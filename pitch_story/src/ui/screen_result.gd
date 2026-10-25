@@ -25,19 +25,72 @@ func _ready() -> void:
 	var body: VBoxContainer = PsKit.vbox(6)
 	col.add_child(PsKit.scroll(body))
 
-	# Scorers
+	# Scorers, with who set them up
 	var my_side: String = str(args["my_side"])
 	var mine: Array = []
 	for sc in sm["scorers"]:
 		if sc["side"] == my_side:
-			mine.append("%s %d'" % [sc["name"], int(sc["min"])])
+			var line: String = "%s %d'" % [sc["name"], int(sc["min"])]
+			if str(sc.get("assist", "")) != "":
+				line += " (assist %s)" % sc["assist"]
+			mine.append(line)
 	if not mine.is_empty():
-		body.add_child(_card("Your scorers", ", ".join(mine)))
+		body.add_child(_card("Your scorers", "\n".join(mine)))
+
+	# Match stats side by side
+	var st_h: Dictionary = sm["stats"]["home"]
+	var st_a: Dictionary = sm["stats"]["away"]
+	var names: Dictionary = args.get("names", {"home": "Home", "away": "Away"})
+	var rows: Array = [
+		["Possession", "%d%%" % int(sm["possession_home"]), "%d%%" % (100 - int(sm["possession_home"]))],
+		["Shots", str(int(st_h["shots"])), str(int(st_a["shots"]))],
+		["On target", str(int(st_h["on_target"])), str(int(st_a["on_target"]))],
+		["Corners", str(int(st_h["corners"])), str(int(st_a["corners"]))],
+		["Fouls", str(int(st_h["fouls"])), str(int(st_a["fouls"]))],
+		["Cards", "%dY %dR" % [int(st_h["yellows"]), int(st_h["reds"])], "%dY %dR" % [int(st_a["yellows"]), int(st_a["reds"])]],
+	]
+	var grid: GridContainer = GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_child(PsKit.fixed(str(names["home"]), 13, PsKit.GOLD))
+	grid.add_child(PsKit.fixed("", 13))
+	grid.add_child(PsKit.fixed(str(names["away"]), 13, PsKit.GOLD, HORIZONTAL_ALIGNMENT_RIGHT))
+	for r in rows:
+		var l1: Label = PsKit.fixed(str(r[1]), 14)
+		l1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(l1)
+		var l2: Label = PsKit.fixed(str(r[0]), 13, PsKit.DIM, HORIZONTAL_ALIGNMENT_CENTER)
+		l2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(l2)
+		var l3: Label = PsKit.fixed(str(r[2]), 14, PsKit.CREAM, HORIZONTAL_ALIGNMENT_RIGHT)
+		l3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(l3)
+	var sp: PanelContainer = PsKit.panel(PsKit.PANEL)
+	sp.add_child(grid)
+	body.add_child(sp)
+
+	# Man of the match and my ratings
+	var mom: Dictionary = sm.get("mom", {})
+	if not mom.is_empty():
+		body.add_child(_card("Man of the match", "%s  %.1f  (%s)" % [mom["name"], float(mom["rating"]) / 100.0, names[mom["side"]]]))
+	var rl: Array = []
+	for r in sm.get("ratings", []):
+		if r["side"] == my_side:
+			var extra: String = ""
+			if int(r["goals"]) > 0:
+				extra += "  %d goal%s" % [int(r["goals"]), "" if int(r["goals"]) == 1 else "s"]
+			if int(r["assists"]) > 0:
+				extra += "  %d assist%s" % [int(r["assists"]), "" if int(r["assists"]) == 1 else "s"]
+			if r["red"]:
+				extra += "  sent off"
+			rl.append("%.1f  %s (%s)%s" % [float(r["rating"]) / 100.0, r["name"], r["pos"], extra])
+	if not rl.is_empty():
+		body.add_child(_card("Your ratings", "\n".join(rl)))
 
 	# Which cards paid off
 	var by_tag: Dictionary = {}
 	for ev in args["events"]:
-		if ev["type"] == "goal" and ev["side"] == my_side and str(ev["tag"]) != "":
+		if ev["type"] == "shot" and ev["result"] == "goal" and ev["side"] == my_side and str(ev["tag"]) != "":
 			by_tag[ev["tag"]] = int(by_tag.get(ev["tag"], 0)) + 1
 	if not by_tag.is_empty():
 		var parts: Array = []

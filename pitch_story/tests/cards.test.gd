@@ -17,18 +17,18 @@ func run(t: PsT) -> void:
 	t.ok(channels_ok, "every rule targets a real channel")
 	t.eq(PsCards.evaluate([], _ctx())["mods"], {"atk": 0, "def": 0, "tmp": 0, "sta": 0}, "no cards, no change")
 	var wing: Dictionary = PsCards.evaluate(["wing_overload"], _ctx())
-	t.eq(wing["mods"]["atk"], 6, "Wing Overload: 2 wingers give +6")
+	t.eq(wing["mods"]["atk"], 8, "Wing Overload: 2 wingers give +8")
 	t.eq(wing["tag"]["atk"], "Wing Overload", "tag names the helping card")
 	var counter: Dictionary = PsCards.evaluate(["counter"], _ctx())
-	t.eq(counter["mods"]["atk"], 8, "Counter Attack works while trailing")
+	t.eq(counter["mods"]["atk"], 11, "Counter Attack works while trailing")
 	var c2: Dictionary = _ctx()
 	c2["my_goals"] = 2
 	t.eq(PsCards.evaluate(["counter"], c2)["mods"]["atk"], 0, "Counter Attack is off while leading")
-	t.eq(PsCards.evaluate(["iron_wall"], _ctx())["mods"]["def"], 7, "Iron Wall against a stronger side")
-	t.eq(PsCards.evaluate(["playmaker"], _ctx())["mods"]["tmp"], 7, "Playmaker with a playmaker in the XI")
+	t.eq(PsCards.evaluate(["iron_wall"], _ctx())["mods"]["def"], 10, "Iron Wall against a stronger side")
+	t.eq(PsCards.evaluate(["playmaker"], _ctx())["mods"]["tmp"], 10, "Playmaker with a playmaker in the XI")
 	var c3: Dictionary = _ctx()
 	c3["traits"] = {}
-	t.eq(PsCards.evaluate(["playmaker"], c3)["mods"]["tmp"], 2, "Playmaker without one")
+	t.eq(PsCards.evaluate(["playmaker"], c3)["mods"]["tmp"], 3, "Playmaker without one")
 	# Synergy: two attack cards give a bonus; three double it.
 	var syn: Array = PsCards.synergies(["golden_boot", "set_pieces"])
 	t.eq(syn.size(), 1, "two attack cards give one synergy")

@@ -24,31 +24,43 @@ func run(t: PsT) -> void:
 	await t.tree.process_frame
 	t.ok(_is(app, PsHubScreen) and app.st["cards"].size() == 1, "the draft returns to the hub with a card")
 
-	# A match played tick by tick, with a live call.
+	# A match played event by event, with the three team talks.
 	app.go("match")
 	await t.tree.process_frame
 	var m: PsMatchScreen = app.screen
-	m._hold = 0.0
 	var guard: int = 0
-	var called: bool = false
-	while not m._ended and guard < 400:
+	var talks: int = 0
+	var subbed: int = 0
+	while not m._ended and guard < 20000:
 		guard += 1
-		m._hold = 0.0
-		if m._waiting_call:
-			t.ok(m.call_panel.visible, "the call panel is showing while the match waits")
-			m._call("push")
-			called = true
+		if m._talking:
+			talks += 1
+			t.ok(m.talk.visible, "the team talk is showing while the match waits")
+			if talks == 1:
+				m._set_mentality("attack")
+				var slot: int = int(m.sim.tired_slots(m.my_side)[0])
+				m._pick_out(slot)
+				for b in m.sim.sides[m.my_side]["bench"].size():
+					if m.sim.sides[m.my_side]["bench"][b]["pos"] == m.sim.sides[m.my_side]["xi"][slot]["pos"]:
+						m._do_sub(b)
+						subbed += 1
+						break
+			m._close_talk()
 		else:
+			m._wait = 0.0
 			m._tick()
-	t.ok(called, "the match paused for a live call")
+	t.eq(talks, 3, "the match pauses three times (30', half time, 65')")
+	t.eq(subbed, 1, "a substitution was made through the screen")
+	t.eq(str(m.sim.sides[m.my_side]["mentality"]), "attack", "the mentality change reached the sim")
 	t.ok(m._ended and m.done_btn.visible, "the match reaches full time")
-	t.eq(m.sim.calls_left(m.my_side), 0, "both live calls were used (minutes 30 and 65)")
+	t.eq(m.score_l.text, "%d - %d" % [m.sim.goals["home"], m.sim.goals["away"]], "the scoreboard shows the final score")
 	var day_before: int = int(app.st["season"]["day"])
 	m._finish()
 	await t.tree.process_frame
 	t.ok(_is(app, PsResultScreen), "the result screen follows")
 	t.eq(int(app.st["season"]["day"]), day_before + 1, "the match day was recorded")
 	t.ok(PsSave.has_save(), "the game saved after the match")
+	t.ok(app.st["last_match"].has("ratings"), "the match summary keeps the ratings")
 	app.screen._next()
 	await t.tree.process_frame
 	t.ok(_is(app, PsHubScreen), "back to the hub")

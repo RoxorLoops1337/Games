@@ -20,7 +20,6 @@ const TRAIT_LABEL: Dictionary = {
 }
 const POS_ORDER: Array = ["GK", "DEF", "MID", "FWD"]
 const POS_COUNT: Dictionary = {"GK": 2, "DEF": 6, "MID": 7, "FWD": 5}
-const LINEUP_SLOTS: Dictionary = {"GK": 1, "DEF": 4, "MID": 4, "FWD": 2}
 
 static func clampi_stat(v: int) -> int:
 	return clampi(v, 20, 95)
@@ -91,9 +90,10 @@ static func main_stat(p: Dictionary) -> int:
 static func overall(p: Dictionary) -> int:
 	return main_stat(p)
 
-## Best XI by position, as {"GK": [ids], "DEF": [ids], ...}.
-static func auto_lineup(squad: Array) -> Dictionary:
+## Best XI by position for a formation, as {"GK": [ids], "DEF": [ids], ...}.
+static func auto_lineup(squad: Array, formation: String = PsFormations.DEFAULT) -> Dictionary:
 	var out: Dictionary = {}
+	var want: Dictionary = PsFormations.slots(formation)
 	for pos in POS_ORDER:
 		var cands: Array = []
 		for p in squad:
@@ -106,7 +106,7 @@ static func auto_lineup(squad: Array) -> Dictionary:
 				return sa > sb
 			return int(a["id"]) < int(b["id"]))
 		var ids: Array = []
-		for i in mini(int(LINEUP_SLOTS[pos]), cands.size()):
+		for i in mini(int(want[pos]), cands.size()):
 			ids.append(int(cands[i]["id"]))
 		out[pos] = ids
 	return out
@@ -126,9 +126,10 @@ static func lineup_players(squad: Array, lineup: Dictionary) -> Array:
 				xi.append(p)
 	return xi
 
-## Repair a lineup that no longer matches the squad (sold player, bad save).
-static func fix_lineup(squad: Array, lineup: Dictionary) -> Dictionary:
-	var best: Dictionary = auto_lineup(squad)
+## Repair a lineup that no longer matches the squad or the formation (sold player, bad save).
+static func fix_lineup(squad: Array, lineup: Dictionary, formation: String = PsFormations.DEFAULT) -> Dictionary:
+	var best: Dictionary = auto_lineup(squad, formation)
+	var want: Dictionary = PsFormations.slots(formation)
 	var out: Dictionary = {}
 	for pos in POS_ORDER:
 		var ids: Array = []
@@ -137,12 +138,37 @@ static func fix_lineup(squad: Array, lineup: Dictionary) -> Dictionary:
 			if not p.is_empty() and p["pos"] == pos and not ids.has(int(id)):
 				ids.append(int(id))
 		for id in best[pos]:
-			if ids.size() >= int(LINEUP_SLOTS[pos]):
+			if ids.size() >= int(want[pos]):
 				break
 			if not ids.has(int(id)):
 				ids.append(int(id))
-		out[pos] = ids.slice(0, int(LINEUP_SLOTS[pos]))
+		out[pos] = ids.slice(0, int(want[pos]))
 	return out
+
+## Five players on the bench: the best keeper, then the best of each outfield line, then the best left.
+static func bench_players(squad: Array, xi_ids: Array) -> Array:
+	var rest: Array = []
+	for p in squad:
+		if not xi_ids.has(int(p["id"])):
+			rest.append(p)
+	rest.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var sa: int = main_stat(a)
+		var sb: int = main_stat(b)
+		if sa != sb:
+			return sa > sb
+		return int(a["id"]) < int(b["id"]))
+	var bench: Array = []
+	for pos in POS_ORDER:
+		for p in rest:
+			if p["pos"] == pos:
+				bench.append(p)
+				break
+	for p in rest:
+		if bench.size() >= 5:
+			break
+		if not bench.has(p) and p["pos"] != "GK":
+			bench.append(p)
+	return bench
 
 ## Season roll-over: age, grow the young, slow the old.
 static func age_squad(rng: PsRng, squad: Array, training_level: int) -> void:

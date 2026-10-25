@@ -6,6 +6,8 @@ var args: Dictionary = {}
 var _selected: int = -1
 var _list: VBoxContainer
 var _hint: Label
+var _form_row: HBoxContainer
+var _ment_row: HBoxContainer
 
 func _ready() -> void:
 	var bg: ColorRect = ColorRect.new()
@@ -20,6 +22,10 @@ func _ready() -> void:
 	col.offset_bottom = -10
 	add_child(col)
 	col.add_child(PsKit.lbl("Squad", 28, PsKit.GOLD))
+	_form_row = PsKit.hbox(4)
+	col.add_child(_form_row)
+	_ment_row = PsKit.hbox(4)
+	col.add_child(_ment_row)
 	_hint = PsKit.lbl("", 13, PsKit.DIM)
 	col.add_child(_hint)
 	_list = PsKit.vbox(4)
@@ -43,16 +49,41 @@ func _is_starter(id: int) -> bool:
 func _rebuild() -> void:
 	for c in _list.get_children():
 		c.queue_free()
-	app.st["lineup"] = PsPlayers.fix_lineup(app.st["squad"], app.st["lineup"])
+	var formation: String = PsClub.my_formation(app.st)
+	app.st["lineup"] = PsPlayers.fix_lineup(app.st["squad"], app.st["lineup"], formation)
+	for c in _form_row.get_children():
+		c.queue_free()
+	for f in PsFormations.LIST:
+		var b: Button = PsKit.btn(f, _pick_formation.bind(f), "gold" if f == formation else "normal", 38)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_form_row.add_child(b)
+	for c in _ment_row.get_children():
+		c.queue_free()
+	var cur: String = str(app.st.get("mentality", "balanced"))
+	for m in PsMatchSim.MENTALITIES:
+		var mb: Button = PsKit.btn(PsMatchSim.MENTALITY_LABEL[m], _pick_mentality.bind(m), "gold" if m == cur else "normal", 34)
+		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_ment_row.add_child(mb)
 	var xi: Array = PsPlayers.lineup_players(app.st["squad"], app.st["lineup"])
-	var base: Dictionary = PsMatchSim.team_base(xi)
-	_hint.text = "Team: attack %d · defence %d · tempo %d · stamina %d.  Tap a player, then a teammate in the same position to swap." % [base["atk"], base["def"], base["tmp"], base["sta"]]
+	var base: Dictionary = PsMatchSim.team_base(xi, formation)
+	_hint.text = "%s  Team: attack %d, defence %d, tempo %d, stamina %d.  Tap a player, then a teammate in the same position to swap." % [PsFormations.BLURB[formation], base["atk"], base["def"], base["tmp"], base["sta"]]
 	var last_pos: String = ""
 	for p in PsClub.squad_sorted(app.st):
 		if p["pos"] != last_pos:
 			last_pos = str(p["pos"])
-			_list.add_child(PsKit.lbl({"GK": "Goalkeepers", "DEF": "Defenders", "MID": "Midfielders", "FWD": "Forwards"}[last_pos], 14, PsKit.pos_color(last_pos)))
+			_list.add_child(PsKit.lbl({"GK": "Goalkeepers", "DEF": "Defenders", "MID": "Midfielders", "FWD": "Forwards"}[last_pos] + "  (%d in the XI)" % PsFormations.count(formation, last_pos), 14, PsKit.pos_color(last_pos)))
 		_list.add_child(_row(p))
+
+func _pick_formation(f: String) -> void:
+	app.sfx.play("click")
+	PsClub.set_formation(app.st, f)
+	_selected = -1
+	_rebuild()
+
+func _pick_mentality(m: String) -> void:
+	app.sfx.play("click")
+	app.st["mentality"] = m
+	_rebuild()
 
 func _row(p: Dictionary) -> Control:
 	var id: int = int(p["id"])
@@ -116,6 +147,6 @@ func _tap(id: int) -> void:
 
 func _auto() -> void:
 	app.sfx.play("pick")
-	app.st["lineup"] = PsPlayers.auto_lineup(app.st["squad"])
+	app.st["lineup"] = PsPlayers.auto_lineup(app.st["squad"], PsClub.my_formation(app.st))
 	_selected = -1
 	_rebuild()

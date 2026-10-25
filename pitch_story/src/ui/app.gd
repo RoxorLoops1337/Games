@@ -3,7 +3,7 @@ extends Control
 ## Root of the game: owns the state, the save, the sound and the current screen.
 
 const MAX_W: float = 520.0
-const VERSION: String = "0.1.0"
+const VERSION: String = "0.2.0"
 
 var st: Dictionary = {}
 var holder: Control

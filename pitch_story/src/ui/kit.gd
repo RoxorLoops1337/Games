@@ -149,6 +149,15 @@ static func money(n: int) -> String:
 			out = "," + out
 	return ("-" if neg else "") + "$" + out
 
+## "Joske De Smet" -> "De Smet"; short enough to label a player on the pitch.
+static func surname(full: String) -> String:
+	var parts: PackedStringArray = full.split(" ")
+	if parts.size() <= 1:
+		return full
+	if parts.size() >= 3:
+		return " ".join(parts.slice(1))
+	return parts[parts.size() - 1]
+
 static func club_colors(st: Dictionary) -> Array:
 	return PsClub.COLORS[int(st["club"]["color"]) % PsClub.COLORS.size()]
 
