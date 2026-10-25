@@ -172,7 +172,7 @@ function drawChoices(app, y) {
     app.text(r2.name.toUpperCase() + ' RELIC', x + w / 2, hy + 122, { size: 12, ui: true, bold: true, align: 'center', color: DIM, alpha: a });
     wrapLimit(app, rl.text, w - 28, 14, 6, { ui: true }).forEach((ln, k) => app.text(ln, x + w / 2, hy + 142 + k * 16, { size: 14, ui: true, align: 'center', color: COL.vellum, alpha: a }));
     if (mine) app.text('TAKEN', x + w / 2, hy + h - 26, { size: 16, bold: true, align: 'center', color: COL.good });
-    else keyBadge(app, String(i + 1), x + 18, hy + 18);
+    else keyBadge(app, 'QWE'[i], x + 18, hy + 18);
     if (!picked && !app.blocked && app.inRect(x, yy, w, h)) {
       app.tooltip(rl.name, null, { lines: [r2.name + ' relic.', rl.text, 'Only one can be taken.'], color: r2.color });
       if (app.clicked(x, yy, w, h)) claim(app, 'boss', x + w / 2, yy + 60, id);
@@ -207,8 +207,10 @@ function onKey(app, k) {
   const rows = buildRows();
   if (k >= '1' && k <= '9') {
     const n = +k - 1;
-    if (st.init.choices) { if (st.init.choices[n] && n < st.init.choices.length && !rows[n]) claim(app, 'boss', 640, 400, st.init.choices[n]); }
     if (rows[n] && !rows[n].taken) claim(app, rows[n].id, 640, 200 + n * 90);
+  } else if ('qwe'.includes(k.toLowerCase()) && k.length === 1 && st.init.choices) {
+    const id = st.init.choices['qwe'.indexOf(k.toLowerCase())];
+    if (id) claim(app, 'boss', 640, 400, id);
   } else if (k === 'Enter') doContinue(app);
 }
 
