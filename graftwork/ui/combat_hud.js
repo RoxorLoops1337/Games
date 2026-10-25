@@ -71,7 +71,7 @@ export function drawIntentBubble(app, info, x, y, prog, alpha = 1) {
   if (!info || prog <= 0 || alpha <= 0) return { w: 0, h: 0 };
   const kinds = info.hidden ? ['unknown'] : info.kinds.slice(0, 3);
   const showNum = !info.hidden && info.kinds.includes('attack');
-  const num = showNum ? (info.hits > 1 ? `${info.per}x${info.hits}` : String(info.dmg)) : (info.hidden ? '?' : '');
+  const num = showNum ? (info.hits > 1 ? `${info.per} x ${info.hits}` : String(info.dmg)) : (info.hidden ? '?' : '');
   const isz = 30, numW = num ? app.measure(num, 22, { bold: true }) + 6 : 0;
   const w = kinds.length * (isz + 2) + numW + 18, h = 42;
   const sc = EASE.back(clamp(prog, 0, 1));

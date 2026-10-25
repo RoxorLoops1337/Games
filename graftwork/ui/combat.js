@@ -12,6 +12,7 @@ import { drawEnemy } from '../art/enemies.js';
 import { drawHero, drawPortrait } from '../art/heroes.js';
 import { drawBackground } from '../art/backgrounds.js';
 import * as L from './combat_layout.js';
+import { maybeTip } from './tutorial.js';
 import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName } from './combat_hud.js';
 
 const { HERO_X, FOOT_Y, PLAY_LINE } = L;
@@ -405,6 +406,7 @@ function onAddCard(ev) {
   sfx(junk ? 'junkAdd' : 'cardDraw'); return 120;
 }
 
+const moveName = (info) => { const n = String(info.name || info.move || 'Intent').replace(/_/g, ' '); return n.charAt(0).toUpperCase() + n.slice(1); };
 function intentWith(ed, move) {
   const e = ed.e, keep = e.move;
   try { e.move = move; return intentOf(S.c, e); } catch (err) { return null; } finally { e.move = keep; }
@@ -487,8 +489,8 @@ function layoutHand(app, d) {
   S.hand.forEach((dc, i) => {
     const sl = L.handSlot(i, n);
     let tx = sl.x, ty = sl.y, ts = sl.s, tr = sl.rot;
-    if (hi >= 0 && i !== hi && !S.drag) { const dist = Math.abs(i - hi); if (dist === 1) tx += Math.sign(i - hi) * 46; else if (dist === 2) tx += Math.sign(i - hi) * 16; }
-    if (dc.uid === S.hov && !(S.drag && S.drag.uid === dc.uid)) { tx = clamp(sl.x, 130, 1150); ty = L.HOVER_Y; ts = L.HOVER_S; tr = 0; }
+    if (hi >= 0 && i !== hi && !S.drag) { const dist = Math.abs(i - hi); if (dist === 1) tx += Math.sign(i - hi) * 62; else if (dist === 2) tx += Math.sign(i - hi) * 22; else if (dist === 3) tx += Math.sign(i - hi) * 8; }
+    if (dc.uid === S.hov && !(S.drag && S.drag.uid === dc.uid)) { tx = clamp(sl.x, 150, 1130); ty = L.HOVER_Y; ts = L.HOVER_S; tr = 0; }
     else if (dc.uid === S.sel) { ty = sl.y - 78; ts = sl.s * 1.18; tr = 0; }
     if (S.drag && S.drag.uid === dc.uid) { tx = m.x; ty = m.y; ts = 0.78; tr = 0; }
     dc.tx = tx; dc.ty = ty; dc.ts = ts; dc.trot = tr;
@@ -932,6 +934,7 @@ function draw(app) {
   if (S.drag && !selNeedsTarget()) drawPlayZone(app);
   drawCardInfo(app);
   drawBanner(app);
+  drawTips(app);
   if (c.pending && !S.ending && !busy()) drawPendingModal(app);
   if (S.modal) drawPilesModal(app);
 }
@@ -1021,7 +1024,7 @@ function drawEnemyHud(app, ed, alpha, hot) {
   const iy = FOOT_Y - ed.h - 34 + Math.sin(S.t * 2.4 + ed.phase) * 3;
   if (info && ed.intentOut < 1) {
     const r = drawIntentBubble(app, info, ed.x, iy, ed.intentT, (1 - ed.intentOut) * alpha);
-    if (r.w && ed.intentOut === 0 && app.inRect(ed.x - r.w / 2, iy - r.h / 2, r.w, r.h)) app.tooltip(info.hidden ? 'Hidden' : (info.name ? String(info.name) : 'Intent'), intentText(info), { color: COL.vellum });
+    if (r.w && ed.intentOut === 0 && app.inRect(ed.x - r.w / 2, iy - r.h / 2, r.w, r.h)) app.tooltip(info.hidden ? 'Hidden intent' : moveName(info), intentText(info), { color: COL.vellum });
   }
   if (ed.callout && ed.callout.text) {
     const k = ed.callout.t; ctx.save(); ctx.globalAlpha = clamp(1 - (k - 0.6) / 0.4, 0, 1) * alpha;
@@ -1178,7 +1181,29 @@ function drawCardInfo(app) {
   const w = 250;
   const right = dc.x + CARD_W * dc.s / 2 + 10;
   const x = right + w < W - 6 ? right : dc.x - CARD_W * dc.s / 2 - 10 - w;
-  drawSections(app, secs, x, 150, w, 520);
+  drawSections(app, secs, x, Math.max(64, dc.y - CARD_H * dc.s / 2), w, 520);
+}
+
+// first-run tips: one at a time, only while the player can act, never over a modal
+function drawTips(app) {
+  if (!S || S.modal || S.ending || S.c.pending || S.banner || !canAct() || S.drag) return;
+  const c = S.c, l = liveEds(), first = l[0];
+  const has = (k) => app.shared.meta && app.shared.meta.tips && app.shared.meta.tips[k];
+  const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
+  if (first && !S.hov) {
+    if (tip('energy', L.ORB.x + 46, L.ORB.y, { side: 'right', w: 280 })) return;
+    if (tip('intent', first.x, FOOT_Y - first.h - 8, { side: 'below', w: 290 })) return;
+    if (S.hand.length && tip('playcard', L.HAND_CX, L.HAND_Y - 120, { side: 'above', w: 330 }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
+    if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 70, FOOT_Y - 150, { side: 'right', w: 280 })) return;
+    if (tip('endturn', L.END_BTN.x + L.END_BTN.w / 2, L.END_BTN.y, { side: 'above', w: 280 })) return;
+  }
+  if (!has('endturn')) return; // later tips wait until the basics are known
+  const hc = S.hand.find((d) => d.w.tithed);
+  if (hc || S.seenTithe.size) { if (tip('strain', L.STRAIN_BOX.x + L.STRAIN_BOX.w, L.STRAIN_BOX.y + 22, { side: 'right', w: 300 })) return; }
+  const jc = S.hand.find((d) => d.jam);
+  if (jc && tip('jam', jc.x, jc.y - CARD_H * jc.s / 2, { side: 'above', w: 300 })) return;
+  const oc = S.hand.find((d) => dcSpec(d).overload);
+  if (oc) tip('overload', oc.x, oc.y - CARD_H * oc.s / 2, { side: 'above', w: 300 });
 }
 
 function drawBanner(app) {

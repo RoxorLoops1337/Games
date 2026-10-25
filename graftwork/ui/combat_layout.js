@@ -12,7 +12,7 @@ export const ORB = { x: 86, y: 534, size: 88 };
 export const STRAIN_BOX = { x: 14, y: 442, w: 150, h: 44 };
 export const END_BTN = { x: 1086, y: 546, w: 172, h: 54 };
 export const HAND_CX = 622, HAND_Y = 626;
-export const HOVER_Y = 552, HOVER_S = 1.0;
+export const HOVER_Y = 528, HOVER_S = 1.18;
 export const ENEMY_REGION = { x0: 500, x1: 1252 };
 export const GOLD_POS = { x: 300, y: 28 };
 export const DECK_BTN = { x: 1052, y: 9, w: 108, h: 38 };
