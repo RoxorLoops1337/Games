@@ -1490,7 +1490,7 @@ function render(dt) {
     ambCur = mix(ambCur, mix(tgt.color, '#ffffff', Math.min(0.9, thunder)), Math.min(1, dt * 1.6));
     duskAmt += (tgt.dusk - duskAmt) * Math.min(1, dt * 1.2);
     const blobs = th.deco === 'star' ? null : [0, 1, 2].map((i) => ({ x: ((t * 12 + i * 430) % 1350) - 170, y: GROUND + 22 + i * 12, rx: 200, ry: 34, a: 0.16 }));
-    post.light(ctx, ambCur, gatherLights(t), blobs);
+    post.light(ctx, ambCur, gatherLights(t), blobs, [th.grade[0], th.grade[1], duskAmt]);
   }
   drawFx();
   if (gfx >= 2) drawWeather(t, dt);
@@ -1500,7 +1500,6 @@ function render(dt) {
     const lum = (parseInt(ambCur.slice(1, 3), 16) + parseInt(ambCur.slice(3, 5), 16) + parseInt(ambCur.slice(5, 7), 16)) / 765;
     post.bloom(ctx, cv, (post.hasFilter ? 0.5 : 0.2) * (1.25 - lum));
   }
-  if (gfx >= 2) post.grade(ctx, th.grade[0], th.grade[1], duskAmt);
   if (gfx >= 3 && th.deco !== 'star') post.flare(ctx, 740, 120, 0.08);
   if (gfx >= 3) post.grain(ctx, t, 0.045);
   vignette(t);
