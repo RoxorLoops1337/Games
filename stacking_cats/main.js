@@ -422,7 +422,7 @@ function showDaily(back, weekly = false) {
   const modsHtml = weekly ? `<div class="wmods">${di.mods.map((m) => `<span class="wmod"><i>${m.icon}</i><b>${m.name}</b><small>${m.desc}</small></span>`).join('')}</div>` : '';
   setScreen(`<h2>${weekly ? 'Weekly Challenge' : 'Daily Challenge'}</h2>
     <div class="dailycols"><div class="dcard ${weekly ? 'weekly' : ''}"><div class="dic">${di.mod.icon}</div><b>${di.mod.name}</b>${weekly ? modsHtml + '<p class="wiron">Mice have 10% more health on top.</p>' : `<p>${di.mod.desc}</p>`}
-      <small>Everyone plays the same mice ${weekly ? 'all week' : 'today'}, with the same cats: the starters plus Yuki, Hawkeye, Boomer, Pudding, Shadow, Ronin, Merlin and Cutlass. Kingdom upgrades and mastery are switched off, so it is a fair race.</small>
+      <small>${weekly ? 'Same mice and same cats for everyone all week. Kingdom upgrades and mastery are off, so it is a fair race.' : 'Everyone plays the same mice today, with the same cats: the starters plus Yuki, Hawkeye, Boomer, Pudding, Shadow, Ronin, Merlin and Cutlass. Kingdom upgrades and mastery are switched off, so it is a fair race.'}</small>
       <div class="dstat">${mine ? `Your best ${weekly ? 'this week' : 'today'}: <b>${mine.best}</b> (wave ${mine.wave})` : `You have not played ${weekly ? 'this week' : 'today'} yet. A first try earns ${weekly ? '2 gems' : 'a gem'}!`}</div>
       <div class="row"><button class="btn big" data-act="go">Play ${weekly ? 'weekly' : 'daily'}</button></div></div>
       <div class="board"><h4>${weekly ? "This week's top cats" : "Today's top cats"}</h4><div id="boardBody" class="bbody">Loading...</div></div></div>
@@ -504,7 +504,7 @@ function showWardrobe(back, startCat) {
       <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wardrobe');
     screenEl.querySelectorAll('canvas[data-try]').forEach((cv2) => {
       const c = COSMETIC_BY_ID[cv2.dataset.try], spr = catSprite(cat, 'open', { ...look, [c.slot]: c.id });
-      const x = cv2.getContext('2d'), crop = c.slot === 'neck' ? [30, 70, 180, 160] : [24, 8, 192, 192];
+      const x = cv2.getContext('2d'), crop = [24, 8, 192, 192];
       x.drawImage(spr, crop[0], crop[1], crop[2], crop[3], 0, 0, 120, 120);
     });
   };

@@ -23,7 +23,7 @@ export const COSMETICS = [
   { id: 'bandana',    slot: 'neck', name: 'Bandana',        cost: 100, desc: 'Dotted and dashing.' },
   { id: 'bowtie',     slot: 'neck', name: 'Bow Tie',        cost: 120, desc: 'Formal wear for brawls.' },
   { id: 'scarf',      slot: 'neck', name: 'Cozy Scarf',     cost: 130, desc: 'Striped and warm.' },
-  { id: 'medal',      slot: 'neck', name: "Master's Medal", cost: 0,   desc: 'Free for a cat at Mastery level 5.', mastery: 5 },
+  { id: 'medal',      slot: 'neck', name: "Master's Medal", cost: 0,   desc: 'Free at Mastery 5.', mastery: 5 },
 ];
 export const COSMETIC_BY_ID = Object.fromEntries(COSMETICS.map((c) => [c.id, c]));
 export const BUYABLE = COSMETICS.filter((c) => !c.mastery);
@@ -125,6 +125,7 @@ const DRAW = {
   },
   partyhat(ctx, catId) {
     const c1 = pick(catId, ['#ff6fa5', '#5ab4f0', '#7ed56f', '#ffd23a']), c2 = '#fff6d8';
+    ctx.translate(0, 4);
     const cone = poly(ctx, [[62, 3], [45, 33], [79, 30]]);
     ctx.save();
     ctx.fillStyle = c1; ctx.fill(cone);

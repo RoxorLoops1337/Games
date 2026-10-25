@@ -67,7 +67,7 @@ t('cosmetics: at least 12 buyable items over head, face and neck, with unique id
   assert.ok(cos.BUYABLE.length >= 12);
   assert.deepEqual(new Set(cos.COSMETICS.map((c) => c.slot)), new Set(['head', 'face', 'neck']));
   assert.equal(new Set(cos.COSMETICS.map((c) => c.id)).size, cos.COSMETICS.length);
-  for (const c of cos.COSMETICS) { assert.ok(c.name && c.desc && Number.isFinite(c.cost), c.id); assert.ok(!/—/.test(JSON.stringify(c))); }
+  for (const c of cos.COSMETICS) { assert.ok(c.name && c.desc && Number.isFinite(c.cost), c.id); assert.ok(!/\u2014/.test(JSON.stringify(c))); }
   assert.ok(cos.BUYABLE.every((c) => c.cost > 0));
 });
 t('cosmetics: every item draws on every cat without errors', () => {
@@ -115,7 +115,7 @@ t('ladder: Nightmare I to V stack their rules, each tier harder than the last', 
     assert.ok(d.hp >= prev.hp && d.dmg >= prev.dmg && d.budget >= prev.budget && d.coin > prev.coin, 'nm' + i + ' is harder');
     assert.ok((d.speed || 1) >= (prev.speed || 1) && (d.elite || 0) >= (prev.elite || 0) && (d.snack || 0) >= (prev.snack || 0) && (d.rerolls || 0) >= (prev.rerolls || 0));
     assert.ok((d.heal == null ? 1 : d.heal) <= (prev.heal == null ? 1 : prev.heal));
-    assert.ok(!/—/.test(JSON.stringify(d)));
+    assert.ok(!/\u2014/.test(JSON.stringify(d)));
     prev = d;
   }
   assert.ok(DIFFS.nm1.speed > 1 && DIFFS.nm2.heal < 1 && DIFFS.nm3.elite > 0 && DIFFS.nm4.snack === 1 && DIFFS.nm5.heal === 0);

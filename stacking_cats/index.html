@@ -481,7 +481,7 @@ body.nomotion .spb.ready{animation:none}
 .mast small{font-size:12px;color:#6a5a80;font-weight:700}
 .detail .wbtn{margin:3px 0 0;float:right;position:relative;top:-6px}
 .btn.wk{padding-left:16px;padding-right:16px}
-.dcard.weekly{max-width:480px}.wmods{display:flex;flex-direction:column;gap:3px;margin:2px 0;width:100%}
+.dcard.weekly{max-width:480px}.dcard.weekly .dic{font-size:30px}.dcard.weekly .btn.big{padding:2px 24px;font-size:26px}.wmods{display:flex;flex-direction:column;gap:3px;margin:2px 0;width:100%}
 .wmod{display:grid;grid-template-columns:28px auto 1fr;gap:6px;align-items:center;text-align:left;background:#0001;border-radius:10px;padding:2px 8px}
 .wmod i{font-style:normal;font-size:20px;line-height:1}.wmod b{font-size:14px}.wmod small{font-size:11px}
 .dcard .wiron{font-size:12px}
@@ -492,18 +492,18 @@ body.nomotion .spb.ready{animation:none}
 .dcell .dci{font-size:30px;line-height:1}.dcell b{font-size:18px;font-family:var(--display);font-weight:400}.dcell small{font-size:12px;font-weight:700;line-height:1.1;color:#5a4a70}
 .dcell.locked small{color:#d8c8f6}.dcell em{font-style:normal;font-size:12px;font-weight:800;color:#b03a4a}.dcell.locked em{color:#ffd23f}.dcell em.coinx{color:#2a8a52}
 .drules{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}.drule{display:inline-flex;align-items:center;gap:3px;background:#0001;border-radius:9px;padding:0 4px;font-size:11px}.drule i{font-style:normal;font-size:14px}.drule .gi{width:15px;height:15px}.drule b{font-size:11px;font-family:inherit;font-weight:800}.drule.new{background:#ffd23f55}
-.screen.wardrobe{justify-content:flex-start;padding-top:10px}.screen.wardrobe h2{margin:0}.screen.wardrobe .kcoins{margin:0 0 4px}
-.wstrip{display:flex;gap:3px;width:900px;overflow-x:auto;padding:3px 2px;margin-bottom:4px}
-.wcat{flex:0 0 auto;width:46px;height:46px;border-radius:12px;border:2px solid var(--ink);background:rgba(255,248,239,.95);padding:0;cursor:pointer}.wcat canvas{width:42px;height:42px}.wcat.sel{outline:3px solid var(--pink)}
-.wcols{display:flex;gap:14px;width:900px;align-items:stretch}
+.screen.wardrobe{justify-content:flex-start;padding-top:6px;gap:0}.screen.wardrobe h2{margin:0;font-size:28px}.screen.wardrobe .kcoins{margin:0 0 2px}.screen.wardrobe .kcoins b{font-size:26px}.screen.wardrobe .kcoins small{display:none}.screen.wardrobe>.row .btn{margin:2px;padding:2px 22px;font-size:20px}
+.wstrip{display:flex;flex:0 0 auto;gap:3px;width:900px;height:54px;overflow-x:auto;overflow-y:hidden;padding:3px 2px;margin-bottom:2px}
+.wcat{flex:0 0 46px;width:46px;height:46px;border-radius:12px;border:2px solid var(--ink);background:rgba(255,248,239,.95);padding:0;cursor:pointer}.wcat canvas{width:42px;height:42px}.wcat.sel{outline:3px solid var(--pink)}
+.wcols{display:flex;flex:0 0 auto;gap:14px;width:900px;align-items:stretch}
 .wprev{width:260px;background:var(--paper);color:var(--ink);border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);padding:6px 10px;display:flex;flex-direction:column;align-items:center;gap:2px}
-.wprev canvas{width:150px;height:150px}.wprev>b{font-family:var(--display);font-weight:400;font-size:22px}.wworn{display:flex;flex-direction:column;font-size:12px;font-weight:700;color:#5a4a70;line-height:1.2}
-.wprev .mast{justify-content:center}.wprev .btn{margin:4px 0 2px}
+.wprev canvas{width:120px;height:120px}.wprev>b{font-family:var(--display);font-weight:400;font-size:22px}.wworn{display:flex;flex-direction:column;font-size:12px;font-weight:700;color:#5a4a70;line-height:1.2}
+.wworn{display:none}.wprev .mast{justify-content:center}.wprev .btn{margin:4px 0 2px}
 .wshop{flex:1;display:flex;flex-direction:column;gap:6px}.wshop .seg{width:100%}
-.wgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.wgrid{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:128px;align-content:start;gap:6px}
 .witem{background:var(--paper);color:var(--ink);border:3px solid var(--ink);border-radius:14px;padding:3px 4px;display:flex;flex-direction:column;align-items:center;gap:0}
-.witem.worn{outline:3px solid var(--mint)}.witem canvas{width:64px;height:64px}.witem b{font-size:13px}.witem small{font-size:10px;font-weight:700;color:#6a5a80;line-height:1.05;min-height:21px}
-.witem .btn{margin:2px 0 0;padding:1px 8px;font-size:13px;box-shadow:0 2px 0 var(--ink)}
+.witem.worn{outline:3px solid var(--mint)}.witem canvas{width:52px;height:52px}.witem b{font-size:13px}.witem small{display:none}
+body .witem .btn{min-height:32px;margin:2px 0 0;padding:1px 8px;font-size:13px;box-shadow:0 2px 0 var(--ink)}
 </style>
 </head>
 <body>
