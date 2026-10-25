@@ -201,7 +201,7 @@ export const ENEMIES_2 = [
     art: { body: 'jar', color: '#6e8f3f', notes: 'Huge jar body, a jagged gold crown of three triangles on the lid, pale pickled limbs pressed against the glass.' } },
 
   // ---------- BOSS ----------
-  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 220, start: { interest: 1 },
+  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 165, start: { interest: 1 },
     pick: (A, e) => {
       const d = e.data;
       if (d.p2 === 1) return 'collect';
