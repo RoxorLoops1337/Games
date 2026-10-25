@@ -50,7 +50,7 @@ t('lighting and post stack runs and ambient colours resolve for every theme', ()
   const orig = globalThis.document.createElement;
   globalThis.document.createElement = () => { const c = { width: 0, height: 0 }; const x = fakeCtx(); x.createImageData = ctx.createImageData; c.getContext = () => x; return c; };
   const post = postMod.createPost(960, 540);
-  post.light(ctx, 'rgb(200,200,220)', [{ x: 100, y: 100, r: 80, col: '#ffcc66', a: 0.8 }], [{ x: 50, y: 50, rx: 40, ry: 10, a: 0.2 }]);
+  post.light(ctx, "rgb(200,200,220)", [{ x: 100, y: 100, r: 80, col: "#ffcc66", a: 0.8 }], [{ x: 50, y: 50, rx: 40, ry: 10, a: 0.2 }], ["rgba(0,0,255,.2)", "rgba(255,0,0,.1)", 0.5]);
   post.bloom(ctx, { width: 960, height: 540 }, 0.3); post.grade(ctx, 'rgba(0,0,255,.2)', 'rgba(255,0,0,.1)', 0.5);
   post.grain(ctx, 1.2, 0.05); post.flare(ctx, 740, 120, 0.1);
   globalThis.document.createElement = orig;
