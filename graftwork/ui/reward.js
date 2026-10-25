@@ -76,6 +76,7 @@ export default {
     if (app.button(label, 390, 646, 500, 60, { size: 26, fill: '#5a3f10', color: '#ffe9a8', sub: notes.length ? 'Unclaimed spoils are forfeited' : undefined, subColor: '#ffb36b' })) doContinue(app);
     if (app.inRect(390, 646, 500, 60)) app.tooltip(label, toGraft ? 'Next you pick one of your cards and one graft. Or decline for a small prize.' : 'Back to the map.', { color: COL.lamp });
 
+    if (!st) return;
     st.fx.draw(ctx); st.fx.drawFlash(ctx, 1280, 720);
   },
 };
