@@ -1300,6 +1300,16 @@ export function rollEvent(g) {
       ev.options.push({ k: 'leave' });
       break;
     }
+    case 'picnic':
+      for (const id of rollSnackChoices(g, 3)) ev.options.push({ k: 'snack', id });
+      ev.options.push({ k: 'leave' });
+      break;
+    case 'fountain':
+      ev.options.push({ k: 'toss', cost: 40, chance: 0.4, prize: 100 });
+      ev.options.push({ k: 'toss', cost: 100, chance: 0.35, prize: 280 });
+      ev.options.push({ k: 'leave' });
+      ev.multi = true;
+      break;
     case 'dojo':
       for (const c of g.cats) ev.options.push({ k: 'train', uid: c.uid, bonus: 0.1 });
       ev.options.push({ k: 'leave' });
@@ -1333,6 +1343,11 @@ export function chooseEvent(g, idx) {
       if (g.rnd() < o.chance) { takeItem(g, o.item); msg = `Lucky! ${ITEM_BY_ID[o.item].name}`; } else msg = 'The shrine stays quiet';
       ev.done = true; break;
     case 'curse': takeItem(g, o.item); g.hurtMul *= 1 + o.hurt; msg = `${ITEM_BY_ID[o.item].name}, but mice bite ${Math.round(o.hurt * 100)}% harder now`; ev.done = true; break;
+    case 'snack': eatSnack(g, o.id); msg = `${SNACK_BY_ID[o.id].name} eaten`; ev.done = true; break;
+    case 'toss':
+      spend(o.cost); o.sold = true;
+      if (g.rnd() < o.chance) { g.run.coins += o.prize; msg = `The fountain pays back ${o.prize} coins!`; } else msg = 'Plop. Nothing happens';
+      break;
     case 'train': { const c = findCat(g, o.uid); if (c) { c.train = (c.train || 0) + o.bonus; msg = `${CAT_BY_ID[c.id].name} trained: +${Math.round(o.bonus * 100)}% damage`; } ev.done = true; break; }
     default: msg = 'You move on'; ev.done = true; break;
   }

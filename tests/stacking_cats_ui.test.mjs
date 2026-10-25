@@ -85,7 +85,7 @@ t('sound: every effect, every cat voice and every music track runs without error
   const sfx = new Sfx();
   sfx.play('coin');                       // before unlock: must be a silent no-op
   sfx.unlock();
-  for (const name of ['coin', 'chest', 'equip', 'upgrade', 'reroll', 'hover', 'achieve', 'synergy', 'route', 'swipe', 'hit', 'shoot', 'bang', 'flame', 'zap', 'boom', 'pop', 'ko', 'heal', 'ui', 'pick', 'merge', 'wave', 'boss', 'clear', 'win', 'over', 'zoom', 'roar', 'nope']) sfx.play(name, 1.3);
+  for (const name of ['coin', 'chest', 'equip', 'upgrade', 'reroll', 'hover', 'achieve', 'synergy', 'route', 'swipe', 'hit', 'shoot', 'bang', 'flame', 'zap', 'boom', 'pop', 'ko', 'heal', 'ui', 'pick', 'merge', 'wave', 'boss', 'clear', 'win', 'over', 'zoom', 'roar', 'nope', 'special', 'shield']) sfx.play(name, 1.3);
   for (const c of CATS) for (const kind of ['pick', 'happy', 'sad']) { sfx.last.meow = 0; sfx.meow(c.id, kind); }
   for (const mode of ['calm', 'fight', 'boss']) {
     sfx.music(mode);
