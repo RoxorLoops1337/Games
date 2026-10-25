@@ -1018,6 +1018,8 @@ function handle(e) {
       puff(e.x, e.y, e.elite ? 14 : 6, e.elite ? '#ffd23f' : '#ffffff', 110, 0.5, 4);
       sparks(e.x, e.y, e.elite ? 12 : 5, e.elite ? '#ffd23f' : '#fff6b0', 190, 0.3);
       spawnFx({ k: 's', x: e.x, y: e.y - 6, life: 0.4, max: 0.4 });
+      flashGlow(e.x, e.y - 8, e.elite ? 54 : 34, '#ffffff', 0.32);
+      for (let i = 0; i < (e.elite ? 7 : 4); i++) spawnFx({ k: 'sp', x: e.x, y: e.y - 10, vx: (Math.random() - 0.3) * 200, vy: -120 - Math.random() * 140, col: e.elite ? '#ffd23f' : '#ffe9c8', life: 0.55, max: 0.55 });
       if (e.elite) { flashGlow(e.x, e.y, 70, '#ffd23f', 0.35); hit(0.05); shake = Math.max(shake, 4); }
       sfx.play('pop', Math.min(2.2, 1 + combo * 0.035));
       if (combo === 10 || combo === 25 || combo === 50 || combo === 100) { txtFx(g.towerX + 70, 250, combo + ' COMBO!', '#ff8fb7', 30, 1.3); sfx.play('pick'); zpunch = Math.max(zpunch, 0.02); }
@@ -1045,7 +1047,7 @@ function handle(e) {
     case 'beam':
       bolt([{ x: e.x, y: e.y }, { x: e.x2, y: e.y2 }], '#ff7be8', 9, 0.26); bolt([{ x: e.x, y: e.y }, { x: e.x2, y: e.y2 }], '#ffffff', 3, 0.26);
       flashGlow(e.x + 10, e.y, 34, '#ff7be8', 0.25); hit(0.03); sfx.play('zap'); break;
-    case 'pellet': bolt([{ x: e.x, y: e.y }, { x: e.x2, y: e.y2 }], '#ffe9a0', 1.8, 0.12); sparks(e.x2, e.y2, 1, '#ffe9a0', 120, 0.2); break;
+    case 'pellet': bolt([{ x: e.x, y: e.y }, { x: e.x2, y: e.y2 }], '#ffd27a', 3, 0.1); bolt([{ x: e.x, y: e.y }, { x: e.x2, y: e.y2 }], '#ffffff', 1.1, 0.1); flashGlow(e.x + 6, e.y, 22, '#ffe9a0', 0.14); sparks(e.x2, e.y2, 2, '#ffe9a0', 150, 0.22); if (Math.random() < 0.5) smoke(e.x2, e.y2 + 4, 1, 5, '#cbbfa0'); break;
     case 'shoot':
       flashGlow(e.x + 16, e.y, e.big ? 40 : 24, atkColor(e.id), e.big ? 0.18 : 0.12);
       if (e.big) { sparks(e.x + 18, e.y, 8, '#ffe9a0', 280, 0.25); smoke(e.x + 24, e.y, 2, 8); shake = Math.max(shake, 4); }
@@ -1074,7 +1076,7 @@ function handle(e) {
     case 'chest': spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', ox: 0, oy: -90 }); sparks(e.x, e.y, 10, '#ffd23f', 220, 0.5); txtFx(e.x, e.y - 20, 'Chest!', '#ffd23f', 20, 1); sfx.play('chest'); break;
     case 'dodge': { const p = catPos(e.uid); txtFx(p.x - 40, p.y, 'Miss!', '#b9f5ff', 16, 0.7); break; }
     case 'ehit': sparks(e.x, e.y, 3, '#ffffff', 130, 0.2); break;
-    case 'spawn': smoke(e.x, e.y, 1, 7, '#d9c9a0'); puff(e.x, e.y - 10, 3, '#d9c9a0', 50, 0.4, 4); break;
+    case 'spawn': smoke(e.x, e.y, 1, 7, '#d9c9a0'); puff(e.x, e.y - 10, 3, '#d9c9a0', 50, 0.4, 4); ring(e.x, e.y + 2, 22, '#e8dcb8', 0.28, 3); break;
     case 'roar': shake = Math.max(shake, 13); zpunch = Math.max(zpunch, 0.03); txtFx(e.x, e.y, 'SQUEAK!', '#ff9a9a', 32, 1.1); screenFlash('rgba(255,40,40,.18)', 0.3); sfx.play('roar'); break;
     case 'bossDown': {
       ring(e.x, e.y - 60, 200, '#fff6b0', 0.9, 14); ring(e.x, e.y - 60, 120, '#ffffff', 0.6, 8);
@@ -1308,7 +1310,8 @@ function drawEnemy(e, t) {
   ctx.restore();
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   const top = y - (e.boss ? 150 : e.h * (e.elite ? 1.28 : 1.12));
-  if (e.slowT > 0 && e.slow > 0 && !e.boss) { add(); glow(e.x, y - e.h * 0.5, e.w * 0.9, '#8fd3ff', 0.4); norm(); }
+  if (e.slowT > 0 && e.slow > 0 && !e.boss) { add(); glow(e.x, y - e.h * 0.5, e.w * 0.9, '#8fd3ff', 0.4); norm(); if (Math.random() < 0.06) spawnFx({ k: 'sp', x: e.x + (Math.random() - 0.5) * e.w, y: y - e.h * (0.3 + Math.random() * 0.6), vx: (Math.random() - 0.5) * 50, vy: -20, col: '#dff4ff', life: 0.5, max: 0.5 }); }
+  if (e.boss) { add(); glow(e.x, e.y + 2, 120, '#ff3a3a', 0.1 + 0.06 * Math.sin(t * 3) + (1 - e.hp / e.maxHp) * 0.14); norm(); }
   if (e.burn) { add(); glow(e.x + Math.sin(t * 20) * 3, y - e.h * 0.6, e.w * 0.6, '#ff7a2b', 0.5); norm(); }
   if (e.stun > 0 && !e.boss) { ctx.fillStyle = '#ffe14d'; for (let k = 0; k < 3; k++) { const an = t * 6 + k * 2.1; ctx.beginPath(); ctx.arc(e.x + Math.cos(an) * 10, top + Math.sin(an) * 3, 2.2, 0, TAU); ctx.fill(); } }
   if (e.poison) { ctx.fillStyle = '#8be05a'; ctx.beginPath(); ctx.arc(e.x + 12, y - e.h * 0.9 + Math.sin(t * 6) * 2, 3, 0, TAU); ctx.fill(); }
@@ -1472,18 +1475,25 @@ function gatherLights(t) {
   }
   return L;
 }
+const splashes = [];
 function drawWeather(t, dt) {
   const th = THEMES[bdIdx] || THEMES[0];
   if (th.weather === 'rain') {
     ctx.save(); ctx.strokeStyle = 'rgba(190,210,255,.42)'; ctx.lineWidth = 1.2; ctx.beginPath();
     for (const d of drops) {
       d.y += d.v * dt; d.x -= d.v * dt * 0.18;
-      if (d.y > H) { if (Math.random() < 0.5 && d.y < H + 40) { /* splash handled below */ } d.y = -20; d.x = Math.random() * (W + 200); }
+      if (!d.gy) d.gy = GROUND + 4 + Math.random() * 50;
+      if (d.y > d.gy) { if (splashes.length < 30) splashes.push({ x: d.x, y: d.gy, t: 0 }); d.y = -20 - Math.random() * 60; d.x = Math.random() * (W + 200); d.gy = 0; }
       ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.l * 0.18, d.y - d.l);
     }
     ctx.stroke();
-    ctx.fillStyle = 'rgba(200,220,255,.5)';
-    for (let i = 0; i < 6; i++) { const x = (i * 197 + t * 330) % W, y = GROUND + 6 + ((i * 53) % 40), r = 3 + ((t * 9 + i) % 1) * 7; ctx.globalAlpha = 0.5 * (1 - (r - 3) / 7); ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.3, 0, 0, TAU); ctx.fill(); }
+    // drops that reach the ground leave a small ring that spreads and fades
+    ctx.strokeStyle = 'rgba(210,228,255,.7)'; ctx.lineWidth = 1;
+    for (let i = splashes.length - 1; i >= 0; i--) {
+      const sp = splashes[i]; sp.t += dt * 3.2;
+      if (sp.t >= 1) { splashes[i] = splashes[splashes.length - 1]; splashes.pop(); continue; }
+      ctx.globalAlpha = 0.65 * (1 - sp.t); ctx.beginPath(); ctx.ellipse(sp.x, sp.y, 2 + sp.t * 9, (2 + sp.t * 9) * 0.32, 0, 0, TAU); ctx.stroke();
+    }
     ctx.restore();
   } else if (th.weather === 'snow') {
     ctx.save(); ctx.fillStyle = 'rgba(255,255,255,.85)';
