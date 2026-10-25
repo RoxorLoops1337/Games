@@ -530,15 +530,15 @@ export function masteryMap(catStats) {
 // mod keys: speed (mice speed, multiplies), heal (wave healing multiplier, smallest wins), elite (extra elite chance from wave 3, adds),
 // snack (fewer snack choices, adds), rerolls (fewer free rerolls, adds)
 export const LADDER_RULES = [
-  { tier: 1, name: 'Quick Mice',    icon: '💨', desc: 'Mice move 12% faster.',                       mod: { speed: 1.12 } },
+  { tier: 1, name: 'Quick Mice',    icon: '💨', desc: 'Mice move 6% faster.',                        mod: { speed: 1.06 } },
   { tier: 2, name: 'Lean Times',    icon: '🥫', desc: 'Cats heal half as much after each wave.',      mod: { heal: 0.5 } },
   { tier: 3, name: 'Royal Guard',   icon: '👑', desc: 'Elite mice show up much more often.',          mod: { elite: 0.1 } },
   { tier: 4, name: 'Slim Pickings', icon: '🍱', desc: 'One snack choice fewer, and one reroll fewer.', mod: { snack: 1, rerolls: 1 } },
-  { tier: 5, name: 'Sealed Pantry', icon: '🔒', desc: 'No healing after waves and no free rerolls. Mice are faster still.', mod: { heal: 0, rerolls: 9, speed: 1.08 } },
+  { tier: 5, name: 'Sealed Pantry', icon: '🔒', desc: 'No healing after waves and no free rerolls. Mice are faster still.', mod: { heal: 0, rerolls: 9, speed: 1.05 } },
 ];
 export const LADDER_TIERS = LADDER_RULES.length;
 // the wave to reach on a tier to unlock the next one (index 0 is Hard, index n is Nightmare n)
-export const LADDER_WAVE = [15, 15, 15, 16, 16];
+export const LADDER_WAVE = [15, 14, 13, 12, 12];
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
 export const ladderId = (tier) => 'nm' + tier;
 export const ladderTier = (diff) => { const m = /^nm([1-5])$/.exec(String(diff)); return m ? +m[1] : 0; };
@@ -557,7 +557,7 @@ for (let t = 1; t <= LADDER_TIERS; t++) {
   DIFFS[ladderId(t)] = {
     name: 'Nightmare ' + ROMAN[t], icon: '☠', tier: t, rule: r,
     desc: 'Hard plus ' + LADDER_RULES.filter((x) => x.tier <= t).map((x) => x.name).join(', ') + '. Coins x' + (1.5 + 0.25 * t) + '.',
-    hp: 1.3 + 0.05 * t, dmg: 1.25 + 0.04 * t, budget: 1.12 + 0.02 * t, coin: 1.5 + 0.25 * t, ...stackRules(t),
+    hp: 1.3 + 0.03 * t, dmg: 1.25 + 0.02 * t, budget: 1.12 + 0.01 * t, coin: 1.5 + 0.25 * t, ...stackRules(t),
   };
 }
 export const DIFF_ORDER = ['cozy', 'normal', 'hard', ...LADDER_RULES.map((r) => ladderId(r.tier))];
