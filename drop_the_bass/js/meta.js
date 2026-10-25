@@ -37,7 +37,7 @@ export function newProfile(now = 0) {
     story: { intro: false, worlds: {}, ending: false },
     seen: { turrets: {}, enemies: {}, bosses: {}, relics: {} },
     autoMerge: false, autoMergeOn: true,
-    settings: { music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1 },
+    settings: { lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1 },
   };
 }
 export function migrate(p, now = 0) {

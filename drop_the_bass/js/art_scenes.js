@@ -552,7 +552,7 @@ function postStack(ctx, id, w, h, t, p, look, beat) {
   }
   glowSpr(ctx, look.lc, lx, ly, Math.max(w, h) * 0.45, 0.14 + beat * 0.08);
   bokeh(ctx, w, h, t, 22, look.dust, 0.35, id.length * 3.7);
-  bloom(ctx, w, h, look.bloom * 0.34);
+  bloom(ctx, w, h, look.bloom * 0.16);
   if (look.glitch) glitch(ctx, w, h, t, look.glitch);
   grade(ctx, w, h, look.gt, look.gb, look.ga);
   vignette(ctx, w, h, 0.5);
@@ -613,7 +613,7 @@ export function drawTitle(ctx, w, h, t, o) {
   const lx = w * 0.5;
   glowSpr(ctx, '#ff5fb0', lx, h * 0.18, Math.max(w, h) * 0.5, 0.12 + beat * 0.12);
   bokeh(ctx, w, h, t, 30, look.dust, 0.4, 5.5);
-  bloom(ctx, w, h, 0.32 + beat * 0.12);
+  bloom(ctx, w, h, 0.13 + beat * 0.06);
   grade(ctx, w, h, look.gt, look.gb, 0.45);
   vignette(ctx, w, h, 0.5);
   grain(ctx, w, h, t, 0.06);

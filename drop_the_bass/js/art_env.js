@@ -6,7 +6,7 @@ import { drawHero } from './art_heroes.js';
 
 let ART_SCALE = 2;
 const cacheBg = new Map(), cacheBoard = new Map(), glowCache = new Map(), misc = new Map();
-export function setArtScale(n) { ART_SCALE = Math.max(1, Math.min(3, n || 2)); cacheBg.clear(); cacheBoard.clear(); glowCache.clear(); misc.clear(); baseSprites.clear(); heroBuf.cv = null; heroBuf.key = ''; }
+export function setArtScale(n) { ART_SCALE = Math.max(1, Math.min(3, n || 2)); cacheBg.clear(); cacheBoard.clear(); glowCache.clear(); misc.clear(); baseSprites.clear(); heroFrames.clear(); }
 export function makeCanvas(w, h) {
   if (typeof document === 'undefined' || !document.createElement) return null;
   const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c;
@@ -701,18 +701,21 @@ export function drawBoard(ctx, mapId, worldId, t, o) {
 // ================================================================================================================ STAGE BASE
 // The stage the Static are attacking. (x,y) = stage tile centre. A lit rig with a screen, speakers and the duo; reacts to hp, hit and the beat.
 const baseSprites = new Map();
-const heroBuf = { cv: null, key: '' };
+// the duo on the stage is tiny and the hero art is detailed: render a looping 8 frame cycle per pose once (lazily) and replay it at 5 fps
+const heroFrames = new Map();
 function heroSprite(pose, t) {
-  if (heroBuf.cv === null) { const cv = makeCanvas(88 * ART_SCALE, 52 * ART_SCALE); heroBuf.cv = cv || false; }
-  if (!heroBuf.cv) return null;
-  const key = pose + '|' + Math.floor(t * 15);
-  if (heroBuf.key !== key) {
-    const c = heroBuf.cv.getContext('2d'); if (!c) return null;
-    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, heroBuf.cv.width, heroBuf.cv.height); c.scale(ART_SCALE, ART_SCALE); c.translate(44, 26);
-    drawHero(c, 'roxor', -11, 7, 38, { t, pose }); drawHero(c, 'jasmin', 11, 7, 36, { t: t + 0.4, pose: pose === 'beat' ? 'sing' : pose });
-    heroBuf.key = key;
+  const f = Math.floor(t * 5) % 8, key = pose + '|' + f + '|' + ART_SCALE;
+  let cv = heroFrames.get(key);
+  if (cv === undefined) {
+    cv = makeCanvas(88 * ART_SCALE, 52 * ART_SCALE) || false;
+    if (cv) {
+      const c = cv.getContext('2d');
+      if (!c) cv = false;
+      else { c.scale(ART_SCALE, ART_SCALE); c.translate(44, 26); const tt = f / 5; drawHero(c, 'roxor', -11, 7, 38, { t: tt, pose }); drawHero(c, 'jasmin', 11, 7, 36, { t: tt + 0.4, pose: pose === 'beat' ? 'sing' : pose }); }
+    }
+    heroFrames.set(key, cv);
   }
-  return heroBuf.cv;
+  return cv || null;
 }
 function baseSprite(worldId, ok) {
   const key = worldId + '|' + ok + '|' + ART_SCALE;
