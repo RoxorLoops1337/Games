@@ -14,3 +14,34 @@ project:
 modes:
   rigor: full
   automation: guided
+
+engine:
+  name: "Godot"
+  version: "4.7.1"
+  language: "GDScript"
+  rendering: "Compatibility"
+  physics: "Godot Physics 2D"
+  # TODO: godot was not found on PATH when this was written (installed version NOT DETERMINED).
+  # Set engine.path to the editor executable via /settings if it is not on PATH.
+
+specialists:
+  code: "godot-gdscript-specialist"
+  shader: "godot-shader-specialist"
+  ui: "godot-specialist"
+  additional: ["godot-gdextension-specialist"]
+
+naming:
+  classes: PascalCase
+  variables: snake_case
+  constants: SCREAMING_SNAKE
+  signals: past_tense
+  files: snake_case
+  scenes: snake_case
+
+commands:
+  # The Godot project lives in pitch_story/, so every command passes --path pitch_story.
+  # build: no export preset exists yet; add a Web preset in the editor, then set it here.
+  build: "[TO BE CONFIGURED]"
+  test: "godot --headless --path pitch_story -s -d --remote-debug tcp://127.0.0.1:0 res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode"
+  run: "godot --path pitch_story --windowed --resolution 1280x720"
+  smoke: "godot --headless --path pitch_story --quit-after 5"

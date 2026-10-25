@@ -1,0 +1,14 @@
+; Engine configuration file.
+; run/main_scene is left unset on purpose: /dev-story or the developer sets it once a scene exists.
+
+config_version=5
+
+[application]
+
+config/name="Pitch Story: Draft Day"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
