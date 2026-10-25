@@ -39,7 +39,7 @@ function playFight(app, ctx, style) {
   let ticks = 0, idle = 0, plays = 0, guard = 0;
   while (ctx.routed.length === 0 && ticks < MAX_TICKS) {
     const a = combat.api();
-    if (a.busy && !a.ending) { if (ticks % 7 === 0) key(app, ' '); else app.tick(DT); ticks++; idle = 0; continue; }
+    if (a.busy && !a.ending) { if (!a.state().skip) key(app, ' '); else app.tick(DT); ticks++; idle = 0; continue; }
     if (a.ending) { app.tick(DT); ticks++; if (ticks % 40 === 0) click(app, 640, 300); continue; }
     if (a.pending) {
       idle++; if (idle < 4) { app.tick(DT); ticks++; continue; }
@@ -66,11 +66,12 @@ function playFight(app, ctx, style) {
     if (hi < 0 || guard > 60) { guard = 0; click(app, a.endTurn.x, a.endTurn.y); ticks += 2; idle = 0; continue; }
     guard++;
     const live = c.enemies.map((e, i) => (e.dead ? -1 : i)).filter((i) => i >= 0);
-    const tgt = needsTarget(c, hi) ? live[plays % live.length] : -1;
+    const prefer = live.find((i) => !c.enemies[i].minion) ?? live[0];
+    const tgt = needsTarget(c, hi) ? prefer : -1;
     const hp = a.handPos(hi);
     if (style === 'keys') {
       key(app, String(((hi + 1) % 10)));
-      if (tgt >= 0) { for (let k = 0; k < (plays % live.length); k++) key(app, 'Tab'); }
+      if (tgt >= 0) { for (let k = 0; k < live.indexOf(tgt); k++) key(app, 'Tab'); }
       key(app, 'Enter'); ticks += 3;
     } else if (style === 'drag') {
       if (tgt >= 0) { const ep = a.enemyPos(tgt); drag(app, hp, ep); } else drag(app, hp, { x: 600, y: 240 });
