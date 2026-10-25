@@ -602,7 +602,7 @@ function updateInput(app, dt) {
   const m = app.mouse, c = S.c;
   const mine = app.stack[app.stack.length - 1] === SCREEN;
   const keys = mine ? app.pressedKeys.slice() : [];
-  if (!mine || app.blocked) { S.hov = S.hov && S.hand.some((d) => d.uid === S.hov) && false ? S.hov : null; S.down = null; return; }
+  if (!mine || app.blocked) { S.hov = null; S.down = null; return; }
 
   // speed-up while the queue plays
   if (busy() && !S.ending) { if (m.pressed || keys.some((e) => e.key === ' ' || e.key === 'Enter')) S.skip = true; }

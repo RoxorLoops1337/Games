@@ -149,7 +149,7 @@ export function gearIcon(ctx, x, y, w, h) {
   ctx.save(); ctx.translate(cx, cy); ctx.fillStyle = COL.vellum;
   for (let i = 0; i < 8; i++) { ctx.rotate(Math.PI / 4); ctx.fillRect(-2.5, -12, 5, 6); }
   ctx.beginPath(); ctx.arc(0, 0, 8, 0, 6.283); ctx.fill();
-  ctx.globalCompositeOperation = 'destination-out'; ctx.beginPath(); ctx.arc(0, 0, 3.2, 0, 6.283); ctx.fill();
+  ctx.fillStyle = COL.slab2; ctx.beginPath(); ctx.arc(0, 0, 3.2, 0, 6.283); ctx.fill();
   ctx.restore();
 }
 export { drawShield, rgba, CARDS };
