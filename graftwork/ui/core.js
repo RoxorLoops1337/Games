@@ -43,8 +43,10 @@ export function createApp(canvas, opts = {}) {
   const toLogical = (e) => { const r = canvas.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return { x: app.mouse.x, y: app.mouse.y }; return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H }; };
   canvas.addEventListener('pointermove', (e) => { const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; });
   canvas.addEventListener('pointerdown', (e) => { const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.down = true; app.mouse.pressed = true; app.mouse.button = e.button; canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); });
-  canvas.addEventListener('pointerup', (e) => { const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.down = false; app.mouse.released = true; });
-  canvas.addEventListener('pointerleave', () => { if (!app.mouse.down) { app.mouse.x = -999; app.mouse.y = -999; } });
+  canvas.addEventListener('pointerup', (e) => { const p = toLogical(e); app.mouse.x = p.x; app.mouse.y = p.y; app.mouse.down = false; app.mouse.released = true; app.mouse.touchUp = !!e.pointerType && e.pointerType !== 'mouse'; });
+  // Touch fires pointerleave right after pointerup: moving the pointer away at once would eat the tap (clicks are resolved on the next tick). Touch parks the pointer after that tick instead.
+  canvas.addEventListener('pointerleave', (e) => { if (!app.mouse.down && !(e && e.pointerType && e.pointerType !== 'mouse')) { app.mouse.x = -999; app.mouse.y = -999; } });
+  canvas.addEventListener('pointercancel', () => { app.mouse.down = false; app.mouse.released = false; app.mouse.x = -999; app.mouse.y = -999; });
   canvas.addEventListener('wheel', (e) => { app.mouse.wheel += e.deltaY; e.preventDefault(); }, { passive: false });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('keydown', (e) => { if (e.repeat) return; app.keys.add(e.key); app.pressedKeys.push(e); const s = top(); if (s && s.key && s.key(app, e)) e.preventDefault(); });
@@ -202,6 +204,7 @@ export function createApp(canvas, opts = {}) {
     drawTip();
     if (app.overlay) app.overlay(app);
     canvas.style.cursor = app.cursor;
+    if (app.mouse.touchUp) { app.mouse.touchUp = false; app.mouse.x = -999; app.mouse.y = -999; }
     app.mouse.pressed = false; app.mouse.released = false; app.mouse.wheel = 0; app.pressedKeys.length = 0;
   };
   app.start = () => { app.resize(); running = true; last = performance.now(); requestAnimationFrame(frame); };

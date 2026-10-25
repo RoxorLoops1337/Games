@@ -100,6 +100,67 @@ export const RELIC_LIST = [
   { id: 'r_parasite_heart', name: 'Parasite Heart', rarity: 'boss', text: 'Gain 1 Energy each turn. Lose 2 HP at turn start.', mod: { energy: 1 },
     on: { turnStart: (A) => A.loseHp(A.player, 2, { floor1: true, src: 'relic' }) } },
 
+
+  // =====================================================================
+  // CONTENT WAVE 2: graft-system relics. Each rewards taking a Price OR avoiding it, never both.
+  // Hooks and mods only; no new perk names.
+  // =====================================================================
+  // ---------- common (8) ----------
+  { id: 'r_blotter', name: 'Blotter', rarity: 'common', text: 'At end of turn, gain 2 Block per jammed card in your hand (max 6).',
+    on: { turnEnd: (A) => A.block(A.player, Math.min(6, 2 * A.c.hand.filter((k) => k.jam).length)) } },
+  { id: 'r_tithe_purse', name: 'Tithe Purse', rarity: 'common', text: 'Whenever you play a Tithed card, gain 2 gold (max 10 per combat).',
+    on: { cardPlayed: (A, p) => { const s = S(A); if (p.card.tithed && (s.purse | 0) < 5) { s.purse = (s.purse | 0) + 1; A.gold(2); } } } },
+  { id: 'r_grafters_apron', name: 'Grafter\'s Apron', rarity: 'common', text: 'At combat start, gain 1 Block per graft in your deck (max 10).',
+    on: { combatStart: (A, p, run) => A.block(A.player, Math.min(10, run.deck.reduce((a, i) => a + i.grafts.length, 0))) } },
+  { id: 'r_scrap_bin', name: 'Scrap Bin', rarity: 'common', text: 'Whenever a grafted card is exhausted, gain 3 Block.',
+    on: { exhaust: (A, p) => { if (p.card.inst.grafts.length) A.block(A.player, 3); } } },
+  { id: 'r_even_keel', name: 'Even Keel', rarity: 'common', text: 'If you have no Strain, draw 1 extra card on turn 1.',
+    on: { turnStart: (A) => { if (A.c.turn === 1 && A.c.strain.strain === 0) A.draw(1); } } },
+  { id: 'r_single_stitch', name: 'Single Stitch', rarity: 'common', text: 'Whenever you play a card with exactly 1 graft, gain 2 Block.',
+    on: { cardPlayed: (A, p) => { if (p.spec.grafts.length === 1) A.block(A.player, 2); } } },
+  { id: 'r_dust_ledger', name: 'Dust Ledger', rarity: 'common', text: 'At turn start, gain 1 Block per junk card in your discard pile (max 5).',
+    on: { turnStart: (A) => A.block(A.player, Math.min(5, A.c.discard.filter(isJunk).length)) } },
+  { id: 'r_patch_kit', name: 'Patch Kit', rarity: 'common', text: 'After combat, heal 3 HP per Overload card you played (max 9).',
+    on: { cardPlayed: (A, p) => { if (p.spec.overload) S(A).patch = (S(A).patch | 0) + 1; },
+      combatEnd: (A) => { const n = Math.min(3, S(A).patch | 0); if (n) A.heal(A.player, 3 * n); } } },
+
+  // ---------- uncommon (8) ----------
+  { id: 'r_unjam_gauge', name: 'Pressure Gauge', rarity: 'uncommon', text: 'At turn start, if you have Backfire, unjam your hand and draw 1 card.',
+    on: { turnStart: (A) => { if (A.c.strain.backfire > 0) { for (const k of A.c.hand) k.jam = false; A.draw(1); } } } },
+  { id: 'r_penance', name: 'Penance', rarity: 'uncommon', text: 'After you play a Tithed card, its Tithe is lifted for this combat.',
+    on: { cardPlayed: (A, p) => { p.card.tithed = false; } } },
+  { id: 'r_overload_fuse', name: 'Overload Fuse', rarity: 'uncommon', text: 'Whenever you play an Overload card, draw 1 card.',
+    on: { cardPlayed: (A, p) => { if (p.spec.overload) A.draw(1); } } },
+  { id: 'r_shatter_dividend', name: 'Shatter Dividend', rarity: 'uncommon', text: 'When a card Shatters, gain 2 Strength and draw 2 cards.',
+    on: { shatter: (A) => { A.status(A.player, 'strength', 2); A.draw(2); } } },
+  { id: 'r_priced_in', name: 'Priced In', rarity: 'uncommon', text: 'Whenever you play a card whose graft Price hurts you, gain 5 Block.',
+    on: { cardPlayed: (A, p) => { if (p.spec.price && p.spec.price.selfHurt > 0) A.block(A.player, 5); } } },
+  { id: 'r_junk_jar', name: 'Junk Jar', rarity: 'uncommon', text: 'At turn start, if you hold 2 or more junk cards, gain 1 Energy.',
+    on: { turnStart: (A) => { if (A.c.hand.filter(isJunk).length >= 2) A.energy(1); } } },
+  { id: 'r_heavy_hands', name: 'Heavy Hands', rarity: 'uncommon', text: 'At turn start, the first card with 2 or more grafts in your hand costs 1 less this turn.',
+    on: { turnStart: (A) => { const k = A.c.hand.find((x) => x.inst.grafts.length >= 2); if (k) k.costMod -= 1; } } },
+  { id: 'r_featherweight', name: 'Featherweight', rarity: 'uncommon', text: 'If you have no Strain, the first Bare card in your hand costs 1 less each turn.',
+    on: { turnStart: (A) => { if (A.c.strain.strain === 0) { const k = A.c.hand.find((x) => x.inst.grafts.length === 0 && !isJunk(x)); if (k) k.costMod -= 1; } } } },
+
+  // ---------- rare (6) ----------
+  { id: 'r_first_dibs', name: 'First Dibs', rarity: 'rare', text: 'At combat start, one random Overload card in your deck cannot Shatter this combat.',
+    on: { combatStart: (A) => { const o = allCards(A).filter((k) => k.inst.grafts.length > 2); if (o.length) A.rng.pick(o).rolled = true; } } },
+  { id: 'r_tithe_engine', name: 'Tithe Engine', rarity: 'rare', text: 'At combat start, gain 1 Strength per Tithed card (max 3).',
+    on: { combatStart: (A) => A.status(A.player, 'strength', Math.min(3, A.c.strain.tithed.length)) } },
+  { id: 'r_jam_forge', name: 'Jam Forge', rarity: 'rare', text: 'Jammed cards in your hand cost no extra.',
+    on: { turnStart: (A) => { for (const k of A.c.hand) if (k.jam) k.costMod -= 1; } } },
+  { id: 'r_graft_press', name: 'Graft Press', rarity: 'rare', text: 'The first time each turn you play a card with 2 or more grafts, gain 1 Energy.',
+    on: { cardPlayed: (A, p) => { const s = S(A); if (p.spec.grafts.length >= 2 && s.press !== A.c.turn) { s.press = A.c.turn; A.energy(1); } } } },
+  { id: 'r_golden_scalpel', name: 'Golden Scalpel', rarity: 'rare', text: 'Budget +1. Overload Shatter chance is 15% higher.', mod: { budget: 1, shatter: 0.15 } },
+  { id: 'r_resonance_lens', name: 'Resonance Lens', rarity: 'rare', text: 'Each school at Resonance 3 counts as Resonance 6 this combat.',
+    on: { combatStart: (A) => { const r = A.c.res || {}; for (const k of Object.keys(r)) if (r[k] === 3) r[k] = 6; } } },
+
+  // ---------- boss (2) ----------
+  { id: 'r_tithe_crown', name: 'Tithe Crown', rarity: 'boss', text: 'Budget -2. Start combat with 1 Strength per Tithed card (max 6).', mod: { budget: -2 },
+    on: { combatStart: (A) => A.status(A.player, 'strength', Math.min(6, A.c.strain.tithed.length)) } },
+  { id: 'r_glass_throat', name: 'Glass Throat', rarity: 'boss', text: 'Overload Shatter chance +15%. Playing an Overload card draws 2 cards and gains 8 Block.', mod: { shatter: 0.15 },
+    on: { cardPlayed: (A, p) => { if (p.spec.overload) { A.draw(2); A.block(A.player, 8); } } } },
+
   // ---------- shop (3) ----------
   { id: 'r_pawn_ticket', name: 'Pawn Ticket', rarity: 'shop', text: 'Shop prices are 25% lower.', perk: 'shopDiscount', n: 25 },
   { id: 'r_budget_ledger', name: 'Budget Ledger', rarity: 'shop', text: 'Budget +1.', mod: { budget: 1 } },

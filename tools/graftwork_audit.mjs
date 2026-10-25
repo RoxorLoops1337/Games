@@ -69,9 +69,9 @@ export function summarize(gid, rows) {
   const g = GRAFTS[gid];
   const faster = mean(rows.map((r) => r.faster)), hpBetter = mean(rows.map((r) => r.hpBetter));
   // headline power: turns faster, with HP saved counted at half weight (HP lost is the other face of the same speed)
-  // gold is the third currency: 1 gold per fight counts as 0.5 points (a normal Act-1 fight pays 18)
+  // gold is the third currency: 1 gold per fight counts as 1 point (a normal Act-1 fight pays 18)
   const gold = mean(rows.map((r) => r.goldD));
-  const power = faster * 0.6 + hpBetter * 0.4 + gold * 0.5;
+  const power = faster * 0.6 + hpBetter * 0.4 + gold * 1.0;
   return { gid, name: g.name, tier: g.tier, weight: g.weight, rarity: g.rarity, cards: rows.length, faster, hpBetter, gold, power };
 }
 

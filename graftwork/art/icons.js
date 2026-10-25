@@ -5,7 +5,7 @@
 //          drawDeckIcon drawPileIcon(ctx,x,y,size,'draw'|'discard'|'exhaust')  drawMapPath(ctx,x1,y1,x2,y2,state,t)
 //          STATUS_IDS_DRAWN / RELIC_GLYPHS (introspection for tests)
 import { COL, FONT, rgba, shade } from '../ui/core.js';
-import { RELICS } from '../data/index.js';
+import { RELICS, STATUSES } from '../data/index.js';
 
 const TAU = Math.PI * 2;
 const D = '#120d0b';
@@ -254,6 +254,17 @@ G.needle = (c, k, a) => { c.save(); c.rotate(0.7); seg(c, 0, -0.66, 0, 0.62, '#e
 const KEYWORDS = [['clamp', 'clamp'], ['staple', 'staple'], ['ledger', 'ledger'], ['tooth', 'tooth'], ['lens', 'lens'], ['look', 'lens'], ['thread', 'spool'], ['key', 'key'], ['bell', 'bell'], ['scale', 'scales'], ['jar', 'jar'], ['coin', 'coin'], ['heart', 'heart'], ['lamp', 'lamp'], ['gear', 'gear'], ['engine', 'engine'], ['gold', 'coin'], ['bone', 'bone'], ['blood', 'drop'], ['fire', 'flame'], ['shield', 'shieldg'], ['ward', 'wardshield'], ['hammer', 'hammer'], ['eye', 'eye'], ['skull', 'skull'], ['crown', 'crown'], ['glove', 'glove'], ['hand', 'palm'], ['book', 'openbook'], ['card', 'deck'], ['deck', 'deck'], ['bolt', 'bolt'], ['star', 'sparkle']];
 G.staple = (c, k, a) => { c.beginPath(); c.moveTo(-0.5, 0.2); c.lineTo(-0.5, -0.1); c.lineTo(0.5, -0.1); c.lineTo(0.5, 0.2); ln(c, D, 0.26); c.beginPath(); c.moveTo(-0.5, 0.2); c.lineTo(-0.5, -0.1); c.lineTo(0.5, -0.1); c.lineTo(0.5, 0.2); ln(c, k, 0.15); };
 const GLYPH_NAMES = Object.keys(G);
+// Any status added to the data later still gets a pictogram: pick a glyph by keyword in its id or name, else by hash.
+const STATUS_KEYWORDS = [['stitch', 'stitch'], ['seam', 'seam'], ['fire', 'flame'], ['flame', 'flame'], ['burn', 'flame'], ['blood', 'drop'], ['bleed', 'drop'], ['coin', 'coin'], ['gold', 'coin'], ['gilt', 'gilt'], ['charge', 'bolt'], ['spark', 'bolt'], ['shield', 'shieldg'], ['armor', 'plate'], ['plate', 'plate'], ['clock', 'clock'], ['time', 'clock'], ['mark', 'crosshair'], ['eye', 'eyeshut'], ['ghost', 'ghost'], ['echo', 'rings'], ['ring', 'rings'], ['curse', 'skull'], ['poison', 'skull'], ['rust', 'holes'], ['jam', 'clamp'], ['key', 'ke'], ['ledger', 'ledger'], ['thread', 'spool'], ['needle', 'needle']];
+for (const sid of Object.keys(STATUSES)) {
+  if (ST[sid]) continue;
+  const text = (sid + ' ' + (STATUSES[sid].name || '')).toLowerCase();
+  let g = null;
+  for (const [kw, name] of STATUS_KEYWORDS) if (text.includes(kw) && G[name]) { g = name; break; }
+  if (!g) g = GLYPH_NAMES[hash(sid) % GLYPH_NAMES.length];
+  ST[sid] = [g, STATUSES[sid].good ? GR : RD, STATUSES[sid].good ? '#e8f6ea' : '#fff'];
+  STATUS_IDS_DRAWN.push(sid);
+}
 function relicGlyph(id, name) {
   if (RELIC_GLYPHS[id]) return RELIC_GLYPHS[id];
   const s = (String(id) + ' ' + String(name || '')).toLowerCase();

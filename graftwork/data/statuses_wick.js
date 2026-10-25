@@ -18,7 +18,4 @@ export const STATUS_WICK = [
   // Short fuse: at turn end lose 2n HP (never lethal) and apply 4n Burn to all enemies.
   { id: 'powderkeg', name: 'Powder Keg', good: true, stack: 'int', desc: (n) => `At turn end, lose ${2 * n} HP and apply ${4 * n} Burn to all enemies.`,
     hooks: { turnEnd: (A, o, n) => { A.loseHp(o, 2 * n, { floor1: true, src: 'status' }); for (const e of live(A)) A.status(e, 'burn', 4 * n); } } },
-  // Every two grafts in the deck feed the fire.
-  { id: 'graftfurnace', name: 'Graft Furnace', good: true, stack: 'int', desc: (n) => `At turn start, apply ${n} Burn to all enemies per 2 grafts in your deck (max ${6 * n}).`,
-    hooks: { turnStart: (A, o, n) => { const g = A.c.run.deck.reduce((a, i) => a + i.grafts.length, 0); const b = Math.min(6 * n, Math.floor(g / 2) * n); if (b > 0) for (const e of live(A)) A.status(e, 'burn', b); } } },
 ];
