@@ -90,6 +90,7 @@ async function fight(opts, style = 'clicks') {
   const ctx = setup(opts);
   const app = await boot(ctx);
   frames(app, 5);
+  if (opts.nerf) for (const e of combat.api().c.enemies) { e.hp = Math.min(e.hp, opts.nerf); e.maxHp = Math.min(e.maxHp, opts.nerf); }
   const before = ctx.run.stats.fights;
   const ticks = playFight(app, ctx, style);
   if (!ctx.routed.length) { const a = combat.api(); console.log('STUCK', JSON.stringify(a.state().q), a.state().wait, a.state().fx.stop, a.state().fx.slow, a.c.over, a.busy, a.canAct, a.ending, a.queueLen, !!a.c.pending, a.c.turn, a.c.hand.length, a.c.energy, a.c.enemies.map((e) => e.id + ':' + e.hp + (e.dead ? 'x' : ''))); }
@@ -119,7 +120,7 @@ let k = 0;
 for (const id of ids) {
   const d = ENEMIES[id];
   const kind = d.kind === 'boss' ? (d.final ? 'final' : 'boss') : d.kind === 'elite' ? 'elite' : 'normal';
-  const r = await fight({ hero: heroes[k % heroes.length], seed: 'e' + id, enemies: [id], kind, act: d.act || 1, hp: 900, potions: ['p_firebomb', 'p_sting', 'p_tonic'] }, styles[k++ % 3]);
+  const r = await fight({ hero: heroes[k % heroes.length], seed: 'e' + id, enemies: [id], kind, act: d.act || 1, hp: 900, nerf: 70, potions: ['p_firebomb', 'p_sting', 'p_tonic'] }, styles[k++ % 3]);
   total += r.ticks;
 }
 
