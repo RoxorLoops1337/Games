@@ -108,7 +108,7 @@ function wick(ctx, A) {
   line(ctx, [-12, hy - 9, -2, hy - 8], C(INK), 1.8); line(ctx, [4, hy - 8, 14, hy - 9], C(INK), 1.8);
   circ(ctx, -11, hy + 5, 3.2, C('#f4a0a8', 1, 0.6), 0); circ(ctx, 14, hy + 5, 3.2, C('#f4a0a8', 1, 0.6), 0);
   mouthStitch(ctx, 2, hy + 10, 10, 3.2, '#6e0a20', 3);
-  bandage(ctx, 12, hy + 8, 10, 5, 0.4);
+  bandage(ctx, -9, hy - 12, 11, 5, -0.5);
   // candle arm: raised, thrusts forward on attack
   const sx = 20, sy = -88 + b, a = -1.15 + att * 0.9 + Math.sin(t * 2.2) * 0.04;
   const ex = sx + Math.cos(a + 0.5) * 20, ey = sy + Math.sin(a + 0.5) * 20, hx = ex + Math.cos(a) * 18, hy2 = ey + Math.sin(a) * 18;

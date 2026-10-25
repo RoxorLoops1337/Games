@@ -125,7 +125,7 @@ export function mouthStitch(ctx, x, y, w, curve = 4, col = INK, ticks = 4) {
   ctx.beginPath(); ctx.moveTo(x - w / 2, y); ctx.quadraticCurveTo(x, y + curve * 2, x + w / 2, y);
   ctx.strokeStyle = C(col); ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.stroke();
   ctx.beginPath();
-  for (let i = 0; i <= ticks; i++) { const f = i / ticks, px = x - w / 2 + w * f, py = y + curve * 2 * f * (1 - f) * 2; ctx.moveTo(px, py - 3.5); ctx.lineTo(px, py + 3.5); }
+  for (let i = 0; i <= ticks; i++) { const f = i / ticks, px = x - w / 2 + w * f, py = y + curve * 2 * f * (1 - f) * 2; ctx.moveTo(px, py - 2.4); ctx.lineTo(px, py + 2.4); }
   ctx.lineWidth = 1.4; ctx.stroke();
 }
 export function thread(ctx, x0, y0, x1, y1, col = '#cdbfa0', lw = 1.2, sag = 0) {
