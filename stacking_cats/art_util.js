@@ -106,7 +106,39 @@ export function rimLight(c, d = 3, color = '#fff0c0', alpha = 0.5) {
   x.globalCompositeOperation = 'destination-out'; x.drawImage(c, -d, d);
   x.globalCompositeOperation = 'source-in'; x.fillStyle = color; x.fillRect(0, 0, w, h);
   const o = c.getContext('2d');
-  o.save(); o.globalCompositeOperation = 'source-atop'; o.globalAlpha = alpha; o.drawImage(t, 0, 0); o.restore();
+  o.save(); o.setTransform(1, 0, 0, 1, 0, 0); o.globalCompositeOperation = 'source-atop'; o.globalAlpha = alpha; o.drawImage(t, 0, 0); o.restore();
   t.width = t.height = 0;
+  return c;
+}
+
+// Bake fine surface texture into a finished sprite: short strokes a little lighter or darker than the colour underneath, kept
+// inside the shape and away from the dark outline and the eyes. Run once when a sprite is cached, so it costs nothing per frame.
+export function texturize(c, o = {}) {
+  try {
+    const w = c.width, h = c.height, x = c.getContext('2d');
+    const d = x.getImageData(0, 0, w, h).data;
+    const rnd = mulberry(o.seed || 7), n = o.count || Math.round((w * h) / 55);
+    const len = o.len || 5, minLum = o.minLum == null ? 70 : o.minLum, lw = o.lw || 1.1, amp = o.amp == null ? 0.14 : o.amp;
+    const dir = o.dir == null ? Math.PI / 2 : o.dir, spread = o.spread == null ? 1.1 : o.spread;
+    const at = (px, py) => { const i = ((py | 0) * w + (px | 0)) * 4; return [d[i], d[i + 1], d[i + 2], d[i + 3]]; };
+    x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const px = rnd() * w, py = rnd() * h;
+      const [r, g, b, a] = at(px, py);
+      if (a < 250) continue;
+      const lum = 0.3 * r + 0.59 * g + 0.11 * b;
+      if (lum < minLum) continue;
+      const ang = dir + (rnd() - 0.5) * spread, L = len * (0.6 + rnd() * 0.8);
+      const ex = px + Math.cos(ang) * L, ey = py + Math.sin(ang) * L;
+      if (ex < 0 || ey < 0 || ex >= w || ey >= h) continue;
+      const e = at(ex, ey);
+      if (e[3] < 250 || 0.3 * e[0] + 0.59 * e[1] + 0.11 * e[2] < minLum) continue;
+      const light = rnd() < 0.45, k = light ? 1 + amp + 0.06 : 1 - amp - 0.04;
+      x.strokeStyle = `rgba(${Math.min(255, Math.round(r * k + (light ? 10 : 0)))},${Math.min(255, Math.round(g * k + (light ? 10 : 0)))},${Math.min(255, Math.round(b * k + (light ? 10 : 0)))},${o.alpha || 0.5})`;
+      x.lineWidth = lw * (0.7 + rnd() * 0.6);
+      x.beginPath(); x.moveTo(px, py); x.lineTo(ex, ey); x.stroke();
+    }
+    x.restore();
+  } catch (err) { /* no pixel access (tests with a fake canvas): skip the texture */ }
   return c;
 }

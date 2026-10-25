@@ -568,6 +568,23 @@ body.touch #meter{top:196px}
 .screen.arr .col h4{margin-bottom:5px}
 body.scr #hud>*:not(#toasts):not(#banner){opacity:0!important;pointer-events:none!important;transition:opacity .15s}
 .setfoot{justify-content:space-between;align-items:center}.setfoot .btn.small{align-self:center}
+
+/* ===== surface detail: a fine paper or fabric grain, stitched edges and soft inner highlights ===== */
+:root{--grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .28 -.1'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");--grainw:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Cpath d='M0 0L6 6M6 0L0 6' stroke='%23ffffff' stroke-opacity='.05' stroke-width='1'/%3E%3C/svg%3E")}
+#waveBox,#coinBox,#chestBox,#snackBar .chip,#modeChip,.schip{background-image:var(--grainw),var(--grain),var(--plaque)}
+.card{background-image:var(--grain),linear-gradient(#fffaf2,#fff1de);background-blend-mode:multiply,normal}
+.slot.has{background-image:var(--grain),linear-gradient(#fffaf2,#f6ead6);background-blend-mode:multiply,normal}
+.detail{background-image:var(--grain),linear-gradient(#fffaf2,#f6ead6);background-blend-mode:multiply,normal}
+#bossBar{background-image:var(--grainw),var(--grain),linear-gradient(#5a2448,#2c1030)}
+#meter{background-image:var(--grainw),linear-gradient(#3a2d78e6,#241a52e6)}
+/* stitched seam just inside the plaques */
+#waveBox::after,#coinBox::after,#chestBox::after{content:'';position:absolute;inset:3px;border-radius:inherit;border:1.5px dashed rgba(255,255,255,.16);pointer-events:none}
+.btn{background-image:var(--grain),linear-gradient(#fff6d6 0%,#ffd58f 55%,#ffb868 100%);background-blend-mode:multiply,normal}
+.btn.big{background-image:var(--grain),linear-gradient(#ffe0ee 0%,#ffa6c8 55%,#ff7fae 100%)}
+.btn.green{background-image:var(--grain),linear-gradient(#e4ffe9 0%,#9ee8b4 55%,#6fd493 100%)}
+.btn.grey{background-image:var(--grain),linear-gradient(#f7f3fc 0%,#d8cdea 55%,#bfb0d8 100%)}
+.btn.amber{background-image:var(--grain),linear-gradient(#fff3c8 0%,#ffd23a 55%,#f0a81a 100%)}
+.btn.purple{background-image:var(--grain),linear-gradient(#f2e6ff 0%,#c89cff 55%,#a870ee 100%)}
 </style>
 </head>
 <body>

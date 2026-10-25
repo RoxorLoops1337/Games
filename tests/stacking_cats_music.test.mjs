@@ -173,7 +173,7 @@ t('music off or sfx off schedules nothing; big effects duck the music', () => {
   assert.ok(s.noteLog.length > 0);
   let dipped = 0; const gp = s.duck.gain, orig = gp.linearRampToValueAtTime;
   gp.linearRampToValueAtTime = function (v) { if (v < 1) dipped++; return orig.apply(this, arguments); };
-  s.last.boom = 0; s.play('boom'); s.last.roar = 0; s.ctx.currentTime += 0.5; s.play('roar');
+  s.last.boom = -1e9; s.play('boom'); s.last.roar = -1e9; s.ctx.currentTime += 0.5; s.play('roar');
   assert.ok(dipped >= 2, 'ducked ' + dipped);
   done(s);
 });
