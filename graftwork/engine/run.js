@@ -181,7 +181,7 @@ export function enterNode(run, id) {
 
 // ---------- encounters ----------
 function actEnemies(run, kind) {
-  return Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === kind && !e.minion && !e.noPick);
+  return Object.values(ENEMIES).filter((e) => e.act === run.act && e.kind === kind && !e.minion && !e.noPick && !e.summonOnly);
 }
 export function makeEncounter(run, kind) {
   const rng = run.rng;
@@ -192,7 +192,7 @@ export function makeEncounter(run, kind) {
   const avg = (e) => (Array.isArray(e.hp) ? (e.hp[0] + e.hp[1]) / 2 : e.hp);
   const early = run.row <= 1;
   const scale = { 1: 1, 2: 1.6, 3: 2.4 }[run.act];
-  const budget = (early ? 42 : 90 + rng.int(25)) * scale * (run.loop ? 1 : 1);
+  const budget = (early ? 36 : 54 + rng.int(14)) * scale;
   const out = [];
   let spent = 0, tries = 0;
   while (tries++ < 12) {
