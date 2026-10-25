@@ -139,11 +139,12 @@ export function liquidBar(ctx, x, y, w, h, f, c0, c1, t, o = {}) {
     const sx = x + ((t * 60) % (fw + 60)) - 30; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx + 14, y); ctx.lineTo(sx + 4, y + h); ctx.lineTo(sx - 10, y + h); ctx.closePath(); ctx.fill();
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
-  ctx.restore();
-  if (o.glow && f > 0.02) {   // light spilling out of the leading edge
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = o.glow * (0.6 + 0.4 * Math.sin(t * 8));
-    ctx.fillStyle = c1; ctx.beginPath(); ctx.arc(x + fw - rad * 0.4, y + h / 2, h * 0.9, 0, TAU); ctx.fill(); ctx.restore();
+  if (o.glow && f > 0.02) {   // light spilling out of the leading edge, kept inside the tube
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = o.glow * (0.55 + 0.35 * Math.sin(t * 8));
+    const ex = x + fw - rad * 0.5, gg = ctx.createRadialGradient(ex, y + h / 2, 0, ex, y + h / 2, h * 1.1); gg.addColorStop(0, c1); gg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gg; ctx.fillRect(ex - h * 1.1, y, h * 2.2, h); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
+  ctx.restore();
   if (o.ticks) {   // segment marks (boss phases)
     ctx.save(); ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2;
     for (const k of o.ticks) { ctx.beginPath(); ctx.moveTo(x + w * k, y + 2); ctx.lineTo(x + w * k, y + h - 2); ctx.stroke(); }

@@ -193,9 +193,9 @@ export class Fx {
     // 5) ray bursts
     for (const R of this.rays) {
       const k = R.t / R.life, a = (1 - k) * (k < 0.1 ? k / 0.1 : 1), len = R.r * (0.3 + 0.7 * Math.min(1, k * 3));
-      ctx.globalAlpha = a * 0.5; ctx.fillStyle = R.color;
+      ctx.globalAlpha = a * 0.26; ctx.fillStyle = R.color;
       for (let i = 0; i < R.n; i++) {
-        const ang = (i / R.n) * TAU + k * 0.6, w = 0.07 + 0.03 * Math.sin(i * 7.3);
+        const ang = (i / R.n) * TAU + k * 0.6, w = 0.045 + 0.02 * Math.sin(i * 7.3);
         ctx.beginPath(); ctx.moveTo(R.x, R.y); ctx.lineTo(R.x + Math.cos(ang - w) * len, R.y + Math.sin(ang - w) * len); ctx.lineTo(R.x + Math.cos(ang + w) * len, R.y + Math.sin(ang + w) * len); ctx.closePath(); ctx.fill();
       }
       drawGlow(ctx, R.x, R.y, R.r * 0.45 * (1 - k * 0.5), '#ffffff', a * 0.8);
