@@ -3,7 +3,11 @@ import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
   ITEM_BY_ID, MAX_STASH, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, upgradeCost, buyUpgrade, kingdomLevel,
+  DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
 } from './cats.js';
+import { createKingdomScene } from './kingdom_scene.js';
+import { encodeSave, decodeSave } from './savecode.js';
+import { dailyScore, fetchBoard, submitScore, rankOf } from './daily.js';
 import { drawBuilding } from './art_kingdom.js';
 import * as S from './sim.js';
 import { drawCat } from './art_cats.js';
@@ -18,35 +22,68 @@ const app = $('app'), cv = $('cv'), ctx = cv.getContext('2d'), screenEl = $('scr
 const sfx = new Sfx();
 
 // ---------------------------------------------------------------- save
-function freshSave() { return { v: 1, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true }; }
+const DEFAULT_OPT = { shake: 1, colorblind: false, bigText: false, quality: 'auto', motion: true, sfxVol: 1, musicVol: 0.7, tutorial: true };
+function freshSave() {
+  return { v: 1, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT } };
+}
+// fill in anything an older save does not have yet (new fields are always additive)
+function adoptSave(s) {
+  const f = freshSave();
+  return {
+    ...f, ...s,
+    stats: { ...f.stats, ...s.stats, lvl3Of: { ...((s.stats && s.stats.lvl3Of) || {}) } },
+    unlocked: [...new Set([...STARTERS, ...(s.unlocked || []).filter((id) => CAT_BY_ID[id])])],
+    tips: s.tips || {}, opt: { ...DEFAULT_OPT, ...(s.opt || {}) },
+    kingdom: { ...f.kingdom, ...(s.kingdom || {}), lv: { ...((s.kingdom && s.kingdom.lv) || {}) }, wonders: { ...((s.kingdom && s.kingdom.wonders) || {}) } },
+    ach: { ...(s.ach || {}) }, catStats: { ...(s.catStats || {}) }, daily: { ...(s.daily || {}) },
+    diff: ['cozy', 'normal', 'hard'].includes(s.diff) ? s.diff : 'normal', name: String(s.name || ''),
+  };
+}
 function loadSave() {
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY));
-    if (s && s.stats && Array.isArray(s.unlocked)) {
-      const f = freshSave();
-      return { ...f, ...s, stats: { ...f.stats, ...s.stats, lvl3Of: { ...(s.stats.lvl3Of || {}) } }, unlocked: [...new Set([...STARTERS, ...s.unlocked.filter((id) => CAT_BY_ID[id])])], tips: s.tips || {}, kingdom: { ...f.kingdom, ...(s.kingdom || {}), lv: { ...((s.kingdom && s.kingdom.lv) || {}) } } };
-    }
+    if (s && s.stats && Array.isArray(s.unlocked)) return adoptSave(s);
   } catch (e) { /* private mode or damaged save: start fresh */ }
   return freshSave();
 }
 let save = loadSave();
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } }
 sfx.on = save.sound; sfx.musicOn = save.music;
+sfx.setVolumes(save.opt.sfxVol, save.opt.musicVol);
 
 // ---------------------------------------------------------------- layout
-let res = 1, quality = 1;
+let res = 1, quality = 1, fxCap = 440;
+const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 function fit() {
-  const k = Math.min(innerWidth / W, innerHeight / H);
-  app.style.transform = `scale(${k})`;
-  app.style.left = (innerWidth - W * k) / 2 + 'px';
-  app.style.top = (innerHeight - H * k) / 2 + 'px';
+  // on a phone held upright the whole game turns sideways so it can use the full screen
+  const upright = coarse && innerHeight > innerWidth * 1.1;
+  let k;
+  if (upright) {
+    k = Math.min(innerHeight / W, innerWidth / H);
+    app.style.left = '0px'; app.style.top = '0px';
+    app.style.transform = `translate(${(innerWidth + H * k) / 2}px, ${(innerHeight - W * k) / 2}px) rotate(90deg) scale(${k})`;
+  } else {
+    k = Math.min(innerWidth / W, innerHeight / H);
+    app.style.transform = `scale(${k})`;
+    app.style.left = (innerWidth - W * k) / 2 + 'px';
+    app.style.top = (innerHeight - H * k) / 2 + 'px';
+  }
   // render at the real screen resolution (capped) so lines stay sharp on high-DPI screens
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  res = Math.max(1, Math.min(2, k * dpr * quality));
+  const cap = save.opt.quality === 'low' ? 1 : 2;
+  res = Math.max(1, Math.min(cap, k * dpr * quality));
   const pw = Math.round(W * res);
   if (cv.width !== pw) { cv.width = pw; cv.height = Math.round(H * res); }
 }
-addEventListener('resize', fit); fit();
+function applyOptions() {
+  const o = save.opt, cl = document.body.classList;
+  cl.toggle('cb', !!o.colorblind); cl.toggle('bigtext', !!o.bigText); cl.toggle('nomotion', !o.motion); cl.toggle('touch', coarse);
+  sfx.setVolumes(o.sfxVol, o.musicVol);
+  fxCap = o.quality === 'low' ? 180 : 440;
+  quality = 1;
+  fit();
+}
+addEventListener('resize', fit); applyOptions();
 
 // ---------------------------------------------------------------- sprites
 const catSprites = new Map(), silSprites = new Map();
@@ -94,7 +131,22 @@ function setBackdrop(idx) {
 }
 
 // ---------------------------------------------------------------- screens (DOM)
+let coachEl = null;
+function hideCoach() { if (coachEl) { coachEl.remove(); coachEl = null; } }
+// a friendly speech bubble for the first runs. dir says which way the little tail points.
+function coach(key, html, x, y, dir = 'down') {
+  if (!save.opt.tutorial || save.tips[key]) return;
+  hideCoach();
+  save.tips[key] = true; persist();
+  const el = document.createElement('div');
+  el.className = 'coach ' + dir; el.style.left = x + 'px'; el.style.top = y + 'px';
+  el.innerHTML = `<span class="cico">&#128049;</span><div>${html}</div><button>Got it</button>`;
+  el.querySelector('button').addEventListener('click', (e) => { e.stopPropagation(); sfx.play('ui'); hideCoach(); });
+  app.appendChild(el); coachEl = el;
+  setTimeout(() => { if (coachEl === el) hideCoach(); }, 14000);
+}
 function setScreen(html, cls = '') {
+  hideCoach();
   screenEl.innerHTML = html ? `<div class="screen ${cls}">${html}</div>` : '';
   paintThumbs(screenEl);
 }
@@ -102,7 +154,7 @@ const closeScreen = () => setScreen('');
 screenEl.addEventListener('click', (e) => {
   const t = e.target.closest('[data-act]');
   if (!t || t.hasAttribute('disabled')) return;
-  sfx.unlock();
+  sfx.unlock(); sfx.music(sfx.mode);
   const fn = acts[t.dataset.act];
   if (fn) { sfx.play('ui'); fn(t.dataset, t); }
 });
@@ -138,7 +190,7 @@ function catGain(id) {
     const gain = probe(2) - S.estDps(twin, m);
     return `<div class="impact up">Merge to Lv 2: <b>+${Math.round(g.cats.includes(twin) ? gain : probe(2))}</b> DPS</div>`;
   }
-  if (g.cats.length < MAX_STACK) return `<div class="impact up">Adds <b>&asymp;${Math.round(probe(1))}</b> DPS</div>`;
+  if (g.cats.length < S.stackMax(g)) return `<div class="impact up">Adds <b>&asymp;${Math.round(probe(1))}</b> DPS</div>`;
   return `<div class="impact">Goes to the bench (&asymp;${Math.round(probe(1))} DPS)</div>`;
 }
 function snackImpact(id) {
@@ -163,7 +215,7 @@ const rerollBtn = () => (g && g.meta.rerolls > 0 ? `<button class="btn small gre
 
 function catCard(id, o = {}) {
   const d = CAT_BY_ID[id];
-  return `<div class="card" data-act="${o.act || 'pickCat'}" data-id="${id}">${o.ribbon ? `<div class="ribbon">${o.ribbon}</div>` : ''}<canvas width="128" height="128" data-cat="${id}"></canvas><h3>${d.name}</h3><div class="ttl">${d.title}</div><div class="role">${d.role}</div><p>${d.desc}</p>${o.gain ? catGain(id) : ''}</div>`;
+  return `<div class="card" data-act="${o.act || 'pickCat'}" data-id="${id}">${o.ribbon ? `<div class="ribbon">${o.ribbon}</div>` : ''}<canvas width="128" height="128" data-cat="${id}"></canvas><h3>${d.name}</h3><div class="ttl">${d.title}</div><div class="role">${d.role}</div><p>${d.desc}</p>${o.gain ? catGain(id) + synHint(id) : ''}</div>`;
 }
 function snackCard(id) {
   const s = SNACK_BY_ID[id];
@@ -184,21 +236,107 @@ function thumbURL(id) {
 
 function showTitle() {
   mode = 'title'; paused = false;
-  const total = save.stats, k = save.kingdom;
-  const can = BUILDINGS.some((b) => buildingLevel(k, b.id) < b.max && k.coins >= upgradeCost(b.id, buildingLevel(k, b.id)));
+  const total = save.stats, k = save.kingdom, d = DIFFS[save.diff];
+  const can = BUILDINGS.some((b) => buildingLevel(k, b.id) < b.max && k.coins >= upgradeCost(b.id, buildingLevel(k, b.id))) || WONDERS.some((w) => !k.wonders[w.id] && k.gems >= w.cost);
+  const day = dayKey(), di = dayInfo(day), played = save.daily[day];
+  const trophies = ACHIEVEMENTS.filter((a) => save.ach[a.id]).length;
   setScreen(`
     <h1 class="logo">Stacking<span>Cats</span></h1>
     <div class="tag">Stack your cats. Merge them. Smash the mouse nests.</div>
-    <div class="row"><button class="btn big" data-act="play">Play</button></div>
-    <div class="row"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button></div>
-    <div class="row"><button class="btn grey small" data-act="how">How to play</button><button class="btn grey small" data-act="sound">Sound: ${save.sound ? 'On' : 'Off'}</button></div>
+    <div class="row"><button class="btn big" data-act="play">Play</button><button class="btn small grey" data-act="diff" title="Change difficulty">${d.icon} ${d.name}</button></div>
+    <div class="row"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button></div>
+    <div class="row"><button class="btn grey small" data-act="trophies">Trophies ${trophies}/${ACHIEVEMENTS.length}</button><button class="btn grey small" data-act="settings">Settings</button><button class="btn grey small" data-act="how">How to play</button></div>
     <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : 'Tap Play to begin'}</div>`, 'clear');
   acts = {
-    play: startRun, dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
-    sound: () => { save.sound = !save.sound; sfx.on = save.sound; persist(); showTitle(); },
+    play: () => startRun(), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
+    daily: () => showDaily(showTitle), trophies: () => showTrophies(showTitle), settings: () => showSettings(showTitle),
+    diff: () => { const order = ['cozy', 'normal', 'hard']; save.diff = order[(order.indexOf(save.diff) + 1) % 3]; persist(); showTitle(); },
   };
   setBackdrop(0);
   sfx.music('calm');
+}
+
+// ---------------------------------------------------------------- settings, with save backup
+function showSettings(back, msg) {
+  const o = save.opt;
+  const seg = (key, opts, cur) => `<div class="seg">${opts.map(([v, l]) => `<button class="${String(cur) === String(v) ? 'on' : ''}" data-act="opt" data-k="${key}" data-v="${v}">${l}</button>`).join('')}</div>`;
+  const tog = (key, label, cur, hint = '') => `<button class="tog ${cur ? 'on' : ''}" data-act="tog" data-k="${key}"><span>${label}${hint ? `<small>${hint}</small>` : ''}</span><i></i></button>`;
+  setScreen(`<h2>Settings</h2><div class="setgrid">
+      <div class="setcol">
+        <div class="setrow"><b>Difficulty</b>${seg('diff', [['cozy', 'Cozy'], ['normal', 'Normal'], ['hard', 'Hard']], save.diff)}<small>${DIFFS[save.diff].desc}</small></div>
+        <div class="setrow"><b>Sound effects</b><input type="range" min="0" max="100" value="${Math.round(o.sfxVol * 100)}" data-r="sfxVol"></div>
+        <div class="setrow"><b>Music</b><input type="range" min="0" max="100" value="${Math.round(o.musicVol * 100)}" data-r="musicVol"></div>
+        <div class="setrow"><b>Screen shake</b>${seg('shake', [[0, 'Off'], [0.5, 'Low'], [1, 'Normal']], o.shake)}</div>
+        <div class="setrow"><b>Graphics</b>${seg('quality', [['auto', 'Auto'], ['high', 'High'], ['low', 'Low']], o.quality)}<small>Low is lighter on older phones.</small></div>
+      </div>
+      <div class="setcol">
+        ${tog('motion', 'Flashes and motion', o.motion, 'Turn off for calmer screens')}
+        ${tog('colorblind', 'Colorblind friendly colors', o.colorblind, 'Blue, yellow and orange bars')}
+        ${tog('bigText', 'Larger text', o.bigText)}
+        ${tog('tutorial', 'Tutorial hints', o.tutorial, 'Little tips during your first runs')}
+        <div class="setrow"><b>Leaderboard name</b><input type="text" maxlength="12" value="${save.name.replace(/"/g, '')}" placeholder="Your name" data-n="1"></div>
+        <div class="setrow"><b>Save backup</b><div class="row"><button class="btn small grey" data-act="export">Copy save code</button><button class="btn small grey" data-act="import">Restore from code</button></div>
+        <small>${msg || 'Moves your cats, coins and trophies to another device.'}</small></div>
+      </div></div>
+    <div class="row"><button class="btn" data-act="back">Back</button><button class="btn small grey" data-act="tipsreset">Replay tutorial</button><button class="btn small grey" data-act="erase">Erase all progress</button></div>`);
+  screenEl.querySelectorAll('input[type=range]').forEach((r) => r.addEventListener('input', () => { save.opt[r.dataset.r] = r.value / 100; persist(); sfx.setVolumes(save.opt.sfxVol, save.opt.musicVol); if (r.dataset.r === 'sfxVol') sfx.play('coin'); }));
+  screenEl.querySelectorAll('input[data-n]').forEach((r) => r.addEventListener('input', () => { save.name = r.value.replace(/[^\w \-.']/g, '').slice(0, 12); persist(); }));
+  let erase = false;
+  acts = {
+    back,
+    opt: (d) => {
+      if (d.k === 'diff') save.diff = d.v; else if (d.k === 'quality') { save.opt.quality = d.v; } else save.opt[d.k] = +d.v;
+      persist(); applyOptions(); showSettings(back);
+    },
+    tog: (d) => { save.opt[d.k] = !save.opt[d.k]; persist(); applyOptions(); showSettings(back); },
+    tipsreset: () => { save.tips = {}; save.opt.tutorial = true; persist(); showSettings(back, 'Tutorial hints will show again.'); },
+    export: () => {
+      const code = encodeSave(save);
+      setScreen(`<h2>Save code</h2><p class="sub">Copy this code and keep it safe. Paste it into Settings on another device to restore.</p><textarea class="code" readonly>${code}</textarea>
+        <div class="row"><button class="btn" data-act="copy">Copy</button><button class="btn grey" data-act="download">Download file</button><button class="btn grey" data-act="again">Back</button></div>`);
+      acts = {
+        copy: () => { try { navigator.clipboard.writeText(code).then(() => toast('Save code copied!'), () => { const t = screenEl.querySelector('textarea'); t.select(); toast('Press Ctrl+C to copy'); }); } catch (e) { screenEl.querySelector('textarea').select(); } },
+        download: () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([code], { type: 'text/plain' })); a.download = 'stacking-cats-save.txt'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); },
+        again: () => showSettings(back),
+      };
+    },
+    import: () => {
+      setScreen(`<h2>Restore save</h2><p class="sub">Paste a save code. This replaces the progress on this device.</p><textarea class="code" placeholder="SC1:..."></textarea><div class="row"><button class="btn" data-act="go">Restore</button><button class="btn grey" data-act="again">Back</button></div>`);
+      acts = {
+        go: () => {
+          const r = decodeSave(screenEl.querySelector('textarea').value);
+          if (!r.ok) { toast(r.error); return; }
+          save = adoptSave(r.save); persist(); applyOptions(); toast('Save restored!'); sfx.play('upgrade'); showSettings(back, 'Restored. Welcome back!');
+        },
+        again: () => showSettings(back),
+      };
+    },
+    erase: () => {
+      if (!erase) { erase = true; toast('Tap again to erase everything'); return; }
+      save = freshSave(); persist(); applyOptions(); toast('Fresh start!'); showSettings(back);
+    },
+  };
+}
+
+// ---------------------------------------------------------------- trophies
+function showTrophies(back) {
+  const list = ACHIEVEMENTS.slice().sort((a, b) => (save.ach[b.id] ? 1 : 0) - (save.ach[a.id] ? 1 : 0));
+  const done = list.filter((a) => save.ach[a.id]).length;
+  setScreen(`<h2>Trophies <small class="klv">${done}/${list.length}</small></h2>
+    <div class="trophies">${list.map((a) => `<div class="tro ${save.ach[a.id] ? 'got' : ''}"><span class="medal">${save.ach[a.id] ? '&#127942;' : '&#128274;'}</span><div><b>${a.name}</b><small>${a.desc}</small></div><em>${a.coins ? `&#129689;${a.coins}` : ''}${a.gems ? ` &#128142;${a.gems}` : ''}</em></div>`).join('')}</div>
+    <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
+  acts = { back };
+}
+function checkAch(run) {
+  const out = [], c = { stats: save.stats, run, save, kingdom: save.kingdom };
+  for (const a of ACHIEVEMENTS) {
+    if (save.ach[a.id]) continue;
+    let ok = false;
+    try { ok = !!a.check(c); } catch (e) { ok = false; }
+    if (ok) { save.ach[a.id] = Date.now(); save.kingdom.coins += a.coins; save.kingdom.earned += a.coins; save.kingdom.gems += a.gems; out.push(a); }
+  }
+  if (out.length) persist();
+  return out;
 }
 
 function showHow(back) {
@@ -209,68 +347,113 @@ function showHow(back) {
     <li><b>Merge</b> two equal cats (same type and level) into one stronger cat, up to Lv 3. The tower fits ${MAX_STACK}, the bench fits ${MAX_BENCH}.</li>
     <li><b>Loot:</b> elite mice drop chests. Items go on one cat each (two at Lv 3). Tap Arrange tower to equip them.</li>
     <li><b>Coins</b> you earn are saved. Spend them in the <b>Kingdom</b> on buildings that make every future run stronger.</li>
+    <li><b>Synergies:</b> cats of the same kind boost each other. Two give a bonus, three give a bigger one. Look for the badges next to the wave counter.</li>
+    <li><b>Roads:</b> after each nest you choose the road to the next one. Riskier roads pay better.</li>
+    <li><b>Daily Challenge:</b> everyone plays the same mice once a day. Climb the leaderboard.</li>
     <li><b>Zoomies</b> (Space): fill the meter by fighting, then make everyone much faster for 6 seconds.</li></ul>
     <div class="row"><button class="btn" data-act="back">Got it</button></div>`);
   acts = { back };
 }
 
+// ---------------------------------------------------------------- the Cat Dex, with how much each cat has done
 function showDex(back) {
   const un = new Set(save.unlocked);
   let sel = null;
+  const fav = Object.entries(save.catStats).sort((a, b) => b[1].runs - a[1].runs)[0];
   const draw = () => {
     setScreen(`<h2>Cat Dex</h2><div class="dex">${CATS.map((d) => {
       const u = un.has(d.id), p = unlockProgress(d, save.stats);
-      return `<div class="tile ${u ? '' : 'locked'} ${sel === d.id ? 'sel' : ''}" data-act="tile" data-id="${d.id}"><canvas width="96" height="96" data-cat="${d.id}" ${u ? '' : 'data-lock="1"'}></canvas><b>${u ? d.name : '???'}</b>${u ? `<small>${d.role}</small>` : `<small>${p.need > 1 ? `${p.have}/${p.need}` : p.have ? 'Done' : 'Locked'}</small>`}</div>`;
+      return `<div class="tile ${u ? '' : 'locked'} ${sel === d.id ? 'sel' : ''}" data-act="tile" data-id="${d.id}"><canvas width="96" height="96" data-cat="${d.id}" ${u ? '' : 'data-lock="1"'}></canvas><b>${u ? d.name : '???'}</b>${u ? `<small>${d.role}</small>` : `<small>${p.need > 1 ? `${p.have}/${p.need}` : p.have ? 'Done' : 'Locked'}</small>`}${fav && fav[0] === d.id && u ? '<i class="fav">&#10084;</i>' : ''}</div>`;
     }).join('')}</div>
-    <div class="detail">${sel ? dexDetail(sel, un.has(sel)) : 'Tap a cat to see how to unlock it. Locked cats join the picks once you earn them.'}</div>
+    <div class="detail">${sel ? dexDetail(sel, un.has(sel)) : 'Tap a cat to see how to unlock it, or how it has done for you. Locked cats join the picks once you earn them.'}</div>
     <div class="row"><button class="btn" data-act="back">Back</button></div>`);
   };
   draw();
-  acts = { back, tile: (d) => { sel = d.id; draw(); } };
+  acts = { back, tile: (d) => { sel = d.id; draw(); sfx.meow(d.id, 'pick'); } };
 }
 function dexDetail(id, unlocked) {
   const d = CAT_BY_ID[id];
-  if (unlocked) return `<b>${d.name}, ${d.title}</b> (${d.role}). ${d.desc}`;
+  if (unlocked) {
+    const s = save.catStats[id], tags = (CAT_TAGS[id] || []).map((t) => `${SYNERGIES[t].icon} ${SYNERGIES[t].name}`).join(', ');
+    return `<b>${d.name}, ${d.title}</b> (${d.role}). ${d.desc}<br><small>${tags ? `Teams up as: ${tags}. ` : ''}${s ? `Used in ${s.runs} run${s.runs === 1 ? '' : 's'}, best wave ${s.best}, ${num(s.dmg)} total damage, ${num(s.kills)} mice defeated.` : 'Not used yet.'}</small>`;
+  }
   const p = unlockProgress(d, save.stats);
   return `<b>Locked.</b> To unlock: ${d.unlock.text}${p.need > 1 ? ` (${p.have}/${p.need})` : ''}.<div class="pbar"><i style="width:${(100 * p.have) / p.need}%"></i></div>`;
 }
 
-// ---------------------------------------------------------------- the Cat Kingdom
-function paintBuildings(root) {
-  root.querySelectorAll('canvas[data-bld]').forEach((c) => {
-    const x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height); x.save(); x.scale(c.width / 120, c.height / 120);
-    drawBuilding(x, c.dataset.bld, +c.dataset.lvl); x.restore();
+// ---------------------------------------------------------------- the daily challenge
+function showDaily(back) {
+  const day = dayKey(), di = dayInfo(day), mine = save.daily[day];
+  setScreen(`<h2>Daily Challenge</h2>
+    <div class="dailycols"><div class="dcard"><div class="dic">${di.mod.icon}</div><b>${di.mod.name}</b><p>${di.mod.desc}</p>
+      <small>Everyone plays the same mice today, with the same cats: the starters plus Yuki, Hawkeye, Boomer, Pudding, Shadow, Ronin, Merlin and Cutlass. Kingdom upgrades are switched off, so it is a fair race.</small>
+      <div class="dstat">${mine ? `Your best today: <b>${mine.best}</b> (wave ${mine.wave})` : 'You have not played today yet. A first try earns a gem!'}</div>
+      <div class="row"><button class="btn big" data-act="go">Play daily</button></div></div>
+      <div class="board"><h4>Today's top cats</h4><div id="boardBody" class="bbody">Loading...</div></div></div>
+    <div class="row"><button class="btn grey" data-act="back">Back</button></div>`);
+  acts = { back, go: () => startRun({ daily: true }) };
+  fetchBoard(day).then((r) => {
+    const el = $('boardBody');
+    if (!el || !el.isConnected) return;
+    el.innerHTML = r.ok ? boardHtml(r.top) : '<small>The leaderboard is offline right now. You can still play!</small>';
   });
 }
-function showKingdom(back, bump) {
+function boardHtml(top, me) {
+  if (!top.length) return '<small>No scores yet today. Be the first!</small>';
+  return top.slice(0, 10).map((e, i) => `<div class="brow ${e.name === (me || save.name) ? 'me' : ''}"><span>${i + 1}</span><b>${e.name}</b><em>wave ${e.wave}</em><strong>${e.score}</strong></div>`).join('');
+}
+
+// ---------------------------------------------------------------- the Cat Kingdom: a village you can tap
+let kScene = null;
+function showKingdom(back, selected) {
+  if (kScene) { kScene.stop(); kScene = null; }
   const k = save.kingdom;
-  const cards = BUILDINGS.map((b) => {
-    const l = buildingLevel(k, b.id), maxed = l >= b.max, cost = maxed ? 0 : upgradeCost(b.id, l), afford = !maxed && k.coins >= cost;
-    return `<div class="bcard ${l ? '' : 'new'} ${bump === b.id ? 'bump' : ''}"><canvas width="168" height="168" data-bld="${b.id}" data-lvl="${l}"></canvas>
-      <div class="bt"><b>${b.name}</b><div class="pips">${Array.from({ length: b.max }, (_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</div>
-      <small>${l ? b.text(l) : b.blurb}</small>${maxed ? '<em class="max">MAX</em>' : `<small class="nx">Next: ${b.text(l + 1)}</small>`}
-      <button class="btn small ${afford ? 'green' : 'grey'}" data-act="buy" data-id="${b.id}" ${afford ? '' : 'disabled'}>${maxed ? 'Complete' : `${l ? 'Upgrade' : 'Build'} &#129689; ${cost}`}</button></div></div>`;
-  }).join('');
+  let sel = selected || null;
+  const detail = () => {
+    if (!sel) return '<div class="kd hint2">Tap a building to upgrade it, or a floating wonder to buy it with gems.</div>';
+    if (sel.type === 'wonder') {
+      const w = WONDER_BY_ID[sel.id], owned = !!k.wonders[w.id], afford = !owned && k.gems >= w.cost;
+      return `<div class="kd"><span class="kic">${w.icon}</span><div class="kt"><b>${w.name}</b><small>${w.desc}</small></div><button class="btn small ${afford ? 'green' : 'grey'}" data-act="buyw" data-id="${w.id}" ${afford ? '' : 'disabled'}>${owned ? 'Built' : `Buy &#128142; ${w.cost}`}</button></div>`;
+    }
+    const b = BUILDING_BY_ID[sel.id], l = buildingLevel(k, b.id), maxed = l >= b.max, cost = maxed ? 0 : upgradeCost(b.id, l), afford = !maxed && k.coins >= cost;
+    return `<div class="kd"><span class="kic">${b.icon}</span><div class="kt"><b>${b.name} <span class="pips">${Array.from({ length: b.max }, (_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</span></b><small>${l ? `Now: ${b.text(l)}` : b.blurb}</small>${maxed ? '<small class="nx">Fully upgraded!</small>' : `<small class="nx">Next: ${b.text(l + 1)}</small>`}</div><button class="btn small ${afford ? 'green' : 'grey'}" data-act="buy" data-id="${b.id}" ${afford ? '' : 'disabled'}>${maxed ? 'Complete' : `${l ? 'Upgrade' : 'Build'} &#129689; ${cost}`}</button></div>`;
+  };
   setScreen(`<h2>Cat Kingdom <small class="klv">Lv ${kingdomLevel(k)}</small></h2>
-    <div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <small>coins &middot; ${num(k.earned)} earned in total</small></div>
-    <div class="kgrid">${cards}</div>
+    <div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <span class="gem">&#128142;</span> <b>${k.gems}</b> <small>${num(k.earned)} coins earned in total &middot; gems come from trophies and nests</small></div>
+    <canvas id="kscene" width="1840" height="472"></canvas><div id="kdetail">${detail()}</div>
     <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'kingdom');
-  paintBuildings(screenEl);
+  const refresh = () => { const el = $('kdetail'); if (el) el.innerHTML = detail(); };
+  kScene = createKingdomScene($('kscene'), () => save.kingdom, (hit) => { sel = hit; sfx.play('ui'); refresh(); });
+  if (sel) kScene.select(sel);
   acts = {
-    back,
+    back: () => { if (kScene) { kScene.stop(); kScene = null; } back(); },
     buy: (d) => {
       const b = BUILDING_BY_ID[d.id];
-      if (buyUpgrade(save.kingdom, d.id)) { persist(); sfx.play('upgrade'); toast(`${b.icon} ${b.name} is now Lv ${buildingLevel(save.kingdom, d.id)}!`); showKingdom(back, d.id); }
+      if (buyUpgrade(save.kingdom, d.id)) {
+        persist(); sfx.play('upgrade'); toast(`${b.icon} ${b.name} is now Lv ${buildingLevel(save.kingdom, d.id)}!`);
+        const ach = checkAch({ ...(g ? g.run : {}), wave: 0 });
+        for (const a of ach) toast(`Trophy: ${a.name}!`);
+        kScene.bump(d.id);
+        showKingdom(back, { type: 'building', id: d.id });
+        if (kScene) kScene.bump(d.id);
+      }
+    },
+    buyw: (d) => {
+      const w = WONDER_BY_ID[d.id];
+      if (buyWonder(save.kingdom, d.id)) { persist(); sfx.play('upgrade'); toast(`${w.icon} ${w.name} built!`); showKingdom(back, { type: 'wonder', id: d.id }); }
     },
   };
 }
 
 // ---------------------------------------------------------------- run flow
-function startRun() {
+let startTotal = START_CATS, maxComboRun = 0;
+function startRun(opts = {}) {
   sfx.unlock();
-  g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom });
+  const daily = opts.daily ? dayInfo(dayKey()) : null;
+  g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom, difficulty: save.diff, daily });
+  startTotal = START_CATS + g.meta.startPicks;
   runCommitted = false; pickN = 0; fx.length = 0; speed = 1; paused = false; rewardChoices = null;
-  combo = 0; coinShown = 0; dpsHist.length = 0;
+  combo = 0; maxComboRun = 0; coinShown = 0; dpsHist.length = 0; sfx.setIntensity(0);
   $('bSpeed').textContent = 'x1';
   showPickStart();
 }
@@ -278,16 +461,23 @@ function startRun() {
 function showPickStart() {
   mode = 'pick';
   rewardChoices = rewardChoices || S.rollCatChoices(g);
-  setScreen(`<h2>Choose friend ${pickN + 1} of ${START_CATS}</h2><p class="sub">${pickN === 0 ? 'Every cat attacks differently. Pick the first one for your tower.' : 'Pick a friend to stack on top. Choosing the same cat again merges them!'}</p>
+  setScreen(`<h2>Choose friend ${pickN + 1} of ${startTotal}</h2><p class="sub">${pickN === 0 ? 'Every cat attacks differently. Pick the first one for your tower.' : 'Pick a friend to stack on top. Choosing the same cat again merges them!'}</p>
     <div class="cards">${rewardChoices.map((id) => catCard(id, { ribbon: owns(id) ? 'MERGE!' : '', gain: pickN > 0 })).join('')}</div>
     <div class="row hint">${rerollBtn()}</div>`);
+  coach('c1', 'Tap a cat to pick it. Every cat fights in its own way, and you will find more along the way!', 480, 440, 'up');
   acts = {
     pickCat: (d) => {
+      const prev = S.synergyState(g);
       const r = S.addCat(g, d.id);
-      sfx.play(r.merged ? 'merge' : 'pick');
+      sfx.play(r.merged ? 'merge' : 'pick'); sfx.meow(d.id, 'pick');
+      notifySyn(prev);
       pickN++; rewardChoices = null;
-      if (pickN < START_CATS) showPickStart();
-      else { queue = Array(g.meta.startSnacks).fill('snack'); mode = 'reward'; nextReward(); }
+      if (pickN < startTotal) showPickStart();
+      else {
+        const gift = S.grantStartItem(g);
+        if (gift) toast(`${ITEM_BY_ID[gift].icon} Golden Paw: ${ITEM_BY_ID[gift].name} equipped!`);
+        queue = Array(g.meta.startSnacks).fill('snack'); mode = 'reward'; nextReward();
+      }
     },
     reroll: () => { if (S.useReroll(g)) { rewardChoices = null; sfx.play('reroll'); showPickStart(); } },
   };
@@ -300,12 +490,12 @@ function beginWave() {
   setBackdrop(themeFor(g.wave));
   const boss = g.bossWave;
   const nest = g.enemies.find((e) => e.boss);
-  banner(boss ? 'NEST BATTLE!' : `Wave ${g.wave}`, boss ? nest.name : `${THEMES[bdIdx].name}`, boss);
+  const rt = g.route.id !== 'trail' && !boss ? ` \u00B7 ${g.route.name}` : '';
+  banner(boss ? 'NEST BATTLE!' : `Wave ${g.wave}`, boss ? nest.name : `${THEMES[bdIdx].name}${rt}`, boss);
   sfx.play(boss ? 'boss' : 'wave');
   sfx.music(boss ? 'boss' : 'fight');
   dpsHist.length = 0;
-  if (g.wave === 1 && !save.tips.first) { save.tips.first = true; persist(); toast('Tip: the bottom cat takes the hits, so stack tough cats low'); }
-  if (g.wave === 2 && !save.tips.zoom) { save.tips.zoom = true; persist(); toast('Tip: fill the Zoomies meter, then press Space or tap it'); }
+  if (g.wave === 1) setTimeout(() => { if (mode === 'play') coach('c2', 'The bottom cat takes the hits. Tough cats go low, shooters go high!', 250, 120, 'left'); }, 2600);
 }
 
 function onClear() {
@@ -316,13 +506,14 @@ function onClear() {
   banner(g.bossWave ? 'NEST DESTROYED!' : 'WAVE CLEARED!', g.bossWave ? 'A friend is free!' : '', false);
   confetti(g.towerX + 40, GROUND - 120, g.bossWave ? 60 : 26, 380);
   queue = g.reward.slice();
+  if (g.bossWave) queue.splice(queue.length - 1, 0, 'route');
   if (g.report && g.report.chests) toast(`Opening ${g.report.chests} loot chest${g.report.chests > 1 ? 's' : ''}!`);
 }
 function nextReward() {
   const r = queue.shift();
   rewardChoices = null;
   if (!r) { beginWave(); return; }
-  if (r === 'cat') showCatReward(); else if (r === 'item') showItemReward(); else showSnackReward();
+  if (r === 'cat') showCatReward(); else if (r === 'item') showItemReward(); else if (r === 'route') showRouteReward(); else showSnackReward();
 }
 
 function reportHtml() {
@@ -335,6 +526,41 @@ function reportHtml() {
     <div class="rbars">${shown.map((c) => `<div class="rb ${mvp && c.uid === mvp.uid ? 'mvp' : ''}"><img src="${thumbURL(c.id)}" alt=""><div class="bar"><i style="width:${(100 * c.dmg) / max}%"></i></div><span>${num(c.dmg)}${c.heal > 1 ? ` <em>+${num(c.heal)}hp</em>` : ''}</span>${mvp && c.uid === mvp.uid ? '<u>MVP</u>' : ''}</div>`).join('')}</div></div>`;
 }
 
+// ---- synergies: tell the player what a cat would start, and celebrate when one switches on
+function synHint(id) {
+  const st = S.synergyState(g), tags = CAT_TAGS[id] || [];
+  let out = '';
+  for (const t of tags) {
+    const have = st.counts[t] || 0, now = have + 1, tierNow = have >= 3 ? 2 : have >= 2 ? 1 : 0, tierNext = now >= 3 ? 2 : now >= 2 ? 1 : 0;
+    const sy = SYNERGIES[t];
+    if (tierNext > tierNow) out += `<div class="impact up">${sy.icon} ${sy.name} x${now}: ${synergyText(t, tierNext)}</div>`;
+    else out += `<div class="impact">${sy.icon} ${sy.name} ${Math.min(now, 3)}/${now >= 3 ? 3 : now >= 2 ? 3 : 2}</div>`;
+  }
+  return out;
+}
+function notifySyn(prev) {
+  const now = S.synergyState(g);
+  for (const t in now.tiers) if ((now.tiers[t] || 0) > ((prev.tiers && prev.tiers[t]) || 0)) {
+    toast(`${SYNERGIES[t].icon} ${SYNERGIES[t].name} ${now.tiers[t] === 2 ? 'MAX' : 'active'}: ${synergyText(t, now.tiers[t])}`);
+    sfx.play('synergy'); puff(S.TOWER_X, 330, 16, '#ffd23f', 150, 0.7, 4); zpunch = Math.max(zpunch, 0.015);
+  }
+}
+
+function showRouteReward() {
+  rewardChoices = rewardChoices || S.rollRoutes(g);
+  const effects = (r) => [
+    r.enemyHp !== 1 ? `Mice health x${r.enemyHp}` : '', r.enemyDmg !== 1 ? `Mice damage x${r.enemyDmg}` : '', r.coin !== 1 ? `Coins x${r.coin}` : '',
+    r.chest ? 'More loot chests' : '', r.rare ? 'Better loot' : '', r.speed !== 1 ? `Mice speed x${r.speed}` : '', r.bossHp !== 1 ? `Nest health x${r.bossHp}` : '', r.snackExtra ? '+1 snack choice' : '', r.healNow ? `Heal ${r.healNow * 100}% now` : '',
+  ].filter(Boolean).map((x) => `<div class="impact">${x}</div>`).join('');
+  setScreen(`<h2>Choose your road</h2><p class="sub">Where to next? This road shapes the next five waves and the next nest.</p>
+    <div class="cards">${rewardChoices.map((id) => { const r = ROUTE_BY_ID[id]; return `<div class="card route" data-act="pickRoute" data-id="${id}"><div class="ic">${r.icon}</div><h3>${r.name}</h3><p>${r.desc}</p>${effects(r)}</div>`; }).join('')}</div>
+    <div class="row hint">${rerollBtn()}</div>`);
+  acts = {
+    pickRoute: (d) => { S.chooseRoute(g, d.id); sfx.play('route'); toast(`${ROUTE_BY_ID[d.id].icon} ${ROUTE_BY_ID[d.id].name}`); nextReward(); },
+    reroll: () => { if (S.useReroll(g)) { rewardChoices = null; sfx.play('reroll'); showRouteReward(); } },
+  };
+}
+
 function showCatReward() {
   rewardChoices = rewardChoices || S.rollCatChoices(g);
   setScreen(`<h2>Nest destroyed!</h2><p class="sub">A caged cat is free and wants to join your stack. Who is it?</p>
@@ -342,9 +568,11 @@ function showCatReward() {
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button>${rerollBtn()}</div>`);
   acts = {
     pickCat: (d) => {
+      const prev = S.synergyState(g);
       const r = S.addCat(g, d.id);
       if (!r.ok) { showFull(d.id); return; }
-      sfx.play(r.merged ? 'merge' : 'pick');
+      sfx.play(r.merged ? 'merge' : 'pick'); sfx.meow(d.id, r.merged ? 'happy' : 'pick');
+      notifySyn(prev);
       toast(r.merged ? `${CAT_BY_ID[d.id].name} merged to Lv ${r.cat.lvl}!` : `${CAT_BY_ID[d.id].name} joined${r.benched ? ' the bench' : ' the stack'}!`);
       nextReward();
     },
@@ -360,7 +588,7 @@ function showFull(newId) {
     <div class="row">${list.map((c) => `<div class="slot has bench-slot" data-act="rel" data-uid="${c.uid}" style="width:200px"><canvas width="104" height="104" data-cat="${c.id}"></canvas><div><b>${CAT_BY_ID[c.id].name}</b><small>Lv ${c.lvl}</small></div></div>`).join('')}</div>
     <div class="row"><button class="btn grey" data-act="skip">Keep my team, skip</button></div>`);
   acts = {
-    rel: (d) => { S.releaseCat(g, +d.uid); S.addCat(g, newId); sfx.play('pick'); nextReward(); },
+    rel: (d) => { const prev = S.synergyState(g); S.releaseCat(g, +d.uid); S.addCat(g, newId); sfx.play('pick'); notifySyn(prev); nextReward(); },
     skip: () => nextReward(),
   };
 }
@@ -425,7 +653,7 @@ function showTower(back, opt = {}) {
       const items = c.items.slice();
       if (items.length >= itemSlots(c.lvl)) items.shift();
       items.push(g.stash[selItem]);
-      const nd = S.estDps(c, mods, S.fxOf(items)), df = nd - dps;
+      const nd = S.estDps(c, mods, items), df = nd - dps;
       prev = `<em class="${df >= 0 ? 'up' : 'down'}">&rarr; &asymp;${Math.round(nd)} (${df >= 0 ? '+' : ''}${Math.round((100 * df) / Math.max(1, dps))}%)</em>`;
     }
     const slots = Array.from({ length: itemSlots(c.lvl) }, (_, k) => {
@@ -436,17 +664,21 @@ function showTower(back, opt = {}) {
   };
   const draw = () => {
     const tw = [];
-    for (let i = MAX_STACK - 1; i >= 0; i--) tw.push(g.cats[i] ? catRow(g.cats[i], 'tower', i, i === 0 ? ' \u00B7 takes the hits' : '') : `<div class="slot" data-act="slot" data-zone="tower" data-i="${i}">&nbsp;Empty spot</div>`);
+    for (let i = S.stackMax(g) - 1; i >= 0; i--) tw.push(g.cats[i] ? catRow(g.cats[i], 'tower', i, i === 0 ? ' \u00B7 takes the hits' : '') : `<div class="slot" data-act="slot" data-zone="tower" data-i="${i}">&nbsp;Empty spot</div>`);
     const bn = [];
-    for (let i = 0; i < MAX_BENCH; i++) bn.push(g.bench[i] ? catRow(g.bench[i], 'bench', i) : `<div class="slot" data-act="slot" data-zone="bench" data-i="${i}">&nbsp;Empty bench spot</div>`);
+    for (let i = 0; i < S.benchMax(g); i++) bn.push(g.bench[i] ? catRow(g.bench[i], 'bench', i) : `<div class="slot" data-act="slot" data-zone="bench" data-i="${i}">&nbsp;Empty bench spot</div>`);
     const bag = g.stash.map((id, i) => `<span class="bag ${ITEM_BY_ID[id].rarity} ${selItem === i ? 'sel' : ''}" data-act="bag" data-i="${i}" title="${ITEM_BY_ID[id].name}">${ITEM_BY_ID[id].icon}</span>`).join('') + Array.from({ length: MAX_STASH - g.stash.length }, () => '<span class="bag empty"></span>').join('');
     const it = selItem != null && g.stash[selItem] ? ITEM_BY_ID[g.stash[selItem]] : null;
-    setScreen(`<h2>Arrange your tower <small class="klv">Team DPS &asymp; ${Math.round(teamDps(S.calcMods(g)))}</small></h2>
+    const syn = S.synergyState(g);
+    const synChips = Object.entries(syn.counts).sort((a, b) => b[1] - a[1]).map(([t, n]) => { const tier = syn.tiers[t] || 0; return `<span class="schip ${tier ? 't' + tier : ''}" title="${SYNERGIES[t].name}: ${tier ? synergyText(t, tier) : 'needs 2 cats'}">${SYNERGIES[t].icon} ${SYNERGIES[t].name} ${n}/${n >= 3 ? 3 : n >= 2 ? 3 : 2}</span>`; }).join('');
+    setScreen(`<h2>Arrange your tower <small class="klv">Team DPS &asymp; ${Math.round(teamDps(S.calcMods(g)))}</small></h2><div class="synrow">${synChips || '<small>Stack cats of the same kind for synergy bonuses!</small>'}</div>
       <div class="tower"><div class="col"><h4>Tower (top to bottom)</h4>${tw.join('')}</div><div class="col"><h4>Bench (rests, heals fast)</h4>${bn.join('')}
         <h4>Backpack ${g.stash.length}/${MAX_STASH}</h4><div class="bagrow">${bag}</div>
         <div class="row"><button class="btn small grey" data-act="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div></div></div>
       <div class="detail slim">${it ? `<b>${it.icon} ${it.name}</b>: ${it.desc}. Tap a cat to equip it.` : sel ? 'Tap another cat to swap, or a matching one to merge.' : 'Tap a cat to move it. Tap a backpack item, then a cat, to equip it.'}</div>
       <div class="row"><button class="btn" data-act="done">Done</button></div>`, 'wide');
+    if (selItem != null) coach('c6', 'Now tap a cat to equip it. The green numbers show how much stronger that cat gets!', 790, 6);
+    else coach('c4', 'Tap a cat, then another one to swap places. Two equal cats merge into one stronger cat!', 790, 6);
   };
   draw();
   acts = {
@@ -462,6 +694,7 @@ function showTower(back, opt = {}) {
     slot: (d) => {
       rel = false;
       const zone = d.zone, i = +d.i, list = zone === 'tower' ? g.cats : g.bench, cat = list[i];
+      const prevSyn = S.synergyState(g);
       if (selItem != null && cat) {
         if (S.equipItem(g, selItem, cat.uid)) { sfx.play('equip'); toast(`${CAT_BY_ID[cat.id].name} equipped!`); puff(S.TOWER_X, 330, 8, '#ffd23f', 120, 0.5); }
         selItem = null; draw(); return;
@@ -480,20 +713,40 @@ function showTower(back, opt = {}) {
         if (a.id === cat.id && a.lvl === cat.lvl && a.lvl < 3) { S.mergeCats(g, a.uid, cat.uid); sfx.play('merge'); toast(`Merged! ${CAT_BY_ID[a.id].name} is Lv ${a.lvl}`); } else S.swapCats(g, sel, cat.uid);
         sel = null;
       }
+      notifySyn(prevSyn);
       draw();
     },
   };
 }
 
+function recordCatStats(run) {
+  const seen = new Set([...g.cats, ...g.bench].map((c) => c.id));
+  const row = (id) => save.catStats[id] || (save.catStats[id] = { runs: 0, dmg: 0, kills: 0, best: 0 });
+  for (const id of seen) { const s = row(id); s.runs++; s.best = Math.max(s.best, run.wave); }
+  for (const [id, v] of Object.entries(run.byCat)) { const s = row(id); s.dmg += v.dmg; s.kills += v.kills; }
+}
 function commitRun() {
   if (runCommitted || !g) return [];
   runCommitted = true;
-  save.stats = mergeRun(save.stats, g.run);
+  const run = g.run, oldNests = save.stats.bossKills;
+  run.maxCombo = maxComboRun;
+  save.stats = mergeRun(save.stats, run);
   const fresh = checkUnlocks(save.stats, new Set(save.unlocked));
   save.unlocked.push(...fresh);
-  g.run.earned = Math.floor(g.run.coins);
-  save.kingdom.coins += g.run.earned;
-  save.kingdom.earned += g.run.earned;
+  run.earned = Math.floor(run.coins);
+  save.kingdom.coins += run.earned;
+  save.kingdom.earned += run.earned;
+  run.gems = Math.floor(save.stats.bossKills / 3) - Math.floor(oldNests / 3);
+  if (run.daily) {
+    const score = dailyScore(run), prev = save.daily[run.daily];
+    if (!prev) run.gems += 1;
+    if (!prev || score > prev.best) save.daily[run.daily] = { best: score, wave: run.wave };
+    run.dailyScore = score;
+  }
+  save.kingdom.gems += run.gems;
+  recordCatStats(run);
+  run.ach = checkAch(run);
+  for (const a of run.ach) run.gems += a.gems;
   persist();
   return fresh;
 }
@@ -504,31 +757,55 @@ function onOver() {
   showOver(commitRun());
 }
 function showOver(fresh) {
-  const r = g.run, best = save.stats.bestWave, k = save.kingdom;
+  const r = g.run, best = save.stats.bestWave, k = save.kingdom, d = DIFFS[r.diff] || DIFFS.normal;
   const by = Object.entries(r.byCat).sort((a, b) => b[1].dmg - a[1].dmg), tot = Math.max(1, by.reduce((a, [, v]) => a + v.dmg, 0)), mx = Math.max(1, by[0] ? by[0][1].dmg : 1);
   const bars = by.slice(0, 6).map(([id, v], i) => `<div class="rb ${i === 0 ? 'mvp' : ''}"><img src="${thumbURL(id)}" alt=""><b>${CAT_BY_ID[id].name}</b><div class="bar"><i style="width:${(100 * v.dmg) / mx}%"></i></div><span>${num(v.dmg)} <em>${Math.round((100 * v.dmg) / tot)}%</em></span></div>`).join('');
-  setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : 'The mice cheer. Next time you will get them.'}</p>
+  const dailyBox = r.daily ? `<div class="dailybox" id="dailyBox"><b>${dayInfo(r.daily).mod.icon} Daily score ${r.dailyScore}</b><span id="dailyMsg"></span></div>` : '';
+  const trophies = (r.ach || []).length ? `<div class="trow">${r.ach.map((a) => `<span class="tchip">&#127942; ${a.name}</span>`).join('')}</div>` : '';
+  setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : 'The mice cheer. Next time you will get them.'} <small>${d.icon} ${d.name}${r.daily ? ' &middot; Daily' : ''}</small></p>
     <div class="overcols"><div><div class="stats"><div><b>${r.wave}</b>Wave reached</div><div><b>${r.kills}</b>Mice defeated</div><div><b>${r.bossKills}</b>Nests destroyed</div><div><b>${r.merges}</b>Merges</div>
       <div><b>${num(r.dmg)}</b>Damage dealt</div><div><b>${num(r.biggest)}</b>Biggest hit</div><div><b>${num(r.taken)}</b>Damage taken</div><div><b>${num(r.healed)}</b>Healed</div></div>
-      <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned</span><small>Total ${num(k.coins)}</small></div></div>
+      <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span><small>Total ${num(k.coins)}</small></div>${dailyBox}</div>
       <div class="rbars big"><div class="rh"><b>Who did the work</b></div>${bars || '<small>No damage dealt</small>'}</div></div>
-    ${fresh.length ? `<p class="sub">New friends unlocked!</p><div class="newcats">${fresh.map((id) => catCard(id, { act: 'none' })).join('')}</div>` : ''}
+    ${trophies}${fresh.length ? `<p class="sub">New friends unlocked!</p><div class="newcats">${fresh.map((id) => catCard(id, { act: 'none' })).join('')}</div>` : ''}
     <div class="row"><button class="btn big" data-act="again">Try again</button><button class="btn green" data-act="kingdom">Kingdom</button><button class="btn grey" data-act="title">Title</button></div>`, 'wide');
-  acts = { again: startRun, title: () => { g = null; showTitle(); }, kingdom: () => showKingdom(() => showOver(fresh)), none: () => {} };
+  acts = {
+    again: () => startRun({ daily: !!r.daily }), title: () => { g = null; showTitle(); }, kingdom: () => showKingdom(() => showOver(fresh)), none: () => {},
+    sendscore: () => { const inp = screenEl.querySelector('input[data-n]'); if (inp) { save.name = inp.value.replace(/[^\w \-.']/g, '').slice(0, 12); persist(); } postDaily(); },
+  };
+  if ((r.ach || []).length) sfx.play('achieve');
   const el = $('earn');
   if (el) {
     const to = +el.dataset.to, t0 = performance.now();
     const tick = (now) => { const u = Math.min(1, (now - t0) / 1100); el.textContent = Math.round(to * (1 - Math.pow(1 - u, 3))); if (u < 1 && el.isConnected) { requestAnimationFrame(tick); if (Math.random() < 0.3) sfx.play('coin'); } };
     requestAnimationFrame(tick);
   }
+  if (r.daily) postDaily();
+}
+// send the daily score once there is a name; otherwise ask for one
+function postDaily() {
+  const r = g.run, msg = $('dailyMsg');
+  if (!msg) return;
+  if (!save.name) {
+    msg.innerHTML = `<input type="text" maxlength="12" placeholder="Your name" data-n="1"><button class="btn small" data-act="sendscore">Send score</button>`;
+    return;
+  }
+  if (r.sent) { msg.textContent = r.sent; return; }
+  msg.textContent = 'Sending your score...';
+  submitScore({ name: save.name, score: r.dailyScore, wave: r.wave, kills: r.kills, day: r.daily }).then((res) => {
+    const el = $('dailyMsg');
+    r.sent = res.ok ? `You are #${rankOf(res.top, save.name) || '?'} today!` : res.status === 429 ? 'Slow down a little, then try again.' : 'Could not reach the leaderboard.';
+    if (el && el.isConnected) el.textContent = r.sent;
+  });
 }
 
 function showPause() {
   paused = true;
-  setScreen(`<h2 class="paused">Paused</h2><div class="row"><button class="btn big" data-act="resume">Resume</button></div><div class="row"><button class="btn grey" data-act="stats">Team stats</button><button class="btn grey" data-act="how">How to play</button><button class="btn grey" data-act="quit">Give up</button></div>`);
+  setScreen(`<h2 class="paused">Paused</h2><div class="row"><button class="btn big" data-act="resume">Resume</button></div><div class="row"><button class="btn grey" data-act="stats">Team stats</button><button class="btn grey" data-act="settings">Settings</button><button class="btn grey" data-act="how">How to play</button><button class="btn grey" data-act="quit">Give up</button></div>`);
   acts = {
     resume: () => { paused = false; closeScreen(); },
     stats: () => showStats(showPause),
+    settings: () => showSettings(showPause),
     how: () => showHow(showPause),
     quit: () => { paused = false; if (g.wave > 1) commitRun(); g = null; showTitle(); },
   };
@@ -585,7 +862,7 @@ function updateHud(dt) {
   } else hudCache.bossPct = null;
   const zr = g.zoomT > 0, z = $('zoom');
   z.style.display = playing ? 'flex' : 'none';
-  z.style.setProperty('--p', (zr ? 100 * g.zoomT / 6 : g.zoom) + '%');
+  z.style.setProperty('--p', (zr ? 100 * g.zoomT / g.zoomMax : g.zoom) + '%');
   z.className = zr ? 'on' : g.zoom >= 100 ? 'ready' : '';
   setText('zoomSub', zr ? 'GO!' : g.zoom >= 100 ? 'READY' : Math.floor(g.zoom) + '%');
   // coins count up smoothly, chests show while waiting to be opened
@@ -596,6 +873,21 @@ function updateHud(dt) {
   $('chestBox').style.display = ch > 0 ? 'flex' : 'none';
   setText('chestTxt', String(ch));
   $('bMeter').classList.toggle('on', !!save.meter);
+  if (playing && g.zoom >= 100 && !zr && !save.tips.c5) coach('c5', 'Zoomies are ready! Tap the glowing button, or press Space, for super speed!', 830, 104, 'right');
+  const syn = S.synergyState(g), ssig = JSON.stringify(syn.counts) + JSON.stringify(syn.tiers);
+  if (hudCache.syn !== ssig) {
+    hudCache.syn = ssig;
+    $('synBar').innerHTML = Object.entries(syn.counts).filter(([, n]) => n >= 2 || syn.tiers).map(([t, n]) => { const tier = syn.tiers[t] || 0; return tier ? `<span class="schip t${tier}" title="${SYNERGIES[t].name}: ${synergyText(t, tier)}">${SYNERGIES[t].icon} ${n}</span>` : ''; }).join('');
+  }
+  const csig = [g.route.id, g.daily ? g.daily.mod.id : '', g.diff.name].join('|');
+  if (hudCache.chip !== csig) {
+    hudCache.chip = csig;
+    const bits = [];
+    if (g.daily) bits.push(`${g.daily.mod.icon} ${g.daily.mod.name}`);
+    else if (g.diff.name !== 'Normal') bits.push(`${g.diff.icon} ${g.diff.name}`);
+    if (g.route.id !== 'trail') bits.push(`${g.route.icon} ${g.route.name}`);
+    $('modeChip').innerHTML = bits.join(' &middot; '); $('modeChip').style.display = bits.length ? 'block' : 'none';
+  }
   const sig = g.perm.join(',') + '|' + g.temp.map((t) => t.id + t.left).join(',');
   if (hudCache.snackSig !== sig) {
     hudCache.snackSig = sig;
@@ -631,12 +923,23 @@ function glow(x, y, r, col, a = 1) { ctx.globalAlpha = a; ctx.drawImage(glowSpri
 const add = () => { ctx.globalCompositeOperation = 'lighter'; };
 const norm = () => { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; };
 
+const moods = new Map();
+const emote = (uid, glyph, life = 1.2) => spawnFx({ k: 'emote', uid, glyph, life, max: life });
+function cheerRandom(chance) {
+  if (Math.random() > chance) return;
+  const al = S.aliveCats(g);
+  if (!al.length) return;
+  const c = al[Math.floor(Math.random() * al.length)];
+  moods.set(c.uid, 1.3);
+  if (Math.random() < 0.5) emote(c.uid, '\u2728', 0.9);
+  if (Math.random() < 0.35) sfx.meow(c.id, 'happy');
+}
 let hitstop = 0, timeScale = 1, slowT = 0, zpunch = 0, towerWob = 0;
 let combo = 0, comboT = 0, comboPulse = 0, celeb = 0;
 const hit = (t) => { hitstop = Math.max(hitstop, t); };
 const slowmo = (sec, scale) => { slowT = sec; timeScale = scale; };
 
-const spawnFx = (f) => { if (fx.length < MAXFX) fx.push(f); };
+const spawnFx = (f) => { if (fx.length < Math.min(MAXFX, fxCap)) fx.push(f); };
 function puff(x, y, n, col, sp = 90, life = 0.5, r = 4, grav = 120) {
   for (let i = 0; i < n; i++) {
     const a = Math.random() * TAU, v = sp * (0.3 + Math.random() * 0.7);
@@ -663,7 +966,7 @@ const txtFx = (x, y, t, col = '#fff', size = 15, life = 0.8, pop = true) => spaw
 const ring = (x, y, r, col, life = 0.35, w = 4) => spawnFx({ k: 'r', x, y, r, col, life, max: life, w });
 const bolt = (pts, col, w, life = 0.16) => spawnFx({ k: 'l', pts, col, w, life, max: life });
 const flashGlow = (x, y, r, col, life = 0.25) => spawnFx({ k: 'g', x, y, r, col, life, max: life });
-const screenFlash = (col, life = 0.12) => spawnFx({ k: 'flash', life, max: life, col });
+const screenFlash = (col, life = 0.12) => { if (save.opt.motion) spawnFx({ k: 'flash', life, max: life, col }); };
 
 function catPos(uid) {
   const alive = S.aliveCats(g);
@@ -680,7 +983,8 @@ function handle(e) {
       break;
     case 'kill': {
       if (e.quiet) { puff(e.x, e.y, 3, '#ffffff', 60, 0.4); break; }
-      combo++; comboT = 2.4; comboPulse = 1;
+      combo++; comboT = 2.4; comboPulse = 1; maxComboRun = Math.max(maxComboRun, combo); cheerRandom(0.12);
+      if (combo === 50) for (const a of checkAch({ ...g.run, maxCombo: combo })) { toast(`Trophy: ${a.name}!`); sfx.play('achieve'); }
       spawnFx({ k: 'corpse', type: e.type, elite: e.elite, x: e.x, y: e.y, vx: 60 + Math.random() * 90, vy: -230 - Math.random() * 90, rot: 0, vr: 6 + Math.random() * 8, life: 0.7, max: 0.7 });
       puff(e.x, e.y, e.elite ? 14 : 6, e.elite ? '#ffd23f' : '#ffffff', 110, 0.5, 4);
       sparks(e.x, e.y, e.elite ? 12 : 5, e.elite ? '#ffd23f' : '#fff6b0', 190, 0.3);
@@ -731,11 +1035,11 @@ function handle(e) {
       sfx.play('zap'); break;
     case 'star': bolt([{ x: e.x + 90, y: e.y - 160 }, { x: e.x, y: e.y }], '#ffe9a0', 4, 0.25); flashGlow(e.x, e.y, 28, '#ffe9a0', 0.25); break;
     case 'nova': ring(e.x, e.y, e.r, '#bfeaff', 0.5, 10); ring(e.x, e.y, e.r * 0.7, '#ffffff', 0.4, 4); flashGlow(e.x, e.y, e.r * 0.8, '#bfeaff', 0.35); sparks(e.x, e.y, 14, '#e8f8ff', 260, 0.45); shake = Math.max(shake, 4); sfx.play('zap'); break;
-    case 'ko': { const p = catPos(e.uid); txtFx(p.x, p.y - 30, 'KO!', '#ff8a8a', 26, 1.2); puff(p.x, p.y, 10, '#ffd1e0', 100, 0.6); sparks(p.x, p.y, 8, '#ff8a8a', 200, 0.4); shake = Math.max(shake, 9); hit(0.1); slowmo(0.5, 0.4); screenFlash('rgba(255,80,80,.22)', 0.25); sfx.play('ko'); break; }
-    case 'revive': { const p = catPos(e.uid); txtFx(p.x, p.y - 30, 'Back up!', '#fff6b0', 22, 1.2); puff(p.x, p.y, 12, '#fff6b0', 100, 0.7); flashGlow(p.x, p.y, 70, '#fff6b0', 0.5); sfx.play('heal'); break; }
-    case 'heal': { const p = catPos(e.uid); txtFx(p.x - 46, p.y - 20, '+' + Math.round(e.v), '#7dffb0', 16, 0.9); break; }
+    case 'ko': { const kc = S.findCat(g, e.uid); if (kc) sfx.meow(kc.id, 'sad'); emote(e.uid, '\uD83D\uDCAB', 1.6); const p = catPos(e.uid); txtFx(p.x, p.y - 30, 'KO!', '#ff8a8a', 26, 1.2); puff(p.x, p.y, 10, '#ffd1e0', 100, 0.6); sparks(p.x, p.y, 8, '#ff8a8a', 200, 0.4); shake = Math.max(shake, 9); hit(0.1); slowmo(0.5, 0.4); screenFlash('rgba(255,80,80,.22)', 0.25); sfx.play('ko'); break; }
+    case 'revive': { const rc = S.findCat(g, e.uid); if (rc) { sfx.meow(rc.id, 'happy'); moods.set(e.uid, 1.5); } const p = catPos(e.uid); txtFx(p.x, p.y - 30, 'Back up!', '#fff6b0', 22, 1.2); puff(p.x, p.y, 12, '#fff6b0', 100, 0.7); flashGlow(p.x, p.y, 70, '#fff6b0', 0.5); sfx.play('heal'); break; }
+    case 'heal': { if (Math.random() < 0.25) emote(e.uid, '\u2764\uFE0F', 1); const p = catPos(e.uid); txtFx(p.x - 46, p.y - 20, '+' + Math.round(e.v), '#7dffb0', 16, 0.9); break; }
     case 'healfx': for (let i = 0; i < 3; i++) spawnFx({ k: 'h', x: e.x + (Math.random() - 0.5) * 50, y: e.y - 10, life: 0.9, max: 0.9 }); sfx.play('heal'); break;
-    case 'cathit': { const p = catPos(e.uid); txtFx(p.x - 56, p.y, Math.round(e.v), '#ff8a8a', 15, 0.7); towerWob = 1; shake = Math.max(shake, 1.8); sfx.play('hit'); break; }
+    case 'cathit': { if (Math.random() < 0.18) emote(e.uid, '\uD83D\uDCA2', 0.8); const p = catPos(e.uid); txtFx(p.x - 56, p.y, Math.round(e.v), '#ff8a8a', 15, 0.7); towerWob = 1; shake = Math.max(shake, 1.8); sfx.play('hit'); break; }
     case 'coin': if (fx.length < 300) spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 52, ty: 72, life: 0.7 + Math.random() * 0.2, max: 0.8, kind: 'coin', ox: (Math.random() - 0.5) * 160, oy: -60 - Math.random() * 60 }); break;
     case 'chest': spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', ox: 0, oy: -90 }); sparks(e.x, e.y, 10, '#ffd23f', 220, 0.5); txtFx(e.x, e.y - 20, 'Chest!', '#ffd23f', 20, 1); sfx.play('chest'); break;
     case 'dodge': { const p = catPos(e.uid); txtFx(p.x - 40, p.y, 'Miss!', '#b9f5ff', 16, 0.7); break; }
@@ -752,7 +1056,7 @@ function handle(e) {
     }
     case 'zoom': banner('ZOOMIES!', '', false); screenFlash('rgba(255,160,210,.25)', 0.25); zpunch = Math.max(zpunch, 0.03); sfx.play('zoom'); break;
     case 'nine': txtFx(S.TOWER_X + 40, 260, 'NINE LIVES!', '#ffd23f', 36, 1.6); puff(S.TOWER_X, 330, 30, '#ffd23f', 200, 0.9, 6); flashGlow(S.TOWER_X, 330, 200, '#ffd23f', 0.6); screenFlash('rgba(255,230,120,.35)', 0.4); sfx.play('heal'); break;
-    case 'merge': puff(S.TOWER_X, 330, 20, '#ffd23f', 160, 0.7, 5); break;
+    case 'merge': puff(S.TOWER_X, 330, 20, '#ffd23f', 160, 0.7, 5); moods.set(e.uid, 1.6); emote(e.uid, '\u2B50', 1.2); break;
     default: break;
   }
 }
@@ -814,6 +1118,10 @@ function drawFx() {
   for (const f of fx) {
     const a = Math.max(0, f.life / f.max);
     if (f.k === 'flash') { ctx.globalAlpha = a; ctx.fillStyle = f.col; ctx.fillRect(0, 0, W, H); }
+    else if (f.k === 'emote') {
+      const p = catPos(f.uid), age = f.max - f.life, sc = 1 + Math.max(0, 0.6 * (1 - age / 0.15));
+      ctx.globalAlpha = Math.min(1, a * 3); ctx.drawImage(iconSprite(f.glyph), p.x + 22 - 13 * sc, p.y - 52 - age * 16 - 13 * sc, 26 * sc, 26 * sc);
+    }
     else if (f.k === 't') {
       const age = f.max - f.life, sc = f.pop ? 1 + Math.max(0, 0.7 * (1 - age / 0.14)) : 1;
       ctx.globalAlpha = Math.min(1, a * 2.2); ctx.font = `800 ${Math.round(f.size * sc)}px ${FONT}`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round';
@@ -865,11 +1173,13 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
     const sc = 1.0 * (1 + 0.06 * (c.lvl - 1));
     let hop = marching ? Math.abs(Math.sin(t * 9 + i * 0.7)) * 3.2 : Math.sin(t * 2.4 + i) * 1.3;
     if (cheer) hop = Math.abs(Math.sin(t * 8 + i * 0.9)) * 12;
-    const feetY = GROUND - i * SLOT - hop;
+    const below = list[i - 1], bump = below && below.atk > 0 ? Math.sin((below.atk / 0.22) * Math.PI) * 3.5 : 0;
+    const feetY = GROUND - i * SLOT - hop - bump;
     const atk = c.atk > 0 ? c.atk / 0.22 : 0;
     const lunge = atk * 7;
     const sway = i * (marching ? Math.sin(t * 9) * 1.5 : Math.sin(t * 1.7 + 0.5) * 0.9) + towerWob * Math.sin(t * 32) * i * 1.6;
-    const variant = c.flash > 0 ? 'hurt' : (cheer ? 'blink' : ((t * 0.9 + i * 1.37 + (c.seed || 0)) % 4.3 < 0.13 ? 'blink' : 'open'));
+    const mood = moods.get(c.uid) || 0;
+    const variant = c.flash > 0 ? 'hurt' : mood > 0 || cheer ? 'happy' : (cheer ? 'blink' : ((t * 0.9 + i * 1.37 + (c.seed || 0)) % 4.3 < 0.13 ? 'blink' : 'open'));
     const spr = catSprite(c.id, variant);
     if (i === 0) shadow(cx, GROUND + 3, 46);
     if (c.lvl >= 2) { add(); glow(cx + sway, feetY - 44, 58 + c.lvl * 8, c.lvl === 3 ? '#ffd24a' : '#ffe38c', (c.lvl === 3 ? 0.5 : 0.32) + 0.08 * Math.sin(t * 3 + i)); norm(); }
@@ -892,7 +1202,8 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
       if (c.lvl > 1) { const nw = ctx.measureText(d.name).width + 3; ctx.strokeText('★'.repeat(c.lvl), bx + nw, by - 3); ctx.fillStyle = '#ffd23f'; ctx.fillText('★'.repeat(c.lvl), bx + nw, by - 3); }
       ctx.fillStyle = 'rgba(39,28,51,.8)'; ctx.beginPath(); ctx.roundRect(bx - 1, by, bw + 2, 9, 5); ctx.fill();
       const r = Math.min(1, Math.max(0, c.hp / c.max));
-      ctx.fillStyle = r > 0.5 ? '#5fe08a' : r > 0.25 ? '#ffc94a' : (Math.sin(t * 14) > 0 ? '#ff6b6b' : '#ffb0b0');
+      const cb = save.opt.colorblind;
+      ctx.fillStyle = r > 0.5 ? (cb ? '#4aa8ff' : '#5fe08a') : r > 0.25 ? '#ffc94a' : (Math.sin(t * 14) > 0 ? (cb ? '#ff8a2a' : '#ff6b6b') : '#ffd9b0');
       ctx.beginPath(); ctx.roundRect(bx, by + 1, Math.max(3, bw * r), 7, 4); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.roundRect(bx + 1, by + 1.5, Math.max(2, bw * r - 2), 2, 1); ctx.fill();
       if (c.items) c.items.forEach((id, k) => ctx.drawImage(iconSprite(ITEM_BY_ID[id].icon), bx + k * 17, by + 11, 16, 16));
@@ -994,7 +1305,7 @@ function drawField(t, dt) {
   }
   for (const m of g.mines) { ctx.fillStyle = '#4a4a5a'; ctx.strokeStyle = '#271c33'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(m.x, GROUND + 10, 13, 6, 0, 0, TAU); ctx.fill(); ctx.stroke(); const on = Math.sin(t * 8) > 0; ctx.fillStyle = on ? '#ff5d5d' : '#7a2a2a'; ctx.beginPath(); ctx.arc(m.x, GROUND + 6, 3, 0, TAU); ctx.fill(); if (on) { add(); glow(m.x, GROUND + 6, 14, '#ff5d5d', 0.6); norm(); } }
   const alive = S.aliveCats(g);
-  const list = alive.map((c) => ({ id: c.id, lvl: c.lvl, hp: c.hp, max: S.catMaxHp(g, c), flash: c.flash, atk: c.atk, seed: c.uid * 0.7, items: c.items }));
+  const list = alive.map((c) => ({ id: c.id, lvl: c.lvl, hp: c.hp, max: S.catMaxHp(g, c), flash: c.flash, atk: c.atk, seed: c.uid * 0.7, items: c.items, uid: c.uid }));
   const marching = g.marching && g.state === 'fight';
   drawStack(g.towerX, list, t, marching, true, mode === 'celebrate', g.zoomT > 0);
   if (marching) { dustT -= dt; if (dustT <= 0) { dustT = 0.11; smoke(g.towerX - 10 + Math.random() * 40, GROUND + 6, 1, 6, '#d8cfae'); } }
@@ -1042,7 +1353,7 @@ function vignette(t) {
 function drawCombo(t) {
   if (combo < 3 || mode !== 'play') return;
   const s = 1 + comboPulse * 0.35, fade = Math.min(1, comboT * 2);
-  ctx.save(); ctx.translate(18, 134); ctx.scale(s, s); ctx.globalAlpha = fade;
+  ctx.save(); ctx.translate(18, 176); ctx.scale(s, s); ctx.globalAlpha = fade;
   ctx.font = `800 ${24 + Math.min(14, combo / 4)}px ${FONT}`; ctx.textAlign = 'left'; ctx.lineWidth = 5; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round';
   const col = combo >= 50 ? '#ff8fb7' : combo >= 20 ? '#ffd23f' : '#ffffff';
   ctx.strokeText(`x${combo}`, 0, 0); ctx.fillStyle = col; ctx.fillText(`x${combo}`, 0, 0);
@@ -1055,17 +1366,17 @@ function render(dt) {
   ctx.setTransform(res, 0, 0, res, 0, 0);
   ctx.clearRect(0, 0, W, H);
   ctx.save();
-  const zp = zpunch + (shake > 0.5 ? 0.012 : 0);
+  const sk = shake * save.opt.shake, zp = save.opt.motion ? zpunch + (sk > 0.5 ? 0.012 : 0) : 0;
   if (zp > 0.001) { ctx.translate(W / 2, H / 2); ctx.scale(1 + zp, 1 + zp); ctx.translate(-W / 2, -H / 2); }
   zpunch *= Math.exp(-6 * dt);
-  if (shake > 0.2) { ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake); shake = Math.max(0, shake - dt * 40); }
+  if (sk > 0.2) ctx.translate((Math.random() - 0.5) * sk, (Math.random() - 0.5) * sk);
+  shake = Math.max(0, shake - dt * 40);
   if (!bd) setBackdrop(0);
   const inRun = g && mode !== 'title';
   if (!inRun) titleScroll += dt * 40;
   const sc = inRun ? g.scroll : titleScroll;
   drawBackdrop(ctx, bd, sc, t);
-  drawRays(ctx, bd, t);
-  drawAmbient(t, dt, sc);
+  if (save.opt.quality !== 'low') { drawRays(ctx, bd, t); drawAmbient(t, dt, sc); }
   if (inRun) drawField(t, dt); else drawTitleScene(t);
   drawFront(ctx, bd, sc);
   drawFx();
@@ -1104,10 +1415,12 @@ function frame(ts) {
   tAnim += dt;
   // drop render resolution if the device cannot keep up
   frameEma = frameEma * 0.95 + Math.min(100, raw * 1000) * 0.05;
-  if (frameEma > 26 && res > 1.01) { if (++slowFrames > 90) { quality *= 0.78; slowFrames = 0; fit(); } } else slowFrames = 0;
+  if (save.opt.quality === 'auto' && frameEma > 26 && res > 1.01) { if (++slowFrames > 90) { quality *= 0.78; slowFrames = 0; fit(); } } else slowFrames = 0;
   if (slowT > 0) { slowT -= dt; if (slowT <= 0) slowT = 0; } else timeScale += (1 - timeScale) * Math.min(1, dt * 5);
   if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
   comboPulse *= Math.exp(-8 * dt); towerWob *= Math.exp(-5 * dt);
+  for (const [k, v] of moods) { if (v - dt <= 0) moods.delete(k); else moods.set(k, v - dt); }
+  sfx.setIntensity(Math.min(1, combo / 30));
   if (g && mode === 'play' && !paused) {
     let sd = dt * speed * timeScale, fd = sd;
     if (hitstop > 0) { hitstop -= dt; sd = 0; fd = dt * 0.1; }
@@ -1137,7 +1450,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { get g() { return g; }, get mode() { return mode; }, S, save: () => save, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; } };
+window.stackingCats = { get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; } };
 showTitle();
 requestAnimationFrame(frame);
 void ENEMY_TYPES;

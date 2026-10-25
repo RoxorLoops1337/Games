@@ -57,8 +57,8 @@ function loot(g) {
   if (target) equipItem(g, g.stash.length - 1, target.uid);
 }
 
-export function playRun(seed, { maxWave = 80, kingdom = null } = {}) {
-  const g = newGame({ seed, unlocked: STARTERS, events: false, kingdom });
+export function playRun(seed, { maxWave = 80, kingdom = null, difficulty = 'normal' } = {}) {
+  const g = newGame({ seed, unlocked: STARTERS, events: false, kingdom, difficulty });
   for (let i = 0; i < START_CATS; i++) recruit(g);
   for (let i = 0; i < g.meta.startSnacks; i++) snack(g);
   while (g.state !== 'over' && g.wave < maxWave) {
@@ -90,6 +90,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   assert.ok(half[Math.floor(N / 2)] >= med, 'a half built kingdom should not be weaker');
   assert.ok(rich[Math.floor(N / 2)] > med + 2, 'a full kingdom should clearly help');
   assert.ok(rich.every((w) => w < 80), 'even a full kingdom must be beatable');
+  // difficulty: the average wave must go down from Cozy to Normal to Hard
+  const mean = (opts) => { const M = QUICK ? 20 : 40; let t = 0; for (let k = 1; k <= M; k++) t += playRun(k * 104729 + 17, opts).wave; return t / M; };
+  const mc = mean({ difficulty: 'cozy' }), mn = mean({ difficulty: 'normal' }), mh = mean({ difficulty: 'hard' });
+  console.log('mean wave cozy', mc.toFixed(1), 'normal', mn.toFixed(1), 'hard', mh.toFixed(1));
+  assert.ok(mc > mn * 1.1 && mn > mh * 1.1, 'difficulty levels should be clearly different');
   assert.ok(med >= 8, 'too hard: median wave ' + med);
   assert.ok(med <= 40, 'too easy: median wave ' + med);
   assert.ok(waves.every((w) => w < 80), 'a run never ended: the game is endless-easy');
