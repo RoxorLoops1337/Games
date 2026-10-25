@@ -7,6 +7,15 @@ let n = 0;
 const t = async (name, fn) => { await fn(); n++; console.log('ok', name); };
 const D = 'stacking_cats/';
 
+// every module the game imports must be in the service worker's install list, or the game will not start offline
+await t('the service worker pre-caches every game module and static file', () => {
+  const sw = readFileSync(D + 'sw.js', 'utf8');
+  const list = sw.slice(sw.indexOf('PRECACHE = ['), sw.indexOf('];', sw.indexOf('PRECACHE = [')));
+  const missing = readdirSync(D).filter((f) => f.endsWith('.js') && f !== 'sw.js' && !list.includes("'" + f + "'"));
+  assert.deepEqual(missing, [], 'not pre-cached: ' + missing.join(', '));
+  for (const f of ['index.html', 'manifest.webmanifest']) assert.ok(list.includes("'" + f + "'"), f);
+});
+
 const fakeCtx = () => {
   const grad = { addColorStop() {} };
   return new Proxy({}, {
