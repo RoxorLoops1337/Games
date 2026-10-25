@@ -156,6 +156,16 @@ const buildAwesomeFarm = () => {
   }
 };
 
+// Pitch Story is a Godot 4 project (pitch_story/). Like Awesome Farm, its web export is kept in git in pitch_story/play/
+// (rebuild with `npm run build:pitchstory`, needs Godot 4.7.1 + web templates, then commit play/) and is served at
+// /pitch_story/. Only play/ is deployed, never the project source. The 39 MB engine is shipped gzipped (host limit 25 MiB).
+const buildPitchStory = () => {
+  const play = path.join(REPO, 'pitch_story', 'play');
+  if (!fs.existsSync(path.join(play, 'index.html'))) { console.log('pitch_story: no build in pitch_story/play (npm run build:pitchstory makes one)'); return; }
+  fs.cpSync(play, path.join(DIST, 'pitch_story'), { recursive: true });
+  console.log('copied pitch_story/play → dist/pitch_story');
+};
+
 // Beatbox Heroes ESM splitting build (park3d/entry.js -> r3/entry.js + r3/p3-*.js): one tool owns the esbuild options (tools/beatbox_heroes/build_park3d.mjs --esm).
 // Output is mirrored into the source tree like the other bundles, and the entry URL is stamped into index.html as window.BBH_R3.
 const R3_SRC = path.join(REPO, 'beatbox_heroes', 'r3');
@@ -338,6 +348,7 @@ const minifyClawspire = () => {
   writeArtManifest();
   minifyClawspire();
   buildAwesomeFarm();
+  buildPitchStory();
 
   for (const t of BUNDLES) {
     await esbuild.build(buildOpts(t));
