@@ -1,5 +1,5 @@
 // Procedural art for the mice and rats, the nests and the parallax backdrops.
-import { TAU, INK, mix, shade, lineOf, ell, cel, poly, fillPath, star, line, mulberry, hash, outlineCanvas, rimLight } from './art_util.js';
+import { TAU, INK, mix, shade, lineOf, ell, cel, poly, fillPath, star, line, mulberry, hash, outlineCanvas, rimLight, texturize } from './art_util.js';
 
 const B = [-20, -50, 20, 0];
 function limb(ctx, x, y, rx, ry, fill, lw = 0.9) { fillPath(ctx, ell(ctx, x, y, rx, ry), fill, lw); }
@@ -175,6 +175,7 @@ export function enemySprite(type, elite) {
     fillPath(ctx, poly(ctx, [[-8, hy], [-8, hy - 8], [-4, hy - 4], [0, hy - 10], [4, hy - 4], [8, hy - 8], [8, hy]]), '#ffd23f', 0.9);
     ctx.restore();
   }
+  texturize(c, { seed: hash(key), len: 6, lw: 1.3, count: 1700, dir: Math.PI / 2 + 0.3, spread: 1.4 });   // fur
   const r = { c: outlineCanvas(rimLight(c, 2, '#fff0c0', 0.4), 2, '#2a1840', 0.85), ax, ay, w: W, h: H };
   spriteCache.set(key, r);
   return r;
@@ -296,6 +297,12 @@ export function makeBackdrop(theme, seed) {
         const cy = base + dy * s, tg = mx.createLinearGradient(0, cy - r * s, 0, cy + r * s);
         tg.addColorStop(0, shade(c, 0.16)); tg.addColorStop(1, shade(c, -0.14));
         mx.fillStyle = tg; mx.beginPath(); mx.arc(xx + dx * s, cy, r * s, 0, TAU); mx.fill();
+        // leaf clumps: lighter on top, darker underneath
+        for (let k = 0; k < 9; k++) {
+          const an = rnd() * TAU, dd = Math.sqrt(rnd()) * r * s * 0.82, lx = xx + dx * s + Math.cos(an) * dd, ly = cy + Math.sin(an) * dd, up = Math.sin(an) < 0;
+          mx.globalAlpha = 0.5; mx.fillStyle = up ? shade(c, 0.22) : shade(c, -0.2);
+          mx.beginPath(); mx.ellipse(lx, ly, (2.4 + rnd() * 3) * s, (1.8 + rnd() * 2) * s, rnd() * 3, 0, TAU); mx.fill(); mx.globalAlpha = 1;
+        }
       }
     });
   };
@@ -353,6 +360,27 @@ export function makeBackdrop(theme, seed) {
   for (let i = 0; i < 40; i++) { gx.fillStyle = 'rgba(255,255,255,.1)'; gx.fillRect(rnd() * W, top + 20 + rnd() * 90, 14 + rnd() * 26, 1.5); }
 
   // tall foreground tufts (drawn in front of the action) and soft sun rays
+  // ground detail: soil grain, pebbles with a lit side, hairline cracks and a few faint paw prints
+  texturize(gr, { seed: seed + 3, count: 8000, len: 7, lw: 1.2, dir: 0.05, spread: 0.7, alpha: 0.5, amp: 0.13, minLum: 35 });
+  {
+    const pc = shade(theme.dirt, -0.32), pl = shade(theme.dirt, 0.3);
+    for (let i = 0; i < 80; i++) {
+      const y = top + 20 + rnd() * (H - top - 34), x = rnd() * W, r = (1.4 + rnd() * 2.8) * (0.6 + (y - top) / 120);
+      gx.fillStyle = 'rgba(30,18,10,.25)'; gx.beginPath(); gx.ellipse(x + 1, y + r * 0.7, r * 1.15, r * 0.5, 0, 0, TAU); gx.fill();
+      gx.fillStyle = pc; gx.beginPath(); gx.ellipse(x, y, r, r * 0.72, 0, 0, TAU); gx.fill();
+      gx.fillStyle = pl; gx.globalAlpha = 0.7; gx.beginPath(); gx.ellipse(x - r * 0.25, y - r * 0.25, r * 0.5, r * 0.28, 0, 0, TAU); gx.fill(); gx.globalAlpha = 1;
+    }
+    gx.strokeStyle = 'rgba(30,18,10,.22)'; gx.lineWidth = 1;
+    for (let i = 0; i < 9; i++) { let x = rnd() * W, y = top + 30 + rnd() * (H - top - 50); gx.beginPath(); gx.moveTo(x, y); for (let k = 0; k < 4; k++) { x += 8 + rnd() * 12; y += (rnd() - 0.5) * 8; gx.lineTo(x, y); } gx.stroke(); }
+    gx.fillStyle = 'rgba(30,18,10,.13)';
+    for (let i = 0; i < 7; i++) {
+      const x = 60 + rnd() * (W - 120), y = top + 36 + rnd() * (H - top - 70), a = -0.5 + rnd() * 1.0;
+      gx.save(); gx.translate(x, y); gx.rotate(a);
+      gx.beginPath(); gx.ellipse(0, 3, 5.5, 4.6, 0, 0, TAU); gx.fill();
+      for (const [tx, ty] of [[-6, -4], [-2.2, -8], [2.2, -8], [6, -4]]) { gx.beginPath(); gx.ellipse(tx, ty, 1.9, 2.4, 0, 0, TAU); gx.fill(); }
+      gx.restore();
+    }
+  }
   const [front, ftx] = mk();
   const tuft = theme.deco === 'snow' ? '#ffffff' : shade(theme.ground[1], -0.12);
   for (let i = 0; i < 46; i++) {
@@ -395,6 +423,8 @@ export function makeBackdrop(theme, seed) {
     cv.width = cv.height = 0;                 // the sharp source layer is not needed again
     return o;
   };
+  texturize(far, { seed: seed + 5, count: 5000, len: 5, lw: 1.2, dir: 0.9, spread: 2.2, alpha: 0.32, amp: 0.06, minLum: 25 });
+  texturize(mid, { seed: seed + 6, count: 7000, len: 4.5, lw: 1.2, dir: 0.6, spread: 2.6, alpha: 0.42, amp: 0.1, minLum: 25 });
   const farSoft = soften(far, 2.6, hz, 0.38), midSoft = soften(mid, 0.9, hz, 0.14);
 
   const stars = []; if (night) for (let i = 0; i < 70; i++) stars.push([rnd() * W, rnd() * 300, 0.6 + rnd() * 1.4, rnd() * 6]);

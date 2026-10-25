@@ -16,7 +16,7 @@ import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
-import { mix, outlineCanvas, rimLight } from './art_util.js';
+import { mix, outlineCanvas, rimLight, texturize, hash } from './art_util.js';
 import { iconCanvas, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
 import { buzz, setHaptics } from './haptics.js';
@@ -109,6 +109,7 @@ function catSprite(id, variant = 'open', look = null) {
     c = document.createElement('canvas'); c.width = c.height = 240;
     const x = c.getContext('2d'); x.scale(2, 2); drawCat(x, CAT_BY_ID[id], variant);
     if (sig && sig !== '..') drawLook(x, look || lookOf(save, id), id);
+    texturize(c, { seed: hash(key), len: 7, lw: 1.6, count: 2600, dir: Math.PI / 2 + 0.25, spread: 1.3 });   // fur
     c = outlineCanvas(rimLight(c, 4, '#fff0c0', 0.45), 3, '#2a1840', 0.8);                // a dark rim so the tower keeps its silhouette on bright backdrops
     catSprites.set(key, c);
   }
