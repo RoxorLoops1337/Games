@@ -1,6 +1,6 @@
 // Stacking Cats: renderer, effects, HUD and screens. The rules live in sim.js.
 import {
-  CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES,
+  CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
   ITEM_BY_ID, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, upgradeCost, buyUpgrade, kingdomLevel,
   DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
@@ -178,6 +178,7 @@ function coach(key, html, x, y, dir = 'down', opt = {}) {
 function setScreen(html, cls = '') {
   hideCoach();
   screenEl.innerHTML = html ? `<div class="screen ${cls}">${html}</div>` : '';
+  document.body.classList.toggle('scr', !!html);       // the HUD steps back while a menu is open
   paintThumbs(screenEl);
 }
 const closeScreen = () => setScreen('');
@@ -293,7 +294,7 @@ function showSettings(back, msg) {
   const o = save.opt;
   const seg = (key, opts, cur) => `<div class="seg">${opts.map(([v, l]) => `<button class="${String(cur) === String(v) ? 'on' : ''}" data-act="opt" data-k="${key}" data-v="${v}">${l}</button>`).join('')}</div>`;
   const tog = (key, label, cur, hint = '') => `<button class="tog ${cur ? 'on' : ''}" data-act="tog" data-k="${key}"><span>${label}${hint ? `<small>${hint}</small>` : ''}</span><i></i></button>`;
-  setScreen(`<h2>Settings</h2><div class="setgrid">
+  setScreen(`<h2>Settings</h2><div class="tbody"><div class="setgrid">
       <div class="setcol">
         <div class="setrow"><b>Difficulty</b>${seg('diff', [['cozy', 'Cozy'], ['normal', 'Normal'], ['hard', 'Hard']], save.diff)}<small>${DIFFS[save.diff].desc}</small></div>
         <div class="setrow"><b>Sound effects</b><input type="range" min="0" max="100" value="${Math.round(o.sfxVol * 100)}" data-r="sfxVol"></div>
@@ -311,8 +312,8 @@ function showSettings(back, msg) {
         <div class="setrow"><b>Leaderboard name</b><input type="text" maxlength="12" value="${save.name.replace(/"/g, '')}" placeholder="Your name" data-n="1"></div>
         <div class="setrow"><b>Save backup</b><div class="row"><button class="btn small grey" data-act="export">Copy save code</button><button class="btn small grey" data-act="import">Restore from code</button></div>
         <small>${msg || 'Moves your cats, coins and trophies to another device.'}</small></div>
-      </div></div>
-    <div class="row"><button class="btn" data-act="back">Back</button><button class="btn small grey" data-act="tipsreset">Replay tutorial</button><button class="btn small grey" data-act="erase">Erase all progress</button></div>`);
+      </div></div></div>
+    <div class="tfoot setfoot"><button class="btn small grey" data-act="tipsreset">Replay tutorial</button><button class="btn big2" data-act="back">Back</button><button class="btn small red" data-act="erase">Erase all progress</button></div>`, 'wide arr');
   screenEl.querySelectorAll('input[type=range]').forEach((r) => r.addEventListener('input', () => { save.opt[r.dataset.r] = r.value / 100; persist(); sfx.setVolumes(save.opt.sfxVol, save.opt.musicVol); if (r.dataset.r === 'sfxVol') sfx.play('coin'); }));
   screenEl.querySelectorAll('input[data-n]').forEach((r) => r.addEventListener('input', () => { save.name = r.value.replace(/[^\w \-.']/g, '').slice(0, 12); persist(); }));
   let erase = false;
@@ -1054,6 +1055,7 @@ function updateHud(dt) {
   $('bossBar').style.display = playing && nest ? 'block' : 'none';
   if (nest) {
     setText('bossName', nest.name);
+    setText('bossTrick', (NESTS.find((n) => n.id === nest.kind) || {}).trick || '');
     const pct = Math.max(0, 100 * nest.hp / nest.maxHp).toFixed(1) + '%';
     if (hudCache.bossPct !== pct) { hudCache.bossPct = pct; $('bossHp').style.width = pct; $('bossTrail').style.width = pct; }
   } else hudCache.bossPct = null;
@@ -1452,16 +1454,25 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     if (c.lvl === 3) { ctx.fillStyle = '#fff6b0'; for (let k = 0; k < 3; k++) { const an = t * 2 + k * 2.1; ctx.beginPath(); ctx.arc(cx + sway + Math.cos(an) * 40, feetY - 44 + Math.sin(an) * 26, 2.4, 0, TAU); ctx.fill(); } }
     if (hpBars) {
-      const bx = cx - 142, by = feetY - 50, bw = 80;
-      ctx.font = `800 12px ${FONT}`; ctx.textAlign = 'left'; ctx.lineWidth = 3.5; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round'; ctx.strokeText(d.name, bx, by - 3); ctx.fillStyle = '#fff'; ctx.fillText(d.name, bx, by - 3);
-      if (c.lvl > 1) { const nw = ctx.measureText(d.name).width + 3; ctx.strokeText('★'.repeat(c.lvl), bx + nw, by - 3); ctx.fillStyle = '#ffd23f'; ctx.fillText('★'.repeat(c.lvl), bx + nw, by - 3); }
-      ctx.fillStyle = 'rgba(39,28,51,.8)'; ctx.beginPath(); ctx.roundRect(bx - 1, by, bw + 2, 9, 5); ctx.fill();
+      const bx = cx - 142, by = feetY - 50, bw = 84;
+      ctx.font = `400 13px ${DISPLAY}`; ctx.textAlign = 'left'; ctx.lineWidth = 4; ctx.strokeStyle = '#1b1233'; ctx.lineJoin = 'round';
+      ctx.strokeText(d.name, bx, by - 4); ctx.fillStyle = '#fff'; ctx.fillText(d.name, bx, by - 4);
+      if (c.lvl > 1) { const nw = ctx.measureText(d.name).width + 4; ctx.strokeText('\u2605'.repeat(c.lvl), bx + nw, by - 4); ctx.fillStyle = '#ffd23f'; ctx.fillText('\u2605'.repeat(c.lvl), bx + nw, by - 4); }
       const r = Math.min(1, Math.max(0, c.hp / c.max));
       const cb = save.opt.colorblind;
-      ctx.fillStyle = r > 0.5 ? (cb ? '#4aa8ff' : '#5fe08a') : r > 0.25 ? '#ffc94a' : (Math.sin(t * 14) > 0 ? (cb ? '#ff8a2a' : '#ff6b6b') : '#ffd9b0');
-      ctx.beginPath(); ctx.roundRect(bx, by + 1, Math.max(3, bw * r), 7, 4); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.roundRect(bx + 1, by + 1.5, Math.max(2, bw * r - 2), 2, 1); ctx.fill();
-      if (c.items) c.items.forEach((id, k) => ctx.drawImage(iconSprite(ITEM_BY_ID[id].icon), bx + k * 17, by + 11, 16, 16));
+      const hc = r > 0.5 ? (cb ? ['#bfe4ff', '#4aa8ff'] : ['#b8ffd0', '#3fcf78']) : r > 0.25 ? ['#ffe9a0', '#f0a81a'] : (Math.sin(t * 14) > 0 ? (cb ? ['#ffd0a0', '#ff8a2a'] : ['#ffc0c0', '#ff5a5a']) : ['#fff0e0', '#ffd9b0']);
+      ctx.fillStyle = '#1b1233'; ctx.beginPath(); ctx.roundRect(bx - 2, by - 1, bw + 4, 12, 6); ctx.fill();
+      const hg = ctx.createLinearGradient(0, by, 0, by + 10); hg.addColorStop(0, hc[0]); hg.addColorStop(1, hc[1]);
+      ctx.fillStyle = hg; ctx.beginPath(); ctx.roundRect(bx, by + 1, Math.max(4, bw * r), 8, 4); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.roundRect(bx + 2, by + 2, Math.max(2, bw * r - 4), 2, 1); ctx.fill();
+      if (c.sp != null && hpBars === true && c.id) {
+        // special move charge: a thin bar under the health bar that glows when the move is ready
+        const sp = Math.min(1, c.sp), sc = (S.specialInfo(c.id) || {}).color || '#ffd23f';
+        ctx.fillStyle = '#1b1233'; ctx.beginPath(); ctx.roundRect(bx - 2, by + 11, bw + 4, 7, 4); ctx.fill();
+        ctx.fillStyle = sp >= 1 ? sc : mix(sc, '#6a5aa0', 0.45); ctx.beginPath(); ctx.roundRect(bx, by + 12, Math.max(3, bw * sp), 4, 2); ctx.fill();
+        if (sp >= 1) { add(); glow(bx + bw / 2, by + 14, 46, sc, 0.22 + 0.12 * Math.sin(t * 8)); norm(); }
+      }
+      if (c.items) c.items.forEach((id, k) => ctx.drawImage(iconSprite(ITEM_BY_ID[id].icon), bx + k * 17, by + 20, 16, 16));
     }
   });
 }
@@ -1584,7 +1595,7 @@ function drawField(t, dt) {
   }
   for (const m of g.mines) { ctx.fillStyle = '#4a4a5a'; ctx.strokeStyle = '#271c33'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(m.x, GROUND + 10, 13, 6, 0, 0, TAU); ctx.fill(); ctx.stroke(); const on = Math.sin(t * 8) > 0; ctx.fillStyle = on ? '#ff5d5d' : '#7a2a2a'; ctx.beginPath(); ctx.arc(m.x, GROUND + 6, 3, 0, TAU); ctx.fill(); if (on) { add(); glow(m.x, GROUND + 6, 14, '#ff5d5d', 0.6); norm(); } }
   const alive = S.aliveCats(g);
-  const list = alive.map((c) => ({ id: c.id, lvl: c.lvl, hp: c.hp, max: S.catMaxHp(g, c), flash: c.flash, atk: c.atk, seed: c.uid * 0.7, items: c.items, uid: c.uid }));
+  const list = alive.map((c) => ({ id: c.id, lvl: c.lvl, hp: c.hp, max: S.catMaxHp(g, c), flash: c.flash, atk: c.atk, seed: c.uid * 0.7, items: c.items, uid: c.uid, sp: c.sp }));
   const marching = g.marching && g.state === 'fight';
   drawStack(g.towerX, list, t, marching, true, mode === 'celebrate', g.zoomT > 0);
   if (g.fortressT > 0) {
@@ -1783,7 +1794,7 @@ function updateSpecials() {
       b = document.createElement('button'); b.className = 'spb'; b.dataset.uid = c.uid;
       const info = S.specialInfo(c.id);
       b.title = `${info.name} (key ${i + 1})`;
-      b.innerHTML = `<img src="${thumbURL(c.id)}" alt=""><i></i><em>${i + 1}</em>`;
+      b.innerHTML = `<img src="${thumbURL(c.id)}" alt=""><i></i><em>${i + 1}</em><span class="si">${info.icon}</span>`;
       box.appendChild(b); spBtns.set(c.uid, b);
     }
     const ready = S.specialReady(c);

@@ -504,6 +504,70 @@ body.nomotion .spb.ready{animation:none}
 .witem{background:var(--paper);color:var(--ink);border:3px solid var(--ink);border-radius:14px;padding:3px 4px;display:flex;flex-direction:column;align-items:center;gap:0}
 .witem.worn{outline:3px solid var(--mint)}.witem canvas{width:52px;height:52px}.witem b{font-size:13px}.witem small{display:none}
 body .witem .btn{min-height:32px;margin:2px 0 0;padding:1px 8px;font-size:13px;box-shadow:0 2px 0 var(--ink)}
+
+/* ===== HUD v3: one plush plaque language for every HUD piece, no overlaps ===== */
+:root{--plaque:linear-gradient(#52429a,#2f2463 62%,#281d57);--ink2:#1b1233;--gloss:inset 0 2px 0 rgba(255,255,255,.3),inset 0 -3px 0 rgba(0,0,0,.28)}
+#waveBox,#coinBox,#chestBox,#snackBar .chip,#modeChip,.schip{background:var(--plaque);border:2.5px solid var(--ink2);box-shadow:var(--gloss),0 3px 0 #0f0a20,0 6px 12px rgba(0,0,0,.35);backdrop-filter:none}
+#waveBox{left:12px;top:10px;gap:10px;padding:4px 16px 4px 14px;min-height:42px}
+#waveBox b{background:linear-gradient(#fff3b0,#ffc83a 60%,#ff9a2a);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;filter:drop-shadow(0 2px 0 #3a1a08);font-size:24px;letter-spacing:.6px}
+#waveBox small{color:#d9ccff;opacity:1;font-size:13px;letter-spacing:.3px;font-family:var(--font);font-weight:800}
+#nestPips{gap:5px;padding-left:2px}
+#nestPips i{width:12px;height:12px;border:2px solid var(--ink2);background:#4a3c86;box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+#nestPips i.on{background:radial-gradient(circle at 35% 30%,#d6ffe6,#4fd88c 60%);box-shadow:0 0 7px #6ff0b0}
+#nestPips i.boss{background:radial-gradient(circle at 35% 30%,#ffd0d0,#ff4a5a 62%);box-shadow:0 0 9px #ff4a5a;transform:scale(1.2)}
+#coinBox,#chestBox{top:58px;min-height:38px;padding:2px 14px 2px 8px;font-size:20px}
+#chestBox{left:122px}
+#coinBox b,#chestBox b{font-size:21px;letter-spacing:.4px}
+#modeChip{top:130px;font-size:13px;padding:1px 12px;line-height:20px}
+#synBar{top:104px;gap:5px}
+.schip{padding:0 10px;line-height:22px;border-width:2px}
+.schip.t1{border-color:#c8941a;background:linear-gradient(#6a5420,#3a2c14);color:#fff3b0}
+.schip.t2{border-color:#c8498a;background:linear-gradient(#7a2f86,#3a1f55);color:#fff}
+#snackBar{left:12px;bottom:10px;gap:6px}
+#snackBar .chip{font-size:15px;padding:1px 11px 1px 6px;min-height:30px}
+#snackBar .chip .gi{width:22px;height:22px}
+#snackBar .chip.temp{border-color:#8a5a2a}
+/* round buttons: glossy domes with an ink rim and a pressable lip */
+#tools{right:12px;top:8px;gap:8px}
+.ib{position:relative;width:44px;height:44px;border-radius:50%;border:3px solid var(--ink2);background:radial-gradient(circle at 50% 22%,#8a74d8,#4c3b9a 55%,#2f2463);box-shadow:inset 0 2px 0 rgba(255,255,255,.35),inset 0 -4px 0 rgba(0,0,0,.25),0 4px 0 #0f0a20,0 7px 12px rgba(0,0,0,.35);color:#fff;transition:transform .08s,box-shadow .08s,filter .15s}
+.ib::before{content:'';position:absolute;left:18%;right:18%;top:8%;height:30%;border-radius:50%;background:linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,0));pointer-events:none}
+.ib:hover{filter:brightness(1.12);background:radial-gradient(circle at 50% 22%,#9a86e8,#5a48b0 55%,#382a74)}
+.ib:active{transform:translateY(3px);box-shadow:inset 0 2px 0 rgba(255,255,255,.3),0 1px 0 #0f0a20}
+.ib.on{background:radial-gradient(circle at 50% 22%,#ffc0da,#f0609a 58%,#b02a66);box-shadow:inset 0 2px 0 rgba(255,255,255,.5),inset 0 -4px 0 rgba(0,0,0,.2),0 4px 0 #6a1740,0 0 14px #ff8fb7aa}
+/* zoomies: a lens in a glowing ring */
+#zoom{right:12px;top:64px;width:92px;height:92px;border:4px solid var(--ink2);background:conic-gradient(from -90deg,#ff8fb7 var(--p,0%),#2a1f55 0);box-shadow:0 0 0 3px rgba(255,255,255,.55),0 5px 0 #0f0a20,0 8px 16px rgba(0,0,0,.45);overflow:visible}
+#zoom::after{content:'';position:absolute;inset:-7px;border-radius:50%;border:2px dashed rgba(255,255,255,.28);pointer-events:none}
+#zoom span{width:68px;height:68px;background:radial-gradient(circle at 50% 28%,#6a54b8,#34276a 62%,#241a52);box-shadow:inset 0 3px 0 rgba(255,255,255,.28),inset 0 -4px 0 rgba(0,0,0,.25)}
+#zoom.on{background:conic-gradient(from -90deg,#ffd23f var(--p,0%),#2a1f55 0)}
+#zoom.ready{animation:readyp .6s ease-in-out infinite alternate;box-shadow:0 0 0 3px #fff,0 0 30px #ff8fb7,0 0 60px #ff8fb788,0 5px 0 #0f0a20}
+#zoom.ready::after{border-color:#fff;animation:spin 6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+body.nomotion #zoom.ready::after{animation:none}
+#zoom::before{bottom:-12px;background:var(--ink2);border:1.5px solid #ffffff44;font-family:var(--display);font-size:11px;padding:0 9px;line-height:16px}
+/* boss bar */
+#bossBar{top:58px;width:340px;padding:3px 12px 5px;background:linear-gradient(#5a2448,#2c1030);border:3px solid var(--ink2);box-shadow:var(--gloss),0 0 22px #ff3a4a77,0 4px 0 #0f0a20}
+#bossBar .nm{font-size:17px}
+#bossBar .trick{font:800 11.5px/1.15 var(--font);color:#ffd9d9;opacity:.9;margin-top:2px;min-height:13px}
+#bossBar .bar{height:15px;border:2px solid var(--ink2);box-shadow:inset 0 2px 0 rgba(0,0,0,.4)}
+#bossBar .bar i{background:linear-gradient(#ffb0b0,#ff5060 55%,#d02a3c)}
+/* DPS meter sits clear of the zoomies dial */
+#meter{top:190px;right:12px;background:linear-gradient(#3a2d78e6,#241a52e6);border:2.5px solid var(--ink2);box-shadow:var(--gloss),0 4px 10px rgba(0,0,0,.35)}
+/* special tray */
+.spb{width:50px;height:50px;border:3px solid var(--ink2);box-shadow:0 0 0 2px rgba(255,255,255,.4),0 4px 0 #0f0a20,0 7px 10px rgba(0,0,0,.4)}
+.spb img{inset:3px;width:calc(100% - 6px);height:calc(100% - 6px)}
+.spb em{background:var(--ink2);border:2px solid #ffffff55;min-width:19px;height:19px;line-height:15px;font-size:12px;right:-5px;bottom:-5px}
+.spb.ready{box-shadow:0 0 0 3px #fff,0 0 22px var(--c,#ffd23f),0 4px 0 #0f0a20}
+.spb .si{position:absolute;left:-7px;top:-7px;width:22px;height:22px;border-radius:50%;background:var(--c,#ffd23f);border:2px solid var(--ink2);display:none;align-items:center;justify-content:center;z-index:2;padding:0}
+.spb.ready .si{display:flex}
+.spb .si .gi{width:14px;height:14px;margin:0;vertical-align:0}
+body.touch .ib{width:52px;height:52px}
+body.touch #zoom{width:104px;height:104px}body.touch #zoom span{width:78px;height:78px}
+body.touch .spb{width:58px;height:58px}
+body.touch #specials{right:72px;bottom:12px}
+body.touch #meter{top:196px}
+.screen.arr .col h4{margin-bottom:5px}
+body.scr #hud>*:not(#toasts):not(#banner){opacity:0!important;pointer-events:none!important;transition:opacity .15s}
+.setfoot{justify-content:space-between;align-items:center}.setfoot .btn.small{align-self:center}
 </style>
 </head>
 <body>
@@ -516,7 +580,7 @@ body .witem .btn{min-height:32px;margin:2px 0 0;padding:1px 8px;font-size:13px;b
     <div id="synBar"></div>
     <div id="modeChip"></div>
     <div class="pill" id="chestBox" title="Loot chests, opened after the wave"><span class="ico">&#127873;</span><b id="chestTxt">0</b></div>
-    <div class="pill" id="bossBar"><div class="nm" id="bossName">Nest</div><div class="bar"><i id="bossTrail"></i><i id="bossHp"></i></div></div>
+    <div class="pill" id="bossBar"><div class="nm" id="bossName">Nest</div><div class="trick" id="bossTrick"></div><div class="bar"><i id="bossTrail"></i><i id="bossHp"></i></div></div>
     <div class="pill" id="tools">
       <button class="ib" id="bPause" title="Pause (P)">&#9208;</button>
       <button class="ib" id="bMeter" title="Damage meter (D)">&#128202;</button>
