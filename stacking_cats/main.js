@@ -31,7 +31,7 @@ const app = $('app'), cv = $('cv'), ctx = cv.getContext('2d'), screenEl = $('scr
 const sfx = new Sfx();
 
 // ---------------------------------------------------------------- save
-const DEFAULT_OPT = { shake: 1, colorblind: false, bigText: false, quality: 'auto', motion: true, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true };
+const DEFAULT_OPT = { shake: 1, colorblind: false, bigText: false, quality: 'auto', motion: true, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, autoSpecial: false };
 function freshSave() {
   return { v: 1, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT }, weekly: {}, ladder: 0, owned: [], wardrobe: {} };
 }
@@ -308,6 +308,7 @@ function showSettings(back, msg) {
         ${tog('colorblind', 'Colorblind friendly colors', o.colorblind, 'Blue, yellow and orange bars')}
         ${tog('bigText', 'Larger text', o.bigText)}
         ${tog('haptics', 'Vibration', o.haptics !== false, 'Short buzzes on hits, if your device has them')}
+        ${tog('autoSpecial', 'Auto special moves', !!o.autoSpecial, 'Charged specials fire by themselves when mice are close')}
         ${tog('tutorial', 'Tutorial hints', o.tutorial, 'Little tips during your first runs')}
         ${canInstall() ? '<div class="setrow"><b>Install app</b><div class="row"><button class="btn small" data-act="install">Install Stacking Cats</button></div><small>Full screen, works offline.</small></div>' : isIosSafari() ? '<div class="setrow"><b>Install app</b><small>Share, then Add to Home Screen for full screen</small></div>' : ''}
         <div class="setrow"><b>Leaderboard name</b><input type="text" maxlength="12" value="${save.name.replace(/"/g, '')}" placeholder="Your name" data-n="1"></div>
@@ -1791,6 +1792,11 @@ function doSpecial(uid) {
 }
 function updateSpecials() {
   const box = $('specials');
+  if (save.opt.autoSpecial && g && mode === 'play' && !paused && g.state === 'fight') {
+    // assist mode: fire a charged special once a few mice (or a nest) are within reach
+    const near = g.enemies.filter((e) => !e.dead && !e.under && e.x < 600).length, boss = g.enemies.some((e) => e.boss && !e.dead);
+    if (near >= 3 || boss || (near >= 1 && g.cats.some((c) => c.hp < S.catMaxHp(g, c) * 0.4))) for (const c of g.cats) if (S.specialReady(c)) { doSpecial(c.uid); break; }
+  }
   const show = g && mode === 'play' && g.state === 'fight';
   box.style.display = show || (g && mode === 'play') ? 'flex' : 'none';
   if (!g) return;
