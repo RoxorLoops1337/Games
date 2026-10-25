@@ -1686,7 +1686,7 @@ function gatherLights(t) {
     for (const p of g.projs) {
       if (L.length > 50) break;
       const col = p.kind === 'lob' ? '#ffb040' : p.kind === 'enemy' ? '#c8c8d8' : (p.fx && p.fx.color) || '#ffffff';
-      L.push({ x: p.x, y: p.y, r: p.kind === 'enemy' ? 44 : 78, col, a: 0.9 });
+      L.push({ x: p.x, y: p.y, r: p.kind === 'enemy' ? 40 : 62, col, a: 0.75 });
     }
     for (const e of g.enemies) {
       if (L.length > 50) break;
