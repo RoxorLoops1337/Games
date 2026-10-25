@@ -1,10 +1,9 @@
 // Meta progression + settings, persisted under graftwork_meta_v1 (key is final, never rename).
 // Pure functions over a plain meta object. Storage is injectable (setStorage) so tests run in node.
 import { lsGet, lsSet } from './save.js';
-import { HEROES } from '../data/index.js';
+import { HEROES, CARDS, GRAFTS } from '../data/index.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { strainInfo, budgetOf, MAX_GRAFTS_NORMAL } from './cards.js';
-import { CARDS } from '../data/index.js';
 import { ASCENSION_TEXT } from './run.js';
 
 export const KEY = 'graftwork_meta_v1';
