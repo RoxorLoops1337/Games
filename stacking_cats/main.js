@@ -14,7 +14,7 @@ import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
-import { mix, outlineCanvas } from './art_util.js';
+import { mix, outlineCanvas, rimLight } from './art_util.js';
 import { iconCanvas, installGlyphs } from './art_icons.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
@@ -98,7 +98,7 @@ function catSprite(id, variant = 'open') {
   if (!c) {
     c = document.createElement('canvas'); c.width = c.height = 240;
     const x = c.getContext('2d'); x.scale(2, 2); drawCat(x, CAT_BY_ID[id], variant);
-    c = outlineCanvas(c, 3, '#2a1840', 0.8);                // a dark rim so the tower keeps its silhouette on bright backdrops
+    c = outlineCanvas(rimLight(c, 4, '#fff0c0', 0.45), 3, '#2a1840', 0.8);                // a dark rim so the tower keeps its silhouette on bright backdrops
     catSprites.set(key, c);
   }
   return c;

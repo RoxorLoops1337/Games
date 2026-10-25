@@ -95,3 +95,18 @@ export function outlineCanvas(src, px = 2, color = '#2a1840', alpha = 0.85) {
   o.globalAlpha = 1; o.drawImage(src, 0, 0);
   return out;
 }
+
+// A thin warm highlight on the edges that face the sun (up and to the right), baked into a cached sprite so it costs nothing
+// per frame. Done before outlineCanvas so the dark outline stays dark.
+export function rimLight(c, d = 3, color = '#fff0c0', alpha = 0.5) {
+  const w = c.width, h = c.height;
+  const t = document.createElement('canvas'); t.width = w; t.height = h;
+  const x = t.getContext('2d');
+  x.drawImage(c, 0, 0);
+  x.globalCompositeOperation = 'destination-out'; x.drawImage(c, -d, d);
+  x.globalCompositeOperation = 'source-in'; x.fillStyle = color; x.fillRect(0, 0, w, h);
+  const o = c.getContext('2d');
+  o.save(); o.globalCompositeOperation = 'source-atop'; o.globalAlpha = alpha; o.drawImage(t, 0, 0); o.restore();
+  t.width = t.height = 0;
+  return c;
+}
