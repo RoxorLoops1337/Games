@@ -33,6 +33,13 @@ function eye(ctx, x, y, color, cool, flip, variant) {
   ctx.save();
   ctx.translate(x, y);
   if (flip) ctx.scale(-1, 1);
+  if (variant === 'happy') {
+    ctx.strokeStyle = INK; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-6.2, 2.4); ctx.quadraticCurveTo(0, -6.4, 6.2, 2.4); ctx.stroke();
+    ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-6.2, 2.4); ctx.lineTo(-8.6, 0.6); ctx.stroke();
+    ctx.restore();
+    return;
+  }
   if (variant === 'blink' || variant === 'hurt') {
     ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath();
@@ -80,6 +87,7 @@ function face(ctx, A, id, variant) {
   ctx.beginPath(); ctx.moveTo(60, 68.4); ctx.lineTo(60, 70.2); ctx.stroke();
   ctx.beginPath();
   if (variant === 'hurt') { ctx.ellipse(60, 72.6, 2.6, 3.2, 0, 0, TAU); ctx.fillStyle = '#5a2236'; ctx.fill(); }
+  else if (variant === 'happy') { ctx.moveTo(53, 70.6); ctx.quadraticCurveTo(60, 82, 67, 70.6); ctx.closePath(); ctx.fillStyle = '#5a2236'; ctx.fill(); ctx.fillStyle = '#ff8fa8'; ctx.beginPath(); ctx.ellipse(60, 75.4, 3.4, 2, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(53, 70.6); ctx.quadraticCurveTo(60, 82, 67, 70.6); ctx.closePath(); ctx.stroke(); }
   else if (cool) { ctx.moveTo(54, 71.4); ctx.quadraticCurveTo(57, 73.4, 60, 70.4); ctx.quadraticCurveTo(64, 74.2, 67.6, 71); }
   else { ctx.moveTo(53.6, 71); ctx.quadraticCurveTo(57, 74.6, 60, 70.4); ctx.quadraticCurveTo(63, 74.6, 66.4, 71); }
   ctx.stroke();

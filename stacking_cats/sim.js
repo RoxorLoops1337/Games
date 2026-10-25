@@ -4,6 +4,7 @@ import {
   CATS, CAT_BY_ID, STARTERS, SNACKS, SNACK_BY_ID, ENEMY_TYPES, NESTS,
   MAX_STACK, MAX_BENCH, BOSS_EVERY, LVL_MUL, AURA_MUL, BASE_HP, BASE_DMG, TEMP_WAVES,
   ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, itemSlots, kingdomBonuses, emptyKingdom, COIN,
+  DIFFS, CAT_TAGS, SYNERGIES, ROUTES, ROUTE_BY_ID, DAILY_POOL,
 } from './cats.js';
 
 export const W = 960, H = 540, GROUND = 440, TOWER_X = 170, SLOT = 56, DT = 1 / 30;
@@ -34,19 +35,22 @@ export const waveScale = (w) => {
   return { hp: 1 + TUNE.hpA * n + TUNE.hpB * n * n, dmg: 1 + TUNE.dmgA * n + TUNE.dmgB * n * n };
 };
 
-export function newGame({ seed = 1, unlocked = STARTERS, events = true, kingdom = null } = {}) {
+export function newGame({ seed = 1, unlocked = STARTERS, events = true, kingdom = null, difficulty = 'normal', daily = null } = {}) {
+  if (daily) { kingdom = null; unlocked = DAILY_POOL; seed = daily.seed; difficulty = 'normal'; }
   const meta = kingdomBonuses(kingdom || emptyKingdom());
   return {
-    meta, rerolls: meta.rerolls, stash: [], chests: 0, curCat: null, report: null, wTaken: 0, wKills: 0, wCoins: 0, wDmg0: 0, wT0: 0,
+    meta, rerolls: meta.rerolls, diff: DIFFS[difficulty] || DIFFS.normal, route: ROUTE_BY_ID.trail, daily, zoomMax: 6 + meta.zoomDur, stash: [], chests: 0, curCat: null, report: null, wTaken: 0, wKills: 0, wCoins: 0, wDmg0: 0, wT0: 0,
     seed, rnd: rngMaker(seed), events, ev: [], unlocked: new Set(unlocked),
     t: 0, wave: 0, state: 'idle', intro: 0, bossWave: false, reward: [],
     cats: [], bench: [], enemies: [], projs: [], pools: [], mines: [],
-    towerX: TOWER_X, scroll: 0, perm: [], temp: [], nineLives: 0, uid: 1,
-    zoom: 0, zoomT: 0, queue: [], qT: 0, waveKO: false, mods: null, tickT: 0,
-    run: { kills: 0, bossKills: 0, recruits: 0, merges: 0, lvl3: 0, lvl3Of: {}, snacks: 0, temp: 0, flawless: 0, wave: 0, coins: 0, dmg: 0, biggest: 0, taken: 0, healed: 0, items: 0, byCat: {} },
+    towerX: TOWER_X, scroll: 0, perm: [], temp: [], nineLives: meta.nine, uid: 1,
+    zoom: meta.zoomStart, zoomT: 0, queue: [], qT: 0, waveKO: false, mods: null, tickT: 0,
+    run: { diff: difficulty, daily: daily ? daily.day : null, synMax: 0, nine: 0, kills: 0, bossKills: 0, recruits: 0, merges: 0, lvl3: 0, lvl3Of: {}, snacks: 0, temp: 0, flawless: 0, wave: 0, coins: 0, dmg: 0, biggest: 0, taken: 0, healed: 0, items: 0, byCat: {} },
   };
 }
 
+export const stackMax = (g) => (g.daily && g.daily.mod.stack) || MAX_STACK;
+export const benchMax = (g) => MAX_BENCH + g.meta.bench;
 const emit = (g, e) => { if (g.events) g.ev.push(e); };
 const rnd = (g) => g.rnd();
 const pick = (g, arr) => arr[Math.floor(g.rnd() * arr.length)];
@@ -56,6 +60,13 @@ export function calcMods(g) {
   const K = g.meta;
   const m = { dmg: K.dmg, haste: K.haste, crit: 0.05 + K.crit, critMul: 1.8, dr: 0, hp: K.hp, range: K.range, slow: 0, curse: 0, waveHeal: TUNE.healAfter + K.waveHeal, snackMul: 1, coin: 1 + K.coinMul };
   for (const c of g.cats.concat(g.bench)) m.coin += itemFx(c).coin;
+  if (g.daily) { m.dmg += g.daily.mod.dmg || 0; m.hp += g.daily.mod.hp || 0; }
+  m.regenTeam = 0;
+  m.syn = synergyState(g);
+  for (const t in m.syn.tiers) {
+    const team = SYNERGIES[t].tiers[m.syn.tiers[t] - 1].team;
+    if (team) for (const k in team) { if (k === 'regen') m.regenTeam += team[k]; else m[k] += team[k]; }
+  }
   for (const c of g.cats) {
     if (c.ko) continue;
     const p = CAT_BY_ID[c.id].pas;
@@ -92,16 +103,40 @@ export function itemFx(c) {
   if (c._sig !== sig) { c._sig = sig; c._fx = fxOf(c.items); }
   return c._fx;
 }
+export function synergyState(g) {
+  const counts = {}, tiers = {};
+  for (const c of g.cats) if (!c.ko) for (const t of CAT_TAGS[c.id] || []) counts[t] = (counts[t] || 0) + 1;
+  for (const t in counts) { const tier = counts[t] >= 3 ? 2 : counts[t] >= 2 ? 1 : 0; if (tier) tiers[t] = tier; }
+  return { counts, tiers };
+}
+// item effects plus this cat's synergy bonuses, cached per mods object
+function mkFx(mods, c, items) {
+  const f = fxOf(items);
+  f.regen += mods.regenTeam || 0;
+  const syn = mods.syn;
+  if (syn) for (const t of CAT_TAGS[c.id] || []) {
+    const tier = syn.tiers[t];
+    const self = tier && SYNERGIES[t].tiers[tier - 1].self;
+    if (self) for (const k in self) f[k] += self[k];
+  }
+  return f;
+}
+export function cfx(mods, c) {
+  const cache = mods._cf || (mods._cf = new Map());
+  let f = cache.get(c.uid);
+  if (!f) { f = mkFx(mods, c, c.items); cache.set(c.uid, f); }
+  return f;
+}
 export function catMaxHp(g, c, mods = g.mods || calcMods(g)) {
-  return Math.round(BASE_HP * CAT_BY_ID[c.id].hp * LVL_MUL[c.lvl - 1] * (1 + mods.hp + itemFx(c).hp));
+  return Math.round(BASE_HP * CAT_BY_ID[c.id].hp * LVL_MUL[c.lvl - 1] * (1 + mods.hp + cfx(mods, c).hp));
 }
 export function catDmg(c, mods, mult = 1) {
-  const f = itemFx(c);
+  const f = cfx(mods, c);
   return BASE_DMG * CAT_BY_ID[c.id].atk.dmg * LVL_MUL[c.lvl - 1] * (1 + mods.dmg + f.dmg + (c.low ? f.berserk : 0)) * mult;
 }
 // rough damage per second, used for the previews in the menus
-export function estDps(c, mods, fx = itemFx(c)) {
-  const a = CAT_BY_ID[c.id].atk;
+export function estDps(c, mods, items = c.items) {
+  const a = CAT_BY_ID[c.id].atk, fx = mkFx(mods, c, items);
   const crit = 1 + Math.min(1, mods.crit + fx.crit + (a.crit || 0)) * (mods.critMul + fx.critMul - 1);
   const per = BASE_DMG * a.dmg * LVL_MUL[c.lvl - 1] * (1 + mods.dmg + fx.dmg) * crit;
   const shots = {
@@ -175,8 +210,8 @@ export function addCat(g, id) {
     mergeCats(g, twin.uid, c.uid);
     return { ok: true, merged: true, cat: twin };
   }
-  if (g.cats.length < MAX_STACK) { g.cats.push(c); return { ok: true, cat: c }; }
-  if (g.bench.length < MAX_BENCH) { g.bench.push(c); return { ok: true, cat: c, benched: true }; }
+  if (g.cats.length < stackMax(g)) { g.cats.push(c); return { ok: true, cat: c }; }
+  if (g.bench.length < benchMax(g)) { g.bench.push(c); return { ok: true, cat: c, benched: true }; }
   g.run.recruits--;
   return { ok: false, cat: c };
 }
@@ -192,7 +227,7 @@ export function releaseCat(g, uid) {
 // ---------------------------------------------------------------- items and loot
 export function stashItem(g, id) { if (g.stash.length < MAX_STASH) { g.stash.push(id); return true; } return false; }
 export function rollItemChoices(g, n = 3) {
-  const L = g.meta.luck, pool = ITEMS.map((it) => ({ id: it.id, w: ITEM_WEIGHT[it.rarity] * (it.rarity === 'rare' ? 1 + 0.25 * L : it.rarity === 'epic' ? 1 + 0.5 * L : 1) }));
+  const L = g.meta.luck + g.route.rare, pool = ITEMS.map((it) => ({ id: it.id, w: ITEM_WEIGHT[it.rarity] * (it.rarity === 'rare' ? 1 + 0.25 * L : it.rarity === 'epic' ? 1 + 0.5 * L : 1) }));
   const out = [];
   while (out.length < n && pool.length) {
     let r = g.rnd() * pool.reduce((a, b) => a + b.w, 0), i = 0;
@@ -254,7 +289,7 @@ export function moveCat(g, uid, to) {
   const from = g.cats.includes(c) ? g.cats : g.bench;
   const dest = to === 'tower' ? g.cats : g.bench;
   if (from === dest) return false;
-  if (dest.length >= (to === 'tower' ? MAX_STACK : MAX_BENCH)) return false;
+  if (dest.length >= (to === 'tower' ? stackMax(g) : benchMax(g))) return false;
   from.splice(from.indexOf(c), 1);
   dest.push(c);
   return true;
@@ -284,7 +319,7 @@ export function rollCatChoices(g, n = 3) {
 }
 
 export function snackChoiceCount(g) {
-  return 3 + g.cats.concat(g.bench).reduce((n, c) => n + (CAT_BY_ID[c.id].pas && CAT_BY_ID[c.id].pas.snackPick ? 1 : 0), 0);
+  return 3 + g.route.snackExtra + g.cats.concat(g.bench).reduce((n, c) => n + (CAT_BY_ID[c.id].pas && CAT_BY_ID[c.id].pas.snackPick ? 1 : 0), 0);
 }
 
 export function rollSnackChoices(g, n = snackChoiceCount(g)) {
@@ -319,6 +354,7 @@ function buildQueue(g, w) {
   const boss = isBossWave(w);
   let budget = TUNE.budgetA + TUNE.budgetB * w + TUNE.budgetC * w * w;
   if (boss) budget *= 0.45;
+  budget *= g.diff.budget * g.route.budget * ((g.daily && g.daily.mod.budget) || 1);
   const types = Object.keys(ENEMY_TYPES).filter((k) => ENEMY_TYPES[k].minWave <= w);
   const q = [];
   let t = 0;
@@ -330,7 +366,7 @@ function buildQueue(g, w) {
     let r = g.rnd() * wts.reduce((a, b) => a + b, 0), i = 0;
     while (r > wts[i] && i < wts.length - 1) { r -= wts[i]; i++; }
     const type = ok[i];
-    const elite = w >= 6 && g.rnd() < Math.min(0.22, (w - 5) * 0.018) && ENEMY_TYPES[type].cost * 2.2 <= budget + 2;
+    const elite = ((w >= 6 && g.rnd() < Math.min(0.22, (w - 5) * 0.018)) || (g.daily && g.daily.mod.elite && w >= 2 && g.rnd() < g.daily.mod.elite)) && ENEMY_TYPES[type].cost * 2.2 <= budget + 2;
     budget -= ENEMY_TYPES[type].cost * (elite ? 2.2 : 1);
     q.push({ t, type, elite });
     t += gap * (0.5 + g.rnd());
@@ -340,12 +376,13 @@ function buildQueue(g, w) {
 }
 
 export function makeEnemy(g, type, w, o = {}) {
-  const d = ENEMY_TYPES[type], sc = waveScale(w);
+  const d = ENEMY_TYPES[type], sc = waveScale(w), dm = (g.daily && g.daily.mod) || {};
   const elite = !!o.elite;
-  const hp = d.hp * sc.hp * (elite ? 2.6 : 1);
+  const hp = d.hp * sc.hp * g.diff.hp * g.route.enemyHp * (dm.enemyHp || 1) * (elite ? 2.6 : 1);
+  const spdMul = g.route.speed * (dm.speed || 1);
   return {
     uid: g.uid++, type, x: o.x != null ? o.x : W + 40, y: GROUND + 4 + g.rnd() * 20, hp, maxHp: hp,
-    dmg: d.dmg * sc.dmg * (elite ? 1.35 : 1), cd: d.cd * (0.4 + g.rnd() * 0.8), spd: d.spd * (0.9 + g.rnd() * 0.2) * (elite ? 0.92 : 1),
+    dmg: d.dmg * sc.dmg * g.diff.dmg * g.route.enemyDmg * (elite ? 1.35 : 1), cd: d.cd * (0.4 + g.rnd() * 0.8), spd: d.spd * spdMul * (0.9 + g.rnd() * 0.2) * (elite ? 0.92 : 1),
     w: d.w * (elite ? 1.2 : 1), h: d.h * (elite ? 1.2 : 1), armor: d.armor || 0, ai: d.ai, range: d.range || 0,
     fly: d.ai === 'fly', alt: d.alt || 0, elite, flash: 0, stun: 0, slow: 0, slowT: 0, burn: null, poison: null,
     dead: false, swing: 0, t: g.rnd() * 6, ability: 0, boss: false, age: 0, kb: 0,
@@ -370,7 +407,7 @@ export function startWave(g) {
   for (const c of g.cats) c.revUsed = false;
   if (g.bossWave) {
     const n = g.wave / BOSS_EVERY;
-    const hp = TUNE.nestHp * Math.pow(TUNE.nestGrow, n - 1) * (1 + 0.08 * g.cats.length);
+    const hp = TUNE.nestHp * Math.pow(TUNE.nestGrow, n - 1) * (1 + 0.08 * g.cats.length) * g.diff.hp * g.route.bossHp;
     const info = NESTS[(n - 1) % NESTS.length];
     const e = makeEnemy(g, 'mouse', g.wave, { x: 770 });
     Object.assign(e, { boss: true, ai: 'nest', type: 'nest', kind: info.id, name: info.name, hp, maxHp: hp, w: 150, h: 150, y: GROUND + 14, armor: 0.12, spd: 0, dmg: 0, ability: 0, spawnT: 2.5, bombT: 6, phase: 0, n });
@@ -452,7 +489,7 @@ function killEnemy(g, e, credit) {
       g.run.kills++; g.wKills++; g.zoom = Math.min(100, g.zoom + 2.4);
       emit(g, { k: 'kill', x: e.x, y: ecy(e), type: e.type, elite: e.elite });
       addCoins(g, e.elite ? COIN.elite : COIN.kill, e.x, ecy(e));
-      if (g.rnd() < (e.elite ? 0.22 : 0.012) * (1 + g.meta.luck * 0.4)) { g.chests++; emit(g, { k: 'chest', x: e.x, y: ecy(e) }); }
+      if (g.rnd() < (e.elite ? 0.22 : 0.012) * (1 + g.meta.luck * 0.4 + g.route.chest + ((g.daily && g.daily.mod.chest) || 0))) { g.chests++; emit(g, { k: 'chest', x: e.x, y: ecy(e) }); }
     }
   }
   if (e.boss) {
@@ -461,7 +498,7 @@ function killEnemy(g, e, credit) {
 }
 
 function addCoins(g, n, x, y) {
-  const v = n * (g.mods ? g.mods.coin : 1);
+  const v = n * (g.mods ? g.mods.coin : 1) * g.diff.coin * g.route.coin * ((g.daily && g.daily.mod.coin) || 1);
   g.run.coins += v; g.wCoins += v;
   if (x !== undefined) emit(g, { k: 'coin', x, y, v });
 }
@@ -523,7 +560,7 @@ function targetsInRange(g, range, from) {
 
 function critRoll(g, c, a) {
   const m = g.mods;
-  const f = itemFx(c);
+  const f = cfx(m, c);
   const crit = g.rnd() < m.crit + (a.crit || 0) + f.crit;
   return crit ? m.critMul + f.critMul : 1;
 }
@@ -567,7 +604,7 @@ function explode(g, x, y, r, dmg, o = {}) {
 function attack(g, c, rank, d) {
   const a = d.atk, m = g.mods;
   const p = catPos(g, rank);
-  const fx = itemFx(c), ex = fx.extra;
+  const fx = cfx(m, c), ex = fx.extra;
   const range = (a.range || 400) * (1 + m.range + fx.range) + rank * 22;
   const t = a.t;
   if (t === 'mine') {
@@ -686,7 +723,7 @@ function updateCats(g, dt) {
     const d = CAT_BY_ID[c.id];
     c.flash = Math.max(0, c.flash - dt);
     c.atk = Math.max(0, c.atk - dt);
-    const f = itemFx(c);
+    const f = cfx(m, c);
     const hs = 1 + m.haste + f.haste;
     const mxh = catMaxHp(g, c, m);
     c.low = c.hp < mxh * 0.5;
@@ -944,7 +981,7 @@ function nestAI(g, e, dt) {
 // ---------------------------------------------------------------- main step
 export function useZoomies(g) {
   if (g.state !== 'fight' || g.zoom < 100) return false;
-  g.zoom = 0; g.zoomT = 6;
+  g.zoom = 0; g.zoomT = g.zoomMax;
   emit(g, { k: 'zoom' });
   return true;
 }
@@ -959,6 +996,7 @@ export function step(g, dt = DT) {
   if (g.state !== 'fight') return;
   g.t += dt;
   g.mods = calcMods(g);
+  for (const t in g.mods.syn.counts) if (g.mods.syn.counts[t] > g.run.synMax) g.run.synMax = g.mods.syn.counts[t];
   if (g.zoomT > 0) g.zoomT -= dt;
 
   // spawn from the queue
@@ -996,7 +1034,7 @@ export function step(g, dt = DT) {
 
   if (!aliveCats(g).length && g.cats.length) {
     if (g.nineLives > 0) {
-      g.nineLives--;
+      g.nineLives--; g.run.nine++;
       for (const c of g.cats) { c.ko = false; c.hp = Math.round(catMaxHp(g, c) * 0.5); }
       for (const e of g.enemies) if (!e.dead && !e.boss) e.stun = 2.5;
       emit(g, { k: 'nine' });
@@ -1011,4 +1049,26 @@ export function step(g, dt = DT) {
 
 export function runSeconds(g, sec, dt = DT) {
   for (let i = 0; i < sec / dt && g.state !== 'over' && g.state !== 'clear'; i++) step(g, dt);
+}
+
+// ---------------------------------------------------------------- routes and starting gifts
+export function rollRoutes(g, n = 3) {
+  const pool = ROUTES.slice(), out = [];
+  while (out.length < n && pool.length) out.push(pool.splice(Math.floor(g.rnd() * pool.length), 1)[0].id);
+  return out;
+}
+export function chooseRoute(g, id) {
+  g.route = ROUTE_BY_ID[id] || ROUTE_BY_ID.trail;
+  if (g.route.healNow) {
+    for (const c of g.cats.concat(g.bench)) c.hp = Math.min(catMaxHp(g, c), c.hp + catMaxHp(g, c) * g.route.healNow);
+    emit(g, { k: 'routeheal' });
+  }
+}
+export function grantStartItem(g) {
+  if (!g.meta.startItem || !g.cats.length) return null;
+  const rares = ITEMS.filter((i) => i.rarity === 'rare');
+  const it = rares[Math.floor(g.rnd() * rares.length)];
+  g.stash.push(it.id);
+  equipItem(g, g.stash.length - 1, g.cats[0].uid);
+  return it.id;
 }
