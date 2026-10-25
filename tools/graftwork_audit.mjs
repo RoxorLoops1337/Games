@@ -6,6 +6,29 @@ import * as RUN from '../graftwork/engine/run.js';
 import { canGraft } from '../graftwork/engine/cards.js';
 import { fight, POLICIES } from './graftwork_sim.mjs';
 import { CARDS, GRAFTS, HEROES, ENEMIES } from '../graftwork/data/index.js';
+import { strainInfo, graftWeight } from '../graftwork/engine/cards.js';
+
+// Grafts that read the rest of the deck (school stacks, Strain, Tithe) are measured in a mid-run deck: 3 plain same-school
+// grafts on other cards and Strain 2 in BOTH the baseline and the graft deck (the graft's own weight is added to the Budget).
+export function needsContext(gid) {
+  const g = GRAFTS[gid];
+  return (g.mods || []).some((m) => m.k === 'custom' && Object.values(m.hooks).some((f) => /stack\(|strainOf|tithedOf|\.strain|run\.deck/.test(String(f))));
+}
+const CTX_POOL = (school) => Object.values(GRAFTS).filter((g) => g.tier === 'safe' && g.weight === 1 && g.school === school && !needsContext(g.id) && !(g.mods || []).some((m) => m.k === 'maxHp'));
+function applyContext(run, school, targetUid, extraWeight) {
+  const pool = CTX_POOL(school);
+  const used = new Set();
+  let ctxW = 0, placed = 0;
+  for (const inst of run.deck) {
+    if (placed >= 3) break;
+    if (inst.uid === targetUid || inst.grafts.length) continue;
+    const g = pool.find((x) => !used.has(x.id) && canGraft(inst, x.id));
+    if (!g) continue;
+    used.add(g.id); inst.grafts.push(g.id); ctxW += g.weight; placed++;
+  }
+  // Strain 2 in both decks: baseline budget = ctxW - 2, graft deck budget grows by the graft's own weight
+  run.budgetBonus = ctxW - 2 - 6 + extraWeight;
+}
 
 export const ACT1_NORMALS = Object.values(ENEMIES).filter((e) => e.act === 1 && e.kind === 'normal' && !e.summonOnly && !e.minion).map((e) => e.id);
 // bands from the brief: faster-than-baseline percent per graft weight
@@ -14,12 +37,14 @@ export const NEGLIGIBLE = 3;
 export const TOO_STRONG = 35;
 
 // One seeded fight. graftSpec = null (baseline) or { cardId, grafts: [gid...] }. extra = card ids added to the deck.
-export function auditFight(hero, seed, graftSpec, extraCards = [], hook = null) {
+export function auditFight(hero, seed, graftSpec, extraCards = [], hook = null, ctx = null) {
   const run = RUN.newRun({ hero, seed });
   for (const id of extraCards) run.deck.push({ uid: RUN.nextUid(run), id, grafts: [], up: 0 });
   const pair = [run.rng.pick(ACT1_NORMALS), run.rng.pick(ACT1_NORMALS)];
+  const target = graftSpec ? run.deck.find((i) => i.id === graftSpec.cardId && i.grafts.length === 0) : null;
+  if (ctx) applyContext(run, ctx.school, target ? target.uid : -1, graftSpec ? graftSpec.grafts.reduce((a, g) => a + graftWeight(g), 0) : 0);
   if (graftSpec) {
-    const inst = run.deck.find((i) => i.id === graftSpec.cardId && i.grafts.length === 0);
+    const inst = target;
     for (const gid of graftSpec.grafts) { const r = RUN.applyGraft(run, inst.uid, gid, { keepPhase: true, free: true }); if (!r.ok) return null; }
   }
   if (hook) hook(run);
@@ -54,10 +79,11 @@ const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 export function auditGraft(gid, N = 40, pool = 'starters', baseCache = new Map()) {
   const rows = [];
   for (const t of targetsFor(gid, pool)) {
-    const bk = `${t.hero}|${t.extra.join(',')}`;
-    if (!baseCache.has(bk)) baseCache.set(bk, Array.from({ length: N }, (_, i) => auditFight(t.hero, `au-${t.hero}-${i}`, null, t.extra)));
+    const ctx = needsContext(gid) ? { school: GRAFTS[gid].school } : null;
+    const bk = `${t.hero}|${t.extra.join(',')}|${ctx ? ctx.school : ''}`;
+    if (!baseCache.has(bk)) baseCache.set(bk, Array.from({ length: N }, (_, i) => auditFight(t.hero, `au-${t.hero}-${i}`, null, t.extra, null, ctx)));
     const base = baseCache.get(bk);
-    const withG = Array.from({ length: N }, (_, i) => auditFight(t.hero, `au-${t.hero}-${i}`, { cardId: t.cardId, grafts: [gid] }, t.extra));
+    const withG = Array.from({ length: N }, (_, i) => auditFight(t.hero, `au-${t.hero}-${i}`, { cardId: t.cardId, grafts: [gid] }, t.extra, null, ctx));
     const bt = mean(base.map((r) => r.turns)), gt = mean(withG.map((r) => r.turns));
     const bh = mean(base.map((r) => r.hpLost)), gh = mean(withG.map((r) => r.hpLost));
     rows.push({ gid, hero: t.hero, cardId: t.cardId, baseTurns: bt, turns: gt, faster: (1 - gt / bt) * 100, baseHp: bh, hpLost: gh, hpBetter: bh > 0 ? (1 - gh / bh) * 100 : 0, goldD: mean(withG.map((r) => r.gold)) - mean(base.map((r) => r.gold)) });
@@ -72,7 +98,7 @@ export function summarize(gid, rows) {
   // gold is the third currency: 1 gold per fight counts as 1 point (a normal Act-1 fight pays 18)
   const gold = mean(rows.map((r) => r.goldD));
   const power = faster * 0.6 + hpBetter * 0.4 + gold * 1.0;
-  return { gid, name: g.name, tier: g.tier, weight: g.weight, rarity: g.rarity, cards: rows.length, faster, hpBetter, gold, power };
+  return { gid, name: g.name, tier: g.tier, weight: g.weight, rarity: g.rarity, ctx: needsContext(gid), cards: rows.length, faster, hpBetter, gold, power };
 }
 
 export function flagsFor(s) {
@@ -111,7 +137,7 @@ if (process.argv[1] && process.argv[1].endsWith('graftwork_audit.mjs')) {
   const res = runAudit({ N, pool: opt('pool') || 'starters', tier: opt('tier'), only: opt('graft') });
   console.log(`graft                 tier   w  rar        cards  faster%  hpSaved%  gold/f  power  flags`);
   for (const s of res) {
-    console.log(`${s.gid.padEnd(21)} ${s.tier.padEnd(6)} ${s.weight}  ${s.rarity.padEnd(9)} ${String(s.cards).padStart(5)}  ${s.faster.toFixed(1).padStart(7)}  ${s.hpBetter.toFixed(1).padStart(8)}  ${s.gold.toFixed(1).padStart(6)}  ${s.power.toFixed(1).padStart(5)}  ${flagsFor(s).join('; ')}`);
+    console.log(`${(s.gid + (s.ctx ? '*' : '')).padEnd(21)} ${s.tier.padEnd(6)} ${s.weight}  ${s.rarity.padEnd(9)} ${String(s.cards).padStart(5)}  ${s.faster.toFixed(1).padStart(7)}  ${s.hpBetter.toFixed(1).padStart(8)}  ${s.gold.toFixed(1).padStart(6)}  ${s.power.toFixed(1).padStart(5)}  ${flagsFor(s).join('; ')}`);
     if (args.includes('--rows')) for (const r of s.rows) console.log(`    ${r.hero}/${r.cardId}: turns ${r.baseTurns.toFixed(2)} -> ${r.turns.toFixed(2)} (${r.faster.toFixed(1)}%), hp ${r.baseHp.toFixed(1)} -> ${r.hpLost.toFixed(1)}`);
   }
   for (const w of [1, 2, 3]) {

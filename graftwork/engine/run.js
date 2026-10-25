@@ -191,7 +191,7 @@ export function makeEncounter(run, kind) {
   const pool = actEnemies(run, 'normal');
   const avg = (e) => (Array.isArray(e.hp) ? (e.hp[0] + e.hp[1]) / 2 : e.hp);
   const early = run.row <= 1;
-  const scale = { 1: 1, 2: 1.6, 3: 2.4 }[run.act];
+  const scale = { 1: 1, 2: 1.4, 3: 2.0 }[run.act];
   const budget = (early ? 36 : 54 + rng.int(14)) * scale;
   const out = [];
   let spent = 0, tries = 0;
