@@ -194,7 +194,7 @@ function updateForgeAnim(app, a, dt) {
 function drawForgeAnim(app, a) {
   const g = app.ctx, k = clamp(a.t / a.dur, 0, 1);
   if (['attach', 'strip', 'move', 'burn'].includes(a.kind)) return drawAnim(app, a, S.fx);
-  g.save(); g.fillStyle = `rgba(8,4,2,${0.88 * clamp(k * 8, 0, 1) * (k > 0.94 ? (1 - k) / 0.06 : 1)})`; g.fillRect(0, 0, 1280, 720); g.restore();
+  g.save(); g.fillStyle = `rgba(8,4,2,${0.96 * clamp(k * 8, 0, 1) * (k > 0.94 ? (1 - k) / 0.06 : 1)})`; g.fillRect(0, 0, 1280, 720); g.restore();
   if (a.kind === 'rest') {
     const pulse = 0.7 + Math.sin(a.t * 6) * 0.1, fk = EASE.out(clamp((k - 0.2) / 0.5, 0, 1));
     const gl = g.createRadialGradient(640, 420, 10, 640, 420, 420); gl.addColorStop(0, `rgba(255,170,70,${0.5 * pulse})`); gl.addColorStop(1, 'rgba(255,120,30,0)'); g.fillStyle = gl; g.fillRect(0, 0, 1280, 720);

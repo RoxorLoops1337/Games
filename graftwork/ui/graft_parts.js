@@ -69,10 +69,11 @@ export function drawSeam(ctx, cx, cy, w, h, p = 1, t = 0) {
   if (p <= 0) return;
   const pts = [];
   const n = 12;
+  const amp = Math.min(7, h * 0.2);
   for (let i = 0; i <= n; i++) {
     const k = i / n;
     const x = cx - w / 2 + 6 + (w - 12) * k;
-    const y = cy - h / 2 + 8 + (h - 16) * k + (i % 2 ? 7 : -7);
+    const y = cy - h / 2 + 8 + (h - 16) * k + (i % 2 ? amp : -amp);
     pts.push([x, y]);
   }
   const upto = p * n;
