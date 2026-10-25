@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   newGame, addCat, startWave, step, makeEnemy, calcMods, useSpecial, specialReady, setFocus, rollEvent, chooseEvent, eventDue, aliveCats, catMaxHp, runSeconds, DT,
 } from '../stacking_cats/sim.js';
-import { CATS, SPECIALS, EVENTS, ENEMY_TYPES, NESTS, ITEM_BY_ID } from '../stacking_cats/cats.js';
+import { ACHIEVEMENTS, CATS, SPECIALS, EVENTS, ENEMY_TYPES, NESTS, ITEM_BY_ID } from '../stacking_cats/cats.js';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
@@ -184,6 +184,17 @@ t('picnic hands out a snack and the fountain pays back only sometimes, never bey
   assert.ok(picnic && tosses > 10);
   assert.ok(wins > 0 && wins < tosses, 'fountain always or never pays');
   assert.ok(net / tosses < 15, 'fountain is a money printer: ' + net / tosses);
+});
+
+t('trophies for the new systems count what the run really did', () => {
+  const by = (id) => ACHIEVEMENTS.find((a) => a.id === id);
+  for (const id of ['sp5', 'sp25', 'forge1', 'sell5', 'event3', 'wish']) assert.ok(by(id), id);
+  assert.equal(by('sp5').check({ run: { specials: 4 } }), false); assert.equal(by('sp5').check({ run: { specials: 5 } }), true);
+  const g = fighting(['tabby'], 4); g.cats[0].sp = 1; useSpecial(g, g.cats[0].uid);
+  assert.equal(g.run.specials, 1);
+  let wins = 0;
+  for (let s = 1; s < 200 && !wins; s++) { const h = newGame({ seed: s, unlocked: CATS.map((c) => c.id) }); addCat(h, 'mochi'); h.wave = 6; h.bossWave = false; h.run.coins = 500; const ev = rollEvent(h); if (ev.id === 'fountain') { assert.equal(h.run.events, 1); for (let k = 0; k < 2; k++) { chooseEvent(h, k); } wins += h.run.fountainWins || 0; } }
+  assert.ok(wins >= 1, 'a fountain win never counted');
 });
 
 console.log(n + ' tests passed');

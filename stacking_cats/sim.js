@@ -1316,7 +1316,7 @@ export function rollEvent(g) {
       break;
     default: break;
   }
-  g.event = ev; g.eventsSeen++;
+  g.event = ev; g.eventsSeen++; g.run.events = (g.run.events || 0) + 1;
   return ev;
 }
 // returns { ok, msg, again } ; again=true means the stop stays open (the shop sells several things)
@@ -1346,7 +1346,7 @@ export function chooseEvent(g, idx) {
     case 'snack': eatSnack(g, o.id); msg = `${SNACK_BY_ID[o.id].name} eaten`; ev.done = true; break;
     case 'toss':
       spend(o.cost); o.sold = true;
-      if (g.rnd() < o.chance) { g.run.coins += o.prize; msg = `The fountain pays back ${o.prize} coins!`; } else msg = 'Plop. Nothing happens';
+      if (g.rnd() < o.chance) { g.run.coins += o.prize; g.run.fountainWins = (g.run.fountainWins || 0) + 1; msg = `The fountain pays back ${o.prize} coins!`; } else msg = 'Plop. Nothing happens';
       break;
     case 'train': { const c = findCat(g, o.uid); if (c) { c.train = (c.train || 0) + o.bonus; msg = `${CAT_BY_ID[c.id].name} trained: +${Math.round(o.bonus * 100)}% damage`; } ev.done = true; break; }
     default: msg = 'You move on'; ev.done = true; break;
