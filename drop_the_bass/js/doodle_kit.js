@@ -190,7 +190,7 @@ export function sprite(key, w, h, draw, o = {}) {
     const c = cv.getContext('2d');
     if (!c) { e.direct = true; break; }
     c.scale(SCALE, SCALE); c.translate(w / 2, h / 2);
-    draw(new Pen(c, (o.seed || 7) * 131 + f * 977 + hashStr(key), SCALE), c, f);
+    draw(new Pen(c, (o.seed || 7) * 131 + f * 977 + hashStr(key), 1), c, f);
     e.frames.push(cv);
   }
   e.draw = draw; e.seed = o.seed || 7; e.key = key;

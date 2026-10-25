@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Doodle icons lab</title>
+<style>html,body{margin:0;background:#2a2630}canvas{display:block;margin:0 auto}</style></head><body>
+<canvas id="c" width="1080" height="1500"></canvas>
+<script type="module">
+import { drawGlyph, drawGear, drawCrate, drawRarityFrame, GLYPH_NAMES, setArtScale } from '../js/doodle_ui.js';
+import { paper } from '../js/doodle_kit.js';
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const q = new URLSearchParams(location.search); setArtScale(+q.get('scale') || 2);
+const W = 540, H = 750; ctx.scale(2, 2);
+function frame(ms) {
+  const t = ms / 1000;
+  ctx.clearRect(0, 0, W, H); paper(ctx, 0, 0, W, H, {});
+  // glyphs at 52 px (57 of them), with a few at 26 and 110
+  GLYPH_NAMES.forEach((n, i) => drawGlyph(ctx, n, 36 + (i % 10) * 49, 34 + Math.floor(i / 10) * 52, 44));
+  for (let i = 0; i < 6; i++) drawGlyph(ctx, GLYPH_NAMES[i * 9 % 57], 30 + i * 28, 330, 24);
+  ['coin', 'diamond', 'record', 'fans', 'heart', 'star'].forEach((n, i) => drawGlyph(ctx, n, 280 + i * 42, 332, 34));
+  ['crown', 'bolt'].forEach((n, i) => drawGlyph(ctx, n, 470 + i * 62, 330, 100 ? 56 : 56, i ? '#9dff3a' : '#ff5fb0'));
+  // gear: 5 slots x 5 rarities
+  const R = ['common', 'rare', 'epic', 'legendary', 'mythic'], S = ['head', 'mic', 'body', 'chain', 'feet'];
+  R.forEach((r, ri) => S.forEach((s, si) => drawGear(ctx, s, 'item' + (si + ri) % 3, r, 50 + si * 66, 405 + ri * 62, 56)));
+  R.forEach((r, ri) => drawRarityFrame(ctx, r, 400 + (ri % 3) * 70, 405 + Math.floor(ri / 3) * 100, 60, 80, t));
+  drawRarityFrame(ctx, 'legendary', 470, 590, 140, 60, t);
+  // crates: closed, shaking, open
+  ['garage', 'studio', 'platinum'].forEach((tier, i) => { drawCrate(ctx, tier, 60 + i * 175, 690, 90, { t }); drawCrate(ctx, tier, 118 + i * 175, 690, 80, { t, open: (Math.sin(t) * 0.5 + 0.5) }); });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script></body></html>
