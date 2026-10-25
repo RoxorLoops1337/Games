@@ -248,3 +248,78 @@ export function mergeRun(stats, run) {
   for (const id in run.lvl3Of) s.lvl3Of[id] = true;
   return s;
 }
+
+// ---------------------------------------------------------------- items (equipped on one cat)
+// fx keys: dmg hp haste crit critMul range (all as fractions), ls lifesteal, dr damage reduction, regen (maxHp per second),
+// thorns (reflect), berserk (extra dmg below half hp), extra (one more shot), burn, slow, stun (chance), coin.
+export const ITEMS = [
+  { id: 'claws', name: 'Sharpened Claws', icon: '🗡️', rarity: 'common', fx: { dmg: 0.20 }, desc: '+20% damage' },
+  { id: 'bell', name: 'Swift Bell', icon: '🔔', rarity: 'common', fx: { haste: 0.18 }, desc: '+18% attack speed' },
+  { id: 'cushion', name: 'Soft Cushion', icon: '🛏️', rarity: 'common', fx: { hp: 0.30 }, desc: '+30% health' },
+  { id: 'clover', name: 'Lucky Clover', icon: '🍀', rarity: 'common', fx: { crit: 0.12 }, desc: '+12% critical chance' },
+  { id: 'monocle', name: 'Eagle Monocle', icon: '🧐', rarity: 'common', fx: { range: 0.25 }, desc: '+25% range' },
+  { id: 'vest', name: 'Fish Scale Vest', icon: '🦺', rarity: 'common', fx: { dr: 0.15 }, desc: 'Takes 15% less damage' },
+  { id: 'spikes', name: 'Spiky Collar', icon: '📿', rarity: 'common', fx: { thorns: 0.5 }, desc: 'Mice that bite this cat take 50% of their damage back' },
+  { id: 'fang', name: 'Vampire Fang', icon: '🦷', rarity: 'rare', fx: { ls: 0.12 }, desc: 'Heals for 12% of the damage it deals' },
+  { id: 'heart', name: 'Healing Charm', icon: '💖', rarity: 'rare', fx: { regen: 0.02 }, desc: 'Heals 2% of its health every second' },
+  { id: 'scarf', name: 'Berserker Scarf', icon: '🧣', rarity: 'rare', fx: { dmg: 0.08, berserk: 0.5 }, desc: '+8% damage, +50% more below half health' },
+  { id: 'whistle', name: 'Twin Whistle', icon: '📯', rarity: 'rare', fx: { extra: 1 }, desc: 'One extra shot, pellet, jump or star with every attack' },
+  { id: 'flamering', name: 'Ember Ring', icon: '💍', rarity: 'rare', fx: { burn: 1 }, desc: 'Attacks set mice on fire' },
+  { id: 'frost', name: 'Frost Charm', icon: '❄️', rarity: 'rare', fx: { slow: 0.3 }, desc: 'Attacks slow mice by 30%' },
+  { id: 'thunder', name: 'Thunder Stone', icon: '🪨', rarity: 'rare', fx: { stun: 0.12 }, desc: '12% chance to stun on every hit' },
+  { id: 'gbell', name: 'Golden Bell', icon: '🛎️', rarity: 'rare', fx: { coin: 0.15 }, desc: '+15% coins from this run' },
+  { id: 'crown', name: 'Cheese Crown', icon: '🧀', rarity: 'epic', fx: { dmg: 0.25, hp: 0.25 }, desc: '+25% damage and +25% health' },
+  { id: 'hourglass', name: 'Time Hourglass', icon: '⏳', rarity: 'epic', fx: { haste: 0.30, range: 0.10 }, desc: '+30% attack speed, +10% range' },
+  { id: 'dragonheart', name: 'Dragon Heart', icon: '🐲', rarity: 'epic', fx: { dmg: 0.30, burn: 1, crit: 0.08 }, desc: '+30% damage, +8% crit, sets mice on fire' },
+  { id: 'feather', name: 'Angel Feather', icon: '🪶', rarity: 'epic', fx: { dr: 0.20, regen: 0.015 }, desc: 'Takes 20% less damage and heals 1.5% per second' },
+  { id: 'mask', name: "Assassin's Mask", icon: '🎭', rarity: 'epic', fx: { crit: 0.20, critMul: 0.8 }, desc: '+20% crit chance and much bigger crits' },
+];
+export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
+export const ITEM_WEIGHT = { common: 10, rare: 5, epic: 1.4 };
+export const MAX_STASH = 8;
+export const itemSlots = (lvl) => (lvl >= 3 ? 2 : 1);
+
+// ---------------------------------------------------------------- the Cat Kingdom (spend coins between runs)
+// bonus(level) returns the part of the run bonuses this building gives at that level.
+export const BUILDINGS = [
+  { id: 'dojo', name: 'Training Dojo', icon: '🥋', max: 5, base: 60, blurb: 'All cats hit harder.', bonus: (l) => ({ dmg: 0.04 * l }), text: (l) => `+${4 * l}% damage` },
+  { id: 'beds', name: 'Cozy Cat Beds', icon: '🛏️', max: 5, base: 60, blurb: 'Well rested cats are tougher.', bonus: (l) => ({ hp: 0.05 * l }), text: (l) => `+${5 * l}% health` },
+  { id: 'yarn', name: 'Yarn Workshop', icon: '🧶', max: 5, base: 70, blurb: 'Playful cats attack faster.', bonus: (l) => ({ haste: 0.03 * l }), text: (l) => `+${3 * l}% attack speed` },
+  { id: 'spa', name: 'Healing Springs', icon: '♨️', max: 5, base: 70, blurb: 'Better rests between waves.', bonus: (l) => ({ waveHeal: 0.04 * l, reviveHp: 0.05 * l }), text: (l) => `+${4 * l}% wave healing, fallen cats return with +${5 * l}% health` },
+  { id: 'tower', name: 'Lookout Tower', icon: '🔭', max: 5, base: 80, blurb: 'See farther, aim better.', bonus: (l) => ({ range: 0.04 * l, crit: 0.02 * l }), text: (l) => `+${4 * l}% range, +${2 * l}% crit` },
+  { id: 'shrine', name: 'Lucky Shrine', icon: '⛩️', max: 5, base: 90, blurb: 'Fortune smiles on loot.', bonus: (l) => ({ luck: l }), text: (l) => `Better loot odds, +${4 * l}% chance elites drop a chest` },
+  { id: 'vault', name: 'Treasure Vault', icon: '💰', max: 5, base: 100, blurb: 'Cats find more coins.', bonus: (l) => ({ coinMul: 0.10 * l }), text: (l) => `+${10 * l}% coins every run` },
+  { id: 'tent', name: 'Fortune Teller Tent', icon: '🔮', max: 4, base: 80, blurb: 'Look again at any choice.', bonus: (l) => ({ rerolls: l }), text: (l) => `${l} free reroll${l > 1 ? 's' : ''} per run` },
+  { id: 'stall', name: 'Snack Stall', icon: '🍣', max: 3, base: 90, blurb: 'Start each run with snacks.', bonus: (l) => ({ startSnacks: l }), text: (l) => `Start every run with ${l} free snack${l > 1 ? 's' : ''}` },
+];
+export const BUILDING_BY_ID = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]));
+
+export const emptyKingdom = () => ({ coins: 0, lv: {}, earned: 0 });
+export const buildingLevel = (k, id) => Math.min(BUILDING_BY_ID[id].max, (k && k.lv && k.lv[id]) | 0);
+export function upgradeCost(id, level) {
+  const b = BUILDING_BY_ID[id];
+  return Math.round((b.base * Math.pow(1.75, level)) / 5) * 5;
+}
+export const kingdomLevel = (k) => BUILDINGS.reduce((n, b) => n + buildingLevel(k, b.id), 0);
+export function kingdomBonuses(k) {
+  const m = { dmg: 0, hp: 0, haste: 0, waveHeal: 0, reviveHp: 0, range: 0, crit: 0, luck: 0, coinMul: 0, rerolls: 0, startSnacks: 0 };
+  for (const b of BUILDINGS) {
+    const l = buildingLevel(k, b.id);
+    if (!l) continue;
+    const bo = b.bonus(l);
+    for (const key in bo) m[key] += bo[key];
+  }
+  return m;
+}
+export function buyUpgrade(k, id) {
+  const l = buildingLevel(k, id), b = BUILDING_BY_ID[id];
+  if (l >= b.max) return false;
+  const c = upgradeCost(id, l);
+  if (k.coins < c) return false;
+  k.coins -= c;
+  k.lv[id] = l + 1;
+  return true;
+}
+
+// coins earned while playing (before the vault bonus)
+export const COIN = { kill: 1, elite: 5, wave: 3, waveGrow: 0.6, nest: 30, nestGrow: 12 };

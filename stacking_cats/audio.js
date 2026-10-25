@@ -36,10 +36,16 @@ export class Sfx {
   }
   play(name, pitch = 1) {
     const now = performance.now();
-    const gap = { hit: 45, swipe: 60, shoot: 70, pop: 40, flame: 120, zap: 80, boom: 80 }[name] || 0;
+    const gap = { hit: 45, swipe: 60, shoot: 70, pop: 40, flame: 120, zap: 80, boom: 80, coin: 40, hover: 60 }[name] || 0;
     if (gap && now - (this.last[name] || 0) < gap) return;
     this.last[name] = now;
     switch (name) {
+      case 'coin': this.tone(1320 + Math.random() * 200, 0.09, { type: 'triangle', v: 0.07 }); this.tone(1760, 0.14, { type: 'sine', v: 0.05, delay: 0.05 }); break;
+      case 'chest': [660, 880, 1100, 1320].forEach((f, i) => this.tone(f, 0.16, { type: 'triangle', v: 0.12, delay: i * 0.05 })); this.noise(0.12, 0.08, 5000); break;
+      case 'equip': this.tone(300, 0.07, { type: 'square', v: 0.08 }); this.tone(900, 0.12, { type: 'triangle', v: 0.1, delay: 0.06 }); break;
+      case 'upgrade': [392, 523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.2, { type: 'triangle', v: 0.13, delay: i * 0.06 })); this.tone(130, 0.3, { to: 70, type: 'sine', v: 0.2 }); break;
+      case 'reroll': this.tone(500, 0.05, { type: 'square', v: 0.06 }); this.tone(700, 0.05, { type: 'square', v: 0.06, delay: 0.06 }); this.tone(950, 0.08, { type: 'square', v: 0.06, delay: 0.12 }); break;
+      case 'hover': this.tone(880, 0.03, { type: 'sine', v: 0.03 }); break;
       case 'swipe': this.noise(0.08, 0.12, 4000); this.tone(520, 0.07, { to: 260, type: 'triangle', v: 0.08 }); break;
       case 'hit': this.tone(190, 0.06, { to: 90, type: 'square', v: 0.07 }); break;
       case 'shoot': this.tone(700, 0.09, { to: 380, type: 'triangle', v: 0.09 }); break;

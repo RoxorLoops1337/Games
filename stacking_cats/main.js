@@ -2,7 +2,9 @@
 import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
+  ITEM_BY_ID, MAX_STASH, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, upgradeCost, buyUpgrade, kingdomLevel,
 } from './cats.js';
+import { drawBuilding } from './art_kingdom.js';
 import * as S from './sim.js';
 import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront } from './art_world.js';
@@ -16,13 +18,13 @@ const app = $('app'), cv = $('cv'), ctx = cv.getContext('2d'), screenEl = $('scr
 const sfx = new Sfx();
 
 // ---------------------------------------------------------------- save
-function freshSave() { return { v: 1, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {} }; }
+function freshSave() { return { v: 1, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true }; }
 function loadSave() {
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY));
     if (s && s.stats && Array.isArray(s.unlocked)) {
       const f = freshSave();
-      return { ...f, ...s, stats: { ...f.stats, ...s.stats, lvl3Of: { ...(s.stats.lvl3Of || {}) } }, unlocked: [...new Set([...STARTERS, ...s.unlocked.filter((id) => CAT_BY_ID[id])])], tips: s.tips || {} };
+      return { ...f, ...s, stats: { ...f.stats, ...s.stats, lvl3Of: { ...(s.stats.lvl3Of || {}) } }, unlocked: [...new Set([...STARTERS, ...s.unlocked.filter((id) => CAT_BY_ID[id])])], tips: s.tips || {}, kingdom: { ...f.kingdom, ...(s.kingdom || {}), lv: { ...((s.kingdom && s.kingdom.lv) || {}) } } };
     }
   } catch (e) { /* private mode or damaged save: start fresh */ }
   return freshSave();
@@ -99,35 +101,100 @@ function setScreen(html, cls = '') {
 const closeScreen = () => setScreen('');
 screenEl.addEventListener('click', (e) => {
   const t = e.target.closest('[data-act]');
-  if (!t) return;
+  if (!t || t.hasAttribute('disabled')) return;
   sfx.unlock();
   const fn = acts[t.dataset.act];
   if (fn) { sfx.play('ui'); fn(t.dataset, t); }
 });
+let lastHover = null;
+screenEl.addEventListener('pointerover', (e) => { const t = e.target.closest('[data-act]'); if (t && t !== lastHover) { lastHover = t; sfx.play('hover'); } });
+// cards tilt toward the pointer
+screenEl.addEventListener('pointermove', (e) => {
+  const c = e.target.closest('.card');
+  if (!c) return;
+  const r = c.getBoundingClientRect();
+  c.style.setProperty('--ry', ((e.clientX - r.left) / r.width - 0.5) * 14 + 'deg');
+  c.style.setProperty('--rx', -((e.clientY - r.top) / r.height - 0.5) * 12 + 'deg');
+});
+screenEl.addEventListener('pointerout', (e) => { const c = e.target.closest && e.target.closest('.card'); if (c && !c.contains(e.relatedTarget)) { c.style.removeProperty('--rx'); c.style.removeProperty('--ry'); } });
 
 const stars = (n) => '★'.repeat(n);
 const owns = (id) => g && [...g.cats, ...g.bench].some((c) => c.id === id && c.lvl === 1);
+
+// ---- helpers that show what a choice does
+const STAT_LABEL = { dmg: 'Damage', haste: 'Attack speed', hp: 'Health', crit: 'Crit chance', range: 'Range', dr: 'Damage taken', waveHeal: 'Healing per wave', slow: 'Mouse speed', curse: 'Mouse weakness', coin: 'Coins' };
+const pc = (v, signed = true) => (signed && v >= 0 ? '+' : '') + Math.round(v * 100) + '%';
+const num = (v) => (v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(Math.round(v)));
+const teamDps = (mods) => g.cats.reduce((a, c) => a + S.estDps(c, mods), 0);
+function dpsLine(before, after) {
+  const d = after - before;
+  if (Math.abs(d) < 0.5) return '';
+  return `<div class="impact ${d > 0 ? 'up' : 'down'}"><span>Team DPS</span> &asymp; <b>${Math.round(before)}</b> &rarr; <b>${Math.round(after)}</b> <em>(${d > 0 ? '+' : ''}${Math.round((100 * d) / Math.max(1, before))}%)</em></div>`;
+}
+function catGain(id) {
+  const m = S.calcMods(g), twin = [...g.cats, ...g.bench].find((c) => c.id === id && c.lvl === 1);
+  const probe = (lvl) => S.estDps({ id, lvl, items: [] }, m);
+  if (twin) {
+    const gain = probe(2) - S.estDps(twin, m);
+    return `<div class="impact up">Merge to Lv 2: <b>+${Math.round(g.cats.includes(twin) ? gain : probe(2))}</b> DPS</div>`;
+  }
+  if (g.cats.length < MAX_STACK) return `<div class="impact up">Adds <b>&asymp;${Math.round(probe(1))}</b> DPS</div>`;
+  return `<div class="impact">Goes to the bench (&asymp;${Math.round(probe(1))} DPS)</div>`;
+}
+function snackImpact(id) {
+  const s = SNACK_BY_ID[id], m = S.calcMods(g), sm = m.snackMul;
+  if (s.kind === 'instant') {
+    const all = g.cats.concat(g.bench);
+    const heal = all.reduce((a, c) => a + Math.min(Math.max(0, S.catMaxHp(g, c) - c.hp), S.catMaxHp(g, c) * s.heal * sm), 0);
+    return heal < 1 ? '<div class="impact">Everyone is at full health</div>' : `<div class="impact up">Heals <b>${num(heal)}</b> health right now</div>`;
+  }
+  if (s.nine) return `<div class="impact up">Nine Lives <b>${g.nineLives}</b> &rarr; <b>${g.nineLives + 1}</b></div>`;
+  const m2 = { ...m };
+  let lines = '';
+  for (const k in s.fx) {
+    if (k === 'critMul') continue;
+    m2[k] = (m2[k] || 0) + s.fx[k] * sm;
+    const sign = k === 'dr' || k === 'slow' ? false : true;
+    lines += `<div class="impact"><span>${STAT_LABEL[k] || k}</span> <b>${pc(m[k], sign)}</b> &rarr; <b>${pc(m2[k], sign)}</b></div>`;
+  }
+  return lines + dpsLine(teamDps(m), teamDps(m2));
+}
+const rerollBtn = () => (g && g.meta.rerolls > 0 ? `<button class="btn small grey" data-act="reroll" ${g.rerolls > 0 ? '' : 'disabled'}>Reroll (${g.rerolls})</button>` : '');
+
 function catCard(id, o = {}) {
   const d = CAT_BY_ID[id];
-  return `<div class="card" data-act="${o.act || 'pickCat'}" data-id="${id}">${o.ribbon ? `<div class="ribbon">${o.ribbon}</div>` : ''}<canvas width="128" height="128" data-cat="${id}"></canvas><h3>${d.name}</h3><div class="ttl">${d.title}</div><div class="role">${d.role}</div><p>${d.desc}</p></div>`;
+  return `<div class="card" data-act="${o.act || 'pickCat'}" data-id="${id}">${o.ribbon ? `<div class="ribbon">${o.ribbon}</div>` : ''}<canvas width="128" height="128" data-cat="${id}"></canvas><h3>${d.name}</h3><div class="ttl">${d.title}</div><div class="role">${d.role}</div><p>${d.desc}</p>${o.gain ? catGain(id) : ''}</div>`;
 }
 function snackCard(id) {
   const s = SNACK_BY_ID[id];
   const kind = { perm: 'Whole run', temp: '3 waves', instant: 'Right now' }[s.kind];
-  return `<div class="card snack" data-act="pickSnack" data-id="${id}"><div class="ic">${s.icon}</div><h3>${s.name}</h3><div class="kind k-${s.kind}">${kind}</div><p>${s.desc}</p></div>`;
+  return `<div class="card snack" data-act="pickSnack" data-id="${id}"><div class="ic">${s.icon}</div><h3>${s.name}</h3><div class="kind k-${s.kind}">${kind}</div><p>${s.desc}</p>${snackImpact(id)}</div>`;
+}
+function itemCard(id) {
+  const it = ITEM_BY_ID[id];
+  return `<div class="card item r-${it.rarity}" data-act="pickItem" data-id="${id}"><div class="rar">${it.rarity}</div><div class="ic">${it.icon}</div><h3>${it.name}</h3><p>${it.desc}</p><div class="impact">Equip it on any cat</div></div>`;
+}
+
+const thumbURLs = new Map();
+function thumbURL(id) {
+  let u = thumbURLs.get(id);
+  if (!u) { const c = document.createElement('canvas'); c.width = c.height = 48; c.getContext('2d').drawImage(catSprite(id), 0, 0, 48, 48); u = c.toDataURL(); thumbURLs.set(id, u); }
+  return u;
 }
 
 function showTitle() {
   mode = 'title'; paused = false;
-  const total = save.stats;
+  const total = save.stats, k = save.kingdom;
+  const can = BUILDINGS.some((b) => buildingLevel(k, b.id) < b.max && k.coins >= upgradeCost(b.id, buildingLevel(k, b.id)));
   setScreen(`
     <h1 class="logo">Stacking<span>Cats</span></h1>
     <div class="tag">Stack your cats. Merge them. Smash the mouse nests.</div>
     <div class="row"><button class="btn big" data-act="play">Play</button></div>
-    <div class="row"><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button><button class="btn grey" data-act="how">How to play</button><button class="btn grey" data-act="sound">Sound: ${save.sound ? 'On' : 'Off'}</button></div>
+    <div class="row"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button></div>
+    <div class="row"><button class="btn grey small" data-act="how">How to play</button><button class="btn grey small" data-act="sound">Sound: ${save.sound ? 'On' : 'Off'}</button></div>
     <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : 'Tap Play to begin'}</div>`, 'clear');
   acts = {
-    play: startRun, dex: () => showDex(showTitle), how: () => showHow(showTitle),
+    play: startRun, dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
     sound: () => { save.sound = !save.sound; sfx.on = save.sound; persist(); showTitle(); },
   };
   setBackdrop(0);
@@ -138,10 +205,11 @@ function showHow(back) {
   setScreen(`<h2>How to play</h2><ul class="how">
     <li><b>Your stack fights by itself.</b> Cats walk right and attack. Mice come from the right.</li>
     <li><b>Order matters.</b> Mice bite the bottom cat first. Put tough cats low. Higher cats see farther.</li>
-    <li><b>Every wave</b> you pick a snack. <b>Every ${BOSS_EVERY}th wave</b> is a nest fight: destroy it to rescue a new cat.</li>
+    <li><b>Every wave</b> you pick a snack. <b>Every ${BOSS_EVERY}th wave</b> is a nest fight: destroy it to rescue a cat and win loot.</li>
     <li><b>Merge</b> two equal cats (same type and level) into one stronger cat, up to Lv 3. The tower fits ${MAX_STACK}, the bench fits ${MAX_BENCH}.</li>
-    <li><b>Zoomies</b> (Space): fill the meter by fighting, then make everyone much faster for 6 seconds.</li>
-    <li><b>Snacks</b> last the whole run, 3 waves, or heal at once. Mice get stronger every wave. Good luck!</li></ul>
+    <li><b>Loot:</b> elite mice drop chests. Items go on one cat each (two at Lv 3). Tap Arrange tower to equip them.</li>
+    <li><b>Coins</b> you earn are saved. Spend them in the <b>Kingdom</b> on buildings that make every future run stronger.</li>
+    <li><b>Zoomies</b> (Space): fill the meter by fighting, then make everyone much faster for 6 seconds.</li></ul>
     <div class="row"><button class="btn" data-act="back">Got it</button></div>`);
   acts = { back };
 }
@@ -167,27 +235,61 @@ function dexDetail(id, unlocked) {
   return `<b>Locked.</b> To unlock: ${d.unlock.text}${p.need > 1 ? ` (${p.have}/${p.need})` : ''}.<div class="pbar"><i style="width:${(100 * p.have) / p.need}%"></i></div>`;
 }
 
+// ---------------------------------------------------------------- the Cat Kingdom
+function paintBuildings(root) {
+  root.querySelectorAll('canvas[data-bld]').forEach((c) => {
+    const x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height); x.save(); x.scale(c.width / 120, c.height / 120);
+    drawBuilding(x, c.dataset.bld, +c.dataset.lvl); x.restore();
+  });
+}
+function showKingdom(back, bump) {
+  const k = save.kingdom;
+  const cards = BUILDINGS.map((b) => {
+    const l = buildingLevel(k, b.id), maxed = l >= b.max, cost = maxed ? 0 : upgradeCost(b.id, l), afford = !maxed && k.coins >= cost;
+    return `<div class="bcard ${l ? '' : 'new'} ${bump === b.id ? 'bump' : ''}"><canvas width="168" height="168" data-bld="${b.id}" data-lvl="${l}"></canvas>
+      <div class="bt"><b>${b.name}</b><div class="pips">${Array.from({ length: b.max }, (_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</div>
+      <small>${l ? b.text(l) : b.blurb}</small>${maxed ? '<em class="max">MAX</em>' : `<small class="nx">Next: ${b.text(l + 1)}</small>`}
+      <button class="btn small ${afford ? 'green' : 'grey'}" data-act="buy" data-id="${b.id}" ${afford ? '' : 'disabled'}>${maxed ? 'Complete' : `${l ? 'Upgrade' : 'Build'} &#129689; ${cost}`}</button></div></div>`;
+  }).join('');
+  setScreen(`<h2>Cat Kingdom <small class="klv">Lv ${kingdomLevel(k)}</small></h2>
+    <div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <small>coins &middot; ${num(k.earned)} earned in total</small></div>
+    <div class="kgrid">${cards}</div>
+    <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'kingdom');
+  paintBuildings(screenEl);
+  acts = {
+    back,
+    buy: (d) => {
+      const b = BUILDING_BY_ID[d.id];
+      if (buyUpgrade(save.kingdom, d.id)) { persist(); sfx.play('upgrade'); toast(`${b.icon} ${b.name} is now Lv ${buildingLevel(save.kingdom, d.id)}!`); showKingdom(back, d.id); }
+    },
+  };
+}
+
 // ---------------------------------------------------------------- run flow
 function startRun() {
   sfx.unlock();
-  g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked] });
-  runCommitted = false; pickN = 0; fx.length = 0; speed = 1; paused = false;
+  g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom });
+  runCommitted = false; pickN = 0; fx.length = 0; speed = 1; paused = false; rewardChoices = null;
+  combo = 0; coinShown = 0; dpsHist.length = 0;
   $('bSpeed').textContent = 'x1';
   showPickStart();
 }
 
 function showPickStart() {
   mode = 'pick';
-  const ch = S.rollCatChoices(g);
+  rewardChoices = rewardChoices || S.rollCatChoices(g);
   setScreen(`<h2>Choose friend ${pickN + 1} of ${START_CATS}</h2><p class="sub">${pickN === 0 ? 'Every cat attacks differently. Pick the first one for your tower.' : 'Pick a friend to stack on top. Choosing the same cat again merges them!'}</p>
-    <div class="cards">${ch.map((id) => catCard(id, { ribbon: owns(id) ? 'MERGE!' : '' })).join('')}</div>`);
+    <div class="cards">${rewardChoices.map((id) => catCard(id, { ribbon: owns(id) ? 'MERGE!' : '', gain: pickN > 0 })).join('')}</div>
+    <div class="row hint">${rerollBtn()}</div>`);
   acts = {
     pickCat: (d) => {
       const r = S.addCat(g, d.id);
       sfx.play(r.merged ? 'merge' : 'pick');
-      pickN++;
-      if (pickN < START_CATS) showPickStart(); else beginWave();
+      pickN++; rewardChoices = null;
+      if (pickN < START_CATS) showPickStart();
+      else { queue = Array(g.meta.startSnacks).fill('snack'); mode = 'reward'; nextReward(); }
     },
+    reroll: () => { if (S.useReroll(g)) { rewardChoices = null; sfx.play('reroll'); showPickStart(); } },
   };
 }
 
@@ -201,6 +303,7 @@ function beginWave() {
   banner(boss ? 'NEST BATTLE!' : `Wave ${g.wave}`, boss ? nest.name : `${THEMES[bdIdx].name}`, boss);
   sfx.play(boss ? 'boss' : 'wave');
   sfx.music(boss ? 'boss' : 'fight');
+  dpsHist.length = 0;
   if (g.wave === 1 && !save.tips.first) { save.tips.first = true; persist(); toast('Tip: the bottom cat takes the hits, so stack tough cats low'); }
   if (g.wave === 2 && !save.tips.zoom) { save.tips.zoom = true; persist(); toast('Tip: fill the Zoomies meter, then press Space or tap it'); }
 }
@@ -213,20 +316,30 @@ function onClear() {
   banner(g.bossWave ? 'NEST DESTROYED!' : 'WAVE CLEARED!', g.bossWave ? 'A friend is free!' : '', false);
   confetti(g.towerX + 40, GROUND - 120, g.bossWave ? 60 : 26, 380);
   queue = g.reward.slice();
+  if (g.report && g.report.chests) toast(`Opening ${g.report.chests} loot chest${g.report.chests > 1 ? 's' : ''}!`);
 }
 function nextReward() {
   const r = queue.shift();
   rewardChoices = null;
   if (!r) { beginWave(); return; }
-  if (r === 'cat') showCatReward(); else showSnackReward();
+  if (r === 'cat') showCatReward(); else if (r === 'item') showItemReward(); else showSnackReward();
+}
+
+function reportHtml() {
+  const r = g.report;
+  if (!r) return '';
+  const max = Math.max(1, ...r.cats.map((c) => c.dmg));
+  const shown = r.cats.slice(0, 6);
+  const mvp = r.cats[0] && r.cats[0].dmg > 0 ? r.cats[0] : null;
+  return `<div class="report"><div class="rh"><b>Wave ${r.wave} report</b><span>Damage <b>${num(r.dmg)}</b></span><span>Mice <b>${r.kills}</b></span><span>Taken <b>${num(r.taken)}</b></span><span>Coins <b>+${Math.floor(r.coins)}</b></span><span>${Math.round(r.time)}s</span></div>
+    <div class="rbars">${shown.map((c) => `<div class="rb ${mvp && c.uid === mvp.uid ? 'mvp' : ''}"><img src="${thumbURL(c.id)}" alt=""><div class="bar"><i style="width:${(100 * c.dmg) / max}%"></i></div><span>${num(c.dmg)}${c.heal > 1 ? ` <em>+${num(c.heal)}hp</em>` : ''}</span>${mvp && c.uid === mvp.uid ? '<u>MVP</u>' : ''}</div>`).join('')}</div></div>`;
 }
 
 function showCatReward() {
   rewardChoices = rewardChoices || S.rollCatChoices(g);
-  const nest = THEMES[bdIdx].name;
   setScreen(`<h2>Nest destroyed!</h2><p class="sub">A caged cat is free and wants to join your stack. Who is it?</p>
-    <div class="cards">${rewardChoices.map((id) => catCard(id, { ribbon: owns(id) ? 'MERGE!' : '' })).join('')}</div>
-    <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button></div>`);
+    <div class="cards">${rewardChoices.map((id) => catCard(id, { ribbon: owns(id) ? 'MERGE!' : '', gain: true })).join('')}</div>
+    <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button>${rerollBtn()}</div>`);
   acts = {
     pickCat: (d) => {
       const r = S.addCat(g, d.id);
@@ -236,8 +349,8 @@ function showCatReward() {
       nextReward();
     },
     tower: () => showTower(showCatReward),
+    reroll: () => { if (S.useReroll(g)) { rewardChoices = null; sfx.play('reroll'); showCatReward(); } },
   };
-  void nest;
 }
 
 // tower and bench are full: the new cat replaces one of the others (or is skipped)
@@ -252,11 +365,29 @@ function showFull(newId) {
   };
 }
 
+function showItemReward() {
+  rewardChoices = rewardChoices || S.rollItemChoices(g);
+  setScreen(`<h2>Loot!</h2><p class="sub">Pick a treasure. Each cat can carry one item (two at Lv 3).</p>
+    <div class="cards">${rewardChoices.map(itemCard).join('')}</div>
+    <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button>${rerollBtn()}</div>`);
+  acts = {
+    pickItem: (d) => {
+      if (g.stash.length >= MAX_STASH) { toast('Backpack full! Equip or drop something first'); showTower(showItemReward); return; }
+      S.takeItem(g, d.id);
+      sfx.play('chest');
+      showTower(() => nextReward(), { item: g.stash.length - 1 });
+    },
+    tower: () => showTower(showItemReward),
+    reroll: () => { if (S.useReroll(g)) { rewardChoices = null; sfx.play('reroll'); showItemReward(); } },
+  };
+}
+
 function showSnackReward() {
   rewardChoices = rewardChoices || S.rollSnackChoices(g);
-  setScreen(`<h2>Wave ${g.wave} cleared!</h2><p class="sub">Snack time. Pick one treat for your cats.</p>
+  const first = g.wave === 0 || !g.report;
+  setScreen(`${first ? '<h2>Snack Stall bonus!</h2><p class="sub">Your kingdom gives you a free snack to start.</p>' : `<h2>Wave ${g.wave} cleared!</h2>`}${first ? '' : reportHtml()}
     <div class="cards">${rewardChoices.map(snackCard).join('')}</div>
-    <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button></div>`);
+    <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button><button class="btn small grey" data-act="stats">Team stats</button>${rerollBtn()}</div>`, first ? '' : 'wide');
   acts = {
     pickSnack: (d) => {
       S.eatSnack(g, d.id);
@@ -265,30 +396,63 @@ function showSnackReward() {
       nextReward();
     },
     tower: () => showTower(showSnackReward),
+    stats: () => showStats(showSnackReward),
+    reroll: () => { if (S.useReroll(g)) { rewardChoices = null; sfx.play('reroll'); showSnackReward(); } },
   };
 }
 
-// arrange tower: tap a cat, then tap another cat to swap, merge equal ones, or tap an empty slot to move
-function showTower(back) {
-  let sel = null, rel = false;
+// team stats: where every bonus comes from, plus what each cat has done
+function showStats(back) {
+  const rows = S.explainMods(g), m = S.calcMods(g);
+  const order = [['dmg', m.dmg], ['haste', m.haste], ['hp', m.hp], ['crit', m.crit], ['range', m.range], ['dr', m.dr], ['waveHeal', m.waveHeal], ['curse', m.curse]];
+  const stat = order.filter(([k]) => rows[k] || k === 'crit' || k === 'waveHeal').map(([k, v]) => `<div class="srow"><b>${STAT_LABEL[k]}</b><strong>${pc(v, k !== 'dr')}</strong><span>${(rows[k] || []).map((r) => `<i>${r.label} ${pc(r.v)}</i>`).join('') || '<i>base</i>'}</span></div>`).join('');
+  const mods = m, cats = g.cats.concat(g.bench).slice().sort((a, b) => b.dmgDone - a.dmgDone);
+  const cs = cats.map((c) => `<div class="srow cat"><img src="${thumbURL(c.id)}" alt=""><b>${CAT_BY_ID[c.id].name} ${stars(c.lvl)}</b><strong>&asymp; ${Math.round(S.estDps(c, mods))} DPS</strong><span><i>${num(c.dmgDone)} damage</i><i>${c.kills} mice</i>${c.healDone > 1 ? `<i>${num(c.healDone)} healed</i>` : ''}${c.items.map((id) => `<i>${ITEM_BY_ID[id].icon}</i>`).join('')}</span></div>`).join('');
+  const r = g.run;
+  setScreen(`<h2>Team stats</h2><div class="statcols"><div>${stat}<div class="srow"><b>Run</b><strong></strong><span><i>${num(r.dmg)} damage</i><i>biggest hit ${num(r.biggest)}</i><i>${num(r.taken)} taken</i><i>${Math.floor(r.coins)} coins</i></span></div></div><div>${cs}</div></div>
+    <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
+  acts = { back };
+}
+
+// arrange the tower: tap a cat then another to swap or merge; tap a backpack item then a cat to equip it
+function showTower(back, opt = {}) {
+  let sel = null, rel = false, selItem = opt.item != null ? opt.item : null;
   const catRow = (c, zone, i, extra = '') => {
-    const d = CAT_BY_ID[c.id], mx = S.catMaxHp(g, c);
+    const d = CAT_BY_ID[c.id], mx = S.catMaxHp(g, c), mods = S.calcMods(g), dps = S.estDps(c, mods);
     const canMerge = sel && sel !== c.uid && (() => { const a = S.findCat(g, sel); return a && a.id === c.id && a.lvl === c.lvl && a.lvl < 3; })();
-    return `<div class="slot has ${sel === c.uid ? 'sel' : ''} ${canMerge ? 'can' : ''}" data-act="slot" data-zone="${zone}" data-i="${i}"><canvas width="104" height="104" data-cat="${c.id}"></canvas><div><b>${d.name}</b><small>${d.role}${canMerge ? ' - tap to MERGE' : ''}</small><div class="hp"><i style="width:${Math.max(2, 100 * c.hp / mx)}%"></i></div></div><span class="lv">${stars(c.lvl)}</span>${extra}</div>`;
+    let prev = '';
+    if (selItem != null && g.stash[selItem]) {
+      const items = c.items.slice();
+      if (items.length >= itemSlots(c.lvl)) items.shift();
+      items.push(g.stash[selItem]);
+      const nd = S.estDps(c, mods, S.fxOf(items)), df = nd - dps;
+      prev = `<em class="${df >= 0 ? 'up' : 'down'}">&rarr; &asymp;${Math.round(nd)} (${df >= 0 ? '+' : ''}${Math.round((100 * df) / Math.max(1, dps))}%)</em>`;
+    }
+    const slots = Array.from({ length: itemSlots(c.lvl) }, (_, k) => {
+      const id = c.items[k];
+      return id ? `<span class="islot full" data-act="unequip" data-uid="${c.uid}" data-i="${k}" title="${ITEM_BY_ID[id].name}: ${ITEM_BY_ID[id].desc} (tap to take off)">${ITEM_BY_ID[id].icon}</span>` : `<span class="islot ${selItem != null ? 'want' : ''}"></span>`;
+    }).join('');
+    return `<div class="slot has ${sel === c.uid ? 'sel' : ''} ${canMerge ? 'can' : ''} ${selItem != null ? 'eq' : ''}" data-act="slot" data-zone="${zone}" data-i="${i}"><canvas width="96" height="96" data-cat="${c.id}"></canvas><div class="sc"><b>${d.name} <span class="st">${stars(c.lvl)}</span></b><small>${d.role}${canMerge ? ' - tap to MERGE' : extra}</small><div class="hp"><i style="width:${Math.max(2, (100 * c.hp) / mx)}%"></i></div></div><div class="islots">${slots}</div><div class="sdps">&asymp;${Math.round(dps)}<small>DPS</small>${prev}</div></div>`;
   };
   const draw = () => {
     const tw = [];
-    for (let i = MAX_STACK - 1; i >= 0; i--) tw.push(g.cats[i] ? catRow(g.cats[i], 'tower', i, i === 0 ? '<span class="base">takes the hits</span>' : '') : `<div class="slot" data-act="slot" data-zone="tower" data-i="${i}">&nbsp;Empty spot</div>`);
+    for (let i = MAX_STACK - 1; i >= 0; i--) tw.push(g.cats[i] ? catRow(g.cats[i], 'tower', i, i === 0 ? ' \u00B7 takes the hits' : '') : `<div class="slot" data-act="slot" data-zone="tower" data-i="${i}">&nbsp;Empty spot</div>`);
     const bn = [];
-    for (let i = 0; i < MAX_BENCH; i++) bn.push(g.bench[i] ? catRow(g.bench[i], 'bench', i) : `<div class="slot bench-slot" data-act="slot" data-zone="bench" data-i="${i}">&nbsp;Empty bench spot</div>`);
-    setScreen(`<h2>Arrange your tower</h2><p class="sub">Tap a cat, then another to swap. Two equal cats merge into one stronger cat!</p>
-      <div class="tower"><div class="col"><h4>Tower (top to bottom)</h4>${tw.join('')}</div><div class="col" style="width:250px"><h4>Bench (rests, heals fast)</h4>${bn.join('')}
-        <div class="row" style="margin-top:6px"><button class="btn small grey" data-act="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div></div></div>
-      <div class="row"><button class="btn" data-act="done">Done</button></div>`);
+    for (let i = 0; i < MAX_BENCH; i++) bn.push(g.bench[i] ? catRow(g.bench[i], 'bench', i) : `<div class="slot" data-act="slot" data-zone="bench" data-i="${i}">&nbsp;Empty bench spot</div>`);
+    const bag = g.stash.map((id, i) => `<span class="bag ${ITEM_BY_ID[id].rarity} ${selItem === i ? 'sel' : ''}" data-act="bag" data-i="${i}" title="${ITEM_BY_ID[id].name}">${ITEM_BY_ID[id].icon}</span>`).join('') + Array.from({ length: MAX_STASH - g.stash.length }, () => '<span class="bag empty"></span>').join('');
+    const it = selItem != null && g.stash[selItem] ? ITEM_BY_ID[g.stash[selItem]] : null;
+    setScreen(`<h2>Arrange your tower <small class="klv">Team DPS &asymp; ${Math.round(teamDps(S.calcMods(g)))}</small></h2>
+      <div class="tower"><div class="col"><h4>Tower (top to bottom)</h4>${tw.join('')}</div><div class="col"><h4>Bench (rests, heals fast)</h4>${bn.join('')}
+        <h4>Backpack ${g.stash.length}/${MAX_STASH}</h4><div class="bagrow">${bag}</div>
+        <div class="row"><button class="btn small grey" data-act="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div></div></div>
+      <div class="detail slim">${it ? `<b>${it.icon} ${it.name}</b>: ${it.desc}. Tap a cat to equip it.` : sel ? 'Tap another cat to swap, or a matching one to merge.' : 'Tap a cat to move it. Tap a backpack item, then a cat, to equip it.'}</div>
+      <div class="row"><button class="btn" data-act="done">Done</button></div>`, 'wide');
   };
   draw();
   acts = {
     done: back,
+    bag: (d) => { selItem = selItem === +d.i ? null : +d.i; sel = null; draw(); },
+    unequip: (d) => { if (S.unequipItem(g, +d.uid, +d.i)) { sfx.play('equip'); draw(); } else toast('Backpack is full'); },
     release: () => {
       if (!sel) return;
       if (!rel) { rel = true; draw(); return; }
@@ -298,6 +462,10 @@ function showTower(back) {
     slot: (d) => {
       rel = false;
       const zone = d.zone, i = +d.i, list = zone === 'tower' ? g.cats : g.bench, cat = list[i];
+      if (selItem != null && cat) {
+        if (S.equipItem(g, selItem, cat.uid)) { sfx.play('equip'); toast(`${CAT_BY_ID[cat.id].name} equipped!`); puff(S.TOWER_X, 330, 8, '#ffd23f', 120, 0.5); }
+        selItem = null; draw(); return;
+      }
       if (!cat) {
         if (sel) {
           const c = S.findCat(g, sel);
@@ -323,6 +491,9 @@ function commitRun() {
   save.stats = mergeRun(save.stats, g.run);
   const fresh = checkUnlocks(save.stats, new Set(save.unlocked));
   save.unlocked.push(...fresh);
+  g.run.earned = Math.floor(g.run.coins);
+  save.kingdom.coins += g.run.earned;
+  save.kingdom.earned += g.run.earned;
   persist();
   return fresh;
 }
@@ -333,23 +504,36 @@ function onOver() {
   showOver(commitRun());
 }
 function showOver(fresh) {
-  const r = g.run, best = save.stats.bestWave;
+  const r = g.run, best = save.stats.bestWave, k = save.kingdom;
+  const by = Object.entries(r.byCat).sort((a, b) => b[1].dmg - a[1].dmg), tot = Math.max(1, by.reduce((a, [, v]) => a + v.dmg, 0)), mx = Math.max(1, by[0] ? by[0][1].dmg : 1);
+  const bars = by.slice(0, 6).map(([id, v], i) => `<div class="rb ${i === 0 ? 'mvp' : ''}"><img src="${thumbURL(id)}" alt=""><b>${CAT_BY_ID[id].name}</b><div class="bar"><i style="width:${(100 * v.dmg) / mx}%"></i></div><span>${num(v.dmg)} <em>${Math.round((100 * v.dmg) / tot)}%</em></span></div>`).join('');
   setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : 'The mice cheer. Next time you will get them.'}</p>
-    <div class="stats"><div><b>${r.wave}</b>Wave reached</div><div><b>${r.kills}</b>Mice defeated</div><div><b>${r.bossKills}</b>Nests destroyed</div><div><b>${r.merges}</b>Merges</div></div>
+    <div class="overcols"><div><div class="stats"><div><b>${r.wave}</b>Wave reached</div><div><b>${r.kills}</b>Mice defeated</div><div><b>${r.bossKills}</b>Nests destroyed</div><div><b>${r.merges}</b>Merges</div>
+      <div><b>${num(r.dmg)}</b>Damage dealt</div><div><b>${num(r.biggest)}</b>Biggest hit</div><div><b>${num(r.taken)}</b>Damage taken</div><div><b>${num(r.healed)}</b>Healed</div></div>
+      <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned</span><small>Total ${num(k.coins)}</small></div></div>
+      <div class="rbars big"><div class="rh"><b>Who did the work</b></div>${bars || '<small>No damage dealt</small>'}</div></div>
     ${fresh.length ? `<p class="sub">New friends unlocked!</p><div class="newcats">${fresh.map((id) => catCard(id, { act: 'none' })).join('')}</div>` : ''}
-    <div class="row"><button class="btn big" data-act="again">Try again</button><button class="btn grey" data-act="title">Title</button><button class="btn grey" data-act="dex">Cat Dex</button></div>`);
-  acts = { again: startRun, title: () => { g = null; showTitle(); }, dex: () => showDex(() => showOver(fresh)), none: () => {} };
+    <div class="row"><button class="btn big" data-act="again">Try again</button><button class="btn green" data-act="kingdom">Kingdom</button><button class="btn grey" data-act="title">Title</button></div>`, 'wide');
+  acts = { again: startRun, title: () => { g = null; showTitle(); }, kingdom: () => showKingdom(() => showOver(fresh)), none: () => {} };
+  const el = $('earn');
+  if (el) {
+    const to = +el.dataset.to, t0 = performance.now();
+    const tick = (now) => { const u = Math.min(1, (now - t0) / 1100); el.textContent = Math.round(to * (1 - Math.pow(1 - u, 3))); if (u < 1 && el.isConnected) { requestAnimationFrame(tick); if (Math.random() < 0.3) sfx.play('coin'); } };
+    requestAnimationFrame(tick);
+  }
 }
 
 function showPause() {
   paused = true;
-  setScreen(`<h2 class="paused">Paused</h2><div class="row"><button class="btn big" data-act="resume">Resume</button></div><div class="row"><button class="btn grey" data-act="how">How to play</button><button class="btn grey" data-act="quit">Give up</button></div>`);
+  setScreen(`<h2 class="paused">Paused</h2><div class="row"><button class="btn big" data-act="resume">Resume</button></div><div class="row"><button class="btn grey" data-act="stats">Team stats</button><button class="btn grey" data-act="how">How to play</button><button class="btn grey" data-act="quit">Give up</button></div>`);
   acts = {
     resume: () => { paused = false; closeScreen(); },
+    stats: () => showStats(showPause),
     how: () => showHow(showPause),
     quit: () => { paused = false; if (g.wave > 1) commitRun(); g = null; showTitle(); },
   };
 }
+
 
 // ---------------------------------------------------------------- HUD
 function banner(txt, sub, boss) {
@@ -368,10 +552,25 @@ function toast(txt) {
 }
 const hudCache = {};
 function setText(id, v) { if (hudCache[id] !== v) { hudCache[id] = v; $(id).innerHTML = v; } }
-function updateHud() {
-  const show = g && (mode === 'play' || mode === 'reward' || mode === 'celebrate');
-  $('hud').style.display = g && mode !== 'title' && mode !== 'pick' && mode !== 'over' ? 'block' : 'none';
-  if (!show) return;
+function pulse(id) { const el = $(id); el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+let coinShown = 0, meterT = 0;
+const dpsHist = [];
+function liveDps() {
+  if (dpsHist.length < 2) return 0;
+  const a = dpsHist[0], b = dpsHist[dpsHist.length - 1];
+  return b.t - a.t > 0.5 ? (b.dmg - a.dmg) / (b.t - a.t) : 0;
+}
+function updateMeter() {
+  const el = $('meter');
+  if (!save.meter || !g || mode !== 'play') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const cats = g.cats.slice().reverse(), max = Math.max(1, ...g.cats.map((c) => c.wDmg));
+  el.innerHTML = `<div class="mh"><b>DPS</b><span>${num(liveDps())}</span></div>` + cats.map((c) => `<div class="mr ${c.ko ? 'ko' : ''}"><img src="${thumbURL(c.id)}" alt=""><div class="bar"><i style="width:${(100 * c.wDmg) / max}%"></i></div><span>${num(c.wDmg)}</span></div>`).join('');
+}
+function updateHud(dt) {
+  const inRun = g && g.wave > 0 && mode !== 'title' && mode !== 'pick' && mode !== 'over';
+  $('hud').style.display = inRun ? 'block' : 'none';
+  if (!inRun) return;
   const playing = mode === 'play';
   setText('waveTxt', `Wave ${g.wave}`);
   setText('themeTxt', THEMES[bdIdx] ? THEMES[bdIdx].name : '');
@@ -384,24 +583,32 @@ function updateHud() {
     const pct = Math.max(0, 100 * nest.hp / nest.maxHp).toFixed(1) + '%';
     if (hudCache.bossPct !== pct) { hudCache.bossPct = pct; $('bossHp').style.width = pct; $('bossTrail').style.width = pct; }
   } else hudCache.bossPct = null;
-  const zr = g.zoomT > 0;
-  const z = $('zoom');
+  const zr = g.zoomT > 0, z = $('zoom');
   z.style.display = playing ? 'flex' : 'none';
   z.style.setProperty('--p', (zr ? 100 * g.zoomT / 6 : g.zoom) + '%');
   z.className = zr ? 'on' : g.zoom >= 100 ? 'ready' : '';
   setText('zoomSub', zr ? 'GO!' : g.zoom >= 100 ? 'READY' : Math.floor(g.zoom) + '%');
+  // coins count up smoothly, chests show while waiting to be opened
+  coinShown += (g.run.coins - coinShown) * Math.min(1, dt * 7);
+  if (Math.abs(g.run.coins - coinShown) < 0.5) coinShown = g.run.coins;
+  setText('coinTxt', String(Math.floor(coinShown)));
+  const ch = g.chests;
+  $('chestBox').style.display = ch > 0 ? 'flex' : 'none';
+  setText('chestTxt', String(ch));
+  $('bMeter').classList.toggle('on', !!save.meter);
   const sig = g.perm.join(',') + '|' + g.temp.map((t) => t.id + t.left).join(',');
   if (hudCache.snackSig !== sig) {
     hudCache.snackSig = sig;
     const counts = {};
     for (const id of g.perm) counts[id] = (counts[id] || 0) + 1;
-    const chips = Object.entries(counts).map(([id, n]) => `<span class="chip pop" title="${SNACK_BY_ID[id].desc}">${SNACK_BY_ID[id].icon}${n > 1 ? ' x' + n : ''}</span>`)
-      .concat(g.temp.map((t) => `<span class="chip temp pop" title="${SNACK_BY_ID[t.id].desc}">${SNACK_BY_ID[t.id].icon} ${t.left}w</span>`));
+    const chips = Object.entries(counts).map(([id, n]) => `<span class="chip pop" title="${SNACK_BY_ID[id].name}: ${SNACK_BY_ID[id].desc}">${SNACK_BY_ID[id].icon}${n > 1 ? ' x' + n : ''}</span>`)
+      .concat(g.temp.map((t) => `<span class="chip temp pop" title="${SNACK_BY_ID[t.id].name}: ${SNACK_BY_ID[t.id].desc}">${SNACK_BY_ID[t.id].icon} ${t.left}w</span>`));
     $('snackBar').innerHTML = chips.join('');
     $('snackBar').style.display = chips.length ? 'flex' : 'none';
   }
+  meterT -= dt;
+  if (meterT <= 0) { meterT = 0.4; updateMeter(); }
 }
-
 
 // ---------------------------------------------------------------- effects
 const MAXFX = 440;
@@ -529,6 +736,8 @@ function handle(e) {
     case 'heal': { const p = catPos(e.uid); txtFx(p.x - 46, p.y - 20, '+' + Math.round(e.v), '#7dffb0', 16, 0.9); break; }
     case 'healfx': for (let i = 0; i < 3; i++) spawnFx({ k: 'h', x: e.x + (Math.random() - 0.5) * 50, y: e.y - 10, life: 0.9, max: 0.9 }); sfx.play('heal'); break;
     case 'cathit': { const p = catPos(e.uid); txtFx(p.x - 56, p.y, Math.round(e.v), '#ff8a8a', 15, 0.7); towerWob = 1; shake = Math.max(shake, 1.8); sfx.play('hit'); break; }
+    case 'coin': if (fx.length < 300) spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 52, ty: 72, life: 0.7 + Math.random() * 0.2, max: 0.8, kind: 'coin', ox: (Math.random() - 0.5) * 160, oy: -60 - Math.random() * 60 }); break;
+    case 'chest': spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', ox: 0, oy: -90 }); sparks(e.x, e.y, 10, '#ffd23f', 220, 0.5); txtFx(e.x, e.y - 20, 'Chest!', '#ffd23f', 20, 1); sfx.play('chest'); break;
     case 'dodge': { const p = catPos(e.uid); txtFx(p.x - 40, p.y, 'Miss!', '#b9f5ff', 16, 0.7); break; }
     case 'ehit': sparks(e.x, e.y, 3, '#ffffff', 130, 0.2); break;
     case 'spawn': smoke(e.x, e.y, 1, 7, '#d9c9a0'); puff(e.x, e.y - 10, 3, '#d9c9a0', 50, 0.4, 4); break;
@@ -553,7 +762,10 @@ function updateFx(dt) {
   for (let i = fx.length - 1; i >= 0; i--) {
     const f = fx[i];
     f.life -= dt;
-    if (f.life <= 0) { fx[i] = fx[fx.length - 1]; fx.pop(); continue; }
+    if (f.life <= 0) {
+      if (f.k === 'fly') { pulse(f.kind === 'coin' ? 'coinBox' : 'chestBox'); if (f.kind === 'coin' && Math.random() < 0.5) sfx.play('coin'); }
+      fx[i] = fx[fx.length - 1]; fx.pop(); continue;
+    }
     switch (f.k) {
       case 'p': f.vy += f.grav * dt; f.x += f.vx * dt; f.y += f.vy * dt; break;
       case 'sp': f.vy += 380 * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= 1 - 2 * dt; break;
@@ -563,6 +775,7 @@ function updateFx(dt) {
       case 't': f.y -= 38 * dt; break;
       case 'f': f.y += f.vy * dt; f.r *= 1 - 1.6 * dt; break;
       case 'h': f.y -= 34 * dt; break;
+      case 'fly': { const u = 1 - f.life / f.max, e = u * u * (3 - 2 * u); f.x = f.sx + (f.tx - f.sx) * e + f.ox * Math.sin(u * Math.PI) * (1 - u); f.y = f.sy + (f.ty - f.sy) * e + f.oy * Math.sin(u * Math.PI); break; }
       default: break;
     }
   }
@@ -579,6 +792,7 @@ function drawFx() {
       ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a * 0.7; ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.restore();
     } else if (f.k === 's') { ctx.globalAlpha = a; ctx.fillStyle = '#fff6b0'; for (let i = 0; i < 4; i++) { const an = i * 1.57 + (1 - a) * 2, d = (1 - a) * 24 + 4; ctx.beginPath(); ctx.arc(f.x + Math.cos(an) * d, f.y + Math.sin(an) * d, 2.6 * a + 0.6, 0, TAU); ctx.fill(); } }
     else if (f.k === 'a') { ctx.globalAlpha = a; ctx.strokeStyle = '#fff'; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { ctx.lineWidth = 3.4 - i; ctx.beginPath(); ctx.arc(f.x + 16, f.y, (f.wide ? 46 : 28) + i * 6 + (1 - a) * 8, Math.PI * 0.62, Math.PI * 1.38); ctx.stroke(); } }
+    else if (f.k === 'fly') { ctx.globalAlpha = 1; if (f.kind === 'coin') { ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#8a5a14'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(f.x, f.y, 5.5 * Math.abs(Math.cos(f.life * 14)) + 1.2, 5.5, 0, 0, TAU); ctx.fill(); ctx.stroke(); } else { ctx.font = '22px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('\uD83C\uDF81', f.x, f.y + 7); } }
     else if (f.k === 'h') { ctx.globalAlpha = Math.min(1, a * 2); ctx.fillStyle = '#ff7aa8'; ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('♥', f.x, f.y); }
     ctx.globalCompositeOperation = 'source-over';
   }
@@ -639,6 +853,12 @@ function drawAmbient(t, dt, scrollNow) {
 // ---------------------------------------------------------------- drawing the world
 function shadow(x, y, rx) { ctx.fillStyle = 'rgba(30,20,50,.22)'; ctx.beginPath(); ctx.ellipse(x, y, rx, rx * 0.22, 0, 0, TAU); ctx.fill(); }
 
+const iconCache = new Map();
+function iconSprite(emoji) {
+  let c = iconCache.get(emoji);
+  if (!c) { c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d'); x.font = '24px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(emoji, 16, 17); iconCache.set(emoji, c); }
+  return c;
+}
 function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
   list.forEach((c, i) => {
     const d = CAT_BY_ID[c.id];
@@ -667,14 +887,15 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     if (c.lvl === 3) { ctx.fillStyle = '#fff6b0'; for (let k = 0; k < 3; k++) { const an = t * 2 + k * 2.1; ctx.beginPath(); ctx.arc(cx + sway + Math.cos(an) * 40, feetY - 44 + Math.sin(an) * 26, 2.4, 0, TAU); ctx.fill(); } }
     if (hpBars) {
-      const bx = cx - 128, by = feetY - 50, bw = 64;
+      const bx = cx - 142, by = feetY - 50, bw = 80;
       ctx.font = `800 12px ${FONT}`; ctx.textAlign = 'left'; ctx.lineWidth = 3.5; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round'; ctx.strokeText(d.name, bx, by - 3); ctx.fillStyle = '#fff'; ctx.fillText(d.name, bx, by - 3);
-      if (c.lvl > 1) { ctx.textAlign = 'right'; ctx.strokeText('★'.repeat(c.lvl), bx + bw, by - 3); ctx.fillStyle = '#ffd23f'; ctx.fillText('★'.repeat(c.lvl), bx + bw, by - 3); ctx.textAlign = 'left'; }
+      if (c.lvl > 1) { const nw = ctx.measureText(d.name).width + 3; ctx.strokeText('★'.repeat(c.lvl), bx + nw, by - 3); ctx.fillStyle = '#ffd23f'; ctx.fillText('★'.repeat(c.lvl), bx + nw, by - 3); }
       ctx.fillStyle = 'rgba(39,28,51,.8)'; ctx.beginPath(); ctx.roundRect(bx - 1, by, bw + 2, 9, 5); ctx.fill();
       const r = Math.min(1, Math.max(0, c.hp / c.max));
       ctx.fillStyle = r > 0.5 ? '#5fe08a' : r > 0.25 ? '#ffc94a' : (Math.sin(t * 14) > 0 ? '#ff6b6b' : '#ffb0b0');
       ctx.beginPath(); ctx.roundRect(bx, by + 1, Math.max(3, bw * r), 7, 4); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.roundRect(bx + 1, by + 1.5, Math.max(2, bw * r - 2), 2, 1); ctx.fill();
+      if (c.items) c.items.forEach((id, k) => ctx.drawImage(iconSprite(ITEM_BY_ID[id].icon), bx + k * 17, by + 11, 16, 16));
     }
   });
 }
@@ -773,7 +994,7 @@ function drawField(t, dt) {
   }
   for (const m of g.mines) { ctx.fillStyle = '#4a4a5a'; ctx.strokeStyle = '#271c33'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(m.x, GROUND + 10, 13, 6, 0, 0, TAU); ctx.fill(); ctx.stroke(); const on = Math.sin(t * 8) > 0; ctx.fillStyle = on ? '#ff5d5d' : '#7a2a2a'; ctx.beginPath(); ctx.arc(m.x, GROUND + 6, 3, 0, TAU); ctx.fill(); if (on) { add(); glow(m.x, GROUND + 6, 14, '#ff5d5d', 0.6); norm(); } }
   const alive = S.aliveCats(g);
-  const list = alive.map((c) => ({ id: c.id, lvl: c.lvl, hp: c.hp, max: S.catMaxHp(g, c), flash: c.flash, atk: c.atk, seed: c.uid * 0.7 }));
+  const list = alive.map((c) => ({ id: c.id, lvl: c.lvl, hp: c.hp, max: S.catMaxHp(g, c), flash: c.flash, atk: c.atk, seed: c.uid * 0.7, items: c.items }));
   const marching = g.marching && g.state === 'fight';
   drawStack(g.towerX, list, t, marching, true, mode === 'celebrate', g.zoomT > 0);
   if (marching) { dustT -= dt; if (dustT <= 0) { dustT = 0.11; smoke(g.towerX - 10 + Math.random() * 40, GROUND + 6, 1, 6, '#d8cfae'); } }
@@ -821,7 +1042,7 @@ function vignette(t) {
 function drawCombo(t) {
   if (combo < 3 || mode !== 'play') return;
   const s = 1 + comboPulse * 0.35, fade = Math.min(1, comboT * 2);
-  ctx.save(); ctx.translate(18, 84); ctx.scale(s, s); ctx.globalAlpha = fade;
+  ctx.save(); ctx.translate(18, 134); ctx.scale(s, s); ctx.globalAlpha = fade;
   ctx.font = `800 ${24 + Math.min(14, combo / 4)}px ${FONT}`; ctx.textAlign = 'left'; ctx.lineWidth = 5; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round';
   const col = combo >= 50 ? '#ff8fb7' : combo >= 20 ? '#ffd23f' : '#ffffff';
   ctx.strokeText(`x${combo}`, 0, 0); ctx.fillStyle = col; ctx.fillText(`x${combo}`, 0, 0);
@@ -861,12 +1082,14 @@ $('bPause').addEventListener('click', () => { sfx.unlock(); togglePause(); });
 $('bSpeed').addEventListener('click', () => { sfx.unlock(); toggleSpeed(); });
 $('bSound').addEventListener('click', () => { sfx.unlock(); save.sound = !save.sound; sfx.on = save.sound; persist(); toast(save.sound ? 'Sound on' : 'Sound off'); });
 $('zoom').addEventListener('click', () => { sfx.unlock(); doZoomies(); });
+$('bMeter').addEventListener('click', () => { sfx.unlock(); save.meter = !save.meter; persist(); meterT = 0; });
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
   const k = e.key.toLowerCase();
   if (k === ' ') { e.preventDefault(); doZoomies(); }
   else if (k === 'p' || k === 'escape') togglePause();
   else if (k === 'f') toggleSpeed();
+  else if (k === 'd') { save.meter = !save.meter; persist(); meterT = 0; }
   else if (k === 'm') { save.sound = !save.sound; sfx.on = save.sound; persist(); }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'play' && !paused) showPause(); });
@@ -896,6 +1119,7 @@ function frame(ts) {
     }
     if (n >= 8) acc = 0;
     drain();
+    if (g.state === 'fight' && (!dpsHist.length || g.t - dpsHist[dpsHist.length - 1].t > 0.25)) { dpsHist.push({ t: g.t, dmg: g.run.dmg }); while (dpsHist.length > 16) dpsHist.shift(); }
     updateFx(fd);
     if (g.state === 'clear') onClear(); else if (g.state === 'over') onOver();
   } else if (g && mode === 'celebrate') {
@@ -909,7 +1133,7 @@ function frame(ts) {
     updateFx(paused ? 0 : dt);
   }
   render(dt);
-  updateHud();
+  updateHud(dt);
   requestAnimationFrame(frame);
 }
 
