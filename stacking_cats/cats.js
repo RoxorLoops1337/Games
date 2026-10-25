@@ -448,6 +448,12 @@ export const ACHIEVEMENTS = [
   { id: 'syn3',     name: 'Dream Team',       desc: 'Get a full tier 2 synergy (3 cats of one kind).', coins: 80, gems: 1, check: (c) => (c.run.synMax || 0) >= 3 },
   { id: 'big1000',  name: 'Big Hitter',       desc: 'Land a single hit of 1000 damage.',           coins: 120, gems: 1, check: (c) => c.run.biggest >= 1000 },
   { id: 'nine',     name: 'Nine Lives',       desc: 'Be saved by Nine Lives.',                     coins: 60,  gems: 1, check: (c) => (c.run.nine || 0) >= 1 },
+  { id: 'sp5',      name: 'Special Delivery', desc: 'Use 5 special moves in one run.',             coins: 60,  gems: 1, check: (c) => (c.run.specials || 0) >= 5 },
+  { id: 'sp25',     name: 'Showstopper',      desc: 'Use 25 special moves in one run.',            coins: 150, gems: 2, check: (c) => (c.run.specials || 0) >= 25 },
+  { id: 'forge1',   name: 'Blacksmith',       desc: 'Forge three items into a better one.',        coins: 50,  gems: 1, check: (c) => (c.run.forged || 0) >= 1 },
+  { id: 'sell5',    name: 'Yard Sale',        desc: 'Sell 5 items in one run.',                    coins: 50,  gems: 0, check: (c) => (c.run.sold || 0) >= 5 },
+  { id: 'event3',   name: 'Wanderer',         desc: 'Visit 3 event stops in one run.',             coins: 70,  gems: 1, check: (c) => (c.run.events || 0) >= 3 },
+  { id: 'wish',     name: 'Lucky Wish',       desc: 'Win a toss at the Wishing Fountain.',         coins: 70,  gems: 1, check: (c) => (c.run.fountainWins || 0) >= 1 },
 ];
 
 // ---------------------------------------------------------------- special moves (tap a charged cat; each cat has one)
