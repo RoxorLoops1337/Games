@@ -25,8 +25,8 @@ const NODE_INFO = {
 const NODE_COL = { fight: '#c9b48a', elite: COL.scar, event: '#6fa8bd', shop: COL.gold, forge: COL.ember, boss: '#b33a4a', final: '#F5E6A8' };
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 
-function worldH(map) { return map.rows * SP + 120; }
-function worldY(map, row) { return worldH(map) - 70 - row * SP; }
+function worldH(map) { return map.rows * SP + 170; }
+function worldY(map, row) { return worldH(map) - 140 - row * SP; }
 function nodeWorld(map, n) { return { x: 350 + n.x * 580, y: worldY(map, n.row) + (hash(n.id) - 0.5) * 14 }; }
 
 function reducedMotion(app) { const s = app.shared.meta && app.shared.meta.settings; return !!(s && (s.reduceMotion || s.reducedMotion)); }
@@ -94,7 +94,7 @@ export default {
     if (this.trav || this.banner) return;
     const run = this.run, map = run.map;
     let from;
-    if (run.node === null) from = { x: 640, y: worldY(map, 0) + 72 };
+    if (run.node === null) from = { x: 640, y: worldY(map, 0) + 62 };
     else from = nodeWorld(map, map.nodes[run.node]);
     const to = nodeWorld(map, n);
     const dur = reducedMotion(app) ? 0.01 : 0.75;
@@ -206,7 +206,7 @@ export default {
     }
     // start thread under row 0
     if (run.node === null) {
-      const ys = worldY(map, 0) + 72 - this.scroll;
+      const ys = worldY(map, 0) + 62 - this.scroll;
       g.setLineDash([9, 7]); g.strokeStyle = COL.scar; g.lineWidth = 3; g.lineDashOffset = -app.t * 14;
       for (const id of map.byRow[0]) { const b = nodeWorld(map, map.nodes[id]); g.beginPath(); g.moveTo(640, ys); g.lineTo(b.x, b.y - this.scroll); g.stroke(); }
       g.setLineDash([]); g.lineDashOffset = 0;
@@ -402,17 +402,17 @@ export default {
       app.text(leg[t].split(': ')[1] || leg[t], X + 58, y + 19, { size: 12, ui: true, color: 'rgba(232,220,196,.6)', maxW: 220 });
     });
     // path key
-    const ky = 268;
+    const ky = 292;
     g.setLineDash([9, 6]); g.lineWidth = 3; g.strokeStyle = COL.scar; g.beginPath(); g.moveTo(X + 18, ky); g.lineTo(X + 62, ky); g.stroke();
     g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(X + 18, ky + 20); g.lineTo(X + 62, ky + 20); g.stroke(); g.setLineDash([]);
     app.text('Open path', X + 72, ky - 8, { size: 13, ui: true, color: 'rgba(232,220,196,.7)' });
     app.text('Possible later', X + 72, ky + 12, { size: 13, ui: true, color: 'rgba(232,220,196,.7)' });
 
-    g.strokeStyle = 'rgba(232,220,196,.25)'; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(X + 18, 306); g.lineTo(X + PW - 18, 306); g.stroke(); g.setLineDash([]);
-    app.text('SCHOOL RESONANCE', X + 18, 318, { size: 14, ui: true, bold: true, color: COL.lamp });
+    g.strokeStyle = 'rgba(232,220,196,.25)'; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(X + 18, 330); g.lineTo(X + PW - 18, 330); g.stroke(); g.setLineDash([]);
+    app.text('SCHOOL RESONANCE', X + 18, 340, { size: 14, ui: true, bold: true, color: COL.lamp });
     const res = RUN.resonance(run);
     SCHOOLS_LIST().forEach((s, i) => {
-      const y = 346 + i * 48;
+      const y = 366 + i * 47;
       const c = res.counts[s.id] || 0, tier = res.tiers[s.id] || 0;
       const hov = app.inRect(X + 10, y - 4, PW - 20, 46);
       if (hov) { app.rr(X + 10, y - 4, PW - 20, 46, 6); g.fillStyle = 'rgba(232,220,196,.07)'; g.fill(); }

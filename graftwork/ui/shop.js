@@ -487,7 +487,6 @@ export default {
     void params;
   },
   leave() { S = null; },
-  key(app, e) { if (e.key === 'Escape' && S && S.modal.m) { S.modal.m = null; sfx(app, 'uiBack'); return true; } return false; },
   update(app, dt) {
     if (!S) return;
     S.t += dt; S.quipT += dt; S.react = Math.max(0, S.react - dt * 1.4);
