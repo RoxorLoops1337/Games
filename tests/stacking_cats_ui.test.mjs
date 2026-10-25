@@ -134,6 +134,13 @@ t('auto special moves: a Settings toggle, an A key and the default off are all w
   assert.ok(js.includes("k === 'a'") && js.includes('save.opt.autoSpecial = !save.opt.autoSpecial'), 'A key missing');
 });
 
+t('tutorial tips are held back while the game is paused', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const m = js.match(/function coach\([^)]*\) \{\n([^\n]*)\n/);
+  assert.ok(m, 'coach() not found');
+  assert.ok(/\bpaused\b/.test(m[1]), 'coach() must return early while paused');
+});
+
 t('no em dashes anywhere in the game files', () => {
   for (const f of ['main.js', 'index.html', 'cats.js', 'sim.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'audio.js', 'kingdom_scene.js', 'savecode.js', 'daily.js', 'post.js', 'art_icons.js', 'share.js', 'haptics.js', 'pwa.js', 'sw.js', 'manifest.webmanifest']) {
     assert.ok(!readFileSync('stacking_cats/' + f, 'utf8').includes('—'), f);
