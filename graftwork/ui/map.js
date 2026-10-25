@@ -100,7 +100,7 @@ export default {
     const dur = reducedMotion(app) ? 0.01 : 0.75;
     this.trav = { id: n.id, t: 0, dur, from, to };
     this.scrollTarget = clamp(to.y - 470, 0, this.maxScroll);
-    if (app.shared.audio) app.shared.audio.sfx('stitch', { vol: 0.5 });
+    if (app.shared.audio) app.shared.audio.sfx('mapStep', { vol: 0.5 });
   },
   draw(app) {
     const g = app.ctx, run = this.run;
