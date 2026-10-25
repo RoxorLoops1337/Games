@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8"><title>Doodle scenes lab</title>
+<style>body{margin:0;background:#222;color:#eee;font:12px sans-serif}canvas{display:block}</style>
+<canvas id="c"></canvas>
+<script type="module">
+import { SCENE_IDS, drawScene, drawTitle } from '../js/doodle_scenes.js';
+const q = new URLSearchParams(location.search);
+const ids = (q.get('ids') || '').split(',').filter(Boolean);
+const list = ids.length ? ids : ['title'].concat(SCENE_IDS);
+const p = +(q.get('p') || 0.8), t0 = +(q.get('t') || 2);
+const cols = +(q.get('cols') || 5), cw = 216, ch = 384;
+const cv = document.getElementById('c'); cv.width = cols * cw; cv.height = Math.ceil(list.length / cols) * ch;
+const ctx = cv.getContext('2d');
+list.forEach((id, i) => {
+  ctx.save(); ctx.translate((i % cols) * cw, Math.floor(i / cols) * ch); ctx.scale(cw / 540, ch / 960);
+  ctx.beginPath(); ctx.rect(0, 0, 540, 960); ctx.clip();
+  if (id === 'title') drawTitle(ctx, 540, 960, t0, { beat: 0.3 }); else drawScene(ctx, id, 540, 960, t0, { progress: p });
+  ctx.restore(); ctx.fillStyle = '#000a'; ctx.fillRect((i % cols) * cw, Math.floor(i / cols) * ch, 110, 14);
+  ctx.fillStyle = '#fff'; ctx.fillText(id, (i % cols) * cw + 3, Math.floor(i / cols) * ch + 11);
+});
+</script>

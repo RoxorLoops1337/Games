@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Drop the Bass Risograph Poster</title>
+<style>
+html,body{margin:0;height:100%;background:#2a2a44}
+body{display:flex;align-items:center;justify-content:center;overflow:hidden}
+canvas{display:block;width:min(100vw,calc(100vh*1080/1920));height:auto;aspect-ratio:1080/1920}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+'use strict';
+/* Style 10 Risograph Poster: a 4 ink screen-print gig poster. Every colour is an overprint of fluorescent pink,
+   teal, yellow and blue (plus a navy key ink) multiplied on cream paper, each ink plate slightly misregistered,
+   halftone gradients, flat cut shapes, condensed poster type, grain and paper fibres.
+   Palette: pink #ff48b0, teal #00a99d, yellow #ffe600, blue #0078bf, navy #232a6e, paper #f3ebd6 */
+const W = 1080, H = 1920, TAU = Math.PI * 2;
+const cv = document.getElementById('c'), X = cv.getContext('2d');
+const INK = { pink: '#ff48b0', teal: '#00a99d', yellow: '#ffe600', blue: '#0078bf', navy: '#232a6e' };
+const PAPER = '#f3ebd6';
+const OFF = { pink: [0, 0], teal: [4, -3], yellow: [-4, 3], blue: [3, 4], navy: [-2, -3] };
+const FONT = 'Inter,"Arial Black","DejaVu Sans",sans-serif';
+function mk(w, h) { const k = document.createElement('canvas'); k.width = w; k.height = h; return k; }
+function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+let c = X, KO = false;
+
+/* ---------- ink plate helpers ---------- */
+function L(k, a, fn) { if (KO) return; c.save(); c.translate(OFF[k][0], OFF[k][1]); c.globalAlpha *= a; c.fillStyle = c.strokeStyle = INK[k]; fn(); c.restore(); }
+function fillR(rec, fn, eo) { for (const [k, a] of rec) L(k, a, () => { c.beginPath(); fn(); c.fill(eo ? 'evenodd' : 'nonzero'); }); }
+function strokeP(k, w, a, fn, cap) { L(k, a, () => { c.lineWidth = w; c.lineJoin = 'round'; c.lineCap = cap || 'round'; c.beginPath(); fn(); c.stroke(); }); }
+function koDraw(fn, grow, eo) { c.save(); c.globalCompositeOperation = 'source-over'; c.fillStyle = c.strokeStyle = PAPER; c.lineWidth = grow; c.lineJoin = 'round'; c.beginPath(); fn(); c.fill(eo ? 'evenodd' : 'nonzero'); c.stroke(); c.restore(); }
+function shape(rec, fn, ow = 4, eo) { if (KO) { koDraw(fn, 16, eo); return; } fillR(rec, fn, eo); if (ow) strokeP('navy', ow, 1, fn); }
+function paperFill(fn) { if (KO) return; c.save(); c.globalCompositeOperation = 'source-over'; c.fillStyle = PAPER; c.beginPath(); fn(); c.fill(); c.restore(); }
+function paperLine(w, fn, dash) { c.save(); c.globalCompositeOperation = 'source-over'; c.strokeStyle = PAPER; c.lineWidth = w; c.lineCap = 'round'; if (dash) c.setLineDash(dash); c.beginPath(); fn(); c.stroke(); c.restore(); }
+function sticker(fn) { KO = true; fn(); KO = false; fn(); }
+const ell = (x, y, rx, ry, rot = 0) => () => { c.moveTo(x + rx, y); c.ellipse(x, y, rx, ry, rot, 0, TAU); };
+const circ = (x, y, r) => () => { c.moveTo(x + r, y); c.arc(x, y, r, 0, TAU); };
+const rr = (x, y, w, h, r) => () => c.roundRect(x, y, w, h, r);
+const poly = (p) => () => { p.forEach((q, i) => i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1])); c.closePath(); };
+const cap = (x1, y1, x2, y2, w) => () => { const dx = x2 - x1, dy = y2 - y1, l = Math.hypot(dx, dy); c.save(); c.translate(x1, y1); c.rotate(Math.atan2(dy, dx)); c.roundRect(-w / 2, -w / 2, l + w, w, w / 2); c.restore(); };
+const heart = (x, y, s) => () => { c.moveTo(x, y + s * .9); c.bezierCurveTo(x - s * 1.25, y + s * .1, x - s * .7, y - s * .95, x, y - s * .3); c.bezierCurveTo(x + s * .7, y - s * .95, x + s * 1.25, y + s * .1, x, y + s * .9); c.closePath(); };
+const star = (x, y, R, r, n = 5, rot = -Math.PI / 2) => () => { for (let i = 0; i < n * 2; i++) { const a = rot + i * Math.PI / n, d = i & 1 ? r : R; i ? c.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d) : c.moveTo(x + Math.cos(a) * d, y + Math.sin(a) * d); } c.closePath(); };
+const both = (...f) => () => f.forEach(g => g());
+const arcP = (x, y, r, a0, a1) => () => { c.moveTo(x + Math.cos(a0) * r, y + Math.sin(a0) * r); c.arc(x, y, r, a0, a1); };
+const lineP = (...p) => () => p.forEach((q, i) => i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]));
+function fur(x, y, r, seed, n = 18) { return () => { const R = rng(seed); for (let i = 0; i < n * 2; i++) { const a = i / (n * 2) * TAU, rr_ = r * ((i & 1) ? 1.13 + R() * .1 : .93 + R() * .03); const px = x + Math.cos(a) * rr_, py = y + Math.sin(a) * rr_ * .94; i ? c.lineTo(px, py) : c.moveTo(px, py); } c.closePath(); }; }
+
+/* halftone dot screen: fn(u,v) -> 0..1 coverage inside rect (x,y,w,h), optional clip path */
+function halftone(ink, x, y, w, h, fn, sp, ang, maxR, clipFn, alpha = 1) {
+  if (KO) return;
+  c.save(); c.beginPath(); if (clipFn) clipFn(); else c.rect(x, y, w, h); c.clip();
+  L(ink, alpha, () => {
+    const ca = Math.cos(ang), sa = Math.sin(ang), cx = x + w / 2, cy = y + h / 2, D = Math.hypot(w, h) / 2 + sp;
+    c.beginPath();
+    for (let gx = -D; gx <= D; gx += sp) for (let gy = -D; gy <= D; gy += sp) {
+      const px = cx + gx * ca - gy * sa, py = cy + gx * sa + gy * ca;
+      if (px < x - 4 || px > x + w + 4 || py < y - 4 || py > y + h + 4) continue;
+      const r = fn((px - x) / w, (py - y) / h) * maxR; if (r < .5) continue;
+      c.moveTo(px + r, py); c.arc(px, py, r, 0, TAU);
+    }
+    c.fill();
+  });
+  c.restore();
+}
+function T(s, x, y, size, rec, o = {}) {
+  const sx = o.sx ?? .68, al = o.al || 'left';
+  c.save(); c.translate(x, y); c.rotate(o.rot || 0); c.scale(sx, 1);
+  c.font = `900 ${size}px ${FONT}`; c.textAlign = al; c.textBaseline = 'alphabetic';
+  if (o.sh) for (const [k, a] of o.sh) L(k, a, () => c.fillText(s, o.shx ?? 6, o.shy ?? 6));
+  if (o.ko && !KO) { c.save(); c.globalCompositeOperation = 'source-over'; c.strokeStyle = PAPER; c.lineWidth = o.ko; c.lineJoin = 'round'; c.strokeText(s, 0, 0); c.restore(); }
+  for (const [k, a] of rec) L(k, a, () => c.fillText(s, 0, 0));
+  if (o.ow) L('navy', 1, () => { c.lineWidth = o.ow; c.lineJoin = 'round'; c.strokeText(s, 0, 0); });
+  c.restore();
+}
+
+/* ink recipes (overprints) */
+const R = {
+  skin: [['yellow', .92], ['pink', .3]], brown: [['yellow', .8], ['pink', .7], ['navy', .5]], tee: [['navy', .88], ['blue', .3]],
+  olive: [['yellow', .95], ['navy', .45], ['pink', .08]], lime: [['yellow', 1], ['teal', .75]], orange: [['yellow', 1], ['pink', .72]],
+  pinkTop: [['pink', 1]], jeans: [['blue', .85], ['navy', .15]], hair: [['navy', .9], ['blue', .35]], fur: [['navy', .3], ['blue', .06]],
+  pink: [['pink', 1]], teal: [['teal', 1]], yel: [['yellow', 1]], blue: [['blue', 1]], navy: [['navy', .85]],
+  green: [['yellow', 1], ['teal', .85]], violet: [['pink', .8], ['blue', .8]], red: [['pink', 1], ['yellow', .55]],
+  tint: [['teal', .22]], tintY: [['yellow', .35]], tintP: [['pink', .25]],
+};
+
+/* ====================== HEROES ====================== */
+function roxor(x, y, s, t) {
+  sticker(() => {
+    c.save(); c.translate(x, y + Math.sin(t * 4) * 2); c.scale(s, s);
+    const hop = Math.sin(t * 4) * 5;
+    // mullet tail
+    shape(R.brown, both(ell(-27, -246, 9, 17, .25), ell(27, -246, 9, 17, -.25)), 3);
+    // legs + shoes
+    shape(R.olive, rr(-46, -140, 40, 128, 10)); shape(R.olive, rr(6, -140, 40, 128, 10));
+    shape(R.lime, ell(-30, -12, 40, 18)); shape(R.lime, ell(30, -12, 40, 18));
+    strokeP('navy', 3, 1, lineP([-52, -8], [-10, -8])); strokeP('navy', 3, 1, lineP([10, -8], [52, -8]));
+    // left arm hanging
+    shape(R.skin, cap(-62, -214, -86, -168, 20)); shape(R.skin, cap(-86, -168, -80, -132, 20));
+    // tee
+    const smile = ell(0, -172, 26, 26);
+    shape(R.tee, both(rr(-66, -240, 132, 116, 22), smile), 4, true);
+    shape(R.tee, both(ell(-70, -218, 20, 26, .5), ell(70, -218, 20, 26, -.5)), 4);
+    // orange smiley
+    shape(R.orange, smile, 3.5);
+    strokeP('navy', 3.5, 1, both(circ(-9, -181, 1), circ(9, -181, 1)));
+    fillR([['navy', 1]], both(circ(-9, -181, 3.4), circ(9, -181, 3.4)));
+    strokeP('navy', 3.5, 1, arcP(0, -176, 14, .25, Math.PI - .25));
+    // raised arm with mic
+    shape(R.skin, cap(68, -220, 102, -190, 20)); shape(R.skin, cap(102, -190, 100, -250, 20));
+    shape(R.navy, cap(104, -266, 104, -300, 17), 3.5);
+    shape(R.green, rr(94, -278, 20, 12, 3), 3);
+    shape(R.navy, circ(104, -310, 14), 3.5);
+    // neck, head
+    shape(R.skin, rr(-14, -250, 28, 28, 6), 3.5);
+    shape(R.skin, both(ell(-43, -272, 8, 12), ell(43, -272, 8, 12)), 3);
+    shape(R.skin, ell(0, -277, 42, 48));
+    fillR([['navy', .22]], both(ell(-35, -284, 9, 24, .1), ell(35, -284, 9, 24, -.1)));
+    // stubble
+    if (!KO) { const q = rng(7); L('navy', .55, () => { c.beginPath(); for (let i = 0; i < 12; i++) { const a = .25 + q() * (Math.PI - .5), d = 20 + q() * 18; const px = Math.cos(a) * d * 1.05, py = -277 + Math.sin(a) * d * 1.1 + 6; if (py > -262 && Math.hypot(px, py + 250) > 7) { c.moveTo(px + 1.4, py); c.arc(px, py, 1.4, 0, TAU); } } c.fill(); }); }
+    fillR([['pink', .5]], both(circ(-29, -257, 8), circ(29, -257, 8)));
+    // mohawk swoop
+    const mo = () => { c.moveTo(-28, -312); c.bezierCurveTo(-40, -362, -6, -400, 46, -396); c.bezierCurveTo(78, -394, 100, -382, 112, -362); c.bezierCurveTo(92, -366, 74, -358, 62, -346); c.bezierCurveTo(70, -330, 50, -316, 30, -314); c.closePath(); };
+    shape(R.brown, mo, 4);
+    strokeP('yellow', 5, .9, () => { c.moveTo(-18, -332); c.bezierCurveTo(-14, -372, 26, -386, 70, -378); });
+    strokeP('navy', 2.5, .6, () => { c.moveTo(-8, -320); c.bezierCurveTo(0, -352, 36, -370, 80, -366); });
+    // eyes
+    for (const sx of [-1, 1]) {
+      const ex = sx * 16;
+      paperFill(ell(ex, -278, 10, 9)); strokeP('navy', 2.8, 1, ell(ex, -278, 10, 9));
+      fillR([['teal', .55], ['blue', .25]], circ(ex + 1.5, -278, 5.2)); fillR([['navy', 1]], circ(ex + 2, -278, 2.6));
+    }
+    strokeP('navy', 4.5, 1, lineP([-29, -293], [-8, -294])); strokeP('navy', 4.5, 1, lineP([7, -299], [27, -306]));
+    strokeP('navy', 3, .8, lineP([2, -276], [-2, -262], [5, -261]));
+    // cheeky smirk with teeth
+    const mouth = () => { c.moveTo(-15, -250); c.quadraticCurveTo(4, -230, 21, -254); c.quadraticCurveTo(4, -248, -15, -250); };
+    paperFill(mouth); strokeP('navy', 3.2, 1, mouth);
+    strokeP('navy', 2, .9, lineP([2, -246], [2, -240]));
+    c.restore();
+  });
+}
+function jasmin(x, y, s, t) {
+  sticker(() => {
+    c.save(); c.translate(x, y + Math.sin(t * 4 + 1.6) * 2); c.scale(s, s);
+    const sw = Math.sin(t * 3) * 7;
+    // ponytail behind
+    const tail = () => { c.moveTo(20, -330); c.bezierCurveTo(34, -392, 104, -410 + sw, 134, -352 + sw); c.bezierCurveTo(146, -320 + sw, 126, -288 + sw, 108, -262 + sw); c.bezierCurveTo(124, -304 + sw, 116, -338, 86, -350); c.bezierCurveTo(64, -358, 46, -346, 36, -326); c.closePath(); };
+    shape(R.hair, tail, 4);
+    strokeP('blue', 3, .8, () => { c.moveTo(48, -352); c.bezierCurveTo(84, -382 + sw, 118, -352 + sw, 120, -322 + sw); });
+    // legs jeans + shoes
+    shape(R.jeans, rr(-42, -148, 36, 136, 10)); shape(R.jeans, rr(6, -148, 36, 136, 10));
+    shape([['pink', .35]], ell(-26, -12, 38, 17)); shape([['pink', .35]], ell(26, -12, 38, 17));
+    strokeP('pink', 4, 1, lineP([-48, -12], [-6, -12])); strokeP('pink', 4, 1, lineP([6, -12], [48, -12]));
+    // right arm hanging (viewer right), left arm raised with mic
+    shape(R.skin, cap(56, -214, 76, -170, 18)); shape(R.skin, cap(76, -170, 64, -140, 18));
+    shape(R.skin, cap(-58, -216, -92, -190, 18)); shape(R.skin, cap(-92, -190, -92, -250, 18));
+    shape(R.navy, cap(-94, -264, -94, -298, 16), 3.5);
+    shape(R.pink, rr(-103, -276, 18, 12, 3), 3);
+    shape(R.navy, circ(-94, -308, 14), 3.5);
+    // midriff + top
+    shape(R.skin, rr(-50, -176, 100, 44, 10), 3.5);
+    shape(R.pinkTop, () => { c.moveTo(-54, -236); c.lineTo(54, -236); c.lineTo(58, -168); c.quadraticCurveTo(0, -158, -58, -168); c.closePath(); });
+    strokeP('navy', 3, 1, lineP([-34, -236], [-30, -258])); strokeP('navy', 3, 1, lineP([34, -236], [30, -258]));
+    // necklace and heart
+    strokeP('navy', 2.5, .9, () => { c.moveTo(-26, -250); c.quadraticCurveTo(0, -208, 26, -250); });
+    paperFill(heart(0, -222, 10)); shape(R.red, heart(0, -222, 9), 3);
+    // neck, head
+    shape(R.skin, rr(-13, -254, 26, 28, 6), 3.5);
+    shape(R.skin, both(ell(-41, -274, 7, 11), ell(41, -274, 7, 11)), 3);
+    strokeP('navy', 3, 1, circ(-43, -258, 8)); strokeP('yellow', 2, 1, circ(-43, -258, 8));
+    shape(R.skin, ell(0, -279, 40, 47));
+    fillR([['pink', .5]], both(circ(-27, -260, 8), circ(27, -260, 8)));
+    // hair cap and fringe
+    shape(R.hair, () => { c.moveTo(-42, -270); c.bezierCurveTo(-52, -330, -20, -338, 8, -336); c.bezierCurveTo(36, -334, 52, -318, 42, -268); c.bezierCurveTo(36, -296, 26, -308, 6, -306); c.bezierCurveTo(-10, -304, -30, -300, -42, -270); c.closePath(); }, 4);
+    strokeP('blue', 3, .9, () => { c.moveTo(-34, -318); c.bezierCurveTo(-20, -330, 0, -330, 16, -326); });
+    // scrunchie
+    shape(R.pink, ell(27, -327, 15, 10, -.5), 3.5);
+    strokeP('navy', 2.5, .8, lineP([17, -330], [34, -322]));
+    // eyes
+    for (const sx of [-1, 1]) {
+      const ex = sx * 16;
+      paperFill(ell(ex, -280, 9.5, 9)); strokeP('navy', 2.8, 1, ell(ex, -280, 9.5, 9));
+      fillR([['navy', 1]], circ(ex + 1, -280, 5));
+      strokeP('navy', 3, 1, lineP([ex + sx * 9, -285], [ex + sx * 14, -290]));
+    }
+    strokeP('navy', 3.6, 1, () => { c.moveTo(-28, -296); c.quadraticCurveTo(-18, -304, -7, -297); });
+    strokeP('navy', 3.6, 1, () => { c.moveTo(7, -297); c.quadraticCurveTo(18, -304, 28, -296); });
+    strokeP('navy', 2.5, .7, lineP([0, -278], [-2, -266], [3, -265]));
+    // warm smile
+    const sm = () => { c.moveTo(-14, -254); c.quadraticCurveTo(0, -234, 14, -254); c.quadraticCurveTo(0, -250, -14, -254); };
+    paperFill(sm); fillR([['pink', .6]], sm); strokeP('navy', 3, 1, sm);
+    c.restore();
+  });
+}
+
+/* ====================== ENEMIES ====================== */
+function enemy(x, y, r, kind, t, seed) {
+  const ph = t * 3 + seed; y += Math.sin(ph) * 3;
+  const tint = { fuzz: [['navy', .28]], zip: [['navy', .22], ['teal', .35]], brick: [['navy', .3], ['yellow', .3]], echo: [['navy', .25], ['blue', .25]], mini: [['navy', .26]], drone: [['navy', .24], ['pink', .22]], rager: [['navy', .25], ['pink', .55]], boss: [['navy', .55], ['blue', .25]] }[kind];
+  const boss = kind === 'boss', gl = Math.sin(t * 6 + seed) > .75 ? 7 : 0;
+  sticker(() => {
+    c.save(); c.translate(x, y);
+    const body = fur(0, 0, r, seed, boss ? 24 : 18);
+    if (!KO) {
+      const g = kind === 'echo' ? 18 : 8 + gl;
+      c.save(); c.translate(-g, 0); strokeP('teal', 3.5, .9, body); c.restore();
+      c.save(); c.translate(g, 0); strokeP('pink', 3.5, .9, body); c.restore();
+    }
+    if (kind === 'zip') { for (let i = 0; i < 4; i++) strokeP('navy', 3.5, .7, lineP([-r * 1.2 - i * 6, -r * .5 + i * r * .35], [-r * 2.1 - i * 9, -r * .5 + i * r * .35])); }
+    shape(R.fur, both(ell(-r * .4, r * .92, r * .3, r * .17), ell(r * .4, r * .92, r * .3, r * .17)), 3);
+    if (kind === 'drone') { strokeP('navy', 3, 1, lineP([0, -r * .95], [0, -r * 1.25])); strokeP('navy', 5, 1, lineP([-r * Math.cos(t * 18), -r * 1.28], [r * Math.cos(t * 18), -r * 1.28])); }
+    shape(tint, body, boss ? 5 : 3.5);
+    if (!KO) {
+      const q = rng(seed + 9); L('navy', .4, () => { c.lineWidth = 2; c.lineCap = 'round'; c.beginPath(); for (let i = 0; i < 9; i++) { const a = q() * TAU, d = r * (.45 + q() * .4); const px = Math.cos(a) * d, py = Math.sin(a) * d * .9; c.moveTo(px - 4, py - 3); c.lineTo(px, py + 3); c.lineTo(px + 4, py - 3); } c.stroke(); });
+    }
+    if (kind === 'brick') shape(R.orange, poly([[-r * .8, -r * .55], [-r * .7, -r * 1.05], [r * .7, -r * 1.05], [r * .8, -r * .55]]), 3.5);
+    if (kind === 'brick') strokeP('navy', 2, .8, lineP([-r * .75, -r * .8], [r * .75, -r * .8]));
+    if (boss) shape(R.yel, poly([[-r * .7, -r * .85], [-r * .62, -r * 1.35], [-r * .3, -r * 1.0], [0, -r * 1.5], [r * .3, -r * 1.0], [r * .62, -r * 1.35], [r * .7, -r * .85]]), 4);
+    const eo = r * (boss ? .3 : .27), ey = -r * .18;
+    for (const sx of [-1, 1]) {
+      const ex = sx * r * .34;
+      paperFill(circ(ex, ey, eo)); strokeP('navy', boss ? 4 : 3, 1, circ(ex, ey, eo));
+      fillR([['navy', 1]], circ(ex + Math.cos(ph * .8) * eo * .35, ey + Math.sin(ph * 1.1) * eo * .35, eo * .42));
+      if (kind === 'rager' || boss) strokeP('navy', 5, 1, lineP([ex - sx * eo * 1.1, ey - eo * 1.5 + 0], [ex + sx * eo * .3, ey - eo * .95]));
+    }
+    // mouth
+    const my = r * .42;
+    if (boss || kind === 'rager') {
+      const m = () => { c.moveTo(-r * .45, my - 4); c.quadraticCurveTo(0, my + r * .45, r * .45, my - 4); c.closePath(); };
+      paperFill(m); strokeP('navy', 3.5, 1, m);
+      strokeP('navy', 2.5, 1, () => { for (let i = -3; i <= 3; i++) { c.moveTo(i * r * .13, my + (i * i) * -.5); c.lineTo(i * r * .13 + r * .06, my + r * .14); } });
+    } else if (kind === 'zip' || kind === 'mini') {
+      const m = ell(0, my, r * .12, r * .1); paperFill(m); strokeP('navy', 3, 1, m);
+    } else strokeP('navy', 3.2, 1, () => { c.moveTo(-r * .3, my); c.bezierCurveTo(-r * .15, my + 7, -r * .05, my - 6, r * .1, my + 2); c.lineTo(r * .3, my - 2); });
+    if (boss) {
+      // headphones band + hp bar
+      strokeP('pink', 9, 1, arcP(0, -r * .1, r * 1.1, Math.PI * 1.1, Math.PI * 1.9));
+      shape(R.pink, both(rr(-r * 1.28, -r * .2, r * .24, r * .5, 8), rr(r * 1.04, -r * .2, r * .24, r * .5, 8)), 4);
+    }
+    c.restore();
+  });
+}
+
+/* ====================== TURRETS ====================== */
+function stars(n, y) { for (let i = 0; i < n; i++) { const px = (i - (n - 1) / 2) * 17; shape(R.yel, star(px, y, 8, 3.6), 2); } }
+function turret(type, x, y, lv, t, seed = 0, sc = 1) {
+  const a = Math.sin(t * 1.3 + seed) * .25;
+  sticker(() => {
+    c.save(); c.translate(x, y); c.scale(sc, sc);
+    if (!KO && lv >= 3) { strokeP('pink', 3, .9, circ(0, 0, 66 + Math.sin(t * 3) * 2)); c.save(); c.setLineDash([6, 8]); strokeP('teal', 3, 1, circ(0, 0, 72)); c.restore(); }
+    shape([['navy', .18]], ell(0, 34, 58, 18), 0);
+    switch (type) {
+      case 'kick': {
+        const ang = -.9 + a, rc = Math.max(0, Math.sin(t * 5 + seed)) * -5;
+        c.save(); c.translate(0, 4); c.rotate(ang);
+        shape(R.blue, rr(6 + rc, -14, 58, 28, 6)); shape(R.teal, rr(52 + rc, -19, 14, 38, 5), 3.5);
+        c.restore();
+        shape(R.pink, circ(0, 6, 40)); shape(R.yel, circ(0, 6, 27), 3.5); strokeP('navy', 3, .9, circ(0, 6, 17));
+        shape(R.pink, star(0, 6, 9, 4), 2.5);
+        for (let i = 0; i < 8; i++) { const q = i / 8 * TAU; strokeP('navy', 3, 1, lineP([Math.cos(q) * 34, 6 + Math.sin(q) * 34], [Math.cos(q) * 42, 6 + Math.sin(q) * 42])); }
+        break;
+      }
+      case 'snare': {
+        shape(R.yel, rr(-46, -2, 92, 40, 8)); fillR([['teal', .8]], rr(-46, 22, 92, 10, 3));
+        for (let i = -3; i <= 3; i++) strokeP('navy', 2.5, .8, lineP([i * 13, 0], [i * 13 + 5, 22]));
+        shape([['pink', .9]], ell(0, -4, 46, 17)); paperFill(ell(0, -4, 36, 11)); strokeP('navy', 3, 1, ell(0, -4, 36, 11));
+        const sw = Math.sin(t * 7 + seed) * .25;
+        shape(R.navy, cap(-30, -34 + sw * 20, 12, -6, 7), 3); shape(R.navy, cap(30, -34 - sw * 20, -12, -6, 7), 3);
+        break;
+      }
+      case 'hat': {
+        strokeP('navy', 5, 1, lineP([0, 34], [0, 10]));
+        shape(R.yel, ell(0, -34 - Math.abs(Math.sin(t * 9)) * 3, 50, 10), 3.5);
+        shape(R.blue, circ(0, 0, 30));
+        for (let i = 0; i < 3; i++) { const q = t * 7 + i * TAU / 3; const px = Math.cos(q) * 15, py = Math.sin(q) * 15; paperFill(circ(px, py, 8.5)); strokeP('navy', 3, 1, circ(px, py, 8.5)); fillR([['navy', 1]], circ(px, py, 3.5)); }
+        shape(R.yel, ell(0, 30, 52, 9), 3.5);
+        break;
+      }
+      case 'sub': {
+        const p = 1 + Math.sin(t * 8 + seed) * .06;
+        shape(R.blue, rr(-48, -48, 96, 96, 14));
+        for (const [px, py] of [[-38, -38], [38, -38], [-38, 38], [38, 38]]) fillR([['yellow', 1]], circ(px, py, 4.5));
+        shape(R.pink, circ(0, 0, 35 * p)); strokeP('navy', 3, .9, circ(0, 0, 25 * p)); shape(R.yel, circ(0, 0, 12 * p), 3);
+        if (!KO) for (let k = 0; k < 2; k++) strokeP('teal', 3.5, 1 - ((t * 1.2 + k * .5) % 1), circ(0, 0, 52 + ((t * 1.2 + k * .5) % 1) * 22));
+        break;
+      }
+      case 'mic': {
+        shape(R.blue, cap(0, -2, 0, 32, 16), 3.5); shape(R.navy, ell(0, 34, 26, 8), 3);
+        shape(R.pink, circ(0, -22, 23));
+        strokeP('navy', 2.5, .8, both(arcP(0, -22, 23, .4, 2.7), lineP([-22, -22], [22, -22])));
+        shape(R.yel, rr(-15, -4, 30, 8, 3), 3);
+        if (!KO) for (let k = 0; k < 3; k++) { const f = (t * 1.1 + k / 3) % 1; for (const sx of [-1, 1]) strokeP(k % 2 ? 'pink' : 'teal', 4, 1 - f, arcP(0, -22, 34 + f * 30, sx > 0 ? -.8 : Math.PI - .8 + 0.0, sx > 0 ? .8 : Math.PI + .8)); }
+        break;
+      }
+      case 'synth': {
+        shape(R.teal, rr(-54, -22, 108, 56, 8));
+        shape(R.navy, rr(-44, -16, 40, 18, 3), 3); strokeP('yellow', 3, 1, () => { c.moveTo(-40, -6); for (let i = 0; i < 8; i++) c.lineTo(-40 + i * 5 + 2.5, -6 + (i & 1 ? 5 : -5) * (1 + Math.sin(t * 6 + i) * .3)); });
+        for (let i = 0; i < 3; i++) shape(R.yel, circ(10 + i * 16, -8, 5.5), 2.5);
+        paperFill(rr(-48, 8, 96, 22, 2));
+        for (let i = 0; i < 8; i++) strokeP('navy', 2, 1, lineP([-48 + i * 12, 8], [-48 + i * 12, 30]));
+        for (const i of [0, 1, 3, 4, 5]) fillR([['navy', 1]], rr(-48 + i * 12 + 8, 8, 8, 13, 1));
+        strokeP('navy', 3, 1, rr(-48, 8, 96, 22, 2));
+        if (!KO) { const f = (t * 1.3) % 1; strokeP('pink', 4, 1 - f, () => { c.moveTo(-50, -40 - f * 8); for (let i = 0; i <= 20; i++) c.lineTo(-50 + i * 5, -40 - f * 8 + Math.sin(i * .9 + t * 8) * 6); }); }
+        break;
+      }
+      case 'horn': {
+        shape(R.pink, rr(-52, -14, 30, 46, 8)); shape(R.yel, rr(-44, -22, 14, 10, 3), 3);
+        shape(R.yel, poly([[-22, -4], [22, -24], [22, 32 - 8], [-22, 14]]));
+        const m = ell(24, 4, 12, 30, 0); shape(R.orange, m); paperFill(ell(26, 4, 6, 20)); strokeP('navy', 3, 1, ell(26, 4, 6, 20));
+        if (!KO) for (let k = 0; k < 3; k++) { const f = (t * 1.4 + k / 3) % 1; strokeP(k % 2 ? 'pink' : 'blue', 4, 1 - f, arcP(26, 4, 20 + f * 34, -.9, .9)); }
+        break;
+      }
+      case 'scratch': {
+        shape(R.blue, rr(-52, -46, 104, 90, 10));
+        shape(R.navy, circ(-4, 0, 38));
+        for (const rad of [32, 26, 20]) strokeP('blue', 1.8, .9, circ(-4, 0, rad));
+        shape(R.pink, circ(-4, 0, 13), 3); fillR([['yellow', 1]], circ(-4 + Math.cos(t * 3) * 7, Math.sin(t * 3) * 7, 3));
+        shape(R.yel, circ(40, -36, 6), 3); strokeP('navy', 4.5, 1, lineP([40, -36], [14, 0])); shape(R.teal, rr(6, -2, 14, 8, 2), 3);
+        break;
+      }
+      case 'cowbell': {
+        const ang = -.55 + a * .6;
+        shape(R.yel, poly([[-26, -14], [26, -14], [38, 34], [-38, 34]]));
+        shape(R.yel, rr(-12, -26, 24, 14, 4), 3.5); paperFill(ell(0, 14, 9, 7)); strokeP('navy', 3, 1, ell(0, 14, 9, 7));
+        c.save(); c.translate(6, -2); c.rotate(ang);
+        shape(R.navy, rr(0, -6, 70, 12, 3), 3.5); shape(R.teal, rr(14, -16, 22, 10, 4), 3);
+        shape(R.pink, rr(66, -9, 8, 18, 2), 3);
+        if (!KO) { c.save(); c.setLineDash([5, 6]); strokeP('pink', 2.5, 1, lineP([76, 0], [150, 0])); c.restore(); }
+        c.restore();
+        break;
+      }
+    }
+    stars(lv, 52);
+    c.restore();
+  });
+}
+
+/* ====================== EFFECTS ====================== */
+function burst(x, y, r, t, seed, hot = false) {
+  const wob = 1 + Math.sin(t * 12 + seed) * .06;
+  c.save(); c.translate(x, y);
+  fillR([['pink', .95]], star(0, 0, r * wob, r * .55, 11, seed));
+  fillR([['yellow', 1]], star(0, 0, r * .72 * wob, r * .38, 11, seed + .2));
+  if (hot) fillR([['teal', .5]], star(0, 0, r * .4, r * .22, 9, seed));
+  strokeP('navy', 3, .9, star(0, 0, r * wob, r * .55, 11, seed));
+  c.restore();
+}
+function dmg(s, x, y, size, t, rec, rot = 0) {
+  const f = Math.sin(t * 2.5 + x) * 4;
+  T(s, x, y + f, size, rec || R.yel, { al: 'center', ow: size * .12, ko: size * .3, sh: [['teal', 1]], shx: 4, shy: 4, rot, sx: .74 });
+}
+function bullet(type, x, y, ang, t, seed) {
+  c.save(); c.translate(x, y); c.rotate(ang);
+  if (type === 'kick') { shape(R.pink, circ(0, 0, 11), 3); strokeP('pink', 5, .7, lineP([-14, 0], [-44, 0])); strokeP('yellow', 3, 1, lineP([-14, 5], [-34, 7])); }
+  else if (type === 'snare') { shape(R.yel, star(0, 0, 13, 5.5, 4, t * 6), 2.5); }
+  else if (type === 'hat') { for (let i = 0; i < 3; i++) shape(R.teal, circ(-i * 20, (i % 2 ? 3 : -3), 5), 2.5); }
+  else if (type === 'cow') { strokeP('navy', 4, 1, lineP([-30, 0], [10, 0])); shape(R.pink, poly([[10, 0], [-2, -6], [-2, 6]]), 2.5); }
+  else if (type === 'scratch') { shape(R.navy, circ(0, 0, 11), 2.5); fillR([['pink', 1]], circ(0, 0, 4)); }
+  else if (type === 'horn') { strokeP('blue', 4, 1, arcP(-6, 0, 14, -.9, .9)); strokeP('pink', 4, .8, arcP(-6, 0, 26, -.8, .8)); }
+  else if (type === 'mic') { strokeP('pink', 4, 1, arcP(0, 0, 12, -1, 1)); strokeP('teal', 4, .9, arcP(0, 0, 22, -.9, .9)); }
+  else if (type === 'synth') { strokeP('teal', 4, 1, () => { c.moveTo(-30, 0); for (let i = 0; i <= 12; i++) c.lineTo(-30 + i * 5, Math.sin(i * 1.6 + t * 10) * 7); }); }
+  c.restore();
+}
+function coin(x, y, r, t, spin = false) {
+  c.save(); c.translate(x, y);
+  const k = spin ? Math.abs(Math.cos(t * 2)) * .85 + .15 : 1; c.scale(k, 1);
+  sticker(() => {
+    shape(R.yel, circ(0, 0, r), 4); strokeP('navy', 2.5, .8, circ(0, 0, r * .72));
+    shape(R.orange, both(ell(-r * .18, r * .22, r * .2, r * .15, -.4)), 2.5);
+    strokeP('navy', 3, 1, lineP([r * .02, r * .2], [r * .02, -r * .45], [r * .32, -r * .3]));
+  });
+  c.restore();
+}
+function diamond(x, y, r) {
+  c.save(); c.translate(x, y);
+  sticker(() => {
+    const g = poly([[-r, -r * .3], [-r * .5, -r * .85], [r * .5, -r * .85], [r, -r * .3], [0, r]]);
+    shape(R.teal, g, 4);
+    fillR([['blue', .85]], poly([[-r * .5, -r * .85], [0, -r * .3], [r * .5, -r * .85]]));
+    fillR([['blue', .6]], poly([[0, -r * .3], [r, -r * .3], [0, r]]));
+    strokeP('navy', 2.5, .9, both(lineP([-r, -r * .3], [r, -r * .3]), lineP([-r * .5, -r * .85], [0, -r * .3], [r * .5, -r * .85]), lineP([0, -r * .3], [0, r])));
+  });
+  c.restore();
+}
+function record(x, y, r, t) {
+  c.save(); c.translate(x, y);
+  sticker(() => {
+    shape(R.navy, circ(0, 0, r), 4);
+    for (const k of [.8, .66, .52]) strokeP('blue', 2, .9, circ(0, 0, r * k));
+    shape(R.pink, circ(0, 0, r * .34), 3); paperFill(circ(0, 0, r * .07));
+    strokeP('yellow', 4, 1, arcP(0, 0, r * .9, t * 3, t * 3 + .8));
+  });
+  c.restore();
+}
+
+/* ====================== STATIC LAYER ====================== */
+const BX = 90, BY = 480, TS = 150; // board origin and tile size
+const cx_ = (col) => BX + col * TS + TS / 2, ry_ = (row) => BY + row * TS + TS / 2;
+const PATH = [[-60, ry_(1)], [cx_(5), ry_(1)], [cx_(5), ry_(2)], [-60, ry_(2)]];
+
+function drawStatic() {
+  c.fillStyle = PAPER; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'multiply';
+  // paper fibres
+  const q = rng(3); c.lineWidth = 1;
+  for (let i = 0; i < 700; i++) { const x = q() * W, y = q() * H, l = 6 + q() * 16, a = q() * TAU; c.strokeStyle = `rgba(140,110,70,${.05 + q() * .08})`; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + Math.cos(a) * l / 2 + 3, y + Math.sin(a) * l / 2 + 3, x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke(); }
+
+  /* ---- BACKDROP 0..480 ---- */
+  c.save(); c.beginPath(); c.rect(0, 0, W, BY); c.clip();
+  for (let i = 0; i < 28; i++) {
+    const a0 = i / 28 * TAU, a1 = (i + .5) / 28 * TAU;
+    const wedge = () => { c.moveTo(540, 500); c.lineTo(540 + Math.cos(a0) * 1500, 500 + Math.sin(a0) * 1500); c.lineTo(540 + Math.cos(a1) * 1500, 500 + Math.sin(a1) * 1500); c.closePath(); };
+    fillR(i % 2 ? [['pink', .92]] : [['yellow', .9]], wedge);
+    if (i % 4 === 0) fillR([['teal', .22]], wedge);
+  }
+  halftone('blue', 0, 0, W, BY, (u, v) => Math.pow(1 - v, 1.6) * 1.0, 13, .5, 6.4);
+  halftone('teal', 0, 0, W, BY, (u, v) => Math.pow(Math.abs(u - .5) * 2, 2.2) * .85, 11, 1.1, 5.2);
+  // sun
+  fillR([['yellow', 1]], circ(540, 500, 190)); halftone('pink', 340, 300, 400, 200, (u, v) => v * v * 1.1, 10, .8, 5, circ(540, 500, 190), .9);
+  strokeP('navy', 5, .9, circ(540, 500, 190));
+  // truss and lights
+  strokeP('navy', 7, 1, lineP([0, 128], [W, 128])); strokeP('navy', 7, 1, lineP([0, 164], [W, 164]));
+  strokeP('navy', 4, 1, () => { for (let x = 0; x < W; x += 54) { c.moveTo(x, 128); c.lineTo(x + 27, 164); c.lineTo(x + 54, 128); } });
+  for (const [lx, col, tx] of [[150, 'teal', 400], [370, 'yellow', 560], [710, 'yellow', 520], [930, 'teal', 680]]) {
+    fillR([[col, .32]], poly([[lx - 10, 168], [lx + 10, 168], [tx + 90, 452], [tx - 90, 452]]));
+    shape(R.navy, rr(lx - 16, 160, 32, 26, 6), 3);
+  }
+  // speaker stacks
+  for (const sx of [24, 880]) for (let k = 0; k < 3; k++) {
+    const by = 250 + k * 66; shape(R.blue, rr(sx, by, 176, 62, 6), 4);
+    for (const cxx of [sx + 46, sx + 130]) { shape(R.pink, circ(cxx, by + 31, 22), 3); strokeP('navy', 2.5, .9, circ(cxx, by + 31, 11)); }
+  }
+  c.restore();
+  // stage floor
+  shape(R.navy, rr(-20, 436, W + 40, 50, 0), 5);
+  fillR([['pink', 1]], rr(-20, 436, W + 40, 10, 0));
+  for (let x = 20; x < W; x += 56) { paperFill(circ(x, 468, 6)); fillR([['yellow', 1]], circ(x, 468, 6)); }
+
+  /* ---- BOARD 480..1086 ---- */
+  halftone('teal', 0, BY, W, 606, (u, v) => .35 + Math.sin(u * 40) * .0, 22, .3, 3.2, null, .35);
+  fillR([['blue', .08]], rr(0, BY + 6, W, 600, 0));
+  // tiles
+  for (let r = 0; r < 4; r++) for (let col = 0; col < 6; col++) {
+    const x = BX + col * TS + 5, y = BY + r * TS + 5, onPath = r === 1 || r === 2;
+    if (onPath) continue;
+    const alt = (r + col) & 1;
+    fillR(alt ? [['teal', .26]] : [['yellow', .4]], rr(x, y, TS - 10, TS - 10, 16));
+    strokeP('navy', 3, .85, rr(x, y, TS - 10, TS - 10, 16));
+    halftone(alt ? 'blue' : 'pink', x, y, TS - 10, TS - 10, (u, v) => (u + v) * .5 * .9, 9, .7, 3.2, rr(x, y, TS - 10, TS - 10, 16), .6);
+  }
+  // path
+  const pth = () => { PATH.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); };
+  c.lineJoin = 'round';
+  strokeP('navy', 118, .95, pth, 'butt'); strokeP('blue', 118, .5, pth, 'butt');
+  paperLine(4, pth, [22, 20]);
+  c.save(); c.globalCompositeOperation = 'source-over';
+  c.strokeStyle = PAPER; c.lineWidth = 6; c.beginPath(); PATH.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.setLineDash([18, 22]); c.stroke(); c.restore();
+  // entry and exit arrows
+  T('IN', 12, ry_(1) - 62, 30, R.pink, { ko: 8 }); T('OUT', 12, ry_(2) + 90, 30, R.pink, { ko: 8 });
+
+  /* ---- HUD ---- */
+  // top plate
+  fillR([['navy', .0]], rr(0, 0, W, 110, 0));
+  paperFill(rr(0, 0, W, 112, 0));
+  fillR([['blue', .85]], rr(0, 0, W, 104, 0)); halftone('pink', 0, 0, W, 104, (u, v) => v * .9, 9, .3, 4);
+  strokeP('navy', 5, 1, lineP([0, 106], [W, 106]));
+  // hp bar
+  shape(R.pink, heart(54, 52, 24), 4);
+  paperFill(rr(92, 30, 330, 44, 22)); strokeP('navy', 4.5, 1, rr(92, 30, 330, 44, 22));
+  c.save(); c.beginPath(); c.roundRect(92, 30, 330, 44, 22); c.clip(); fillR([['pink', 1]], rr(92, 30, 330 * .72, 44, 0)); fillR([['yellow', .6]], rr(92, 30, 330 * .72, 15, 0)); c.restore();
+  T('18 / 25', 257, 64, 34, [['navy', 1]], { al: 'center', sx: .72 });
+  // wave ticket
+  const tick = () => { c.moveTo(380, 24); c.lineTo(700, 24); c.arc(700, 52, 28, -Math.PI / 2, Math.PI / 2, true); c.lineTo(380, 80); c.arc(380, 52, 28, Math.PI / 2, Math.PI * 1.5, true); c.closePath(); };
+  paperFill(tick); shape([['yellow', .75]], tick, 5);
+  T('WAVE 07', 490, 68, 50, [['navy', 1]], { al: 'center', sx: .66 });
+  T('/12', 622, 66, 30, [['navy', 1]], { al: 'center', sx: .7 });
+  shape(R.pink, star(432, 52, 14, 6), 3);
+  // coins
+  paperFill(rr(752, 28, 286, 48, 24)); shape([['yellow', .75]], rr(752, 28, 286, 48, 24), 4.5);
+  T('1,240', 940, 66, 38, [['navy', 1]], { al: 'center', sx: .72 });
+
+  // bottom HUD plate
+  fillR([['blue', .0]], rr(0, 1086, W, 200, 0));
+  paperFill(rr(0, 1084, W, 200, 0));
+  fillR([['teal', .2]], rr(0, 1086, W, 200, 0)); halftone('blue', 0, 1086, W, 200, (u, v) => .85 - v, 10, .5, 4);
+  strokeP('navy', 5, 1, lineP([0, 1086], [W, 1086]));
+  // hype bar
+  shape(R.pink, rr(160, 1098, 760, 26, 13), 4);
+  paperFill(rr(160, 1098, 760, 26, 13)); c.save(); c.beginPath(); c.roundRect(160, 1098, 760, 26, 13); c.clip();
+  fillR([['pink', 1]], rr(160, 1098, 760 * .68, 26, 0)); fillR([['yellow', .9]], rr(160 + 760 * .4, 1098, 760 * .28, 26, 0));
+  strokeP('navy', 2, .6, () => { for (let i = 1; i < 16; i++) { c.moveTo(160 + i * 47.5, 1098); c.lineTo(160 + i * 47.5, 1124); } }); c.restore();
+  strokeP('navy', 4.5, 1, rr(160, 1098, 760, 26, 13));
+  T('HYPE', 36, 1122, 36, R.pink, { ko: 12 }); T('68%', 934, 1122, 30, [['navy', 1]], { ko: 10 });
+  // DROP button
+  shape(R.pink, circ(540, 1196, 76), 6); shape(R.yel, circ(540, 1196, 60), 4);
+  halftone('pink', 480, 1136, 120, 120, (u, v) => v * .9, 7, .8, 3, circ(540, 1196, 60));
+  strokeP('navy', 3, .6, circ(540, 1196, 68));
+  T('DROP', 540, 1214, 60, R.pink, { al: 'center', sx: .7, ow: 3, ko: 16, sh: [['navy', 1]], shx: 3, shy: 3 });
+  // ability buttons
+  for (const [bx, col, ico, nm, cd] of [[250, R.green, 'bolt', 'MOHAWK', .66], [830, R.pink, 'heart', 'HEART', .3]]) {
+    shape(col, circ(bx, 1196, 56), 5);
+    strokeP('navy', 10, .85, arcP(bx, 1196, 66, -Math.PI / 2, -Math.PI / 2 + TAU * cd), 'butt');
+    strokeP('pink', 3, 1, arcP(bx, 1196, 66, -Math.PI / 2 + TAU * cd, -Math.PI / 2 + TAU), 'butt');
+    if (ico === 'bolt') shape(R.navy, poly([[bx + 8, 1160], [bx - 22, 1204], [bx - 3, 1204], [bx - 10, 1234], [bx + 22, 1186], [bx + 3, 1186]]), 3);
+    else { paperFill(heart(bx, 1192, 24)); shape(R.red, heart(bx, 1192, 22), 4); }
+    T(nm, bx, 1274, 26, [['navy', 1]], { al: 'center', sx: .72, ko: 10 });
+  }
+  // frame
+  strokeP('navy', 8, 1, rr(4, 4, W - 8, 1274, 0));
+
+  /* ---- CAST SHEET 1286..1920 ---- */
+  c.save(); c.beginPath(); c.rect(0, 1286, W, H - 1286); c.clip();
+  fillR([['yellow', .28]], rr(0, 1286, W, 640, 0));
+  halftone('pink', 0, 1286, W, 640, (u, v) => Math.pow(Math.abs(u - .5) * 2, 1.6) * 1.0, 14, .45, 7.4, null, .75);
+  halftone('teal', 0, 1286, W, 640, (u, v) => Math.pow(v, 2.2), 12, 1.2, 5.2, null, .6);
+  c.restore();
+  // perforation
+  strokeP('navy', 3, .9, lineP([0, 1286], [W, 1286]));
+  c.save(); c.globalCompositeOperation = 'source-over'; c.fillStyle = PAPER; for (let x = 12; x < W; x += 36) { c.beginPath(); c.arc(x, 1286, 7, 0, TAU); c.fill(); } c.restore();
+  // hero spots
+  for (const hx of [200, 880]) {
+    fillR([['yellow', 1]], circ(hx, 1500, 190)); halftone(hx < 500 ? 'pink' : 'blue', hx - 190, 1310, 380, 380, (u, v) => v * 1.05, 10, .7, 5.2, circ(hx, 1500, 190));
+    strokeP('navy', 5, .9, circ(hx, 1500, 190));
+  }
+  // title lockup
+  const tx = 540;
+  T('DROP', tx, 1442, 165, R.pink, { al: 'center', sx: .6, ow: 6, ko: 18, sh: [['teal', 1]], shx: 8, shy: 8 });
+  T('BASS', tx, 1618, 165, R.blue, { al: 'center', sx: .6, ow: 6, ko: 18, sh: [['pink', 1]], shx: 8, shy: 8 });
+  const rib1 = poly([[392, 1452], [688, 1444], [692, 1488], [396, 1496]]); paperFill(rib1); shape([['yellow', .8]], rib1, 5);
+  T('THE', tx, 1486, 46, R.pink, { al: 'center', sx: .66, rot: -.03 });
+  // style ribbon
+  const rib2 = poly([[352, 1636], [728, 1628], [732, 1674], [356, 1682]]); paperFill(rib2); shape([['yellow', .8]], rib2, 5);
+  T('RISOGRAPH POSTER', tx, 1668, 38, R.pink, { al: 'center', sx: .62, rot: -.02 });
+  T('4 INK GIG PRINT', tx, 1312, 24, [['navy', 1]], { al: 'center', sx: .64, ko: 8 });
+  c.restore;
+  // swatch bar + registration marks
+  [['pink', 'PINK', 40], ['teal', 'TEAL', 140], ['yellow', 'YELLOW', 240], ['blue', 'BLUE', 380]].forEach(([k, n, x]) => { L(k, 1, () => { c.fillRect(x, 1884, 32, 22); }); strokeP('navy', 2, 1, rr(x, 1884, 32, 22, 0)); T(n, x + 38, 1903, 20, [['navy', 1]], { sx: .7 }); });
+  for (const [mx, my] of [[1030, 1880], [1030, 1300]]) { strokeP('navy', 2.5, 1, both(circ(mx, my, 11), lineP([mx - 20, my], [mx + 20, my]), lineP([mx, my - 20], [mx, my + 20]))); }
+}
+
+/* ====================== DYNAMIC LAYER ====================== */
+function drawDynamic(t) {
+  c.globalCompositeOperation = 'multiply';
+  // stage heroes
+  roxor(396, 468, .78, t); jasmin(694, 468, .78, t + .5);
+  // sparkles around the heroes
+  for (let i = 0; i < 7; i++) { const sx = [250, 330, 520, 560, 810, 880, 600][i], sy = [220, 330, 240, 340, 260, 360, 190][i], p = (Math.sin(t * 3 + i * 1.7) + 1) / 2; shape(i & 1 ? R.pink : R.teal, star(sx, sy, 6 + p * 10, 2 + p * 2, 4), 2.5); }
+  // turrets
+  const TUR = [
+    ['kick', 0, 0, 2], ['snare', 1, 0, 1], ['hat', 2, 0, 3], ['sub', 3, 0, 2], ['mic', 4, 0, 1], ['synth', 5, 0, 2],
+    ['horn', 0, 3, 1], ['scratch', 1, 3, 3], ['cowbell', 2, 3, 2], ['kick', 5, 3, 1],
+  ];
+  // empty merge slots
+  for (const [col, row] of [[3, 3], [4, 3]]) { c.save(); c.setLineDash([10, 9]); strokeP('navy', 4, .7, rr(BX + col * TS + 28, BY + row * TS + 28, TS - 56, TS - 56, 14)); c.restore(); T('+', cx_(col), ry_(row) + 22, 66, R.pink, { al: 'center', sx: .8 }); }
+  TUR.forEach(([ty, col, row, lv], i) => turret(ty, cx_(col), ry_(row) - 2, lv, t, i * 1.3));
+  // enemies
+  const EN = [
+    [150, 1, 'mini', 26, 1], [330, 1, 'fuzz', 36, 2], [520, 1, 'zip', 32, 3], [705, 1, 'brick', 38, 4], [880, 1, 'echo', 36, 5],
+    [770, 2, 'rager', 38, 6], [585, 2, 'drone', 34, 7], [150, 2, 'fuzz', 34, 9],
+  ];
+  EN.forEach(([ex, row, k, r, sd]) => enemy(ex + Math.sin(t * 1.2 + sd) * 8, ry_(row), r, k, t, sd));
+  enemy(360, ry_(2) + 6, 68, 'boss', t, 12);
+  // boss hp bar
+  c.save(); const bhx = 360, bhy = ry_(2) - 100; paperFill(rr(bhx - 60, bhy, 120, 16, 8)); fillR([['pink', 1]], rr(bhx - 58, bhy + 2, 120 * .78 - 4, 12, 6)); strokeP('navy', 3.5, 1, rr(bhx - 60, bhy, 120, 16, 8)); c.restore();
+  T('BOSS', bhx, bhy - 8, 24, R.pink, { al: 'center', ow: 0, sx: .7 });
+  // projectiles
+  const tgt = (ex, row) => [ex, ry_(row)];
+  bullet('kick', 220, 625 + Math.sin(t * 2) * 6, .9, t); bullet('kick', 270, 660, .55, t);
+  bullet('hat', 470, 628, 1.45, t); bullet('hat', 440, 600, 1.2, t);
+  bullet('snare', 640, 640, .6, t, 1);
+  bullet('mic', 735, 620, .9, t);
+  bullet('synth', 830, 640, 1.35, t);
+  bullet('horn', 160, 928, -1.15, t); bullet('scratch', 330, 900, -.9, t);
+  bullet('cow', 500, 940, -1.3, t); bullet('kick', 960, 915, -1.9, t);
+  // impacts
+  burst(330, ry_(1) - 6, 44, t, .3); burst(705, ry_(1) - 4, 36, t, 1.1); burst(585, ry_(2) - 6, 34, t, 2.2, true); burst(402, ry_(2) - 40, 54, t, 3, true);
+  dmg('-42', 330, ry_(1) - 52, 44, t, R.yel);
+  dmg('-18', 718, ry_(1) - 48, 34, t, R.pink, .08);
+  dmg('-31', 596, ry_(2) - 46, 36, t, R.yel, -.06);
+  dmg('-256 CRIT!', 600, ry_(2) - 56, 56, t, R.pink, -.05);
+  dmg('+5', 882, ry_(1) - 58, 30, t, R.teal);
+  // flying coins
+  coin(780, 560, 16, t, true); coin(900, 640, 14, t + .7, true);
+
+  /* ---- cast sheet ---- */
+  roxor(206, 1648, .92, t); jasmin(874, 1648, .92, t + .5);
+  // name plates
+  for (const [nx, nm, rec, rot] of [[206, 'ROXORLOOPS', R.green, -.04], [874, 'JASMIN', R.pink, .04]]) {
+    c.save(); c.translate(nx, 1650); c.rotate(rot);
+    paperFill(rr(-110, -22, 220, 42, 6)); shape([['yellow', .35]], rr(-110, -22, 220, 42, 6), 4);
+    c.restore();
+    T(nm, nx, 1654 + (rot < 0 ? 2 : -2), 32, rec, { al: 'center', sx: .66, rot });
+  }
+  // close-up cards
+  const CARDS = [
+    ['t', 'kick', 'KICK CANNON', 'pink'], ['t', 'sub', 'SUBWOOFER', 'blue'], ['t', 'mic', 'SIREN MIC', 'teal'],
+    ['e', 'fuzz', 'FUZZ', 'yellow'], ['e', 'brick', 'BRICK', 'pink'], ['e', 'boss', 'THE BOSS', 'blue'],
+  ];
+  CARDS.forEach(([kind, id, nm, ink], i) => {
+    const x = 20 + i * 173, y = 1700, w = 163, h = 138;
+    c.save();
+    paperFill(rr(x, y, w, h, 14)); fillR([[ink, .28]], rr(x, y, w, h, 14));
+    halftone(ink, x, y, w, h, (u, v) => (1 - v) * .95, 8, .6, 3.6, rr(x, y, w, h, 14), .8);
+    strokeP('navy', 4, 1, rr(x, y, w, h, 14));
+    if (kind === 't') turret(id, x + w / 2, y + 62, i === 0 ? 3 : i === 1 ? 2 : 3, t, i, 1.0);
+    else enemy(x + w / 2, y + 66, id === 'boss' ? 42 : 40, id, t, id === 'boss' ? 12 : i + 2);
+    paperFill(rr(x + 8, y + h - 31, w - 16, 25, 5)); strokeP('navy', 3, 1, rr(x + 8, y + h - 31, w - 16, 25, 5));
+    T(nm, x + w / 2, y + h - 12, 20, [['navy', 1]], { al: 'center', sx: .7 });
+    c.restore();
+  });
+  // currency row
+  const cy = 1880;
+  coin(520, cy - 4, 24, t, false); T('COIN', 556, cy + 8, 28, [['navy', 1]], { sx: .7 });
+  diamond(690, cy - 4, 25); T('DIAMOND', 724, cy + 8, 28, [['navy', 1]], { sx: .7 });
+  record(884, cy - 4, 26, t); T('RECORD', 918, cy + 8, 28, [['navy', 1]], { sx: .7 });
+}
+
+/* ====================== GRAIN ====================== */
+function makeGrain() {
+  const g = mk(W, H), gx = g.getContext('2d'), im = gx.createImageData(W, H), d = new Uint32Array(im.data.buffer), q = rng(99);
+  for (let i = 0; i < d.length; i++) {
+    const v = q();
+    if (v < .035) d[i] = (60 << 24) | (214 << 16) | (235 << 8) | 243;       // ink dropout speck (paper colour, ABGR)
+    else if (v < .042) d[i] = (30 << 24) | (60 << 16) | (80 << 8) | 110;   // dark speckle
+  }
+  gx.putImageData(im, 0, 0);
+  // soft paper vignette
+  const rg = gx.createRadialGradient(W / 2, H / 2, 500, W / 2, H / 2, 1250); rg.addColorStop(0, 'rgba(120,80,30,0)'); rg.addColorStop(1, 'rgba(120,80,30,.16)');
+  gx.fillStyle = rg; gx.fillRect(0, 0, W, H);
+  return g;
+}
+
+/* ====================== MAIN ====================== */
+const bg = mk(W, H), grain = makeGrain();
+c = bg.getContext('2d'); drawStatic();
+c = X;
+const fixed = new URLSearchParams(location.search).get('t');
+function frame(ms) {
+  const t = fixed !== null ? parseFloat(fixed) : ms / 1000;
+  X.globalCompositeOperation = 'source-over'; X.globalAlpha = 1; X.drawImage(bg, 0, 0);
+  c = X; KO = false; drawDynamic(t);
+  X.globalCompositeOperation = 'source-over'; X.globalAlpha = 1; X.drawImage(grain, 0, 0);
+}
+let last = 0;
+function loop(ms) { if (ms - last > 45) { last = ms; frame(ms); } if (fixed === null) requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
