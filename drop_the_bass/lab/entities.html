@@ -1,0 +1,59 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Drop the Bass: entity art lab</title>
+<style>html,body{margin:0;background:#1a1236;color:#fff6ea;font:12px sans-serif}canvas{display:block}</style>
+<canvas id="c"></canvas>
+<script type="module">
+import * as A from '../js/art_entities.js';
+import { TURRETS, ENEMIES, BOSSES, AFFIXES, RARITY } from '../js/data_core.js';
+const q = new URLSearchParams(location.search);
+const sheet = q.get('sheet') || 'turrets', T = parseFloat(q.get('t') || '1.3');
+const cv = document.getElementById('c');
+const W = 1000, H = sheet === 'turrets' ? 1000 : 900;
+cv.width = W * 1; cv.height = H; cv.style.width = W + 'px';
+const c = cv.getContext('2d');
+c.fillStyle = '#2a1c5a'; c.fillRect(0, 0, W, H);
+c.fillStyle = '#fff6ea'; c.font = '12px sans-serif';
+if (sheet === 'turrets') {
+  Object.keys(TURRETS).forEach((id, i) => {
+    const y = 50 + i * 80;
+    c.fillStyle = '#fff6ea'; c.fillText(id, 6, y + 4);
+    for (let L = 1; L <= 7; L++) A.drawTurret(c, id, L, 90 + (L - 1) * 85, y, { t: T, ang: -0.4, fire: L === 4 ? 0.9 : 0 });
+    A.drawTurret(c, id, 3, 720, y, { t: T, ang: 0.5, jammed: true });
+    A.drawTurret(c, id, 5, 800, y, { t: T, ang: 0.5, buff: i % 2 ? 'dmg' : 'rate', selected: true });
+    A.drawTurretIconFlat(c, id, 900, y, 40);
+    A.drawProjectile(c, ['kick','snare','hat','scratch','cowbell','orb'][i % 6], 960, y, { t: T, ang: 0 });
+  });
+} else if (sheet === 'enemies') {
+  Object.keys(ENEMIES).forEach((id, i) => {
+    const x = 60 + (i % 6) * 110, y = 60 + Math.floor(i / 6) * 110;
+    A.drawEnemy(c, id, x, y, { t: T, ang: 0.5, hp: i % 3 === 0 ? 0.6 : 1, shield: id === 'gate' ? 0.7 : 0 });
+    c.fillStyle = '#fff6ea'; c.fillText(id, x - 20, y + 40);
+  });
+  const affs = Object.keys(AFFIXES);
+  affs.forEach((a, i) => { const x = 60 + i * 110; A.drawEnemy(c, 'fuzz', x, 250, { t: T, ang: 0.3, affix: a, scale: AFFIXES[a].scale || 1 }); c.fillText(a, x - 15, 300); });
+  ['slow', 'stun', 'burn', 'mark', 'rage', 'hit'].forEach((s, i) => { const x = 60 + i * 110; A.drawEnemy(c, 'rager', x, 350, { t: T, ang: 0.3, [s]: s === 'hit' ? 0.8 : true, hp: 0.4 }); c.fillText(s, x - 10, 400); });
+  Object.keys(BOSSES).forEach((id, i) => {
+    const x = 100 + i * 190;
+    A.drawBoss(c, id, x, 520, { t: T, ang: 0.4, hp: 0.7, phase: 2, gated: i === 1 });
+    A.drawBoss(c, id, x, 700, { t: T + 1.7, ang: 0.4, hp: 1, phase: 3, gated: false, hit: i === 0 ? 0.7 : 0 });
+    c.fillText(id, x - 20, 610);
+  });
+} else if (sheet === 'icons') {
+  A.GLYPH_NAMES.forEach((n, i) => {
+    const x = 40 + (i % 14) * 68, y = 40 + Math.floor(i / 14) * 70;
+    A.drawGlyph(c, n, x, y, 40); A.drawGlyph(c, n, x + 26, y + 24, 20);
+    c.fillStyle = '#fff6ea'; c.font = '9px sans-serif'; c.fillText(n, x - 18, y + 38);
+  });
+} else {
+  const slots = ['head', 'mic', 'body', 'chain', 'feet'], rars = Object.keys(RARITY);
+  rars.forEach((r, ri) => slots.forEach((s, si) => A.drawGear(c, s, 'g' + (ri * 5 + si), r, 60 + si * 80, 60 + ri * 80, 64)));
+  ['garage', 'studio', 'platinum'].forEach((tier, i) => {
+    A.drawCrate(c, tier, 520 + i * 150, 80, 110, { t: T });
+    A.drawCrate(c, tier, 520 + i * 150, 230, 110, { t: T, open: 0.5 });
+    A.drawCrate(c, tier, 520 + i * 150, 390, 110, { t: T, open: 1 });
+  });
+  rars.forEach((r, i) => A.drawRarityFrame(c, r, 100 + i * 190, 560, 150, 100, T));
+}
+window.__ready = true;
+</script>
