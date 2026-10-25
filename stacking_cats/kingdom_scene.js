@@ -2,6 +2,7 @@
 import { BUILDINGS, WONDERS, buildingLevel, upgradeCost } from './cats.js';
 import { drawBuilding } from './art_kingdom.js';
 import { TAU, mulberry } from './art_util.js';
+import { iconCanvas } from './art_icons.js';
 
 export const KW = 920, KH = 236;
 // feet position and size of each building (back row smaller)
@@ -96,8 +97,8 @@ export function drawKingdom(ctx, st, t) {
     ctx.fillStyle = gl; ctx.fillRect(x - 40, y - 40, 80, 80);
     ctx.fillStyle = owned ? '#fff6d0' : 'rgba(255,255,255,.7)'; ctx.strokeStyle = owned ? '#d9a600' : sel ? '#ff8fb7' : '#9a8ac0'; ctx.lineWidth = sel ? 3.5 : 2.2;
     ctx.beginPath(); ctx.arc(x, y, 21, 0, TAU); ctx.fill(); ctx.stroke();
-    ctx.globalAlpha = owned ? 1 : 0.5; ctx.font = '24px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(w.icon, x, y + 8); ctx.globalAlpha = 1;
-    if (!owned) { ctx.fillStyle = '#2a1d4a'; ctx.font = '800 11px sans-serif'; const label = '💎 ' + w.cost; const tw = ctx.measureText(label).width + 10; ctx.beginPath(); ctx.roundRect(x - tw / 2, y + 23, tw, 15, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(label, x, y + 34); }
+    ctx.globalAlpha = owned ? 1 : 0.55; ctx.drawImage(iconCanvas(w.icon), x - 15, y - 16, 30, 30); ctx.globalAlpha = 1;
+    if (!owned) { ctx.fillStyle = '#2a1d4a'; ctx.font = '800 11px sans-serif'; const label = String(w.cost); const tw = ctx.measureText(label).width + 26; ctx.beginPath(); ctx.roundRect(x - tw / 2, y + 23, tw, 15, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(label, x + 7, y + 34); ctx.drawImage(iconCanvas('💎'), x - tw / 2 + 2, y + 22, 17, 17); }
   });
 }
 

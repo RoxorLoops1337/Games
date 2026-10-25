@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {
   newGame, addCat, startWave, step, makeEnemy, catMaxHp, calcMods, itemFx, estDps, explainMods, rollItemChoices, equipItem, unequipItem,
-  takeItem, useReroll, mergeCats, releaseCat, findCat, aliveCats,
+  takeItem, useReroll, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
   ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS,
@@ -71,8 +71,31 @@ t('equip: items go to the stash, cats hold 1 (2 at Lv3), swaps return the old it
   c.lvl = 3;
   equipItem(g, 0, c.uid); equipItem(g, 0, c.uid);
   assert.equal(c.items.length, 2);
+  const had = g.stash.length;
   for (let i = 0; i < 20; i++) takeItem(g, 'claws');
-  assert.ok(g.stash.length <= MAX_STASH);
+  // picks are never refused (no soft lock); the pack overflows and selling brings it back under the limit
+  assert.equal(g.stash.length, had + 20);
+  assert.equal(overflow(g), had + 20 - MAX_STASH);
+  const coins0 = g.run.coins;
+  while (overflow(g) > 0) assert.ok(sellItem(g, g.stash.length - 1) > 0);
+  assert.equal(g.stash.length, MAX_STASH);
+  assert.ok(g.run.coins > coins0);
+});
+
+t('forging turns three of a rarity into one of the next, and picks nothing it cannot afford', () => {
+  const g = newGame({ seed: 9 });
+  g.stash = ['claws', 'bell', 'claws', 'fang'];
+  assert.equal(forgePlan(g, 3), null);                    // only one rare
+  const plan = forgePlan(g, 0);
+  assert.deepEqual(plan.slice().sort(), [0, 1, 2]);
+  const out = forgeItems(g, 0);
+  assert.equal(ITEM_BY_ID[out].rarity, 'rare');
+  assert.deepEqual(g.stash.length, 2);
+  g.stash = ['fang', 'heart', 'scarf', 'claws'];
+  assert.equal(ITEM_BY_ID[forgeItems(g, 0)].rarity, 'epic');
+  g.stash = ['crown', 'hourglass', 'mask'];
+  const coins = g.run.coins, e = forgeItems(g, 0);
+  assert.equal(ITEM_BY_ID[e].rarity, 'epic'); assert.ok(g.run.coins > coins); assert.equal(g.stash.length, 1);
 });
 
 t('merging and releasing keep items (extra ones return to the stash)', () => {

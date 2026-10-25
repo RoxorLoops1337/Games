@@ -57,6 +57,20 @@ t('lighting and post stack runs and ambient colours resolve for every theme', ()
   for (const th of THEMES) for (const boss of [false, true]) assert.ok(postMod.ambientFor(th, 2, 5, boss, boss));
 });
 
+const icons = await import('../stacking_cats/art_icons.js');
+t('every drawn icon runs, and every emoji the game shows has one', () => {
+  for (const k of icons.ICON_KEYS) assert.ok(icons.iconCanvas(k), k);
+  const seen = new Set();
+  const rx = /[\u2600-\u27BF\u2B50\u23F3\u2728\u2764\u{1F000}-\u{1FFFF}]\uFE0F?/gu;
+  for (const f of ['cats.js', 'main.js', 'index.html', 'kingdom_scene.js']) {
+    let src = readFileSync(new URL('../stacking_cats/' + f, import.meta.url), 'utf8');
+    src = src.replace(/&#(x?[0-9a-fA-F]+);/g, (m, d) => String.fromCodePoint(d[0] === 'x' ? parseInt(d.slice(1), 16) : +d)).replace(/\\u([0-9a-fA-F]{4})\\u([0-9a-fA-F]{4})/g, (m, a, b) => String.fromCharCode(parseInt(a, 16), parseInt(b, 16)));
+    for (const m of src.matchAll(rx)) seen.add(m[0].replace(/\uFE0F/g, ''));
+  }
+  const missing = [...seen].filter((e) => !icons.hasIcon(e));
+  assert.deepEqual(missing, [], 'emoji without a drawn icon: ' + missing.join(' '));
+});
+
 t('every cat draws without errors', () => {
   for (const d of CATS) for (const v of ['open', 'blink', 'hurt', 'happy']) drawCat(fakeCtx(), d, v);
   assert.ok(calls.n > 1000);
@@ -113,7 +127,7 @@ t('main.js parses and the ids it uses exist in index.html', () => {
 });
 
 t('no em dashes anywhere in the game files', () => {
-  for (const f of ['main.js', 'index.html', 'cats.js', 'sim.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'audio.js', 'kingdom_scene.js', 'savecode.js', 'daily.js', 'post.js']) {
+  for (const f of ['main.js', 'index.html', 'cats.js', 'sim.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'audio.js', 'kingdom_scene.js', 'savecode.js', 'daily.js', 'post.js', 'art_icons.js']) {
     assert.ok(!readFileSync('stacking_cats/' + f, 'utf8').includes('—'), f);
   }
 });

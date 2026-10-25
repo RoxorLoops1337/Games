@@ -317,6 +317,31 @@ body.cb .sdps em.up{color:#1a5ad0}body.cb .sdps em.down{color:#c06000}
 body.touch .ib{width:52px;height:52px;font-size:21px}body.touch #zoom{width:108px;height:108px}body.touch #zoom span{width:82px;height:82px}
 body.touch .btn{min-height:50px}body.touch .btn.small{min-height:42px}body.touch .seg button{padding:8px 6px}body.touch .bag{height:46px}
 body.touch .card:hover{transform:none}body.touch #meter{top:164px}
+/* drawn icons replace emoji everywhere (art_icons.js) */
+.gi{width:1.2em;height:1.2em;vertical-align:-.26em;display:inline-block;margin:0 .04em;pointer-events:none;-webkit-user-drag:none;user-select:none;image-rendering:auto}
+.card .ic .gi{width:1.1em;height:1.1em;filter:drop-shadow(0 3px 0 #0003)}
+.ib .gi{width:1.15em;height:1.15em;vertical-align:-.2em}
+/* arrange screen: the list scrolls, the footer with Done never does */
+.screen.arr{overflow:hidden;justify-content:flex-start;padding:8px 14px 8px}
+.screen.arr h2{font-size:28px;flex:none}.screen.arr .synrow{flex:none;min-height:22px}
+.tbody{flex:1;min-height:0;width:100%;overflow-y:auto;overflow-x:hidden;display:flex;justify-content:center;padding:2px 0 6px;scrollbar-width:thin}
+.tfoot{flex:none;display:flex;gap:10px;align-items:stretch;justify-content:center;width:100%;max-width:820px;margin-top:4px}
+.tfoot .detail.slim{flex:1;margin:0;width:auto;min-height:44px;display:flex;align-items:center}
+.tfoot .detail.bad{border-color:#d03a3a;background:#ffe9e9}
+.btn.big2{font-size:24px;padding:4px 30px;flex:none;background:linear-gradient(#e4ffe9 0%,#9ee8b4 55%,#6fd493 100%);box-shadow:0 5px 0 #2a6a42,0 8px 14px #0006,inset 0 2px 0 #fffc}
+.warn{color:#d03a3a}.col h4 .warn{color:#ff8a8a}
+.bagrow{grid-template-columns:repeat(6,1fr);width:380px}
+.bag{height:46px;font-size:30px;position:relative;border-width:2.5px;box-shadow:inset 0 -3px 0 #0001}
+.bag.common{background:linear-gradient(#f4f0fa,#d8d0ea)}.bag.rare{background:linear-gradient(#e6f2ff,#b4d4ff);box-shadow:inset 0 -3px 0 #4a8ad822,0 0 8px #4a8ad8aa}
+.bag.epic{background:linear-gradient(#fbe8ff,#e6b8ff);box-shadow:inset 0 -3px 0 #c04ae022,0 0 10px #c04ae0cc;animation:epicp 2s ease-in-out infinite}
+@keyframes epicp{50%{box-shadow:inset 0 -3px 0 #c04ae022,0 0 16px #e070ff}}
+.bag.over{border-color:#ff5a5a;box-shadow:0 0 10px #ff5a5acc}
+.tfoot .fbtn{flex:none;white-space:nowrap;padding:3px 12px;align-self:center;font-size:15px}.relbtn{align-self:flex-start;margin-top:2px}
+.screen.arr .slot:not(.has){height:34px;font-size:13px}.screen.arr .slot.has{height:50px}.screen.arr .col{gap:4px}.screen.arr .col h4{font-size:15px;margin:0}
+.screen.arr .bagrow{gap:3px}.screen.arr .bag{height:42px;font-size:28px}
+.btn.amber{background:linear-gradient(#fff3c8 0%,#ffd23a 55%,#f0a81a 100%);box-shadow:0 4px 0 #7a5410,0 6px 10px #0005,inset 0 1px 0 #fffc}
+.btn.purple{background:linear-gradient(#f2e6ff 0%,#c89cff 55%,#a870ee 100%);box-shadow:0 4px 0 #4a2a7a,0 6px 10px #0005,inset 0 1px 0 #fffc}
+body.touch .bag{height:52px}
 </style>
 </head>
 <body>
@@ -331,7 +356,7 @@ body.touch .card:hover{transform:none}body.touch #meter{top:164px}
     <div class="pill" id="chestBox" title="Loot chests, opened after the wave"><span class="ico">&#127873;</span><b id="chestTxt">0</b></div>
     <div class="pill" id="bossBar"><div class="nm" id="bossName">Nest</div><div class="bar"><i id="bossTrail"></i><i id="bossHp"></i></div></div>
     <div class="pill" id="tools">
-      <button class="ib" id="bPause" title="Pause (P)">&#10074;&#10074;</button>
+      <button class="ib" id="bPause" title="Pause (P)">&#9208;</button>
       <button class="ib" id="bMeter" title="Damage meter (D)">&#128202;</button>
       <button class="ib" id="bSpeed" title="Speed (F)">x1</button>
       <button class="ib" id="bSound" title="Sound (M)">&#9835;</button>

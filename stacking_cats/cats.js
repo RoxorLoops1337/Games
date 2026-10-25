@@ -278,7 +278,11 @@ export const ITEMS = [
 ];
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
 export const ITEM_WEIGHT = { common: 10, rare: 5, epic: 1.4 };
-export const MAX_STASH = 8;
+export const MAX_STASH = 12;
+// selling pays coins (scaled a little by wave); forging turns three of one rarity into one of the next
+export const SELL_VALUE = { common: 8, rare: 22, epic: 60 };
+export const FORGE_NEXT = { common: 'rare', rare: 'epic', epic: 'epic' };
+export const FORGE_COUNT = 3;
 export const itemSlots = (lvl) => (lvl >= 3 ? 2 : 1);
 
 // ---------------------------------------------------------------- the Cat Kingdom (spend coins between runs)
