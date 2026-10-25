@@ -2,6 +2,7 @@
 // Immediate-mode screen. The run is only changed through engine/run.js (applyGraft, skipGraft, rerollGraftOffer, afterGraft).
 import { COL, EASE, clamp, lerp, rgba } from './core.js';
 import { Fx } from './fx.js';
+import { maybeTip } from './tutorial.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft } from '../engine/cards.js';
 import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
@@ -110,6 +111,11 @@ export default {
     st.fx.draw(ctx); st.fx.drawFlash(ctx, 1280, 720);
 
     if (st.menu) drawSkipMenu(app);
+    else if (st.mode === 'pick') {
+      const T = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
+      (T('graftpick', 412, 130, { side: 'below', w: 300 }) || T('boonprice', TRAY_X, 160, { side: 'left', w: 300 }) || T('budget', 200, 62, { side: 'below', w: 300 }) ||
+        (strain.strain > 0 && T('strain', 200, 62, { side: 'below', w: 300 })) || T('skipping', TRAY_X + 326, 556, { side: 'above', w: 300 }));
+    }
     // click anywhere skips the attach animation
     if (st.mode === 'attach' && app.mouse.released) finishAnim(app);
   },

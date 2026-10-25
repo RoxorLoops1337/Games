@@ -7,6 +7,7 @@ import { RELICS, POTIONS } from '../data/index.js';
 import { drawBackground } from '../art/backgrounds.js';
 import * as ICONS from '../art/icons.js';
 import { wrapLimit, keyBadge } from './graft_parts.js';
+import { maybeTip } from './tutorial.js';
 
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
 const RARITY = {
@@ -78,6 +79,7 @@ export default {
 
     if (!st) return;
     st.fx.draw(ctx); st.fx.drawFlash(ctx, 1280, 720);
+    maybeTip(app, 'rewardspoils', 640, 640, 'Click a reward to claim it. Anything you leave is forfeited when you continue. Then you graft one of your own cards.', { side: 'above', w: 330 });
   },
 };
 

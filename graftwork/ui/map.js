@@ -8,6 +8,7 @@ import { drawBackground } from '../art/backgrounds.js';
 import { drawNodeIcon, drawRelic, drawPotion, drawHeart, drawCoin } from '../art/icons.js';
 import { drawPortrait } from '../art/heroes.js';
 import { drawSchoolGlyph } from '../art/cards.js';
+import { maybeTip } from './tutorial.js';
 
 const ACT_NAMES = { 1: 'The Ward', 2: 'The Cellar Market', 3: 'The Gilt Theatre' };
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III' };
@@ -305,6 +306,9 @@ export default {
     if (this.banner) this.drawBanner(app);
     app.blocked = blocked0;
     if (this.confirm) this.drawConfirm(app);
+    if (!this.banner && !this.confirm && !this.trav) {
+      if (!maybeTip(app, 'mapnodes', 640, 640, 'Pick a node to walk to. Fights give gold and a graft, elites a relic, events are a gamble, shops sell, forges mend. The legend is on the left.', { side: 'above', w: 330 })) maybeTip(app, 'resonance', 968, 340, undefined, { side: 'left' });
+    }
   },
 
   leftPanel(app, run) {
