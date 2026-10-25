@@ -201,7 +201,7 @@ export const ENEMIES_2 = [
     art: { body: 'jar', color: '#6e8f3f', notes: 'Huge jar body, a jagged gold crown of three triangles on the lid, pale pickled limbs pressed against the glass.' } },
 
   // ---------- BOSS ----------
-  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 165, start: { interest: 1 },
+  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 135, start: { interest: 1 },
     pick: (A, e) => {
       const d = e.data;
       if (d.p2 === 1) return 'collect';
@@ -213,7 +213,7 @@ export const ENEMIES_2 = [
       sweet: { name: 'Sweet Talk', fx: [{ op: 'dmg', n: 12 }, { op: 'status', s: 'frail', n: 1, to: 'player' }] },
       hands: { name: 'Dangling Hands', fx: [{ op: 'dmg', n: 7, hits: 3 }] },
       offer: { name: 'An Offer', fx: [{ op: 'dmg', n: 6 }, { op: 'status', s: 'offer', n: 1, to: 'self' }] },
-      foreclose: { name: 'Foreclose', fx: [{ op: 'dmg', n: 34 }] },
+      foreclose: { name: 'Foreclose', fx: [{ op: 'dmg', n: 28 }] },
       collect: { name: 'Collect', fx: [{ op: 'dmg', n: 8 }, { op: 'custom', intent: 'debuff', text: 'Steals up to 30 of your gold.', fn: (A) => { A.gold(-Math.min(30, A.c.run.gold || 0)); } }, { op: 'summon', id: 'coin_mite', n: 2 }], after: (A, e) => { e.data.p2 = 2; } },
     },
     on: {
