@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 GODOT="${GODOT:-godot}"
-rm -rf play && mkdir -p play
+rm -rf play && mkdir -p play && touch play/.gdignore   # keeps Godot from importing the exported images
 "$GODOT" --headless --path . --import >/dev/null 2>&1 || true
 "$GODOT" --headless --path . --export-release Web play/index.html 2>&1 | grep -iE "error|fail" && exit 1 || true
 test -f play/index.wasm || { echo "export did not produce play/index.wasm"; exit 1; }
