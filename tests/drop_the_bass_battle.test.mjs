@@ -7,6 +7,8 @@ import { AudioFx } from '../drop_the_bass/js/audio.js';
 import * as M from '../drop_the_bass/js/meta.js';
 import { TUTORIAL } from '../drop_the_bass/js/data_story.js';
 import { WORLDS, BOARD_X, BOARD_Y, TILE } from '../drop_the_bass/js/data_core.js';
+import { setStyle } from '../drop_the_bass/js/style.js';
+setStyle(process.env.DTB_STYLE === 'classic' ? 'classic' : 'doodle');   // default doodle; DTB_STYLE=classic checks the classic look
 
 let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
 function mockCtx() {

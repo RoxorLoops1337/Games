@@ -11,6 +11,9 @@ import * as AE from './art_entities.js';
 import * as AW from './art_world.js';
 import { glass, button, liquidBar, bezel, text, wrapText, rrect, rrectPath, rgba } from './hudx.js';
 import { drawGlow } from './fx.js';
+import { isDoodle } from './style.js';
+import * as DB from './doodle_battle.js';
+import * as DFX from './doodle_fx.js';
 
 const FONT = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
 const inR = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -507,7 +510,8 @@ export class Battle {
     this.drawBanner(ctx);
     if (this.tut && !this.tut.done) this.drawTutorial(ctx);
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    if (this.hurtFlash > 0) {
+    if (this.hurtFlash > 0 && isDoodle()) DFX.hurt(fx, ctx, view.cw, view.ch, view.dpr, this.hurtFlash);
+    else if (this.hurtFlash > 0) {
       const a = Math.min(0.55, this.hurtFlash * 0.55), g = ctx.createRadialGradient(view.cw / 2, view.ch / 2, Math.min(view.cw, view.ch) * 0.3, view.cw / 2, view.ch / 2, Math.hypot(view.cw, view.ch) * 0.55);
       g.addColorStop(0, 'rgba(255,30,70,0)'); g.addColorStop(1, 'rgba(255,30,70,' + a + ')'); ctx.fillStyle = g; ctx.fillRect(0, 0, view.cw, view.ch);
     }
@@ -516,6 +520,7 @@ export class Battle {
     fx.drawFlash(ctx, view.cw, view.ch);
   }
   drawBoard(ctx, t, beat) {
+    if (isDoodle()) return DB.drawBoard(this, ctx, t, beat);
     const run = this.run, fx = this.fx;
     AW.drawBoard(ctx, run.map.id, run.world.id, t, { beat, slotHint: this.slotHint, hoverSlot: this.hoverSlot ? [this.hoverSlot.c, this.hoverSlot.r] : null, dropSlot: this.targetSlot != null ? [this.targetSlot % COLS, Math.floor(this.targetSlot / COLS)] : null });
     AW.drawStageBase(ctx, run.world.id, run.map.base.x, run.map.base.y, { t, hp: run.stageFrac, hit: Math.max(0, this.hurtFlash), beat });
@@ -591,6 +596,7 @@ export class Battle {
     if (sel) this.drawPanel(ctx, sel);
   }
   drawPanel(ctx, tu) {
+    if (isDoodle()) return DB.drawPanel(this, ctx, tu);
     const run = this.run, def = TURRETS[tu.type];
     const top = tu.y > BOARD_Y + BOARD_H / 2;
     const box = { x: 16, y: top ? BOARD_Y + 6 : BOARD_Y + BOARD_H - 92, w: 508, h: 86 };
@@ -617,6 +623,7 @@ export class Battle {
     ctx.restore();
   }
   drawHud(ctx, t, beat) {
+    if (isDoodle()) return DB.drawHud(this, ctx, t, beat);
     const run = this.run;
     const hudA = this.tut && !this.tut.done ? 1 : 1;
     // top and bottom bars: smoked glass fading into the board, with a hairline of stage colour at the seam
@@ -719,6 +726,7 @@ export class Battle {
     text(ctx, run.turrets.length + '/' + run.slotCapacity() + ' tiles', W / 2, 833, 13, slotsLeft < 3 ? COL.orange : COL.dim, 'center');
   }
   drawDeploy(ctx, t, beat) {
+    if (isDoodle()) return DB.drawDeploy(this, ctx, t, beat);
     const run = this.run, d = R.deploy;
     const cost = run.deployCost(false), can = run.coins >= cost && run.canDeploy().ok;
     const ph = this.beatPhase, nextDef = TURRETS[run.nextType];
@@ -753,6 +761,7 @@ export class Battle {
     ctx.restore();
   }
   drawHero(ctx, who, c, t) {
+    if (isDoodle()) return DB.drawHero(this, ctx, who, c, t);
     const run = this.run, name = who === 'roxor' ? 'heroR' : 'heroJ';
     const ready = run.heroReady(who), max = run.heroMax(who), cd = run.heroCd[who];
     const col = who === 'roxor' ? COL.green : COL.pink;
@@ -788,6 +797,7 @@ export class Battle {
     text(ctx, ready ? lab : lab[0] + lab.slice(1).toLowerCase(), c.x, c.y + c.r + 12, 12, ready ? col : COL.dim, 'center');
   }
   drawBanner(ctx) {
+    if (isDoodle()) return DB.drawBanner(this, ctx);
     const b = this.banner; if (!b) return;
     const inK = clamp(b.t / 0.28, 0, 1), outK = clamp((b.life - b.t) / 0.3, 0, 1);
     const a = Math.min(inK, outK), k = b.t / b.life;
@@ -814,6 +824,7 @@ export class Battle {
     ctx.restore();
   }
   drawTutorial(ctx) {
+    if (isDoodle()) return DB.drawTutorial(this, ctx);
     const spot = this.tutSpot();
     const s = TUTORIAL[this.tut.i];
     if (!s) return;

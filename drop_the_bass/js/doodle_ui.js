@@ -1,7 +1,7 @@
 // doodle_ui.js: the DOODLE icon set. Glyphs, gear stickers, treasure crates and rarity frames, all drawn as crayon doodles on doodle_kit.js.
 // Everything is baked once into small boil-frame canvases (per glyph, colour and size bucket) and replayed, so a menu full of icons costs a few drawImage calls.
 // Glyph names, signatures and anchors match the classic art_ui.js: drawGlyph/drawIcon centred on (x,y); drawGear centred; drawCrate centred;
-// drawRarityFrame centred on (x,y) with a width and a height. No Math.random, no Date, safe in node with a mock ctx.
+// drawRarityFrame centred on (x,y) with a width and a height. No unseeded randomness or clock, safe in node with a mock ctx.
 import { Pen, C, clamp, arc, rect, star, heart, getScale, setScale, makeCanvas } from './doodle_kit.js';
 import { RARITY } from './data_core.js';
 import { GLYPH_NAMES } from './art_ui.js';
