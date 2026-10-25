@@ -234,6 +234,7 @@ export function nestSprite(kind) {
   const c = document.createElement('canvas'); c.width = W * S; c.height = H * S;
   const ctx = c.getContext('2d'); ctx.scale(S, S); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   nestBody(ctx, kind);
+  texturize(c, { seed: hash(key), len: 9, lw: 1.4, count: 4500, dir: 0.03, spread: 0.55, alpha: 0.42, amp: 0.12, minLum: 55 });   // brick, wood and cheese grain
   // art spans x 8..192, y 6..196 of the 200 box, so the 1px outline fits; nestOverlay shares these coordinates
   const r = { c: outlineCanvas(c, 2, '#2a1840', 0.85), ax: 100, ay: 192, w: W, h: H };
   spriteCache.set(key, r);

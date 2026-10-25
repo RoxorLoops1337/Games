@@ -1,7 +1,7 @@
 // The Cat Kingdom panorama: a little village with the nine buildings and the wonders floating above it.
 import { BUILDINGS, WONDERS, buildingLevel, upgradeCost } from './cats.js';
 import { drawBuilding } from './art_kingdom.js';
-import { TAU, mulberry } from './art_util.js';
+import { TAU, mulberry, texturize, hash } from './art_util.js';
 import { iconCanvas } from './art_icons.js';
 
 export const KW = 920, KH = 236;
@@ -30,6 +30,7 @@ function sprite(id, lvl) {
   if (!c) {
     c = document.createElement('canvas'); c.width = c.height = 240;
     const x = c.getContext('2d'); x.scale(2, 2); drawBuilding(x, id, lvl);
+    texturize(c, { seed: hash(key), len: 8, lw: 1.3, count: 2600, dir: 0.04, spread: 0.6, alpha: 0.4, amp: 0.11, minLum: 60 });   // planks, shingles and plaster grain
     sprites.set(key, c);
   }
   return c;

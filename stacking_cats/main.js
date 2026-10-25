@@ -1,6 +1,6 @@
 // Stacking Cats: renderer, effects, HUD and screens. The rules live in sim.js.
 import {
-  CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS,
+  CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS, SPECIAL_TEXT,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
   ITEM_BY_ID, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, upgradeCost, buyUpgrade, kingdomLevel,
   DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
@@ -412,7 +412,7 @@ function dexDetail(id, unlocked) {
   const d = CAT_BY_ID[id];
   if (unlocked) {
     const s = save.catStats[id], tags = (CAT_TAGS[id] || []).map((t) => `${SYNERGIES[t].icon} ${SYNERGIES[t].name}`).join(', ');
-    return `<b>${d.name}, ${d.title}</b> (${d.role}). ${d.desc}<br><small>${tags ? `Teams up as: ${tags}. ` : ''}${s ? `Used in ${s.runs} run${s.runs === 1 ? '' : 's'}, best wave ${s.best}, ${num(s.dmg)} total damage, ${num(s.kills)} mice defeated.` : 'Not used yet.'}</small>${masteryHtml(id)}<button class="btn small wbtn" data-act="wardrobe" data-id="${id}">Wardrobe</button>`;
+    return `<b>${d.name}, ${d.title}</b> (${d.role}). ${d.desc}<br><small>${tags ? `Teams up as: ${tags}. ` : ''}${s ? `Used in ${s.runs} run${s.runs === 1 ? '' : 's'}, best wave ${s.best}, ${num(s.dmg)} total damage, ${num(s.kills)} mice defeated.` : 'Not used yet.'}</small><br><small class="spnote">Special move: <b>${S.specialInfo(id).name}</b>. ${SPECIAL_TEXT[S.specialInfo(id).kind] || ''}</small>${masteryHtml(id)}<button class="btn small wbtn" data-act="wardrobe" data-id="${id}">Wardrobe</button>`;
   }
   const p = unlockProgress(d, save.stats);
   return `<b>Locked.</b> To unlock: ${d.unlock.text}${p.need > 1 ? ` (${p.have}/${p.need})` : ''}.<div class="pbar"><i style="width:${(100 * p.have) / p.need}%"></i></div>`;
@@ -623,6 +623,11 @@ function beginWave() {
   sfx.play(boss ? 'boss' : 'wave');
   sfx.music(boss ? 'boss' : 'fight');
   dpsHist.length = 0;
+  // introduce new mice and the nest's trick the first time they show up
+  const intro = [];
+  for (const ty of new Set(g.queue.map((q) => q.type))) { const d = ENEMY_TYPES[ty]; if (d && d.hint && !save.tips['m_' + ty]) { save.tips['m_' + ty] = true; intro.push(`New: ${d.name}. ${d.hint}.`); } }
+  if (boss && nest) { const info = NESTS.find((n) => n.id === nest.kind); if (info && info.trick && !save.tips['n_' + nest.kind]) { save.tips['n_' + nest.kind] = true; intro.push(`${nest.name}: ${info.trick}.`); } }
+  if (intro.length) { persist(); intro.slice(0, 3).forEach((m, i) => setTimeout(() => { if (mode === 'play') toast(m); }, 2800 + i * 2600)); }
   if (g.wave === 1) setTimeout(() => { if (mode === 'play' && !(coachEl && coachEl.dataset.key === 'c5')) coach('c2', 'The bottom cat takes the hits. Tough cats go low, shooters go high!', 250, 120, 'left'); }, 2600);
 }
 
@@ -1794,7 +1799,7 @@ function updateSpecials() {
     if (!b) {
       b = document.createElement('button'); b.className = 'spb'; b.dataset.uid = c.uid;
       const info = S.specialInfo(c.id);
-      b.title = `${info.name} (key ${i + 1})`;
+      b.title = `${info.name} (key ${i + 1}): ${SPECIAL_TEXT[info.kind] || ''}`;
       b.innerHTML = `<img src="${thumbURL(c.id)}" alt=""><i></i><em>${i + 1}</em><span class="si">${info.icon}</span>`;
       box.appendChild(b); spBtns.set(c.uid, b);
     }
