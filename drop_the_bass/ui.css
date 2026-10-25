@@ -243,8 +243,7 @@ body{background:radial-gradient(120% 80% at 50% 0%,#241552 0%,#0d0820 60%) fixed
 .badge{background:linear-gradient(#ff7a8a,#e0243e);box-shadow:0 0 10px #ff4a5eaa,inset 0 1px 0 rgba(255,255,255,.5);animation:pop .3s var(--spring) backwards}
 
 /* headings */
-h2{font-size:26px;letter-spacing:.09em;margin:14px 2px 10px;background:linear-gradient(180deg,#fff 20%,#cdbdff);-webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 3px 0 #0a0420) drop-shadow(0 0 10px #7a5cff66)}
+h2{font-size:26px;letter-spacing:.09em;margin:14px 2px 10px;color:#fff;text-shadow:0 3px 0 #0a0420,0 0 14px #7a5cffaa,0 0 2px #0a0420}
 .modal h2{text-align:center}
 h3{letter-spacing:.02em;text-shadow:0 2px 0 #0a0420}
 
@@ -322,8 +321,7 @@ h3{letter-spacing:.02em;text-shadow:0 2px 0 #0a0420}
 @keyframes pickIn{0%{transform:translateY(40px) scale(.9);opacity:0}100%{transform:none;opacity:1}}
 
 /* results */
-.res-title{font-size:52px;letter-spacing:.08em;background:linear-gradient(180deg,#fff 10%,var(--c1,#9dff3a) 60%,var(--c2,#2fa84a));-webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 4px 0 #0a0420) drop-shadow(0 0 22px var(--c1,#9dff3a));animation:titleIn .7s var(--spring)}
+.res-title{font-size:52px;letter-spacing:.08em;color:var(--c1,#9dff3a);text-shadow:0 5px 0 #0a0420,0 0 24px var(--c1,#9dff3a),0 0 3px #fff;animation:titleIn .7s var(--spring)}
 .res-title.win{--c1:#9dff3a;--c2:#2fa84a}.res-title.lose{--c1:#ff6a7a;--c2:#c8283e}
 @keyframes titleIn{0%{transform:scale(.4) rotate(-6deg);opacity:0}100%{transform:none;opacity:1}}
 .big-stars canvas{filter:drop-shadow(0 0 12px #ffc83daa)}
@@ -336,9 +334,9 @@ h3{letter-spacing:.02em;text-shadow:0 2px 0 #0a0420}
 
 /* crates: spotlight, rarity beams on reveal */
 .cratecard{background:radial-gradient(circle at 50% 22%,#3b2a8f55,transparent 55%),var(--glass-hi),linear-gradient(180deg,#271a5e,#170e3b)}
-.cratecard canvas.cr{filter:drop-shadow(0 12px 14px rgba(0,0,0,.55)) drop-shadow(0 0 18px rgba(255,200,61,.25))}
+.cratecard canvas.cr{-webkit-mask-image:radial-gradient(ellipse at 50% 55%,#000 52%,transparent 74%);mask-image:radial-gradient(ellipse at 50% 55%,#000 52%,transparent 74%)}
 .opening{background:radial-gradient(circle at 50% 38%,#6a4ad855,transparent 60%)}
-.opening canvas.cr{filter:drop-shadow(0 14px 18px rgba(0,0,0,.6)) drop-shadow(0 0 30px rgba(255,200,61,.4))}
+.opening canvas.cr{-webkit-mask-image:radial-gradient(ellipse at 50% 55%,#000 52%,transparent 76%);mask-image:radial-gradient(ellipse at 50% 55%,#000 52%,transparent 76%)}
 .revi{position:relative;padding:8px 4px;border-radius:18px;animation:reveal .65s var(--spring) backwards}
 .revi::before{content:"";position:absolute;left:50%;top:44%;width:200%;aspect-ratio:1;transform:translate(-50%,-50%);background:conic-gradient(from 0deg,transparent 0 12deg,rgba(255,255,255,.14) 12deg 24deg,transparent 24deg 48deg,rgba(255,255,255,.1) 48deg 60deg,transparent 60deg 90deg,rgba(255,255,255,.14) 90deg 102deg,transparent 102deg 150deg,rgba(255,255,255,.1) 150deg 162deg,transparent 162deg 220deg,rgba(255,255,255,.14) 220deg 232deg,transparent 232deg 360deg);
   mask-image:radial-gradient(circle,#000 5%,transparent 62%);-webkit-mask-image:radial-gradient(circle,#000 5%,transparent 62%);animation:spin 9s linear infinite;pointer-events:none;z-index:-1}
@@ -355,7 +353,7 @@ h3{letter-spacing:.02em;text-shadow:0 2px 0 #0a0420}
 
 /* title and cutscenes */
 .title-wrap{background:linear-gradient(180deg,transparent 55%,#06021a99)}
-.tap{font-size:28px;letter-spacing:.2em;background:linear-gradient(180deg,#fff,#ffb0e0);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 3px 0 #0a0420) drop-shadow(0 0 16px #ff5fb0)}
+.tap{font-size:28px;letter-spacing:.2em;color:#fff;text-shadow:0 3px 0 #0a0420,0 0 18px #ff5fb0,0 0 3px #ff5fb0}
 .menu .btn.big{font-size:30px;min-height:76px;letter-spacing:.14em}
 .credit{letter-spacing:.12em;text-transform:uppercase;font-size:11px;text-shadow:0 2px 0 #0a0420}
 .cut-box{border:4px solid #12082b;border-radius:24px;background:linear-gradient(180deg,#fffaf0,#f1e3cb);box-shadow:inset 0 2px 0 #fff,inset 0 -5px 0 rgba(120,80,40,.18),0 8px 0 #0a0518,0 18px 34px rgba(0,0,0,.55);animation:slideup .4s var(--spring)}
@@ -374,6 +372,6 @@ textarea.code,input[type=text]{box-shadow:inset 0 3px 6px rgba(0,0,0,.6)}
 
 /* scrollbars and focus */
 button:focus-visible,.tab:focus-visible,.pick:focus-visible{outline:3px solid #2fe6ff;outline-offset:2px}
-.hub-main{padding-bottom:20px}
+.hub-main{padding-bottom:34px}
 @media (prefers-reduced-motion:reduce){.btn::after,.pick::after,.revi::before,.pbar>i::after{animation:none}}
 .reduce .btn::after,.reduce .pick::after,.reduce .revi::before,.reduce .pbar>i::after{animation:none}
