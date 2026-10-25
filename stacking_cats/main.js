@@ -2,7 +2,7 @@
 import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
-  ITEM_BY_ID, MAX_STASH, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, upgradeCost, buyUpgrade, kingdomLevel,
+  ITEM_BY_ID, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, upgradeCost, buyUpgrade, kingdomLevel,
   DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
 } from './cats.js';
 import { createKingdomScene } from './kingdom_scene.js';
@@ -15,6 +15,7 @@ import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawR
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
 import { mix } from './art_util.js';
+import { iconCanvas, installGlyphs } from './art_icons.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -87,6 +88,7 @@ function applyOptions() {
   fit();
 }
 addEventListener('resize', fit); applyOptions();
+installGlyphs(app);
 
 // ---------------------------------------------------------------- sprites
 const catSprites = new Map(), silSprites = new Map();
@@ -603,7 +605,6 @@ function showItemReward() {
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button>${rerollBtn()}</div>`);
   acts = {
     pickItem: (d) => {
-      if (g.stash.length >= MAX_STASH) { toast('Backpack full! Equip or drop something first'); showTower(showItemReward); return; }
       S.takeItem(g, d.id);
       sfx.play('chest');
       showTower(() => nextReward(), { item: g.stash.length - 1 });
@@ -670,24 +671,39 @@ function showTower(back, opt = {}) {
     for (let i = S.stackMax(g) - 1; i >= 0; i--) tw.push(g.cats[i] ? catRow(g.cats[i], 'tower', i, i === 0 ? ' \u00B7 takes the hits' : '') : `<div class="slot" data-act="slot" data-zone="tower" data-i="${i}">&nbsp;Empty spot</div>`);
     const bn = [];
     for (let i = 0; i < S.benchMax(g); i++) bn.push(g.bench[i] ? catRow(g.bench[i], 'bench', i) : `<div class="slot" data-act="slot" data-zone="bench" data-i="${i}">&nbsp;Empty bench spot</div>`);
-    const bag = g.stash.map((id, i) => `<span class="bag ${ITEM_BY_ID[id].rarity} ${selItem === i ? 'sel' : ''}" data-act="bag" data-i="${i}" title="${ITEM_BY_ID[id].name}">${ITEM_BY_ID[id].icon}</span>`).join('') + Array.from({ length: MAX_STASH - g.stash.length }, () => '<span class="bag empty"></span>').join('');
+    const over = S.overflow(g);
+    const cell = (id, i) => `<span class="bag ${ITEM_BY_ID[id].rarity} ${selItem === i ? 'sel' : ''} ${i >= MAX_STASH ? 'over' : ''}" data-act="bag" data-i="${i}" title="${ITEM_BY_ID[id].name}: ${ITEM_BY_ID[id].desc}">${ITEM_BY_ID[id].icon}</span>`;
+    const bag = g.stash.map(cell).join('') + Array.from({ length: Math.max(0, MAX_STASH - g.stash.length) }, () => '<span class="bag empty"></span>').join('');
     const it = selItem != null && g.stash[selItem] ? ITEM_BY_ID[g.stash[selItem]] : null;
+    const plan = it ? S.forgePlan(g, selItem) : null;
+    const same = it ? g.stash.filter((x) => ITEM_BY_ID[x].rarity === it.rarity).length : 0;
+    const acts2 = it
+      ? `<button class="btn small amber fbtn" data-act="sell">Sell &#129689; +${S.sellValue(g, it.id)}</button><button class="btn small fbtn ${plan ? 'purple' : 'grey'}" data-act="forge" ${plan ? '' : 'disabled'} title="Melt three ${it.rarity} items into one ${FORGE_NEXT[it.rarity]} item">Forge ${Math.min(same, FORGE_COUNT)}/${FORGE_COUNT} &rarr; ${FORGE_NEXT[it.rarity]}</button>`
+      : '';
     const syn = S.synergyState(g);
     const synChips = Object.entries(syn.counts).sort((a, b) => b[1] - a[1]).map(([t, n]) => { const tier = syn.tiers[t] || 0; return `<span class="schip ${tier ? 't' + tier : ''}" title="${SYNERGIES[t].name}: ${tier ? synergyText(t, tier) : 'needs 2 cats'}">${SYNERGIES[t].icon} ${SYNERGIES[t].name} ${n}/${n >= 3 ? 3 : n >= 2 ? 3 : 2}</span>`; }).join('');
+    const msg = over
+      ? `<b class="warn">Backpack is over full by ${over}.</b> Sell, forge or equip items to continue.`
+      : it ? `<b>${it.icon} ${it.name}</b>: ${it.desc}. Tap a cat to equip it, or sell / forge it.` : sel ? 'Tap another cat to swap, or a matching one to merge.' : 'Tap a cat to move it. Tap a backpack item, then a cat, to equip it.';
     setScreen(`<h2>Arrange your tower <small class="klv">Team DPS &asymp; ${Math.round(teamDps(S.calcMods(g)))}</small></h2><div class="synrow">${synChips || '<small>Stack cats of the same kind for synergy bonuses!</small>'}</div>
-      <div class="tower"><div class="col"><h4>Tower (top to bottom)</h4>${tw.join('')}</div><div class="col"><h4>Bench (rests, heals fast)</h4>${bn.join('')}
-        <h4>Backpack ${g.stash.length}/${MAX_STASH}</h4><div class="bagrow">${bag}</div>
-        <div class="row"><button class="btn small grey" data-act="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div></div></div>
-      <div class="detail slim">${it ? `<b>${it.icon} ${it.name}</b>: ${it.desc}. Tap a cat to equip it.` : sel ? 'Tap another cat to swap, or a matching one to merge.' : 'Tap a cat to move it. Tap a backpack item, then a cat, to equip it.'}</div>
-      <div class="row"><button class="btn" data-act="done">Done</button></div>`, 'wide');
+      <div class="tbody"><div class="tower"><div class="col"><h4>Tower (top to bottom)</h4>${tw.join('')}<button class="btn small grey relbtn" data-act="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div><div class="col"><h4>Bench (rests, heals fast)</h4>${bn.join('')}
+        <h4>Backpack <span class="${over ? 'warn' : ''}">${g.stash.length}/${MAX_STASH}</span></h4><div class="bagrow">${bag}</div></div></div></div>
+      <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}"><span>${msg}</span></div>${acts2}<button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>Done</button></div>`, 'wide arr');
     if (selItem != null) coach('c6', 'Now tap a cat to equip it. The green numbers show how much stronger that cat gets!', 790, 6);
     else coach('c4', 'Tap a cat, then another one to swap places. Two equal cats merge into one stronger cat!', 790, 6);
   };
   draw();
   acts = {
-    done: back,
+    done: () => { if (S.overflow(g) > 0) { toast('Sell, forge or equip items first'); return; } back(); },
+    sell: () => { const v = S.sellItem(g, selItem); if (v) { sfx.play('coin'); toast(`Sold for +${v} coins`); } selItem = null; draw(); },
+    forge: () => {
+      const id = S.forgeItems(g, selItem);
+      if (!id) return;
+      sfx.play('merge'); toast(`Forged ${ITEM_BY_ID[id].name}!`); puff(S.TOWER_X, 330, 14, '#c88aff', 160, 0.6);
+      selItem = g.stash.length - 1; draw();
+    },
     bag: (d) => { selItem = selItem === +d.i ? null : +d.i; sel = null; draw(); },
-    unequip: (d) => { if (S.unequipItem(g, +d.uid, +d.i)) { sfx.play('equip'); draw(); } else toast('Backpack is full'); },
+    unequip: (d) => { if (S.unequipItem(g, +d.uid, +d.i)) { sfx.play('equip'); draw(); } else toast('Backpack is full: sell something first'); },
     release: () => {
       if (!sel) return;
       if (!rel) { rel = true; draw(); return; }
@@ -1099,8 +1115,8 @@ function drawFx() {
       ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a * 0.7; ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.restore();
     } else if (f.k === 's') { ctx.globalAlpha = a; ctx.fillStyle = '#fff6b0'; for (let i = 0; i < 4; i++) { const an = i * 1.57 + (1 - a) * 2, d = (1 - a) * 24 + 4; ctx.beginPath(); ctx.arc(f.x + Math.cos(an) * d, f.y + Math.sin(an) * d, 2.6 * a + 0.6, 0, TAU); ctx.fill(); } }
     else if (f.k === 'a') { ctx.globalAlpha = a; ctx.strokeStyle = '#fff'; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { ctx.lineWidth = 3.4 - i; ctx.beginPath(); ctx.arc(f.x + 16, f.y, (f.wide ? 46 : 28) + i * 6 + (1 - a) * 8, Math.PI * 0.62, Math.PI * 1.38); ctx.stroke(); } }
-    else if (f.k === 'fly') { ctx.globalAlpha = 1; if (f.kind === 'coin') { ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#8a5a14'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(f.x, f.y, 5.5 * Math.abs(Math.cos(f.life * 14)) + 1.2, 5.5, 0, 0, TAU); ctx.fill(); ctx.stroke(); } else { ctx.font = '22px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('\uD83C\uDF81', f.x, f.y + 7); } }
-    else if (f.k === 'h') { ctx.globalAlpha = Math.min(1, a * 2); ctx.fillStyle = '#ff7aa8'; ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('♥', f.x, f.y); }
+    else if (f.k === 'fly') { ctx.globalAlpha = 1; if (f.kind === 'coin') { ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#8a5a14'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(f.x, f.y, 5.5 * Math.abs(Math.cos(f.life * 14)) + 1.2, 5.5, 0, 0, TAU); ctx.fill(); ctx.stroke(); } else ctx.drawImage(iconSprite('\uD83C\uDF81'), f.x - 13, f.y - 13, 26, 26); }
+    else if (f.k === 'h') { ctx.globalAlpha = Math.min(1, a * 2); ctx.drawImage(iconSprite('♥'), f.x - 8, f.y - 12, 16, 16); }
     ctx.globalCompositeOperation = 'source-over';
   }
   // pass 2: additive light
@@ -1198,7 +1214,7 @@ function shadow(x, y, rx) { ctx.fillStyle = 'rgba(30,20,50,.22)'; ctx.beginPath(
 const iconCache = new Map();
 function iconSprite(emoji) {
   let c = iconCache.get(emoji);
-  if (!c) { c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d'); x.font = '24px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(emoji, 16, 17); iconCache.set(emoji, c); }
+  if (!c) { c = document.createElement('canvas'); c.width = c.height = 48; c.getContext('2d').drawImage(iconCanvas(emoji), 0, 0, 48, 48); iconCache.set(emoji, c); }
   return c;
 }
 function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
@@ -1322,7 +1338,7 @@ function drawProj(p, t, ids) {
   const sp = Math.hypot(p.vx, p.vy), ux = p.vx / sp, uy = p.vy / sp;
   ctx.save(); ctx.lineCap = 'round';
   if (id === 'shadow') { ctx.translate(p.x, p.y); ctx.rotate(t * 20); ctx.fillStyle = '#dfe6f2'; ctx.strokeStyle = '#271c33'; ctx.lineWidth = 1; ctx.beginPath(); for (let i = 0; i < 8; i++) { const r = i % 2 ? 2.4 : 7; ctx.lineTo(Math.cos(i * 0.785) * r, Math.sin(i * 0.785) * r); } ctx.closePath(); ctx.fill(); ctx.stroke(); }
-  else if (id === 'pudding') { ctx.fillStyle = '#ff6b9a'; ctx.font = '15px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('♥', p.x, p.y + 5); }
+  else if (id === 'pudding') { ctx.drawImage(iconSprite('♥'), p.x - 8, p.y - 9, 16, 16); }
   else if (id === 'lyra') { ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#271c33'; ctx.lineWidth = 2.5; ctx.font = `800 18px ${FONT}`; ctx.textAlign = 'center'; ctx.strokeText('♪', p.x, p.y + 6); ctx.fillText('♪', p.x, p.y + 6); }
   else if (id === 'yuki') { ctx.fillStyle = '#fff'; ctx.strokeStyle = '#7fc8ff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, TAU); ctx.fill(); ctx.stroke(); }
   else if (id === 'hawkeye') { ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - ux * 34, p.y - uy * 34); ctx.stroke(); }
@@ -1593,7 +1609,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; } };
+window.stackingCats = { get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward };
 showTitle();
 requestAnimationFrame(frame);
 void ENEMY_TYPES;

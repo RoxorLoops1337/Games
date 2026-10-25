@@ -3,7 +3,7 @@
 import {
   CATS, CAT_BY_ID, STARTERS, SNACKS, SNACK_BY_ID, ENEMY_TYPES, NESTS,
   MAX_STACK, MAX_BENCH, BOSS_EVERY, LVL_MUL, AURA_MUL, BASE_HP, BASE_DMG, TEMP_WAVES,
-  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, itemSlots, kingdomBonuses, emptyKingdom, COIN,
+  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, FORGE_NEXT, FORGE_COUNT, itemSlots, kingdomBonuses, emptyKingdom, COIN,
   DIFFS, CAT_TAGS, SYNERGIES, ROUTES, ROUTE_BY_ID, DAILY_POOL,
 } from './cats.js';
 
@@ -225,7 +225,7 @@ export function releaseCat(g, uid) {
 }
 
 // ---------------------------------------------------------------- items and loot
-export function stashItem(g, id) { if (g.stash.length < MAX_STASH) { g.stash.push(id); return true; } return false; }
+export function stashItem(g, id) { g.stash.push(id); return true; }
 export function rollItemChoices(g, n = 3) {
   const L = g.meta.luck + g.route.rare, pool = ITEMS.map((it) => ({ id: it.id, w: ITEM_WEIGHT[it.rarity] * (it.rarity === 'rare' ? 1 + 0.25 * L : it.rarity === 'epic' ? 1 + 0.5 * L : 1) }));
   const out = [];
@@ -236,7 +236,41 @@ export function rollItemChoices(g, n = 3) {
   }
   return out;
 }
-export function takeItem(g, id) { g.run.items++; return stashItem(g, id); }
+// a pick is never refused: the pack may overflow, and the arrange screen then asks the player to sell, forge or equip
+// until it fits again (selling always works, so the pack can never lock the run)
+export function takeItem(g, id) { g.run.items++; g.stash.push(id); return true; }
+export const overflow = (g) => Math.max(0, g.stash.length - MAX_STASH);
+export const sellValue = (g, id) => Math.round(SELL_VALUE[ITEM_BY_ID[id].rarity] * (1 + 0.04 * g.wave));
+export function sellItem(g, idx) {
+  const id = g.stash[idx];
+  if (!id) return 0;
+  const v = sellValue(g, id);
+  g.stash.splice(idx, 1);
+  addCoins(g, v);
+  g.run.sold = (g.run.sold || 0) + 1;
+  return v;
+}
+// indexes of the items that forging item `idx` would use: the item itself plus two more of its rarity, equal items first
+export function forgePlan(g, idx) {
+  const id = g.stash[idx];
+  if (!id) return null;
+  const rar = ITEM_BY_ID[id].rarity, rest = [];
+  g.stash.forEach((o, i) => { if (i !== idx && ITEM_BY_ID[o].rarity === rar) rest.push(i); });
+  rest.sort((a, b) => (g.stash[b] === id) - (g.stash[a] === id));
+  return rest.length >= FORGE_COUNT - 1 ? [idx, ...rest.slice(0, FORGE_COUNT - 1)] : null;
+}
+export function forgeItems(g, idx) {
+  const plan = forgePlan(g, idx);
+  if (!plan) return null;
+  const rar = ITEM_BY_ID[g.stash[idx]].rarity, next = FORGE_NEXT[rar], used = plan.map((i) => g.stash[i]);
+  const pool = ITEMS.filter((it) => it.rarity === next && !(rar === 'epic' && used.includes(it.id)));
+  const pick = (pool.length ? pool : ITEMS.filter((it) => it.rarity === next))[Math.floor(g.rnd() * (pool.length || 1))] || ITEMS.find((it) => it.rarity === next);
+  for (const i of plan.slice().sort((a, b) => b - a)) g.stash.splice(i, 1);
+  g.stash.push(pick.id);
+  g.run.forged = (g.run.forged || 0) + 1;
+  if (rar === 'epic') addCoins(g, Math.round(40 * (1 + 0.04 * g.wave)));
+  return pick.id;
+}
 export function equipItem(g, stashIdx, catUid) {
   const c = findCat(g, catUid), id = g.stash[stashIdx];
   if (!c || !id) return false;
