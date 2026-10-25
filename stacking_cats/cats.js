@@ -615,3 +615,22 @@ export function weekInfo(week) {
   mod.name = 'Weekly Gauntlet'; mod.icon = '🏆'; mod.desc = picks.map((p) => p.name).join(', ');
   return { day: week, week, kind: 'weekly', seed: h || 1, mod, mods: picks };
 }
+
+// one plain sentence per special move kind, for the Cat Dex and the tray tooltips
+export const SPECIAL_TEXT = {
+  frenzy: 'Attacks about twice as fast for a few seconds.',
+  fortress: 'The whole stack takes 70% less damage for 5 seconds.',
+  inferno: 'A wall of fire burns every mouse in front of the stack.',
+  storm: 'Lightning jumps through up to ten mice and stuns them.',
+  volley: 'Fires a burst of shots at random mice.',
+  freeze: 'Freezes every mouse for a few seconds (nests only slow down).',
+  snipe: 'One huge shot at the toughest mouse, ignoring armor.',
+  barrage: 'Seven explosions rain down on the mice.',
+  heal: 'Heals the whole team and wakes up fallen cats.',
+  meteor: 'A giant explosion where the mice are packed tightest.',
+  toxin: 'Poisons every mouse on the field.',
+  anthem: 'The whole team attacks 50% faster for 6 seconds.',
+  hex: 'Cursed mice take 35% more damage for 6 seconds.',
+  phase: 'The stack dodges 60% of attacks for 5 seconds.',
+  supernova: 'A cosmic blast hits every mouse on the field.',
+};
