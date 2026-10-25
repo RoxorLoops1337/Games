@@ -728,7 +728,6 @@ function disc(ctx, A) {
   eye(ctx, -14, -4, 3.4, -1, 0, A.blink, INK); eye(ctx, 4, -5, 3.4, -1, 0, A.blink, INK);
   mouthStitch(ctx, -5, 14, 20, 3, INK, 5);
   seam(ctx, [18, -34, 26, -14, 22, 6, 28, 26], 7, 4); staple(ctx, 24, -14, 0.5);
-  text0(ctx, '$', 4, -14 + 22, 0, C(INK));
   ctx.restore();
   ell(ctx, 0, 2, 46, 5, C('#000', 1, 0.22), 0);
 }
@@ -1335,7 +1334,7 @@ export function stage(ctx, paint, A, bw, bh, x, y, o, facing, kScale) {
   ctx.translate(x + (fx * att * 46 - fx * hurt * 16) * s, y);
   if (d > 0) ctx.globalAlpha *= 1;
   // ground shadow
-  ctx.fillStyle = C('#000', 1, 0.28 * (1 - d)); ctx.beginPath(); ctx.ellipse(0, 1, bw * 0.4 * s * kScale, 7 * s, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = C('#000', 1, 0.28 * (1 - d)); ctx.beginPath(); ctx.ellipse(0, 1, bw * 0.4 * s, 7 * s, 0, 0, TAU); ctx.fill();
   ctx.scale(s * kScale * m, s * kScale);
   const sq = 1 + att * 0.05 - hurt * 0.04, sx = 1 - att * 0.04 + hurt * 0.05;
   ctx.rotate(-fx * hurt * 0.06 + fx * att * 0.03);
@@ -1361,6 +1360,7 @@ export function drawEnemy(ctx, def, x, y, o = {}) {
     stage(ctx, BODY[key], A, sz[0] * k, sz[1] * k, x, y, o, -1, k);
   } catch (e) {
     G.flash = 0;
+    if (globalThis.__GW_ART_THROW) throw e;
     try { ctx.restore(); } catch (e2) { /* ignore */ }
     try { fallbackDraw(ctx, def, x, y, o); } catch (e3) { /* never throw */ }
   }

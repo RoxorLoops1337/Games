@@ -246,8 +246,12 @@ export function makeGraftOffer(run, o = {}) {
   const cards = [];
   const lowPool = byPlays.slice(0, Math.max(3, Math.ceil(elig.length / 3)));
   const low = rng.pick(lowPool); cards.push(low);
+  // prefer three DIFFERENT cards so the choice is a real one; duplicates only fill gaps
   const rest = elig.filter((i) => i !== low);
-  for (const c of rng.sample(rest, 2)) cards.push(c);
+  const seen = new Set([low.id]);
+  const fresh = rng.shuffle(rest.filter((i) => !seen.has(i.id)));
+  for (const c of fresh) { if (cards.length >= 3) break; if (!seen.has(c.id)) { seen.add(c.id); cards.push(c); } }
+  for (const c of rng.shuffle(rest.filter((i) => !cards.includes(i)))) { if (cards.length >= 3) break; cards.push(c); }
   const count = perk(run, 'offer4') ? 4 : 3;
   const tiers = ['safe', 'greedy', 'weird'];
   const picked = [];

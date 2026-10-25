@@ -45,7 +45,7 @@ export default {
     st = {
       run, offer: run.pending.offer, t: 0, dealT: 0, selCard: null, selGraft: null, morphT: 1, pvKey: '', pv: null,
       menu: false, skipPick: [], fx: new Fx(), mode: 'pick', anim: null, snap: null, lift: {}, note: null, ending: false,
-      reduce: !!(meta.settings && meta.settings.reduceMotion), done: false,
+      reduce: !!(meta.settings && meta.settings.reducedMotion), done: false,
     };
     st.rects = layout(st.offer);
     this.st = st;

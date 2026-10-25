@@ -221,7 +221,7 @@ function ruleArt(app, i, cx, cy, w, h) {
 export default {
   enter(app) {
     this.tab = 0; this.q = ''; this.filt = {}; this.sts = {}; this.pending = null;
-    this.anim = (app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reduceMotion) ? 1 : 0;
+    this.anim = (app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion) ? 1 : 0;
     this.count = 0;
   },
   setTab(i) { this.tab = ((i % TABS.length) + TABS.length) % TABS.length; this.q = ''; },

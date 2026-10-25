@@ -8,7 +8,7 @@ import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
 import { cardSpec, strainInfo, isBare, instWeight, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { resonanceOf } from '../engine/resonance.js';
 
-const reduceMotion = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reduceMotion);
+const reduceMotion = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion);
 const plural = (n, w) => (n === 1 ? w : w + 's');
 
 // ---------------------------------------------------------------- small widgets
