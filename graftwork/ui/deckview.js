@@ -123,6 +123,7 @@ export function cardGrid(app, items, x, y, w, h, o = {}) {
         const i = r * cols + c; if (i >= items.length) break;
         const it = items[i];
         const left = ox + c * (cw + gap), cardTop = top + gap + r * rowH;
+        const over = inView(app, st, left, cardTop, cw, ch);
         const hot = hover === i && !it.disabled;
         const cx = left + cw / 2, cy = cardTop + ch / 2 - (hot ? 4 : 0);
         if (it.spec) {
