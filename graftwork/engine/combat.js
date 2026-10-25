@@ -592,6 +592,7 @@ export function intentOf(c, e) {
         let n = val(c, ctx, o.n);
         eachStatus(e, (d, v) => { if (d.mod && d.mod.outAdd) n += d.mod.outAdd(v); });
         eachStatus(e, (d, v) => { if (d.mod && d.mod.outMul) n *= d.mod.outMul(v); });
+        if (e.dmgMul) n *= e.dmgMul;
         eachStatus(c.player, (d, v) => { if (d.mod && d.mod.inMul) n *= d.mod.inMul(v); });
         n = Math.max(0, Math.floor(n));
         const h = val(c, ctx, o.hits) || 1;
