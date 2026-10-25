@@ -71,7 +71,7 @@ function checkRun(run) {
   const p = run.pending;
   switch (run.phase) {
     case 'combat': if (!p || !Array.isArray(p.enemies) || !p.enemies.length || p.enemies.some((e) => !ENEMIES[e])) fail('combat without valid enemies'); break;
-    case 'graft': if (!p || p.kind !== 'graft') fail('graft phase without graft pending'); for (const u of p.offer.cards) if (!RUN.findInst(run, u)) fail('offer card not in deck ' + u); for (const g of p.offer.grafts) if (!GRAFTS[g]) fail('offer bad graft'); break;
+    case 'graft': if (!p) break; /* null while the attach / skip animation runs, then afterGraft routes on */ if (p.kind !== 'graft') fail('graft phase with wrong pending'); for (const u of p.offer.cards) if (!RUN.findInst(run, u)) fail('offer card not in deck ' + u); for (const g of p.offer.grafts) if (!GRAFTS[g]) fail('offer bad graft'); break;
     case 'shop': if (!p || p.kind !== 'shop') fail('shop phase without shop'); break;
     case 'forge': if (!p || p.kind !== 'forge') fail('forge phase without forge'); break;
     case 'event': if (!p || p.kind !== 'event' || !EVENTS[p.id]) fail('event phase without event'); break;
@@ -165,6 +165,7 @@ function doResize(R) {
 }
 function doSaveReload(R) {
   const run = app.shared.run; if (!run) return;
+  if (run.phase === 'graft' && !run.pending) return; // mid attach animation: the game only saves on route()
   log('save/reload ' + run.phase);
   if (run.phase === 'dead' || run.phase === 'won') { saveRun(run); assert.equal(loadRun(), null, 'ended run must not be saved'); return; }
   saveRun(run);
