@@ -95,8 +95,10 @@ func _fixture_panel(st: Dictionary) -> Control:
 	var opp: Dictionary = st["season"]["teams"][int(fx["opp"])]
 	var block: int = PsClub.block_of_day(int(st["season"]["day"]))
 	v.add_child(PsKit.lbl("Next: %s vs %s" % ["home" if fx["me_home"] else "away", opp["name"]], 17, PsKit.CREAM))
-	var mine: Dictionary = PsMatchSim.team_base(PsClub.team_cfg(st, 0)["xi"])
-	var theirs: Dictionary = PsMatchSim.team_base(PsClub.team_cfg(st, int(fx["opp"]))["xi"])
+	var my_cfg: Dictionary = PsClub.team_cfg(st, 0)
+	var op_cfg: Dictionary = PsClub.team_cfg(st, int(fx["opp"]))
+	var mine: Dictionary = PsMatchSim.team_base(my_cfg["xi"], str(my_cfg["formation"]))
+	var theirs: Dictionary = PsMatchSim.team_base(op_cfg["xi"], str(op_cfg["formation"]))
 	var my_p: int = (int(mine["atk"]) + int(mine["def"]) + int(mine["tmp"])) / 3
 	var op_p: int = (int(theirs["atk"]) + int(theirs["def"]) + int(theirs["tmp"])) / 3
 	var verdict: String = "evenly matched"
@@ -108,6 +110,7 @@ func _fixture_panel(st: Dictionary) -> Control:
 		verdict = "you look stronger"
 		vc = PsKit.GRASS
 	v.add_child(PsKit.lbl("Block %d, match %d of %d  ·  %s (you %d, them %d)" % [block + 1, int(st["season"]["day"]) - int(PsClub.BLOCK_STARTS[block]) + 1, PsClub.block_size(block), verdict, my_p, op_p], 13, vc))
+	v.add_child(PsKit.lbl("You: %s, %s.  They: %s." % [my_cfg["formation"], str(PsMatchSim.MENTALITY_LABEL[my_cfg["mentality"]]).to_lower(), op_cfg["formation"]], 13, PsKit.DIM))
 	return p
 
 func _form_panel(st: Dictionary) -> Control:

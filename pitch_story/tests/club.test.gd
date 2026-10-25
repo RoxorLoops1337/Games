@@ -75,7 +75,7 @@ func run(t: PsT) -> void:
 	var apps: int = 0
 	for p in st["squad"]:
 		apps += int(p["apps"])
-	t.eq(apps, 14 * 11, "every match gave 11 appearances")
+	t.ok(apps >= 14 * 11 and apps <= 14 * 14, "every match gave 11 appearances plus any substitutes (%d)" % apps)
 
 	# Roll over to the next season.
 	var legacy: String = st["cards"][0]
@@ -94,7 +94,7 @@ func run(t: PsT) -> void:
 	t.ok(rep["prize"] >= 0, "prize money is not negative")
 	var lineup_ok: bool = true
 	for pos in PsPlayers.POS_ORDER:
-		if st["lineup"][pos].size() != int(PsPlayers.LINEUP_SLOTS[pos]):
+		if st["lineup"][pos].size() != PsFormations.count(PsClub.my_formation(st), pos):
 			lineup_ok = false
 	t.ok(lineup_ok, "the lineup is complete after the roll-over")
 	var ages_ok: bool = true
@@ -102,6 +102,25 @@ func run(t: PsT) -> void:
 		if int(p["age"]) < 16 or int(p["age"]) > 40:
 			ages_ok = false
 	t.ok(ages_ok, "ages stay sane")
+
+	# Formations rebuild the XI and the bench.
+	var fm: Dictionary = PsClub.new_game(3, "Form FC", 0)
+	for f in PsFormations.LIST:
+		t.ok(PsClub.set_formation(fm, f), "formation %s can be picked" % f)
+		var cfg: Dictionary = PsClub.team_cfg(fm, 0, true)
+		t.eq(cfg["xi"].size(), 11, f + ": eleven in the XI")
+		t.eq(cfg["formation"], f, f + ": the match gets the formation")
+		t.ok(cfg["bench"].size() >= 4 and cfg["bench"].size() <= 5, f + ": a bench of four or five")
+		var ids: Dictionary = {}
+		for p in cfg["xi"]:
+			ids[int(p["id"])] = true
+		for p in cfg["bench"]:
+			t.ok(not ids.has(int(p["id"])), f + ": nobody is on the pitch and the bench at once")
+		for pos in PsPlayers.POS_ORDER:
+			t.eq(fm["lineup"][pos].size(), PsFormations.count(f, pos), "%s: %s slots" % [f, pos])
+	t.ok(not PsClub.set_formation(fm, "9-9-9"), "an unknown formation is refused")
+	t.ok(cfg_has_ai(PsClub.team_cfg(fm, 1)), "rivals are played by the computer")
+	t.ok(not cfg_has_ai(PsClub.team_cfg(fm, 0)), "your side is not")
 
 	# Facilities and money.
 	var fac: Dictionary = PsClub.new_game(5, "Rich FC", 0)
@@ -125,3 +144,6 @@ func run(t: PsT) -> void:
 		_play_day(eco)
 	var delta: int = int(eco["club"]["money"]) - start_money
 	t.ok(delta > -600 and delta < 3500, "season profit is in a sane range (%d)" % delta)
+
+func cfg_has_ai(cfg: Dictionary) -> bool:
+	return bool(cfg.get("ai", false))
