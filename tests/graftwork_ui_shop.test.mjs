@@ -86,7 +86,7 @@ for (const hero of Object.keys(HEROES)) {
     if (opt === 'reforge') { click(app, ...FIRST); frames(app, 15); click(app, ...GRAFT_ROW); frames(app, 15); click(app, ...FIRST); }
     settle(app);
     assert.equal(run.pending.used, 1, `${hero} ${opt} used`);
-    if (opt === 'rest') assert.equal(run.hp, hp + RUN.forgeHeal(run));
+    if (opt === 'rest') assert.equal(run.hp, Math.min(run.maxHp, hp + RUN.forgeHeal(run))); // Rest heals 30% of max HP but never past max
     if (opt === 'expand') assert.equal(run.budgetBonus, bb + 1);
     if (opt === 'refine') assert.equal(run.deck.filter((c) => c.up).length, ups + 1);
     if (opt === 'strip') assert.equal(nGrafts(run), g0 - 1);

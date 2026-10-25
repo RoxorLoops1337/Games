@@ -202,7 +202,7 @@ export const ENEMIES_1 = [
     art: { body: 'box', color: '#d8d070', notes: 'Wheeled cart box with a screen rect showing a flat polyline pulse, two round paddles on coiled cable polylines. Screen brightens as the countdown falls.' } },
 
   // ================= BOSS =================
-  { id: 'the_matron', name: 'The Matron', act: 1, kind: 'boss', hp: 80,
+  { id: 'the_matron', name: 'The Matron', act: 1, kind: 'boss', hp: 90,
     pick: (A, e) => {
       const t = e.data.t || 0;
       if (e.data.phase === 2) return e.data.rang ? ['scar', 'rap', 'smother'][t % 3] : 'ring';

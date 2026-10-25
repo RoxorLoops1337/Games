@@ -286,7 +286,7 @@ function impresarioPick(A, e) {
   return PHASES[ph - 1][(e.data.step || 0) % 3];
 }
 const impresario = {
-  id: 'the_impresario', name: 'The Impresario', act: 3, kind: 'boss', hp: 340,
+  id: 'the_impresario', name: 'The Impresario', act: 3, kind: 'boss', hp: 210,
   pick: impresarioPick,
   moves: {
     downbeat: { name: 'Downbeat', fx: [D(22), { op: 'block', n: 10 }] },
@@ -364,7 +364,7 @@ function spliceEffect(A, ctx) {
 const SPLICE_TEXT = 'Applies the effect of your most grafted school: Ember burn, Blood bleed, Echo a second hit, Hoard block it keeps, Rust junk, Static marks, Gilded steals gold. No grafts: Weak and block';
 
 const grafter = {
-  id: 'the_grafter', name: 'The Grafter', act: 3, kind: 'boss', final: true, hp: 420,
+  id: 'the_grafter', name: 'The Grafter', act: 3, kind: 'boss', final: true, hp: 300,
   pattern: ['stitch', 'splice', 'mirror'],
   moves: {
     stitch: { name: 'Stitch', fx: [{ op: 'dmg', n: { base: 12, per: 'grafts', max: 52 } }] },

@@ -183,7 +183,7 @@ export const ENEMIES_2 = [
       gavel: { name: 'Gavel', fx: [{ op: 'dmg', n: 22 }] },
     },
     art: { body: 'podium', color: '#7a4a2a', notes: 'Wide wooden podium rect with a stout gavel arm swinging from the top, a fringe of paddle shapes along the front.' } },
-  { id: 'pickled_king', name: 'The Pickled King', act: 2, kind: 'elite', hp: [116, 122], pattern: ['sour', 'decree', 'crush'], start: { brined: 16 },
+  { id: 'pickled_king', name: 'The Pickled King', act: 2, kind: 'elite', hp: [100, 106], pattern: ['sour', 'decree', 'crush'], start: { brined: 16 },
     moves: {
       sour: { name: 'Sour Crown', fx: [{ op: 'dmg', n: 14 }, { op: 'status', s: 'weak', n: 1, to: 'player' }] },
       decree: { name: 'Brined Decree', fx: [{ op: 'dmg', n: 6 }, { op: 'block', n: 12, to: 'self' }, { op: 'addCard', card: 'j_clot', n: 2, to: 'draw' }] },
@@ -201,7 +201,7 @@ export const ENEMIES_2 = [
     art: { body: 'jar', color: '#6e8f3f', notes: 'Huge jar body, a jagged gold crown of three triangles on the lid, pale pickled limbs pressed against the glass.' } },
 
   // ---------- BOSS ----------
-  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 135, start: { interest: 1 },
+  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 130, start: { interest: 1 },
     pick: (A, e) => {
       const d = e.data;
       if (d.p2 === 1) return 'collect';

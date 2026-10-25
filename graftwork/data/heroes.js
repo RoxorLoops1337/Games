@@ -22,7 +22,7 @@ export const HERO_LIST = [
     unlock: { text: 'Win a run with any hero.', rule: 'win' },
     blurb: 'Polite, acquisitive, and never without a receipt. Gold in, replays out.',
     passive: 'Start with 130 gold. Shop prices are 10% lower.',
-    perks: { hp: 86, gold: 130, shopDiscount: 0.1, combatHeal: 8 },
+    perks: { hp: 92, gold: 130, shopDiscount: 0.1, combatHeal: 8 },
     deck: ['o_swipe', 'o_swipe', 'o_swipe', 'o_pocket_change', 'o_pocket_change', 'o_cover', 'o_cover', 'o_cover', 'o_cover', 'o_appraise', 'o_appraise', 'o_gilt_strike', 'o_gilt_strike', 'o_collect', 'o_encore'],
   },
 ];
