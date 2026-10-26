@@ -153,7 +153,8 @@ t('number keys pick the nth card on pick screens and the cards show their number
 
 t('each wave shows an incoming strip with the mouse types and counts it brings', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
-  assert.ok(js.includes('for (const q of g.queue) inc.set(q.type'), 'the strip must count the wave queue by type');
+  assert.ok(js.includes('for (const q of g.queue) {') && js.includes('inc.set(q.type, o)'), 'the strip must count the wave queue by type');
+  assert.ok(js.includes('if (q.elite) o.el++'), 'the strip must count elites so it can crown them');
   assert.ok(js.includes('drawIncoming();'), 'the strip must be drawn in the frame');
   assert.ok(/function drawIncoming\(\)[\s\S]*mode !== 'play'/.test(js), 'the strip must only show while playing');
 });
