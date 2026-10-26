@@ -303,4 +303,10 @@ t('buying a Kingdom building or wonder gets a cheer meow from a village cat', ()
   assert.ok(/const villageCat = \(\) =>/.test(js), 'a helper picks a cat that lives in the village');
 });
 
+t('holding a finger on an uncharged cat makes it purr, and letting go stops the purr from starting', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/purrTimer = setTimeout\([\s\S]{0,200}sfx\.play\('purr'\)/.test(js), 'a held tap must start a purr after a short wait');
+  assert.ok(/addEventListener\('pointerup', stopPurr\)/.test(js), 'releasing must cancel it');
+});
+
 console.log(`${n} tests passed`);

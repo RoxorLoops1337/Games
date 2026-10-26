@@ -2055,13 +2055,17 @@ screenEl.addEventListener('pointerdown', (e) => {
   if (i < 0 || i >= titleStack.length || Math.abs(GROUND - 50 - i * SLOT - y) > SLOT * 0.55) return;
   sfx.unlock(); sfx.meow(titleStack[i], 'happy'); sparks(100, GROUND - 60 - i * SLOT, 6, '#fff6b0', 120, 0.4);
 });
+// holding a finger (or the mouse button) on a cat for half a second makes it purr; letting go before that cancels it
+let purrTimer = 0;
+const stopPurr = () => { clearTimeout(purrTimer); purrTimer = 0; };
+addEventListener('pointerup', stopPurr); cv.addEventListener('pointercancel', stopPurr);
 cv.addEventListener('pointerdown', (e) => {
   if (!g || mode !== 'play' || paused || g.state !== 'fight') return;
   const { x, y } = stagePoint(e);
   if (!isFinite(x) || !isFinite(y)) return;
   for (let i = 0; i < g.cats.length; i++) {
     const c = g.cats[i], py = GROUND - 50 - S.aliveCats(g).indexOf(c) * SLOT;
-    if (!c.ko && Math.abs(x - g.towerX) < 55 && Math.abs(y - py) < SLOT * 0.5) { if (S.specialReady(c)) doSpecial(c.uid); else { sfx.unlock(); sfx.meow(c.id, 'happy'); moods.set(c.uid, 1.2); emote(c.uid, '\uD83D\uDC96', 0.9); } return; }
+    if (!c.ko && Math.abs(x - g.towerX) < 55 && Math.abs(y - py) < SLOT * 0.5) { if (S.specialReady(c)) doSpecial(c.uid); else { sfx.unlock(); sfx.meow(c.id, 'happy'); moods.set(c.uid, 1.2); emote(c.uid, '\uD83D\uDC96', 0.9); stopPurr(); purrTimer = setTimeout(() => { purrTimer = 0; if (mode === 'play' && !paused) { sfx.play('purr'); moods.set(c.uid, 2.6); emote(c.uid, '\uD83D\uDC96', 1.4); } }, 550); } return; }
   }
   let best = null, bd = 1e9;
   for (const en of g.enemies) {
