@@ -5,7 +5,7 @@ import {
   takeItem, useReroll, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder,
 } from '../stacking_cats/cats.js';
 
 let n = 0;
@@ -215,6 +215,17 @@ t('cheapestUpgrade names the cheapest building the player can afford, or null', 
   for (const b of BUILDINGS) k.lv[b.id] = b.max;
   k.coins = 1e9;
   assert.equal(cheapestUpgrade(k), null, 'maxed buildings are never named');
+});
+
+t('affordableWonder names the cheapest unowned wonder the gems can pay for', () => {
+  const k = emptyKingdom();
+  assert.equal(affordableWonder(k), null, 'no gems, no hint');
+  k.gems = 3;
+  assert.ok(['bench', 'coin'].includes(affordableWonder(k)), 'a 3 gem wonder is named');
+  k.wonders.bench = true; k.wonders.coin = true;
+  assert.equal(affordableWonder(k), null, 'owned wonders are skipped');
+  k.gems = 99;
+  assert.ok(affordableWonder(k), 'more gems name another wonder');
 });
 
 console.log(`${n} tests passed`);

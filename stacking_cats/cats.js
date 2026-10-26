@@ -337,6 +337,15 @@ export function kingdomBonuses(k) {
   for (const w of WONDERS) if (k && k.wonders && k.wonders[w.id]) for (const key in w.bonus) m[key] += w.bonus[key];
   return m;
 }
+// the cheapest wonder not yet built that the gems can pay for (null when none), used for the Kingdom hint
+export function affordableWonder(k) {
+  let best = null;
+  for (const w of WONDERS) {
+    if ((k && k.wonders && k.wonders[w.id]) || ((k && k.gems) | 0) < w.cost) continue;
+    if (!best || w.cost < best.cost) best = w;
+  }
+  return best ? best.id : null;
+}
 export function buyWonder(k, id) {
   const w = WONDER_BY_ID[id];
   if (!w || (k.wonders && k.wonders[id]) || (k.gems | 0) < w.cost) return false;
