@@ -245,4 +245,9 @@ t('the first-run title hint mentions Enter for keyboard players', () => {
   assert.ok(js.includes("coarse ? 'Tap Play to begin' : 'Click Play or press Enter to begin'"), 'mouse and keyboard players must see the Enter shortcut, touch players keep the tap hint');
 });
 
+t('opening the pause menu clears the toasts so they do not smear behind the blur', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/function showPause\(\)[\s\S]*?\$\('toasts'\)\.replaceChildren\(\)/.test(js), 'showPause must clear the toast stack');
+});
+
 console.log(`${n} tests passed`);
