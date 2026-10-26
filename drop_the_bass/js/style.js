@@ -1,6 +1,6 @@
-// style.js: which visual style is active. 'doodle' (crayon notebook, the default) or 'classic' (the polished AAA look).
-let current = 'doodle';
-export const getStyle = () => current;
-export const isDoodle = () => current === 'doodle';
-export function setStyle(s) { current = s === 'classic' ? 'classic' : 'doodle'; return current; }
-export const STYLES = ['doodle', 'classic'];
+// style.js: the visual style. The game has ONE look, the crayon notebook doodle. A stored 'classic' value in an old save is ignored.
+// The classic art_*.js modules stay in the repo only because the facades still import them; nothing in the UI can reach them.
+export const getStyle = () => 'doodle';
+export const isDoodle = () => true;
+export function setStyle() { return 'doodle'; }
+export const STYLES = ['doodle'];

@@ -20,7 +20,7 @@ export function newProfile(now = 0) {
   const turretsUnlocked = {};
   for (const t of STARTER_TURRETS) turretsUnlocked[t] = true;
   return {
-    v: GAME.version, created: now, lastSeen: now,
+    v: GAME.version, poolV: 2, created: now, lastSeen: now,
     records: 250, diamonds: 30, fans: 0, fame: 1, name: '', resume: null, boosters: {}, wheel: null,
     studio: {}, heroLv: { roxor: 1, jasmin: 1 },
     turretsUnlocked, loadout: STARTER_TURRETS.slice(),
@@ -49,6 +49,7 @@ export function migrate(p, now = 0) {
   for (const w of WORLDS) out.prog[w.id] = Object.assign({}, base.prog[w.id], (p.prog || {})[w.id] || {});
   out.turretsUnlocked = Object.assign({}, base.turretsUnlocked, p.turretsUnlocked || {});
   if (!Array.isArray(out.loadout) || !out.loadout.length) out.loadout = STARTER_TURRETS.slice();
+  if (!p.poolV) { out.loadout = STARTER_TURRETS.slice(); out.poolV = 2; }   // older saves had a 4 to 8 turret pool: every drop now draws from all of them
   out.loadout = out.loadout.filter((t) => TURRETS[t] && out.turretsUnlocked[t]);
   if (!out.loadout.length) out.loadout = STARTER_TURRETS.slice();
   if (!Array.isArray(out.gear.items)) out.gear.items = [];
@@ -84,10 +85,9 @@ export function buyStudio(p, id) {
   if (c == null) return { ok: false, reason: 'max' };
   if (p.records < c) return { ok: false, reason: 'records', cost: c };
   p.records -= c; p.studio[id] = studioLevel(p, id) + 1;
-  if (id === 'rack') { /* loadout size grows */ }
   return { ok: true, cost: c };
 }
-export const loadoutSize = (p) => LOADOUT_BASE + studioLevel(p, 'rack');
+export const loadoutSize = () => LOADOUT_BASE;
 export function heroUpgradeCost(p, who) { const l = p.heroLv[who]; return l >= HERO_MAX ? null : heroCost(l); }
 export function upgradeHero(p, who) {
   const c = heroUpgradeCost(p, who);

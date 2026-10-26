@@ -101,7 +101,7 @@ function tourTab(app, st, rerender) {
     const mod = DAILY_MODS[dc.mod];
     const w = WORLDS.find((x) => x.id === dc.world);
     wrap.append(h('div', { class: 'card', style: 'border-color:var(--gold)' },
-      h('div', { class: 'row' }, h('div', { class: 'ic', style: 'width:54px;height:54px;border-radius:12px;background:#12082b;display:flex;align-items:center;justify-content:center' }, icon(mod.glyph, 38)),
+      h('div', { class: 'row' }, h('div', { class: 'ic icbox' }, icon(mod.glyph, 38)),
         h('div', { class: 'grow' }, h('h3', null, 'Daily Challenge: ' + mod.name), h('div', { class: 'sub' }, mod.desc), h('div', { class: 'sub' }, w.name + ', 15 waves'))),
       h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, dc.done ? 'Reward claimed today. Play again for fun (half rewards).' : 'First clear today: diamonds, Records and fans!'),
         btn(dc.done ? 'Play' : 'Play!', () => app.startRun({ mode: 'daily', world: dc.world, encore: 0, seed: dc.seed, daily: dc.mod, wavesTotal: dc.waves }), dc.done ? 'dark' : 'gold'))));
@@ -332,7 +332,7 @@ function shopTab(app, st, rerender) {
   wrap.append(h('div', { class: 'sub', style: 'margin:0 2px 10px' }, 'Pity timer: an Epic is guaranteed within ' + PITY.epicEvery + ' items and a Legendary within ' + PITY.legendaryEvery + '. Items so far since last: Epic ' + p.crate.sinceEpic + ', Legendary ' + p.crate.sinceLegend + '. Duplicates are never wasted: merge 3 of the same into the next rarity.'));
   // special offers
   wrap.append(h('h2', null, 'Upgrades'));
-  wrap.append(h('div', { class: 'card' }, h('div', { class: 'row' }, h('div', { class: 'ic', style: 'width:54px;height:54px;border-radius:12px;background:#12082b;display:flex;align-items:center;justify-content:center' }, icon('merge', 38)),
+  wrap.append(h('div', { class: 'card' }, h('div', { class: 'row' }, h('div', { class: 'ic icbox' }, icon('merge', 38)),
     h('div', { class: 'grow' }, h('h3', null, 'Auto-Merge Rack'), h('div', { class: 'sub' }, 'Unlocks the MERGE button in battle: merges every matching pair with one tap.')),
     p.autoMerge ? h('span', { class: 'pill', style: 'color:var(--green)' }, 'OWNED') : btn([icon('diamond', 22), AUTOMERGE_PRICE], () => { const r = M.buyAutoMerge(p); app.audio.play(r.ok ? 'levelup' : 'error'); if (!r.ok) toast('Need ' + AUTOMERGE_PRICE + ' diamonds. Win stages and finish quests to earn them!'); rerender(); }, p.diamonds >= AUTOMERGE_PRICE ? 'gold small' : 'dark small off'))));
   wrap.append(h('div', { class: 'sub', style: 'margin:0 2px' }, 'Diamonds are earned in the game only: first clears, stars, bosses, quests, stickers and daily rewards. Nothing here costs real money.'));
@@ -464,13 +464,10 @@ export function settingsModal(app) {
     body.replaceChildren(h('h2', null, 'Settings'));
     const slider = (label, key, apply) => h('div', { class: 'rangeRow' }, h('span', { style: 'width:80px' }, label), h('input', { type: 'range', min: 0, max: 100, value: Math.round(s[key] * 100), oninput: (e) => { s[key] = e.target.value / 100; apply(); app.save(); }, onchange: () => app.audio.play('ui_click') }));
     const tog = (label, key) => h('div', { class: 'toggle' }, label, btn(s[key] ? 'ON' : 'OFF', () => { s[key] = !s[key]; app.applySettings(); app.save(); draw(); }, s[key] ? 'green small' : 'dark small'));
-    body.append(h('div', { class: 'toggle' }, 'Visual style', h('div', { class: 'row', style: 'gap:6px' },
-      btn('Doodle', () => { s.style = 'doodle'; app.applySettings(); app.save(); draw(); app.hub && app.hub.render(); }, s.style === 'classic' ? 'dark small' : 'green small'),
-      btn('Classic', () => { s.style = 'classic'; app.applySettings(); app.save(); draw(); app.hub && app.hub.render(); }, s.style === 'classic' ? 'green small' : 'dark small'))));
     body.append(slider('Music', 'music', () => app.applySettings()), slider('Sound', 'sfx', () => app.applySettings()),
       tog('Screen shake', 'shake'), tog('Damage numbers', 'numbers'), tog('Vibration', 'vibrate'), tog('Beat helper (DROP ring)', 'beat'), tog('Reduce motion', 'reduce'), tog('Low graphics (faster)', 'lowfx'));
     if (p.autoMerge) body.append(tog2('Auto-merge after each drop', p.autoMergeOn, () => { p.autoMergeOn = !p.autoMergeOn; app.save(); draw(); }));
-    body.append(h('div', { class: 'hr' }), h('h3', null, 'Leaderboard name'), h('input', { type: 'text', maxlength: 16, value: p.name || '', placeholder: 'Your name (optional)', style: 'width:100%;font:800 18px sans-serif;padding:10px;border-radius:10px;border:3px solid var(--line);background:#12082b;color:#fff', oninput: (e) => { p.name = e.target.value.replace(/[^\w \-.']/g, '').slice(0, 16); app.save(); } }));
+    body.append(h('div', { class: 'hr' }), h('h3', null, 'Leaderboard name'), h('input', { type: 'text', maxlength: 16, value: p.name || '', placeholder: 'Your name (optional)', style: 'width:100%;font:400 20px var(--hand,sans-serif);padding:10px;border-radius:10px;border:3px solid var(--line)', oninput: (e) => { p.name = e.target.value.replace(/[^\w \-.']/g, '').slice(0, 16); app.save(); } }));
     body.append(h('div', { class: 'hr' }), h('h3', null, 'Save data'), h('div', { class: 'sub' }, 'Your progress is saved on this device. Copy the code to move it to another device.'));
     const ta = h('textarea', { class: 'code', readonly: true }, M.exportCode(p));
     body.append(ta, h('div', { class: 'btnrow' }, btn('Copy code', () => { ta.select(); try { navigator.clipboard.writeText(ta.value); toast('Copied!'); } catch (e) { document.execCommand('copy'); toast('Copied!'); } }, 'blue small'),
@@ -506,14 +503,15 @@ function wheelCard(app, rerender) {
     WHEEL.forEach((w, i) => {
       const a0 = -Math.PI / 2 + i * seg, a1 = a0 + seg;
       ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 108, a0, a1); ctx.closePath();
-      ctx.fillStyle = ['#ff5fb0', '#7a5cff', '#2fe6ff', '#ffc83d'][i % 4]; ctx.globalAlpha = 0.92; ctx.fill(); ctx.globalAlpha = 1; ctx.lineWidth = 3; ctx.strokeStyle = '#12082b'; ctx.stroke();
+      ctx.fillStyle = ['#ff8cc6', '#b79af0', '#7fd6f5', '#ffd95a'][i % 4]; ctx.fill(); ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = '#2b2733'; ctx.stroke();
+      ctx.save(); ctx.clip(); ctx.strokeStyle = 'rgba(43,39,51,0.16)'; ctx.lineWidth = 2; ctx.beginPath(); for (let k = -120; k < 120; k += 9) { ctx.moveTo(k, -110); ctx.lineTo(k + 60, 110); } ctx.stroke(); ctx.restore();
       ctx.save(); ctx.rotate(a0 + seg / 2); AE.drawGlyph(ctx, w.glyph, 74, 0, 26, '#fff');
-      ctx.translate(48, 0); ctx.rotate(Math.PI / 2 * 0); ctx.fillStyle = '#fff'; ctx.font = '900 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = '#12082b'; ctx.lineWidth = 3; ctx.strokeText(w.label, 0, 0); ctx.fillText(w.label, 0, 0); ctx.restore();
+      ctx.translate(48, 0); ctx.rotate(Math.PI / 2 * 0); ctx.fillStyle = '#fff'; ctx.font = '400 16px "Patrick Hand","Comic Sans MS",system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = '#2b2733'; ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeText(w.label, 0, 0); ctx.fillText(w.label, 0, 0); ctx.restore();
     });
     ctx.restore();
-    ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fillStyle = '#12082b'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fillStyle = '#ffd60a'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#2b2733'; ctx.stroke();
     ctx.restore();
-    ctx.beginPath(); ctx.moveTo(120, 36); ctx.lineTo(108, 10); ctx.lineTo(132, 10); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#12082b'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(120, 36); ctx.lineTo(108, 10); ctx.lineTo(132, 10); ctx.closePath(); ctx.fillStyle = '#e8403f'; ctx.fill(); ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeStyle = '#2b2733'; ctx.stroke();
   }, { live: true });
   const label = h('div', { class: 'sub', style: 'text-align:center' }, st.free ? 'Your free daily spin is ready!' : 'Come back tomorrow for a free spin, or spin for ' + WHEEL_SPIN_PRICE + ' diamonds.');
   let busy = false;
@@ -537,7 +535,7 @@ export function boardModal(app, id, title) {
     body.replaceChildren(h('h2', null, title));
     if (!top) { body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, 'The leaderboard is offline right now. Your own best is still saved.')); }
     else if (!top.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, 'No scores yet. Be the first!'));
-    else top.slice(0, 20).forEach((e, i) => body.append(h('div', { class: 'row', style: 'padding:6px 4px;border-bottom:2px solid #12082b' + (e.name === p.name ? ';background:#3b2a7a55' : '') }, h('div', { style: 'width:34px;font-weight:900;color:' + (i < 3 ? 'var(--gold)' : 'var(--dim)') }, '#' + (i + 1)), h('div', { class: 'grow', style: 'font-weight:800' }, e.name), h('div', { style: 'font-weight:900' }, e.score))));
+    else top.slice(0, 20).forEach((e, i) => body.append(h('div', { class: 'row', style: 'padding:6px 4px;border-bottom:2px dashed #2b2733' + (e.name === p.name ? ';background:#ffe28a' : '') }, h('div', { style: 'width:34px;font-weight:900;color:' + (i < 3 ? 'var(--gold)' : 'var(--dim)') }, '#' + (i + 1)), h('div', { class: 'grow', style: 'font-weight:800' }, e.name), h('div', { style: 'font-weight:900' }, e.score))));
     body.append(h('div', { class: 'sub', style: 'font-size:12px;text-align:center;margin-top:8px' }, p.name ? 'You appear as ' + p.name + '.' : 'Set your name in Settings to join the board.'), h('div', { class: 'btnrow' }, btn('Close', () => m.close(), 'green')));
   });
 }

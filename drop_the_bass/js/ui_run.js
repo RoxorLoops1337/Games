@@ -85,7 +85,7 @@ export function showDefeat(app, run, battle, onGiveUp) {
   const m = modal(body, { sticky: true });
   const canRevive = app.profile.diamonds >= ECON.reviveDiamonds && run.mode !== 'tutorial';
   body.append(h('div', { class: 'res-title lose' }, 'DEFEAT'), h('div', { class: 'sub', style: 'text-align:center' }, 'The Static took the stage on wave ' + run.wave + '. But the music is not over...'),
-    h('div', { style: 'text-align:center;margin:8px 0' }, canvasOf(120, 120, (ctx, t) => AE.drawGlyph(ctx, 'skull', 60, 60, 80, '#a99bd0'))),
+    h('div', { style: 'text-align:center;margin:8px 0' }, canvasOf(120, 120, (ctx, t) => AE.drawGlyph(ctx, 'skull', 60, 60, 80, '#dcd8e8'))),
     h('div', { class: 'btnrow' }, btn([icon('diamond', 22), 'Revive ' + ECON.reviveDiamonds], () => {
       if (!canRevive) { toast('You need ' + ECON.reviveDiamonds + ' diamonds to revive.'); return; }
       app.spendDiamonds(ECON.reviveDiamonds); run.revive(); battle.ended = false; battle.endTimer = 0; battle.queueBanner('ENCORE!', 'Half the stage is back', COL.green, 1.8); m.close();
@@ -135,7 +135,7 @@ export function showResults(app, run, out, opts = {}) {
     const submit = () => { line.textContent = 'Posting your score...'; app.submitBoard(run).then((rank) => { line.textContent = rank ? 'Leaderboard rank #' + rank + '!' : 'Leaderboard is offline.'; }); };
     if (p.name) submit();
     else {
-      const inp = h('input', { type: 'text', maxlength: 16, placeholder: 'Your name', style: 'flex:1;font:800 18px sans-serif;padding:8px;border-radius:10px;border:3px solid var(--line);background:#12082b;color:#fff;min-width:0' });
+      const inp = h('input', { type: 'text', maxlength: 16, placeholder: 'Your name', style: 'flex:1;font:400 20px var(--hand,sans-serif);padding:8px;border-radius:10px;border:3px solid var(--line);min-width:0' });
       const row = h('div', { class: 'row', style: 'margin-top:6px' }, inp, btn('Post score', () => { const nm = inp.value.replace(/[^\w \-.']/g, '').trim().slice(0, 16); if (!nm) return; p.name = nm; app.save(); row.remove(); submit(); }, 'blue small'));
       body.append(row);
     }
@@ -149,7 +149,7 @@ export function showResults(app, run, out, opts = {}) {
 
 // ------------------------------------------------------------------------------------------------ how to play
 export function showHowTo(app) {
-  const sec = (t, ...ps) => h('div', { class: 'card' }, h('h3', null, t), ps.map((p) => h('p', { class: 'sub', style: 'margin:4px 0;font-size:16px;color:#e9e0ff' }, p)));
+  const sec = (t, ...ps) => h('div', { class: 'card' }, h('h3', null, t), ps.map((p) => h('p', { class: 'sub', style: 'margin:4px 0;font-size:17px;color:#4b4455' }, p)));
   const m = modal(h('div', null, h('h2', null, 'How to Play'),
     sec('The goal', 'The Static walks along the path towards your stage. Stop every one of them. Each one that gets through costs stage health. Survive all the waves, beat the boss and clear the stage for stars.'),
     sec('Drop and merge', 'Tap DROP to place a random turret. Tap an empty tile first to choose exactly where. Two turrets of the same level can be merged: drag one onto the other, or tap one then the other. Every level doubles the power (up to level 7). Different turrets of the same level can remix into a surprise.'),

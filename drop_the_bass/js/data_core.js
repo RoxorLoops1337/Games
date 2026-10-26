@@ -46,7 +46,7 @@ export const lvlRate = (L) => 1 + 0.05 * (L - 1);
 export const lvlRange = (L) => 1 + 0.035 * (L - 1);
 
 // kind = how it fires. hero = which of the duo "owns" the instrument (flavour and art accent).
-// unlock = { fame: account level needed, records: price in Records }. Starter turrets cost nothing.
+// unlock = { fame, records }: kept for save compatibility; every turret is free from the start.
 export const TURRETS = {
   kick:    { id: 'kick',    name: 'Kick Cannon',     hero: 'roxor',  kind: 'splash',  color: '#ff7a3c', accent: '#ffd9a0',
              dmg: 20, rate: 0.85, range: 190, splash: 52, unlock: { fame: 1, records: 0 },
@@ -65,40 +65,40 @@ export const TURRETS = {
              blurb: 'A low pulse rolls out in a ring and slows everything it touches.',
              perks: { 3: 'Stronger slow', 5: 'Pulse pushes enemies back', 7: 'Double pulse' } },
   mic:     { id: 'mic',     name: 'Siren Mic',       hero: 'jasmin', kind: 'beam',    color: '#ff5fb0', accent: '#ffd0ea',
-             dmg: 16, rate: 0.95, range: 230, unlock: { fame: 2, records: 300 },
+             dmg: 16, rate: 0.95, range: 230, unlock: { fame: 1, records: 0 },
              blurb: 'Jasmin\'s sung beam pierces a whole line of Static.',
              perks: { 4: 'Wider beam', 5: 'Every 8th beam heals the stage', 7: 'Beam sings twice' } },
   synth:   { id: 'synth',   name: 'Arc Synth',       hero: 'roxor',  kind: 'chain',   color: '#35c8ff', accent: '#c4f1ff',
-             dmg: 11, rate: 1.15, range: 155, chains: 2, unlock: { fame: 3, records: 700 },
+             dmg: 11, rate: 1.15, range: 155, chains: 2, unlock: { fame: 1, records: 0 },
              blurb: 'Lightning that jumps from one enemy to the next.',
              perks: { 3: '+1 chain', 5: '+1 chain and short stun', 7: '+1 chain' } },
   horn:    { id: 'horn',    name: 'Air Horn',        hero: 'roxor',  kind: 'cone',    color: '#ff4a5e', accent: '#ffc4cb',
-             dmg: 8, rate: 0.55, range: 125, stun: 0.7, unlock: { fame: 4, records: 1200 },
+             dmg: 8, rate: 0.55, range: 125, stun: 0.7, unlock: { fame: 1, records: 0 },
              blurb: 'A blast cone that stuns and shoves enemies back down the path.',
              perks: { 3: 'Longer stun', 5: 'Wider cone', 7: 'Blasts all around' } },
   scratch: { id: 'scratch', name: 'Vinyl Scratcher', hero: 'jasmin', kind: 'boomerang', color: '#e5e5ff', accent: '#ffffff',
-             dmg: 13, rate: 0.75, range: 170, unlock: { fame: 5, records: 2000 },
+             dmg: 13, rate: 0.75, range: 170, unlock: { fame: 1, records: 0 },
              blurb: 'Throws a spinning record that flies out and comes back, hitting twice.',
              perks: { 3: 'Throws 2 records', 5: 'Records ignore armor', 7: 'Throws 3 records' } },
   loop:    { id: 'loop',    name: 'Loop Station',    hero: 'jasmin', kind: 'aura_rate', color: '#3cff9a', accent: '#c8ffe2',
-             dmg: 0, rate: 0, range: 0, aura: 0.18, unlock: { fame: 6, records: 3200 },
+             dmg: 0, rate: 0, range: 0, aura: 0.18, unlock: { fame: 1, records: 0 },
              blurb: 'Does not shoot. Neighbours play faster, like a loop that never stops.',
              perks: { 3: 'Neighbours get range too', 5: 'Neighbours sometimes fire twice', 7: 'Aura is 50% stronger' } },
   cowbell: { id: 'cowbell', name: 'Cowbell Sniper',  hero: 'roxor',  kind: 'sniper',  color: '#ffb02e', accent: '#fff0c4',
-             dmg: 55, rate: 0.42, range: 320, crit: 0.25, unlock: { fame: 7, records: 4800 },
+             dmg: 55, rate: 0.42, range: 320, crit: 0.25, unlock: { fame: 1, records: 0 },
              blurb: 'More cowbell. Huge long range hits that mark the target.',
              perks: { 3: 'Mark lasts longer', 5: 'Shots pierce 1 enemy', 7: 'Executes weakened enemies' } },
   amp:     { id: 'amp',     name: 'Amp Stack',       hero: 'roxor',  kind: 'aura_dmg', color: '#ff3c8a', accent: '#ffc2dd',
-             dmg: 0, rate: 0, range: 0, aura: 0.16, unlock: { fame: 8, records: 7000 },
+             dmg: 0, rate: 0, range: 0, aura: 0.16, unlock: { fame: 1, records: 0 },
              blurb: 'Does not shoot. Neighbours hit harder. Turn it up to eleven.',
              perks: { 3: 'More damage aura', 5: 'Neighbours gain crit', 7: 'Aura is 50% stronger' } },
   vocal:   { id: 'vocal',   name: 'Choir Orb',       hero: 'jasmin', kind: 'orb',     color: '#ffe0f4', accent: '#ffffff',
-             dmg: 9, rate: 0.5, range: 200, unlock: { fame: 10, records: 11000 },
+             dmg: 9, rate: 0.5, range: 200, unlock: { fame: 1, records: 0 },
              blurb: 'Jasmin\'s harmony drifts as a homing choir orb and bursts into soft light.',
              perks: { 3: 'Orbs seek faster', 5: 'Burst heals the stage sometimes', 7: 'Fires 2 orbs' } },
 };
 export const TURRET_IDS = Object.keys(TURRETS);
-export const STARTER_TURRETS = ['kick', 'snare', 'hat', 'sub'];
+export const STARTER_TURRETS = Object.keys(TURRETS);   // every turret is in the drop pool from the first run
 
 // ---------------------------------------------------------------- enemies (the Static)
 // hp is a multiplier of the wave's base hp. speed in px per second. armor is flat damage removed per hit (min 25% of the hit goes through).
@@ -221,19 +221,19 @@ export function laneAt(lane, d) {
 
 // Worlds = the stops on the tour. wavesTotal is the story length; endless continues past it.
 export const WORLDS = [
-  { id: 'garage',   n: 1, name: 'Garage Days',     place: 'Roxor\'s Garage',  map: 'garage',   bpm: 100, wavesTotal: 20, hpMul: 1.0,  pool: ['fuzz', 'zip', 'brick', 'echo'],
+  { id: 'garage',   n: 1, name: 'Garage Days',     place: 'Roxor\'s Garage',  map: 'garage',   bpm: 100, wavesTotal: 20, hpMul: 3.5, pool: ['fuzz', 'zip', 'brick', 'echo'],
     boss10: 'compressor', boss: 'compressor', sky: ['#1a1038', '#3a1d5c'], accent: '#ff9a3c', ground: '#2a1c4a', coinMul: 1.0,
     blurb: 'Where it all started. A cluttered garage, a loop pedal and a very confused cat.' },
-  { id: 'busk',     n: 2, name: 'Busk Street',     place: 'Old Town Street',  map: 'busk',     bpm: 108, wavesTotal: 20, hpMul: 2.3,  pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech'],
+  { id: 'busk',     n: 2, name: 'Busk Street',     place: 'Old Town Street',  map: 'busk',     bpm: 108, wavesTotal: 20, hpMul: 8, pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech'],
     boss10: 'compressor', boss: 'noisegate', sky: ['#10264a', '#2a4a7a'], accent: '#ffd23c', ground: '#1f2f5a', coinMul: 1.7,
     blurb: 'Cobblestones, street lamps and a crowd that has gone suspiciously quiet.' },
-  { id: 'club',     n: 3, name: 'Neon Club',       place: 'The Neon Club',    map: 'club',     bpm: 120, wavesTotal: 20, hpMul: 6,  pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal'],
+  { id: 'club',     n: 3, name: 'Neon Club',       place: 'The Neon Club',    map: 'club',     bpm: 120, wavesTotal: 20, hpMul: 21, pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal'],
     boss10: 'noisegate', boss: 'reverb', sky: ['#2a0f40', '#5a1a6a'], accent: '#ff4fd0', ground: '#2e1450', coinMul: 2.8,
     blurb: 'Lasers, fog and a dance floor that forgot how to dance.' },
-  { id: 'festival', n: 4, name: 'Festival Fields', place: 'Sunset Festival', map: 'festival', bpm: 126, wavesTotal: 20, hpMul: 22,  pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal', 'mute', 'rager'],
+  { id: 'festival', n: 4, name: 'Festival Fields', place: 'Sunset Festival', map: 'festival', bpm: 126, wavesTotal: 20, hpMul: 77, pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal', 'mute', 'rager'],
     boss10: 'reverb', boss: 'djglitch', sky: ['#4a1f3a', '#ff7a4a'], accent: '#ffb02e', ground: '#3a2048', coinMul: 4.6,
     blurb: 'Two entrances, one stage and a sunset that has gone grey around the edges.' },
-  { id: 'arena',    n: 5, name: 'Mega Arena',      place: 'The Mega Arena',   map: 'arena',    bpm: 132, wavesTotal: 20, hpMul: 80,     pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal', 'mute', 'rager'],
+  { id: 'arena',    n: 5, name: 'Mega Arena',      place: 'The Mega Arena',   map: 'arena',    bpm: 132, wavesTotal: 20, hpMul: 280,   pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal', 'mute', 'rager'],
     boss10: 'djglitch', boss: 'playback', sky: ['#0a0a2a', '#2a1060'], accent: '#ff5fb0', ground: '#1c1240', coinMul: 4.6,
     blurb: 'Three lanes, ninety thousand empty seats and Mr. Playback at the soundboard.' },
 ];
@@ -266,7 +266,7 @@ export const ECON = {
   rerollCostDiamonds: 3,
   reviveDiamonds: 50,
   hpPerWaveBase: 28,       // base hp of a 'fuzz' on wave 1 (before world and encore multipliers)
-  hpGrowth: 1.17,         // per wave
+  hpGrowth: 1.21,         // per wave
   hpGrowthLate: 1.15,      // after wave 20 (endless)
 };
 

@@ -58,7 +58,7 @@ function exercise(H, label) {
 }
 exercise(DH, 'doodle_hud');
 setStyle('doodle'); exercise(HX, 'hudx(doodle)');
-setStyle('classic'); exercise(HX, 'hudx(classic)');
+setStyle('classic'); exercise(HX, 'hudx(stored classic is ignored)');
 setStyle('doodle');
 
 // ---- the Fx layer in both styles, with every kind of effect alive
@@ -70,7 +70,7 @@ function fxScene(fx) {
   fx.floater(100, 100, '1234', '#ff9226', 18); fx.floater(140, 100, 'CRIT 99', '#ffc83d', 26, { crit: true }); fx.floater(180, 100, '+5 coins', '#fff', 14); fx.floater(220, 100, 'Weird * chars?', '#fff', 16); fx.floater(260, 100, '', '#fff', 16);
   fx.addShake(10); fx.addChroma(1); fx.doFlash('#ff2a4a', 0.5);
 }
-for (const style of ['doodle', 'classic']) {
+for (const style of ['doodle']) {
   setStyle(style);
   const fx = new Fx(); fxScene(fx);
   const c = mock();
