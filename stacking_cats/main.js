@@ -1769,7 +1769,31 @@ function drawJelly(img, dx, dy, dw, dh, t, amp, phase) {
     ctx.drawImage(img, 0, k * sh, img.width, sh + 0.6, dx + off, dy + k * dsh, dw, dsh + 0.7);
   }
 }
-function shadow(x, y, rx) { ctx.fillStyle = 'rgba(30,20,50,.22)'; ctx.beginPath(); ctx.ellipse(x, y, rx, rx * 0.22, 0, 0, TAU); ctx.fill(); }
+// soft contact shadow: dark core, feathered edge (one cached radial sprite, scaled per use)
+let shadowSpr = null;
+function shadow(x, y, rx) {
+  if (!shadowSpr) {
+    shadowSpr = document.createElement('canvas'); shadowSpr.width = 64; shadowSpr.height = 64;
+    const x2 = shadowSpr.getContext('2d'), g2 = x2.createRadialGradient(32, 32, 2, 32, 32, 32);
+    g2.addColorStop(0, 'rgba(30,20,50,.42)'); g2.addColorStop(0.55, 'rgba(30,20,50,.22)'); g2.addColorStop(1, 'rgba(30,20,50,0)');
+    x2.fillStyle = g2; x2.fillRect(0, 0, 64, 64);
+  }
+  if (rx > 0.5) ctx.drawImage(shadowSpr, x - rx * 1.25, y - rx * 0.3, rx * 2.5, rx * 0.6);
+}
+// a little cushion the tower sits on (cached)
+let rugSpr = null;
+function drawRug(cx, y) {
+  if (!rugSpr) {
+    rugSpr = document.createElement('canvas'); rugSpr.width = 124; rugSpr.height = 30;
+    const r = rugSpr.getContext('2d');
+    r.fillStyle = '#7a2e4a'; r.beginPath(); r.ellipse(62, 17, 58, 11, 0, 0, TAU); r.fill();
+    r.fillStyle = '#a8456a'; r.beginPath(); r.ellipse(62, 14, 58, 10, 0, 0, TAU); r.fill();
+    r.strokeStyle = '#ffd98a'; r.lineWidth = 1.5; r.beginPath(); r.ellipse(62, 14, 48, 7.5, 0, 0, TAU); r.stroke();
+    r.fillStyle = 'rgba(255,255,255,.16)'; r.beginPath(); r.ellipse(62, 11, 40, 4, 0, 0, TAU); r.fill();
+    r.fillStyle = '#ffd98a'; for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; r.beginPath(); r.arc(62 + Math.cos(a) * 53, 14 + Math.sin(a) * 8.5, 1.4, 0, TAU); r.fill(); }
+  }
+  ctx.drawImage(rugSpr, cx - 62, y - 15);
+}
 
 const iconCache = new Map();
 function iconSprite(emoji) {
@@ -1791,7 +1815,7 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
     const mood = moods.get(c.uid) || 0;
     const variant = c.flash > 0 ? 'hurt' : mood > 0 || cheer ? 'happy' : (cheer ? 'blink' : ((t * 0.9 + i * 1.37 + (c.seed || 0)) % 4.3 < 0.13 ? 'blink' : 'open'));
     const spr = catSprite(c.id, variant);
-    if (i === 0) shadow(cx, GROUND + 3, 46);
+    if (i === 0) { shadow(cx, GROUND + 5, 60); drawRug(cx, GROUND + 3); } else shadow(cx + sway, feetY + 1, 30);
     castShadow('cat:' + c.id, catSprite(c.id), cx + lunge * 0.3, GROUND + 2, -60 * sc, feetY - GROUND - 107 * sc, 120 * sc, 120 * sc, 0.30 - i * 0.03);
     if (c.lvl >= 2) { add(); glow(cx + sway, feetY - 44, 58 + c.lvl * 8, c.lvl === 3 ? '#ffd24a' : '#ffe38c', (c.lvl === 3 ? 0.5 : 0.32) + 0.08 * Math.sin(t * 3 + i)); norm(); }
     const squash = c.flash > 0 ? 0.06 : 0;
@@ -1978,6 +2002,13 @@ let dustT = 0;
 
 function drawTitleScene(t) {
   const cx = 100;
+  if (gfx >= 1) {
+    add();
+    for (let i = 0; i < 9; i++) { const fx2 = (i * 107 + Math.sin(t * 0.5 + i) * 30) % W, fy2 = 300 + ((i * 53) % 150) + Math.cos(t * 0.7 + i * 2) * 14; glow(fx2, fy2, 10 + 3 * Math.sin(t * 3 + i), '#ffe58a', 0.3 + 0.25 * Math.sin(t * 2.2 + i * 1.7)); }
+    norm();
+    ctx.fillStyle = 'rgba(120,200,110,.7)';
+    for (let i = 0; i < 6; i++) { const lx = ((i * 170 - t * 28) % (W + 40) + W + 40) % (W + 40) - 20, ly = ((t * 22 + i * 90) % (H + 20)) - 10; ctx.save(); ctx.translate(lx, ly); ctx.rotate(t * 1.5 + i); ctx.beginPath(); ctx.ellipse(0, 0, 5, 2.2, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+  }
   const list = titleStack.map((id, i) => ({ id, lvl: i === 0 ? 2 : 1, hp: 1, max: 1, flash: 0, atk: Math.max(0, Math.sin(t * 3 + i) - 0.8), seed: i * 0.9 }));
   drawStack(cx, list, t, true, false, false, false);
   for (let i = 0; i < 5; i++) {

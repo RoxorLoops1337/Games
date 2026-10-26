@@ -374,8 +374,16 @@ function party(ctx, R, p, T) {
     for (let a = 0; a < 12; a++) { const ang = (a / 12) * TAU; ctx.beginPath(); ctx.moveTo(fx + Math.cos(ang) * r * 0.55, fy + Math.sin(ang) * r * 0.55); ctx.lineTo(fx + Math.cos(ang) * r, fy + Math.sin(ang) * r); ctx.stroke(); }
     ctx.restore();
   }
+  // light shafts and a trophy flare over the party
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 5; k++) { const a = -0.5 + k * 0.25 + Math.sin(T * 0.6 + k) * 0.05; ctx.save(); ctx.translate(480, -20); ctx.rotate(a); const lg = ctx.createLinearGradient(0, 0, 0, 520); lg.addColorStop(0, 'rgba(255,236,160,.22)'); lg.addColorStop(1, 'rgba(255,236,160,0)'); ctx.fillStyle = lg; ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(14, 0); ctx.lineTo(70, 520); ctx.lineTo(-70, 520); ctx.fill(); ctx.restore(); }
+  const fl = ctx.createRadialGradient(480, 170, 4, 480, 170, 90 + 12 * Math.sin(T * 3)); fl.addColorStop(0, 'rgba(255,248,200,.8)'); fl.addColorStop(1, 'rgba(255,220,120,0)'); ctx.fillStyle = fl; ctx.fillRect(360, 60, 240, 220);
+  ctx.restore();
+  ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#7a4a10'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(458, 150); ctx.lineTo(502, 150); ctx.quadraticCurveTo(500, 186, 480, 188); ctx.quadraticCurveTo(460, 186, 458, 150); ctx.fill(); ctx.stroke(); ctx.fillRect(474, 188, 12, 12); ctx.fillRect(464, 200, 32, 7);
+  ctx.fillStyle = '#fff6c0'; ctx.fillRect(465, 156, 4, 22);
   PARTY.forEach((id, i) => {
     const x = 150 + i * 110, hop = Math.abs(Math.sin(T * 5 + i * 0.9)) * 26;
+    ctx.fillStyle = 'rgba(20,10,40,.28)'; ctx.beginPath(); ctx.ellipse(x, GROUND - 2 + (i % 2) * 8, 40 - hop * 0.5, 8 - hop * 0.12, 0, 0, TAU); ctx.fill();
     cat(ctx, R, id, x, GROUND - 10 + (i % 2) * 8 - hop, 1.05, { rot: Math.sin(T * 5 + i) * 0.06 });
     const h = (T * 0.6 + i * 0.19) % 1; ctx.save(); ctx.globalAlpha = Math.sin(h * Math.PI); ctx.fillStyle = '#ff7aa8'; ctx.font = `22px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('\u2665', x + Math.sin(h * 7 + i) * 10, GROUND - 90 - h * 80); ctx.restore();
   });

@@ -931,3 +931,25 @@ t('lootbox opening: lid pop, glow, beams and sparks, a flash and pedestal on the
   assert.ok(/class="pedestal"/.test(js) && /class="revealflash"/.test(js) && /class="cheercat"/.test(js) && /@keyframes rflash/.test(css), 'reveal polish');
   assert.ok(/body\.nomotion \*/.test(css), 'nomotion still stops animations');
 });
+
+t('tower and scenes polish: rug, feathered contact shadows, title fireflies, finale light and trophy', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), it = readFileSync('stacking_cats/intro.js', 'utf8');
+  assert.ok(/function drawRug/.test(js) && /drawRug\(cx, GROUND/.test(js) && /createRadialGradient\(32, 32/.test(js), 'rug and soft shadow');
+  assert.ok(/fireflies|ffe58a/.test(js), 'title fireflies');
+  assert.ok(/trophy flare/.test(it) && /light shafts/.test(it), 'finale light');
+  assert.ok(!/—/.test(it), 'no em dashes');
+});
+
+t('UI chrome detail pass: ornate corner studs, bevels, recessed progress bars, Relic Book frames, vignette, and keeps the a11y hooks', () => {
+  const css = readFileSync('stacking_cats/index.html', 'utf8');
+  const r5 = css.slice(css.indexOf('round 5: UI chrome detail'));
+  assert.ok(r5.length > 500, 'round 5 block exists');
+  assert.ok(/\.detail,\.dcard,\.kd,\.bcard[^{]*\{--cs:radial-gradient/.test(r5), 'corner studs on paper panels');
+  assert.ok(/\.pbar,\.mbar,\.rb \.bar,\.slot \.hp[^{]*\{box-shadow:inset/.test(r5), 'recessed bars');
+  assert.ok(/\.rlabel\.r-legendary\{border-color/.test(r5) && /\.rtile\.sel\{/.test(r5) && /\.rtile\.locked\{/.test(r5), 'Relic Book frames');
+  assert.ok(/\.screen\{background-image:radial-gradient/.test(r5) && /\.screen\.clear\{background-image:none\}/.test(r5), 'vignette that leaves clear screens alone');
+  assert.ok(/body\.nomotion \.dcell:hover/.test(r5), 'nomotion covers new hover lifts');
+  assert.ok(/body\.nomotion \*/.test(css) && /body\.bigtext \.card p/.test(css) && /body\.cb \.impact\.up/.test(css), 'a11y modes intact');
+  assert.ok(/\.bag\.rare::after\{content/.test(css), 'rarity pips kept');
+  assert.ok(!/—/.test(r5), 'no em dashes');
+});
