@@ -242,6 +242,19 @@ export class Sfx {
     this.noiseAt(now, Math.min(0.12, dur * 0.5), 0.03, { type: 'highpass', freq: 3500 });   // the breath at the start of the mew
   }
 
+  // a soft purr: a low saw through a low-pass, its volume chopped by a 24 Hz wobble, fading in and out over about a second
+  purr() {
+    const c = this.ctx; if (!c) return;
+    const now = c.currentTime, dur = 1.1;
+    const osc = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain(), am = c.createOscillator(), amg = c.createGain();
+    osc.type = 'sawtooth'; osc.frequency.value = 58;
+    lp.type = 'lowpass'; lp.frequency.value = 260;
+    am.frequency.value = 24; amg.gain.value = 0.5; am.connect(amg); amg.connect(g.gain);
+    g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.5, now + 0.25); g.gain.setValueAtTime(0.5, now + dur - 0.3); g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    osc.connect(lp); lp.connect(g); g.connect(this.sfxBus);
+    osc.start(now); am.start(now); osc.stop(now + dur + 0.05); am.stop(now + dur + 0.05);
+  }
+
   play(name, pitch = 1) {
     const now = performance.now();
     const gap = { hit: 45, swipe: 60, shoot: 70, pop: 40, flame: 120, zap: 80, boom: 80, coin: 40, hover: 60 }[name] || 0;
@@ -271,6 +284,7 @@ export class Sfx {
       case 'heal': this.tone(660, 0.12, { type: 'sine', v: 0.1 }); this.tone(880, 0.16, { type: 'sine', v: 0.1, delay: 0.08 }); break;
       case 'heart': this.tone(72, 0.14, { to: 52, type: 'sine', v: 0.2 }); this.tone(60, 0.16, { to: 44, type: 'sine', v: 0.15, delay: 0.17 }); break;
       case 'nope': this.tone(220, 0.09, { to: 170, type: 'square', v: 0.09, lp: 900 }); this.tone(170, 0.14, { to: 120, type: 'square', v: 0.09, lp: 700, delay: 0.1 }); break;   // a soft two-step "uh-uh" for a refused tap
+      case 'purr': this.purr(); break;
       case 'ui': this.tone(520, 0.06, { type: 'triangle', v: 0.1 }); break;
       case 'pick': [523, 659, 784].forEach((f, i) => this.tone(f, 0.16, { type: 'triangle', v: 0.14, delay: i * 0.07 })); break;
       case 'merge': [392, 523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.18, { type: 'triangle', v: 0.14, delay: i * 0.06 })); break;
