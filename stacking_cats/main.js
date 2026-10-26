@@ -9,7 +9,7 @@ import {
 import { COSMETICS, COSMETIC_BY_ID, SLOTS, SLOT_NAMES, lookOf, lookSig, drawLook, drawCosmetic, canWear, buyCosmetic, toggleWear, isOwned } from './cosmetics.js';
 import { createKingdomScene } from './kingdom_scene.js';
 import { encodeSave, decodeSave } from './savecode.js';
-import { dailyScore, fetchBoard, submitScore, rankOf } from './daily.js';
+import { dailyScore, fetchBoard, submitScore, rankOf, dailyStreak } from './daily.js';
 import { drawBuilding } from './art_kingdom.js';
 import * as S from './sim.js';
 import { drawCat } from './art_cats.js';
@@ -281,13 +281,13 @@ function showTitle() {
   mode = 'title'; paused = false;
   const total = save.stats, k = save.kingdom, d = DIFFS[save.diff];
   const can = BUILDINGS.some((b) => buildingLevel(k, b.id) < b.max && k.coins >= upgradeCost(b.id, buildingLevel(k, b.id))) || WONDERS.some((w) => !k.wonders[w.id] && k.gems >= w.cost);
-  const day = dayKey(), di = dayInfo(day), played = save.daily[day];
+  const day = dayKey(), di = dayInfo(day), played = save.daily[day], streak = dailyStreak(save.daily);
   const trophies = ACHIEVEMENTS.filter((a) => save.ach[a.id]).length;
   setScreen(`
     <h1 class="logo">Stacking<span>Cats</span></h1>
     <div class="tag">Stack your cats. Merge them. Smash the mouse nests.</div>
     <div class="row"><button class="btn big" data-act="play">Play</button><button class="btn small grey" data-act="diff" title="Change difficulty">${d.icon} ${d.name}</button></div>
-    <div class="row"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button></div>
+    <div class="row"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${streak >= 2 ? `<span class="streak" title="${streak} days in a row">&#128293;${streak}</span>` : ''}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button></div>
     <div class="row"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn grey small" data-act="trophies">Trophies ${trophies}/${ACHIEVEMENTS.length}</button><button class="btn grey small" data-act="settings">Settings</button><button class="btn grey small" data-act="how">How to play</button></div>
     <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : 'Tap Play to begin'}</div>`, 'clear tpad');
   acts = {
