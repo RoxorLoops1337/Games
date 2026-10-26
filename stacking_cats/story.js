@@ -140,3 +140,14 @@ export const catStory = (id) => CAT_STORIES[id] || '';
 
 // the chapter beat is a toast, and the first coach tip clears toasts, so on wave 1 it steps aside while that tip is still to come
 export const beatToastWanted = (wave, firstTipPending) => isChapterStart(wave) && !(wave === 1 && firstTipPending);
+
+// the ending: the last nest of the first trip around the map is King Squeakimus himself. The run can go on afterwards.
+export const FINALE_WAVE = CHAPTERS.length * 5;
+export const finaleDue = (wave, alreadyShown) => wave === FINALE_WAVE && !alreadyShown;
+export const finaleGems = (firstTime) => (firstTime ? 5 : 0);
+export const FINALE_TITLE = 'King Squeakimus is defeated!';
+export const FINALE_LINES = [
+  'The last nest crumbles and the Cheddar Throne tips over with a squeak.',
+  'Every caged cat is free. Whiskerton is safe, the Cheese Moon shines again and the whole royal guard is purring.',
+  'But mice are always hiding in the cheese. Want to keep the guard in shape?',
+];

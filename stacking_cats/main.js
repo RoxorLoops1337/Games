@@ -22,7 +22,7 @@ import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.j
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
 import { playIntro } from './intro.js';
-import { rescueLine, fallLine, freedToast, catStory, beatToastWanted, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
+import { rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -712,13 +712,27 @@ function onClear() {
   queue = g.reward.slice();
   if (g.bossWave) queue.splice(queue.length - 1, 0, 'route');
   if (S.eventDue(g)) queue.push('event');
+  if (finaleDue(g.wave, !!g.run.finale)) queue.unshift('finale');
   if (g.report && g.report.chests) toast(`Opening ${g.report.chests} loot chest${g.report.chests > 1 ? 's' : ''}!`);
+}
+// the ending: the mouse king falls at the end of the map. Shown once per run, pays a one time gem reward and the run goes on
+function showFinale() {
+  g.run.finale = true;
+  const first = !save.storyDone;
+  const gems = finaleGems(first);
+  if (first) { save.storyDone = true; save.kingdom.gems += gems; persist(); }
+  sfx.play('win'); sfx.music('calm');
+  g.cats.slice(0, 3).forEach((c, i) => sfx.meow(c.id, 'cheer', 0.2 + i * 0.25));
+  setScreen(`<h2>${FINALE_TITLE}</h2>${FINALE_LINES.map((l) => `<p class="sub">${l}</p>`).join('')}
+    <p class="sub"><b>${gems ? `Royal reward: +${gems} gems!` : 'Paws-itively purr-fect! The kingdom cheers again.'}</b></p>
+    <div class="row"><button class="btn big" data-act="go">Keep playing</button></div>`);
+  acts = { go: () => nextReward() };
 }
 function nextReward() {
   const r = queue.shift();
   rewardChoices = null;
   if (!r) { beginWave(); return; }
-  if (r === 'event') showEvent(); else if (r === 'cat') showCatReward(); else if (r === 'item') showItemReward(); else if (r === 'route') showRouteReward(); else showSnackReward();
+  if (r === 'finale') showFinale(); else if (r === 'event') showEvent(); else if (r === 'cat') showCatReward(); else if (r === 'item') showItemReward(); else if (r === 'route') showRouteReward(); else showSnackReward();
 }
 
 function reportHtml() {
@@ -2255,7 +2269,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { coach, beginWave, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+window.stackingCats = { coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
 showTitle();
 requestAnimationFrame(frame);
 void ENEMY_TYPES;
