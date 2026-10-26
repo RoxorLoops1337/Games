@@ -76,6 +76,15 @@ t('every cat draws without errors', () => {
   assert.ok(calls.n > 1000);
 });
 
+t('cat art keeps its fine detail layers (tapered tail, toes, ear fur, whisker pairs) for every breed and mood', () => {
+  const count = (d, v) => { const before = calls.n; drawCat(fakeCtx(), d, v); return calls.n - before; };
+  for (const d of CATS) {
+    const open = count(d, 'open');
+    assert.ok(open > 260, d.id + ' draws only ' + open + ' calls: detail layers missing');
+    assert.ok(count(d, 'happy') > 200 && count(d, 'hurt') > 200 && count(d, 'blink') > 200, d.id + ' expression states');
+  }
+});
+
 t('every mouse type, elite and nest draws', () => {
   for (const type of Object.keys(ENEMY_TYPES)) for (const elite of [false, true]) { const s = art.enemySprite(type, elite); assert.ok(s.c && s.w > 0); }
   for (const nest of NESTS) { const s = art.nestSprite(nest.id); assert.ok(s.c); art.nestOverlay(fakeCtx(), 0.3, 1.2); }
@@ -855,4 +864,16 @@ t('the fight HUD and the fly effect show the drawn lootbox, not the gift emoji',
   assert.ok(/id="chestIco"/.test(rd('index.html')), 'HUD icon slot');
   assert.ok(/\$\('chestIco'\)\.innerHTML = `<img class="gi"[^`]*iconURL\(topBox\.icon\)/.test(js), 'HUD uses the best queued box art');
   assert.ok(/tier: e\.tier/.test(js) && /BOX_BY_ID\[f\.tier\]\.icon/.test(js), 'the flying box uses its tier art');
+});
+
+t('relic icons: every relic key still has a drawing, each draws without throwing, and the fine detail pass is in place', async () => {
+  const { RELIC_ICONS } = await import('../stacking_cats/art_relics.js');
+  const { ITEMS } = await import('../stacking_cats/cats.js');
+  const art = readFileSync('stacking_cats/art_relics.js', 'utf8');
+  for (const it of ITEMS) assert.ok(icons.hasIcon(it.icon), it.id + ' needs a drawing');
+  assert.ok(Object.keys(RELIC_ICONS).length >= 36, 'no relic drawing was dropped');
+  for (const k of ['🍪', '🏅', '🌻', '🌟', '⭐', '🔱', '🥠']) assert.ok(new RegExp("\\n  '" + k + "': \\(c\\) =>").test(art.slice(art.indexOf('const DETAIL = {'))), k + ' has a detail layer');
+  assert.ok(/EPIC = new Set\(\[/.test(art) && /rimLight\(cv/.test(art), 'epic glow and rim light finish');
+  for (const [k, f] of Object.entries(RELIC_ICONS)) f(fakeCtx());
+  assert.ok(!/—/.test(art), 'no em dashes');
 });
