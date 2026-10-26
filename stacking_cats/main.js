@@ -184,8 +184,13 @@ function setScreen(html, cls = '') {
   screenEl.innerHTML = html ? `<div class="screen ${cls}">${html}</div>` : '';
   document.body.classList.toggle('scr', !!html);       // the HUD steps back while a menu is open
   paintThumbs(screenEl);
+  // clickable divs (tower slots, items) get button semantics so keyboard and screen reader players can reach them
+  for (const el of screenEl.querySelectorAll('[data-act]:not(button)')) { el.setAttribute('role', 'button'); el.tabIndex = 0; }
 }
 const closeScreen = () => setScreen('');
+screenEl.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-act]:not(button)')) { e.preventDefault(); e.stopPropagation(); e.target.click(); }
+});
 screenEl.addEventListener('click', (e) => {
   const t = e.target.closest('[data-act]');
   if (!t || t.hasAttribute('disabled')) return;
