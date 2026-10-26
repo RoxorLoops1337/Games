@@ -18,8 +18,8 @@ function fight(g, secs, mk) {
   for (let i = 0; i < secs * 30 && g.enemies.some((e) => !e.dead); i++) step(g);
 }
 
-t('items: 21 items with text, valid effects and rarities', () => {
-  assert.equal(ITEMS.length, 21);
+t('items: 22 items with text, valid effects and rarities', () => {
+  assert.equal(ITEMS.length, 22);
   for (const it of ITEMS) {
     assert.ok(it.name && it.icon && it.desc && ['common', 'rare', 'epic'].includes(it.rarity), it.id);
     assert.ok(Object.keys(it.fx).length, it.id);
@@ -253,6 +253,14 @@ t('beating King Squeakimus earns its own trophy, and only after the finale', () 
 t('the king trophy is the last trophy and its text says where to find the king', () => {
   assert.equal(ACHIEVEMENTS[ACHIEVEMENTS.length - 1].id, 'king', 'the final boss trophy closes the list');
   assert.ok(/wave 30/i.test(ACHIEVEMENTS[ACHIEVEMENTS.length - 1].desc), 'the text names the wave');
+});
+
+t('the Silk Ribbon item is a rare with damage and crit', () => {
+  const r = ITEMS.find((x) => x.id === 'ribbon');
+  assert.ok(r, 'the ribbon exists');
+  assert.equal(r.rarity, 'rare');
+  assert.ok(r.fx.dmg > 0 && r.fx.crit > 0);
+  assert.ok(!r.desc.includes('\u2014') && !r.name.includes('\u2014'));
 });
 
 console.log(`${n} tests passed`);
