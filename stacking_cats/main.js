@@ -165,6 +165,7 @@ function hideCoach() {
 function coach(key, html, x, y, dir = 'down', opt = {}) {
   if (!save.opt.tutorial || save.tips[key] || paused) return;   // never float a tip over the pause menu
   hideCoach();
+  $('toasts').replaceChildren();   // a tip and a toast in the same spot just hide each other
   save.tips[key] = true; persist();
   let hl = opt.target;
   if (typeof hl === 'string') hl = screenEl.querySelector(hl) || document.querySelector(hl);

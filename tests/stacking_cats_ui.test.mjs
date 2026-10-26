@@ -224,4 +224,9 @@ t('the game is registered for the build and the change map', () => {
   assert.ok(readFileSync('index.html', 'utf8').includes('/stacking_cats/'));
 });
 
+t('a coach bubble clears the toasts it would cover', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/function coach\([\s\S]*?\$\('toasts'\)\.replaceChildren\(\)/.test(js), 'showing a tip must clear the toast stack so the two never overlap');
+});
+
 console.log(`${n} tests passed`);
