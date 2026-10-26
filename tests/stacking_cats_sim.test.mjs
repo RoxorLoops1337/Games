@@ -10,10 +10,10 @@ let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
 const ALL = CATS.map((c) => c.id);
 
-t('data: 31 cats, 5 starters, unique ids, every cat has a handled attack', () => {
-  assert.equal(CATS.length, 31);
+t('data: 32 cats, 5 starters, unique ids, every cat has a handled attack', () => {
+  assert.equal(CATS.length, 32);
   assert.equal(STARTERS.length, 5);
-  assert.equal(new Set(ALL).size, 31);
+  assert.equal(new Set(ALL).size, 32);
   const kinds = new Set(['melee', 'proj', 'lob', 'cone', 'chain', 'beam', 'strike', 'nova', 'mine', 'storm', 'spread']);
   for (const c of CATS) {
     assert.ok(kinds.has(c.atk.t), c.id + ' attack kind');

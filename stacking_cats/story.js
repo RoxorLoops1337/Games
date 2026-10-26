@@ -136,6 +136,7 @@ const CAT_STORIES = {
   leo: 'The Lion King, ruler of cats. His roar made the Mouse King tremble.',
   nebula: 'Weaves stars into her fur. Some say she purrs in constellations.',
   biscuit: 'Bakes the guard\'s bread before sunrise. Her loaves are warm, soft and surprisingly heavy.',
+  pearl: 'Sings to the tide from the Frosty Pond. Her bubbles tickle, her voice calms the whole guard.',
 };
 export const catStory = (id) => CAT_STORIES[id] || '';
 

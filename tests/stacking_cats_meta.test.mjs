@@ -7,6 +7,8 @@ import {
 import {
   ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, ACHIEVEMENTS,
 } from '../stacking_cats/cats.js';
+import { CAT_BY_ID, CAT_TAGS, SPECIALS, unlockProgress } from '../stacking_cats/cats.js';
+import { catStory } from '../stacking_cats/story.js';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
@@ -292,6 +294,15 @@ t('titleStackIds: the title stack shows the five most used unlocked cats, bottom
   assert.ok(!ids.includes('ghost'), 'locked or unknown cats never appear');
   assert.equal(new Set(ids).size, 5, 'no duplicates');
   assert.deepEqual(titleStackIds(['tabby'], {}), ['tabby'], 'fewer cats than five is fine');
+});
+
+t('Pearl the tide singer: slows mice, dodges, has a special, a story, a tag and a rule to unlock her', () => {
+  const d = CAT_BY_ID.pearl;
+  assert.ok(d && d.atk.t === 'proj' && d.atk.fx.slow > 0 && d.pas.dodge > 0);
+  assert.ok(CAT_TAGS.pearl && SPECIALS.pearl && catStory('pearl').length > 20);
+  assert.ok(!/\u2014/.test(d.desc + catStory('pearl') + SPECIALS.pearl.name), 'no em dash');
+  assert.equal(unlockProgress(d, { merges: 10 }).have, 10);
+  assert.ok(ACHIEVEMENTS.find((a) => a.id === 'coll30').desc.includes(String(CATS.length)), 'collection trophy text matches the cat count');
 });
 
 console.log(`${n} tests passed`);
