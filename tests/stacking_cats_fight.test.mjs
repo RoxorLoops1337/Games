@@ -1,7 +1,7 @@
 // Stacking Cats: special moves, tap focus, event stops, the new mice and the nest tricks.
 import assert from 'node:assert/strict';
 import {
-  newGame, addCat, startWave, step, makeEnemy, calcMods, useSpecial, specialReady, setFocus, rollEvent, chooseEvent, eventDue, aliveCats, catMaxHp, runSeconds, DT,
+  newGame, addCat, startWave, step, makeEnemy, calcMods, useSpecial, specialReady, autoSpecialPick, setFocus, rollEvent, chooseEvent, eventDue, aliveCats, catMaxHp, runSeconds, DT,
 } from '../stacking_cats/sim.js';
 import { ACHIEVEMENTS, CATS, SPECIALS, EVENTS, ENEMY_TYPES, NESTS, ITEM_BY_ID } from '../stacking_cats/cats.js';
 
@@ -195,6 +195,23 @@ t('trophies for the new systems count what the run really did', () => {
   let wins = 0;
   for (let s = 1; s < 200 && !wins; s++) { const h = newGame({ seed: s, unlocked: CATS.map((c) => c.id) }); addCat(h, 'mochi'); h.wave = 6; h.bossWave = false; h.run.coins = 500; const ev = rollEvent(h); if (ev.id === 'fountain') { assert.equal(h.run.events, 1); for (let k = 0; k < 2; k++) { chooseEvent(h, k); } wins += h.run.fountainWins || 0; } }
   assert.ok(wins >= 1, 'a fountain win never counted');
+});
+
+t('auto specials: wait for a threat, hold a heal for a hurt team, defensive moves first when hurt', () => {
+  const g = fighting(['yuki', 'pudding'], 8);   // yuki freezes (an attacker), pudding heals
+  const [yuki, pudding] = g.cats;
+  for (const c of g.cats) c.sp = 1;
+  assert.equal(autoSpecialPick(g), null, 'nothing near, nothing to do');
+  spawn(g, 'mouse', 300);
+  assert.equal(autoSpecialPick(g), null, 'one mouse and a healthy team is not worth a special');
+  spawn(g, 'mouse', 320); spawn(g, 'mouse', 340);
+  assert.equal(autoSpecialPick(g).uid, yuki.uid, 'a crowd fires the attack and keeps the heal');
+  yuki.sp = 0;
+  assert.equal(autoSpecialPick(g), null, 'only the heal is charged and nobody is hurt, so it is held');
+  yuki.sp = 1; yuki.hp = 1;
+  assert.equal(autoSpecialPick(g).uid, pudding.uid, 'a hurt team gets the heal first');
+  pudding.sp = 0;
+  assert.equal(autoSpecialPick(g).uid, yuki.uid, 'no defensive move ready, so the attack goes');
 });
 
 console.log(n + ' tests passed');
