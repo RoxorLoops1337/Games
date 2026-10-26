@@ -2326,7 +2326,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+window.stackingCats = { get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
 showTitle();
 requestAnimationFrame(frame);
 void ENEMY_TYPES;
