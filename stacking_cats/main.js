@@ -1804,11 +1804,12 @@ function updateSpecials() {
   const show = g && mode === 'play' && g.state === 'fight';
   box.style.display = show || (g && mode === 'play') ? 'flex' : 'none';
   if (!autoBtn) {
-    autoBtn = document.createElement('button'); autoBtn.className = 'autob'; autoBtn.textContent = 'AUTO'; autoBtn.title = 'Auto special moves (key A)';
+    autoBtn = document.createElement('button'); autoBtn.className = 'autob'; autoBtn.textContent = 'AUTO'; autoBtn.title = 'Auto special moves (key A)'; autoBtn.setAttribute('aria-label', 'Auto special moves');
     autoBtn.addEventListener('click', (e) => { e.stopPropagation(); sfx.unlock(); setAutoSpecial(!save.opt.autoSpecial); });
     box.appendChild(autoBtn);
   }
   autoBtn.classList.toggle('on', !!save.opt.autoSpecial);
+  autoBtn.setAttribute('aria-pressed', save.opt.autoSpecial ? 'true' : 'false');
   if (!g) return;
   const cats = g.cats;
   for (const [uid, b] of spBtns) if (!cats.some((c) => c.uid === uid)) { b.remove(); spBtns.delete(uid); }
@@ -1818,6 +1819,7 @@ function updateSpecials() {
       b = document.createElement('button'); b.className = 'spb'; b.dataset.uid = c.uid;
       const info = S.specialInfo(c.id);
       b.title = `${info.name} (key ${i + 1}): ${SPECIAL_TEXT[info.kind] || ''}`;
+      b.setAttribute('aria-label', `${CAT_BY_ID[c.id].name}: ${info.name}`);
       b.innerHTML = `<img src="${thumbURL(c.id)}" alt=""><i></i><em>${i + 1}</em><span class="si">${info.icon}</span>`;
       box.appendChild(b); spBtns.set(c.uid, b);
     }
