@@ -2055,6 +2055,17 @@ addEventListener('keydown', (e) => {
     if (main) { e.preventDefault(); main.click(); }
     return;
   }
+  if ((k === 'arrowleft' || k === 'arrowright' || k === 'arrowup' || k === 'arrowdown') && document.body.classList.contains('scr') && !(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) {
+    // arrow keys walk the focus through the cards of a pick screen
+    const cards = [...screenEl.querySelectorAll('.cards > .card[data-act]')];
+    if (cards.length) {
+      e.preventDefault();
+      const at = cards.indexOf(document.activeElement), step = k === 'arrowleft' || k === 'arrowup' ? -1 : 1;
+      const to = cards[at < 0 ? (step > 0 ? 0 : cards.length - 1) : (at + step + cards.length) % cards.length];
+      to.focus(); sfx.play('hover');
+      return;
+    }
+  }
   if (k === 'escape' && document.body.classList.contains('scr')) {
     // Escape backs out of a sub screen (settings, how to play, dex, trophies, Kingdom); the pause screen still resumes
     const back = screenEl.querySelector('[data-act="back"]:not([disabled])');
