@@ -744,12 +744,13 @@ function showFinale() {
   const first = !save.storyDone;
   const gems = finaleGems(first);
   if (first) { save.storyDone = true; save.kingdom.gems += gems; persist(); }
-  for (const a of checkAch({ ...g.run, wave: g.wave })) toast(`Trophy: ${a.name}!`);
+  const trophies = checkAch({ ...g.run, wave: g.wave });   // shown inside the card: a toast would sit on top of its title
+  const trophyHtml = trophies.map((a) => `<p class="sub"><b>&#127942; Trophy: ${a.name}!</b></p>`).join('');
   sfx.play('win'); sfx.music('calm');
   g.cats.slice(0, 3).forEach((c, i) => sfx.meow(c.id, 'cheer', 0.2 + i * 0.25));
   const card = () => {
     setScreen(`<h2>${FINALE_TITLE}</h2>${FINALE_LINES.map((l) => `<p class="sub">${l}</p>`).join('')}
-      <p class="sub"><b>${gems ? `Royal reward: +${gems} gems!` : 'Paws-itively purr-fect! The kingdom cheers again.'}</b></p>
+      <p class="sub"><b>${gems ? `Royal reward: +${gems} gems!` : 'Paws-itively purr-fect! The kingdom cheers again.'}</b></p>${trophyHtml}
       <div class="row"><button class="btn big" data-act="go">Keep playing</button><button class="btn grey" data-act="ending">Watch the ending</button></div>`);
     acts = { go: () => nextReward(), ending: () => playEpilogue(app, { cat: (id) => catSprite(id), sfx, motion: save.opt.motion, onDone: () => card() }) };
   };
