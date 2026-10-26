@@ -269,4 +269,9 @@ t('meows: a voice with two vowel formants and a breath, cheers on a clear, a wor
   assert.ok(js.includes("sfx.meow(lowCat.id, 'worried'"), 'a cat that drops below a third of its health gives a worried mew');
 });
 
+t('tapping a cat that is not charged gives it a happy meow and a bounce instead of nothing', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/if \(S\.specialReady\(c\)\) doSpecial\(c\.uid\); else \{[^}]*sfx\.meow\(c\.id, 'happy'\)[^}]*moods\.set\(c\.uid/.test(js), 'a tap on an uncharged cat must answer');
+});
+
 console.log(`${n} tests passed`);

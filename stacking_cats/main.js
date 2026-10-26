@@ -2047,7 +2047,7 @@ cv.addEventListener('pointerdown', (e) => {
   if (!isFinite(x) || !isFinite(y)) return;
   for (let i = 0; i < g.cats.length; i++) {
     const c = g.cats[i], py = GROUND - 50 - S.aliveCats(g).indexOf(c) * SLOT;
-    if (!c.ko && Math.abs(x - g.towerX) < 55 && Math.abs(y - py) < SLOT * 0.5) { if (S.specialReady(c)) doSpecial(c.uid); return; }
+    if (!c.ko && Math.abs(x - g.towerX) < 55 && Math.abs(y - py) < SLOT * 0.5) { if (S.specialReady(c)) doSpecial(c.uid); else { sfx.unlock(); sfx.meow(c.id, 'happy'); moods.set(c.uid, 1.2); emote(c.uid, '\uD83D\uDC96', 0.9); } return; }
   }
   let best = null, bd = 1e9;
   for (const en of g.enemies) {
