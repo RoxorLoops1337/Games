@@ -289,9 +289,17 @@ function snackCard(id) {
   const kind = { perm: 'Whole run', temp: '3 waves', instant: 'Right now' }[s.kind];
   return `<div class="card snack" data-act="pickSnack" data-id="${id}"><div class="ic">${s.icon}</div><h3>${s.name}</h3><div class="kind k-${s.kind}">${kind}</div><p>${s.desc}</p>${snackImpact(id)}</div>`;
 }
+// the two notes under a relic: its set progress and the cat it helps most (loot cards, shop and shady deal)
+function relicNotes(id) {
+  if (!g) return '';
+  const h = setHint(id, g.cats), r = S.relicGain(g, id), bits = [];
+  if (r && r.dps >= 0.01) bits.push(`+${Math.round(r.dps * 100)}% damage`);
+  if (r && r.bulk >= 0.03) bits.push(`tougher +${Math.round(r.bulk * 100)}%`);
+  return (h ? `<div class="setl">${h}</div>` : '') + (bits.length ? `<div class="gainl">Best on ${CAT_BY_ID[r.cat].name}: ${bits.join(', ')}</div>` : '');
+}
 function itemCard(id) {
   const it = ITEM_BY_ID[id];
-  return `<div class="card item r-${it.rarity}" data-act="pickItem" data-id="${id}"><div class="rar">${it.rarity}</div><div class="ic">${it.icon}</div><h3>${it.name}</h3><p>${it.desc}</p>${g ? (() => { const h = setHint(id, g.cats); return h ? `<div class="setl">${h}</div>` : ''; })() : ''}${g ? (() => { const r = S.relicGain(g, id); if (!r) return ''; const bits = []; if (r.dps >= 0.01) bits.push(`+${Math.round(r.dps * 100)}% damage`); if (r.bulk >= 0.03) bits.push(`tougher +${Math.round(r.bulk * 100)}%`); return bits.length ? `<div class="gainl">Best on ${CAT_BY_ID[r.cat].name}: ${bits.join(', ')}</div>` : ''; })() : ''}<div class="impact">Equip it on any cat</div></div>`;
+  return `<div class="card item r-${it.rarity}" data-act="pickItem" data-id="${id}"><div class="rar">${it.rarity}</div><div class="ic">${it.icon}</div><h3>${it.name}</h3><p>${it.desc}</p>${relicNotes(id)}<div class="impact">Equip it on any cat</div></div>`;
 }
 
 const thumbURLs = new Map();
@@ -856,12 +864,12 @@ function eventOptionHtml(o, i) {
   const head = (ic, name, desc, extra = '') => `<div class="${cls}" data-act="evpick" data-i="${i}"><div class="ic">${ic}</div><h3>${name}</h3><p>${desc}</p>${extra}${price}${o.sold ? '<div class="evsold">Sold</div>' : ''}</div>`;
   const it = o.item ? ITEM_BY_ID[o.item] : null;
   switch (o.k) {
-    case 'buy': return head(it.icon, it.name, it.desc, `<div class="rar ${it.rarity}">${it.rarity}</div>`);
+    case 'buy': return head(it.icon, it.name, it.desc, `<div class="rar ${it.rarity}">${it.rarity}</div>${relicNotes(o.item)}`);
     case 'heal': return head('&#128150;', o.cost ? 'Healing Snack' : 'Warm Rest', `Heal the whole team ${Math.round(o.pct * 100)}% and wake fallen cats.`);
     case 'reroll': return head('&#128302;', o.bonusCoins ? 'Stay up late' : 'Reroll Token', o.bonusCoins ? `+1 reroll and +${o.bonusCoins} coins.` : '+1 reroll for later choices.');
     case 'blood': return head(it.icon, 'Offer blood', `Every cat loses ${Math.round(o.hp * 100)}% health. The shrine gives <b>${it.name}</b> (${it.desc}).`);
     case 'gamble': return head(it.icon, 'Make a wish', `${Math.round(o.chance * 100)}% chance of <b>${it.name}</b> (${it.desc}). Coins are gone either way.`);
-    case 'curse': return head(it.icon, it.name, `${it.desc}. <b class="warn">Mice bite ${Math.round(o.hurt * 100)}% harder for the rest of the run.</b>`);
+    case 'curse': return head(it.icon, it.name, `${it.desc}. <b class="warn">Mice bite ${Math.round(o.hurt * 100)}% harder for the rest of the run.</b>`, relicNotes(o.item));
     case 'snack': { const sn = SNACK_BY_ID[o.id]; return head(sn.icon, sn.name, sn.desc, `<div class="rar ${sn.kind === 'perm' ? 'rare' : 'common'}">${sn.kind === 'perm' ? 'whole run' : sn.kind === 'temp' ? '3 waves' : 'instant'}</div>`); }
     case 'toss': return head('&#129689;', 'Toss ' + o.cost + ' coins', `${Math.round(o.chance * 100)}% chance to get ${o.prize} coins back.`);
     case 'train': { const c = S.findCat(g, o.uid); return head(`<img class="thumb" src="${thumbURL(c.id)}" alt="">`, CAT_BY_ID[c.id].name, `Trains hard: +${Math.round(o.bonus * 100)}% damage for the rest of the run.`); }
