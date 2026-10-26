@@ -145,6 +145,17 @@ await t('clearLine: a short wave summary for the cleared banner', async () => {
   assert.equal(clearLine(null), '', 'no report, no line');
 });
 
+await t('specialLabel: the tray button says whether the special is ready, charging or the cat is down', async () => {
+  const { specialLabel } = await import('../stacking_cats/art_util.js');
+  assert.equal(specialLabel('Tabby', 'Frenzy', 1, true, false), 'Tabby: Frenzy, ready');
+  assert.equal(specialLabel('Tabby', 'Frenzy', 0.4, false, false), 'Tabby: Frenzy, charging 40 percent');
+  assert.equal(specialLabel('Tabby', 'Frenzy', 0.4, false, true), 'Tabby: Frenzy, knocked out');
+  assert.equal(specialLabel('Tabby', 'Frenzy', 1.7, false, false), 'Tabby: Frenzy, charging 100 percent', 'clamped');
+  assert.ok(!specialLabel('A', 'B', 0.5, false, false).includes(String.fromCharCode(0x2014)));
+  const js = (await import('node:fs')).readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/const lab = specialLabel\(/.test(js) && /setAttribute\('aria-label', lab\)/.test(js), 'the tray updates its label each frame');
+});
+
 await t('confirmTap: the first tap arms, a second tap within three seconds confirms', async () => {
   const { confirmTap } = await import('../stacking_cats/art_util.js');
   assert.deepEqual(confirmTap(0, 10), { fire: false, armedAt: 10 }, 'first tap only arms');
