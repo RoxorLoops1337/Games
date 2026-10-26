@@ -112,7 +112,7 @@ function peace(ctx, R, p, T) {
   tint(ctx, '#ff9a4a', 0.22);
   moon(ctx, 790, 118, 1, T, 0);
   GUARD.forEach((id, i) => {
-    const x = 250 + i * 120, y = GROUND + 18 + (i % 2) * 8, hop = Math.sin(T * 1.4 + i) * 0.015;
+    const x = 250 + i * 120, y = GROUND - 12 + (i % 2) * 8, hop = Math.sin(T * 1.4 + i) * 0.015;
     cat(ctx, R, id, x, y, 1.05, { rot: hop });
     const h = (T * 0.5 + i * 0.27) % 1; // little hearts drift up
     ctx.save(); ctx.globalAlpha = Math.sin(h * Math.PI) * 0.9; ctx.fillStyle = '#ff7aa8'; ctx.font = `20px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('♥', x + Math.sin(h * 6) * 8, y - 100 - h * 46); ctx.restore();
@@ -152,7 +152,7 @@ function moonScene(ctx, R, p, T) {
   }
   const alarm = seg(p, 0.45, 0.6);
   GUARD.forEach((id, i) => {
-    const x = 250 + i * 120 + (alarm > 0 ? Math.sin(T * 40 + i) * 2.4 * (R.motion ? 1 : 0.3) : 0), y = GROUND + 18 + (i % 2) * 8 - Math.sin(alarm * Math.PI) * 28;
+    const x = 250 + i * 120 + (alarm > 0 ? Math.sin(T * 40 + i) * 2.4 * (R.motion ? 1 : 0.3) : 0), y = GROUND - 12 + (i % 2) * 8 - Math.sin(alarm * Math.PI) * 28;
     cat(ctx, R, id, x, y, 1.05);
     if (alarm > 0.1) label(ctx, '!', x, y - 118, 40, '#ff4a4a', { skew: 0 });
   });

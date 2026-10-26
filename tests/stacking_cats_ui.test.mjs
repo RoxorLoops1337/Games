@@ -561,4 +561,11 @@ t('the cutscene caption wraps with wrapCaption', () => {
   assert.ok(/wrapCaption\(full, \(s\) => ctx\.measureText\(s\)\.width, 800\)/.test(js.slice(i, i + 700)), 'caption uses the balanced wrap');
 });
 
+t('the first two cutscene scenes seat the cats above the caption plate', () => {
+  const js = readFileSync('stacking_cats/intro.js', 'utf8');
+  const hits = js.match(/y = GROUND - 12 \+ \(i % 2\) \* 8/g) || [];
+  assert.equal(hits.length, 2, 'peace and moon scenes lift the guard');
+  assert.ok(!/y = GROUND \+ 18 \+ \(i % 2\) \* 8/.test(js), 'no scene keeps the old low seat');
+});
+
 console.log(`${n} tests passed`);
