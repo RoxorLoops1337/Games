@@ -4,7 +4,7 @@ import { drawBuilding } from './art_kingdom.js';
 import { TAU, mulberry, texturize, hash } from './art_util.js';
 import { iconCanvas } from './art_icons.js';
 
-export const KW = 920, KH = 236;
+export const KW = 920, KH = 256;
 // feet position and size of each building (back row smaller)
 const SPOTS = {
   dojo: { x: 92, y: 152, s: 0.86 }, beds: { x: 282, y: 152, s: 0.86 }, yarn: { x: 472, y: 152, s: 0.86 }, spa: { x: 662, y: 152, s: 0.86 }, tower: { x: 836, y: 152, s: 0.86 },
@@ -87,7 +87,16 @@ export function drawKingdom(ctx, st, t) {
     for (let i = 0; i < b.max; i++) { ctx.fillStyle = i < l ? '#ffd23f' : 'rgba(80,60,110,.35)'; ctx.strokeStyle = '#6a4a14'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.arc(p.x + (i - (b.max - 1) / 2) * 9, p.y + 11, 3, 0, TAU); ctx.fill(); if (i < l) ctx.stroke(); }
     const afford = l < b.max && k.coins >= upgradeCost(b.id, l);
     if (afford) { const y = p.y - h * 0.95 - 4 + Math.sin(t * 5 + p.x) * 3; ctx.fillStyle = '#ff4a6a'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x + h * 0.36, y, 9, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = '800 13px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', p.x + h * 0.36, y + 4.5); }
-    if (sel) { ctx.font = '800 13px sans-serif'; ctx.textAlign = 'center'; const w = ctx.measureText(b.name).width + 16; ctx.fillStyle = '#2a1d4a'; ctx.beginPath(); ctx.roundRect(p.x - w / 2, p.y + 18, w, 20, 10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(b.name, p.x, p.y + 32); }
+    if (l < b.max && !sel) {
+      // price tag: the next upgrade cost, bright when affordable
+      const cost = upgradeCost(b.id, l), label = cost >= 10000 ? Math.round(cost / 1000) + 'k' : String(cost);
+      ctx.font = '800 11px sans-serif'; ctx.textAlign = 'center';
+      const tw = ctx.measureText(label).width + 26, ty = p.y + 17;
+      ctx.fillStyle = afford ? '#2f8a4a' : 'rgba(42,29,74,.78)'; ctx.beginPath(); ctx.roundRect(p.x - tw / 2, ty, tw, 15, 7); ctx.fill();
+      ctx.fillStyle = afford ? '#fff' : '#cfc4ee'; ctx.fillText(label, p.x + 7, ty + 11.5);
+      ctx.drawImage(iconCanvas('\u{1FA99}'), p.x - tw / 2 + 2, ty - 1, 17, 17);
+    }
+    if (sel) { ctx.font = '800 13px sans-serif'; ctx.textAlign = 'center'; const w = ctx.measureText(b.name).width + 16; ctx.fillStyle = '#2a1d4a'; ctx.beginPath(); ctx.roundRect(p.x - w / 2, p.y + 16, w, 20, 10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(b.name, p.x, p.y + 30); }
   }
   // wonders float above the village
   WONDERS.forEach((w, i) => {

@@ -556,7 +556,7 @@ function showKingdom(back, selected) {
   };
   setScreen(`<h2>Cat Kingdom <small class="klv">Lv ${kingdomLevel(k)}</small></h2>
     <div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <span class="gem">&#128142;</span> <b>${k.gems}</b> <small>${num(k.earned)} coins earned in total &middot; gems come from trophies and nests</small></div>
-    <canvas id="kscene" width="1840" height="472"></canvas><div id="kdetail">${detail()}</div>
+    <canvas id="kscene" width="1840" height="512"></canvas><div id="kdetail">${detail()}</div>
     <div class="row"><button class="btn" data-act="back">Back</button><button class="btn pink" data-act="wardrobe">Wardrobe</button></div>`, 'kingdom');
   const refresh = () => { const el = $('kdetail'); if (el) el.innerHTML = detail(); };
   kScene = createKingdomScene($('kscene'), () => save.kingdom, (hit) => { sel = hit; sfx.play('ui'); refresh(); });
