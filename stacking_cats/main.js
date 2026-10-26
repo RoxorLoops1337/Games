@@ -544,6 +544,8 @@ function showWardrobe(back, startCat) {
       const x = cv2.getContext('2d'), crop = [24, 8, 192, 192];
       x.drawImage(spr, crop[0], crop[1], crop[2], crop[3], 0, 0, 120, 120);
     });
+    // the strip is redrawn on every pick, so keep the chosen cat in view (31 cats do not fit in one row)
+    const on = screenEl.querySelector('.wcat.sel'); if (on && on.scrollIntoView) on.scrollIntoView({ inline: 'center', block: 'nearest' });
   };
   draw();
   acts = {

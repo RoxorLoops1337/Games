@@ -457,4 +457,11 @@ t('the Cat Dex grid keeps every cat within three rows so the title and Back butt
   assert.ok(cols * 3 >= CATS.length, `${CATS.length} cats need at most 3 rows but ${cols} columns give ${Math.ceil(CATS.length / cols)}`);
 });
 
+t('the wardrobe cat strip fades at the right edge to show it scrolls and keeps the chosen cat in view', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8'), js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/\.wstrip\{[^}]*mask-image:linear-gradient/.test(html), 'the strip needs a fade mask');
+  const f = js.slice(js.indexOf('function showWardrobe'), js.indexOf('function showWardrobe') + 4500);
+  assert.ok(/scrollIntoView\(\{[^}]*inline: 'center'/.test(f), 'the selected cat must be scrolled into view');
+});
+
 console.log(`${n} tests passed`);
