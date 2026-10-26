@@ -365,6 +365,10 @@ body.touch .bag{height:52px}
 .card.item.r-epic{border-top-color:#b83ad0}
 .card.item .rar{position:static;align-self:center;font-size:15px;letter-spacing:1.5px;padding:1px 14px;border-radius:9px;margin:-2px 0 2px}
 .card.item .impact{background:transparent;border:1.5px dashed #c9bdd9;color:#7a6a90;font-size:12px;font-weight:600;opacity:.85}
+.card.item .ic{position:relative;z-index:0}
+.card.item .ic::before{content:'';position:absolute;left:50%;top:50%;width:86px;height:86px;margin:-43px 0 0 -43px;border-radius:50%;z-index:-1;background:radial-gradient(circle,rgba(255,255,255,.95) 0,rgba(214,206,232,.75) 46%,rgba(214,206,232,0) 72%)}
+.card.item.r-rare .ic::before{background:radial-gradient(circle,rgba(255,255,255,.95) 0,rgba(150,205,255,.85) 46%,rgba(150,205,255,0) 72%)}
+.card.item.r-epic .ic::before{background:radial-gradient(circle,rgba(255,255,255,.95) 0,rgba(235,150,255,.85) 46%,rgba(235,150,255,0) 72%)}
 .card.item.r-rare::after,.card.item.r-epic::after{content:'';position:absolute;inset:0;border-radius:17px;pointer-events:none;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.5) 50%,transparent 65%);background-size:250% 100%;background-position:150% 0;animation:rarshim 5s ease-in-out infinite}
 @keyframes rarshim{0%,55%{background-position:150% 0}100%{background-position:-50% 0}}
 @media (prefers-reduced-motion:reduce){.card.item::after{animation:none!important;display:none}}
