@@ -438,4 +438,10 @@ t('the nest cleared banner announces the chapter that just ended', () => {
   assert.ok(/g\.bossWave \? chapterDoneLine\(g\.wave\) : clearLine\(g\.report\)/.test(js), 'onClear must use chapterDoneLine for nests');
 });
 
+t('the game over screen names the chapter the run ended in', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const f = js.slice(js.indexOf('function showOver'), js.indexOf('function showOver') + 2600);
+  assert.ok(/Chapter \$\{chapterOf\(r\.wave\)\.n\}/.test(f), 'showOver must show the chapter number');
+});
+
 console.log(`${n} tests passed`);
