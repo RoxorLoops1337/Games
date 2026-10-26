@@ -2043,6 +2043,12 @@ addEventListener('keydown', (e) => {
     if (card) { e.preventDefault(); card.click(); }
     return;
   }
+  if (k === 'enter' && document.body.classList.contains('scr') && !(e.target && /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(e.target.tagName)) && !(e.target && e.target.matches && e.target.matches('[data-act]'))) {
+    // Enter presses the screen's main button (Play, Resume, Try again, Continue)
+    const main = screenEl.querySelector('.btn.big:not([disabled]), .btn.green:not([disabled])');
+    if (main) { e.preventDefault(); main.click(); }
+    return;
+  }
   if (k === ' ') { e.preventDefault(); doZoomies(); }
   else if (k === 'p' || k === 'escape') togglePause();
   else if (k === 'f') toggleSpeed();
