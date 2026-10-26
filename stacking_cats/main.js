@@ -2,7 +2,7 @@
 import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS, SPECIAL_TEXT,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
-  ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
+  ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
   DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
   masteryProgress, masteryMap, masteryBonus, MASTERY_MAX, DIFF_ORDER, LADDER_RULES, LADDER_WAVE, ladderTier, ladderUnlocked, diffAllowed, ladderClears, weekKey, weekInfo,
 } from './cats.js';
@@ -438,7 +438,7 @@ function showHow(back) {
     ${row('\uD83C\uDFAF', '<b>Focus.</b> Tap a mouse and your cats shoot it first.')}
     ${row('\uD83D\uDC00', `<b>Nests.</b> Every ${BOSS_EVERY}th wave is a nest fight. Destroy it to rescue a cat and win loot.`)}
     ${row('\u2728', `<b>Merge</b> two equal cats into one stronger cat, up to Lv 3. The tower fits ${MAX_STACK}, the bench ${MAX_BENCH}.`)}
-    ${row('\uD83C\uDF81', '<b>Relics.</b> Elite mice drop chests full of relics, from common to mythic. Each cat carries one (two at Lv 3). Forge three of a kind into the next tier.')}
+    ${row('\uD83C\uDF81', '<b>Relics.</b> Elite mice drop chests full of relics, from common to mythic. Each cat carries one (two at Lv 3). Forge three of a kind into the next tier. Three different relics of one family (bells, toys, armor...) make a set that helps the whole team.')}
     ${row('\uD83E\uDE99', '<b>Coins</b> are saved. Spend them in the <b>Kingdom</b> to make every future run stronger.')}
     ${row('\uD83D\uDD25', '<b>Synergies.</b> Cats of one kind boost each other. Look for the badges by the wave counter.')}
     ${row('\uD83D\uDC3E', '<b>Roads.</b> After each nest you pick the next road. Riskier roads pay better.')}
@@ -486,7 +486,7 @@ function showRelics(back, sel0) {
     }).join('');
     const it = sel && ITEM_BY_ID[sel];
     const detail = !it ? 'Tap a relic to read what it does. Relics you have owned in a run are written into the book, the rest are shadows.'
-      : save.relics[it.id] ? `<b>${it.icon} ${it.name}</b> <span class="rar ${it.rarity}">${it.rarity}</span><br>${it.desc}.`
+      : save.relics[it.id] ? `<b>${it.icon} ${it.name}</b> <span class="rar ${it.rarity}">${it.rarity}</span><br>${it.desc}.${RELIC_SETS.filter((x) => x.ids.includes(it.id)).map((x) => `<br><small>Set: ${x.name}. Carry ${SET_NEED} of its relics and ${x.desc}, ${SET_DOUBLE} double it.</small>`).join('')}`
         : `<b>A ${it.rarity} relic you have not found yet.</b><br>Relics drop from chests and loot, turn up in shops and deals, and three of a kind forge into the next tier.`;
     setScreen(`<h2>Relic Book <small class="klv">${pr.got}/${pr.total} found</small></h2><div class="relbook">${rows}</div><div class="detail dexd relde">${detail}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
   };
@@ -972,7 +972,8 @@ function showStats(back) {
   const cs = cats.map((c) => `<div class="srow cat"><img src="${thumbURL(c.id)}" alt=""><b>${CAT_BY_ID[c.id].name} ${stars(c.lvl)}</b><strong>&asymp; ${Math.round(S.estDps(c, mods))} DPS</strong><span><i>${num(c.dmgDone)} damage</i><i>${c.kills} mice</i>${c.healDone > 1 ? `<i>${num(c.healDone)} healed</i>` : ''}${c.items.map((id) => `<i>${ITEM_BY_ID[id].icon}</i>`).join('')}</span></div>`).join('');
   const r = g.run;
   const rl = teamRelics(cats).map((e) => `<div class="srow rel r-${e.rarity}"><b>${e.icon} ${e.name}${e.n > 1 ? ` x${e.n}` : ''}</b><strong></strong><span><i>${e.desc}</i><i>${[...new Set(e.carriers)].map((id) => CAT_BY_ID[id].name).join(', ')}</i></span></div>`).join('');
-  setScreen(`<h2>Team stats</h2><div class="statcols"><div>${stat}<div class="srow"><b>Run</b><strong></strong><span><i>${num(r.dmg)} damage</i><i>biggest hit ${num(r.biggest)}</i><i>${num(r.taken)} taken</i><i>${Math.floor(r.coins)} coins</i></span></div></div><div>${cs}</div></div>${rl ? `<h4 class="relh">Relics in play</h4><div class="statcols relcols">${rl}</div>` : ''}
+  const rs = activeSets(g.cats).filter((a) => a.have.length).map((a) => `<div class="srow rel set${a.mult ? ' on' : ''}"><b>${a.set.name}${a.mult > 1 ? ' x2' : ''}</b><strong></strong><span><i>${a.mult ? a.set.desc : `${SET_NEED - a.have.length} more for: ${a.set.desc}`}</i><i>${a.have.length}/${a.set.ids.length}: ${a.have.map((id) => ITEM_BY_ID[id].name).join(', ')}</i></span></div>`).join('');
+  setScreen(`<h2>Team stats</h2><div class="statcols"><div>${stat}<div class="srow"><b>Run</b><strong></strong><span><i>${num(r.dmg)} damage</i><i>biggest hit ${num(r.biggest)}</i><i>${num(r.taken)} taken</i><i>${Math.floor(r.coins)} coins</i></span></div></div><div>${cs}</div></div>${rl ? `<h4 class="relh">Relics in play</h4><div class="statcols relcols">${rl}</div>` : ''}${rs ? `<h4 class="relh">Relic sets</h4><div class="statcols relcols">${rs}</div>` : ''}
     <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
   acts = { back };
 }

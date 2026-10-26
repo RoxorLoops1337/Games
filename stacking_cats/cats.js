@@ -358,6 +358,25 @@ export function noteRelics(found, ids) {
   for (const id of ids) if (ITEM_BY_ID[id] && !found[id]) { found[id] = true; fresh.push(id); }
   return fresh;
 }
+// relic sets: three different relics of one family on living tower cats give the whole team the bonus, five double it (copies of one relic count once)
+export const RELIC_SETS = [
+  { id: 'noise', name: 'Noisemakers', ids: ['bell', 'gbell', 'jingle', 'chime', 'whistle', 'drum'], fx: { haste: 0.06 }, desc: 'the team attacks 6% faster' },
+  { id: 'pantry', name: 'Pantry', ids: ['rind', 'cookie', 'bowl', 'fishbone', 'basket', 'heart'], fx: { hp: 0.1 }, desc: 'the team has 10% more health' },
+  { id: 'toys', name: 'Toy Box', ids: ['toymouse', 'pingpong', 'hairball', 'twine', 'post', 'sock'], fx: { dmg: 0.07 }, desc: 'the team deals 7% more damage' },
+  { id: 'hoard', name: 'Treasure Hoard', ids: ['penny', 'medal', 'piggy', 'goldpaw', 'kingcrown', 'clover'], fx: { coin: 0.2 }, desc: 'the team earns 20% more coins' },
+  { id: 'sharp', name: 'Sharp Set', ids: ['claws', 'needle', 'fang', 'whisker', 'scythe', 'spikes'], fx: { crit: 0.06 }, desc: 'the team gets +6% crit chance' },
+  { id: 'armor', name: 'Armor Set', ids: ['vest', 'cushion', 'shell', 'cloak', 'ironbowl', 'mitten'], fx: { dr: 0.04 }, desc: 'the team takes 4% less damage' },
+];
+export const SET_NEED = 3, SET_DOUBLE = 5;
+// every set with how many of its relics the living cats carry; mult is 0 (not active), 1 (three) or 2 (five or more)
+export function activeSets(cats) {
+  const held = new Set();
+  for (const c of cats) if (!c.ko) for (const id of (c.items || [])) held.add(id);
+  return RELIC_SETS.map((set) => {
+    const have = set.ids.filter((id) => held.has(id));
+    return { set, have, mult: have.length >= SET_DOUBLE ? 2 : have.length >= SET_NEED ? 1 : 0 };
+  });
+}
 // the relics a team carries, one line per kind: how many, which cats hold them, rarest first (for the Team stats screen)
 export function teamRelics(cats) {
   const by = new Map();
