@@ -254,7 +254,7 @@ export class Sfx {
       case 'equip': this.tone(300, 0.07, { type: 'square', v: 0.08 }); this.tone(900, 0.12, { type: 'triangle', v: 0.1, delay: 0.06 }); break;
       case 'upgrade': [392, 523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.2, { type: 'triangle', v: 0.13, delay: i * 0.06 })); this.tone(130, 0.3, { to: 70, type: 'sine', v: 0.2 }); break;
       case 'reroll': this.tone(500, 0.05, { type: 'square', v: 0.06 }); this.tone(700, 0.05, { type: 'square', v: 0.06, delay: 0.06 }); this.tone(950, 0.08, { type: 'square', v: 0.06, delay: 0.12 }); break;
-      case 'hover': this.tone(880, 0.03, { type: 'sine', v: 0.03 }); break;
+      case 'hover': this.tone(880, 0.03, { type: 'sine', v: 0.07 }); break;
       case 'achieve': [523, 659, 784, 1046, 1318].forEach((f, i) => this.tone(f, 0.22, { type: 'triangle', v: 0.13, delay: i * 0.07 })); this.tone(2093, 0.4, { type: 'sine', v: 0.06, delay: 0.38 }); break;
       case 'synergy': [440, 554, 659, 880].forEach((f, i) => this.tone(f, 0.14, { type: 'sawtooth', v: 0.05, delay: i * 0.05 })); this.tone(1320, 0.3, { type: 'sine', v: 0.07, delay: 0.2 }); break;
       case 'route': this.tone(392, 0.12, { type: 'triangle', v: 0.1 }); this.tone(588, 0.2, { type: 'triangle', v: 0.1, delay: 0.1 }); break;
@@ -263,7 +263,7 @@ export class Sfx {
       case 'hit': this.tone(190, 0.06, { to: 90, type: 'square', v: 0.07 }); break;
       case 'shoot': this.tone(700, 0.09, { to: 380, type: 'triangle', v: 0.09 }); break;
       case 'bang': this.noise(0.16, 0.3, 1800); this.tone(120, 0.14, { to: 50, type: 'sawtooth', v: 0.14 }); break;
-      case 'flame': this.noise(0.12, 0.1, 900); break;
+      case 'flame': this.noise(0.12, 0.2, 900); break;
       case 'zap': this.tone(900, 0.14, { to: 200, type: 'sawtooth', v: 0.08 }); this.noise(0.1, 0.08, 6000); break;
       case 'boom': this.noise(0.35, 0.34, 700); this.tone(90, 0.3, { to: 40, type: 'sine', v: 0.3 }); break;
       case 'pop': this.tone((420 + Math.random() * 120) * pitch, 0.1, { to: 900 * pitch, type: 'sine', v: 0.1 }); break;
