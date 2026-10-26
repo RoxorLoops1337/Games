@@ -23,13 +23,13 @@ export const STUDIO = {
   royalty:  { id: 'royalty',  name: 'Royalties',         glyph: 'record',  max: 8,  cost: geo(180, 1.38), fx: [['interest', 'add', 0.005]],    desc: 'Earn +0.5% interest on your coins after every wave.' },
   tipcup:   { id: 'tipcup',   name: 'Tip Cup',           glyph: 'coin',    max: 10, cost: geo(100, 1.31), fx: [['waveCoins', 'add', 3]],       desc: 'Start every wave with +3 coins.' },
   setlist:  { id: 'setlist',  name: 'Spare Setlist',     glyph: 'reroll',  max: 4,  cost: geo(400, 1.9),  fx: [['rerolls', 'add', 1]],         desc: '+1 free reroll per run.' },
-  rack:     { id: 'rack',     name: 'Bigger Rack',       glyph: 'gear',    max: 3,  cost: geo(900, 2.6),  fx: [],                              desc: '+1 turret in your loadout (starts at 5).', special: 'loadout' },
+  rack:     { id: 'rack',     name: 'Roadie Rack',        glyph: 'gear',    max: 3,  cost: geo(900, 2.6),  fx: [['startCoins', 'add', 60]],     desc: 'Start every run with +60 coins.' },
   stream:   { id: 'stream',   name: 'Streaming Royalties', glyph: 'note',  max: 8,  cost: geo(250, 1.5),  fx: [],                              desc: 'Earn more Records while you are away (and a longer away cap).', special: 'offline' },
 };
 export const STUDIO_IDS = Object.keys(STUDIO);
 export const HERO_MAX = 10;
 export const heroCost = (lv) => Math.round(120 * Math.pow(1.5, lv - 1));     // price to go from lv to lv+1
-export const LOADOUT_BASE = 5;
+export const LOADOUT_BASE = 12;
 export const AUTOMERGE_PRICE = 150;   // diamonds
 
 // ---------------------------------------------------------------- Gear
@@ -190,7 +190,7 @@ export const ACHIEVEMENTS = [
   { id: 'a_duet',     stat: 'duets',     goal: 10,     name: 'In Harmony',        text: 'Trigger the Duet Finale 10 times.', diamonds: 15 },
   { id: 'a_codex1',   stat: 'seenEnemies', goal: 10,  name: 'Know Your Enemy',   text: 'Meet all 10 kinds of Static.',  diamonds: 20, max: true },
   { id: 'a_codex2',   stat: 'seenBosses',  goal: 5,   name: 'Boss Collector',    text: 'Meet all 5 bosses.',            diamonds: 30, max: true },
-  { id: 'a_rack',     stat: 'turretsOwned', goal: 12, name: 'Full Rack',         text: 'Unlock all 12 turrets.',        diamonds: 40, max: true },
+  { id: 'a_rack',     stat: 'wins',        goal: 10,  name: 'Tour Regular',      text: 'Win 10 stages.',                diamonds: 40 },
   { id: 'a_rush',     stat: 'rushBest',    goal: 10,  name: 'Boss Rush Done',    text: 'Beat all 10 bosses in Boss Rush.', diamonds: 50, max: true },
   { id: 'a_wheel',    stat: 'spins',       goal: 10,  name: 'Lucky Spinner',     text: 'Spin the Lucky Wheel 10 times.', diamonds: 15 },
   { id: 'a_perfect',  stat: 'flawless',  goal: 1,      name: 'Not A Scratch',     text: 'Win a stage with no leaks.',    diamonds: 20 },

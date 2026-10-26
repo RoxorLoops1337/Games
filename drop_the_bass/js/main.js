@@ -39,7 +39,7 @@ const app = {
     const s = app.profile.settings;
     AudioFx.setVolume({ music: s.music, sfx: s.sfx });
     document.body.classList.toggle('reduce', !!s.reduce);
-    const st = setStyle(s.style); document.body.classList.toggle('doodle', st === 'doodle'); document.body.classList.toggle('classic', st === 'classic');
+    setStyle(); document.body.classList.add('doodle'); document.body.classList.remove('classic');
     if (app.battle) { app.battle.fx.noShake = !s.shake || !!s.reduce; if (s.lowfx) app.battle.fx.bloomOn = false; }
     if (app.view && app.view.lowfx !== !!s.lowfx) { app.view.lowfx = !!s.lowfx; resize(); }
   },

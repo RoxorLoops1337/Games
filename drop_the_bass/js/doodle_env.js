@@ -86,26 +86,28 @@ function tentProp(p, x, y, s, col) { p.shp([x - s, y, x, y - s * 0.9, x + s, y],
 
 // ================================================================================================================ BACKDROPS
 const STAGES = {
-  title: { paper: '#27204c', line: '#3b3270', margin: '#9a4a7a', grain: 'rgba(255,255,255,0.04)', accent: C.pink },
+  title: { paper: '#f1ecfb', line: '#cdc4ee', margin: '#f08a8a', accent: C.pink },
   hub: { paper: '#efe9fb', line: '#d3c7ee', margin: '#e9a5c9', accent: C.pink },
   garage: { paper: C.paper, line: '#a9cdf0', margin: '#f08a8a', accent: C.orange },
-  busk: { paper: '#46556f', line: '#5d6e8c', margin: '#7d90b0', grain: 'rgba(255,255,255,0.05)', accent: C.yellow },
-  club: { paper: '#1c1535', line: '#33285d', margin: '#5a2a7a', grain: 'rgba(255,255,255,0.04)', accent: C.mag },
+  busk: { paper: '#e2e8f2', line: '#b9c7de', margin: '#f08a8a', accent: C.yellow },
+  club: { paper: '#efe6fc', line: '#cdbdf0', margin: '#f08a8a', accent: C.mag },
   festival: { paper: '#ffe9c8', line: '#f5c9a0', margin: '#f08a8a', accent: C.orange },
   arena: { paper: '#f6f0e2', line: '#bcd5ea', margin: '#f08a8a', accent: C.pink },
 };
 const PAINT = {
   title(p, c, w, h) {
-    sparkleDots(p, w, h * 0.5, 22, ['#fff6b0', '#ffd0ea', '#bfe9ff'], 11);
-    p.shp(arc(w * 0.78, h * 0.14, 46, 46, 0, 360, 18), C.yellow, INK, 3.4, { gap: 6 }); p.shp(arc(w * 0.78 + 14, h * 0.14 - 8, 38, 38, 0, 360, 16), STAGES.title.paper, null, 0, { gap: 3, alpha: 1 });
-    for (let i = 0; i < 4; i++) p.hatch([w * (0.2 + i * 0.18), h * 0.5, w * (0.24 + i * 0.18), 0, w * (0.28 + i * 0.18), 0, w * (0.32 + i * 0.18), h * 0.5], [C.pink, C.cyan, C.yellow, C.lime][i], 12, 1.1, 0.14);
-    let x = -10; for (let i = 0; x < w + 20; i++) { const bw = 60 + hn(i * 3) * 70, bh = h * (0.12 + hn(i * 5 + 1) * 0.16); building(p, x, h * 0.62, bw, bh, ['#4a3f86', '#5a4a9a', '#3c3470'][i % 3], '#ffe27a', '#d8d0ff'); x += bw + 6; }
-    p.hatch(rect(0, h * 0.62, w, h * 0.38), '#17122e', 10, -0.4, 0.8);
+    p.hatch(rect(0, 0, w, h * 0.62), '#8f86e0', 11, 0.5, 0.3);   // crayon night wash on the page
+    sparkleDots(p, w, h * 0.5, 22, [C.yellow, C.pink, C.sky], 11);
+    p.shp(arc(w * 0.78, h * 0.14, 46, 46, 0, 360, 18), C.yellow, INK, 3.4, { gap: 6 }); p.shp(arc(w * 0.78 + 14, h * 0.14 - 8, 38, 38, 0, 360, 16), '#cfc8f3', null, 0, { gap: 3, alpha: 1 });
+    for (let i = 0; i < 4; i++) p.hatch([w * (0.2 + i * 0.18), h * 0.5, w * (0.24 + i * 0.18), 0, w * (0.28 + i * 0.18), 0, w * (0.32 + i * 0.18), h * 0.5], [C.pink, C.cyan, C.yellow, C.lime][i], 12, 1.1, 0.3);
+    let x = -10; for (let i = 0; x < w + 20; i++) { const bw = 60 + hn(i * 3) * 70, bh = h * (0.12 + hn(i * 5 + 1) * 0.16); building(p, x, h * 0.62, bw, bh, ['#7d6fd0', '#d96aa8', '#4f9fd8'][i % 3], '#ffe27a', INK); x += bw + 6; }
+    p.hatch(rect(0, h * 0.62, w, h * 0.38), '#8f88b8', 10, -0.4, 0.5);
+    p.ln([0, h * 0.62, w, h * 0.62], INK, 3.2, false, 1);
     marginDoodles(p, w, h, [C.pink, C.cyan, C.yellow, C.lime], 5);
   },
   hub(p, c, w, h) {
     const cols = ['#ffc2de', '#c9f2a4', '#bfe9ff', '#ffe49a', '#d9ccf5'];
-    for (let i = 0; i < 26; i++) { const x = hn(i * 7 + 1) * w, y = hn(i * 11 + 2) * h, col = cols[i % 5]; if (i % 4 === 0) p.shp(star(x, y, 15, 0.45, hn(i)), col, '#b9aedc', 2, { gap: 5 }); else if (i % 4 === 1) p.shp(heart(x, y, 28), col, '#b9aedc', 2, { gap: 5 }); else if (i % 4 === 2) spiral(p, x, y, 16, '#c3b5e8'); else noteDoodle(p, x, y, 16, col); }
+    for (let i = 0; i < 26; i++) { const x = hn(i * 7 + 1) * w, y = hn(i * 11 + 2) * h, col = cols[i % 5]; if (i % 4 === 0) p.shp(star(x, y, 15, 0.45, hn(i)), col, '#d3c9ec', 2, { gap: 5, alpha: 0.5 }); else if (i % 4 === 1) p.shp(heart(x, y, 28), col, '#d3c9ec', 2, { gap: 5, alpha: 0.5 }); else if (i % 4 === 2) spiral(p, x, y, 16, '#d9cff0'); else p.shp(heart(x, y, 20), col, '#d3c9ec', 2, { gap: 5, alpha: 0.5 }); }
     tape(p, w * 0.1, 18, 90, 26, -0.2); tape(p, w * 0.9, 18, 90, 26, 0.25);
   },
   garage(p, c, w, h) {
@@ -120,21 +122,22 @@ const PAINT = {
     function amp(pp, ww, hh) { ampProp(pp, ww * 0.92, hh * 0.4, 80); }
   },
   busk(p, c, w, h) {
-    const chalk = '#f4f1e8';
-    let x = -10; for (let i = 0; x < w; i++) { const bw = 70 + hn(i * 3 + 9) * 80, bh = h * (0.16 + hn(i * 5 + 4) * 0.2); p.shp(rect(x, h * 0.6 - bh, bw, bh), '#5c6b86', chalk, 2.6, { gap: 9, alpha: 0.4 }); for (let r = 0; r < Math.floor(bh / 42); r++) for (let k = 0; k < Math.floor(bw / 30); k++) if (hn(i * 17 + r * 5 + k) > 0.4) p.shp(rect(x + 10 + k * 28, h * 0.6 - bh + 12 + r * 40, 14, 20), C.yellow, null, 1, { gap: 4, alpha: 0.85 }); x += bw + 8; }
+    const chalk = '#7b8aa8';
+    let x = -10; for (let i = 0; x < w; i++) { const bw = 70 + hn(i * 3 + 9) * 80, bh = h * (0.16 + hn(i * 5 + 4) * 0.2); p.shp(rect(x, h * 0.6 - bh, bw, bh), '#6f82a6', INK, 2.8, { gap: 8, alpha: 0.55 }); for (let r = 0; r < Math.floor(bh / 42); r++) for (let k = 0; k < Math.floor(bw / 30); k++) if (hn(i * 17 + r * 5 + k) > 0.4) p.shp(rect(x + 10 + k * 28, h * 0.6 - bh + 12 + r * 40, 14, 20), C.yellow, null, 1, { gap: 4, alpha: 0.85 }); x += bw + 8; }
     for (let k = 0; k < 4; k++) lamp(p, w * (0.14 + k * 0.24), h * 0.66, h * 0.17, '#ffe27a');
     for (let r = 0; r < 9; r++) for (let k = 0; k < Math.ceil(w / 54); k++) { const cx = k * 54 + (r % 2) * 27, cy = h * 0.67 + r * 22; if (cy < h - 4) p.ln(arc(cx, cy, 24, 11, 200, 340, 6), chalk, 2, false, 0.7); }
-    if (!BAKE_THUMB) p.txt('OLD TOWN', w * 0.5, h * 0.09, Math.min(44, w * 0.09), chalk, { align: 'c' });
-    marginDoodles(p, w, h, [chalk, '#ffd0ea', '#bfe9ff'], 31);
+    if (!BAKE_THUMB) p.txt('OLD TOWN', w * 0.5, h * 0.09, Math.min(44, w * 0.09), C.yellow, { align: 'c', out: INK, ow: 5 });
+    marginDoodles(p, w, h, [C.yellow, C.pink, C.sky], 31);
   },
   club(p, c, w, h) {
+    p.hatch(rect(0, 0, w, h * 0.72), '#9b7fe6', 11, 0.5, 0.26);   // glitter-pen night wash
     discoBall(p, w * 0.5, h * 0.12, 38);
     const cols = [C.mag, C.cyan, C.lime, C.yellow, C.pink];
     for (let i = 0; i < 7; i++) { const a = -0.9 + i * 0.3; p.ln([w * 0.5, h * 0.12, w * 0.5 + Math.sin(a) * h * 0.8, h * 0.12 + Math.cos(a) * h * 0.8], cols[i % 5], 2.8, false, 1.6); }
     for (let k = 0; k < 2; k++) { const sx = k ? w * 0.9 : w * 0.1; for (let r = 0; r < 3; r++) speakerProp(p, sx, h * (0.3 + r * 0.13), 56, '#3b3158'); }
-    const tw = Math.ceil(w / 60), th = 6; for (let r = 0; r < th; r++) for (let k = 0; k < tw; k++) if ((r + k) % 2) p.hatch(rect(k * 60, h * 0.78 + r * ((h * 0.22) / th), 60, (h * 0.22) / th), cols[(r + k) % 5], 8, 0.8, 0.28);
-    if (!BAKE_THUMB) p.txt('NEON CLUB', w * 0.5, h * 0.27, Math.min(44, w * 0.09), C.pink, { align: 'c', out: '#0e0a22', ow: 5 });
-    sparkleDots(p, w, h * 0.7, 26, [C.mag, C.cyan, C.lime, '#fff'], 41);
+    const tw = Math.ceil(w / 60), th = 6; for (let r = 0; r < th; r++) for (let k = 0; k < tw; k++) if ((r + k) % 2) p.hatch(rect(k * 60, h * 0.78 + r * ((h * 0.22) / th), 60, (h * 0.22) / th), cols[(r + k) % 5], 8, 0.8, 0.45);
+    if (!BAKE_THUMB) p.txt('NEON CLUB', w * 0.5, h * 0.27, Math.min(44, w * 0.09), C.pink, { align: 'c', out: INK, ow: 5 });
+    sparkleDots(p, w, h * 0.7, 26, [C.mag, C.cyan, C.orange, C.yellow], 41);
   },
   festival(p, c, w, h) {
     const bands = ['#ffd95a', '#ffb347', '#ff8a5a', '#f2619a', '#9b6bd8'];
@@ -148,8 +151,8 @@ const PAINT = {
     cloud(p, w * 0.2, h * 0.34, 50, '#fff'); cloud(p, w * 0.82, h * 0.3, 44, '#fff');
   },
   arena(p, c, w, h) {
-    p.shp(rect(w * 0.2, h * 0.04, w * 0.6, h * 0.14, 10), '#2b2840', INK, 3.4, { gap: 8, alpha: 0.9 });
-    if (!BAKE_THUMB) p.txt('MEGA ARENA', w * 0.5, h * 0.125, Math.min(44, w * 0.088), C.yellow, { align: 'c' });
+    p.shp(rect(w * 0.2, h * 0.012, w * 0.6, h * 0.085, 10), '#ffe9a0', INK, 3.4, { gap: 8, alpha: 0.7 });
+    if (!BAKE_THUMB) p.txt('MEGA ARENA', w * 0.5, h * 0.078, Math.min(40, w * 0.08), C.red, { align: 'c', out: INK, ow: 5 });
     for (let k = 0; k < 2; k++) { const tx = k ? w * 0.93 : w * 0.07; p.ln([tx, h * 0.5, tx, h * 0.16], INK, 4, false, 0.8); p.shp(rect(tx - 26, h * 0.1, 52, 38, 4), '#f3e9a0', INK, 3, { gap: 6 }); for (let i = -1; i <= 1; i++) p.ln([tx + i * 12, h * 0.15, tx + i * 90 * (k ? -1 : 1) - 30, h * 0.46], '#ffe27a', 2.2, false, 1.2); }
     const heads = [C.pink, C.sky, C.yellow, C.lime, C.orange, C.lav];
     for (let r = 0; r < 9; r++) { const y = h * 0.28 + r * h * 0.045, cnt = Math.floor(w / 26); p.ln([w * 0.04, y + 14, w * 0.96, y + 14], '#a9a39a', 2.2, false, 0.9); for (let k = 0; k < cnt; k++) { const x = w * 0.04 + (k + 0.5) / cnt * w * 0.92 + (r % 2) * 6; p.dot(x, y + 4, 7, heads[(k * 7 + r * 3) % 6]); p.ln(arc(x, y + 4, 7, 7, 0, 360, 8), INK, 1.4, true, 0.4); } }
@@ -167,28 +170,28 @@ function bakeBg(id, w, h) {
   });
 }
 const twinkle = (c, w, h, t, n, col, ymax) => { c.strokeStyle = col; c.lineWidth = 2; c.lineCap = 'round'; c.beginPath(); for (let i = 0; i < n; i++) { const k = Math.sin(t * (1.5 + hn(i) * 2.2) + i * 5); if (k < 0.2) continue; const x = hn(i * 3 + 7) * w, y = hn(i * 5 + 3) * h * ymax, r = 3 + k * 5; c.moveTo(x - r, y); c.lineTo(x + r, y); c.moveTo(x, y - r); c.lineTo(x, y + r); } c.stroke(); };
-function floatNotes(c, w, h, t, n, cols) {
+function floatNotes(c, w, h, t, n, cols, amax = 0.9) {
   c.lineWidth = 2.6; c.lineCap = 'round';
   for (let i = 0; i < n; i++) {
     const k = ((t * 0.07 + i / n) % 1), x = w * (0.12 + hn(i * 9 + 2) * 0.76) + Math.sin(t * 0.9 + i * 2) * 16, y = h * (1.02 - k * 1.1), a = Math.sin(k * Math.PI);
-    c.globalAlpha = a * 0.9; c.fillStyle = cols[i % cols.length]; c.strokeStyle = INK; c.beginPath(); c.ellipse(x, y, 7, 5, -0.4, 0, TAU); c.fill(); c.stroke();
+    c.globalAlpha = a * amax; c.fillStyle = cols[i % cols.length]; c.strokeStyle = INK; c.beginPath(); c.ellipse(x, y, 7, 5, -0.4, 0, TAU); c.fill(); c.stroke();
     c.beginPath(); c.moveTo(x + 6, y - 2); c.lineTo(x + 6, y - 22); c.lineTo(x + 14, y - 18); c.stroke();
   }
   c.globalAlpha = 1;
 }
 const DYN = {
-  title(c, w, h, t, beat) { twinkle(c, w, h, t, 18, '#fff6b0', 0.5); floatNotes(c, w, h, t, 5, [C.pink, C.cyan, C.yellow, C.lime]); },
-  hub(c, w, h, t) { floatNotes(c, w, h, t, 4, ['#ffc2de', '#c9f2a4', '#bfe9ff', '#ffe49a']); },
+  title(c, w, h, t, beat) { twinkle(c, w, h, t, 18, C.yellow, 0.5); floatNotes(c, w, h, t, 5, [C.pink, C.cyan, C.yellow, C.lime]); },
+  hub(c, w, h, t) { floatNotes(c, w, h, t, 3, ['#ffc2de', '#c9f2a4', '#bfe9ff', '#ffe49a'], 0.3); },
   garage(c, w, h, t, beat) { floatNotes(c, w, h, t, 3, [C.orange, C.pink, C.sky]); if (beat > 0.05) { c.strokeStyle = C.orange; c.lineWidth = 3; c.globalAlpha = beat * 0.6; c.beginPath(); c.arc(w * 0.92, h * 0.4, 52 + (1 - beat) * 16, -0.9, 0.9); c.stroke(); c.globalAlpha = 1; } },
   busk(c, w, h, t) {
-    c.strokeStyle = '#d9e6ff'; c.lineWidth = 1.8; c.lineCap = 'round'; c.beginPath();
+    c.strokeStyle = '#5b86c9'; c.lineWidth = 2; c.lineCap = 'round'; c.beginPath();
     for (let i = 0; i < 40; i++) { const x = (hn(i * 3) * w + t * 30) % w, y = ((hn(i * 5 + 1) * h + t * 340) % h); c.moveTo(x, y); c.lineTo(x - 5, y + 16); }
-    c.stroke(); twinkle(c, w, h, t, 6, '#fff6b0', 0.3);
+    c.stroke(); twinkle(c, w, h, t, 6, C.orange, 0.3);
   },
   club(c, w, h, t, beat) {
     const cols = [C.mag, C.cyan, C.lime]; c.lineWidth = 3.6; c.lineCap = 'round';
     for (let i = 0; i < 3; i++) { const a = Math.sin(t * (0.8 + i * 0.3) + i * 2) * 0.7; c.strokeStyle = cols[i]; c.globalAlpha = 0.55 + beat * 0.4; c.beginPath(); c.moveTo(w * 0.5, h * 0.12); c.lineTo(w * 0.5 + Math.sin(a) * h, h * 0.12 + Math.cos(a) * h); c.stroke(); }
-    c.globalAlpha = 1; twinkle(c, w, h, t, 22, '#ffffff', 0.9);
+    c.globalAlpha = 1; twinkle(c, w, h, t, 22, C.orange, 0.9);
   },
   festival(c, w, h, t, beat) {
     const sway = Math.sin(t * 1.6) * 7, cols = [C.red, C.yellow, C.blue, C.pink, C.lime, C.orange];
@@ -247,7 +250,7 @@ export function drawBackdrop(ctx, id, w, h, t, o) {
 const THEME = {
   garage: { page: '#fff7e4', line: '#d9e8f7', pad: '#ffe2a8', lane: '#a9a39a', accent: C.orange, props: ['speaker', 'crate', 'amp', 'plant'] },
   busk: { page: '#e9edf5', line: '#c9d6ea', pad: '#cfe0ff', lane: '#7e8ba3', accent: C.yellow, props: ['plant', 'crate', 'cone', 'speaker'] },
-  club: { page: '#2c2350', line: '#3f3470', pad: '#6a4ab0', lane: '#16102e', accent: C.mag, props: ['speaker', 'amp', 'speaker', 'cone'] },
+  club: { page: '#f1e9ff', line: '#d6c9f5', pad: '#c9b3f5', lane: '#6d6790', accent: C.mag, props: ['speaker', 'amp', 'speaker', 'cone'] },
   festival: { page: '#fff0d6', line: '#f6d6a8', pad: '#ffc98a', lane: '#b89a72', accent: C.orange, props: ['plant', 'crate', 'cone', 'amp'] },
   arena: { page: '#faf5ea', line: '#cfe0ee', pad: '#c9dcf2', lane: '#8d93a6', accent: C.pink, props: ['cone', 'speaker', 'amp', 'crate'] },
 };
@@ -285,13 +288,13 @@ function paintBoard(p, c, mapId, worldId) {
   for (const key of pset) {
     const [cc, rr] = key.split(',').map(Number); if (cc < 0 || cc >= COLS || rr < 0 || rr >= ROWS) continue;
     const x0 = BOARD_X + cc * TILE, y0 = BOARD_Y + rr * TILE;
-    p.hatch(rect(x0, y0, TILE, TILE), th.lane, 7, 0.9 + ((cc + rr) % 2) * 0.1, worldId === 'club' ? 0.9 : 0.5);
+    p.hatch(rect(x0, y0, TILE, TILE), th.lane, 7, 0.9 + ((cc + rr) % 2) * 0.1, worldId === 'club' ? 0.6 : 0.5);
     if (!pset.has(cc + ',' + (rr - 1))) p.ln([x0 - 1, y0, x0 + TILE + 1, y0], INK, 3.2, false, 1);
     if (!pset.has(cc + ',' + (rr + 1))) p.ln([x0 - 1, y0 + TILE, x0 + TILE + 1, y0 + TILE], INK, 3.2, false, 1);
     if (!pset.has((cc - 1) + ',' + rr)) p.ln([x0, y0 - 1, x0, y0 + TILE + 1], INK, 3.2, false, 1);
     if (!pset.has((cc + 1) + ',' + rr)) p.ln([x0 + TILE, y0 - 1, x0 + TILE, y0 + TILE + 1], INK, 3.2, false, 1);
   }
-  for (const lane of m.lanes) { const q = []; for (const pt of lane.pts) q.push(pt.x, pt.y); p.ln(q, worldId === 'club' ? '#e8e0ff' : '#f7f2e4', 3, false, 1, [14, 12]); }
+  for (const lane of m.lanes) { const q = []; for (const pt of lane.pts) q.push(pt.x, pt.y); p.ln(q, '#f7f2e4', 3, false, 1, [14, 12]); }
   // spawn gates: an angry doodled hole with brows and fangs
   for (const lane of m.lanes) {
     const g = gatePos(lane); c.save(); c.translate(g.gx, g.gy); c.rotate(g.ang);
@@ -326,7 +329,7 @@ export function drawBoard(ctx, mapId, worldId, t, o) {
   if (e.direct) { ctx.save(); e.draw(new Pen(ctx, hashStr(e.key), 1), ctx, 0); ctx.restore(); } else put(ctx, e, BOARD_X - PAD, BOARD_Y - PAD, t, 3.5);
   // flowing chevrons along every lane (pencil ticks marching to the stage)
   ctx.save(); ctx.beginPath(); ctx.rect(BOARD_X, BOARD_Y, BOARD_W, BOARD_H); ctx.clip();
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 3.2; ctx.strokeStyle = worldId === 'club' ? 'rgba(232,224,255,0.75)' : 'rgba(43,39,51,0.5)';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 3.2; ctx.strokeStyle = 'rgba(43,39,51,0.5)';
   for (const lane of m.lanes) {
     const sp = 58, off = (t * 30) % sp; ctx.beginPath();
     for (let d = off; d < lane.total; d += sp) { const p = laneAt(lane, d), c = Math.cos(p.ang), s = Math.sin(p.ang); const bx = p.x - c * 5, by = p.y - s * 5; ctx.moveTo(bx - s * 8, by + c * 8); ctx.lineTo(p.x + c * 4, p.y + s * 4); ctx.lineTo(bx + s * 8, by - c * 8); }
