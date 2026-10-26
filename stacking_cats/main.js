@@ -1328,6 +1328,11 @@ function specialVfx(e, p, col) {
   switch (e.kind) {
     case 'frenzy':
       for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU; bolt(jag(p.x + Math.cos(a) * 30, p.y + Math.sin(a) * 30, p.x + Math.cos(a) * 110, p.y + Math.sin(a) * 110, 3, 6), col, 2.4, 0.22); }
+      // three claw marks across each of the nearest mice
+      for (const m of foes.slice(0, 4)) {
+        for (const o of [-9, 0, 9]) bolt([{ x: m.x - 24 + o, y: m.y - 50 }, { x: m.x + 24 + o, y: m.y - 2 }], '#fff6dc', 3, 0.3);
+        sparks(m.x, m.y - 26, 4, col, 160, 0.3);
+      }
       break;
     case 'fortress':
       for (const r of [80, 112, 146]) ring(p.x, p.y - SLOT * 0.5, r, '#bfe3ff', 0.5 + r / 400, 7);
