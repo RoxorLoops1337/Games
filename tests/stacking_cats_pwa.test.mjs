@@ -279,7 +279,7 @@ await t('story: the mouse king falls at the end of the map, once per run, with a
   assert.equal(st.finaleDue(st.FINALE_WAVE, true), false, 'only once per run');
   assert.equal(st.finaleDue(st.FINALE_WAVE - 5, false), false, 'not before the last nest');
   assert.equal(st.finaleDue(st.FINALE_WAVE + 5, false), false, 'not on later laps');
-  assert.equal(st.finaleGems(true), 5, 'the first victory pays gems');
+  assert.equal(st.finaleGems(true), 3, 'the first victory pays gems (a few, they are rare)');
   assert.equal(st.finaleGems(false), 0, 'later victories pay nothing extra');
   assert.ok(st.FINALE_LINES.length >= 3);
   for (const l of st.FINALE_LINES) assert.ok(!l.includes('\u2014') && l.length > 20, l);

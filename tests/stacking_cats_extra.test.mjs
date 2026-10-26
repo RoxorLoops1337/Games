@@ -8,7 +8,7 @@ import {
 } from '../stacking_cats/sim.js';
 import {
   CATS, CAT_TAGS, SYNERGIES, synergyText, ROUTES, DIFFS, DAILY_MODS, DAILY_POOL, dayInfo, dayKey, WONDERS, buyWonder, emptyKingdom, kingdomBonuses,
-  ACHIEVEMENTS, emptyStats, STARTERS, ITEM_BY_ID, ITEMS, RARITIES, ITEM_WEIGHT, SELL_VALUE, FORGE_NEXT, SPECIAL_TIME,
+  ACHIEVEMENTS, emptyStats, STARTERS, ITEM_BY_ID, ITEMS, RARITIES, ITEM_WEIGHT, SELL_VALUE, FORGE_NEXT, SPECIAL_TIME, COIN,
 } from '../stacking_cats/cats.js';
 
 let n = 0;
@@ -240,9 +240,9 @@ t('relic: kills heal (Cheese Rind), pay (Copper Penny), charge specials (Twine) 
   assert.ok(Math.abs(kill([['tabby', 'rind']]).heal - 0.05) < 1e-6 && base.heal === 0, 'Cheese Rind 5%');
   assert.ok(Math.abs(kill([['tabby', 'scythe']]).heal - 0.12) < 1e-6, 'Moon Scythe heals 12%');
   const pen = kill([['tabby', 'penny']]), mul = pen.g.mods.coin * pen.g.diff.coin * pen.g.route.coin;
-  assert.ok(Math.abs(pen.coins - base.coins - 0.5 * mul) < 1e-6, 'Copper Penny +0.5 coins: ' + (pen.coins - base.coins));
+  assert.ok(Math.abs(pen.coins - base.coins - 0.2 * mul) < 1e-6, 'Copper Penny +0.2 coins: ' + (pen.coins - base.coins));
   const gp = kill([['tabby', 'goldpaw']]), gmul = gp.g.mods.coin * gp.g.diff.coin * gp.g.route.coin;
-  assert.ok(Math.abs(gp.coins - (1 + 4) * gmul) < 1e-6 && gp.g.mods.coin > pen.g.mods.coin, 'Golden Paw: +4 coins per kill on top of the kill coin, and its +40% coins');
+  assert.ok(Math.abs(gp.coins - (COIN.kill + 1.6) * gmul) < 1e-6 && gp.g.mods.coin > pen.g.mods.coin, 'Golden Paw: +1.6 coins per kill on top of the kill coin, and its +40% coins');
   assert.ok(Math.abs(kill([['tabby', 'twine']]).sp - base.sp - 0.03) < 1e-9, 'Ball of Twine +3% charge');
   const other = kill([['tabby', null], ['mochi', 'rind']], 0);
   assert.equal(other.heal, 0, 'a relic on another cat does nothing for the killer');

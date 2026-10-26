@@ -301,7 +301,7 @@ export const ITEMS = [
   // ---- more relics. Each has one clear job: kill effects, conditional damage, barriers, team auras, loot luck, and a few run-changing legends.
   // common
   { id: 'rind', name: 'Cheese Rind', icon: '🍪', rarity: 'common', fx: { kheal: 0.05 }, desc: 'Heals 5% of its health on every kill' },
-  { id: 'penny', name: 'Copper Penny', icon: '🏅', rarity: 'common', fx: { kcoin: 0.5 }, desc: '+0.5 coins for every mouse it defeats' },
+  { id: 'penny', name: 'Copper Penny', icon: '🏅', rarity: 'common', fx: { kcoin: 0.2 }, desc: '+0.2 coins for every mouse it defeats' },
   { id: 'needle', name: 'Sewing Needle', icon: '🪡', rarity: 'common', fx: { pierce: 1 }, desc: 'Its attacks ignore mouse armor' },
   { id: 'twine', name: 'Ball of Twine', icon: '🎾', rarity: 'common', fx: { kcharge: 0.03 }, desc: 'Each kill charges its special move by 3%' },
   { id: 'sprig', name: 'Catnip Sprig', icon: '🌻', rarity: 'common', fx: { zoomG: 0.2 }, desc: 'The Zoomies meter fills 20% faster' },
@@ -316,7 +316,7 @@ export const ITEMS = [
   { id: 'pingpong', name: 'Ping Pong Ball', icon: '🏓', rarity: 'common', fx: { frenzy: 0.025 }, desc: '+2.5% attack speed for every kill this wave (up to 10 kills)' },
   // rare
   { id: 'whisker', name: 'Reaper Whisker', icon: '💀', rarity: 'rare', fx: { exec: 0.6 }, desc: '+60% damage to mice below 30% health' },
-  { id: 'piggy', name: 'Piggy Bank', icon: '🏺', rarity: 'rare', fx: { kcoin: 1.2 }, desc: '+1.2 coins for every mouse it defeats' },
+  { id: 'piggy', name: 'Piggy Bank', icon: '🏺', rarity: 'rare', fx: { kcoin: 0.5 }, desc: '+0.5 coins for every mouse it defeats' },
   { id: 'sock', name: 'Static Sock', icon: '🪤', rarity: 'rare', fx: { echo: 0.2 }, desc: '20% chance that an attack fires a second time for free' },
   { id: 'spore', name: 'Spore Mushroom', icon: '🍄', rarity: 'rare', fx: { venom: 0.45 }, desc: 'Its hits poison mice, and the poison stacks' },
   { id: 'ironbowl', name: 'Iron Bowl', icon: '🪣', rarity: 'rare', fx: { shield: 0.3, dr: 0.05 }, desc: 'Starts every wave with a barrier worth 30% of its health, takes 5% less damage' },
@@ -334,7 +334,7 @@ export const ITEMS = [
   { id: 'keg', name: 'Powder Keg', icon: '⚗', rarity: 'legendary', fx: { boom: 0.8, dmg: 0.12 }, desc: 'Mice it kills blow up for 80% of their health, hurting the mice around them. +12% damage' },
   { id: 'whiskers', name: 'Echo Whiskers', icon: '🪄', rarity: 'legendary', fx: { echo: 0.45, haste: 0.15 }, desc: '45% chance that an attack fires a second time for free, +15% attack speed' },
   { id: 'scythe', name: 'Moon Scythe', icon: '🗝', rarity: 'legendary', fx: { exec: 1.2, kheal: 0.12, crit: 0.1 }, desc: '+120% damage to mice below 30% health, heals 12% on a kill, +10% crit' },
-  { id: 'goldpaw', name: 'Golden Paw', icon: '🍯', rarity: 'legendary', fx: { kcoin: 4, coin: 0.4, luck: 1.5 }, desc: '+4 coins per kill, +40% coins and better loot' },
+  { id: 'goldpaw', name: 'Golden Paw', icon: '🍯', rarity: 'legendary', fx: { kcoin: 1.6, coin: 0.4, luck: 1.5 }, desc: '+1.6 coins per kill, +40% coins and better loot' },
   { id: 'rainbow', name: 'Rainbow Yarn', icon: '🌈', rarity: 'legendary', fx: { teamDmg: 0.12, teamHaste: 0.1 }, desc: 'The whole team deals 12% more damage and attacks 10% faster' },
   // mythic
   { id: 'kingcrown', name: 'Crown of the Cat King', icon: '🧷', rarity: 'mythic', fx: { teamDmg: 0.2, teamHp: 0.25, teamDr: 0.08, luck: 2 }, desc: 'The whole team: +20% damage, +25% health, 8% less damage taken, and much better loot' },
@@ -398,6 +398,18 @@ export function setHint(id, cats) {
 export function relicBookLine(found, got, total) {
   return found > 0 ? `${found} new relic${found === 1 ? '' : 's'} in the Relic Book (${got}/${total})` : '';
 }
+// ---------------------------------------------------------------- lootboxes
+// Relics come out of boxes now (a chance, not a choice). Every cat loves a box: four qualities, each with its own odds per relic rarity.
+// `src` says where a box of that quality can drop from (see rollBoxTier in sim.js).
+export const BOXES = [
+  { id: 'cardboard', name: 'Cardboard Box', icon: '\uD83D\uDCE6', blurb: 'Every cat loves a box. Who knows what is inside?', odds: { common: 70, rare: 25, epic: 5 } },
+  { id: 'basket', name: 'Wicker Basket', icon: '\uD83E\uDDF3', blurb: 'A cosy basket, still warm from a nap.', odds: { common: 35, rare: 42, epic: 19, legendary: 4 } },
+  { id: 'silver', name: 'Silver Fish Chest', icon: '\uD83E\uDDF0', blurb: 'Smells like the best tuna in the kingdom.', odds: { rare: 45, epic: 40, legendary: 14, mythic: 1 } },
+  { id: 'golden', name: 'Golden Cat Chest', icon: '\uD83D\uDDC3', blurb: 'A treasure fit for the Cat King.', odds: { epic: 55, legendary: 38, mythic: 7 } },
+];
+// what the reveal screen says for each relic rarity
+export const RARITY_CHEER = { common: 'A cosy little find!', rare: 'Paw-some! A rare relic!', epic: 'Meow-velous! An epic relic!', legendary: 'Purr-fectly legendary!', mythic: 'MYTHIC! The Cat King approves!' };
+export const BOX_BY_ID = Object.fromEntries(BOXES.map((b) => [b.id, b]));
 // the relics a team carries, one line per kind: how many, which cats hold them, rarest first (for the Team stats screen)
 export function teamRelics(cats) {
   const by = new Map();
@@ -410,7 +422,7 @@ export function teamRelics(cats) {
   return [...by.values()].sort((a, b) => rank(b.rarity) - rank(a.rarity) || a.name.localeCompare(b.name));
 }
 // selling pays coins (scaled a little by wave); forging turns three of one rarity into one of the next
-export const SELL_VALUE = { common: 8, rare: 22, epic: 60, legendary: 150, mythic: 400 };
+export const SELL_VALUE = { common: 3, rare: 9, epic: 24, legendary: 60, mythic: 160 };   // run coins (see COIN_SCALE)
 export const FORGE_NEXT = { common: 'rare', rare: 'epic', epic: 'legendary', legendary: 'mythic', mythic: 'mythic' };
 export const FORGE_COUNT = 3;
 export const itemSlots = (lvl) => (lvl >= 3 ? 2 : 1);
@@ -434,7 +446,7 @@ export const emptyKingdom = () => ({ coins: 0, lv: {}, earned: 0, gems: 0, wonde
 export const buildingLevel = (k, id) => Math.min(BUILDING_BY_ID[id].max, (k && k.lv && k.lv[id]) | 0);
 export function upgradeCost(id, level) {
   const b = BUILDING_BY_ID[id];
-  return Math.round((b.base * Math.pow(1.75, level)) / 5) * 5;
+  return Math.round((b.base * Math.pow(1.85, level)) / 5) * 5;
 }
 // the cheapest building the player can pay for right now (null when none), used for the Kingdom hint
 export function cheapestUpgrade(k) {
@@ -499,7 +511,9 @@ export function buyUpgrade(k, id) {
 }
 
 // coins earned while playing (before the vault bonus)
-export const COIN = { kill: 1, elite: 5, wave: 3, waveGrow: 0.6, nest: 30, nestGrow: 12 };
+// run coins are scarce on purpose: everything in a run that pays or costs coins (kills, waves, the shop, selling relics) uses this one scale
+export const COIN_SCALE = 0.4;
+export const COIN = { kill: 1 * COIN_SCALE, elite: 5 * COIN_SCALE, wave: 3 * COIN_SCALE, waveGrow: 0.6 * COIN_SCALE, nest: 30 * COIN_SCALE, nestGrow: 12 * COIN_SCALE };
 
 // ---------------------------------------------------------------- difficulty
 export const DIFFS = {
@@ -580,43 +594,43 @@ export const WONDER_BY_ID = Object.fromEntries(WONDERS.map((w) => [w.id, w]));
 // check gets { stats (after this run), run, save, kingdom }.
 const bld = (k, n) => BUILDINGS.filter((b) => buildingLevel(k, b.id) >= n).length;
 export const ACHIEVEMENTS = [
-  { id: 'first',    name: 'First Catch',      desc: 'Defeat your first mouse.',                    coins: 20,  gems: 0, check: (c) => c.stats.kills >= 1 },
-  { id: 'hunter',   name: 'Mouser',           desc: 'Defeat 1000 mice in total.',                  coins: 80,  gems: 0, check: (c) => c.stats.kills >= 1000 },
-  { id: 'exterm',   name: 'Exterminator',     desc: 'Defeat 10000 mice in total.',                 coins: 300, gems: 2, check: (c) => c.stats.kills >= 10000 },
-  { id: 'nest1',    name: 'Nest Buster',      desc: 'Destroy a nest.',                             coins: 50,  gems: 1, check: (c) => c.stats.bossKills >= 1 },
-  { id: 'nest10',   name: 'Nest Crusher',     desc: 'Destroy 10 nests in total.',                  coins: 150, gems: 1, check: (c) => c.stats.bossKills >= 10 },
-  { id: 'w10',      name: 'Getting Warm',     desc: 'Reach wave 10.',                              coins: 60,  gems: 0, check: (c) => c.stats.bestWave >= 10 },
-  { id: 'w20',      name: 'Cat Hero',         desc: 'Reach wave 20.',                              coins: 120, gems: 1, check: (c) => c.stats.bestWave >= 20 },
-  { id: 'w30',      name: 'Cat Legend',       desc: 'Reach wave 30.',                              coins: 250, gems: 2, check: (c) => c.stats.bestWave >= 30 },
-  { id: 'w50',      name: 'Whisker of Gold',  desc: 'Reach wave 50.',                              coins: 500, gems: 3, check: (c) => c.stats.bestWave >= 50 },
-  { id: 'merge5',   name: 'Merge Master',     desc: 'Merge cats up to Lv 3, 5 times.',             coins: 100, gems: 1, check: (c) => c.stats.lvl3 >= 5 },
-  { id: 'flaw5',    name: 'Not a Scratch',    desc: 'Clear 5 waves in one run without a cat going down.', coins: 80, gems: 0, check: (c) => c.run.flawless >= 5 },
-  { id: 'combo50',  name: 'Combo King',       desc: 'Chain a 50 mouse combo.',                     coins: 80,  gems: 1, check: (c) => (c.run.maxCombo || 0) >= 50 },
-  { id: 'rich',     name: 'Piggy Bank',       desc: 'Earn 5000 coins in total.',                   coins: 100, gems: 1, check: (c) => c.kingdom.earned >= 5000 },
-  { id: 'build15',  name: 'Town Planner',     desc: 'Reach Kingdom level 15.',                     coins: 100, gems: 1, check: (c) => kingdomLevel(c.kingdom) >= 15 },
-  { id: 'allbld',   name: 'Full Village',     desc: 'Build every Kingdom building.',               coins: 150, gems: 2, check: (c) => bld(c.kingdom, 1) >= BUILDINGS.length },
-  { id: 'maxbld',   name: 'Finishing Touch',  desc: 'Fully upgrade one building.',                 coins: 100, gems: 1, check: (c) => BUILDINGS.some((b) => buildingLevel(c.kingdom, b.id) >= b.max) },
-  { id: 'coll15',   name: 'Cat Collector',    desc: 'Unlock 15 cats.',                             coins: 100, gems: 1, check: (c) => c.save.unlocked.length >= 15 },
-  { id: 'coll30',   name: 'Gotta Pet Them All', desc: 'Unlock all 32 cats.',                       coins: 300, gems: 3, check: (c) => c.save.unlocked.length >= CATS.length },
-  { id: 'loot8',    name: 'Loot Goblin',      desc: 'Collect 8 relics in one run.',                 coins: 80,  gems: 1, check: (c) => c.run.items >= 8 },
-  { id: 'hard15',   name: 'Brave Whiskers',   desc: 'Reach wave 15 on Hard.',                      coins: 200, gems: 2, check: (c) => c.run.diff === 'hard' && c.run.wave >= 15 },
-  { id: 'daily1',   name: 'Daily Dabbler',    desc: 'Play the daily challenge.',                   coins: 40,  gems: 1, check: (c) => !!c.run.daily },
-  { id: 'daily20',  name: 'Daily Champion',   desc: 'Reach wave 20 in a daily challenge.',         coins: 200, gems: 2, check: (c) => !!c.run.daily && c.run.wave >= 20 },
-  { id: 'syn3',     name: 'Dream Team',       desc: 'Get a full tier 2 synergy (3 cats of one kind).', coins: 80, gems: 1, check: (c) => (c.run.synMax || 0) >= 3 },
-  { id: 'big1000',  name: 'Big Hitter',       desc: 'Land a single hit of 1000 damage.',           coins: 120, gems: 1, check: (c) => c.run.biggest >= 1000 },
-  { id: 'nine',     name: 'Nine Lives',       desc: 'Be saved by Nine Lives.',                     coins: 60,  gems: 1, check: (c) => (c.run.nine || 0) >= 1 },
-  { id: 'sp5',      name: 'Special Delivery', desc: 'Use 5 special moves in one run.',             coins: 60,  gems: 1, check: (c) => (c.run.specials || 0) >= 5 },
-  { id: 'sp25',     name: 'Showstopper',      desc: 'Use 25 special moves in one run.',            coins: 150, gems: 2, check: (c) => (c.run.specials || 0) >= 25 },
-  { id: 'forge1',   name: 'Blacksmith',       desc: 'Forge three relics into a better one.',        coins: 50,  gems: 1, check: (c) => (c.run.forged || 0) >= 1 },
-  { id: 'sell5',    name: 'Yard Sale',        desc: 'Sell 5 relics in one run.',                    coins: 50,  gems: 0, check: (c) => (c.run.sold || 0) >= 5 },
-  { id: 'event3',   name: 'Wanderer',         desc: 'Visit 3 event stops in one run.',             coins: 70,  gems: 1, check: (c) => (c.run.events || 0) >= 3 },
-  { id: 'wish',     name: 'Lucky Wish',       desc: 'Win a toss at the Wishing Fountain.',         coins: 70,  gems: 1, check: (c) => (c.run.fountainWins || 0) >= 1 },
-  { id: 'book10',   name: 'Relic Hoarder',    desc: 'Find 10 different relics for the Relic Book.', coins: 60,  gems: 1, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= 10 },
-  { id: 'book30',   name: 'Relic Curator',    desc: 'Find 30 different relics for the Relic Book.', coins: 150, gems: 2, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= 30 },
-  { id: 'bookall',  name: 'Complete Collection', desc: 'Find every relic for the Relic Book.',      coins: 400, gems: 4, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= ITEMS.length },
-  { id: 'set1',     name: 'Matching Set',     desc: 'Have a relic set bonus active in a fight.',    coins: 60,  gems: 1, check: (c) => (c.run.setMax || 0) >= 1 },
-  { id: 'set3',     name: 'Set Collector',    desc: 'Have three relic sets active at once.',        coins: 200, gems: 2, check: (c) => (c.run.setMax || 0) >= 3 },
-  { id: 'king',     name: 'Cheddar Crusher',  desc: 'Defeat King Squeakimus in the wave 30 nest.', coins: 300, gems: 0, check: (c) => !!(c.save && c.save.storyDone) },
+  { id: 'first',    name: 'First Catch',      desc: 'Defeat your first mouse.',                    coins: 10, gems: 0, check: (c) => c.stats.kills >= 1 },
+  { id: 'hunter',   name: 'Mouser',           desc: 'Defeat 1000 mice in total.',                  coins: 40, gems: 0, check: (c) => c.stats.kills >= 1000 },
+  { id: 'exterm',   name: 'Exterminator',     desc: 'Defeat 10000 mice in total.',                 coins: 150, gems: 1, check: (c) => c.stats.kills >= 10000 },
+  { id: 'nest1',    name: 'Nest Buster',      desc: 'Destroy a nest.',                             coins: 25, gems: 0, check: (c) => c.stats.bossKills >= 1 },
+  { id: 'nest10',   name: 'Nest Crusher',     desc: 'Destroy 10 nests in total.',                  coins: 75, gems: 0, check: (c) => c.stats.bossKills >= 10 },
+  { id: 'w10',      name: 'Getting Warm',     desc: 'Reach wave 10.',                              coins: 30, gems: 0, check: (c) => c.stats.bestWave >= 10 },
+  { id: 'w20',      name: 'Cat Hero',         desc: 'Reach wave 20.',                              coins: 60, gems: 0, check: (c) => c.stats.bestWave >= 20 },
+  { id: 'w30',      name: 'Cat Legend',       desc: 'Reach wave 30.',                              coins: 125, gems: 1, check: (c) => c.stats.bestWave >= 30 },
+  { id: 'w50',      name: 'Whisker of Gold',  desc: 'Reach wave 50.',                              coins: 250, gems: 1, check: (c) => c.stats.bestWave >= 50 },
+  { id: 'merge5',   name: 'Merge Master',     desc: 'Merge cats up to Lv 3, 5 times.',             coins: 50, gems: 0, check: (c) => c.stats.lvl3 >= 5 },
+  { id: 'flaw5',    name: 'Not a Scratch',    desc: 'Clear 5 waves in one run without a cat going down.', coins: 40, gems: 0, check: (c) => c.run.flawless >= 5 },
+  { id: 'combo50',  name: 'Combo King',       desc: 'Chain a 50 mouse combo.',                     coins: 40, gems: 0, check: (c) => (c.run.maxCombo || 0) >= 50 },
+  { id: 'rich',     name: 'Piggy Bank',       desc: 'Earn 5000 coins in total.',                   coins: 50, gems: 0, check: (c) => c.kingdom.earned >= 5000 },
+  { id: 'build15',  name: 'Town Planner',     desc: 'Reach Kingdom level 15.',                     coins: 50, gems: 0, check: (c) => kingdomLevel(c.kingdom) >= 15 },
+  { id: 'allbld',   name: 'Full Village',     desc: 'Build every Kingdom building.',               coins: 75, gems: 1, check: (c) => bld(c.kingdom, 1) >= BUILDINGS.length },
+  { id: 'maxbld',   name: 'Finishing Touch',  desc: 'Fully upgrade one building.',                 coins: 50, gems: 0, check: (c) => BUILDINGS.some((b) => buildingLevel(c.kingdom, b.id) >= b.max) },
+  { id: 'coll15',   name: 'Cat Collector',    desc: 'Unlock 15 cats.',                             coins: 50, gems: 0, check: (c) => c.save.unlocked.length >= 15 },
+  { id: 'coll30',   name: 'Gotta Pet Them All', desc: 'Unlock all 32 cats.',                       coins: 150, gems: 1, check: (c) => c.save.unlocked.length >= CATS.length },
+  { id: 'loot8',    name: 'Loot Goblin',      desc: 'Collect 8 relics in one run.',                 coins: 40, gems: 0, check: (c) => c.run.items >= 8 },
+  { id: 'hard15',   name: 'Brave Whiskers',   desc: 'Reach wave 15 on Hard.',                      coins: 100, gems: 1, check: (c) => c.run.diff === 'hard' && c.run.wave >= 15 },
+  { id: 'daily1',   name: 'Daily Dabbler',    desc: 'Play the daily challenge.',                   coins: 20, gems: 0, check: (c) => !!c.run.daily },
+  { id: 'daily20',  name: 'Daily Champion',   desc: 'Reach wave 20 in a daily challenge.',         coins: 100, gems: 1, check: (c) => !!c.run.daily && c.run.wave >= 20 },
+  { id: 'syn3',     name: 'Dream Team',       desc: 'Get a full tier 2 synergy (3 cats of one kind).', coins: 40, gems: 0, check: (c) => (c.run.synMax || 0) >= 3 },
+  { id: 'big1000',  name: 'Big Hitter',       desc: 'Land a single hit of 1000 damage.',           coins: 60, gems: 0, check: (c) => c.run.biggest >= 1000 },
+  { id: 'nine',     name: 'Nine Lives',       desc: 'Be saved by Nine Lives.',                     coins: 30, gems: 0, check: (c) => (c.run.nine || 0) >= 1 },
+  { id: 'sp5',      name: 'Special Delivery', desc: 'Use 5 special moves in one run.',             coins: 30, gems: 0, check: (c) => (c.run.specials || 0) >= 5 },
+  { id: 'sp25',     name: 'Showstopper',      desc: 'Use 25 special moves in one run.',            coins: 75, gems: 1, check: (c) => (c.run.specials || 0) >= 25 },
+  { id: 'forge1',   name: 'Blacksmith',       desc: 'Forge three relics into a better one.',        coins: 25, gems: 0, check: (c) => (c.run.forged || 0) >= 1 },
+  { id: 'sell5',    name: 'Yard Sale',        desc: 'Sell 5 relics in one run.',                    coins: 25, gems: 0, check: (c) => (c.run.sold || 0) >= 5 },
+  { id: 'event3',   name: 'Wanderer',         desc: 'Visit 3 event stops in one run.',             coins: 35, gems: 0, check: (c) => (c.run.events || 0) >= 3 },
+  { id: 'wish',     name: 'Lucky Wish',       desc: 'Win a toss at the Wishing Fountain.',         coins: 35, gems: 0, check: (c) => (c.run.fountainWins || 0) >= 1 },
+  { id: 'book10',   name: 'Relic Hoarder',    desc: 'Find 10 different relics for the Relic Book.', coins: 30, gems: 0, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= 10 },
+  { id: 'book30',   name: 'Relic Curator',    desc: 'Find 30 different relics for the Relic Book.', coins: 75, gems: 1, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= 30 },
+  { id: 'bookall',  name: 'Complete Collection', desc: 'Find every relic for the Relic Book.',      coins: 200, gems: 2, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= ITEMS.length },
+  { id: 'set1',     name: 'Matching Set',     desc: 'Have a relic set bonus active in a fight.',    coins: 30, gems: 0, check: (c) => (c.run.setMax || 0) >= 1 },
+  { id: 'set3',     name: 'Set Collector',    desc: 'Have three relic sets active at once.',        coins: 100, gems: 1, check: (c) => (c.run.setMax || 0) >= 3 },
+  { id: 'king',     name: 'Cheddar Crusher',  desc: 'Defeat King Squeakimus in the wave 30 nest.', coins: 150, gems: 0, check: (c) => !!(c.save && c.save.storyDone) },
 ];
 
 // ---------------------------------------------------------------- special moves (tap a charged cat; each cat has one)

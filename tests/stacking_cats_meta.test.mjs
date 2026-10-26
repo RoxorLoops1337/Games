@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   newGame, addCat, startWave, step, makeEnemy, catMaxHp, calcMods, itemFx, estDps, explainMods, rollItemChoices, equipItem, unequipItem,
-  takeItem, useReroll, fxOf, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
+  takeItem, useReroll, fxOf, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems, rollBoxTier, rollBoxRelic, openBox,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, RARITIES, ACHIEVEMENTS,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, BOXES, BOX_BY_ID, COIN, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, RARITIES, ACHIEVEMENTS,
 } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CAT_TAGS, SPECIALS, SYNERGIES, unlockProgress } from '../stacking_cats/cats.js';
 import { catStory } from '../stacking_cats/story.js';
@@ -163,20 +163,51 @@ t('every item can be equipped and a fight runs without errors', () => {
 t('coins, chests and loot: kills pay, vault boosts, chests turn into item rewards', () => {
   const g = newGame({ seed: 10, events: false }); addCat(g, 'tabby'); addCat(g, 'ember');
   fight(g, 40, (gg) => { for (let i = 0; i < 6; i++) gg.enemies.push(makeEnemy(gg, 'mouse', 1, { x: 300 + i * 40 })); });
-  assert.ok(g.run.coins >= 6);
+  assert.ok(g.run.coins >= 6 * COIN.kill, 'six kills pay at least six kill coins: ' + g.run.coins);
   const k = emptyKingdom(); k.lv = { vault: 5 };
   const v = newGame({ seed: 10, kingdom: k, events: false }); addCat(v, 'tabby'); addCat(v, 'ember');
   fight(v, 40, (gg) => { for (let i = 0; i < 6; i++) gg.enemies.push(makeEnemy(gg, 'mouse', 1, { x: 300 + i * 40 })); });
   assert.ok(v.run.coins > g.run.coins * 1.3);
-  // force chests
-  const c = newGame({ seed: 11, events: false }); addCat(c, 'tabby'); c.chests = 3;
+  // force boxes: at most two are opened after a wave, the rest wait for the next one
+  const c = newGame({ seed: 11, events: false }); addCat(c, 'tabby'); c.boxes = ['cardboard', 'basket', 'silver'];
   startWave(c); c.enemies = []; c.queue = []; c.state = 'fight'; step(c, 0.1);
   assert.equal(c.state, 'clear');
-  assert.deepEqual(c.reward, ['item', 'item', 'snack']);
-  assert.equal(c.chests, 1);
+  assert.deepEqual(c.reward, ['box:cardboard', 'box:basket', 'snack']);
+  assert.deepEqual(c.boxes, ['silver']);
+  assert.deepEqual(c.report.boxes, ['cardboard', 'basket']);
   const ch = rollItemChoices(c);
   assert.equal(new Set(ch).size, 3);
   ch.forEach((id) => assert.ok(ITEM_BY_ID[id]));
+});
+
+t('lootboxes: four cat themed qualities, each better than the last, one random relic each', () => {
+  assert.deepEqual(BOXES.map((b) => b.id), ['cardboard', 'basket', 'silver', 'golden']);
+  assert.equal(new Set(BOXES.map((b) => b.icon)).size, BOXES.length, 'unique icons');
+  for (const b of BOXES) { assert.ok(b.name && b.blurb && Object.keys(b.odds).length, b.id); for (const r of Object.keys(b.odds)) assert.ok(RARITIES.includes(r), b.id + ' odds name a rarity: ' + r); assert.equal(BOX_BY_ID[b.id], b); }
+  const g = newGame({ seed: 21, events: false }); addCat(g, 'tabby');
+  const mean = (tier) => { let s = 0; for (let i = 0; i < 1500; i++) s += RARITIES.indexOf(ITEM_BY_ID[rollBoxRelic(g, tier)].rarity); return s / 1500; };
+  const m = BOXES.map((b) => mean(b.id));
+  for (let i = 1; i < m.length; i++) assert.ok(m[i] > m[i - 1] + 0.25, BOXES[i].id + ' beats ' + BOXES[i - 1].id + ': ' + m);
+  assert.ok(m[0] < 0.6, 'a cardboard box is mostly commons, mean rarity ' + m[0]);
+  for (let i = 0; i < 400; i++) assert.notEqual(ITEM_BY_ID[rollBoxRelic(g, 'golden')].rarity, 'common', 'golden never gives a common');
+  const before = g.stash.length, runItems = g.run.items;
+  const id = openBox(g, 'basket');
+  assert.ok(ITEM_BY_ID[id] && g.stash.length === before + 1 && g.stash[g.stash.length - 1] === id && g.run.items === runItems + 1, 'the relic lands in the backpack');
+});
+
+t('lootbox tiers: elites mostly drop cardboard, nests never do, luck lifts the quality', () => {
+  const g = newGame({ seed: 22, events: false }); addCat(g, 'tabby');
+  const tally = (src, n, game = g) => { const c = {}; for (let i = 0; i < 3000; i++) { const k = rollBoxTier(game, src, n); c[k] = (c[k] || 0) + 1; } return c; };
+  const e = tally('elite', 0), nest = tally('nest', 1);
+  assert.ok(e.cardboard / 3000 > 0.6 && e.cardboard / 3000 < 0.9, 'elite cardboard ' + e.cardboard / 3000);
+  assert.ok(!e.golden, 'an elite never drops a golden chest');
+  assert.ok(!nest.cardboard, 'a nest never drops cardboard');
+  assert.ok(nest.basket > nest.silver && nest.silver > (nest.golden || 0), 'nest tiers fall off: ' + JSON.stringify(nest));
+  const lucky = newGame({ seed: 22, events: false, kingdom: { ...emptyKingdom(), lv: { shrine: 5 } } }); addCat(lucky, 'tabby');
+  const le = tally('elite', 0, lucky);
+  assert.ok((le.cardboard || 0) < e.cardboard, 'luck lowers the share of cardboard: ' + le.cardboard + ' vs ' + e.cardboard);
+  const late = tally('nest', 6);
+  assert.ok((late.golden || 0) > (nest.golden || 0), 'later nests give golden chests more often');
 });
 
 t('impact stats: damage per cat, wave report, biggest hit, team stat sources', () => {

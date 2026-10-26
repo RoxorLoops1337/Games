@@ -824,3 +824,16 @@ t('Relic Book rarity labels carry their own dark backing, so they read on any ba
   assert.ok(m, 'rule exists');
   assert.ok(/background:rgba\(\d+,\s*\d+,\s*\d+,\s*\.[7-9]\d*\)/.test(m[1]), 'a mostly opaque dark background: ' + m[1].slice(0, 120));
 });
+
+t('lootbox screens: every box has a drawn icon, rewards open boxes, the reveal leads to the equip screen', async () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  const { ICON_KEYS } = await import('../stacking_cats/art_icons.js'), { BOXES } = await import('../stacking_cats/cats.js');
+  for (const b of BOXES) assert.ok(ICON_KEYS.includes(b.icon), b.id + ' needs a drawing');
+  assert.ok(/else if \(r\.startsWith\('box:'\)\) showBox\(r\.slice\(4\)\)/.test(js), 'nextReward opens boxes');
+  assert.ok(!/showItemReward/.test(js), 'the old pick one of three screen is gone');
+  const box = js.slice(js.indexOf('function showBox('), js.indexOf('function showSnackReward'));
+  assert.ok(/S\.openBox\(g, tier\)/.test(box) && /showBoxReveal\(tier, id\)/.test(box), 'opening rolls through the sim');
+  assert.ok(/take: \(\) => \{[^}]*showTower\(\(\) => nextReward\(\), \{ item: g\.stash\.lastIndexOf\(id\) \}\)/.test(box), 'equip leads to the arrange screen with the relic selected');
+  assert.ok(/\.boxic\.shaking\{animation:boxshake/.test(css) && /@keyframes boxshake/.test(css), 'shake animation');
+  assert.ok(/body\.nomotion \*/.test(css), 'reduced motion stops animations (the open still works)');
+});
