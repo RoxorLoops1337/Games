@@ -255,4 +255,9 @@ t('the Kingdom hint mentions arrow keys and Enter for keyboard players', () => {
   assert.ok(js.includes("coarse ? '' : ' Arrow keys move between them and Enter buys.'"), 'mouse and keyboard players must be told about the keys, touch players keep the short hint');
 });
 
+t('a wave 1 coach tip is dismissed when the wave clears so it never covers the banner', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/function onClear\(\)[\s\S]*?coachEl\.dataset\.key === 'c2'\) hideCoach\(\)/.test(js), 'onClear must hide the c2 tip');
+});
+
 console.log(`${n} tests passed`);
