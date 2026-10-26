@@ -240,6 +240,19 @@ const ACC = {
       fillPath(ctx, ell(ctx, 60, 98, 11, 6.5), '#d9954a', 1); line(ctx, [[54, 96], [57, 100]], '#f2c88a', 0.9); line(ctx, [[60, 95], [63, 99]], '#f2c88a', 0.9);
     },
   },
+  pearl: {
+    back(ctx) {
+      // a little fin-shaped tail ribbon behind her
+      fillPath(ctx, new Path2D('M92 108 q12 -4 16 -16 q-2 14 -16 24 Z'), '#ff9ad0', 0.8);
+    },
+    front(ctx, A) {
+      // a shell crown on her head, a pearl necklace and a few floating bubbles
+      fillPath(ctx, new Path2D('M46 34 Q60 6 74 34 Q60 26 46 34 Z'), '#ffd9ec', 1);
+      line(ctx, [[60, 12], [60, 30]], '#ff9ad0', 1); line(ctx, [[53, 16], [54, 31]], '#ff9ad0', 0.9); line(ctx, [[67, 16], [66, 31]], '#ff9ad0', 0.9);
+      for (let i = 0; i < 5; i++) dot(ctx, 46 + i * 7, 92 + Math.sin(i * 0.8) * 3 + 2, 2.6, '#ffffff', 0.7);
+      for (const [x, y, r] of [[92, 56, 4], [98, 44, 3], [88, 40, 2.4]]) { ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke(); }
+    },
+  },
   pudding: {
     front(ctx, A) {
       fillPath(ctx, new Path2D('M36 36 L40 16 Q60 10 80 16 L84 36 Q60 28 36 36 Z'), '#ffffff', 1);
