@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {
   newGame, addCat, startWave, step, makeEnemy, catMaxHp, calcMods, cfx, synergyState, estDps, rollRoutes, chooseRoute, grantStartItem,
-  stackMax, benchMax, moveCat, useZoomies, snackChoiceCount, rollItemChoices,
+  stackMax, benchMax, moveCat, useZoomies, snackChoiceCount, rollItemChoices, rollCatChoices, rollSnackChoices, eatSnack, mergePairs, mergeCats, useSpecial,
 } from '../stacking_cats/sim.js';
 import {
   CATS, CAT_TAGS, SYNERGIES, synergyText, ROUTES, DIFFS, DAILY_MODS, DAILY_POOL, dayInfo, dayKey, WONDERS, buyWonder, emptyKingdom, kingdomBonuses,
@@ -140,6 +140,37 @@ t('achievements: checks run against stats, runs and the kingdom', () => {
   assert.ok(got(ctx({ run: { synMax: 3, biggest: 1500, items: 9, maxCombo: 60 } })).filter((x) => ['syn3', 'big1000', 'loot8', 'combo50'].includes(x)).length === 4);
   const k = emptyKingdom(); k.lv = { dojo: 5, beds: 1, yarn: 1, spa: 1, tower: 1, shrine: 1, vault: 1, tent: 1, stall: 1 }; k.earned = 6000;
   assert.ok(got(ctx({ kingdom: k })).includes('allbld') && got(ctx({ kingdom: k })).includes('maxbld') && got(ctx({ kingdom: k })).includes('rich'));
+});
+
+// whole runs with random specials and picks across difficulties: no cat, mouse or coin value may ever turn NaN or huge, and nothing may throw
+const brokenState = (g) => {
+  for (const c of g.cats.concat(g.bench)) if (!Number.isFinite(c.hp) || c.hp > 1e9) return `cat ${c.id} hp ${c.hp}`;
+  for (const e of g.enemies) if (!Number.isFinite(e.x) || !Number.isFinite(e.hp)) return `mouse ${e.type} x ${e.x} hp ${e.hp}`;
+  return Number.isFinite(g.run.coins) ? '' : 'coins';
+};
+t('fuzz: seeded random runs keep every number finite and never throw', () => {
+  const sane = newGame({ seed: 1 }); addCat(sane, 'tabby'); sane.cats[0].hp = NaN;
+  assert.match(brokenState(sane), /cat tabby/, 'the detector itself catches a NaN cat');
+  let r = 7;
+  const rnd = () => ((r = (r * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let seed = 1; seed <= 10; seed++) {
+    const g = newGame({ seed, diff: ['normal', 'nm1', 'nm3', 'nm5'][seed % 4] });
+    for (const id of STARTERS.slice(0, 2)) addCat(g, id);
+    for (let w = 0; w < 30 && g.state !== 'over'; w++) {
+      startWave(g);
+      for (let i = 0; i < 6000 && (g.state === 'fight' || g.state === 'intro'); i++) {
+        step(g, 0.05);
+        if (i % 20 === 0) {
+          for (const c of g.cats) if (rnd() < 0.3) useSpecial(g, c.uid);
+          assert.equal(brokenState(g), '', `seed ${seed} wave ${w}`);
+        }
+      }
+      if (g.state === 'over') break;
+      const cc = rollCatChoices(g); if (cc.length) addCat(g, cc[0]);
+      const sc = rollSnackChoices(g); if (sc.length) eatSnack(g, sc[0]);
+      const p = mergePairs(g)[0]; if (p) mergeCats(g, p[0], p[1]);
+    }
+  }
 });
 
 console.log(`${n} tests passed`);
