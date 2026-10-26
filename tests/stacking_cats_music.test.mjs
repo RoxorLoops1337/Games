@@ -1,7 +1,8 @@
 // Stacking Cats: headless tests for the soundtrack (per theme and mode). We cannot listen here, so besides running the
 // scheduler against a fake Web Audio clock we check that the generated music is structurally sane.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
@@ -184,12 +185,21 @@ t('music off or sfx off schedules nothing; big effects duck the music', () => {
 // ---- the recorded meows: the bank, the pure helpers, and the sample paths of the engine
 const { MEOW_CLIPS, MEOW_BANK } = await import('../stacking_cats/meow_bank.js');
 const mv = await import('../stacking_cats/meow_voice.js');
-const wav = readFileSync(new URL('../stacking_cats/meows.wav', import.meta.url));
+const wav = readFileSync(new URL('../stacking_cats/' + MEOW_BANK.url, import.meta.url));
 const pcm = new Int16Array(wav.buffer, wav.byteOffset + 44, (wav.length - 44) >> 1);
 const clipData = (c) => Array.from(pcm.subarray(c.at, c.at + c.len), (v) => v / 32768);
 const rmsOf = (a) => Math.sqrt(a.reduce((s2, v) => s2 + v * v, 0) / a.length);
 
-t('meows.wav is a mono 16 bit file and every clip sits inside it, in order, with silent guards between', () => {
+t('the bank file name carries a hash of its content, so a changed bank is never served from an old cache, and the service worker pre-caches it', () => {
+  const m = MEOW_BANK.url.match(/^meows\.([0-9a-f]{8})\.wav$/);
+  assert.ok(m, 'name looks like meows.<hash>.wav: ' + MEOW_BANK.url);
+  assert.equal(createHash('sha1').update(wav).digest('hex').slice(0, 8), m[1], 'the hash is of the file content');
+  assert.deepEqual(readdirSync('stacking_cats').filter((f) => /^meows.*\.wav$/.test(f)), [MEOW_BANK.url], 'no old bank files left behind');
+  const sw = readFileSync('stacking_cats/sw.js', 'utf8');
+  assert.ok(sw.includes("'" + MEOW_BANK.url + "'"), 'sw.js PRECACHE lists ' + MEOW_BANK.url + ' (update it when the bank is rebuilt)');
+});
+
+t('the meow bank is a mono 16 bit file and every clip sits inside it, in order, with silent guards between', () => {
   assert.equal(wav.toString('latin1', 0, 4), 'RIFF'); assert.equal(wav.toString('latin1', 8, 12), 'WAVE');
   assert.equal(wav.readUInt16LE(22), 1, 'mono'); assert.equal(wav.readUInt32LE(24), MEOW_BANK.rate); assert.equal(wav.readUInt16LE(34), 16);
   assert.ok(MEOW_CLIPS.length >= 25, 'clips: ' + MEOW_CLIPS.length);

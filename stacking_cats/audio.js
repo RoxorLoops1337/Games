@@ -159,7 +159,7 @@ export class Sfx {
     this.sfxVol = 1; this.musicVol = 0.7; this.step = 0; this.nextT = 0; this.timer = 0; this.intensity = 0;
     this.theme = 0; this.running = false; this.song = null; this.songKey = ''; this.bus = null; this.busNode = null;
     this.vend = []; this.peakVoices = 0; this.timers = []; this.noteLog = null; this.vh = null;
-    this.meowBuf = null; this.meowLoading = false; this.lastMew = ''; this.lastMewF = 0;   // the recorded meows (meows.wav), decoded once after unlock
+    this.meowBuf = null; this.meowLoading = false; this.lastMew = ''; this.lastMewF = 0;   // the recorded meows (the bank file named in meow_bank.js), decoded once after unlock
   }
   unlock() {
     try {
