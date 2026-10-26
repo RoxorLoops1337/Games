@@ -561,7 +561,7 @@ function showKingdom(back, selected) {
   const k = save.kingdom;
   let sel = selected || null;
   const detail = () => {
-    if (!sel) return '<div class="kd hint2">Tap a building to upgrade it, or a floating wonder to buy it with gems.</div>';
+    if (!sel) return '<div class="kd hint2">Tap a building to upgrade it, or a floating wonder to buy it with gems.' + (coarse ? '' : ' Arrow keys move between them and Enter buys.') + '</div>';
     if (sel.type === 'wonder') {
       const w = WONDER_BY_ID[sel.id], owned = !!k.wonders[w.id], afford = !owned && k.gems >= w.cost;
       return `<div class="kd"><span class="kic">${w.icon}</span><div class="kt"><b>${w.name}</b><small>${w.desc}</small></div><button class="btn small ${afford ? 'green' : 'grey'}" data-act="buyw" data-id="${w.id}" ${afford ? '' : 'disabled'}>${owned ? 'Built' : `Buy &#128142; ${w.cost}`}</button></div>`;

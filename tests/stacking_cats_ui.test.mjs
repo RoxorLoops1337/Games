@@ -250,4 +250,9 @@ t('opening the pause menu clears the toasts so they do not smear behind the blur
   assert.ok(/function showPause\(\)[\s\S]*?\$\('toasts'\)\.replaceChildren\(\)/.test(js), 'showPause must clear the toast stack');
 });
 
+t('the Kingdom hint mentions arrow keys and Enter for keyboard players', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(js.includes("coarse ? '' : ' Arrow keys move between them and Enter buys.'"), 'mouse and keyboard players must be told about the keys, touch players keep the short hint');
+});
+
 console.log(`${n} tests passed`);
