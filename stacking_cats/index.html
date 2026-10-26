@@ -122,8 +122,9 @@ body.scr #toasts{left:50%;top:auto;bottom:10px}   /* over a full screen the toas
 .pbar{height:6px;width:80%;background:#0003;border-radius:4px;overflow:hidden;margin-top:1px}.pbar i{display:block;height:100%;background:var(--mint)}
 .stats{display:grid;grid-template-columns:repeat(4,auto);gap:6px 26px;margin:8px 0 12px;font-weight:700;font-size:17px}
 .stats b{display:block;font-size:28px;color:var(--peach);line-height:1}
-.how{max-width:880px;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;text-align:left;font-size:15px;font-weight:600;line-height:1.2;background:rgba(0,0,0,.28);border-radius:16px;padding:10px 12px}
-.how li{margin:0;display:grid;grid-template-columns:34px 1fr;gap:8px;align-items:center;background:rgba(20,12,40,.45);border-radius:12px;padding:5px 9px}
+.screen:has(.how){justify-content:safe center;overflow-y:auto}
+.how{max-width:880px;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;text-align:left;font-size:15px;font-weight:600;line-height:1.2;background:rgba(0,0,0,.28);border-radius:16px;padding:8px 12px}
+.how li{margin:0;display:grid;grid-template-columns:34px 1fr;gap:8px;align-items:center;background:rgba(20,12,40,.45);border-radius:12px;padding:3px 9px}
 .how .hi{width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,#fff 0,#e6dcf6 70%);display:flex;align-items:center;justify-content:center}.how .hi .gi{width:24px;height:24px}
 .newcats{display:flex;gap:10px;justify-content:center;margin:6px 0 10px}
 .newcats .card{width:150px;transform:scale(.9)}

@@ -443,7 +443,7 @@ function showHow(back) {
     ${row('\uD83C\uDFAF', '<b>Focus.</b> Tap a mouse and your cats shoot it first.')}
     ${row('\uD83D\uDC00', `<b>Nests.</b> Every ${BOSS_EVERY}th wave is a nest fight. Destroy it to rescue a cat and win loot.`)}
     ${row('\u2728', `<b>Merge</b> two equal cats into one stronger cat, up to Lv 3. The tower fits ${MAX_STACK}, the bench ${MAX_BENCH}.`)}
-    ${row('\uD83C\uDF81', '<b>Relics.</b> Elite mice drop chests full of relics, from common to mythic. Each cat carries one (two at Lv 3). Forge three of a kind into the next tier. Three different relics of one family (bells, toys, armor...) make a set that helps the whole team.')}
+    ${row('\uD83C\uDF81', '<b>Relics.</b> Chests hold relics, common to mythic. One per cat (two at Lv 3). Three of a kind forge up, three of a family make a team set.')}
     ${row('\uD83E\uDE99', '<b>Coins</b> are saved. Spend them in the <b>Kingdom</b> to make every future run stronger.')}
     ${row('\uD83D\uDD25', '<b>Synergies.</b> Cats of one kind boost each other. Look for the badges by the wave counter.')}
     ${row('\uD83D\uDC3E', '<b>Roads.</b> After each nest you pick the next road. Riskier roads pay better.')}
