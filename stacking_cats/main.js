@@ -1200,6 +1200,83 @@ function catPos(uid) {
 }
 const atkColor = (id) => (CAT_BY_ID[id] && CAT_BY_ID[id].atk.color) || '#fff2b0';
 
+// a jagged line from (x0,y0) to (x1,y1) for lightning and beams
+function jag(x0, y0, x1, y1, n = 8, amp = 14) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) { const u = i / n, k = i === 0 || i === n ? 0 : (Math.random() - 0.5) * 2 * amp; pts.push({ x: x0 + (x1 - x0) * u + k * 0.4, y: y0 + (y1 - y0) * u + k }); }
+  return pts;
+}
+// each special move gets its own look on top of the shared ring and flash
+function specialVfx(e, p, col) {
+  const foes = g.enemies.filter((m) => !m.dead && !m.under && m.x > g.towerX && m.x < S.W + 20).sort((a, b) => a.x - b.x);
+  const top = p.y - 20;
+  switch (e.kind) {
+    case 'frenzy':
+      for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU; bolt(jag(p.x + Math.cos(a) * 30, p.y + Math.sin(a) * 30, p.x + Math.cos(a) * 110, p.y + Math.sin(a) * 110, 3, 6), col, 2.4, 0.22); }
+      break;
+    case 'fortress':
+      for (const r of [80, 112, 146]) ring(p.x, p.y - SLOT * 0.5, r, '#bfe3ff', 0.5 + r / 400, 7);
+      flashGlow(p.x, p.y - SLOT * 0.5, 190, '#9ad0ff', 0.6);
+      break;
+    case 'inferno':
+      for (let x = p.x + 50; x < S.W - 40; x += 26) spawnFx({ k: 'f', x, y: GROUND - 10 - Math.random() * 14, vy: -50 - Math.random() * 60, r: 22 + Math.random() * 16, life: 0.55 + Math.random() * 0.5, max: 1.05 });
+      flashGlow(p.x + 280, GROUND - 30, 320, '#ff8a2b', 0.5); smoke(p.x + 200, GROUND - 40, 3, 16, '#6a5a60');
+      break;
+    case 'storm':
+      for (const m of foes.slice(0, 8)) { bolt(jag(m.x + (Math.random() - 0.5) * 60, 0, m.x, m.y - 10, 9, 18), '#bfe6ff', 3, 0.28); sparks(m.x, m.y - 10, 5, '#fff6b0', 200, 0.3); flashGlow(m.x, m.y - 10, 50, '#bfe6ff', 0.3); }
+      screenFlash('rgba(190,230,255,.28)', 0.14);
+      break;
+    case 'volley':
+      for (const m of foes.slice(0, 7)) { bolt(jag(p.x + 24, top, m.x, m.y - 12, 4, 5), col, 1.8, 0.2); puff(m.x, m.y - 12, 3, col, 70, 0.3, 3); }
+      break;
+    case 'freeze':
+      ring(p.x, p.y, 520, '#e6f7ff', 0.55, 12); ring(p.x, p.y, 340, '#bfeaff', 0.45, 8);
+      for (const m of foes) { puff(m.x, m.y - 14, 7, '#e6f7ff', 90, 0.6, 3, -20); sparks(m.x, m.y - 14, 4, '#ffffff', 120, 0.45); }
+      screenFlash('rgba(190,234,255,.3)', 0.3);
+      break;
+    case 'snipe': {
+      const m = foes.slice().sort((a, b) => b.hp - a.hp)[0];
+      if (m) { bolt([{ x: p.x + 30, y: top }, { x: m.x, y: m.y - 14 }], '#ffffff', 4.2, 0.3); ring(m.x, m.y - 14, 60, col, 0.45, 8); sparks(m.x, m.y - 14, 12, col, 260, 0.4); flashGlow(m.x, m.y - 14, 90, col, 0.4); }
+      break;
+    }
+    case 'barrage':
+      for (const m of (foes.length ? foes : [{ x: 600, y: GROUND - 20 }]).slice(0, 7)) { flashGlow(m.x, m.y - 10, 80, '#ffb05a', 0.4); ring(m.x, m.y - 10, 54, '#ffcf8a', 0.4, 6); puff(m.x, m.y - 10, 6, '#ff8a2b', 140, 0.5, 4); }
+      break;
+    case 'heal':
+      for (let i = 0; i < 12; i++) spawnFx({ k: 'h', x: p.x + (Math.random() - 0.5) * 90, y: p.y + 20 - Math.random() * SLOT * 2.5, life: 1.2 + Math.random() * 0.5, max: 1.7 });
+      flashGlow(p.x, p.y - SLOT * 0.6, 170, '#9effc6', 0.7); ring(p.x, p.y, 130, '#c6ffdc', 0.6, 7);
+      break;
+    case 'meteor': {
+      const m = foes[Math.floor(foes.length / 2)] || { x: 600, y: GROUND - 20 };
+      bolt([{ x: m.x + 260, y: -30 }, { x: m.x, y: m.y - 6 }], '#ffb040', 7, 0.35); bolt([{ x: m.x + 260, y: -30 }, { x: m.x, y: m.y - 6 }], '#ffffff', 2.5, 0.35);
+      ring(m.x, m.y, 150, '#ff9a3a', 0.6, 12); flashGlow(m.x, m.y, 240, '#ff7a20', 0.6); puff(m.x, m.y, 18, '#ff9a3a', 220, 0.7, 6); smoke(m.x, m.y, 4, 18, '#5a4a50'); shake = Math.max(shake, 9);
+      break;
+    }
+    case 'toxin':
+      for (const m of foes) { smoke(m.x, m.y - 8, 3, 16, '#7ee08a'); puff(m.x, m.y - 14, 4, '#a8f0b0', 60, 0.6, 3, -30); }
+      flashGlow(S.W * 0.6, GROUND - 40, 360, '#5ad07a', 0.5);
+      break;
+    case 'anthem':
+      ring(p.x, p.y, 190, '#ffe08a', 0.6, 6); ring(p.x, p.y, 120, '#fff6c8', 0.5, 5);
+      break;
+    case 'hex':
+      for (const m of foes) { ring(m.x, m.y - 10, 34, '#c9a6ff', 0.6, 4); ring(m.x, m.y - 10, 20, '#e6d4ff', 0.5, 3); sparks(m.x, m.y - 30, 4, '#c9a6ff', 80, 0.5); }
+      flashGlow(p.x, p.y, 140, '#a070ff', 0.5);
+      break;
+    case 'phase':
+      ring(p.x, p.y - SLOT * 0.5, 120, '#e4dcff', 0.6, 10); flashGlow(p.x, p.y - SLOT * 0.5, 170, '#d8ccff', 0.6);
+      for (let i = 0; i < 10; i++) spawnFx({ k: 'p', x: p.x + (Math.random() - 0.5) * 70, y: p.y + 10 - Math.random() * SLOT * 2, vx: 0, vy: -50 - Math.random() * 40, life: 0.8, max: 0.8, r: 3 + Math.random() * 3, col: '#efe9ff', grav: -10 });
+      break;
+    case 'supernova':
+      for (const [r, w] of [[260, 14], [420, 10], [640, 7]]) ring(p.x, p.y, r, '#fff6d0', 0.6 + r / 900, w);
+      flashGlow(p.x, p.y, 380, '#fff2b0', 0.7); sparks(p.x, p.y, 28, '#fff2b0', 420, 0.7);
+      for (const m of foes) { flashGlow(m.x, m.y - 10, 70, '#fff2b0', 0.4); sparks(m.x, m.y - 10, 4, '#ffffff', 200, 0.35); }
+      screenFlash('rgba(255,248,214,.4)', 0.3); shake = Math.max(shake, 10);
+      break;
+    default: break;
+  }
+}
+
 function handle(e) {
   switch (e.k) {
     case 'dmg':
@@ -1291,6 +1368,7 @@ function handle(e) {
       txtFx(p.x + 60, p.y - 56, e.name + '!', col, 28, 1.3);
       screenFlash(col.length === 7 ? col + '33' : 'rgba(255,255,255,.2)', 0.22);
       shake = Math.max(shake, 5); hit(0.06); slowmo(0.35, 0.3); sfx.play('special'); sfx.meow(e.id, 'happy');
+      specialVfx(e, p, col);
       if (e.kind === 'anthem') for (let i = 0; i < 8; i++) spawnFx({ k: 'h', x: p.x + (Math.random() - 0.3) * 160, y: p.y - 20, life: 1.2, max: 1.2 });
       break;
     }
