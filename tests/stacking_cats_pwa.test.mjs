@@ -126,6 +126,17 @@ await t('waveProgress: share of the wave already beaten, always between 0 and 1'
   assert.ok(waveProgress(40, 0, 20) >= 0 && waveProgress(0, 0, 20) <= 1, 'summons cannot push it out of range');
 });
 
+await t('dangerLevel: a soft warning only when a cat is nearly out of health', async () => {
+  const { dangerLevel } = await import('../stacking_cats/art_util.js');
+  const cat = (hp, max = 100) => ({ hp, max });
+  assert.equal(dangerLevel([]), 0, 'no cats, no warning');
+  assert.equal(dangerLevel([cat(100), cat(80)]), 0, 'healthy team');
+  assert.equal(dangerLevel([cat(30), cat(90)]), 0, 'exactly at the threshold is still calm');
+  assert.ok(dangerLevel([cat(15), cat(90)]) > 0.3 && dangerLevel([cat(15), cat(90)]) < 0.7, 'half way into the red zone');
+  assert.equal(dangerLevel([cat(0, 100), cat(90)]), 0, 'fallen cats do not count');
+  assert.ok(dangerLevel([cat(1)]) > 0.9 && dangerLevel([cat(1)]) <= 1, 'nearly dead is the strongest warning');
+});
+
 await t('share card draws for several runs without throwing', async () => {
   const { drawShareCard, shareRun, SHARE_W } = await import('../stacking_cats/share.js');
   const { CATS } = await import('../stacking_cats/cats.js');

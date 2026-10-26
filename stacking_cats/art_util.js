@@ -154,3 +154,10 @@ export function waveProgress(queued, alive, total) {
   if (!(total > 0)) return 0;
   return Math.min(1, Math.max(0, 1 - (queued + alive) / total));
 }
+
+// low-health warning strength, 0 to 1: how deep the weakest living cat is below 30% health. Fallen cats (hp 0) are ignored.
+export function dangerLevel(cats) {
+  let worst = 1;
+  for (const c of cats) if (c.hp > 0 && c.max > 0) worst = Math.min(worst, c.hp / c.max);
+  return worst >= 0.3 ? 0 : Math.min(1, (0.3 - worst) / 0.3);
+}
