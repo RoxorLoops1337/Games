@@ -174,6 +174,9 @@ function coach(key, html, x, y, dir = 'down', opt = {}) {
   if (dir === 'right') { el.style.left = 'auto'; el.style.right = (W - x) + 'px'; el.style.transform = 'none'; }   // anchor to the right edge so the bubble keeps its full width
   el._hl = hl; el.dataset.key = key;
   app.appendChild(el); coachEl = el;
+  // a bubble that would run past the right or bottom edge of the stage gets narrower instead of being cut off
+  const room = W - 8 - el.offsetLeft;
+  if (dir !== 'right' && el.offsetWidth > room) el.style.maxWidth = Math.max(150, room) + 'px';
   if (!opt.wait) setTimeout(() => { if (coachEl === el) hideCoach(); }, 14000);
 }
 function setScreen(html, cls = '') {
