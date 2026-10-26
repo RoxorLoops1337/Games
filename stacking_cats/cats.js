@@ -295,6 +295,7 @@ export const ITEMS = [
   { id: 'hourglass', name: 'Time Hourglass', icon: '⏳', rarity: 'epic', fx: { haste: 0.30, range: 0.10 }, desc: '+30% attack speed, +10% range' },
   { id: 'dragonheart', name: 'Dragon Heart', icon: '🐲', rarity: 'epic', fx: { dmg: 0.30, burn: 1, crit: 0.08 }, desc: '+30% damage, +8% crit, sets mice on fire' },
   { id: 'feather', name: 'Angel Feather', icon: '🪶', rarity: 'epic', fx: { dr: 0.20, regen: 0.015 }, desc: 'Takes 20% less damage and heals 1.5% per second' },
+  { id: 'cloak', name: 'Shadow Cloak', icon: '🧥', rarity: 'epic', fx: { dodge: 0.20, haste: 0.12 }, desc: '+20% chance to dodge a bite and +12% attack speed' },
   { id: 'mask', name: "Assassin's Mask", icon: '🎭', rarity: 'epic', fx: { crit: 0.20, critMul: 0.8 }, desc: '+20% crit chance and much bigger crits' },
 ];
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));

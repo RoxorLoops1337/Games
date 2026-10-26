@@ -21,8 +21,8 @@ function fight(g, secs, mk) {
   for (let i = 0; i < secs * 30 && g.enemies.some((e) => !e.dead); i++) step(g);
 }
 
-t('items: 24 items with text, valid effects and rarities', () => {
-  assert.equal(ITEMS.length, 24);
+t('items: 25 items with text, valid effects and rarities', () => {
+  assert.equal(ITEMS.length, 25);
   for (const it of ITEMS) {
     assert.ok(it.name && it.icon && it.desc && ['common', 'rare', 'epic'].includes(it.rarity), it.id);
     assert.ok(Object.keys(it.fx).length, it.id);

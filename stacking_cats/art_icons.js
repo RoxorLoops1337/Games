@@ -89,6 +89,14 @@ const D = {
     F(c, P((p) => { p.moveTo(24, 54); p.lineTo(40, 54); p.lineTo(38, 58); p.lineTo(26, 58); p.closePath(); }), '#e8a0bc', 1.6);
     F(c, circ(32, 36, 5.5), '#ffffff', 1.6); glint(c, 30, 34, 2.4);
   },
+  '🧥': (c) => {
+    // a hooded midnight cloak with a clasp and a trailing hem
+    F(c, P((p) => { p.moveTo(32, 8); p.bezierCurveTo(20, 8, 16, 18, 14, 30); p.bezierCurveTo(12, 42, 8, 52, 6, 58); p.lineTo(24, 54); p.lineTo(32, 58); p.lineTo(40, 54); p.lineTo(58, 58); p.bezierCurveTo(56, 52, 52, 42, 50, 30); p.bezierCurveTo(48, 18, 44, 8, 32, 8); p.closePath(); }), '#5a3d9a', 2.2);
+    F(c, P((p) => { p.moveTo(32, 12); p.bezierCurveTo(24, 12, 22, 22, 26, 30); p.lineTo(32, 36); p.lineTo(38, 30); p.bezierCurveTo(42, 22, 40, 12, 32, 12); p.closePath(); }), '#2a1c4a', 1.8, { shade: false });
+    ln(c, [[32, 36], [32, 56]], '#3e2a72', 1.8);
+    F(c, circ(32, 38, 3.2), '#ffd84a', 1.6); glint(c, 31, 37, 1.6);
+    dot(c, 24, 20, 1.3, '#ffffff'); dot(c, 41, 44, 1.3, '#ffffff'); dot(c, 17, 46, 1.1, '#ffffff');
+  },
   '🧺': (c) => {
     // a woven cat bed: a rim, a soft blanket and weave lines
     F(c, P((p) => { p.moveTo(8, 30); p.bezierCurveTo(8, 56, 56, 56, 56, 30); p.closePath(); }), '#d9a05a', 2);
