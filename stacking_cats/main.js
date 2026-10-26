@@ -867,8 +867,8 @@ function eventOptionHtml(o, i) {
     case 'buy': return head(it.icon, it.name, it.desc, `<div class="rar ${it.rarity}">${it.rarity}</div>${relicNotes(o.item)}`);
     case 'heal': return head('&#128150;', o.cost ? 'Healing Snack' : 'Warm Rest', `Heal the whole team ${Math.round(o.pct * 100)}% and wake fallen cats.`);
     case 'reroll': return head('&#128302;', o.bonusCoins ? 'Stay up late' : 'Reroll Token', o.bonusCoins ? `+1 reroll and +${o.bonusCoins} coins.` : '+1 reroll for later choices.');
-    case 'blood': return head(it.icon, 'Offer blood', `Every cat loses ${Math.round(o.hp * 100)}% health. The shrine gives <b>${it.name}</b> (${it.desc}).`);
-    case 'gamble': return head(it.icon, 'Make a wish', `${Math.round(o.chance * 100)}% chance of <b>${it.name}</b> (${it.desc}). Coins are gone either way.`);
+    case 'blood': return head(it.icon, 'Offer blood', `Every cat loses ${Math.round(o.hp * 100)}% health. The shrine gives <b>${it.name}</b> (${it.desc}).`, relicNotes(o.item));
+    case 'gamble': return head(it.icon, 'Make a wish', `${Math.round(o.chance * 100)}% chance of <b>${it.name}</b> (${it.desc}). Coins are gone either way.`, relicNotes(o.item));
     case 'curse': return head(it.icon, it.name, `${it.desc}. <b class="warn">Mice bite ${Math.round(o.hurt * 100)}% harder for the rest of the run.</b>`, relicNotes(o.item));
     case 'snack': { const sn = SNACK_BY_ID[o.id]; return head(sn.icon, sn.name, sn.desc, `<div class="rar ${sn.kind === 'perm' ? 'rare' : 'common'}">${sn.kind === 'perm' ? 'whole run' : sn.kind === 'temp' ? '3 waves' : 'instant'}</div>`); }
     case 'toss': return head('&#129689;', 'Toss ' + o.cost + ' coins', `${Math.round(o.chance * 100)}% chance to get ${o.prize} coins back.`);
