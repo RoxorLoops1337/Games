@@ -187,6 +187,12 @@ t('the Kingdom can be browsed with the arrow keys and only while its scene is on
   assert.ok(/\.\.\.WONDERS\.map/.test(js), 'the walk must include the wonders');
 });
 
+t('the Kingdom canvas has a text description and its detail panel is announced to screen readers', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(js.includes('id="kscene" width="1840" height="512" role="img" aria-label="Your cat village'), 'the village canvas needs an accessible name');
+  assert.ok(js.includes('id="kdetail" aria-live="polite"'), 'the detail panel must be a polite live region');
+});
+
 t('tutorial tips are held back while the game is paused', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   const m = js.match(/function coach\([^)]*\) \{\n([^\n]*)\n/);
