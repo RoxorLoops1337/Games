@@ -6,7 +6,7 @@ import {
   takeItem, useReroll, fxOf, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, ACHIEVEMENTS,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, RARITIES, ACHIEVEMENTS,
 } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CAT_TAGS, SPECIALS, SYNERGIES, unlockProgress } from '../stacking_cats/cats.js';
 import { catStory } from '../stacking_cats/story.js';
@@ -322,6 +322,30 @@ t('Lucky Shell: a dodge item that stacks with the cat\'s own dodge and never tou
   assert.equal(fxOf(['mitten']).dodge, 0, 'other items have no dodge');
   const src = readFileSync(new URL('../stacking_cats/sim.js', import.meta.url), 'utf8');
   assert.ok(/const dodge = \(d\.pas && d\.pas\.dodge \|\| 0\) \+ itemFx\(c\)\.dodge;\s*if \(dodge > 0 && g\.rnd\(\) < dodge\)/.test(src), 'hurtCat rolls only when there is a dodge chance');
+});
+
+t('relic book: progress counts per rarity, noting relics returns only the new ones and ignores unknown ids', () => {
+  const none = relicProgress({});
+  assert.equal(none.total, ITEMS.length); assert.equal(none.got, 0);
+  assert.deepEqual(RARITIES.map((r) => none.by[r].total), RARITIES.map((r) => ITEMS.filter((i) => i.rarity === r).length));
+  const found = {};
+  assert.deepEqual(noteRelics(found, ['claws', 'kingcrown', 'claws', 'nope']), ['claws', 'kingcrown']);
+  assert.deepEqual(noteRelics(found, ['claws', 'bell']), ['bell'], 'already found ones are not new again');
+  const p = relicProgress(found);
+  assert.equal(p.got, 3); assert.equal(p.by.common.got, 2); assert.equal(p.by.mythic.got, 1); assert.equal(p.by.rare.got, 0);
+  assert.equal(relicProgress(undefined).got, 0, 'a missing book is an empty book');
+});
+
+t('relic book wiring: a screen, a title button, found relics saved with the run, and a toast for new ones', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/function showRelics\(back/.test(js) && /relics: \(\) => showRelics\(showTitle\)/.test(js), 'screen and title action');
+  assert.ok(/data-act="relics"/.test(js), 'title button');
+  assert.ok(/function noteRelics\(/.test(js) && /noteRelics\(\)/.test(js.slice(js.indexOf('function beginWave'), js.indexOf('function beginWave') + 3000)), 'relics are noted when a wave begins');
+  assert.ok(/New relic/.test(js), 'a toast for a new relic');
+  assert.ok(/function freshSave\(\) \{\s*return \{[^}]*relics: \{\}/.test(js), 'a brand new save already has an empty book (new players must not crash on their first relic)');
+  assert.ok(/if \(!save\.relics\) save\.relics = \{\}/.test(js), 'noting relics never assumes the field exists');
+  assert.ok(/relics: Object\.fromEntries\(Object\.keys\(s\.relics \|\| \{\}\)\.filter\(\(id\) => ITEM_BY_ID\[id\]/.test(js), 'the loader keeps only real relics in the book');
+  assert.ok(/\.rtile\.locked/.test(css) && /\.rtile\.r-mythic/.test(css), 'tile styles, locked and by rarity');
 });
 
 console.log(`${n} tests passed`);

@@ -345,6 +345,19 @@ export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
 export const RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
 export const ITEM_WEIGHT = { common: 10, rare: 6, epic: 1.4, legendary: 0.55, mythic: 0.1 };   // per relic: there are many more commons than legends, so the odds of a tier are this times its relic count
 export const MAX_STASH = 12;
+// the Relic Book: which relics the player has owned at some point (save.relics = { id: true })
+export function relicProgress(found) {
+  const out = { total: ITEMS.length, got: 0, by: {} };
+  for (const r of RARITIES) out.by[r] = { got: 0, total: 0 };
+  for (const it of ITEMS) { const b = out.by[it.rarity]; b.total++; if (found && found[it.id]) { b.got++; out.got++; } }
+  return out;
+}
+// records ids in the book and returns the ones that were new, in order
+export function noteRelics(found, ids) {
+  const fresh = [];
+  for (const id of ids) if (ITEM_BY_ID[id] && !found[id]) { found[id] = true; fresh.push(id); }
+  return fresh;
+}
 // selling pays coins (scaled a little by wave); forging turns three of one rarity into one of the next
 export const SELL_VALUE = { common: 8, rare: 22, epic: 60, legendary: 150, mythic: 400 };
 export const FORGE_NEXT = { common: 'rare', rare: 'epic', epic: 'legendary', legendary: 'mythic', mythic: 'mythic' };

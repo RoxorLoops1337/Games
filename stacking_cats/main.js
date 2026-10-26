@@ -2,7 +2,7 @@
 import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS, SPECIAL_TEXT,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
-  ITEM_BY_ID, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
+  ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
   DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
   masteryProgress, masteryMap, masteryBonus, MASTERY_MAX, DIFF_ORDER, LADDER_RULES, LADDER_WAVE, ladderTier, ladderUnlocked, diffAllowed, ladderClears, weekKey, weekInfo,
 } from './cats.js';
@@ -37,7 +37,7 @@ const sfx = new Sfx();
 const REDUCED_MOTION = (() => { try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
 const DEFAULT_OPT = { shake: REDUCED_MOTION ? 0 : 1, colorblind: false, bigText: false, quality: 'auto', motion: !REDUCED_MOTION, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, meows: true, meowMusic: true, autoSpecial: false, fast: false };
 function freshSave() {
-  return { v: 1, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT }, weekly: {}, ladder: 0, owned: [], wardrobe: {} };
+  return { v: 1, relics: {}, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT }, weekly: {}, ladder: 0, owned: [], wardrobe: {} };
 }
 // fill in anything an older save does not have yet (new fields are always additive)
 function adoptSave(s) {
@@ -48,6 +48,7 @@ function adoptSave(s) {
     unlocked: [...new Set([...STARTERS, ...(s.unlocked || []).filter((id) => CAT_BY_ID[id])])],
     tips: s.tips || {}, opt: { ...DEFAULT_OPT, ...(s.opt || {}) },
     kingdom: { ...f.kingdom, ...(s.kingdom || {}), lv: { ...((s.kingdom && s.kingdom.lv) || {}) }, wonders: { ...((s.kingdom && s.kingdom.wonders) || {}) } },
+    relics: Object.fromEntries(Object.keys(s.relics || {}).filter((id) => ITEM_BY_ID[id] && s.relics[id]).map((id) => [id, true])),
     ach: { ...(s.ach || {}) }, catStats: { ...(s.catStats || {}) }, daily: { ...(s.daily || {}) },
     diff: DIFF_ORDER.includes(s.diff) ? s.diff : 'normal', name: String(s.name || ''),
     weekly: { ...(s.weekly || {}) }, ladder: Math.max(0, Math.min(5, (s.ladder | 0))), owned: (s.owned || []).filter((id) => COSMETIC_BY_ID[id]), wardrobe: { ...(s.wardrobe || {}) },
@@ -314,10 +315,11 @@ function showTitle() {
     <h1 class="logo">Stacking<span>Cats</span></h1>
     <div class="tag">${titleTag(!!save.storyDone, save.unlocked.length, CATS.length)}</div>
     <div class="row"><button class="btn big" data-act="play">Play</button><button class="btn small grey" data-act="diff" title="Change difficulty">${d.icon} ${d.name}</button><button class="btn small grey" data-act="story">Story</button></div>
-    <div class="row"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${streak >= 2 ? `<span class="streak" title="${streak} days in a row">&#128293;${streak}</span>` : ''}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button></div>
+    <div class="row"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${streak >= 2 ? `<span class="streak" title="${streak} days in a row">&#128293;${streak}</span>` : ''}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button><button class="btn" data-act="relics">Relics ${relicProgress(save.relics).got}/${ITEMS.length}</button></div>
     <div class="row"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn grey small" data-act="trophies">Trophies ${trophies}/${ACHIEVEMENTS.length}</button><button class="btn grey small" data-act="settings">Settings</button><button class="btn grey small" data-act="how">How to play</button></div>
     <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : (coarse ? 'Tap Play to begin' : 'Click Play or press Enter to begin')}</div>`, 'clear tpad');
   acts = {
+    relics: () => showRelics(showTitle),
     play: () => (save.seenIntro ? startRun() : watchIntro(() => startRun())), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
     daily: () => showDaily(showTitle), trophies: () => showTrophies(showTitle), settings: () => showSettings(showTitle),
     weekly: () => showDaily(showTitle, true), story: () => watchIntro(() => showTitle()),
@@ -471,6 +473,25 @@ function dexDetail(id, unlocked) {
   }
   const p = unlockProgress(d, save.stats);
   return `<b>Still caged!</b> The Gnaw Army locked this cat in a nest. To free it: ${d.unlock.text}${p.need > 1 ? ` (${p.have}/${p.need})` : ''}.<div class="pbar"><i style="width:${(100 * p.have) / p.need}%"></i></div>`;
+}
+
+// ---------------------------------------------------------------- the Relic Book
+function showRelics(back, sel0) {
+  let sel = sel0 || null;
+  const draw = () => {
+    const pr = relicProgress(save.relics);
+    const rows = RARITIES.slice().reverse().map((r) => {
+      const tiles = ITEMS.filter((it) => it.rarity === r).map((it) => { const f = !!save.relics[it.id]; return `<button class="rtile r-${r} ${f ? '' : 'locked'} ${sel === it.id ? 'sel' : ''}" data-act="rtile" data-id="${it.id}" title="${f ? it.name : '???'}"><span class="ic">${it.icon}</span></button>`; }).join('');
+      return `<div class="rrow"><div class="rlabel r-${r}"><b>${r}</b><small>${pr.by[r].got}/${pr.by[r].total}</small></div><div class="rtiles">${tiles}</div></div>`;
+    }).join('');
+    const it = sel && ITEM_BY_ID[sel];
+    const detail = !it ? 'Tap a relic to read what it does. Relics you have owned in a run are written into the book, the rest are shadows.'
+      : save.relics[it.id] ? `<b>${it.icon} ${it.name}</b> <span class="rar ${it.rarity}">${it.rarity}</span><br>${it.desc}.`
+        : `<b>A ${it.rarity} relic you have not found yet.</b><br>Relics drop from chests and loot, turn up in shops and deals, and three of a kind forge into the next tier.`;
+    setScreen(`<h2>Relic Book <small class="klv">${pr.got}/${pr.total} found</small></h2><div class="relbook">${rows}</div><div class="detail dexd relde">${detail}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
+  };
+  draw();
+  acts = { back, rtile: (d) => { sel = d.id; draw(); sfx.play('hover'); } };
 }
 
 // ---------------------------------------------------------------- the daily challenge
@@ -685,8 +706,21 @@ function showPickStart() {
   };
 }
 
+// every relic the player holds goes into the Relic Book; a new one gets a toast
+function noteRelics() {
+  if (!g) return;
+  if (!save.relics) save.relics = {};
+  const ids = g.stash.slice();
+  for (const c of g.cats.concat(g.bench)) ids.push(...c.items);
+  const fresh = bookRelics(save.relics, ids);
+  if (!fresh.length) return;
+  persist();
+  const first = ITEM_BY_ID[fresh[0]];
+  setTimeout(() => toastWhenPlaying(`New relic in your book: ${first.name}${fresh.length > 1 ? ` and ${fresh.length - 1} more` : ''}!`), 1200);
+}
 function beginWave() {
   closeScreen();
+  noteRelics();
   S.startWave(g);
   mode = 'play';
   setBackdrop(themeFor(g.wave));
@@ -725,6 +759,7 @@ function toastWhenPlaying(m) {
 
 function onClear() {
   mode = 'celebrate';
+  noteRelics();
   if (coachEl && coachEl.dataset.key === 'c2') hideCoach();   // the wave 1 tip would sit on top of the cleared banner
   celeb = g.bossWave ? 2.4 : 1.15;
   sfx.play(g.bossWave ? 'win' : 'clear');
