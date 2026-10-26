@@ -1391,7 +1391,7 @@ function specialVfx(e, p, col) {
       for (let i = 0; i < 12; i++) txtFx(p.x + 20 + i * 38 + Math.random() * 20, p.y + 30 - Math.random() * 90, i % 2 ? '\u266B' : '\u266A', ['#ffe08a', '#ffb3d9', '#bfe6ff', '#c8ffb0'][i % 4], 28, 1.3 + Math.random() * 0.5, false);
       break;
     case 'hex':
-      for (const m of foes) { ring(m.x, m.y - 10, 34, '#c9a6ff', 0.6, 4); ring(m.x, m.y - 10, 20, '#e6d4ff', 0.5, 3); sparks(m.x, m.y - 30, 4, '#c9a6ff', 80, 0.5); }
+      for (const m of foes) { ring(m.x, m.y - 10, 34, '#c9a6ff', 0.6, 4); ring(m.x, m.y - 10, 20, '#e6d4ff', 0.5, 3); sparks(m.x, m.y - 30, 4, '#c9a6ff', 80, 0.5); txtFx(m.x, m.y - m.h - 12, 'HEX!', '#d9b8ff', 20, 1.1); }
       flashGlow(p.x, p.y, 140, '#a070ff', 0.5);
       break;
     case 'phase':
