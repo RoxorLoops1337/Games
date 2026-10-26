@@ -274,4 +274,15 @@ t('tapping a cat that is not charged gives it a happy meow and a bounce instead 
   assert.ok(/if \(S\.specialReady\(c\)\) doSpecial\(c\.uid\); else \{[^}]*sfx\.meow\(c\.id, 'happy'\)[^}]*moods\.set\(c\.uid/.test(js), 'a tap on an uncharged cat must answer');
 });
 
+t('every sound effect the game plays actually makes a sound (nope used to be silent)', () => {
+  const sfx = new Sfx(); sfx.unlock(); sfx.ctx.currentTime = 5;
+  const names = new Set(); const re = /sfx\.play\('([a-z]+)'/g; let m;
+  for (const f of ['stacking_cats/main.js']) { const js = readFileSync(f, 'utf8'); while ((m = re.exec(js))) names.add(m[1]); }
+  assert.ok(names.has('nope') && names.size > 20, 'found the effect names used by the game');
+  for (const nm of names) {
+    const before = sfx.ctx.calls; sfx.last = {}; sfx.play(nm);
+    assert.ok(sfx.ctx.calls > before, `sfx.play('${nm}') must create at least one audio node`);
+  }
+});
+
 console.log(`${n} tests passed`);
