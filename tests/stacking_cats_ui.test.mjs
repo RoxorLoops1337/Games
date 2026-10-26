@@ -367,4 +367,9 @@ t('the wave banner opens each chapter with its story line, and a nest rising get
   assert.ok(/King Squeakimus: [\s\S]{0,80}taunt\(/.test(js), 'a nest wave toasts a taunt');
 });
 
+t('the cat freed from a nest says its own line when it joins', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/function showCatReward[\s\S]*?toast\(freedToast\(CAT_BY_ID\[d\.id\]\.name, g\.run\.bossKills\)\)/.test(js), 'the nest reward must toast the freed cat line');
+});
+
 console.log(`${n} tests passed`);

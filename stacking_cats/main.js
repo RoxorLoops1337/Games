@@ -22,7 +22,7 @@ import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.j
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
 import { playIntro } from './intro.js';
-import { rescueLine, fallLine, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
+import { rescueLine, fallLine, freedToast, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -825,6 +825,7 @@ function showCatReward() {
       sfx.play(r.merged ? 'merge' : 'pick'); sfx.meow(d.id, r.merged ? 'happy' : 'pick');
       notifySyn(prev);
       toast(r.merged ? `${CAT_BY_ID[d.id].name} merged to Lv ${r.cat.lvl}!` : `${CAT_BY_ID[d.id].name} joined${r.benched ? ' the bench' : ' the stack'}!`);
+      setTimeout(() => { if (g && mode !== 'title' && mode !== 'over') toast(freedToast(CAT_BY_ID[d.id].name, g.run.bossKills)); }, 1100);
       nextReward();
     },
     tower: () => showTower(showCatReward),

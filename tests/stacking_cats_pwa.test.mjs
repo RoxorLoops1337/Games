@@ -217,4 +217,14 @@ await t('story: every five waves a new chapter starts in a new region, and each 
   assert.ok(/squeak|mice|mouse|cheese/i.test(st.TAUNTS.join(' ')), 'taunts sound like the mouse king');
 });
 
+await t('story: a freed cat thanks you with a line of its own', async () => {
+  const st = await import('../stacking_cats/story.js');
+  assert.ok(st.FREED_LINES.length >= 6);
+  for (const l of st.FREED_LINES) assert.ok(!l.includes('\u2014') && l.length > 12, l);
+  assert.ok(/meow|whisker|paw|purr/i.test(st.FREED_LINES.join(' ')), 'freed cats talk like cats');
+  assert.notEqual(st.freedLine(0), st.freedLine(1));
+  assert.equal(st.freedLine(0), st.freedLine(st.FREED_LINES.length), 'the lines loop');
+  assert.equal(st.freedToast('Tabby', 2), 'Tabby: "' + st.freedLine(2) + '"');
+});
+
 console.log(n + ' passed');
