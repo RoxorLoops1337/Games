@@ -579,4 +579,12 @@ t('the epilogue seats the guard above the caption plate too', () => {
   assert.ok(/GROUND - 10 \+ \(i % 2\) \* 8 - hop/.test(js) && /GROUND - 6 - bob/.test(js), 'both epilogue scenes lifted');
 });
 
+t('the finale trophy is written into the card, not floated over its title as a toast', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const i = js.indexOf('function showFinale()');
+  const f = js.slice(i, i + 1800);
+  assert.ok(!/toast\(`Trophy:/.test(f), 'no trophy toast in showFinale');
+  assert.ok(/const trophies = checkAch/.test(f) && /\$\{trophyHtml\}/.test(f), 'trophies are rendered inside the card');
+});
+
 console.log(`${n} tests passed`);
