@@ -897,7 +897,7 @@ function showTower(back, opt = {}) {
         <h4>Backpack <span class="${over ? 'warn' : ''}">${g.stash.length}/${MAX_STASH}</span></h4><div class="bagrow">${bag}</div></div></div></div>
       <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}"><span>${msg}</span></div>${acts2}<button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>Done</button></div>`, 'wide arr');
     if (selItem != null) coach('c6', 'Now tap a cat to equip it. The green numbers show how much stronger that cat gets!', 730, 6);
-    else coach('c4', 'Step 3: tap a cat, then another to swap. Two equal cats merge!', 730, 6, 'down', { target: '.slot.has', wait: true });
+    else coach('c4', 'Step 3: tap a cat, then another to swap. Two equal cats merge!', 730, 232, 'down', { target: '.slot.has', wait: true });
   };
   draw();
   acts = {
