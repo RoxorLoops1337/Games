@@ -90,3 +90,15 @@ export const TAUNTS = [
   'Even nine lives will not save you!',
 ];
 export const taunt = (n) => TAUNTS[((n | 0) % TAUNTS.length + TAUNTS.length) % TAUNTS.length];
+
+// what a caged cat says once a nest falls and it is free
+export const FREED_LINES = [
+  'Meow-velous, you found me!',
+  'My whiskers were shaking in there!',
+  'Paws-itively glad to see you!',
+  'I knew you would come. Purr-fect timing!',
+  'Thank you! Let me help smash the rest.',
+  'That cage was no place for a pussycat!',
+];
+export const freedLine = (n) => FREED_LINES[((n | 0) % FREED_LINES.length + FREED_LINES.length) % FREED_LINES.length];
+export const freedToast = (name, n) => `${name}: "${freedLine(n)}"`;
