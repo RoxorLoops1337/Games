@@ -173,6 +173,13 @@ t('Escape backs out of sub screens through their Back button', () => {
   assert.ok(js.includes("k === 'p' || k === 'escape'"), 'Escape must still pause and resume during a run');
 });
 
+t('arrow keys move focus through the cards of a pick screen', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(js.includes("k === 'arrowleft' || k === 'arrowright'"), 'arrow keys must be handled');
+  assert.ok(js.includes("cards.indexOf(document.activeElement)"), 'focus must move relative to the focused card');
+  assert.ok(/\.card:focus-visible/.test(readFileSync('stacking_cats/index.html', 'utf8')), 'a focused card must be visibly marked');
+});
+
 t('tutorial tips are held back while the game is paused', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   const m = js.match(/function coach\([^)]*\) \{\n([^\n]*)\n/);
