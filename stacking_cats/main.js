@@ -835,7 +835,7 @@ function showEvent() {
     tower: () => showTower(() => showEvent()),
     evdone: finish,
   };
-  coach('c8', 'A quiet stop. Spend coins or take a chance. Coins spent here are not saved for the Kingdom!', 480, 20);
+  coach('c8', 'A quiet stop. Spend coins or take a chance. Coins spent here are not saved for the Kingdom!', 480, 402, 'up');
 }
 
 function showRouteReward() {
