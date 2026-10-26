@@ -1785,6 +1785,8 @@ function render(dt) {
 function togglePause() { if (mode !== 'play') return; if (paused) { paused = false; closeScreen(); } else showPause(); }
 // ---- special moves and tap focus
 const spBtns = new Map();
+let autoBtn = null;
+function setAutoSpecial(on) { save.opt.autoSpecial = on; persist(); toast(on ? 'Auto specials on' : 'Auto specials off'); }
 function doSpecial(uid) {
   if (mode !== 'play' || paused || !g) return;
   if (S.useSpecial(g, uid)) { if (coachEl && coachEl.dataset.key === 'c7') hideCoach(); drain(); }
@@ -1798,7 +1800,12 @@ function updateSpecials() {
   }
   const show = g && mode === 'play' && g.state === 'fight';
   box.style.display = show || (g && mode === 'play') ? 'flex' : 'none';
-  box.classList.toggle('auto', !!save.opt.autoSpecial);
+  if (!autoBtn) {
+    autoBtn = document.createElement('button'); autoBtn.className = 'autob'; autoBtn.textContent = 'AUTO'; autoBtn.title = 'Auto special moves (key A)';
+    autoBtn.addEventListener('click', (e) => { e.stopPropagation(); sfx.unlock(); setAutoSpecial(!save.opt.autoSpecial); });
+    box.appendChild(autoBtn);
+  }
+  autoBtn.classList.toggle('on', !!save.opt.autoSpecial);
   if (!g) return;
   const cats = g.cats;
   for (const [uid, b] of spBtns) if (!cats.some((c) => c.uid === uid)) { b.remove(); spBtns.delete(uid); }
@@ -1878,7 +1885,7 @@ addEventListener('keydown', (e) => {
   else if (k >= '1' && k <= '6' && g && g.cats[+k - 1]) doSpecial(g.cats[+k - 1].uid);
   else if (k === 'g' && !$('bFull').hidden) toggleFull();
   else if (k === 'd') { save.meter = !save.meter; persist(); meterT = 0; }
-  else if (k === 'a') { save.opt.autoSpecial = !save.opt.autoSpecial; persist(); toast(save.opt.autoSpecial ? 'Auto specials on' : 'Auto specials off'); }
+  else if (k === 'a') setAutoSpecial(!save.opt.autoSpecial);
   else if (k === 'm') { save.sound = !save.sound; sfx.on = save.sound; persist(); }
 });
 document.addEventListener('visibilitychange', () => {
