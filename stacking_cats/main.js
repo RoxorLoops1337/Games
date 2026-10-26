@@ -2049,6 +2049,11 @@ addEventListener('keydown', (e) => {
     if (main) { e.preventDefault(); main.click(); }
     return;
   }
+  if (k === 'escape' && document.body.classList.contains('scr')) {
+    // Escape backs out of a sub screen (settings, how to play, dex, trophies, Kingdom); the pause screen still resumes
+    const back = screenEl.querySelector('[data-act="back"]:not([disabled])');
+    if (back) { e.preventDefault(); back.click(); return; }
+  }
   if (k === ' ') { e.preventDefault(); doZoomies(); }
   else if (k === 'p' || k === 'escape') togglePause();
   else if (k === 'f') toggleSpeed();
