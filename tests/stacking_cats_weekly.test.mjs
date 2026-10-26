@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { weekKey, weekInfo, WEEK_RE, WEEKLY_MODS, DAILY_POOL, dayKey } from '../stacking_cats/cats.js';
 import { newGame, calcMods, makeEnemy, stackMax } from '../stacking_cats/sim.js';
-import { fetchBoard, submitScore, dailyStreak, passedBest } from '../stacking_cats/daily.js';
+import { fetchBoard, submitScore, dailyStreak, passedBest, milestoneLine } from '../stacking_cats/daily.js';
 import { onRequestGet, onRequestPost, weekOf } from '../functions/api/stackingcats_board.js';
 
 let n = 0;
@@ -135,6 +135,13 @@ await t('passedBest fires once, only when a run beats an established record', as
   assert.equal(passedBest(3, 2), false, 'tiny records are not worth a fanfare');
   assert.equal(passedBest(30, 25), true);
   assert.equal(passedBest(1, 25), false);
+});
+
+await t('milestoneLine marks every tenth wave only', async () => {
+  assert.match(milestoneLine(10), /10/);
+  assert.match(milestoneLine(50), /50/);
+  assert.notEqual(milestoneLine(20), milestoneLine(30));
+  for (const w of [0, 1, 9, 11, 25]) assert.equal(milestoneLine(w), '', `wave ${w}`);
 });
 
 console.log(n + ' tests passed');

@@ -9,7 +9,7 @@ import {
 import { COSMETICS, COSMETIC_BY_ID, SLOTS, SLOT_NAMES, lookOf, lookSig, drawLook, drawCosmetic, canWear, buyCosmetic, toggleWear, isOwned } from './cosmetics.js';
 import { createKingdomScene } from './kingdom_scene.js';
 import { encodeSave, decodeSave } from './savecode.js';
-import { dailyScore, fetchBoard, submitScore, rankOf, dailyStreak, passedBest } from './daily.js';
+import { dailyScore, fetchBoard, submitScore, rankOf, dailyStreak, passedBest, milestoneLine } from './daily.js';
 import { drawBuilding } from './art_kingdom.js';
 import * as S from './sim.js';
 import { drawCat } from './art_cats.js';
@@ -651,7 +651,7 @@ function beginWave() {
   const boss = g.bossWave;
   const nest = g.enemies.find((e) => e.boss);
   const rt = g.route.id !== 'trail' && !boss ? ` \u00B7 ${g.route.name}` : '';
-  banner(boss ? 'NEST BATTLE!' : `Wave ${g.wave}`, boss ? nest.name : `${THEMES[bdIdx].name}${rt}`, boss);
+  banner(boss ? 'NEST BATTLE!' : `Wave ${g.wave}`, boss ? nest.name : milestoneLine(g.wave) || `${THEMES[bdIdx].name}${rt}`, boss);
   sfx.play(boss ? 'boss' : 'wave');
   // passing the all-time best wave: one celebration per run
   if (!bestShown && passedBest(g.wave, save.stats.bestWave)) {
