@@ -46,7 +46,7 @@ export function newGame({ seed = 1, unlocked = STARTERS, events = true, kingdom 
     cats: [], bench: [], enemies: [], projs: [], pools: [], mines: [],
     towerX: TOWER_X, scroll: 0, perm: [], temp: [], nineLives: meta.nine, uid: 1,
     zoom: meta.zoomStart, zoomT: 0, queue: [], qT: 0, waveKO: false, mods: null, tickT: 0,
-    run: { diff: difficulty, daily: daily ? daily.day : null, synMax: 0, nine: 0, kills: 0, bossKills: 0, recruits: 0, merges: 0, lvl3: 0, lvl3Of: {}, snacks: 0, temp: 0, flawless: 0, wave: 0, coins: 0, dmg: 0, biggest: 0, taken: 0, healed: 0, items: 0, byCat: {} },
+    run: { diff: difficulty, daily: daily ? daily.day : null, synMax: 0, setMax: 0, nine: 0, kills: 0, bossKills: 0, recruits: 0, merges: 0, lvl3: 0, lvl3Of: {}, snacks: 0, temp: 0, flawless: 0, wave: 0, coins: 0, dmg: 0, biggest: 0, taken: 0, healed: 0, items: 0, byCat: {} },
   };
 }
 
@@ -74,7 +74,8 @@ export function calcMods(g) {
     const f = itemFx(c);
     m.dmg += f.teamDmg; m.haste += f.teamHaste; m.hp += f.teamHp; m.dr += f.teamDr; m.curse += f.curseT; m.waveHeal += f.wheal; m.zoomG += f.zoomG;
   }
-  for (const a of activeSets(g.cats)) if (a.mult) for (const k in a.set.fx) m[k] += a.set.fx[k] * a.mult;   // relic sets
+  m.setCount = 0;
+  for (const a of activeSets(g.cats)) if (a.mult) { m.setCount++; for (const k in a.set.fx) m[k] += a.set.fx[k] * a.mult; }   // relic sets
   for (const c of g.cats) {
     if (c.ko) continue;
     const p = CAT_BY_ID[c.id].pas;
@@ -1137,6 +1138,7 @@ export function step(g, dt = DT) {
   g.t += dt;
   g.mods = calcMods(g);
   for (const t in g.mods.syn.counts) if (g.mods.syn.counts[t] > g.run.synMax) g.run.synMax = g.mods.syn.counts[t];
+  if (g.mods.setCount > g.run.setMax) g.run.setMax = g.mods.setCount;
   if (g.zoomT > 0) g.zoomT -= dt;
   for (const k of ['fortressT', 'anthemT', 'hexT', 'phaseT']) if (g[k] > 0) g[k] = Math.max(0, g[k] - dt);
   if (g.focus && !g.enemies.some((e) => e.uid === g.focus && !e.dead && !e.under)) g.focus = 0;

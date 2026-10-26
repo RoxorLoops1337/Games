@@ -607,6 +607,11 @@ export const ACHIEVEMENTS = [
   { id: 'sell5',    name: 'Yard Sale',        desc: 'Sell 5 relics in one run.',                    coins: 50,  gems: 0, check: (c) => (c.run.sold || 0) >= 5 },
   { id: 'event3',   name: 'Wanderer',         desc: 'Visit 3 event stops in one run.',             coins: 70,  gems: 1, check: (c) => (c.run.events || 0) >= 3 },
   { id: 'wish',     name: 'Lucky Wish',       desc: 'Win a toss at the Wishing Fountain.',         coins: 70,  gems: 1, check: (c) => (c.run.fountainWins || 0) >= 1 },
+  { id: 'book10',   name: 'Relic Hoarder',    desc: 'Find 10 different relics for the Relic Book.', coins: 60,  gems: 1, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= 10 },
+  { id: 'book30',   name: 'Relic Curator',    desc: 'Find 30 different relics for the Relic Book.', coins: 150, gems: 2, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= 30 },
+  { id: 'bookall',  name: 'Complete Collection', desc: 'Find every relic for the Relic Book.',      coins: 400, gems: 4, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= ITEMS.length },
+  { id: 'set1',     name: 'Matching Set',     desc: 'Have a relic set bonus active in a fight.',    coins: 60,  gems: 1, check: (c) => (c.run.setMax || 0) >= 1 },
+  { id: 'set3',     name: 'Set Collector',    desc: 'Have three relic sets active at once.',        coins: 200, gems: 2, check: (c) => (c.run.setMax || 0) >= 3 },
   { id: 'king',     name: 'Cheddar Crusher',  desc: 'Defeat King Squeakimus in the wave 30 nest.', coins: 300, gems: 0, check: (c) => !!(c.save && c.save.storyDone) },
 ];
 
