@@ -213,7 +213,7 @@ export class Sfx {
   // a little cat voice: a gliding saw (with vibrato) through two vowel formants that sweep from "ee" to "ow", plus a breath of noise.
   // Each cat has its own pitch. kinds: pick (mee-ow), happy (short mew), cheer (quick high mew), sad (long falling mrrow), worried (wobbly mew).
   meow(id, kind = 'pick', delay = 0) {
-    if (!this.ctx || !this.on) return;
+    if (!this.ctx || !this.on || this.meowsOn === false) return;   // meowsOn: the Settings toggle for cat voices
     const c = this.ctx, clock = c.currentTime;
     if (!delay) { if (clock - (this.last.meow || 0) < 0.12) return; this.last.meow = clock; }
     const now = clock + delay, h = hashStr(id);

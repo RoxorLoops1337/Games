@@ -97,6 +97,20 @@ t('sound: every effect, every cat voice and every music track runs without error
   assert.ok(sfx.ctx.calls > 500, 'the sequencer scheduled notes: ' + sfx.ctx.calls);
 });
 
+t('Cat meows can be switched off: the voices go quiet but other sounds keep playing', () => {
+  const sfx = new Sfx(); sfx.unlock();
+  sfx.meowsOn = false; sfx.ctx.currentTime += 1;
+  const before = sfx.ctx.calls; sfx.meow('tabby', 'pick');
+  assert.equal(sfx.ctx.calls, before, 'a muted meow schedules nothing');
+  sfx.play('coin'); assert.ok(sfx.ctx.calls > before, 'effects still play');
+  sfx.meowsOn = true; sfx.ctx.currentTime += 1; const mid = sfx.ctx.calls; sfx.meow('tabby', 'pick');
+  assert.ok(sfx.ctx.calls > mid, 'meows are back when switched on');
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  assert.ok(/tog\('meows'/.test(js), 'Settings has a Cat meows toggle');
+  assert.ok(/sfx\.meowsOn = o\.meows !== false/.test(js), 'applyOptions passes the setting to the audio');
+  assert.ok(/DEFAULT_OPT = \{[^}]*meows: true/.test(js), 'on by default');
+});
+
 t('every kingdom building draws at every level', () => {
   for (const b of BUILDINGS) for (let l = 0; l <= b.max; l++) drawBuilding(fakeCtx(), b.id, l);
 });

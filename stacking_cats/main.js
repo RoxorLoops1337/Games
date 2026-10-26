@@ -35,7 +35,7 @@ const sfx = new Sfx();
 // ---------------------------------------------------------------- save
 // a player whose system asks for reduced motion starts with screen shake and flashes off (they can still turn them on)
 const REDUCED_MOTION = (() => { try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const DEFAULT_OPT = { shake: REDUCED_MOTION ? 0 : 1, colorblind: false, bigText: false, quality: 'auto', motion: !REDUCED_MOTION, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, autoSpecial: false, fast: false };
+const DEFAULT_OPT = { shake: REDUCED_MOTION ? 0 : 1, colorblind: false, bigText: false, quality: 'auto', motion: !REDUCED_MOTION, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, meows: true, autoSpecial: false, fast: false };
 function freshSave() {
   return { v: 1, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT }, weekly: {}, ladder: 0, owned: [], wardrobe: {} };
 }
@@ -94,6 +94,7 @@ function applyOptions() {
   cl.toggle('cb', !!o.colorblind); cl.toggle('bigtext', !!o.bigText); cl.toggle('nomotion', !o.motion); cl.toggle('touch', coarse);
   setHaptics(o.haptics !== false && !!o.motion);
   sfx.setVolumes(o.sfxVol, o.musicVol);
+  sfx.meowsOn = o.meows !== false;
   fxCap = o.quality === 'low' ? 180 : 440;
   gfx = o.quality === 'low' ? 0 : coarse ? 2 : 3;      // phones skip the bloom pass by default (it is the most expensive single step)
   quality = 1;
@@ -343,6 +344,7 @@ function showSettings(back, msg) {
         ${tog('motion', 'Flashes and motion', o.motion, 'Turn off for calmer screens')}
         ${tog('colorblind', 'Colorblind friendly colors', o.colorblind, 'Blue, yellow and orange bars')}
         ${tog('bigText', 'Larger text', o.bigText)}
+        ${tog('meows', 'Cat meows', o.meows !== false, 'Turn off to silence the cat voices')}
         ${tog('haptics', 'Vibration', o.haptics !== false, 'Short buzzes on hits, if your device has them')}
         ${tog('autoSpecial', 'Auto special moves', !!o.autoSpecial, 'Charged specials fire by themselves when mice are close')}
         ${tog('tutorial', 'Tutorial hints', o.tutorial, 'Little tips during your first runs')}
