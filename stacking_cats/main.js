@@ -1696,7 +1696,7 @@ function drawEnemy(e, t) {
   if ((e.hp < e.maxHp || e.elite) && !e.boss) {
     const w = Math.max(26, e.w) * 0.9, by = top - 6 - barLift;
     ctx.fillStyle = 'rgba(39,28,51,.8)'; ctx.beginPath(); ctx.roundRect(e.x - w / 2 - 1, by, w + 2, 6, 3); ctx.fill();
-    ctx.fillStyle = e.elite ? '#ffd23f' : '#ff7a8a'; ctx.beginPath(); ctx.roundRect(e.x - w / 2, by + 1, Math.max(2, w * e.hp / e.maxHp), 4, 2); ctx.fill();
+    ctx.fillStyle = e.elite ? '#ffd23f' : save.opt.colorblind ? '#ff8a2a' : '#ff7a8a'; ctx.beginPath(); ctx.roundRect(e.x - w / 2, by + 1, Math.max(2, w * e.hp / e.maxHp), 4, 2); ctx.fill();
   }
 }
 

@@ -229,4 +229,9 @@ t('a coach bubble clears the toasts it would cover', () => {
   assert.ok(/function coach\([\s\S]*?\$\('toasts'\)\.replaceChildren\(\)/.test(js), 'showing a tip must clear the toast stack so the two never overlap');
 });
 
+t('mouse health bars follow the colourblind palette like the cat bars do', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/e\.elite \? '#ffd23f' : save\.opt\.colorblind \? '#ff8a2a' : '#ff7a8a'/.test(js), 'the mouse hp bar must switch to orange in colourblind mode');
+});
+
 console.log(`${n} tests passed`);
