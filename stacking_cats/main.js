@@ -449,7 +449,7 @@ function showDaily(back, weekly = false) {
   setScreen(`<h2>${weekly ? 'Weekly Challenge' : 'Daily Challenge'}</h2>
     <div class="dailycols"><div class="dcard ${weekly ? 'weekly' : ''}"><div class="dic">${di.mod.icon}</div><b>${di.mod.name}</b>${weekly ? modsHtml + '<p class="wiron">Mice have 10% more health on top.</p>' : `<p>${di.mod.desc}</p>`}
       <small>${weekly ? 'Same mice and same cats for everyone all week. Kingdom upgrades and mastery are off, so it is a fair race.' : 'Everyone plays the same mice today, with the same cats: the starters plus Yuki, Hawkeye, Boomer, Pudding, Shadow, Ronin, Merlin and Cutlass. Kingdom upgrades and mastery are switched off, so it is a fair race.'}</small>
-      <div class="dstat">${mine ? `Your best ${weekly ? 'this week' : 'today'}: <b>${mine.best}</b> (wave ${mine.wave})` : `You have not played ${weekly ? 'this week' : 'today'} yet. A first try earns ${weekly ? '2 gems' : 'a gem'}!`}</div>
+      <div class="dstat">${mine ? `Your best ${weekly ? 'this week' : 'today'}: <b>${mine.best}</b> (wave ${mine.wave})` : `You have not played ${weekly ? 'this week' : 'today'} yet. A first try earns ${weekly ? '2 gems' : 'a gem'}!`}${!weekly && dailyStreak(save.daily) >= 2 ? ` <span class="streakline">&#128293; ${dailyStreak(save.daily)} days in a row</span>` : ''}</div>
       <div class="row"><button class="btn big" data-act="go">Play ${weekly ? 'weekly' : 'daily'}</button></div></div>
       <div class="board"><h4>${weekly ? "This week's top cats" : "Today's top cats"}</h4><div id="boardBody" class="bbody">Loading...</div></div></div>
     <div class="row"><button class="btn grey" data-act="back">Back</button></div>`);
