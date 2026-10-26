@@ -325,6 +325,29 @@ export function makeBackdrop(theme, seed) {
       mx.fillStyle = '#d4463c'; mx.fillRect(xx - w / 2 + pw, base - h * 0.72, w - pw * 2, 5 * gs);
     });
   }
+  if (theme.deco === 'snow') {
+    // an igloo and a snowman between the pines
+    wrapX(300, (xx) => {
+      mx.fillStyle = 'rgba(0,0,0,.14)'; mx.beginPath(); mx.ellipse(xx, base + 1, 56, 5, 0, 0, TAU); mx.fill();
+      const ig = mx.createLinearGradient(0, base - 54, 0, base); ig.addColorStop(0, '#ffffff'); ig.addColorStop(1, '#cfe2f5');
+      mx.fillStyle = ig; mx.beginPath(); mx.arc(xx, base, 56, Math.PI, 0); mx.fill(); mx.strokeStyle = '#6a86ab'; mx.lineWidth = 2.5; mx.stroke();
+      mx.fillRect(xx + 28, base - 18, 34, 18);
+      mx.strokeStyle = 'rgba(120,150,190,.55)'; mx.lineWidth = 1.5;
+      for (const r of [20, 36, 50]) { mx.beginPath(); mx.arc(xx, base, r, Math.PI, 0); mx.stroke(); }
+      for (let k = -3; k <= 3; k++) { mx.beginPath(); mx.moveTo(xx + k * 14, base - 4); mx.lineTo(xx + k * 11, base - 44 * Math.cos(k * 0.3)); mx.stroke(); }
+      mx.fillStyle = '#3a4a6a'; mx.beginPath(); mx.arc(xx + 44, base, 12, Math.PI, 0); mx.fill();
+    });
+    wrapX(760, (xx) => {
+      mx.fillStyle = 'rgba(0,0,0,.14)'; mx.beginPath(); mx.ellipse(xx, base + 1, 24, 4, 0, 0, TAU); mx.fill();
+      for (const [dy, r] of [[-17, 18], [-43, 14], [-63, 10.5]]) {
+        const sg = mx.createRadialGradient(xx - r * 0.3, base + dy - r * 0.3, 2, xx, base + dy, r); sg.addColorStop(0, '#ffffff'); sg.addColorStop(1, '#c4d8ee');
+        mx.fillStyle = sg; mx.beginPath(); mx.arc(xx, base + dy, r, 0, TAU); mx.fill(); mx.strokeStyle = '#6a86ab'; mx.lineWidth = 2; mx.stroke();
+      }
+      mx.fillStyle = '#2a3550'; mx.beginPath(); mx.arc(xx - 3.5, base - 65, 1.6, 0, TAU); mx.arc(xx + 3.5, base - 65, 1.6, 0, TAU); mx.fill();
+      mx.fillStyle = '#ff8a3a'; mx.beginPath(); mx.moveTo(xx, base - 62); mx.lineTo(xx + 12, base - 60); mx.lineTo(xx, base - 58); mx.fill();
+      mx.fillStyle = '#d4463c'; mx.fillRect(xx - 11, base - 54, 22, 5);
+    });
+  }
   for (let i = 0; i < 9; i++) {
     const x = (i + rnd() * 0.7) * (W / 9), s = 0.8 + rnd() * 0.6;
     if (theme.deco === 'flower' || theme.deco === 'petal') tree(x, s, theme.deco === 'petal' ? '#ffa6c9' : light, theme.deco === 'petal' ? '#f27aa8' : col);
