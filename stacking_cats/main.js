@@ -22,7 +22,7 @@ import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.j
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
 import { playIntro, playEpilogue } from './intro.js';
-import { kingdomLine, roadLine, pickLine, nestBannerTitle, nestTitle, titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
+import { freedLineFor, kingdomLine, roadLine, pickLine, nestBannerTitle, nestTitle, titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -1085,7 +1085,7 @@ function showOver(fresh) {
       <div><b>${num(r.dmg)}</b>Damage dealt</div><div><b>${num(r.biggest)}</b>Biggest hit</div><div><b>${num(r.taken)}</b>Damage taken</div><div><b>${num(r.healed)}</b>Healed</div></div>
       <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span><small>Total ${num(k.coins)}${goalLine}</small></div>${dailyBox}</div>
       <div class="rbars big"><div class="rh"><b>Who did the work</b></div>${bars || '<small>No damage dealt</small>'}</div></div>
-    ${trophies}${fresh.length ? `<p class="sub">New friends unlocked!</p><div class="newcats">${fresh.map((id) => catCard(id, { act: 'none' })).join('')}</div>` : ''}
+    ${trophies}${fresh.length ? `<p class="sub">${freedLineFor(fresh.length)}</p><div class="newcats">${fresh.map((id) => catCard(id, { act: 'none' })).join('')}</div>` : ''}
     <div class="row overbtns"><button class="btn big" data-act="again">Try again</button><button class="btn green" data-act="kingdom">Kingdom${goal && !goal.need ? '<i class="bang">!</i>' : ''}</button><button class="btn small" data-act="share">Share</button><button class="btn grey" data-act="title">Title</button></div>`, 'wide');
   acts = {
     share: (d, el) => {
