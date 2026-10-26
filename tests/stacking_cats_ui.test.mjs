@@ -774,3 +774,12 @@ t('the title logo is small enough that the whole title column fits the 540 high 
   assert.ok(sizes[sizes.length - 1] <= 74, 'the last .logo font size wins, got ' + sizes[sizes.length - 1]);
   assert.ok(/\n\.logo\{font-size:72px[^}]*padding-top:10px/.test(css), 'room above the letters (their tops stick out of the line box)');
 });
+
+t('How to play fits the stage: short rows, and if it ever grows it scrolls from the top instead of cutting off the heading and Back button', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  const how = js.slice(js.indexOf('function showHow'), js.indexOf('function showHow') + 4000);
+  const rows = [...how.matchAll(/row\('[^']*', [`']([^`']*)[`']\)/g)].map((m) => m[1].replace(/<[^>]+>/g, ''));
+  assert.ok(rows.length >= 10, 'found the rows, got ' + rows.length);
+  for (const r of rows) assert.ok(r.length <= 150, 'a row of ' + r.length + ' characters wraps to a third line: ' + r.slice(0, 40));
+  assert.ok(/\.screen:has\(\.how\)\{[^}]*justify-content:safe center[^}]*overflow-y:auto/.test(css), 'safe centering and scrolling for the how screen');
+});
