@@ -3,7 +3,7 @@
 import {
   CATS, CAT_BY_ID, STARTERS, SNACKS, SNACK_BY_ID, ENEMY_TYPES, NESTS,
   MAX_STACK, MAX_BENCH, BOSS_EVERY, LVL_MUL, AURA_MUL, BASE_HP, BASE_DMG, TEMP_WAVES,
-  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, itemSlots, kingdomBonuses, emptyKingdom, COIN,
+  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, BOXES, BOX_BY_ID, COIN_SCALE, itemSlots, kingdomBonuses, emptyKingdom, COIN,
   DIFFS, CAT_TAGS, SYNERGIES, ROUTES, ROUTE_BY_ID, DAILY_POOL, masteryBonus, activeSets,
 } from './cats.js';
 
@@ -12,8 +12,8 @@ export const MAX_ENEMIES = 34;
 
 // Difficulty knobs (the balance test keeps these honest).
 export const TUNE = {
-  hpA: 0.17, hpB: 0.0075,       // enemy hp scale per wave
-  dmgA: 0.075, dmgB: 0.0025,    // enemy damage scale per wave
+  hpA: 0.23, hpB: 0.009,        // enemy hp scale per wave
+  dmgA: 0.1, dmgB: 0.0025,      // enemy damage scale per wave
   budgetA: 3, budgetB: 2.6, budgetC: 0.06,
   nestHp: 650, nestGrow: 1.4,
   healAfter: 0.4,
@@ -40,7 +40,7 @@ export function newGame({ seed = 1, unlocked = STARTERS, events = true, kingdom 
   const meta = kingdomBonuses(kingdom || emptyKingdom());
   return {
     focus: 0, fortressT: 0, anthemT: 0, hexT: 0, phaseT: 0, event: null, eventsSeen: 0, hurtMul: 1,
-    meta, mastery: daily ? null : mastery, rerolls: Math.max(0, meta.rerolls - ((DIFFS[difficulty] || DIFFS.normal).rerolls || 0)), diff: DIFFS[difficulty] || DIFFS.normal, route: ROUTE_BY_ID.trail, daily, zoomMax: 6 + meta.zoomDur, stash: [], chests: 0, curCat: null, report: null, wTaken: 0, wKills: 0, wCoins: 0, wDmg0: 0, wT0: 0,
+    meta, mastery: daily ? null : mastery, rerolls: Math.max(0, meta.rerolls - ((DIFFS[difficulty] || DIFFS.normal).rerolls || 0)), diff: DIFFS[difficulty] || DIFFS.normal, route: ROUTE_BY_ID.trail, daily, zoomMax: 6 + meta.zoomDur, stash: [], boxes: [], curCat: null, report: null, wTaken: 0, wKills: 0, wCoins: 0, wDmg0: 0, wT0: 0,
     seed, rnd: rngMaker(seed), events, ev: [], unlocked: new Set(unlocked),
     t: 0, wave: 0, state: 'idle', intro: 0, bossWave: false, reward: [],
     cats: [], bench: [], enemies: [], projs: [], pools: [], mines: [],
@@ -266,9 +266,11 @@ export function releaseCat(g, uid) {
 
 // ---------------------------------------------------------------- items and loot
 export function stashItem(g, id) { g.stash.push(id); return true; }
+// how lucky the run is: Kingdom shrine, the road, and relics that carry luck (Fortune Cookie, Golden Paw, the Cat King's crown)
+const luckOf = (g) => { let team = 0; for (const c of g.cats) if (!c.ko) team += itemFx(c).luck; return g.meta.luck + g.route.rare + team; };
+const RARITY_LUCK = { rare: 0.25, epic: 0.5, legendary: 0.75, mythic: 1 };
 export function rollItemChoices(g, n = 3) {
-  let team = 0; for (const c of g.cats) if (!c.ko) team += itemFx(c).luck;   // Fortune Cookie, Golden Paw, the Cat King's crown
-  const L = g.meta.luck + g.route.rare + team, LUCK = { rare: 0.25, epic: 0.5, legendary: 0.75, mythic: 1 };
+  const L = luckOf(g), LUCK = RARITY_LUCK;
   const pool = ITEMS.map((it) => ({ id: it.id, w: ITEM_WEIGHT[it.rarity] * (1 + (LUCK[it.rarity] || 0) * L) }));
   const out = [];
   while (out.length < n && pool.length) {
@@ -278,6 +280,26 @@ export function rollItemChoices(g, n = 3) {
   }
   return out;
 }
+// which box drops: `src` is 'elite' (an elite mouse fell) or 'nest' (a nest was destroyed, `n` counts the nests so far). Luck lifts the better qualities.
+export function rollBoxTier(g, src = 'elite', n = 0) {
+  const L = luckOf(g), w = src === 'nest'
+    ? { basket: Math.max(20, 58 - 2 * n), silver: 36 + 1.5 * n, golden: 6 + 0.7 * n }
+    : { cardboard: 76, basket: 19, silver: 5 };
+  const list = BOXES.filter((b) => w[b.id]).map((b, i) => ({ id: b.id, w: w[b.id] * (1 + BOXES.indexOf(b) * 0.3 * L) }));
+  let r = g.rnd() * list.reduce((a, b) => a + b.w, 0);
+  for (const e of list) { r -= e.w; if (r <= 0) return e.id; }
+  return list[list.length - 1].id;
+}
+// the relic inside a box of this quality (a chance, duplicates happen: spare copies forge into better relics)
+export function rollBoxRelic(g, tier) {
+  const L = luckOf(g), odds = (BOX_BY_ID[tier] || BOXES[0]).odds;
+  const list = Object.keys(odds).map((r) => ({ r, w: odds[r] * (1 + (RARITY_LUCK[r] || 0) * L * 0.6) }));
+  let x = g.rnd() * list.reduce((a, b) => a + b.w, 0), rar = list[list.length - 1].r;
+  for (const e of list) { x -= e.w; if (x <= 0) { rar = e.r; break; } }
+  const pool = ITEMS.filter((it) => it.rarity === rar);
+  return pool[Math.floor(g.rnd() * pool.length)].id;
+}
+export function openBox(g, tier) { const id = rollBoxRelic(g, tier); takeItem(g, id); return id; }
 // a pick is never refused: the pack may overflow, and the arrange screen then asks the player to sell, forge or equip
 // until it fits again (selling always works, so the pack can never lock the run)
 export function takeItem(g, id) { g.run.items++; g.stash.push(id); return true; }
@@ -512,11 +534,11 @@ export function finishWave(g) {
   g.zoomT = 0; g.fortressT = g.anthemT = g.hexT = g.phaseT = 0; g.focus = 0;
   for (const c of g.cats) c.frenzyT = 0;
   addCoins(g, COIN.wave + COIN.waveGrow * g.wave);
-  const chests = Math.min(2, g.chests);
-  g.chests -= chests;
-  g.reward = (g.bossWave ? ['cat', 'item'] : []).concat(Array(chests).fill('item'), ['snack']);
+  const boxes = g.boxes.splice(0, 2);   // elite boxes wait their turn, two after each wave
+  const nestBox = g.bossWave ? rollBoxTier(g, 'nest', g.run.bossKills) : null;
+  g.reward = (g.bossWave ? ['cat', 'box:' + nestBox] : []).concat(boxes.map((b) => 'box:' + b), ['snack']);
   g.report = {
-    wave: g.wave, time: g.t - g.wT0, dmg: g.run.dmg - g.wDmg0, taken: g.wTaken, kills: g.wKills, coins: g.wCoins, boss: g.bossWave, chests,
+    wave: g.wave, time: g.t - g.wT0, dmg: g.run.dmg - g.wDmg0, taken: g.wTaken, kills: g.wKills, coins: g.wCoins, boss: g.bossWave, boxes: (nestBox ? [nestBox] : []).concat(boxes),
     cats: g.cats.concat(g.bench).map((c) => ({ uid: c.uid, id: c.id, lvl: c.lvl, dmg: c.wDmg, kills: c.wKills, heal: c.wHeal })).sort((a, b) => b.dmg - a.dmg),
   };
   refreshHp(g, before);
@@ -598,7 +620,7 @@ export function killEnemy(g, e, credit) {
       if (kf && kf.kcoin) addCoins(g, kf.kcoin, e.x, ecy(e));
       emit(g, { k: 'kill', x: e.x, y: ecy(e), type: e.type, elite: e.elite });
       addCoins(g, e.elite ? COIN.elite : COIN.kill, e.x, ecy(e));
-      if (g.rnd() < (e.elite ? 0.22 : 0.012) * (1 + g.meta.luck * 0.4 + g.route.chest + ((g.daily && g.daily.mod.chest) || 0))) { g.chests++; emit(g, { k: 'chest', x: e.x, y: ecy(e) }); }
+      if (g.rnd() < (e.elite ? 0.22 : 0.012) * (1 + g.meta.luck * 0.4 + g.route.chest + ((g.daily && g.daily.mod.chest) || 0))) { const tier = rollBoxTier(g, 'elite'); g.boxes.push(tier); emit(g, { k: 'chest', x: e.x, y: ecy(e), tier }); }
     }
   }
   if (e.boss) {
@@ -1346,7 +1368,8 @@ export function setFocus(g, uid) {
 }
 
 // ---- event stops: a break between waves with a choice (see EVENTS in cats.js)
-const itemPrice = (g, id) => Math.round({ common: 45, rare: 110, epic: 250, legendary: 620, mythic: 1600 }[ITEM_BY_ID[id].rarity] * (1 + 0.03 * g.wave));
+const cc = (n) => Math.max(1, Math.round(n * COIN_SCALE));   // a price in run coins (see COIN_SCALE)
+const itemPrice = (g, id) => cc({ common: 45, rare: 110, epic: 250, legendary: 620, mythic: 1600 }[ITEM_BY_ID[id].rarity] * (1 + 0.03 * g.wave));
 export function eventDue(g) { return g.wave >= 3 && !g.bossWave && g.wave % 3 === 0; }
 export function rollEvent(g) {
   if (!eventDue(g)) return null;
@@ -1358,20 +1381,20 @@ export function rollEvent(g) {
   switch (def.id) {
     case 'shop':
       for (const id of items) ev.options.push({ k: 'buy', item: id, cost: itemPrice(g, id) });
-      ev.options.push({ k: 'heal', cost: Math.round(55 + g.wave * 2), pct: 0.4 });
-      ev.options.push({ k: 'reroll', cost: Math.round(70 + g.wave * 2) });
+      ev.options.push({ k: 'heal', cost: cc(55 + g.wave * 2), pct: 0.4 });
+      ev.options.push({ k: 'reroll', cost: cc(70 + g.wave * 2) });
       ev.multi = true;
       break;
     case 'shrine': {
       const epic = ITEMS.filter((i) => i.rarity === 'epic'), rare = ITEMS.filter((i) => i.rarity === 'rare');
       ev.options.push({ k: 'blood', item: rare[Math.floor(g.rnd() * rare.length)].id, hp: 0.25 });
-      ev.options.push({ k: 'gamble', cost: Math.round(80 + g.wave * 3), item: epic[Math.floor(g.rnd() * epic.length)].id, chance: 0.6 });
+      ev.options.push({ k: 'gamble', cost: cc(80 + g.wave * 3), item: epic[Math.floor(g.rnd() * epic.length)].id, chance: 0.6 });
       ev.options.push({ k: 'leave' });
       break;
     }
     case 'rest':
       ev.options.push({ k: 'heal', cost: 0, pct: 0.6 });
-      ev.options.push({ k: 'reroll', cost: 0, bonusCoins: 30 + g.wave * 2 });
+      ev.options.push({ k: 'reroll', cost: 0, bonusCoins: cc(30 + g.wave * 2) });
       break;
     case 'deal': {
       const epic = ITEMS.filter((i) => i.rarity === 'epic'), rare = ITEMS.filter((i) => i.rarity === 'rare');
@@ -1387,8 +1410,8 @@ export function rollEvent(g) {
       ev.options.push({ k: 'leave' });
       break;
     case 'fountain':
-      ev.options.push({ k: 'toss', cost: 40, chance: 0.4, prize: 100 });
-      ev.options.push({ k: 'toss', cost: 100, chance: 0.35, prize: 280 });
+      ev.options.push({ k: 'toss', cost: cc(40), chance: 0.4, prize: cc(100) });
+      ev.options.push({ k: 'toss', cost: cc(100), chance: 0.35, prize: cc(280) });
       ev.options.push({ k: 'leave' });
       ev.multi = true;
       break;

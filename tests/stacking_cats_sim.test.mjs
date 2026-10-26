@@ -197,7 +197,8 @@ t('a nest wave: nest spawns mice, can be destroyed, ends the wave with a cat rew
   spawned = seen.size;
   assert.equal(g.state, 'clear');
   assert.ok(spawned >= 5, 'nest spawned ' + spawned);
-  assert.deepEqual(g.reward, ['cat', 'item', 'snack']);
+  assert.equal(g.reward.length, 3, 'a nest pays a cat, a box and a snack: ' + g.reward);
+  assert.equal(g.reward[0], 'cat'); assert.match(g.reward[1], /^box:(basket|silver|golden)$/, 'a nest never drops cardboard'); assert.equal(g.reward[2], 'snack');
   assert.equal(g.run.bossKills, 1);
   assert.ok(minNest < 450, 'the world scrolled the nest toward the stack: ' + minNest);
 });

@@ -3,6 +3,7 @@
 // swaps any known emoji in the page for its drawn icon, so data files can keep using plain characters as ids.
 import { TAU, INK, mix, shade, lineOf, cel, ell, poly, star, line } from './art_util.js';
 import { RELIC_ICONS } from './art_relics.js';
+import { BOX_ICONS } from './art_boxes.js';
 
 const BOX = [0, 0, 64, 64];
 const P = (build) => { const p = new Path2D(); build(p); return p; };
@@ -207,7 +208,7 @@ const D = {
   '♥': (c) => { heart(c, 32, 30, 22, RED, 2.4); glint(c, 22, 22, 4.5); },
 };
 
-Object.assign(D, RELIC_ICONS);   // the relics of the second loot update live in art_relics.js (merged before ICON_KEYS is read)
+Object.assign(D, RELIC_ICONS, BOX_ICONS);   // the relics of the second loot update live in art_relics.js (merged before ICON_KEYS is read)
 // a few spare pictures other code asks for by name
 const ALIAS = { '🍣': '🍣' };
 export const ICON_KEYS = Object.keys(D);

@@ -2,7 +2,7 @@
 import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS, SPECIAL_TEXT,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
-  ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
+  ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, BOXES, BOX_BY_ID, RARITY_CHEER, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
   DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
   masteryProgress, masteryMap, masteryBonus, MASTERY_MAX, DIFF_ORDER, LADDER_RULES, LADDER_WAVE, ladderTier, ladderUnlocked, diffAllowed, ladderClears, weekKey, weekInfo,
 } from './cats.js';
@@ -297,9 +297,9 @@ function relicNotes(id) {
   if (r && r.bulk >= 0.03) bits.push(`tougher +${Math.round(r.bulk * 100)}%`);
   return (h ? `<div class="setl">${h}</div>` : '') + (bits.length ? `<div class="gainl">Best on ${CAT_BY_ID[r.cat].name}: ${bits.join(', ')}</div>` : '');
 }
-function itemCard(id) {
+function itemCard(id, act = 'none') {
   const it = ITEM_BY_ID[id];
-  return `<div class="card item r-${it.rarity}" data-act="pickItem" data-id="${id}"><div class="rar">${it.rarity}</div><div class="ic">${it.icon}</div><h3>${it.name}</h3><p>${it.desc}</p>${relicNotes(id)}<div class="impact">Equip it on any cat</div></div>`;
+  return `<div class="card item r-${it.rarity}" data-act="${act}" data-id="${id}"><div class="rar">${it.rarity}</div><div class="ic">${it.icon}</div><h3>${it.name}</h3><p>${it.desc}</p>${relicNotes(id)}<div class="impact">Equip it on any cat</div></div>`;
 }
 
 const thumbURLs = new Map();
@@ -451,7 +451,7 @@ function showHow(back) {
     ${row('\uD83C\uDFAF', '<b>Focus.</b> Tap a mouse and your cats shoot it first.')}
     ${row('\uD83D\uDC00', `<b>Nests.</b> Every ${BOSS_EVERY}th wave is a nest fight. Destroy it to rescue a cat and win loot.`)}
     ${row('\u2728', `<b>Merge</b> two equal cats into one stronger cat, up to Lv 3. The tower fits ${MAX_STACK}, the bench ${MAX_BENCH}.`)}
-    ${row('\uD83C\uDF81', '<b>Relics.</b> Chests hold relics, common to mythic. One per cat (two at Lv 3). Three of a kind forge up, three of a family make a team set.')}
+    ${row('\uD83C\uDF81', '<b>Lootboxes.</b> Elites and nests drop boxes holding a random relic: cardboard, basket, silver, golden. One per cat (two at Lv 3).')}
     ${row('\uD83E\uDE99', '<b>Coins</b> are saved. Spend them in the <b>Kingdom</b> to make every future run stronger.')}
     ${row('\uD83D\uDD25', '<b>Synergies.</b> Cats of one kind boost each other. Look for the badges by the wave counter.')}
     ${row('\uD83D\uDC3E', '<b>Roads.</b> After each nest you pick the next road. Riskier roads pay better.')}
@@ -500,7 +500,7 @@ function showRelics(back, sel0) {
     const it = sel && ITEM_BY_ID[sel];
     const detail = !it ? 'Tap a relic to read what it does. Relics you have owned in a run are written into the book, the rest are shadows.'
       : save.relics[it.id] ? `<b>${it.icon} ${it.name}</b> <span class="rar ${it.rarity}">${it.rarity}</span><br>${it.desc}.${RELIC_SETS.filter((x) => x.ids.includes(it.id)).map((x) => `<br><small>Set: ${x.name}. Carry ${SET_NEED} of its relics and ${x.desc}, ${SET_DOUBLE} double it.</small>`).join('')}`
-        : `<b>A ${it.rarity} relic you have not found yet.</b><br>Relics drop from chests and loot, turn up in shops and deals, and three of a kind forge into the next tier.`;
+        : `<b>A ${it.rarity} relic you have not found yet.</b><br>Relics come out of lootboxes, turn up in shops and deals, and three of a kind forge into the next tier.`;
     setScreen(`<h2>Relic Book <small class="klv">${pr.got}/${pr.total} found</small></h2><div class="relbook">${rows}</div><div class="detail dexd relde">${detail}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
   };
   draw();
@@ -514,7 +514,7 @@ function showDaily(back, weekly = false) {
   setScreen(`<h2>${weekly ? 'Weekly Challenge' : 'Daily Challenge'}</h2>
     <div class="dailycols"><div class="dcard ${weekly ? 'weekly' : ''}"><div class="dic">${di.mod.icon}</div><b>${di.mod.name}</b>${weekly ? modsHtml + '<p class="wiron">Mice have 10% more health on top.</p>' : `<p>${di.mod.desc}</p>`}
       <small>${weekly ? 'Same mice and same cats for everyone all week. Kingdom upgrades and mastery are off, so it is a fair race.' : 'Everyone plays the same mice today, with the same cats: the starters plus Yuki, Hawkeye, Boomer, Pudding, Shadow, Ronin, Merlin and Cutlass. Kingdom upgrades and mastery are switched off, so it is a fair race.'}</small>
-      <div class="dstat">${mine ? `Your best ${weekly ? 'this week' : 'today'}: <b>${mine.best}</b> (wave ${mine.wave})` : `You have not played ${weekly ? 'this week' : 'today'} yet. A first try earns ${weekly ? '2 gems' : 'a gem'}!`}${!weekly && dailyStreak(save.daily) >= 2 ? ` <span class="streakline">&#128293; ${dailyStreak(save.daily)} days in a row</span>` : ''}</div>
+      <div class="dstat">${mine ? `Your best ${weekly ? 'this week' : 'today'}: <b>${mine.best}</b> (wave ${mine.wave})` : `You have not played ${weekly ? 'this week' : 'today'} yet. Reach wave ${weekly ? 15 : 12} on your first try to earn a gem!`}${!weekly && dailyStreak(save.daily) >= 2 ? ` <span class="streakline">&#128293; ${dailyStreak(save.daily)} days in a row</span>` : ''}</div>
       <div class="row"><button class="btn big" data-act="go">Play ${weekly ? 'weekly' : 'daily'}</button></div></div>
       <div class="board"><h4>${weekly ? "This week's top cats" : "Today's top cats"}</h4><div id="boardBody" class="bbody">Loading...</div></div></div>
     <div class="row"><button class="btn grey" data-act="back">Back</button></div>`);
@@ -800,7 +800,7 @@ function onClear() {
   if (g.bossWave) queue.splice(queue.length - 1, 0, 'route');
   if (S.eventDue(g)) queue.push('event');
   if (finaleDue(g.wave, !!g.run.finale)) queue.unshift('finale');
-  if (g.report && g.report.chests) toast(`Opening ${g.report.chests} loot chest${g.report.chests > 1 ? 's' : ''}!`);
+  if (g.report && g.report.boxes && g.report.boxes.length) toast(`Lootbox time: ${g.report.boxes.map((b) => BOX_BY_ID[b].name).join(', ')}!`);
 }
 // the ending: the mouse king falls at the end of the map. Shown once per run, pays a one time gem reward and the run goes on
 function showFinale() {
@@ -824,7 +824,7 @@ function nextReward() {
   const r = queue.shift();
   rewardChoices = null;
   if (!r) { beginWave(); return; }
-  if (r === 'finale') showFinale(); else if (r === 'event') showEvent(); else if (r === 'cat') showCatReward(); else if (r === 'item') showItemReward(); else if (r === 'route') showRouteReward(); else showSnackReward();
+  if (r === 'finale') showFinale(); else if (r === 'event') showEvent(); else if (r === 'cat') showCatReward(); else if (r.startsWith('box:')) showBox(r.slice(4)); else if (r === 'route') showRouteReward(); else showSnackReward();
 }
 
 function reportHtml() {
@@ -951,19 +951,36 @@ function showFull(newId) {
   };
 }
 
-function showItemReward() {
-  rewardChoices = rewardChoices || S.rollItemChoices(g);
-  setScreen(`<h2>Loot!</h2><p class="sub">Pick a relic. Each cat can carry one (two at Lv 3).</p>
-    <div class="cards">${rewardChoices.map(itemCard).join('')}</div>
-    <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button>${rerollBtn()}</div>`);
+// ---- lootboxes: a chance, not a choice. Shake it, open it, meet the relic.
+function showBox(tier) {
+  const bx = BOX_BY_ID[tier] || BOXES[0], rars = Object.keys(bx.odds);
+  setScreen(`<h2>${bx.icon} ${bx.name}</h2><p class="sub">${bx.blurb}</p>
+    <div class="boxstage"><div class="boxic t-${bx.id}" data-act="openbox">${bx.icon}</div></div>
+    <p class="sub boxodds">Might hold ${rars.length > 1 ? `<b>${rars[0]}</b> to <b>${rars[rars.length - 1]}</b>` : `<b>${rars[0]}</b>`} relics</p>
+    <div class="row"><button class="btn big" data-act="openbox">Open it!</button></div>
+    <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button></div>`);
+  let opening = false;
   acts = {
-    pickItem: (d) => {
-      S.takeItem(g, d.id);
-      sfx.play('chest');
-      showTower(() => nextReward(), { item: g.stash.length - 1 });
+    openbox: () => {
+      if (opening) return;
+      opening = true; sfx.unlock(); sfx.play('pick');
+      const el = screenEl.querySelector('.boxic'); if (el) el.classList.add('shaking');
+      setTimeout(() => { if (g && el && el.isConnected) { const id = S.openBox(g, tier); rewardChoices = id; showBoxReveal(tier, id); } }, 750);
     },
-    tower: () => showTower(showItemReward),
-    reroll: () => { if (S.useReroll(g)) { rewardChoices = null; sfx.play('reroll'); showItemReward(); } },
+    tower: () => showTower(() => showBox(tier)),
+  };
+}
+function showBoxReveal(tier, id) {
+  const it = ITEM_BY_ID[id], bx = BOX_BY_ID[tier] || BOXES[0], hi = ['epic', 'legendary', 'mythic'].includes(it.rarity);
+  sfx.play('chest');
+  if (hi) { sfx.play('achieve', 0.7); const c0 = g.cats[0]; if (c0) sfx.meow(c0.id, 'cheer'); }
+  setScreen(`<h2 class="cheer r-${it.rarity}">${RARITY_CHEER[it.rarity]}</h2><p class="sub">Out of the ${bx.name}:</p>
+    <div class="cards reveal">${itemCard(id)}</div>
+    <div class="row"><button class="btn big" data-act="take">Equip it</button></div>
+    <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button></div>`);
+  acts = {
+    take: () => { rewardChoices = null; showTower(() => nextReward(), { item: g.stash.lastIndexOf(id) }); },
+    tower: () => showTower(() => showBoxReveal(tier, id)),
   };
 }
 
@@ -1111,11 +1128,11 @@ function commitRun() {
   run.earned = Math.floor(run.coins);
   save.kingdom.coins += run.earned;
   save.kingdom.earned += run.earned;
-  run.gems = Math.floor(save.stats.bossKills / 3) - Math.floor(oldNests / 3);
+  run.gems = Math.floor(save.stats.bossKills / 6) - Math.floor(oldNests / 6);   // one gem for every sixth nest ever destroyed
   if (run.daily) {
     const book = run.weekly ? save.weekly : save.daily;
     const score = dailyScore(run), prev = book[run.daily];
-    if (!prev) run.gems += run.weekly ? 2 : 1;
+    if (!prev && run.wave >= (run.weekly ? 15 : 12)) run.gems += 1;   // a gem has to be earned: reach wave 12 (15 in the weekly) the first time
     if (!prev || score > prev.best) book[run.daily] = { best: score, wave: run.wave };
     run.dailyScore = score;
   }
@@ -1270,7 +1287,7 @@ function updateHud(dt) {
   coinShown += (g.run.coins - coinShown) * Math.min(1, dt * 7);
   if (Math.abs(g.run.coins - coinShown) < 0.5) coinShown = g.run.coins;
   setText('coinTxt', String(Math.floor(coinShown)));
-  const ch = g.chests;
+  const ch = g.boxes.length;
   $('chestBox').style.display = ch > 0 ? 'flex' : 'none';
   setText('chestTxt', String(ch));
   $('bMeter').classList.toggle('on', !!save.meter);
@@ -1550,7 +1567,7 @@ function handle(e) {
     case 'healfx': for (let i = 0; i < 3; i++) spawnFx({ k: 'h', x: e.x + (Math.random() - 0.5) * 50, y: e.y - 10, life: 0.9, max: 0.9 }); sfx.play('heal'); break;
     case 'cathit': { if (Math.random() < 0.18) emote(e.uid, '\uD83D\uDCA2', 0.8); const p = catPos(e.uid); txtFx(p.x - 56, p.y, Math.round(e.v), '#ff8a8a', 15, 0.7); towerWob = 1; shake = Math.max(shake, 1.8); sfx.play('hit'); buzz('hit'); break; }
     case 'coin': if (fx.length < 300) spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 52, ty: 72, life: 0.7 + Math.random() * 0.2, max: 0.8, kind: 'coin', ox: (Math.random() - 0.5) * 160, oy: -60 - Math.random() * 60 }); break;
-    case 'chest': spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', ox: 0, oy: -90 }); sparks(e.x, e.y, 10, '#ffd23f', 220, 0.5); txtFx(e.x, e.y - 20, 'Chest!', '#ffd23f', 20, 1); sfx.play('chest'); break;
+    case 'chest': spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', ox: 0, oy: -90 }); sparks(e.x, e.y, 10, '#ffd23f', 220, 0.5); txtFx(e.x, e.y - 20, e.tier ? BOX_BY_ID[e.tier].name : 'Box!', '#ffd23f', 20, 1); sfx.play('chest'); break;
     case 'shieldhit': { const p = catPos(e.uid); ring(p.x, p.y - 10, e.broke ? 70 : 46, '#8fe8ff', e.broke ? 0.5 : 0.28, e.broke ? 6 : 3); if (e.broke) { txtFx(p.x - 46, p.y - 6, 'Barrier down', '#bff4ff', 16, 0.9); sparks(p.x, p.y - 10, 10, '#bff4ff', 190, 0.4); } break; }
     case 'undying': { const p = catPos(e.uid); txtFx(p.x - 56, p.y - 24, 'Second chance!', '#ffe27a', 22, 1.5); ring(p.x, p.y - 10, 100, '#fff2a0', 0.7, 8); flashGlow(p.x, p.y - 10, 140, '#fff2a0', 0.6); sparks(p.x, p.y - 10, 20, '#fff6b0', 260, 0.7); sfx.play('heal'); break; }
     case 'dodge': { const p = catPos(e.uid); txtFx(p.x - 40, p.y, 'Dodge!', '#b9f5ff', 18, 0.8); ring(p.x, p.y - 10, 44, '#d9f8ff', 0.35, 3); sparks(p.x, p.y - 10, 6, '#ffffff', 150, 0.3); break; }
@@ -2396,7 +2413,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+window.stackingCats = { get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
 showTitle();
 requestAnimationFrame(frame);
 void ENEMY_TYPES;
