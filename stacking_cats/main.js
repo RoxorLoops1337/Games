@@ -22,7 +22,7 @@ import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.j
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
 import { playIntro, playEpilogue } from './intro.js';
-import { rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
+import { rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -1054,7 +1054,7 @@ function showOver(fresh) {
   const trophies = (r.ach || []).length ? `<div class="trow">${r.ach.map((a) => `<span class="tchip">&#127942; ${a.name}</span>`).join('')}</div>` : '';
   const goal = nextGoal(k), goalB = goal && BUILDING_BY_ID[goal.id];
   const goalLine = goalB ? (goal.need ? ` &middot; ${goalB.icon} ${goalB.name} needs ${num(goal.need)} more` : ` &middot; ${goalB.icon} ${goalB.name} is ready to upgrade`) : '';
-  setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : fallLine(r.wave)} <small>${d.icon} ${d.name}${r.daily ? (r.weekly ? ' &middot; Weekly' : ' &middot; Daily') : ''}</small></p>${metaNotes(r)}
+  setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : fallLine(r.wave)} <small>${d.icon} ${d.name} &middot; Chapter ${chapterOf(r.wave).n}${r.daily ? (r.weekly ? ' &middot; Weekly' : ' &middot; Daily') : ''}</small></p>${metaNotes(r)}
     <div class="overcols"><div><div class="stats"><div><b>${r.wave}</b>Wave reached</div><div><b>${r.kills}</b>Mice defeated</div><div><b>${r.bossKills}</b>Nests destroyed</div><div><b>${r.merges}</b>Merges</div>
       <div><b>${num(r.dmg)}</b>Damage dealt</div><div><b>${num(r.biggest)}</b>Biggest hit</div><div><b>${num(r.taken)}</b>Damage taken</div><div><b>${num(r.healed)}</b>Healed</div></div>
       <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span><small>Total ${num(k.coins)}${goalLine}</small></div>${dailyBox}</div>
