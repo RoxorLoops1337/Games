@@ -470,4 +470,12 @@ t('the Cheddar Crusher trophy shows how close the player is (best wave out of th
   assert.ok(/king: \[st\.bestWave, FINALE_WAVE\]/.test(f), 'troProgress needs a king entry that counts toward FINALE_WAVE');
 });
 
+t('locked cats in the Cat Dex are caged by the Gnaw Army, with the unlock hint kept', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const f = js.slice(js.indexOf('function dexDetail'), js.indexOf('function dexDetail') + 1800);
+  assert.ok(/Still caged/.test(f) && /Gnaw Army/.test(f) && /d\.unlock\.text/.test(f), 'locked detail tells the story and the unlock rule');
+  assert.ok(!/\u2014/.test(f), 'no em dash');
+  assert.ok(/'Caged'/.test(js), 'locked tile says Caged');
+});
+
 console.log(`${n} tests passed`);
