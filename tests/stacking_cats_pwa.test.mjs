@@ -249,4 +249,18 @@ await t('story: the chapter beat toast steps aside while the first coach tip is 
   assert.equal(st.beatToastWanted(7, true), false, 'only the first wave of a chapter has a beat');
 });
 
+await t('story: the mouse king falls at the end of the map, once per run, with a one time royal reward', async () => {
+  const st = await import('../stacking_cats/story.js');
+  assert.equal(st.FINALE_WAVE, st.CHAPTERS.length * 5, 'the finale is the last nest of the first trip around the map');
+  assert.equal(st.finaleDue(st.FINALE_WAVE, false), true);
+  assert.equal(st.finaleDue(st.FINALE_WAVE, true), false, 'only once per run');
+  assert.equal(st.finaleDue(st.FINALE_WAVE - 5, false), false, 'not before the last nest');
+  assert.equal(st.finaleDue(st.FINALE_WAVE + 5, false), false, 'not on later laps');
+  assert.equal(st.finaleGems(true), 5, 'the first victory pays gems');
+  assert.equal(st.finaleGems(false), 0, 'later victories pay nothing extra');
+  assert.ok(st.FINALE_LINES.length >= 3);
+  for (const l of st.FINALE_LINES) assert.ok(!l.includes('\u2014') && l.length > 20, l);
+  assert.ok(/Squeakimus/.test(st.FINALE_TITLE) && !st.FINALE_TITLE.includes('\u2014'));
+});
+
 console.log(n + ' passed');

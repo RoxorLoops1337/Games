@@ -388,4 +388,13 @@ t('the chapter beat toast asks beatToastWanted so it never races the first coach
   assert.ok(/beatToastWanted\(g\.wave, save\.opt\.tutorial && !save\.tips\.c2\)/.test(js), 'beginWave must pass whether the c2 tip is pending');
 });
 
+t('clearing the last nest of the map shows the finale card, pays once and lets the run go on', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/finaleDue\(g\.wave, !!g\.run\.finale\)[\s\S]{0,80}queue\.unshift\('finale'\)/.test(js), 'a wave clear queues the finale card first');
+  assert.ok(/r === 'finale'\) showFinale\(\)/.test(js), 'nextReward must open it');
+  const f = js.slice(js.indexOf('function showFinale'));
+  assert.ok(/g\.run\.finale = true/.test(f) && /!save\.storyDone/.test(f) && /finaleGems\(/.test(f), 'one time reward flagged in the save');
+  assert.ok(/Keep playing/.test(f) && /nextReward\(\)/.test(f), 'the player can keep going');
+});
+
 console.log(`${n} tests passed`);
