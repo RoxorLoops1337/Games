@@ -1,7 +1,8 @@
 // Stacking Cats: difficulty, synergies, routes, the daily challenge, wonders and achievements.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
-  newGame, addCat, startWave, step, makeEnemy, catMaxHp, calcMods, cfx, synergyState, estDps, rollRoutes, chooseRoute, grantStartItem,
+  newGame, addCat, startWave, step, makeEnemy, catMaxHp, calcMods, cfx, synergyState, estDps, estBulk, rollRoutes, chooseRoute, grantStartItem,
   stackMax, benchMax, moveCat, useZoomies, snackChoiceCount, rollItemChoices, rollCatChoices, rollSnackChoices, eatSnack, mergePairs, mergeCats, useSpecial,
   hurtEnemy, hurtCat, killEnemy, equipItem, forgeItems, sellValue, finishWave, FX_KEYS, rollEvent, DT,
 } from '../stacking_cats/sim.js';
@@ -349,6 +350,18 @@ t('relic sets: three different Armor Set relics give the team 4% less damage tak
   assert.ok(Math.abs(three - two - 0.04) < 1e-9, 'a set bonus of 4%, got ' + (three - two));
   const dup = calcMods(lab([['tabby', 'vest'], ['ember', 'vest'], ['mochi', 'vest']])).dr;
   assert.ok(dup < three, 'copies of one relic are not a set');
+});
+
+t('previews: estBulk counts health, damage reduction and dodge from relics (the defensive half of the equip preview)', () => {
+  const g = lab([['tabby', null], ['mochi', null]]);
+  const c = g.cats[0], m = calcMods(g), base = estBulk(g, c, m, []);
+  assert.ok(base > 0 && Math.abs(estBulk(g, c, m) - base) < 1e-9, 'same items, same bulk');
+  const vest = estBulk(g, c, m, ['vest']) / base, cushion = estBulk(g, c, m, ['cushion']) / base, shell = estBulk(g, c, m, ['shell']) / base;
+  assert.ok(Math.abs(vest - 1 / 0.85) < 0.02, 'a vest takes 15% off every bite, got ' + vest);
+  assert.ok(cushion > 1.2 && cushion < 1.4, '+30% health, got ' + cushion);
+  assert.ok(shell > 1.15, 'dodge and health both count, got ' + shell);
+  assert.ok(Math.abs(estBulk(g, c, m, ['claws']) / base - 1) < 1e-9, 'an attack relic adds no bulk');
+  assert.ok(/estBulk\(g, c, mods, items\)/.test(readFileSync('stacking_cats/main.js', 'utf8')), 'the equip preview shows it');
 });
 
 t('previews: the damage estimate counts the extra damage mice take from a curse (Hex Doll)', () => {
