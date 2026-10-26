@@ -675,6 +675,7 @@ function beginWave() {
 
 function onClear() {
   mode = 'celebrate';
+  if (coachEl && coachEl.dataset.key === 'c2') hideCoach();   // the wave 1 tip would sit on top of the cleared banner
   celeb = g.bossWave ? 2.4 : 1.15;
   sfx.play(g.bossWave ? 'win' : 'clear');
   sfx.music('calm');
