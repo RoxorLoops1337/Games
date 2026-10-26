@@ -247,6 +247,21 @@ export function nestOverlay(ctx, hpFrac, t) {
   for (const x of [91, 109]) { ctx.beginPath(); ctx.ellipse(x, 168, 4.4, 5.4 * blink, 0, 0, TAU); ctx.fill(); }
   ctx.fillStyle = '#fff'; for (const x of [90, 108]) { ctx.beginPath(); ctx.arc(x, 166, 1.2, 0, TAU); ctx.fill(); }
   ctx.strokeStyle = '#1b1020'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(85, 158); ctx.lineTo(97, 163); ctx.moveTo(115, 158); ctx.lineTo(103, 163); ctx.stroke();
+  // the caged cat the nest is holding: a little cage by the door, ears and eyes peeking out, swaying and blinking
+  {
+    const sw = Math.sin(t * 1.7) * 1.2, ex = 168 + sw, top = 150, bot = 188;
+    ctx.save();
+    ctx.fillStyle = '#3a2a4a'; ctx.beginPath(); ctx.moveTo(ex - 15, top + 18); ctx.lineTo(ex - 11, top + 4); ctx.lineTo(ex - 5, top + 13); ctx.lineTo(ex + 5, top + 13); ctx.lineTo(ex + 11, top + 4); ctx.lineTo(ex + 15, top + 18); ctx.lineTo(ex + 15, bot - 2); ctx.lineTo(ex - 15, bot - 2); ctx.closePath(); ctx.fill();   // the cat silhouette
+    ctx.fillStyle = '#ffe9a8'; const lid = Math.sin(t * 1.3 + 1) > 0.93 ? 0.3 : 1;
+    for (const x of [ex - 6, ex + 6]) { ctx.beginPath(); ctx.ellipse(x, top + 24, 2.6, 3.2 * lid, 0, 0, TAU); ctx.fill(); }
+    ctx.strokeStyle = '#c9b8a0'; ctx.lineWidth = 2; ctx.fillStyle = 'rgba(0,0,0,0)';
+    ctx.strokeRect(ex - 17, top + 12, 34, bot - top - 14);
+    ctx.lineWidth = 1.6; ctx.beginPath();   // cageBars
+    for (let x = -9; x <= 9; x += 6) { ctx.moveTo(ex + x, top + 12); ctx.lineTo(ex + x, bot - 2); }
+    ctx.stroke();
+    ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(ex, top + 8, 5, Math.PI, 0); ctx.moveTo(ex, top + 3); ctx.lineTo(ex, top + 12); ctx.stroke();   // ring on top
+    ctx.restore();
+  }
   const cracks = hpFrac < 0.75 ? (hpFrac < 0.45 ? (hpFrac < 0.2 ? 3 : 2) : 1) : 0;
   ctx.strokeStyle = 'rgba(30,10,30,.8)'; ctx.lineWidth = 1.6;
   const C = [[[50, 120], [58, 134], [52, 146], [62, 158]], [[150, 110], [142, 126], [150, 140]], [[100, 100], [94, 112], [104, 120], [98, 130]]];
