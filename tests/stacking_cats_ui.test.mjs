@@ -321,4 +321,10 @@ t('a long press on the field does not open the browser menu (it would cancel the
   assert.ok(html.includes('-webkit-touch-callout:none'), 'iOS long-press callout must be off');
 });
 
+t('How to play tells players they can tap and hold their cats', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const how = js.slice(js.indexOf('function showHow'), js.indexOf('function showDex'));
+  assert.ok(/Tap a cat/i.test(how) && /hold/i.test(how) && /purr/i.test(how), 'How to play must mention tapping and holding a cat to hear it purr');
+});
+
 console.log(`${n} tests passed`);
