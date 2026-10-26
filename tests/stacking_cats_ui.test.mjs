@@ -659,4 +659,9 @@ t('the title stack is built from the player\'s own most used cats', () => {
   assert.ok(/titleStack = titleStackIds\(save\.unlocked, save\.catStats\)/.test(js), 'showTitle refreshes the stack');
 });
 
+t('the idle Kingdom hint opens with the village story line', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/hint2">\$\{kingdomLine\(kingdomLevel\(k\)\)\} Tap a building to upgrade it/.test(js), 'kingdomLine in the idle hint');
+});
+
 console.log(`${n} tests passed`);

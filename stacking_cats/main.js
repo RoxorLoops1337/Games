@@ -22,7 +22,7 @@ import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.j
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
 import { playIntro, playEpilogue } from './intro.js';
-import { roadLine, pickLine, nestBannerTitle, nestTitle, titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
+import { kingdomLine, roadLine, pickLine, nestBannerTitle, nestTitle, titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -596,7 +596,7 @@ function showKingdom(back, selected) {
       const wd = affordableWonder(k);
       if (wd) return `<div class="kd hint2">You have enough gems to build the <b>${WONDER_BY_ID[wd].name}</b> ${WONDER_BY_ID[wd].icon}. Tap the floating wonder!</div>`;
     }
-    if (!sel) return '<div class="kd hint2">Tap a building to upgrade it, or a floating wonder to buy it with gems.' + (coarse ? '' : ' Arrow keys move between them and Enter buys.') + '</div>';
+    if (!sel) return `<div class="kd hint2">${kingdomLine(kingdomLevel(k))} Tap a building to upgrade it, or a floating wonder to buy it with gems.` + (coarse ? '' : ' Arrow keys move between them and Enter buys.') + '</div>';
     if (sel.type === 'wonder') {
       const w = WONDER_BY_ID[sel.id], owned = !!k.wonders[w.id], afford = !owned && k.gems >= w.cost;
       return `<div class="kd"><span class="kic">${w.icon}</span><div class="kt"><b>${w.name}</b><small>${w.desc}</small></div><button class="btn small ${afford ? 'green' : 'grey'}" data-act="buyw" data-id="${w.id}" ${afford ? '' : 'disabled'}>${owned ? 'Built' : `Buy &#128142; ${w.cost}`}</button></div>`;

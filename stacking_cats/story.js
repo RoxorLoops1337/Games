@@ -210,3 +210,11 @@ export function wrapCaption(text, measure, maxW) {
   const balanced = wrap(Math.min(maxW, measure(text) / 2 + 70));
   return balanced.length === 2 ? balanced : lines;
 }
+
+// a story line for the Cat Kingdom: the village the Gnaw Army wrecked grows back as the player upgrades it
+export function kingdomLine(level) {
+  if (level < 6) return 'The Gnaw Army wrecked Whiskerton. Rebuild it!';
+  if (level < 16) return 'Whiskerton is getting cosy again.';
+  if (level < 30) return 'Whiskerton is busy and happy.';
+  return 'Whiskerton is the finest village in the land!';
+}
