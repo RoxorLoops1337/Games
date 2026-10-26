@@ -227,4 +227,18 @@ await t('story: a freed cat thanks you with a line of its own', async () => {
   assert.equal(st.freedToast('Tabby', 2), 'Tabby: "' + st.freedLine(2) + '"');
 });
 
+await t('story: every cat has its own one line story for the Cat Dex', async () => {
+  const st = await import('../stacking_cats/story.js');
+  const { CATS } = await import('../stacking_cats/cats.js');
+  const seen = new Set();
+  for (const c of CATS) {
+    const l = st.catStory(c.id);
+    assert.ok(l && l.length >= 30 && l.length <= 130, c.id + ' needs a story line of 30 to 130 characters: ' + l);
+    assert.ok(!l.includes('\u2014'), 'no em dash for ' + c.id);
+    assert.ok(!seen.has(l), 'story lines are unique: ' + c.id);
+    seen.add(l);
+  }
+  assert.equal(st.catStory('nobody'), '', 'unknown cats have no story');
+});
+
 console.log(n + ' passed');

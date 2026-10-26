@@ -372,4 +372,9 @@ t('the cat freed from a nest says its own line when it joins', () => {
   assert.ok(/function showCatReward[\s\S]*?toast\(freedToast\(CAT_BY_ID\[d\.id\]\.name, g\.run\.bossKills\)\)/.test(js), 'the nest reward must toast the freed cat line');
 });
 
+t('the Cat Dex shows the story line of an unlocked cat', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/function dexDetail[\s\S]*?catStory\(id\)/.test(js), 'dexDetail must show catStory');
+});
+
 console.log(`${n} tests passed`);
