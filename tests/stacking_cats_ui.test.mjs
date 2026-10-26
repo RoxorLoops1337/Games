@@ -199,6 +199,12 @@ t('the wave banner and the toasts are live regions so screen readers announce wa
   assert.ok(/id="toasts" role="status" aria-live="polite"/.test(html), 'toasts must be announced');
 });
 
+t('the fight HUD pills have accessible names', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8');
+  for (const id of ['waveBox', 'coinBox', 'chestBox', 'bossBar']) assert.ok(new RegExp(`id="${id}" role="group" aria-label="`).test(html), `${id} needs a name`);
+  assert.ok(!/id="zoom"[^>]*aria-label=/.test(html), 'the Zoomies button must keep its own text (with the percentage) as its name');
+});
+
 t('tutorial tips are held back while the game is paused', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   const m = js.match(/function coach\([^)]*\) \{\n([^\n]*)\n/);
