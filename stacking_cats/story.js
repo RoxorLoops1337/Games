@@ -102,3 +102,38 @@ export const FREED_LINES = [
 ];
 export const freedLine = (n) => FREED_LINES[((n | 0) % FREED_LINES.length + FREED_LINES.length) % FREED_LINES.length];
 export const freedToast = (name, n) => `${name}: "${freedLine(n)}"`;
+
+// one line of backstory per cat, shown in the Cat Dex (cat puns on purpose)
+const CAT_STORIES = {
+  tabby: 'Captain of the royal guard. Never lost a fight, only a few whiskers.',
+  ember: 'Born in a fireplace. Warm paws, hot temper, purr-fectly toasty.',
+  sparky: 'Rubbed the wrong blanket once and has been shocking ever since.',
+  buckshot: 'The deputy of Whiskerton. Keeps the peace with a very loud meow.',
+  mochi: 'So fluffy that mice bounce right off. Naps between every fight.',
+  yuki: 'Rolls snowballs for fun. Her paws are always cold and her heart is warm.',
+  hawkeye: 'Can spot a mouse from three rooftops away. Never blinks, never misses.',
+  boomer: 'Loves things that go boom. The guard keeps him far from the curtains.',
+  pudding: 'The kindest nurse in the kingdom. A gentle purr heals every scratch.',
+  shadow: 'Moves so quietly that even the other cats forget she is there.',
+  ronin: 'A wandering swordcat with no master, only a bowl to fill and a duty to keep.',
+  merlin: 'Studied magic for nine lives. Still mixes up his spells and his snacks.',
+  cutlass: 'Sailed the seven seas for the best tuna. Now he guards the harbour.',
+  sprout: 'Grows flowers that smell lovely and mice that hate them.',
+  gizmo: 'Builds traps from spare parts and one very patient ball of yarn.',
+  lyra: 'Her song makes every cat purr in time and every mouse cover its ears.',
+  nibbles: 'A vampire who only drinks milk. Hisses at garlic and at Mondays.',
+  zeus: 'Calls the storm with a single meow. Sleeps on clouds when he can.',
+  volcano: 'Sleeps on warm rocks, wakes up grumpy and erupts with a roar.',
+  blizzard: 'The Ice Queen of Frosty Pond. Her glare freezes mice, her hug warms cats.',
+  dusty: 'The fastest paw in the west. Draws before the mouse can squeak.',
+  cyber: 'Half cat, half machine, all whiskers. Its laser pointer is not a toy.',
+  boo: 'A friendly ghost who haunts the mice. Boo! Meow! It never gets old.',
+  draco: 'Raised by dragons, so he purrs in flames and naps on gold.',
+  halo: 'A guardian angel with soft paws. Watches over every cat in the stack.',
+  mecha: 'A rocket powered cat from the future. Lands on its feet, every time.',
+  hexa: 'A witch cat with a crooked hat. Her curses make mice trip over their tails.',
+  nori: 'The sushi master of the guard. Every roll is made with love and fish.',
+  leo: 'The Lion King, ruler of cats. His roar made the Mouse King tremble.',
+  nebula: 'Weaves stars into her fur. Some say she purrs in constellations.',
+};
+export const catStory = (id) => CAT_STORIES[id] || '';

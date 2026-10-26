@@ -22,7 +22,7 @@ import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.j
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
 import { playIntro } from './intro.js';
-import { rescueLine, fallLine, freedToast, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
+import { rescueLine, fallLine, freedToast, catStory, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -447,7 +447,7 @@ function dexDetail(id, unlocked) {
   const d = CAT_BY_ID[id];
   if (unlocked) {
     const s = save.catStats[id], tags = (CAT_TAGS[id] || []).map((t) => `${SYNERGIES[t].icon} ${SYNERGIES[t].name}`).join(', ');
-    return `<b>${d.name}, ${d.title}</b> (${d.role}). ${d.desc}<br><small>${tags ? `Teams up as: ${tags}. ` : ''}${s ? `Used in ${s.runs} run${s.runs === 1 ? '' : 's'}, best wave ${s.best}, ${num(s.dmg)} total damage, ${num(s.kills)} mice defeated.` : 'Not used yet.'}</small><br><small class="spnote">Special move: <b>${S.specialInfo(id).name}</b>. ${SPECIAL_TEXT[S.specialInfo(id).kind] || ''}</small>${masteryHtml(id)}<button class="btn small wbtn" data-act="wardrobe" data-id="${id}">Wardrobe</button>`;
+    return `<b>${d.name}, ${d.title}</b> (${d.role}). ${d.desc}<br><i class="cstory">${catStory(id)}</i><br><small>${tags ? `Teams up as: ${tags}. ` : ''}${s ? `Used in ${s.runs} run${s.runs === 1 ? '' : 's'}, best wave ${s.best}, ${num(s.dmg)} total damage, ${num(s.kills)} mice defeated.` : 'Not used yet.'}</small><br><small class="spnote">Special move: <b>${S.specialInfo(id).name}</b>. ${SPECIAL_TEXT[S.specialInfo(id).kind] || ''}</small>${masteryHtml(id)}<button class="btn small wbtn" data-act="wardrobe" data-id="${id}">Wardrobe</button>`;
   }
   const p = unlockProgress(d, save.stats);
   return `<b>Locked.</b> To unlock: ${d.unlock.text}${p.need > 1 ? ` (${p.have}/${p.need})` : ''}.<div class="pbar"><i style="width:${(100 * p.have) / p.need}%"></i></div>`;
