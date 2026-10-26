@@ -464,4 +464,10 @@ t('the wardrobe cat strip fades at the right edge to show it scrolls and keeps t
   assert.ok(/scrollIntoView\(\{[^}]*inline: 'center'/.test(f), 'the selected cat must be scrolled into view');
 });
 
+t('the Cheddar Crusher trophy shows how close the player is (best wave out of the finale wave)', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const f = js.slice(js.indexOf('function troProgress'), js.indexOf('function troProgress') + 900);
+  assert.ok(/king: \[st\.bestWave, FINALE_WAVE\]/.test(f), 'troProgress needs a king entry that counts toward FINALE_WAVE');
+});
+
 console.log(`${n} tests passed`);
