@@ -632,4 +632,12 @@ t('Battle Anthem sends music notes drifting across the field', () => {
   assert.ok(/for \(let i = 0; i < 12; i\+\+\) txtFx\(/.test(f) && /\\u266A/.test(f), 'twelve rising notes');
 });
 
+t('the volley special (Buckshot, Dusty) has a muzzle flash, white-hot tracers and impact flashes', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const i = js.indexOf("case 'volley':");
+  const f = js.slice(i, js.indexOf("case 'freeze':", i));
+  assert.ok(/flashGlow\(p\.x \+ 24, top/.test(f), 'muzzle flash');
+  assert.ok(/'#ffffff', 1\.2/.test(f) && /flashGlow\(m\.x, m\.y - 12/.test(f), 'white core tracer and impact flash');
+});
+
 console.log(`${n} tests passed`);

@@ -1347,7 +1347,12 @@ function specialVfx(e, p, col) {
       screenFlash('rgba(190,230,255,.28)', 0.14);
       break;
     case 'volley':
-      for (const m of foes.slice(0, 7)) { bolt(jag(p.x + 24, top, m.x, m.y - 12, 4, 5), col, 1.8, 0.2); puff(m.x, m.y - 12, 3, col, 70, 0.3, 3); }
+      flashGlow(p.x + 24, top, 110, col, 0.6); sparks(p.x + 24, top, 8, '#fff6c8', 260, 0.3);   // muzzle flash
+      for (const m of foes.slice(0, 7)) {
+        const line = jag(p.x + 24, top, m.x, m.y - 12, 4, 5);
+        bolt(line, col, 3.2, 0.22); bolt(line, '#ffffff', 1.2, 0.22);   // a white-hot core inside the coloured tracer
+        puff(m.x, m.y - 12, 3, col, 70, 0.3, 3); flashGlow(m.x, m.y - 12, 60, '#fff2c0', 0.4); sparks(m.x, m.y - 12, 4, '#ffe9a8', 180, 0.3);
+      }
       break;
     case 'freeze':
       ring(p.x, p.y, 520, '#e6f7ff', 0.55, 12); ring(p.x, p.y, 340, '#bfeaff', 0.45, 8);
