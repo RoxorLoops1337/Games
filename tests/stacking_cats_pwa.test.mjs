@@ -153,6 +153,18 @@ await t('confirmTap: the first tap arms, a second tap within three seconds confi
   assert.equal(confirmTap(0, 0.5).fire, false, 'time zero is not an armed tap');
 });
 
+await t('share card shows the story tagline above the link and keeps it off the stats panel', async () => {
+  const { drawShareCard, SHARE_TAGLINE, SHARE_URL } = await import('../stacking_cats/share.js');
+  const texts = [];
+  const rec = new Proxy({}, { get: (o, k) => (k === 'fillText' ? (t, x, y) => texts.push({ t, y }) : k === 'measureText' ? () => ({ width: 10 }) : k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : (o[k] ?? (() => {})))), set: (o, k, v) => { o[k] = v; return true; } });
+  assert.equal(drawShareCard({ getContext: () => rec }, { wave: 12, cats: [] }), true);
+  const tag = texts.find((x) => x.t === SHARE_TAGLINE), url = texts.find((x) => x.t === SHARE_URL);
+  assert.ok(tag && url, 'tagline and link are drawn');
+  assert.ok(tag.y < url.y && url.y - tag.y >= 40, 'the tagline sits above the link');
+  assert.ok(tag.y > 850, 'below the stats panel (ends at y=840)');
+  assert.ok(!SHARE_TAGLINE.includes('\u2014'));
+});
+
 await t('share card draws for several runs without throwing', async () => {
   const { drawShareCard, shareRun, SHARE_W } = await import('../stacking_cats/share.js');
   const { CATS } = await import('../stacking_cats/cats.js');
