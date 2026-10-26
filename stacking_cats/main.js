@@ -22,7 +22,7 @@ import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.j
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
 import { playIntro, playEpilogue } from './intro.js';
-import { nestTitle, titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
+import { nestBannerTitle, nestTitle, titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -678,7 +678,7 @@ function beginWave() {
   const boss = g.bossWave;
   const nest = g.enemies.find((e) => e.boss);
   const rt = g.route.id !== 'trail' && !boss ? ` \u00B7 ${g.route.name}` : '';
-  banner(boss ? 'NEST BATTLE!' : `Wave ${g.wave}`, boss ? nest.name : isChapterStart(g.wave) ? chapterTitle(g.wave, THEMES) : milestoneLine(g.wave) || `${THEMES[bdIdx].name}${rt}`, boss);
+  banner(boss ? nestBannerTitle(g.wave) : `Wave ${g.wave}`, boss ? nestTitle(g.wave, nest.name) : isChapterStart(g.wave) ? chapterTitle(g.wave, THEMES) : milestoneLine(g.wave) || `${THEMES[bdIdx].name}${rt}`, boss);
   if (beatToastWanted(g.wave, save.opt.tutorial && !save.tips.c2)) setTimeout(() => { if (mode === 'play') toast(chapterBeat(g.wave)); }, 1500);
   if (boss) setTimeout(() => { if (g && g.bossWave) toastWhenPlaying(`King Squeakimus: "${taunt(g.run.bossKills)}"`); }, 1500);
   sfx.play(boss ? 'boss' : 'wave');
