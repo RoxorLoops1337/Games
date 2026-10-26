@@ -931,3 +931,11 @@ t('lootbox opening: lid pop, glow, beams and sparks, a flash and pedestal on the
   assert.ok(/class="pedestal"/.test(js) && /class="revealflash"/.test(js) && /class="cheercat"/.test(js) && /@keyframes rflash/.test(css), 'reveal polish');
   assert.ok(/body\.nomotion \*/.test(css), 'nomotion still stops animations');
 });
+
+t('tower and scenes polish: rug, feathered contact shadows, title fireflies, finale light and trophy', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), it = readFileSync('stacking_cats/intro.js', 'utf8');
+  assert.ok(/function drawRug/.test(js) && /drawRug\(cx, GROUND/.test(js) && /createRadialGradient\(32, 32/.test(js), 'rug and soft shadow');
+  assert.ok(/fireflies|ffe58a/.test(js), 'title fireflies');
+  assert.ok(/trophy flare/.test(it) && /light shafts/.test(it), 'finale light');
+  assert.ok(!/—/.test(it), 'no em dashes');
+});
