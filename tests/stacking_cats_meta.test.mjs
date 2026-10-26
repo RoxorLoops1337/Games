@@ -393,6 +393,23 @@ t('relic sets: the card hint names the set, its progress and when this relic com
   assert.ok(/setHint\(id, g\.cats\)/.test(readFileSync('stacking_cats/main.js', 'utf8')), 'shown on the relic cards');
 });
 
+t('relic book trophies: collection sizes and sets in play, and the final boss trophy still closes the list', () => {
+  const by = (id) => ACHIEVEMENTS.find((a) => a.id === id);
+  const book = (n) => ({ save: { relics: Object.fromEntries(ITEMS.slice(0, n).map((i) => [i.id, true])) }, run: {}, stats: {}, kingdom: {} });
+  assert.ok(!by('book10').check(book(9)) && by('book10').check(book(10)));
+  assert.ok(!by('book30').check(book(29)) && by('book30').check(book(30)));
+  assert.ok(!by('bookall').check(book(ITEMS.length - 1)) && by('bookall').check(book(ITEMS.length)));
+  assert.equal(by('book10').check({ save: {}, run: {}, stats: {}, kingdom: {} }), false, 'no book yet is fine');
+  assert.ok(!by('set1').check({ run: { setMax: 0 } }) && by('set1').check({ run: { setMax: 1 } }));
+  assert.ok(!by('set3').check({ run: { setMax: 2 } }) && by('set3').check({ run: { setMax: 3 } }));
+  assert.equal(ACHIEVEMENTS[ACHIEVEMENTS.length - 1].id, 'king');
+  const g = newGame({ seed: 3, events: false });
+  for (const id of ['tabby', 'ember', 'mochi']) addCat(g, id);
+  g.cats[0].items.push('vest', 'cushion'); g.cats[1].items.push('mitten');
+  g.state = 'fight'; g.queue = []; step(g);
+  assert.equal(g.run.setMax, 1, 'the sim records how many sets were active at once');
+});
+
 t('relic sets wiring: calcMods applies them and Team stats lists them', () => {
   const sim = readFileSync('stacking_cats/sim.js', 'utf8'), js = readFileSync('stacking_cats/main.js', 'utf8');
   assert.ok(/activeSets\(g\.cats\)/.test(sim), 'calcMods reads the sets');
