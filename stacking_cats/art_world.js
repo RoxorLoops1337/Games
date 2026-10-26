@@ -11,26 +11,56 @@ function rod(ctx, x1, y1, x2, y2, w, color) {
 
 // ---------------------------------------------------------------- mice and rats (face left, feet at 0,0)
 let curElite = false;
+// soft fur shading: light from the upper left, a darker underside, clipped to the shape (no noise)
+function furShade(ctx, path, x0, y0, len, diag) {
+  ctx.save(); ctx.clip(path);
+  const g = ctx.createLinearGradient(x0, y0, x0 + len * (diag ? 0.6 : 0.5), y0 + len * (diag ? 1 : 1.3));
+  g.addColorStop(0, 'rgba(255,255,255,.16)'); g.addColorStop(0.45, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(30,10,50,.2)');
+  ctx.fillStyle = g; ctx.fillRect(x0 - 4, y0 - 4, len + 30, len * 1.4 + 10); ctx.restore();
+}
+function earShade(ctx, x, y, rx, ry, inner) {
+  ctx.save(); ctx.clip(ell(ctx, x, y, rx, ry));
+  ctx.fillStyle = shade(inner, -0.22); ctx.beginPath(); ctx.ellipse(x + rx * 0.25, y + ry * 0.3, rx * 0.9, ry * 0.9, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = shade(inner, 0.35); ctx.beginPath(); ctx.ellipse(x - rx * 0.1, y - ry * 0.1, rx * 0.55, ry * 0.6, 0, 0, TAU); ctx.fill();
+  ctx.restore();
+}
 function mouseBody(ctx, o) {
   const fur = o.fur, belly = o.belly || shade(fur, 0.5), inner = o.inner || '#ffb3c8';
-  // tail
+  // tail: tapers from a thick root to a fine tip, with a darker underside and faint rings
   ctx.lineCap = 'round';
-  ctx.strokeStyle = lineOf('#f1a6b8'); ctx.lineWidth = 3.6;
-  ctx.beginPath(); ctx.moveTo(8, -9); ctx.bezierCurveTo(26, -4, 30, -20, 38, -22); ctx.stroke();
-  ctx.strokeStyle = '#f7bccb'; ctx.lineWidth = 2.2;
-  ctx.beginPath(); ctx.moveTo(8, -9); ctx.bezierCurveTo(26, -4, 30, -20, 38, -22); ctx.stroke();
+  const tb = (u) => { const v = 1 - u; return [v * v * v * 8 + 3 * v * v * u * 26 + 3 * v * u * u * 30 + u * u * u * 38, v * v * v * -9 + 3 * v * v * u * -4 + 3 * v * u * u * -20 + u * u * u * -22]; };
+  for (const [col, wk, dy] of [['#d48a9e', 1.35, 0.5], ['#f7bccb', 1, 0]]) {
+    for (let k = 0; k < 14; k++) {
+      const a = tb(k / 14), b2 = tb((k + 1) / 14);
+      ctx.strokeStyle = k < 1 && wk > 1 ? lineOf('#f1a6b8') : col; ctx.lineWidth = (3.8 - 2.6 * k / 14) * wk + (wk > 1 ? 0.6 : 0);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1] + dy); ctx.lineTo(b2[0], b2[1] + dy); ctx.stroke();
+    }
+  }
+  ctx.strokeStyle = 'rgba(160,80,100,.45)'; ctx.lineWidth = 0.7;
+  for (const u of [0.3, 0.5, 0.7]) { const q = tb(u); ctx.beginPath(); ctx.moveTo(q[0] - 0.5, q[1] - 1.6); ctx.lineTo(q[0] + 0.5, q[1] + 1.6); ctx.stroke(); }
   // far ear and body
   fillPath(ctx, ell(ctx, 4, -41, 8, 8.4), fur, 1);
   cel(ctx, ell(ctx, 2, -13, 11.5, 12.5), fur, { box: [-10, -26, 14, 0] });
   ctx.save(); ctx.clip(ell(ctx, 2, -13, 11.5, 12.5)); ctx.fillStyle = belly; ctx.beginPath(); ctx.ellipse(-3, -10, 7, 9.5, 0, 0, TAU); ctx.fill(); ctx.restore();
+  furShade(ctx, ell(ctx, 2, -13, 11.5, 12.5), -9, -26, 13, 0);
+  ctx.save(); ctx.clip(ell(ctx, 2, -13, 11.5, 12.5)); ctx.strokeStyle = shade(fur, -0.22); ctx.globalAlpha = 0.5; ctx.lineWidth = 0.8; ctx.lineCap = 'round';
+  for (const [x, y] of [[6, -6], [9, -12], [5, -17], [10, -20]]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 1.5, y + 2, x + 0.5, y + 4); ctx.stroke(); }
+  ctx.restore();
   ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 1; ctx.stroke(ell(ctx, 2, -13, 11.5, 12.5));
   limb(ctx, -4, -1.8, 5, 2.8, fur); limb(ctx, 8, -1.8, 5, 2.8, fur);
   // head
-  fillPath(ctx, ell(ctx, -9, -42, 7.6, 8), fur, 1); fillPath(ctx, ell(ctx, -9, -42, 4.5, 4.9), inner, 0.5);
-  fillPath(ctx, ell(ctx, 4, -41, 8, 8.4), fur, 1); fillPath(ctx, ell(ctx, 4.5, -41, 5, 5.4), inner, 0.5);
+  fillPath(ctx, ell(ctx, -9, -42, 7.6, 8), fur, 1); fillPath(ctx, ell(ctx, -9, -42, 4.5, 4.9), inner, 0.5); earShade(ctx, -9, -42, 4.5, 4.9, inner);
+  fillPath(ctx, ell(ctx, 4, -41, 8, 8.4), fur, 1); fillPath(ctx, ell(ctx, 4.5, -41, 5, 5.4), inner, 0.5); earShade(ctx, 4.5, -41, 5, 5.4, inner);
   const head = new Path2D(); head.ellipse(-5, -31, 13.5, 11.8, 0, 0, TAU);
   cel(ctx, head, fur, { box: [-19, -43, 9, -19] });
+  furShade(ctx, head, -19, -43, 24, 1);
   cel(ctx, ell(ctx, -16, -27.5, 7.4, 5.2), shade(fur, 0.22), { shade: false, lw: 0.9 });
+  // whiskers: two fine pairs fanning from the muzzle, the far pair shorter and paler
+  ctx.lineCap = 'round'; ctx.lineWidth = 0.6;
+  for (const [dy, ex, ey, al] of [[-1.2, -32.5, -32.4, 0.85], [0.8, -32, -26.2, 0.8], [-0.2, -28, -34, 0.45], [1.6, -27.5, -22.6, 0.4]]) {
+    ctx.strokeStyle = `rgba(255,255,255,${al})`; ctx.beginPath(); ctx.moveTo(-20.5, -27.6 + dy); ctx.quadraticCurveTo((-20.5 + ex) / 2, (-27.6 + ey) / 2 - 1.4, ex, ey); ctx.stroke();
+    ctx.strokeStyle = `rgba(40,25,60,${al * 0.35})`; ctx.beginPath(); ctx.moveTo(ex + 3.4, ey + (dy > 0 ? 0.8 : -0.4)); ctx.lineTo(ex, ey); ctx.stroke();
+  }
   fillPath(ctx, ell(ctx, -22.4, -29.6, 2.5, 2.2), '#ff8fa8', 0.7); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-23, -30.4, 0.7, 0, TAU); ctx.fill();
   // eye: big and shiny, with a mean brow
   const eyeC = o.eye || '#2a1a3a';
@@ -38,6 +68,7 @@ function mouseBody(ctx, o) {
   ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.stroke();
   ctx.fillStyle = eyeC; ctx.beginPath(); ctx.ellipse(-9.4, -32.8, 2.6, 3.7, 0, 0, TAU); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-10.2, -34.4, 1.1, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.beginPath(); ctx.arc(-7.6, -30.9, 0.55, 0, TAU); ctx.fill();
   // threat cue: narrowed upper lid and a red glint in the eye (stronger on elites)
   ctx.save(); ctx.beginPath(); ctx.ellipse(-8.6, -33, 4.2, 4.8, 0.1, 0, TAU); ctx.clip();
   ctx.fillStyle = fur; ctx.beginPath(); ctx.moveTo(-14, -39); ctx.lineTo(-3, -39); ctx.lineTo(-3, -34.6); ctx.lineTo(-14, -36.8); ctx.fill();
@@ -54,6 +85,7 @@ function mouseBody(ctx, o) {
   if (o.scar !== false) { ctx.strokeStyle = 'rgba(170,60,80,.7)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-4, -28); ctx.lineTo(1, -33); ctx.moveTo(-5.2, -32); ctx.lineTo(-0.4, -28.6); ctx.stroke(); }
   // front paw
   limb(ctx, -11, -14, 3.6, 3.4, fur);
+  ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(-12.6, -12.6); ctx.lineTo(-12.2, -11.2); ctx.moveTo(-10.4, -12.2); ctx.lineTo(-10.2, -10.8); ctx.stroke();
 }
 function dagger(ctx, x = -13, y = -14, len = 15) {
   rod(ctx, x, y, x - len, y - len * 0.55, 2.4, '#dfe6f2');
@@ -175,7 +207,6 @@ export function enemySprite(type, elite) {
     fillPath(ctx, poly(ctx, [[-8, hy], [-8, hy - 8], [-4, hy - 4], [0, hy - 10], [4, hy - 4], [8, hy - 8], [8, hy]]), '#ffd23f', 0.9);
     ctx.restore();
   }
-  texturize(c, { seed: hash(key), len: 6, lw: 1.3, count: 1700, dir: Math.PI / 2 + 0.3, spread: 1.4 });   // fur
   const r = { c: outlineCanvas(rimLight(c, 2, '#fff0c0', 0.4), 2, '#2a1840', 0.85), ax, ay, w: W, h: H };
   spriteCache.set(key, r);
   return r;
