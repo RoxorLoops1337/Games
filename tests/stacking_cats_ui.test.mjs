@@ -647,4 +647,11 @@ t('King Leo\'s Royal Roar adds golden roar shockwaves on top of the shared claw 
   assert.ok(/if \(e\.id === 'leo'\)/.test(f) && /for \(let r = 0; r < 4; r\+\+\) ring\(p\.x \+ 60 \+ r \* 70/.test(f), 'leo gets four expanding roar rings');
 });
 
+t('Hexa\'s Hex stamps a floating curse mark above every hexed mouse', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const i = js.indexOf("case 'hex':");
+  const f = js.slice(i, js.indexOf('break;', i));
+  assert.ok(/txtFx\(m\.x, m\.y - m\.h - 12, 'HEX!'/.test(f), 'text mark over each foe');
+});
+
 console.log(`${n} tests passed`);
