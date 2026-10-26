@@ -513,4 +513,9 @@ t('the wave 30 nest wears King Squeakimus\'s crown (nestOverlay king flag, passe
   assert.ok(/nestOverlay\(ctx, e\.hp \/ e\.maxHp, t, g\.wave === FINALE_WAVE\)/.test(js), 'renderer passes wave === FINALE_WAVE');
 });
 
+t('the nest bar shows the story title', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/setText\('bossName', nestTitle\(g\.wave, nest\.name\)\)/.test(js), 'HUD uses nestTitle');
+});
+
 console.log(`${n} tests passed`);

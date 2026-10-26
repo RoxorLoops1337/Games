@@ -314,4 +314,12 @@ await t('titleTag: the line under the logo follows the story', async () => {
   for (const [d, u] of [[false, 3], [false, 9], [true, 9], [true, 31]]) assert.ok(!/\u2014/.test(titleTag(d, u, 31)), 'no em dash');
 });
 
+await t('nestTitle: the wave 30 nest bar names King Squeakimus', async () => {
+  const { nestTitle } = await import('../stacking_cats/story.js');
+  assert.equal(nestTitle(10, 'Drain Pipe Den'), 'Drain Pipe Den');
+  assert.equal(nestTitle(30, 'Cheese Hut'), 'King Squeakimus: Cheese Hut');
+  assert.equal(nestTitle(60, 'Cheese Hut'), 'Cheese Hut', 'only the first trip around the map');
+  assert.ok(!/\u2014/.test(nestTitle(30, 'x')), 'no em dash');
+});
+
 console.log(n + ' passed');
