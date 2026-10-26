@@ -478,4 +478,11 @@ t('locked cats in the Cat Dex are caged by the Gnaw Army, with the unlock hint k
   assert.ok(/'Caged'/.test(js), 'locked tile says Caged');
 });
 
+t('the forge toast names the rarity of the new item', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const i = js.indexOf('forge: () =>');
+  const f = js.slice(i, i + 400);
+  assert.ok(/Forged \$\{ITEM_BY_ID\[id\]\.name\} \(\$\{ITEM_BY_ID\[id\]\.rarity\}\)!/.test(f), 'toast reads Forged Name (rarity)!');
+});
+
 console.log(`${n} tests passed`);
