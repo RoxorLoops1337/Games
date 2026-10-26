@@ -450,4 +450,11 @@ t('the pause screen shows the chapter next to the wave', () => {
   assert.ok(/Chapter <b>\$\{chapterOf\(g\.wave\)\.n\}<\/b>/.test(f), 'showPause must list the chapter');
 });
 
+t('the Cat Dex grid keeps every cat within three rows so the title and Back button stay on screen', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8');
+  const cols = +(/\.dex\{[^}]*grid-template-columns:repeat\((\d+),/.exec(html) || [])[1];
+  assert.ok(cols > 0, 'the dex grid has a column count');
+  assert.ok(cols * 3 >= CATS.length, `${CATS.length} cats need at most 3 rows but ${cols} columns give ${Math.ceil(CATS.length / cols)}`);
+});
+
 console.log(`${n} tests passed`);
