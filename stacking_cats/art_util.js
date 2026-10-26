@@ -171,3 +171,9 @@ export function clearLine(r) {
   if (r.time > 0) parts.push(`${Math.round(r.time)}s`);
   return parts.join(' · ');
 }
+
+// two-tap confirm for a destructive button: the first tap arms it, a second tap within `win` seconds fires. armedAt 0 means not armed.
+export function confirmTap(armedAt, now, win = 3) {
+  if (armedAt > 0 && now - armedAt <= win) return { fire: true, armedAt: 0 };
+  return { fire: false, armedAt: now };
+}

@@ -16,7 +16,7 @@ import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
-import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel, clearLine } from './art_util.js';
+import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel, clearLine, confirmTap } from './art_util.js';
 import { iconCanvas, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
 import { buzz, setHaptics } from './haptics.js';
@@ -554,7 +554,7 @@ function showWardrobe(back, startCat) {
 }
 
 // ---------------------------------------------------------------- the Cat Kingdom: a village you can tap
-let kScene = null, kNav = null, bestShown = false, heartAt = 0;
+let kScene = null, kNav = null, bestShown = false, heartAt = 0, quitArmed = 0;
 function showKingdom(back, selected) {
   if (kScene) { kScene.stop(); kScene = null; }
   kNav = null;
@@ -1064,7 +1064,12 @@ function showPause() {
     stats: () => showStats(showPause),
     settings: () => showSettings(showPause),
     how: () => showHow(showPause),
-    quit: () => { paused = false; if (g.wave > 1) commitRun(); g = null; showTitle(); },
+    quit: (d, el) => {
+      // one stray tap next to Settings must not end the run: the first tap asks, the second (within 3 s) gives up
+      const r = confirmTap(quitArmed, performance.now() / 1000); quitArmed = r.armedAt;
+      if (!r.fire) { if (el) { el.textContent = 'Tap again to give up'; setTimeout(() => { if (el.isConnected) el.textContent = 'Give up'; }, 3000); } return; }
+      paused = false; if (g.wave > 1) commitRun(); g = null; showTitle();
+    },
   };
 }
 
