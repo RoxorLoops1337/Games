@@ -1501,7 +1501,9 @@ function handle(e) {
       for (let i = 0; i < 9; i++) spawnFx({ k: 'h', x: e.x + 68 + (Math.random() - 0.5) * 40, y: e.y - 22 - Math.random() * 30, life: 1.3 + Math.random() * 0.6, max: 1.9 });
       sparks(e.x + 68, e.y - 30, 16, '#ffe9a8', 260, 0.8);
       shake = 20; zpunch = 0.07; hit(0.16); slowmo(1.2, 0.28); screenFlash('rgba(255,255,230,.5)', 0.4);
-      sfx.play('boom'); buzz('boss'); break;
+      sfx.play('boom'); buzz('boss');
+      sfx.meow('caged' + (g ? g.run.bossKills : 0), 'cheer', 0.55);   // the freed cat's happy mew from the broken cage, a different voice each nest
+      break;
     }
     case 'zoom': banner('ZOOMIES!', '', false); screenFlash('rgba(255,160,210,.25)', 0.25); zpunch = Math.max(zpunch, 0.03); sfx.play('zoom'); break;
     case 'nine': txtFx(S.TOWER_X + 40, 260, 'NINE LIVES!', '#ffd23f', 36, 1.6); puff(S.TOWER_X, 330, 30, '#ffd23f', 200, 0.9, 6); flashGlow(S.TOWER_X, 330, 200, '#ffd23f', 0.6); screenFlash('rgba(255,230,120,.35)', 0.4); sfx.play('heal'); break;

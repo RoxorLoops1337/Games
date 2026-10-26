@@ -710,4 +710,13 @@ t('barrage specials tint by the cat color and Pearl gets a water splash instead 
   assert.ok(/e\.id === 'pearl'/.test(blk), 'Tidal Wave needs its own splash');
 });
 
+t('the caged cat meows when its nest breaks, after the boom, with a different voice per nest', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  const a = js.indexOf("case 'bossDown':"), blk = js.slice(a, js.indexOf("case 'zoom':", a));
+  const m = blk.match(/sfx\.meow\(('caged'|`caged)[^;]*?'cheer',\s*([0-9.]+)\)/);
+  assert.ok(m, 'bossDown plays a cheer meow for the freed cat');
+  assert.ok(+m[2] >= 0.3, 'it comes a little after the boom, not on top of it');
+  assert.ok(/g\.wave|bossKills/.test(blk.slice(blk.indexOf('sfx.meow'))), 'the voice depends on the nest so it is not always the same cat');
+});
+
 console.log(`${n} tests passed`);
