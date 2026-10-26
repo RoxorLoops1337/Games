@@ -165,6 +165,13 @@ export function estDps(c, mods, items = c.items) {
   }[a.t] || 1;
   return (per * shots * (1 + 0.4 * fx.extra) * (1 + mods.haste + fx.haste) * (1 + (mods.curse || 0))) / a.cd;
 }
+// rough toughness for the equip preview: health divided by what gets through (damage reduction) and what is dodged
+export function estBulk(g, c, mods, items = c.items) {
+  const fx = mkFx(mods, c, items), d = CAT_BY_ID[c.id];
+  const hp = BASE_HP * d.hp * LVL_MUL[c.lvl - 1] * (1 + mods.hp + fx.hp);
+  const taken = (1 - Math.min(0.8, mods.dr + fx.dr)) * (1 - Math.min(0.9, (d.pas && d.pas.dodge || 0) + fx.dodge));
+  return hp / taken;
+}
 export const aliveCats = (g) => g.cats.filter((c) => !c.ko);
 
 export function makeCat(g, id, lvl = 1) {

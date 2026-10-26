@@ -998,7 +998,8 @@ function showTower(back, opt = {}) {
       if (items.length >= itemSlots(c.lvl)) items.shift();
       items.push(g.stash[selItem]);
       const nd = S.estDps(c, mods, items), df = nd - dps;
-      prev = `<em class="${df >= 0 ? 'up' : 'down'}">&rarr; &asymp;${Math.round(nd)} (${df >= 0 ? '+' : ''}${Math.round((100 * df) / Math.max(1, dps))}%)</em>`;
+      const bk = S.estBulk(g, c, mods, items) / Math.max(1, S.estBulk(g, c, mods, c.items)) - 1, bp = Math.round(bk * 100);
+      prev = `<em class="${df >= 0 ? 'up' : 'down'}">&rarr; &asymp;${Math.round(nd)} (${df >= 0 ? '+' : ''}${Math.round((100 * df) / Math.max(1, dps))}%)${bp ? `, ${bp > 0 ? 'tougher +' : 'less tough '}${Math.abs(bp)}%` : ''}</em>`;
     }
     const slots = Array.from({ length: itemSlots(c.lvl) }, (_, k) => {
       const id = c.items[k];
