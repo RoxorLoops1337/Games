@@ -2,7 +2,7 @@
 
 Live at `https://games-71g.pages.dev/stacking_cats/`. Plain ES modules, no build step; `build.js` only copies the folder.
 
-- `cats.js`: data only (32 cats, snacks, 23 items, 9 Kingdom buildings and their bonus rules, enemy types, themes, unlock rules, meta-stat helpers). Add a cat by adding an entry here AND a draw block in `art_cats.js` (`ACC[id]`). `tests/stacking_cats_sim.test.mjs` checks every cat attacks and has text.
+- `cats.js`: data only (32 cats, snacks, 24 items, 9 Kingdom buildings and their bonus rules, enemy types, themes, unlock rules, meta-stat helpers). Add a cat by adding an entry here AND a draw block in `art_cats.js` (`ACC[id]`). `tests/stacking_cats_sim.test.mjs` checks every cat attacks and has text.
 - `sim.js`: the whole game rules, pure and seeded (`newGame({seed})`, `step(g, dt)`). No DOM. The renderer reads state and drains `g.ev` for visual and sound events. Tuning knobs are in `TUNE`.
 - `art_util.js`, `art_cats.js`, `art_world.js`, `art_kingdom.js`: all art is procedural canvas drawing (no image files). Cats are drawn once into a 120x120 box and cached by `main.js`.
 - `post.js`: lighting and post stack (multiply light map, thresholded bloom, colour grade, grain, flare) and `ambientFor` (day to dusk to night colour). Themes in `cats.js` carry `amb`, `grade`, `weather`, `haze`. `main.js` has `gfx` levels 0-3 (off, light, weather, bloom) that the adaptive quality drops before it lowers resolution; Low quality skips the whole stack. Far and mid backdrop layers get depth of field blur and haze in `art_world.js`.

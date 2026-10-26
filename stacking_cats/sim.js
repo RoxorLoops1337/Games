@@ -93,7 +93,7 @@ export function calcMods(g) {
   return m;
 }
 
-const FX_KEYS = ['dmg', 'haste', 'hp', 'crit', 'critMul', 'range', 'ls', 'dr', 'regen', 'thorns', 'berserk', 'extra', 'burn', 'slow', 'stun', 'coin'];
+const FX_KEYS = ['dmg', 'haste', 'hp', 'crit', 'critMul', 'range', 'ls', 'dr', 'regen', 'thorns', 'berserk', 'extra', 'burn', 'slow', 'stun', 'coin', 'dodge'];
 // the summed effect of a cat's equipped items (cached on the cat)
 export function fxOf(items) {
   const f = {};
@@ -571,7 +571,8 @@ function koCat(g, c) {
 function hurtCat(g, c, dmg) {
   if (!c || c.ko) return;
   const d = CAT_BY_ID[c.id];
-  if (d.pas && d.pas.dodge && g.rnd() < d.pas.dodge) { emit(g, { k: 'dodge', uid: c.uid }); return; }
+  const dodge = (d.pas && d.pas.dodge || 0) + itemFx(c).dodge;
+  if (dodge > 0 && g.rnd() < dodge) { emit(g, { k: 'dodge', uid: c.uid }); return; }
   if (g.phaseT > 0 && g.rnd() < 0.6) { emit(g, { k: 'dodge', uid: c.uid }); return; }
   const v = dmg * (1 - Math.min(0.8, g.mods.dr + itemFx(c).dr)) * (g.fortressT > 0 ? 0.3 : 1) * g.hurtMul;
   c.hp -= v;

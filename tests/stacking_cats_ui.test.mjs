@@ -664,4 +664,10 @@ t('the idle Kingdom hint opens with the village story line', () => {
   assert.ok(/hint2">\$\{kingdomLine\(kingdomLevel\(k\)\)\} Tap a building to upgrade it/.test(js), 'kingdomLine in the idle hint');
 });
 
+t('the equip tip on the arrange screen sits below the backpack, clear of the title and team DPS', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const m = js.match(/coach\('c6', '[^']*', (\d+), (\d+), '(\w+)'/);
+  assert.ok(m && +m[2] >= 340 && m[3] === 'up', 'c6 is low with its tail pointing up at the backpack');
+});
+
 console.log(`${n} tests passed`);

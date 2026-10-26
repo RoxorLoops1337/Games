@@ -979,7 +979,7 @@ function showTower(back, opt = {}) {
       <div class="tbody"><div class="tower"><div class="col"><h4>Tower (top to bottom)</h4>${tw.join('')}<button class="btn small red relbtn" data-act="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div><div class="col"><h4>Bench (rests, heals fast)</h4>${bn.join('')}
         <h4>Backpack <span class="${over ? 'warn' : ''}">${g.stash.length}/${MAX_STASH}</span></h4><div class="bagrow">${bag}</div></div></div></div>
       <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}"><span>${msg}</span></div>${acts2}<button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>Done</button></div>`, 'wide arr');
-    if (selItem != null) coach('c6', 'Now tap a cat to equip it. The green numbers show how much stronger that cat gets!', 730, 6);
+    if (selItem != null) coach('c6', 'Now tap a cat to equip it. The green numbers show how much stronger that cat gets!', 680, 352, 'up');
     else coach('c4', 'Step 3: tap a cat, then another to swap. Two equal cats merge!', 730, 232, 'down', { target: '.slot.has', wait: true, above: true });
   };
   draw();
