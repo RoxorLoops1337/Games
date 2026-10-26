@@ -6,7 +6,7 @@ import {
   takeItem, useReroll, fxOf, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, RELIC_SETS, activeSets, RARITIES, ACHIEVEMENTS,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, RELIC_SETS, activeSets, setUps, RARITIES, ACHIEVEMENTS,
 } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CAT_TAGS, SPECIALS, SYNERGIES, unlockProgress } from '../stacking_cats/cats.js';
 import { catStory } from '../stacking_cats/story.js';
@@ -365,6 +365,21 @@ t('relic sets: ids exist, three different relics from a set give its bonus and f
   assert.equal(five.have.length, 5); assert.equal(five.mult, 2);
   assert.equal(activeSets([{ ...mk('bell', 'gbell', 'jingle'), ko: true }]).find((a) => a.set.id === 'noise').mult, 0, 'a knocked out cat does not count');
   assert.deepEqual(activeSets([]).map((a) => a.mult), RELIC_SETS.map(() => 0));
+});
+
+t('relic sets: setUps reports a set only when it turns on or doubles, once', () => {
+  const mk = (...items) => ({ id: 'tabby', items, ko: false });
+  const seen = {};
+  assert.deepEqual(setUps(seen, [mk('vest', 'cushion')]), [], 'two relics: nothing yet');
+  const a = setUps(seen, [mk('vest', 'cushion', 'mitten')]);
+  assert.deepEqual(a.map((x) => [x.set.id, x.mult]), [['armor', 1]]);
+  assert.deepEqual(setUps(seen, [mk('vest', 'cushion', 'mitten')]), [], 'not again');
+  const b = setUps(seen, [mk('vest', 'cushion', 'mitten', 'shell', 'cloak')]);
+  assert.deepEqual(b.map((x) => [x.set.id, x.mult]), [['armor', 2]], 'doubling is news too');
+  assert.deepEqual(setUps(seen, [mk('vest')]), [], 'losing a set is silent');
+  assert.deepEqual(setUps(seen, [mk('vest', 'cushion', 'mitten')]).map((x) => x.mult), [1], 'getting it back is news again');
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/function noteSets\(/.test(js) && /noteSets\(\)/.test(js.slice(js.indexOf('function beginWave'), js.indexOf('function beginWave') + 400)), 'checked when a wave begins');
 });
 
 t('relic sets wiring: calcMods applies them and Team stats lists them', () => {
