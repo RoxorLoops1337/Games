@@ -383,7 +383,7 @@ function troProgress(id) {
   const m = {
     first: [st.kills, 1], hunter: [st.kills, 1000], exterm: [st.kills, 10000], nest1: [st.bossKills, 1], nest10: [st.bossKills, 10],
     w10: [st.bestWave, 10], w20: [st.bestWave, 20], w30: [st.bestWave, 30], w50: [st.bestWave, 50], merge5: [st.lvl3, 5],
-    rich: [save.kingdom.earned, 5000], build15: [kingdomLevel(save.kingdom), 15], coll15: [save.unlocked.length, 15], coll30: [save.unlocked.length, 30],
+    rich: [save.kingdom.earned, 5000], build15: [kingdomLevel(save.kingdom), 15], coll15: [save.unlocked.length, 15], coll30: [save.unlocked.length, CATS.length],
   }[id];
   return m ? [Math.min(m[1], m[0] || 0), m[1]] : null;
 }
