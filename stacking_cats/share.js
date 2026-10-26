@@ -16,6 +16,7 @@ export const SHARE_W = 1080, SHARE_H = 1080;
 const DISPLAY = '"Lilita One","Baloo 2","Arial Rounded MT Bold",system-ui,sans-serif';
 const BODY = '"Baloo 2","Nunito","Arial Rounded MT Bold",system-ui,sans-serif';
 export const SHARE_URL = 'games-71g.pages.dev/stacking_cats';
+export const SHARE_TAGLINE = 'Help rescue the catnapped cats of Whiskerton!';
 
 const fmt = (n) => { n = Math.round(+n || 0); return n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(1) + 'k' : String(n); };
 
@@ -66,8 +67,8 @@ export function drawShareCard(canvas, info = {}) {
     }
 
     if (shareExtra(all.length) > 0) {
-      x.textAlign = 'center'; x.font = `44px ${DISPLAY}`; x.fillStyle = "#ffd23f";
-      x.fillText(`+${shareExtra(all.length)} more cats`, cx, 940);
+      x.textAlign = 'center'; x.font = `40px ${DISPLAY}`; x.fillStyle = "#ffd23f";
+      x.fillText(`+${shareExtra(all.length)} more cats`, cx, 936);
     }
 
     // stats panel
@@ -84,7 +85,9 @@ export function drawShareCard(canvas, info = {}) {
 
     // footer
     x.textAlign = 'center'; x.font = `40px ${BODY}`; x.fillStyle = '#fff8ef';
-    x.fillText(SHARE_URL, W / 2, 1010);
+    x.font = `36px ${BODY}`; x.fillStyle = '#ffd23f'; x.fillText(SHARE_TAGLINE, W / 2, 986);
+    x.font = `40px ${BODY}`; x.fillStyle = '#fff8ef';
+    x.fillText(SHARE_URL, W / 2, 1040);
     return true;
   } catch (e) { return false; }
 }
