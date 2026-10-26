@@ -361,4 +361,10 @@ t('the intro plays before the first run, can be replayed, and the story shows up
   assert.ok(/rescueLine\(/.test(js) && /fallLine\(/.test(js), 'the rescue and game over screens use the story lines');
 });
 
+t('the wave banner opens each chapter with its story line, and a nest rising gets a taunt from the mouse king', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/isChapterStart\(g\.wave\)[\s\S]{0,60}chapterTitle\(g\.wave, THEMES\)/.test(js) && /toast\(chapterBeat\(g\.wave\)\)/.test(js), 'the first wave of a chapter shows the chapter title and its story beat');
+  assert.ok(/King Squeakimus: [\s\S]{0,80}taunt\(/.test(js), 'a nest wave toasts a taunt');
+});
+
 console.log(`${n} tests passed`);

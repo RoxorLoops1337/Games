@@ -56,3 +56,37 @@ export const FALL_LINES = [
   'That was a hiss-terical fight. The nests are not safe yet.',
 ];
 export const fallLine = (n) => FALL_LINES[((n | 0) % FALL_LINES.length + FALL_LINES.length) % FALL_LINES.length];
+
+// chapters: every stage (5 waves, ending in a nest) is one chapter in one region of Whiskerton; the map starts over after the last region
+export const CHAPTERS = [
+  'The mice are in the meadow. Time to paws and fight!',
+  'Leaves crunch and whiskers twitch. They are close.',
+  'Across the rooftops the Cheese Moon is watching.',
+  'Stinky, cheesy and full of mice. Purr-fect.',
+  'Cold paws, warm hearts. Keep stacking!',
+  'Pink petals fall. The mouse king is near.',
+];
+export const isChapterStart = (wave) => wave >= 1 && wave % 5 === 1;
+export function chapterOf(wave) {
+  const n = Math.ceil(Math.max(1, wave) / 5);
+  return { n, theme: (n - 1) % CHAPTERS.length };
+}
+// "Chapter 2: Autumn Alley" for the wave banner, the beat itself comes as a toast
+export const chapterTitle = (wave, themes) => { const c = chapterOf(wave); return `Chapter ${c.n}: ${themes[c.theme].name}`; };
+export const chapterBeat = (wave) => CHAPTERS[chapterOf(wave).theme];
+// "Chapter 2: Autumn Alley. Leaves crunch..." shown under the wave banner on the first wave of a chapter
+export function chapterLine(wave, themes) {
+  const c = chapterOf(wave);
+  return `Chapter ${c.n}: ${themes[c.theme].name}. ${CHAPTERS[c.theme]}`;
+}
+
+// what King Squeakimus shouts when a nest rises
+export const TAUNTS = [
+  'Hee hee! These cats are mine now!',
+  'My mice will nibble your whiskers off!',
+  'No cat has ever beaten my cheese walls!',
+  'Squeak! You will never find the royal guard!',
+  'Bow to the Cheddar Throne, furballs!',
+  'Even nine lives will not save you!',
+];
+export const taunt = (n) => TAUNTS[((n | 0) % TAUNTS.length + TAUNTS.length) % TAUNTS.length];

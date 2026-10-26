@@ -198,4 +198,23 @@ await t('story: the intro timeline is walkable and every line of the story is cl
   assert.ok(st.fallLine(3).length > 10);
 });
 
+await t('story: every five waves a new chapter starts in a new region, and each nest has a villain taunt', async () => {
+  const st = await import('../stacking_cats/story.js');
+  const { THEMES } = await import('../stacking_cats/cats.js');
+  assert.equal(st.CHAPTERS.length, THEMES.length, 'one story beat per region');
+  assert.ok(st.isChapterStart(1) && st.isChapterStart(6) && st.isChapterStart(11), 'chapters start on 1, 6, 11');
+  assert.ok(!st.isChapterStart(2) && !st.isChapterStart(5) && !st.isChapterStart(10), 'not mid chapter or on a nest wave');
+  assert.deepEqual(st.chapterOf(1), { n: 1, theme: 0 });
+  assert.deepEqual(st.chapterOf(6), { n: 2, theme: 1 });
+  assert.equal(st.chapterOf(31).theme, 0, 'after the last region the map starts over');
+  const line = st.chapterLine(6, THEMES);
+  assert.ok(line.startsWith('Chapter 2'), line);
+  assert.ok(line.includes(THEMES[1].name), 'the line names the region');
+  for (const c of st.CHAPTERS) { assert.ok(c.length > 20 && !c.includes('\u2014'), c); }
+  assert.ok(st.TAUNTS.length >= 5);
+  for (const tn of st.TAUNTS) assert.ok(!tn.includes('\u2014') && tn.length > 10, tn);
+  assert.notEqual(st.taunt(0), st.taunt(1));
+  assert.ok(/squeak|mice|mouse|cheese/i.test(st.TAUNTS.join(' ')), 'taunts sound like the mouse king');
+});
+
 console.log(n + ' passed');
