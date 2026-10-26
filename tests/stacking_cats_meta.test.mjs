@@ -6,7 +6,7 @@ import {
   takeItem, useReroll, fxOf, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, RARITIES, ACHIEVEMENTS,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, RARITIES, ACHIEVEMENTS,
 } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CAT_TAGS, SPECIALS, SYNERGIES, unlockProgress } from '../stacking_cats/cats.js';
 import { catStory } from '../stacking_cats/story.js';
@@ -410,6 +410,16 @@ t('relic book trophies: collection sizes and sets in play, and the final boss tr
   g.cats[0].items.push('vest', 'cushion'); g.cats[1].items.push('mitten');
   g.state = 'fight'; g.queue = []; step(g);
   assert.equal(g.run.setMax, 1, 'the sim records how many sets were active at once');
+});
+
+t('relic book line for the end of a run: only when the run found something, singular and plural, with the book total', () => {
+  assert.equal(relicBookLine(0, 5, 61), '');
+  assert.equal(relicBookLine(1, 5, 61), '1 new relic in the Relic Book (5/61)');
+  assert.equal(relicBookLine(3, 12, 61), '3 new relics in the Relic Book (12/61)');
+  assert.ok(!relicBookLine(2, 2, 61).includes(String.fromCharCode(0x2014)));
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/runNewRelics \+= fresh\.length/.test(js) && /relicBookLine\(runNewRelics/.test(js), 'counted while playing, shown on the game over screen');
+  assert.ok(/runNewRelics = 0/.test(js), 'reset for each run');
 });
 
 t('relic sets wiring: calcMods applies them and Team stats lists them', () => {
