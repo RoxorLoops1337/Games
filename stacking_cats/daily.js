@@ -5,6 +5,7 @@ export const BOARD_URL = '/api/stackingcats_board';
 // true when this wave beats an established record (a record of at least 3, so first runs do not celebrate every wave)
 const MILESTONES = { 10: 'Wave 10! Ten down!', 20: 'Wave 20! Legendary stack!', 30: 'Wave 30! Cat royalty!', 40: 'Wave 40! Unstoppable!', 50: 'Wave 50! The ultimate stack!' };
 export const milestoneLine = (wave) => MILESTONES[wave] || '';
+export const bestTag = (best) => (best >= 3 ? `Best ${best}` : '');
 export const passedBest = (wave, prevBest) => prevBest >= 3 && wave > prevBest;
 
 // consecutive days the daily challenge was played, counting back from today (or from yesterday while today is still open)

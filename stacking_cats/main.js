@@ -9,7 +9,7 @@ import {
 import { COSMETICS, COSMETIC_BY_ID, SLOTS, SLOT_NAMES, lookOf, lookSig, drawLook, drawCosmetic, canWear, buyCosmetic, toggleWear, isOwned } from './cosmetics.js';
 import { createKingdomScene } from './kingdom_scene.js';
 import { encodeSave, decodeSave } from './savecode.js';
-import { dailyScore, fetchBoard, submitScore, rankOf, dailyStreak, passedBest, milestoneLine } from './daily.js';
+import { dailyScore, fetchBoard, submitScore, rankOf, dailyStreak, passedBest, milestoneLine, bestTag } from './daily.js';
 import { drawBuilding } from './art_kingdom.js';
 import * as S from './sim.js';
 import { drawCat } from './art_cats.js';
@@ -1103,7 +1103,7 @@ function updateHud(dt) {
   if (!inRun) return;
   const playing = mode === 'play';
   setText('waveTxt', `Wave ${g.wave}`);
-  setText('themeTxt', THEMES[bdIdx] ? THEMES[bdIdx].name : '');
+  setText('themeTxt', [THEMES[bdIdx] ? THEMES[bdIdx].name : '', bestTag(save.stats.bestWave)].filter(Boolean).join(' \u00B7 '));
   const inStage = ((g.wave - 1) % BOSS_EVERY) + 1;
   if (hudCache.pips !== inStage) { hudCache.pips = inStage; $('nestPips').innerHTML = Array.from({ length: BOSS_EVERY }, (_, i) => `<i class="${i === BOSS_EVERY - 1 ? 'boss' : ''} ${i + 1 <= inStage ? 'on' : ''}"></i>`).join(''); }
   const nest = g.enemies.find((e) => e.boss && !e.dead);
