@@ -481,7 +481,7 @@ function showRelics(back, sel0) {
   const draw = () => {
     const pr = relicProgress(save.relics);
     const rows = RARITIES.slice().reverse().map((r) => {
-      const tiles = ITEMS.filter((it) => it.rarity === r).map((it) => { const f = !!save.relics[it.id]; return `<button class="rtile r-${r} ${f ? '' : 'locked'} ${sel === it.id ? 'sel' : ''}" data-act="rtile" data-id="${it.id}" title="${f ? it.name : '???'}"><span class="ic">${it.icon}</span></button>`; }).join('');
+      const tiles = ITEMS.filter((it) => it.rarity === r).map((it) => { const f = !!save.relics[it.id]; return `<button class="rtile r-${r} ${f ? '' : 'locked'} ${sel === it.id ? 'sel' : ''}" data-act="rtile" data-id="${it.id}" aria-label="${f ? `${it.name}, ${r}` : `Unknown ${r} relic`}" title="${f ? it.name : '???'}"><span class="ic">${it.icon}</span></button>`; }).join('');
       return `<div class="rrow"><div class="rlabel r-${r}"><b>${r}</b><small>${pr.by[r].got}/${pr.by[r].total}</small></div><div class="rtiles">${tiles}</div></div>`;
     }).join('');
     const it = sel && ITEM_BY_ID[sel];
@@ -1013,7 +1013,7 @@ function showTower(back, opt = {}) {
     const bn = [];
     for (let i = 0; i < S.benchMax(g); i++) bn.push(g.bench[i] ? catRow(g.bench[i], 'bench', i) : `<div class="slot" data-act="slot" data-zone="bench" data-i="${i}">&nbsp;Empty bench spot</div>`);
     const over = S.overflow(g);
-    const cell = (id, i) => `<span class="bag ${ITEM_BY_ID[id].rarity} ${selItem === i ? 'sel' : ''} ${i >= MAX_STASH ? 'over' : ''}" data-act="bag" data-i="${i}" title="${ITEM_BY_ID[id].name}: ${ITEM_BY_ID[id].desc}">${ITEM_BY_ID[id].icon}</span>`;
+    const cell = (id, i) => `<span class="bag ${ITEM_BY_ID[id].rarity} ${selItem === i ? 'sel' : ''} ${i >= MAX_STASH ? 'over' : ''}" data-act="bag" data-i="${i}" aria-label="${ITEM_BY_ID[id].name}, ${ITEM_BY_ID[id].rarity}" title="${ITEM_BY_ID[id].name}: ${ITEM_BY_ID[id].desc}">${ITEM_BY_ID[id].icon}</span>`;
     const bag = g.stash.map(cell).join('') + Array.from({ length: Math.max(0, MAX_STASH - g.stash.length) }, () => '<span class="bag empty"></span>').join('');
     const it = selItem != null && g.stash[selItem] ? ITEM_BY_ID[g.stash[selItem]] : null;
     const plan = it ? S.forgePlan(g, selItem) : null;
