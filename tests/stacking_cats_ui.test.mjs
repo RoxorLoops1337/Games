@@ -738,3 +738,9 @@ t('backpack cells tell rarity without colour: one pip more per tier, a star for 
   assert.ok(/\.bag\.mythic::after\{content:'\\2605'\}/.test(css), 'mythic shows a star');
   assert.ok(!/\.bag\.common::after/.test(css), 'common has no mark');
 });
+
+t('backpack cells and Relic Book tiles have spoken labels with the rarity (screen readers, no colour needed)', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/class="bag \$\{ITEM_BY_ID\[id\]\.rarity\}[^`]*aria-label="\$\{ITEM_BY_ID\[id\]\.name\}, \$\{ITEM_BY_ID\[id\]\.rarity\}"/.test(js), 'bag cell label');
+  assert.ok(/data-act="rtile"[^`]*aria-label="\$\{f \? `\$\{it\.name\}, \$\{r\}` : `Unknown \$\{r\} relic`\}"/.test(js), 'book tile label');
+});
