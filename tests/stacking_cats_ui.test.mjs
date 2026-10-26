@@ -670,4 +670,11 @@ t('the equip tip on the arrange screen sits below the backpack, clear of the tit
   assert.ok(m && +m[2] >= 340 && m[3] === 'up', 'c6 is low with its tail pointing up at the backpack');
 });
 
+t('a dodged bite shows a Dodge! pop with a swish ring and sparkles, not a plain Miss', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const i = js.indexOf("case 'dodge':");
+  const f = js.slice(i, js.indexOf("case 'ehit':", i));
+  assert.ok(/'Dodge!'/.test(f) && /ring\(p\.x/.test(f) && /sparks\(p\.x/.test(f) && !/'Miss!'/.test(f));
+});
+
 console.log(`${n} tests passed`);
