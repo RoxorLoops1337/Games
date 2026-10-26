@@ -619,4 +619,10 @@ t('Claw Frenzy slashes the mice it hits with triple claw marks', () => {
   assert.ok(/for \(const m of foes\.slice\(0, 4\)\)/.test(f) && /for \(const o of \[-9, 0, 9\]\)/.test(f), 'three parallel slashes on the first four mice');
 });
 
+t('in a fight the toasts sit right of centre so they do not hide the special move name over the tower', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/#toasts\{[^}]*left:6\d%/.test(html), 'fight toasts are shifted right');
+  assert.ok(/body\.scr #toasts\{[^}]*left:50%/.test(html), 'menu screens keep them centred at the bottom');
+});
+
 console.log(`${n} tests passed`);
