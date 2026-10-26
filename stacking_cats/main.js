@@ -367,11 +367,21 @@ function showSettings(back, msg) {
 }
 
 // ---------------------------------------------------------------- trophies
+// progress toward the trophies that count things across runs: id -> [now, goal]
+function troProgress(id) {
+  const st = save.stats || {};
+  const m = {
+    first: [st.kills, 1], hunter: [st.kills, 1000], exterm: [st.kills, 10000], nest1: [st.bossKills, 1], nest10: [st.bossKills, 10],
+    w10: [st.bestWave, 10], w20: [st.bestWave, 20], w30: [st.bestWave, 30], w50: [st.bestWave, 50], merge5: [st.lvl3, 5],
+    rich: [save.kingdom.earned, 5000], build15: [kingdomLevel(save.kingdom), 15], coll15: [save.unlocked.length, 15], coll30: [save.unlocked.length, 30],
+  }[id];
+  return m ? [Math.min(m[1], m[0] || 0), m[1]] : null;
+}
 function showTrophies(back) {
   const list = ACHIEVEMENTS.slice().sort((a, b) => (save.ach[b.id] ? 1 : 0) - (save.ach[a.id] ? 1 : 0));
   const done = list.filter((a) => save.ach[a.id]).length;
   setScreen(`<h2>Trophies <small class="klv">${done}/${list.length}</small></h2>
-    <div class="trophies">${list.map((a) => `<div class="tro ${save.ach[a.id] ? 'got' : ''}"><span class="medal">${save.ach[a.id] ? '&#127942;' : '&#128274;'}</span><div><b>${a.name}</b><small>${a.desc}</small></div><em>${a.coins ? `&#129689;${a.coins}` : ''}${a.gems ? ` &#128142;${a.gems}` : ''}</em></div>`).join('')}</div>
+    <div class="trophies">${list.map((a) => `<div class="tro ${save.ach[a.id] ? 'got' : ''}"><span class="medal">${save.ach[a.id] ? '&#127942;' : '&#128274;'}</span><div><b>${a.name}</b><small>${a.desc}</small>${(() => { const pr = !save.ach[a.id] && troProgress(a.id); return pr ? `<span class="tbar"><i style="width:${Math.round(100 * pr[0] / pr[1])}%"></i><u>${pr[0]}/${pr[1]}</u></span>` : ''; })()}</div><em>${a.coins ? `&#129689;${a.coins}` : ''}${a.gems ? ` &#128142;${a.gems}` : ''}</em></div>`).join('')}</div>
     <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
   acts = { back };
 }
