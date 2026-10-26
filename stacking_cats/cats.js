@@ -272,7 +272,7 @@ export function mergeRun(stats, run) {
 // fx keys: dmg hp haste crit critMul range (all as fractions), ls lifesteal, dr damage reduction, regen (maxHp per second),
 // thorns (reflect), berserk (extra dmg below half hp), extra (one more shot), burn, slow, stun (chance), coin.
 export const ITEMS = [
-  { id: 'claws', name: 'Sharpened Claws', icon: '🗡️', rarity: 'common', fx: { dmg: 0.20 }, desc: '+20% damage' },
+  { id: 'claws', name: 'Sharpened Claws', icon: '🪝', rarity: 'common', fx: { dmg: 0.20 }, desc: '+20% damage' },
   { id: 'bell', name: 'Swift Bell', icon: '🔔', rarity: 'common', fx: { haste: 0.18 }, desc: '+18% attack speed' },
   { id: 'cushion', name: 'Soft Cushion', icon: '🛏️', rarity: 'common', fx: { hp: 0.30 }, desc: '+30% health' },
   { id: 'clover', name: 'Lucky Clover', icon: '🍀', rarity: 'common', fx: { crit: 0.12 }, desc: '+12% critical chance' },

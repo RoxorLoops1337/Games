@@ -97,6 +97,15 @@ const D = {
     F(c, circ(32, 38, 3.2), '#ffd84a', 1.6); glint(c, 31, 37, 1.6);
     dot(c, 24, 20, 1.3, '#ffffff'); dot(c, 41, 44, 1.3, '#ffffff'); dot(c, 17, 46, 1.1, '#ffffff');
   },
+  '🪝': (c) => {
+    // three sharpened claws: slim, separate crescent talons curving up to the right, with a golden wrap at the base
+    for (const o of [9, 25, 41]) {
+      F(c, P((p) => { p.moveTo(o - 3.5, 58); p.bezierCurveTo(o - 9, 36, o + 3, 16, o + 17, 5); p.bezierCurveTo(o + 11, 22, o + 9, 42, o + 3.5, 58); p.closePath(); }), '#f3f6ff', 2);
+      ln(c, [[o - 1, 50], [o + 5, 28]], '#ffffff', 1.4);
+    }
+    F(c, P((p) => { p.rect(3, 47, 52, 10); }), GOLD2, 2);
+    glint(c, 56, 10, 3.2);
+  },
   '🧺': (c) => {
     // a woven cat bed: a rim, a soft blanket and weave lines
     F(c, P((p) => { p.moveTo(8, 30); p.bezierCurveTo(8, 56, 56, 56, 56, 30); p.closePath(); }), '#d9a05a', 2);
@@ -122,7 +131,7 @@ const D = {
   '🍱': (c) => { F(c, P((p) => { p.rect(6, 14, 52, 40); }), '#b8553a', 2); F(c, P((p) => { p.rect(10, 18, 44, 32); }), '#fff0d8', 1.4, { shade: false }); F(c, P((p) => { p.rect(30, 18, 3, 32); }), '#b8553a', 1, { shade: false }); F(c, ell(null, 20, 34, 8, 8), '#fff', 1.4); dot(c, 20, 34, 3, '#e83a4a'); F(c, ell(null, 43, 28, 8, 5), '#ff8a5a', 1.4); F(c, ell(null, 43, 41, 8, 5), GREEN, 1.4); },
   '🔔': (c) => bell(c, GOLD),
   '🛎': (c) => { F(c, P((p) => { p.moveTo(8, 44); p.bezierCurveTo(8, 24, 20, 18, 32, 18); p.bezierCurveTo(44, 18, 56, 24, 56, 44); p.closePath(); }), GOLD, 2.2); F(c, P((p) => { p.rect(4, 44, 56, 9); }), GOLD2, 1.8); F(c, P((p) => { p.rect(28, 10, 8, 9); }), '#d8d8e8', 1.6); F(c, ell(null, 32, 9, 8, 3.5), '#f4f4ff', 1.5); glint(c, 20, 30, 4.5); },
-  '🧐': (c) => { F(c, circ(30, 30, 20), '#cfeaff', 2.4, { line: GOLD2 }); curve(c, GOLD2, 4, (x) => { x.arc(30, 30, 20, 0, TAU); }); curve(c, '#fff', 2, (x) => { x.arc(30, 30, 14, 3.6, 4.7); }); dot(c, 30, 32, 5, '#fff'); dot(c, 30, 32, 3, '#4a3a70'); curve(c, GOLD2, 2.2, (x) => { x.moveTo(44, 46); x.bezierCurveTo(56, 52, 50, 62, 58, 62); }); },
+  '🧐': (c) => { F(c, circ(30, 30, 20), '#cfeaff', 2.4, { line: GOLD2 }); curve(c, GOLD2, 4, (x) => { x.arc(30, 30, 20, 0, TAU); }); curve(c, '#fff', 2, (x) => { x.arc(30, 30, 14, 3.6, 4.7); }); dot(c, 30, 32, 8, '#ffcf3a'); dot(c, 30, 32, 8, 'rgba(160,100,0,.35)'); dot(c, 30, 32, 6.4, '#ffd84a'); dot(c, 30, 32, 3.4, '#2a1c3a'); dot(c, 27.6, 29.6, 1.5, '#fff'); curve(c, GOLD2, 2.2, (x) => { x.moveTo(44, 46); x.bezierCurveTo(56, 52, 50, 62, 58, 62); }); },
   '🦺': (c) => { F(c, P((p) => { p.moveTo(14, 8); p.lineTo(26, 8); p.lineTo(32, 18); p.lineTo(38, 8); p.lineTo(50, 8); p.lineTo(54, 56); p.lineTo(10, 56); p.closePath(); }), '#3ab8c8', 2.2); for (const y of [26, 36, 46]) for (let x = 16; x < 50; x += 8) { c.fillStyle = 'rgba(255,255,255,.35)'; c.beginPath(); c.arc(x + (y % 20 ? 4 : 0), y, 3.6, Math.PI, 0); c.fill(); } ln(c, [[32, 18], [32, 56]], '#1e7a88', 2); },
   '📿': (c) => { for (let i = 0; i < 9; i++) { const a = Math.PI * (0.05 + (i / 8) * 0.9); const x = 32 + Math.cos(a) * 24, y = 16 + Math.sin(a) * 30; F(c, poly(c, [[x - 4, y - 3], [x + 4, y - 3], [x + Math.cos(a) * 8, y + Math.sin(a) * 8 + 1]]), SILVER, 1.4, { shade: false }); } curve(c, '#b83a5a', 6, (x) => { x.arc(32, 16, 24, 0.12, Math.PI - 0.12); }); curve(c, '#ff7a98', 2, (x) => { x.arc(32, 14, 24, 0.5, 1.3); }); F(c, circ(32, 44, 4.4), GOLD, 1.6); },
   '🦷': (c) => { F(c, P((p) => { p.moveTo(14, 8); p.bezierCurveTo(30, 4, 46, 6, 50, 10); p.bezierCurveTo(52, 30, 44, 44, 34, 58); p.bezierCurveTo(30, 40, 24, 24, 14, 8); p.closePath(); }), '#fffaf0', 2.2); F(c, P((p) => { p.moveTo(34, 58); p.bezierCurveTo(37, 52, 40, 48, 43, 42); p.lineTo(34, 44); p.closePath(); }), '#e83a4a', 1.2, { shade: false }); glint(c, 24, 14, 3.6); },
