@@ -86,7 +86,7 @@ export function drawKingdom(ctx, st, t) {
     // level pips
     for (let i = 0; i < b.max; i++) { ctx.fillStyle = i < l ? '#ffd23f' : 'rgba(80,60,110,.35)'; ctx.strokeStyle = '#6a4a14'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.arc(p.x + (i - (b.max - 1) / 2) * 9, p.y + 11, 3, 0, TAU); ctx.fill(); if (i < l) ctx.stroke(); }
     const afford = l < b.max && k.coins >= upgradeCost(b.id, l);
-    if (afford) { const y = p.y - h * 0.95 - 4 + Math.sin(t * 5 + p.x) * 3; ctx.fillStyle = '#ff4a6a'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x + h * 0.36, y, 9, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = '800 13px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', p.x + h * 0.36, y + 4.5); }
+    if (afford) { const y = p.y - h * 0.62 + Math.sin(t * 5 + p.x) * 3; ctx.fillStyle = '#ff4a6a'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x + h * 0.36, y, 9, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = '800 13px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', p.x + h * 0.36, y + 4.5); }
     if (l < b.max && !sel) {
       // price tag: the next upgrade cost, bright when affordable
       const cost = upgradeCost(b.id, l), label = cost >= 10000 ? Math.round(cost / 1000) + 'k' : String(cost);
