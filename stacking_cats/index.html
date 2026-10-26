@@ -480,6 +480,7 @@ body.nomotion .spb.ready{animation:none}
 .evcards{gap:8px;justify-content:center}
 .screen .card.ev,.screen.wide .card.ev{width:150px;min-height:176px;padding:6px 6px 10px;cursor:pointer;position:relative}
 .screen .evcards{flex-wrap:nowrap;max-width:none;margin-bottom:6px}.card.ev .rar{position:static;font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.7}
+.card.ev .ic{position:relative;z-index:0}.card.ev .ic::before{content:'';position:absolute;left:50%;top:50%;width:66px;height:66px;margin:-33px 0 0 -33px;border-radius:50%;z-index:-1;background:radial-gradient(circle,rgba(255,255,255,.95) 0,rgba(214,206,232,.7) 48%,rgba(214,206,232,0) 72%)}
 .card.ev .ic{font-size:44px;line-height:1.1}.card.ev .ic .thumb{width:54px;height:54px}
 .card.ev h3{font-size:19px}.card.ev p{font-size:12.5px;line-height:1.15;margin:3px 0}
 .card.ev .evp{position:absolute;left:50%;bottom:-13px;transform:translateX(-50%);background:#2a1d4a;color:#ffd23f;border:2.5px solid #ffd23f;border-radius:999px;padding:1px 12px;font:400 17px var(--display);white-space:nowrap}
