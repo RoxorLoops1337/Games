@@ -354,7 +354,18 @@ export function makeBackdrop(theme, seed) {
     else if (theme.deco === 'leaf') {
       wrapX(x, (xx) => { const w = 54 * s, h = (70 + rnd() * 50) * s; mx.fillStyle = i % 2 ? col : dark; mx.fillRect(xx - w / 2, base - h, w, h); mx.fillStyle = 'rgba(255,230,150,.75)'; for (let k = 0; k < 4; k++) mx.fillRect(xx - w / 2 + 8 + (k % 2) * 22, base - h + 12 + Math.floor(k / 2) * 24, 12, 14); });
     } else if (night) {
-      wrapX(x, (xx) => { const w = 60 * s, h = (50 + rnd() * 60) * s; mx.fillStyle = i % 2 ? col : dark; mx.fillRect(xx - w / 2, base - h, w, h); mx.fillRect(xx + w * 0.2, base - h - 16, 10, 16); mx.fillStyle = 'rgba(255,225,120,.85)'; for (let k = 0; k < 3; k++) mx.fillRect(xx - w / 2 + 8 + (k % 2) * 24, base - h + 10 + Math.floor(k / 2) * 20, 10, 12); });
+      wrapX(x, (xx) => { const w = 60 * s, h = (50 + rnd() * 60) * s; mx.fillStyle = i % 2 ? col : dark; mx.fillRect(xx - w / 2, base - h, w, h); mx.fillRect(xx + w * 0.2, base - h - 16, 10, 16); mx.fillStyle = 'rgba(255,225,120,.85)'; for (let k = 0; k < 3; k++) mx.fillRect(xx - w / 2 + 8 + (k % 2) * 24, base - h + 10 + Math.floor(k / 2) * 20, 10, 12);
+        if (i === 3) {
+          // a cat silhouette keeping watch on the roof, eyes glowing
+          const cx0 = xx - w * 0.12, cy0 = base - h, k2 = 2.1 * s;
+          mx.fillStyle = '#12102c';
+          mx.beginPath(); mx.ellipse(cx0, cy0 - 5 * k2, 5.5 * k2, 5 * k2, 0, 0, TAU); mx.fill();
+          mx.beginPath(); mx.arc(cx0 + 1.5 * k2, cy0 - 12 * k2, 3.6 * k2, 0, TAU); mx.fill();
+          mx.beginPath(); mx.moveTo(cx0 - 1.6 * k2, cy0 - 14.2 * k2); mx.lineTo(cx0 - 1 * k2, cy0 - 18 * k2); mx.lineTo(cx0 + 1 * k2, cy0 - 15.2 * k2); mx.fill();
+          mx.beginPath(); mx.moveTo(cx0 + 2.2 * k2, cy0 - 15.2 * k2); mx.lineTo(cx0 + 4.4 * k2, cy0 - 18 * k2); mx.lineTo(cx0 + 4.6 * k2, cy0 - 14 * k2); mx.fill();
+          mx.strokeStyle = '#12102c'; mx.lineWidth = 2 * k2 * 0.6; mx.lineCap = 'round'; mx.beginPath(); mx.moveTo(cx0 - 5 * k2, cy0 - 2 * k2); mx.quadraticCurveTo(cx0 - 12 * k2, cy0 - 3 * k2, cx0 - 10 * k2, cy0 - 11 * k2); mx.stroke();
+          mx.fillStyle = '#ffe27a'; mx.beginPath(); mx.arc(cx0 + 0.4 * k2, cy0 - 12.4 * k2, 0.7 * k2, 0, TAU); mx.arc(cx0 + 2.8 * k2, cy0 - 12.4 * k2, 0.7 * k2, 0, TAU); mx.fill();
+        } });
     } else if (theme.deco === 'hole') {
       wrapX(x, (xx) => { const w = 60 * s, h = 50 * s; mx.fillStyle = i % 2 ? '#e6b64a' : '#f2cc5e'; mx.beginPath(); mx.moveTo(xx - w / 2, base); mx.lineTo(xx - w / 2 + 10, base - h); mx.lineTo(xx + w / 2, base - h * 0.7); mx.lineTo(xx + w / 2, base); mx.fill(); mx.fillStyle = 'rgba(160,100,20,.55)'; for (const [dx, dy, r] of [[-10, -20, 6], [12, -34, 5], [8, -12, 4]]) { mx.beginPath(); mx.ellipse(xx + dx * s, base + dy * s, r * s, r * s * 0.8, 0, 0, TAU); mx.fill(); } });
     } else {
