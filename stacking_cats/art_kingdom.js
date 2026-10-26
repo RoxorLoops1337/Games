@@ -3,12 +3,51 @@
 import { TAU, INK, mix, shade, lineOf, ell, poly, fillPath, star, line } from './art_util.js';
 
 const P = (d) => new Path2D(d);
-function box(ctx, x, y, w, h, c, lw = 1.2) { fillPath(ctx, P(`M${x} ${y} h${w} v${h} h${-w} z`), c, lw); }
-function roof(ctx, x, y, w, h, c) { fillPath(ctx, P(`M${x - 4} ${y} L${x + w / 2} ${y - h} L${x + w + 4} ${y} Z`), c, 1.3); }
-function door(ctx, x, y, w, h) { fillPath(ctx, P(`M${x} ${y} v${-h + w / 2} a${w / 2} ${w / 2} 0 0 1 ${w} 0 v${h - w / 2} z`), '#5a3a2a', 1); }
-function win(ctx, x, y, r, glowy = true) { fillPath(ctx, ell(ctx, x, y, r, r), glowy ? '#ffe9a0' : '#bfe6ff', 1); ctx.strokeStyle = 'rgba(80,50,30,.6)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x + r, y); ctx.moveTo(x, y - r); ctx.lineTo(x, y + r); ctx.stroke(); }
+function box(ctx, x, y, w, h, c, lw = 1.2) {
+  const path = P(`M${x} ${y} h${w} v${h} h${-w} z`);
+  fillPath(ctx, path, c, lw);
+  if (w < 9 || h < 9) return;
+  // fine texture: masonry rows with staggered joints, a lit left edge, a shaded right edge and a soft shadow at the foot
+  ctx.save(); ctx.clip(path);
+  const g = ctx.createLinearGradient(x, y, x + w, y); g.addColorStop(0, 'rgba(255,255,255,.18)'); g.addColorStop(0.35, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(60,30,40,.20)');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(70,40,30,.13)'; ctx.lineWidth = 0.5; ctx.beginPath();
+  for (let r = 0, yy = y + 5.5; yy < y + h; yy += 5.5, r++) { ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); for (let xx = x + 4 + (r % 2) * 4.5; xx < x + w; xx += 9) { ctx.moveTo(xx, yy - 5.5); ctx.lineTo(xx, yy); } }
+  ctx.stroke();
+  const f = ctx.createLinearGradient(0, y + h - 7, 0, y + h); f.addColorStop(0, 'rgba(40,20,30,0)'); f.addColorStop(1, 'rgba(40,20,30,.22)'); ctx.fillStyle = f; ctx.fillRect(x, y + h - 7, w, 7);
+  ctx.restore();
+}
+function roof(ctx, x, y, w, h, c) {
+  const path = P(`M${x - 4} ${y} L${x + w / 2} ${y - h} L${x + w + 4} ${y} Z`);
+  fillPath(ctx, path, c, 1.3);
+  // shingle rows, a bright ridge edge and a shadow cast on the wall under the eaves
+  ctx.save(); ctx.clip(path);
+  ctx.strokeStyle = 'rgba(40,10,30,.22)'; ctx.lineWidth = 0.55;
+  for (let yy = y - 3.2, r = 0; yy > y - h; yy -= 3.2, r++) { ctx.beginPath(); for (let xx = x - 4 + (r % 2) * 2.8; xx < x + w + 6; xx += 5.6) { ctx.moveTo(xx, yy); ctx.quadraticCurveTo(xx + 2.8, yy + 3, xx + 5.6, yy); } ctx.stroke(); }
+  const g = ctx.createLinearGradient(x, y, x + w, y); g.addColorStop(0, 'rgba(255,255,255,.22)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(40,10,30,.22)'); ctx.fillStyle = g; ctx.fillRect(x - 4, y - h, w + 8, h);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(x - 3, y - 0.8); ctx.lineTo(x + w / 2 - 0.5, y - h + 1); ctx.stroke();
+  const e = ctx.createLinearGradient(0, y, 0, y + 5); e.addColorStop(0, 'rgba(40,20,30,.28)'); e.addColorStop(1, 'rgba(40,20,30,0)'); ctx.fillStyle = e; ctx.fillRect(x - 3, y + 0.5, w + 6, 5);
+}
+function door(ctx, x, y, w, h) {
+  const path = P(`M${x} ${y} v${-h + w / 2} a${w / 2} ${w / 2} 0 0 1 ${w} 0 v${h - w / 2} z`);
+  fillPath(ctx, path, '#5a3a2a', 1);
+  ctx.save(); ctx.clip(path); ctx.strokeStyle = 'rgba(20,8,4,.35)'; ctx.lineWidth = 0.5; ctx.beginPath();
+  for (let xx = x + w / 3; xx < x + w - 1; xx += w / 3) { ctx.moveTo(xx, y - h); ctx.lineTo(xx, y); }
+  ctx.stroke(); ctx.fillStyle = 'rgba(255,200,140,.18)'; ctx.fillRect(x, y - h, w * 0.3, h); ctx.restore();
+  ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(x + w * 0.74, y - h * 0.38, 0.9, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(70,50,40,.55)'; ctx.fillRect(x - 2, y - 0.8, w + 4, 2.2);
+}
+function win(ctx, x, y, r, glowy = true) {
+  if (glowy) { const g = ctx.createRadialGradient(x, y, r * 0.4, x, y, r * 2.6); g.addColorStop(0, 'rgba(255,226,140,.42)'); g.addColorStop(1, 'rgba(255,226,140,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 2.6, 0, TAU); ctx.fill(); }
+  fillPath(ctx, ell(ctx, x, y, r, r), glowy ? '#ffe9a0' : '#bfe6ff', 1);
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - r * 0.35, y - r * 0.4, r * 0.35, r * 0.22, -0.6, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(80,50,30,.6)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x + r, y); ctx.moveTo(x, y - r); ctx.lineTo(x, y + r); ctx.stroke();
+  ctx.strokeStyle = 'rgba(90,60,40,.8)'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.arc(x, y, r + 0.5, 0, TAU); ctx.stroke();
+  ctx.fillStyle = 'rgba(90,60,40,.75)'; ctx.fillRect(x - r - 1.5, y + r + 0.4, r * 2 + 3, 1.6);
+}
 function sparkle(ctx, x, y, r, c = '#fff6b0') { ctx.fillStyle = c; ctx.fill(star(x, y, r, r * 0.32, 4)); }
-function smoke(ctx, x, y) { ctx.fillStyle = 'rgba(255,255,255,.7)'; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(x + i * 3, y - i * 7, 3 + i, 0, TAU); ctx.fill(); } }
+function smoke(ctx, x, y) { for (let i = 0; i < 4; i++) { ctx.fillStyle = `rgba(255,255,255,${0.75 - i * 0.16})`; ctx.beginPath(); ctx.arc(x + i * 3.2 + Math.sin(i) * 1.5, y - i * 7, 2.6 + i * 1.1, 0, TAU); ctx.fill(); } }
 function flag(ctx, x, y, c) { line(ctx, [[x, y], [x, y - 16]], '#6a4a2a', 1.6); fillPath(ctx, P(`M${x} ${y - 16} l12 4 l-12 5 z`), c, 0.9); }
 
 const B = {
@@ -18,7 +57,12 @@ const B = {
     const tiers = 1 + (l >= 3) + (l >= 5);
     for (let i = 0; i < tiers; i++) {
       const y = 82 - i * 22, w = 84 - i * 18;
-      fillPath(ctx, P(`M${60 - w / 2 - 6} ${y} Q${60} ${y - 8} ${60 + w / 2 + 6} ${y} L${60 + w / 2 - 4} ${y - 14} Q60 ${y - 20} ${60 - w / 2 + 4} ${y - 14} Z`), '#c0304a', 1.3);
+      const rp = P(`M${60 - w / 2 - 6} ${y} Q${60} ${y - 8} ${60 + w / 2 + 6} ${y} L${60 + w / 2 - 4} ${y - 14} Q60 ${y - 20} ${60 - w / 2 + 4} ${y - 14} Z`);
+      fillPath(ctx, rp, '#c0304a', 1.3);
+      ctx.save(); ctx.clip(rp); ctx.strokeStyle = 'rgba(60,0,20,.28)'; ctx.lineWidth = 0.55; ctx.beginPath();
+      for (let xx = 60 - w / 2 - 4; xx < 60 + w / 2 + 6; xx += 3.4) { ctx.moveTo(xx, y - 20); ctx.lineTo(xx - 1.2, y + 1); }
+      ctx.stroke(); const rg = ctx.createLinearGradient(0, y - 20, 0, y); rg.addColorStop(0, 'rgba(255,200,210,.35)'); rg.addColorStop(0.5, 'rgba(255,255,255,0)'); rg.addColorStop(1, 'rgba(40,0,20,.25)'); ctx.fillStyle = rg; ctx.fillRect(0, y - 22, 120, 24); ctx.restore();
+      for (const ex of [60 - w / 2 - 5, 60 + w / 2 + 5]) { fillPath(ctx, ell(ctx, ex, y - 0.5, 2.1, 1.7), '#ffd23f', 0.6); }
       if (i < tiers - 1) box(ctx, 60 - w / 2 + 12, y - 14, w - 24, 8, '#c9824a', 0.8);
     }
     if (l >= 2) flag(ctx, 98, 82, '#ffd23f');
@@ -74,6 +118,11 @@ const B = {
   },
   tent(ctx, l) {
     fillPath(ctx, P('M16 112 L60 36 L104 112 Z'), '#7a4ad0', 1.4); fillPath(ctx, P('M60 36 L60 112 L48 112 Z'), '#6a3ac0', 0.5);
+    ctx.save(); ctx.clip(P('M16 112 L60 36 L104 112 Z')); ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 0.7; ctx.beginPath();
+    for (const x of [28, 38, 74, 84, 94]) { ctx.moveTo(60, 36); ctx.lineTo(x, 112); } ctx.stroke();
+    const tg = ctx.createLinearGradient(16, 0, 104, 0); tg.addColorStop(0, 'rgba(255,255,255,.18)'); tg.addColorStop(0.5, 'rgba(255,255,255,0)'); tg.addColorStop(1, 'rgba(10,0,40,.28)'); ctx.fillStyle = tg; ctx.fillRect(16, 36, 88, 78);
+    ctx.strokeStyle = 'rgba(255,225,120,.55)'; ctx.lineWidth = 0.9; ctx.setLineDash([2.2, 2.2]); ctx.beginPath(); ctx.moveTo(16, 111); ctx.lineTo(104, 111); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+    for (const [x1, y1, x2] of [[22, 100, 10], [98, 100, 110]]) { ctx.strokeStyle = '#c9a066'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, 112); ctx.stroke(); fillPath(ctx, P(`M${x2 - 1.6} 111 h3.2 l-1.6 3.2 z`), '#8a6a4a', 0.5); }
     fillPath(ctx, P('M46 112 L60 84 L74 112 Z'), '#2a1a50', 1);
     for (const [x, y, r] of [[40, 90, 3], [80, 86, 3.4], [58, 62, 3], [72, 70, 2.4], [48, 76, 2.4]]) sparkle(ctx, x, y, r, '#ffe14d');
     const gl = ctx.createRadialGradient(92, 102, 0, 92, 102, 14); gl.addColorStop(0, 'rgba(200,160,255,.9)'); gl.addColorStop(1, 'rgba(200,160,255,0)'); ctx.fillStyle = gl; ctx.fillRect(76, 86, 32, 32);
