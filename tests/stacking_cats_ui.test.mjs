@@ -783,3 +783,10 @@ t('How to play fits the stage: short rows, and if it ever grows it scrolls from 
   for (const r of rows) assert.ok(r.length <= 150, 'a row of ' + r.length + ' characters wraps to a third line: ' + r.slice(0, 40));
   assert.ok(/\.screen:has\(\.how\)\{[^}]*justify-content:safe center[^}]*overflow-y:auto/.test(css), 'safe centering and scrolling for the how screen');
 });
+
+t('cat level stars on the Arrange rows are not faded by the mastery star rule that shares their class', () => {
+  const css = readFileSync('stacking_cats/index.html', 'utf8');
+  const rule = css.match(/\.slot \.st\{([^}]*)\}/);
+  assert.ok(rule, 'a slot star rule exists');
+  assert.ok(/opacity:1/.test(rule[1]) && /filter:none/.test(rule[1]), 'it resets the opacity and grayscale of the generic .st (mastery) rule: ' + rule[1]);
+});
