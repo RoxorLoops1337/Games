@@ -1030,7 +1030,7 @@ function showOver(fresh) {
       <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span><small>Total ${num(k.coins)}${goalLine}</small></div>${dailyBox}</div>
       <div class="rbars big"><div class="rh"><b>Who did the work</b></div>${bars || '<small>No damage dealt</small>'}</div></div>
     ${trophies}${fresh.length ? `<p class="sub">New friends unlocked!</p><div class="newcats">${fresh.map((id) => catCard(id, { act: 'none' })).join('')}</div>` : ''}
-    <div class="row"><button class="btn big" data-act="again">Try again</button><button class="btn green" data-act="kingdom">Kingdom${goal && !goal.need ? '<i class="bang">!</i>' : ''}</button><button class="btn small" data-act="share">Share</button><button class="btn grey" data-act="title">Title</button></div>`, 'wide');
+    <div class="row overbtns"><button class="btn big" data-act="again">Try again</button><button class="btn green" data-act="kingdom">Kingdom${goal && !goal.need ? '<i class="bang">!</i>' : ''}</button><button class="btn small" data-act="share">Share</button><button class="btn grey" data-act="title">Title</button></div>`, 'wide');
   acts = {
     share: (d, el) => {
       const ids = (g && g.cats && g.cats.length ? g.cats.map((c) => c.id) : Object.keys(r.byCat));
