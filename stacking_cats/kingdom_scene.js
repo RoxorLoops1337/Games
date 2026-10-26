@@ -107,6 +107,14 @@ export function drawKingdom(ctx, st, t) {
     ctx.fillStyle = gl; ctx.fillRect(x - 40, y - 40, 80, 80);
     ctx.fillStyle = owned ? '#fff6d0' : 'rgba(255,255,255,.7)'; ctx.strokeStyle = owned ? '#d9a600' : sel ? '#ff8fb7' : '#9a8ac0'; ctx.lineWidth = sel ? 3.5 : 2.2;
     ctx.beginPath(); ctx.arc(x, y, 21, 0, TAU); ctx.fill(); ctx.stroke();
+    if (owned) {
+      // a bought wonder wears a gold halo with a few twinkling sparks, so it reads as "yours" at a glance
+      ctx.strokeStyle = 'rgba(255,214,90,.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 27 + Math.sin(t * 2.4 + i) * 1.5, 0, TAU); ctx.stroke();
+      for (let k = 0; k < 4; k++) {
+        const a = t * 0.9 + k * (TAU / 4) + i, tw = 0.5 + 0.5 * Math.sin(t * 3 + k * 1.7 + i);
+        ctx.fillStyle = `rgba(255,240,170,${0.35 + 0.55 * tw})`; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 30, y + Math.sin(a) * 30, 1.6 + tw * 1.4, 0, TAU); ctx.fill();
+      }
+    }
     ctx.globalAlpha = owned ? 1 : 0.55; ctx.drawImage(iconCanvas(w.icon), x - 15, y - 16, 30, 30); ctx.globalAlpha = 1;
     if (!owned) { ctx.fillStyle = '#2a1d4a'; ctx.font = '800 11px sans-serif'; const label = String(w.cost); const tw = ctx.measureText(label).width + 26; ctx.beginPath(); ctx.roundRect(x - tw / 2, y + 23, tw, 15, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(label, x + 7, y + 34); ctx.drawImage(iconCanvas('💎'), x - tw / 2 + 2, y + 22, 17, 17); }
   });
