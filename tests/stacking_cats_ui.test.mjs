@@ -158,6 +158,13 @@ t('each wave shows an incoming strip with the mouse types and counts it brings',
   assert.ok(/function drawIncoming\(\)[\s\S]*mode !== 'play'/.test(js), 'the strip must only show while playing');
 });
 
+t('Enter presses the main button of an open screen but never steals a focused control', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(js.includes("k === 'enter' && document.body.classList.contains('scr')"), 'Enter must only act while a screen is open');
+  assert.ok(js.includes('INPUT|TEXTAREA|SELECT|BUTTON|A'), 'Enter must leave inputs and focused buttons alone');
+  assert.ok(js.includes(".btn.big:not([disabled]), .btn.green:not([disabled])"), 'Enter must target the main button');
+});
+
 t('tutorial tips are held back while the game is paused', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   const m = js.match(/function coach\([^)]*\) \{\n([^\n]*)\n/);
