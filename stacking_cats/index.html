@@ -624,6 +624,9 @@ body.scr #hud>*:not(#toasts):not(#banner){opacity:0!important;pointer-events:non
 @keyframes legp{50%{box-shadow:inset 0 -3px 0 #e8a00033,0 0 20px #ffd23f}}
 @keyframes mythp{50%{box-shadow:inset 0 -3px 0 #ff3a8a33,0 0 24px #ff7ac0,0 0 34px #9a7aff}}
 .rar.legendary{background:linear-gradient(#ffb020,#e07a00);color:#fff}.rar.mythic{background:linear-gradient(90deg,#ff3a8a,#8a5aff);color:#fff}.rar.epic{background:#b83ad0;color:#fff}.rar.rare{background:#2f7ad0;color:#fff}
+/* rarity without colour: pips in the corner of a backpack cell (colour blind players, and a quick read in a crowded bag) */
+.bag.rare::after,.bag.epic::after,.bag.legendary::after,.bag.mythic::after{position:absolute;right:3px;bottom:1px;font-size:8px;line-height:1;letter-spacing:-1px;color:#23144a;text-shadow:0 0 2px #fff,0 0 2px #fff;pointer-events:none}
+.bag.rare::after{content:'\25CF'}.bag.epic::after{content:'\25CF\25CF'}.bag.legendary::after{content:'\25CF\25CF\25CF'}.bag.mythic::after{content:'\2605'}
 body.nomotion .bag.legendary,body.nomotion .bag.mythic,body.nomotion .card.item.r-legendary::after,body.nomotion .card.item.r-mythic::after{animation:none}
 .card.item .ic{margin-top:7px}   /* keep the bobbing picture clear of the rarity chip */
 
