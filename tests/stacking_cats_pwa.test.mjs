@@ -294,4 +294,15 @@ await t('share text names the chapter as well as the wave and has no em dash', a
   assert.ok(shareText({}).includes('wave 0') || shareText({}).length > 10, 'a missing wave does not throw');
 });
 
+await t('coachAbove: a tip sits just over its target, clamped inside the stage', async () => {
+  const { coachAbove } = await import('../stacking_cats/art_util.js');
+  const app = { left: 100, top: 50 };
+  // scale 0.5: a target at screen (300,250) is at stage (400,400); bubble 60 high goes 12 above it
+  const a = coachAbove({ left: 300, top: 250, width: 100 }, app, 0.5, 60, 960);
+  assert.deepEqual(a, { x: 500, y: 328 }, 'centred over the target, bubble bottom 12 above it');
+  assert.equal(coachAbove({ left: 100, top: 52, width: 20 }, app, 1, 60, 960).y, 6, 'never above the top edge');
+  assert.equal(coachAbove({ left: 100, top: 400, width: 10 }, app, 1, 60, 960).x, 139, 'keeps room on the left edge');
+  assert.equal(coachAbove({ left: 1100, top: 400, width: 10 }, app, 1, 60, 960).x, 821, 'keeps room on the right edge');
+});
+
 console.log(n + ' passed');
