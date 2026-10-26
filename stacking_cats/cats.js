@@ -358,6 +358,17 @@ export function noteRelics(found, ids) {
   for (const id of ids) if (ITEM_BY_ID[id] && !found[id]) { found[id] = true; fresh.push(id); }
   return fresh;
 }
+// the relics a team carries, one line per kind: how many, which cats hold them, rarest first (for the Team stats screen)
+export function teamRelics(cats) {
+  const by = new Map();
+  for (const c of cats) for (const id of (c.items || [])) {
+    const it = ITEM_BY_ID[id]; if (!it) continue;
+    if (!by.has(id)) by.set(id, { id, name: it.name, icon: it.icon, rarity: it.rarity, desc: it.desc, n: 0, carriers: [] });
+    const e = by.get(id); e.n++; e.carriers.push(c.id);
+  }
+  const rank = (r) => RARITIES.indexOf(r);
+  return [...by.values()].sort((a, b) => rank(b.rarity) - rank(a.rarity) || a.name.localeCompare(b.name));
+}
 // selling pays coins (scaled a little by wave); forging turns three of one rarity into one of the next
 export const SELL_VALUE = { common: 8, rare: 22, epic: 60, legendary: 150, mythic: 400 };
 export const FORGE_NEXT = { common: 'rare', rare: 'epic', epic: 'legendary', legendary: 'mythic', mythic: 'mythic' };

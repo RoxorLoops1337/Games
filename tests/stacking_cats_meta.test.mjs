@@ -6,7 +6,7 @@ import {
   takeItem, useReroll, fxOf, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, RARITIES, ACHIEVEMENTS,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, RARITIES, ACHIEVEMENTS,
 } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CAT_TAGS, SPECIALS, SYNERGIES, unlockProgress } from '../stacking_cats/cats.js';
 import { catStory } from '../stacking_cats/story.js';
@@ -334,6 +334,17 @@ t('relic book: progress counts per rarity, noting relics returns only the new on
   const p = relicProgress(found);
   assert.equal(p.got, 3); assert.equal(p.by.common.got, 2); assert.equal(p.by.mythic.got, 1); assert.equal(p.by.rare.got, 0);
   assert.equal(relicProgress(undefined).got, 0, 'a missing book is an empty book');
+});
+
+t('team relics: one line per kind with count and carriers, rarest first, unknown ids skipped', () => {
+  const cats = [{ id: 'mochi', items: ['claws', 'kingcrown'] }, { id: 'pearl', items: ['claws', 'nope'] }, { id: 'tuna' }];
+  const r = teamRelics(cats);
+  assert.deepEqual(r.map((e) => e.id), ['kingcrown', 'claws']);
+  assert.equal(r[1].n, 2); assert.deepEqual(r[1].carriers, ['mochi', 'pearl']);
+  assert.ok(r[0].desc && r[0].name && r[0].icon);
+  assert.deepEqual(teamRelics([]), []);
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/teamRelics\(cats\)/.test(js) && /Relics in play/.test(js), 'Team stats lists them');
 });
 
 t('relic book wiring: a screen, a title button, found relics saved with the run, and a toast for new ones', () => {
