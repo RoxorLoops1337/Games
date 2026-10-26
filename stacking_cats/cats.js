@@ -686,3 +686,9 @@ export const SPECIAL_TEXT = {
   phase: 'The stack dodges 60% of attacks for 5 seconds.',
   supernova: 'A cosmic blast hits every mouse on the field.',
 };
+
+// the cats stacked on the title screen: the player's five most used unlocked cats (ties keep unlock order), so the title shows their own team
+export function titleStackIds(unlocked, catStats = {}) {
+  const used = (id) => (catStats[id] && catStats[id].runs) || 0;
+  return unlocked.map((id, i) => ({ id, i })).sort((a, b) => used(b.id) - used(a.id) || a.i - b.i).slice(0, 5).map((x) => x.id);
+}
