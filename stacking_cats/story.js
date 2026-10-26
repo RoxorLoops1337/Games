@@ -179,3 +179,6 @@ export function titleTag(storyDone, unlocked, total) {
   if (unlocked > 3) return `${unlocked} of ${total} cats rescued. Keep smashing the nests!`;
   return 'Stack your cats. Merge them. Smash the mouse nests.';
 }
+
+// the nest bar title: the wave 30 nest is the mouse king's own, every other nest keeps its name
+export const nestTitle = (wave, name) => (wave === FINALE_WAVE ? `King Squeakimus: ${name}` : name);

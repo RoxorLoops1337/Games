@@ -22,7 +22,7 @@ import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.j
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
 import { playIntro, playEpilogue } from './intro.js';
-import { titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
+import { nestTitle, titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -1168,7 +1168,7 @@ function updateHud(dt) {
   const nest = g.enemies.find((e) => e.boss && !e.dead);
   $('bossBar').style.display = playing && nest ? 'block' : 'none';
   if (nest) {
-    setText('bossName', nest.name);
+    setText('bossName', nestTitle(g.wave, nest.name));
     setText('bossTrick', (NESTS.find((n) => n.id === nest.kind) || {}).trick || '');
     const pct = Math.max(0, 100 * nest.hp / nest.maxHp).toFixed(1) + '%';
     if (hudCache.bossPct !== pct) { hudCache.bossPct = pct; $('bossHp').style.width = pct; $('bossTrail').style.width = pct; }
