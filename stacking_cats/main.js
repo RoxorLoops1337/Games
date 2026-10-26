@@ -632,6 +632,7 @@ function beginWave() {
   const rt = g.route.id !== 'trail' && !boss ? ` \u00B7 ${g.route.name}` : '';
   banner(boss ? 'NEST BATTLE!' : `Wave ${g.wave}`, boss ? nest.name : `${THEMES[bdIdx].name}${rt}`, boss);
   sfx.play(boss ? 'boss' : 'wave');
+  if (boss) { spawnFx({ k: 'vig', life: 2.6, max: 2.6 }); nestPending = 3; }
   sfx.music(boss ? 'boss' : 'fight');
   dpsHist.length = 0;
   // introduce new mice and the nest's trick the first time they show up
@@ -1144,6 +1145,7 @@ const add = () => { ctx.globalCompositeOperation = 'lighter'; };
 const norm = () => { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; };
 
 const moods = new Map();
+let nestPending = 0;   // seconds left to wait for the nest to appear after a boss intro
 const pops = new Map();   // cats that just merged: a short squash and stretch bounce
 const emote = (uid, glyph, life = 1.2) => spawnFx({ k: 'emote', uid, glyph, life, max: life });
 function cheerRandom(chance) {
@@ -1451,6 +1453,11 @@ function drawFx() {
   for (const f of fx) {
     const a = Math.max(0, f.life / f.max);
     if (f.k === 'flash') { ctx.globalAlpha = a; ctx.fillStyle = f.col; ctx.fillRect(0, 0, W, H); }
+    else if (f.k === 'vig') {   // boss warning: red edges that pulse (steady when motion is off)
+      const pulse = save.opt.motion ? 0.55 + 0.45 * Math.sin(tAnim * 7) : 0.8, grd = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.9);
+      grd.addColorStop(0, 'rgba(255,40,70,0)'); grd.addColorStop(1, 'rgba(255,40,70,' + (0.5 * pulse * Math.min(1, a * 2.5)).toFixed(3) + ')');
+      ctx.globalAlpha = 1; ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+    }
     else if (f.k === 'emote') {
       const p = catPos(f.uid), age = f.max - f.life, sc = 1 + Math.max(0, 0.6 * (1 - age / 0.15));
       ctx.globalAlpha = Math.min(1, a * 3); ctx.drawImage(iconSprite(f.glyph), p.x + 22 - 13 * sc, p.y - 52 - age * 16 - 13 * sc, 26 * sc, 26 * sc);
@@ -2052,6 +2059,16 @@ function frame(ts) {
     }
     if (n >= 8) acc = 0;
     drain();
+    if (nestPending > 0) {
+      nestPending -= dt;
+      const nest = g.state === 'fight' && g.enemies.find((m) => m.boss && !m.dead);
+      if (nest) {   // the nest slams down when the fight starts
+        nestPending = 0;
+        puff(nest.x, GROUND, 28, '#cdb89a', 190, 0.8, 6); smoke(nest.x, GROUND - 10, 5, 22, '#b8a890');
+        ring(nest.x, GROUND - 4, 190, '#e8d4a8', 0.6, 10); ring(nest.x, GROUND - 4, 110, '#ffffff', 0.4, 6);
+        shake = Math.max(shake, 12); hit(0.06); sfx.play('boom');
+      }
+    }
     if (g.state === 'fight' && (!dpsHist.length || g.t - dpsHist[dpsHist.length - 1].t > 0.25)) { dpsHist.push({ t: g.t, dmg: g.run.dmg }); while (dpsHist.length > 16) dpsHist.shift(); }
     updateFx(fd);
     if (g.state === 'clear') onClear(); else if (g.state === 'over') onOver();
@@ -2070,7 +2087,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { coach, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+window.stackingCats = { coach, beginWave, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
 showTitle();
 requestAnimationFrame(frame);
 void ENEMY_TYPES;
