@@ -58,7 +58,7 @@ body.doodle .tab:active{transform:scale(.94)}
 body.doodle .badge{background:#e8403f;border:2.5px solid #2b2733;color:#fff;box-shadow:none;font-weight:400;text-shadow:none;animation:d-pop .3s backwards}
 
 /* headings and text */
-body.doodle h2{font:400 32px var(--hand);letter-spacing:.05em;text-transform:uppercase;color:#2b2733;text-shadow:3px 3px 0 #ffd60a;margin:14px 2px 10px}
+body.doodle h2{font:400 32px var(--hand);letter-spacing:.05em;text-transform:uppercase;color:#2b2733;text-shadow:none;background:linear-gradient(transparent 62%,#ffd60a 62% 92%,transparent 92%);display:inline-block;padding:0 6px;margin:14px 2px 10px}
 body.doodle h3{font:400 23px var(--hand);text-shadow:none;letter-spacing:.01em}
 body.doodle .sub,body.doodle .timer{color:#6b6477;font-weight:400;font-size:17px}
 body.doodle .credit{color:#6b6477;letter-spacing:.06em;text-shadow:none;opacity:1;font-size:14px}
@@ -205,3 +205,5 @@ body.doodle.reduce .tab.on,body.doodle.reduce .btn.big,body.doodle.reduce .day.c
 body.doodle .how [style*="color:#fff"],body.doodle .how [style*="color:#e"],body.doodle .how [style*="color:#d"],body.doodle .how [style*="color:#c"],body.doodle .how [style*="color:#b"]{color:#2b2733!important}
 body.doodle input,body.doodle textarea,body.doodle select{background:#fbf6e6!important;color:#2b2733!important}
 body.doodle .ibox,body.doodle .icon-box{background:#fbf6e6}
+body.doodle .opening h2,body.doodle .modal h2{text-shadow:none}
+body.doodle .chip,body.doodle .chip *{color:#2b2733;text-shadow:none;font-weight:400}

@@ -121,7 +121,7 @@ function tourTab(app, st, rerender) {
     const enc = st['enc_' + w.id] || 0;
     const boss = BOSSES[w.boss];
     const card = h('div', { class: 'card world' + (unlocked ? '' : '') });
-    const art = h('div', { class: 'art' }, canvasOf(504, 92, (ctx) => AW.drawBackdrop(ctx, w.id, 504, 92, 0.5, {})),
+    const art = h('div', { class: 'art' }, canvasOf(504, 92, (ctx) => AW.drawBackdrop(ctx, w.id, 504, 92, 0.5, { thumb: true })),
       h('div', { class: 'ttl', style: 'color:' + w.accent }, w.name), h('div', { class: 'num' }, w.n));
     const body = h('div', { class: 'body' });
     body.append(h('div', { class: 'sub' }, w.blurb));
