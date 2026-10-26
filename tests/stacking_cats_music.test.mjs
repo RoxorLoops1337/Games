@@ -325,4 +325,20 @@ t('the sample voices respect the voice budget and never exceed it', () => {
   done(s);
 });
 
+t('Meow music can be switched off: songs go back to their own lead and drums, cat voices are untouched', () => {
+  let th = 0; for (; th < THEME_COUNT; th++) if (songInfo(th, 'fight').def.mewKit) break;
+  const on = withBank(); const log = sources(on); on.setTheme(th); on.music('fight'); run(on, 8);
+  assert.ok(on.noteLog.some((e) => e.inst === 'mewlead') && log.filter((l) => l.n.buffer === on.meowBuf).length > 20, 'meows in the music by default');
+  done(on);
+  const off = withBank(); const olog = sources(off); off.meowMusicOn = false; off.setTheme(th); off.music('fight'); run(off, 8);
+  assert.ok(!off.noteLog.some((e) => e.inst === 'mewlead'), 'no meow lead');
+  assert.equal(olog.filter((l) => l.n.buffer === off.meowBuf).length, 0, 'no meow drums');
+  assert.ok(off.noteLog.some((e) => e.inst === songInfo(th, 'fight').def.lead), 'the song plays its own lead');
+  off.ctx.currentTime += 1; off.meow('tabby', 'pick');
+  assert.equal(olog.filter((l) => l.n.buffer === off.meowBuf).length, 1, 'a cat still meows from the recordings');
+  done(off);
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  assert.ok(/tog\('meowMusic'/.test(js) && /sfx\.meowMusicOn = o\.meowMusic !== false/.test(js) && /DEFAULT_OPT = \{[^}]*meowMusic: true/.test(js), 'Settings toggle, applied, on by default');
+});
+
 console.log(`${n} music tests passed`);
