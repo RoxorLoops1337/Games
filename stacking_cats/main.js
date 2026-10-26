@@ -16,6 +16,7 @@ import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
+import { boxHero } from './art_boxes.js';
 import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel, clearLine, confirmTap, coachAbove, specialLabel } from './art_util.js';
 import { iconCanvas, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
@@ -955,7 +956,7 @@ function showFull(newId) {
 function showBox(tier) {
   const bx = BOX_BY_ID[tier] || BOXES[0], rars = Object.keys(bx.odds);
   setScreen(`<h2>${bx.icon} ${bx.name}</h2><p class="sub">${bx.blurb}</p>
-    <div class="boxstage"><div class="boxic t-${bx.id}" data-act="openbox">${bx.icon}</div></div>
+    <div class="boxstage"><div class="boxic t-${bx.id}" data-act="openbox"><img class="boxhero" src="${boxHero(bx.id).toDataURL()}" alt="${bx.name}"></div></div>
     <p class="sub boxodds">Might hold ${rars.length > 1 ? `<b>${rars[0]}</b> to <b>${rars[rars.length - 1]}</b>` : `<b>${rars[0]}</b>`} relics</p>
     <div class="row"><button class="btn big" data-act="openbox">Open it!</button></div>
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button></div>`);
@@ -970,12 +971,18 @@ function showBox(tier) {
     tower: () => showTower(() => showBox(tier)),
   };
 }
+// the burst when a box opens: more and brighter pieces for better relics
+const CONFETTI = { common: [8, ['#fff0d0', '#ffd23f']], rare: [12, ['#8ec6ff', '#fff']], epic: [18, ['#e7a0ff', '#fff', '#ffd23f']], legendary: [26, ['#ffd23f', '#fff6b0', '#ff9a3a']], mythic: [36, ['#ff8ac8', '#9a7aff', '#fff', '#ffd23f']] };
+function confettiHtml(rarity) {
+  const [n, cols] = CONFETTI[rarity] || CONFETTI.common;
+  return Array.from({ length: n }, (_, i) => `<i style="--a:${Math.round((360 / n) * i + (i % 2) * 7)}deg;--d:${110 + (i * 37) % 90}px;--c:${cols[i % cols.length]};--t:${(i % 5) * 0.03}s"></i>`).join('');
+}
 function showBoxReveal(tier, id) {
   const it = ITEM_BY_ID[id], bx = BOX_BY_ID[tier] || BOXES[0], hi = ['epic', 'legendary', 'mythic'].includes(it.rarity);
   sfx.play('chest');
   if (hi) { sfx.play('achieve', 0.7); const c0 = g.cats[0]; if (c0) sfx.meow(c0.id, 'cheer'); }
   setScreen(`<h2 class="cheer r-${it.rarity}">${RARITY_CHEER[it.rarity]}</h2><p class="sub">Out of the ${bx.name}:</p>
-    <div class="cards reveal">${itemCard(id)}</div>
+    <div class="revealstage r-${it.rarity}"><div class="rays"></div><div class="confetti">${confettiHtml(it.rarity)}</div><div class="cards reveal">${itemCard(id)}</div></div>
     <div class="row"><button class="btn big" data-act="take">Equip it</button></div>
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button></div>`);
   acts = {

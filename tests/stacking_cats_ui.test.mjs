@@ -837,3 +837,14 @@ t('lootbox screens: every box has a drawn icon, rewards open boxes, the reveal l
   assert.ok(/\.boxic\.shaking\{animation:boxshake/.test(css) && /@keyframes boxshake/.test(css), 'shake animation');
   assert.ok(/body\.nomotion \*/.test(css), 'reduced motion stops animations (the open still works)');
 });
+
+t('lootbox hero art: a fine detail layer for every box, the opening screen shows it, the reveal has rays and confetti by rarity', async () => {
+  const art = readFileSync('stacking_cats/art_boxes.js', 'utf8'), js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  const { BOXES } = await import('../stacking_cats/cats.js');
+  const det = art.slice(art.indexOf('const DETAIL = {'), art.indexOf('const heroCache'));
+  for (const b of BOXES) assert.ok(new RegExp('\\n  ' + b.id + ': \\(c\\) =>').test(det), b.id + ' has a detail layer');
+  assert.ok(/export function boxHero\(tier, px = 320\)/.test(art), 'hero renderer');
+  assert.ok(/import \{[^}]*boxHero[^}]*\} from '\.\/art_boxes\.js'/.test(js) && /boxHero\(bx\.id\)\.toDataURL\(\)/.test(js), 'the box screen uses it');
+  assert.ok(/class="revealstage r-\$\{it\.rarity\}"/.test(js) && /class="rays"/.test(js) && /class="confetti"/.test(js), 'rays and confetti on the reveal');
+  assert.ok(/\.rays\{/.test(css) && /@keyframes conf/.test(css), 'their styles');
+});
