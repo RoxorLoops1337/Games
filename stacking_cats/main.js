@@ -426,7 +426,7 @@ function showDex(back, sel0) {
       const u = un.has(d.id), p = unlockProgress(d, save.stats);
       return `<div class="tile ${u ? '' : 'locked'} ${sel === d.id ? 'sel' : ''}" data-act="tile" data-id="${d.id}"><canvas width="96" height="96" data-cat="${d.id}" ${u ? '' : 'data-lock="1"'}></canvas><b>${u ? d.name : '???'}</b>${u ? `<small>${d.role}</small>` : `<small>${p.need > 1 ? `${p.have}/${p.need}` : p.have ? 'Done' : 'Locked'}</small>`}${fav && fav[0] === d.id && u ? '<i class="fav">&#10084;</i>' : ''}</div>`;
     }).join('')}</div>
-    <div class="detail">${sel ? dexDetail(sel, un.has(sel)) : 'Tap a cat to see how to unlock it, or how it has done for you. Locked cats join the picks once you earn them.'}</div>
+    <div class="detail dexd">${sel ? dexDetail(sel, un.has(sel)) : 'Tap a cat to see how to unlock it, or how it has done for you. Locked cats join the picks once you earn them.'}</div>
     <div class="row"><button class="btn" data-act="back">Back</button></div>`);
   };
   draw();
