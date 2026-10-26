@@ -161,3 +161,13 @@ export function dangerLevel(cats) {
   for (const c of cats) if (c.hp > 0 && c.max > 0) worst = Math.min(worst, c.hp / c.max);
   return worst >= 0.3 ? 0 : Math.min(1, (0.3 - worst) / 0.3);
 }
+
+// a short summary under "WAVE CLEARED!": mice beaten, coins earned and how long it took (parts with nothing to show are left out)
+export function clearLine(r) {
+  if (!r) return '';
+  const parts = [];
+  if (r.kills > 0) parts.push(`${r.kills} ${r.kills === 1 ? 'mouse' : 'mice'}`);
+  if (r.coins >= 1) parts.push(`+${Math.floor(r.coins)} coins`);
+  if (r.time > 0) parts.push(`${Math.round(r.time)}s`);
+  return parts.join(' · ');
+}

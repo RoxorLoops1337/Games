@@ -16,7 +16,7 @@ import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
-import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel } from './art_util.js';
+import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel, clearLine } from './art_util.js';
 import { iconCanvas, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
 import { buzz, setHaptics } from './haptics.js';
@@ -678,7 +678,7 @@ function onClear() {
   celeb = g.bossWave ? 2.4 : 1.15;
   sfx.play(g.bossWave ? 'win' : 'clear');
   sfx.music('calm');
-  banner(g.bossWave ? 'NEST DESTROYED!' : 'WAVE CLEARED!', g.bossWave ? 'A friend is free!' : '', false);
+  banner(g.bossWave ? 'NEST DESTROYED!' : 'WAVE CLEARED!', g.bossWave ? 'A friend is free!' : clearLine(g.report), false);
   confetti(g.towerX + 40, GROUND - 120, g.bossWave ? 60 : 26, 380);
   // victory moment: a warm flash, rings from the tower and every cat grinning for a beat
   screenFlash(g.bossWave ? 'rgba(255,240,170,.32)' : 'rgba(255,248,214,.18)', 0.35);

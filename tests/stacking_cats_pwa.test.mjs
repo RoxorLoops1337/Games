@@ -137,6 +137,14 @@ await t('dangerLevel: a soft warning only when a cat is nearly out of health', a
   assert.ok(dangerLevel([cat(1)]) > 0.9 && dangerLevel([cat(1)]) <= 1, 'nearly dead is the strongest warning');
 });
 
+await t('clearLine: a short wave summary for the cleared banner', async () => {
+  const { clearLine } = await import('../stacking_cats/art_util.js');
+  assert.equal(clearLine({ kills: 12, coins: 18.6, time: 41.2 }), '12 mice \u00B7 +18 coins \u00B7 41s');
+  assert.equal(clearLine({ kills: 1, coins: 9, time: 8 }), '1 mouse \u00B7 +9 coins \u00B7 8s');
+  assert.equal(clearLine({ kills: 0, coins: 0, time: 3 }), '3s', 'nothing to brag about, just the time');
+  assert.equal(clearLine(null), '', 'no report, no line');
+});
+
 await t('share card draws for several runs without throwing', async () => {
   const { drawShareCard, shareRun, SHARE_W } = await import('../stacking_cats/share.js');
   const { CATS } = await import('../stacking_cats/cats.js');
