@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { weekKey, weekInfo, WEEK_RE, WEEKLY_MODS, DAILY_POOL, dayKey } from '../stacking_cats/cats.js';
 import { newGame, calcMods, makeEnemy, stackMax } from '../stacking_cats/sim.js';
-import { fetchBoard, submitScore } from '../stacking_cats/daily.js';
+import { fetchBoard, submitScore, dailyStreak } from '../stacking_cats/daily.js';
 import { onRequestGet, onRequestPost, weekOf } from '../functions/api/stackingcats_board.js';
 
 let n = 0;
@@ -115,6 +115,17 @@ await t('function: get with a bad or missing week falls back to this week, and n
   assert.equal((await (await get(env, '?type=weekly')).json()).week, thisWeek);
   assert.equal((await get({}, '?type=weekly')).status, 503);
   assert.equal((await post({}, { type: 'weekly', week: thisWeek })).status, 503);
+});
+
+await t('dailyStreak counts consecutive played days, keeps a streak alive until today is over, and breaks on a gap', async () => {
+  const ms = Date.UTC(2026, 9, 26, 12);
+  const key = (back) => dayKey(ms - back * 86400000);
+  assert.equal(dailyStreak({}, ms), 0, 'no history is no streak');
+  assert.equal(dailyStreak({ [key(0)]: {} }, ms), 1, 'today alone is a streak of one');
+  assert.equal(dailyStreak({ [key(0)]: {}, [key(1)]: {}, [key(2)]: {} }, ms), 3);
+  assert.equal(dailyStreak({ [key(1)]: {}, [key(2)]: {} }, ms), 2, 'not played yet today does not break yesterday\'s streak');
+  assert.equal(dailyStreak({ [key(0)]: {}, [key(2)]: {} }, ms), 1, 'a missed day breaks it');
+  assert.equal(dailyStreak({ [key(2)]: {}, [key(3)]: {} }, ms), 0, 'a streak that ended two days ago is gone');
 });
 
 console.log(n + ' tests passed');

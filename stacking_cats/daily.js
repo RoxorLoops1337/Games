@@ -2,6 +2,14 @@
 export const dailyScore = (run) => Math.max(1, Math.floor(run.wave * 100 + run.kills + run.bossKills * 50));
 export const BOARD_URL = '/api/stackingcats_board';
 
+// consecutive days the daily challenge was played, counting back from today (or from yesterday while today is still open)
+export function dailyStreak(book, ms = Date.now()) {
+  const key = (back) => { const d = new Date(ms - back * 86400000), p = (n) => String(n).padStart(2, '0'); return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`; };
+  let back = book && book[key(0)] ? 0 : 1, n = 0;
+  while (book && book[key(back)]) { n++; back++; }
+  return n;
+}
+
 async function withTimeout(promise, ms) {
   let timer;
   const t = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), ms); });
