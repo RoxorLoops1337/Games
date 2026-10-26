@@ -82,6 +82,13 @@ const D = {
     F(c, P((p) => { p.moveTo(26, 28); p.bezierCurveTo(26, 24, 38, 24, 38, 28); p.lineTo(38, 38); p.bezierCurveTo(38, 42, 26, 42, 26, 38); p.closePath(); }), '#ff8fb7', 2);
     glint(c, 30, 30, 3.5);
   },
+  '🐚': (c) => {
+    // a scallop shell with ridges and a pearl
+    F(c, P((p) => { p.moveTo(32, 54); p.bezierCurveTo(8, 48, 4, 24, 14, 16); p.bezierCurveTo(24, 8, 40, 8, 50, 16); p.bezierCurveTo(60, 24, 56, 48, 32, 54); p.closePath(); }), '#ffc6dc', 2.2);
+    for (const [x2, y2] of [[12, 22], [20, 14], [32, 10], [44, 14], [52, 22]]) ln(c, [[32, 52], [x2, y2]], '#e08aac', 1.8);
+    F(c, P((p) => { p.moveTo(24, 54); p.lineTo(40, 54); p.lineTo(38, 58); p.lineTo(26, 58); p.closePath(); }), '#e8a0bc', 1.6);
+    F(c, circ(32, 36, 5.5), '#ffffff', 1.6); glint(c, 30, 34, 2.4);
+  },
   '🧺': (c) => {
     // a woven cat bed: a rim, a soft blanket and weave lines
     F(c, P((p) => { p.moveTo(8, 30); p.bezierCurveTo(8, 56, 56, 56, 56, 30); p.closePath(); }), '#d9a05a', 2);

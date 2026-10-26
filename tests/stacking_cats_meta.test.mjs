@@ -1,8 +1,9 @@
 // Stacking Cats: the Cat Kingdom, items and loot, coins, and the stats that show the impact of choices.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   newGame, addCat, startWave, step, makeEnemy, catMaxHp, calcMods, itemFx, estDps, explainMods, rollItemChoices, equipItem, unequipItem,
-  takeItem, useReroll, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
+  takeItem, useReroll, fxOf, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
   ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, ACHIEVEMENTS,
@@ -20,8 +21,8 @@ function fight(g, secs, mk) {
   for (let i = 0; i < secs * 30 && g.enemies.some((e) => !e.dead); i++) step(g);
 }
 
-t('items: 23 items with text, valid effects and rarities', () => {
-  assert.equal(ITEMS.length, 23);
+t('items: 24 items with text, valid effects and rarities', () => {
+  assert.equal(ITEMS.length, 24);
   for (const it of ITEMS) {
     assert.ok(it.name && it.icon && it.desc && ['common', 'rare', 'epic'].includes(it.rarity), it.id);
     assert.ok(Object.keys(it.fx).length, it.id);
@@ -303,6 +304,15 @@ t('Pearl the tide singer: slows mice, dodges, has a special, a story, a tag and 
   assert.ok(!/\u2014/.test(d.desc + catStory('pearl') + SPECIALS.pearl.name), 'no em dash');
   assert.equal(unlockProgress(d, { merges: 10 }).have, 10);
   assert.ok(ACHIEVEMENTS.find((a) => a.id === 'coll30').desc.includes(String(CATS.length)), 'collection trophy text matches the cat count');
+});
+
+t('Lucky Shell: a dodge item that stacks with the cat\'s own dodge and never touches the random stream when absent', () => {
+  const shell = ITEM_BY_ID.shell;
+  assert.ok(shell && shell.rarity === 'rare' && shell.fx.dodge > 0 && shell.fx.hp > 0);
+  assert.equal(fxOf(['shell', 'shell']).dodge, shell.fx.dodge * 2);
+  assert.equal(fxOf(['mitten']).dodge, 0, 'other items have no dodge');
+  const src = readFileSync(new URL('../stacking_cats/sim.js', import.meta.url), 'utf8');
+  assert.ok(/const dodge = \(d\.pas && d\.pas\.dodge \|\| 0\) \+ itemFx\(c\)\.dodge;\s*if \(dodge > 0 && g\.rnd\(\) < dodge\)/.test(src), 'hurtCat rolls only when there is a dodge chance');
 });
 
 console.log(`${n} tests passed`);
