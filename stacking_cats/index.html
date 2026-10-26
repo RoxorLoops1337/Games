@@ -57,7 +57,7 @@ body{background:radial-gradient(circle at 50% 30%,#3a2a66,#150f26 70%)}
 #banner.show{animation:ban 2.2s ease-out forwards}
 #banner.boss{color:#ffb0b0;text-shadow:0 3px 0 #9a1a2a,0 0 24px #f00a,3px 3px 0 var(--ink),-3px -3px 0 var(--ink),3px -3px 0 var(--ink),-3px 3px 0 var(--ink)}
 @keyframes ban{0%{opacity:0;transform:scale(.6)}15%{opacity:1;transform:scale(1.08)}25%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(1.05)}}
-#toasts{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+#toasts{position:absolute;left:50%;top:134px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
 .toast{background:var(--paper);color:var(--ink);border-radius:14px;padding:6px 16px;font-weight:800;font-size:17px;box-shadow:0 4px 14px #0006;border:2px solid var(--pink);animation:toast 3.2s forwards}
 @keyframes toast{0%{opacity:0;transform:translateY(12px)}10%{opacity:1;transform:none}85%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
 
@@ -199,6 +199,7 @@ body{background:radial-gradient(circle at 50% 30%,#3a2a66,#150f26 70%)}
 #zoom::before{content:'SPACE';position:absolute;bottom:-9px;background:#150f26;color:#ffe3c4;border-radius:8px;padding:0 7px;font-size:10px;letter-spacing:1px}
 #snackBar .chip{background:linear-gradient(#3f2f78,#2a1f55);box-shadow:0 2px 0 #150f26;font-size:15px}
 .toast{background:linear-gradient(#fffaf0,#ffe8d0);border:3px solid var(--ink);box-shadow:0 4px 0 #6a3a1a,0 8px 16px #0006;font-size:18px}
+#toasts .toast{font-size:16px;max-width:600px;text-align:center;text-wrap:balance;padding:5px 16px}
 #banner{font-size:64px;letter-spacing:1px}
 
 /* screens */
