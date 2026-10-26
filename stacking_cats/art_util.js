@@ -148,3 +148,9 @@ export function idleHop(t, seed = 0) {
   const period = 9 + (Math.abs(Math.floor(seed)) % 5), u = (t + seed * 3.7) % period;
   return u < 0.5 ? Math.sin((u / 0.5) * Math.PI) : 0;
 }
+
+// how much of the wave is beaten: mice still queued or alive against the wave's size, kept inside 0..1 (summons can push the count past the total)
+export function waveProgress(queued, alive, total) {
+  if (!(total > 0)) return 0;
+  return Math.min(1, Math.max(0, 1 - (queued + alive) / total));
+}

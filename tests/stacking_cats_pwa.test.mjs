@@ -117,6 +117,15 @@ await t('idleHop: a tower cat now and then hops once, each cat on its own beat',
   assert.notDeepEqual(a, b, 'two cats do not hop in unison');
 });
 
+await t('waveProgress: share of the wave already beaten, always between 0 and 1', async () => {
+  const { waveProgress } = await import('../stacking_cats/art_util.js');
+  assert.equal(waveProgress(10, 10, 20), 0, 'a fresh wave is at the start');
+  assert.equal(waveProgress(0, 5, 20), 0.75);
+  assert.equal(waveProgress(0, 0, 20), 1);
+  assert.equal(waveProgress(0, 0, 0), 0, 'no total means no bar');
+  assert.ok(waveProgress(40, 0, 20) >= 0 && waveProgress(0, 0, 20) <= 1, 'summons cannot push it out of range');
+});
+
 await t('share card draws for several runs without throwing', async () => {
   const { drawShareCard, shareRun, SHARE_W } = await import('../stacking_cats/share.js');
   const { CATS } = await import('../stacking_cats/cats.js');

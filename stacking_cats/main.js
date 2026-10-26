@@ -16,7 +16,7 @@ import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
-import { mix, outlineCanvas, rimLight, texturize, hash, idleHop } from './art_util.js';
+import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress } from './art_util.js';
 import { iconCanvas, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
 import { buzz, setHaptics } from './haptics.js';
@@ -662,6 +662,7 @@ function beginWave() {
   if (boss) { spawnFx({ k: 'vig', life: 2.6, max: 2.6 }); nestPending = 3; }
   // a short "incoming" strip under the banner: which mice this wave brings and how many
   const inc = new Map(); for (const q of g.queue) { const o = inc.get(q.type) || { n: 0, el: 0 }; o.n++; if (q.elite) o.el++; inc.set(q.type, o); }
+  waveTotal = g.queue.length + g.enemies.length;
   incoming = [...inc].map(([type, o]) => ({ type, n: o.n, el: o.el })); incomingEnd = tAnim + 4.6;
   sfx.music(boss ? 'boss' : 'fight');
   dpsHist.length = 0;
@@ -1104,6 +1105,7 @@ function updateHud(dt) {
   if (!inRun) return;
   const playing = mode === 'play';
   setText('waveTxt', `Wave ${g.wave}`);
+  { const pw = Math.round(100 * waveProgress(g.queue.length, g.enemies.length, waveTotal)) + '%'; if (hudCache.wprog !== pw) { hudCache.wprog = pw; $('waveProg').style.width = pw; } }
   setText('themeTxt', [THEMES[bdIdx] ? THEMES[bdIdx].name : '', bestTag(save.stats.bestWave)].filter(Boolean).join(' \u00B7 '));
   const inStage = ((g.wave - 1) % BOSS_EVERY) + 1;
   if (hudCache.pips !== inStage) { hudCache.pips = inStage; $('nestPips').innerHTML = Array.from({ length: BOSS_EVERY }, (_, i) => `<i class="${i === BOSS_EVERY - 1 ? 'boss' : ''} ${i + 1 <= inStage ? 'on' : ''}"></i>`).join(''); }
@@ -1808,7 +1810,7 @@ function vignette(t) {
   }
 }
 
-let incoming = [], incomingEnd = 0;
+let incoming = [], incomingEnd = 0, waveTotal = 0;
 function drawIncoming() {
   const left = incomingEnd - tAnim;
   if (left <= 0 || !incoming.length || mode !== 'play') return;
