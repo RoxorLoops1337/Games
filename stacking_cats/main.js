@@ -650,6 +650,13 @@ function onClear() {
   sfx.music('calm');
   banner(g.bossWave ? 'NEST DESTROYED!' : 'WAVE CLEARED!', g.bossWave ? 'A friend is free!' : '', false);
   confetti(g.towerX + 40, GROUND - 120, g.bossWave ? 60 : 26, 380);
+  // victory moment: a warm flash, rings from the tower and every cat grinning for a beat
+  screenFlash(g.bossWave ? 'rgba(255,240,170,.32)' : 'rgba(255,248,214,.18)', 0.35);
+  flashGlow(g.towerX, GROUND - 120, g.bossWave ? 260 : 170, '#ffe9a0', 0.55);
+  ring(g.towerX, GROUND - 100, g.bossWave ? 220 : 150, '#fff3b8', 0.7, 8);
+  ring(g.towerX, GROUND - 100, g.bossWave ? 150 : 100, '#ffffff', 0.55, 4);
+  sparks(g.towerX, GROUND - 120, g.bossWave ? 26 : 14, '#ffe27a', 300, 0.7);
+  g.cats.forEach((c, i) => { if (c.hp > 0) { moods.set(c.uid, 1.4); if (i < 3) setTimeout(() => { if (mode === 'celebrate') { const q = catPos(c.uid); if (q) sparks(q.x, q.y - 10, 5, '#fff6b0', 150, 0.4); } }, 160 + i * 140); } });
   queue = g.reward.slice();
   if (g.bossWave) queue.splice(queue.length - 1, 0, 'route');
   if (S.eventDue(g)) queue.push('event');
