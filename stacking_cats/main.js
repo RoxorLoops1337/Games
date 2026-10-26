@@ -647,8 +647,8 @@ function beginWave() {
   sfx.play(boss ? 'boss' : 'wave');
   if (boss) { spawnFx({ k: 'vig', life: 2.6, max: 2.6 }); nestPending = 3; }
   // a short "incoming" strip under the banner: which mice this wave brings and how many
-  const inc = new Map(); for (const q of g.queue) inc.set(q.type, (inc.get(q.type) || 0) + 1);
-  incoming = [...inc].map(([type, n]) => ({ type, n })); incomingEnd = tAnim + 4.6;
+  const inc = new Map(); for (const q of g.queue) { const o = inc.get(q.type) || { n: 0, el: 0 }; o.n++; if (q.elite) o.el++; inc.set(q.type, o); }
+  incoming = [...inc].map(([type, o]) => ({ type, n: o.n, el: o.el })); incomingEnd = tAnim + 4.6;
   sfx.music(boss ? 'boss' : 'fight');
   dpsHist.length = 0;
   // introduce new mice and the nest's trick the first time they show up
@@ -1804,6 +1804,12 @@ function drawIncoming() {
   items.forEach((it, i) => {
     const spr = enemySprite(it.type, false), sc = Math.min(0.95, 38 / ((ENEMY_TYPES[it.type] && ENEMY_TYPES[it.type].h) || 40)), cx = x0 + 18 + i * cw;
     ctx.drawImage(spr.c, cx + 18 - spr.ax * sc, y0 + 50 - spr.ay * sc, spr.w * sc, spr.h * sc);
+    if (it.el) {
+      // elites in the mix: a little gold crown on the sprite
+      const kx = cx + 26, ky = y0 + 9;
+      ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#6a4a14'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(kx - 6, ky + 7); ctx.lineTo(kx - 7, ky); ctx.lineTo(kx - 3, ky + 3); ctx.lineTo(kx, ky - 2); ctx.lineTo(kx + 3, ky + 3); ctx.lineTo(kx + 7, ky); ctx.lineTo(kx + 6, ky + 7); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
     ctx.lineWidth = 3.5; ctx.strokeStyle = '#1b1233'; ctx.lineJoin = 'round';
     ctx.strokeText('\u00D7' + it.n, cx + 40, y0 + 36); ctx.fillStyle = '#fff'; ctx.fillText('\u00D7' + it.n, cx + 40, y0 + 36);
   });
