@@ -8,7 +8,7 @@ import {
 import {
   ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, ACHIEVEMENTS,
 } from '../stacking_cats/cats.js';
-import { CAT_BY_ID, CAT_TAGS, SPECIALS, unlockProgress } from '../stacking_cats/cats.js';
+import { CAT_BY_ID, CAT_TAGS, SPECIALS, SYNERGIES, unlockProgress } from '../stacking_cats/cats.js';
 import { catStory } from '../stacking_cats/story.js';
 
 let n = 0;
@@ -28,6 +28,13 @@ t('items: 25 items with text, valid effects and rarities', () => {
     assert.ok(Object.keys(it.fx).length, it.id);
     assert.ok(!/—/.test(JSON.stringify(it)));
   }
+});
+
+t('every item has its own icon, none shared with another item or a synergy badge', () => {
+  const icons = ITEMS.map((it) => it.icon.replace(/\uFE0F/g, ''));
+  assert.equal(new Set(icons).size, icons.length, 'two items share an icon');
+  const syn = Object.values(SYNERGIES).map((x) => x.icon.replace(/\uFE0F/g, ''));
+  for (const it of ITEMS) assert.ok(!syn.includes(it.icon.replace(/\uFE0F/g, '')), it.id + ' shares an icon with a synergy badge');
 });
 
 t('kingdom: buy upgrades with coins, costs rise, max level, bonuses add up', () => {
