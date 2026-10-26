@@ -436,7 +436,7 @@ function showHow(back) {
     ${row('\uD83C\uDFAF', '<b>Focus.</b> Tap a mouse and your cats shoot it first.')}
     ${row('\uD83D\uDC00', `<b>Nests.</b> Every ${BOSS_EVERY}th wave is a nest fight. Destroy it to rescue a cat and win loot.`)}
     ${row('\u2728', `<b>Merge</b> two equal cats into one stronger cat, up to Lv 3. The tower fits ${MAX_STACK}, the bench ${MAX_BENCH}.`)}
-    ${row('\uD83C\uDF81', '<b>Loot.</b> Elite mice drop chests. Items go on one cat each (two at Lv 3). Tap Arrange tower.')}
+    ${row('\uD83C\uDF81', '<b>Relics.</b> Elite mice drop chests full of relics, from common to mythic. Each cat carries one (two at Lv 3). Forge three of a kind into the next tier.')}
     ${row('\uD83E\uDE99', '<b>Coins</b> are saved. Spend them in the <b>Kingdom</b> to make every future run stronger.')}
     ${row('\uD83D\uDD25', '<b>Synergies.</b> Cats of one kind boost each other. Look for the badges by the wave counter.')}
     ${row('\uD83D\uDC3E', '<b>Roads.</b> After each nest you pick the next road. Riskier roads pay better.')}
@@ -895,7 +895,7 @@ function showFull(newId) {
 
 function showItemReward() {
   rewardChoices = rewardChoices || S.rollItemChoices(g);
-  setScreen(`<h2>Loot!</h2><p class="sub">Pick a treasure. Each cat can carry one item (two at Lv 3).</p>
+  setScreen(`<h2>Loot!</h2><p class="sub">Pick a relic. Each cat can carry one (two at Lv 3).</p>
     <div class="cards">${rewardChoices.map(itemCard).join('')}</div>
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button>${rerollBtn()}</div>`);
   acts = {
@@ -973,13 +973,13 @@ function showTower(back, opt = {}) {
     const plan = it ? S.forgePlan(g, selItem) : null;
     const same = it ? g.stash.filter((x) => ITEM_BY_ID[x].rarity === it.rarity).length : 0;
     const acts2 = it
-      ? `<button class="btn small amber fbtn" data-act="sell">Sell &#129689; +${S.sellValue(g, it.id)}</button><button class="btn small fbtn ${plan ? 'purple' : 'grey'}" data-act="forge" ${plan ? '' : 'disabled'} title="Melt three ${it.rarity} items into one ${FORGE_NEXT[it.rarity]} item">Forge ${Math.min(same, FORGE_COUNT)}/${FORGE_COUNT} &rarr; ${FORGE_NEXT[it.rarity]}</button>`
+      ? `<button class="btn small amber fbtn" data-act="sell">Sell &#129689; +${S.sellValue(g, it.id)}</button><button class="btn small fbtn ${plan ? 'purple' : 'grey'}" data-act="forge" ${plan ? '' : 'disabled'} title="Melt three ${it.rarity} relics into one ${FORGE_NEXT[it.rarity]} relic">Forge ${Math.min(same, FORGE_COUNT)}/${FORGE_COUNT} &rarr; ${FORGE_NEXT[it.rarity]}</button>`
       : '';
     const syn = S.synergyState(g);
     const synChips = Object.entries(syn.counts).sort((a, b) => b[1] - a[1]).map(([t, n]) => { const tier = syn.tiers[t] || 0; return `<span class="schip ${tier ? 't' + tier : ''}" title="${SYNERGIES[t].name}: ${tier ? synergyText(t, tier) : 'needs 2 cats'}">${SYNERGIES[t].icon} ${SYNERGIES[t].name} ${n}/${n >= 3 ? 3 : n >= 2 ? 3 : 2}</span>`; }).join('');
     const msg = over
-      ? `<b class="warn">Backpack is over full by ${over}.</b> Sell, forge or equip items to continue.`
-      : it ? `<b>${it.icon} ${it.name}</b>: ${it.desc}. Tap a cat to equip it, or sell / forge it.` : sel ? 'Tap another cat to swap, or a matching one to merge.' : 'Tap a cat to move it. Tap a backpack item, then a cat, to equip it.';
+      ? `<b class="warn">Backpack is over full by ${over}.</b> Sell, forge or equip relics to continue.`
+      : it ? `<b>${it.icon} ${it.name}</b>: ${it.desc}. Tap a cat to equip it, or sell / forge it.` : sel ? 'Tap another cat to swap, or a matching one to merge.' : 'Tap a cat to move it. Tap a backpack relic, then a cat, to equip it.';
     setScreen(`<h2>Arrange your tower <small class="klv">Team DPS &asymp; ${Math.round(teamDps(S.calcMods(g)))}</small></h2><div class="synrow">${synChips || '<small>Stack cats of the same kind for synergy bonuses!</small>'}</div>
       <div class="tbody"><div class="tower"><div class="col"><h4>Tower (top to bottom)</h4>${tw.join('')}<button class="btn small red relbtn" data-act="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div><div class="col"><h4>Bench (rests, heals fast)</h4>${bn.join('')}
         <h4>Backpack <span class="${over ? 'warn' : ''}">${g.stash.length}/${MAX_STASH}</span></h4><div class="bagrow">${bag}</div></div></div></div>
@@ -989,7 +989,7 @@ function showTower(back, opt = {}) {
   };
   draw();
   acts = {
-    done: () => { if (S.overflow(g) > 0) { toast('Sell, forge or equip items first'); return; } back(); },
+    done: () => { if (S.overflow(g) > 0) { toast('Sell, forge or equip relics first'); return; } back(); },
     sell: () => { const v = S.sellItem(g, selItem); if (v) { sfx.play('coin'); toast(`Sold for +${v} coins`); } selItem = null; draw(); },
     forge: () => {
       const id = S.forgeItems(g, selItem);
@@ -1488,6 +1488,8 @@ function handle(e) {
     case 'cathit': { if (Math.random() < 0.18) emote(e.uid, '\uD83D\uDCA2', 0.8); const p = catPos(e.uid); txtFx(p.x - 56, p.y, Math.round(e.v), '#ff8a8a', 15, 0.7); towerWob = 1; shake = Math.max(shake, 1.8); sfx.play('hit'); buzz('hit'); break; }
     case 'coin': if (fx.length < 300) spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 52, ty: 72, life: 0.7 + Math.random() * 0.2, max: 0.8, kind: 'coin', ox: (Math.random() - 0.5) * 160, oy: -60 - Math.random() * 60 }); break;
     case 'chest': spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', ox: 0, oy: -90 }); sparks(e.x, e.y, 10, '#ffd23f', 220, 0.5); txtFx(e.x, e.y - 20, 'Chest!', '#ffd23f', 20, 1); sfx.play('chest'); break;
+    case 'shieldhit': { const p = catPos(e.uid); ring(p.x, p.y - 10, e.broke ? 70 : 46, '#8fe8ff', e.broke ? 0.5 : 0.28, e.broke ? 6 : 3); if (e.broke) { txtFx(p.x - 46, p.y - 6, 'Barrier down', '#bff4ff', 16, 0.9); sparks(p.x, p.y - 10, 10, '#bff4ff', 190, 0.4); } break; }
+    case 'undying': { const p = catPos(e.uid); txtFx(p.x - 56, p.y - 24, 'Second chance!', '#ffe27a', 22, 1.5); ring(p.x, p.y - 10, 100, '#fff2a0', 0.7, 8); flashGlow(p.x, p.y - 10, 140, '#fff2a0', 0.6); sparks(p.x, p.y - 10, 20, '#fff6b0', 260, 0.7); sfx.play('heal'); break; }
     case 'dodge': { const p = catPos(e.uid); txtFx(p.x - 40, p.y, 'Dodge!', '#b9f5ff', 18, 0.8); ring(p.x, p.y - 10, 44, '#d9f8ff', 0.35, 3); sparks(p.x, p.y - 10, 6, '#ffffff', 150, 0.3); break; }
     case 'ehit': sparks(e.x, e.y, 3, '#ffffff', 130, 0.2); break;
     case 'spawn': smoke(e.x, e.y, 1, 7, '#d9c9a0'); puff(e.x, e.y - 10, 3, '#d9c9a0', 50, 0.4, 4); ring(e.x, e.y + 2, 22, '#e8dcb8', 0.28, 3); break;
@@ -1729,6 +1731,7 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
       const hg = ctx.createLinearGradient(0, by, 0, by + 10); hg.addColorStop(0, hc[0]); hg.addColorStop(1, hc[1]);
       ctx.fillStyle = hg; ctx.beginPath(); ctx.roundRect(bx, by + 1, Math.max(4, bw * r), 8, 4); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.roundRect(bx + 2, by + 2, Math.max(2, bw * r - 4), 2, 1); ctx.fill();
+      if (c.shd > 0.5) { const sr = Math.min(1, c.shd / c.max); ctx.fillStyle = '#3fd2ff'; ctx.beginPath(); ctx.roundRect(bx, by + 1, Math.max(4, bw * sr), 4.5, 2); ctx.fill(); ctx.strokeStyle = '#0f4a6a'; ctx.lineWidth = 1; ctx.stroke(); }   // a relic barrier over the health
       if (c.sp != null && hpBars === true && c.id) {
         // special move charge: a thin bar under the health bar that glows when the move is ready
         const sp = Math.min(1, c.sp), sc = (S.specialInfo(c.id) || {}).color || '#ffd23f';
@@ -1860,7 +1863,7 @@ function drawField(t, dt) {
   }
   for (const m of g.mines) { ctx.fillStyle = '#4a4a5a'; ctx.strokeStyle = '#271c33'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(m.x, GROUND + 10, 13, 6, 0, 0, TAU); ctx.fill(); ctx.stroke(); const on = Math.sin(t * 8) > 0; ctx.fillStyle = on ? '#ff5d5d' : '#7a2a2a'; ctx.beginPath(); ctx.arc(m.x, GROUND + 6, 3, 0, TAU); ctx.fill(); if (on) { add(); glow(m.x, GROUND + 6, 14, '#ff5d5d', 0.6); norm(); } }
   const alive = S.aliveCats(g);
-  const list = alive.map((c) => ({ id: c.id, lvl: c.lvl, hp: c.hp, max: S.catMaxHp(g, c), flash: c.flash, atk: c.atk, seed: c.uid * 0.7, items: c.items, uid: c.uid, sp: c.sp }));
+  const list = alive.map((c) => ({ id: c.id, lvl: c.lvl, hp: c.hp, max: S.catMaxHp(g, c), flash: c.flash, atk: c.atk, seed: c.uid * 0.7, items: c.items, uid: c.uid, sp: c.sp, shd: c.shd }));
   const marching = g.marching && g.state === 'fight';
   drawStack(g.towerX, list, t, marching, true, mode === 'celebrate', g.zoomT > 0);
   if (g.fortressT > 0) {

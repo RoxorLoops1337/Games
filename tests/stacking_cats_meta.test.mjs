@@ -21,10 +21,10 @@ function fight(g, secs, mk) {
   for (let i = 0; i < secs * 30 && g.enemies.some((e) => !e.dead); i++) step(g);
 }
 
-t('items: 25 items with text, valid effects and rarities', () => {
-  assert.equal(ITEMS.length, 25);
+t('items: 61 relics with text, valid effects and rarities', () => {
+  assert.equal(ITEMS.length, 61);
   for (const it of ITEMS) {
-    assert.ok(it.name && it.icon && it.desc && ['common', 'rare', 'epic'].includes(it.rarity), it.id);
+    assert.ok(it.name && it.icon && it.desc && ['common', 'rare', 'epic', 'legendary', 'mythic'].includes(it.rarity), it.id);
     assert.ok(Object.keys(it.fx).length, it.id);
     assert.ok(!/—/.test(JSON.stringify(it)));
   }
@@ -104,8 +104,10 @@ t('forging turns three of a rarity into one of the next, and picks nothing it ca
   g.stash = ['fang', 'heart', 'scarf', 'claws'];
   assert.equal(ITEM_BY_ID[forgeItems(g, 0)].rarity, 'epic');
   g.stash = ['crown', 'hourglass', 'mask'];
+  assert.equal(ITEM_BY_ID[forgeItems(g, 0)].rarity, 'legendary');
+  g.stash = ['kingcrown', 'timeknot', 'wheart'];
   const coins = g.run.coins, e = forgeItems(g, 0);
-  assert.equal(ITEM_BY_ID[e].rarity, 'epic'); assert.ok(g.run.coins > coins); assert.equal(g.stash.length, 1);
+  assert.equal(ITEM_BY_ID[e].rarity, 'mythic'); assert.ok(g.run.coins > coins); assert.equal(g.stash.length, 1);
 });
 
 t('merging and releasing keep items (extra ones return to the stash)', () => {

@@ -12,8 +12,8 @@ export const MAX_ENEMIES = 34;
 
 // Difficulty knobs (the balance test keeps these honest).
 export const TUNE = {
-  hpA: 0.14, hpB: 0.006,        // enemy hp scale per wave
-  dmgA: 0.065, dmgB: 0.002,     // enemy damage scale per wave
+  hpA: 0.17, hpB: 0.0075,       // enemy hp scale per wave
+  dmgA: 0.075, dmgB: 0.0025,    // enemy damage scale per wave
   budgetA: 3, budgetB: 2.6, budgetC: 0.06,
   nestHp: 650, nestGrow: 1.4,
   healAfter: 0.4,
@@ -59,7 +59,7 @@ const pick = (g, arr) => arr[Math.floor(g.rnd() * arr.length)];
 // ---------------------------------------------------------------- stats
 export function calcMods(g) {
   const K = g.meta;
-  const m = { dmg: K.dmg, haste: K.haste, crit: 0.05 + K.crit, critMul: 1.8, dr: 0, hp: K.hp, range: K.range, slow: 0, curse: 0, waveHeal: TUNE.healAfter + K.waveHeal, snackMul: 1, coin: 1 + K.coinMul };
+  const m = { dmg: K.dmg, haste: K.haste, crit: 0.05 + K.crit, critMul: 1.8, dr: 0, hp: K.hp, range: K.range, slow: 0, curse: 0, waveHeal: TUNE.healAfter + K.waveHeal, snackMul: 1, coin: 1 + K.coinMul, zoomG: 0 };
   for (const c of g.cats.concat(g.bench)) m.coin += itemFx(c).coin;
   if (g.daily) { m.dmg += g.daily.mod.dmg || 0; m.hp += g.daily.mod.hp || 0; }
   m.regenTeam = 0;
@@ -68,6 +68,11 @@ export function calcMods(g) {
   for (const t in m.syn.tiers) {
     const team = SYNERGIES[t].tiers[m.syn.tiers[t] - 1].team;
     if (team) for (const k in team) { if (k === 'regen') m.regenTeam += team[k]; else m[k] += team[k]; }
+  }
+  for (const c of g.cats) {   // relics that help the whole team count while a living tower cat carries them
+    if (c.ko) continue;
+    const f = itemFx(c);
+    m.dmg += f.teamDmg; m.haste += f.teamHaste; m.hp += f.teamHp; m.dr += f.teamDr; m.curse += f.curseT; m.waveHeal += f.wheal; m.zoomG += f.zoomG;
   }
   for (const c of g.cats) {
     if (c.ko) continue;
@@ -93,7 +98,15 @@ export function calcMods(g) {
   return m;
 }
 
-const FX_KEYS = ['dmg', 'haste', 'hp', 'crit', 'critMul', 'range', 'ls', 'dr', 'regen', 'thorns', 'berserk', 'extra', 'burn', 'slow', 'stun', 'coin', 'dodge'];
+// every effect key a relic can carry. Per cat: dmg haste hp crit critMul range ls dr regen thorns berserk extra burn slow stun coin dodge, and
+// exec (extra damage to mice under 30% health), open (to mice at full health), bossDmg (to elites and nests), pristine (while above 80% health),
+// pierce (ignores armor), kheal / kcoin / kcharge (on a kill: heal share, coins, special charge), boom (kills explode for this share of the mouse's health),
+// cleave (hits strike a second mouse), venom (poison share), frenzy (attack speed per kill this wave, up to 10), shield (a barrier each wave),
+// undying (survive one deadly bite per wave), echo (chance an attack repeats), spc (special charge speed).
+// Whole team while carried by a living tower cat: teamDmg teamHaste teamHp teamDr curseT (mice take more damage) wheal (extra heal after a wave) zoomG (zoomies meter) luck (loot odds).
+export const FX_KEYS = ['dmg', 'haste', 'hp', 'crit', 'critMul', 'range', 'ls', 'dr', 'regen', 'thorns', 'berserk', 'extra', 'burn', 'slow', 'stun', 'coin', 'dodge',
+  'exec', 'open', 'bossDmg', 'pristine', 'pierce', 'kheal', 'kcoin', 'kcharge', 'boom', 'cleave', 'venom', 'frenzy', 'shield', 'undying', 'echo', 'spc',
+  'teamDmg', 'teamHaste', 'teamHp', 'teamDr', 'curseT', 'wheal', 'zoomG', 'luck'];
 // the summed effect of a cat's equipped items (cached on the cat)
 export function fxOf(items) {
   const f = {};
@@ -232,7 +245,9 @@ export function releaseCat(g, uid) {
 // ---------------------------------------------------------------- items and loot
 export function stashItem(g, id) { g.stash.push(id); return true; }
 export function rollItemChoices(g, n = 3) {
-  const L = g.meta.luck + g.route.rare, pool = ITEMS.map((it) => ({ id: it.id, w: ITEM_WEIGHT[it.rarity] * (it.rarity === 'rare' ? 1 + 0.25 * L : it.rarity === 'epic' ? 1 + 0.5 * L : 1) }));
+  let team = 0; for (const c of g.cats) if (!c.ko) team += itemFx(c).luck;   // Fortune Cookie, Golden Paw, the Cat King's crown
+  const L = g.meta.luck + g.route.rare + team, LUCK = { rare: 0.25, epic: 0.5, legendary: 0.75, mythic: 1 };
+  const pool = ITEMS.map((it) => ({ id: it.id, w: ITEM_WEIGHT[it.rarity] * (1 + (LUCK[it.rarity] || 0) * L) }));
   const out = [];
   while (out.length < n && pool.length) {
     let r = g.rnd() * pool.reduce((a, b) => a + b.w, 0), i = 0;
@@ -268,12 +283,12 @@ export function forgeItems(g, idx) {
   const plan = forgePlan(g, idx);
   if (!plan) return null;
   const rar = ITEM_BY_ID[g.stash[idx]].rarity, next = FORGE_NEXT[rar], used = plan.map((i) => g.stash[i]);
-  const pool = ITEMS.filter((it) => it.rarity === next && !(rar === 'epic' && used.includes(it.id)));
+  const pool = ITEMS.filter((it) => it.rarity === next && !(next === rar && used.includes(it.id)));
   const pick = (pool.length ? pool : ITEMS.filter((it) => it.rarity === next))[Math.floor(g.rnd() * (pool.length || 1))] || ITEMS.find((it) => it.rarity === next);
   for (const i of plan.slice().sort((a, b) => b - a)) g.stash.splice(i, 1);
   g.stash.push(pick.id);
   g.run.forged = (g.run.forged || 0) + 1;
-  if (rar === 'epic') addCoins(g, Math.round(40 * (1 + 0.04 * g.wave)));
+  if (next === rar) addCoins(g, Math.round(40 * (1 + 0.04 * g.wave)));   // nothing above a mythic: three of them pay coins instead
   return pick.id;
 }
 export function equipItem(g, stashIdx, catUid) {
@@ -454,10 +469,11 @@ export function startWave(g) {
     g.enemies.push(e);
   }
   g.mods = calcMods(g);
+  for (const c of g.cats.concat(g.bench)) { const f = itemFx(c); c.shd = f.shield ? catMaxHp(g, c) * f.shield : 0; c.undy = false; c.fz = 0; }   // barriers refill, undying and frenzy reset every wave
   emit(g, { k: 'wave', wave: g.wave, boss: g.bossWave });
 }
 
-function finishWave(g) {
+export function finishWave(g) {
   g.state = 'clear';
   const m = calcMods(g);
   const before = snapshotMax(g);
@@ -485,10 +501,17 @@ function finishWave(g) {
 }
 
 // ---------------------------------------------------------------- damage
-function hurtEnemy(g, e, dmg, o = {}) {
+export function hurtEnemy(g, e, dmg, o = {}) {   // exported for the tests
   if (e.dead || e.under) return 0;
+  const sc = g.curCat, f = sc ? itemFx(sc) : null;
   let d = dmg * (1 + g.mods.curse);
-  if (e.armor && !o.pierceArmor) d *= 1 - e.armor;
+  if (e.armor && !o.pierceArmor && !(f && f.pierce)) d *= 1 - e.armor;
+  if (f) {   // relics that care about the target or about the cat's own health
+    if (f.exec && e.hp <= e.maxHp * 0.3) d *= 1 + f.exec;
+    if (f.open && e.hp >= e.maxHp * 0.9) d *= 1 + f.open;
+    if (f.bossDmg && (e.boss || e.elite)) d *= 1 + f.bossDmg;
+    if (f.pristine && sc.hp >= catMaxHp(g, sc) * 0.8) d *= 1 + f.pristine;
+  }
   if (e.boss) {
     // nest tricks: the Rat Castle is guarded by shield bearers, the Moon Burrow hides in a bubble, the Trash Tower rots back unless pressured
     if (e.kind === 'castle' && g.enemies.some((o) => !o.dead && o.shield > 0)) d *= 0.35;
@@ -503,15 +526,19 @@ function hurtEnemy(g, e, dmg, o = {}) {
   }
   e.hp -= d - absorbed;
   e.flash = 0.1;
-  const sc = g.curCat;
   if (sc) {
     sc.dmgDone += d; sc.wDmg += d; g.run.dmg += d;
     if (d > g.run.biggest) g.run.biggest = d;
     const bc = g.run.byCat[sc.id] || (g.run.byCat[sc.id] = { dmg: 0, kills: 0, heal: 0 });
     bc.dmg += d;
-    const f = itemFx(sc);
     if (f.ls) healCat(g, sc, d * f.ls, sc, true);
+    if (f.cleave && !o.cleave) {   // the hit also strikes the nearest other mouse
+      let near = null, nd = 160;
+      for (const x of g.enemies) if (!x.dead && !x.under && x !== e && Math.abs(x.x - e.x) < nd) { nd = Math.abs(x.x - e.x); near = x; }
+      if (near) hurtEnemy(g, near, d * f.cleave, { cleave: true, silent: true, tick: true });
+    }
     if (!o.tick && !shielded) {
+      if (f.venom) { const add = d * f.venom / 3, p = e.poison; e.poison = { dps: Math.min(add * 5, (p ? p.dps : 0) + add), t: 3, owner: sc.uid }; }
       if (f.burn && !e.burn) e.burn = { dps: d * 0.35, t: 2, owner: sc.uid };
       if (f.slow) { e.slow = Math.max(e.slow, f.slow); e.slowT = Math.max(e.slowT, 1.5); }
       if (f.stun && !e.boss && g.rnd() < f.stun) e.stun = Math.max(e.stun, 0.6);
@@ -526,20 +553,26 @@ function hurtEnemy(g, e, dmg, o = {}) {
     const p = e.poison;
     e.poison = { dps: (p ? p.dps : 0) + o.poison.dps * BASE_DMG * (o.mult || 1), t: o.poison.t, owner: sc ? sc.uid : 0 };
   }
-  g.zoom = Math.min(100, g.zoom + (e.boss ? 0.15 : 0.12));
+  g.zoom = Math.min(100, g.zoom + (e.boss ? 0.15 : 0.12) * (1 + g.mods.zoomG));
   if (e.hp <= 0) killEnemy(g, e, true);
   return d;
 }
 
-function killEnemy(g, e, credit) {
+export function killEnemy(g, e, credit) {
   if (e.dead) return;
   e.dead = true;
   if (credit) {
-    const sc = g.curCat;
-    if (sc) { sc.sp = Math.min(1, sc.sp + (e.boss ? 0.2 : e.elite ? 0.06 : 0.025)); sc.kills++; sc.wKills++; (g.run.byCat[sc.id] || (g.run.byCat[sc.id] = { dmg: 0, kills: 0, heal: 0 })).kills++; }
+    const sc = g.curCat, kf = sc ? itemFx(sc) : null;
+    if (sc) {
+      sc.sp = Math.min(1, sc.sp + (e.boss ? 0.2 : e.elite ? 0.06 : 0.025) + kf.kcharge); sc.kills++; sc.wKills++; (g.run.byCat[sc.id] || (g.run.byCat[sc.id] = { dmg: 0, kills: 0, heal: 0 })).kills++;
+      if (kf.kheal) healCat(g, sc, catMaxHp(g, sc) * kf.kheal, sc, true);
+      if (kf.frenzy) sc.fz = Math.min(10, (sc.fz || 0) + 1);
+      if (kf.boom && !e.boss && (g._boomDepth || 0) < 8) { g._boomDepth = (g._boomDepth || 0) + 1; explode(g, e.x, ecy(e), 85, e.maxHp * kf.boom, { silent: true, color: '#ffb05a' }); g._boomDepth--; }
+    }
     if (e.boss) { g.run.bossKills++; g.wKills++; addCoins(g, COIN.nest + COIN.nestGrow * e.n, e.x, e.y); emit(g, { k: 'bossDown', x: e.x, y: e.y }); }
     else {
-      g.run.kills++; g.wKills++; g.zoom = Math.min(100, g.zoom + 2.4);
+      g.run.kills++; g.wKills++; g.zoom = Math.min(100, g.zoom + 2.4 * (1 + g.mods.zoomG));
+      if (kf && kf.kcoin) addCoins(g, kf.kcoin, e.x, ecy(e));
       emit(g, { k: 'kill', x: e.x, y: ecy(e), type: e.type, elite: e.elite });
       addCoins(g, e.elite ? COIN.elite : COIN.kill, e.x, ecy(e));
       if (g.rnd() < (e.elite ? 0.22 : 0.012) * (1 + g.meta.luck * 0.4 + g.route.chest + ((g.daily && g.daily.mod.chest) || 0))) { g.chests++; emit(g, { k: 'chest', x: e.x, y: ecy(e) }); }
@@ -568,18 +601,25 @@ function koCat(g, c) {
   }
 }
 
-function hurtCat(g, c, dmg) {
+export function hurtCat(g, c, dmg) {
   if (!c || c.ko) return;
   const d = CAT_BY_ID[c.id];
   const dodge = (d.pas && d.pas.dodge || 0) + itemFx(c).dodge;
   if (dodge > 0 && g.rnd() < dodge) { emit(g, { k: 'dodge', uid: c.uid }); return; }
   if (g.phaseT > 0 && g.rnd() < 0.6) { emit(g, { k: 'dodge', uid: c.uid }); return; }
-  const v = dmg * (1 - Math.min(0.8, g.mods.dr + itemFx(c).dr)) * (g.fortressT > 0 ? 0.3 : 1) * g.hurtMul;
+  let v = dmg * (1 - Math.min(0.8, g.mods.dr + itemFx(c).dr)) * (g.fortressT > 0 ? 0.3 : 1) * g.hurtMul;
+  if (c.shd > 0) {   // a relic barrier soaks the bite first
+    const a = Math.min(c.shd, v); c.shd -= a; v -= a;
+    emit(g, { k: 'shieldhit', uid: c.uid, broke: c.shd <= 0 });
+  }
   c.hp -= v;
   c.taken += v; g.run.taken += v; g.wTaken += v;
   c.flash = 0.18;
-  emit(g, { k: 'cathit', uid: c.uid, v });
-  if (c.hp <= 0) koCat(g, c);
+  if (v > 0) emit(g, { k: 'cathit', uid: c.uid, v });
+  if (c.hp <= 0) {
+    if (itemFx(c).undying && !c.undy) { c.undy = true; c.hp = catMaxHp(g, c) * 0.4; emit(g, { k: 'undying', uid: c.uid }); return; }   // Nine Lives Locket: one second chance per wave
+    koCat(g, c);
+  }
 }
 
 function healCat(g, c, v, src, quiet) {
@@ -780,10 +820,10 @@ function updateCats(g, dt) {
     c.flash = Math.max(0, c.flash - dt);
     c.atk = Math.max(0, c.atk - dt);
     const f = cfx(m, c);
-    let hs = 1 + m.haste + f.haste;
+    let hs = 1 + m.haste + f.haste + (c.fz || 0) * f.frenzy;
     if (c.frenzyT > 0) { c.frenzyT -= dt; hs *= 2.2; }
     if (g.anthemT > 0) hs *= 1.5;
-    c.sp = Math.min(1, c.sp + dt / SPECIAL_TIME);
+    c.sp = Math.min(1, c.sp + dt / SPECIAL_TIME * (1 + f.spc));
     const mxh = catMaxHp(g, c, m);
     c.low = c.hp < mxh * 0.5;
     if (f.regen) healCat(g, c, mxh * f.regen * dt, c, true);
@@ -799,7 +839,10 @@ function updateCats(g, dt) {
       }
     }
     c.cd -= dt * hs;
-    if (c.cd <= 0) { if (attack(g, c, rank, d)) c.cd += d.atk.cd; else c.cd = 0.08; }
+    if (c.cd <= 0) {
+      if (attack(g, c, rank, d)) { c.cd += d.atk.cd; if (f.echo && g.rnd() < f.echo) attack(g, c, rank, d); }   // echo: a free second attack
+      else c.cd = 0.08;
+    }
     if (d.sup) {
       c.scd -= dt * hs;
       if (c.scd <= 0) { if (support(g, c, rank, d.sup)) c.scd += d.sup.cd; else c.scd = 0.4; }
@@ -1279,7 +1322,7 @@ export function setFocus(g, uid) {
 }
 
 // ---- event stops: a break between waves with a choice (see EVENTS in cats.js)
-const itemPrice = (g, id) => Math.round({ common: 45, rare: 110, epic: 250 }[ITEM_BY_ID[id].rarity] * (1 + 0.03 * g.wave));
+const itemPrice = (g, id) => Math.round({ common: 45, rare: 110, epic: 250, legendary: 620, mythic: 1600 }[ITEM_BY_ID[id].rarity] * (1 + 0.03 * g.wave));
 export function eventDue(g) { return g.wave >= 3 && !g.bossWave && g.wave % 3 === 0; }
 export function rollEvent(g) {
   if (!eventDue(g)) return null;
@@ -1310,6 +1353,8 @@ export function rollEvent(g) {
       const epic = ITEMS.filter((i) => i.rarity === 'epic'), rare = ITEMS.filter((i) => i.rarity === 'rare');
       ev.options.push({ k: 'curse', item: epic[Math.floor(g.rnd() * epic.length)].id, hurt: 0.12 });
       ev.options.push({ k: 'curse', item: rare[Math.floor(g.rnd() * rare.length)].id, hurt: 0.05 });
+      const legend = ITEMS.filter((i) => i.rarity === 'legendary');
+      ev.options.push({ k: 'curse', item: legend[Math.floor(g.rnd() * legend.length)].id, hurt: 0.2 });
       ev.options.push({ k: 'leave' });
       break;
     }
