@@ -377,4 +377,10 @@ t('the Cat Dex shows the story line of an unlocked cat', () => {
   assert.ok(/function dexDetail[\s\S]*?catStory\(id\)/.test(js), 'dexDetail must show catStory');
 });
 
+t('the title has a Story button that replays the intro and comes back to the title', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/data-act="story"[^>]*>Story</.test(js), 'the title needs a Story button');
+  assert.ok(/story: \(\) => watchIntro\(\(\) => showTitle\(\)\)/.test(js), 'Story replays the intro then shows the title');
+});
+
 console.log(`${n} tests passed`);
