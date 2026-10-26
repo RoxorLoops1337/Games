@@ -336,4 +336,13 @@ await t('pickLine: the first start pick sets the story up, later picks explain m
   assert.ok(!/\u2014/.test(pickLine(0) + pickLine(1)), 'no em dash');
 });
 
+await t('roadLine: the road screen names the next chapter and its region', async () => {
+  const { roadLine } = await import('../stacking_cats/story.js');
+  const themes = [{ name: 'A' }, { name: 'B' }, { name: 'C' }, { name: 'D' }, { name: 'E' }, { name: 'F' }];
+  assert.equal(roadLine(5, themes), 'Where to next? Chapter 2 waits in B. This road shapes the next five waves and the next nest.');
+  assert.ok(/Chapter 3 waits in C/.test(roadLine(10, themes)));
+  assert.ok(/Chapter 7 waits in A/.test(roadLine(30, themes)), 'the map starts over after the last region');
+  assert.ok(!/\u2014/.test(roadLine(5, themes)), 'no em dash');
+});
+
 console.log(n + ' passed');

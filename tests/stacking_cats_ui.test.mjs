@@ -550,4 +550,9 @@ t('the start pick screen uses the story subtitle', () => {
   assert.ok(/<p class="sub">\$\{pickLine\(pickN\)\}<\/p>/.test(js), 'subtitle from pickLine');
 });
 
+t('the road choice screen subtitle comes from roadLine', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/Choose your road<\/h2><p class="sub">\$\{roadLine\(g\.wave, THEMES\)\}<\/p>/.test(js), 'wired');
+});
+
 console.log(`${n} tests passed`);
