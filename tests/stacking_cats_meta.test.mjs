@@ -263,4 +263,15 @@ t('the Silk Ribbon item is a rare with damage and crit', () => {
   assert.ok(!r.desc.includes('\u2014') && !r.name.includes('\u2014'));
 });
 
+t('Biscuit the royal baker is a cat of her own and the collector trophy needs every cat', () => {
+  const b = CATS.find((c) => c.id === 'biscuit');
+  assert.ok(b && b.role === 'Baker' && b.atk.t === 'lob', 'Biscuit lobs loaves');
+  assert.ok(b.unlock && b.unlock.k === 'recruits', 'she is unlocked by recruiting');
+  const a = ACHIEVEMENTS.find((x) => x.id === 'coll30');
+  const all = CATS.map((c) => c.id);
+  assert.equal(!!a.check({ save: { unlocked: all.slice(1) } }), false, 'one cat short is not enough');
+  assert.equal(!!a.check({ save: { unlocked: all } }), true, 'every cat unlocks the trophy');
+  assert.ok(a.desc.includes(String(CATS.length)), 'the text names the real number of cats');
+});
+
 console.log(`${n} tests passed`);

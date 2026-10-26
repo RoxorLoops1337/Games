@@ -164,6 +164,11 @@ export const CATS = [
     atk: { t: 'storm', dmg: 0.35, cd: 2.0, range: 700, stars: 5, splash: 36 },
     art: { fur: '#3a2f7a', belly: '#9a8de0', accent: '#ffe14d', eye: '#ff9bf0', pat: 'stars' },
     unlock: { k: 'lvl3', n: 10, text: 'Merge cats up to Lv 3, 10 times' } },
+  { id: 'biscuit', name: 'Biscuit', title: 'Royal Baker', role: 'Baker', hp: 1.1,
+    desc: 'Tosses warm loaves that crumble over a small crowd of mice.',
+    atk: { t: 'lob', dmg: 1.3, cd: 1.7, range: 410, splash: 54, color: '#e6b26a' },
+    art: { fur: '#e0a868', belly: '#fff1d6', accent: '#fffaf0', eye: '#7a4a2a', pat: 'plain' },
+    unlock: { k: 'recruits', n: 20, text: 'Recruit 20 cats in total' } },
 ];
 
 export const CAT_BY_ID = Object.fromEntries(CATS.map((c) => [c.id, c]));
@@ -393,7 +398,7 @@ export const CAT_TAGS = {
   yuki: ['storm'], hawkeye: ['gun'], boomer: ['gun'], pudding: ['guardian', 'cheer'], shadow: ['blade'], ronin: ['blade'],
   merlin: ['magic'], cutlass: ['gun'], sprout: ['cheer'], gizmo: ['tech'], lyra: ['cheer'], nibbles: ['blade'],
   zeus: ['storm'], volcano: ['fire'], blizzard: ['storm'], dusty: ['gun'], cyber: ['tech'], boo: ['magic'],
-  draco: ['fire'], halo: ['guardian'], mecha: ['gun', 'tech'], hexa: ['magic'], nori: ['cheer'], leo: ['guardian'], nebula: ['magic'],
+  draco: ['fire'], halo: ['guardian'], mecha: ['gun', 'tech'], hexa: ['magic'], nori: ['cheer'], leo: ['guardian'], nebula: ['magic'], biscuit: ['cheer'],
 };
 // self: applies to the cats with the tag. team: applies to every cat. Tier 1 needs 2 cats, tier 2 needs 3 or more.
 export const SYNERGIES = {
@@ -476,7 +481,7 @@ export const ACHIEVEMENTS = [
   { id: 'allbld',   name: 'Full Village',     desc: 'Build every Kingdom building.',               coins: 150, gems: 2, check: (c) => bld(c.kingdom, 1) >= BUILDINGS.length },
   { id: 'maxbld',   name: 'Finishing Touch',  desc: 'Fully upgrade one building.',                 coins: 100, gems: 1, check: (c) => BUILDINGS.some((b) => buildingLevel(c.kingdom, b.id) >= b.max) },
   { id: 'coll15',   name: 'Cat Collector',    desc: 'Unlock 15 cats.',                             coins: 100, gems: 1, check: (c) => c.save.unlocked.length >= 15 },
-  { id: 'coll30',   name: 'Gotta Pet Them All', desc: 'Unlock all 30 cats.',                       coins: 300, gems: 3, check: (c) => c.save.unlocked.length >= 30 },
+  { id: 'coll30',   name: 'Gotta Pet Them All', desc: 'Unlock all 31 cats.',                       coins: 300, gems: 3, check: (c) => c.save.unlocked.length >= CATS.length },
   { id: 'loot8',    name: 'Loot Goblin',      desc: 'Collect 8 items in one run.',                 coins: 80,  gems: 1, check: (c) => c.run.items >= 8 },
   { id: 'hard15',   name: 'Brave Whiskers',   desc: 'Reach wave 15 on Hard.',                      coins: 200, gems: 2, check: (c) => c.run.diff === 'hard' && c.run.wave >= 15 },
   { id: 'daily1',   name: 'Daily Dabbler',    desc: 'Play the daily challenge.',                   coins: 40,  gems: 1, check: (c) => !!c.run.daily },
@@ -524,6 +529,7 @@ export const SPECIALS = {
   mecha:    { kind: 'barrage', name: 'Missile Rain', icon: '✨', color: '#ff8a5a', pow: 1.2 },
   hexa:     { kind: 'hex', name: 'Hex', icon: '🔮', color: '#d28aff', pow: 1 },
   nori:     { kind: 'barrage', name: 'Hot Pot', icon: '✨', color: '#ffb05a', pow: 1 },
+  biscuit:  { kind: 'barrage', name: 'Fresh Batch', icon: '✨', color: '#e6b26a', pow: 1 },
   leo:      { kind: 'frenzy', name: 'Royal Roar', icon: '👑', color: '#ffd23f', pow: 1.3 },
   nebula:   { kind: 'supernova', name: 'Supernova', icon: '✨', color: '#9a8aff', pow: 1 },
 };

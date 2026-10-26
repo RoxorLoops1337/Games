@@ -226,6 +226,20 @@ const ACC = {
       dot(ctx, 60, 98, 10, '#3b3b4f', 1); line(ctx, [[60, 89], [64, 83]], '#caa86a', 1.3); sparkle(ctx, 66, 81, 3.4, '#ff8f3d');
     },
   },
+  biscuit: {
+    back(ctx) {
+      // a rolling pin held behind her back
+      line(ctx, [[96, 104], [104, 84]], '#b98a52', 3.6); dot(ctx, 96, 105, 3.2, '#8a6236', 0.8); dot(ctx, 104, 83, 3.2, '#8a6236', 0.8);
+    },
+    front(ctx, A) {
+      // a soft baker's cap and a dusting of flour on one cheek
+      fillPath(ctx, new Path2D('M38 36 Q34 14 52 14 Q60 4 70 14 Q86 14 82 36 Q60 28 38 36 Z'), '#fffaf0', 1);
+      line(ctx, [[44, 30], [76, 30]], 'rgba(200,185,160,.7)', 0.8);
+      for (const [x, y] of [[44, 70], [48, 73], [42, 75]]) dot(ctx, x, y, 1.6, 'rgba(255,255,255,.85)', 0);
+      // a little loaf on the belly
+      fillPath(ctx, ell(ctx, 60, 98, 11, 6.5), '#d9954a', 1); line(ctx, [[54, 96], [57, 100]], '#f2c88a', 0.9); line(ctx, [[60, 95], [63, 99]], '#f2c88a', 0.9);
+    },
+  },
   pudding: {
     front(ctx, A) {
       fillPath(ctx, new Path2D('M36 36 L40 16 Q60 10 80 16 L84 36 Q60 28 36 36 Z'), '#ffffff', 1);

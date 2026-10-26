@@ -135,6 +135,7 @@ const CAT_STORIES = {
   nori: 'The sushi master of the guard. Every roll is made with love and fish.',
   leo: 'The Lion King, ruler of cats. His roar made the Mouse King tremble.',
   nebula: 'Weaves stars into her fur. Some say she purrs in constellations.',
+  biscuit: 'Bakes the guard\'s bread before sunrise. Her loaves are warm, soft and surprisingly heavy.',
 };
 export const catStory = (id) => CAT_STORIES[id] || '';
 
