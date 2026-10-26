@@ -269,10 +269,16 @@ export function makeBackdrop(theme, seed) {
   const [sky, sx] = mk();
   const g = sx.createLinearGradient(0, 0, 0, 430); g.addColorStop(0, theme.sky[0]); g.addColorStop(1, theme.sky[1]);
   sx.fillStyle = g; sx.fillRect(0, 0, W, H);
+  const cave = theme.deco === 'hole';
+  if (cave) {
+    // a cave has no sky: deep amber at the top, a warm lantern glow instead of a sun
+    const cg = sx.createLinearGradient(0, 0, 0, 430); cg.addColorStop(0, '#6a3f12'); cg.addColorStop(0.55, '#c98a2c'); cg.addColorStop(1, '#f2c460');
+    sx.fillStyle = cg; sx.fillRect(0, 0, W, H);
+  }
   const sun = sx.createRadialGradient(740, 120, 8, 740, 120, 150);
   sun.addColorStop(0, night ? 'rgba(255,250,220,.9)' : 'rgba(255,255,230,.95)'); sun.addColorStop(0.25, night ? 'rgba(255,240,200,.3)' : 'rgba(255,240,190,.4)'); sun.addColorStop(1, 'rgba(255,255,255,0)');
   sx.fillStyle = sun; sx.fillRect(500, 0, 460, 300);
-  sx.fillStyle = night ? '#fff7d6' : '#fffbe6'; sx.beginPath(); sx.arc(740, 120, 38, 0, TAU); sx.fill();
+  if (!cave) { sx.fillStyle = night ? '#fff7d6' : '#fffbe6'; sx.beginPath(); sx.arc(740, 120, 38, 0, TAU); sx.fill(); }
   if (night) { sx.fillStyle = theme.sky[0]; sx.beginPath(); sx.arc(754, 112, 32, 0, TAU); sx.fill(); sx.fillStyle = '#fff7d6'; sx.beginPath(); sx.arc(740, 120, 38, 0, TAU); sx.fill(); sx.fillStyle = 'rgba(40,30,100,.2)'; sx.beginPath(); sx.arc(748, 126, 32, 0, TAU); sx.fill(); }
 
   const hz = theme.haze || '#ffffff';
@@ -430,15 +436,22 @@ export function makeBackdrop(theme, seed) {
 
   const stars = []; if (night) for (let i = 0; i < 70; i++) stars.push([rnd() * W, rnd() * 300, 0.6 + rnd() * 1.4, rnd() * 6]);
   const clouds = []; for (let i = 0; i < 5; i++) clouds.push([rnd() * W, 50 + rnd() * 130, 0.6 + rnd() * 0.8, 6 + rnd() * 8]);
-  return { sky, far: farSoft, mid: midSoft, gr, front, rays, stars, clouds, night, deco: theme.deco, sun: { x: 740, y: 120 } };
+  return { sky, far: farSoft, mid: midSoft, gr, front, rays, stars, clouds, night, cave, deco: theme.deco, sun: { x: 740, y: 120 } };
 }
 
 export function drawBackdrop(ctx, bd, scroll, t) {
   const W = 960;
   ctx.drawImage(bd.sky, 0, 0);
   if (bd.night) for (const [x, y, r, p] of bd.stars) { ctx.fillStyle = `rgba(255,250,220,${0.45 + 0.45 * Math.sin(t * 2 + p)})`; ctx.fillRect(x, y, r, r); }
+  if (bd.cave) {
+    // glowing dust motes drifting up through the cave air instead of clouds
+    for (const [x, y, s, v] of bd.clouds) {
+      const cx = ((x + Math.sin(t * 0.4 + v) * 30 - scroll * 0.05) % W + W) % W, cy = 380 - ((y * 2 + t * (6 + v)) % 330);
+      ctx.fillStyle = `rgba(255,236,160,${0.25 + 0.25 * Math.sin(t * 1.5 + v + x)})`; ctx.beginPath(); ctx.arc(cx, cy, 1.4 + s * 1.2, 0, TAU); ctx.fill();
+    }
+  }
   ctx.fillStyle = bd.night ? 'rgba(200,190,255,.28)' : 'rgba(255,255,255,.75)';
-  for (const [x, y, s, v] of bd.clouds) {
+  if (!bd.cave) for (const [x, y, s, v] of bd.clouds) {
     const cx = ((x - t * v - scroll * 0.05) % (W + 200) + W + 200) % (W + 200) - 100;
     ctx.beginPath(); ctx.ellipse(cx, y, 46 * s, 14 * s, 0, 0, TAU); ctx.ellipse(cx - 24 * s, y + 4 * s, 28 * s, 11 * s, 0, 0, TAU); ctx.ellipse(cx + 26 * s, y + 5 * s, 30 * s, 11 * s, 0, 0, TAU); ctx.ellipse(cx + 4 * s, y - 9 * s, 24 * s, 12 * s, 0, 0, TAU); ctx.fill();
   }
@@ -449,7 +462,7 @@ export function drawBackdrop(ctx, bd, scroll, t) {
 }
 
 export function drawRays(ctx, bd, t) {
-  if (bd.night) return;
+  if (bd.night || bd.cave) return;
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.11 + 0.05 * Math.sin(t * 0.7);
   ctx.drawImage(bd.rays, 0, 0); ctx.restore();
 }
