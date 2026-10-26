@@ -744,3 +744,12 @@ t('backpack cells and Relic Book tiles have spoken labels with the rarity (scree
   assert.ok(/class="bag \$\{ITEM_BY_ID\[id\]\.rarity\}[^`]*aria-label="\$\{ITEM_BY_ID\[id\]\.name\}, \$\{ITEM_BY_ID\[id\]\.rarity\}"/.test(js), 'bag cell label');
   assert.ok(/data-act="rtile"[^`]*aria-label="\$\{f \? `\$\{it\.name\}, \$\{r\}` : `Unknown \$\{r\} relic`\}"/.test(js), 'book tile label');
 });
+
+t('every menu screen is a labelled dialog that takes focus, so keyboard and screen reader players know it opened', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  const fn = js.slice(js.indexOf('function setScreen'), js.indexOf('const closeScreen'));
+  assert.ok(/setAttribute\('role', 'dialog'\)/.test(fn) && /aria-label/.test(fn) && /querySelector\('h2, \.logo'\)/.test(fn), 'role and a label taken from the heading');
+  assert.ok(/tabIndex = -1/.test(fn) && /focus\(\{ preventScroll: true \}\)/.test(fn), 'focus moves into the screen without scrolling');
+  assert.ok(/\.screen:focus\{outline:none\}/.test(css), 'no focus ring on the container itself');
+  assert.ok(/if \(html\)/.test(fn), 'closing a screen never steals focus');
+});
