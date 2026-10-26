@@ -314,6 +314,17 @@ export function upgradeCost(id, level) {
   const b = BUILDING_BY_ID[id];
   return Math.round((b.base * Math.pow(1.75, level)) / 5) * 5;
 }
+// the cheapest building the player can pay for right now (null when none), used for the Kingdom hint
+export function cheapestUpgrade(k) {
+  let best = null, bc = Infinity;
+  for (const b of BUILDINGS) {
+    const l = buildingLevel(k, b.id);
+    if (l >= b.max) continue;
+    const c = upgradeCost(b.id, l);
+    if (c <= ((k && k.coins) | 0) && c < bc) { best = b.id; bc = c; }
+  }
+  return best;
+}
 export const kingdomLevel = (k) => BUILDINGS.reduce((n, b) => n + buildingLevel(k, b.id), 0);
 export function kingdomBonuses(k) {
   const m = { dmg: 0, hp: 0, haste: 0, waveHeal: 0, reviveHp: 0, range: 0, crit: 0, luck: 0, coinMul: 0, rerolls: 0, startSnacks: 0, startItem: 0, bench: 0, startPicks: 0, zoomStart: 0, zoomDur: 0, nine: 0 };

@@ -5,7 +5,7 @@ import {
   takeItem, useReroll, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade,
 } from '../stacking_cats/cats.js';
 
 let n = 0;
@@ -204,5 +204,17 @@ t('items: Warm Mittens is a common that adds health and attack speed together', 
   assert.ok(itemFx(g.cats[0]).haste > baseHaste, 'and faster attacks');
 });
 
+
+t('cheapestUpgrade names the cheapest building the player can afford, or null', () => {
+  const k = emptyKingdom();
+  assert.equal(cheapestUpgrade(k), null, 'no coins, no hint');
+  k.coins = 60;
+  const id = cheapestUpgrade(k);
+  assert.ok(id && upgradeCost(id, 0) <= 60, 'an affordable building is named');
+  for (const b of BUILDINGS) if (upgradeCost(b.id, 0) <= 60) assert.ok(upgradeCost(id, 0) <= upgradeCost(b.id, 0), 'and it is the cheapest');
+  for (const b of BUILDINGS) k.lv[b.id] = b.max;
+  k.coins = 1e9;
+  assert.equal(cheapestUpgrade(k), null, 'maxed buildings are never named');
+});
 
 console.log(`${n} tests passed`);
