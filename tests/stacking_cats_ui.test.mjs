@@ -625,4 +625,11 @@ t('in a fight the toasts sit right of centre so they do not hide the special mov
   assert.ok(/body\.scr #toasts\{[^}]*left:50%/.test(html), 'menu screens keep them centred at the bottom');
 });
 
+t('Battle Anthem sends music notes drifting across the field', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const i = js.indexOf("case 'anthem':");
+  const f = js.slice(i, js.indexOf("case 'hex':", i));
+  assert.ok(/for \(let i = 0; i < 12; i\+\+\) txtFx\(/.test(f) && /\\u266A/.test(f), 'twelve rising notes');
+});
+
 console.log(`${n} tests passed`);
