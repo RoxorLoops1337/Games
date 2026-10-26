@@ -258,7 +258,8 @@ export function nestOverlay(ctx, hpFrac, t, king) {
   }
   // the caged cat the nest is holding: a little cage by the door, ears and eyes peeking out, swaying and blinking
   {
-    const sw = Math.sin(t * 1.7) * 1.2, ex = 164 + sw, top = 150, bot = 188;
+    const sw = Math.sin(t * 1.7) * 1.2 + Math.sin(t * 14) * (1 - hpFrac) * 2.2,   // the captive panics as the nest is hurt
+       ex = 164 + sw, top = 150, bot = 188;
     ctx.save(); ctx.translate(ex, bot); ctx.scale(1.35, 1.35); ctx.translate(-ex, -bot);   // bigger, grown from its base
     ctx.fillStyle = '#3a2a4a'; ctx.beginPath(); ctx.moveTo(ex - 15, top + 18); ctx.lineTo(ex - 11, top + 4); ctx.lineTo(ex - 5, top + 13); ctx.lineTo(ex + 5, top + 13); ctx.lineTo(ex + 11, top + 4); ctx.lineTo(ex + 15, top + 18); ctx.lineTo(ex + 15, bot - 2); ctx.lineTo(ex - 15, bot - 2); ctx.closePath(); ctx.fill();   // the cat silhouette
     ctx.fillStyle = '#ffe9a8'; const lid = Math.sin(t * 1.3 + 1) > 0.93 ? 0.3 : 1;
