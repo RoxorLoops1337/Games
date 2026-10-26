@@ -1480,7 +1480,7 @@ function handle(e) {
     case 'cathit': { if (Math.random() < 0.18) emote(e.uid, '\uD83D\uDCA2', 0.8); const p = catPos(e.uid); txtFx(p.x - 56, p.y, Math.round(e.v), '#ff8a8a', 15, 0.7); towerWob = 1; shake = Math.max(shake, 1.8); sfx.play('hit'); buzz('hit'); break; }
     case 'coin': if (fx.length < 300) spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 52, ty: 72, life: 0.7 + Math.random() * 0.2, max: 0.8, kind: 'coin', ox: (Math.random() - 0.5) * 160, oy: -60 - Math.random() * 60 }); break;
     case 'chest': spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', ox: 0, oy: -90 }); sparks(e.x, e.y, 10, '#ffd23f', 220, 0.5); txtFx(e.x, e.y - 20, 'Chest!', '#ffd23f', 20, 1); sfx.play('chest'); break;
-    case 'dodge': { const p = catPos(e.uid); txtFx(p.x - 40, p.y, 'Miss!', '#b9f5ff', 16, 0.7); break; }
+    case 'dodge': { const p = catPos(e.uid); txtFx(p.x - 40, p.y, 'Dodge!', '#b9f5ff', 18, 0.8); ring(p.x, p.y - 10, 44, '#d9f8ff', 0.35, 3); sparks(p.x, p.y - 10, 6, '#ffffff', 150, 0.3); break; }
     case 'ehit': sparks(e.x, e.y, 3, '#ffffff', 130, 0.2); break;
     case 'spawn': smoke(e.x, e.y, 1, 7, '#d9c9a0'); puff(e.x, e.y - 10, 3, '#d9c9a0', 50, 0.4, 4); ring(e.x, e.y + 2, 22, '#e8dcb8', 0.28, 3); break;
     case 'roar': shake = Math.max(shake, 13); zpunch = Math.max(zpunch, 0.03); txtFx(e.x, e.y, 'SQUEAK!', '#ff9a9a', 32, 1.1); screenFlash('rgba(255,40,40,.18)', 0.3); sfx.play('roar'); buzz('boss'); break;
