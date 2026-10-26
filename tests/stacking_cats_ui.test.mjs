@@ -817,3 +817,10 @@ t('Training Yard options tell two cats of the same kind apart (level stars in th
   const ev = js.slice(js.indexOf('function eventOptionHtml'), js.indexOf('function showEvent'));
   assert.ok(/case 'train':[^\n]*CAT_BY_ID\[c\.id\]\.name \+ ' ' \+ stars\(c\.lvl\)/.test(ev), 'name plus stars');
 });
+
+t('Relic Book rarity labels carry their own dark backing, so they read on any backdrop', () => {
+  const css = readFileSync('stacking_cats/index.html', 'utf8');
+  const m = css.match(/\.rlabel\{([^}]*)\}/);
+  assert.ok(m, 'rule exists');
+  assert.ok(/background:rgba\(\d+,\s*\d+,\s*\d+,\s*\.[7-9]\d*\)/.test(m[1]), 'a mostly opaque dark background: ' + m[1].slice(0, 120));
+});
