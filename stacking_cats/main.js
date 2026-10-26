@@ -971,7 +971,7 @@ function showTower(back, opt = {}) {
     forge: () => {
       const id = S.forgeItems(g, selItem);
       if (!id) return;
-      sfx.play('merge'); toast(`Forged ${ITEM_BY_ID[id].name}!`); puff(S.TOWER_X, 330, 14, '#c88aff', 160, 0.6);
+      sfx.play('merge'); toast(`Forged ${ITEM_BY_ID[id].name} (${ITEM_BY_ID[id].rarity})!`); puff(S.TOWER_X, 330, 14, '#c88aff', 160, 0.6);
       selItem = g.stash.length - 1; draw();
     },
     bag: (d) => { selItem = selItem === +d.i ? null : +d.i; sel = null; draw(); },
