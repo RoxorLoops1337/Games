@@ -145,6 +145,14 @@ await t('clearLine: a short wave summary for the cleared banner', async () => {
   assert.equal(clearLine(null), '', 'no report, no line');
 });
 
+await t('confirmTap: the first tap arms, a second tap within three seconds confirms', async () => {
+  const { confirmTap } = await import('../stacking_cats/art_util.js');
+  assert.deepEqual(confirmTap(0, 10), { fire: false, armedAt: 10 }, 'first tap only arms');
+  assert.deepEqual(confirmTap(10, 12.5), { fire: true, armedAt: 0 }, 'second tap in time fires and resets');
+  assert.deepEqual(confirmTap(10, 13.5), { fire: false, armedAt: 13.5 }, 'too slow: it arms again instead');
+  assert.equal(confirmTap(0, 0.5).fire, false, 'time zero is not an armed tap');
+});
+
 await t('share card draws for several runs without throwing', async () => {
   const { drawShareCard, shareRun, SHARE_W } = await import('../stacking_cats/share.js');
   const { CATS } = await import('../stacking_cats/cats.js');
