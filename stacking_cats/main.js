@@ -872,7 +872,7 @@ function eventOptionHtml(o, i) {
     case 'curse': return head(it.icon, it.name, `${it.desc}. <b class="warn">Mice bite ${Math.round(o.hurt * 100)}% harder for the rest of the run.</b>`, relicNotes(o.item));
     case 'snack': { const sn = SNACK_BY_ID[o.id]; return head(sn.icon, sn.name, sn.desc, `<div class="rar ${sn.kind === 'perm' ? 'rare' : 'common'}">${sn.kind === 'perm' ? 'whole run' : sn.kind === 'temp' ? '3 waves' : 'instant'}</div>`); }
     case 'toss': return head('&#129689;', 'Toss ' + o.cost + ' coins', `${Math.round(o.chance * 100)}% chance to get ${o.prize} coins back.`);
-    case 'train': { const c = S.findCat(g, o.uid); return head(`<img class="thumb" src="${thumbURL(c.id)}" alt="">`, CAT_BY_ID[c.id].name, `Trains hard: +${Math.round(o.bonus * 100)}% damage for the rest of the run.`); }
+    case 'train': { const c = S.findCat(g, o.uid); return head(`<img class="thumb" src="${thumbURL(c.id)}" alt="">`, CAT_BY_ID[c.id].name + ' ' + stars(c.lvl), `Trains hard: +${Math.round(o.bonus * 100)}% damage for the rest of the run.`); }
     default: return head('&#129703;', 'Move on', 'Walk away. Nothing happens.');
   }
 }

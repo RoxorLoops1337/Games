@@ -802,3 +802,17 @@ t('shop and shady deal relics show the same set and best-cat notes as loot cards
   assert.ok(/case 'buy': return head\([^\n]*relicNotes\(o\.item\)/.test(ev), 'shop uses it');
   assert.ok(/case 'curse': return head\([^\n]*relicNotes\(o\.item\)/.test(ev), 'shady deal uses it');
 });
+
+t('the rarity badge on shop and deal cards is not dimmed (white text on a coloured pill needs full opacity)', () => {
+  const css = readFileSync('stacking_cats/index.html', 'utf8');
+  const m = css.match(/\.card\.ev \.rar\{([^}]*)\}/);
+  assert.ok(m, 'rule exists');
+  const op = m[1].match(/opacity:([\d.]+)/);
+  assert.ok(!op || +op[1] >= 1, 'opacity ' + (op && op[1]));
+});
+
+t('Training Yard options tell two cats of the same kind apart (level stars in the name)', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const ev = js.slice(js.indexOf('function eventOptionHtml'), js.indexOf('function showEvent'));
+  assert.ok(/case 'train':[^\n]*CAT_BY_ID\[c\.id\]\.name \+ ' ' \+ stars\(c\.lvl\)/.test(ev), 'name plus stars');
+});
