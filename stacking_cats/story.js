@@ -219,3 +219,6 @@ export function kingdomLine(level) {
   if (level < 30) return 'Whiskerton is busy and happy.';
   return 'Whiskerton is the finest village in the land!';
 }
+
+// the line over the cats a run has just freed from the Gnaw Army (unlocked), one or several
+export const freedLineFor = (n) => (n === 1 ? 'A caged cat is free and joins the royal guard!' : `${n} caged cats are free and join the royal guard!`);

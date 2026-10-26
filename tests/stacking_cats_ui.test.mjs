@@ -677,4 +677,9 @@ t('a dodged bite shows a Dodge! pop with a swish ring and sparkles, not a plain 
   assert.ok(/'Dodge!'/.test(f) && /ring\(p\.x/.test(f) && /sparks\(p\.x/.test(f) && !/'Miss!'/.test(f));
 });
 
+t('the game over screen announces unlocked cats as freed from the Gnaw Army', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/<p class="sub">\$\{freedLineFor\(fresh\.length\)\}<\/p>/.test(js) && !/New friends unlocked/.test(js));
+});
+
 console.log(`${n} tests passed`);

@@ -384,4 +384,11 @@ await t('coachAbove: with no room above the target (a title is there) the tip go
   assert.equal(lo.y, 188);
 });
 
+await t('freedLineFor: the game over screen announces freed cats in story words', async () => {
+  const { freedLineFor } = await import('../stacking_cats/story.js');
+  assert.equal(freedLineFor(1), 'A caged cat is free and joins the royal guard!');
+  assert.equal(freedLineFor(3), '3 caged cats are free and join the royal guard!');
+  assert.ok(!/\u2014/.test(freedLineFor(1) + freedLineFor(2)), 'no em dash');
+});
+
 console.log(n + ' passed');
