@@ -1,7 +1,7 @@
 // Stacking Cats: the anime style intro cutscene. Six short scenes drawn live on one canvas (960x540) from the game's own sprites:
 // speed lines, impact frames, camera pushes, name slams and a typed caption. drawIntro is a pure function of time so tests can run it;
 // playIntro wraps it with the canvas, the skip controls and the sound cues.
-import { INTRO, INTRO_LEN, introAt, typed, EPILOGUE, EPILOGUE_LEN, epilogueAt } from './story.js';
+import { INTRO, INTRO_LEN, introAt, typed, wrapCaption, EPILOGUE, EPILOGUE_LEN, epilogueAt } from './story.js';
 import { TAU, mulberry } from './art_util.js';
 import { makeBackdrop, drawBackdrop, drawFront, freeBackdrop, enemySprite, nestSprite } from './art_world.js';
 import { THEMES, CAT_BY_ID } from './cats.js';
@@ -88,9 +88,7 @@ function caption(ctx, text, p) {
   const full = text, shown = typed(full, clamp(p / 0.62));
   if (!shown) return;
   ctx.save(); ctx.font = `26px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const words = full.split(' '), lines = []; let cur = '';
-  for (const w of words) { const t = cur ? cur + ' ' + w : w; if (ctx.measureText(t).width > 800 && cur) { lines.push(cur); cur = w; } else cur = t; }
-  lines.push(cur);
+  const lines = wrapCaption(full, (s) => ctx.measureText(s).width, 800);
   let shownLeft = shown.length;
   const y0 = H - 54 - lines.length * 17;
   ctx.fillStyle = 'rgba(8,2,20,.62)'; const bw = Math.min(900, Math.max(...lines.map((l) => ctx.measureText(l).width)) + 56), bh = lines.length * 34 + 14;

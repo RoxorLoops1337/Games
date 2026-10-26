@@ -195,3 +195,18 @@ export function roadLine(wave, themes) {
   const c = chapterOf(wave + 1);
   return `Where to next? Chapter ${c.n} waits in ${themes[c.theme].name}. This road shapes the next five waves and the next nest.`;
 }
+
+// splits a caption into lines no wider than maxW (measure gives a string's width). A caption that needs two lines is
+// balanced so the second line is never a lonely word
+export function wrapCaption(text, measure, maxW) {
+  const wrap = (limit) => {
+    const lines = []; let cur = '';
+    for (const w of text.split(' ')) { const t = cur ? cur + ' ' + w : w; if (measure(t) > limit && cur) { lines.push(cur); cur = w; } else cur = t; }
+    lines.push(cur);
+    return lines;
+  };
+  const lines = wrap(maxW);
+  if (lines.length !== 2) return lines;
+  const balanced = wrap(Math.min(maxW, measure(text) / 2 + 70));
+  return balanced.length === 2 ? balanced : lines;
+}

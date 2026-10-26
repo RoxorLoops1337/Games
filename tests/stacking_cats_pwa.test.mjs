@@ -345,4 +345,20 @@ await t('roadLine: the road screen names the next chapter and its region', async
   assert.ok(!/\u2014/.test(roadLine(5, themes)), 'no em dash');
 });
 
+await t('wrapCaption: balanced two-line captions, no lonely last word', async () => {
+  const { wrapCaption, INTRO, EPILOGUE } = await import('../stacking_cats/story.js');
+  const m = (s) => s.length * 12;   // 12 px per character
+  assert.deepEqual(wrapCaption('short caption', m, 800), ['short caption'], 'one line stays one line');
+  const l = wrapCaption('Then one night the Cheese Moon went dark, and the mice crept out to squeak.', m, 800);
+  assert.equal(l.length, 2);
+  assert.ok(l[1].length > 20, 'second line is not an orphan: ' + l[1]);
+  assert.equal(l.join(' '), 'Then one night the Cheese Moon went dark, and the mice crept out to squeak.', 'no words lost');
+  for (const sc of [...INTRO, ...EPILOGUE]) {
+    const lines = wrapCaption(sc.text, m, 800);
+    assert.equal(lines.join(' '), sc.text);
+    assert.ok(lines.every((x) => m(x) <= 800), 'every line fits');
+    if (lines.length === 2) assert.ok(lines[1].length >= lines[0].length * 0.4, 'balanced: ' + sc.id);
+  }
+});
+
 console.log(n + ' passed');
