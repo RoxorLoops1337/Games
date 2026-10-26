@@ -88,6 +88,17 @@ await t('haptics: no-op without vibrate, short patterns with it, respects settin
   assert.doesNotThrow(() => h.buzz('ko'));
 });
 
+await t('share card: a tall stack is scaled down so its top never reaches the subtitle', async () => {
+  const { shareStack } = await import('../stacking_cats/share.js');
+  for (let n = 0; n <= 5; n++) {
+    const { cell, step, bottom } = shareStack(n);
+    const topOfStack = bottom - cell - Math.max(0, n - 1) * step;
+    assert.ok(topOfStack >= 200, `${n} cats: the top of the stack (${topOfStack}) must stay below the subtitle line`);
+    assert.ok(cell <= 250 && cell >= 150, `${n} cats: cats stay a readable size (${cell})`);
+  }
+  assert.equal(shareStack(1).cell, 250, 'a short stack keeps the full size');
+});
+
 await t('share card draws for several runs without throwing', async () => {
   const { drawShareCard, shareRun, SHARE_W } = await import('../stacking_cats/share.js');
   const { CATS } = await import('../stacking_cats/cats.js');

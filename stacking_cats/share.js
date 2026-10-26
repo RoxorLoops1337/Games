@@ -10,6 +10,13 @@ export const SHARE_URL = 'games-71g.pages.dev/stacking_cats';
 const fmt = (n) => { n = Math.round(+n || 0); return n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(1) + 'k' : String(n); };
 
 // info: { wave, kills, bossKills, biggest, diff, daily, cats: [catId, ...] top of the tower first or last, any order }
+// size and spacing of the cat tower on the card: tall stacks shrink so the top cat stays below the subtitle
+export function shareStack(n) {
+  const bottom = 880, topLimit = 215, step = 0.5;
+  const cell = Math.min(250, (bottom - topLimit) / (1 + Math.max(0, n - 1) * step));
+  return { cell, step: cell * step, bottom };
+}
+
 export function drawShareCard(canvas, info = {}) {
   try {
     canvas.width = SHARE_W; canvas.height = SHARE_H;
@@ -36,7 +43,7 @@ export function drawShareCard(canvas, info = {}) {
 
     // the tower: bottom cat at the bottom, up to 5 cats overlapping
     const ids = (info.cats || []).filter((id) => CAT_BY_ID[id]).slice(0, 5);
-    const cell = 250, step = cell * 0.5, bottom = 880, cx = 300;
+    const { cell, step, bottom } = shareStack(ids.length), cx = 300;
     for (let i = 0; i < ids.length; i++) {
       const y = bottom - cell - i * step;
       x.save(); x.translate(cx - cell / 2, y); x.scale(cell / 120, cell / 120);
