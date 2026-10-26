@@ -1144,6 +1144,7 @@ const add = () => { ctx.globalCompositeOperation = 'lighter'; };
 const norm = () => { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; };
 
 const moods = new Map();
+const pops = new Map();   // cats that just merged: a short squash and stretch bounce
 const emote = (uid, glyph, life = 1.2) => spawnFx({ k: 'emote', uid, glyph, life, max: life });
 function cheerRandom(chance) {
   if (Math.random() > chance) return;
@@ -1376,7 +1377,18 @@ function handle(e) {
     case 'leap': puff(e.x, e.y - 8, 6, '#d9c9a0', 90, 0.4, 4); ring(e.x, e.y + 2, 26, '#e8dcb8', 0.25, 3); break;
     case 'dig': puff(e.x, e.y, 14, '#8a6a48', 150, 0.6, 5); ring(e.x, e.y + 4, 42, '#a07a52', 0.35, 5); smoke(e.x, e.y, 2, 10, '#9a7a58'); shake = Math.max(shake, 2); sfx.play('pop', 0.5); break;
     case 'bubble': ring(e.x, e.y, 90, '#cfc0ff', 0.5, 6); flashGlow(e.x, e.y, 110, '#cfc0ff', 0.5); sfx.play('route'); break;
-    case 'merge': puff(S.TOWER_X, 330, 20, '#ffd23f', 160, 0.7, 5); moods.set(e.uid, 1.6); emote(e.uid, '\u2B50', 1.2); buzz('merge'); break;
+    case 'merge': {
+      const mc = S.findCat(g, e.uid), p = catPos(e.uid), max = mc && mc.lvl >= 3;
+      puff(p.x, p.y, 20, '#ffd23f', 160, 0.7, 5);
+      ring(p.x, p.y, max ? 150 : 100, '#ffe38c', 0.5, 9); ring(p.x, p.y, 62, '#ffffff', 0.35, 5);
+      flashGlow(p.x, p.y, max ? 190 : 130, '#ffd24a', 0.5);
+      for (let i = 0; i < (max ? 10 : 6); i++) { const a = (i / (max ? 10 : 6)) * TAU; spawnFx({ k: 'p', x: p.x, y: p.y, vx: Math.cos(a) * 190, vy: Math.sin(a) * 190 - 60, life: 0.7, max: 0.7, r: 5, col: i % 2 ? '#fff6b0' : '#ffd23f', grav: 160 }); }
+      confetti(p.x, p.y - 20, max ? 46 : 24, max ? 380 : 300);
+      txtFx(p.x + 56, p.y - 50, max ? 'MAX LEVEL!' : 'Level up!', '#ffe14d', max ? 26 : 22, 1.2);
+      pops.set(e.uid, 0.55); moods.set(e.uid, 1.6); emote(e.uid, '\u2B50', 1.2); buzz('merge');
+      if (max) { hit(0.05); shake = Math.max(shake, 3); }
+      break;
+    }
     default: break;
   }
 }
@@ -1541,6 +1553,7 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
       ctx.save();
       ctx.translate(cx + lunge + sway - k * 16, feetY);
       ctx.scale(1 + atk * 0.05 + squash, 1 - atk * 0.06 - squash);
+      const pop = pops.get(c.uid); if (pop) { const u = pop / 0.55, st = Math.sin((1 - u) * Math.PI * 3) * u * 0.2; ctx.scale(1 - st * 0.55, 1 + st); }
       ctx.rotate(Math.sin(t * 2 + i * 1.3) * 0.015 + (marching ? Math.sin(t * 9 + i) * 0.03 : 0) + sway * 0.002);
       ctx.globalAlpha = k ? 0.22 / k : 1;
       if (gfx >= 2 && !k) drawJelly(spr, -60 * sc, -107 * sc, 120 * sc, 120 * sc, t, 0.9 + atk * 2.2 + (marching ? 1.6 : 0) + towerWob * 2.5, i * 1.3 + (c.seed || 0));
@@ -2026,6 +2039,7 @@ function frame(ts) {
   if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
   comboPulse *= Math.exp(-8 * dt); towerWob *= Math.exp(-5 * dt);
   for (const [k, v] of moods) { if (v - dt <= 0) moods.delete(k); else moods.set(k, v - dt); }
+  for (const [k, v] of pops) { if (v - dt <= 0) pops.delete(k); else pops.set(k, v - dt); }
   sfx.setIntensity(Math.min(1, combo / 30));
   if (g && mode === 'play' && !paused) {
     let sd = dt * speed * timeScale, fd = sd;
