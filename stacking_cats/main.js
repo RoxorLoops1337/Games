@@ -1372,7 +1372,11 @@ function specialVfx(e, p, col) {
       break;
     }
     case 'barrage':
-      for (const m of (foes.length ? foes : [{ x: 600, y: GROUND - 20 }]).slice(0, 7)) { flashGlow(m.x, m.y - 10, 80, '#ffb05a', 0.4); ring(m.x, m.y - 10, 54, '#ffcf8a', 0.4, 6); puff(m.x, m.y - 10, 6, '#ff8a2b', 140, 0.5, 4); }
+      for (const m of (foes.length ? foes : [{ x: 600, y: GROUND - 20 }]).slice(0, 7)) {
+        flashGlow(m.x, m.y - 10, 80, col, 0.4); ring(m.x, m.y - 10, 54, '#ffffff', 0.4, 6); puff(m.x, m.y - 10, 6, col, 140, 0.5, 4);
+        if (e.id === 'pearl') puff(m.x, m.y - 24, 8, '#e8fbff', 90, 0.7, 3, -70);   // Tidal Wave: droplets spray upward
+      }
+      if (e.id === 'pearl') { ring(p.x + 150, GROUND - 10, 140, '#bff4ff', 0.6, 8); ring(p.x + 280, GROUND - 10, 170, '#8fe6ff', 0.6, 6); flashGlow(p.x + 200, GROUND - 20, 200, '#6fd8ff', 0.3); }
       break;
     case 'heal':
       for (let i = 0; i < 12; i++) spawnFx({ k: 'h', x: p.x + (Math.random() - 0.5) * 90, y: p.y + 20 - Math.random() * SLOT * 2.5, life: 1.2 + Math.random() * 0.5, max: 1.7 });

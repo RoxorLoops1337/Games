@@ -688,4 +688,12 @@ t('How to play explains dodge', () => {
   assert.ok(/Dodge/.test(how) && /Pearl|Lucky Shell/.test(how), 'How to play must mention dodge and where it comes from');
 });
 
+t('barrage specials tint by the cat color and Pearl gets a water splash instead of the fire burst', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  const a = js.indexOf("case 'barrage':"), blk = js.slice(a, js.indexOf("case 'heal':", a));
+  assert.ok(blk.includes('col'), 'barrage must use the special color');
+  assert.ok(!blk.includes("'#ffb05a'") && !blk.includes("'#ff8a2b'"), 'barrage must not hardcode the fire colors for every cat');
+  assert.ok(/e\.id === 'pearl'/.test(blk), 'Tidal Wave needs its own splash');
+});
+
 console.log(`${n} tests passed`);
