@@ -1328,6 +1328,10 @@ function specialVfx(e, p, col) {
   switch (e.kind) {
     case 'frenzy':
       for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU; bolt(jag(p.x + Math.cos(a) * 30, p.y + Math.sin(a) * 30, p.x + Math.cos(a) * 110, p.y + Math.sin(a) * 110, 3, 6), col, 2.4, 0.22); }
+      if (e.id === 'leo') {   // the Royal Roar: golden shockwaves roll across the field
+        for (let r = 0; r < 4; r++) ring(p.x + 60 + r * 70, p.y - 10, 90 + r * 40, '#ffe27a', 0.55 + r * 0.08, 6);
+        flashGlow(p.x + 40, p.y - 20, 200, '#ffd23f', 0.6); screenFlash('rgba(255,220,120,.22)', 0.16);
+      }
       // three claw marks across each of the nearest mice
       for (const m of foes.slice(0, 4)) {
         for (const o of [-9, 0, 9]) bolt([{ x: m.x - 24 + o, y: m.y - 50 }, { x: m.x + 24 + o, y: m.y - 2 }], '#fff6dc', 3, 0.3);
