@@ -156,7 +156,7 @@ await t('confirmTap: the first tap arms, a second tap within three seconds confi
 await t('share card shows the story tagline above the link and keeps it off the stats panel', async () => {
   const { drawShareCard, SHARE_TAGLINE, SHARE_URL } = await import('../stacking_cats/share.js');
   const texts = [];
-  const rec = new Proxy({}, { get: (o, k) => (k === 'fillText' ? (t, x, y) => texts.push({ t, y }) : k === 'measureText' ? () => ({ width: 10 }) : k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : (o[k] ?? (() => {})))), set: (o, k, v) => { o[k] = v; return true; } });
+  const rec = new Proxy({}, { get: (o, k) => (k === 'fillText' ? (t, x, y) => texts.push({ t, y }) : k === 'measureText' ? () => ({ width: 10 }) : k === 'createLinearGradient' ? () => ({ addColorStop() {} }) : (o[k] ?? (() => {}))), set: (o, k, v) => { o[k] = v; return true; } });
   assert.equal(drawShareCard({ getContext: () => rec }, { wave: 12, cats: [] }), true);
   const tag = texts.find((x) => x.t === SHARE_TAGLINE), url = texts.find((x) => x.t === SHARE_URL);
   assert.ok(tag && url, 'tagline and link are drawn');

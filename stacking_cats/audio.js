@@ -1,4 +1,6 @@
 // Procedural sound: effects, cat voices and a small step-sequenced soundtrack. No audio files.
+import { MEOW_BANK } from './meow_bank.js';
+import { meowPlan, clipForNote, MEW_KIT } from './meow_voice.js';
 const NOTE = (semi, root) => root * Math.pow(2, semi / 12);
 const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
@@ -8,6 +10,7 @@ const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) 
 export const THEME_COUNT = 6;
 export const MUSIC_MODES = ['calm', 'fight', 'boss'];
 export const MUSIC_VOICE_CAP = 28;
+const MEW_LEAD_GAIN = 3.5;   // a recorded meow note is this many times the lead volume of the song (about as loud as the oscillator leads)
 const CH = { M: [0, 4, 7], m: [0, 3, 7], '7': [0, 4, 7, 10], m7: [0, 3, 7, 10], M7: [0, 4, 7, 11], sus: [0, 5, 7], s2: [0, 2, 7] };
 // instruments as layered partials: [wave, frequency ratio, volume, decay as a share of the note, attack, detune cents]
 const INST = {
@@ -40,31 +43,31 @@ const BOSS_PROG = [[0, 'm'], [8, 'M'], [5, 'm'], [7, '7'], [0, 'm'], [1, 'M'], [
 const EIGHTS = [0, 2, 4, 6, 8, 10, 12, 14];
 const SONGS = {
   calm: [
-    { name: 'Garden Morning', bpm: 92, root: 130.81, scale: PENT, seed: 11, lpf: 12000, ring: 1.6, lead: 'pluck', arp: { steps: [2, 6, 10, 14], oct: 4 }, arpInst: 'pluck',
+    { name: 'Garden Morning', mew: 2, bpm: 92, root: 130.81, scale: PENT, seed: 11, lpf: 12000, ring: 1.6, lead: 'pluck', arp: { steps: [2, 6, 10, 14], oct: 4 }, arpInst: 'pluck',
       prog: [[0, 'M'], [9, 'm'], [5, 'M'], [7, 'M'], [0, 'M'], [4, 'm'], [5, 'M7'], [7, 'sus']], rhy: 'slow', bassInst: 'subbass' },
     { name: 'Autumn Walk', bpm: 76, root: 146.83, scale: MIN, seed: 22, lpf: 3200, lead: 'warm', padInst: 'pad', padV: 0.03, bassInst: 'tribass', arp: { steps: [0, 3, 6, 8, 11, 14], oct: 4 }, arpInst: 'pluck', rhy: 'slow',
       prog: [[0, 'm'], [8, 'M'], [3, 'M'], [10, 'M'], [0, 'm'], [5, 'm'], [7, '7'], [0, 'm']] },
     { name: 'Moon Rain', bpm: 72, root: 164.81, scale: MIN, seed: 33, lpf: 1300, lead: 'sinelead', leadV: 0.055, padInst: 'pad', padV: 0.035, shaker: false, rhy: 'slow', bassInst: 'subbass',
       prog: [[0, 'm'], [8, 'M'], [3, 'M'], [10, 'M'], [0, 'm'], [5, 'm'], [7, '7'], [0, 'm']] },
-    { name: 'Cheese Waltz', bpm: 100, root: 174.61, scale: LYD, seed: 44, swing: 0.18, lead: 'bassoon', leadV: 0.045, legato: 0.5, bass: 'bounce', bassInst: 'bassoon', bassV: 0.07, padInst: 'softpad', pad: 'pulse', padV: 0.016, arp: { steps: [3, 7, 11, 15], oct: 4 }, arpInst: 'marimba', arpV: 0.045, rhy: 'stac',
+    { name: 'Cheese Waltz', mew: 3, bpm: 100, root: 174.61, scale: LYD, seed: 44, swing: 0.18, lead: 'bassoon', leadV: 0.045, legato: 0.5, bass: 'bounce', bassInst: 'bassoon', bassV: 0.07, padInst: 'softpad', pad: 'pulse', padV: 0.016, arp: { steps: [3, 7, 11, 15], oct: 4 }, arpInst: 'marimba', arpV: 0.045, rhy: 'stac',
       prog: [[0, 'M'], [2, 'M'], [9, 'm'], [7, 'M'], [0, 'M'], [5, 'M'], [2, 'm'], [7, '7']] },
     { name: 'Ice Bells', bpm: 72, root: 146.83, scale: LYD, seed: 55, lpf: 9000, lead: 'celesta', ring: 1.8, padV: 0.02, shaker: false, bass: 'sparse', arp: { steps: [0, 6, 12], oct: 6 }, arpInst: 'bell', arpV: 0.025, rhy: 'slow',
       prog: [[0, 'M7'], [9, 'm7'], [5, 'M7'], [7, 'M'], [0, 'M7'], [4, 'm7'], [5, 'M7'], [7, 'sus']] },
-    { name: 'Petal Drift', bpm: 80, root: 146.83, scale: [0, 2, 3, 7, 8], seed: 66, lead: 'koto', ring: 2, bassInst: 'tribass', arp: { steps: [4, 10, 14], oct: 4 }, arpInst: 'koto', padV: 0.02, rhy: 'slow',
+    { name: 'Petal Drift', mew: 3, bpm: 80, root: 146.83, scale: [0, 2, 3, 7, 8], seed: 66, lead: 'koto', ring: 2, bassInst: 'tribass', arp: { steps: [4, 10, 14], oct: 4 }, arpInst: 'koto', padV: 0.02, rhy: 'slow',
       prog: [[0, 'm'], [8, 'M'], [3, 'M'], [7, 'sus'], [0, 'm'], [5, 'm'], [8, 'M'], [7, '7']] },
   ],
   fight: [
-    { name: 'Garden Rush', bpm: 124, root: 98, scale: PENT, seed: 111, drums: 1, lead: 'pluck', leadV: 0.05, ring: 1.3, bass: 'walk', bassInst: 'tribass', bassV: 0.1, pad: 'stab', arp: { steps: EIGHTS, oct: 4 }, arpInst: 'pluck', rhy: 'med',
+    { name: 'Garden Rush', mew: 3, mewKit: true, bpm: 124, root: 98, scale: PENT, seed: 111, drums: 1, lead: 'pluck', leadV: 0.05, ring: 1.3, bass: 'walk', bassInst: 'tribass', bassV: 0.1, pad: 'stab', arp: { steps: EIGHTS, oct: 4 }, arpInst: 'pluck', rhy: 'med',
       prog: [[0, 'M'], [7, 'M'], [9, 'm'], [5, 'M'], [0, 'M'], [4, 'm'], [5, 'M'], [7, '7']] },
     { name: 'Alley Chase', bpm: 112, root: 146.83, scale: MIN, seed: 122, drums: 1, lead: 'warm', leadV: 0.055, padInst: 'pad', pad: 'stab', padV: 0.03, lpf: 6000, bass: 'walk', bassInst: 'tribass', bassV: 0.1, arp: { steps: EIGHTS, oct: 4 }, arpInst: 'pluck', rhy: 'med',
       prog: [[0, 'm'], [8, 'M'], [3, 'M'], [10, 'M'], [0, 'm'], [5, 'm'], [8, 'M'], [7, '7']] },
     { name: 'Rooftop Storm', bpm: 118, root: 164.81, scale: [0, 2, 3, 5, 7, 8, 10], seed: 133, drums: 1, lead: 'warm', leadV: 0.055, padInst: 'pad', pad: 'stab', padV: 0.03, lpf: 4500, bass: 'walk', bassInst: 'sawbass', bassV: 0.07, arp: { steps: EIGHTS, oct: 4 }, arpInst: 'pluck', rhy: 'med',
       prog: [[0, 'm'], [10, 'M'], [8, 'M'], [7, 'M'], [0, 'm'], [3, 'M'], [5, 'm'], [7, '7']] },
-    { name: 'Mouse Hole Mambo', bpm: 138, root: 174.61, scale: LYD, seed: 144, drums: 1, swing: 0.15, lead: 'marimba', leadV: 0.06, legato: 0.6, bass: 'bounce', bassInst: 'bassoon', bassV: 0.08, pad: 'stab', padV: 0.02, arp: { steps: [2, 6, 10, 14], oct: 4 }, arpInst: 'bassoon', arpV: 0.03, rhy: 'stac',
+    { name: 'Mouse Hole Mambo', mew: 2, mewKit: true, bpm: 138, root: 174.61, scale: LYD, seed: 144, drums: 1, swing: 0.15, lead: 'marimba', leadV: 0.06, legato: 0.6, bass: 'bounce', bassInst: 'bassoon', bassV: 0.08, pad: 'stab', padV: 0.02, arp: { steps: [2, 6, 10, 14], oct: 4 }, arpInst: 'bassoon', arpV: 0.03, rhy: 'stac',
       prog: [[0, 'M'], [5, 'M'], [2, 'M'], [7, '7'], [0, 'M'], [9, 'm'], [2, 'm'], [7, '7']] },
     { name: 'Blizzard Dance', bpm: 108, root: 146.83, scale: LYD, seed: 155, drums: 1, kv: 0.6, hatV: 0.04, lead: 'bell', leadV: 0.045, ring: 1.4, bass: 'walk', bassInst: 'subbass', bassV: 0.1, padV: 0.018, pad: 'sus', arp: { steps: EIGHTS, oct: 6 }, arpInst: 'celesta', arpV: 0.03, rhy: 'med',
       prog: [[0, 'M7'], [9, 'm7'], [5, 'M7'], [7, 'M'], [0, 'M7'], [4, 'm7'], [5, 'M7'], [7, 'sus']] },
-    { name: 'Hanami Charge', bpm: 118, root: 146.83, scale: [0, 2, 3, 7, 8], seed: 166, drums: 1, lead: 'koto', leadV: 0.06, ring: 1.8, bass: 'walk', bassInst: 'tribass', bassV: 0.1, pad: 'stab', padV: 0.02, arp: { steps: EIGHTS, oct: 4 }, arpInst: 'koto', rhy: 'med',
+    { name: 'Hanami Charge', mew: 2, bpm: 118, root: 146.83, scale: [0, 2, 3, 7, 8], seed: 166, drums: 1, lead: 'koto', leadV: 0.06, ring: 1.8, bass: 'walk', bassInst: 'tribass', bassV: 0.1, pad: 'stab', padV: 0.02, arp: { steps: EIGHTS, oct: 4 }, arpInst: 'koto', rhy: 'med',
       prog: [[0, 'm'], [8, 'M'], [3, 'M'], [7, 'sus'], [0, 'm'], [5, 'm'], [8, 'M'], [7, '7']] },
   ],
   boss: [
@@ -132,8 +135,10 @@ function compile(raw, theme, mode) {
   }
   // lead: phrases A, A' (same rhythm, new pitches over the new chords, new ending), B (higher), A'' (cadence)
   const ph = [genPhrase(def, chords, 1, 0, 0), genPhrase(def, chords, 1, 4, 0, { variant: true }), genPhrase(def, chords, 2, 8, 2), genPhrase(def, chords, 1, 12, 0, { cadence: true })];
+  let noteNo = 0;   // def.mew = N: every Nth lead note (and every long ending note) is sung by a recorded meow
   ph.forEach((phrase, p) => phrase.forEach((bar, b) => bar.forEach(([s, semi, len]) => {
-    add(p * 4 + b, s, 'mel', def.lead, f(semi, def.melOct), len, def.leadV, 1, (def.legato || def.ring));
+    const meow = def.mew && (len >= 8 || noteNo++ % def.mew === def.mew - 1);
+    add(p * 4 + b, s, 'mel', meow ? 'mewlead' : def.lead, f(semi, def.melOct), len, def.leadV, 1, (def.legato || def.ring));
   })));
   return { theme, mode, def, spb, chords, bars, name: def.name };
 }
@@ -154,6 +159,7 @@ export class Sfx {
     this.sfxVol = 1; this.musicVol = 0.7; this.step = 0; this.nextT = 0; this.timer = 0; this.intensity = 0;
     this.theme = 0; this.running = false; this.song = null; this.songKey = ''; this.bus = null; this.busNode = null;
     this.vend = []; this.peakVoices = 0; this.timers = []; this.noteLog = null; this.vh = null;
+    this.meowBuf = null; this.meowLoading = false; this.lastMew = ''; this.lastMewF = 0;   // the recorded meows (meows.wav), decoded once after unlock
   }
   unlock() {
     try {
@@ -171,7 +177,28 @@ export class Sfx {
         for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
       }
       if (this.ctx.state === 'suspended') this.ctx.resume();
+      this.loadMeows();
     } catch (e) { /* audio is optional */ }
+  }
+  // fetch and decode the bank of recorded meows; until it is there (or if it never comes, offline or blocked) everything uses the synth voices
+  loadMeows() {
+    if (this.meowBuf || this.meowLoading || typeof fetch !== 'function') return;
+    let url;
+    try { url = new URL(MEOW_BANK.url, import.meta.url); } catch (e) { return; }
+    if (!/^https?:$/.test(url.protocol)) return;
+    this.meowLoading = true;
+    fetch(url.href).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('meows ' + r.status)))).then((ab) => this.setMeowBank(ab)).then(() => { this.meowLoading = false; }, () => { this.meowLoading = false; });
+  }
+  // decodes the bank into one buffer. Resolves true when the recordings are ready, false (never rejects) when not.
+  setMeowBank(ab) {
+    const c = this.ctx;
+    if (!c || !c.decodeAudioData) return Promise.resolve(false);
+    return new Promise((ok) => {
+      try {
+        const p = c.decodeAudioData(ab, (buf) => { this.meowBuf = buf; ok(true); }, () => ok(false));
+        if (p && p.then) p.then((buf) => { this.meowBuf = buf; ok(true); }, () => ok(false));
+      } catch (e) { ok(false); }
+    });
   }
   setVolumes(sfx, music) {
     this.sfxVol = sfx; this.musicVol = music;
@@ -210,6 +237,38 @@ export class Sfx {
     this.noiseAt(this.ctx.currentTime, t, v, { freq: lp });
   }
 
+  // plays part of one recording from the meow bank at an absolute audio time. o: from (share of the clip to start at), dur (longest play time in seconds),
+  // rate (and rateTo for a pitch glide), v (volume), wobble (pitch wobble in cents), lp / hp (filters), fin / fout (fade times), bus.
+  sampleAt(clip, t, o = {}) {
+    const c = this.ctx, buf = this.meowBuf;
+    if (!c || !buf) return false;
+    const rate = o.rate || 1, mean = o.rateTo ? (rate + o.rateTo) / 2 : rate;
+    const startS = (clip.at + (o.from || 0) * clip.len) / MEOW_BANK.rate;
+    const left = (clip.at + clip.len) / MEOW_BANK.rate - startS;
+    const play = Math.max(0.03, Math.min(left / mean, o.dur || 1e9));
+    const src = c.createBufferSource(), g = c.createGain();
+    src.buffer = buf;
+    src.playbackRate.setValueAtTime(rate, t);
+    if (o.rateTo) src.playbackRate.exponentialRampToValueAtTime(o.rateTo, t + play);
+    let tail = src;
+    if (o.hp) { const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = o.hp; tail.connect(f); tail = f; }
+    if (o.lp) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = o.lp; tail.connect(f); tail = f; }
+    const fin = Math.min(o.fin || 0.006, play * 0.4), fout = Math.min(o.fout || 0.03, play * 0.5), v = o.v || 0.5;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(v, t + fin);
+    g.gain.setValueAtTime(v, Math.max(t + fin, t + play - fout));
+    g.gain.linearRampToValueAtTime(0.0001, t + play);
+    tail.connect(g); g.connect(o.bus || this.sfxBus);
+    let lfo = null;
+    if (o.wobble) {   // a worried meow: the pitch wavers about 6 times a second
+      lfo = c.createOscillator(); const lg = c.createGain();
+      lfo.frequency.value = 6.5; lg.gain.value = rate * (Math.pow(2, o.wobble / 1200) - 1);
+      lfo.connect(lg); lg.connect(src.playbackRate); lfo.start(t); lfo.stop(t + play + 0.05);
+    }
+    src.start(t, startS); src.stop(t + play + 0.02);
+    return true;
+  }
+
   // a little cat voice: a gliding saw (with vibrato) through two vowel formants that sweep from "ee" to "ow", plus a breath of noise.
   // Each cat has its own pitch. kinds: pick (mee-ow), happy (short mew), cheer (quick high mew), sad (long falling mrrow), worried (wobbly mew).
   meow(id, kind = 'pick', delay = 0) {
@@ -217,6 +276,11 @@ export class Sfx {
     const c = this.ctx, clock = c.currentTime;
     if (!delay) { if (clock - (this.last.meow || 0) < 0.12) return; this.last.meow = clock; }
     const now = clock + delay, h = hashStr(id);
+    if (this.meowBuf) {   // the real recordings, each cat with its own clip and pitch; the synth below is the fallback
+      const plan = meowPlan(id, kind, Math.random());
+      this.sampleAt(plan.clip, now, { rate: plan.rate, v: plan.gain, wobble: plan.wobble, bus: this.sfxBus });
+      return;
+    }
     const low = kind === 'sad' || kind === 'worried';
     const base = (low ? 270 : 340) + (h % 240) * (kind === 'sad' ? 0.8 : 1.1) + (kind === 'cheer' ? 90 : 0);
     const dur = { pick: 0.38, happy: 0.24, cheer: 0.18, sad: 0.65, worried: 0.5 }[kind] || 0.3;
@@ -384,8 +448,22 @@ export class Sfx {
     if (a.length > this.peakVoices) this.peakVoices = a.length;
     return true;
   }
+  // a melody note sung by a recorded meow, pitched to the note. False when no recording is near enough (the caller plays the song's own lead instead).
+  meowNote(f, t, dur, v, pri) {
+    const pick = clipForNote(f, f === this.lastMewF ? this.lastMew : undefined);
+    if (!pick) return false;
+    if (!this.reserve(t, dur, 1, pri)) return true;
+    this.lastMew = pick.clip.id; this.lastMewF = f;
+    if (this.noteLog) this.noteLog.push({ inst: 'mewlead', f, t, dur, v, pri, song: this.songKey });
+    this.sampleAt(pick.clip, t, { rate: pick.rate, from: 0.1, dur: Math.max(0.16, dur * 1.15), v: v * MEW_LEAD_GAIN, bus: this.bus, fin: 0.012, fout: 0.07 });
+    return true;
+  }
   voice(inst, f, t, dur, v, pri = 1) {
     if (!this.ctx || !this.bus) return;
+    if (inst === 'mewlead') {
+      if (this.meowBuf && this.meowNote(f, t, dur, v, pri)) return;
+      inst = (this.song && this.song.def.lead) || 'pluck';
+    }
     const I = INST[inst] || INST.pluck, P = I.p;
     if (!this.reserve(t, dur, P.length, pri)) return;
     if (this.noteLog) this.noteLog.push({ inst, f, t, dur, v, pri, song: this.songKey });
@@ -394,8 +472,17 @@ export class Sfx {
       this.toneAt(I.bend ? ff * I.bend : ff, t, Math.max(0.03, dur * p[3]), { type: p[0], v: v * p[2], attack: p[4], bus: this.bus, lp: I.lp, to: I.bend ? ff : 0 });
     }
   }
+  // the meow drum kit: a low meow dropping in pitch for the kick, the hissy aggressive one for snare and hat
+  mewDrum(kind, t, v, hi) {
+    const k = MEW_KIT[kind] || MEW_KIT.hat;
+    if (!this.reserve(t, k.dur, k.thump ? 2 : 1, kind === 'kick' ? 2 : hi ? 0 : 1)) return;
+    if (this.noteLog) this.noteLog.push({ inst: kind, f: 0, t, dur: k.dur, v, pri: 1, song: this.songKey });
+    if (k.thump) this.toneAt(150, t, 0.13, { type: 'sine', to: 42, v: v * k.thump, bus: this.bus });
+    this.sampleAt(k.clip, t, { from: k.from, dur: k.dur, rate: k.rate, rateTo: k.rateTo, v: v * k.gain, bus: this.bus, lp: k.lp, hp: k.hp, fin: 0.002, fout: Math.min(0.05, k.dur * 0.5) });
+  }
   drum(kind, t, v, hi) {
     if (!this.ctx || !this.bus) return;
+    if (this.meowBuf && this.song && this.song.def.mewKit) return this.mewDrum(kind, t, v, hi);
     if (!this.reserve(t, 0.13, 1, kind === 'kick' ? 2 : hi ? 0 : 1)) return;
     if (this.noteLog) this.noteLog.push({ inst: kind, f: 0, t, dur: 0.13, v, pri: 1, song: this.songKey });
     if (kind === 'kick') this.toneAt(150, t, 0.13, { type: 'sine', to: 42, v, bus: this.bus });
