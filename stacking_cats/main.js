@@ -1428,6 +1428,7 @@ function handle(e) {
     case 'bubble': ring(e.x, e.y, 90, '#cfc0ff', 0.5, 6); flashGlow(e.x, e.y, 110, '#cfc0ff', 0.5); sfx.play('route'); break;
     case 'merge': {
       const mc = S.findCat(g, e.uid), p = catPos(e.uid), max = mc && mc.lvl >= 3;
+      if (mc) sfx.meow(mc.id, max ? 'cheer' : 'happy', 0.1);   // a little voice right after the merge chime
       puff(p.x, p.y, 20, '#ffd23f', 160, 0.7, 5);
       ring(p.x, p.y, max ? 150 : 100, '#ffe38c', 0.5, 9); ring(p.x, p.y, 62, '#ffffff', 0.35, 5);
       flashGlow(p.x, p.y, max ? 190 : 130, '#ffd24a', 0.5);

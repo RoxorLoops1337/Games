@@ -291,4 +291,9 @@ t('tapping a cat in the title tower makes it meow', () => {
   assert.ok(js.includes('function stagePoint(e)'), 'the quarter-turn aware tap position is shared by the field and the title');
 });
 
+t('a merge makes the cat meow right after the chime (a louder cheer at max level)', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/case 'merge': \{[\s\S]{0,400}sfx\.meow\(mc\.id, max \? 'cheer' : 'happy', 0\.1\)/.test(js), 'the merge event must meow the merged cat');
+});
+
 console.log(`${n} tests passed`);
