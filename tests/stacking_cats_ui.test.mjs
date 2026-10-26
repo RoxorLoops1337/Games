@@ -433,4 +433,9 @@ t('the finale card can show the ending cutscene and comes back to the card after
   assert.ok((f.match(/finaleGems\(/g) || []).length === 1, 'the reward is still computed once');
 });
 
+t('the nest cleared banner announces the chapter that just ended', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/g\.bossWave \? chapterDoneLine\(g\.wave\) : clearLine\(g\.report\)/.test(js), 'onClear must use chapterDoneLine for nests');
+});
+
 console.log(`${n} tests passed`);
