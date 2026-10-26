@@ -398,17 +398,20 @@ function checkAch(run) {
 }
 
 function showHow(back) {
+  const row = (ic, html) => `<li><span class="hi">${ic}</span><div>${html}</div></li>`;
   setScreen(`<h2>How to play</h2><ul class="how">
-    <li><b>Your stack fights by itself.</b> Cats walk right and attack. Mice come from the right.</li>
-    <li><b>Order matters.</b> Mice bite the bottom cat first. Put tough cats low. Higher cats see farther.</li>
-    <li><b>Every wave</b> you pick a snack. <b>Every ${BOSS_EVERY}th wave</b> is a nest fight: destroy it to rescue a cat and win loot.</li>
-    <li><b>Merge</b> two equal cats (same type and level) into one stronger cat, up to Lv 3. The tower fits ${MAX_STACK}, the bench fits ${MAX_BENCH}.</li>
-    <li><b>Loot:</b> elite mice drop chests. Items go on one cat each (two at Lv 3). Tap Arrange tower to equip them.</li>
-    <li><b>Coins</b> you earn are saved. Spend them in the <b>Kingdom</b> on buildings that make every future run stronger.</li>
-    <li><b>Synergies:</b> cats of the same kind boost each other. Two give a bonus, three give a bigger one. Look for the badges next to the wave counter.</li>
-    <li><b>Roads:</b> after each nest you choose the road to the next one. Riskier roads pay better.</li>
-    <li><b>Daily Challenge:</b> everyone plays the same mice once a day. Climb the leaderboard.</li>
-    <li><b>Zoomies</b> (Space): fill the meter by fighting, then make everyone much faster for 6 seconds.</li></ul>
+    ${row('\uD83D\uDC31', '<b>Your stack fights by itself.</b> Cats walk right and attack. Mice come from the right.')}
+    ${row('\uD83D\uDEE1', '<b>Order matters.</b> Mice bite the bottom cat first. Put tough cats low, shooters high.')}
+    ${row('\u26A1', '<b>Special moves.</b> A charged cat glows in the tray. Tap it (or press 1 to 6). AUTO fires them for you.')}
+    ${row('\uD83C\uDFAF', '<b>Focus.</b> Tap a mouse and your cats shoot it first.')}
+    ${row('\uD83D\uDC00', `<b>Nests.</b> Every ${BOSS_EVERY}th wave is a nest fight. Destroy it to rescue a cat and win loot.`)}
+    ${row('\u2728', `<b>Merge</b> two equal cats into one stronger cat, up to Lv 3. The tower fits ${MAX_STACK}, the bench ${MAX_BENCH}.`)}
+    ${row('\uD83C\uDF81', '<b>Loot.</b> Elite mice drop chests. Items go on one cat each (two at Lv 3). Tap Arrange tower.')}
+    ${row('\uD83E\uDE99', '<b>Coins</b> are saved. Spend them in the <b>Kingdom</b> to make every future run stronger.')}
+    ${row('\uD83D\uDD25', '<b>Synergies.</b> Cats of one kind boost each other. Look for the badges by the wave counter.')}
+    ${row('\uD83D\uDC3E', '<b>Roads.</b> After each nest you pick the next road. Riskier roads pay better.')}
+    ${row('\uD83C\uDFC6', '<b>Daily Challenge.</b> Everyone plays the same mice once a day. Climb the leaderboard.')}
+    ${row('\uD83D\uDCA8', '<b>Zoomies</b> (Space). Fill the meter by fighting, then everyone is much faster for 6 seconds.')}</ul>
     <div class="row"><button class="btn" data-act="back">Got it</button></div>`);
   acts = { back };
 }
