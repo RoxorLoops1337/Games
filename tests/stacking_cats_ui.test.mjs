@@ -538,4 +538,11 @@ t('locked Dex cats are drawn behind cage bars', () => {
   assert.ok(/function cageBars\(/.test(js) && /if \(c\.dataset\.lock\) cageBars\(x, c\.width, c\.height\)/.test(f), 'silhouettes get bars');
 });
 
+t('the event stop tip sits below the buttons so it never covers the stop title or its cards', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const m = js.match(/coach\('c8', '[^']*', (\d+), (\d+), '(\w+)'/);
+  assert.ok(m, 'c8 tip exists with an explicit direction');
+  assert.ok(+m[2] >= 400 && m[3] === 'up', 'placed low on the stage with the tail pointing up');
+});
+
 console.log(`${n} tests passed`);
