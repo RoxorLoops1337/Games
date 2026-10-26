@@ -1746,14 +1746,19 @@ function drawTitleScene(t) {
   const list = titleStack.map((id, i) => ({ id, lvl: i === 0 ? 2 : 1, hp: 1, max: 1, flash: 0, atk: Math.max(0, Math.sin(t * 3 + i) - 0.8), seed: i * 0.9 }));
   drawStack(cx, list, t, true, false, false, false);
   for (let i = 0; i < 5; i++) {
-    const x = ((i * 190 - t * 60) % 1000 + 1000) % 1000 + 330;
+    const x = ((i * 190 - t * 60) % 1000 + 1000) % 1000 + 200;
     const type = ['mouse', 'scout', 'slinger', 'armored', 'mouse'][i];
     const spr = enemySprite(type, false);
-    const y = GROUND + 8 + (i % 3) * 9;
-    shadow(x, y, 18);
-    ctx.save(); ctx.translate(x, y - Math.abs(Math.sin(t * 9 + i)) * 3); ctx.drawImage(spr.c, -spr.ax, -spr.ay, spr.w, spr.h); ctx.restore();
+    // the mice march on the lower ground, where the menu does not hide them, and get swatted at the cat line
+    const y = GROUND + 34 + (i % 3) * 13, sc = 1 + (i % 3) * 0.05;
+    const fade = x < 270 ? Math.max(0, (x - 200) / 70) : 1, prev = titleMiceX[i];
+    if (prev != null && prev > x && prev >= 205 && x < 205 && prev - x < 40 && fx.length < 200) { puff(205, y - 14, 7, '#fff6d6', 90, 0.45, 4); sparks(205, y - 18, 5, '#ffe27a', 170, 0.35); spawnFx({ k: 's', x: 205, y: y - 22, life: 0.4, max: 0.4 }); }
+    titleMiceX[i] = x;
+    shadow(x, y, 18 * sc * fade);
+    ctx.save(); ctx.globalAlpha = fade; ctx.translate(x, y - Math.abs(Math.sin(t * 9 + i)) * 3 - (1 - fade) * 14); ctx.scale(sc, sc * (0.5 + 0.5 * fade)); ctx.drawImage(spr.c, -spr.ax, -spr.ay, spr.w, spr.h); ctx.restore();
   }
 }
+const titleMiceX = [];
 
 let vig = null, hurtVig = null;
 function vignette(t) {
