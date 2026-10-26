@@ -728,7 +728,7 @@ let setsSeen = {};
 function noteSets() {
   if (!g) return;
   const ups = setUps(setsSeen, g.cats);
-  if (ups.length) setTimeout(() => toastWhenPlaying(`Relic set: ${ups[0].set.name}${ups[0].mult > 1 ? ' doubled' : ''}! ${ups[0].set.desc[0].toUpperCase()}${ups[0].set.desc.slice(1)}.`), 2200);
+  if (ups.length) setTimeout(() => { if (mode === 'play' && !paused) sfx.play('synergy', 0.8); toastWhenPlaying(`Relic set: ${ups[0].set.name}${ups[0].mult > 1 ? ' doubled' : ''}! ${ups[0].set.desc[0].toUpperCase()}${ups[0].set.desc.slice(1)}.`); }, 2200);
 }
 function beginWave() {
   closeScreen();
