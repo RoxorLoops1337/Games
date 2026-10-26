@@ -1039,7 +1039,7 @@ function postDaily() {
 
 function showPause() {
   paused = true;
-  setScreen(`<h2 class="paused">Paused</h2><div class="row"><button class="btn big" data-act="resume">Resume</button></div><div class="row"><button class="btn grey" data-act="stats">Team stats</button><button class="btn grey" data-act="settings">Settings</button><button class="btn grey" data-act="how">How to play</button><button class="btn grey" data-act="quit">Give up</button></div>${matchMedia('(pointer: fine)').matches ? '<div class="hint">Keys: Space zoomies, 1-6 specials, A auto specials, F speed, P pause, M sound</div>' : ''}`);
+  setScreen(`<h2 class="paused">Paused</h2><div class="pstat"><span>Wave <b>${g.wave}</b></span><span>Mice <b>${num(g.run.kills || 0)}</b></span><span>Coins <b>${num(g.run.coins || 0)}</b></span><span>Cats <b>${g.cats.length + g.bench.length}</b></span></div><div class="row"><button class="btn big" data-act="resume">Resume</button></div><div class="row"><button class="btn grey" data-act="stats">Team stats</button><button class="btn grey" data-act="settings">Settings</button><button class="btn grey" data-act="how">How to play</button><button class="btn grey" data-act="quit">Give up</button></div>${matchMedia('(pointer: fine)').matches ? '<div class="hint">Keys: Space zoomies, 1-6 specials, A auto specials, F speed, P pause, M sound</div>' : ''}`);
   acts = {
     resume: () => { paused = false; closeScreen(); },
     stats: () => showStats(showPause),
