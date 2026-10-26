@@ -106,6 +106,17 @@ await t('share card: cats that do not fit on the tower are counted, not silently
   assert.equal(shareExtra(8), 3);
 });
 
+await t('idleHop: a tower cat now and then hops once, each cat on its own beat', async () => {
+  const { idleHop } = await import('../stacking_cats/art_util.js');
+  let peak = 0, hopping = 0;
+  for (let tt = 0; tt < 60; tt += 0.05) { const h = idleHop(tt, 3); assert.ok(h >= 0 && h <= 1, 'lift stays between 0 and 1'); peak = Math.max(peak, h); if (h > 0) hopping++; }
+  assert.ok(peak > 0.95, 'a hop reaches its top');
+  assert.ok(hopping < 1200 * 0.2, 'cats are on the ground most of the time');
+  const a = [], b = [];
+  for (let tt = 0; tt < 30; tt += 0.1) { a.push(idleHop(tt, 1) > 0); b.push(idleHop(tt, 2) > 0); }
+  assert.notDeepEqual(a, b, 'two cats do not hop in unison');
+});
+
 await t('share card draws for several runs without throwing', async () => {
   const { drawShareCard, shareRun, SHARE_W } = await import('../stacking_cats/share.js');
   const { CATS } = await import('../stacking_cats/cats.js');

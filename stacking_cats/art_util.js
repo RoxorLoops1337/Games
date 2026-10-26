@@ -142,3 +142,9 @@ export function texturize(c, o = {}) {
   } catch (err) { /* no pixel access (tests with a fake canvas): skip the texture */ }
   return c;
 }
+
+// idle variety: every so often a tower cat does one small hop. Each cat has its own beat (period 9 to 13 s and its own offset) so they never hop in unison.
+export function idleHop(t, seed = 0) {
+  const period = 9 + (Math.abs(Math.floor(seed)) % 5), u = (t + seed * 3.7) % period;
+  return u < 0.5 ? Math.sin((u / 0.5) * Math.PI) : 0;
+}
