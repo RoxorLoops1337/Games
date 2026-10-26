@@ -2,7 +2,7 @@
 import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS, SPECIAL_TEXT,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
-  ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
+  ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
   DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
   masteryProgress, masteryMap, masteryBonus, MASTERY_MAX, DIFF_ORDER, LADDER_RULES, LADDER_WAVE, ladderTier, ladderUnlocked, diffAllowed, ladderClears, weekKey, weekInfo,
 } from './cats.js';
@@ -680,7 +680,7 @@ function startRun(opts = {}) {
   g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom, difficulty: save.diff, daily, mastery: masteryMap(save.catStats) });
   if (opts.weekly) g.run.weekly = true;
   startTotal = START_CATS + g.meta.startPicks;
-  setsSeen = {}; runCommitted = false; bestShown = false; pickN = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
+  setsSeen = {}; runNewRelics = 0; runCommitted = false; bestShown = false; pickN = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
   combo = 0; maxComboRun = 0; coinShown = 0; dpsHist.length = 0; sfx.setIntensity(0);
   $('bSpeed').textContent = 'x' + speed;
   showPickStart();
@@ -719,12 +719,14 @@ function noteRelics() {
   for (const c of g.cats.concat(g.bench)) ids.push(...c.items);
   const fresh = bookRelics(save.relics, ids);
   if (!fresh.length) return;
+  runNewRelics += fresh.length;
   persist();
   const first = ITEM_BY_ID[fresh[0]];
   setTimeout(() => toastWhenPlaying(`New relic in your book: ${first.name}${fresh.length > 1 ? ` and ${fresh.length - 1} more` : ''}!`), 1200);
 }
 // a set that turns on (or doubles) gets a toast, so the player sees why the team got stronger
 let setsSeen = {};
+let runNewRelics = 0;   // relics added to the Relic Book during this run (shown when the run ends)
 function noteSets() {
   if (!g) return;
   const ups = setUps(setsSeen, g.cats);
@@ -1132,7 +1134,9 @@ function showOver(fresh) {
   const by = Object.entries(r.byCat).sort((a, b) => b[1].dmg - a[1].dmg), tot = Math.max(1, by.reduce((a, [, v]) => a + v.dmg, 0)), mx = Math.max(1, by[0] ? by[0][1].dmg : 1);
   const bars = by.slice(0, 6).map(([id, v], i) => `<div class="rb ${i === 0 ? 'mvp' : ''}"><img src="${thumbURL(id)}" alt=""><b>${CAT_BY_ID[id].name}</b><div class="bar"><i style="width:${(100 * v.dmg) / mx}%"></i></div><span>${num(v.dmg)} <em>${Math.round((100 * v.dmg) / tot)}%</em></span></div>`).join('');
   const dailyBox = r.daily ? `<div class="dailybox" id="dailyBox"><b>${(r.weekly ? weekInfo(r.daily) : dayInfo(r.daily)).mod.icon} ${r.weekly ? 'Weekly' : 'Daily'} score ${r.dailyScore}</b><span id="dailyMsg"></span></div>` : '';
-  const trophies = (r.ach || []).length ? `<div class="trow">${r.ach.map((a) => `<span class="tchip">&#127942; ${a.name}</span>`).join('')}</div>` : '';
+  const bookLine = relicBookLine(runNewRelics, relicProgress(save.relics).got, ITEMS.length);
+  const chips = (r.ach || []).map((a) => `<span class="tchip">&#127942; ${a.name}</span>`).concat(bookLine ? [`<span class="tchip">&#127873; ${bookLine}</span>`] : []);
+  const trophies = chips.length ? `<div class="trow">${chips.join('')}</div>` : '';
   const goal = nextGoal(k), goalB = goal && BUILDING_BY_ID[goal.id];
   const goalLine = goalB ? (goal.need ? ` &middot; ${goalB.icon} ${goalB.name} needs ${num(goal.need)} more` : ` &middot; ${goalB.icon} ${goalB.name} is ready to upgrade`) : '';
   setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : fallLine(r.wave)} <small>${d.icon} ${d.name} &middot; Chapter ${chapterOf(r.wave).n}${r.daily ? (r.weekly ? ' &middot; Weekly' : ' &middot; Daily') : ''}</small></p>${metaNotes(r)}

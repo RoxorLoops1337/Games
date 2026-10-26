@@ -394,6 +394,10 @@ export function setHint(id, cats) {
   const note = owned ? '' : a.mult === 0 && n >= SET_NEED ? ', completes it!' : a.mult === 1 && n >= SET_DOUBLE ? ', doubles it!' : '';
   return `${a.set.name} ${Math.min(a.have.length, a.mult ? SET_DOUBLE : SET_NEED)}/${a.mult ? SET_DOUBLE : SET_NEED}${note}`;
 }
+// the end of run line about the Relic Book ('' when the run found nothing new)
+export function relicBookLine(found, got, total) {
+  return found > 0 ? `${found} new relic${found === 1 ? '' : 's'} in the Relic Book (${got}/${total})` : '';
+}
 // the relics a team carries, one line per kind: how many, which cats hold them, rarest first (for the Team stats screen)
 export function teamRelics(cats) {
   const by = new Map();
