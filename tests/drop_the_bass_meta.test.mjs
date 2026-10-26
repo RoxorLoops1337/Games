@@ -27,17 +27,18 @@ const rng = () => makeRng(42);
 {
   const p = fresh(); p.records = 10; ok(!M.buyStudio(p, 'amp').ok, 'cannot afford'); p.records = 1e7;
   for (const id of Object.keys(STUDIO)) { for (let i = 0; i < STUDIO[id].max; i++) ok(M.buyStudio(p, id).ok, 'buy ' + id); ok(M.buyStudio(p, id).reason === 'max', 'max ' + id); }
-  ok(M.loadoutSize(p) === 8, 'rack grows loadout');
+  ok(M.loadoutSize(p) === 12 && p.loadout.length === 12, 'every turret is in the drop pool');
   const setup = M.computeRunSetup(p); const m = freshMods(); applyFx(m, setup.baseFx);
-  ok(m.dmg > 2 && m.rate > 1.5 && m.stageHp === 10 && m.startCoins === 15 * 15, 'studio feeds the run');
-  const r = new Run({ world: 'garage', baseFx: setup.baseFx, seed: 1 }); ok(r.stageMax === 30 && r.coins === 120 + 225, 'run applies studio');
+  ok(m.dmg > 2 && m.rate > 1.5 && m.stageHp === 10 && m.startCoins === 15 * 15 + 180, 'studio feeds the run');
+  const r = new Run({ world: 'garage', baseFx: setup.baseFx, seed: 1 }); ok(r.stageMax === 30 && r.coins === 120 + 225 + 180, 'run applies studio');
 }
 
 // ---- heroes, turret unlocks, loadout
 {
   const p = fresh(); p.records = 1e6; for (let i = 0; i < 12; i++) M.upgradeHero(p, 'roxor'); ok(p.heroLv.roxor === 10, 'hero cap');
-  ok(!M.unlockTurret(p, 'mic').ok && M.canUnlockTurret(p, 'mic').reason === 'fame', 'fame gate'); p.fame = 2; ok(M.unlockTurret(p, 'mic').ok && p.turretsUnlocked.mic && p.loadout.includes('mic'), 'unlock adds to loadout');
-  ok(p.loadout.length <= M.loadoutSize(p), 'loadout within size'); ok(!M.toggleLoadout(p, 'synth'), 'locked cannot toggle');
+  ok(M.canUnlockTurret(p, 'mic').reason === 'owned' && p.turretsUnlocked.mic && p.loadout.includes('mic'), 'all turrets start unlocked');
+  const old = M.migrate({ loadout: ['kick', 'snare'] }, 0); ok(old.loadout.length === 12, 'old small pools grow to every turret');
+  ok(p.loadout.length <= M.loadoutSize(p), 'loadout within size');
   ok(M.toggleLoadout(p, 'mic') && !p.loadout.includes('mic'), 'toggle off'); ok(M.setLoadout(p, ['kick', 'kick', 'zzz']) && p.loadout.length === 1, 'setLoadout sanitises');
   ok(!M.toggleLoadout(p, 'kick'), 'cannot empty the loadout');
 }
@@ -143,7 +144,7 @@ const rng = () => makeRng(42);
   w.diamonds = 0; ok(!M.spinWheel(w, NOW, makeRng(3)).ok, 'paid spin needs diamonds'); w.diamonds = 100; ok(M.spinWheel(w, NOW, makeRng(4)).ok && w.diamonds === 85, 'paid spin');
   ok(M.wheelState(w, NOW + 86400000).free, 'free spin again tomorrow');
   const seen = {}; const rr = makeRng(11); for (let i = 0; i < 300; i++) { const q = fresh(); const x = M.spinWheel(q, NOW, rr); seen[x.seg.id] = 1; } ok(Object.keys(seen).length >= 6, 'wheel pays many things');
-  const c = fresh(); c.seen.enemies = { fuzz: 1, zip: 1, mini: 1 }; ok(M.statValueOf(c, 'seenEnemies') === 2, 'hidden enemies do not count'); c.bossesSeen.playback = true; c.seen.bosses.reverb = 1; ok(M.statValueOf(c, 'seenBosses') === 2, 'bosses seen'); ok(M.statValueOf(c, 'turretsOwned') === 4, 'turrets owned');
+  const c = fresh(); c.seen.enemies = { fuzz: 1, zip: 1, mini: 1 }; ok(M.statValueOf(c, 'seenEnemies') === 2, 'hidden enemies do not count'); c.bossesSeen.playback = true; c.seen.bosses.reverb = 1; ok(M.statValueOf(c, 'seenBosses') === 2, 'bosses seen'); ok(M.statValueOf(c, 'turretsOwned') === 12, 'turrets owned');
   const rush = fresh(); const o = M.applyRunResult(rush, { won: true, world: 'garage', encore: 0, mode: 'rush', cleared: 10, wave: 10, kills: 100, leaks: 0, merges: 10, deploys: 30, bossKills: 10, bossTypes: [], bestCombo: 9, coinsEarned: 500, stars: 3 }, makeRng(1), NOW); ok(rush.stats.rushBest === 10 && o.diamonds >= 55 && !rush.prog.garage.cleared, 'boss rush pays and does not clear the stage');
 }
 console.log('drop_the_bass meta: ' + n + ' checks passed');

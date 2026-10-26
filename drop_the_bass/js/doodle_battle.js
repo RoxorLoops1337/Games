@@ -131,7 +131,7 @@ export function drawPanel(b, ctx, tu) {
   const mode = { x: box.x + box.w - 214, y: box.y + 14, w: 112, h: 58 };
   const sell = { x: box.x + box.w - 94, y: box.y + 14, w: 84, h: 58 };
   const isAttacker = def.kind !== 'aura_rate' && def.kind !== 'aura_dmg';
-  if (isAttacker) DH.button(ctx, mode, C.purple, { label: { first: 'First', last: 'Last', strong: 'Strongest', close: 'Closest' }[tu.mode], sub: 'TARGET', size: 15 });
+  if (isAttacker) DH.button(ctx, mode, '#b9a6f0', { label: { first: 'First', last: 'Last', strong: 'Strongest', close: 'Closest' }[tu.mode], sub: 'TARGET', size: 15 });
   DH.button(ctx, sell, C.red, { label: '+' + Math.floor(tu.paid * Math.min(0.95, ECON.sellBack + run.mods.sell)), sub: 'SELL', size: 17 });
   b.panel = { box, mode: isAttacker ? mode : { x: -99, y: -99, w: 0, h: 0 }, sell };
   ctx.restore();

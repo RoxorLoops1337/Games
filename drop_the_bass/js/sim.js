@@ -624,7 +624,7 @@ export class Run {
       this.emit({ k: 'hero', who });
       for (const e of this.enemies.slice()) {
         this.hurt(e, base * 2.4 * pw, { quiet: false });
-        if (e.hp > 0 && !e.immune) { e.stun = Math.max(e.stun, e.boss ? 0.6 : 1.4); if (!e.boss) e.d = Math.max(0, e.d - 70); }
+        if (e.hp > 0 && !e.immune) { this.stunE(e, e.boss ? 0.6 : 1.4); if (!e.boss) e.d = Math.max(0, e.d - 70); }
       }
       for (const t of this.turrets) t.jam = 0;
     } else {
@@ -728,7 +728,7 @@ export class Run {
     const idx = this.enemies.indexOf(e);
     if (idx >= 0) this.enemies.splice(idx, 1);
     e.dead = true;
-    const dmg = e.boss ? Math.max(8, Math.ceil(this.stageMax * 0.4)) : 1;
+    const dmg = e.boss ? Math.max(8, Math.ceil(this.stageMax * 0.4)) : (ENEMIES[e.type] && ENEMIES[e.type].hp >= 3 ? 3 : ENEMIES[e.type] && ENEMIES[e.type].hp >= 1.8 ? 2 : 1);
     this.leaks += e.boss ? 3 : 1;
     this.stageHp -= dmg;
     this.combo = 0;
@@ -742,6 +742,8 @@ export class Run {
     }
   }
 
+  // a stun cannot be chained: after it ends the enemy shrugs stuns off for a moment (no permanent stun lock at the spawn)
+  stunE(e, dur) { if (e.stunCd > 0) return; e.stun = Math.max(e.stun, dur); }
   updateEnemies(dt) {
     const sm = this.enemySpeedMul();
     const list = this.enemies.slice();
@@ -751,7 +753,7 @@ export class Run {
       if (e.hitT > 0) e.hitT -= dt;
       // statuses
       if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slowAmt = 0; }
-      if (e.stun > 0) e.stun -= dt;
+      if (e.stun > 0) { e.stun -= dt; if (e.stun <= 0) e.stunCd = 1.4; } else if (e.stunCd > 0) e.stunCd -= dt;
       if (e.markT > 0) e.markT -= dt;
       if (e.burnT > 0) { e.burnT -= dt; this.hurt(e, e.burnDps * dt, { dot: true, quiet: true }); if (e.dead) continue; if (e.burnT <= 0) e.burnDps = 0; }
       if (e.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.regen * dt);
@@ -761,7 +763,7 @@ export class Run {
         e.timer -= dt;
         if (e.timer <= 0) {
           e.timer = 1;
-          for (const o of this.enemies) if (o !== e && !o.dead && o.hp < o.maxHp && dist2(o.x, o.y, e.x, e.y) < 95 * 95) { o.hp = Math.min(o.maxHp, o.hp + o.maxHp * 0.04); }
+          for (const o of this.enemies) if (o !== e && !o.dead && o.type !== 'leech' && o.hp < o.maxHp && dist2(o.x, o.y, e.x, e.y) < 95 * 95) { o.hp = Math.min(o.maxHp, o.hp + o.maxHp * 0.04); }
           this.emit({ k: 'hum', x: e.x, y: e.y });
         }
       } else if (e.type === 'rager') {
@@ -936,7 +938,7 @@ export class Run {
           pts.push({ x: cur.x, y: cur.y });
           const r = this.rollCrit(t, dmg);
           this.hurt(cur, r.dmg, { crit: r.crit });
-          if (L >= 5 && !cur.immune && cur.hp > 0) cur.stun = Math.max(cur.stun, 0.3);
+          if (L >= 5 && !cur.immune && cur.hp > 0) this.stunE(cur, 0.3);
           dmg *= 0.85;
           let nxt = null, nd = 90 * 90;
           for (const e of this.enemies) { if (hit.has(e.id) || e.dead || e.gated) continue; const d2 = dist2(e.x, e.y, cur.x, cur.y); if (d2 < nd) { nd = d2; nxt = e; } }
@@ -959,7 +961,7 @@ export class Run {
           this.hurt(e, r.dmg, { crit: r.crit });
           if (e.hp > 0) {
             if (e.immune) continue;
-            e.stun = Math.max(e.stun, e.boss ? stun * 0.25 : stun);
+            this.stunE(e, e.boss ? stun * 0.25 : stun);
             if (!e.boss) e.d = Math.max(0, e.d - 36);
           }
         }

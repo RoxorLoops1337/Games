@@ -207,3 +207,26 @@ body.doodle input,body.doodle textarea,body.doodle select{background:#fbf6e6!imp
 body.doodle .ibox,body.doodle .icon-box{background:#fbf6e6}
 body.doodle .opening h2,body.doodle .modal h2{text-shadow:none}
 body.doodle .chip,body.doodle .chip *{color:#2b2733;text-shadow:none;font-weight:400}
+
+/* ---- consistency pass: one crayon look everywhere ---- */
+body.doodle .icbox{width:54px;height:54px;min-width:54px;display:flex;align-items:center;justify-content:center;background:#f3ead0;border:3px solid #2b2733;border-radius:var(--wob2)}
+/* secondary buttons are lavender paper with ink text, not dark violet */
+body.doodle .btn.dark{background:#e4d9fa;color:#2b2733;text-shadow:none}
+body.doodle .btn.dark.off{background:#ece8f2}
+body.doodle .cut-skip{background:#ffd60a;color:#2b2733;text-shadow:none}
+/* ink text sits over decoration: a thin paper halo keeps it readable */
+body.doodle h3,body.doodle .sub,body.doodle .timer,body.doodle .hub-main>.sub{text-shadow:-1px -1px 0 #fbf6e6,1px -1px 0 #fbf6e6,-1px 1px 0 #fbf6e6,1px 1px 0 #fbf6e6}
+body.doodle .card h3,body.doodle .card .sub,body.doodle .modal .sub,body.doodle .modal h3{text-shadow:none}
+body.doodle .hub-main>h2{background-color:#fbf6e6}
+body.doodle .hub-main{background:none}
+/* world cards: title in the hand font with an ink outline, no accent glow */
+body.doodle .world .ttl{color:#fff!important;font-family:var(--hand)}
+body.doodle .lockbox{border:3px dashed #2b2733;border-radius:var(--wob);margin:8px}
+/* leaderboard and chips */
+body.doodle .modal .row{color:#2b2733}
+body.doodle .gitem,body.doodle .gslot{background-color:#f3ead0}
+body.doodle .pbar>i.dark{background:#b79af0}
+body.doodle .rangeRow input[type=range]{background:transparent}
+body.doodle #boot b{font-weight:400;color:#ff5fb0;text-shadow:3px 3px 0 #2b2733}
+body.doodle .world .ttl{color:#2b2733!important;background:#fbf6e6;border:3px solid #2b2733;border-radius:var(--wob);padding:0 12px;box-shadow:2px 3px 0 #2b2733;text-shadow:none;font-size:28px;transform:rotate(-1.5deg);left:14px;bottom:10px}
+body.doodle #boot small{text-shadow:none}

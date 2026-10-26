@@ -48,9 +48,11 @@ node with a mock ctx: guard `document` use. Sprite caches: `makeCanvas(w,h)` ret
 Neon sticker look: dark violet backdrops, thick dark outlines (3 px), bright flat fills with a lighter highlight and darker shade,
 small sparkles, soft glow on the important thing. Cute but cheeky. The Static are fuzzy grey blobs with googly eyes, glitch offsets
 in cyan and magenta, never gory. Palette is `COL` in data_core.js. Jasmin pink (#ff5fb0), RoxorLoops green (#9dff3a).
-RoxorLoops: tall swooping brown mohawk pushed up and forward, shaved sides, short mullet tail, pale blue-grey cheeky eyes, smirk with a
-flash of teeth, black tee with an orange smiley, olive pants, lime sneakers, black mic with a green band, light stubble.
-Jasmin: long dark hair in a high ponytail with a pink scrunchie, a heart necklace, hoop earring, warm smile, pink top, a mic with a pink band.
+RoxorLoops (doodle art, from the crayon duo reference): chibi, spiky auburn mohawk swept up and forward with orange highlights, shaved tan sides, long
+auburn mullet, big bright blue eyes, open grin with pink tongue, blush, black oversized tee with a yellow smiley, black cargo pants (orange stitching,
+thigh pockets), chunky black sneakers with white soles, black mic with a green band, rock-on hand when an arm is raised.
+Jasmin: chibi, long wavy auburn hair in a high ponytail with a pink scrunchie and a small pink hair clip, big brown eyes with lashes (a wink when
+happy), blush, silver hoop earring, bead necklace, pink crop top, pink baggy cargo pants, white-pink sneakers, black mic with a pink band, open waving hand.
 Onesies (outfit 'onesie'): Roxor a green monster onesie with horns hood, Jasmin a unicorn onesie with a horn and rainbow mane.
 Loopy: a living loop-station pedal (rounded rectangle, two big round footswitch "feet", a tiny screen face with eyes, a cable tail), the guide.
 

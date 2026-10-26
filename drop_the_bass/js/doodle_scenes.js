@@ -157,13 +157,13 @@ const SCENES = {
     live(ctx, t, p) { duo(ctx, t, { a: [150, 800, 290], b: [400, 800, 280], pa: 'beat', pb: 'point', bob: 3 }); drawLoopy(ctx, 270, 590, 80, { t, mood: 'excited', talk: true }); sparks(ctx, t, 270, 520); },
   },
   van_night: {
-    bg: (P) => { wash(P, 0, 0, 540, 640, '#2f3c86', 0.97, 12); stars(P, 24, 20, 360, 2); moon(P, 410, 150, 62); P.hatch([0, 560, 130, 470, 260, 540, 390, 450, 540, 520, 540, 640, 0, 640], '#3b2a66', 11, 0.4, 0.95); P.ln([0, 560, 130, 470, 260, 540, 390, 450, 540, 520], INK, 4, false, 2); wash(P, 0, 640, 540, 320, '#4f4a5e', 0.95, 12, 0.3); P.ln([0, 640, 540, 644], INK, 4.5, false, 2); sign(P); },
+    bg: (P) => { wash(P, 0, 0, 540, 640, '#8a96e8', 0.8, 12); stars(P, 24, 20, 360, 2); moon(P, 410, 150, 62); P.hatch([0, 560, 130, 470, 260, 540, 390, 450, 540, 520, 540, 640, 0, 640], '#7a68d0', 11, 0.4, 0.85); P.ln([0, 560, 130, 470, 260, 540, 390, 450, 540, 520], INK, 4, false, 2); wash(P, 0, 640, 540, 320, '#9a96ac', 0.8, 12, 0.3); P.ln([0, 640, 540, 644], INK, 4.5, false, 2); sign(P); },
     live(ctx, t, p) { road(ctx, t); van(ctx, 270, 690, 1.35, t); },
     fg: (P) => { for (const [x, y] of [[40, 880], [470, 900]]) { fuzzDraw(P, null, 16, 0.2, true); } },
   },
   boss_reveal: {
-    bg: (P) => { wash(P, 0, 0, 540, 960, '#2a1633', 0.98, 11, 0.4); for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; P.ln([270, 330, 270 + Math.cos(a) * 520, 330 + Math.sin(a) * 520], i % 2 ? '#ff5fb0' : '#5a2a60', 6, false, 1); } },
-    mid: (P) => tvRobot(P, 270, 330, 1.3), fg: (P) => { floor(P, 800, '#3b2a4a', false); },
+    bg: (P) => { wash(P, 0, 0, 540, 960, '#c9a0e8', 0.85, 11, 0.4); for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; P.ln([270, 330, 270 + Math.cos(a) * 520, 330 + Math.sin(a) * 520], i % 2 ? '#ff5fb0' : '#9a6ad0', 6, false, 1); } },
+    mid: (P) => { floor(P, 800, '#9a86b8', false); tvRobot(P, 270, 330, 1.3); },
     live(ctx, t, p) { duo(ctx, t, { a: [150, 900, 190], b: [392, 900, 186], pa: 'shock', pb: 'shock', bob: 0 }); },
   },
 };
@@ -202,16 +202,16 @@ function sign(P) { P.ln([430, 640, 430, 520], INK, 5); poly(P, rect(340, 470, 18
 function worldScene(id) {
   const W = WORLD_BY_ID[id.slice(6)];
   const title = W.name.toUpperCase();
-  const sky = { garage: '#f6c98a', busk: '#8fc3f0', club: '#3a1f6e', festival: '#ff8f5a', arena: '#1f2a6a' }[id.slice(6)];
+  const sky = { garage: '#f6c98a', busk: '#8fc3f0', club: '#b79af0', festival: '#ff8f5a', arena: '#8fa0f0' }[id.slice(6)];
   return {
     bg: (P) => {
       const k = id.slice(6);
       wash(P, 0, 0, 540, 700, sky, 0.96, 12);
       if (k === 'garage') { brick(P, 0, 120, 540, 400); house(P, 150, 330, 240, 200, '#f1dfae', C.red); poly(P, rect(190, 380, 160, 150), '#2a1633', 5, { gap: 8 }); sun(P, 450, 100, 40); cloud(P, 120, 90, 1.1); floor(P, 700, '#8a8a99', false); }
       if (k === 'busk') { [[0, 280, 150, 330, '#e9a0b0'], [140, 250, 140, 360, '#f0d28a'], [270, 290, 130, 320, '#9ed0a0'], [390, 260, 150, 350, '#b8a2e0']].forEach(([x, y, w, h, c]) => house(P, x, y, w, h, c, C.brown)); for (const x of [90, 270, 450]) { P.ln([x, 480, x, 620], INK, 5); P.dot(x, 470, 14, C.yellow); } bunting(P, 330); floor(P, 640, '#a9a6ba', false); for (let r = 0; r < 6; r++) for (let q = 0; q < 12; q++) P.ln(arc(q * 46 + (r % 2) * 23, 660 + r * 44, 22, 14, 180, 360, 5), '#6f6c80', 2, false, 1); cloud(P, 380, 90, 1.2); }
-      if (k === 'club') { for (let i = 0; i < 5; i++) { const a = -0.9 + i * 0.45; P.hatch([60 + i * 100, 0, 80 + i * 100, 0, 200 + i * 60 + Math.sin(a) * 200, 520, 160 + i * 60, 520], ['#ff2fb9', '#19d3ff', '#9dff3a', '#ffd60a', '#ff5fb0'][i], 8, 0.9, 0.55); } poly(P, rect(110, 150, 320, 110), '#1a0b3d', 6, { gap: 7 }); P.txt('CLUB', 270, 238, 74, '#ff5fb0', { align: 'c', w: 8, out: '#19d3ff', ow: 5 }); ball(P, 460, 60); for (let r = 0; r < 4; r++) for (let q = 0; q < 6; q++) P.shp(rect(q * 90 + (r % 2) * 10, 640 + r * 70, 88, 68), (q + r) % 2 ? C.mag : C.cyan, INK, 2.6, { gap: 7, alpha: 0.8 }); }
+      if (k === 'club') { for (let i = 0; i < 5; i++) { const a = -0.9 + i * 0.45; P.hatch([60 + i * 100, 0, 80 + i * 100, 0, 200 + i * 60 + Math.sin(a) * 200, 520, 160 + i * 60, 520], ['#ff2fb9', '#19d3ff', '#9dff3a', '#ffd60a', '#ff5fb0'][i], 8, 0.9, 0.55); } poly(P, rect(110, 150, 320, 110), '#fff1b8', 6, { gap: 7 }); P.txt('CLUB', 270, 238, 74, '#ff5fb0', { align: 'c', w: 8, out: INK, ow: 5 }); ball(P, 460, 60); for (let r = 0; r < 4; r++) for (let q = 0; q < 6; q++) P.shp(rect(q * 90 + (r % 2) * 10, 640 + r * 70, 88, 68), (q + r) % 2 ? C.mag : C.cyan, INK, 2.6, { gap: 7, alpha: 0.8 }); }
       if (k === 'festival') { sun(P, 270, 400, 120, '#ffd05a'); for (const [x, y, c] of [[40, 380, C.red], [210, 340, C.yellow], [380, 380, C.sky]]) { poly(P, [x - 20, y + 140, x + 70, y - 40, x + 160, y + 140], c, 5, { gap: 8 }); poly(P, rect(x + 10, y + 100, 120, 80), '#fff7e0', 4, { gap: 9 }); } bunting(P, 250); floor(P, 640, '#6fbf5c', false); for (let i = 0; i < 20; i++) P.ln([20 + i * 27, 650 + (i % 3) * 20, 22 + i * 27, 638 + (i % 3) * 20], '#3e8a3a', 3); poly(P, rect(130, 500, 280, 140), '#5a3d7a', 5, { gap: 8 }); speaker(P, 100, 480, 50, 160, C.purple); speaker(P, 390, 480, 50, 160, C.purple); }
-      if (k === 'arena') { for (let r = 0; r < 6; r++) P.ln(arc(270, 680, 300 - r * 36, 250 - r * 30, 180, 360, 18), ['#5a6ad0', '#7a5ad0', '#9a5ac0', '#c05aa0', '#e05a80', '#f06060'][r], 16, false, 3); for (let i = 0; i < 4; i++) P.hatch([60 + i * 130, 0, 90 + i * 130, 0, 190 + i * 40, 520, 140 + i * 40, 520], '#fff7a0', 9, 0.9, 0.18); poly(P, rect(60, 70, 130, 90), '#0f1740', 5, { gap: 6 }); poly(P, rect(350, 70, 130, 90), '#0f1740', 5, { gap: 6 }); P.txt('LIVE', 125, 130, 40, C.pink, { align: 'c', w: 5 }); P.txt('LIVE', 415, 130, 40, C.cyan, { align: 'c', w: 5 }); floor(P, 660, '#34346a', false); for (const x of [90, 270, 450]) P.ln([x, 960, 270, 700], '#e9e5f5', 8, false, 2, [18, 14]); }
+      if (k === 'arena') { for (let r = 0; r < 6; r++) P.ln(arc(270, 680, 300 - r * 36, 250 - r * 30, 180, 360, 18), ['#5a6ad0', '#7a5ad0', '#9a5ac0', '#c05aa0', '#e05a80', '#f06060'][r], 16, false, 3); for (let i = 0; i < 4; i++) P.hatch([60 + i * 130, 0, 90 + i * 130, 0, 190 + i * 40, 520, 140 + i * 40, 520], '#fff7a0', 9, 0.9, 0.18); poly(P, rect(60, 70, 130, 90), '#ffe9a0', 5, { gap: 6 }); poly(P, rect(350, 70, 130, 90), '#ffe9a0', 5, { gap: 6 }); P.txt('LIVE', 125, 130, 40, C.red, { align: 'c', w: 5, out: INK, ow: 4 }); P.txt('LIVE', 415, 130, 40, C.blue, { align: 'c', w: 5, out: INK, ow: 4 }); floor(P, 660, '#34346a', false); for (const x of [90, 270, 450]) P.ln([x, 960, 270, 700], '#e9e5f5', 8, false, 2, [18, 14]); }
     },
     mid: (P) => { if (id === 'world_garage' || id === 'world_busk') for (let i = 0; i < 4; i++) fuzzDraw(P, null, 16, 0.4, i % 2 === 0); },
     fg: (P) => { banner(P, 60, 24, 420, 70, title, '#fff7c9'); },
@@ -221,9 +221,9 @@ function worldScene(id) {
 function ball(P, x, y) { P.ln([x, 0, x, y - 40], INK, 4); poly(P, P.blob(x, y, 40, 40, 14), '#d6d6e6', 5, { gap: 6, f2: '#fff' }); for (let i = -1; i <= 1; i++) P.ln([x - 38, y + i * 20, x + 38, y + i * 20], INK, 2, false, 1); for (let i = -1; i <= 1; i++) P.ln([x + i * 20, y - 38, x + i * 20, y + 38], INK, 2, false, 1); }
 function bossScene(id) {
   const key = id.slice(5), B = BOSSES[key];
-  const skyCol = { compressor: '#c0c6e0', noisegate: '#ffe08a', reverb: '#c9b3ff', djglitch: '#9ff0d8', playback: '#2a1633' }[key];
+  const skyCol = { compressor: '#c0c6e0', noisegate: '#ffe08a', reverb: '#c9b3ff', djglitch: '#9ff0d8', playback: '#c9a0e8' }[key];
   return {
-    bg: (P) => { wash(P, 0, 0, 540, 960, skyCol, 0.96, 12, -0.4); for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; P.ln([270, 380, 270 + Math.cos(a) * 560, 380 + Math.sin(a) * 560], key === 'playback' ? (i % 2 ? '#ff5fb0' : '#5a2a60') : 'rgba(255,255,255,0.7)', 5, false, 1); } floor(P, 740, key === 'playback' ? '#3b2a4a' : '#8f8aa0', false); },
+    bg: (P) => { wash(P, 0, 0, 540, 960, skyCol, 0.96, 12, -0.4); for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; P.ln([270, 380, 270 + Math.cos(a) * 560, 380 + Math.sin(a) * 560], key === 'playback' ? (i % 2 ? '#ff5fb0' : '#9a6ad0') : 'rgba(255,255,255,0.7)', 5, false, 1); } floor(P, 740, key === 'playback' ? '#9a86b8' : '#8f8aa0', false); },
     mid: (P) => bossArt(P, key),
     fg: (P) => { banner(P, 40, 22, 460, 74, B.name.toUpperCase(), key === 'playback' ? '#ffd1ea' : '#fff7c9'); },
     live(ctx, t, p) { duo(ctx, t, { a: [150, 920, 200], b: [392, 920, 196], pa: 'shock', pb: 'shock', bob: 0 }); },
@@ -309,9 +309,9 @@ export function drawScene(ctx, id, w, h, t, o) {
 
 // ===================================================================================================== title screen: a rooftop concert doodled on notebook paper
 const TITLE_BG = (P) => {
-  wash(P, 0, 0, 540, 700, '#3a3f98', 0.97, 12); stars(P, 30, 20, 380, 6); moon(P, 440, 120, 50);
-  for (const [x, y, w, h, c] of [[-10, 520, 90, 220, '#3b2a66'], [70, 470, 110, 270, '#4b3a86'], [170, 540, 100, 200, '#352a62'], [260, 500, 120, 240, '#4b3a86'], [370, 460, 90, 280, '#3b2a66'], [450, 520, 100, 220, '#4b3a86']]) { poly(P, rect(x, y, w, h), c, 4.5, { gap: 9, alpha: 0.95 }); for (let r = 0; r < 6; r++) for (let q = 0; q < 3; q++) if ((r * 3 + q + x) % 3) P.shp(rect(x + 12 + q * (w - 24) / 3, y + 16 + r * 34, 14, 18), C.yellow, null, 0, { gap: 4, alpha: 0.9 }); }
-  wash(P, 0, 735, 540, 225, '#2a2b5e', 0.97, 12, 0.3); P.ln([0, 740, 540, 743], INK, 5, false, 2); poly(P, rect(60, 740, 420, 36), '#6a4a8a', 5, { gap: 8 });
+  wash(P, 0, 0, 540, 700, '#8d94ee', 0.8, 12); stars(P, 30, 20, 380, 6); moon(P, 440, 120, 50);
+  for (const [x, y, w, h, c] of [[-10, 520, 90, 220, '#7a68d0'], [70, 470, 110, 270, '#d96aa8'], [170, 540, 100, 200, '#4f9fd8'], [260, 500, 120, 240, '#8a76dc'], [370, 460, 90, 280, '#e8905a'], [450, 520, 100, 220, '#5bb86a']]) { poly(P, rect(x, y, w, h), c, 4.5, { gap: 9, alpha: 0.95 }); for (let r = 0; r < 6; r++) for (let q = 0; q < 3; q++) if ((r * 3 + q + x) % 3) P.shp(rect(x + 12 + q * (w - 24) / 3, y + 16 + r * 34, 14, 18), C.yellow, null, 0, { gap: 4, alpha: 0.9 }); }
+  wash(P, 0, 735, 540, 225, '#8f88b8', 0.7, 12, 0.3); P.ln([0, 740, 540, 743], INK, 5, false, 2); poly(P, rect(60, 740, 420, 36), '#c58ad8', 5, { gap: 8 });
   speaker(P, 6, 590, 96, 150, C.purple); speaker(P, 438, 590, 96, 150, C.purple);
 };
 const spotLeft = () => layer('title', 'spotL', (P) => lightCone(P, 90, 20, 120, 740, C.yellow, 0.4));
