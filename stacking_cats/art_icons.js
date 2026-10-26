@@ -63,7 +63,17 @@ const D = {
   '🧶': (c) => { F(c, circ(30, 32, 22), PINK, 2.2); for (const [a, b] of [[[14, 24], [44, 22]], [[10, 34], [48, 36]], [[18, 46], [42, 14]]]) curve(c, '#c85a88', 2, (x) => { x.moveTo(a[0], a[1]); x.quadraticCurveTo(30, (a[1] + b[1]) / 2 + 12, b[0], b[1]); }); curve(c, '#c85a88', 2.4, (x) => { x.moveTo(46, 48); x.bezierCurveTo(58, 52, 50, 60, 60, 58); }); glint(c, 20, 20, 4); },
   '🗡': (c) => { F(c, poly(c, [[14, 52], [10, 40], [44, 8], [54, 10], [56, 20], [24, 54]]), SILVER, 2); ln(c, [[18, 46], [48, 14]], '#fff', 2); F(c, poly(c, [[8, 46], [18, 56], [14, 60], [4, 50]]), '#a05a30', 1.8); F(c, poly(c, [[12, 36], [28, 52], [24, 56], [8, 40]]), GOLD, 1.8); },
   '🛏': (c) => { F(c, P((p) => { p.moveTo(8, 20); p.bezierCurveTo(24, 12, 40, 12, 56, 20); p.bezierCurveTo(52, 32, 52, 36, 56, 46); p.bezierCurveTo(40, 54, 24, 54, 8, 46); p.bezierCurveTo(12, 36, 12, 32, 8, 20); p.closePath(); }), '#ffb8d0', 2.2); for (const [x, y] of [[8, 20], [56, 20], [8, 46], [56, 46]]) F(c, circ(x, y, 4.5), '#ffe08a', 1.6); curve(c, '#d86a98', 2, (x) => { x.moveTo(20, 32); x.quadraticCurveTo(32, 26, 44, 32); }); glint(c, 22, 24, 4); },
-  '🍀': (c) => { for (const [x, y] of [[21, 21], [43, 21], [21, 43], [43, 43]]) heart(c, x, y, 10, GREEN, 1.9); ln(c, [[32, 32], [38, 56]], '#2e8a3e', 3.4); dot(c, 32, 32, 3, '#9ae88a'); glint(c, 18, 17, 3.5); },
+  '🍀': (c) => {
+    // a four leaf clover: four hearts turned so their points meet in the middle, each with a vein, and a curving stem
+    curve(c, '#2e8a3e', 3.6, (x) => { x.moveTo(32, 32); x.bezierCurveTo(36, 44, 30, 52, 40, 60); });
+    for (let k = 0; k < 4; k++) {
+      c.save(); c.translate(32, 31); c.rotate(k * Math.PI / 2);
+      heart(c, 0, -11.5, 9.6, GREEN, 1.9);
+      ln(c, [[0, -4.5], [0, -17]], '#2e8a3e', 1.5);
+      c.restore();
+    }
+    dot(c, 32, 31, 2.6, '#c8f5a8'); glint(c, 20, 14, 3.4);
+  },
   '💰': (c) => sack(c, '#d8a24a', (x) => { x.fillStyle = INK; x.font = '800 22px sans-serif'; x.textAlign = 'center'; F(x, circ(32, 42, 10), GOLD, 1.8); curve(x, mix(GOLD2, INK, 0.3), 2.2, (q) => { q.moveTo(28, 42); q.quadraticCurveTo(32, 36, 36, 42); q.moveTo(28, 42); q.quadraticCurveTo(32, 48, 36, 42); }); glint(x, 16, 36, 3.5); }),
   '🔮': (c) => { F(c, P((p) => { p.moveTo(14, 58); p.lineTo(20, 46); p.lineTo(44, 46); p.lineTo(50, 58); p.closePath(); }), '#7a5aa8', 2); F(c, circ(32, 28, 21), '#a58cf0', 2.2); F(c, ell(null, 32, 31, 15, 15), '#c8b8ff', 1, { shade: false }); glint(c, 24, 20, 5); glint(c, 40, 34, 3); dot(c, 28, 36, 1.8); },
   '🌼': (c) => { for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU; F(c, ell(null, 32 + Math.cos(a) * 15, 32 + Math.sin(a) * 15, 9, 5.5, a), '#fff', 1.6, { shade: false }); } F(c, circ(32, 32, 9), '#ffd23a', 2); dot(c, 29, 29, 2.2); },
