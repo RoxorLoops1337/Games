@@ -18,8 +18,8 @@ function fight(g, secs, mk) {
   for (let i = 0; i < secs * 30 && g.enemies.some((e) => !e.dead); i++) step(g);
 }
 
-t('items: 20 items with text, valid effects and rarities', () => {
-  assert.equal(ITEMS.length, 20);
+t('items: 21 items with text, valid effects and rarities', () => {
+  assert.equal(ITEMS.length, 21);
   for (const it of ITEMS) {
     assert.ok(it.name && it.icon && it.desc && ['common', 'rare', 'epic'].includes(it.rarity), it.id);
     assert.ok(Object.keys(it.fx).length, it.id);
@@ -192,5 +192,17 @@ t('estimated dps is higher for stronger cats and levels', () => {
   g.cats.length = 0; g.stash.length = 0;
   for (const id of ALL) { const gg = newGame({ seed: 1, unlocked: ALL }); addCat(gg, id); assert.ok(estDps(gg.cats[0], calcMods(gg)) > 0, id); }
 });
+
+t('items: Warm Mittens is a common that adds health and attack speed together', () => {
+  const it = ITEM_BY_ID.mitten;
+  assert.ok(it && it.rarity === 'common', 'mittens exist as a common');
+  assert.ok(it.fx.hp > 0 && it.fx.haste > 0, 'two small bonuses');
+  const g = newGame({ seed: 5 }); addCat(g, 'tabby');
+  const base = catMaxHp(g, g.cats[0]), baseHaste = itemFx(g.cats[0]).haste || 0;
+  g.cats[0].items = ['mitten'];
+  assert.ok(catMaxHp(g, g.cats[0]) > base, 'more health');
+  assert.ok(itemFx(g.cats[0]).haste > baseHaste, 'and faster attacks');
+});
+
 
 console.log(`${n} tests passed`);

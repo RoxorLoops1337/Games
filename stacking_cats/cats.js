@@ -267,6 +267,7 @@ export const ITEMS = [
   { id: 'clover', name: 'Lucky Clover', icon: '🍀', rarity: 'common', fx: { crit: 0.12 }, desc: '+12% critical chance' },
   { id: 'monocle', name: 'Eagle Monocle', icon: '🧐', rarity: 'common', fx: { range: 0.25 }, desc: '+25% range' },
   { id: 'vest', name: 'Fish Scale Vest', icon: '🦺', rarity: 'common', fx: { dr: 0.15 }, desc: 'Takes 15% less damage' },
+  { id: 'mitten', name: 'Warm Mittens', icon: '🧤', rarity: 'common', fx: { hp: 0.15, haste: 0.09 }, desc: '+15% health and +9% attack speed' },
   { id: 'spikes', name: 'Spiky Collar', icon: '📿', rarity: 'common', fx: { thorns: 0.5 }, desc: 'Mice that bite this cat take 50% of their damage back' },
   { id: 'fang', name: 'Vampire Fang', icon: '🦷', rarity: 'rare', fx: { ls: 0.12 }, desc: 'Heals for 12% of the damage it deals' },
   { id: 'heart', name: 'Healing Charm', icon: '💖', rarity: 'rare', fx: { regen: 0.02 }, desc: 'Heals 2% of its health every second' },
