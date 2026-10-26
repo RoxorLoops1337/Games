@@ -182,6 +182,7 @@ body.doodle .menu .btn.big{font-size:34px;min-height:76px;letter-spacing:.1em}
 body.doodle .cut-box{background:#fbf6e6;color:#2b2733;border:4px solid #2b2733;border-radius:var(--wob);box-shadow:5px 7px 0 #2b2733;font-weight:400;font-size:25px;line-height:1.3;animation:d-pop .3s;
   background-image:repeating-linear-gradient(180deg,transparent 0 31px,#a9cdf0 31px 33px)}
 body.doodle .cut-box::before{display:none}
+body.doodle .cut-box{padding:26px 18px 30px}
 body.doodle .cut-box .who{background:#ffd60a;color:#2b2733;border:3.5px solid #2b2733;border-radius:var(--wob);box-shadow:2px 3px 0 #2b2733;font:400 21px var(--hand);letter-spacing:.06em;text-transform:uppercase;top:-22px;transform:rotate(-2deg)}
 body.doodle .cut-box .nx{color:#e8403f;font-size:18px;font-weight:400;animation:d-wiggle .9s ease-in-out infinite}
 body.doodle .cut-skip{opacity:1}
@@ -199,3 +200,8 @@ body.doodle button:focus-visible,body.doodle .tab:focus-visible,body.doodle .pic
   body.doodle .tab.on,body.doodle .btn.big,body.doodle .day.cur2,body.doodle .ms.ready,body.doodle .gitem .new,body.doodle .pick.rar-b-legendary,body.doodle .cut-box .nx{animation:none}
 }
 body.doodle.reduce .tab.on,body.doodle.reduce .btn.big,body.doodle.reduce .day.cur2,body.doodle.reduce .ms.ready,body.doodle.reduce .gitem .new,body.doodle.reduce .pick.rar-b-legendary,body.doodle.reduce .cut-box .nx{animation:none}
+
+/* contrast guards: inline pale or dark colours from the classic UI */
+body.doodle .how [style*="color:#fff"],body.doodle .how [style*="color:#e"],body.doodle .how [style*="color:#d"],body.doodle .how [style*="color:#c"],body.doodle .how [style*="color:#b"]{color:#2b2733!important}
+body.doodle input,body.doodle textarea,body.doodle select{background:#fbf6e6!important;color:#2b2733!important}
+body.doodle .ibox,body.doodle .icon-box{background:#fbf6e6}
