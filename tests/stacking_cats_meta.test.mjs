@@ -5,7 +5,7 @@ import {
   takeItem, useReroll, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, ACHIEVEMENTS,
 } from '../stacking_cats/cats.js';
 
 let n = 0;
@@ -239,6 +239,15 @@ t('nextGoal names the cheapest unmaxed building with the coins still missing', (
   assert.equal(nextGoal(k).need, 0, 'an affordable goal needs nothing');
   for (const b of BUILDINGS) k.lv[b.id] = b.max;
   assert.equal(nextGoal(k), null, 'a fully built kingdom has no goal');
+});
+
+t('beating King Squeakimus earns its own trophy, and only after the finale', () => {
+  const a = ACHIEVEMENTS.find((x) => x.id === 'king');
+  assert.ok(a, 'the king trophy exists');
+  assert.ok(!a.name.includes('\u2014') && !a.desc.includes('\u2014'));
+  assert.ok(a.coins > 0, 'it pays coins');
+  assert.equal(!!a.check({ stats: {}, run: {}, save: {}, kingdom: {} }), false, 'not before the finale');
+  assert.equal(!!a.check({ stats: {}, run: {}, save: { storyDone: true }, kingdom: {} }), true, 'after the finale');
 });
 
 console.log(`${n} tests passed`);

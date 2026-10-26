@@ -721,6 +721,7 @@ function showFinale() {
   const first = !save.storyDone;
   const gems = finaleGems(first);
   if (first) { save.storyDone = true; save.kingdom.gems += gems; persist(); }
+  for (const a of checkAch({ ...g.run, wave: g.wave })) toast(`Trophy: ${a.name}!`);
   sfx.play('win'); sfx.music('calm');
   g.cats.slice(0, 3).forEach((c, i) => sfx.meow(c.id, 'cheer', 0.2 + i * 0.25));
   setScreen(`<h2>${FINALE_TITLE}</h2>${FINALE_LINES.map((l) => `<p class="sub">${l}</p>`).join('')}

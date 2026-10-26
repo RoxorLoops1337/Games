@@ -397,4 +397,10 @@ t('clearing the last nest of the map shows the finale card, pays once and lets t
   assert.ok(/Keep playing/.test(f) && /nextReward\(\)/.test(f), 'the player can keep going');
 });
 
+t('the finale card hands out the king trophy straight away', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const f = js.slice(js.indexOf('function showFinale'));
+  assert.ok(/checkAch\(/.test(f.slice(0, 900)) && /Trophy: /.test(f.slice(0, 900)), 'showFinale must check trophies and announce them');
+});
+
 console.log(`${n} tests passed`);

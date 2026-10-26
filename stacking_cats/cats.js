@@ -458,6 +458,7 @@ export const WONDER_BY_ID = Object.fromEntries(WONDERS.map((w) => [w.id, w]));
 // check gets { stats (after this run), run, save, kingdom }.
 const bld = (k, n) => BUILDINGS.filter((b) => buildingLevel(k, b.id) >= n).length;
 export const ACHIEVEMENTS = [
+  { id: 'king',     name: 'Cheddar Crusher',  desc: 'Defeat King Squeakimus at the end of the map.', coins: 300, gems: 0, check: (c) => !!(c.save && c.save.storyDone) },
   { id: 'first',    name: 'First Catch',      desc: 'Defeat your first mouse.',                    coins: 20,  gems: 0, check: (c) => c.stats.kills >= 1 },
   { id: 'hunter',   name: 'Mouser',           desc: 'Defeat 1000 mice in total.',                  coins: 80,  gems: 0, check: (c) => c.stats.kills >= 1000 },
   { id: 'exterm',   name: 'Exterminator',     desc: 'Defeat 10000 mice in total.',                 coins: 300, gems: 2, check: (c) => c.stats.kills >= 10000 },
