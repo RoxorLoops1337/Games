@@ -6,7 +6,7 @@ import {
   takeItem, useReroll, fxOf, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, RELIC_SETS, activeSets, setUps, RARITIES, ACHIEVEMENTS,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, RARITIES, ACHIEVEMENTS,
 } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CAT_TAGS, SPECIALS, SYNERGIES, unlockProgress } from '../stacking_cats/cats.js';
 import { catStory } from '../stacking_cats/story.js';
@@ -380,6 +380,17 @@ t('relic sets: setUps reports a set only when it turns on or doubles, once', () 
   assert.deepEqual(setUps(seen, [mk('vest', 'cushion', 'mitten')]).map((x) => x.mult), [1], 'getting it back is news again');
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   assert.ok(/function noteSets\(/.test(js) && /noteSets\(\)/.test(js.slice(js.indexOf('function beginWave'), js.indexOf('function beginWave') + 400)), 'checked when a wave begins');
+});
+
+t('relic sets: the card hint names the set, its progress and when this relic completes or doubles it', () => {
+  const mk = (...items) => ({ id: 'tabby', items, ko: false });
+  assert.equal(setHint('claws', []), 'Sharp Set 0/3', 'progress even when nothing is held');
+  assert.match(setHint('mitten', [mk('vest')]), /Armor Set 1\/3/);
+  assert.match(setHint('mitten', [mk('vest', 'cushion')]), /Armor Set 2\/3.*completes it/);
+  assert.match(setHint('cloak', [mk('vest', 'cushion', 'mitten', 'shell')]), /doubles it/);
+  assert.doesNotMatch(setHint('vest', [mk('vest', 'cushion')]), /completes/, 'a copy does not help');
+  assert.equal(setHint('rainbow', []), '', 'a relic with no set has no hint');
+  assert.ok(/setHint\(id, g\.cats\)/.test(readFileSync('stacking_cats/main.js', 'utf8')), 'shown on the relic cards');
 });
 
 t('relic sets wiring: calcMods applies them and Team stats lists them', () => {

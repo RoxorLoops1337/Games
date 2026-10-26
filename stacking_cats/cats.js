@@ -386,6 +386,14 @@ export function setUps(seen, cats) {
   }
   return ups;
 }
+// one line for a relic card: its set, how many different relics of it the living cats hold, and whether this one completes or doubles it
+export function setHint(id, cats) {
+  const a = activeSets(cats).filter((x) => x.set.ids.includes(id)).sort((p, q) => q.have.length - p.have.length)[0];
+  if (!a) return '';
+  const owned = a.have.includes(id), n = a.have.length + (owned ? 0 : 1);
+  const note = owned ? '' : a.mult === 0 && n >= SET_NEED ? ', completes it!' : a.mult === 1 && n >= SET_DOUBLE ? ', doubles it!' : '';
+  return `${a.set.name} ${Math.min(a.have.length, a.mult ? SET_DOUBLE : SET_NEED)}/${a.mult ? SET_DOUBLE : SET_NEED}${note}`;
+}
 // the relics a team carries, one line per kind: how many, which cats hold them, rarest first (for the Team stats screen)
 export function teamRelics(cats) {
   const by = new Map();
