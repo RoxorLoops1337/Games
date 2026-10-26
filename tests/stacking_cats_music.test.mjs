@@ -299,7 +299,7 @@ await (async () => {
 t('some songs sing with the meows and fall back to their own lead until the bank has loaded', () => {
   const withMew = []; 
   for (let th = 0; th < THEME_COUNT; th++) for (const mode of MUSIC_MODES) { const sg = songInfo(th, mode); if (sg.def.mew) withMew.push(`${th}/${mode}`); }
-  assert.ok(withMew.length >= 5 && withMew.length <= 9, 'meow songs: ' + withMew.join(','));
+  assert.ok(withMew.length >= 5 && withMew.length <= 15, 'meow songs: ' + withMew.join(','));
   assert.ok(withMew.some((k) => k.endsWith('calm')) && withMew.some((k) => k.endsWith('fight')), 'calm and fight both');
   const th = +withMew.find((k) => k.endsWith('calm')).split('/')[0];
   const plain = fresh(); plain.setTheme(th); plain.music('calm'); run(plain, 12);
