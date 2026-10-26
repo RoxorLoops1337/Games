@@ -206,6 +206,11 @@ function setScreen(html, cls = '') {
   screenEl.innerHTML = html ? `<div class="screen ${cls}">${html}</div>` : '';
   document.body.classList.toggle('scr', !!html);       // the HUD steps back while a menu is open
   paintThumbs(screenEl);
+  if (html) {   // a labelled dialog that takes focus: keyboard and screen reader players learn that a menu opened
+    const s = screenEl.firstElementChild, h = s.querySelector('h2, .logo');
+    s.setAttribute('role', 'dialog'); s.setAttribute('aria-label', (h && (h.classList.contains('logo') ? 'Stacking Cats' : h.textContent.trim())) || 'Menu'); s.tabIndex = -1;
+    try { s.focus({ preventScroll: true }); } catch (e) { /* focus is a nicety */ }
+  }
   // clickable divs (tower slots, items) get button semantics so keyboard and screen reader players can reach them
   for (const el of screenEl.querySelectorAll('[data-act]:not(button)')) { el.setAttribute('role', 'button'); el.tabIndex = 0; }
 }
