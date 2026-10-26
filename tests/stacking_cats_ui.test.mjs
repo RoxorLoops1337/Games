@@ -240,4 +240,9 @@ t('the low health edge has a heartbeat that quickens as health drops', () => {
   assert.ok(/sfx\.play\('heart'/.test(js), 'the frame must play the heartbeat while the danger edge shows');
 });
 
+t('the first-run title hint mentions Enter for keyboard players', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(js.includes("coarse ? 'Tap Play to begin' : 'Click Play or press Enter to begin'"), 'mouse and keyboard players must see the Enter shortcut, touch players keep the tap hint');
+});
+
 console.log(`${n} tests passed`);
