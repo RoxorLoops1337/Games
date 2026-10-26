@@ -195,6 +195,7 @@ function coach(key, html, x, y, dir = 'down', opt = {}) {
     const sc = app.getBoundingClientRect().width / W || 1;
     const p = coachAbove(hl.getBoundingClientRect(), app.getBoundingClientRect(), sc, el.offsetHeight, W);
     el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+    if (p.side) { el.classList.remove('down'); el.classList.add('left'); }   // the bubble sits right of the target with its tail pointing left
   }
   if (!opt.wait) setTimeout(() => { if (coachEl === el) hideCoach(); }, 14000);
 }

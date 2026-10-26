@@ -182,5 +182,8 @@ export function confirmTap(armedAt, now, win = 3) {
 export function coachAbove(rect, appRect, scale, bubbleH, W, halfW = 135) {
   const cx = (rect.left + rect.width / 2 - appRect.left) / scale;
   const top = (rect.top - appRect.top) / scale;
-  return { x: Math.round(Math.max(halfW + 4, Math.min(W - halfW - 4, cx))), y: Math.round(Math.max(6, top - bubbleH - 12)) };
+  const x = Math.round(Math.max(halfW + 4, Math.min(W - halfW - 4, cx)));
+  // not enough room above (a screen title or chips sit there): go to the right of the target, tail pointing left at it
+  if (top - bubbleH - 12 < 56 && rect.height) return { x: Math.round((rect.left + rect.width - appRect.left) / scale + 14), y: Math.round(top), side: true };
+  return { x, y: Math.round(Math.max(6, top - bubbleH - 12)), side: false };
 }

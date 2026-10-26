@@ -299,7 +299,7 @@ await t('coachAbove: a tip sits just over its target, clamped inside the stage',
   const app = { left: 100, top: 50 };
   // scale 0.5: a target at screen (300,250) is at stage (400,400); bubble 60 high goes 12 above it
   const a = coachAbove({ left: 300, top: 250, width: 100 }, app, 0.5, 60, 960);
-  assert.deepEqual(a, { x: 500, y: 328 }, 'centred over the target, bubble bottom 12 above it');
+  assert.deepEqual(a, { x: 500, y: 328, side: false }, 'centred over the target, bubble bottom 12 above it');
   assert.equal(coachAbove({ left: 100, top: 52, width: 20 }, app, 1, 60, 960).y, 6, 'never above the top edge');
   assert.equal(coachAbove({ left: 100, top: 400, width: 10 }, app, 1, 60, 960).x, 139, 'keeps room on the left edge');
   assert.equal(coachAbove({ left: 1100, top: 400, width: 10 }, app, 1, 60, 960).x, 821, 'keeps room on the right edge');
@@ -371,6 +371,17 @@ await t('kingdomLine: the village story grows with the kingdom level', async () 
   assert.notEqual(lines[5], lines[6]);
   assert.equal(lines[6], lines[7]);
   assert.ok(lines.every((l) => l.length > 10 && !/\u2014/.test(l)), 'no em dash');
+});
+
+await t('coachAbove: with no room above the target (a title is there) the tip goes to its right, tail left', async () => {
+  const { coachAbove } = await import('../stacking_cats/art_util.js');
+  const app = { left: 0, top: 0 };
+  const hi = coachAbove({ left: 100, top: 80, width: 200, height: 40 }, app, 1, 100, 960);
+  assert.equal(hi.side, true, 'only 80px of room for a 100px bubble');
+  assert.deepEqual([hi.x, hi.y], [314, 80], 'just right of the target: left edge at 300 + 14, level with its top');
+  const lo = coachAbove({ left: 100, top: 300, width: 200, height: 40 }, app, 1, 100, 960);
+  assert.equal(lo.side, false);
+  assert.equal(lo.y, 188);
 });
 
 console.log(n + ' passed');
