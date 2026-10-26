@@ -1656,6 +1656,7 @@ function drawEnemy(e, t) {
   ctx.restore();
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   const top = y - (e.boss ? 150 : e.h * (e.elite ? 1.28 : 1.12));
+  const barLift = e.boss ? 0 : e.elite ? 26 : 20;   // bars sit above the ears and crown, not across the eyes
   if (e.shield > 0) { add(); glow(e.x, y - e.h * 0.5, e.w * 0.95, '#6aa8ff', 0.3 + 0.08 * Math.sin(t * 6)); norm(); ctx.strokeStyle = 'rgba(190,220,255,.8)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(e.x - e.w * 0.3, y - e.h * 0.45, e.w * 0.32, e.h * 0.5, 0, 0, TAU); ctx.stroke(); }
   if (e.boss && e.bubble > 0) { ctx.fillStyle = 'rgba(207,192,255,.22)'; ctx.strokeStyle = 'rgba(235,225,255,.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(e.x, y - 80, 112 + Math.sin(t * 8) * 3, 0, TAU); ctx.fill(); ctx.stroke(); add(); glow(e.x, y - 80, 120, '#cfc0ff', 0.25); norm(); }
   if (g.hexT > 0 && !e.boss) { add(); glow(e.x, y - e.h * 0.5, e.w * 0.8, '#d28aff', 0.4); norm(); }
@@ -1671,12 +1672,12 @@ function drawEnemy(e, t) {
   if (e.stun > 0 && !e.boss) { ctx.fillStyle = '#ffe14d'; for (let k = 0; k < 3; k++) { const an = t * 6 + k * 2.1; ctx.beginPath(); ctx.arc(e.x + Math.cos(an) * 10, top + Math.sin(an) * 3, 2.2, 0, TAU); ctx.fill(); } }
   if (e.poison) { ctx.fillStyle = '#8be05a'; ctx.beginPath(); ctx.arc(e.x + 12, y - e.h * 0.9 + Math.sin(t * 6) * 2, 3, 0, TAU); ctx.fill(); }
   if (e.shield > 0 && !e.boss) {
-    const w = Math.max(26, e.w) * 0.9, by = top - 12;
+    const w = Math.max(26, e.w) * 0.9, by = top - 12 - barLift;
     ctx.fillStyle = 'rgba(39,28,51,.8)'; ctx.beginPath(); ctx.roundRect(e.x - w / 2 - 1, by, w + 2, 6, 3); ctx.fill();
     ctx.fillStyle = '#6aa8ff'; ctx.beginPath(); ctx.roundRect(e.x - w / 2, by + 1, Math.max(2, w * e.shield / e.maxShield), 4, 2); ctx.fill();
   }
-  if (e.hp < e.maxHp && !e.boss) {
-    const w = Math.max(26, e.w) * 0.9, by = top - 6;
+  if ((e.hp < e.maxHp || e.elite) && !e.boss) {
+    const w = Math.max(26, e.w) * 0.9, by = top - 6 - barLift;
     ctx.fillStyle = 'rgba(39,28,51,.8)'; ctx.beginPath(); ctx.roundRect(e.x - w / 2 - 1, by, w + 2, 6, 3); ctx.fill();
     ctx.fillStyle = e.elite ? '#ffd23f' : '#ff7a8a'; ctx.beginPath(); ctx.roundRect(e.x - w / 2, by + 1, Math.max(2, w * e.hp / e.maxHp), 4, 2); ctx.fill();
   }
