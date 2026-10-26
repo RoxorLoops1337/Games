@@ -493,4 +493,11 @@ t('every nest shows the caged cat it is holding (cage, ears and eyes drawn live)
   assert.ok(!/\u2014/.test(f), 'no em dash');
 });
 
+t('when a nest falls the caged cat is freed: hearts and sparks rise from where its cage hung', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const i = js.indexOf("case 'bossDown'");
+  const f = js.slice(i, i + 1200);
+  assert.ok(/freed cat/.test(f) && /k: 'h'/.test(f) && /e\.x \+ 68/.test(f), 'bossDown spawns hearts at the cage spot (nest x + 68)');
+});
+
 console.log(`${n} tests passed`);

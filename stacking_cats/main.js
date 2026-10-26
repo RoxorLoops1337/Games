@@ -1453,6 +1453,9 @@ function handle(e) {
       flashGlow(e.x, e.y - 60, 260, '#fff2c0', 0.7);
       puff(e.x, e.y - 60, 40, '#ffd23f', 280, 1, 7); sparks(e.x, e.y - 60, 40, '#fff6b0', 420, 0.8); smoke(e.x, e.y - 40, 8, 22, '#b8aab8');
       confetti(e.x, e.y - 60, 70, 420);
+      // the freed cat: hearts and sparks lift off from where its cage hung (see nestOverlay)
+      for (let i = 0; i < 9; i++) spawnFx({ k: 'h', x: e.x + 68 + (Math.random() - 0.5) * 40, y: e.y - 22 - Math.random() * 30, life: 1.3 + Math.random() * 0.6, max: 1.9 });
+      sparks(e.x + 68, e.y - 30, 16, '#ffe9a8', 260, 0.8);
       shake = 20; zpunch = 0.07; hit(0.16); slowmo(1.2, 0.28); screenFlash('rgba(255,255,230,.5)', 0.4);
       sfx.play('boom'); buzz('boss'); break;
     }
