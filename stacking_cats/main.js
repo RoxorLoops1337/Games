@@ -555,6 +555,7 @@ function showWardrobe(back, startCat) {
 
 // ---------------------------------------------------------------- the Cat Kingdom: a village you can tap
 let kScene = null, kNav = null, bestShown = false, heartAt = 0, quitArmed = 0;
+const worried = new Set();   // cats that already gave their worried mew
 function showKingdom(back, selected) {
   if (kScene) { kScene.stop(); kScene = null; }
   kNav = null;
@@ -607,6 +608,7 @@ function showKingdom(back, selected) {
 // ---------------------------------------------------------------- run flow
 let startTotal = START_CATS, maxComboRun = 0;
 function startRun(opts = {}) {
+  worried.clear();
   sfx.unlock();
   const daily = opts.weekly ? weekInfo(weekKey()) : opts.daily ? dayInfo(dayKey()) : null;
   if (!diffAllowed(save, save.diff)) save.diff = 'hard';
@@ -687,7 +689,7 @@ function onClear() {
   ring(g.towerX, GROUND - 100, g.bossWave ? 220 : 150, '#fff3b8', 0.7, 8);
   ring(g.towerX, GROUND - 100, g.bossWave ? 150 : 100, '#ffffff', 0.55, 4);
   sparks(g.towerX, GROUND - 120, g.bossWave ? 26 : 14, '#ffe27a', 300, 0.7);
-  g.cats.forEach((c, i) => { if (c.hp > 0) { moods.set(c.uid, 1.4); if (i < 3) setTimeout(() => { if (mode === 'celebrate') { const q = catPos(c.uid); if (q) sparks(q.x, q.y - 10, 5, '#fff6b0', 150, 0.4); } }, 160 + i * 140); } });
+  g.cats.forEach((c, i) => { if (c.hp > 0) { moods.set(c.uid, 1.4); if (i < 3) setTimeout(() => { if (mode === 'celebrate') { sfx.meow(c.id, 'cheer'); const q = catPos(c.uid); if (q) sparks(q.x, q.y - 10, 5, '#fff6b0', 150, 0.4); } }, 160 + i * 140); } });
   queue = g.reward.slice();
   if (g.bossWave) queue.splice(queue.length - 1, 0, 'route');
   if (S.eventDue(g)) queue.push('event');
@@ -1956,7 +1958,14 @@ function render(dt) {
   drawFx();
   if (mode === 'play' && g && g.cats) {
     // low-health warning: a soft red edge that beats like a pulse while any cat is nearly out of health
-    const dg = dangerLevel(S.aliveCats(g).map((c) => ({ hp: c.hp, max: S.catMaxHp(g, c) })));
+    const aliveNow = S.aliveCats(g);
+    const dg = dangerLevel(aliveNow.map((c) => ({ hp: c.hp, max: S.catMaxHp(g, c) })));
+    // a cat that drops below a third of its health gives one worried mew (and may do it again after it has healed past half)
+    for (const lowCat of aliveNow) {
+      const r = lowCat.hp / S.catMaxHp(g, lowCat);
+      if (r < 1 / 3 && !worried.has(lowCat.uid)) { worried.add(lowCat.uid); sfx.meow(lowCat.id, 'worried'); }
+      else if (r >= 0.5) worried.delete(lowCat.uid);
+    }
     if (dg > 0) {
       const beat = save.opt.motion ? 0.6 + 0.4 * Math.sin(tAnim * 5) : 0.8, grd = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.85);
       grd.addColorStop(0, 'rgba(255,40,70,0)'); grd.addColorStop(1, 'rgba(255,40,70,' + (0.5 * dg * beat).toFixed(3) + ')');
