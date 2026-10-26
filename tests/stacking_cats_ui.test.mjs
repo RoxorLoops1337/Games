@@ -598,4 +598,11 @@ t('over a full screen only the latest toast shows, so a stack of them cannot cov
   assert.ok(/classList\.contains\('scr'\)\) \$\('toasts'\)\.replaceChildren\(\)/.test(js.slice(i, i + 300)), 'toast replaces older ones in screen mode');
 });
 
+t('Larger text also grows the title tagline, hints and Dex detail text', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/body\.bigtext \.tag\{font-size:1[89]px\}/.test(html), 'tagline');
+  assert.ok(/body\.bigtext \.hint\{font-size:1[67]px\}/.test(html), 'hints');
+  assert.ok(/body\.bigtext \.detail\.dexd\{font-size:1[67]px\}/.test(html), 'dex detail');
+});
+
 console.log(`${n} tests passed`);
