@@ -277,6 +277,7 @@ export const ITEMS = [
   { id: 'flamering', name: 'Ember Ring', icon: '💍', rarity: 'rare', fx: { burn: 1 }, desc: 'Attacks set mice on fire' },
   { id: 'frost', name: 'Frost Charm', icon: '❄️', rarity: 'rare', fx: { slow: 0.3 }, desc: 'Attacks slow mice by 30%' },
   { id: 'thunder', name: 'Thunder Stone', icon: '🪨', rarity: 'rare', fx: { stun: 0.12 }, desc: '12% chance to stun on every hit' },
+  { id: 'ribbon', name: 'Silk Ribbon', icon: '🎀', rarity: 'rare', fx: { dmg: 0.10, crit: 0.10 }, desc: '+10% damage and +10% critical chance' },
   { id: 'gbell', name: 'Golden Bell', icon: '🛎️', rarity: 'rare', fx: { coin: 0.15 }, desc: '+15% coins from this run' },
   { id: 'crown', name: 'Cheese Crown', icon: '🧀', rarity: 'epic', fx: { dmg: 0.25, hp: 0.25 }, desc: '+25% damage and +25% health' },
   { id: 'hourglass', name: 'Time Hourglass', icon: '⏳', rarity: 'epic', fx: { haste: 0.30, range: 0.10 }, desc: '+30% attack speed, +10% range' },
