@@ -2,6 +2,14 @@
 import { drawCat } from './art_cats.js';
 import { CAT_BY_ID } from './cats.js';
 
+import { chapterOf } from './story.js';
+
+// the line that goes with the picture when it is shared
+export function shareText(info) {
+  const wave = (info && info.wave) | 0;
+  return `I reached wave ${wave} (chapter ${chapterOf(wave).n}) in Stacking Cats! https://${SHARE_URL}/`;
+}
+
 export const SHARE_W = 1080, SHARE_H = 1080;
 const DISPLAY = '"Lilita One","Baloo 2","Arial Rounded MT Bold",system-ui,sans-serif';
 const BODY = '"Baloo 2","Nunito","Arial Rounded MT Bold",system-ui,sans-serif';
@@ -97,7 +105,7 @@ export async function shareRun(info) {
     const name = 'stacking-cats-wave-' + (info.wave || 0) + '.png';
     try {
       const file = new File([blob], name, { type: 'image/png' });
-      const data = { files: [file], title: 'Stacking Cats', text: `I reached wave ${info.wave} in Stacking Cats! https://${SHARE_URL}/` };
+      const data = { files: [file], title: 'Stacking Cats', text: shareText(info) };
       if (navigator.share && (!navigator.canShare || navigator.canShare(data))) { await navigator.share(data); return 'shared'; }
     } catch (e) {
       if (e && e.name === 'AbortError') return 'failed';       // the player closed the share sheet

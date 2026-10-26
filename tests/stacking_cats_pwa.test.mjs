@@ -285,4 +285,13 @@ await t('story: destroying a nest closes the chapter with its own line', async (
   assert.ok(!st.chapterDoneLine(30).includes('\u2014'));
 });
 
+await t('share text names the chapter as well as the wave and has no em dash', async () => {
+  const { shareText } = await import('../stacking_cats/share.js');
+  const tx = shareText({ wave: 12 });
+  assert.ok(tx.includes('wave 12') && /chapter 3/i.test(tx), tx);
+  assert.ok(tx.includes('Stacking Cats') && !tx.includes('\u2014'));
+  assert.ok(/chapter 1/i.test(shareText({ wave: 1 })), 'wave 1 is chapter 1');
+  assert.ok(shareText({}).includes('wave 0') || shareText({}).length > 10, 'a missing wave does not throw');
+});
+
 console.log(n + ' passed');
