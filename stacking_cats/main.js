@@ -2037,13 +2037,25 @@ function updateSpecials() {
 }
 $('specials').addEventListener('click', (e) => { const b = e.target.closest('.spb'); if (b) { sfx.unlock(); doSpecial(+b.dataset.uid); } });
 // tapping the field: a charged cat fires its special, a mouse becomes the focus target
-cv.addEventListener('pointerdown', (e) => {
-  if (!g || mode !== 'play' || paused || g.state !== 'fight') return;
+// where a pointer event landed on the 960x540 stage (the whole game is turned a quarter turn on an upright phone)
+function stagePoint(e) {
   const r = cv.getBoundingClientRect();
   const upright = coarse && innerHeight > innerWidth * 1.1;
-  let x, y;
-  if (upright) { x = ((e.clientY - r.top) / r.height) * W; y = ((r.right - e.clientX) / r.width) * H; }   // the whole game is turned a quarter turn
-  else { x = ((e.clientX - r.left) / r.width) * W; y = ((e.clientY - r.top) / r.height) * H; }
+  if (upright) return { x: ((e.clientY - r.top) / r.height) * W, y: ((r.right - e.clientX) / r.width) * H };
+  return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H };
+}
+// the title: tap one of the cats in the tower on the left and it meows back
+screenEl.addEventListener('pointerdown', (e) => {
+  if (mode !== 'title' || e.target.closest('button')) return;
+  const { x, y } = stagePoint(e);
+  if (!isFinite(x) || !isFinite(y) || x > 160) return;
+  const i = Math.round((GROUND - 50 - y) / SLOT);
+  if (i < 0 || i >= titleStack.length || Math.abs(GROUND - 50 - i * SLOT - y) > SLOT * 0.55) return;
+  sfx.unlock(); sfx.meow(titleStack[i], 'happy'); sparks(100, GROUND - 60 - i * SLOT, 6, '#fff6b0', 120, 0.4);
+});
+cv.addEventListener('pointerdown', (e) => {
+  if (!g || mode !== 'play' || paused || g.state !== 'fight') return;
+  const { x, y } = stagePoint(e);
   if (!isFinite(x) || !isFinite(y)) return;
   for (let i = 0; i < g.cats.length; i++) {
     const c = g.cats[i], py = GROUND - 50 - S.aliveCats(g).indexOf(c) * SLOT;
