@@ -848,3 +848,11 @@ t('lootbox hero art: a fine detail layer for every box, the opening screen shows
   assert.ok(/class="revealstage r-\$\{it\.rarity\}"/.test(js) && /class="rays"/.test(js) && /class="confetti"/.test(js), 'rays and confetti on the reveal');
   assert.ok(/\.rays\{/.test(css) && /@keyframes conf/.test(css), 'their styles');
 });
+
+t('the fight HUD and the fly effect show the drawn lootbox, not the gift emoji', () => {
+  const rd = (f) => readFileSync(new URL('../stacking_cats/' + f, import.meta.url), 'utf8');
+  const js = rd('main.js');
+  assert.ok(/id="chestIco"/.test(rd('index.html')), 'HUD icon slot');
+  assert.ok(/\$\('chestIco'\)\.innerHTML = `<img class="gi"[^`]*iconURL\(topBox\.icon\)/.test(js), 'HUD uses the best queued box art');
+  assert.ok(/tier: e\.tier/.test(js) && /BOX_BY_ID\[f\.tier\]\.icon/.test(js), 'the flying box uses its tier art');
+});
