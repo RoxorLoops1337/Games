@@ -315,4 +315,10 @@ t('toasts sit above coach tips so a new toast is never hidden under a tip', () =
   assert.ok(+z > +cz, `toast z-index ${z} must be above the coach z-index ${cz}`);
 });
 
+t('a long press on the field does not open the browser menu (it would cancel the purr)', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), html = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/cv\.addEventListener\('contextmenu', \(e\) => e\.preventDefault\(\)\)/.test(js), 'the canvas must swallow contextmenu');
+  assert.ok(html.includes('-webkit-touch-callout:none'), 'iOS long-press callout must be off');
+});
+
 console.log(`${n} tests passed`);

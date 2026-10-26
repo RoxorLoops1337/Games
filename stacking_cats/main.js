@@ -2059,6 +2059,7 @@ screenEl.addEventListener('pointerdown', (e) => {
 let purrTimer = 0;
 const stopPurr = () => { clearTimeout(purrTimer); purrTimer = 0; };
 addEventListener('pointerup', stopPurr); cv.addEventListener('pointercancel', stopPurr);
+cv.addEventListener('contextmenu', (e) => e.preventDefault());   // a long press must not open the browser menu
 cv.addEventListener('pointerdown', (e) => {
   if (!g || mode !== 'play' || paused || g.state !== 'fight') return;
   const { x, y } = stagePoint(e);
