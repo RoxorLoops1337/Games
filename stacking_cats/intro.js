@@ -376,7 +376,7 @@ function party(ctx, R, p, T) {
   }
   PARTY.forEach((id, i) => {
     const x = 150 + i * 110, hop = Math.abs(Math.sin(T * 5 + i * 0.9)) * 26;
-    cat(ctx, R, id, x, GROUND + 20 + (i % 2) * 8 - hop, 1.05, { rot: Math.sin(T * 5 + i) * 0.06 });
+    cat(ctx, R, id, x, GROUND - 10 + (i % 2) * 8 - hop, 1.05, { rot: Math.sin(T * 5 + i) * 0.06 });
     const h = (T * 0.6 + i * 0.19) % 1; ctx.save(); ctx.globalAlpha = Math.sin(h * Math.PI); ctx.fillStyle = '#ff7aa8'; ctx.font = `22px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('\u2665', x + Math.sin(h * 7 + i) * 10, GROUND - 90 - h * 80); ctx.restore();
   });
   // confetti
@@ -397,7 +397,7 @@ function dawn(ctx, R, p, T) {
   const g = ctx.createRadialGradient(700, sy, 10, 700, sy, 200); g.addColorStop(0, 'rgba(255,240,170,.9)'); g.addColorStop(1, 'rgba(255,240,170,0)'); ctx.fillStyle = g; ctx.fillRect(480, sy - 210, 480, 420);
   HEROES.forEach((h, i) => {
     const x = 250 + i * 120 + ease(seg(p, 0, 1)) * 60, bob = Math.abs(Math.sin(T * 6 + i)) * 8;
-    cat(ctx, R, h.id, x, GROUND + 24 - bob, 1.2, { rot: 0.05 });
+    cat(ctx, R, h.id, x, GROUND - 6 - bob, 1.2, { rot: 0.05 });
   });
   // a pair of beady eyes in the grass: the mice are not done
   if (p > 0.55) { const k = ease(seg(p, 0.55, 0.7)); ctx.save(); ctx.globalAlpha = k; ctx.fillStyle = '#ff3a4a'; ctx.beginPath(); ctx.ellipse(840, GROUND + 40, 5, 3, 0, 0, TAU); ctx.ellipse(858, GROUND + 40, 5, 3, 0, 0, TAU); ctx.fill(); ctx.restore(); }

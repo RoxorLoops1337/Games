@@ -574,4 +574,9 @@ t('the cutscene cages are seated above the caption plate so the caged cats stay 
   assert.ok(!/GROUND \+ 56 - \(1 - drop\)/.test(js), 'old low seat is gone');
 });
 
+t('the epilogue seats the guard above the caption plate too', () => {
+  const js = readFileSync('stacking_cats/intro.js', 'utf8');
+  assert.ok(/GROUND - 10 \+ \(i % 2\) \* 8 - hop/.test(js) && /GROUND - 6 - bob/.test(js), 'both epilogue scenes lifted');
+});
+
 console.log(`${n} tests passed`);
