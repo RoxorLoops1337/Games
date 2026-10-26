@@ -451,7 +451,9 @@ body.touch .tfoot .btn,body.touch .tfoot .fbtn{min-height:44px}
 
 /* ===== fight agency: special tray, event stops, shield and focus hints ===== */
 #specials{position:absolute;right:62px;bottom:10px;display:none;gap:8px;align-items:flex-end;flex-direction:row-reverse}
-#specials.auto::before{content:'AUTO';position:absolute;right:0;bottom:100%;margin-bottom:4px;font:12px var(--display);letter-spacing:.06em;color:#271c33;background:#ffd36b;border-radius:999px;padding:1px 9px;pointer-events:none;box-shadow:0 2px 0 #271c33}
+#specials .autob{position:absolute;right:0;bottom:100%;margin-bottom:4px;font:12px var(--display);letter-spacing:.06em;color:#d9cdf0;background:rgba(21,15,38,.72);border:0;border-radius:999px;padding:2px 10px;box-shadow:0 2px 0 #0008;cursor:pointer}
+#specials .autob.on{color:#271c33;background:#ffd36b;box-shadow:0 2px 0 #271c33}
+body.touch #specials .autob{padding:5px 12px;font-size:13px}
 .spb{position:relative;width:48px;height:48px;border-radius:50%;border:3px solid #ffffff55;padding:0;cursor:pointer;background:conic-gradient(var(--c,#ffd23f) var(--p,0%),rgba(32,22,58,.9) 0);box-shadow:0 3px 0 #150f26,0 4px 10px #0007;transition:transform .1s}
 .spb img{position:absolute;inset:4px;width:calc(100% - 8px);height:calc(100% - 8px);border-radius:50%;background:#2a2050;object-fit:cover;pointer-events:none}
 .spb i{position:absolute;inset:0;border-radius:50%;pointer-events:none}

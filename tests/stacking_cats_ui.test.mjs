@@ -131,7 +131,8 @@ t('auto special moves: a Settings toggle, an A key and the default off are all w
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   assert.ok(/autoSpecial: false/.test(js), 'default must be off');
   assert.ok(js.includes("tog('autoSpecial'"), 'Settings toggle missing');
-  assert.ok(js.includes("k === 'a'") && js.includes('save.opt.autoSpecial = !save.opt.autoSpecial'), 'A key missing');
+  assert.ok(js.includes("k === 'a'") && js.includes('setAutoSpecial(!save.opt.autoSpecial)'), 'A key missing');
+  assert.ok(js.includes("className = 'autob'"), 'tappable AUTO button missing (phones have no keyboard)');
 });
 
 t('tutorial tips are held back while the game is paused', () => {
