@@ -174,4 +174,28 @@ await t('no em dashes in the new files', () => {
   assert.ok(readdirSync(D + 'icons').length >= 4);
 });
 
+await t('story: the intro timeline is walkable and every line of the story is clean and cat themed', async () => {
+  const st = await import('../stacking_cats/story.js');
+  assert.ok(st.INTRO.length >= 5, 'the intro has several scenes');
+  let at = 0;
+  for (let i = 0; i < st.INTRO.length; i++) {
+    const mid = st.introAt(at + st.INTRO[i].dur / 2);
+    assert.equal(mid.i, i, 'the middle of scene ' + i + ' is scene ' + i);
+    assert.ok(mid.p > 0.45 && mid.p < 0.55, 'progress is about half');
+    at += st.INTRO[i].dur;
+  }
+  assert.equal(st.INTRO_LEN, at, 'the total length is the sum of the scenes');
+  assert.equal(st.introAt(-1).i, 0);
+  assert.ok(st.introAt(at + 5).done, 'past the end the intro reports done');
+  assert.equal(st.typed('Hello world', 0), '');
+  assert.equal(st.typed('Hello world', 1), 'Hello world');
+  assert.ok(st.typed('Hello world', 0.5).length > 2 && st.typed('Hello world', 0.5).length < 11, 'half way is a prefix');
+  const all = [...st.INTRO.map((s) => s.text), ...st.RESCUE_LINES, ...st.FALL_LINES, st.WORLD.tagline];
+  for (const line of all) assert.ok(!line.includes('\u2014'), 'no em dash in: ' + line);
+  const words = all.join(' ').toLowerCase();
+  for (const w of ['meow', 'whisker', 'paw', 'purr', 'cat']) assert.ok(words.includes(w), 'the story uses the word ' + w);
+  assert.ok(st.rescueLine(0) !== st.rescueLine(1), 'the rescue line changes between nests');
+  assert.ok(st.fallLine(3).length > 10);
+});
+
 console.log(n + ' passed');

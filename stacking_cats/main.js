@@ -21,6 +21,8 @@ import { iconCanvas, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
+import { playIntro } from './intro.js';
+import { rescueLine, fallLine } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -278,6 +280,13 @@ function thumbURL(id) {
   return u;
 }
 
+// the story cutscene: plays full screen over everything, once before the very first run and again from How to play
+function watchIntro(then) {
+  save.seenIntro = true; persist();
+  sfx.unlock();
+  playIntro(app, { cat: (id) => catSprite(id), sfx, motion: save.opt.motion, onDone: () => { then(); } });
+}
+
 function showTitle() {
   mode = 'title'; paused = false;
   const total = save.stats, k = save.kingdom, d = DIFFS[save.diff];
@@ -292,7 +301,7 @@ function showTitle() {
     <div class="row"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn grey small" data-act="trophies">Trophies ${trophies}/${ACHIEVEMENTS.length}</button><button class="btn grey small" data-act="settings">Settings</button><button class="btn grey small" data-act="how">How to play</button></div>
     <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : (coarse ? 'Tap Play to begin' : 'Click Play or press Enter to begin')}</div>`, 'clear tpad');
   acts = {
-    play: () => startRun(), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
+    play: () => (save.seenIntro ? startRun() : watchIntro(() => startRun())), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
     daily: () => showDaily(showTitle), trophies: () => showTrophies(showTitle), settings: () => showSettings(showTitle),
     weekly: () => showDaily(showTitle, true),
     diff: () => showDiffPicker(showTitle),
@@ -414,8 +423,8 @@ function showHow(back) {
     ${row('\uD83D\uDC3E', '<b>Roads.</b> After each nest you pick the next road. Riskier roads pay better.')}
     ${row('\uD83C\uDFC6', '<b>Daily Challenge.</b> Everyone plays the same mice once a day. Climb the leaderboard.')}
     ${row('\uD83D\uDCA8', '<b>Zoomies</b> (Space). Fill the meter by fighting, then everyone is much faster for 6 seconds.')}</ul>
-    <div class="row"><button class="btn" data-act="back">Got it</button></div>`);
-  acts = { back };
+    <div class="row"><button class="btn" data-act="back">Got it</button><button class="btn grey" data-act="intro">Watch the intro</button></div>`);
+  acts = { back, intro: () => watchIntro(() => showHow(back)) };
 }
 
 // ---------------------------------------------------------------- the Cat Dex, with how much each cat has done
@@ -803,7 +812,7 @@ function showRouteReward() {
 
 function showCatReward() {
   rewardChoices = rewardChoices || S.rollCatChoices(g);
-  setScreen(`<h2>Nest destroyed!</h2><p class="sub">A caged cat is free and wants to join your stack. Who is it?</p>
+  setScreen(`<h2>Nest destroyed!</h2><p class="sub">${rescueLine(g.run.bossKills)} A caged cat is free and wants to join your stack. Who is it?</p>
     <div class="cards">${rewardChoices.map((id) => catCard(id, { ribbon: owns(id) ? 'MERGE!' : '', gain: true })).join('')}</div>
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button>${rerollBtn()}</div>`);
   acts = {
@@ -1024,7 +1033,7 @@ function showOver(fresh) {
   const trophies = (r.ach || []).length ? `<div class="trow">${r.ach.map((a) => `<span class="tchip">&#127942; ${a.name}</span>`).join('')}</div>` : '';
   const goal = nextGoal(k), goalB = goal && BUILDING_BY_ID[goal.id];
   const goalLine = goalB ? (goal.need ? ` &middot; ${goalB.icon} ${goalB.name} needs ${num(goal.need)} more` : ` &middot; ${goalB.icon} ${goalB.name} is ready to upgrade`) : '';
-  setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : 'The mice cheer. Next time you will get them.'} <small>${d.icon} ${d.name}${r.daily ? (r.weekly ? ' &middot; Weekly' : ' &middot; Daily') : ''}</small></p>${metaNotes(r)}
+  setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : fallLine(r.wave)} <small>${d.icon} ${d.name}${r.daily ? (r.weekly ? ' &middot; Weekly' : ' &middot; Daily') : ''}</small></p>${metaNotes(r)}
     <div class="overcols"><div><div class="stats"><div><b>${r.wave}</b>Wave reached</div><div><b>${r.kills}</b>Mice defeated</div><div><b>${r.bossKills}</b>Nests destroyed</div><div><b>${r.merges}</b>Merges</div>
       <div><b>${num(r.dmg)}</b>Damage dealt</div><div><b>${num(r.biggest)}</b>Biggest hit</div><div><b>${num(r.taken)}</b>Damage taken</div><div><b>${num(r.healed)}</b>Healed</div></div>
       <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span><small>Total ${num(k.coins)}${goalLine}</small></div>${dailyBox}</div>

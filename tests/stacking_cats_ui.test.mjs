@@ -333,4 +333,32 @@ t('the game over buttons stay docked at the bottom so a long results screen neve
   assert.ok(/\.overbtns\{[^}]*position:sticky[^}]*bottom:/.test(html), 'overbtns must be sticky at the bottom of the scrolling screen');
 });
 
+const introMod = await import('../stacking_cats/intro.js');
+const storyMod = await import('../stacking_cats/story.js');
+t('the intro cutscene draws every moment, and every sound cue names a real sound or cat', () => {
+  const R = { cat: () => ({ width: 240, height: 240 }), motion: true, bd: art.makeBackdrop(THEMES[0], 0) };
+  for (let tt = 0; tt <= storyMod.INTRO_LEN + 0.2; tt += 0.2) introMod.drawIntro(fakeCtx(), tt, R);
+  introMod.drawIntro(fakeCtx(), 3, { ...R, motion: false });
+  const audio = readFileSync('stacking_cats/audio.js', 'utf8');
+  const kinds = ['pick', 'happy', 'cheer', 'sad', 'worried'];
+  const seen = new Set();
+  for (const a of introMod.cuesBetween(0, storyMod.INTRO_LEN + 1)) {
+    const [kind, x, y] = a.split(' ');
+    seen.add(a);
+    if (kind === 'play') assert.ok(audio.includes(`case '${x}':`), 'unknown sound ' + x);
+    else if (kind === 'meow') { assert.ok(CATS.some((c) => c.id === x), 'unknown cat ' + x); assert.ok(kinds.includes(y), 'unknown meow kind ' + y); }
+    else assert.ok(kind === 'music' && ['calm', 'fight', 'boss'].includes(x), 'bad cue ' + a);
+  }
+  assert.ok(seen.size >= 20, 'the intro has plenty of cues');
+  assert.equal(introMod.cuesBetween(0, 0.001).length, 1, 'the opening music cue fires at time zero');
+  assert.deepEqual(introMod.HEROES.map((h) => h.id), ['tabby', 'ember', 'buckshot'], 'three brave cats set out');
+});
+t('the intro plays before the first run, can be replayed, and the story shows up in the game screens', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/play: \(\) => \(save\.seenIntro \? startRun\(\) : watchIntro\(/.test(js), 'the first Play must show the intro');
+  assert.ok(/function watchIntro[\s\S]*?save\.seenIntro = true; persist\(\)/.test(js), 'watching it is remembered');
+  assert.ok(js.includes('Watch the intro'), 'How to play can replay it');
+  assert.ok(/rescueLine\(/.test(js) && /fallLine\(/.test(js), 'the rescue and game over screens use the story lines');
+});
+
 console.log(`${n} tests passed`);
