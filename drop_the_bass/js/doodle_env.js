@@ -151,8 +151,8 @@ const PAINT = {
     cloud(p, w * 0.2, h * 0.34, 50, '#fff'); cloud(p, w * 0.82, h * 0.3, 44, '#fff');
   },
   arena(p, c, w, h) {
-    p.shp(rect(w * 0.2, h * 0.04, w * 0.6, h * 0.14, 10), '#ffe9a0', INK, 3.4, { gap: 8, alpha: 0.7 });
-    if (!BAKE_THUMB) p.txt('MEGA ARENA', w * 0.5, h * 0.125, Math.min(44, w * 0.088), C.red, { align: 'c', out: INK, ow: 5 });
+    p.shp(rect(w * 0.2, h * 0.012, w * 0.6, h * 0.085, 10), '#ffe9a0', INK, 3.4, { gap: 8, alpha: 0.7 });
+    if (!BAKE_THUMB) p.txt('MEGA ARENA', w * 0.5, h * 0.078, Math.min(40, w * 0.08), C.red, { align: 'c', out: INK, ow: 5 });
     for (let k = 0; k < 2; k++) { const tx = k ? w * 0.93 : w * 0.07; p.ln([tx, h * 0.5, tx, h * 0.16], INK, 4, false, 0.8); p.shp(rect(tx - 26, h * 0.1, 52, 38, 4), '#f3e9a0', INK, 3, { gap: 6 }); for (let i = -1; i <= 1; i++) p.ln([tx + i * 12, h * 0.15, tx + i * 90 * (k ? -1 : 1) - 30, h * 0.46], '#ffe27a', 2.2, false, 1.2); }
     const heads = [C.pink, C.sky, C.yellow, C.lime, C.orange, C.lav];
     for (let r = 0; r < 9; r++) { const y = h * 0.28 + r * h * 0.045, cnt = Math.floor(w / 26); p.ln([w * 0.04, y + 14, w * 0.96, y + 14], '#a9a39a', 2.2, false, 0.9); for (let k = 0; k < cnt; k++) { const x = w * 0.04 + (k + 0.5) / cnt * w * 0.92 + (r % 2) * 6; p.dot(x, y + 4, 7, heads[(k * 7 + r * 3) % 6]); p.ln(arc(x, y + 4, 7, 7, 0, 360, 8), INK, 1.4, true, 0.4); } }
