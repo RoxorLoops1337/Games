@@ -314,6 +314,17 @@ export function makeBackdrop(theme, seed) {
     });
   };
   const col = mix(theme.mid, hz, 0.1), dark = shade(col, -0.18), light = shade(col, 0.18);
+  if (theme.deco === 'petal') {
+    // torii gates standing among the blossom trees give the hill its identity
+    for (const [gx0, gs] of [[230, 1.0], [690, 0.85]]) wrapX(gx0, (xx) => {
+      const w = 62 * gs, h = 78 * gs, pw = 7 * gs;
+      mx.fillStyle = 'rgba(0,0,0,.16)'; mx.beginPath(); mx.ellipse(xx, base + 1, w * 0.7, 4, 0, 0, TAU); mx.fill();
+      mx.fillStyle = '#d4463c'; mx.fillRect(xx - w / 2, base - h, pw, h); mx.fillRect(xx + w / 2 - pw, base - h, pw, h);
+      mx.fillRect(xx - w / 2 - 4 * gs, base - h - 2 * gs, w + 8 * gs, 7 * gs);
+      mx.fillStyle = '#2a1f2e'; mx.fillRect(xx - w / 2 - 9 * gs, base - h - 9 * gs, w + 18 * gs, 7 * gs);
+      mx.fillStyle = '#d4463c'; mx.fillRect(xx - w / 2 + pw, base - h * 0.72, w - pw * 2, 5 * gs);
+    });
+  }
   for (let i = 0; i < 9; i++) {
     const x = (i + rnd() * 0.7) * (W / 9), s = 0.8 + rnd() * 0.6;
     if (theme.deco === 'flower' || theme.deco === 'petal') tree(x, s, theme.deco === 'petal' ? '#ffa6c9' : light, theme.deco === 'petal' ? '#f27aa8' : col);
