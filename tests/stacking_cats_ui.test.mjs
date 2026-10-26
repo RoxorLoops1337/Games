@@ -801,6 +801,7 @@ t('shop and shady deal relics show the same set and best-cat notes as loot cards
   const ev = js.slice(js.indexOf('function eventOptionHtml'), js.indexOf('function showEvent'));
   assert.ok(/case 'buy': return head\([^\n]*relicNotes\(o\.item\)/.test(ev), 'shop uses it');
   assert.ok(/case 'curse': return head\([^\n]*relicNotes\(o\.item\)/.test(ev), 'shady deal uses it');
+  assert.ok(/case 'blood': return head\([^\n]*relicNotes\(o\.item\)/.test(ev) && /case 'gamble': return head\([^\n]*relicNotes\(o\.item\)/.test(ev), 'the shrine offers use it too');
 });
 
 t('the rarity badge on shop and deal cards is not dimmed (white text on a coloured pill needs full opacity)', () => {
