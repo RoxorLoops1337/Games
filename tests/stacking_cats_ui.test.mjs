@@ -285,4 +285,10 @@ t('every sound effect the game plays actually makes a sound (nope used to be sil
   }
 });
 
+t('tapping a cat in the title tower makes it meow', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/mode !== 'title'[\s\S]{0,600}sfx\.meow\(titleStack\[/.test(js), 'a tap on the title tower must meow that cat');
+  assert.ok(js.includes('function stagePoint(e)'), 'the quarter-turn aware tap position is shared by the field and the title');
+});
+
 console.log(`${n} tests passed`);
