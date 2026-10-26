@@ -6,7 +6,7 @@ import {
   takeItem, useReroll, fxOf, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, RARITIES, ACHIEVEMENTS,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, RELIC_SETS, activeSets, RARITIES, ACHIEVEMENTS,
 } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CAT_TAGS, SPECIALS, SYNERGIES, unlockProgress } from '../stacking_cats/cats.js';
 import { catStory } from '../stacking_cats/story.js';
@@ -345,6 +345,32 @@ t('team relics: one line per kind with count and carriers, rarest first, unknown
   assert.deepEqual(teamRelics([]), []);
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   assert.ok(/teamRelics\(cats\)/.test(js) && /Relics in play/.test(js), 'Team stats lists them');
+});
+
+t('relic sets: ids exist, three different relics from a set give its bonus and five double it, only living tower cats count', () => {
+  const ids = new Set();
+  for (const s of RELIC_SETS) {
+    assert.ok(s.name && s.ids.length >= 5 && Object.keys(s.fx).length, s.id + ' is complete');
+    for (const id of s.ids) assert.ok(ITEM_BY_ID[id], s.id + ' lists a real relic: ' + id);
+    assert.equal(new Set(s.ids).size, s.ids.length, 'no duplicates in ' + s.id); ids.add(s.id);
+  }
+  assert.equal(ids.size, RELIC_SETS.length);
+  const bells = RELIC_SETS.find((s) => s.id === 'noise');
+  const mk = (...items) => ({ id: 'tabby', items, ko: false });
+  assert.deepEqual(activeSets([mk('bell', 'gbell')]).filter((a) => a.mult).map((a) => a.set.id), [], 'two is not enough');
+  const three = activeSets([mk('bell', 'gbell'), mk('jingle')]).find((a) => a.set.id === 'noise');
+  assert.equal(three.mult, 1); assert.equal(three.have.length, 3);
+  assert.equal(activeSets([mk('bell', 'bell', 'bell')]).find((a) => a.set.id === 'noise').mult, 0, 'copies of one relic count once');
+  const five = activeSets([mk(...bells.ids.slice(0, 3)), mk(...bells.ids.slice(3, 5), 'rind', 'cookie')]).find((a) => a.set.id === 'noise');
+  assert.equal(five.have.length, 5); assert.equal(five.mult, 2);
+  assert.equal(activeSets([{ ...mk('bell', 'gbell', 'jingle'), ko: true }]).find((a) => a.set.id === 'noise').mult, 0, 'a knocked out cat does not count');
+  assert.deepEqual(activeSets([]).map((a) => a.mult), RELIC_SETS.map(() => 0));
+});
+
+t('relic sets wiring: calcMods applies them and Team stats lists them', () => {
+  const sim = readFileSync('stacking_cats/sim.js', 'utf8'), js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/activeSets\(g\.cats\)/.test(sim), 'calcMods reads the sets');
+  assert.ok(/Relic sets/.test(js) && /activeSets\(/.test(js), 'Team stats shows them');
 });
 
 t('relic book wiring: a screen, a title button, found relics saved with the run, and a toast for new ones', () => {

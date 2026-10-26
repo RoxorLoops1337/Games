@@ -4,7 +4,7 @@ import {
   CATS, CAT_BY_ID, STARTERS, SNACKS, SNACK_BY_ID, ENEMY_TYPES, NESTS,
   MAX_STACK, MAX_BENCH, BOSS_EVERY, LVL_MUL, AURA_MUL, BASE_HP, BASE_DMG, TEMP_WAVES,
   ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, itemSlots, kingdomBonuses, emptyKingdom, COIN,
-  DIFFS, CAT_TAGS, SYNERGIES, ROUTES, ROUTE_BY_ID, DAILY_POOL, masteryBonus,
+  DIFFS, CAT_TAGS, SYNERGIES, ROUTES, ROUTE_BY_ID, DAILY_POOL, masteryBonus, activeSets,
 } from './cats.js';
 
 export const W = 960, H = 540, GROUND = 440, TOWER_X = 170, SLOT = 56, DT = 1 / 30;
@@ -74,6 +74,7 @@ export function calcMods(g) {
     const f = itemFx(c);
     m.dmg += f.teamDmg; m.haste += f.teamHaste; m.hp += f.teamHp; m.dr += f.teamDr; m.curse += f.curseT; m.waveHeal += f.wheal; m.zoomG += f.zoomG;
   }
+  for (const a of activeSets(g.cats)) if (a.mult) for (const k in a.set.fx) m[k] += a.set.fx[k] * a.mult;   // relic sets
   for (const c of g.cats) {
     if (c.ko) continue;
     const p = CAT_BY_ID[c.id].pas;
@@ -325,6 +326,7 @@ export function explainMods(g) {
     const a = AURA_MUL[c.lvl - 1];
     for (const k of ['haste', 'dmg', 'curse', 'dr']) add(k, CAT_BY_ID[c.id].name, (p[k] || 0) * a);
   }
+  for (const a of activeSets(g.cats)) if (a.mult) for (const k in a.set.fx) add(k, a.set.name, a.set.fx[k] * a.mult);
   if (g.zoomT > 0) { add('haste', 'Zoomies', 1.0); add('dmg', 'Zoomies', 0.2); }
   return rows;
 }

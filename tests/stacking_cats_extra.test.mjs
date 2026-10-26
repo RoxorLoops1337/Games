@@ -343,6 +343,14 @@ t('relics: Catnip Sprig speeds the zoomies meter, Time Knot speeds specials, Win
   assert.ok(Math.abs(sp([['tabby', null]]) - DT / SPECIAL_TIME) < 1e-6, 'baseline charge unchanged');
 });
 
+t('relic sets: three different Armor Set relics give the team 4% less damage taken, a fifth doubles it', () => {
+  const two = calcMods(lab([['tabby', 'vest'], ['ember', 'cushion'], ['mochi', null]])).dr;
+  const three = calcMods(lab([['tabby', 'vest'], ['ember', 'cushion'], ['mochi', 'mitten']])).dr;
+  assert.ok(Math.abs(three - two - 0.04) < 1e-9, 'a set bonus of 4%, got ' + (three - two));
+  const dup = calcMods(lab([['tabby', 'vest'], ['ember', 'vest'], ['mochi', 'vest']])).dr;
+  assert.ok(dup < three, 'copies of one relic are not a set');
+});
+
 t('previews: the damage estimate counts the extra damage mice take from a curse (Hex Doll)', () => {
   const g = lab([['tabby', null], ['ember', 'hexdoll']]);
   const m = calcMods(g), plain = lab([['tabby', null], ['ember', null]]);
