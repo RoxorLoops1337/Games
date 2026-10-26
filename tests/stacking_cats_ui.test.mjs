@@ -90,6 +90,18 @@ t('every mouse type, elite and nest draws', () => {
   for (const nest of NESTS) { const s = art.nestSprite(nest.id); assert.ok(s.c); art.nestOverlay(fakeCtx(), 0.3, 1.2); }
 });
 
+t('elites carry cape, shoulder plate and jewelled crown, and nest cracks and door glow grow with damage', () => {
+  const draws = (f) => { const c0 = calls.n; f(); return calls.n - c0; };
+  for (const nest of NESTS) {
+    const hurt = draws(() => art.nestOverlay(fakeCtx(), 0.1, 1.2)), fresh = draws(() => art.nestOverlay(fakeCtx(), 1, 1.2));
+    assert.ok(hurt > fresh, nest.id + ': more cracks when hurt');
+    assert.ok(art.nestSprite(nest.id) === art.nestSprite(nest.id), 'nest sprite cached');
+  }
+  const src = readFileSync(new URL('../stacking_cats/art_world.js', import.meta.url), 'utf8');
+  assert.ok(src.includes('eliteCape') && src.includes('eliteCrown') && src.includes('nestDetail'));
+  for (const type of Object.keys(ENEMY_TYPES)) assert.ok(art.enemySprite(type, true) === art.enemySprite(type, true), 'elite sprite cached');
+});
+
 t('sound: every effect, every cat voice and every music track runs without errors', () => {
   const sfx = new Sfx();
   sfx.play('coin');                       // before unlock: must be a silent no-op
@@ -910,4 +922,12 @@ t('world art: backdrops carry depth layers (cloud sprites, birds, motes), mice h
   assert.ok(/case 'cathit':[^\n]*sparks\([^\n]*flashGlow\(/.test(js), 'tower damage burst');
   assert.ok(/case 'coin': if \(fx\.length < 300\) \{ sparks\(/.test(js) && /case 'chest':[^\n]*ring\([^\n]*flashGlow\(/.test(js), 'coin pop and box glint');
   assert.ok(!/—/.test(aw), 'no em dashes');
+});
+
+t('lootbox opening: lid pop, glow, beams and sparks, a flash and pedestal on the reveal, all under the nomotion rule', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/class="boxglow"/.test(js) && /class="boxbeams"/.test(js) && /boxsparks/.test(js) && /classList\.add\('opening'\)/.test(js), 'opening layers');
+  assert.ok(/@keyframes lidpop/.test(css) && /@keyframes beamsburst/.test(css) && /\.boxstage\.opening/.test(css), 'opening styles');
+  assert.ok(/class="pedestal"/.test(js) && /class="revealflash"/.test(js) && /class="cheercat"/.test(js) && /@keyframes rflash/.test(css), 'reveal polish');
+  assert.ok(/body\.nomotion \*/.test(css), 'nomotion still stops animations');
 });
