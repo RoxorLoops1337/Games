@@ -24,7 +24,7 @@ function fakeCtx() {
 globalThis.document = { createElement: () => ({ width: 0, height: 0, getContext: () => fakeCtx() }) };
 globalThis.Path2D = class { constructor() { return new Proxy(this, { get: (o, k) => (k in o ? o[k] : () => {}) }); } };
 
-const { CATS, ENEMY_TYPES, THEMES, NESTS } = await import('../stacking_cats/cats.js');
+const { CATS, ENEMY_TYPES, THEMES, NESTS, ITEMS } = await import('../stacking_cats/cats.js');
 const { drawCat } = await import('../stacking_cats/art_cats.js');
 const art = await import('../stacking_cats/art_world.js');
 // a stand in for the Web Audio API that accepts every call, so the sound code can run headless
@@ -717,6 +717,12 @@ t('the caged cat meows when its nest breaks, after the boom, with a different vo
   assert.ok(m, 'bossDown plays a cheer meow for the freed cat');
   assert.ok(+m[2] >= 0.3, 'it comes a little after the boom, not on top of it');
   assert.ok(/g\.wave|bossKills/.test(blk.slice(blk.indexOf('sfx.meow'))), 'the voice depends on the nest so it is not always the same cat');
+});
+
+t('every relic icon is in ICON_KEYS, so the page swaps its emoji for the drawing instead of showing a system glyph', () => {
+  const { ICON_KEYS } = icons;
+  const missing = ITEMS.map((it) => it.icon.replace(/\uFE0F/g, '')).filter((k) => !ICON_KEYS.includes(k));
+  assert.deepEqual(missing, [], 'drawn but not swapped in the page: ' + missing.join(' '));
 });
 
 console.log(`${n} tests passed`);

@@ -297,13 +297,57 @@ export const ITEMS = [
   { id: 'feather', name: 'Angel Feather', icon: '🪶', rarity: 'epic', fx: { dr: 0.20, regen: 0.015 }, desc: 'Takes 20% less damage and heals 1.5% per second' },
   { id: 'cloak', name: 'Shadow Cloak', icon: '🧥', rarity: 'epic', fx: { dodge: 0.20, haste: 0.12 }, desc: '+20% chance to dodge a bite and +12% attack speed' },
   { id: 'mask', name: "Assassin's Mask", icon: '🎭', rarity: 'epic', fx: { crit: 0.20, critMul: 0.8 }, desc: '+20% crit chance and much bigger crits' },
+
+  // ---- more relics. Each has one clear job: kill effects, conditional damage, barriers, team auras, loot luck, and a few run-changing legends.
+  // common
+  { id: 'rind', name: 'Cheese Rind', icon: '🍪', rarity: 'common', fx: { kheal: 0.05 }, desc: 'Heals 5% of its health on every kill' },
+  { id: 'penny', name: 'Copper Penny', icon: '🏅', rarity: 'common', fx: { kcoin: 0.5 }, desc: '+0.5 coins for every mouse it defeats' },
+  { id: 'needle', name: 'Sewing Needle', icon: '🪡', rarity: 'common', fx: { pierce: 1 }, desc: 'Its attacks ignore mouse armor' },
+  { id: 'twine', name: 'Ball of Twine', icon: '🎾', rarity: 'common', fx: { kcharge: 0.03 }, desc: 'Each kill charges its special move by 3%' },
+  { id: 'sprig', name: 'Catnip Sprig', icon: '🌻', rarity: 'common', fx: { zoomG: 0.2 }, desc: 'The Zoomies meter fills 20% faster' },
+  { id: 'toymouse', name: 'Toy Mouse', icon: '🧸', rarity: 'common', fx: { exec: 0.3 }, desc: '+30% damage to mice below 30% health' },
+  { id: 'post', name: 'Scratching Post', icon: '🪵', rarity: 'common', fx: { shield: 0.12 }, desc: 'Starts every wave with a barrier worth 12% of its health' },
+  { id: 'fishbone', name: 'Fish Bone', icon: '🧲', rarity: 'common', fx: { cleave: 0.25 }, desc: 'Its hits also strike a second mouse for 25% damage' },
+  { id: 'jingle', name: 'Jingle Collar', icon: '🪀', rarity: 'common', fx: { open: 0.3 }, desc: '+30% damage to mice at full health' },
+  { id: 'sunbeam', name: 'Sunbeam', icon: '🌟', rarity: 'common', fx: { wheal: 0.04 }, desc: 'The whole team heals 4% more after every wave' },
+  { id: 'medal', name: 'Dusty Medal', icon: '⭐', rarity: 'common', fx: { bossDmg: 0.25 }, desc: '+25% damage to elite mice and nests' },
+  { id: 'hairball', name: 'Hairball', icon: '🪁', rarity: 'common', fx: { venom: 0.2 }, desc: 'Its hits poison mice, and the poison stacks' },
+  { id: 'bowl', name: 'Silver Bowl', icon: '🥄', rarity: 'common', fx: { pristine: 0.2 }, desc: '+20% damage while it is above 80% health' },
+  { id: 'pingpong', name: 'Ping Pong Ball', icon: '🏓', rarity: 'common', fx: { frenzy: 0.025 }, desc: '+2.5% attack speed for every kill this wave (up to 10 kills)' },
+  // rare
+  { id: 'whisker', name: 'Reaper Whisker', icon: '💀', rarity: 'rare', fx: { exec: 0.6 }, desc: '+60% damage to mice below 30% health' },
+  { id: 'piggy', name: 'Piggy Bank', icon: '🏺', rarity: 'rare', fx: { kcoin: 1.2 }, desc: '+1.2 coins for every mouse it defeats' },
+  { id: 'sock', name: 'Static Sock', icon: '🪤', rarity: 'rare', fx: { echo: 0.2 }, desc: '20% chance that an attack fires a second time for free' },
+  { id: 'spore', name: 'Spore Mushroom', icon: '🍄', rarity: 'rare', fx: { venom: 0.45 }, desc: 'Its hits poison mice, and the poison stacks' },
+  { id: 'ironbowl', name: 'Iron Bowl', icon: '🪣', rarity: 'rare', fx: { shield: 0.3, dr: 0.05 }, desc: 'Starts every wave with a barrier worth 30% of its health, takes 5% less damage' },
+  { id: 'cracker', name: 'Firecracker', icon: '🧨', rarity: 'rare', fx: { boom: 0.35 }, desc: 'Mice it kills explode, hurting others nearby for 35% of their health' },
+  { id: 'banner', name: 'Sunflower Banner', icon: '🎈', rarity: 'rare', fx: { teamDmg: 0.05 }, desc: 'The whole team deals 5% more damage' },
+  { id: 'chime', name: 'Windchime', icon: '🎐', rarity: 'rare', fx: { teamHaste: 0.05 }, desc: 'The whole team attacks 5% faster' },
+  // epic
+  { id: 'cookie', name: 'Fortune Cookie', icon: '🥠', rarity: 'epic', fx: { luck: 2 }, desc: 'Much better loot: rare, epic and legendary relics turn up far more often' },
+  { id: 'hexdoll', name: 'Hex Doll', icon: '🧿', rarity: 'epic', fx: { curseT: 0.1 }, desc: 'Every mouse takes 10% more damage from the whole team' },
+  { id: 'lantern', name: 'Guardian Lantern', icon: '🕯', rarity: 'epic', fx: { teamDr: 0.05, teamHp: 0.12 }, desc: 'The whole team takes 5% less damage and has 12% more health' },
+  { id: 'drum', name: 'War Drum', icon: '🥁', rarity: 'epic', fx: { frenzy: 0.045, teamHaste: 0.04 }, desc: '+4.5% attack speed per kill this wave, and the team attacks 4% faster' },
+  { id: 'rod', name: 'Lightning Rod', icon: '🔱', rarity: 'epic', fx: { echo: 0.3, crit: 0.05 }, desc: '30% chance that an attack fires a second time, +5% crit' },
+  // legendary
+  { id: 'locket', name: 'Nine Lives Locket', icon: '🪞', rarity: 'legendary', fx: { undying: 1, hp: 0.15 }, desc: 'Once per wave it survives a deadly bite with 40% health. +15% health' },
+  { id: 'keg', name: 'Powder Keg', icon: '⚗', rarity: 'legendary', fx: { boom: 0.8, dmg: 0.12 }, desc: 'Mice it kills blow up for 80% of their health, hurting the mice around them. +12% damage' },
+  { id: 'whiskers', name: 'Echo Whiskers', icon: '🪄', rarity: 'legendary', fx: { echo: 0.45, haste: 0.15 }, desc: '45% chance that an attack fires a second time for free, +15% attack speed' },
+  { id: 'scythe', name: 'Moon Scythe', icon: '🗝', rarity: 'legendary', fx: { exec: 1.2, kheal: 0.12, crit: 0.1 }, desc: '+120% damage to mice below 30% health, heals 12% on a kill, +10% crit' },
+  { id: 'goldpaw', name: 'Golden Paw', icon: '🍯', rarity: 'legendary', fx: { kcoin: 4, coin: 0.4, luck: 1.5 }, desc: '+4 coins per kill, +40% coins and better loot' },
+  { id: 'rainbow', name: 'Rainbow Yarn', icon: '🌈', rarity: 'legendary', fx: { teamDmg: 0.12, teamHaste: 0.1 }, desc: 'The whole team deals 12% more damage and attacks 10% faster' },
+  // mythic
+  { id: 'kingcrown', name: 'Crown of the Cat King', icon: '🧷', rarity: 'mythic', fx: { teamDmg: 0.2, teamHp: 0.25, teamDr: 0.08, luck: 2 }, desc: 'The whole team: +20% damage, +25% health, 8% less damage taken, and much better loot' },
+  { id: 'timeknot', name: 'Time Knot', icon: '⌛', rarity: 'mythic', fx: { echo: 0.5, haste: 0.45, frenzy: 0.05, spc: 0.5 }, desc: '50% chance to attack twice, +45% attack speed, faster kills and specials' },
+  { id: 'wheart', name: 'Heart of Whiskerton', icon: '📜', rarity: 'mythic', fx: { undying: 1, shield: 0.5, regen: 0.03, teamDr: 0.1, hp: 0.3 }, desc: 'Survives deadly bites, starts waves with a 50% barrier, heals constantly. The team takes 10% less damage' },
 ];
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
-export const ITEM_WEIGHT = { common: 10, rare: 5, epic: 1.4 };
+export const RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
+export const ITEM_WEIGHT = { common: 10, rare: 6, epic: 1.4, legendary: 0.55, mythic: 0.1 };   // per relic: there are many more commons than legends, so the odds of a tier are this times its relic count
 export const MAX_STASH = 12;
 // selling pays coins (scaled a little by wave); forging turns three of one rarity into one of the next
-export const SELL_VALUE = { common: 8, rare: 22, epic: 60 };
-export const FORGE_NEXT = { common: 'rare', rare: 'epic', epic: 'epic' };
+export const SELL_VALUE = { common: 8, rare: 22, epic: 60, legendary: 150, mythic: 400 };
+export const FORGE_NEXT = { common: 'rare', rare: 'epic', epic: 'legendary', legendary: 'mythic', mythic: 'mythic' };
 export const FORGE_COUNT = 3;
 export const itemSlots = (lvl) => (lvl >= 3 ? 2 : 1);
 
@@ -459,7 +503,7 @@ export function dayInfo(day) {
 
 // ---------------------------------------------------------------- wonders (bought with gems, the second currency)
 export const WONDERS = [
-  { id: 'paw',     name: 'Golden Paw',      icon: '🐾', cost: 4, desc: 'Start every run with a random rare item already equipped.', bonus: { startItem: 1 } },
+  { id: 'paw',     name: 'Golden Paw',      icon: '🐾', cost: 4, desc: 'Start every run with a random rare relic already equipped.', bonus: { startItem: 1 } },
   { id: 'bench',   name: 'Big Bench',       icon: '🪑', cost: 3, desc: 'One more bench spot (5 instead of 4).',                    bonus: { bench: 1 } },
   { id: 'cafe',    name: 'Cat Cafe',        icon: '☕',       cost: 6, desc: 'Pick one extra cat at the start of every run.',             bonus: { startPicks: 1 } },
   { id: 'academy', name: 'Zoomies Academy', icon: '🎓', cost: 4, desc: 'Zoomies meter starts half full and lasts 3 seconds longer.', bonus: { zoomStart: 50, zoomDur: 3 } },
@@ -490,7 +534,7 @@ export const ACHIEVEMENTS = [
   { id: 'maxbld',   name: 'Finishing Touch',  desc: 'Fully upgrade one building.',                 coins: 100, gems: 1, check: (c) => BUILDINGS.some((b) => buildingLevel(c.kingdom, b.id) >= b.max) },
   { id: 'coll15',   name: 'Cat Collector',    desc: 'Unlock 15 cats.',                             coins: 100, gems: 1, check: (c) => c.save.unlocked.length >= 15 },
   { id: 'coll30',   name: 'Gotta Pet Them All', desc: 'Unlock all 32 cats.',                       coins: 300, gems: 3, check: (c) => c.save.unlocked.length >= CATS.length },
-  { id: 'loot8',    name: 'Loot Goblin',      desc: 'Collect 8 items in one run.',                 coins: 80,  gems: 1, check: (c) => c.run.items >= 8 },
+  { id: 'loot8',    name: 'Loot Goblin',      desc: 'Collect 8 relics in one run.',                 coins: 80,  gems: 1, check: (c) => c.run.items >= 8 },
   { id: 'hard15',   name: 'Brave Whiskers',   desc: 'Reach wave 15 on Hard.',                      coins: 200, gems: 2, check: (c) => c.run.diff === 'hard' && c.run.wave >= 15 },
   { id: 'daily1',   name: 'Daily Dabbler',    desc: 'Play the daily challenge.',                   coins: 40,  gems: 1, check: (c) => !!c.run.daily },
   { id: 'daily20',  name: 'Daily Champion',   desc: 'Reach wave 20 in a daily challenge.',         coins: 200, gems: 2, check: (c) => !!c.run.daily && c.run.wave >= 20 },
@@ -499,8 +543,8 @@ export const ACHIEVEMENTS = [
   { id: 'nine',     name: 'Nine Lives',       desc: 'Be saved by Nine Lives.',                     coins: 60,  gems: 1, check: (c) => (c.run.nine || 0) >= 1 },
   { id: 'sp5',      name: 'Special Delivery', desc: 'Use 5 special moves in one run.',             coins: 60,  gems: 1, check: (c) => (c.run.specials || 0) >= 5 },
   { id: 'sp25',     name: 'Showstopper',      desc: 'Use 25 special moves in one run.',            coins: 150, gems: 2, check: (c) => (c.run.specials || 0) >= 25 },
-  { id: 'forge1',   name: 'Blacksmith',       desc: 'Forge three items into a better one.',        coins: 50,  gems: 1, check: (c) => (c.run.forged || 0) >= 1 },
-  { id: 'sell5',    name: 'Yard Sale',        desc: 'Sell 5 items in one run.',                    coins: 50,  gems: 0, check: (c) => (c.run.sold || 0) >= 5 },
+  { id: 'forge1',   name: 'Blacksmith',       desc: 'Forge three relics into a better one.',        coins: 50,  gems: 1, check: (c) => (c.run.forged || 0) >= 1 },
+  { id: 'sell5',    name: 'Yard Sale',        desc: 'Sell 5 relics in one run.',                    coins: 50,  gems: 0, check: (c) => (c.run.sold || 0) >= 5 },
   { id: 'event3',   name: 'Wanderer',         desc: 'Visit 3 event stops in one run.',             coins: 70,  gems: 1, check: (c) => (c.run.events || 0) >= 3 },
   { id: 'wish',     name: 'Lucky Wish',       desc: 'Win a toss at the Wishing Fountain.',         coins: 70,  gems: 1, check: (c) => (c.run.fountainWins || 0) >= 1 },
   { id: 'king',     name: 'Cheddar Crusher',  desc: 'Defeat King Squeakimus in the wave 30 nest.', coins: 300, gems: 0, check: (c) => !!(c.save && c.save.storyDone) },

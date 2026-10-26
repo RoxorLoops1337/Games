@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {
   newGame, addCat, mergeCats, mergePairs, rollCatChoices, rollSnackChoices, eatSnack, startWave, step, catMaxHp, releaseCat, moveCat, TUNE,
-  rollItemChoices, takeItem, equipItem, useReroll,
+  rollItemChoices, takeItem, equipItem, useReroll, autoSpecialPick, useSpecial, useZoomies,
 } from '../stacking_cats/sim.js';
 import { ITEM_BY_ID, emptyKingdom } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CATS, SNACK_BY_ID, STARTERS, MAX_STACK, START_CATS } from '../stacking_cats/cats.js';
@@ -48,7 +48,7 @@ function snack(g) {
   eatSnack(g, ch[0]);
 }
 
-const RAR = { common: 1, rare: 2, epic: 3 };
+const RAR = { common: 1, rare: 2, epic: 3, legendary: 4, mythic: 5 };
 function loot(g) {
   const ch = rollItemChoices(g).sort((a, b) => RAR[ITEM_BY_ID[b].rarity] - RAR[ITEM_BY_ID[a].rarity]);
   takeItem(g, ch[0]);
@@ -57,14 +57,18 @@ function loot(g) {
   if (target) equipItem(g, g.stash.length - 1, target.uid);
 }
 
-export function playRun(seed, { maxWave = 80, kingdom = null, difficulty = 'normal' } = {}) {
+// skill 1 also fires charged special moves and the zoomies the way an attentive player does (the plain bot never does, so it plays far worse than a person)
+export function playRun(seed, { maxWave = 80, kingdom = null, difficulty = 'normal', skill = 0 } = {}) {
   const g = newGame({ seed, unlocked: STARTERS, events: false, kingdom, difficulty });
   for (let i = 0; i < START_CATS; i++) recruit(g);
   for (let i = 0; i < g.meta.startSnacks; i++) snack(g);
   while (g.state !== 'over' && g.wave < maxWave) {
     startWave(g);
     let guard = 0;
-    while (g.state !== 'clear' && g.state !== 'over' && guard++ < 30 * 600) step(g);
+    while (g.state !== 'clear' && g.state !== 'over' && guard++ < 30 * 600) {
+      step(g);
+      if (skill && guard % 10 === 0) { const u = autoSpecialPick(g); if (u) useSpecial(g, u.uid !== undefined ? u.uid : u); if (g.zoom >= 100) useZoomies(g); }
+    }
     if (g.state === 'over') break;
     for (const r of g.reward) { if (r === 'cat') recruit(g); else if (r === 'item') loot(g); else snack(g); }
     arrange(g);
@@ -99,5 +103,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   assert.ok(med <= 40, 'too easy: median wave ' + med);
   assert.ok(waves.every((w) => w < 80), 'a run never ended: the game is endless-easy');
   assert.ok(waves.filter((w) => w >= 6).length >= N * 0.55, 'the first nest should usually fall');
+  // an attentive player (specials and zoomies) is the yardstick for "the first run should not get that far": most fresh saves end well before the finale at wave 30
+  const NA = QUICK ? 24 : 48, att = []; for (let k = 1; k <= NA; k++) att.push(playRun(k * 7919, { skill: 1 }).wave); att.sort((a, b) => a - b);
+  const am = att[Math.floor(NA / 2)], finale = att.filter((w) => w >= 30).length;
+  console.log('attentive player', att.join(' '), 'median', am, 'finale reached', finale + '/' + NA);
+  assert.ok(am >= 9 && am <= 22, 'a fresh save with an attentive player should end around wave 10 to 22, median ' + am);
+  assert.ok(finale <= NA * 0.25, 'the wave 30 finale should be rare on a fresh save: ' + finale + '/' + NA);
+  assert.ok(am >= med, 'paying attention (specials, zoomies) must help');
   console.log('balance ok');
 }

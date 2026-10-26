@@ -609,6 +609,22 @@ body.scr #hud>*:not(#toasts):not(#banner){opacity:0!important;pointer-events:non
 .btn.grey{background-image:var(--grain),linear-gradient(#f7f3fc 0%,#d8cdea 55%,#bfb0d8 100%)}
 .btn.amber{background-image:var(--grain),linear-gradient(#fff3c8 0%,#ffd23a 55%,#f0a81a 100%)}
 .btn.purple{background-image:var(--grain),linear-gradient(#f2e6ff 0%,#c89cff 55%,#a870ee 100%)}
+
+/* legendary and mythic relics: gold and a pink to violet glow */
+.card.item.r-legendary{border-color:#e8a000;border-top-color:#e8a000;box-shadow:0 6px 0 #9a6000,0 12px 24px #0006,0 0 34px #ffc83add;background:linear-gradient(#fffaea,#ffe9a8)}
+.card.item.r-legendary .rar{background:linear-gradient(#ffb020,#e07a00);color:#fff}
+.card.item.r-legendary .ic::before{background:radial-gradient(circle,rgba(255,255,255,.95) 0,rgba(255,215,90,.9) 46%,rgba(255,215,90,0) 72%)}
+.card.item.r-mythic{border-color:#ff3a8a;border-top-color:#ff3a8a;box-shadow:0 6px 0 #8a1a4a,0 12px 24px #0006,0 0 36px #ff5aa8dd,0 0 64px #7a5aff77;background:linear-gradient(#fff0fa,#ffd0ec 55%,#e4d4ff)}
+.card.item.r-mythic .rar{background:linear-gradient(90deg,#ff3a8a,#8a5aff);color:#fff}
+.card.item.r-mythic .ic::before{background:radial-gradient(circle,rgba(255,255,255,.95) 0,rgba(255,150,210,.9) 46%,rgba(150,120,255,0) 74%)}
+.card.item.r-legendary::after,.card.item.r-mythic::after{content:'';position:absolute;inset:0;border-radius:17px;pointer-events:none;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.6) 50%,transparent 65%);background-size:250% 100%;background-position:150% 0;animation:rarshim 3.4s ease-in-out infinite}
+.bag.legendary{background:linear-gradient(#fff6d0,#ffd870);border-color:#e8a000;box-shadow:inset 0 -3px 0 #e8a00033,0 0 12px #ffc83add;animation:legp 1.8s ease-in-out infinite}
+.bag.mythic{background:linear-gradient(#ffe6f6,#e0c8ff);border-color:#ff3a8a;box-shadow:inset 0 -3px 0 #ff3a8a33,0 0 14px #ff5aa8,0 0 22px #7a5aff88;animation:mythp 1.4s ease-in-out infinite}
+@keyframes legp{50%{box-shadow:inset 0 -3px 0 #e8a00033,0 0 20px #ffd23f}}
+@keyframes mythp{50%{box-shadow:inset 0 -3px 0 #ff3a8a33,0 0 24px #ff7ac0,0 0 34px #9a7aff}}
+.rar.legendary{background:linear-gradient(#ffb020,#e07a00);color:#fff}.rar.mythic{background:linear-gradient(90deg,#ff3a8a,#8a5aff);color:#fff}.rar.epic{background:#b83ad0;color:#fff}.rar.rare{background:#2f7ad0;color:#fff}
+body.nomotion .bag.legendary,body.nomotion .bag.mythic,body.nomotion .card.item.r-legendary::after,body.nomotion .card.item.r-mythic::after{animation:none}
+.card.item .ic{margin-top:7px}   /* keep the bobbing picture clear of the rarity chip */
 </style>
 </head>
 <body>
