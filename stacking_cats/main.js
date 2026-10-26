@@ -404,6 +404,7 @@ function showHow(back) {
     ${row('\uD83D\uDC31', '<b>Your stack fights by itself.</b> Cats walk right and attack. Mice come from the right.')}
     ${row('\uD83D\uDEE1', '<b>Order matters.</b> Mice bite the bottom cat first. Put tough cats low, shooters high.')}
     ${row('\u26A1', '<b>Special moves.</b> A charged cat glows in the tray. Tap it (or press 1 to 6). AUTO fires them for you.')}
+    ${row('\u2764', '<b>Pet your cats.</b> Tap a cat to hear it meow. Hold it for a purr.')}
     ${row('\uD83C\uDFAF', '<b>Focus.</b> Tap a mouse and your cats shoot it first.')}
     ${row('\uD83D\uDC00', `<b>Nests.</b> Every ${BOSS_EVERY}th wave is a nest fight. Destroy it to rescue a cat and win loot.`)}
     ${row('\u2728', `<b>Merge</b> two equal cats into one stronger cat, up to Lv 3. The tower fits ${MAX_STACK}, the bench ${MAX_BENCH}.`)}
