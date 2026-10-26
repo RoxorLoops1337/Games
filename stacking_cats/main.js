@@ -9,7 +9,7 @@ import {
 import { COSMETICS, COSMETIC_BY_ID, SLOTS, SLOT_NAMES, lookOf, lookSig, drawLook, drawCosmetic, canWear, buyCosmetic, toggleWear, isOwned } from './cosmetics.js';
 import { createKingdomScene } from './kingdom_scene.js';
 import { encodeSave, decodeSave } from './savecode.js';
-import { dailyScore, fetchBoard, submitScore, rankOf, dailyStreak } from './daily.js';
+import { dailyScore, fetchBoard, submitScore, rankOf, dailyStreak, passedBest } from './daily.js';
 import { drawBuilding } from './art_kingdom.js';
 import * as S from './sim.js';
 import { drawCat } from './art_cats.js';
@@ -553,7 +553,7 @@ function showWardrobe(back, startCat) {
 }
 
 // ---------------------------------------------------------------- the Cat Kingdom: a village you can tap
-let kScene = null, kNav = null;
+let kScene = null, kNav = null, bestShown = false;
 function showKingdom(back, selected) {
   if (kScene) { kScene.stop(); kScene = null; }
   kNav = null;
@@ -612,7 +612,7 @@ function startRun(opts = {}) {
   g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom, difficulty: save.diff, daily, mastery: masteryMap(save.catStats) });
   if (opts.weekly) g.run.weekly = true;
   startTotal = START_CATS + g.meta.startPicks;
-  runCommitted = false; pickN = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
+  runCommitted = false; bestShown = false; pickN = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
   combo = 0; maxComboRun = 0; coinShown = 0; dpsHist.length = 0; sfx.setIntensity(0);
   $('bSpeed').textContent = 'x' + speed;
   showPickStart();
@@ -653,6 +653,11 @@ function beginWave() {
   const rt = g.route.id !== 'trail' && !boss ? ` \u00B7 ${g.route.name}` : '';
   banner(boss ? 'NEST BATTLE!' : `Wave ${g.wave}`, boss ? nest.name : `${THEMES[bdIdx].name}${rt}`, boss);
   sfx.play(boss ? 'boss' : 'wave');
+  // passing the all-time best wave: one celebration per run
+  if (!bestShown && passedBest(g.wave, save.stats.bestWave)) {
+    bestShown = true;
+    setTimeout(() => { if (mode === 'play') { txtFx(W / 2, 236, 'NEW BEST!', '#ffd23f', 38, 2); confetti(W / 2, 120, 40, 360); sfx.play('win'); toast(`New best: wave ${g.wave}!`); } }, 2600);
+  }
   if (boss) { spawnFx({ k: 'vig', life: 2.6, max: 2.6 }); nestPending = 3; }
   // a short "incoming" strip under the banner: which mice this wave brings and how many
   const inc = new Map(); for (const q of g.queue) { const o = inc.get(q.type) || { n: 0, el: 0 }; o.n++; if (q.elite) o.el++; inc.set(q.type, o); }
