@@ -343,6 +343,14 @@ t('relics: Catnip Sprig speeds the zoomies meter, Time Knot speeds specials, Win
   assert.ok(Math.abs(sp([['tabby', null]]) - DT / SPECIAL_TIME) < 1e-6, 'baseline charge unchanged');
 });
 
+t('previews: the damage estimate counts the extra damage mice take from a curse (Hex Doll)', () => {
+  const g = lab([['tabby', null], ['ember', 'hexdoll']]);
+  const m = calcMods(g), plain = lab([['tabby', null], ['ember', null]]);
+  assert.ok(m.curse > 0.09, 'the doll curses the mice');
+  const withDoll = g.cats.reduce((a, c) => a + estDps(c, m), 0), without = plain.cats.reduce((a, c) => a + estDps(c, calcMods(plain)), 0);
+  assert.ok(Math.abs(withDoll / without - 1.1) < 0.02, 'about 10% more damage in the estimate, got ' + (withDoll / without));
+});
+
 t('relics: forging climbs all five tiers, mythics forge into mythics for coins, selling and shop prices exist for every tier', () => {
   const g = lab([['tabby', null]]);
   g.stash = ['crown', 'hourglass', 'mask']; assert.equal(ITEM_BY_ID[forgeItems(g, 0)].rarity, 'legendary', 'three epics make a legendary');

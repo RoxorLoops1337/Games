@@ -161,7 +161,7 @@ export function estDps(c, mods, items = c.items) {
     melee: a.pierce ? 2.2 : 1 + 0.6 * (a.cleave || 0), cone: 2.2, chain: 1 + 0.6 * a.jumps, beam: 2, strike: 1.5, nova: 3, mine: 1.8, storm: (a.stars || 1) * 1.2,
     spread: (a.pellets || 1) * 0.85, lob: 1.8, proj: (a.count || 1) * (a.burst || 1) * (1 + 0.3 * (a.pierce || 0)) * (a.splash ? 1.5 : 1),
   }[a.t] || 1;
-  return (per * shots * (1 + 0.4 * fx.extra) * (1 + mods.haste + fx.haste)) / a.cd;
+  return (per * shots * (1 + 0.4 * fx.extra) * (1 + mods.haste + fx.haste) * (1 + (mods.curse || 0))) / a.cd;
 }
 export const aliveCats = (g) => g.cats.filter((c) => !c.ko);
 
