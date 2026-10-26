@@ -1722,7 +1722,7 @@ function drawEnemy(e, t) {
     if (e.flash > 0) ctx.translate((Math.random() - 0.5) * 3, 0);
     ctx.scale(1.25 * pulse * pop, 1.25 * (2 - pulse) * pop);
     ctx.drawImage(spr.c, -spr.ax, -spr.ay, spr.w, spr.h);
-    ctx.save(); ctx.translate(-spr.ax, -spr.ay); nestOverlay(ctx, e.hp / e.maxHp, t); ctx.restore();
+    ctx.save(); ctx.translate(-spr.ax, -spr.ay); nestOverlay(ctx, e.hp / e.maxHp, t, g.wave === FINALE_WAVE); ctx.restore();
     if (e.flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35; ctx.drawImage(spr.c, -spr.ax, -spr.ay, spr.w, spr.h); }
   } else {
     const spr = enemySprite(e.type, e.elite);

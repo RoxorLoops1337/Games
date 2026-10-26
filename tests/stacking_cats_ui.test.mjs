@@ -507,4 +507,10 @@ t('the nest cage is drawn at 1.35 times size so the captive reads on a phone', (
   assert.ok(/ctx\.scale\(1\.35, 1\.35\)/.test(f) && /translate\(ex, bot\)/.test(f), 'cage scaled about its base');
 });
 
+t('the wave 30 nest wears King Squeakimus\'s crown (nestOverlay king flag, passed by the renderer)', () => {
+  const art = readFileSync('stacking_cats/art_world.js', 'utf8'), js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/export function nestOverlay\(ctx, hpFrac, t, king\)/.test(art) && /if \(king\)/.test(art), 'overlay takes a king flag');
+  assert.ok(/nestOverlay\(ctx, e\.hp \/ e\.maxHp, t, g\.wave === FINALE_WAVE\)/.test(js), 'renderer passes wave === FINALE_WAVE');
+});
+
 console.log(`${n} tests passed`);

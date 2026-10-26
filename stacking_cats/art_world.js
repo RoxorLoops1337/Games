@@ -241,12 +241,21 @@ export function nestSprite(kind) {
   return r;
 }
 // the angry glowing eyes in the doorway, blinking, plus cracks as it takes damage (drawn live)
-export function nestOverlay(ctx, hpFrac, t) {
+export function nestOverlay(ctx, hpFrac, t, king) {
   const blink = Math.sin(t * 2.2) > 0.94 ? 0.2 : 1;
   ctx.fillStyle = '#ff3a3a';
   for (const x of [91, 109]) { ctx.beginPath(); ctx.ellipse(x, 168, 4.4, 5.4 * blink, 0, 0, TAU); ctx.fill(); }
   ctx.fillStyle = '#fff'; for (const x of [90, 108]) { ctx.beginPath(); ctx.arc(x, 166, 1.2, 0, TAU); ctx.fill(); }
   ctx.strokeStyle = '#1b1020'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(85, 158); ctx.lineTo(97, 163); ctx.moveTo(115, 158); ctx.lineTo(103, 163); ctx.stroke();
+  if (king) {   // wave 30: this is King Squeakimus's own nest, with his golden crown floating on top
+    const by = 10 + Math.sin(t * 2.4) * 2.5;
+    ctx.save(); ctx.translate(100, by);
+    ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#7a4a10'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(-26, 16); ctx.lineTo(-30, -8); ctx.lineTo(-14, 3); ctx.lineTo(0, -14); ctx.lineTo(14, 3); ctx.lineTo(30, -8); ctx.lineTo(26, 16); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#e8a020'; ctx.fillRect(-26, 10, 52, 6);
+    for (const [x, y, c] of [[-30, -8, '#ff5a7a'], [0, -14, '#6fd3ff'], [30, -8, '#ff5a7a']]) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, 3.6, 0, TAU); ctx.fill(); ctx.stroke(); }
+    ctx.restore();
+  }
   // the caged cat the nest is holding: a little cage by the door, ears and eyes peeking out, swaying and blinking
   {
     const sw = Math.sin(t * 1.7) * 1.2, ex = 164 + sw, top = 150, bot = 188;
