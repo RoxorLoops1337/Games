@@ -555,4 +555,10 @@ t('the road choice screen subtitle comes from roadLine', () => {
   assert.ok(/Choose your road<\/h2><p class="sub">\$\{roadLine\(g\.wave, THEMES\)\}<\/p>/.test(js), 'wired');
 });
 
+t('the cutscene caption wraps with wrapCaption', () => {
+  const js = readFileSync('stacking_cats/intro.js', 'utf8');
+  const i = js.indexOf('function caption(');
+  assert.ok(/wrapCaption\(full, \(s\) => ctx\.measureText\(s\)\.width, 800\)/.test(js.slice(i, i + 700)), 'caption uses the balanced wrap');
+});
+
 console.log(`${n} tests passed`);
