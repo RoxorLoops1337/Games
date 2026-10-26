@@ -380,6 +380,8 @@ t('relic sets: setUps reports a set only when it turns on or doubles, once', () 
   assert.deepEqual(setUps(seen, [mk('vest', 'cushion', 'mitten')]).map((x) => x.mult), [1], 'getting it back is news again');
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   assert.ok(/function noteSets\(/.test(js) && /noteSets\(\)/.test(js.slice(js.indexOf('function beginWave'), js.indexOf('function beginWave') + 400)), 'checked when a wave begins');
+  const ns = js.slice(js.indexOf('function noteSets'), js.indexOf('function beginWave'));
+  assert.ok(/sfx\.play\('synergy'/.test(ns) && /!paused/.test(ns), 'a set turning on also chimes (never over the pause menu)');
 });
 
 t('relic sets: the card hint names the set, its progress and when this relic completes or doubles it', () => {
