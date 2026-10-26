@@ -553,9 +553,10 @@ function showWardrobe(back, startCat) {
 }
 
 // ---------------------------------------------------------------- the Cat Kingdom: a village you can tap
-let kScene = null;
+let kScene = null, kNav = null;
 function showKingdom(back, selected) {
   if (kScene) { kScene.stop(); kScene = null; }
+  kNav = null;
   const k = save.kingdom;
   let sel = selected || null;
   const detail = () => {
@@ -574,9 +575,16 @@ function showKingdom(back, selected) {
   const refresh = () => { const el = $('kdetail'); if (el) el.innerHTML = detail(); };
   kScene = createKingdomScene($('kscene'), () => save.kingdom, (hit) => { sel = hit; sfx.play('ui'); refresh(); });
   if (sel) kScene.select(sel);
+  // keyboard: arrows walk through the buildings then the wonders, Enter buys (the buy button is the screen's green button)
+  const order = [...BUILDINGS.map((b) => ({ type: 'building', id: b.id })), ...WONDERS.map((w) => ({ type: 'wonder', id: w.id }))];
+  kNav = (step) => {
+    const at = sel ? order.findIndex((o) => o.type === sel.type && o.id === sel.id) : -1;
+    sel = order[at < 0 ? (step > 0 ? 0 : order.length - 1) : (at + step + order.length) % order.length];
+    kScene.select(sel); sfx.play('ui'); refresh();
+  };
   acts = {
-    back: () => { if (kScene) { kScene.stop(); kScene = null; } back(); },
-    wardrobe: () => { if (kScene) { kScene.stop(); kScene = null; } showWardrobe(() => showKingdom(back)); },
+    back: () => { if (kScene) { kScene.stop(); kScene = null; } kNav = null; back(); },
+    wardrobe: () => { if (kScene) { kScene.stop(); kScene = null; } kNav = null; showWardrobe(() => showKingdom(back)); },
     buy: (d) => {
       const b = BUILDING_BY_ID[d.id];
       if (buyUpgrade(save.kingdom, d.id)) {
@@ -2054,6 +2062,9 @@ addEventListener('keydown', (e) => {
     const main = screenEl.querySelector('.btn.big:not([disabled]), .btn.green:not([disabled])');
     if (main) { e.preventDefault(); main.click(); }
     return;
+  }
+  if (kNav && kScene && $('kscene') && document.body.classList.contains('scr') && (k === 'arrowleft' || k === 'arrowright' || k === 'arrowup' || k === 'arrowdown')) {
+    e.preventDefault(); kNav(k === 'arrowleft' || k === 'arrowup' ? -1 : 1); return;
   }
   if ((k === 'arrowleft' || k === 'arrowright' || k === 'arrowup' || k === 'arrowdown') && document.body.classList.contains('scr') && !(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) {
     // arrow keys walk the focus through the cards of a pick screen
