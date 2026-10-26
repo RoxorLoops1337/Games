@@ -680,7 +680,7 @@ function beginWave() {
   const rt = g.route.id !== 'trail' && !boss ? ` \u00B7 ${g.route.name}` : '';
   banner(boss ? 'NEST BATTLE!' : `Wave ${g.wave}`, boss ? nest.name : isChapterStart(g.wave) ? chapterTitle(g.wave, THEMES) : milestoneLine(g.wave) || `${THEMES[bdIdx].name}${rt}`, boss);
   if (beatToastWanted(g.wave, save.opt.tutorial && !save.tips.c2)) setTimeout(() => { if (mode === 'play') toast(chapterBeat(g.wave)); }, 1500);
-  if (boss) setTimeout(() => { if (mode === 'play' && g && g.bossWave) toast(`King Squeakimus: "${taunt(g.run.bossKills)}"`); }, 1500);
+  if (boss) setTimeout(() => { if (g && g.bossWave) toastWhenPlaying(`King Squeakimus: "${taunt(g.run.bossKills)}"`); }, 1500);
   sfx.play(boss ? 'boss' : 'wave');
   // passing the all-time best wave: one celebration per run
   if (!bestShown && passedBest(g.wave, save.stats.bestWave)) {
@@ -697,8 +697,15 @@ function beginWave() {
   // introduce new mice and the nest's trick the first time they show up
   const intro = [];
   for (const ty of new Set(g.queue.map((q) => q.type))) { const d = ENEMY_TYPES[ty]; if (d && d.hint && !save.tips['m_' + ty]) { save.tips['m_' + ty] = true; intro.push(`New: ${d.name}. ${d.hint}.`); } }
-  if (intro.length) { persist(); intro.slice(0, 3).forEach((m, i) => setTimeout(() => { if (mode === 'play') toast(m); }, 2800 + i * 2600)); }
+  if (intro.length) { persist(); intro.slice(0, 3).forEach((m, i) => setTimeout(() => toastWhenPlaying(m), 2800 + i * 2600)); }
   if (g.wave === 1) setTimeout(() => { if (mode === 'play' && !(coachEl && coachEl.dataset.key === 'c5')) coach('c2', 'The bottom cat takes the hits. Tough cats go low, shooters go high!', 250, 120, 'left'); }, 2600);
+}
+
+// a toast that comes due while the pause menu is open waits for the game to resume, so it never covers the menu
+function toastWhenPlaying(m) {
+  if (mode !== 'play') return;
+  if (paused) return setTimeout(() => toastWhenPlaying(m), 1000);
+  toast(m);
 }
 
 function onClear() {
