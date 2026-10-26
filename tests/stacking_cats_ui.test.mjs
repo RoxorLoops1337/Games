@@ -143,6 +143,14 @@ t('the x2 speed choice is saved and a new run starts at that speed', () => {
   assert.ok(js.includes("$('bSpeed').textContent = 'x' + speed"), 'the speed button must show the starting speed');
 });
 
+t('number keys pick the nth card on pick screens and the cards show their number', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const css = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(js.includes("document.body.classList.contains('scr') && k >= '1' && k <= '9'"), 'digit keys must be routed to the open screen');
+  assert.ok(js.includes(".cards > .card[data-act]"), 'digit keys must target the cards of the open screen');
+  assert.ok(/counter\(cn\)/.test(css), 'cards must show their number for keyboard players');
+});
+
 t('tutorial tips are held back while the game is paused', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   const m = js.match(/function coach\([^)]*\) \{\n([^\n]*)\n/);

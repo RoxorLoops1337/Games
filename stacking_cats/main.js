@@ -2016,6 +2016,12 @@ $('bMeter').addEventListener('click', () => { sfx.unlock(); save.meter = !save.m
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
   const k = e.key.toLowerCase();
+  if (document.body.classList.contains('scr') && k >= '1' && k <= '9' && !(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) {
+    // on a pick screen the number keys choose the nth card
+    const card = [...screenEl.querySelectorAll('.cards > .card[data-act]')][+k - 1];
+    if (card) { e.preventDefault(); card.click(); }
+    return;
+  }
   if (k === ' ') { e.preventDefault(); doZoomies(); }
   else if (k === 'p' || k === 'escape') togglePause();
   else if (k === 'f') toggleSpeed();
