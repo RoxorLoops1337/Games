@@ -22,7 +22,7 @@ import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.j
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
 import { playIntro, playEpilogue } from './intro.js';
-import { rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
+import { rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -700,7 +700,7 @@ function onClear() {
   celeb = g.bossWave ? 2.4 : 1.15;
   sfx.play(g.bossWave ? 'win' : 'clear');
   sfx.music('calm');
-  banner(g.bossWave ? 'NEST DESTROYED!' : 'WAVE CLEARED!', g.bossWave ? 'A friend is free!' : clearLine(g.report), false);
+  banner(g.bossWave ? 'NEST DESTROYED!' : 'WAVE CLEARED!', g.bossWave ? chapterDoneLine(g.wave) : clearLine(g.report), false);
   confetti(g.towerX + 40, GROUND - 120, g.bossWave ? 60 : 26, 380);
   // victory moment: a warm flash, rings from the tower and every cat grinning for a beat
   screenFlash(g.bossWave ? 'rgba(255,240,170,.32)' : 'rgba(255,248,214,.18)', 0.35);

@@ -278,4 +278,11 @@ await t('story: the epilogue is a short two scene timeline with clean captions',
   assert.ok(st.EPILOGUE_LEN > 8 && st.EPILOGUE_LEN < 20, 'short enough to enjoy and not too short to read');
 });
 
+await t('story: destroying a nest closes the chapter with its own line', async () => {
+  const st = await import('../stacking_cats/story.js');
+  assert.equal(st.chapterDoneLine(5), 'Chapter 1 complete! A friend is free!');
+  assert.equal(st.chapterDoneLine(10), 'Chapter 2 complete! A friend is free!');
+  assert.ok(!st.chapterDoneLine(30).includes('\u2014'));
+});
+
 console.log(n + ' passed');

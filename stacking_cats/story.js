@@ -167,3 +167,6 @@ export function epilogueAt(t) {
   }
   return { i: EPILOGUE.length - 1, p: 1, t: EPILOGUE[EPILOGUE.length - 1].dur, done: true };
 }
+
+// the banner after a nest falls: that nest was the last fight of its chapter
+export const chapterDoneLine = (wave) => `Chapter ${chapterOf(wave).n} complete! A friend is free!`;
