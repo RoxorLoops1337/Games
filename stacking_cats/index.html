@@ -32,6 +32,7 @@ body{background:radial-gradient(circle at 50% 30%,#3a2a66,#150f26 70%)}
 #waveBox{left:12px;top:10px;display:flex;gap:10px;align-items:center}
 #waveBox b{font-size:20px;color:var(--peach)}
 #waveBox small{opacity:.8;font-size:13px}
+#waveProg{position:absolute;left:14px;bottom:3px;height:3px;width:0;max-width:calc(100% - 28px);border-radius:3px;background:linear-gradient(90deg,#7af0b0,#ffd23f);transition:width .25s}
 #nestPips{display:flex;gap:4px;align-items:center}
 #nestPips i{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.35)}
 #nestPips i.on{background:var(--mint)} #nestPips i.boss{background:#ff5d5d;border-color:#fff;box-shadow:0 0 8px #ff5d5d}
@@ -611,7 +612,7 @@ body.scr #hud>*:not(#toasts):not(#banner){opacity:0!important;pointer-events:non
   <canvas id="cv" width="960" height="540"></canvas>
   <button id="bFull" class="ib" title="Full screen (G)" aria-label="Full screen" hidden>&#9974;</button>
   <div id="hud">
-    <div class="pill" id="waveBox" role="group" aria-label="Wave"><b id="waveTxt">Wave 1</b><small id="themeTxt"></small><span id="nestPips"></span></div>
+    <div class="pill" id="waveBox" role="group" aria-label="Wave"><b id="waveTxt">Wave 1</b><small id="themeTxt"></small><span id="nestPips"></span><i id="waveProg"></i></div>
     <div class="pill" id="coinBox" role="group" aria-label="Coins this run" title="Coins this run. Spend them in the Kingdom."><span class="ico">&#129689;</span><b id="coinTxt">0</b></div>
     <div id="synBar"></div>
     <div id="modeChip"></div>
