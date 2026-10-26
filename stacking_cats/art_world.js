@@ -283,6 +283,7 @@ export function nestOverlay(ctx, hpFrac, t, king) {
 export function freeBackdrop(bd) {
   if (!bd) return;
   for (const k of ['sky', 'far', 'mid', 'gr', 'front', 'rays']) if (bd[k] && bd[k].width) bd[k].width = bd[k].height = 0;
+  if (bd.cloudSpr) for (const c of bd.cloudSpr) c.width = c.height = 0;
 }
 export function resetWorldArt() { spriteCache.clear(); }
 export function makeBackdrop(theme, seed) {
@@ -307,6 +308,12 @@ export function makeBackdrop(theme, seed) {
   if (night) { sx.fillStyle = theme.sky[0]; sx.beginPath(); sx.arc(754, 112, 32, 0, TAU); sx.fill(); sx.fillStyle = '#fff7d6'; sx.beginPath(); sx.arc(740, 120, 38, 0, TAU); sx.fill(); sx.fillStyle = 'rgba(40,30,100,.2)'; sx.beginPath(); sx.arc(748, 126, 32, 0, TAU); sx.fill(); }
 
   const hz = theme.haze || '#ffffff';
+  const rgba = (c0, a) => { const m = mix(c0, c0, 0); return `rgba(${parseInt(m.slice(1, 3), 16)},${parseInt(m.slice(3, 5), 16)},${parseInt(m.slice(5, 7), 16)},${a})`; };
+  {
+    // a warm band of light hugging the horizon, so the sky melts into the hills instead of meeting them
+    const hg = sx.createLinearGradient(0, 230, 0, 430); hg.addColorStop(0, rgba(hz, 0)); hg.addColorStop(1, rgba(hz, night ? 0.3 : 0.5));
+    sx.fillStyle = hg; sx.fillRect(0, 230, W, 200);
+  }
   const wrapX = (x, fn) => { fn(x); fn(x - W); fn(x + W); };
   const [far, fx] = mk();
   fx.fillStyle = mix(theme.far, hz, 0.22);
@@ -318,6 +325,27 @@ export function makeBackdrop(theme, seed) {
   fx.beginPath(); fx.moveTo(0, H);
   for (let x = 0; x <= W; x += 8) { const a = x / W * TAU; fx.lineTo(x, 350 + Math.sin(a * 3 + ph2 + 1) * 18 + Math.sin(a * 5 + ph) * 8); }
   fx.lineTo(W, H); fx.fill();
+
+  {
+    // tiny far-off shapes standing on the back ridge: trees, spires, pines or stalagmites, per place
+    const ry = (x) => { const a = x / W * TAU; return 350 + Math.sin(a * 3 + ph2 + 1) * 18 + Math.sin(a * 5 + ph) * 8; };
+    fx.fillStyle = mix(mix(theme.far, theme.sky[1], 0.35), theme.mid, 0.3);
+    const dd = theme.deco;
+    for (let i = 0; i < 26; i++) {
+      const x0 = (i + rnd() * 0.8) * (W / 26), sz = 0.7 + rnd() * 0.8;
+      wrapX(x0, (xx) => {
+        const y0 = ry(((xx % W) + W) % W) + 3;
+        fx.beginPath();
+        if (dd === 'snow' || dd === 'hole') { const h = (dd === 'hole' ? 16 : 22) * sz, w = (dd === 'hole' ? 7 : 8) * sz; fx.moveTo(xx - w, y0); fx.lineTo(xx, y0 - h); fx.lineTo(xx + w, y0); }
+        else if (dd === 'leaf' || dd === 'star') { const w = (7 + rnd() * 9) * sz, h = (12 + rnd() * 20) * sz; fx.rect(xx - w / 2, y0 - h, w, h); if (rnd() < 0.4) fx.rect(xx + w * 0.1, y0 - h - 5, 3, 5); }
+        else { fx.moveTo(xx - 1.5 * sz, y0); fx.lineTo(xx - 1.5 * sz, y0 - 6 * sz); fx.arc(xx, y0 - 11 * sz, 7.5 * sz, Math.PI, 0); fx.lineTo(xx + 1.5 * sz, y0); }
+        fx.fill();
+      });
+    }
+    // a pale mist trail slipping between the two ridges
+    const mg = fx.createLinearGradient(0, 322, 0, 372); mg.addColorStop(0, rgba(hz, 0)); mg.addColorStop(0.5, rgba(hz, 0.2)); mg.addColorStop(1, rgba(hz, 0));
+    fx.fillStyle = mg; fx.fillRect(0, 322, W, 50);
+  }
 
   const [mid, mx] = mk();
   const base = 404;
@@ -419,6 +447,11 @@ export function makeBackdrop(theme, seed) {
 
   const [gr, gx] = mk();
   const top = 424;
+  {
+    // low ground fog drifting over the foot of the hills
+    const fg = gx.createLinearGradient(0, top - 52, 0, top + 14); fg.addColorStop(0, rgba(hz, 0)); fg.addColorStop(0.7, rgba(hz, night ? 0.22 : 0.34)); fg.addColorStop(1, rgba(hz, 0.1));
+    gx.fillStyle = fg; gx.fillRect(0, top - 52, W, 66);
+  }
   const gg = gx.createLinearGradient(0, top, 0, H); gg.addColorStop(0, theme.ground[0]); gg.addColorStop(0.12, theme.ground[1]); gg.addColorStop(0.13, theme.dirt); gg.addColorStop(1, shade(theme.dirt, -0.25));
   gx.fillStyle = gg; gx.beginPath(); gx.moveTo(0, top + 6);
   for (let x = 0; x <= W; x += 6) gx.lineTo(x, top + Math.sin(x / W * TAU * 3) * 3 + 2);
@@ -494,6 +527,39 @@ export function makeBackdrop(theme, seed) {
       gx.restore();
     }
   }
+  {
+    // ground shading: contact shadow under the grass lip, a sunlit band, and a darker foreground for depth
+    const ao = gx.createLinearGradient(0, top + 4, 0, top + 26); ao.addColorStop(0, 'rgba(10,5,20,.26)'); ao.addColorStop(1, 'rgba(10,5,20,0)');
+    gx.fillStyle = ao; gx.fillRect(0, top + 4, W, 22);
+    const dp = gx.createLinearGradient(0, 468, 0, H); dp.addColorStop(0, 'rgba(10,5,20,0)'); dp.addColorStop(1, 'rgba(10,5,20,.32)');
+    gx.fillStyle = dp; gx.fillRect(0, 468, W, H - 468);
+    // small props lying around, different per place (x wraps, so they tile)
+    const prop = (x, y, fn) => { fn(x, y); if (x < 40) fn(x + W, y); if (x > W - 40) fn(x - W, y); };
+    const shadow = (x, y, rx) => { gx.fillStyle = 'rgba(10,5,20,.22)'; gx.beginPath(); gx.ellipse(x + 1, y + 1, rx, rx * 0.32, 0, 0, TAU); gx.fill(); };
+    for (let i = 0; i < 9; i++) {
+      const x = rnd() * W, y = top + 26 + rnd() * (H - top - 60), k = 0.8 + (y - top) / 110;
+      prop(x, y, (xx, yy) => {
+        shadow(xx, yy, 9 * k);
+        if (dec === 'flower') {   // a toadstool
+          gx.fillStyle = '#f2e8d4'; gx.fillRect(xx - 1.6 * k, yy - 6 * k, 3.2 * k, 6 * k);
+          gx.fillStyle = '#d4463c'; gx.beginPath(); gx.ellipse(xx, yy - 6 * k, 6 * k, 4 * k, 0, Math.PI, 0); gx.fill();
+          gx.fillStyle = '#fff'; for (const dx of [-2.6, 0.5, 2.8]) { gx.beginPath(); gx.arc(xx + dx * k, yy - 8 * k, 0.9 * k, 0, TAU); gx.fill(); }
+        } else if (dec === 'leaf') {   // a leaf pile
+          for (let j = 0; j < 6; j++) { gx.fillStyle = ['#d9532b', '#e8a22a', '#b8431f'][j % 3]; gx.beginPath(); gx.ellipse(xx + (j - 3) * 2.4 * k, yy - (j % 3) * 1.6 * k, 4 * k, 1.9 * k, j * 0.7, 0, TAU); gx.fill(); }
+        } else if (dec === 'star') {   // a puddle that catches the moon
+          const pg = gx.createLinearGradient(xx - 12 * k, yy, xx + 12 * k, yy); pg.addColorStop(0, 'rgba(120,140,230,.0)'); pg.addColorStop(0.5, 'rgba(190,205,255,.55)'); pg.addColorStop(1, 'rgba(120,140,230,0)');
+          gx.fillStyle = pg; gx.beginPath(); gx.ellipse(xx, yy, 13 * k, 3.4 * k, 0, 0, TAU); gx.fill();
+        } else if (dec === 'hole') {   // cheese crumbs
+          for (let j = 0; j < 4; j++) { gx.fillStyle = j % 2 ? '#ffe27a' : '#f5c040'; gx.beginPath(); gx.moveTo(xx + j * 4 * k - 6, yy); gx.lineTo(xx + j * 4 * k - 3, yy - 3 * k); gx.lineTo(xx + j * 4 * k, yy); gx.fill(); }
+        } else if (dec === 'snow') {   // a small snow drift with a blue lee side
+          gx.fillStyle = '#ffffff'; gx.beginPath(); gx.ellipse(xx, yy, 11 * k, 4 * k, 0, Math.PI, 0); gx.fill();
+          gx.fillStyle = 'rgba(150,185,225,.55)'; gx.beginPath(); gx.ellipse(xx + 2 * k, yy, 8 * k, 2 * k, 0, 0, Math.PI); gx.fill();
+        } else {   // fallen petals
+          for (let j = 0; j < 5; j++) { gx.fillStyle = j % 2 ? '#ffd0e2' : '#ff9ac0'; gx.beginPath(); gx.ellipse(xx + (j - 2) * 3.2 * k, yy - (j % 2) * 1.5, 3 * k, 1.6 * k, j, 0, TAU); gx.fill(); }
+        }
+      });
+    }
+  }
   const [front, ftx] = mk();
   const tuft = theme.deco === 'snow' ? '#ffffff' : shade(theme.ground[1], -0.12);
   for (let i = 0; i < 46; i++) {
@@ -505,12 +571,13 @@ export function makeBackdrop(theme, seed) {
     }
   }
   const [rays, rx] = mk();
-  if (!night) for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < (night ? 4 : 6); i++) {
     const a0 = 1.7 + i * 0.2 + (rnd() - 0.5) * 0.08, spread = 0.025 + rnd() * 0.075, peak = 0.05 + rnd() * 0.05;
     const L = 520 + rnd() * 120, ca = Math.cos(a0), sa = Math.sin(a0);
     // along the shaft: bright near the sun, gone before the ground
     const gl = rx.createLinearGradient(740, 120, 740 + ca * L, 120 + sa * L);
-    gl.addColorStop(0, `rgba(255,255,220,${peak})`); gl.addColorStop(0.6, `rgba(255,255,220,${peak * 0.5})`); gl.addColorStop(1, 'rgba(255,255,220,0)');
+    const rc = night ? '190,205,255' : '255,255,220';
+    gl.addColorStop(0, `rgba(${rc},${peak})`); gl.addColorStop(0.6, `rgba(${rc},${peak * 0.5})`); gl.addColorStop(1, `rgba(${rc},0)`);
     const [sh, shx] = mk();
     shx.fillStyle = gl; shx.beginPath(); shx.moveTo(740, 120);
     shx.lineTo(740 + Math.cos(a0 - spread) * 900, 120 + Math.sin(a0 - spread) * 900); shx.lineTo(740 + Math.cos(a0 + spread) * 900, 120 + Math.sin(a0 + spread) * 900); shx.fill();
@@ -541,14 +608,43 @@ export function makeBackdrop(theme, seed) {
   const farSoft = soften(far, 2.6, hz, 0.38), midSoft = soften(mid, 0.9, hz, 0.14);
 
   const stars = []; if (night) for (let i = 0; i < 70; i++) stars.push([rnd() * W, rnd() * 300, 0.6 + rnd() * 1.4, rnd() * 6]);
-  const clouds = []; for (let i = 0; i < 5; i++) clouds.push([rnd() * W, 50 + rnd() * 130, 0.6 + rnd() * 0.8, 6 + rnd() * 8]);
-  return { sky, far: farSoft, mid: midSoft, gr, front, rays, stars, clouds, night, cave, deco: theme.deco, sun: { x: 740, y: 120 } };
+  const clouds = []; for (let i = 0; i < 6; i++) clouds.push([rnd() * W, 50 + rnd() * 130, 0.6 + rnd() * 0.8, 6 + rnd() * 8]);
+  // three shaded cloud sprites (lit top, soft shadowed belly), drawn with drawImage instead of four path fills per cloud
+  const cloudSpr = [];
+  if (!cave) for (let i = 0; i < 3; i++) {
+    const cw = 252, ch = 92, c = document.createElement('canvas'); c.width = cw; c.height = ch; const cx = c.getContext('2d'), s2 = 1.4;
+    const puffs = [[0, 0, 46, 14], [-24, 4, 28, 11], [26, 5, 30, 11], [4, -9, 24, 12]];
+    if (i === 1) puffs.push([-48, 6, 18, 8]); if (i === 2) puffs.push([50, 7, 20, 8], [-10, -13, 16, 9]);
+    cx.fillStyle = night ? '#c4bcff' : '#ffffff';
+    for (const [dx, dy, rx, ry] of puffs) { cx.beginPath(); cx.ellipse(cw / 2 + dx * s2, ch / 2 + 6 + dy * s2, rx * s2, ry * s2, 0, 0, TAU); cx.fill(); }
+    cx.globalCompositeOperation = 'source-atop';
+    const cg = cx.createLinearGradient(0, 14, 0, ch - 14); cg.addColorStop(0, 'rgba(255,255,255,0)'); cg.addColorStop(0.55, rgba(night ? '#6a60c0' : mix(theme.sky[1], '#8aa0c8', 0.5), 0)); cg.addColorStop(1, rgba(night ? '#5a50b0' : mix(theme.sky[1], '#8aa0c8', 0.5), 0.5));
+    cx.fillStyle = cg; cx.fillRect(0, 0, cw, ch);
+    cloudSpr.push(c);
+  }
+  const birds = []; if (!night && !cave) for (let i = 0; i < 3; i++) birds.push([rnd() * W, 90 + rnd() * 120, 0.7 + rnd() * 0.6, rnd() * 6]);
+  const motes = []; for (let i = 0; i < 18; i++) motes.push([380 + rnd() * 520, 140 + rnd() * 260, 0.5 + rnd(), rnd() * 6]);
+  return { cloudSpr, birds, motes, sky, far: farSoft, mid: midSoft, gr, front, rays, stars, clouds, night, cave, deco: theme.deco, sun: { x: 740, y: 120 } };
 }
 
 export function drawBackdrop(ctx, bd, scroll, t) {
   const W = 960;
   ctx.drawImage(bd.sky, 0, 0);
-  if (bd.night) for (const [x, y, r, p] of bd.stars) { ctx.fillStyle = `rgba(255,250,220,${0.45 + 0.45 * Math.sin(t * 2 + p)})`; ctx.fillRect(x, y, r, r); }
+  if (bd.night) {
+    for (const [x, y, r, p] of bd.stars) {
+      const b = 0.45 + 0.45 * Math.sin(t * 2 + p); ctx.fillStyle = `rgba(255,250,220,${b})`; ctx.fillRect(x, y, r, r);
+      if (r > 1.7 && b > 0.6) { ctx.fillStyle = `rgba(255,250,220,${(b - 0.6) * 1.6})`; ctx.fillRect(x - 2.5, y + r / 2 - 0.5, r + 5, 1); ctx.fillRect(x + r / 2 - 0.5, y - 2.5, 1, r + 5); }
+    }
+    // now and then a shooting star slips across the sky
+    const per = 11, u = (t % per) / 0.8;
+    if (u < 1) { const k = Math.floor(t / per), sx0 = 120 + (k * 377) % 480, sy0 = 40 + (k * 91) % 90, d = u * 190; ctx.save(); ctx.lineCap = 'round'; ctx.globalAlpha = 1 - u; ctx.strokeStyle = '#fff7d6'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(sx0 + d, sy0 + d * 0.38); ctx.lineTo(sx0 + d - 34, sy0 + (d - 34) * 0.38); ctx.stroke(); ctx.restore(); }
+  }
+  if (bd.birds) for (const [x, y, s, p] of bd.birds) {
+    // distant birds: a flapping V that wraps the screen
+    const bx = ((x + t * (18 + p * 3) - scroll * 0.06) % (W + 80) + W + 80) % (W + 80) - 40, by = y + Math.sin(t * 0.9 + p) * 14, fl = Math.sin(t * 9 + p * 3) * 3.4 * s;
+    ctx.strokeStyle = bd.deco === 'snow' ? 'rgba(60,80,120,.5)' : 'rgba(50,40,70,.45)'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx - 7 * s, by + fl * 0.3); ctx.quadraticCurveTo(bx - 3 * s, by - fl, bx, by); ctx.quadraticCurveTo(bx + 3 * s, by - fl, bx + 7 * s, by + fl * 0.3); ctx.stroke();
+  }
   if (bd.deco === 'flower') {
     // a few butterflies flutter over the meadow
     for (let k = 0; k < 4; k++) {
@@ -564,10 +660,14 @@ export function drawBackdrop(ctx, bd, scroll, t) {
       ctx.fillStyle = `rgba(255,236,160,${0.25 + 0.25 * Math.sin(t * 1.5 + v + x)})`; ctx.beginPath(); ctx.arc(cx, cy, 1.4 + s * 1.2, 0, TAU); ctx.fill();
     }
   }
-  ctx.fillStyle = bd.night ? 'rgba(200,190,255,.28)' : 'rgba(255,255,255,.75)';
-  if (!bd.cave) for (const [x, y, s, v] of bd.clouds) {
-    const cx = ((x - t * v - scroll * 0.05) % (W + 200) + W + 200) % (W + 200) - 100;
-    ctx.beginPath(); ctx.ellipse(cx, y, 46 * s, 14 * s, 0, 0, TAU); ctx.ellipse(cx - 24 * s, y + 4 * s, 28 * s, 11 * s, 0, 0, TAU); ctx.ellipse(cx + 26 * s, y + 5 * s, 30 * s, 11 * s, 0, 0, TAU); ctx.ellipse(cx + 4 * s, y - 9 * s, 24 * s, 12 * s, 0, 0, TAU); ctx.fill();
+  if (!bd.cave && bd.cloudSpr) {
+    ctx.globalAlpha = bd.night ? 0.34 : 0.85;
+    let ci = 0;
+    for (const [x, y, s, v] of bd.clouds) {
+      const cx = ((x - t * v - scroll * 0.05 * s) % (W + 200) + W + 200) % (W + 200) - 100, sp = bd.cloudSpr[ci++ % 3], k = s / 1.4;
+      ctx.drawImage(sp, cx - 126 * k, y - 46 * k - 6 * s, 252 * k, 92 * k);
+    }
+    ctx.globalAlpha = 1;
   }
   for (const [layer, k] of [[bd.far, 0.12], [bd.mid, 0.4], [bd.gr, 1]]) {
     const o = ((scroll * k) % W + W) % W;
@@ -576,9 +676,16 @@ export function drawBackdrop(ctx, bd, scroll, t) {
 }
 
 export function drawRays(ctx, bd, t) {
-  if (bd.night || bd.cave) return;
-  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.11 + 0.05 * Math.sin(t * 0.7);
-  ctx.drawImage(bd.rays, 0, 0); ctx.restore();
+  if (bd.cave) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (bd.night ? 0.085 : 0.11) + 0.05 * Math.sin(t * 0.7);
+  ctx.drawImage(bd.rays, 0, 0);
+  // dust motes turning slowly in the light
+  ctx.fillStyle = bd.night ? 'rgba(190,205,255,1)' : 'rgba(255,250,215,1)';
+  for (const [x, y, s, p] of bd.motes || []) {
+    const mx2 = x + Math.sin(t * 0.35 + p) * 26, my2 = y + Math.cos(t * 0.27 + p * 2) * 18 - Math.sin(t * 0.2 + p) * 12 * s;
+    ctx.globalAlpha = 0.25 + 0.3 * Math.sin(t * 1.3 + p * 4) ** 2; ctx.fillRect(mx2, my2, 1.6 * s, 1.6 * s);
+  }
+  ctx.restore();
 }
 export function drawFront(ctx, bd, scroll) {
   const W = 960, o = ((scroll * 1.35) % W + W) % W;

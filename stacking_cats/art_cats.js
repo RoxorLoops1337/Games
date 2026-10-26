@@ -505,10 +505,10 @@ export function drawCat(ctx, d, variant = 'open') {
     cel(ctx, tp, fur, { shade: false, lw: 1.1 });
     ctx.save(); ctx.clip(tp);
     const dk = shade(fur, -0.3);
-    ctx.strokeStyle = shade(fur, -0.14); ctx.lineWidth = 1.2; ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = shade(fur, -0.14); ctx.lineWidth = 1; ctx.globalAlpha = 0.12;
     ctx.beginPath(); for (let i = 1; i < N; i++) { const c = at(i / N); ctx.moveTo(c[0] + 2.6, c[1] - 2); ctx.lineTo(c[0] + 4.4, c[1] + 0.6); } ctx.stroke();
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = shade(fur, 0.28); ctx.lineWidth = 1.6; ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = shade(fur, 0.28); ctx.lineWidth = 1.4; ctx.globalAlpha = 0.2;
     ctx.beginPath(); for (let i = 0; i <= N; i++) { const c = at(i / N); i ? ctx.lineTo(c[0] - 2.4 + i * 0.12, c[1] - 1) : ctx.moveTo(c[0] - 2.4, c[1] - 1); } ctx.stroke();
     ctx.globalAlpha = 1;
     if (A.pat === 'stripes') {
@@ -554,7 +554,7 @@ export function drawCat(ctx, d, variant = 'open') {
   }
   // chest fluff
   if (!B.ghost) {
-    ctx.strokeStyle = shade(belly, -0.1); ctx.lineWidth = 0.8; ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = shade(belly, -0.1); ctx.lineWidth = 0.8; ctx.globalAlpha = 0.35;
     for (const [dx, dy] of [[-4, 0], [0, 1.5], [4, 0]]) { ctx.beginPath(); ctx.moveTo(60 + dx - 1.2, 86 + dy); ctx.lineTo(60 + dx, 90 + dy); ctx.lineTo(60 + dx + 1.2, 86 + dy); ctx.stroke(); }
     ctx.globalAlpha = 1;
   }
@@ -565,7 +565,7 @@ export function drawCat(ctx, d, variant = 'open') {
   const earTx = (fn) => { fn(); mirror(ctx, 120, fn); };
   earTx(() => { cel(ctx, earOuter, fur, { shade: false }); ctx.fillStyle = A.pat === 'tux' ? '#3b3548' : '#ffb3c8'; ctx.fill(earInner);
     ctx.save(); ctx.clip(earInner); ctx.fillStyle = A.pat === 'tux' ? '#2a2536' : '#e88aa8'; ctx.beginPath(); ctx.ellipse(40, 44, 9, 9, 0, 0, TAU); ctx.fill();
-    ctx.strokeStyle = shade(fur, 0.55); ctx.lineWidth = 0.9; ctx.globalAlpha = 0.8;
+    ctx.strokeStyle = shade(fur, 0.55); ctx.lineWidth = 0.8; ctx.globalAlpha = 0.45;
     for (const [x, y, ex, ey] of [[48, 33, 42, 30], [47, 38, 40, 35], [44, 43, 38, 40]]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke(); }
     ctx.restore();
     ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 0.7; ctx.stroke(earInner);
@@ -585,9 +585,9 @@ export function drawCat(ctx, d, variant = 'open') {
   ctx.save(); ctx.clip(head);
   // soft cheek shade under the eyes, brighter forehead, and short fur strokes
   for (const s of [-1, 1]) { ctx.fillStyle = 'rgba(80,40,110,.12)'; ctx.beginPath(); ctx.ellipse(60 + s * 28, 76, 9, 5.5, s * 0.5, 0, TAU); ctx.fill(); }
-  ctx.fillStyle = 'rgba(255,255,255,.13)'; ctx.beginPath(); ctx.ellipse(60, 36, 16, 5, 0, 0, TAU); ctx.fill();
-  ctx.lineWidth = 0.9; ctx.lineCap = 'round';
-  for (const [x, y, dx, dy] of [[52, 32, -2, 4], [60, 31, 0, 4.4], [68, 32, 2, 4], [31, 62, 4, 1.4], [29, 67, 5, 0.6], [89, 62, -4, 1.4], [91, 67, -5, 0.6], [40, 75, 3, 2.4], [80, 75, -3, 2.4]]) { ctx.strokeStyle = shade(fur, -0.16); ctx.globalAlpha = 0.55; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dx, y + dy); ctx.stroke(); }
+  ctx.lineWidth = 0.8; ctx.lineCap = 'round';
+  // a few tiny cheek-edge strokes that follow the face outline
+  for (const [x, y, dx, dy] of [[31, 64, 3, 1], [30, 69, 3.4, 0.4], [89, 64, -3, 1], [90, 69, -3.4, 0.4]]) { ctx.strokeStyle = shade(fur, -0.2); ctx.globalAlpha = 0.14; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dx, y + dy); ctx.stroke(); }
   ctx.globalAlpha = 1; ctx.restore();
   pattern(ctx, A, head, bodyPath);
   ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 1.15; ctx.stroke(head);
