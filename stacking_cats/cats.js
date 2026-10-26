@@ -377,6 +377,15 @@ export function activeSets(cats) {
     return { set, have, mult: have.length >= SET_DOUBLE ? 2 : have.length >= SET_NEED ? 1 : 0 };
   });
 }
+// the sets that turned on (or doubled) since `seen` was last updated; `seen` is { setId: mult } and is updated here
+export function setUps(seen, cats) {
+  const ups = [];
+  for (const a of activeSets(cats)) {
+    if (a.mult > (seen[a.set.id] || 0)) ups.push(a);
+    seen[a.set.id] = a.mult;
+  }
+  return ups;
+}
 // the relics a team carries, one line per kind: how many, which cats hold them, rarest first (for the Team stats screen)
 export function teamRelics(cats) {
   const by = new Map();

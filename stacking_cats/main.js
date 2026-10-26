@@ -2,7 +2,7 @@
 import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS, SPECIAL_TEXT,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
-  ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
+  ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, setUps, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
   DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
   masteryProgress, masteryMap, masteryBonus, MASTERY_MAX, DIFF_ORDER, LADDER_RULES, LADDER_WAVE, ladderTier, ladderUnlocked, diffAllowed, ladderClears, weekKey, weekInfo,
 } from './cats.js';
@@ -675,7 +675,7 @@ function startRun(opts = {}) {
   g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom, difficulty: save.diff, daily, mastery: masteryMap(save.catStats) });
   if (opts.weekly) g.run.weekly = true;
   startTotal = START_CATS + g.meta.startPicks;
-  runCommitted = false; bestShown = false; pickN = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
+  setsSeen = {}; runCommitted = false; bestShown = false; pickN = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
   combo = 0; maxComboRun = 0; coinShown = 0; dpsHist.length = 0; sfx.setIntensity(0);
   $('bSpeed').textContent = 'x' + speed;
   showPickStart();
@@ -718,9 +718,17 @@ function noteRelics() {
   const first = ITEM_BY_ID[fresh[0]];
   setTimeout(() => toastWhenPlaying(`New relic in your book: ${first.name}${fresh.length > 1 ? ` and ${fresh.length - 1} more` : ''}!`), 1200);
 }
+// a set that turns on (or doubles) gets a toast, so the player sees why the team got stronger
+let setsSeen = {};
+function noteSets() {
+  if (!g) return;
+  const ups = setUps(setsSeen, g.cats);
+  if (ups.length) setTimeout(() => toastWhenPlaying(`Relic set: ${ups[0].set.name}${ups[0].mult > 1 ? ' doubled' : ''}! ${ups[0].set.desc[0].toUpperCase()}${ups[0].set.desc.slice(1)}.`), 2200);
+}
 function beginWave() {
   closeScreen();
   noteRelics();
+  noteSets();
   S.startWave(g);
   mode = 'play';
   setBackdrop(themeFor(g.wave));
