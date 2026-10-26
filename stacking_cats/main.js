@@ -31,7 +31,9 @@ const app = $('app'), cv = $('cv'), ctx = cv.getContext('2d'), screenEl = $('scr
 const sfx = new Sfx();
 
 // ---------------------------------------------------------------- save
-const DEFAULT_OPT = { shake: 1, colorblind: false, bigText: false, quality: 'auto', motion: true, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, autoSpecial: false };
+// a player whose system asks for reduced motion starts with screen shake and flashes off (they can still turn them on)
+const REDUCED_MOTION = (() => { try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+const DEFAULT_OPT = { shake: REDUCED_MOTION ? 0 : 1, colorblind: false, bigText: false, quality: 'auto', motion: !REDUCED_MOTION, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, autoSpecial: false };
 function freshSave() {
   return { v: 1, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT }, weekly: {}, ladder: 0, owned: [], wardrobe: {} };
 }
