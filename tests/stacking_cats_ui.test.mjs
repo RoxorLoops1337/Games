@@ -500,4 +500,11 @@ t('when a nest falls the caged cat is freed: hearts and sparks rise from where i
   assert.ok(/freed cat/.test(f) && /k: 'h'/.test(f) && /e\.x \+ 68/.test(f), 'bossDown spawns hearts at the cage spot (nest x + 68)');
 });
 
+t('the nest cage is drawn at 1.35 times size so the captive reads on a phone', () => {
+  const js = readFileSync('stacking_cats/art_world.js', 'utf8');
+  const i = js.indexOf('export function nestOverlay');
+  const f = js.slice(i, js.indexOf('// ----', i));
+  assert.ok(/ctx\.scale\(1\.35, 1\.35\)/.test(f) && /translate\(ex, bot\)/.test(f), 'cage scaled about its base');
+});
+
 console.log(`${n} tests passed`);
