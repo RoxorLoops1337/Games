@@ -1,5 +1,5 @@
 // Save backup: turn the save into a text code and back. Used by Settings (copy, download, paste to restore).
-import { CAT_BY_ID, STARTERS, BUILDINGS, WONDERS, ACHIEVEMENTS, DIFF_ORDER, LADDER_TIERS, WEEK_RE, masteryLevel, diffAllowed } from './cats.js';
+import { CAT_BY_ID, ITEM_BY_ID, STARTERS, BUILDINGS, WONDERS, ACHIEVEMENTS, DIFF_ORDER, LADDER_TIERS, WEEK_RE, masteryLevel, diffAllowed } from './cats.js';
 import { cleanWardrobe } from './cosmetics.js';
 
 const PREFIX = 'SC1:';
@@ -26,8 +26,9 @@ export function decodeSave(text) {
       tips: raw.tips && typeof raw.tips === 'object' ? { ...raw.tips } : {},
       opt: raw.opt && typeof raw.opt === 'object' ? { ...raw.opt } : {},
       unlocked: [...new Set([...STARTERS, ...raw.unlocked.filter((id) => CAT_BY_ID[id])])],
-      stats: {}, kingdom: { coins: 0, earned: 0, gems: 0, lv: {}, wonders: {} }, ach: {}, catStats: {}, daily: {},
+      stats: {}, kingdom: { coins: 0, earned: 0, gems: 0, lv: {}, wonders: {} }, ach: {}, catStats: {}, daily: {}, relics: {},
     };
+    for (const id in raw.relics || {}) if (raw.relics[id] && Object.hasOwn(ITEM_BY_ID, id)) s.relics[id] = true;
     for (const k of ['runs', 'kills', 'bossKills', 'recruits', 'merges', 'lvl3', 'snacks', 'temp', 'flawless', 'bestWave']) s.stats[k] = num(raw.stats[k]);
     s.stats.lvl3Of = {};
     for (const id in raw.stats.lvl3Of || {}) if (CAT_BY_ID[id]) s.stats.lvl3Of[id] = true;

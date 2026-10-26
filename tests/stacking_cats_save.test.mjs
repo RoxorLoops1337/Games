@@ -66,4 +66,12 @@ await t('leaderboard client: success, server errors and network failures never t
   assert.equal(rankOf([{ name: 'B' }, { name: 'A' }], 'A'), 2);
   assert.equal(rankOf([], 'A'), 0);
 });
+await t('the Relic Book found list survives the round trip and unknown relic ids are dropped', () => {
+  const s = sample(); s.relics = { claws: true, kingcrown: true, 'not a relic': true, __proto__x: true };
+  const r = decodeSave(encodeSave(s));
+  assert.ok(r.ok);
+  assert.deepEqual(Object.keys(r.save.relics).sort(), ['claws', 'kingcrown']);
+  assert.deepEqual(decodeSave(encodeSave(sample())).save.relics, {}, 'an old save without the field has an empty book');
+});
+
 console.log(`${n} tests passed`);

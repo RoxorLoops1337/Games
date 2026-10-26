@@ -625,6 +625,21 @@ body.scr #hud>*:not(#toasts):not(#banner){opacity:0!important;pointer-events:non
 .rar.legendary{background:linear-gradient(#ffb020,#e07a00);color:#fff}.rar.mythic{background:linear-gradient(90deg,#ff3a8a,#8a5aff);color:#fff}.rar.epic{background:#b83ad0;color:#fff}.rar.rare{background:#2f7ad0;color:#fff}
 body.nomotion .bag.legendary,body.nomotion .bag.mythic,body.nomotion .card.item.r-legendary::after,body.nomotion .card.item.r-mythic::after{animation:none}
 .card.item .ic{margin-top:7px}   /* keep the bobbing picture clear of the rarity chip */
+
+/* the Relic Book */
+.relbook{display:flex;flex-direction:column;gap:5px;width:900px}
+.rrow{display:flex;align-items:center;gap:10px}
+.rlabel{width:104px;text-align:left;font-family:var(--display);text-transform:uppercase;font-size:14px;line-height:1.1;color:#cfc6ea}.rlabel small{display:block;font-size:12px;color:#fff;opacity:.8}
+.rlabel.r-rare{color:#7ab8ff}.rlabel.r-epic{color:#e08aff}.rlabel.r-legendary{color:#ffd23f}.rlabel.r-mythic{color:#ff7ac0}
+.rtiles{display:flex;flex-wrap:wrap;gap:4px;flex:1}
+.rtile{width:38px;height:38px;border-radius:9px;border:2px solid #9a8fb8;background:#e8e2f2;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;padding:0}
+.rtile .ic .gi{width:28px;height:28px}
+.rtile.r-rare{background:#d6e8ff;border-color:#4a8ad8}.rtile.r-epic{background:#f4dcff;border-color:#c04ae0}
+.rtile.r-legendary{background:#fff0c0;border-color:#e8a000;box-shadow:0 0 8px #ffc83aaa}.rtile.r-mythic{background:#ffe0f2;border-color:#ff3a8a;box-shadow:0 0 10px #ff5aa8cc}
+.rtile.locked{background:rgba(20,12,40,.5);border-color:rgba(255,255,255,.18);box-shadow:none}.rtile.locked .ic{filter:brightness(0) opacity(.5)}
+.rtile.sel{outline:3px solid var(--pink)}
+.relde{min-height:66px;width:760px}
+.relde .rar{position:static;display:inline-block;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:0 8px;border-radius:7px;color:#fff;background:#8a8aa0;vertical-align:middle}
 </style>
 </head>
 <body>
