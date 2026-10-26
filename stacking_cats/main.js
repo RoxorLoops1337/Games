@@ -286,7 +286,7 @@ function snackCard(id) {
 }
 function itemCard(id) {
   const it = ITEM_BY_ID[id];
-  return `<div class="card item r-${it.rarity}" data-act="pickItem" data-id="${id}"><div class="rar">${it.rarity}</div><div class="ic">${it.icon}</div><h3>${it.name}</h3><p>${it.desc}</p>${g ? (() => { const h = setHint(id, g.cats); return h ? `<div class="setl">${h}</div>` : ''; })() : ''}<div class="impact">Equip it on any cat</div></div>`;
+  return `<div class="card item r-${it.rarity}" data-act="pickItem" data-id="${id}"><div class="rar">${it.rarity}</div><div class="ic">${it.icon}</div><h3>${it.name}</h3><p>${it.desc}</p>${g ? (() => { const h = setHint(id, g.cats); return h ? `<div class="setl">${h}</div>` : ''; })() : ''}${g ? (() => { const r = S.relicGain(g, id); if (!r) return ''; const bits = []; if (r.dps >= 0.01) bits.push(`+${Math.round(r.dps * 100)}% damage`); if (r.bulk >= 0.03) bits.push(`tougher +${Math.round(r.bulk * 100)}%`); return bits.length ? `<div class="gainl">Best on ${CAT_BY_ID[r.cat].name}: ${bits.join(', ')}</div>` : ''; })() : ''}<div class="impact">Equip it on any cat</div></div>`;
 }
 
 const thumbURLs = new Map();

@@ -172,6 +172,19 @@ export function estBulk(g, c, mods, items = c.items) {
   const taken = (1 - Math.min(0.8, mods.dr + fx.dr)) * (1 - Math.min(0.9, (d.pas && d.pas.dodge || 0) + fx.dodge));
   return hp / taken;
 }
+// what a relic would do for the cat it helps most: { cat, dps, bulk } as fractions (null when there are no cats)
+export function relicGain(g, id) {
+  const mods = g.mods || calcMods(g);
+  let best = null;
+  for (const c of g.cats) {
+    const items = c.items.slice();
+    if (items.length >= itemSlots(c.lvl)) items.shift();
+    items.push(id);
+    const dps = estDps(c, mods, items) / Math.max(1e-9, estDps(c, mods)) - 1, bulk = estBulk(g, c, mods, items) / Math.max(1e-9, estBulk(g, c, mods)) - 1;
+    if (!best || dps + bulk * 0.5 > best.dps + best.bulk * 0.5) best = { cat: c.id, dps, bulk };
+  }
+  return best;
+}
 export const aliveCats = (g) => g.cats.filter((c) => !c.ko);
 
 export function makeCat(g, id, lvl = 1) {

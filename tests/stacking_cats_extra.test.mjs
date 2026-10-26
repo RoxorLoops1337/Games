@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  newGame, addCat, startWave, step, makeEnemy, catMaxHp, calcMods, cfx, synergyState, estDps, estBulk, rollRoutes, chooseRoute, grantStartItem,
+  newGame, addCat, startWave, step, makeEnemy, catMaxHp, calcMods, cfx, synergyState, estDps, estBulk, relicGain, rollRoutes, chooseRoute, grantStartItem,
   stackMax, benchMax, moveCat, useZoomies, snackChoiceCount, rollItemChoices, rollCatChoices, rollSnackChoices, eatSnack, mergePairs, mergeCats, useSpecial,
   hurtEnemy, hurtCat, killEnemy, equipItem, forgeItems, sellValue, finishWave, FX_KEYS, rollEvent, DT,
 } from '../stacking_cats/sim.js';
@@ -362,6 +362,22 @@ t('previews: estBulk counts health, damage reduction and dodge from relics (the 
   assert.ok(shell > 1.15, 'dodge and health both count, got ' + shell);
   assert.ok(Math.abs(estBulk(g, c, m, ['claws']) / base - 1) < 1e-9, 'an attack relic adds no bulk');
   assert.ok(/estBulk\(g, c, mods, items\)/.test(readFileSync('stacking_cats/main.js', 'utf8')), 'the equip preview shows it');
+});
+
+t('previews: relicGain finds the cat a relic helps most, as damage or toughness', () => {
+  const g = lab([['tabby', null], ['mochi', null]]);
+  const claws = relicGain(g, 'claws');
+  assert.ok(claws && claws.dps > 0.01 && claws.cat, 'claws help damage');
+  assert.ok(g.cats.some((c) => c.id === claws.cat), 'names a cat of the team');
+  const best = Math.max(...g.cats.map((c) => estDps(c, calcMods(g), [...c.items, 'claws']) / estDps(c, calcMods(g)) - 1));
+  assert.ok(Math.abs(claws.dps - best) < 1e-9, 'the best of the cats, got ' + claws.dps + ' vs ' + best);
+  const vest = relicGain(g, 'vest');
+  assert.ok(vest.dps < 0.001 && vest.bulk > 0.1, 'a vest is a toughness relic');
+  assert.equal(relicGain(g, 'rind').bulk >= 0, true);
+  assert.equal(relicGain(lab([]), 'claws'), null, 'no cats, no answer');
+  const full = lab([['tabby', 'claws']]); const again = relicGain(full, 'bell');
+  assert.ok(again && Number.isFinite(again.dps) && Number.isFinite(again.bulk), 'a full single slot is replaced in the estimate, never an error');
+  assert.ok(/relicGain\(g, id\)/.test(readFileSync('stacking_cats/main.js', 'utf8')), 'shown on the relic cards');
 });
 
 t('previews: the damage estimate counts the extra damage mice take from a curse (Hex Doll)', () => {
