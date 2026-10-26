@@ -526,4 +526,9 @@ t('delayed story and hint toasts wait while the game is paused instead of coveri
   assert.ok(/toastWhenPlaying\(`King Squeakimus/.test(js), 'the nest taunt uses it');
 });
 
+t('the nest wave banner uses the story title helpers', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/banner\(boss \? nestBannerTitle\(g\.wave\)/.test(js) && /boss \? nestTitle\(g\.wave, nest\.name\)/.test(js), 'banner and sub line come from story.js');
+});
+
 console.log(`${n} tests passed`);

@@ -182,3 +182,5 @@ export function titleTag(storyDone, unlocked, total) {
 
 // the nest bar title: the wave 30 nest is the mouse king's own, every other nest keeps its name
 export const nestTitle = (wave, name) => (wave === FINALE_WAVE ? `King Squeakimus: ${name}` : name);
+// the big banner when a nest wave starts: the wave 30 nest is the showdown with the mouse king
+export const nestBannerTitle = (wave) => (wave === FINALE_WAVE ? 'FINAL BATTLE!' : 'NEST BATTLE!');

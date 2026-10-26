@@ -322,4 +322,11 @@ await t('nestTitle: the wave 30 nest bar names King Squeakimus', async () => {
   assert.ok(!/\u2014/.test(nestTitle(30, 'x')), 'no em dash');
 });
 
+await t('nestBannerTitle: wave 30 announces the final battle', async () => {
+  const { nestBannerTitle } = await import('../stacking_cats/story.js');
+  assert.equal(nestBannerTitle(10), 'NEST BATTLE!');
+  assert.equal(nestBannerTitle(30), 'FINAL BATTLE!');
+  assert.equal(nestBannerTitle(60), 'NEST BATTLE!');
+});
+
 console.log(n + ' passed');
