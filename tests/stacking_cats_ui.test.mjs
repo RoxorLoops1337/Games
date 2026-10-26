@@ -790,3 +790,15 @@ t('cat level stars on the Arrange rows are not faded by the mastery star rule th
   assert.ok(rule, 'a slot star rule exists');
   assert.ok(/opacity:1/.test(rule[1]) && /filter:none/.test(rule[1]), 'it resets the opacity and grayscale of the generic .st (mastery) rule: ' + rule[1]);
 });
+
+t('shop and shady deal relics show the same set and best-cat notes as loot cards (one shared helper)', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/function relicNotes\(id\)/.test(js), 'a shared helper');
+  const helper = js.slice(js.indexOf('function relicNotes'), js.indexOf('function relicNotes') + 1200);
+  assert.ok(/setHint\(id, g\.cats\)/.test(helper) && /relicGain\(g, id\)/.test(helper), 'the helper holds both notes');
+  const card = js.slice(js.indexOf('function itemCard'), js.indexOf('function itemCard') + 700);
+  assert.ok(/relicNotes\(id\)/.test(card), 'loot cards use it');
+  const ev = js.slice(js.indexOf('function eventOptionHtml'), js.indexOf('function showEvent'));
+  assert.ok(/case 'buy': return head\([^\n]*relicNotes\(o\.item\)/.test(ev), 'shop uses it');
+  assert.ok(/case 'curse': return head\([^\n]*relicNotes\(o\.item\)/.test(ev), 'shady deal uses it');
+});
