@@ -11,6 +11,8 @@ const fmt = (n) => { n = Math.round(+n || 0); return n >= 1e6 ? (n / 1e6).toFixe
 
 // info: { wave, kills, bossKills, biggest, diff, daily, cats: [catId, ...] top of the tower first or last, any order }
 // size and spacing of the cat tower on the card: tall stacks shrink so the top cat stays below the subtitle
+export const SHARE_CATS = 5;
+export const shareExtra = (total) => Math.max(0, total - SHARE_CATS);
 export function shareStack(n) {
   const bottom = 880, topLimit = 215, step = 0.5;
   const cell = Math.min(250, (bottom - topLimit) / (1 + Math.max(0, n - 1) * step));
@@ -42,7 +44,8 @@ export function drawShareCard(canvas, info = {}) {
     x.fillText(info.daily ? `Daily challenge  -  ${info.diff || 'Normal'}` : `${info.diff || 'Normal'} difficulty`, W / 2, 200);
 
     // the tower: bottom cat at the bottom, up to 5 cats overlapping
-    const ids = (info.cats || []).filter((id) => CAT_BY_ID[id]).slice(0, 5);
+    const all = (info.cats || []).filter((id) => CAT_BY_ID[id]);
+    const ids = all.slice(0, SHARE_CATS);
     const { cell, step, bottom } = shareStack(ids.length), cx = 300;
     for (let i = 0; i < ids.length; i++) {
       const y = bottom - cell - i * step;
@@ -50,6 +53,11 @@ export function drawShareCard(canvas, info = {}) {
       x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 12;
       try { drawCat(x, CAT_BY_ID[ids[ids.length - 1 - i]]); } catch (e) { /* skip a cat that fails to draw */ }
       x.restore();
+    }
+
+    if (shareExtra(all.length) > 0) {
+      x.textAlign = 'center'; x.font = `44px ${DISPLAY}`; x.fillStyle = "#ffd23f";
+      x.fillText(`+${shareExtra(all.length)} more cats`, cx, 940);
     }
 
     // stats panel
