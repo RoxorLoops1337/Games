@@ -429,6 +429,24 @@ export function makeBackdrop(theme, seed) {
   }
   for (let i = 0; i < 40; i++) { gx.fillStyle = 'rgba(255,255,255,.1)'; gx.fillRect(rnd() * W, top + 20 + rnd() * 90, 14 + rnd() * 26, 1.5); }
 
+  const gb = 440, wrapG = (x, fn) => { fn(x); fn(x - W); fn(x + W); };
+  if (theme.deco === 'leaf') {
+    // street lamps and a bench along the alley
+    for (const lx of [380, 700]) wrapG(lx, (xx) => {
+      gx.fillStyle = 'rgba(0,0,0,.14)'; gx.beginPath(); gx.ellipse(xx, gb + 1, 14, 3.5, 0, 0, TAU); gx.fill();
+      const lg = gx.createRadialGradient(xx + 14, gb - 92, 2, xx + 14, gb - 92, 46); lg.addColorStop(0, 'rgba(255,240,170,1)'); lg.addColorStop(0.45, 'rgba(255,225,130,.55)'); lg.addColorStop(1, 'rgba(255,225,130,0)');
+      gx.fillStyle = lg; gx.fillRect(xx - 40, gb - 150, 110, 110);
+      gx.strokeStyle = '#2a1c1c'; gx.lineWidth = 6.5; gx.lineCap = 'round';
+      gx.beginPath(); gx.moveTo(xx, gb); gx.lineTo(xx, gb - 88); gx.quadraticCurveTo(xx, gb - 100, xx + 14, gb - 100); gx.stroke();
+      gx.fillStyle = '#2a1c1c'; gx.fillRect(xx - 9, gb - 8, 18, 8);
+      gx.fillStyle = '#fff3b8'; gx.beginPath(); gx.moveTo(xx + 6, gb - 102); gx.lineTo(xx + 24, gb - 102); gx.lineTo(xx + 21, gb - 88); gx.lineTo(xx + 9, gb - 88); gx.closePath(); gx.fill();
+      gx.strokeStyle = '#2a1c1c'; gx.lineWidth = 3; gx.stroke();
+    });
+    wrapG(620, (xx) => {
+      gx.fillStyle = '#5a3a2a'; gx.fillRect(xx - 24, gb - 22, 48, 6); gx.fillRect(xx - 24, gb - 34, 48, 4);
+      gx.fillRect(xx - 22, gb - 16, 4, 16); gx.fillRect(xx + 18, gb - 16, 4, 16); gx.fillRect(xx - 24, gb - 36, 4, 20); gx.fillRect(xx + 20, gb - 36, 4, 20);
+    });
+  }
   // tall foreground tufts (drawn in front of the action) and soft sun rays
   // ground detail: soil grain, pebbles with a lit side, hairline cracks and a few faint paw prints
   texturize(gr, { seed: seed + 3, count: 8000, len: 7, lw: 1.2, dir: 0.05, spread: 0.7, alpha: 0.5, amp: 0.13, minLum: 35 });
