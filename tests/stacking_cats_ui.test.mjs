@@ -85,7 +85,7 @@ t('sound: every effect, every cat voice and every music track runs without error
   const sfx = new Sfx();
   sfx.play('coin');                       // before unlock: must be a silent no-op
   sfx.unlock();
-  for (const name of ['coin', 'chest', 'equip', 'upgrade', 'reroll', 'hover', 'achieve', 'synergy', 'route', 'swipe', 'hit', 'shoot', 'bang', 'flame', 'zap', 'boom', 'pop', 'ko', 'heal', 'ui', 'pick', 'merge', 'wave', 'boss', 'clear', 'win', 'over', 'zoom', 'roar', 'nope', 'special', 'shield']) sfx.play(name, 1.3);
+  for (const name of ['coin', 'chest', 'equip', 'upgrade', 'reroll', 'hover', 'achieve', 'synergy', 'route', 'swipe', 'hit', 'shoot', 'bang', 'flame', 'zap', 'boom', 'pop', 'ko', 'heal', 'ui', 'pick', 'merge', 'wave', 'boss', 'clear', 'win', 'over', 'zoom', 'roar', 'nope', 'special', 'shield', 'heart']) sfx.play(name, 1.3);
   for (const c of CATS) for (const kind of ['pick', 'happy', 'sad']) { sfx.last.meow = 0; sfx.meow(c.id, kind); }
   for (const mode of ['calm', 'fight', 'boss']) {
     sfx.music(mode);
@@ -232,6 +232,12 @@ t('a coach bubble clears the toasts it would cover', () => {
 t('mouse health bars follow the colourblind palette like the cat bars do', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   assert.ok(/e\.elite \? '#ffd23f' : save\.opt\.colorblind \? '#ff8a2a' : '#ff7a8a'/.test(js), 'the mouse hp bar must switch to orange in colourblind mode');
+});
+
+t('the low health edge has a heartbeat that quickens as health drops', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), au = readFileSync('stacking_cats/audio.js', 'utf8');
+  assert.ok(au.includes("case 'heart':"), 'audio.js must define the heartbeat effect');
+  assert.ok(/sfx\.play\('heart'/.test(js), 'the frame must play the heartbeat while the danger edge shows');
 });
 
 console.log(`${n} tests passed`);
