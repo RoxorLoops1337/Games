@@ -135,6 +135,14 @@ t('auto special moves: a Settings toggle, an A key and the default off are all w
   assert.ok(js.includes("className = 'autob'"), 'tappable AUTO button missing (phones have no keyboard)');
 });
 
+t('the x2 speed choice is saved and a new run starts at that speed', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/fast: false/.test(js), 'default must be normal speed');
+  assert.ok(js.includes('save.opt.fast = speed === 2'), 'toggling speed must be saved');
+  assert.ok(js.includes('speed = save.opt.fast ? 2 : 1'), 'a new run must start at the saved speed');
+  assert.ok(js.includes("$('bSpeed').textContent = 'x' + speed"), 'the speed button must show the starting speed');
+});
+
 t('tutorial tips are held back while the game is paused', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   const m = js.match(/function coach\([^)]*\) \{\n([^\n]*)\n/);

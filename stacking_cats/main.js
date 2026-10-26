@@ -33,7 +33,7 @@ const sfx = new Sfx();
 // ---------------------------------------------------------------- save
 // a player whose system asks for reduced motion starts with screen shake and flashes off (they can still turn them on)
 const REDUCED_MOTION = (() => { try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const DEFAULT_OPT = { shake: REDUCED_MOTION ? 0 : 1, colorblind: false, bigText: false, quality: 'auto', motion: !REDUCED_MOTION, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, autoSpecial: false };
+const DEFAULT_OPT = { shake: REDUCED_MOTION ? 0 : 1, colorblind: false, bigText: false, quality: 'auto', motion: !REDUCED_MOTION, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, autoSpecial: false, fast: false };
 function freshSave() {
   return { v: 1, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT }, weekly: {}, ladder: 0, owned: [], wardrobe: {} };
 }
@@ -604,9 +604,9 @@ function startRun(opts = {}) {
   g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom, difficulty: save.diff, daily, mastery: masteryMap(save.catStats) });
   if (opts.weekly) g.run.weekly = true;
   startTotal = START_CATS + g.meta.startPicks;
-  runCommitted = false; pickN = 0; fx.length = 0; speed = 1; paused = false; rewardChoices = null;
+  runCommitted = false; pickN = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
   combo = 0; maxComboRun = 0; coinShown = 0; dpsHist.length = 0; sfx.setIntensity(0);
-  $('bSpeed').textContent = 'x1';
+  $('bSpeed').textContent = 'x' + speed;
   showPickStart();
 }
 
@@ -2007,7 +2007,7 @@ if (fsReq && !matchMedia('(display-mode: standalone)').matches) {
   document.addEventListener('fullscreenchange', () => { syncFull(); fit(); });
   document.addEventListener('webkitfullscreenchange', () => { syncFull(); fit(); });
 }
-function toggleSpeed() { speed = speed === 1 ? 2 : 1; $('bSpeed').textContent = 'x' + speed; }
+function toggleSpeed() { speed = speed === 1 ? 2 : 1; $('bSpeed').textContent = 'x' + speed; save.opt.fast = speed === 2; persist(); }
 $('bPause').addEventListener('click', () => { sfx.unlock(); togglePause(); });
 $('bSpeed').addEventListener('click', () => { sfx.unlock(); toggleSpeed(); });
 $('bSound').addEventListener('click', () => { sfx.unlock(); save.sound = !save.sound; sfx.on = save.sound; persist(); toast(save.sound ? 'Sound on' : 'Sound off'); });
