@@ -361,4 +361,16 @@ await t('wrapCaption: balanced two-line captions, no lonely last word', async ()
   }
 });
 
+await t('kingdomLine: the village story grows with the kingdom level', async () => {
+  const { kingdomLine } = await import('../stacking_cats/story.js');
+  const lines = [0, 5, 6, 15, 16, 29, 30, 80].map(kingdomLine);
+  assert.equal(lines[0], lines[1]);
+  assert.notEqual(lines[1], lines[2]);
+  assert.equal(lines[2], lines[3]);
+  assert.notEqual(lines[3], lines[4]);
+  assert.notEqual(lines[5], lines[6]);
+  assert.equal(lines[6], lines[7]);
+  assert.ok(lines.every((l) => l.length > 10 && !/\u2014/.test(l)), 'no em dash');
+});
+
 console.log(n + ' passed');
