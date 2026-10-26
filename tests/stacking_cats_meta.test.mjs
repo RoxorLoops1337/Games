@@ -250,4 +250,9 @@ t('beating King Squeakimus earns its own trophy, and only after the finale', () 
   assert.equal(!!a.check({ stats: {}, run: {}, save: { storyDone: true }, kingdom: {} }), true, 'after the finale');
 });
 
+t('the king trophy is the last trophy and its text says where to find the king', () => {
+  assert.equal(ACHIEVEMENTS[ACHIEVEMENTS.length - 1].id, 'king', 'the final boss trophy closes the list');
+  assert.ok(/wave 30/i.test(ACHIEVEMENTS[ACHIEVEMENTS.length - 1].desc), 'the text names the wave');
+});
+
 console.log(`${n} tests passed`);
