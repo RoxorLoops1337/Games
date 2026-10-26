@@ -444,4 +444,10 @@ t('the game over screen names the chapter the run ended in', () => {
   assert.ok(/Chapter \$\{chapterOf\(r\.wave\)\.n\}/.test(f), 'showOver must show the chapter number');
 });
 
+t('the pause screen shows the chapter next to the wave', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const f = js.slice(js.indexOf('function showPause'), js.indexOf('function showPause') + 900);
+  assert.ok(/Chapter <b>\$\{chapterOf\(g\.wave\)\.n\}<\/b>/.test(f), 'showPause must list the chapter');
+});
+
 console.log(`${n} tests passed`);
