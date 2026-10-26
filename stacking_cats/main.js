@@ -1796,7 +1796,7 @@ function togglePause() { if (mode !== 'play') return; if (paused) { paused = fal
 // ---- special moves and tap focus
 const spBtns = new Map();
 let autoBtn = null;
-function setAutoSpecial(on) { save.opt.autoSpecial = on; persist(); toast(on ? 'Auto specials on' : 'Auto specials off'); }
+function setAutoSpecial(on) { save.opt.autoSpecial = on; persist(); sfx.play('ui'); toast(on ? 'Auto specials on' : 'Auto specials off'); }
 function doSpecial(uid) {
   if (mode !== 'play' || paused || !g) return;
   if (S.useSpecial(g, uid)) { if (coachEl && coachEl.dataset.key === 'c7') hideCoach(); drain(); }
