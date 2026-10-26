@@ -766,3 +766,11 @@ t('the set and best-cat lines on relic cards are readable on the cream card (WCA
   assert.ok(/body\.bigtext \.card \.setl/.test(css) && /body\.bigtext \.card \.gainl/.test(css), 'big text covers both lines');
   assert.ok(/body\.cb \.card \.gainl/.test(css), 'colour blind mode swaps the green');
 });
+
+t('the title logo is small enough that the whole title column fits the 540 high stage (it clipped at the top once the Relics row was added)', () => {
+  const css = readFileSync('stacking_cats/index.html', 'utf8');
+  const sizes = [...css.matchAll(/(?:^|\n)\.logo\{font-size:(\d+)px/g)].map((m) => +m[1]);
+  assert.ok(sizes.length >= 1);
+  assert.ok(sizes[sizes.length - 1] <= 74, 'the last .logo font size wins, got ' + sizes[sizes.length - 1]);
+  assert.ok(/\n\.logo\{font-size:72px[^}]*padding-top:10px/.test(css), 'room above the letters (their tops stick out of the line box)');
+});
