@@ -554,7 +554,7 @@ function showWardrobe(back, startCat) {
 }
 
 // ---------------------------------------------------------------- the Cat Kingdom: a village you can tap
-let kScene = null, kNav = null, bestShown = false;
+let kScene = null, kNav = null, bestShown = false, heartAt = 0;
 function showKingdom(back, selected) {
   if (kScene) { kScene.stop(); kScene = null; }
   kNav = null;
@@ -1954,6 +1954,7 @@ function render(dt) {
       const beat = save.opt.motion ? 0.6 + 0.4 * Math.sin(tAnim * 5) : 0.8, grd = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.85);
       grd.addColorStop(0, 'rgba(255,40,70,0)'); grd.addColorStop(1, 'rgba(255,40,70,' + (0.5 * dg * beat).toFixed(3) + ')');
       ctx.globalAlpha = 1; ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+      if (tAnim >= heartAt && !paused) { sfx.play('heart', 0.6 + 0.4 * dg); heartAt = tAnim + 1.3 - 0.5 * dg; }   // quicker the closer to zero
     }
   }
   ctx.restore();

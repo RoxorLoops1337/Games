@@ -260,6 +260,7 @@ export class Sfx {
       case 'pop': this.tone((420 + Math.random() * 120) * pitch, 0.1, { to: 900 * pitch, type: 'sine', v: 0.1 }); break;
       case 'ko': this.tone(400, 0.4, { to: 90, type: 'triangle', v: 0.18 }); break;
       case 'heal': this.tone(660, 0.12, { type: 'sine', v: 0.1 }); this.tone(880, 0.16, { type: 'sine', v: 0.1, delay: 0.08 }); break;
+      case 'heart': this.tone(72, 0.14, { to: 52, type: 'sine', v: 0.2 }); this.tone(60, 0.16, { to: 44, type: 'sine', v: 0.15, delay: 0.17 }); break;
       case 'ui': this.tone(520, 0.06, { type: 'triangle', v: 0.1 }); break;
       case 'pick': [523, 659, 784].forEach((f, i) => this.tone(f, 0.16, { type: 'triangle', v: 0.14, delay: i * 0.07 })); break;
       case 'merge': [392, 523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.18, { type: 'triangle', v: 0.14, delay: i * 0.06 })); break;
