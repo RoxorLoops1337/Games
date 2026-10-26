@@ -1825,7 +1825,7 @@ function updateSpecials() {
     b.classList.toggle('down', c.ko);
     b.firstChild.style.opacity = c.ko ? 0.35 : 1;
     b.style.order = String(-i);
-    if (ready && !save.tips.c7 && g.state === 'fight') coach('c7', 'A cat is charged! Tap its glowing portrait (or press its number) for a special move. Tap a mouse to make everyone focus it.', 520, 400, 'right');
+    if (ready && !save.tips.c7 && g.state === 'fight') coach('c7', 'A cat is charged! Tap its glowing portrait (or press its number) for a special move. Tap a mouse to make everyone focus it. The AUTO button fires specials for you.', 520, 400, 'right');
   });
 }
 $('specials').addEventListener('click', (e) => { const b = e.target.closest('.spb'); if (b) { sfx.unlock(); doSpecial(+b.dataset.uid); } });
