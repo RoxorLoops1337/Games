@@ -72,7 +72,7 @@ const SONGS = {
   ],
   boss: [
     [140, 98, 'sawlead', 16000], [134, 110, 'squarelead', 16000], [142, 123.47, 'sawlead', 6500], [146, 116.54, 'bassoon', 16000], [138, 130.81, 'bell', 16000], [136, 103.83, 'koto', 16000],
-  ].map(([bpm, root, lead, lpf], i) => ({ name: 'Nest Battle ' + (i + 1), bpm, root, scale: PHRYG, seed: 211 + i * 10, drums: 2, lead, lpf, leadV: lead === 'bell' || lead === 'koto' ? 0.06 : 0.032, ring: 1, bass: 'pump', bassInst: 'sawbass', bassV: 0.07, pad: 'stab', padInst: 'stab', padV: 0.018, arp: { steps: EIGHTS, oct: 4 }, arpInst: 'squarelead', arpV: 0.022, rhy: 'busy', prog: BOSS_PROG })),
+  ].map(([bpm, root, lead, lpf], i) => ({ name: 'Nest Battle ' + (i + 1), mew: 4, bpm, root, scale: PHRYG, seed: 211 + i * 10, drums: 2, lead, lpf, leadV: lead === 'bell' || lead === 'koto' ? 0.06 : 0.032, ring: 1, bass: 'pump', bassInst: 'sawbass', bassV: 0.07, pad: 'stab', padInst: 'stab', padV: 0.018, arp: { steps: EIGHTS, oct: 4 }, arpInst: 'squarelead', arpV: 0.022, rhy: 'busy', prog: BOSS_PROG })),
 };
 
 const pcOf = (x) => ((x % 12) + 12) % 12;
