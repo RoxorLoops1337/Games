@@ -189,3 +189,9 @@ export const nestBannerTitle = (wave) => (wave === FINALE_WAVE ? 'FINAL BATTLE!'
 export const pickLine = (n) => (n === 0
   ? 'Brave cats set out to free the royal guard. Every cat attacks differently, so pick the first one for your tower.'
   : 'Pick a friend to stack on top. Choosing the same cat again merges them!');
+
+// the subtitle on the road choice screen: it names the region of the next chapter. wave is the nest wave that just fell
+export function roadLine(wave, themes) {
+  const c = chapterOf(wave + 1);
+  return `Where to next? Chapter ${c.n} waits in ${themes[c.theme].name}. This road shapes the next five waves and the next nest.`;
+}

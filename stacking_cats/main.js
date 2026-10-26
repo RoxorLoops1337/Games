@@ -22,7 +22,7 @@ import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.j
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
 import { playIntro, playEpilogue } from './intro.js';
-import { pickLine, nestBannerTitle, nestTitle, titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
+import { roadLine, pickLine, nestBannerTitle, nestTitle, titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -844,7 +844,7 @@ function showRouteReward() {
     r.enemyHp !== 1 ? `Mice health x${r.enemyHp}` : '', r.enemyDmg !== 1 ? `Mice damage x${r.enemyDmg}` : '', r.coin !== 1 ? `Coins x${r.coin}` : '',
     r.chest ? 'More loot chests' : '', r.rare ? 'Better loot' : '', r.speed !== 1 ? `Mice speed x${r.speed}` : '', r.bossHp !== 1 ? `Nest health x${r.bossHp}` : '', r.snackExtra ? '+1 snack choice' : '', r.healNow ? `Heal ${r.healNow * 100}% now` : '',
   ].filter(Boolean).map((x) => `<div class="impact">${x}</div>`).join('');
-  setScreen(`<h2>Choose your road</h2><p class="sub">Where to next? This road shapes the next five waves and the next nest.</p>
+  setScreen(`<h2>Choose your road</h2><p class="sub">${roadLine(g.wave, THEMES)}</p>
     <div class="cards">${rewardChoices.map((id) => { const r = ROUTE_BY_ID[id]; return `<div class="card route" data-act="pickRoute" data-id="${id}"><div class="ic">${r.icon}</div><h3>${r.name}</h3><p>${r.desc}</p>${effects(r)}</div>`; }).join('')}</div>
     <div class="row hint">${rerollBtn()}</div>`);
   acts = {
@@ -2299,7 +2299,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+window.stackingCats = { coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showItemReward, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
 showTitle();
 requestAnimationFrame(frame);
 void ENEMY_TYPES;
