@@ -59,6 +59,7 @@ body{background:radial-gradient(circle at 50% 30%,#3a2a66,#150f26 70%)}
 #banner.boss{color:#ffb0b0;text-shadow:0 3px 0 #9a1a2a,0 0 24px #f00a,3px 3px 0 var(--ink),-3px -3px 0 var(--ink),3px -3px 0 var(--ink),-3px 3px 0 var(--ink)}
 @keyframes ban{0%{opacity:0;transform:scale(.6)}15%{opacity:1;transform:scale(1.08)}25%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(1.05)}}
 #toasts{position:absolute;z-index:70;left:50%;top:134px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+body.scr #toasts{top:auto;bottom:10px}   /* over a full screen the toasts sit on the bottom edge, clear of titles and cards */
 .toast{background:var(--paper);color:var(--ink);border-radius:14px;padding:6px 16px;font-weight:800;font-size:17px;box-shadow:0 4px 14px #0006;border:2px solid var(--pink);animation:toast 3.2s forwards}
 @keyframes toast{0%{opacity:0;transform:translateY(12px)}10%{opacity:1;transform:none}85%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
 

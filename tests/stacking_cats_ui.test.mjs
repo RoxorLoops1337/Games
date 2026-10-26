@@ -587,4 +587,15 @@ t('the finale trophy is written into the card, not floated over its title as a t
   assert.ok(/const trophies = checkAch/.test(f) && /\$\{trophyHtml\}/.test(f), 'trophies are rendered inside the card');
 });
 
+t('toasts drop to the bottom edge while a full screen is open so they never cover its title', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/body\.scr #toasts\{[^}]*top:auto[^}]*bottom:\d+px/.test(html), 'screen mode moves the toast layer to the bottom');
+});
+
+t('over a full screen only the latest toast shows, so a stack of them cannot cover the buttons', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const i = js.indexOf('function toast(txt)');
+  assert.ok(/classList\.contains\('scr'\)\) \$\('toasts'\)\.replaceChildren\(\)/.test(js.slice(i, i + 300)), 'toast replaces older ones in screen mode');
+});
+
 console.log(`${n} tests passed`);

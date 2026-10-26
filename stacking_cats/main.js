@@ -1149,6 +1149,7 @@ function banner(txt, sub, boss) {
   b.className = 'show' + (boss ? ' boss' : '');
 }
 function toast(txt) {
+  if (document.body.classList.contains('scr')) $('toasts').replaceChildren();   // one at a time over a full screen
   const el = document.createElement('div');
   el.className = 'toast'; el.textContent = txt;
   $('toasts').appendChild(el);
