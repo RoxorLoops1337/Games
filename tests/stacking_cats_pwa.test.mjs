@@ -99,6 +99,13 @@ await t('share card: a tall stack is scaled down so its top never reaches the su
   assert.equal(shareStack(1).cell, 250, 'a short stack keeps the full size');
 });
 
+await t('share card: cats that do not fit on the tower are counted, not silently dropped', async () => {
+  const { shareExtra } = await import('../stacking_cats/share.js');
+  assert.equal(shareExtra(0), 0);
+  assert.equal(shareExtra(5), 0);
+  assert.equal(shareExtra(8), 3);
+});
+
 await t('share card draws for several runs without throwing', async () => {
   const { drawShareCard, shareRun, SHARE_W } = await import('../stacking_cats/share.js');
   const { CATS } = await import('../stacking_cats/cats.js');
