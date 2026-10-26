@@ -372,6 +372,24 @@ export function makeBackdrop(theme, seed) {
       wrapX(x, (xx) => { const h = (60 + rnd() * 40) * s, w = 40 * s; mx.fillStyle = '#6a8a7a'; mx.fillRect(xx - 2, base - 12, 4, 12); for (let k = 0; k < 3; k++) { mx.fillStyle = k % 2 ? '#7aa08a' : '#8ab89a'; mx.beginPath(); mx.moveTo(xx - w / 2 + k * 3, base - 10 - k * h * 0.28); mx.lineTo(xx, base - h * (0.5 + k * 0.28)); mx.lineTo(xx + w / 2 - k * 3, base - 10 - k * h * 0.28); mx.fill(); mx.fillStyle = '#fff'; mx.beginPath(); mx.moveTo(xx - 8 + k * 2, base - h * (0.38 + k * 0.28)); mx.lineTo(xx, base - h * (0.5 + k * 0.28)); mx.lineTo(xx + 8 - k * 2, base - h * (0.38 + k * 0.28)); mx.fill(); } });
     }
   }
+  if (theme.deco === 'flower') {
+    // a windmill on the garden hill
+    wrapX(560, (xx) => {
+      mx.fillStyle = 'rgba(0,0,0,.14)'; mx.beginPath(); mx.ellipse(xx, base + 1, 34, 5, 0, 0, TAU); mx.fill();
+      mx.fillStyle = '#f4ead6'; mx.beginPath(); mx.moveTo(xx - 17, base); mx.lineTo(xx - 10, base - 78); mx.lineTo(xx + 10, base - 78); mx.lineTo(xx + 17, base); mx.closePath(); mx.fill();
+      mx.strokeStyle = '#8a6a4a'; mx.lineWidth = 2.4; mx.stroke();
+      mx.fillStyle = '#c4533f'; mx.beginPath(); mx.moveTo(xx - 14, base - 76); mx.lineTo(xx, base - 98); mx.lineTo(xx + 14, base - 76); mx.closePath(); mx.fill(); mx.stroke();
+      mx.fillStyle = '#6a4a3a'; mx.fillRect(xx - 5, base - 20, 10, 20);
+      const hx = xx, hy = base - 70; mx.strokeStyle = '#8a6a4a'; mx.lineWidth = 2.2;
+      for (let k = 0; k < 4; k++) {
+        const an = Math.PI / 4 + k * Math.PI / 2, ex = hx + Math.cos(an) * 44, ey = hy + Math.sin(an) * 44;
+        mx.beginPath(); mx.moveTo(hx, hy); mx.lineTo(ex, ey); mx.stroke();
+        const nx = -Math.sin(an), ny = Math.cos(an);
+        mx.fillStyle = 'rgba(255,250,235,.95)'; mx.beginPath(); mx.moveTo(hx + Math.cos(an) * 12, hy + Math.sin(an) * 12); mx.lineTo(ex, ey); mx.lineTo(ex + nx * 13, ey + ny * 13); mx.lineTo(hx + Math.cos(an) * 12 + nx * 13, hy + Math.sin(an) * 12 + ny * 13); mx.closePath(); mx.fill(); mx.stroke();
+      }
+      mx.fillStyle = '#8a6a4a'; mx.beginPath(); mx.arc(hx, hy, 4, 0, TAU); mx.fill();
+    });
+  }
   if (theme.deco === 'hole') { mx.fillStyle = '#8a5a14'; for (let i = 0; i < 12; i++) { const x = i * 84 + rnd() * 30; mx.beginPath(); mx.moveTo(x, 0); mx.lineTo(x + 26, 0); mx.lineTo(x + 13, 40 + rnd() * 50); mx.fill(); } }
 
   const [gr, gx] = mk();
@@ -488,6 +506,14 @@ export function drawBackdrop(ctx, bd, scroll, t) {
   const W = 960;
   ctx.drawImage(bd.sky, 0, 0);
   if (bd.night) for (const [x, y, r, p] of bd.stars) { ctx.fillStyle = `rgba(255,250,220,${0.45 + 0.45 * Math.sin(t * 2 + p)})`; ctx.fillRect(x, y, r, r); }
+  if (bd.deco === 'flower') {
+    // a few butterflies flutter over the meadow
+    for (let k = 0; k < 4; k++) {
+      const bx = ((k * 260 + t * (14 + k * 3) - scroll * 0.1) % (W + 80) + W + 80) % (W + 80) - 40, by = 330 + k * 14 + Math.sin(t * 1.7 + k * 2) * 22, fl = Math.abs(Math.sin(t * 14 + k)) ;
+      ctx.fillStyle = ['#ff8fb7', '#ffd23f', '#8fd0ff', '#ffffff'][k];
+      ctx.beginPath(); ctx.ellipse(bx - 2.5, by, 3.2 * (0.35 + fl), 2.6, -0.4, 0, TAU); ctx.ellipse(bx + 2.5, by, 3.2 * (0.35 + fl), 2.6, 0.4, 0, TAU); ctx.fill();
+    }
+  }
   if (bd.cave) {
     // glowing dust motes drifting up through the cave air instead of clouds
     for (const [x, y, s, v] of bd.clouds) {
