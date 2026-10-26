@@ -1802,7 +1802,7 @@ function drawIncoming() {
   const items = incoming.slice(0, 6), cw = 74, w = items.length * cw + 22, x0 = W / 2 - w / 2, y0 = 254;
   ctx.fillStyle = 'rgba(27,18,51,.72)'; ctx.beginPath(); ctx.roundRect(x0, y0, w, 58, 29); ctx.fill();
   items.forEach((it, i) => {
-    const spr = enemySprite(it.type, false), sc = 0.78, cx = x0 + 18 + i * cw;
+    const spr = enemySprite(it.type, false), sc = Math.min(0.95, 38 / ((ENEMY_TYPES[it.type] && ENEMY_TYPES[it.type].h) || 40)), cx = x0 + 18 + i * cw;
     ctx.drawImage(spr.c, cx + 18 - spr.ax * sc, y0 + 50 - spr.ay * sc, spr.w * sc, spr.h * sc);
     ctx.lineWidth = 3.5; ctx.strokeStyle = '#1b1233'; ctx.lineJoin = 'round';
     ctx.strokeText('\u00D7' + it.n, cx + 40, y0 + 36); ctx.fillStyle = '#fff'; ctx.fillText('\u00D7' + it.n, cx + 40, y0 + 36);
