@@ -241,4 +241,12 @@ await t('story: every cat has its own one line story for the Cat Dex', async () 
   assert.equal(st.catStory('nobody'), '', 'unknown cats have no story');
 });
 
+await t('story: the chapter beat toast steps aside while the first coach tip is about to appear', async () => {
+  const st = await import('../stacking_cats/story.js');
+  assert.equal(st.beatToastWanted(1, true), false, 'wave 1 with the tutorial still pending: the coach tip would wipe the toast');
+  assert.equal(st.beatToastWanted(1, false), true, 'wave 1 without a pending tip shows it');
+  assert.equal(st.beatToastWanted(6, true), true, 'later chapters always show it');
+  assert.equal(st.beatToastWanted(7, true), false, 'only the first wave of a chapter has a beat');
+});
+
 console.log(n + ' passed');

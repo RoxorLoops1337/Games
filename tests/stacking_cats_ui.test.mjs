@@ -383,4 +383,9 @@ t('the title has a Story button that replays the intro and comes back to the tit
   assert.ok(/story: \(\) => watchIntro\(\(\) => showTitle\(\)\)/.test(js), 'Story replays the intro then shows the title');
 });
 
+t('the chapter beat toast asks beatToastWanted so it never races the first coach tip', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/beatToastWanted\(g\.wave, save\.opt\.tutorial && !save\.tips\.c2\)/.test(js), 'beginWave must pass whether the c2 tip is pending');
+});
+
 console.log(`${n} tests passed`);

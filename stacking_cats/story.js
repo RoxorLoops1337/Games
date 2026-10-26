@@ -137,3 +137,6 @@ const CAT_STORIES = {
   nebula: 'Weaves stars into her fur. Some say she purrs in constellations.',
 };
 export const catStory = (id) => CAT_STORIES[id] || '';
+
+// the chapter beat is a toast, and the first coach tip clears toasts, so on wave 1 it steps aside while that tip is still to come
+export const beatToastWanted = (wave, firstTipPending) => isChapterStart(wave) && !(wave === 1 && firstTipPending);
