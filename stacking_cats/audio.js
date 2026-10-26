@@ -461,7 +461,7 @@ export class Sfx {
   voice(inst, f, t, dur, v, pri = 1) {
     if (!this.ctx || !this.bus) return;
     if (inst === 'mewlead') {
-      if (this.meowBuf && this.meowNote(f, t, dur, v, pri)) return;
+      if (this.meowBuf && this.meowMusicOn !== false && this.meowNote(f, t, dur, v, pri)) return;   // meowMusicOn: the Settings toggle for meows in the soundtrack
       inst = (this.song && this.song.def.lead) || 'pluck';
     }
     const I = INST[inst] || INST.pluck, P = I.p;
@@ -482,7 +482,7 @@ export class Sfx {
   }
   drum(kind, t, v, hi) {
     if (!this.ctx || !this.bus) return;
-    if (this.meowBuf && this.song && this.song.def.mewKit) return this.mewDrum(kind, t, v, hi);
+    if (this.meowBuf && this.meowMusicOn !== false && this.song && this.song.def.mewKit) return this.mewDrum(kind, t, v, hi);
     if (!this.reserve(t, 0.13, 1, kind === 'kick' ? 2 : hi ? 0 : 1)) return;
     if (this.noteLog) this.noteLog.push({ inst: kind, f: 0, t, dur: 0.13, v, pri: 1, song: this.songKey });
     if (kind === 'kick') this.toneAt(150, t, 0.13, { type: 'sine', to: 42, v, bus: this.bus });
