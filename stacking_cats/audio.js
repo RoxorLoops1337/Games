@@ -210,27 +210,36 @@ export class Sfx {
     this.noiseAt(this.ctx.currentTime, t, v, { freq: lp });
   }
 
-  // a little cat voice: a gliding saw through a formant filter. Each cat has its own pitch.
-  meow(id, kind = 'pick') {
+  // a little cat voice: a gliding saw (with vibrato) through two vowel formants that sweep from "ee" to "ow", plus a breath of noise.
+  // Each cat has its own pitch. kinds: pick (mee-ow), happy (short mew), cheer (quick high mew), sad (long falling mrrow), worried (wobbly mew).
+  meow(id, kind = 'pick', delay = 0) {
     if (!this.ctx || !this.on) return;
-    const now = this.ctx.currentTime;
-    if (now - (this.last.meow || 0) < 0.12) return;
-    this.last.meow = now;
-    const c = this.ctx, h = hashStr(id);
-    const base = 330 + (h % 240) * (kind === 'sad' ? 0.8 : 1.15);
-    const dur = kind === 'sad' ? 0.55 : kind === 'happy' ? 0.2 : 0.32;
-    const osc = c.createOscillator(), bp = c.createBiquadFilter(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+    const c = this.ctx, clock = c.currentTime;
+    if (!delay) { if (clock - (this.last.meow || 0) < 0.12) return; this.last.meow = clock; }
+    const now = clock + delay, h = hashStr(id);
+    const low = kind === 'sad' || kind === 'worried';
+    const base = (low ? 270 : 340) + (h % 240) * (kind === 'sad' ? 0.8 : 1.1) + (kind === 'cheer' ? 90 : 0);
+    const dur = { pick: 0.38, happy: 0.24, cheer: 0.18, sad: 0.65, worried: 0.5 }[kind] || 0.3;
+    const osc = c.createOscillator(), lfo = c.createOscillator(), lg = c.createGain(), master = c.createGain();
     osc.type = 'sawtooth';
     const f = osc.frequency;
     f.setValueAtTime(base * 0.8, now);
-    if (kind === 'sad') { f.linearRampToValueAtTime(base * 1.1, now + dur * 0.25); f.exponentialRampToValueAtTime(base * 0.55, now + dur); }
-    else { f.linearRampToValueAtTime(base * 1.35, now + dur * 0.35); f.exponentialRampToValueAtTime(base * 0.85, now + dur); }
-    bp.type = 'bandpass'; bp.Q.value = 3.5;
-    bp.frequency.setValueAtTime(900, now); bp.frequency.linearRampToValueAtTime(1800, now + dur * 0.4); bp.frequency.linearRampToValueAtTime(1100, now + dur);
-    g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.16, now + 0.04); g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-    lfo.frequency.value = 22; lg.gain.value = base * 0.02; lfo.connect(lg); lg.connect(f);
-    osc.connect(bp); bp.connect(g); g.connect(this.sfxBus);
+    if (low) { f.linearRampToValueAtTime(base * 1.1, now + dur * 0.25); f.exponentialRampToValueAtTime(base * 0.55, now + dur); }
+    else { f.linearRampToValueAtTime(base * 1.3, now + dur * 0.3); f.exponentialRampToValueAtTime(base * 0.8, now + dur); }
+    lfo.frequency.value = kind === 'worried' ? 9 : 22; lg.gain.value = base * (kind === 'worried' ? 0.06 : 0.02); lfo.connect(lg); lg.connect(f);
+    // F1 opens as the mouth does, F2 slides down from "ee" to "ow" (and the other way round for the sad, falling one)
+    const formants = [[480, 780, 5, 0.9], low ? [1300, 2200, 6, 0.6] : [2400, 1000, 6, 0.7]];
+    for (const [f0, f1, q, vol] of formants) {
+      const bp = c.createBiquadFilter(), fg = c.createGain();
+      bp.type = 'bandpass'; bp.Q.value = q;
+      bp.frequency.setValueAtTime(f0, now); bp.frequency.linearRampToValueAtTime(f1, now + dur * 0.8);
+      fg.gain.value = vol;
+      osc.connect(bp); bp.connect(fg); fg.connect(master);
+    }
+    master.gain.setValueAtTime(0.0001, now); master.gain.exponentialRampToValueAtTime(0.6, now + 0.04); master.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    master.connect(this.sfxBus);
     osc.start(now); lfo.start(now); osc.stop(now + dur + 0.05); lfo.stop(now + dur + 0.05);
+    this.noiseAt(now, Math.min(0.12, dur * 0.5), 0.03, { type: 'highpass', freq: 3500 });   // the breath at the start of the mew
   }
 
   play(name, pitch = 1) {

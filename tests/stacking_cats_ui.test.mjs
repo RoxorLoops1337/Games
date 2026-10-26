@@ -86,7 +86,7 @@ t('sound: every effect, every cat voice and every music track runs without error
   sfx.play('coin');                       // before unlock: must be a silent no-op
   sfx.unlock();
   for (const name of ['coin', 'chest', 'equip', 'upgrade', 'reroll', 'hover', 'achieve', 'synergy', 'route', 'swipe', 'hit', 'shoot', 'bang', 'flame', 'zap', 'boom', 'pop', 'ko', 'heal', 'ui', 'pick', 'merge', 'wave', 'boss', 'clear', 'win', 'over', 'zoom', 'roar', 'nope', 'special', 'shield', 'heart']) sfx.play(name, 1.3);
-  for (const c of CATS) for (const kind of ['pick', 'happy', 'sad']) { sfx.last.meow = 0; sfx.meow(c.id, kind); }
+  for (const c of CATS) for (const kind of ['pick', 'happy', 'sad', 'cheer', 'worried']) { sfx.last.meow = 0; sfx.meow(c.id, kind); }
   for (const mode of ['calm', 'fight', 'boss']) {
     sfx.music(mode);
     for (let i = 0; i < 16 * 8; i++) { sfx.ctx.currentTime += 0.12; sfx.pump(); }
@@ -258,6 +258,15 @@ t('the Kingdom hint mentions arrow keys and Enter for keyboard players', () => {
 t('a wave 1 coach tip is dismissed when the wave clears so it never covers the banner', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   assert.ok(/function onClear\(\)[\s\S]*?coachEl\.dataset\.key === 'c2'\) hideCoach\(\)/.test(js), 'onClear must hide the c2 tip');
+});
+
+t('meows: a voice with two vowel formants and a breath, cheers on a clear, a worried mew on low health', () => {
+  const sfx = new Sfx(); sfx.unlock(); sfx.ctx.currentTime = 5;
+  const before = sfx.ctx.calls; sfx.last.meow = 0; sfx.meow('tabby', 'pick');
+  assert.ok(sfx.ctx.calls - before >= 9, 'a meow needs a source, two formant filters, a breath of noise and their gains (' + (sfx.ctx.calls - before) + ' nodes)');
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/mode === 'celebrate'\) \{[^}]*sfx\.meow\(c\.id, 'cheer'/.test(js), 'cats meow when the wave is cleared');
+  assert.ok(js.includes("sfx.meow(lowCat.id, 'worried'"), 'a cat that drops below a third of its health gives a worried mew');
 });
 
 console.log(`${n} tests passed`);
