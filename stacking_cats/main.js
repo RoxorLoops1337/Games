@@ -556,6 +556,7 @@ function showWardrobe(back, startCat) {
 // ---------------------------------------------------------------- the Cat Kingdom: a village you can tap
 let kScene = null, kNav = null, bestShown = false, heartAt = 0, quitArmed = 0;
 const worried = new Set();   // cats that already gave their worried mew
+const villageCat = () => titleStack[Math.floor(Math.random() * titleStack.length)];   // some cat of the kingdom gives a little cheer
 function showKingdom(back, selected) {
   if (kScene) { kScene.stop(); kScene = null; }
   kNav = null;
@@ -590,7 +591,7 @@ function showKingdom(back, selected) {
     buy: (d) => {
       const b = BUILDING_BY_ID[d.id];
       if (buyUpgrade(save.kingdom, d.id)) {
-        persist(); sfx.play('upgrade'); toast(`${b.icon} ${b.name} is now Lv ${buildingLevel(save.kingdom, d.id)}!`);
+        persist(); sfx.play('upgrade'); sfx.meow(villageCat(), 'cheer', 0.12); toast(`${b.icon} ${b.name} is now Lv ${buildingLevel(save.kingdom, d.id)}!`);
         const ach = checkAch({ ...(g ? g.run : {}), wave: 0 });
         for (const a of ach) toast(`Trophy: ${a.name}!`);
         kScene.bump(d.id);
@@ -600,7 +601,7 @@ function showKingdom(back, selected) {
     },
     buyw: (d) => {
       const w = WONDER_BY_ID[d.id];
-      if (buyWonder(save.kingdom, d.id)) { persist(); sfx.play('upgrade'); toast(`${w.icon} ${w.name} built!`); showKingdom(back, { type: 'wonder', id: d.id }); }
+      if (buyWonder(save.kingdom, d.id)) { persist(); sfx.play('upgrade'); sfx.meow(villageCat(), 'cheer', 0.12); toast(`${w.icon} ${w.name} built!`); showKingdom(back, { type: 'wonder', id: d.id }); }
     },
   };
 }
