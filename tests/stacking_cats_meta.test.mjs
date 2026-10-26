@@ -18,8 +18,8 @@ function fight(g, secs, mk) {
   for (let i = 0; i < secs * 30 && g.enemies.some((e) => !e.dead); i++) step(g);
 }
 
-t('items: 22 items with text, valid effects and rarities', () => {
-  assert.equal(ITEMS.length, 22);
+t('items: 23 items with text, valid effects and rarities', () => {
+  assert.equal(ITEMS.length, 23);
   for (const it of ITEMS) {
     assert.ok(it.name && it.icon && it.desc && ['common', 'rare', 'epic'].includes(it.rarity), it.id);
     assert.ok(Object.keys(it.fx).length, it.id);
@@ -272,6 +272,13 @@ t('Biscuit the royal baker is a cat of her own and the collector trophy needs ev
   assert.equal(!!a.check({ save: { unlocked: all.slice(1) } }), false, 'one cat short is not enough');
   assert.equal(!!a.check({ save: { unlocked: all } }), true, 'every cat unlocks the trophy');
   assert.ok(a.desc.includes(String(CATS.length)), 'the text names the real number of cats');
+});
+
+t('the Cozy Basket is a common item that adds health and a little regeneration', () => {
+  const b = ITEMS.find((x) => x.id === 'basket');
+  assert.ok(b && b.rarity === 'common');
+  assert.ok(b.fx.hp > 0 && b.fx.regen > 0);
+  assert.ok(!b.name.includes('\u2014') && !b.desc.includes('\u2014'));
 });
 
 console.log(`${n} tests passed`);
