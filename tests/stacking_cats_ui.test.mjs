@@ -165,6 +165,13 @@ t('Enter presses the main button of an open screen but never steals a focused co
   assert.ok(js.includes(".btn.big:not([disabled]), .btn.green:not([disabled])"), 'Enter must target the main button');
 });
 
+t('Escape backs out of sub screens through their Back button', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(js.includes("k === 'escape' && document.body.classList.contains('scr')"), 'Escape must act only while a screen is open');
+  assert.ok(js.includes('[data-act="back"]:not([disabled])'), 'Escape must press the screen\'s Back button');
+  assert.ok(js.includes("k === 'p' || k === 'escape'"), 'Escape must still pause and resume during a run');
+});
+
 t('tutorial tips are held back while the game is paused', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   const m = js.match(/function coach\([^)]*\) \{\n([^\n]*)\n/);
