@@ -1559,7 +1559,9 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
     for (let k = zoomies ? 2 : 0; k >= 0; k--) {
       ctx.save();
       ctx.translate(cx + lunge + sway - k * 16, feetY);
-      ctx.scale(1 + atk * 0.05 + squash, 1 - atk * 0.06 - squash);
+      // idle breathing: a slow chest rise, out of step between cats, steadier while marching or attacking
+      const br = marching || cheer || !save.opt.motion ? 0 : Math.sin(t * 2.1 + i * 1.9 + (c.seed || 0)) * 0.014 * (1 - Math.min(1, atk));
+      ctx.scale(1 + atk * 0.05 + squash - br * 0.5, 1 - atk * 0.06 - squash + br);
       const pop = pops.get(c.uid); if (pop) { const u = pop / 0.55, st = Math.sin((1 - u) * Math.PI * 3) * u * 0.2; ctx.scale(1 - st * 0.55, 1 + st); }
       ctx.rotate(Math.sin(t * 2 + i * 1.3) * 0.015 + (marching ? Math.sin(t * 9 + i) * 0.03 : 0) + sway * 0.002);
       ctx.globalAlpha = k ? 0.22 / k : 1;
