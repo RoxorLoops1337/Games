@@ -654,4 +654,9 @@ t('Hexa\'s Hex stamps a floating curse mark above every hexed mouse', () => {
   assert.ok(/txtFx\(m\.x, m\.y - m\.h - 12, 'HEX!'/.test(f), 'text mark over each foe');
 });
 
+t('the title stack is built from the player\'s own most used cats', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/titleStack = titleStackIds\(save\.unlocked, save\.catStats\)/.test(js), 'showTitle refreshes the stack');
+});
+
 console.log(`${n} tests passed`);

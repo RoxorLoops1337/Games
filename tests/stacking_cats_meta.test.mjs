@@ -5,7 +5,7 @@ import {
   takeItem, useReroll, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, ACHIEVEMENTS,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, ACHIEVEMENTS,
 } from '../stacking_cats/cats.js';
 
 let n = 0;
@@ -279,6 +279,19 @@ t('the Cozy Basket is a common item that adds health and a little regeneration',
   assert.ok(b && b.rarity === 'common');
   assert.ok(b.fx.hp > 0 && b.fx.regen > 0);
   assert.ok(!b.name.includes('\u2014') && !b.desc.includes('\u2014'));
+});
+
+t('titleStackIds: the title stack shows the five most used unlocked cats, bottom to top', () => {
+  const starters = ['tabby', 'ember', 'sparky', 'buckshot', 'mochi'];
+  assert.deepEqual(titleStackIds(starters, {}), starters, 'a fresh save keeps the starters in order');
+  const unlocked = [...starters, 'yuki', 'zeus'];
+  const stats = { zeus: { runs: 9 }, yuki: { runs: 5 }, tabby: { runs: 4 }, ember: { runs: 1 }, ghost: { runs: 99 } };
+  const ids = titleStackIds(unlocked, stats);
+  assert.equal(ids.length, 5);
+  assert.deepEqual(ids.slice(0, 3), ['zeus', 'yuki', 'tabby'], 'most used first');
+  assert.ok(!ids.includes('ghost'), 'locked or unknown cats never appear');
+  assert.equal(new Set(ids).size, 5, 'no duplicates');
+  assert.deepEqual(titleStackIds(['tabby'], {}), ['tabby'], 'fewer cats than five is fine');
 });
 
 console.log(`${n} tests passed`);
