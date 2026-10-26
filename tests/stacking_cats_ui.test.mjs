@@ -518,4 +518,12 @@ t('the nest bar shows the story title', () => {
   assert.ok(/setText\('bossName', nestTitle\(g\.wave, nest\.name\)\)/.test(js), 'HUD uses nestTitle');
 });
 
+t('delayed story and hint toasts wait while the game is paused instead of covering the pause menu', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/function toastWhenPlaying\(m\)/.test(js) && /paused\) return setTimeout\(\(\) => toastWhenPlaying/.test(js), 'helper retries while paused');
+  const i = js.indexOf('const intro = [];');
+  assert.ok(/toastWhenPlaying\(m\)/.test(js.slice(i, i + 700)), 'new mouse hints use it');
+  assert.ok(/toastWhenPlaying\(`King Squeakimus/.test(js), 'the nest taunt uses it');
+});
+
 console.log(`${n} tests passed`);
