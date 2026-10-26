@@ -403,4 +403,12 @@ t('the finale card hands out the king trophy straight away', () => {
   assert.ok(/checkAch\(/.test(f.slice(0, 900)) && /Trophy: /.test(f.slice(0, 900)), 'showFinale must check trophies and announce them');
 });
 
+t('the title keeps Story on the Play row so no button is left alone on a last row', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const play = js.slice(js.indexOf('data-act="play"'), js.indexOf('data-act="daily"'));
+  assert.ok(play.includes('data-act="story"'), 'Story sits next to Play and the difficulty button');
+  const last = js.slice(js.indexOf('data-act="trophies"'), js.indexOf('class="hint"', js.indexOf('data-act="trophies"')));
+  assert.ok(!last.includes('data-act="story"'), 'and not in the crowded bottom row');
+});
+
 console.log(`${n} tests passed`);
