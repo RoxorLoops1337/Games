@@ -1,7 +1,7 @@
 // Stacking Cats: the anime style intro cutscene. Six short scenes drawn live on one canvas (960x540) from the game's own sprites:
 // speed lines, impact frames, camera pushes, name slams and a typed caption. drawIntro is a pure function of time so tests can run it;
 // playIntro wraps it with the canvas, the skip controls and the sound cues.
-import { INTRO, INTRO_LEN, introAt, typed } from './story.js';
+import { INTRO, INTRO_LEN, introAt, typed, EPILOGUE, EPILOGUE_LEN, epilogueAt } from './story.js';
 import { TAU, mulberry } from './art_util.js';
 import { makeBackdrop, drawBackdrop, drawFront, freeBackdrop, enemySprite, nestSprite } from './art_world.js';
 import { THEMES, CAT_BY_ID } from './cats.js';
@@ -359,11 +359,87 @@ export function cuesBetween(t0, t1) {
   return out;
 }
 
-// run the cutscene full screen inside host (the scaled game box). o: { cat(id), sfx, motion, onDone }. Returns { skip }.
-export function playIntro(host, o) {
+// ---------------------------------------------------------------- the epilogue (shown from the finale card)
+const PARTY = ['tabby', 'ember', 'buckshot', 'mochi', 'yuki', 'pudding', 'sparky'];
+function party(ctx, R, p, T) {
+  ctx.save();
+  drawBackdrop(ctx, R.bd, T * 4, T);
+  tint(ctx, '#202a5c', 0.42 * (1 - ease(seg(p, 0.5, 1))));
+  tint(ctx, '#ffb86a', 0.2 * ease(seg(p, 0.5, 1)));
+  moon(ctx, 480, 104, 1, T, 0);
+  // fireworks bursting over the party
+  const rnd = mulberry(5);
+  for (let i = 0; i < 6; i++) {
+    const at = 0.1 + i * 0.13, k = seg(p, at, at + 0.16); if (k <= 0 || k >= 1) continue;
+    const fx = 160 + rnd() * 640, fy = 120 + rnd() * 130, r = 20 + k * 60;
+    ctx.save(); ctx.globalAlpha = 1 - k; ctx.strokeStyle = ['#ffd23f', '#ff8ac0', '#7af0ff'][i % 3]; ctx.lineWidth = 4;
+    for (let a = 0; a < 12; a++) { const ang = (a / 12) * TAU; ctx.beginPath(); ctx.moveTo(fx + Math.cos(ang) * r * 0.55, fy + Math.sin(ang) * r * 0.55); ctx.lineTo(fx + Math.cos(ang) * r, fy + Math.sin(ang) * r); ctx.stroke(); }
+    ctx.restore();
+  }
+  PARTY.forEach((id, i) => {
+    const x = 150 + i * 110, hop = Math.abs(Math.sin(T * 5 + i * 0.9)) * 26;
+    cat(ctx, R, id, x, GROUND + 20 + (i % 2) * 8 - hop, 1.05, { rot: Math.sin(T * 5 + i) * 0.06 });
+    const h = (T * 0.6 + i * 0.19) % 1; ctx.save(); ctx.globalAlpha = Math.sin(h * Math.PI); ctx.fillStyle = '#ff7aa8'; ctx.font = `22px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('\u2665', x + Math.sin(h * 7 + i) * 10, GROUND - 90 - h * 80); ctx.restore();
+  });
+  // confetti
+  const cr = mulberry(9);
+  for (let i = 0; i < 46; i++) {
+    const cx = cr() * W, speed = 50 + cr() * 90, cy = ((T * speed + cr() * H) % (H + 20)) - 10;
+    ctx.fillStyle = ['#ffd23f', '#ff8ac0', '#7af0ff', '#9aff9a'][i % 4]; ctx.save(); ctx.translate(cx + Math.sin(T * 3 + i) * 10, cy); ctx.rotate(T * 4 + i); ctx.fillRect(-4, -2, 8, 4); ctx.restore();
+  }
+  ctx.restore();
+  vignette(ctx, 0.35);
+}
+function dawn(ctx, R, p, T) {
+  ctx.save();
+  drawBackdrop(ctx, R.bd, T * 90, T);
+  tint(ctx, '#ffb060', 0.3);
+  // the sun rises
+  const sy = 330 - 210 * ease(seg(p, 0, 0.6));
+  const g = ctx.createRadialGradient(700, sy, 10, 700, sy, 200); g.addColorStop(0, 'rgba(255,240,170,.9)'); g.addColorStop(1, 'rgba(255,240,170,0)'); ctx.fillStyle = g; ctx.fillRect(480, sy - 210, 480, 420);
+  HEROES.forEach((h, i) => {
+    const x = 250 + i * 120 + ease(seg(p, 0, 1)) * 60, bob = Math.abs(Math.sin(T * 6 + i)) * 8;
+    cat(ctx, R, h.id, x, GROUND + 24 - bob, 1.2, { rot: 0.05 });
+  });
+  // a pair of beady eyes in the grass: the mice are not done
+  if (p > 0.55) { const k = ease(seg(p, 0.55, 0.7)); ctx.save(); ctx.globalAlpha = k; ctx.fillStyle = '#ff3a4a'; ctx.beginPath(); ctx.ellipse(840, GROUND + 40, 5, 3, 0, 0, TAU); ctx.ellipse(858, GROUND + 40, 5, 3, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+  if (p > 0.78) { const k = outBack(seg(p, 0.78, 0.9)); label(ctx, 'KEEP PLAYING!', W / 2, 150, 70 * k, '#ffd23f', { rot: -0.04 }); }
+  ctx.restore();
+  vignette(ctx, 0.35);
+}
+const EPI_SCENES = [party, dawn];
+export function drawEpilogue(ctx, t, R) {
+  const s = epilogueAt(t);
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.save(); ctx.translate(W / 2, H / 2 - 26); ctx.scale(1.07, 1.07); ctx.translate(-W / 2, -H / 2);
+  EPI_SCENES[s.i](ctx, R, s.p, s.t);
+  ctx.restore();
+  bars(ctx, 1);
+  caption(ctx, EPILOGUE[s.i].text, s.p);
+  const f = Math.max(1 - seg(t, 0, 0.6), seg(t, EPILOGUE_LEN - 0.6, EPILOGUE_LEN));
+  if (f > 0) { ctx.globalAlpha = f; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
+  ctx.restore();
+  return s;
+}
+const EPI_CUES = [
+  [0, 0.0, 'music calm'], [0, 0.1, 'play win'], [0, 0.23, 'play special'], [0, 0.36, 'meow tabby cheer'], [0, 0.5, 'play special'], [0, 0.62, 'meow ember cheer'], [0, 0.75, 'meow mochi happy'],
+  [1, 0.0, 'play clear'], [1, 0.55, 'meow tabby worried'], [1, 0.78, 'play boss'], [1, 0.82, 'meow buckshot cheer'],
+];
+export function epilogueCuesBetween(t0, t1) {
+  const out = [];
+  for (const [si, p, act] of EPI_CUES) {
+    let at = 0; for (let i = 0; i < si; i++) at += EPILOGUE[i].dur;
+    const when = at + p * EPILOGUE[si].dur;
+    if (when >= t0 && when < t1) out.push(act);
+  }
+  return out;
+}
+
+// run a cutscene full screen inside host (the scaled game box). o: { cat(id), sfx, motion, onDone }. Returns { skip }.
+function runScenes(host, o, spec) {
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H; cv.className = 'introcv';
   cv.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;z-index:95;background:#000;touch-action:manipulation';
-  const skip = document.createElement('button'); skip.className = 'introskip'; skip.textContent = 'Skip ›'; skip.setAttribute('aria-label', 'Skip the intro');
+  const skip = document.createElement('button'); skip.className = 'introskip'; skip.textContent = 'Skip \u203A'; skip.setAttribute('aria-label', 'Skip the cutscene');
   skip.style.cssText = 'position:absolute;right:14px;bottom:12px;z-index:96;font:700 16px "Baloo 2",system-ui,sans-serif;color:#fff;background:rgba(8,2,20,.7);border:1.5px solid rgba(255,255,255,.4);border-radius:999px;padding:6px 16px;cursor:pointer';
   host.appendChild(cv); host.appendChild(skip);
   const ctx = cv.getContext('2d');
@@ -386,12 +462,14 @@ export function playIntro(host, o) {
   const frame = (now) => {
     if (ended) return;
     const t = (now - t0) / 1000;
-    for (const a of cuesBetween(last, t)) act(a);
+    for (const a of spec.cues(last, t)) act(a);
     last = t;
-    const s = drawIntro(ctx, Math.min(t, INTRO_LEN), R);
-    if (t >= INTRO_LEN || s.done) { finish(); return; }
+    const s = spec.draw(ctx, Math.min(t, spec.len), R);
+    if (t >= spec.len || s.done) { finish(); return; }
     raf = requestAnimationFrame(frame);
   };
   raf = requestAnimationFrame(frame);
   return { skip: finish };
 }
+export const playIntro = (host, o) => runScenes(host, o, { len: INTRO_LEN, draw: drawIntro, cues: cuesBetween });
+export const playEpilogue = (host, o) => runScenes(host, o, { len: EPILOGUE_LEN, draw: drawEpilogue, cues: epilogueCuesBetween });

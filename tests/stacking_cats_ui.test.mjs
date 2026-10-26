@@ -411,4 +411,26 @@ t('the title keeps Story on the Play row so no button is left alone on a last ro
   assert.ok(!last.includes('data-act="story"'), 'and not in the crowded bottom row');
 });
 
+t('the epilogue draws every moment and its cues are real', () => {
+  const R = { cat: () => ({ width: 240, height: 240 }), motion: true, bd: art.makeBackdrop(THEMES[0], 0) };
+  for (let tt = 0; tt <= storyMod.EPILOGUE_LEN + 0.2; tt += 0.2) introMod.drawEpilogue(fakeCtx(), tt, R);
+  introMod.drawEpilogue(fakeCtx(), 4, { ...R, motion: false });
+  const audio = readFileSync('stacking_cats/audio.js', 'utf8');
+  const cues = introMod.epilogueCuesBetween(0, storyMod.EPILOGUE_LEN + 1);
+  assert.ok(cues.length >= 5, 'the epilogue has cues');
+  for (const a of cues) {
+    const [kind, x, y] = a.split(' ');
+    if (kind === 'play') assert.ok(audio.includes(`case '${x}':`), 'unknown sound ' + x);
+    else if (kind === 'meow') { assert.ok(CATS.some((c) => c.id === x), 'unknown cat ' + x); assert.ok(['pick', 'happy', 'cheer', 'sad', 'worried'].includes(y), y); }
+    else assert.ok(kind === 'music' && ['calm', 'fight', 'boss'].includes(x), 'bad cue ' + a);
+  }
+});
+t('the finale card can show the ending cutscene and comes back to the card afterwards', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const f = js.slice(js.indexOf('function showFinale'), js.indexOf('function nextReward'));
+  assert.ok(f.includes('Watch the ending') && /playEpilogue\(/.test(f), 'a button plays the epilogue');
+  assert.ok(/onDone: \(\) => (\{[^}]*)?card\(\)/.test(f), 'afterwards the finale card is shown again');
+  assert.ok((f.match(/finaleGems\(/g) || []).length === 1, 'the reward is still computed once');
+});
+
 console.log(`${n} tests passed`);
