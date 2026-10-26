@@ -40,6 +40,19 @@ t('snacks: Berry Smoothie gives attack speed and range for 3 waves', () => {
   assert.equal(g.temp.length, 0, 'it wears off after three waves');
 });
 
+t('snacks: Rice Ball is a permanent snack that adds a little damage and health together', () => {
+  const sn = SNACKS.find((x) => x.id === 'rice');
+  assert.ok(sn && sn.kind === 'perm', 'rice ball exists as a permanent snack');
+  const g = newGame({ seed: 7 });
+  addCat(g, 'tabby');
+  const base = calcMods(g), mx = catMaxHp(g, g.cats[0]);
+  eatSnack(g, 'rice');
+  const m = calcMods(g);
+  assert.ok(m.dmg > base.dmg && catMaxHp(g, g.cats[0]) > mx, 'more damage and more health');
+  for (let i = 0; i < 4; i++) { startWave(g); g.enemies = []; g.queue = []; step(g, 3); step(g, 0.1); }
+  assert.equal(g.perm.length, 1, 'it lasts the whole run');
+});
+
 t('addCat: stack, auto-merge equals, bench, then refuses', () => {
   const g = newGame({ seed: 3 });
   assert.ok(addCat(g, 'tabby').ok);

@@ -176,6 +176,7 @@ export const SNACKS = [
   { id: 'catnip', name: 'Catnip Leaf', icon: '🌿', kind: 'perm', fx: { haste: 0.10 }, desc: '+10% attack speed for the whole run' },
   { id: 'milk', name: 'Warm Milk', icon: '🥛', kind: 'perm', fx: { waveHeal: 0.12 }, desc: 'Heal 12% more after every wave' },
   { id: 'kibble', name: 'Crunchy Kibble', icon: '🍘', kind: 'perm', fx: { crit: 0.08 }, desc: '+8% critical chance for the whole run' },
+  { id: 'rice', name: 'Rice Ball', icon: '🍙', kind: 'perm', fx: { dmg: 0.07, hp: 0.08 }, desc: '+7% damage and +8% health for the whole run' },
   { id: 'bonito', name: 'Bonito Flakes', icon: '🐟', kind: 'perm', fx: { range: 0.12 }, desc: '+12% range for the whole run' },
   { id: 'golden', name: 'Golden Fish', icon: '🐠', kind: 'perm', fx: {}, nine: true, desc: 'Nine Lives: if the tower falls, everyone gets back up once', rare: true },
   { id: 'pepper', name: 'Spicy Pepper', icon: '🌶️', kind: 'temp', fx: { dmg: 0.45 }, desc: '+45% damage for 3 waves' },
