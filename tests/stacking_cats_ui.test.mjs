@@ -296,4 +296,11 @@ t('a merge makes the cat meow right after the chime (a louder cheer at max level
   assert.ok(/case 'merge': \{[\s\S]{0,400}sfx\.meow\(mc\.id, max \? 'cheer' : 'happy', 0\.1\)/.test(js), 'the merge event must meow the merged cat');
 });
 
+t('buying a Kingdom building or wonder gets a cheer meow from a village cat', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const n = (js.match(/sfx\.play\('upgrade'\); sfx\.meow\(villageCat\(\), 'cheer', 0\.12\)/g) || []).length;
+  assert.equal(n, 2, 'both the building upgrade and the wonder purchase cheer');
+  assert.ok(/const villageCat = \(\) =>/.test(js), 'a helper picks a cat that lives in the village');
+});
+
 console.log(`${n} tests passed`);
