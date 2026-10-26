@@ -193,6 +193,12 @@ t('the Kingdom canvas has a text description and its detail panel is announced t
   assert.ok(js.includes('id="kdetail" aria-live="polite"'), 'the detail panel must be a polite live region');
 });
 
+t('the wave banner and the toasts are live regions so screen readers announce wave starts, clears and tips', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/id="banner" role="status" aria-live="polite"/.test(html), 'the banner must be announced');
+  assert.ok(/id="toasts" role="status" aria-live="polite"/.test(html), 'toasts must be announced');
+});
+
 t('tutorial tips are held back while the game is paused', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   const m = js.match(/function coach\([^)]*\) \{\n([^\n]*)\n/);

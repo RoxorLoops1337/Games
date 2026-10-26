@@ -626,8 +626,8 @@ body.scr #hud>*:not(#toasts):not(#banner){opacity:0!important;pointer-events:non
     <div id="specials"></div>
     <button id="zoom" title="Zoomies (Space)"><span>Zoomies<br><small id="zoomSub">0%</small></span></button>
     <div class="pill" id="snackBar"></div>
-    <div id="banner"></div>
-    <div id="toasts"></div>
+    <div id="banner" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div id="toasts" role="status" aria-live="polite"></div>
   </div>
   <div id="screen"></div>
 </div>
