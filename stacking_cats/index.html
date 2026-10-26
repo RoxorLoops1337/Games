@@ -610,12 +610,12 @@ body.scr #hud>*:not(#toasts):not(#banner){opacity:0!important;pointer-events:non
   <canvas id="cv" width="960" height="540"></canvas>
   <button id="bFull" class="ib" title="Full screen (G)" aria-label="Full screen" hidden>&#9974;</button>
   <div id="hud">
-    <div class="pill" id="waveBox"><b id="waveTxt">Wave 1</b><small id="themeTxt"></small><span id="nestPips"></span></div>
-    <div class="pill" id="coinBox" title="Coins this run. Spend them in the Kingdom."><span class="ico">&#129689;</span><b id="coinTxt">0</b></div>
+    <div class="pill" id="waveBox" role="group" aria-label="Wave"><b id="waveTxt">Wave 1</b><small id="themeTxt"></small><span id="nestPips"></span></div>
+    <div class="pill" id="coinBox" role="group" aria-label="Coins this run" title="Coins this run. Spend them in the Kingdom."><span class="ico">&#129689;</span><b id="coinTxt">0</b></div>
     <div id="synBar"></div>
     <div id="modeChip"></div>
-    <div class="pill" id="chestBox" title="Loot chests, opened after the wave"><span class="ico">&#127873;</span><b id="chestTxt">0</b></div>
-    <div class="pill" id="bossBar"><div class="nm" id="bossName">Nest</div><div class="trick" id="bossTrick"></div><div class="bar"><i id="bossTrail"></i><i id="bossHp"></i></div></div>
+    <div class="pill" id="chestBox" role="group" aria-label="Loot chests" title="Loot chests, opened after the wave"><span class="ico">&#127873;</span><b id="chestTxt">0</b></div>
+    <div class="pill" id="bossBar" role="group" aria-label="Nest health"><div class="nm" id="bossName">Nest</div><div class="trick" id="bossTrick"></div><div class="bar"><i id="bossTrail"></i><i id="bossHp"></i></div></div>
     <div class="pill" id="tools">
       <button class="ib" id="bPause" title="Pause (P)" aria-label="Pause">&#9208;</button>
       <button class="ib" id="bMeter" title="Damage meter (D)" aria-label="Damage meter">&#128202;</button>
