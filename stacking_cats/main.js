@@ -16,7 +16,7 @@ import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
-import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel, clearLine, confirmTap, coachAbove } from './art_util.js';
+import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel, clearLine, confirmTap, coachAbove, specialLabel } from './art_util.js';
 import { iconCanvas, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
 import { buzz, setHaptics } from './haptics.js';
@@ -2172,6 +2172,7 @@ function updateSpecials() {
       box.appendChild(b); spBtns.set(c.uid, b);
     }
     const ready = S.specialReady(c);
+    { const lab = specialLabel(CAT_BY_ID[c.id].name, S.specialInfo(c.id).name, c.sp, ready, c.ko); if (b.getAttribute('aria-label') !== lab) b.setAttribute('aria-label', lab); }
     b.style.setProperty('--p', Math.round(c.sp * 100) + '%');
     b.style.setProperty('--c', S.specialInfo(c.id).color);
     b.classList.toggle('ready', ready);

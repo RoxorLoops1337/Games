@@ -187,3 +187,9 @@ export function coachAbove(rect, appRect, scale, bubbleH, W, halfW = 135) {
   if (top - bubbleH - 12 < 56 && rect.height) return { x: Math.round((rect.left + rect.width - appRect.left) / scale + 14), y: Math.round(top), side: true };
   return { x, y: Math.round(Math.max(6, top - bubbleH - 12)), side: false };
 }
+
+// spoken label of a special move button in the tray: says whether it can be used now
+export function specialLabel(catName, moveName, charge, ready, down) {
+  const state = down ? 'knocked out' : ready ? 'ready' : `charging ${Math.round(Math.max(0, Math.min(1, charge)) * 100)} percent`;
+  return `${catName}: ${moveName}, ${state}`;
+}
