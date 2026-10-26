@@ -612,4 +612,11 @@ t('the nest cage rattles harder as the nest takes damage (the captive panics)', 
   assert.ok(/Math\.sin\(t \* 14\) \* \(1 - hpFrac\)/.test(f), 'rattle scales with missing health');
 });
 
+t('Claw Frenzy slashes the mice it hits with triple claw marks', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const i = js.indexOf("case 'frenzy':");
+  const f = js.slice(i, js.indexOf("case 'fortress':", i));
+  assert.ok(/for \(const m of foes\.slice\(0, 4\)\)/.test(f) && /for \(const o of \[-9, 0, 9\]\)/.test(f), 'three parallel slashes on the first four mice');
+});
+
 console.log(`${n} tests passed`);
