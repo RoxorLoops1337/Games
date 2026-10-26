@@ -7,7 +7,9 @@ import { chapterOf } from './story.js';
 // the line that goes with the picture when it is shared
 export function shareText(info) {
   const wave = (info && info.wave) | 0;
-  return `I reached wave ${wave} (chapter ${chapterOf(wave).n}) in Stacking Cats! https://${SHARE_URL}/`;
+  const kills = (info && info.kills) | 0;
+  const mice = kills > 0 ? ` and chased off ${kills} ${kills === 1 ? 'mouse' : 'mice'}, paws-itively purr-fect!` : '!';
+  return `I reached wave ${wave} (chapter ${chapterOf(wave).n}) in Stacking Cats${mice} https://${SHARE_URL}/`;
 }
 
 export const SHARE_W = 1080, SHARE_H = 1080;

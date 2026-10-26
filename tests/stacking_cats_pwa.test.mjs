@@ -285,6 +285,16 @@ await t('story: destroying a nest closes the chapter with its own line', async (
   assert.ok(!st.chapterDoneLine(30).includes('\u2014'));
 });
 
+await t('share text adds the mouse count and a cat pun when the run has kills, and stays short without them', async () => {
+  const { shareText } = await import('../stacking_cats/share.js');
+  const withKills = shareText({ wave: 12, kills: 340 });
+  assert.ok(/340 mice/.test(withKills) && /paw|purr|meow|whisker|fur/i.test(withKills), withKills);
+  assert.ok(!withKills.includes('\u2014'));
+  assert.ok(!/mice/.test(shareText({ wave: 5 })), 'no kills means no mouse count');
+  assert.ok(/1 mouse(?!s)/.test(shareText({ wave: 5, kills: 1 })), 'one kill is singular');
+  assert.ok(withKills.length <= 200, 'short enough for a post');
+});
+
 await t('share text names the chapter as well as the wave and has no em dash', async () => {
   const { shareText } = await import('../stacking_cats/share.js');
   const tx = shareText({ wave: 12 });
