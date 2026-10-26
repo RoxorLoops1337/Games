@@ -640,4 +640,11 @@ t('the volley special (Buckshot, Dusty) has a muzzle flash, white-hot tracers an
   assert.ok(/'#ffffff', 1\.2/.test(f) && /flashGlow\(m\.x, m\.y - 12/.test(f), 'white core tracer and impact flash');
 });
 
+t('King Leo\'s Royal Roar adds golden roar shockwaves on top of the shared claw effect', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const i = js.indexOf("case 'frenzy':");
+  const f = js.slice(i, js.indexOf("case 'fortress':", i));
+  assert.ok(/if \(e\.id === 'leo'\)/.test(f) && /for \(let r = 0; r < 4; r\+\+\) ring\(p\.x \+ 60 \+ r \* 70/.test(f), 'leo gets four expanding roar rings');
+});
+
 console.log(`${n} tests passed`);
