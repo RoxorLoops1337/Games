@@ -682,4 +682,10 @@ t('the game over screen announces unlocked cats as freed from the Gnaw Army', ()
   assert.ok(/<p class="sub">\$\{freedLineFor\(fresh\.length\)\}<\/p>/.test(js) && !/New friends unlocked/.test(js));
 });
 
+t('How to play explains dodge', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  const how = js.slice(js.indexOf('function showHow'), js.indexOf('function showDex'));
+  assert.ok(/Dodge/.test(how) && /Pearl|Lucky Shell/.test(how), 'How to play must mention dodge and where it comes from');
+});
+
 console.log(`${n} tests passed`);

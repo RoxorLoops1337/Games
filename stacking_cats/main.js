@@ -438,6 +438,7 @@ function showHow(back) {
     ${row('\uD83D\uDD25', '<b>Synergies.</b> Cats of one kind boost each other. Look for the badges by the wave counter.')}
     ${row('\uD83D\uDC3E', '<b>Roads.</b> After each nest you pick the next road. Riskier roads pay better.')}
     ${row('\uD83C\uDFC6', '<b>Daily Challenge.</b> Everyone plays the same mice once a day. Climb the leaderboard.')}
+    ${row('\uD83D\uDC1A', '<b>Dodge.</b> Pearl and the Lucky Shell give cats a chance to dodge a bite and take no damage.')}
     ${row('\uD83D\uDCA8', '<b>Zoomies</b> (Space). Fill the meter by fighting, then everyone is much faster for 6 seconds.')}</ul>
     <div class="row"><button class="btn" data-act="back">Got it</button><button class="btn grey" data-act="intro">Watch the intro</button></div>`);
   acts = { back, intro: () => watchIntro(() => showHow(back)) };
