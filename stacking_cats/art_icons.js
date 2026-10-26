@@ -149,7 +149,20 @@ const D = {
   '💖': (c) => { heart(c, 32, 32, 20, PINK, 2.4); glint(c, 22, 24, 4.5); glint(c, 52, 12, 4); glint(c, 12, 50, 3); },
   '❤': (c) => { heart(c, 32, 30, 22, RED, 2.4); glint(c, 22, 22, 4.5); },
   '🧣': (c) => { F(c, P((p) => { p.moveTo(8, 20); p.bezierCurveTo(24, 36, 40, 36, 56, 20); p.lineTo(56, 32); p.bezierCurveTo(40, 48, 24, 48, 8, 32); p.closePath(); }), '#e8503a', 2.2); F(c, P((p) => { p.moveTo(38, 40); p.lineTo(52, 40); p.lineTo(54, 60); p.lineTo(40, 60); p.closePath(); }), '#e8503a', 2); for (const y of [46, 53]) ln(c, [[40, y], [53, y]], '#ffd23a', 2.4); ln(c, [[16, 28], [20, 38]], '#ffd23a', 2.4); ln(c, [[32, 36], [32, 46]], '#ffd23a', 2.4); ln(c, [[48, 28], [44, 38]], '#ffd23a', 2.4); },
-  '📯': (c) => { for (const [x, y, a] of [[22, 30, -0.5], [42, 34, 0.5]]) { c.save(); c.translate(x, y); c.rotate(a); F(c, P((p) => { p.moveTo(-10, -10); p.lineTo(8, -10); p.bezierCurveTo(16, -10, 18, 8, 8, 10); p.lineTo(-10, 10); p.closePath(); }), GOLD, 2); F(c, circ(0, 0, 3.4), '#3a2a50', 1.2, { shade: false }); F(c, P((p) => { p.rect(-16, -6, 7, 12); }), '#ffe08a', 1.6); c.restore(); } },
+  '📯': (c) => {
+    // two crossed metal whistles: a flat mouthpiece, a round chamber with a sound slot and a ring
+    for (const [a, col] of [[-0.5, '#ffd84a'], [Math.PI + 0.5, '#ffc83a']]) {
+      c.save(); c.translate(32, 40); c.rotate(a);
+      F(c, P((p) => { p.rect(-26, -5, 24, 10); }), '#e8962a', 1.8);
+      F(c, circ(15, 0, 11), col, 2);
+      F(c, ell(null, 15, -5, 5, 2.2), '#3a2a50', 1, { shade: false });
+      F(c, circ(15, 3, 2.8), '#fff3b0', 1, { shade: false });
+      curve(c, '#8a6a30', 2.2, (x) => { x.arc(27, -3, 3.6, 0, TAU); });
+      c.restore();
+    }
+    glint(c, 32, 8, 3.4); glint(c, 8, 56, 3);
+  },
+
   '💍': (c) => { curve(c, GOLD2, 7, (x) => { x.arc(32, 40, 15, 0, TAU); }); curve(c, GOLD, 3.5, (x) => { x.arc(32, 40, 15, 0, TAU); }); F(c, poly(c, [[24, 20], [40, 20], [46, 10], [32, 4], [18, 10]]), '#ff5a5a', 2); ln(c, [[18, 10], [46, 10]], '#ffb0b0', 1.4); ln(c, [[24, 20], [32, 4], [40, 20]], '#b82a3a', 1.2); glint(c, 27, 12, 3.5); },
   '❄': (c) => { for (let i = 0; i < 3; i++) { c.save(); c.translate(32, 32); c.rotate((i * Math.PI) / 3); ln(c, [[0, -26], [0, 26]], '#6ab8ee', 4.6); ln(c, [[0, -26], [0, 26]], '#dff4ff', 2); for (const s of [-1, 1]) for (const y of [-15, 15]) { ln(c, [[0, y], [8, y + s * 9 * Math.sign(y)]], '#6ab8ee', 3.8); ln(c, [[0, y], [8, y + s * 9 * Math.sign(y)]], '#dff4ff', 1.6); } c.restore(); } F(c, circ(32, 32, 5), '#fff', 1.6); },
   '🪨': (c) => { F(c, P((p) => { p.moveTo(8, 46); p.lineTo(12, 22); p.lineTo(28, 10); p.lineTo(46, 14); p.lineTo(56, 32); p.lineTo(52, 52); p.lineTo(26, 56); p.closePath(); }), '#8a92b0', 2.2); F(c, poly(c, [[36, 14], [26, 34], [34, 34], [28, 54], [44, 28], [35, 28], [42, 14]]), '#ffd23a', 1.8); },
