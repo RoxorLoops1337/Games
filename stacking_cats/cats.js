@@ -458,7 +458,6 @@ export const WONDER_BY_ID = Object.fromEntries(WONDERS.map((w) => [w.id, w]));
 // check gets { stats (after this run), run, save, kingdom }.
 const bld = (k, n) => BUILDINGS.filter((b) => buildingLevel(k, b.id) >= n).length;
 export const ACHIEVEMENTS = [
-  { id: 'king',     name: 'Cheddar Crusher',  desc: 'Defeat King Squeakimus at the end of the map.', coins: 300, gems: 0, check: (c) => !!(c.save && c.save.storyDone) },
   { id: 'first',    name: 'First Catch',      desc: 'Defeat your first mouse.',                    coins: 20,  gems: 0, check: (c) => c.stats.kills >= 1 },
   { id: 'hunter',   name: 'Mouser',           desc: 'Defeat 1000 mice in total.',                  coins: 80,  gems: 0, check: (c) => c.stats.kills >= 1000 },
   { id: 'exterm',   name: 'Exterminator',     desc: 'Defeat 10000 mice in total.',                 coins: 300, gems: 2, check: (c) => c.stats.kills >= 10000 },
@@ -490,6 +489,7 @@ export const ACHIEVEMENTS = [
   { id: 'sell5',    name: 'Yard Sale',        desc: 'Sell 5 items in one run.',                    coins: 50,  gems: 0, check: (c) => (c.run.sold || 0) >= 5 },
   { id: 'event3',   name: 'Wanderer',         desc: 'Visit 3 event stops in one run.',             coins: 70,  gems: 1, check: (c) => (c.run.events || 0) >= 3 },
   { id: 'wish',     name: 'Lucky Wish',       desc: 'Win a toss at the Wishing Fountain.',         coins: 70,  gems: 1, check: (c) => (c.run.fountainWins || 0) >= 1 },
+  { id: 'king',     name: 'Cheddar Crusher',  desc: 'Defeat King Squeakimus in the wave 30 nest.', coins: 300, gems: 0, check: (c) => !!(c.save && c.save.storyDone) },
 ];
 
 // ---------------------------------------------------------------- special moves (tap a charged cat; each cat has one)
