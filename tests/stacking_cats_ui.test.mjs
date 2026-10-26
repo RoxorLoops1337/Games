@@ -726,3 +726,15 @@ t('every relic icon is in ICON_KEYS, so the page swaps its emoji for the drawing
 });
 
 console.log(`${n} tests passed`);
+
+t('backpack cells tell rarity without colour: one pip more per tier, a star for mythic', () => {
+  const css = readFileSync('stacking_cats/index.html', 'utf8');
+  const pips = { rare: 1, epic: 2, legendary: 3 };
+  for (const [r, n] of Object.entries(pips)) {
+    const m = css.match(new RegExp('\\.bag\\.' + r + '::after\\{content:\'([^\']*)\'\\}'));
+    assert.ok(m, r + ' has a content rule');
+    assert.equal((m[1].match(/\\25CF/g) || []).length, n, r + ' shows ' + n + ' pip(s)');
+  }
+  assert.ok(/\.bag\.mythic::after\{content:'\\2605'\}/.test(css), 'mythic shows a star');
+  assert.ok(!/\.bag\.common::after/.test(css), 'common has no mark');
+});
