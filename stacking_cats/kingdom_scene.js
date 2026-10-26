@@ -73,7 +73,7 @@ function bgLayer(night) {
     } else {   // sun: broad warm bloom, soft rays, bright disc
       const sh = g.createRadialGradient(866, 38, 6, 866, 38, 150); sh.addColorStop(0, 'rgba(255,248,200,.95)'); sh.addColorStop(0.25, 'rgba(255,240,170,.45)'); sh.addColorStop(1, 'rgba(255,240,170,0)');
       g.fillStyle = sh; g.fillRect(700, 0, 220, 170);
-      g.fillStyle = 'rgba(255,250,210,.22)';
+      g.fillStyle = 'rgba(255,250,210,.08)';
       for (let i = 0; i < 14; i++) { const a = i * TAU / 14 + 0.2; g.beginPath(); g.moveTo(866, 38); g.lineTo(866 + Math.cos(a - 0.07) * 120, 38 + Math.sin(a - 0.07) * 120); g.lineTo(866 + Math.cos(a + 0.07) * 120, 38 + Math.sin(a + 0.07) * 120); g.fill(); }
       g.fillStyle = '#fffbe0'; g.beginPath(); g.arc(866, 38, 16, 0, TAU); g.fill(); g.fillStyle = '#fff3a8'; g.beginPath(); g.arc(866, 38, 12, 0, TAU); g.fill();
     }
@@ -238,8 +238,8 @@ function propSprite(kind, v) {
 const DECOR = [
   ['tree', 24, 214, 1.1, 1, 0], ['bush', 70, 238, 1, 1, 0], ['lantern', 118, 204, 1, 0, 0], ['flowerbed', 96, 247, 1, 2, 4],
   ['lantern', 262, 203, 1, 0, 0], ['bench', 288, 232, 1, 0, 0], ['bush', 252, 240, 0.9, 2, 2], ['fence', 262, 252, 1, 0, 8],
-  ['blossom', 468, 216, 1, 2, 0], ['lantern', 502, 202, 1, 0, 6], ['flowerbed', 452, 247, 1, 3, 3], ['bush', 492, 240, 0.9, 1, 9],
-  ['tree', 650, 216, 1, 3, 0], ['lantern', 686, 204, 1, 0, 0], ['bush', 628, 240, 1, 2, 5], ['fence', 636, 252, 1, 0, 12],
+  ['blossom', 460, 233, 0.75, 2, 0], ['lantern', 502, 202, 1, 0, 6], ['flowerbed', 494, 248, 1, 3, 3], ['bush', 438, 246, 0.8, 1, 9],
+  ['tree', 640, 233, 0.75, 3, 0], ['lantern', 686, 204, 1, 0, 0], ['bush', 628, 240, 1, 2, 5], ['fence', 636, 252, 1, 0, 12],
   ['pine', 876, 214, 1.1, 4, 0], ['signpost', 828, 232, 1, 0, 0], ['crate', 812, 240, 1, 0, 3], ['bush', 904, 242, 1, 1, 0], ['flowerbed', 852, 248, 1, 5, 7],
   ['pine', 12, 150, 0.8, 5, 14], ['tree', 208, 152, 0.7, 6, 16], ['blossom', 430, 150, 0.7, 7, 20], ['pine', 756, 150, 0.7, 8, 24], ['tree', 905, 154, 0.75, 9, 28],
 ];

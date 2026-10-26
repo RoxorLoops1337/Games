@@ -124,6 +124,23 @@ t('every kingdom building draws at every level', () => {
   for (const b of BUILDINGS) for (let l = 0; l <= b.max; l++) drawBuilding(fakeCtx(), b.id, l);
 });
 
+t('the Kingdom scene is a cached painted world: day and night, growth props, cats, no em dashes', () => {
+  const k = emptyKingdom(); k.coins = 100; k.wonders = { paw: true };
+  const draw = (night, lv) => { k.lv = {}; for (const b of BUILDINGS) k.lv[b.id] = lv; scene.drawKingdom(fakeCtx(), { kingdom: k, selected: null, bumps: {}, night }, 3.7); };
+  for (const night of [false, true]) for (const lv of [0, 2, 3, 4, 5]) draw(night, lv);
+  assert.equal(typeof scene.freeKingdomArt, 'function', 'the scene can release its cached layers');
+  let made = 0; const old = globalThis.document.createElement;
+  globalThis.document.createElement = (...a) => { made++; return old(...a); };
+  draw(true, 5); draw(true, 5);
+  assert.equal(made, 0, 'a second frame builds no new canvases: the world is cached');
+  globalThis.document.createElement = old;
+  scene.freeKingdomArt(); draw(false, 1);
+  const dash = String.fromCharCode(0x2014);
+  for (const f of ['kingdom_scene.js', 'art_kingdom.js']) assert.ok(!readFileSync(new URL('../stacking_cats/' + f, import.meta.url), 'utf8').includes(dash), f + ' has no em dash');
+  const js = readFileSync(new URL('../stacking_cats/kingdom_scene.js', import.meta.url), 'utf8');
+  assert.ok(js.includes('WALKERS') && js.includes('LANTERNS') && js.includes('cloudSprite'), 'cats, lanterns and clouds are part of the scene');
+});
+
 t('kingdom scene draws, and taps land on the right building or wonder', () => {
   const k = emptyKingdom(); k.coins = 5000; k.lv = { dojo: 2, tent: 1 }; k.wonders = { paw: true };
   scene.drawKingdom(fakeCtx(), { kingdom: k, selected: { type: 'building', id: 'dojo' }, bumps: { dojo: 0 } }, 0.3);
@@ -876,4 +893,21 @@ t('relic icons: every relic key still has a drawing, each draws without throwing
   assert.ok(/EPIC = new Set\(\[/.test(art) && /rimLight\(cv/.test(art), 'epic glow and rim light finish');
   for (const [k, f] of Object.entries(RELIC_ICONS)) f(fakeCtx());
   assert.ok(!/—/.test(art), 'no em dashes');
+});
+
+t('world art: backdrops carry depth layers (cloud sprites, birds, motes), mice have fine detail and no scratch texture, fight VFX are richer', () => {
+  const rd = (f) => readFileSync(new URL('../stacking_cats/' + f, import.meta.url), 'utf8');
+  const aw = rd('art_world.js'), js = rd('main.js');
+  for (const th of THEMES) {
+    const bd = art.makeBackdrop(th, 3);
+    assert.ok(bd.cloudSpr && bd.motes.length > 0 && Array.isArray(bd.birds), th.name + ' ambient lists');
+    art.drawBackdrop(fakeCtx(), bd, 120, 3.3); art.drawRays(fakeCtx(), bd, 3.3); art.drawFront(fakeCtx(), bd, 120);
+    art.freeBackdrop(bd);
+  }
+  const mice = aw.slice(aw.indexOf('function mouseBody'), aw.indexOf('function dagger'));
+  assert.ok(/earShade\(/.test(mice) && /furShade\(/.test(mice) && /whiskers/.test(mice) && /tapers/.test(mice), 'mouse fine detail');
+  assert.ok(!/texturize\(c, \{ seed: hash\(key\)/.test(aw), 'no noisy scratch texture on mice');
+  assert.ok(/case 'cathit':[^\n]*sparks\([^\n]*flashGlow\(/.test(js), 'tower damage burst');
+  assert.ok(/case 'coin': if \(fx\.length < 300\) \{ sparks\(/.test(js) && /case 'chest':[^\n]*ring\([^\n]*flashGlow\(/.test(js), 'coin pop and box glint');
+  assert.ok(!/—/.test(aw), 'no em dashes');
 });
