@@ -605,4 +605,11 @@ t('Larger text also grows the title tagline, hints and Dex detail text', () => {
   assert.ok(/body\.bigtext \.detail\.dexd\{font-size:1[67]px\}/.test(html), 'dex detail');
 });
 
+t('the nest cage rattles harder as the nest takes damage (the captive panics)', () => {
+  const js = readFileSync('stacking_cats/art_world.js', 'utf8');
+  const i = js.indexOf('export function nestOverlay');
+  const f = js.slice(i, js.indexOf('// ----', i));
+  assert.ok(/Math\.sin\(t \* 14\) \* \(1 - hpFrac\)/.test(f), 'rattle scales with missing health');
+});
+
 console.log(`${n} tests passed`);
