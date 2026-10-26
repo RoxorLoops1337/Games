@@ -753,3 +753,16 @@ t('every menu screen is a labelled dialog that takes focus, so keyboard and scre
   assert.ok(/\.screen:focus\{outline:none\}/.test(css), 'no focus ring on the container itself');
   assert.ok(/if \(html\)/.test(fn), 'closing a screen never steals focus');
 });
+
+t('the set and best-cat lines on relic cards are readable on the cream card (WCAG contrast 4.5), and scale with big text', () => {
+  const css = readFileSync('stacking_cats/index.html', 'utf8');
+  const lum = (hex) => { const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  for (const sel of ['setl', 'gainl']) {
+    const m = css.match(new RegExp('\\.card \\.' + sel + '\\{[^}]*?color:(#[0-9a-fA-F]{6})'));
+    assert.ok(m, sel + ' has a colour');
+    assert.ok(ratio(m[1], '#fff1de') >= 4.5, sel + ' contrast ' + ratio(m[1], '#fff1de').toFixed(2));
+  }
+  assert.ok(/body\.bigtext \.card \.setl/.test(css) && /body\.bigtext \.card \.gainl/.test(css), 'big text covers both lines');
+  assert.ok(/body\.cb \.card \.gainl/.test(css), 'colour blind mode swaps the green');
+});
