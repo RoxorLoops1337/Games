@@ -151,3 +151,19 @@ export const FINALE_LINES = [
   'Every caged cat is free. Whiskerton is safe, the Cheese Moon shines again and the whole royal guard is purring.',
   'But mice are always hiding in the cheese. Want to keep the guard in shape?',
 ];
+
+// the ending cutscene, shown from the finale card: a party under the returned Cheese Moon, then the guard walks on into the sunrise
+export const EPILOGUE = [
+  { id: 'party', dur: 5.6, text: 'The Cheese Moon shone again and all of Whiskerton purred until sunrise.' },
+  { id: 'dawn', dur: 6.4, text: 'But mice are never far away. The royal guard is ready for the next squeak!' },
+];
+export const EPILOGUE_LEN = EPILOGUE.reduce((a, s) => a + s.dur, 0);
+export function epilogueAt(t) {
+  if (t <= 0) return { i: 0, p: 0, t: 0, done: false };
+  let at = 0;
+  for (let i = 0; i < EPILOGUE.length; i++) {
+    if (t < at + EPILOGUE[i].dur) return { i, p: (t - at) / EPILOGUE[i].dur, t: t - at, done: false };
+    at += EPILOGUE[i].dur;
+  }
+  return { i: EPILOGUE.length - 1, p: 1, t: EPILOGUE[EPILOGUE.length - 1].dur, done: true };
+}

@@ -263,4 +263,19 @@ await t('story: the mouse king falls at the end of the map, once per run, with a
   assert.ok(/Squeakimus/.test(st.FINALE_TITLE) && !st.FINALE_TITLE.includes('\u2014'));
 });
 
+await t('story: the epilogue is a short two scene timeline with clean captions', async () => {
+  const st = await import('../stacking_cats/story.js');
+  assert.equal(st.EPILOGUE.length, 2);
+  let at = 0;
+  for (let i = 0; i < st.EPILOGUE.length; i++) {
+    const mid = st.epilogueAt(at + st.EPILOGUE[i].dur / 2);
+    assert.equal(mid.i, i);
+    assert.ok(!st.EPILOGUE[i].text.includes('\u2014'), st.EPILOGUE[i].text);
+    at += st.EPILOGUE[i].dur;
+  }
+  assert.equal(st.EPILOGUE_LEN, at);
+  assert.ok(st.epilogueAt(at + 1).done);
+  assert.ok(st.EPILOGUE_LEN > 8 && st.EPILOGUE_LEN < 20, 'short enough to enjoy and not too short to read');
+});
+
 console.log(n + ' passed');

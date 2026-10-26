@@ -21,7 +21,7 @@ import { iconCanvas, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
-import { playIntro } from './intro.js';
+import { playIntro, playEpilogue } from './intro.js';
 import { rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
@@ -724,10 +724,13 @@ function showFinale() {
   for (const a of checkAch({ ...g.run, wave: g.wave })) toast(`Trophy: ${a.name}!`);
   sfx.play('win'); sfx.music('calm');
   g.cats.slice(0, 3).forEach((c, i) => sfx.meow(c.id, 'cheer', 0.2 + i * 0.25));
-  setScreen(`<h2>${FINALE_TITLE}</h2>${FINALE_LINES.map((l) => `<p class="sub">${l}</p>`).join('')}
-    <p class="sub"><b>${gems ? `Royal reward: +${gems} gems!` : 'Paws-itively purr-fect! The kingdom cheers again.'}</b></p>
-    <div class="row"><button class="btn big" data-act="go">Keep playing</button></div>`);
-  acts = { go: () => nextReward() };
+  const card = () => {
+    setScreen(`<h2>${FINALE_TITLE}</h2>${FINALE_LINES.map((l) => `<p class="sub">${l}</p>`).join('')}
+      <p class="sub"><b>${gems ? `Royal reward: +${gems} gems!` : 'Paws-itively purr-fect! The kingdom cheers again.'}</b></p>
+      <div class="row"><button class="btn big" data-act="go">Keep playing</button><button class="btn grey" data-act="ending">Watch the ending</button></div>`);
+    acts = { go: () => nextReward(), ending: () => playEpilogue(app, { cat: (id) => catSprite(id), sfx, motion: save.opt.motion, onDone: () => card() }) };
+  };
+  card();
 }
 function nextReward() {
   const r = queue.shift();
