@@ -16,7 +16,7 @@ import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
-import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress } from './art_util.js';
+import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel } from './art_util.js';
 import { iconCanvas, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
 import { buzz, setHaptics } from './haptics.js';
@@ -1947,6 +1947,15 @@ function render(dt) {
   }
   if (gfx >= 2) drawWeather(t, dt);
   drawFx();
+  if (mode === 'play' && g && g.cats) {
+    // low-health warning: a soft red edge that beats like a pulse while any cat is nearly out of health
+    const dg = dangerLevel(S.aliveCats(g).map((c) => ({ hp: c.hp, max: S.catMaxHp(g, c) })));
+    if (dg > 0) {
+      const beat = save.opt.motion ? 0.6 + 0.4 * Math.sin(tAnim * 5) : 0.8, grd = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.85);
+      grd.addColorStop(0, 'rgba(255,40,70,0)'); grd.addColorStop(1, 'rgba(255,40,70,' + (0.5 * dg * beat).toFixed(3) + ')');
+      ctx.globalAlpha = 1; ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+    }
+  }
   ctx.restore();
   if (gfx >= 3) {
     // glow reads best in dim light, so it is gentle at noon and stronger at dusk, at night and in the rain
