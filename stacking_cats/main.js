@@ -133,7 +133,16 @@ function paintThumbs(root) {
   root.querySelectorAll('canvas[data-cat]').forEach((c) => {
     const x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height);
     x.drawImage(c.dataset.lock ? silSprite(c.dataset.cat) : catSprite(c.dataset.cat), 0, 0, c.width, c.height);
+    if (c.dataset.lock) cageBars(x, c.width, c.height);   // the Gnaw Army has this cat locked up
   });
+}
+// a little cage drawn over a locked cat's silhouette: top and bottom rails and six bars
+function cageBars(x, w, h) {
+  x.save(); x.strokeStyle = 'rgba(214,200,240,.75)'; x.lineWidth = Math.max(2, w / 36); x.lineCap = 'round';
+  x.beginPath();
+  for (let i = 1; i <= 6; i++) { const px = (w * i) / 7; x.moveTo(px, h * 0.1); x.lineTo(px, h * 0.92); }
+  x.moveTo(w * 0.08, h * 0.12); x.lineTo(w * 0.92, h * 0.12); x.moveTo(w * 0.08, h * 0.9); x.lineTo(w * 0.92, h * 0.9);
+  x.stroke(); x.restore();
 }
 
 // ---------------------------------------------------------------- state

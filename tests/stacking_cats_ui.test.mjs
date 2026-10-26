@@ -531,4 +531,11 @@ t('the nest wave banner uses the story title helpers', () => {
   assert.ok(/banner\(boss \? nestBannerTitle\(g\.wave\)/.test(js) && /boss \? nestTitle\(g\.wave, nest\.name\)/.test(js), 'banner and sub line come from story.js');
 });
 
+t('locked Dex cats are drawn behind cage bars', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const i = js.indexOf('function paintThumbs');
+  const f = js.slice(i, i + 900);
+  assert.ok(/function cageBars\(/.test(js) && /if \(c\.dataset\.lock\) cageBars\(x, c\.width, c\.height\)/.test(f), 'silhouettes get bars');
+});
+
 console.log(`${n} tests passed`);
