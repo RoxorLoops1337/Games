@@ -82,6 +82,16 @@ const D = {
     F(c, P((p) => { p.moveTo(26, 28); p.bezierCurveTo(26, 24, 38, 24, 38, 28); p.lineTo(38, 38); p.bezierCurveTo(38, 42, 26, 42, 26, 38); p.closePath(); }), '#ff8fb7', 2);
     glint(c, 30, 30, 3.5);
   },
+  '🧺': (c) => {
+    // a woven cat bed: a rim, a soft blanket and weave lines
+    F(c, P((p) => { p.moveTo(8, 30); p.bezierCurveTo(8, 56, 56, 56, 56, 30); p.closePath(); }), '#d9a05a', 2);
+    for (const [x1, y1, x2, y2] of [[16, 36, 20, 50], [26, 38, 28, 53], [38, 38, 36, 53], [48, 36, 44, 50]]) ln(c, [[x1, y1], [x2, y2]], '#a8743a', 1.6);
+    ln(c, [[12, 40], [52, 40]], '#a8743a', 1.6); ln(c, [[16, 47], [48, 47]], '#a8743a', 1.6);
+    F(c, P((p) => { p.moveTo(14, 30); p.bezierCurveTo(16, 18, 48, 18, 50, 30); p.bezierCurveTo(40, 36, 24, 36, 14, 30); p.closePath(); }), PINK, 2);
+    ln(c, [[22, 26], [26, 31]], '#ffd0e2', 1.8); ln(c, [[34, 25], [38, 30]], '#ffd0e2', 1.8);
+    F(c, P((p) => { p.moveTo(6, 30); p.bezierCurveTo(6, 25, 58, 25, 58, 30); p.bezierCurveTo(58, 34, 6, 34, 6, 30); p.closePath(); }), '#e8b46a', 2);
+    glint(c, 46, 22, 3.4);
+  },
   '🧤': (c) => { F(c, P((p) => { p.moveTo(20, 56); p.lineTo(18, 34); p.bezierCurveTo(10, 30, 8, 22, 14, 20); p.bezierCurveTo(18, 19, 20, 24, 22, 28); p.lineTo(22, 14); p.bezierCurveTo(22, 8, 30, 8, 30, 14); p.lineTo(30, 10); p.bezierCurveTo(30, 4, 38, 4, 38, 10); p.lineTo(38, 12); p.bezierCurveTo(38, 6, 46, 6, 46, 12); p.lineTo(46, 38); p.bezierCurveTo(46, 48, 44, 52, 42, 56); p.closePath(); }), BLUE, 2.2); F(c, P((p) => { p.rect(19, 50, 24, 9); }), CREAM, 2); for (const x of [24, 30, 36]) ln(c, [[x, 51], [x, 58]], '#c9b89a', 1.6); for (const [x, y] of [[30, 30], [38, 24], [30, 20]]) dot(c, x, y, 1.8, 'rgba(255,255,255,.8)'); glint(c, 40, 40, 3.2); },
   '🍙': (c) => { F(c, P((p) => { p.moveTo(32, 10); p.bezierCurveTo(40, 10, 56, 38, 54, 46); p.bezierCurveTo(52, 54, 40, 56, 32, 56); p.bezierCurveTo(24, 56, 12, 54, 10, 46); p.bezierCurveTo(8, 38, 24, 10, 32, 10); p.closePath(); }), '#fffaf0', 2.2); F(c, P((p) => { p.moveTo(20, 56); p.lineTo(22, 40); p.lineTo(42, 40); p.lineTo(44, 56); p.closePath(); }), '#2e3a3a', 1.8, { shade: false }); for (const [x, y] of [[26, 26], [36, 22], [32, 32], [40, 31], [24, 36]]) dot(c, x, y, 1.3, '#e8dcc4'); glint(c, 22, 24, 3.4); },
   '🌿': (c) => { ln(c, [[32, 58], [32, 12]], '#2e8a3e', 3); for (const [y, s] of [[44, 1], [34, -1], [24, 1], [16, -1]]) F(c, ell(null, 32 + s * 11, y, 12, 5.5, s * -0.5), GREEN, 1.8); F(c, ell(null, 32, 10, 5, 8), GREEN, 1.8); },
