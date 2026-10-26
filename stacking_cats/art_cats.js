@@ -247,8 +247,9 @@ const ACC = {
     },
     front(ctx, A) {
       // a shell crown on her head, a pearl necklace and a few floating bubbles
-      fillPath(ctx, new Path2D('M46 34 Q60 6 74 34 Q60 26 46 34 Z'), '#ffd9ec', 1);
-      line(ctx, [[60, 12], [60, 30]], '#ff9ad0', 1); line(ctx, [[53, 16], [54, 31]], '#ff9ad0', 0.9); line(ctx, [[67, 16], [66, 31]], '#ff9ad0', 0.9);
+      fillPath(ctx, new Path2D('M42 36 Q60 -2 78 36 Q60 27 42 36 Z'), '#ff9ad0', 1.4);
+      line(ctx, [[60, 8], [60, 30]], '#d8609e', 1.2); line(ctx, [[51, 13], [52, 31]], '#d8609e', 1); line(ctx, [[69, 13], [68, 31]], '#d8609e', 1);
+      dot(ctx, 60, 8, 3.4, '#ffffff', 1);
       for (let i = 0; i < 5; i++) dot(ctx, 46 + i * 7, 92 + Math.sin(i * 0.8) * 3 + 2, 2.6, '#ffffff', 0.7);
       for (const [x, y, r] of [[92, 56, 4], [98, 44, 3], [88, 40, 2.4]]) { ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke(); }
     },
