@@ -180,6 +180,13 @@ t('arrow keys move focus through the cards of a pick screen', () => {
   assert.ok(/\.card:focus-visible/.test(readFileSync('stacking_cats/index.html', 'utf8')), 'a focused card must be visibly marked');
 });
 
+t('the Kingdom can be browsed with the arrow keys and only while its scene is on screen', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(js.includes('kNav = (step) =>'), 'the Kingdom must register a keyboard walker');
+  assert.ok(js.includes("if (kNav && kScene && $('kscene')"), 'arrows must only drive the Kingdom while its canvas exists');
+  assert.ok(/\.\.\.WONDERS\.map/.test(js), 'the walk must include the wonders');
+});
+
 t('tutorial tips are held back while the game is paused', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   const m = js.match(/function coach\([^)]*\) \{\n([^\n]*)\n/);
