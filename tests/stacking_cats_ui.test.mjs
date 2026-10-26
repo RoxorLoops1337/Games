@@ -568,4 +568,10 @@ t('the first two cutscene scenes seat the cats above the caption plate', () => {
   assert.ok(!/y = GROUND \+ 18 \+ \(i % 2\) \* 8/.test(js), 'no scene keeps the old low seat');
 });
 
+t('the cutscene cages are seated above the caption plate so the caged cats stay visible', () => {
+  const js = readFileSync('stacking_cats/intro.js', 'utf8');
+  assert.ok(/y = GROUND \+ 2 - \(1 - drop\) \* 220/.test(js), 'cages sit at ground level, not below the plate');
+  assert.ok(!/GROUND \+ 56 - \(1 - drop\)/.test(js), 'old low seat is gone');
+});
+
 console.log(`${n} tests passed`);

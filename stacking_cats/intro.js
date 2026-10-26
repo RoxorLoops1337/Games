@@ -221,7 +221,7 @@ function nap(ctx, R, p, T) {
   const ids = ['tabby', 'mochi', 'yuki', 'pudding', 'ember', 'sparky'];
   for (let i = 0; i < 6; i++) {
     const at = 0.6 + i * 0.06, k = seg(p, at, at + 0.07), drop = k < 1 ? outBack(k) : 1; if (k <= 0) continue;
-    const x = 160 + i * 128, y = GROUND + 56 - (1 - drop) * 220;
+    const x = 160 + i * 128, y = GROUND + 2 - (1 - drop) * 220;
     cat(ctx, R, ids[i], x, y + 2, 0.6);
     ctx.save(); ctx.translate(x, y);
     ctx.fillStyle = 'rgba(20,8,40,.55)'; ctx.fillRect(-46, -86, 92, 92);
