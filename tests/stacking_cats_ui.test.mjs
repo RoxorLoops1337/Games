@@ -906,7 +906,7 @@ t('world art: backdrops carry depth layers (cloud sprites, birds, motes), mice h
   }
   const mice = aw.slice(aw.indexOf('function mouseBody'), aw.indexOf('function dagger'));
   assert.ok(/earShade\(/.test(mice) && /furShade\(/.test(mice) && /whiskers/.test(mice) && /tapers/.test(mice), 'mouse fine detail');
-  assert.ok(!/texturize\(c, \{ seed: hash\(key\)/.test(aw), 'no noisy scratch texture on mice');
+  assert.ok(!/texturize/.test(aw.slice(aw.indexOf('export function enemySprite'), aw.indexOf('function nestBody'))), 'no noisy scratch texture on mice');
   assert.ok(/case 'cathit':[^\n]*sparks\([^\n]*flashGlow\(/.test(js), 'tower damage burst');
   assert.ok(/case 'coin': if \(fx\.length < 300\) \{ sparks\(/.test(js) && /case 'chest':[^\n]*ring\([^\n]*flashGlow\(/.test(js), 'coin pop and box glint');
   assert.ok(!/—/.test(aw), 'no em dashes');
