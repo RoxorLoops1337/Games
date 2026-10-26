@@ -5,7 +5,7 @@ import {
   takeItem, useReroll, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems,
 } from '../stacking_cats/sim.js';
 import {
-  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder,
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal,
 } from '../stacking_cats/cats.js';
 
 let n = 0;
@@ -226,6 +226,19 @@ t('affordableWonder names the cheapest unowned wonder the gems can pay for', () 
   assert.equal(affordableWonder(k), null, 'owned wonders are skipped');
   k.gems = 99;
   assert.ok(affordableWonder(k), 'more gems name another wonder');
+});
+
+t('nextGoal names the cheapest unmaxed building with the coins still missing', () => {
+  const k = emptyKingdom();
+  const g0 = nextGoal(k);
+  assert.ok(g0 && g0.cost === Math.min(...BUILDINGS.map((b) => upgradeCost(b.id, 0))), 'the cheapest building is the goal');
+  assert.equal(g0.need, g0.cost, 'with no coins all of it is missing');
+  k.coins = g0.cost - 5;
+  assert.equal(nextGoal(k).need, 5, 'only the gap is reported');
+  k.coins = g0.cost + 1000;
+  assert.equal(nextGoal(k).need, 0, 'an affordable goal needs nothing');
+  for (const b of BUILDINGS) k.lv[b.id] = b.max;
+  assert.equal(nextGoal(k), null, 'a fully built kingdom has no goal');
 });
 
 console.log(`${n} tests passed`);

@@ -337,6 +337,18 @@ export function kingdomBonuses(k) {
   for (const w of WONDERS) if (k && k.wonders && k.wonders[w.id]) for (const key in w.bonus) m[key] += w.bonus[key];
   return m;
 }
+// the cheapest unmaxed building with the coins still missing for it (null when everything is built), used for the game over goal line
+export function nextGoal(k) {
+  let best = null;
+  for (const b of BUILDINGS) {
+    const l = buildingLevel(k, b.id);
+    if (l >= b.max) continue;
+    const cost = upgradeCost(b.id, l);
+    if (!best || cost < best.cost) best = { id: b.id, cost };
+  }
+  if (best) best.need = Math.max(0, best.cost - ((k && k.coins) | 0));
+  return best;
+}
 // the cheapest wonder not yet built that the gems can pay for (null when none), used for the Kingdom hint
 export function affordableWonder(k) {
   let best = null;
