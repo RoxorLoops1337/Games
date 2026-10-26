@@ -16,7 +16,7 @@ import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
-import { mix, outlineCanvas, rimLight, texturize, hash } from './art_util.js';
+import { mix, outlineCanvas, rimLight, texturize, hash, idleHop } from './art_util.js';
 import { iconCanvas, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
 import { buzz, setHaptics } from './haptics.js';
@@ -1594,7 +1594,8 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
     const squash = c.flash > 0 ? 0.06 : 0;
     for (let k = zoomies ? 2 : 0; k >= 0; k--) {
       ctx.save();
-      ctx.translate(cx + lunge + sway - k * 16, feetY);
+      const hop = !k && !marching && !cheer && save.opt.motion && atk < 0.02 ? idleHop(t, i + (c.seed || 0)) * 7 : 0;
+      ctx.translate(cx + lunge + sway - k * 16, feetY - hop);
       // idle breathing: a slow chest rise, out of step between cats, steadier while marching or attacking
       const br = marching || cheer || !save.opt.motion ? 0 : Math.sin(t * 2.1 + i * 1.9 + (c.seed || 0)) * 0.014 * (1 - Math.min(1, atk));
       ctx.scale(1 + atk * 0.05 + squash - br * 0.5, 1 - atk * 0.06 - squash + br);
