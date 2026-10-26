@@ -485,4 +485,12 @@ t('the forge toast names the rarity of the new item', () => {
   assert.ok(/Forged \$\{ITEM_BY_ID\[id\]\.name\} \(\$\{ITEM_BY_ID\[id\]\.rarity\}\)!/.test(f), 'toast reads Forged Name (rarity)!');
 });
 
+t('every nest shows the caged cat it is holding (cage, ears and eyes drawn live)', () => {
+  const js = readFileSync('stacking_cats/art_world.js', 'utf8');
+  const i = js.indexOf('export function nestOverlay');
+  const f = js.slice(i, js.indexOf('// ----', i));
+  assert.ok(/caged cat/.test(f) && /cageBars|bars/.test(f), 'nestOverlay draws a small cage with a cat inside');
+  assert.ok(!/\u2014/.test(f), 'no em dash');
+});
+
 console.log(`${n} tests passed`);
