@@ -1793,16 +1793,8 @@ function doSpecial(uid) {
 function updateSpecials() {
   const box = $('specials');
   if (save.opt.autoSpecial && g && mode === 'play' && !paused && g.state === 'fight') {
-    // assist mode: fire a charged special once a few mice (or a nest) are within reach
-    const near = g.enemies.filter((e) => !e.dead && !e.under && e.x < 600).length, boss = g.enemies.some((e) => e.boss && !e.dead);
-    const hurt = g.cats.some((c) => c.ko || c.hp < S.catMaxHp(g, c) * 0.4);
-    if (near >= 3 || boss || (near >= 1 && hurt)) {
-      // a heal is wasted on a healthy team; when the team is hurt, the defensive moves go first
-      const ready = g.cats.filter((c) => S.specialReady(c) && (hurt || S.specialInfo(c.id).kind !== 'heal'));
-      const guard = (c) => ['heal', 'fortress', 'phase'].includes(S.specialInfo(c.id).kind);
-      const pick = (hurt && ready.find(guard)) || ready[0];
-      if (pick) doSpecial(pick.uid);
-    }
+    const pick = S.autoSpecialPick(g);   // assist mode, rules live in sim.js
+    if (pick) doSpecial(pick.uid);
   }
   const show = g && mode === 'play' && g.state === 'fight';
   box.style.display = show || (g && mode === 'play') ? 'flex' : 'none';

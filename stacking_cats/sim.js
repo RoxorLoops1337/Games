@@ -1172,6 +1172,18 @@ export function grantStartItem(g) {
 // ================================================================ special moves, event stops
 export const specialInfo = (id) => SPECIALS[id] || { kind: 'frenzy', name: 'Power Up', icon: '✨', color: '#ffd23f', pow: 1 };
 export const specialReady = (c) => !c.ko && c.sp >= 1;
+// Assist mode: which charged cat should fire by itself right now (or null). It acts when a few mice are
+// close, a boss is out, or a cat is low with a mouse close. A heal is held for a hurt team, and when the
+// team is hurt the defensive moves (heal, fortress, phase) go first.
+export function autoSpecialPick(g) {
+  const near = g.enemies.filter((e) => !e.dead && !e.under && e.x < 600).length;
+  const boss = g.enemies.some((e) => e.boss && !e.dead);
+  const hurt = g.cats.some((c) => c.ko || c.hp < catMaxHp(g, c) * 0.4);
+  if (!(near >= 3 || boss || (near >= 1 && hurt))) return null;
+  const ready = g.cats.filter((c) => specialReady(c) && (hurt || specialInfo(c.id).kind !== 'heal'));
+  const guard = (c) => ['heal', 'fortress', 'phase'].includes(specialInfo(c.id).kind);
+  return (hurt && ready.find(guard)) || ready[0] || null;
+}
 const foesOf = (g) => g.enemies.filter((e) => !e.dead && !e.under && e.x >= g.towerX - 10 && e.x < W + 30);
 const pickN = (g, arr, n) => { const a = arr.slice(), out = []; while (a.length && out.length < n) out.push(a.splice(Math.floor(g.rnd() * a.length), 1)[0]); return out; };
 
