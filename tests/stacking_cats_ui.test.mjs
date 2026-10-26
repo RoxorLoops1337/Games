@@ -309,4 +309,10 @@ t('holding a finger on an uncharged cat makes it purr, and letting go stops the 
   assert.ok(/addEventListener\('pointerup', stopPurr\)/.test(js), 'releasing must cancel it');
 });
 
+t('toasts sit above coach tips so a new toast is never hidden under a tip', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8');
+  const z = (html.match(/#toasts\{[^}]*z-index:(\d+)/) || [])[1], cz = (html.match(/\.coach\{[^}]*z-index:(\d+)/) || [])[1];
+  assert.ok(+z > +cz, `toast z-index ${z} must be above the coach z-index ${cz}`);
+});
+
 console.log(`${n} tests passed`);
