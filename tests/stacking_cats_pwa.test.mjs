@@ -329,4 +329,11 @@ await t('nestBannerTitle: wave 30 announces the final battle', async () => {
   assert.equal(nestBannerTitle(60), 'NEST BATTLE!');
 });
 
+await t('pickLine: the first start pick sets the story up, later picks explain merging', async () => {
+  const { pickLine } = await import('../stacking_cats/story.js');
+  assert.ok(/royal guard/.test(pickLine(0)) && /pick the first/.test(pickLine(0)));
+  assert.ok(/merges/.test(pickLine(1)) && pickLine(1) === pickLine(2));
+  assert.ok(!/\u2014/.test(pickLine(0) + pickLine(1)), 'no em dash');
+});
+
 console.log(n + ' passed');

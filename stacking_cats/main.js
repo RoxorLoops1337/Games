@@ -22,7 +22,7 @@ import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.j
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
 import { playIntro, playEpilogue } from './intro.js';
-import { nestBannerTitle, nestTitle, titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
+import { pickLine, nestBannerTitle, nestTitle, titleTag, rescueLine, fallLine, freedToast, catStory, beatToastWanted, finaleDue, finaleGems, chapterDoneLine, chapterOf, FINALE_WAVE, FINALE_TITLE, FINALE_LINES, isChapterStart, chapterTitle, chapterBeat, taunt } from './story.js';
 
 const SAVE_KEY = 'stacking_cats_save_v1';
 const W = S.W, H = S.H, GROUND = S.GROUND, SLOT = S.SLOT;
@@ -657,7 +657,7 @@ function startRun(opts = {}) {
 function showPickStart() {
   mode = 'pick';
   rewardChoices = rewardChoices || S.rollCatChoices(g);
-  setScreen(`<h2>Choose friend ${pickN + 1} of ${startTotal}</h2><p class="sub">${pickN === 0 ? 'Every cat attacks differently. Pick the first one for your tower.' : 'Pick a friend to stack on top. Choosing the same cat again merges them!'}</p>
+  setScreen(`<h2>Choose friend ${pickN + 1} of ${startTotal}</h2><p class="sub">${pickLine(pickN)}</p>
     <div class="cards">${rewardChoices.map((id) => catCard(id, { ribbon: owns(id) ? 'MERGE!' : '', gain: pickN > 0 })).join('')}</div>
     <div class="row hint">${rerollBtn()}</div>`);
   coach('c1', 'Step 1: tap a cat to pick it.', 480, 440, 'up', { target: '.card' });

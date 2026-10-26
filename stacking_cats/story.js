@@ -184,3 +184,8 @@ export function titleTag(storyDone, unlocked, total) {
 export const nestTitle = (wave, name) => (wave === FINALE_WAVE ? `King Squeakimus: ${name}` : name);
 // the big banner when a nest wave starts: the wave 30 nest is the showdown with the mouse king
 export const nestBannerTitle = (wave) => (wave === FINALE_WAVE ? 'FINAL BATTLE!' : 'NEST BATTLE!');
+
+// the subtitle on the "choose your starting cats" screen: the first pick sets the story up
+export const pickLine = (n) => (n === 0
+  ? 'Brave cats set out to free the royal guard. Every cat attacks differently, so pick the first one for your tower.'
+  : 'Pick a friend to stack on top. Choosing the same cat again merges them!');
