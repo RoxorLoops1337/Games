@@ -651,7 +651,6 @@ function beginWave() {
   // introduce new mice and the nest's trick the first time they show up
   const intro = [];
   for (const ty of new Set(g.queue.map((q) => q.type))) { const d = ENEMY_TYPES[ty]; if (d && d.hint && !save.tips['m_' + ty]) { save.tips['m_' + ty] = true; intro.push(`New: ${d.name}. ${d.hint}.`); } }
-  if (boss && nest) { const info = NESTS.find((n) => n.id === nest.kind); if (info && info.trick && !save.tips['n_' + nest.kind]) { save.tips['n_' + nest.kind] = true; intro.push(`${nest.name}: ${info.trick}.`); } }
   if (intro.length) { persist(); intro.slice(0, 3).forEach((m, i) => setTimeout(() => { if (mode === 'play') toast(m); }, 2800 + i * 2600)); }
   if (g.wave === 1) setTimeout(() => { if (mode === 'play' && !(coachEl && coachEl.dataset.key === 'c5')) coach('c2', 'The bottom cat takes the hits. Tough cats go low, shooters go high!', 250, 120, 'left'); }, 2600);
 }
