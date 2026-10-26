@@ -18,7 +18,7 @@ import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
 import { boxHero } from './art_boxes.js';
 import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel, clearLine, confirmTap, coachAbove, specialLabel } from './art_util.js';
-import { iconCanvas, installGlyphs } from './art_icons.js';
+import { iconCanvas, iconURL, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
 import { buzz, setHaptics } from './haptics.js';
 import { shareRun } from './share.js';
@@ -1297,6 +1297,8 @@ function updateHud(dt) {
   const ch = g.boxes.length;
   $('chestBox').style.display = ch > 0 ? 'flex' : 'none';
   setText('chestTxt', String(ch));
+  const topBox = BOXES.filter((b) => g.boxes.includes(b.id)).pop();
+  if (topBox && hudCache.box !== topBox.id) { hudCache.box = topBox.id; $('chestIco').innerHTML = `<img class="gi" alt="" src="${iconURL(topBox.icon)}">`; }
   $('bMeter').classList.toggle('on', !!save.meter);
   if (playing && g.state === 'fight' && g.zoom >= 100 && !zr && !save.tips.c5) coach('c5', 'Step 2: tap Zoomies for super speed!', 830, 104, 'right', { target: '#zoom', wait: true });
   const syn = S.synergyState(g), ssig = JSON.stringify(syn.counts) + JSON.stringify(syn.tiers);
@@ -1574,7 +1576,7 @@ function handle(e) {
     case 'healfx': for (let i = 0; i < 3; i++) spawnFx({ k: 'h', x: e.x + (Math.random() - 0.5) * 50, y: e.y - 10, life: 0.9, max: 0.9 }); sfx.play('heal'); break;
     case 'cathit': { if (Math.random() < 0.18) emote(e.uid, '\uD83D\uDCA2', 0.8); const p = catPos(e.uid); txtFx(p.x - 56, p.y, Math.round(e.v), '#ff8a8a', 15, 0.7); towerWob = 1; shake = Math.max(shake, 1.8); sfx.play('hit'); buzz('hit'); break; }
     case 'coin': if (fx.length < 300) spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 52, ty: 72, life: 0.7 + Math.random() * 0.2, max: 0.8, kind: 'coin', ox: (Math.random() - 0.5) * 160, oy: -60 - Math.random() * 60 }); break;
-    case 'chest': spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', ox: 0, oy: -90 }); sparks(e.x, e.y, 10, '#ffd23f', 220, 0.5); txtFx(e.x, e.y - 20, e.tier ? BOX_BY_ID[e.tier].name : 'Box!', '#ffd23f', 20, 1); sfx.play('chest'); break;
+    case 'chest': spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', tier: e.tier, ox: 0, oy: -90 }); sparks(e.x, e.y, 10, '#ffd23f', 220, 0.5); txtFx(e.x, e.y - 20, e.tier ? BOX_BY_ID[e.tier].name : 'Box!', '#ffd23f', 20, 1); sfx.play('chest'); break;
     case 'shieldhit': { const p = catPos(e.uid); ring(p.x, p.y - 10, e.broke ? 70 : 46, '#8fe8ff', e.broke ? 0.5 : 0.28, e.broke ? 6 : 3); if (e.broke) { txtFx(p.x - 46, p.y - 6, 'Barrier down', '#bff4ff', 16, 0.9); sparks(p.x, p.y - 10, 10, '#bff4ff', 190, 0.4); } break; }
     case 'undying': { const p = catPos(e.uid); txtFx(p.x - 56, p.y - 24, 'Second chance!', '#ffe27a', 22, 1.5); ring(p.x, p.y - 10, 100, '#fff2a0', 0.7, 8); flashGlow(p.x, p.y - 10, 140, '#fff2a0', 0.6); sparks(p.x, p.y - 10, 20, '#fff6b0', 260, 0.7); sfx.play('heal'); break; }
     case 'dodge': { const p = catPos(e.uid); txtFx(p.x - 40, p.y, 'Dodge!', '#b9f5ff', 18, 0.8); ring(p.x, p.y - 10, 44, '#d9f8ff', 0.35, 3); sparks(p.x, p.y - 10, 6, '#ffffff', 150, 0.3); break; }
@@ -1663,7 +1665,7 @@ function drawFx() {
       ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a > 0.85 ? 0.9 : a * 0.45; ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.restore();
     } else if (f.k === 's') { ctx.globalAlpha = a; ctx.fillStyle = '#fff6b0'; for (let i = 0; i < 4; i++) { const an = i * 1.57 + (1 - a) * 2, d = (1 - a) * 24 + 4; ctx.beginPath(); ctx.arc(f.x + Math.cos(an) * d, f.y + Math.sin(an) * d, 2.6 * a + 0.6, 0, TAU); ctx.fill(); } }
     else if (f.k === 'a') { ctx.globalAlpha = a; ctx.strokeStyle = '#fff'; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { ctx.lineWidth = 3.4 - i; ctx.beginPath(); ctx.arc(f.x + 16, f.y, (f.wide ? 46 : 28) + i * 6 + (1 - a) * 8, Math.PI * 0.62, Math.PI * 1.38); ctx.stroke(); } }
-    else if (f.k === 'fly') { ctx.globalAlpha = 1; if (f.kind === 'coin') { ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#8a5a14'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(f.x, f.y, 5.5 * Math.abs(Math.cos(f.life * 14)) + 1.2, 5.5, 0, 0, TAU); ctx.fill(); ctx.stroke(); } else ctx.drawImage(iconSprite('\uD83C\uDF81'), f.x - 13, f.y - 13, 26, 26); }
+    else if (f.k === 'fly') { ctx.globalAlpha = 1; if (f.kind === 'coin') { ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#8a5a14'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(f.x, f.y, 5.5 * Math.abs(Math.cos(f.life * 14)) + 1.2, 5.5, 0, 0, TAU); ctx.fill(); ctx.stroke(); } else ctx.drawImage(iconSprite(f.tier && BOX_BY_ID[f.tier] ? BOX_BY_ID[f.tier].icon : '\uD83C\uDF81'), f.x - 13, f.y - 13, 26, 26); }
     else if (f.k === 'h') { ctx.globalAlpha = Math.min(1, a * 2); ctx.drawImage(iconSprite('♥'), f.x - 8, f.y - 12, 16, 16); }
     ctx.globalCompositeOperation = 'source-over';
   }
