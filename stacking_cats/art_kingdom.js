@@ -73,6 +73,7 @@ const B = {
     box(ctx, 66, 46, 8, 16, '#b8685a', 0.9); smoke(ctx, 70, 42);
     if (l >= 2) { box(ctx, 84, 84, 22, 28, '#ffe3ee'); roof(ctx, 84, 84, 22, 14, '#e0708f'); }
     if (l >= 4) for (const x of [34, 46, 70]) { fillPath(ctx, ell(ctx, x, 110, 3, 3), ['#ff9ac6', '#ffd23f', '#fff'][x % 3], 0.5); }
+    if (l >= 3) { fillPath(ctx, P('M44 60 h16 v-5 l-8 -7 l-8 7 z'), '#ffd1e0', 1); fillPath(ctx, P('M42 55 L52 46 L62 55 Z'), '#e0708f', 1); win(ctx, 52, 56, 2.6); }   // attic dormer
     if (l >= 5) sparkle(ctx, 56, 30, 7, '#ffd23f');
   },
   yarn(ctx, l) {
@@ -81,6 +82,7 @@ const B = {
     ctx.strokeStyle = '#d9507f'; ctx.lineWidth = 1; for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.ellipse(60, 42, 16, 6 + Math.abs(i) * 4, i * 0.6, 0, TAU); ctx.stroke(); }
     if (l >= 2) line(ctx, [[82, 88], [96, 100], [88, 108]], '#ff8fb7', 2);
     if (l >= 3) fillPath(ctx, star(86, 62, 9, 6.5, 8), '#c9d2e0', 1);
+    if (l >= 4) { box(ctx, 12, 64, 14, 48, '#8fd3ff', 0.9); fillPath(ctx, P('M10 64 L19 46 L28 64 Z'), '#7a5ad0', 1.1); win(ctx, 19, 80, 3, false); win(ctx, 19, 96, 3); }   // wool turret
     if (l >= 5) sparkle(ctx, 80, 36, 6);
   },
   spa(ctx, l) {
@@ -107,6 +109,7 @@ const B = {
     fillPath(ctx, ell(ctx, 60, 90, 8, 8), '#bfe6ff', 1);
     const gl = ctx.createRadialGradient(60, 90, 0, 60, 90, 16); gl.addColorStop(0, 'rgba(255,255,255,.8)'); gl.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = gl; ctx.fillRect(40, 70, 40, 40);
     if (l >= 2) for (const x of [20, 100]) { box(ctx, x - 3, 96, 6, 16, '#9aa6b8', 0.8); fillPath(ctx, ell(ctx, x, 94, 6, 5), '#ffe9a0', 0.8); }
+    if (l >= 3) { fillPath(ctx, P('M32 40 Q60 30 88 40 L86 46 L34 46 Z'), '#b8281c', 1.1); for (const x of [32, 88]) fillPath(ctx, ell(ctx, x, 40, 2.2, 1.8), '#ffd23f', 0.6); }   // second roof
     if (l >= 4) sparkle(ctx, 60, 30, 7, '#ffd23f');
     if (l >= 5) { sparkle(ctx, 30, 40, 4); sparkle(ctx, 92, 36, 4); }
   },
@@ -115,6 +118,7 @@ const B = {
     fillPath(ctx, ell(ctx, 60, 90, 16, 16), '#c9d2e0', 1.4); fillPath(ctx, ell(ctx, 60, 90, 9, 9), '#7a869a', 1); dot(ctx, 60, 90, 2.4, '#ffd23f');
     for (let i = 0; i < 3 + l; i++) fillPath(ctx, ell(ctx, 30 + i * 9, 108, 5, 2.6), '#ffd23f', 0.7);
     if (l >= 3) for (const x of [26, 86]) box(ctx, x, 60, 8, 52, '#b4bfcf', 0.9);
+    if (l >= 4) { box(ctx, 54, 24, 12, 11, '#c9d2e0', 0.9); fillPath(ctx, P('M51 25 L60 13 L69 25 Z'), '#ffd23f', 1); win(ctx, 60, 30, 2.4); }   // cupola
   },
   tent(ctx, l) {
     fillPath(ctx, P('M16 112 L60 36 L104 112 Z'), '#7a4ad0', 1.4); fillPath(ctx, P('M60 36 L60 112 L48 112 Z'), '#6a3ac0', 0.5);
@@ -139,6 +143,44 @@ const B = {
     if (l >= 3) fillPath(ctx, P('M44 40 h32 v10 h-32 z'), '#fff8ef', 1);
   },
 };
+// per level growth shared by every building: bunting (Lv 3), hanging banners (Lv 4), gold eave trim and a crown star (Lv 5).
+// [bunting x1, y, x2], [banner x left, x right], apex [x, y]
+const GROW = {
+  dojo: { b: [34, 92, 86], bn: [32, 82], ap: (l) => [60, 82 - ((l >= 5) + (l >= 3)) * 22 - 22] },
+  beds: { b: [30, 72, 82], bn: [30, 76], ap: () => [56, 38] },
+  yarn: { b: [28, 74, 92], bn: [28, 86], ap: () => [60, 22] },
+  spa: { b: [22, 86, 98], ap: () => [60, 44] },
+  tower: { b: [46, 0, 74], ap: (l) => [60, 112 - (44 + l * 6) - 30] },
+  shrine: { b: [26, 62, 94], bn: [28, 86], ap: () => [60, 36] },
+  vault: { b: [24, 58, 96], bn: [30, 82], ap: (l) => [60, l >= 4 ? 8 : 30] },
+  tent: { b: [24, 98, 96], ap: () => [60, 16] },
+  stall: { b: [22, 56, 98], bn: [24, 88], ap: () => [60, 34] },
+};
+function grow(ctx, id, l) {
+  const G = GROW[id]; if (!G) return;
+  let [x1, y, x2] = G.b; if (id === 'tower') y = 112 - (44 + l * 6) + 4;
+  if (l >= 3) {   // bunting
+    const n = Math.max(4, Math.round((x2 - x1) / 7)), cols = ['#ffd23f', '#ff8fb7', '#ffffff', '#8fd3ff'];
+    ctx.strokeStyle = 'rgba(70,40,30,.7)'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(x1, y); ctx.quadraticCurveTo((x1 + x2) / 2, y + 7, x2, y); ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) / n, px = x1 + (x2 - x1) * u, py = y + 7 * 2 * u * (1 - u);
+      fillPath(ctx, P(`M${px - 2.6} ${py} L${px + 2.6} ${py} L${px} ${py + 5.5} Z`), cols[i % 4], 0.5);
+    }
+  }
+  if (l >= 4 && G.bn) for (const bx of G.bn) {   // banners with a gold paw
+    const by = y + 4;
+    fillPath(ctx, P(`M${bx} ${by} h7 v15 l-3.5 -3 l-3.5 3 z`), '#c0304a', 0.8);
+    ctx.fillStyle = '#ffd23f'; ctx.fillRect(bx, by, 7, 1.6);
+    ctx.beginPath(); ctx.arc(bx + 3.5, by + 8, 1.7, 0, TAU); for (const d of [-2.2, 0, 2.2]) ctx.arc(bx + 3.5 + d, by + 4.8 + Math.abs(d) * 0.3, 0.7, 0, TAU); ctx.fill();
+  }
+  if (l >= 5) {   // gold trim and a crown star at the very top
+    ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x1 - 3, y - 1.4); ctx.lineTo(x2 + 3, y - 1.4); ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,80,10,.55)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(x1 - 3, y - 0.3); ctx.lineTo(x2 + 3, y - 0.3); ctx.stroke();
+    const [ax, ay] = G.ap(l), gl = ctx.createRadialGradient(ax, ay, 0, ax, ay, 14); gl.addColorStop(0, 'rgba(255,230,120,.8)'); gl.addColorStop(1, 'rgba(255,230,120,0)');
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(ax, ay, 14, 0, TAU); ctx.fill();
+    fillPath(ctx, P(`M${ax - 5} ${ay + 3} L${ax - 5} ${ay - 2} L${ax - 2.5} ${ay + 0.5} L${ax} ${ay - 4} L${ax + 2.5} ${ay + 0.5} L${ax + 5} ${ay - 2} L${ax + 5} ${ay + 3} Z`), '#ffd23f', 0.8);
+  }
+}
 function dot(ctx, x, y, r, c) { fillPath(ctx, ell(ctx, x, y, r, r), c, 0.5); }
 
 export function drawBuilding(ctx, id, lvl) {
@@ -152,6 +194,6 @@ export function drawBuilding(ctx, id, lvl) {
     for (const x of [30, 90]) { ctx.beginPath(); ctx.moveTo(x, 112); ctx.lineTo(x, 50); ctx.stroke(); }
     for (const y of [64, 84, 104]) { ctx.beginPath(); ctx.moveTo(30, y); ctx.lineTo(90, y); ctx.stroke(); }
     ctx.strokeStyle = 'rgba(138,106,74,.7)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(30, 104); ctx.lineTo(90, 64); ctx.moveTo(90, 104); ctx.lineTo(30, 64); ctx.stroke();
-  } else B[id](ctx, lvl);
+  } else { B[id](ctx, lvl); grow(ctx, id, lvl); }
   ctx.restore();
 }

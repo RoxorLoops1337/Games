@@ -57,9 +57,12 @@ function eye(ctx, x, y, color, cool, flip, variant) {
   ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, TAU); ctx.fill();
   ctx.fillStyle = '#1b1426';
   ctx.beginPath(); ctx.ellipse(0, 0.6, cool ? 1.7 : 2.9, ry * 0.62, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = shade(color, -0.45); ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.ellipse(0, 0, rx - 0.5, ry - 0.5, 0, 0, TAU); ctx.stroke();
   ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.arc(-2, -ry * 0.38, cool ? 1.7 : 2.4, 0, TAU); ctx.fill();
   ctx.beginPath(); ctx.arc(2.3, ry * 0.4, 1.2, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.arc(3.2, -ry * 0.1, 0.7, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
   // upper lid and lash flick
   ctx.strokeStyle = INK; ctx.lineWidth = 1.9; ctx.lineCap = 'round';
   ctx.beginPath();
@@ -91,7 +94,15 @@ function face(ctx, A, id, variant) {
   else if (cool) { ctx.moveTo(54, 71.4); ctx.quadraticCurveTo(57, 73.4, 60, 70.4); ctx.quadraticCurveTo(64, 74.2, 67.6, 71); }
   else { ctx.moveTo(53.6, 71); ctx.quadraticCurveTo(57, 74.6, 60, 70.4); ctx.quadraticCurveTo(63, 74.6, 66.4, 71); }
   ctx.stroke();
-  // whiskers
+  // whisker pad dots
+  ctx.fillStyle = 'rgba(60,35,80,.45)';
+  for (const [x, y] of [[52, 72.4], [54.4, 74.2], [50.6, 74.6], [68, 72.4], [65.6, 74.2], [69.4, 74.6]]) { ctx.beginPath(); ctx.arc(x, y, 0.5, 0, TAU); ctx.fill(); }
+  // whiskers: dark strand with a pale highlight strand beside it
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 0.45;
+  for (const [dy, ex] of [[-3, -17], [0, -19], [3, -16]]) {
+    ctx.beginPath(); ctx.moveTo(32, 69.5 + dy); ctx.quadraticCurveTo(24, 69.5 + dy * 1.6, 32 + ex, 69.5 + dy * 2.4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(88, 69.5 + dy); ctx.quadraticCurveTo(96, 69.5 + dy * 1.6, 88 - ex, 69.5 + dy * 2.4); ctx.stroke();
+  }
   ctx.strokeStyle = 'rgba(50,30,70,.5)'; ctx.lineWidth = 0.7;
   for (const [dy, ex] of [[-3, -17], [0, -19], [3, -16]]) {
     ctx.beginPath(); ctx.moveTo(32, 70 + dy); ctx.quadraticCurveTo(24, 70 + dy * 1.6, 32 + ex, 70 + dy * 2.4); ctx.stroke();
@@ -480,17 +491,38 @@ export function drawCat(ctx, d, variant = 'open') {
     }
   }
 
-  // tail
+  // tail: tapered from a thick root to a slim tip, with a lighter tip and breed bands
   const tailFur = id === 'boo' ? null : fur;
   if (tailFur) {
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 11.4;
-    ctx.beginPath(); ctx.moveTo(76, 102); ctx.bezierCurveTo(102, 106, 112, 88, 102, 64); ctx.stroke();
-    ctx.strokeStyle = fur; ctx.lineWidth = 8.6;
-    ctx.beginPath(); ctx.moveTo(76, 102); ctx.bezierCurveTo(102, 106, 112, 88, 102, 64); ctx.stroke();
-    ctx.strokeStyle = A.pat === 'stripes' ? shade(fur, -0.3) : belly; ctx.lineWidth = 8.6;
-    ctx.beginPath(); ctx.moveTo(104, 78); ctx.bezierCurveTo(108, 74, 107, 68, 102, 64); ctx.stroke();
-    if (A.pat === 'stripes') { ctx.lineWidth = 2.2; for (const [x, y] of [[100, 98], [108, 90]]) { ctx.beginPath(); ctx.moveTo(x - 4, y - 3); ctx.lineTo(x + 3, y + 3); ctx.stroke(); } }
+    const P = [[76, 102], [102, 106], [112, 88], [102, 64]], L = [], R = [], N = 14;
+    const at = (u) => { const m = 1 - u; return [0, 1].map((k) => m * m * m * P[0][k] + 3 * m * m * u * P[1][k] + 3 * m * u * u * P[2][k] + u * u * u * P[3][k]); };
+    for (let i = 0; i <= N; i++) {
+      const u = i / N, c = at(u), c2 = at(Math.min(1, u + 0.02)), c1 = at(Math.max(0, u - 0.02));
+      const dx = c2[0] - c1[0], dy = c2[1] - c1[1], l = Math.hypot(dx, dy) || 1, w = 6.2 - 1.7 * u + Math.sin(u * 3.1) * 0.5 + (u > 0.93 ? -(u - 0.93) * 18 : 0);
+      L.push([c[0] - (dy / l) * w, c[1] + (dx / l) * w]); R.push([c[0] + (dy / l) * w, c[1] - (dx / l) * w]);
+    }
+    const tp = poly(ctx, [...L, ...R.reverse()]);
+    cel(ctx, tp, fur, { shade: false, lw: 1.1 });
+    ctx.save(); ctx.clip(tp);
+    const dk = shade(fur, -0.3);
+    ctx.strokeStyle = shade(fur, -0.14); ctx.lineWidth = 1; ctx.globalAlpha = 0.12;
+    ctx.beginPath(); for (let i = 1; i < N; i++) { const c = at(i / N); ctx.moveTo(c[0] + 2.6, c[1] - 2); ctx.lineTo(c[0] + 4.4, c[1] + 0.6); } ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = shade(fur, 0.28); ctx.lineWidth = 1.4; ctx.globalAlpha = 0.2;
+    ctx.beginPath(); for (let i = 0; i <= N; i++) { const c = at(i / N); i ? ctx.lineTo(c[0] - 2.4 + i * 0.12, c[1] - 1) : ctx.moveTo(c[0] - 2.4, c[1] - 1); } ctx.stroke();
+    ctx.globalAlpha = 1;
+    if (A.pat === 'stripes') {
+      ctx.strokeStyle = dk; ctx.lineWidth = 2.4;
+      for (const u of [0.3, 0.48, 0.66, 0.84]) { const c = at(u), c2 = at(u + 0.02); const dx = c2[0] - c[0], dy = c2[1] - c[1], l = Math.hypot(dx, dy); ctx.beginPath(); ctx.moveTo(c[0] - (dy / l) * 8, c[1] + (dx / l) * 8); ctx.lineTo(c[0] + (dy / l) * 8, c[1] - (dx / l) * 8); ctx.stroke(); }
+    } else if (A.pat === 'spots') {
+      ctx.fillStyle = dk; for (const u of [0.35, 0.6]) { const c = at(u); ctx.beginPath(); ctx.arc(c[0] + 1, c[1], 2.2, 0, TAU); ctx.fill(); }
+    } else if (A.pat === 'patch') {
+      ctx.fillStyle = A.accent; ctx.globalAlpha = 0.85; const c = at(0.5); ctx.beginPath(); ctx.ellipse(c[0], c[1], 6, 6, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = A.pat === 'stripes' ? dk : belly;
+    ctx.beginPath(); for (let i = 11; i <= N; i++) { const c = at(i / N); ctx.moveTo(c[0] + 7, c[1]); ctx.arc(c[0], c[1], 7, 0, TAU); } ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 1.1; ctx.stroke(tp);
   }
 
   // body
@@ -511,19 +543,33 @@ export function drawCat(ctx, d, variant = 'open') {
     // feet
     for (const x of [46, 74]) cel(ctx, ell(ctx, x, 105.4, 8.5, 4.6), fur, { shade: false });
   }
-  // front paws
+  // front paws: toe bumps, toe lines and a small pad
   for (const x of [49, 71]) {
     const paw = ell(ctx, x, 97, 5.8, 6.4);
     cel(ctx, paw, fur, { shade: false, box: [x - 6, 91, x + 6, 103] });
     ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 0.6;
-    ctx.beginPath(); ctx.moveTo(x - 1.6, 98.6); ctx.lineTo(x - 1.6, 102); ctx.moveTo(x + 1.6, 98.6); ctx.lineTo(x + 1.6, 102); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 1.9, 98.8); ctx.lineTo(x - 1.9, 102.2); ctx.moveTo(x + 1.9, 98.8); ctx.lineTo(x + 1.9, 102.2); ctx.stroke();
+    for (const dx of [-3.8, 0, 3.8]) { ctx.fillStyle = shade(fur, 0.12); ctx.beginPath(); ctx.arc(x + dx, 102.2, 1.9, 0, Math.PI); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(255,150,170,.35)'; ctx.beginPath(); ctx.ellipse(x, 94.6, 1.7, 1.1, 0, 0, TAU); ctx.fill();
+  }
+  // chest fluff
+  if (!B.ghost) {
+    ctx.strokeStyle = shade(belly, -0.1); ctx.lineWidth = 0.8; ctx.globalAlpha = 0.35;
+    for (const [dx, dy] of [[-4, 0], [0, 1.5], [4, 0]]) { ctx.beginPath(); ctx.moveTo(60 + dx - 1.2, 86 + dy); ctx.lineTo(60 + dx, 90 + dy); ctx.lineTo(60 + dx + 1.2, 86 + dy); ctx.stroke(); }
+    ctx.globalAlpha = 1;
   }
 
   // ears
   const earOuter = new Path2D('M31 52 Q24 22 35 14 Q48 20 57 31 Z');
   const earInner = new Path2D('M34 46 Q30 27 36 20 Q45 25 51 32 Z');
   const earTx = (fn) => { fn(); mirror(ctx, 120, fn); };
-  earTx(() => { cel(ctx, earOuter, fur, { shade: false }); ctx.fillStyle = A.pat === 'tux' ? '#3b3548' : '#ffb3c8'; ctx.fill(earInner); });
+  earTx(() => { cel(ctx, earOuter, fur, { shade: false }); ctx.fillStyle = A.pat === 'tux' ? '#3b3548' : '#ffb3c8'; ctx.fill(earInner);
+    ctx.save(); ctx.clip(earInner); ctx.fillStyle = A.pat === 'tux' ? '#2a2536' : '#e88aa8'; ctx.beginPath(); ctx.ellipse(40, 44, 9, 9, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = shade(fur, 0.55); ctx.lineWidth = 0.8; ctx.globalAlpha = 0.45;
+    for (const [x, y, ex, ey] of [[48, 33, 42, 30], [47, 38, 40, 35], [44, 43, 38, 40]]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke(); }
+    ctx.restore();
+    ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 0.7; ctx.stroke(earInner);
+    ctx.strokeStyle = shade(fur, -0.22); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(34.6, 15.6); ctx.lineTo(35.4, 19.6); ctx.stroke(); });
 
   // head
   const head = new Path2D('M60 27 C81 27 94 40 94 57 C94 71 81 81 60 81 C39 81 26 71 26 57 C26 40 39 27 60 27 Z');
@@ -536,6 +582,13 @@ export function drawCat(ctx, d, variant = 'open') {
   }
   // muzzle
   ctx.fillStyle = belly; ctx.beginPath(); ctx.ellipse(60, 71, 11, 7.5, 0, 0, TAU); ctx.fill();
+  ctx.save(); ctx.clip(head);
+  // soft cheek shade under the eyes, brighter forehead, and short fur strokes
+  for (const s of [-1, 1]) { ctx.fillStyle = 'rgba(80,40,110,.12)'; ctx.beginPath(); ctx.ellipse(60 + s * 28, 76, 9, 5.5, s * 0.5, 0, TAU); ctx.fill(); }
+  ctx.lineWidth = 0.8; ctx.lineCap = 'round';
+  // a few tiny cheek-edge strokes that follow the face outline
+  for (const [x, y, dx, dy] of [[31, 64, 3, 1], [30, 69, 3.4, 0.4], [89, 64, -3, 1], [90, 69, -3.4, 0.4]]) { ctx.strokeStyle = shade(fur, -0.2); ctx.globalAlpha = 0.14; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dx, y + dy); ctx.stroke(); }
+  ctx.globalAlpha = 1; ctx.restore();
   pattern(ctx, A, head, bodyPath);
   ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 1.15; ctx.stroke(head);
 

@@ -11,26 +11,56 @@ function rod(ctx, x1, y1, x2, y2, w, color) {
 
 // ---------------------------------------------------------------- mice and rats (face left, feet at 0,0)
 let curElite = false;
+// soft fur shading: light from the upper left, a darker underside, clipped to the shape (no noise)
+function furShade(ctx, path, x0, y0, len, diag) {
+  ctx.save(); ctx.clip(path);
+  const g = ctx.createLinearGradient(x0, y0, x0 + len * (diag ? 0.6 : 0.5), y0 + len * (diag ? 1 : 1.3));
+  g.addColorStop(0, 'rgba(255,255,255,.16)'); g.addColorStop(0.45, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(30,10,50,.2)');
+  ctx.fillStyle = g; ctx.fillRect(x0 - 4, y0 - 4, len + 30, len * 1.4 + 10); ctx.restore();
+}
+function earShade(ctx, x, y, rx, ry, inner) {
+  ctx.save(); ctx.clip(ell(ctx, x, y, rx, ry));
+  ctx.fillStyle = shade(inner, -0.22); ctx.beginPath(); ctx.ellipse(x + rx * 0.25, y + ry * 0.3, rx * 0.9, ry * 0.9, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = shade(inner, 0.35); ctx.beginPath(); ctx.ellipse(x - rx * 0.1, y - ry * 0.1, rx * 0.55, ry * 0.6, 0, 0, TAU); ctx.fill();
+  ctx.restore();
+}
 function mouseBody(ctx, o) {
   const fur = o.fur, belly = o.belly || shade(fur, 0.5), inner = o.inner || '#ffb3c8';
-  // tail
+  // tail: tapers from a thick root to a fine tip, with a darker underside and faint rings
   ctx.lineCap = 'round';
-  ctx.strokeStyle = lineOf('#f1a6b8'); ctx.lineWidth = 3.6;
-  ctx.beginPath(); ctx.moveTo(8, -9); ctx.bezierCurveTo(26, -4, 30, -20, 38, -22); ctx.stroke();
-  ctx.strokeStyle = '#f7bccb'; ctx.lineWidth = 2.2;
-  ctx.beginPath(); ctx.moveTo(8, -9); ctx.bezierCurveTo(26, -4, 30, -20, 38, -22); ctx.stroke();
+  const tb = (u) => { const v = 1 - u; return [v * v * v * 8 + 3 * v * v * u * 26 + 3 * v * u * u * 30 + u * u * u * 38, v * v * v * -9 + 3 * v * v * u * -4 + 3 * v * u * u * -20 + u * u * u * -22]; };
+  for (const [col, wk, dy] of [['#d48a9e', 1.35, 0.5], ['#f7bccb', 1, 0]]) {
+    for (let k = 0; k < 14; k++) {
+      const a = tb(k / 14), b2 = tb((k + 1) / 14);
+      ctx.strokeStyle = k < 1 && wk > 1 ? lineOf('#f1a6b8') : col; ctx.lineWidth = (3.8 - 2.6 * k / 14) * wk + (wk > 1 ? 0.6 : 0);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1] + dy); ctx.lineTo(b2[0], b2[1] + dy); ctx.stroke();
+    }
+  }
+  ctx.strokeStyle = 'rgba(160,80,100,.45)'; ctx.lineWidth = 0.7;
+  for (const u of [0.3, 0.5, 0.7]) { const q = tb(u); ctx.beginPath(); ctx.moveTo(q[0] - 0.5, q[1] - 1.6); ctx.lineTo(q[0] + 0.5, q[1] + 1.6); ctx.stroke(); }
   // far ear and body
   fillPath(ctx, ell(ctx, 4, -41, 8, 8.4), fur, 1);
   cel(ctx, ell(ctx, 2, -13, 11.5, 12.5), fur, { box: [-10, -26, 14, 0] });
   ctx.save(); ctx.clip(ell(ctx, 2, -13, 11.5, 12.5)); ctx.fillStyle = belly; ctx.beginPath(); ctx.ellipse(-3, -10, 7, 9.5, 0, 0, TAU); ctx.fill(); ctx.restore();
+  furShade(ctx, ell(ctx, 2, -13, 11.5, 12.5), -9, -26, 13, 0);
+  ctx.save(); ctx.clip(ell(ctx, 2, -13, 11.5, 12.5)); ctx.strokeStyle = shade(fur, -0.22); ctx.globalAlpha = 0.5; ctx.lineWidth = 0.8; ctx.lineCap = 'round';
+  for (const [x, y] of [[6, -6], [9, -12], [5, -17], [10, -20]]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 1.5, y + 2, x + 0.5, y + 4); ctx.stroke(); }
+  ctx.restore();
   ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 1; ctx.stroke(ell(ctx, 2, -13, 11.5, 12.5));
   limb(ctx, -4, -1.8, 5, 2.8, fur); limb(ctx, 8, -1.8, 5, 2.8, fur);
   // head
-  fillPath(ctx, ell(ctx, -9, -42, 7.6, 8), fur, 1); fillPath(ctx, ell(ctx, -9, -42, 4.5, 4.9), inner, 0.5);
-  fillPath(ctx, ell(ctx, 4, -41, 8, 8.4), fur, 1); fillPath(ctx, ell(ctx, 4.5, -41, 5, 5.4), inner, 0.5);
+  fillPath(ctx, ell(ctx, -9, -42, 7.6, 8), fur, 1); fillPath(ctx, ell(ctx, -9, -42, 4.5, 4.9), inner, 0.5); earShade(ctx, -9, -42, 4.5, 4.9, inner);
+  fillPath(ctx, ell(ctx, 4, -41, 8, 8.4), fur, 1); fillPath(ctx, ell(ctx, 4.5, -41, 5, 5.4), inner, 0.5); earShade(ctx, 4.5, -41, 5, 5.4, inner);
   const head = new Path2D(); head.ellipse(-5, -31, 13.5, 11.8, 0, 0, TAU);
   cel(ctx, head, fur, { box: [-19, -43, 9, -19] });
+  furShade(ctx, head, -19, -43, 24, 1);
   cel(ctx, ell(ctx, -16, -27.5, 7.4, 5.2), shade(fur, 0.22), { shade: false, lw: 0.9 });
+  // whiskers: two fine pairs fanning from the muzzle, the far pair shorter and paler
+  ctx.lineCap = 'round'; ctx.lineWidth = 0.6;
+  for (const [dy, ex, ey, al] of [[-1.2, -32.5, -32.4, 0.85], [0.8, -32, -26.2, 0.8], [-0.2, -28, -34, 0.45], [1.6, -27.5, -22.6, 0.4]]) {
+    ctx.strokeStyle = `rgba(255,255,255,${al})`; ctx.beginPath(); ctx.moveTo(-20.5, -27.6 + dy); ctx.quadraticCurveTo((-20.5 + ex) / 2, (-27.6 + ey) / 2 - 1.4, ex, ey); ctx.stroke();
+    ctx.strokeStyle = `rgba(40,25,60,${al * 0.35})`; ctx.beginPath(); ctx.moveTo(ex + 3.4, ey + (dy > 0 ? 0.8 : -0.4)); ctx.lineTo(ex, ey); ctx.stroke();
+  }
   fillPath(ctx, ell(ctx, -22.4, -29.6, 2.5, 2.2), '#ff8fa8', 0.7); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-23, -30.4, 0.7, 0, TAU); ctx.fill();
   // eye: big and shiny, with a mean brow
   const eyeC = o.eye || '#2a1a3a';
@@ -38,6 +68,7 @@ function mouseBody(ctx, o) {
   ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.stroke();
   ctx.fillStyle = eyeC; ctx.beginPath(); ctx.ellipse(-9.4, -32.8, 2.6, 3.7, 0, 0, TAU); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-10.2, -34.4, 1.1, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.beginPath(); ctx.arc(-7.6, -30.9, 0.55, 0, TAU); ctx.fill();
   // threat cue: narrowed upper lid and a red glint in the eye (stronger on elites)
   ctx.save(); ctx.beginPath(); ctx.ellipse(-8.6, -33, 4.2, 4.8, 0.1, 0, TAU); ctx.clip();
   ctx.fillStyle = fur; ctx.beginPath(); ctx.moveTo(-14, -39); ctx.lineTo(-3, -39); ctx.lineTo(-3, -34.6); ctx.lineTo(-14, -36.8); ctx.fill();
@@ -54,6 +85,7 @@ function mouseBody(ctx, o) {
   if (o.scar !== false) { ctx.strokeStyle = 'rgba(170,60,80,.7)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-4, -28); ctx.lineTo(1, -33); ctx.moveTo(-5.2, -32); ctx.lineTo(-0.4, -28.6); ctx.stroke(); }
   // front paw
   limb(ctx, -11, -14, 3.6, 3.4, fur);
+  ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(-12.6, -12.6); ctx.lineTo(-12.2, -11.2); ctx.moveTo(-10.4, -12.2); ctx.lineTo(-10.2, -10.8); ctx.stroke();
 }
 function dagger(ctx, x = -13, y = -14, len = 15) {
   rod(ctx, x, y, x - len, y - len * 0.55, 2.4, '#dfe6f2');
@@ -175,7 +207,6 @@ export function enemySprite(type, elite) {
     fillPath(ctx, poly(ctx, [[-8, hy], [-8, hy - 8], [-4, hy - 4], [0, hy - 10], [4, hy - 4], [8, hy - 8], [8, hy]]), '#ffd23f', 0.9);
     ctx.restore();
   }
-  texturize(c, { seed: hash(key), len: 6, lw: 1.3, count: 1700, dir: Math.PI / 2 + 0.3, spread: 1.4 });   // fur
   const r = { c: outlineCanvas(rimLight(c, 2, '#fff0c0', 0.4), 2, '#2a1840', 0.85), ax, ay, w: W, h: H };
   spriteCache.set(key, r);
   return r;
@@ -283,6 +314,7 @@ export function nestOverlay(ctx, hpFrac, t, king) {
 export function freeBackdrop(bd) {
   if (!bd) return;
   for (const k of ['sky', 'far', 'mid', 'gr', 'front', 'rays']) if (bd[k] && bd[k].width) bd[k].width = bd[k].height = 0;
+  if (bd.cloudSpr) for (const c of bd.cloudSpr) c.width = c.height = 0;
 }
 export function resetWorldArt() { spriteCache.clear(); }
 export function makeBackdrop(theme, seed) {
@@ -307,6 +339,12 @@ export function makeBackdrop(theme, seed) {
   if (night) { sx.fillStyle = theme.sky[0]; sx.beginPath(); sx.arc(754, 112, 32, 0, TAU); sx.fill(); sx.fillStyle = '#fff7d6'; sx.beginPath(); sx.arc(740, 120, 38, 0, TAU); sx.fill(); sx.fillStyle = 'rgba(40,30,100,.2)'; sx.beginPath(); sx.arc(748, 126, 32, 0, TAU); sx.fill(); }
 
   const hz = theme.haze || '#ffffff';
+  const rgba = (c0, a) => { const m = mix(c0, c0, 0); return `rgba(${parseInt(m.slice(1, 3), 16)},${parseInt(m.slice(3, 5), 16)},${parseInt(m.slice(5, 7), 16)},${a})`; };
+  {
+    // a warm band of light hugging the horizon, so the sky melts into the hills instead of meeting them
+    const hg = sx.createLinearGradient(0, 230, 0, 430); hg.addColorStop(0, rgba(hz, 0)); hg.addColorStop(1, rgba(hz, night ? 0.3 : 0.5));
+    sx.fillStyle = hg; sx.fillRect(0, 230, W, 200);
+  }
   const wrapX = (x, fn) => { fn(x); fn(x - W); fn(x + W); };
   const [far, fx] = mk();
   fx.fillStyle = mix(theme.far, hz, 0.22);
@@ -318,6 +356,27 @@ export function makeBackdrop(theme, seed) {
   fx.beginPath(); fx.moveTo(0, H);
   for (let x = 0; x <= W; x += 8) { const a = x / W * TAU; fx.lineTo(x, 350 + Math.sin(a * 3 + ph2 + 1) * 18 + Math.sin(a * 5 + ph) * 8); }
   fx.lineTo(W, H); fx.fill();
+
+  {
+    // tiny far-off shapes standing on the back ridge: trees, spires, pines or stalagmites, per place
+    const ry = (x) => { const a = x / W * TAU; return 350 + Math.sin(a * 3 + ph2 + 1) * 18 + Math.sin(a * 5 + ph) * 8; };
+    fx.fillStyle = mix(mix(theme.far, theme.sky[1], 0.35), theme.mid, 0.3);
+    const dd = theme.deco;
+    for (let i = 0; i < 26; i++) {
+      const x0 = (i + rnd() * 0.8) * (W / 26), sz = 0.7 + rnd() * 0.8;
+      wrapX(x0, (xx) => {
+        const y0 = ry(((xx % W) + W) % W) + 3;
+        fx.beginPath();
+        if (dd === 'snow' || dd === 'hole') { const h = (dd === 'hole' ? 16 : 22) * sz, w = (dd === 'hole' ? 7 : 8) * sz; fx.moveTo(xx - w, y0); fx.lineTo(xx, y0 - h); fx.lineTo(xx + w, y0); }
+        else if (dd === 'leaf' || dd === 'star') { const w = (7 + rnd() * 9) * sz, h = (12 + rnd() * 20) * sz; fx.rect(xx - w / 2, y0 - h, w, h); if (rnd() < 0.4) fx.rect(xx + w * 0.1, y0 - h - 5, 3, 5); }
+        else { fx.moveTo(xx - 1.5 * sz, y0); fx.lineTo(xx - 1.5 * sz, y0 - 6 * sz); fx.arc(xx, y0 - 11 * sz, 7.5 * sz, Math.PI, 0); fx.lineTo(xx + 1.5 * sz, y0); }
+        fx.fill();
+      });
+    }
+    // a pale mist trail slipping between the two ridges
+    const mg = fx.createLinearGradient(0, 322, 0, 372); mg.addColorStop(0, rgba(hz, 0)); mg.addColorStop(0.5, rgba(hz, 0.2)); mg.addColorStop(1, rgba(hz, 0));
+    fx.fillStyle = mg; fx.fillRect(0, 322, W, 50);
+  }
 
   const [mid, mx] = mk();
   const base = 404;
@@ -419,6 +478,11 @@ export function makeBackdrop(theme, seed) {
 
   const [gr, gx] = mk();
   const top = 424;
+  {
+    // low ground fog drifting over the foot of the hills
+    const fg = gx.createLinearGradient(0, top - 52, 0, top + 14); fg.addColorStop(0, rgba(hz, 0)); fg.addColorStop(0.7, rgba(hz, night ? 0.22 : 0.34)); fg.addColorStop(1, rgba(hz, 0.1));
+    gx.fillStyle = fg; gx.fillRect(0, top - 52, W, 66);
+  }
   const gg = gx.createLinearGradient(0, top, 0, H); gg.addColorStop(0, theme.ground[0]); gg.addColorStop(0.12, theme.ground[1]); gg.addColorStop(0.13, theme.dirt); gg.addColorStop(1, shade(theme.dirt, -0.25));
   gx.fillStyle = gg; gx.beginPath(); gx.moveTo(0, top + 6);
   for (let x = 0; x <= W; x += 6) gx.lineTo(x, top + Math.sin(x / W * TAU * 3) * 3 + 2);
@@ -494,6 +558,39 @@ export function makeBackdrop(theme, seed) {
       gx.restore();
     }
   }
+  {
+    // ground shading: contact shadow under the grass lip, a sunlit band, and a darker foreground for depth
+    const ao = gx.createLinearGradient(0, top + 4, 0, top + 26); ao.addColorStop(0, 'rgba(10,5,20,.26)'); ao.addColorStop(1, 'rgba(10,5,20,0)');
+    gx.fillStyle = ao; gx.fillRect(0, top + 4, W, 22);
+    const dp = gx.createLinearGradient(0, 468, 0, H); dp.addColorStop(0, 'rgba(10,5,20,0)'); dp.addColorStop(1, 'rgba(10,5,20,.32)');
+    gx.fillStyle = dp; gx.fillRect(0, 468, W, H - 468);
+    // small props lying around, different per place (x wraps, so they tile)
+    const prop = (x, y, fn) => { fn(x, y); if (x < 40) fn(x + W, y); if (x > W - 40) fn(x - W, y); };
+    const shadow = (x, y, rx) => { gx.fillStyle = 'rgba(10,5,20,.22)'; gx.beginPath(); gx.ellipse(x + 1, y + 1, rx, rx * 0.32, 0, 0, TAU); gx.fill(); };
+    for (let i = 0; i < 9; i++) {
+      const x = rnd() * W, y = top + 26 + rnd() * (H - top - 60), k = 0.8 + (y - top) / 110;
+      prop(x, y, (xx, yy) => {
+        shadow(xx, yy, 9 * k);
+        if (dec === 'flower') {   // a toadstool
+          gx.fillStyle = '#f2e8d4'; gx.fillRect(xx - 1.6 * k, yy - 6 * k, 3.2 * k, 6 * k);
+          gx.fillStyle = '#d4463c'; gx.beginPath(); gx.ellipse(xx, yy - 6 * k, 6 * k, 4 * k, 0, Math.PI, 0); gx.fill();
+          gx.fillStyle = '#fff'; for (const dx of [-2.6, 0.5, 2.8]) { gx.beginPath(); gx.arc(xx + dx * k, yy - 8 * k, 0.9 * k, 0, TAU); gx.fill(); }
+        } else if (dec === 'leaf') {   // a leaf pile
+          for (let j = 0; j < 6; j++) { gx.fillStyle = ['#d9532b', '#e8a22a', '#b8431f'][j % 3]; gx.beginPath(); gx.ellipse(xx + (j - 3) * 2.4 * k, yy - (j % 3) * 1.6 * k, 4 * k, 1.9 * k, j * 0.7, 0, TAU); gx.fill(); }
+        } else if (dec === 'star') {   // a puddle that catches the moon
+          const pg = gx.createLinearGradient(xx - 12 * k, yy, xx + 12 * k, yy); pg.addColorStop(0, 'rgba(120,140,230,.0)'); pg.addColorStop(0.5, 'rgba(190,205,255,.55)'); pg.addColorStop(1, 'rgba(120,140,230,0)');
+          gx.fillStyle = pg; gx.beginPath(); gx.ellipse(xx, yy, 13 * k, 3.4 * k, 0, 0, TAU); gx.fill();
+        } else if (dec === 'hole') {   // cheese crumbs
+          for (let j = 0; j < 4; j++) { gx.fillStyle = j % 2 ? '#ffe27a' : '#f5c040'; gx.beginPath(); gx.moveTo(xx + j * 4 * k - 6, yy); gx.lineTo(xx + j * 4 * k - 3, yy - 3 * k); gx.lineTo(xx + j * 4 * k, yy); gx.fill(); }
+        } else if (dec === 'snow') {   // a small snow drift with a blue lee side
+          gx.fillStyle = '#ffffff'; gx.beginPath(); gx.ellipse(xx, yy, 11 * k, 4 * k, 0, Math.PI, 0); gx.fill();
+          gx.fillStyle = 'rgba(150,185,225,.55)'; gx.beginPath(); gx.ellipse(xx + 2 * k, yy, 8 * k, 2 * k, 0, 0, Math.PI); gx.fill();
+        } else {   // fallen petals
+          for (let j = 0; j < 5; j++) { gx.fillStyle = j % 2 ? '#ffd0e2' : '#ff9ac0'; gx.beginPath(); gx.ellipse(xx + (j - 2) * 3.2 * k, yy - (j % 2) * 1.5, 3 * k, 1.6 * k, j, 0, TAU); gx.fill(); }
+        }
+      });
+    }
+  }
   const [front, ftx] = mk();
   const tuft = theme.deco === 'snow' ? '#ffffff' : shade(theme.ground[1], -0.12);
   for (let i = 0; i < 46; i++) {
@@ -505,12 +602,13 @@ export function makeBackdrop(theme, seed) {
     }
   }
   const [rays, rx] = mk();
-  if (!night) for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < (night ? 4 : 6); i++) {
     const a0 = 1.7 + i * 0.2 + (rnd() - 0.5) * 0.08, spread = 0.025 + rnd() * 0.075, peak = 0.05 + rnd() * 0.05;
     const L = 520 + rnd() * 120, ca = Math.cos(a0), sa = Math.sin(a0);
     // along the shaft: bright near the sun, gone before the ground
     const gl = rx.createLinearGradient(740, 120, 740 + ca * L, 120 + sa * L);
-    gl.addColorStop(0, `rgba(255,255,220,${peak})`); gl.addColorStop(0.6, `rgba(255,255,220,${peak * 0.5})`); gl.addColorStop(1, 'rgba(255,255,220,0)');
+    const rc = night ? '190,205,255' : '255,255,220';
+    gl.addColorStop(0, `rgba(${rc},${peak})`); gl.addColorStop(0.6, `rgba(${rc},${peak * 0.5})`); gl.addColorStop(1, `rgba(${rc},0)`);
     const [sh, shx] = mk();
     shx.fillStyle = gl; shx.beginPath(); shx.moveTo(740, 120);
     shx.lineTo(740 + Math.cos(a0 - spread) * 900, 120 + Math.sin(a0 - spread) * 900); shx.lineTo(740 + Math.cos(a0 + spread) * 900, 120 + Math.sin(a0 + spread) * 900); shx.fill();
@@ -541,14 +639,43 @@ export function makeBackdrop(theme, seed) {
   const farSoft = soften(far, 2.6, hz, 0.38), midSoft = soften(mid, 0.9, hz, 0.14);
 
   const stars = []; if (night) for (let i = 0; i < 70; i++) stars.push([rnd() * W, rnd() * 300, 0.6 + rnd() * 1.4, rnd() * 6]);
-  const clouds = []; for (let i = 0; i < 5; i++) clouds.push([rnd() * W, 50 + rnd() * 130, 0.6 + rnd() * 0.8, 6 + rnd() * 8]);
-  return { sky, far: farSoft, mid: midSoft, gr, front, rays, stars, clouds, night, cave, deco: theme.deco, sun: { x: 740, y: 120 } };
+  const clouds = []; for (let i = 0; i < 6; i++) clouds.push([rnd() * W, 50 + rnd() * 130, 0.6 + rnd() * 0.8, 6 + rnd() * 8]);
+  // three shaded cloud sprites (lit top, soft shadowed belly), drawn with drawImage instead of four path fills per cloud
+  const cloudSpr = [];
+  if (!cave) for (let i = 0; i < 3; i++) {
+    const cw = 252, ch = 92, c = document.createElement('canvas'); c.width = cw; c.height = ch; const cx = c.getContext('2d'), s2 = 1.4;
+    const puffs = [[0, 0, 46, 14], [-24, 4, 28, 11], [26, 5, 30, 11], [4, -9, 24, 12]];
+    if (i === 1) puffs.push([-48, 6, 18, 8]); if (i === 2) puffs.push([50, 7, 20, 8], [-10, -13, 16, 9]);
+    cx.fillStyle = night ? '#c4bcff' : '#ffffff';
+    for (const [dx, dy, rx, ry] of puffs) { cx.beginPath(); cx.ellipse(cw / 2 + dx * s2, ch / 2 + 6 + dy * s2, rx * s2, ry * s2, 0, 0, TAU); cx.fill(); }
+    cx.globalCompositeOperation = 'source-atop';
+    const cg = cx.createLinearGradient(0, 14, 0, ch - 14); cg.addColorStop(0, 'rgba(255,255,255,0)'); cg.addColorStop(0.55, rgba(night ? '#6a60c0' : mix(theme.sky[1], '#8aa0c8', 0.5), 0)); cg.addColorStop(1, rgba(night ? '#5a50b0' : mix(theme.sky[1], '#8aa0c8', 0.5), 0.5));
+    cx.fillStyle = cg; cx.fillRect(0, 0, cw, ch);
+    cloudSpr.push(c);
+  }
+  const birds = []; if (!night && !cave) for (let i = 0; i < 3; i++) birds.push([rnd() * W, 90 + rnd() * 120, 0.7 + rnd() * 0.6, rnd() * 6]);
+  const motes = []; for (let i = 0; i < 18; i++) motes.push([380 + rnd() * 520, 140 + rnd() * 260, 0.5 + rnd(), rnd() * 6]);
+  return { cloudSpr, birds, motes, sky, far: farSoft, mid: midSoft, gr, front, rays, stars, clouds, night, cave, deco: theme.deco, sun: { x: 740, y: 120 } };
 }
 
 export function drawBackdrop(ctx, bd, scroll, t) {
   const W = 960;
   ctx.drawImage(bd.sky, 0, 0);
-  if (bd.night) for (const [x, y, r, p] of bd.stars) { ctx.fillStyle = `rgba(255,250,220,${0.45 + 0.45 * Math.sin(t * 2 + p)})`; ctx.fillRect(x, y, r, r); }
+  if (bd.night) {
+    for (const [x, y, r, p] of bd.stars) {
+      const b = 0.45 + 0.45 * Math.sin(t * 2 + p); ctx.fillStyle = `rgba(255,250,220,${b})`; ctx.fillRect(x, y, r, r);
+      if (r > 1.7 && b > 0.6) { ctx.fillStyle = `rgba(255,250,220,${(b - 0.6) * 1.6})`; ctx.fillRect(x - 2.5, y + r / 2 - 0.5, r + 5, 1); ctx.fillRect(x + r / 2 - 0.5, y - 2.5, 1, r + 5); }
+    }
+    // now and then a shooting star slips across the sky
+    const per = 11, u = (t % per) / 0.8;
+    if (u < 1) { const k = Math.floor(t / per), sx0 = 120 + (k * 377) % 480, sy0 = 40 + (k * 91) % 90, d = u * 190; ctx.save(); ctx.lineCap = 'round'; ctx.globalAlpha = 1 - u; ctx.strokeStyle = '#fff7d6'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(sx0 + d, sy0 + d * 0.38); ctx.lineTo(sx0 + d - 34, sy0 + (d - 34) * 0.38); ctx.stroke(); ctx.restore(); }
+  }
+  if (bd.birds) for (const [x, y, s, p] of bd.birds) {
+    // distant birds: a flapping V that wraps the screen
+    const bx = ((x + t * (18 + p * 3) - scroll * 0.06) % (W + 80) + W + 80) % (W + 80) - 40, by = y + Math.sin(t * 0.9 + p) * 14, fl = Math.sin(t * 9 + p * 3) * 3.4 * s;
+    ctx.strokeStyle = bd.deco === 'snow' ? 'rgba(60,80,120,.5)' : 'rgba(50,40,70,.45)'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(bx - 7 * s, by + fl * 0.3); ctx.quadraticCurveTo(bx - 3 * s, by - fl, bx, by); ctx.quadraticCurveTo(bx + 3 * s, by - fl, bx + 7 * s, by + fl * 0.3); ctx.stroke();
+  }
   if (bd.deco === 'flower') {
     // a few butterflies flutter over the meadow
     for (let k = 0; k < 4; k++) {
@@ -564,10 +691,14 @@ export function drawBackdrop(ctx, bd, scroll, t) {
       ctx.fillStyle = `rgba(255,236,160,${0.25 + 0.25 * Math.sin(t * 1.5 + v + x)})`; ctx.beginPath(); ctx.arc(cx, cy, 1.4 + s * 1.2, 0, TAU); ctx.fill();
     }
   }
-  ctx.fillStyle = bd.night ? 'rgba(200,190,255,.28)' : 'rgba(255,255,255,.75)';
-  if (!bd.cave) for (const [x, y, s, v] of bd.clouds) {
-    const cx = ((x - t * v - scroll * 0.05) % (W + 200) + W + 200) % (W + 200) - 100;
-    ctx.beginPath(); ctx.ellipse(cx, y, 46 * s, 14 * s, 0, 0, TAU); ctx.ellipse(cx - 24 * s, y + 4 * s, 28 * s, 11 * s, 0, 0, TAU); ctx.ellipse(cx + 26 * s, y + 5 * s, 30 * s, 11 * s, 0, 0, TAU); ctx.ellipse(cx + 4 * s, y - 9 * s, 24 * s, 12 * s, 0, 0, TAU); ctx.fill();
+  if (!bd.cave && bd.cloudSpr) {
+    ctx.globalAlpha = bd.night ? 0.34 : 0.85;
+    let ci = 0;
+    for (const [x, y, s, v] of bd.clouds) {
+      const cx = ((x - t * v - scroll * 0.05 * s) % (W + 200) + W + 200) % (W + 200) - 100, sp = bd.cloudSpr[ci++ % 3], k = s / 1.4;
+      ctx.drawImage(sp, cx - 126 * k, y - 46 * k - 6 * s, 252 * k, 92 * k);
+    }
+    ctx.globalAlpha = 1;
   }
   for (const [layer, k] of [[bd.far, 0.12], [bd.mid, 0.4], [bd.gr, 1]]) {
     const o = ((scroll * k) % W + W) % W;
@@ -576,9 +707,16 @@ export function drawBackdrop(ctx, bd, scroll, t) {
 }
 
 export function drawRays(ctx, bd, t) {
-  if (bd.night || bd.cave) return;
-  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.11 + 0.05 * Math.sin(t * 0.7);
-  ctx.drawImage(bd.rays, 0, 0); ctx.restore();
+  if (bd.cave) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (bd.night ? 0.085 : 0.11) + 0.05 * Math.sin(t * 0.7);
+  ctx.drawImage(bd.rays, 0, 0);
+  // dust motes turning slowly in the light
+  ctx.fillStyle = bd.night ? 'rgba(190,205,255,1)' : 'rgba(255,250,215,1)';
+  for (const [x, y, s, p] of bd.motes || []) {
+    const mx2 = x + Math.sin(t * 0.35 + p) * 26, my2 = y + Math.cos(t * 0.27 + p * 2) * 18 - Math.sin(t * 0.2 + p) * 12 * s;
+    ctx.globalAlpha = 0.25 + 0.3 * Math.sin(t * 1.3 + p * 4) ** 2; ctx.fillRect(mx2, my2, 1.6 * s, 1.6 * s);
+  }
+  ctx.restore();
 }
 export function drawFront(ctx, bd, scroll) {
   const W = 960, o = ((scroll * 1.35) % W + W) % W;

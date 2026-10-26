@@ -1,7 +1,7 @@
 // Drawings for the relics added in the second loot update (commons to mythics): same 64x64 board and cel-shaded style as art_icons.js,
 // keyed by the plain character that cats.js uses as the relic's icon. art_icons.js merges RELIC_ICONS into its own table.
 // NOTE: keep every drawing on whole lines; never put a // comment in the middle of a line that holds code after it.
-import { TAU, INK, mix, cel, ell, poly, star, line } from './art_util.js';
+import { TAU, INK, mix, cel, ell, poly, star, line, rimLight } from './art_util.js';
 
 const BOX = [0, 0, 64, 64];
 const P = (build) => { const p = new Path2D(); build(p); return p; };
@@ -369,3 +369,81 @@ export const RELIC_ICONS = {
     glint(c, 50, 54, 3.6); glint(c, 8, 54, 3);
   },
 };
+
+// ------------------------------------------------------------ fine detail pass
+// Extra hand-placed detail drawn over the plainest icons (after the base drawing, same 64x64 board).
+const radial = (ctx, x, y, r0, r1, a, b) => { const g = ctx.createRadialGradient(x, y, r0, x, y, r1); g.addColorStop(0, a); g.addColorStop(1, b); return g; };
+const DETAIL = {
+  // cheese rind: holes with a lit lower lip, a darker rind edge, crumbs
+  '🍪': (c) => {
+    curve(c, '#c98a1c', 2.4, (x) => { x.moveTo(8, 52); x.lineTo(58, 34); });
+    curve(c, 'rgba(255,248,200,.7)', 1.4, (x) => { x.moveTo(20, 17); x.bezierCurveTo(32, 6, 50, 12, 55, 30); });
+    for (const [x, y, r] of [[26, 32, 3.6], [40, 26, 2.8], [22, 44, 2.6], [44, 40, 3.2]]) {
+      curve(c, 'rgba(120,70,0,.55)', 1.1, (q) => { q.arc(x, y, r, 3.6, 5.9); });
+      curve(c, 'rgba(255,245,190,.9)', 1, (q) => { q.arc(x, y, r + 0.4, 0.5, 2.6); });
+    }
+    dot(c, 12, 56, 1.4, '#e8a020'); dot(c, 17, 58, 1, '#e8a020');
+  },
+  // copper penny: beaded rim, raised inner ring, shaded stamp
+  '🏅': (c) => {
+    for (let i = 0; i < 20; i++) { const a = (i / 20) * TAU; dot(c, 32 + Math.cos(a) * 21.2, 32 + Math.sin(a) * 21.2, 1, i % 2 ? '#f6c08a' : '#a8602a'); }
+    curve(c, '#a8602a', 1.2, (x) => { x.arc(32, 32, 16.4, 0, TAU); });
+    curve(c, 'rgba(255,225,190,.8)', 1.2, (x) => { x.arc(32, 32, 15.2, 3.6, 5.3); });
+    curve(c, 'rgba(255,255,255,.55)', 1.2, (x) => { x.arc(32, 32, 22, 4.0, 5.0); });
+  },
+  // catnip sprig: leaf highlights, bud stripes, a curled tendril
+  '🌻': (c) => {
+    for (const [y, s] of [[48, 1], [48, -1], [36, 1], [36, -1], [24, 1], [24, -1]]) ln(c, [[32 + s * 5, y - 0.5], [32 + s * 14, y - 4]], 'rgba(220,255,200,.65)', 0.9);
+    curve(c, '#2e8a3e', 1.4, (x) => { x.moveTo(32, 34); x.bezierCurveTo(40, 32, 44, 28, 41, 22); });
+    ln(c, [[32, 4], [32, 15]], 'rgba(255,255,255,.45)', 0.9);
+  },
+  // sunbeam: radial core, inner flare ring, tiny rays between the points
+  '🌟': (c) => {
+    for (let i = 0; i < 10; i++) { const a = ((i + 0.5) / 10) * TAU + 0.1; ln(c, [[32 + Math.cos(a) * 20, 32 + Math.sin(a) * 20], [32 + Math.cos(a) * 25, 32 + Math.sin(a) * 25]], 'rgba(255,210,90,.9)', 1.5); }
+    c.fillStyle = radial(c, 28, 27, 1, 14, 'rgba(255,255,230,.9)', 'rgba(255,255,230,0)'); c.beginPath(); c.arc(32, 32, 14, 0, TAU); c.fill();
+    curve(c, 'rgba(200,120,20,.6)', 1.2, (x) => { x.arc(32, 32, 14, 0.3, 2.4); });
+    dot(c, 44, 20, 1.4); dot(c, 18, 46, 1.2);
+  },
+  // dusty medal: ribbon stripes and fold, ridged edge, shaded star
+  '⭐': (c) => {
+    ln(c, [[16, 5], [31, 26]], 'rgba(255,255,255,.55)', 1.2); ln(c, [[48, 5], [33, 26]], 'rgba(255,255,255,.55)', 1.2);
+    ln(c, [[20, 11], [14, 8]], 'rgba(0,0,0,.25)', 1.1);
+    for (let i = 0; i < 24; i++) { const a = (i / 24) * TAU; ln(c, [[32 + Math.cos(a) * 17.6, 42 + Math.sin(a) * 17.6], [32 + Math.cos(a) * 19, 42 + Math.sin(a) * 19]], 'rgba(150,90,10,.6)', 1); }
+    c.fillStyle = 'rgba(255,255,255,.55)'; c.beginPath(); c.moveTo(32, 31); c.lineTo(34.6, 38); c.lineTo(32, 42); c.lineTo(29.4, 38); c.closePath(); c.fill();
+    c.fillStyle = 'rgba(160,100,20,.3)'; c.beginPath(); c.moveTo(32, 42); c.lineTo(34.6, 38); c.lineTo(42, 40); c.closePath(); c.fill();
+    curve(c, 'rgba(255,255,255,.7)', 1.6, (x) => { x.arc(32, 42, 17, 3.6, 4.7); });
+    glint(c, 22, 31, 2.6);
+  },
+  // lightning rod: ringed pole, copper base, spark arcs
+  '🔱': (c) => {
+    for (const y of [44, 49, 54]) ln(c, [[28.5, y], [35.5, y]], 'rgba(60,30,0,.45)', 1.1);
+    ln(c, [[30, 41], [30, 55]], 'rgba(255,240,170,.7)', 1.1);
+    ln(c, [[26, 56], [38, 56]], 'rgba(255,255,255,.3)', 1);
+    curve(c, 'rgba(255,255,255,.9)', 1, (x) => { x.moveTo(54, 3); x.lineTo(38, 19); x.lineTo(47, 22); x.lineTo(31, 36); });
+    curve(c, 'rgba(255,240,140,.8)', 1, (x) => { x.moveTo(16, 8); x.lineTo(20, 14); x.lineTo(15, 17); x.lineTo(20, 24); });
+    curve(c, 'rgba(255,240,140,.8)', 1, (x) => { x.moveTo(48, 44); x.lineTo(52, 48); x.lineTo(48, 52); });
+  },
+  // fortune cookie: fold crease, baked speckles, paper curl
+  '🥠': (c) => {
+    curve(c, 'rgba(120,60,0,.4)', 1.4, (x) => { x.moveTo(12, 44); x.bezierCurveTo(24, 48, 34, 48, 42, 52); });
+    for (const [x, y] of [[16, 28], [24, 20], [34, 22], [12, 40], [28, 48]]) dot(c, x, y, 0.9, 'rgba(110,60,10,.55)');
+    ln(c, [[40, 33], [47, 31]], '#e05a6a', 0.9);
+  },
+};
+
+// Rarity-tinted glow behind the epic icons (legendary and mythic already carry their own halo); a faint cool tint for the epics.
+const EPIC = new Set(['🥠', '🧿', '🕯', '🥁', '🔱']);
+// Bake the shared finish: glow, the base drawing, the extra detail, then a thin warm rim light on the edges that face the light.
+for (const k of Object.keys(RELIC_ICONS)) {
+  const base = RELIC_ICONS[k], extra = DETAIL[k], glow = EPIC.has(k);
+  RELIC_ICONS[k] = (ctx) => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+    const o = cv.getContext('2d');
+    o.scale(2, 2); o.lineJoin = 'round'; o.lineCap = 'round';
+    if (glow) halo(o, 32, 32, 31, 'rgba(190,130,255,.5)');
+    base(o);
+    if (extra) extra(o);
+    rimLight(cv, 2, '#fff6d8', 0.4);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(cv, 0, 0); ctx.restore();
+  };
+}
