@@ -171,3 +171,11 @@ export function epilogueAt(t) {
 
 // the banner after a nest falls: that nest was the last fight of its chapter
 export const chapterDoneLine = (wave) => `Chapter ${chapterOf(wave).n} complete! A friend is free!`;
+
+// the line under the logo: it follows the story, from the first call to arms to the hunt for the last caged cats
+export function titleTag(storyDone, unlocked, total) {
+  if (storyDone && unlocked >= total) return 'Every cat is free and purring. Whiskerton is safe!';
+  if (storyDone) return `The Cheddar Throne has fallen. ${total - unlocked} cats still caged!`;
+  if (unlocked > 3) return `${unlocked} of ${total} cats rescued. Keep smashing the nests!`;
+  return 'Stack your cats. Merge them. Smash the mouse nests.';
+}

@@ -305,4 +305,13 @@ await t('coachAbove: a tip sits just over its target, clamped inside the stage',
   assert.equal(coachAbove({ left: 1100, top: 400, width: 10 }, app, 1, 60, 960).x, 821, 'keeps room on the right edge');
 });
 
+await t('titleTag: the line under the logo follows the story', async () => {
+  const { titleTag } = await import('../stacking_cats/story.js');
+  assert.equal(titleTag(false, 3, 31), 'Stack your cats. Merge them. Smash the mouse nests.', 'fresh save keeps the classic line');
+  assert.equal(titleTag(false, 8, 31), '8 of 31 cats rescued. Keep smashing the nests!');
+  assert.equal(titleTag(true, 20, 31), 'The Cheddar Throne has fallen. 11 cats still caged!');
+  assert.equal(titleTag(true, 31, 31), 'Every cat is free and purring. Whiskerton is safe!');
+  for (const [d, u] of [[false, 3], [false, 9], [true, 9], [true, 31]]) assert.ok(!/\u2014/.test(titleTag(d, u, 31)), 'no em dash');
+});
+
 console.log(n + ' passed');
