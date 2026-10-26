@@ -180,6 +180,7 @@ export const SNACKS = [
   { id: 'golden', name: 'Golden Fish', icon: '🐠', kind: 'perm', fx: {}, nine: true, desc: 'Nine Lives: if the tower falls, everyone gets back up once', rare: true },
   { id: 'pepper', name: 'Spicy Pepper', icon: '🌶️', kind: 'temp', fx: { dmg: 0.45 }, desc: '+45% damage for 3 waves' },
   { id: 'cola', name: 'Cat Cola', icon: '🥤', kind: 'temp', fx: { haste: 0.35 }, desc: '+35% attack speed for 3 waves' },
+  { id: 'smoothie', name: 'Berry Smoothie', icon: '🍓', kind: 'temp', fx: { haste: 0.2, range: 0.2 }, desc: '+20% attack speed and range for 3 waves' },
   { id: 'bone', name: 'Fish Bone Armor', icon: '🦴', kind: 'temp', fx: { dr: 0.30 }, desc: '30% less damage taken for 3 waves' },
   { id: 'icecream', name: 'Frozen Treat', icon: '🍦', kind: 'temp', fx: { slow: 0.22 }, desc: 'Mice move 22% slower for 3 waves' },
   { id: 'yarn', name: 'Rainbow Yarn', icon: '🧶', kind: 'temp', fx: { crit: 0.25, critMul: 0.6 }, desc: '+25% crit chance and bigger crits for 3 waves' },

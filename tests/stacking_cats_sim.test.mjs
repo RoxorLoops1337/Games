@@ -29,6 +29,17 @@ t('snacks: perm, temp and instant exist, all have text', () => {
   for (const s of SNACKS) assert.ok(s.name && s.icon && s.desc, s.id);
 });
 
+t('snacks: Berry Smoothie gives attack speed and range for 3 waves', () => {
+  const g = newGame({ seed: 7 });
+  addCat(g, 'tabby');
+  const base = calcMods(g);
+  eatSnack(g, 'smoothie');
+  const m = calcMods(g);
+  assert.ok(m.haste > base.haste && m.range > base.range, 'both bonuses apply');
+  for (let i = 0; i < 3; i++) { startWave(g); g.enemies = []; g.queue = []; step(g, 3); step(g, 0.1); }
+  assert.equal(g.temp.length, 0, 'it wears off after three waves');
+});
+
 t('addCat: stack, auto-merge equals, bench, then refuses', () => {
   const g = newGame({ seed: 3 });
   assert.ok(addCat(g, 'tabby').ok);
