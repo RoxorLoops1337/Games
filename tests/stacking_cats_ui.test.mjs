@@ -991,3 +991,15 @@ t('coach bubbles on full screens step clear of buttons and cards, and merge dust
   assert.ok(/for \(const k of \['c1'/.test(js) || /coach\('c5'/.test(js), 'coach keys stay');
   assert.ok(/if \(save\.opt\.motion && !document\.body\.classList\.contains\('nomotion'\)\) \{[^}]*pops\.set\(e\.uid[\s\S]*?puff\(p\.x, GROUND/.test(js), 'merge squash and base dust only with motion on');
 });
+
+t('phone in-fight HUD: tools, specials, Zoomies reach about 35 real px, text stays near 9 real px, Auto has a taller hit area', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8'), js = readFileSync('stacking_cats/main.js', 'utf8');
+  const blk = html.slice(html.indexOf('round 10: in-fight HUD on phones'));
+  assert.ok(/@media \(max-height:400px\)/.test(blk), 'phone only block');
+  assert.ok(/body \.ib,body\.touch \.ib[^{]*\{width:60px;height:60px/.test(blk), 'tool buttons 60 stage px');
+  assert.ok(/body \.spb,body\.touch \.spb\{width:64px;height:64px/.test(blk), 'special buttons 64 stage px');
+  assert.ok(/#specials \.autob::before\{content:'';/.test(blk), 'Auto hit area grows');
+  assert.ok(/#zoom span[^{]*\{font-size:17px/.test(blk) && /#meter \.mr\{font-size:15px/.test(blk), 'Zoomies and DPS text readable');
+  assert.ok(/window\.innerHeight <= 400 \? 16 : 13/.test(js) && /Math\.max\(f\.size, 20\)/.test(js), 'canvas HP names and damage numbers scale up on phones');
+  for (const id of ['specials', 'zoom', 'meter', 'banner', 'waveBox']) assert.ok(html.includes(`id="${id}"`), id);
+});

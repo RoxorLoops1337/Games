@@ -817,6 +817,26 @@ body.nomotion .tile:hover{transform:none}
 .tro.got.t-rare{box-shadow:0 0 8px #4a8ad866,0 2px 0 rgba(0,0,0,.4)}.tro.got.t-epic{box-shadow:0 0 8px #c04ae066,0 2px 0 rgba(0,0,0,.4)}
 .tro.got.t-legendary{box-shadow:0 0 9px #ffc83a99,0 2px 0 rgba(0,0,0,.4)}.tro.got.t-mythic{box-shadow:0 0 10px #ff5aa8cc,0 2px 0 rgba(0,0,0,.4)}
 .tro small{color:#ffeedd}
+/* ===== round 10: in-fight HUD on phones (568x320 shows the stage at 0.59): reach about 35 real px taps and 9 real px text ===== */
+@media (max-height:400px){
+body .ib,body.touch .ib,body #bFull,body.touch #bFull{width:60px;height:60px;font-size:24px}
+body #tools,body.touch #tools{gap:6px}
+body #zoom,body.touch #zoom{top:76px}
+body #zoom span,body.touch #zoom span{font-size:17px}
+body #zoom small{font-size:20px}
+body #waveBox small{font-size:16px}
+body #coinBox b,body #chestBox b{font-size:21px}
+body #snackBar .chip{font-size:17px}
+body .spb,body.touch .spb{width:64px;height:64px}
+body .spb em{min-width:22px;height:22px;font-size:15px;line-height:22px;border-radius:11px}
+body #specials .autob,body.touch #specials .autob{font-size:16px;padding:3px 14px}
+body #specials .autob::before{content:'';position:absolute;left:-8px;right:-8px;top:-40px;bottom:-2px}
+body #meter,body.touch #meter{top:190px;width:176px}
+body #meter .mh{font-size:16px} body #meter .mh span{font-size:17px}
+body #meter .mr{font-size:15px;height:24px} body #meter .mr span{width:40px}
+body .coach{font-size:17px;max-width:300px}
+body .coach button{font-size:16px;padding:3px 12px}
+}
 </style>
 </head>
 <body>

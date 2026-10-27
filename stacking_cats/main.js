@@ -1738,7 +1738,7 @@ function drawFx() {
     }
     else if (f.k === 't') {
       const age = f.max - f.life, sc = f.pop ? 1 + Math.max(0, 0.7 * (1 - age / 0.14)) : 1;
-      ctx.globalAlpha = Math.min(1, a * 2.2); ctx.font = `400 ${Math.round(f.size * sc)}px ${DISPLAY}`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round';
+      ctx.globalAlpha = Math.min(1, a * 2.2); ctx.font = `400 ${Math.round((window.innerHeight <= 400 ? Math.max(f.size, 20) : f.size) * sc)}px ${DISPLAY}`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round';
       ctx.strokeText(f.t, f.x, f.y); ctx.fillStyle = f.col; ctx.fillText(f.t, f.x, f.y);
     }
   }
@@ -1873,7 +1873,7 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
     if (c.lvl === 3) { ctx.fillStyle = '#fff6b0'; for (let k = 0; k < 3; k++) { const an = t * 2 + k * 2.1; ctx.beginPath(); ctx.arc(cx + sway + Math.cos(an) * 40, feetY - 44 + Math.sin(an) * 26, 2.4, 0, TAU); ctx.fill(); } }
     if (hpBars) {
       const bx = cx - 142, by = feetY - 50, bw = 84;
-      ctx.font = `400 13px ${DISPLAY}`; ctx.textAlign = 'left'; ctx.lineWidth = 4; ctx.strokeStyle = '#1b1233'; ctx.lineJoin = 'round';
+      ctx.font = `400 ${window.innerHeight <= 400 ? 16 : 13}px ${DISPLAY}`; ctx.textAlign = 'left'; ctx.lineWidth = 4; ctx.strokeStyle = '#1b1233'; ctx.lineJoin = 'round';
       ctx.strokeText(d.name, bx, by - 4); ctx.fillStyle = '#fff'; ctx.fillText(d.name, bx, by - 4);
       if (c.lvl > 1) { const nw = ctx.measureText(d.name).width + 4; ctx.strokeText('\u2605'.repeat(c.lvl), bx + nw, by - 4); ctx.fillStyle = '#ffd23f'; ctx.fillText('\u2605'.repeat(c.lvl), bx + nw, by - 4); }
       const r = Math.min(1, Math.max(0, c.hp / c.max));
