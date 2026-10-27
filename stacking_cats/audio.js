@@ -327,6 +327,7 @@ export class Sfx {
     if (DUCK[name]) this.duckMusic(DUCK[name][0], DUCK[name][1]);
     switch (name) {
       case 'coin': this.tone(1320 + Math.random() * 200, 0.09, { type: 'triangle', v: 0.07 }); this.tone(1760, 0.14, { type: 'sine', v: 0.05, delay: 0.05 }); break;
+      case 'boxopen': [0, 0.09, 0.18, 0.27].forEach((d, i) => { this.tone(150 + i * 25, 0.07, { type: 'square', v: 0.05, delay: d }); this.noiseAt(this.ctx.currentTime + d, 0.05, 0.05, { freq: 1800 + i * 300 }); }); this.tone(200, 0.16, { to: 640, type: 'sine', v: 0.16, delay: 0.4 }); this.noiseAt(this.ctx.currentTime + 0.4, 0.14, 0.1, { freq: 3200 }); [1568, 1976, 2349].forEach((f, i) => this.tone(f, 0.2, { type: 'triangle', v: 0.05, delay: 0.5 + i * 0.05 })); break;
       case 'chest': [660, 880, 1100, 1320].forEach((f, i) => this.tone(f, 0.16, { type: 'triangle', v: 0.12, delay: i * 0.05 })); this.noise(0.12, 0.08, 5000); break;
       case 'equip': this.tone(300, 0.07, { type: 'square', v: 0.08 }); this.tone(900, 0.12, { type: 'triangle', v: 0.1, delay: 0.06 }); break;
       case 'upgrade': [392, 523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.2, { type: 'triangle', v: 0.13, delay: i * 0.06 })); this.tone(130, 0.3, { to: 70, type: 'sine', v: 0.2 }); break;

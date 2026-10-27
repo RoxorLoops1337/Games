@@ -958,3 +958,10 @@ t('opening a full screen clears the wave banner (under a blurred panel it showed
   const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
   assert.ok(/function setScreen[\s\S]{0,400}getElementById\('banner'\)[\s\S]{0,80}className = ''/.test(js), 'setScreen clears the banner');
 });
+
+t('opening a lootbox has its own sound: rattle, lid pop, sparkle', async () => {
+  const au = readFileSync(new URL('../stacking_cats/audio.js', import.meta.url), 'utf8');
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  assert.ok(/case 'boxopen':/.test(au), 'the sound exists');
+  assert.ok(/sfx\.play\('boxopen'\)/.test(js), 'the Open button plays it');
+});
