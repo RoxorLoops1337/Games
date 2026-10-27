@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#1d1745;color:#f6ecd8;font:12px sans-serif">
+<canvas id="c"></canvas>
+<script src="../src/gfx/pestprint.js"></script>
+<script>
+var PP=SB.gfx.pestprint, list=PP.catalog, poses=['idle0','idle1','attack','hurt','dead'], S=3, cell=64*S/2+8;
+var cols=3, rows=Math.ceil(list.length/cols), cw=5*(40*S)+10, ch=56*S;
+var c=document.getElementById('c'); c.width=cols*cw; c.height=rows*ch; var x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+x.fillStyle='#2a2147'; x.fillRect(0,0,c.width,c.height);
+list.forEach(function(id,i){var col=i%cols,row=(i/cols)|0, ox=col*cw, oy=row*ch;
+ x.fillStyle=(row+col)%2?'#241c42':'#2d2350'; x.fillRect(ox,oy,cw,ch);
+ x.fillStyle='#f6ecd8'; x.font='11px sans-serif'; x.fillText(id,ox+4,oy+12);
+ var sp=PP.make(id), sc=sp.w>40?S*0.75:S; sc=sp.w>=64?2:3;
+ poses.forEach(function(p,j){ var cx=ox+j*(40*S)+ (40*S)/2+5; x.fillStyle='rgba(0,0,0,.25)'; x.fillRect(cx-sp.w*sc/2,oy+ch-8,sp.w*sc,1);
+   PP.drawPest(x,id,p,cx,oy+ch-8,sc,0,{noBob:true});});
+});
+document.title='ok';
+</script>

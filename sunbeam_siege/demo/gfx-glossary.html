@@ -1,0 +1,9 @@
+<!doctype html><meta charset="utf-8"><title>gfx glossary icons</title>
+<body style="margin:0;background:#2a2147;color:#f6ecd8;font:9px sans-serif"><div id="r" style="display:flex;flex-wrap:wrap;width:1400px"></div>
+<script src="../src/data/glossary.js"></script><script src="../src/gfx/icons.js"></script>
+<script>
+var I=SB.gfx.icons,r=document.getElementById('r'),miss=0;
+SB.data.glossary.forEach(function(e){var ok=I.has(e.icon)&&I.has(e.ref);if(!ok)miss++;var d=document.createElement('div');d.style.cssText='width:116px;height:54px;padding:2px;border:1px solid '+(ok?'#3d3263':'#f00')+';box-sizing:border-box;position:relative';
+d.innerHTML=I.svg(e.icon,2,{}).replace('<svg ','<svg style="image-rendering:pixelated" ')+I.svg(e.ref,1.33,{}).replace('<svg ','<svg style="image-rendering:pixelated;margin-left:4px" ')+'<div style="position:absolute;bottom:1px;left:2px;white-space:nowrap">'+e.ref+' ('+e.icon+')</div>';r.appendChild(d);});
+document.title='missing '+miss;
+</script>

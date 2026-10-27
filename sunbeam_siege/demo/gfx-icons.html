@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>gfx icons</title>
+<body style="margin:0;background:#2a2147;color:#f6ecd8;font:10px sans-serif">
+<div id="r" style="display:flex;flex-wrap:wrap;width:1500px"></div>
+<script src="../src/data/glossary.js"></script>
+<script src="../src/gfx/icons.js"></script>
+<script>
+var I=SB.gfx.icons,r=document.getElementById('r');
+var q=location.search.match(/only=([^&]+)/);var list=I.names.filter(function(n){return I.resolve(n)===n});
+if(q){var s=q[1].split(',');list=list.filter(function(n){return s.indexOf(n)>=0});}
+list.forEach(function(n){var d=document.createElement('div');d.style.cssText='width:116px;height:76px;padding:3px;border:1px solid #3d3263;box-sizing:border-box;position:relative';
+d.innerHTML='<div style="display:flex;gap:6px;align-items:flex-end;height:50px">'+[16,24,48].map(function(p){return I.svg(n,p/12,{}).replace('<svg ','<svg style="image-rendering:pixelated" ')}).join('')+'</div><div style="position:absolute;bottom:2px;left:3px;font-size:9px;white-space:nowrap;overflow:hidden;width:110px">'+n+'</div>';r.appendChild(d);});
+document.title='ok';
+</script>

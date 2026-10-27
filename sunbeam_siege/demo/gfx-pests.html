@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>gfx pests</title>
+<body style="margin:0;background:#2a2147;color:#f6ecd8;font:11px sans-serif"><canvas id="c"></canvas>
+<script src="../src/gfx/pestprint.js"></script>
+<script>
+var PP=SB.gfx.pestprint,m=(location.search.match(/m=(\w+)/)||[])[1]||'species';
+var list=m==='species'?PP.species.filter(function(s){return s!=='alarm_clock'||true}).map(function(s){return {id:s,d:{species:s}}}):
+ ['boss_rat_king','boss_vacuum','boss_carrier','boss_great_bath','boss_hose','boss_reddot','boss_spray','boss_alarm_clock'].map(function(s){return {id:s,d:s}});
+var poses=m==='species'?['idle0','idle1','attack','hurt']:['idle0','attack','hurt','dead'];
+var S=m==='species'?3:2,cw=poses.length*(m==='species'?100:150)+10,ch=m==='species'?150:170,cols=m==='species'?3:2;
+var c=document.getElementById('c');c.width=cols*cw;c.height=Math.ceil(list.length/cols)*ch;var x=c.getContext('2d');x.imageSmoothingEnabled=false;
+list.forEach(function(it,i){var ox=(i%cols)*cw,oy=((i/cols)|0)*ch;x.fillStyle=((i%cols)+((i/cols)|0))%2?'#241c42':'#2d2350';x.fillRect(ox,oy,cw,ch);
+ x.fillStyle='#f6ecd8';x.fillText(it.id,ox+4,oy+12);
+ poses.forEach(function(p,j){var cx=ox+j*(m==='species'?100:150)+(m==='species'?50:75);PP.drawPest(x,it.d,p,cx,oy+ch-8,S,0,{noBob:true});});});
+document.title='ok';
+</script>
