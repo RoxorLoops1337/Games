@@ -204,6 +204,7 @@ function coach(key, html, x, y, dir = 'down', opt = {}) {
 }
 function setScreen(html, cls = '') {
   hideCoach();
+  if (html) { const bn = document.getElementById('banner'); if (bn) bn.className = ''; }   // a banner left under a blurred panel shows up as a mirrored ghost
   screenEl.innerHTML = html ? `<div class="screen ${cls}">${html}</div>` : '';
   document.body.classList.toggle('scr', !!html);       // the HUD steps back while a menu is open
   paintThumbs(screenEl);
