@@ -504,20 +504,35 @@ function showDex(back, sel0) {
       const u = un.has(d.id), p = unlockProgress(d, save.stats);
       return `<div class="tile ${u ? '' : 'locked'} ${sel === d.id ? 'sel' : ''}" data-act="tile" data-id="${d.id}"><canvas width="96" height="96" data-cat="${d.id}" ${u ? '' : 'data-lock="1"'}></canvas><b>${u ? d.name : '???'}</b>${u ? `<small>${d.role}</small>` : `<small>${p.need > 1 ? `${p.have}/${p.need}` : p.have ? 'Done' : 'Caged'}</small>${p.need > 1 ? `<span class="tpb"><i style="width:${Math.min(100, Math.round(100 * p.have / p.need))}%"></i></span>` : ''}`}${fav && fav[0] === d.id && u ? '<i class="fav">&#10084;</i>' : ''}</div>`;
     }).join('')}</div>
-    <div class="detail dexd">${sel ? dexDetail(sel, un.has(sel)) : 'Tap a cat to see how to unlock it, or how it has done for you. Locked cats join the picks once you earn them.'}</div>
+    <div class="detail dexd ${sel ? 'dx' : ''}">${sel ? dexDetail(sel, un.has(sel)) : 'Tap a cat to see how to unlock it, or how it has done for you. Locked cats join the picks once you earn them.'}</div>
     <div class="row"><button class="btn" data-act="back">Back</button></div>`);
   };
   draw();
   acts = { back, tile: (d) => { sel = d.id; draw(); sfx.meow(d.id, 'pick'); }, wardrobe: (d) => showWardrobe(() => showDex(back, d.id), d.id) };
 }
+// Dex portrait plate: cats have no stored rarity, so the tint follows how hard the cat is to get (starters, then thirds of the unlock list)
+const ATK_NAME = { melee: 'Melee', proj: 'Ranged', lob: 'Lobber', cone: 'Flame cone', chain: 'Chain', beam: 'Beam', strike: 'Strike', nova: 'Nova', mine: 'Mines', storm: 'Storm', spread: 'Spread' };
+function dexTier(id) {
+  const ids = CATS.filter((c) => c.unlock).map((c) => c.id), i = ids.indexOf(id);
+  return i < 0 ? 'common' : i < ids.length / 3 ? 'rare' : i < (2 * ids.length) / 3 ? 'epic' : 'legendary';
+}
+const dexPlate = (id, locked) => `<div class="dxplate dx-${dexTier(id)} ${locked ? 'lock' : ''}"><canvas width="192" height="192" data-cat="${id}" ${locked ? 'data-lock="1"' : ''} aria-hidden="true"></canvas></div>`;
 function dexDetail(id, unlocked) {
   const d = CAT_BY_ID[id];
   if (unlocked) {
-    const s = save.catStats[id], tags = (CAT_TAGS[id] || []).map((t) => `${SYNERGIES[t].icon} ${SYNERGIES[t].name}`).join(', ');
-    return `<b>${d.name}, ${d.title}</b> (${d.role}). ${d.desc}<br><i class="cstory">${catStory(id)}</i><br><small>${tags ? `Teams up as: ${tags}. ` : ''}${s ? `Used in ${s.runs} run${s.runs === 1 ? '' : 's'}, best wave ${s.best}, ${num(s.dmg)} total damage, ${num(s.kills)} mice defeated.` : 'Not used yet.'}</small><br><small class="spnote">Special move: <b>${S.specialInfo(id).name}</b>. ${SPECIAL_TEXT[S.specialInfo(id).kind] || ''}</small>${masteryHtml(id)}<button class="btn small wbtn" data-act="wardrobe" data-id="${id}">Wardrobe</button>`;
+    const s = save.catStats[id], sp = S.specialInfo(id), tg = (CAT_TAGS[id] || []).map((t) => `<span class="dxtg tag">${SYNERGIES[t].icon} ${SYNERGIES[t].name}</span>`).join('');
+    const st = s ? [['Best wave', s.best], ['Runs', s.runs], ['Mice', num(s.kills)]].map(([k, v]) => `<span class="dxstat"><b>${v}</b>${k}</span>`).join('') : '<span class="dxstat dxnone">Not used yet</span>';
+    return `${dexPlate(id, false)}<div class="dxtxt"><div class="dxname"><b>${d.name}</b> <span>${d.title}</span></div>
+      <div class="dxtags"><span class="dxtg drole">${d.role}</span><span class="dxtg datk">${ATK_NAME[d.atk.t] || d.atk.t}</span>${tg}</div>
+      <i class="cstory">${catStory(id)}</i>
+      <div class="dxstats">${st}${s ? `<span class="dxstat"><b>${num(s.dmg)}</b>Damage</span>` : ''}</div>
+      <small class="spnote">${d.desc} Special: <b>${sp.name}</b>. ${SPECIAL_TEXT[sp.kind] || ''}</small>${masteryHtml(id)}</div><button class="btn small wbtn" data-act="wardrobe" data-id="${id}">Wardrobe</button>`;
   }
   const p = unlockProgress(d, save.stats);
-  return `<b>Still caged!</b> The Gnaw Army locked this cat in a nest. To free it: ${d.unlock.text}${p.need > 1 ? ` (${p.have}/${p.need})` : ''}.<div class="pbar"><i style="width:${(100 * p.have) / p.need}%"></i></div>`;
+  return `${dexPlate(id, true)}<div class="dxtxt"><div class="dxname"><b>Still caged!</b></div>
+    <div class="dxtags"><span class="dxtg lockc">Locked</span></div>
+    <span class="cstory">The Gnaw Army locked this cat in a nest. To free it: ${d.unlock.text}${p.need > 1 ? ` (${p.have}/${p.need})` : ''}.</span>
+    <div class="dxprog"><div class="pbar"><i style="width:${(100 * p.have) / p.need}%"></i></div><span>${p.need > 1 ? `${p.have} / ${p.need}` : p.have ? 'Done' : 'Not yet'}</span></div></div>`;
 }
 
 // ---------------------------------------------------------------- the Relic Book
