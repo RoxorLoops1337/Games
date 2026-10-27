@@ -691,8 +691,9 @@ function showKingdom(back, selected) {
     return `<div class="kd"><span class="kic">${b.icon}</span><div class="kt"><b>${b.name} <span class="pips">${Array.from({ length: b.max }, (_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</span></b><small>${l ? `Now: ${b.text(l)}` : b.blurb}</small>${maxed ? '<small class="nx">Fully upgraded!</small>' : `<small class="nx">Next: ${b.text(l + 1)}</small>`}</div><button class="btn small ${afford ? 'green' : 'grey'}" data-act="buy" data-id="${b.id}" ${afford ? '' : 'disabled'}>${maxed ? 'Complete' : `${l ? 'Upgrade' : 'Build'} &#129689; ${cost}`}</button></div>`;
   };
   setScreen(`<h2>Cat Kingdom <small class="klv">Lv ${kingdomLevel(k)}</small></h2>
-    <div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <span class="gem">&#128142;</span> <b>${k.gems}</b> <small>${num(k.earned)} coins earned in total &middot; gems come from trophies and nests</small></div>
+    <div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <span class="gem">&#128142;</span> <b>${k.gems}</b> <small>${num(k.earned)} coins earned in total &middot; upgrades cost coins from runs &middot; gems are rare: nests, trophies, daily wins</small></div>
     <canvas id="kscene" width="1840" height="512" role="img" aria-label="Your cat village. Use the left and right arrow keys to move between buildings and wonders, Enter to buy."></canvas><div id="kdetail" aria-live="polite">${detail()}</div>
+    <div class="ktip">${KINGDOM_TIPS[Math.floor(k.earned / 50) % KINGDOM_TIPS.length]}</div>
     <div class="row"><button class="btn" data-act="back">Back</button><button class="btn pink" data-act="wardrobe">Wardrobe</button></div>`, 'kingdom');
   const refresh = () => { const el = $('kdetail'); if (el) el.innerHTML = detail(); };
   kScene = createKingdomScene($('kscene'), () => save.kingdom, (hit) => { sel = hit; sfx.play('ui'); refresh(); });
@@ -1625,7 +1626,7 @@ function handle(e) {
     case 'healfx': for (let i = 0; i < 3; i++) spawnFx({ k: 'h', x: e.x + (Math.random() - 0.5) * 50, y: e.y - 10, life: 0.9, max: 0.9 }); sfx.play('heal'); break;
     case 'cathit': { if (Math.random() < 0.18) emote(e.uid, '\uD83D\uDCA2', 0.8); const p = catPos(e.uid); txtFx(p.x - 56, p.y, Math.round(e.v), '#ff8a8a', 15, 0.7); sparks(p.x + 14, p.y - 8, 4 + Math.min(5, Math.floor(e.v / 12)), '#ff9a8a', 170, 0.3); flashGlow(p.x + 10, p.y - 8, 34, '#ff6a6a', 0.3); ring(p.x + 8, p.y - 8, 28, '#ffb0a0', 0.22, 3); if (e.v >= 8) puff(p.x + 12, p.y - 4, 3, '#e8d4c4', 55, 0.35, 3, 40); towerWob = 1; shake = Math.max(shake, 1.8); sfx.play('hit'); buzz('hit'); break; }
     case 'coin': if (fx.length < 300) { sparks(e.x, e.y - 6, 2, '#ffe27a', 110, 0.25); flashGlow(e.x, e.y - 6, 16, '#ffd23f', 0.25); } if (fx.length < 300) spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 52, ty: 72, life: 0.7 + Math.random() * 0.2, max: 0.8, kind: 'coin', ox: (Math.random() - 0.5) * 160, oy: -60 - Math.random() * 60 }); break;
-    case 'chest': spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', tier: e.tier, ox: 0, oy: -90 }); sparks(e.x, e.y, 14, '#ffd23f', 240, 0.55); ring(e.x, e.y - 6, 54, '#fff3b8', 0.45, 4); flashGlow(e.x, e.y - 10, 70, '#ffe27a', 0.5); spawnFx({ k: 's', x: e.x, y: e.y - 14, life: 0.5, max: 0.5 }); txtFx(e.x, e.y - 20, e.tier ? BOX_BY_ID[e.tier].name : 'Box!', '#ffd23f', 20, 1); sfx.play('chest'); break;
+    case 'chest': if (save.opt.motion && !document.body.classList.contains('nomotion')) { const dx = (Math.random() < 0.5 ? -1 : 1) * (22 + Math.random() * 16); spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, lx: e.x + dx, tx: 150, ty: 72, life: DROP_T, max: DROP_T, kind: 'chest', tier: e.tier, ox: 0, oy: -70, drop: 1, landed: 0 }); } else spawnFx({ k: 'fly', x: e.x, y: e.y, sx: e.x, sy: e.y, tx: 150, ty: 72, life: 1.0, max: 1.0, kind: 'chest', tier: e.tier, ox: 0, oy: -90 }); sparks(e.x, e.y, 14, '#ffd23f', 240, 0.55); ring(e.x, e.y - 6, 54, '#fff3b8', 0.45, 4); flashGlow(e.x, e.y - 10, 70, '#ffe27a', 0.5); spawnFx({ k: 's', x: e.x, y: e.y - 14, life: 0.5, max: 0.5 }); txtFx(e.x, e.y - 20, e.tier ? BOX_BY_ID[e.tier].name : 'Box!', '#ffd23f', 20, 1); sfx.play('chest'); break;
     case 'shieldhit': { const p = catPos(e.uid); ring(p.x, p.y - 10, e.broke ? 70 : 46, '#8fe8ff', e.broke ? 0.5 : 0.28, e.broke ? 6 : 3); if (e.broke) { txtFx(p.x - 46, p.y - 6, 'Barrier down', '#bff4ff', 16, 0.9); sparks(p.x, p.y - 10, 10, '#bff4ff', 190, 0.4); } break; }
     case 'undying': { const p = catPos(e.uid); txtFx(p.x - 56, p.y - 24, 'Second chance!', '#ffe27a', 22, 1.5); ring(p.x, p.y - 10, 100, '#fff2a0', 0.7, 8); flashGlow(p.x, p.y - 10, 140, '#fff2a0', 0.6); sparks(p.x, p.y - 10, 20, '#fff6b0', 260, 0.7); sfx.play('heal'); break; }
     case 'dodge': { const p = catPos(e.uid); txtFx(p.x - 40, p.y, 'Dodge!', '#b9f5ff', 18, 0.8); ring(p.x, p.y - 10, 44, '#d9f8ff', 0.35, 3); sparks(p.x, p.y - 10, 6, '#ffffff', 150, 0.3); break; }
@@ -1684,6 +1685,24 @@ function handle(e) {
 }
 function drain() { for (const e of g.ev) handle(e); g.ev.length = 0; }
 
+// Lootbox drop timeline (seconds): arc up and land, one small bounce, rest, fly to the HUD counter.
+const DROP_T = 1.6, DROP_LAND = 0.4, DROP_BOUNCE = 0.65, DROP_FLY = 1.1;
+const DROP_TINT = { cardboard: ['#fff0d6', 0.3], basket: ['#ffb460', 0.4], silver: ['#bfe4ff', 0.5], golden: ['#ffd23f', 0.8] };
+// position of a dropped box at a given age; pure and allocation free (writes into out)
+function dropPos(f, age, out) {
+  if (age < DROP_LAND) { const u = age / DROP_LAND; out.x = f.sx + (f.lx - f.sx) * u; out.y = f.sy - 62 * 4 * u * (1 - u) + 8 * u * u; out.h = 62 * 4 * u * (1 - u); }
+  else if (age < DROP_BOUNCE) { const v = (age - DROP_LAND) / (DROP_BOUNCE - DROP_LAND); out.x = f.lx; out.h = 14 * 4 * v * (1 - v); out.y = f.sy + 8 - out.h; }
+  else if (age < DROP_FLY) { out.x = f.lx; out.y = f.sy + 8; out.h = 0; }
+  else { const u = (age - DROP_FLY) / (DROP_T - DROP_FLY), e = u * u * (3 - 2 * u); out.x = f.lx + (f.tx - f.lx) * e; out.y = f.sy + 8 + (f.ty - f.sy - 8) * e + f.oy * Math.sin(u * Math.PI); out.h = 0; }
+  return out;
+}
+const _dp = { x: 0, y: 0, h: 0 };
+const KINGDOM_TIPS = [
+  'Slow on purpose: every run adds a few coins, and small upgrades stack up.',
+  'Tip: spend coins on upgrades between runs, they make the next run go further.',
+  'Gems are rare treats from nests, trophies and your first daily wins.',
+  'No rush. Each run you play makes the kingdom a little stronger.',
+];
 function updateFx(dt) {
   for (let i = fx.length - 1; i >= 0; i--) {
     const f = fx[i];
@@ -1701,7 +1720,7 @@ function updateFx(dt) {
       case 't': f.y -= 38 * dt; break;
       case 'f': f.y += f.vy * dt; f.r *= 1 - 1.6 * dt; break;
       case 'h': f.y -= 34 * dt; break;
-      case 'fly': { const u = 1 - f.life / f.max, e = u * u * (3 - 2 * u); f.x = f.sx + (f.tx - f.sx) * e + f.ox * Math.sin(u * Math.PI) * (1 - u); f.y = f.sy + (f.ty - f.sy) * e + f.oy * Math.sin(u * Math.PI); break; }
+      case 'fly': if (f.drop) { const age = f.max - f.life; dropPos(f, age, _dp); f.x = _dp.x; f.y = _dp.y; if (!f.landed && age >= DROP_LAND) { f.landed = 1; sparks(f.lx, f.sy + 8, 5, '#fff3b8', 90, 0.3); } break; } { const u = 1 - f.life / f.max, e = u * u * (3 - 2 * u); f.x = f.sx + (f.tx - f.sx) * e + f.ox * Math.sin(u * Math.PI) * (1 - u); f.y = f.sy + (f.ty - f.sy) * e + f.oy * Math.sin(u * Math.PI); break; }
       default: break;
     }
   }
@@ -1718,6 +1737,12 @@ function drawFx() {
       ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a > 0.85 ? 0.9 : a * 0.45; ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.restore();
     } else if (f.k === 's') { ctx.globalAlpha = a; ctx.fillStyle = '#fff6b0'; for (let i = 0; i < 4; i++) { const an = i * 1.57 + (1 - a) * 2, d = (1 - a) * 24 + 4; ctx.beginPath(); ctx.arc(f.x + Math.cos(an) * d, f.y + Math.sin(an) * d, 2.6 * a + 0.6, 0, TAU); ctx.fill(); } }
     else if (f.k === 'a') { ctx.globalAlpha = a; ctx.strokeStyle = '#fff'; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { ctx.lineWidth = 3.4 - i; ctx.beginPath(); ctx.arc(f.x + 16, f.y, (f.wide ? 46 : 28) + i * 6 + (1 - a) * 8, Math.PI * 0.62, Math.PI * 1.38); ctx.stroke(); } }
+    else if (f.k === 'fly' && f.drop) {
+      const age = f.max - f.life, grounded = age < DROP_FLY, hh = grounded ? Math.max(0, f.sy + 8 - f.y) : 0;
+      if (grounded) { const sx = age < DROP_LAND ? f.x : f.lx, sc = 1 / (1 + hh / 50); ctx.globalAlpha = 0.3 * sc; ctx.fillStyle = '#1a1024'; ctx.beginPath(); ctx.ellipse(sx, f.sy + 12, 13 * sc, 4 * sc, 0, 0, TAU); ctx.fill(); }
+      const sq = age >= DROP_LAND && age < DROP_LAND + 0.08 ? 0.85 : 1;   // tiny squash on landing
+      ctx.globalAlpha = 1; ctx.drawImage(iconSprite(f.tier && BOX_BY_ID[f.tier] ? BOX_BY_ID[f.tier].icon : '🎁'), f.x - 13, f.y + 13 - 26 * sq, 26, 26 * sq);
+    }
     else if (f.k === 'fly') { ctx.globalAlpha = 1; if (f.kind === 'coin') { ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#8a5a14'; ctx.lineWidth = 1.4; const cw = 5.5 * Math.abs(Math.cos(f.life * 14)) + 1.2; ctx.beginPath(); ctx.ellipse(f.x, f.y, cw, 5.5, 0, 0, TAU); ctx.fill(); ctx.stroke(); if (cw > 2.6) { ctx.strokeStyle = '#c98a1c'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(f.x, f.y, cw * 0.62, 3.4, 0, 0, TAU); ctx.stroke(); } ctx.fillStyle = '#fff8d0'; ctx.fillRect(f.x - cw * 0.5, f.y - 3.6, Math.max(1, cw * 0.35), 2.4); } else ctx.drawImage(iconSprite(f.tier && BOX_BY_ID[f.tier] ? BOX_BY_ID[f.tier].icon : '\uD83C\uDF81'), f.x - 13, f.y - 13, 26, 26); }
     else if (f.k === 'h') { ctx.globalAlpha = Math.min(1, a * 2); ctx.drawImage(iconSprite('♥'), f.x - 8, f.y - 12, 16, 16); }
     ctx.globalCompositeOperation = 'source-over';
@@ -1729,6 +1754,16 @@ function drawFx() {
     if (f.k === 'g') glow(f.x, f.y, f.r * (1.2 - a * 0.3), f.col, a * 0.62);
     else if (f.k === 'f') glow(f.x, f.y, Math.max(3, f.r) * (1.4 - a * 0.4), a > 0.7 ? '#ffe9a0' : a > 0.4 ? '#ffb040' : '#ff5a1f', a * 0.85);
     else if (f.k === 'sp') { ctx.globalAlpha = a; ctx.strokeStyle = f.col; ctx.lineWidth = 1 + 1.4 * a; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(f.x - f.vx * 0.05, f.y - f.vy * 0.05); ctx.stroke(); ctx.fillStyle = '#ffffff'; ctx.globalAlpha = a * 0.9; ctx.fillRect(f.x - 1, f.y - 1, 2, 2); }
+    else if (f.k === 'fly' && f.drop) {
+      const age = f.max - f.life, tn = DROP_TINT[f.tier] || DROP_TINT.cardboard, st = tn[1], gold = f.tier === 'golden';
+      glow(f.x, f.y, (gold ? 34 : 22) * (age < DROP_FLY ? 1 + 0.12 * Math.sin(age * 9) : 1), tn[0], st * (age < DROP_FLY ? 0.7 : 0.9));
+      if (age >= DROP_LAND && age < DROP_FLY) {   // sparkle glint while it rests
+        const g2 = Math.sin(((age - DROP_LAND) / (DROP_FLY - DROP_LAND)) * Math.PI), gl = (gold ? 15 : 10) * g2;
+        ctx.globalAlpha = 0.9 * g2; ctx.strokeStyle = '#fff6d8'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(f.x + 6 - gl, f.y - 10); ctx.lineTo(f.x + 6 + gl, f.y - 10); ctx.moveTo(f.x + 6, f.y - 10 - gl); ctx.lineTo(f.x + 6, f.y - 10 + gl); ctx.stroke();
+      } else if (age >= DROP_FLY) {   // short trail: ghosts of earlier positions on the same path
+        for (let i = 1; i <= 4; i++) { dropPos(f, Math.max(DROP_FLY, age - i * 0.035), _dp); glow(_dp.x, _dp.y, 15 - i * 2.2, tn[0], 0.42 - i * 0.08); }
+      }
+    }
     else if (f.k === 'fly') { const ch = f.kind !== 'coin', u = 1 - a; glow(f.x, f.y, ch ? 24 : 11, ch ? '#ffe27a' : '#ffd23f', ch ? 0.45 + 0.2 * Math.sin(f.life * 20) : 0.32); if (ch) { ctx.globalAlpha = 0.8; ctx.strokeStyle = '#fff6c8'; ctx.lineWidth = 1.4; ctx.lineCap = 'round'; const gl = 9 + 5 * Math.sin(f.life * 17); ctx.beginPath(); ctx.moveTo(f.x - gl, f.y - 12); ctx.lineTo(f.x + gl, f.y - 12); ctx.moveTo(f.x, f.y - 12 - gl); ctx.lineTo(f.x, f.y - 12 + gl); ctx.stroke(); } }
     else if (f.k === 'r') { const u = 1 - a; ctx.globalAlpha = a; ctx.strokeStyle = f.col; ctx.lineWidth = f.w * a + 1; ctx.beginPath(); ctx.ellipse(f.x, f.y, f.r * (0.3 + 0.7 * u), f.r * (0.3 + 0.7 * u) * 0.55, 0, 0, TAU); ctx.stroke(); }
     else if (f.k === 'l') {
