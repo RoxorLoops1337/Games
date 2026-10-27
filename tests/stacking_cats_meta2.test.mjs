@@ -151,8 +151,8 @@ t('ladder: Lean Times halves and Sealed Pantry removes the healing after a wave'
     return (c.hp - mx * 0.2) / mx;
   };
   const h = heal('hard'), l = heal('nm2'), p = heal('nm5');
-  assert.ok(h > 0.1, 'hard heals, got ' + h);
-  assert.ok(Math.abs(l - h / 2) < 0.03, `nm2 heals half: ${l} vs ${h}`);
+  assert.ok(h > 0.03 && h < 0.08, 'hard heals about 5%, got ' + h);
+  assert.ok(Math.abs(l - h / 2) < 0.012, `nm2 heals half: ${l} vs ${h}`);
   assert.ok(p < 0.02, 'nm5 does not heal, got ' + p);
 });
 t('ladder: Royal Guard sends more elites (counted over seeded waves)', () => {

@@ -140,9 +140,9 @@ t('item effects: damage, haste, thorns, lifesteal, regen, extra shot, burn', () 
   for (let i = 0; i < 30 * 6; i++) step(g);
   assert.ok(g.cats[0].dmgDone > 0 && mouse.hp < 500);
   // regen and lifesteal heal
-  const h = newGame({ seed: 7 }); addCat(h, 'tabby'); h.cats[0].items = ['heart']; h.cats[0].hp = 10;
-  startWave(h); h.state = 'fight'; h.queue = []; for (let i = 0; i < 90; i++) step(h);
-  assert.ok(h.cats[0].hp > 18, 'regen ' + h.cats[0].hp);
+  // (a far away mouse keeps the wave going so no wave rest heals; compare with a cat that carries no regen relic)
+  const run = (items) => { const h = newGame({ seed: 7 }); addCat(h, 'tabby'); h.cats[0].items = items; h.cats[0].hp = 10; startWave(h); h.state = 'fight'; h.queue = []; const far = makeEnemy(h, 'brute', 1, { x: 900 }); far.hp = far.maxHp = 99999; h.enemies.push(far); for (let i = 0; i < 90; i++) step(h); return h.cats[0].hp; };
+  assert.ok(run(['heart']) > run([]) + 3, 'regen ' + run(['heart']) + ' vs ' + run([]));
   // burn item sets mice on fire
   const b = newGame({ seed: 8 }); addCat(b, 'tabby'); b.cats[0].items = ['flamering'];
   startWave(b); b.state = 'fight'; b.queue = []; const m2 = makeEnemy(b, 'brute', 1, { x: 240 }); m2.hp = m2.maxHp = 900; b.enemies.push(m2);

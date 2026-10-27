@@ -16,7 +16,7 @@ export const TUNE = {
   dmgA: 0.1, dmgB: 0.0025,      // enemy damage scale per wave
   budgetA: 3, budgetB: 2.6, budgetC: 0.06,
   nestHp: 650, nestGrow: 1.4,
-  healAfter: 0.4,
+  healAfter: 0.05,
 };
 
 export function rngMaker(seed) {

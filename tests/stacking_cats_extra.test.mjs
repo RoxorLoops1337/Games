@@ -400,3 +400,24 @@ t('relics: forging climbs all five tiers, mythics forge into mythics for coins, 
 });
 
 console.log(`${n} tests passed`);
+
+t('between waves the tower only heals 5% of its health; snacks and relics add the rest', () => {
+  const g = newGame({ seed: 5, unlocked: ALL });
+  addCat(g, 'tabby');
+  const c = g.cats[0], mx = catMaxHp(g, c);
+  c.hp = Math.round(mx * 0.5);
+  g.mods = null;
+  const base = c.hp;
+  finishWave(g);
+  const gain = (c.hp - base) / mx;
+  assert.ok(gain > 0.03 && gain < 0.08, `a wave rest heals about 5%, got ${(gain * 100).toFixed(1)}%`);
+  // the Warm Milk snack (+12% a wave) is the extra heal
+  const g2 = newGame({ seed: 5, unlocked: ALL });
+  addCat(g2, 'tabby');
+  const d = g2.cats[0], mx2 = catMaxHp(g2, d);
+  d.hp = Math.round(mx2 * 0.5);
+  eatSnack(g2, 'milk');
+  const base2 = d.hp;
+  finishWave(g2);
+  assert.ok((d.hp - base2) / mx2 > gain + 0.08, 'Warm Milk adds at least 8 points more');
+});
