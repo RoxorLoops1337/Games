@@ -1020,24 +1020,67 @@ body .screen.arr .relbtn.btn.small{min-height:44px;padding:0 14px}
 .screen.tpad .logo{font-size:64px;padding-top:6px}
 .screen.tpad .logo span{font-size:54px;padding-bottom:.1em}
 .screen.tpad .tag{margin:4px 0 8px}
-.screen.tpad .btn{padding-left:20px;padding-right:20px;max-width:100%}
+.screen.tpad .btn{padding-left:16px;padding-right:16px;max-width:100%;margin-top:3px;margin-bottom:5px}
+.screen.tpad .hint:not(.row){margin-top:6px}
 .screen.tpad .btn .badge{white-space:nowrap}
 /* dex tiles: one line each, never overlapping */
-.tile b,.tile small{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
+.tile{padding:2px 1px}
+.tile b,.tile small{max-width:100%;white-space:nowrap;text-overflow:ellipsis;line-height:1.2}
+.tile b{font-size:11px}
 /* contrast: white text on these chips needs a darker chip */
 .card .ribbon,.rb u{background:#d63a5c}
 .k-perm{background:#2a8a52}.k-temp{background:#c0601c}.k-instant{background:#a8347f}
 .card.item.r-legendary .rar,.rar.legendary{background:linear-gradient(#e89400,#b85c00);text-shadow:0 1px 0 rgba(0,0,0,.5)}
 .card.item.r-mythic .rar,.rar.mythic{background:linear-gradient(90deg,#d62a74,#6a3ad8);text-shadow:0 1px 0 rgba(0,0,0,.5)}
 .card.item .impact{color:#4a3a60}
-/* sold stamp: a dark plaque so the word reads on any card */
-.card.ev .evsold{inset:auto 10px;top:50%;height:40px;margin-top:-20px;background:rgba(39,28,51,.9);border:2px solid #fff;border-radius:10px;font-size:26px}
 /* toasts over a wave banner: keep them clear of the title text */
 #toasts{max-width:420px}
 .toast{max-width:420px;overflow-wrap:anywhere}
+/* shop: a sold card keeps its text at full contrast, only the picture fades, and the stamp sits in the corner clear of the text */
+.card.ev.sold{opacity:1;background:#e6dff0;pointer-events:none}
+.card.ev.sold .ic,.card.ev.sold .thumb{filter:grayscale(1);opacity:.45}
+.card.ev.poor{opacity:1}
+.card.ev .evsold{inset:auto;top:5px;left:5px;right:auto;bottom:auto;height:auto;margin:0;padding:0 10px;background:rgba(39,28,51,.92);border:2px solid #fff;border-radius:9px;font-size:16px;transform:rotate(-8deg)}
+.rar.common,.card.ev .rar.common{background:#5f5f78;color:#fff}
+/* pause title: one solid plaque with gold rules drawn as inset shadows, so the white title always sits on dark */
+.screen h2.paused{background:#2a1458;color:#fff;box-shadow:inset 0 3px 0 #ffd23f,inset 0 -3px 0 #ffd23f}
+/* difficulty rule chips */
+.drule b{color:var(--ink)}.dcell.locked .drule b{color:#fff}
+/* toasts sit above the wave banner, never on it */
+#toasts{top:auto;bottom:396px;justify-content:flex-end}
+body.scr #toasts{bottom:10px}
 /* press and hover polish */
 .btn:not([disabled]):hover{filter:brightness(1.06)}
 .card[data-act]:active{transform:scale(.98)}
+@media (max-height:400px){
+.screen.tpad{padding-top:4px;padding-bottom:4px}
+.screen.tpad .logo{font-size:46px;padding-top:0;line-height:.9}
+.screen.tpad .logo span{font-size:40px}
+.screen.tpad .tag{margin:2px 0 4px;font-size:16px;padding:1px 14px}
+body .screen.tpad .btn.big.btn{min-height:64px}
+body .screen.tpad .btn.btn{margin-top:1px;margin-bottom:4px}
+.screen.tpad .hint:not(.row){margin-top:2px;padding:1px 14px}
+}
+@media (max-height:400px){
+#toasts{bottom:420px}body.scr #toasts{bottom:10px}
+.screen .hint:not(.row){font-size:17px}
+.screen:has(.revealstage){padding-top:4px;padding-bottom:4px}
+.screen:has(.revealstage) h2{font-size:28px}
+.cards.reveal{margin-bottom:2px}
+body .screen:has(.revealstage) .btn.big.btn{min-height:62px;margin-top:2px;margin-bottom:2px}
+.screen:has(.revealstage) .row.hint{margin-top:2px}
+}
+/* small screens: the stage is scaled down, so text under about 9px real gets a floor in stage px (14px at 360 high, 15.5px at 320 high) */
+@media (max-height:400px){
+body .tile small,body .card p,body .card .impact,body .card .impact b,body .card .impact span,body .card .impact em,body .card .ttl,body .card .role,body .card .gainl,body .card .setl,body .tro small,body .tro em,body .tbar u,body .tog span,body .tog small,body .setrow b,body .setrow small,body .how li>div,body .kcoins small,body .kt small,body .ktip,body .seg button,body .rlabel b,body .rlabel small,body .srow b,body .srow span i,body .spb em,body .dcell small,body .dcard small,body .wmod small,body .kd small,body .sub,body .rb span,body .rb em,body .rb b,body .stats div,body .dxstat,body .dxstats span,body .pstat span{font-size:14px}
+body .tile b{font-size:14px}body .tile b.lg{font-size:12px}
+body .dex .tile canvas{width:40px;height:40px}
+}
+@media (max-height:340px){
+body .tile small,body .card p,body .card .impact,body .card .impact b,body .card .impact span,body .card .impact em,body .card .ttl,body .card .role,body .card .gainl,body .card .setl,body .tro small,body .tro em,body .tbar u,body .tog span,body .tog small,body .setrow b,body .setrow small,body .how li>div,body .kcoins small,body .kt small,body .ktip,body .seg button,body .rlabel b,body .rlabel small,body .srow b,body .srow span i,body .spb em,body .dcell small,body .dcard small,body .wmod small,body .kd small,body .sub,body .rb span,body .rb em,body .rb b,body .stats div,body .dxstat,body .dxstats span,body .pstat span{font-size:15.5px}
+body .tile b{font-size:15px}body .tile b.lg{font-size:12.5px}
+body .dex .tile canvas{width:36px;height:36px}
+}
 /* AUDIT END */
 </style>
 </head>
