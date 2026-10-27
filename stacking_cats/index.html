@@ -717,6 +717,10 @@ body.nomotion .bag.legendary,body.nomotion .bag.mythic,body.nomotion .card.item.
 .dcell.locked{background-image:linear-gradient(#7a68a6,#5c4a86);box-shadow:0 4px 0 var(--ink),inset 0 2px 0 rgba(255,255,255,.2)}
 .card:not(.item):not(:hover){box-shadow:0 6px 0 var(--ink),0 12px 24px #0006,var(--bevel)}
 .card.item.r-legendary,.card.item.r-mythic,.card.item.r-epic,.card.item.r-rare{background-image:var(--grain),linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,0) 40%)}
+/* the texture rule above replaces the rarity gradient and the shorthand left no colour: epic, legendary and mythic cards were see-through (rays and scene showed through the text). Give them a solid colour and their gradient back. */
+.card.item.r-epic{background-color:#f6e0ff;background-image:var(--grain),linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,0) 40%),linear-gradient(#fff6ff,#f6e0ff)}
+.card.item.r-legendary{background-color:#ffe9a8;background-image:var(--grain),linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,0) 40%),linear-gradient(#fffaea,#ffe9a8)}
+.card.item.r-mythic{background-color:#ffd0ec;background-image:var(--grain),linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,0) 40%),linear-gradient(#fff0fa,#ffd0ec 55%,#e4d4ff)}
 .card .role{background-image:linear-gradient(rgba(255,255,255,.28),rgba(255,255,255,0) 55%);box-shadow:inset 0 -2px 0 rgba(0,0,0,.22),0 1px 0 rgba(0,0,0,.18)}
 .card .ribbon{box-shadow:inset 0 2px 0 rgba(255,255,255,.4),0 2px 0 rgba(0,0,0,.3)}
 .rar,.card .kind{box-shadow:inset 0 2px 0 rgba(255,255,255,.35),inset 0 -2px 0 rgba(0,0,0,.2);text-shadow:0 1px 0 rgba(0,0,0,.35)}
