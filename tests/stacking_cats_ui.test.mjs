@@ -1145,3 +1145,49 @@ t('epic, legendary and mythic relic cards have a solid colour (the grain rule on
     assert.ok(re.test(html), r + ' card has a solid background-colour');
   }
 });
+
+t('arrange drag and drop: pointer handlers with capture, a ghost, drop targets, sim calls and the tap fallback all stay', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), html = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/function bindDrag\(root, h\)[\s\S]{0,400}'pointerdown'[\s\S]{0,900}setPointerCapture[\s\S]{0,1500}'pointermove'[\s\S]{0,200}'pointerup'[\s\S]{0,200}'pointercancel'/.test(js), 'pointer events with capture');
+  assert.ok(/elementFromPoint/.test(js) && /className = 'dghost'/.test(js), 'hit test and a floating ghost');
+  assert.ok(/act === 'equip'\) \{ equipTo\(s\.i, t\.uid\)/.test(js) && /S\.equipItem\(g, idx, uid\)/.test(js), 'dropping a relic on a cat calls equipItem');
+  assert.ok(/S\.moveItem\(g, s\.uid, s\.i, t\.uid\)/.test(js) && /S\.unequipItem\(g, s\.uid, s\.i\)/.test(js), 'worn relics move and unequip');
+  assert.ok(/S\.mergeCats\(g, a\.uid, b\.uid\)/.test(js) && /S\.swapCats\(g, a\.uid, b\.uid\)/.test(js) && /S\.moveCat\(g, s\.uid, t\.zone\)/.test(js), 'cats merge, swap and move by drop');
+  assert.ok(/acts\.sell\(\)/.test(js) && /acts\.forge\(\)/.test(js) && /data-drop="sell"/.test(js) && /data-drop="forge"/.test(js), 'sell and forge zones');
+  assert.ok(/bag: \(d\) => \{ selItem = selItem === \+d\.i/.test(js) && /slot: \(d\) => \{/.test(js) && /equipTo\(selItem, cat\.uid\)/.test(js) && /unequip: \(d\)/.test(js), 'tap to select then tap a target still works');
+  assert.ok(/aria-label="\$\{it\.name\}, \$\{it\.rarity\}, worn by/.test(js) && /data-act="done"/.test(js), 'labels and Done kept');
+  assert.ok(/click', \(e\) => \{ if \(performance\.now\(\) < dragSuppress\)/.test(js), 'the click ending a drag is swallowed');
+  assert.ok(/ARRANGE START \*\//.test(html) && /ARRANGE END \*\//.test(html), 'css block present');
+  const css = html.slice(html.indexOf('ARRANGE START'), html.indexOf('ARRANGE END'));
+  assert.ok(/\.screen\.arr \.slot\.has\{[^}]*touch-action:none/.test(css) && /\.screen\.arr \.bag\{touch-action:none/.test(css), 'draggables stop the browser from scrolling');
+  assert.ok(/\.dghost\{[^}]*pointer-events:none/.test(css) && /body\.nomotion \.dghost/.test(css), 'ghost never catches the pointer, calm under reduced motion');
+  assert.ok(/\.islot\.full\.r-mythic/.test(css) && /\.screen\.arr \.slot \.nm\{overflow:hidden;text-overflow:ellipsis/.test(css), 'rarity sockets and ellipsis names');
+  assert.ok(/'upgrade'|'pop'/.test(js) && /sfx\.play\('equip'\)/.test(js), 'soft sounds use existing names');
+  assert.ok(!js.includes('\u2014') && !html.includes('\u2014'), 'no em dashes');
+});
+
+t('arrange drag: dropAction picks the right move and moveItem swaps worn relics without backpack room', async () => {
+  const { dropAction } = await import('../stacking_cats/art_util.js');
+  assert.equal(dropAction({ k: 'bag' }, { k: 'cat' }), 'equip');
+  assert.equal(dropAction({ k: 'bag' }, { k: 'sell' }), 'sell');
+  assert.equal(dropAction({ k: 'bag' }, { k: 'forge' }), 'forge');
+  assert.equal(dropAction({ k: 'bag' }, { k: 'empty' }), null);
+  assert.equal(dropAction({ k: 'worn' }, { k: 'cat', self: true }), null);
+  assert.equal(dropAction({ k: 'worn' }, { k: 'cat' }), 'moveItem');
+  assert.equal(dropAction({ k: 'worn' }, { k: 'bag' }), 'unequip');
+  assert.equal(dropAction({ k: 'cat' }, { k: 'cat' }), 'catSwap');
+  assert.equal(dropAction({ k: 'cat' }, { k: 'zone' }), 'catMove');
+  assert.equal(dropAction({ k: 'cat' }, { k: 'release' }), 'release');
+  assert.equal(dropAction({ k: 'cat' }, { k: 'cat', self: true }), null);
+  const S = await import('../stacking_cats/sim.js');
+  const g = S.newGame({ seed: 5, unlocked: ['tabby', 'mochi', 'yuki'] });
+  S.addCat(g, 'tabby'); S.addCat(g, 'mochi');
+  const [a, b] = g.cats;
+  g.stash.push('scythe', 'mask');
+  assert.ok(S.equipItem(g, 0, a.uid) && S.equipItem(g, 0, b.uid));
+  const ia = a.items[0], ib = b.items[0], len = g.stash.length;
+  assert.ok(S.moveItem(g, a.uid, 0, b.uid));
+  assert.deepEqual([a.items[0], b.items[0]], [ib, ia], 'a full target trades its relic back');
+  assert.equal(g.stash.length, len, 'the backpack is untouched');
+  assert.ok(!S.moveItem(g, a.uid, 0, a.uid) && !S.moveItem(g, a.uid, 5, b.uid));
+});
