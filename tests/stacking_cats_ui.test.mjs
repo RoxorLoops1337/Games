@@ -1089,3 +1089,15 @@ t('nest destroyed celebration: cheese confetti, crumbling nest, hopping caged ca
   assert.ok(/idle fidget/.test(js) && /save\.opt\.motion && atk < 0\.02\) \{ const per/.test(js), 'idle fidget is gated by motion');
   assert.ok(!/\u2014/.test(blk), 'no em dashes');
 });
+
+t('polish: banner ribbon variants, trophy toast medal, pause plaque, reduced motion still shows the banner', async () => {
+  const html = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  assert.ok(/#banner::before\{/.test(html) && /#banner\.boss\{[^}]*--crack/.test(html) && /#banner\.clear\{/.test(html), 'ribbon plus boss crack and gold clear variants');
+  assert.ok(/pointer-events:none/.test(html.match(/#banner\{[^}]*\}/)[0]), 'banner never blocks taps');
+  assert.ok(/body\.nomotion #banner\.show\{opacity:1/.test(html) && /nomotion'\)\) banner\.t = setTimeout/.test(js), 'reduced motion shows then hides the banner by timer');
+  assert.ok(/WAVE CLEARED\/\.test\(txt\) \? ' clear'/.test(js) && /NEST DESTROYED\/\.test\(txt\)/.test(js), 'banner picks its variant from the text');
+  assert.ok(/'toast trophy'/.test(js) && /\.toast\.trophy::before/.test(html) && /#toasts \.toast::before/.test(html), 'toasts get a medal icon, trophies a gold one');
+  assert.ok(/\.screen h2\.paused\{/.test(html) && /max-width:700px\)\{\.screen \.row \.btn\.grey\{min-height:6\d/.test(html), 'pause plaque and tall phone buttons');
+  assert.ok(!html.includes('\u2014'), 'no em dashes in index.html');
+});

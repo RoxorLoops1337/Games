@@ -1289,12 +1289,16 @@ function banner(txt, sub, boss) {
   b.className = '';
   b.innerHTML = `${txt}${sub ? `<small>${sub}</small>` : ''}`;
   void b.offsetWidth;
-  b.className = 'show' + (boss ? ' boss' : '');
+  const kind = boss || /NEST DESTROYED/.test(txt) ? ' boss' : /WAVE CLEARED/.test(txt) ? ' clear' : '';
+  b.className = 'show' + kind;
+  clearTimeout(banner.t);
+  // reduced motion drops the animation (and with it the fade-out), so hide the plaque by timer instead
+  if (document.body.classList.contains('nomotion')) banner.t = setTimeout(() => { b.className = ''; }, 2200);
 }
 function toast(txt) {
   if (document.body.classList.contains('scr')) $('toasts').replaceChildren();   // one at a time over a full screen
   const el = document.createElement('div');
-  el.className = 'toast'; el.textContent = txt;
+  el.className = /^Trophy:/.test(txt) ? 'toast trophy' : 'toast'; el.textContent = txt;
   $('toasts').appendChild(el);
   setTimeout(() => el.remove(), 3300);
   while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
