@@ -831,6 +831,11 @@ body .spb,body.touch .spb{width:64px;height:64px}
 body .spb em{min-width:22px;height:22px;font-size:15px;line-height:22px;border-radius:11px}
 body #specials .autob,body.touch #specials .autob{font-size:16px;padding:3px 14px}
 body #specials .autob::before{content:'';position:absolute;left:-8px;right:-8px;top:-40px;bottom:-2px}
+/* round 11: AUTO joins the row (left end) and the row drops to the bottom edge, so the lane where mice arrive stays clear */
+body #specials,body.touch #specials{bottom:4px;right:70px;gap:8px;align-items:center}
+body #specials .autob,body.touch #specials .autob{position:relative;order:99;bottom:auto;right:auto;margin:0;height:60px;padding:0 10px;font-size:16px;border-radius:30px}
+body #specials .autob::before{top:-4px;bottom:-4px}
+body #bossBar{top:66px;width:320px}
 body #meter,body.touch #meter{top:190px;width:176px}
 body #meter .mh{font-size:16px} body #meter .mh span{font-size:17px}
 body #meter .mr{font-size:15px;height:24px} body #meter .mr span{width:40px}
@@ -859,6 +864,7 @@ body .detail.dexd.dx{min-height:0;padding-right:10px;gap:8px}
 .dxplate{width:88px;height:88px}.dxplate canvas{width:82px;height:82px}
 body .dex .tile{height:80px}body .dex .tile canvas{width:50px;height:50px}
 .dx .spnote,.dx .mast small{display:none}
+.dx .mast{gap:5px;margin-top:1px}.dx .mast .mbar{width:130px;height:9px;flex:none}
 body .detail.dx .wbtn{align-self:center}
 }
 body.bigtext .dxtg,body.bigtext .dx .cstory{font-size:14px}

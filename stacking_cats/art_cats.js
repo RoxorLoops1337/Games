@@ -70,6 +70,29 @@ function cape(ctx, d, c, trim) {
   if (trim) { line(ctx, [[10, 104], [60, 96], [110, 104]], trim, 2.6); }
   ctx.restore();
 }
+// ---- held props: wood grain, metal bands, collars with prongs, steam, glints
+function axis(x1, y1, x2, y2) { const dx = x2 - x1, dy = y2 - y1, l = Math.hypot(dx, dy) || 1; return [-dy / l, dx / l, dx / l, dy / l, l]; }
+function grain(ctx, x1, y1, x2, y2, w, col = 'rgba(40,20,8,.42)') {
+  const [nx, ny, ux, uy, l] = axis(x1, y1, x2, y2);
+  for (const [o, a, b] of [[-0.26, 0.08, 0.7], [0.24, 0.3, 0.94], [0, 0.18, 0.42]]) line(ctx, [[x1 + ux * l * a + nx * w * o, y1 + uy * l * a + ny * w * o], [x1 + ux * l * b + nx * w * o, y1 + uy * l * b + ny * w * o]], col, 0.5);
+  ctx.fillStyle = col; ctx.fill(ell(ctx, x1 + ux * l * 0.58 - nx * w * 0.12, y1 + uy * l * 0.58 - ny * w * 0.12, 1.1, 0.7, Math.atan2(uy, ux)));
+}
+function band(ctx, x1, y1, x2, y2, t, w, c = '#b9c2d2') {
+  const [nx, ny] = axis(x1, y1, x2, y2), x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t, h = w / 2 + 0.8;
+  line(ctx, [[x - nx * h, y - ny * h], [x + nx * h, y + ny * h]], lineOf(c), 2.4);
+  line(ctx, [[x - nx * h, y - ny * h], [x + nx * h, y + ny * h]], c, 1.4);
+  line(ctx, [[x - nx * h - 0.3, y - ny * h - 0.3], [x - nx * h * 0.2, y - ny * h * 0.2]], 'rgba(255,255,255,.7)', 0.5);
+}
+function shine(ctx, x1, y1, x2, y2, w, a = 0.55) { const [nx, ny] = axis(x1, y1, x2, y2); line(ctx, [[x1 - nx * w * 0.28, y1 - ny * w * 0.28], [x2 - nx * w * 0.28, y2 - ny * w * 0.28]], `rgba(255,255,255,${a})`, 0.6); }
+function steam(ctx, x, y, h = 9) {
+  ctx.lineCap = 'round'; ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,.6)';
+  for (const k of [-3, 0, 3]) { ctx.beginPath(); ctx.moveTo(x + k, y - Math.abs(k) * 0.3); ctx.bezierCurveTo(x + k - 3, y - h * 0.35, x + k + 3, y - h * 0.65, x + k, y - h - Math.abs(k) * 0.4); ctx.stroke(); }
+}
+function collar(ctx, x, y, r, c = '#e0b34a', stone) {
+  for (const s of [-1, 1]) { ctx.lineCap = 'round'; ctx.strokeStyle = lineOf(c); ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(x + s * 2.4, y + 1); ctx.quadraticCurveTo(x + s * (r + 2.2), y - r * 0.6, x + s * (r * 0.7), y - r * 1.5); ctx.stroke(); ctx.strokeStyle = c; ctx.lineWidth = 1.1; ctx.stroke(); }
+  gfill(ctx, ell(ctx, x, y + 1, 4.4, 2.2), c, 0.7, y - 2, y + 4);
+  if (stone) gem(ctx, x, y + 1, 1.7, stone);
+}
 
 function eye(ctx, x, y, color, cool, flip, variant) {
   ctx.save();
@@ -243,6 +266,12 @@ const ACC = {
       fillPath(ctx, new Path2D('M42 82 Q60 92 78 82 L72 92 L60 98 L48 92 Z'), A.accent, 0.9);
       hat.cowboy(ctx, '#7a4a2a', '#2f1c10');
       rod(ctx, 30, 99, 94, 88, 4.2, '#4b3a30'); rod(ctx, 30, 99, 62, 94, 5, '#8a5a34');
+      grain(ctx, 31, 99, 61, 94, 5);                                                   // walnut stock
+      line(ctx, [[64, 91], [93, 86.2]], 'rgba(220,226,240,.55)', 0.6);   // barrel gleam
+      band(ctx, 30, 99, 94, 88, 0.5, 4, '#d9b14a'); band(ctx, 30, 99, 94, 88, 0.8, 4, '#aab4c4');
+      fillPath(ctx, new Path2D('M92.5 84.4 l2.4 -2.6 l1.2 3 Z'), '#2b2b3a', 0.5);       // front sight
+      dot(ctx, 95.4, 88, 1.5, '#15131c', 0.4); sparkle(ctx, 95, 84, 2.6, 'rgba(255,255,255,.85)');
+      ctx.strokeStyle = lineOf('#4b3a30'); ctx.lineWidth = 0.9; ctx.beginPath(); ctx.arc(62, 99.2, 3, 0.1, Math.PI * 0.95); ctx.stroke();   // trigger guard
       dot(ctx, 48, 99, 5, A.fur, 0.9); dot(ctx, 70, 96, 5, A.fur, 0.9);
     },
   },
@@ -278,6 +307,12 @@ const ACC = {
       fillPath(ctx, ell(ctx, 74, 59, 11, 11), 'rgba(255,230,120,.28)', 1.8, '#ffd23f');   // scope lens
       line(ctx, [[63, 59], [85, 59]], 'rgba(255,230,120,.8)', 0.6); line(ctx, [[74, 48], [74, 70]], 'rgba(255,230,120,.8)', 0.6);
       rod(ctx, 26, 100, 98, 86, 3.6, '#39475a'); rod(ctx, 26, 100, 52, 95, 5.4, '#5a3d2a');
+      grain(ctx, 27, 100, 51, 95.3, 5.4);                                              // stock
+      line(ctx, [[54, 95], [96, 86.8]], 'rgba(200,215,240,.6)', 0.6);                    // barrel gleam
+      band(ctx, 26, 100, 98, 86, 0.55, 3.6, '#8a96aa'); band(ctx, 26, 100, 98, 86, 0.82, 3.6, '#8a96aa');
+      rod(ctx, 99, 86, 104, 85, 4.2, '#2b3342');                                       // muzzle brake
+      fillPath(ctx, new Path2D('M66 88.6 l2 -3 l3 -0.6 l-0.6 3.2 Z'), '#2b3342', 0.5);   // rear sight
+      sparkle(ctx, 104, 83, 3.2, 'rgba(255,255,255,.9)');
       dot(ctx, 50, 99, 5, A.fur, 0.9);
     },
   },
@@ -305,7 +340,8 @@ const ACC = {
       fillPath(ctx, new Path2D('M38 31 Q60 25 82 31 L82 36 Q60 30 38 36 Z'), '#f1e8d4', 0.8);
       for (const [x, y] of [[44, 70], [48, 73], [42, 75]]) dot(ctx, x, y, 1.6, 'rgba(255,255,255,.85)', 0);
       // a little loaf on the belly
-      fillPath(ctx, ell(ctx, 60, 98, 11, 6.5), '#d9954a', 1); line(ctx, [[54, 96], [57, 100]], '#f2c88a', 0.9); line(ctx, [[60, 95], [63, 99]], '#f2c88a', 0.9);
+      gfill(ctx, ell(ctx, 60, 98, 11, 6.5), '#d9954a', 1, 92, 105); line(ctx, [[54, 96], [57, 100]], '#f2c88a', 0.9); line(ctx, [[60, 95], [63, 99]], '#f2c88a', 0.9);
+      dot(ctx, 66, 100, 0.7, '#fff6e0', 0); dot(ctx, 52, 99.6, 0.7, '#fff6e0', 0); steam(ctx, 60, 91, 7);
     },
   },
   pearl: {
@@ -334,6 +370,8 @@ const ACC = {
       ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(57.6, 17.6, 1.4, 12);
       fillPath(ctx, new Path2D('M85 70 q-5 -6 -9 -1 q-3 5 9 11 q12 -6 9 -11 q-4 -5 -9 1 Z'), '#ff6b9a', 0.7);
       rod(ctx, 88, 102, 98, 84, 2.4, '#ffd9e6'); fillPath(ctx, new Path2D('M98 78 q-4 -5 -7 -1 q-2 4 7 9 q9 -5 7 -9 q-3 -4 -7 1 Z'), '#ff6b9a', 0.8);
+      band(ctx, 88, 102, 98, 84, 0.5, 2.4, '#ff9ac0'); line(ctx, [[94, 92], [90, 98], [93, 100]], '#ff6b9a', 0.9);   // ribbon
+      ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fill(ell(ctx, 95, 76.6, 1.6, 0.9, -0.6)); sparkle(ctx, 106, 74, 3, '#fff');
     },
   },
   shadow: {
@@ -373,6 +411,7 @@ const ACC = {
       fillPath(ctx, new Path2D('M42 80 Q60 110 78 80 Q60 88 42 80 Z'), '#ffffff', 0.9);   // beard
       rod(ctx, 96, 108, 96, 54, 3, '#6a4a2a'); line(ctx, [[95, 60], [95, 104]], 'rgba(255,230,190,.35)', 0.7);
       for (const y of [64, 74]) line(ctx, [[94, y], [98, y + 2]], '#caa86a', 1.1);
+      grain(ctx, 96, 106, 96, 58, 3); collar(ctx, 96, 57, 5.2, '#e0b34a', '#ff6aa8');
       const cg = ctx.createRadialGradient(94.5, 48, 1, 96, 50, 6.5); cg.addColorStop(0, '#fff'); cg.addColorStop(1, '#b08aff'); dot(ctx, 96, 50, 6, cg, 1); sparkle(ctx, 96, 50, 4, 'rgba(255,255,255,.8)');
     },
   },
@@ -403,7 +442,13 @@ const ACC = {
       fillPath(ctx, new Path2D('M34 38 Q60 10 86 38 Q60 30 34 38 Z'), '#ffcc33', 1);
       ctx.fillStyle = '#e6a800'; ctx.fillRect(56, 14, 8, 20);
       dot(ctx, 48, 40, 5, '#9fd8ff', 1); dot(ctx, 72, 40, 5, '#9fd8ff', 1); ctx.fillStyle = '#4a6a8a'; ctx.fillRect(48, 38.6, 24, 2.6);
-      rod(ctx, 90, 104, 100, 80, 3.4, '#9aa6b8'); fillPath(ctx, ell(ctx, 101, 77, 5, 5), '#9aa6b8', 1); dot(ctx, 101, 77, 1.8, '#ffffff00', 0.1);
+      rod(ctx, 90, 104, 100, 80, 3.4, '#9aa6b8'); fillPath(ctx, ell(ctx, 101, 77, 5, 5), '#9aa6b8', 1);
+      ctx.save(); ctx.translate(101, 77); ctx.rotate(0.4);
+      fillPath(ctx, new Path2D('M-1.9 -6 h3.8 v4.6 h-3.8 z'), '#2a3140', 0.4);          // open jaw
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(-4, -3.5, 1.2, 4);
+      ctx.restore();
+      fillPath(ctx, poly(ctx, [[86.8, 105], [88.4, 102.2], [91.6, 102.2], [93.2, 105], [91.6, 107.8], [88.4, 107.8]]), '#b0bacb', 0.8); dot(ctx, 90, 105, 1.3, '#4a5468', 0);   // hex nut
+      line(ctx, [[91.2, 98], [97.4, 84]], 'rgba(255,255,255,.4)', 0.6); band(ctx, 90, 104, 100, 80, 0.5, 3.4, '#d9b14a'); sparkle(ctx, 104, 73, 3, 'rgba(255,255,255,.9)');
       fillPath(ctx, star(30, 96, 7, 5, 8), '#b0b8c8', 0.9); dot(ctx, 30, 96, 2, '#6c7688', 0.6);
     },
   },
@@ -450,6 +495,8 @@ const ACC = {
       for (const [x, h] of [[44, 16], [52, 22], [60, 26], [68, 22], [76, 16]]) fillPath(ctx, poly(ctx, [[x - 4, 34], [x, 34 - h], [x + 4, 34]]), '#bfeaff', 0.9);
       line(ctx, [[40, 34], [80, 34]], '#78c8ff', 1.4);
       rod(ctx, 98, 108, 98, 62, 2.6, '#cfe8ff'); fillPath(ctx, star(98, 58, 8, 3, 6), '#e8f8ff', 0.9);
+      for (const y of [72, 84, 96]) line(ctx, [[96.6, y], [99.4, y + 1.6]], '#78c8ff', 0.9);   // frost wraps
+      gem(ctx, 98, 58, 2.6, '#78c8ff'); sparkle(ctx, 105, 51, 3, '#ffffff'); sparkle(ctx, 91, 64, 2, '#dff2ff');
     },
   },
   dusty: {
@@ -458,6 +505,8 @@ const ACC = {
       hat.cowboy(ctx, '#c9a066', '#7a4a2a');
       fillPath(ctx, star(40, 92, 6, 2.6, 5), '#ffd23f', 0.8);
       rod(ctx, 80, 100, 98, 90, 4.4, '#6c7688'); rod(ctx, 76, 102, 82, 98, 5.6, '#5a3d2a');
+      grain(ctx, 76.6, 101.7, 81.6, 98.4, 5.6); dot(ctx, 84, 97.4, 3, '#8a96aa', 0.7); dot(ctx, 84, 97.4, 1, '#3a4252', 0);   // grip and cylinder
+      line(ctx, [[86, 91.6], [97, 88]], 'rgba(235,240,255,.6)', 0.6); dot(ctx, 99, 89.2, 1.2, '#1a1a24', 0); sparkle(ctx, 100, 86, 2.4, 'rgba(255,255,255,.85)');
     },
   },
   cyber: {
@@ -468,6 +517,8 @@ const ACC = {
       dot(ctx, 33, 24, 1.6, '#ff3bd4', 0.3); dot(ctx, 87, 24, 1.6, '#ff3bd4', 0.3);
       dot(ctx, 60, 90, 4, '#ff3bd4', 0.9); line(ctx, [[48, 88], [72, 88]], '#2a8a88', 1);
       rod(ctx, 80, 100, 102, 92, 5, '#3a4a5a'); dot(ctx, 104, 91.5, 2.4, '#ff3bd4', 0.5);
+      for (const t of [0.3, 0.5, 0.7]) line(ctx, [[80 + 22 * t - 1, 100 - 8 * t - 1.6], [80 + 22 * t + 1, 100 - 8 * t + 1.6]], '#ff3bd4', 0.9);   // energy vents
+      band(ctx, 80, 100, 102, 92, 0.12, 5, '#8a96aa'); sparkle(ctx, 106, 88.5, 3, 'rgba(255,200,250,.9)');
     },
   },
   boo: {
@@ -510,7 +561,9 @@ const ACC = {
       const hg = ctx.createLinearGradient(40, 10, 80, 20); hg.addColorStop(0, '#fff3a8'); hg.addColorStop(1, '#f0b830');
       ctx.strokeStyle = hg; ctx.lineWidth = 3; ctx.stroke();
       ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.ellipse(60, 14.2, 14.2, 4.4, 0, Math.PI * 1.1, Math.PI * 1.7); ctx.stroke();
-      rod(ctx, 92, 108, 94, 56, 2.6, '#ffe9a0'); sparkle(ctx, 94, 52, 6, '#fff6b0');
+      rod(ctx, 92, 108, 94, 56, 2.6, '#ffe9a0');
+      for (const t of [0.2, 0.4, 0.6, 0.8]) line(ctx, [[92 + 2 * t - 1.6, 108 - 52 * t + 1], [92 + 2 * t + 1.6, 108 - 52 * t - 1]], '#d9a82a', 0.8);   // gold spiral
+      band(ctx, 92, 108, 94, 56, 0.9, 2.6, '#f0b830'); gem(ctx, 94, 56, 2, '#ffffff'); sparkle(ctx, 94, 52, 6, '#fff6b0'); sparkle(ctx, 101, 60, 2, '#fff');
     },
   },
   mecha: {
@@ -535,7 +588,8 @@ const ACC = {
       line(ctx, [[62, -1], [62, 24]], 'rgba(255,255,255,.14)', 1); line(ctx, [[66, 12], [74, 28]], 'rgba(10,0,30,.35)', 1.2);
       ctx.fillStyle = '#9bff6b'; ctx.fillRect(40, 30, 38, 4); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(40, 30, 38, 1.1);
       fillPath(ctx, new Path2D('M54 28.4 h12 v7.2 h-12 z'), '#ffd23f', 0.8); ctx.fillStyle = '#4a2a70'; ctx.fillRect(57, 30.4, 6, 3.2);
-      rod(ctx, 98, 108, 94, 54, 2.8, '#6a4a2a'); dot(ctx, 94, 50, 5, '#9bff6b', 0.9); sparkle(ctx, 94, 50, 3.4, '#fff');
+      rod(ctx, 98, 108, 94, 54, 2.8, '#6a4a2a'); grain(ctx, 98, 106, 94, 58, 2.8); band(ctx, 98, 108, 94, 54, 0.3, 2.8, '#c9b6ff'); band(ctx, 98, 108, 94, 54, 0.55, 2.8, '#c9b6ff');
+      collar(ctx, 94, 55, 5, '#b9a0ff'); dot(ctx, 94, 50, 5, '#9bff6b', 0.9); sparkle(ctx, 94, 50, 3.4, '#fff'); sparkle(ctx, 100, 44, 2, '#d8ffc0');
     },
   },
   nori: {
@@ -547,7 +601,8 @@ const ACC = {
       fillPath(ctx, new Path2D('M42 84 Q60 94 78 84 L82 108 L38 108 Z'), '#ffffff', 1);
       fillPath(ctx, ell(ctx, 92, 94, 9, 7), '#fff6ee', 1); fillPath(ctx, ell(ctx, 92, 92.4, 7, 3.8), '#ff8f8f', 0.7);
       ctx.fillStyle = '#2b3a2a'; ctx.fillRect(86, 94.4, 12, 3.4);
-    },
+      for (const [x, y] of [[87, 92], [90, 90.6], [93, 93], [96, 91], [89, 94]]) dot(ctx, x, y, 0.7, '#ffffff', 0);   // rice grains
+      dot(ctx, 97.5, 91.6, 1.4, '#9bd14a', 0.4); line(ctx, [[86, 90], [90, 88.6]], 'rgba(255,255,255,.8)', 0.7);    },
   },
   leo: {
     body: { chubby: 1.18 },
