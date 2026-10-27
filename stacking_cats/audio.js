@@ -151,7 +151,7 @@ export function songInfo(theme, mode) {
 }
 
 // music ducks under the big effects: [gain it dips to, seconds to recover]
-const DUCK = { boom: [0.55, 0.4], roar: [0.6, 0.55], thunder: [0.6, 0.9], boss: [0.5, 0.9], bang: [0.75, 0.25], special: [0.7, 0.5], win: [0.6, 1.2], over: [0.6, 1.2] };
+const DUCK = { boom: [0.55, 0.4], nestdown: [0.5, 0.9], waveclear: [0.75, 0.6], roar: [0.6, 0.55], thunder: [0.6, 0.9], boss: [0.5, 0.9], bang: [0.75, 0.25], special: [0.7, 0.5], win: [0.6, 1.2], over: [0.6, 1.2] };
 
 export class Sfx {
   constructor() {
@@ -321,8 +321,8 @@ export class Sfx {
 
   play(name, pitch = 1) {
     const now = performance.now();
-    const gap = { hit: 45, swipe: 60, shoot: 70, pop: 40, flame: 120, zap: 80, boom: 80, coin: 40, hover: 60 }[name] || 0;
-    if (gap && now - (this.last[name] || 0) < gap) return;
+    const gap = { hit: 45, swipe: 60, shoot: 70, pop: 40, flame: 120, zap: 80, boom: 80, coin: 40, hover: 60, ui: 50, back: 80, pip: 140, merge: 120, waveclear: 500, nestdown: 500 }[name] || 0;
+    if (gap && now - (this.last[name] ?? -Infinity) < gap) return;
     this.last[name] = now;
     if (DUCK[name]) this.duckMusic(DUCK[name][0], DUCK[name][1]);
     switch (name) {
@@ -352,7 +352,11 @@ export class Sfx {
       case 'purr': this.purr(); break;
       case 'ui': this.tone(520, 0.06, { type: 'triangle', v: 0.1 }); break;
       case 'pick': [523, 659, 784].forEach((f, i) => this.tone(f, 0.16, { type: 'triangle', v: 0.14, delay: i * 0.07 })); break;
-      case 'merge': [392, 523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.18, { type: 'triangle', v: 0.14, delay: i * 0.06 })); break;
+      case 'merge': [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.2, { type: 'sine', v: 0.08, delay: i * 0.05 })); this.tone(2349, 0.3, { type: 'sine', v: 0.04, delay: 0.2 }); break;   // a soft rising sparkle
+      case 'back': this.tone(470, 0.05, { to: 340, type: 'triangle', v: 0.08 }); break;
+      case 'pip': this.tone(1480, 0.07, { type: 'sine', v: 0.05 }); break;
+      case 'waveclear': [523, 659, 784, 1046, 1318, 1568].forEach((f, i) => this.tone(f, 0.2, { type: 'triangle', v: 0.1, delay: i * 0.07 })); this.tone(2093, 0.45, { type: 'sine', v: 0.05, delay: 0.42 }); break;   // short bright arpeggio
+      case 'nestdown': this.noise(0.5, 0.3, 900); this.tone(100, 0.45, { to: 38, type: 'sine', v: 0.3 }); this.tone(180, 0.2, { to: 60, type: 'sawtooth', v: 0.1 }); [1046, 1318, 1568, 2093, 2637].forEach((f, i) => this.tone(f, 0.3, { type: 'sine', v: 0.06, delay: 0.3 + i * 0.07 })); break;   // crash, then a rising sparkle
       case 'wave': this.tone(330, 0.2, { type: 'triangle', v: 0.14 }); this.tone(440, 0.25, { type: 'triangle', v: 0.14, delay: 0.14 }); break;
       case 'boss': this.tone(110, 0.7, { to: 70, type: 'sawtooth', v: 0.22 }); this.tone(165, 0.7, { to: 90, type: 'square', v: 0.1 }); this.noise(0.5, 0.2, 500); break;
       case 'clear': [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.22, { type: 'triangle', v: 0.14, delay: i * 0.09 })); break;
