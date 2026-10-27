@@ -178,6 +178,16 @@ export function confirmTap(armedAt, now, win = 3) {
   return { fire: false, armedAt: now };
 }
 
+// drag and drop on the arrange screen: what dropping `src` on `tgt` does (null: nothing, the thing snaps back).
+// src.k is 'bag' (a backpack relic), 'worn' (a relic on a cat) or 'cat'; tgt.k is 'cat', 'empty', 'zone', 'bag', 'sell', 'forge' or 'release'; tgt.self marks the cat it came from
+export function dropAction(src, tgt) {
+  if (!src || !tgt) return null;
+  if (src.k === 'bag') return tgt.k === 'cat' ? 'equip' : tgt.k === 'sell' ? 'sell' : tgt.k === 'forge' ? 'forge' : null;
+  if (src.k === 'worn') return tgt.k === 'cat' ? (tgt.self ? null : 'moveItem') : tgt.k === 'bag' ? 'unequip' : null;
+  if (src.k === 'cat') return tgt.k === 'cat' ? (tgt.self ? null : 'catSwap') : tgt.k === 'empty' || tgt.k === 'zone' ? 'catMove' : tgt.k === 'release' ? 'release' : null;
+  return null;
+}
+
 // where a coach bubble goes so it sits just above its target: rect and appRect are screen pixels, scale is screen per stage pixel
 export function coachAbove(rect, appRect, scale, bubbleH, W, halfW = 135) {
   const cx = (rect.left + rect.width / 2 - appRect.left) / scale;
