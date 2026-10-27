@@ -1249,3 +1249,10 @@ t('juice: press squash, ripple, coin pop, level up fx, wave hop, pips, reduced m
   assert.ok(!html.includes('\u2014') || !blk.includes('\u2014'), 'no em dash in the juice block');
   assert.ok(!js.slice(js.indexOf('// ---- JUICE helpers'), js.indexOf('function drain()')).includes('\u2014'), 'no em dash in juice js');
 });
+
+t('Relic Book keeps its scroll position when a tile is picked and fades the bottom of the scrolling grid', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(/const oldTop = \(screenEl\.querySelector\('\.relbook'\)/.test(js) && /rb\.scrollTop = oldTop/.test(js), 'scrollTop is saved and restored around the redraw');
+  assert.ok(/body \.relbook\{[^}]*mask-image:linear-gradient/.test(html), 'a bottom fade marks the grid as scrollable');
+});

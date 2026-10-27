@@ -1154,6 +1154,10 @@ body.bigtext .cards.reveal .card h3{font-size:22px}
 body.nomotion .rip,body.nomotion #coinBox.cgain,body.nomotion #chestBox.cbounce,body.nomotion #nestPips i.nw,body.nomotion #nestPips.pipclear{animation:none!important}
 body.nomotion .rip{display:none}
 body.nomotion .btn:active,body.nomotion .seg button:active{transform:none}
+
+/* Relic Book: a soft fade at the bottom of the scrolling grid so the cut off row reads as 'scroll for more' */
+body .relbook{-webkit-mask-image:linear-gradient(#000 calc(100% - 26px),transparent);mask-image:linear-gradient(#000 calc(100% - 26px),transparent);scrollbar-width:thin;scrollbar-color:#ffd23f #2a1f55}
+body .relbook::-webkit-scrollbar{width:8px}body .relbook::-webkit-scrollbar-thumb{background:#ffd23f;border-radius:6px}body .relbook::-webkit-scrollbar-track{background:#2a1f55;border-radius:6px}
 /* JUICE END */
 </style>
 </head>
