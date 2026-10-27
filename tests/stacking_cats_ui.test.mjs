@@ -982,3 +982,12 @@ t('phone audit round 2: Relic Book tiles are 60 stage px in a scrolling grid, Ba
   assert.ok(/\.card\.ev\{width:150px;min-height:176px;padding:6px 6px 18px/.test(html), 'event card text clears the price pill');
   assert.ok(!/—/.test(html), 'no em dash');
 });
+
+t('coach bubbles on full screens step clear of buttons and cards, and merge dust respects reduced motion', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), html = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/function coachClear\(el, hl\)/.test(js) && /classList\.contains\('scr'\)\) \{[\s\S]*?coachClear\(el, hl\)/.test(js), 'coach() repositions on a full screen');
+  assert.ok(/querySelectorAll\('button, \.card,/.test(js), 'buttons and cards are avoided');
+  assert.ok(/\.coach\.notail::after\{display:none\}/.test(html), 'a bubble with no target drops its tail');
+  assert.ok(/for \(const k of \['c1'/.test(js) || /coach\('c5'/.test(js), 'coach keys stay');
+  assert.ok(/if \(save\.opt\.motion && !document\.body\.classList\.contains\('nomotion'\)\) \{[^}]*pops\.set\(e\.uid[\s\S]*?puff\(p\.x, GROUND/.test(js), 'merge squash and base dust only with motion on');
+});

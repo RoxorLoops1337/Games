@@ -200,7 +200,10 @@ function coach(key, html, x, y, dir = 'down', opt = {}) {
     el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
     if (p.side) { el.classList.remove('down'); el.classList.add('left'); }   // the bubble sits right of the target with its tail pointing left
   }
-  if (document.body.classList.contains('scr')) coachClear(el, hl);
+  if (document.body.classList.contains('scr')) {   // wait for the cards to finish sliding in so their real boxes are measured
+    el.style.visibility = 'hidden';
+    setTimeout(() => { if (coachEl === el) { coachClear(el, hl); el.style.visibility = ''; } }, 480);
+  }
   if (!opt.wait) setTimeout(() => { if (coachEl === el) hideCoach(); }, 14000);
 }
 // on a full screen, move the bubble to the nearest spot that covers no button, card, slot or title (nor its own target);
