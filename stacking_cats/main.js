@@ -200,7 +200,36 @@ function coach(key, html, x, y, dir = 'down', opt = {}) {
     el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
     if (p.side) { el.classList.remove('down'); el.classList.add('left'); }   // the bubble sits right of the target with its tail pointing left
   }
+  if (document.body.classList.contains('scr')) {   // wait for the cards to finish sliding in so their real boxes are measured
+    el.style.visibility = 'hidden';
+    setTimeout(() => { if (coachEl === el) { coachClear(el, hl); el.style.visibility = ''; } }, 480);
+  }
   if (!opt.wait) setTimeout(() => { if (coachEl === el) hideCoach(); }, 14000);
+}
+// on a full screen, move the bubble to the nearest spot that covers no button, card, slot or title (nor its own target);
+// the tail then points at the target from above or below, or is dropped when there is none
+function coachClear(el, hl) {
+  const ar = app.getBoundingClientRect(), sc = ar.width / W || 1;
+  const toStage = (r) => ({ l: (r.left - ar.left) / sc, t: (r.top - ar.top) / sc, r: (r.right - ar.left) / sc, b: (r.bottom - ar.top) / sc });
+  const blocks = [...screenEl.querySelectorAll('button, .card, .slot, .bag, h2, .logo, .tile, input, [role=button]')].map((n) => toStage(n.getBoundingClientRect())).filter((r) => r.r - r.l > 2 && r.b - r.t > 2);
+  if (hl) blocks.push(toStage(hl.getBoundingClientRect()));
+  const bw = el.offsetWidth, bh = el.offsetHeight, H2 = app.getBoundingClientRect().height / sc;
+  const hit = (cx, y) => { let a = 0; const l = cx - bw / 2 - 4, r = cx + bw / 2 + 4, t = y - 4, b = y + bh + 6; for (const k of blocks) { const w = Math.min(r, k.r) - Math.max(l, k.l), h = Math.min(b, k.b) - Math.max(t, k.t); if (w > 0 && h > 0) a += w * h; } return a; };
+  const cur = toStage(el.getBoundingClientRect());
+  const ox = Math.max(bw / 2 + 4, Math.min(W - bw / 2 - 4, (cur.l + cur.r) / 2)), oy = cur.t;
+  if (hit((cur.l + cur.r) / 2, cur.t) === 0) return;   // already in a free spot
+  let best = null;
+  for (const cx of [ox, W / 2, W * 0.3, W * 0.7, bw / 2 + 8, W - bw / 2 - 8]) {
+    const x = Math.max(bw / 2 + 4, Math.min(W - bw / 2 - 4, cx));
+    for (let y = 6; y <= H2 - bh - 6; y += 6) {
+      const a = hit(x, y), d = Math.abs(x - ox) * 0.6 + Math.abs(y - oy);
+      const s = a * 1000 + d;
+      if (!best || s < best.s) best = { s, x, y };
+    }
+  }
+  if (!best) return;
+  el.className = 'coach ' + (hl ? ((best.y + bh / 2) < (toStage(hl.getBoundingClientRect()).t + toStage(hl.getBoundingClientRect()).b) / 2 ? 'down' : 'up') : 'notail');
+  el.style.right = ''; el.style.transform = ''; el.style.left = Math.round(best.x) + 'px'; el.style.top = Math.round(best.y) + 'px';
 }
 function setScreen(html, cls = '') {
   hideCoach();
@@ -1627,7 +1656,11 @@ function handle(e) {
       for (let i = 0; i < (max ? 10 : 6); i++) { const a = (i / (max ? 10 : 6)) * TAU; spawnFx({ k: 'p', x: p.x, y: p.y, vx: Math.cos(a) * 190, vy: Math.sin(a) * 190 - 60, life: 0.7, max: 0.7, r: 5, col: i % 2 ? '#fff6b0' : '#ffd23f', grav: 160 }); }
       confetti(p.x, p.y - 20, max ? 46 : 24, max ? 380 : 300);
       txtFx(p.x + 56, p.y - 50, max ? 'MAX LEVEL!' : 'Level up!', '#ffe14d', max ? 26 : 22, 1.2);
-      pops.set(e.uid, 0.55); moods.set(e.uid, 1.6); emote(e.uid, '\u2B50', 1.2); buzz('merge');
+      if (save.opt.motion && !document.body.classList.contains('nomotion')) {   // squash and stretch plus a soft dust puff where the tower meets the ground
+        pops.set(e.uid, 0.55);
+        puff(p.x, GROUND + 4, 5, '#e6dcc0', 70, 0.45, 3.5, 40); smoke(p.x - 14, GROUND + 6, 1, 7, '#e6dcc0'); smoke(p.x + 14, GROUND + 6, 1, 7, '#e6dcc0');
+      }
+      moods.set(e.uid, 1.6); emote(e.uid, '\u2B50', 1.2); buzz('merge');
       if (max) { hit(0.05); shake = Math.max(shake, 3); }
       break;
     }
