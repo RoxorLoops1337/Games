@@ -401,7 +401,7 @@ t('How to play tells players they can tap and hold their cats', () => {
 
 t('the game over buttons stay docked at the bottom so a long results screen never hides them', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8'), html = readFileSync('stacking_cats/index.html', 'utf8');
-  assert.ok(/<div class="row overbtns">[\s\S]{0,120}data-act="again"/.test(js), 'the game over button row must carry the overbtns class');
+  assert.ok(/<div class="row overbtns[^"]*">[\s\S]{0,120}data-act="again"/.test(js), 'the game over button row must carry the overbtns class');
   assert.ok(/\.overbtns\{[^}]*position:sticky[^}]*bottom:/.test(html), 'overbtns must be sticky at the bottom of the scrolling screen');
 });
 
