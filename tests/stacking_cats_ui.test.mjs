@@ -97,6 +97,14 @@ t('costume accessories (hats, capes, wings, weapons) carry gradient, rim light a
   assert.ok(!readFileSync(new URL('../stacking_cats/art_cats.js', import.meta.url), 'utf8').includes('\u2014'), 'no em dashes in art_cats.js');
 });
 
+t('held weapons and props carry material detail (wood grain, metal bands, collars, steam) within the draw budget', () => {
+  const src = readFileSync(new URL('../stacking_cats/art_cats.js', import.meta.url), 'utf8');
+  for (const fn of ['grain', 'band', 'collar', 'steam', 'shine']) assert.ok(new RegExp('function ' + fn + '\\(').test(src), fn + ' helper missing');
+  const uses = (id, h) => { const i = src.indexOf('\n  ' + id + ': {'); const seg = src.slice(i, src.indexOf('\n  },', i)); return seg.includes(h + '(ctx'); };
+  for (const [id, h] of [['buckshot', 'grain'], ['buckshot', 'band'], ['hawkeye', 'grain'], ['hawkeye', 'band'], ['gizmo', 'band'], ['merlin', 'collar'], ['hexa', 'collar'], ['biscuit', 'steam']]) assert.ok(uses(id, h), id + ' lost its ' + h + ' detail');
+  for (const id of ['buckshot', 'hawkeye', 'dusty', 'cyber', 'gizmo', 'merlin', 'hexa', 'blizzard', 'halo', 'biscuit', 'nori']) { const c0 = calls.n; drawCat(fakeCtx(), CATS.find((x) => x.id === id), 'open'); assert.ok(calls.n - c0 < 4000, id + ' over budget'); }
+});
+
 t('every mouse type, elite and nest draws', () => {
   for (const type of Object.keys(ENEMY_TYPES)) for (const elite of [false, true]) { const s = art.enemySprite(type, elite); assert.ok(s.c && s.w > 0); }
   for (const nest of NESTS) { const s = art.nestSprite(nest.id); assert.ok(s.c); art.nestOverlay(fakeCtx(), 0.3, 1.2); }
