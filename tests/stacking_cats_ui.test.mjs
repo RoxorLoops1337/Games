@@ -783,6 +783,20 @@ t('every relic icon is in ICON_KEYS, so the page swaps its emoji for the drawing
   assert.deepEqual(missing, [], 'drawn but not swapped in the page: ' + missing.join(' '));
 });
 
+t('lootbox drop bounces, rests and flies; reduced motion keeps the direct flight; Kingdom explains the slow economy', () => {
+  const src = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  const page = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(/DROP_T = 1\.6/.test(src) && /function dropPos\(/.test(src), 'drop timeline is 1.6 s');
+  assert.ok(/case 'chest': if \(save\.opt\.motion && !document\.body\.classList\.contains\('nomotion'\)\)/.test(src), 'drop only with motion on');
+  assert.ok(/else spawnFx\(\{ k: 'fly'[^\n]*life: 1\.0, max: 1\.0, kind: 'chest'/.test(src), 'old direct flight kept for reduced motion');
+  for (const tier of ['cardboard', 'basket', 'silver', 'golden']) assert.ok(new RegExp(tier + ": \\['#").test(src), 'tint for ' + tier);
+  assert.ok(/upgrades cost coins from runs/.test(src) && /gems are rare/.test(src), 'Kingdom header says upgrades cost coins and gems are rare');
+  const tips = /const KINGDOM_TIPS = \[([\s\S]*?)\];/.exec(src);
+  assert.ok(tips && /Slow on purpose/.test(tips[1]), 'slow on purpose tip');
+  assert.ok(!/\u2014/.test(tips[1]) && !/\u2014/.test(src.slice(src.indexOf('DROP_T = 1.6'), src.indexOf('DROP_T = 1.6') + 1500)), 'no em dashes');
+  assert.ok(/\.ktip\{/.test(page), 'tip styled');
+});
+
 console.log(`${n} tests passed`);
 
 t('backpack cells tell rarity without colour: one pip more per tier, a star for mythic', () => {
