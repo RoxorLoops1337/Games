@@ -487,7 +487,7 @@ body.touch #specials .autob{padding:5px 12px;font-size:13px}
 body.touch .spb{width:58px;height:58px}body.touch #specials{right:70px;bottom:12px;gap:10px}
 body.nomotion .spb.ready{animation:none}
 .evcards{gap:8px;justify-content:center}
-.screen .card.ev,.screen.wide .card.ev{width:150px;min-height:176px;padding:6px 6px 10px;cursor:pointer;position:relative}
+.screen .card.ev,.screen.wide .card.ev{width:150px;min-height:176px;padding:6px 6px 18px;cursor:pointer;position:relative}
 .screen .evcards{flex-wrap:nowrap;max-width:none;margin-bottom:6px}.card.ev .rar{position:static;font-size:11px;letter-spacing:1px;text-transform:uppercase}
 .card.ev .ic{position:relative;z-index:0}.card.ev .ic::before{content:'';position:absolute;left:50%;top:50%;width:66px;height:66px;margin:-33px 0 0 -33px;border-radius:50%;z-index:-1;background:radial-gradient(circle,rgba(255,255,255,.95) 0,rgba(214,206,232,.7) 48%,rgba(214,206,232,0) 72%)}
 .card.ev .ic{font-size:44px;line-height:1.1}.card.ev .ic .thumb{width:54px;height:54px}
@@ -783,9 +783,13 @@ body .btn.big.btn,body.touch .btn.big{min-height:76px}
 body .seg button,body.touch .seg button{min-height:60px}
 body .tog,body.touch .tog{min-height:60px}
 body .screen.arr .btn.btn,body.touch .screen.arr .btn,body.touch .screen.arr .btn.small{min-height:54px}
-body .rtile{width:40px;height:40px}
-body .rtiles{gap:2px}
-body .relde{min-height:70px}
+body .screen:has(.relbook){overflow:hidden}
+body .relbook{width:900px;flex:1 1 0;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:4px;scrollbar-width:thin}
+body .rrow{flex:none}
+body .rtile{width:60px;height:60px;font-size:30px}
+body .rtiles{gap:3px}
+body .relde{min-height:56px;flex:none;margin-top:4px}
+body .screen.arr .btn.big2.btn,body.touch .screen.arr .btn.big2{min-height:60px}
 body .setfoot .btn.small.btn,body.touch .setfoot .btn.small,body .screen.arr .btn.small.btn{min-height:60px}
 body .tile{height:90px}
 body .detail.dexd{position:relative;padding-right:150px}
