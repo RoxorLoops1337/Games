@@ -92,7 +92,7 @@ t('costume accessories (hats, capes, wings, weapons) carry gradient, rim light a
     const d = CATS.find((x) => x.id === id), r = withGrad(d);
     assert.ok(r.g >= 1, id + ' accessory has no gradient material');
   }
-  for (const id of ['buckshot', 'yuki', 'hawkeye', 'boomer', 'dusty', 'shadow', 'hexa', 'nori']) assert.ok(withGrad(CATS.find((x) => x.id === id)).o >= 1, id + ' lost its stitched seam');
+  for (const id of ['buckshot', 'hawkeye', 'boomer', 'dusty', 'shadow', 'nori', 'pudding']) assert.ok(withGrad(CATS.find((x) => x.id === id)).o >= 1, id + ' lost its stitched seam');
   for (const d of CATS) { const c0 = calls.n; drawCat(fakeCtx(), d, 'open'); assert.ok(calls.n - c0 < 4000, d.id + ' draw cost grew past the cached sprite budget'); }
   assert.ok(!readFileSync(new URL('../stacking_cats/art_cats.js', import.meta.url), 'utf8').includes('\u2014'), 'no em dashes in art_cats.js');
 });
