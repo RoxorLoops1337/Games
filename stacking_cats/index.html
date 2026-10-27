@@ -1159,6 +1159,14 @@ body.nomotion .btn:active,body.nomotion .seg button:active{transform:none}
 body .relbook{-webkit-mask-image:linear-gradient(#000 calc(100% - 26px),transparent);mask-image:linear-gradient(#000 calc(100% - 26px),transparent);scrollbar-width:thin;scrollbar-color:#ffd23f #2a1f55}
 body .relbook::-webkit-scrollbar{width:8px}body .relbook::-webkit-scrollbar-thumb{background:#ffd23f;border-radius:6px}body .relbook::-webkit-scrollbar-track{background:#2a1f55;border-radius:6px}
 /* JUICE END */
+/* TGRID START */
+.tgrid{display:grid;gap:8px 10px;width:min(100%,640px);margin:6px auto}
+.tgrid.g4{grid-template-columns:repeat(4,1fr)}
+.tgrid.g31{grid-template-columns:1.7fr 1fr 1fr 1fr}
+.tgrid .btn,.tgrid .btn.small,.screen .tgrid>.btn:not(.big):not(.small){margin:0;min-width:0;width:100%;padding-left:6px;padding-right:6px;display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;overflow:visible;font-size:clamp(15px,2.4vw,21px)}
+.tgrid .btn.small{font-size:clamp(13px,2vw,16px)}
+.tgrid .badge{white-space:nowrap}
+/* TGRID END */
 </style>
 </head>
 <body>
