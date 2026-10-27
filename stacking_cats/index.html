@@ -916,6 +916,181 @@ body.touch .screen.arr .btn.small{min-height:36px}
 .card.ev:has(.rar.epic){background:linear-gradient(#fff6ff,#f6e0ff)}.card.ev:has(.rar.legendary){background:linear-gradient(#fffbe8,#ffeeb8)}
 .card.ev .ic::before{width:70px;height:70px;margin:-35px 0 0 -35px;box-shadow:0 0 0 2px #fff8,inset 0 -3px 0 #4a2f7a18}
 .card.ev .evp{background:linear-gradient(#3f2f78,#2a1f55);box-shadow:0 3px 0 #150f26;display:flex;gap:4px;align-items:center;padding:0 12px 0 8px}
+/* ARRANGE START */
+/* Arrange tower: drag and drop, sockets, sections, detail bar, sell and forge zones */
+.screen.arr{padding:6px 14px 8px}
+.screen.arr .tbody{align-items:flex-start;padding:10px 2px 6px}
+.screen.arr .tower{gap:16px;width:100%;max-width:910px;align-items:flex-start}
+.screen.arr .col{width:auto;flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:4px}
+.screen.arr .zone,.screen.arr .packz{display:flex;flex-direction:column;gap:4px;padding:4px 6px 6px;border-radius:16px;background:rgba(20,12,44,.35);border:2px solid rgba(255,255,255,.12);transition:box-shadow .12s,border-color .12s}
+.screen.arr .col h4{margin:0 0 1px;text-align:left;font-size:16px;color:var(--peach)}
+.screen.arr .col h4 small{font-size:12px;color:#ffe3c4aa;font-family:var(--font);font-weight:700;margin-left:4px}
+.screen.arr .slot{width:100%;gap:6px}
+.screen.arr .slot.has{height:52px;padding:0 8px 0 16px;touch-action:none;cursor:grab}
+.screen.arr .slot.has canvas{width:46px;height:46px}
+.screen.arr .slot .sc{flex:1 1 0;min-width:0}
+.screen.arr .slot .sc b{display:flex;align-items:center;gap:4px;font-size:18px;line-height:1.05;white-space:nowrap}
+.screen.arr .slot .nm{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.screen.arr .slot .st{flex:none}
+.screen.arr .slot .sc small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;line-height:1.1}
+.screen.arr .slot .rp{font-style:normal;background:#e9ddff;border-radius:8px;padding:0 6px;margin-right:3px}
+.screen.arr .slot .hp{width:100%;max-width:150px}
+.screen.arr .slot .islots{flex:none;gap:4px}
+.screen.arr .islot{width:38px;height:38px;border-radius:12px;font-size:23px;position:relative;transition:transform .1s;border:2.5px dashed #b9a6d8;background:rgba(80,50,120,.12);box-shadow:inset 0 3px 5px rgba(60,30,100,.3)}
+.screen.arr .islot.full{border-style:solid;touch-action:none;cursor:grab;background:#fff;box-shadow:inset 0 2px 0 #fff9,0 2px 0 rgba(60,30,100,.4)}
+.screen.arr .islot.want{border-color:#ff8fb7;background:#ffe9f2;box-shadow:0 0 8px #ff8fb7}
+.screen.arr .islot.full.r-common{border-color:#9a8ab8;background:linear-gradient(#f4f0fa,#d8d0ea)}
+.screen.arr .islot.full.r-rare{border-color:#4a8ad8;background:linear-gradient(#e6f2ff,#b4d4ff);box-shadow:0 0 6px #4a8ad8aa}
+.screen.arr .islot.full.r-epic{border-color:#c04ae0;background:linear-gradient(#fbe8ff,#e6b8ff);box-shadow:0 0 8px #c04ae0cc}
+.screen.arr .islot.full.r-legendary{border-color:#e8a000;background:linear-gradient(#fff6d0,#ffd870);box-shadow:0 0 10px #ffc83add}
+.screen.arr .islot.full.r-mythic{border-color:#ff3a8a;background:linear-gradient(#ffe6f6,#e0c8ff);box-shadow:0 0 12px #ff5aa8,0 0 18px #7a5aff88}
+.screen.arr .slot .sdps{flex:none;width:auto;min-width:56px;text-align:right;font-size:20px;line-height:1}
+.screen.arr .slot .sdps small{display:block;font-size:12px}
+.screen.arr .slot .pv{position:absolute;right:10px;top:-11px;z-index:3;font-style:normal;font-weight:800;font-size:13px;line-height:20px;padding:0 9px;border-radius:999px;white-space:nowrap;pointer-events:none;color:#fff;box-shadow:0 2px 0 rgba(0,0,0,.35)}
+.screen.arr .slot .pv:empty{display:none}
+.screen.arr .slot .pv.up{background:#23a05a;border:1.5px solid #bfffd6}
+.screen.arr .slot .pv.down{background:#c0483a;border:1.5px solid #ffd0c8}
+.screen.arr .slot.lifted{opacity:.35}
+.screen.arr .slot:not(.has){height:30px;min-height:0;font-size:13px}
+/* drag states */
+.screen.arr.dg-relic .slot.has,.screen.arr.dg-worn .slot.has,.screen.arr.dg-cat .slot.has,.screen.arr.dg-cat .slot:not(.has){outline:3px dashed #ffd23faa;outline-offset:-2px}
+.screen.arr.dg-relic [data-drop=sell],.screen.arr.dg-relic [data-drop=forge],.screen.arr.dg-cat [data-drop=release],.screen.arr.dg-worn .packz{box-shadow:0 0 0 3px #ffd23faa,0 0 14px #ffd23f88}
+.screen.arr .slot.over{outline:4px solid #4fe08a;outline-offset:-2px;background-color:#eafff0;transform:scale(1.02)}
+.screen.arr .slot.badt,.screen.arr [data-drop].badt{outline:4px solid #ff6a6a;outline-offset:-2px}
+.screen.arr [data-drop].over{box-shadow:0 0 0 4px #4fe08a,0 0 20px #4fe08a;transform:scale(1.05)}
+.screen.arr .packz.over{border-color:#4fe08a;box-shadow:0 0 0 3px #4fe08a}
+.screen.arr .zone.over{border-color:#ffd23f}
+.screen.arr .bag{touch-action:none;cursor:grab}
+.screen.arr .bag.lifted{opacity:.3}
+.screen.arr .packz .bagrow{width:100%;grid-template-columns:repeat(6,1fr);gap:4px}
+.screen.arr .packz .bag{height:46px;font-size:30px;border-radius:13px}
+.screen.arr .packz h4{text-align:left}
+/* the ghost that follows the pointer */
+.dghost{position:absolute;z-index:90;pointer-events:none;transform:translate(-50%,-50%) scale(1.15) rotate(-4deg);filter:drop-shadow(0 8px 6px #0007);transition:none}
+.dghost .gr{display:flex;align-items:center;justify-content:center;width:58px;height:58px;font-size:36px;border-radius:15px;border:3px solid #9a8ab8;background:linear-gradient(#f4f0fa,#d8d0ea)}
+.dghost .gr.r-rare{border-color:#4a8ad8;background:linear-gradient(#e6f2ff,#b4d4ff)}.dghost .gr.r-epic{border-color:#c04ae0;background:linear-gradient(#fbe8ff,#e6b8ff)}
+.dghost .gr.r-legendary{border-color:#e8a000;background:linear-gradient(#fff6d0,#ffd870)}.dghost .gr.r-mythic{border-color:#ff3a8a;background:linear-gradient(#ffe6f6,#e0c8ff)}
+.dghost .gc{display:flex;align-items:center;gap:6px;padding:4px 14px 4px 6px;border-radius:16px;background:#fffaf2;border:3px solid #ff8fb7;color:var(--ink);font-weight:800;font-size:18px}
+.dghost .gc img{width:44px;height:44px}
+/* detail bar, sell and forge zones */
+.screen.arr .tfoot{max-width:840px;gap:8px;min-height:64px}
+.screen.arr .tfoot .detail.slim{min-height:64px;padding:4px 10px;font-size:14px;line-height:1.15;overflow:hidden;align-items:center}
+.ditem{display:flex;gap:8px;align-items:center;width:100%;min-width:0}
+.ditem .dic{flex:none;width:46px;height:46px;border-radius:13px;border:3px solid #9a8ab8;display:flex;align-items:center;justify-content:center;font-size:28px;background:linear-gradient(#f4f0fa,#d8d0ea);font-style:normal}
+.ditem.r-rare .dic{border-color:#4a8ad8;background:linear-gradient(#e6f2ff,#b4d4ff)}.ditem.r-epic .dic{border-color:#c04ae0;background:linear-gradient(#fbe8ff,#e6b8ff)}
+.ditem.r-legendary .dic{border-color:#e8a000;background:linear-gradient(#fff6d0,#ffd870)}.ditem.r-mythic .dic{border-color:#ff3a8a;background:linear-gradient(#ffe6f6,#e0c8ff)}
+.ditem .dbody{display:flex;flex-direction:column;min-width:0;flex:1}
+.ditem .dnm{display:flex;align-items:center;gap:6px;font-size:16px;line-height:1.1}
+.ditem .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.ditem .drar{flex:none;font-style:normal;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-radius:8px;padding:0 6px;background:#e9ddff}
+.ditem.r-rare .drar{background:#b4d4ff}.ditem.r-epic .drar{background:#e6b8ff}.ditem.r-legendary .drar{background:#ffd870}.ditem.r-mythic .drar{background:#ffb8e0}
+.ditem .dds{font-size:13px;font-weight:700;line-height:1.1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ditem .dex{font-size:12px;font-weight:800;color:#6b3fb0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ditem .dex u{text-decoration:none;color:#23805a;margin-right:8px}
+.screen.arr .tfoot .zbtn{width:104px;min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;line-height:1.05;padding:2px 6px;white-space:normal;align-self:stretch}
+.zbtn b{font-size:19px;font-weight:400;font-family:var(--display)}.zbtn small{font-size:12px;font-weight:800;opacity:.85;white-space:nowrap}
+.screen.arr .tfoot .btn.big2{align-self:stretch;min-height:64px}
+.screen.arr .relbtn{align-self:flex-start;margin:2px 0 0}
+/* bounce and sparkle */
+.screen.arr .bump{animation:arrbump .5s cubic-bezier(.3,1.6,.5,1)}
+.screen.arr .glow{box-shadow:0 0 0 4px #ffd23f,0 0 18px #ffd23f}
+@keyframes arrbump{0%{transform:scale(1)}30%{transform:scale(1.07)}60%{transform:scale(.98)}100%{transform:scale(1)}}
+.sparkle{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none;z-index:4}
+.sparkle i{position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;background:#fff6b0;box-shadow:0 0 6px #ffd23f;animation:arrspk .8s ease-out var(--t) forwards;opacity:0}
+.sparkle.r-mythic i:nth-child(odd){background:#ffb0e0;box-shadow:0 0 6px #ff5aa8}
+@keyframes arrspk{0%{opacity:1;transform:rotate(var(--a)) translateX(6px) scale(1)}100%{opacity:0;transform:rotate(var(--a)) translateX(var(--d)) scale(.2)}}
+body.nomotion .screen.arr .slot.over,body.nomotion .screen.arr [data-drop].over{transform:none}
+body.nomotion .dghost{transform:translate(-50%,-50%)}
+@media (max-height:400px){
+.screen.arr .slot.has{height:50px}
+.screen.arr .slot.has canvas{width:40px;height:40px}
+.screen.arr .slot .sc b{font-size:19px}
+.screen.arr .col h4{font-size:17px}
+.screen.arr .packz .bag{height:42px}
+.screen.arr .tbody{padding-top:8px}
+.screen.arr .zone,.screen.arr .packz{padding:2px 6px 4px;gap:3px}
+.screen.arr .col{gap:3px}
+body .screen.arr .tfoot .zbtn,body .screen.arr .tfoot .btn.big2.btn{min-height:62px}
+.screen.arr .tfoot .detail.slim{min-height:62px}
+body .screen.arr .relbtn.btn.small{min-height:44px;padding:0 14px}
+}
+/* ARRANGE END */
+/* AUDIT START */
+/* title: the logo and the button rows must fit the 540px stage, and wide badge buttons must not outgrow their box */
+.screen.tpad .logo{font-size:64px;padding-top:6px}
+.screen.tpad .logo span{font-size:54px;padding-bottom:.1em}
+.screen.tpad .tag{margin:4px 0 8px}
+.screen.tpad .btn{padding-left:16px;padding-right:16px;max-width:100%;margin-top:3px;margin-bottom:5px}
+.screen.tpad .hint:not(.row){margin-top:6px}
+.screen.tpad .btn .badge{white-space:nowrap}
+/* dex tiles: one line each, never overlapping */
+.tile{padding:2px 1px}
+.tile b,.tile small{max-width:100%;white-space:nowrap;text-overflow:ellipsis;line-height:1.2}
+.tile b{font-size:11px}
+/* contrast: white text on these chips needs a darker chip */
+.card .ribbon,.rb u{background:#d63a5c}
+.k-perm{background:#2a8a52}.k-temp{background:#c0601c}.k-instant{background:#a8347f}
+.card.item.r-mythic .rar,.rar.mythic{background:linear-gradient(90deg,#d62a74,#6a3ad8);text-shadow:0 1px 0 rgba(0,0,0,.5)}
+.card.item .impact{color:#4a3a60}
+/* toasts over a wave banner: keep them clear of the title text */
+#toasts{max-width:420px}
+.toast{max-width:420px;overflow-wrap:anywhere}
+/* shop: a sold card keeps its text at full contrast, only the picture fades, and the stamp sits in the corner clear of the text */
+.card.ev.sold{opacity:1;background:#e6dff0;pointer-events:none}
+.card.ev.sold .ic,.card.ev.sold .thumb{filter:grayscale(1);opacity:.45}
+.card.ev.poor{opacity:1}
+.card.ev .evsold{inset:auto;top:5px;left:5px;right:auto;bottom:auto;height:auto;margin:0;padding:0 10px;background:rgba(39,28,51,.92);border:2px solid #fff;border-radius:9px;font-size:16px;transform:rotate(-8deg)}
+.rar.common,.card.ev .rar.common{background:#5f5f78;color:#fff}
+/* pause title: one solid plaque with gold rules drawn as inset shadows, so the white title always sits on dark */
+.screen h2.paused{background:#2a1458;color:#fff;box-shadow:inset 0 3px 0 #ffd23f,inset 0 -3px 0 #ffd23f}
+/* difficulty rule chips */
+.drule b{color:var(--ink)}.dcell.locked .drule b{color:#fff}
+/* toasts sit above the wave banner, never on it */
+#toasts{top:auto;bottom:396px;justify-content:flex-end}
+body.scr #toasts{bottom:10px}
+#bossBar .nm{line-height:1.3;padding-bottom:1px}
+.dex .tile{height:98px}
+.card.item.r-legendary .rar,.rar.legendary{background:linear-gradient(#ffc646,#ffa514);color:#271c33;text-shadow:none}
+/* press and hover polish */
+.btn:not([disabled]):hover{filter:brightness(1.06)}
+.card[data-act]:active{transform:scale(.98)}
+@media (max-height:400px){
+.screen.tpad{padding-top:4px;padding-bottom:4px}
+.screen.tpad .logo{font-size:46px;padding-top:0;line-height:.9}
+.screen.tpad .logo span{font-size:40px}
+.screen.tpad .tag{margin:2px 0 4px;font-size:16px;padding:1px 14px}
+body .screen.tpad .btn.big.btn{min-height:64px}
+body .screen.tpad .btn.btn{margin-top:1px;margin-bottom:4px}
+.screen.tpad .hint:not(.row){margin-top:2px;padding:1px 14px}
+}
+@media (max-height:400px){
+#toasts{bottom:396px}body.scr #toasts{bottom:10px}#banner{top:150px}
+body .dex .tile{height:88px}
+.screen .hint:not(.row){font-size:17px}
+.screen:has(.revealstage){padding-top:4px;padding-bottom:4px}
+.screen:has(.revealstage) h2{font-size:28px}
+.cards.reveal{margin-bottom:2px}
+body .screen:has(.revealstage) .btn.big.btn{min-height:62px;margin-top:2px;margin-bottom:2px}
+.screen:has(.revealstage) .row.hint{margin-top:2px}
+}
+/* small screens: the stage is scaled down, so text under about 9px real gets a floor in stage px (14px at 360 high, 15.5px at 320 high) */
+@media (max-height:400px){
+body .tile small,body .card p,body .card .impact,body .card .impact b,body .card .impact span,body .card .impact em,body .card .ttl,body .card .role,body .card .gainl,body .card .setl,body .tro small,body .tro em,body .tbar u,body .tog span,body .tog small,body .setrow b,body .setrow small,body .how li>div,body .kcoins small,body .kt small,body .ktip,body .seg button,body .rlabel b,body .rlabel small,body .srow b,body .srow span i,body .spb em,body .dcell small,body .dcard small,body .wmod small,body .kd small,body .sub,body .rb span,body .rb em,body .rb b,body .stats div,body .dxstat,body .dxstats span,body .pstat span{font-size:14px}
+body .tile b{font-size:14px}body .tile b.lg{font-size:11px}body .tile small{font-size:13.5px}
+body .dex .tile canvas{width:40px;height:40px}
+}
+@media (max-height:340px){
+body .tile small,body .card p,body .card .impact,body .card .impact b,body .card .impact span,body .card .impact em,body .card .ttl,body .card .role,body .card .gainl,body .card .setl,body .tro small,body .tro em,body .tbar u,body .tog span,body .tog small,body .setrow b,body .setrow small,body .how li>div,body .kcoins small,body .kt small,body .ktip,body .seg button,body .rlabel b,body .rlabel small,body .srow b,body .srow span i,body .spb em,body .dcell small,body .dcard small,body .wmod small,body .kd small,body .sub,body .rb span,body .rb em,body .rb b,body .stats div,body .dxstat,body .dxstats span,body .pstat span{font-size:15.5px}
+body .tile b{font-size:15px}body .tile b.lg{font-size:12.5px}
+body .dex .tile canvas{width:36px;height:36px}
+}
+/* when a screen is taller than the stage its top (title, heading) stays visible and the overflow goes to the bottom */
+.screen:not(.arr){justify-content:safe center}
+@media (max-height:340px){
+body .tile small{font-size:14px}body .tile b.lg{font-size:11px}
+body.bigtext .dex{gap:3px}
+}
+/* AUDIT END */
 </style>
 </head>
 <body>

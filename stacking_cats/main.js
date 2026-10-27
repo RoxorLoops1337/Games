@@ -17,7 +17,7 @@ import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawR
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
 import { boxHero } from './art_boxes.js';
-import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel, clearLine, confirmTap, coachAbove, specialLabel } from './art_util.js';
+import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel, clearLine, confirmTap, coachAbove, specialLabel, dropAction } from './art_util.js';
 import { iconCanvas, iconURL, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
 import { buzz, setHaptics } from './haptics.js';
@@ -502,7 +502,7 @@ function showDex(back, sel0) {
   const draw = () => {
     setScreen(`<h2>Cat Dex <span class="dexhead"><small class="klv dexh">${un.size}/${CATS.length}</small><span class="dexbar" aria-hidden="true"><i style="width:${Math.round(100 * un.size / CATS.length)}%"></i></span></span></h2><div class="dex">${CATS.map((d) => {
       const u = un.has(d.id), p = unlockProgress(d, save.stats);
-      return `<div class="tile ${u ? '' : 'locked'} ${sel === d.id ? 'sel' : ''}" data-act="tile" data-id="${d.id}"><canvas width="96" height="96" data-cat="${d.id}" ${u ? '' : 'data-lock="1"'}></canvas><b>${u ? d.name : '???'}</b>${u ? `<small>${d.role}</small>` : `<small>${p.need > 1 ? `${p.have}/${p.need}` : p.have ? 'Done' : 'Caged'}</small>${p.need > 1 ? `<span class="tpb"><i style="width:${Math.min(100, Math.round(100 * p.have / p.need))}%"></i></span>` : ''}`}${fav && fav[0] === d.id && u ? '<i class="fav">&#10084;</i>' : ''}</div>`;
+      return `<div class="tile ${u ? '' : 'locked'} ${sel === d.id ? 'sel' : ''}" data-act="tile" data-id="${d.id}"><canvas width="96" height="96" data-cat="${d.id}" ${u ? '' : 'data-lock="1"'}></canvas><b${u && d.name.length > 9 ? ' class="lg"' : ''}>${u ? d.name : '???'}</b>${u ? `<small>${d.role}</small>` : `<small>${p.need > 1 ? `${p.have}/${p.need}` : p.have ? 'Done' : 'Caged'}</small>${p.need > 1 ? `<span class="tpb"><i style="width:${Math.min(100, Math.round(100 * p.have / p.need))}%"></i></span>` : ''}`}${fav && fav[0] === d.id && u ? '<i class="fav">&#10084;</i>' : ''}</div>`;
     }).join('')}</div>
     <div class="detail dexd ${sel ? 'dx' : ''}">${sel ? dexDetail(sel, un.has(sel)) : 'Tap a cat to see how to unlock it, or how it has done for you. Locked cats join the picks once you earn them.'}</div>
     <div class="row"><button class="btn" data-act="back">Back</button></div>`);
@@ -1075,30 +1075,88 @@ function showStats(back) {
   acts = { back };
 }
 
-// arrange the tower: tap a cat then another to swap or merge; tap a backpack item then a cat to equip it
+// ---- drag and drop on the arrange screen: one pointer path for mouse, pen and finger. A press that moves more than a few
+// pixels lifts the thing under it (a floating ghost follows the pointer), the hooks say what is under the pointer and what a drop does.
+let dragSuppress = 0;
+screenEl.addEventListener('click', (e) => { if (performance.now() < dragSuppress) { e.stopPropagation(); e.preventDefault(); } }, true);   // the click that ends a drag is not a tap
+function bindDrag(root, h) {
+  root.addEventListener('pointerdown', (e) => {
+    if ((e.pointerType === 'mouse' && e.button !== 0) || e.isPrimary === false) return;
+    const src = h.pick(e);
+    if (!src) return;
+    const id = e.pointerId, sx = e.clientX, sy = e.clientY, touch = e.pointerType !== 'mouse';
+    let on = false, ghost = null, over = null;
+    try { src.el.setPointerCapture(id); } catch (err) { /* capture is a nicety */ }
+    const under = (ev) => h.hit(document.elementFromPoint(ev.clientX, ev.clientY), src);
+    const same = (a, b) => (a && b ? a.el === b.el : a === b);
+    const move = (ev) => {
+      if (ev.pointerId !== id) return;
+      if (!on) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 7) return;
+        on = true;
+        ghost = document.createElement('div'); ghost.className = 'dghost'; ghost.innerHTML = h.ghost(src);
+        app.appendChild(ghost); h.start(src);
+      }
+      const p = stagePoint(ev);
+      if (isFinite(p.x) && isFinite(p.y)) { ghost.style.left = p.x + 'px'; ghost.style.top = (p.y - (touch ? 34 : 0)) + 'px'; }
+      const t = under(ev);
+      if (!same(t, over)) { h.over(t, over, src); over = t; }
+    };
+    const end = (ev, cancel) => {
+      if (ev.pointerId !== id) return;
+      for (const [n, f] of [['pointermove', move], ['pointerup', up], ['pointercancel', cn]]) src.el.removeEventListener(n, f);
+      if (!on) return;
+      dragSuppress = performance.now() + 450;
+      const t = cancel ? null : under(ev);
+      ghost.remove(); h.over(null, over, src); h.end(src, t);
+    };
+    const up = (ev) => end(ev, false), cn = (ev) => end(ev, true);
+    src.el.addEventListener('pointermove', move); src.el.addEventListener('pointerup', up); src.el.addEventListener('pointercancel', cn);
+  });
+}
+
+// arrange the tower: drag a relic onto a cat to equip it (or tap a relic, then a cat), drag cats to swap, merge or move them
 function showTower(back, opt = {}) {
-  let sel = null, rel = false, selItem = opt.item != null ? opt.item : null;
+  let sel = null, rel = false, selItem = opt.item != null ? opt.item : null, hoverId = null, pend = null;
+  const motion = () => save.opt.motion && !document.body.classList.contains('nomotion');
+  const gainChip = (c, id) => {   // before and after for one cat wearing relic `id` (null when it would change nothing worth saying)
+    const mods = S.calcMods(g), dps = S.estDps(c, mods), items = c.items.slice();
+    if (items.length >= itemSlots(c.lvl)) items.shift();
+    items.push(id);
+    const nd = S.estDps(c, mods, items), df = nd - dps;
+    const bk = S.estBulk(g, c, mods, items) / Math.max(1, S.estBulk(g, c, mods, c.items)) - 1, bp = Math.round(bk * 100);
+    const better = df > -0.5 && bp >= 0;
+    return { cls: better ? 'up' : 'down', html: `&asymp;${Math.round(dps)} &rarr; <b>&asymp;${Math.round(nd)}</b> (${df >= 0 ? '+' : ''}${Math.round((100 * df) / Math.max(1, dps))}%)${bp ? `, ${bp > 0 ? 'tougher +' : 'less tough '}${Math.abs(bp)}%` : ''}` };
+  };
   const catRow = (c, zone, i, extra = '') => {
     const d = CAT_BY_ID[c.id], mx = S.catMaxHp(g, c), mods = S.calcMods(g), dps = S.estDps(c, mods);
     const canMerge = sel && sel !== c.uid && (() => { const a = S.findCat(g, sel); return a && a.id === c.id && a.lvl === c.lvl && a.lvl < 3; })();
-    let prev = '';
-    if (selItem != null && g.stash[selItem]) {
-      const items = c.items.slice();
-      if (items.length >= itemSlots(c.lvl)) items.shift();
-      items.push(g.stash[selItem]);
-      const nd = S.estDps(c, mods, items), df = nd - dps;
-      const bk = S.estBulk(g, c, mods, items) / Math.max(1, S.estBulk(g, c, mods, c.items)) - 1, bp = Math.round(bk * 100);
-      prev = `<em class="${df >= 0 ? 'up' : 'down'}">&rarr; &asymp;${Math.round(nd)} (${df >= 0 ? '+' : ''}${Math.round((100 * df) / Math.max(1, dps))}%)${bp ? `, ${bp > 0 ? 'tougher +' : 'less tough '}${Math.abs(bp)}%` : ''}</em>`;
-    }
+    const pv = selItem != null && g.stash[selItem] ? gainChip(c, g.stash[selItem]) : null;
     const slots = Array.from({ length: itemSlots(c.lvl) }, (_, k) => {
-      const id = c.items[k];
-      return id ? `<span class="islot full" data-act="unequip" data-uid="${c.uid}" data-i="${k}" title="${ITEM_BY_ID[id].name}: ${ITEM_BY_ID[id].desc} (tap to take off)">${ITEM_BY_ID[id].icon}</span>` : `<span class="islot ${selItem != null ? 'want' : ''}"></span>`;
+      const id = c.items[k], it = id && ITEM_BY_ID[id];
+      return it ? `<span class="islot full r-${it.rarity}" data-act="unequip" data-uid="${c.uid}" data-i="${k}" aria-label="${it.name}, ${it.rarity}, worn by ${d.name}. Take it off" title="${it.name}: ${it.desc} (tap to take off, or drag it)">${it.icon}</span>` : `<span class="islot ${selItem != null ? 'want' : ''}" aria-hidden="true"></span>`;
     }).join('');
-    return `<div class="slot has ${sel === c.uid ? 'sel' : ''} ${canMerge ? 'can' : ''} ${selItem != null ? 'eq' : ''}" data-act="slot" data-zone="${zone}" data-i="${i}"><canvas width="96" height="96" data-cat="${c.id}"></canvas><div class="sc"><b>${d.name} <span class="st">${stars(c.lvl)}</span></b><small>${d.role}${canMerge ? ' - tap to MERGE' : extra}</small><div class="hp"><i style="width:${Math.max(2, (100 * c.hp) / mx)}%"></i></div></div><div class="islots">${slots}</div><div class="sdps">&asymp;${Math.round(dps)}<small>DPS</small>${prev}</div></div>`;
+    const worn = c.items.map((id) => ITEM_BY_ID[id].name).join(', ');
+    return `<div class="slot has ${sel === c.uid ? 'sel' : ''} ${canMerge ? 'can' : ''} ${selItem != null ? 'eq' : ''}" data-act="slot" data-zone="${zone}" data-i="${i}" data-uid="${c.uid}" aria-label="${d.name}, level ${c.lvl}, ${d.role}, about ${Math.round(dps)} damage per second${worn ? ', wearing ' + worn : ''}"><canvas width="96" height="96" data-cat="${c.id}"></canvas><div class="sc"><b><span class="nm">${d.name}</span> <span class="st">${stars(c.lvl)}</span></b><small><i class="rp">${d.role}</i>${canMerge ? ' MERGE!' : extra}</small><div class="hp"><i style="width:${Math.max(2, (100 * c.hp) / mx)}%"></i></div></div><div class="islots">${slots}</div><div class="sdps">&asymp;${Math.round(dps)}<small>DPS</small></div><em class="pv ${pv ? pv.cls : ''}">${pv ? pv.html : ''}</em></div>`;
+  };
+  // the detail bar: a relic's name, rarity, effect, set progress and the cat it helps most
+  const itemDetail = (id) => {
+    const it = ITEM_BY_ID[id], h = setHint(id, g.cats), r = S.relicGain(g, id), bits = [];
+    if (r && r.dps >= 0.01) bits.push(`+${Math.round(r.dps * 100)}% damage`);
+    if (r && r.bulk >= 0.03) bits.push(`tougher +${Math.round(r.bulk * 100)}%`);
+    const best = bits.length ? `Best on ${CAT_BY_ID[r.cat].name}: ${bits.join(', ')}` : '';
+    return `<span class="ditem r-${it.rarity}"><i class="dic">${it.icon}</i><span class="dbody"><b class="dnm"><span class="nm">${it.name}</span><em class="drar">${it.rarity}</em></b><span class="dds">${it.desc}</span>${h || best ? `<span class="dex">${h ? `<u>${h}</u>` : ''}${best}</span>` : ''}</span></span>`;
+  };
+  const sellLabel = (idx) => { const id = g.stash[idx]; return id ? `<b>Sell</b><small>&#129689; +${S.sellValue(g, id)}</small>` : '<b>Sell</b><small>drop a relic</small>'; };
+  const forgeLabel = (idx) => {
+    const id = g.stash[idx];
+    if (!id) return '<b>Forge</b><small>3 of a kind</small>';
+    const r = ITEM_BY_ID[id].rarity, same = g.stash.filter((x) => ITEM_BY_ID[x].rarity === r).length;
+    return `<b>Forge</b><small>${Math.min(same, FORGE_COUNT)}/${FORGE_COUNT} &rarr; ${FORGE_NEXT[r]}</small>`;
   };
   const draw = () => {
     const tw = [];
-    for (let i = S.stackMax(g) - 1; i >= 0; i--) tw.push(g.cats[i] ? catRow(g.cats[i], 'tower', i, i === 0 ? ' \u00B7 takes the hits' : '') : `<div class="slot" data-act="slot" data-zone="tower" data-i="${i}">&nbsp;Empty spot</div>`);
+    for (let i = S.stackMax(g) - 1; i >= 0; i--) tw.push(g.cats[i] ? catRow(g.cats[i], 'tower', i, i === 0 ? ' · takes the hits' : '') : `<div class="slot" data-act="slot" data-zone="tower" data-i="${i}">&nbsp;Empty spot</div>`);
     const bn = [];
     for (let i = 0; i < S.benchMax(g); i++) bn.push(g.bench[i] ? catRow(g.bench[i], 'bench', i) : `<div class="slot" data-act="slot" data-zone="bench" data-i="${i}">&nbsp;Empty bench spot</div>`);
     const over = S.overflow(g);
@@ -1106,33 +1164,162 @@ function showTower(back, opt = {}) {
     const bag = g.stash.map(cell).join('') + Array.from({ length: Math.max(0, MAX_STASH - g.stash.length) }, () => '<span class="bag empty"></span>').join('');
     const it = selItem != null && g.stash[selItem] ? ITEM_BY_ID[g.stash[selItem]] : null;
     const plan = it ? S.forgePlan(g, selItem) : null;
-    const same = it ? g.stash.filter((x) => ITEM_BY_ID[x].rarity === it.rarity).length : 0;
-    const acts2 = it
-      ? `<button class="btn small amber fbtn" data-act="sell">Sell &#129689; +${S.sellValue(g, it.id)}</button><button class="btn small fbtn ${plan ? 'purple' : 'grey'}" data-act="forge" ${plan ? '' : 'disabled'} title="Melt three ${it.rarity} relics into one ${FORGE_NEXT[it.rarity]} relic">Forge ${Math.min(same, FORGE_COUNT)}/${FORGE_COUNT} &rarr; ${FORGE_NEXT[it.rarity]}</button>`
-      : '';
     const syn = S.synergyState(g);
     const synChips = Object.entries(syn.counts).sort((a, b) => b[1] - a[1]).map(([t, n]) => { const tier = syn.tiers[t] || 0; return `<span class="schip ${tier ? 't' + tier : ''}" title="${SYNERGIES[t].name}: ${tier ? synergyText(t, tier) : 'needs 2 cats'}">${SYNERGIES[t].icon} ${SYNERGIES[t].name} ${n}/${n >= 3 ? 3 : n >= 2 ? 3 : 2}</span>`; }).join('');
     const msg = over
       ? `<b class="warn">Backpack is over full by ${over}.</b> Sell, forge or equip relics to continue.`
-      : it ? `<b>${it.icon} ${it.name}</b>: ${it.desc}. Tap a cat to equip it, or sell / forge it.` : sel ? 'Tap another cat to swap, or a matching one to merge.' : 'Tap a cat to move it. Tap a backpack relic, then a cat, to equip it.';
+      : sel ? 'Tap another cat to swap, or a matching one to merge. Or drag cats around.' : 'Drag a relic onto a cat to equip it. Drag a cat onto another to swap or merge.';
+    const detail = it ? itemDetail(it.id) : msg;
     setScreen(`<h2>Arrange your tower <small class="klv">Team DPS &asymp; ${Math.round(teamDps(S.calcMods(g)))}</small></h2><div class="synrow">${synChips || '<small>Stack cats of the same kind for synergy bonuses!</small>'}</div>
-      <div class="tbody"><div class="tower"><div class="col"><h4>Tower (top to bottom)</h4>${tw.join('')}<button class="btn small red relbtn" data-act="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div><div class="col"><h4>Bench (rests, heals fast)</h4>${bn.join('')}
-        <h4>Backpack <span class="${over ? 'warn' : ''}">${g.stash.length}/${MAX_STASH}</span></h4><div class="bagrow">${bag}</div></div></div></div>
-      <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}"><span>${msg}</span></div>${acts2}<button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>Done</button></div>`, 'wide arr');
+      <div class="tbody"><div class="tower"><div class="col tw"><div class="zone" data-zone="tower"><h4>Tower <small>top to bottom</small></h4>${tw.join('')}</div><button class="btn small red relbtn" data-act="release" data-drop="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div><div class="col"><div class="zone bn" data-zone="bench"><h4>Bench <small>rests, heals fast</small></h4>${bn.join('')}</div>
+        <div class="packz" data-drop="bag"><h4>Backpack <span class="${over ? 'warn' : ''}">${g.stash.length}/${MAX_STASH}</span></h4><div class="bagrow">${bag}</div></div></div></div></div>
+      <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}" aria-live="polite">${detail}</div><button class="btn small amber fbtn zbtn" data-act="sell" data-drop="sell" ${it ? '' : 'disabled'}>${sellLabel(selItem)}</button><button class="btn small fbtn zbtn ${plan ? 'purple' : 'grey'}" data-act="forge" data-drop="forge" ${plan ? '' : 'disabled'} title="Melt three relics of one rarity into one of the next">${forgeLabel(selItem)}</button><button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>Done</button></div>`, 'wide arr');
+    screenEl.firstElementChild.dataset.msg = msg;
+    bindTower(screenEl.firstElementChild);
     if (selItem != null) coach('c6', 'Now tap a cat to equip it. The green numbers show how much stronger that cat gets!', 680, 352, 'up');
     else coach('c4', 'Step 3: tap a cat, then another to swap. Two equal cats merge!', 730, 232, 'down', { target: '.slot.has', wait: true, above: true });
+    if (pend) { const p = pend; pend = null; celebrate(p); }
   };
+  // a bounce on what just changed, and a sparkle for a legendary or mythic relic (reduced motion: a still glow only)
+  const celebrate = (p) => {
+    const el = screenEl.querySelector(p.q);
+    if (!el) return;
+    const m = motion(), cls = m ? 'bump' : 'glow';
+    el.classList.add(cls); setTimeout(() => el.classList.remove(cls), 700);
+    if (m && (p.rar === 'legendary' || p.rar === 'mythic')) {
+      const box = document.createElement('span'); box.className = 'sparkle r-' + p.rar;
+      box.innerHTML = Array.from({ length: 12 }, (_, i) => `<i style="--a:${i * 30 + 8}deg;--d:${26 + (i * 13) % 22}px;--t:${(i % 4) * 0.04}s"></i>`).join('');
+      el.appendChild(box); setTimeout(() => box.remove(), 900);
+    }
+  };
+  const setDetail = (html) => { const d = screenEl.querySelector('.tfoot .detail.slim'); if (d) d.innerHTML = html; };
+  const zones = (idx, enable) => {   // Sell and Forge show what they would do with the relic in hand, and light up as drop zones
+    const id = idx != null && enable ? g.stash[idx] : null, plan = id ? S.forgePlan(g, idx) : null;
+    const s = screenEl.querySelector('[data-act="sell"]'), f = screenEl.querySelector('[data-act="forge"]');
+    if (s) { s.innerHTML = sellLabel(id ? idx : null); s.disabled = !id; }
+    if (f) { f.innerHTML = forgeLabel(id ? idx : null); f.disabled = !plan; f.classList.toggle('purple', !!plan); f.classList.toggle('grey', !plan); }
+  };
+  const equipTo = (idx, uid) => {
+    const cat = S.findCat(g, uid), id = g.stash[idx];
+    if (!cat || !id) return false;
+    if (!S.equipItem(g, idx, uid)) return false;
+    sfx.play('equip'); buzz('ui'); toast(`${CAT_BY_ID[cat.id].name} equipped!`); puff(S.TOWER_X, 330, 8, '#ffd23f', 120, 0.5);
+    if (ITEM_BY_ID[id].rarity === 'legendary' || ITEM_BY_ID[id].rarity === 'mythic') sfx.play('upgrade', 0.5);
+    pend = { q: `.slot[data-uid="${uid}"]`, rar: ITEM_BY_ID[id].rarity };
+    return true;
+  };
+  // what is under the pointer: a cat row, an empty spot, a zone, or one of the drop buttons
+  const hitOf = (el) => {
+    if (!el || !el.closest) return null;
+    const row = el.closest('.slot');
+    if (row && row.dataset.zone) return row.classList.contains('has') ? { k: 'cat', uid: +row.dataset.uid, zone: row.dataset.zone, el: row } : { k: 'empty', zone: row.dataset.zone, el: row };
+    const dz = el.closest('[data-drop]');
+    if (dz) return { k: dz.dataset.drop, el: dz };
+    const z = el.closest('.zone');
+    return z ? { k: 'zone', zone: z.dataset.zone, el: z } : null;
+  };
+  const catMoveOk = (uid, zone) => {
+    const c = S.findCat(g, uid), fromTower = g.cats.includes(c);
+    return !!c && (zone === 'tower') !== fromTower && !(fromTower && g.cats.length === 1) && (zone === 'tower' ? g.cats.length < S.stackMax(g) : g.bench.length < S.benchMax(g));
+  };
+  const validDrop = (src, t) => {
+    if (!t) return false;
+    const act = dropAction(src, { ...t, self: t.k === 'cat' && t.uid === src.uid });
+    if (act === 'forge') return !!S.forgePlan(g, src.i);
+    if (act === 'catMove') return catMoveOk(src.uid, t.zone);
+    if (act === 'release') return g.cats.length + g.bench.length > 1;
+    if (act === 'unequip') return g.stash.length < MAX_STASH;
+    return !!act;
+  };
+  function bindTower(root) {
+    bindDrag(root, {
+      pick: (e) => {
+        const w = e.target.closest('.islot.full'), b = e.target.closest('.bag:not(.empty)'), r = e.target.closest('.slot.has');
+        if (w) return { k: 'worn', uid: +w.dataset.uid, i: +w.dataset.i, el: w };
+        if (b) return { k: 'bag', i: +b.dataset.i, el: b };
+        if (r) return { k: 'cat', uid: +r.dataset.uid, el: r };
+        return null;
+      },
+      hit: (el) => hitOf(el),
+      ghost: (s) => {
+        if (s.k === 'cat') { const c = S.findCat(g, s.uid); return `<span class="gc"><img src="${thumbURL(c.id)}" alt=""><b>${CAT_BY_ID[c.id].name}</b></span>`; }
+        const id = s.k === 'bag' ? g.stash[s.i] : S.findCat(g, s.uid).items[s.i];
+        return `<span class="gr r-${ITEM_BY_ID[id].rarity}">${ITEM_BY_ID[id].icon}</span>`;
+      },
+      start: (s) => {
+        sfx.play('ui'); buzz('ui');
+        root.classList.add('dg-' + (s.k === 'cat' ? 'cat' : s.k === 'bag' ? 'relic' : 'worn'));
+        s.el.classList.add('lifted');
+        const id = s.k === 'bag' ? g.stash[s.i] : s.k === 'worn' ? S.findCat(g, s.uid).items[s.i] : null;
+        if (s.k === 'bag') { s.prev = selItem; selItem = s.i; sel = null; zones(s.i, true); }
+        else zones(null, false);
+        s.defHtml = root.querySelector('.tfoot .detail.slim').innerHTML;
+        if (id) setDetail(itemDetail(id));
+      },
+      over: (t, prev, s) => {
+        if (prev && prev.el) { prev.el.classList.remove('over', 'badt'); const pv = prev.el.querySelector && prev.el.querySelector('.pv'); if (pv && prev.k === 'cat') { pv.textContent = ''; pv.className = 'pv'; } }
+        if (!t || !t.el) return;
+        const ok = validDrop(s, t);
+        t.el.classList.add(ok ? 'over' : 'badt');
+        if (ok) sfx.play('hover');
+        if (t.k === 'cat' && s.k !== 'cat') {
+          const id = s.k === 'bag' ? g.stash[s.i] : S.findCat(g, s.uid).items[s.i], c = S.findCat(g, t.uid), pv = t.el.querySelector('.pv');
+          if (c && pv && !(s.k === 'worn' && s.uid === t.uid)) { const gc = gainChip(c, id); pv.className = 'pv ' + gc.cls; pv.innerHTML = gc.html; }
+        } else if (t.k === 'cat' && s.k === 'cat' && t.uid !== s.uid) {
+          const a = S.findCat(g, s.uid), b = S.findCat(g, t.uid), pv = t.el.querySelector('.pv');
+          if (a && b && pv) { const mg = a.id === b.id && a.lvl === b.lvl && a.lvl < 3; pv.className = 'pv up'; pv.textContent = mg ? `MERGE to Lv ${a.lvl + 1}!` : 'Swap places'; }
+        }
+      },
+      cancel: () => {},
+      end: (s, t) => {
+        if (s.k === 'bag') selItem = s.prev;
+        const act = validDrop(s, t) ? dropAction(s, { ...t, self: t.k === 'cat' && t.uid === s.uid }) : null;
+        if (!act) { if (t && t.k !== 'zone') { sfx.play('nope'); } draw(); return; }
+        const prevSyn = S.synergyState(g);
+        if (act === 'equip') { equipTo(s.i, t.uid); selItem = null; }
+        else if (act === 'moveItem') {
+          const id = S.findCat(g, s.uid).items[s.i];
+          if (S.moveItem(g, s.uid, s.i, t.uid)) { sfx.play('equip'); buzz('ui'); toast(`${CAT_BY_ID[S.findCat(g, t.uid).id].name} got it`); pend = { q: `.slot[data-uid="${t.uid}"]`, rar: ITEM_BY_ID[id].rarity }; }
+        } else if (act === 'unequip') {
+          const id = S.findCat(g, s.uid).items[s.i];
+          if (S.unequipItem(g, s.uid, s.i)) { sfx.play('pop'); selItem = null; pend = { q: `.bag[data-i="${g.stash.length - 1}"]`, rar: ITEM_BY_ID[id].rarity }; }
+        } else if (act === 'sell') { selItem = s.i; acts.sell(); return; }
+        else if (act === 'forge') { selItem = s.i; acts.forge(); return; }
+        else if (act === 'catSwap') {
+          const a = S.findCat(g, s.uid), b = S.findCat(g, t.uid);
+          if (a.id === b.id && a.lvl === b.lvl && a.lvl < 3) { S.mergeCats(g, a.uid, b.uid); sfx.play('merge'); sfx.play('upgrade', 0.5); buzz('merge'); mergeFlash(S.TOWER_X, 330, a.lvl >= 3); toast(`Merged! ${CAT_BY_ID[a.id].name} is Lv ${a.lvl}`); pend = { q: `.slot[data-uid="${a.uid}"]`, rar: 'epic' }; }
+          else { S.swapCats(g, a.uid, b.uid); sfx.play('pop'); pend = { q: `.slot[data-uid="${a.uid}"]`, rar: 'common' }; }
+          sel = null;
+        } else if (act === 'catMove') { if (S.moveCat(g, s.uid, t.zone)) { sfx.play('pop'); pend = { q: `.slot[data-uid="${s.uid}"]`, rar: 'common' }; } sel = null; }
+        else if (act === 'release') { sel = s.uid; rel = true; }
+        notifySyn(prevSyn);
+        draw();
+      },
+    });
+    // desktop: hovering a relic shows its details without a click
+    root.addEventListener('pointerover', (e) => {
+      if (e.pointerType !== 'mouse' || root.classList.contains('dg-relic') || root.classList.contains('dg-worn') || root.classList.contains('dg-cat')) return;
+      const w = e.target.closest('.islot.full'), b = e.target.closest('.bag:not(.empty)');
+      const id = w ? S.findCat(g, +w.dataset.uid).items[+w.dataset.i] : b ? g.stash[+b.dataset.i] : null;
+      if (id) setDetail(itemDetail(id));
+    });
+    root.addEventListener('pointerout', (e) => {
+      if (e.pointerType !== 'mouse' || !e.target.closest('.islot.full, .bag')) return;
+      const it = selItem != null && g.stash[selItem] ? itemDetail(g.stash[selItem]) : null;
+      if (it) setDetail(it); else if (root.dataset.msg != null) setDetail(root.dataset.msg);
+    });
+  }
   draw();
   acts = {
     done: () => { if (S.overflow(g) > 0) { toast('Sell, forge or equip relics first'); return; } back(); },
-    sell: () => { const v = S.sellItem(g, selItem); if (v) { sfx.play('coin'); toast(`Sold for +${v} coins`); } selItem = null; draw(); },
+    sell: () => { const v = S.sellItem(g, selItem); if (v) { sfx.play('coin'); toast(`Sold for +${v} coins`); pend = { q: '[data-act="sell"]', rar: 'common' }; } selItem = null; draw(); },
     forge: () => {
       const id = S.forgeItems(g, selItem);
-      if (!id) return;
+      if (!id) { sfx.play('nope'); toast('Forging needs three relics of one rarity'); draw(); return; }
       sfx.play('merge'); toast(`Forged ${ITEM_BY_ID[id].name} (${ITEM_BY_ID[id].rarity})!`); puff(S.TOWER_X, 330, 14, '#c88aff', 160, 0.6);
-      selItem = g.stash.length - 1; draw();
+      selItem = g.stash.length - 1; pend = { q: `.bag[data-i="${selItem}"]`, rar: ITEM_BY_ID[id].rarity }; draw();
     },
-    bag: (d) => { selItem = selItem === +d.i ? null : +d.i; sel = null; draw(); },
+    bag: (d) => { selItem = selItem === +d.i ? null : +d.i; sel = null; sfx.play('pop'); draw(); },
     unequip: (d) => { if (S.unequipItem(g, +d.uid, +d.i)) { sfx.play('equip'); draw(); } else toast('Backpack is full: sell something first'); },
     release: () => {
       if (!sel) return;
@@ -1145,7 +1332,7 @@ function showTower(back, opt = {}) {
       const zone = d.zone, i = +d.i, list = zone === 'tower' ? g.cats : g.bench, cat = list[i];
       const prevSyn = S.synergyState(g);
       if (selItem != null && cat) {
-        if (S.equipItem(g, selItem, cat.uid)) { sfx.play('equip'); toast(`${CAT_BY_ID[cat.id].name} equipped!`); puff(S.TOWER_X, 330, 8, '#ffd23f', 120, 0.5); }
+        equipTo(selItem, cat.uid);
         selItem = null; draw(); return;
       }
       if (!cat) {
@@ -2573,7 +2760,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+window.stackingCats = { get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
 showTitle();
 requestAnimationFrame(frame);
 void ENEMY_TYPES;

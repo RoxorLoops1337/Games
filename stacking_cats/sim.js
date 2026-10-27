@@ -353,6 +353,17 @@ export function unequipItem(g, catUid, idx) {
   refreshHp(g, before);
   return true;
 }
+// move a worn relic from one cat to another (drag on the arrange screen); a full target hands its oldest relic back, so it never needs backpack room
+export function moveItem(g, fromUid, idx, toUid) {
+  const a = findCat(g, fromUid), b = findCat(g, toUid), id = a && a.items[idx];
+  if (!a || !b || a === b || !id) return false;
+  const before = snapshotMax(g);
+  a.items.splice(idx, 1);
+  if (b.items.length >= itemSlots(b.lvl)) a.items.push(b.items.shift());
+  b.items.push(id);
+  refreshHp(g, before);
+  return true;
+}
 export function useReroll(g) { if (g.rerolls <= 0) return false; g.rerolls--; return true; }
 
 // where each team bonus comes from, for the stats panel
