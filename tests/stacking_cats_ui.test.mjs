@@ -1118,3 +1118,14 @@ t('polish: banner ribbon variants, trophy toast medal, pause plaque, reduced mot
   assert.ok(/\.screen h2\.paused\{/.test(html) && /max-width:700px\)\{\.screen \.row \.btn\.grey\{min-height:6\d/.test(html), 'pause plaque and tall phone buttons');
   assert.ok(!html.includes('\u2014'), 'no em dashes in index.html');
 });
+
+t('arrange and event polish: grip handle, strong selection, rarity framed event cards, merge flash respects reduced motion', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8'), js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/\.screen\.arr \.slot\.has::before\{content:'\\22EE/.test(html), 'drag grip on cat rows');
+  assert.ok(/\.screen\.arr \.slot\.has\.sel\{[^}]*outline:3px solid #fff/.test(html), 'selected cat is clearly highlighted');
+  assert.ok(/body\.touch \.screen\.arr \.btn\.small\{min-height:36px\}/.test(html), 'arrange buttons reach 35px on phone');
+  assert.ok(/\.card\.ev:has\(\.rar\.epic\)\{border-color:#b83ad0\}/.test(html) && /\.card\.ev \.evp\{[^}]*display:flex/.test(html), 'event card rarity frame and coin price pill');
+  assert.ok(/function mergeFlash\([^)]*\)[\s\S]{0,500}save\.opt\.motion[\s\S]{0,200}u2605/.test(js), 'star burst gated by reduced motion');
+  assert.ok(/case 'merge': \{[\s\S]{0,400}mergeFlash\(p\.x, p\.y, max\)/.test(js), 'merge event flashes');
+  assert.ok(!html.includes('\u2014') && !js.includes('\u2014'), 'no em dashes');
+});
