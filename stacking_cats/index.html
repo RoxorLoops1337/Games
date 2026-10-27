@@ -1015,6 +1015,30 @@ body .screen.arr .tfoot .zbtn,body .screen.arr .tfoot .btn.big2.btn{min-height:6
 body .screen.arr .relbtn.btn.small{min-height:44px;padding:0 14px}
 }
 /* ARRANGE END */
+/* AUDIT START */
+/* title: the logo and the button rows must fit the 540px stage, and wide badge buttons must not outgrow their box */
+.screen.tpad .logo{font-size:64px;padding-top:6px}
+.screen.tpad .logo span{font-size:54px;padding-bottom:.1em}
+.screen.tpad .tag{margin:4px 0 8px}
+.screen.tpad .btn{padding-left:20px;padding-right:20px;max-width:100%}
+.screen.tpad .btn .badge{white-space:nowrap}
+/* dex tiles: one line each, never overlapping */
+.tile b,.tile small{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
+/* contrast: white text on these chips needs a darker chip */
+.card .ribbon,.rb u{background:#d63a5c}
+.k-perm{background:#2a8a52}.k-temp{background:#c0601c}.k-instant{background:#a8347f}
+.card.item.r-legendary .rar,.rar.legendary{background:linear-gradient(#e89400,#b85c00);text-shadow:0 1px 0 rgba(0,0,0,.5)}
+.card.item.r-mythic .rar,.rar.mythic{background:linear-gradient(90deg,#d62a74,#6a3ad8);text-shadow:0 1px 0 rgba(0,0,0,.5)}
+.card.item .impact{color:#4a3a60}
+/* sold stamp: a dark plaque so the word reads on any card */
+.card.ev .evsold{inset:auto 10px;top:50%;height:40px;margin-top:-20px;background:rgba(39,28,51,.9);border:2px solid #fff;border-radius:10px;font-size:26px}
+/* toasts over a wave banner: keep them clear of the title text */
+#toasts{max-width:420px}
+.toast{max-width:420px;overflow-wrap:anywhere}
+/* press and hover polish */
+.btn:not([disabled]):hover{filter:brightness(1.06)}
+.card[data-act]:active{transform:scale(.98)}
+/* AUDIT END */
 </style>
 </head>
 <body>

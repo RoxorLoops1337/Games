@@ -1191,3 +1191,15 @@ t('arrange drag: dropAction picks the right move and moveItem swaps worn relics 
   assert.equal(g.stash.length, len, 'the backpack is untouched');
   assert.ok(!S.moveItem(g, a.uid, 0, a.uid) && !S.moveItem(g, a.uid, 5, b.uid));
 });
+
+t('audit block: opaque chips behind white text, a title that fits, no em dash in the markup', () => {
+  const html = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  const a = html.indexOf('/* AUDIT START */'), b = html.indexOf('/* AUDIT END */');
+  assert.ok(a > 0 && b > a, 'the audit CSS block exists');
+  const blk = html.slice(a, b);
+  assert.ok(/\.screen\.tpad \.logo\{font-size:64px/.test(blk), 'the title logo is compact enough for the 540px stage');
+  assert.ok(/\.k-perm\{background:#2a8a52\}/.test(blk), 'kind chips are dark enough for white text');
+  assert.ok(/\.card\.ev \.evsold\{[^}]*rgba\(39,28,51,\.9\)/.test(blk), 'the sold stamp has a dark plaque');
+  assert.ok(/\.tile b,\.tile small\{[^}]*text-overflow:ellipsis/.test(blk), 'dex tile labels stay on one line');
+  assert.ok(!html.includes(String.fromCharCode(0x2014)), 'no em dash in index.html');
+});
