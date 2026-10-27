@@ -549,6 +549,7 @@ function dexDetail(id, unlocked) {
 function showRelics(back, sel0) {
   let sel = sel0 || null;
   const draw = () => {
+    const oldTop = (screenEl.querySelector('.relbook') || {}).scrollTop || 0;   // keep the scroll position when a tile is picked
     const pr = relicProgress(save.relics);
     const rows = RARITIES.slice().reverse().map((r) => {
       const tiles = ITEMS.filter((it) => it.rarity === r).map((it) => { const f = !!save.relics[it.id]; return `<button class="rtile r-${r} ${f ? '' : 'locked'} ${sel === it.id ? 'sel' : ''}" data-act="rtile" data-id="${it.id}" aria-label="${f ? `${it.name}, ${r}` : `Unknown ${r} relic`}" title="${f ? it.name : '???'}"><span class="ic">${it.icon}</span></button>`; }).join('');
@@ -559,6 +560,7 @@ function showRelics(back, sel0) {
       : save.relics[it.id] ? `<b>${it.icon} ${it.name}</b> <span class="rar ${it.rarity}">${it.rarity}</span><br>${it.desc}.${RELIC_SETS.filter((x) => x.ids.includes(it.id)).map((x) => `<br><small>Set: ${x.name}. Carry ${SET_NEED} of its relics and ${x.desc}, ${SET_DOUBLE} double it.</small>`).join('')}`
         : `<b>A ${it.rarity} relic you have not found yet.</b><br>Relics come out of lootboxes, turn up in shops and deals, and three of a kind forge into the next tier.`;
     setScreen(`<h2>Relic Book <small class="klv">${pr.got}/${pr.total} found</small></h2><div class="relbook">${rows}</div><div class="detail dexd relde">${detail}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
+    const rb = screenEl.querySelector('.relbook'); if (rb && oldTop) rb.scrollTop = oldTop;
   };
   draw();
   acts = { back, rtile: (d) => { sel = d.id; draw(); sfx.play('hover'); } };
