@@ -322,7 +322,7 @@ export class Sfx {
   play(name, pitch = 1) {
     const now = performance.now();
     const gap = { hit: 45, swipe: 60, shoot: 70, pop: 40, flame: 120, zap: 80, boom: 80, coin: 40, hover: 60, ui: 50, back: 80, pip: 140, merge: 120, waveclear: 500, nestdown: 500 }[name] || 0;
-    if (gap && now - (this.last[name] || 0) < gap) return;
+    if (gap && now - (this.last[name] ?? -Infinity) < gap) return;
     this.last[name] = now;
     if (DUCK[name]) this.duckMusic(DUCK[name][0], DUCK[name][1]);
     switch (name) {
