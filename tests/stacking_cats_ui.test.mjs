@@ -1137,3 +1137,11 @@ t('the sticky game over button footer is soft: a light fade and edges that fade 
   assert.ok(/position:sticky/.test(m[0]) && /rgba\(24,14,48,\.5\)/.test(m[0]) && /mask-image/.test(m[0]), 'sticky, light fade, faded edges');
   assert.ok(!/rgba\(24,14,48,\.92\)/.test(m[0]), 'the old heavy band is gone');
 });
+
+t('epic, legendary and mythic relic cards have a solid colour (the grain rule once left them see-through, rays and scene showed through the text)', () => {
+  const html = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  for (const r of ['epic', 'legendary', 'mythic']) {
+    const re = new RegExp('\\.card\\.item\\.r-' + r + '\\{[^}]*background-color:#[0-9a-f]{6}');
+    assert.ok(re.test(html), r + ' card has a solid background-colour');
+  }
+});
