@@ -1003,3 +1003,22 @@ t('phone in-fight HUD: tools, specials, Zoomies reach about 35 real px, text sta
   assert.ok(/window\.innerHeight <= 400 \? 16 : 13/.test(js) && /Math\.max\(f\.size, 20\)/.test(js), 'canvas HP names and damage numbers scale up on phones');
   for (const id of ['specials', 'zoom', 'meter', 'banner', 'waveBox']) assert.ok(html.includes(`id="${id}"`), id);
 });
+
+t('icons: the shared shaded finish is in place and every non-relic icon still draws visible pixels', async () => {
+  const src = readFileSync('stacking_cats/art_icons.js', 'utf8');
+  assert.ok(/rimLight/.test(src) && /createLinearGradient/.test(src) && /const DETAIL = \{/.test(src), 'finish present');
+  assert.ok(!src.includes(String.fromCharCode(0x2014)), 'no em dash in art_icons.js');
+  for (const k of ['🍗', '🍣', '🥛', '🍦', '🥤', '🔥', '🐟', '🧱', '⚙']) {
+    assert.ok(icons.iconCanvas(k), k + ' still has a drawing');
+  }
+});
+
+t('cutscene polish: jewelled king on a cheese throne, barred cages, depth haze, cached layers, motion respected', () => {
+  const it = readFileSync('stacking_cats/intro.js', 'utf8');
+  assert.ok(/function kingCourt/.test(it) && /cheese/.test(it) && /#3aa0ff/.test(it) && /glowEye/.test(it), 'king throne, jewels and glowing eyes');
+  assert.ok(/function layer\(/.test(it) && /function haze\(/.test(it) && /function rays\(/.test(it) && /function silhouette\(/.test(it), 'cached layers, haze, light shafts, rim lit silhouettes');
+  assert.ok(/t = R\.motion \? T : 0/.test(it), 'motes hold still when motion is reduced');
+  const R = { cat: () => ({ width: 240, height: 240 }), motion: false, bd: art.makeBackdrop(THEMES[0], 0) };
+  for (let tt = 0; tt <= storyMod.INTRO_LEN; tt += 0.5) introMod.drawIntro(fakeCtx(), tt, R);
+  for (let tt = 0; tt <= storyMod.EPILOGUE_LEN; tt += 0.5) introMod.drawEpilogue(fakeCtx(), tt, R);
+});

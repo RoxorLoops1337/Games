@@ -1,7 +1,7 @@
 // Hand-built icon set (no emoji, no image files): every item, snack, building, route and badge is drawn on a 64x64 board in
 // the same fine-line, cel-shaded style as the cats. `iconCanvas(key)` serves the canvas games and `installGlyphs(root)`
 // swaps any known emoji in the page for its drawn icon, so data files can keep using plain characters as ids.
-import { TAU, INK, mix, shade, lineOf, cel, ell, poly, star, line } from './art_util.js';
+import { TAU, INK, mix, shade, lineOf, cel, ell, poly, star, line, rimLight } from './art_util.js';
 import { RELIC_ICONS } from './art_relics.js';
 import { BOX_ICONS } from './art_boxes.js';
 
@@ -207,6 +207,48 @@ const D = {
   '★': (c) => { F(c, star(32, 33, 28, 12), '#ffd23a', 2.4); glint(c, 25, 24, 4.5); },
   '♥': (c) => { heart(c, 32, 30, 22, RED, 2.4); glint(c, 22, 22, 4.5); },
 };
+
+// ---- shared finish for the non-relic icons (relics and boxes carry their own): a small detail pass for the plainest icons,
+// then a soft top-to-bottom shade, a cool bounce at the foot and the same warm rim light the relics use. Pause, bars and the
+// fullscreen frame stay flat on purpose so they read as UI.
+const FLAT = new Set(['⏸', '❚', '⛶', '📊']);
+const DETAIL = {
+  '🍗': (c) => { curve(c, 'rgba(255,230,170,.8)', 2.2, (x) => { x.moveTo(36, 12); x.bezierCurveTo(46, 12, 52, 20, 52, 28); }); for (const [x, y] of [[30, 20], [40, 34], [26, 32], [44, 22]]) dot(c, x, y, 1.4, 'rgba(110,50,10,.5)'); curve(c, 'rgba(110,50,10,.45)', 1.4, (x) => { x.moveTo(24, 38); x.quadraticCurveTo(34, 44, 42, 40); }); },
+  '🍣': (c) => { for (const [x, y] of [[14, 42], [20, 47], [44, 47], [50, 42], [26, 50], [38, 50]]) F(c, ell(null, x, y, 2.6, 1.6, 0.4), '#fff', 0.8, { shade: false }); curve(c, '#ffe0c8', 1.4, (x) => { x.moveTo(14, 28); x.quadraticCurveTo(20, 22, 26, 26); x.moveTo(40, 26); x.quadraticCurveTo(48, 22, 52, 30); }); },
+  '🥛': (c) => { ln(c, [[22, 20], [25, 50]], 'rgba(255,255,255,.95)', 2.2); curve(c, '#bcd4f0', 1.6, (x) => { x.moveTo(19, 22); x.quadraticCurveTo(26, 25, 32, 22); x.quadraticCurveTo(38, 19, 45, 22); }); dot(c, 36, 40, 1.4, '#cfe0f8'); dot(c, 31, 46, 1, '#cfe0f8'); },
+  '🍦': (c) => { for (const [x, y, col] of [[24, 18, '#7ad0f0'], [38, 14, '#ffd23a'], [34, 24, '#7ad08a'], [28, 10, '#ff6f9f']]) ln(c, [[x, y], [x + 2, y + 2]], col, 1.8); curve(c, 'rgba(255,255,255,.8)', 1.6, (x) => { x.moveTo(20, 24); x.quadraticCurveTo(32, 30, 44, 24); }); },
+  '🥤': (c) => { F(c, P((p) => { p.rect(27, 28, 9, 9); }), 'rgba(255,255,255,.55)', 1.2, { shade: false }); for (const [x, y] of [[22, 44], [40, 50], [34, 44], [26, 52]]) dot(c, x, y, 1.6, 'rgba(255,255,255,.7)'); ln(c, [[18, 26], [22, 52]], 'rgba(255,255,255,.7)', 2); },
+  '🔥': (c) => { for (const [x, y] of [[46, 14], [14, 22], [50, 30]]) dot(c, x, y, 1.6, '#ffd23a'); },
+  '🐟': (c) => { for (const [x, y] of [[26, 26], [34, 26], [22, 34], [30, 34], [38, 34], [26, 42], [34, 42]]) curve(c, 'rgba(20,70,140,.45)', 1.2, (q) => { q.arc(x, y, 3.4, 0.3, Math.PI - 0.3); }); curve(c, 'rgba(20,70,140,.6)', 1.6, (q) => { q.moveTo(14, 24); q.quadraticCurveTo(11, 32, 14, 40); }); curve(c, 'rgba(255,255,255,.7)', 1.6, (q) => { q.moveTo(22, 20); q.quadraticCurveTo(34, 16, 44, 24); }); },
+  '🦴': (c) => { dot(c, 14, 36, 1, 'rgba(120,90,50,.5)'); dot(c, 48, 22, 1, 'rgba(120,90,50,.5)'); },
+  '🍙': (c) => { for (const [x, y] of [[28, 24], [36, 30], [24, 34], [40, 40], [30, 42]]) F(c, ell(null, x, y, 2.4, 1.4, 0.5), '#fff', 0.7, { shade: false }); },
+  '🧱': (c) => { for (const [x1, y1, x2] of [[8, 14, 26], [34, 27, 52], [10, 40, 30]]) ln(c, [[x1, y1], [x2, y1]], 'rgba(255,200,150,.7)', 1.4); for (const [x, y] of [[44, 18], [20, 32], [48, 44]]) dot(c, x, y, 1, 'rgba(90,30,10,.5)'); },
+  '🪨': (c) => { curve(c, 'rgba(40,40,70,.5)', 1.4, (x) => { x.moveTo(20, 40); x.lineTo(26, 34); x.lineTo(24, 28); }); dot(c, 46, 44, 2.2, '#6aa860'); dot(c, 42, 46, 1.6, '#8cc878'); },
+  '⚡': (c) => { ln(c, [[34, 8], [20, 30]], 'rgba(255,255,255,.85)', 2); },
+  '☀': (c) => { curve(c, 'rgba(255,240,160,.9)', 2, (x) => { x.arc(32, 32, 13, 3.6, 4.9); }); dot(c, 40, 38, 5, 'rgba(230,140,20,.25)'); },
+  '🌙': (c) => { for (const [x, y, r] of [[22, 34, 3], [26, 46, 2.2], [20, 24, 1.8]]) dot(c, x, y, r, 'rgba(160,120,40,.35)'); },
+  '⚙': (c) => { for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU; dot(c, 32 + Math.cos(a) * 13, 32 + Math.sin(a) * 13, 1.6, 'rgba(60,70,100,.55)'); } dot(c, 32, 32, 2, '#c8b8ff'); },
+  '🔒': (c) => { ln(c, [[18, 34], [18, 52]], 'rgba(255,255,255,.55)', 2); ln(c, [[22, 54], [42, 54]], 'rgba(120,70,10,.4)', 1.4); },
+  '🕊': (c) => { for (const [x, y] of [[22, 40], [30, 42], [38, 38]]) curve(c, 'rgba(120,140,180,.6)', 1.4, (q) => { q.moveTo(x - 4, y); q.quadraticCurveTo(x, y + 4, x + 4, y - 1); }); },
+  '🌿': (c) => { for (const [x, y] of [[43, 42], [21, 32], [43, 22]]) ln(c, [[x - 4, y + 2], [x + 3, y - 2]], 'rgba(220,255,200,.7)', 1.4); },
+  '💨': (c) => { dot(c, 52, 12, 1.8, '#fff'); dot(c, 8, 54, 1.4, '#fff'); },
+  '🐀': (c) => { for (const x of [-1, 1]) ln(c, [[32 + x * 6, 44], [32 + x * 20, 41]], 'rgba(255,255,255,.8)', 1.2); },
+};
+for (const k of Object.keys(D)) {
+  if (FLAT.has(k)) continue;
+  const base = D[k], extra = DETAIL[k];
+  D[k] = (ctx) => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+    const o = cv.getContext('2d'); o.scale(2, 2); o.lineJoin = 'round'; o.lineCap = 'round';
+    base(o); if (extra) extra(o);
+    o.save(); o.setTransform(1, 0, 0, 1, 0, 0); o.globalCompositeOperation = 'source-atop';
+    const g = o.createLinearGradient(0, 0, 0, 128);
+    g.addColorStop(0, 'rgba(255,248,225,.16)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(40,30,90,.2)');
+    o.fillStyle = g; o.fillRect(0, 0, 128, 128); o.restore();
+    rimLight(cv, 2, '#fff6d8', 0.38);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(cv, 0, 0); ctx.restore();
+  };
+}
 
 Object.assign(D, RELIC_ICONS, BOX_ICONS);   // the relics of the second loot update live in art_relics.js (merged before ICON_KEYS is read)
 // a few spare pictures other code asks for by name

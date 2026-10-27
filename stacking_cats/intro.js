@@ -42,11 +42,91 @@ function nest(ctx, kind, x, y, s = 1) {
   ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.drawImage(sp.c, -sp.ax, -sp.ay, sp.w, sp.h); ctx.restore();
 }
 function tint(ctx, color, a) { if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a); ctx.fillStyle = color; ctx.fillRect(-40, -40, W + 80, H + 80); ctx.restore(); }
+// static layers are cached on a small canvas (browser only; the headless tests fall back to drawing directly)
+const layers = new Map();
+function layer(key, w, h, paint) {
+  if (typeof document === 'undefined') return null;
+  let c = layers.get(key);
+  if (!c) { c = document.createElement('canvas'); c.width = w; c.height = h; paint(c.getContext('2d')); layers.set(key, c); }
+  return c;
+}
 function vignette(ctx, a = 0.55) {
+  const k = Math.round(a * 20), c = layer('vig' + k, W, H, (x) => {
+    const g = x.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, 620);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(8,2,20,${k / 20})`); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  });
+  if (c) { ctx.drawImage(c, 0, 0); return; }
   const g = ctx.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, 620);
   g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(8,2,20,${a})`);
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 }
+// drifting dust, pollen or embers: deterministic, a still scatter when motion is reduced
+function motes(ctx, R, T, o = {}) {
+  const n = o.n || 26, col = o.color || '255,240,200', rnd = mulberry(o.seed || 21), t = R.motion ? T : 0;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < n; i++) {
+    const bx = rnd() * W, sp = 8 + rnd() * 22, ph = rnd() * 6, r = 1 + rnd() * 2.2;
+    const x = bx + Math.sin(t * 0.7 + ph) * 18, y = (((rnd() * H - t * sp * (o.dir || 1)) % H) + H) % H;
+    ctx.fillStyle = `rgba(${col},${(0.25 + 0.4 * Math.abs(Math.sin(t * 1.3 + ph))) * (o.a || 1)})`; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+// soft slanted light shafts from the top
+function rays(ctx, T, col, a, x0 = 480, spread = 0.3, n = 5) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < n; k++) {
+    const ang = (k - (n - 1) / 2) * spread * 0.5 + Math.sin(T * 0.5 + k) * 0.03; ctx.save(); ctx.translate(x0, -30); ctx.rotate(ang);
+    const g = ctx.createLinearGradient(0, 0, 0, 560); g.addColorStop(0, `rgba(${col},${a})`); g.addColorStop(1, `rgba(${col},0)`); ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); ctx.lineTo(60 + k * 4, 560); ctx.lineTo(-60 - k * 4, 560); ctx.fill(); ctx.restore();
+  }
+  ctx.restore();
+}
+// a band of low haze that sells depth
+function haze(ctx, y, h, col, a) { const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(0.55, `rgba(${col},${a})`); g.addColorStop(1, `rgba(${col},0)`); ctx.fillStyle = g; ctx.fillRect(0, y, W, h); }
+// dark foreground tufts with a rim of light along the top edge
+function silhouette(ctx, rim, seed = 4) {
+  const c = layer('sil' + rim + seed, W, 120, (x) => {
+    const rnd = mulberry(seed); x.fillStyle = '#10061c'; x.beginPath(); x.moveTo(0, 120);
+    for (let px = 0; px <= W; px += 12) x.lineTo(px, 80 + Math.sin(px * 0.013) * 6 - rnd() * 18 * (px % 36 === 0 ? 1 : 0.35));
+    x.lineTo(W, 120); x.closePath(); x.fill(); x.strokeStyle = rim; x.lineWidth = 1.6; x.globalAlpha = 0.7; x.stroke();
+  });
+  if (c) ctx.drawImage(c, 0, H - 120);
+}
+function glowEye(ctx, x, y, r, T, col = '255,60,70') {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r * 3); g.addColorStop(0, `rgba(255,230,200,${0.95})`); g.addColorStop(0.25, `rgba(${col},0.9)`); g.addColorStop(1, `rgba(${col},0)`);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 3 * (0.92 + 0.08 * Math.sin(T * 6)), 0, TAU); ctx.fill(); ctx.restore();
+}
+// King Squeakimus, drawn in sprite space (about 130 wide, feet at y 20): cheese throne, folded cape, jewelled crown, burning eyes
+function kingCourt(ctx, R, T, front) {
+  if (!front) {
+    // red menace glow behind the throne
+    const g = ctx.createRadialGradient(0, -50, 10, 0, -50, 110); g.addColorStop(0, 'rgba(255,50,70,.45)'); g.addColorStop(1, 'rgba(255,50,70,0)'); ctx.fillStyle = g; ctx.fillRect(-120, -170, 240, 240);
+    // throne back: a slab of cheese in a gold frame, holes in it, wedge finials
+    ctx.lineJoin = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = '#4a2a08';
+    const tb = ctx.createLinearGradient(0, -140, 0, 10); tb.addColorStop(0, '#b8841e'); tb.addColorStop(1, '#4a260a');
+    ctx.fillStyle = tb; ctx.beginPath(); ctx.moveTo(-56, 12); ctx.lineTo(-56, -90); ctx.quadraticCurveTo(-56, -120, 0, -124); ctx.quadraticCurveTo(56, -120, 56, -90); ctx.lineTo(56, 12); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(70,30,0,.45)'; for (const [x, y, r] of [[-38, -98, 8], [40, -84, 6], [-44, -60, 5], [42, -40, 9], [-34, -20, 6], [30, -108, 4]]) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.fillStyle = 'rgba(255,236,150,.5)'; ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.3, r * 0.35, 0, TAU); ctx.fill(); ctx.fillStyle = 'rgba(70,30,0,.45)'; }
+    ctx.strokeStyle = '#ffe070'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(-50, 8); ctx.lineTo(-50, -90); ctx.quadraticCurveTo(-50, -114, 0, -118); ctx.quadraticCurveTo(50, -114, 50, -90); ctx.lineTo(50, 8); ctx.stroke();
+    ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#4a2a08'; ctx.lineWidth = 2;
+    for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sx * 54, -84); ctx.lineTo(sx * 64, -122); ctx.lineTo(sx * 44, -100); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    // cape: wide, with deep folds and a gold hem
+    const cg = ctx.createLinearGradient(0, -60, 0, 14); cg.addColorStop(0, '#a01438'); cg.addColorStop(1, '#4a0818');
+    ctx.fillStyle = cg; ctx.strokeStyle = '#2a0410'; ctx.beginPath(); ctx.moveTo(-34, -52); ctx.lineTo(34, -52); ctx.lineTo(54, 8); ctx.quadraticCurveTo(30, 14, 18, 8); ctx.quadraticCurveTo(0, 16, -18, 8); ctx.quadraticCurveTo(-30, 14, -54, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(30,0,10,.6)'; ctx.lineWidth = 2.5; for (const x of [-30, -14, 4, 20, 36]) { ctx.beginPath(); ctx.moveTo(x * 0.5, -48); ctx.quadraticCurveTo(x * 0.9 + 4, -18, x * 1.35, 8); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(255,120,140,.4)'; ctx.lineWidth = 1.4; for (const x of [-22, -6, 12, 28]) { ctx.beginPath(); ctx.moveTo(x * 0.5 + 2, -48); ctx.quadraticCurveTo(x * 0.9 + 6, -18, x * 1.35 + 2, 6); ctx.stroke(); }
+    ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-54, 8); ctx.quadraticCurveTo(-30, 14, -18, 8); ctx.quadraticCurveTo(0, 16, 18, 8); ctx.quadraticCurveTo(30, 14, 54, 8); ctx.stroke();
+    return;
+  }
+  // crown: gold band, five points with ball tips, three jewels
+  const cx = 0, cy = -86;
+  const gg = ctx.createLinearGradient(0, cy - 22, 0, cy); gg.addColorStop(0, '#fff0a0'); gg.addColorStop(0.5, '#ffd23f'); gg.addColorStop(1, '#b8801a');
+  ctx.fillStyle = gg; ctx.strokeStyle = '#2a1840'; ctx.lineWidth = 1.6; ctx.beginPath();
+  [[-16, 0], [-17, -20], [-9, -9], [-4, -24], [0, -10], [4, -24], [9, -9], [17, -20], [16, 0]].forEach(([x, y], i) => (i ? ctx.lineTo(cx + x, cy + y) : ctx.moveTo(cx + x, cy + y))); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff6c0'; for (const [x, y] of [[-17, -20], [-4, -24], [4, -24], [17, -20]]) { ctx.beginPath(); ctx.arc(cx + x, cy + y, 2.2, 0, TAU); ctx.fill(); ctx.stroke(); }
+  for (const [x, y, c] of [[-9, -4, '#3aa0ff'], [0, -4, '#ff2a50'], [9, -4, '#3ae080']]) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(cx + x, cy + y, 2.8, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.arc(cx + x - 0.9, cy + y - 1, 0.9, 0, TAU); ctx.fill(); }
+  glowEye(ctx, -20, -65, 5, T);
+}
+function bars(ctx, k) { const h = 46 * k; ctx.fillStyle = '#05010c'; ctx.fillRect(0, 0, W, h); ctx.fillRect(0, H - h, W, h); const g = ctx.createLinearGradient(0, h, 0, h + 16); g.addColorStop(0, 'rgba(5,1,12,.55)'); g.addColorStop(1, 'rgba(5,1,12,0)'); ctx.fillStyle = g; ctx.fillRect(0, h, W, 16); const g2 = ctx.createLinearGradient(0, H - h - 16, 0, H - h); g2.addColorStop(0, 'rgba(5,1,12,0)'); g2.addColorStop(1, 'rgba(5,1,12,.55)'); ctx.fillStyle = g2; ctx.fillRect(0, H - h - 16, W, 16); }
 // thin wedges fanning out from a point: the classic anime "focus" lines
 function speedLines(ctx, cx, cy, T, o = {}) {
   const n = o.n || 52, inner = o.inner || 170, a = o.alpha == null ? 0.55 : o.alpha, rnd = mulberry(Math.floor(T * (o.rate || 16)) * 977 + 11);
@@ -83,7 +163,6 @@ function pow(ctx, word, x, y, a, rot = -0.12) {
   ctx.save(); ctx.globalAlpha = clamp(a * 2); const s = 0.6 + 0.6 * ease(1 - a);
   ctx.translate(x, y); ctx.scale(s, s); burst(ctx, 0, 0, 62, '#fff070', rot); label(ctx, word, 0, 2, 38, '#ff4a3a', { rot }); ctx.restore();
 }
-function bars(ctx, k) { const h = 46 * k; ctx.fillStyle = '#05010c'; ctx.fillRect(0, 0, W, h); ctx.fillRect(0, H - h, W, h); }
 function caption(ctx, text, p) {
   const full = text, shown = typed(full, clamp(p / 0.62));
   if (!shown) return;
@@ -118,6 +197,9 @@ function peace(ctx, R, p, T) {
     ctx.save(); ctx.globalAlpha = Math.sin(h * Math.PI) * 0.9; ctx.fillStyle = '#ff7aa8'; ctx.font = `20px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('♥', x + Math.sin(h * 6) * 8, y - 100 - h * 46); ctx.restore();
   });
   drawFront(ctx, R.bd, T * 6);
+  haze(ctx, GROUND - 70, 110, '255,190,130', 0.16);
+  rays(ctx, T, '255,220,150', 0.1, 790, 0.35, 4);
+  motes(ctx, R, T, { n: 30, color: '255,230,150', a: 0.8, seed: 5 });
   ctx.restore();
   vignette(ctx, 0.4);
 }
@@ -162,6 +244,9 @@ function moonScene(ctx, R, p, T) {
     ctx.save(); ctx.strokeStyle = '#fffbe0'; ctx.lineWidth = 6; ctx.shadowColor = '#bfe0ff'; ctx.shadowBlur = 24; ctx.lineJoin = 'miter'; ctx.beginPath();
     [[700, -10], [668, 90], [696, 130], [640, 250], [668, 280], [616, 420]].forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); ctx.restore();
   }
+  haze(ctx, GROUND - 60, 120, '120,40,90', 0.22 * ease(seg(p, 0.2, 0.8)));
+  motes(ctx, R, T, { n: 18, color: '255,90,110', a: 0.6 * ease(seg(p, 0.3, 0.8)), seed: 8, dir: 1 });
+  silhouette(ctx, 'rgba(255,90,120,0.8)', 4);
   if (R.motion) tint(ctx, '#ffffff', (1 - seg(p, 0.5, 0.6)) * (p > 0.5 ? 0.8 : 0));
   ctx.restore();
   vignette(ctx, 0.7);
@@ -185,17 +270,20 @@ function horde(ctx, R, p, T) {
     nest(ctx, kind, x, GROUND + 70, 0.62 * k);
     if (seg(p, at, at + 0.2) < 1) { ctx.fillStyle = 'rgba(210,190,160,.5)'; for (let d = 0; d < 6; d++) { ctx.beginPath(); ctx.arc(x - 60 + d * 24, GROUND + 66 - ((T * 60 + d * 9) % 30), 7 + d % 3 * 3, 0, TAU); ctx.fill(); } }
   });
-  // the king
+  // the king, on his cheese throne, lit red from below
   const kk = ease(seg(p, 0.66, 0.84));
   if (kk > 0) {
     ctx.save(); ctx.translate(730, GROUND + 80 + (1 - kk) * 120); ctx.scale(2.9, 2.9);
-    ctx.fillStyle = '#7a0f2e'; ctx.beginPath(); ctx.moveTo(-26, -40); ctx.lineTo(30, -40); ctx.lineTo(42, 4); ctx.lineTo(-38, 4); ctx.closePath(); ctx.fill();
+    kingCourt(ctx, R, T, false);
     ctx.shadowColor = '#ff2040'; ctx.shadowBlur = 14; ctx.drawImage(enemySprite('brute', true).c, -65, -110, 130, 130); ctx.shadowBlur = 0;
-    ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#2a1840'; ctx.lineWidth = 1.5; ctx.beginPath(); [[-14, -86], [-14, -102], [-6, -94], [0, -106], [6, -94], [14, -102], [14, -86]].forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.fill(); ctx.stroke();
+    kingCourt(ctx, R, T, true);
     ctx.restore();
     label(ctx, 'KING SQUEAKIMUS', W / 2 + 40, 118, 54 * (0.8 + 0.2 * outBack(seg(p, 0.7, 0.8))), '#ffd23f', { rot: -0.04 });
   }
   streaks(ctx, T, -1, 0.3);
+  haze(ctx, GROUND - 40, 120, '120,20,50', 0.25);
+  motes(ctx, R, T, { n: 34, color: '255,120,60', a: 0.9, seed: 12 });
+  silhouette(ctx, 'rgba(255,70,90,0.7)', 9);
   ctx.restore();
   vignette(ctx, 0.75);
   if (R.motion) tint(ctx, '#ffffff', Math.max(0, 0.7 - Math.abs(p - 0.66) * 14));
@@ -222,20 +310,37 @@ function nap(ctx, R, p, T) {
   for (let i = 0; i < 6; i++) {
     const at = 0.6 + i * 0.06, k = seg(p, at, at + 0.07), drop = k < 1 ? outBack(k) : 1; if (k <= 0) continue;
     const x = 160 + i * 128, y = GROUND + 2 - (1 - drop) * 220;
+    // cast shadow on the ground, then the cat, then the dark cage interior, bars with a lit edge, a lock and a chain
+    ctx.fillStyle = 'rgba(8,2,20,.5)'; ctx.beginPath(); ctx.ellipse(x + 10, GROUND + 8, 58, 9, 0, 0, TAU); ctx.fill();
     cat(ctx, R, ids[i], x, y + 2, 0.6);
     ctx.save(); ctx.translate(x, y);
     ctx.fillStyle = 'rgba(20,8,40,.55)'; ctx.fillRect(-46, -86, 92, 92);
-    ctx.strokeStyle = '#9aa0b4'; ctx.lineWidth = 3.5;
-    for (let b = -3; b <= 3; b++) { ctx.beginPath(); ctx.moveTo(b * 13, -86); ctx.lineTo(b * 13, 6); ctx.stroke(); }
+    for (let b = -3; b <= 3; b++) {
+      ctx.strokeStyle = '#6a7088'; ctx.lineWidth = 4.2; ctx.beginPath(); ctx.moveTo(b * 13, -86); ctx.lineTo(b * 13, 6); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(b * 13 - 1.2, -86); ctx.lineTo(b * 13 - 1.2, 6); ctx.stroke();
+      ctx.strokeStyle = 'rgba(8,2,20,.55)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(b * 13 + 8, -80); ctx.lineTo(b * 13 + 8, 2); ctx.stroke();
+    }
+    ctx.fillStyle = '#4a4e64'; ctx.fillRect(-48, 2, 96, 8);
+    ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#4a2a08'; ctx.lineWidth = 1.5; ctx.fillRect(-7, -20, 14, 12); ctx.strokeRect(-7, -20, 14, 12);
+    ctx.beginPath(); ctx.arc(0, -20, 5, Math.PI, 0); ctx.stroke(); ctx.fillStyle = '#4a2a08'; ctx.fillRect(-1, -16, 2, 5);
+    ctx.strokeStyle = '#7a7e92'; ctx.lineWidth = 2.5; ctx.setLineDash([5, 3]); ctx.beginPath(); ctx.moveTo(0, -88); ctx.lineTo(0, -130); ctx.stroke(); ctx.setLineDash([]);
     ctx.strokeStyle = '#c8ccdc'; ctx.lineWidth = 5; ctx.strokeRect(-47, -88, 94, 96);
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-48, 6); ctx.lineTo(-48, -90); ctx.lineTo(48, -90); ctx.stroke();
     ctx.restore();
   }
+  haze(ctx, GROUND - 90, 130, '90,50,120', 0.2);
+  rays(ctx, T, '170,150,255', 0.07, 790, 0.4, 4);
+  motes(ctx, R, T, { n: 22, color: '190,170,255', a: 0.7, seed: 31 });
   ctx.restore();
   vignette(ctx, 0.75);
 }
 function heroes(ctx, R, p, T) {
   ctx.save();
   const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#120a3a'); bg.addColorStop(1, '#4a1a6a'); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  { const sg = ctx.createRadialGradient(W / 2, 330, 20, W / 2, 330, 520); sg.addColorStop(0, 'rgba(255,160,230,.35)'); sg.addColorStop(1, 'rgba(255,160,230,0)'); ctx.fillStyle = sg; ctx.fillRect(0, 0, W, H); }
+  rays(ctx, T, '255,190,255', 0.1, W / 2, 0.5, 6);
+  ctx.fillStyle = 'rgba(10,2,30,.55)'; ctx.fillRect(0, 440, W, 100);
+  ctx.strokeStyle = 'rgba(255,170,240,.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 441); ctx.lineTo(W, 441); ctx.stroke();
   const eyeP = seg(p, 0, 0.3);
   if (eyeP > 0 && eyeP < 1) {
     // close up: the brave one's eyes, in a letterboxed strip
@@ -258,6 +363,7 @@ function heroes(ctx, R, p, T) {
   HEROES.forEach((h, i) => {
     const k = seg(p, ats[i], ats[i] + 0.1); if (k <= 0) return;
     const sc = 2.1 * (0.8 + 0.2 * outBack(k)), y = 462 + (1 - ease(k)) * 140, x = xs[i];
+    ctx.fillStyle = 'rgba(5,0,15,.45)'; ctx.beginPath(); ctx.ellipse(x, 458, 90 * sc / 2.1, 14, 0, 0, TAU); ctx.fill();
     ctx.save(); ctx.shadowColor = h.color; ctx.shadowBlur = 26 * (R.motion ? 1 : 0.5);
     cat(ctx, R, h.id, x, y, sc);
     ctx.restore();
@@ -270,6 +376,7 @@ function heroes(ctx, R, p, T) {
     // slam flash
     if (R.motion) tint(ctx, '#ffffff', Math.max(0, 0.55 - seg(p, ats[i], ats[i] + 0.05) * 0.55) * (k > 0 ? 1 : 0));
   });
+  motes(ctx, R, T, { n: 26, color: '255,200,255', a: 0.8, seed: 44 });
   ctx.restore();
   vignette(ctx, 0.5);
 }
@@ -296,6 +403,8 @@ function charge(ctx, R, p, T) {
     ctx.save(); ctx.shadowColor = h.color; ctx.shadowBlur = 16; cat(ctx, R, h.id, x, y, 1.2, { rot: 0.1 }); ctx.restore();
   });
   streaks(ctx, T, -1, 0.5, 34);
+  rays(ctx, T, '255,220,150', 0.1, 480, 0.6, 5);
+  haze(ctx, GROUND - 50, 110, '255,190,120', 0.18);
   ctx.restore();
   // the finale: impact frame, then the title
   const imp = seg(p, 0.6, 0.66);
@@ -387,6 +496,8 @@ function party(ctx, R, p, T) {
     cat(ctx, R, id, x, GROUND - 10 + (i % 2) * 8 - hop, 1.05, { rot: Math.sin(T * 5 + i) * 0.06 });
     const h = (T * 0.6 + i * 0.19) % 1; ctx.save(); ctx.globalAlpha = Math.sin(h * Math.PI); ctx.fillStyle = '#ff7aa8'; ctx.font = `22px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('\u2665', x + Math.sin(h * 7 + i) * 10, GROUND - 90 - h * 80); ctx.restore();
   });
+  haze(ctx, GROUND - 60, 110, '255,200,140', 0.14);
+  motes(ctx, R, T, { n: 24, color: '255,240,170', a: 0.7, seed: 61 });
   // confetti
   const cr = mulberry(9);
   for (let i = 0; i < 46; i++) {
@@ -403,12 +514,19 @@ function dawn(ctx, R, p, T) {
   // the sun rises
   const sy = 330 - 210 * ease(seg(p, 0, 0.6));
   const g = ctx.createRadialGradient(700, sy, 10, 700, sy, 200); g.addColorStop(0, 'rgba(255,240,170,.9)'); g.addColorStop(1, 'rgba(255,240,170,0)'); ctx.fillStyle = g; ctx.fillRect(480, sy - 210, 480, 420);
+  // two far hills with a lit rim give the dawn depth
+  for (const [col, y0, amp, ph, rim] of [['rgba(70,50,110,.55)', 400, 26, 0.6, 'rgba(255,220,160,.5)'], ['rgba(40,24,70,.75)', 430, 18, 2.1, 'rgba(255,200,140,.6)']]) {
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, 470); for (let x = 0; x <= W; x += 20) ctx.lineTo(x, y0 + Math.sin(x * 0.006 + ph) * amp + Math.sin(x * 0.017 + ph) * amp * 0.4); ctx.lineTo(W, 470); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = rim; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  rays(ctx, T, '255,235,170', 0.12, 700, 0.5, 5);
   HEROES.forEach((h, i) => {
     const x = 250 + i * 120 + ease(seg(p, 0, 1)) * 60, bob = Math.abs(Math.sin(T * 6 + i)) * 8;
     cat(ctx, R, h.id, x, GROUND - 6 - bob, 1.2, { rot: 0.05 });
   });
   // a pair of beady eyes in the grass: the mice are not done
   if (p > 0.55) { const k = ease(seg(p, 0.55, 0.7)); ctx.save(); ctx.globalAlpha = k; ctx.fillStyle = '#ff3a4a'; ctx.beginPath(); ctx.ellipse(840, GROUND + 40, 5, 3, 0, 0, TAU); ctx.ellipse(858, GROUND + 40, 5, 3, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+  motes(ctx, R, T, { n: 20, color: '255,236,160', a: 0.8, seed: 72 });
   if (p > 0.78) { const k = outBack(seg(p, 0.78, 0.9)); label(ctx, 'KEEP PLAYING!', W / 2, 150, 70 * k, '#ffd23f', { rot: -0.04 }); }
   ctx.restore();
   vignette(ctx, 0.35);
