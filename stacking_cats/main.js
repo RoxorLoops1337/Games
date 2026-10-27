@@ -194,7 +194,7 @@ function coach(key, html, x, y, dir = 'down', opt = {}) {
   app.appendChild(el); coachEl = el;
   // a bubble that would run past the right or bottom edge of the stage gets narrower instead of being cut off
   const room = W - 8 - el.offsetLeft;
-  if (dir !== 'right' && el.offsetWidth > room) el.style.maxWidth = Math.max(150, room) + 'px';
+  if (dir !== 'right' && el.offsetWidth > room) { el.style.maxWidth = Math.max(150, room) + 'px'; el.dataset.narrow = '1'; }
   if (opt.above && hl) {   // sit right over the target instead of a fixed spot that can cover other buttons
     const sc = app.getBoundingClientRect().width / W || 1;
     const p = coachAbove(hl.getBoundingClientRect(), app.getBoundingClientRect(), sc, el.offsetHeight, W);
@@ -210,6 +210,7 @@ function coach(key, html, x, y, dir = 'down', opt = {}) {
 // on a full screen, move the bubble to the nearest spot that covers no button, card, slot or title (nor its own target);
 // the tail then points at the target from above or below, or is dropped when there is none
 function coachClear(el, hl) {
+  if (el.dataset.narrow) { el.style.maxWidth = ''; delete el.dataset.narrow; }   // a bubble squeezed by its first spot gets its full width back before it looks for a clear one
   const ar = app.getBoundingClientRect(), sc = ar.width / W || 1;
   const toStage = (r) => ({ l: (r.left - ar.left) / sc, t: (r.top - ar.top) / sc, r: (r.right - ar.left) / sc, b: (r.bottom - ar.top) / sc });
   const blocks = [...screenEl.querySelectorAll('button, .card, .slot, .bag, h2, .logo, .tile, input, [role=button]')].map((n) => toStage(n.getBoundingClientRect())).filter((r) => r.r - r.l > 2 && r.b - r.t > 2);
@@ -230,6 +231,7 @@ function coachClear(el, hl) {
   }
   if (!best) return;
   el.className = 'coach ' + (hl ? ((best.y + bh / 2) < (toStage(hl.getBoundingClientRect()).t + toStage(hl.getBoundingClientRect()).b) / 2 ? 'down' : 'up') : 'notail');
+  el.style.width = bw + 'px';   // keep the measured width: shrink-to-fit would squeeze a bubble moved near the right edge into a thin column
   el.style.right = ''; el.style.transform = ''; el.style.left = Math.round(best.x) + 'px'; el.style.top = Math.round(best.y) + 'px';
 }
 function setScreen(html, cls = '') {
