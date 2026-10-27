@@ -973,3 +973,12 @@ t('phone polish: tall tap targets on short screens, and the Cat Dex and Trophies
   assert.ok(/class="dexbar"/.test(js) && /class="tpb"/.test(js) && /function troTier/.test(js) && /t-\$\{troTier\(a\)\}/.test(js), 'markup uses them');
   assert.ok(!/—/.test(html + js), 'no em dash');
 });
+
+t('phone audit round 2: Relic Book tiles are 60 stage px in a scrolling grid, Back/Done reach 60, event cards keep the price pill clear', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/body \.rtile\{width:60px;height:60px/.test(html), 'big relic tiles on short screens');
+  assert.ok(/body \.relbook\{[^}]*overflow-y:auto/.test(html) && /body \.screen:has\(\.relbook\)\{overflow:hidden\}/.test(html), 'relic grid scrolls so Back stays visible');
+  assert.ok(/body \.screen\.arr \.btn\.big2\.btn[^{]*\{min-height:60px\}/.test(html), 'Settings Back and Arrange Done reach 35px real');
+  assert.ok(/\.card\.ev\{width:150px;min-height:176px;padding:6px 6px 18px/.test(html), 'event card text clears the price pill');
+  assert.ok(!/—/.test(html), 'no em dash');
+});
