@@ -837,6 +837,31 @@ body #meter .mr{font-size:15px;height:24px} body #meter .mr span{width:40px}
 body .coach{font-size:17px;max-width:300px}
 body .coach button{font-size:16px;padding:3px 12px}
 }
+/* ===== Cat Dex detail: portrait plate on the left, text on the right ===== */
+.detail.dexd.dx{flex:none;display:flex;gap:12px;align-items:center;text-align:left;min-height:118px;padding:6px 12px}
+.dxplate{flex:none;width:100px;height:100px;border-radius:16px;border:3px solid var(--tc,#ffc83a);background:radial-gradient(circle at 50% 42%,#fff 0,var(--tg,#ffe9a8) 62%,var(--tc,#ffc83a) 135%);box-shadow:0 0 16px var(--tc,#ffc83a),inset 0 0 14px rgba(255,255,255,.7),0 3px 0 rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center}
+.dxplate canvas{width:94px;height:94px}
+.dx-rare{--tc:#4aa8ff;--tg:#cfe8ff}.dx-epic{--tc:#c04ae0;--tg:#f0d2fb}.dx-legendary{--tc:#ffa81c;--tg:#ffe3a0}
+.dxplate.lock{background:radial-gradient(circle at 50% 42%,#8a78b8 0,#5c4a86 100%);border-color:#b9a9e0;box-shadow:inset 0 3px 8px rgba(0,0,0,.5),0 0 10px #9a86d055}
+.dxtxt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.dex ~ .dx .x{}
+.dxname b{font-family:var(--display);font-weight:400;font-size:21px;line-height:1}.dxname span{font-size:13px;color:#7a5a98}
+.dxtags{display:flex;flex-wrap:wrap;gap:4px;align-items:center}.dxtg{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}.dxtg .gi{width:14px;height:14px}
+.dxtg{font-size:11px;font-weight:800;line-height:1;padding:3px 8px;border-radius:999px;border:1.5px solid rgba(42,29,74,.35);background:#efe4ff;color:var(--ink)}
+.dxtg.drole{background:#ffe08a}.dxtg.datk{background:#bfe3ff}.dxtg.lockc{background:#8a78b8;color:#fff}
+.dxstats{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:12px;color:#6a5a80}.dxstat b{font-size:15px;color:var(--ink);margin-right:3px}.dxnone{font-style:italic}
+.dx .cstory{font-size:13px;line-height:1.1}.dx .spnote{font-size:11px;line-height:1.05;color:#6a5a80}.dx .mast{margin-top:0;gap:6px}.dx .mast .st{font-size:15px}.dx .mbar{width:90px}
+.dex .tile{height:84px}
+.dxprog{display:flex;align-items:center;gap:8px;font-size:14px}.dxprog .pbar{height:12px;width:240px;margin:0}
+body .detail.dexd.dx{padding-right:12px}body .detail.dx .wbtn{position:static;margin:0;float:none;flex:none}
+@media (max-height:400px){
+body .detail.dexd.dx{min-height:0;padding-right:10px;gap:8px}
+.dxplate{width:88px;height:88px}.dxplate canvas{width:82px;height:82px}
+body .dex .tile{height:80px}body .dex .tile canvas{width:50px;height:50px}
+.dx .spnote,.dx .mast small{display:none}
+body .detail.dx .wbtn{align-self:center}
+}
+body.bigtext .dxtg,body.bigtext .dx .cstory{font-size:14px}
 </style>
 </head>
 <body>

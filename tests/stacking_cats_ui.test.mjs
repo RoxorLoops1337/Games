@@ -85,6 +85,18 @@ t('cat art keeps its fine detail layers (tapered tail, toes, ear fur, whisker pa
   }
 });
 
+t('costume accessories (hats, capes, wings, weapons) carry gradient, rim light and stitch detail and stay cached cheap', () => {
+  const withGrad = (d) => { let g = 0, o = 0; const c = fakeCtx(); const p = new Proxy(c, { get: (t, k) => (k === 'createLinearGradient' || k === 'createRadialGradient' ? (...a) => { g++; return t[k](...a); } : k === 'setLineDash' ? (...a) => { o++; } : t[k]), set: (t, k, v) => { t[k] = v; return true; } }); drawCat(p, d, 'open'); return { g, o }; };
+  const dressed = ['buckshot', 'yuki', 'hawkeye', 'boomer', 'biscuit', 'pearl', 'pudding', 'shadow', 'ronin', 'merlin', 'cutlass', 'dusty', 'mecha', 'hexa', 'nori', 'leo', 'nebula', 'nibbles', 'blizzard', 'halo', 'draco', 'lyra'];
+  for (const id of dressed) {
+    const d = CATS.find((x) => x.id === id), r = withGrad(d);
+    assert.ok(r.g >= 1, id + ' accessory has no gradient material');
+  }
+  for (const id of ['buckshot', 'yuki', 'hawkeye', 'boomer', 'dusty', 'shadow', 'hexa', 'nori']) assert.ok(withGrad(CATS.find((x) => x.id === id)).o >= 1, id + ' lost its stitched seam');
+  for (const d of CATS) { const c0 = calls.n; drawCat(fakeCtx(), d, 'open'); assert.ok(calls.n - c0 < 4000, d.id + ' draw cost grew past the cached sprite budget'); }
+  assert.ok(!readFileSync(new URL('../stacking_cats/art_cats.js', import.meta.url), 'utf8').includes('\u2014'), 'no em dashes in art_cats.js');
+});
+
 t('every mouse type, elite and nest draws', () => {
   for (const type of Object.keys(ENEMY_TYPES)) for (const elite of [false, true]) { const s = art.enemySprite(type, elite); assert.ok(s.c && s.w > 0); }
   for (const nest of NESTS) { const s = art.nestSprite(nest.id); assert.ok(s.c); art.nestOverlay(fakeCtx(), 0.3, 1.2); }
@@ -1021,4 +1033,16 @@ t('cutscene polish: jewelled king on a cheese throne, barred cages, depth haze, 
   const R = { cat: () => ({ width: 240, height: 240 }), motion: false, bd: art.makeBackdrop(THEMES[0], 0) };
   for (let tt = 0; tt <= storyMod.INTRO_LEN; tt += 0.5) introMod.drawIntro(fakeCtx(), tt, R);
   for (let tt = 0; tt <= storyMod.EPILOGUE_LEN; tt += 0.5) introMod.drawEpilogue(fakeCtx(), tt, R);
+});
+
+t('the Cat Dex detail panel has a portrait plate, chips, stats and a progress bar for locked cats', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), html = readFileSync('stacking_cats/index.html', 'utf8');
+  const f = js.slice(js.indexOf('function dexDetail'), js.indexOf('// ----', js.indexOf('function dexDetail')));
+  assert.ok(/dexPlate\(id, false\)/.test(f) && /dexPlate\(id, true\)/.test(f), 'both panels show the portrait plate');
+  assert.ok(/data-lock/.test(js.slice(js.indexOf('const dexPlate'), js.indexOf('function dexDetail'))), 'locked plate is caged');
+  assert.ok(/Best wave/.test(f) && /Runs/.test(f) && /Mice/.test(f) && /ATK_NAME/.test(f), 'stats and attack chip');
+  assert.ok(/dxprog/.test(f) && /class="pbar"/.test(f), 'locked cats show the unlock progress bar');
+  assert.ok(!/—/.test(f), 'no em dash');
+  assert.ok(/\.dxplate\{/.test(html) && /\.dxtg\{/.test(html) && /\.dx-legendary\{/.test(html), 'styles exist');
+  assert.ok(/data-act="wardrobe"/.test(f) && /data-act="back"/.test(js.slice(js.indexOf('function showDex'), js.indexOf('function dexDetail'))), 'wardrobe and Back stay');
 });
