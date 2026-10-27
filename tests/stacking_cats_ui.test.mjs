@@ -1129,3 +1129,11 @@ t('arrange and event polish: grip handle, strong selection, rarity framed event 
   assert.ok(/case 'merge': \{[\s\S]{0,400}mergeFlash\(p\.x, p\.y, max\)/.test(js), 'merge event flashes');
   assert.ok(!html.includes('\u2014') && !js.includes('\u2014'), 'no em dashes');
 });
+
+t('the sticky game over button footer is soft: a light fade and edges that fade out, not a hard dark band', () => {
+  const html = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  const m = html.match(/\.screen\.wide \.overbtns\{[^}]*\}/);
+  assert.ok(m, 'rule found');
+  assert.ok(/position:sticky/.test(m[0]) && /rgba\(24,14,48,\.5\)/.test(m[0]) && /mask-image/.test(m[0]), 'sticky, light fade, faded edges');
+  assert.ok(!/rgba\(24,14,48,\.92\)/.test(m[0]), 'the old heavy band is gone');
+});
