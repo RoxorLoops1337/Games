@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>B20 Pestprint, Icons and FX demo</title>
+<style>
+body{margin:0;background:#140f26;color:#f6ecd8;font:13px system-ui,sans-serif;padding:12px}
+h2{margin:18px 0 6px;font-size:14px;color:#ffd18a}
+canvas{image-rendering:pixelated;display:block;margin:4px 0;background:#1d1745}
+.row{display:flex;flex-wrap:wrap;gap:6px}
+</style></head><body>
+<div>Reduce motion: <label><input type="checkbox" id="rm"> on</label> (also honours ?reduce=1)</div>
+<h2>Pests (idle, attack, hurt, dead) with accessories</h2><div id="pests"></div>
+<h2>Icons (cb badges on, kind frame on every second)</h2><canvas id="icons"></canvas>
+<h2>FX filmstrips (times in ms)</h2><div id="fx"></div>
+<script src="../src/gfx/pestprint.js"></script><script src="../src/gfx/icons.js"></script><script src="../src/gfx/fx.js"></script>
+<script>
+var PP=SB.gfx.pestprint, IC=SB.gfx.icons, FXF=SB.gfx.fx;
+var reduce=/reduce=1/.test(location.search); document.getElementById('rm').checked=reduce;
+document.getElementById('rm').onchange=function(){location.search=this.checked?'?reduce=1':'';};
+
+// ---- pests
+(function(){
+  var list=PP.catalog.slice(), poses=['idle0','attack','hurt','dead'], S=2, W=64*S;
+  var cols=6, cell=function(sp){return sp.w*S+4;}; var rows=[];
+  var c=document.createElement('canvas'); var cw=poses.length*(48*S)+16, ch=(64+6)*S; c.width=3*cw; c.height=Math.ceil(list.length/3)*ch; document.getElementById('pests').appendChild(c);
+  var x=c.getContext('2d'); x.imageSmoothingEnabled=false; x.fillStyle='#2a2147'; x.fillRect(0,0,c.width,c.height);
+  list.forEach(function(id,i){var col=i%3,row=(i/3)|0,ox=col*cw,oy=row*ch;
+    x.fillStyle=(row+col)%2?'#241c42':'#2d2350';x.fillRect(ox,oy,cw,ch);x.fillStyle='#f6ecd8';x.font='10px sans-serif';x.fillText(id,ox+4,oy+11);
+    var sp=PP.make(id), sc=sp.w>=64?1:2; if(sp.w>=64&&S==2) sc=1.5; sc=sp.w>=64?1:2;
+    poses.forEach(function(p,j){var cx=ox+8+j*(48*S)+(48*S)/2;PP.drawPest(x,id,p,cx,oy+ch-6,sc,0,{noBob:true});});
+  });
+  // accessories strip
+  var acc=PP.accessories.filter(function(a){return a!=='none';}), species=['mouse','rat','fox','crow','dog_medium','raccoon'];
+  var c2=document.createElement('canvas'); c2.width=acc.length*70; c2.height=species.length*70; document.getElementById('pests').appendChild(c2);
+  var y=c2.getContext('2d'); y.imageSmoothingEnabled=false; y.fillStyle='#2a2147'; y.fillRect(0,0,c2.width,c2.height);
+  species.forEach(function(sp,r){acc.forEach(function(a,k){PP.drawPest(y,{species:sp,accessory:a,size:sp==='dog_medium'?'M':undefined},'idle0',k*70+35,r*70+66,1.5,0,{noBob:true});});});
+  y.fillStyle='#f6ecd8';y.font='9px sans-serif';acc.forEach(function(a,k){y.fillText(a,k*70+4,10);});
+})();
+// ---- icons
+(function(){
+  var n=IC.names,S=3,cols=14,cw=15*S+34,ch=12*S+16,c=document.getElementById('icons');c.width=cols*cw;c.height=Math.ceil(n.length/cols)*ch;var x=c.getContext('2d');x.fillStyle='#231a3d';x.fillRect(0,0,c.width,c.height);
+  n.forEach(function(k,i){var ox=(i%cols)*cw+4,oy=((i/cols)|0)*ch+3;IC.draw(x,k,ox,oy,{scale:S,cb:true});x.fillStyle='#f6ecd8';x.font='8px sans-serif';x.fillText(k,ox,oy+12*S+9);});
+})();
+// ---- fx
+var SC={w:192,h:108,S:3};
+function bg(x,w,h){x.fillStyle='#3a2a5e';x.fillRect(0,0,w,h);x.fillStyle='#5f3d50';x.fillRect(0,0,w,h-24);x.fillStyle='#3b2530';x.fillRect(0,h-24,w,24);x.fillStyle='#1d1745';x.fillRect(0,h-24,w,2);}
+function strip(title,times,build,draw){
+  var wrap=document.createElement('div');wrap.innerHTML='<div style="margin:6px 0 2px;color:#b7a9c9">'+title+'</div>';var row=document.createElement('div');row.className='row';wrap.appendChild(row);document.getElementById('fx').appendChild(wrap);
+  times.forEach(function(t){
+    var f=FXF.create({seed:7,reduceMotion:reduce}); var state=build(f);
+    for(var ms=0;ms<t;ms+=1000/60){f.update(1000/60); if(state.tick)state.tick(f,ms);}
+    var c=document.createElement('canvas');c.width=SC.w;c.height=SC.h;c.style.width=SC.w*2+'px';c.style.height=SC.h*2+'px';row.appendChild(c);
+    var x=c.getContext('2d');x.imageSmoothingEnabled=false;var o=f.shakeOffset();x.save();x.translate(o.x,o.y);bg(x,SC.w,SC.h);draw(x,f,state,t);f.draw(x);x.restore();
+    x.fillStyle='#f6ecd8';x.font='6px sans-serif';x.fillText(t+'ms',3,8);
+  });
+}
+var mouse={species:'mouse'},fox={species:'fox'},cuke={species:'cucumber'};
+strip('Cat swipes a mouse: slash, hit flash, damage 4, shake, then 12 big hit and death burst',[0,60,120,240,500,900],function(f){
+  f.slash(150,70);f.hit(150,70,'#ff8a3d');f.number(150,64,4,'damage');f.number(150,64,12,'crit',{index:1});f.shake(3,180);f.flash('m',66);f.hitStop(0);
+  f.deathBurst(150,81,PP.pixels(mouse,'idle0'),1);return {};
+},function(x,f,s,t){PP.drawPest(x,mouse,t<500?'idle':'death',150,84,1,t/16,{flash:f.isFlashing('m'),t:Math.max(0,(t-300)/500)});});
+strip('Purr hearts, nap Zzz, heal number, sparkles',[0,150,400,800,1200],function(f){
+  f.heal(60,70);f.number(60,60,3,'heal');f.sparkle(60,60,6);f.zzz('a',100,80);f.zzz('b',30,80);return {};
+},function(x,f){PP.drawPest(x,{species:'hamster'},'idle0',100,84,1,0);});
+strip('Hairball arc, yarn wrap on a fox, warmth flowing to the Sunbeam',[0,150,300,500,800,1100],function(f){
+  f.hairball({x:30,y:70},{x:140,y:76},null);f.yarn({x:20,y:60},{x:140,y:72});f.warmthGain({x:100,y:60},{x:170,y:10});f.pawTrail({x:20,y:96},{x:120,y:96});return {};
+},function(x,f){PP.drawPest(x,fox,'idle0',140,84,1,0);x.fillStyle='#ffd95a';x.fillRect(160,4,28,6);});
+strip('Catnip surge (green vignette), zoomies streaks, dust puff, fish coins',[0,150,300,500],function(f){
+  f.catnip(20,40,100,40);f.zoomies(192,108);f.dust(80,84);f.fishGain({x:150,y:60},{x:20,y:8});return {};
+},function(x){});
+strip('Pixel text and damage number kinds',[500],function(f){
+  var k=['damage','crit','heal','block','shatter','hairball','warmth','purr'];k.forEach(function(kk,i){f.number(16+i*22,70,i+3+(kk==='crit'?10:0),kk);});return {};
+},function(x,f,s,t){});
+window.__ready=true;
+</script></body></html>

@@ -75,6 +75,7 @@ const GAME_SUITES = {
   blockmates: ['test:blockmates'],
   stacking_cats: ['test:stackingcats'],
   graftwork: ['test:graftwork'],
+  sunbeam_siege: ['test:sunbeam'],
   rustgrift: ['test:rustgrift'],
   midnight_mog: ['test:midnightmog'],
   drop_the_bass: ['test:dropbass'],
