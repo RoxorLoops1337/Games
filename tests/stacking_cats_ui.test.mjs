@@ -286,7 +286,7 @@ t('tutorial tips are held back while the game is paused', () => {
 
 t('no em dashes anywhere in the game files', () => {
   for (const f of ['main.js', 'index.html', 'cats.js', 'sim.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'audio.js', 'kingdom_scene.js', 'savecode.js', 'daily.js', 'post.js', 'art_icons.js', 'share.js', 'haptics.js', 'pwa.js', 'sw.js', 'manifest.webmanifest']) {
-    assert.ok(!readFileSync('stacking_cats/' + f, 'utf8').includes('—'), f);
+    assert.ok(!readFileSync('stacking_cats/' + f, 'utf8').includes('\u2014'), f);
   }
 });
 
@@ -924,7 +924,7 @@ t('relic icons: every relic key still has a drawing, each draws without throwing
   for (const k of ['🍪', '🏅', '🌻', '🌟', '⭐', '🔱', '🥠']) assert.ok(new RegExp("\\n  '" + k + "': \\(c\\) =>").test(art.slice(art.indexOf('const DETAIL = {'))), k + ' has a detail layer');
   assert.ok(/EPIC = new Set\(\[/.test(art) && /rimLight\(cv/.test(art), 'epic glow and rim light finish');
   for (const [k, f] of Object.entries(RELIC_ICONS)) f(fakeCtx());
-  assert.ok(!/—/.test(art), 'no em dashes');
+  assert.ok(!/\u2014/.test(art), 'no em dashes');
 });
 
 t('world art: backdrops carry depth layers (cloud sprites, birds, motes), mice have fine detail and no scratch texture, fight VFX are richer', () => {
@@ -941,7 +941,7 @@ t('world art: backdrops carry depth layers (cloud sprites, birds, motes), mice h
   assert.ok(!/texturize/.test(aw.slice(aw.indexOf('export function enemySprite'), aw.indexOf('function nestBody'))), 'no noisy scratch texture on mice');
   assert.ok(/case 'cathit':[^\n]*sparks\([^\n]*flashGlow\(/.test(js), 'tower damage burst');
   assert.ok(/case 'coin': if \(fx\.length < 300\) \{ sparks\(/.test(js) && /case 'chest':[^\n]*ring\([^\n]*flashGlow\(/.test(js), 'coin pop and box glint');
-  assert.ok(!/—/.test(aw), 'no em dashes');
+  assert.ok(!/\u2014/.test(aw), 'no em dashes');
 });
 
 t('lootbox opening: lid pop, glow, beams and sparks, a flash and pedestal on the reveal, all under the nomotion rule', () => {
@@ -957,7 +957,7 @@ t('tower and scenes polish: rug, feathered contact shadows, title fireflies, fin
   assert.ok(/function drawRug/.test(js) && /drawRug\(cx, GROUND/.test(js) && /createRadialGradient\(32, 32/.test(js), 'rug and soft shadow');
   assert.ok(/fireflies|ffe58a/.test(js), 'title fireflies');
   assert.ok(/trophy flare/.test(it) && /light shafts/.test(it), 'finale light');
-  assert.ok(!/—/.test(it), 'no em dashes');
+  assert.ok(!/\u2014/.test(it), 'no em dashes');
 });
 
 t('UI chrome detail pass: ornate corner studs, bevels, recessed progress bars, Relic Book frames, vignette, and keeps the a11y hooks', () => {
@@ -971,7 +971,7 @@ t('UI chrome detail pass: ornate corner studs, bevels, recessed progress bars, R
   assert.ok(/body\.nomotion \.dcell:hover/.test(r5), 'nomotion covers new hover lifts');
   assert.ok(/body\.nomotion \*/.test(css) && /body\.bigtext \.card p/.test(css) && /body\.cb \.impact\.up/.test(css), 'a11y modes intact');
   assert.ok(/\.bag\.rare::after\{content/.test(css), 'rarity pips kept');
-  assert.ok(!/—/.test(r5), 'no em dashes');
+  assert.ok(!/\u2014/.test(r5), 'no em dashes');
 });
 
 t('opening a full screen clears the wave banner (under a blurred panel it showed as a mirrored ghost)', async () => {
@@ -991,7 +991,7 @@ t('phone polish: tall tap targets on short screens, and the Cat Dex and Trophies
   assert.ok(/@media \(max-height:400px\)\{[^@]*min-height:60px/.test(html), 'short screens get 60px stage high buttons (about 36px on a phone)');
   assert.ok(/\.dexbar\{/.test(html) && /\.tile \.tpb\{/.test(html) && /\.tro\.t-legendary\{/.test(html), 'dex and trophy styles exist');
   assert.ok(/class="dexbar"/.test(js) && /class="tpb"/.test(js) && /function troTier/.test(js) && /t-\$\{troTier\(a\)\}/.test(js), 'markup uses them');
-  assert.ok(!/—/.test(html + js), 'no em dash');
+  assert.ok(!/\u2014/.test(html + js), 'no em dash');
 });
 
 t('phone audit round 2: Relic Book tiles are 60 stage px in a scrolling grid, Back/Done reach 60, event cards keep the price pill clear', () => {
@@ -1000,7 +1000,7 @@ t('phone audit round 2: Relic Book tiles are 60 stage px in a scrolling grid, Ba
   assert.ok(/body \.relbook\{[^}]*overflow-y:auto/.test(html) && /body \.screen:has\(\.relbook\)\{overflow:hidden\}/.test(html), 'relic grid scrolls so Back stays visible');
   assert.ok(/body \.screen\.arr \.btn\.big2\.btn[^{]*\{min-height:60px\}/.test(html), 'Settings Back and Arrange Done reach 35px real');
   assert.ok(/\.card\.ev\{width:150px;min-height:176px;padding:6px 6px 18px/.test(html), 'event card text clears the price pill');
-  assert.ok(!/—/.test(html), 'no em dash');
+  assert.ok(!/\u2014/.test(html), 'no em dash');
 });
 
 t('coach bubbles on full screens step clear of buttons and cards, and merge dust respects reduced motion', () => {
@@ -1050,7 +1050,18 @@ t('the Cat Dex detail panel has a portrait plate, chips, stats and a progress ba
   assert.ok(/data-lock/.test(js.slice(js.indexOf('const dexPlate'), js.indexOf('function dexDetail'))), 'locked plate is caged');
   assert.ok(/Best wave/.test(f) && /Runs/.test(f) && /Mice/.test(f) && /ATK_NAME/.test(f), 'stats and attack chip');
   assert.ok(/dxprog/.test(f) && /class="pbar"/.test(f), 'locked cats show the unlock progress bar');
-  assert.ok(!/—/.test(f), 'no em dash');
+  assert.ok(!/\u2014/.test(f), 'no em dash');
   assert.ok(/\.dxplate\{/.test(html) && /\.dxtg\{/.test(html) && /\.dx-legendary\{/.test(html), 'styles exist');
   assert.ok(/data-act="wardrobe"/.test(f) && /data-act="back"/.test(js.slice(js.indexOf('function showDex'), js.indexOf('function dexDetail'))), 'wardrobe and Back stay');
+});
+
+t('phone layout round 11: AUTO joins the special row at the bottom edge, the nest bar clears the wave box, the Dex mastery bar is wider', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8');
+  const blk = html.slice(html.indexOf('round 11: AUTO joins the row'));
+  const phone = html.slice(html.lastIndexOf('@media (max-height:400px){', html.indexOf('round 11: AUTO joins the row')));
+  assert.ok(phone.includes('round 11'), 'rules sit inside the phone media block');
+  assert.ok(/#specials,body\.touch #specials\{bottom:4px/.test(blk), 'specials row at the bottom edge');
+  assert.ok(/#specials \.autob,body\.touch #specials \.autob\{position:relative;order:99;[^}]*height:60px/.test(blk), 'AUTO is in the row with a 60 stage px (about 36 real) tap height');
+  assert.ok(/body #bossBar\{top:66px/.test(blk), 'nest bar sits below the wave box');
+  assert.ok(/\.dx \.mast \.mbar\{width:130px/.test(html), 'Dex mastery bar wider on phones');
 });
