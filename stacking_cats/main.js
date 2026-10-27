@@ -423,11 +423,12 @@ function troProgress(id) {
   }[id];
   return m ? [Math.min(m[1], m[0] || 0), m[1]] : null;
 }
+function troTier(a) { return a.gems >= 2 ? 'mythic' : a.gems ? 'legendary' : a.coins >= 100 ? 'epic' : a.coins >= 50 ? 'rare' : 'common'; }
 function showTrophies(back) {
   const list = ACHIEVEMENTS.slice().sort((a, b) => (save.ach[b.id] ? 1 : 0) - (save.ach[a.id] ? 1 : 0));
   const done = list.filter((a) => save.ach[a.id]).length;
-  setScreen(`<h2>Trophies <small class="klv">${done}/${list.length}</small></h2>
-    <div class="trophies">${list.map((a) => `<div class="tro ${save.ach[a.id] ? 'got' : ''}"><span class="medal">${save.ach[a.id] ? '&#127942;' : '&#128274;'}</span><div><b>${a.name}</b><small>${a.desc}</small>${(() => { const pr = !save.ach[a.id] && troProgress(a.id); return pr ? `<span class="tbar"><i style="width:${Math.round(100 * pr[0] / pr[1])}%"></i><u>${pr[0]}/${pr[1]}</u></span>` : ''; })()}</div><em>${a.coins ? `&#129689;${a.coins}` : ''}${a.gems ? ` &#128142;${a.gems}` : ''}</em></div>`).join('')}</div>
+  setScreen(`<h2>Trophies <small class="klv">${done}/${list.length}</small><span class="dexhead"><span class="dexbar" aria-hidden="true"><i style="width:${Math.round(100 * done / list.length)}%"></i></span></span></h2>
+    <div class="trophies">${list.map((a) => `<div class="tro t-${troTier(a)} ${save.ach[a.id] ? 'got' : ''}"><span class="medal">${save.ach[a.id] ? '&#127942;' : '&#128274;'}</span><div><b>${a.name}</b><small>${a.desc}</small>${(() => { const pr = !save.ach[a.id] && troProgress(a.id); return pr ? `<span class="tbar"><i style="width:${Math.round(100 * pr[0] / pr[1])}%"></i><u>${pr[0]}/${pr[1]}</u></span>` : ''; })()}</div><em>${a.coins ? `&#129689;${a.coins}` : ''}${a.gems ? ` &#128142;${a.gems}` : ''}</em></div>`).join('')}</div>
     <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
   acts = { back };
 }
@@ -470,9 +471,9 @@ function showDex(back, sel0) {
   let sel = sel0 || null;
   const fav = Object.entries(save.catStats).sort((a, b) => b[1].runs - a[1].runs)[0];
   const draw = () => {
-    setScreen(`<h2>Cat Dex</h2><div class="dex">${CATS.map((d) => {
+    setScreen(`<h2>Cat Dex <span class="dexhead"><small class="klv dexh">${un.size}/${CATS.length}</small><span class="dexbar" aria-hidden="true"><i style="width:${Math.round(100 * un.size / CATS.length)}%"></i></span></span></h2><div class="dex">${CATS.map((d) => {
       const u = un.has(d.id), p = unlockProgress(d, save.stats);
-      return `<div class="tile ${u ? '' : 'locked'} ${sel === d.id ? 'sel' : ''}" data-act="tile" data-id="${d.id}"><canvas width="96" height="96" data-cat="${d.id}" ${u ? '' : 'data-lock="1"'}></canvas><b>${u ? d.name : '???'}</b>${u ? `<small>${d.role}</small>` : `<small>${p.need > 1 ? `${p.have}/${p.need}` : p.have ? 'Done' : 'Caged'}</small>`}${fav && fav[0] === d.id && u ? '<i class="fav">&#10084;</i>' : ''}</div>`;
+      return `<div class="tile ${u ? '' : 'locked'} ${sel === d.id ? 'sel' : ''}" data-act="tile" data-id="${d.id}"><canvas width="96" height="96" data-cat="${d.id}" ${u ? '' : 'data-lock="1"'}></canvas><b>${u ? d.name : '???'}</b>${u ? `<small>${d.role}</small>` : `<small>${p.need > 1 ? `${p.have}/${p.need}` : p.have ? 'Done' : 'Caged'}</small>${p.need > 1 ? `<span class="tpb"><i style="width:${Math.min(100, Math.round(100 * p.have / p.need))}%"></i></span>` : ''}`}${fav && fav[0] === d.id && u ? '<i class="fav">&#10084;</i>' : ''}</div>`;
     }).join('')}</div>
     <div class="detail dexd">${sel ? dexDetail(sel, un.has(sel)) : 'Tap a cat to see how to unlock it, or how it has done for you. Locked cats join the picks once you earn them.'}</div>
     <div class="row"><button class="btn" data-act="back">Back</button></div>`);

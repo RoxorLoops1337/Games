@@ -965,3 +965,11 @@ t('opening a lootbox has its own sound: rattle, lid pop, sparkle', async () => {
   assert.ok(/case 'boxopen':/.test(au), 'the sound exists');
   assert.ok(/sfx\.play\('boxopen'\)/.test(js), 'the Open button plays it');
 });
+
+t('phone polish: tall tap targets on short screens, and the Cat Dex and Trophies get progress bars and tiered frames', () => {
+  const html = readFileSync('stacking_cats/index.html', 'utf8'), js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/@media \(max-height:400px\)\{[^@]*min-height:60px/.test(html), 'short screens get 60px stage high buttons (about 36px on a phone)');
+  assert.ok(/\.dexbar\{/.test(html) && /\.tile \.tpb\{/.test(html) && /\.tro\.t-legendary\{/.test(html), 'dex and trophy styles exist');
+  assert.ok(/class="dexbar"/.test(js) && /class="tpb"/.test(js) && /function troTier/.test(js) && /t-\$\{troTier\(a\)\}/.test(js), 'markup uses them');
+  assert.ok(!/—/.test(html + js), 'no em dash');
+});
