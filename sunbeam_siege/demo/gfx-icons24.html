@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>gfx icons 24</title>
+<body style="margin:0;background:#2a2147;color:#f6ecd8;font:9px sans-serif">
+<div id="r" style="display:flex;flex-wrap:wrap;width:1200px"></div>
+<script src="../src/data/glossary.js"></script>
+<script src="../src/gfx/icons.js"></script>
+<script>
+var I=SB.gfx.icons,r=document.getElementById('r');
+var q=location.search.match(/only=([^&]+)/),pg=location.search.match(/from=(\d+)-(\d+)/);var list=I.names.filter(function(n){return I.resolve(n)===n});
+if(q){var s=q[1].split(',');list=list.filter(function(n){return s.indexOf(n)>=0});}
+if(pg)list=list.slice(+pg[1],+pg[2]);
+list.forEach(function(n){var d=document.createElement('div');d.style.cssText='width:100px;height:62px;padding:2px;border:1px solid #3d3263;box-sizing:border-box;position:relative';
+d.innerHTML='<div style="display:flex;gap:4px;align-items:flex-end;height:44px">'+[16,24].map(function(p){return I.svg(n,p/12,{}).replace('<svg ','<svg style="image-rendering:pixelated" ')}).join('')+'<span style="width:32px;display:inline-block;margin-left:6px"></span></div><div style="position:absolute;bottom:1px;left:2px;white-space:nowrap">'+n+'</div>';
+var m=document.createElement('div');m.style.cssText='position:absolute;right:3px;top:3px;width:36px;height:36px';m.innerHTML=I.svg(n,3,{}).replace('<svg ','<svg style="image-rendering:pixelated" ');d.appendChild(m);r.appendChild(d);});
+document.title='ok';
+</script>
