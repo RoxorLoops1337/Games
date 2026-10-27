@@ -900,6 +900,18 @@ body.nomotion #banner.show::after{opacity:1}
 .screen .row .btn.big{min-height:50px;box-shadow:0 5px 0 var(--ink),inset 0 0 0 2px #fff,inset 0 0 0 4px rgba(255,93,122,.6)}
 @media (max-height:400px){.screen h2.paused{font-size:34px;margin-bottom:4px}}
 @media (max-width:700px){.screen .row .btn.grey{min-height:62px}.screen .row .btn.big{min-height:68px}}
+/* arrange + event polish: grip handle, strong selection, rarity-tinted slots and event frames, coin price pill */
+.screen.arr .slot.has{position:relative;padding-left:14px;border:2px solid #b9a27a}
+.screen.arr .slot.has::before{content:'\22EE\22EE';position:absolute;left:1px;top:50%;transform:translateY(-50%);width:12px;text-align:center;font-size:14px;line-height:.6;letter-spacing:-3px;color:#8a6aa8;font-weight:900;word-break:break-all;pointer-events:none}
+.screen.arr .slot.has.sel{border-color:#ff5d9a;outline:3px solid #fff;outline-offset:-1px;box-shadow:var(--bevel),0 0 0 3px #ff5d9a,0 0 20px #ff8fb7;transform:translateX(4px)}
+.screen.arr .slot.has.sel::before{color:#ff5d9a}
+.screen.arr .slot.has.can{border-color:#38c878}
+.screen.arr .slot.has .islot.full{border:2px solid #b9a27a;border-radius:8px}
+body.touch .screen.arr .btn.small{min-height:36px}
+.card.ev:has(.rar.rare){border-color:#2f7ad0}.card.ev:has(.rar.epic){border-color:#b83ad0}.card.ev:has(.rar.legendary){border-color:#e8a000}.card.ev:has(.rar.mythic){border-color:#ff3a8a}
+.card.ev:has(.rar.epic){background:linear-gradient(#fff6ff,#f6e0ff)}.card.ev:has(.rar.legendary){background:linear-gradient(#fffbe8,#ffeeb8)}
+.card.ev .ic::before{width:70px;height:70px;margin:-35px 0 0 -35px;box-shadow:0 0 0 2px #fff8,inset 0 -3px 0 #4a2f7a18}
+.card.ev .evp{background:linear-gradient(#3f2f78,#2a1f55);box-shadow:0 3px 0 #150f26;display:flex;gap:4px;align-items:center;padding:0 12px 0 8px}
 </style>
 </head>
 <body>

@@ -1159,7 +1159,7 @@ function showTower(back, opt = {}) {
       else if (sel === cat.uid) sel = null;
       else {
         const a = S.findCat(g, sel);
-        if (a.id === cat.id && a.lvl === cat.lvl && a.lvl < 3) { S.mergeCats(g, a.uid, cat.uid); sfx.play('merge'); buzz('merge'); toast(`Merged! ${CAT_BY_ID[a.id].name} is Lv ${a.lvl}`); } else S.swapCats(g, sel, cat.uid);
+        if (a.id === cat.id && a.lvl === cat.lvl && a.lvl < 3) { S.mergeCats(g, a.uid, cat.uid); sfx.play('merge'); buzz('merge'); mergeFlash(S.TOWER_X, 330, a.lvl >= 3); toast(`Merged! ${CAT_BY_ID[a.id].name} is Lv ${a.lvl}`); } else S.swapCats(g, sel, cat.uid);
         sel = null;
       }
       notifySyn(prevSyn);
@@ -1680,6 +1680,7 @@ function handle(e) {
     case 'merge': {
       const mc = S.findCat(g, e.uid), p = catPos(e.uid), max = mc && mc.lvl >= 3;
       if (mc) sfx.meow(mc.id, max ? 'cheer' : 'happy', 0.1);   // a little voice right after the merge chime
+      mergeFlash(p.x, p.y, max);
       puff(p.x, p.y, 20, '#ffd23f', 160, 0.7, 5);
       ring(p.x, p.y, max ? 150 : 100, '#ffe38c', 0.5, 9); ring(p.x, p.y, 62, '#ffffff', 0.35, 5);
       flashGlow(p.x, p.y, max ? 190 : 130, '#ffd24a', 0.5);
@@ -1696,6 +1697,10 @@ function handle(e) {
     }
     default: break;
   }
+}
+function mergeFlash(x, y, big) {   // short bright ring plus a star burst at the merge point; stars are skipped under reduced motion
+  ring(x, y, big ? 80 : 56, '#ffffff', 0.2, 8);
+  if (save.opt.motion && !document.body.classList.contains('nomotion')) for (let i = 0; i < (big ? 7 : 5); i++) { const a = (i / (big ? 7 : 5)) * TAU + 0.4; txtFx(x + Math.cos(a) * 34, y + Math.sin(a) * 34 - 6, '\u2605', i % 2 ? '#fff6b0' : '#ffd23f', 16, 0.5, false); }
 }
 function drain() { for (const e of g.ev) handle(e); g.ev.length = 0; }
 
