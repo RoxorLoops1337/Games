@@ -1030,7 +1030,6 @@ body .screen.arr .relbtn.btn.small{min-height:44px;padding:0 14px}
 /* contrast: white text on these chips needs a darker chip */
 .card .ribbon,.rb u{background:#d63a5c}
 .k-perm{background:#2a8a52}.k-temp{background:#c0601c}.k-instant{background:#a8347f}
-.card.item.r-legendary .rar,.rar.legendary{background:linear-gradient(#e89400,#b85c00);text-shadow:0 1px 0 rgba(0,0,0,.5)}
 .card.item.r-mythic .rar,.rar.mythic{background:linear-gradient(90deg,#d62a74,#6a3ad8);text-shadow:0 1px 0 rgba(0,0,0,.5)}
 .card.item .impact{color:#4a3a60}
 /* toasts over a wave banner: keep them clear of the title text */
@@ -1049,6 +1048,9 @@ body .screen.arr .relbtn.btn.small{min-height:44px;padding:0 14px}
 /* toasts sit above the wave banner, never on it */
 #toasts{top:auto;bottom:396px;justify-content:flex-end}
 body.scr #toasts{bottom:10px}
+#bossBar .nm{line-height:1.3;padding-bottom:1px}
+.dex .tile{height:98px}
+.card.item.r-legendary .rar,.rar.legendary{background:linear-gradient(#ffc646,#ffa514);color:#271c33;text-shadow:none}
 /* press and hover polish */
 .btn:not([disabled]):hover{filter:brightness(1.06)}
 .card[data-act]:active{transform:scale(.98)}
@@ -1062,7 +1064,8 @@ body .screen.tpad .btn.btn{margin-top:1px;margin-bottom:4px}
 .screen.tpad .hint:not(.row){margin-top:2px;padding:1px 14px}
 }
 @media (max-height:400px){
-#toasts{bottom:420px}body.scr #toasts{bottom:10px}
+#toasts{bottom:396px}body.scr #toasts{bottom:10px}#banner{top:150px}
+body .dex .tile{height:88px}
 .screen .hint:not(.row){font-size:17px}
 .screen:has(.revealstage){padding-top:4px;padding-bottom:4px}
 .screen:has(.revealstage) h2{font-size:28px}
@@ -1073,13 +1076,19 @@ body .screen:has(.revealstage) .btn.big.btn{min-height:62px;margin-top:2px;margi
 /* small screens: the stage is scaled down, so text under about 9px real gets a floor in stage px (14px at 360 high, 15.5px at 320 high) */
 @media (max-height:400px){
 body .tile small,body .card p,body .card .impact,body .card .impact b,body .card .impact span,body .card .impact em,body .card .ttl,body .card .role,body .card .gainl,body .card .setl,body .tro small,body .tro em,body .tbar u,body .tog span,body .tog small,body .setrow b,body .setrow small,body .how li>div,body .kcoins small,body .kt small,body .ktip,body .seg button,body .rlabel b,body .rlabel small,body .srow b,body .srow span i,body .spb em,body .dcell small,body .dcard small,body .wmod small,body .kd small,body .sub,body .rb span,body .rb em,body .rb b,body .stats div,body .dxstat,body .dxstats span,body .pstat span{font-size:14px}
-body .tile b{font-size:14px}body .tile b.lg{font-size:12px}
+body .tile b{font-size:14px}body .tile b.lg{font-size:11px}body .tile small{font-size:13.5px}
 body .dex .tile canvas{width:40px;height:40px}
 }
 @media (max-height:340px){
 body .tile small,body .card p,body .card .impact,body .card .impact b,body .card .impact span,body .card .impact em,body .card .ttl,body .card .role,body .card .gainl,body .card .setl,body .tro small,body .tro em,body .tbar u,body .tog span,body .tog small,body .setrow b,body .setrow small,body .how li>div,body .kcoins small,body .kt small,body .ktip,body .seg button,body .rlabel b,body .rlabel small,body .srow b,body .srow span i,body .spb em,body .dcell small,body .dcard small,body .wmod small,body .kd small,body .sub,body .rb span,body .rb em,body .rb b,body .stats div,body .dxstat,body .dxstats span,body .pstat span{font-size:15.5px}
 body .tile b{font-size:15px}body .tile b.lg{font-size:12.5px}
 body .dex .tile canvas{width:36px;height:36px}
+}
+/* when a screen is taller than the stage its top (title, heading) stays visible and the overflow goes to the bottom */
+.screen:not(.arr){justify-content:safe center}
+@media (max-height:340px){
+body .tile small{font-size:14px}body .tile b.lg{font-size:11px}
+body.bigtext .dex{gap:3px}
 }
 /* AUDIT END */
 </style>

@@ -1199,7 +1199,7 @@ t('audit block: opaque chips behind white text, a title that fits, no em dash in
   const blk = html.slice(a, b);
   assert.ok(/\.screen\.tpad \.logo\{font-size:64px/.test(blk), 'the title logo is compact enough for the 540px stage');
   assert.ok(/\.k-perm\{background:#2a8a52\}/.test(blk), 'kind chips are dark enough for white text');
-  assert.ok(/\.card\.ev \.evsold\{[^}]*rgba\(39,28,51,\.9\)/.test(blk), 'the sold stamp has a dark plaque');
+  assert.ok(/\.card\.ev \.evsold\{[^}]*rgba\(39,28,51,\.92\)/.test(blk) && /\.card\.ev\.sold\{opacity:1/.test(blk), 'the sold stamp has a dark plaque and a sold card keeps full text contrast');
   assert.ok(/\.tile b,\.tile small\{[^}]*text-overflow:ellipsis/.test(blk), 'dex tile labels stay on one line');
   assert.ok(!html.includes(String.fromCharCode(0x2014)), 'no em dash in index.html');
 });
