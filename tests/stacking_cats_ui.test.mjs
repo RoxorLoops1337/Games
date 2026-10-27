@@ -1079,3 +1079,13 @@ t('phone layout round 11: AUTO joins the special row at the bottom edge, the nes
   assert.ok(/body #bossBar\{top:66px/.test(blk), 'nest bar sits below the wave box');
   assert.ok(/\.dx \.mast \.mbar\{width:130px/.test(html), 'Dex mastery bar wider on phones');
 });
+
+t('nest destroyed celebration: cheese confetti, crumbling nest, hopping caged cat and meow text; reduced motion keeps only a soft glow and text; tower cats fidget', async () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  const blk = js.slice(js.indexOf("case 'bossDown'"), js.indexOf("case 'zoom'"));
+  assert.ok(/confetti\([^)]*CHEESE\)/.test(blk) && /k: 'nest'/.test(blk) && /k: 'sil'/.test(blk) && /'Meow!'/.test(blk), 'celebration pieces');
+  assert.ok(/const calm = !save\.opt\.motion/.test(blk) && /if \(!calm\) confetti/.test(blk) && /\} else flashGlow/.test(blk), 'reduced motion branch');
+  assert.ok(/f\.k === 'nest'/.test(js) && /f\.k === 'sil'/.test(js), 'both fx are drawn');
+  assert.ok(/idle fidget/.test(js) && /save\.opt\.motion && atk < 0\.02\) \{ const per/.test(js), 'idle fidget is gated by motion');
+  assert.ok(!/\u2014/.test(blk), 'no em dashes');
+});
