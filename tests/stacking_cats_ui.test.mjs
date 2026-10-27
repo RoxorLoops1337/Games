@@ -1203,3 +1203,21 @@ t('audit block: opaque chips behind white text, a title that fits, no em dash in
   assert.ok(/\.tile b,\.tile small\{[^}]*text-overflow:ellipsis/.test(blk), 'dex tile labels stay on one line');
   assert.ok(!html.includes(String.fromCharCode(0x2014)), 'no em dash in index.html');
 });
+
+t('arrange polish: landing socket preview, chip inside the row, no fullscreen button near Done, forge celebration, free coach spot', async () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), html = readFileSync('stacking_cats/index.html', 'utf8');
+  const css = html.slice(html.indexOf('ARRANGE START'), html.indexOf('ARRANGE END'));
+  assert.ok(/classList\.add\('land'\)[\s\S]{0,200}ghostsock/.test(js) && /\.islot\.land\{[^}]*dashed #4fe08a/.test(css), 'the socket a relic would land in is marked');
+  assert.ok(/<em class="pv [^"]*">[^<]*<\/em><\/div><div class="islots">/.test(js) || /<\/div><em class="pv/.test(js) === false, 'the gain chip lives inside the name column');
+  assert.ok(/\.screen\.arr \.slot \.sc\{position:relative\}/.test(css) && !/\.pv\{position:absolute;right:10px;top:-11px/.test(css), 'chip no longer floats over the row above');
+  assert.ok(/body:has\(\.screen\.towerscr\) #bFull\{display:none\}/.test(css), 'fullscreen button hidden on the arrange screen');
+  assert.ok(/pend = \[\{ q: `\.bag\[data-i=[^\]]*\]`, rar: ITEM_BY_ID\[id\]\.rarity \}, \{ q: '\[data-act="forge"\]'/.test(js), 'forging bounces the new relic and the Forge zone');
+  assert.ok(/opt\.free/.test(js) && /coach\('c4'[^\n]*free: true/.test(js), 'the arrange tip sits in a spot known to be clear');
+  const S = await import('../stacking_cats/sim.js');
+  const g = S.newGame({ seed: 9, unlocked: ['tabby'] });
+  g.stash.push('mask', 'mask', 'mask', 'kingcrown');
+  assert.ok(S.forgePlan(g, 0), 'three epics can forge');
+  const out = S.forgeItems(g, 0), cats = await import('../stacking_cats/cats.js');
+  assert.equal(cats.ITEM_BY_ID[out].rarity, 'legendary');
+  assert.deepEqual(g.stash.length, 2, 'three became one');
+});

@@ -189,6 +189,7 @@ function coach(key, html, x, y, dir = 'down', opt = {}) {
   el.innerHTML = `<span class="cico">&#128049;</span><div>${html}</div><button>Got it</button>`;
   el.querySelector('button').addEventListener('click', (e) => { e.stopPropagation(); sfx.play('ui'); hideCoach(); });
   if (dir === 'right') { el.style.left = 'auto'; el.style.right = (W - x) + 'px'; el.style.transform = 'none'; }   // anchor to the right edge so the bubble keeps its full width
+  if (opt.maxW) el.style.maxWidth = opt.maxW + 'px';
   el._hl = hl; el.dataset.key = key;
   app.appendChild(el); coachEl = el;
   // a bubble that would run past the right or bottom edge of the stage gets narrower instead of being cut off
@@ -202,7 +203,7 @@ function coach(key, html, x, y, dir = 'down', opt = {}) {
   }
   if (document.body.classList.contains('scr')) {   // wait for the cards to finish sliding in so their real boxes are measured
     el.style.visibility = 'hidden';
-    setTimeout(() => { if (coachEl === el) { coachClear(el, hl); el.style.visibility = ''; } }, 480);
+    setTimeout(() => { if (coachEl === el) { if (!opt.free) coachClear(el, hl); el.style.visibility = ''; } }, 480);   // opt.free: the caller picked a spot that is known to be clear
   }
   if (!opt.wait) setTimeout(() => { if (coachEl === el) hideCoach(); }, 14000);
 }
@@ -1137,7 +1138,7 @@ function showTower(back, opt = {}) {
       return it ? `<span class="islot full r-${it.rarity}" data-act="unequip" data-uid="${c.uid}" data-i="${k}" aria-label="${it.name}, ${it.rarity}, worn by ${d.name}. Take it off" title="${it.name}: ${it.desc} (tap to take off, or drag it)">${it.icon}</span>` : `<span class="islot ${selItem != null ? 'want' : ''}" aria-hidden="true"></span>`;
     }).join('');
     const worn = c.items.map((id) => ITEM_BY_ID[id].name).join(', ');
-    return `<div class="slot has ${sel === c.uid ? 'sel' : ''} ${canMerge ? 'can' : ''} ${selItem != null ? 'eq' : ''}" data-act="slot" data-zone="${zone}" data-i="${i}" data-uid="${c.uid}" aria-label="${d.name}, level ${c.lvl}, ${d.role}, about ${Math.round(dps)} damage per second${worn ? ', wearing ' + worn : ''}"><canvas width="96" height="96" data-cat="${c.id}"></canvas><div class="sc"><b><span class="nm">${d.name}</span> <span class="st">${stars(c.lvl)}</span></b><small><i class="rp">${d.role}</i>${canMerge ? ' MERGE!' : extra}</small><div class="hp"><i style="width:${Math.max(2, (100 * c.hp) / mx)}%"></i></div></div><div class="islots">${slots}</div><div class="sdps">&asymp;${Math.round(dps)}<small>DPS</small></div><em class="pv ${pv ? pv.cls : ''}">${pv ? pv.html : ''}</em></div>`;
+    return `<div class="slot has ${sel === c.uid ? 'sel' : ''} ${canMerge ? 'can' : ''} ${selItem != null ? 'eq' : ''}" data-act="slot" data-zone="${zone}" data-i="${i}" data-uid="${c.uid}" aria-label="${d.name}, level ${c.lvl}, ${d.role}, about ${Math.round(dps)} damage per second${worn ? ', wearing ' + worn : ''}"><canvas width="96" height="96" data-cat="${c.id}"></canvas><div class="sc"><b><span class="nm">${d.name}</span> <span class="st">${stars(c.lvl)}</span></b><small><i class="rp">${d.role}</i>${canMerge ? ' MERGE!' : extra}</small><div class="hp"><i style="width:${Math.max(2, (100 * c.hp) / mx)}%"></i></div><em class="pv ${pv ? pv.cls : ''}">${pv ? pv.html : ''}</em></div><div class="islots">${slots}</div><div class="sdps">&asymp;${Math.round(dps)}<small>DPS</small></div></div>`;
   };
   // the detail bar: a relic's name, rarity, effect, set progress and the cat it helps most
   const itemDetail = (id) => {
@@ -1173,15 +1174,16 @@ function showTower(back, opt = {}) {
     setScreen(`<h2>Arrange your tower <small class="klv">Team DPS &asymp; ${Math.round(teamDps(S.calcMods(g)))}</small></h2><div class="synrow">${synChips || '<small>Stack cats of the same kind for synergy bonuses!</small>'}</div>
       <div class="tbody"><div class="tower"><div class="col tw"><div class="zone" data-zone="tower"><h4>Tower <small>top to bottom</small></h4>${tw.join('')}</div><button class="btn small red relbtn" data-act="release" data-drop="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div><div class="col"><div class="zone bn" data-zone="bench"><h4>Bench <small>rests, heals fast</small></h4>${bn.join('')}</div>
         <div class="packz" data-drop="bag"><h4>Backpack <span class="${over ? 'warn' : ''}">${g.stash.length}/${MAX_STASH}</span></h4><div class="bagrow">${bag}</div></div></div></div></div>
-      <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}" aria-live="polite">${detail}</div><button class="btn small amber fbtn zbtn" data-act="sell" data-drop="sell" ${it ? '' : 'disabled'}>${sellLabel(selItem)}</button><button class="btn small fbtn zbtn ${plan ? 'purple' : 'grey'}" data-act="forge" data-drop="forge" ${plan ? '' : 'disabled'} title="Melt three relics of one rarity into one of the next">${forgeLabel(selItem)}</button><button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>Done</button></div>`, 'wide arr');
+      <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}" aria-live="polite">${detail}</div><button class="btn small amber fbtn zbtn" data-act="sell" data-drop="sell" ${it ? '' : 'disabled'}>${sellLabel(selItem)}</button><button class="btn small fbtn zbtn ${plan ? 'purple' : 'grey'}" data-act="forge" data-drop="forge" ${plan ? '' : 'disabled'} title="Melt three relics of one rarity into one of the next">${forgeLabel(selItem)}</button><button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>Done</button></div>`, 'wide arr towerscr');
     screenEl.firstElementChild.dataset.msg = msg;
     bindTower(screenEl.firstElementChild);
     if (selItem != null) coach('c6', 'Now tap a cat to equip it. The green numbers show how much stronger that cat gets!', 680, 352, 'up');
-    else coach('c4', 'Step 3: tap a cat, then another to swap. Two equal cats merge!', 730, 232, 'down', { target: '.slot.has', wait: true, above: true });
+    else coach('c4', 'Step 3: drag a cat onto another to swap. Two equal cats merge!', 430, 376, 'up', { target: '.slot.has', wait: true, free: true, maxW: 430 });
     if (pend) { const p = pend; pend = null; celebrate(p); }
   };
   // a bounce on what just changed, and a sparkle for a legendary or mythic relic (reduced motion: a still glow only)
   const celebrate = (p) => {
+    if (Array.isArray(p)) { p.forEach(celebrate); return; }
     const el = screenEl.querySelector(p.q);
     if (!el) return;
     const m = motion(), cls = m ? 'bump' : 'glow';
@@ -1257,6 +1259,7 @@ function showTower(back, opt = {}) {
         if (id) setDetail(itemDetail(id));
       },
       over: (t, prev, s) => {
+        if (prev && prev.el) { prev.el.querySelectorAll('.islot.land').forEach((x) => { x.classList.remove('land', 'ghostsock'); if (x.dataset.was != null) { x.innerHTML = x.dataset.was; delete x.dataset.was; } }); }
         if (prev && prev.el) { prev.el.classList.remove('over', 'badt'); const pv = prev.el.querySelector && prev.el.querySelector('.pv'); if (pv && prev.k === 'cat') { pv.textContent = ''; pv.className = 'pv'; } }
         if (!t || !t.el) return;
         const ok = validDrop(s, t);
@@ -1265,6 +1268,10 @@ function showTower(back, opt = {}) {
         if (t.k === 'cat' && s.k !== 'cat') {
           const id = s.k === 'bag' ? g.stash[s.i] : S.findCat(g, s.uid).items[s.i], c = S.findCat(g, t.uid), pv = t.el.querySelector('.pv');
           if (c && pv && !(s.k === 'worn' && s.uid === t.uid)) { const gc = gainChip(c, id); pv.className = 'pv ' + gc.cls; pv.innerHTML = gc.html; }
+          if (ok && c) {   // show where it lands: the free socket, or the one that gets replaced
+            const socks = [...t.el.querySelectorAll('.islot')], at = socks.find((x) => !x.classList.contains('full')) || socks[0];
+            if (at) { at.dataset.was = at.innerHTML; at.classList.add('land'); if (!at.classList.contains('full')) { at.classList.add('ghostsock'); at.innerHTML = ITEM_BY_ID[id].icon; } }
+          }
         } else if (t.k === 'cat' && s.k === 'cat' && t.uid !== s.uid) {
           const a = S.findCat(g, s.uid), b = S.findCat(g, t.uid), pv = t.el.querySelector('.pv');
           if (a && b && pv) { const mg = a.id === b.id && a.lvl === b.lvl && a.lvl < 3; pv.className = 'pv up'; pv.textContent = mg ? `MERGE to Lv ${a.lvl + 1}!` : 'Swap places'; }
@@ -1317,7 +1324,7 @@ function showTower(back, opt = {}) {
       const id = S.forgeItems(g, selItem);
       if (!id) { sfx.play('nope'); toast('Forging needs three relics of one rarity'); draw(); return; }
       sfx.play('merge'); toast(`Forged ${ITEM_BY_ID[id].name} (${ITEM_BY_ID[id].rarity})!`); puff(S.TOWER_X, 330, 14, '#c88aff', 160, 0.6);
-      selItem = g.stash.length - 1; pend = { q: `.bag[data-i="${selItem}"]`, rar: ITEM_BY_ID[id].rarity }; draw();
+      selItem = g.stash.length - 1; pend = [{ q: `.bag[data-i="${selItem}"]`, rar: ITEM_BY_ID[id].rarity }, { q: '[data-act="forge"]', rar: 'common' }]; draw();
     },
     bag: (d) => { selItem = selItem === +d.i ? null : +d.i; sel = null; sfx.play('pop'); draw(); },
     unequip: (d) => { if (S.unequipItem(g, +d.uid, +d.i)) { sfx.play('equip'); draw(); } else toast('Backpack is full: sell something first'); },
