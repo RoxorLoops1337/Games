@@ -965,7 +965,7 @@ function showBox(tier) {
   acts = {
     openbox: () => {
       if (opening) return;
-      opening = true; sfx.unlock(); sfx.play('pick');
+      opening = true; sfx.unlock(); sfx.play('boxopen');
       const el = screenEl.querySelector('.boxic'); if (el) el.classList.add('shaking');
       const stg = screenEl.querySelector('.boxstage'); if (stg) stg.classList.add('opening');
       setTimeout(() => { if (g && el && el.isConnected) { const id = S.openBox(g, tier); rewardChoices = id; showBoxReveal(tier, id); } }, 750);
