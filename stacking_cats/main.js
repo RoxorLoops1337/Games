@@ -1496,7 +1496,7 @@ function toast(txt) {
   el.className = /^Trophy:/.test(txt) ? 'toast trophy' : 'toast'; el.textContent = txt;
   $('toasts').appendChild(el);
   setTimeout(() => el.remove(), 3300);
-  while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
+  while ($('toasts').children.length > 2) $('toasts').firstChild.remove();
 }
 const hudCache = {};
 function setText(id, v) { if (hudCache[id] !== v) { hudCache[id] = v; $(id).innerHTML = v; } }

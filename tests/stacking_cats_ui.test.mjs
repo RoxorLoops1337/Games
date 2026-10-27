@@ -1221,3 +1221,16 @@ t('arrange polish: landing socket preview, chip inside the row, no fullscreen bu
   assert.equal(cats.ITEM_BY_ID[out].rarity, 'legendary');
   assert.deepEqual(g.stash.length, 2, 'three became one');
 });
+
+t('audit round 2: one toast at a time on short screens, reveal fits, text floor and 60px buttons on short screens', () => {
+  const html = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  const blk = html.slice(html.indexOf('/* AUDIT START */'), html.indexOf('/* AUDIT END */'));
+  const main = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  assert.ok(/children\.length > 2\) \$\('toasts'\)\.firstChild\.remove\(\)/.test(main), 'at most two toasts stack');
+  assert.ok(/body:not\(\.scr\) #toasts \.toast:not\(:last-child\)\{display:none\}/.test(blk), 'one toast on short screens, clear of the nest bar');
+  assert.ok(/\.revealstage \.confetti\{z-index:1\}/.test(blk) && /body\.nomotion \.revealstage \.confetti\{display:none\}/.test(blk), 'confetti stays behind the relic card');
+  assert.ok(/@media \(min-height:401px\)\{\n\.screen:has\(\.revealstage\)/.test(blk), 'the reveal screen is compact on every height');
+  assert.ok(/@media \(max-height:340px\)\{\nbody \.card p[^{]*\{font-size:16px!important\}/.test(blk), 'a 16px text floor at 320 high');
+  assert.ok(/body \.coach button\{min-height:60px/.test(blk) && /\.wcat\{flex-basis:60px/.test(blk), 'coach and wardrobe buttons reach 35px real at 320 high');
+  assert.ok(/\.card\.item\.r-legendary \.rar,\.rar\.legendary\{[^}]*color:#271c33/.test(blk), 'the legendary badge uses dark text');
+});
