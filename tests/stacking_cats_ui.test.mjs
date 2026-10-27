@@ -1087,5 +1087,5 @@ t('nest destroyed celebration: cheese confetti, crumbling nest, hopping caged ca
   assert.ok(/const calm = !save\.opt\.motion/.test(blk) && /if \(!calm\) confetti/.test(blk) && /\} else flashGlow/.test(blk), 'reduced motion branch');
   assert.ok(/f\.k === 'nest'/.test(js) && /f\.k === 'sil'/.test(js), 'both fx are drawn');
   assert.ok(/idle fidget/.test(js) && /save\.opt\.motion && atk < 0\.02\) \{ const per/.test(js), 'idle fidget is gated by motion');
-  assert.ok(!/—/.test(blk), 'no em dashes');
+  assert.ok(!/\u2014/.test(blk), 'no em dashes');
 });
