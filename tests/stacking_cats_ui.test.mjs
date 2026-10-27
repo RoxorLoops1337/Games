@@ -1234,3 +1234,18 @@ t('audit round 2: one toast at a time on short screens, reveal fits, text floor 
   assert.ok(/body \.coach button\{min-height:60px/.test(blk) && /\.wcat\{flex-basis:60px/.test(blk), 'coach and wardrobe buttons reach 35px real at 320 high');
   assert.ok(/\.card\.item\.r-legendary \.rar,\.rar\.legendary\{[^}]*color:#271c33/.test(blk), 'the legendary badge uses dark text');
 });
+
+t('juice: press squash, ripple, coin pop, level up fx, wave hop, pips, reduced motion respected', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), html = readFileSync('stacking_cats/index.html', 'utf8');
+  const blk = html.slice(html.indexOf('/* JUICE START */'), html.indexOf('/* JUICE END */'));
+  assert.ok(blk.length > 200, 'juice css block exists');
+  assert.ok(/\.btn:active\{[^}]*scale\(\.94\)/.test(blk), 'buttons squash on press');
+  assert.ok(/\.rip\{/.test(blk) && /#coinBox\.cgain/.test(blk) && /#chestBox\.cbounce/.test(blk) && /#nestPips i\.nw/.test(blk), 'ripple, coin pop, chest bounce, pip pop styles');
+  assert.ok(/body\.nomotion \.rip/.test(blk) && /body\.nomotion #coinBox\.cgain/.test(blk), 'reduced motion switches the juice off');
+  assert.ok(/function levelUpFx/.test(js) && /'LEVEL UP!'/.test(js) && /levelUpFx\(p\.x, p\.y\)/.test(js), 'level up celebration on the merge event');
+  assert.ok(/function juiceCoins/.test(js) && /coinAccT = 0\.3/.test(js), 'coin gains aggregate over 300 ms');
+  assert.ok(/function dustSweep\(\) \{[^\n]*\n\s*if \(!motionOn\(\) \|\| gfx < 1\)/.test(js) && /cheerHop = 0\.55/.test(js), 'wave start dust and cheer hop are gated by motion and gfx');
+  assert.ok(/dataset\.act === 'back' \? 'back' : 'ui'/.test(js), 'Back plays the back sound');
+  assert.ok(!html.includes('\u2014') || !blk.includes('\u2014'), 'no em dash in the juice block');
+  assert.ok(!js.slice(js.indexOf('// ---- JUICE helpers'), js.indexOf('function drain()')).includes('\u2014'), 'no em dash in juice js');
+});

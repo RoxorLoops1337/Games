@@ -247,6 +247,15 @@ function setScreen(html, cls = '') {
   for (const el of screenEl.querySelectorAll('[data-act]:not(button)')) { el.setAttribute('role', 'button'); el.tabIndex = 0; }
 }
 const closeScreen = () => setScreen('');
+// press ripple: a small ring where the finger or cursor lands on a button (CSS animates it, skipped under reduced motion)
+document.addEventListener('pointerdown', (e) => {
+  const b = e.target.closest && e.target.closest('.btn, .seg button');
+  if (!b || b.hasAttribute('disabled') || !save.opt.motion || document.body.classList.contains('nomotion')) return;
+  const r = b.getBoundingClientRect(), sp = document.createElement('span');
+  sp.className = 'rip'; sp.setAttribute('aria-hidden', 'true');
+  sp.style.left = (e.clientX - r.left) + 'px'; sp.style.top = (e.clientY - r.top) + 'px';
+  b.appendChild(sp); setTimeout(() => sp.remove(), 480);
+});
 screenEl.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-act]:not(button)')) { e.preventDefault(); e.stopPropagation(); e.target.click(); }
 });
@@ -795,6 +804,7 @@ function beginWave() {
   noteSets();
   S.startWave(g);
   mode = 'play';
+  if (motionOn()) { cheerHop = 0.55; dustSweep(); }
   setBackdrop(themeFor(g.wave));
   const boss = g.bossWave;
   const nest = g.enemies.find((e) => e.boss);
@@ -834,6 +844,7 @@ function onClear() {
   noteRelics();
   if (coachEl && coachEl.dataset.key === 'c2') hideCoach();   // the wave 1 tip would sit on top of the cleared banner
   celeb = g.bossWave ? 2.4 : 1.15;
+  if (motionOn()) { const pp = $('nestPips'); pp.classList.remove('pipclear'); void pp.offsetWidth; pp.classList.add('pipclear'); }
   sfx.play(g.bossWave ? 'win' : 'waveclear');
   sfx.music('calm');
   banner(g.bossWave ? 'NEST DESTROYED!' : 'WAVE CLEARED!', g.bossWave ? chapterDoneLine(g.wave) : clearLine(g.report), false);
@@ -1524,7 +1535,7 @@ function updateHud(dt) {
   { const pw = Math.round(100 * waveProgress(g.queue.length, g.enemies.length, waveTotal)) + '%'; if (hudCache.wprog !== pw) { hudCache.wprog = pw; $('waveProg').style.width = pw; } }
   setText('themeTxt', [THEMES[bdIdx] ? THEMES[bdIdx].name : '', bestTag(save.stats.bestWave)].filter(Boolean).join(' \u00B7 '));
   const inStage = ((g.wave - 1) % BOSS_EVERY) + 1;
-  if (hudCache.pips !== inStage) { hudCache.pips = inStage; $('nestPips').innerHTML = Array.from({ length: BOSS_EVERY }, (_, i) => `<i class="${i === BOSS_EVERY - 1 ? 'boss' : ''} ${i + 1 <= inStage ? 'on' : ''}"></i>`).join(''); }
+  if (hudCache.pips !== inStage) { hudCache.pips = inStage; $('nestPips').innerHTML = Array.from({ length: BOSS_EVERY }, (_, i) => `<i class="${i === BOSS_EVERY - 1 ? 'boss' : ''} ${i + 1 <= inStage ? 'on' : ''} ${i + 1 === inStage ? 'nw' : ''}"></i>`).join(''); }
   const nest = g.enemies.find((e) => e.boss && !e.dead);
   $('bossBar').style.display = playing && nest ? 'block' : 'none';
   if (nest) {
@@ -1543,9 +1554,12 @@ function updateHud(dt) {
   coinShown += (g.run.coins - coinShown) * Math.min(1, dt * 7);
   if (Math.abs(g.run.coins - coinShown) < 0.5) coinShown = g.run.coins;
   setText('coinTxt', String(Math.floor(coinShown)));
+  juiceCoins(dt);
   const ch = g.boxes.length;
   $('chestBox').style.display = ch > 0 ? 'flex' : 'none';
   setText('chestTxt', String(ch));
+  if (ch > chestPrev && motionOn()) { const cb = $('chestBox'); cb.classList.remove('cbounce'); void cb.offsetWidth; cb.classList.add('cbounce'); }
+  chestPrev = ch;
   const topBox = BOXES.filter((b) => g.boxes.includes(b.id)).pop();
   if (topBox && hudCache.box !== topBox.id) { hudCache.box = topBox.id; $('chestIco').innerHTML = `<img class="gi" alt="" src="${iconURL(topBox.icon)}">`; }
   $('bMeter').classList.toggle('on', !!save.meter);
@@ -1858,7 +1872,7 @@ function handle(e) {
     case 'nine': txtFx(S.TOWER_X + 40, 260, 'NINE LIVES!', '#ffd23f', 36, 1.6); puff(S.TOWER_X, 330, 30, '#ffd23f', 200, 0.9, 6); flashGlow(S.TOWER_X, 330, 200, '#ffd23f', 0.6); screenFlash('rgba(255,230,120,.35)', 0.4); sfx.play('heal'); break;
     case 'special': {
       const p = catPos(e.uid), col = e.color || '#ffd23f';
-      ring(p.x, p.y, 120, col, 0.55, 10); ring(p.x, p.y, 70, '#ffffff', 0.4, 5);
+      ring(p.x, p.y, 120, col, 0.55, 10); ring(p.x, p.y, 70, '#ffffff', 0.4, 5); ring(p.x, p.y, 170, col, 0.7, 4); if (motionOn()) pops.set(e.uid, 0.55);
       flashGlow(p.x, p.y, 120, col, 0.6); sparks(p.x, p.y, 16, col, 300, 0.5);
       txtFx(p.x + 60, p.y - 56, e.name + '!', col, 28, 1.3);
       screenFlash(col.length === 7 ? col + '33' : 'rgba(255,255,255,.2)', 0.22);
@@ -1880,7 +1894,7 @@ function handle(e) {
       flashGlow(p.x, p.y, max ? 190 : 130, '#ffd24a', 0.5);
       for (let i = 0; i < (max ? 10 : 6); i++) { const a = (i / (max ? 10 : 6)) * TAU; spawnFx({ k: 'p', x: p.x, y: p.y, vx: Math.cos(a) * 190, vy: Math.sin(a) * 190 - 60, life: 0.7, max: 0.7, r: 5, col: i % 2 ? '#fff6b0' : '#ffd23f', grav: 160 }); }
       confetti(p.x, p.y - 20, max ? 46 : 24, max ? 380 : 300);
-      txtFx(p.x + 56, p.y - 50, max ? 'MAX LEVEL!' : 'Level up!', '#ffe14d', max ? 26 : 22, 1.2);
+      if (max) txtFx(p.x + 56, p.y - 50, 'MAX LEVEL!', '#ffe14d', 26, 1.2); levelUpFx(p.x, p.y);   // LEVEL UP! comes from levelUpFx
       if (save.opt.motion && !document.body.classList.contains('nomotion')) {   // squash and stretch plus a soft dust puff where the tower meets the ground
         pops.set(e.uid, 0.55);
         puff(p.x, GROUND + 4, 5, '#e6dcc0', 70, 0.45, 3.5, 40); smoke(p.x - 14, GROUND + 6, 1, 7, '#e6dcc0'); smoke(p.x + 14, GROUND + 6, 1, 7, '#e6dcc0');
@@ -1895,6 +1909,34 @@ function handle(e) {
 function mergeFlash(x, y, big) {   // short bright ring plus a star burst at the merge point; stars are skipped under reduced motion
   ring(x, y, big ? 80 : 56, '#ffffff', 0.2, 8);
   if (save.opt.motion && !document.body.classList.contains('nomotion')) for (let i = 0; i < (big ? 7 : 5); i++) { const a = (i / (big ? 7 : 5)) * TAU + 0.4; txtFx(x + Math.cos(a) * 34, y + Math.sin(a) * 34 - 6, '\u2605', i % 2 ? '#fff6b0' : '#ffd23f', 16, 0.5, false); }
+}
+// ---- JUICE helpers (cheap: they reuse ring, txtFx, puff and sparks; all skipped or reduced under reduced motion)
+const motionOn = () => !!save.opt.motion && !document.body.classList.contains('nomotion');
+let cheerHop = 0;   // seconds left of the tiny tower hop at wave start
+function levelUpFx(x, y) {   // distinct from mergeFlash: a golden ring, LEVEL UP! over the cat and rising arrows
+  ring(x, y - 6, 70, '#ffd23f', 0.6, 7); ring(x, y - 6, 110, '#fff2a0', 0.75, 3);
+  txtFx(x, y - 78, 'LEVEL UP!', '#ffd23f', 30, 1.4);
+  if (motionOn()) for (let i = -1; i <= 1; i++) txtFx(x + i * 26, y - 30 + Math.abs(i) * 10, '\u25B2', i ? '#fff2a0' : '#ffe14d', 17, 0.9, false);
+}
+function dustSweep() {   // a low band of dust rolling across the ground
+  if (!motionOn() || gfx < 1) return;
+  const n = gfx >= 2 ? 9 : 5;
+  for (let i = 0; i < n; i++) spawnFx({ k: 'p', x: g.towerX + 30 + i * 70, y: GROUND + 4, vx: 140 + Math.random() * 60, vy: -6 - Math.random() * 10, life: 0.6, max: 0.6, r: 5 + Math.random() * 3, col: '#e6dcc0', grav: 0 });
+}
+let coinPrev = -1, coinAcc = 0, coinAccT = 0, chestPrev = 0;
+function juiceCoins(dt) {   // aggregates coin gains over 300 ms: one gold pop and, for bigger gains, one +N text
+  const c = Math.round(g.run.coins || 0);
+  if (coinPrev < 0 || c < coinPrev) coinPrev = c;
+  if (c > coinPrev) { coinAcc += c - coinPrev; coinPrev = c; if (!coinAccT) coinAccT = 0.3; }
+  if (coinAccT > 0) {
+    coinAccT -= dt;
+    if (coinAccT <= 0) {
+      coinAccT = 0;
+      if (motionOn()) { const el = $('coinBox'); el.classList.remove('cgain'); void el.offsetWidth; el.classList.add('cgain'); }
+      if (coinAcc >= 5) txtFx(70, 134, '+' + coinAcc, '#ffd23f', 18, 0.9);
+      coinAcc = 0;
+    }
+  }
 }
 function drain() { for (const e of g.ev) handle(e); g.ev.length = 0; }
 
@@ -2114,6 +2156,7 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
     const sc = 1.0 * (1 + 0.06 * (c.lvl - 1));
     let hop = marching ? Math.abs(Math.sin(t * 9 + i * 0.7)) * 3.2 : Math.sin(t * 2.4 + i) * 1.3;
     if (cheer) hop = Math.abs(Math.sin(t * 8 + i * 0.9)) * 12;
+    else if (cheerHop > 0) { const u = Math.max(0, Math.min(1, 1 - cheerHop / 0.55 - i * 0.07)); hop += Math.sin(u * Math.PI) * 9; }
     const below = list[i - 1], bump = below && below.atk > 0 ? Math.sin((below.atk / 0.22) * Math.PI) * 3.5 : 0;
     const feetY = GROUND - i * SLOT - hop - bump;
     const atk = c.atk > 0 ? c.atk / 0.22 : 0;
@@ -2599,7 +2642,7 @@ cv.addEventListener('pointerdown', (e) => {
   if (!isFinite(x) || !isFinite(y)) return;
   for (let i = 0; i < g.cats.length; i++) {
     const c = g.cats[i], py = GROUND - 50 - S.aliveCats(g).indexOf(c) * SLOT;
-    if (!c.ko && Math.abs(x - g.towerX) < 55 && Math.abs(y - py) < SLOT * 0.5) { if (S.specialReady(c)) doSpecial(c.uid); else { sfx.unlock(); sfx.meow(c.id, 'happy'); moods.set(c.uid, 1.2); emote(c.uid, '\uD83D\uDC96', 0.9); stopPurr(); purrTimer = setTimeout(() => { purrTimer = 0; if (mode === 'play' && !paused) { sfx.play('purr'); moods.set(c.uid, 2.6); emote(c.uid, '\uD83D\uDC96', 1.4); } }, 550); } return; }
+    if (!c.ko && Math.abs(x - g.towerX) < 55 && Math.abs(y - py) < SLOT * 0.5) { if (S.specialReady(c)) doSpecial(c.uid); else { sfx.unlock(); sfx.meow(c.id, 'happy'); moods.set(c.uid, 1.2); emote(c.uid, '\uD83D\uDC96', 0.9); if (motionOn()) pops.set(c.uid, 0.55); spawnFx({ k: 's', x: g.towerX + 18, y: py - 30, life: 0.5, max: 0.5 }); stopPurr(); purrTimer = setTimeout(() => { purrTimer = 0; if (mode === 'play' && !paused) { sfx.play('purr'); moods.set(c.uid, 2.6); emote(c.uid, '\uD83D\uDC96', 1.4); } }, 550); } return; }
   }
   let best = null, bd = 1e9;
   for (const en of g.enemies) {
@@ -2726,6 +2769,7 @@ function frame(ts) {
   if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
   comboPulse *= Math.exp(-8 * dt); towerWob *= Math.exp(-5 * dt);
   for (const [k, v] of moods) { if (v - dt <= 0) moods.delete(k); else moods.set(k, v - dt); }
+  if (cheerHop > 0) cheerHop = Math.max(0, cheerHop - dt);
   for (const [k, v] of pops) { if (v - dt <= 0) pops.delete(k); else pops.set(k, v - dt); }
   sfx.setIntensity(Math.min(1, combo / 30));
   if (g && mode === 'play' && !paused) {

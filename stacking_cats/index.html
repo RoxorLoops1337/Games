@@ -1136,6 +1136,25 @@ body .screen:has(.revealstage) .btn.small.btn{min-height:52px}
 body.bigtext .cards.reveal .card p,body.bigtext .cards.reveal .card .impact,body.bigtext .cards.reveal .card .gainl,body.bigtext .cards.reveal .card .setl{font-size:14px;line-height:1.08}
 body.bigtext .cards.reveal .card h3{font-size:22px}
 /* AUDIT END */
+/* JUICE START */
+.btn,.seg button{position:relative}
+.btn{transition:transform .24s cubic-bezier(.34,1.7,.5,1),box-shadow .12s,filter .15s}
+.btn:active{transform:translateY(3px) scale(.94);filter:brightness(1.12) saturate(1.1);transition-duration:.05s,.05s,.05s}
+.seg button:active{transform:scale(.94);filter:brightness(1.15)}
+.rip{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;pointer-events:none;border:3px solid #fffd;background:radial-gradient(#fff9,#fff0 70%);animation:ripple .45s ease-out forwards;z-index:3}
+@keyframes ripple{from{transform:scale(.4);opacity:1}to{transform:scale(5);opacity:0}}
+#coinBox.cgain{animation:cgainpop .38s ease-out}
+@keyframes cgainpop{0%{transform:scale(1)}35%{transform:scale(1.15);filter:brightness(1.6) sepia(.5) saturate(2);box-shadow:0 0 18px #ffd23f}100%{transform:scale(1)}}
+#chestBox.cbounce{animation:cbounce .5s ease-out}
+@keyframes cbounce{0%{transform:translateY(0) scale(1)}25%{transform:translateY(-9px) scale(1.12,.92)}50%{transform:translateY(0) scale(.92,1.1)}75%{transform:translateY(-3px)}100%{transform:none}}
+#nestPips i.nw{animation:pipnew .45s cubic-bezier(.34,1.8,.5,1)}
+@keyframes pipnew{0%{transform:scale(.4)}60%{transform:scale(1.7);box-shadow:0 0 12px #fff}100%{transform:scale(1.15)}}
+#nestPips.pipclear{animation:pipclear .5s ease-out}
+@keyframes pipclear{0%{transform:scale(1)}40%{transform:scale(1.25);filter:brightness(1.6)}100%{transform:scale(1)}}
+body.nomotion .rip,body.nomotion #coinBox.cgain,body.nomotion #chestBox.cbounce,body.nomotion #nestPips i.nw,body.nomotion #nestPips.pipclear{animation:none!important}
+body.nomotion .rip{display:none}
+body.nomotion .btn:active,body.nomotion .seg button:active{transform:none}
+/* JUICE END */
 </style>
 </head>
 <body>
