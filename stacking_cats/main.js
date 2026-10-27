@@ -1441,10 +1441,11 @@ function smoke(x, y, n, r = 10, col = '#d9d2e6') {
   for (let i = 0; i < n; i++) spawnFx({ k: 'sm', x: x + (Math.random() - 0.5) * 12, y, vx: (Math.random() - 0.5) * 30, vy: -20 - Math.random() * 30, r, life: 0.7, max: 0.7, col });
 }
 const CONF = ['#ff8fb7', '#ffd23f', '#8fe0b4', '#8fd3ff', '#c9a6ff', '#ffffff'];
-function confetti(x, y, n, spread = 320) {
+const CHEESE = ['#ffd23f', '#fff6b0', '#ffffff', '#ffc02a'];
+function confetti(x, y, n, spread = 320, cols = CONF) {
   for (let i = 0; i < n; i++) {
     const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, v = spread * (0.4 + Math.random() * 0.8);
-    spawnFx({ k: 'cf', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 16, col: CONF[i % CONF.length], life: 1.4 + Math.random() * 0.8, max: 2.2 });
+    spawnFx({ k: 'cf', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 16, col: cols[i % cols.length], life: 1.4 + Math.random() * 0.8, max: 2.2 });
   }
 }
 const txtFx = (x, y, t, col = '#fff', size = 15, life = 0.8, pop = true) => spawnFx({ k: 't', x: x + (Math.random() - 0.5) * 14, y, t, col, size, life, max: life, pop });
@@ -1637,11 +1638,19 @@ function handle(e) {
       ring(e.x, e.y - 60, 200, '#fff6b0', 0.9, 14); ring(e.x, e.y - 60, 120, '#ffffff', 0.6, 8);
       flashGlow(e.x, e.y - 60, 260, '#fff2c0', 0.7);
       puff(e.x, e.y - 60, 40, '#ffd23f', 280, 1, 7); sparks(e.x, e.y - 60, 40, '#fff6b0', 420, 0.8); smoke(e.x, e.y - 40, 8, 22, '#b8aab8');
-      confetti(e.x, e.y - 60, 70, 420);
+      const calm = !save.opt.motion;   // reduced motion: only a soft glow and the meow text
+      if (!calm) confetti(e.x, e.y - 60, 80, 420, CHEESE);
       // the freed cat: hearts and sparks lift off from where its cage hung (see nestOverlay)
-      for (let i = 0; i < 9; i++) spawnFx({ k: 'h', x: e.x + 68 + (Math.random() - 0.5) * 40, y: e.y - 22 - Math.random() * 30, life: 1.3 + Math.random() * 0.6, max: 1.9 });
-      sparks(e.x + 68, e.y - 30, 16, '#ffe9a8', 260, 0.8);
-      shake = 20; zpunch = 0.07; hit(0.16); slowmo(1.2, 0.28); screenFlash('rgba(255,255,230,.5)', 0.4);
+      for (let i = 0; i < (calm ? 3 : 9); i++) spawnFx({ k: 'h', x: e.x + 68 + (Math.random() - 0.5) * 40, y: e.y - 22 - Math.random() * 30, life: 1.3 + Math.random() * 0.6, max: 1.9 });
+      sparks(e.x + 68, e.y - 30, calm ? 4 : 16, '#ffe9a8', 260, 0.8);
+      txtFx(e.x + 68, e.y - 70, 'Meow!', '#fff3b0', 26, 1.1);
+      if (!calm) {
+        const nst = g && (g.enemies.find((m) => m.boss) || {}), nk = nst.kind || NESTS[0].id;
+        spawnFx({ k: 'nest', x: e.x, y: e.y, kind: nk, life: 0.9, max: 0.9 });   // the nest sprite shakes, sinks and cracks apart
+        for (let i = 0; i < 10; i++) spawnFx({ k: 'cf', x: e.x + (Math.random() - 0.5) * 120, y: e.y - 30 - Math.random() * 50, vx: (Math.random() - 0.5) * 240, vy: -60 - Math.random() * 160, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 12, col: i % 2 ? '#c9a878' : '#8a6c4a', life: 0.9, max: 0.9 });   // crumbs
+        spawnFx({ k: 'sil', x: e.x + 68, y: e.y - 20, id: CATS[(g ? g.run.bossKills : 0) % CATS.length].id, life: 1.2, max: 1.2 });   // the caged cat hops out
+        shake = 20; zpunch = 0.07; hit(0.16); slowmo(1.2, 0.28); screenFlash('rgba(255,255,230,.6)', 0.4);
+      } else flashGlow(e.x, e.y - 60, 200, '#fff6c0', 0.5);
       sfx.play('boom'); buzz('boss');
       sfx.meow('caged' + (g ? g.run.bossKills : 0), 'cheer', 0.55);   // the freed cat's happy mew from the broken cage, a different voice each nest
       break;
@@ -1744,6 +1753,15 @@ function drawFx() {
       ctx.globalAlpha = 1; ctx.drawImage(iconSprite(f.tier && BOX_BY_ID[f.tier] ? BOX_BY_ID[f.tier].icon : '🎁'), f.x - 13, f.y + 13 - 26 * sq, 26, 26 * sq);
     }
     else if (f.k === 'fly') { ctx.globalAlpha = 1; if (f.kind === 'coin') { ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#8a5a14'; ctx.lineWidth = 1.4; const cw = 5.5 * Math.abs(Math.cos(f.life * 14)) + 1.2; ctx.beginPath(); ctx.ellipse(f.x, f.y, cw, 5.5, 0, 0, TAU); ctx.fill(); ctx.stroke(); if (cw > 2.6) { ctx.strokeStyle = '#c98a1c'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(f.x, f.y, cw * 0.62, 3.4, 0, 0, TAU); ctx.stroke(); } ctx.fillStyle = '#fff8d0'; ctx.fillRect(f.x - cw * 0.5, f.y - 3.6, Math.max(1, cw * 0.35), 2.4); } else ctx.drawImage(iconSprite(f.tier && BOX_BY_ID[f.tier] ? BOX_BY_ID[f.tier].icon : '\uD83C\uDF81'), f.x - 13, f.y - 13, 26, 26); }
+    else if (f.k === 'nest') {
+      const u = 1 - a, spr = nestSprite(f.kind), sq = 1 - u * 0.55;
+      ctx.globalAlpha = Math.min(1, a * 2.2); ctx.save(); ctx.translate(f.x + Math.sin(u * 60) * 5 * a, f.y + u * 14); ctx.scale(1.25 * (1 + u * 0.3), 1.25 * sq);
+      ctx.drawImage(spr.c, -spr.ax, -spr.ay, spr.w, spr.h); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.max(0, 0.7 - u * 2.2); ctx.drawImage(spr.c, -spr.ax, -spr.ay, spr.w, spr.h); ctx.restore();
+    }
+    else if (f.k === 'sil') {
+      const u = 1 - a, hp = Math.abs(Math.sin(u * Math.PI * 2.5)) * 34 * (1 - u * 0.4), sx = f.x + u * 120, s = silSprite(f.id);
+      ctx.globalAlpha = Math.min(1, a * 3) * (u < 0.1 ? u * 10 : 1); ctx.drawImage(s, sx - 36, f.y - hp - 66, 72, 72);
+    }
     else if (f.k === 'h') { ctx.globalAlpha = Math.min(1, a * 2); ctx.drawImage(iconSprite('♥'), f.x - 8, f.y - 12, 16, 16); }
     ctx.globalCompositeOperation = 'source-over';
   }
@@ -1912,7 +1930,10 @@ function drawStack(cx, list, t, marching, hpBars, cheer, zoomies) {
       const br = marching || cheer || !save.opt.motion ? 0 : Math.sin(t * 2.1 + i * 1.9 + (c.seed || 0)) * 0.014 * (1 - Math.min(1, atk));
       ctx.scale(1 + atk * 0.05 + squash - br * 0.5, 1 - atk * 0.06 - squash + br);
       const pop = pops.get(c.uid); if (pop) { const u = pop / 0.55, st = Math.sin((1 - u) * Math.PI * 3) * u * 0.2; ctx.scale(1 - st * 0.55, 1 + st); }
-      ctx.rotate(Math.sin(t * 2 + i * 1.3) * 0.015 + (marching ? Math.sin(t * 9 + i) * 0.03 : 0) + sway * 0.002);
+      // idle fidget: every 6 to 10 s (out of step per cat) a quick ear-twitch style head wiggle, no redraw
+      let fid = 0;
+      if (!k && !marching && !cheer && save.opt.motion && atk < 0.02) { const per = 6 + ((i * 7 + (c.seed || 0) * 13) % 5), ph = (t + i * 2.3 + (c.seed || 0) * 3) % per; if (ph < 0.4) fid = Math.sin(ph / 0.4 * Math.PI * 3) * (1 - ph / 0.4) * 0.05; }
+      ctx.rotate(fid + Math.sin(t * 2 + i * 1.3) * 0.015 + (marching ? Math.sin(t * 9 + i) * 0.03 : 0) + sway * 0.002);
       ctx.globalAlpha = k ? 0.22 / k : 1;
       if (gfx >= 2 && !k) drawJelly(spr, -60 * sc, -107 * sc, 120 * sc, 120 * sc, t, 0.9 + atk * 2.2 + (marching ? 1.6 : 0) + towerWob * 2.5, i * 1.3 + (c.seed || 0));
       else ctx.drawImage(spr, -60 * sc, -107 * sc, 120 * sc, 120 * sc);
