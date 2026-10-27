@@ -1894,7 +1894,7 @@ function handle(e) {
       flashGlow(p.x, p.y, max ? 190 : 130, '#ffd24a', 0.5);
       for (let i = 0; i < (max ? 10 : 6); i++) { const a = (i / (max ? 10 : 6)) * TAU; spawnFx({ k: 'p', x: p.x, y: p.y, vx: Math.cos(a) * 190, vy: Math.sin(a) * 190 - 60, life: 0.7, max: 0.7, r: 5, col: i % 2 ? '#fff6b0' : '#ffd23f', grav: 160 }); }
       confetti(p.x, p.y - 20, max ? 46 : 24, max ? 380 : 300);
-      txtFx(p.x + 56, p.y - 50, max ? 'MAX LEVEL!' : 'Level up!', '#ffe14d', max ? 26 : 22, 1.2); levelUpFx(p.x, p.y);
+      if (max) txtFx(p.x + 56, p.y - 50, 'MAX LEVEL!', '#ffe14d', 26, 1.2); levelUpFx(p.x, p.y);   // LEVEL UP! comes from levelUpFx
       if (save.opt.motion && !document.body.classList.contains('nomotion')) {   // squash and stretch plus a soft dust puff where the tower meets the ground
         pops.set(e.uid, 0.55);
         puff(p.x, GROUND + 4, 5, '#e6dcc0', 70, 0.45, 3.5, 40); smoke(p.x - 14, GROUND + 6, 1, 7, '#e6dcc0'); smoke(p.x + 14, GROUND + 6, 1, 7, '#e6dcc0');
@@ -1933,7 +1933,7 @@ function juiceCoins(dt) {   // aggregates coin gains over 300 ms: one gold pop a
     if (coinAccT <= 0) {
       coinAccT = 0;
       if (motionOn()) { const el = $('coinBox'); el.classList.remove('cgain'); void el.offsetWidth; el.classList.add('cgain'); }
-      if (coinAcc >= 5) txtFx(78, 118, '+' + coinAcc, '#ffd23f', 18, 0.9);
+      if (coinAcc >= 5) txtFx(70, 134, '+' + coinAcc, '#ffd23f', 18, 0.9);
       coinAcc = 0;
     }
   }
