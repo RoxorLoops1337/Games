@@ -254,7 +254,7 @@ screenEl.addEventListener('click', (e) => {
   if (!t || t.hasAttribute('disabled')) return;
   sfx.unlock(); sfx.music(sfx.mode);
   const fn = acts[t.dataset.act];
-  if (fn) { sfx.play('ui'); buzz('ui'); fn(t.dataset, t); }
+  if (fn) { sfx.play(t.dataset.act === 'back' ? 'back' : 'ui'); buzz('ui'); fn(t.dataset, t); }
 });
 let lastHover = null;
 screenEl.addEventListener('pointerover', (e) => { const t = e.target.closest('[data-act]'); if (t && t !== lastHover) { lastHover = t; sfx.play('hover'); } });
@@ -833,7 +833,7 @@ function onClear() {
   noteRelics();
   if (coachEl && coachEl.dataset.key === 'c2') hideCoach();   // the wave 1 tip would sit on top of the cleared banner
   celeb = g.bossWave ? 2.4 : 1.15;
-  sfx.play(g.bossWave ? 'win' : 'clear');
+  sfx.play(g.bossWave ? 'win' : 'waveclear');
   sfx.music('calm');
   banner(g.bossWave ? 'NEST DESTROYED!' : 'WAVE CLEARED!', g.bossWave ? chapterDoneLine(g.wave) : clearLine(g.report), false);
   confetti(g.towerX + 40, GROUND - 120, g.bossWave ? 60 : 26, 380);
@@ -1297,6 +1297,7 @@ function banner(txt, sub, boss) {
 }
 function toast(txt) {
   if (document.body.classList.contains('scr')) $('toasts').replaceChildren();   // one at a time over a full screen
+  sfx.play('pip');
   const el = document.createElement('div');
   el.className = /^Trophy:/.test(txt) ? 'toast trophy' : 'toast'; el.textContent = txt;
   $('toasts').appendChild(el);
@@ -1655,7 +1656,7 @@ function handle(e) {
         spawnFx({ k: 'sil', x: e.x + 68, y: e.y - 20, id: CATS[(g ? g.run.bossKills : 0) % CATS.length].id, life: 1.2, max: 1.2 });   // the caged cat hops out
         shake = 20; zpunch = 0.07; hit(0.16); slowmo(1.2, 0.28); screenFlash('rgba(255,255,230,.6)', 0.4);
       } else flashGlow(e.x, e.y - 60, 200, '#fff6c0', 0.5);
-      sfx.play('boom'); buzz('boss');
+      sfx.play('nestdown'); buzz('boss');
       sfx.meow('caged' + (g ? g.run.bossKills : 0), 'cheer', 0.55);   // the freed cat's happy mew from the broken cage, a different voice each nest
       break;
     }

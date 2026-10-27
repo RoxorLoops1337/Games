@@ -797,6 +797,23 @@ t('lootbox drop bounces, rests and flies; reduced motion keeps the direct flight
   assert.ok(/\.ktip\{/.test(page), 'tip styled');
 });
 
+t('new sfx (waveclear, nestdown, merge sparkle, back, pip) exist, are wired into main.js, rate limited and keep conservative gains', () => {
+  const au = readFileSync(new URL('../stacking_cats/audio.js', import.meta.url), 'utf8');
+  const mj = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  for (const nm of ['waveclear', 'nestdown', 'merge', 'back', 'pip']) {
+    const m = au.match(new RegExp("case '" + nm + "':([^\\n]*)"));
+    assert.ok(m, nm + ' case exists');
+    const vs = [...m[1].matchAll(/ v: ([0-9.]+)/g)].map((x) => +x[1]);
+    assert.ok(vs.length && vs.every((v) => v <= 0.3), nm + ' tone gains stay conservative');
+    assert.ok(new RegExp('\\b' + nm + ': \\d+[ ,}]').test(au.match(/const gap = \{[^}]*\}/)[0]), nm + ' has a gap');
+  }
+  assert.ok(/'win' : 'waveclear'/.test(mj), 'wave cleared plays waveclear');
+  assert.ok(/sfx\.play\('nestdown'\)/.test(mj), 'bossDown plays nestdown');
+  assert.ok(/sfx\.play\('pip'\)/.test(mj), 'toasts pip');
+  assert.ok(/'back' : 'ui'/.test(mj), 'back taps get their own sound');
+  assert.ok(!au.includes(String.fromCharCode(0x2014)), 'no literal em dash in audio.js');
+});
+
 console.log(`${n} tests passed`);
 
 t('backpack cells tell rarity without colour: one pip more per tier, a star for mythic', () => {
