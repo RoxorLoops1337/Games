@@ -1280,4 +1280,12 @@ t('drag juice: the ghost lifts with a ring, leans into the motion and trails spa
   for (const k of ['ghostlift', 'dring', 'dtrail', 'targetpulse']) assert.ok(new RegExp('@keyframes ' + k).test(css), k);
 });
 
+t('end of run and Kingdom juice: stats count up and pop in one after another, bars fill, a personal best bursts, buying an upgrade or wonder bursts with a label', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/function domBurst\(cx, cy, n, cols, label\)/.test(js) && /save\.opt\.motion\) return;/.test(js.slice(js.indexOf('function domBurst'), js.indexOf('function domBurst') + 200)), 'the burst helper respects reduced motion');
+  assert.ok(/domBurst\([^)]*'LEVEL UP!'\)/.test(js) && /domBurst\([^)]*'BUILT!'\)/.test(js) && /'NEW BEST!'/.test(js), 'bursts on upgrade, wonder and a personal best');
+  assert.ok(/\.overcols \.stats > div/.test(js) && /--i/.test(js), 'the stats count up in turn');
+  for (const k of ['statpop', 'rbin', 'barfill', 'dconf', 'dlabel']) assert.ok(new RegExp('@keyframes ' + k).test(css), k);
+});
+
 console.log(`${n} tests passed`);
