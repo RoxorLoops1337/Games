@@ -440,7 +440,7 @@ function showTitle() {
   const day = dayKey(), di = dayInfo(day), played = save.daily[day], streak = dailyStreak(save.daily);
   const trophies = ACHIEVEMENTS.filter((a) => save.ach[a.id]).length;
   setScreen(`
-    <h1 class="logo">Stacking<span>Cats</span></h1>
+    <h1 class="logo" data-no-tr="1">Stacking<span>Cats</span></h1>
     <div class="tag">${titleTag(!!save.storyDone, save.unlocked.length, CATS.length)}</div>
     <div class="row tgrid g4 gplay"><button class="btn big" data-act="play">Play</button><button class="btn small grey" data-act="ranking" title="See the ranking list">&#127942; Ranking</button><button class="btn small grey" data-act="story">Story</button></div>
     <div class="row tgrid g4"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${streak >= 2 ? `<span class="streak" title="${streak} days in a row">&#128293;${streak}</span>` : ''}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="collection" style="grid-column:span 2">Collection</button></div>

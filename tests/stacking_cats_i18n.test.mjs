@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { resolveLang, compile, useDict, tr, getLang } from '../stacking_cats/i18n.js';
 
 let passed = 0;
-const t = (name, fn) => { try { fn(); passed++; console.log('ok ' + name); } catch (e) { console.error('FAIL ' + name); throw e; } };
+const t = async (name, fn) => { try { await fn(); passed++; console.log('ok ' + name); } catch (e) { console.error('FAIL ' + name); throw e; } };
 
-t('Auto follows the browser: Danish if any browser language is Danish, otherwise English; a chosen language always wins', () => {
+await t('Auto follows the browser: Danish if any browser language is Danish, otherwise English; a chosen language always wins', () => {
   assert.equal(resolveLang('auto', ['da-DK', 'en']), 'da');
   assert.equal(resolveLang('auto', ['en-US', 'da']), 'en');
   assert.equal(resolveLang('auto', ['fr', 'de']), 'en');
@@ -14,11 +14,11 @@ t('Auto follows the browser: Danish if any browser language is Danish, otherwise
   assert.equal(resolveLang('da', ['en']), 'da');
 });
 
-t('lookup: exact text, numbers, wildcards (matched text is translated too), sentences, spaces around the text', () => {
+await t('lookup: exact text, numbers, wildcards (matched text is translated too), sentences, spaces around the text', () => {
   useDict('da', {
     'Play': 'Spil', 'Wave #': 'Bolge {1}', 'Best on {}: #': 'Bedst paa {1}: {2}', 'Lucky Shell': 'Heldig Musling',
     'You win.': 'Du vinder.', 'Try again!': 'Proev igen!', 'Mice bite #% harder': 'Mus bider {1}% haardere',
-    'The shrine gives {}': 'Helligdommen giver {1}',
+    'The shrine gives {}': 'Helligdommen giver {1}', '# of # cats': '# af # katte',
   });
   assert.equal(getLang(), 'da');
   assert.equal(tr('Play'), 'Spil');
@@ -28,13 +28,14 @@ t('lookup: exact text, numbers, wildcards (matched text is translated too), sent
   assert.equal(tr('The shrine gives Lucky Shell'), 'Helligdommen giver Heldig Musling', 'a name inside a wildcard is translated by its own entry');
   assert.equal(tr('You win. Try again!'), 'Du vinder. Proev igen!', 'a text is tried sentence by sentence');
   assert.equal(tr('Mice bite 8% harder'), 'Mus bider 8% haardere');
+  assert.equal(tr('5 of 32 cats'), '5 af 32 katte', 'a bare # in a value is the next number of the key');
   assert.equal(tr('Something new'), 'Something new', 'an unknown text stays English');
   assert.equal(tr(''), '');
   useDict('en', {});
   assert.equal(tr('Play'), 'Play', 'English never changes anything');
 });
 
-t('patterns: the most specific one wins and a number pattern is tried before a wildcard', () => {
+await t('patterns: the most specific one wins and a number pattern is tried before a wildcard', () => {
   const { wl } = compile({ '{}': 'any', 'Wave #': 'w', 'Wave # of #': 'w2', 'Wave {} is here': 'x' });
   assert.ok(wl.findIndex((p) => p.v === 'w') < wl.findIndex((p) => p.v === 'any'));
   assert.ok(wl.findIndex((p) => p.v === 'w2') < wl.findIndex((p) => p.v === 'w'));
@@ -42,7 +43,7 @@ t('patterns: the most specific one wins and a number pattern is tried before a w
 
 // ---- the Danish dictionary
 const { default: DA } = await import('../stacking_cats/lang/da.js');
-t('Danish dictionary: no dashes used as punctuation, valid {n} references, keys are real text', () => {
+await t('Danish dictionary: no dashes used as punctuation, valid {n} references, keys are real text', () => {
   const keys = Object.keys(DA);
   assert.ok(keys.length >= 0);
   for (const k of keys) {
@@ -52,7 +53,20 @@ t('Danish dictionary: no dashes used as punctuation, valid {n} references, keys 
     assert.ok(!/[—–]/.test(v), 'no em or en dash: ' + v);
     const caps = (k.match(/\{\}|#/g) || []).length;
     for (const m of v.matchAll(/\{(\d+)\}/g)) assert.ok(+m[1] >= 1 && +m[1] <= caps, `"${k}" -> "${v}": {${m[1]}} has no match in the key`);
+    if (/#/.test(v) && !/\{\d+\}/.test(v)) assert.ok(k.includes('#'), `"${k}" -> "${v}": a # in the value needs a # in the key`);
     if (k.includes('{}') || k.includes('#')) assert.doesNotThrow(() => compile({ [k]: v }), k);
   }
+});
+await t('Danish covers the game data: every item, relic, snack, cat text, event, trophy, building and wonder text has a translation', async () => {
+  const C = await import('../stacking_cats/cats.js'), R = await import('../stacking_cats/relics.js');
+  useDict('da', DA);
+  const same = new Set(['Tank', 'Frost', 'Ninja', 'Samurai', 'Magma', 'Laser', 'Showstopper']);   // words that are the same in Danish
+  const miss = [];
+  const chk = (label, arr, fields) => { for (const o of arr) for (const f of fields) { const v = o[f]; if (typeof v === 'string' && v.length > 2 && !same.has(v) && tr(v) === v) miss.push(`${label}:${o.id}.${f}=${v}`); } };
+  chk('item', C.ITEMS, ['name', 'desc']); chk('relic', R.ALL_RELICS, ['name', 'desc']); chk('snack', C.SNACKS || [], ['name', 'desc']);
+  chk('cat', C.CATS, ['desc', 'role']); chk('event', C.EVENTS, ['name', 'desc']); chk('trophy', C.ACHIEVEMENTS, ['name', 'desc']);
+  chk('building', C.BUILDINGS, ['name']); chk('wonder', C.WONDERS, ['name', 'desc']); chk('synergy', Object.values(C.SYNERGIES), ['name']);
+  assert.deepEqual(miss, []);
+  useDict('en', {});
 });
 console.log(`${passed} i18n tests passed`);

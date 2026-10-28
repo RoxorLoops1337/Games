@@ -34,7 +34,9 @@ export function compile(dict) {
       for (const p of parts) {
         if (p === '{}') { src += '(.+?)'; kinds.push('w'); } else if (p === '#') { src += '(' + NUM + ')'; kinds.push('n'); } else src += p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       }
-      wl.push({ re: new RegExp('^' + src + '$'), v, lit: k.replace(/\{\}|#/g, '').length, hasW: kinds.includes('w') });
+      let v2 = v;
+      if (v2.includes('#')) { const nums = kinds.map((x, i) => (x === 'n' ? i + 1 : 0)).filter(Boolean); let q = 0; v2 = v2.replace(/#/g, () => '{' + (nums[q++] || nums[nums.length - 1] || 1) + '}'); }   // a bare # in a value stands for the next number of the key
+      wl.push({ re: new RegExp('^' + src + '$'), v: v2, lit: k.replace(/\{\}|#/g, '').length, hasW: kinds.includes('w') });
     } else ex.set(k, v);
   }
   // the most specific patterns first: the one with the most fixed text, wildcards after plain numbers
@@ -59,15 +61,44 @@ export function tr(s) {
   const lead = s.match(/^\s*/)[0], tail = s.match(/\s*$/)[0], core = s.trim();
   if (!core) return s;
   let out = lookup(core);
-  if (out == null) {
-    const parts = core.split(/(?<=[.!?])\s+/);
-    if (parts.length > 1) {
-      let any = false;
-      const tp = parts.map((p) => { const r = lookup(p); if (r != null) any = true; return r != null ? r : p; });
-      if (any) out = tp.join(' ');
-    }
-  }
+  if (out == null) out = bySentence(core);
+  if (out == null) out = pieces(core);
   return out == null ? s : lead + out + tail;
+}
+// texts built from known parts: a symbol in front, 'Name: text', 'Name, rarity', 'Name (key 3): text' (each part is looked up on its own)
+function pieces(core) {
+  let m = /^([^\p{L}\p{N}]+?)\s+(\p{L}.*)$/u.exec(core);
+  if (m) { const r = lookupAny(m[2]); if (r != null) return m[1] + ' ' + r; }
+  m = /^(.+?) \(key (\d+)\): (.+)$/.exec(core);
+  if (m) { const a = lookupAny(m[1]), b = lookupAny(m[3]); if (a != null || b != null) return (a != null ? a : m[1]) + ' (tast ' + m[2] + '): ' + (b != null ? b : m[3]); }
+  for (const sep of [': ', ', ', ' \u00B7 ']) {
+    const i = core.indexOf(sep);
+    if (i > 0) { const a = lookupAny(core.slice(0, i)), b = lookupAny(core.slice(i + sep.length)); if (a != null || b != null) return (a != null ? a : core.slice(0, i)) + sep + (b != null ? b : core.slice(i + sep.length)); }
+  }
+  return null;
+}
+// a text of several sentences: the longest run of sentences the dictionary knows is taken first, then shorter ones, then single sentences
+function bySentence(core) {
+  const parts = core.split(/(?<=[.!?])\s+/);
+  if (parts.length < 2) return null;
+  const out = []; let any = false;
+  for (let i = 0; i < parts.length;) {
+    let done = false;
+    for (let j = parts.length; j > i; j--) {
+      const r = lookup(parts.slice(i, j).join(' '));
+      if (r != null) { out.push(r); i = j; any = true; done = true; break; }
+    }
+    if (!done) { out.push(parts[i]); i++; }
+  }
+  return any ? out.join(' ') : null;
+}
+// a part: as a whole, or by its own sentences
+function lookupAny(t) {
+  const r = lookup(t);
+  if (r != null) return r;
+  const bs = bySentence(t);
+  if (bs != null) return bs;
+  return pieces(t);
 }
 
 // ---- the dictionary
