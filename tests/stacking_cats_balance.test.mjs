@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {
   newGame, addCat, mergeCats, mergePairs, rollCatChoices, rollSnackChoices, eatSnack, startWave, step, catMaxHp, releaseCat, moveCat, TUNE,
-  rollItemChoices, takeItem, openBox, equipItem, useReroll, autoSpecialPick, useSpecial, useZoomies,
+  rollItemChoices, takeItem, rollRelicChoices, takeRelic, openBox, equipItem, useReroll, autoSpecialPick, useSpecial, useZoomies,
 } from '../stacking_cats/sim.js';
 import { ITEM_BY_ID, emptyKingdom } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CATS, SNACK_BY_ID, STARTERS, MAX_STACK, START_CATS } from '../stacking_cats/cats.js';
@@ -68,7 +68,7 @@ export function playRun(seed, { maxWave = 80, kingdom = null, difficulty = 'norm
       if (skill && guard % 10 === 0) { const u = autoSpecialPick(g); if (u) useSpecial(g, u.uid !== undefined ? u.uid : u); if (g.zoom >= 100) useZoomies(g); }
     }
     if (g.state === 'over') break;
-    for (const r of g.reward) { if (r === 'cat') recruit(g); else if (r.startsWith('box:')) lootBox(g, r.slice(4)); else snack(g); }
+    for (const r of g.reward) { if (r === 'cat') recruit(g); else if (r === 'relic') { const ch = rollRelicChoices(g); if (ch.length) takeRelic(g, ch[0]); } else if (r.startsWith('box:')) lootBox(g, r.slice(4)); else snack(g); }
     arrange(g);
   }
   return { wave: g.wave, kills: g.run.kills, cats: g.cats.length, state: g.state, coins: Math.floor(g.run.coins) };

@@ -352,7 +352,7 @@ t('Lucky Shell: a dodge item that stacks with the cat\'s own dodge and never tou
   assert.equal(fxOf(['shell', 'shell']).dodge, shell.fx.dodge * 2);
   assert.equal(fxOf(['mitten']).dodge, 0, 'other items have no dodge');
   const src = readFileSync(new URL('../stacking_cats/sim.js', import.meta.url), 'utf8');
-  assert.ok(/const dodge = \(d\.pas && d\.pas\.dodge \|\| 0\) \+ itemFx\(c\)\.dodge;\s*if \(dodge > 0 && g\.rnd\(\) < dodge\)/.test(src), 'hurtCat rolls only when there is a dodge chance');
+  assert.ok(/const dodge = \(d\.pas && d\.pas\.dodge \|\| 0\) \+ cx\.dodge;\s*if \(dodge > 0 && g\.rnd\(\) < dodge\)/.test(src), 'hurtCat rolls only when there is a dodge chance');
 });
 
 t('relic book: progress counts per rarity, noting relics returns only the new ones and ignores unknown ids', () => {
@@ -375,7 +375,7 @@ t('team relics: one line per kind with count and carriers, rarest first, unknown
   assert.ok(r[0].desc && r[0].name && r[0].icon);
   assert.deepEqual(teamRelics([]), []);
   const js = readFileSync('stacking_cats/main.js', 'utf8');
-  assert.ok(/teamRelics\(cats\)/.test(js) && /Relics in play/.test(js), 'Team stats lists them');
+  assert.ok(/teamRelics\(cats\)/.test(js) && /Items worn/.test(js), 'Team stats lists them');
 });
 
 t('relic sets: ids exist, three different relics from a set give its bonus and five double it, only living tower cats count', () => {
@@ -456,7 +456,7 @@ t('relic book line for the end of a run: only when the run found something, sing
 t('relic sets wiring: calcMods applies them and Team stats lists them', () => {
   const sim = readFileSync('stacking_cats/sim.js', 'utf8'), js = readFileSync('stacking_cats/main.js', 'utf8');
   assert.ok(/activeSets\(g\.cats\)/.test(sim), 'calcMods reads the sets');
-  assert.ok(/Relic sets/.test(js) && /activeSets\(/.test(js), 'Team stats shows them');
+  assert.ok(/Item sets/.test(js) && /activeSets\(/.test(js), 'Team stats shows them');
 });
 
 t('relic book wiring: a screen, a title button, found relics saved with the run, and a toast for new ones', () => {

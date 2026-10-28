@@ -3,9 +3,10 @@
 import {
   CATS, CAT_BY_ID, STARTERS, SNACKS, SNACK_BY_ID, ENEMY_TYPES, NESTS,
   MAX_STACK, MAX_BENCH, BOSS_EVERY, LVL_MUL, AURA_MUL, BASE_HP, BASE_DMG, TEMP_WAVES,
-  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, CHARMS, CHARM_BY_ID, MAX_STASH, SELL_VALUE, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, BOXES, BOX_BY_ID, COIN_SCALE, itemSlots, kingdomBonuses, emptyKingdom, COIN,
+  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, BOXES, BOX_BY_ID, COIN_SCALE, itemSlots, kingdomBonuses, emptyKingdom, COIN,
   DIFFS, CAT_TAGS, SYNERGIES, ROUTES, ROUTE_BY_ID, DAILY_POOL, masteryBonus, activeSets,
 } from './cats.js';
+import { RELICS, SHADY_RELICS, RELIC_BY_ID, NEST_RELIC_EVERY, DEAL_CATCH, EARLY_BIRD, FIRST_KILL, THEME_TAG, RELIC_THEMES } from './relics.js';
 
 export const W = 960, H = 540, GROUND = 440, TOWER_X = 170, SLOT = 56, DT = 1 / 30;
 export const MAX_ENEMIES = 34;
@@ -44,7 +45,7 @@ export function newGame({ seed = 1, unlocked = STARTERS, events = true, kingdom 
     seed, rnd: rngMaker(seed), events, ev: [], unlocked: new Set(unlocked),
     t: 0, wave: 0, state: 'idle', intro: 0, bossWave: false, reward: [],
     cats: [], bench: [], enemies: [], projs: [], pools: [], mines: [],
-    towerX: TOWER_X, scroll: 0, perm: [], charms: [], temp: [], nineLives: meta.nine, uid: 1,
+    towerX: TOWER_X, scroll: 0, perm: [], relics: [], waveT: 0, firstHit: false, firstKill: false, temp: [], nineLives: meta.nine, uid: 1,
     zoom: meta.zoomStart, zoomT: 0, queue: [], qT: 0, waveKO: false, mods: null, tickT: 0,
     run: { diff: difficulty, daily: daily ? daily.day : null, synMax: 0, setMax: 0, nine: 0, kills: 0, bossKills: 0, recruits: 0, merges: 0, lvl3: 0, lvl3Of: {}, snacks: 0, temp: 0, flawless: 0, wave: 0, coins: 0, dmg: 0, biggest: 0, taken: 0, healed: 0, items: 0, byCat: {} },
   };
@@ -56,6 +57,74 @@ const emit = (g, e) => { if (g.events) g.ev.push(e); };
 const rnd = (g) => g.rnd();
 const pick = (g, arr) => arr[Math.floor(g.rnd() * arr.length)];
 
+// ---------------------------------------------------------------- relics (the data is in relics.js)
+// The team part is added to the stats here; the part that depends on which cat it is (its kind, its place in the tower) is in mkFx.
+function relicState(g, m) {
+  const R = { tagFx: [], posFx: [], allFx: [], matching: 0, rule: {} };
+  const counts = m.syn.counts, kinds = Object.keys(counts).length;
+  for (const id of g.relics || []) {
+    const r = RELIC_BY_ID[id];
+    if (!r) continue;
+    if (r.team) for (const k in r.team) m[k] += r.team[k];
+    if (r.cost) for (const k in r.cost) if (k !== 'hurt') m[k] += r.cost[k];
+    if (r.scale) m[r.scale.key] += r.scale.per * Math.min(r.scale.max, counts[r.scale.tag] || 0);
+    if (r.variety) m.dmg += r.variety * Math.min(8, kinds);
+    if (r.tagFx) R.tagFx.push(r.tagFx);
+    if (r.posFx) R.posFx.push(r.posFx);
+    if (r.allFx) R.allFx.push(r.allFx);
+    if (r.matching) R.matching += r.matching;
+    if (r.rule) for (const k in r.rule) R.rule[k] = (R.rule[k] || 0) + r.rule[k];
+  }
+  if (R.rule.early && g.waveT < EARLY_BIRD.t) m.haste += EARLY_BIRD.haste;
+  return R;
+}
+const addFx = (f, fx) => { for (const k in fx) f[k] += fx[k]; };
+// a relic is taken: it joins the run, and a price in "mice bite harder" is paid for the rest of the run
+export function takeRelic(g, id, extraHurt = 0) {
+  const r = RELIC_BY_ID[id], before = snapshotMax(g);
+  if (!r || g.relics.includes(id)) return false;
+  g.relics.push(id); g.run.relics = (g.run.relics || 0) + 1;
+  const hurt = ((r.cost && r.cost.hurt) || 0) + extraHurt;
+  if (hurt) g.hurtMul *= 1 + hurt;
+  refreshHp(g, before);
+  return true;
+}
+// three relics to pick from after a nest: one for a kind of cat in the tower, one about the tower or the start of a wave, one that is a surprise
+export function rollRelicChoices(g, n = 3) {
+  const owned = new Set(g.relics), counts = synergyState(g).counts;
+  const pool = RELICS.filter((r) => !owned.has(r.id));
+  const tagOf = (r) => (r.tagFx && r.tagFx.tag) || (r.scale && r.scale.tag) || THEME_TAG[r.theme] || null;
+  const w = (r) => (r.rarity === 'epic' ? 0.6 : 1) * (1 + (tagOf(r) ? (counts[tagOf(r)] || 0) : 0));
+  const out = [];
+  const take = (list) => {
+    const left = list.filter((r) => !out.includes(r));
+    if (!left.length) return;
+    let t = left.reduce((a, r) => a + w(r), 0) * g.rnd();
+    for (const r of left) { t -= w(r); if (t <= 0) { out.push(r); return; } }
+    out.push(left[left.length - 1]);
+  };
+  take(pool.filter((r) => tagOf(r) && counts[tagOf(r)] > 0));          // fits a kind of cat you already have
+  take(pool.filter((r) => !tagOf(r)));                                  // about the tower or the start of a wave
+  take(pool);                                                           // anything
+  while (out.length < n && out.length < pool.length) take(pool);
+  return out.slice(0, n).map((r) => r.id);
+}
+// one plain line: which of your cats a relic is helping right now
+export function relicWho(g, r) {
+  const alive = aliveCats(g), name = (c) => CAT_BY_ID[c.id].name;
+  const tag = (r.tagFx && r.tagFx.tag) || (r.scale && r.scale.tag) || THEME_TAG[r.theme];
+  if (tag) {
+    const who = alive.filter((c) => (CAT_TAGS[c.id] || []).includes(tag));
+    return who.length ? `Helps now: ${who.map(name).join(', ')}` : `No ${RELIC_THEMES[r.theme]} cats in your tower yet. Free one to use this.`;
+  }
+  if (r.posFx) {
+    const p = r.posFx.pos, n = alive.length;
+    const who = p === 'bottom' ? alive.slice(0, 1) : p === 'top' ? alive.slice(-1) : alive.slice(1, -1);
+    return who.length ? `Helps now: ${who.map(name).join(', ')}` : 'Needs 3 cats in the tower for a middle cat.';
+  }
+  return 'Helps your whole team.';
+}
+
 // ---------------------------------------------------------------- stats
 export function calcMods(g) {
   const K = g.meta;
@@ -63,6 +132,7 @@ export function calcMods(g) {
   for (const c of g.cats.concat(g.bench)) m.coin += itemFx(c).coin;
   if (g.daily) { m.dmg += g.daily.mod.dmg || 0; m.hp += g.daily.mod.hp || 0; }
   m.regenTeam = 0;
+  m.order = g.cats.filter((c) => !c.ko).map((c) => c.uid);   // the tower from the bottom (bitten first) to the top
   m.mastery = g.mastery || null;
   m.syn = synergyState(g);
   for (const t in m.syn.tiers) {
@@ -87,7 +157,8 @@ export function calcMods(g) {
     if (p.dr) m.dr += p.dr * a;
     if (p.snack) m.snackMul += p.snack * a;
   }
-  for (const id of g.charms || []) { const ch = CHARM_BY_ID[id]; for (const k in ch.fx) m[k] += ch.fx[k]; for (const k in ch.cost) if (k !== 'hurt') m[k] += ch.cost[k]; }   // Shady Charms count before snacks so a stronger snack bite applies to them too
+  const R = relicState(g, m);   // relics: the run-wide rules (relics.js). Their stats count before snacks so a stronger snack bite applies to them too
+  m.rel = R; m.rule = R.rule;
   const apply = (id) => {
     const s = SNACK_BY_ID[id];
     for (const k in s.fx) m[k] += s.fx[k] * m.snackMul;
@@ -140,6 +211,17 @@ function mkFx(mods, c, items) {
     const self = tier && SYNERGIES[t].tiers[tier - 1].self;
     if (self) for (const k in self) f[k] += self[k];
   }
+  const R = mods.rel;   // relics that care about this cat: its kind, its place in the tower
+  if (R) {
+    const tags = CAT_TAGS[c.id] || [];
+    for (const t of R.tagFx) if (tags.includes(t.tag)) addFx(f, t.fx);
+    for (const a of R.allFx) addFx(f, a);
+    if (R.posFx.length && mods.order) {
+      const n = mods.order.length, i = mods.order.indexOf(c.uid);
+      if (i >= 0) for (const p of R.posFx) if ((p.pos === 'bottom' && i === 0) || (p.pos === 'top' && i === n - 1) || (p.pos === 'mid' && i > 0 && i < n - 1)) addFx(f, p.fx);
+    }
+    if (R.matching && tags.some((t) => ((mods.syn && mods.syn.counts[t]) || 0) >= 2)) f.dmg += R.matching;
+  }
   return f;
 }
 export function cfx(mods, c) {
@@ -148,6 +230,8 @@ export function cfx(mods, c) {
   if (!f) { f = mkFx(mods, c, c.items); cache.set(c.uid, f); }
   return f;
 }
+// per-cat effects while a fight is running: items, synergies and relics together
+const cf = (g, c) => cfx(g.mods || (g.mods = calcMods(g)), c);
 export function catMaxHp(g, c, mods = g.mods || calcMods(g)) {
   return Math.round(BASE_HP * CAT_BY_ID[c.id].hp * LVL_MUL[c.lvl - 1] * (1 + mods.hp + cfx(mods, c).hp));
 }
@@ -373,7 +457,16 @@ export function explainMods(g) {
   const add = (stat, label, v) => { if (v) (rows[stat] = rows[stat] || []).push({ label, v }); };
   const K = g.meta, sm = calcMods(g).snackMul;
   for (const k of ['dmg', 'hp', 'haste', 'range', 'crit', 'waveHeal']) add(k, 'Kingdom', K[k]);
-  for (const id of g.charms || []) { const ch = CHARM_BY_ID[id]; for (const k in ch.fx) add(k, ch.name, ch.fx[k]); for (const k in ch.cost) if (k !== 'hurt') add(k, ch.name, ch.cost[k]); }
+  { const counts = synergyState(g).counts, kinds = Object.keys(counts).length;
+    for (const id of g.relics || []) {
+      const r = RELIC_BY_ID[id];
+      if (!r) continue;
+      if (r.team) for (const k in r.team) add(k, r.name, r.team[k]);
+      if (r.cost) for (const k in r.cost) if (k !== 'hurt') add(k, r.name, r.cost[k]);
+      if (r.scale) add(r.scale.key, r.name, r.scale.per * Math.min(r.scale.max, counts[r.scale.tag] || 0));
+      if (r.variety) add('dmg', r.name, r.variety * Math.min(8, kinds));
+      if (r.rule && r.rule.early && g.waveT < EARLY_BIRD.t) add('haste', r.name + ' (first ' + EARLY_BIRD.t + 's)', EARLY_BIRD.haste);
+    } }
   for (const id of g.perm) { const s = SNACK_BY_ID[id]; for (const k in s.fx) add(k, s.name, s.fx[k] * sm); }
   for (const t of g.temp) { const s = SNACK_BY_ID[t.id]; for (const k in s.fx) add(k, s.name + ' (' + t.left + 'w)', s.fx[k] * sm); }
   for (const c of g.cats) {
@@ -537,7 +630,8 @@ export function startWave(g) {
     g.enemies.push(e);
   }
   g.mods = calcMods(g);
-  for (const c of g.cats.concat(g.bench)) { const f = itemFx(c); c.shd = f.shield ? catMaxHp(g, c) * f.shield : 0; c.undy = false; c.fz = 0; }   // barriers refill, undying and frenzy reset every wave
+  g.waveT = 0; g.firstHit = false; g.firstKill = false;   // the "first of the wave" relics start over
+  for (const c of g.cats.concat(g.bench)) { const f = cf(g, c); c.shd = f.shield ? catMaxHp(g, c) * f.shield : 0; c.undy = false; c.fz = 0; c.fresh = true; }   // barriers refill, undying and frenzy reset every wave
   emit(g, { k: 'wave', wave: g.wave, boss: g.bossWave });
 }
 
@@ -559,7 +653,8 @@ export function finishWave(g) {
   addCoins(g, COIN.wave + COIN.waveGrow * g.wave);
   const boxes = g.boxes.splice(0, 2);   // elite boxes wait their turn, two after each wave
   const nestBox = g.bossWave ? rollBoxTier(g, 'nest', g.run.bossKills) : null;
-  g.reward = (g.bossWave ? ['cat', 'box:' + nestBox] : []).concat(boxes.map((b) => 'box:' + b), ['snack']);
+  const relicNest = g.bossWave && g.run.bossKills % NEST_RELIC_EVERY === 1;   // a relic pick takes the snack's place, so relics do not make runs easier
+  g.reward = (g.bossWave ? ['cat', ...(relicNest ? ['relic'] : []), 'box:' + nestBox] : []).concat(boxes.map((b) => 'box:' + b), relicNest ? [] : ['snack']);
   g.report = {
     wave: g.wave, time: g.t - g.wT0, dmg: g.run.dmg - g.wDmg0, taken: g.wTaken, kills: g.wKills, coins: g.wCoins, boss: g.bossWave, boxes: (nestBox ? [nestBox] : []).concat(boxes),
     cats: g.cats.concat(g.bench).map((c) => ({ uid: c.uid, id: c.id, lvl: c.lvl, dmg: c.wDmg, kills: c.wKills, heal: c.wHeal })).sort((a, b) => b.dmg - a.dmg),
@@ -571,8 +666,12 @@ export function finishWave(g) {
 // ---------------------------------------------------------------- damage
 export function hurtEnemy(g, e, dmg, o = {}) {   // exported for the tests
   if (e.dead || e.under) return 0;
-  const sc = g.curCat, f = sc ? itemFx(sc) : null;
+  const sc = g.curCat, f = sc ? cf(g, sc) : null;
   let d = dmg * (1 + g.mods.curse);
+  const rl = g.mods.rule;   // relics that look at the mouse or at the moment
+  if (rl.stunVuln && e.stun > 0) d *= 1 + rl.stunVuln;
+  if (rl.burnVuln && e.burn) d *= 1 + rl.burnVuln;
+  if (rl.firstHit && sc && !o.tick && !g.firstHit) { g.firstHit = true; d *= 1 + rl.firstHit; emit(g, { k: 'rfirst', x: e.x, y: ecy(e) }); }
   if (e.armor && !o.pierceArmor && !(f && f.pierce)) d *= 1 - e.armor;
   if (f) {   // relics that care about the target or about the cat's own health
     if (f.exec && e.hp <= e.maxHp * 0.3) d *= 1 + f.exec;
@@ -630,12 +729,18 @@ export function killEnemy(g, e, credit) {
   if (e.dead) return;
   e.dead = true;
   if (credit) {
-    const sc = g.curCat, kf = sc ? itemFx(sc) : null;
+    const sc = g.curCat, kf = sc ? cf(g, sc) : null;
     if (sc) {
       sc.sp = Math.min(1, sc.sp + (e.boss ? 0.2 : e.elite ? 0.06 : 0.025) + kf.kcharge); sc.kills++; sc.wKills++; (g.run.byCat[sc.id] || (g.run.byCat[sc.id] = { dmg: 0, kills: 0, heal: 0 })).kills++;
       if (kf.kheal) healCat(g, sc, catMaxHp(g, sc) * kf.kheal, sc, true);
       if (kf.frenzy) sc.fz = Math.min(10, (sc.fz || 0) + 1);
       if (kf.boom && !e.boss && (g._boomDepth || 0) < 8) { g._boomDepth = (g._boomDepth || 0) + 1; explode(g, e.x, ecy(e), 85, e.maxHp * kf.boom, { silent: true, color: '#ffb05a' }); g._boomDepth--; }
+    }
+    if (!e.boss && g.mods.rule.firstKill && !g.firstKill) {   // First Treat: the first mouse of the wave pays more and heals the team a little
+      g.firstKill = true;
+      addCoins(g, COIN.kill * (FIRST_KILL.coins - 1), e.x, ecy(e));
+      for (const c of aliveCats(g)) healCat(g, c, catMaxHp(g, c) * FIRST_KILL.heal, null, true);
+      emit(g, { k: 'rtreat', x: e.x, y: ecy(e) });
     }
     if (e.boss) { g.run.bossKills++; g.wKills++; addCoins(g, COIN.nest + COIN.nestGrow * e.n, e.x, e.y); emit(g, { k: 'bossDown', x: e.x, y: e.y }); }
     else {
@@ -645,6 +750,11 @@ export function killEnemy(g, e, credit) {
       addCoins(g, e.elite ? COIN.elite : COIN.kill, e.x, ecy(e));
       if (g.rnd() < (e.elite ? 0.22 : 0.012) * (1 + g.meta.luck * 0.4 + g.route.chest + ((g.daily && g.daily.mod.chest) || 0))) { const tier = rollBoxTier(g, 'elite'); g.boxes.push(tier); emit(g, { k: 'chest', x: e.x, y: ecy(e), tier }); }
     }
+  }
+  if (e.burn && !e.boss && g.mods.rule.burnBoom && (g._boomDepth || 0) < 8) {   // Cinder Bomb: a burning mouse blows up (same depth cap as the item explosions)
+    g._boomDepth = (g._boomDepth || 0) + 1;
+    explode(g, e.x, ecy(e), 85, e.maxHp * g.mods.rule.burnBoom, { silent: true, tick: true, color: '#ff8a3a' });
+    g._boomDepth--;
   }
   if (e.boss) {
     for (const o of g.enemies) if (!o.dead && o !== e) { o.dead = true; emit(g, { k: 'kill', x: o.x, y: ecy(o), type: o.type, quiet: true }); }
@@ -672,10 +782,11 @@ function koCat(g, c) {
 export function hurtCat(g, c, dmg) {
   if (!c || c.ko) return;
   const d = CAT_BY_ID[c.id];
-  const dodge = (d.pas && d.pas.dodge || 0) + itemFx(c).dodge;
+  const cx = cf(g, c);
+  const dodge = (d.pas && d.pas.dodge || 0) + cx.dodge;
   if (dodge > 0 && g.rnd() < dodge) { emit(g, { k: 'dodge', uid: c.uid }); return; }
   if (g.phaseT > 0 && g.rnd() < 0.6) { emit(g, { k: 'dodge', uid: c.uid }); return; }
-  let v = dmg * (1 - Math.min(0.8, g.mods.dr + itemFx(c).dr)) * (g.fortressT > 0 ? 0.3 : 1) * g.hurtMul;
+  let v = dmg * (1 - Math.min(0.8, g.mods.dr + cx.dr)) * (g.fortressT > 0 ? 0.3 : 1) * g.hurtMul;
   if (c.shd > 0) {   // a relic barrier soaks the bite first
     const a = Math.min(c.shd, v); c.shd -= a; v -= a;
     emit(g, { k: 'shieldhit', uid: c.uid, broke: c.shd <= 0 });
@@ -685,7 +796,7 @@ export function hurtCat(g, c, dmg) {
   c.flash = 0.18;
   if (v > 0) emit(g, { k: 'cathit', uid: c.uid, v });
   if (c.hp <= 0) {
-    if (itemFx(c).undying && !c.undy) { c.undy = true; c.hp = catMaxHp(g, c) * 0.4; emit(g, { k: 'undying', uid: c.uid }); return; }   // Nine Lives Locket: one second chance per wave
+    if (cx.undying && !c.undy) { c.undy = true; c.hp = catMaxHp(g, c) * 0.4; emit(g, { k: 'undying', uid: c.uid }); return; }   // Nine Lives Locket: one second chance per wave
     koCat(g, c);
   }
 }
@@ -725,6 +836,7 @@ function targetsInRange(g, range, from) {
 function critRoll(g, c, a) {
   const m = g.mods;
   const f = cfx(m, c);
+  if (m.rule.freshCrit && c.fresh) { c.fresh = false; return m.critMul + f.critMul; }   // Fresh Claws: a cat's first attack of the wave always crits
   const crit = g.rnd() < m.crit + (a.crit || 0) + f.crit;
   return crit ? m.critMul + f.critMul : 1;
 }
@@ -1125,7 +1237,7 @@ function updateEnemies(g, dt) {
             const tank = alive.find((c) => CAT_BY_ID[c.id].pas && CAT_BY_ID[c.id].pas.taunt);
             const victim = tank || alive[0];
             hurtCat(g, victim, e.dmg);
-            const th = itemFx(victim).thorns;
+            const th = cf(g, victim).thorns;
             if (th && !e.dead) { g.curCat = victim; hurtEnemy(g, e, e.dmg * th, { tick: true }); g.curCat = null; }
             emit(g, { k: 'ehit', x: front + 6, y: GROUND - 30 });
           }
@@ -1205,7 +1317,7 @@ export function step(g, dt = DT) {
     return;
   }
   if (g.state !== 'fight') return;
-  g.t += dt;
+  g.t += dt; g.waveT += dt;
   g.mods = calcMods(g);
   for (const t in g.mods.syn.counts) if (g.mods.syn.counts[t] > g.run.synMax) g.run.synMax = g.mods.syn.counts[t];
   if (g.mods.setCount > g.run.setMax) g.run.setMax = g.mods.setCount;
@@ -1425,9 +1537,12 @@ export function rollEvent(g) {
       ev.options.push({ k: 'reroll', cost: 0, bonusCoins: cc(30 + g.wave * 2) });
       break;
     case 'deal': {
-      // three different charms the team does not wear yet: each is a boon for the whole run with a price that bites for the whole run
-      const free = CHARMS.filter((c) => !(g.charms || []).includes(c.id));
-      for (let n = 0; n < 3 && free.length; n++) ev.options.push({ k: 'charm', id: free.splice(Math.floor(g.rnd() * free.length), 1)[0].id });
+      // the masked mouse sells relics for the whole run, each with a price that bites for the whole run: one for a kind of cat you have
+      // (with a catch: mice bite harder), and two Shady relics (a big boon for the team, a price in stats)
+      const shady = SHADY_RELICS.filter((r) => !g.relics.includes(r.id));
+      const fit = rollRelicChoices(g, 1)[0];
+      if (fit) ev.options.push({ k: 'relic', id: fit, catch: DEAL_CATCH });
+      while (ev.options.length < 3 && shady.length) ev.options.push({ k: 'relic', id: shady.splice(Math.floor(g.rnd() * shady.length), 1)[0].id });
       ev.options.push({ k: 'leave' });
       break;
     }
@@ -1473,12 +1588,7 @@ export function chooseEvent(g, idx) {
       spend(o.cost);
       if (g.rnd() < o.chance) { takeItem(g, o.item); msg = `Lucky! ${ITEM_BY_ID[o.item].name}`; } else msg = 'The shrine stays quiet';
       ev.done = true; break;
-    case 'charm': {
-      const ch = CHARM_BY_ID[o.id], before = snapshotMax(g);
-      g.charms.push(ch.id); if (ch.cost.hurt) g.hurtMul *= 1 + ch.cost.hurt;
-      g.run.charms = (g.run.charms || 0) + 1;
-      refreshHp(g, before); msg = `${ch.name}: the whole team, for the rest of the run`; ev.done = true; break;
-    }
+    case 'relic': { const r = RELIC_BY_ID[o.id]; takeRelic(g, o.id, o.catch || 0); msg = `${r.name}: the whole team, for the rest of the run`; ev.done = true; break; }
     case 'snack': eatSnack(g, o.id); msg = `${SNACK_BY_ID[o.id].name} eaten`; ev.done = true; break;
     case 'toss':
       spend(o.cost); o.sold = true;
