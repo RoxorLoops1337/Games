@@ -1325,6 +1325,12 @@ body.nomotion .toast.trophy{animation:none}
 body.nomotion .screen.tpad .tag,body.nomotion .screen.tpad .row,body.nomotion .screen.tpad .hint,body.nomotion .screen.tpad .tgrid .btn:hover{animation:none!important}
 @media (prefers-reduced-motion:reduce){.screen.tpad .tag,.screen.tpad .row,.screen.tpad .hint,.screen.tpad .tgrid .btn:hover{animation:none!important}}
 /* TITLEJUICE END */
+/* PICKJUICE START */
+.shakeno{animation:shakeno .35s ease-in-out}
+@keyframes shakeno{0%,100%{transform:none}20%{transform:translateX(-8px) rotate(-1.5deg)}40%{transform:translateX(8px) rotate(1.5deg)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+body.nomotion .shakeno{animation:none}
+@media (prefers-reduced-motion:reduce){.shakeno{animation:none}}
+/* PICKJUICE END */
 </style>
 </head>
 <body>
