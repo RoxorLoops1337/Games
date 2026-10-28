@@ -1452,4 +1452,10 @@ t('every pressable thing sinks when pressed and every HUD button answers with a 
   }
 });
 
+t('the Kingdom button does not clip its corner marker (the badge ellipsizes by itself)', () => {
+  const css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  const rule = css.slice(css.indexOf('KINGBTN START'), css.indexOf('KINGBTN END'));
+  assert.ok(/\.tgrid\.g31>\.btn\.green\.btn\.btn\{[^}]*overflow:visible/.test(rule) && /\.badge\{[^}]*overflow:hidden[^}]*text-overflow:ellipsis/.test(rule));
+});
+
 console.log(`${n} tests passed`);
