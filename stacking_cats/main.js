@@ -1677,11 +1677,16 @@ function postDaily() {
 }
 
 function showPause() {
+  if (!paused) sfx.play('pip', 0.7);   // a low blip as the game holds still
   paused = true;
   $('toasts').replaceChildren();   // old toasts would smear behind the blurred pause menu
   setScreen(`<h2 class="paused">Paused</h2><div class="pstat"><span>Chapter <b>${chapterOf(g.wave).n}</b></span><span>Wave <b>${g.wave}</b></span><span>Mice <b>${num(g.run.kills || 0)}</b></span><span>Coins <b>${num(g.run.coins || 0)}</b></span><span>Cats <b>${g.cats.length + g.bench.length}</b></span></div><div class="row"><button class="btn big" data-act="resume">Resume</button></div><div class="row tgrid g4"><button class="btn grey" data-act="stats">Team stats</button><button class="btn grey" data-act="settings">Settings</button><button class="btn grey" data-act="how">How to play</button><button class="btn red" data-act="quit">Give up</button></div>${matchMedia('(pointer: fine)').matches ? '<div class="hint">Keys: Space zoomies, 1-6 specials, A auto specials, F speed, P pause, M sound</div>' : ''}`);
   acts = {
-    resume: () => { paused = false; closeScreen(); },
+    resume: () => {
+      paused = false; closeScreen(); sfx.play('pick', 1.3);
+      // coming back to the fight: a quick GO! and the cats hop, no countdown so the player is never held up
+      if (motionOn() && g && mode === 'play') { txtFx(W / 2, 210, 'GO!', '#ffd23f', 44, 0.8); ring(g.towerX, GROUND - 60, 120, '#ffd23f', 0.4, 6); cheerHop = 0.4; buzz('tick'); }
+    },
     stats: () => showStats(showPause),
     settings: () => showSettings(showPause),
     how: () => showHow(showPause),

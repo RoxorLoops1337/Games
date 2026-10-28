@@ -1421,4 +1421,11 @@ t('startup and menus are lean: every module is preloaded in parallel, and a cove
   assert.ok(/coverScreen && \(paused \|\| mode !== 'play'\) && \+\+coverSkip % 3\) \{ updateHud\(dt\); requestAnimationFrame\(frame\); return; \}\s*render\(coverDt\); coverDt = 0;/.test(js));
 });
 
+t('pausing blips low and resuming says GO! with a ring and a cat hop, without a countdown', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  assert.ok(/function showPause\(\) \{\s*if \(!paused\) sfx\.play\('pip', 0\.7\)/.test(js));
+  assert.ok(/resume: \(\) => \{\s*paused = false; closeScreen\(\);[\s\S]{0,400}txtFx\(W \/ 2, 210, 'GO!'[\s\S]{0,200}cheerHop = 0\.4/.test(js));
+  assert.ok(!/resume:[\s\S]{0,500}setTimeout/.test(js.slice(js.indexOf('function showPause'), js.indexOf('function showPause') + 1800)), 'no countdown delay on resume');
+});
+
 console.log(`${n} tests passed`);
