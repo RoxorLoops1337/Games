@@ -1294,6 +1294,11 @@ function showTower(back, opt = {}) {
     if (!el) return;
     const m = motion(), cls = m ? 'bump' : 'glow';
     el.classList.add(cls); setTimeout(() => el.classList.remove(cls), 700);
+    if (m) {   // every landing sparkles and bursts, bigger and with a label the rarer the relic is
+      const RB = { common: [6, ['#fff6b0', '#fff']], rare: [10, ['#8ec6ff', '#fff']], epic: [16, ['#e7a0ff', '#fff', '#ffd23f']], legendary: [22, ['#ffd23f', '#fff6b0', '#ff9a3a']], mythic: [28, ['#ff8ac8', '#9a7aff', '#fff', '#ffd23f']] }[p.rar] || [6, ['#fff']];
+      const r = el.getBoundingClientRect();
+      if (p.rar !== 'common' || p.label) domBurst(r.left + r.width / 2, r.top + r.height / 2, p.burst || RB[0], RB[1], p.label || '');
+    }
     if (m && (p.rar === 'legendary' || p.rar === 'mythic')) {
       const box = document.createElement('span'); box.className = 'sparkle r-' + p.rar;
       box.innerHTML = Array.from({ length: 12 }, (_, i) => `<i style="--a:${i * 30 + 8}deg;--d:${26 + (i * 13) % 22}px;--t:${(i % 4) * 0.04}s"></i>`).join('');
@@ -1401,7 +1406,7 @@ function showTower(back, opt = {}) {
         else if (act === 'forge') { selItem = s.i; acts.forge(); return; }
         else if (act === 'catSwap') {
           const a = S.findCat(g, s.uid), b = S.findCat(g, t.uid);
-          if (a.id === b.id && a.lvl === b.lvl && a.lvl < 3) { S.mergeCats(g, a.uid, b.uid); sfx.play('merge'); sfx.play('upgrade', 0.5); buzz('merge'); mergeFlash(S.TOWER_X, 330, a.lvl >= 3); toast(`Merged! ${CAT_BY_ID[a.id].name} is Lv ${a.lvl}`); pend = { q: `.slot[data-uid="${a.uid}"]`, rar: 'epic' }; }
+          if (a.id === b.id && a.lvl === b.lvl && a.lvl < 3) { S.mergeCats(g, a.uid, b.uid); sfx.play('merge'); sfx.play('upgrade', 0.5); buzz('merge'); mergeFlash(S.TOWER_X, 330, a.lvl >= 3); toast(`Merged! ${CAT_BY_ID[a.id].name} is Lv ${a.lvl}`); pend = { q: `.slot[data-uid="${a.uid}"]`, rar: 'epic', label: `LV ${a.lvl}!`, burst: 24 }; }
           else { S.swapCats(g, a.uid, b.uid); sfx.play('pop'); pend = { q: `.slot[data-uid="${a.uid}"]`, rar: 'common' }; }
           sel = null;
         } else if (act === 'catMove') { if (S.moveCat(g, s.uid, t.zone)) { sfx.play('pop'); pend = { q: `.slot[data-uid="${s.uid}"]`, rar: 'common' }; } sel = null; }
