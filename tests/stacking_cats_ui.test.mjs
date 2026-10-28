@@ -1288,4 +1288,15 @@ t('end of run and Kingdom juice: stats count up and pop in one after another, ba
   for (const k of ['statpop', 'rbin', 'barfill', 'dconf', 'dlabel']) assert.ok(new RegExp('@keyframes ' + k).test(css), k);
 });
 
+t('kill streak and flawless callouts: named multi kills that grow, shake scales up, a gold FLAWLESS stamp when nothing got through (visual only)', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const m = js.match(/const MULTI_KILL = \{([^\n]*)\};/);
+  assert.ok(m, 'a callout table');
+  const ks = [...m[1].matchAll(/(\d+): \{ t: '([A-Z! ]+)', c: '#[0-9a-f]{6}', s: (\d+), k: (\d+) \}/g)].map((x) => x.slice(1).map((v, i) => (i === 1 ? v : +v)));
+  assert.ok(ks.length >= 4, 'at least four tiers');
+  assert.ok(ks.every((r, i) => i === 0 || (r[0] > ks[i - 1][0] && r[2] >= ks[i - 1][2] && r[3] >= ks[i - 1][3])), 'tiers grow in streak, size and shake');
+  assert.ok(/multiKill = nowT - lastKillAt < 650 \? multiKill \+ 1 : 1/.test(js), 'a streak is kills less than 0.65 s apart');
+  assert.ok(/FLAWLESS/.test(js) && /g\.report\.taken < 1/.test(js) && /flawless = 0/.test(js), 'flawless stamp and its reset');
+});
+
 console.log(`${n} tests passed`);
