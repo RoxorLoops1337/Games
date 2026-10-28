@@ -1314,6 +1314,17 @@ body.nomotion .overcols *,body.nomotion .earn,body.nomotion .newcats .card{anima
 body.nomotion .toast.trophy{animation:none}
 @media (prefers-reduced-motion:reduce){.toast.trophy{animation:none}}
 /* TROPHYJUICE END */
+/* TITLEJUICE START */
+.screen.tpad .tag{animation:titlein .5s .05s cubic-bezier(.2,1.4,.4,1) both}
+.screen.tpad .row{animation:titlein .5s cubic-bezier(.2,1.4,.4,1) both}
+.screen.tpad .row:nth-of-type(1){animation-delay:.12s}.screen.tpad .row:nth-of-type(2){animation-delay:.22s}.screen.tpad .row:nth-of-type(3){animation-delay:.32s}
+.screen.tpad .hint:not(.row){animation:titlein .5s .45s ease-out both}
+@keyframes titlein{0%{opacity:0;transform:translateY(22px) scale(.92)}100%{opacity:1;transform:none}}
+.screen.tpad .tgrid .btn:not(.big):hover{animation:btnwob .35s ease-in-out}
+@keyframes btnwob{25%{transform:translateY(-3px) rotate(-1.6deg)}60%{transform:translateY(-3px) rotate(1.6deg)}100%{transform:translateY(-2px)}}
+body.nomotion .screen.tpad .tag,body.nomotion .screen.tpad .row,body.nomotion .screen.tpad .hint,body.nomotion .screen.tpad .tgrid .btn:hover{animation:none!important}
+@media (prefers-reduced-motion:reduce){.screen.tpad .tag,.screen.tpad .row,.screen.tpad .hint,.screen.tpad .tgrid .btn:hover{animation:none!important}}
+/* TITLEJUICE END */
 </style>
 </head>
 <body>
