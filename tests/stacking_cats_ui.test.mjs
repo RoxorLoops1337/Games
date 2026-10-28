@@ -1336,4 +1336,12 @@ t('pick juice: a snack gets gobbled with a burst and label by kind, an event pic
   assert.ok(/body\.nomotion \.shakeno/.test(css), 'motion off');
 });
 
+t('screen transitions: every menu title drops in with a bounce, the subtitle and the bottom buttons follow, the title screen keeps its own entrance, motion off turns it off', () => {
+  const css = readFileSync('stacking_cats/index.html', 'utf8');
+  const b = css.slice(css.indexOf('/* SCREENJUICE START */'), css.indexOf('/* SCREENJUICE END */'));
+  assert.ok(/\.screen:not\(\.tpad\)>h2\{animation:h2in/.test(b) && /@keyframes h2in/.test(b) && /@keyframes rowin/.test(b), 'title and buttons');
+  assert.ok(/\.screen\.suspense>h2/.test(b), 'the suspenseful reveal keeps its own timing');
+  assert.ok(/body\.nomotion \.screen>h2/.test(b) && /prefers-reduced-motion:reduce/.test(b), 'motion off');
+});
+
 console.log(`${n} tests passed`);
