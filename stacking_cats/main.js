@@ -9,7 +9,7 @@ import {
 import { COSMETICS, COSMETIC_BY_ID, SLOTS, SLOT_NAMES, lookOf, lookSig, drawLook, drawCosmetic, canWear, buyCosmetic, toggleWear, isOwned } from './cosmetics.js';
 import { createKingdomScene } from './kingdom_scene.js';
 import { encodeSave, decodeSave } from './savecode.js';
-import { dailyScore, fetchBoard, submitScore, rankOf, dailyStreak, passedBest, milestoneLine, bestTag } from './daily.js';
+import { dailyScore, fetchBoard, submitScore, submitRun, rankOf, dailyStreak, passedBest, milestoneLine, bestTag, nameOk, cleanName, suggestName } from './daily.js';
 import { drawBuilding } from './art_kingdom.js';
 import * as S from './sim.js';
 import { drawCat } from './art_cats.js';
@@ -38,7 +38,7 @@ const sfx = new Sfx();
 const REDUCED_MOTION = (() => { try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
 const DEFAULT_OPT = { shake: REDUCED_MOTION ? 0 : 1, colorblind: false, bigText: false, quality: 'auto', motion: !REDUCED_MOTION, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, meows: true, meowMusic: true, autoSpecial: false, fast: false };
 function freshSave() {
-  return { v: 1, relics: {}, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT }, weekly: {}, ladder: 0, owned: [], wardrobe: {} };
+  return { v: 1, relics: {}, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', nameAsked: false, ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT }, weekly: {}, ladder: 0, owned: [], wardrobe: {} };
 }
 // fill in anything an older save does not have yet (new fields are always additive)
 function adoptSave(s) {
@@ -51,7 +51,7 @@ function adoptSave(s) {
     kingdom: { ...f.kingdom, ...(s.kingdom || {}), lv: { ...((s.kingdom && s.kingdom.lv) || {}) }, wonders: { ...((s.kingdom && s.kingdom.wonders) || {}) } },
     relics: Object.fromEntries(Object.keys(s.relics || {}).filter((id) => ITEM_BY_ID[id] && s.relics[id]).map((id) => [id, true])),
     ach: { ...(s.ach || {}) }, catStats: { ...(s.catStats || {}) }, daily: { ...(s.daily || {}) },
-    diff: DIFF_ORDER.includes(s.diff) ? s.diff : 'normal', name: String(s.name || ''),
+    diff: DIFF_ORDER.includes(s.diff) ? s.diff : 'normal', name: String(s.name || ''), nameAsked: !!s.nameAsked,
     weekly: { ...(s.weekly || {}) }, ladder: Math.max(0, Math.min(5, (s.ladder | 0))), owned: (s.owned || []).filter((id) => COSMETIC_BY_ID[id]), wardrobe: { ...(s.wardrobe || {}) },
   };
 }
@@ -377,13 +377,14 @@ function showTitle() {
     <div class="row tgrid g4 gplay"><button class="btn big" data-act="play">Play</button><button class="btn small grey" data-act="diff" title="Change difficulty">${d.icon} ${d.name}</button><button class="btn small grey" data-act="story">Story</button></div>
     <div class="row tgrid g4"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${streak >= 2 ? `<span class="streak" title="${streak} days in a row">&#128293;${streak}</span>` : ''}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button><button class="btn" data-act="relics">Relics ${relicProgress(save.relics).got}/${ITEMS.length}</button></div>
     <div class="row tgrid g31"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn grey small" data-act="trophies">Trophies ${trophies}/${ACHIEVEMENTS.length}</button><button class="btn grey small" data-act="settings">Settings</button><button class="btn grey small" data-act="how">How to play</button></div>
+    <button class="namechip" data-act="ranking" title="Open the ranking list">&#127942; ${save.name ? `${save.name.replace(/[<>&"]/g, '')} &middot; ` : ''}Ranking</button>
     <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : (coarse ? 'Tap Play to begin' : 'Click Play or press Enter to begin')}</div>`, 'clear tpad');
   acts = {
     relics: () => showRelics(showTitle),
     play: () => (save.seenIntro ? startRun() : watchIntro(() => startRun())), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
     daily: () => showDaily(showTitle), trophies: () => showTrophies(showTitle), settings: () => showSettings(showTitle),
     weekly: () => showDaily(showTitle, true), story: () => watchIntro(() => showTitle()),
-    diff: () => showDiffPicker(showTitle),
+    diff: () => showDiffPicker(showTitle), ranking: () => showRanking(showTitle),
   };
   setBackdrop(0);
   sfx.music('calm');
@@ -588,6 +589,50 @@ function showDaily(back, weekly = false) {
     const el = $('boardBody');
     if (!el || !el.isConnected) return;
     el.innerHTML = r.ok ? boardHtml(r.top) : '<small>The leaderboard is offline right now. You can still play!</small>';
+  });
+}
+// ---------------------------------------------------------------- username and the ranking list
+function showNamePrompt(next) {
+  save.nameAsked = true; persist();
+  setScreen(`<h2>Pick your name</h2><p class="sub">Your name shows up in the rankings, so everyone can see how high your stack goes.</p>
+    <div class="namebox"><input type="text" maxlength="12" value="${save.name.replace(/[<>&"]/g, '')}" placeholder="Your name" data-n="1" autocomplete="off" autocapitalize="words" spellcheck="false"><button class="btn small grey" data-act="suggest">Surprise me</button></div>
+    <small class="namemsg" id="nameMsg">2 to 12 letters, numbers, spaces</small>
+    <div class="row"><button class="btn big" data-act="savename">Save name</button><button class="btn grey" data-act="later">${save.name ? 'Cancel' : 'Later'}</button></div>`);
+  const inp = screenEl.querySelector('input[data-n]'), msg = $('nameMsg');
+  const save1 = () => {
+    const v = cleanName(inp.value);
+    if (!nameOk(v)) { msg.textContent = v.length < 2 ? 'Use at least 2 characters' : 'Please pick a friendlier name'; msg.classList.add('bad'); inp.classList.remove('shakeno'); void inp.offsetWidth; inp.classList.add('shakeno'); sfx.play('nope'); return; }
+    save.name = v; persist(); sfx.play('achieve', 1.2); buzz('pop');
+    if (motionOn()) { const rc = inp.getBoundingClientRect(); domBurst(rc.left + rc.width / 2, rc.top + rc.height / 2, 22, ['#ffd23f', '#fff', '#ff8fb7'], 'WELCOME!'); }
+    setTimeout(next, motionOn() ? 650 : 0);
+  };
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save1(); } });
+  inp.addEventListener('input', () => { msg.classList.remove('bad'); msg.textContent = '2 to 12 letters, numbers, spaces'; });
+  acts = { savename: save1, later: next, suggest: () => { inp.value = suggestName(); msg.classList.remove('bad'); sfx.play('pick'); } };
+}
+function showRanking(back) {
+  const tab = { all: 'All time', day: 'Today', week: 'This week' };
+  let cur = 'all', data = null;
+  const draw = () => {
+    const list = !data ? null : cur === 'all' ? data.all : cur === 'day' ? data.day : data.week;
+    const rows = list === null ? 'Loading...' : !list ? '<small>The ranking is offline right now. Your name is saved, so it will show up later.</small>'
+      : !list.length ? '<small>Nobody is on this list yet. Be the first!</small>'
+        : list.slice(0, 25).map((e, i) => `<div class="brow rk ${e.name === save.name ? 'me' : ''} ${i < 3 ? 'p' + (i + 1) : ''}"><span>${i + 1}</span><b>${String(e.name).replace(/[<>&"]/g, '')}</b><em>wave ${e.wave}</em><strong>${e.score}</strong></div>`).join('');
+    const mine = list && save.name ? rankOf(list, save.name) : 0;
+    $('rankBody').innerHTML = rows;
+    $('rankMe').innerHTML = save.name ? (mine ? `You are <b>#${mine}</b> on this list` : 'Play a run to get on this list') : '<button class="btn small" data-act="rename">Pick a name to join</button>';
+    screenEl.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.v === cur));
+  };
+  setScreen(`<h2>Ranking</h2><div class="seg rktabs">${Object.entries(tab).map(([k, l]) => `<button class="${k === cur ? 'on' : ''}" data-act="tab" data-v="${k}">${l}</button>`).join('')}</div>
+    <div class="board rkboard"><div id="rankBody" class="bbody rkbody">Loading...</div></div>
+    <div class="rkfoot"><span id="rankMe"></span><button class="btn small grey" data-act="rename">${save.name ? `Name: ${save.name.replace(/[<>&"]/g, '')}` : 'Pick a name'}</button></div>
+    <div class="row"><button class="btn grey" data-act="back">Back</button></div>`);
+  acts = { back, tab: (d) => { cur = d.v; sfx.play('hover'); draw(); }, rename: () => showNamePrompt(() => showRanking(back)) };
+  draw();
+  Promise.all([fetchBoard(dayKey()), fetchBoard(weekKey(), undefined, undefined, true)]).then(([d, w]) => {
+    if (!screenEl.querySelector('#rankBody')) return;
+    data = d.ok ? { all: d.all, day: d.top, week: w.ok ? w.top : [] } : { all: false, day: false, week: false };
+    draw();
   });
 }
 function boardHtml(top, me) {
@@ -1550,7 +1595,7 @@ function showOver(fresh) {
   setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : fallLine(r.wave)} <small>${d.icon} ${d.name} &middot; Chapter ${chapterOf(r.wave).n}${r.daily ? (r.weekly ? ' &middot; Weekly' : ' &middot; Daily') : ''}</small></p>${metaNotes(r)}
     <div class="overcols"><div><div class="stats"><div><b>${r.wave}</b>Wave reached</div><div><b>${r.kills}</b>Mice defeated</div><div><b>${r.bossKills}</b>Nests destroyed</div><div><b>${r.merges}</b>Merges</div>
       <div><b>${num(r.dmg)}</b>Damage dealt</div><div><b>${num(r.biggest)}</b>Biggest hit</div><div><b>${num(r.taken)}</b>Damage taken</div><div><b>${num(r.healed)}</b>Healed</div></div>
-      <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span><small>Total ${num(k.coins)}${goalLine}</small></div>${dailyBox}</div>
+      <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span><small>Total ${num(k.coins)}${goalLine}</small>${r.daily ? '' : '<small class="rankmsg" id="rankMsg"></small>'}</div>${dailyBox}</div>
       <div class="rbars big"><div class="rh"><b>Who did the work</b></div>${bars || '<small>No damage dealt</small>'}</div></div>
     ${trophies}${fresh.length ? `<p class="sub">${freedLineFor(fresh.length)}</p><div class="newcats">${fresh.map((id) => catCard(id, { act: 'none' })).join('')}</div>` : ''}
     <div class="row overbtns tgrid gover"><button class="btn big" data-act="again">Try again</button><button class="btn green" data-act="kingdom">Kingdom${goal && !goal.need ? '<i class="bang">!</i>' : ''}</button><button class="btn amber" data-act="share">Share</button><button class="btn grey" data-act="title">Title</button></div>`, 'wide');
@@ -1561,6 +1606,7 @@ function showOver(fresh) {
       shareRun({ wave: r.wave, kills: r.kills, bossKills: r.bossKills, biggest: r.biggest, diff: (DIFFS[r.diff] || DIFFS.normal).name, daily: !!r.daily, cats: ids })
         .then((res) => { if (el && el.isConnected) el.textContent = 'Share'; if (res === 'downloaded') toast('Picture saved!'); });
     },
+    setname: () => showNamePrompt(() => showOver(fresh)),
     again: () => startRun({ daily: !!r.daily && !r.weekly, weekly: !!r.weekly }), title: () => { g = null; showTitle(); }, kingdom: () => showKingdom(() => showOver(fresh)), none: () => {},
     sendscore: () => { const inp = screenEl.querySelector('input[data-n]'); if (inp) { save.name = inp.value.replace(/[^\w \-.']/g, '').slice(0, 12); persist(); } postDaily(); },
   };
@@ -1589,6 +1635,19 @@ function showOver(fresh) {
     requestAnimationFrame(tick);
   }
   if (r.daily) postDaily();
+  else postRun(r);
+}
+// an ordinary run joins the all time ranking once, when the player has a name
+function postRun(r) {
+  const msg = $('rankMsg');
+  if (!msg || r.wave < 3) return;
+  if (!save.name) { msg.innerHTML = '<button class="linkbtn" data-act="setname">Pick a name to join the ranking</button>'; return; }
+  if (r.rankSent) { msg.textContent = r.rankSent; return; }
+  submitRun({ name: save.name, score: dailyScore(r), wave: r.wave, kills: r.kills }).then((res) => {
+    r.rankSent = res.ok ? (rankOf(res.all, save.name) ? `Ranked #${rankOf(res.all, save.name)} all time` : 'Not in the top 50 yet') : '';
+    const el = $('rankMsg');
+    if (el && el.isConnected) el.textContent = r.rankSent;
+  });
 }
 // send the daily score once there is a name; otherwise ask for one
 function postDaily() {
@@ -3006,6 +3065,8 @@ showTitle();
   if (boot) {
     const wait = motionOn() ? Math.max(0, 1500 - performance.now()) : 0;
     setTimeout(() => { boot.classList.add('gone'); setTimeout(() => boot.remove(), 600); }, wait);
+    // a new player picks a name once, right after the intro (Later is remembered, the Ranking button asks again)
+    if (!save.name && !save.nameAsked) setTimeout(() => { if (mode === 'title' && !save.name) showNamePrompt(showTitle); }, wait + 700);
   }
 }
 requestAnimationFrame(frame);

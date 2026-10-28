@@ -6,6 +6,7 @@
 //   GET  /api/stackingcats_board?day=2026-10-25 -> { day, top: [{name,score,wave,kills}], all: [...] }
 //   POST /api/stackingcats_board {name,score,wave,kills,day} -> best per name on that day and all time,
 //                                  20s per-IP write throttle, returns both boards.
+//   POST /api/stackingcats_board {type:'run',name,score,wave,kills} -> an ordinary run: all time board only.
 
 const json = (o, s) => new Response(JSON.stringify(o), {
   status: s || 200,
@@ -33,6 +34,13 @@ export function weekOf(ms) {
 const weekOk = (week, now) => WEEK_RE.test(week) && [-7, 0, 7].some((k) => weekOf(now + k * 86400000) === week);
 const WEEK_TTL = 21 * 86400; // KV needs at least 60 seconds
 
+// names are public: obvious profanity becomes Anonymous (the game checks the same list before it lets a name be saved)
+const BAD_NAME = /(fuck|shit|cunt|nigg|fagg|bitch|whore|slut|rape|nazi|hitler|dick|cock|pussy|penis|vagina|asshole)/i;
+export const cleanName = (raw) => {
+  const n = String(raw || '').replace(/[^\w \-.']/g, '').trim().slice(0, 12);
+  return !n || BAD_NAME.test(n.replace(/[ \-.'_0-9]/g, '')) ? 'Anonymous' : n;
+};
+
 async function read(KV, key) { try { return JSON.parse((await KV.get(key)) || '[]'); } catch (e) { return []; } }
 
 export async function onRequestGet({ request, env }) {
@@ -59,16 +67,17 @@ export async function onRequestPost({ request, env }) {
   let b;
   try { b = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
   const now = Date.now();
-  const name = String(b.name || '').replace(/[^\w \-.']/g, '').trim().slice(0, 12) || 'Anonymous';
+  const name = cleanName(b.name);
   const wave = Math.floor(+b.wave), kills = Math.floor(+b.kills), score = Math.floor(+b.score);
+  const run = b.type === 'run';   // an ordinary run only competes on the all time board
   const weekly = b.type === 'weekly';
   const day = String(b.day || '');
   const week = String(b.week || '');
-  if (weekly ? !weekOk(week, now) : !dayOk(day, now)) return json({ error: weekly ? 'bad week' : 'bad day' }, 400);
+  if (!run && (weekly ? !weekOk(week, now) : !dayOk(day, now))) return json({ error: weekly ? 'bad week' : 'bad day' }, 400);
   if (![wave, kills, score].every(Number.isFinite) || wave < 1 || wave > 300 || kills < 0 || kills > wave * 80 || score < 1 || score > 1000000) return json({ error: 'bad score' }, 400);
   const entry = { name, score, wave, kills, t: now };
   const result = {};
-  const boards = weekly ? [['sc:w:' + week, WEEK_TTL], ['sc:wall', 0]] : [['sc:d:' + day, DAY_TTL], ['sc:all', 0]];
+  const boards = run ? [['sc:all', 0]] : weekly ? [['sc:w:' + week, WEEK_TTL], ['sc:wall', 0]] : [['sc:d:' + day, DAY_TTL], ['sc:all', 0]];
   for (const [key, ttl] of boards) {
     const top = await read(KV, key);
     const i = top.findIndex((e) => e.name === name);
@@ -81,6 +90,7 @@ export async function onRequestPost({ request, env }) {
     result[key] = top;
   }
   await KV.put('scrl:' + ip, String(now), { expirationTtl: 60 });
+  if (run) return json({ type: 'run', all: result['sc:all'] });
   if (weekly) return json({ type: 'weekly', week, top: result['sc:w:' + week], all: result['sc:wall'] });
   return json({ day, top: result['sc:d:' + day], all: result['sc:all'] });
 }
