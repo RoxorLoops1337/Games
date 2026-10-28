@@ -324,7 +324,7 @@ export const ITEMS = [
   { id: 'banner', name: 'Sunflower Banner', icon: '🎈', rarity: 'rare', fx: { teamDmg: 0.05 }, desc: 'The whole team deals 5% more damage' },
   { id: 'chime', name: 'Windchime', icon: '🎐', rarity: 'rare', fx: { teamHaste: 0.05 }, desc: 'The whole team attacks 5% faster' },
   // epic
-  { id: 'cookie', name: 'Fortune Cookie', icon: '🥠', rarity: 'epic', fx: { luck: 2 }, desc: 'Much better loot: rare, epic and legendary relics turn up far more often' },
+  { id: 'cookie', name: 'Fortune Cookie', icon: '🥠', rarity: 'epic', fx: { luck: 2 }, desc: 'Much better loot: rare, epic and legendary items turn up far more often' },
   { id: 'hexdoll', name: 'Hex Doll', icon: '🧿', rarity: 'epic', fx: { curseT: 0.1 }, desc: 'Every mouse takes 10% more damage from the whole team' },
   { id: 'lantern', name: 'Guardian Lantern', icon: '🕯', rarity: 'epic', fx: { teamDr: 0.05, teamHp: 0.12 }, desc: 'The whole team takes 5% less damage and has 12% more health' },
   { id: 'drum', name: 'War Drum', icon: '🥁', rarity: 'epic', fx: { frenzy: 0.045, teamHaste: 0.04 }, desc: '+4.5% attack speed per kill this wave, and the team attacks 4% faster' },
@@ -396,7 +396,7 @@ export function setHint(id, cats) {
 }
 // the end of run line about the Relic Book ('' when the run found nothing new)
 export function relicBookLine(found, got, total) {
-  return found > 0 ? `${found} new relic${found === 1 ? '' : 's'} in the Relic Book (${got}/${total})` : '';
+  return found > 0 ? `${found} new item${found === 1 ? '' : 's'} in the Item Book (${got}/${total})` : '';
 }
 // ---------------------------------------------------------------- lootboxes
 // Relics come out of boxes now (a chance, not a choice). Every cat loves a box: four qualities, each with its own odds per relic rarity.
@@ -408,7 +408,7 @@ export const BOXES = [
   { id: 'golden', name: 'Golden Cat Chest', icon: '\uD83D\uDDC3', blurb: 'A treasure fit for the Cat King.', odds: { epic: 55, legendary: 38, mythic: 7 } },
 ];
 // what the reveal screen says for each relic rarity
-export const RARITY_CHEER = { common: 'A cosy little find!', rare: 'Paw-some! A rare relic!', epic: 'Meow-velous! An epic relic!', legendary: 'Purr-fectly legendary!', mythic: 'MYTHIC! The Cat King approves!' };
+export const RARITY_CHEER = { common: 'A cosy little find!', rare: 'Paw-some! A rare item!', epic: 'Meow-velous! An epic item!', legendary: 'Purr-fectly legendary!', mythic: 'MYTHIC! The Cat King approves!' };
 export const BOX_BY_ID = Object.fromEntries(BOXES.map((b) => [b.id, b]));
 // the relics a team carries, one line per kind: how many, which cats hold them, rarest first (for the Team stats screen)
 export function teamRelics(cats) {
@@ -581,7 +581,7 @@ export function dayInfo(day) {
 
 // ---------------------------------------------------------------- wonders (bought with gems, the second currency)
 export const WONDERS = [
-  { id: 'paw',     name: 'Golden Paw',      icon: '🐾', cost: 4, desc: 'Every run starts with a free rare relic on one of your cats.', bonus: { startItem: 1 } },
+  { id: 'paw',     name: 'Golden Paw',      icon: '🐾', cost: 4, desc: 'Every run starts with a free rare item on one of your cats.', bonus: { startItem: 1 } },
   { id: 'bench',   name: 'Big Bench',       icon: '🪑', cost: 3, desc: 'One more bench spot for resting cats (5 instead of 4).', bonus: { bench: 1 } },
   { id: 'cafe',    name: 'Cat Cafe',        icon: '☕',       cost: 6, desc: 'You pick one more cat at the start of every run.',         bonus: { startPicks: 1 } },
   { id: 'academy', name: 'Zoomies Academy', icon: '🎓', cost: 4, desc: 'The Zoomies meter starts half full, and Zoomies last 3 seconds longer.', bonus: { zoomStart: 50, zoomDur: 3 } },
@@ -612,7 +612,7 @@ export const ACHIEVEMENTS = [
   { id: 'maxbld',   name: 'Finishing Touch',  desc: 'Fully upgrade one building.',                 coins: 50, gems: 0, check: (c) => BUILDINGS.some((b) => buildingLevel(c.kingdom, b.id) >= b.max) },
   { id: 'coll15',   name: 'Cat Collector',    desc: 'Unlock 15 cats.',                             coins: 50, gems: 0, check: (c) => c.save.unlocked.length >= 15 },
   { id: 'coll30',   name: 'Gotta Pet Them All', desc: 'Unlock all 32 cats.',                       coins: 150, gems: 1, check: (c) => c.save.unlocked.length >= CATS.length },
-  { id: 'loot8',    name: 'Loot Goblin',      desc: 'Collect 8 relics in one run.',                 coins: 40, gems: 0, check: (c) => c.run.items >= 8 },
+  { id: 'loot8',    name: 'Loot Goblin',      desc: 'Collect 8 items in one run.',                 coins: 40, gems: 0, check: (c) => c.run.items >= 8 },
   { id: 'hard15',   name: 'Brave Whiskers',   desc: 'Reach wave 15 on Hard.',                      coins: 100, gems: 1, check: (c) => c.run.diff === 'hard' && c.run.wave >= 15 },
   { id: 'daily1',   name: 'Daily Dabbler',    desc: 'Play the daily challenge.',                   coins: 20, gems: 0, check: (c) => !!c.run.daily },
   { id: 'daily20',  name: 'Daily Champion',   desc: 'Reach wave 20 in a daily challenge.',         coins: 100, gems: 1, check: (c) => !!c.run.daily && c.run.wave >= 20 },
@@ -621,15 +621,15 @@ export const ACHIEVEMENTS = [
   { id: 'nine',     name: 'Nine Lives',       desc: 'Be saved by Nine Lives.',                     coins: 30, gems: 0, check: (c) => (c.run.nine || 0) >= 1 },
   { id: 'sp5',      name: 'Special Delivery', desc: 'Use 5 special moves in one run.',             coins: 30, gems: 0, check: (c) => (c.run.specials || 0) >= 5 },
   { id: 'sp25',     name: 'Showstopper',      desc: 'Use 25 special moves in one run.',            coins: 75, gems: 1, check: (c) => (c.run.specials || 0) >= 25 },
-  { id: 'forge1',   name: 'Blacksmith',       desc: 'Forge three relics into a better one.',        coins: 25, gems: 0, check: (c) => (c.run.forged || 0) >= 1 },
-  { id: 'sell5',    name: 'Yard Sale',        desc: 'Sell 5 relics in one run.',                    coins: 25, gems: 0, check: (c) => (c.run.sold || 0) >= 5 },
+  { id: 'forge1',   name: 'Blacksmith',       desc: 'Forge three items into a better one.',        coins: 25, gems: 0, check: (c) => (c.run.forged || 0) >= 1 },
+  { id: 'sell5',    name: 'Yard Sale',        desc: 'Sell 5 items in one run.',                    coins: 25, gems: 0, check: (c) => (c.run.sold || 0) >= 5 },
   { id: 'event3',   name: 'Wanderer',         desc: 'Visit 3 event stops in one run.',             coins: 35, gems: 0, check: (c) => (c.run.events || 0) >= 3 },
   { id: 'wish',     name: 'Lucky Wish',       desc: 'Win a toss at the Wishing Fountain.',         coins: 35, gems: 0, check: (c) => (c.run.fountainWins || 0) >= 1 },
-  { id: 'book10',   name: 'Relic Hoarder',    desc: 'Find 10 different relics for the Relic Book.', coins: 30, gems: 0, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= 10 },
-  { id: 'book30',   name: 'Relic Curator',    desc: 'Find 30 different relics for the Relic Book.', coins: 75, gems: 1, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= 30 },
-  { id: 'bookall',  name: 'Complete Collection', desc: 'Find every relic for the Relic Book.',      coins: 200, gems: 2, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= ITEMS.length },
-  { id: 'set1',     name: 'Matching Set',     desc: 'Have a relic set bonus active in a fight.',    coins: 30, gems: 0, check: (c) => (c.run.setMax || 0) >= 1 },
-  { id: 'set3',     name: 'Set Collector',    desc: 'Have three relic sets active at once.',        coins: 100, gems: 1, check: (c) => (c.run.setMax || 0) >= 3 },
+  { id: 'book10',   name: 'Item Hoarder',    desc: 'Find 10 different items for the Item Book.', coins: 30, gems: 0, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= 10 },
+  { id: 'book30',   name: 'Item Curator',    desc: 'Find 30 different items for the Item Book.', coins: 75, gems: 1, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= 30 },
+  { id: 'bookall',  name: 'Complete Collection', desc: 'Find every item for the Item Book.',      coins: 200, gems: 2, check: (c) => Object.keys((c.save && c.save.relics) || {}).length >= ITEMS.length },
+  { id: 'set1',     name: 'Matching Set',     desc: 'Have an item set bonus active in a fight.',    coins: 30, gems: 0, check: (c) => (c.run.setMax || 0) >= 1 },
+  { id: 'set3',     name: 'Set Collector',    desc: 'Have three item sets active at once.',        coins: 100, gems: 1, check: (c) => (c.run.setMax || 0) >= 3 },
   { id: 'king',     name: 'Cheddar Crusher',  desc: 'Defeat King Squeakimus in the wave 30 nest.', coins: 150, gems: 0, check: (c) => !!(c.save && c.save.storyDone) },
 ];
 

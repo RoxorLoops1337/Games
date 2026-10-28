@@ -445,8 +445,8 @@ t('relic book trophies: collection sizes and sets in play, and the final boss tr
 
 t('relic book line for the end of a run: only when the run found something, singular and plural, with the book total', () => {
   assert.equal(relicBookLine(0, 5, 61), '');
-  assert.equal(relicBookLine(1, 5, 61), '1 new relic in the Relic Book (5/61)');
-  assert.equal(relicBookLine(3, 12, 61), '3 new relics in the Relic Book (12/61)');
+  assert.equal(relicBookLine(1, 5, 61), '1 new item in the Item Book (5/61)');
+  assert.equal(relicBookLine(3, 12, 61), '3 new items in the Item Book (12/61)');
   assert.ok(!relicBookLine(2, 2, 61).includes(String.fromCharCode(0x2014)));
   const js = readFileSync('stacking_cats/main.js', 'utf8');
   assert.ok(/runNewRelics \+= fresh\.length/.test(js) && /relicBookLine\(runNewRelics/.test(js), 'counted while playing, shown on the game over screen');
@@ -464,7 +464,7 @@ t('relic book wiring: a screen, a title button, found relics saved with the run,
   assert.ok(/function showRelics\(back/.test(js) && /relics: \(\) => showRelics\(showTitle\)/.test(js), 'screen and title action');
   assert.ok(/data-act="relics"/.test(js), 'title button');
   assert.ok(/function noteRelics\(/.test(js) && /noteRelics\(\)/.test(js.slice(js.indexOf('function beginWave'), js.indexOf('function beginWave') + 3000)), 'relics are noted when a wave begins');
-  assert.ok(/New relic/.test(js), 'a toast for a new relic');
+  assert.ok(/New item/.test(js), 'a toast for a new relic');
   assert.ok(/function freshSave\(\) \{\s*return \{[^}]*relics: \{\}/.test(js), 'a brand new save already has an empty book (new players must not crash on their first relic)');
   assert.ok(/if \(!save\.relics\) save\.relics = \{\}/.test(js), 'noting relics never assumes the field exists');
   assert.ok(/relics: Object\.fromEntries\(Object\.keys\(s\.relics \|\| \{\}\)\.filter\(\(id\) => ITEM_BY_ID\[id\]/.test(js), 'the loader keeps only real relics in the book');
