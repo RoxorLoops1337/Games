@@ -123,7 +123,7 @@ t('kill relics: Copper Penny pays on kill, Cheese Rind heals, damage multipliers
   killEnemy(g, e, true);
   g.curCat = null;
   const gmul = g.mods.coin * g.diff.coin * g.route.coin;
-  assert.ok(Math.abs(g.run.coins - before - (COIN.kill + ITEM_BY_ID.penny.fx.kcoin) * gmul) < 1e-6);
+  assert.ok(Math.abs(g.run.coins - before - COIN.kill * (1 + ITEM_BY_ID.penny.fx.kcoin) * gmul) < 1e-6);
   const f = newGame({ seed: 8 });
   addCat(f, 'tabby');
   f.stash.push('toymouse'); equipItem(f, 0, f.cats[0].uid);

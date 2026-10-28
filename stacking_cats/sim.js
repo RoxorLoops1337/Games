@@ -638,7 +638,7 @@ export function killEnemy(g, e, credit) {
     if (e.boss) { g.run.bossKills++; g.wKills++; addCoins(g, COIN.nest + COIN.nestGrow * e.n, e.x, e.y); emit(g, { k: 'bossDown', x: e.x, y: e.y }); }
     else {
       g.run.kills++; g.wKills++; g.zoom = Math.min(100, g.zoom + 2.4 * (1 + g.mods.zoomG));
-      if (kf && kf.kcoin) addCoins(g, kf.kcoin, e.x, ecy(e));
+      if (kf && kf.kcoin) addCoins(g, kf.kcoin * COIN.kill, e.x, ecy(e));   // kcoin is a share of the kill coin, so it moves with COIN_SCALE
       emit(g, { k: 'kill', x: e.x, y: ecy(e), type: e.type, elite: e.elite });
       addCoins(g, e.elite ? COIN.elite : COIN.kill, e.x, ecy(e));
       if (g.rnd() < (e.elite ? 0.22 : 0.012) * (1 + g.meta.luck * 0.4 + g.route.chest + ((g.daily && g.daily.mod.chest) || 0))) { const tier = rollBoxTier(g, 'elite'); g.boxes.push(tier); emit(g, { k: 'chest', x: e.x, y: ecy(e), tier }); }
