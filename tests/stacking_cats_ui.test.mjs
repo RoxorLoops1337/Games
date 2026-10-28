@@ -1322,4 +1322,11 @@ t('combo meter heat: the counter glows hotter at 10, 20, 50 and 100, shakes and 
   assert.ok(/m && H0\.g/.test(f) && /m && h >= 3/.test(f), 'glow and flames only with motion on');
 });
 
+t('title juice: the menu rows pop in one after another and buttons wobble on hover, with reduced motion and nomotion turning both off', () => {
+  const css = readFileSync('stacking_cats/index.html', 'utf8');
+  const b = css.slice(css.indexOf('/* TITLEJUICE START */'), css.indexOf('/* TITLEJUICE END */'));
+  assert.ok(/@keyframes titlein/.test(b) && /@keyframes btnwob/.test(b) && /nth-of-type\(3\)/.test(b), 'entrance and wobble');
+  assert.ok(/body\.nomotion \.screen\.tpad/.test(b) && /prefers-reduced-motion:reduce/.test(b), 'motion off paths');
+});
+
 console.log(`${n} tests passed`);
