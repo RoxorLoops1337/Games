@@ -1402,4 +1402,10 @@ t('players pick a username that shows on the title and in a ranking list, ordina
   assert.ok(/RANKING START[\s\S]*\.namechip[\s\S]*\.rkboard[\s\S]*RANKING END/.test(css));
 });
 
+t('a daily or weekly rank pops in and a top three place bursts', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8'), css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(/function postDaily[\s\S]*classList\.add\('rankin'\)[\s\S]{0,300}rk <= 3[\s\S]{0,400}NUMBER ONE![\s\S]{0,200}TOP 3!/.test(js));
+  assert.ok(/RANKIN START[\s\S]*\.dailybox\.rankin[\s\S]*nomotion \.dailybox\.rankin[\s\S]*RANKIN END/.test(css));
+});
+
 console.log(`${n} tests passed`);

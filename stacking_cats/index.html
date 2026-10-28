@@ -1382,6 +1382,11 @@ body.nomotion .spb.justready,body.nomotion .spb.fired{animation:none}
 .linkbtn{background:none;border:0;color:#8fd3ff;font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;padding:0}
 @media (max-height:340px){.rkboard{max-height:120px}.namechip{top:6px;font-size:12px;padding:3px 10px}}
 /* RANKING END */
+/* RANKIN START */
+@keyframes rankin{0%{transform:scale(.8);opacity:.4}55%{transform:scale(1.12);box-shadow:0 0 22px #ffd23f}100%{transform:scale(1);opacity:1}}
+.dailybox.rankin{animation:rankin .55s cubic-bezier(.2,1.5,.4,1)}
+body.nomotion .dailybox.rankin{animation:none}
+/* RANKIN END */
 /* BOSSJUICE START */
 #bossBar.hit{animation:bosshit .16s ease-out}
 #bossBar.phase{animation:bossphase .6s cubic-bezier(.2,1.6,.4,1)}
