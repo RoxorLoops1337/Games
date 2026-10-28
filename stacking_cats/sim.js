@@ -381,6 +381,16 @@ export function explainMods(g) {
     for (const k of ['haste', 'dmg', 'curse', 'dr']) add(k, CAT_BY_ID[c.id].name, (p[k] || 0) * a);
   }
   for (const a of activeSets(g.cats)) if (a.mult) for (const k in a.set.fx) add(k, a.set.name, a.set.fx[k] * a.mult);
+  // the rest of what calcMods adds, so the rows always add up to the totals: team synergies, relics a living tower cat carries for everyone, the daily rule
+  const syn = synergyState(g);
+  for (const t in syn.tiers) { const team = SYNERGIES[t].tiers[syn.tiers[t] - 1].team; if (team) for (const k in team) add(k === 'regen' ? 'regenTeam' : k, SYNERGIES[t].name, team[k]); }
+  const TEAM_STAT = { teamDmg: 'dmg', teamHaste: 'haste', teamHp: 'hp', teamDr: 'dr', curseT: 'curse', wheal: 'waveHeal' };
+  for (const c of g.cats) {
+    if (c.ko) continue;
+    for (const id of c.items) { const it = ITEM_BY_ID[id]; if (it) for (const k in TEAM_STAT) if (it.fx[k]) add(TEAM_STAT[k], it.name, it.fx[k]); }
+  }
+  if (g.daily) { add('dmg', 'Daily rule', g.daily.mod.dmg || 0); add('hp', 'Daily rule', g.daily.mod.hp || 0); }
+  if (g.hexT > 0) add('curse', 'Hex', 0.35);
   if (g.zoomT > 0) { add('haste', 'Zoomies', 1.0); add('dmg', 'Zoomies', 0.2); }
   return rows;
 }
