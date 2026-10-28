@@ -1314,4 +1314,12 @@ t('trophy juice: a trophy toast pops, glows, bursts gold with a cup and plays th
   assert.ok(/@keyframes trophypop/.test(css) && /@keyframes trophyglow/.test(css), 'styles');
 });
 
+t('combo meter heat: the counter glows hotter at 10, 20, 50 and 100, shakes and flames when hot, and a bar shows the time left before the streak lapses', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const f = js.slice(js.indexOf('function comboHeat'), js.indexOf('// ---------------------------------------------------------------- lighting and post processing'));
+  assert.ok(/c >= 100 \? 4 : c >= 50 \? 3 : c >= 20 \? 2 : c >= 10 \? 1 : 0/.test(f), 'four heat steps');
+  assert.ok(/const HEAT = \[/.test(f) && /shadowBlur/.test(f) && /comboT \/ 2\.4/.test(f), 'glow and the lapse bar');
+  assert.ok(/m && H0\.g/.test(f) && /m && h >= 3/.test(f), 'glow and flames only with motion on');
+});
+
 console.log(`${n} tests passed`);
