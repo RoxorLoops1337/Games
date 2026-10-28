@@ -1382,4 +1382,11 @@ t('a boot splash covers the first frame and lifts onto the title', () => {
   assert.ok(/getElementById\('boot'\)[\s\S]{0,300}motionOn\(\) \? Math\.max\(0, 1500 - performance\.now\(\)\) : 0[\s\S]{0,200}classList\.add\('gone'\)/.test(js));
 });
 
+t('a special button flashes and dings when it charges and bursts in the cat colour when it fires', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8'), css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(/ready && !b\._was && g\.state === 'fight' && motionOn\(\)[\s\S]{0,300}justready[\s\S]{0,200}sfx\.play\('pip', 1\.7\)[\s\S]{0,300}b\._was = ready/.test(js));
+  assert.ok(/function doSpecial[\s\S]{0,700}classList\.add\('fired'\)[\s\S]{0,300}buzz\('pop'\)/.test(js));
+  assert.ok(/SPJUICE START[\s\S]*spjust[\s\S]*spfired[\s\S]*nomotion \.spb\.justready[\s\S]*SPJUICE END/.test(css));
+});
+
 console.log(`${n} tests passed`);
