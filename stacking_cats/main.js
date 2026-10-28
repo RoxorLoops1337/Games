@@ -170,9 +170,49 @@ function setBackdrop(idx) {
 }
 
 // ---------------------------------------------------------------- screens (DOM)
-let coachEl = null;
+let coachEl = null, tipHold = false;   // tipHold: a tip is open during a fight, so the game waits for the player to press Got it
+// the player pressed Got it (or Enter): the game goes on, and the thing the tip pointed at keeps its ring until it is used
+function dismissTip() {
+  const held = coachEl && coachEl._held, hl = coachEl && coachEl._hl;
+  hideCoach();
+  if (held && hl && hl.isConnected && hl.classList) {
+    hl.classList.add('tuthl');
+    const off = () => hl.classList.remove('tuthl');
+    hl.addEventListener('click', off, { once: true }); setTimeout(off, 9000);
+  }
+}
 function hideCoach() {
-  if (coachEl) { if (coachEl._hl) coachEl._hl.classList.remove('tuthl'); coachEl.remove(); coachEl = null; }
+  tipHold = false;
+  if (coachEl) { if (coachEl._hl) coachEl._hl.classList.remove('tuthl'); if (coachEl._ring) coachEl._ring.remove(); coachEl.remove(); coachEl = null; }
+}
+// the stage rectangle of the tower (it is drawn on the canvas, so there is no element to point at)
+const towerRect = () => { const n = Math.max(1, g ? g.cats.length : 1); return { x: (g ? g.towerX : 214) - 55, y: GROUND - SLOT * n - 24, w: 110, h: SLOT * n + 36 }; };
+// puts a tip right next to the thing it talks about: the side with the most free room, the little tail pointing at it
+function placeCoach(el, hl, at) {
+  const ar = app.getBoundingClientRect(), sc = ar.width / W || 1, H2 = ar.height / sc;
+  const toStage = (r) => ({ l: (r.left - ar.left) / sc, t: (r.top - ar.top) / sc, r: (r.right - ar.left) / sc, b: (r.bottom - ar.top) / sc });
+  let tr;
+  if (hl) { if (!hl.isConnected) return; tr = toStage(hl.getBoundingClientRect()); } else tr = { l: at.x, t: at.y, r: at.x + at.w, b: at.y + at.h };
+  const bw = el.offsetWidth, bh = el.offsetHeight, gap = 18, cx = (tr.l + tr.r) / 2, cy = (tr.t + tr.b) / 2;
+  const blocks = [...document.querySelectorAll('#hud .pill, #tools button, #specials button, #zoom, #screen button, #screen .card, #screen .slot.has, #screen .bag.has, #screen .zone h4, #screen .tile, #screen .report, #screen .sub, #screen h2, #screen .logo, #screen input')]
+    .filter((n) => n !== hl && !(hl && hl.contains(n)) && !(n.contains && hl && n.contains(hl))).map((n) => toStage(n.getBoundingClientRect())).filter((r) => r.r - r.l > 2 && r.b - r.t > 2);
+  const area = (x, y, r) => Math.max(0, Math.min(x + bw, r.r) - Math.max(x, r.l)) * Math.max(0, Math.min(y + bh, r.b) - Math.max(y, r.t));
+  const cands = [];   // each side, slid along the edge a few steps, so a tip can dodge a button next to its target
+  [0, -0.3, 0.3, -0.6, 0.6].forEach((k, n) => {
+    cands.push({ cls: 'down', x: cx - bw / 2 + k * bw, y: tr.t - bh - gap, n }, { cls: 'up', x: cx - bw / 2 + k * bw, y: tr.b + gap, n });
+    cands.push({ cls: 'right', x: tr.l - bw - gap, y: cy - bh / 2 + k * bh, n }, { cls: 'left', x: tr.r + gap, y: cy - bh / 2 + k * bh, n });
+  });
+  let best = null;
+  cands.forEach((c, i) => {
+    const x = Math.max(6, Math.min(W - bw - 6, c.x)), y = Math.max(6, Math.min(H2 - bh - 6, c.y));
+    let o = 0; for (const k of blocks) o += area(x, y, k);
+    const score = o + area(x, y, tr) * 3 + (Math.abs(x - c.x) + Math.abs(y - c.y)) * 60 + (i % 4) * 150 + c.n * 40;
+    if (!best || score < best.score) best = { score, cls: c.cls, x, y };
+  });
+  el.className = 'coach ' + best.cls;
+  el.style.right = ''; el.style.transform = 'none'; el.style.left = Math.round(best.x) + 'px'; el.style.top = Math.round(best.y) + 'px';
+  if (best.cls === 'up' || best.cls === 'down') el.style.setProperty('--tx', Math.max(-(bw / 2 - 26), Math.min(bw / 2 - 26, cx - (best.x + bw / 2))) + 'px');
+  else el.style.setProperty('--ty', Math.max(-(bh / 2 - 22), Math.min(bh / 2 - 22, cy - (best.y + bh / 2))) + 'px');
 }
 // a friendly speech bubble for the first runs. dir says which way the little tail points.
 // opt.target: element (or selector in the screen) to ring with a pulse; opt.wait: stay until the real action (no timer).
@@ -184,14 +224,29 @@ function coach(key, html, x, y, dir = 'down', opt = {}) {
   let hl = opt.target;
   if (typeof hl === 'string') hl = screenEl.querySelector(hl) || document.querySelector(hl);
   if (hl && hl.classList) hl.classList.add('tuthl'); else hl = null;
+  const targeted = !!(hl || opt.at);   // a tip that points at something sits next to it
   const el = document.createElement('div');
   el.className = 'coach ' + dir; el.style.left = x + 'px'; el.style.top = y + 'px';
   el.innerHTML = `<span class="cico">&#128049;</span><div>${html}</div><button>Got it</button>`;
-  el.querySelector('button').addEventListener('click', (e) => { e.stopPropagation(); sfx.play('ui'); hideCoach(); });
+  el.querySelector('button').addEventListener('click', (e) => { e.stopPropagation(); sfx.play('ui'); dismissTip(); });
   if (dir === 'right') { el.style.left = 'auto'; el.style.right = (W - x) + 'px'; el.style.transform = 'none'; }   // anchor to the right edge so the bubble keeps its full width
   if (opt.maxW) el.style.maxWidth = opt.maxW + 'px';
   el._hl = hl; el.dataset.key = key;
+  if (opt.at) {   // something drawn on the canvas (the tower): a pulsing ring in its place
+    const ring = document.createElement('div'); ring.className = 'tutring';
+    ring.style.left = opt.at.x + 'px'; ring.style.top = opt.at.y + 'px'; ring.style.width = opt.at.w + 'px'; ring.style.height = opt.at.h + 'px';
+    app.appendChild(ring); el._ring = ring;
+  }
   app.appendChild(el); coachEl = el;
+  // a tip during a fight stops the game until the player presses Got it, so it can be read in peace
+  if (mode === 'play' && g && !document.body.classList.contains('scr')) { tipHold = true; el._held = true; el.classList.add('held'); el.querySelector('div').insertAdjacentHTML('beforeend', '<small class="holdnote">The game is paused.</small>'); opt = { ...opt, wait: true }; }
+  if (targeted) {
+    el.style.visibility = 'hidden';
+    const go = () => { if (coachEl === el) { placeCoach(el, hl, opt.at); el.style.visibility = ''; } };
+    if (document.body.classList.contains('scr')) setTimeout(go, 480); else go();   // on a menu the cards finish sliding in first
+    if (!opt.wait) setTimeout(() => { if (coachEl === el) hideCoach(); }, 16000);
+    return;
+  }
   // a bubble that would run past the right or bottom edge of the stage gets narrower instead of being cut off
   const room = W - 8 - el.offsetLeft;
   if (dir !== 'right' && el.offsetWidth > room) { el.style.maxWidth = Math.max(150, room) + 'px'; el.dataset.narrow = '1'; }
@@ -380,7 +435,7 @@ function showTitle() {
     <div class="row tgrid g4"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${streak >= 2 ? `<span class="streak" title="${streak} days in a row">&#128293;${streak}</span>` : ''}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button><button class="btn" data-act="relics">Relics ${relicProgress(save.relics).got}/${ITEMS.length}</button></div>
     <div class="row tgrid g31"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn grey small" data-act="trophies">Trophies ${trophies}/${ACHIEVEMENTS.length}</button><button class="btn grey small" data-act="settings">Settings</button><button class="btn grey small" data-act="how">How to play</button></div>
     <button class="namechip" data-act="ranking" title="Open the ranking list">&#127942; ${save.name ? `${save.name.replace(/[<>&"]/g, '')} &middot; ` : ''}Ranking</button>
-    <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : (coarse ? 'Tap Play to begin' : 'Click Play or press Enter to begin')}</div>`, 'clear tpad');
+    <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : (coarse ? 'Tap the big pink Play button to start' : 'Click the big pink Play button, or press Enter, to start')}</div>`, 'clear tpad');
   acts = {
     relics: () => showRelics(showTitle),
     play: () => (save.seenIntro ? startRun() : watchIntro(() => startRun())), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
@@ -505,20 +560,20 @@ function checkAch(run) {
 function showHow(back) {
   const row = (ic, html) => `<li><span class="hi">${ic}</span><div>${html}</div></li>`;
   setScreen(`<h2>How to play</h2><ul class="how">
-    ${row('\uD83D\uDC31', '<b>Your stack fights by itself.</b> Cats walk right and attack. Mice come from the right.')}
-    ${row('\uD83D\uDEE1', '<b>Order matters.</b> Mice bite the bottom cat first. Put tough cats low, shooters high.')}
-    ${row('\u26A1', '<b>Special moves.</b> A charged cat glows in the tray. Tap it (or press 1 to 6). AUTO fires them for you.')}
-    ${row('\u2764', '<b>Pet your cats.</b> Tap a cat to hear it meow. Hold it for a purr.')}
-    ${row('\uD83C\uDFAF', '<b>Focus.</b> Tap a mouse and your cats shoot it first.')}
-    ${row('\uD83D\uDC00', `<b>Nests.</b> Every ${BOSS_EVERY}th wave is a nest fight. Destroy it to rescue a cat and win loot.`)}
-    ${row('\u2728', `<b>Merge</b> two equal cats into one stronger cat, up to Lv 3. The tower fits ${MAX_STACK}, the bench ${MAX_BENCH}.`)}
-    ${row('\uD83C\uDF81', '<b>Lootboxes.</b> Elites and nests drop boxes holding a random relic: cardboard, basket, silver, golden. One per cat (two at Lv 3).')}
-    ${row('\uD83E\uDE99', '<b>Coins</b> are saved. Spend them in the <b>Kingdom</b> to make every future run stronger.')}
-    ${row('\uD83D\uDD25', '<b>Synergies.</b> Cats of one kind boost each other. Look for the badges by the wave counter.')}
-    ${row('\uD83D\uDC3E', '<b>Roads.</b> After each nest you pick the next road. Riskier roads pay better.')}
-    ${row('\uD83C\uDFC6', '<b>Daily Challenge.</b> Everyone plays the same mice once a day. Climb the leaderboard.')}
-    ${row('\uD83D\uDC1A', '<b>Dodge.</b> Pearl and the Lucky Shell give cats a chance to dodge a bite and take no damage.')}
-    ${row('\uD83D\uDCA8', '<b>Zoomies</b> (Space). Fill the meter by fighting, then everyone is much faster for 6 seconds.')}</ul>
+    ${row('\uD83D\uDC31', '<b>Your cats fight by themselves.</b> You do not need to tap to attack. Mice walk in from the right.')}
+    ${row('\uD83D\uDEE1', '<b>The bottom cat gets bitten first.</b> Put a tough cat at the bottom and the shooters on top.')}
+    ${row('\u26A1', '<b>Special moves.</b> Each cat has a round picture at the bottom right. When it glows, tap it. Tap AUTO to let the game do it.')}
+    ${row('\uD83D\uDCA8', '<b>Zoomies.</b> Fighting fills the big round meter at the top right. When it says READY, tap it or press Space. Your cats get much faster for 6 seconds.')}
+    ${row('\uD83C\uDFAF', '<b>Pick a target.</b> Tap a mouse and your cats shoot it first.')}
+    ${row('\uD83D\uDC00', `<b>Nests.</b> Every ${BOSS_EVERY}th wave you fight a mouse nest. Destroy it to free a cat and win loot.`)}
+    ${row('\u2728', `<b>Join two cats.</b> Two of the same cat join into one stronger cat (up to Lv 3). The tower holds ${MAX_STACK} cats and the bench holds ${MAX_BENCH}.`)}
+    ${row('\uD83C\uDF81', '<b>Lootboxes.</b> A box holds a relic. A relic is an item that makes one cat stronger. Tap Equip it, then tap the cat that should wear it.')}
+    ${row('\uD83E\uDE99', '<b>Coins</b> are saved. Spend them in the <b>Kingdom</b> (on the title screen) to make every new run stronger.')}
+    ${row('\uD83D\uDD25', '<b>Cat teams.</b> Cats of the same kind help each other. Small badges next to the wave number show these bonuses.')}
+    ${row('\uD83D\uDC3E', '<b>Roads.</b> After each nest you choose the road to walk next. A harder road gives better rewards.')}
+    ${row('\u2764', '<b>Pet your cats.</b> Tap a cat to hear it meow. Hold it to hear it purr.')}
+    ${row('\uD83C\uDFC6', '<b>Daily Challenge.</b> Everyone plays the same game once a day. Try to reach a high place in the ranking.')}
+    ${row('\uD83D\uDC1A', '<b>Dodge.</b> Pearl and the Lucky Shell give a cat a chance to dodge a bite. A dodged bite does no damage.')}</ul>
     <div class="row"><button class="btn" data-act="back">Got it</button><button class="btn grey" data-act="intro">Watch the intro</button></div>`);
   acts = { back, intro: () => watchIntro(() => showHow(back)) };
 }
@@ -831,7 +886,7 @@ function showPickStart() {
   setScreen(`<h2>Choose friend ${pickN + 1} of ${startTotal}</h2><p class="sub">${pickLine(pickN)}</p>
     <div class="cards">${rewardChoices.map((id) => catCard(id, { ribbon: owns(id) ? 'MERGE!' : '', gain: pickN > 0 })).join('')}</div>
     <div class="row hint">${rerollBtn()}</div>`);
-  coach('c1', 'Step 1: tap a cat to pick it.', 480, 440, 'up', { target: '.card' });
+  coach('c1', 'Tap a cat card to choose that cat. You choose 3 cats for your team.', 480, 440, 'up', { target: '.card' });
   acts = {
     pickCat: (d, el) => {
       const prev = S.synergyState(g);
@@ -908,7 +963,8 @@ function beginWave() {
   const intro = [];
   for (const ty of new Set(g.queue.map((q) => q.type))) { const d = ENEMY_TYPES[ty]; if (d && d.hint && !save.tips['m_' + ty]) { save.tips['m_' + ty] = true; intro.push(`New: ${d.name}. ${d.hint}.`); } }
   if (intro.length) { persist(); intro.slice(0, 3).forEach((m, i) => setTimeout(() => toastWhenPlaying(m), 2800 + i * 2600)); }
-  if (g.wave === 1) setTimeout(() => { if (mode === 'play' && !(coachEl && coachEl.dataset.key === 'c5')) coach('c2', 'The bottom cat takes the hits. Tough cats go low, shooters go high!', 250, 120, 'left'); }, 2600);
+  if (g.wave === 1) setTimeout(() => { if (mode === 'play' && !coachEl) coach('c2', 'This is your team. Your cats fight by themselves. Mice walk in from the right.', 0, 0, 'down', { at: towerRect() }); }, 1800);
+  if (g.wave === 2) setTimeout(() => { if (mode === 'play' && !coachEl) coach('c3', 'The cat at the bottom gets bitten first. Put your toughest cat at the bottom.', 0, 0, 'down', { at: towerRect() }); }, 2600);
 }
 
 // a toast that comes due while the pause menu is open waits for the game to resume, so it never covers the menu
@@ -1047,7 +1103,7 @@ function showEvent() {
     tower: () => showTower(() => showEvent()),
     evdone: finish,
   };
-  coach('c8', 'A quiet stop. Spend coins or take a chance. Coins spent here are not saved for the Kingdom!', 480, 402, 'up');
+  coach('c8', 'Tap a card to choose it. Or tap Leave to skip. Coins you spend here are gone for good.', 480, 402, 'up', { target: '.card.ev' });
 }
 
 function showRouteReward() {
@@ -1059,6 +1115,7 @@ function showRouteReward() {
   setScreen(`<h2>Choose your road</h2><p class="sub">${roadLine(g.wave, THEMES)}</p>
     <div class="cards">${rewardChoices.map((id) => { const r = ROUTE_BY_ID[id]; return `<div class="card route" data-act="pickRoute" data-id="${id}"><div class="ic">${r.icon}</div><h3>${r.name}</h3><p>${r.desc}</p>${effects(r)}</div>`; }).join('')}</div>
     <div class="row hint">${rerollBtn()}</div>`);
+  coach('c13', 'Pick the road to walk next. A harder road gives better rewards.', 480, 400, 'up', { target: '.card' });
   acts = {
     pickRoute: (d) => { S.chooseRoute(g, d.id); sfx.play('route'); toast(`${ROUTE_BY_ID[d.id].icon} ${ROUTE_BY_ID[d.id].name}`); nextReward(); },
     reroll: () => { if (S.useReroll(g)) { rewardChoices = null; sfx.play('reroll'); showRouteReward(); } },
@@ -1067,9 +1124,10 @@ function showRouteReward() {
 
 function showCatReward() {
   rewardChoices = rewardChoices || S.rollCatChoices(g);
-  setScreen(`<h2>Nest destroyed!</h2><p class="sub">${rescueLine(g.run.bossKills)} A caged cat is free and wants to join your stack. Who is it?</p>
+  setScreen(`<h2>Nest destroyed!</h2><p class="sub">${rescueLine(g.run.bossKills)} A caged cat is free! Tap a card to add that cat to your team.</p>
     <div class="cards">${rewardChoices.map((id) => catCard(id, { ribbon: owns(id) ? 'MERGE!' : '', gain: true })).join('')}</div>
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button>${rerollBtn()}</div>`);
+  coach('c12', 'A caged cat is free! Tap a card to add that cat to your team.', 480, 400, 'up', { target: '.card' });
   acts = {
     pickCat: (d, el) => {
       const prev = S.synergyState(g);
@@ -1107,6 +1165,7 @@ function showBox(tier) {
     <p class="sub boxodds">Might hold ${rars.length > 1 ? `<b>${rars[0]}</b> to <b>${rars[rars.length - 1]}</b>` : `<b>${rars[0]}</b>`} relics</p>
     <div class="row"><button class="btn big" data-act="openbox">Open it!</button></div>
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button></div>`);
+  coach('c9', 'Tap Open it! to open the box and see what is inside.', 480, 380, 'up', { target: 'button[data-act=openbox]' });
   let opening = false, burst = false;
   const stg = screenEl.querySelector('.boxstage'), root = screenEl.firstElementChild;
   const later = (fn, ms) => setTimeout(() => { if (g && stg && stg.isConnected) fn(); }, ms);
@@ -1162,6 +1221,7 @@ function showBoxReveal(tier, id, again = false) {   // again: coming back from t
     sfx.play(REVEAL_SFX[it.rarity] || 'chest');
     if (it.rarity !== 'common') setTimeout(() => sfx.play('stamp'), 260);
     if (fresh) setTimeout(() => sfx.play('newrelic'), 520);
+    setTimeout(() => { if (flipped && stage.isConnected && !leaving) coach('c10', 'This is a relic. It makes one cat stronger. Tap Equip it, then tap the cat that should wear it.', 480, 380, 'up', { target: 'button[data-act=take]' }); }, 1100);
     buzz(hi ? 'jackpot' : 'pop');
     if (hi) { const c0 = g.cats[0]; if (c0) setTimeout(() => sfx.meow(c0.id, 'cheer'), 380); }
   };
@@ -1188,6 +1248,7 @@ function showSnackReward() {
   setScreen(`${first ? '<h2>Snack Stall bonus!</h2><p class="sub">Your kingdom gives you a free snack to start.</p>' : `<h2>Wave ${g.wave} cleared!</h2>`}${first ? '' : reportHtml()}
     <div class="cards">${rewardChoices.map(snackCard).join('')}</div>
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button><button class="btn small grey" data-act="stats">Team stats</button>${rerollBtn()}</div>`, first ? '' : 'wide');
+  coach('c11', 'Pick one snack. A snack makes your whole team a little stronger.', 480, 400, 'up', { target: '.card' });
   acts = {
     pickSnack: (d, el) => {
       S.eatSnack(g, d.id);
@@ -1363,8 +1424,8 @@ function showTower(back, opt = {}) {
       <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}" aria-live="polite">${detail}</div><button class="btn small amber fbtn zbtn" data-act="sell" data-drop="sell" ${it ? '' : 'disabled'}>${sellLabel(selItem)}</button><button class="btn small fbtn zbtn ${plan ? 'purple' : 'grey'}" data-act="forge" data-drop="forge" ${plan ? '' : 'disabled'} title="Melt three relics of one rarity into one of the next">${forgeLabel(selItem)}</button><button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>Done</button></div>`, 'wide arr towerscr');
     screenEl.firstElementChild.dataset.msg = msg;
     bindTower(screenEl.firstElementChild);
-    if (selItem != null) coach('c6', 'Now tap a cat to equip it. The green numbers show how much stronger that cat gets!', 680, 352, 'up');
-    else coach('c4', 'Step 3: drag a cat onto another to swap. Two equal cats merge!', 430, 376, 'up', { target: '.slot.has', wait: true, free: true, maxW: 430 });
+    if (selItem != null) coach('c6', 'Now tap the cat that should wear it. The green numbers show how much stronger that cat gets.', 680, 352, 'up', { target: '.slot.has' });
+    else coach('c4', 'To swap two cats, drag one cat onto another cat. Two of the same cat join into one stronger cat.', 430, 376, 'up', { target: '.slot.has', wait: true, maxW: 300 });
     if (pend) { const p = pend; pend = null; celebrate(p); }
   };
   // a bounce on what just changed, and a sparkle for a legendary or mythic relic (reduced motion: a still glow only)
@@ -1799,7 +1860,7 @@ function updateHud(dt) {
   const topBox = BOXES.filter((b) => g.boxes.includes(b.id)).pop();
   if (topBox && hudCache.box !== topBox.id) { hudCache.box = topBox.id; $('chestIco').innerHTML = `<img class="gi" alt="" src="${iconURL(topBox.icon)}">`; }
   $('bMeter').classList.toggle('on', !!save.meter);
-  if (playing && g.state === 'fight' && g.zoom >= 100 && !zr && !save.tips.c5) coach('c5', 'Step 2: tap Zoomies for super speed!', 830, 104, 'right', { target: '#zoom', wait: true });
+  if (playing && g.state === 'fight' && g.zoom >= 100 && !zr && !save.tips.c5) coach('c5', 'The Zoomies button is full! Tap it, or press the Space key. Your cats get much faster for a few seconds.', 830, 104, 'right', { target: '#zoom', wait: true });
   const syn = S.synergyState(g), ssig = JSON.stringify(syn.counts) + JSON.stringify(syn.tiers);
   if (hudCache.syn !== ssig) {
     hudCache.syn = ssig;
@@ -2827,7 +2888,7 @@ function render(dt) {
       const beat = save.opt.motion ? 0.6 + 0.4 * Math.sin(tAnim * 5) : 0.8, grd = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.85);
       grd.addColorStop(0, 'rgba(255,40,70,0)'); grd.addColorStop(1, 'rgba(255,40,70,' + (0.5 * dg * beat).toFixed(3) + ')');
       ctx.globalAlpha = 1; ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
-      if (tAnim >= heartAt && !paused) { sfx.play('heart', 0.6 + 0.4 * dg); heartAt = tAnim + 1.3 - 0.5 * dg; }   // quicker the closer to zero
+      if (tAnim >= heartAt && !paused && !tipHold) { sfx.play('heart', 0.6 + 0.4 * dg); heartAt = tAnim + 1.3 - 0.5 * dg; }   // quicker the closer to zero
     }
   }
   ctx.restore();
@@ -2844,13 +2905,13 @@ function render(dt) {
 }
 
 // ---------------------------------------------------------------- input
-function togglePause() { if (mode !== 'play') return; if (paused) { paused = false; closeScreen(); sfx.play('pick', 1.3); } else showPause(); }
+function togglePause() { if (mode !== 'play') return; if (tipHold) { dismissTip(); return; } if (paused) { paused = false; closeScreen(); sfx.play('pick', 1.3); } else showPause(); }
 // ---- special moves and tap focus
 const spBtns = new Map();
 let autoBtn = null;
 function setAutoSpecial(on) { save.opt.autoSpecial = on; persist(); sfx.play('ui'); toast(on ? 'Auto specials on' : 'Auto specials off'); }
 function doSpecial(uid) {
-  if (mode !== 'play' || paused || !g) return;
+  if (mode !== 'play' || paused || tipHold || !g) return;
   const sc = g.cats.find((c) => c.uid === uid);
   if (S.useSpecial(g, uid)) {
     if (coachEl && coachEl.dataset.key === 'c7') hideCoach();
@@ -2863,7 +2924,7 @@ function doSpecial(uid) {
 }
 function updateSpecials() {
   const box = $('specials');
-  if (save.opt.autoSpecial && g && mode === 'play' && !paused && g.state === 'fight') {
+  if (save.opt.autoSpecial && g && mode === 'play' && !paused && !tipHold && g.state === 'fight') {
     const pick = S.autoSpecialPick(g);   // assist mode, rules live in sim.js
     if (pick) doSpecial(pick.uid);
   }
@@ -2902,7 +2963,7 @@ function updateSpecials() {
     b.classList.toggle('down', c.ko);
     b.firstChild.style.opacity = c.ko ? 0.35 : 1;
     b.style.order = String(-i);
-    if (ready && !save.tips.c7 && g.state === 'fight') coach('c7', 'A cat is charged! Tap its portrait (or press its number) for a special move. Tap a mouse to focus it. AUTO fires specials for you.', 520, 340, 'right');
+    if (ready && !save.tips.c7 && g.state === 'fight') coach('c7', 'This cat is charged! Tap its round picture to use its special move. Tap AUTO and the game does it for you.', 520, 340, 'right', { target: b });
   });
 }
 $('specials').addEventListener('click', (e) => { const b = e.target.closest('.spb'); if (b) { sfx.unlock(); doSpecial(+b.dataset.uid); } });
@@ -2929,7 +2990,7 @@ const stopPurr = () => { clearTimeout(purrTimer); purrTimer = 0; };
 addEventListener('pointerup', stopPurr); cv.addEventListener('pointercancel', stopPurr);
 cv.addEventListener('contextmenu', (e) => e.preventDefault());   // a long press must not open the browser menu
 cv.addEventListener('pointerdown', (e) => {
-  if (!g || mode !== 'play' || paused || g.state !== 'fight') return;
+  if (!g || mode !== 'play' || paused || tipHold || g.state !== 'fight') return;
   const { x, y } = stagePoint(e);
   if (!isFinite(x) || !isFinite(y)) return;
   for (let i = 0; i < g.cats.length; i++) {
@@ -2944,7 +3005,7 @@ cv.addEventListener('pointerdown', (e) => {
   }
   if (best) { if (S.setFocus(g, best.uid)) { sfx.play('hover'); ring(best.x, best.y, 34, '#ff8fb7', 0.3, 4); } } else if (g.focus) g.focus = 0;
 });
-function doZoomies() { if (mode === 'play' && !paused && S.useZoomies(g)) { if (coachEl && coachEl.dataset.key === 'c5') hideCoach(); drain(); } }
+function doZoomies() { if (mode === 'play' && !paused && !tipHold && S.useZoomies(g)) { if (coachEl && coachEl.dataset.key === 'c5') hideCoach(); drain(); } }
 // full screen: the Fullscreen API where the browser has it (Android, desktop); iPhone Safari has none, so the button stays hidden there
 const fsEl = document.documentElement;
 const fsReq = fsEl.requestFullscreen || fsEl.webkitRequestFullscreen;
@@ -2973,6 +3034,7 @@ $('bMeter').addEventListener('click', () => { sfx.unlock(); save.meter = !save.m
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
   const k = e.key.toLowerCase();
+  if (tipHold && (k === 'enter' || k === ' ' || k === 'escape')) { e.preventDefault(); sfx.play('ui'); dismissTip(); return; }   // Enter, Space or Esc press Got it
   if (document.body.classList.contains('scr') && k >= '1' && k <= '9' && !(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) {
     // on a pick screen the number keys choose the nth card
     const card = [...screenEl.querySelectorAll('.cards > .card[data-act]')][+k - 1];
@@ -3029,7 +3091,7 @@ let frameEma = 16, slowFrames = 0, fastFrames = 0, refreshMs = 16.7, calmNeed = 
 // adaptive quality: step down when frames run long, step back up after a calm stretch (with back-off so it cannot flap).
 // The limit follows the real refresh rate, so a 30 Hz or battery saver display is not mistaken for a slow device.
 function adaptQuality(rawMs) {
-  if (save.opt.quality !== 'auto' || document.hidden || paused || rawMs > 120) { slowFrames = fastFrames = 0; return; }
+  if (save.opt.quality !== 'auto' || document.hidden || paused || tipHold || rawMs > 120) { slowFrames = fastFrames = 0; return; }
   refreshMs = Math.min(refreshMs + 0.02, rawMs);
   frameEma = frameEma * 0.95 + rawMs * 0.05;
   const limit = Math.max(26, refreshMs * 1.55);
@@ -3064,7 +3126,7 @@ function frame(ts) {
   if (cheerHop > 0) cheerHop = Math.max(0, cheerHop - dt);
   for (const [k, v] of pops) { if (v - dt <= 0) pops.delete(k); else pops.set(k, v - dt); }
   sfx.setIntensity(Math.min(1, combo / 30));
-  if (g && mode === 'play' && !paused) {
+  if (g && mode === 'play' && !paused && !tipHold) {
     let sd = dt * speed * timeScale, fd = sd;
     if (hitstop > 0) { hitstop -= dt; sd = 0; fd = dt * 0.1; }
     acc += sd;
@@ -3096,7 +3158,7 @@ function frame(ts) {
     if (celeb <= 0) { mode = 'reward'; nextReward(); }
   } else {
     if (g && g.ev.length) g.ev.length = 0;
-    updateFx(paused ? 0 : dt);
+    updateFx(paused || tipHold ? 0 : dt);
   }
   // under a dimmed menu the scene only needs a third of the frames: the GPU skips two re-blurs out of three and a phone runs cooler
   coverDt += dt;
