@@ -663,12 +663,12 @@ body.scr #hud>*:not(#toasts):not(#banner){opacity:0!important;pointer-events:non
 .boxstage.opening .boxglow{animation:glowburst .75s ease-in both}
 .boxstage.opening .boxbeams{animation:beamsburst .75s ease-out both}
 .boxstage.opening .boxsparks i{animation:sparkfly .5s ease-out var(--t) both}
-.boxstage.opening .boxhero.hi{animation:lidpop .75s ease-in both}
+.boxstage.opening .boxhero.hi{animation:lidpop .7s cubic-bezier(.2,.8,.3,1) both}
 @keyframes glowpulse{50%{opacity:.34;transform:scale(1.08)}}
-@keyframes glowburst{0%{opacity:.2;transform:scale(.8)}100%{opacity:1;transform:scale(1.7)}}
+@keyframes glowburst{0%{opacity:.2;transform:scale(.8)}60%{opacity:.7;transform:scale(1.4)}100%{opacity:.55;transform:scale(1.7)}}
 @keyframes beamsburst{0%,40%{opacity:0;transform:scale(.4) rotate(0)}70%{opacity:.85}100%{opacity:.9;transform:scale(1.3) rotate(24deg)}}
 @keyframes sparkfly{0%{opacity:1;transform:rotate(var(--a)) translateY(0) rotate(45deg)}100%{opacity:0;transform:rotate(var(--a)) translateY(calc(var(--d) * -1)) rotate(45deg) scale(.4)}}
-@keyframes lidpop{0%,50%{transform:translateY(0) rotate(0)}75%{transform:translateY(-26px) rotate(-8deg)}100%{transform:translateY(-44px) rotate(-14deg)}}
+@keyframes lidpop{0%{transform:translateY(0) rotate(0)}35%{transform:translateY(-52px) rotate(-10deg)}100%{transform:translateY(-120px) rotate(-26deg);opacity:0}}
 .cheercat{width:34px;height:34px;vertical-align:middle;margin-right:6px;image-rendering:auto;animation:cheerhop .6s ease-in-out 3}
 @keyframes cheerhop{50%{transform:translateY(-6px) rotate(-6deg)}}
 .pedestal{position:absolute;left:50%;bottom:-8px;width:240px;height:26px;margin-left:-120px;border-radius:50%;pointer-events:none;background:radial-gradient(ellipse,rgba(var(--ray),.8),rgba(var(--ray),0) 70%);animation:glowpulse 2.4s ease-in-out infinite}
@@ -1481,6 +1481,29 @@ body.nomotion #boot b,body.nomotion #boot i,body.nomotion #boot .bar u{animation
 body.nomotion #boot i,body.nomotion #boot .bar{display:none}
 @media (prefers-reduced-motion:reduce){#boot b,#boot .bar u{animation:none!important;opacity:1;width:auto}#boot i,#boot .bar{display:none}}
 /* BOOT END */
+
+/* event cards: the card you picked is lit and stamped, the others step back, and Continue pulses */
+.card.ev.chosen{border-color:#ffd23f;box-shadow:0 0 0 3px #ffd23f,0 0 26px #ffd23faa,0 8px 0 #0004;transform:translateY(-4px) scale(1.04);z-index:2;pointer-events:none}
+.card.ev.passed{opacity:.4;filter:saturate(.4);transform:scale(.96);pointer-events:none}
+.card.ev .evstamp{position:absolute;left:14px;right:14px;top:-12px;border-radius:10px;background:#3b8f55;color:#fff;border:2px solid #fff;padding:3px 4px;box-shadow:0 3px 0 #0005;display:flex;flex-direction:column;gap:1px;animation:evstamp .35s cubic-bezier(.2,1.6,.4,1) both}
+.card.ev .evstamp b{font:400 16px var(--display)}.card.ev .evstamp small{font:700 11px/1.1 var(--body,inherit)}
+.evres{color:#ffd23f}
+.btn.pulse{animation:evpulse 1s ease-in-out infinite}
+@keyframes evstamp{from{transform:scale(2.2) rotate(-8deg);opacity:0}to{transform:none;opacity:1}}
+@keyframes evpulse{50%{transform:scale(1.06);filter:brightness(1.12)}}
+body.nomotion .btn.pulse,body.nomotion .card.ev .evstamp{animation:none}
+@media (prefers-reduced-motion:reduce){.btn.pulse,.card.ev .evstamp{animation:none}}
+
+/* relic cards: a bold chip in the colour of the build (Fire, Lightning, Top cat...), a bigger icon and a glow for the rare ones */
+.card.relic .kind{background:var(--tc);color:#fff;font:400 15px var(--display);letter-spacing:.5px;padding:2px 12px;border-radius:999px;border:2px solid #2a1d4a;box-shadow:0 2px 0 #0004;text-shadow:0 1px 0 #0006;margin:3px 0 4px}
+.card.relic .ic{font-size:60px}
+.card.relic.epic{border-color:#d9a0ff;box-shadow:0 0 18px #c58aff88,0 6px 0 #0004}.card.relic.rare{border-color:#8ec6ff}
+.card.relic:hover{transform:translateY(-4px) scale(1.03)}
+.card.relic .impact{font-weight:800}
+/* the reveal screen does not fade in from empty (that flashed the bright world between the chest and the card), the card rises out of the chest spot */
+.screen.noscrin{animation:none}
+.revealstage.pending .cardback{animation:backrise .45s cubic-bezier(.2,1.4,.4,1) both,backwobble .32s .45s ease-in-out infinite}
+@keyframes backrise{from{transform:translateY(70px) scale(.5);opacity:0}to{transform:none;opacity:1}}
 </style>
 </head>
 <body>
