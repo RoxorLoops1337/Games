@@ -1329,4 +1329,11 @@ t('title juice: the menu rows pop in one after another and buttons wobble on hov
   assert.ok(/body\.nomotion \.screen\.tpad/.test(b) && /prefers-reduced-motion:reduce/.test(b), 'motion off paths');
 });
 
+t('pick juice: a snack gets gobbled with a burst and label by kind, an event pick bursts when taken and its card shakes when refused', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/pickSnack: \(d, el\) =>/.test(js) && /YUM! FOREVER/.test(js) && /BOOST!/.test(js) && /HEALED!/.test(js), 'snack bursts by kind');
+  assert.ok(/evpick: \(d, el\) =>/.test(js) && /shakeno/.test(js) && /@keyframes shakeno/.test(css), 'event pick burst and refusal shake');
+  assert.ok(/body\.nomotion \.shakeno/.test(css), 'motion off');
+});
+
 console.log(`${n} tests passed`);

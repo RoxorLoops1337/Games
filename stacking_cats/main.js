@@ -962,11 +962,12 @@ function showEvent() {
   const finish = () => { S.endEvent(g); if (S.overflow(g) > 0) showTower(nextReward); else nextReward(); };
   draw();
   acts = {
-    evpick: (d) => {
+    evpick: (d, el) => {
       if (ev.done) return;
       const r = S.chooseEvent(g, +d.i);
-      if (!r.ok) { sfx.play('nope'); toast(r.msg); return; }
+      if (!r.ok) { sfx.play('nope'); toast(r.msg); if (el && save.opt.motion) { el.classList.remove('shakeno'); void el.offsetWidth; el.classList.add('shakeno'); } buzz('hit'); return; }   // a refused pick shakes its card
       sfx.play('chest'); toast(r.msg); puff(S.TOWER_X, 330, 10, '#ffd23f', 120, 0.5);
+      if (el && el.getBoundingClientRect) { const rc = el.getBoundingClientRect(); domBurst(rc.left + rc.width / 2, rc.top + rc.height / 2, 16, ['#ffd23f', '#fff6b0', '#fff', '#ff9a3a'], ''); buzz('pop'); }   // a taken pick bursts
       if (r.again) { draw(); return; }
       draw();
     },
@@ -1114,9 +1115,14 @@ function showSnackReward() {
     <div class="cards">${rewardChoices.map(snackCard).join('')}</div>
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button><button class="btn small grey" data-act="stats">Team stats</button>${rerollBtn()}</div>`, first ? '' : 'wide');
   acts = {
-    pickSnack: (d) => {
+    pickSnack: (d, el) => {
       S.eatSnack(g, d.id);
       sfx.play('pick');
+      if (el && el.getBoundingClientRect) {   // the snack gets gobbled: a burst in the colour of its kind and a label
+        const sn = SNACK_BY_ID[d.id], r = el.getBoundingClientRect();
+        domBurst(r.left + r.width / 2, r.top + r.height / 2, sn.kind === 'perm' ? 22 : 16, sn.kind === 'perm' ? ['#ffd23f', '#fff6b0', '#ff9a3a', '#fff'] : sn.kind === 'temp' ? ['#8fe8ff', '#fff', '#c58aff'] : ['#ff8fb7', '#fff', '#ffd1e0'], sn.kind === 'perm' ? 'YUM! FOREVER' : sn.kind === 'temp' ? 'BOOST!' : 'HEALED!');
+        buzz('pop');
+      }
       toast(`${SNACK_BY_ID[d.id].icon} ${SNACK_BY_ID[d.id].name}!`);
       nextReward();
     },
