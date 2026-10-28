@@ -634,6 +634,12 @@ export default {
   'Keep playing': 'Spil videre',
   'Watch the ending': 'Se slutningen',
 
+  'Ready!': 'Klar!',
+  'Cat Kingdom Lv #': 'Kattekongerige Niv. {1}',
+  'Item Book #/# found': 'Udstyrsbog {1}/{2} fundet',
+  'Arrange your tower Team DPS ≈ #': 'Ordn dit tårn Holdets DPS ≈ {1}',
+  'Get ready for wave #! Team DPS ≈ #': 'Gør klar til bølge {1}! Holdets DPS ≈ {2}',
+
   // ---------------------------------------------------------------- generic helpers (last: low priority)
   '{} · {}': '{1} · {2}',
 };
