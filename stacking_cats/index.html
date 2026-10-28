@@ -1342,6 +1342,15 @@ body.nomotion .shakeno{animation:none}
 body.nomotion .screen>h2,body.nomotion .screen>.sub,body.nomotion .screen>.row{animation:none!important}
 @media (prefers-reduced-motion:reduce){.screen>h2,.screen>.sub,.screen>.row{animation:none!important}}
 /* SCREENJUICE END */
+/* BOSSJUICE START */
+#bossBar.hit{animation:bosshit .16s ease-out}
+#bossBar.phase{animation:bossphase .6s cubic-bezier(.2,1.6,.4,1)}
+#bossBar.hit .bar i#bossHp{filter:brightness(1.6)}
+@keyframes bosshit{0%{transform:translateX(-50%) translateX(-4px)}50%{transform:translateX(-50%) translateX(4px)}100%{transform:translateX(-50%)}}
+@keyframes bossphase{0%{transform:translateX(-50%) scale(1)}30%{transform:translateX(-50%) scale(1.12);box-shadow:0 0 34px 8px rgba(255,80,80,.9)}100%{transform:translateX(-50%) scale(1)}}
+body.nomotion #bossBar{animation:none!important}
+@media (prefers-reduced-motion:reduce){#bossBar{animation:none!important}}
+/* BOSSJUICE END */
 </style>
 </head>
 <body>

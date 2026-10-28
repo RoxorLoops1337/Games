@@ -1661,8 +1661,18 @@ function updateHud(dt) {
     setText('bossName', nestTitle(g.wave, nest.name));
     setText('bossTrick', (NESTS.find((n) => n.id === nest.kind) || {}).trick || '');
     const pct = Math.max(0, 100 * nest.hp / nest.maxHp).toFixed(1) + '%';
-    if (hudCache.bossPct !== pct) { hudCache.bossPct = pct; $('bossHp').style.width = pct; $('bossTrail').style.width = pct; }
-  } else hudCache.bossPct = null;
+    if (hudCache.bossPct !== pct) {
+      const f = nest.hp / nest.maxHp, last = hudCache.bossF == null ? 1 : hudCache.bossF;
+      hudCache.bossPct = pct; $('bossHp').style.width = pct; $('bossTrail').style.width = pct;
+      if (motionOn() && f < last) {   // the bar flinches on every hit, and a threshold (75, 50, 25 percent) gets a bigger pulse and a sound
+        const bb = $('bossBar'), t = performance.now();
+        if (t - (hudCache.bossHitAt || 0) > 140) { hudCache.bossHitAt = t; bb.classList.remove('hit'); void bb.offsetWidth; bb.classList.add('hit'); }
+        const cross = [0.75, 0.5, 0.25].find((x) => last > x && f <= x);
+        if (cross) { bb.classList.remove('phase'); void bb.offsetWidth; bb.classList.add('phase'); sfx.play('stamp'); shake = Math.max(shake, 3); txtFx(nest.x, nest.y - 120, `${Math.round(cross * 100)}% LEFT!`, '#ffb0b0', 24, 1.0); buzz('hit'); }
+      }
+      hudCache.bossF = f;
+    }
+  } else { hudCache.bossPct = null; hudCache.bossF = null; }
   const zr = g.zoomT > 0, z = $('zoom');
   z.style.display = playing ? 'flex' : 'none';
   z.style.setProperty('--p', (zr ? 100 * g.zoomT / g.zoomMax : g.zoom) + '%');
