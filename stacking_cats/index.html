@@ -1367,9 +1367,28 @@ body.nomotion #coinBox.cgain.cbig{animation:none!important}
 body.nomotion #bossBar{animation:none!important}
 @media (prefers-reduced-motion:reduce){#bossBar{animation:none!important}}
 /* BOSSJUICE END */
+/* BOOT START */
+#boot{position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:radial-gradient(ellipse at 50% 40%,#5a3fb0,#2a1d4a 70%);overflow:hidden;transition:opacity .45s ease-out,transform .45s ease-in}
+#boot.gone{opacity:0;transform:scale(1.12);pointer-events:none}
+#boot b{display:block;font-family:var(--display,system-ui),system-ui,sans-serif;font-weight:800;line-height:.9;color:#fff;letter-spacing:2px;text-shadow:0 6px 0 #6b4fc9,0 0 30px #ff8fb788,4px 4px 0 #271c33,-4px -4px 0 #271c33,4px -4px 0 #271c33,-4px 4px 0 #271c33;opacity:0;animation:bootslam .38s cubic-bezier(.2,1.5,.4,1) forwards}
+#boot b.w1{font-size:min(15vw,96px);animation-delay:.15s}
+#boot b.w2{font-size:min(11vw,64px);color:#ff8fb7;animation-delay:.5s}
+#boot b.w3{font-size:min(7vw,34px);color:#ffc38a;letter-spacing:6px;animation-delay:.85s}
+#boot i{position:absolute;inset:0;pointer-events:none;background:#fff;opacity:0;animation:bootflash .3s ease-out forwards}
+#boot i.f1{animation-delay:.15s}#boot i.f2{animation-delay:.5s}#boot i.f3{animation-delay:.85s}
+#boot .bar{position:absolute;left:50%;bottom:9%;width:min(60%,320px);height:10px;transform:translateX(-50%);border-radius:6px;background:#0005;border:2px solid #ffffff33;overflow:hidden}
+#boot .bar u{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff8fb7,#ffd23f);animation:bootbar 1.3s .2s ease-out forwards}
+@keyframes bootslam{0%{opacity:0;transform:scale(2.4) rotate(-3deg)}60%{opacity:1;transform:scale(.92) rotate(1deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes bootflash{0%{opacity:.5}100%{opacity:0}}
+@keyframes bootbar{to{width:100%}}
+body.nomotion #boot b,body.nomotion #boot i,body.nomotion #boot .bar u{animation:none!important;opacity:1}
+body.nomotion #boot i,body.nomotion #boot .bar{display:none}
+@media (prefers-reduced-motion:reduce){#boot b,#boot .bar u{animation:none!important;opacity:1;width:auto}#boot i,#boot .bar{display:none}}
+/* BOOT END */
 </style>
 </head>
 <body>
+<div id="boot" aria-hidden="true"><b class="w1">STACKING</b><b class="w2">CATS</b><b class="w3">GET READY</b><i class="f1"></i><i class="f2"></i><i class="f3"></i><div class="bar"><u></u></div></div>
 <div id="app">
   <canvas id="cv" width="960" height="540"></canvas>
   <button id="bFull" class="ib" title="Full screen (G)" aria-label="Full screen" hidden>&#9974;</button>

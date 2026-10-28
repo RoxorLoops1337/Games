@@ -1,7 +1,7 @@
 // Stacking Cats service worker. Bump VERSION to bust the cache.
 // Fonts and icons: cache first. index.html, page loads and code (js): network first, so a deploy is never
 // stuck behind a stale cache, with the cache as the offline fallback. /api/ is never touched.
-const VERSION = 'sc-v61';
+const VERSION = 'sc-v62';
 const CACHE = 'stacking-cats-' + VERSION;
 const PRECACHE = [
   './', 'index.html', 'manifest.webmanifest',
