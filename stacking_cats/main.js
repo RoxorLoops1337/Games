@@ -1092,11 +1092,17 @@ function showEvent() {
   const ev = g.event || S.rollEvent(g);
   if (!ev) { nextReward(); return; }
   mode = 'reward';
+  const picks = new Map();   // option index -> what happened, so the chosen card stays marked
+  let lastMsg = '';
   const draw = () => {
-    setScreen(`<h2>${ev.icon} ${ev.name}</h2><p class="sub">${ev.desc}</p>
+    setScreen(`<h2>${ev.icon} ${ev.name}</h2><p class="sub">${ev.done && lastMsg ? `<b class="evres">${lastMsg}</b> Tap Continue when you are ready.` : ev.desc}</p>
       <div class="kcoins evcoins"><span>&#129689;</span><b>${num(g.run.coins)}</b><small>run coins</small></div>
       <div class="cards evcards">${ev.options.map(eventOptionHtml).join('')}</div>
-      <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button><button class="btn ${ev.done ? 'green' : ''}" data-act="evdone">${ev.done ? 'Continue' : 'Leave'}</button></div>`, 'wide');
+      <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button><button class="btn ${ev.done ? 'green pulse' : ''}" data-act="evdone">${ev.done ? 'Continue' : 'Leave'}</button></div>`, 'wide');
+    screenEl.querySelectorAll('.card.ev').forEach((c, i) => {   // the picked card is marked, the others step back
+      if (picks.has(i)) { c.classList.add('chosen'); c.insertAdjacentHTML('beforeend', `<div class="evstamp"><b>Chosen!</b></div>`); }
+      else if (ev.done) c.classList.add('passed');
+    });
   };
   const finish = () => { S.endEvent(g); if (S.overflow(g) > 0) showTower(nextReward); else nextReward(); };
   draw();
@@ -1105,6 +1111,7 @@ function showEvent() {
       if (ev.done) return;
       const r = S.chooseEvent(g, +d.i);
       if (!r.ok) { sfx.play('nope'); toast(r.msg); if (el && save.opt.motion) { el.classList.remove('shakeno'); void el.offsetWidth; el.classList.add('shakeno'); } buzz('hit'); return; }   // a refused pick shakes its card
+      picks.set(+d.i, r.msg); lastMsg = r.msg;
       sfx.play('chest'); toast(r.msg); puff(S.TOWER_X, 330, 10, '#ffd23f', 120, 0.5);
       if (el && el.getBoundingClientRect) { const rc = el.getBoundingClientRect(); domBurst(rc.left + rc.width / 2, rc.top + rc.height / 2, 16, ['#ffd23f', '#fff6b0', '#fff', '#ff9a3a'], ''); buzz('pop'); }   // a taken pick bursts
       if (r.again) { draw(); return; }
@@ -1185,7 +1192,7 @@ function showBox(tier) {
     stg.classList.remove('charging'); stg.classList.add('opening');
     if (save.opt.shake > 0 && root) { root.classList.remove('jolt'); void root.offsetWidth; root.classList.add('jolt'); }
     sfx.play('boxburst'); buzz('pop');
-    later(() => { const id = S.openBox(g, tier); rewardChoices = id; showBoxReveal(tier, id); }, save.opt.motion ? 480 : 120);
+    later(() => { const id = S.openBox(g, tier); rewardChoices = id; showBoxReveal(tier, id); }, save.opt.motion ? 720 : 120);
   };
   acts = {
     openbox: () => {
@@ -1220,6 +1227,7 @@ function showBoxReveal(tier, id, again = false) {   // again: coming back from t
     <div class="row veil"><button class="btn big" data-act="take">Equip it</button></div>
     <div class="row hint veil"><button class="btn small grey" data-act="tower">Arrange tower</button></div>`);
   const root = screenEl.firstElementChild, stage = root.querySelector('.revealstage');
+  if (!again) root.classList.add('noscrin');
   root.classList.add('suspense');
   let flipped = false, leaving = false;
   const flip = (quiet) => {   // the card turns over: light, confetti, a fanfare matched to the rarity, a stamp and (for a first find) a NEW tag
@@ -1277,9 +1285,10 @@ function showSnackReward() {
   };
 }
 
+const THEME_COLOR = { storm: '#2f7fe0', fire: '#e4561c', gun: '#8a6a2f', blade: '#6c7a8c', magic: '#8e44d6', guardian: '#2e8b57', tech: '#1f8fa3', cheer: '#e0559a', top: '#c99a0a', bottom: '#7a4f33', mid: '#c4701c', first: '#1f9e8a', team: '#5a5ad8', shady: '#5a2f6e' };
 function relicCard(id) {
   const r = RELIC_BY_ID[id];
-  return `<div class="card relic ${r.rarity}" data-act="pickRelic" data-id="${id}"><div class="ic">${r.icon}</div><h3>${r.name}</h3><div class="kind k-perm">${RELIC_THEMES[r.theme]}</div><p>${r.desc}</p><div class="impact">${S.relicWho(g, r)}</div></div>`;
+  return `<div class="card snack relic ${r.rarity}" data-act="pickRelic" data-id="${id}" style="--tc:${THEME_COLOR[r.theme] || '#6b4fc0'}"><div class="ic">${r.icon}</div><h3>${r.name}</h3><div class="kind">${RELIC_THEMES[r.theme]}</div><p>${r.desc}</p><div class="impact">${S.relicWho(g, r)}</div></div>`;
 }
 function showRelicReward() {
   rewardChoices = rewardChoices || S.rollRelicChoices(g);
@@ -3203,7 +3212,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { showRelicReward, setCombo: (n) => { combo = n; comboT = 2.4; }, get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+window.stackingCats = { showRelicReward, showBox, showEvent, setCombo: (n) => { combo = n; comboT = 2.4; }, get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
 showTitle();
 // the boot splash (in index.html) covers the half-built first frame; it stays long enough for the three slams, then lifts onto the title
 {
