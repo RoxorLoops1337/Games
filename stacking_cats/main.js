@@ -2,7 +2,7 @@
 import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS, SPECIAL_TEXT,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
-  ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, BOXES, BOX_BY_ID, RARITY_CHEER, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
+  ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, BOXES, BOX_BY_ID, BOX_PITY, RARITY_CHEER, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
   TEMP_WAVES, DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
   masteryProgress, masteryMap, masteryBonus, MASTERY_MAX, DIFF_ORDER, LADDER_RULES, LADDER_WAVE, ladderTier, ladderUnlocked, diffAllowed, ladderClears, weekKey, weekInfo,
 } from './cats.js';
@@ -568,7 +568,7 @@ function showHow(back) {
     ${row('\uD83D\uDC00', `<b>Nests.</b> Every ${BOSS_EVERY}th wave you fight a mouse nest. Destroy it to free a cat and win loot.`)}
     ${row('\u2728', `<b>Join two cats.</b> Two of the same cat join into one stronger cat (up to Lv 3). The tower holds ${MAX_STACK} cats and the bench holds ${MAX_BENCH}.`)}
     ${row('\uD83D\uDD2E', '<b>Relics.</b> After every second nest, pick a relic for the whole run. Some help Fire or Lightning cats, some your top or bottom cat.')}
-    ${row('\uD83C\uDF81', '<b>Lootboxes.</b> A box holds an item. An item makes one cat stronger. Tap Equip it, then tap the cat that should wear it.')}
+    ${row('\uD83C\uDF81', '<b>Lootboxes.</b> Tap a chest to crack it. Items go in your backpack. Before each wave, give them to your cats.')}
     ${row('\uD83E\uDE99', '<b>Coins</b> are saved. Spend them in the <b>Kingdom</b> (on the title screen) to make every new run stronger.')}
     ${row('\uD83D\uDD25', '<b>Cat teams.</b> Cats of the same kind help each other. Small badges next to the wave number show these bonuses.')}
     ${row('\uD83D\uDC3E', '<b>Roads.</b> After each nest you choose the road to walk next. A harder road gives better rewards.')}
@@ -877,7 +877,7 @@ function startRun(opts = {}) {
   g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom, difficulty: save.diff, daily, mastery: masteryMap(save.catStats) });
   if (opts.weekly) g.run.weekly = true;
   startTotal = START_CATS + g.meta.startPicks;
-  setsSeen = {}; runNewRelics = 0; runCommitted = false; bestShown = false; pickN = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
+  setsSeen = {}; runNewRelics = 0; runCommitted = false; bestShown = false; pickN = 0; prepSeen = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
   combo = 0; multiKill = 0; flawless = 0; maxComboRun = 0; coinShown = 0; dpsHist.length = 0; sfx.setIntensity(0);
   $('bSpeed').textContent = 'x' + speed;
   showPickStart();
@@ -1029,10 +1029,14 @@ function showFinale() {
   };
   card();
 }
+let prepSeen = 0;   // how many items the run had found at the last prepare screen
 function nextReward() {
   const r = queue.shift();
   rewardChoices = null;
-  if (!r) { beginWave(); return; }
+  if (!r) {   // everything is picked: new items are handed out on the prepare screen, then the wave starts
+    if (g.run.items > prepSeen && g.stash.length) { prepSeen = g.run.items; showTower(nextReward, { prepare: true }); return; }
+    beginWave(); return;
+  }
   if (r === 'finale') showFinale(); else if (r === 'event') showEvent(); else if (r === 'cat') showCatReward(); else if (r.startsWith('box:')) showBox(r.slice(4)); else if (r === 'route') showRouteReward(); else if (r === 'relic') showRelicReward(); else showSnackReward();
 }
 
@@ -1175,37 +1179,88 @@ function showFull(newId) {
 }
 
 // ---- lootboxes: a chance, not a choice. Shake it, open it, meet the relic.
+const TIER_RGB = { common: '255,230,140', rare: '120,190,255', epic: '205,130,255', legendary: '255,190,60', mythic: '255,110,190' };
+const TIER_HEX = { common: '#ffe68c', rare: '#78beff', epic: '#cd82ff', legendary: '#ffbe3c', mythic: '#ff6ebe' };
+const cap1 = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+// a chest: tap it to crack it (it shakes harder each tap and can turn rarer), the last tap opens it. Chests come one after the other,
+// the items wait in the backpack and are handed out on the prepare screen before the next wave.
 function showBox(tier) {
-  const bx = BOX_BY_ID[tier] || BOXES[0], rars = Object.keys(bx.odds);
-  setScreen(`<h2>${bx.icon} ${bx.name}</h2><p class="sub">${bx.blurb}</p>
-    <div class="boxstage t-${bx.id}"><div class="boxvig"></div><div class="boxglow"></div><div class="boxbeams"></div><div class="boxsuck">${suckHtml()}</div><div class="boxsparks">${sparksHtml()}</div><div class="boxcrack"></div><div class="boxic t-${bx.id}" data-act="openbox"><img class="boxhero lo" src="${boxHero(bx.id).toDataURL()}" alt="${bx.name}"><img class="boxhero hi" src="${boxHero(bx.id).toDataURL()}" alt="" aria-hidden="true"></div><div class="boxring"></div><div class="boxflash"></div></div>
-    <p class="sub boxodds">Might hold ${rars.length > 1 ? `<b>${rars[0]}</b> to <b>${rars[rars.length - 1]}</b>` : `<b>${rars[0]}</b>`} items</p>
-    <div class="row"><button class="btn big" data-act="openbox">Open it!</button></div>
-    <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button></div>`);
-  coach('c9', 'Tap Open it! to open the box and see what is inside.', 480, 380, 'up', { target: 'button[data-act=openbox]' });
-  let opening = false, burst = false;
-  const stg = screenEl.querySelector('.boxstage'), root = screenEl.firstElementChild;
+  const bx = BOX_BY_ID[tier] || BOXES[0], rars = Object.keys(bx.odds), plan = S.boxPlan(g, tier);
+  const calm = !save.opt.motion;
+  const burstTap = calm ? 0 : Math.max((g.run.boxCount || 0) >= 4 ? 2 : 3, plan.ups.length + 2) - 1;
+  const more = queue.filter((q) => q.startsWith('box:')).length;   // chests waiting after this one
+  const pityLeft = Math.max(1, BOX_PITY - (g.run.boxPity || 0));
+  let shown = plan.tier0, taps = 0, burst = false, stage = 0;
+  setScreen(`<h2>${bx.icon} ${bx.name}</h2>
+    <div class="captier" id="capTier" style="--tc:${TIER_HEX[shown]}">${cap1(shown)} chest</div><div class="captag" id="capTag"></div>
+    <div class="boxstage t-${bx.id}" style="--bg:${TIER_RGB[shown]}"><div class="boxvig"></div><div class="boxglow"></div><div class="boxbeams"></div><div class="boxsuck">${suckHtml()}</div><div class="boxsparks">${sparksHtml()}</div><div class="boxcrack"></div><div class="boxic t-${bx.id}" data-act="crack"><img class="boxhero lo" src="${boxHero(bx.id).toDataURL()}" alt="${bx.name}"><img class="boxhero hi" src="${boxHero(bx.id).toDataURL()}" alt="" aria-hidden="true"></div><div class="boxring"></div><div class="boxflash"></div></div>
+    <div class="caphint" id="caphint"></div>
+    ${rars.includes('common') ? `<p class="sub boxodds">Rare or better in <b>${pityLeft > 1 ? pityLeft + ' chests' : 'this chest'}</b> or sooner</p>` : `<p class="sub boxodds">Might hold <b>${rars[0]}</b> to <b>${rars[rars.length - 1]}</b> items</p>`}
+    <div class="row"><button class="btn big" data-act="crack">${calm ? 'Open it!' : 'Crack it!'}</button>${more ? `<button class="btn small grey" data-act="all">Open all ${more + 1}</button>` : ''}</div>`);
+  coach('c9', 'Tap the chest or the Crack it! button again and again. Each tap shakes it more.', 480, 380, 'up', { target: 'button[data-act=crack]' });
+  const stg = screenEl.querySelector('.boxstage'), root = screenEl.firstElementChild, hint = screenEl.querySelector('#caphint');
   const later = (fn, ms) => setTimeout(() => { if (g && stg && stg.isConnected) fn(); }, ms);
-  const doBurst = () => {   // the lid flies, light and confetti fly, and the relic is rolled
-    if (burst) return;
-    burst = true;
+  const showHint = () => { const l = Math.max(0, burstTap + 1 - taps); hint.innerHTML = burst ? '' : `<span>${l <= 1 ? 'TAP TO OPEN!' : 'TAP TO CRACK'}</span><small>${'&#9679;'.repeat(Math.min(taps, burstTap + 1))}${'&#9675;'.repeat(l)}</small>`; };
+  const at = () => { const r = stg.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  const doBurst = () => {   // the lid flies, light and confetti fly, and the item lands in the backpack
+    if (burst && stg.classList.contains('opening')) return;
+    burst = true; showHint();
     stg.classList.remove('charging'); stg.classList.add('opening');
     if (save.opt.shake > 0 && root) { root.classList.remove('jolt'); void root.offsetWidth; root.classList.add('jolt'); }
     sfx.play('boxburst'); buzz('pop');
-    later(() => { const id = S.openBox(g, tier); rewardChoices = id; showBoxReveal(tier, id); }, save.opt.motion ? 720 : 120);
+    later(() => { S.openPlanned(g, plan); rewardChoices = plan.id; showBoxReveal(tier, plan.id, more); }, calm ? 120 : 720);
   };
+  const upgrade = () => {   // the chest turns one tier rarer: a flash, a ring of light and a label
+    const next = plan.ups[stage++];
+    if (!next) return;
+    shown = next;
+    stg.style.setProperty('--bg', TIER_RGB[next]);
+    const t = screenEl.querySelector('#capTier'); t.textContent = cap1(next) + ' chest'; t.style.setProperty('--tc', TIER_HEX[next]); t.classList.remove('up'); void t.offsetWidth; t.classList.add('up');
+    const tag = screenEl.querySelector('#capTag'); tag.textContent = next === 'legendary' || next === 'mythic' ? 'JACKPOT UPGRADE!' : 'UPGRADE!'; tag.style.setProperty('--tc', TIER_HEX[next]); tag.classList.remove('pop'); void tag.offsetWidth; tag.classList.add('pop');
+    stg.classList.remove('flashup'); void stg.offsetWidth; stg.classList.add('flashup');
+    const [x, y] = at(); domBurst(x, y, 14 + stage * 6, [TIER_HEX[next], '#fff', '#ffd23f'], '');
+    sfx.play('stamp'); sfx.play('boxtick', 2.2 + stage * 0.3); buzz('jackpot');
+  };
+  const tap = () => {
+    if (burst) { doBurst(); return; }   // a tap while it charges pops it now
+    if (taps === 0) sfx.unlock();
+    const i = taps++;
+    if (i >= burstTap) {
+      sfx.play('boxopen');
+      if (calm) { doBurst(); return; }
+      burst = true; showHint(); sfx.play('boxbuild'); stg.classList.add('charging');
+      later(doBurst, 800);
+      return;
+    }
+    stg.style.setProperty('--k', String(i + 1)); stg.style.setProperty('--crack', String((i + 1) / (burstTap + 1)));
+    stg.classList.remove('hit'); void stg.offsetWidth; stg.classList.add('hit');
+    sfx.play('boxtick', 1 + i * 0.35); buzz('tick');
+    if (save.opt.shake > 0 && root) { root.classList.remove('jolt'); void root.offsetWidth; root.classList.add('jolt'); }
+    const [x, y] = at(); domBurst(x, y, 5 + i * 3, [TIER_HEX[shown], '#fff'], '');
+    if (i >= 1 && stage < plan.ups.length) upgrade();
+    showHint();
+  };
+  showHint();
   acts = {
-    openbox: () => {
-      if (opening) { doBurst(); return; }   // tapping again skips the wind-up
-      opening = true; sfx.unlock(); sfx.play('boxopen');
-      const row = screenEl.querySelector('.row'); if (row) row.classList.add('gone');
-      if (!save.opt.motion) { later(doBurst, 200); return; }
-      sfx.play('boxbuild'); stg.classList.add('charging');
-      [200, 420, 600, 740, 850, 930].forEach((ms, i) => later(() => { if (!burst) { sfx.play('boxtick', 1 + i * 0.2); buzz('tick'); } }, ms));
-      later(doBurst, 1050);
+    crack: tap,
+    all: () => {   // every chest at once: the items go to the backpack and a summary shows what you found
+      if (burst) return;
+      burst = true;
+      const plans = [plan]; S.openPlanned(g, plan);
+      while (queue[0] && queue[0].startsWith('box:')) { const p = S.boxPlan(g, queue.shift().slice(4)); S.openPlanned(g, p); plans.push(p); }
+      showBoxSummary(plans);
     },
-    tower: () => showTower(() => showBox(tier)),
   };
+}
+// what Open all found: one tile per item, the best one lit
+function showBoxSummary(plans) {
+  const best = plans.reduce((a, p) => (RARITIES.indexOf(p.rar) > RARITIES.indexOf(a.rar) ? p : a), plans[0]);
+  setScreen(`<h2>${plans.length} items found!</h2><p class="sub">They wait in your backpack. You give them to your cats before the next wave.</p>
+    <div class="sumgrid">${plans.map((p, i) => { const it = ITEM_BY_ID[p.id]; return `<div class="sumtile r-${p.rar} ${p === best ? 'best' : ''}" style="--i:${i};--tc:${TIER_HEX[p.rar]}"><div class="ic">${it.icon}</div><b>${it.name}</b><small>${p.rar}</small></div>`; }).join('')}</div>
+    <div class="row"><button class="btn big" data-act="go">Collect all</button></div>`, 'wide');
+  sfx.play(REVEAL_SFX[best.rar] || 'chest'); buzz(best.rar === 'common' ? 'pop' : 'jackpot');
+  setTimeout(() => { const t = screenEl.querySelector('.sumtile.best'); if (t && t.isConnected && best.rar !== 'common') { const r = t.getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 20, [TIER_HEX[best.rar], '#fff', '#ffd23f'], ''); } }, 500);
+  acts = { go: () => nextReward() };
 }
 // the burst when a box opens: more and brighter pieces for better relics
 const CONFETTI = { common: [8, ['#fff0d0', '#ffd23f']], rare: [14, ['#8ec6ff', '#fff']], epic: [22, ['#e7a0ff', '#fff', '#ffd23f']], legendary: [34, ['#ffd23f', '#fff6b0', '#ff9a3a']], mythic: [46, ['#ff8ac8', '#9a7aff', '#fff', '#ffd23f']] };
@@ -1218,16 +1273,15 @@ function confettiHtml(rarity) {
   const [n, cols] = CONFETTI[rarity] || CONFETTI.common;
   return Array.from({ length: n }, (_, i) => `<i style="--a:${Math.round((360 / n) * i + (i % 2) * 7)}deg;--d:${110 + (i * 37) % 90}px;--c:${cols[i % cols.length]};--t:${(i % 5) * 0.03}s"></i>`).join('');
 }
-function showBoxReveal(tier, id, again = false) {   // again: coming back from the Arrange screen, so no second wait
+function showBoxReveal(tier, id, more = 0) {   // more: chests still waiting after this one
   const it = ITEM_BY_ID[id], bx = BOX_BY_ID[tier] || BOXES[0], hi = ['epic', 'legendary', 'mythic'].includes(it.rarity);
   const fresh = !save.relics[id];   // the first time this relic has ever turned up
   const cheerId = g.cats[0] && g.cats[0].id;
   setScreen(`<h2 class="cheer veil r-${it.rarity}">${cheerId ? `<img class="cheercat" src="${thumbURL(cheerId)}" alt="">` : ''}${RARITY_CHEER[it.rarity]}</h2><p class="sub veil">Out of the ${bx.name}:</p>
     <div class="revealstage pending r-${it.rarity}"><div class="revealflash"></div><div class="rays"></div><div class="pedestal"></div><div class="confetti">${confettiHtml(it.rarity)}</div><div class="cardback t-${bx.id}"><img src="${boxHero(bx.id).toDataURL()}" alt=""><b>?</b></div><div class="cards reveal">${itemCard(id)}</div><div class="stamp">${it.rarity}!</div>${fresh ? '<div class="newtag">NEW!</div>' : ''}</div>
-    <div class="row veil"><button class="btn big" data-act="take">Equip it</button></div>
-    <div class="row hint veil"><button class="btn small grey" data-act="tower">Arrange tower</button></div>`);
+    <div class="row veil"><button class="btn big" data-act="take">${more ? `Next chest (${more})` : 'Collect'}</button></div>`);
   const root = screenEl.firstElementChild, stage = root.querySelector('.revealstage');
-  if (!again) root.classList.add('noscrin');
+  root.classList.add('noscrin');
   root.classList.add('suspense');
   let flipped = false, leaving = false;
   const flip = (quiet) => {   // the card turns over: light, confetti, a fanfare matched to the rarity, a stamp and (for a first find) a NEW tag
@@ -1239,24 +1293,22 @@ function showBoxReveal(tier, id, again = false) {   // again: coming back from t
     sfx.play(REVEAL_SFX[it.rarity] || 'chest');
     if (it.rarity !== 'common') setTimeout(() => sfx.play('stamp'), 260);
     if (fresh) setTimeout(() => sfx.play('newrelic'), 520);
-    setTimeout(() => { if (flipped && stage.isConnected && !leaving) coach('c10', 'This is an item. It makes one cat stronger. Tap Equip it, then tap the cat that should wear it.', 480, 380, 'up', { target: 'button[data-act=take]' }); }, 1100);
+    setTimeout(() => { if (flipped && stage.isConnected && !leaving) coach('c10', 'This is an item. Tap Collect. You give items to your cats before the next wave.', 480, 380, 'up', { target: 'button[data-act=take]' }); }, 1100);
     buzz(hi ? 'jackpot' : 'pop');
     if (hi) { const c0 = g.cats[0]; if (c0) setTimeout(() => sfx.meow(c0.id, 'cheer'), 380); }
   };
   stage.addEventListener('click', () => flip());
-  const wait = !again && save.opt.motion ? REVEAL_WAIT[it.rarity] || 400 : 0;
-  if (again) { stage.classList.add('again'); flip(true); }
-  else { if (wait && it.rarity !== 'common') sfx.play('boxtick', 0.8); setTimeout(() => flip(), wait); }
+  const wait = save.opt.motion ? REVEAL_WAIT[it.rarity] || 400 : 0;
+  if (wait && it.rarity !== 'common') sfx.play('boxtick', 0.8);
+  setTimeout(() => flip(), wait);
   acts = {
     take: () => {
       if (!flipped) { flip(); return; }
       if (leaving) return;
       leaving = true; rewardChoices = null;
-      const idx = g.stash.lastIndexOf(id);
-      if (save.opt.motion) { stage.classList.add('fly'); sfx.play('equip'); setTimeout(() => showTower(() => nextReward(), { item: idx }), 300); }
-      else showTower(() => nextReward(), { item: idx });
+      if (save.opt.motion) { stage.classList.add('fly'); sfx.play('equip'); setTimeout(() => nextReward(), 300); }
+      else nextReward();
     },
-    tower: () => showTower(() => showBoxReveal(tier, id, true)),
   };
 }
 
@@ -1460,12 +1512,13 @@ function showTower(back, opt = {}) {
     const synChips = Object.entries(syn.counts).sort((a, b) => b[1] - a[1]).map(([t, n]) => { const tier = syn.tiers[t] || 0; return `<span class="schip ${tier ? 't' + tier : ''}" title="${SYNERGIES[t].name}: ${tier ? synergyText(t, tier) : 'needs 2 cats'}">${SYNERGIES[t].icon} ${SYNERGIES[t].name} ${n}/${n >= 3 ? 3 : n >= 2 ? 3 : 2}</span>`; }).join('');
     const msg = over
       ? `<b class="warn">Backpack is over full by ${over}.</b> Sell, forge or equip items to continue.`
+      : opt.prepare && g.stash.length && !sel ? `You have ${g.stash.length} item${g.stash.length > 1 ? 's' : ''} to give out. Drag an item onto a cat. Higher level cats have more item slots.`
       : sel ? 'Tap another cat to swap, or a matching one to merge. Or drag cats around.' : 'Drag an item onto a cat to equip it. Drag a cat onto another to swap or merge.';
     const detail = it ? itemDetail(it.id) : msg;
-    setScreen(`<h2>Arrange your tower <small class="klv">Team DPS &asymp; ${Math.round(teamDps(S.calcMods(g)))}</small></h2><div class="synrow">${synChips || '<small>Stack cats of the same kind for synergy bonuses!</small>'}</div>
+    setScreen(`<h2>${opt.prepare ? `Get ready for wave ${g.wave + 1}!` : 'Arrange your tower'} <small class="klv">Team DPS &asymp; ${Math.round(teamDps(S.calcMods(g)))}</small></h2><div class="synrow">${synChips || '<small>Stack cats of the same kind for synergy bonuses!</small>'}</div>
       <div class="tbody"><div class="tower"><div class="col tw"><div class="zone" data-zone="tower"><h4>Tower <small>top to bottom</small></h4>${tw.join('')}</div><button class="btn small red relbtn" data-act="release" data-drop="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div><div class="col"><div class="zone bn" data-zone="bench"><h4>Bench <small>rests, heals fast</small></h4>${bn.join('')}</div>
         <div class="packz" data-drop="bag"><h4>Backpack <span class="${over ? 'warn' : ''}">${g.stash.length}/${MAX_STASH}</span></h4><div class="bagrow">${bag}</div></div></div></div></div>
-      <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}" aria-live="polite">${detail}</div><button class="btn small amber fbtn zbtn" data-act="sell" data-drop="sell" ${it ? '' : 'disabled'}>${sellLabel(selItem)}</button><button class="btn small fbtn zbtn ${plan ? 'purple' : 'grey'}" data-act="forge" data-drop="forge" ${plan ? '' : 'disabled'} title="Melt three relics of one rarity into one of the next">${forgeLabel(selItem)}</button><button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>Done</button></div>`, 'wide arr towerscr');
+      <div class="tfoot"><div class="detail slim ${over ? 'bad' : ''}" aria-live="polite">${detail}</div><button class="btn small amber fbtn zbtn" data-act="sell" data-drop="sell" ${it ? '' : 'disabled'}>${sellLabel(selItem)}</button><button class="btn small fbtn zbtn ${plan ? 'purple' : 'grey'}" data-act="forge" data-drop="forge" ${plan ? '' : 'disabled'} title="Melt three relics of one rarity into one of the next">${forgeLabel(selItem)}</button><button class="btn big2" data-act="done" ${over ? 'disabled' : ''}>${opt.prepare ? 'Ready!' : 'Done'}</button></div>`, 'wide arr towerscr');
     screenEl.firstElementChild.dataset.msg = msg;
     bindTower(screenEl.firstElementChild);
     if (selItem != null) coach('c6', 'Now tap the cat that should wear it. The green numbers show how much stronger that cat gets.', 680, 352, 'up', { target: '.slot.has' });

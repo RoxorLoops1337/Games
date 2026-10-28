@@ -913,16 +913,16 @@ t('Relic Book rarity labels carry their own dark backing, so they read on any ba
   assert.ok(/background:rgba\(\d+,\s*\d+,\s*\d+,\s*\.[7-9]\d*\)/.test(m[1]), 'a mostly opaque dark background: ' + m[1].slice(0, 120));
 });
 
-t('lootbox screens: every box has a drawn icon, rewards open boxes, the reveal leads to the equip screen', async () => {
+t('lootbox screens: every box has a drawn icon, rewards open boxes, the reveal collects the item and a prepare screen hands items out', async () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
   const { ICON_KEYS } = await import('../stacking_cats/art_icons.js'), { BOXES } = await import('../stacking_cats/cats.js');
   for (const b of BOXES) assert.ok(ICON_KEYS.includes(b.icon), b.id + ' needs a drawing');
   assert.ok(/else if \(r\.startsWith\('box:'\)\) showBox\(r\.slice\(4\)\)/.test(js), 'nextReward opens boxes');
   assert.ok(!/showItemReward/.test(js), 'the old pick one of three screen is gone');
   const box = js.slice(js.indexOf('function showBox('), js.indexOf('function showSnackReward'));
-  assert.ok(/S\.openBox\(g, tier\)/.test(box) && /showBoxReveal\(tier, id\)/.test(box), 'opening rolls through the sim');
-  assert.ok(/take: \(\) => \{[\s\S]*?showTower\(\(\) => nextReward\(\), \{ item: idx \}\)/.test(box) && /const idx = g\.stash\.lastIndexOf\(id\)/.test(box), 'equip leads to the arrange screen with the relic selected');
-  assert.ok(/\.boxic\.shaking\{animation:boxshake/.test(css) && /@keyframes boxshake/.test(css), 'shake animation');
+  assert.ok(/S\.openPlanned\(g, plan\)/.test(box) && /showBoxReveal\(tier, plan\.id, more\)/.test(box), 'opening rolls through the sim');
+  assert.ok(/take: \(\) => \{[\s\S]*?nextReward\(\)/.test(box) && !/showTower\(\(\) => nextReward\(\), \{ item: idx \}\)/.test(box), 'collecting goes on to the next chest, not to the equip screen');
+  assert.ok(/\.boxic\.shaking\{animation:boxshake/.test(css) && /@keyframes boxshake/.test(css) && /@keyframes boxhit/.test(css), 'shake animation');
   assert.ok(/body\.nomotion \*/.test(css), 'reduced motion stops animations (the open still works)');
 });
 
@@ -1260,11 +1260,13 @@ t('lootbox juice: the box charges and bursts, the card stays covered a rarity-sc
   const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8'), au = readFileSync('stacking_cats/audio.js', 'utf8');
   for (const k of ['boxbuild', 'boxtick', 'boxburst', 'stamp', 'newrelic', 'revealrare', 'revealepic', 'revealleg', 'revealmyth']) assert.ok(new RegExp("case '" + k + "':").test(au), 'sound ' + k);
   assert.ok(/classList\.add\('charging'\)/.test(js) && /classList\.add\('opening'\)/.test(js) && /sfx\.play\('boxburst'\)/.test(js), 'charge then burst');
-  assert.ok(/if \(opening\) \{ doBurst\(\); return; \}/.test(js), 'a second tap skips the wind-up');
+  assert.ok(/if \(burst\) \{ doBurst\(\); return; \}/.test(js), 'a tap while the chest charges pops it now');
+  assert.ok(/function showBox\(tier\)/.test(js) && /boxPlan\(g, tier\)/.test(js) && /upgrade\(\)/.test(js) && /showBoxSummary/.test(js), 'chests are cracked with taps, can turn rarer, and Open all shows a summary');
+  assert.ok(/prepare: true/.test(js) && /g\.run\.items > prepSeen/.test(js), 'new items are handed out on one prepare screen before the wave');
   assert.ok(/REVEAL_WAIT = \{ common: \d+, rare: \d+, epic: \d+, legendary: \d+, mythic: \d+ \}/.test(js), 'a wait per rarity');
   const w = js.match(/REVEAL_WAIT = \{ common: (\d+), rare: (\d+), epic: (\d+), legendary: (\d+), mythic: (\d+) \}/).slice(1).map(Number);
   assert.ok(w.every((v, i) => i === 0 || v > w[i - 1]), 'the rarer the relic, the longer the suspense');
-  assert.ok(/!again && save\.opt\.motion \? REVEAL_WAIT/.test(js) && /showBoxReveal\(tier, id, true\)/.test(js), 'no second wait when coming back from the Arrange screen; no wait with motion off');
+  assert.ok(/save\.opt\.motion \? REVEAL_WAIT/.test(js), 'no wait with motion off');
   assert.ok(/!save\.relics\[id\]/.test(js) && /class="newtag"/.test(js), 'a first find gets a NEW tag');
   assert.ok(/\.cardback/.test(css) && /@keyframes cardflip/.test(css) && /@keyframes stampin/.test(css) && /@keyframes boxcharge/.test(css) && /@keyframes jolt/.test(css), 'styles');
   assert.ok(/save\.opt\.shake > 0/.test(js), 'the screen jolt respects the shake setting');
@@ -1480,9 +1482,9 @@ t('tutorial words are easy: short sentences, no game jargon, and the button to p
     assert.ok(txt.length <= 125, `${k}: too long (${txt.length})`);
   }
   const text = Object.fromEntries(tips);
-  assert.ok(/Open it!/.test(text.c9) && /Equip it/.test(text.c10) && /Leave/.test(text.c8) && /Space/.test(text.c5) && /AUTO/.test(text.c7), 'the tip names the button');
+  assert.ok(/Crack it/.test(text.c9) && /Collect/.test(text.c10) && /Leave/.test(text.c8) && /Space/.test(text.c5) && /AUTO/.test(text.c7), 'the tip names the button');
   const how = js.slice(js.indexOf('<h2>How to play</h2>'), js.indexOf('data-act="intro"'));
-  assert.ok(!JARGON.test(how) && /Equip it/.test(how) && /Space/.test(how) && /AUTO/.test(how) && /top right/.test(how) && /bottom right/.test(how), 'How to play says where the buttons are');
+  assert.ok(!JARGON.test(how) && /backpack/.test(how) && /Space/.test(how) && /AUTO/.test(how) && /top right/.test(how) && /bottom right/.test(how), 'How to play says where the buttons are');
   assert.ok(!/Step \d/.test(js.slice(js.indexOf("coach('c1'"), js.indexOf("coach('c1'") + 4000)) || true);
 });
 
