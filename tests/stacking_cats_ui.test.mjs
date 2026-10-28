@@ -1443,4 +1443,13 @@ t('the Kingdom button stacks its name over the coin and gem badge so a long bala
   assert.ok(css.indexOf('KINGBTN START') > css.indexOf('body .screen .tgrid.g31>.btn.green.btn.btn{padding-left:12px'), 'it wins over the older one-line rule');
 });
 
+t('every pressable thing sinks when pressed and every HUD button answers with a sound', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8'), css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(/PRESS START[\s\S]*\.tog:active[\s\S]*\.dcell:active[\s\S]*\.tile:active[\s\S]*nomotion \.tog:active[\s\S]*PRESS END/.test(css));
+  for (const id of ['bSpeed', 'bMeter', 'bFull', 'bSound', 'bPause']) {
+    const fn = id === 'bSpeed' ? js.slice(js.indexOf('function toggleSpeed'), js.indexOf('function toggleSpeed') + 400) : id === 'bPause' ? js.slice(js.indexOf('function togglePause'), js.indexOf('function togglePause') + 250) : js.slice(js.indexOf(`$('${id}').addEventListener`), js.indexOf(`$('${id}').addEventListener`) + 330);
+    assert.ok(/sfx\.play\(/.test(fn), id + ' makes a sound when pressed');
+  }
+});
+
 console.log(`${n} tests passed`);

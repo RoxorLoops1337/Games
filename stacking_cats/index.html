@@ -1427,6 +1427,12 @@ body.nomotion .tog.flip,body.nomotion .tog.flip i::after{animation:none}
 .charm .price b{background:rgba(255,100,100,.22);color:#8e1a1a;border:1.5px solid #d04a4a}.charm .price b::before{content:'\25BC  '}
 .card.ev .charm+.rar,.card.ev .rar{margin-top:6px}
 /* CHARM END */
+/* PRESS START */
+/* every pressable thing sinks under the finger, not only the big buttons */
+.tog:active,.dcell:active,.namechip:active,.autob:active,.tile:active,.slot[data-act]:active,.chip[data-act]:active,.bag:active,.seg button:active{transform:scale(.95);filter:brightness(.92)}
+.tog,.dcell,.namechip,.autob,.tile,.slot[data-act],.chip[data-act]{transition:transform .08s ease-out,filter .08s}
+body.nomotion .tog:active,body.nomotion .dcell:active,body.nomotion .namechip:active,body.nomotion .autob:active,body.nomotion .tile:active,body.nomotion .slot[data-act]:active,body.nomotion .chip[data-act]:active{transform:none}
+/* PRESS END */
 /* KINGBTN START */
 /* the Kingdom button holds its name and the coin and gem badge on two lines, so a long balance can never spill out of the button */
 body .screen .tgrid.g31>.btn.green.btn.btn{flex-direction:column;gap:1px;padding-top:3px;padding-bottom:3px;line-height:1.05;white-space:normal;overflow:hidden}

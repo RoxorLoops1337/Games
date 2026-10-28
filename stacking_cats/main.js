@@ -2844,7 +2844,7 @@ function render(dt) {
 }
 
 // ---------------------------------------------------------------- input
-function togglePause() { if (mode !== 'play') return; if (paused) { paused = false; closeScreen(); } else showPause(); }
+function togglePause() { if (mode !== 'play') return; if (paused) { paused = false; closeScreen(); sfx.play('pick', 1.3); } else showPause(); }
 // ---- special moves and tap focus
 const spBtns = new Map();
 let autoBtn = null;
@@ -2959,17 +2959,17 @@ function toggleFull() {
 }
 if (fsReq && !matchMedia('(display-mode: standalone)').matches) {
   $('bFull').hidden = false;
-  $('bFull').addEventListener('click', () => { sfx.unlock(); toggleFull(); });
+  $('bFull').addEventListener('click', () => { sfx.unlock(); sfx.play('ui'); buzz('tick'); toggleFull(); });
   const syncFull = () => $('bFull').classList.toggle('on', isFull());
   document.addEventListener('fullscreenchange', () => { syncFull(); fit(); });
   document.addEventListener('webkitfullscreenchange', () => { syncFull(); fit(); });
 }
-function toggleSpeed() { speed = speed === 1 ? 2 : 1; $('bSpeed').textContent = 'x' + speed; save.opt.fast = speed === 2; persist(); }
+function toggleSpeed() { speed = speed === 1 ? 2 : 1; $('bSpeed').textContent = 'x' + speed; save.opt.fast = speed === 2; persist(); sfx.play('ui', speed === 2 ? 1.35 : 0.8); buzz('tick'); }   // every HUD button answers a press: faster rises, slower falls
 $('bPause').addEventListener('click', () => { sfx.unlock(); togglePause(); });
 $('bSpeed').addEventListener('click', () => { sfx.unlock(); toggleSpeed(); });
-$('bSound').addEventListener('click', () => { sfx.unlock(); save.sound = !save.sound; sfx.on = save.sound; persist(); toast(save.sound ? 'Sound on' : 'Sound off'); });
+$('bSound').addEventListener('click', () => { sfx.unlock(); save.sound = !save.sound; sfx.on = save.sound; persist(); if (save.sound) sfx.play('pick', 1.2); buzz('tick'); toast(save.sound ? 'Sound on' : 'Sound off'); });
 $('zoom').addEventListener('click', () => { sfx.unlock(); doZoomies(); });
-$('bMeter').addEventListener('click', () => { sfx.unlock(); save.meter = !save.meter; persist(); meterT = 0; });
+$('bMeter').addEventListener('click', () => { sfx.unlock(); save.meter = !save.meter; persist(); meterT = 0; sfx.play('ui', save.meter ? 1.25 : 0.8); buzz('tick'); });
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
   const k = e.key.toLowerCase();
