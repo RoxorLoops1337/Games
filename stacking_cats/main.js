@@ -432,14 +432,13 @@ function showTitle() {
   setScreen(`
     <h1 class="logo">Stacking<span>Cats</span></h1>
     <div class="tag">${titleTag(!!save.storyDone, save.unlocked.length, CATS.length)}</div>
-    <div class="row tgrid g4 gplay"><button class="btn big" data-act="play">Play</button><button class="btn small grey" data-act="diff" title="Change difficulty">${d.icon} ${d.name}</button><button class="btn small grey" data-act="story">Story</button></div>
-    <div class="row tgrid g4"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${streak >= 2 ? `<span class="streak" title="${streak} days in a row">&#128293;${streak}</span>` : ''}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button><button class="btn" data-act="relics">Items ${relicProgress(save.relics).got}/${ITEMS.length}</button></div>
-    <div class="row tgrid g31"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn grey small" data-act="trophies">Trophies ${trophies}/${ACHIEVEMENTS.length}</button><button class="btn grey small" data-act="settings">Settings</button><button class="btn grey small" data-act="how">How to play</button></div>
-    <button class="namechip" data-act="ranking" title="Open the ranking list">&#127942; ${save.name ? `${save.name.replace(/[<>&"]/g, '')} &middot; ` : ''}Ranking</button>
+    <div class="row tgrid g4 gplay"><button class="btn big" data-act="play">Play</button><button class="btn small grey" data-act="ranking" title="See the ranking list">&#127942; Ranking</button><button class="btn small grey" data-act="story">Story</button></div>
+    <div class="row tgrid g4"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${streak >= 2 ? `<span class="streak" title="${streak} days in a row">&#128293;${streak}</span>` : ''}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="collection" style="grid-column:span 2">Collection</button></div>
+    <div class="row tgrid g31" style="grid-template-columns:1.7fr 1fr 1fr"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn grey small" data-act="settings">Settings</button><button class="btn grey small" data-act="how">How to play</button></div>
     <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : (coarse ? 'Tap the big pink Play button to start' : 'Click the big pink Play button, or press Enter, to start')}</div>`, 'clear tpad');
   acts = {
     relics: () => showRelics(showTitle),
-    play: () => (save.seenIntro ? startRun() : watchIntro(() => startRun())), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
+    play: () => showDiffPicker(showTitle, true), collection: () => showCollection(showTitle), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
     daily: () => showDaily(showTitle), trophies: () => showTrophies(showTitle), settings: () => showSettings(showTitle),
     weekly: () => showDaily(showTitle, true), story: () => watchIntro(() => showTitle()),
     diff: () => showDiffPicker(showTitle), ranking: () => showRanking(showTitle),
@@ -721,19 +720,28 @@ function diffLockText(id) {
   const t = ladderTier(id);
   return t === 1 ? `Reach wave ${LADDER_WAVE[0]} on Hard` : `Reach wave ${LADDER_WAVE[t - 1]} on Nightmare ${ROMAN_N[t - 1]}`;
 }
-function showDiffPicker(back) {
+function showCollection(back) {
+  const pr = relicProgress(save.relics).got;
+  setScreen(`<h2>Collection</h2><p class="sub">Everything you have found so far.</p>
+    <div class="row tgrid g4" style="grid-template-columns:repeat(3,1fr)"><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button><button class="btn" data-act="relics">Items ${pr}/${ITEMS.length}</button><button class="btn" data-act="trophies">Trophies ${ACHIEVEMENTS.filter((a) => save.ach[a.id]).length}/${ACHIEVEMENTS.length}</button></div>
+    <div class="row"><button class="btn grey" data-act="back">Back</button></div>`);
+  acts = { back, dex: () => showDex(() => showCollection(back)), relics: () => showRelics(() => showCollection(back)), trophies: () => showTrophies(() => showCollection(back)) };
+}
+// before a run (start = true) it is the screen between Play and the fight; from Settings-like places it just picks
+function showDiffPicker(back, start) {
   const card = (id) => {
     const d = DIFFS[id], t = ladderTier(id), ok = diffAllowed(save, id), on = save.diff === id;
     const rules = t ? LADDER_RULES.filter((r) => r.tier <= t).map((r) => `<span class="drule ${r.tier === t ? 'new' : ''}" title="${r.name}"><i>${r.icon}</i>${r.tier === t ? `<b>${r.name}</b>` : ''}</span>`).join('') : '';
     const body = t ? `<small>${d.rule.desc}</small>` : `<small>${d.desc}</small>`;
     return `<button class="dcell ${on ? 'on' : ''} ${ok ? '' : 'locked'} ${t ? 'nm' : ''}" data-act="${ok ? 'pick' : 'locked'}" data-id="${id}"><span class="dci">${ok ? d.icon : '&#128274;'}</span><b>${d.name}</b>${rules ? `<div class="drules">${rules}</div>` : ''}${body}${ok ? '' : `<em>${diffLockText(id)}</em>`}${t && ok ? `<em class="coinx">Coins x${d.coin}</em>` : ''}</button>`;
   };
-  setScreen(`<h2>Difficulty</h2><p class="sub">Clear Hard, then climb the Nightmare ladder. Each tier keeps every rule below it.</p>
+  setScreen(`<h2>${start ? 'Pick a difficulty' : 'Difficulty'}</h2><p class="sub">Clear Hard, then climb the Nightmare ladder. Each tier keeps every rule below it.</p>
+    ${start ? '<div class="row"><button class="btn big" data-act="go">Start</button><button class="btn grey" data-act="back">Back</button></div>' : ''}
     <div class="dgrid">${DIFF_ORDER.map(card).join('')}</div>
-    <div class="row"><button class="btn" data-act="back">Done</button></div>`);
+    ${start ? '' : '<div class="row"><button class="btn" data-act="back">Done</button></div>'}`);
   acts = {
-    back, locked: () => {},
-    pick: (d) => { save.diff = d.id; persist(); showDiffPicker(back); },
+    back, locked: () => {}, go: () => (save.seenIntro ? startRun() : watchIntro(() => startRun())),
+    pick: (d) => { save.diff = d.id; persist(); showDiffPicker(back, start); },
   };
 }
 

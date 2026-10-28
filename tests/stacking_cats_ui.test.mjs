@@ -427,7 +427,7 @@ t('the intro cutscene draws every moment, and every sound cue names a real sound
 });
 t('the intro plays before the first run, can be replayed, and the story shows up in the game screens', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
-  assert.ok(/play: \(\) => \(save\.seenIntro \? startRun\(\) : watchIntro\(/.test(js), 'the first Play must show the intro');
+  assert.ok(/go: \(\) => \(save\.seenIntro \? startRun\(\) : watchIntro\(/.test(js), 'the first Play must show the intro');
   assert.ok(/function watchIntro[\s\S]*?save\.seenIntro = true; persist\(\)/.test(js), 'watching it is remembered');
   assert.ok(js.includes('Watch the intro'), 'How to play can replay it');
   assert.ok(/rescueLine\(/.test(js) && /fallLine\(/.test(js), 'the rescue and game over screens use the story lines');
