@@ -6,6 +6,9 @@ const PATTERNS = {
   merge: [14, 30, 22],
   ko: [40, 40, 40],
   boss: [30, 30, 60],
+  tick: 6,
+  pop: [24, 24, 44],
+  jackpot: [30, 40, 30, 40, 30, 40, 90],
 };
 let enabled = true;
 export function setHaptics(on) { enabled = !!on; }

@@ -1210,6 +1210,70 @@ body .screen .tgrid>.btn:not(.big):not(.small).btn{font-size:clamp(16px,2.4vw,21
 /* HALOFIX START */
 .card.snack h3,.card.route h3,.card.item h3,.card.ev h3{position:relative;z-index:1}
 /* HALOFIX END */
+/* BOXV2 START: the chest opening as a sequence: charge, burst, covered card, flip, stamp */
+.boxvig{position:absolute;inset:-40px -80px;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 46%,rgba(0,0,0,0) 28%,rgba(10,4,30,.55) 100%)}
+.boxcrack{position:absolute;left:50%;top:50%;width:150px;height:6px;margin:-14px 0 0 -75px;border-radius:4px;pointer-events:none;z-index:3;opacity:0;background:linear-gradient(90deg,rgba(var(--bg),0),rgba(255,255,255,1) 30%,rgba(255,255,255,1) 70%,rgba(var(--bg),0));box-shadow:0 0 14px 4px rgba(var(--bg),.95),0 0 34px 10px rgba(var(--bg),.55)}
+.boxsuck{position:absolute;left:50%;top:46%;width:0;height:0;pointer-events:none;z-index:3}
+.boxsuck i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:#fff;opacity:0;box-shadow:0 0 8px 3px rgba(var(--bg),.95)}
+.boxring{position:absolute;left:50%;top:46%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;pointer-events:none;z-index:4;opacity:0;border:6px solid rgba(255,255,255,.95);box-shadow:0 0 22px 6px rgba(var(--bg),.9)}
+.boxflash{position:absolute;inset:-60px -120px;pointer-events:none;z-index:5;opacity:0;background:radial-gradient(circle at 50% 46%,rgba(255,255,255,.95),rgba(var(--bg),.6) 38%,rgba(255,255,255,0) 72%)}
+.boxstage.charging .boxic{animation:boxcharge 1.05s cubic-bezier(.4,0,.8,.6) both}
+.boxstage.charging .boxglow{animation:glowcharge 1.05s ease-in both}
+.boxstage.charging .boxvig{animation:vigin 1.05s ease-in both}
+.boxstage.charging .boxcrack{animation:crackin 1.05s ease-in both}
+.boxstage.charging .boxsuck i{animation:suck .5s ease-in var(--t) infinite}
+.boxstage.charging .boxbeams{animation:beamsprep 1.05s ease-in both}
+.boxstage.opening .boxring{animation:ringout .55s ease-out both}
+.boxstage.opening .boxflash{animation:flashout .5s ease-out both}
+.boxstage.opening .boxcrack,.boxstage.opening .boxvig{opacity:0;animation:none}
+.row.gone{opacity:0;pointer-events:none;transition:opacity .2s}
+@keyframes boxcharge{0%{transform:scale(1,1)}8%{transform:scale(1.1,.88)}16%{transform:scale(.96,1.06) rotate(-2deg)}30%{transform:rotate(3deg) scale(1.04)}42%{transform:rotate(-5deg) scale(1.06)}54%{transform:rotate(6deg) scale(1.08)}64%{transform:rotate(-8deg) scale(1.1)}74%{transform:rotate(9deg) translateY(-2px) scale(1.13)}84%{transform:rotate(-11deg) scale(1.16)}92%{transform:rotate(12deg) scale(1.2)}100%{transform:rotate(0) scale(1.26,1.2)}}
+@keyframes glowcharge{0%{opacity:.18;transform:scale(.8)}20%{opacity:.4}35%{opacity:.25}50%{opacity:.6}62%{opacity:.4}74%{opacity:.8}84%{opacity:.6}100%{opacity:1;transform:scale(1.5)}}
+@keyframes vigin{to{opacity:1}}
+@keyframes crackin{0%,12%{opacity:0;transform:scaleX(.3)}40%{opacity:.5;transform:scaleX(.7)}100%{opacity:1;transform:scaleX(1.25)}}
+@keyframes suck{0%{opacity:0;transform:rotate(var(--a)) translateY(calc(var(--d) * -1)) scale(.5)}30%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) translateY(-8px) scale(1)}}
+@keyframes beamsprep{0%,30%{opacity:0;transform:scale(.3)}100%{opacity:.5;transform:scale(.8) rotate(8deg)}}
+@keyframes ringout{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(14)}}
+@keyframes flashout{0%{opacity:1}100%{opacity:0}}
+.screen.jolt{animation:jolt .42s ease-out}
+@keyframes jolt{0%{transform:translate(0,0)}12%{transform:translate(-7px,4px)}26%{transform:translate(6px,-5px)}40%{transform:translate(-5px,-3px)}55%{transform:translate(4px,3px)}72%{transform:translate(-2px,1px)}100%{transform:translate(0,0)}}
+/* the reveal: a covered card that wobbles harder the rarer it is, then flips */
+.screen.suspense .veil{opacity:0;visibility:hidden}
+.screen .veil{transition:opacity .3s}
+.cardback{position:absolute;left:50%;top:50%;width:150px;height:190px;margin:-95px 0 0 -75px;z-index:3;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;border:4px solid #2a1d4a;background:linear-gradient(160deg,#6b4fc0,#3a2478);box-shadow:0 0 0 3px rgba(var(--ray),.8),0 0 28px 6px rgba(var(--ray),.6),0 8px 0 #0004;backface-visibility:hidden}
+.cardback img{width:90px;height:90px;filter:drop-shadow(0 4px 0 #0005)}
+.cardback b{font-family:var(--display);font-weight:400;font-size:40px;color:#fff;text-shadow:0 3px 0 #2a1d4a,0 0 14px rgba(var(--ray),.9)}
+.revealstage.pending .cards .card{animation:none;visibility:hidden}
+.revealstage.pending .cardback{animation:backwobble .32s ease-in-out infinite}
+.revealstage.pending.r-epic .cardback{animation-duration:.26s}
+.revealstage.pending.r-legendary .cardback,.revealstage.pending.r-mythic .cardback{animation-duration:.2s}
+.revealstage.pending .rays{animation:raysp 16s linear infinite,raysgrow 1.6s ease-in both}
+.revealstage.pending .stamp,.revealstage.pending .newtag{display:none}
+.revealstage.flipped .cardback{animation:backaway .28s ease-in both;pointer-events:none}
+.revealstage.flipped .cards .card{animation:cardflip .6s cubic-bezier(.2,1.5,.4,1) both}
+.revealstage.again .cardback{display:none}.revealstage.again .cards .card{animation:none}
+.revealstage.fly .cards .card{animation:cardfly .3s ease-in both}
+@keyframes backwobble{0%,100%{transform:rotate(-3deg) scale(1)}50%{transform:rotate(3deg) scale(1.05)}}
+@keyframes raysgrow{from{opacity:.15;transform:rotate(0) scale(.5)}to{opacity:1}}
+@keyframes backaway{to{transform:rotateY(80deg) scale(.8);opacity:0}}
+@keyframes cardflip{0%{transform:perspective(600px) rotateY(-85deg) scale(.7);opacity:0}60%{transform:perspective(600px) rotateY(8deg) scale(1.08);opacity:1}100%{transform:perspective(600px) rotateY(0) scale(1);opacity:1}}
+@keyframes cardfly{to{transform:translateY(150px) scale(.2) rotate(14deg);opacity:0}}
+.stamp{position:absolute;left:50%;top:-6px;z-index:6;transform:translateX(-50%);font-family:var(--display);font-weight:400;font-size:30px;text-transform:uppercase;letter-spacing:2px;color:#fff;padding:0 14px;border-radius:10px;border:3px solid #fff;background:rgba(var(--ray),.9);text-shadow:0 2px 0 #0006;box-shadow:0 4px 0 #0005,0 0 20px 4px rgba(var(--ray),.8);pointer-events:none;opacity:0;white-space:nowrap}
+.revealstage.r-common .stamp{display:none}
+.revealstage.flipped .stamp{animation:stampin .55s .22s cubic-bezier(.2,1.8,.4,1) both}
+.revealstage.again .stamp{animation:none;opacity:1;transform:translateX(-50%) rotate(-3deg)}
+@keyframes stampin{0%{opacity:0;transform:translateX(-50%) scale(3.2) rotate(-12deg)}60%{opacity:1;transform:translateX(-50%) scale(.92) rotate(-3deg)}100%{opacity:1;transform:translateX(-50%) scale(1) rotate(-3deg)}}
+.newtag{position:absolute;left:calc(50% - 118px);top:18px;z-index:6;transform:rotate(-12deg);font-family:var(--display);font-weight:400;font-size:20px;color:#3a1f12;padding:0 9px;border-radius:9px;border:3px solid #3a1f12;background:linear-gradient(#fff6b0,#ffd23f);box-shadow:0 3px 0 #3a1f12;pointer-events:none;opacity:0}
+.revealstage.flipped .newtag{animation:newpop .5s .5s cubic-bezier(.2,2,.4,1) both,newwob 1.4s 1s ease-in-out infinite}
+.revealstage.again .newtag{animation:none;opacity:1}
+@keyframes newpop{0%{opacity:0;transform:rotate(-12deg) scale(0)}100%{opacity:1;transform:rotate(-12deg) scale(1)}}
+@keyframes newwob{50%{transform:rotate(-8deg) scale(1.08)}}
+.revealstage.flipped.r-legendary .rays,.revealstage.flipped.r-mythic .rays{animation:raysp 7s linear infinite;filter:brightness(1.25)}
+.revealstage.flipped.r-mythic .pedestal{animation:glowpulse 1s ease-in-out infinite}
+body.nomotion .cardback,body.nomotion .stamp,body.nomotion .newtag{animation:none!important}
+@media (prefers-reduced-motion:reduce){.boxstage.charging *,.screen.jolt,.revealstage.pending .cardback,.revealstage.flipped .stamp{animation:none!important}}
+@media (max-height:400px){.cardback{width:120px;height:150px;margin:-75px 0 0 -60px}.cardback img{width:64px;height:64px}.cardback b{font-size:30px}.stamp{font-size:22px;top:-2px}.newtag{left:calc(50% - 96px);top:10px;font-size:16px}}
+/* BOXV2 END */
 </style>
 </head>
 <body>

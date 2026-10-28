@@ -922,7 +922,7 @@ t('lootbox screens: every box has a drawn icon, rewards open boxes, the reveal l
   assert.ok(!/showItemReward/.test(js), 'the old pick one of three screen is gone');
   const box = js.slice(js.indexOf('function showBox('), js.indexOf('function showSnackReward'));
   assert.ok(/S\.openBox\(g, tier\)/.test(box) && /showBoxReveal\(tier, id\)/.test(box), 'opening rolls through the sim');
-  assert.ok(/take: \(\) => \{[^}]*showTower\(\(\) => nextReward\(\), \{ item: g\.stash\.lastIndexOf\(id\) \}\)/.test(box), 'equip leads to the arrange screen with the relic selected');
+  assert.ok(/take: \(\) => \{[\s\S]*?showTower\(\(\) => nextReward\(\), \{ item: idx \}\)/.test(box) && /const idx = g\.stash\.lastIndexOf\(id\)/.test(box), 'equip leads to the arrange screen with the relic selected');
   assert.ok(/\.boxic\.shaking\{animation:boxshake/.test(css) && /@keyframes boxshake/.test(css), 'shake animation');
   assert.ok(/body\.nomotion \*/.test(css), 'reduced motion stops animations (the open still works)');
 });
@@ -934,7 +934,7 @@ t('lootbox hero art: a fine detail layer for every box, the opening screen shows
   for (const b of BOXES) assert.ok(new RegExp('\\n  ' + b.id + ': \\(c\\) =>').test(det), b.id + ' has a detail layer');
   assert.ok(/export function boxHero\(tier, px = 320\)/.test(art), 'hero renderer');
   assert.ok(/import \{[^}]*boxHero[^}]*\} from '\.\/art_boxes\.js'/.test(js) && /boxHero\(bx\.id\)\.toDataURL\(\)/.test(js), 'the box screen uses it');
-  assert.ok(/class="revealstage r-\$\{it\.rarity\}"/.test(js) && /class="rays"/.test(js) && /class="confetti"/.test(js), 'rays and confetti on the reveal');
+  assert.ok(/class="revealstage pending r-\$\{it\.rarity\}"/.test(js) && /class="rays"/.test(js) && /class="confetti"/.test(js), 'rays and confetti on the reveal');
   assert.ok(/\.rays\{/.test(css) && /@keyframes conf/.test(css), 'their styles');
 });
 
@@ -1255,4 +1255,18 @@ t('Relic Book keeps its scroll position when a tile is picked and fades the bott
   const html = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
   assert.ok(/const oldTop = \(screenEl\.querySelector\('\.relbook'\)/.test(js) && /rb\.scrollTop = oldTop/.test(js), 'scrollTop is saved and restored around the redraw');
   assert.ok(/body \.relbook\{[^}]*mask-image:linear-gradient/.test(html), 'a bottom fade marks the grid as scrollable');
+});
+
+t('lootbox juice: the box charges and bursts, the card stays covered a rarity-scaled moment, then flips with a stamp, NEW tag and fanfare; a tap skips; reduced motion skips the waits', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8'), au = readFileSync('stacking_cats/audio.js', 'utf8');
+  for (const k of ['boxbuild', 'boxtick', 'boxburst', 'stamp', 'newrelic', 'revealrare', 'revealepic', 'revealleg', 'revealmyth']) assert.ok(new RegExp("case '" + k + "':").test(au), 'sound ' + k);
+  assert.ok(/classList\.add\('charging'\)/.test(js) && /classList\.add\('opening'\)/.test(js) && /sfx\.play\('boxburst'\)/.test(js), 'charge then burst');
+  assert.ok(/if \(opening\) \{ doBurst\(\); return; \}/.test(js), 'a second tap skips the wind-up');
+  assert.ok(/REVEAL_WAIT = \{ common: \d+, rare: \d+, epic: \d+, legendary: \d+, mythic: \d+ \}/.test(js), 'a wait per rarity');
+  const w = js.match(/REVEAL_WAIT = \{ common: (\d+), rare: (\d+), epic: (\d+), legendary: (\d+), mythic: (\d+) \}/).slice(1).map(Number);
+  assert.ok(w.every((v, i) => i === 0 || v > w[i - 1]), 'the rarer the relic, the longer the suspense');
+  assert.ok(/!again && save\.opt\.motion \? REVEAL_WAIT/.test(js) && /showBoxReveal\(tier, id, true\)/.test(js), 'no second wait when coming back from the Arrange screen; no wait with motion off');
+  assert.ok(/!save\.relics\[id\]/.test(js) && /class="newtag"/.test(js), 'a first find gets a NEW tag');
+  assert.ok(/\.cardback/.test(css) && /@keyframes cardflip/.test(css) && /@keyframes stampin/.test(css) && /@keyframes boxcharge/.test(css) && /@keyframes jolt/.test(css), 'styles');
+  assert.ok(/save\.opt\.shake > 0/.test(js), 'the screen jolt respects the shake setting');
 });
