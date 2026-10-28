@@ -1342,6 +1342,12 @@ body.nomotion .shakeno{animation:none}
 body.nomotion .screen>h2,body.nomotion .screen>.sub,body.nomotion .screen>.row{animation:none!important}
 @media (prefers-reduced-motion:reduce){.screen>h2,.screen>.sub,.screen>.row{animation:none!important}}
 /* SCREENJUICE END */
+/* CATFLIP START */
+@keyframes catflip{0%{transform:perspective(700px) rotateY(90deg) scale(.7);opacity:0}60%{transform:perspective(700px) rotateY(-12deg) scale(1);opacity:1}100%{transform:perspective(700px) rotateY(0) scale(.9);opacity:1}}
+@keyframes catglow{0%,100%{box-shadow:0 0 0 0 rgba(255,210,63,0)}40%{box-shadow:0 0 22px 6px rgba(255,210,63,.8)}}
+body .over .newcats .card,body .newcats .card{animation:catflip .55s calc(1s + var(--i,0)*.35s) cubic-bezier(.2,1.2,.4,1) both,catglow .9s calc(1.2s + var(--i,0)*.35s) ease-out both}
+body.nomotion .newcats .card{animation:none!important}
+/* CATFLIP END */
 /* BOSSJUICE START */
 #bossBar.hit{animation:bosshit .16s ease-out}
 #bossBar.phase{animation:bossphase .6s cubic-bezier(.2,1.6,.4,1)}

@@ -1561,6 +1561,12 @@ function showOver(fresh) {
       bn.textContent = '0'; requestAnimationFrame(tk);
     }
   });
+  // each freed cat flips in one after another with a burst and a meow
+  screenEl.querySelectorAll('.newcats .card').forEach((c, i) => {
+    c.style.setProperty('--i', i);
+    if (!motionOn()) return;
+    setTimeout(() => { if (!c.isConnected) return; const rc = c.getBoundingClientRect(); domBurst(rc.left + rc.width / 2, rc.top + rc.height / 2, 18, ['#ffd23f', '#fff', '#8fe3ff'], 'NEW CAT!'); sfx.play('newrelic'); if (fresh[i]) sfx.meow(fresh[i], 'happy'); buzz('pop'); }, 1250 + i * 350);
+  });
   if (r.wave >= best && r.wave > 1 && save.opt.motion) setTimeout(() => { const sb = screenEl.querySelector('.sub'); if (!sb || !sb.isConnected) return; const rc = sb.getBoundingClientRect(); domBurst(rc.left + rc.width / 2, rc.top + rc.height / 2, 26, ['#ffd23f', '#fff', '#ff8fb7'], 'NEW BEST!'); sfx.play('achieve', 0.8); buzz('pop'); }, 700);
   const el = $('earn');
   if (el) {

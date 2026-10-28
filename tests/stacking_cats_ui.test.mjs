@@ -1351,4 +1351,10 @@ t('boss bar juice: the bar flinches on every hit and pulses with a sound and a c
   assert.ok(/@keyframes bosshit/.test(css) && /@keyframes bossphase/.test(css), 'styles');
 });
 
+t('freed cats on the game over screen flip in one by one with a burst', () => {
+  const css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8'), js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  assert.ok(/CATFLIP START[\s\S]*catflip[\s\S]*CATFLIP END/.test(css) && /nomotion \.newcats \.card\{animation:none/.test(css));
+  assert.ok(/querySelectorAll\('\.newcats \.card'\)[\s\S]{0,500}NEW CAT!/.test(js));
+});
+
 console.log(`${n} tests passed`);
