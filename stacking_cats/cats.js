@@ -431,14 +431,14 @@ export const itemSlots = (lvl) => (lvl >= 3 ? 2 : 1);
 // bonus(level) returns the part of the run bonuses this building gives at that level.
 export const BUILDINGS = [
   { id: 'dojo', name: 'Training Dojo', icon: '🥋', max: 5, base: 60, blurb: 'All cats hit harder.', bonus: (l) => ({ dmg: 0.04 * l }), text: (l) => `+${4 * l}% damage` },
-  { id: 'beds', name: 'Cozy Cat Beds', icon: '🛏️', max: 5, base: 60, blurb: 'Well rested cats are tougher.', bonus: (l) => ({ hp: 0.05 * l }), text: (l) => `+${5 * l}% health` },
+  { id: 'beds', name: 'Cozy Cat Beds', icon: '🛏️', max: 5, base: 60, blurb: 'Your cats get more health.', bonus: (l) => ({ hp: 0.05 * l }), text: (l) => `+${5 * l}% health` },
   { id: 'yarn', name: 'Yarn Workshop', icon: '🧶', max: 5, base: 70, blurb: 'Playful cats attack faster.', bonus: (l) => ({ haste: 0.03 * l }), text: (l) => `+${3 * l}% attack speed` },
-  { id: 'spa', name: 'Healing Springs', icon: '♨️', max: 5, base: 70, blurb: 'Better rests between waves.', bonus: (l) => ({ waveHeal: 0.04 * l, reviveHp: 0.05 * l }), text: (l) => `+${4 * l}% wave healing, fallen cats return with +${5 * l}% health` },
-  { id: 'tower', name: 'Lookout Tower', icon: '🔭', max: 5, base: 80, blurb: 'See farther, aim better.', bonus: (l) => ({ range: 0.04 * l, crit: 0.02 * l }), text: (l) => `+${4 * l}% range, +${2 * l}% crit` },
-  { id: 'shrine', name: 'Lucky Shrine', icon: '⛩️', max: 5, base: 90, blurb: 'Fortune smiles on loot.', bonus: (l) => ({ luck: l }), text: (l) => `Better loot odds, +${4 * l}% chance elites drop a chest` },
-  { id: 'vault', name: 'Treasure Vault', icon: '💰', max: 5, base: 100, blurb: 'Cats find more coins.', bonus: (l) => ({ coinMul: 0.10 * l }), text: (l) => `+${10 * l}% coins every run` },
-  { id: 'tent', name: 'Fortune Teller Tent', icon: '🔮', max: 4, base: 80, blurb: 'Look again at any choice.', bonus: (l) => ({ rerolls: l }), text: (l) => `${l} free reroll${l > 1 ? 's' : ''} per run` },
-  { id: 'stall', name: 'Snack Stall', icon: '🍣', max: 3, base: 90, blurb: 'Start each run with snacks.', bonus: (l) => ({ startSnacks: l }), text: (l) => `Start every run with ${l} free snack${l > 1 ? 's' : ''}` },
+  { id: 'spa', name: 'Healing Springs', icon: '♨️', max: 5, base: 70, blurb: 'Your cats heal more after each wave.', bonus: (l) => ({ waveHeal: 0.04 * l, reviveHp: 0.05 * l }), text: (l) => `+${4 * l}% healing after each wave. Fallen cats come back with +${5 * l}% health` },
+  { id: 'tower', name: 'Lookout Tower', icon: '🔭', max: 5, base: 80, blurb: 'Your cats shoot farther and land more big hits.', bonus: (l) => ({ range: 0.04 * l, crit: 0.02 * l }), text: (l) => `+${4 * l}% range, +${2 * l}% chance for a big hit` },
+  { id: 'shrine', name: 'Lucky Shrine', icon: '⛩️', max: 5, base: 90, blurb: 'You find better loot.', bonus: (l) => ({ luck: l }), text: (l) => `Better loot, and +${4 * l}% chance that strong (elite) mice drop a chest` },
+  { id: 'vault', name: 'Treasure Vault', icon: '💰', max: 5, base: 100, blurb: 'You earn more coins.', bonus: (l) => ({ coinMul: 0.10 * l }), text: (l) => `+${10 * l}% coins every run` },
+  { id: 'tent', name: 'Fortune Teller Tent', icon: '🔮', max: 4, base: 80, blurb: 'Get new choices when you do not like the ones you see.', bonus: (l) => ({ rerolls: l }), text: (l) => `${l} free reroll${l > 1 ? 's' : ''} per run (a reroll shows new choices)` },
+  { id: 'stall', name: 'Snack Stall', icon: '🍣', max: 3, base: 90, blurb: 'You start every run with free snacks.', bonus: (l) => ({ startSnacks: l }), text: (l) => `Start every run with ${l} free snack${l > 1 ? 's' : ''}` },
 ];
 export const BUILDING_BY_ID = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]));
 
@@ -562,9 +562,9 @@ export const ROUTE_BY_ID = Object.fromEntries(ROUTES.map((r) => [r.id, r]));
 export const DAILY_POOL = [...STARTERS, 'yuki', 'hawkeye', 'boomer', 'pudding', 'shadow', 'ronin', 'merlin', 'cutlass'];
 export const DAILY_MODS = [
   { id: 'fast',  name: 'Zoomies Day',   icon: '💨', desc: 'Mice move 25% faster.',                         speed: 1.25 },
-  { id: 'glass', name: 'Glass Cats',    icon: '🔮', desc: 'Cats deal +40% damage but have 35% less health.', dmg: 0.4, hp: -0.35 },
-  { id: 'horde', name: 'Horde Day',     icon: '🐀', desc: '40% more mice, each 20% weaker.',                budget: 1.4, enemyHp: 0.8 },
-  { id: 'elite', name: 'Elite Storm',   icon: '👑', desc: 'Elite mice show up from wave 2. Chests drop more.', elite: 0.2, chest: 1 },
+  { id: 'glass', name: 'Glass Cats',    icon: '🔮', desc: 'Your cats hit 40% harder but have 35% less health.', dmg: 0.4, hp: -0.35 },
+  { id: 'horde', name: 'Horde Day',     icon: '🐀', desc: 'There are 40% more mice, but each mouse is 20% weaker.', budget: 1.4, enemyHp: 0.8 },
+  { id: 'elite', name: 'Elite Storm',   icon: '👑', desc: 'Strong (elite) mice show up from wave 2. More chests drop.', elite: 0.2, chest: 1 },
   { id: 'tiny',  name: 'Tiny Tower',    icon: '🧱', desc: 'The tower only holds 4 cats.',                    stack: 4 },
   { id: 'rich',  name: 'Gold Rush',     icon: '🪙', desc: 'Double coins and double the chests.',            coin: 2, chest: 1 },
 ];
@@ -581,12 +581,12 @@ export function dayInfo(day) {
 
 // ---------------------------------------------------------------- wonders (bought with gems, the second currency)
 export const WONDERS = [
-  { id: 'paw',     name: 'Golden Paw',      icon: '🐾', cost: 4, desc: 'Start every run with a random rare relic already equipped.', bonus: { startItem: 1 } },
-  { id: 'bench',   name: 'Big Bench',       icon: '🪑', cost: 3, desc: 'One more bench spot (5 instead of 4).',                    bonus: { bench: 1 } },
-  { id: 'cafe',    name: 'Cat Cafe',        icon: '☕',       cost: 6, desc: 'Pick one extra cat at the start of every run.',             bonus: { startPicks: 1 } },
-  { id: 'academy', name: 'Zoomies Academy', icon: '🎓', cost: 4, desc: 'Zoomies meter starts half full and lasts 3 seconds longer.', bonus: { zoomStart: 50, zoomDur: 3 } },
-  { id: 'coin',    name: 'Lucky Coin',      icon: '🍀', cost: 3, desc: 'One more free reroll in every run.',                        bonus: { rerolls: 1 } },
-  { id: 'spring',  name: 'Phoenix Fountain', icon: '🕊️', cost: 8, desc: 'Every run starts with Nine Lives: the tower rises once after falling.', bonus: { nine: 1 } },
+  { id: 'paw',     name: 'Golden Paw',      icon: '🐾', cost: 4, desc: 'Every run starts with a free rare relic on one of your cats.', bonus: { startItem: 1 } },
+  { id: 'bench',   name: 'Big Bench',       icon: '🪑', cost: 3, desc: 'One more bench spot for resting cats (5 instead of 4).', bonus: { bench: 1 } },
+  { id: 'cafe',    name: 'Cat Cafe',        icon: '☕',       cost: 6, desc: 'You pick one more cat at the start of every run.',         bonus: { startPicks: 1 } },
+  { id: 'academy', name: 'Zoomies Academy', icon: '🎓', cost: 4, desc: 'The Zoomies meter starts half full, and Zoomies last 3 seconds longer.', bonus: { zoomStart: 50, zoomDur: 3 } },
+  { id: 'coin',    name: 'Lucky Coin',      icon: '🍀', cost: 3, desc: 'One more free reroll (new choices) in every run.',     bonus: { rerolls: 1 } },
+  { id: 'spring',  name: 'Phoenix Fountain', icon: '🕊️', cost: 8, desc: 'Once in every run, your tower stands back up after it falls (Nine Lives).', bonus: { nine: 1 } },
 ];
 export const WONDER_BY_ID = Object.fromEntries(WONDERS.map((w) => [w.id, w]));
 
@@ -790,12 +790,12 @@ export const ladderClears = (run) => { const t = ladderTier(run.diff); return t 
 // ---- weekly challenge: one seed and three stacked modifiers per ISO week (UTC)
 export const WEEKLY_MODS = [
   { id: 'fast',  name: 'Zoomies Week',  icon: '💨', desc: 'Mice move 20% faster.',                 speed: 1.2 },
-  { id: 'glass', name: 'Glass Cats',    icon: '🔮', desc: 'Cats deal +30% damage, 30% less health.', dmg: 0.3, hp: -0.3 },
-  { id: 'horde', name: 'Horde Week',    icon: '🐀', desc: '30% more mice, each 15% weaker.',        budget: 1.3, enemyHp: 0.85 },
-  { id: 'elite', name: 'Elite Storm',   icon: '👑', desc: 'Elite mice from wave 2. More chests.',   elite: 0.18, chest: 0.5 },
+  { id: 'glass', name: 'Glass Cats',    icon: '🔮', desc: 'Cats hit 30% harder, with 30% less health.', dmg: 0.3, hp: -0.3 },
+  { id: 'horde', name: 'Horde Week',    icon: '🐀', desc: '30% more mice, but each is 15% weaker.', budget: 1.3, enemyHp: 0.85 },
+  { id: 'elite', name: 'Elite Storm',   icon: '👑', desc: 'Strong mice show up from wave 2. More chests.', elite: 0.18, chest: 0.5 },
   { id: 'tiny',  name: 'Tiny Tower',    icon: '🧱', desc: 'The tower only holds 4 cats.',           stack: 4 },
   { id: 'brute', name: 'Brute Mice',    icon: '🛡', desc: 'Mice have 30% more health.',             enemyHp: 1.3 },
-  { id: 'poor',  name: 'Tight Purse',   icon: '🪙', desc: 'Coins are halved, chests are rarer.',    coin: 0.5, chest: -0.4 },
+  { id: 'poor',  name: 'Tight Purse',   icon: '🪙', desc: 'Half the coins, and fewer chests.', coin: 0.5, chest: -0.4 },
 ];
 export function weekKey(ms = Date.now()) {
   const d = new Date(ms), day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
