@@ -756,7 +756,7 @@ function startRun(opts = {}) {
   if (opts.weekly) g.run.weekly = true;
   startTotal = START_CATS + g.meta.startPicks;
   setsSeen = {}; runNewRelics = 0; runCommitted = false; bestShown = false; pickN = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
-  combo = 0; maxComboRun = 0; coinShown = 0; dpsHist.length = 0; sfx.setIntensity(0);
+  combo = 0; multiKill = 0; flawless = 0; maxComboRun = 0; coinShown = 0; dpsHist.length = 0; sfx.setIntensity(0);
   $('bSpeed').textContent = 'x' + speed;
   showPickStart();
 }
@@ -865,6 +865,10 @@ function onClear() {
   ring(g.towerX, GROUND - 100, g.bossWave ? 150 : 100, '#ffffff', 0.55, 4);
   sparks(g.towerX, GROUND - 120, g.bossWave ? 26 : 14, '#ffe27a', 300, 0.7);
   g.cats.forEach((c, i) => { if (c.hp > 0) { moods.set(c.uid, 1.4); if (i < 3) setTimeout(() => { if (mode === 'celebrate') { sfx.meow(c.id, 'cheer'); const q = catPos(c.uid); if (q) sparks(q.x, q.y - 10, 5, '#fff6b0', 150, 0.4); } }, 160 + i * 140); } });
+  if (g.report && g.report.taken < 1 && g.report.kills > 3) {   // nothing got through: a gold FLAWLESS stamp over the tower (visual only)
+    flawless++;
+    setTimeout(() => { if (mode === 'celebrate') { txtFx(g.towerX + 110, GROUND - 190, flawless > 1 ? `FLAWLESS x${flawless}!` : 'FLAWLESS!', '#ffe27a', 34, 1.6); ring(g.towerX + 100, GROUND - 170, 120, '#ffe27a', 0.6, 6); sfx.play('revealrare'); buzz('pop'); } }, 420);
+  } else flawless = 0;
   queue = g.reward.slice();
   if (g.bossWave) queue.splice(queue.length - 1, 0, 'route');
   if (S.eventDue(g)) queue.push('event');
@@ -1732,6 +1736,8 @@ function cheerRandom(chance) {
 }
 let hitstop = 0, timeScale = 1, slowT = 0, zpunch = 0, towerWob = 0;
 let combo = 0, comboT = 0, comboPulse = 0, celeb = 0;
+let multiKill = 0, lastKillAt = 0, flawless = 0;
+const MULTI_KILL = { 3: { t: 'TRIPLE!', c: '#ffd23f', s: 26, k: 2 }, 5: { t: 'MEGA KILL!', c: '#ff9a3a', s: 30, k: 4 }, 8: { t: 'RAMPAGE!', c: '#ff6a6a', s: 34, k: 6 }, 12: { t: 'UNSTOPPABLE!', c: '#ff8fb7', s: 38, k: 8 }, 18: { t: 'LEGENDARY!', c: '#c58aff', s: 42, k: 10 } };
 let lastSmallHit = -1;
 const hit = (t) => {
   // tiny stops (every swipe) are throttled so fast attackers do not stutter; crits, elites, KOs and bosses always land
@@ -1893,6 +1899,16 @@ function handle(e) {
       if (e.elite) { flashGlow(e.x, e.y, 70, '#ffd23f', 0.35); hit(0.05); shake = Math.max(shake, 4); }
       sfx.play('pop', Math.min(2.2, 1 + combo * 0.035));
       if (combo === 10 || combo === 25 || combo === 50 || combo === 100) { txtFx(g.towerX + 70, 250, combo + ' COMBO!', '#ff8fb7', 30, 1.3); sfx.play('pick'); zpunch = Math.max(zpunch, 0.02); }
+      // kills that land in quick succession get a named callout that grows with the streak
+      const nowT = performance.now();
+      multiKill = nowT - lastKillAt < 650 ? multiKill + 1 : 1; lastKillAt = nowT;
+      const MK = MULTI_KILL[multiKill];
+      if (MK) {
+        txtFx(e.x, e.y - 40, MK.t, MK.c, MK.s, 1.2);
+        ring(e.x, e.y - 10, 60 + multiKill * 6, MK.c, 0.45, 5); flashGlow(e.x, e.y - 10, 90, MK.c, 0.4);
+        shake = Math.max(shake, MK.k); if (MK.k >= 6) { hit(0.05); screenFlash('rgba(255,240,180,.18)', 0.18); }
+        sfx.play('pick', 1 + multiKill * 0.04); buzz('pop');
+      }
       break;
     }
     case 'swipe':
