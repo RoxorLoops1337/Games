@@ -324,7 +324,7 @@ t('opening the pause menu clears the toasts so they do not smear behind the blur
 
 t('the Kingdom hint mentions arrow keys and Enter for keyboard players', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
-  assert.ok(js.includes("coarse ? '' : ' Arrow keys move between them and Enter buys.'"), 'mouse and keyboard players must be told about the keys, touch players keep the short hint');
+  assert.ok(js.includes("coarse ? '' : ' With a keyboard, use the arrow keys to move and Enter to buy.'"), 'mouse and keyboard players must be told about the keys, touch players keep the short hint');
 });
 
 t('a wave 1 coach tip is dismissed when the wave clears so it never covers the banner', () => {
@@ -733,7 +733,7 @@ t('the title stack is built from the player\'s own most used cats', () => {
 
 t('the idle Kingdom hint opens with the village story line', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
-  assert.ok(/hint2">\$\{kingdomLine\(kingdomLevel\(k\)\)\} Tap a building to upgrade it/.test(js), 'kingdomLine in the idle hint');
+  assert.ok(/hint2">\$\{kingdomLine\(kingdomLevel\(k\)\)\} Tap a building to see what it does/.test(js), 'kingdomLine in the idle hint');
 });
 
 t('the equip tip on the arrange screen sits below the backpack, clear of the title and team DPS', () => {
@@ -790,9 +790,9 @@ t('lootbox drop bounces, rests and flies; reduced motion keeps the direct flight
   assert.ok(/case 'chest': if \(save\.opt\.motion && !document\.body\.classList\.contains\('nomotion'\)\)/.test(src), 'drop only with motion on');
   assert.ok(/else spawnFx\(\{ k: 'fly'[^\n]*life: 1\.0, max: 1\.0, kind: 'chest'/.test(src), 'old direct flight kept for reduced motion');
   for (const tier of ['cardboard', 'basket', 'silver', 'golden']) assert.ok(new RegExp(tier + ": \\['#").test(src), 'tint for ' + tier);
-  assert.ok(/upgrades cost coins from runs/.test(src) && /gems are rare/.test(src), 'Kingdom header says upgrades cost coins and gems are rare');
+  assert.ok(/Coins pay for upgrades/.test(src) && /Gems pay for wonders/.test(src) && /Gems are rare/.test(src), 'Kingdom header says upgrades cost coins and gems are rare');
   const tips = /const KINGDOM_TIPS = \[([\s\S]*?)\];/.exec(src);
-  assert.ok(tips && /Slow on purpose/.test(tips[1]), 'slow on purpose tip');
+  assert.ok(tips && /Small upgrades add up/.test(tips[1]), 'the slow economy tip: small upgrades add up');
   assert.ok(!/\u2014/.test(tips[1]) && !/\u2014/.test(src.slice(src.indexOf('DROP_T = 1.6'), src.indexOf('DROP_T = 1.6') + 1500)), 'no em dashes');
   assert.ok(/\.ktip\{/.test(page), 'tip styled');
 });
@@ -1503,6 +1503,30 @@ t('a tip during a fight pauses the game until the player presses Got it (or Ente
   assert.ok(/function doZoomies\(\) \{ if \(mode === 'play' && !paused && !tipHold/.test(js) && /mode !== 'play' \|\| paused \|\| tipHold \|\| !g\) return;/.test(js));
   assert.ok(/function hideCoach\(\) \{\s*tipHold = false;/.test(js), 'any menu that opens lets the game go');
   assert.ok(/\.coach\.held button/.test(css) && /\.holdnote/.test(css));
+});
+
+t('the Kingdom and Daily screens use easy words and say which button to press', async () => {
+  const C = await import('../stacking_cats/cats.js'), St = await import('../stacking_cats/story.js');
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  const JARGON = /\bcrit\b|\bmastery\b|\bXP\b|odds|leaderboard|cosmetic|synerg|\bproc\b|\bbuff|\bDPS\b|aggro/i;
+  const lines = [
+    ...C.BUILDINGS.flatMap((b) => [b.blurb, b.text(1), b.text(b.max)]), ...C.WONDERS.map((w) => w.desc),
+    ...C.DAILY_MODS.map((m) => m.desc), ...C.WEEKLY_MODS.map((m) => m.desc), ...[1, 8, 20, 40].map((l) => St.kingdomLine(l)),
+  ];
+  for (const l of lines) { assert.ok(!JARGON.test(l), 'jargon in: ' + l); for (const sen of l.split(/(?<=[.!?])\s+/)) assert.ok(sen.split(/\s+/).length <= 20, 'sentence too long: ' + sen); }
+  const tips = js.slice(js.indexOf('const KINGDOM_TIPS'), js.indexOf('function updateFx'));
+  assert.ok(!JARGON.test(tips));
+  const kd = js.slice(js.indexOf('function showKingdom'), js.indexOf('// ---------------------------------------------------------------- run flow'));
+  assert.ok(/tap the green Upgrade button/.test(kd) && /tap the green Buy button/.test(kd), 'the hints name the button to press');
+  assert.ok(!JARGON.test(kd.replace(/Mastery/g, '')), 'no jargon on the Kingdom screen');
+  const dy = js.slice(js.indexOf('function showDaily'), js.indexOf('function boardHtml'));
+  assert.ok(!JARGON.test(dy) && /the race is fair/.test(dy) && /win a gem/.test(dy), 'the Daily page is plain');
+  assert.ok(/tap Send score again/.test(js) && /ranking list/.test(js));
+});
+
+t('the Daily and Weekly cards keep their buttons on a short screen', () => {
+  const css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(/DAILYFIT START[\s\S]*max-height:340px[\s\S]*body \.dcard[\s\S]*DAILYFIT END/.test(css));
 });
 
 console.log(`${n} tests passed`);

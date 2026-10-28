@@ -646,8 +646,8 @@ function showDaily(back, weekly = false) {
   const modsHtml = weekly ? `<div class="wmods">${di.mods.map((m) => `<span class="wmod"><i>${m.icon}</i><b>${m.name}</b><small>${m.desc}</small></span>`).join('')}</div>` : '';
   setScreen(`<h2>${weekly ? 'Weekly Challenge' : 'Daily Challenge'}</h2>
     <div class="dailycols"><div class="dcard ${weekly ? 'weekly' : ''}"><div class="dic">${di.mod.icon}</div><b>${di.mod.name}</b>${weekly ? modsHtml + '<p class="wiron">Mice have 10% more health on top.</p>' : `<p>${di.mod.desc}</p>`}
-      <small>${weekly ? 'Same mice and same cats for everyone all week. Kingdom upgrades and mastery are off, so it is a fair race.' : 'Everyone plays the same mice today, with the same cats: the starters plus Yuki, Hawkeye, Boomer, Pudding, Shadow, Ronin, Merlin and Cutlass. Kingdom upgrades and mastery are switched off, so it is a fair race.'}</small>
-      <div class="dstat">${mine ? `Your best ${weekly ? 'this week' : 'today'}: <b>${mine.best}</b> (wave ${mine.wave})` : `You have not played ${weekly ? 'this week' : 'today'} yet. Reach wave ${weekly ? 15 : 12} on your first try to earn a gem!`}${!weekly && dailyStreak(save.daily) >= 2 ? ` <span class="streakline">&#128293; ${dailyStreak(save.daily)} days in a row</span>` : ''}</div>
+      <small>${weekly ? 'Everyone gets the same mice and cats all week. Kingdom upgrades are off, so the race is fair.' : 'Everyone gets the same mice and cats today. Kingdom upgrades are off, so the race is fair. Cats: the 3 starters, Yuki, Hawkeye, Boomer, Pudding, Shadow, Ronin, Merlin and Cutlass.'}</small>
+      <div class="dstat">${mine ? `Your best ${weekly ? 'this week' : 'today'}: <b>${mine.best}</b> (wave ${mine.wave})` : `You have not played ${weekly ? 'this week' : 'today'} yet. Reach wave ${weekly ? 15 : 12} on your first try to win a gem.`}${!weekly && dailyStreak(save.daily) >= 2 ? ` <span class="streakline">&#128293; ${dailyStreak(save.daily)} days in a row</span>` : ''}</div>
       <div class="row"><button class="btn big" data-act="go">Play ${weekly ? 'weekly' : 'daily'}</button></div></div>
       <div class="board"><h4>${weekly ? "This week's top cats" : "Today's top cats"}</h4><div id="boardBody" class="bbody">Loading...</div></div></div>
     <div class="row"><button class="btn grey" data-act="back">Back</button></div>`);
@@ -655,7 +655,7 @@ function showDaily(back, weekly = false) {
   fetchBoard(day, undefined, undefined, weekly).then((r) => {
     const el = $('boardBody');
     if (!el || !el.isConnected) return;
-    el.innerHTML = r.ok ? boardHtml(r.top) : '<small>The leaderboard is offline right now. You can still play!</small>';
+    el.innerHTML = r.ok ? boardHtml(r.top) : '<small>The ranking list cannot load right now. You can still play!</small>';
   });
 }
 // ---------------------------------------------------------------- username and the ranking list
@@ -747,7 +747,7 @@ const starsHtml = (lv) => Array.from({ length: MASTERY_MAX }, (_, i) => `<i clas
 function masteryHtml(id) {
   const p = masteryProgress(save.catStats[id]), b = masteryBonus(p.lv);
   return `<div class="mast"><b>Mastery</b><span class="stars">${starsHtml(p.lv)}</span><div class="mbar"><i style="width:${p.pct}%"></i></div>
-    <small>${p.to == null ? `${num(p.xp)} XP, max level` : `${num(p.xp)} / ${num(p.to)} XP`}${p.lv > 1 ? ` &middot; +${Math.round(b.dmg * 100)}% damage, +${Math.round(b.hp * 100)}% health` : ' &middot; +2% damage per level'}${p.lv >= MASTERY_MAX ? ' &middot; Medal unlocked' : ''}</small></div>`;
+    <small>Grows when this cat fights: ${p.to == null ? `${num(p.xp)} points, top level` : `${num(p.xp)} / ${num(p.to)} points`}${p.lv > 1 ? ` &middot; now +${Math.round(b.dmg * 100)}% damage and +${Math.round(b.hp * 100)}% health` : ' &middot; each level gives a little more damage'}${p.lv >= MASTERY_MAX ? ' &middot; Medal unlocked' : ''}</small></div>`;
 }
 function showWardrobe(back, startCat) {
   const list = CATS.filter((c) => save.unlocked.includes(c.id));
@@ -762,7 +762,7 @@ function showWardrobe(back, startCat) {
       const dis = c.mastery ? !can : (!can && !afford);
       return `<div class="witem ${worn ? 'worn' : ''}"><canvas width="120" height="120" data-try="${c.id}"></canvas><b>${c.name}</b><small>${c.desc}</small><button class="btn small ${can ? (worn ? 'grey' : 'green') : afford ? '' : 'grey'}" data-act="item" data-id="${c.id}" ${dis ? 'disabled' : ''}>${worn ? 'Worn' : act}</button></div>`;
     };
-    setScreen(`<h2>Wardrobe</h2><div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <small>Cosmetics are only for show. Every cat wears one hat, one pair of glasses and one neck piece.</small></div>
+    setScreen(`<h2>Wardrobe</h2><div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <small>Outfits are only for looks. They do not make a cat stronger. Each cat can wear one hat, one pair of glasses and one neck piece.</small></div>
       <div class="wstrip">${list.map((c) => `<button class="wcat ${c.id === cat ? 'sel' : ''}" data-act="cat" data-id="${c.id}" title="${c.name}"><canvas width="48" height="48" data-cat="${c.id}"></canvas></button>`).join('')}</div>
       <div class="wcols"><div class="wprev"><canvas width="240" height="240" data-cat="${cat}"></canvas><b>${CAT_BY_ID[cat].name}</b>${masteryHtml(cat)}
         <div class="wworn">${SLOTS.map((s) => `<span>${SLOT_NAMES[s]}: ${look[s] ? COSMETIC_BY_ID[look[s]].name : 'none'}</span>`).join('')}</div>
@@ -808,11 +808,11 @@ function showKingdom(back, selected) {
   const detail = () => {
     if (!sel) {
       const up = cheapestUpgrade(k);
-      if (up) return `<div class="kd hint2">You have enough coins to upgrade the <b>${BUILDING_BY_ID[up].name}</b> ${BUILDING_BY_ID[up].icon}. Tap it!</div>`;
+      if (up) return `<div class="kd hint2">You have enough coins to upgrade the <b>${BUILDING_BY_ID[up].name}</b> ${BUILDING_BY_ID[up].icon}. Tap it, then tap the green Upgrade button.</div>`;
       const wd = affordableWonder(k);
-      if (wd) return `<div class="kd hint2">You have enough gems to build the <b>${WONDER_BY_ID[wd].name}</b> ${WONDER_BY_ID[wd].icon}. Tap the floating wonder!</div>`;
+      if (wd) return `<div class="kd hint2">You have enough gems for the <b>${WONDER_BY_ID[wd].name}</b> ${WONDER_BY_ID[wd].icon}. Tap the floating wonder, then tap the green Buy button.</div>`;
     }
-    if (!sel) return `<div class="kd hint2">${kingdomLine(kingdomLevel(k))} Tap a building to upgrade it, or a floating wonder to buy it with gems.` + (coarse ? '' : ' Arrow keys move between them and Enter buys.') + '</div>';
+    if (!sel) return `<div class="kd hint2">${kingdomLine(kingdomLevel(k))} Tap a building to see what it does. Tap a floating wonder to buy it with gems.` + (coarse ? '' : ' With a keyboard, use the arrow keys to move and Enter to buy.') + '</div>';
     if (sel.type === 'wonder') {
       const w = WONDER_BY_ID[sel.id], owned = !!k.wonders[w.id], afford = !owned && k.gems >= w.cost;
       return `<div class="kd"><span class="kic">${w.icon}</span><div class="kt"><b>${w.name}</b><small>${w.desc}</small></div><button class="btn small ${afford ? 'green' : 'grey'}" data-act="buyw" data-id="${w.id}" ${afford ? '' : 'disabled'}>${owned ? 'Built' : `Buy &#128142; ${w.cost}`}</button></div>`;
@@ -821,7 +821,7 @@ function showKingdom(back, selected) {
     return `<div class="kd"><span class="kic">${b.icon}</span><div class="kt"><b>${b.name} <span class="pips">${Array.from({ length: b.max }, (_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</span></b><small>${l ? `Now: ${b.text(l)}` : b.blurb}</small>${maxed ? '<small class="nx">Fully upgraded!</small>' : `<small class="nx">Next: ${b.text(l + 1)}</small>`}</div><button class="btn small ${afford ? 'green' : 'grey'}" data-act="buy" data-id="${b.id}" ${afford ? '' : 'disabled'}>${maxed ? 'Complete' : `${l ? 'Upgrade' : 'Build'} &#129689; ${cost}`}</button></div>`;
   };
   setScreen(`<h2>Cat Kingdom <small class="klv">Lv ${kingdomLevel(k)}</small></h2>
-    <div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <span class="gem">&#128142;</span> <b>${k.gems}</b> <small>${num(k.earned)} coins earned in total &middot; upgrades cost coins from runs &middot; gems are rare: nests, trophies, daily wins</small></div>
+    <div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <span class="gem">&#128142;</span> <b>${k.gems}</b> <small>${num(k.earned)} coins earned so far. Coins pay for upgrades. Gems pay for wonders.</small></div>
     <canvas id="kscene" width="1840" height="512" role="img" aria-label="Your cat village. Use the left and right arrow keys to move between buildings and wonders, Enter to buy."></canvas><div id="kdetail" aria-live="polite">${detail()}</div>
     <div class="ktip">${KINGDOM_TIPS[Math.floor(k.earned / 50) % KINGDOM_TIPS.length]}</div>
     <div class="row"><button class="btn" data-act="back">Back</button><button class="btn pink" data-act="wardrobe">Wardrobe</button></div>`, 'kingdom');
@@ -1737,7 +1737,7 @@ function postDaily() {
   msg.textContent = 'Sending your score...';
   submitScore({ name: save.name, score: r.dailyScore, wave: r.wave, kills: r.kills, ...(r.weekly ? { type: 'weekly', week: r.daily } : { day: r.daily }) }).then((res) => {
     const el = $('dailyMsg');
-    r.sent = res.ok ? `You are #${rankOf(res.top, save.name) || '?'} ${r.weekly ? 'this week' : 'today'}!` : res.status === 429 ? 'Slow down a little, then try again.' : 'Could not reach the leaderboard.';
+    r.sent = res.ok ? `You are #${rankOf(res.top, save.name) || '?'} ${r.weekly ? 'this week' : 'today'}!` : res.status === 429 ? 'Please wait a few seconds, then tap Send score again.' : 'Could not reach the ranking list. Your score was not sent.';
     if (el && el.isConnected) {
       el.textContent = r.sent;
       // the rank lands like a result: a top three place bursts, first place is shouted
@@ -2267,10 +2267,10 @@ function dropPos(f, age, out) {
 }
 const _dp = { x: 0, y: 0, h: 0 };
 const KINGDOM_TIPS = [
-  'Slow on purpose: every run adds a few coins, and small upgrades stack up.',
-  'Tip: spend coins on upgrades between runs, they make the next run go further.',
-  'Gems are rare treats from nests, trophies and your first daily wins.',
-  'No rush. Each run you play makes the kingdom a little stronger.',
+  'Every run gives you a few coins. Small upgrades add up, so keep playing.',
+  'Spend your coins here between runs. Upgrades make your next run stronger.',
+  'Gems are rare. You get them from nests, trophies and your first daily wins.',
+  'No rush. Every run you play makes your kingdom a little stronger.',
 ];
 function updateFx(dt) {
   for (let i = fx.length - 1; i >= 0; i--) {
