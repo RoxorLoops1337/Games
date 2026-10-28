@@ -888,7 +888,7 @@ t('shop and shady deal relics show the same set and best-cat notes as loot cards
   assert.ok(/relicNotes\(id\)/.test(card), 'loot cards use it');
   const ev = js.slice(js.indexOf('function eventOptionHtml'), js.indexOf('function showEvent'));
   assert.ok(/case 'buy': return head\([^\n]*relicNotes\(o\.item\)/.test(ev), 'shop uses it');
-  assert.ok(/case 'curse': return head\([^\n]*relicNotes\(o\.item\)/.test(ev), 'shady deal uses it');
+  assert.ok(/case 'charm': \{[\s\S]*charmLines\(ch\)/.test(ev), 'the shady deal sells charms (whole-run team boons), shown as boon and price lines');
   assert.ok(/case 'blood': return head\([^\n]*relicNotes\(o\.item\)/.test(ev) && /case 'gamble': return head\([^\n]*relicNotes\(o\.item\)/.test(ev), 'the shrine offers use it too');
 });
 

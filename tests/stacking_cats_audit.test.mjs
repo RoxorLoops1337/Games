@@ -3,9 +3,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  newGame, addCat, calcMods, explainMods, eatSnack, finishWave, FX_KEYS, equipItem, hurtEnemy, makeEnemy, killEnemy, catMaxHp, TUNE,
+  newGame, addCat, calcMods, explainMods, eatSnack, finishWave, FX_KEYS, equipItem, hurtEnemy, makeEnemy, killEnemy, catMaxHp, TUNE, rollEvent, chooseEvent, endEvent,
 } from '../stacking_cats/sim.js';
-import { ITEMS, ITEM_BY_ID, SNACKS, TEMP_WAVES, COIN } from '../stacking_cats/cats.js';
+import { ITEMS, ITEM_BY_ID, SNACKS, TEMP_WAVES, COIN, CHARMS, CHARM_BY_ID, charmLines, EVENTS } from '../stacking_cats/cats.js';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
@@ -133,6 +133,71 @@ t('kill relics: Copper Penny pays on kill, Cheese Rind heals, damage multipliers
   hurtEnemy(f, low, 10); hurtEnemy(f, full, 10);
   f.curCat = null;
   assert.ok(low.maxHp * 0.2 - low.hp > full.maxHp - full.hp + 1e-9, 'Toy Mouse hits a weak mouse harder');
+});
+
+// ---- Shady Charms: the masked mouse sells whole-run, whole-team charms
+const dealGame = (seed) => {
+  const g = newGame({ seed });
+  addCat(g, 'tabby'); addCat(g, 'ember');
+  for (let w = 0; w < 400; w++) { g.wave = 3 + 3 * (w % 30); g.event = null; g.bossWave = false; if (g.wave % 3 === 0) { const ev = rollEvent(g); if (ev && ev.id === 'deal') return { g, ev }; } }
+  throw new Error('no shady deal rolled');
+};
+
+t('a shady deal offers three different charms and a way out, never an item with a curse', () => {
+  const { ev } = dealGame(11);
+  const ids = ev.options.filter((o) => o.k === 'charm').map((o) => o.id);
+  assert.equal(ids.length, 3); assert.equal(new Set(ids).size, 3);
+  assert.equal(ev.options.at(-1).k, 'leave');
+  assert.ok(!ev.options.some((o) => o.k === 'curse'));
+  assert.ok(EVENTS.find((e) => e.id === 'deal').desc.includes('charms'));
+});
+
+t('every charm has a boon and a price, the boon is worth more, and the card text comes from the numbers', () => {
+  const good = { dmg: 1, haste: 1, hp: 1, crit: 1, critMul: 0.5, dr: 1.5, curse: 1, waveHeal: 1, snackMul: 0.6, coin: 1, range: 0.7 };   // rough value of one point of each stat
+  for (const c of CHARMS) {
+    assert.ok(Object.keys(c.fx).length && Object.keys(c.cost).length, c.id);
+    const boon = Object.entries(c.fx).reduce((a, [k, v]) => a + v * good[k], 0);
+    const price = Object.entries(c.cost).reduce((a, [k, v]) => a + (k === 'hurt' ? v * 1.3 : -v * good[k]), 0);
+    assert.ok(boon > price * 1.05, `${c.id}: boon ${boon.toFixed(3)} should beat price ${price.toFixed(3)}`);
+    for (const k of Object.keys(c.fx)) assert.ok(c.fx[k] > 0 && FX_KEYS.concat(['curse', 'snackMul', 'waveHeal', 'critMul', 'crit', 'coin']).includes(k) || k in calcMods(newGame({ seed: 1 })), `${c.id}.${k}`);
+    const ln = charmLines(c);
+    for (const l of ln.boon.concat(ln.cost)) assert.ok(/\d+%/.test(l), l);
+    for (const [k, v] of Object.entries(c.fx)) assert.ok(ln.boon.some((l) => l.includes(`${Math.round(v * 100)}%`)), `${c.id} boon text for ${k}`);
+  }
+});
+
+t('taking a charm changes the team for the whole run and shows in the Team stats rows', () => {
+  for (const id of CHARMS.map((c) => c.id)) {
+    const g = newGame({ seed: 5 }); addCat(g, 'tabby'); addCat(g, 'ember');
+    const before = calcMods(g), ch = CHARM_BY_ID[id], hurt0 = g.hurtMul;
+    g.event = { id: 'deal', options: [{ k: 'charm', id }, { k: 'leave' }], done: false };
+    const r = chooseEvent(g, 0); assert.ok(r.ok && !r.again, id);
+    const after = calcMods(g);
+    for (const [k, v] of Object.entries(ch.fx)) assert.ok(Math.abs(after[k] - before[k] - v) < 1e-9, `${id}: boon ${k}`);
+    for (const [k, v] of Object.entries(ch.cost)) { if (k === 'hurt') assert.ok(Math.abs(g.hurtMul - hurt0 * (1 + v)) < 1e-9, id + ' hurt'); else assert.ok(Math.abs(after[k] - before[k] - v) < 1e-9, `${id}: price ${k}`); }
+    const rows = explainMods(g);
+    for (const k of [...Object.keys(ch.fx), ...Object.keys(ch.cost)].filter((k) => k !== 'hurt')) assert.ok(rows[k] && rows[k].some((x) => x.label === ch.name), `${id} row ${k}`);
+    // the rows still add up to the totals for the stats a charm touches
+    for (const k of ['dmg', 'haste', 'hp', 'curse', 'dr']) assert.ok(Math.abs((rows[k] || []).reduce((a, x) => a + x.v, 0) - after[k]) < 1e-9, `${id}: ${k} rows add up`);
+    assert.deepEqual(g.charms, [id]);
+  }
+});
+
+t('a charm that costs health lowers max health but never kills, and a charm is never offered twice', () => {
+  const g = newGame({ seed: 6 }); addCat(g, 'tabby');
+  const mx0 = catMaxHp(g, g.cats[0]); g.cats[0].hp = mx0;
+  g.event = { id: 'deal', options: [{ k: 'charm', id: 'fang' }], done: false };
+  chooseEvent(g, 0);
+  assert.ok(catMaxHp(g, g.cats[0]) < mx0 && g.cats[0].hp <= catMaxHp(g, g.cats[0]) && g.cats[0].hp > 0);
+  for (let seed = 1; seed < 40; seed++) { const { g: h, ev } = dealGame(seed); h.charms = ['fang', 'pact', 'tooth', 'appetite', 'moon', 'crown']; h.event = null; const e2 = rollEvent(h); if (e2 && e2.id === 'deal') for (const o of e2.options) if (o.k === 'charm') assert.ok(!h.charms.includes(o.id)); void ev; }
+});
+
+t('snack strength from a charm makes snacks bite harder, and the card renders boon and price lines', () => {
+  const g = newGame({ seed: 7 }); addCat(g, 'tabby');
+  const base = calcMods(g).dmg; eatSnack(g, 'sushi'); const plain = calcMods(g).dmg - base;
+  const h = newGame({ seed: 7 }); addCat(h, 'tabby'); h.charms.push('appetite'); const b2 = calcMods(h).dmg; eatSnack(h, 'sushi');
+  assert.ok(Math.abs((calcMods(h).dmg - b2) - plain * 1.5) < 1e-9);
+  assert.ok(/case 'charm': \{[\s\S]{0,400}class="boon"[\s\S]{0,200}class="price"/.test(mainSrc));
 });
 
 console.log(n + ' tests passed');
