@@ -2746,7 +2746,14 @@ let autoBtn = null;
 function setAutoSpecial(on) { save.opt.autoSpecial = on; persist(); sfx.play('ui'); toast(on ? 'Auto specials on' : 'Auto specials off'); }
 function doSpecial(uid) {
   if (mode !== 'play' || paused || !g) return;
-  if (S.useSpecial(g, uid)) { if (coachEl && coachEl.dataset.key === 'c7') hideCoach(); drain(); }
+  const sc = g.cats.find((c) => c.uid === uid);
+  if (S.useSpecial(g, uid)) {
+    if (coachEl && coachEl.dataset.key === 'c7') hideCoach();
+    // the portrait button flashes and bursts in the cat's own colour when the move fires
+    const fb = spBtns.get(uid);
+    if (fb && sc && motionOn()) { const rc = fb.getBoundingClientRect(), col = S.specialInfo(sc.id).color; fb.classList.remove('fired'); void fb.offsetWidth; fb.classList.add('fired'); domBurst(rc.left + rc.width / 2, rc.top + rc.height / 2, 14, [col, '#fff'], ''); buzz('pop'); }
+    drain();
+  }
   else sfx.play('nope');
 }
 function updateSpecials() {
@@ -2781,6 +2788,11 @@ function updateSpecials() {
     { const lab = specialLabel(CAT_BY_ID[c.id].name, S.specialInfo(c.id).name, c.sp, ready, c.ko); if (b.getAttribute('aria-label') !== lab) b.setAttribute('aria-label', lab); }
     b.style.setProperty('--p', Math.round(c.sp * 100) + '%');
     b.style.setProperty('--c', S.specialInfo(c.id).color);
+    if (ready && !b._was && g.state === 'fight' && motionOn()) {   // just charged: a ring flashes out and a bright ding calls the player
+      b.classList.remove('justready'); void b.offsetWidth; b.classList.add('justready'); sfx.play('pip', 1.7);
+      const rc = b.getBoundingClientRect(); domBurst(rc.left + rc.width / 2, rc.top + rc.height / 2, 8, [S.specialInfo(c.id).color, '#fff'], '');
+    }
+    b._was = ready;
     b.classList.toggle('ready', ready);
     b.classList.toggle('down', c.ko);
     b.firstChild.style.opacity = c.ko ? 0.35 : 1;

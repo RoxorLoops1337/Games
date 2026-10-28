@@ -1358,6 +1358,13 @@ body.nomotion #banner.boss.show{animation:none;opacity:1;transform:none}
 @keyframes cbigpop{0%{transform:scale(1)}30%{transform:scale(1.4) rotate(-4deg);filter:brightness(1.9) sepia(.6) saturate(2.4);box-shadow:0 0 30px 6px #ffd23f}60%{transform:scale(.95) rotate(2deg)}100%{transform:scale(1)}}
 body.nomotion #coinBox.cgain.cbig{animation:none!important}
 /* COINBIG END */
+/* SPJUICE START */
+@keyframes spjust{0%{box-shadow:0 0 0 0 var(--c,#ffd23f),0 4px 0 #0f0a20}70%{box-shadow:0 0 0 22px rgba(255,255,255,0),0 4px 0 #0f0a20}100%{box-shadow:0 0 0 0 rgba(255,255,255,0),0 4px 0 #0f0a20}}
+@keyframes spfired{0%{transform:scale(1.12)}25%{transform:scale(.7);filter:brightness(2)}60%{transform:scale(1.25)}100%{transform:scale(1)}}
+.spb.justready{animation:spjust .6s ease-out,spready 1s .6s ease-in-out infinite}
+.spb.fired{animation:spfired .45s cubic-bezier(.2,1.4,.4,1)}
+body.nomotion .spb.justready,body.nomotion .spb.fired{animation:none}
+/* SPJUICE END */
 /* BOSSJUICE START */
 #bossBar.hit{animation:bosshit .16s ease-out}
 #bossBar.phase{animation:bossphase .6s cubic-bezier(.2,1.6,.4,1)}
