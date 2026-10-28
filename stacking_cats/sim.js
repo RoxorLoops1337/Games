@@ -1012,6 +1012,11 @@ function updateMinesPools(g, dt) {
         g.curCat = s.owner ? findCat(g, s.owner) || null : null;
         hurtEnemy(g, e, s.dps * 0.25, { silent: true, pierceArmor: true, tick: true });
         g.curCat = null;
+        // the ticks are summed and shown twice a second (a small orange or green number), so burning and poison can be seen working without a number every tick
+        // (kept on the mouse, not on the burn: a flame cone relights the burn every hit and would reset a counter stored there)
+        const a = (e.dotAcc || (e.dotAcc = {}))[k] || (e.dotAcc[k] = { v: 0, n: 0 });
+        a.v += s.dps * 0.25; a.n++;
+        if (a.n >= 2) { if (!e.dead) emit(g, { k: 'dmg', x: e.x, y: ecy(e) - e.h * 0.5, v: a.v, dot: k }); a.v = 0; a.n = 0; }
         if (s.t <= 0) e[k] = null;
       }
     }

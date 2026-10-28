@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  newGame, addCat, calcMods, explainMods, eatSnack, finishWave, FX_KEYS, equipItem, hurtEnemy, makeEnemy, killEnemy, catMaxHp, TUNE, rollEvent, chooseEvent, endEvent,
+  newGame, addCat, calcMods, explainMods, eatSnack, finishWave, FX_KEYS, equipItem, hurtEnemy, makeEnemy, killEnemy, catMaxHp, TUNE, rollEvent, chooseEvent, endEvent, startWave, step, DT,
 } from '../stacking_cats/sim.js';
 import { ITEMS, ITEM_BY_ID, SNACKS, TEMP_WAVES, COIN, CHARMS, CHARM_BY_ID, charmLines, EVENTS } from '../stacking_cats/cats.js';
 
@@ -198,6 +198,30 @@ t('snack strength from a charm makes snacks bite harder, and the card renders bo
   const h = newGame({ seed: 7 }); addCat(h, 'tabby'); h.charms.push('appetite'); const b2 = calcMods(h).dmg; eatSnack(h, 'sushi');
   assert.ok(Math.abs((calcMods(h).dmg - b2) - plain * 1.5) < 1e-9);
   assert.ok(/case 'charm': \{[\s\S]{0,400}class="boon"[\s\S]{0,200}class="price"/.test(mainSrc));
+});
+
+// ---- burning is visible: Ember's flames set mice on fire and the ticks are shown
+t('Ember sets mice on fire and the burn ticks show as small orange numbers twice a second', () => {
+  const g = newGame({ seed: 21, unlocked: ['tabby', 'ember'] });
+  addCat(g, 'ember'); g.mods = calcMods(g);
+  const e = makeEnemy(g, 'mouse', 1, { x: 330 }); e.hp = e.maxHp = 1e6; g.enemies.push(e);
+  hurtEnemy(g, e, 10, { burn: { dps: 0.5, t: 2 }, mult: 1 });
+  assert.ok(e.burn && e.burn.t === 2, 'the cone lights the mouse');
+  g.ev.length = 0;
+  g.state = 'fight';
+  const hp0 = e.hp;
+  for (let i = 0; i < 90; i++) { g.spawnLeft = 0; g.queue = []; step(g, DT); }
+  assert.ok(e.hp < hp0, 'it burns for damage');
+  const dots = g.ev.filter((x) => x.k === 'dmg' && x.dot === 'burn');
+  assert.ok(dots.length >= 2 && dots.length <= 5, 'about two numbers a second over 1.5s, got ' + dots.length);
+  assert.ok(dots.every((x) => x.v > 0));
+  assert.ok(Math.abs(dots.reduce((a, x) => a + x.v, 0) - (hp0 - e.hp)) < hp0 - e.hp + 1e-6, 'the numbers add up to the burn damage');
+});
+
+t('burning mice draw flame tongues and embers, and the drain shows dot numbers small and coloured', () => {
+  assert.ok(/function drawFlames\(e, y, t\)[\s\S]*#ffe27a[\s\S]*quadraticCurveTo[\s\S]*k: 'sp'/.test(mainSrc));
+  assert.ok(/if \(e\.burn\) drawFlames\(e, y, t\)/.test(mainSrc));
+  assert.ok(/if \(e\.dot\) \{[\s\S]{0,300}'#ff9a3a' : '#8be05a', 11, 0\.55/.test(mainSrc));
 });
 
 console.log(n + ' tests passed');

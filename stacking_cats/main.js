@@ -2012,6 +2012,10 @@ function specialVfx(e, p, col) {
 function handle(e) {
   switch (e.k) {
     case 'dmg':
+      if (e.dot) {   // burn and poison ticks: small, coloured, short, and dropped when the screen is already busy
+        if (fx.length < fxCap * 0.7 && e.v >= 0.5) txtFx(e.x, e.y, Math.max(1, Math.round(e.v)), e.dot === 'burn' ? '#ff9a3a' : '#8be05a', 11, 0.55);
+        break;
+      }
       if (e.v >= 1) txtFx(e.x, e.y, Math.round(e.v), e.crit ? '#ffe14d' : '#ffffff', e.crit ? 24 : 14, e.crit ? 0.95 : 0.65);
       if (e.crit) { sparks(e.x, e.y, 6, '#ffe14d', 180, 0.3); hit(0.03); shake = Math.max(shake, 2.5); buzz('crit'); }
       break;
@@ -2470,6 +2474,20 @@ function drawMound(e, t) {
   ctx.beginPath(); ctx.ellipse(e.x, e.y + 2, 17, 7 + Math.sin(t * 9 + e.t) * 1.2, 0, Math.PI, TAU); ctx.fill(); ctx.stroke();
   if (Math.random() < 0.1) smoke(e.x + (Math.random() - 0.5) * 20, e.y, 1, 4, '#9a7a58');
 }
+// a burning mouse wears flame tongues (more of them on a big mouse) and throws embers, so the burn is seen, not only a tint
+function drawFlames(e, y, t) {
+  const n = gfx >= 2 ? (e.w > 50 ? 5 : 4) : 2, base = y - e.h * 0.02;
+  add(); glow(e.x + Math.sin(t * 20) * 3, y - e.h * 0.55, e.w * 0.6, '#ff6a1f', 0.32); norm();   // a warm halo, kept faint so the mouse is not washed out
+  for (let i = 0; i < n; i++) {
+    const ph = t * 13 + i * 2.1 + e.uid, bx = e.x + (n === 1 ? 0 : (i / (n - 1) - 0.5)) * e.w * 0.95, h = e.h * (0.85 + 0.3 * Math.sin(ph)), w = Math.max(7, e.w * 0.2), sw = Math.sin(ph * 0.8) * w * 0.8;
+    for (const [sc, col, al] of [[1, '#e8480f', 0.92], [0.72, '#ff9a1f', 0.95], [0.4, '#ffe27a', 1]]) {   // red, orange, yellow core: solid colours so they read on pale fur
+      ctx.globalAlpha = al; ctx.fillStyle = col;
+      ctx.beginPath(); ctx.moveTo(bx - w * sc, base); ctx.quadraticCurveTo(bx - w * 0.9 * sc, base - h * sc * 0.55, bx + sw * sc, base - h * sc); ctx.quadraticCurveTo(bx + w * 0.9 * sc, base - h * sc * 0.55, bx + w * sc, base); ctx.closePath(); ctx.fill();
+    }
+  }
+  norm();
+  if (gfx >= 1 && fx.length < fxCap * 0.8 && Math.random() < 0.22) spawnFx({ k: 'sp', x: e.x + (Math.random() - 0.5) * e.w * 0.8, y: y - e.h * (0.4 + Math.random() * 0.6), vx: (Math.random() - 0.5) * 40, vy: -80 - Math.random() * 60, col: Math.random() < 0.5 ? '#ffb347' : '#ff7a2b', life: 0.6, max: 0.6 });
+}
 function drawEnemy(e, t) {
   if (e.dead) return;
   if (e.under) { drawMound(e, t); return; }
@@ -2516,7 +2534,7 @@ function drawEnemy(e, t) {
   }
   if (e.slowT > 0 && e.slow > 0 && !e.boss) { add(); glow(e.x, y - e.h * 0.5, e.w * 0.9, '#8fd3ff', 0.4); norm(); if (Math.random() < 0.06) spawnFx({ k: 'sp', x: e.x + (Math.random() - 0.5) * e.w, y: y - e.h * (0.3 + Math.random() * 0.6), vx: (Math.random() - 0.5) * 50, vy: -20, col: '#dff4ff', life: 0.5, max: 0.5 }); }
   if (e.boss) { add(); glow(e.x, e.y + 2, 120, '#ff3a3a', 0.1 + 0.06 * Math.sin(t * 3) + (1 - e.hp / e.maxHp) * 0.14); norm(); }
-  if (e.burn) { add(); glow(e.x + Math.sin(t * 20) * 3, y - e.h * 0.6, e.w * 0.6, '#ff7a2b', 0.5); norm(); }
+  if (e.burn) drawFlames(e, y, t);
   if (e.stun > 0 && !e.boss) { ctx.fillStyle = '#ffe14d'; for (let k = 0; k < 3; k++) { const an = t * 6 + k * 2.1; ctx.beginPath(); ctx.arc(e.x + Math.cos(an) * 10, top + Math.sin(an) * 3, 2.2, 0, TAU); ctx.fill(); } }
   if (e.poison) { ctx.fillStyle = '#8be05a'; ctx.beginPath(); ctx.arc(e.x + 12, y - e.h * 0.9 + Math.sin(t * 6) * 2, 3, 0, TAU); ctx.fill(); }
   if (e.shield > 0 && !e.boss) {
