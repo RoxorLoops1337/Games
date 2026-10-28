@@ -1363,4 +1363,10 @@ t('recruiting a cat bursts out of its card on both pick screens', () => {
   assert.equal(js.split('recruitBurst(el, r.merged)').length - 1, 2, 'start pick and nest reward both burst');
 });
 
+t('a nest banner slams in with a shake and a chapter start flashes gold', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8'), css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(/BANSLAM START[\s\S]*#banner\.boss\.show\{animation:banslam[\s\S]*nomotion #banner\.boss\.show[\s\S]*BANSLAM END/.test(css));
+  assert.ok(/if \(motionOn\(\)\) \{\s*if \(boss\) \{ shake = Math\.max\(shake, 7\)[\s\S]{0,400}isChapterStart\(g\.wave\)\) \{ screenFlash/.test(js));
+});
+
 console.log(`${n} tests passed`);
