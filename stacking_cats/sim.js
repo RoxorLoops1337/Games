@@ -3,7 +3,7 @@
 import {
   CATS, CAT_BY_ID, STARTERS, SNACKS, SNACK_BY_ID, ENEMY_TYPES, NESTS,
   MAX_STACK, MAX_BENCH, BOSS_EVERY, LVL_MUL, AURA_MUL, BASE_HP, BASE_DMG, TEMP_WAVES,
-  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, BOXES, BOX_BY_ID, COIN_SCALE, itemSlots, kingdomBonuses, emptyKingdom, COIN,
+  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, CHARMS, CHARM_BY_ID, MAX_STASH, SELL_VALUE, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, BOXES, BOX_BY_ID, COIN_SCALE, itemSlots, kingdomBonuses, emptyKingdom, COIN,
   DIFFS, CAT_TAGS, SYNERGIES, ROUTES, ROUTE_BY_ID, DAILY_POOL, masteryBonus, activeSets,
 } from './cats.js';
 
@@ -44,7 +44,7 @@ export function newGame({ seed = 1, unlocked = STARTERS, events = true, kingdom 
     seed, rnd: rngMaker(seed), events, ev: [], unlocked: new Set(unlocked),
     t: 0, wave: 0, state: 'idle', intro: 0, bossWave: false, reward: [],
     cats: [], bench: [], enemies: [], projs: [], pools: [], mines: [],
-    towerX: TOWER_X, scroll: 0, perm: [], temp: [], nineLives: meta.nine, uid: 1,
+    towerX: TOWER_X, scroll: 0, perm: [], charms: [], temp: [], nineLives: meta.nine, uid: 1,
     zoom: meta.zoomStart, zoomT: 0, queue: [], qT: 0, waveKO: false, mods: null, tickT: 0,
     run: { diff: difficulty, daily: daily ? daily.day : null, synMax: 0, setMax: 0, nine: 0, kills: 0, bossKills: 0, recruits: 0, merges: 0, lvl3: 0, lvl3Of: {}, snacks: 0, temp: 0, flawless: 0, wave: 0, coins: 0, dmg: 0, biggest: 0, taken: 0, healed: 0, items: 0, byCat: {} },
   };
@@ -87,6 +87,7 @@ export function calcMods(g) {
     if (p.dr) m.dr += p.dr * a;
     if (p.snack) m.snackMul += p.snack * a;
   }
+  for (const id of g.charms || []) { const ch = CHARM_BY_ID[id]; for (const k in ch.fx) m[k] += ch.fx[k]; for (const k in ch.cost) if (k !== 'hurt') m[k] += ch.cost[k]; }   // Shady Charms count before snacks so a stronger snack bite applies to them too
   const apply = (id) => {
     const s = SNACK_BY_ID[id];
     for (const k in s.fx) m[k] += s.fx[k] * m.snackMul;
@@ -372,6 +373,7 @@ export function explainMods(g) {
   const add = (stat, label, v) => { if (v) (rows[stat] = rows[stat] || []).push({ label, v }); };
   const K = g.meta, sm = calcMods(g).snackMul;
   for (const k of ['dmg', 'hp', 'haste', 'range', 'crit', 'waveHeal']) add(k, 'Kingdom', K[k]);
+  for (const id of g.charms || []) { const ch = CHARM_BY_ID[id]; for (const k in ch.fx) add(k, ch.name, ch.fx[k]); for (const k in ch.cost) if (k !== 'hurt') add(k, ch.name, ch.cost[k]); }
   for (const id of g.perm) { const s = SNACK_BY_ID[id]; for (const k in s.fx) add(k, s.name, s.fx[k] * sm); }
   for (const t of g.temp) { const s = SNACK_BY_ID[t.id]; for (const k in s.fx) add(k, s.name + ' (' + t.left + 'w)', s.fx[k] * sm); }
   for (const c of g.cats) {
@@ -1418,11 +1420,9 @@ export function rollEvent(g) {
       ev.options.push({ k: 'reroll', cost: 0, bonusCoins: cc(30 + g.wave * 2) });
       break;
     case 'deal': {
-      const epic = ITEMS.filter((i) => i.rarity === 'epic'), rare = ITEMS.filter((i) => i.rarity === 'rare');
-      ev.options.push({ k: 'curse', item: epic[Math.floor(g.rnd() * epic.length)].id, hurt: 0.12 });
-      ev.options.push({ k: 'curse', item: rare[Math.floor(g.rnd() * rare.length)].id, hurt: 0.05 });
-      const legend = ITEMS.filter((i) => i.rarity === 'legendary');
-      ev.options.push({ k: 'curse', item: legend[Math.floor(g.rnd() * legend.length)].id, hurt: 0.2 });
+      // three different charms the team does not wear yet: each is a boon for the whole run with a price that bites for the whole run
+      const free = CHARMS.filter((c) => !(g.charms || []).includes(c.id));
+      for (let n = 0; n < 3 && free.length; n++) ev.options.push({ k: 'charm', id: free.splice(Math.floor(g.rnd() * free.length), 1)[0].id });
       ev.options.push({ k: 'leave' });
       break;
     }
@@ -1468,7 +1468,12 @@ export function chooseEvent(g, idx) {
       spend(o.cost);
       if (g.rnd() < o.chance) { takeItem(g, o.item); msg = `Lucky! ${ITEM_BY_ID[o.item].name}`; } else msg = 'The shrine stays quiet';
       ev.done = true; break;
-    case 'curse': takeItem(g, o.item); g.hurtMul *= 1 + o.hurt; msg = `${ITEM_BY_ID[o.item].name}, but mice bite ${Math.round(o.hurt * 100)}% harder now`; ev.done = true; break;
+    case 'charm': {
+      const ch = CHARM_BY_ID[o.id], before = snapshotMax(g);
+      g.charms.push(ch.id); if (ch.cost.hurt) g.hurtMul *= 1 + ch.cost.hurt;
+      g.run.charms = (g.run.charms || 0) + 1;
+      refreshHp(g, before); msg = `${ch.name}: the whole team, for the rest of the run`; ev.done = true; break;
+    }
     case 'snack': eatSnack(g, o.id); msg = `${SNACK_BY_ID[o.id].name} eaten`; ev.done = true; break;
     case 'toss':
       spend(o.cost); o.sold = true;

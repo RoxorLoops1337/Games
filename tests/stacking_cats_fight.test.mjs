@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   newGame, addCat, startWave, step, makeEnemy, calcMods, useSpecial, specialReady, autoSpecialPick, setFocus, rollEvent, chooseEvent, eventDue, aliveCats, catMaxHp, runSeconds, DT,
 } from '../stacking_cats/sim.js';
-import { ACHIEVEMENTS, CATS, SPECIALS, EVENTS, ENEMY_TYPES, NESTS, ITEM_BY_ID } from '../stacking_cats/cats.js';
+import { ACHIEVEMENTS, CATS, SPECIALS, EVENTS, ENEMY_TYPES, NESTS, ITEM_BY_ID, CHARM_BY_ID } from '../stacking_cats/cats.js';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
@@ -161,7 +161,7 @@ t('the deal and training events change the run as promised', () => {
   for (let s = 1; s < 200; s++) {
     const g = newGame({ seed: s, unlocked: CATS.map((c) => c.id) }); addCat(g, 'mochi'); g.wave = 6; g.bossWave = false;
     const ev = rollEvent(g);
-    if (ev.id === 'deal') { const h = g.hurtMul; assert.ok(chooseEvent(g, 0).ok); assert.ok(g.hurtMul > h); assert.equal(g.stash.length >= 1, true); break; }
+    if (ev.id === 'deal') { const h = g.hurtMul, o = ev.options[0], before = calcMods(g); assert.equal(o.k, 'charm'); assert.ok(chooseEvent(g, 0).ok); assert.deepEqual(g.charms, [o.id]); assert.ok(g.hurtMul >= h && (g.hurtMul > h) === !!CHARM_BY_ID[o.id].cost.hurt); const after = calcMods(g); assert.ok(Object.keys(CHARM_BY_ID[o.id].fx).every((k) => after[k] > before[k]), 'the boon is on for the whole team'); break; }
   }
   for (let s = 1; s < 200; s++) {
     const g = newGame({ seed: s, unlocked: CATS.map((c) => c.id) }); addCat(g, 'mochi'); g.wave = 6; g.bossWave = false;

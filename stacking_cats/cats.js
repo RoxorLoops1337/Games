@@ -676,12 +676,41 @@ export const EVENTS = [
   { id: 'shop', name: 'Wandering Shop', icon: '💰', desc: 'A travelling cat sells supplies. Coins you spend here are not saved for the Kingdom.' },
   { id: 'shrine', name: 'Moon Shrine', icon: '🌙', desc: 'Offer something and the shrine may give back more.' },
   { id: 'rest', name: 'Cozy Campfire', icon: '🔥', desc: 'A warm rest. Free, but only one choice.' },
-  { id: 'deal', name: 'Shady Deal', icon: '🎭', desc: 'A masked mouse offers loot with a catch.' },
+  { id: 'deal', name: 'Shady Deal', icon: '🎭', desc: 'A masked mouse sells charms that help the whole team for the rest of the run. Every boon has a price.' },
   { id: 'dojo', name: 'Training Yard', icon: '🥋', desc: 'Pick one cat to train for the rest of the run.' },
   { id: 'picnic', name: 'Cat Picnic', icon: '🍱', desc: 'A blanket full of snacks. Take one, free.' },
   { id: 'fountain', name: 'Wishing Fountain', icon: '🪙', desc: 'Toss in some coins and make a wish. It may pay back, it may not.' },
 ];
 export const EVENT_BY_ID = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
+
+// ---- Shady Charms: what the masked mouse sells. A charm is not carried by a cat, it works for the whole team for the rest of the run.
+// Every charm has a boon and a price (`fx` adds to the team stats, `hurt` makes every mouse bite that much harder). The boon is always worth
+// a bit more than the price, so a deal is a real choice, never a trap, but the price always bites.
+export const CHARMS = [
+  { id: 'fang',     icon: '\u{1F9B7}', name: "Rat King's Fang",    fx: { dmg: 0.28 },              cost: { hp: -0.18 } },
+  { id: 'pact',     icon: '\u{1F480}', name: 'Berserker Pact',     fx: { haste: 0.22 },            cost: { hurt: 0.10 } },
+  { id: 'tooth',    icon: '\u{1FA99}', name: 'Golden Tooth',       fx: { coin: 0.30 },             cost: { hurt: 0.07 } },
+  { id: 'appetite', icon: '\u{1F357}', name: 'Bottomless Appetite', fx: { snackMul: 0.5 },         cost: { coin: -0.2 } },
+  { id: 'moon',     icon: '\u{1F319}', name: 'Moonlit Bargain',    fx: { crit: 0.12, critMul: 0.4 }, cost: { hp: -0.12 } },
+  { id: 'crown',    icon: '\u{1F451}', name: 'Tin Crown',          fx: { curse: 0.18 },            cost: { hurt: 0.10 } },
+  { id: 'iron',     icon: '\u{1F512}', name: 'Iron Contract',      fx: { dr: 0.12 },               cost: { haste: -0.12 } },
+  { id: 'locket',   icon: '\u{1F496}', name: 'Healing Bargain',    fx: { waveHeal: 0.10 },         cost: { dmg: -0.08 } },
+  { id: 'spyglass', icon: '\u{1F52D}', name: 'Spyglass Deal',      fx: { range: 0.20 },            cost: { hp: -0.10 } },
+];
+export const CHARM_BY_ID = Object.fromEntries(CHARMS.map((c) => [c.id, c]));
+const CHARM_WORDS = {
+  dmg: 'damage', haste: 'attack speed', hp: 'health', crit: 'crit chance', critMul: 'crit damage', dr: 'less damage taken', curse: 'extra damage to mice',
+  waveHeal: 'healing after each wave', snackMul: 'snack strength', coin: 'coins', range: 'range',
+};
+const pct = (v) => Math.round(Math.abs(v) * 100);
+// the lines a card shows, built from the numbers so text and effect can never drift apart: { boon: [...], cost: [...] }
+export function charmLines(c) {
+  const line = (k, v) => `${v < 0 ? '-' : '+'}${pct(v)}% ${CHARM_WORDS[k]}`;
+  return {
+    boon: Object.entries(c.fx).map(([k, v]) => line(k, v)),
+    cost: Object.entries(c.cost).map(([k, v]) => (k === 'hurt' ? `Mice bite ${pct(v)}% harder` : line(k, v))),
+  };
+}
 
 // ================================================================ META 2: cat mastery, challenge ladder, weekly challenge
 // ---- cat mastery: every cat earns XP from use (waves survived in the tower, damage, kills) and levels 1 to 5.

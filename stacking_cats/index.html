@@ -1420,6 +1420,13 @@ body.nomotion .dailybox.rankin{animation:none}
 .seg button{transition:background .15s,transform .12s}.seg button.on{transform:scale(1.04)}
 body.nomotion .tog.flip,body.nomotion .tog.flip i::after{animation:none}
 /* TOGJUICE END */
+/* CHARM START */
+.charm{display:flex;flex-direction:column;gap:5px;margin-top:2px}
+.charm b{display:block;font-weight:800;font-size:13px;line-height:1.25;border-radius:8px;padding:2px 8px}
+.charm .boon b{background:rgba(79,207,122,.3);color:#0f5a2c;border:1.5px solid #2f9f58}.charm .boon b::before{content:'\25B2  '}
+.charm .price b{background:rgba(255,100,100,.22);color:#8e1a1a;border:1.5px solid #d04a4a}.charm .price b::before{content:'\25BC  '}
+.card.ev .charm+.rar,.card.ev .rar{margin-top:6px}
+/* CHARM END */
 /* BOSSJUICE START */
 #bossBar.hit{animation:bosshit .16s ease-out}
 #bossBar.phase{animation:bossphase .6s cubic-bezier(.2,1.6,.4,1)}
