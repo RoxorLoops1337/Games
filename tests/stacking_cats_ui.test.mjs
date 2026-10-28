@@ -1306,4 +1306,12 @@ t('equip and merge juice: every relic landing bursts (more for rarer ones, label
   assert.ok(/label: `LV \$\{a\.lvl\}!`/.test(js), 'a merge says the new level');
 });
 
+t('trophy juice: a trophy toast pops, glows, bursts gold with a cup and plays the fanfare once (no double sound at the call sites)', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  const tb = js.slice(js.indexOf('function toast(txt)'), js.indexOf('const hudCache'));
+  assert.ok(/\^Trophy:/.test(tb) && /domBurst\(/.test(tb) && /sfx\.play\('achieve'/.test(tb), 'burst and fanfare live in toast');
+  assert.ok(!/toast\(`Trophy: \$\{a\.name\}!`\); sfx\.play\('achieve'\)/.test(js), 'call sites do not play it again');
+  assert.ok(/@keyframes trophypop/.test(css) && /@keyframes trophyglow/.test(css), 'styles');
+});
+
 console.log(`${n} tests passed`);

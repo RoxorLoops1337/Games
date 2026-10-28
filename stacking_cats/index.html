@@ -1307,6 +1307,13 @@ body.nomotion .dghost,body.nomotion .dfx{animation:none!important;transition:non
 body.nomotion .overcols *,body.nomotion .earn,body.nomotion .newcats .card{animation:none!important}
 @media (prefers-reduced-motion:reduce){.overcols .stats>div,.overcols .rb,.overcols .rb .bar i,.earn,.newcats .card{animation:none!important}}
 /* ENDJUICE END */
+/* TROPHYJUICE START */
+.toast.trophy{animation:trophypop .7s cubic-bezier(.2,1.8,.4,1) both,trophyglow 1.2s .7s ease-in-out 2}
+@keyframes trophypop{0%{opacity:0;transform:translateY(24px) scale(.5)}60%{opacity:1;transform:translateY(-4px) scale(1.12)}100%{opacity:1;transform:none}}
+@keyframes trophyglow{50%{box-shadow:0 0 26px 6px rgba(255,214,90,.9)}}
+body.nomotion .toast.trophy{animation:none}
+@media (prefers-reduced-motion:reduce){.toast.trophy{animation:none}}
+/* TROPHYJUICE END */
 </style>
 </head>
 <body>

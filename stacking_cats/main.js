@@ -1618,6 +1618,7 @@ function toast(txt) {
   const el = document.createElement('div');
   el.className = /^Trophy:/.test(txt) ? 'toast trophy' : 'toast'; el.textContent = txt;
   $('toasts').appendChild(el);
+  if (/^Trophy:/.test(txt)) { sfx.play('achieve', 0.9); buzz('jackpot'); requestAnimationFrame(() => { const r = el.getBoundingClientRect(); if (r.width) domBurst(r.left + r.width / 2, r.top + r.height / 2, 24, ['#ffd23f', '#fff6b0', '#ff9a3a', '#fff'], '\uD83C\uDFC6'); }); }   // a trophy pops with a gold burst and the cup rises above it
   setTimeout(() => el.remove(), 3300);
   while ($('toasts').children.length > 2) $('toasts').firstChild.remove();
 }
@@ -1894,7 +1895,7 @@ function handle(e) {
     case 'kill': {
       if (e.quiet) { puff(e.x, e.y, 3, '#ffffff', 60, 0.4); break; }
       combo++; comboT = 2.4; comboPulse = 1; maxComboRun = Math.max(maxComboRun, combo); cheerRandom(0.12);
-      if (combo === 50) for (const a of checkAch({ ...g.run, maxCombo: combo })) { toast(`Trophy: ${a.name}!`); sfx.play('achieve'); }
+      if (combo === 50) for (const a of checkAch({ ...g.run, maxCombo: combo })) toast(`Trophy: ${a.name}!`);
       spawnFx({ k: 'corpse', type: e.type, elite: e.elite, x: e.x, y: e.y, vx: 60 + Math.random() * 90, vy: -230 - Math.random() * 90, rot: 0, vr: 6 + Math.random() * 8, life: 0.7, max: 0.7 });
       puff(e.x, e.y, e.elite ? 14 : 6, e.elite ? '#ffd23f' : '#ffffff', 110, 0.5, 4);
       sparks(e.x, e.y, e.elite ? 12 : 5, e.elite ? '#ffd23f' : '#fff6b0', 190, 0.3);
