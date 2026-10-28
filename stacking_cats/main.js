@@ -234,11 +234,13 @@ function coachClear(el, hl) {
   el.style.width = bw + 'px';   // keep the measured width: shrink-to-fit would squeeze a bubble moved near the right edge into a thin column
   el.style.right = ''; el.style.transform = ''; el.style.left = Math.round(best.x) + 'px'; el.style.top = Math.round(best.y) + 'px';
 }
+let coverScreen = false, coverSkip = 0, coverDt = 0;
 function setScreen(html, cls = '') {
   hideCoach();
   if (html) { const bn = document.getElementById('banner'); if (bn) bn.className = ''; }   // a banner left under a blurred panel shows up as a mirrored ghost
   screenEl.innerHTML = html ? `<div class="screen ${cls}">${html}</div>` : '';
   document.body.classList.toggle('scr', !!html);       // the HUD steps back while a menu is open
+  coverScreen = !!html && !/\bclear\b/.test(cls);   // a dimmed, blurred menu hides the scene (the title is 'clear' and keeps it moving)
   paintThumbs(screenEl);
   if (html) {   // a labelled dialog that takes focus: keyboard and screen reader players learn that a menu opened
     const s = screenEl.firstElementChild, h = s.querySelector('h2, .logo');
@@ -3060,7 +3062,10 @@ function frame(ts) {
     if (g && g.ev.length) g.ev.length = 0;
     updateFx(paused ? 0 : dt);
   }
-  render(dt);
+  // under a dimmed menu the scene only needs a third of the frames: the GPU skips two re-blurs out of three and a phone runs cooler
+  coverDt += dt;
+  if (coverScreen && (paused || mode !== 'play') && ++coverSkip % 3) { updateHud(dt); requestAnimationFrame(frame); return; }
+  render(coverDt); coverDt = 0;
   updateHud(dt);
   requestAnimationFrame(frame);
 }

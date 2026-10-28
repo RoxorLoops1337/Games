@@ -1408,4 +1408,17 @@ t('a daily or weekly rank pops in and a top three place bursts', () => {
   assert.ok(/RANKIN START[\s\S]*\.dailybox\.rankin[\s\S]*nomotion \.dailybox\.rankin[\s\S]*RANKIN END/.test(css));
 });
 
+t('startup and menus are lean: every module is preloaded in parallel, and a covered scene renders at a third of the rate', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8'), html = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  // every module main.js reaches is preloaded, so a new import never silently falls back to one request per level
+  const seen = new Set(), todo = ['main.js'];
+  while (todo.length) {
+    const f = todo.pop(); if (seen.has(f)) continue; seen.add(f);
+    for (const m of readFileSync(new URL('../stacking_cats/' + f, import.meta.url), 'utf8').matchAll(/(?:import|export)[^;'"]*?from\s*['"]\.\/([\w.]+)['"]|import\s*['"]\.\/([\w.]+)['"]/g)) todo.push(m[1] || m[2]);
+  }
+  for (const f of seen) assert.ok(html.includes(`<link rel="modulepreload" href="${f}">`), 'no modulepreload for ' + f);
+  assert.ok(/coverScreen = !!html && !\/\\bclear\\b\/\.test\(cls\)/.test(js));
+  assert.ok(/coverScreen && \(paused \|\| mode !== 'play'\) && \+\+coverSkip % 3\) \{ updateHud\(dt\); requestAnimationFrame\(frame\); return; \}\s*render\(coverDt\); coverDt = 0;/.test(js));
+});
+
 console.log(`${n} tests passed`);
