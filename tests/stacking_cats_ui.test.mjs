@@ -814,7 +814,6 @@ t('new sfx (waveclear, nestdown, merge sparkle, back, pip) exist, are wired into
   assert.ok(!au.includes(String.fromCharCode(0x2014)), 'no literal em dash in audio.js');
 });
 
-console.log(`${n} tests passed`);
 
 t('backpack cells tell rarity without colour: one pip more per tier, a star for mythic', () => {
   const css = readFileSync('stacking_cats/index.html', 'utf8');
@@ -1148,8 +1147,8 @@ t('epic, legendary and mythic relic cards have a solid colour (the grain rule on
 
 t('arrange drag and drop: pointer handlers with capture, a ghost, drop targets, sim calls and the tap fallback all stay', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8'), html = readFileSync('stacking_cats/index.html', 'utf8');
-  assert.ok(/function bindDrag\(root, h\)[\s\S]{0,400}'pointerdown'[\s\S]{0,900}setPointerCapture[\s\S]{0,1500}'pointermove'[\s\S]{0,200}'pointerup'[\s\S]{0,200}'pointercancel'/.test(js), 'pointer events with capture');
-  assert.ok(/elementFromPoint/.test(js) && /className = 'dghost'/.test(js), 'hit test and a floating ghost');
+  assert.ok(/function bindDrag\(root, h\)[\s\S]{0,400}'pointerdown'[\s\S]{0,900}setPointerCapture[\s\S]{0,3500}'pointermove'[\s\S]{0,200}'pointerup'[\s\S]{0,200}'pointercancel'/.test(js), 'pointer events with capture');
+  assert.ok(/elementFromPoint/.test(js) && /className = 'dghost lift'/.test(js), 'hit test and a floating ghost');
   assert.ok(/act === 'equip'\) \{ equipTo\(s\.i, t\.uid\)/.test(js) && /S\.equipItem\(g, idx, uid\)/.test(js), 'dropping a relic on a cat calls equipItem');
   assert.ok(/S\.moveItem\(g, s\.uid, s\.i, t\.uid\)/.test(js) && /S\.unequipItem\(g, s\.uid, s\.i\)/.test(js), 'worn relics move and unequip');
   assert.ok(/S\.mergeCats\(g, a\.uid, b\.uid\)/.test(js) && /S\.swapCats\(g, a\.uid, b\.uid\)/.test(js) && /S\.moveCat\(g, s\.uid, t\.zone\)/.test(js), 'cats merge, swap and move by drop');
@@ -1270,3 +1269,15 @@ t('lootbox juice: the box charges and bursts, the card stays covered a rarity-sc
   assert.ok(/\.cardback/.test(css) && /@keyframes cardflip/.test(css) && /@keyframes stampin/.test(css) && /@keyframes boxcharge/.test(css) && /@keyframes jolt/.test(css), 'styles');
   assert.ok(/save\.opt\.shake > 0/.test(js), 'the screen jolt respects the shake setting');
 });
+
+t('drag juice: the ghost lifts with a ring, leans into the motion and trails sparkles; a good drop drops in with a ring, a bad one flies home; reduced motion skips it all', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  const body = js.slice(js.indexOf('function bindDrag'), js.indexOf('function bindDrag') + 3600);
+  assert.ok(/dghost lift/.test(body) && /pickring/.test(body) && /--tilt/.test(body) && /trail\(/.test(body), 'lift, lean and trail');
+  assert.ok(/h\.valid \? h\.valid\(src, t\)/.test(body) && /'dropin'/.test(body) && /'goback'/.test(body), 'drop in or go back');
+  assert.ok(/save\.opt\.motion/.test(body), 'respects reduced motion');
+  assert.ok(/valid: \(s, t\) => validDrop\(s, t\)/.test(js), 'the Arrange screen says which drops are valid');
+  for (const k of ['ghostlift', 'dring', 'dtrail', 'targetpulse']) assert.ok(new RegExp('@keyframes ' + k).test(css), k);
+});
+
+console.log(`${n} tests passed`);

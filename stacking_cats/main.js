@@ -1140,13 +1140,26 @@ function showStats(back) {
 // pixels lifts the thing under it (a floating ghost follows the pointer), the hooks say what is under the pointer and what a drop does.
 let dragSuppress = 0;
 screenEl.addEventListener('click', (e) => { if (performance.now() < dragSuppress) { e.stopPropagation(); e.preventDefault(); } }, true);   // the click that ends a drag is not a tap
+// short-lived DOM effects on the stage for the drag and drop: a ring that grows and fades, and a sparkle that drifts down and fades
+function dfxRing(cx, cy, cls) {
+  if (!save.opt.motion) return;
+  const p = stagePoint({ clientX: cx, clientY: cy }), el = document.createElement('i');
+  el.className = 'dfx ' + cls; el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+  app.appendChild(el); setTimeout(() => el.remove(), 520);
+}
+function trail(cx, cy) {
+  const p = stagePoint({ clientX: cx, clientY: cy }), el = document.createElement('i');
+  el.className = 'dfx dtrail'; el.style.left = (p.x + (Math.random() - 0.5) * 14) + 'px'; el.style.top = (p.y + (Math.random() - 0.5) * 14) + 'px';
+  el.style.setProperty('--dx', ((Math.random() - 0.5) * 24).toFixed(0) + 'px');
+  app.appendChild(el); setTimeout(() => el.remove(), 480);
+}
 function bindDrag(root, h) {
   root.addEventListener('pointerdown', (e) => {
     if ((e.pointerType === 'mouse' && e.button !== 0) || e.isPrimary === false) return;
     const src = h.pick(e);
     if (!src) return;
     const id = e.pointerId, sx = e.clientX, sy = e.clientY, touch = e.pointerType !== 'mouse';
-    let on = false, ghost = null, over = null;
+    let on = false, ghost = null, over = null, lastX = 0, tilt = 0, lastSpark = 0;
     try { src.el.setPointerCapture(id); } catch (err) { /* capture is a nicety */ }
     const under = (ev) => h.hit(document.elementFromPoint(ev.clientX, ev.clientY), src);
     const same = (a, b) => (a && b ? a.el === b.el : a === b);
@@ -1155,11 +1168,17 @@ function bindDrag(root, h) {
       if (!on) {
         if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 7) return;
         on = true;
-        ghost = document.createElement('div'); ghost.className = 'dghost'; ghost.innerHTML = h.ghost(src);
+        ghost = document.createElement('div'); ghost.className = 'dghost lift'; ghost.innerHTML = h.ghost(src);
         app.appendChild(ghost); h.start(src);
+        const sr = src.el.getBoundingClientRect(); dfxRing(sr.left + sr.width / 2, sr.top + sr.height / 2, 'pickring');   // a puff where it was lifted
       }
       const p = stagePoint(ev);
-      if (isFinite(p.x) && isFinite(p.y)) { ghost.style.left = p.x + 'px'; ghost.style.top = (p.y - (touch ? 34 : 0)) + 'px'; }
+      if (isFinite(p.x) && isFinite(p.y)) {
+        ghost.style.left = p.x + 'px'; ghost.style.top = (p.y - (touch ? 34 : 0)) + 'px';
+        // the ghost leans into the way it is being carried and leaves a short trail of sparkles
+        const vx = p.x - lastX; lastX = p.x; tilt = tilt * 0.7 + Math.max(-16, Math.min(16, vx * 1.1)) * 0.3;
+        if (save.opt.motion) { ghost.style.setProperty('--tilt', (tilt - 4).toFixed(1) + 'deg'); if (performance.now() - lastSpark > 38) { lastSpark = performance.now(); trail(ev.clientX, ev.clientY - (touch ? 34 * (cv.getBoundingClientRect().width / W) : 0)); } }
+      }
       const t = under(ev);
       if (!same(t, over)) { h.over(t, over, src); over = t; }
     };
@@ -1169,7 +1188,14 @@ function bindDrag(root, h) {
       if (!on) return;
       dragSuppress = performance.now() + 450;
       const t = cancel ? null : under(ev);
-      ghost.remove(); h.over(null, over, src); h.end(src, t);
+      const ok = !!(t && (h.valid ? h.valid(src, t) : true));
+      const gh = ghost;
+      if (save.opt.motion) {   // a good drop: it drops in with a ring; a bad one: it flies home to where it was lifted from
+        if (ok) { gh.classList.add('dropin'); dfxRing(ev.clientX, ev.clientY, 'dropring'); }
+        else { const r = src.el.getBoundingClientRect(), q = stagePoint({ clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }); gh.classList.add('goback'); gh.style.left = q.x + 'px'; gh.style.top = q.y + 'px'; }
+        setTimeout(() => gh.remove(), 240);
+      } else gh.remove();
+      h.over(null, over, src); h.end(src, t);
     };
     const up = (ev) => end(ev, false), cn = (ev) => end(ev, true);
     src.el.addEventListener('pointermove', move); src.el.addEventListener('pointerup', up); src.el.addEventListener('pointercancel', cn);
@@ -1303,6 +1329,7 @@ function showTower(back, opt = {}) {
         return null;
       },
       hit: (el) => hitOf(el),
+      valid: (s, t) => validDrop(s, t),
       ghost: (s) => {
         if (s.k === 'cat') { const c = S.findCat(g, s.uid); return `<span class="gc"><img src="${thumbURL(c.id)}" alt=""><b>${CAT_BY_ID[c.id].name}</b></span>`; }
         const id = s.k === 'bag' ? g.stash[s.i] : S.findCat(g, s.uid).items[s.i];
