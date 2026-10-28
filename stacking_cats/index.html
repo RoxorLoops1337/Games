@@ -1411,6 +1411,15 @@ body.nomotion .spb.justready,body.nomotion .spb.fired{animation:none}
 .dailybox.rankin{animation:rankin .55s cubic-bezier(.2,1.5,.4,1)}
 body.nomotion .dailybox.rankin{animation:none}
 /* RANKIN END */
+/* TOGJUICE START */
+.tog i::after{transition:left .22s cubic-bezier(.3,1.6,.5,1),width .12s}
+.tog.flip i::after{animation:togsquash .22s ease-out}
+@keyframes togsquash{0%{width:18px}40%{width:26px}100%{width:18px}}
+.tog.flip{animation:togpop .22s ease-out}
+@keyframes togpop{0%{filter:brightness(1.5)}100%{filter:none}}
+.seg button{transition:background .15s,transform .12s}.seg button.on{transform:scale(1.04)}
+body.nomotion .tog.flip,body.nomotion .tog.flip i::after{animation:none}
+/* TOGJUICE END */
 /* BOSSJUICE START */
 #bossBar.hit{animation:bosshit .16s ease-out}
 #bossBar.phase{animation:bossphase .6s cubic-bezier(.2,1.6,.4,1)}

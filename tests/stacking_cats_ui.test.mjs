@@ -1428,4 +1428,13 @@ t('pausing blips low and resuming says GO! with a ring and a cat hop, without a 
   assert.ok(!/resume:[\s\S]{0,500}setTimeout/.test(js.slice(js.indexOf('function showPause'), js.indexOf('function showPause') + 1800)), 'no countdown delay on resume');
 });
 
+t('settings switches and segments change in place with a click that says on or off', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8'), css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  const body = js.slice(js.indexOf('    opt: (d, el) => {'), js.indexOf('    install: () =>'));
+  assert.ok(/tog: \(d, el\) => \{[\s\S]*classList\.toggle\('on', on\)[\s\S]*sfx\.play\(on \? 'pick' : 'pip'/.test(body), 'a switch flips its own class and sounds different on and off');
+  assert.ok(!/tog: \(d, el\)[\s\S]*?showSettings\(back\); \}\s*el\.classList/.test(body) || /isConnected\) \{ showSettings\(back\); return; \}/.test(body), 'the rebuild is only a fallback');
+  assert.ok(/d\.k === 'diff'\) \{ const note[\s\S]{0,120}DIFFS\[save\.diff\]\.desc/.test(body), 'the difficulty note follows the choice');
+  assert.ok(/TOGJUICE START[\s\S]*togsquash[\s\S]*nomotion \.tog\.flip[\s\S]*TOGJUICE END/.test(css));
+});
+
 console.log(`${n} tests passed`);
