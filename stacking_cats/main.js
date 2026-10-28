@@ -3,7 +3,7 @@ import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS, SPECIAL_TEXT,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
   ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, BOXES, BOX_BY_ID, RARITY_CHEER, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
-  TEMP_WAVES, CHARM_BY_ID, charmLines, DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
+  TEMP_WAVES, DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
   masteryProgress, masteryMap, masteryBonus, MASTERY_MAX, DIFF_ORDER, LADDER_RULES, LADDER_WAVE, ladderTier, ladderUnlocked, diffAllowed, ladderClears, weekKey, weekInfo,
 } from './cats.js';
 import { COSMETICS, COSMETIC_BY_ID, SLOTS, SLOT_NAMES, lookOf, lookSig, drawLook, drawCosmetic, canWear, buyCosmetic, toggleWear, isOwned } from './cosmetics.js';
@@ -11,6 +11,7 @@ import { createKingdomScene } from './kingdom_scene.js';
 import { encodeSave, decodeSave } from './savecode.js';
 import { dailyScore, fetchBoard, submitScore, submitRun, rankOf, dailyStreak, passedBest, milestoneLine, bestTag, nameOk, cleanName, suggestName } from './daily.js';
 import { drawBuilding } from './art_kingdom.js';
+import { RELIC_BY_ID, RELIC_THEMES, relicLines, DEAL_CATCH } from './relics.js';
 import * as S from './sim.js';
 import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
@@ -567,6 +568,7 @@ function showHow(back) {
     ${row('\uD83C\uDFAF', '<b>Pick a target.</b> Tap a mouse and your cats shoot it first.')}
     ${row('\uD83D\uDC00', `<b>Nests.</b> Every ${BOSS_EVERY}th wave you fight a mouse nest. Destroy it to free a cat and win loot.`)}
     ${row('\u2728', `<b>Join two cats.</b> Two of the same cat join into one stronger cat (up to Lv 3). The tower holds ${MAX_STACK} cats and the bench holds ${MAX_BENCH}.`)}
+    ${row('\uD83D\uDD2E', '<b>Relics.</b> After every second nest, pick a relic for the whole run. Some help Fire or Lightning cats, some your top or bottom cat.')}
     ${row('\uD83C\uDF81', '<b>Lootboxes.</b> A box holds an item. An item makes one cat stronger. Tap Equip it, then tap the cat that should wear it.')}
     ${row('\uD83E\uDE99', '<b>Coins</b> are saved. Spend them in the <b>Kingdom</b> (on the title screen) to make every new run stronger.')}
     ${row('\uD83D\uDD25', '<b>Cat teams.</b> Cats of the same kind help each other. Small badges next to the wave number show these bonuses.')}
@@ -1023,7 +1025,7 @@ function nextReward() {
   const r = queue.shift();
   rewardChoices = null;
   if (!r) { beginWave(); return; }
-  if (r === 'finale') showFinale(); else if (r === 'event') showEvent(); else if (r === 'cat') showCatReward(); else if (r.startsWith('box:')) showBox(r.slice(4)); else if (r === 'route') showRouteReward(); else showSnackReward();
+  if (r === 'finale') showFinale(); else if (r === 'event') showEvent(); else if (r === 'cat') showCatReward(); else if (r.startsWith('box:')) showBox(r.slice(4)); else if (r === 'route') showRouteReward(); else if (r === 'relic') showRelicReward(); else showSnackReward();
 }
 
 function reportHtml() {
@@ -1068,9 +1070,9 @@ function eventOptionHtml(o, i) {
     case 'reroll': return head('&#128302;', o.bonusCoins ? 'Stay up late' : 'Reroll Token', o.bonusCoins ? `+1 reroll and +${o.bonusCoins} coins.` : '+1 reroll for later choices.');
     case 'blood': return head(it.icon, 'Offer blood', `Every cat loses ${Math.round(o.hp * 100)}% health. The shrine gives <b>${it.name}</b> (${it.desc}).`, relicNotes(o.item));
     case 'gamble': return head(it.icon, 'Make a wish', `${Math.round(o.chance * 100)}% chance of <b>${it.name}</b> (${it.desc}). Coins are gone either way.`, relicNotes(o.item));
-    case 'charm': {
-      const ch = CHARM_BY_ID[o.id], ln = charmLines(ch);
-      return head(ch.icon, ch.name, `<span class="charm"><span class="boon">${ln.boon.map((x) => `<b>${x}</b>`).join('')}</span><span class="price">${ln.cost.map((x) => `<b>${x}</b>`).join('')}</span></span>`, '<div class="rar rare">whole run</div>');
+    case 'relic': {
+      const ch = RELIC_BY_ID[o.id], ln = relicLines(ch), cost = o.catch ? [`Mice bite ${Math.round(o.catch * 100)}% harder`] : ln.cost;
+      return head(ch.icon, ch.name, `<span class="charm"><span class="boon">${ln.boon.map((x) => `<b>${x}</b>`).join('')}</span><span class="price">${cost.map((x) => `<b>${x}</b>`).join('')}</span></span>`, `<div class="rar rare">${RELIC_THEMES[ch.theme]} relic, whole run</div>`);
     }
     case 'snack': { const sn = SNACK_BY_ID[o.id]; return head(sn.icon, sn.name, sn.desc, `<div class="rar ${sn.kind === 'perm' ? 'rare' : 'common'}">${sn.kind === 'perm' ? 'whole run' : sn.kind === 'temp' ? '3 waves' : 'instant'}</div>`); }
     case 'toss': return head('&#129689;', 'Toss ' + o.cost + ' coins', `${Math.round(o.chance * 100)}% chance to get ${o.prize} coins back.`);
@@ -1267,6 +1269,30 @@ function showSnackReward() {
   };
 }
 
+function relicCard(id) {
+  const r = RELIC_BY_ID[id];
+  return `<div class="card relic ${r.rarity}" data-act="pickRelic" data-id="${id}"><div class="ic">${r.icon}</div><h3>${r.name}</h3><div class="kind k-perm">${RELIC_THEMES[r.theme]}</div><p>${r.desc}</p><div class="impact">${S.relicWho(g, r)}</div></div>`;
+}
+function showRelicReward() {
+  rewardChoices = rewardChoices || S.rollRelicChoices(g);
+  setScreen(`<h2>Pick a relic!</h2><p class="sub">A relic works for the whole run. Some help one kind of cat, some help your top or bottom cat.</p>
+    <div class="cards">${rewardChoices.map(relicCard).join('')}</div>
+    <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button><button class="btn small grey" data-act="stats">Team stats</button>${rerollBtn()}</div>`, 'wide');
+  coach('c14', 'A relic works for the whole run. The last line shows which cats it helps. Tap one.', 480, 400, 'up', { target: '.card' });
+  acts = {
+    pickRelic: (d, el) => {
+      S.takeRelic(g, d.id);
+      sfx.play('newrelic'); buzz('pop');
+      if (el && el.getBoundingClientRect) { const r = el.getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 24, ['#ffd23f', '#fff6b0', '#c58aff', '#fff'], 'RELIC!'); }
+      toast(`${RELIC_BY_ID[d.id].icon} ${RELIC_BY_ID[d.id].name}!`);
+      nextReward();
+    },
+    tower: () => showTower(showRelicReward),
+    stats: () => showStats(showRelicReward),
+    reroll: () => { if (S.useReroll(g)) { rewardChoices = null; sfx.play('reroll'); showRelicReward(); } },
+  };
+}
+
 // team stats: where every bonus comes from, plus what each cat has done
 function showStats(back) {
   const rows = S.explainMods(g), m = S.calcMods(g);
@@ -1276,8 +1302,9 @@ function showStats(back) {
   const cs = cats.map((c) => `<div class="srow cat"><img src="${thumbURL(c.id)}" alt=""><b>${CAT_BY_ID[c.id].name} ${stars(c.lvl)}</b><strong>&asymp; ${Math.round(S.estDps(c, mods))} DPS</strong><span><i>${num(c.dmgDone)} damage</i><i>${c.kills} mice</i>${c.healDone > 1 ? `<i>${num(c.healDone)} healed</i>` : ''}${c.items.map((id) => `<i>${ITEM_BY_ID[id].icon}</i>`).join('')}</span></div>`).join('');
   const r = g.run;
   const rl = teamRelics(cats).map((e) => `<div class="srow rel r-${e.rarity}"><b>${e.icon} ${e.name}${e.n > 1 ? ` x${e.n}` : ''}</b><strong></strong><span><i>${e.desc}</i><i>${[...new Set(e.carriers)].map((id) => CAT_BY_ID[id].name).join(', ')}</i></span></div>`).join('');
+  const rr = g.relics.map((id) => { const x = RELIC_BY_ID[id]; return `<div class="srow rel r-${x.rarity}"><b>${x.icon} ${x.name}</b><strong></strong><span><i>${x.desc}</i><i>${S.relicWho(g, x)}</i></span></div>`; }).join('');
   const rs = activeSets(g.cats).filter((a) => a.have.length).map((a) => `<div class="srow rel set${a.mult ? ' on' : ''}"><b>${a.set.name}${a.mult > 1 ? ' x2' : ''}</b><strong></strong><span><i>${a.mult ? a.set.desc : `${SET_NEED - a.have.length} more for: ${a.set.desc}`}</i><i>${a.have.length}/${a.set.ids.length}: ${a.have.map((id) => ITEM_BY_ID[id].name).join(', ')}</i></span></div>`).join('');
-  setScreen(`<h2>Team stats</h2><div class="statcols"><div>${stat}<div class="srow"><b>Run</b><strong></strong><span><i>${num(r.dmg)} damage</i><i>biggest hit ${num(r.biggest)}</i><i>${num(r.taken)} taken</i><i>${Math.floor(r.coins)} coins</i></span></div></div><div>${cs}</div></div>${rl ? `<h4 class="relh">Relics in play</h4><div class="statcols relcols">${rl}</div>` : ''}${rs ? `<h4 class="relh">Relic sets</h4><div class="statcols relcols">${rs}</div>` : ''}
+  setScreen(`<h2>Team stats</h2><div class="statcols"><div>${stat}<div class="srow"><b>Run</b><strong></strong><span><i>${num(r.dmg)} damage</i><i>biggest hit ${num(r.biggest)}</i><i>${num(r.taken)} taken</i><i>${Math.floor(r.coins)} coins</i></span></div></div><div>${cs}</div></div>${rr ? `<h4 class="relh">Relics</h4><div class="statcols relcols">${rr}</div>` : ''}${rl ? `<h4 class="relh">Items worn</h4><div class="statcols relcols">${rl}</div>` : ''}${rs ? `<h4 class="relh">Item sets</h4><div class="statcols relcols">${rs}</div>` : ''}
     <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
   acts = { back };
 }
@@ -1875,12 +1902,12 @@ function updateHud(dt) {
     if (g.route.id !== 'trail') bits.push(`${g.route.icon} ${g.route.name}`);
     $('modeChip').innerHTML = bits.join(' &middot; '); $('modeChip').style.display = bits.length ? 'block' : 'none';
   }
-  const sig = g.perm.join(',') + '|' + g.temp.map((t) => t.id + t.left).join(',');
+  const sig = g.perm.join(',') + '|' + g.temp.map((t) => t.id + t.left).join(',') + '|' + g.relics.join(',');
   if (hudCache.snackSig !== sig) {
     hudCache.snackSig = sig;
     const counts = {};
     for (const id of g.perm) counts[id] = (counts[id] || 0) + 1;
-    const chips = Object.entries(counts).map(([id, n]) => `<span class="chip pop" title="${SNACK_BY_ID[id].name}: ${SNACK_BY_ID[id].desc}">${SNACK_BY_ID[id].icon}${n > 1 ? ' x' + n : ''}</span>`)
+    const chips = g.relics.map((id) => `<span class="chip relic pop" title="${RELIC_BY_ID[id].name}: ${RELIC_BY_ID[id].desc}">${RELIC_BY_ID[id].icon}</span>`).concat(Object.entries(counts).map(([id, n]) => `<span class="chip pop" title="${SNACK_BY_ID[id].name}: ${SNACK_BY_ID[id].desc}">${SNACK_BY_ID[id].icon}${n > 1 ? ' x' + n : ''}</span>`))
       .concat(g.temp.map((t) => `<span class="chip temp pop" title="${SNACK_BY_ID[t.id].name}: ${SNACK_BY_ID[t.id].desc}">${SNACK_BY_ID[t.id].icon} ${t.left}w</span>`));
     $('snackBar').innerHTML = chips.join('');
     $('snackBar').style.display = chips.length ? 'flex' : 'none';
@@ -3168,7 +3195,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { setCombo: (n) => { combo = n; comboT = 2.4; }, get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+window.stackingCats = { showRelicReward, setCombo: (n) => { combo = n; comboT = 2.4; }, get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
 showTitle();
 // the boot splash (in index.html) covers the half-built first frame; it stays long enough for the three slams, then lifts onto the title
 {
