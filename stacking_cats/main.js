@@ -425,11 +425,21 @@ function showSettings(back, msg) {
   let erase = false;
   acts = {
     back,
-    opt: (d) => {
+    // the settings change in place (no rebuild), so the switch glides, the screen keeps its scroll and nothing replays its entrance
+    opt: (d, el) => {
       if (d.k === 'diff') save.diff = d.v; else if (d.k === 'quality') { save.opt.quality = d.v; } else save.opt[d.k] = +d.v;
-      persist(); applyOptions(); showSettings(back);
+      persist(); applyOptions();
+      if (!el || !el.isConnected) { showSettings(back); return; }
+      el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
+      if (d.k === 'diff') { const note = el.closest('.setrow').querySelector('small'); if (note) note.textContent = DIFFS[save.diff].desc; }
+      sfx.play('pick', 1.1);
     },
-    tog: (d) => { save.opt[d.k] = !save.opt[d.k]; persist(); applyOptions(); showSettings(back); },
+    tog: (d, el) => {
+      const on = !save.opt[d.k]; save.opt[d.k] = on; persist(); applyOptions();
+      if (!el || !el.isConnected) { showSettings(back); return; }
+      el.classList.toggle('on', on); el.classList.remove('flip'); void el.offsetWidth; el.classList.add('flip');
+      sfx.play(on ? 'pick' : 'pip', on ? 1.3 : 0.75); buzz('tick');
+    },
     install: () => { promptInstall().then(() => showSettings(back)); },
     tipsreset: () => { save.tips = {}; save.opt.tutorial = true; persist(); showSettings(back, 'Tutorial hints will show again.'); },
     export: () => {
