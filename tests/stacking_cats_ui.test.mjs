@@ -1344,4 +1344,11 @@ t('screen transitions: every menu title drops in with a bounce, the subtitle and
   assert.ok(/body\.nomotion \.screen>h2/.test(b) && /prefers-reduced-motion:reduce/.test(b), 'motion off');
 });
 
+t('boss bar juice: the bar flinches on every hit and pulses with a sound and a callout at 75, 50 and 25 percent, only with motion on', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/\[0\.75, 0\.5, 0\.25\]\.find/.test(js) && /classList\.add\('hit'\)/.test(js) && /classList\.add\('phase'\)/.test(js) && /LEFT!/.test(js), 'hit and phase');
+  assert.ok(/motionOn\(\) && f < last/.test(js) && /hudCache\.bossF = null/.test(js), 'motion gate and reset between nests');
+  assert.ok(/@keyframes bosshit/.test(css) && /@keyframes bossphase/.test(css), 'styles');
+});
+
 console.log(`${n} tests passed`);
