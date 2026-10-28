@@ -301,7 +301,7 @@ export const ITEMS = [
   // ---- more relics. Each has one clear job: kill effects, conditional damage, barriers, team auras, loot luck, and a few run-changing legends.
   // common
   { id: 'rind', name: 'Cheese Rind', icon: '🍪', rarity: 'common', fx: { kheal: 0.05 }, desc: 'Heals 5% of its health on every kill' },
-  { id: 'penny', name: 'Copper Penny', icon: '🏅', rarity: 'common', fx: { kcoin: 0.2 }, desc: '+0.2 coins for every mouse it defeats' },
+  { id: 'penny', name: 'Copper Penny', icon: '🏅', rarity: 'common', fx: { kcoin: 0.2 }, desc: '+20% coins from every mouse it defeats' },
   { id: 'needle', name: 'Sewing Needle', icon: '🪡', rarity: 'common', fx: { pierce: 1 }, desc: 'Its attacks ignore mouse armor' },
   { id: 'twine', name: 'Ball of Twine', icon: '🎾', rarity: 'common', fx: { kcharge: 0.03 }, desc: 'Each kill charges its special move by 3%' },
   { id: 'sprig', name: 'Catnip Sprig', icon: '🌻', rarity: 'common', fx: { zoomG: 0.2 }, desc: 'The Zoomies meter fills 20% faster' },
@@ -316,7 +316,7 @@ export const ITEMS = [
   { id: 'pingpong', name: 'Ping Pong Ball', icon: '🏓', rarity: 'common', fx: { frenzy: 0.025 }, desc: '+2.5% attack speed for every kill this wave (up to 10 kills)' },
   // rare
   { id: 'whisker', name: 'Reaper Whisker', icon: '💀', rarity: 'rare', fx: { exec: 0.6 }, desc: '+60% damage to mice below 30% health' },
-  { id: 'piggy', name: 'Piggy Bank', icon: '🏺', rarity: 'rare', fx: { kcoin: 0.5 }, desc: '+0.5 coins for every mouse it defeats' },
+  { id: 'piggy', name: 'Piggy Bank', icon: '🏺', rarity: 'rare', fx: { kcoin: 0.5 }, desc: '+50% coins from every mouse it defeats' },
   { id: 'sock', name: 'Static Sock', icon: '🪤', rarity: 'rare', fx: { echo: 0.2 }, desc: '20% chance that an attack fires a second time for free' },
   { id: 'spore', name: 'Spore Mushroom', icon: '🍄', rarity: 'rare', fx: { venom: 0.45 }, desc: 'Its hits poison mice, and the poison stacks' },
   { id: 'ironbowl', name: 'Iron Bowl', icon: '🪣', rarity: 'rare', fx: { shield: 0.3, dr: 0.05 }, desc: 'Starts every wave with a barrier worth 30% of its health, takes 5% less damage' },
@@ -334,7 +334,7 @@ export const ITEMS = [
   { id: 'keg', name: 'Powder Keg', icon: '⚗', rarity: 'legendary', fx: { boom: 0.8, dmg: 0.12 }, desc: 'Mice it kills blow up for 80% of their health, hurting the mice around them. +12% damage' },
   { id: 'whiskers', name: 'Echo Whiskers', icon: '🪄', rarity: 'legendary', fx: { echo: 0.45, haste: 0.15 }, desc: '45% chance that an attack fires a second time for free, +15% attack speed' },
   { id: 'scythe', name: 'Moon Scythe', icon: '🗝', rarity: 'legendary', fx: { exec: 1.2, kheal: 0.12, crit: 0.1 }, desc: '+120% damage to mice below 30% health, heals 12% on a kill, +10% crit' },
-  { id: 'goldpaw', name: 'Golden Paw', icon: '🍯', rarity: 'legendary', fx: { kcoin: 1.6, coin: 0.4, luck: 1.5 }, desc: '+1.6 coins per kill, +40% coins and better loot' },
+  { id: 'goldpaw', name: 'Golden Paw', icon: '🍯', rarity: 'legendary', fx: { kcoin: 1.6, coin: 0.4, luck: 1.5 }, desc: '+160% coins from every kill, +40% coins and better loot' },
   { id: 'rainbow', name: 'Rainbow Yarn', icon: '🌈', rarity: 'legendary', fx: { teamDmg: 0.12, teamHaste: 0.1 }, desc: 'The whole team deals 12% more damage and attacks 10% faster' },
   // mythic
   { id: 'kingcrown', name: 'Crown of the Cat King', icon: '🧷', rarity: 'mythic', fx: { teamDmg: 0.2, teamHp: 0.25, teamDr: 0.08, luck: 2 }, desc: 'The whole team: +20% damage, +25% health, 8% less damage taken, and much better loot' },
