@@ -432,7 +432,7 @@ function showTitle() {
     <h1 class="logo">Stacking<span>Cats</span></h1>
     <div class="tag">${titleTag(!!save.storyDone, save.unlocked.length, CATS.length)}</div>
     <div class="row tgrid g4 gplay"><button class="btn big" data-act="play">Play</button><button class="btn small grey" data-act="diff" title="Change difficulty">${d.icon} ${d.name}</button><button class="btn small grey" data-act="story">Story</button></div>
-    <div class="row tgrid g4"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${streak >= 2 ? `<span class="streak" title="${streak} days in a row">&#128293;${streak}</span>` : ''}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button><button class="btn" data-act="relics">Relics ${relicProgress(save.relics).got}/${ITEMS.length}</button></div>
+    <div class="row tgrid g4"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${streak >= 2 ? `<span class="streak" title="${streak} days in a row">&#128293;${streak}</span>` : ''}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="dex">Cat Dex ${save.unlocked.length}/${CATS.length}</button><button class="btn" data-act="relics">Items ${relicProgress(save.relics).got}/${ITEMS.length}</button></div>
     <div class="row tgrid g31"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn grey small" data-act="trophies">Trophies ${trophies}/${ACHIEVEMENTS.length}</button><button class="btn grey small" data-act="settings">Settings</button><button class="btn grey small" data-act="how">How to play</button></div>
     <button class="namechip" data-act="ranking" title="Open the ranking list">&#127942; ${save.name ? `${save.name.replace(/[<>&"]/g, '')} &middot; ` : ''}Ranking</button>
     <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : (coarse ? 'Tap the big pink Play button to start' : 'Click the big pink Play button, or press Enter, to start')}</div>`, 'clear tpad');
@@ -567,7 +567,7 @@ function showHow(back) {
     ${row('\uD83C\uDFAF', '<b>Pick a target.</b> Tap a mouse and your cats shoot it first.')}
     ${row('\uD83D\uDC00', `<b>Nests.</b> Every ${BOSS_EVERY}th wave you fight a mouse nest. Destroy it to free a cat and win loot.`)}
     ${row('\u2728', `<b>Join two cats.</b> Two of the same cat join into one stronger cat (up to Lv 3). The tower holds ${MAX_STACK} cats and the bench holds ${MAX_BENCH}.`)}
-    ${row('\uD83C\uDF81', '<b>Lootboxes.</b> A box holds a relic. A relic is an item that makes one cat stronger. Tap Equip it, then tap the cat that should wear it.')}
+    ${row('\uD83C\uDF81', '<b>Lootboxes.</b> A box holds an item. An item makes one cat stronger. Tap Equip it, then tap the cat that should wear it.')}
     ${row('\uD83E\uDE99', '<b>Coins</b> are saved. Spend them in the <b>Kingdom</b> (on the title screen) to make every new run stronger.')}
     ${row('\uD83D\uDD25', '<b>Cat teams.</b> Cats of the same kind help each other. Small badges next to the wave number show these bonuses.')}
     ${row('\uD83D\uDC3E', '<b>Roads.</b> After each nest you choose the road to walk next. A harder road gives better rewards.')}
@@ -630,10 +630,10 @@ function showRelics(back, sel0) {
       return `<div class="rrow"><div class="rlabel r-${r}"><b>${r}</b><small>${pr.by[r].got}/${pr.by[r].total}</small></div><div class="rtiles">${tiles}</div></div>`;
     }).join('');
     const it = sel && ITEM_BY_ID[sel];
-    const detail = !it ? 'Tap a relic to read what it does. Relics you have owned in a run are written into the book, the rest are shadows.'
-      : save.relics[it.id] ? `<b>${it.icon} ${it.name}</b> <span class="rar ${it.rarity}">${it.rarity}</span><br>${it.desc}.${RELIC_SETS.filter((x) => x.ids.includes(it.id)).map((x) => `<br><small>Set: ${x.name}. Carry ${SET_NEED} of its relics and ${x.desc}, ${SET_DOUBLE} double it.</small>`).join('')}`
-        : `<b>A ${it.rarity} relic you have not found yet.</b><br>Relics come out of lootboxes, turn up in shops and deals, and three of a kind forge into the next tier.`;
-    setScreen(`<h2>Relic Book <small class="klv">${pr.got}/${pr.total} found</small></h2><div class="relbook">${rows}</div><div class="detail dexd relde">${detail}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
+    const detail = !it ? 'Tap an item to read what it does. Items you have owned in a run are written into the book, the rest are shadows.'
+      : save.relics[it.id] ? `<b>${it.icon} ${it.name}</b> <span class="rar ${it.rarity}">${it.rarity}</span><br>${it.desc}.${RELIC_SETS.filter((x) => x.ids.includes(it.id)).map((x) => `<br><small>Set: ${x.name}. Carry ${SET_NEED} of its items and ${x.desc}, ${SET_DOUBLE} double it.</small>`).join('')}`
+        : `<b>A ${it.rarity} item you have not found yet.</b><br>Items come out of lootboxes, turn up in shops and deals, and three of a kind forge into the next tier.`;
+    setScreen(`<h2>Item Book <small class="klv">${pr.got}/${pr.total} found</small></h2><div class="relbook">${rows}</div><div class="detail dexd relde">${detail}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
     const rb = screenEl.querySelector('.relbook'); if (rb && oldTop) rb.scrollTop = oldTop;
   };
   draw();
@@ -917,7 +917,7 @@ function noteRelics() {
   runNewRelics += fresh.length;
   persist();
   const first = ITEM_BY_ID[fresh[0]];
-  setTimeout(() => toastWhenPlaying(`New relic in your book: ${first.name}${fresh.length > 1 ? ` and ${fresh.length - 1} more` : ''}!`), 1200);
+  setTimeout(() => toastWhenPlaying(`New item in your book: ${first.name}${fresh.length > 1 ? ` and ${fresh.length - 1} more` : ''}!`), 1200);
 }
 // a set that turns on (or doubles) gets a toast, so the player sees why the team got stronger
 let setsSeen = {};
@@ -925,7 +925,7 @@ let runNewRelics = 0;   // relics added to the Relic Book during this run (shown
 function noteSets() {
   if (!g) return;
   const ups = setUps(setsSeen, g.cats);
-  if (ups.length) setTimeout(() => { if (mode === 'play' && !paused) sfx.play('synergy', 0.8); toastWhenPlaying(`Relic set: ${ups[0].set.name}${ups[0].mult > 1 ? ' doubled' : ''}! ${ups[0].set.desc[0].toUpperCase()}${ups[0].set.desc.slice(1)}.`); }, 2200);
+  if (ups.length) setTimeout(() => { if (mode === 'play' && !paused) sfx.play('synergy', 0.8); toastWhenPlaying(`Item set: ${ups[0].set.name}${ups[0].mult > 1 ? ' doubled' : ''}! ${ups[0].set.desc[0].toUpperCase()}${ups[0].set.desc.slice(1)}.`); }, 2200);
 }
 function beginWave() {
   closeScreen();
@@ -1162,7 +1162,7 @@ function showBox(tier) {
   const bx = BOX_BY_ID[tier] || BOXES[0], rars = Object.keys(bx.odds);
   setScreen(`<h2>${bx.icon} ${bx.name}</h2><p class="sub">${bx.blurb}</p>
     <div class="boxstage t-${bx.id}"><div class="boxvig"></div><div class="boxglow"></div><div class="boxbeams"></div><div class="boxsuck">${suckHtml()}</div><div class="boxsparks">${sparksHtml()}</div><div class="boxcrack"></div><div class="boxic t-${bx.id}" data-act="openbox"><img class="boxhero lo" src="${boxHero(bx.id).toDataURL()}" alt="${bx.name}"><img class="boxhero hi" src="${boxHero(bx.id).toDataURL()}" alt="" aria-hidden="true"></div><div class="boxring"></div><div class="boxflash"></div></div>
-    <p class="sub boxodds">Might hold ${rars.length > 1 ? `<b>${rars[0]}</b> to <b>${rars[rars.length - 1]}</b>` : `<b>${rars[0]}</b>`} relics</p>
+    <p class="sub boxodds">Might hold ${rars.length > 1 ? `<b>${rars[0]}</b> to <b>${rars[rars.length - 1]}</b>` : `<b>${rars[0]}</b>`} items</p>
     <div class="row"><button class="btn big" data-act="openbox">Open it!</button></div>
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button></div>`);
   coach('c9', 'Tap Open it! to open the box and see what is inside.', 480, 380, 'up', { target: 'button[data-act=openbox]' });
@@ -1221,7 +1221,7 @@ function showBoxReveal(tier, id, again = false) {   // again: coming back from t
     sfx.play(REVEAL_SFX[it.rarity] || 'chest');
     if (it.rarity !== 'common') setTimeout(() => sfx.play('stamp'), 260);
     if (fresh) setTimeout(() => sfx.play('newrelic'), 520);
-    setTimeout(() => { if (flipped && stage.isConnected && !leaving) coach('c10', 'This is a relic. It makes one cat stronger. Tap Equip it, then tap the cat that should wear it.', 480, 380, 'up', { target: 'button[data-act=take]' }); }, 1100);
+    setTimeout(() => { if (flipped && stage.isConnected && !leaving) coach('c10', 'This is an item. It makes one cat stronger. Tap Equip it, then tap the cat that should wear it.', 480, 380, 'up', { target: 'button[data-act=take]' }); }, 1100);
     buzz(hi ? 'jackpot' : 'pop');
     if (hi) { const c0 = g.cats[0]; if (c0) setTimeout(() => sfx.meow(c0.id, 'cheer'), 380); }
   };
@@ -1395,7 +1395,7 @@ function showTower(back, opt = {}) {
     const best = bits.length ? `Best on ${CAT_BY_ID[r.cat].name}: ${bits.join(', ')}` : '';
     return `<span class="ditem r-${it.rarity}"><i class="dic">${it.icon}</i><span class="dbody"><b class="dnm"><span class="nm">${it.name}</span><em class="drar">${it.rarity}</em></b><span class="dds">${it.desc}</span>${h || best ? `<span class="dex">${h ? `<u>${h}</u>` : ''}${best}</span>` : ''}</span></span>`;
   };
-  const sellLabel = (idx) => { const id = g.stash[idx]; return id ? `<b>Sell</b><small>&#129689; +${S.sellValue(g, id)}</small>` : '<b>Sell</b><small>drop a relic</small>'; };
+  const sellLabel = (idx) => { const id = g.stash[idx]; return id ? `<b>Sell</b><small>&#129689; +${S.sellValue(g, id)}</small>` : '<b>Sell</b><small>drop an item</small>'; };
   const forgeLabel = (idx) => {
     const id = g.stash[idx];
     if (!id) return '<b>Forge</b><small>3 of a kind</small>';
@@ -1415,8 +1415,8 @@ function showTower(back, opt = {}) {
     const syn = S.synergyState(g);
     const synChips = Object.entries(syn.counts).sort((a, b) => b[1] - a[1]).map(([t, n]) => { const tier = syn.tiers[t] || 0; return `<span class="schip ${tier ? 't' + tier : ''}" title="${SYNERGIES[t].name}: ${tier ? synergyText(t, tier) : 'needs 2 cats'}">${SYNERGIES[t].icon} ${SYNERGIES[t].name} ${n}/${n >= 3 ? 3 : n >= 2 ? 3 : 2}</span>`; }).join('');
     const msg = over
-      ? `<b class="warn">Backpack is over full by ${over}.</b> Sell, forge or equip relics to continue.`
-      : sel ? 'Tap another cat to swap, or a matching one to merge. Or drag cats around.' : 'Drag a relic onto a cat to equip it. Drag a cat onto another to swap or merge.';
+      ? `<b class="warn">Backpack is over full by ${over}.</b> Sell, forge or equip items to continue.`
+      : sel ? 'Tap another cat to swap, or a matching one to merge. Or drag cats around.' : 'Drag an item onto a cat to equip it. Drag a cat onto another to swap or merge.';
     const detail = it ? itemDetail(it.id) : msg;
     setScreen(`<h2>Arrange your tower <small class="klv">Team DPS &asymp; ${Math.round(teamDps(S.calcMods(g)))}</small></h2><div class="synrow">${synChips || '<small>Stack cats of the same kind for synergy bonuses!</small>'}</div>
       <div class="tbody"><div class="tower"><div class="col tw"><div class="zone" data-zone="tower"><h4>Tower <small>top to bottom</small></h4>${tw.join('')}</div><button class="btn small red relbtn" data-act="release" data-drop="release" ${sel ? '' : 'disabled'}>${rel ? 'Really release?' : 'Release cat'}</button></div><div class="col"><div class="zone bn" data-zone="bench"><h4>Bench <small>rests, heals fast</small></h4>${bn.join('')}</div>
@@ -1571,11 +1571,11 @@ function showTower(back, opt = {}) {
   }
   draw();
   acts = {
-    done: () => { if (S.overflow(g) > 0) { toast('Sell, forge or equip relics first'); return; } back(); },
+    done: () => { if (S.overflow(g) > 0) { toast('Sell, forge or equip items first'); return; } back(); },
     sell: () => { const v = S.sellItem(g, selItem); if (v) { sfx.play('coin'); toast(`Sold for +${v} coins`); pend = { q: '[data-act="sell"]', rar: 'common' }; } selItem = null; draw(); },
     forge: () => {
       const id = S.forgeItems(g, selItem);
-      if (!id) { sfx.play('nope'); toast('Forging needs three relics of one rarity'); draw(); return; }
+      if (!id) { sfx.play('nope'); toast('Forging needs three items of one rarity'); draw(); return; }
       sfx.play('merge'); toast(`Forged ${ITEM_BY_ID[id].name} (${ITEM_BY_ID[id].rarity})!`); puff(S.TOWER_X, 330, 14, '#c88aff', 160, 0.6);
       selItem = g.stash.length - 1; pend = [{ q: `.bag[data-i="${selItem}"]`, rar: ITEM_BY_ID[id].rarity }, { q: '[data-act="forge"]', rar: 'common' }]; draw();
     },
