@@ -2093,8 +2093,9 @@ function juiceCoins(dt) {   // aggregates coin gains over 300 ms: one gold pop a
     coinAccT -= dt;
     if (coinAccT <= 0) {
       coinAccT = 0;
-      if (motionOn()) { const el = $('coinBox'); el.classList.remove('cgain'); void el.offsetWidth; el.classList.add('cgain'); }
-      if (coinAcc >= 5) txtFx(70, 134, '+' + coinAcc, '#ffd23f', 18, 0.9);
+      const bigGain = coinAcc >= 60;   // a jackpot-sized haul gets a bigger pop, a bigger number and sparks
+      if (motionOn()) { const el = $('coinBox'); el.classList.remove('cgain', 'cbig'); void el.offsetWidth; el.classList.add('cgain'); if (bigGain) el.classList.add('cbig'); if (bigGain) { sparks(70, 76, 10, '#ffd23f', 160, 0.4); ring(70, 76, 40, '#ffd23f', 0.4, 4); } }
+      if (coinAcc >= 5) txtFx(70, 134, '+' + coinAcc, '#ffd23f', bigGain ? 28 : 18, bigGain ? 1.3 : 0.9);
       coinAcc = 0;
     }
   }

@@ -1369,4 +1369,10 @@ t('a nest banner slams in with a shake and a chapter start flashes gold', () => 
   assert.ok(/if \(motionOn\(\)\) \{\s*if \(boss\) \{ shake = Math\.max\(shake, 7\)[\s\S]{0,400}isChapterStart\(g\.wave\)\) \{ screenFlash/.test(js));
 });
 
+t('a big coin haul pops the counter harder with sparks and a larger number', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8'), css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(/bigGain = coinAcc >= 60[\s\S]{0,500}classList\.add\('cbig'\)[\s\S]{0,300}bigGain \? 28 : 18/.test(js));
+  assert.ok(/COINBIG START[\s\S]*cbigpop[\s\S]*nomotion #coinBox\.cgain\.cbig[\s\S]*COINBIG END/.test(css));
+});
+
 console.log(`${n} tests passed`);
