@@ -730,6 +730,7 @@ function showKingdom(back, selected) {
       const b = BUILDING_BY_ID[d.id];
       if (buyUpgrade(save.kingdom, d.id)) {
         persist(); sfx.play('upgrade'); sfx.meow(villageCat(), 'cheer', 0.12); toast(`${b.icon} ${b.name} is now Lv ${buildingLevel(save.kingdom, d.id)}!`);
+        { const r = (screenEl.querySelector('[data-act=buy]') || screenEl).getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 22, ['#ffd23f', '#fff', '#ff8fb7', '#8fe0b4'], 'LEVEL UP!'); buzz('pop'); }
         const ach = checkAch({ ...(g ? g.run : {}), wave: 0 });
         for (const a of ach) toast(`Trophy: ${a.name}!`);
         kScene.bump(d.id);
@@ -739,7 +740,7 @@ function showKingdom(back, selected) {
     },
     buyw: (d) => {
       const w = WONDER_BY_ID[d.id];
-      if (buyWonder(save.kingdom, d.id)) { persist(); sfx.play('upgrade'); sfx.meow(villageCat(), 'cheer', 0.12); toast(`${w.icon} ${w.name} built!`); showKingdom(back, { type: 'wonder', id: d.id }); }
+      if (buyWonder(save.kingdom, d.id)) { { const r = (screenEl.querySelector('[data-act=buyw]') || screenEl).getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 30, ['#9fd4ff', '#fff', '#ffd23f', '#e7a0ff'], 'BUILT!'); buzz('jackpot'); } persist(); sfx.play('upgrade'); sfx.meow(villageCat(), 'cheer', 0.12); toast(`${w.icon} ${w.name} built!`); showKingdom(back, { type: 'wonder', id: d.id }); }
     },
   };
 }
@@ -1153,6 +1154,21 @@ function trail(cx, cy) {
   el.style.setProperty('--dx', ((Math.random() - 0.5) * 24).toFixed(0) + 'px');
   app.appendChild(el); setTimeout(() => el.remove(), 480);
 }
+// a burst of confetti and a floating label at a screen point, for the menus (buying an upgrade, a personal best)
+function domBurst(cx, cy, n, cols, label) {
+  if (!save.opt.motion) return;
+  for (let i = 0; i < n; i++) {
+    const p = stagePoint({ clientX: cx, clientY: cy }), el = document.createElement('i'), a = (360 / n) * i + Math.random() * 14, d = 50 + Math.random() * 90;
+    el.className = 'dfx dconf'; el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+    el.style.setProperty('--a', a.toFixed(0) + 'deg'); el.style.setProperty('--d', d.toFixed(0) + 'px'); el.style.setProperty('--c', cols[i % cols.length]);
+    app.appendChild(el); setTimeout(() => el.remove(), 900);
+  }
+  if (label) {
+    const p = stagePoint({ clientX: cx, clientY: cy }), el = document.createElement('b');
+    el.className = 'dfx dlabel'; el.textContent = label; el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+    app.appendChild(el); setTimeout(() => el.remove(), 1100);
+  }
+}
 function bindDrag(root, h) {
   root.addEventListener('pointerdown', (e) => {
     if ((e.pointerType === 'mouse' && e.button !== 0) || e.isPrimary === false) return;
@@ -1520,6 +1536,17 @@ function showOver(fresh) {
     sendscore: () => { const inp = screenEl.querySelector('input[data-n]'); if (inp) { save.name = inp.value.replace(/[^\w \-.']/g, '').slice(0, 12); persist(); } postDaily(); },
   };
   if ((r.ach || []).length) sfx.play('achieve');
+  // the numbers count up one after another, a personal best gets a burst
+  screenEl.querySelectorAll('.overcols .stats > div').forEach((box, i) => {
+    box.style.setProperty('--i', i);
+    const bn = box.querySelector('b'), to = /^\d+$/.test(bn.textContent) ? +bn.textContent : null;
+    if (to && to > 1 && save.opt.motion) {
+      const t0 = performance.now() + 120 + i * 90;
+      const tk = (now) => { const u = Math.max(0, Math.min(1, (now - t0) / 700)); bn.textContent = Math.round(to * (1 - Math.pow(1 - u, 3))); if (u < 1 && bn.isConnected) requestAnimationFrame(tk); };
+      bn.textContent = '0'; requestAnimationFrame(tk);
+    }
+  });
+  if (r.wave >= best && r.wave > 1 && save.opt.motion) setTimeout(() => { const sb = screenEl.querySelector('.sub'); if (!sb || !sb.isConnected) return; const rc = sb.getBoundingClientRect(); domBurst(rc.left + rc.width / 2, rc.top + rc.height / 2, 26, ['#ffd23f', '#fff', '#ff8fb7'], 'NEW BEST!'); sfx.play('achieve', 0.8); buzz('pop'); }, 700);
   const el = $('earn');
   if (el) {
     const to = +el.dataset.to, t0 = performance.now();
