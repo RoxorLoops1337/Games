@@ -2544,14 +2544,27 @@ function drawIncoming() {
   ctx.restore();
 }
 
+// the combo counter heats up with the streak: white, then gold with a glow, then an orange flicker, then a hot pink shake with flames,
+// and a thin bar shows how long is left before the streak lapses (so keeping it alive feels urgent)
+function comboHeat(c) { return c >= 100 ? 4 : c >= 50 ? 3 : c >= 20 ? 2 : c >= 10 ? 1 : 0; }
+const HEAT = [{ c: '#ffffff', g: 0, w: 0 }, { c: '#ffe27a', g: 8, w: 0 }, { c: '#ffb04a', g: 14, w: 1.2 }, { c: '#ff8fb7', g: 20, w: 2.2 }, { c: '#c58aff', g: 26, w: 3.2 }];
 function drawCombo(t) {
   if (combo < 3 || mode !== 'play') return;
+  const h = comboHeat(combo), H0 = HEAT[h], m = motionOn();
   const s = 1 + comboPulse * 0.35, fade = Math.min(1, comboT * 2);
-  ctx.save(); ctx.translate(18, 176); ctx.scale(s, s); ctx.globalAlpha = fade;
-  ctx.font = `400 ${26 + Math.min(14, combo / 4)}px ${DISPLAY}`; ctx.textAlign = 'left'; ctx.lineWidth = 5; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round';
-  const col = combo >= 50 ? '#ff8fb7' : combo >= 20 ? '#ffd23f' : '#ffffff';
-  ctx.strokeText(`x${combo}`, 0, 0); ctx.fillStyle = col; ctx.fillText(`x${combo}`, 0, 0);
+  const wob = m && H0.w ? Math.sin(t * 38) * H0.w : 0, wob2 = m && H0.w ? Math.cos(t * 31) * H0.w * 0.6 : 0;
+  ctx.save(); ctx.translate(18 + wob, 176 + wob2); ctx.scale(s, s); ctx.globalAlpha = fade;
+  ctx.font = `400 ${26 + Math.min(18, combo / 4)}px ${DISPLAY}`; ctx.textAlign = 'left'; ctx.lineWidth = 5; ctx.strokeStyle = '#271c33'; ctx.lineJoin = 'round';
+  if (m && H0.g) { ctx.shadowColor = H0.c; ctx.shadowBlur = H0.g * (0.8 + 0.2 * Math.sin(t * 9)); }
+  ctx.strokeText(`x${combo}`, 0, 0); ctx.fillStyle = H0.c; ctx.fillText(`x${combo}`, 0, 0);
+  ctx.shadowBlur = 0;
   ctx.font = `800 13px ${FONT}`; ctx.lineWidth = 3.5; ctx.strokeText('COMBO', 2, 15); ctx.fillStyle = '#ffe3c4'; ctx.fillText('COMBO', 2, 15);
+  const frac = Math.max(0, Math.min(1, comboT / 2.4));   // time left before the streak lapses
+  ctx.fillStyle = 'rgba(20,10,40,.7)'; ctx.fillRect(2, 21, 70, 5);
+  ctx.fillStyle = frac < 0.3 ? '#ff6a6a' : H0.c; ctx.fillRect(2, 21, 70 * frac, 5);
+  if (m && h >= 3) {   // flames licking up from the number
+    for (let k = 0; k < 5; k++) { const ph = (t * 1.7 + k * 0.37) % 1; ctx.globalAlpha = fade * (1 - ph) * 0.9; ctx.fillStyle = k % 2 ? '#ffd23f' : H0.c; ctx.beginPath(); ctx.arc(10 + k * 12 + Math.sin(t * 7 + k) * 4, -18 - ph * 30, 3.5 * (1 - ph) + 1, 0, TAU); ctx.fill(); }
+  }
   ctx.restore();
 }
 
@@ -2936,7 +2949,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+window.stackingCats = { setCombo: (n) => { combo = n; comboT = 2.4; }, get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
 showTitle();
 requestAnimationFrame(frame);
 void ENEMY_TYPES;
