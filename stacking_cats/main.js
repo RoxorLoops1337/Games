@@ -761,6 +761,13 @@ function startRun(opts = {}) {
   showPickStart();
 }
 
+// a recruited cat bursts out of its card; a merge gets the bigger one
+function recruitBurst(el, merged) {
+  if (!el || !motionOn()) return;
+  const rc = el.getBoundingClientRect();
+  domBurst(rc.left + rc.width / 2, rc.top + rc.height / 2, merged ? 30 : 20, merged ? ['#ffd23f', '#fff', '#ff8fb7'] : ['#8fe3ff', '#fff', '#ffd23f'], merged ? 'MERGED!' : 'RECRUITED!');
+  buzz(merged ? 'merge' : 'pop');
+}
 function showPickStart() {
   mode = 'pick';
   rewardChoices = rewardChoices || S.rollCatChoices(g);
@@ -769,9 +776,10 @@ function showPickStart() {
     <div class="row hint">${rerollBtn()}</div>`);
   coach('c1', 'Step 1: tap a cat to pick it.', 480, 440, 'up', { target: '.card' });
   acts = {
-    pickCat: (d) => {
+    pickCat: (d, el) => {
       const prev = S.synergyState(g);
       const r = S.addCat(g, d.id);
+      if (r.ok !== false) recruitBurst(el, r.merged);
       sfx.play(r.merged ? 'merge' : 'pick'); sfx.meow(d.id, 'pick');
       notifySyn(prev);
       pickN++; rewardChoices = null;
@@ -998,9 +1006,10 @@ function showCatReward() {
     <div class="cards">${rewardChoices.map((id) => catCard(id, { ribbon: owns(id) ? 'MERGE!' : '', gain: true })).join('')}</div>
     <div class="row hint"><button class="btn small grey" data-act="tower">Arrange tower</button>${rerollBtn()}</div>`);
   acts = {
-    pickCat: (d) => {
+    pickCat: (d, el) => {
       const prev = S.synergyState(g);
       const r = S.addCat(g, d.id);
+      if (r.ok !== false) recruitBurst(el, r.merged);
       if (!r.ok) { showFull(d.id); return; }
       sfx.play(r.merged ? 'merge' : 'pick'); sfx.meow(d.id, r.merged ? 'happy' : 'pick');
       notifySyn(prev);

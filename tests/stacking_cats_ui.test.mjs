@@ -1357,4 +1357,10 @@ t('freed cats on the game over screen flip in one by one with a burst', () => {
   assert.ok(/querySelectorAll\('\.newcats \.card'\)[\s\S]{0,500}NEW CAT!/.test(js));
 });
 
+t('recruiting a cat bursts out of its card on both pick screens', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  assert.ok(/function recruitBurst\(el, merged\)[\s\S]{0,200}motionOn\(\)[\s\S]{0,400}RECRUITED!/.test(js));
+  assert.equal(js.split('recruitBurst(el, r.merged)').length - 1, 2, 'start pick and nest reward both burst');
+});
+
 console.log(`${n} tests passed`);
