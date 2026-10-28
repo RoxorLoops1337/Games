@@ -347,7 +347,7 @@ body.nomotion .tuthl{animation:none!important}
 .coach .cico{font-size:30px}.coach button{pointer-events:auto;font-family:inherit;font-weight:800;font-size:13px;border:2px solid var(--ink);background:#ffd58f;border-radius:10px;padding:1px 10px;cursor:pointer;flex:none}
 .coach.notail::after{display:none}
 .coach::after{content:'';position:absolute;width:16px;height:16px;background:#fffaf0;border:3px solid var(--ink);border-top:0;border-left:0;transform:rotate(45deg)}
-.coach.up::after{left:calc(50% - 8px);top:-10px;transform:rotate(225deg)}.coach.down::after{left:calc(50% - 8px);bottom:-10px}.coach.left{transform:translate(0,0)}.coach.left::after{left:-10px;top:calc(50% - 8px);transform:rotate(135deg)}.coach.right{transform:translate(-100%,0)}.coach.right::after{right:-10px;top:calc(50% - 8px);transform:rotate(-45deg)}
+.coach.up::after{left:calc(50% - 8px + var(--tx,0px));top:-10px;transform:rotate(225deg)}.coach.down::after{left:calc(50% - 8px + var(--tx,0px));bottom:-10px}.coach.left{transform:translate(0,0)}.coach.left::after{left:-10px;top:calc(50% - 8px + var(--ty,0px));transform:rotate(135deg)}.coach.right{transform:translate(-100%,0)}.coach.right::after{right:-10px;top:calc(50% - 8px + var(--ty,0px));transform:rotate(-45deg)}
 
 .card.route{width:236px;padding-top:12px}.card.route .ic{font-size:58px;line-height:1.1;animation:bob 2.4s ease-in-out infinite}
 #kscene{width:920px;height:256px;border-radius:18px;border:3px solid var(--ink);box-shadow:0 5px 0 var(--ink);cursor:pointer;background:#9fdcff;touch-action:manipulation}
@@ -1433,6 +1433,17 @@ body.nomotion .tog.flip,body.nomotion .tog.flip i::after{animation:none}
 .tog,.dcell,.namechip,.autob,.tile,.slot[data-act],.chip[data-act]{transition:transform .08s ease-out,filter .08s}
 body.nomotion .tog:active,body.nomotion .dcell:active,body.nomotion .namechip:active,body.nomotion .autob:active,body.nomotion .tile:active,body.nomotion .slot[data-act]:active,body.nomotion .chip[data-act]:active{transform:none}
 /* PRESS END */
+/* TUTRING START */
+/* a pulsing ring for a tip that points at something drawn on the canvas (the tower) */
+.tutring{position:absolute;z-index:59;pointer-events:none;border:4px solid #ffd23f;border-radius:22px;animation:tutpulse 1.1s ease-in-out infinite}
+body.nomotion .tutring{animation:none}
+/* TUTRING END */
+.coach .holdnote{display:block;margin-top:3px;font-size:12px;font-weight:600;opacity:.7}
+.coach.held button{background:#9be8b8}
+/* HOWFIT START */
+/* the longer, plainer How to play rows must still leave room for the buttons on a short phone screen */
+@media (max-height:340px){body .how{gap:2px 8px;padding:5px 10px}body .how li{padding:1px 8px}body .how .hi{width:26px;height:26px}body .how li{grid-template-columns:26px 1fr}}
+/* HOWFIT END */
 /* KINGBTN START */
 /* the Kingdom button holds its name and the coin and gem badge on two lines, so a long balance can never spill out of the button */
 body .screen .tgrid.g31>.btn.green.btn.btn{flex-direction:column;gap:1px;padding-top:3px;padding-bottom:3px;line-height:1.05;white-space:normal;overflow:visible}

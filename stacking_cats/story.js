@@ -188,13 +188,13 @@ export const nestBannerTitle = (wave) => (wave === FINALE_WAVE ? 'FINAL BATTLE!'
 
 // the subtitle on the "choose your starting cats" screen: the first pick sets the story up
 export const pickLine = (n) => (n === 0
-  ? 'Brave cats set out to free the royal guard. Every cat attacks differently, so pick the first one for your tower.'
-  : 'Pick a friend to stack on top. Choosing the same cat again merges them!');
+  ? 'Choose your first cat. Every cat attacks in its own way, so read the card, then tap it.'
+  : 'Choose another cat to stack on top. Tap the same cat again and the two join into one stronger cat.');
 
 // the subtitle on the road choice screen: it names the region of the next chapter. wave is the nest wave that just fell
 export function roadLine(wave, themes) {
   const c = chapterOf(wave + 1);
-  return `Where to next? Chapter ${c.n} waits in ${themes[c.theme].name}. This road shapes the next five waves and the next nest.`;
+  return `Choose the road to walk next. Chapter ${c.n} is in ${themes[c.theme].name}. The road you pick changes the next five waves and the next nest.`;
 }
 
 // splits a caption into lines no wider than maxW (measure gives a string's width). A caption that needs two lines is

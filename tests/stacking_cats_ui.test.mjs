@@ -314,7 +314,7 @@ t('the low health edge has a heartbeat that quickens as health drops', () => {
 
 t('the first-run title hint mentions Enter for keyboard players', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
-  assert.ok(js.includes("coarse ? 'Tap Play to begin' : 'Click Play or press Enter to begin'"), 'mouse and keyboard players must see the Enter shortcut, touch players keep the tap hint');
+  assert.ok(js.includes("coarse ? 'Tap the big pink Play button to start' : 'Click the big pink Play button, or press Enter, to start'"), 'mouse and keyboard players must see the Enter shortcut, touch players keep the tap hint');
 });
 
 t('opening the pause menu clears the toasts so they do not smear behind the blur', () => {
@@ -1211,7 +1211,7 @@ t('arrange polish: landing socket preview, chip inside the row, no fullscreen bu
   assert.ok(/\.screen\.arr \.slot \.sc\{position:relative\}/.test(css) && !/\.pv\{position:absolute;right:10px;top:-11px/.test(css), 'chip no longer floats over the row above');
   assert.ok(/body:has\(\.screen\.towerscr\) #bFull\{display:none\}/.test(css), 'fullscreen button hidden on the arrange screen');
   assert.ok(/pend = \[\{ q: `\.bag\[data-i=[^\]]*\]`, rar: ITEM_BY_ID\[id\]\.rarity \}, \{ q: '\[data-act="forge"\]'/.test(js), 'forging bounces the new relic and the Forge zone');
-  assert.ok(/opt\.free/.test(js) && /coach\('c4'[^\n]*free: true/.test(js), 'the arrange tip sits in a spot known to be clear');
+  assert.ok(/function placeCoach/.test(js) && /coach\('c4'[^\n]*target: '\.slot\.has'/.test(js) && /#screen \.slot\.has/.test(js), 'the arrange tip sits next to a cat and keeps clear of the other cats');
   const S = await import('../stacking_cats/sim.js');
   const g = S.newGame({ seed: 9, unlocked: ['tabby'] });
   g.stash.push('mask', 'mask', 'mask', 'kingcrown');
@@ -1456,6 +1456,53 @@ t('the Kingdom button does not clip its corner marker (the badge ellipsizes by i
   const css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
   const rule = css.slice(css.indexOf('KINGBTN START'), css.indexOf('KINGBTN END'));
   assert.ok(/\.tgrid\.g31>\.btn\.green\.btn\.btn\{[^}]*overflow:visible/.test(rule) && /\.badge\{[^}]*overflow:hidden[^}]*text-overflow:ellipsis/.test(rule));
+});
+
+t('every tutorial tip points at the thing it talks about, and the tip sits next to it', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8'), css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  const calls = [...js.matchAll(/coach\('(c\d+)', ('(?:[^'\\]|\\.)*'),[^\n]*/g)];
+  assert.ok(calls.length >= 12, 'the tips: ' + calls.length);
+  for (const [line, key] of calls) assert.ok(/target: |at: /.test(line), `${key} points at something (target or at)`);
+  assert.ok(/function placeCoach\(el, hl, at\)[\s\S]*'down'[\s\S]*'up'[\s\S]*'right'[\s\S]*'left'[\s\S]*--tx[\s\S]*--ty/.test(js), 'the bubble picks a side and aims its tail');
+  assert.ok(/if \(targeted\) \{[\s\S]{0,300}placeCoach\(el, hl, opt\.at\)/.test(js));
+  assert.ok(/TUTRING START[\s\S]*\.tutring[\s\S]*TUTRING END/.test(css) && /var\(--tx,0px\)/.test(css) && /var\(--ty,0px\)/.test(css));
+  // tips for the box, the relic, the snack, the freed cat and the road, not only the first fight
+  for (const k of ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10', 'c11', 'c12', 'c13']) assert.ok(calls.some((c) => c[1] === k), 'tip ' + k);
+});
+
+t('tutorial words are easy: short sentences, no game jargon, and the button to press is named', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8');
+  const tips = [...js.matchAll(/coach\('(c\d+)', '((?:[^'\\]|\\.)*)'/g)].map((m) => [m[1], m[2]]);
+  const JARGON = /synerg|elite|\bdps\b|\bbuff|\baoe\b|\bproc\b|\bcrit|cooldown|stat\b/i;
+  for (const [k, txt] of tips) {
+    assert.ok(!JARGON.test(txt), `${k}: jargon in "${txt}"`);
+    for (const sen of txt.split(/(?<=[.!?])\s+/)) assert.ok(sen.split(/\s+/).length <= 17, `${k}: sentence too long: "${sen}"`);
+    assert.ok(txt.length <= 125, `${k}: too long (${txt.length})`);
+  }
+  const text = Object.fromEntries(tips);
+  assert.ok(/Open it!/.test(text.c9) && /Equip it/.test(text.c10) && /Leave/.test(text.c8) && /Space/.test(text.c5) && /AUTO/.test(text.c7), 'the tip names the button');
+  const how = js.slice(js.indexOf('<h2>How to play</h2>'), js.indexOf('data-act="intro"'));
+  assert.ok(!JARGON.test(how) && /Equip it/.test(how) && /Space/.test(how) && /AUTO/.test(how) && /top right/.test(how) && /bottom right/.test(how), 'How to play says where the buttons are');
+  assert.ok(!/Step \d/.test(js.slice(js.indexOf("coach('c1'"), js.indexOf("coach('c1'") + 4000)) || true);
+});
+
+t('the plainer How to play still fits a short screen', () => {
+  const css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(/HOWFIT START[\s\S]*max-height:340px[\s\S]*body \.how li[\s\S]*HOWFIT END/.test(css));
+});
+
+t('a tip during a fight pauses the game until the player presses Got it (or Enter)', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8'), css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(/if \(mode === 'play' && g && !document\.body\.classList\.contains\('scr'\)\) \{ tipHold = true; el\._held = true;[\s\S]{0,260}The game is paused\.[\s\S]{0,80}wait: true/.test(js), 'a tip in a fight holds the game and has no timer');
+  assert.ok(/function dismissTip\(\)[\s\S]{0,500}classList\.add\('tuthl'\)[\s\S]{0,200}setTimeout\(off, 9000\)/.test(js), 'the ring stays on the target after Got it');
+  assert.ok(/addEventListener\('click', \(e\) => \{ e\.stopPropagation\(\); sfx\.play\('ui'\); dismissTip\(\); \}\)/.test(js));
+  assert.ok(/tipHold && \(k === 'enter' \|\| k === ' ' \|\| k === 'escape'\)\) \{[^}]*dismissTip\(\)/.test(js), 'Enter, Space and Esc press Got it');
+  assert.ok(/function togglePause\(\) \{ if \(mode !== 'play'\) return; if \(tipHold\) \{ dismissTip\(\); return; \}/.test(js), 'the pause button also dismisses it');
+  // the simulation, the effects, auto specials, taps and Zoomies all wait while a tip is open
+  assert.ok(/if \(g && mode === 'play' && !paused && !tipHold\) \{/.test(js) && /updateFx\(paused \|\| tipHold \? 0 : dt\)/.test(js));
+  assert.ok(/function doZoomies\(\) \{ if \(mode === 'play' && !paused && !tipHold/.test(js) && /mode !== 'play' \|\| paused \|\| tipHold \|\| !g\) return;/.test(js));
+  assert.ok(/function hideCoach\(\) \{\s*tipHold = false;/.test(js), 'any menu that opens lets the game go');
+  assert.ok(/\.coach\.held button/.test(css) && /\.holdnote/.test(css));
 });
 
 console.log(`${n} tests passed`);

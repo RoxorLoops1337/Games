@@ -364,17 +364,17 @@ await t('nestBannerTitle: wave 30 announces the final battle', async () => {
 
 await t('pickLine: the first start pick sets the story up, later picks explain merging', async () => {
   const { pickLine } = await import('../stacking_cats/story.js');
-  assert.ok(/royal guard/.test(pickLine(0)) && /pick the first/.test(pickLine(0)));
-  assert.ok(/merges/.test(pickLine(1)) && pickLine(1) === pickLine(2));
+  assert.ok(/Choose your first cat/.test(pickLine(0)) && /tap it/.test(pickLine(0)));
+  assert.ok(/join into one stronger cat/.test(pickLine(1)) && pickLine(1) === pickLine(2));
   assert.ok(!/\u2014/.test(pickLine(0) + pickLine(1)), 'no em dash');
 });
 
 await t('roadLine: the road screen names the next chapter and its region', async () => {
   const { roadLine } = await import('../stacking_cats/story.js');
   const themes = [{ name: 'A' }, { name: 'B' }, { name: 'C' }, { name: 'D' }, { name: 'E' }, { name: 'F' }];
-  assert.equal(roadLine(5, themes), 'Where to next? Chapter 2 waits in B. This road shapes the next five waves and the next nest.');
-  assert.ok(/Chapter 3 waits in C/.test(roadLine(10, themes)));
-  assert.ok(/Chapter 7 waits in A/.test(roadLine(30, themes)), 'the map starts over after the last region');
+  assert.equal(roadLine(5, themes), 'Choose the road to walk next. Chapter 2 is in B. The road you pick changes the next five waves and the next nest.');
+  assert.ok(/Chapter 3 is in C/.test(roadLine(10, themes)));
+  assert.ok(/Chapter 7 is in A/.test(roadLine(30, themes)), 'the map starts over after the last region');
   assert.ok(!/\u2014/.test(roadLine(5, themes)), 'no em dash');
 });
 
