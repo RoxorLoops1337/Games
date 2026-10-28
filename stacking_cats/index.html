@@ -1331,6 +1331,17 @@ body.nomotion .screen.tpad .tag,body.nomotion .screen.tpad .row,body.nomotion .s
 body.nomotion .shakeno{animation:none}
 @media (prefers-reduced-motion:reduce){.shakeno{animation:none}}
 /* PICKJUICE END */
+/* SCREENJUICE START */
+.screen:not(.tpad)>h2{animation:h2in .42s cubic-bezier(.2,1.6,.4,1) both}
+.screen:not(.tpad)>.sub{animation:subin .4s .08s ease-out both}
+.screen:not(.tpad)>.row:last-child,.screen:not(.tpad)>.row.overbtns{animation:rowin .4s .22s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes h2in{0%{opacity:0;transform:translateY(-16px) scale(.8)}100%{opacity:1;transform:none}}
+@keyframes subin{0%{opacity:0;transform:translateY(-6px)}100%{opacity:1;transform:none}}
+@keyframes rowin{0%{opacity:0;transform:translateY(16px)}100%{opacity:1;transform:none}}
+.screen.suspense>h2,.screen.suspense>.sub{animation:none}
+body.nomotion .screen>h2,body.nomotion .screen>.sub,body.nomotion .screen>.row{animation:none!important}
+@media (prefers-reduced-motion:reduce){.screen>h2,.screen>.sub,.screen>.row{animation:none!important}}
+/* SCREENJUICE END */
 </style>
 </head>
 <body>
