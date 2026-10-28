@@ -1662,7 +1662,15 @@ function postDaily() {
   submitScore({ name: save.name, score: r.dailyScore, wave: r.wave, kills: r.kills, ...(r.weekly ? { type: 'weekly', week: r.daily } : { day: r.daily }) }).then((res) => {
     const el = $('dailyMsg');
     r.sent = res.ok ? `You are #${rankOf(res.top, save.name) || '?'} ${r.weekly ? 'this week' : 'today'}!` : res.status === 429 ? 'Slow down a little, then try again.' : 'Could not reach the leaderboard.';
-    if (el && el.isConnected) el.textContent = r.sent;
+    if (el && el.isConnected) {
+      el.textContent = r.sent;
+      // the rank lands like a result: a top three place bursts, first place is shouted
+      const rk = res.ok ? rankOf(res.top, save.name) : 0, box = $('dailyBox');
+      if (box && rk > 0 && motionOn()) {
+        box.classList.remove('rankin'); void box.offsetWidth; box.classList.add('rankin');
+        if (rk <= 3) { const rc = box.getBoundingClientRect(); domBurst(rc.left + rc.width / 2, rc.top + rc.height / 2, rk === 1 ? 34 : 20, rk === 1 ? ['#ffd23f', '#fff', '#ff8fb7'] : ['#8fd3ff', '#fff', '#ffd23f'], rk === 1 ? 'NUMBER ONE!' : 'TOP 3!'); sfx.play('achieve', rk === 1 ? 1.2 : 1); buzz('jackpot'); }
+      }
+    }
   });
 }
 
