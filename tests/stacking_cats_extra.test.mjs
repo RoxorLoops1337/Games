@@ -421,3 +421,6 @@ t('between waves the tower only heals 5% of its health; snacks and relics add th
   finishWave(g2);
   assert.ok((d.hp - base2) / mx2 > gain + 0.08, 'Warm Milk adds at least 8 points more');
 });
+
+// the snack and relic audit lives in its own file; it runs with this suite so no shared script has to change
+await import('./stacking_cats_audit.test.mjs');

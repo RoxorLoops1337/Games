@@ -3,7 +3,7 @@ import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS, SPECIAL_TEXT,
   emptyStats, checkUnlocks, mergeRun, unlockProgress,
   ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, BOXES, BOX_BY_ID, RARITY_CHEER, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
-  DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
+  TEMP_WAVES, DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
   masteryProgress, masteryMap, masteryBonus, MASTERY_MAX, DIFF_ORDER, LADDER_RULES, LADDER_WAVE, ladderTier, ladderUnlocked, diffAllowed, ladderClears, weekKey, weekInfo,
 } from './cats.js';
 import { COSMETICS, COSMETIC_BY_ID, SLOTS, SLOT_NAMES, lookOf, lookSig, drawLook, drawCosmetic, canWear, buyCosmetic, toggleWear, isOwned } from './cosmetics.js';
@@ -284,7 +284,7 @@ const stars = (n) => '★'.repeat(n);
 const owns = (id) => g && [...g.cats, ...g.bench].some((c) => c.id === id && c.lvl === 1);
 
 // ---- helpers that show what a choice does
-const STAT_LABEL = { dmg: 'Damage', haste: 'Attack speed', hp: 'Health', crit: 'Crit chance', range: 'Range', dr: 'Damage taken', waveHeal: 'Healing per wave', slow: 'Mouse speed', curse: 'Mouse weakness', coin: 'Coins' };
+const STAT_LABEL = { dmg: 'Damage', haste: 'Attack speed', hp: 'Health', crit: 'Crit chance', range: 'Range', dr: 'Less damage taken', waveHeal: 'Healing per wave', slow: 'Mice slowed', curse: 'Mouse weakness', coin: 'Coins' };
 const pc = (v, signed = true) => (signed && v >= 0 ? '+' : '') + Math.round(v * 100) + '%';
 const num = (v) => (v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(Math.round(v)));
 const teamDps = (mods) => g.cats.reduce((a, c) => a + S.estDps(c, mods), 0);
@@ -311,11 +311,15 @@ function snackImpact(id) {
     return heal < 1 ? '<div class="impact">Everyone is at full health</div>' : `<div class="impact up">Heals <b>${num(heal)}</b> health right now</div>`;
   }
   if (s.nine) return `<div class="impact up">Nine Lives <b>${g.nineLives}</b> &rarr; <b>${g.nineLives + 1}</b></div>`;
+  const live = s.kind === 'temp' && g.temp.some((t) => t.id === id);   // eatSnack only refreshes a snack that is already running, it never stacks
+  if (live) return `<div class="impact">Already active: runs the full ${TEMP_WAVES} waves again</div>`;
   const m2 = { ...m };
   let lines = '';
+  const CAP = { dr: 0.65, slow: 0.6 };   // calcMods caps these, so the preview must too
   for (const k in s.fx) {
-    if (k === 'critMul') continue;
     m2[k] = (m2[k] || 0) + s.fx[k] * sm;
+    if (CAP[k]) m2[k] = Math.min(CAP[k], m2[k]);
+    if (k === 'critMul') continue;   // counted in the Team DPS line, there is no stat row for it
     const sign = k === 'dr' || k === 'slow' ? false : true;
     lines += `<div class="impact"><span>${STAT_LABEL[k] || k}</span> <b>${pc(m[k], sign)}</b> &rarr; <b>${pc(m2[k], sign)}</b></div>`;
   }
