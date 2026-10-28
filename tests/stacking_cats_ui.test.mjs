@@ -1299,4 +1299,11 @@ t('kill streak and flawless callouts: named multi kills that grow, shake scales 
   assert.ok(/FLAWLESS/.test(js) && /g\.report\.taken < 1/.test(js) && /flawless = 0/.test(js), 'flawless stamp and its reset');
 });
 
+t('equip and merge juice: every relic landing bursts (more for rarer ones, labelled for a merge) on top of the glow, only with motion on', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  const c = js.slice(js.indexOf('const celebrate = (p) =>'), js.indexOf('const setDetail'));
+  assert.ok(/domBurst\(r\.left/.test(c) && /p\.burst \|\| RB\[0\]/.test(c) && /if \(m\) \{/.test(c), 'a burst per landing, only with motion');
+  assert.ok(/label: `LV \$\{a\.lvl\}!`/.test(js), 'a merge says the new level');
+});
+
 console.log(`${n} tests passed`);
