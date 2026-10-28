@@ -1437,4 +1437,10 @@ t('settings switches and segments change in place with a click that says on or o
   assert.ok(/TOGJUICE START[\s\S]*togsquash[\s\S]*nomotion \.tog\.flip[\s\S]*TOGJUICE END/.test(css));
 });
 
+t('the Kingdom button stacks its name over the coin and gem badge so a long balance stays inside the button', () => {
+  const css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(/KINGBTN START[\s\S]*\.tgrid\.g31>\.btn\.green\.btn\.btn\{flex-direction:column[\s\S]*\.badge\{margin:0[\s\S]*max-width:100%[\s\S]*KINGBTN END/.test(css));
+  assert.ok(css.indexOf('KINGBTN START') > css.indexOf('body .screen .tgrid.g31>.btn.green.btn.btn{padding-left:12px'), 'it wins over the older one-line rule');
+});
+
 console.log(`${n} tests passed`);
