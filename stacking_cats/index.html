@@ -1348,6 +1348,11 @@ body.nomotion .screen>h2,body.nomotion .screen>.sub,body.nomotion .screen>.row{a
 body .over .newcats .card,body .newcats .card{animation:catflip .55s calc(1s + var(--i,0)*.35s) cubic-bezier(.2,1.2,.4,1) both,catglow .9s calc(1.2s + var(--i,0)*.35s) ease-out both}
 body.nomotion .newcats .card{animation:none!important}
 /* CATFLIP END */
+/* BANSLAM START */
+@keyframes banslam{0%{opacity:0;transform:scale(2.1)}14%{opacity:1;transform:scale(.94)}22%{transform:scale(1.05)}30%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(1.05)}}
+#banner.boss.show{animation:banslam 2.2s cubic-bezier(.2,.9,.3,1) forwards;letter-spacing:3px}
+body.nomotion #banner.boss.show{animation:none;opacity:1;transform:none}
+/* BANSLAM END */
 /* BOSSJUICE START */
 #bossBar.hit{animation:bosshit .16s ease-out}
 #bossBar.phase{animation:bossphase .6s cubic-bezier(.2,1.6,.4,1)}

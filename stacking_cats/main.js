@@ -835,6 +835,11 @@ function beginWave() {
     bestShown = true;
     setTimeout(() => { if (mode === 'play') { txtFx(W / 2, 236, 'NEW BEST!', '#ffd23f', 38, 2); confetti(W / 2, 120, 40, 360); sfx.play('win'); toast(`New best: wave ${g.wave}!`); } }, 2600);
   }
+  // the banner lands with weight: a nest slams in with a shake, a new chapter gets a gold flash
+  if (motionOn()) {
+    if (boss) { shake = Math.max(shake, 7); setTimeout(() => { if (mode === 'play') { sfx.play('stamp'); buzz('boss'); } }, 230); }
+    else if (isChapterStart(g.wave)) { screenFlash('rgba(255,210,63,.22)', 0.35); ring(W / 2, 190, 260, '#ffd23f', 0.7, 10); buzz('pop'); }
+  }
   if (boss) { spawnFx({ k: 'vig', life: 2.6, max: 2.6 }); nestPending = 3; }
   // a short "incoming" strip under the banner: which mice this wave brings and how many
   const inc = new Map(); for (const q of g.queue) { const o = inc.get(q.type) || { n: 0, el: 0 }; o.n++; if (q.elite) o.el++; inc.set(q.type, o); }
