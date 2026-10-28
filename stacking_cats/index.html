@@ -1365,6 +1365,23 @@ body.nomotion #coinBox.cgain.cbig{animation:none!important}
 .spb.fired{animation:spfired .45s cubic-bezier(.2,1.4,.4,1)}
 body.nomotion .spb.justready,body.nomotion .spb.fired{animation:none}
 /* SPJUICE END */
+/* RANKING START */
+.namechip{position:absolute;top:10px;left:12px;z-index:3;font:400 14px var(--display);color:#fff;background:rgba(21,15,38,.78);border:2px solid #ffffff44;border-radius:999px;padding:5px 14px;cursor:pointer;box-shadow:0 3px 0 #150f26;max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.namechip:hover{border-color:#ffd23f;color:#ffd23f}
+.namebox{display:flex;gap:10px;align-items:center;justify-content:center;margin:6px 0 4px}
+.namebox input{font:400 24px var(--display);text-align:center;width:min(280px,60vw);padding:8px 12px;border-radius:14px;border:3px solid var(--ink);background:#fff8ef;color:var(--ink);box-shadow:0 4px 0 #0004 inset}
+.namebox input:focus{outline:3px solid #ffd23f}
+.namemsg{display:block;text-align:center;color:#ffe3c4;font-weight:700;margin-bottom:8px}.namemsg.bad{color:#ff9a9a}
+.rktabs{justify-content:center;margin:2px auto 6px}.rktabs button{white-space:nowrap}
+.rkboard{width:min(460px,92vw);margin:0 auto;max-height:200px;overflow:auto}
+.rkbody .brow.rk{grid-template-columns:30px 1fr auto 64px;font-size:15px;padding:3px 6px}
+.rkbody .brow.p1 span{color:#ffd23f;font-size:18px}.rkbody .brow.p2 span{color:#e6ecf5;font-size:17px}.rkbody .brow.p3 span{color:#ff9f5a;font-size:16px}
+.rkbody .brow.me{background:rgba(255,210,63,.2);outline:2px solid #ffd23f}
+.rkfoot{display:flex;gap:12px;align-items:center;justify-content:center;margin:6px 0;color:#fff;font-weight:700}
+.rankmsg{display:block;color:#ffd23f;font-weight:800}
+.linkbtn{background:none;border:0;color:#8fd3ff;font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;padding:0}
+@media (max-height:340px){.rkboard{max-height:120px}.namechip{top:6px;font-size:12px;padding:3px 10px}}
+/* RANKING END */
 /* BOSSJUICE START */
 #bossBar.hit{animation:bosshit .16s ease-out}
 #bossBar.phase{animation:bossphase .6s cubic-bezier(.2,1.6,.4,1)}

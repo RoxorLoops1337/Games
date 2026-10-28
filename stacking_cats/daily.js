@@ -43,3 +43,16 @@ export async function submitScore(entry, fetchFn = (typeof fetch === 'function' 
 }
 
 export const rankOf = (list, name) => { const i = list.findIndex((e) => e.name === name); return i < 0 ? 0 : i + 1; };
+
+// ---- usernames and the ranking list
+const BAD_NAME = /(fuck|shit|cunt|nigg|fagg|bitch|whore|slut|rape|nazi|hitler|dick|cock|pussy|penis|vagina|asshole)/i;
+export const cleanName = (raw) => String(raw || '').replace(/[^\w \-.']/g, '').trim().slice(0, 12);
+// at least two characters and nothing the board would turn into Anonymous
+export const nameOk = (raw) => { const n = cleanName(raw); return n.length >= 2 && !BAD_NAME.test(n.replace(/[ \-.'_0-9]/g, '')); };
+const NAME_A = ['Whisker', 'Biscuit', 'Mochi', 'Pounce', 'Noodle', 'Pickle', 'Mittens', 'Tuna', 'Fluffy', 'Sparky', 'Cosmo', 'Muffin'];
+const NAME_B = ['Boss', 'Ninja', 'Hero', 'King', 'Wizard', 'Chef', 'Pilot', 'Fox', 'Star', 'Tiger'];
+export const suggestName = (rnd = Math.random) => (NAME_A[Math.floor(rnd() * NAME_A.length)] + NAME_B[Math.floor(rnd() * NAME_B.length)]).slice(0, 12);
+// an ordinary (not daily or weekly) run goes on the all time ranking only
+export async function submitRun(entry, fetchFn = (typeof fetch === 'function' ? fetch : null), ms = 5000) {
+  return submitScore({ ...entry, type: 'run' }, fetchFn, ms);
+}

@@ -194,7 +194,7 @@ t('main.js parses and the ids it uses exist in index.html', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8'), html = readFileSync('stacking_cats/index.html', 'utf8');
   const ids = new Set([...js.matchAll(/\$\('([A-Za-z]+)'\)/g)].map((m) => m[1]));
   assert.ok(ids.size >= 10);
-  const dynamic = new Set(['earn', 'boardBody', 'dailyMsg', 'dailyBox', 'kscene', 'kdetail']); // created by the game over screen
+  const dynamic = new Set(['earn', 'boardBody', 'dailyMsg', 'dailyBox', 'kscene', 'kdetail', 'nameMsg', 'rankBody', 'rankMe', 'rankMsg']); // created by the game over, name and ranking screens
   for (const id of ids) assert.ok(dynamic.has(id) || html.includes(`id="${id}"`), 'index.html misses #' + id);
   assert.ok(html.includes('type="module" src="main.js"'));
 });
@@ -1387,6 +1387,19 @@ t('a special button flashes and dings when it charges and bursts in the cat colo
   assert.ok(/ready && !b\._was && g\.state === 'fight' && motionOn\(\)[\s\S]{0,300}justready[\s\S]{0,200}sfx\.play\('pip', 1\.7\)[\s\S]{0,300}b\._was = ready/.test(js));
   assert.ok(/function doSpecial[\s\S]{0,700}classList\.add\('fired'\)[\s\S]{0,300}buzz\('pop'\)/.test(js));
   assert.ok(/SPJUICE START[\s\S]*spjust[\s\S]*spfired[\s\S]*nomotion \.spb\.justready[\s\S]*SPJUICE END/.test(css));
+});
+
+t('players pick a username that shows on the title and in a ranking list, ordinary runs join it', async () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8'), css = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  const { nameOk, cleanName, suggestName } = await import('../stacking_cats/daily.js');
+  assert.ok(nameOk('Mia') && nameOk('Cat Lover 7') && !nameOk('a') && !nameOk('   ') && !nameOk('f.u c-k') && !nameOk('<<>>'));
+  assert.equal(cleanName('<b>Mia</b>  '), 'bMiab'); assert.ok(suggestName(() => 0.99).length <= 12 && nameOk(suggestName()));
+  assert.ok(/function showNamePrompt[\s\S]*nameOk\(v\)[\s\S]*save\.name = v/.test(js) && /function showRanking[\s\S]*fetchBoard\(dayKey\(\)\)[\s\S]*fetchBoard\(weekKey\(\)/.test(js));
+  assert.ok(/data-act="ranking"/.test(js) && /ranking: \(\) => showRanking\(showTitle\)/.test(js), 'title chip opens the ranking');
+  assert.ok(/!save\.name && !save\.nameAsked\) setTimeout\(\(\) => \{ if \(mode === 'title' && !save\.name\) showNamePrompt/.test(js), 'asked once after the intro');
+  assert.ok(/function postRun[\s\S]*submitRun\(\{ name: save\.name[\s\S]*r\.rankSent/.test(js) && /else postRun\(r\)/.test(js));
+  assert.ok(/nameAsked: !!s\.nameAsked/.test(js), 'additive save field');
+  assert.ok(/RANKING START[\s\S]*\.namechip[\s\S]*\.rkboard[\s\S]*RANKING END/.test(css));
 });
 
 console.log(`${n} tests passed`);

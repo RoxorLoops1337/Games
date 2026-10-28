@@ -55,4 +55,20 @@ await t('get with a bad day falls back to today', async () => {
   const j = await (await get(env, '?day=1999-01-01')).json();
   assert.equal(j.day, today);
 });
+await t('an ordinary run only joins the all time board, needs no day and cleans names', async () => {
+  const env = { BOARD: mockKV() };
+  let r = await post(env, { type: 'run', name: 'Mia', score: 900, wave: 9, kills: 50 }, '8.8.8.1');
+  assert.equal(r.status, 200);
+  let j = await r.json();
+  assert.equal(j.type, 'run');
+  assert.deepEqual(j.all.map((e) => e.name), ['Mia']);
+  const d = await (await get(env)).json();
+  assert.equal(d.top.length, 0, 'not on the daily board');
+  assert.equal(d.all.length, 1);
+  r = await post(env, { type: 'run', name: 'Mia', score: 100, wave: 1, kills: 0 }, '8.8.8.2');
+  assert.equal((await r.json()).all[0].score, 900, 'best per name');
+  assert.equal((await post(env, { type: 'run', name: 'Mia', score: 0, wave: 5, kills: 3 }, '8.8.8.3')).status, 400);
+  r = await post(env, { type: 'run', name: 'shitlord', score: 500, wave: 5, kills: 3 }, '8.8.8.4');
+  assert.ok((await r.json()).all.some((e) => e.name === 'Anonymous'), 'a rude name is shown as Anonymous');
+});
 console.log(`${n} tests passed`);
