@@ -118,8 +118,8 @@ t('merging and releasing keep items (extra ones return to the stash)', () => {
   e1.items = ['claws'];
   assert.ok(mergeCats(g, e1.uid, 999));
   assert.equal(e1.lvl, 2);
-  assert.equal(e1.items.length, 1);
-  assert.equal(e1.items.length + g.stash.length, 2);
+  assert.equal(e1.items.length, 2, 'a Lv 2 cat has two slots, so both items stay');
+  assert.equal(g.stash.length, 0);
   const s = g.cats[1];
   s.items = ['vest'];
   releaseCat(g, s.uid);

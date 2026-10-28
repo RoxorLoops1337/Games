@@ -425,7 +425,8 @@ export function teamRelics(cats) {
 export const SELL_VALUE = { common: 3, rare: 9, epic: 24, legendary: 60, mythic: 160 };   // run coins (see COIN_SCALE)
 export const FORGE_NEXT = { common: 'rare', rare: 'epic', epic: 'legendary', legendary: 'mythic', mythic: 'mythic' };
 export const FORGE_COUNT = 3;
-export const itemSlots = (lvl) => (lvl >= 3 ? 2 : 1);
+export const itemSlots = (lvl) => Math.max(1, Math.min(3, lvl));   // a Lv 1 cat wears 1 item, Lv 2 wears 2, Lv 3 wears 3
+export const BOX_PITY = 5;   // a box that could hold a common gives a rare or better at the latest on the 5th chest in a row
 
 // ---------------------------------------------------------------- the Cat Kingdom (spend coins between runs)
 // bonus(level) returns the part of the run bonuses this building gives at that level.

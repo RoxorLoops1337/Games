@@ -5,7 +5,7 @@ import {
   newGame, addCat, mergeCats, mergePairs, rollCatChoices, rollSnackChoices, eatSnack, startWave, step, catMaxHp, releaseCat, moveCat, TUNE,
   rollItemChoices, takeItem, rollRelicChoices, takeRelic, openBox, equipItem, useReroll, autoSpecialPick, useSpecial, useZoomies,
 } from '../stacking_cats/sim.js';
-import { ITEM_BY_ID, emptyKingdom } from '../stacking_cats/cats.js';
+import { ITEM_BY_ID, emptyKingdom, itemSlots } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CATS, SNACK_BY_ID, STARTERS, MAX_STACK, START_CATS } from '../stacking_cats/cats.js';
 
 const QUICK = !!process.env.QUICK;
@@ -51,7 +51,7 @@ function snack(g) {
 // a lootbox is a chance, not a choice: the bot opens it and puts the relic on a cat with a free slot (or the first cat)
 function lootBox(g, tier) {
   openBox(g, tier);
-  const target = g.cats.find((c) => c.items.length < (c.lvl >= 3 ? 2 : 1)) || g.cats[0];
+  const target = g.cats.find((c) => c.items.length < itemSlots(c.lvl)) || g.cats[0];
   if (target) equipItem(g, g.stash.length - 1, target.uid);
 }
 

@@ -1504,6 +1504,34 @@ body.nomotion .btn.pulse,body.nomotion .card.ev .evstamp{animation:none}
 .screen.noscrin{animation:none}
 .revealstage.pending .cardback{animation:backrise .45s cubic-bezier(.2,1.4,.4,1) both,backwobble .32s .45s ease-in-out infinite}
 @keyframes backrise{from{transform:translateY(70px) scale(.5);opacity:0}to{transform:none;opacity:1}}
+
+/* chests: tap to crack. A tier chip that can turn rarer, a hint with dots, a harder shake per tap, a summary for Open all */
+.captier{font:400 22px var(--display);color:#fff;background:var(--tc,#ffe68c);border:3px solid #2a1d4a;border-radius:999px;padding:2px 18px;box-shadow:0 3px 0 #0005;text-shadow:0 2px 0 #0007;margin:2px 0}
+.captier.up{animation:tierup .5s cubic-bezier(.2,1.8,.4,1)}
+.captag{font:400 18px var(--display);height:24px;color:var(--tc,#ffd23f);text-shadow:0 2px 0 #000a,0 0 10px var(--tc,#ffd23f);opacity:0}
+.captag.pop{animation:tagpop 1.1s ease-out both}
+.caphint{height:42px;display:flex;flex-direction:column;align-items:center;justify-content:center;font:400 20px var(--display);color:#fff;text-shadow:0 2px 0 #000a;animation:hintbob .8s ease-in-out infinite}
+.caphint small{font-size:15px;letter-spacing:5px;color:#ffd23f}
+.boxstage.hit .boxic{animation:boxhit .34s ease-out}
+.boxstage.hit .boxcrack{opacity:var(--crack,.3);animation:none}
+.boxstage.hit .boxglow{opacity:calc(.25 + var(--crack,0) * .6);animation:none}
+.boxstage.flashup .boxflash{animation:flashout .5s ease-out both}
+.sumgrid{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:760px;margin:6px 0 10px}
+.sumtile{width:120px;padding:8px 6px;border-radius:14px;background:#fff6e6;color:#2a1d4a;border:4px solid var(--tc,#ffe68c);box-shadow:0 5px 0 #0004;display:flex;flex-direction:column;align-items:center;gap:2px;animation:sumpop .5s calc(var(--i,0) * .12s) cubic-bezier(.2,1.6,.4,1) both}
+.sumtile .ic{font-size:40px;line-height:1.1}.sumtile b{font:400 15px/1.05 var(--display)}.sumtile small{font-weight:800;text-transform:uppercase;font-size:11px;letter-spacing:1px;color:#6b5a85}
+.sumtile.best{box-shadow:0 0 0 3px #fff,0 0 24px var(--tc),0 5px 0 #0004;transform:scale(1.08)}
+@keyframes boxhit{0%{transform:scale(1)}18%{transform:scale(calc(1 + var(--k,1) * .06),calc(1 - var(--k,1) * .07)) rotate(calc(var(--k,1) * -2deg))}45%{transform:scale(.97,1.04) rotate(calc(var(--k,1) * 2.5deg))}70%{transform:rotate(calc(var(--k,1) * -1.5deg))}100%{transform:none}}
+@keyframes tierup{0%{transform:scale(.6)}60%{transform:scale(1.25)}100%{transform:none}}
+@keyframes tagpop{0%{opacity:0;transform:scale(.5)}20%{opacity:1;transform:scale(1.3)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translateY(-6px)}}
+@keyframes hintbob{50%{transform:scale(1.07)}}
+@keyframes sumpop{from{opacity:0;transform:translateY(30px) scale(.5)}to{opacity:1}}
+body.nomotion .caphint,body.nomotion .sumtile,body.nomotion .captier.up,body.nomotion .captag.pop,body.nomotion .boxstage.hit .boxic{animation:none}
+body.nomotion .captag.pop{opacity:1}
+@media (prefers-reduced-motion:reduce){.caphint,.sumtile,.captier.up,.boxstage.hit .boxic{animation:none}}
+@media (max-height:340px){.captier{font-size:16px;padding:0 12px}.captag{height:16px;font-size:14px}.caphint{height:30px;font-size:15px}.sumtile{width:96px}.sumtile .ic{font-size:30px}}
+
+/* the snack row is a transparent holder: it must not blur what is behind it (it covered AUTO and the first special), and it stops before the specials */
+body #snackBar{backdrop-filter:none;-webkit-backdrop-filter:none;max-width:min(560px,calc(100% - 520px))}
 </style>
 </head>
 <body>

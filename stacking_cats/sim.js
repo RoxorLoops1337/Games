@@ -3,7 +3,7 @@
 import {
   CATS, CAT_BY_ID, STARTERS, SNACKS, SNACK_BY_ID, ENEMY_TYPES, NESTS,
   MAX_STACK, MAX_BENCH, BOSS_EVERY, LVL_MUL, AURA_MUL, BASE_HP, BASE_DMG, TEMP_WAVES,
-  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, BOXES, BOX_BY_ID, COIN_SCALE, itemSlots, kingdomBonuses, emptyKingdom, COIN,
+  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, BOX_PITY, RARITIES, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, BOXES, BOX_BY_ID, COIN_SCALE, itemSlots, kingdomBonuses, emptyKingdom, COIN,
   DIFFS, CAT_TAGS, SYNERGIES, ROUTES, ROUTE_BY_ID, DAILY_POOL, masteryBonus, activeSets,
 } from './cats.js';
 import { RELICS, SHADY_RELICS, RELIC_BY_ID, NEST_RELIC_EVERY, DEAL_CATCH, EARLY_BIRD, FIRST_KILL, THEME_TAG, RELIC_THEMES } from './relics.js';
@@ -378,13 +378,26 @@ export function rollBoxTier(g, src = 'elite', n = 0) {
 // the relic inside a box of this quality (a chance, duplicates happen: spare copies forge into better relics)
 export function rollBoxRelic(g, tier) {
   const L = luckOf(g), odds = (BOX_BY_ID[tier] || BOXES[0]).odds;
-  const list = Object.keys(odds).map((r) => ({ r, w: odds[r] * (1 + (RARITY_LUCK[r] || 0) * L * 0.6) }));
+  const due = (g.run.boxPity || 0) >= BOX_PITY - 1;   // pity: a long run of commons ends with a rare or better
+  const list = Object.keys(odds).filter((r) => !(due && r === 'common' && Object.keys(odds).length > 1)).map((r) => ({ r, w: odds[r] * (1 + (RARITY_LUCK[r] || 0) * L * 0.6) }));
   let x = g.rnd() * list.reduce((a, b) => a + b.w, 0), rar = list[list.length - 1].r;
   for (const e of list) { x -= e.w; if (x <= 0) { rar = e.r; break; } }
   const pool = ITEMS.filter((it) => it.rarity === rar);
   return pool[Math.floor(g.rnd() * pool.length)].id;
 }
-export function openBox(g, tier) { const id = rollBoxRelic(g, tier); takeItem(g, id); return id; }
+// a box is rolled first (so the chest can show a lower tier and turn rarer as it cracks), then opened
+export function boxPlan(g, tier) {
+  const id = rollBoxRelic(g, tier), rar = ITEM_BY_ID[id].rarity, low = RARITIES.indexOf(Object.keys((BOX_BY_ID[tier] || BOXES[0]).odds)[0]), fi = RARITIES.indexOf(rar);
+  const i0 = Math.max(low, fi - 2);
+  return { id, rar, tier, tier0: RARITIES[i0], ups: RARITIES.slice(i0 + 1, fi + 1) };
+}
+export function openPlanned(g, plan) {
+  takeItem(g, plan.id);
+  g.run.boxCount = (g.run.boxCount || 0) + 1;
+  g.run.boxPity = plan.rar === 'common' ? (g.run.boxPity || 0) + 1 : 0;
+  return plan.id;
+}
+export function openBox(g, tier) { return openPlanned(g, boxPlan(g, tier)); }
 // a pick is never refused: the pack may overflow, and the arrange screen then asks the player to sell, forge or equip
 // until it fits again (selling always works, so the pack can never lock the run)
 export function takeItem(g, id) { g.run.items++; g.stash.push(id); return true; }
@@ -748,7 +761,7 @@ export function killEnemy(g, e, credit) {
       if (kf && kf.kcoin) addCoins(g, kf.kcoin * COIN.kill, e.x, ecy(e));   // kcoin is a share of the kill coin, so it moves with COIN_SCALE
       emit(g, { k: 'kill', x: e.x, y: ecy(e), type: e.type, elite: e.elite });
       addCoins(g, e.elite ? COIN.elite : COIN.kill, e.x, ecy(e));
-      if (g.rnd() < (e.elite ? 0.22 : 0.012) * (1 + g.meta.luck * 0.4 + g.route.chest + ((g.daily && g.daily.mod.chest) || 0))) { const tier = rollBoxTier(g, 'elite'); g.boxes.push(tier); emit(g, { k: 'chest', x: e.x, y: ecy(e), tier }); }
+      if (g.rnd() < (e.elite ? 0.08 : 0.004) * (1 + g.meta.luck * 0.4 + g.route.chest + ((g.daily && g.daily.mod.chest) || 0))) { const tier = rollBoxTier(g, 'elite'); g.boxes.push(tier); emit(g, { k: 'chest', x: e.x, y: ecy(e), tier }); }
     }
   }
   if (e.burn && !e.boss && g.mods.rule.burnBoom && (g._boomDepth || 0) < 8) {   // Cinder Bomb: a burning mouse blows up (same depth cap as the item explosions)
