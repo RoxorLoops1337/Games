@@ -1375,4 +1375,11 @@ t('a big coin haul pops the counter harder with sparks and a larger number', () 
   assert.ok(/COINBIG START[\s\S]*cbigpop[\s\S]*nomotion #coinBox\.cgain\.cbig[\s\S]*COINBIG END/.test(css));
 });
 
+t('a boot splash covers the first frame and lifts onto the title', () => {
+  const js = readFileSync(new URL('../stacking_cats/main.js', import.meta.url), 'utf8'), html = readFileSync(new URL('../stacking_cats/index.html', import.meta.url), 'utf8');
+  assert.ok(html.indexOf('<div id="boot"') > html.indexOf('<body>') && html.indexOf('<div id="boot"') < html.indexOf('<div id="app">'), 'the splash is in the HTML so it paints before any script runs');
+  assert.ok(/BOOT START[\s\S]*bootslam[\s\S]*nomotion #boot[\s\S]*prefers-reduced-motion[\s\S]*BOOT END/.test(html));
+  assert.ok(/getElementById\('boot'\)[\s\S]{0,300}motionOn\(\) \? Math\.max\(0, 1500 - performance\.now\(\)\) : 0[\s\S]{0,200}classList\.add\('gone'\)/.test(js));
+});
+
 console.log(`${n} tests passed`);

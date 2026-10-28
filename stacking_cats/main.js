@@ -2988,5 +2988,13 @@ function frame(ts) {
 
 window.stackingCats = { setCombo: (n) => { combo = n; comboT = 2.4; }, get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
 showTitle();
+// the boot splash (in index.html) covers the half-built first frame; it stays long enough for the three slams, then lifts onto the title
+{
+  const boot = document.getElementById('boot');
+  if (boot) {
+    const wait = motionOn() ? Math.max(0, 1500 - performance.now()) : 0;
+    setTimeout(() => { boot.classList.add('gone'); setTimeout(() => boot.remove(), 600); }, wait);
+  }
+}
 requestAnimationFrame(frame);
 void ENEMY_TYPES;
