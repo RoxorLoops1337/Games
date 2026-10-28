@@ -1,4 +1,5 @@
 // Share card: a 1080x1080 picture of the run (tower, wave, nests, mice, best hit) and the share/download helper.
+import { tr } from './i18n.js';
 import { drawCat } from './art_cats.js';
 import { CAT_BY_ID } from './cats.js';
 
@@ -52,7 +53,7 @@ export function drawShareCard(canvas, info = {}) {
     x.font = `110px ${DISPLAY}`; x.lineJoin = 'round'; x.lineWidth = 16; x.strokeStyle = '#271c33'; x.fillStyle = '#ffd23f';
     x.strokeText('Stacking Cats', W / 2, 140); x.fillText('Stacking Cats', W / 2, 140);
     x.font = `38px ${BODY}`; x.fillStyle = '#fff8ef';
-    x.fillText(info.daily ? `Daily challenge  -  ${info.diff || 'Normal'}` : `${info.diff || 'Normal'} difficulty`, W / 2, 200);
+    x.fillText(tr(info.daily ? `Daily challenge  -  ${info.diff || 'Normal'}` : `${info.diff || 'Normal'} difficulty`), W / 2, 200);
 
     // the tower: bottom cat at the bottom, up to 5 cats overlapping
     const all = (info.cats || []).filter((id) => CAT_BY_ID[id]);
@@ -68,7 +69,7 @@ export function drawShareCard(canvas, info = {}) {
 
     if (shareExtra(all.length) > 0) {
       x.textAlign = 'center'; x.font = `40px ${DISPLAY}`; x.fillStyle = "#ffd23f";
-      x.fillText(`+${shareExtra(all.length)} more cats`, cx, 936);
+      x.fillText(tr(`+${shareExtra(all.length)} more cats`), cx, 936);
     }
 
     // stats panel
@@ -79,13 +80,13 @@ export function drawShareCard(canvas, info = {}) {
     const rows = [['Wave reached', info.wave], ['Nests destroyed', info.bossKills], ['Mice defeated', info.kills], ['Best hit', info.biggest]];
     rows.forEach(([label, v], i) => {
       const y = py + 130 + i * 128;
-      x.font = `34px ${BODY}`; x.fillStyle = '#c9b8f0'; x.fillText(label, px + 40, y - 52);
+      x.font = `34px ${BODY}`; x.fillStyle = '#c9b8f0'; x.fillText(tr(label), px + 40, y - 52);
       x.font = `84px ${DISPLAY}`; x.fillStyle = i === 0 ? '#ffd23f' : '#ffffff'; x.fillText(fmt(v), px + 40, y + 20);
     });
 
     // footer
     x.textAlign = 'center'; x.font = `40px ${BODY}`; x.fillStyle = '#fff8ef';
-    x.font = `36px ${BODY}`; x.fillStyle = '#ffd23f'; x.fillText(SHARE_TAGLINE, W / 2, 986);
+    x.font = `36px ${BODY}`; x.fillStyle = '#ffd23f'; x.fillText(tr(SHARE_TAGLINE), W / 2, 986);
     x.font = `40px ${BODY}`; x.fillStyle = '#fff8ef';
     x.fillText(SHARE_URL, W / 2, 1040);
     return true;

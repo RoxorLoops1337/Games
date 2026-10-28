@@ -16,6 +16,7 @@
 <link rel="modulepreload" href="main.js">
 <link rel="modulepreload" href="cats.js">
 <link rel="modulepreload" href="relics.js">
+<link rel="modulepreload" href="i18n.js">
 <link rel="modulepreload" href="sim.js">
 <link rel="modulepreload" href="audio.js">
 <link rel="modulepreload" href="post.js">
@@ -1532,6 +1533,13 @@ body.nomotion .captag.pop{opacity:1}
 
 /* the snack row is a transparent holder: it must not blur what is behind it (it covered AUTO and the first special), and it stops before the specials */
 body #snackBar{backdrop-filter:none;-webkit-backdrop-filter:none;max-width:min(560px,calc(100% - 520px))}
+
+/* language buttons: English / Dansk on the title and in the pause menu, the language of each button is its own name */
+.langsw{display:inline-flex;gap:0;border-radius:999px;overflow:hidden;border:2.5px solid #ffffff66;background:rgba(21,15,38,.78);box-shadow:0 3px 0 #150f26;margin-top:6px}
+.langsw button{font:400 15px var(--display);color:#d9cdf0;background:none;border:0;padding:4px 14px;cursor:pointer}
+.langsw button.on{background:#ffd23f;color:#271c33}
+.langsw.titlelang{position:absolute;top:10px;right:12px;margin:0;z-index:3}
+@media (max-height:340px){.langsw button{font-size:12px;padding:2px 10px}.langsw.titlelang{top:6px}}
 </style>
 </head>
 <body>

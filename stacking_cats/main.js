@@ -13,6 +13,7 @@ import { dailyScore, fetchBoard, submitScore, submitRun, rankOf, dailyStreak, pa
 import { drawBuilding } from './art_kingdom.js';
 import { RELIC_BY_ID, RELIC_THEMES, relicLines, DEAL_CATCH } from './relics.js';
 import * as S from './sim.js';
+import { setLang, startDom, retranslate, resolveLang, getLang, tr, missing as i18nMissing } from './i18n.js';
 import { drawCat } from './art_cats.js';
 import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawRays, drawFront, freeBackdrop, resetWorldArt } from './art_world.js';
 import { Sfx } from './audio.js';
@@ -37,7 +38,7 @@ const sfx = new Sfx();
 // ---------------------------------------------------------------- save
 // a player whose system asks for reduced motion starts with screen shake and flashes off (they can still turn them on)
 const REDUCED_MOTION = (() => { try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const DEFAULT_OPT = { shake: REDUCED_MOTION ? 0 : 1, colorblind: false, bigText: false, quality: 'auto', motion: !REDUCED_MOTION, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, meows: true, meowMusic: true, autoSpecial: false, fast: false };
+const DEFAULT_OPT = { shake: REDUCED_MOTION ? 0 : 1, colorblind: false, bigText: false, quality: 'auto', motion: !REDUCED_MOTION, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, meows: true, meowMusic: true, autoSpecial: false, fast: false, lang: 'auto' };
 function freshSave() {
   return { v: 1, relics: {}, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', nameAsked: false, ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT }, weekly: {}, ladder: 0, owned: [], wardrobe: {} };
 }
@@ -422,6 +423,15 @@ function watchIntro(then) {
   playIntro(app, { cat: (id) => catSprite(id), sfx, motion: save.opt.motion, onDone: () => { then(); } });
 }
 
+// language: Auto follows the browser. The two buttons (title, pause menu) pick English or Danish at once, Settings also has Auto.
+const langSwitch = (cls = '') => { const cur = getLang(); return `<div class="langsw ${cls}" data-no-tr="1" role="group" aria-label="Language"><button class="${cur === 'en' ? 'on' : ''}" data-act="lang" data-v="en">English</button><button class="${cur === 'da' ? 'on' : ''}" data-act="lang" data-v="da">Dansk</button></div>`; };
+async function chooseLang(code, redraw) {
+  save.opt.lang = code; persist();
+  await setLang(code); retranslate();
+  for (const k of Object.keys(hudCache)) delete hudCache[k];   // the HUD chips are rebuilt in the new language
+  sfx.play('pick', 1.2);
+  if (redraw) redraw();
+}
 function showTitle() {
   mode = 'title'; paused = false;
   titleStack = titleStackIds(save.unlocked, save.catStats);   // the title shows the player's own team
@@ -435,13 +445,14 @@ function showTitle() {
     <div class="row tgrid g4 gplay"><button class="btn big" data-act="play">Play</button><button class="btn small grey" data-act="ranking" title="See the ranking list">&#127942; Ranking</button><button class="btn small grey" data-act="story">Story</button></div>
     <div class="row tgrid g4"><button class="btn pink" data-act="daily">Daily ${di.mod.icon}${streak >= 2 ? `<span class="streak" title="${streak} days in a row">&#128293;${streak}</span>` : ''}${played ? '' : '<i class="bang">!</i>'}</button><button class="btn pink wk" data-act="weekly">Weekly &#127942;${save.weekly[weekKey()] ? '' : '<i class="bang">!</i>'}</button><button class="btn" data-act="collection" style="grid-column:span 2">Collection</button></div>
     <div class="row tgrid g31" style="grid-template-columns:1.7fr 1fr 1fr"><button class="btn green" data-act="kingdom">Kingdom <span class="badge">&#129689; ${num(k.coins)}${k.gems ? ` &middot; &#128142; ${k.gems}` : ''}</span>${can ? '<i class="bang">!</i>' : ''}</button><button class="btn grey small" data-act="settings">Settings</button><button class="btn grey small" data-act="how">How to play</button></div>
+     ${langSwitch('titlelang')}
     <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : (coarse ? 'Tap the big pink Play button to start' : 'Click the big pink Play button, or press Enter, to start')}</div>`, 'clear tpad');
   acts = {
     relics: () => showRelics(showTitle),
     play: () => showDiffPicker(showTitle, true), collection: () => showCollection(showTitle), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
     daily: () => showDaily(showTitle), trophies: () => showTrophies(showTitle), settings: () => showSettings(showTitle),
     weekly: () => showDaily(showTitle, true), story: () => watchIntro(() => showTitle()),
-    diff: () => showDiffPicker(showTitle), ranking: () => showRanking(showTitle),
+    diff: () => showDiffPicker(showTitle), ranking: () => showRanking(showTitle), lang: (d) => chooseLang(d.v, showTitle),
   };
   setBackdrop(0);
   sfx.music('calm');
@@ -455,6 +466,7 @@ function showSettings(back, msg) {
   setScreen(`<h2>Settings</h2><div class="tbody"><div class="setgrid">
       <div class="setcol">
         <div class="setrow"><b>Difficulty</b>${seg('diff', [['cozy', 'Cozy'], ['normal', 'Normal'], ['hard', 'Hard']], save.diff)}<small>${DIFFS[save.diff].desc}</small></div>
+        <div class="setrow"><b>Language</b><div class="seg" data-no-tr="1">${[['auto', 'Auto'], ['en', 'English'], ['da', 'Dansk']].map(([v, l]) => `<button class="${(o.lang || 'auto') === v ? 'on' : ''}" data-act="lang" data-v="${v}">${l}</button>`).join('')}</div><small>${(o.lang || 'auto') === 'auto' ? 'Auto follows your browser.' : ''}</small></div>
         <div class="setrow"><b>Sound effects</b><input type="range" min="0" max="100" value="${Math.round(o.sfxVol * 100)}" data-r="sfxVol"></div>
         <div class="setrow"><b>Music</b><input type="range" min="0" max="100" value="${Math.round(o.musicVol * 100)}" data-r="musicVol"></div>
         <div class="setrow"><b>Screen shake</b>${seg('shake', [[0, 'Off'], [0.5, 'Low'], [1, 'Normal']], o.shake)}</div>
@@ -496,6 +508,7 @@ function showSettings(back, msg) {
       sfx.play(on ? 'pick' : 'pip', on ? 1.3 : 0.75); buzz('tick');
     },
     install: () => { promptInstall().then(() => showSettings(back)); },
+    lang: (d) => chooseLang(d.v, () => showSettings(back)),
     tipsreset: () => { save.tips = {}; save.opt.tutorial = true; persist(); showSettings(back, 'Tutorial hints will show again.'); },
     export: () => {
       const code = encodeSave(save);
@@ -1851,7 +1864,7 @@ function showPause() {
   if (!paused) sfx.play('pip', 0.7);   // a low blip as the game holds still
   paused = true;
   $('toasts').replaceChildren();   // old toasts would smear behind the blurred pause menu
-  setScreen(`<h2 class="paused">Paused</h2><div class="pstat"><span>Chapter <b>${chapterOf(g.wave).n}</b></span><span>Wave <b>${g.wave}</b></span><span>Mice <b>${num(g.run.kills || 0)}</b></span><span>Coins <b>${num(g.run.coins || 0)}</b></span><span>Cats <b>${g.cats.length + g.bench.length}</b></span></div><div class="row"><button class="btn big" data-act="resume">Resume</button></div><div class="row tgrid g4"><button class="btn grey" data-act="stats">Team stats</button><button class="btn grey" data-act="settings">Settings</button><button class="btn grey" data-act="how">How to play</button><button class="btn red" data-act="quit">Give up</button></div>${matchMedia('(pointer: fine)').matches ? '<div class="hint">Keys: Space zoomies, 1-6 specials, A auto specials, F speed, P pause, M sound</div>' : ''}`);
+  setScreen(`<h2 class="paused">Paused</h2><div class="pstat"><span>Chapter <b>${chapterOf(g.wave).n}</b></span><span>Wave <b>${g.wave}</b></span><span>Mice <b>${num(g.run.kills || 0)}</b></span><span>Coins <b>${num(g.run.coins || 0)}</b></span><span>Cats <b>${g.cats.length + g.bench.length}</b></span></div><div class="row"><button class="btn big" data-act="resume">Resume</button></div><div class="row tgrid g4"><button class="btn grey" data-act="stats">Team stats</button><button class="btn grey" data-act="settings">Settings</button><button class="btn grey" data-act="how">How to play</button><button class="btn red" data-act="quit">Give up</button></div>${langSwitch('pauselang')}${matchMedia('(pointer: fine)').matches ? '<div class="hint">Keys: Space zoomies, 1-6 specials, A auto specials, F speed, P pause, M sound</div>' : ''}`);
   acts = {
     resume: () => {
       paused = false; closeScreen(); sfx.play('pick', 1.3);
@@ -1860,6 +1873,7 @@ function showPause() {
     },
     stats: () => showStats(showPause),
     settings: () => showSettings(showPause),
+    lang: (d) => chooseLang(d.v, showPause),
     how: () => showHow(showPause),
     quit: (d, el) => {
       // one stray tap next to Settings must not end the run: the first tap asks, the second (within 3 s) gives up
@@ -2057,7 +2071,7 @@ function confetti(x, y, n, spread = 320, cols = CONF) {
     spawnFx({ k: 'cf', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 16, col: cols[i % cols.length], life: 1.4 + Math.random() * 0.8, max: 2.2 });
   }
 }
-const txtFx = (x, y, t, col = '#fff', size = 15, life = 0.8, pop = true) => spawnFx({ k: 't', x: x + (Math.random() - 0.5) * 14, y, t, col, size, life, max: life, pop });
+const txtFx = (x, y, t, col = '#fff', size = 15, life = 0.8, pop = true) => spawnFx({ k: 't', x: x + (Math.random() - 0.5) * 14, y, t: tr(t), col, size, life, max: life, pop });
 const ring = (x, y, r, col, life = 0.35, w = 4) => spawnFx({ k: 'r', x, y, r, col, life, max: life, w });
 const bolt = (pts, col, w, life = 0.16) => spawnFx({ k: 'l', pts, col, w, life, max: life });
 const flashGlow = (x, y, r, col, life = 0.25) => spawnFx({ k: 'g', x, y, r, col, life, max: life });
@@ -2858,7 +2872,7 @@ function drawCombo(t) {
   if (m && H0.g) { ctx.shadowColor = H0.c; ctx.shadowBlur = H0.g * (0.8 + 0.2 * Math.sin(t * 9)); }
   ctx.strokeText(`x${combo}`, 0, 0); ctx.fillStyle = H0.c; ctx.fillText(`x${combo}`, 0, 0);
   ctx.shadowBlur = 0;
-  ctx.font = `800 13px ${FONT}`; ctx.lineWidth = 3.5; ctx.strokeText('COMBO', 2, 15); ctx.fillStyle = '#ffe3c4'; ctx.fillText('COMBO', 2, 15);
+  ctx.font = `800 13px ${FONT}`; ctx.lineWidth = 3.5; ctx.strokeText(tr('COMBO'), 2, 15); ctx.fillStyle = '#ffe3c4'; ctx.fillText(tr('COMBO'), 2, 15);
   const frac = Math.max(0, Math.min(1, comboT / 2.4));   // time left before the streak lapses
   ctx.fillStyle = 'rgba(20,10,40,.7)'; ctx.fillRect(2, 21, 70, 5);
   ctx.fillStyle = frac < 0.3 ? '#ff6a6a' : H0.c; ctx.fillRect(2, 21, 70 * frac, 5);
@@ -3265,7 +3279,9 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { showRelicReward, showBox, showEvent, setCombo: (n) => { combo = n; comboT = 2.4; }, get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+window.stackingCats = { i18nMissing, clearChoices: () => { rewardChoices = null; }, ui: { showTitle, showSettings, showTrophies, showHow, showDex, showRelics, showDaily, showNamePrompt, showRanking, showCollection, showDiffPicker, showWardrobe, showKingdom, showPickStart, showFinale, showEvent, showRouteReward, showCatReward, showFull, showBox, showBoxSummary, showBoxReveal, showSnackReward, showRelicReward, showStats, showTower, showOver, showPause }, nextReward, get queue() { return queue; }, setLangNow: (c) => chooseLang(c), showRelicReward, showBox, showEvent, setCombo: (n) => { combo = n; comboT = 2.4; }, get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+await setLang(save.opt.lang);   // Auto follows the browser; the Danish dictionary loads only when it is needed
+startDom(document.body);
 showTitle();
 // the boot splash (in index.html) covers the half-built first frame; it stays long enough for the three slams, then lifts onto the title
 {

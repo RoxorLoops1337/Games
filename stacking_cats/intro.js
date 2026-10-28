@@ -1,6 +1,7 @@
 // Stacking Cats: the anime style intro cutscene. Six short scenes drawn live on one canvas (960x540) from the game's own sprites:
 // speed lines, impact frames, camera pushes, name slams and a typed caption. drawIntro is a pure function of time so tests can run it;
 // playIntro wraps it with the canvas, the skip controls and the sound cues.
+import { tr } from './i18n.js';
 import { INTRO, INTRO_LEN, introAt, typed, wrapCaption, EPILOGUE, EPILOGUE_LEN, epilogueAt } from './story.js';
 import { TAU, mulberry } from './art_util.js';
 import { makeBackdrop, drawBackdrop, drawFront, freeBackdrop, enemySprite, nestSprite } from './art_world.js';
@@ -152,6 +153,7 @@ function burst(ctx, x, y, r, fill = '#fff6c0', rot = 0) {
   ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
 }
 function label(ctx, text, x, y, size, fill, o = {}) {
+  text = tr(text);
   ctx.save(); ctx.translate(x, y); ctx.rotate(o.rot || 0); ctx.transform(1, 0, o.skew == null ? -0.18 : o.skew, 1, 0, 0);
   ctx.font = `${size}px ${FONT}`; ctx.textAlign = o.align || 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
   ctx.lineWidth = o.lw || size * 0.2; ctx.strokeStyle = o.stroke || '#2a1840'; ctx.strokeText(text, 0, 0);
@@ -164,7 +166,7 @@ function pow(ctx, word, x, y, a, rot = -0.12) {
   ctx.translate(x, y); ctx.scale(s, s); burst(ctx, 0, 0, 62, '#fff070', rot); label(ctx, word, 0, 2, 38, '#ff4a3a', { rot }); ctx.restore();
 }
 function caption(ctx, text, p) {
-  const full = text, shown = typed(full, clamp(p / 0.62));
+  const full = tr(text), shown = typed(full, clamp(p / 0.62));
   if (!shown) return;
   ctx.save(); ctx.font = `26px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const lines = wrapCaption(full, (s) => ctx.measureText(s).width, 800);

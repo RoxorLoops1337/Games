@@ -1,4 +1,5 @@
 // The Cat Kingdom panorama: a little village with the nine buildings and the wonders floating above it.
+import { tr } from './i18n.js';
 import { BUILDINGS, WONDERS, CATS, buildingLevel, upgradeCost } from './cats.js';
 import { drawCat } from './art_cats.js';
 import { drawBuilding } from './art_kingdom.js';
@@ -366,7 +367,7 @@ export function drawKingdom(ctx, st, t) {
       ctx.fillStyle = afford ? '#fff' : '#cfc4ee'; ctx.fillText(label, p.x + 7, ty + 11.5);
       ctx.drawImage(iconCanvas('\u{1FA99}'), p.x - tw / 2 + 2, ty - 1, 17, 17);
     }
-    if (sel) { ctx.font = '800 13px sans-serif'; ctx.textAlign = 'center'; const w = ctx.measureText(b.name).width + 16; ctx.fillStyle = '#2a1d4a'; ctx.beginPath(); ctx.roundRect(p.x - w / 2, p.y + 16, w, 20, 10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(b.name, p.x, p.y + 30); }
+    if (sel) { ctx.font = '800 13px sans-serif'; ctx.textAlign = 'center'; const w = ctx.measureText(tr(b.name)).width + 16; ctx.fillStyle = '#2a1d4a'; ctx.beginPath(); ctx.roundRect(p.x - w / 2, p.y + 16, w, 20, 10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText(tr(b.name), p.x, p.y + 30); }
   }
   // wonders float above the village
   WONDERS.forEach((w, i) => {
