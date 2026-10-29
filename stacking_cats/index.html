@@ -31,6 +31,7 @@
 <link rel="modulepreload" href="art_icons.js">
 <link rel="modulepreload" href="art_relics.js">
 <link rel="modulepreload" href="art_boxes.js">
+<link rel="modulepreload" href="chest_fx.js">
 <link rel="modulepreload" href="reveal_fx.js">
 <link rel="modulepreload" href="pwa.js">
 <link rel="modulepreload" href="haptics.js">
@@ -1569,8 +1570,173 @@ html[lang=da] body .how li{padding:1px 8px}
 }
 
 /* CHESTJUICE START (owned by the chest choreography work: showBox, chest_fx.js) */
+/* chest_fx.js drives these layers per frame (transform and opacity only), so the old CSS keyframes are switched off here */
+.boxstage.cx{width:200px;height:200px;margin:0 auto;--seam:57%;--seamw:76%;--hinge:46%}
+.boxstage.cx .boxic,.boxstage.cx .boxglow,.boxstage.cx .boxbeams,.boxstage.cx .boxvig,.boxstage.cx .boxring,.boxstage.cx .boxflash,.boxstage.cx .boxhero{animation:none!important}
+.boxstage.cx .boxic{display:block;width:200px;height:200px;font-size:0;line-height:0;filter:none;position:relative;z-index:2;-webkit-tap-highlight-color:transparent}
+.cxbody{position:relative;width:200px;height:200px;transform-origin:50% 89%;will-change:transform}
+.boxstage.cx .boxhero{width:200px;height:200px;display:block;pointer-events:none;-webkit-user-drag:none;user-select:none}
+.boxstage.cx .boxhero.lo{clip-path:inset(var(--seam) 0 0 0)}
+.boxstage.cx .boxhero.hi{position:absolute;left:0;top:0;clip-path:inset(0 0 calc(100% - var(--seam)) 0)}
+.boxstage.cx.parts .boxhero.lo,.boxstage.cx.parts .boxhero.hi{clip-path:none}
+.cxlid{position:absolute;inset:0;transform-origin:50% 36%;z-index:3}
+.cxcracks{position:absolute;inset:0;pointer-events:none;z-index:1;clip-path:inset(var(--seam) 0 0 0)}
+.cxcracks.up{z-index:2;clip-path:inset(0 0 calc(100% - var(--seam)) 0)}
+.cxcracks img{position:absolute;inset:0;width:100%;height:100%;opacity:0;transition:opacity .12s}
+.cxpour{position:absolute;inset:0;pointer-events:none;z-index:1;opacity:0;transform-origin:50% var(--seam)}
+.cxpour img{position:absolute;inset:0;width:100%;height:100%}
+.cxseam{position:absolute;left:calc((100% - var(--seamw)) / 2);width:var(--seamw);top:calc(var(--seam) - 5px);height:10px;border-radius:6px;pointer-events:none;z-index:2;opacity:0;background:linear-gradient(90deg,rgba(var(--bg),0),#fff 18%,#fff 82%,rgba(var(--bg),0));box-shadow:0 0 12px 4px rgba(var(--bg),.95),0 0 30px 10px rgba(var(--bg),.5)}
+.cxleak{position:absolute;left:50%;top:var(--seam);width:340px;height:250px;margin:-250px 0 0 -170px;pointer-events:none;z-index:3;opacity:0;transform-origin:50% 100%;background:repeating-conic-gradient(from 0deg at 50% 100%,rgba(255,255,255,.75) 0 2.5deg,rgba(var(--bg),.4) 2.5deg 5deg,transparent 5deg 12deg);-webkit-mask:radial-gradient(ellipse 50% 100% at 50% 100%,#000 10%,transparent 92%);mask:radial-gradient(ellipse 50% 100% at 50% 100%,#000 10%,transparent 92%)}
+.cxshadow{position:absolute;left:50%;top:84%;width:160px;height:26px;margin-left:-80px;border-radius:50%;pointer-events:none;z-index:1;background:radial-gradient(ellipse,rgba(10,4,30,.5),rgba(10,4,30,0) 70%)}
+.cxfx{position:absolute;left:calc(50% - 450px);top:calc(50% - 260px);width:900px;height:520px;pointer-events:none;z-index:4}
+.boxstage.cx .boxglow{width:300px;height:300px;margin:-150px 0 0 -150px;top:var(--seam);opacity:.22;background:radial-gradient(circle,rgba(255,255,255,.75),rgba(var(--bg),.8) 22%,rgba(var(--bg),0) 68%)}
+.boxstage.cx .boxbeams{top:var(--seam);width:420px;height:420px;margin:-210px 0 0 -210px}
+.boxstage.cx .boxring{top:var(--seam)}
+.boxstage.cx .boxring.b{border-width:3px;border-color:rgba(var(--bg),1)}
+.boxstage.cx .boxflash{background:radial-gradient(circle at 50% var(--seam),#fff,rgba(var(--bg),.7) 34%,rgba(255,255,255,0) 70%)}
+.boxstage.cx.still .cxseam{opacity:calc(var(--heat,0) * .8)}
+#chestflash{position:fixed;inset:0;pointer-events:none;z-index:200;opacity:0;will-change:opacity}
+body.nomotion #chestflash{display:none}
 /* CHESTJUICE END */
 /* REVEALJUICE START (owned by the card reveal work: showBoxReveal, reveal_fx.js) */
+/* the reveal screen: a rarity vignette, the card twirls in (reveal_fx.js drives .rv-fly and .rv-spin), lands, then the rest follows */
+.screen.rvx{--ray:255,226,170;--rc:#f0cf96;--rb:#c79a5c;--rd:#7a5530;--rl:#fff8ea;--rh:#fff1c8;--panel1:#fffaf0;--panel2:#f6e7cc;justify-content:center;padding:6px 24px 4px;overflow:hidden;background:radial-gradient(ellipse 46% 62% at 50% 54%,rgba(var(--ray),.34) 0,rgba(var(--ray),.12) 42%,rgba(12,6,30,.74) 78%,rgba(6,2,18,.9) 100%)}
+.screen.rvx.r-rare{--ray:120,190,255;--rc:#7cc0ff;--rb:#2f7ad0;--rd:#163f7a;--rl:#eef6ff;--rh:#9fd0ff;--panel1:#f6fbff;--panel2:#dcecff}
+.screen.rvx.r-epic{--ray:205,130,255;--rc:#d690ff;--rb:#9a35c8;--rd:#4e1670;--rl:#fbefff;--rh:#eab0ff;--panel1:#fdf6ff;--panel2:#efd9ff}
+.screen.rvx.r-legendary{--ray:255,200,60;--rc:#ffd65a;--rb:#e39400;--rd:#7a4a00;--rl:#fff8dc;--rh:#ffd84a;--panel1:#fffbea;--panel2:#ffe9a6}
+.screen.rvx.r-mythic{--ray:255,120,200;--rc:#ff8ad0;--rb:#b04ae0;--rd:#4a1a6a;--rl:#fff2fb;--rh:#ff9ad4;--panel1:#fff6fc;--panel2:#eadcff}
+body .screen.rvx>h2.cheer{display:flex;align-items:center;justify-content:center;gap:10px;margin:0;font-family:var(--display);font-weight:400;font-size:36px;line-height:1.05;letter-spacing:.5px;color:var(--rh);text-shadow:0 4px 0 var(--rd),3px 3px 0 #1a0f30,-3px -3px 0 #1a0f30,3px -3px 0 #1a0f30,-3px 3px 0 #1a0f30,0 0 26px rgba(var(--ray),.8)}
+.screen.rvx.r-common>h2.cheer{color:#fff6dc}
+.screen.rvx .cheercat{width:46px;height:46px;margin:0;animation:none;filter:drop-shadow(0 3px 0 #0006)}
+body .screen.rvx>.sub{margin:2px 0 0;font-size:16px;color:#ffe9cc;opacity:.9}
+.screen.rvx .revealstage{display:block;flex:none;width:100%;height:330px;margin:6px 0 10px;--ray:inherit}
+.screen.rvx .revealstage.r-rare,.screen.rvx .revealstage.r-epic,.screen.rvx .revealstage.r-legendary,.screen.rvx .revealstage.r-mythic{--ray:inherit}
+/* behind the card: rays, arcs, rings, a flash and a glow disc, all asleep until the card lands */
+.screen.rvx .rays{left:50%;top:50%;width:760px;height:760px;margin:-380px 0 0 -380px;opacity:0;scale:.2;animation:none;background:repeating-conic-gradient(from 4deg,rgba(var(--ray),.5) 0 5deg,rgba(var(--ray),0) 9deg 15deg,rgba(255,255,255,.22) 17deg 19deg,rgba(var(--ray),0) 21deg 24deg);-webkit-mask:radial-gradient(circle,#000 10%,rgba(0,0,0,.6) 34%,transparent 64%);mask:radial-gradient(circle,#000 10%,rgba(0,0,0,.6) 34%,transparent 64%)}
+.screen.rvx.r-common .rays{background:repeating-conic-gradient(from 0deg,rgba(var(--ray),.28) 0 6deg,rgba(var(--ray),0) 10deg 30deg)}
+.screen.rvx.r-legendary .rays{background:repeating-conic-gradient(from 0deg,rgba(255,226,110,.75) 0 4deg,rgba(255,170,40,.18) 7deg 11deg,rgba(255,200,60,0) 12deg 18deg)}
+.screen.rvx.r-mythic .rays{background:repeating-conic-gradient(from 0deg,rgba(255,120,200,.55) 0 5deg,transparent 6deg 10deg,rgba(150,120,255,.55) 10deg 15deg,transparent 16deg 20deg,rgba(120,230,255,.5) 20deg 25deg,transparent 26deg 30deg,rgba(255,240,140,.5) 30deg 35deg,transparent 36deg 40deg)}
+.screen.rvx .rv-arcs{position:absolute;left:50%;top:50%;width:420px;height:420px;margin:-210px 0 0 -210px;border-radius:50%;pointer-events:none;opacity:0;display:none;background:conic-gradient(from 0deg,transparent 0 20deg,rgba(var(--ray),.95) 50deg,transparent 80deg 170deg,rgba(255,255,255,.85) 205deg,transparent 235deg 290deg,rgba(var(--ray),.8) 320deg,transparent 345deg);-webkit-mask:radial-gradient(circle,transparent 58%,#000 60%,#000 63%,transparent 65%,transparent 70%,#000 71%,transparent 73%);mask:radial-gradient(circle,transparent 58%,#000 60%,#000 63%,transparent 65%,transparent 70%,#000 71%,transparent 73%)}
+.screen.rvx.r-epic .rv-arcs,.screen.rvx.r-mythic .rv-arcs{display:block}
+.screen.rvx.r-mythic .rv-arcs{background:conic-gradient(#ff7ac6,#ffe77a,#7affc8,#7ac8ff,#c87aff,#ff7ac6)}
+.screen.rvx .rv-ring{position:absolute;left:50%;top:50%;width:220px;height:220px;margin:-110px 0 0 -110px;border-radius:50%;pointer-events:none;border:10px solid rgba(var(--ray),.95);box-shadow:0 0 30px rgba(var(--ray),.9),inset 0 0 30px rgba(var(--ray),.7);opacity:0;z-index:1}
+.screen.rvx .rv-ring.b{border-color:rgba(255,255,255,.9);border-width:5px}
+.screen.rvx .revealflash{inset:-200px;opacity:0;animation:none;z-index:5;background:radial-gradient(circle,rgba(255,255,255,.95) 0,rgba(var(--ray),.7) 22%,rgba(var(--ray),0) 55%)}
+.screen.rvx .pedestal{bottom:-10px;width:340px;height:46px;margin-left:-170px;opacity:0;animation:none;background:radial-gradient(ellipse,rgba(255,255,255,.75) 0,rgba(var(--ray),.75) 30%,rgba(var(--ray),0) 70%)}
+.screen.rvx .confetti{top:50%;z-index:1}
+.screen.rvx .confetti i{width:var(--w,8px);height:var(--h,12px);left:calc(var(--w,8px) / -2);top:calc(var(--h,12px) / -2);border-radius:var(--br,2px);opacity:0;animation:none}
+/* the card on its way: three wrappers (path and scale, turn, idle float) and the trading card itself */
+.screen.rvx .rv-fly{position:absolute;left:50%;top:50%;width:232px;height:314px;margin:-157px 0 0 -116px;perspective:1100px;z-index:3;transform-origin:50% 50%}
+.screen.rvx.flying .rv-fly{will-change:transform,opacity}
+.screen.rvx .rv-spin,.screen.rvx .rv-idle{position:absolute;inset:0;transform-style:preserve-3d}
+.screen.rvx .rv-ghost{position:absolute;left:50%;top:50%;width:232px;height:314px;margin:-157px 0 0 -116px;border-radius:20px;pointer-events:none;z-index:2;background:linear-gradient(160deg,rgba(255,255,255,.9),rgba(var(--ray),.85) 60%,rgba(var(--ray),.4));box-shadow:0 0 34px 8px rgba(var(--ray),.8)}
+.screen.rvx .rv-sparks{position:absolute;left:0;top:0;width:960px;height:540px;pointer-events:none;z-index:4}
+.tcard{position:absolute;inset:0;transform-style:preserve-3d;transform:rotateX(var(--ty,0deg)) rotateY(var(--tx,0deg));transition:transform .3s ease-out;color:#2a1d4a;text-align:center}
+.tc-face{position:absolute;inset:0;border-radius:20px;overflow:hidden;-webkit-backface-visibility:hidden;backface-visibility:hidden}
+.tc-front{display:flex;flex-direction:column;align-items:center;padding:13px 18px 14px;background:linear-gradient(145deg,var(--rl) 0,var(--rc) 22%,var(--rb) 55%,var(--rc) 80%,var(--rl) 100%);box-shadow:0 0 0 3px var(--rd),0 16px 30px rgba(0,0,0,.5),0 0 46px 6px rgba(var(--ray),.55)}
+.screen.rvx.r-mythic .tc-front{background:conic-gradient(from 210deg,#ff7ac6,#ffe77a,#7affc8,#7ac8ff,#c87aff,#ff7ac6)}
+.tc-bevel{position:absolute;inset:8px;border-radius:14px;background:radial-gradient(ellipse 80% 40% at 50% 26%,rgba(var(--ray),.42),rgba(var(--ray),0) 70%),linear-gradient(var(--panel1),var(--panel2));box-shadow:0 0 0 2px var(--rd),inset 0 3px 0 rgba(255,255,255,.95),inset 0 -4px 0 rgba(0,0,0,.12),inset 0 0 18px rgba(var(--ray),.45)}
+.tc-front>:not(.tc-bevel):not(.tc-foil):not(.tc-holo){position:relative;z-index:1}
+.tc-ribbon{align-self:stretch;margin:-2px -18px 0;height:30px;display:flex;align-items:center;justify-content:center;background:linear-gradient(rgba(255,255,255,.35),rgba(255,255,255,0) 50%),linear-gradient(var(--rc),var(--rb));clip-path:polygon(0 0,100% 0,95% 50%,100% 100%,0 100%,5% 50%);box-shadow:inset 0 -3px 0 rgba(0,0,0,.2)}
+.tc-ribbon span{font:400 18px/1 var(--display);letter-spacing:4px;text-transform:uppercase;color:#fff;text-shadow:0 2px 0 var(--rd),1px 1px 0 var(--rd),-1px -1px 0 var(--rd),1px -1px 0 var(--rd),-1px 1px 0 var(--rd)}
+.screen.rvx.r-legendary .tc-ribbon{background:linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,0) 50%),linear-gradient(90deg,#e39400,#ffd65a 30%,#fff3b0 50%,#ffd65a 70%,#e39400)}
+.screen.rvx.r-mythic .tc-ribbon{background:linear-gradient(rgba(255,255,255,.4),rgba(255,255,255,0) 50%),linear-gradient(90deg,#ff4fa8,#b04ae0 50%,#4a8aff)}
+.tc-art{width:132px;height:112px;margin:4px 0 0;display:flex;align-items:center;justify-content:center;flex:none}
+.tc-arays{position:absolute;left:50%;top:50%;width:200px;height:200px;margin:-100px 0 0 -100px;border-radius:50%;background:repeating-conic-gradient(rgba(var(--ray),.85) 0 8deg,rgba(var(--ray),0) 8deg 24deg);-webkit-mask:radial-gradient(circle,#000 20%,transparent 66%);mask:radial-gradient(circle,#000 20%,transparent 66%);opacity:.75}
+.tc-prism{position:absolute;left:50%;top:50%;width:150px;height:150px;margin:-75px 0 0 -75px;border-radius:50%;display:none;background:conic-gradient(rgba(255,122,198,.7),rgba(255,231,122,.7),rgba(122,255,200,.7),rgba(122,200,255,.7),rgba(200,122,255,.7),rgba(255,122,198,.7));-webkit-mask:radial-gradient(circle,transparent 52%,#000 54%,#000 64%,transparent 66%);mask:radial-gradient(circle,transparent 52%,#000 54%,#000 64%,transparent 66%)}
+.screen.rvx.r-mythic .tc-prism{display:block}
+.tc-medal{width:94px;height:94px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 34%,#fff 0,var(--rl) 38%,var(--rc) 82%,var(--rb) 100%);box-shadow:0 0 0 4px var(--rb),0 0 0 7px rgba(255,255,255,.8),0 0 0 9px var(--rd),0 0 30px 10px rgba(var(--ray),.8),inset 0 -8px 12px rgba(0,0,0,.14),inset 0 6px 8px #fff}
+.tc-medal .ic{font-size:56px;line-height:1}
+.tc-medal .ic .gi{width:68px;height:68px;margin:0;vertical-align:middle;filter:drop-shadow(0 4px 0 rgba(0,0,0,.28))}
+.tc-name{margin:8px 0 3px;font:400 25px/1 var(--display);letter-spacing:.3px;color:#2a1d4a;text-shadow:0 2px 0 #fff}
+.tc-desc{flex:1;display:flex;align-items:center;justify-content:center;margin:0;font-size:14.5px;line-height:1.17;font-weight:700;color:#3a2c55;text-wrap:balance}
+.tc-tags{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:5px;flex:none}
+.tc-tags>div{margin:0;font-size:11.5px;line-height:1.15;font-weight:800;padding:2px 9px;border-radius:9px;background:rgba(var(--ray),.22);border:1.5px solid rgba(var(--ray),.75);color:#4a3a60}
+.tc-tags .gainl{color:#1e6b38;background:#dff5e4;border-color:#8fd3a2}
+.tc-tags .setl{color:#7a4f00;background:#fff1c8;border-color:#f0c860}
+.tc-tags .impact{background:transparent;border-style:dashed;border-color:rgba(74,58,96,.35)}
+body.cb .tc-tags .gainl{color:#1a4a8a}
+.tc-foil{position:absolute;left:-60%;top:-20%;width:70%;height:140%;z-index:3;pointer-events:none;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.75) 48%,rgba(255,255,255,.95) 50%,rgba(255,255,255,.75) 52%,rgba(255,255,255,0));transform:rotate(18deg) translateX(-60%);opacity:0}
+.tc-holo{position:absolute;inset:-40%;z-index:2;pointer-events:none;opacity:0;mix-blend-mode:overlay;background:linear-gradient(115deg,#ff7ac6 10%,#ffe77a 25%,#7affc8 40%,#7ac8ff 55%,#c87aff 70%,#ff7ac6 85%);transform:translateX(calc(var(--mx,50%) - 50%))}
+.screen.rvx.r-mythic .tc-holo{opacity:.55}
+.screen.rvx.r-legendary .tc-holo{opacity:.22;background:linear-gradient(115deg,transparent 20%,#fff3b0 40%,transparent 50%,#ffd65a 65%,transparent 80%)}
+.tc-back{transform:rotateY(180deg);display:flex;align-items:center;justify-content:center;border:6px solid var(--rc);background:radial-gradient(circle,rgba(255,255,255,.5),rgba(255,255,255,0) 60%),repeating-linear-gradient(45deg,var(--rb) 0 12px,var(--rd) 12px 24px);box-shadow:0 0 0 3px var(--rd),0 0 40px 8px rgba(var(--ray),.7)}
+.tc-back img{width:150px;height:150px;filter:drop-shadow(0 6px 0 rgba(0,0,0,.35))}
+.tc-glint{position:absolute;inset:0;background:linear-gradient(125deg,rgba(255,255,255,0) 25%,rgba(255,255,255,.85) 45%,rgba(255,255,255,.2) 55%,rgba(255,255,255,0) 70%)}
+.screen.rvx .newtag{display:block;position:absolute;left:auto;right:-20px;top:-14px;z-index:6;font-size:18px;padding:1px 10px;transform:rotate(14deg);opacity:0;animation:none;box-shadow:0 3px 0 #3a1f12,0 0 16px rgba(255,210,63,.9)}
+/* landed: the end state (also what reduced motion shows) */
+.screen.rvx.landed .rays{opacity:1;scale:1;animation:raysp 26s linear infinite}
+.screen.rvx.landed .rv-arcs{opacity:.85;animation:raysp 7s linear infinite reverse}
+.screen.rvx.landed .pedestal{opacity:1;animation:glowpulse 2.6s ease-in-out infinite}
+.screen.rvx.landed .newtag{opacity:1}
+.screen.rvx.landed .rv-idle{animation:rvfloat 4.4s .5s ease-in-out infinite}
+.screen.rvx.landed .tc-arays{animation:raysp 14s linear infinite}
+.screen.rvx.landed .tc-prism{animation:raysp 5s linear infinite}
+.screen.rvx.landed .tc-foil{animation:rvfoil 4.2s .9s ease-in-out infinite}
+.screen.rvx.landed .tc-medal .ic{animation:bob 2.4s ease-in-out infinite}
+.screen.rvx.landed .cheercat{animation:cheerhop .6s .45s ease-in-out 2}
+/* landing: everything bursts out, then the words and the button follow (skipping jumps to the end) */
+.screen.rvx.landed:not(.rvdone) .rays{animation:rvraysin .9s cubic-bezier(.15,1.3,.35,1) both,raysp 26s linear infinite}
+.screen.rvx.landed:not(.rvdone) .rv-arcs{animation:rvarcsin .7s .05s cubic-bezier(.2,1.4,.4,1) both,raysp 7s linear infinite reverse}
+.screen.rvx.landed:not(.rvdone) .rv-ring{animation:rvring .75s cubic-bezier(.1,.7,.3,1) both}
+.screen.rvx.landed:not(.rvdone) .rv-ring.b{animation-delay:.09s;animation-duration:.9s}
+.screen.rvx.landed:not(.rvdone) .revealflash{animation:rflash .55s ease-out both}
+.screen.rvx.landed:not(.rvdone) .pedestal{animation:rvfade .5s .15s ease-out both,glowpulse 2.6s .7s ease-in-out infinite}
+.screen.rvx.landed:not(.rvdone) .confetti i{animation:rvconf 1.25s cubic-bezier(.15,.7,.4,1) var(--t) both}
+.screen.rvx.landed:not(.rvdone) .newtag{animation:rvnew .5s .5s cubic-bezier(.2,2,.4,1) both}
+body .screen.rvx.landed:not(.rvdone)>h2.cheer{animation:rvslam .6s .08s cubic-bezier(.2,1.5,.35,1) both}
+body .screen.rvx.landed:not(.rvdone)>.sub{animation:rvsub .45s .38s ease-out both}
+body .screen.rvx.landed:not(.rvdone)>.row{animation:rvbtn .65s .55s cubic-bezier(.2,1.5,.4,1) both}
+body .screen.rvx.rvdone>h2,body .screen.rvx.rvdone>.sub,body .screen.rvx.rvdone>.row{animation:none}
+.screen.rvx.punch .revealstage{animation:rvpunch .38s ease-out}
+.screen.rvx.leaving .newtag,.screen.rvx.leaving .pedestal{opacity:0;transition:opacity .15s}
+.screen.rvx.rvcalm .confetti,.screen.rvx.rvcalm .rv-ring,.screen.rvx.rvcalm .rv-sparks{display:none}
+.screen.rvx.rvcalm *,.screen.rvx.rvcalm{animation:none!important;transition:none!important}
+@keyframes rvraysin{0%{opacity:0;scale:.15}35%{opacity:1}100%{opacity:1;scale:1}}
+@keyframes rvarcsin{0%{opacity:0;scale:.4}100%{opacity:.85;scale:1}}
+@keyframes rvring{0%{opacity:1;transform:scale(.5);border-width:16px}100%{opacity:0;transform:scale(3.4);border-width:1px}}
+@keyframes rvfade{from{opacity:0}to{opacity:1}}
+@keyframes rvconf{0%{transform:rotate(var(--a)) translateY(0) scale(.4);opacity:1}55%{opacity:1}100%{transform:rotate(var(--a)) translateY(calc(var(--d) * -1)) rotate(var(--sp,420deg)) scale(1);opacity:0}}
+@keyframes rvnew{0%{opacity:0;transform:rotate(-20deg) scale(3)}60%{opacity:1;transform:rotate(18deg) scale(.88)}100%{opacity:1;transform:rotate(14deg) scale(1)}}
+@keyframes rvslam{0%{opacity:0;transform:scale(2.3) rotate(-3deg)}45%{opacity:1;transform:scale(.9) rotate(1deg)}70%{transform:scale(1.05)}100%{opacity:1;transform:none}}
+@keyframes rvsub{from{opacity:0;transform:translateY(-6px)}to{opacity:.9;transform:none}}
+@keyframes rvbtn{0%{opacity:0;transform:translateY(70px) scale(.8)}60%{opacity:1;transform:translateY(-6px) scale(1.04)}100%{opacity:1;transform:none}}
+@keyframes rvpunch{0%{transform:scale(1.045)}100%{transform:scale(1)}}
+@keyframes rvfloat{0%,100%{transform:translateY(0) rotateZ(0)}30%{transform:translateY(-6px) rotateZ(-.7deg)}70%{transform:translateY(3px) rotateZ(.6deg)}}
+@keyframes rvfoil{0%{opacity:0;transform:rotate(18deg) translateX(-60%)}6%{opacity:1}26%{opacity:1;transform:rotate(18deg) translateX(330%)}30%,100%{opacity:0;transform:rotate(18deg) translateX(330%)}}
+/* short screens: the stage is scaled down, so the card text gets bigger in stage px */
+@media (max-height:400px){
+body .screen.rvx>h2.cheer{font-size:31px}
+.screen.rvx .cheercat{width:40px;height:40px}
+.screen.rvx .revealstage{height:358px;margin:2px 0 0}
+.screen.rvx .rv-fly,.screen.rvx .rv-ghost{width:262px;height:350px;margin:-175px 0 0 -131px}
+.tc-front{padding:12px 16px 13px}
+.tc-art{height:100px;margin-top:2px}.tc-medal{width:84px;height:84px}.tc-medal .ic .gi{width:60px;height:60px}
+.tc-name{font-size:27px;margin:6px 0 2px}
+body .tc-desc{font-size:16.5px;line-height:1.12}
+body .tc-tags>div{font-size:13.5px;padding:1px 8px}
+body .screen.rvx .newtag{font-size:20px}
+}
+@media (max-height:340px){
+body .screen.rvx>.sub{font-size:15.5px}
+body .tc-desc{font-size:17.5px;line-height:1.08}
+body .tc-tags>div{font-size:14.5px;line-height:1.08}
+.tc-name{font-size:28px}
+}
+/* Open all: the tiles flip in one after another with a glow by rarity, the best one gets a spotlight */
+.sumgrid{position:relative;gap:14px;margin:12px 0 14px}
+.sumtile{position:relative;isolation:isolate;width:128px;padding:10px 6px 8px;background:linear-gradient(#fffaf0,#f3e8ff);border-width:4px;box-shadow:inset 0 2px 0 #fff,0 0 18px color-mix(in srgb,var(--tc) 70%,transparent),0 6px 0 #0005;animation:rvsum .6s calc(var(--i,0) * .14s) cubic-bezier(.2,1.5,.4,1) both}
+.sumtile.r-common{box-shadow:inset 0 2px 0 #fff,0 6px 0 #0005}
+.sumtile .ic{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:3px;background:radial-gradient(circle at 50% 35%,#fff,color-mix(in srgb,var(--tc) 55%,#fff) 70%,var(--tc));box-shadow:0 0 0 3px #fff8,0 0 16px color-mix(in srgb,var(--tc) 80%,transparent)}
+.sumtile .ic .gi{width:46px;height:46px;margin:0}
+.sumtile small{color:color-mix(in srgb,var(--tc) 55%,#3a2c55)}
+.sumtile.best{z-index:2;transform:none;scale:1.12;box-shadow:0 0 0 3px #fff,0 0 30px 6px var(--tc),0 6px 0 #0005;animation:rvsum .6s calc(var(--i,0) * .14s) cubic-bezier(.2,1.5,.4,1) both,rvbest 2.2s calc(var(--i,0) * .14s + .7s) ease-in-out infinite}
+.sumtile.best::before{content:'';position:absolute;left:50%;top:50%;width:300px;height:300px;margin:-150px 0 0 -150px;z-index:-1;border-radius:50%;pointer-events:none;background:repeating-conic-gradient(color-mix(in srgb,var(--tc) 70%,transparent) 0 7deg,transparent 7deg 20deg);-webkit-mask:radial-gradient(circle,#000 18%,transparent 64%);mask:radial-gradient(circle,#000 18%,transparent 64%);animation:raysp 14s linear infinite}
+.sumtile.best::after{content:'';position:absolute;left:50%;bottom:-6px;width:220px;height:420px;margin-left:-110px;z-index:-2;pointer-events:none;background:linear-gradient(rgba(255,255,255,0),rgba(255,255,255,.16) 60%,rgba(255,255,255,.04));clip-path:polygon(38% 0,62% 0,100% 100%,0 100%)}
+@keyframes rvsum{0%{opacity:0;transform:perspective(600px) rotateY(100deg) translateY(30px) scale(.4)}60%{opacity:1;transform:perspective(600px) rotateY(-12deg) scale(1.1)}100%{opacity:1;transform:none}}
+@keyframes rvbest{50%{box-shadow:0 0 0 3px #fff,0 0 44px 12px var(--tc),0 6px 0 #0005}}
+body.nomotion .sumtile,body.nomotion .sumtile.best::before{animation:none}
+@media (prefers-reduced-motion:reduce){.sumtile,.sumtile.best::before,.screen.rvx *{animation:none!important;transition:none!important}}
 /* REVEALJUICE END */
 </style>
 </head>

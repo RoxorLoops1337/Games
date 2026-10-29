@@ -19,6 +19,7 @@ import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawR
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
 import { boxHero } from './art_boxes.js';
+import { createChestScene, chestHtml, CHEST_T } from './chest_fx.js';
 import { playReveal, revealCardHtml, RARITY_IDX } from './reveal_fx.js';
 import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel, clearLine, confirmTap, coachAbove, specialLabel, dropAction } from './art_util.js';
 import { iconCanvas, iconURL, installGlyphs } from './art_icons.js';
@@ -1207,32 +1208,31 @@ function showBox(tier) {
   let shown = plan.tier0, taps = 0, burst = false, stage = 0;
   setScreen(`<h2>${bx.icon} ${bx.name}</h2>
     <div class="captier" id="capTier" style="--tc:${TIER_HEX[shown]}">${cap1(shown)} chest</div><div class="captag" id="capTag"></div>
-    <div class="boxstage t-${bx.id}" style="--bg:${TIER_RGB[shown]}"><div class="boxvig"></div><div class="boxglow"></div><div class="boxbeams"></div><div class="boxsuck">${suckHtml()}</div><div class="boxsparks">${sparksHtml()}</div><div class="boxcrack"></div><div class="boxic t-${bx.id}" data-act="crack"><img class="boxhero lo" src="${boxHero(bx.id).toDataURL()}" alt="${bx.name}"><img class="boxhero hi" src="${boxHero(bx.id).toDataURL()}" alt="" aria-hidden="true"></div><div class="boxring"></div><div class="boxflash"></div></div>
+    ${chestHtml({ tier: bx.id, rgb: TIER_RGB[shown], hero: boxHero(bx.id).toDataURL(), name: bx.name })}
     <div class="caphint" id="caphint"></div>
     ${rars.includes('common') ? `<p class="sub boxodds">Rare or better in <b>${pityLeft > 1 ? pityLeft + ' chests' : 'this chest'}</b> or sooner</p>` : `<p class="sub boxodds">Might hold <b>${rars[0]}</b> to <b>${rars[rars.length - 1]}</b> items</p>`}
     <div class="row"><button class="btn big" data-act="crack">${calm ? 'Open it!' : 'Crack it!'}</button>${more ? `<button class="btn small grey" data-act="all">Open all ${more + 1}</button>` : ''}</div>`);
   coach('c9', 'Tap the chest or the Crack it! button again and again. Each tap shakes it more.', 480, 380, 'up', { target: 'button[data-act=crack]' });
   const stg = screenEl.querySelector('.boxstage'), root = screenEl.firstElementChild, hint = screenEl.querySelector('#caphint');
   const later = (fn, ms) => setTimeout(() => { if (g && stg && stg.isConnected) fn(); }, ms);
+  const fx = createChestScene(stg, { tier: bx.id, rgb: TIER_RGB[shown], motion: !calm, shake: save.opt.shake });   // the choreography (chest_fx.js)
   const showHint = () => { const l = Math.max(0, burstTap + 1 - taps); hint.innerHTML = burst ? '' : `<span>${l <= 1 ? 'TAP TO OPEN!' : 'TAP TO CRACK'}</span><small>${'&#9679;'.repeat(Math.min(taps, burstTap + 1))}${'&#9675;'.repeat(l)}</small>`; };
-  const at = () => { const r = stg.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
   const doBurst = () => {   // the lid flies, light and confetti fly, and the item lands in the backpack
     if (burst && stg.classList.contains('opening')) return;
     burst = true; showHint();
     stg.classList.remove('charging'); stg.classList.add('opening');
     if (save.opt.shake > 0 && root) { root.classList.remove('jolt'); void root.offsetWidth; root.classList.add('jolt'); }
-    sfx.play('boxburst'); buzz('pop');
-    later(() => { S.openPlanned(g, plan); rewardChoices = plan.id; showBoxReveal(tier, plan.id, more); }, calm ? 120 : 720);
+    sfx.play('chestboom', Math.max(0, RARITIES.indexOf(plan.rar))); buzz('pop');
+    fx.burst(plan.rar);   // the lid blasts off and the screen flashes in the item's colour; the reveal starts under the flash
+    later(() => { S.openPlanned(g, plan); rewardChoices = plan.id; showBoxReveal(tier, plan.id, more); }, fx.motion ? CHEST_T.swap : 120);
   };
   const upgrade = () => {   // the chest turns one tier rarer: a flash, a ring of light and a label
     const next = plan.ups[stage++];
     if (!next) return;
     shown = next;
-    stg.style.setProperty('--bg', TIER_RGB[next]);
+    fx.upgrade(TIER_RGB[next]);
     const t = screenEl.querySelector('#capTier'); t.textContent = cap1(next) + ' chest'; t.style.setProperty('--tc', TIER_HEX[next]); t.classList.remove('up'); void t.offsetWidth; t.classList.add('up');
     const tag = screenEl.querySelector('#capTag'); tag.textContent = next === 'legendary' || next === 'mythic' ? 'JACKPOT UPGRADE!' : 'UPGRADE!'; tag.style.setProperty('--tc', TIER_HEX[next]); tag.classList.remove('pop'); void tag.offsetWidth; tag.classList.add('pop');
-    stg.classList.remove('flashup'); void stg.offsetWidth; stg.classList.add('flashup');
-    const [x, y] = at(); domBurst(x, y, 14 + stage * 6, [TIER_HEX[next], '#fff', '#ffd23f'], '');
     sfx.play('stamp'); sfx.play('boxtick', 2.2 + stage * 0.3); buzz('jackpot');
   };
   const tap = () => {
@@ -1240,17 +1240,15 @@ function showBox(tier) {
     if (taps === 0) sfx.unlock();
     const i = taps++;
     if (i >= burstTap) {
-      sfx.play('boxopen');
-      if (calm) { doBurst(); return; }
-      burst = true; showHint(); sfx.play('boxbuild'); stg.classList.add('charging');
-      later(doBurst, 800);
+      sfx.play('chestsqueeze', Math.min(4, i + 1)); buzz('tick');
+      if (calm) { fx.inhale(); doBurst(); return; }
+      burst = true; showHint(); sfx.play('chestinhale'); stg.classList.add('charging');
+      later(doBurst, fx.inhale() || 0);   // the held breath: compress, stretch, tremble, a freeze frame, then the burst
       return;
     }
-    stg.style.setProperty('--k', String(i + 1)); stg.style.setProperty('--crack', String((i + 1) / (burstTap + 1)));
-    stg.classList.remove('hit'); void stg.offsetWidth; stg.classList.add('hit');
-    sfx.play('boxtick', 1 + i * 0.35); buzz('tick');
+    fx.hit(i, burstTap + 1);   // squeezed flat, springs back, rattles harder, light leaks from the seam
+    sfx.play('chestsqueeze', Math.min(4, i + 1)); buzz('tick');
     if (save.opt.shake > 0 && root) { root.classList.remove('jolt'); void root.offsetWidth; root.classList.add('jolt'); }
-    const [x, y] = at(); domBurst(x, y, 5 + i * 3, [TIER_HEX[shown], '#fff'], '');
     if (i >= 1 && stage < plan.ups.length) upgrade();
     showHint();
   };
@@ -1281,11 +1279,10 @@ const CONFETTI = { common: [8, ['#fff0d0', '#ffd23f']], rare: [14, ['#8ec6ff', '
 // how long the card twirls in from the chest: a longer, bigger spiral the rarer it is, and a tap skips it
 const REVEAL_WAIT = { common: 720, rare: 820, epic: 920, legendary: 1150, mythic: 1350 };
 const REVEAL_SFX = { common: 'chest', rare: 'revealrare', epic: 'revealepic', legendary: 'revealleg', mythic: 'revealmyth' };
-const sparksHtml = () => Array.from({ length: 10 }, (_, i) => `<i style="--a:${i * 36 + 12}deg;--d:${62 + (i * 29) % 50}px;--t:${0.36 + (i % 4) * 0.06}s"></i>`).join('');
-const suckHtml = () => Array.from({ length: 12 }, (_, i) => `<i style="--a:${i * 30 + (i % 2) * 11}deg;--d:${120 + (i * 23) % 60}px;--t:${(i % 6) * 0.14}s"></i>`).join('');   // bits of light pulled into the box while it charges
 function confettiHtml(rarity) {
   const [n, cols] = CONFETTI[rarity] || CONFETTI.common;
-  return Array.from({ length: n }, (_, i) => `<i style="--a:${Math.round((360 / n) * i + (i % 2) * 7)}deg;--d:${110 + (i * 37) % 90}px;--c:${cols[i % cols.length]};--t:${(i % 5) * 0.03}s"></i>`).join('');
+  const far = 1 + RARITY_IDX[rarity] * 0.22 || 1;   // rarer cards throw their confetti further
+  return Array.from({ length: n }, (_, i) => { const k = i % 4; return `<i style="--a:${Math.round((360 / n) * i + (i % 2) * 7)}deg;--d:${Math.round((150 + (i * 37) % 130) * far)}px;--c:${cols[i % cols.length]};--t:${(i % 5) * 0.03}s;--w:${k === 3 ? 9 : 6 + (i % 3) * 2}px;--h:${k === 3 ? 9 : 10 + (i % 4) * 2}px;--br:${k === 3 ? '50%' : '2px'};--sp:${300 + (i * 53) % 360}deg"></i>`; }).join('');
 }
 function showBoxReveal(tier, id, more = 0) {   // more: chests still waiting after this one
   const it = ITEM_BY_ID[id], bx = BOX_BY_ID[tier] || BOXES[0], hi = ['epic', 'legendary', 'mythic'].includes(it.rarity);
