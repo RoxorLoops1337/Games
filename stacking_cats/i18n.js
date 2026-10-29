@@ -36,7 +36,7 @@ export function compile(dict) {
       }
       let v2 = v;
       if (v2.includes('#')) { const nums = kinds.map((x, i) => (x === 'n' ? i + 1 : 0)).filter(Boolean); let q = 0; v2 = v2.replace(/#/g, () => '{' + (nums[q++] || nums[nums.length - 1] || 1) + '}'); }   // a bare # in a value stands for the next number of the key
-      wl.push({ re: new RegExp('^' + src + '$'), v: v2, lit: k.replace(/\{\}|#/g, '').length, hasW: kinds.includes('w') });
+      wl.push({ re: new RegExp('^' + src + '$'), v: v2, lit: k.replace(/\{\}|#/g, '').length, hasW: kinds.includes('w'), sep: k.includes(' \u00B7 ') });
     } else ex.set(k, v);
   }
   // the most specific patterns first: the one with the most fixed text, wildcards after plain numbers
@@ -45,14 +45,21 @@ export function compile(dict) {
 }
 
 let cur = { ex: new Map(), wl: [] };
-const fill = (v, caps) => v.replace(/\{(\d+)\}/g, (m, i) => { const c = caps[+i - 1]; return c == null ? m : /^-?\d/.test(c) ? c : tr(c); });
+const fill = (v, caps) => v.replace(/\{(\d+)\}/g, (m, i) => { const c = caps[+i - 1]; return c == null ? m : /^-?\d+(?:[.,]\d+)*$/.test(c) ? c : tr(c); });
 
 // translate one piece of text (null when the dictionary has nothing for it)
 function lookup(t) {
   if (!t) return null;
   const hit = cur.ex.get(t);
   if (hit != null) return hit;
-  for (const p of cur.wl) { const m = p.re.exec(t); if (m) return fill(p.v, m.slice(1)); }
+  for (const p of cur.wl) {
+    const m = p.re.exec(t);
+    if (!m) continue;
+    // a wildcard that swallowed English prose it could not translate is no answer (a name like 'Lucky Shell' is fine)
+    if (p.hasW && !p.sep && m.slice(1).some((c) => c.includes(' \u00B7 ') || (c.split(/\s+/).length >= 3 && /\b[a-z]{3,}\b/.test(c) && tr(c) === c))) continue;
+    const r = fill(p.v, m.slice(1));
+    if (r !== t) return r;   // a pattern that changes nothing is no answer
+  }
   return null;
 }
 // a whole text: as it is, with its numbers, then sentence by sentence
@@ -66,14 +73,30 @@ export function tr(s) {
   return out == null ? s : lead + out + tail;
 }
 // texts built from known parts: a symbol in front, 'Name: text', 'Name, rarity', 'Name (key 3): text' (each part is looked up on its own)
+function parens(core) {
+  if (!core.includes('(')) return null;
+  let any = false;
+  const out = core.split(/(\((?:[^()]|\([^()]*\))+\))/).map((part) => {
+    if (!part) return part;
+    if (part[0] === '(' && part[part.length - 1] === ')') { const inner = part.slice(1, -1), r = lookupAny(inner); if (r != null) { any = true; return '(' + r + ')'; } return part; }
+    const m = /^(\s*[.,;:!?]*\s*)([\s\S]*?)(\s*)$/.exec(part);
+    if (!m[2]) return part;
+    const r = lookup(m[2]) != null ? lookup(m[2]) : bySentence(m[2]);
+    if (r != null) { any = true; return m[1] + r + m[3]; }
+    return part;
+  }).join('');
+  return any ? out : null;
+}
 function pieces(core) {
+  const pr = parens(core);
+  if (pr != null) return pr;
   let m = /^([^\p{L}\p{N}]+?)\s+(\p{L}.*)$/u.exec(core);
   if (m) { const r = lookupAny(m[2]); if (r != null) return m[1] + ' ' + r; }
   m = /^(.+?) \(key (\d+)\): (.+)$/.exec(core);
   if (m) { const a = lookupAny(m[1]), b = lookupAny(m[3]); if (a != null || b != null) return (a != null ? a : m[1]) + ' (tast ' + m[2] + '): ' + (b != null ? b : m[3]); }
-  for (const sep of [': ', ', ', ' \u00B7 ']) {
+  for (const [sep, outSep] of [[': ', ': '], [', ', ', '], [' \u00B7 ', ' \u00B7 '], [' and ', ' og ']]) {
     const i = core.indexOf(sep);
-    if (i > 0) { const a = lookupAny(core.slice(0, i)), b = lookupAny(core.slice(i + sep.length)); if (a != null || b != null) return (a != null ? a : core.slice(0, i)) + sep + (b != null ? b : core.slice(i + sep.length)); }
+    if (i > 0) { const a = lookupAny(core.slice(0, i)), b = lookupAny(core.slice(i + sep.length)); if (a != null || b != null) return (a != null ? a : core.slice(0, i)) + outSep + (b != null ? b : core.slice(i + sep.length)); }
   }
   return null;
 }
@@ -88,7 +111,7 @@ function bySentence(core) {
       const r = lookup(parts.slice(i, j).join(' '));
       if (r != null) { out.push(r); i = j; any = true; done = true; break; }
     }
-    if (!done) { out.push(parts[i]); i++; }
+    if (!done) { const r = pieces(parts[i]); if (r != null) any = true; out.push(r != null ? r : parts[i]); i++; }
   }
   return any ? out.join(' ') : null;
 }

@@ -253,7 +253,7 @@ export default {
 
   // ---------------------------------------------------------------- difficulty picker and Nightmare ladder
   'Pick a difficulty': 'Vælg sværhedsgrad',
-  'Clear Hard, then climb the Nightmare ladder. Each tier keeps every rule below it.': 'Klar Svær, og klatr så op ad Mareridts-stigen. Hvert trin beholder alle reglerne under sig.',
+  'Clear Hard, then climb the Nightmare ladder. Each tier keeps every rule below it.': 'Klar Svær for at åbne Mareridt. Hvert trin beholder reglerne under sig.',
   'Start': 'Start',
   'Coins x#': 'Mønter x{1}',
   'Reach wave # on Hard': 'Nå bølge {1} på Svær',
@@ -333,7 +333,7 @@ export default {
   '{} built!': '{1} er bygget!',
   'LEVEL UP!': 'NIVEAU OP!',
   'BUILT!': 'BYGGET!',
-  'Every run gives you a few coins. Small upgrades add up, so keep playing.': 'Hver omgang giver dig nogle mønter. Små opgraderinger bliver til meget, så bliv ved med at spille.',
+  'Every run gives you a few coins. Small upgrades add up, so keep playing.': 'Hver omgang giver mønter. Små opgraderinger bliver til meget.',
   'Spend your coins here between runs. Upgrades make your next run stronger.': 'Brug dine mønter her mellem omgangene. Opgraderinger gør din næste omgang stærkere.',
   'Gems are rare. You get them from nests, trophies and your first daily wins.': 'Ædelsten er sjældne. Du får dem fra reder, trofæer og dine første sejre i dagens udfordring.',
   'No rush. Every run you play makes your kingdom a little stronger.': 'Ingen hast. Hver omgang du spiller, gør dit kongerige lidt stærkere.',
@@ -469,8 +469,8 @@ export default {
   'A relic works for the whole run. The last line shows which cats it helps. Tap one.': 'En relikvie virker i hele omgangen. Den sidste linje viser, hvilke katte den hjælper. Tryk på en.',
   'Nest destroyed!': 'Reden er smadret!',
   'A caged cat is free!': 'En kat i bur er fri!',
-  'Tap a card to add that cat to your team.': 'Tryk på et kort for at få den kat med på dit hold.',
-  'A caged cat is free! Tap a card to add that cat to your team.': 'En kat i bur er fri! Tryk på et kort for at få den kat med på dit hold.',
+  'Tap a card to add that cat to your team.': 'Tryk på et kort for at tage katten med.',
+  'A caged cat is free! Tap a card to add that cat to your team.': 'En kat i bur er fri! Tryk på et kort for at tage katten med.',
   '{} merged to Lv #!': '{1} er smeltet sammen til Niv. {2}!',
   '{} joined the bench!': '{1} er kommet på bænken!',
   '{} joined the stack!': '{1} er kommet på tårnet!',
