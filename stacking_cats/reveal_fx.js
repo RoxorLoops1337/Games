@@ -26,7 +26,7 @@ export function revealCardHtml(it, notes = '', back = '') {
   return `<div class="tcard r-${it.rarity}" data-id="${it.id}"><div class="tc-face tc-front"><div class="tc-bevel"></div>
 <div class="tc-ribbon"><span>${it.rarity}</span></div>
 <div class="tc-art"><i class="tc-arays"></i><i class="tc-prism"></i><div class="tc-medal"><div class="ic">${it.icon}</div></div></div>
-<h3 class="tc-name">${it.name}</h3><p class="tc-desc">${it.desc}</p>
+<h3 class="tc-name${it.name.length > 15 ? ' long' : ''}">${it.name}</h3><p class="tc-desc">${it.desc}</p>
 <div class="tc-tags">${notes}<div class="impact">Equip it on any cat</div></div>
 <i class="tc-holo"></i><i class="tc-foil"></i></div>
 <div class="tc-face tc-back">${back ? `<img src="${back}" alt="">` : ''}<i class="tc-glint"></i></div></div>`;
@@ -50,7 +50,7 @@ export function flightAt(t, T, from, rarity) {
   const a = ang0 + f.loops * Math.PI * 2 * u, r = f.rad * Math.sin(Math.PI * Math.min(1, u * 1.08)) * (1 - u * 0.4);
   const x = from.x * (1 - u) + Math.cos(a + Math.PI / 2) * r * (len > 30 ? 1 : 0.6);
   const y = from.y * (1 - u) + Math.sin(a + Math.PI / 2) * r * 0.62;
-  const s = 0.05 + 1.2 * Math.pow(p, 1.55);   // from a speck far away to oversized
+  const s = 0.05 + 1.2 * (0.32 * p + 0.68 * p * p);   // from a speck far away to oversized
   const ry = f.turns * 360 * (1 - Math.pow(1 - p, 2.4));
   const rz = Math.sin(p * Math.PI * 2.2) * 16 * (1 - p);
   const rx = 18 * (1 - p) * (1 - p);
@@ -77,7 +77,7 @@ function sparkLayer(root, rarity) {
     cv,
     star(x, y, sc, vx = 0, vy = 0) {
       const a = Math.random() * Math.PI * 2, v = 20 + Math.random() * 60;
-      add({ x: x + (Math.random() - 0.5) * 30 * sc, y: y + (Math.random() - 0.5) * 30 * sc, vx: Math.cos(a) * v + vx, vy: Math.sin(a) * v + vy, life: 0.5 + Math.random() * 0.4, age: 0, r: 2 + Math.random() * 3.5 * Math.max(0.4, sc), c: cols[(Math.random() * cols.length) | 0], k: 's', g: 40 });
+      add({ x: x + (Math.random() - 0.5) * 30 * sc, y: y + (Math.random() - 0.5) * 30 * sc, vx: Math.cos(a) * v + vx, vy: Math.sin(a) * v + vy, life: 0.45 + Math.random() * 0.5, age: 0, r: 2.5 + Math.random() * 4 * Math.max(0.5, sc), c: cols[(Math.random() * cols.length) | 0], k: 's', g: 40 });
     },
     comet(x, y, sc) { add({ x, y, vx: 0, vy: 0, life: 0.42, age: 0, r: 18 + 30 * sc, c: cols[0], k: 'g', g: 0 }); },
     burst(x, y, n) {
@@ -137,6 +137,8 @@ export function playReveal(root, opts) {
   const land = (skipped) => {
     if (landed) return;
     landed = true;
+    const front = card && card.querySelector('.tc-front');   // a long name or text (or a longer translation) gets the compact layout
+    if (front && front.scrollHeight > front.clientHeight + 2) card.classList.add('tight');
     fly.style.transform = ''; spin.style.transform = '';
     for (const g of ghosts) g.remove();
     ghosts = [];
@@ -202,7 +204,7 @@ export function playReveal(root, opts) {
         for (let i = 0; i < ghosts.length; i++) {   // each echo is the card a few frames ago
           const gs = flightAt(t - (i + 1) * 34, T, from, rarity);
           ghosts[i].style.transform = tf(gs) + ' ' + spinTf(gs);
-          ghosts[i].style.opacity = (gs.o * (0.42 - i * 0.07)).toFixed(2);
+          ghosts[i].style.opacity = (gs.o * (0.55 - i * 0.09)).toFixed(2);
         }
         const n = fl.spark * (0.6 + st.s);
         for (let i = 0; i < n; i++) if (Math.random() < n - i) sp.star(X, Y, st.s);

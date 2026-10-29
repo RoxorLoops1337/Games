@@ -1240,8 +1240,8 @@ function showBox(tier) {
     if (taps === 0) sfx.unlock();
     const i = taps++;
     if (i >= burstTap) {
+      if (calm) { sfx.play('boxopen'); fx.inhale(); doBurst(); return; }   // motion off: one tap, the short rattle and pop
       sfx.play('chestsqueeze', Math.min(4, i + 1)); buzz('tick');
-      if (calm) { fx.inhale(); doBurst(); return; }
       burst = true; showHint(); sfx.play('chestinhale'); stg.classList.add('charging');
       later(doBurst, fx.inhale() || 0);   // the held breath: compress, stretch, tremble, a freeze frame, then the burst
       return;
@@ -1271,7 +1271,9 @@ function showBoxSummary(plans) {
     <div class="sumgrid">${plans.map((p, i) => { const it = ITEM_BY_ID[p.id]; return `<div class="sumtile r-${p.rar} ${p === best ? 'best' : ''}" style="--i:${i};--tc:${TIER_HEX[p.rar]}"><div class="ic">${it.icon}</div><b>${it.name}</b><small>${p.rar}</small></div>`; }).join('')}</div>
     <div class="row"><button class="btn big" data-act="go">Collect all</button></div>`, 'wide');
   sfx.play(REVEAL_SFX[best.rar] || 'chest'); buzz(best.rar === 'common' ? 'pop' : 'jackpot');
-  setTimeout(() => { const t = screenEl.querySelector('.sumtile.best'); if (t && t.isConnected && best.rar !== 'common') { const r = t.getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 20, [TIER_HEX[best.rar], '#fff', '#ffd23f'], ''); } }, 500);
+  const bi = plans.indexOf(best), grid = screenEl.querySelector('.sumgrid');
+  if (save.opt.motion) plans.slice(0, 10).forEach((p, i) => setTimeout(() => { if (grid && grid.isConnected) sfx.play(i === bi ? 'cardland' : 'cardpop', i === bi ? RARITY_IDX[p.rar] || 0 : 1 + i * 0.04); }, 140 + i * 140));   // a pop per tile as it flips in, the best one lands
+  setTimeout(() => { const t = screenEl.querySelector('.sumtile.best'); if (t && t.isConnected && best.rar !== 'common') { const r = t.getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 24, [TIER_HEX[best.rar], '#fff', '#ffd23f'], ''); } }, 500 + bi * 140);
   acts = { go: () => nextReward() };
 }
 // the burst when a box opens: more and brighter pieces for better relics

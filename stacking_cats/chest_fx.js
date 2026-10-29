@@ -229,7 +229,7 @@ export function createChestScene(el, o = {}) {
       if (frozen) { jit = 0; extraY = -8; st.q = -0.23; }
       hot = Math.min(1, 0.55 + st.pt * 1.3);
     } else if (st.phase === 'burst') {
-      jit = 0; hot = 1;
+      jit = 0; hot = Math.max(0.35, 1 - st.pt * 2.5);   // the glow eases so the open chest shows under the light
     }
     sy = 1 - st.q; sx = 1 + st.q * 0.9;
     if (st.phase === 'idle') { const br2 = Math.sin(t * 3.4 + 1.2) * 0.022; sy += br2; sx -= br2 * 0.8; }
@@ -238,12 +238,12 @@ export function createChestScene(el, o = {}) {
       body.style.transform = `translate(${(jx).toFixed(2)}px,${(jy - bob + extraY).toFixed(2)}px) rotate(${(st.r + br).toFixed(2)}deg) scale(${sx.toFixed(4)},${sy.toFixed(4)})`;
       if (st.flying) lid.style.transform = `translate(${st.lx.toFixed(1)}px,${st.ly.toFixed(1)}px) rotate(${st.lr.toFixed(1)}deg) scale(${st.ls.toFixed(3)})`;
       else lid.style.transform = `translateY(${(st.lidY).toFixed(2)}px) rotate(${(st.lidY * 0.12).toFixed(2)}deg)`;
-      const gl = Math.min(1, 0.22 + Math.sin(t * 2.6) * 0.07 + hot * 0.6 + st.pulse * 0.5);
+      const gl = Math.min(0.85, 0.36 + Math.sin(t * 2.6) * 0.12 + hot * 0.4 + st.pulse * 0.4);
       glow.style.opacity = gl.toFixed(3);
-      glow.style.transform = `scale(${(0.9 + Math.sin(t * 2.6) * 0.05 + hot * 0.45 + st.pulse * 0.25).toFixed(3)})`;
+      glow.style.transform = `scale(${(0.9 + Math.sin(t * 2.6) * 0.05 + hot * 0.3 + st.pulse * 0.15).toFixed(3)})`;
       const lift = Math.max(0, -st.lidY);
       seam.style.opacity = Math.min(1, hot * 0.85 + lift * 0.08 + (st.phase === 'inhale' ? 0.3 : 0) + (Math.random() - 0.5) * 0.12 * hot).toFixed(3);
-      seam.style.transform = `scale(${(0.75 + hot * 0.35).toFixed(3)},${(1 + lift * 0.15 + hot * 0.8).toFixed(3)})`;
+      seam.style.transform = `scale(${(0.8 + hot * 0.25).toFixed(3)},${(1 + Math.min(lift, 12) * 0.06 + hot * 0.45).toFixed(3)})`;
       leak.style.opacity = Math.min(1, hot * hot * 0.7 + lift * 0.04 + (st.phase === 'inhale' ? st.pt * 1.4 : 0)).toFixed(3);
       leak.style.transform = `translate(${jx.toFixed(1)}px,${(jy - bob + extraY).toFixed(1)}px) scale(${(0.7 + hot * 0.5).toFixed(3)},${(0.6 + hot * 0.7).toFixed(3)})`;
       shadow.style.transform = `scale(${(sx * (1 - bob * 0.018)).toFixed(3)},1)`;
@@ -297,7 +297,7 @@ export function createChestScene(el, o = {}) {
     el.style.setProperty('--bg', rgb);
     if (!motion) return;
     st.pulse = 1.6; st.rv += 160; st.press = 0.04; st.pressQ = 0.3;
-    anim(q('.boxflash'), [{ opacity: 1 }, { opacity: 0 }], { duration: 520, easing: 'ease-out' });
+    anim(q('.boxflash'), [{ opacity: 0.7 }, { opacity: 0 }], { duration: 380, easing: 'ease-out' });
     anim(q('.boxring'), [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(13)' }], { duration: 600, easing: 'cubic-bezier(.1,.7,.3,1)' });
     ringP(20, 260, 0.55, 10, rgb);
     sparks(CX, SEAM, 30, 520, [rgb, '255,255,255', '255,210,63'], { g: 300, life: 0.9, s1: 14 });
@@ -334,9 +334,9 @@ export function createChestScene(el, o = {}) {
     ringP(16, 340, 0.6, 16, '255,255,255'); ringP(10, 250, 0.5, 9, frgb);
     anim(q('.boxring'), [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(16)' }], { duration: 560, easing: 'cubic-bezier(.1,.7,.3,1)' });
     anim(q('.boxring.b'), [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(10)' }], { duration: 480, delay: 60, easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'backwards' });
-    anim(q('.boxflash'), [{ opacity: 1 }, { opacity: 0.2 }], { duration: 260, easing: 'ease-out', fill: 'forwards' });
+    anim(q('.boxflash'), [{ opacity: 0.9 }, { opacity: 0 }], { duration: 240, easing: 'ease-out', fill: 'forwards' });
     anim(beams, [{ opacity: 0.6, transform: 'scale(.8) rotate(-20deg)' }, { opacity: 1, transform: 'scale(1.9) rotate(30deg)' }], { duration: 700, easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'forwards' });
-    anim(pour, [{ opacity: 0.4, transform: 'scale(.8,.6)' }, { opacity: 1, transform: 'scale(1.6,2.2)' }], { duration: 380, easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'forwards' });
+    anim(pour, [{ opacity: 0.4, transform: 'scale(.8,.6)' }, { opacity: 0.7, transform: 'scale(1.2,1.45)' }], { duration: 380, easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'forwards' });
     anim(vig, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: 'forwards' });
     // pieces: sparks scale with rarity, confetti, debris from the chest, a puff of dust
     const cols = rar === 'mythic' ? MYTHIC : [frgb, '255,255,255', '255,214,90'];
