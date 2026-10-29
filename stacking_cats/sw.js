@@ -7,7 +7,7 @@ const PRECACHE = [
   './', 'index.html', 'manifest.webmanifest',
   'main.js', 'sim.js', 'cats.js', 'relics.js', 'i18n.js', 'lang/da.js', 'lang/da_ui.js', 'lang/da_data.js', 'lang/da_story.js', 'audio.js', 'post.js', 'daily.js', 'savecode.js', 'kingdom_scene.js',
   'art_util.js', 'art_cats.js', 'art_world.js', 'art_kingdom.js', 'art_icons.js',
-  'pwa.js', 'haptics.js', 'share.js', 'cosmetics.js', 'story.js', 'intro.js', 'meow_bank.js', 'meow_voice.js', 'art_relics.js', 'art_boxes.js', 'meows.aff2147f.wav',
+  'pwa.js', 'haptics.js', 'share.js', 'cosmetics.js', 'story.js', 'intro.js', 'meow_bank.js', 'meow_voice.js', 'art_relics.js', 'art_boxes.js', 'reveal_fx.js', 'meows.aff2147f.wav',
   'fonts/lilitaone-latin.woff2', 'fonts/baloo2-latin.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png',
 ];

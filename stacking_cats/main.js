@@ -19,6 +19,7 @@ import { enemySprite, nestSprite, nestOverlay, makeBackdrop, drawBackdrop, drawR
 import { Sfx } from './audio.js';
 import { createPost, ambientFor, lightSprite } from './post.js';
 import { boxHero } from './art_boxes.js';
+import { playReveal, revealCardHtml, RARITY_IDX } from './reveal_fx.js';
 import { mix, outlineCanvas, rimLight, texturize, hash, idleHop, waveProgress, dangerLevel, clearLine, confirmTap, coachAbove, specialLabel, dropAction } from './art_util.js';
 import { iconCanvas, iconURL, installGlyphs } from './art_icons.js';
 import { canInstall, promptInstall, onInstallChange, isIosSafari } from './pwa.js';
@@ -1277,8 +1278,8 @@ function showBoxSummary(plans) {
 }
 // the burst when a box opens: more and brighter pieces for better relics
 const CONFETTI = { common: [8, ['#fff0d0', '#ffd23f']], rare: [14, ['#8ec6ff', '#fff']], epic: [22, ['#e7a0ff', '#fff', '#ffd23f']], legendary: [34, ['#ffd23f', '#fff6b0', '#ff9a3a']], mythic: [46, ['#ff8ac8', '#9a7aff', '#fff', '#ffd23f']] };
-// how long the covered card keeps you waiting: a longer pause the rarer it is, and a tap skips it
-const REVEAL_WAIT = { common: 380, rare: 650, epic: 950, legendary: 1350, mythic: 1750 };
+// how long the card twirls in from the chest: a longer, bigger spiral the rarer it is, and a tap skips it
+const REVEAL_WAIT = { common: 720, rare: 820, epic: 920, legendary: 1150, mythic: 1350 };
 const REVEAL_SFX = { common: 'chest', rare: 'revealrare', epic: 'revealepic', legendary: 'revealleg', mythic: 'revealmyth' };
 const sparksHtml = () => Array.from({ length: 10 }, (_, i) => `<i style="--a:${i * 36 + 12}deg;--d:${62 + (i * 29) % 50}px;--t:${0.36 + (i % 4) * 0.06}s"></i>`).join('');
 const suckHtml = () => Array.from({ length: 12 }, (_, i) => `<i style="--a:${i * 30 + (i % 2) * 11}deg;--d:${120 + (i * 23) % 60}px;--t:${(i % 6) * 0.14}s"></i>`).join('');   // bits of light pulled into the box while it charges
@@ -1290,36 +1291,37 @@ function showBoxReveal(tier, id, more = 0) {   // more: chests still waiting aft
   const it = ITEM_BY_ID[id], bx = BOX_BY_ID[tier] || BOXES[0], hi = ['epic', 'legendary', 'mythic'].includes(it.rarity);
   const fresh = !save.relics[id];   // the first time this relic has ever turned up
   const cheerId = g.cats[0] && g.cats[0].id;
-  setScreen(`<h2 class="cheer veil r-${it.rarity}">${cheerId ? `<img class="cheercat" src="${thumbURL(cheerId)}" alt="">` : ''}${RARITY_CHEER[it.rarity]}</h2><p class="sub veil">Out of the ${bx.name}:</p>
-    <div class="revealstage pending r-${it.rarity}"><div class="revealflash"></div><div class="rays"></div><div class="pedestal"></div><div class="confetti">${confettiHtml(it.rarity)}</div><div class="cardback t-${bx.id}"><img src="${boxHero(bx.id).toDataURL()}" alt=""><b>?</b></div><div class="cards reveal">${itemCard(id)}</div><div class="stamp">${it.rarity}!</div>${fresh ? '<div class="newtag">NEW!</div>' : ''}</div>
-    <div class="row veil"><button class="btn big" data-act="take">${more ? `Next chest (${more})` : 'Collect'}</button></div>`);
+  const motion = !!save.opt.motion && !document.body.classList.contains('nomotion') && !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  // the card is face up from the start: it twirls in from the chest (reveal_fx.js), lands with a pop, then the header, NEW tag and button follow
+  setScreen(`<h2 class="cheer veil r-${it.rarity}">${cheerId ? `<img class="cheercat" src="${thumbURL(cheerId)}" alt="">` : ''}<span>${RARITY_CHEER[it.rarity]}</span></h2><p class="sub veil">Out of the ${bx.name}:</p>
+    <div class="revealstage pending r-${it.rarity}"><div class="revealflash"></div><div class="rays"></div><div class="rv-arcs"></div><div class="rv-ring"></div><div class="rv-ring b"></div><div class="pedestal"></div><div class="confetti">${confettiHtml(it.rarity)}</div><div class="rv-fly"><div class="rv-spin"><div class="rv-idle">${revealCardHtml(it, relicNotes(id), boxHero(bx.id).toDataURL())}</div></div>${fresh ? '<div class="newtag">NEW!</div>' : ''}</div></div>
+    <div class="row veil"><button class="btn big" data-act="take">${more ? `Next chest (${more})` : 'Collect'}</button></div>`, 'rvx r-' + it.rarity);
   const root = screenEl.firstElementChild, stage = root.querySelector('.revealstage');
   root.classList.add('noscrin');
   root.classList.add('suspense');
   let flipped = false, leaving = false;
-  const flip = (quiet) => {   // the card turns over: light, confetti, a fanfare matched to the rarity, a stamp and (for a first find) a NEW tag
+  const onLand = (skipped) => {   // the card lands: light, confetti, a fanfare matched to the rarity, a jolt and (for a first find) a NEW tag
     if (flipped || !stage.isConnected) return;
     flipped = true;
-    root.classList.remove('suspense'); stage.classList.remove('pending'); stage.classList.add('flipped');
-    if (hi && save.opt.shake > 0) { root.classList.remove('jolt'); void root.offsetWidth; root.classList.add('jolt'); }
-    if (quiet === true) return;
+    root.classList.remove('suspense');
+    if (save.opt.shake > 0 && motion) { root.classList.remove('jolt'); void root.offsetWidth; root.classList.add('jolt'); if (hi) root.classList.add('punch'); }
     sfx.play(REVEAL_SFX[it.rarity] || 'chest');
-    if (it.rarity !== 'common') setTimeout(() => sfx.play('stamp'), 260);
-    if (fresh) setTimeout(() => sfx.play('newrelic'), 520);
+    if (it.rarity !== 'common') setTimeout(() => sfx.play('stamp'), skipped ? 120 : 260);
+    if (fresh) setTimeout(() => sfx.play('newrelic'), skipped ? 260 : 520);
     setTimeout(() => { if (flipped && stage.isConnected && !leaving) coach('c10', 'This is an item. Tap Collect. You give items to your cats before the next wave.', 480, 380, 'up', { target: 'button[data-act=take]' }); }, 1100);
     buzz(hi ? 'jackpot' : 'pop');
     if (hi) { const c0 = g.cats[0]; if (c0) setTimeout(() => sfx.meow(c0.id, 'cheer'), 380); }
   };
-  stage.addEventListener('click', () => flip());
-  const wait = save.opt.motion ? REVEAL_WAIT[it.rarity] || 400 : 0;
-  if (wait && it.rarity !== 'common') sfx.play('boxtick', 0.8);
-  setTimeout(() => flip(), wait);
+  const flight = save.opt.motion ? REVEAL_WAIT[it.rarity] || 800 : 0;
+  const ds = document.body.dataset;
+  const fx = playReveal(root, { rarity: it.rarity, motion, flight, chest: { x: ds.chestX ?? 0.5, y: ds.chestY ?? 0.42 }, app, onLand, play: (k, a) => sfx.play(k, a) });
+  root.addEventListener('click', (e) => { if (!e.target.closest('button')) fx.skip(); });   // a tap during the show jumps ahead
   acts = {
     take: () => {
-      if (!flipped) { flip(); return; }
+      if (!flipped) { fx.skip(); return; }
       if (leaving) return;
       leaving = true; rewardChoices = null;
-      if (save.opt.motion) { stage.classList.add('fly'); sfx.play('equip'); setTimeout(() => nextReward(), 300); }
+      if (motion) { sfx.play('equip'); fx.leave(); setTimeout(() => nextReward(), 300); }
       else nextReward();
     },
   };
