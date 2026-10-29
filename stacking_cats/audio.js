@@ -319,9 +319,230 @@ export class Sfx {
     osc.start(now); am.start(now); osc.stop(now + dur + 0.05); am.stop(now + dur + 0.05);
   }
 
-  play(name, pitch = 1) {
+  // ---- building blocks for the chest and card sounds. All of them go through sfxBus (so the sfx volume applies) and stay silent when sound is off.
+  // a rarity as an index 0..4 (also takes the rarity name)
+  rarIdx(r) { const i = typeof r === 'string' ? ['common', 'rare', 'epic', 'legendary', 'mythic'].indexOf(r) : r | 0; return Math.max(0, Math.min(4, i)); }
+  // the start time for a recipe, or -1 when there is no context or sound is off
+  t0(delay = 0) { return this.ctx && this.on ? this.ctx.currentTime + delay : -1; }
+  // a gain envelope: up to v in `attack` seconds, held for `hold`, then down to silence at t + dur. o.cut ends it abruptly (a swell that stops dead).
+  envAt(p, t, dur, v, o = {}) {
+    const a = Math.max(0.002, Math.min(o.attack || 0.005, dur * 0.95));
+    p.setValueAtTime(0.0001, t);
+    p.exponentialRampToValueAtTime(v, t + a);
+    if (o.cut) { p.setValueAtTime(v, Math.max(t + a, t + dur - 0.008)); p.linearRampToValueAtTime(0.0001, t + dur); return; }
+    if (o.hold) p.setValueAtTime(v, t + Math.min(dur * 0.95, a + o.hold));
+    p.exponentialRampToValueAtTime(0.0001, t + dur);
+  }
+  // an oscillator with an envelope. o: type, v, attack, hold, cut, to (end frequency) or glide ([[seconds, frequency], ...]), lp / hp / bp (with q), bus
+  oscAt(f, t, dur, o = {}) {
+    const c = this.ctx;
+    if (!c) return;
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'sine';
+    const fr = osc.frequency;
+    fr.setValueAtTime(f, t);
+    if (o.glide) for (const [dt, ff] of o.glide) fr.exponentialRampToValueAtTime(Math.max(20, ff), t + dt);
+    else if (o.to) fr.exponentialRampToValueAtTime(Math.max(20, o.to), t + dur);
+    this.envAt(g.gain, t, dur, o.v || 0.1, o);
+    let tail = osc;
+    for (const [k, type] of [['lp', 'lowpass'], ['hp', 'highpass'], ['bp', 'bandpass']]) {
+      if (!o[k]) continue;
+      const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = o[k]; if (o.q) fl.Q.value = o.q;
+      tail.connect(fl); tail = fl;
+    }
+    tail.connect(g); g.connect(o.bus || this.sfxBus);
+    osc.start(t); osc.stop(t + dur + 0.05);
+  }
+  // filtered noise whose filter sweeps from f0 to f1. o: type (bandpass), f0, f1, q, v envelope options as envAt, bus
+  sweepAt(t, dur, v, o = {}) {
+    const c = this.ctx;
+    if (!c) return;
+    const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = this.noiseBuf; s.loop = true;
+    f.type = o.type || 'bandpass'; f.Q.value = o.q || 1;
+    f.frequency.setValueAtTime(o.f0 || 1000, t);
+    if (o.f1) f.frequency.exponentialRampToValueAtTime(o.f1, t + dur);
+    this.envAt(g.gain, t, dur, v, o);
+    s.connect(f); f.connect(g); g.connect(o.bus || this.sfxBus);
+    s.start(t, Math.random() * 0.4); s.stop(t + dur + 0.02);
+  }
+  // a small bus whose volume wobbles (tremolo or flutter) at `rate` Hz, gliding to rateTo; depth 0..0.5
+  amBus(t, dur, rate, rateTo, depth) {
+    const c = this.ctx, g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+    g.gain.value = 1 - depth; lg.gain.value = depth;
+    lfo.frequency.setValueAtTime(rate, t);
+    if (rateTo) lfo.frequency.exponentialRampToValueAtTime(rateTo, t + dur);
+    lfo.connect(lg); lg.connect(g.gain); g.connect(this.sfxBus);
+    lfo.start(t); lfo.stop(t + dur + 0.1);
+    return g;
+  }
+  // a struck bell: the inharmonic partials of a small bell plus a slightly detuned twin for a slow shimmer
+  bellAt(f, t, dur, v, bus) {
+    for (const [r, vv, dd] of [[1, 1, 1], [1.004, 0.45, 0.9], [2.76, 0.28, 0.5], [5.4, 0.1, 0.25]]) this.oscAt(f * r, t, dur * dd, { v: v * vv, attack: 0.003, bus });
+  }
+  // a run of n tiny chimes on a pentatonic scale from f, rising (dir 1) or falling (dir -1), spread over `span` seconds
+  sparkleAt(t, n, f, span, v, dir = 1, bus) {
+    for (let i = 0; i < n; i++) {
+      const k = dir > 0 ? i : n - 1 - i, semi = PENT[k % 5] + 12 * Math.floor(k / 5);
+      this.oscAt(NOTE(semi, f), t + (span * i) / Math.max(1, n - 1) + Math.random() * 0.012, 0.1 + Math.random() * 0.08, { type: i % 2 ? 'sine' : 'triangle', v: v * (0.7 + 0.3 * Math.random()), attack: 0.002, bus });
+    }
+  }
+  // a soft chord that swells in: two slightly detuned voices per note
+  padAt(freqs, t, dur, v, o = {}) {
+    for (const f of freqs) for (const d of [0.997, 1.003]) this.oscAt(f * d, t, dur, { type: o.type || 'triangle', v: v * 0.6, attack: o.attack || 0.12, hold: o.hold || dur * 0.3, lp: o.lp, bus: o.bus });
+  }
+
+  // the chest squeezed under a tap (k = 1..4): rubbery creak and groan, a knock, a rising tone that climbs with k, sparkle from the 3rd tap
+  chestSqueeze(k) {
+    const t = this.t0(); if (t < 0) return;
+    k = Math.max(1, Math.min(4, Math.round(k) || 1));
+    const s = (k - 1) / 3, up = Math.pow(2, (k - 1) * 3 / 12);
+    this.oscAt(190 + 20 * k, t, 0.07, { to: 115, v: 0.1 + 0.03 * k, attack: 0.002 });   // wooden knock
+    this.sweepAt(t, 0.035, 0.04 + 0.02 * k, { f0: 1300 + 200 * k, q: 2, attack: 0.002 });
+    const creak = this.amBus(t + 0.01, 0.22, 26 + 6 * k, 18, 0.45);   // the ratchet of a stressed lid
+    this.oscAt(68 + 10 * k, t + 0.01, 0.22, { type: 'sawtooth', glide: [[0.07, (68 + 10 * k) * 1.5], [0.22, (68 + 10 * k) * 1.1]], v: 0.06 + 0.025 * k, lp: 600 + 220 * k, attack: 0.02, bus: creak });
+    this.sweepAt(t + 0.01, 0.2, 0.045 + 0.01 * k, { f0: 420 + 120 * k, f1: 700 + 200 * k, q: 3.5, attack: 0.03, bus: creak });
+    this.oscAt(96 + 8 * k, t, 0.24, { type: 'triangle', glide: [[0.05, 120 + 10 * k], [0.24, 74 + 6 * k]], v: 0.07 + 0.02 * k, attack: 0.01 });   // the groan
+    this.oscAt(280 * up, t + 0.07, 0.24 + 0.03 * s, { to: 560 * up, v: 0.045 + 0.02 * s, attack: 0.05 });   // tension rising with k
+    this.oscAt(420 * up, t + 0.09, 0.2, { to: 840 * up, type: 'triangle', v: 0.02 + 0.01 * s, attack: 0.05 });
+    if (k >= 3) this.sparkleAt(t + 0.17, k === 4 ? 4 : 3, 1568 * (k === 4 ? 1.122 : 1), 0.12, 0.028);
+  }
+  // half a second of suction before the boom: a reversed sounding riser that stops dead
+  chestInhale() {
+    const t = this.t0(); if (t < 0) return;
+    const d = 0.5, trem = this.amBus(t, d, 5, 30, 0.38);
+    this.sweepAt(t, d, 0.17, { f0: 280, f1: 4200, q: 2.4, attack: d - 0.012, cut: true, bus: trem });
+    this.sweepAt(t, d, 0.05, { type: 'highpass', f0: 2500, f1: 9000, q: 0.7, attack: d - 0.012, cut: true });
+    this.oscAt(170, t, d, { to: 960, v: 0.09, attack: d - 0.015, cut: true, bus: trem });
+    this.oscAt(255, t, d, { to: 1440, type: 'triangle', v: 0.03, attack: d - 0.015, cut: true, bus: trem });
+    this.oscAt(48, t, d, { to: 96, v: 0.11, attack: d - 0.02, cut: true });
+  }
+  // the chest exploding; the sparkle tail grows with the rarity r (0 common .. 4 mythic)
+  chestBoom(r) {
+    const t = this.t0(); if (t < 0) return;
+    r = this.rarIdx(r);
+    this.duckMusic(0.5 - 0.05 * r, 0.6 + 0.3 * r);
+    this.oscAt(150, t, 0.5, { to: 36, v: 0.32, attack: 0.002 });   // the thump
+    this.oscAt(95, t, 0.32, { to: 44, type: 'sawtooth', v: 0.07, lp: 520, attack: 0.002 });
+    this.oscAt(1100, t, 0.025, { to: 260, type: 'square', v: 0.05, lp: 3000, attack: 0.001 });   // the crack at the very start
+    this.sweepAt(t, 0.45, 0.27, { type: 'lowpass', f0: 3200, f1: 500, q: 0.7, attack: 0.002 });
+    for (let i = 0; i < 6; i++) this.sweepAt(t + 0.04 + i * 0.045 + Math.random() * 0.03, 0.025, 0.07 - i * 0.008, { type: 'highpass', f0: 3000 + Math.random() * 3000, q: 0.8, attack: 0.001 });   // crackle
+    const L = 1 + 0.35 * r;
+    // common: short and warm
+    [523, 659, 784].forEach((f, i) => this.oscAt(f, t + 0.08 + i * 0.05, 0.35 * L, { type: 'triangle', v: 0.05, attack: 0.004 }));
+    if (r === 0) { this.oscAt(1047, t + 0.22, 0.4, { type: 'sine', v: 0.03 }); return; }
+    // rare: a bright glass chime
+    this.bellAt(1568, t + 0.16, 0.9 * L, 0.05); this.bellAt(2093, t + 0.26, 0.8 * L, 0.035);
+    this.sparkleAt(t + 0.2, 4, 2349, 0.2, 0.025);
+    if (r === 1) return;
+    // epic: a shimmering chord
+    this.padAt([659, 831, 988, 1319], t + 0.12, 1.3 * L * 0.8, 0.03, { attack: 0.1, bus: this.amBus(t + 0.12, 1.3 * L, 7, 9, 0.35) });
+    if (r === 2) return;
+    // legendary: a rising gold arpeggio and a bell
+    [392, 494, 587, 784, 988, 1175, 1568, 1976].forEach((f, i) => this.oscAt(f, t + 0.18 + i * 0.055, 0.32, { type: 'triangle', v: 0.05, attack: 0.004 }));
+    this.bellAt(1047, t + 0.62, 1.8, 0.075);
+    this.sparkleAt(t + 0.7, 8, 2093, 0.5, 0.022, -1);
+    if (r === 3) return;
+    // mythic: a magical sweep with shimmer and a sub drop
+    this.oscAt(70, t + 0.06, 1.4, { to: 27, v: 0.13, attack: 0.02 });
+    this.sweepAt(t + 0.1, 1.3, 0.06, { f0: 700, f1: 9500, q: 1.6, attack: 0.5 });
+    const sh = this.amBus(t + 0.4, 1.8, 11, 6, 0.45);
+    [2637, 3136, 3951, 5274].forEach((f, i) => this.oscAt(f, t + 0.4 + i * 0.08, 1.4, { v: 0.018, attack: 0.15, bus: sh }));
+    this.padAt([220, 277, 330, 440], t + 0.3, 1.9, 0.016, { type: 'sawtooth', lp: 1400, attack: 0.35 });
+  }
+  // something small flying from far away to the camera while spinning: the noise swells and brightens, the flutter slows, a faint whistle bends up then down
+  cardWhoosh() {
+    const t = this.t0(); if (t < 0) return;
+    const d = 0.9, fl = this.amBus(t, d, 14, 6, 0.4);
+    this.sweepAt(t, d, 0.28, { f0: 380, f1: 2600, q: 1.6, attack: 0.78, bus: fl });
+    this.sweepAt(t, d, 0.08, { f0: 2600, f1: 7500, q: 1.2, attack: 0.8, bus: fl });
+    this.oscAt(820, t + 0.05, d - 0.05, { glide: [[0.62, 1500], [d - 0.05, 1320]], v: 0.035, attack: 0.65, bus: fl });
+    this.oscAt(110, t + 0.45, 0.45, { to: 160, v: 0.08, attack: 0.38 });   // the air pressure of it arriving
+  }
+  // a cartoon pop with a tiny overshoot wobble, right on the landing beat
+  cardPop() {
+    const t = this.t0(); if (t < 0) return;
+    this.sweepAt(t, 0.018, 0.13, { type: 'highpass', f0: 3500, q: 0.7, attack: 0.001 });   // the click
+    this.oscAt(2400, t, 0.025, { type: 'triangle', v: 0.04, attack: 0.001 });
+    this.oscAt(980, t, 0.11, { to: 240, v: 0.2, attack: 0.002 });   // the bloop
+    this.oscAt(300, t + 0.05, 0.16, { glide: [[0.04, 380], [0.09, 290], [0.16, 330]], type: 'triangle', v: 0.1, attack: 0.006 });   // overshoot wobble
+  }
+  // the card landing: a soft low thud and a shimmer chord that grows with the rarity r
+  cardLand(r) {
+    const t = this.t0(); if (t < 0) return;
+    r = this.rarIdx(r);
+    this.duckMusic(0.75 - 0.04 * r, 0.4 + 0.15 * r);
+    this.oscAt(120, t, 0.26, { to: 50, v: 0.2, attack: 0.003 });
+    this.sweepAt(t, 0.12, 0.1, { type: 'lowpass', f0: 700, f1: 250, attack: 0.002 });
+    const ch = [[1047, 1319, 1568], [1175, 1480, 1760, 2349], [1047, 1319, 1568, 1976, 2637], [1175, 1480, 1760, 2349, 2960], [1109, 1397, 1661, 2217, 2794, 3322]][r];
+    const bus = r >= 2 ? this.amBus(t + 0.02, 1.2, 8, 5, 0.3) : undefined;
+    ch.forEach((f, i) => this.oscAt(f, t + 0.02 + i * 0.012, 0.45 + 0.18 * r, { v: 0.032 - 0.002 * i, attack: 0.006, bus }));
+    if (r >= 3) this.sparkleAt(t + 0.08, r === 4 ? 12 : 9, 2093, r === 4 ? 0.75 : 0.55, 0.022, -1);
+    if (r === 4) this.bellAt(2217, t + 0.05, 1.4, 0.035);
+  }
+  // a quiet sparkle glissando for the foil shine sweeping across the card
+  cardShine() {
+    const t = this.t0(); if (t < 0) return;
+    this.sparkleAt(t, 8, 2093, 0.38, 0.032, 1);
+    this.sweepAt(t, 0.5, 0.028, { type: 'highpass', f0: 6000, f1: 12000, q: 0.7, attack: 0.25 });
+  }
+  // ---- the reveal fanfares, one per rarity, each clearly its own colour
+  // common (also the chest drop in a fight, so short): a bright arpeggio, a little bell and a wooden thock
+  chestChime() {
+    const t = this.t0(); if (t < 0) return;
+    this.oscAt(220, t, 0.08, { to: 150, v: 0.07, attack: 0.002 });
+    [660, 880, 1100, 1320].forEach((f, i) => this.oscAt(f, t + i * 0.05, 0.18, { type: 'triangle', v: 0.09, attack: 0.004 }));
+    this.bellAt(1760, t + 0.2, 0.5, 0.04);
+    this.sweepAt(t, 0.14, 0.05, { type: 'highpass', f0: 5000, q: 0.7, attack: 0.002 });
+  }
+  // rare (blue): glassy arpeggio doubled an octave up, a glass bell and a soft pad
+  revealRare() {
+    const t = this.t0(); if (t < 0) return;
+    [784, 988, 1175, 1568].forEach((f, i) => { this.oscAt(f, t + i * 0.06, 0.24, { type: 'triangle', v: 0.09, attack: 0.004 }); this.oscAt(f * 2, t + i * 0.06, 0.14, { v: 0.025, attack: 0.003 }); });
+    this.bellAt(2349, t + 0.26, 0.9, 0.045);
+    this.padAt([392, 494, 587], t + 0.05, 0.8, 0.022, { attack: 0.08 });
+    this.sparkleAt(t + 0.3, 4, 3136, 0.18, 0.018);
+    this.sweepAt(t + 0.2, 0.35, 0.025, { type: 'highpass', f0: 7000, q: 0.7, attack: 0.05 });
+  }
+  // epic (purple): a lydian climb, a shimmering maj7 chord with tremolo, a bell and an upward air sweep
+  revealEpic() {
+    const t = this.t0(); if (t < 0) return;
+    this.duckMusic(0.65, 0.8);
+    [523, 659, 740, 784, 988, 1319].forEach((f, i) => { this.oscAt(f, t + i * 0.06, 0.26, { type: 'triangle', v: 0.09, attack: 0.004 }); this.oscAt(f, t + i * 0.06, 0.12, { type: 'square', v: 0.018, lp: 2400, attack: 0.004 }); });
+    this.padAt([262, 330, 392, 494, 659], t + 0.1, 1.3, 0.024, { attack: 0.12, bus: this.amBus(t + 0.1, 1.3, 6.5, 8, 0.3) });
+    this.bellAt(2093, t + 0.4, 1.1, 0.05);
+    this.sweepAt(t, 0.48, 0.04, { f0: 1000, f1: 6500, q: 1.4, attack: 0.4 });
+    this.sparkleAt(t + 0.45, 5, 2637, 0.25, 0.018, -1);
+  }
+  // legendary (gold): a brassy chord stab, a rising gold arpeggio, a bell chord, a sub boom and a falling sparkle cascade
+  revealLeg() {
+    const t = this.t0(); if (t < 0) return;
+    this.duckMusic(0.55, 1.1);
+    this.oscAt(98, t, 0.6, { to: 49, v: 0.15, attack: 0.004 });
+    this.padAt([196, 247, 294, 392], t, 0.6, 0.045, { type: 'sawtooth', lp: 1500, attack: 0.02, hold: 0.15 });
+    [392, 523, 659, 784, 1047, 1319, 1568].forEach((f, i) => this.oscAt(f, t + 0.05 + i * 0.065, 0.3, { type: 'triangle', v: 0.09, attack: 0.004 }));
+    [1568, 1976, 2349].forEach((f, i) => this.bellAt(f, t + 0.55 + i * 0.02, 1.6, 0.035));
+    this.sparkleAt(t + 0.6, 10, 2093, 0.7, 0.02, -1);
+    this.sweepAt(t, 0.6, 0.045, { f0: 900, f1: 7000, q: 1.3, attack: 0.5 });
+  }
+  // mythic (rainbow): a full magical sweep, a sub drop, an alternating arpeggio, a choir like pad, a bell cascade and shimmer
+  revealMyth() {
+    const t = this.t0(); if (t < 0) return;
+    this.duckMusic(0.5, 1.4);
+    this.oscAt(82, t, 1.3, { to: 30, v: 0.18, attack: 0.01 });
+    this.sweepAt(t, 0.9, 0.055, { f0: 500, f1: 10000, q: 1.5, attack: 0.6 });
+    [330, 440, 523, 659, 880, 1047, 1319, 1760].forEach((f, i) => this.oscAt(f, t + i * 0.07, 0.36, { type: i % 2 ? 'triangle' : 'sine', v: 0.085, attack: 0.004 }));
+    this.padAt([220, 277, 330, 440, 554], t + 0.2, 2.1, 0.018, { type: 'sawtooth', lp: 1300, attack: 0.35, bus: this.amBus(t + 0.2, 2.1, 5, 7, 0.25) });
+    [1760, 2217, 2637, 3520].forEach((f, i) => this.bellAt(f, t + 0.65 + i * 0.11, 1.4, 0.032));
+    const sh = this.amBus(t + 0.7, 1.6, 12, 6, 0.45);
+    [3136, 3951, 4699].forEach((f, i) => this.oscAt(f, t + 0.7 + i * 0.1, 1.3, { v: 0.014, attack: 0.2, bus: sh }));
+    this.sparkleAt(t + 1.1, 10, 2637, 0.6, 0.017, -1);
+  }
+
+  play(name, arg) {
+    const pitch = arg === undefined ? 1 : arg;
     const now = performance.now();
-    const gap = { hit: 45, swipe: 60, shoot: 70, pop: 40, flame: 120, zap: 80, boom: 80, coin: 40, hover: 60, ui: 50, back: 80, pip: 140, merge: 120, waveclear: 500, nestdown: 500 }[name] || 0;
+    const gap = { hit: 45, swipe: 60, shoot: 70, pop: 40, flame: 120, zap: 80, boom: 80, coin: 40, hover: 60, ui: 50, back: 80, pip: 140, merge: 120, waveclear: 500, nestdown: 500, chestsqueeze: 60, chestinhale: 250, chestboom: 300, cardwhoosh: 250, cardpop: 60, cardland: 150, cardshine: 150 }[name] || 0;
     if (gap && now - (this.last[name] ?? -Infinity) < gap) return;
     this.last[name] = now;
     if (DUCK[name]) this.duckMusic(DUCK[name][0], DUCK[name][1]);
@@ -333,11 +554,19 @@ export class Sfx {
       case 'boxburst': this.noise(0.4, 0.3, 2600); this.tone(120, 0.42, { to: 38, type: 'sine', v: 0.32 }); [880, 1175, 1568, 2093].forEach((f, i) => this.tone(f, 0.18, { type: 'triangle', v: 0.09, delay: 0.02 + i * 0.035 })); break;
       case 'stamp': this.tone(96, 0.16, { to: 46, type: 'sine', v: 0.3 }); this.noise(0.09, 0.2, 1300); break;   // the rarity label slamming down
       case 'newrelic': this.tone(1568, 0.1, { type: 'triangle', v: 0.09 }); this.tone(2093, 0.18, { type: 'sine', v: 0.08, delay: 0.08 }); break;
-      case 'revealrare': [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.2, { type: 'triangle', v: 0.1, delay: i * 0.06 })); break;
-      case 'revealepic': [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, 0.24, { type: 'triangle', v: 0.11, delay: i * 0.065 })); this.tone(2093, 0.5, { type: 'sine', v: 0.06, delay: 0.34 }); this.noise(0.3, 0.05, 6000); break;
-      case 'revealleg': [392, 523, 659, 784, 1047, 1319, 1568].forEach((f, i) => this.tone(f, 0.3, { type: 'triangle', v: 0.12, delay: i * 0.07 })); this.tone(196, 0.8, { type: 'sawtooth', v: 0.06, lp: 700 }); this.tone(2637, 0.7, { type: 'sine', v: 0.06, delay: 0.5 }); this.noise(0.5, 0.06, 7000); break;
-      case 'revealmyth': [330, 440, 523, 659, 880, 1047, 1319, 1760].forEach((f, i) => this.tone(f, 0.36, { type: i % 2 ? 'triangle' : 'sine', v: 0.12, delay: i * 0.075 })); this.tone(165, 1.1, { type: 'sawtooth', v: 0.07, lp: 600 }); [2093, 2637, 3136].forEach((f, i) => this.tone(f, 0.6, { type: 'sine', v: 0.05, delay: 0.6 + i * 0.12 })); this.noise(0.7, 0.07, 8000); break;
-      case 'chest': [660, 880, 1100, 1320].forEach((f, i) => this.tone(f, 0.16, { type: 'triangle', v: 0.12, delay: i * 0.05 })); this.noise(0.12, 0.08, 5000); break;
+      case 'revealrare': this.revealRare(); break;
+      case 'revealepic': this.revealEpic(); break;
+      case 'revealleg': this.revealLeg(); break;
+      case 'revealmyth': this.revealMyth(); break;
+      case 'chest': this.chestChime(); break;
+      // the chest opening and card reveal: squeeze taps (arg = tap 1..4), the inhale, the boom and the card landing (arg = rarity 0..4)
+      case 'chestsqueeze': this.chestSqueeze(arg === undefined ? 1 : arg); break;
+      case 'chestinhale': this.chestInhale(); break;
+      case 'chestboom': this.chestBoom(arg); break;
+      case 'cardwhoosh': this.cardWhoosh(); break;
+      case 'cardpop': this.cardPop(); break;
+      case 'cardland': this.cardLand(arg); break;
+      case 'cardshine': this.cardShine(); break;
       case 'equip': this.tone(300, 0.07, { type: 'square', v: 0.08 }); this.tone(900, 0.12, { type: 'triangle', v: 0.1, delay: 0.06 }); break;
       case 'upgrade': [392, 523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.2, { type: 'triangle', v: 0.13, delay: i * 0.06 })); this.tone(130, 0.3, { to: 70, type: 'sine', v: 0.2 }); break;
       case 'reroll': this.tone(500, 0.05, { type: 'square', v: 0.06 }); this.tone(700, 0.05, { type: 'square', v: 0.06, delay: 0.06 }); this.tone(950, 0.08, { type: 'square', v: 0.06, delay: 0.12 }); break;

@@ -976,7 +976,8 @@ t('world art: backdrops carry depth layers (cloud sprites, birds, motes), mice h
 
 t('lootbox opening: lid pop, glow, beams and sparks, a flash and pedestal on the reveal, all under the nomotion rule', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
-  assert.ok(/class="boxglow"/.test(js) && /class="boxbeams"/.test(js) && /boxsparks/.test(js) && /classList\.add\('opening'\)/.test(js), 'opening layers');
+  const cfx = readFileSync('stacking_cats/chest_fx.js', 'utf8');   // the chest stage and its particles live in chest_fx.js
+  assert.ok(/class="boxglow"/.test(cfx) && /class="boxbeams"/.test(cfx) && /class="cxfx"/.test(cfx) && /chestHtml\(/.test(js) && /classList\.add\('opening'\)/.test(js), 'opening layers');
   assert.ok(/@keyframes lidpop/.test(css) && /@keyframes beamsburst/.test(css) && /\.boxstage\.opening/.test(css), 'opening styles');
   assert.ok(/class="pedestal"/.test(js) && /class="revealflash"/.test(js) && /class="cheercat"/.test(js) && /@keyframes rflash/.test(css), 'reveal polish');
   assert.ok(/body\.nomotion \*/.test(css), 'nomotion still stops animations');
@@ -1259,7 +1260,7 @@ t('Relic Book keeps its scroll position when a tile is picked and fades the bott
 t('lootbox juice: the box charges and bursts, the card stays covered a rarity-scaled moment, then flips with a stamp, NEW tag and fanfare; a tap skips; reduced motion skips the waits', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8'), au = readFileSync('stacking_cats/audio.js', 'utf8');
   for (const k of ['boxbuild', 'boxtick', 'boxburst', 'stamp', 'newrelic', 'revealrare', 'revealepic', 'revealleg', 'revealmyth']) assert.ok(new RegExp("case '" + k + "':").test(au), 'sound ' + k);
-  assert.ok(/classList\.add\('charging'\)/.test(js) && /classList\.add\('opening'\)/.test(js) && /sfx\.play\('boxburst'\)/.test(js), 'charge then burst');
+  assert.ok(/classList\.add\('charging'\)/.test(js) && /classList\.add\('opening'\)/.test(js) && /sfx\.play\('chestboom', /.test(js), 'charge then burst');
   assert.ok(/if \(burst\) \{ doBurst\(\); return; \}/.test(js), 'a tap while the chest charges pops it now');
   assert.ok(/function showBox\(tier\)/.test(js) && /boxPlan\(g, tier\)/.test(js) && /upgrade\(\)/.test(js) && /showBoxSummary/.test(js), 'chests are cracked with taps, can turn rarer, and Open all shows a summary');
   assert.ok(/prepare: true/.test(js) && /g\.run\.items > prepSeen/.test(js), 'new items are handed out on one prepare screen before the wave');
