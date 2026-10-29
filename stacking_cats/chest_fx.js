@@ -249,8 +249,7 @@ export function createChestScene(el, o = {}) {
       shadow.style.transform = `scale(${(sx * (1 - bob * 0.018)).toFixed(3)},1)`;
       shadow.style.opacity = (0.55 - bob * 0.02).toFixed(3);
     }
-    step(dt);
-    draw();
+    try { step(dt); draw(); } catch (e) { /* the canvas is a bonus: the chest keeps moving without it */ }
     if (st.alive && (st.phase !== 'done' || ps.length)) raf = requestAnimationFrame(frame);
   };
   const kick = () => { if (motion && !raf && st.alive) { last = 0; raf = requestAnimationFrame(frame); } };

@@ -64,15 +64,24 @@ export function popAt(q) {
   return { x: 0, y: 0, s, sx: s * (1 + k), sy: s * (1 - k), ry: 0, rz: 0, rx: 0, o: 1 };
 }
 const tf = (st) => `translate3d(${st.x.toFixed(1)}px,${st.y.toFixed(1)}px,0) scale(${st.sx.toFixed(3)},${st.sy.toFixed(3)})`;
-const spinTf = (st) => `rotateX(${st.rx.toFixed(1)}deg) rotateY(${st.ry.toFixed(1)}deg) rotateZ(${st.rz.toFixed(1)}deg)`;
+// the twirl is 2D on purpose (no preserve-3d or backface-visibility: some phone browsers lose the card's faces with them):
+// a turn around the Y axis is the card squeezed sideways, and the back is shown while it faces away
+const spinC = (st) => { const c = Math.cos(st.ry * Math.PI / 180); return Math.abs(c) < 0.04 ? (c < 0 ? -0.04 : 0.04) : c; };
+const spinTf = (st) => `rotate(${st.rz.toFixed(1)}deg) scaleX(${spinC(st).toFixed(3)})`;
 
 // the sparkle canvas: stars along the flight, a comet tail for legendary and mythic, the landing burst, embers after
 function sparkLayer(root, rarity) {
-  const cv = document.createElement('canvas');
-  cv.className = 'rv-sparks'; cv.width = 960; cv.height = 540; cv.setAttribute('aria-hidden', 'true');
+  const cv = document.createElement('canvas'), cols = COLS[rarity] || COLS.common, ps = [];
+  const k = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 0.5 : 1;   // phones: a quarter of the pixels
+  cv.className = 'rv-sparks'; cv.width = Math.round(960 * k); cv.height = Math.round(540 * k); cv.setAttribute('aria-hidden', 'true');
+  let ctx = null;
+  try { ctx = cv.getContext('2d'); } catch (e) { ctx = null; }
+  if (!ctx) {   // no canvas memory left: the card still lands, just without sparkles
+    return { cv, star() {}, comet() {}, burst() {}, ember() {}, get count() { return 0; }, step() {}, free() {} };
+  }
   root.appendChild(cv);
-  const ctx = cv.getContext('2d'), cols = COLS[rarity] || COLS.common, ps = [];
-  const add = (p) => { if (ps.length < 220) ps.push(p); };
+  ctx.scale(k, k);
+  const add = (p) => { if (ps.length < (k < 1 ? 90 : 220)) ps.push(p); };
   return {
     cv,
     star(x, y, sc, vx = 0, vy = 0) {
@@ -139,7 +148,7 @@ export function playReveal(root, opts) {
     landed = true;
     const front = card && card.querySelector('.tc-front');   // a long name or text (or a longer translation) gets the compact layout
     if (front && front.scrollHeight > front.clientHeight + 2) card.classList.add('tight');
-    fly.style.transform = ''; spin.style.transform = '';
+    fly.style.transform = ''; spin.style.transform = ''; fly.style.opacity = ''; if (card) card.classList.remove('showback');
     for (const g of ghosts) g.remove();
     ghosts = [];
     root.classList.remove('flying'); root.classList.add('landed');
@@ -187,12 +196,13 @@ export function playReveal(root, opts) {
   sp = sparkLayer(root, rarity);
   root.classList.add('flying');
   play('cardwhoosh');
-  const apply = (st) => { fly.style.transform = tf(st); spin.style.transform = spinTf(st); fly.style.opacity = st.o.toFixed(2); };
+  const apply = (st) => { fly.style.transform = tf(st); spin.style.transform = spinTf(st); fly.style.opacity = st.o.toFixed(2); if (card) card.classList.toggle('showback', spinC(st) < 0); };
   apply(flightAt(0, T, from, rarity));
 
   let last = 0, embT = 0;
   const frame = (now) => {
     if (!alive || !root.isConnected) { stop(); return; }
+    try {
     if (!t0) { t0 = now; last = now; }
     const t = now - t0, dt = Math.min(0.05, (now - last) / 1000); last = now;
     if (!landed) {
@@ -224,9 +234,11 @@ export function playReveal(root, opts) {
     }
     sp.step(dt);
     if (landed && !['legendary', 'mythic', 'epic'].includes(rarity) && sp.count === 0 && t > T + POP_MS) { stop(); return; }
+    } catch (e) { stop(); finish(); return; }   // whatever goes wrong, the card lands and Collect shows
     raf = requestAnimationFrame(frame);
   };
   raf = requestAnimationFrame(frame);
+  later(() => { if (!landed) finish(); }, T + 1500);   // never rely on animation frames alone: a stalled browser still lands the card
   const stop = () => { cancelAnimationFrame(raf); raf = 0; if (sp && (!root.isConnected || !alive)) { sp.free(); sp = null; } };
 
   // tilt toward the pointer once it rests
