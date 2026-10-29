@@ -1223,7 +1223,7 @@ function showBox(tier) {
     stg.classList.remove('charging'); stg.classList.add('opening');
     if (save.opt.shake > 0 && root) { root.classList.remove('jolt'); void root.offsetWidth; root.classList.add('jolt'); }
     sfx.play('chestboom', Math.max(0, RARITIES.indexOf(plan.rar))); buzz('pop');
-    fx.burst(plan.rar);   // the lid blasts off and the screen flashes in the item's colour; the reveal starts under the flash
+    try { fx.burst(plan.rar); } catch (e) { /* the show must never block the reveal */ }   // the lid blasts off and the screen flashes in the item's colour; the reveal starts under the flash
     later(() => { S.openPlanned(g, plan); rewardChoices = plan.id; showBoxReveal(tier, plan.id, more); }, fx.motion ? CHEST_T.swap : 120);
   };
   const upgrade = () => {   // the chest turns one tier rarer: a flash, a ring of light and a label
@@ -1313,11 +1313,14 @@ function showBoxReveal(tier, id, more = 0) {   // more: chests still waiting aft
   };
   const flight = save.opt.motion ? REVEAL_WAIT[it.rarity] || 800 : 0;
   const ds = document.body.dataset;
-  const fx = playReveal(root, { rarity: it.rarity, motion, flight, chest: { x: ds.chestX ?? 0.5, y: ds.chestY ?? 0.42 }, app, onLand, play: (k, a) => sfx.play(k, a) });
+  let fx;
+  try { fx = playReveal(root, { rarity: it.rarity, motion, flight, chest: { x: ds.chestX ?? 0.5, y: ds.chestY ?? 0.42 }, app, onLand, play: (k, a) => sfx.play(k, a) }); }
+  catch (e) { fx = { skip() {}, leave: () => Promise.resolve(), done: Promise.resolve() }; root.classList.add('rvcalm', 'landed', 'rvdone'); stage.classList.remove('pending'); stage.classList.add('landed'); onLand(true); }   // the animation must never trap the player
+  setTimeout(() => { if (!flipped && stage.isConnected) { try { fx.skip(); } catch (e) { /* ignore */ } if (!flipped) { root.classList.add('rvcalm', 'landed', 'rvdone'); stage.classList.add('landed'); onLand(true); } } }, (motion ? flight : 0) + 2500);   // a stalled browser still gets the card and the button
   root.addEventListener('click', (e) => { if (!e.target.closest('button')) fx.skip(); });   // a tap during the show jumps ahead
   acts = {
     take: () => {
-      if (!flipped) { fx.skip(); return; }
+      if (!flipped) fx.skip();   // Collect never waits for the show
       if (leaving) return;
       leaving = true; rewardChoices = null;
       if (motion) { sfx.play('equip'); fx.leave(); setTimeout(() => nextReward(), 300); }

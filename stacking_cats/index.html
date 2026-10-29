@@ -1629,13 +1629,13 @@ body .screen.rvx>.sub{position:relative;z-index:3;margin:3px 0 0;padding:0 12px;
 .screen.rvx .confetti{top:50%;z-index:1}
 .screen.rvx .confetti i{width:var(--w,8px);height:var(--h,12px);left:calc(var(--w,8px) / -2);top:calc(var(--h,12px) / -2);border-radius:var(--br,2px);opacity:0;animation:none}
 /* the card on its way: three wrappers (path and scale, turn, idle float) and the trading card itself */
-.screen.rvx .rv-fly{position:absolute;left:50%;top:50%;width:232px;height:314px;margin:-157px 0 0 -116px;perspective:1100px;z-index:3;transform-origin:50% 50%}
+.screen.rvx .rv-fly{position:absolute;left:50%;top:50%;width:232px;height:314px;margin:-157px 0 0 -116px;z-index:3;transform-origin:50% 50%}
 .screen.rvx.flying .rv-fly{will-change:transform,opacity}
-.screen.rvx .rv-spin,.screen.rvx .rv-idle{position:absolute;inset:0;transform-style:preserve-3d}
+.screen.rvx .rv-spin,.screen.rvx .rv-idle{position:absolute;inset:0}
 .screen.rvx .rv-ghost{position:absolute;left:50%;top:50%;width:232px;height:314px;margin:-157px 0 0 -116px;border-radius:20px;pointer-events:none;z-index:2;background:linear-gradient(160deg,rgba(255,255,255,.9),rgba(var(--ray),.85) 60%,rgba(var(--ray),.4));box-shadow:0 0 34px 8px rgba(var(--ray),.8)}
 .screen.rvx .rv-sparks{position:absolute;left:0;top:0;width:960px;height:540px;pointer-events:none;z-index:1}
-.tcard{position:absolute;inset:0;transform-style:preserve-3d;transform:rotateX(var(--ty,0deg)) rotateY(var(--tx,0deg));transition:transform .3s ease-out;color:#2a1d4a;text-align:center}
-.tc-face{position:absolute;inset:0;border-radius:20px;overflow:hidden;-webkit-backface-visibility:hidden;backface-visibility:hidden}
+.tcard{position:absolute;inset:0;color:#2a1d4a;text-align:center}
+.tc-face{position:absolute;inset:0;border-radius:20px;overflow:hidden}
 .tc-front{display:flex;flex-direction:column;align-items:center;padding:13px 18px 14px;background:linear-gradient(145deg,var(--rl) 0,var(--rc) 22%,var(--rb) 55%,var(--rc) 80%,var(--rl) 100%);box-shadow:0 0 0 3px var(--rd),0 16px 30px rgba(0,0,0,.5),0 0 46px 6px rgba(var(--ray),.55)}
 .screen.rvx.r-mythic .tc-front{background:conic-gradient(from 210deg,#ff7ac6,#ffe77a,#7affc8,#7ac8ff,#c87aff,#ff7ac6)}
 .tc-bevel{position:absolute;inset:8px;border-radius:14px;background:radial-gradient(ellipse 80% 40% at 50% 26%,rgba(var(--ray),.42),rgba(var(--ray),0) 70%),linear-gradient(var(--panel1),var(--panel2));box-shadow:0 0 0 2px var(--rd),inset 0 3px 0 rgba(255,255,255,.95),inset 0 -4px 0 rgba(0,0,0,.12),inset 0 0 18px rgba(var(--ray),.45)}
@@ -1666,7 +1666,7 @@ body.cb .tc-tags .gainl{color:#1a4a8a}
 .tc-holo{position:absolute;inset:-40%;z-index:0;pointer-events:none;opacity:0;mix-blend-mode:overlay;background:linear-gradient(115deg,#ff7ac6 10%,#ffe77a 25%,#7affc8 40%,#7ac8ff 55%,#c87aff 70%,#ff7ac6 85%);transform:translateX(calc(var(--mx,50%) - 50%))}
 .screen.rvx.r-mythic .tc-holo{opacity:.3}
 .screen.rvx.r-legendary .tc-holo{opacity:.22;background:linear-gradient(115deg,transparent 20%,#fff3b0 40%,transparent 50%,#ffd65a 65%,transparent 80%)}
-.tc-back{transform:rotateY(180deg);display:flex;align-items:center;justify-content:center;border:6px solid var(--rc);background:radial-gradient(circle,rgba(255,255,255,.5),rgba(255,255,255,0) 60%),repeating-linear-gradient(45deg,var(--rb) 0 12px,var(--rd) 12px 24px);box-shadow:0 0 0 3px var(--rd),0 0 40px 8px rgba(var(--ray),.7)}
+.tc-back{display:flex;align-items:center;justify-content:center;border:6px solid var(--rc);background:radial-gradient(circle,rgba(255,255,255,.5),rgba(255,255,255,0) 60%),repeating-linear-gradient(45deg,var(--rb) 0 12px,var(--rd) 12px 24px);box-shadow:0 0 0 3px var(--rd),0 0 40px 8px rgba(var(--ray),.7)}
 .tc-back img{width:150px;height:150px;filter:drop-shadow(0 6px 0 rgba(0,0,0,.35))}
 .tc-glint{position:absolute;inset:0;background:linear-gradient(125deg,rgba(255,255,255,0) 25%,rgba(255,255,255,.85) 45%,rgba(255,255,255,.2) 55%,rgba(255,255,255,0) 70%)}
 .screen.rvx .newtag{display:block;position:absolute;left:auto;right:-24px;top:22px;z-index:6;font-size:18px;padding:1px 10px;transform:rotate(14deg);opacity:0;animation:none;box-shadow:0 3px 0 #3a1f12,0 0 16px rgba(255,210,63,.9)}
@@ -1740,10 +1740,12 @@ body .tc-tags>div{font-size:14.5px;line-height:1.08}
 .sumtile.best::before{content:'';position:absolute;left:50%;top:50%;width:300px;height:300px;margin:-150px 0 0 -150px;z-index:-2;border-radius:50%;pointer-events:none;background:repeating-conic-gradient(color-mix(in srgb,var(--tc) 70%,transparent) 0 7deg,transparent 7deg 20deg);-webkit-mask:radial-gradient(circle,#000 18%,transparent 64%);mask:radial-gradient(circle,#000 18%,transparent 64%);animation:raysp 14s linear infinite}
 .sumtile.best{border-color:transparent;background:none}
 .sumtile.best::after{content:'';position:absolute;inset:-4px;z-index:-1;border-radius:14px;border:4px solid var(--tc);background:linear-gradient(#fffaf0,#fff1c8);pointer-events:none}
-@keyframes rvsum{0%{opacity:0;transform:perspective(600px) rotateY(100deg) translateY(30px) scale(.4)}60%{opacity:1;transform:perspective(600px) rotateY(-12deg) scale(1.1)}100%{opacity:1;transform:none}}
+@keyframes rvsum{0%{opacity:0;transform:translateY(30px) scale(.4,.4)}60%{opacity:1;transform:scale(1.1)}100%{opacity:1;transform:none}}
 @keyframes rvbest{50%{box-shadow:0 0 0 3px #fff,0 0 44px 12px var(--tc),0 6px 0 #0005}}
 body.nomotion .sumtile,body.nomotion .sumtile.best::before{animation:none}
 @media (prefers-reduced-motion:reduce){.sumtile,.sumtile.best::before,.screen.rvx *{animation:none!important;transition:none!important}}
+/* the two faces: the back shows only while the card faces away (set by reveal_fx.js), no 3D needed */
+.tcard .tc-back{visibility:hidden}.tcard.showback .tc-back{visibility:visible}.tcard.showback .tc-front{visibility:hidden}
 /* REVEALJUICE END */
 </style>
 </head>

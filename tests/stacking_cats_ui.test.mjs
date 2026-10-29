@@ -1273,6 +1273,16 @@ t('lootbox juice: the box charges and bursts, the card stays covered a rarity-sc
   assert.ok(/save\.opt\.shake > 0/.test(js), 'the screen jolt respects the shake setting');
 });
 
+t('the reveal never traps the player: 2D twirl (no 3D layers), every animation has a watchdog, Collect works before the card lands', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8'), rv = readFileSync('stacking_cats/reveal_fx.js', 'utf8');
+  const block = css.slice(css.indexOf('REVEALJUICE START'), css.indexOf('REVEALJUICE END'));
+  assert.ok(!/preserve-3d|backface-visibility|perspective\(|perspective:/.test(block), 'some phone browsers lose the faces of a 3D card: the twirl is 2D');
+  assert.ok(/scaleX\(/.test(rv) && /showback/.test(rv) && /catch \(e\) \{ stop\(\); finish\(\)/.test(rv), 'the twirl is a squeeze plus a face swap and an error in a frame lands the card');
+  assert.ok(/later\(\(\) => \{ if \(!landed\) finish\(\); \}, T \+ 1500\)/.test(rv), 'a stalled animation loop still lands the card');
+  assert.ok(/if \(!flipped\) fx\.skip\(\);\s*\/\/ Collect never waits/.test(js) && /\+ 2500\);/.test(js), 'Collect works at once and a second watchdog lands the card');
+  assert.ok(/try \{ fx\.burst\(plan\.rar\); \} catch/.test(js), 'a failing chest effect never blocks the reveal');
+});
+
 t('drag juice: the ghost lifts with a ring, leans into the motion and trails sparkles; a good drop drops in with a ring, a bad one flies home; reduced motion skips it all', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
   const body = js.slice(js.indexOf('function bindDrag'), js.indexOf('function bindDrag') + 3600);
