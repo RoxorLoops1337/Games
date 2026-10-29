@@ -77,9 +77,9 @@ function sparkLayer(root, rarity) {
     cv,
     star(x, y, sc, vx = 0, vy = 0) {
       const a = Math.random() * Math.PI * 2, v = 20 + Math.random() * 60;
-      add({ x: x + (Math.random() - 0.5) * 30 * sc, y: y + (Math.random() - 0.5) * 30 * sc, vx: Math.cos(a) * v + vx, vy: Math.sin(a) * v + vy, life: 0.45 + Math.random() * 0.5, age: 0, r: 2.5 + Math.random() * 4 * Math.max(0.5, sc), c: cols[(Math.random() * cols.length) | 0], k: 's', g: 40 });
+      add({ x: x + (Math.random() - 0.5) * (20 + 250 * sc), y: y + (Math.random() - 0.5) * (20 + 320 * sc), vx: Math.cos(a) * v + vx, vy: Math.sin(a) * v + vy, life: 0.45 + Math.random() * 0.5, age: 0, r: 2.5 + Math.random() * 4 * Math.max(0.5, sc), c: cols[(Math.random() * cols.length) | 0], k: 's', g: 40 });
     },
-    comet(x, y, sc) { add({ x, y, vx: 0, vy: 0, life: 0.42, age: 0, r: 18 + 30 * sc, c: cols[0], k: 'g', g: 0 }); },
+    comet(x, y, sc) { add({ x, y, vx: 0, vy: 0, life: 0.42, age: 0, r: 22 + 40 * sc, c: cols[0], k: 'g', g: 0 }); },
     burst(x, y, n) {
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2 + Math.random() * 0.3, v = 180 + Math.random() * 420;
@@ -202,13 +202,14 @@ export function playReveal(root, opts) {
         apply(st);
         const X = home.x + st.x, Y = home.y + st.y;
         for (let i = 0; i < ghosts.length; i++) {   // each echo is the card a few frames ago
-          const gs = flightAt(t - (i + 1) * 34, T, from, rarity);
+          const gs = flightAt(t - (i + 1) * 48, T, from, rarity);
           ghosts[i].style.transform = tf(gs) + ' ' + spinTf(gs);
-          ghosts[i].style.opacity = (gs.o * (0.55 - i * 0.09)).toFixed(2);
+          ghosts[i].style.opacity = (gs.o * (0.6 - i * 0.1) * Math.min(1, t / 120)).toFixed(2);
         }
-        const n = fl.spark * (0.6 + st.s);
+        const n = fl.spark * (1.4 + st.s * 1.6);
         for (let i = 0; i < n; i++) if (Math.random() < n - i) sp.star(X, Y, st.s);
         if (fl.comet) { sp.comet(X, Y, st.s); if (Math.random() < 0.5) sp.comet(X, Y, st.s * 0.8); }
+        else if (st.s < 0.6) sp.comet(X, Y, 0.25 + st.s * 0.4);   // the speck glows while it is far away
       }
     }
     if (landed) {

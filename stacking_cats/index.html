@@ -1598,6 +1598,8 @@ html[lang=da] body .how li{padding:1px 8px}
 .boxstage.cx.still .cxseam{opacity:calc(var(--heat,0) * .8)}
 #chestflash{position:fixed;inset:0;pointer-events:none;z-index:200;opacity:0;will-change:opacity}
 body.nomotion #chestflash{display:none}
+/* chest stretch must not hit the tier chip */
+.screen .boxstage{margin-top:8px}.screen .captier{position:relative;z-index:0}.screen .boxstage{z-index:1}
 /* CHESTJUICE END */
 /* REVEALJUICE START (owned by the card reveal work: showBoxReveal, reveal_fx.js) */
 /* the reveal screen: a rarity vignette, the card twirls in (reveal_fx.js drives .rv-fly and .rv-spin), lands, then the rest follows */
@@ -1609,7 +1611,7 @@ body.nomotion #chestflash{display:none}
 body .screen.rvx>h2.cheer{display:flex;align-items:center;justify-content:center;gap:10px;margin:0;font-family:var(--display);font-weight:400;font-size:36px;line-height:1.05;letter-spacing:.5px;color:var(--rh);text-shadow:0 4px 0 var(--rd),3px 3px 0 #1a0f30,-3px -3px 0 #1a0f30,3px -3px 0 #1a0f30,-3px 3px 0 #1a0f30,0 0 26px rgba(var(--ray),.8)}
 .screen.rvx.r-common>h2.cheer{color:#fff6dc}
 .screen.rvx .cheercat{width:46px;height:46px;margin:0;animation:none;filter:drop-shadow(0 3px 0 #0006)}
-body .screen.rvx>.sub{margin:2px 0 0;font-size:16px;color:#ffe9cc;opacity:.9}
+body .screen.rvx>.sub{position:relative;z-index:3;margin:3px 0 0;padding:0 12px;border-radius:10px;background:rgba(16,8,36,.6);font-size:16px;color:#ffe9cc;opacity:.95}
 .screen.rvx .revealstage{display:block;flex:none;width:100%;height:328px;margin:8px 0 16px;--ray:inherit;z-index:2}
 .screen.rvx .revealstage.r-rare,.screen.rvx .revealstage.r-epic,.screen.rvx .revealstage.r-legendary,.screen.rvx .revealstage.r-mythic{--ray:inherit}
 /* behind the card: rays, arcs, rings, a flash and a glow disc, all asleep until the card lands */
@@ -1642,10 +1644,10 @@ body .screen.rvx>.sub{margin:2px 0 0;font-size:16px;color:#ffe9cc;opacity:.9}
 .tc-ribbon span{font:400 19px/1 var(--display);letter-spacing:4px;text-transform:uppercase;color:#fff;text-shadow:0 2px 0 var(--rd),1px 1px 0 var(--rd),-1px -1px 0 var(--rd),1px -1px 0 var(--rd),-1px 1px 0 var(--rd)}
 .screen.rvx.r-legendary .tc-ribbon span{color:#5a3300;text-shadow:0 1px 0 #fff8c8}
 .screen.rvx.r-legendary .tc-ribbon{background:linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,0) 50%),linear-gradient(90deg,#e39400,#ffd65a 30%,#fff3b0 50%,#ffd65a 70%,#e39400)}
-.screen.rvx.r-mythic .tc-ribbon{background:linear-gradient(rgba(255,255,255,.4),rgba(255,255,255,0) 50%),linear-gradient(90deg,#ff4fa8,#b04ae0 50%,#4a8aff)}
+.screen.rvx.r-mythic .tc-ribbon{background:linear-gradient(rgba(255,255,255,.4),rgba(255,255,255,0) 50%),linear-gradient(90deg,#d62a84,#8a2ad0 50%,#2a5ad8)}
 .tc-art{width:132px;height:106px;margin:3px 0 0;display:flex;align-items:center;justify-content:center;flex:none}
 .tc-arays{position:absolute;left:50%;top:50%;width:200px;height:200px;margin:-100px 0 0 -100px;border-radius:50%;background:repeating-conic-gradient(rgba(var(--ray),.85) 0 8deg,rgba(var(--ray),0) 8deg 24deg);-webkit-mask:radial-gradient(circle,#000 20%,transparent 66%);mask:radial-gradient(circle,#000 20%,transparent 66%);opacity:.75}
-.tc-prism{position:absolute;left:50%;top:50%;width:150px;height:150px;margin:-75px 0 0 -75px;border-radius:50%;display:none;background:conic-gradient(rgba(255,122,198,.7),rgba(255,231,122,.7),rgba(122,255,200,.7),rgba(122,200,255,.7),rgba(200,122,255,.7),rgba(255,122,198,.7));-webkit-mask:radial-gradient(circle,transparent 52%,#000 54%,#000 64%,transparent 66%);mask:radial-gradient(circle,transparent 52%,#000 54%,#000 64%,transparent 66%)}
+.tc-prism{position:absolute;left:50%;top:50%;width:128px;height:128px;margin:-64px 0 0 -64px;border-radius:50%;display:none;background:conic-gradient(rgba(255,122,198,.7),rgba(255,231,122,.7),rgba(122,255,200,.7),rgba(122,200,255,.7),rgba(200,122,255,.7),rgba(255,122,198,.7));-webkit-mask:radial-gradient(circle,transparent 52%,#000 54%,#000 64%,transparent 66%);mask:radial-gradient(circle,transparent 52%,#000 54%,#000 64%,transparent 66%)}
 .screen.rvx.r-mythic .tc-prism{display:block}
 .tc-medal{width:94px;height:94px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 34%,#fff 0,var(--rl) 38%,var(--rc) 82%,var(--rb) 100%);box-shadow:0 0 0 4px var(--rb),0 0 0 7px rgba(255,255,255,.8),0 0 0 9px var(--rd),0 0 30px 10px rgba(var(--ray),.8),inset 0 -8px 12px rgba(0,0,0,.14),inset 0 6px 8px #fff}
 .tc-medal .ic{font-size:56px;line-height:1}
@@ -1728,15 +1730,16 @@ body .tc-tags>div{font-size:14.5px;line-height:1.08}
 .tc-name{font-size:28px}
 }
 /* Open all: the tiles flip in one after another with a glow by rarity, the best one gets a spotlight */
-.sumgrid{position:relative;gap:14px;margin:12px 0 14px}
+.sumgrid{position:relative;gap:14px;margin:14px 0 36px}
 .sumtile{position:relative;isolation:isolate;width:128px;padding:10px 6px 8px;background:linear-gradient(#fffaf0,#f3e8ff);border-width:4px;box-shadow:inset 0 2px 0 #fff,0 0 18px color-mix(in srgb,var(--tc) 70%,transparent),0 6px 0 #0005;animation:rvsum .6s calc(var(--i,0) * .14s) cubic-bezier(.2,1.5,.4,1) both}
 .sumtile.r-common{box-shadow:inset 0 2px 0 #fff,0 6px 0 #0005}
 .sumtile .ic{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:3px;background:radial-gradient(circle at 50% 35%,#fff,color-mix(in srgb,var(--tc) 55%,#fff) 70%,var(--tc));box-shadow:0 0 0 3px #fff8,0 0 16px color-mix(in srgb,var(--tc) 80%,transparent)}
 .sumtile .ic .gi{width:46px;height:46px;margin:0}
 .sumtile small{color:color-mix(in srgb,var(--tc) 55%,#3a2c55)}
 .sumtile.best{z-index:2;transform:none;scale:1.12;box-shadow:0 0 0 3px #fff,0 0 30px 6px var(--tc),0 6px 0 #0005;animation:rvsum .6s calc(var(--i,0) * .14s) cubic-bezier(.2,1.5,.4,1) both,rvbest 2.2s calc(var(--i,0) * .14s + .7s) ease-in-out infinite}
-.sumtile.best::before{content:'';position:absolute;left:50%;top:50%;width:300px;height:300px;margin:-150px 0 0 -150px;z-index:-1;border-radius:50%;pointer-events:none;background:repeating-conic-gradient(color-mix(in srgb,var(--tc) 70%,transparent) 0 7deg,transparent 7deg 20deg);-webkit-mask:radial-gradient(circle,#000 18%,transparent 64%);mask:radial-gradient(circle,#000 18%,transparent 64%);animation:raysp 14s linear infinite}
-.sumtile.best::after{content:'';position:absolute;left:50%;bottom:-6px;width:220px;height:420px;margin-left:-110px;z-index:-2;pointer-events:none;background:linear-gradient(rgba(255,255,255,0),rgba(255,255,255,.16) 60%,rgba(255,255,255,.04));clip-path:polygon(38% 0,62% 0,100% 100%,0 100%)}
+.sumtile.best::before{content:'';position:absolute;left:50%;top:50%;width:300px;height:300px;margin:-150px 0 0 -150px;z-index:-2;border-radius:50%;pointer-events:none;background:repeating-conic-gradient(color-mix(in srgb,var(--tc) 70%,transparent) 0 7deg,transparent 7deg 20deg);-webkit-mask:radial-gradient(circle,#000 18%,transparent 64%);mask:radial-gradient(circle,#000 18%,transparent 64%);animation:raysp 14s linear infinite}
+.sumtile.best{border-color:transparent;background:none}
+.sumtile.best::after{content:'';position:absolute;inset:-4px;z-index:-1;border-radius:14px;border:4px solid var(--tc);background:linear-gradient(#fffaf0,#fff1c8);pointer-events:none}
 @keyframes rvsum{0%{opacity:0;transform:perspective(600px) rotateY(100deg) translateY(30px) scale(.4)}60%{opacity:1;transform:perspective(600px) rotateY(-12deg) scale(1.1)}100%{opacity:1;transform:none}}
 @keyframes rvbest{50%{box-shadow:0 0 0 3px #fff,0 0 44px 12px var(--tc),0 6px 0 #0005}}
 body.nomotion .sumtile,body.nomotion .sumtile.best::before{animation:none}
