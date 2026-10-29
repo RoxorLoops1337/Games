@@ -92,7 +92,7 @@ export default {
  "Choose your first cat. Every cat attacks in its own way, so read the card, then tap it.": "Vælg din første kat. Hver kat angriber på sin egen måde, så læs kortet og tryk på den.",
  "Choose another cat to stack on top. Tap the same cat again and the two join into one stronger cat.": "Vælg endnu en kat at stable ovenpå. Tryk på den samme kat igen, så smelter de to sammen til én stærkere kat.",
  "Choose the road to walk next. Chapter # is in {}. The road you pick changes the next five waves and the next nest.": "Vælg, hvilken vej du vil gå næste gang. Kapitel {1} foregår i {2}. Vejen, du vælger, ændrer de næste fem bølger og den næste rede.",
- "The mice wrecked our village. Upgrade buildings to build it back!": "Musene smadrede vores landsby. Opgrader bygninger for at bygge den op igen!",
+ "The mice wrecked our village. Upgrade buildings to build it back!": "Musene smadrede vores landsby. Opgrader for at bygge den op!",
  "Whiskerton is getting cosy again.": "Whiskerton bliver hyggeligt igen.",
  "Whiskerton is busy and happy.": "Whiskerton summer af liv og glæde.",
  "Whiskerton is the finest village in the land!": "Whiskerton er landets dejligste landsby!",
