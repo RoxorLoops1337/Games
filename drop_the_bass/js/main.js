@@ -298,3 +298,5 @@ showTitle();
 document.getElementById('boot').remove();
 window.__dtbReady = true;
 requestAnimationFrame(frame);
+// autosave the run every few seconds so a reload, a discarded tab or a crash never loses turrets placed since the last wave
+setInterval(() => { try { saveResume(); } catch (e) { /* ignore */ } }, 4000);
