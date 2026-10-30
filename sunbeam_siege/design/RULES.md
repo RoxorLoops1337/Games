@@ -17,14 +17,15 @@ Source docs (read the ones relevant to your job for detail): A01 vision, A02 com
 
 ## 3. Board
 - 3 floors: 1 Cellar, 2 Parlor, 3 Attic. Above Attic: the Sunbeam.
+- Cats are placed Front, Middle or Back of a floor (the UI asks when the floor already has cats; engine `playCard(uid, {floor, pos})`).
 - Per floor: 4 cat slots (cat Size 1; rare Large cats Size 2), 5 pest Size capacity (Small 1, Medium 2, Large 3, Boss 5), 2 room slots (Toys, Boxes, Rooms). Position 0 is front; units compact when one leaves.
 - Sunbeam Warmth: start 40, max 40, +5 max after each boss (so 45 then 50). Persists between fights. Shade (Sunbeam armor) resets each battle. A one-time "Last Life" revive is NOT default: it is a rare relic (Spare Whisker).
 
 ## 4. Turn structure (A02 names are canonical)
-Setup (once), then per round: Draw, Play, End Turn, Cat Attacks (floors 1 to 3, front to back), Pest Attacks, Pest Advance (floors top down), Spawn, then Dusk tick (status ticks per A04 tick order). Cats always strike before pests. One FIFO trigger queue; simultaneous triggers: relics, rooms by floor, cats, pests. Damage applies simultaneously, then deaths are removed together. Damage order: flat bonuses, percent multipliers (rounded down), Hiss, Fluff, then HP. Overkill is lost.
+Setup (once), then per round: Draw, Play, End Turn, Cat Attacks (floors 1 to 3, front to back), Pest Attacks, Pest Advance (floors top down), Spawn, then Dusk tick (status ticks per A04 tick order). PESTS ATTACK FIRST (changed from cats first): the order is End Turn, Pest Attacks, Cat Attacks, Pest Advance. Rules flags `pestsFirst` and `pestsAlwaysClimb` in SB.data.rules (set both false for the classic order and Hold Rule; the legacy test suites do). One FIFO trigger queue; simultaneous triggers: relics, rooms by floor, cats, pests. Damage applies simultaneously, then deaths are removed together. Damage order: flat bonuses, percent multipliers (rounded down), Hiss, Fluff, then HP. Overkill is lost.
 - Zoomies (energy): 3 per turn, set not added, no carryover, hard cap 10. Draw 5. Hand limit 10 (max 6 Hairballs in hand). Starting deck 11 cards: Champion, 4 main-clan basics, 2 Swat, 2 Catnap, 1 Cardboard Box, 1 side-clan basic. Min deck 8, target 24 to 32.
 - Fluff = armor. It persists until end of battle (A04's halving rule is cut). Pests can have Fluff too, called Armor on pests in UI text only if needed.
-- Climb: HOLD RULE. A pest climbs only if its floor has no cats, or it has the Climber trait. An unopposed pest on arrival hits the Sunbeam 3 rounds after it appears. On the Attic with no cats, pests hit the Sunbeam every round. Sneaky pests hit the Sunbeam even with cats present.
+- Climb: every surviving pest climbs one floor each round after the fighting (`pestsAlwaysClimb`), whether or not cats stand in the way. The old Hold Rule (a pest climbs only if its floor has no cats, or it has the Climber trait) applies only with the flag off. Pests get `pestHpMult` 0.5 so one round per floor is enough to matter (tutorial excluded). An unopposed pest on arrival hits the Sunbeam 3 rounds after it appears. On the Attic with no cats, pests hit the Sunbeam every round. Sneaky pests hit the Sunbeam even with cats present.
 - Anti-stall: Impatience gives pests +1 Attack per round from round 16.
 - Determinism: one mulberry32 battle RNG seeded from runSeed + nodeId; combat never calls Math.random.
 

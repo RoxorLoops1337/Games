@@ -22,7 +22,7 @@ function makeSB() {
   const order = ['ops-bosses', 'ops-pests', 'ops-alley', 'ops-hearth', 'ops-moon', 'ops-mischief', 'ops-neutral', 'ops-champions'];
   const rest = fs.readdirSync(path.join(root, 'src/engine')).filter(f => /^ops-.*\.js$/.test(f)).map(f => f.slice(0, -3)).filter(n => order.indexOf(n) < 0).sort();
   order.concat(rest).forEach(n => { const f = path.join(root, 'src/engine', n + '.js'); if (fs.existsSync(f)) load(f); });
-  ctx.SB.util.quiet = true;
+  ctx.SB.util.quiet = true; (ctx.SB||SB).data.rules.pestsFirst = false; (ctx.SB||SB).data.rules.pestsAlwaysClimb = false; (ctx.SB||SB).data.rules.pestHpMult = 1;
   return ctx.SB;
 }
 

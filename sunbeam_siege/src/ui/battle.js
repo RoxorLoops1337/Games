@@ -782,7 +782,22 @@
     function commit(t) {
       if (!sel) return;
       if (sel.abil) { var ab = sel.abil; var tgt = t && t.catUid ? { catUid: t.catUid } : t && t.floor !== undefined ? { floor: t.floor } : null; sel = null; refreshTargets(); el.arrow.style.display = 'none'; doAbility(ab.catUid, ab.idx, tgt); renderTray(); return; }
+      var rec = handEls.get(sel.uid), ct = rec && rec.entry && rec.entry.card && rec.entry.card.type;
+      var n = t && t.floor !== undefined && vm.floors[t.floor] ? (vm.floors[t.floor].cats || []).filter(function (c) { return !c.dead && !c.removed; }).length : 0;
+      if ((ct === 'unit' || ct === 'champion') && t && t.pos === undefined && n > 0 && !(hooks.target && hooks.target(sel.uid, t))) return askSlot(sel.uid, t.floor, n);
       doPlay(sel.uid, t);
+    }
+    // Front / Middle / Back chooser for a cat going onto a floor that already has cats.
+    function askSlot(uid, floor, n) {
+      var opts = [['Front', 0]];
+      if (n >= 2) opts.push(['Middle', Math.floor(n / 2)]);
+      opts.push(['Back', n]);
+      ui.clear(el.prompt); el.prompt.classList.remove('hidden');
+      el.prompt.appendChild(h('span.pm', {}, 'Where on the ' + FLOOR_NAMES[floor] + '?'));
+      opts.forEach(function (o) {
+        el.prompt.appendChild(h('button.btn.sm', { 'data-tut': 'slot-' + o[0].toLowerCase(), onclick: function () { doPlay(uid, { floor: floor, pos: o[1] }); } }, o[0]));
+      });
+      el.prompt.appendChild(h('button.btn.alt.sm', { onclick: function () { clearSel(); } }, 'Cancel'));
     }
     function doAbility(catUid, idx, target, a) {
       var res = act(function () { return B.useAbility(catUid, idx, target || undefined); });

@@ -228,7 +228,7 @@ SB.data.story = {
       "That is the Sunbeam. Everything warm in this house comes from it. Guard it.",
       "Three floors. The Pests climb. You hold them off. It is not complicated, only tiring.",
       "Each of your cats has nine lives. Not nine, of course. Fewer, most of them. Spend them with care.",
-      "Cats strike first. This is the one advantage we have. Do not waste it.",
+      "The pests strike first. Put your best cat at the front and let them climb into trouble.",
       "Your Zoomies are your energy. They refill every turn. I would envy this, if I were young.",
       "When you are tired, nap. It is a tactic. Some of us have been using it for years.",
       "That is all. The rest you will learn by being surprised. Off you go."
