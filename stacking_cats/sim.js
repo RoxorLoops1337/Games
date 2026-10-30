@@ -3,7 +3,7 @@
 import {
   CATS, CAT_BY_ID, STARTERS, SNACKS, SNACK_BY_ID, ENEMY_TYPES, NESTS,
   MAX_STACK, MAX_BENCH, BOSS_EVERY, LVL_MUL, AURA_MUL, BASE_HP, BASE_DMG, TEMP_WAVES,
-  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, BOX_PITY, RARITIES, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, BOXES, BOX_BY_ID, COIN_SCALE, itemSlots, kingdomBonuses, emptyKingdom, COIN,
+  ITEMS, ITEM_BY_ID, ITEM_WEIGHT, MAX_STASH, SELL_VALUE, BOX_PITY, RARITIES, FORGE_NEXT, FORGE_COUNT, SPECIALS, SPECIAL_TIME, EVENTS, BOXES, BOX_BY_ID, GEM_CHANCE, GEM_WEIGHTS, COIN_SCALE, itemSlots, kingdomBonuses, emptyKingdom, COIN,
   DIFFS, CAT_TAGS, SYNERGIES, ROUTES, ROUTE_BY_ID, DAILY_POOL, masteryBonus, activeSets,
 } from './cats.js';
 import { RELICS, SHADY_RELICS, RELIC_BY_ID, NEST_RELIC_EVERY, DEAL_CATCH, EARLY_BIRD, FIRST_KILL, THEME_TAG, RELIC_THEMES } from './relics.js';
@@ -387,11 +387,18 @@ export function rollBoxRelic(g, tier) {
 }
 // a box is rolled first (so the chest can show a lower tier and turn rarer as it cracks), then opened
 export function boxPlan(g, tier) {
+  if (g.rnd() < (GEM_CHANCE[tier] || 0)) {   // sometimes the chest holds gems, not an item
+    let x = g.rnd() * GEM_WEIGHTS.reduce((a, b) => a + b, 0), n = GEM_WEIGHTS.length;
+    for (let i = 0; i < GEM_WEIGHTS.length; i++) { x -= GEM_WEIGHTS[i]; if (x <= 0) { n = i + 1; break; } }
+    const rar = n >= 5 ? 'legendary' : n >= 3 ? 'epic' : 'rare';
+    return { id: 'gem', gems: n, rar, tier, tier0: rar, ups: [] };
+  }
   const id = rollBoxRelic(g, tier), rar = ITEM_BY_ID[id].rarity, low = RARITIES.indexOf(Object.keys((BOX_BY_ID[tier] || BOXES[0]).odds)[0]), fi = RARITIES.indexOf(rar);
   const i0 = Math.max(low, fi - 2);
   return { id, rar, tier, tier0: RARITIES[i0], ups: RARITIES.slice(i0 + 1, fi + 1) };
 }
 export function openPlanned(g, plan) {
+  if (plan.gems) { g.run.boxGems = (g.run.boxGems || 0) + plan.gems; g.run.boxCount = (g.run.boxCount || 0) + 1; return plan.id; }
   takeItem(g, plan.id);
   g.run.boxCount = (g.run.boxCount || 0) + 1;
   g.run.boxPity = plan.rar === 'common' ? (g.run.boxPity || 0) + 1 : 0;

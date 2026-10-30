@@ -640,6 +640,17 @@ export default {
   'Arrange your tower Team DPS ≈ #': 'Ordn dit tårn Holdets DPS ≈ {1}',
   'Get ready for wave #! Team DPS ≈ #': 'Gør klar til bølge {1}! Holdets DPS ≈ {2}',
 
+  'This is your find. Tap Collect. You give items to your cats before the next wave.': 'Det her er dit fund. Tryk på Saml op. Du giver udstyr til dine katte før næste bølge.',
+  'Cat unlocks': 'Kattelåse op',
+  '1 Gem': '1 Juvel', '# Gems': '{1} Juveler',
+  'Shiny! Gems buy wonders in the Cat Kingdom.': 'Blinkende! Juveler køber vidundere i Kattekongeriget.',
+  'Added when the run ends': 'Lægges til når turen slutter',
+
+  // cat unlock rules (any number)
+  'Reach wave #': 'Nå bølge {1}', 'Defeat # mice in total': 'Besejr {1} mus i alt', 'Recruit # cats in total': 'Rekruttér {1} katte i alt',
+  'Destroy # nests': 'Ødelæg {1} reder', 'Merge cats # times': 'Slå katte sammen {1} gange', 'Eat # snacks in total': 'Spis {1} snacks i alt',
+  'Eat # temporary snacks': 'Spis {1} midlertidige snacks', 'Merge cats up to Lv 3, # times': 'Slå katte sammen op til Lv 3, {1} gange',
+
   // ---------------------------------------------------------------- generic helpers (last: low priority)
   '{} · {}': '{1} · {2}',
 };

@@ -10,9 +10,9 @@ let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
 const ALL = CATS.map((c) => c.id);
 
-t('data: 32 cats, 5 starters, unique ids, every cat has a handled attack', () => {
+t('data: 32 cats, 3 starters, unique ids, every cat has a handled attack', () => {
   assert.equal(CATS.length, 32);
-  assert.equal(STARTERS.length, 5);
+  assert.equal(STARTERS.length, 3);
   assert.equal(new Set(ALL).size, 32);
   const kinds = new Set(['melee', 'proj', 'lob', 'cone', 'chain', 'beam', 'strike', 'nova', 'mine', 'storm', 'spread']);
   for (const c of CATS) {
@@ -242,12 +242,12 @@ t('unlocks: stat rules, run merge, Ember lv3 unlocks Volcano', () => {
   let st = emptyStats();
   const un = new Set(STARTERS);
   assert.deepEqual(checkUnlocks(st, un), []);
-  st = mergeRun(st, { kills: 400, bossKills: 1, recruits: 3, merges: 0, lvl3: 0, lvl3Of: { ember: true }, snacks: 0, temp: 0, flawless: 0, wave: 7 });
+  st = mergeRun(st, { kills: 700, bossKills: 1, recruits: 3, merges: 0, lvl3: 0, lvl3Of: { ember: true }, snacks: 0, temp: 0, flawless: 0, wave: 9 });
   const fresh = checkUnlocks(st, un);
   for (const id of ['yuki', 'hawkeye', 'boomer', 'volcano']) assert.ok(fresh.includes(id), id);
   assert.ok(!fresh.includes('shadow'));
   assert.equal(st.runs, 1);
-  assert.deepEqual(unlockProgress(CAT_BY_ID.shadow, st), { have: 7, need: 10 });
+  assert.deepEqual(unlockProgress(CAT_BY_ID.shadow, st), { have: 9, need: 12 });
 });
 
 console.log(`${n} tests passed`);

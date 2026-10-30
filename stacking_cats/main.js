@@ -557,6 +557,8 @@ function showTrophies(back) {
   const done = list.filter((a) => save.ach[a.id]).length;
   setScreen(`<h2>Trophies <small class="klv">${done}/${list.length}</small><span class="dexhead"><span class="dexbar" aria-hidden="true"><i style="width:${Math.round(100 * done / list.length)}%"></i></span></span></h2>
     <div class="trophies">${list.map((a) => `<div class="tro t-${troTier(a)} ${save.ach[a.id] ? 'got' : ''}"><span class="medal">${save.ach[a.id] ? '&#127942;' : '&#128274;'}</span><div><b>${a.name}</b><small>${a.desc}</small>${(() => { const pr = !save.ach[a.id] && troProgress(a.id); return pr ? `<span class="tbar"><i style="width:${Math.round(100 * pr[0] / pr[1])}%"></i><u>${pr[0]}/${pr[1]}</u></span>` : ''; })()}</div><em>${a.coins ? `&#129689;${a.coins}` : ''}${a.gems ? ` &#128142;${a.gems}` : ''}</em></div>`).join('')}</div>
+    <h3 class="sub" style="margin:10px 0 4px">Cat unlocks <small class="klv">${CATS.filter((c) => c.unlock && save.unlocked.includes(c.id)).length}/${CATS.filter((c) => c.unlock).length}</small></h3>
+    <div class="trophies">${CATS.filter((c) => c.unlock).sort((a, b) => (save.unlocked.includes(b.id) ? 1 : 0) - (save.unlocked.includes(a.id) ? 1 : 0)).map((c) => { const got = save.unlocked.includes(c.id), pr = unlockProgress(c, save.stats); return `<div class="tro t-rare ${got ? 'got' : ''}"><span class="medal"><img class="gi" src="${thumbURL(c.id)}" alt="" style="${got ? '' : 'filter:brightness(0) opacity(.45)'}"></span><div><b>${got ? c.name : '???'}</b><small>${c.unlock.text}</small>${got ? '' : `<span class="tbar"><i style="width:${Math.round(100 * pr.have / pr.need)}%"></i><u>${pr.have}/${pr.need}</u></span>`}</div><em>${got ? '&#10003;' : ''}</em></div>`; }).join('')}</div>
     <div class="row"><button class="btn" data-act="back">Back</button></div>`, 'wide');
   acts = { back };
 }
@@ -1224,7 +1226,7 @@ function showBox(tier) {
     if (save.opt.shake > 0 && root) { root.classList.remove('jolt'); void root.offsetWidth; root.classList.add('jolt'); }
     sfx.play('chestboom', Math.max(0, RARITIES.indexOf(plan.rar))); buzz('pop');
     try { fx.burst(plan.rar); } catch (e) { /* the show must never block the reveal */ }   // the lid blasts off and the screen flashes in the item's colour; the reveal starts under the flash
-    later(() => { S.openPlanned(g, plan); rewardChoices = plan.id; showBoxReveal(tier, plan.id, more); }, fx.motion ? CHEST_T.swap : 120);
+    later(() => { S.openPlanned(g, plan); rewardChoices = plan.id; showBoxReveal(tier, plan.id, more, plan.gems || 0); }, fx.motion ? CHEST_T.swap : 120);
   };
   const upgrade = () => {   // the chest turns one tier rarer: a flash, a ring of light and a label
     const next = plan.ups[stage++];
@@ -1268,7 +1270,7 @@ function showBox(tier) {
 function showBoxSummary(plans) {
   const best = plans.reduce((a, p) => (RARITIES.indexOf(p.rar) > RARITIES.indexOf(a.rar) ? p : a), plans[0]);
   setScreen(`<h2>${plans.length} items found!</h2><p class="sub">They wait in your backpack. You give them to your cats before the next wave.</p>
-    <div class="sumgrid">${plans.map((p, i) => { const it = ITEM_BY_ID[p.id]; return `<div class="sumtile r-${p.rar} ${p === best ? 'best' : ''}" style="--i:${i};--tc:${TIER_HEX[p.rar]}"><div class="ic">${it.icon}</div><b>${it.name}</b><small>${p.rar}</small></div>`; }).join('')}</div>
+    <div class="sumgrid">${plans.map((p, i) => { const it = p.gems ? gemItem(p.gems) : ITEM_BY_ID[p.id]; return `<div class="sumtile r-${p.rar} ${p === best ? 'best' : ''}" style="--i:${i};--tc:${TIER_HEX[p.rar]}"><div class="ic">${it.icon}</div><b>${it.name}</b><small>${p.rar}</small></div>`; }).join('')}</div>
     <div class="row"><button class="btn big" data-act="go">Collect all</button></div>`, 'wide');
   sfx.play(REVEAL_SFX[best.rar] || 'chest'); buzz(best.rar === 'common' ? 'pop' : 'jackpot');
   const bi = plans.indexOf(best), grid = screenEl.querySelector('.sumgrid');
@@ -1286,14 +1288,15 @@ function confettiHtml(rarity) {
   const far = 1 + RARITY_IDX[rarity] * 0.22 || 1;   // rarer cards throw their confetti further
   return Array.from({ length: n }, (_, i) => { const k = i % 4; return `<i style="--a:${Math.round((360 / n) * i + (i % 2) * 7)}deg;--d:${Math.round((150 + (i * 37) % 130) * far)}px;--c:${cols[i % cols.length]};--t:${(i % 5) * 0.03}s;--w:${k === 3 ? 9 : 6 + (i % 3) * 2}px;--h:${k === 3 ? 9 : 10 + (i % 4) * 2}px;--br:${k === 3 ? '50%' : '2px'};--sp:${300 + (i * 53) % 360}deg"></i>`; }).join('');
 }
-function showBoxReveal(tier, id, more = 0) {   // more: chests still waiting after this one
-  const it = ITEM_BY_ID[id], bx = BOX_BY_ID[tier] || BOXES[0], hi = ['epic', 'legendary', 'mythic'].includes(it.rarity);
-  const fresh = !save.relics[id];   // the first time this relic has ever turned up
+const gemItem = (n) => ({ id: 'gem', name: `${n} ${n > 1 ? 'Gems' : 'Gem'}`, icon: '\uD83D\uDC8E', rarity: n >= 5 ? 'legendary' : n >= 3 ? 'epic' : 'rare', desc: 'Shiny! Gems buy wonders in the Cat Kingdom.', tag: 'Added when the run ends' });
+function showBoxReveal(tier, id, more = 0, gems = 0) {   // more: chests still waiting after this one
+  const it = gems ? gemItem(gems) : ITEM_BY_ID[id], bx = BOX_BY_ID[tier] || BOXES[0], hi = ['epic', 'legendary', 'mythic'].includes(it.rarity);
+  const fresh = !gems && !save.relics[id];   // the first time this relic has ever turned up
   const cheerId = g.cats[0] && g.cats[0].id;
   const motion = !!save.opt.motion && !document.body.classList.contains('nomotion') && !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
   // the card is face up from the start: it twirls in from the chest (reveal_fx.js), lands with a pop, then the header, NEW tag and button follow
   setScreen(`<h2 class="cheer veil r-${it.rarity}">${cheerId ? `<img class="cheercat" src="${thumbURL(cheerId)}" alt="">` : ''}<span>${RARITY_CHEER[it.rarity]}</span></h2><p class="sub veil">Out of the ${bx.name}:</p>
-    <div class="revealstage pending r-${it.rarity}"><div class="revealflash"></div><div class="rays"></div><div class="rv-arcs"></div><div class="rv-ring"></div><div class="rv-ring b"></div><div class="pedestal"></div><div class="confetti">${confettiHtml(it.rarity)}</div><div class="rv-fly"><div class="rv-spin"><div class="rv-idle">${revealCardHtml(it, relicNotes(id), boxHero(bx.id).toDataURL())}</div></div>${fresh ? '<div class="newtag">NEW!</div>' : ''}</div></div>
+    <div class="revealstage pending r-${it.rarity}"><div class="revealflash"></div><div class="rays"></div><div class="rv-arcs"></div><div class="rv-ring"></div><div class="rv-ring b"></div><div class="pedestal"></div><div class="confetti">${confettiHtml(it.rarity)}</div><div class="rv-fly"><div class="rv-spin"><div class="rv-idle">${revealCardHtml(it, gems ? '' : relicNotes(id), boxHero(bx.id).toDataURL())}</div></div>${fresh ? '<div class="newtag">NEW!</div>' : ''}</div></div>
     <div class="row veil"><button class="btn big" data-act="take">${more ? `Next chest (${more})` : 'Collect'}</button></div>`, 'rvx r-' + it.rarity);
   const root = screenEl.firstElementChild, stage = root.querySelector('.revealstage');
   root.classList.add('noscrin');
@@ -1307,7 +1310,7 @@ function showBoxReveal(tier, id, more = 0) {   // more: chests still waiting aft
     sfx.play(REVEAL_SFX[it.rarity] || 'chest');
     if (it.rarity !== 'common') setTimeout(() => sfx.play('stamp'), skipped ? 120 : 260);
     if (fresh) setTimeout(() => sfx.play('newrelic'), skipped ? 260 : 520);
-    setTimeout(() => { if (flipped && stage.isConnected && !leaving) coach('c10', 'This is an item. Tap Collect. You give items to your cats before the next wave.', 480, 380, 'up', { target: 'button[data-act=take]' }); }, 1100);
+    setTimeout(() => { if (flipped && stage.isConnected && !leaving) coach('c10', 'This is your find. Tap Collect. You give items to your cats before the next wave.', 480, 380, 'up', { target: 'button[data-act=take]' }); }, 1100);
     buzz(hi ? 'jackpot' : 'pop');
     if (hi) { const c0 = g.cats[0]; if (c0) setTimeout(() => sfx.meow(c0.id, 'cheer'), 380); }
   };
@@ -1746,7 +1749,7 @@ function commitRun() {
   run.earned = Math.floor(run.coins);
   save.kingdom.coins += run.earned;
   save.kingdom.earned += run.earned;
-  run.gems = Math.floor(save.stats.bossKills / 6) - Math.floor(oldNests / 6);   // one gem for every sixth nest ever destroyed
+  run.gems = Math.floor(save.stats.bossKills / 6) - Math.floor(oldNests / 6) + (run.boxGems || 0);   // one gem for every sixth nest ever destroyed, plus gems found in chests
   if (run.daily) {
     const book = run.weekly ? save.weekly : save.daily;
     const score = dailyScore(run), prev = book[run.daily];
