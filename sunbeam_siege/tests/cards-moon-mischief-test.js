@@ -20,7 +20,7 @@ function makeSB() {
     if (fs.existsSync(f)) load(f);
   });
   fs.readdirSync(path.join(root, 'src/engine')).filter(f => /^ops-.*\.js$/.test(f)).sort().forEach(f => load(path.join(root, 'src/engine', f)));
-  ctx.SB.util.quiet = true;
+  ctx.SB.util.quiet = true; (ctx.SB||SB).data.rules.pestsFirst = false; (ctx.SB||SB).data.rules.pestsAlwaysClimb = false; (ctx.SB||SB).data.rules.pestHpMult = 1;
   return ctx.SB;
 }
 

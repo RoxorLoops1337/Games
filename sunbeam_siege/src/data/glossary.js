@@ -395,8 +395,8 @@ SB.data.glossary = [];
     {});
 
   G('hold_rule', 'Hold Rule', 'twist', 'wall-paws',
-    'Pests only climb when a floor has no cats, or if they are Climbers.',
-    'A pest climbs only if its floor has no cats, or it has the Climber trait. Hidden cats do not count as cats. An unopposed pest reaches the Sunbeam 3 rounds after it appears. Cats are walls.',
+    'Old rule, no longer in force: every pest now climbs one floor each round, cats or no cats.',
+    'Pests strike first, then your cats, then every surviving pest climbs one floor. A pest on the Attic with no cat there hits the Sunbeam. (Classic Hold Rule: only floors with no cats let pests climb.)',
     'The most structurally sound thing a cat has ever done.',
     { aliases: ['hold'] });
 
@@ -730,6 +730,10 @@ SB.data.glossaryIcons = (function () {
  * RULES.md wins over every doc. "REC" in a comment marks a recommended value for an open question (B22-glossary.md).
  */
 SB.data.rules = {
+  /* turn flow: pests strike first and every pest climbs a floor each round. Set both false for the classic Hold Rule flow. */
+  pestsFirst: true,
+  pestsAlwaysClimb: true,
+  pestHpMult: 0.5, /* pests only get one round per floor now, so they are softer */
   /* identity */
   game_title: 'SUNBEAM SIEGE',
   game_subtitle: 'Nine Lives to Hold the House',

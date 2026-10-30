@@ -1166,10 +1166,10 @@
     var rid = id;
     var def = SB.content.pest(rid);
     if (!def) { U.warnOnce('nopest:' + id, 'unknown pest ' + id); return null; }
-    var scale = o.hpScale !== undefined ? o.hpScale : (this.enc.hpScale || 1);
+    var scale = (o.hpScale !== undefined ? o.hpScale : (this.enc.hpScale || 1)) * (this.enc.tutorial ? 1 : rv('pestHpMult', 1));
     var hp = def.hp;
     if (!def.isBoss) hp = Math.max(1, Math.round(hp * scale));
-    else hp = Math.max(1, Math.round(hp * (this.enc.bossHpScale || 1)));
+    else hp = Math.max(1, Math.round(hp * (this.enc.bossHpScale || 1) * rv('pestHpMult', 1)));
     if (o.mod && o.mod.hpMult) hp = Math.max(1, Math.round(hp * o.mod.hpMult));
     var E = ENG();
     var fx = {};
@@ -1470,6 +1470,7 @@
   P.hitSunbeam = function (base, o) {
     o = o || {};
     var sb = this.S.sunbeam, amt = Math.max(0, base);
+    amt = Math.ceil(amt * rv('sunbeamHitMult', 1));
     var att = o.src && o.src.kind === 'pest' ? o.src : null;
     if (att && !o.noHiss) amt = Math.max(0, amt - (att.statuses.hiss || 0));
     var absorbed = Math.min(sb.shade, amt); sb.shade -= absorbed; amt -= absorbed;
@@ -2131,6 +2132,15 @@
     this.discardHand();
     S.zoomies = 0;
     if (S.over) return this.takeEvents();
+    var pestsFirst = rv('pestsFirst', true);
+    for (var pass = 0; pass < 2; pass++) {
+    if ((pass === 0) === pestsFirst) {
+    // PEST ATTACKS
+    S.phase = 'pest_attacks'; this.emit('phase', { phase: 'pest_attacks', round: S.round });
+    ENG().ai.pestPhase(this);
+    this.drain();
+    if (S.over) return this.takeEvents();
+    } else {
     // CAT ATTACKS
     S.phase = 'cat_attacks'; this.emit('phase', { phase: 'cat_attacks', round: S.round });
     this.ensure();
@@ -2155,11 +2165,8 @@
     this.drain();
     if (S.over) return this.takeEvents();
     this.tickEndOfCatPhase();
-    // PEST ATTACKS
-    S.phase = 'pest_attacks'; this.emit('phase', { phase: 'pest_attacks', round: S.round });
-    ENG().ai.pestPhase(this);
-    this.drain();
-    if (S.over) return this.takeEvents();
+    }
+    }
     // PEST ADVANCE
     S.phase = 'pest_advance'; this.emit('phase', { phase: 'pest_advance', round: S.round });
     this.pestAdvance();
@@ -2223,7 +2230,7 @@
     if (p.boss && p.flags.stationary) return false;
     if (p.statuses.fixated) return false;
     var climber = this.hasTrait(p, 'climber') || this.hasTrait(p, 'glider') || this.hasTrait(p, 'flying');
-    if (!climber && this.blockers(p.floor).length > 0) return false;
+    if (!rv('pestsAlwaysClimb', true) && !climber && this.blockers(p.floor).length > 0) return false;
     if (p.pat && p.pat.noClimb) return false;
     return true;
   };

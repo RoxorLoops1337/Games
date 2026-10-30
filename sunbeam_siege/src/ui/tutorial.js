@@ -302,7 +302,7 @@
       if (st.afterEnd) {
         st.afterEnd = false;
         // the whole round played out in one go, so every phase of it has ended by now (in engine order)
-        ['cat_attacks', 'pest_attacks', 'spawn', 'dusk'].forEach(function (ph) { emit({ on: 'phaseEnd', phase: ph, round: st.round }); });
+        ['pest_attacks', 'cat_attacks', 'spawn', 'dusk'].forEach(function (ph) { emit({ on: 'phaseEnd', phase: ph, round: st.round }); });
       }
       if (S && S.turn === 'player' && S.round !== st.round && st.started) { st.round = S.round; st.playPtr = 0; emit({ on: 'roundStart', round: S.round }); }
     };
@@ -356,7 +356,7 @@
   function finishAll() {
     markHandbook('all');
     try { var p = K.prof.get(); p.tutorial.firstFightDone = true; K.prof.save(); } catch (e) { /* ignore */ }
-    say(['That is the lot. Floors and cards, Knock, Nap, the Witching Hour and Nine Lives. The rest of the house is yours.', 'The Sunbeam holds. Go and choose a clan.'], function () { done('all'); }, { last: 'To the cradle' });
+    say(['That is the lot: cards, floors, and who strikes first. The rest of the house is yours.', 'The Sunbeam holds. Go and choose a clan.'], function () { done('all'); }, { last: 'To the cradle' });
   }
   function done(kind) {
     var F = SB.ui.flow;
