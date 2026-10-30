@@ -13,7 +13,7 @@ fs.readdirSync(dd).filter(f => f.endsWith('.js')).sort().forEach(f => load(path.
   const f = path.join(root, 'src/engine', n + '.js'); if (fs.existsSync(f)) load(f);
 });
 fs.readdirSync(path.join(root, 'src/engine')).filter(f => /^ops-.*\.js$/.test(f)).sort().forEach(f => load(path.join(root, 'src/engine', f)));
-const SB = ctx.SB; SB.util.quiet = true;
+const SB = ctx.SB; SB.util.quiet = true; (ctx.SB||SB).data.rules.pestsFirst = false; (ctx.SB||SB).data.rules.pestsAlwaysClimb = false; (ctx.SB||SB).data.rules.pestHpMult = 1;
 const use = SB.content.scanUsage();
 const cats = ['ops', 'triggers', 'statuses', 'keywords', 'targets', 'checks', 'counters', 'actions', 'patterns', 'picks', 'passives', 'conds', 'hazards', 'floorStatuses', 'mods', 'upgradeOps', 'hooks', 'winIf', 'traits', 'flags', 'stats'];
 const LIST = process.argv.includes('--list');

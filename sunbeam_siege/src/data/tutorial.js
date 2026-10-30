@@ -5,8 +5,8 @@
  * What lives here:
  *   cards     4 cat cards and 3 spell cards used only by the tutorial (ids neutral_tut_*), A03 schema.
  *   enemies   4 tutorial pests (pest_tutorial_*), A02 section 17 shape plus flavor and art.
- *   fights    4 scripted fights: exact waves, fixed hands, exact plays, coach steps, expected end states.
- *   flow      the guided first run: fight, map, fight, shop, fight, nook, fight.
+ *   fights    1 scripted fight (two rounds): exact waves, fixed hands, exact plays, coach steps.
+ *   flow      the guided first run: the fight, then graduation.
  *   mapGuide, shopGuide, nookGuide   the mini guides.
  *   safeFail  the rules that make losing impossible.
  *   tips      30 in-run contextual tip rules.
@@ -159,391 +159,68 @@ SB.data.tutorial = (function () {
   };
 
   // ---------------------------------------------------------------------------------------------
-  // FIGHT 1: "A Tabby, a Mouse and the Rest of the House"
-  // Teaches: Sunbeam, floors, intents, playing cards, Zoomies, End Turn, cats-strike-first, Lives pips.
+  // THE LESSON: one short fight, two rounds.
+  // Teaches: Zoomies and cards, putting a cat in the Front, Middle or Back, pests strike first, cats strike back,
+  // and every pest climbs one floor per round.
+  // Round 1: a rat (8 health) on the Cellar. Biscuit 4 + Tabby 3 leave it on 1 health, so it climbs to the Parlor.
+  // Round 2: the rat is on the Parlor and a mouse has come in below. Tabby on the Parlor finishes the rat, Swat the mouse.
   // ---------------------------------------------------------------------------------------------
   var fight1 = {
     id: 'tut_1_cellar', order: 1, title: 'The Cellar Door', scripted: true,
-    teaches: ['sunbeam', 'floors', 'intents', 'playing cards', 'zoomies', 'end turn', 'cats strike first', 'lives'],
+    teaches: ['sunbeam', 'floors', 'zoomies', 'cards', 'front middle back', 'pests strike first', 'pests climb'],
     rules: { nightClock: false, dazedKnock: true, noRandomMisfire: true, impatience: false },
     warmth: 40, maxRounds: 5,
-    setup: {
-      cats: [{ ref: 'B', card: 'neutral_tut_biscuit', floor: 1, pos: 0 }]
-    },
-    fillerDraw: ['neutral_tut_swat'],
-    waves: [
-      { round: 1, spawns: [{ ref: 'mouse1', id: 'pest_tutorial_mouse', floor: 1, at: 'back' }] },
-      { round: 2, spawns: [{ ref: 'rat1', id: 'pest_tutorial_rat', floor: 1, at: 'back' },
-                           { ref: 'mouse2', id: 'pest_tutorial_mouse', floor: 3, at: 'back' }] }
-    ],
-    rounds: [
-      { n: 1,
-        expect: { warmth: 40, cats: ['B:14:L9', 'T1:5:L3', 'T2:5:L3'], pests: ['rat1:8@1', 'mouse2:4@3'] },
-        hand: ['neutral_tut_tabby', 'neutral_tut_tabby', 'neutral_tut_swat', 'neutral_tut_swat', 'neutral_tut_tabby'],
-        plays: [
-          play('f1_p1', 'f1_play_a', { kind: 'place', card: 'neutral_tut_tabby', ref: 'T1', floor: 1, pos: 'back' }),
-          play('f1_p2', 'f1_play_b', { kind: 'place', card: 'neutral_tut_tabby', ref: 'T2', floor: 2, pos: 'back' }),
-          play('f1_p3', 'f1_end1', { kind: 'endTurn' })
-        ] },
-      { n: 2,
-        expect: { warmth: 40, cats: ['B:11:L9', 'T1:5:L3', 'T2:5:L3'], pests: ['rat1:1@1'] },
-        hand: ['neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_tabby', 'neutral_tut_swat', 'neutral_tut_tabby'],
-        plays: [
-          play('f1_p4', 'f1_swat', { kind: 'spell', card: 'neutral_tut_swat', target: 'mouse2' }),
-          play('f1_p5', 'f1_end2', { kind: 'endTurn' })
-        ] },
-      { n: 3,
-        expect: { win: true },
-        hand: ['neutral_tut_swat', 'neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_tabby', 'neutral_tut_tabby'],
-        plays: [
-          play('f1_p6', 'f1_finish', { kind: 'endTurn' })
-        ] }
-    ],
-    steps: [
-      step('f1_hello', { when: { on: 'fightStart' }, pose: 'smile', target: null,
-        text: 'Ah, there you are. Sit. Not there, that is my spot. Here, next to the Sunbeam. Tonight we hold the house, and I will point at things.' }),
-      step('f1_sunbeam', { when: { on: 'afterStep', step: 'f1_hello' }, target: 'sunbeam', pose: 'point',
-        text: 'That is the Sunbeam. Warm, lovely, and the whole point. Its Warmth is 40. If it reaches zero the house goes cold, and I get very quiet.' }),
-      step('f1_floors', { when: { on: 'afterStep', step: 'f1_sunbeam' }, target: 'floors', pose: 'point',
-        text: 'Three floors: Cellar, Parlor, Attic. Pests come in at the bottom. Your cats stand where you put them. Put them well, or at least visibly.' }),
-      step('f1_biscuit', { when: { on: 'afterStep', step: 'f1_floors' }, target: 'cat:B', pose: 'smile',
-        text: 'This is Biscuit, your Champion. Four claws, fourteen health, and nine lives, which is the full set and slightly showing off.' }),
-      step('f1_intent', { when: { on: 'afterStep', step: 'f1_biscuit' }, target: 'intent:mouse1', pose: 'point',
-        text: 'A mouse. The bubble over its head says Nibble, 2. That is exactly what it will do on its turn, and who it will do it to. Pests are honest like that. It is their only virtue.' }),
-      step('f1_hand', { when: { on: 'afterStep', step: 'f1_intent' }, target: 'hand', pose: 'talk',
-        text: 'Those are your cards. Each costs Zoomies, shown here. You get 3 a turn, and what you do not spend is gone at End Turn. Nothing carries over. It is a very modern house.' }),
-      step('f1_zoom', { when: { on: 'afterStep', step: 'f1_hand' }, target: 'zoomies', pose: 'point',
-        text: 'Three Zoomies. Spend them. A Hall Tabby costs one.' }),
-      step('f1_play_a', { when: { on: 'afterStep', step: 'f1_zoom' }, target: 'card:neutral_tut_tabby', pose: 'point',
-        gate: { allow: [{ input: 'placeCard', card: 'neutral_tut_tabby', floor: 1 }] }, advance: { await: 'f1_p1' },
-        text: 'Drag the Hall Tabby onto the Cellar. On a phone, tap the card, then tap the floor.' }),
-      step('f1_wall', { when: { on: 'afterPlay', play: 'f1_p1' }, target: 'floor:1', pose: 'talk',
-        text: 'Cats on a floor fight the pests on that floor, front cat first. As far as a pest is concerned, a cat is a wall.' }),
-      step('f1_play_b', { when: { on: 'afterStep', step: 'f1_wall' }, target: 'floor:2', pose: 'point',
-        gate: { allow: [{ input: 'placeCard', card: 'neutral_tut_tabby', floor: 2 }] }, advance: { await: 'f1_p2' },
-        text: 'Another one, on the Parlor. Nothing is up there yet. A cat in the right place before the trouble is called planning. A cat in the wrong place is called a nap.' }),
-      step('f1_end1', { when: { on: 'afterPlay', play: 'f1_p2' }, target: 'endTurn', pose: 'point',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f1_p3' },
-        text: 'Now End Turn. Your cats strike first, floor by floor, front to back. Then the pests get their turn, if any are left. It is the one fair rule in the house.' }),
-      step('f1_strike', { when: { on: 'phaseEnd', phase: 'cat_attacks', round: 1 }, target: 'cat:B', pose: 'smile', dim: false,
-        text: 'Biscuit got there first. The mouse never reached its turn. This is most of the strategy, really.' }),
-
-      step('f1_attic', { when: { on: 'roundStart', round: 2 }, target: 'pest:mouse2', pose: 'wince',
-        text: 'Another mouse, and this one came in through the Attic window. No cat up there, so it will go straight for the Sunbeam. That is the part we dislike.' }),
-      step('f1_swat', { when: { on: 'afterStep', step: 'f1_attic' }, target: 'card:neutral_tut_swat', pose: 'point',
-        gate: { allow: [{ input: 'playCard', card: 'neutral_tut_swat', target: 'mouse2' }] }, advance: { await: 'f1_p4' },
-        text: 'Swat deals 4 damage to a pest you choose. Tap Swat, then tap the mouse. A mouse has 4 health. Arithmetic is on your side.' }),
-      step('f1_spare', { when: { on: 'afterPlay', play: 'f1_p4' }, target: 'zoomies', pose: 'shrug',
-        text: 'Two Zoomies left. You may spend them or lose them. Tonight we will lose them, with dignity.' }),
-      step('f1_rat', { when: { on: 'afterStep', step: 'f1_spare' }, target: 'intent:rat1', pose: 'point',
-        text: 'The rat on the Cellar will Bite for 3. Biscuit and the Tabby can deal with it, though perhaps not all at once. Let them.' }),
-      step('f1_end2', { when: { on: 'afterStep', step: 'f1_rat' }, target: 'endTurn', pose: 'point',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f1_p5' }, text: 'End Turn.' }),
-      step('f1_bite', { when: { on: 'phaseEnd', phase: 'pest_attacks', round: 2 }, target: 'cat:B', pose: 'talk', dim: false,
-        text: 'Biscuit took a bite. Health refills after every fight, so nobody minds. Lives are different. Lives do not refill.' }),
-
-      step('f1_lives', { when: { on: 'roundStart', round: 3 }, target: 'lives:B', pose: 'point',
-        text: 'These little paws are Lives. Biscuit has nine, the Tabbies have three. When a cat runs out of health it spends one life and goes back to your discard pile. When the last life goes, the card is gone. Keep count. I do.' }),
-      step('f1_finish', { when: { on: 'afterStep', step: 'f1_lives' }, target: 'endTurn', pose: 'smile',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f1_p6' },
-        text: 'The rat has 1 health left and Biscuit has four claws. You may End Turn. Or admire the rat. I have seen worse plans.' }),
-      step('f1_win', { when: { on: 'fightWon' }, pose: 'smile',
-        text: 'That is the whole fight. Cards, floors, End Turn. Everything else is decoration. The Sunbeam holds.' })
-    ]
-  };
-
-  // ---------------------------------------------------------------------------------------------
-  // FIGHT 2: "Knock It Off"
-  // Teaches: Knock, Shatter, landing damage on neighbours, Dazed on landing, Climber, cat flap.
-  // ---------------------------------------------------------------------------------------------
-  var fight2 = {
-    id: 'tut_2_knock', order: 2, title: 'Things That Fall', scripted: true,
-    teaches: ['knock it off', 'shatter', 'pile-up damage', 'climber', 'cat flap', 'dizzy'],
-    rules: { nightClock: false, dazedKnock: true, noRandomMisfire: true, impatience: false },
-    warmth: 40, maxRounds: 5,
-    setup: {
-      cats: [
-        { ref: 'B', card: 'neutral_tut_biscuit', floor: 1, pos: 0 },
-        { ref: 'T1', card: 'neutral_tut_tabby', floor: 1, pos: 1 },
-        { ref: 'T2', card: 'neutral_tut_tabby', floor: 2, pos: 0 }
-      ]
-    },
-    fillerDraw: ['neutral_tut_swat'],
-    waves: [
-      { round: 1, spawns: [
-        { ref: 'rat1', id: 'pest_tutorial_rat', floor: 1, at: 'back' },
-        { ref: 'mouse1', id: 'pest_tutorial_mouse', floor: 1, at: 'back' },
-        { ref: 'pup1', id: 'pest_tutorial_pup', floor: 2, at: 'back' }] }
-    ],
-    rounds: [
-      { n: 1,
-        expect: { warmth: 40, cats: ['B:9:L9', 'T1:5:L3', 'T2:5:L3'], pests: ['mouse1:2@1', 'pup1:7@1'] },
-        hand: ['neutral_tut_knock', 'neutral_tut_knock', 'neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_tabby'],
-        plays: [
-          play('f2_p1', 'f2_knock1', { kind: 'spell', card: 'neutral_tut_knock', target: 'pup1' }),
-          play('f2_p2', 'f2_end1', { kind: 'endTurn' })
-        ] },
-      { n: 2,
-        expect: { warmth: 40, cats: ['B:9:L9', 'T1:5:L3', 'T2:5:L3'], pests: ['pup1:3@1'] },
-        hand: ['neutral_tut_knock', 'neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_tabby', 'neutral_tut_tabby'],
-        plays: [
-          play('f2_p3', 'f2_knock2', { kind: 'spell', card: 'neutral_tut_knock', target: 'pup1' }),
-          play('f2_p4', 'f2_end2', { kind: 'endTurn' })
-        ] },
-      { n: 3,
-        expect: { win: true },
-        hand: ['neutral_tut_swat', 'neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_tabby', 'neutral_tut_tabby'],
-        plays: [
-          play('f2_p5', 'f2_swat', { kind: 'spell', card: 'neutral_tut_swat', target: 'pup1' }),
-          play('f2_p6', 'f2_end3', { kind: 'endTurn' })
-        ] }
-    ],
-    steps: [
-      step('f2_hello', { when: { on: 'fightStart' }, pose: 'smile',
-        text: 'Tonight somebody is going to fall off something. It is more satisfying than it sounds.' }),
-      step('f2_pup', { when: { on: 'afterStep', step: 'f2_hello' }, target: 'pest:pup1', pose: 'point',
-        text: 'A pup, on the Parlor. Pups are Climbers. A Climber ignores the rule that cats are walls, and heads for the Attic and the Sunbeam regardless. Enthusiasm, you see.' }),
-      step('f2_card', { when: { on: 'afterStep', step: 'f2_pup' }, target: 'card:neutral_tut_knock', pose: 'point',
-        text: 'Knock It Off. Cost 1. It pushes a pest down a floor. The pest takes 2 Shatter damage per floor it falls, which ignores Fluff, and whatever it lands on takes 2 as well.' }),
-      step('f2_knock1', { when: { on: 'afterStep', step: 'f2_card' }, target: 'pest:pup1', pose: 'point',
-        gate: { allow: [{ input: 'playCard', card: 'neutral_tut_knock', target: 'pup1' }] }, advance: { await: 'f2_p1' },
-        text: 'Tap Knock It Off, then the pup. Go on. It is a card, not a character judgement.' }),
-      step('f2_after', { when: { on: 'afterPlay', play: 'f2_p1' }, target: 'floor:1', pose: 'smile',
-        text: 'Down it goes. The pup took 2, the rat took 2, the mouse took 2. The pup also lands Dizzy, so it loses its next turn and its climb. Gravity does the work. You supervise.' }),
-      step('f2_end1', { when: { on: 'afterStep', step: 'f2_after' }, target: 'endTurn', pose: 'point',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f2_p2' }, text: 'End Turn.' }),
-      step('f2_cats', { when: { on: 'phaseEnd', phase: 'cat_attacks', round: 1 }, target: 'floor:1', pose: 'smile', dim: false,
-        text: 'Biscuit and the Tabby finished the rat. Nobody was surprised, least of all the rat.' }),
-
-      step('f2_cellar', { when: { on: 'roundStart', round: 2 }, target: 'pest:pup1', pose: 'point',
-        text: 'The pup is on the Cellar now, and the Cellar has nowhere lower to go. Knock a pest from the Cellar and it takes 3 Shatter and leaves through the cat flap. It comes back at the next Spawn.' }),
-      step('f2_knock2', { when: { on: 'afterStep', step: 'f2_cellar' }, target: 'pest:pup1', pose: 'point',
-        gate: { allow: [{ input: 'playCard', card: 'neutral_tut_knock', target: 'pup1' }] }, advance: { await: 'f2_p3' },
-        text: 'Knock It Off, on the pup again.' }),
-      step('f2_flap', { when: { on: 'afterPlay', play: 'f2_p3' }, target: 'gardenQueue', pose: 'shrug',
-        text: 'Out through the cat flap, and into the garden queue. Knocking buys time and chips health. It does not retire anyone. A pest also moves by Knock only once a round, so no juggling.' }),
-      step('f2_end2', { when: { on: 'afterStep', step: 'f2_flap' }, target: 'endTurn', pose: 'point',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f2_p4' }, text: 'End Turn.' }),
-
-      step('f2_back', { when: { on: 'roundStart', round: 3 }, target: 'pest:pup1', pose: 'wince',
-        text: 'And here it is again, with 3 health and a dazed expression. Swat, then let Biscuit finish. Some problems solve themselves if you are patient.' }),
-      step('f2_swat', { when: { on: 'afterStep', step: 'f2_back' }, target: 'card:neutral_tut_swat', pose: 'point',
-        gate: { allow: [{ input: 'playCard', card: 'neutral_tut_swat', target: 'pup1' }] }, advance: { await: 'f2_p5' },
-        text: 'Swat the pup.' }),
-      step('f2_end3', { when: { on: 'afterPlay', play: 'f2_p5' }, target: 'endTurn', pose: 'point',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f2_p6' }, text: 'End Turn.' }),
-      step('f2_win', { when: { on: 'fightWon' }, pose: 'smile',
-        text: 'Knock is a little damage, a lost turn and a tidier floor, all for one Zoomies. Remember that when you find a card that Knocks twice. The Sunbeam holds.' })
-    ]
-  };
-
-  // ---------------------------------------------------------------------------------------------
-  // FIGHT 3: "The Art of Doing Nothing"
-  // Teaches: Nap toggle (Z), no nap on the turn played, Rested, Catnap card, Stretch on waking, Rude Awakening.
-  // ---------------------------------------------------------------------------------------------
-  var fight3 = {
-    id: 'tut_3_nap', order: 3, title: 'The Art of Doing Nothing', scripted: true,
-    teaches: ['nap', 'rested', 'stretch', 'catnap', 'rude awakening'],
-    rules: { nightClock: false, dazedKnock: true, noRandomMisfire: true, impatience: false },
-    warmth: 40, maxRounds: 6,
-    setup: {
-      cats: [{ ref: 'B', card: 'neutral_tut_biscuit', floor: 1, pos: 0 }]
-    },
-    fillerDraw: ['neutral_tut_swat'],
-    waves: [
-      { round: 1, spawns: [{ ref: 'mouse1', id: 'pest_tutorial_mouse', floor: 1, at: 'back' }] },
-      { round: 2, spawns: [{ ref: 'mouse2', id: 'pest_tutorial_mouse', floor: 1, at: 'back' }] },
-      { round: 3, spawns: [{ ref: 'pup1', id: 'pest_tutorial_pup', floor: 1, at: 'back' }] }
-    ],
-    rounds: [
-      { n: 1,
-        expect: { warmth: 40, cats: ['B:14:L9', 'L1:7:L3'], pests: ['mouse2:4@1'] },
-        hand: ['neutral_tut_loaf', 'neutral_tut_catnap', 'neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_catnap'],
-        plays: [
-          play('f3_p1', 'f3_loaf', { kind: 'place', card: 'neutral_tut_loaf', ref: 'L1', floor: 2, pos: 'back' }),
-          play('f3_p2', 'f3_end1', { kind: 'endTurn' })
-        ] },
-      { n: 2,
-        expect: { warmth: 40, cats: ['B:14:L9', 'L1:7:L3'], pests: ['pup1:10@1'] },
-        hand: ['neutral_tut_catnap', 'neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_catnap', 'neutral_tut_swat'],
-        plays: [
-          play('f3_p3', 'f3_toggle', { kind: 'toggleNap', unit: 'L1', to: 'napping' }),
-          play('f3_p4', 'f3_end2', { kind: 'endTurn' })
-        ] },
-      { n: 3,
-        expect: { warmth: 40, cats: ['B:11:L9', 'L1:7:L3'], pests: ['pup1:6@2'] },
-        hand: ['neutral_tut_catnap', 'neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_catnap', 'neutral_tut_swat'],
-        plays: [
-          play('f3_p5', 'f3_catnap', { kind: 'spell', card: 'neutral_tut_catnap', target: 'L1' }),
-          play('f3_p6', 'f3_end3', { kind: 'endTurn' })
-        ] },
-      { n: 4,
-        expect: { win: true },
-        hand: ['neutral_tut_swat', 'neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_catnap', 'neutral_tut_tabby'],
-        plays: [
-          play('f3_p7', 'f3_wake', { kind: 'toggleNap', unit: 'L1', to: 'awake' }),
-          play('f3_p8', 'f3_end4', { kind: 'endTurn' })
-        ] }
-    ],
-    steps: [
-      step('f3_hello', { when: { on: 'fightStart' }, pose: 'smile',
-        text: 'Tonight, a lesson in doing nothing. It is harder than it looks and it is most of what I do all day.' }),
-      step('f3_loaf', { when: { on: 'afterStep', step: 'f3_hello' }, target: 'card:neutral_tut_loaf', pose: 'point',
-        gate: { allow: [{ input: 'placeCard', card: 'neutral_tut_loaf', floor: 2 }] }, advance: { await: 'f3_p1' },
-        text: 'Sofa Loaf. Slow, round, structurally unimpressive. Put her on the Parlor. Nothing is up there, which is how she likes it.' }),
-      step('f3_end1', { when: { on: 'afterPlay', play: 'f3_p1' }, target: 'endTurn', pose: 'point',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f3_p2' },
-        text: 'End Turn. Biscuit will see to the mouse. Cats cannot Nap on the turn they arrive. Too excited. She will settle.' }),
-
-      step('f3_toggle', { when: { on: 'roundStart', round: 2 }, target: 'napToggle:L1', pose: 'point',
-        gate: { allow: [{ input: 'toggleNap', unit: 'L1', to: 'napping' }] }, advance: { await: 'f3_p3' },
-        text: 'She has settled. Tap the Z on the Loaf. It is free. A napping cat does not attack, heals 2 each round, and gains Rested at Dusk.' }),
-      step('f3_end2', { when: { on: 'afterPlay', play: 'f3_p3' }, target: 'endTurn', pose: 'smile',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f3_p4' }, text: 'End Turn. Biscuit does the work. The Loaf does the rest, which is nothing.' }),
-      step('f3_pips', { when: { on: 'phaseEnd', phase: 'dusk', round: 2 }, target: 'rested:L1', pose: 'point', dim: false,
-        text: 'One moon pip. That is Rested. Every pip is worth 3 extra damage when she wakes, and she can hold 4.' }),
-
-      step('f3_pup', { when: { on: 'roundStart', round: 3 }, target: 'pest:pup1', pose: 'point',
-        text: 'A pup is coming. Do not wake her yet. It has to climb to her first, and it will, being a Climber. Let it come.' }),
-      step('f3_catnap', { when: { on: 'afterStep', step: 'f3_pup' }, target: 'card:neutral_tut_catnap', pose: 'point',
-        gate: { allow: [{ input: 'playCard', card: 'neutral_tut_catnap', target: 'L1' }] }, advance: { await: 'f3_p5' },
-        text: 'Catnap does the Z\'s job plus a heal of 3 and one extra Rested. It costs a Zoomies, and the Z is free, but she is already asleep and this is the cheapest moment to add more sleep. Play it on the Loaf.' }),
-      step('f3_end3', { when: { on: 'afterPlay', play: 'f3_p5' }, target: 'endTurn', pose: 'shrug',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f3_p6' },
-        text: 'End Turn. If the pup bit her while she slept, she would wake cross and lose all her Rested. Rude Awakening, it is called. We will not let that happen.' }),
-
-      step('f3_cometh', { when: { on: 'roundStart', round: 4 }, target: 'pest:pup1', pose: 'wince',
-        text: 'The pup is on the Parlor, and the Loaf is on 3 Rested. It would bite her this turn. It will not, because cats strike first.' }),
-      step('f3_wake', { when: { on: 'afterStep', step: 'f3_cometh' }, target: 'napToggle:L1', pose: 'point',
-        gate: { allow: [{ input: 'toggleNap', unit: 'L1', to: 'awake' }] }, advance: { await: 'f3_p7' },
-        text: 'Wake her. Tap the Z again. On her next strike she Stretches: her Attack plus 3 for every Rested. With three Rested, that is a good nine on top. She also keeps a little extra Attack for the whole fight.' }),
-      step('f3_end4', { when: { on: 'afterPlay', play: 'f3_p7' }, target: 'endTurn', pose: 'point',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f3_p8' }, text: 'End Turn, and watch.' }),
-      step('f3_stretch', { when: { on: 'phaseEnd', phase: 'cat_attacks', round: 4 }, target: 'cat:L1', pose: 'smile', dim: false,
-        text: 'That was rather more than a pup with six health needed. Overkill is lost. I am told it was worth it.' }),
-      step('f3_win', { when: { on: 'fightWon' }, pose: 'smile',
-        text: 'The best defender is sometimes the one that did nothing for three turns. The Sunbeam holds.' })
-    ]
-  };
-
-  // ---------------------------------------------------------------------------------------------
-  // FIGHT 4: "The Witching Hour"
-  // Teaches: Nine Lives (spend, Cornered, last life), Witching Hour (clock, Zoom, Frazzled, Night Visitors).
-  // ---------------------------------------------------------------------------------------------
-  var fight4 = {
-    id: 'tut_4_witching', order: 4, title: 'The Witching Hour', scripted: true,
-    teaches: ['nine lives', 'cornered', 'witching hour', 'zoom', 'frazzled', 'night visitors', 'heavy'],
-    rules: { nightClock: true, dazedKnock: true, noRandomMisfire: true, impatience: false },
-    warmth: 40, maxRounds: 7,
     setup: {
       cats: [{ ref: 'B', card: 'neutral_tut_biscuit', floor: 1, pos: 0 }]
     },
     fillerDraw: ['neutral_tut_swat'],
     waves: [
       { round: 1, spawns: [{ ref: 'rat1', id: 'pest_tutorial_rat', floor: 1, at: 'back' }] },
-      { round: 2, spawns: [{ ref: 'mouse1', id: 'pest_tutorial_mouse', floor: 1, at: 'back' }] },
-      { round: 3, spawns: [{ ref: 'mouse2', id: 'pest_tutorial_mouse', floor: 1, at: 'back' }] },
-      { round: 4, spawns: [{ ref: 'vac1', id: 'pest_tutorial_vacuum', floor: 1, at: 'back' }] }
-    ],
-    nightVisitors: [
-      // Spawn at the end of Witching Hour round 3, arrive for round 4 behind the normal wave.
-      { afterRound: 3, spawns: [{ ref: 'mouse3', id: 'pest_tutorial_mouse', floor: 1, at: 'back' }] }
+      { round: 2, spawns: [{ ref: 'mouse1', id: 'pest_tutorial_mouse', floor: 1, at: 'back' }] }
     ],
     rounds: [
       { n: 1,
-        expect: { warmth: 40, cats: ['B:14:L9'], pests: ['rat1:2@1', 'mouse1:4@1'], lifeEvents: ['K1:1'] },
-        hand: ['neutral_tut_kitten', 'neutral_tut_tabby', 'neutral_tut_swat', 'neutral_tut_catnap', 'neutral_tut_catnap'],
+        expect: { warmth: 40, cats: ['B:14:L9', 'T1:2:L3'], pests: ['rat1:1@1'] },
+        hand: ['neutral_tut_tabby', 'neutral_tut_tabby', 'neutral_tut_swat', 'neutral_tut_swat', 'neutral_tut_tabby'],
         plays: [
-          play('f4_p1', 'f4_kitten', { kind: 'place', card: 'neutral_tut_kitten', ref: 'K1', floor: 1, pos: 'front' }),
-          play('f4_p2', 'f4_end1', { kind: 'endTurn' })
+          play('f1_p1', 'f1_play_a', { kind: 'place', card: 'neutral_tut_tabby', ref: 'T1', floor: 1 }),
+          play('f1_p2', 'f1_end1', { kind: 'endTurn' })
         ] },
       { n: 2,
-        expect: { warmth: 40, cats: ['B:14:L9', 'K1:3:L1'], pests: ['mouse2:4@1'] },
-        hand: ['neutral_tut_kitten', 'neutral_tut_tabby', 'neutral_tut_swat', 'neutral_tut_catnap', 'neutral_tut_tabby'],
-        plays: [
-          play('f4_p3', 'f4_replay', { kind: 'place', card: 'neutral_tut_kitten', ref: 'K1', floor: 1, pos: 'back' }),
-          play('f4_p4', 'f4_end2', { kind: 'endTurn' })
-        ] },
-      { n: 3, witching: true,
-        expect: { warmth: 40, cats: ['B:14:L9', 'K1:3:L1', 'T1:5:L3', 'T2:5:L3'], pests: ['vac1:16@1', 'mouse3:4@1'] },
-        hand: ['neutral_tut_tabby', 'neutral_tut_tabby', 'neutral_tut_swat', 'neutral_tut_swat', 'neutral_tut_catnap', 'neutral_tut_tabby'],
-        plays: [
-          play('f4_p5', 'f4_spend', { kind: 'place', card: 'neutral_tut_tabby', ref: 'T1', floor: 1, pos: 'back' }),
-          play('f4_p6', 'f4_spend2', { kind: 'place', card: 'neutral_tut_tabby', ref: 'T2', floor: 1, pos: 'back' }),
-          play('f4_p7', 'f4_end3', { kind: 'endTurn' })
-        ] },
-      { n: 4,
-        expect: { warmth: 40, cats: ['B:9:L9', 'K1:3:L1', 'T1:5:L3', 'T2:5:L3'], pests: ['vac1:6@1', 'mouse3:4@1'] },
-        hand: ['neutral_tut_swat', 'neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_catnap', 'neutral_tut_tabby'],
-        plays: [
-          play('f4_p8', 'f4_swat1', { kind: 'spell', card: 'neutral_tut_swat', target: 'vac1' }),
-          play('f4_p9', 'f4_end4', { kind: 'endTurn' })
-        ] },
-      { n: 5,
         expect: { win: true },
-        hand: ['neutral_tut_swat', 'neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_catnap', 'neutral_tut_tabby'],
+        hand: ['neutral_tut_swat', 'neutral_tut_tabby', 'neutral_tut_tabby', 'neutral_tut_swat', 'neutral_tut_tabby'],
         plays: [
-          play('f4_p10', 'f4_swat2', { kind: 'spell', card: 'neutral_tut_swat', target: 'vac1' }),
-          play('f4_p11', 'f4_swat3', { kind: 'spell', card: 'neutral_tut_swat', target: 'mouse3' })
+          play('f1_p3', 'f1_play_b', { kind: 'place', card: 'neutral_tut_tabby', ref: 'T2', floor: 2 }),
+          play('f1_p4', 'f1_swat', { kind: 'spell', card: 'neutral_tut_swat', target: 'mouse1' }),
+          play('f1_p5', 'f1_end2', { kind: 'endTurn' })
         ] }
     ],
     steps: [
-      step('f4_hello', { when: { on: 'fightStart' }, pose: 'smile',
-        text: 'Last one tonight. Two things: what nine lives actually cost, and what happens to a house at the Witching Hour.' }),
-      step('f4_kitten', { when: { on: 'afterStep', step: 'f4_hello' }, target: 'card:neutral_tut_kitten', pose: 'point',
-        gate: { allow: [{ input: 'placeCard', card: 'neutral_tut_kitten', floor: 1, pos: 'front' }] }, advance: { await: 'f4_p1' },
-        text: 'A Hall Kitten. Three health, two lives. Put her on the Cellar, in front of Biscuit. I know. I am being instructive, not kind.' }),
-      step('f4_end1', { when: { on: 'afterPlay', play: 'f4_p1' }, target: 'endTurn', pose: 'wince',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f4_p2' },
-        text: 'The rat will Bite for 3 and the front cat is the one it bites. She has 3 health. I have done this arithmetic before. End Turn.' }),
-      step('f4_life', { when: { on: 'phaseEnd', phase: 'pest_attacks', round: 1 }, target: 'lives:K1', pose: 'talk', dim: true,
-        text: 'She spent a life. One left, and back to the discard pile she goes, to be drawn again. A cat on exactly one life is Cornered and gains +2 Attack. Nobody fights like a cat with one life and a point to make. If the last life goes, the card is lost and an Empty Collar takes its place. Biscuit has eight to spare.' }),
+      step('f1_hello', { when: { on: 'fightStart' }, pose: 'smile', target: 'sunbeam',
+        text: 'Tonight we hold the house. That is the Sunbeam at the top. If its Warmth reaches zero, the house goes cold. Pests come in at the bottom and climb.' }),
+      step('f1_intent', { when: { on: 'afterStep', step: 'f1_hello' }, target: 'intent:rat1', pose: 'point',
+        text: 'A rat on the Cellar. The bubble over its head says what it will do this turn. Pests go first, and they are honest about it.' }),
+      step('f1_hand', { when: { on: 'afterStep', step: 'f1_intent' }, target: 'zoomies', pose: 'talk',
+        text: 'Cards cost Zoomies. You get 3 a turn and unspent ones vanish. Spend them.' }),
+      step('f1_play_a', { when: { on: 'afterStep', step: 'f1_hand' }, target: 'card:neutral_tut_tabby', pose: 'point', dim: false,
+        gate: { allow: [{ input: 'placeCard', card: 'neutral_tut_tabby', floor: 1 }] }, advance: { await: 'f1_p1' },
+        text: 'Play a Hall Tabby on the Cellar (drag it, or tap the card then the floor). Then choose Front, Middle or Back. The front cat takes the first bite. Your choice.' }),
+      step('f1_end1', { when: { on: 'afterPlay', play: 'f1_p1' }, target: 'endTurn', pose: 'point',
+        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f1_p2' },
+        text: 'Now End Turn. The rat bites first. Then your cats strike back.' }),
 
-      step('f4_clock', { when: { on: 'roundStart', round: 2 }, target: 'nightClock', pose: 'point',
-        text: 'The moon dial. It says Witching Hour next round. Every third round the house gets strange, and it is announced a round ahead, as manners require.' }),
-      step('f4_replay', { when: { on: 'afterStep', step: 'f4_clock' }, target: 'card:neutral_tut_kitten', pose: 'point',
-        gate: { allow: [{ input: 'placeCard', card: 'neutral_tut_kitten', floor: 1, pos: 'back' }] }, advance: { await: 'f4_p3' },
-        text: 'There she is again. Play her on the Cellar, at the back this time. Cornered kittens hit like Biscuit, and survive longer at the back.' }),
-      step('f4_end2', { when: { on: 'afterPlay', play: 'f4_p3' }, target: 'endTurn', pose: 'point',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f4_p4' }, text: 'End Turn.' }),
-
-      step('f4_witching', { when: { on: 'roundStart', round: 3 }, target: 'nightClock', pose: 'wince',
-        text: 'The Witching Hour. You get 5 Zoomies and 6 cards. Every awake cat Zooms: a free hit, half damage, on a random pest. Then they are Frazzled next round, minus 2 Attack. Cats that did not Zoom are fine.' }),
-      step('f4_zoomed', { when: { on: 'afterStep', step: 'f4_witching' }, target: 'floor:1', pose: 'smile',
-        text: 'The mouse is still here. Every awake cat Zooms at End Turn, and that includes any cat you put down this turn. Free hits all round. A little rude, but generous.' }),
-      step('f4_spend', { when: { on: 'afterStep', step: 'f4_zoomed' }, target: 'card:neutral_tut_tabby', pose: 'point',
-        gate: { allow: [{ input: 'placeCard', card: 'neutral_tut_tabby', floor: 1 }] }, advance: { await: 'f4_p5' },
-        text: 'Five Zoomies and one small mouse. Play a Tabby on the Cellar. She will Zoom with the others, and pay for it next round.' }),
-      step('f4_spend2', { when: { on: 'afterPlay', play: 'f4_p5' }, target: 'card:neutral_tut_tabby', pose: 'point',
-        gate: { allow: [{ input: 'placeCard', card: 'neutral_tut_tabby', floor: 1 }] }, advance: { await: 'f4_p6' },
-        text: 'And another. The rest of the Zoomies will vanish at End Turn. Please do not look at them.' }),
-      step('f4_end3', { when: { on: 'afterPlay', play: 'f4_p6' }, target: 'endTurn', pose: 'point',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f4_p7' }, text: 'End Turn.' }),
-      step('f4_visitors', { when: { on: 'phaseEnd', phase: 'spawn', round: 3 }, target: 'gardenQueue', pose: 'wince',
-        text: 'Night Visitors: a small extra wave at the end of the Witching Hour. Tonight, a mouse. And a vacuum, which I did not arrange and do not approve of.' }),
-
-      step('f4_frazzled', { when: { on: 'roundStart', round: 4 }, target: 'status:B:frazzled', pose: 'point',
-        text: 'Frazzled. Everyone who Zoomed hits 2 less this round: Biscuit, the Kitten and both Tabbies. That is the price of a free hit.' }),
-      step('f4_vacuum', { when: { on: 'afterStep', step: 'f4_frazzled' }, target: 'pest:vac1', pose: 'wince',
-        text: 'That is a vacuum. Large, Heavy, loud. Heavy means Knock moves it a floor less. Its first move is a Nudge on the front cat, and then it Sucks the whole floor. We will not let it get that far.' }),
-      step('f4_swat1', { when: { on: 'afterStep', step: 'f4_vacuum' }, target: 'card:neutral_tut_swat', pose: 'point',
-        gate: { allow: [{ input: 'playCard', card: 'neutral_tut_swat', target: 'vac1' }] }, advance: { await: 'f4_p8' },
-        text: 'Swat the vacuum. It will not mind. It has no feelings, only a cord.' }),
-      step('f4_end4', { when: { on: 'afterPlay', play: 'f4_p8' }, target: 'endTurn', pose: 'point',
-        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f4_p9' }, text: 'End Turn.' }),
-      step('f4_nudge', { when: { on: 'phaseEnd', phase: 'pest_attacks', round: 4 }, target: 'cat:B', pose: 'shrug', dim: false,
-        text: 'One Nudge and a Nibble on Biscuit. Fine. He has fourteen health and no complaints on file.' }),
-
-      step('f4_finish', { when: { on: 'roundStart', round: 5 }, target: 'pest:vac1', pose: 'point',
-        text: 'Six health left on the vacuum, and the mouse behind it. One Swat on each, and the cats will see to the rest. After this, you know everything I know that is useful.' }),
-      step('f4_swat2', { when: { on: 'afterStep', step: 'f4_finish' }, target: 'card:neutral_tut_swat', pose: 'point',
-        gate: { allow: [{ input: 'playCard', card: 'neutral_tut_swat', target: 'vac1' }] }, advance: { await: 'f4_p10' },
-        text: 'Swat the vacuum.' }),
-      step('f4_swat3', { when: { on: 'afterPlay', play: 'f4_p10' }, target: 'card:neutral_tut_swat', pose: 'point',
-        gate: { allow: [{ input: 'playCard', card: 'neutral_tut_swat', target: 'mouse3' }] }, advance: { await: 'f4_p11' },
-        text: 'And the mouse.' }),
-      step('f4_win', { when: { on: 'fightWon' }, pose: 'smile',
-        text: 'Floors and cards, Knock, Nap, the Witching Hour and Nine Lives. That is the lot. The rest of the house is yours. The Sunbeam holds.' })
+      step('f1_climb', { when: { on: 'roundStart', round: 2 }, target: 'pest:rat1', pose: 'wince',
+        text: 'It survived with 1 health, so it climbed to the Parlor. Every pest climbs one floor per turn, whoever is standing in the way. A new mouse has come in below.' }),
+      step('f1_play_b', { when: { on: 'afterStep', step: 'f1_climb' }, target: 'card:neutral_tut_tabby', pose: 'point', dim: false,
+        gate: { allow: [{ input: 'placeCard', card: 'neutral_tut_tabby', floor: 2 }] }, advance: { await: 'f1_p3' },
+        text: 'Put a Hall Tabby on the Parlor, where the rat is now. Cats only fight the pests on their own floor.' }),
+      step('f1_swat', { when: { on: 'afterPlay', play: 'f1_p3' }, target: 'card:neutral_tut_swat', pose: 'point', dim: false,
+        gate: { allow: [{ input: 'playCard', card: 'neutral_tut_swat', target: 'mouse1' }] }, advance: { await: 'f1_p4' },
+        text: 'Swat deals 4 damage to any pest. Tap Swat, then tap the mouse down in the Cellar.' }),
+      step('f1_end2', { when: { on: 'afterPlay', play: 'f1_p4' }, target: 'endTurn', pose: 'point',
+        gate: { allow: [{ input: 'endTurn' }] }, advance: { await: 'f1_p5' }, text: 'End Turn.' }),
+      step('f1_win', { when: { on: 'fightWon' }, pose: 'smile',
+        text: 'That is the whole game: cards, floors, End Turn. Pests strike first and climb every turn, so put your cats where they will be. The Sunbeam holds.' })
     ]
   };
 
@@ -552,15 +229,7 @@ SB.data.tutorial = (function () {
   // ---------------------------------------------------------------------------------------------
   var flow = [
     { id: 'tf_1', type: 'fight', fight: 'tut_1_cellar', next: ['tf_2'] },
-    { id: 'tf_2', type: 'rewardLite', fish: 60, text: 'Sixty Fish, found behind the radiator. Keep them. We are going shopping.', next: ['tf_3'] },
-    { id: 'tf_3', type: 'map', guide: 'mapGuide', next: ['tf_4'] },
-    { id: 'tf_4', type: 'fight', fight: 'tut_2_knock', next: ['tf_5'] },
-    { id: 'tf_5', type: 'map', guide: 'mapGuide2', next: ['tf_6', 'tf_6b'] },
-    { id: 'tf_6', type: 'shop', guide: 'shopGuide', next: ['tf_7'] },
-    { id: 'tf_6b', type: 'nook', guide: 'nookGuide', next: ['tf_7'] },
-    { id: 'tf_7', type: 'fight', fight: 'tut_3_nap', next: ['tf_8'] },
-    { id: 'tf_8', type: 'fight', fight: 'tut_4_witching', next: ['tf_9'] },
-    { id: 'tf_9', type: 'graduation', next: [] }
+    { id: 'tf_2', type: 'graduation', next: [] }
   ];
 
   // ---------------------------------------------------------------------------------------------
@@ -753,7 +422,7 @@ SB.data.tutorial = (function () {
     cards: cards,
     enemies: enemies,
     targets: targets,
-    fights: [fight1, fight2, fight3, fight4],
+    fights: [fight1],
     flow: flow,
     mapGuide: mapGuide,
     mapGuide2: mapGuide2,

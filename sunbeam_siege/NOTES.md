@@ -7,9 +7,9 @@ Open `index.html` in any modern browser, no install, no network. Phones work in 
 
 **One round, start to finish**
 1. You draw cards and get Zoomies (3 a turn). Cards cost Zoomies. Unspent ones evaporate, so spend them.
-2. Play cats onto a floor (Attic, Parlor or Cellar). A cat in the way is a wall: pests have to get past it.
+2. Play cats onto a floor (Attic, Parlor or Cellar) and choose Front, Middle or Back. The front cat takes the first hit. Cats only fight the pests on their own floor, and pests climb past them.
 3. Play spells and toys to hurt pests, protect cats or set something up.
-4. Press End Turn. Your cats strike first, front to back, floor by floor. Then the pests act, and the little icons above them told you exactly what they will do.
+4. Press End Turn. The pests act first (the little icons above them told you exactly what they will do), then your cats strike back, front to back, floor by floor. Every pest that is still alive then climbs one floor. A pest that reaches the Attic with no cat there hits the Sunbeam.
 5. Cats that run out of health spend a Life and come back via your discard pile. When the last Life goes, the card is gone for the run. Health refills after every fight. Lives do not.
 
 **Between fights.** Pick a card reward, spend Fish at Gerald's bazaar, scratch a card sharper at a Post, nap at a Nook, open a cardboard box, or trust an Event. The map shows what is ahead, so choose a route you can afford.
