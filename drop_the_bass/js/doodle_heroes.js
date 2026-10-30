@@ -55,225 +55,270 @@ const POSE = {
 // Look (from the crayon duo reference): Roxor has an auburn mohawk, shaved tan sides, a long mullet, big blue eyes, a black tee with a yellow smiley,
 // black cargo pants and chunky black sneakers. Jasmin has long wavy auburn hair in a high ponytail with a pink scrunchie and clip, big brown eyes
 // (a wink when happy), hoop earring, bead necklace, pink crop top, pink baggy cargo pants and white-pink sneakers. Both hold black mics (green / pink band).
+// Drawing style: fine coloured-pencil contours (about 1.5 px) in a darker tint of each fill, soft layered hatching, many thin hair strands.
+// Eyes, mouth and lashes keep one thin dark line. Small sizes stay readable through colour contrast, not line weight.
 const HAIR = { dark: '#5c1810', mid: '#8e2a16', lite: '#d4601f', hi: '#f2a04a' };
-const SKIN = { roxor: '#f6c19a', jasmin: '#fad2b0' };
+const SKIN = { roxor: '#f8c8a2', jasmin: '#fdd8b8' };
 const SKIN2 = { roxor: '#eaa57c', jasmin: '#f2bd98' };
 const BLK = '#3b3746', BLK2 = '#6b6578';
 const PINKC = '#ff7fbf', PINK2 = '#ffb0d9', PINKD = '#d93c8a';
 const BLUSH = '#ff8a9a';
+// contour tints (darker version of the fill) and fine-line colours
+const LN = { skin: '#b5654a', hair: '#4a160f', blk: '#16131d', pink: '#c42f7c', green: '#2b7a33', lav: '#8c7cc6', white: '#a8a0c0', eye: '#2a1620', mouth: '#7a2230', gold: '#b88a00' };
+const W_OUT = 1.6, W_FINE = 1.2;
 function solid(pen, p, col) { const c = pen.ctx; c.beginPath(); c.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]); c.closePath(); c.fillStyle = col; c.fill(); }
-function limb(pen, x0, y0, x1, y1, col, w, bend = 0) {
+// pencil fill: a solid base, a darker hatch tone, a lighter cross hatch, then a thin contour in a tint
+function pf(pen, p, base, tone, line, o = {}) {
+  solid(pen, p, base);
+  const gap = o.gap || 2.4, ang = o.ang !== undefined ? o.ang : -0.7 + pen.rr(-0.2, 0.2);
+  if (tone) pen.hatch(p, tone, gap, ang, o.a || 0.4);
+  if (o.hi) pen.hatch(p, o.hi, gap * 1.8, ang + 1.25, o.ha || 0.35);
+  if (line) pen.ln(p, line, o.lw || W_OUT, true, o.j || 0.6);
+}
+function el(c, x, y, rx, ry, col, a = 1) { c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, TAU); c.fillStyle = col; c.globalAlpha = a; c.fill(); c.globalAlpha = 1; }
+function limb(pen, x0, y0, x1, y1, col, w, bend = 0, oc = LN.blk) {
   const mx = (x0 + x1) / 2 + bend, my = (y0 + y1) / 2 + Math.abs(bend) * 0.4;
   const p = [x0, y0, mx, my, x1, y1];
-  pen.ln(p, INK, w + 5, false, 0.7); pen.ln(p, col, w, false, 0.5);
+  pen.ln(p, oc, w + 2.8, false, 0.4); pen.ln(p, col, w, false, 0.3);
 }
-function hand(pen, x, y, skin, r = 6.2) { pen.dot(x, y, r + 1.6, INK); pen.dot(x, y, r, skin); }
+function hand(pen, x, y, skin, r = 5.2, oc = LN.skin) { pen.dot(x, y, r + 1, oc); pen.dot(x, y, r, skin); pen.ln([x - 1, y + 1, x + 2, y + 2], oc, 0.9, false, 0.1); }
 // Roxor's signature rock-on sign: index and pinky up, thumb out, two curled knuckles
-function rockHand(pen, x, y, skin) {
-  for (const [p, w] of [[[x - 2, y - 3, x - 5, y - 15], 6.4], [[x + 3, y - 3, x + 7, y - 12], 6], [[x - 5, y + 1, x - 11, y - 3], 5.6]]) pen.ln(p, INK, w + 2.4, false, 0.2);
-  pen.dot(x, y, 7.8, INK);
-  for (const [p, w] of [[[x - 2, y - 3, x - 5, y - 15], 4.2], [[x + 3, y - 3, x + 7, y - 12], 3.8], [[x - 5, y + 1, x - 11, y - 3], 3.6]]) pen.ln(p, skin, w, false, 0.2);
-  pen.dot(x, y, 6.2, skin);
-  pen.ln([x - 1, y + 1, x + 4, y + 2], INK, 1.6, false, 0.1); pen.ln([x + 1, y + 4, x + 6, y + 4], INK, 1.4, false, 0.1);
+function rockHand(pen, x, y, skin, oc = LN.skin) {
+  const F = [[[x - 2, y - 3, x - 5, y - 14], 3.6], [[x + 3, y - 3, x + 6, y - 12], 3.3], [[x - 5, y + 1, x - 10, y - 2], 3.2]];
+  for (const [p, w] of F) pen.ln(p, oc, w + 1.8, false, 0.15);
+  pen.dot(x, y, 6.6, oc);
+  for (const [p, w] of F) pen.ln(p, skin, w, false, 0.15);
+  pen.dot(x, y, 5.4, skin);
+  pen.ln([x - 1, y + 1, x + 4, y + 2], oc, 1, false, 0.1); pen.ln([x + 1, y + 4, x + 5, y + 4], oc, 1, false, 0.1);
 }
 // Jasmin's open waving hand (fingers fanned)
-function openHand(pen, x, y, skin) {
+function openHand(pen, x, y, skin, oc = LN.skin) {
   const f = [[-6, -9], [-2, -12], [3, -12], [7, -8]];
-  for (const [dx, dy] of f) pen.ln([x + dx * 0.4, y - 2, x + dx, y + dy], INK, 5.6, false, 0.2);
-  pen.dot(x, y, 7.6, INK);
-  for (const [dx, dy] of f) pen.ln([x + dx * 0.4, y - 2, x + dx, y + dy], skin, 3.2, false, 0.2);
-  pen.dot(x, y, 6.2, skin);
+  for (const [dx, dy] of f) pen.ln([x + dx * 0.4, y - 2, x + dx, y + dy], oc, 4.4, false, 0.15);
+  pen.dot(x, y, 6.6, oc);
+  for (const [dx, dy] of f) pen.ln([x + dx * 0.4, y - 2, x + dx, y + dy], skin, 2.6, false, 0.15);
+  pen.dot(x, y, 5.4, skin);
 }
 function mic(pen, hx, hy, ang, band) {
-  const ca = Math.cos(ang), sa = Math.sin(ang), ex = hx + ca * 18, ey = hy + sa * 18;
-  pen.ln([hx, hy, ex, ey], INK, 11, false, 0.4); pen.ln([hx, hy, ex, ey], '#46414f', 6.4, false, 0.4);
-  pen.ln([hx + ca * 8, hy + sa * 8, hx + ca * 13, hy + sa * 13], band, 7.8, false, 0.3);
-  const hx2 = ex + ca * 7, hy2 = ey + sa * 7;
-  pen.shp(pen.blob(hx2, hy2, 8, 8, 10, 0.05), '#7d7992', INK, 2.8, { gap: 3.2, alpha: 0.95, f2: '#b9b6c7' });
-  pen.ln([hx2 - 3, hy2 - 3, hx2 + 2, hy2 - 4], '#fff', 1.8, false, 0.2);
+  const ca = Math.cos(ang), sa = Math.sin(ang), ex = hx + ca * 17, ey = hy + sa * 17;
+  pen.ln([hx, hy, ex, ey], LN.blk, 8.6, false, 0.3); pen.ln([hx, hy, ex, ey], '#4a4456', 5.4, false, 0.3);
+  pen.ln([hx + ca * 8, hy + sa * 8, hx + ca * 12.5, hy + sa * 12.5], band, 6, false, 0.2);
+  const hx2 = ex + ca * 6.5, hy2 = ey + sa * 6.5;
+  pf(pen, pen.blob(hx2, hy2, 7.4, 7.4, 10, 0.04), '#8e8aa4', '#5f5a74', LN.blk, { gap: 2.2, hi: '#cfcde0', lw: 1.4 });
+  pen.ln([hx2 - 3, hy2 - 3, hx2 + 1, hy2 - 4], '#fff', 1.6, false, 0.1);
 }
 function lashes(pen, x, y, r, sx) {
-  pen.ln([x + sx * r * 0.9, y - r * 0.5, x + sx * (r + 5), y - r * 0.95], INK, 2.2, false, 0.15);
-  pen.ln([x + sx * (r + 0.5), y - r * 0.1, x + sx * (r + 6), y - r * 0.25], INK, 2, false, 0.15);
+  pen.ln([x + sx * r * 0.85, y - r * 0.55, x + sx * (r + 4.5), y - r * 0.95], LN.eye, 1.5, false, 0.1);
+  pen.ln([x + sx * (r + 0.4), y - r * 0.1, x + sx * (r + 5), y - r * 0.28], LN.eye, 1.4, false, 0.1);
 }
+// a big glossy anime eye: white, deep iris with a lighter lower rim, dark pupil, two sparkles, a bold upper lash line
 function eyeBall(pen, x, y, r, iris, look, lash, sx) {
-  pen.dot(x, y, r + 1.4, INK); pen.dot(x, y, r, '#fff');
-  const ix = x + Math.cos(look) * r * 0.2, iy = y + Math.sin(look) * r * 0.2 + r * 0.06;
-  pen.dot(ix, iy, r * 0.8, iris[1]); pen.dot(ix, iy + r * 0.12, r * 0.64, iris[0]);
-  pen.dot(ix, iy, r * 0.32, INK);
-  pen.dot(ix - r * 0.26, iy - r * 0.3, r * 0.26, '#fff'); pen.dot(ix + r * 0.28, iy + r * 0.3, r * 0.11, '#fff');
-  pen.ln(arc(x, y, r + 0.6, r + 0.6, 195, 345), INK, 3.6, false, 0.2);
+  const c = pen.ctx, rx = r * 0.92, ry = r * 1.1;
+  el(c, x, y, rx + 0.7, ry + 0.7, '#8a5a56'); el(c, x, y, rx, ry, '#fff');
+  const ix = x + Math.cos(look) * r * 0.14, iy = y + Math.sin(look) * r * 0.1 + r * 0.06;
+  el(c, ix, iy, r * 0.8, r * 0.98, iris[1]);
+  el(c, ix, iy + r * 0.3, r * 0.6, r * 0.6, iris[0], 0.95);
+  el(c, ix, iy - r * 0.02, r * 0.36, r * 0.46, '#170d1c');
+  el(c, ix - r * 0.3, iy - r * 0.38, r * 0.27, r * 0.27, '#fff');
+  el(c, ix + r * 0.3, iy + r * 0.34, r * 0.12, r * 0.12, '#fff');
+  el(c, ix + r * 0.05, iy + r * 0.52, r * 0.07, r * 0.07, '#fff', 0.8);
+  pen.ln(arc(x, y + 0.5, rx + 0.5, ry + 0.4, 192, 348), LN.eye, 2.3, false, 0.12);
   if (lash) lashes(pen, x, y, r, sx);
 }
 function eyes(pen, who, st, hx, hy, spread, r) {
-  const rox = who === 'roxor', iris = rox ? ['#3f86ee', '#1b479e'] : ['#a2602f', '#55290f'], lash = !rox;
+  const rox = who === 'roxor', iris = rox ? ['#5aa0ff', '#1c4aa6'] : ['#c27a3c', '#5a2a10'], lash = !rox;
   for (const sx of [-1, 1]) {
     const x = hx + sx * spread, y = hy;
-    if (st.blink) { pen.ln(arc(x, y - 1, r * 0.9, r * 0.5, 20, 160), INK, 3, false, 0.3); if (lash) lashes(pen, x, y + 1, r * 0.8, sx); continue; }
+    if (st.blink) { pen.ln(arc(x, y - 1, r * 0.9, r * 0.45, 20, 160), LN.eye, 1.8, false, 0.2); if (lash) lashes(pen, x, y + 1, r * 0.8, sx); continue; }
     const happy = st.eye === 'happy';
-    if (happy && lash && sx > 0) { pen.ln(arc(x, y + 3, r, r * 0.85, 200, 340), INK, 3.6, false, 0.3); lashes(pen, x, y + 1, r, sx); continue; }   // the wink
-    if (st.eye === 'wide') { eyeBall(pen, x, y, r * 1.25, iris, -1.57, lash, sx); continue; }
+    if (happy && lash && sx > 0) { pen.ln(arc(x, y + 2, r, r * 0.8, 200, 340), LN.eye, 2.2, false, 0.2); lashes(pen, x, y + 1, r, sx); continue; }   // the wink
+    if (st.eye === 'wide') { eyeBall(pen, x, y, r * 1.2, iris, -1.57, lash, sx); continue; }
     eyeBall(pen, x, y, r, iris, happy ? -0.45 : st.look, lash, sx);
-    if (st.eye === 'sad') { pen.ln([x - sx * r * 1.2, y - r * 1.5 - 1, x + sx * r * 1.1, y - r * 1.1 + 4], INK, 3, false, 0.3); pen.shp(pen.blob(x + sx * r * 0.7, y + r * 1.9, 2.2, 3.4, 8, 0.06), C.cyan, INK, 1.6, { gap: 2 }); }
+    if (st.eye === 'sad') { pen.ln([x - sx * r * 1.2, y - r * 1.5 - 1, x + sx * r * 1.1, y - r * 1.1 + 4], LN.hair, 1.6, false, 0.2); pen.shp(pen.blob(x + sx * r * 0.7, y + r * 1.9, 2, 3.2, 8, 0.05), C.cyan, '#2a8fb0', 1.1, { gap: 1.6 }); }
   }
 }
 function mouth(pen, who, st, cx, cy) {
-  const m = st.mouth;
-  if (m === 'open') {
-    const p = [cx - 9, cy - 4, cx + 9, cy - 4, cx + 7.5, cy + 4, cx + 3, cy + 9.5, cx - 3, cy + 9.5, cx - 7.5, cy + 4];
-    pen.shp(p, '#b82a38', INK, 2.8, { gap: 3, alpha: 0.95 });
-    pen.ln([cx - 7, cy - 3, cx + 7, cy - 3], '#fff', 3.2, false, 0.3);
-    pen.dot(cx, cy + 6, 4.4, '#ff8fae');
-  } else if (m === 'o') { pen.dot(cx, cy + 2, 6.5, INK); pen.dot(cx, cy + 3, 3.6, '#b82a38'); }
-  else if (m === 'sad') pen.ln(arc(cx, cy + 9, 8, 6, 210, 330), INK, 3.2, false, 0.3);
-  else if (who === 'roxor') {   // a wide cheeky grin
-    pen.ln(arc(cx + 1, cy - 3, 9.5, 6, 15, 165), INK, 3.2, false, 0.4);
-    pen.ln([cx - 5, cy + 1.5, cx + 6, cy + 1.5], '#fff', 2.4, false, 0.2);
-  } else pen.ln(arc(cx, cy - 2, 9, 6, 20, 160), INK, 3.2, false, 0.4);
+  const m = st.mouth, c = pen.ctx;
+  if (m === 'open') {   // a sweet open smile: D shape, pink tongue, tiny teeth
+    const p = [cx - 8, cy - 4, cx + 8, cy - 4, cx + 6.8, cy + 3, cx + 3, cy + 8, cx - 3, cy + 8, cx - 6.8, cy + 3];
+    solid(pen, p, '#c9304a'); pen.hatch(p, '#e2506a', 1.8, -0.5, 0.5);
+    pen.dot(cx, cy + 6, 3.6, '#ff93ae');
+    pen.ln([cx - 6.4, cy - 3, cx + 6.4, cy - 3], '#fff', 2.2, false, 0.15);
+    pen.ln(p, LN.mouth, 1.4, true, 0.3);
+  } else if (m === 'o') { el(c, cx, cy + 2, 4.8, 5.6, LN.mouth); el(c, cx, cy + 3.4, 3, 3.4, '#e0506a'); }
+  else if (m === 'sad') pen.ln(arc(cx, cy + 8, 6.5, 4.5, 215, 325), LN.mouth, 1.7, false, 0.2);
+  else if (who === 'roxor') {   // a cheeky grin
+    pen.ln(arc(cx + 1, cy - 3, 8, 5.2, 18, 162), LN.mouth, 1.8, false, 0.25);
+    pen.ln([cx - 4.5, cy + 1.2, cx + 5.5, cy + 1.2], '#fff', 1.8, false, 0.15);
+  } else pen.ln(arc(cx, cy - 2, 7.4, 5, 22, 158), LN.mouth, 1.8, false, 0.25);
 }
 function blush(pen, hx, hy, y, spread, big) {
-  for (const sx of [-1, 1]) pen.shp(pen.blob(hx + sx * spread, hy + y, big, big * 0.62, 8, 0.1), BLUSH, null, 0, { gap: 2.4, alpha: 0.55 });
+  for (const sx of [-1, 1]) { const b = pen.blob(hx + sx * spread, hy + y, big, big * 0.6, 10, 0.06); solid(pen, b, 'rgba(255,128,150,0.28)'); pen.hatch(b, BLUSH, 1.8, -0.5, 0.35); }
+}
+// thin strands: n curved pencil lines fanned between two edge points
+function fan(pen, x0, y0, x1, y1, n, cols, w, curve, spread) {
+  for (let i = 0; i < n; i++) {
+    const f = n > 1 ? i / (n - 1) : 0.5, o = (f - 0.5) * spread, j = (pen.rnd() - 0.5) * 2;
+    const ax = x0 + o + j, ay = y0 + j, bx = x1 + o * 0.6 + (pen.rnd() - 0.5) * 3, by = y1 + (pen.rnd() - 0.5) * 3;
+    pen.ln([ax, ay, (ax + bx) / 2 + curve + (f - 0.5) * 4, (ay + by) / 2, bx, by], cols[i % cols.length], w, false, 0.25);
+  }
+}
+function clipped(pen, p, fn) { const c = pen.ctx; c.save(); c.beginPath(); c.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]); c.closePath(); c.clip(); fn(); c.restore(); }
+function polyAt(hx, hy, a, ky = 1) { const o = []; for (let i = 0; i < a.length; i += 2) o.push(hx + a[i], hy + a[i + 1] * ky); return o; }
+// head wrapper: a rounder, bigger chibi head (drawn at 1.1x around the head centre)
+function bigHead(pen, fn, st, onesie) {
+  const c = pen.ctx; c.save(); c.translate(0, -80); c.scale(1.1, 1.1); c.translate(0, 80); fn(pen, st, onesie); c.restore();
 }
 
 function headRoxor(pen, st, onesie) {
   const hx = 0, hy = -80, H = HAIR, sad = st.eye === 'sad';
   if (onesie) {   // monster hood: green fur with cream horns
-    pen.shp(pen.spiky(35, 34, 11, 0.1, hx, hy + 1), C.green, INK, 3.4, { gap: 5, f2: C.lime });
-    for (const sx of [-1, 1]) pen.shp([hx + sx * 15, hy - 28, hx + sx * 22, hy - 52, hx + sx * 30, hy - 26], '#f6e7c4', INK, 3, { gap: 4, f2: '#e1c889' });
+    pf(pen, pen.spiky(35, 34, 11, 0.1, hx, hy + 1), C.green, '#2f9a38', LN.green, { gap: 2.6, hi: C.lime });
+    for (const sx of [-1, 1]) pf(pen, [hx + sx * 15, hy - 28, hx + sx * 22, hy - 52, hx + sx * 30, hy - 26], '#f6e7c4', '#e1c889', '#b89a58', { gap: 2.2 });
   } else {   // the long mullet tail behind the head
-    pen.shp([hx - 18, hy - 8, hx - 34, hy - 6, hx - 40, hy + 6, hx - 48, hy + 22, hx - 40, hy + 20, hx - 43, hy + 36, hx - 33, hy + 28, hx - 31, hy + 42, hx - 21, hy + 28, hx - 12, hy + 18], H.dark, INK, 3, { gap: 4, f2: H.lite, ang: 1.2 });
-    pen.ln([hx - 28, hy + 2, hx - 37, hy + 24], H.lite, 2, false, 0.6); pen.ln([hx - 24, hy + 8, hx - 29, hy + 33], H.mid, 2, false, 0.6);
+    const tail = [hx - 18, hy - 8, hx - 34, hy - 6, hx - 40, hy + 6, hx - 48, hy + 22, hx - 40, hy + 20, hx - 43, hy + 36, hx - 33, hy + 28, hx - 31, hy + 42, hx - 21, hy + 28, hx - 12, hy + 18];
+    pf(pen, tail, H.mid, H.dark, LN.hair, { gap: 2.2, ang: 1.2, hi: H.lite });
+    clipped(pen, tail, () => fan(pen, hx - 24, hy - 6, hx - 38, hy + 36, 9, [H.lite, H.hi, H.dark, H.lite], 1, -2, 14));
   }
-  { const f = pen.blob(hx, hy, 27, 26, 16, 0.03); solid(pen, f, SKIN.roxor); pen.shp(f, SKIN2.roxor, INK, 3.6, { gap: 6, alpha: 0.45, ang: -0.9 }); }
-  pen.dot(hx - 27, hy + 2, 6.4, INK); pen.dot(hx - 27, hy + 2, 4.8, SKIN.roxor); pen.ln([hx - 28, hy, hx - 26, hy + 4], '#d98a6a', 1.6, false, 0.2);   // ear
+  { const f = pen.blob(hx, hy, 27, 26, 18, 0.02); pf(pen, f, SKIN.roxor, SKIN2.roxor, LN.skin, { gap: 2.6, a: 0.3, ang: -0.9, lw: 1.5 }); }
+  pen.dot(hx - 27, hy + 2, 5.6, LN.skin); pen.dot(hx - 27, hy + 2, 4.5, SKIN.roxor); pen.ln([hx - 28, hy, hx - 26, hy + 4], '#d98a6a', 1.1, false, 0.1);   // ear
   if (!onesie) {
     // shaved tan side
-    pen.shp([hx - 26, hy - 3, hx - 27, hy - 16, hx - 20, hy - 27, hx - 12, hy - 22, hx - 14, hy - 10, hx - 20, hy - 3], '#c99a6e', null, 0, { gap: 2.6, f2: '#a67a54', alpha: 0.85 });
+    const side = [hx - 26, hy - 3, hx - 27, hy - 16, hx - 20, hy - 27, hx - 12, hy - 22, hx - 14, hy - 10, hx - 20, hy - 3];
+    solid(pen, side, '#d2a37a'); pen.hatch(side, '#a67a54', 1.8, 1.1, 0.7);
     // swept up mohawk spikes leaning forward
     const crest = [-17, -12, -27, -30, -19, -28, -21, -44, -11, -36, -10, -54, -2, -40, 6, -58, 11, -42, 21, -56, 21, -36, 35, -46, 31, -28, 42, -32, 29, -19, 22, -17, 12, -24, 2, -20, -8, -24, -14, -19];
-    const cr = []; for (let i = 0; i < crest.length; i += 2) cr.push(hx + crest[i], hy + crest[i + 1]);
-    pen.shp(cr, H.dark, INK, 3.4, { gap: 3.8, f2: H.lite, ang: -1.1 });
-    for (const [a, b, c, d] of [[-9, -30, -9, -50], [4, -32, 6, -55], [18, -30, 20, -52], [-18, -28, -20, -42], [28, -26, 38, -32], [-2, -26, -2, -38]]) pen.ln([hx + a, hy + b, hx + c, hy + d], H.hi, 1.8, false, 0.7);
-    for (const [a, b, c, d] of [[-14, -26, -12, -44], [10, -30, 14, -50], [24, -30, 30, -42]]) pen.ln([hx + a, hy + b, hx + c, hy + d], H.mid, 1.8, false, 0.7);
-    for (let i = 0; i < 4; i++) pen.dot(hx - 23 + pen.rnd() * 3, hy - 8 + i * 3 + pen.rnd() * 2, 0.9, '#8a6040');
+    const cr = polyAt(hx, hy, crest);
+    pf(pen, cr, H.mid, H.dark, LN.hair, { gap: 2.4, ang: -1.1, hi: H.lite, ha: 0.5 });
+    // many fine strands from the hairline up to the spike tips (clipped to the crest so the silhouette stays clean)
+    clipped(pen, cr, () => {
+      for (let i = 0; i < 30; i++) {
+        const f = i / 29, bx = -17 + f * 36 + (pen.rnd() - 0.5) * 2, by = -20 + (pen.rnd() - 0.5) * 3;
+        const hgt = 30 + 24 * Math.sin(f * Math.PI) * (0.75 + 0.45 * pen.rnd()), tx = bx + (f - 0.4) * 14 + 4, ty = by - hgt;
+        pen.ln([hx + bx, hy + by, hx + (bx + tx) / 2 + 3 * (pen.rnd() - 0.3), hy + (by + ty) / 2, hx + tx, hy + ty], [H.hi, H.lite, H.dark, H.lite, H.mid][i % 5], 1, false, 0.2);
+      }
+    });
+    for (let i = 0; i < 4; i++) pen.dot(hx - 23 + pen.rnd() * 3, hy - 8 + i * 3 + pen.rnd() * 2, 0.7, '#8a6040');
   } else {   // a tuft of auburn spikes peeks out of the hood
-    const tuft = [-12, -20, -14, -35, -6, -27, -2, -40, 4, -28, 10, -37, 14, -22, 4, -18];
-    const tf = []; for (let i = 0; i < tuft.length; i += 2) tf.push(hx + tuft[i], hy + tuft[i + 1]);
-    pen.shp(tf, H.dark, INK, 3, { gap: 3.4, f2: H.lite, ang: -1.1 });
+    const tuft = polyAt(hx, hy, [-12, -20, -14, -35, -6, -27, -2, -40, 4, -28, 10, -37, 14, -22, 4, -18]);
+    pf(pen, tuft, H.mid, H.dark, LN.hair, { gap: 2.2, ang: -1.1, hi: H.lite });
   }
   // face
-  eyes(pen, 'roxor', st, hx + 1, hy - 3, 11.2, 7.6);
-  if (!sad) { pen.ln([hx - 18, hy - 16, hx - 6, hy - 18], '#5a2216', 3.6, false, 0.3); pen.ln([hx + 5, hy - 18, hx + 18, hy - 15], '#5a2216', 3.6, false, 0.3); }
-  pen.ln([hx, hy + 5, hx + 3, hy + 8, hx, hy + 9.5], '#c4805e', 2, false, 0.3);   // nose
+  eyes(pen, 'roxor', st, hx + 1, hy - 3, 11.2, 8.6);
+  if (!sad) { pen.ln([hx - 19, hy - 17, hx - 7, hy - 19.5], LN.hair, 1.8, false, 0.2); pen.ln([hx + 6, hy - 19.5, hx + 19, hy - 16], LN.hair, 1.8, false, 0.2); }
+  pen.ln([hx + 1, hy + 6, hx + 3, hy + 8, hx + 0.5, hy + 8.6], '#c4805e', 1.2, false, 0.1);   // small neat nose
   mouth(pen, 'roxor', st, hx + 1, hy + 14);
-  blush(pen, hx, hy, 9, 18.5, 4.6);
+  blush(pen, hx, hy, 9, 19, 5);
 }
 function headJasmin(pen, st, onesie) {
   const hx = 0, hy = -80, H = HAIR;
   const maneCols = ['#ff5fb0', '#ff9226', '#ffd60a', '#43b94a', '#2f7de1', '#7b4fd0'];
   if (!onesie) {   // long wavy hair behind and the high ponytail
-    pen.shp([hx - 26, hy - 12, hx - 35, hy + 6, hx - 33, hy + 26, hx - 26, hy + 38, hx - 20, hy + 24, hx - 19, hy + 8, hx + 19, hy + 8, hx + 21, hy + 26, hx + 28, hy + 44, hx + 36, hy + 32, hx + 40, hy + 48, hx + 44, hy + 26, hx + 40, hy + 4, hx + 28, hy - 12], H.dark, INK, 3, { gap: 4.2, f2: H.lite, ang: 1.2 });
-    pen.shp([hx + 6, hy - 30, hx + 14, hy - 50, hx + 28, hy - 62, hx + 46, hy - 58, hx + 56, hy - 42, hx + 58, hy - 20, hx + 52, hy, hx + 56, hy + 10, hx + 46, hy - 2, hx + 42, hy - 18, hx + 40, hy - 34, hx + 32, hy - 40, hx + 24, hy - 34, hx + 18, hy - 26], H.dark, INK, 3.2, { gap: 4, f2: H.lite, ang: -0.6 });
-    pen.ln([hx + 22, hy - 52, hx + 38, hy - 52, hx + 50, hy - 36, hx + 52, hy - 12], H.hi, 2, false, 0.8); pen.ln([hx + 30, hy - 44, hx + 46, hy - 30, hx + 46, hy - 8], H.lite, 1.8, false, 0.8);
-    pen.ln([hx + 30, hy + 10, hx + 34, hy + 30, hx + 31, hy + 42], H.lite, 1.8, false, 0.6); pen.ln([hx - 28, hy + 4, hx - 28, hy + 24], H.lite, 1.8, false, 0.6);
+    const back = [hx - 26, hy - 12, hx - 35, hy + 6, hx - 33, hy + 26, hx - 26, hy + 38, hx - 20, hy + 24, hx - 19, hy + 8, hx + 19, hy + 8, hx + 21, hy + 26, hx + 28, hy + 44, hx + 36, hy + 32, hx + 40, hy + 48, hx + 44, hy + 26, hx + 40, hy + 4, hx + 28, hy - 12];
+    pf(pen, back, H.mid, H.dark, LN.hair, { gap: 2.2, ang: 1.2, hi: H.lite });
+    const tailp = [hx + 6, hy - 30, hx + 14, hy - 50, hx + 28, hy - 62, hx + 46, hy - 58, hx + 56, hy - 42, hx + 58, hy - 20, hx + 52, hy, hx + 56, hy + 10, hx + 46, hy - 2, hx + 42, hy - 18, hx + 40, hy - 34, hx + 32, hy - 40, hx + 24, hy - 34, hx + 18, hy - 26];
+    pf(pen, tailp, H.mid, H.dark, LN.hair, { gap: 2.2, ang: -0.6, hi: H.lite, ha: 0.5 });
+    // flowing strands down the ponytail and the back hair
+    clipped(pen, tailp, () => { fan(pen, hx + 18, hy - 56, hx + 54, hy + 4, 14, [H.hi, H.lite, H.dark, H.lite], 1, 7, 26); fan(pen, hx + 12, hy - 40, hx + 50, hy - 10, 6, [H.hi, H.lite, H.dark], 1, 4, 12); });
+    clipped(pen, back, () => { fan(pen, hx + 26, hy + 6, hx + 32, hy + 46, 9, [H.lite, H.hi, H.dark], 1, 2, 22); fan(pen, hx - 28, hy + 2, hx - 27, hy + 38, 7, [H.lite, H.hi, H.dark], 1, -2, 14); });
   } else {   // unicorn hood with a rainbow mane down the back
-    pen.shp(pen.blob(hx, hy + 1, 34, 33, 16, 0.04), '#f1e8ff', INK, 3.4, { gap: 5, f2: C.lav });
-    for (let i = 0; i < 6; i++) pen.ln([hx + 22 + i * 1.5, hy - 24 + i * 7, hx + 40 + i * 3, hy - 14 + i * 9, hx + 36 + i * 3, hy + 4 + i * 9], maneCols[i], 4.4, false, 1);
-    for (const sx of [-1, 1]) pen.shp([hx + sx * 18, hy - 26, hx + sx * 25, hy - 46, hx + sx * 31, hy - 22], '#f1e8ff', INK, 3, { gap: 4, f2: C.pink });
+    pf(pen, pen.blob(hx, hy + 1, 34, 33, 18, 0.03), '#f1e8ff', C.lav, LN.lav, { gap: 2.6, hi: '#fff', lw: 1.6 });
+    for (let i = 0; i < 6; i++) pen.ln([hx + 22 + i * 1.5, hy - 24 + i * 7, hx + 40 + i * 3, hy - 14 + i * 9, hx + 36 + i * 3, hy + 4 + i * 9], maneCols[i], 3.6, false, 1);
+    for (const sx of [-1, 1]) pf(pen, [hx + sx * 18, hy - 26, hx + sx * 25, hy - 46, hx + sx * 31, hy - 22], '#f1e8ff', C.pink, LN.lav, { gap: 2.2 });
   }
-  { const f = pen.blob(hx, hy, 26.5, 25.5, 16, 0.03); solid(pen, f, SKIN.jasmin); pen.shp(f, SKIN2.jasmin, INK, 3.6, { gap: 6, alpha: 0.45, ang: -0.9 }); }
-  pen.dot(hx - 26, hy + 3, 5.8, INK); pen.dot(hx - 26, hy + 3, 4.2, SKIN.jasmin);
+  { const f = pen.blob(hx, hy, 26.5, 25.5, 18, 0.02); pf(pen, f, SKIN.jasmin, SKIN2.jasmin, LN.skin, { gap: 2.6, a: 0.28, ang: -0.9, lw: 1.5 }); }
+  pen.dot(hx - 26, hy + 3, 5.2, LN.skin); pen.dot(hx - 26, hy + 3, 4.2, SKIN.jasmin);
   // swept fringe over the forehead (smaller under the hood)
   const ky = onesie ? 0.8 : 1, bang = [-27, -6, -28, -24, -16, -36, 4, -39, 22, -33, 28, -16, 28, -4, 22, -14, 14, -24, 6, -20, -2, -26, -10, -20, -20, -12];
-  const bg = []; for (let i = 0; i < bang.length; i += 2) bg.push(hx + bang[i], hy + bang[i + 1] * ky);
-  pen.shp(bg, H.dark, INK, 3.2, { gap: 3.8, f2: H.lite, ang: -0.8 });
-  for (const [a, b, c, d] of [[-12, -32, -18, -14], [2, -35, -6, -18], [16, -30, 24, -12]]) pen.ln([hx + a, hy + b * ky, hx + c, hy + d * ky], H.hi, 1.8, false, 0.6);
+  const bg = polyAt(hx, hy, bang, ky);
+  pf(pen, bg, H.mid, H.dark, LN.hair, { gap: 2.2, ang: -0.8, hi: H.lite });
+  clipped(pen, bg, () => { fan(pen, hx - 8, hy - 38 * ky, hx - 24, hy - 8 * ky, 8, [H.hi, H.lite, H.dark], 1, -2, 14); fan(pen, hx + 6, hy - 38 * ky, hx + 26, hy - 6 * ky, 8, [H.hi, H.lite, H.dark], 1, 2, 14); });
   // small pink hair clip
-  pen.shp([hx - 21, hy - 29 * ky, hx - 14, hy - 33 * ky, hx - 11, hy - 26 * ky, hx - 18, hy - 22 * ky], PINKC, INK, 2, { gap: 2.4 });
-  pen.ln([hx - 18, hy - 28 * ky, hx - 15, hy - 29 * ky], '#fff', 1.4, false, 0.1);
+  pf(pen, [hx - 21, hy - 29 * ky, hx - 14, hy - 33 * ky, hx - 11, hy - 26 * ky, hx - 18, hy - 22 * ky], PINKC, PINK2, LN.pink, { gap: 1.8, lw: 1.2 });
+  pen.ln([hx - 18, hy - 28 * ky, hx - 15, hy - 29 * ky], '#fff', 1.2, false, 0.1);
   if (!onesie) {
-    pen.shp(pen.blob(hx + 15, hy - 36, 9.5, 6.8, 10, 0.1), PINKC, INK, 2.8, { gap: 2.8, f2: PINK2 });   // pink scrunchie
-    pen.ln([hx + 9, hy - 37, hx + 15, hy - 33, hx + 21, hy - 38], PINKD, 1.6, false, 0.2); pen.ln([hx + 10, hy - 39, hx + 16, hy - 40], '#fff', 1.6, false, 0.3);
+    pf(pen, pen.blob(hx + 15, hy - 36, 9.5, 6.8, 10, 0.06), PINKC, PINK2, LN.pink, { gap: 1.8, hi: '#fff', lw: 1.4 });   // pink scrunchie
+    pen.ln([hx + 9, hy - 37, hx + 15, hy - 33, hx + 21, hy - 38], PINKD, 1.2, false, 0.1); pen.ln([hx + 10, hy - 39, hx + 16, hy - 40], '#fff', 1.2, false, 0.2);
   } else {
-    pen.shp([hx - 6, hy - 28, hx + 4, hy - 62, hx + 12, hy - 28], '#ffc83a', INK, 3, { gap: 3.4 });   // golden horn
-    pen.ln([hx - 3, hy - 38, hx + 9, hy - 40], INK, 2, false, 0.2); pen.ln([hx - 1, hy - 48, hx + 7, hy - 50], INK, 2, false, 0.2);
+    pf(pen, [hx - 6, hy - 28, hx + 4, hy - 62, hx + 12, hy - 28], '#ffd75a', '#ffb020', LN.gold, { gap: 2 });   // golden horn
+    pen.ln([hx - 3, hy - 38, hx + 9, hy - 40], LN.gold, 1.3, false, 0.2); pen.ln([hx - 1, hy - 48, hx + 7, hy - 50], LN.gold, 1.3, false, 0.2);
   }
-  pen.ln(arc(hx - 27, hy + 13, 5.4, 7, 0, 360), INK, 4.4, true, 0.1); pen.ln(arc(hx - 27, hy + 13, 5.4, 7, 0, 360), '#d6d9e4', 2.2, true, 0.1);   // silver hoop earring
+  pen.ln(arc(hx - 27, hy + 13, 5, 6.6, 0, 360), '#7f8396', 2.4, true, 0.1); pen.ln(arc(hx - 27, hy + 13, 5, 6.6, 0, 360), '#e4e7f2', 1.1, true, 0.1);   // silver hoop earring
   // face
-  eyes(pen, 'jasmin', st, hx, hy - 3, 10.6, 7.8);
-  if (st.eye !== 'sad') { pen.ln([hx - 17, hy - 15.5, hx - 6, hy - 17], '#5a2a1a', 2.4, false, 0.3); pen.ln([hx + 6, hy - 17, hx + 17, hy - 15.5], '#5a2a1a', 2.4, false, 0.3); }
-  pen.ln([hx, hy + 5, hx + 2, hy + 8], '#c4805e', 2, false, 0.2);
+  eyes(pen, 'jasmin', st, hx, hy - 3, 10.8, 9);
+  if (st.eye !== 'sad') { pen.ln([hx - 17, hy - 17, hx - 6, hy - 19], LN.hair, 1.6, false, 0.2); pen.ln([hx + 6, hy - 19, hx + 17, hy - 17], LN.hair, 1.6, false, 0.2); }
+  pen.ln([hx, hy + 6, hx + 1.8, hy + 8], '#c4805e', 1.2, false, 0.1);
   mouth(pen, 'jasmin', st, hx, hy + 14);
-  blush(pen, hx, hy, 9, 17.5, 5);
+  blush(pen, hx, hy, 9, 17.5, 5.4);
 }
 
 function bodyParts(pen, who, onesie, st, bust) {
   const roxor = who === 'roxor';
-  const sx = [-1, 1];
   const slump = st.slump || 0;
+  const oc = onesie ? (roxor ? LN.green : LN.lav) : (roxor ? LN.blk : LN.pink);
   if (!bust) {
     const legCol = onesie ? (roxor ? C.green : '#f1e8ff') : (roxor ? BLK : PINKC);
-    for (const s of sx) {
+    for (const s of [-1, 1]) {
       const lift = st.foot && s > 0 ? -8 : 0, foot = lift ? [s * 14, -8] : [s * 10, -2];
-      limb(pen, s * 7, -28, foot[0], foot[1] - 5, legCol, onesie ? 9 : 11.5);
+      limb(pen, s * 7, -28, foot[0], foot[1] - 5, legCol, onesie ? 9 : 11.5, 0, oc);
       const fx = foot[0], fy = foot[1], x0 = fx - 10 + (s > 0 ? 2 : -2), x1 = fx + 12 + (s > 0 ? 3 : -1);
       if (!onesie) {
         const my = (-28 + fy - 5) / 2, mx = (s * 7 + fx) / 2 + s * 2.5;
-        pen.shp([mx - 5, my - 3, mx + 5, my - 3, mx + 5, my + 6, mx - 5, my + 6], roxor ? '#4a4558' : PINK2, roxor ? C.orange : PINKD, 1.8, { gap: 2.6, alpha: 0.9 });   // cargo pocket
-        if (roxor) pen.ln([s * 12, -27, fx + s * 6, fy - 7], C.orange, 1.4, false, 0.3);   // orange stitching
-        else pen.shp(pen.blob(fx, fy - 7, 8.5, 4, 8, 0.1), PINKC, INK, 2.2, { gap: 3 });   // baggy cuff
+        pf(pen, [mx - 5, my - 3, mx + 5, my - 3, mx + 5, my + 6, mx - 5, my + 6], roxor ? '#4a4558' : PINK2, roxor ? '#c77a2a' : LN.pink, { gap: 2, lw: 1.1, a: 0.3 });   // cargo pocket
+        if (roxor) pen.ln([s * 12, -27, fx + s * 6, fy - 7], C.orange, 1.1, false, 0.3);   // orange stitching
+        else pf(pen, pen.blob(fx, fy - 7, 8.5, 4, 8, 0.06), PINKC, PINK2, LN.pink, { gap: 2, lw: 1.2 });   // baggy cuff
       }
       const shoe = [x0, fy - 6, x1 - 1, fy - 6, x1 + 1, fy + 4, x0 - 1, fy + 4];
-      pen.shp(shoe, onesie ? (roxor ? C.lime : C.pink) : (roxor ? '#34303f' : '#fff'), INK, 3, { gap: 3.6, f2: onesie ? (roxor ? '#e9ff9a' : '#ff9ad2') : (roxor ? '#605a70' : PINK2) });
+      pf(pen, shoe, onesie ? (roxor ? C.lime : C.pink) : (roxor ? '#3a3646' : '#fff'), onesie ? (roxor ? '#c7ff7a' : '#ff9ad2') : (roxor ? '#55506a' : PINK2), onesie ? (roxor ? LN.green : LN.pink) : (roxor ? LN.blk : '#c98fb5'), { gap: 2.2 });
       if (!onesie) {
-        pen.shp([x0 - 0.5, fy + 0.5, x1 + 1, fy + 0.5, x1 + 1, fy + 4.5, x0 - 1, fy + 4.5], roxor ? '#fff' : PINK2, INK, 2, { gap: 2.4, alpha: 1 });   // sole
-        pen.ln([fx - 1 + s, fy - 5, fx + 5 + s, fy - 3], roxor ? '#fff' : PINKC, 1.6, false, 0.1);   // laces
+        pf(pen, [x0 - 0.5, fy + 0.5, x1 + 1, fy + 0.5, x1 + 1, fy + 4.5, x0 - 1, fy + 4.5], roxor ? '#fff' : PINK2, null, roxor ? LN.blk : '#c98fb5', { gap: 2, lw: 1.1 });   // sole
+        pen.ln([fx - 1 + s, fy - 5, fx + 5 + s, fy - 3], roxor ? '#fff' : PINKC, 1.3, false, 0.1);   // laces
       }
     }
   }
   // torso
-  const torso = [-17, -57 + slump, 17, -57 + slump, 19, -26, -19, -26];
   if (onesie) {
-    pen.shp(torso, roxor ? C.green : '#f1e8ff', INK, 3.4, { gap: 4.6, f2: roxor ? C.lime : C.lav });
-    pen.shp(pen.blob(0, -41, 10, 11, 10, 0.05), roxor ? '#e8f7b0' : C.pink, INK, 2.4, { gap: 3.6, alpha: 0.7 });
-    if (roxor) for (let i = 0; i < 3; i++) pen.ln([-8 + i * 8, -34, -5 + i * 8, -30], INK, 2, false, 0.3);
+    pf(pen, [-17, -57 + slump, 17, -57 + slump, 19, -26, -19, -26], roxor ? C.green : '#f1e8ff', roxor ? '#2f9a38' : C.lav, oc, { gap: 2.6, hi: roxor ? C.lime : '#fff' });
+    pf(pen, pen.blob(0, -41, 10, 11, 10, 0.04), roxor ? '#e8f7b0' : C.pink, roxor ? '#c9e078' : '#ff9ad2', oc, { gap: 2, lw: 1.2, a: 0.3 });
+    if (roxor) for (let i = 0; i < 3; i++) pen.ln([-8 + i * 8, -34, -5 + i * 8, -30], LN.green, 1.3, false, 0.3);
   } else if (roxor) {   // oversized black tee with a yellow smiley
-    pen.shp([-18, -58 + slump, 18, -58 + slump, 24, -27, -24, -27], BLK, INK, 3.4, { gap: 4.2, f2: BLK2, ang: -0.4 });
-    pen.ln([-23, -30, 23, -30], BLK2, 1.6, false, 0.4);
-    pen.shp(pen.blob(0, -42, 9, 9, 12, 0.04), '#ffd60a', INK, 2.4, { gap: 2.8, f2: C.gold });
-    pen.dot(-3.2, -44.5, 1.3, INK); pen.dot(3.2, -44.5, 1.3, INK); pen.ln(arc(0, -42, 5, 4, 25, 155), INK, 1.8, false, 0.2);
+    pf(pen, [-18, -58 + slump, 18, -58 + slump, 24, -27, -24, -27], BLK, '#26222f', LN.blk, { gap: 2.2, ang: -0.4, hi: BLK2, ha: 0.3 });
+    pen.ln([-23, -30, 23, -30], BLK2, 1.1, false, 0.4);
+    pf(pen, pen.blob(0, -42, 9, 9, 14, 0.03), '#ffd60a', '#ffe65a', LN.gold, { gap: 2, lw: 1.2, a: 0.35 });
+    pen.dot(-3.2, -44.5, 1.1, LN.blk); pen.dot(3.2, -44.5, 1.1, LN.blk); pen.ln(arc(0, -42, 5, 4, 25, 155), LN.blk, 1.3, false, 0.2);
   } else {   // pink crop top, bare midriff, pink cargo waist
-    pen.shp([-18, -33, 18, -33, 22, -24, -22, -24], PINKC, INK, 3, { gap: 4, f2: PINK2 });
-    pen.ln([-18, -31, 18, -31], PINKD, 1.8, false, 0.3);
-    pen.shp([-14, -44, 14, -44, 16, -32, -16, -32], SKIN.jasmin, INK, 2.4, { gap: 3.4, alpha: 0.8 }); pen.dot(0, -38, 1.1, '#c4805e');
-    pen.shp([-16, -57 + slump, 16, -57 + slump, 17, -43, -17, -43], PINKC, INK, 3.2, { gap: 4.2, f2: PINK2 });
-    pen.ln([-17, -44, -8, -42, 0, -44, 8, -42, 17, -44], PINKD, 1.4, false, 0.4);
-    pen.ln([-9, -57 + slump, 0, -50 + slump, 9, -57 + slump], SKIN2.jasmin, 5, false, 0.1);
+    pf(pen, [-18, -33, 18, -33, 22, -24, -22, -24], PINKC, PINKD, LN.pink, { gap: 2.2, hi: PINK2 });
+    pen.ln([-18, -31, 18, -31], PINKD, 1.3, false, 0.3);
+    pf(pen, [-14, -44, 14, -44, 16, -32, -16, -32], SKIN.jasmin, SKIN2.jasmin, LN.skin, { gap: 2.4, lw: 1.3, a: 0.3 }); pen.dot(0, -38, 0.9, '#c4805e');
+    pf(pen, [-16, -57 + slump, 16, -57 + slump, 17, -43, -17, -43], PINKC, PINKD, LN.pink, { gap: 2.2, hi: PINK2 });
+    pen.ln([-17, -44, -8, -42, 0, -44, 8, -42, 17, -44], PINKD, 1.1, false, 0.4);
+    pen.ln([-9, -57 + slump, 0, -50 + slump, 9, -57 + slump], SKIN2.jasmin, 4, false, 0.1);
   }
   // neck, with Jasmin's bead necklace
-  pen.shp([-6, -60 + slump, 6, -60 + slump, 6, -54 + slump, -6, -54 + slump], SKIN[who], INK, 2.4, { gap: 3, alpha: 0.7 });
-  if (!roxor) for (let i = 0; i < 8; i++) { const a = (20 + i * 20) * Math.PI / 180, bx = Math.cos(a) * 8, by = -57 + slump + Math.sin(a) * 6 + 1; pen.dot(bx, by, 2.5, INK); pen.dot(bx, by, 1.6, '#e8eaf2'); }
+  pf(pen, [-6, -60 + slump, 6, -60 + slump, 6, -54 + slump, -6, -54 + slump], SKIN[who], SKIN2[who], LN.skin, { gap: 2.4, lw: 1.2, a: 0.3 });
+  if (!roxor) for (let i = 0; i < 8; i++) { const a = (20 + i * 20) * Math.PI / 180, bx = Math.cos(a) * 8, by = -57 + slump + Math.sin(a) * 6 + 1; pen.dot(bx, by, 2.1, '#8a8fa6'); pen.dot(bx, by, 1.5, '#f0f2fa'); }
 }
 
 function armsAndMic(pen, who, onesie, st, hands, only) {
   const roxor = who === 'roxor';
   const sleeve = onesie ? (roxor ? C.green : '#f1e8ff') : BLK;
   const armCol = onesie ? (roxor ? C.green : '#f1e8ff') : SKIN[who];
+  const oc = onesie ? (roxor ? LN.green : LN.lav) : LN.skin;
   const sh = [[-16, -54 + (st.slump || 0)], [16, -54 + (st.slump || 0)]];
   const micHand = st.micMouth || st.pose === 'sing' || st.pose === 'beat' ? 1 : (st.pose === 'point' ? 0 : 1);
   for (let i = 0; i < 2; i++) {
     if (only != null && i !== only) continue;
     const s = i === 0 ? -1 : 1, h = hands[i];
-    limb(pen, sh[i][0], sh[i][1], h[0], h[1], armCol, 7.4, s * 5);
-    if (!onesie && roxor) pen.shp(pen.blob(sh[i][0] + s * 3, sh[i][1] + 5, 8.6, 8.2, 8, 0.05), sleeve, INK, 2.6, { gap: 3.4, f2: BLK2 });
+    limb(pen, sh[i][0], sh[i][1], h[0], h[1], armCol, 6, s * 5, oc);
+    if (!onesie && roxor) pf(pen, pen.blob(sh[i][0] + s * 3, sh[i][1] + 5, 8, 7.6, 10, 0.04), sleeve, '#26222f', LN.blk, { gap: 2.2, hi: BLK2, lw: 1.4 });
   }
   for (let i = 0; i < 2; i++) {
     if (only != null && i !== only) continue;
     const h = hands[i], hc = onesie ? (roxor ? C.green : '#fff') : SKIN[who];
-    if (i === micHand) { mic(pen, h[0], h[1], st.mic, roxor ? '#43d84a' : PINKC); hand(pen, h[0], h[1], hc); }
-    else if (st.point) { hand(pen, h[0], h[1], hc, 5.2); pen.ln([h[0], h[1], h[0] + 15, h[1] - 3], INK, 7.5, false, 0.3); pen.ln([h[0], h[1], h[0] + 15, h[1] - 3], hc, 4, false, 0.3); }
-    else if (h[1] < -55) (roxor ? rockHand : openHand)(pen, h[0], h[1], hc);
-    else hand(pen, h[0], h[1], hc);
+    if (i === micHand) { mic(pen, h[0], h[1], st.mic, roxor ? '#43d84a' : PINKC); hand(pen, h[0], h[1], hc, 5.2, oc); }
+    else if (st.point) { hand(pen, h[0], h[1], hc, 4.6, oc); pen.ln([h[0], h[1], h[0] + 14, h[1] - 3], oc, 5.6, false, 0.2); pen.ln([h[0], h[1], h[0] + 14, h[1] - 3], hc, 3.2, false, 0.2); }
+    else if (h[1] < -55) (roxor ? rockHand : openHand)(pen, h[0], h[1], hc, oc);
+    else hand(pen, h[0], h[1], hc, 5, oc);
   }
 }
 
@@ -285,7 +330,7 @@ function drawFigure(pen, ctx, who, pose, onesie, v) {
   const hh = hands.map((h) => [h[0], h[1] + (P.slump || 0) * 0.3]);
   armsAndMic(pen, who, onesie, st, hh, P.micMouth ? 0 : null);
   ctx.save(); ctx.translate(0, P.slump || 0); ctx.rotate((P.tilt || 0) * 0.8);
-  (who === 'roxor' ? headRoxor : headJasmin)(pen, st, onesie);
+  bigHead(pen, who === 'roxor' ? headRoxor : headJasmin, st, onesie);
   ctx.restore();
   if (P.micMouth) armsAndMic(pen, who, onesie, st, hh, 1);   // the singing arm and mic go in front of the face
   ctx.restore();
@@ -330,7 +375,7 @@ export function drawBust(ctx, who, x, y, size, o) {
     c.translate(0, 64); c.scale(0.76, 0.76);
     const st = { pose, eye: P.eye, mouth: mouthSt, blink, look: who === 'roxor' ? 0.25 : 0.1, mic: P.mic, slump: P.slump || 0 };
     bodyParts(pen, who, onesie, st, true);
-    c.save(); c.translate(0, P.slump || 0); c.rotate((P.tilt || 0) * 0.8); (who === 'roxor' ? headRoxor : headJasmin)(pen, st, onesie); c.restore();
+    c.save(); c.translate(0, P.slump || 0); c.rotate((P.tilt || 0) * 0.8); bigHead(pen, who === 'roxor' ? headRoxor : headJasmin, st, onesie); c.restore();
     c.restore();
   });
   const bob = Math.sin(t * P.sp) * P.bob * 0.35;
