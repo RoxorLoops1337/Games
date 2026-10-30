@@ -2276,6 +2276,12 @@ function handle(e) {
     case 'undying': { const p = catPos(e.uid); txtFx(p.x - 56, p.y - 24, 'Second chance!', '#ffe27a', 22, 1.5); ring(p.x, p.y - 10, 100, '#fff2a0', 0.7, 8); flashGlow(p.x, p.y - 10, 140, '#fff2a0', 0.6); sparks(p.x, p.y - 10, 20, '#fff6b0', 260, 0.7); sfx.play('heal'); break; }
     case 'dodge': { const p = catPos(e.uid); txtFx(p.x - 40, p.y, 'Dodge!', '#b9f5ff', 18, 0.8); ring(p.x, p.y - 10, 44, '#d9f8ff', 0.35, 3); sparks(p.x, p.y - 10, 6, '#ffffff', 150, 0.3); break; }
     case 'ehit': sparks(e.x, e.y, 3, '#ffffff', 130, 0.2); break;
+    case 'miss': txtFx(e.x, e.y, 'MISS', '#d8e4ff', 15, 0.6); break;   // a Ninja Mouse dodged or a Ghost Mouse was faded
+    case 'steal': txtFx(e.x, e.y - 20, '-' + Math.max(1, Math.round(e.v)), '#ffd23f', 18, 0.9); sparks(e.x, e.y, 6, '#ffe27a', 150, 0.35); break;
+    case 'loot': sparks(e.x, e.y, 10, '#ffe27a', 200, 0.45); break;
+    case 'thorns': { const p = catPos(e.uid); sparks(p.x + 14, p.y - 8, 4, '#c8e07a', 150, 0.25); break; }
+    case 'medic': ring(e.x, e.y, e.r, '#8affb0', 0.4, 3); break;
+    case 'escape': smoke(e.x - 20, e.y, 2, 10, '#d9c9a0'); break;
     case 'spawn': smoke(e.x, e.y, 1, 7, '#d9c9a0'); puff(e.x, e.y - 10, 3, '#d9c9a0', 50, 0.4, 4); ring(e.x, e.y + 2, 22, '#e8dcb8', 0.28, 3); break;
     case 'roar': shake = Math.max(shake, 13); zpunch = Math.max(zpunch, 0.03); txtFx(e.x, e.y, 'SQUEAK!', '#ff9a9a', 32, 1.1); screenFlash('rgba(255,40,40,.18)', 0.3); sfx.play('roar'); buzz('boss'); break;
     case 'bossDown': {
@@ -2695,6 +2701,7 @@ function drawEnemy(e, t) {
     ctx.translate(-(e.swing > 0 ? 6 * e.swing / 0.3 : 0), 0);
     ctx.rotate(Math.sin(e.t * 9) * (walking ? 0.05 : 0) - e.kb * 0.012);
     ctx.scale(sc * (1 + f * 0.14), sc * (1 - f * 0.12));
+    if (e.phased) ctx.globalAlpha = 0.3;   // a faded Ghost Mouse
     ctx.drawImage(spr.c, -spr.ax, -spr.ay, spr.w, spr.h);
     if (e.flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.6; ctx.drawImage(spr.c, -spr.ax, -spr.ay, spr.w, spr.h); }
   }
@@ -2715,6 +2722,7 @@ function drawEnemy(e, t) {
   if (e.boss) { add(); glow(e.x, e.y + 2, 120, '#ff3a3a', 0.1 + 0.06 * Math.sin(t * 3) + (1 - e.hp / e.maxHp) * 0.14); norm(); }
   if (e.burn) drawFlames(e, y, t);
   if (e.stun > 0 && !e.boss) { ctx.fillStyle = '#ffe14d'; for (let k = 0; k < 3; k++) { const an = t * 6 + k * 2.1; ctx.beginPath(); ctx.arc(e.x + Math.cos(an) * 10, top + Math.sin(an) * 3, 2.2, 0, TAU); ctx.fill(); } }
+  if (e.loot > 0) { ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#8a5a14'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(e.x + 10, top - 2, 5, 0, TAU); ctx.fill(); ctx.stroke(); }   // a thief's stolen coins
   if (e.poison) { ctx.fillStyle = '#8be05a'; ctx.beginPath(); ctx.arc(e.x + 12, y - e.h * 0.9 + Math.sin(t * 6) * 2, 3, 0, TAU); ctx.fill(); }
   if (e.shield > 0 && !e.boss) {
     const w = Math.max(26, e.w) * 0.9, by = top - 12 - barLift;
@@ -2736,6 +2744,13 @@ function drawProj(p, t, ids) {
     ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, TAU); ctx.fill(); ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(p.x - 2, p.y - 2, 2, 0, TAU); ctx.fill();
     add(); glow(p.x, p.y, 16, p.color && p.color.length === 7 && p.color !== '#2c2c36' && p.color !== '#3b3b4f' ? p.color : '#ffb040', 0.45); norm();
+    return;
+  }
+  if (p.kind === 'enemy' && p.rocket) {   // Rocket Mouse: a little rocket with a flame tail
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.atan2(p.vy, p.vx));
+    ctx.fillStyle = '#ff8a3d'; ctx.beginPath(); ctx.moveTo(-8, -3); ctx.lineTo(-15, 0); ctx.lineTo(-8, 3); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#d8dce8'; ctx.strokeStyle = '#271c33'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(0, 0, 9, 4, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.restore();
     return;
   }
   if (p.kind === 'enemy') {

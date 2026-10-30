@@ -366,6 +366,14 @@ export function rollItemChoices(g, n = 3) {
   return out;
 }
 // which box drops: `src` is 'elite' (an elite mouse fell) or 'nest' (a nest was destroyed, `n` counts the nests so far). Luck lifts the better qualities.
+// crowd control: some mice are tenacious (ENEMY_TYPES.tenacity, elites +0.25): they are stunned less often and for less time and slowed less,
+// and after any stun they cannot be stunned again for STUN_IMMUNE seconds, so a stun lock is never possible
+export const STUN_IMMUNE = 1.4;
+export const tenacity = (e) => Math.min(0.8, (e.tn || 0) + (e.elite ? 0.25 : 0));
+export function stunEnemy(e, t) {
+  if (e.boss || e.stunCd > 0 || t <= 0) return;
+  e.stun = Math.max(e.stun, t * (1 - tenacity(e)));
+}
 export function rollBoxTier(g, src = 'elite', n = 0) {
   const L = luckOf(g), w = src === 'nest'
     ? { basket: Math.max(20, 58 - 2 * n), silver: 36 + 1.5 * n, golden: 6 + 0.7 * n }
@@ -619,7 +627,7 @@ export function makeEnemy(g, type, w, o = {}) {
     uid: g.uid++, type, x: o.x != null ? o.x : W + 40, y: GROUND + 4 + g.rnd() * 20, hp, maxHp: hp,
     dmg: d.dmg * sc.dmg * g.diff.dmg * g.route.enemyDmg * (elite ? 1.35 : 1), cd: d.cd * (0.4 + g.rnd() * 0.8), spd: d.spd * spdMul * (0.9 + g.rnd() * 0.2) * (elite ? 0.92 : 1),
     w: d.w * (elite ? 1.2 : 1), h: d.h * (elite ? 1.2 : 1), armor: d.armor || 0, ai: d.ai, range: d.range || 0,
-    fly: d.ai === 'fly', alt: d.alt || 0, elite, flash: 0, stun: 0, slow: 0, slowT: 0, burn: null, poison: null,
+    fly: d.ai === 'fly', alt: d.alt || 0, elite, flash: 0, stun: 0, stunCd: 0, tn: d.tenacity || 0, slow: 0, slowT: 0, burn: null, poison: null,
     dead: false, swing: 0, t: g.rnd() * 6, ability: 0, boss: false, age: 0, kb: 0,
     shield: d.shield ? hp * d.shield : 0, maxShield: d.shield ? hp * d.shield : 0, under: d.ai === 'burrow', leapT: 0, leaped: false,
     // the Rat Gang's newcomers (see ENEMY_TYPES): dodge chance, pups on death, thorns share, chill aura, phase cycle (phased = faded, cannot be hit), stolen coins
@@ -733,14 +741,14 @@ export function hurtEnemy(g, e, dmg, o = {}) {   // exported for the tests
     if (!o.tick && !shielded) {
       if (f.venom) { const add = d * f.venom / 3, p = e.poison; e.poison = { dps: Math.min(add * 5, (p ? p.dps : 0) + add), t: 3, owner: sc.uid }; }
       if (f.burn && !e.burn) e.burn = { dps: d * 0.35, t: 2, owner: sc.uid };
-      if (f.slow) { e.slow = Math.max(e.slow, f.slow); e.slowT = Math.max(e.slowT, 1.5); }
-      if (f.stun && !e.boss && g.rnd() < f.stun) e.stun = Math.max(e.stun, 0.6);
+      if (f.slow) { e.slow = Math.max(e.slow, f.slow * (1 - tenacity(e) * 0.6)); e.slowT = Math.max(e.slowT, 1.5); }
+      if (f.stun && !e.boss && g.rnd() < f.stun * (1 - tenacity(e))) stunEnemy(e, 0.6);
     }
   }
   if (!e.boss && !o.silent) e.kb = Math.min(9, e.kb + (e.w > 50 ? 1.6 : 4));
   if (!o.silent) emit(g, { k: 'dmg', x: e.x, y: ecy(e) - e.h * 0.4, v: d, crit: !!o.crit });
-  if (o.slow && !shielded) { e.slow = Math.max(e.slow, o.slow); e.slowT = Math.max(e.slowT, o.slowT || 2); }
-  if (o.stun && !e.boss && !shielded) e.stun = Math.max(e.stun, o.stun);
+  if (o.slow && !shielded) { e.slow = Math.max(e.slow, o.slow * (1 - tenacity(e) * 0.6)); e.slowT = Math.max(e.slowT, o.slowT || 2); }
+  if (o.stun && !e.boss && !shielded) stunEnemy(e, o.stun);
   if (o.burn && !shielded) e.burn = { dps: o.burn.dps * BASE_DMG * (o.mult || 1), t: o.burn.t, owner: sc ? sc.uid : 0 };
   if (o.poison && !shielded) {
     const p = e.poison;
@@ -836,11 +844,12 @@ export function hurtCat(g, c, dmg) {
   }
 }
 
+export const THORN_CAP = 0.06;   // most a single prick can take, as a share of the cat's max health
 // Spiky Rat thorns: the cat's damage reduction (and the Fortress special) still count, dodges and barriers do not, and it never knocks a cat out
 export function thornCat(g, c, v) {
   if (!c || c.ko || !g.cats.includes(c)) return 0;
   v *= (1 - Math.min(0.8, g.mods.dr + cf(g, c).dr)) * (g.fortressT > 0 ? 0.3 : 1) * g.hurtMul;
-  v = Math.min(v, c.hp - 1);
+  v = Math.min(v, catMaxHp(g, c) * THORN_CAP, c.hp - 1);   // a huge special does not cut a cat to the bone
   if (!(v > 0)) return 0;
   c.hp -= v;
   c.taken += v; g.run.taken += v; g.wTaken += v;
@@ -1232,7 +1241,8 @@ function updateEnemies(g, dt) {
       e.phased = e.phT % (e.phCd + GHOST_FADE) >= e.phCd;
       if (was !== e.phased) emit(g, { k: e.phased ? 'fade' : 'unfade', x: e.x, y: ecy(e) });
     }
-    if (e.stun > 0) { e.stun -= dt; continue; }
+    if (e.stunCd > 0) e.stunCd -= dt;
+    if (e.stun > 0) { e.stun -= dt; if (e.stun <= 0) e.stunCd = STUN_IMMUNE; continue; }
     const sp = e.spd * (1 - Math.min(0.85, e.slow + m.slow));
     if (!alive.length) continue;
     if (e.ai === 'melee') {
@@ -1490,7 +1500,7 @@ export function step(g, dt = DT) {
     if (g.nineLives > 0) {
       g.nineLives--; g.run.nine++;
       for (const c of g.cats) { c.ko = false; c.hp = Math.round(catMaxHp(g, c) * 0.5); }
-      for (const e of g.enemies) if (!e.dead && !e.boss) e.stun = 2.5;
+      for (const e of g.enemies) if (!e.dead && !e.boss) stunEnemy(e, 2.5);
       emit(g, { k: 'nine' });
     } else {
       g.state = 'over';

@@ -208,26 +208,26 @@ export const ENEMY_TYPES = {
   mouse:   { name: 'Mouse',        w: 34, h: 36, hp: 28,  dmg: 6,  cd: 1.0, spd: 46, cost: 1, minWave: 1, wt: 10, ai: 'melee' },
   scout:   { name: 'Zippy Mouse',  w: 28, h: 30, hp: 16,  dmg: 5,  cd: 0.8, spd: 100, cost: 1, minWave: 2, wt: 5, ai: 'melee' },
   slinger: { name: 'Slinger',      w: 34, h: 40, hp: 24,  dmg: 7,  cd: 1.9, spd: 42, cost: 2, minWave: 3, wt: 4, ai: 'range', range: 340 },
-  brute:   { name: 'Brute Rat',    w: 66, h: 64, hp: 170, dmg: 16, cd: 1.5, spd: 28, cost: 6, minWave: 4, wt: 2, ai: 'melee' },
-  armored: { name: 'Helmet Mouse', w: 40, h: 42, hp: 70,  dmg: 9,  cd: 1.1, spd: 36, cost: 3, minWave: 5, wt: 3, ai: 'melee', armor: 0.4 },
+  brute:   { name: 'Brute Rat',    w: 66, h: 64, hp: 170, dmg: 16, cd: 1.5, spd: 28, cost: 6, minWave: 4, wt: 2, ai: 'melee', tenacity: 0.4 },
+  armored: { name: 'Helmet Mouse', w: 40, h: 42, hp: 70,  dmg: 9,  cd: 1.1, spd: 36, cost: 3, minWave: 5, wt: 3, ai: 'melee', tenacity: 0.5, armor: 0.4 },
   glider:  { name: 'Glider',       w: 44, h: 34, hp: 30,  dmg: 8,  cd: 1.2, spd: 72, cost: 2, minWave: 6, wt: 3, ai: 'fly', alt: 105 },
   bomber:  { name: 'Bomb Mouse',   w: 36, h: 38, hp: 36,  dmg: 36, cd: 1,   spd: 86, cost: 3, minWave: 7, wt: 3, ai: 'bomb' },
   shaman:  { name: 'Shaman Rat',   w: 40, h: 50, hp: 58,  dmg: 0,  cd: 2.6, spd: 38, cost: 4, minWave: 8, wt: 2, ai: 'shaman', range: 400 },
   // counters to a one-note tower: dashers leap over the stack to bite the top cat, shield bearers shrug off status effects until the
   // shield breaks, diggers tunnel under the field and cannot be hit until they pop up next to the stack
   dasher:  { name: 'Dash Mouse',   w: 30, h: 32, hp: 22,  dmg: 9,  cd: 1.5, spd: 120, cost: 2, minWave: 9, wt: 3, ai: 'dash', hint: 'Leaps over the stack to bite the top cat' },
-  shield:  { name: 'Shield Bearer', w: 46, h: 46, hp: 60, dmg: 9,  cd: 1.2, spd: 34, cost: 4, minWave: 10, wt: 3, ai: 'melee', shield: 1.4, hint: 'Its shield blocks burns, slows and poison until it breaks' },
-  digger:  { name: 'Digger',       w: 40, h: 40, hp: 52,  dmg: 15, cd: 1.3, spd: 44, cost: 4, minWave: 12, wt: 2, ai: 'burrow', hint: 'Tunnels under the field and cannot be hit until it pops up' },
+  shield:  { name: 'Shield Bearer', w: 46, h: 46, hp: 60, dmg: 9,  cd: 1.2, spd: 34, cost: 4, minWave: 10, wt: 3, ai: 'melee', tenacity: 0.35, shield: 1.4, hint: 'Its shield blocks burns, slows and poison until it breaks' },
+  digger:  { name: 'Digger',       w: 40, h: 40, hp: 52,  dmg: 15, cd: 1.3, spd: 44, cost: 4, minWave: 12, wt: 2, ai: 'burrow', tenacity: 0.2, hint: 'Tunnels under the field and cannot be hit until it pops up' },
   // the Rat Gang's newcomers (behaviours in sim.js, drawings in art_world.js ENEMY_ART): flags on the type are read by the sim
   // dodge: chance that a hit misses; splits: mice that scamper out on death; thorns: share of a hit sent back at the cat; phase: seconds between
   // fade outs; chill: cat attack speed lost to its aura (that much, once, however many chill the tower)
   ninja:   { name: 'Ninja Mouse',  w: 30, h: 34, hp: 30,  dmg: 8,  cd: 0.9, spd: 90, cost: 3, minWave: 6, wt: 3, ai: 'melee', dodge: 0.3, hint: 'Dodges a third of all hits' },
-  litter:  { name: 'Mama Mouse',   w: 52, h: 50, hp: 90,  dmg: 8,  cd: 1.4, spd: 32, cost: 4, minWave: 5, wt: 2, ai: 'melee', splits: 3, hint: 'Three Pups scamper out when it falls' },
+  litter:  { name: 'Mama Mouse',   w: 52, h: 50, hp: 90,  dmg: 8,  cd: 1.4, spd: 32, cost: 4, minWave: 5, wt: 2, ai: 'melee', tenacity: 0.5, splits: 3, hint: 'Three Pups scamper out when it falls' },
   pup:     { name: 'Pup',          w: 20, h: 22, hp: 8,   dmg: 3,  cd: 0.7, spd: 110, cost: 0, minWave: 999, wt: 0, ai: 'melee', hint: 'Tiny and fast' },
-  medic:   { name: 'Medic Mouse',  w: 36, h: 44, hp: 44,  dmg: 0,  cd: 2.2, spd: 34, cost: 4, minWave: 8, wt: 2, ai: 'medic', range: 360, hint: 'Heals the mice around it: pop it first' },
+  medic:   { name: 'Medic Mouse',  w: 36, h: 44, hp: 44,  dmg: 0,  cd: 2.2, spd: 34, cost: 4, minWave: 8, wt: 2, ai: 'medic', tenacity: 0.2, range: 360, hint: 'Heals the mice around it: pop it first' },
   thief:   { name: 'Sneak Thief',  w: 32, h: 36, hp: 26,  dmg: 0,  cd: 1.0, spd: 105, cost: 3, minWave: 7, wt: 2, ai: 'thief', hint: 'Steals coins and runs away. Catch it to get them back' },
-  spiky:   { name: 'Spiky Rat',    w: 46, h: 40, hp: 80,  dmg: 11, cd: 1.3, spd: 33, cost: 4, minWave: 9, wt: 2, ai: 'melee', thorns: 0.25, hint: 'Hurts the cat that hits it hard' },
-  frosty:  { name: 'Frost Rat',    w: 42, h: 46, hp: 62,  dmg: 8,  cd: 1.6, spd: 34, cost: 4, minWave: 10, wt: 2, ai: 'melee', chill: 0.18, hint: 'Its icy aura slows the attacks of the cats' },
+  spiky:   { name: 'Spiky Rat',    w: 46, h: 40, hp: 80,  dmg: 11, cd: 1.3, spd: 33, cost: 4, minWave: 9, wt: 2, ai: 'melee', tenacity: 0.3, thorns: 0.25, hint: 'Hurts the cat that hits it hard' },
+  frosty:  { name: 'Frost Rat',    w: 42, h: 46, hp: 62,  dmg: 8,  cd: 1.6, spd: 34, cost: 4, minWave: 10, wt: 2, ai: 'melee', tenacity: 0.3, chill: 0.18, hint: 'Its icy aura slows the attacks of the cats' },
   rocket:  { name: 'Rocket Mouse', w: 36, h: 46, hp: 40,  dmg: 14, cd: 3.0, spd: 36, cost: 5, minWave: 11, wt: 2, ai: 'rocket', range: 420, hint: 'Fires rockets that hit two cats at once' },
   ghost:   { name: 'Ghost Mouse',  w: 38, h: 42, hp: 46,  dmg: 10, cd: 1.2, spd: 48, cost: 4, minWave: 13, wt: 2, ai: 'melee', phase: 3.2, hint: 'Fades out and cannot be hit for a moment' },
 };
