@@ -287,11 +287,11 @@ function bodyParts(pen, who, onesie, st, bust) {
     pf(pen, pen.blob(0, -42, 9, 9, 14, 0.03), '#ffd60a', '#ffe65a', LN.gold, { gap: 2, lw: 1.2, a: 0.35 });
     pen.dot(-3.2, -44.5, 1.1, LN.blk); pen.dot(3.2, -44.5, 1.1, LN.blk); pen.ln(arc(0, -42, 5, 4, 25, 155), LN.blk, 1.3, false, 0.2);
   } else {   // pink crop top, bare midriff, pink cargo waist
-    pf(pen, [-18, -33, 18, -33, 22, -24, -22, -24], PINKC, PINKD, LN.pink, { gap: 2.2, hi: PINK2 });
-    pen.ln([-18, -31, 18, -31], PINKD, 1.3, false, 0.3);
-    pf(pen, [-14, -44, 14, -44, 16, -32, -16, -32], SKIN.jasmin, SKIN2.jasmin, LN.skin, { gap: 2.4, lw: 1.3, a: 0.3 }); pen.dot(0, -38, 0.9, '#c4805e');
-    pf(pen, [-16, -57 + slump, 16, -57 + slump, 17, -43, -17, -43], PINKC, PINKD, LN.pink, { gap: 2.2, hi: PINK2 });
-    pen.ln([-17, -44, -8, -42, 0, -44, 8, -42, 17, -44], PINKD, 1.1, false, 0.4);
+    pf(pen, [-12, -33, 12, -33, 19, -24, -19, -24], PINKC, PINKD, LN.pink, { gap: 2.2, hi: PINK2 });   // slim waistband that flares into the baggy pants
+    pen.ln([-12, -31, 12, -31], PINKD, 1.3, false, 0.3);
+    pf(pen, [-10, -41, 10, -41, 10, -32, -10, -32], SKIN.jasmin, SKIN2.jasmin, LN.skin, { gap: 2.4, lw: 1.3, a: 0.2 });   // short, narrow midriff (no navel dot: it read as a belly)
+    pf(pen, [-15, -57 + slump, 15, -57 + slump, 12, -40, -12, -40], PINKC, PINKD, LN.pink, { gap: 2.2, hi: PINK2 });   // crop top tapering to the waist
+    pen.ln([-12, -41, -6, -39.5, 0, -41, 6, -39.5, 12, -41], PINKD, 1.1, false, 0.4);
     pen.ln([-9, -57 + slump, 0, -50 + slump, 9, -57 + slump], SKIN2.jasmin, 4, false, 0.1);
   }
   // neck, with Jasmin's bead necklace
@@ -345,7 +345,7 @@ function mouthAt(P, t, talk) {
 }
 
 // ------------------------------------------------------------------------------------------------ public: hero and bust
-const BOX_W = 184, BOX_H = 172, FEET = 78;   // sprite box: feet sit FEET below the box centre
+const BOX_W = 232, BOX_H = 204, FEET = 78;   // sprite box: feet sit FEET below the box centre
 export function drawHero(ctx, who, x, y, size, o) {
   o = o || {}; who = who === 'jasmin' ? 'jasmin' : 'roxor';
   const t = o.t || 0, pose = POSE[o.pose] ? o.pose : 'idle', P = POSE[pose], onesie = o.outfit === 'onesie', k = size / 118;
