@@ -22,8 +22,7 @@ export const CATS = [
   { id: 'ember', name: 'Ember', title: 'Flame Whisker', role: 'Flames', hp: 0.9,
     desc: 'Breathes a cone of fire. Burns whole crowds, short range.',
     atk: { t: 'cone', dmg: 0.42, cd: 0.25, range: 128, burn: { dps: 0.5, t: 2 } },
-    art: { fur: '#ff7a45', belly: '#ffe3b0', accent: '#ffcc33', eye: '#ffb02e', pat: 'plain' },
-    unlock: { k: 'bestWave', n: 5, text: 'Reach wave 5' } },
+    art: { fur: '#ff7a45', belly: '#ffe3b0', accent: '#ffcc33', eye: '#ffb02e', pat: 'plain' } },
   { id: 'sparky', name: 'Sparky', title: 'Static Shock', role: 'Electric', hp: 0.85,
     desc: 'Chain lightning jumps between up to four mice.',
     atk: { t: 'chain', dmg: 0.9, cd: 0.95, range: 270, jumps: 3, fall: 0.78, stun: 0.25 },
@@ -32,7 +31,8 @@ export const CATS = [
   { id: 'buckshot', name: 'Buckshot', title: 'The Deputy', role: 'Shotgun', hp: 0.95,
     desc: 'Six pellets per blast. Devastating up close.',
     atk: { t: 'spread', dmg: 0.38, cd: 1.25, range: 235, pellets: 6 },
-    art: { fur: '#a58a72', belly: '#efe0cc', accent: '#8a4b2a', eye: '#5a3a1a', pat: 'patch' } },
+    art: { fur: '#a58a72', belly: '#efe0cc', accent: '#8a4b2a', eye: '#5a3a1a', pat: 'patch' },
+    unlock: { k: 'bestWave', n: 6, text: 'Reach wave 6' } },
   { id: 'mochi', name: 'Mochi', title: 'Fluffy Wall', role: 'Tank', hp: 2.2,
     desc: 'Huge and squishy. Soaks hits and makes the whole stack tougher.',
     atk: { t: 'melee', dmg: 0.55, cd: 0.9, range: 70 }, pas: { dr: 0.06, taunt: true },
@@ -227,8 +227,8 @@ export const ENEMY_TYPES = {
   medic:   { name: 'Medic Mouse',  w: 36, h: 44, hp: 44,  dmg: 0,  cd: 2.2, spd: 34, cost: 4, minWave: 8, wt: 2, ai: 'medic', tenacity: 0.2, range: 360, hint: 'Heals the mice around it: pop it first' },
   thief:   { name: 'Sneak Thief',  w: 32, h: 36, hp: 26,  dmg: 0,  cd: 1.0, spd: 105, cost: 3, minWave: 7, wt: 2, ai: 'thief', hint: 'Steals coins and runs away. Catch it to get them back' },
   spiky:   { name: 'Spiky Rat',    w: 46, h: 40, hp: 80,  dmg: 11, cd: 1.3, spd: 33, cost: 4, minWave: 9, wt: 2, ai: 'melee', tenacity: 0.3, thorns: 0.25, hint: 'Hurts the cat that hits it hard' },
-  frosty:  { name: 'Frost Rat',    w: 42, h: 46, hp: 62,  dmg: 8,  cd: 1.6, spd: 34, cost: 4, minWave: 10, wt: 2, ai: 'melee', tenacity: 0.3, chill: 0.18, hint: 'Its icy aura slows the attacks of the cats' },
-  rocket:  { name: 'Rocket Mouse', w: 36, h: 46, hp: 40,  dmg: 14, cd: 3.0, spd: 36, cost: 5, minWave: 11, wt: 2, ai: 'rocket', range: 420, hint: 'Fires rockets that hit two cats at once' },
+  frosty:  { name: 'Frost Rat',    w: 42, h: 46, hp: 62,  dmg: 8,  cd: 1.6, spd: 34, cost: 4, minWave: 10, wt: 2.5, ai: 'melee', tenacity: 0.3, chill: 0.18, hint: 'Its icy aura slows the attacks of the cats' },
+  rocket:  { name: 'Rocket Mouse', w: 36, h: 46, hp: 40,  dmg: 14, cd: 3.0, spd: 36, cost: 5, minWave: 11, wt: 3, ai: 'rocket', range: 420, hint: 'Fires rockets that hit two cats at once' },
   ghost:   { name: 'Ghost Mouse',  w: 38, h: 42, hp: 46,  dmg: 10, cd: 1.2, spd: 48, cost: 4, minWave: 13, wt: 2, ai: 'melee', phase: 3.2, hint: 'Fades out and cannot be hit for a moment' },
 };
 
@@ -577,7 +577,7 @@ export const ROUTES = [
 export const ROUTE_BY_ID = Object.fromEntries(ROUTES.map((r) => [r.id, r]));
 
 // ---------------------------------------------------------------- the daily challenge
-export const DAILY_POOL = [...STARTERS, 'ember', 'sparky', 'yuki', 'hawkeye', 'boomer', 'pudding', 'shadow', 'ronin', 'merlin', 'cutlass'];
+export const DAILY_POOL = [...STARTERS, 'buckshot', 'sparky', 'yuki', 'hawkeye', 'boomer', 'pudding', 'shadow', 'ronin', 'merlin', 'cutlass'];
 export const DAILY_MODS = [
   { id: 'fast',  name: 'Zoomies Day',   icon: '💨', desc: 'Mice move 25% faster.',                         speed: 1.25 },
   { id: 'glass', name: 'Glass Cats',    icon: '🔮', desc: 'Your cats hit 40% harder but have 35% less health.', dmg: 0.4, hp: -0.35 },

@@ -773,7 +773,7 @@ export function killEnemy(g, e, credit) {
   if (credit) {
     const sc = g.curCat, kf = sc ? cf(g, sc) : null;
     if (sc) {
-      sc.sp = Math.min(1, sc.sp + (e.boss ? 0.2 : e.elite ? 0.06 : 0.025) + kf.kcharge); sc.kills++; sc.wKills++; (g.run.byCat[sc.id] || (g.run.byCat[sc.id] = { dmg: 0, kills: 0, heal: 0 })).kills++;
+      sc.sp = Math.min(1, sc.sp + (e.boss ? 0.2 : e.elite ? 0.06 : e.minion ? 0.006 : 0.025) + kf.kcharge); sc.kills++; sc.wKills++; (g.run.byCat[sc.id] || (g.run.byCat[sc.id] = { dmg: 0, kills: 0, heal: 0 })).kills++;
       if (kf.kheal) healCat(g, sc, catMaxHp(g, sc) * kf.kheal, sc, true);
       if (kf.frenzy) sc.fz = Math.min(10, (sc.fz || 0) + 1);
       if (kf.boom && !e.boss && (g._boomDepth || 0) < 8) { g._boomDepth = (g._boomDepth || 0) + 1; explode(g, e.x, ecy(e), 85, e.maxHp * kf.boom, { silent: true, color: '#ffb05a' }); g._boomDepth--; }
@@ -786,7 +786,7 @@ export function killEnemy(g, e, credit) {
     }
     if (e.boss) { g.run.bossKills++; g.wKills++; addCoins(g, COIN.nest + COIN.nestGrow * e.n, e.x, e.y); emit(g, { k: 'bossDown', x: e.x, y: e.y }); }
     else {
-      g.run.kills++; g.wKills++; g.zoom = Math.min(100, g.zoom + 2.4 * (1 + g.mods.zoomG));
+      g.run.kills++; g.wKills++; g.zoom = Math.min(100, g.zoom + (e.minion ? 0.6 : 2.4) * (1 + g.mods.zoomG));   // a pup is a small kill: a little zoomies and special charge
       if (kf && kf.kcoin) addCoins(g, kf.kcoin * COIN.kill, e.x, ecy(e));   // kcoin is a share of the kill coin, so it moves with COIN_SCALE
       emit(g, { k: 'kill', x: e.x, y: ecy(e), type: e.type, elite: e.elite });
       if (!e.minion) addCoins(g, e.elite ? COIN.elite : COIN.kill, e.x, ecy(e));   // pups pay nothing, Mama Mouse already paid for the litter
@@ -844,13 +844,14 @@ export function hurtCat(g, c, dmg) {
   }
 }
 
-export const THORN_CAP = 0.06;   // most a single prick can take, as a share of the cat's max health
+export const THORN_CAP = 0.05, THORN_GAP = 0.4;   // most a single prick can take (share of the cat's max health), and a cat is pricked at most once per THORN_GAP seconds
 // Spiky Rat thorns: the cat's damage reduction (and the Fortress special) still count, dodges and barriers do not, and it never knocks a cat out
 export function thornCat(g, c, v) {
-  if (!c || c.ko || !g.cats.includes(c)) return 0;
+  if (!c || c.ko || !g.cats.includes(c) || (c.thornT || 0) > g.t) return 0;
   v *= (1 - Math.min(0.8, g.mods.dr + cf(g, c).dr)) * (g.fortressT > 0 ? 0.3 : 1) * g.hurtMul;
   v = Math.min(v, catMaxHp(g, c) * THORN_CAP, c.hp - 1);   // a huge special does not cut a cat to the bone
   if (!(v > 0)) return 0;
+  c.thornT = g.t + THORN_GAP;
   c.hp -= v;
   c.taken += v; g.run.taken += v; g.wTaken += v;
   c.flash = 0.18;

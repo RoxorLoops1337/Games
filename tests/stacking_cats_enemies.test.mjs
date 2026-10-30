@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {
   newGame, addCat, calcMods, startWave, step, DT, hurtEnemy, makeEnemy, killEnemy, aliveCats, catMaxHp, useSpecial, useZoomies,
-  chillOf, CHILL_R, targetsInRange, thornCat, MEDIC, THIEF, W, TOWER_X,
+  chillOf, CHILL_R, targetsInRange, thornCat, THORN_CAP, THORN_GAP, MEDIC, THIEF, W, TOWER_X,
 } from '../stacking_cats/sim.js';
 import { ENEMY_TYPES, COIN_SCALE, CATS } from '../stacking_cats/cats.js';
 import { playRun } from './stacking_cats_balance.test.mjs';
@@ -75,6 +75,7 @@ t('Mama Mouse: three pups scamper out, count as kills once each, pay no coins, a
   assert.equal(g.state, 'clear', 'the wave ends');
   // in a real fight the cats clear Mama and the litter and the wave still ends, every mouse counted once
   const h = arena({ wave: 8 });
+  h.hurtMul = 0;   // the cats cannot fall here, this is about counting
   h.queue = [{ t: 0, type: 'litter', elite: false }, { t: 0.5, type: 'litter', elite: true }];
   const hk = h.run.kills;
   run(h, 120);
@@ -156,13 +157,15 @@ t('spiky: the cat that hits it takes a quarter back through its damage reduction
   assert.ok(d > 0);
   assert.ok(hp0 - c.hp > 0 && hp0 - c.hp <= d * 0.25 * (1 - dr) + 1e-6, 'thorns ' + (hp0 - c.hp) + ' of ' + d);
   assert.ok(g.ev.some((v) => v.k === 'thorns' && v.uid === c.uid));
-  g.mods.dr = 0.5;
+  const hpA = c.hp; hurtEnemy(g, s, 40); assert.equal(c.hp, hpA, 'one prick per ' + THORN_GAP + ' s');
+  g.t += THORN_GAP; hurtEnemy(g, s, 1e5); assert.ok(hpA - c.hp <= catMaxHp(g, c) * THORN_CAP + 1e-6 && hpA - c.hp > 0, 'a huge hit pricks at most ' + THORN_CAP + ' of max health');
+  g.mods.dr = 0.5; g.t += THORN_GAP;
   const hp1 = c.hp; hurtEnemy(g, s, 40);
   assert.ok(hp1 - c.hp <= 40 * 0.25 * 0.5 + 1e-6, 'damage reduction counts');
-  const hp2 = c.hp; hurtEnemy(g, s, 40, { tick: true });
+  g.t += THORN_GAP; const hp2 = c.hp; hurtEnemy(g, s, 40, { tick: true });
   assert.equal(c.hp, hp2, 'ticks do not prick');
   g.curCat = null; hurtEnemy(g, s, 40); assert.equal(c.hp, hp2, 'no cat, no thorns');
-  g.curCat = c; c.hp = 2; hurtEnemy(g, s, 1e6);
+  g.curCat = c; c.hp = 2; hurtEnemy(g, s, 1e6); g.t += THORN_GAP;
   assert.ok(c.hp >= 1 - 1e-9 && !c.ko, 'thorns never knock a cat out');
   assert.equal(thornCat(g, c, 50), 0, 'at 1 hp nothing more');
   g.curCat = null;
