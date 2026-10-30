@@ -164,7 +164,7 @@
   function placeHole() {
     var s = st && st.showing; if (!s) return;
     var vw = window.innerWidth, vh = window.innerHeight, pad = 6;
-    if (!s.dim) { st.layer.className = 'tut-layer nodim'; st.holeActive = false; positionPanel(null); return; }
+    if (!s.dim) { st.layer.className = 'tut-layer nodim'; st.holeActive = false; positionPanel(rectOf(resolve(s.targetKey || s.step.target))); return; }
     var node = s.node = resolve(s.targetKey || s.step.target), r = rectOf(node);
     st.holeActive = !!r;
     var gated = s.awaiting;
