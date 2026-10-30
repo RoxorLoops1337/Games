@@ -222,3 +222,11 @@ for (const w of WORLDS) {
   const mid = new Run({ world: 'garage', seed: 2, firstPrep: 1 }); mid.hype = mid.hypeNeed; mid.checkHype(); const rs = Run.restore(JSON.parse(JSON.stringify(mid.snapshot()))); ok(rs.choice && rs.choice.options.length === 3, 'a pending choice survives a save');
 }
 console.log('drop_the_bass sim: ' + n + ' checks passed');
+
+// resume contract the battle view relies on: turret ages are measured on the run clock, which survives snapshot and restore
+{
+  const run = new Run({ world: 'garage', seed: 3, loadout: ['kick', 'snare'], firstPrep: 0.2 }); run.t = 400; run.coins = 999; run.deploy(null, { onBeat: false });
+  const back = Run.restore(run.snapshot());
+  assert.ok(back.t === 400 && back.turrets[0].born === 400 && back.t - back.turrets[0].born >= 0, 'restored run keeps turret born times on the run clock');
+  console.log('drop_the_bass sim: resume clock ok');
+}

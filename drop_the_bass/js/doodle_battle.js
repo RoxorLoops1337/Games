@@ -56,7 +56,7 @@ export function drawBoard(b, ctx, t, beat) {
   const ts = run.turrets.slice().sort((a, c) => a.y - c.y);
   for (const tu of ts) {
     const hidden = b.drag && b.drag.moved && b.drag.id === tu.id;
-    const age = t - (tu.born || 0), def = TURRETS[tu.type];
+    const age = run.t - (tu.born || 0), def = TURRETS[tu.type];
     ctx.save(); ctx.globalAlpha = hidden ? 0.08 : 0.2; ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(tu.x, tu.y + 24, 25 + tu.level, 8, 0, 0, TAU); ctx.fill(); ctx.restore();
     if (age < 0.5) ring(ctx, tu.x, tu.y, 20 + age * 70, def.color, 3.5, t, { alpha: (0.5 - age) * 1.8, seed: tu.id });
     if (tu.fire > 0.5) ring(ctx, tu.x, tu.y, 38, def.color, 3, t, { alpha: (tu.fire - 0.5) * 1.2, ink: false, seed: tu.id });

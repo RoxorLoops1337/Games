@@ -541,7 +541,7 @@ export class Battle {
     const ts = run.turrets.slice().sort((a, b) => a.y - b.y);
     for (const tu of ts) {
       const hiddenByDrag = this.drag && this.drag.moved && this.drag.id === tu.id;
-      const age = t - (tu.born || 0);
+      const age = run.t - (tu.born || 0);
       const def = TURRETS[tu.type];
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       drawGlow(ctx, tu.x, tu.y + 6, 40 + tu.level * 2.5, def.color, (0.10 + 0.04 * tu.level / 7 + Math.max(0, tu.fire) * 0.35) * (hiddenByDrag ? 0.3 : 1));
