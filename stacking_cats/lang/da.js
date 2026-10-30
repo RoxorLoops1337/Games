@@ -2,4 +2,5 @@
 import UI from './da_ui.js';
 import DATA from './da_data.js';
 import STORY from './da_story.js';
-export default { ...UI, ...DATA, ...STORY };
+import ENEMIES from './da_enemies.js';
+export default { ...UI, ...DATA, ...STORY, ...ENEMIES };

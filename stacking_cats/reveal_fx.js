@@ -27,7 +27,7 @@ export function revealCardHtml(it, notes = '', back = '') {
 <div class="tc-ribbon"><span>${it.rarity}</span></div>
 <div class="tc-art"><i class="tc-arays"></i><i class="tc-prism"></i><div class="tc-medal"><div class="ic">${it.icon}</div></div></div>
 <h3 class="tc-name${it.name.length > 15 ? ' long' : ''}">${it.name}</h3><p class="tc-desc">${it.desc}</p>
-<div class="tc-tags">${notes}<div class="impact">Equip it on any cat</div></div>
+<div class="tc-tags">${notes}<div class="impact">${it.tag || 'Equip it on any cat'}</div></div>
 <i class="tc-holo"></i><i class="tc-foil"></i></div>
 <div class="tc-face tc-back">${back ? `<img src="${back}" alt="">` : ''}<i class="tc-glint"></i></div></div>`;
 }

@@ -28,6 +28,11 @@ function mouseBody(ctx, o) {
   const fur = o.fur, belly = o.belly || shade(fur, 0.5), inner = o.inner || '#ffb3c8';
   // tail: tapers from a thick root to a fine tip, with a darker underside and faint rings
   ctx.lineCap = 'round';
+  // optional shape knobs for the newer mice: bx/by/brx/bry move and size the body, earK scales the ears,
+  // cute drops the mean lid, brow, glint, fang and scar (the Pup), noTail and noFeet (the Ghost)
+  const bx = o.bx ?? 2, by = o.by ?? -13, brx = o.brx || 11.5, bry = o.bry || 12.5, ek = o.earK || 1;
+  const bodyP = () => ell(ctx, bx, by, brx, bry);
+  if (!o.noTail) {
   const tb = (u) => { const v = 1 - u; return [v * v * v * 8 + 3 * v * v * u * 26 + 3 * v * u * u * 30 + u * u * u * 38, v * v * v * -9 + 3 * v * v * u * -4 + 3 * v * u * u * -20 + u * u * u * -22]; };
   for (const [col, wk, dy] of [['#d48a9e', 1.35, 0.5], ['#f7bccb', 1, 0]]) {
     for (let k = 0; k < 14; k++) {
@@ -38,19 +43,20 @@ function mouseBody(ctx, o) {
   }
   ctx.strokeStyle = 'rgba(160,80,100,.45)'; ctx.lineWidth = 0.7;
   for (const u of [0.3, 0.5, 0.7]) { const q = tb(u); ctx.beginPath(); ctx.moveTo(q[0] - 0.5, q[1] - 1.6); ctx.lineTo(q[0] + 0.5, q[1] + 1.6); ctx.stroke(); }
+  }
   // far ear and body
-  fillPath(ctx, ell(ctx, 4, -41, 8, 8.4), fur, 1);
-  cel(ctx, ell(ctx, 2, -13, 11.5, 12.5), fur, { box: [-10, -26, 14, 0] });
-  ctx.save(); ctx.clip(ell(ctx, 2, -13, 11.5, 12.5)); ctx.fillStyle = belly; ctx.beginPath(); ctx.ellipse(-3, -10, 7, 9.5, 0, 0, TAU); ctx.fill(); ctx.restore();
-  furShade(ctx, ell(ctx, 2, -13, 11.5, 12.5), -9, -26, 13, 0);
-  ctx.save(); ctx.clip(ell(ctx, 2, -13, 11.5, 12.5)); ctx.strokeStyle = shade(fur, -0.22); ctx.globalAlpha = 0.5; ctx.lineWidth = 0.8; ctx.lineCap = 'round';
+  fillPath(ctx, ell(ctx, 4, -41, 8 * ek, 8.4 * ek), fur, 1);
+  cel(ctx, bodyP(), fur, { box: [bx - brx, by - bry, bx + brx, by + bry] });
+  ctx.save(); ctx.clip(bodyP()); ctx.fillStyle = belly; ctx.beginPath(); ctx.ellipse(bx - 5 * brx / 11.5, by + 3, 7 * brx / 11.5, 9.5 * bry / 12.5, 0, 0, TAU); ctx.fill(); ctx.restore();
+  furShade(ctx, bodyP(), bx - brx, by - bry, bry + 0.5, 0);
+  ctx.save(); ctx.clip(bodyP()); ctx.strokeStyle = shade(fur, -0.22); ctx.globalAlpha = 0.5; ctx.lineWidth = 0.8; ctx.lineCap = 'round';
   for (const [x, y] of [[6, -6], [9, -12], [5, -17], [10, -20]]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 1.5, y + 2, x + 0.5, y + 4); ctx.stroke(); }
   ctx.restore();
-  ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 1; ctx.stroke(ell(ctx, 2, -13, 11.5, 12.5));
-  limb(ctx, -4, -1.8, 5, 2.8, fur); limb(ctx, 8, -1.8, 5, 2.8, fur);
+  ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 1; ctx.stroke(bodyP());
+  if (!o.noFeet) { limb(ctx, bx - 6 * brx / 11.5, -1.8, 5, 2.8, fur); limb(ctx, bx + 6 * brx / 11.5, -1.8, 5, 2.8, fur); }
   // head
-  fillPath(ctx, ell(ctx, -9, -42, 7.6, 8), fur, 1); fillPath(ctx, ell(ctx, -9, -42, 4.5, 4.9), inner, 0.5); earShade(ctx, -9, -42, 4.5, 4.9, inner);
-  fillPath(ctx, ell(ctx, 4, -41, 8, 8.4), fur, 1); fillPath(ctx, ell(ctx, 4.5, -41, 5, 5.4), inner, 0.5); earShade(ctx, 4.5, -41, 5, 5.4, inner);
+  fillPath(ctx, ell(ctx, -9, -42, 7.6 * ek, 8 * ek), fur, 1); fillPath(ctx, ell(ctx, -9, -42, 4.5 * ek, 4.9 * ek), inner, 0.5); earShade(ctx, -9, -42, 4.5 * ek, 4.9 * ek, inner);
+  fillPath(ctx, ell(ctx, 4, -41, 8 * ek, 8.4 * ek), fur, 1); fillPath(ctx, ell(ctx, 4.5, -41, 5 * ek, 5.4 * ek), inner, 0.5); earShade(ctx, 4.5, -41, 5 * ek, 5.4 * ek, inner);
   const head = new Path2D(); head.ellipse(-5, -31, 13.5, 11.8, 0, 0, TAU);
   cel(ctx, head, fur, { box: [-19, -43, 9, -19] });
   furShade(ctx, head, -19, -43, 24, 1);
@@ -64,11 +70,16 @@ function mouseBody(ctx, o) {
   fillPath(ctx, ell(ctx, -22.4, -29.6, 2.5, 2.2), '#ff8fa8', 0.7); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-23, -30.4, 0.7, 0, TAU); ctx.fill();
   // eye: big and shiny, with a mean brow
   const eyeC = o.eye || '#2a1a3a';
+  if (o.cute) { ctx.save(); ctx.translate(-8.6, -33); ctx.scale(1.3, 1.3); ctx.translate(8.6, 33); }
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(-8.6, -33, 4.2, 4.8, 0.1, 0, TAU); ctx.fill();
   ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.stroke();
   ctx.fillStyle = eyeC; ctx.beginPath(); ctx.ellipse(-9.4, -32.8, 2.6, 3.7, 0, 0, TAU); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-10.2, -34.4, 1.1, 0, TAU); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.beginPath(); ctx.arc(-7.6, -30.9, 0.55, 0, TAU); ctx.fill();
+  if (o.cute) {
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-8, -35.2, 0.7, 0, TAU); ctx.fill(); ctx.restore();
+    ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-20.5, -25.4); ctx.quadraticCurveTo(-17.5, -23, -14.5, -25); ctx.stroke();
+  } else {
   // threat cue: narrowed upper lid and a red glint in the eye (stronger on elites)
   ctx.save(); ctx.beginPath(); ctx.ellipse(-8.6, -33, 4.2, 4.8, 0.1, 0, TAU); ctx.clip();
   ctx.fillStyle = fur; ctx.beginPath(); ctx.moveTo(-14, -39); ctx.lineTo(-3, -39); ctx.lineTo(-3, -34.6); ctx.lineTo(-14, -36.8); ctx.fill();
@@ -81,8 +92,9 @@ function mouseBody(ctx, o) {
   ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-21, -25.6); ctx.quadraticCurveTo(-16, -22.4, -10.6, -25); ctx.stroke();
   fillPath(ctx, poly(ctx, [[-18, -24.6], [-16.6, -24], [-17.4, -21]]), '#fff', 0.5);
   fillPath(ctx, poly(ctx, [[-14, -24], [-12.8, -24.6], [-13.4, -21.4]]), '#fff', 0.5);
+  }
   // scar
-  if (o.scar !== false) { ctx.strokeStyle = 'rgba(170,60,80,.7)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-4, -28); ctx.lineTo(1, -33); ctx.moveTo(-5.2, -32); ctx.lineTo(-0.4, -28.6); ctx.stroke(); }
+  if (o.scar !== false && !o.cute) { ctx.strokeStyle = 'rgba(170,60,80,.7)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(-4, -28); ctx.lineTo(1, -33); ctx.moveTo(-5.2, -32); ctx.lineTo(-0.4, -28.6); ctx.stroke(); }
   // front paw
   limb(ctx, -11, -14, 3.6, 3.4, fur);
   ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(-12.6, -12.6); ctx.lineTo(-12.2, -11.2); ctx.moveTo(-10.4, -12.2); ctx.lineTo(-10.2, -10.8); ctx.stroke();
@@ -90,6 +102,51 @@ function mouseBody(ctx, o) {
 function dagger(ctx, x = -13, y = -14, len = 15) {
   rod(ctx, x, y, x - len, y - len * 0.55, 2.4, '#dfe6f2');
   rod(ctx, x + 1, y + 0.5, x - 2.5, y - 1.3, 3.4, '#7a4a2a');
+}
+// props for the Rat Gang newcomers. a: rotation of a kunai (0 points the blade left)
+function kunai(ctx, x, y, a, len = 11) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  fillPath(ctx, poly(ctx, [[0, -1.9], [-len, 0], [0, 1.9], [1.4, 0]]), '#d4dcea', 0.8);
+  line(ctx, [[-len + 1.5, -0.1], [-0.5, -1]], 'rgba(255,255,255,.95)', 0.7);
+  rod(ctx, 1.4, 0, 6.6, 0, 2.3, '#2e2440');
+  ctx.strokeStyle = '#d8b860'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(8.6, 0, 1.7, 0, TAU); ctx.stroke();
+  ctx.restore();
+}
+function plus(ctx, x, y, r, col, lw = 0.7) {
+  const w = r * 0.4;
+  fillPath(ctx, poly(ctx, [[x - w, y - r], [x + w, y - r], [x + w, y - w], [x + r, y - w], [x + r, y + w], [x + w, y + w], [x + w, y + r], [x - w, y + r], [x - w, y + w], [x - r, y + w], [x - r, y - w], [x - w, y - w]]), col, lw);
+}
+function flake(ctx, x, y, r, col = '#f4fbff') {
+  ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.7, r * 0.24); ctx.lineCap = 'round';
+  for (let k = 0; k < 3; k++) {
+    const a = k * Math.PI / 3 + 0.26, dx = Math.cos(a) * r, dy = Math.sin(a) * r;
+    ctx.beginPath(); ctx.moveTo(x - dx, y - dy); ctx.lineTo(x + dx, y + dy); ctx.stroke();
+    for (const s of [1, -1]) { const px = x + dx * 0.6 * s, py = y + dy * 0.6 * s, b = r * 0.3, a2 = a + (s > 0 ? 0 : Math.PI);
+      ctx.beginPath(); ctx.moveTo(px + Math.cos(a2 + 2.3) * b, py + Math.sin(a2 + 2.3) * b); ctx.lineTo(px, py); ctx.lineTo(px + Math.cos(a2 - 2.3) * b, py + Math.sin(a2 - 2.3) * b); ctx.stroke(); }
+  }
+}
+function coin(ctx, x, y, r) {
+  fillPath(ctx, ell(ctx, x, y, r, r), '#ffc92b', 0.9);
+  fillPath(ctx, ell(ctx, x, y, r * 0.6, r * 0.6), '#f2a81c', 0.6);
+  ctx.fillStyle = 'rgba(255,255,230,.9)'; ctx.beginPath(); ctx.ellipse(x - r * 0.35, y - r * 0.4, r * 0.32, r * 0.18, -0.6, 0, TAU); ctx.fill();
+}
+// the head and muzzle of mouseBody as one shape (for masks and hoods), and a clip that keeps paint off them
+// (for coats, scarves and straps laid over the body after mouseBody has drawn the head)
+function faceP() {
+  const p = new Path2D(); p.ellipse(-5, -31, 13.5, 11.8, 0, 0, TAU); p.moveTo(-8.6, -27.5); p.ellipse(-16, -27.5, 7.4, 5.2, 0, 0, TAU); return p;
+}
+function offFace(ctx) {
+  for (const [x, y, rx, ry] of [[-5, -31, 13.5, 11.8], [-16, -27.5, 7.4, 5.2]]) {
+    const p = new Path2D(); p.rect(-80, -120, 160, 140); p.moveTo(x + rx, y); p.ellipse(x, y, rx, ry, 0, 0, TAU); ctx.clip(p, 'evenodd');
+  }
+}
+function spike(ctx, cx, cy, a, r0, r1, half, fill) {
+  const b1 = [cx + Math.cos(a - half) * r0, cy + Math.sin(a - half) * r0], b2 = [cx + Math.cos(a + half) * r0, cy + Math.sin(a + half) * r0];
+  const tip = [cx + Math.cos(a) * r1, cy + Math.sin(a) * r1];
+  fillPath(ctx, poly(ctx, [b1, tip, b2]), fill, 0.9);
+  const m = [(b1[0] * 0.35 + tip[0] * 0.65), (b1[1] * 0.35 + tip[1] * 0.65)];
+  line(ctx, [[(b1[0] + b2[0]) / 2 * 0.5 + b1[0] * 0.5, (b1[1] + b2[1]) / 2 * 0.5 + b1[1] * 0.5], m, tip], 'rgba(255,244,220,.85)', 0.8);
+  ctx.fillStyle = '#fff6e4'; ctx.beginPath(); ctx.arc(tip[0] - Math.cos(a) * 1.2, tip[1] - Math.sin(a) * 1.2, 0.7, 0, TAU); ctx.fill();
 }
 
 const ENEMY_ART = {
@@ -195,6 +252,238 @@ const ENEMY_ART = {
     for (const [x, y] of [[8, -4], [16, -2], [-26, -2]]) { ctx.fillStyle = 'rgba(140,100,60,.8)'; ctx.beginPath(); ctx.arc(x, y, 2.4, 0, TAU); ctx.fill(); }
     ctx.restore();
   },
+  ninja(ctx) {
+    // crouched, in an indigo hood and mask with only the white eyes showing, red scarf tails streaming behind, a kunai in each paw
+    ctx.save(); ctx.scale(0.98, 0.9); ctx.rotate(-0.08);
+    fillPath(ctx, new Path2D('M2 -25 Q14 -33 24 -29 Q31 -26 41 -33 Q38 -22 28 -20 Q17 -18 4 -19 Z'), '#ee3a44', 0.9);
+    fillPath(ctx, new Path2D('M3 -21 Q13 -19 21 -14 Q28 -10 36 -14 Q33 -5 23 -7 Q14 -9 3 -16 Z'), '#b8222e', 0.9);
+    mouseBody(ctx, { fur: '#3c3668', belly: '#4c4680', inner: '#8a6a9a', eye: '#14102a', scar: false });
+    ctx.save(); ctx.clip(faceP());
+    ctx.fillStyle = '#1c1834'; ctx.fillRect(-30, -29.4, 44, 16); ctx.fillRect(-30, -50, 44, 9.6);
+    ctx.fillStyle = 'rgba(150,140,220,.35)'; ctx.fillRect(-30, -29.4, 44, 1); ctx.fillRect(-30, -41.4, 44, 0.9);
+    ctx.restore();
+    fillPath(ctx, poly(ctx, [[7, -42], [16, -47], [14, -41], [19, -37], [8, -38.5]]), '#1c1834', 0.8);
+    ctx.save(); offFace(ctx);
+    fillPath(ctx, new Path2D('M-16 -23 Q-3 -17 10 -23 L10 -17.5 Q-3 -12 -16 -18 Z'), '#ee3a44', 0.9);
+    ctx.restore();
+    ctx.save(); ctx.clip(ell(ctx, 2, -13, 11.5, 12.5)); ctx.fillStyle = '#ee3a44'; ctx.fillRect(-12, -9.6, 30, 2.6); ctx.restore();
+    kunai(ctx, -9, -10, -0.5, 10);
+    limb(ctx, -10.5, -10.5, 3, 2.8, '#3c3668');
+    kunai(ctx, -12, -15, 0.55, 12);
+    limb(ctx, -11, -14.5, 3.4, 3.2, '#3c3668');
+    ctx.restore();
+  },
+  litter(ctx) {
+    // a big round mother: polka dot kerchief, apron, rolling pin, and three pups peeking out of the basket on her back
+    ctx.save(); ctx.scale(1.38, 1.38);
+    const fur = '#c9a49c';
+    mouseBody(ctx, { fur, belly: '#ecd6cc', inner: '#ffb0c0', bx: 3, by: -13.6, brx: 15, bry: 13.6, scar: false });
+    ctx.save(); ctx.clip(ell(ctx, 3, -13.6, 15, 13.6)); offFace(ctx);
+    const ap = new Path2D('M-12 -22 Q-4 -24 4 -21 L6 -3 Q-3 0 -13 -3 Z');
+    fillPath(ctx, ap, '#fff6f2', 0.9);
+    ctx.fillStyle = '#ff8fb0'; for (let x = -12; x < 6; x += 3.2) { ctx.beginPath(); ctx.arc(x + 1.6, -3, 1.6, 0, Math.PI); ctx.fill(); }
+    ctx.fillStyle = '#ff6a94'; ctx.beginPath(); ctx.moveTo(-3.5, -9); ctx.bezierCurveTo(-7.5, -12, -6, -15.5, -3.5, -13); ctx.bezierCurveTo(-1, -15.5, 0.5, -12, -3.5, -9); ctx.fill();
+    ctx.restore();
+    ctx.save(); ctx.clip(faceP()); ctx.fillStyle = '#e0485a'; ctx.fillRect(-22, -50, 34, 12.4);
+    ctx.fillStyle = '#fff'; for (const [x, y] of [[-14, -40.5], [-8, -41], [-2, -40.5], [4, -40], [-11, -43], [-5, -43.5], [1, -43]]) { ctx.beginPath(); ctx.arc(x, y, 0.9, 0, TAU); ctx.fill(); }
+    ctx.restore();
+    fillPath(ctx, poly(ctx, [[7, -39], [13, -42], [11, -37], [14, -33], [7.5, -36]]), '#e0485a', 0.8);
+    // basket: inside rim, the pups, then the front of the basket over them
+    fillPath(ctx, ell(ctx, 22, -34, 10.5, 2.6), '#6a4420', 0.8);
+    for (const [x, y, c] of [[15.5, -36.4, '#dccbe0'], [22, -38.4, '#c9b39a'], [28.5, -36.4, '#ece2d2']]) {
+      for (const s of [-1, 1]) { fillPath(ctx, ell(ctx, x + s * 2.6, y - 3, 1.9, 2.1), c, 0.6); ctx.fillStyle = '#ffb8cc'; ctx.beginPath(); ctx.arc(x + s * 2.6, y - 3, 1, 0, TAU); ctx.fill(); }
+      fillPath(ctx, ell(ctx, x, y, 3.7, 3.3), c, 0.7);
+      ctx.fillStyle = INK; for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(x + s * 1.3, y - 0.4, 0.75, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = '#ff8fa8'; ctx.beginPath(); ctx.arc(x, y + 1, 0.7, 0, TAU); ctx.fill();
+    }
+    const bk = new Path2D('M11 -34.5 L33 -34.5 L30 -16 Q22 -13 14 -16 Z');
+    cel(ctx, bk, '#cf9850', { box: [11, -35, 33, -14] });
+    ctx.save(); ctx.clip(bk); ctx.strokeStyle = '#9a6a2a'; ctx.lineWidth = 0.8;
+    for (const y of [-29, -24, -19]) { ctx.beginPath(); ctx.moveTo(10, y); ctx.lineTo(34, y); ctx.stroke(); }
+    for (let x = 13; x < 33; x += 3.4) for (const [y, o] of [[-31.5, 0], [-26.5, 1.7], [-21.5, 0], [-16.5, 1.7]]) { ctx.beginPath(); ctx.moveTo(x + o, y - 1.6); ctx.lineTo(x + o, y + 1.6); ctx.stroke(); }
+    ctx.restore();
+    fillPath(ctx, new Path2D('M10.5 -35.6 L33.5 -35.6 L33 -33 L11 -33 Z'), '#a8742e', 0.8);
+    ctx.save(); offFace(ctx); rod(ctx, 12, -32, -7, -19, 1.6, '#8a5a2a'); ctx.restore();
+    rod(ctx, -6, -10, -26, -22.5, 4.2, '#e6b87e');
+    rod(ctx, -26, -22.5, -29.5, -24.6, 1.8, '#b07a40'); rod(ctx, -6, -10, -2.5, -8, 1.8, '#b07a40');
+    line(ctx, [[-9, -13.4], [-23, -21.8]], 'rgba(255,255,240,.7)', 0.8);
+    limb(ctx, -11, -14, 3.6, 3.4, fur);
+    ctx.restore();
+  },
+  pup(ctx) {
+    // a tiny baby mouse: big head, big ears, big shiny eyes, a pacifier and a little blue bandana
+    ctx.save(); ctx.scale(0.66, 0.66);
+    mouseBody(ctx, { fur: '#ead8c6', belly: '#fff4ea', inner: '#ffb4c8', cute: true, earK: 1.28, bx: 1, by: -9.6, brx: 9, bry: 9.6 });
+    ctx.save(); offFace(ctx);
+    fillPath(ctx, new Path2D('M-12 -20.5 Q-3 -16 7 -20.5 L6 -16 Q0 -13 -3 -8 Q-8 -12.5 -12 -16.5 Z'), '#4aa8f4', 0.9);
+    ctx.fillStyle = '#fff'; for (const [x, y] of [[-8, -17], [-3, -15.5], [2, -17], [-3.5, -11.5]]) { ctx.beginPath(); ctx.arc(x, y, 0.9, 0, TAU); ctx.fill(); }
+    ctx.restore();
+    fillPath(ctx, ell(ctx, -21.6, -24.6, 2, 3.8), '#ff9ac4', 0.8);
+    ctx.strokeStyle = lineOf('#ffd23f'); ctx.lineWidth = 2.6; ctx.beginPath(); ctx.arc(-25.2, -24.6, 2.4, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 1.5; ctx.stroke();
+    fillPath(ctx, ell(ctx, -22.6, -24.6, 1.2, 1.2), '#ffd23f', 0.6);
+    ctx.fillStyle = 'rgba(255,120,150,.45)'; ctx.beginPath(); ctx.ellipse(-12, -26, 3, 1.8, 0, 0, TAU); ctx.fill();
+    ctx.restore();
+  },
+  medic(ctx) {
+    // white coat, nurse cap with a red cross, a syringe of green tonic, and healing plus signs floating around
+    ctx.save(); ctx.scale(1.1, 1.1);
+    for (const [x, y, r] of [[-25, -47, 3.4], [15, -54, 2.8], [25, -38, 3.2], [-29, -10, 2.4]]) {
+      plus(ctx, x, y, r, '#5ee07a');
+    }
+    const fur = '#c8bca8';
+    mouseBody(ctx, { fur, inner: '#ffc0c8', scar: false });
+    ctx.save(); offFace(ctx);
+    const coat = new Path2D('M-11 -23 Q2 -28 13 -22 Q17 -12 16 -2.6 L-12 -2.6 Q-14 -14 -11 -23 Z');
+    cel(ctx, coat, '#f6f8fc', { box: [-12, -27, 16, -3] });
+    line(ctx, [[-9, -22], [-3, -13], [3, -24]], '#b8c2d2', 1.1);
+    line(ctx, [[-3, -13], [-3, -3]], '#c8d0dc', 0.8);
+    ctx.restore();
+    plus(ctx, 7.5, -14, 3.4, '#e8343f');
+    rod(ctx, 10.5, -21, 11, -17, 1.2, '#4a7ad8');
+    const cap = new Path2D('M-14 -40 L-12 -49 L4 -50 L6 -41 Q-4 -38 -14 -40 Z');
+    cel(ctx, cap, '#ffffff', { box: [-14, -50, 6, -39] });
+    plus(ctx, -4, -44.6, 3, '#e8343f');
+    ctx.save(); ctx.translate(-12, -16); ctx.rotate(0.45);
+    fillPath(ctx, poly(ctx, [[-14, -2.2], [0, -2.2], [0, 2.2], [-14, 2.2]]), '#eaf6ff', 0.9);
+    ctx.fillStyle = '#5ee07a'; ctx.fillRect(-13, -1.4, 9, 2.8);
+    ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillRect(-12, -1.2, 7, 0.7);
+    rod(ctx, 0, 0, 4.5, 0, 1.4, '#c8d0dc'); fillPath(ctx, poly(ctx, [[4.5, -2.6], [5.8, -2.6], [5.8, 2.6], [4.5, 2.6]]), '#c8d0dc', 0.7);
+    line(ctx, [[-14, 0], [-20, 0]], '#e8eef8', 0.9);
+    ctx.restore();
+    limb(ctx, -11, -14, 3.6, 3.4, fur);
+    ctx.restore();
+  },
+  thief(ctx) {
+    // leaning in, a striped shirt and a black eye mask, a fat sack of stolen coins over the shoulder, and a sly smirk
+    ctx.save(); ctx.rotate(-0.12);
+    const fur = '#aaa4b6';
+    mouseBody(ctx, { fur, inner: '#ffb8c4' });
+    ctx.save(); ctx.clip(ell(ctx, 2, -13, 11.5, 12.5)); offFace(ctx);
+    ctx.fillStyle = '#f4f2f8'; ctx.fillRect(-12, -27, 30, 23.4);
+    ctx.fillStyle = '#2a2638'; for (let y = -24; y < -4; y += 4.4) ctx.fillRect(-12, y, 30, 2.2);
+    ctx.restore();
+    ctx.save(); ctx.clip(faceP());
+    const m = new Path2D(); m.rect(-30, -38.6, 44, 8.6); m.moveTo(-3.6, -33); m.ellipse(-8.6, -33, 5, 5.6, 0.1, 0, TAU);
+    ctx.fillStyle = '#1a1626'; ctx.fill(m, 'evenodd');
+    ctx.restore();
+    fillPath(ctx, poly(ctx, [[7, -36], [15, -40], [13, -35], [17, -31], [8, -33]]), '#1a1626', 0.8);
+    fillPath(ctx, ell(ctx, -22.4, -29.6, 2.5, 2.2), '#ff8fa8', 0.7);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-12.6, -25.2); ctx.quadraticCurveTo(-10.6, -25.6, -9.6, -28); ctx.stroke();
+    const sk = new Path2D('M15 -42 Q5 -33 9 -20 Q15 -9 27 -11 Q38 -15 36 -28 Q34 -39 23 -43 Z');
+    cel(ctx, sk, '#c69c62', { box: [6, -44, 37, -10] });
+    fillPath(ctx, poly(ctx, [[22, -26], [29, -27], [30, -20], [23, -19]]), '#a47844', 0.8);
+    ctx.strokeStyle = '#6a4a28'; ctx.lineWidth = 0.6; ctx.setLineDash([1.2, 1.2]); ctx.stroke(poly(ctx, [[23, -25.2], [28.2, -26], [29, -21], [23.8, -20]])); ctx.setLineDash([]);
+    fillPath(ctx, ell(ctx, 18, -43, 6.4, 2.8), '#4a3020', 0.9);
+    coin(ctx, 15.6, -45, 2.8); coin(ctx, 20.6, -46, 2.6);
+    rod(ctx, 12, -40.5, 24, -40.5, 1.6, '#8a6a3a');
+    limb(ctx, 10, -38, 3.2, 3, fur);
+    ctx.restore();
+  },
+  spiky(ctx) {
+    // a rat with a back full of sharp quills: a fan behind the body, a shorter row over the back, angry brows
+    ctx.save(); ctx.scale(1.15, 1.15);
+    for (let k = 0; k < 9; k++) spike(ctx, 4, -18, -1.72 + k * 0.235, 9, 25 + (k % 2) * 4 - Math.abs(k - 4) * 0.6, 0.19, '#4e3e34');
+    const fur = '#8a7262';
+    mouseBody(ctx, { fur, belly: '#c8b09a', inner: '#e0a090', eye: '#ff4a2a' });
+    for (let k = 0; k < 5; k++) spike(ctx, 4, -13, -1.05 + k * 0.32, 5, 15.5 - Math.abs(k - 2) * 0.5, 0.2, '#6a5444');
+    ctx.strokeStyle = INK; ctx.lineWidth = 2.8; ctx.beginPath(); ctx.moveTo(-15.4, -36.4); ctx.lineTo(-3, -41.6); ctx.stroke();
+    fillPath(ctx, poly(ctx, [[-16, -25], [-14.6, -24.4], [-15.4, -21.4]]), '#fff', 0.5);
+    ctx.restore();
+  },
+  frosty(ctx) {
+    // icy blue fur with an ice crest and frost crystals, a striped scarf, an icicle dagger, frozen breath and drifting snowflakes
+    ctx.save(); ctx.scale(1.15, 1.15);
+    for (const [x, y, r] of [[-27, -46, 3.6], [18, -50, 3.2], [28, -32, 2.8], [-31, -9, 2.6]]) { flake(ctx, x, y, r + 0.6, 'rgba(60,110,190,.55)'); flake(ctx, x, y, r); }
+    const fur = '#a8d0f0';
+    for (const [x, b, h, w] of [[-6.5, -41, 9, 2.6], [-1.5, -42.4, 12, 3.2], [3, -41.6, 8, 2.4]]) {
+      fillPath(ctx, poly(ctx, [[x - w, b], [x, b - h], [x + w, b]]), '#e8f8ff', 0.9, '#5a9ad0');
+      line(ctx, [[x - w * 0.4, b - 1], [x - 0.2, b - h + 1.5]], 'rgba(255,255,255,.95)', 0.7);
+    }
+    mouseBody(ctx, { fur, belly: '#eef8ff', inner: '#c4e2ff', eye: '#1a4a8a', scar: false });
+    for (const [x, y, r] of [[8, -15, 1.9], [0, -7, 1.5], [2, -38, 1.6], [12, -8, 1.3]]) flake(ctx, x, y, r, '#ffffff');
+    ctx.save(); offFace(ctx);
+    const sc = new Path2D('M-15 -23 Q-2 -17 10 -23 L10 -17.6 Q-2 -12 -15 -18 Z'), tl = new Path2D('M5 -20 L12 -19 L15 -6 L9 -6 Z');
+    for (const p of [tl, sc]) {
+      fillPath(ctx, p, '#3a5ab8', 0.9);
+      ctx.save(); ctx.clip(p); ctx.fillStyle = '#f4f8ff'; for (let x = -16; x < 18; x += 5) ctx.fillRect(x, -26, 2, 24); ctx.restore();
+    }
+    ctx.restore();
+    for (const [x, y, rx, ry, c] of [[-30, -27, 4, 3, '#f4fbff'], [-36.5, -25, 3, 2.3, '#e2f2ff'], [-41.5, -23.6, 2, 1.6, '#d0e8fc']]) fillPath(ctx, ell(ctx, x, y, rx, ry), c, 0.6);
+    fillPath(ctx, poly(ctx, [[-9, -12], [-14, -17], [-28, -25.5], [-13, -13]]), '#d8f2ff', 0.9, '#4a8ac8');
+    line(ctx, [[-14, -16], [-26, -24.6]], 'rgba(255,255,255,.95)', 0.7);
+    limb(ctx, -11, -14, 3.6, 3.4, fur);
+    ctx.restore();
+  },
+  rocket(ctx) {
+    // goggles up on the forehead, a launcher tube on the shoulder with a rocket in the muzzle, a jet pack spitting flames
+    ctx.save(); ctx.scale(1.1, 1.1);
+    ctx.save(); ctx.translate(0, -40); ctx.rotate(0.07);
+    for (const [x, y, r, a] of [[35, -1, 3.4, 0.6], [40, -5.5, 2.8, 0.45], [44, -10.5, 2.2, 0.3]]) { ctx.fillStyle = `rgba(200,200,210,${a})`; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
+    fillPath(ctx, poly(ctx, [[24, -5], [31, -7.6], [31, 7.6], [24, 5]]), '#4c5632', 1);
+    fillPath(ctx, ell(ctx, 31, 0, 1.8, 7.4), '#1e2016', 0.6);
+    ctx.fillStyle = 'rgba(255,150,60,.6)'; ctx.beginPath(); ctx.ellipse(31, 0, 0.9, 4.6, 0, 0, TAU); ctx.fill();
+    cel(ctx, poly(ctx, [[-30, -5], [24, -5], [24, 5], [-30, 5]]), '#6c7a3e', { box: [-30, -5, 24, 5] });
+    for (const x of [-24, 15]) { ctx.fillStyle = '#ffd23f'; ctx.fillRect(x, -5, 3.2, 10); }
+    fillPath(ctx, poly(ctx, [[-31, -6.2], [-27, -6.2], [-27, 6.2], [-31, 6.2]]), '#4c5632', 0.9);
+    fillPath(ctx, poly(ctx, [[-31, -3.8], [-39, 0], [-31, 3.8]]), '#e8343f', 0.9);
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.moveTo(-32, -2.4); ctx.lineTo(-37, -0.3); ctx.lineTo(-32, -1); ctx.fill();
+    fillPath(ctx, poly(ctx, [[-10, -5], [-9, -9], [-3, -9], [-2, -5]]), '#4c5632', 0.8);
+    ctx.restore();
+    const fur = '#b4a492';
+    mouseBody(ctx, { fur, inner: '#ffc0a8' });
+    for (const [x, y] of [[12, -5], [18.5, -5.5]]) {
+      fillPath(ctx, new Path2D(`M${x - 2.6} ${y} Q${x + 1} ${y + 7} ${x + 10} ${y + 6.5} Q${x + 4} ${y + 2.5} ${x + 2.6} ${y} Z`), '#ff8a2b', 0.8);
+      fillPath(ctx, new Path2D(`M${x - 1.2} ${y} Q${x + 1.2} ${y + 4.4} ${x + 6} ${y + 4.4} Q${x + 2.5} ${y + 1.6} ${x + 1.4} ${y} Z`), '#ffe14a', 0.5);
+    }
+    const pk = new Path2D('M8 -30 Q21 -32 22 -26 L22 -11 Q21 -8 16 -8 L8 -8 Z');
+    cel(ctx, pk, '#8c92a2', { box: [8, -32, 22, -8] });
+    ctx.fillStyle = '#e8343f'; ctx.fillRect(9, -22, 12.6, 2.4);
+    for (const x of [10, 16.5]) fillPath(ctx, poly(ctx, [[x, -8], [x + 4, -8], [x + 5, -4.6], [x - 1, -4.6]]), '#585e6c', 0.8);
+    ctx.save(); offFace(ctx); rod(ctx, 9, -27, -7, -19, 1.6, '#5a4a3a'); ctx.restore();
+    ctx.save(); ctx.clip(faceP()); ctx.fillStyle = '#6a4a2a'; ctx.fillRect(-22, -42.6, 34, 2.4); ctx.restore();
+    for (const x of [-12.5, -5]) { fillPath(ctx, ell(ctx, x, -42, 3.3, 3.1), '#d0a840', 0.9); fillPath(ctx, ell(ctx, x, -42, 2.1, 1.9), '#8ae0ff', 0.6); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x - 0.8, -42.7, 0.7, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  },
+  ghost(ctx) {
+    // a pale mouse with a wavy wisp for a tail and no feet; ENEMY_POST makes it see-through and adds the glow
+    ctx.save(); ctx.scale(1.1, 1.1); ctx.translate(0, -4);
+    const w = new Path2D('M-9 -10 Q-10 0 -2 3 Q5 5 9 1 Q13 -2 17 2 Q21 6 27 3 Q33 0 36 4 Q35 -4 29 -5 Q23 -6 20 -9 Q16 -13 10 -12 Q6 -12 4 -18 Z');
+    cel(ctx, w, '#dfe8ff', { box: [-10, -18, 36, 5] });
+    ctx.save(); ctx.clip(w); ctx.strokeStyle = 'rgba(150,170,230,.5)'; ctx.lineWidth = 0.8;
+    for (const [x1, y1, x2, y2] of [[0, -4, 14, -2], [10, -8, 26, 0]]) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo((x1 + x2) / 2, y1 + 4, x2, y2); ctx.stroke(); }
+    ctx.restore();
+    mouseBody(ctx, { fur: '#e2eaff', belly: '#ffffff', inner: '#c4ceff', eye: '#1aa8e0', scar: false, noTail: true, noFeet: true });
+    ctx.restore();
+  },
+};
+
+// passes laid on the finished sprite after the dark outline (in feet coordinates), for what an outline would spoil:
+// soft glows go behind the sprite, and the Ghost is made see-through with glowing eyes on top
+function glowDisc(ctx, x, y, r, rgb, a) {
+  const g = ctx.createRadialGradient(x, y, r * 0.1, x, y, r); g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+}
+const ENEMY_POST = {
+  medic(ctx) {
+    ctx.scale(1.1, 1.1); ctx.globalCompositeOperation = 'destination-over';
+    for (const [x, y, r] of [[-25, -47, 3.4], [15, -54, 2.8], [25, -38, 3.2], [-29, -10, 2.4]]) glowDisc(ctx, x, y, r * 2.6, '120,255,140', 0.55);
+  },
+  frosty(ctx) {
+    ctx.scale(1.15, 1.15); ctx.globalCompositeOperation = 'destination-over';
+    glowDisc(ctx, 0, -26, 38, '170,225,255', 0.5);
+  },
+  ghost(ctx) {
+    ctx.scale(1.1, 1.1); ctx.translate(0, -4);
+    ctx.globalCompositeOperation = 'destination-in';
+    const f = ctx.createLinearGradient(8, 0, 38, 0); f.addColorStop(0, 'rgba(0,0,0,.8)'); f.addColorStop(1, 'rgba(0,0,0,.2)');
+    ctx.fillStyle = f; ctx.fillRect(-60, -80, 120, 100);
+    ctx.globalCompositeOperation = 'source-over';
+    glowDisc(ctx, -9, -33, 8, '160,240,255', 0.95);
+    ctx.fillStyle = '#e8ffff'; ctx.beginPath(); ctx.ellipse(-9.4, -32.8, 1.4, 2.2, 0, 0, TAU); ctx.fill();
+    ctx.globalCompositeOperation = 'destination-over';
+    glowDisc(ctx, 4, -24, 40, '130,200,255', 0.55);
+  },
 };
 
 // elite dressing: a crimson cape behind the body, a gold-trimmed shoulder plate and a jewelled crown
@@ -241,7 +530,7 @@ export function enemySprite(type, elite) {
   const c = document.createElement('canvas'); c.width = W * S; c.height = H * S;
   const ctx = c.getContext('2d'); ctx.scale(S, S); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   curElite = !!elite;
-  const sc = { brute: 1.85, armored: 1.12, shaman: 1.18, shield: 1.08, digger: 1.08, dasher: 0.95 }[type] || 1;
+  const sc = { brute: 1.85, armored: 1.12, shaman: 1.18, shield: 1.08, digger: 1.08, dasher: 0.95, ninja: 0.94, litter: 1.38, pup: 0.66, medic: 1.1, spiky: 1.15, frosty: 1.15, rocket: 1.1, ghost: 1.1 }[type] || 1;
   const draw = (last) => {
     ctx.save(); ctx.translate(ax, ay);
     if (elite && type !== 'glider') eliteCape(ctx, sc);
@@ -253,11 +542,12 @@ export function enemySprite(type, elite) {
   draw(true);
   if (elite) {
     ctx.save(); ctx.translate(ax, ay);
-    const hy = { brute: -78, shaman: -62, armored: -58 }[type] || -52;
+    const hy = { brute: -78, shaman: -62, armored: -58, ninja: -48, litter: -70, pup: -38, medic: -60, spiky: -58, frosty: -62, rocket: -58, ghost: -58 }[type] || -52;
     eliteCrown(ctx, -2, hy);
     ctx.restore();
   }
   const r = { c: outlineCanvas(rimLight(c, 2, '#fff0c0', 0.4), 2, '#2a1840', 0.85), ax, ay, w: W, h: H };
+  if (ENEMY_POST[type]) { const x = r.c.getContext('2d'); x.save(); x.scale(S, S); x.translate(ax, ay); ENEMY_POST[type](x); x.restore(); }
   spriteCache.set(key, r);
   return r;
 }
