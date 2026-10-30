@@ -920,7 +920,7 @@ t('lootbox screens: every box has a drawn icon, rewards open boxes, the reveal c
   assert.ok(/else if \(r\.startsWith\('box:'\)\) showBox\(r\.slice\(4\)\)/.test(js), 'nextReward opens boxes');
   assert.ok(!/showItemReward/.test(js), 'the old pick one of three screen is gone');
   const box = js.slice(js.indexOf('function showBox('), js.indexOf('function showSnackReward'));
-  assert.ok(/S\.openPlanned\(g, plan\)/.test(box) && /showBoxReveal\(tier, plan\.id, more\)/.test(box), 'opening rolls through the sim');
+  assert.ok(/S\.openPlanned\(g, plan\)/.test(box) && /showBoxReveal\(tier, plan\.id, more, plan\.gems \|\| 0\)/.test(box), 'opening rolls through the sim');
   assert.ok(/take: \(\) => \{[\s\S]*?nextReward\(\)/.test(box) && !/showTower\(\(\) => nextReward\(\), \{ item: idx \}\)/.test(box), 'collecting goes on to the next chest, not to the equip screen');
   assert.ok(/\.boxic\.shaking\{animation:boxshake/.test(css) && /@keyframes boxshake/.test(css) && /@keyframes boxhit/.test(css), 'shake animation');
   assert.ok(/body\.nomotion \*/.test(css), 'reduced motion stops animations (the open still works)');

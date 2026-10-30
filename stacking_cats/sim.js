@@ -622,6 +622,9 @@ export function makeEnemy(g, type, w, o = {}) {
     fly: d.ai === 'fly', alt: d.alt || 0, elite, flash: 0, stun: 0, slow: 0, slowT: 0, burn: null, poison: null,
     dead: false, swing: 0, t: g.rnd() * 6, ability: 0, boss: false, age: 0, kb: 0,
     shield: d.shield ? hp * d.shield : 0, maxShield: d.shield ? hp * d.shield : 0, under: d.ai === 'burrow', leapT: 0, leaped: false,
+    // the Rat Gang's newcomers (see ENEMY_TYPES): dodge chance, pups on death, thorns share, chill aura, phase cycle (phased = faded, cannot be hit), stolen coins
+    dodge: d.dodge || 0, splits: d.splits || 0, thorns: d.thorns || 0, chill: d.chill || 0, phCd: d.phase || 0, phT: d.phase ? g.rnd() * d.phase : 0, phased: false,
+    loot: 0, fled: false, minion: d.cost === 0,
   };
 }
 const ecy = (e) => (e.fly ? e.y - e.alt : e.y - e.h * 0.5);
@@ -632,7 +635,7 @@ export function startWave(g) {
   g.state = 'intro';
   g.intro = 2.4;
   g.bossWave = isBossWave(g.wave);
-  g.enemies = []; g.projs = []; g.pools = []; g.mines = [];
+  g.enemies = []; g.projs = []; g.pools = []; g.mines = []; g.pending = []; g.chill = 0;
   g.towerX = TOWER_X;
   g.queue = buildQueue(g, g.wave);
   g.qT = 0;
@@ -686,6 +689,8 @@ export function finishWave(g) {
 // ---------------------------------------------------------------- damage
 export function hurtEnemy(g, e, dmg, o = {}) {   // exported for the tests
   if (e.dead || e.under) return 0;
+  // a faded Ghost Mouse takes nothing at all; a Ninja Mouse dodges a share of real hits (status ticks, cleave and thorns always land)
+  if (e.phased || (e.dodge && !o.tick && g.rnd() < e.dodge)) { if (!o.tick && !o.silent) emit(g, { k: 'miss', x: e.x, y: ecy(e) - e.h * 0.4 }); return 0; }
   const sc = g.curCat, f = sc ? cf(g, sc) : null;
   let d = dmg * (1 + g.mods.curse);
   const rl = g.mods.rule;   // relics that look at the mouse or at the moment
@@ -713,6 +718,7 @@ export function hurtEnemy(g, e, dmg, o = {}) {   // exported for the tests
   }
   e.hp -= d - absorbed;
   e.flash = 0.1;
+  if (e.thorns && sc && !o.tick && d > 0) thornCat(g, sc, d * e.thorns);   // Spiky Rat: the cat that hit it pays a share back
   if (sc) {
     sc.dmgDone += d; sc.wDmg += d; g.run.dmg += d;
     if (d > g.run.biggest) g.run.biggest = d;
@@ -748,6 +754,14 @@ export function hurtEnemy(g, e, dmg, o = {}) {   // exported for the tests
 export function killEnemy(g, e, credit) {
   if (e.dead) return;
   e.dead = true;
+  // Mama Mouse: pups scamper out (spawned at the end of the step, so a blast that killed her does not hit them in the same loop)
+  if (e.splits && !e.boss) for (let i = 0; i < e.splits; i++) (g.pending || (g.pending = [])).push({ type: 'pup', x: e.x + (i - (e.splits - 1) / 2) * 16, y: e.y });
+  if (e.loot > 0) {   // a caught Sneak Thief drops the coins it stole (they were run coins already, so no coin bonuses apply)
+    g.run.coins += e.loot;
+    emit(g, { k: 'coin', x: e.x, y: ecy(e), v: e.loot });
+    emit(g, { k: 'loot', x: e.x, y: ecy(e), v: e.loot });
+    e.loot = 0;
+  }
   if (credit) {
     const sc = g.curCat, kf = sc ? cf(g, sc) : null;
     if (sc) {
@@ -767,8 +781,8 @@ export function killEnemy(g, e, credit) {
       g.run.kills++; g.wKills++; g.zoom = Math.min(100, g.zoom + 2.4 * (1 + g.mods.zoomG));
       if (kf && kf.kcoin) addCoins(g, kf.kcoin * COIN.kill, e.x, ecy(e));   // kcoin is a share of the kill coin, so it moves with COIN_SCALE
       emit(g, { k: 'kill', x: e.x, y: ecy(e), type: e.type, elite: e.elite });
-      addCoins(g, e.elite ? COIN.elite : COIN.kill, e.x, ecy(e));
-      if (g.rnd() < (e.elite ? 0.08 : 0.004) * (1 + g.meta.luck * 0.4 + g.route.chest + ((g.daily && g.daily.mod.chest) || 0))) { const tier = rollBoxTier(g, 'elite'); g.boxes.push(tier); emit(g, { k: 'chest', x: e.x, y: ecy(e), tier }); }
+      if (!e.minion) addCoins(g, e.elite ? COIN.elite : COIN.kill, e.x, ecy(e));   // pups pay nothing, Mama Mouse already paid for the litter
+      if (!e.minion && g.rnd() < (e.elite ? 0.08 : 0.004) * (1 + g.meta.luck * 0.4 + g.route.chest + ((g.daily && g.daily.mod.chest) || 0))) { const tier = rollBoxTier(g, 'elite'); g.boxes.push(tier); emit(g, { k: 'chest', x: e.x, y: ecy(e), tier }); }
     }
   }
   if (e.burn && !e.boss && g.mods.rule.burnBoom && (g._boomDepth || 0) < 8) {   // Cinder Bomb: a burning mouse blows up (same depth cap as the item explosions)
@@ -777,7 +791,8 @@ export function killEnemy(g, e, credit) {
     g._boomDepth--;
   }
   if (e.boss) {
-    for (const o of g.enemies) if (!o.dead && o !== e) { o.dead = true; emit(g, { k: 'kill', x: o.x, y: ecy(o), type: o.type, quiet: true }); }
+    g.pending = [];
+    for (const o of g.enemies) if (!o.dead && o !== e) { o.dead = true; if (o.loot > 0) { g.run.coins += o.loot; o.loot = 0; } emit(g, { k: 'kill', x: o.x, y: ecy(o), type: o.type, quiet: true }); }
   }
 }
 
@@ -821,6 +836,19 @@ export function hurtCat(g, c, dmg) {
   }
 }
 
+// Spiky Rat thorns: the cat's damage reduction (and the Fortress special) still count, dodges and barriers do not, and it never knocks a cat out
+export function thornCat(g, c, v) {
+  if (!c || c.ko || !g.cats.includes(c)) return 0;
+  v *= (1 - Math.min(0.8, g.mods.dr + cf(g, c).dr)) * (g.fortressT > 0 ? 0.3 : 1) * g.hurtMul;
+  v = Math.min(v, c.hp - 1);
+  if (!(v > 0)) return 0;
+  c.hp -= v;
+  c.taken += v; g.run.taken += v; g.wTaken += v;
+  c.flash = 0.18;
+  emit(g, { k: 'thorns', uid: c.uid, v });
+  return v;
+}
+
 function healCat(g, c, v, src, quiet) {
   if (!c || c.ko) return;
   const mx = catMaxHp(g, c);
@@ -841,13 +869,14 @@ function weakestCat(g) {
 // ---------------------------------------------------------------- cat side
 const catPos = (g, rank) => ({ x: g.towerX + 30, y: GROUND - 36 - rank * SLOT });
 
-function targetsInRange(g, range, from) {
-  const out = [];
+export function targetsInRange(g, range, from) {   // exported for the tests
+  let out = [];
   for (const e of g.enemies) {
     if (e.dead || e.under || e.x < g.towerX - 10) continue;
     const edge = e.x - e.w * (e.boss ? 0.45 : 0.4) - from;
     if (edge <= range) out.push(e);
   }
+  if (out.some((e) => e.phased) && out.some((e) => !e.phased)) out = out.filter((e) => !e.phased);   // a faded ghost is only aimed at when nothing else is there
   out.sort((a, b) => a.x - b.x);
   if (g.focus) { const i = out.findIndex((e) => e.uid === g.focus); if (i > 0) out.unshift(out.splice(i, 1)[0]); }
   return out;
@@ -1012,9 +1041,18 @@ function support(g, c, rank, s) {
   return false;
 }
 
+// Frost Rat aura: while one stands within CHILL_R of the stack every cat attacks slower (the strongest aura counts once, they do not stack)
+export const CHILL_R = 320;
+export function chillOf(g) {
+  let c = 0;
+  for (const e of g.enemies) if (!e.dead && e.chill && !e.under && e.x - g.towerX <= CHILL_R) c = Math.max(c, e.chill);
+  return c;
+}
+
 function updateCats(g, dt) {
   const m = g.mods;
   const alive = aliveCats(g);
+  const chill = g.chill = chillOf(g);
   alive.forEach((c, rank) => {
     const d = CAT_BY_ID[c.id];
     c.flash = Math.max(0, c.flash - dt);
@@ -1023,7 +1061,8 @@ function updateCats(g, dt) {
     let hs = 1 + m.haste + f.haste + (c.fz || 0) * f.frenzy;
     if (c.frenzyT > 0) { c.frenzyT -= dt; hs *= 2.2; }
     if (g.anthemT > 0) hs *= 1.5;
-    c.sp = Math.min(1, c.sp + dt / SPECIAL_TIME * (1 + f.spc));
+    hs *= 1 - chill;
+    c.sp =Math.min(1, c.sp + dt / SPECIAL_TIME * (1 + f.spc));
     const mxh = catMaxHp(g, c, m);
     c.low = c.hp < mxh * 0.5;
     if (f.regen) healCat(g, c, mxh * f.regen * dt, c, true);
@@ -1075,7 +1114,10 @@ function updateProjs(g, dt) {
       if (p.x <= p.tx) {
         p.dead = true;
         const al = aliveCats(g);
-        if (al.length) hurtCat(g, pick(g, al), p.dmg);
+        if (p.rocket) {   // Rocket Mouse: full damage on the top cat, half on the one below
+          if (al.length) { hurtCat(g, al[al.length - 1], p.dmg); if (al.length > 1) hurtCat(g, al[al.length - 2], p.dmg * 0.5); }
+          emit(g, { k: 'boom', x: p.x, y: p.y, r: 40, color: '#ff8a3d', enemy: true });
+        } else if (al.length) hurtCat(g, pick(g, al), p.dmg);
       }
       continue;
     }
@@ -1095,7 +1137,7 @@ function updateProjs(g, dt) {
     p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
     if (p.life <= 0 || p.x > W + 60 || p.y > GROUND + 40 || p.y < -60) { p.dead = true; continue; }
     for (const e of g.enemies) {
-      if (e.dead || p.hits.has(e)) continue;
+      if (e.dead || e.phased || p.hits.has(e)) continue;   // shots fly through a faded ghost
       if (Math.hypot(e.x - p.x, ecy(e) - p.y) < e.w * 0.42 + p.r) {
         p.hits.add(e);
         const f = p.fx;
@@ -1167,6 +1209,10 @@ function spawnFromNest(g, nest) {
   emit(g, { k: 'spawn', x: e.x, y: e.y });
 }
 
+const GHOST_FADE = 1.2;   // seconds a Ghost Mouse stays faded
+export const MEDIC = { r: 160, pct: 0.08, medic: 0.02, nest: 0.01 };   // heal reach and share of max health (other medics and nests get only a little)
+export const THIEF = { share: 0.08, min: 3, flee: 1.8 };   // share of the run coins stolen, at least min (times COIN_SCALE), and the run away speed
+
 function updateEnemies(g, dt) {
   const front = g.towerX + 30;
   const sorted = g.enemies.filter((e) => !e.dead && !e.fly && e.ai !== 'nest').sort((a, b) => a.x - b.x);
@@ -1180,6 +1226,12 @@ function updateEnemies(g, dt) {
     e.t += dt; e.age += dt; e.kb *= Math.exp(-11 * dt);
     if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
     if (e.ai === 'nest') { nestAI(g, e, dt); continue; }
+    if (e.phCd) {   // Ghost Mouse: visible for phCd seconds, then faded for GHOST_FADE (it keeps walking and biting)
+      e.phT += dt;
+      const was = e.phased;
+      e.phased = e.phT % (e.phCd + GHOST_FADE) >= e.phCd;
+      if (was !== e.phased) emit(g, { k: e.phased ? 'fade' : 'unfade', x: e.x, y: ecy(e) });
+    }
     if (e.stun > 0) { e.stun -= dt; continue; }
     const sp = e.spd * (1 - Math.min(0.85, e.slow + m.slow));
     if (!alive.length) continue;
@@ -1205,6 +1257,54 @@ function updateEnemies(g, dt) {
           e.swing = 0.4;
           for (const o of g.enemies) if (!o.dead && o !== e && !o.boss && Math.abs(o.x - e.x) < 230) { o.hp = Math.min(o.maxHp, o.hp + o.maxHp * 0.14); emit(g, { k: 'ehealfx', x: o.x, y: ecy(o) }); }
         }
+      }
+    } else if (e.ai === 'rocket') {
+      // stands far back like a slinger and fires a rocket at the top of the stack (it splashes the cat below too, see updateProjs)
+      const stop = front + e.range;
+      if (e.x > stop) e.x = Math.max(stop, e.x - sp * dt);
+      else {
+        e.cd -= dt;
+        if (e.cd <= 0) {
+          e.cd = ENEMY_TYPES.rocket.cd * (e.elite ? 0.8 : 1);
+          e.swing = 0.3;
+          const tx = front, ty = catPos(g, alive.length - 1).y - 6, sx = e.x - 10, sy = e.y - e.h * 0.7;
+          const dx = tx - sx, dy = ty - sy, L = Math.hypot(dx, dy);
+          g.projs.push({ kind: 'enemy', rocket: true, x: sx, y: sy, vx: dx / L * 260, vy: dy / L * 260, tx, dmg: e.dmg });
+          emit(g, { k: 'eshoot', x: e.x, y: sy, rocket: true });
+          emit(g, { k: 'rocket', x: sx, y: sy, x2: tx, y2: ty });
+        }
+      }
+    } else if (e.ai === 'medic') {
+      // keeps a little behind the front mouse (never closer than 90 px to the stack, never further back than its range) and patches up the mice near it
+      let lead = Infinity;
+      for (const o of g.enemies) if (!o.dead && o !== e && !o.boss && !o.fly && !o.under && o.ai !== 'medic' && o.ai !== 'thief') lead = Math.min(lead, o.x);
+      const stop = Math.min(front + e.range, Math.max(front + 90, lead + 110));
+      if (e.x > stop) e.x = Math.max(stop, e.x - sp * dt);
+      e.cd -= dt;
+      if (e.cd <= 0) {
+        e.cd = ENEMY_TYPES.medic.cd * (e.elite ? 0.85 : 1);
+        let n = 0;
+        for (const o of g.enemies) {
+          if (o.dead || o === e || o.under || o.hp >= o.maxHp || Math.abs(o.x - e.x) > MEDIC.r) continue;
+          o.hp = Math.min(o.maxHp, o.hp + o.maxHp * (o.boss ? MEDIC.nest : o.ai === 'medic' ? MEDIC.medic : MEDIC.pct));
+          emit(g, { k: 'ehealfx', x: o.x, y: ecy(o) }); n++;
+        }
+        if (n) { e.swing = 0.4; emit(g, { k: 'medic', x: e.x, y: ecy(e), r: MEDIC.r, n }); }
+      }
+    } else if (e.ai === 'thief') {
+      // slips past the queue to the foot of the stack, grabs a share of the run coins once, then runs off to the right; caught, it drops them (killEnemy)
+      if (!e.fled) {
+        const stop = front + e.w * 0.5 + 2;
+        if (e.x > stop) e.x = Math.max(stop, e.x - sp * dt);
+        else {
+          const have = Math.max(0, g.run.coins);
+          const n = Math.min(have, Math.max(THIEF.min * COIN_SCALE, have * THIEF.share));
+          g.run.coins -= n; e.loot = n; e.fled = true; e.swing = 0.3;
+          emit(g, { k: 'steal', x: e.x, y: ecy(e), v: n });
+        }
+      } else {
+        e.x += sp * THIEF.flee * dt;
+        if (e.x > W + 60) { e.dead = true; emit(g, { k: 'escape', x: W, y: ecy(e), v: e.loot }); e.loot = 0; }   // got away: the coins are gone
       }
     } else if (e.ai === 'fly') {
       const stop = front + 60;
@@ -1360,7 +1460,7 @@ export function step(g, dt = DT) {
     const a = CAT_BY_ID[c.id].atk;
     reach = Math.min(reach, a.t === 'nova' ? a.radius - 30 : a.t === 'mine' ? 300 : a.range) * 1;
   }
-  for (const e of g.enemies) if (!e.dead && !e.fly) { any = true; near = Math.min(near, e.x - e.w * 0.4 - (front - 10)); }
+  for (const e of g.enemies) if (!e.dead && !e.fly && !e.fled) { any = true; near = Math.min(near, e.x - e.w * 0.4 - (front - 10)); }   // the stack does not chase a fleeing thief
   g.marching = near > Math.max(40, reach * (1 + g.mods.range) * 0.8) && aliveCats(g).length > 0;
   if (g.marching) {
     const v = any ? (near > 260 ? 125 : 58) : 30;
@@ -1377,6 +1477,14 @@ export function step(g, dt = DT) {
   updateProjs(g, dt);
   updateMinesPools(g, dt);
   updateEnemies(g, dt);
+  if (g.pending && g.pending.length) {   // Mama Mouse pups join the wave (not in the queue, not in the wave budget)
+    for (const p of g.pending.splice(0)) {
+      const pup = makeEnemy(g, p.type, g.wave, { x: p.x });
+      pup.y = p.y + (g.rnd() - 0.5) * 8; pup.kb = 0;
+      g.enemies.push(pup);
+      emit(g, { k: 'spawn', x: pup.x, y: pup.y });
+    }
+  }
 
   if (!aliveCats(g).length && g.cats.length) {
     if (g.nineLives > 0) {
