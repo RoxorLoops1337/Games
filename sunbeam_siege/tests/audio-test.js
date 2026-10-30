@@ -41,7 +41,7 @@ const A = win.SB.audio;
 let fails = 0;
 function ok(c, m) { if (!c) { fails++; console.log('FAIL', m); } }
 
-const REQUIRED = ['card_draw','card_play','cat_deploy','meow_1','meow_2','meow_3','meow_4','meow_5','meow_6','purr','hiss','pounce_hit','claw_scratch','heavy_hit','shatter','knock_off','box_flap','yarn_tangle','nap_zzz','wake_stretch','life_spent','life_gained','zoomies_surge','crash_down','witching_gong','pest_squeak','dog_bark','vacuum_whirr','spray_hiss','relic_gain','shop_coin','upgrade_scratch','victory_fanfare','defeat_sting','ui_click','ui_hover'];
+const REQUIRED = ['card_draw','card_play','cat_deploy','meow_1','meow_2','meow_3','meow_4','meow_5','meow_6','purr','hiss','pounce_hit','claw_scratch','heavy_hit','shatter','knock_off','box_flap','yarn_tangle','nap_zzz','wake_stretch','life_spent','life_gained','zoomies_surge','crash_down','witching_gong','pest_squeak','dog_bark','vacuum_whirr','spray_hiss','relic_gain','shop_coin','upgrade_scratch','victory_fanfare','defeat_sting','ui_click','ui_hover','card_hover','card_pick','card_return','card_drop','card_place','slot_tick','hit_heavy','hit_crit','cat_lunge','pest_climb','death_poof','sunbeam_hit','phase_whoosh'];
 A.init();
 REQUIRED.forEach(n => ok(A.has(n) && A.names().includes(n), 'missing ' + n));
 A.unlock();

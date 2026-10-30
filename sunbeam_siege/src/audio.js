@@ -354,6 +354,79 @@
   };
   SFX.ui_hover = function (k) { k.tone({ f: 1250, f2: 1400, dur: 0.035, vol: 0.05, a: 0.003 }); };
 
+  // ---- tactile card and combat feel (called by name from the UI) ----
+  // Levels are matched to the old set: soft UI ticks near ui_hover/card_draw, thumps near card_play/pounce_hit.
+  SFX.card_hover = function (k) {
+    var j = rnd(0.97, 1.03);
+    k.noise({ type: 'bandpass', f: 4200 * j, f2: 3000, q: 1.4, dur: 0.028, vol: 0.05 });
+    k.tone({ type: 'triangle', f: 1500 * j, f2: 1350 * j, dur: 0.03, vol: 0.022, a: 0.003 });
+  };
+  SFX.card_pick = function (k) {
+    k.noise({ type: 'bandpass', f: 900, f2: 2600, q: 0.9, dur: 0.14, vol: 0.16, a: 0.03, swell: 0.6 });
+    k.tone({ type: 'triangle', f: 520, f2: 760, dur: 0.1, vol: 0.09, at: 0.03, lp: 2400 });
+    k.tone({ f: 1040, dur: 0.12, vol: 0.025, at: 0.03 });
+  };
+  SFX.card_return = function (k) {
+    // down, small overshoot, settle: three shrinking rising bounces
+    k.noise({ type: 'bandpass', f: 2200, f2: 900, q: 0.8, dur: 0.1, vol: 0.12, a: 0.01 });
+    k.tone({ type: 'triangle', f: 360, f2: 250, dur: 0.1, vol: 0.12, at: 0.02, lp: 1800 });
+    k.tone({ type: 'triangle', f: 460, f2: 330, dur: 0.08, vol: 0.075, at: 0.11, lp: 1800 });
+    k.tone({ type: 'triangle', f: 560, f2: 440, dur: 0.07, vol: 0.04, at: 0.18, lp: 1800 });
+    k.noise({ type: 'lowpass', f: 700, f2: 300, dur: 0.05, vol: 0.06, at: 0.02 });
+  };
+  SFX.card_drop = function (k) {
+    k.tone({ f: 200, f2: 100, dur: 0.12, vol: 0.24 });
+    k.noise({ type: 'lowpass', f: 1100, f2: 300, dur: 0.07, vol: 0.2 });
+    k.noise({ type: 'bandpass', f: 2800, f2: 5200, q: 0.7, dur: 0.16, vol: 0.09, a: 0.02, at: 0.02, swell: 0.4 });
+  };
+  SFX.card_place = function (k) {
+    // felt-soft landing: low body, muffled thud, a puff of dust
+    k.tone({ f: 120, f2: 62, dur: 0.22, vol: 0.34, a: 0.005 });
+    k.tone({ type: 'triangle', f: 240, f2: 120, dur: 0.1, vol: 0.1 });
+    k.noise({ type: 'lowpass', f: 700, f2: 180, dur: 0.12, vol: 0.2, a: 0.004 });
+    k.noise({ type: 'bandpass', f: 3400, f2: 1800, q: 0.6, dur: 0.22, vol: 0.05, a: 0.03, at: 0.03, swell: 0.3 });
+  };
+  SFX.slot_tick = function (k) {
+    k.tone({ type: 'triangle', f: 1900, f2: 1600, dur: 0.022, vol: 0.05, a: 0.002 });
+    k.noise({ type: 'highpass', f: 5000, dur: 0.012, vol: 0.03, a: 0.002 });
+  };
+  SFX.hit_heavy = function (k) {
+    k.tone({ f: 130, f2: 40, dur: 0.3, vol: 0.52 });
+    k.noise({ type: 'lowpass', f: 900, f2: 140, dur: 0.18, vol: 0.4 });
+    k.noise({ type: 'highpass', f: 3500, dur: 0.045, vol: 0.14 });
+  };
+  SFX.hit_crit = function (k) {
+    k.tone({ f: 110, f2: 34, dur: 0.4, vol: 0.6 });
+    k.noise({ type: 'lowpass', f: 1100, f2: 120, dur: 0.24, vol: 0.45 });
+    k.noise({ type: 'highpass', f: 3500, dur: 0.06, vol: 0.18 });
+    [2093, 2637, 3136].forEach(function (f, i) { k.tone({ f: f, dur: 0.35 - i * 0.06, vol: 0.035, a: 0.004, at: 0.03 + i * 0.03 }); });
+  };
+  SFX.cat_lunge = function (k) {
+    k.noise({ type: 'bandpass', f: 500, f2: 3400, q: 1.1, dur: 0.16, vol: 0.2, a: 0.02, swell: 0.7 });
+    k.tone({ type: 'triangle', f: 260, f2: 680, dur: 0.14, vol: 0.05, a: 0.02, lp: 2000 });
+  };
+  SFX.pest_climb = function (k) {
+    for (var i = 0; i < 3; i++) {
+      k.noise({ type: 'bandpass', f: 2600 + i * 500, q: 2, dur: 0.035, vol: 0.2, at: i * 0.075 });
+      k.tone({ type: 'triangle', f: 700 + i * 160, f2: 600 + i * 140, dur: 0.04, vol: 0.04, at: i * 0.075 });
+    }
+  };
+  SFX.death_poof = function (k) {
+    k.noise({ type: 'lowpass', f: 2400, f2: 250, dur: 0.22, vol: 0.28, a: 0.006 });
+    k.tone({ type: 'triangle', f: 640, f2: 120, dur: 0.3, vol: 0.14, a: 0.006, lp: 2200, lp2: 400 });
+    k.tone({ f: 90, f2: 50, dur: 0.15, vol: 0.14 });
+  };
+  SFX.sunbeam_hit = function (k) {
+    k.tone({ f: 440, f2: 330, dur: 0.9, vol: 0.13, a: 0.01 });
+    k.tone({ f: 660, f2: 495, dur: 0.6, vol: 0.05, a: 0.01 });
+    k.tone({ f: 110, f2: 52, dur: 0.35, vol: 0.34, at: 0.02 });
+    k.noise({ type: 'lowpass', f: 700, f2: 150, dur: 0.18, vol: 0.2, at: 0.02 });
+  };
+  SFX.phase_whoosh = function (k) {
+    k.noise({ type: 'bandpass', f: 400, f2: 2600, q: 0.7, dur: 0.38, vol: 0.14, a: 0.12, swell: 0.55 });
+    k.tone({ type: 'sine', f: 330, f2: 520, dur: 0.3, vol: 0.035, a: 0.1 });
+  };
+
   var LOOPS = {};
   // purr: low-frequency amplitude-modulated noise. Returns a handle with stop().
   LOOPS.purr = function (k, o) {
@@ -391,7 +464,8 @@
   function setTimeoutSafe(fn, ms) { var id = setTimeout(fn, ms); if (id && id.unref) id.unref(); return id; }
 
   var ALIAS = { meow: null, purr_start: 'purr', click: 'ui_click', hover: 'ui_hover', gong: 'witching_gong', coin: 'shop_coin', bark: 'dog_bark', squeak: 'pest_squeak', win: 'victory_fanfare', lose: 'defeat_sting' };
-  var THROTTLE = { ui_hover: 0.04, ui_click: 0.03, card_draw: 0.04, pest_squeak: 0.05, claw_scratch: 0.04 };
+  var THROTTLE = { ui_hover: 0.04, ui_click: 0.03, card_draw: 0.04, pest_squeak: 0.05, claw_scratch: 0.04,
+    card_hover: 0.07, slot_tick: 0.05, card_pick: 0.08, card_return: 0.08, card_drop: 0.06, card_place: 0.06, pest_climb: 0.15, cat_lunge: 0.08, death_poof: 0.05, hit_heavy: 0.05, hit_crit: 0.05, sunbeam_hit: 0.2, phase_whoosh: 0.3 };
   var NOOP = { stop: function () {} };
 
   function names() { return Object.keys(SFX).concat(Object.keys(LOOPS), ['meow']); }
@@ -418,6 +492,7 @@
       if (name === 'victory_fanfare' || name === 'defeat_sting') duck(0.6, 2.2, 1.2);
       else if (name === 'witching_gong') duck(0.5, 1.5, 1.5);
       else if (name === 'heavy_hit' || name === 'shatter') duck(0.25, 0.12, 0.3);
+      else if (name === 'hit_heavy' || name === 'hit_crit') duck(0.15, 0.08, 0.25);
     } catch (e) { /* audio must never break the game */ }
     return NOOP;
   }
