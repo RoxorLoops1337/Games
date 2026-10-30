@@ -72,6 +72,13 @@
     for (pi = 0; pi < FXMAX; pi++) V.fxs.push({ on: false, kind: 'flare', x: 0, y: 0, t0: 0, d: 1, r: 8, color: '#fff' });
     var inbox = [], queue = [], playing = false, skip = false, destroyed = false, raf = 0, lastFrame = 0;
     var sel = null, drag = null, handEls = new Map(), handOrder = [], dealN = 0, hoverUid = null, ended = false, endShown = false, kbCursor = -1, tgtCursor = -1;
+    // hand feel state (hover intent, drag springs, post-release animation). All preallocated: the drag loop allocates nothing per frame.
+    var dropping = false, animPhase = '', dragRaf = 0, dragLast = 0, aimOn = false, lastDeal = 0;
+    var hv = { uid: null, timer: 0 }, SL = { x: 0, y: 0, r: 0 }, GH = null;
+    var DR = { uid: null, el: null, cp: null, ph: null, S: new Float64Array(6), V: new Float64Array(6), T: new Float64Array(6), K: new Float64Array(6), C: new Float64Array(6),
+      fl: new Float64Array(12), flOk: [0, 0, 0], fEntry: [null, null, null], fy: new Float64Array(3), zc: [0, 0, 0], zn: [0, 0, 0], zp: new Float64Array(9), zx: new Float64Array(9),
+      tcx: new Float64Array(64), tcy: new Float64Array(64), tw: new Float64Array(64), th: new Float64Array(64), tV: [], tEntry: [], tn: 0 };
+    var AIM = { x: 0, y: 0, tx: 0, ty: 0, hot: null, line: null };
     var logLines = [], logOpen = false, phaseText = '', keepMode = false, abilUsed = {};
     var cleanups = [];
     var hooks = ui.battleHooks = ui.battleHooks || {};
@@ -595,16 +602,18 @@
       layoutHand();
     }
     function dealIn(c) {
-      var idx = dealN++ % 10;
+      var tn = now(); if (tn - lastDeal > 320) dealN = 0; lastDeal = tn; // a fresh batch restarts the stagger
+      var idx = Math.min(dealN++, 9);
       if (ui.reduced() || !c.animate) { c.style.opacity = '0'; requestAnimationFrame(function () { c.style.transition = 'opacity .12s'; c.style.opacity = '1'; }); return; }
       c.style.visibility = 'hidden';
       requestAnimationFrame(function () {
         if (!c.parentNode) return;
         var pr = pileRect('draw'), cr = c.getBoundingClientRect(), fin = getComputedStyle(c).transform;
         var dx = pr.left + pr.width / 2 - (cr.left + cr.width / 2), dy = pr.top + pr.height / 2 - (cr.top + cr.height / 2);
+        var fx = fin === 'none' ? 'none' : fin, sp = skip ? 6 : ui.speed();
         c.style.visibility = '';
-        c.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) scale(.35) rotate(-10deg)', opacity: 0.2 }, { transform: fin === 'none' ? 'none' : fin, opacity: 1 }],
-          { duration: 320 / (skip ? 6 : ui.speed()), delay: idx * 45 / (skip ? 6 : ui.speed()), easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'backwards' });
+        c.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) scale(.35) rotate(-14deg)', opacity: 0.2 }, { transform: fx, opacity: 1 }],
+          { duration: 420 / sp, delay: idx * 70 / sp, easing: 'cubic-bezier(.18,.9,.28,1.12)', fill: 'backwards' });
       });
       sfx('card_draw');
     }
@@ -621,21 +630,55 @@
         { duration: 300 / ui.speed(), easing: 'ease-in', delay: Math.random() * 60 / ui.speed(), fill: 'forwards' });
       a.onfinish = function () { c.remove(); if (onDone) onDone(); };
     }
-    function layoutHand() {
-      var n = handOrder.length, W = el.hand.clientWidth, cwc = parseFloat(el.hand.style.getPropertyValue('--hand-cw')) || 110;
+    // fan geometry for card i of n: writes SL.x / SL.y / SL.r (no allocation)
+    function computeSlot(i, n, W, cwc) {
+      var room = W - cwc * 1.5 - 28, gap = Math.min(cwc * 0.92, room / Math.max(1, n - 1)), total = (n - 1) * gap + cwc, x0 = (W - total) / 2 - 6; // 1.5: a hovered, rotated edge card grows ~50% wider and must not reach End Turn
+      var k = i - (n - 1) / 2;
+      SL.x = Math.round(x0 + i * gap); SL.y = Math.round(k * k * (n > 7 ? 1.1 : 1.8)); SL.r = k * (n > 7 ? 2 : 3);
+    }
+    function layoutHand(skipUid) {
+      var order = skipUid ? handOrder.filter(function (u) { return u !== skipUid; }) : handOrder;
+      var n = order.length, W = el.hand.clientWidth, cwc = parseFloat(el.hand.style.getPropertyValue('--hand-cw')) || 110;
       var phone = mode === 'phone';
       el.hand.classList.toggle('row', phone);
-      handOrder.forEach(function (uid, i) {
+      order.forEach(function (uid, i) {
         var rec = handEls.get(uid); if (!rec) return; var c = rec.el;
         if (phone) { c.style.setProperty('--x', '0px'); c.style.setProperty('--y', '0px'); c.style.setProperty('--r', '0deg'); c.style.marginRight = '6px'; return; } // no overlap on phones: the stats sit on the right edge of a card and must stay readable
         c.style.marginRight = '';
-        var room = W - cwc * 1.5 - 28, gap = Math.min(cwc * 0.92, room / Math.max(1, n - 1)), total = (n - 1) * gap + cwc, x0 = (W - total) / 2 - 6; // 1.5: a hovered, rotated edge card grows ~50% wider and and must not reach End Turn
-        var mid = (n - 1) / 2, k = i - mid;
-        c.style.setProperty('--x', Math.round(x0 + i * gap) + 'px');
-        c.style.setProperty('--y', Math.round(k * k * (n > 7 ? 1.1 : 1.8)) + 'px');
-        c.style.setProperty('--r', (k * (n > 7 ? 2 : 3)).toFixed(1) + 'deg');
+        computeSlot(i, n, W, cwc);
+        rec.bx = SL.x;
+        c.style.setProperty('--x', SL.x + 'px');
+        c.style.setProperty('--y', SL.y + 'px');
+        c.style.setProperty('--r', SL.r.toFixed(1) + 'deg');
       });
+      applyHover();
     }
+    // ---- hover fan: hover intent with hysteresis, neighbours spread apart. Driven by the pointer x against the resting fan, never by :hover, so a card that rises under the pointer cannot flicker.
+    function applyHover() {
+      var hi = (hv.uid && !drag && !animPhase) ? handOrder.indexOf(hv.uid) : -1;
+      var cwc = parseFloat(el.hand.style.getPropertyValue('--hand-cw')) || 110, S = cwc * 0.46;
+      for (var i = 0; i < handOrder.length; i++) {
+        var rec = handEls.get(handOrder[i]); if (!rec) continue;
+        var d = hi < 0 ? 0 : i - hi, hx = d === 0 ? 0 : (d > 0 ? 1 : -1) * S / (1 + 0.8 * (Math.abs(d) - 1));
+        rec.el.style.setProperty('--hx', Math.round(hx) + 'px');
+        rec.el.classList.toggle('hov', i === hi);
+      }
+    }
+    function clearHover() { clearTimeout(hv.timer); if (hv.uid) { hv.uid = null; applyHover(); } }
+    function hoverMove(e) {
+      if (e.pointerType === 'touch' || drag || animPhase || dropping || el.hand.classList.contains('row')) return;
+      var t = e.target, ce = t && t.closest ? t.closest('.card') : null;
+      if (!ce || ce.classList.contains('drag')) { clearTimeout(hv.timer); hv.timer = setTimeout(clearHover, 90); return; }
+      clearTimeout(hv.timer);
+      var hr = el.hand.getBoundingClientRect(), px = e.clientX - hr.left, cwc = parseFloat(el.hand.style.getPropertyValue('--hand-cw')) || 110;
+      var cur = hv.uid ? handEls.get(hv.uid) : null;
+      if (cur && cur.bx != null && Math.abs(px - (cur.bx + cwc / 2)) < cwc * 0.6) return; // still inside the raised card: hold (hysteresis)
+      var best = null, bd = 1e9;
+      for (var i = 0; i < handOrder.length; i++) { var r = handEls.get(handOrder[i]); if (!r || r.bx == null) continue; var dd = Math.abs(px - (r.bx + cwc / 2)); if (dd < bd) { bd = dd; best = handOrder[i]; } }
+      if (best && best !== hv.uid) { hv.uid = best; applyHover(); sfx('card_hover'); }
+    }
+    el.hand.addEventListener('pointermove', hoverMove);
+    el.hand.addEventListener('pointerleave', function () { clearTimeout(hv.timer); hv.timer = setTimeout(clearHover, 60); });
     function bindCard(rec, uid) {
       var c = rec.el, down = null, longT = 0, moved = false;
       c.addEventListener('pointerdown', function (e) {
@@ -668,7 +711,7 @@
     }
 
     // ---------------- selection and targeting
-    function locked() { return playing || ended || vm.turn !== 'player' || B.state.turn !== 'player' || ui.modal.count() > 0 && false; }
+    function locked() { return playing || ended || dropping || vm.turn !== 'player' || B.state.turn !== 'player' || ui.modal.count() > 0 && false; }
     function selectCard(uid) {
       if (locked()) return;
       if (keepMode) return toggleKeep(uid);
@@ -895,58 +938,341 @@
     }
 
     // ---------------- dragging
+    // The dragged card is a spring-driven transform (translate3d + tilt + scale), never left/top. One rAF loop (dragLoop) drives drag, the post-release
+    // animation and the tap-mode aim arrow, and stops itself when idle. Everything it touches is preallocated (DR, AIM, GH).
+    function clampf(v, a, b) { return v < a ? a : v > b ? b : v; }
+    function q2(v) { return Math.round(v * 100) / 100; }
+    function ensureGhost() {
+      if (GH) return GH;
+      GH = { layer: h('div.b-ghostlayer', { 'aria-hidden': 'true' }), shadow: h('div.b-dshadow'), ghost: h('canvas.b-ghost', { width: 32, height: 32 }), zones: [], gctx: null, drawn: '' };
+      GH.layer.appendChild(GH.shadow); GH.layer.appendChild(GH.ghost);
+      for (var i = 0; i < 3; i++) { var z = h('div.b-zone'); GH.zones.push(z); GH.layer.appendChild(z); }
+      GH.gctx = GH.ghost.getContext('2d'); GH.gctx.imageSmoothingEnabled = false;
+      rootEl.appendChild(GH.layer);
+      cleanups.push(function () { if (GH && GH.layer.parentNode) GH.layer.parentNode.removeChild(GH.layer); });
+      return GH;
+    }
+    function drawGhost(card) {
+      var pp = SB.gfx && SB.gfx.pawprint; if (!pp || !GH) return;
+      var key = (card && (card.id || card.name)) || '?'; if (GH.drawn === key) return; GH.drawn = key;
+      tryf(function () { var g = ui.genome(card && card.art, card && card.id); GH.gctx.clearRect(0, 0, 32, 32); if (g) pp.drawCat(GH.gctx, g, { name: 'idle', flash: false, alpha: 1 }, 0, 0, 1, 0); });
+    }
+    function setHotEl(n) {
+      if (DR.hotEl === n) return;
+      if (DR.hotEl) DR.hotEl.classList.remove('drop-hot');
+      DR.hotEl = n; if (n) n.classList.add('drop-hot');
+    }
+    function showZones(f) {
+      var D = DR, zs = GH.zones, zc = f >= 0 && D.unit ? D.zc[f] : 0, k = D.k;
+      var names = zc === 3 ? ['Front', 'Middle', 'Back'] : ['Front', 'Back'];
+      var bw = G.catPitch * k * 1.5;
+      for (var i = 0; i < zc - 1 && zc > 1; i++) bw = Math.min(bw, Math.abs(D.zx[f * 3 + i] - D.zx[f * 3 + i + 1]) * 0.94);
+      for (var j = 0; j < 3; j++) {
+        var z = zs[j];
+        if (zc > 1 && j < zc) {
+          z.setAttribute('data-l', names[j]); z.style.width = Math.round(bw) + 'px'; z.style.height = Math.round(G.floorH * k) + 'px';
+          z.style.transform = 'translate3d(' + Math.round(D.zx[f * 3 + j] - bw / 2) + 'px,' + Math.round(D.fl[f * 4 + 1]) + 'px,0)'; z.classList.add('on');
+        } else z.classList.remove('on', 'hot');
+      }
+    }
+    function pickZone(ax) {
+      var D = DR, f = D.f, zc = D.zc[f], best = D.z < 0 ? 0 : D.z, bd = 1e9;
+      for (var i = 0; i < zc; i++) { var dd = Math.abs(ax - D.zx[f * 3 + i]); if (i === D.z) dd -= 7; if (dd < bd) { bd = dd; best = i; } } // 7px hysteresis toward the current zone
+      if (best !== D.z) {
+        var first = D.z < 0; D.z = best;
+        for (var j = 0; j < 3; j++) GH.zones[j].classList.toggle('hot', j === best);
+        if (!first && zc > 1) sfx('slot_tick');
+      }
+    }
+    function updateAim() {
+      var D = DR; D.dirty = false;
+      var ax = D.px, ay = D.py + (D.touch ? D.tOffY : 0), mode2 = D.cp.needsTarget, i;
+      if (mode2 === 'none') {
+        var hot = ay < D.handTop - 30;
+        if (hot !== D.hot) { D.hot = hot; el.stage.classList.toggle('playhot', hot); }
+        return;
+      }
+      if (mode2 === 'floor') {
+        var f = -1;
+        for (i = 0; i < 3; i++) if (D.flOk[i] && ax >= D.fl[i * 4] && ax <= D.fl[i * 4 + 2] && ay >= D.fl[i * 4 + 1] && ay <= D.fl[i * 4 + 3]) { f = i; break; }
+        if (f !== D.f) {
+          D.f = f; D.z = -1; D.ghostInit = false; setHotEl(f >= 0 ? frame.floors[f] : null);
+          if (D.unit) { GH.ghost.classList.toggle('on', f >= 0); showZones(f); }
+          if (f >= 0) sfx('slot_tick');
+        }
+        if (f >= 0 && D.unit) pickZone(ax);
+        return;
+      }
+      var bi = -1, bd = 1e12, pad = 26, cur = D.ti;
+      for (i = 0; i < D.tn; i++) {
+        var dx = ax - D.tcx[i], dy = ay - D.tcy[i];
+        if (Math.abs(dx) <= D.tw[i] / 2 + pad && Math.abs(dy) <= D.th[i] / 2 + pad) { var dd = dx * dx + dy * dy; if (dd < bd) { bd = dd; bi = i; } }
+      }
+      if (cur >= 0 && bi >= 0 && bi !== cur) { var cx = ax - D.tcx[cur], cy = ay - D.tcy[cur]; if (Math.abs(cx) <= D.tw[cur] / 2 + pad && Math.abs(cy) <= D.th[cur] / 2 + pad && cx * cx + cy * cy < bd * 1.6 + 200) bi = cur; } // magnet hysteresis
+      if (bi !== cur) {
+        D.ti = bi; setHotEl(bi >= 0 ? D.tV[bi].hit : null);
+        if (bi >= 0) { D.mcx = D.tcx[bi]; D.mcy = D.tcy[bi]; sfx('slot_tick'); }
+      }
+    }
+    // Geometry for the drag (floor rects, ghost slots, target centres). The battle layout can rebuild its overlay a frame after a card is picked up
+    // (the prompt bar appears), so this runs at pick-up and once more shortly after.
+    function cacheGeometry() {
+      var D = DR;
+      var hr = el.hand.getBoundingClientRect(), sr = el.stage.getBoundingClientRect(); D.handTop = hr.top; D.k = sr.width / G.W;
+      var tg = targetsList(), mode2 = D.cp.needsTarget, i; D.tn = 0;
+      if (mode2 === 'floor') {
+        for (i = 0; i < 3; i++) {
+          var t = tg.filter(function (q) { return q.floor === i; })[0]; D.flOk[i] = t ? 1 : 0; D.fEntry[i] = t || null; D.zc[i] = 0; D.zn[i] = 0;
+          if (!t || !frame.floors[i]) { D.flOk[i] = 0; continue; }
+          var fr = frame.floors[i].getBoundingClientRect(); D.fl[i * 4] = fr.left; D.fl[i * 4 + 1] = fr.top; D.fl[i * 4 + 2] = fr.right; D.fl[i * 4 + 3] = fr.bottom;
+          D.fy[i] = sr.top + G.feet(i) * D.k;
+          if (D.unit) {
+            var cats = ((vm.floors[i] && vm.floors[i].cats) || []).filter(function (cc) { return !cc.dead && !cc.removed; }).sort(function (a, b) { return a.pos - b.pos; }), n = cats.length;
+            var pos = n === 0 ? [0] : n === 1 ? [0, 1] : [0, Math.floor(n / 2), n];
+            D.zc[i] = pos.length; D.zn[i] = n;
+            for (var z = 0; z < pos.length; z++) { var st = 0; for (var m = 0; m < pos[z] && m < n; m++) st += cats[m].size || 1; D.zp[i * 3 + z] = pos[z]; D.zx[i * 3 + z] = sr.left + G.catX(st, 1) * D.k; }
+          }
+        }
+        if (D.unit) { var gs = Math.round(32 * D.k); GH.ghost.style.width = gs + 'px'; GH.ghost.style.height = gs + 'px'; drawGhost(D.rec && D.rec.entry && D.rec.entry.card); }
+      } else if (mode2 === 'pest' || mode2 === 'cat') {
+        V.units.forEach(function (v) {
+          if (!v.hit || v.dying || v.side !== mode2 || D.tn >= 64) return;
+          var t2 = tg.filter(function (q) { return entryMatchesUnit(q, v); })[0]; if (!t2) return;
+          var ur = v.hit.getBoundingClientRect(), j = D.tn++;
+          D.tcx[j] = ur.left + ur.width / 2; D.tcy[j] = ur.top + ur.height / 2; D.tw[j] = ur.width; D.th[j] = ur.height; D.tV[j] = v; D.tEntry[j] = t2;
+        });
+      }
+    }
     function startDrag(uid, c, e) {
       var cp = B.canPlay(uid);
       if (!cp.ok) { drag = null; selectCard(uid); return; }
+      flushAnim(); clearHover();
+      var D = DR, rec = handEls.get(uid), ct = rec && rec.entry && rec.entry.card && rec.entry.card.type, i;
+      var r = c.getBoundingClientRect(), w = c.offsetWidth, hh = c.offsetHeight, rowMode = el.hand.classList.contains('row');
       sel = { uid: uid, cp: cp }; refreshTargets();
-      drag = { uid: uid, el: c, cp: cp, ox: e.clientX, oy: e.clientY, r: c.getBoundingClientRect() };
-      c.classList.add('drag'); c.style.setProperty('--dw', drag.r.width + 'px');
+      ensureGhost();
+      drag = D; D.uid = uid; D.el = c; D.cp = cp; D.w = w; D.h = hh; D.unit = ct === 'unit' || ct === 'champion'; D.touch = e.pointerType === 'touch';
+      D.red = ui.reduced(); D.px = e.clientX; D.py = e.clientY; D.dirty = true; D.hot = false; D.hotEl = null;
+      D.f = -1; D.z = -1; D.ti = -1; D.mag = 0; D.mcx = 0; D.mcy = 0; D.ghostInit = false; D.gx = 0; D.gy = 0; D.tn = 0;
+      D.cx0 = r.left + r.width / 2; D.cy0 = r.top + r.height / 2;
+      D.offX = D.cx0 - e.clientX; D.offY = D.cy0 - e.clientY; D.tOffY = D.touch ? -hh * 0.55 : -hh * 0.1;
+      var hovered = c.classList.contains('hov');
+      D.S[0] = D.cx0; D.S[1] = D.cy0; D.S[2] = 0; D.S[3] = hovered ? 1.2 : 1; D.S[4] = 0; D.S[5] = 0;
+      for (i = 0; i < 6; i++) D.V[i] = 0;
+      var wn = 26; D.K[0] = D.K[1] = wn * wn; D.C[0] = D.C[1] = 2 * wn;
+      D.K[2] = D.K[4] = D.K[5] = 170; D.C[2] = D.C[4] = D.C[5] = 2 * Math.sqrt(170);
+      D.K[3] = 260; D.C[3] = 2 * Math.sqrt(260) * 0.8;
+      if (rowMode) { D.ph = h('div.card-ph', { style: { width: w + 'px', height: hh + 'px', marginRight: '6px' } }); c.parentNode.insertBefore(D.ph, c); } else D.ph = null;
+      c.style.setProperty('--dw', w + 'px'); c.style.transition = 'none';
+      c.classList.add('drag'); c.style.transform = 'translate3d(' + (D.cx0 - w / 2) + 'px,' + (D.cy0 - hh / 2) + 'px,0) scale(' + D.S[3] + ')';
       c.setPointerCapture && tryf(function () { c.setPointerCapture(e.pointerId); });
-      moveDrag(e);
+      D.pid = e.pointerId;
+      D.rec = rec; D.age = 0; D.recached = false;
+      cacheGeometry();
+      GH.shadow.style.width = w + 'px'; GH.shadow.style.height = hh + 'px'; GH.shadow.classList.add('on');
+      c.style.willChange = 'transform';
+      layoutHand(uid);
+      sfx('card_pick');
+      updateAim(); kick();
     }
     function moveDrag(e) {
-      var c = drag.el; c.style.left = (e.clientX - drag.r.width / 2) + 'px'; c.style.top = (e.clientY - drag.r.height * 0.6) + 'px';
-      var under = targetUnder(e.clientX, e.clientY);
-      rootEl.querySelectorAll('.drop-hot').forEach(function (n) { n.classList.remove('drop-hot'); });
-      if (under && under.el) under.el.classList.add('drop-hot');
+      var D = DR; D.px = e.clientX; D.py = e.clientY; D.dirty = true; kick();
     }
-    function targetUnder(x, y) {
-      var els = document.elementsFromPoint(x, y), mode2 = drag ? drag.cp.needsTarget : (sel && sel.cp.needsTarget);
-      for (var i = 0; i < els.length; i++) {
-        var n = els[i];
-        if (n.classList && n.classList.contains('u-hit') && n.classList.contains('tgt')) { var v = viewOf(n.getAttribute('data-uid')); if (v) { var t = targetsList().filter(function (q) { return entryMatchesUnit(q, v); })[0]; if (t) return { entry: t, el: n }; } }
+    function stepSprings(dt) {
+      var D = DR, n = Math.ceil(dt / 0.008), hd = dt / n, S = D.S, V = D.V, T = D.T, K = D.K, C = D.C;
+      for (var i = 0; i < n; i++) for (var ch = 0; ch < 6; ch++) { V[ch] += (K[ch] * (T[ch] - S[ch]) - C[ch] * V[ch]) * hd; S[ch] += V[ch] * hd; }
+    }
+    function applyCard(lift) {
+      var D = DR, S = D.S, c = D.el;
+      c.style.transform = 'translate3d(' + q2(S[0] - D.w / 2) + 'px,' + q2(S[1] - D.h / 2) + 'px,0) perspective(800px) rotateX(' + q2(S[4]) + 'deg) rotateY(' + q2(S[5]) + 'deg) rotate(' + q2(S[2]) + 'deg) scale(' + q2(S[3]) + ')';
+      var sh = GH.shadow.style;
+      sh.transform = 'translate3d(' + q2(S[0] - D.w / 2 + lift * 10) + 'px,' + q2(S[1] - D.h / 2 + 6 + lift * 30) + 'px,0) rotate(' + q2(S[2]) + 'deg) scale(' + q2(S[3] * (1 - lift * 0.04)) + ')';
+      sh.opacity = q2(0.22 + lift * 0.22);
+    }
+    function stepDrag(dt) {
+      var D = DR, S = D.S, V = D.V, T = D.T, red = D.red;
+      D.age += dt;
+      if (!D.recached && D.age > 0.12) { D.recached = true; cacheGeometry(); D.dirty = true; }
+      if (D.dirty) updateAim();
+      var live = D.ti >= 0 ? D.tV[D.ti].hit : D.f >= 0 ? frame.floors[D.f] : null; // the overlay can be rebuilt mid-drag: keep the highlight on the live element
+      if (live && live !== D.hotEl) setHotEl(live);
+      var kk = red ? 1 : 1 - Math.exp(-dt * 10);
+      D.offX += (0 - D.offX) * kk; D.offY += (D.tOffY - D.offY) * kk;
+      D.mag += ((D.ti >= 0 ? 1 : 0) - D.mag) * (red ? 1 : 1 - Math.exp(-dt * 12));
+      var gx = D.px + D.offX, gy = D.py + D.offY;
+      if (D.mag > 0.001) { gx += (D.mcx - gx) * D.mag * 0.4; gy += (D.mcy - gy) * D.mag * 0.4; }
+      var lift = clampf((D.cy0 - S[1]) / 220, 0, 1);
+      if (red) { S[0] = gx; S[1] = gy; V[0] = V[1] = 0; S[2] = S[4] = S[5] = 0; S[3] = 1.05; applyCard(0.4); }
+      else {
+        T[0] = gx; T[1] = gy;
+        T[2] = clampf(V[0] * 0.008, -14, 14); T[5] = clampf(V[0] * 0.006, -16, 16); T[4] = clampf(-V[1] * 0.005, -12, 12);
+        T[3] = (D.touch ? 0.8 : 1.08) + (D.ti >= 0 || D.f >= 0 || D.hot ? 0.03 : 0); // on a phone the lifted card shrinks so the board stays visible
+        stepSprings(dt);
+        lift = clampf(lift + Math.sqrt(V[0] * V[0] + V[1] * V[1]) / 5000, 0, 1);
+        applyCard(lift);
       }
-      for (var j = 0; j < els.length; j++) {
-        var m = els[j];
-        if (m.classList && m.classList.contains('b-floor') && m.classList.contains('tgt')) { var f = +m.getAttribute('data-floor'); var tt = targetsList().filter(function (q) { return q.floor === f; })[0]; if (tt) return { entry: tt, el: m }; }
+      // ghost silhouette glides to the slot the drop would take
+      if (D.unit && D.f >= 0 && D.z >= 0) {
+        var tx = D.zx[D.f * 3 + D.z], ty = D.fy[D.f];
+        if (!D.ghostInit || red) { D.gx = tx; D.gy = ty; D.ghostInit = true; } else { var kg = 1 - Math.exp(-dt * 22); D.gx += (tx - D.gx) * kg; D.gy += (ty - D.gy) * kg; }
+        var gs = 32 * D.k;
+        GH.ghost.style.transform = 'translate3d(' + q2(D.gx - gs / 2) + 'px,' + q2(D.gy - gs + 3 * D.k) + 'px,0)';
       }
-      // floor from unit hit when targeting floors
-      if (mode2 === 'floor') {
-        for (var k = 0; k < els.length; k++) { var u = els[k]; if (u.classList && u.classList.contains('u-hit')) { var vv = viewOf(u.getAttribute('data-uid')); if (vv) { var t3 = targetsList().filter(function (q) { return q.floor === vv.d.floor; })[0]; if (t3) return { entry: t3, el: frame.floors[vv.d.floor] }; } } }
+    }
+    // where the card's resting slot is on screen (centre + rotation), for the springy return
+    function slotTarget() {
+      var D = DR, T = D.T;
+      if (D.ph && D.ph.parentNode) { var pr = D.ph.getBoundingClientRect(); T[0] = pr.left + pr.width / 2; T[1] = pr.top + pr.height / 2; T[2] = 0; return; }
+      var idx = handOrder.indexOf(D.uid), n = handOrder.length, hr = el.hand.getBoundingClientRect(), cwc = parseFloat(el.hand.style.getPropertyValue('--hand-cw')) || 110;
+      if (idx < 0) idx = 0;
+      computeSlot(idx, n, el.hand.clientWidth, cwc);
+      var rad = SL.r * Math.PI / 180, px = hr.left + SL.x + D.w / 2, py = hr.bottom - 10 + SL.y;
+      T[0] = px + D.h / 2 * Math.sin(rad); T[1] = py - D.h / 2 * Math.cos(rad); T[2] = SL.r;
+    }
+    function startReturn() {
+      var D = DR, i; if (!D.el) return;
+      layoutHand(); // everyone makes room again
+      slotTarget();
+      D.T[3] = 1; D.T[4] = 0; D.T[5] = 0;
+      var kc = [520, 520, 300, 300, 200, 200];
+      for (i = 0; i < 6; i++) { D.K[i] = kc[i]; D.C[i] = 2 * Math.sqrt(kc[i]) * (i < 2 ? 0.5 : 0.7); } // zeta 0.5: one small overshoot
+      D.t = 0; animPhase = 'ret';
+      if (ui.reduced()) { finishAnim(); return; }
+      kick();
+    }
+    function ringPulse(x, y) {
+      if (ui.reduced() || !GH) return;
+      var r = h('div.b-ring', { style: { left: Math.round(x) + 'px', top: Math.round(y) + 'px' } });
+      GH.layer.appendChild(r); setTimeout(function () { if (r.parentNode) r.parentNode.removeChild(r); }, 520);
+    }
+    function stepAnim(dt) {
+      var D = DR; if (!D.el || !D.el.parentNode) { finishAnim(); return; }
+      D.t += dt;
+      if (animPhase === 'ret') {
+        slotTarget(); // the slot may move (cards drawn or played meanwhile)
+        stepSprings(dt);
+        var S = D.S, V = D.V, T = D.T;
+        applyCard(clampf((Math.abs(S[1] - T[1]) + Math.abs(S[0] - T[0])) / 260, 0, 1));
+        var done = Math.abs(S[0] - T[0]) < 0.6 && Math.abs(S[1] - T[1]) < 0.6 && Math.abs(S[2] - T[2]) < 0.3 && Math.abs(V[0]) + Math.abs(V[1]) < 8 && Math.abs(S[3] - 1) < 0.01;
+        if (done || D.t > 1.4) finishAnim();
+      } else if (animPhase === 'drop') {
+        var p = Math.min(1, D.t / 0.14), e1 = 1 - Math.pow(1 - p, 3), S2 = D.S;
+        S2[0] = D.sx + (D.dx - D.sx) * e1; S2[1] = D.sy + (D.dy - D.sy) * e1; S2[3] = D.ss + (0.32 - D.ss) * e1; S2[2] = D.sr * (1 - e1); S2[4] = S2[5] = 0;
+        applyCard(0.2 * (1 - e1)); D.el.style.opacity = p > 0.6 ? String(q2(1 - (p - 0.6) / 0.4 * 0.9)) : '';
+        if (p >= 1) finishAnim();
       }
-      return null;
+    }
+    // settle: hand the element back to the CSS-driven fan (no transition flash)
+    function resetCardEl(c) {
+      c.style.transition = 'none'; c.classList.remove('drag'); c.style.transform = ''; c.style.left = ''; c.style.top = ''; c.style.opacity = ''; c.style.willChange = '';
+      requestAnimationFrame(function () { c.style.transition = ''; });
+    }
+    function finishAnim() {
+      var D = DR, ph = animPhase; animPhase = '';
+      if (GH) { GH.shadow.classList.remove('on'); GH.shadow.style.opacity = ''; }
+      if (D.ph && D.ph.parentNode) D.ph.parentNode.removeChild(D.ph); D.ph = null;
+      if (ph === 'ret') { if (D.el && D.el.parentNode) resetCardEl(D.el); applyHover(); }
+      else if (ph === 'drop') {
+        var uid = D.uid, entry = D.entry;
+        handEls.delete(uid); handOrder = handOrder.filter(function (x) { return x !== uid; });
+        if (D.el && D.el.parentNode) D.el.parentNode.removeChild(D.el);
+        layoutHand(); dropping = false;
+        D.el = null;
+        doPlay(uid, entry);
+        return;
+      }
+      D.el = null;
+    }
+    function flushAnim() { if (animPhase) finishAnim(); }
+    function clearDropFeedback() {
+      var D = DR; setHotEl(null);
+      rootEl.querySelectorAll('.drop-hot').forEach(function (n) { n.classList.remove('drop-hot'); });
+      el.stage.classList.remove('playhot'); D.hot = false;
+      if (GH) { GH.ghost.classList.remove('on'); GH.zones.forEach(function (z) { z.classList.remove('on', 'hot'); }); }
     }
     function endDrag(e) {
-      var d = drag, c = d.el; drag = null;
-      rootEl.querySelectorAll('.drop-hot').forEach(function (n) { n.classList.remove('drop-hot'); });
-      c.classList.remove('drag'); c.style.left = ''; c.style.top = ''; tryf(function () { c.releasePointerCapture(e.pointerId); });
-      var handTop = el.hand.getBoundingClientRect().top;
-      if (d.cp.needsTarget === 'none') {
-        if (e.clientY < handTop - 30) { doPlay(d.uid, null); return; }
-        clearSel(); return;
+      var D = DR, c = D.el, uid = D.uid, cp = D.cp; if (!drag) return;
+      tryf(function () { c.releasePointerCapture(e.pointerId); });
+      D.px = e.clientX; D.py = e.clientY; updateAim();
+      var valid = false, entry = null, ax = D.px, ay = D.py + (D.touch ? D.tOffY : 0), mode2 = cp.needsTarget, destX = ax, destY = ay;
+      if (mode2 === 'none') valid = ay < D.handTop - 30;
+      else if (mode2 === 'floor') {
+        if (D.f >= 0) {
+          valid = true; entry = D.fEntry[D.f];
+          if (D.unit && D.zn[D.f] > 0) entry = { floor: D.f, pos: D.zp[D.f * 3 + Math.max(0, D.z)] };
+          if (D.unit) { destX = D.zx[D.f * 3 + Math.max(0, D.z)]; destY = D.fy[D.f] - 12 * D.k; }
+        }
+      } else if (D.ti >= 0) { valid = true; entry = D.tEntry[D.ti]; destX = D.tcx[D.ti]; destY = D.tcy[D.ti]; }
+      clearDropFeedback(); drag = null;
+      if (!valid) {
+        sfx('card_return');
+        var overScene = e.clientY < D.handTop - 10;
+        if (mode2 === 'none' || !overScene) { sel = null; refreshTargets(); el.arrow.style.display = 'none'; renderTray(); } // else: stay selected so a tap can still aim it
+        startReturn();
+        return;
       }
-      var under = targetUnder(e.clientX, e.clientY);
-      if (under) { doPlay(d.uid, under.entry); return; }
-      // dropped nowhere: keep selected for tap-to-target if released over scene, else cancel
-      if (e.clientY < handTop - 10) { renderHand(); } else clearSel();
+      sfx(D.unit ? 'card_place' : 'card_drop');
+      ringPulse(destX, destY);
+      if (D.unit) {
+        var k = D.k, sr = el.stage.getBoundingClientRect();
+        burst((destX - sr.left) / k, (destY - sr.top) / k + 6, { n: 6, colors: ['#c9b48a', '#e8d8b0'], speed: 0.7, g: 0.02, spread: 6.28, life: 300, jit: 4 });
+        D.entry = entry; D.sx = D.S[0]; D.sy = D.S[1]; D.ss = D.S[3]; D.sr = D.S[2]; D.dx = destX; D.dy = destY; D.t = 0;
+        animPhase = 'drop'; dropping = true;
+        if (ui.reduced()) { finishAnim(); return; }
+        kick(); return;
+      }
+      // spells and other cards: hand the natural-size element to the play animation, which flies it to the board and the pile
+      if (GH) GH.shadow.classList.remove('on');
+      c.style.transform = 'none'; c.style.left = Math.round(D.S[0] - D.w / 2) + 'px'; c.style.top = Math.round(D.S[1] - D.h / 2) + 'px'; c.style.willChange = '';
+      c.classList.remove('drag'); c.style.position = 'fixed'; c.style.width = D.w + 'px';
+      if (D.ph && D.ph.parentNode) D.ph.parentNode.removeChild(D.ph); D.ph = null; D.el = null;
+      layoutHand();
+      doPlay(uid, entry);
     }
-    function cancelDrag() { if (!drag) return; var c = drag.el; c.classList.remove('drag'); c.style.left = ''; c.style.top = ''; drag = null; clearSel(); }
+    function cancelDrag() {
+      if (!drag) return;
+      drag = null; clearDropFeedback(); sfx('card_return');
+      sel = null; refreshTargets(); el.arrow.style.display = 'none'; renderTray();
+      startReturn();
+    }
+    // ---- loop
+    function dragLoop(ts) {
+      dragRaf = 0;
+      if (destroyed) return;
+      var dt = dragLast ? Math.min(0.034, Math.max(0.001, (ts - dragLast) / 1000)) : 0.016; dragLast = ts;
+      if (drag) stepDrag(dt); else if (animPhase) stepAnim(dt);
+      if (aimOn) stepAim(dt);
+      if (drag || animPhase || aimOn) dragRaf = requestAnimationFrame(dragLoop); else dragLast = 0;
+    }
+    function kick() { if (!dragRaf && !destroyed) { dragLast = 0; dragRaf = requestAnimationFrame(dragLoop); } }
+    cleanups.push(function () { if (dragRaf) cancelAnimationFrame(dragRaf); dragRaf = 0; });
+    // ---- tap mode aim arrow (mouse): eased, and it snaps magnetically to a valid target
+    function stepAim(dt) {
+      if (!sel || drag || sel.cp.needsTarget === 'none') { aimOn = false; el.arrow.style.display = 'none'; setAimHot(null); return; }
+      var kk = ui.reduced() ? 1 : 1 - Math.exp(-dt * 26);
+      AIM.x += (AIM.tx - AIM.x) * kk; AIM.y += (AIM.ty - AIM.y) * kk;
+      AIM.line.setAttribute('x2', AIM.x); AIM.line.setAttribute('y2', AIM.y);
+    }
+    function setAimHot(n) { if (AIM.hot === n) return; if (AIM.hot) AIM.hot.classList.remove('drop-hot'); AIM.hot = n; if (n) n.classList.add('drop-hot'); }
     var onPtrMove = function (e) {
       if (sel && sel.cp.needsTarget !== 'none' && !drag && e.pointerType === 'mouse') {
         var rec = handEls.get(sel.uid); if (!rec) return; var r = rec.el.getBoundingClientRect();
-        var ln = el.arrow.querySelector('line'); ln.setAttribute('x1', r.left + r.width / 2); ln.setAttribute('y1', r.top + 10); ln.setAttribute('x2', e.clientX); ln.setAttribute('y2', e.clientY);
-        el.arrow.style.display = 'block';
-      } else if (el.arrow.style.display !== 'none') el.arrow.style.display = 'none';
+        if (!AIM.line) AIM.line = el.arrow.querySelector('line');
+        var tx = e.clientX, ty = e.clientY, mode2 = sel.cp.needsTarget, hot = null;
+        if (mode2 === 'pest' || mode2 === 'cat') {
+          var tg = targetsList(), bd = 1e9;
+          V.units.forEach(function (v) {
+            if (!v.hit || v.dying || v.side !== mode2 || !tg.some(function (q) { return entryMatchesUnit(q, v); })) return;
+            var ur = v.hit.getBoundingClientRect(), cx = ur.left + ur.width / 2, cy = ur.top + ur.height / 2, dx = e.clientX - cx, dy = e.clientY - cy;
+            if (Math.abs(dx) <= ur.width / 2 + 26 && Math.abs(dy) <= ur.height / 2 + 26 && dx * dx + dy * dy < bd) { bd = dx * dx + dy * dy; hot = v.hit; tx = cx; ty = cy; }
+          });
+        }
+        setAimHot(hot);
+        AIM.line.setAttribute('x1', r.left + r.width / 2); AIM.line.setAttribute('y1', r.top + 10);
+        if (el.arrow.style.display === 'none') { AIM.x = e.clientX; AIM.y = e.clientY; }
+        AIM.tx = tx; AIM.ty = ty;
+        el.arrow.style.display = 'block'; aimOn = true; kick();
+      } else if (el.arrow.style.display !== 'none') { el.arrow.style.display = 'none'; setAimHot(null); }
     };
     document.addEventListener('pointermove', onPtrMove); cleanups.push(function () { document.removeEventListener('pointermove', onPtrMove); });
     var onDocDown = function (e) {
@@ -1777,7 +2103,7 @@
       var k = e.key, tag = (e.target && e.target.tagName) || '';
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (ended) { if (k === 'Enter' && el.endOverlay) { /* default button handles it */ } return; }
-      if (k === 'Escape') { e.preventDefault(); if (sel) clearSel(); else pauseMenu(); return; }
+      if (k === 'Escape') { e.preventDefault(); if (drag) cancelDrag(); else if (sel) clearSel(); else pauseMenu(); return; }
       if (k === '?') { keyHelp(); return; }
       if (k === 'd' || k === 'D') { openPile('draw'); return; }
       if (k === 'x' || k === 'X') { openPile('discard'); return; }

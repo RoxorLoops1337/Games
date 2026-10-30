@@ -244,16 +244,19 @@ html.reduce-motion .b-vig.flash{animation-duration:.25s}
 .nip-bar{display:flex;gap:2px} .nip-bar i{width:7px;height:14px;background:rgba(255,255,255,.1);border-radius:1px;display:block} .nip-bar i.on{background:var(--good)}
 .b-nip.surge{border-color:var(--good);animation:ck-pulse .6s infinite} .b-nip.crash{background:#12303f;border-color:var(--cold)}
 .b-bank{background:#1a1a44;border-color:#7a8cff;color:#c3ccff}
-.b-prompt{grid-area:prompt;display:flex;align-items:center;gap:8px;padding:4px 10px;background:rgba(35,26,61,.95);border:2px solid var(--ui-border-hi);border-radius:4px;min-height:34px;margin-bottom:4px;animation:prompt-in .15s ease-out}
+.b-prompt{grid-area:prompt;display:flex;align-items:center;gap:8px;padding:4px 10px;background:rgba(35,26,61,.95);border:2px solid var(--ui-border-hi);border-radius:4px;min-height:34px;margin-bottom:4px;animation:prompt-in .24s cubic-bezier(.2,.9,.25,1.2)}
 .b-prompt .pm{flex:1;font-weight:700}
-@keyframes prompt-in{from{opacity:0;transform:translateY(4px)}}
+@keyframes prompt-in{from{opacity:0;transform:translateY(8px) scale(.97)}}
 .b-handwrap{grid-area:hand;position:relative;min-width:0;min-height:0}
 .b-hand{position:absolute;inset:0;touch-action:none}
 .b-hand .card{position:absolute;left:0;bottom:10px;transform-origin:50% 100%;
-  transform:translate(var(--x,0px),var(--y,0px)) rotate(var(--r,0deg)) translateY(var(--lift,0px)) scale(var(--sc,1));transition:transform .16s ease-out,filter .12s,box-shadow .12s;will-change:transform}
+  transform:translate(calc(var(--x,0px) + var(--hx,0px)),var(--y,0px)) rotate(var(--r,0deg)) translateY(var(--lift,0px)) scale(var(--sc,1));transition:transform .34s cubic-bezier(.2,.9,.25,1.06),filter .15s,box-shadow .15s}
 .b-hand .card.selected{--lift:-34px;--sc:1.1;--r:0deg;outline:3px solid var(--ui-border-hi);z-index:80!important}
-.b-hand:not(.row) .card:hover,.b-hand:not(.row) .card:focus-visible{--lift:-58px;--sc:1.25;--r:0deg;z-index:90!important}
-.b-hand .card.drag{position:fixed;transform:rotate(0) scale(1.05);width:var(--dw);transition:none;z-index:400!important;pointer-events:none;box-shadow:0 12px 0 rgba(0,0,0,.35)}
+/* the hover fan is driven by JS (.hov) with hover intent, not :hover, so a card rising under the pointer cannot flicker */
+.b-hand:not(.row) .card.hov,.b-hand:not(.row) .card:focus-visible{--lift:-58px;--sc:1.25;--r:0deg;z-index:90!important;will-change:transform;transition-duration:.26s,.15s,.15s}
+.b-hand .card.drag,.b-hand.row .card.drag{position:fixed!important;left:0;top:0;bottom:auto!important;margin:0;width:var(--dw);transform-origin:50% 50%;transition:none!important;z-index:400!important;pointer-events:none;touch-action:none;box-shadow:0 .22em 0 var(--ui-shadow);outline:0}
+.card-ph{flex:none;visibility:hidden}
+html.reduce-motion .b-hand .card{transition:none}
 .b-hand .card.shake{animation:card-shake .22s linear}
 .b-hand.row{position:absolute;inset:0;display:flex;align-items:center;overflow-x:auto;overflow-y:visible;padding:20px 12px 4px;touch-action:pan-x;scrollbar-width:none}
 .b-hand.row .card{position:relative;bottom:auto;left:auto;transform:translateY(var(--lift,0px)) scale(var(--sc,1));touch-action:pan-x}
@@ -369,3 +372,25 @@ html[data-mode=phone] .btn.sm{min-height:44px}
 .b-pw .b-prompt{flex:1 1 220px;margin-bottom:0}
 /* while a card or ability waits for a target the Nap and Scratch buttons must not eat the tap meant for the floor or the cat under them */
 .b-targeting .u-nap,.b-targeting .u-scratch,.b-targeting .u-lives{pointer-events:none}
+
+/* ---------- drag feel: shadow, drop ghost, Front / Middle / Back zones, release ring ---------- */
+.b-ghostlayer{position:fixed;inset:0;pointer-events:none;z-index:6;overflow:hidden}
+.b-dshadow{position:absolute;left:0;top:0;border-radius:10px;background:#000;filter:blur(9px);opacity:0;visibility:hidden;will-change:transform,opacity}
+.b-dshadow.on{visibility:visible}
+.b-ghost{position:absolute;left:0;top:0;image-rendering:pixelated;opacity:0;transition:opacity .14s;will-change:transform;
+  filter:brightness(0) invert(1) drop-shadow(0 0 3px rgba(123,228,149,.95)) drop-shadow(0 0 8px rgba(123,228,149,.6))}
+.b-ghost.on{opacity:.55}
+.b-zone{position:absolute;left:0;top:0;opacity:0;border-left:2px dashed rgba(255,255,255,.28);border-right:2px dashed rgba(255,255,255,.28);box-sizing:border-box;border-radius:3px;transition:opacity .14s,background .14s,border-color .14s}
+.b-zone::after{content:attr(data-l);position:absolute;left:50%;bottom:3px;transform:translateX(-50%);padding:2px 7px;border-radius:99px;background:rgba(20,15,38,.88);border:2px solid var(--ui-border);color:var(--ui-text);font:800 11px/1 var(--font-display);letter-spacing:.06em;white-space:nowrap;transition:background .14s,color .14s,border-color .14s,transform .14s}
+.b-zone.on{opacity:1}
+.b-zone.hot{background:rgba(123,228,149,.2);border-color:rgba(123,228,149,.85)}
+.b-zone.hot::after{background:var(--good);color:#0b2a14;border-color:#fff;transform:translateX(-50%) scale(1.12)}
+.b-ring{position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border:3px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(255,255,255,.7);animation:ring-pulse .45s cubic-bezier(.1,.7,.3,1) forwards}
+@keyframes ring-pulse{from{transform:scale(.3);opacity:.95}to{transform:scale(3);opacity:0;border-width:1px}}
+.b-stage{transition:box-shadow .16s}
+.b-stage.playhot{box-shadow:0 0 0 3px var(--good),0 0 26px rgba(123,228,149,.5)}
+.b-floor{transition:background .14s,border-color .14s}
+.b-floor.drop-hot{background:rgba(123,228,149,.26);border-color:#fff;box-shadow:inset 0 0 14px rgba(123,228,149,.55)}
+.u-hit{transition:background .12s,outline-color .12s}
+.u-hit.drop-hot{outline-offset:3px}
+html.reduce-motion .b-ring,html.reduce-motion .b-ghost,html.reduce-motion .b-zone{transition:none;animation:none}
