@@ -2255,10 +2255,7 @@
     function drawUnit(v, tk, tn) {
       // squash and stretch, lean and idle breathing around the feet; identity transform costs nothing
       var red = ui.reduced(), sx = v.sx, sy = v.sy, lean = v.lean;
-      if (!red && !v.dying) {
-        var nap = v.d.napping, per = nap ? 2800 : 1800 + (v.phase % 9) * 110, br = Math.sin(tn / per * 6.2832 + v.phase);
-        sy *= 1 + br * (nap ? 0.03 : 0.022); sx *= 1 - br * (nap ? 0.016 : 0.011);
-      }
+      // no scale based breathing: on pixel art a 1 to 3 percent squash pops whole pixel rows in and out, which makes a napping cat look like it stands up and lies down again. The sprites carry their own idle and sleep bob frames.
       if (sx === 1 && sy === 1 && !lean) { drawUnitBody(v, tk, tn); return; }
       var fx0 = Math.round(v.x + v.ox), fy0 = Math.round(v.y + v.oy);
       ctx.save(); ctx.translate(fx0, fy0); if (lean) ctx.rotate(lean); ctx.scale(sx, sy); ctx.translate(-fx0, -fy0);
