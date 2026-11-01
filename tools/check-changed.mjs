@@ -88,7 +88,7 @@ const NO_SUITE = [
   'Carnegiendon', 'DhauwieSurvival', 'beatbox_story', 'carmanager', 'chase_hq',
   'crypto', 'cutie_merge', 'decktest', 'evolve_and_conquer', 'gamedevloop',
   'mazekeep', 'messenger', 'night_shift', 'pitchdeck', 'ralpherizer',
-  'roblox_obby', 'thieu_excuses_app', 'tower-defense-sprites', 'verb_collector',
+  'roblox_obby', 'thieu_excuses_app', 'tower-defense-sprites',
 ];
 
 const FUNCTION_SUITES = {
