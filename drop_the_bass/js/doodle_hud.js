@@ -77,8 +77,9 @@ export function button(ctx, r, color, o = {}) {
   }
   if (o.draw) o.draw(ctx, x, y, bodyH);
   if (o.icon && o.glyph) o.glyph(ctx, o.icon, cx, y + bodyH / 2 - (o.sub ? 8 : 0), o.sub ? 30 : 28, '#fff');
-  if (o.label) text(ctx, o.label, cx, y + bodyH / 2 - (o.sub ? 7 : 0), o.size || 18, '#fff', 'center');
-  if (o.sub) text(ctx, o.sub, cx, y + bodyH - 10, (o.size && o.icon) ? o.size : 12, 'rgba(255,255,255,0.95)', 'center', 800);
+  const bw = { maxW: w - 16 };
+  if (o.label) text(ctx, o.label, cx, y + bodyH / 2 - (o.sub ? 7 : 0), o.size || 18, '#fff', 'center', 900, bw);
+  if (o.sub) text(ctx, o.sub, cx, y + bodyH - 10, (o.size && o.icon) ? o.size : 12, 'rgba(255,255,255,0.95)', 'center', 800, bw);
   ctx.restore();
 }
 
@@ -137,8 +138,32 @@ export function bezel(ctx, cx, cy, r, color, o = {}) {
 // ---------------------------------------------------------------------------------------------------- text
 let textBaked = 0;
 const strokeOk = (s) => { for (const ch of s.toUpperCase()) if (ch !== ' ' && !K.GLYPHS[ch]) return false; return true; };
+// Fit to width: o.maxW scales the font down (not below size * o.minScale, default 0.6) and then cuts the string with an ellipsis. Long German and
+// Dutch strings use it; English that already fits is untouched. measure(ctx, s, size) is injectable so the classic HUD can share the logic.
+export function measureStr(ctx, s, size) {
+  if (size >= 26 && s.length <= 16 && strokeOk(s)) return K.Pen.prototype.textWidth(s, size);
+  if (!ctx || !ctx.measureText) return s.length * size * 0.55;
+  ctx.save(); ctx.font = (size >= 15 ? 'bold ' : '') + size + 'px ' + FONT; const w = ctx.measureText(s).width; ctx.restore();
+  return w;
+}
+export function fitText(ctx, s, size, maxW, minScale = 0.6, measure = measureStr) {
+  s = String(s);
+  if (!(maxW > 0)) return { s, size };
+  let w = measure(ctx, s, size);
+  if (w <= maxW) return { s, size };
+  const minSize = Math.max(8, size * minScale);
+  let sz = Math.max(minSize, Math.floor(size * maxW / w * 10) / 10);
+  w = measure(ctx, s, sz);
+  if (w > maxW) {
+    let cut = s;
+    while (cut.length > 1 && measure(ctx, cut.trimEnd() + '\u2026', sz) > maxW) cut = cut.slice(0, -1);
+    s = cut.trimEnd() + '\u2026';
+  }
+  return { s, size: sz };
+}
 export function text(ctx, s, x, y, size, color, align = 'left', weight = 900, o) {
   s = String(s);
+  if (o && o.maxW) { const f = fitText(ctx, s, size, o.maxW, o.minScale); s = f.s; size = f.size; }
   if (size >= 26 && s.length <= 16 && textBaked < 140 && strokeOk(s) && isHex(color)) {
     // big words use the hand-made stroke font (baked once per string)
     const col = hex6(color), wTot = K.Pen.prototype.textWidth(s, size), pw = Math.ceil(wTot + size * 0.9), ph = Math.ceil(size * 1.9);

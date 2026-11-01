@@ -6,13 +6,14 @@ import * as M from './meta.js';
 import { makeRng } from './rng.js';
 import { Battle, battleIdle } from './battle.js';
 import { Cutscene } from './cutscene.js';
-import { buildHub, settingsModal, codexModal, setlistSheet } from './ui_hub.js';
+import { buildHub, settingsModal, codexModal, setlistSheet, langPicker } from './ui_hub.js';
 import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo } from './ui_run.js';
 import { setRoot, h, btn, modal, toast, tickLive, AE, AW } from './ui_core.js';
 import { submitScore, rankOf } from './lb.js';
 import { setStyle } from './style.js';
 import { initPwa } from './pwa.js';
 import * as Stats from './stats.js';
+import * as I18N from './i18n.js';
 
 const canvas = document.getElementById('game');
 const ui = document.getElementById('ui');
@@ -24,6 +25,9 @@ setRoot(ui);
 let loaded;
 try { loaded = M.loadSave(localStorage, Date.now()); } catch (e) { loaded = { profile: M.newProfile(Date.now()), source: 'new', recovered: false, corrupt: false, hadSave: false }; }
 let profile = loaded.profile;
+// language before the first paint: the profile choice, else the one stored on this device, else the browser language (see I18N.md)
+await I18N.initLang({ profile: profile.settings.lang });
+profile.settings.lang = I18N.getLangPref();
 const hadSave = loaded.hadSave;
 let saveT = 0, saveFailT = 0;
 // validate-then-commit (meta.commitSave): a profile that does not survive serialise + parse back never overwrites the last good save
@@ -50,8 +54,11 @@ const app = {
     try { localStorage.setItem(M.SAVE_PREV_KEY, M.serialize(Object.assign({}, app.profile, { resume: null }))); } catch (e) { /* keep going */ }
     app.profile = np; profile = np; writeSave({ force: true }); app.applySettings(); app.openHub('tour');
   },
+  langNow: () => I18N.getLang(),
+  setLangPref(pref) { app.profile.settings.lang = pref; app.save(); return I18N.setLangPref(pref); },
   applySettings() {
     const s = app.profile.settings;
+    if (s.lang !== I18N.getLangPref()) I18N.setLangPref(s.lang);
     AudioFx.setVolume({ music: s.music, sfx: s.sfx });
     document.body.classList.toggle('reduce', !!s.reduce);
     setStyle(); document.body.classList.add('doodle'); document.body.classList.remove('classic');
@@ -120,6 +127,10 @@ function showTitle() {
   const tap = h('div', { class: 'tap' }, 'TAP TO START');
   wrap.append(tap);
   ui.append(wrap);
+  // first title screen: a small text row to pick the language (stays visible under the menu)
+  const langRow = h('div', { class: 'lang-row', style: 'position:absolute;left:0;right:0;bottom:6px;display:flex;justify-content:center;z-index:5' }, langPicker(app, false));
+  langRow.addEventListener('pointerdown', (e) => e.stopPropagation());
+  wrap.append(langRow);
   const showMenu = () => {
     app.audio.init(); app.audio.resume(); app.applySettings(); app.audio.musicStart('title');
     tap.remove(); wrap.removeEventListener('pointerdown', showMenu);
@@ -351,6 +362,18 @@ function frame(now) {
   }
   requestAnimationFrame(frame);
 }
+
+// the language changed: redraw the current screen (battle canvas text reads t() every frame, so it follows by itself)
+function rerender() {
+  if (app.screen === 'hub' && app.hub && app.hub.render) app.hub.render();
+  else if (app.screen === 'title') {
+    const menuShown = !!ui.querySelector('.menu button');
+    showTitle();
+    if (menuShown) { const w = ui.querySelector('.title-wrap'); if (w) w.dispatchEvent(new Event('pointerdown')); }
+  }
+}
+app.rerender = rerender;
+I18N.onLang(() => app.rerender());
 
 // ------------------------------------------------------------------------------------------------ boot
 resize();

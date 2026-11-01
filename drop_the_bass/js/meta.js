@@ -45,7 +45,7 @@ export function newProfile(now = 0) {
     skins: { owned: [SKIN_DEFAULT] }, milestones: { claimed: {}, cosmetics: [] },
     seen: { turrets: {}, enemies: {}, bosses: {}, relics: {} },
     autoMerge: false, autoMergeOn: true,
-    settings: { style: 'doodle', lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1, difficulty: 'normal', skin: SKIN_DEFAULT, analytics: true, skipSetlist: false },
+    settings: { style: 'doodle', lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1, difficulty: 'normal', skin: SKIN_DEFAULT, analytics: true, skipSetlist: false, lang: 'auto' },
   };
 }
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -110,6 +110,7 @@ export function migrate(p, now = 0) {
   s.difficulty = DIFFICULTY_IDS.includes(s.difficulty) ? s.difficulty : 'normal';
   s.analytics = s.analytics === undefined ? true : !!s.analytics;
   s.skipSetlist = !!s.skipSetlist;
+  s.lang = ['en', 'da', 'nl', 'de'].includes(s.lang) ? s.lang : 'auto';   // 'auto' follows the device language
   // second tour fields: ability picks, pinned modifiers, epilogues seen, board skins, claimed Endless milestones
   out.story.epilogues = isObj(out.story.epilogues) ? Object.fromEntries(Object.entries(out.story.epilogues).filter(([k, v]) => WORLD_BY_ID[k] && v).map(([k]) => [k, true])) : {};
   out.heroAbility = {};
