@@ -41,6 +41,7 @@
     ]);
     var display = section('Display', [
       field('Text size', seg([['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL']], S.get('textSize') || 'm', function (v) { S.set('textSize', v); }, 'Text size')),
+      field('Full screen', SB.ui.fullscreenButton('.btn.alt.sm', true), SB.ui.fullscreen.supported() ? 'Hides the browser bars. Also in the pause menu.' : 'This browser has no full screen. On iPhone use Share, then Add to Home Screen.'),
       field('Reduce motion', sw(S.get('reduceMotion'), function (v) { S.set('reduceMotion', v); }, 'Reduce motion'), 'Calmer screens. Defaults to your system setting.'),
       field('High contrast', sw(S.get('highContrast'), function (v) { S.set('highContrast', v); }, 'High contrast')),
       field('Colorblind icons', sw(S.get('cbIcons'), function (v) { S.set('cbIcons', v); }, 'Colorblind icons'), 'Adds shape badges to statuses and rarities.'),

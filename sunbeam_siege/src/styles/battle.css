@@ -394,3 +394,9 @@ html[data-mode=phone] .btn.sm{min-height:44px}
 .u-hit{transition:background .12s,outline-color .12s}
 .u-hit.drop-hot{outline-offset:3px}
 html.reduce-motion .b-ring,html.reduce-motion .b-ghost,html.reduce-motion .b-zone{transition:none;animation:none}
+
+/* phone drag: once a floor is the aim, the other valid floors fade back so it is obvious which one you would land on */
+.b-stage.aimhot .b-floor.tgt:not(.drop-hot){border-color:rgba(123,228,149,.22);background:rgba(15,11,36,.34);animation:none}
+.b-stage.aimhot .b-floor.drop-hot{border-width:3px;border-color:#fff;background:rgba(123,228,149,.3);box-shadow:inset 0 0 22px rgba(123,228,149,.7),0 0 16px rgba(123,228,149,.55);animation:none}
+.b-tag{position:fixed;left:0;top:0;z-index:410;pointer-events:none;opacity:0;padding:3px 10px;border-radius:99px;background:var(--good);color:#0b2a14;border:2px solid #fff;font-weight:900;font-size:13px;letter-spacing:.02em;white-space:nowrap;box-shadow:0 2px 0 var(--ui-shadow);transition:opacity .12s;will-change:transform}
+.b-tag.on{opacity:1}
