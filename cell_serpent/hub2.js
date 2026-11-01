@@ -5,7 +5,8 @@ import {
   META, metaCost, buyMeta, levelInfo, levelReward, power,
   SIGN_DAYS, claimSign, FUND, fundReady, claimFund, idleAmount, claimIdle, idleRate, ENERGY_MAX, buyEnergy, tickEnergy,
   BOXES, WEAPONS, PETS, openBox, shopLevel, dealsFor, buyDeal, refreshDeals, welcomeReady, claimWelcome, GOLD_PACKS, buyGold, EGG_PRICE, buyEgg,
-  exchangeFrags,
+  exchangeFrags, OUTFITS, outfitAvailable, buyOutfit, wearOutfit, eventInfo, EVENT_MILES, claimEventMile, ensureEvent, EXCHANGE_ITEMS, buyExchange, LIMIT_ITEMS, buyLimit,
+  CARD_PRICE, buyCard, cardActive, claimCard, TROPHIES, trophyReady, claimTrophy, weaponExchange, WEAPON_EXCHANGE_PRICE, SKINS, SKIN_NAMES,
 } from './sim.js';
 
 const STATICON = { atk: '🔊', crt: '🎵', cdn: '⏱️', vit: '❤️', for: '⭐', rev: '🎤' };
@@ -42,6 +43,11 @@ export function createHub2(c) {
     mk('📅', 'Sign in', signReady, openSign);
     mk('🎀', 'Fan Fund', fundReadyAny, openFund);
     mk('🧺', 'Backstage', idleAmount(s, now()) >= 50, openIdle);
+    mk('🎪', eventInfo(day).name.split(' ')[0], s.event.earned > 0 && EVENT_MILES.some((m, i) => !s.event.claimed[i] && s.event.earned >= m.at), openEvent);
+    mk('👗', 'Wardrobe', false, openWardrobe);
+    mk('🏆', 'Trophies', TROPHIES.some(t => trophyReady(s, t)), openTrophies);
+    mk('📖', 'Preview', false, openBestiary);
+    mk('🎫', 'Pass', cardActive(s, day) && s.card.last !== day, openPass);
     mk('🔀', 'Swap', false, openSwap);
   }
   function openSign() {
@@ -82,6 +88,9 @@ export function createHub2(c) {
       box.innerHTML = `<div class="sub">Three of one become two of another.</div><select id="swFrom">${opts}</select><div class="arrowd">⬇</div><select id="swTo">${opts}</select><button class="btn gold" id="swGo">SWAP</button>`;
       body.appendChild(box);
       $('swTo').selectedIndex = 1;
+      const wx = document.createElement('div'); wx.className = 'tiles'; wx.style.marginTop = '14px';
+      for (const w of WEAPONS.filter(q => !s.skills[q.id].lv)) wx.appendChild(tile({ cls: 't-weapon tier' + (w.tier || 0), ic: icon(w.id), name: w.name, desc: (s.cleared || 0) < (w.stage || 0) ? 'Clear stage ' + w.stage + ' first' : 'Skip the fragment hunt', btn: WEAPON_EXCHANGE_PRICE + ' ' + curImg('sparkles'), gold: true, disabled: (s.cleared || 0) < (w.stage || 0) || s.sparkles < WEAPON_EXCHANGE_PRICE, onclick: () => { if (weaponExchange(save(), w.id)) { c.persist(); audio.play('levelup'); c.refreshCur(); openSwap(); } } }));
+      if (wx.children.length) { const t = document.createElement('div'); t.className = 'sub'; t.textContent = 'Weapon Exchange'; box.appendChild(t); box.appendChild(wx); }
       $('swGo').onclick = () => { if (exchangeFrags(save(), $('swFrom').value, $('swTo').value)) { c.persist(); audio.play('upgrade'); openSwap(); } };
     });
   }
@@ -189,7 +198,87 @@ export function createHub2(c) {
       const free = !p.price, used = free && s.shop.gold === day;
       list.appendChild(tile({ cls: 't-weapon', ic: curImg('beats'), name: p.name, desc: `${p.beats} Beats`, btn: used ? 'OBTAINED' : free ? 'FREE' : p.price + ' ' + curImg('sparkles'), disabled: used || (!free && s.sparkles < p.price), onclick: () => { if (buyGold(save(), p.id, day)) { c.persist(); audio.play('upgrade'); c.refreshCur(); renderShop(); } } }));
     }
+    shopExtras(list);
   }
 
-  return { renderSide, renderStats, renderGear, renderShop, openPanel, openPanelStats: null, setGearFilter: f => { gearFilter = f; }, lootModal };
+  // ---------------------------------------------------------------- extra panels
+  const rib = n => `🎀 ${n}`;
+  function openWardrobe() {
+    const s = save(), day = c.dayKey();
+    openPanel('WARDROBE', body => {
+      const top = document.createElement('div'); top.className = 'wardtop';
+      const worn = OUTFITS.find(o => o.id === s.outfits.worn);
+      top.innerHTML = `<div class="wardhero"><img src="assets/duo_idle.png" alt=""><span class="wardhat">${worn ? worn.hat : ''}</span></div><div class="sub">Ribbons ${rib(s.ribbons)}</div>`;
+      body.appendChild(top);
+      const grid = document.createElement('div'); grid.className = 'tiles';
+      for (const o of OUTFITS) {
+        const own = s.outfits.owned[o.id], av = outfitAvailable(o, day), wn = s.outfits.worn === o.id, wname = WEAPONS.find(w => w.id === o.weapon).name;
+        grid.appendChild(tile({ cls: 't-gold' + (wn ? ' on-loadout' : ''), ic: `<span class="kemo">${o.hat}</span>`, name: o.name, chip: o.event ? EVENT_THEMES_NAME(o.event) : '', desc: `${wname} +${Math.round((o.mul - 1) * 100)}%`, btn: own ? (wn ? 'TAKE OFF' : 'WEAR') : av ? rib(o.price) : 'Event only', gold: !own && av, disabled: !own && (!av || s.ribbons < o.price),
+          onclick: () => { const sv = save(); if (own) wearOutfit(sv, wn ? '' : o.id); else if (!buyOutfit(sv, o.id, day)) return; c.persist(); audio.play('upgrade'); openWardrobe(); } }));
+      }
+      body.appendChild(grid);
+    });
+  }
+  const EVENT_THEMES_NAME = id => ({ spring: 'Blossom', summer: 'Sunny', autumn: 'Harvest', winter: 'Snowy' })[id];
+  function openEvent() {
+    const s = save(), day = c.dayKey(); ensureEvent(s, day); const ev = eventInfo(day);
+    openPanel(ev.name.toUpperCase(), body => {
+      const hd = document.createElement('div'); hd.className = 'sub'; hd.innerHTML = `${ev.blurb}<br><b>${ev.daysLeft} days left</b>  ·  you gathered ${rib(s.event.earned)}  ·  you hold ${rib(s.ribbons)}`; body.appendChild(hd);
+      const grid = document.createElement('div'); grid.className = 'tiles';
+      EVENT_MILES.forEach((m, i) => {
+        const got = s.event.claimed[i], ready = !got && s.event.earned >= m.at, r = m.reward;
+        const txt = r.eggs ? icon('egg') + ' Egg' : r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : r.energy ? '⚡ ' + r.energy : '👗 Outfit';
+        grid.appendChild(tile({ cls: 't-weapon', ic: '🎪', name: m.at + ' ribbons', desc: '', btn: got ? 'GOT IT' : ready ? 'CLAIM ' + txt : txt, gold: ready, disabled: !ready, onclick: () => { if (claimEventMile(save(), i, day)) { c.persist(); audio.play('levelup'); c.refreshCur(); openEvent(); } } }));
+      });
+      for (const it of EXCHANGE_ITEMS) grid.appendChild(tile({ cls: 't-gold', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('upgrade'); c.refreshCur(); openEvent(); } } }));
+      body.appendChild(grid);
+    });
+  }
+  function openTrophies() {
+    const s = save();
+    openPanel('TROPHY SHELF', body => {
+      const grid = document.createElement('div'); grid.className = 'tiles';
+      for (const t of TROPHIES) {
+        const got = s.trophies[t.id], ready = trophyReady(s, t), cur = Math.min(t.at, t.get(s)), r = t.reward;
+        grid.appendChild(tile({ cls: 't-gold one', ic: got ? '🏆' : '🥉', name: t.name, desc: '', bar: Math.round(cur / t.at * 100), barText: cur + ' / ' + t.at, btn: got ? 'GOT IT' : ready ? 'CLAIM ' + (r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : icon('egg') + ' ×' + r.eggs) : (r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : icon('egg') + ' ×' + r.eggs), gold: ready, disabled: !ready, onclick: () => { if (claimTrophy(save(), t.id)) { c.persist(); audio.play('levelup'); c.refreshCur(); openTrophies(); } } }));
+      }
+      body.appendChild(grid);
+    });
+  }
+  function openBestiary() {
+    const s = save();
+    openPanel('PREVIEW', body => {
+      const grid = document.createElement('div'); grid.className = 'beasts';
+      SKINS.forEach((sk, i) => {
+        const seen = (s.cleared || 0) >= i, url = c.bodyURL(sk);
+        const d = document.createElement('div'); d.className = 'beast' + (seen ? '' : ' off');
+        d.innerHTML = `<div class="bpic">${url ? `<img src="${url}" alt="">` : '?'}</div><div class="bname">${seen ? SKIN_NAMES[i] : '???'}</div><small>Stage ${i + 1}</small>`;
+        grid.appendChild(d);
+      });
+      body.appendChild(grid);
+    });
+  }
+  function openPass() {
+    const s = save(), day = c.dayKey(), act = cardActive(s, day);
+    openPanel('MONTHLY PASS', body => {
+      const grid = document.createElement('div'); grid.className = 'tiles';
+      grid.appendChild(tile({ cls: 't-gold one', ic: '🎫', name: 'Fan Club Pass', chip: act ? (s.card.until - day) + ' days left' : 'Not active', desc: '10 Sparkles and 5 Voice every day for 30 days.', btn: act ? (s.card.last === day ? 'COME BACK TOMORROW' : 'COLLECT TODAY') : CARD_PRICE + ' ' + curImg('sparkles'), gold: true, disabled: act ? s.card.last === day : s.sparkles < CARD_PRICE,
+        onclick: () => { const sv = save(); if (act ? claimCard(sv, day) : buyCard(sv, day)) { c.persist(); audio.play('levelup'); c.refreshCur(); openPass(); } } }));
+      body.appendChild(grid);
+    });
+  }
+  function eventTile() {
+    const s = save(), day = c.dayKey(), ev = eventInfo(day);
+    return tile({ cls: 't-gold one', ic: '🎪', name: ev.name, chip: ev.daysLeft + ' days left', desc: ev.blurb, btn: 'JOIN THE FUN', gold: true, onclick: () => { audio.play('click'); openEvent(); } });
+  }
+  function shopExtras(list) {
+    const s = save(), day = c.dayKey(), wk = Math.floor(day / 7), bought = s.shop.limit.week === wk ? s.shop.limit.bought : {};
+    sec(list, 'Limit Shop');
+    for (const it of LIMIT_ITEMS) { const left = it.limit - (bought[it.id] || 0); list.appendChild(tile({ cls: 't-weapon', ic: it.id === 'egg' ? icon('egg') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, chip: left + ' left this week', desc: '', btn: it.price + ' ' + curImg('beats'), disabled: left < 1 || s.beats < it.price, onclick: () => { if (buyLimit(save(), it.id, day)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } })); }
+    sec(list, 'Exchange Shop');
+    for (const it of EXCHANGE_ITEMS) list.appendChild(tile({ cls: 't-gold', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } }));
+    sec(list, 'Pass');
+    list.appendChild(tile({ cls: 't-gold one', ic: '🎫', name: 'Fan Club Pass', desc: '30 days of daily gifts', btn: 'LOOK', gold: true, onclick: () => { audio.play('click'); openPass(); } }));
+  }
+  return { eventTile, shopExtras, renderSide, renderStats, renderGear, renderShop, openPanel, openPanelStats: null, setGearFilter: f => { gearFilter = f; }, lootModal };
 }
