@@ -25,7 +25,10 @@ for (const [id, b] of Object.entries(C.BOSSES)) { ok(b.id === id && b.hpMul > 0 
 for (const [id, a] of Object.entries(C.AFFIXES)) ok(a.id === id, 'affix ' + id);
 
 // ---- worlds and maps
-ok(C.WORLDS.length === 5, 'five worlds');
+ok(C.WORLDS.length === 7, 'seven worlds');
+ok(C.WORLD_ORDER.join() === C.WORLDS.map((w) => w.id).join() && C.WORLDS.every((w, i) => w.n === i + 1), 'WORLD_ORDER matches the tour');
+ok(C.WORLD_BY_ID.beach.map === 'beach' && C.WORLD_BY_ID.moon.map === 'moon' && C.WORLD_BY_ID.beach.wavesTotal === 25 && C.WORLD_BY_ID.moon.wavesTotal === 25, 'second tour worlds');
+ok(C.BOSSES.lowpass && C.BOSSES.silence, 'second tour bosses');
 for (const w of C.WORLDS) {
   ok(C.MAPS[w.map], 'map ' + w.id);
   ok(C.BOSSES[w.boss] && C.BOSSES[w.boss10], 'bosses of ' + w.id);
@@ -90,8 +93,12 @@ for (const lv of [1, 5, 10, 20, 50]) { const r = D.fameReward(lv); ok(r.diamonds
 for (const id of Object.keys(C.TURRETS)) { const f = C.TURRETS[id].unlock.fame; if (f > 1) ok(!!D.fameReward(f).unlocks, 'fame ' + f + ' announces its unlock'); }
 
 // ---- story
-for (const [id, c] of Object.entries(S.CUTSCENES)) for (const p of c.panels) { ok(SCENE_IDS.includes(p.scene), 'scene exists ' + id + ' ' + p.scene); ok(p.lines.length > 0 && p.lines.every((l) => l.text && ['roxor', 'jasmin', 'loopy', 'playback', 'narr'].includes(l.who)), 'lines ' + id); }
+for (const [id, c] of Object.entries(S.CUTSCENES)) for (const p of c.panels) { ok(SCENE_IDS.includes(p.scene) || S.NEW_SCENE_IDS.includes(p.scene), 'scene exists ' + id + ' ' + p.scene); ok(p.lines.length > 0 && p.lines.every((l) => l.text && ['roxor', 'jasmin', 'loopy', 'playback', 'narr'].includes(l.who)), 'lines ' + id); }
 for (const w of C.WORLDS) { ok(S.CUTSCENES['world_' + w.id], 'world cutscene ' + w.id); ok(S.CUTSCENES['boss_' + w.boss], 'boss cutscene ' + w.boss); }
+for (const w of C.WORLDS) { ok(S.EPILOGUES[w.id] && S.CUTSCENES[S.EPILOGUES[w.id]], 'epilogue for ' + w.id); const lines = S.CUTSCENES[S.EPILOGUES[w.id]].panels.flatMap((p) => p.lines); ok(lines.length >= 2 && lines.length <= 4, 'epilogue length ' + w.id); }
+ok(Object.keys(S.EPILOGUES).length === C.WORLDS.length, 'no stray epilogues');
+ok(S.CUTSCENES[S.CREDITS_FINAL], 'final credits');
+for (const id of S.NEW_SCENE_IDS) ok(Object.values(S.CUTSCENES).some((c) => c.panels.some((p) => p.scene === id)), 'new scene id is used ' + id);
 for (const k of Object.keys(C.ENEMIES)) if (!C.ENEMIES[k].hidden) ok(S.HINTS[k], 'hint for ' + k);
 
 // ---- synergies, partners and difficulty

@@ -25,6 +25,22 @@ const rng = () => makeRng(42);
   ok(M.migrate(null, NOW).records > 0, 'migrate null');
 }
 
+// ---- seven worlds: new profiles and old five world saves
+{
+  const p = fresh();
+  ok(WORLDS.every((w) => p.prog[w.id] && p.prog[w.id].cleared === false), 'new profile has prog for every world');
+  ok(p.prog.beach && p.prog.moon, 'new profile has beach and moon');
+  const five = {}; for (const id of ['garage', 'busk', 'club', 'festival', 'arena']) five[id] = { cleared: true, stars: [3, 1, 0, 0, 0, 0], bestEndless: 7, bestWave: 20 };
+  const m = M.migrate({ records: 9, prog: five }, NOW);
+  ok(m.prog.arena.cleared && m.prog.arena.stars[0] === 3 && m.prog.arena.bestEndless === 7, 'old save keeps arena cleared');
+  ok(m.prog.beach && m.prog.moon && !m.prog.beach.cleared && !m.prog.moon.cleared, 'old save gets the two new worlds, uncleared');
+  ok(m.prog.beach.stars.length === 6, 'new world stars array is complete');
+  ok(M.worldUnlocked(m, 'beach') && !M.worldUnlocked(m, 'moon'), 'beach unlocks after arena, moon stays locked');
+  m.prog.beach.cleared = true; ok(M.worldUnlocked(m, 'moon'), 'moon unlocks after beach');
+  const fresh2 = M.migrate({ records: 1, prog: { garage: { cleared: true } } }, NOW);
+  ok(!M.worldUnlocked(fresh2, 'beach') && !M.worldUnlocked(fresh2, 'moon'), 'beach and moon are locked without arena');
+}
+
 // ---- studio
 {
   const p = fresh(); p.records = 10; ok(!M.buyStudio(p, 'amp').ok, 'cannot afford'); p.records = 1e7;
@@ -219,7 +235,7 @@ const mockStore = (o = {}) => { const m = new Map(Object.entries(o)); return { g
   ok(!mut((r) => { delete r.snap.turrets; }).ok && !mut((r) => { delete r.snap.enemies; }).ok && !mut((r) => { r.snap.turrets = 'x'; }).ok, 'missing lists rejected');
   ok(!mut((r) => { r.snap.turrets[0].type = 'nope'; }).ok && !mut((r) => { r.snap.turrets[0].level = 9; }).ok && !mut((r) => { r.snap.turrets[1].slot = r.snap.turrets[0].slot; }).ok, 'bad turrets rejected');
   ok(!mut((r) => { r.snap.enemies[0].hp = 'a'; }).ok && !mut((r) => { r.snap.enemies[0].x = null; }).ok, 'bad enemies rejected');
-  ok(!mut((r) => { r.snap.phase = 'dead'; }).ok && !mut((r) => { r.cfg = null; }).ok && !mut((r) => { r.cfg.world = 'moon'; }).ok && !mut((r) => { r.snap = null; }).ok && !mut((r) => { r.snap.opts = {}; }).ok, 'missing setup rejected');
+  ok(!mut((r) => { r.snap.phase = 'dead'; }).ok && !mut((r) => { r.cfg = null; }).ok && !mut((r) => { r.cfg.world = 'nowhere'; }).ok && !mut((r) => { r.snap = null; }).ok && !mut((r) => { r.snap.opts = {}; }).ok, 'missing setup rejected');
   ok(!M.checkResume(null).ok && !M.checkResume('x').ok && !M.checkResume([]).ok && !M.checkResume({}).ok, 'garbage resume rejected');
   ok(!mut((r) => { r.snap.rngState = undefined; }).ok, 'missing rng state rejected');
 }

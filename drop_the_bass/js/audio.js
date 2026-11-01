@@ -10,16 +10,22 @@ export const SFX_NAMES = ['ui_click', 'ui_back', 'ui_open', 'ui_tab', 'coin', 'd
   'remix_pick', 'relic', 'chest', 'crate_shake', 'crate_open', 'reveal_common', 'reveal_rare', 'reveal_epic', 'reveal_legendary', 'reveal_mythic',
   'win', 'lose', 'error', 'countdown', 'tick', 'achievement', 'typewriter', 'whoosh', 'jam', 'heal', 'freeze', 'combo', 'reroll', 'star_pop',
   // appended: the drop pack (see drop_the_bass/AUDIO_EVENTS.md)
-  'drop_big', 'hype_full', 'synergy', 'reroll_drop', 'wave_preview', 'perfect_beat', 'boss_hit', 'merge_7', 'combo_milestone', 'stage_low', 'ui_pop'];
+  'drop_big', 'hype_full', 'synergy', 'reroll_drop', 'wave_preview', 'perfect_beat', 'boss_hit', 'merge_7', 'combo_milestone', 'stage_low', 'ui_pop',
+  // appended: the branch, hero move and story pack (see drop_the_bass/AUDIO_EVENTS.md)
+  'branch_pick', 'branch_ready', 'hero_freeze', 'hero_overclock', 'hero_coinrain', 'hero_shield', 'boss_phase', 'turret_stolen', 'turret_returned',
+  'milestone', 'mod_select', 'install_ready'];
 
-export const TRACK_IDS = ['title', 'hub', 'world_garage', 'world_busk', 'world_club', 'world_festival', 'world_arena', 'boss', 'victory', 'defeat', 'cutscene_warm', 'cutscene_dark'];
+// appended tracks: world_beach and world_moon (extra world themes), epilogue (after a stage clear cutscene), credits
+export const TRACK_IDS = ['title', 'hub', 'world_garage', 'world_busk', 'world_club', 'world_festival', 'world_arena', 'boss', 'victory', 'defeat', 'cutscene_warm', 'cutscene_dark',
+  'world_beach', 'world_moon', 'epilogue', 'credits'];
 
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
 // ------------------------------------------------------------------------------------------------ music data
 const QUAL = { m7: [0, 3, 7, 10], maj7: [0, 4, 7, 11], dom7: [0, 4, 7, 10], m: [0, 3, 7, 12], maj: [0, 4, 7, 12], dim: [0, 3, 6, 9], sus: [0, 5, 7, 10],
   m9: [0, 3, 10, 14], maj9: [0, 4, 11, 14], dom9: [0, 4, 10, 14], maj6: [0, 4, 7, 9], m6: [0, 3, 7, 9] };
-const SCALES = { mpent: [0, 3, 5, 7, 10, 12, 15], majpent: [0, 2, 4, 7, 9, 12, 14], dorian: [0, 2, 3, 5, 7, 9, 10, 12], mixo: [0, 2, 4, 5, 7, 9, 10, 12] };
+const SCALES = { mpent: [0, 3, 5, 7, 10, 12, 15], majpent: [0, 2, 4, 7, 9, 12, 14], dorian: [0, 2, 3, 5, 7, 9, 10, 12], mixo: [0, 2, 4, 5, 7, 9, 10, 12],
+  major: [0, 2, 4, 5, 7, 9, 11, 12], minor: [0, 2, 3, 5, 7, 8, 10, 12] };
 
 // drum patterns: x = hit, o = soft hit, . = rest
 const PAT = {
@@ -35,6 +41,10 @@ const PAT = {
   soft:    { k: '................', s: '................', h: '................', o: '................' },
   anthem:  { k: 'x.......x..x....', s: '........x.......', h: '..x...x...x...x.', o: '......x.......x.' }, // half-time, big and slow
   stomp:   { k: 'x.....x.x.......', s: '....x.......x...', h: 'x.xxx.xxx.xxx.xx', o: '..............x.' }, // busker stomp and clap
+  beach:   { k: 'x.......x.x.....', s: '....o.......o...', h: '.o.x.o.x.o.x.o.x', o: '................' }, // soft kick, rim, shaker (h plays as a shaker)
+  rave:    { k: 'x...x...x...x...', s: '....x.......x...', h: '.x.x.x.x.x.x.x.x', o: '...x...x...x...x' }, // four on the floor
+  resolve: { k: 'x.......x.......', s: '................', h: '..o...o...o...o.', o: '................' }, // very soft
+  singalong: { k: 'x...x...x...x...', s: '....x.......x...', h: '..x...x...x...x.', o: '......x.......x.' }, // stomp and clap
 };
 // bass: semitones above the chord root (two octaves down), null = rest
 const BASS = {
@@ -50,6 +60,10 @@ const BASS = {
   soft:    [0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
   anthem:  [0, null, null, null, null, null, null, null, 7, null, null, null, 12, null, 10, null],
   stomp:   [0, null, null, null, 7, null, null, null, 0, null, null, null, 5, null, 7, null],
+  beach:   [0, null, null, 0, null, null, 7, null, null, null, 12, null, 7, null, null, null],
+  rave:    [null, null, 0, null, null, null, 0, 0, null, null, 0, null, null, null, 12, 0],
+  resolve: [0, null, null, null, null, null, null, null, 7, null, null, null, null, null, 12, null],
+  singalong: [0, null, null, 0, null, null, 7, null, 0, null, null, 0, null, 12, null, 7],
 };
 // chord stabs: steps and length (steps) and oscillator
 const CH = {
@@ -59,6 +73,8 @@ const CH = {
   chill: { steps: [0, 10], len: 8, wave: 'triangle' }, sad: { steps: [0], len: 15, wave: 'triangle' },
   fanfare: { steps: [0, 4, 8, 12], len: 3.5, wave: 'square' }, soft: { steps: [0], len: 15, wave: 'triangle' },
   anthem: { steps: [0, 8], len: 7, wave: 'sawtooth' }, stomp: { steps: [0, 3, 6, 8, 11, 14], len: 1.2, wave: 'triangle' },
+  beach: { steps: [0, 3, 6, 10, 12], len: 1.6, wave: 'triangle' }, rave: { steps: [0, 10], len: 5, wave: 'sawtooth' },
+  resolve: { steps: [0, 8], len: 7.5, wave: 'triangle' }, singalong: { steps: [0, 6, 8, 14], len: 3, wave: 'sawtooth' },
 };
 // arp: chord tone index per sixteenth (0..3, 4..7 = octave up), null = rest
 const ARP = {
@@ -68,6 +84,10 @@ const ARP = {
   chill: [0, null, 2, null, 1, null, 3, null, 0, null, 2, null, 4, null, 3, null], sad: [0, null, null, 1, null, null, 2, null, null, 3, null, null, 2, null, 1, null],
   fanfare: [0, 1, 2, 4, 2, 1, 0, 1, 2, 3, 4, 5, 4, 3, 2, 1], soft: [0, null, null, null, 1, null, null, null, 2, null, null, null, 3, null, null, null],
   anthem: [0, null, 1, null, 2, null, 3, null, 4, null, 3, null, 2, null, 1, null], stomp: [0, 2, 1, 2, 3, 2, 1, 2, 0, 2, 1, 2, 4, 2, 1, 2],
+  beach: [0, null, 1, 2, null, 3, null, 2, 0, null, 1, 2, null, 4, 3, null],
+  rave: [0, 1, 2, 3, 4, 3, 2, 1, 0, 1, 2, 3, 5, 3, 2, 1],
+  resolve: [0, null, null, 1, null, 2, null, 3, null, 4, null, 3, null, 2, null, null],
+  singalong: [0, 2, 4, 2, 1, 3, 5, 3, 0, 2, 4, 2, 1, 3, 5, 3],
 };
 
 const TRACKS = {
@@ -84,6 +104,16 @@ const TRACKS = {
   defeat:        { bpm: 70,  root: 50, style: 'sad',     prog: [[0, 'm'], [8, 'maj'], [5, 'm'], [7, 'dom7']],        scale: 'mpent',   lead: 'sine',     swing: 0.0,  defInt: 0.5, leadMin: 0.3, seed: 31, dens: 35 },
   cutscene_warm: { bpm: 80,  root: 55, style: 'soft',    prog: [[0, 'maj7'], [5, 'maj7'], [2, 'm7'], [7, 'dom7']],   scale: 'majpent', lead: 'sine',     swing: 0.0,  defInt: 0.6, leadMin: 0.4, seed: 37, dens: 35 },
   cutscene_dark: { bpm: 66,  root: 46, style: 'soft',    prog: [[0, 'm'], [1, 'maj'], [0, 'm'], [6, 'dim']],         scale: 'mpent',   lead: 'triangle', swing: 0.0,  defInt: 0.55, leadMin: 0.45, seed: 41, dens: 30 },
+  // extra optional fields: drumVol (drum level), shaker (hat slot plays a shaker), conga (pattern: x low, h high), breeze (noise swell), pad {wave,f,v,oct,send},
+  // arpSend, arpF, arpDetune (cents of a second arp osc), leadLift (extra semitones on the lead)
+  // sunset beach bonfire: F major, plucks, offbeat shaker, rolling congas, sea-breeze pad
+  world_beach:   { bpm: 112, root: 53, style: 'beach',   prog: [[0, 'maj9'], [5, 'maj7'], [2, 'm7'], [7, 'dom7']],    scale: 'major',   lead: 'triangle', swing: 0.14, defInt: 0.5, leadMin: 0.75, seed: 43, dens: 50, bassWave: 'triangle', chordWave: 'triangle', arpWave: 'triangle', chordF: 2600, leadFilt: 1900, leadSend: 0.3, vibRate: 5, drumVol: 0.7, shaker: true, conga: '..x.hh.x..x.hh.x', breeze: true, pad: { wave: 'sine', f: 1400, v: 0.03, oct: 12 } },
+  // moonlit rave: B minor, detuned arps, four on the floor, floating pad, lifted lead, long echoes
+  world_moon:    { bpm: 138, root: 59, style: 'rave',    prog: [[0, 'm7'], [5, 'm7'], [8, 'maj7'], [7, 'dom7']],      scale: 'minor',   lead: 'sawtooth', swing: 0.0,  defInt: 0.5, leadMin: 0.7, seed: 47, dens: 55, bassWave: 'sawtooth', bassCut: 600, chordF: 1800, arpWave: 'sawtooth', arpSend: 0.75, arpF: 3200, arpDetune: 9, leadFilt: 3200, lead2: 7, leadSend: 0.8, leadLift: 12, vibRate: 5, pad: { wave: 'sawtooth', f: 1100, v: 0.025, oct: 12, send: 0.3 } },
+  // short warm resolve loop for the cutscene after a stage clear
+  epilogue:      { bpm: 88,  root: 60, style: 'resolve', prog: [[5, 'maj7'], [7, 'sus'], [2, 'm7'], [0, 'maj9']],      scale: 'major',   lead: 'sine',     swing: 0.0,  defInt: 0.7, leadMin: 0.45, seed: 53, dens: 35, bassWave: 'triangle', chordF: 1500, leadSend: 0.5, vibRate: 4.5, drumVol: 0.5, pad: { wave: 'triangle', f: 1200, v: 0.03, oct: 12 } },
+  // triumphant singalong (shares 120 bpm with world_club on purpose, differs in key, style, drums, lead)
+  credits:       { bpm: 120, root: 62, style: 'singalong', prog: [[0, 'maj'], [7, 'maj'], [9, 'm'], [5, 'maj']],        scale: 'majpent', lead: 'square',   swing: 0.0,  defInt: 1.0, leadMin: 0.3, seed: 59, dens: 80, bassWave: 'triangle', chordF: 2400, leadFilt: 3400, lead2: 5, leadSend: 0.3, vibRate: 5.5 },
 };
 
 // ------------------------------------------------------------------------------------------------ engine state
@@ -217,6 +247,12 @@ function snare(out, t, v, st, sf) {
   }
 }
 function hat(out, t, v, open, sf) { noise(out, 'highpass', 7000, 9000, t, open ? 0.16 : 0.04, v * (open ? 0.3 : 0.32), { sfx: sf }); }
+function shaker(out, t, v) { noise(out, 'bandpass', 5500, 7000, t, 0.07, v * 0.4, { q: 1, attack: 0.02 }); }
+function conga(out, t, v, hi) {
+  const f = hi ? 330 : 210;
+  tone(out, 'sine', f * 1.12, f, t, hi ? 0.1 : 0.16, v, { attack: 0.002 });
+  noise(out, 'bandpass', hi ? 1800 : 900, hi ? 1500 : 700, t, 0.03, v * 0.3, { q: 2 });
+}
 function clap(out, t, v, sf) { for (let i = 0; i < 3; i++) noise(out, 'bandpass', 1500, 1500, t + i * 0.012, 0.05, v * 0.4, { q: 1.4, sfx: sf }); noise(out, 'bandpass', 1500, 900, t + 0.036, 0.14, v * 0.4, { q: 1, sfx: sf }); }
 
 // ------------------------------------------------------------------------------------------------ music sequencer
@@ -230,18 +266,28 @@ function scheduleStep(m, i, time) {
   const I = m.int, dest = m.gain, st = T.style, P = PAT[st];
   const fill = bar % 4 === 3 && s >= 12;
   const accent = s % 4 === 0 ? 1 : 0.8;
+  const dv = T.drumVol == null ? 1 : T.drumVol;
+  const H = (v, open) => (T.shaker ? shaker(dest, time, v * dv) : hat(dest, time, v * dv, open));
   if (I >= 0.05) {
-    if (P.k[s] !== '.') kick(dest, time, P.k[s] === 'x' ? 0.8 : 0.45, st);
+    if (P.k[s] !== '.') kick(dest, time, (P.k[s] === 'x' ? 0.8 : 0.45) * dv, st);
     if (st === 'boss' && fill) kick(dest, time, 0.7, st);
   }
   if (I >= 0.25 && P.s[s] !== '.') {
-    snare(dest, time, P.s[s] === 'x' ? 0.7 : 0.35, st);
-    if (st === 'house' || st === 'bright' || st === 'fanfare' || st === 'stomp') clap(dest, time, 0.5);
+    snare(dest, time, (P.s[s] === 'x' ? 0.7 : 0.35) * dv, st);
+    if (st === 'house' || st === 'bright' || st === 'fanfare' || st === 'stomp' || st === 'rave' || st === 'singalong') clap(dest, time, 0.5);
   }
   if (I >= 0.15) {
-    if (P.h[s] !== '.') hat(dest, time, (P.h[s] === 'x' ? 0.6 : 0.3) * accent, false);
-    else if (fill && s % 2 === 0) hat(dest, time, 0.4, false);
-    if (P.o[s] === 'x') hat(dest, time, 0.5, true);
+    if (P.h[s] !== '.') H((P.h[s] === 'x' ? 0.6 : 0.3) * accent, false);
+    else if (fill && s % 2 === 0) H(0.4, false);
+    if (P.o[s] === 'x') H(0.5, true);
+  }
+  if (T.conga && I >= 0.3 && T.conga[s] !== '.') conga(dest, time, 0.26, T.conga[s] === 'h');
+  if (T.breeze && I >= 0.3 && s === 0) noise(dest, 'bandpass', 900, 2400, time, 16 * 60 / T.bpm / 4, 0.05, { q: 0.5, attack: 0.5 });
+  if (T.pad && I >= 0.3 && s % 8 === 0) {
+    for (let n = 0; n < chord.length; n++) {
+      const f = mtof(chord[n] + (T.pad.oct == null ? 12 : T.pad.oct));
+      tone(dest, T.pad.wave, f, f, time, 16 * 60 / T.bpm / 4, T.pad.v, { detune: n % 2 ? 8 : -8, filter: { type: 'lowpass', f: T.pad.f, q: 0.5 }, attack: 6 * 60 / T.bpm / 4, send: T.pad.send || 0 });
+    }
   }
   const sd = 60 / m.def.bpm / 4;
   const bn = BASS[st][s];
@@ -261,7 +307,8 @@ function scheduleStep(m, i, time) {
   if (I >= 0.55 && A != null) {
     const note = chord[A % 4] + (A >= 4 ? 12 : 0) + 12;
     const f = mtof(note);
-    tone(dest, T.arpWave || (st === 'boss' || st === 'epic' ? 'sawtooth' : 'square'), f, f, time, sd * 0.9, 0.05, { filter: { type: 'lowpass', f: 2600, q: 1 }, send: 0.4 });
+    tone(dest, T.arpWave || (st === 'boss' || st === 'epic' ? 'sawtooth' : 'square'), f, f, time, sd * 0.9, 0.05, { filter: { type: 'lowpass', f: T.arpF || 2600, q: 1 }, send: T.arpSend || 0.4 });
+    if (T.arpDetune) tone(dest, T.arpWave || 'square', f, f, time, sd * 0.9, 0.035, { detune: T.arpDetune, filter: { type: 'lowpass', f: T.arpF || 2600, q: 1 }, send: T.arpSend || 0.4 });
   }
   if (I >= T.leadMin) {
     const sc = SCALES[T.scale];
@@ -271,7 +318,7 @@ function scheduleStep(m, i, time) {
       // lean toward chord tones: pick scale degree, snap to chord root now and then
       const deg = h % sc.length;
       const note = (h >>> 9) % 3 === 0 ? chord[(h >>> 5) % 3] + 12 : m.root + cr + sc[deg] + 12;
-      const f = mtof(note + 12);
+      const f = mtof(note + 12 + (T.leadLift || 0));
       const ld = sd * (((h >>> 11) % 2) + 1.6);
       const lf = T.leadFilt ? { type: 'lowpass', f: T.leadFilt, q: T.leadQ || 0.8 } : T.lead === 'sawtooth' ? { type: 'lowpass', f: 2400, q: 0.8 } : null;
       tone(dest, T.lead, f, f, time, ld, T.lead2 ? 0.06 : 0.08, { attack: 0.01, send: T.leadSend == null ? 0.45 : T.leadSend, vib: { rate: T.vibRate || 5.5, depth: f * 0.004 }, filter: lf });
@@ -527,11 +574,90 @@ const SFX = {
     tone(o, 'sawtooth', 98, 92, t, 0.5, 0.07, { sfx: 1, attack: 0.1, filter: { type: 'lowpass', f: 400, q: 1 } });
   },
   ui_pop: (o, t) => { tone(o, 'sine', 420, 1000, t, 0.06, 0.2, S); noise(o, 'highpass', 5000, 5000, t, 0.012, 0.06, S); },
+  // ---- the branch, hero move and story pack
+  // branch_pick: a thunk of the upgrade locking in, then a bright rising triad
+  branch_pick: (o, t) => {
+    tone(o, 'sine', 190, 80, t, 0.12, 0.4, S); noise(o, 'bandpass', 2200, 1200, t, 0.04, 0.2, { q: 1.5, sfx: 1 });
+    arpUp(o, t + 0.07, [523.25, 783.99, 1046.5], 0.055, 0.35, 0.17, 'triangle');
+    tone(o, 'sine', 2093, null, t + 0.2, 0.3, 0.07, S);
+  },
+  // branch_ready: gentle sparkle ping, quiet enough to fire for every branchable turret
+  branch_ready: (o, t) => {
+    tone(o, 'sine', 1568, null, t, 0.35, 0.11, S); tone(o, 'sine', 2349.3, null, t + 0.07, 0.4, 0.08, S); tone(o, 'sine', 3136, null, t + 0.14, 0.3, 0.04, S);
+  },
+  // hero_freeze: icy bass drop with glassy shards
+  hero_freeze: (o, t) => {
+    tone(o, 'sine', 150, 30, t, 0.95, 0.55, S); tone(o, 'triangle', 300, 60, t, 0.5, 0.15, S);
+    noise(o, 'highpass', 7500, 3000, t, 0.55, 0.14, { q: 0.6, sfx: 1 }); noise(o, 'lowpass', 1200, 120, t, 0.4, 0.2, S);
+    arpUp(o, t + 0.04, [3136, 2637, 2093, 1568], 0.05, 0.3, 0.07, 'sine');
+  },
+  // hero_overclock: tape speeding up, a rising whirr that ends in a tick
+  hero_overclock: (o, t) => {
+    tone(o, 'sawtooth', 70, 900, t, 0.95, 0.12, { sfx: 1, attack: 0.15, filter: { type: 'lowpass', f: 1800, q: 2 }, vib: { rate: 14, depth: 25 } });
+    tone(o, 'sine', 140, 1800, t, 0.95, 0.15, { sfx: 1, attack: 0.1 });
+    noise(o, 'bandpass', 300, 3500, t, 0.95, 0.12, { q: 1.2, attack: 0.3, sfx: 1 });
+    tone(o, 'square', 1800, 1500, t + 0.95, 0.06, 0.1, S);
+  },
+  // hero_coinrain: a cascade of coins, pitch tumbling down and up in a fixed pattern
+  hero_coinrain: (o, t) => {
+    const fs = [1760, 1320, 2093, 1568, 1976, 1320, 1760, 2349];
+    for (let i = 0; i < fs.length; i++) {
+      const at = t + i * 0.075 + (i % 3) * 0.012;
+      tone(o, 'square', fs[i], null, at, 0.07, 0.07, S); tone(o, 'sine', fs[i] * 1.5, null, at + 0.045, 0.2, 0.06, S);
+    }
+    tone(o, 'sine', 3136, null, t + 0.5, 0.4, 0.05, S);
+  },
+  // hero_shield: a soft bell and a swelling dome of air
+  hero_shield: (o, t) => {
+    for (const [r, v] of [[1, 0.2], [2, 0.1], [2.76, 0.06], [5.4, 0.03]]) tone(o, 'sine', 392 * r, null, t, 1.3, v, S);
+    tone(o, 'triangle', 196, null, t, 1.2, 0.1, { sfx: 1, attack: 0.3, filter: { type: 'lowpass', f: 900, q: 0.6 } });
+    noise(o, 'bandpass', 1200, 3000, t, 0.8, 0.07, { q: 0.6, attack: 0.3, sfx: 1 });
+  },
+  // boss_phase: low menace, a rising sweep, then the hit at t + 0.9
+  boss_phase: (o, t) => {
+    tone(o, 'sawtooth', 55, 220, t, 0.9, 0.14, { sfx: 1, attack: 0.5, filter: { type: 'lowpass', f: 700, q: 2 } });
+    noise(o, 'bandpass', 200, 4500, t, 0.9, 0.16, { q: 1, attack: 0.6, sfx: 1 });
+    tone(o, 'square', 440, 880, t + 0.2, 0.7, 0.04, { sfx: 1, attack: 0.4, filter: { type: 'lowpass', f: 1400, q: 1 } });
+    const h = t + 0.9;
+    tone(o, 'sine', 100, 28, h, 1.0, 0.6, S); noise(o, 'lowpass', 1800, 150, h, 0.5, 0.28, S);
+    for (const f of [110, 116.5]) tone(o, 'sawtooth', f, null, h, 1.1, 0.07, { sfx: 1, attack: 0.02, filter: { type: 'lowpass', f: 800, q: 1 } });
+  },
+  // turret_stolen: a descending whoop (a sad glide plus a swoosh)
+  turret_stolen: (o, t) => {
+    tone(o, 'triangle', 1000, 160, t, 0.5, 0.26, { sfx: 1, attack: 0.02, vib: { rate: 9, depth: 18 } });
+    tone(o, 'square', 650, 110, t, 0.5, 0.08, { sfx: 1, filter: { type: 'lowpass', f: 1200, q: 1 } });
+    noise(o, 'bandpass', 3500, 500, t, 0.4, 0.1, { q: 0.8, sfx: 1 });
+  },
+  // turret_returned: a happy ascending pop and a three note flick
+  turret_returned: (o, t) => {
+    tone(o, 'sine', 350, 900, t, 0.09, 0.28, S); noise(o, 'highpass', 5000, 5000, t + 0.07, 0.015, 0.07, S);
+    arpUp(o, t + 0.09, [784, 988, 1318], 0.055, 0.3, 0.16, 'triangle');
+  },
+  // milestone: fanfare, a quick square run into a held major chord with a kick underneath
+  milestone: (o, t) => {
+    tone(o, 'sine', 130, 55, t, 0.4, 0.4, S);
+    arpUp(o, t, [523.25, 659.25, 783.99, 1046.5], 0.09, 0.3, 0.15, 'square');
+    for (const x of [523.25, 659.25, 783.99, 1046.5]) tone(o, 'triangle', x, null, t + 0.38, 1.1, 0.1, { sfx: 1, attack: 0.02 });
+    for (const x of [261.6, 392, 523.25]) tone(o, 'sawtooth', x, null, t + 0.38, 1.0, 0.05, { sfx: 1, attack: 0.03, filter: { type: 'lowpass', f: 1600, q: 0.7 } });
+    for (let i = 0; i < 4; i++) tone(o, 'sine', 2400 + i * 330, null, t + 0.45 + i * 0.05, 0.2, 0.05, S);
+  },
+  // mod_select: a risky-deal click, a dry tick and two clashing notes
+  mod_select: (o, t) => {
+    tone(o, 'square', 320, 140, t, 0.06, 0.18, S); noise(o, 'highpass', 3500, 3500, t, 0.02, 0.12, S);
+    tone(o, 'triangle', 330, null, t + 0.06, 0.18, 0.14, S); tone(o, 'triangle', 349.2, null, t + 0.06, 0.18, 0.12, S);
+    tone(o, 'sine', 1500, 1100, t + 0.1, 0.1, 0.07, S);
+  },
+  // install_ready: small friendly two note chime
+  install_ready: (o, t) => {
+    tone(o, 'sine', 1046.5, null, t, 0.3, 0.16, S); tone(o, 'sine', 1568, null, t + 0.11, 0.45, 0.14, S); tone(o, 'sine', 3136, null, t + 0.11, 0.25, 0.03, S);
+  },
 };
 
 const GAP = { shoot_hat: 0.05, shoot_snare: 0.035, shoot_kick: 0.04, hit: 0.035, kill: 0.04, coin: 0.05, typewriter: 0.03, tick: 0.03, shoot_scratch: 0.05, shoot_synth: 0.05, combo: 0.05, ui_click: 0.04,
-  drop_big: 2.5, hype_full: 0.6, synergy: 0.15, reroll_drop: 0.15, wave_preview: 0.3, perfect_beat: 0.06, boss_hit: 0.12, merge_7: 0.5, combo_milestone: 0.12, stage_low: 1.0, ui_pop: 0.04 };
-const LOW = { boss_hit: 1, perfect_beat: 1, ui_pop: 1, hit: 1, shoot_hat: 1, shoot_snare: 1, tick: 1, typewriter: 1, coin: 1, kill: 1, shoot_kick: 1, shoot_synth: 1, shoot_scratch: 1 };
+  drop_big: 2.5, hype_full: 0.6, synergy: 0.15, reroll_drop: 0.15, wave_preview: 0.3, perfect_beat: 0.06, boss_hit: 0.12, merge_7: 0.5, combo_milestone: 0.12, stage_low: 1.0, ui_pop: 0.04,
+  branch_pick: 0.12, branch_ready: 0.3, hero_freeze: 0.8, hero_overclock: 1.0, hero_coinrain: 1.0, hero_shield: 0.8, boss_phase: 1.5, turret_stolen: 0.25,
+  turret_returned: 0.25, milestone: 1.0, mod_select: 0.1, install_ready: 0.5 };
+const LOW = { branch_ready: 1, install_ready: 1, boss_hit: 1, perfect_beat: 1, ui_pop: 1, hit: 1, shoot_hat: 1, shoot_snare: 1, tick: 1, typewriter: 1, coin: 1, kill: 1, shoot_kick: 1, shoot_synth: 1, shoot_scratch: 1 };
 
 function heartbeat(on, period) {
   hbOn = !!on;

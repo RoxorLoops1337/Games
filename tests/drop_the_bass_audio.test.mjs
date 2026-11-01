@@ -52,11 +52,12 @@ class FakeCtx {
 }
 
 // 2. contract surface
-assert.equal(SFX_NAMES.length, 69, 'sfx count');
+assert.equal(SFX_NAMES.length, 81, 'sfx count');
+for (const n of ['branch_pick', 'branch_ready', 'hero_freeze', 'hero_overclock', 'hero_coinrain', 'hero_shield', 'boss_phase', 'turret_stolen', 'turret_returned', 'milestone', 'mod_select', 'install_ready']) assert.ok(SFX_NAMES.includes(n), n);
 for (const n of ['drop_big', 'hype_full', 'synergy', 'reroll_drop', 'wave_preview', 'perfect_beat', 'boss_hit', 'merge_7', 'combo_milestone', 'stage_low', 'ui_pop']) assert.ok(SFX_NAMES.includes(n), n);
 assert.equal(new Set(SFX_NAMES).size, SFX_NAMES.length);
 for (const n of ['ui_click', 'merge_big', 'reveal_mythic', 'star_pop', 'typewriter', 'crate_shake', 'shoot_vocal', 'boss_die']) assert.ok(SFX_NAMES.includes(n), n);
-assert.deepEqual(TRACK_IDS, ['title', 'hub', 'world_garage', 'world_busk', 'world_club', 'world_festival', 'world_arena', 'boss', 'victory', 'defeat', 'cutscene_warm', 'cutscene_dark']);
+assert.deepEqual(TRACK_IDS, ['title', 'hub', 'world_garage', 'world_busk', 'world_club', 'world_festival', 'world_arena', 'boss', 'victory', 'defeat', 'cutscene_warm', 'cutscene_dark', 'world_beach', 'world_moon', 'epilogue', 'credits']);
 
 // 3. before init: music request is remembered and starts at init
 globalThis.AudioContext = FakeCtx;
@@ -191,7 +192,8 @@ function peakSum(envs, a, b, step = 0.005) {
 }
 
 // 11. the drop pack: every new sfx is audible, bounded in loudness (pre-bus worst-case envelope sum) and limited per name
-const NEW_SFX = ['drop_big', 'hype_full', 'synergy', 'reroll_drop', 'wave_preview', 'perfect_beat', 'boss_hit', 'merge_7', 'combo_milestone', 'stage_low', 'ui_pop'];
+const NEW_SFX = ['drop_big', 'hype_full', 'synergy', 'reroll_drop', 'wave_preview', 'perfect_beat', 'boss_hit', 'merge_7', 'combo_milestone', 'stage_low', 'ui_pop',
+  'branch_pick', 'branch_ready', 'hero_freeze', 'hero_overclock', 'hero_coinrain', 'hero_shield', 'boss_phase', 'turret_stolen', 'turret_returned', 'milestone', 'mod_select', 'install_ready'];
 {
   AudioFx._reset(); AudioFx.init(); ctx = AudioFx._state().ctx;
   let worstAll = 0, worstName = '';

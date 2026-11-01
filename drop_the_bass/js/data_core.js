@@ -162,6 +162,8 @@ export const BOSSES = {
   reverb:     { id: 'reverb',     name: 'Reverb Titan',    hpMul: 52, speed: 27, armor: 1, r: 40, color: '#9f7bff', coins: 190, trick: 'Echoes itself: spawns Echo Minis as it walks.' },
   djglitch:   { id: 'djglitch',   name: 'DJ Glitch',       hpMul: 60, speed: 34, armor: 0, r: 34, color: '#35f0c8', coins: 230, trick: 'Teleports along the path and jams your nearest turrets.' },
   playback:   { id: 'playback',   name: 'Mr. Playback',    hpMul: 90, speed: 28, armor: 2, r: 44, color: '#ff4fa0', coins: 400, trick: 'Perfect, polished, three phases. Calls everything, heals, and hits the skip button.' },
+  lowpass:    { id: 'lowpass',    name: 'The Low-Pass Tide', hpMul: 70, speed: 29, armor: 0, r: 42, color: '#3fb8c8', coins: 300, trick: 'Washes over small hits: it takes much less damage from fast weak shots.' },
+  silence:    { id: 'silence',    name: 'Dr. Dead Air',      hpMul: 120, speed: 25, armor: 2, r: 44, color: '#4a4866', coins: 600, trick: 'Mutes your turrets in waves and steals the music.' },
 };
 export const BOSS_IDS = Object.keys(BOSSES);
 
@@ -204,6 +206,19 @@ export const MAPS = {
       [[3, -1], [3, 9]],
     ],
     blocked: [[1, 9], [5, 9], [2, 9], [4, 9]],
+  },
+  // Bonfire Beach: one spawn, the path forks around the bonfire (left and right arms) and merges again at the middle row.
+  beach: {
+    paths: [
+      [[3, -1], [3, 1], [0, 1], [0, 5], [3, 5], [3, 9]],
+      [[3, -1], [3, 1], [6, 1], [6, 5], [3, 5], [3, 9]],
+    ],
+    blocked: [[0, 0], [6, 0], [0, 9], [1, 9], [5, 9], [6, 9]],
+  },
+  // Moon Stage: one long inward spiral (clockwise from the bottom right) ending at the stage in the centre.
+  moon: {
+    paths: [[[7, 9], [0, 9], [0, 0], [6, 0], [6, 7], [2, 7], [2, 2], [4, 2], [4, 5]]],
+    blocked: [[1, 1], [5, 8]],
   },
 };
 
@@ -274,8 +289,16 @@ export const WORLDS = [
   { id: 'arena',    n: 5, name: 'Mega Arena',      place: 'The Mega Arena',   map: 'arena',    bpm: 132, wavesTotal: 20, hpMul: 280,   pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal', 'mute', 'rager'],
     boss10: 'djglitch', boss: 'playback', sky: ['#0a0a2a', '#2a1060'], accent: '#ff5fb0', ground: '#1c1240', coinMul: 4.6,
     blurb: 'Three lanes, ninety thousand empty seats and Mr. Playback at the soundboard.' },
+  // Second tour. hpMul values are placeholders until the balance pass.
+  { id: 'beach',    n: 6, name: 'Bonfire Beach',   place: 'Sunset Bonfire Cove', map: 'beach', bpm: 112, wavesTotal: 25, hpMul: 400, pool: ['fuzz', 'zip', 'echo', 'drone', 'brick', 'leech', 'squeal', 'rager', 'mute', 'gate'],
+    boss10: 'djglitch', boss: 'lowpass', sky: ['#2a1038', '#ff7a3c'], accent: '#ff8a4c', ground: '#0f4a58', coinMul: 6.5,
+    blurb: 'A bonfire, a boat for a stage and a tide of muffled sound. The path splits around the fire and comes back together.' },
+  { id: 'moon',     n: 7, name: 'Moonlight Rave',  place: 'The Moon Stage',   map: 'moon',     bpm: 138, wavesTotal: 25, hpMul: 900, pool: ['fuzz', 'zip', 'drone', 'echo', 'brick', 'leech', 'rager', 'gate', 'squeal', 'mute'],
+    boss10: 'lowpass', boss: 'silence', sky: ['#050a2e', '#1f2f9a'], accent: '#5fe8ff', ground: '#101a5a', coinMul: 9.0,
+    blurb: 'A floating stage, low gravity and one very long spiral walk to the middle. Dr. Dead Air waits at the end.' },
 ];
 export const WORLD_BY_ID = Object.fromEntries(WORLDS.map((w) => [w.id, w]));
+export const WORLD_ORDER = WORLDS.map((w) => w.id);   // the tour order; never assume a fixed world count, derive from this
 export const ENCORE_MAX = 5;   // encore 0 = normal, 1..5 harder (hp, speed) and richer rewards
 export const encoreHp = (e) => 1 + 0.55 * e + 0.08 * e * e;
 export const encoreSpeed = (e) => 1 + 0.05 * e;

@@ -76,6 +76,66 @@ export const CUTSCENES = {
     { who: 'playback', text: 'You are out of tune, you are out of time, and you are out of luck. Press play.' },
     { who: 'roxor', text: 'You know what the best part of live music is?' },
     { who: 'jasmin', text: 'Anything can happen. Together!' } ] } ] },
+  // ---- second tour: world and boss intros
+  world_beach: { music: 'cutscene_warm', panels: [ { scene: 'world_beach', lines: [
+    { who: 'narr', text: 'Bonfire Beach. Warm sand, a driftwood stage and a boat that is definitely not a stage. It is the stage.' },
+    { who: 'jasmin', text: 'The path splits around the fire this time, then comes back together. Guard the meeting point!' },
+    { who: 'roxor', text: 'I brought marshmallows. For after. And for during.' },
+    { who: 'loopy', text: 'Beep! Sand in my footswitches. I regret nothing.' } ] } ] },
+  world_moon: { music: 'cutscene_dark', panels: [ { scene: 'world_moon', lines: [
+    { who: 'narr', text: 'The Moonlight Rave. A stage floating in the dark, and every jump lasts a little too long.' },
+    { who: 'roxor', text: 'Why am I bouncing? I did not ask to bounce.' },
+    { who: 'jasmin', text: 'One long spiral, all the way to the middle. Plenty of time to place turrets.' },
+    { who: 'loopy', text: 'Low gravity detected! Drumsticks will fall slowly. Please do not chase them.' } ] } ] },
+  boss_lowpass: { music: 'cutscene_dark', panels: [ { scene: 'boss_lowpass', lines: [
+    { who: 'narr', text: 'THE LOW-PASS TIDE rolls up the beach. Everything high and sparkly goes dull and muddy.' },
+    { who: 'loopy', text: 'Tiny fast hits wash right off it! Bring the big, heavy hitters.' },
+    { who: 'roxor', text: 'Finally, a reason to turn up the bass.' } ] } ] },
+  boss_silence: { music: 'cutscene_dark', panels: [ { scene: 'boss_silence', lines: [
+    { who: 'narr', text: 'DR. DEAD AIR does not make noise. It makes the gaps. The long, empty, awkward gaps.' },
+    { who: 'loopy', text: 'It mutes turrets in waves, and it is stealing the music right out of my speakers!' },
+    { who: 'jasmin', text: 'Then we bring our own. Even a hum counts.' },
+    { who: 'roxor', text: 'Last show of the tour. Make it loud.' } ] } ] },
+  // ---- epilogues: one per world, played after its first clear (see EPILOGUES below)
+  epilogue_garage: { music: 'cutscene_warm', panels: [ { scene: 'epilogue_garage', lines: [
+    { who: 'narr', text: 'The garage hummed again. The cat came out from behind the amp and meowed in key.' },
+    { who: 'jasmin', text: 'One stage down. The street outside is still silent.' },
+    { who: 'loopy', text: 'Next stop: Old Town. Pack the van!' } ] } ] },
+  epilogue_busk: { music: 'cutscene_warm', panels: [ { scene: 'epilogue_busk', lines: [
+    { who: 'narr', text: 'The crowd on Busk Street finished their clap. Three seconds late, but with feeling.' },
+    { who: 'roxor', text: 'They gave us a tip. A button, a guitar pick and a very old sandwich.' },
+    { who: 'loopy', text: 'I hear bass from the Neon Club. It sounds nervous.' } ] } ] },
+  epilogue_club: { music: 'cutscene_warm', panels: [ { scene: 'epilogue_club', lines: [
+    { who: 'narr', text: 'The lasers swung back on. The fog machine coughed, then danced.' },
+    { who: 'roxor', text: 'They still owe me that drink.' },
+    { who: 'jasmin', text: 'Later. The sunset festival is going grey. We have to hurry.' } ] } ] },
+  epilogue_festival: { music: 'cutscene_warm', panels: [ { scene: 'epilogue_festival', lines: [
+    { who: 'narr', text: 'The sky turned orange again, and ten thousand voices sang one wobbly chorus.' },
+    { who: 'jasmin', text: 'Did you hear that? That is the sound of a field remembering how to cheer.' },
+    { who: 'loopy', text: 'Only one stage left on my map. The big one.' } ] } ] },
+  epilogue_arena: { music: 'cutscene_warm', panels: [ { scene: 'epilogue_arena', lines: [
+    { who: 'narr', text: 'Ninety thousand fans went home hoarse and happy. The Arena stayed warm all night.' },
+    { who: 'loopy', text: 'Bad news, good news. I picked up a fresh signal, far away. It sounds like waves.' },
+    { who: 'roxor', text: 'Waves? Like at the beach?' },
+    { who: 'jasmin', text: 'Then we are not done. Second tour, everybody!' } ] } ] },
+  epilogue_beach: { music: 'cutscene_warm', panels: [ { scene: 'epilogue_beach', lines: [
+    { who: 'narr', text: 'The tide rolled back, and the bonfire crackled in full colour again.' },
+    { who: 'roxor', text: 'My marshmallow survived. A hero.' },
+    { who: 'jasmin', text: 'Look up. The moon looks quiet. Too quiet.' },
+    { who: 'loopy', text: 'Calculating route to the moon. Please sit down, and hold your sandwiches.' } ] } ] },
+  epilogue_moon: { music: 'cutscene_warm', panels: [ { scene: 'epilogue_moon', lines: [
+    { who: 'narr', text: 'Dr. Dead Air faded out, and the moon lit up in neon crayon, every colour at once.' },
+    { who: 'jasmin', text: 'It was never about silence. It was about nobody daring to start.' },
+    { who: 'roxor', text: 'So we start. Again. And again.' } ] } ] },
+  credits_moon: {
+    music: 'cutscene_warm',
+    panels: [ { scene: 'credits_moon', lines: [
+      { who: 'narr', text: 'On the far side of the moon, a tiny hum turned into a beat, and the beat turned into a party.' },
+      { who: 'loopy', text: 'Recording complete! Two tours, seven stages, one very long cable. I kept all of it.' },
+      { who: 'jasmin', text: 'Where to next?' },
+      { who: 'roxor', text: 'Anywhere with a plug socket.' },
+      { who: 'narr', text: 'THE END. KEEP THE MUSIC LIVE, ON EARTH AND ON THE MOON.' } ] } ],
+  },
   ending: {
     music: 'cutscene_warm',
     panels: [
@@ -99,6 +159,18 @@ export const CUTSCENES = {
       { who: 'loopy', text: 'The stage went quiet... but I am still recording. One more try?' } ] } ],
   },
 };
+
+// Which cutscene plays after the FIRST clear of each world (the player wiring lives elsewhere). The last world also ends with CREDITS_FINAL.
+export const EPILOGUES = {
+  garage: 'epilogue_garage', busk: 'epilogue_busk', club: 'epilogue_club', festival: 'epilogue_festival',
+  arena: 'epilogue_arena', beach: 'epilogue_beach', moon: 'epilogue_moon',
+};
+export const CREDITS_FINAL = 'credits_moon';
+// Scene ids the art agent still has to draw (cutscene panels may use them before they exist in SCENE_IDS).
+export const NEW_SCENE_IDS = [
+  'epilogue_garage', 'epilogue_busk', 'epilogue_club', 'epilogue_festival', 'epilogue_arena', 'epilogue_beach', 'epilogue_moon',
+  'world_beach', 'world_moon', 'boss_lowpass', 'boss_silence', 'credits_moon',
+];
 
 // Tutorial steps. The battle view interprets: say (Loopy text), wait (condition id), spot (rect id to highlight), lock (what the player may do).
 export const TUTORIAL = [
