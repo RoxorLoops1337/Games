@@ -138,7 +138,10 @@ export function createRenderer(canvas, art, kit) {
       if (i === 0) {
         if (kit) { const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1; kit.drawHead(ctx, s.x, s.y, r * 1.14, ang, { skin: sn.skin, boss: sn.boss, t: S.t + sn.id, look: [dx / d, dy / d], flash: s.flash }); }
         else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
-        text(num(s.hp), s.x, s.y - r * 1.55, 24, '#fff', INK);
+        if (s.shield) {   // the face cannot be hit until it is alone
+          ctx.save(); ctx.globalAlpha = 0.5 + Math.sin(S.t * 5) * 0.15; ctx.strokeStyle = '#bfe9ff'; ctx.fillStyle = 'rgba(190,235,255,.16)'; ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.28, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+        }
         continue;
       }
       const bob = 1 + Math.sin(S.t * 6 - i * 0.5) * 0.03;
