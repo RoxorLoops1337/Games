@@ -216,6 +216,7 @@ export function createRenderer(canvas, art, kit) {
     const im = art && art.get(key);
     if (im) { const h = 170, w = h * im.width / im.height; img(key, p.x, p.y - 26, w / sq, h * sq, p.mx * 0.05); }
     else { glow(p.x, p.y, 40, '#39f0ff', 0.7); ctx.fillStyle = '#39f0ff'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 22, 0, TAU); ctx.fill(); ctx.stroke(); }
+    (g.pets || []).forEach((id, i) => { const s2 = i ? 1 : -1, bob = Math.abs(Math.sin(S.t * 6 + i * 2)) * 8, px = p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6; ctx.save(); ctx.globalAlpha *= 0.3; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, 22, 7, 0, 0, TAU); ctx.fill(); ctx.restore(); blit(kit && kit.SPR.pet(id), px, p.y + 8 - bob, 92, s2 * Math.sin(S.t * 6 + i * 2) * 0.08); });
     // hitbox core: the part that actually gets hurt
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 9, 0, TAU); ctx.stroke();
     ctx.fillStyle = '#ff5a78'; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 3.5, 0, TAU); ctx.fill();
@@ -238,6 +239,7 @@ export function createRenderer(canvas, art, kit) {
   }
 
   const WCOL = { swab: '#ff7eb6', daggers: '#c9d3ee', tower: '#6fe3ff', dragon: '#8dff6a', needles: '#f2f6ff', stick: '#e0a468', bubble: '#bfe9ff', satellite: '#ffe14a', maw: '#8a4fe0' };
+  const WSPR = { daggers: 'dagger', needles: 'needle' };
   const WAB = { swab: 'BP', daggers: 'SV', tower: 'SS', dragon: 'AN', needles: 'TP', stick: 'DS', bubble: 'HB', satellite: 'SL', maw: 'BD' };
   // Beat Pads sit under the snake and pulse on every tick
   function drawZones(g) {
@@ -254,14 +256,14 @@ export function createRenderer(canvas, art, kit) {
       blit(kit && kit.SPR.weapon('tower'), t.x, t.y, 160 * (1 + 0.14 * Math.max(0, t.pulse)), Math.sin(S.t * 3 + t.x) * 0.03);
     }
     const dl = g.weap.daggers ? g.weap.daggers.lv : 0;   // Spinning Vinyl
-    for (let i = 0; i < (dl ? 1 + dl : 0); i++) { const d = daggerPos(g, i); blit(kit && kit.SPR.weapon('dagger'), d.x, d.y, 164, S.t * 9 + i); }
+    for (let i = 0; i < (dl ? 1 + dl : 0); i++) { const d = daggerPos(g, i); blit(kit && kit.SPR.weapon('dagger'), d.x, d.y + Math.sin(S.t * 8 + i) * 4, 150, Math.sin(S.t * 7 + i) * 0.2); }
     if (g.weap.stick) for (let k = 0; k < (g.weap.stick.lv >= 4 ? 2 : 1); k++) {   // Drumsticks
       const sg = stickSeg(g, k), sc = sg.len / 144, mid = 80 * sc;
       blit(kit && kit.SPR.weapon('stick'), sg.x0 + Math.cos(sg.a) * mid, sg.y0 + Math.sin(sg.a) * mid, 184 * sc, sg.a);
     }
     for (const m of g.maws) {   // Bass Drop: a sub-bass vortex with a thump
       const k = Math.min(1, m.life * 3, (m.max - m.life) * 4) || 0, ph = (S.t * 2) % 1;
-      ctx.save(); ctx.globalAlpha = 0.92 * k; blit(kit && kit.SPR.weapon('maw'), m.x, m.y, m.r * 4.84 * (1 + 0.06 * Math.sin(S.t * 14)), S.t * 0.8); ctx.restore();
+      ctx.save(); ctx.globalAlpha = 0.92 * k; blit(kit && kit.SPR.weapon('maw'), m.x, m.y, m.r * 3.4 * (1 + 0.06 * Math.sin(S.t * 14)), Math.sin(S.t * 9) * 0.1); ctx.restore();
       ctx.save(); ctx.globalAlpha = (1 - ph) * 0.8 * k; ctx.strokeStyle = '#ff7eb6'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(m.x, m.y, m.r * (0.2 + 0.8 * ph), 0, TAU); ctx.stroke(); ctx.restore();
     }
     for (let i = S.bolts.length - 1; i >= 0; i--) {   // Spotlight Storm: a beam from the rig above
@@ -315,7 +317,7 @@ export function createRenderer(canvas, art, kit) {
     // chapter, virus name, and progress with chests at 25% / 50% / 100%
     const boss = isBossStage(g.stage);
     text(boss ? 'BOSS  ' + g.stage : 'STAGE ' + g.stage, W / 2, 34, 26, boss ? '#ff7a9a' : '#fff');
-    text(virusName(g.stage), W / 2, 62, 17, '#ffd0e6');
+    text(g.mode === 'pig' ? 'Piggy Bank Parade' : virusName(g.stage), W / 2, 62, 17, '#ffd0e6');
     const bw = 400, bx = W / 2 - bw / 2, by = 84;
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(bx - 3, by - 3, bw + 6, 20);
     ctx.fillStyle = boss ? '#ff3d6e' : '#ff7eb6'; ctx.fillRect(bx, by, bw * (g.progress || 0), 14);
@@ -339,7 +341,7 @@ export function createRenderer(canvas, art, kit) {
     for (const id of Object.keys(g.weap)) {
       ctx.save(); ctx.translate(wx, wy); ctx.fillStyle = WCOL[id] || '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-22, -22, 44, 44, 10) : ctx.rect(-22, -22, 44, 44); ctx.fill(); ctx.stroke(); ctx.restore();
-      text(WAB[id] || '', wx, wy - 4, 16, '#2d170f', 'rgba(255,255,255,.6)'); text('Lv' + g.weap[id].lv, wx, wy + 14, 11, '#fff', INK);
+      blit(kit && kit.SPR.weapon(WSPR[id] || id), wx, wy - 6, 100); text('Lv' + g.weap[id].lv, wx, wy + 14, 11, '#fff', INK);
       wx -= 52;
     }
     // joystick

@@ -29,20 +29,32 @@ export function rng(seed) {
 // ---------------------------------------------------------------- skills (weapons)
 // `frag` is how many fragments unlock a locked skill (0 = owned from the start).
 export const WEAPONS = [
-  { id: 'swab', name: 'Beat Pad', max: 5, frag: 0, desc: 'Drops a drum pad under the snake that pulses damage in time. Bigger and longer with levels.' },
-  { id: 'daggers', name: 'Spinning Vinyl', max: 5, frag: 0, desc: 'Records spin around you and slice through cells.' },
-  { id: 'tower', name: 'Speaker Stack', max: 5, frag: 0, desc: 'Speakers beside you thump bass waves at everything nearby.' },
-  { id: 'dragon', name: 'Autotune', max: 5, frag: 0, desc: 'Winged notes that always find their cell.' },
-  { id: 'needles', name: 'Treble Pins', max: 5, frag: 0, desc: 'A fan of piercing high notes that skewer whole rows.' },
-  { id: 'stick', name: 'Drumsticks', max: 5, frag: 20, desc: 'Sticks sweep in front of you and whack cells.' },
-  { id: 'bubble', name: 'Hum Bubbles', max: 5, frag: 30, desc: 'Humming bubbles burst on contact and slow the snake.' },
-  { id: 'satellite', name: 'Spotlight Storm', max: 5, frag: 40, desc: 'Stage lights strike for a percent of cell HP.' },
-  { id: 'maw', name: 'Bass Drop', max: 5, frag: 60, desc: 'A sub-bass drop that wipes out weakened cells.' },
+  { id: 'swab', name: 'Kitty Paws', max: 5, frag: 0, desc: 'Soft paw prints that thump where the snake crawls.' },
+  { id: 'daggers', name: 'Chick Circle', max: 5, frag: 0, desc: 'Fluffy chicks that zoom around you.' },
+  { id: 'tower', name: 'Cow Choir', max: 5, frag: 0, desc: 'Moooo! Big cows, bigger bass.' },
+  { id: 'dragon', name: 'Dove Squad', max: 5, frag: 0, desc: 'Little doves that never miss.' },
+  { id: 'needles', name: 'Hedgehog Quills', max: 5, frag: 0, desc: 'A sneeze of spiky love.' },
+  { id: 'stick', name: 'Bunny Thump', max: 5, frag: 20, desc: 'Thump thump! Fluffy feet, serious kicks.' },
+  { id: 'bubble', name: 'Duckling Splash', max: 5, frag: 30, desc: 'Bubble baths with a quack.' },
+  { id: 'satellite', name: 'Owl Spotlight', max: 5, frag: 40, desc: 'Wise eyes that light up the weak.' },
+  { id: 'maw', name: 'Bulldog Chomp', max: 5, frag: 60, desc: 'Good boy. Very hungry boy.' },
 ];
 const WEAPON = Object.fromEntries(WEAPONS.map(w => [w.id, w]));
 export const WEAPON_STARTERS = WEAPONS.filter(w => !w.frag).map(w => w.id);
 export const LOADOUT_SIZE = 5;
 
+// Pets: collect them from eggs. Every star adds a permanent bonus, equipped or not. Two can walk with you.
+export const PET_MAX_STAR = 5, PET_SLOTS = 2;
+export const PETS = [
+  { id: 'kitten', name: 'Kitten', stat: 'atk', per: 0.06, flavor: 'Naps, then pounces.' },
+  { id: 'puppy', name: 'Puppy', stat: 'vit', per: 18, flavor: 'Barks at big things.' },
+  { id: 'piglet', name: 'Piglet', stat: 'coin', per: 0.08, flavor: 'Snuffles out the Beats.' },
+  { id: 'lamb', name: 'Lamb', stat: 'guard', per: 0.04, flavor: 'Wool-powered hugs.' },
+  { id: 'hamster', name: 'Hamster', stat: 'crit', per: 0.02, flavor: 'Runs on a tiny wheel.' },
+  { id: 'turtle', name: 'Turtle', stat: 'cdn', per: 0.03, flavor: 'Slow and steady.' },
+];
+const PET = Object.fromEntries(PETS.map(p => [p.id, p]));
+export const petCost = star => (star === 0 ? 5 : 4 + 4 * star);   // fragments to own it, then for each star
 // Rarity of an upgrade choice. Every pick raises your luck, so better rarities slowly become likelier;
 // one of the three cards is always common.
 export const RARITIES = [
@@ -97,13 +109,15 @@ export const skillMul = lv => 1 + 0.12 * (Math.max(1, lv) - 1);          // perm
 export const skillUpgradeCost = lv => ({ frag: 4 + 3 * lv, beats: 0 });   // lv -> lv + 1, fragments only
 export const BOXES = [
   { id: 'beat', name: 'Beat Box', cur: 'beats', price: 150, frags: 5, feature: 0, desc: '5 skill fragments' },
-  { id: 'spark', name: 'Spark Box', cur: 'sparkles', price: 30, frags: 15, feature: 8, desc: '15 skill fragments, 8 of one skill' },
+  { id: 'spark', name: 'Spark Box', cur: 'sparkles', price: 30, frags: 12, feature: 0, desc: 'A little sparkle of fragments' },
+  { id: 'spark10', name: 'Grand Spark Box', cur: 'sparkles', price: 270, frags: 150, feature: 45, top: true, desc: 'Ten boxes in one, with a star prize' },
 ];
 
 export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
-  return { v: 4, loadout: [...WEAPON_STARTERS], beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
+  const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0 };
+  return { v: 5, loadout: [...WEAPON_STARTERS], pets, petEquip: [], eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -119,6 +133,11 @@ export function sanitizeSave(raw) {
     if (r) { s.skills[w.id].lv = Math.min(SKILL_MAX_LV, num(r.lv, s.skills[w.id].lv)); s.skills[w.id].frag = num(r.frag); }
     if (!w.frag) s.skills[w.id].lv = Math.max(1, s.skills[w.id].lv);
   }
+  for (const p of PETS) { const r = raw.pets && raw.pets[p.id]; if (r) { s.pets[p.id].star = Math.min(PET_MAX_STAR, num(r.star)); s.pets[p.id].frag = num(r.frag); } }
+  if (Array.isArray(raw.petEquip)) s.petEquip = raw.petEquip.filter((id, i, a) => PET[id] && s.pets[id].star > 0 && a.indexOf(id) === i).slice(0, PET_SLOTS);
+  if (raw.eggs !== undefined) s.eggs = num(raw.eggs); else if (raw.runs) s.eggs = 1;
+  s.login = num(raw.login);
+  if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
   const lo = Array.isArray(raw.loadout) ? raw.loadout.filter((id, i, a) => WEAPON[id] && s.skills[id].lv > 0 && a.indexOf(id) === i).slice(0, LOADOUT_SIZE) : [];
   if (lo.length) s.loadout = lo; else if (Array.isArray(raw.loadout)) s.loadout = [...WEAPON_STARTERS].filter(id => s.skills[id].lv > 0).slice(0, LOADOUT_SIZE);
   return s;
@@ -142,6 +161,49 @@ export function toggleLoadout(save, id) {
   if (save.loadout.length >= LOADOUT_SIZE) return false;
   save.loadout.push(id); return true;
 }
+export function togglePet(save, id) {
+  if (!PET[id] || !save.pets[id] || save.pets[id].star < 1) return false;
+  const i = save.petEquip.indexOf(id);
+  if (i >= 0) { save.petEquip.splice(i, 1); return true; }
+  if (save.petEquip.length >= PET_SLOTS) save.petEquip.shift();
+  save.petEquip.push(id); return true;
+}
+export function petUp(save, id) {   // own the pet, or add a star
+  const k = save.pets[id];
+  if (!k || k.star >= PET_MAX_STAR || k.frag < petCost(k.star)) return false;
+  k.frag -= petCost(k.star); k.star++;
+  if (k.star === 1 && save.petEquip.length < PET_SLOTS) save.petEquip.push(id);
+  return true;
+}
+export const petCanUp = (save, id) => { const k = save.pets[id]; return !!k && k.star < PET_MAX_STAR && k.frag >= petCost(k.star); };
+// Hatching an egg: usually a few pet fragments (unowned pets a bit likelier), sometimes just Beats.
+export function hatchEgg(save, rand = Math.random) {
+  if (save.eggs < 1) return null;
+  save.eggs--;
+  if (rand() < 0.3) { const beats = 20 + Math.floor(rand() * 40); save.beats += beats; return { beats }; }
+  const pool = PETS.map(p => ({ id: p.id, w: save.pets[p.id].star ? 1 : 1.6 }));
+  let r = rand() * pool.reduce((a, p) => a + p.w, 0), k = 0;
+  for (; k < pool.length - 1; k++) { r -= pool[k].w; if (r <= 0) break; }
+  const n = 1 + Math.floor(rand() * 3), id = pool[k].id;
+  save.pets[id].frag += n;
+  return { id, n };
+}
+export const EGG_PRICE = 60;   // Sparkles
+export function buyEgg(save) { if (save.sparkles < EGG_PRICE) return false; save.sparkles -= EGG_PRICE; save.eggs++; return true; }
+export function petBonus(pets) {   // permanent, whether the pet is equipped or not
+  const b = { atk: 0, vit: 0, coin: 0, guard: 0, crit: 0, cdn: 0 };
+  for (const p of PETS) { const st = (pets && pets[p.id]) || 0; b[p.stat] += p.per * st; }
+  return b;
+}
+// A fresh day gives a fresh egg and fresh Piggy Bank attempts.
+export function dayLogin(save, day) {
+  let fresh = false;
+  if (save.login !== day) { save.login = day; save.eggs++; fresh = true; }
+  if (!save.pig || save.pig.day !== day) save.pig = { day, left: 3, best: (save.pig && save.pig.best) || 0 };
+  return fresh;
+}
+export const pigTier = save => (save.pig ? save.pig.best : 0) + 1;
+export function usePigAttempt(save, day) { dayLogin(save, day); if (save.pig.left < 1) return false; save.pig.left--; return true; }
 export function unlockSkill(save, id) {
   const w = WEAPON[id], k = save.skills[id];
   if (!w || !k || k.lv > 0 || k.frag < w.frag) return false;
@@ -162,14 +224,14 @@ export function openBox(save, boxId, rand = Math.random) {
   const b = BOXES.find(x => x.id === boxId);
   if (!b || save[b.cur] < b.price) return null;
   save[b.cur] -= b.price;
-  const got = {};
-  const pick = () => { // locked skills are a little more likely: the box is how you unlock them
-    const pool = WEAPONS.map(w => ({ id: w.id, w: save.skills[w.id].lv ? 1 : 1.6 }));
+  const got = {}, top = false;
+  const pick = (top2 = false) => { // locked skills are a little more likely: the box is how you unlock them
+    const pool = WEAPONS.map(w => ({ id: w.id, w: (save.skills[w.id].lv ? 1 : 1.6) * (top2 && w.frag >= 40 ? 2 : 1) }));
     let r = rand() * pool.reduce((a, p) => a + p.w, 0), k = 0;
     for (; k < pool.length - 1; k++) { r -= pool[k].w; if (r <= 0) break; }
     return pool[k].id;
   };
-  const featured = b.feature ? pick() : null;
+  const featured = b.feature ? pick(!!b.top) : null;
   for (let i = 0; i < b.frags; i++) { const id = i < b.feature ? featured : pick(); got[id] = (got[id] || 0) + 1; }
   for (const id of Object.keys(got)) save.skills[id].frag += got[id];
   return Object.entries(got).map(([id, n]) => ({ id, n })).sort((a, b) => b.n - a.n);
@@ -207,11 +269,12 @@ export const canPlay = (save, n) => n >= 1 && n <= save.cleared + 1;
 export const clearReward = n => ({ sparkles: (isBossStage(n) ? 40 : 15) + 3 * n });
 // Applies a finished run to the save and returns what was earned.
 export function applyResult(save, r) {
-  const out = { beats: r.coins, sparkles: 0, first: false, frags: r.frags || {} };
+  const out = { beats: r.coins, sparkles: 0, first: false, egg: false, frags: r.frags || {} };
   save.beats += r.coins; save.runs++; save.kills += r.kills;
   for (const id of Object.keys(out.frags)) save.skills[id].frag += out.frags[id];
+  if (r.mode === 'pig') { if (r.won) { save.pig.best = Math.max(save.pig.best, r.stage); save.eggs++; out.egg = true; } return out; }
   if (r.won) {
-    if (r.stage > save.cleared) { out.first = true; out.sparkles = clearReward(r.stage).sparkles; save.sparkles += out.sparkles; save.cleared = r.stage; }
+    if (r.stage > save.cleared) { out.first = true; out.sparkles = clearReward(r.stage).sparkles; save.sparkles += out.sparkles; save.cleared = r.stage; save.eggs++; out.egg = true; }
     save.best = Math.max(save.best, r.stage);
   }
   return out;
@@ -230,6 +293,9 @@ export const virusName = n => NAMES[(n - 1) % NAMES.length] + (n > NAMES.length 
 export const PATH_KINDS = ['Gentle waves', 'Tall hairpins', 'Big lobes', 'Castle steps', 'Tight waves', 'Sharp zigzag', 'Wide S', 'Hairpin lanes', 'Wild lanes'];
 const PATH_ORDER = [0, 1, 3, 2, 6, 4, 7, 5, 8];   // which shape each stage gets
 export const pathKind = n => PATH_ORDER[(n - 1) % PATH_ORDER.length];
+export const PIG_NAME = 'Piggy Bank Parade';
+const nameOf = g => (g.mode === 'pig' ? PIG_NAME : virusName(g.stage));
+const skinOf = (g, n) => (g.mode === 'pig' ? 'piggy' : skinFor(n));
 export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: PATH_KINDS[pathKind(n)], hp: Math.round(hpBase(n)) });
 
 const KIND = { normal: { hp: 1 }, armor: { hp: 2.6 }, bomb: { hp: 1 }, upgrade: { hp: 1.6 } };
@@ -294,14 +360,14 @@ export function pointAt(path, s) {
 }
 
 // ---------------------------------------------------------------- player
-export function makePlayer(metaLv) {
-  const m = id => (metaLv && metaLv[id]) || 0;
-  const maxHp = 100 + 12 * m('vit');
+export function makePlayer(metaLv, pb, equip) {
+  const m = id => (metaLv && metaLv[id]) || 0, b = pb || { atk: 0, vit: 0, coin: 0, guard: 0, crit: 0, cdn: 0 }, eq = id => (equip && equip.includes(id) ? 1 : 0);
+  const maxHp = 100 + 12 * m('vit') + b.vit;
   return {
-    x: W / 2, y: ROW_Y, r: 16, kx: 0, maxHp, hp: maxHp, speed: 300, guard: 0,
-    atk: 1 + 0.10 * m('atk'), crit: 0.05 + 0.02 * m('crt'), critMul: 2.5 + 0.08 * m('crt'), cdBase: 1 - 0.05 * m('cdn'),
+    x: W / 2, y: ROW_Y, r: 16, kx: 0, maxHp, hp: maxHp, speed: 300 * (1 + 0.15 * eq('hamster')), guard: Math.min(0.5, b.guard),
+    atk: 1 + 0.10 * m('atk') + b.atk, crit: 0.05 + 0.02 * m('crt') + b.crit, critMul: 2.5 + 0.08 * m('crt'), cdBase: Math.max(0.4, 1 - 0.05 * m('cdn') - b.cdn),
     rate: 2.0, bspeed: 900,
-    coinMul: 1 + 0.1 * m('for'), revive: m('rev') > 0 ? 1 : 0,
+    coinMul: 1 + 0.1 * m('for') + b.coin + 0.1 * eq('piglet'), revive: m('rev') > 0 ? 1 : 0,
     iframes: 0, shield: 0, rage: 0, cd: 0, aim: -Math.PI / 2, orbAng: 0, mx: 0,
     zone: { x0: 40, x1: W - 40 },
   };
@@ -325,11 +391,12 @@ export function segRadius(boss, i, len) {
 const spacing = (a, b) => (a.r + b.r) * 0.78;
 
 function spawnSnake(g, n) {
-  const boss = isBossStage(n), len = snakeLength(n), segs = [];
+  const pig = g.mode === 'pig', boss = isBossStage(n), len = pig ? 40 : snakeLength(n), segs = [];
+  const hpB = pig ? hpBase(1 + 2 * n) * 0.5 : hpBase(n);
   let ps = 240;   // the face starts just inside the top edge
   for (let i = 0; i < len; i++) {
     const kind = pickKind(g, n, boss, i, len), r = segRadius(boss, i, len);
-    let hp = hpBase(n) * KIND[kind].hp * (boss ? 1.5 : 1) * (0.9 + g.rand() * 0.2);
+    let hp = hpB * KIND[kind].hp * (boss ? 1.5 : 1) * (0.9 + g.rand() * 0.2);
     hp = i === 0 ? 1 : Math.max(1, Math.round(hp));   // the face has no real HP: it is shielded until it is alone
     const pos = pointAt(g.path, ps);
     segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0 });
@@ -339,7 +406,7 @@ function spawnSnake(g, n) {
   const ups = Math.max(4, Math.round(len / 7));
   for (let k = 0; k < ups; k++) {
     const c = segs[clamp(3 + Math.round(((len - 5) * (k + 0.5)) / ups), 1, len - 1)];
-    c.kind = 'upgrade'; c.max = c.hp = Math.max(1, Math.round(hpBase(n) * KIND.upgrade.hp * (boss ? 1.5 : 1)));
+    c.kind = 'upgrade'; c.max = c.hp = Math.max(1, Math.round(hpB * KIND.upgrade.hp * (boss ? 1.5 : 1)));
   }
   // chest cells (a chest on the cell): aim for them first too
   const nch = Math.max(2, Math.round(len / 15));
@@ -350,12 +417,12 @@ function spawnSnake(g, n) {
   }
   g.upgradeLeft = ups;
   const speed = (g.path.len - 240) / arrivalTime(n);
-  g.snakes.push({ id: ++g.sid, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinFor(n), name: virusName(n), surge: 'idle', surgeT: 4 + g.rand() * 3 });
+  g.snakes.push({ id: ++g.sid, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: g.mode === 'pig' ? PIG_NAME : virusName(n), surge: 'idle', surgeT: 4 + g.rand() * 3 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
 }
 
 export function startStage(g, n) {
-  g.stage = n; g.skin = skinFor(n);
+  g.stage = n; g.skin = skinOf(g, n);
   g.snakes.length = 0; g.stageHpMax = 0; g.zones.length = 0; g.maws.length = 0; g.bullets.length = 0; g.vq.length = 0;
   g.path = buildPath(n);
   const p = g.p;
@@ -363,7 +430,7 @@ export function startStage(g, n) {
   spawnSnake(g, n);
   rebuildTowers(g);
   g.phase = 'play'; g.clearT = 0; g.progress = 0;
-  g.events.push({ t: 'stage', n, boss: isBossStage(n), name: virusName(n) });
+  g.events.push({ t: 'stage', n, boss: isBossStage(n), name: nameOf(g) });
 }
 
 // ---------------------------------------------------------------- game
@@ -376,7 +443,7 @@ export function createGame(opts = {}) {
   const loadout = (opts.loadout || Object.keys(unlocked)).filter(id => unlocked[id]).slice(0, LOADOUT_SIZE);
   const g = {
     rand: rng(opts.seed || 1), t: 0, phase: 'play', stage: 0, sid: 0, path: null,
-    p: makePlayer(opts.meta), snakes: [], bullets: [], vq: [], pickups: [], zones: [], maws: [], towers: [],
+    p: makePlayer(opts.meta, petBonus(opts.pets), opts.petEquip), mode: opts.mode || '', coinK: opts.mode === 'pig' ? 6 : 1, pets: (opts.petEquip || []).slice(0, PET_SLOTS), petStars: opts.pets || {}, petT: {}, snakes: [], bullets: [], vq: [], pickups: [], zones: [], maws: [], towers: [],
     events: [], ups: {}, val: {}, weap: {}, unlocked, skillLv, loadout,
     level: 1, cells: 0, upgradeLeft: 0, pending: 0, choices: [], resume: 'play', rerolls: 4,
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
@@ -428,6 +495,17 @@ function randomFragment(g) {
   return ids[Math.floor(g.rand() * ids.length)];
 }
 
+// Equipped pets help now and then. Stars make them quicker or stronger.
+function petTick(g, dt) {
+  const p = g.p, st = id => g.petStars ? g.petStars[id] || 1 : 1;
+  for (const id of g.pets) {
+    const t = (g.petT[id] = (g.petT[id] || 0) + dt), n = st(id);
+    if (id === 'kitten' && t > 20 - 2 * n) { g.petT[id] = 0; for (const w of Object.values(g.weap)) w.cd = 0; g.events.push({ t: 'pet', id }); }
+    else if (id === 'puppy' && t > 11) { g.petT[id] = 0; const all = g.snakes.flatMap(sn => sn.segs).filter(q => visible(q) && !q.shield && q.hp > 0).sort((a, b) => b.y - a.y).slice(0, 2 + (n >= 3 ? 1 : 0)); for (const q of all) damageSeg(g, q, dmgMul(g) * (3 + n), false, q.x, q.y); g.events.push({ t: 'pet', id }); }
+    else if (id === 'lamb' && t > 24 - 2 * n) { g.petT[id] = 0; p.shield = Math.max(p.shield, 3); g.events.push({ t: 'pet', id }); }
+    else if (id === 'turtle' && t > 10) { g.petT[id] = 0; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * (0.03 + 0.01 * n)); g.events.push({ t: 'pet', id }); }
+  }
+}
 function onKill(g, s, sn) {
   const st = g.stage;
   g.kills++; g.cells++;
@@ -482,7 +560,7 @@ function hurtPlayer(g, dmg, fx, fy) {
   }
 }
 function makeResult(g, won) {
-  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: virusName(g.stage), frags: { ...g.frags } };
+  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, frags: { ...g.frags } };
 }
 // the face has reached the membrane and is chewing through it: HP drains until you finish the cells
 // behind it (each kill pushes the face back off the membrane)
@@ -580,10 +658,11 @@ function collect(g, pk) {
   if (pk.kind === 'rage') { p.rage = 8; g.events.push({ t: 'power', kind: 'rage', x: pk.x, y: pk.y }); return; }
   if (pk.kind === 'chest') {   // chests give Beats and a skill fragment, never a skill pick
     const id = randomFragment(g);
-    g.coins += (4 + g.stage * 2) * p.coinMul; g.frags[id] = (g.frags[id] || 0) + 1; g.chestsOpened++;
+    const cp = pk.cp || 0;
+    g.coins += (4 + g.stage * 2) * p.coinMul * (cp ? cp * 2 : 1) * (g.coinK || 1); if (!cp) g.frags[id] = (g.frags[id] || 0) + 1; g.chestsOpened++;
     g.events.push({ t: 'chest', x: pk.x, y: pk.y, frag: id }); return;
   }
-  if (pk.kind === 'coin') { g.coins += pk.v * p.coinMul; g.events.push({ t: 'coin', x: pk.x, y: pk.y, v: pk.v }); }
+  if (pk.kind === 'coin') { g.coins += pk.v * p.coinMul * (g.coinK || 1); g.events.push({ t: 'coin', x: pk.x, y: pk.y, v: pk.v }); }
 }
 
 // ---------------------------------------------------------------- shooting and skills
@@ -790,6 +869,9 @@ export function step(g, dt, input) {
   }
   g.stageHp = stageHp;
   g.progress = g.stageHpMax ? clamp(1 - stageHp / g.stageHpMax, 0, 1) : 0;
+  // chests at a quarter and half way: even a lost run pays for how far it got
+  for (const [th, k] of [[0.25, 1], [0.5, 2]]) if (g.phase === 'play' && g.progress >= th && !(g.cp || (g.cp = {}))[th]) { g.cp[th] = 1; g.pickups.push({ kind: 'chest', x: W / 2, y: 320, vx: 0, vy: 0, v: 1, cp: k, age: 0, vac: false }); g.events.push({ t: 'checkpoint', k }); }
+  if (g.phase === 'play') petTick(g, dt);
 
   // the capsule never aims: it fires straight up, so you aim by sliding
   const canFire = g.phase === 'play';
@@ -849,7 +931,7 @@ export function step(g, dt, input) {
     const bonus = (6 + g.stage * 3) * (isBossStage(g.stage) ? 3 : 1);
     g.coins += bonus * p.coinMul;
     g.pickups.push({ kind: 'chest', x: W / 2, y: 300, vx: 0, vy: 0, v: 1, age: 0, vac: false });
-    g.events.push({ t: 'clear', n: g.stage, bonus: Math.round(bonus * p.coinMul), boss: isBossStage(g.stage), name: virusName(g.stage) });
+    g.events.push({ t: 'clear', n: g.stage, bonus: Math.round(bonus * p.coinMul), boss: isBossStage(g.stage), name: nameOf(g) });
   }
   if (g.phase === 'clear') {
     g.clearT += dt;

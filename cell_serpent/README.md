@@ -52,3 +52,14 @@ Hocus Vocus kit). Tests: `npm run test:serpent`.
 Static art is baked once: cells, skills, glows, HUD text and the stage background are all cached canvases that are blitted.
 Cells off screen are skipped, the hub stops rendering the game behind it, and the game lowers its resolution (down to 1x) by
 itself when frames run slow, then raises it again when it runs fast.
+
+## Animals, pets and the Piggy Bank Parade
+
+- The skills are cute animals (ids unchanged, they are save keys): Kitty Paws (`swab`), Chick Circle (`daggers`), Cow Choir (`tower`),
+  Dove Squad (`dragon`), Hedgehog Quills (`needles`), Bunny Thump (`stick`), Duckling Splash (`bubble`), Owl Spotlight (`satellite`),
+  Bulldog Chomp (`maw`). Their art is drawn in code by `critter()` in `art_draw.js`.
+- **Pets** (Kitten, Puppy, Piglet, Lamb, Hamster, Turtle) come from eggs. Every star gives a permanent bonus whether the pet is equipped
+  or not; two can walk with you and help in runs. Eggs come from a fresh day, first stage clears and the Piggy Bank Parade.
+- **Piggy Bank Parade**: a daily side stage (3 tries a day) with a parade of piggy banks that pays a lot of Beats. A win raises its tier.
+- **Checkpoint chests** drop at 25% and 50% progress and pay Beats even if the run is lost.
+- The shop has a cheap Spark Box and a Grand Spark Box (ten in one with a star prize). The hub deliberately explains very little.

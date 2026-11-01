@@ -1,4 +1,4 @@
-import { W, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
+import { W, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
@@ -41,12 +41,14 @@ function iconURL(id) {
     else if (id === 'beats') spr = kit.SPR.pickup('coin');
     else if (id === 'sparkles') spr = kit.SPR.pickup('spark');
     else if (id === 'boxbeat' || id === 'boxspark') spr = kit.SPR.pickup(id);
+    else if (id === 'egg') spr = kit.SPR.pickup('egg');
+    else if (PETS.some(p => p.id === id)) spr = kit.SPR.pet(id);
     else if (WEAPONS.some(w => w.id === id)) spr = kit.SPR.weapon(WICON[id] || id);
   }
   return (iconCache[id] = spr && spr.c.toDataURL ? spr.c.toDataURL() : '');
 }
 const PICON = { power: '🎤', haste: '⏱️', crit: '🎯', vital: '❤️', guard: '🎧', speed: '👟' };
-const icon = id => (PICON[id] ? PICON[id] : iconURL(id) ? `<img ${WEAPONS.some(w => w.id === id) || id === 'maw' ? 'class="zoom" ' : ''}src="${iconURL(id)}" alt="">` : (id[0] || '?').toUpperCase());
+const icon = id => (PICON[id] ? PICON[id] : PETS.some(p => p.id === id) ? (iconURL(id) ? `<img src="${iconURL(id)}" alt="">` : '🐾') : id === 'egg' ? (iconURL('egg') ? `<img src="${iconURL('egg')}" alt="">` : '🥚') : iconURL(id) ? `<img ${WEAPONS.some(w => w.id === id) || id === 'maw' ? 'class="zoom" ' : ''}src="${iconURL(id)}" alt="">` : (id[0] || '?').toUpperCase());
 const STATICON = { atk: '🔊', crt: '🎵', cdn: '⏱️', vit: '❤️', for: '⭐', rev: '🎤' };
 function tile({ cls = '', ic, name, chip, chipCls = '', desc, bar, barText, pips, btn, gold, disabled, onclick, one }) {
   const t = document.createElement('div'); t.className = 'tile ' + cls + (one ? ' one' : '');
@@ -70,9 +72,11 @@ const curImg = c => `<img src="${iconURL(c)}" alt="" style="width:22px;height:22
 const skillLevels = () => Object.fromEntries(Object.entries(save.skills).map(([id, k]) => [id, k.lv]));
 
 // ---------------------------------------------------------------- hub
-const TABS = ['Battle', 'Skills', 'Stats', 'Shop'];
+const TABS = ['Battle', 'Skills', 'Pets', 'Stats', 'Shop'];
 function openHub(tab = hubTab) {
-  mode = 'hub'; hubTab = tab; audio.music(false); refreshCur();
+  mode = 'hub'; hubTab = tab; audio.music(false);
+  if (dayLogin(save, dayKey())) persist();
+  refreshCur();
   sel = Math.max(1, Math.min(sel, save.cleared + 4));
   renderHub(); show('hub');
 }
@@ -80,7 +84,7 @@ function renderHub() {
   refreshCur();
   for (const t of TABS) { $('tab' + t).classList.toggle('on', t === hubTab); }
   for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === hubTab);
-  if (hubTab === 'Battle') renderBattle(); else if (hubTab === 'Skills') renderSkills(); else if (hubTab === 'Stats') renderStats(); else renderShop();
+  if (hubTab === 'Battle') renderBattle(); else if (hubTab === 'Skills') renderSkills(); else if (hubTab === 'Pets') renderPets(); else if (hubTab === 'Stats') renderStats(); else renderShop();
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { audio.unlock(); audio.play('click'); hubTab = b.dataset.tab; renderHub(); };
 
@@ -99,6 +103,7 @@ function renderBattle() {
   $('stInfo').innerHTML = `<span>Cells <b>${info.length}</b></span><span>Cell HP <b>${Math.round(info.hp / 10) * 10 >= 1000 ? (info.hp / 1000).toFixed(1) + 'k' : info.hp}</b></span>${first}`;
   const go = $('stGo'); go.disabled = !playable; go.textContent = playable ? 'START THE BATTLE' : `CLEAR STAGE ${save.cleared + 1} FIRST`;
   loadoutRow($('battleLoad'), true);
+  renderPig();
   renderGoals();
   const chip = chips.querySelector('.sel'); if (chip && chip.scrollIntoView) { try { chips.scrollTo({ left: chip.offsetLeft - 120 }); } catch (e) { /* ignore */ } }
 }
@@ -130,6 +135,30 @@ function drawPreview(t) {
   c.restore();
 }
 
+function renderPig() {
+  const el = $('pigBox'); el.innerHTML = '';
+  const left = save.pig.left, tier = pigTier(save);
+  el.appendChild(tile({ cls: 't-gold one', ic: '🐷', name: PIG_NAME, chip: 'Tier ' + tier + '  ·  ' + left + '/3 today', desc: 'A parade of piggy banks. Shake them hard.', btn: left ? 'JOIN THE PARADE' : 'COME BACK TOMORROW', gold: true, disabled: !left,
+    onclick: () => { audio.unlock(); audio.play('click'); if (usePigAttempt(save, dayKey())) { persist(); startRun(tier, 'pig'); } } }));
+}
+function renderPets() {
+  const list = $('petList'); list.innerHTML = '';
+  const egg = tile({ cls: 't-gold one', ic: icon('egg'), name: 'Eggs', chip: '× ' + save.eggs, desc: 'Something is wiggling inside.', btn: 'HATCH', gold: true, disabled: save.eggs < 1,
+    onclick: () => { audio.unlock(); const h = hatchEgg(save); if (!h) return; persist(); audio.play('levelup'); refreshCur();
+      $('bTitle').textContent = h.beats ? 'JUST SOME SNACKS' : (PETS.find(p => p.id === h.id).name.toUpperCase() + '!');
+      $('bLoot').innerHTML = h.beats ? `<div class="it">${curImg('beats')}<span>+${h.beats}</span></div>` : `<div class="it">${icon(h.id)}<span>+${h.n}</span></div>`;
+      $('bOk').onclick = () => { audio.play('click'); $('bOk').onclick = defaultBoxOk; openHub('Pets'); }; show('boxModal'); } });
+  list.appendChild(egg);
+  for (const p of PETS) {
+    const k = save.pets[p.id], owned = k.star > 0, maxed = k.star >= PET_MAX_STAR, need = maxed ? 0 : petCost(k.star), eq = save.petEquip.includes(p.id);
+    const stars = '★ ' + k.star + '/' + PET_MAX_STAR;
+    const t = tile({ cls: 't-weapon' + (eq ? ' on-loadout' : ''), ic: icon(p.id), name: p.name, chip: owned ? stars : 'NEW', chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: p.flavor,
+      bar: need ? Math.min(100, Math.round((k.frag / need) * 100)) : 100, barText: need ? k.frag + ' / ' + need : '', btn: maxed ? 'FULL STARS' : owned ? 'MORE STARS' : 'WELCOME HOME', disabled: !petCanUp(save, p.id),
+      onclick: () => { if (petUp(save, p.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } } });
+    if (owned) { const e = document.createElement('button'); e.className = 'btn small go alt'; e.textContent = eq ? 'BENCH' : 'WALK WITH ME'; e.onclick = () => { if (togglePet(save, p.id)) { persist(); audio.play('click'); renderHub(); } }; t.appendChild(e); }
+    list.appendChild(t);
+  }
+}
 function renderGoals() {
   const list = $('goalList'); list.innerHTML = '';
   const day = dayKey();
@@ -173,9 +202,10 @@ function renderStats() {
 }
 function renderShop() {
   const list = $('boxList'); list.innerHTML = '';
+  list.appendChild(tile({ cls: 't-gold', ic: icon('egg'), name: 'Pet Egg', desc: 'Warm and wiggly.', btn: EGG_PRICE + ' ' + curImg('sparkles'), gold: true, disabled: save.sparkles < EGG_PRICE, onclick: () => { if (buyEgg(save)) { persist(); audio.play('upgrade'); refreshCur(); renderShop(); } } }));
   for (const b of BOXES) {
     const can = save[b.cur] >= b.price;
-    const card = tile({ cls: (b.id === 'spark' ? 't-gold' : 't-weapon') + ' one', ic: icon(b.id === 'spark' ? 'boxspark' : 'boxbeat'), name: b.name, desc: b.desc, btn: b.price + ' ' + curImg(b.cur), gold: b.id === 'spark', disabled: !can });
+    const card = tile({ cls: (b.cur === 'sparkles' ? 't-gold' : 't-weapon') + (b.id === 'spark10' ? ' one' : ''), ic: icon(b.cur === 'sparkles' ? 'boxspark' : 'boxbeat'), name: b.name, desc: b.desc, btn: b.price + ' ' + curImg(b.cur), gold: b.cur === 'sparkles', disabled: !can });
     card.querySelector('button').onclick = () => {
       audio.unlock();
       const got = openBox(save, b.id); if (!got) return;
@@ -187,7 +217,8 @@ function renderShop() {
     list.appendChild(card);
   }
 }
-$('bOk').onclick = () => { audio.play('click'); openHub('Shop'); };
+const defaultBoxOk = () => { audio.play('click'); openHub('Shop'); };
+$('bOk').onclick = defaultBoxOk;
 
 // ---------------------------------------------------------------- runs
 function newDemo() {
@@ -195,10 +226,10 @@ function newDemo() {
   demo.p.hp = demo.p.maxHp = 9999;
   demo.weap = { swab: { lv: 2, cd: 0 }, daggers: { lv: 2, cd: 0 }, dragon: { lv: 1, cd: 0 } }; demo.ups = { notes: 1, aspd: 2 };
 }
-function startRun(stage) {
+function startRun(stage, mode2 = '') {
   audio.unlock(); audio.music(true);
   sel = stage; ranResult = false; endT = 0;
-  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), loadout: save.loadout, stage });
+  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
   mode = 'play'; acc = 0; cardsFor = null; show('');
   window.CS.g = g;
 }
@@ -265,16 +296,18 @@ function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
   const out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); persist(); audio.music(false);
   const rows = [`<div class="r">${curImg('beats')}+${out.beats} Beats</div>`];
+  if (out.egg) rows.push(`<div class="r">${icon('egg')}+1 Egg</div>`);
   if (out.sparkles) rows.push(`<div class="r">${curImg('sparkles')}+${out.sparkles} Sparkles (first clear)</div>`);
   for (const id of Object.keys(out.frags)) rows.push(`<div class="r">${icon(id)}+${out.frags[id]} ${WEAPONS.find(w => w.id === id).name} fragment</div>`);
   $('rList').innerHTML = rows.join('');
-  $('rTitle').textContent = r.won ? 'STAGE CLEAR!' : r.name.toUpperCase() + ' WINS';
+  $('rTitle').textContent = r.mode === 'pig' ? (r.won ? 'PIGGY BANKS CRACKED!' : 'THE PIGGIES ESCAPED') : r.won ? 'STAGE CLEAR!' : r.name.toUpperCase() + ' WINS';
   $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.') : `You popped ${r.kills} cells. Spend your Beats in the hub and try again.`;
-  const nextOk = r.won && canPlay(save, r.stage + 1);
+  const pigRun = r.mode === 'pig', nextOk = !pigRun && r.won && canPlay(save, r.stage + 1);
   $('rNext').style.display = nextOk ? '' : 'none';
   $('rNext').onclick = () => { audio.play('click'); startRun(r.stage + 1); };
+  $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); startRun(r.stage); };
-  $('rHub').onclick = () => { audio.play('click'); sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; openHub('Battle'); };
+  $('rHub').onclick = () => { audio.play('click'); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; openHub('Battle'); };
   show('result'); mode = 'over';
 }
 
