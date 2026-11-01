@@ -13,8 +13,12 @@ A Cell Survivor - Shoot Defense style game, with RoxorLoops & Jasmin as the cell
 - The **face is shielded** (no HP, cannot be targeted) until every other cell is gone, then it pops and the stage is cleared.
   If the face reaches the membrane it drains HP until you finish the cells behind it.
 - Two cells per snake carry a **chest**: aim for them first. Chests give Beats and a skill fragment.
-- Upgrades: after **5 cells destroyed**, then every **10**. Pick 1 of 3, with 4 **Free Refreshes** per run. The first two
-  picks are capsule upgrades only (attack speed, extra note, extra burst, damage); skills and passives join after that.
+- Upgrades come only from the **yellow upgrade cells** (a star on a yellow cell, about one per 7 cells, at least 3 per
+  snake). Pop one, then pick 1 of 3 with 4 **Free Refreshes** per run. The first two picks are capsule upgrades only
+  (attack speed, extra note, extra burst, damage); skills and passives join after that. Cards show the numbers
+  (for example "Notes per shot: 2 -> 3") and the HUD shows what the capsule does right now.
+- Every stage has its own **species** (colour, cell style, face and headgear): Love-Struck, Rustic, Sneezy, Grumpy, Sleepy,
+  Disco, Sour, Mighty, Frosty, Gloomy. Only the head has a face. Bomb cells are red with a fuse, armor cells have a plate.
 
 ## Between runs (the hub)
 
