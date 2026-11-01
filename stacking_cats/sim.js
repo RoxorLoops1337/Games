@@ -1518,12 +1518,13 @@ export function runSeconds(g, sec, dt = DT) {
 
 // ---------------------------------------------------------------- routes and starting gifts
 export function rollRoutes(g, n = 3) {
-  const pool = ROUTES.slice(), out = [];
+  const pool = ROUTES.filter((r) => !(g.routePicked && r.id === g.route.id)), out = [];   // the road you just walked is not offered again, so a soft road can never be chosen nest after nest
   while (out.length < n && pool.length) out.push(pool.splice(Math.floor(g.rnd() * pool.length), 1)[0].id);
   return out;
 }
 export function chooseRoute(g, id) {
-  g.route = ROUTE_BY_ID[id] || ROUTE_BY_ID.trail;
+  g.route = ROUTE_BY_ID[id] || ROUTE_BY_ID.trail;   // a road replaces the last one (never multiplies with it) and lasts until the next nest
+  g.routePicked = true;
   if (g.route.healNow) {
     for (const c of g.cats.concat(g.bench)) c.hp = Math.min(catMaxHp(g, c), c.hp + catMaxHp(g, c) * g.route.healNow);
     emit(g, { k: 'routeheal' });

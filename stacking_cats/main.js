@@ -1,7 +1,7 @@
 // Stacking Cats: renderer, effects, HUD and screens. The rules live in sim.js.
 import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS, SPECIAL_TEXT,
-  emptyStats, checkUnlocks, mergeRun, unlockProgress,
+  emptyStats, checkUnlocks, mergeRun, unlockProgress, CASH_EVERY, FALL_LOSS,
   ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, BOXES, BOX_BY_ID, BOX_PITY, RARITY_CHEER, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
   TEMP_WAVES, DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
   masteryProgress, masteryMap, masteryBonus, MASTERY_MAX, DIFF_ORDER, LADDER_RULES, LADDER_WAVE, ladderTier, ladderUnlocked, diffAllowed, ladderClears, weekKey, weekInfo,
@@ -894,7 +894,7 @@ function startRun(opts = {}) {
   g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom, difficulty: save.diff, daily, mastery: masteryMap(save.catStats) });
   if (opts.weekly) g.run.weekly = true;
   startTotal = START_CATS + g.meta.startPicks;
-  setsSeen = {}; runNewRelics = 0; runCommitted = false; bestShown = false; pickN = 0; prepSeen = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
+  setsSeen = {}; runNewRelics = 0; runCommitted = false; bestShown = false; pickN = 0; prepSeen = 0; campSeen = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
   combo = 0; multiKill = 0; flawless = 0; maxComboRun = 0; coinShown = 0; dpsHist.length = 0; sfx.setIntensity(0);
   $('bSpeed').textContent = 'x' + speed;
   showPickStart();
@@ -1046,15 +1046,33 @@ function showFinale() {
   };
   card();
 }
+let campSeen = 0;   // the last wave whose rest stop was shown
 let prepSeen = 0;   // how many items the run had found at the last prepare screen
 function nextReward() {
   const r = queue.shift();
   rewardChoices = null;
+  if (!r && g.wave >= CASH_EVERY && g.wave % CASH_EVERY === 0 && campSeen !== g.wave && mode !== 'over') { campSeen = g.wave; showCamp(); return; }
   if (!r) {   // everything is picked: new items are handed out on the prepare screen, then the wave starts
     if (g.run.items > prepSeen && g.stash.length) { prepSeen = g.run.items; showTower(nextReward, { prepare: true }); return; }
     beginWave(); return;
   }
   if (r === 'finale') showFinale(); else if (r === 'event') showEvent(); else if (r === 'cat') showCatReward(); else if (r.startsWith('box:')) showBox(r.slice(4)); else if (r === 'route') showRouteReward(); else if (r === 'relic') showRelicReward(); else showSnackReward();
+}
+
+// the loot of this run so far: coins and the gems it would pay out now (a gem for every sixth nest ever destroyed, plus gems found in chests)
+const runLoot = (run) => ({ coins: Math.floor(run.coins), gems: Math.floor((save.stats.bossKills + (run.bossKills || 0)) / 6) - Math.floor(save.stats.bossKills / 6) + (run.boxGems || 0) });
+// the rest stop after every 5th wave: cash out and keep everything, or go on and risk half of it
+function showCamp() {
+  const run = g.run, loot = runLoot(run), risk = Math.round(FALL_LOSS * 100);
+  sfx.play('route'); sfx.music('calm');
+  setScreen(`<h2>Rest stop</h2><p class="sub">Wave ${g.wave} done. Cash out to take everything home, or go on and risk losing ${risk}% of your loot if the stack falls.</p>
+    <div class="campbox"><div>&#129689; <b>${num(loot.coins)}</b> coins</div><div>&#128142; <b>${loot.gems}</b> gems</div></div>
+    <p class="sub">${loot.coins ? `At risk if you fall: <b>${num(Math.ceil(loot.coins * FALL_LOSS))}</b> coins${loot.gems ? ` and <b>${Math.ceil(loot.gems * FALL_LOSS)}</b> gems` : ''}.` : 'Nothing to lose yet.'}</p>
+    <div class="row"><button class="btn big green" data-act="cash">Cash out</button><button class="btn big" data-act="go">Keep going</button></div>`);
+  acts = {
+    cash: () => { run.cashed = true; mode = 'over'; paused = false; sfx.play('win'); showOver(commitRun()); },
+    go: () => { run.risk = true; sfx.play('pick', 1.2); nextReward(); },
+  };
 }
 
 function reportHtml() {
@@ -1150,7 +1168,7 @@ function showRouteReward() {
     r.enemyHp !== 1 ? `Mice health x${r.enemyHp}` : '', r.enemyDmg !== 1 ? `Mice damage x${r.enemyDmg}` : '', r.coin !== 1 ? `Coins x${r.coin}` : '',
     r.chest ? 'More loot chests' : '', r.rare ? 'Better loot' : '', r.speed !== 1 ? `Mice speed x${r.speed}` : '', r.bossHp !== 1 ? `Nest health x${r.bossHp}` : '', r.snackExtra ? '+1 snack choice' : '', r.healNow ? `Heal ${r.healNow * 100}% now` : '',
   ].filter(Boolean).map((x) => `<div class="impact">${x}</div>`).join('');
-  setScreen(`<h2>Choose your road</h2><p class="sub">${roadLine(g.wave, THEMES)}</p>
+  setScreen(`<h2>Choose your road</h2><p class="sub">${roadLine(g.wave, THEMES)} <small>A road lasts until the next nest and replaces the last one.</small></p>
     <div class="cards">${rewardChoices.map((id) => { const r = ROUTE_BY_ID[id]; return `<div class="card route" data-act="pickRoute" data-id="${id}"><div class="ic">${r.icon}</div><h3>${r.name}</h3><p>${r.desc}</p>${effects(r)}</div>`; }).join('')}</div>
     <div class="row hint">${rerollBtn()}</div>`);
   coach('c13', 'Pick the road to walk next. A harder road gives better rewards.', 480, 400, 'up', { target: '.card' });
@@ -1746,10 +1764,13 @@ function commitRun() {
   save.stats = mergeRun(save.stats, run);
   const fresh = checkUnlocks(save.stats, new Set(save.unlocked));
   save.unlocked.push(...fresh);
-  run.earned = Math.floor(run.coins);
+  const keep = run.risk && !run.cashed ? 1 - FALL_LOSS : 1;   // after turning down a cash out, a fall costs part of the loot
+  run.earned = Math.floor(run.coins * keep);
+  run.lostCoins = Math.floor(run.coins) - run.earned;
   save.kingdom.coins += run.earned;
   save.kingdom.earned += run.earned;
   run.gems = Math.floor(save.stats.bossKills / 6) - Math.floor(oldNests / 6) + (run.boxGems || 0);   // one gem for every sixth nest ever destroyed, plus gems found in chests
+  run.lostGems = run.gems - Math.floor(run.gems * keep); run.gems -= run.lostGems;
   if (run.daily) {
     const book = run.weekly ? save.weekly : save.daily;
     const score = dailyScore(run), prev = book[run.daily];
@@ -1785,10 +1806,10 @@ function showOver(fresh) {
   const trophies = chips.length ? `<div class="trow">${chips.join('')}</div>` : '';
   const goal = nextGoal(k), goalB = goal && BUILDING_BY_ID[goal.id];
   const goalLine = goalB ? (goal.need ? ` &middot; ${goalB.icon} ${goalB.name} needs ${num(goal.need)} more` : ` &middot; ${goalB.icon} ${goalB.name} is ready to upgrade`) : '';
-  setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : fallLine(r.wave)} <small>${d.icon} ${d.name} &middot; Chapter ${chapterOf(r.wave).n}${r.daily ? (r.weekly ? ' &middot; Weekly' : ' &middot; Daily') : ''}</small></p>${metaNotes(r)}
+  setScreen(`<h2>${r.cashed ? 'Cashed out!' : 'The stack has fallen'}</h2><p class="sub">${r.cashed ? 'You took everything home safely.' : r.wave >= best && r.wave > 1 ? 'A new personal best!' : fallLine(r.wave)} <small>${d.icon} ${d.name} &middot; Chapter ${chapterOf(r.wave).n}${r.daily ? (r.weekly ? ' &middot; Weekly' : ' &middot; Daily') : ''}</small></p>${metaNotes(r)}
     <div class="overcols"><div><div class="stats"><div><b>${r.wave}</b>Wave reached</div><div><b>${r.kills}</b>Mice defeated</div><div><b>${r.bossKills}</b>Nests destroyed</div><div><b>${r.merges}</b>Merges</div>
       <div><b>${num(r.dmg)}</b>Damage dealt</div><div><b>${num(r.biggest)}</b>Biggest hit</div><div><b>${num(r.taken)}</b>Damage taken</div><div><b>${num(r.healed)}</b>Healed</div></div>
-      <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span><small>Total ${num(k.coins)}${goalLine}</small>${r.daily ? '' : '<small class="rankmsg" id="rankMsg"></small>'}</div>${dailyBox}</div>
+      <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span>${r.lostCoins || r.lostGems ? `<small class="lost">The fall cost you ${r.lostCoins ? num(r.lostCoins) + ' coins' : ''}${r.lostCoins && r.lostGems ? ' and ' : ''}${r.lostGems ? r.lostGems + ' gems' : ''}. Cash out at a rest stop to keep it all.</small>` : ''}<small>Total ${num(k.coins)}${goalLine}</small>${r.daily ? '' : '<small class="rankmsg" id="rankMsg"></small>'}</div>${dailyBox}</div>
       <div class="rbars big"><div class="rh"><b>Who did the work</b></div>${bars || '<small>No damage dealt</small>'}</div></div>
     ${trophies}${fresh.length ? `<p class="sub">${freedLineFor(fresh.length)}</p><div class="newcats">${fresh.map((id) => catCard(id, { act: 'none' })).join('')}</div>` : ''}
     <div class="row overbtns tgrid gover"><button class="btn big" data-act="again">Try again</button><button class="btn green" data-act="kingdom">Kingdom${goal && !goal.need ? '<i class="bang">!</i>' : ''}</button><button class="btn amber" data-act="share">Share</button><button class="btn grey" data-act="title">Title</button></div>`, 'wide');
