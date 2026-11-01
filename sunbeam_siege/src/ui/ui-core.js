@@ -108,10 +108,49 @@
   window.addEventListener('resize', function () { clearTimeout(rzTimer); rzTimer = setTimeout(applyLayout, 60); });
   window.addEventListener('orientationchange', function () { setTimeout(applyLayout, 120); });
 
+
+  // ------------------------------------------------------------------ full screen
+  // Fullscreen API where the browser has it (desktop, Android). iPhone Safari has none for pages, so there we explain Add to Home Screen
+  // (index.html carries the web-app meta tags that make a home screen launch chrome free).
+  var FSAPI = ui.fullscreen = {
+    supported: function () { var e = document.documentElement; return !!(e.requestFullscreen || e.webkitRequestFullscreen); },
+    active: function () { return !!(document.fullscreenElement || document.webkitFullscreenElement); },
+    standalone: function () { try { return window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches); } catch (e) { return false; } },
+    toggle: function () {
+      var e = document.documentElement, d = document;
+      if (!FSAPI.supported()) {
+        ui.toast && ui.toast(FSAPI.standalone() ? 'Already running full screen.' : 'On iPhone: tap Share, then Add to Home Screen, and open the game from there to play full screen.', { ms: 5200 });
+        return;
+      }
+      try {
+        if (FSAPI.active()) { (d.exitFullscreen || d.webkitExitFullscreen).call(d); }
+        else {
+          var r = (e.requestFullscreen || e.webkitRequestFullscreen).call(e, { navigationUI: 'hide' });
+          if (r && r.catch) r.catch(function () { ui.toast && ui.toast('Full screen was blocked by the browser.', { ms: 2600 }); });
+        }
+      } catch (err) { ui.toast && ui.toast('Full screen is not available here.', { ms: 2600 }); }
+    }
+  };
+  /** a button that toggles full screen and keeps its icon and label in sync */
+  ui.fullscreenButton = function (cls, withLabel) {
+    var b = h('button' + (cls || '.btn.alt.sm.icon'), { type: 'button', onclick: function () { FSAPI.toggle(); } });
+    function sync() {
+      var on = FSAPI.active() || FSAPI.standalone();
+      ui.clear(b); b.appendChild(ui.icon(on ? 'shrink' : 'expand', { size: 18 }));
+      if (withLabel) b.appendChild(h('span', {}, ' ' + (FSAPI.active() ? 'Exit full screen' : 'Full screen')));
+      b.setAttribute('aria-label', FSAPI.active() ? 'Exit full screen' : 'Full screen'); b.setAttribute('data-tip', FSAPI.active() ? 'Exit full screen' : 'Full screen');
+    }
+    var on = function () { if (!b.isConnected) { document.removeEventListener('fullscreenchange', on); document.removeEventListener('webkitfullscreenchange', on); return; } sync(); };
+    document.addEventListener('fullscreenchange', on); document.addEventListener('webkitfullscreenchange', on);
+    sync(); return b;
+  };
+
   // ------------------------------------------------------------------ icons
   // 24x24 viewBox. Inner markup strings, drawn with currentColor. Unknown names fall back to a lettered glyph.
   var P = function (d, extra) { return '<path d="' + d + '"' + (extra || '') + '/>'; };
   var ICONS = {
+    expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    shrink: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>',
     heart: P('M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z'),
     sword: P('M19.5 3.5l1 1-1 5.5-9 9-2.5-2.5 9-9zM6.5 14l3.5 3.5-1.6 1.6-.9-.9-2.3 2.3-1.7-1.7 2.3-2.3-.9-.9z'),
     shield: P('M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z'),
