@@ -103,7 +103,10 @@ for (const w of WORLDS) {
     ok(a.groups.length >= 1 && a.groups.every((g) => g.count >= 2 && g.count <= 40 && ENEMIES[g.type] && w.pool.includes(g.type)), 'wave groups valid ' + w.id + wave);
     ok(a.groups.reduce((s, g) => s + g.count, 0) <= 90, 'wave size sane');
     if (wave % 10 === 0) ok(a.boss && BOSSES[a.boss], 'boss on wave ' + wave);
-    if (wave === 20) ok(a.boss === w.boss, 'wave 20 boss of the stage');
+    if (wave === 20 && w.wavesTotal === 20) ok(a.boss === w.boss, 'wave 20 boss of the stage');
+    if (wave === 20 && w.wavesTotal === 25) ok(a.boss === w.boss10 && a.bossScale < 1, 'wave 20 mid boss of a 25 wave stage');
+    if (wave === w.wavesTotal) ok(a.boss === w.boss && a.bossScale === 1, 'final wave boss of ' + w.id);
+    if (w.wavesTotal === 25 && wave > 20 && wave < 25) ok(!a.boss, 'no boss on waves 21 to 24');
     if (wave === 10) ok(a.boss === w.boss10 && a.bossScale < 1, 'wave 10 mini boss');
   }
   ok(waveBaseHp(w, 20) > waveBaseHp(w, 1) * 5, 'hp grows'); ok(waveBaseHp(w, 40) > waveBaseHp(w, 21), 'endless hp grows');
@@ -204,7 +207,7 @@ for (const w of WORLDS) {
 {
   const r = new Run({ world: 'garage', mode: 'rush', seed: 3, firstPrep: 0.1 });
   ok(r.wavesTotal === 10, 'rush is ten waves'); const ids = []; for (let w = 1; w <= 10; w++) ids.push(r.upcoming(w).boss);
-  ok(new Set(ids).size === 5 && ids.every(Boolean), 'rush has a boss every wave, all five kinds');
+  ok(new Set(ids).size === 7 && ids.every(Boolean), 'rush has a boss every wave, all seven kinds');
   r.coins = 1e6; for (let i = 0; i < 16; i++) r.deploy(); r.mergeAll(30);
   for (let i = 0; i < 20000 && r.phase !== 'won' && r.phase !== 'lost'; i++) { r.advance(0.1); r.autoPlayStep({ early: true }); r.drain(); }
   ok(r.bossKills >= 1, 'rush bosses can be killed');

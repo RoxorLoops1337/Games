@@ -1,5 +1,5 @@
 {
- "version": "1a990eb71149",
+ "version": "125a1cbcce31",
  "files": [
   "fonts/PatrickHand-latin-ext.woff2",
   "fonts/PatrickHand-latin.woff2",
@@ -20,6 +20,7 @@
   "js/battle.js",
   "js/cutscene.js",
   "js/data_core.js",
+  "js/data_depth.js",
   "js/data_meta.js",
   "js/data_run.js",
   "js/data_story.js",
@@ -41,9 +42,11 @@
   "js/legacy_world.js",
   "js/main.js",
   "js/meta.js",
+  "js/pwa.js",
   "js/rng.js",
   "js/share.js",
   "js/sim.js",
+  "js/stats.js",
   "js/style.js",
   "js/ui_core.js",
   "js/ui_hub.js",

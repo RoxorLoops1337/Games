@@ -167,7 +167,9 @@ function clipped(pen, p, fn) { const c = pen.ctx; c.save(); c.beginPath(); c.mov
 function polyAt(hx, hy, a, ky = 1) { const o = []; for (let i = 0; i < a.length; i += 2) o.push(hx + a[i], hy + a[i + 1] * ky); return o; }
 // head wrapper: a rounder, bigger chibi head (drawn at 1.1x around the head centre)
 function bigHead(pen, fn, st, onesie) {
-  const c = pen.ctx; c.save(); c.translate(0, -80); c.scale(1.1, 1.1); c.translate(0, 80); fn(pen, st, onesie); c.restore();
+  const c = pen.ctx; c.save(); c.translate(0, -80); c.scale(1.1, 1.1); c.translate(0, 80); fn(pen, st, onesie);
+  if (st.ox) headOutfit(pen, st.who, st.ox, st);
+  c.restore();
 }
 
 function headRoxor(pen, st, onesie) {
@@ -253,6 +255,7 @@ function headJasmin(pen, st, onesie) {
 }
 
 function bodyParts(pen, who, onesie, st, bust) {
+  if (st.ox) { bodyOutfit(pen, who, st, bust); return; }
   const roxor = who === 'roxor';
   const slump = st.slump || 0;
   const oc = onesie ? (roxor ? LN.green : LN.lav) : (roxor ? LN.blk : LN.pink);
@@ -301,16 +304,19 @@ function bodyParts(pen, who, onesie, st, bust) {
 
 function armsAndMic(pen, who, onesie, st, hands, only) {
   const roxor = who === 'roxor';
+  const sp = st.ox ? SPEC[st.ox + ':' + who] : null, A = sp ? sp.arm : null;
   const sleeve = onesie ? (roxor ? C.green : '#f1e8ff') : BLK;
-  const armCol = onesie ? (roxor ? C.green : '#f1e8ff') : SKIN[who];
-  const oc = onesie ? (roxor ? LN.green : LN.lav) : LN.skin;
+  const armCol = A ? (A.col || SKIN[who]) : onesie ? (roxor ? C.green : '#f1e8ff') : SKIN[who];
+  const oc = A ? (A.oc || LN.skin) : onesie ? (roxor ? LN.green : LN.lav) : LN.skin;
   const sh = [[-16, -54 + (st.slump || 0)], [16, -54 + (st.slump || 0)]];
   const micHand = st.micMouth || st.pose === 'sing' || st.pose === 'beat' ? 1 : (st.pose === 'point' ? 0 : 1);
   for (let i = 0; i < 2; i++) {
     if (only != null && i !== only) continue;
     const s = i === 0 ? -1 : 1, h = hands[i];
     limb(pen, sh[i][0], sh[i][1], h[0], h[1], armCol, 6, s * 5, oc);
-    if (!onesie && roxor) pf(pen, pen.blob(sh[i][0] + s * 3, sh[i][1] + 5, 8, 7.6, 10, 0.04), sleeve, '#26222f', LN.blk, { gap: 2.2, hi: BLK2, lw: 1.4 });
+    if (A) armOutfit(pen, A, sh[i], h, s);
+    if (A) { if (A.cap) pf(pen, pen.blob(sh[i][0] + s * 3, sh[i][1] + 5, A.capR || 8, A.capR ? A.capR - 0.4 : 7.6, 10, 0.04), A.cap, A.capTone, A.capLine, { gap: 2.2, hi: A.capHi, lw: 1.4 }); }
+    else if (!onesie && roxor) pf(pen, pen.blob(sh[i][0] + s * 3, sh[i][1] + 5, 8, 7.6, 10, 0.04), sleeve, '#26222f', LN.blk, { gap: 2.2, hi: BLK2, lw: 1.4 });
   }
   for (let i = 0; i < 2; i++) {
     if (only != null && i !== only) continue;
@@ -319,12 +325,13 @@ function armsAndMic(pen, who, onesie, st, hands, only) {
     else if (st.point) { hand(pen, h[0], h[1], hc, 4.6, oc); pen.ln([h[0], h[1], h[0] + 14, h[1] - 3], oc, 5.6, false, 0.2); pen.ln([h[0], h[1], h[0] + 14, h[1] - 3], hc, 3.2, false, 0.2); }
     else if (h[1] < -55) (roxor ? rockHand : openHand)(pen, h[0], h[1], hc, oc);
     else hand(pen, h[0], h[1], hc, 5, oc);
+    if (A && A.bands) wristBands(pen, sh[i], h, A.bands);
   }
 }
 
 function drawFigure(pen, ctx, who, pose, onesie, v) {
   const P = POSE[pose], hands = (v && P.alt) ? P.alt : P.hands;
-  const st = { pose, eye: P.eye, mouth: v.mouth, blink: v.blink, look: who === 'roxor' ? 0.25 : 0.1, mic: P.mic, micMouth: P.micMouth, slump: P.slump || 0, foot: P.foot && v.alt, point: P.point };
+  const st = { who, ox: v.ox, pose, eye: P.eye, mouth: v.mouth, blink: v.blink, look: who === 'roxor' ? 0.25 : 0.1, mic: P.mic, micMouth: P.micMouth, slump: P.slump || 0, foot: P.foot && v.alt, point: P.point };
   ctx.save(); ctx.translate(0, P.slump ? P.slump * 0.4 : 0);
   bodyParts(pen, who, onesie, st, false);
   const hh = hands.map((h) => [h[0], h[1] + (P.slump || 0) * 0.3]);
@@ -348,12 +355,12 @@ function mouthAt(P, t, talk) {
 const BOX_W = 232, BOX_H = 204, FEET = 78;   // sprite box: feet sit FEET below the box centre
 export function drawHero(ctx, who, x, y, size, o) {
   o = o || {}; who = who === 'jasmin' ? 'jasmin' : 'roxor';
-  const t = o.t || 0, pose = POSE[o.pose] ? o.pose : 'idle', P = POSE[pose], onesie = o.outfit === 'onesie', k = size / 118;
+  const t = o.t || 0, pose = POSE[o.pose] ? o.pose : 'idle', P = POSE[pose], onesie = o.outfit === 'onesie', ox = oxOf(o.outfit), k = size / 118;
   const ph = t * P.sp, bob = Math.sin(ph) * P.bob, jump = P.jump ? Math.abs(Math.sin(ph * 0.9)) * P.jump * 1.4 : 0;
   const alt = P.alt || P.foot ? (Math.floor(t * P.sp * 0.55 + (who === 'jasmin' ? 0.5 : 0)) % 2 === 1 ? 1 : 0) : 0;
   const mouthSt = mouthAt(P, t, !!o.talk), blink = eyeBlink(t, who === 'jasmin' ? 2 : 0);
-  const key = ['hero', who, pose, onesie ? 'o' : 'd', alt, mouthSt, blink ? 1 : 0].join('|');
-  const e = bake(key, BOX_W, BOX_H, (pen, c) => { c.translate(0, FEET); drawFigure(pen, c, who, pose, onesie, { alt, mouth: mouthSt, blink }); });
+  const key = ['hero', who, pose, onesie ? 'o' : (ox || 'd'), alt, mouthSt, blink ? 1 : 0].join('|');
+  const e = bake(key, BOX_W, BOX_H, (pen, c) => { c.translate(0, FEET); drawFigure(pen, c, who, pose, onesie, { alt, mouth: mouthSt, blink, ox }); });
   ctx.save(); ctx.translate(x, y); if (o.flip) ctx.scale(-1, 1); ctx.scale(k, k);
   ctx.fillStyle = 'rgba(43,39,51,0.17)'; ctx.beginPath(); ctx.ellipse(0, 2, 26 - jump * 0.6, 5.5, 0, 0, TAU); ctx.fill();
   const sq = 1 + Math.sin(ph * 2) * 0.012 * P.bob - (jump > 0 ? jump * 0.004 : 0);
@@ -367,13 +374,13 @@ export function drawHero(ctx, who, x, y, size, o) {
 // head and shoulders portrait; (x, y) = centre of the bust box, size = box height
 export function drawBust(ctx, who, x, y, size, o) {
   o = o || {}; who = who === 'jasmin' ? 'jasmin' : 'roxor';
-  const t = o.t || 0, pose = POSE[o.pose] ? o.pose : 'idle', P = POSE[pose], onesie = o.outfit === 'onesie', k = size / 100;
+  const t = o.t || 0, pose = POSE[o.pose] ? o.pose : 'idle', P = POSE[pose], onesie = o.outfit === 'onesie', ox = oxOf(o.outfit), k = size / 100;
   const mouthSt = mouthAt(P, t, !!o.talk), blink = eyeBlink(t, who === 'jasmin' ? 2 : 0);
-  const key = ['bust', who, pose, onesie ? 'o' : 'd', mouthSt, blink ? 1 : 0].join('|');
+  const key = ['bust', who, pose, onesie ? 'o' : (ox || 'd'), mouthSt, blink ? 1 : 0].join('|');
   const e = bake(key, 112, 100, (pen, c) => {
     c.save(); c.beginPath(); c.rect(-56, -50, 112, 100); c.clip();
     c.translate(0, 64); c.scale(0.76, 0.76);
-    const st = { pose, eye: P.eye, mouth: mouthSt, blink, look: who === 'roxor' ? 0.25 : 0.1, mic: P.mic, slump: P.slump || 0 };
+    const st = { who, ox, pose, eye: P.eye, mouth: mouthSt, blink, look: who === 'roxor' ? 0.25 : 0.1, mic: P.mic, slump: P.slump || 0 };
     bodyParts(pen, who, onesie, st, true);
     c.save(); c.translate(0, P.slump || 0); c.rotate((P.tilt || 0) * 0.8); bigHead(pen, who === 'roxor' ? headRoxor : headJasmin, st, onesie); c.restore();
     c.restore();
