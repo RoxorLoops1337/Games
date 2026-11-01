@@ -75,3 +75,11 @@ itself when frames run slow, then raises it again when it runs fast.
 - Battle side buttons: Sign in (7 days), Fan Fund (free stage rewards), Backstage tip jar (idle Beats), Fragment Swap.
 - In a run: speed readout, per-source damage panel (tap the bars icon), 25/50/100% chests on the bar, and Revive for Sparkles (3 times, knocks the snake back).
 - Balance: cells have about 25 to 40 shots of HP in stage 1 and capsule upgrades are small (common +8% speed, +12% damage).
+
+## Round four: wardrobe, events, instances, shops
+
+- **Wardrobe**: outfits (a hat and a perk for one animal skill) bought with Ribbons, which stage wins and the seasonal event hand out. The worn outfit shows above the duo in runs.
+- **Seasonal event** (Blossom Bash, Sunny Fair, Harvest Hootenanny, Snowy Sing-Along, by month): ribbon milestones, an exclusive outfit, and the Exchange Shop.
+- **Giant Serpent Gig**: a boss instance, two tries a day, pays Ribbons, an egg and pet fragments (the solo stand-in for the co-op boss mode).
+- **Fan Club Pass**, **Limit Shop** (weekly stock, Beats), **Exchange Shop** (Ribbons), **Weapon Exchange** (Sparkles skip the fragment grind, stage gate still applies).
+- **Preview** shows every virus species; **Trophy Shelf** holds one-time rewards for milestones.

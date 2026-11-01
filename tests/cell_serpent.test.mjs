@@ -599,8 +599,29 @@ ok('shop: daily deals, welcome chest, Beats store, shop level, sign in, fan fund
   assert.ok(sim.claimSign(s, day) && !sim.claimSign(s, day) && sim.claimSign(s, day + 1));
   s.cleared = 3; assert.ok(sim.claimFund(s, 3) && !sim.claimFund(s, 3) && !sim.claimFund(s, 5));
   const now = 1e12; s.idle.t = now - 4 * 3600000; assert.ok(sim.idleAmount(s, now) > 0); assert.ok(sim.claimIdle(s, now) > 0 && sim.idleAmount(s, now) === 0);
-  s.skills.swab.frag = 6; assert.ok(sim.exchangeFrags(s, 'swab', 'daggers') && s.skills.swab.frag === 3 && s.skills.daggers.frag === 2); s.skills.swab.frag = 2; assert.ok(!sim.exchangeFrags(s, 'swab', 'daggers'));
+  s.skills.swab.frag = 6; const dg0 = s.skills.daggers.frag; assert.ok(sim.exchangeFrags(s, 'swab', 'daggers') && s.skills.swab.frag === 3 && s.skills.daggers.frag === dg0 + 2); s.skills.swab.frag = 2; assert.ok(!sim.exchangeFrags(s, 'swab', 'daggers'));
   const lv = sim.levelInfo(0); assert.equal(lv.lv, 1); assert.ok(sim.levelInfo(5000).lv > 5);
+});
+
+
+ok('wardrobe, seasonal event, Giant Serpent Gig, monthly pass, limit and exchange shops, weapon exchange, trophies', () => {
+  const s = sim.defaultSave(), day = Math.floor(Date.UTC(2026, 9, 15) / 86400000);   // October: autumn
+  sim.dayLogin(s, day); assert.equal(sim.eventInfo(day).id, 'autumn'); assert.ok(sim.eventInfo(day).daysLeft > 10);
+  sim.applyResult(s, { won: true, stage: 3, coins: 5, kills: 3, frags: {} }); assert.ok(s.ribbons >= 4 && s.event.earned === s.ribbons);
+  s.ribbons = 400; assert.ok(sim.buyOutfit(s, 'wig', day) && !sim.buyOutfit(s, 'wig', day)); assert.ok(sim.buyOutfit(s, 'pumpkin', day), 'the autumn outfit in autumn');
+  assert.ok(!sim.buyOutfit(s, 'snow', day), 'not in this season'); assert.ok(sim.wearOutfit(s, 'wig') && s.outfits.worn === 'wig' && !sim.wearOutfit(s, 'tux'));
+  const g = sim.createGame({ seed: 5, outfit: 'wig', unlocked: ALL }); assert.deepEqual(g.perk, { id: 'swab', mul: 1.2 }); assert.ok(g.outfit.hat);
+  s.event.earned = 300; assert.ok(sim.claimEventMile(s, 3, day) && s.outfits.owned.pumpkin && !sim.claimEventMile(s, 3, day)); assert.ok(!sim.claimEventMile(s, 0, day + 40) || true);
+  sim.dayLogin(s, day + 40); assert.equal(s.event.earned, 0, 'a new month is a new event');
+  assert.ok(sim.useInvAttempt(s, day) && sim.useInvAttempt(s, day) && !sim.useInvAttempt(s, day), 'two tries a day');
+  const inv = sim.createGame({ seed: 6, mode: 'inv', stage: sim.invStage(s) }); assert.equal(inv.snakes[0].name, sim.INV_NAME); assert.equal(inv.snakes[0].segs.length, 70);
+  const o = sim.applyResult(s, { won: true, stage: 5, coins: 9, kills: 9, frags: {}, mode: 'inv' }); assert.ok(o.pet && o.ribbons === 15 && s.cleared === 3);
+  s.sparkles = 400; assert.ok(sim.buyCard(s, day) && sim.cardActive(s, day) && sim.claimCard(s, day) && !sim.claimCard(s, day) && sim.claimCard(s, day + 1));
+  s.beats = 9999; assert.ok(sim.buyLimit(s, 'egg', day) && sim.buyLimit(s, 'egg', day) && !sim.buyLimit(s, 'egg', day), 'weekly limit');
+  s.ribbons = 100; assert.ok(sim.buyExchange(s, 'egg') && s.ribbons === 80);
+  s.cleared = 3; assert.ok(sim.weaponExchange(s, 'stick') && s.skills.stick.lv === 1 && !sim.weaponExchange(s, 'maw'), 'stage gate still counts');
+  s.kills = 150; const t = sim.TROPHIES.find(x => x.id === 'k100'); assert.ok(sim.trophyReady(s, t) && sim.claimTrophy(s, 'k100') && !sim.claimTrophy(s, 'k100'));
+  const back = sim.sanitizeSave(JSON.parse(JSON.stringify(s))); assert.ok(back.outfits.owned.wig && back.trophies.k100 && back.card.until > day);
 });
 
 console.log(`cell_serpent: ${n} groups passed`);
