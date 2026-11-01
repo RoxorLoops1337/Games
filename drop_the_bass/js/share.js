@@ -5,6 +5,7 @@ import { W, H, COLS, TURRETS, BOARD_X, BOARD_Y, BOARD_W, BOARD_H, fmt } from './
 import * as AE from './art_entities.js';
 import * as AW from './art_world.js';
 import * as K from './doodle_kit.js';
+import { t, tn } from './i18n.js';
 
 export const SHARE_URL = 'games-71g.pages.dev/drop_the_bass/';
 const CW = 1080, CH = 1350, LW = 540, LH = 675;     // canvas px, logical px (drawn at 2x)
@@ -37,6 +38,7 @@ function card(ctx, x, y, w, h, fill = '#fbf6e6', shadow = true) {
 function safe(fn) { try { fn(); } catch (e) { /* art must never break the card */ } }
 
 export function makeShareCard(run, result, profile) {
+  const worn = (who) => (profile && profile.outfits && profile.outfits.worn && profile.outfits.worn[who]) || "default";
   const cv = newCanvas();
   if (!cv) return null;
   const ctx = cv.getContext('2d');
@@ -52,11 +54,11 @@ export function makeShareCard(run, result, profile) {
   safe(() => AW.drawLogo(ctx, LW / 2, 62, 140, 0));
 
   // headline
-  const stage = world ? world.name : 'Drop the Bass';
+  const stage = world ? world.name : t('share.game_title', 'Drop the Bass');
   say(ctx, stage, LW / 2, 134, 30, INK, 'center', { halo: '#ffe28a', haloW: 9 });
   let head, sub;
-  if (won) { head = mode === 'tutorial' ? 'PRACTICE DONE!' : 'VICTORY!'; sub = mode === 'story' && r.encore ? 'Encore ' + r.encore + ' cleared' : mode === 'boss_rush' ? 'Boss Rush cleared' : 'Stage cleared'; }
-  else { head = 'WAVE ' + (r.wave || r.cleared || 0); sub = mode === 'endless' ? 'Endless run' : mode === 'daily' ? 'Daily challenge' : 'The Static won this round'; }
+  if (won) { head = mode === 'tutorial' ? t('share.practice_done', 'PRACTICE DONE!') : t('share.victory', 'VICTORY!'); sub = mode === 'story' && r.encore ? t('share.encore_cleared', 'Encore {n} cleared', { n: r.encore }) : mode === 'boss_rush' ? t('share.rush_cleared', 'Boss Rush cleared') : t('share.stage_cleared', 'Stage cleared'); }
+  else { head = t('share.wave', 'WAVE {n}', { n: r.wave || r.cleared || 0 }); sub = mode === 'endless' ? t('share.endless_run', 'Endless run') : mode === 'daily' ? t('share.daily', 'Daily challenge') : t('share.static_won', 'The Static won this round'); }
   say(ctx, head, LW / 2, 178, 46, won ? '#43b94a' : '#e8403f', 'center', { halo: INK, haloW: 11, rot: -0.02 });
   say(ctx, sub, LW / 2, 200, 18, DIM, 'center');
 
@@ -84,7 +86,7 @@ export function makeShareCard(run, result, profile) {
 
   // stat notes on the right
   const sx = bx + bw + 22, sw = LW - sx - 18;
-  const stats = [['Kills', fmt(r.kills || 0)], ['Best combo', 'x' + (r.bestCombo || 0)], [mode === 'endless' || !won ? 'Waves cleared' : 'Waves', String(r.cleared || 0)], ['Merges', String(r.merges || 0)]];
+  const stats = [[t('share.kills', 'Kills'), fmt(r.kills || 0)], [t('share.best_combo', 'Best combo'), 'x' + (r.bestCombo || 0)], [mode === 'endless' || !won ? t('share.waves_cleared', 'Waves cleared') : t('share.waves', 'Waves'), String(r.cleared || 0)], [t('share.merges', 'Merges'), String(r.merges || 0)]];
   stats.forEach(([k, v], i) => {
     const y = by + i * 52;
     card(ctx, sx, y, sw, 44, i % 2 ? '#fff1b8' : '#e6f1ff');
@@ -95,24 +97,31 @@ export function makeShareCard(run, result, profile) {
   const ty = by + 4 * 52 + 2;
   const room = by + bh - ty;
   const bust = Math.min(110, room - 14);
-  safe(() => AW.drawBust(ctx, 'roxor', sx + sw * 0.27, ty + room * 0.5, bust, { t: 0, pose: won ? 'cheer' : 'sad' }));
-  safe(() => AW.drawBust(ctx, 'jasmin', sx + sw * 0.76, ty + room * 0.5, bust, { t: 0, pose: won ? 'cheer' : 'sad' }));
+  safe(() => AW.drawBust(ctx, 'roxor', sx + sw * 0.27, ty + room * 0.5, bust, { t: 0, pose: won ? 'cheer' : 'sad', outfit: worn('roxor') }));
+  safe(() => AW.drawBust(ctx, 'jasmin', sx + sw * 0.76, ty + room * 0.5, bust, { t: 0, pose: won ? 'cheer' : 'sad', outfit: worn('jasmin') }));
   say(ctx, 'RoxorLoops & Jasmin', sx + sw / 2, by + bh - 2, 16, INK, 'center', { halo: '#fbf6e6', haloW: 5 });
 
   // footer: the call and the url
   const fy = by + bh + 14;
-  say(ctx, won ? 'Can you beat it?' : 'Think you can do better?', LW / 2, fy + 20, 26, INK, 'center');
+  say(ctx, won ? t('share.can_you_beat', 'Can you beat it?') : t('share.do_better', 'Think you can do better?'), LW / 2, fy + 20, 26, INK, 'center');
   card(ctx, 70, fy + 28, LW - 140, 36, '#ffe28a');
   say(ctx, SHARE_URL, LW / 2, fy + 54, 22, INK, 'center');
-  if (profile && profile.name) say(ctx, 'by ' + profile.name, LW - 24, 30, 16, DIM, 'right');
+  if (profile && profile.name) say(ctx, t('share.by', 'by {name}', { name: profile.name }), LW - 24, 30, 16, DIM, 'right');
   return cv;
 }
 
 export function shareText(result, world) {
   const r = result || {};
-  const where = world && world.name ? ' on ' + world.name : '';
-  const line = r.won ? 'I cleared a stage' + where + (r.stars ? ' with ' + r.stars + ' star' + (r.stars > 1 ? 's' : '') : '') : 'I reached wave ' + (r.wave || r.cleared || 0) + where;
-  return line + ' in Drop the Bass with RoxorLoops and Jasmin! https://' + SHARE_URL;
+  const wn = world && world.name ? world.name : '';
+  let line;
+  if (r.won) {
+    if (wn && r.stars) line = tn('share.text.won_world_stars', r.stars, 'I cleared a stage on {world} with {n} star in Drop the Bass with RoxorLoops and Jasmin!', 'I cleared a stage on {world} with {n} stars in Drop the Bass with RoxorLoops and Jasmin!', { world: wn });
+    else if (r.stars) line = tn('share.text.won_stars', r.stars, 'I cleared a stage with {n} star in Drop the Bass with RoxorLoops and Jasmin!', 'I cleared a stage with {n} stars in Drop the Bass with RoxorLoops and Jasmin!');
+    else if (wn) line = t('share.text.won_world', 'I cleared a stage on {world} in Drop the Bass with RoxorLoops and Jasmin!', { world: wn });
+    else line = t('share.text.won', 'I cleared a stage in Drop the Bass with RoxorLoops and Jasmin!');
+  } else if (wn) line = t('share.text.lost_world', 'I reached wave {n} on {world} in Drop the Bass with RoxorLoops and Jasmin!', { n: r.wave || r.cleared || 0, world: wn });
+  else line = t('share.text.lost', 'I reached wave {n} in Drop the Bass with RoxorLoops and Jasmin!', { n: r.wave || r.cleared || 0 });
+  return line + ' https://' + SHARE_URL;
 }
 
 function toBlob(canvas) {
@@ -127,7 +136,7 @@ export async function shareCard(canvas, text) {
     if (typeof File !== 'undefined' && typeof navigator !== 'undefined' && navigator.share) {
       const file = new File([blob], name, { type: 'image/png' });
       if (!navigator.canShare || navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], text: text || '', title: 'Drop the Bass' });
+        await navigator.share({ files: [file], text: text || '', title: t('share.game_title', 'Drop the Bass') });
         return 'shared';
       }
     }

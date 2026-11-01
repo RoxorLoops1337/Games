@@ -50,7 +50,7 @@ det('loopy default', (c) => A.drawLoopy(c, 50, 50, 100));
 det('logo', (c) => { A.drawLogo(c, 270, 190, 440, 0.3); A.drawLogo(c, 270, 190, 300, 7.9); });
 
 const sizes = [[540, 960], [1280, 720], [390, 800], [1920, 1080]];
-for (const id of ['title', 'hub', 'garage', 'busk', 'club', 'festival', 'arena', 'unknown']) for (const [w, h] of sizes) {
+for (const id of ['title', 'hub', 'garage', 'busk', 'club', 'festival', 'arena', 'beach', 'moon', 'unknown']) for (const [w, h] of sizes) {
   det('backdrop ' + id + w, (c) => A.drawBackdrop(c, id, w, h, 4.2, { beat: 0.6, staticAmt: 0.5 }));
 }
 det('backdrop no opts', (c) => A.drawBackdrop(c, 'club', 540, 960, 0));
@@ -67,12 +67,17 @@ det('stage default', (c) => A.drawStageBase(c, 'arena', 10, 10));
 const SCENES = ['garage_day', 'static_arrives', 'silent_town', 'build', 'van_night', 'boss_reveal',
   'world_garage', 'world_busk', 'world_club', 'world_festival', 'world_arena',
   'boss_compressor', 'boss_noisegate', 'boss_reverb', 'boss_djglitch', 'boss_playback',
-  'victory_stage', 'credits_van', 'defeat_quiet', 'no_such_scene'];
+  'victory_stage', 'credits_van', 'defeat_quiet',
+  'epilogue_garage', 'epilogue_busk', 'epilogue_club', 'epilogue_festival', 'epilogue_arena', 'epilogue_beach', 'epilogue_moon',
+  'world_beach', 'world_moon', 'boss_lowpass', 'boss_silence', 'credits_moon', 'no_such_scene'];
 assert.deepEqual(A.SCENE_IDS.slice().sort(), SCENES.filter((s) => s !== 'no_such_scene').sort(), 'SCENE_IDS matches the contract list');
 for (const id of SCENES) for (const [w, h] of [[540, 960], [1280, 720]]) for (const p of [0, 0.5, 1]) det('scene ' + id + w + p, (c) => A.drawScene(c, id, w, h, 5.5, { progress: p }));
 det('scene no opts', (c) => A.drawScene(c, 'build', 540, 960, 0));
 for (const [w, h] of sizes) det('title scene ' + w, (c) => A.drawTitle(c, w, h, 6.6, { beat: 0.7 }));
 det('title scene no opts', (c) => A.drawTitle(c, 540, 960, 0));
+
+assert.deepEqual(A.BOARD_SKIN_IDS, ['skin_paper', 'skin_chalk', 'skin_sticker', 'skin_midnight'], 'the facade exports the skin ids');
+for (const sk of A.BOARD_SKIN_IDS) for (const w of WORLDS) { det('skin board ' + sk + w.id, (c) => A.drawBoard(c, w.map, w.id, 2, { skin: sk })); det('skin backdrop ' + sk + w.id, (c) => A.drawBackdrop(c, w.id, 540, 960, 2, { skin: sk })); }
 
 // animation really moves with t
 assert.notEqual(run('t1', (c) => A.drawHero(c, 'roxor', 0, 0, 100, { t: 0.1, pose: 'cheer' })), run('t2', (c) => A.drawHero(c, 'roxor', 0, 0, 100, { t: 0.5, pose: 'cheer' })), 'hero animates with t');

@@ -286,3 +286,49 @@ body.doodle .lb-addrow{margin-top:10px;gap:8px}
 body.doodle .lb-input{flex:1;min-width:0;font:400 20px var(--hand);padding:8px 10px;border-radius:10px;border:3px solid #2b2733}
 body.doodle .cont-run{display:flex;flex-direction:column;align-items:center;gap:0;line-height:1.05}
 body.doodle .cont-run .cr-s{font:400 15px var(--hand);opacity:.85}
+
+/* ---- second tour round: Setlist sheet, wardrobe and skins strips, modifier results, second tour heading ---- */
+body.doodle .tour2{color:#7b4fd0}
+body.doodle .setlist .sl-h{margin:12px 0 6px;font-size:22px}
+body.doodle .sl-hero{display:flex;gap:8px;align-items:flex-start;border:3px solid #2b2733;border-radius:var(--wob);padding:8px;margin-bottom:8px;background:#fffaf0;box-shadow:2px 3px 0 #2b2733}
+body.doodle .sl-who{font-size:19px;margin-bottom:4px}
+body.doodle .sl-abs{display:flex;flex-direction:column;gap:5px}
+body.doodle .sl-ab{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:0;padding:5px 9px;border:3px solid #2b2733;border-radius:12px 8px 13px 8px;background:#fbf6e6;color:#2b2733;font:400 17px/1.1 var(--hand);cursor:pointer;min-height:var(--tap)}
+body.doodle .sl-ab.on{background:#d4f2b8;box-shadow:2px 3px 0 #2b2733}
+body.doodle .sl-ab.locked{background:#ece8f2;color:#6b6477}
+body.doodle .sl-abn{display:flex;align-items:center;gap:5px;font-size:18px}
+body.doodle .sl-abd{font-size:14px;color:#6b6477;margin-left:23px}
+body.doodle .sl-mods{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+body.doodle .sl-mod{display:flex;align-items:center;gap:5px;padding:5px 7px;border:3px solid #2b2733;border-radius:12px 8px 13px 8px;background:#fbf6e6;color:#2b2733;font:400 16px/1.05 var(--hand);text-align:left;cursor:pointer;min-height:var(--tap)}
+body.doodle .sl-mod.on{background:#d4f2b8;box-shadow:2px 3px 0 #2b2733}
+body.doodle .sl-mn{flex:1;min-width:0}
+body.doodle .flames{display:inline-flex;align-items:center;gap:0;vertical-align:middle}
+body.doodle .sl-read{margin-top:8px;padding:8px 10px;border:3px dashed #2b2733;border-radius:12px;background:#fffaf0;font-size:16px}
+body.doodle .sl-sum{margin-top:6px;display:flex;flex-direction:column;gap:2px}
+body.doodle .sl-pay{color:#2e8b38}
+body.doodle .sl-lock{display:flex;gap:10px;align-items:center}
+body.doodle .sl-foot{position:sticky;bottom:-16px;margin:12px -16px -16px;padding:8px 16px 14px;background:#fbf6e6;border-top:3px solid #2b2733;z-index:2}
+body.doodle .sl-foot .btnrow{margin-top:6px}
+body.doodle .sl-start{flex:2}
+body.doodle .ward{margin:0 0 14px}
+body.doodle .ward-head{justify-content:space-between;align-items:center;margin-bottom:6px}
+body.doodle .ward-strip{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;scroll-snap-type:x proximity;scrollbar-width:thin}
+body.doodle .ward-card{flex:none;width:112px;scroll-snap-align:start;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px 8px;border:3px solid #2b2733;border-radius:var(--wob);background:#fbf6e6;box-shadow:2px 3px 0 #2b2733}
+body.doodle .ward-card.worn{background:#d4f2b8}
+body.doodle .ward-card.locked canvas{filter:grayscale(.85) opacity(.65)}
+body.doodle .ward-name{font-size:16px;line-height:1.05;text-align:center;min-height:34px;display:flex;align-items:center}
+body.doodle .ward-state{display:flex;align-items:center;justify-content:center;gap:3px;font-size:14px;line-height:1.05;text-align:center;color:#6b6477;min-height:40px}
+body.doodle .ward-state.worn{color:#2e8b38;font-size:17px}
+body.doodle .ward-act{padding:4px 10px;font-size:17px}
+body.doodle .ward-card.skin canvas{border:2px solid #2b2733;border-radius:6px}
+body.doodle .res-mods{margin-top:8px;padding:8px}
+body.doodle .install-row{margin:4px 0}
+/* i18n: long German and Dutch words must wrap or ellipsize instead of overflowing tabs, buttons and chips */
+body.doodle{overflow-wrap:break-word}
+html[lang=de] body.doodle .btn,html[lang=nl] body.doodle .btn,html[lang=da] body.doodle .btn,html[lang=de] body.doodle .sub,html[lang=de] body.doodle .ds,html[lang=de] body.doodle .nm{hyphens:auto}
+body.doodle .tab{min-width:0;overflow-wrap:anywhere}
+body.doodle .seg button{min-width:0;overflow:hidden;text-overflow:ellipsis}
+body.doodle .btn{max-width:100%}
+body.doodle .chip,body.doodle .pill{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+body.doodle .ward-name,body.doodle .ward-state,body.doodle .sl-abn,body.doodle .sl-abd{min-width:0;overflow-wrap:anywhere}
+body.doodle .toggle>:first-child{min-width:0}

@@ -20,6 +20,7 @@ if (!pw) skip('playwright not found');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.json': 'application/json' };
 const srv = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html';
+  if (p.startsWith('/api/')) { res.writeHead(204); res.end(); return; }   // the anonymous stats beacon
   fs.readFile(path.join(ROOT, p), (e, d) => { if (e) { res.writeHead(404); res.end('nf'); } else { res.writeHead(200, { 'content-type': MIME[path.extname(p)] || 'application/octet-stream' }); res.end(d); } });
 });
 await new Promise((r) => srv.listen(0, r));
@@ -138,7 +139,8 @@ try {
   }
 
   // ---- results (win), with a recap-free result, then defeat with a recap
-  await page.evaluate(() => { const a = __dtb.app, b = a.battle; b.run.finish(true); a.hooks.onEnd(b.run, b); });
+  // the first clear of a world plays its epilogue before the results: mark it seen so the results screen shows at once
+  await page.evaluate(() => { const a = __dtb.app, b = a.battle; a.profile.story.epilogues = Object.assign({}, a.profile.story.epilogues, { [b.run.world.id]: true }); b.run.finish(true); a.hooks.onEnd(b.run, b); });
   await page.waitForSelector('.res-title', { timeout: 10000 });
   await page.waitForTimeout(1200);
   await shot('results');
