@@ -97,9 +97,20 @@ for (const f of ['doodle_hud.js', 'doodle_fx.js', 'doodle_battle.js']) {
   const src = readFileSync(new URL('../drop_the_bass/js/' + f, import.meta.url), 'utf8');
   ok(!/Math\.random|Date\.now|new Date|performance\.now/.test(src), f + ' has no unseeded randomness or clock'); ok(!src.includes(String.fromCharCode(8212)), f + ' has no em dash');
 }
-for (const f of ['doodle_fx.js', 'doodle_battle.js']) {
+for (const f of ['doodle_fx.js', 'doodle_battle.js', 'doodle_depth.js']) {
   const src = readFileSync(new URL('../drop_the_bass/js/' + f, import.meta.url), 'utf8');
   ok(!/'lighter'|'screen'|createRadialGradient|createLinearGradient|shadowBlur|drawGlow|\.filter\s*=/.test(src), f + ' has no glow, additive blend, gradient, blur or filter');
 }
 ok(!readFileSync(new URL('../drop_the_bass/ui_doodle.css', import.meta.url), 'utf8').includes(String.fromCharCode(8212)), 'ui_doodle.css has no em dash');
+// the depth drawing (branch cards, boss and hero effects, popovers) lives in doodle_depth.js
+{
+  const DD = await import('../drop_the_bass/js/doodle_depth.js');
+  setStyle('doodle');
+  const c = mock();
+  for (const g of Object.values(DD.ABILITY_GLYPH)) DD.emblem(c, 100, 100, 14, g, '#ff7a3c');
+  ok(c.__st.saves === c.__st.restores && c.__st.nan === 0 && c.__st.calls > 20, 'emblem draws every ability glyph balanced, no NaN');
+  ok(Object.keys(DD.ABILITY_SHORT).length === 6 && Object.keys(DD.ABILITY_COLOR).length === 6, 'every hero ability has a short name and a colour');
+  ok(DD.POOL_HIT.w >= 300 && DD.POOL_HIT.h >= 30, 'pool strip tap area is wide and as tall as the layout allows');
+}
+
 console.log('drop_the_bass doodle_hud: ' + n + ' checks passed');

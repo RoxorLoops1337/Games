@@ -280,7 +280,7 @@ export class Battle {
   }
   // a depth coach mark: never two in a row within 15 s, so a new player is not buried in cards
   hint2(id) {
-    if (this.t - this.lastHintT < 15) return;
+    if (this.prof.tutorial.hints[id] || this.shownHints[id] || this.t - this.lastHintT < 15) return;
     this.hint(id);
     if (this.shownHints[id]) this.lastHintT = this.t;
   }

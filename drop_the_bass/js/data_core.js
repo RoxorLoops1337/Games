@@ -291,10 +291,10 @@ export const WORLDS = [
     blurb: 'Three lanes, ninety thousand empty seats and Mr. Playback at the soundboard.' },
   // Second tour. hpMul values are placeholders until the balance pass.
   { id: 'beach',    n: 6, name: 'Bonfire Beach',   place: 'Sunset Bonfire Cove', map: 'beach', bpm: 112, wavesTotal: 25, hpMul: 400, pool: ['fuzz', 'zip', 'echo', 'drone', 'brick', 'leech', 'squeal', 'rager', 'mute', 'gate'],
-    boss10: 'djglitch', boss: 'lowpass', sky: ['#2a1038', '#ff7a3c'], accent: '#ff8a4c', ground: '#0f4a58', coinMul: 6.5,
+    boss10: 'djglitch', boss: 'lowpass', sky: ['#2a1038', '#ff7a3c'], accent: '#ff8a4c', ground: '#0f4a58', coinMul: 2.6,
     blurb: 'A bonfire, a boat for a stage and a tide of muffled sound. The path splits around the fire and comes back together.' },
   { id: 'moon',     n: 7, name: 'Moonlight Rave',  place: 'The Moon Stage',   map: 'moon',     bpm: 138, wavesTotal: 25, hpMul: 900, pool: ['fuzz', 'zip', 'drone', 'echo', 'brick', 'leech', 'rager', 'gate', 'squeal', 'mute'],
-    boss10: 'lowpass', boss: 'silence', sky: ['#050a2e', '#1f2f9a'], accent: '#5fe8ff', ground: '#101a5a', coinMul: 9.0,
+    boss10: 'lowpass', boss: 'silence', sky: ['#050a2e', '#1f2f9a'], accent: '#5fe8ff', ground: '#101a5a', coinMul: 0.8,
     blurb: 'A floating stage, low gravity and one very long spiral walk to the middle. Dr. Dead Air waits at the end.' },
 ];
 export const WORLD_BY_ID = Object.fromEntries(WORLDS.map((w) => [w.id, w]));

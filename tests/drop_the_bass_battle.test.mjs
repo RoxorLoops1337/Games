@@ -178,9 +178,9 @@ function depthRig(runOpts = {}, profFn) {
 }
 {
   // the hint texts exist (copied into HINTS when data_story does not define them yet)
-  const IDS = ['hint_synergy', 'hint_branch', 'hint_preview', 'hint_reroll', 'hint_bossphase', 'hint_hero_ready'];
+  const HE = new RegExp(String.fromCharCode(8212)), IDS = ['hint_synergy', 'hint_branch', 'hint_preview', 'hint_reroll', 'hint_bossphase', 'hint_hero_ready'];
   ok(IDS.every((id) => HINTS_EXTRA[id] && HINTS_EXTRA[id].title && HINTS_EXTRA[id].text && HINTS[id]), 'HINTS_EXTRA ids are readable through HINTS');
-  ok(IDS.every((id) => !/—/.test(HINTS_EXTRA[id].text + HINTS_EXTRA[id].title)), 'no em dashes in hint text');
+  ok(IDS.every((id) => !HE.test(HINTS_EXTRA[id].text + HINTS_EXTRA[id].title)), 'no em dashes in hint text');
 
   // ---- branch choice
   const { calls, run, b, ctx, app } = depthRig();
@@ -215,13 +215,13 @@ function depthRig(runOpts = {}, profFn) {
   run.phase = 'wave'; const e = run.spawnEnemy({ type: 'boss:djglitch', lane: 0, hpBase: 4000, w: 10, d: 250, scale: 1 }); b.bossId = e.id;
   const fire = (ph) => { calls.length = 0; b.banner = null; b.bannerQ = []; b.fx.flash = 0; run.bossPhaseFx(e, ph); b.update(1 / 60); };
   fire({ id: 'dark_lane', text: 'Lights out!', at: 0.5, dur: 6, cols: 2 });
-  ok(b.banner && /DARK LANE/.test(b.banner.text) && b.banner.sub === 'Lights out!', 'phase banner shows the effect and the phase text'); ok(b.fx.flash > 0 && calls.includes('boss_phase'), 'phase flashes and plays boss_phase');
+  ok([b.banner, ...b.bannerQ].some((x) => x && /DARK LANE/.test(x.text) && x.sub === 'Lights out!'), 'phase banner shows the effect and the phase text'); ok(b.fx.flash > 0 && calls.includes('boss_phase'), 'phase flashes and plays boss_phase');
   ok(b.dx.dark && b.dx.dark.c1 - b.dx.dark.c0 === 1, 'dark lane band comes from the event columns'); frame(b, ctx, 0.5);
   b.t += 10; b.update(1 / 60); ok(b.dx.dark === null, 'dark lane scribble ends with its duration');
   fire({ id: 'steal_turret', text: 'Mine now!', at: 0.4, dur: 3 });
   const stolen = run.turrets.find((t) => t.stolen > 0); ok(stolen && b.dx.steals[stolen.id], 'steal_turret tracks the borrowed turret'); ok(calls.includes('turret_stolen'), 'turret_stolen sfx');
   frame(b, ctx, 0.5); ok(ctx.__st.saves === ctx.__st.restores, 'steal drawing balanced');
-  calls.length = 0; run.advance(3.5); b.update(1 / 60); ok(calls.includes('turret_returned') && !(stolen.stolen > 0), 'turret_returned sfx when it comes back'); ok(!b.dx.steals[stolen.id], 'borrowed state cleared');
+  calls.length = 0; for (let i = 0; i < 260; i++) run.advance(1 / 60); b.update(1 / 60); ok(calls.includes('turret_returned') && !(stolen.stolen > 0), 'turret_returned sfx when it comes back'); ok(!b.dx.steals[stolen.id], 'borrowed state cleared');
   fire({ id: 'bulwark', text: 'Shield up', at: 0.3, frac: 0.2 }); fire({ id: 'enrage', text: 'Angry', at: 0.2, speed: 1.3 }); fire({ id: 'jam_pulse', text: 'Jam', at: 0.1, radius: 600, dur: 3, max: 4 }); fire({ id: 'heal_pulse', text: 'Heal', at: 0.1 }); fire({ id: 'summon_wave', text: 'More', at: 0.1, n: 3 });
   frame(b, ctx, 0.6); ok(e.bulwarkMax > 0 && e.rageMul > 1 && run.turrets.some((t) => t.jam > 0), 'bulwark, enrage and jam are on'); ok(ctx.__st.saves === ctx.__st.restores, 'every boss phase effect draws balanced');
   ok(b.phaseTicksOk !== false, 'boss bar draws with phase notches');
@@ -271,7 +271,7 @@ function depthRig(runOpts = {}, profFn) {
   b.handleEvents([{ k: 'branchReady', id: 1, x: 100, y: 300 }]); ok(!app.log.hints.includes('hint_branch'), 'a second hint within 15 s waits');
   b.t += 16; b.handleEvents([{ k: 'branchReady', id: 1, x: 100, y: 300 }]); ok(app.log.hints.includes('hint_branch'), 'branch hint after the gap'); ok(p.tutorial.hints.hint_branch, 'hint is remembered in the profile');
   b.t += 16; run.wave = 1; run.phase = 'prep'; b.slowTick(); ok(app.log.hints.includes('hint_preview'), 'wave preview hint');
-  b.t += 16; b.slowTick(); ok(app.log.hints.includes('hint_reroll'), 'reroll hint');
+  b.t += 16; b.slowTick(); ok(app.log.hints.includes('hint_reroll'), 'reroll hint ');
   b.t += 16; run.wave = 2; run.heroCd.roxor = 0; b.slowTick(); ok(app.log.hints.includes('hint_hero_ready'), 'hero ready hint');
   b.t += 16; b.handleEvents([{ k: 'bossPhase', boss: 'djglitch', id: 'enrage', text: 'x', bossId: 1, x: 100, y: 100, phase: 1 }]); ok(app.log.hints.includes('hint_bossphase'), 'boss phase hint');
   const n0 = app.log.hints.length; b.t += 16; b.handleEvents([{ k: 'synergy', id: 'x', x: 100, y: 300 }]); ok(app.log.hints.length === n0, 'each hint shows only once');

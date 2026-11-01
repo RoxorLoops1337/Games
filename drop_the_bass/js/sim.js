@@ -1093,7 +1093,7 @@ export class Run {
   // a stun cannot be chained: after it ends the enemy shrugs stuns off for a moment (no permanent stun lock at the spawn)
   // push-backs draw on a small per-enemy budget that refills slowly, so slows plus shoves can never hold an enemy in place for good
   pushE(e, amount) { if (e.boss || e.dead) return; const b = e.pushBudget == null ? 90 : e.pushBudget; const use = Math.min(amount, b); e.pushBudget = b - use; e.d = Math.max(0, e.d - use); }
-  stunE(e, dur) { if (e.stunCd > 0 || e.stun > 0) return; e.stun = Math.max(e.stun, dur); }
+  stunE(e, dur) { if (e.stunCd > 0 || e.stun > 0) return; e.stunLen = Math.min(dur, 2.5); e.stun = e.stunLen; }
   updateEnemies(dt) {
     const sm = this.enemySpeedMul();
     const list = this.enemies.slice();
@@ -1103,8 +1103,8 @@ export class Run {
       if (e.hitT > 0) e.hitT -= dt;
       // statuses
       if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slowAmt = 0; }
-      if (e.pushBudget != null && e.pushBudget < 90) e.pushBudget = Math.min(90, e.pushBudget + 12 * dt);
-      if (e.stun > 0) { e.stun -= dt; if (e.stun <= 0) e.stunCd = 1.4; } else if (e.stunCd > 0) e.stunCd -= dt;
+      if (e.pushBudget != null && e.pushBudget < 90) e.pushBudget = Math.min(90, e.pushBudget + 6 * dt);
+      if (e.stun > 0) { e.stun -= dt; if (e.stun <= 0) e.stunCd = Math.max(1.4, 1.5 * (e.stunLen || 0)); } else if (e.stunCd > 0) e.stunCd -= dt;
       if (e.markT > 0) e.markT -= dt;
       if (e.burnT > 0) { e.burnT -= dt; this.hurt(e, e.burnDps * dt, { dot: true, quiet: true }); if (e.dead) continue; if (e.burnT <= 0) e.burnDps = 0; }
       if (e.regen && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.regen * dt);
