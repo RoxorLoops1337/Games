@@ -806,7 +806,7 @@ export class Run {
       this.emit({ k: 'hero', who });
       for (const e of this.enemies.slice()) {
         this.hurt(e, base * 2.4 * pw, { quiet: false });
-        if (e.hp > 0 && !e.immune) { this.stunE(e, e.boss ? 0.6 : 1.4); if (!e.boss) e.d = Math.max(0, e.d - 70); }
+        if (e.hp > 0 && !e.immune) { this.stunE(e, e.boss ? 0.6 : 1.4); this.pushE(e, 70); }
       }
       for (const t of this.turrets) t.jam = 0;
     } else {
@@ -932,7 +932,9 @@ export class Run {
   }
 
   // a stun cannot be chained: after it ends the enemy shrugs stuns off for a moment (no permanent stun lock at the spawn)
-  stunE(e, dur) { if (e.stunCd > 0) return; e.stun = Math.max(e.stun, dur); }
+  // push-backs draw on a small per-enemy budget that refills slowly, so slows plus shoves can never hold an enemy in place for good
+  pushE(e, amount) { if (e.boss || e.dead) return; const b = e.pushBudget == null ? 90 : e.pushBudget; const use = Math.min(amount, b); e.pushBudget = b - use; e.d = Math.max(0, e.d - use); }
+  stunE(e, dur) { if (e.stunCd > 0 || e.stun > 0) return; e.stun = Math.max(e.stun, dur); }
   updateEnemies(dt) {
     const sm = this.enemySpeedMul();
     const list = this.enemies.slice();
@@ -942,6 +944,7 @@ export class Run {
       if (e.hitT > 0) e.hitT -= dt;
       // statuses
       if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slowAmt = 0; }
+      if (e.pushBudget != null && e.pushBudget < 90) e.pushBudget = Math.min(90, e.pushBudget + 12 * dt);
       if (e.stun > 0) { e.stun -= dt; if (e.stun <= 0) e.stunCd = 1.4; } else if (e.stunCd > 0) e.stunCd -= dt;
       if (e.markT > 0) e.markT -= dt;
       if (e.burnT > 0) { e.burnT -= dt; this.hurt(e, e.burnDps * dt, { dot: true, quiet: true }); if (e.dead) continue; if (e.burnT <= 0) e.burnDps = 0; }
@@ -1151,7 +1154,7 @@ export class Run {
           if (e.hp > 0) {
             if (e.immune) continue;
             this.stunE(e, e.boss ? stun * 0.25 : stun);
-            if (!e.boss) e.d = Math.max(0, e.d - 36);
+            this.pushE(e, 36);
           }
         }
         this.emit({ k: 'cone', x: t.x, y: t.y, ang: t.ang, range: rng2, spread: Math.min(spread, Math.PI), color: def.color });
@@ -1205,7 +1208,7 @@ export class Run {
       this.hurt(e, r.dmg, { crit: r.crit });
       if (e.hp > 0 && !e.immune) {
         e.slowAmt = Math.max(e.slowAmt, slow); e.slowT = Math.max(e.slowT, 2);
-        if (L >= 5 && !e.boss) e.d = Math.max(0, e.d - 22);
+        if (L >= 5) this.pushE(e, 22);
       }
     }
     this.emit({ k: 'pulse', x: t.x, y: t.y, r: radius, color: def.color, bass: true });

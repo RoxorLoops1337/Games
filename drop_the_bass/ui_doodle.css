@@ -261,3 +261,28 @@ body.doodle #ui .btn,body.doodle #ui .tab,body.doodle #ui .iconbtn,body.doodle #
 body.doodle #ui .btn,body.doodle #ui .iconbtn,body.doodle #ui .seg button,body.doodle #ui .enc button{min-width:var(--tap)}
 body.doodle #ui .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
 body.doodle .recap .rc-bar{width:40px}
+
+/* ---- meta additions: fame title, studio scene, difficulty, weekly gig, leaderboard tabs and friends, continue run ---- */
+body.doodle .fame-title{font-family:var(--hand);font-size:17px;letter-spacing:0;text-transform:none;color:#2b2733;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.05}
+body.doodle .fame-pbar{position:relative;height:16px;overflow:hidden}
+body.doodle .fame-cnt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:400 13px var(--hand);color:#2b2733;text-shadow:-1px -1px 0 #fbf6e6,1px -1px 0 #fbf6e6,-1px 1px 0 #fbf6e6,1px 1px 0 #fbf6e6;letter-spacing:0}
+body.doodle .studio-scene{border:3px solid #2b2733;border-radius:var(--wob);overflow:hidden;background:#fbf6e6;box-shadow:2px 3px 0 #2b2733;margin:0 0 10px}
+body.doodle .studio-scene canvas{display:block;width:100%!important;height:auto!important}
+body.doodle .studio-cap{padding:4px 10px 6px;font-size:14px;text-align:center;border-top:3px dashed #2b2733;margin:0}
+body.doodle .seg.diff button{font-size:20px}
+body.doodle .lb-row{padding:6px 6px;border-bottom:2px dashed #2b2733;align-items:center;gap:6px}
+body.doodle .lb-row.friend{background:#d4f2b8}
+body.doodle .lb-row.me{background:#ffe28a}
+body.doodle .lb-row.missing{opacity:.6}
+body.doodle .lb-rank{width:38px;font-weight:900;color:#6b6477}
+body.doodle .lb-name{font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.doodle .lb-score{font-weight:900;min-width:30px;text-align:right}
+body.doodle .lb-tag{font:400 12px var(--hand);margin-left:6px;padding:0 6px;border:2px solid #2b2733;border-radius:8px;vertical-align:middle}
+body.doodle .lb-tag.you{background:#ff5fb0;color:#fff}
+body.doodle .lb-tag.fr{background:#9dff3a;color:#2b2733}
+body.doodle .lb-add,body.doodle .lb-x{width:30px;height:30px;border:3px solid #2b2733;border-radius:50%;background:#fbf6e6;font:400 20px var(--hand);color:#2b2733;line-height:1;padding:0;cursor:pointer}
+body.doodle .lb-x{background:#ece8f2;color:#6b6477}
+body.doodle .lb-addrow{margin-top:10px;gap:8px}
+body.doodle .lb-input{flex:1;min-width:0;font:400 20px var(--hand);padding:8px 10px;border-radius:10px;border:3px solid #2b2733}
+body.doodle .cont-run{display:flex;flex-direction:column;align-items:center;gap:0;line-height:1.05}
+body.doodle .cont-run .cr-s{font:400 15px var(--hand);opacity:.85}

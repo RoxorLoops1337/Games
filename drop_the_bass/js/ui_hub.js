@@ -10,7 +10,7 @@ import {
 import { REMIX, RELICS, DAILY_MODS } from './data_run.js';
 import * as M from './meta.js';
 import { fetchBoard, rankOf, boardRows, cleanName, FRIENDS_MAX } from './lb.js';
-import { drawStudioScene } from './doodle_env.js';
+import { drawStudioScene, studioProps } from './doodle_env.js';
 import {
   h, canvasOf, icon, turretIcon, turretLive, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW,
 } from './ui_core.js';
@@ -158,6 +158,33 @@ function tourTab(app, st, rerender) {
   return wrap;
 }
 
+function difficultyCard(app, rerender) {
+  const p = app.profile, cur = M.difficultyOf(p);
+  const seg = h('div', { class: 'seg diff' }, M.DIFFICULTY_IDS.map((id) => h('button', { class: cur === id ? 'on' : '', onclick: () => { if (cur !== id) { p.settings.difficulty = id; app.audio.play('ui_click'); app.save(); } rerender(); } }, M.difficultyInfo(id).name)));
+  return h('div', { class: 'card diffcard' }, h('div', { class: 'row' }, h('h3', { style: 'margin:0' }, 'Difficulty'), h('div', { class: 'grow sub', style: 'text-align:right' }, M.difficultyInfo(cur).desc)), seg,
+    h('div', { class: 'sub', style: 'font-size:12px' }, 'Applies to Story, Endless and Boss Rush. The Daily and Weekly Gigs are always Normal, so everyone plays the same run.'));
+}
+const FX_TEXT = { enemyHp: (v) => 'Static have +' + Math.round((v - 1) * 100) + '% health', rate: (v) => 'turrets fire ' + Math.round((v - 1) * 100) + '% faster', coin: (v) => '+' + Math.round((v - 1) * 100) + '% coins', enemySpeed: (v) => 'Static move ' + Math.round((v - 1) * 100) + '% faster' };
+function timeLeft(ms) { const h2 = Math.floor(ms / 3600000); return h2 >= 24 ? Math.floor(h2 / 24) + 'd ' + (h2 % 24) + 'h' : h2 + 'h'; }
+function weeklyCard(app) {
+  const p = app.profile, wg = M.weeklyGig(p, app.now()), mod = DAILY_MODS[wg.mod], w = WORLDS.find((x) => x.id === wg.world);
+  const extra = wg.extra.map(([path, , v]) => (FX_TEXT[path] ? FX_TEXT[path](v) : '')).filter(Boolean).join(', ');
+  return h('div', { class: 'card weekly', style: 'border-color:var(--pink)' },
+    h('div', { class: 'row' }, h('div', { class: 'ic icbox' }, icon('ticket', 38)),
+      h('div', { class: 'grow' }, h('h3', null, 'Weekly Gig: ' + wg.name), h('div', { class: 'sub' }, mod.name + ': ' + mod.desc + (extra ? ' Also: ' + extra + '.' : '')), h('div', { class: 'sub' }, w.name + ', ' + wg.waves + ' waves. Same run for everyone. ' + timeLeft(wg.msLeft) + ' left.'))),
+    h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, wg.done ? 'Reward claimed this week (best ' + wg.best + '/' + wg.waves + '). Replays pay half Records, no bonus.' : 'One big reward a week: ' + (WEEKLY_REWARD.diamonds + WEEKLY_REWARD.winDiamonds) + '+ diamonds, Records, fans and a Studio crate for a win.'),
+      btn(icon('crown', 24), () => boardModal(app, 'weekly', 'Weekly Gig: ' + wg.name), 'dark small', { 'aria-label': 'Leaderboard' }),
+      btn(wg.done ? 'Play' : 'Play!', () => app.startRun({ mode: 'daily', world: wg.world, encore: 0, seed: wg.seed, daily: wg.mod, wavesTotal: wg.waves, weekly: true, weekId: wg.id, extraFx: wg.extra }), wg.done ? 'dark' : 'gold')));
+}
+// the next prop the Studio will grow, as a one-line hint under the backstage scene
+function studioCaption(p) {
+  const sp = studioProps(p.studio);
+  const next = [['amps', 'Bigger Speakers puts amp stacks on the stage'], ['riser', 'Tight Timing builds a drum riser'], ['banner', 'Showmanship hangs a banner'], ['lights', 'Hype Drive strings up lights'],
+    ['jar', 'Tip Jar starts a tip jar'], ['truss', 'Sturdy Stage raises a truss'], ['van', 'Roadie Rack buys a tour van'], ['cables', 'Long Cables lays out cables'], ['charm', 'Lucky Charm hangs a lucky clover'], ['eq', 'Keep upgrading to light up the equaliser']].find(([k]) => !sp[k]);
+  if (next) return 'Next: ' + next[1] + '. Hero levels make Roxor and Jasmin glow.';
+  return sp.amps >= 4 && sp.riser >= 3 && sp.van >= 3 && sp.lights >= 3 ? 'A full stage show! Hero levels add sparkles and a crown.' : 'Every prop is on stage. Keep upgrading to make them bigger.';
+}
+
 function loadoutModal(app, rerender) {
   const p = app.profile;
   const body = h('div');
@@ -181,7 +208,7 @@ function studioTab(app, st, rerender) {
   const wrap = h('div');
   wrap.append(h('h2', null, 'The Studio'), h('div', { class: 'sub', style: 'margin:-4px 2px 8px' }, 'Permanent upgrades, bought with Records. They help in every run.'));
   wrap.append(h('div', { class: 'studio-scene' }, canvasOf(504, 170, (ctx, t) => drawStudioScene(ctx, 504, 170, t, p.studio, { heroLv: p.heroLv, outfits: p.outfits.worn }), { live: true }),
-    h('div', { class: 'sub studio-cap' }, M.studioSceneCaption(p))));
+    h('div', { class: 'sub studio-cap' }, studioCaption(p))));
   const seg = h('div', { class: 'seg' });
   const sec = st.studioSec || 'up';
   for (const [id, name] of [['up', 'Upgrades'], ['turrets', 'Turrets'], ['heroes', 'Heroes']]) seg.append(h('button', { class: sec === id ? 'on' : '', onclick: () => { st.studioSec = id; rerender(); } }, name));
@@ -478,7 +505,7 @@ export function settingsModal(app) {
     body.append(h('div', { class: 'hr' }), h('h3', null, 'Leaderboard name'), h('input', { type: 'text', maxlength: 16, value: p.name || '', placeholder: 'Your name (optional)', style: 'width:100%;font:400 20px var(--hand,sans-serif);padding:10px;border-radius:10px;border:3px solid var(--line)', oninput: (e) => { p.name = e.target.value.replace(/[^\w \-.']/g, '').slice(0, 16); app.save(); } }));
     body.append(h('div', { class: 'hr' }), h('h3', null, 'Save data'), h('div', { class: 'sub' }, 'Your progress is saved on this device. Copy the code to move it to another device.'));
     const ta = h('textarea', { class: 'code', readonly: true }, M.exportCode(p));
-    body.append(ta, h('div', { class: 'btnrow' }, btn('Copy code', () => { ta.select(); try { navigator.clipboard.writeText(ta.value); toast('Copied!'); } catch (e) { document.execCommand('copy'); toast('Copied!'); } }, 'blue small'),
+    body.append(ta, h('div', { class: 'btnrow' }, btn('Copy code', () => { ta.select(); const fb = () => { try { document.execCommand('copy'); toast('Copied!'); } catch (e) { toast('Select the code and copy it by hand.'); } }; try { navigator.clipboard.writeText(ta.value).then(() => toast('Copied!'), fb); } catch (e) { fb(); } }, 'blue small'),
       btn('Import code', () => importModal(app), 'dark small')));
     body.append(h('div', { class: 'btnrow' }, btn('How to play', () => { m.close(); app.showHowTo(); }, 'dark small'), btn('Codex', () => { m.close(); codexModal(app); }, 'dark small')));
     body.append(h('div', { class: 'btnrow' }, btn('Replay intro', () => { m.close(); app.playCutscene('intro', () => app.openHub()); }, 'dark small'), btn('Reset game', () => resetModal(app), 'red small')));
@@ -489,9 +516,17 @@ export function settingsModal(app) {
 }
 function tog2(label, on, fn) { return h('div', { class: 'toggle' }, label, btn(on ? 'ON' : 'OFF', fn, on ? 'green small' : 'dark small')); }
 function importModal(app) {
-  const ta = h('textarea', { class: 'code', placeholder: 'Paste your save code here' });
-  const m = modal(h('div', null, h('h2', null, 'Import save'), h('div', { class: 'sub' }, 'This replaces the progress on this device.'), ta,
-    h('div', { class: 'btnrow' }, btn('Import', () => { const np = M.importCode(ta.value, app.now()); if (!np) { toast('That code did not work.'); return; } app.replaceProfile(np); m.close(); toast('Save imported!'); }, 'green'), btn('Cancel', () => m.close(), 'dark'))));
+  const ta = h('textarea', { class: 'code', placeholder: 'Paste your save code here (it starts with DTB1.)' });
+  const body = h('div');
+  const m = modal(body);
+  const ask = () => body.replaceChildren(h('h2', null, 'Import save'), h('div', { class: 'sub' }, 'This replaces the progress on this device. Your current save is kept as a backup first.'), ta,
+    h('div', { class: 'btnrow' }, btn('Check code', () => {
+      const np = M.importCode(ta.value, app.now());
+      if (!np) { toast('That code did not work. Copy the whole code, from DTB1 to the end.', 3600); app.audio.play('error'); return; }
+      body.replaceChildren(h('h2', null, 'Found a save'), h('div', { class: 'sub', style: 'text-align:center' }, 'Fame ' + np.fame + ' (' + fameTitle(np.fame) + '), ' + fmt(np.records) + ' Records, ' + fmt(np.diamonds) + ' diamonds, ' + M.clearedCount(np) + ' stages cleared.'),
+        h('div', { class: 'btnrow' }, btn('Replace my save', () => { app.replaceProfile(np); m.close(); toast('Save imported!'); }, 'green'), btn('Back', ask, 'dark')));
+    }, 'green'), btn('Cancel', () => m.close(), 'dark')));
+  ask();
 }
 function resetModal(app) {
   const m = modal(h('div', null, h('h2', null, 'Reset everything?'), h('div', { class: 'sub', style: 'text-align:center' }, 'This deletes all progress on this device. It cannot be undone.'),
@@ -537,13 +572,41 @@ function wheelCard(app, rerender) {
 
 export function boardModal(app, id, title) {
   const p = app.profile;
-  const body = h('div', null, h('h2', null, title), h('div', { class: 'sub', style: 'text-align:center' }, 'Loading...'));
+  const state = { tab: 'all', top: undefined, msg: '' };
+  const body = h('div');
   const m = modal(body);
-  fetchBoard(id).then((top) => {
+  const addFriend = (name) => {
+    const r = M.addFriend(p, name);
+    state.msg = r.ok ? 'Added ' + r.name + ' to your friends.' : ({ empty: 'Type a name first.', self: 'That is you!', dup: 'Already a friend.', full: 'Your friend list is full (' + FRIENDS_MAX + ').' })[r.reason];
+    if (r.ok) app.audio.play('ui_click'); else app.audio.play('error');
+    app.save(); draw();
+  };
+  const draw = () => {
     body.replaceChildren(h('h2', null, title));
-    if (!top) { body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, 'The leaderboard is offline right now. Your own best is still saved.')); }
-    else if (!top.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, 'No scores yet. Be the first!'));
-    else top.slice(0, 20).forEach((e, i) => body.append(h('div', { class: 'row', style: 'padding:6px 4px;border-bottom:2px dashed #2b2733' + (e.name === p.name ? ';background:#ffe28a' : '') }, h('div', { style: 'width:34px;font-weight:900;color:' + (i < 3 ? 'var(--gold)' : 'var(--dim)') }, '#' + (i + 1)), h('div', { class: 'grow', style: 'font-weight:800' }, e.name), h('div', { style: 'font-weight:900' }, e.score))));
+    const seg = h('div', { class: 'seg' });
+    for (const [tid, nm] of [['all', 'All'], ['friends', 'Friends (' + p.friends.length + ')']]) seg.append(h('button', { class: state.tab === tid ? 'on' : '', onclick: () => { state.tab = tid; state.msg = ''; draw(); } }, nm));
+    body.append(seg);
+    if (state.top === undefined) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, 'Loading...'));
+    else {
+      if (!state.top) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, 'The leaderboard is offline right now. Your own best is still saved.'));
+      else if (!state.top.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, 'No scores yet. Be the first!'));
+      const rows = boardRows(state.top || [], p.friends, p.name, state.tab);
+      if (state.tab === 'friends' && !p.friends.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, 'Add friends by name to follow their scores here.'));
+      rows.forEach((e) => {
+        const top3 = e.rank > 0 && e.rank <= 3;
+        const act = e.me ? null : e.friend ? h('button', { class: 'lb-x', 'aria-label': 'Remove friend', title: 'Remove friend', onclick: () => { M.removeFriend(p, e.name); state.msg = ''; app.save(); draw(); } }, 'x')
+          : h('button', { class: 'lb-add', 'aria-label': 'Add friend', title: 'Add friend', onclick: () => addFriend(e.name) }, '+');
+        body.append(h('div', { class: 'row lb-row' + (e.me ? ' me' : '') + (e.friend ? ' friend' : '') + (e.missing ? ' missing' : '') },
+          h('div', { class: 'lb-rank', style: top3 ? 'color:var(--gold)' : '' }, e.rank > 0 ? '#' + e.rank : '-'),
+          h('div', { class: 'grow lb-name' }, e.name, e.me ? h('span', { class: 'lb-tag you' }, 'YOU') : null, e.friend ? h('span', { class: 'lb-tag fr' }, 'FRIEND') : null),
+          h('div', { class: 'lb-score' }, e.score == null ? '-' : e.score), act));
+      });
+    }
+    const inp = h('input', { type: 'text', maxlength: 16, placeholder: 'Add a friend by name', class: 'lb-input', 'aria-label': 'Friend name', onkeydown: (ev) => { if (ev.key === 'Enter') addFriend(inp.value); } });
+    body.append(h('div', { class: 'row lb-addrow' }, inp, btn('Add', () => addFriend(cleanName(inp.value)), 'blue small')));
+    if (state.msg) body.append(h('div', { class: 'sub', style: 'font-size:13px;text-align:center' }, state.msg));
     body.append(h('div', { class: 'sub', style: 'font-size:12px;text-align:center;margin-top:8px' }, p.name ? 'You appear as ' + p.name + '.' : 'Set your name in Settings to join the board.'), h('div', { class: 'btnrow' }, btn('Close', () => m.close(), 'green')));
-  });
+  };
+  draw();
+  fetchBoard(id).then((top) => { state.top = top; draw(); });
 }

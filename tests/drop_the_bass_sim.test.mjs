@@ -252,7 +252,7 @@ const put = (r, type, c, rr, level = 1) => { const t = r.deploy(slotAt(r, c, rr)
   const savedC = sb.c, savedR = sb.r; sb.c = k.c + 1; sb.r = k.r + 1; r.recalcAuras(); ok(r.synergiesOf(k).length === 0 && !k.syn.slowedDmg, 'diagonal is not adjacent'); sb.c = savedC; sb.r = savedR; r.recalcAuras();
   ok(k.syn.slowedDmg > 0, 'adjacent again');
   r.move(sb.id, slotAt(r, 0, 6)); ok(r.synergiesOf(k).length === 0 && !k.syn.slowedDmg, 'breaks when the neighbour moves');
-  r.move(sb.id, slotAt(r, 3, 2)); ok(r.synergiesOf(k).length === 1, 'returns when it comes back');
+  r.move(sb.id, slotAt(r, 2, 2)); ok(r.synergiesOf(k).length === 1, 'returns when it comes back');
   r.sell(sb.id); ok(r.synergiesOf(k).length === 0 && !k.syn.slowedDmg, 'breaks when the neighbour is sold');
   // snapshot and restore keep it and do not re-announce
   const r2 = mk({ loadout: ['kick', 'sub'] }); r2.coins = 1e6; const k2 = put(r2, 'kick', 2, 2), s2 = put(r2, 'sub', 3, 2); r2.drain();

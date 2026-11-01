@@ -233,7 +233,7 @@ const mockStore = (o = {}) => { const m = new Map(Object.entries(o)); return { g
   for (const id of M.DIFFICULTY_IDS) { const d = M.difficultyInfo(id); ok(d.id === id && d.name.length > 0 && d.desc.length > 0, 'difficulty info ' + id); }
   ok(M.difficultyInfo('bogus').id === 'normal', 'difficulty info fallback');
   ok(fameTitle(1) === 'Garage Band' && fameTitle(10) === 'Local Legend' && fameTitle(FAME_MAX) === 'Bass Legend' && fameTitle(0) === 'Garage Band', 'fame titles');
-  ok(FAME_TITLES.every((t, i) => i === 0 || t[0] > FAME_TITLES[i - 1][0]) && FAME_TITLES[0][0] === 1 && !FAME_TITLES.some((t) => /—/.test(t[1])), 'fame titles ascend');
+  ok(FAME_TITLES.every((t, i) => i === 0 || t[0] > FAME_TITLES[i - 1][0]) && FAME_TITLES[0][0] === 1 && !FAME_TITLES.some((t) => t[1].includes(String.fromCharCode(8212))), 'fame titles ascend');
   const f = fresh(); ok(M.addFriend(f, 'Jas').ok && f.friends.length === 1 && !M.addFriend(f, 'jas').ok, 'profile friends'); M.removeFriend(f, 'JAS'); ok(f.friends.length === 0, 'remove friend');
   f.name = 'Me'; ok(M.addFriend(f, 'me').reason === 'self', 'cannot befriend yourself');
 }

@@ -475,7 +475,7 @@ function vanArt(p, x, y, tier, ghost) {   // (x, y) = bottom-left on the floor
   p.shp([x + 71, y - 33, x + 79, y - 33, x + 91, y - 21, x + 71, y - 21], C.sky, INK, 2.2, { gap: 4 });
   p.shp(rect(x + 8, y - 38, 20, 14, 2), C.sky, INK, 2.2, { gap: 4 });
   if (tier >= 2) { p.ln([x + 2, y - 15, x + 64, y - 15], C.cyan, 3.4, false, 0.6); p.shp(star(x + 42, y - 31, 7, 0.45, 0.2), C.yellow, INK, 1.8, { gap: 4 }); }
-  if (tier >= 3) { p.ln([x + 6, y - 50, x + 60, y - 50], INK, 2.4, false, 0.4); for (let i = 0; i < 4; i++) p.ln([x + 10 + i * 15, y - 46, x + 10 + i * 15, y - 50], INK, 2, false, 0.2); p.txt('TOUR', x + 33, y - 52, 8, C.red, { align: 'c', w: 2 }); p.shp(rect(x + 44, y - 64, 14, 12, 2), '#3d3750', INK, 2.2, { gap: 4 }); }
+  if (tier >= 3) { p.ln([x + 6, y - 50, x + 60, y - 50], INK, 2.4, false, 0.4); for (let i = 0; i < 4; i++) p.ln([x + 10 + i * 15, y - 46, x + 10 + i * 15, y - 50], INK, 2, false, 0.2); p.txt('TOUR', x + 22, y - 52, 8, C.red, { align: 'c', w: 2 }); p.shp(rect(x + 44, y - 64, 14, 12, 2), '#3d3750', INK, 2.2, { gap: 4 }); }
   else if (tier === 1) p.ln([x + 14, y - 30, x + 20, y - 24, x + 15, y - 18], INK, 1.8, false, 0.8);
   for (const wx of [x + 22, x + 76]) { p.shp(arc(wx, y - 6, 9, 9, 0, 360, 10), '#3d3750', INK, 2.8, { gap: 4 }); p.shp(arc(wx, y - 6, 3.4, 3.4, 0, 360, 6), C.grey, INK, 1.6, { gap: 3 }); }
 }
@@ -550,10 +550,10 @@ function paintScene(p, c, sp, accent) {
   if (sp.lights > 0) { const q = []; for (let i = 0; i <= 24; i++) q.push(i * SCENE_W / 24, 8 + Math.sin(i / 24 * Math.PI) * 18); p.ln(q, INK, 2, false, 0.5); }
   else sketch(p, [10, 8, 494, 8, 494, 12, 10, 12]);
   if (sp.banner >= 1) {
-    if (sp.banner >= 2) { p.shp([170, 22, 354, 22, 354, 54, 262, 62, 170, 54], C.pink, INK, 3, { gap: 5, f2: C.yellow }); p.txt('DROP THE BASS', 262, 49, 17, C.paper, { align: 'c', out: INK, ow: 4, w: 3 }); }
-    else for (let i = 0; i < 9; i++) p.shp([160 + i * 25, 18, 178 + i * 25, 18, 169 + i * 25, 38], BULB_COLS[i % 5], INK, 2, { gap: 4 });
-  } else sketch(p, [170, 22, 354, 22, 354, 54, 170, 54]);
-  if (sp.charm > 0) { p.ln([262, 62, 262, 70], INK, 1.8, false, 0.2); for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.4; p.shp(arc(262 + Math.cos(a) * 6, 79 + Math.sin(a) * 6, 5, 5, 0, 360, 8), C.green, INK, 1.8, { gap: 3 }); } if (sp.charm >= 2) p.ln(arc(262, 79, 13, 13, 0, 360, 14), C.gold, 2.4, true, 0.4); }
+    if (sp.banner >= 2) { p.shp([250, 20, 378, 20, 378, 42, 314, 47, 250, 42], C.pink, INK, 3, { gap: 5, f2: C.yellow }); p.txt('DROP THE BASS', 314, 38, 10, C.paper, { align: 'c', out: INK, ow: 3.4, w: 2.4 }); }
+    else for (let i = 0; i < 6; i++) p.shp([248 + i * 22, 18, 264 + i * 22, 18, 256 + i * 22, 36], BULB_COLS[i % 5], INK, 2, { gap: 4 });
+  } else sketch(p, [250, 20, 378, 20, 378, 42, 250, 42]);
+  if (sp.charm > 0) { p.ln([356, 46, 356, 58], INK, 1.8, false, 0.2); for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.4; p.shp(arc(356 + Math.cos(a) * 6, 67 + Math.sin(a) * 6, 5, 5, 0, 360, 8), C.green, INK, 1.8, { gap: 3 }); } if (sp.charm >= 2) p.ln(arc(356, 67, 13, 13, 0, 360, 14), C.gold, 2.4, true, 0.4); }
   // amps
   if (sp.amps === 0) { sketch(p, rect(30, SFLOOR - 38, 44, 38)); sketch(p, rect(82, SFLOOR - 38, 38, 38)); }
   else for (const [x, dy, w, h] of AMP_SPOTS[sp.amps]) ampBox(p, x, SFLOOR + dy, w, h, accent);
@@ -566,7 +566,7 @@ function paintScene(p, c, sp, accent) {
   // equaliser frame
   if (sp.eq === 0) sketch(p, rect(398, 24, 92, 48));
   else { p.shp(rect(398, 24, 92, 48, 4), '#2a2548', INK, 3, { gap: 6 }); }
-  p.txt(sp.total > 0 ? 'YOUR STUDIO' : 'EMPTY STUDIO', 74, 24, 10, C.purple, { align: 'c', w: 2 });
+  if (sp.total === 0) p.txt('EMPTY STUDIO', 72, 44, 10, C.purple, { align: 'c', w: 2 });
 }
 function sceneEntry(sp, accent) {
   const key = ['scene', sp.amps, sp.riser, sp.cables, sp.charm, sp.jar, sp.banner, sp.lights, sp.van, sp.truss, sp.eq, sp.total > 0 ? 1 : 0, getScale()].join('|');
@@ -594,10 +594,10 @@ export function drawStudioScene(ctx, w, h, t, studio, o) {
   for (const [who, x] of [['roxor', 176], ['jasmin', 226]]) {
     const lv = Math.max(1, Math.min(10, Math.floor(+hl[who]) || 1)); hv += lv;
     const tr = tierOf(lv, [3, 6, 10]);
-    try { drawHero(ctx, who, x, SFLOOR + 6, 104 + tr * 3, { t: t + (who === 'jasmin' ? 0.4 : 0), pose: HERO_POSE[who], outfit: outfits[who] || 'default' }); } catch (e) { /* art must never break the menu */ }
-    if (tr >= 1) for (let i = 0; i < 3 + tr * 2; i++) { const a = t * 0.9 + i * 6.283 / (3 + tr * 2), r = 34 + tr * 4; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 3 + i); ctx.strokeStyle = who === 'roxor' ? C.lime : C.pink; ctx.lineWidth = 2.4; const sx = x + Math.cos(a) * r, sy = SFLOOR - 56 + Math.sin(a) * r * 0.9; ctx.beginPath(); ctx.moveTo(sx - 4, sy); ctx.lineTo(sx + 4, sy); ctx.moveTo(sx, sy - 4); ctx.lineTo(sx, sy + 4); ctx.stroke(); }
+    try { drawHero(ctx, who, x, SFLOOR + 6, 96 + tr * 3, { t: t + (who === 'jasmin' ? 0.4 : 0), pose: HERO_POSE[who], outfit: outfits[who] || 'default' }); } catch (e) { /* art must never break the menu */ }
+    if (tr >= 1) for (let i = 0; i < 3 + tr * 2; i++) { const a = t * 0.9 + i * 6.283 / (3 + tr * 2), r = 34 + tr * 4; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 3 + i); ctx.strokeStyle = who === 'roxor' ? C.lime : C.pink; ctx.lineWidth = 2.4; const sx = x + Math.cos(a) * r, sy = SFLOOR - 50 + Math.sin(a) * r * 0.9; ctx.beginPath(); ctx.moveTo(sx - 4, sy); ctx.lineTo(sx + 4, sy); ctx.moveTo(sx, sy - 4); ctx.lineTo(sx, sy + 4); ctx.stroke(); }
     ctx.globalAlpha = 1;
-    if (tr >= 3) { const cy = SFLOOR - 108 + Math.sin(t * 2) * 2; ctx.fillStyle = C.gold; ctx.strokeStyle = INK; ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(x - 12, cy + 10); ctx.lineTo(x - 13, cy - 2); ctx.lineTo(x - 6, cy + 4); ctx.lineTo(x, cy - 6); ctx.lineTo(x + 6, cy + 4); ctx.lineTo(x + 13, cy - 2); ctx.lineTo(x + 12, cy + 10); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    if (tr >= 3) { const cy = SFLOOR - 100 + Math.sin(t * 2) * 2; ctx.fillStyle = C.gold; ctx.strokeStyle = INK; ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(x - 12, cy + 10); ctx.lineTo(x - 13, cy - 2); ctx.lineTo(x - 6, cy + 4); ctx.lineTo(x, cy - 6); ctx.lineTo(x + 6, cy + 4); ctx.lineTo(x + 13, cy - 2); ctx.lineTo(x + 12, cy + 10); ctx.closePath(); ctx.fill(); ctx.stroke(); }
     // level pips under the feet
     for (let i = 0; i < 10; i++) { const px = x - 22.5 + i * 5, py = SFLOOR + 17; ctx.beginPath(); ctx.arc(px, py, 2, 0, TAU); ctx.fillStyle = i < lv ? (who === 'roxor' ? C.lime : C.pink) : 'rgba(255,255,255,0.55)'; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke(); }
   }
