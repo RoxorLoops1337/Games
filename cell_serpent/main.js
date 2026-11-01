@@ -1,4 +1,4 @@
-import { W, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
+import { W, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
@@ -14,12 +14,15 @@ const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save
 const audio = createAudio();
 audio.setMuted(save.muted);
 let art = null, R = null, kit = null;
+const dayKey = () => Math.floor(Date.now() / 86400000);
+let slowFrames = 0, fastFrames = 0;
 let mode = 'title', g = null, demo = null, acc = 0, last = 0, endT = 0, cardsFor = null, hubTab = 'Battle', sel = 1, ranResult = false;
 const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
 const keys = {};
 
+let dprCap = 2;   // lowered automatically on slow phones (dynamic resolution)
 function resize() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
   canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
 }
 addEventListener('resize', resize); resize();
@@ -75,6 +78,7 @@ function renderBattle() {
   const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : '<span><b>Cleared ✓</b></span>';
   $('stInfo').innerHTML = `<span>Cells <b>${info.length}</b></span><span>Cell HP <b>${Math.round(info.hp / 10) * 10 >= 1000 ? (info.hp / 1000).toFixed(1) + 'k' : info.hp}</b></span>${first}`;
   const go = $('stGo'); go.disabled = !playable; go.textContent = playable ? 'START THE BATTLE' : `CLEAR STAGE ${save.cleared + 1} FIRST`;
+  renderGoals();
   const chip = chips.querySelector('.sel'); if (chip && chip.scrollIntoView) { try { chips.scrollTo({ left: chip.offsetLeft - 120 }); } catch (e) { /* ignore */ } }
 }
 $('stPrev').onclick = () => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
@@ -105,6 +109,18 @@ function drawPreview(t) {
   c.restore();
 }
 
+function renderGoals() {
+  const list = $('goalList'); list.innerHTML = '';
+  const day = dayKey();
+  for (const goal of dailyGoals(day)) {
+    const prog = goalProgress(save, day, goal), done = prog >= goal.target, claimed = !!(save.daily && save.daily.day === day && save.daily.claimed[goal.id]);
+    const rw = goal.reward.beats ? `${goal.reward.beats} ${curImg('beats')}` : `${goal.reward.sparkles} ${curImg('sparkles')}`;
+    const card = document.createElement('div'); card.className = 'card c-passive'; card.style.cursor = 'default';
+    card.innerHTML = `<div style="flex:1"><div class="nm">${goal.text}</div><div class="bar" style="margin-top:6px"><i style="width:${Math.round(prog / goal.target * 100)}%"></i></div><div class="ds">${prog} / ${goal.target}</div></div><div class="end"><button class="btn gold small" ${done && !claimed ? '' : 'disabled'}>${claimed ? 'CLAIMED' : done ? 'CLAIM ' + rw : rw}</button></div>`;
+    card.querySelector('button').onclick = () => { if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); renderHub(); } };
+    list.appendChild(card);
+  }
+}
 function renderSkills() {
   const list = $('skillList'); list.innerHTML = '';
   for (const w of WEAPONS) {
@@ -223,7 +239,7 @@ function toggleMute() { save.muted = !save.muted; audio.setMuted(save.muted); $(
 // ---------------------------------------------------------------- result
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
-  const out = applyResult(save, r); persist(); audio.music(false);
+  const out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); persist(); audio.music(false);
   const rows = [`<div class="r">${curImg('beats')}+${out.beats} Beats</div>`];
   if (out.sparkles) rows.push(`<div class="r">${curImg('sparkles')}+${out.sparkles} Sparkles (first clear)</div>`);
   for (const id of Object.keys(out.frags)) rows.push(`<div class="r">${icon(id)}+${out.frags[id]} ${WEAPONS.find(w => w.id === id).name} fragment</div>`);
@@ -249,11 +265,17 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000 || 0); last = now;
   if (!R) return;
-  if (mode === 'title' || mode === 'hub') {
+  if (mode === 'play') {
+    const ms = dt * 1000;
+    if (ms > 26) { slowFrames++; fastFrames = 0; } else if (ms < 19) { fastFrames++; slowFrames = Math.max(0, slowFrames - 1); }
+    if (slowFrames > 45 && dprCap > 1) { dprCap = Math.max(1, dprCap - 0.5); slowFrames = 0; resize(); }
+    else if (fastFrames > 600 && dprCap < 2) { dprCap = Math.min(2, dprCap + 0.5); fastFrames = 0; resize(); }
+  }
+  if (mode === 'hub') { if (hubTab === 'Battle') drawPreview(now / 1000); return; }   // the hub covers the game: draw only the stage picture
+  if (mode === 'title') {
     acc += dt; while (acc >= 1 / 60) { acc -= 1 / 60; step(demo, 1 / 60, botInput(demo)); if (demo.phase === 'levelup') choose(demo, 0); }
     if (demo.phase === 'dead' || demo.phase === 'won') newDemo();
     drain(demo, false); R.draw(demo, null, dt);
-    if (mode === 'hub' && hubTab === 'Battle') drawPreview(now / 1000);
     return;
   }
   if (mode === 'play') {
@@ -263,7 +285,7 @@ function frame(now) {
     if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5)) showResult(); }
     audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0);
   }
-  if (g) { drain(g, mode === 'play'); R.draw(g, { joy }, mode === 'pause' ? 0 : dt); }
+  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2 }, mode === 'pause' ? 0 : dt); }
 }
 
 // ---------------------------------------------------------------- wiring
