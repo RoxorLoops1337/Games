@@ -21,7 +21,8 @@ const ok = (name, fn) => { fn(); n++; };
 const run = (g, secs, input, pick = 0) => { for (let i = 0; i < secs * 60; i++) { sim.step(g, 1 / 60, typeof input === 'function' ? input(g) : input); if (g.phase === 'levelup') sim.choose(g, pick); } };
 const bot = g => sim.botInput(g);
 // move the whole virus along its lane until the head sits `gap` px above the cell
-const bringNear = (g, gap = 100) => { let best = 0, bd = 1e9; for (let t = 0; t < g.path.len; t += 4) { const q = sim.pointAt(g.path, t), d = Math.abs(Math.hypot(q.x - g.p.x, q.y - g.p.y) - gap); if (d < bd) { bd = d; best = t; } } const shift = best - g.snakes[0].segs[0].ps; for (const q of g.snakes[0].segs) q.ps += shift; };
+const shiftChain = (g, shift) => { const sn = g.snakes[0]; sn.tail += shift; for (const q of sn.segs) q.ps += shift; };
+const bringNear = (g, gap = 100) => { let best = 0, bd = 1e9; for (let t = 0; t < g.path.len; t += 4) { const q = sim.pointAt(g.path, t), d = Math.abs(Math.hypot(q.x - g.p.x, q.y - g.p.y) - gap); if (d < bd) { bd = d; best = t; } } shiftChain(g, best - g.snakes[0].segs[0].ps); };
 const ALL = { needles: 1, stick: 1, bubble: 1, satellite: 1, maw: 1 };
 
 ok('deterministic: same seed, same run', () => {
@@ -73,32 +74,42 @@ ok('it starts weak: every cell takes 10 to 20 capsule shots, and you have no ski
   assert.ok(g.p.rate <= 2.2, 'slow fire rate');
 });
 
-ok('killing a middle segment splits the virus into two pieces that both keep crawling', () => {
+ok('the virus stays one connected chain: a destroyed cell is removed and the front slides back to close the gap', () => {
   const g = sim.createGame({ seed: 3 });
-  const s = g.snakes[0], len = s.segs.length, tailHead = s.segs[6];
-  s.segs[5].hp = 0; sim.step(g, 1 / 60, {});
-  assert.equal(g.snakes.length, 2);
-  assert.equal(g.snakes[0].segs.length + g.snakes[1].segs.length, len - 1);
-  assert.equal(g.snakes.find(x => x !== s).segs[0], tailHead);
-  assert.ok(g.events.some(e => e.t === 'split') && g.events.some(e => e.t === 'kill') && g.pickups.length >= 1);
-  const ps = tailHead.ps; run(g, 1, {}); assert.ok(tailHead.ps > ps);
+  const sn = g.snakes[0], len = sn.segs.length; sn.speed = 0.01;
+  run(g, 0.2, {});
+  const headPs = sn.segs[0].ps, gap = (a, b) => a.ps - b.ps;
+  sn.segs[5].hp = 0; sim.step(g, 1 / 60, {});
+  assert.equal(g.snakes.length, 1, 'never splits'); assert.equal(sn.segs.length, len - 1);
+  assert.ok(g.events.some(e => e.t === 'kill') && g.pickups.length >= 1 && g.events.some(e => e.t === 'close'));
+  run(g, 2, {});
+  for (let i = 0; i < sn.segs.length - 1; i++) assert.ok(Math.abs(gap(sn.segs[i], sn.segs[i + 1]) - (sn.segs[i].r + sn.segs[i + 1].r) * 0.78) < 0.6, 'neighbours touch again');
+  assert.ok(sn.segs[0].ps < headPs - 20, 'the face slid back with the front cells');
 });
 
-ok('killing the head promotes the next segment', () => {
+ok('the face cannot be hit or targeted until it is the last cell; then it pops and the chapter clears', () => {
   const g = sim.createGame({ seed: 4 });
-  const s = g.snakes[0], second = s.segs[1];
-  s.segs[0].hp = 0; sim.step(g, 1 / 60, {});
-  assert.equal(g.snakes.length, 1); assert.equal(g.snakes[0].segs[0], second);
+  const sn = g.snakes[0], face = sn.segs[0]; sn.speed = 0.01;
+  assert.ok(face.shield && face.isHead);
+  bringNear(g, 120); g.p.x = face.x; g.p.hp = g.p.maxHp = 1e6; g.p.iframes = 1e6;
+  run(g, 4, {});
+  assert.equal(face.hp, 1, 'shots and weapons pass through the face'); assert.ok(face.shield);
+  for (const q of sn.segs.slice(1)) q.hp = 0;
+  sim.step(g, 1 / 60, {});
+  assert.equal(g.snakes.length, 0, 'the face pops once it is alone');
+  assert.ok(g.events.some(e => e.t === 'kill' && e.head) && ['clear', 'levelup'].includes(g.phase));
 });
 
-ok('a segment that reaches the membrane leaks: hurts even through i-frames, drops nothing', () => {
+ok('if the face reaches the membrane it drains HP until you finish the cells; each kill pushes it back', () => {
   const g = sim.createGame({ seed: 5 });
-  const s = g.snakes[0], h = s.segs[0];
-  g.p.iframes = 5; const hp0 = g.p.hp, kills0 = g.kills, pick0 = g.pickups.length;
-  h.ps = g.path.len + 1; sim.step(g, 1 / 60, {});
-  assert.ok(g.p.hp < hp0, 'leak damage ignores i-frames');
-  assert.equal(g.leaks, 1); assert.equal(g.kills, kills0); assert.equal(g.pickups.length, pick0);
-  assert.ok(g.events.some(e => e.t === 'leak') && !g.snakes.some(x => x.segs.includes(h)));
+  const sn = g.snakes[0], face = sn.segs[0];
+  g.p.iframes = 5; const hp0 = g.p.hp;
+  sn.tail = 1e9; sim.step(g, 1 / 60, {});
+  assert.ok(sn.breach, 'pinned at the membrane'); assert.ok(g.p.hp < hp0, 'breach damage ignores i-frames'); assert.ok(g.events.some(e => e.t === 'leak'));
+  assert.ok(face.ps <= g.path.len + 0.01, 'the face stops at the membrane');
+  const hp1 = g.p.hp; sn.speed = 0.01; run(g, 1.1, {}); assert.ok(g.p.hp < hp1 - 4, 'keeps draining');
+  const before = face.ps; for (const q of sn.segs.slice(1, 4)) q.hp = 0; run(g, 1, {});
+  assert.ok(face.ps < before - 80, 'killing cells pushes the face back off the membrane');
   assert.ok(sim.LINE_Y < H && LINE_Y === 1190);
 });
 
@@ -120,13 +131,11 @@ ok('the capsule never aims: it fires straight up, so you hit only what is above 
   run(g, 3, {});   // nothing above the cell yet: it still fires, straight up
   assert.ok(g.shots >= 3 && g.bullets.every(b => Math.abs(b.vx) < 1e-6 && b.vy < 0));
   assert.equal(g.p.aim, -Math.PI / 2);
-  // park the head right above the cell: the shots land. Park it far to the side: they miss.
-  const sn = g.snakes[0], hd = sn.segs[0]; sn.speed = 0.01;
-  for (const q of sn.segs) q.ps += 400 - hd.ps; run(g, 0.05, {});
-  g.p.x = hd.x; g.events.length = 0; const hp0 = hd.hp; run(g, 4, {});
-  assert.ok(hd.hp < hp0 && g.events.some(e => e.t === 'hit'), 'standing under it hits');
-  g.p.x = hd.x < W / 2 ? hd.x + 300 : hd.x - 300; run(g, 2, {}); g.events.length = 0; const hp1 = hd.hp; run(g, 4, {});   // (let shots already in flight land first)
-  assert.equal(hd.hp, hp1, 'standing away from it misses');
+  const sn = g.snakes[0]; sn.speed = 0.01; shiftChain(g, 900 - sn.segs[0].ps); run(g, 0.05, {});
+  const cell = sn.segs[3]; g.p.x = cell.x; g.events.length = 0; const hp0 = cell.hp; run(g, 5, {});
+  assert.ok(cell.hp < hp0 && g.events.some(e => e.t === 'hit'), 'standing under a cell hits it');
+  g.p.x = cell.x < W / 2 ? cell.x + 300 : cell.x - 300; run(g, 2, {}); g.events.length = 0; const hp1 = cell.hp; run(g, 4, {});   // (let shots in flight land first)
+  assert.equal(cell.hp, hp1, 'standing away from it misses');
 });
 
 ok('every weapon works at every level and hurts the virus', () => {
@@ -207,12 +216,12 @@ ok('contact hurts, grants i-frames; dying ends the run; Second Wind revives once
   const g = sim.createGame({ seed: 16 });
   g.snakes[0].speed = 0.01; const hd = g.snakes[0].segs[0]; g.p.zone = { x0: -500, x1: 2000, y0: -500, y1: 2000 }; g.p.x = hd.x; g.p.y = hd.y;
   const hp0 = g.p.hp; sim.step(g, 1 / 60, {}); assert.ok(g.p.hp < hp0 && g.p.iframes > 0);
-  const d = sim.createGame({ seed: 17 }); d.p.hp = 1; d.snakes[0].segs[0].ps = d.path.len + 1; sim.step(d, 1 / 60, {});
+  const d = sim.createGame({ seed: 17 }); d.p.hp = 1; d.snakes[0].tail = 1e9; sim.step(d, 1 / 60, {});
   assert.equal(d.phase, 'dead'); assert.ok(d.result && d.result.stage === 1 && d.result.name);
   const t = d.t; sim.step(d, 1 / 60, {}); assert.equal(d.t, t);
-  const r = sim.createGame({ seed: 17, meta: { rev: 1 } }); r.p.hp = 1; r.snakes[0].segs[0].ps = r.path.len + 1; sim.step(r, 1 / 60, {});
+  const r = sim.createGame({ seed: 17, meta: { rev: 1 } }); r.p.hp = 1; r.snakes[0].tail = 1e9; sim.step(r, 1 / 60, {});
   assert.equal(r.phase, 'play'); assert.ok(r.events.some(e => e.t === 'revive'));
-  const s = sim.createGame({ seed: 18 }); s.p.shield = 3; s.snakes[0].segs[0].ps = s.path.len + 1; sim.step(s, 1 / 60, {}); assert.equal(s.p.hp, s.p.maxHp);
+  const s = sim.createGame({ seed: 18 }); s.p.shield = 3; s.snakes[0].tail = 1e9; sim.step(s, 1 / 60, {}); assert.equal(s.p.hp, s.p.maxHp);
   s.p.shield = 0; s.p.hp = 10; s.pickups.push({ kind: 'heal', x: s.p.x, y: s.p.y, vx: 0, vy: 0, v: 1, age: 1, vac: true }, { kind: 'rage', x: s.p.x, y: s.p.y, vx: 0, vy: 0, v: 1, age: 1, vac: true });
   sim.step(s, 1 / 60, {}); assert.ok(s.p.hp > 10 && s.p.rage > 0);
 });
