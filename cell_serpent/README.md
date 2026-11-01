@@ -63,3 +63,15 @@ itself when frames run slow, then raises it again when it runs fast.
 - **Piggy Bank Parade**: a daily side stage (3 tries a day) with a parade of piggy banks that pays a lot of Beats. A win raises its tier.
 - **Checkpoint chests** drop at 25% and 50% progress and pay Beats even if the run is lost.
 - The shop has a cheap Spark Box and a Grand Spark Box (ten in one with a star prize). The hub deliberately explains very little.
+
+## The hub, round three (from the reference screenshots)
+
+- Tabs: Shop, Stats, Battle, Skills, Pets, Gear. Code split: `hub2.js` holds the shop, keepsake collection, character page and panels.
+- **Voice** (energy): a stage costs 5, it refills slowly (cap 32, rewards may overflow it), the 50% chest gives 10 back. The Piggy Bank Parade is free.
+- **Normal / Hard** per stage, with a recommended power. Hard has 2.4x cell HP and pays double.
+- **Gear**: keepsakes (Fine to Legendary) with fragments, levels and set bonuses, found in Keepsake Chests.
+- **Stats** is the character page: power, account level with Sparkle milestones, Volume / Pitch / Tempo cards.
+- **Shop**: daily treats with discounts and a refresh, a one-time Welcome Chest, a shop level that sweetens chests, a Beats store.
+- Battle side buttons: Sign in (7 days), Fan Fund (free stage rewards), Backstage tip jar (idle Beats), Fragment Swap.
+- In a run: speed readout, per-source damage panel (tap the bars icon), 25/50/100% chests on the bar, and Revive for Sparkles (3 times, knocks the snake back).
+- Balance: cells have about 25 to 40 shots of HP in stage 1 and capsule upgrades are small (common +8% speed, +12% damage).

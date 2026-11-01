@@ -55,6 +55,107 @@ export const PETS = [
 ];
 const PET = Object.fromEntries(PETS.map(p => [p.id, p]));
 export const petCost = star => (star === 0 ? 5 : 4 + 4 * star);   // fragments to own it, then for each star
+// Keepsakes: little treasures from backstage. Each level adds a permanent bonus; owning a whole set adds one more.
+export const KEEP_TIERS = [
+  { id: 'fine', name: 'Fine', color: '#4fd8f0', max: 5 },
+  { id: 'excellent', name: 'Excellent', color: '#6fe08a', max: 10 },
+  { id: 'superb', name: 'Superb', color: '#b06cff', max: 10 },
+  { id: 'legendary', name: 'Legendary', color: '#ffb04d', max: 10 },
+];
+export const KEEPSAKES = [
+  { id: 'mallet', name: 'Squeaky Mallet', tier: 3, stat: 'atk', per: 0.05, set: 'stage', icon: '🔨' },
+  { id: 'megaphone', name: 'Tiny Megaphone', tier: 3, stat: 'crit', per: 0.008, set: 'stage', icon: '📣' },
+  { id: 'ring', name: 'Mood Ring', tier: 2, stat: 'crit', per: 0.006, set: 'cozy', icon: '💍' },
+  { id: 'gourd', name: 'Beat Gourd', tier: 2, stat: 'coin', per: 0.04, set: 'snack', icon: '🪘' },
+  { id: 'wheel', name: 'Wheel Speaker', tier: 1, stat: 'speed', per: 0.02, set: 'stage', icon: '🎡' },
+  { id: 'scarf', name: 'Sparkle Scarf', tier: 1, stat: 'guard', per: 0.015, set: 'cozy', icon: '🧣' },
+  { id: 'vest', name: 'Stage Vest', tier: 1, stat: 'vit', per: 12, set: 'cozy', icon: '🦺' },
+  { id: 'stand', name: 'Mic Stand', tier: 1, stat: 'atk', per: 0.02, set: 'stage', icon: '🎙️' },
+  { id: 'glove', name: 'Jazz Hands', tier: 1, stat: 'cdn', per: 0.01, set: '', icon: '🧤' },
+  { id: 'clock', name: 'Tick Tock Turtle', tier: 1, stat: 'cdn', per: 0.012, set: 'snack', icon: '⏰' },
+  { id: 'soap', name: 'Bubble Soap', tier: 0, stat: 'guard', per: 0.01, set: 'snack', icon: '🧼' },
+  { id: 'milk', name: 'Oat Milk Carton', tier: 0, stat: 'vit', per: 8, set: 'snack', icon: '🥛' },
+  { id: 'tea', name: 'Iced Tea', tier: 0, stat: 'coin', per: 0.02, set: '', icon: '🧋' },
+  { id: 'jam', name: 'Berry Jam', tier: 0, stat: 'atk', per: 0.01, set: '', icon: '🫙' },
+];
+export const KEEP_SETS = [
+  { id: 'stage', name: 'Showtime', stat: 'atk', val: 0.1 },
+  { id: 'cozy', name: 'Cozy Dressing Room', stat: 'guard', val: 0.06 },
+  { id: 'snack', name: 'Snack Table', stat: 'coin', val: 0.15 },
+];
+const KEEP = Object.fromEntries(KEEPSAKES.map(k => [k.id, k]));
+export const keepMax = k => KEEP_TIERS[k.tier].max;
+export const keepCost = (k, lv) => Math.round((lv === 0 ? 2 : 4 + 3 * lv) * (1 + 0.6 * k.tier));
+export function keepUp(save, id) {
+  const a = save.keeps[id], k = KEEP[id];
+  if (!a || a.lv >= keepMax(k) || a.frag < keepCost(k, a.lv)) return false;
+  a.frag -= keepCost(k, a.lv); a.lv++; return true;
+}
+export const keepCanUp = (save, id) => { const a = save.keeps[id], k = KEEP[id]; return !!a && a.lv < keepMax(k) && a.frag >= keepCost(k, a.lv); };
+export const KEEP_PRICE = 80;   // Sparkles for one draw; the ten-draw is 10% cheaper
+export function openKeepChest(save, n = 1, rand = Math.random) {
+  const price = n === 10 ? KEEP_PRICE * 9 : KEEP_PRICE * n;
+  if (save.sparkles < price) return null;
+  save.sparkles -= price;
+  const got = {}, W = [50, 30, 15, 5];
+  for (let i = 0; i < n; i++) {
+    let r = rand() * 100, t = 0; for (; t < 3; t++) { r -= W[t]; if (r <= 0) break; }
+    const pool = KEEPSAKES.filter(k => k.tier === t), k = pool[Math.floor(rand() * pool.length)], c = 1 + Math.floor(rand() * 3);
+    got[k.id] = (got[k.id] || 0) + c;
+  }
+  if (n === 10) { const k = KEEPSAKES.filter(q => q.tier >= 2)[Math.floor(rand() * 4)]; got[k.id] = (got[k.id] || 0) + 4; }
+  for (const id of Object.keys(got)) save.keeps[id].frag += got[id];
+  return Object.entries(got).map(([id, n2]) => ({ id, n: n2 })).sort((a, b) => b.n - a.n);
+}
+export function keepBonus(lvs) {   // lvs: id -> level
+  const b = { atk: 0, vit: 0, coin: 0, guard: 0, crit: 0, cdn: 0, speed: 0 };
+  for (const k of KEEPSAKES) b[k.stat] += k.per * ((lvs && lvs[k.id]) || 0);
+  for (const set of KEEP_SETS) if (KEEPSAKES.filter(k => k.set === set.id).every(k => ((lvs && lvs[k.id]) || 0) > 0)) b[set.stat] += set.val;
+  return b;
+}
+// Account level: every run teaches you something.
+export const levelNeed = lv => Math.round(60 * Math.pow(lv, 1.35));
+export function levelInfo(xp) { let lv = 1, left = xp; while (left >= levelNeed(lv)) { left -= levelNeed(lv); lv++; } return { lv, cur: left, need: levelNeed(lv) }; }
+export const levelReward = lv => (lv % 10 === 0 ? { sparkles: 15 * (lv / 10) + 15 } : lv % 5 === 0 ? { sparkles: 10 } : null);
+// Energy ("Voice"): a run costs 5, it comes back slowly, and the half-way chest gives some back.
+export const ENERGY_MAX = 32, ENERGY_COST = 5, ENERGY_REGEN = 180, ENERGY_BACK = 10;
+export function tickEnergy(save, now) {
+  const e = save.energy; if (!e.t) e.t = now;
+  if (e.n >= ENERGY_MAX) { e.t = now; return e.n; }
+  const gain = Math.floor((now - e.t) / (ENERGY_REGEN * 1000));
+  if (gain > 0) { e.n = Math.min(ENERGY_MAX, e.n + gain); e.t += gain * ENERGY_REGEN * 1000; if (e.n >= ENERGY_MAX) e.t = now; }
+  return e.n;
+}
+export function spendEnergy(save, now, cost = ENERGY_COST) { if (tickEnergy(save, now) < cost) return false; if (save.energy.n >= ENERGY_MAX) save.energy.t = now; save.energy.n -= cost; return true; }
+export const addEnergy = (save, n) => { save.energy.n += n; };   // rewards may push it past the cap
+export function buyEnergy(save, now) { if (save.sparkles < 10) return false; save.sparkles -= 10; addEnergy(save, 10); return true; }
+// Stage difficulty: Hard has much tougher cells and pays double.
+export const HARD_HP = 2.4;
+export const recPower = (stage, hard) => Math.round(160 * Math.pow(stage, 1.2) * (hard ? 2.2 : 1));
+// Daily sign-in, seven days round and round.
+export const SIGN_DAYS = [{ beats: 200 }, { eggs: 1 }, { sparkles: 10 }, { energy: 10 }, { beats: 500 }, { eggs: 1 }, { sparkles: 30 }];
+export function claimSign(save, day) {
+  if (save.sign.day === day) return null;
+  const r = SIGN_DAYS[save.sign.n % 7]; save.sign.day = day; save.sign.n++;
+  save.beats += r.beats || 0; save.sparkles += r.sparkles || 0; save.eggs += r.eggs || 0; addEnergy(save, r.energy || 0);
+  return r;
+}
+// The backstage chest slowly fills with Beats while you are away (up to 8 hours).
+export const idleRate = save => 40 + 12 * (save.cleared || 0);   // Beats per hour
+export const idleAmount = (save, now) => Math.floor(idleRate(save) * Math.min(8, Math.max(0, (now - save.idle.t) / 3600000)));
+export function claimIdle(save, now) { const n = idleAmount(save, now); if (n < 1) return 0; save.beats += n; save.idle.t = now; return n; }
+// The Fan Club Fund: free rewards for stages you clear.
+export const FUND = [3, 5, 8, 10, 15, 20, 25, 30, 40, 50].map((st, i) => ({ stage: st, reward: i % 3 === 0 ? { sparkles: 20 + 4 * i } : i % 3 === 1 ? { eggs: 1 } : { energy: 15 } }));
+export const fundReady = (save, f) => save.cleared >= f.stage && !save.fund[f.stage];
+export function claimFund(save, stage) {
+  const f = FUND.find(x => x.stage === stage); if (!f || !fundReady(save, f)) return false;
+  save.fund[stage] = 1; save.sparkles += f.reward.sparkles || 0; save.eggs += f.reward.eggs || 0; addEnergy(save, f.reward.energy || 0); return true;
+}
+// Fragment exchange: three of one skill become two of another.
+export function exchangeFrags(save, from, to) {
+  if (from === to || !save.skills[from] || !save.skills[to] || save.skills[from].frag < 3) return false;
+  save.skills[from].frag -= 3; save.skills[to].frag += 2; return true;
+}
 // Rarity of an upgrade choice. Every pick raises your luck, so better rarities slowly become likelier;
 // one of the three cards is always common.
 export const RARITIES = [
@@ -67,7 +168,7 @@ export const RARITIES = [
 ];
 const RARITY_BASE = [100, 32, 11, 3.2, 1, 0.3];
 export const LUCK_MAX = 30;
-export const rarityWeights = luck => RARITY_BASE.map((w, t) => w * Math.exp(0.045 * t * Math.min(LUCK_MAX, Math.max(0, luck))));
+export const rarityWeights = luck => RARITY_BASE.map((w, t) => w * Math.exp(0.03 * t * Math.min(LUCK_MAX, Math.max(0, luck))));
 export function rollRarity(rand, luck) {
   const w = rarityWeights(luck); let r = rand() * w.reduce((x, y) => x + y, 0);
   for (let t = 0; t < w.length; t++) { r -= w[t]; if (r <= 0) return t; }
@@ -76,18 +177,18 @@ export function rollRarity(rand, luck) {
 // The capsule is the cell's own gun; its upgrades are the first thing you are offered.
 // vals[rarity] is what one pick adds; cap is the most a run can stack.
 export const CAPSULE_UPS = [
-  { id: 'aspd', name: 'Faster Tempo', max: 12, w: 1.2, vals: [15, 25, 40, 60, 90, 140], cap: 400, fmt: v => '+' + v + '% attack speed', desc: '+15% attack speed' },
-  { id: 'notes', name: 'Harmony', max: 5, w: 1.0, vals: [1, 1, 2, 2, 3, 4], cap: 5, fmt: v => '+' + v + ' note' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 note per shot, side by side' },
-  { id: 'burst', name: 'Echo', max: 3, w: 0.9, vals: [1, 1, 2, 2, 3, 3], cap: 3, fmt: v => '+' + v + ' burst' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 burst per shot, a quick echo of the notes' },
-  { id: 'cdmg', name: 'Volume Up', max: 12, w: 1.2, vals: [30, 50, 80, 130, 200, 320], cap: 900, fmt: v => '+' + v + '% capsule damage', desc: '+30% capsule damage' },
+  { id: 'aspd', name: 'Faster Tempo', max: 12, w: 1.2, vals: [8, 12, 18, 26, 38, 55], cap: 300, fmt: v => '+' + v + '% attack speed', desc: '+15% attack speed' },
+  { id: 'notes', name: 'Harmony', max: 5, w: 1.0, vals: [1, 1, 1, 2, 2, 3], cap: 5, fmt: v => '+' + v + ' note' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 note per shot, side by side' },
+  { id: 'burst', name: 'Echo', max: 3, w: 0.9, vals: [1, 1, 1, 2, 2, 2], cap: 3, fmt: v => '+' + v + ' burst' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 burst per shot, a quick echo of the notes' },
+  { id: 'cdmg', name: 'Volume Up', max: 12, w: 1.2, vals: [12, 18, 28, 42, 65, 100], cap: 600, fmt: v => '+' + v + '% capsule damage', desc: '+30% capsule damage' },
 ];
 export const PASSIVES = [
-  { id: 'power', name: 'Loud Vocals', max: 8, w: 0.9, vals: [20, 35, 55, 85, 130, 200], cap: 400, fmt: v => '+' + v + '% damage for every skill', desc: '+20% damage for every skill', apply: () => {} },
-  { id: 'haste', name: 'Tempo Up', max: 8, w: 0.9, vals: [10, 16, 24, 36, 50, 70], cap: 60, fmt: v => 'Every skill recharges ' + v + '% faster', desc: 'Every skill recharges 10% faster', apply: () => {} },
-  { id: 'crit', name: 'Perfect Pitch', max: 8, w: 0.7, vals: [8, 12, 18, 26, 38, 55], cap: 60, fmt: v => '+' + v + '% crit chance', desc: '+8% crit chance for the capsule and needles', apply: (p, v) => { p.crit += v / 100; } },
-  { id: 'vital', name: 'Warm Up', max: 8, w: 0.7, vals: [30, 50, 80, 120, 180, 280], cap: 99999, fmt: v => '+' + v + ' max HP and heal ' + v, desc: '+30 max HP and heal 30', apply: (p, v) => { p.maxHp += v; p.hp = Math.min(p.maxHp, p.hp + v); } },
+  { id: 'power', name: 'Loud Vocals', max: 8, w: 0.9, vals: [8, 12, 18, 28, 42, 65], cap: 300, fmt: v => '+' + v + '% damage for every skill', desc: '+20% damage for every skill', apply: () => {} },
+  { id: 'haste', name: 'Tempo Up', max: 8, w: 0.9, vals: [5, 7, 10, 15, 20, 28], cap: 50, fmt: v => 'Every skill recharges ' + v + '% faster', desc: 'Every skill recharges 10% faster', apply: () => {} },
+  { id: 'crit', name: 'Perfect Pitch', max: 8, w: 0.7, vals: [3, 4, 6, 9, 13, 18], cap: 40, fmt: v => '+' + v + '% crit chance', desc: '+8% crit chance for the capsule and needles', apply: (p, v) => { p.crit += v / 100; } },
+  { id: 'vital', name: 'Warm Up', max: 8, w: 0.7, vals: [20, 30, 45, 70, 100, 150], cap: 99999, fmt: v => '+' + v + ' max HP and heal ' + v, desc: '+30 max HP and heal 30', apply: (p, v) => { p.maxHp += v; p.hp = Math.min(p.maxHp, p.hp + v); } },
   { id: 'guard', name: 'Ear Plugs', max: 6, w: 0.6, vals: [15, 22, 30, 40, 50, 60], cap: 60, fmt: v => 'Breaches hurt ' + v + '% less', desc: 'Breaches hurt 15% less', apply: (p, v) => { p.guard = Math.min(0.8, p.guard + v / 100); } },
-  { id: 'speed', name: 'Dance Shoes', max: 6, w: 0.6, vals: [12, 18, 26, 36, 50, 70], cap: 100, fmt: v => '+' + v + '% move speed', desc: '+12% move speed', apply: (p, v) => { p.speed *= 1 + v / 100; } },
+  { id: 'speed', name: 'Dance Shoes', max: 6, w: 0.6, vals: [6, 9, 13, 18, 25, 35], cap: 60, fmt: v => '+' + v + '% move speed', desc: '+12% move speed', apply: (p, v) => { p.speed *= 1 + v / 100; } },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
 const CAP_UP = Object.fromEntries(CAPSULE_UPS.map(u => [u.id, u]));
@@ -117,7 +218,7 @@ export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
   const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0 };
-  return { v: 5, loadout: [...WEAPON_STARTERS], pets, petEquip: [], prog: {}, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
+  return { v: 6, loadout: [...WEAPON_STARTERS], pets, petEquip: [], prog: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0 }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -136,8 +237,14 @@ export function sanitizeSave(raw) {
   for (const p of PETS) { const r = raw.pets && raw.pets[p.id]; if (r) { s.pets[p.id].star = Math.min(PET_MAX_STAR, num(r.star)); s.pets[p.id].frag = num(r.frag); } }
   if (Array.isArray(raw.petEquip)) s.petEquip = raw.petEquip.filter((id, i, a) => PET[id] && s.pets[id].star > 0 && a.indexOf(id) === i).slice(0, PET_SLOTS);
   if (raw.eggs !== undefined) s.eggs = num(raw.eggs); else if (raw.runs) s.eggs = 1;
-  s.login = num(raw.login);
-  if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
+  s.login = num(raw.login); s.hardCleared = Math.min(s.cleared, num(raw.hardCleared)); s.xp = num(raw.xp);
+  if (raw.energy && typeof raw.energy === 'object') s.energy = { n: Math.min(999, num(raw.energy.n, ENERGY_MAX)), t: num(raw.energy.t) };
+  for (const k of KEEPSAKES) { const r = raw.keeps && raw.keeps[k.id]; if (r) { s.keeps[k.id].lv = Math.min(keepMax(k), num(r.lv)); s.keeps[k.id].frag = num(r.frag); } }
+  if (raw.sign && typeof raw.sign === 'object') s.sign = { day: num(raw.sign.day), n: num(raw.sign.n) };
+  if (raw.idle && typeof raw.idle === 'object') s.idle = { t: num(raw.idle.t) };
+  if (raw.fund && typeof raw.fund === 'object') for (const f of FUND) if (raw.fund[f.stage]) s.fund[f.stage] = 1;
+  if (raw.shop && typeof raw.shop === 'object') { const sh = raw.shop; s.shop = { welcome: sh.welcome ? 1 : 0, day: num(sh.day), refresh: num(sh.refresh), free: num(sh.free), xp: num(sh.xp), gold: num(sh.gold), bought: {} }; for (const k of Object.keys(sh.bought || {})) if (sh.bought[k]) s.shop.bought[k] = 1; }
+  if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^h?\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
   if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
   const lo = Array.isArray(raw.loadout) ? raw.loadout.filter((id, i, a) => WEAPON[id] && s.skills[id].lv > 0 && a.indexOf(id) === i).slice(0, LOADOUT_SIZE) : [];
   if (lo.length) s.loadout = lo; else if (Array.isArray(raw.loadout)) s.loadout = [...WEAPON_STARTERS].filter(id => s.skills[id].lv > 0).slice(0, LOADOUT_SIZE);
@@ -146,7 +253,7 @@ export function sanitizeSave(raw) {
 // One big number for how strong the account is.
 export function power(save) {
   const sum = o => Object.values(o).reduce((a, x) => a + x, 0);
-  return Math.round(100 + 60 * sum(save.meta) + 45 * Object.values(save.skills).reduce((a, k) => a + k.lv, 0) + 80 * Object.values(save.pets).reduce((a, k) => a + k.star, 0));
+  return Math.round(100 + 60 * sum(save.meta) + 45 * Object.values(save.skills).reduce((a, k) => a + k.lv, 0) + 80 * Object.values(save.pets).reduce((a, k) => a + k.star, 0) + 35 * Object.values(save.keeps).reduce((a, k) => a + k.lv, 0) + 20 * levelInfo(save.xp).lv);
 }
 export function buyMeta(save, id) {
   const d = META.find(m => m.id === id);
@@ -205,6 +312,7 @@ export function petBonus(pets) {   // permanent, whether the pet is equipped or 
 export function dayLogin(save, day) {
   let fresh = false;
   if (save.login !== day) { save.login = day; save.eggs++; fresh = true; }
+  if (save.shop.day !== day) save.shop = { ...save.shop, day, refresh: 0, bought: {}, free: 0 };
   if (!save.pig || save.pig.day !== day) save.pig = { day, left: 3, best: (save.pig && save.pig.best) || 0 };
   return fresh;
 }
@@ -225,6 +333,49 @@ export function levelSkill(save, id) {
   k.frag -= c.frag; k.lv++;
   return true;
 }
+// ---- the shop: a daily deal board, a welcome chest, a Beats store, and a shop level that sweetens the chests
+export const shopLevel = xp => { let lv = 1, left = xp; while (left >= 300 * lv) { left -= 300 * lv; lv++; } return { lv, cur: left, need: 300 * lv }; };
+export function dealsFor(save, day) {
+  const R = rng(day * 131 + (save.shop.refresh || 0) * 7 + 1), pick = a => a[Math.floor(R() * a.length)];
+  const out = [{ kind: 'sparkles', n: 10, off: 100, price: 0, cur: 'sparkles' }];
+  const offs = [90, 80, 70, 50];
+  for (let i = 1; i < 5; i++) {
+    const t = pick(['frag', 'frag', 'keep', 'egg', 'energy', 'beats']), off = pick(offs);
+    let d;
+    if (t === 'frag') { const w = pick(WEAPONS); d = { kind: 'frag', ref: w.id, n: 3, base: 24 }; }
+    else if (t === 'keep') { const k = pick(KEEPSAKES.filter(q => q.tier < 3)); d = { kind: 'keep', ref: k.id, n: 2, base: 30 }; }
+    else if (t === 'egg') d = { kind: 'egg', n: 1, base: 70 };
+    else if (t === 'energy') d = { kind: 'energy', n: 10, base: 12 };
+    else d = { kind: 'beats', n: 800, base: 30 };
+    out.push({ ...d, off, price: Math.max(2, Math.ceil(d.base * (1 - off / 100))), cur: 'sparkles' });
+  }
+  return out;
+}
+export function buyDeal(save, day, i) {
+  const d = dealsFor(save, day)[i];
+  if (!d || save.shop.bought[i] || save.sparkles < d.price) return false;
+  save.sparkles -= d.price; save.shop.bought[i] = 1;
+  if (d.kind === 'sparkles') save.sparkles += d.n; else if (d.kind === 'frag') save.skills[d.ref].frag += d.n; else if (d.kind === 'keep') save.keeps[d.ref].frag += d.n;
+  else if (d.kind === 'egg') save.eggs += d.n; else if (d.kind === 'energy') addEnergy(save, d.n); else save.beats += d.n;
+  return true;
+}
+export function refreshDeals(save) {
+  const cost = save.shop.free ? 5 : 0;
+  if (save.sparkles < cost) return false;
+  save.sparkles -= cost; save.shop.free = 1; save.shop.refresh++; save.shop.bought = {}; return true;
+}
+export const welcomeReady = save => (save.cleared || 0) >= 5 && !save.shop.welcome;
+export function claimWelcome(save) { if (!welcomeReady(save)) return false; save.shop.welcome = 1; save.eggs += 4; save.sparkles += 100; save.beats += 3000; return true; }
+export const GOLD_PACKS = [
+  { id: 'bit', name: 'A bit of Beats', beats: 150, price: 0 },
+  { id: 'bag', name: 'A bag of Beats', beats: 700, price: 40 },
+  { id: 'box', name: 'A box of Beats', beats: 2600, price: 120 },
+];
+export function buyGold(save, id, day) {
+  const p = GOLD_PACKS.find(x => x.id === id); if (!p) return false;
+  if (!p.price) { if (save.shop.gold === day) return false; save.shop.gold = day; } else { if (save.sparkles < p.price) return false; save.sparkles -= p.price; }
+  save.beats += p.beats; return true;
+}
 // Opens a loot box: pays, adds fragments, returns [{id, n}] sorted by amount.
 export function openBox(save, boxId, rand = Math.random) {
   const b = BOXES.find(x => x.id === boxId);
@@ -239,6 +390,9 @@ export function openBox(save, boxId, rand = Math.random) {
   };
   const featured = b.feature ? pick(!!b.top) : null;
   for (let i = 0; i < b.frags; i++) { const id = i < b.feature ? featured : pick(); got[id] = (got[id] || 0) + 1; }
+  const extra = Math.floor(b.frags * 0.04 * (shopLevel(save.shop.xp).lv - 1)), bonusId = featured || pick();
+  if (extra) got[bonusId] = (got[bonusId] || 0) + extra;
+  save.shop.xp += b.frags;
   for (const id of Object.keys(got)) save.skills[id].frag += got[id];
   return Object.entries(got).map(([id, n]) => ({ id, n })).sort((a, b) => b.n - a.n);
 }
@@ -275,9 +429,15 @@ export const canPlay = (save, n) => n >= 1 && n <= save.cleared + 1;
 export const clearReward = n => ({ sparkles: (isBossStage(n) ? 40 : 15) + 3 * n });
 // Applies a finished run to the save and returns what was earned.
 export function applyResult(save, r) {
-  const out = { beats: r.coins, sparkles: 0, first: false, egg: false, frags: r.frags || {} };
+  const out = { beats: r.coins, sparkles: 0, first: false, egg: false, levelUps: 0, frags: r.frags || {} };
+  const lv0 = levelInfo(save.xp).lv; save.xp += Math.round((r.kills || 0) + 25 * (r.stage || 1) * (r.won ? 2 : 1) * (r.hard ? 1.5 : 1));
+  const lv1 = levelInfo(save.xp).lv; out.levelUps = lv1 - lv0;
+  for (let l = lv0 + 1; l <= lv1; l++) { const rw = levelReward(l); if (rw) { save.sparkles += rw.sparkles; out.sparkles += rw.sparkles; } }
+  if (r.cp50) addEnergy(save, ENERGY_BACK);
   save.beats += r.coins; save.runs++; save.kills += r.kills;
   for (const id of Object.keys(out.frags)) save.skills[id].frag += out.frags[id];
+  if (r.hard && r.won && r.mode !== 'pig') { save.prog['h' + r.stage] = 100; if (r.stage > save.hardCleared) { save.hardCleared = r.stage; const sp = Math.round(clearReward(r.stage).sparkles * 1.5); save.sparkles += sp; out.sparkles += sp; out.first = true; save.eggs++; out.egg = true; } return out; }
+  if (r.hard && r.mode !== 'pig') { save.prog['h' + r.stage] = Math.max(save.prog['h' + r.stage] || 0, Math.floor((r.progress || 0) * 100)); return out; }
   if (r.mode !== 'pig' && r.stage) save.prog[r.stage] = Math.max(save.prog[r.stage] || 0, r.won ? 100 : Math.floor((r.progress || 0) * 100));
   if (r.mode === 'pig') { if (r.won) { save.pig.best = Math.max(save.pig.best, r.stage); save.eggs++; out.egg = true; } return out; }
   if (r.won) {
@@ -289,9 +449,9 @@ export function applyResult(save, r) {
 
 // ---------------------------------------------------------------- stages
 export const isBossStage = n => n % 5 === 0;
-export const hpBase = n => 12 * (14 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
+export const hpBase = n => 12 * (26 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
 export const snakeLength = n => Math.min(150, 32 + 4 * (n - 1) + (isBossStage(n) ? 12 : 0));
-export const arrivalTime = n => Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) + (isBossStage(n) ? 24 : 0);   // seconds for the face to reach the membrane if you do nothing
+export const arrivalTime = n => 1.5 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) + (isBossStage(n) ? 36 : 0);   // seconds for the face to reach the membrane if you do nothing
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
 export const SKINS = ['love', 'rust', 'sneezy', 'grumpy', 'sleepy', 'disco', 'sour', 'mighty', 'frosty', 'gloomy'];
 export const skinFor = n => SKINS[(n - 1) % SKINS.length];
@@ -367,11 +527,12 @@ export function pointAt(path, s) {
 }
 
 // ---------------------------------------------------------------- player
+const mergeBonus = (a, b) => { const o = { ...a }; for (const k of Object.keys(b)) o[k] = (o[k] || 0) + b[k]; return o; };
 export function makePlayer(metaLv, pb, equip) {
-  const m = id => (metaLv && metaLv[id]) || 0, b = pb || { atk: 0, vit: 0, coin: 0, guard: 0, crit: 0, cdn: 0 }, eq = id => (equip && equip.includes(id) ? 1 : 0);
+  const m = id => (metaLv && metaLv[id]) || 0, b = Object.assign({ atk: 0, vit: 0, coin: 0, guard: 0, crit: 0, cdn: 0, speed: 0 }, pb || {}), eq = id => (equip && equip.includes(id) ? 1 : 0);
   const maxHp = 100 + 12 * m('vit') + b.vit;
   return {
-    x: W / 2, y: ROW_Y, r: 16, kx: 0, maxHp, hp: maxHp, speed: 300 * (1 + 0.15 * eq('hamster')), guard: Math.min(0.5, b.guard),
+    x: W / 2, y: ROW_Y, r: 16, kx: 0, maxHp, hp: maxHp, speed: 300 * (1 + 0.15 * eq('hamster')) * (1 + b.speed), guard: Math.min(0.5, b.guard),
     atk: 1 + 0.10 * m('atk') + b.atk, crit: 0.05 + 0.02 * m('crt') + b.crit, critMul: 2.5 + 0.08 * m('crt'), cdBase: Math.max(0.4, 1 - 0.05 * m('cdn') - b.cdn),
     rate: 2.0, bspeed: 900,
     coinMul: 1 + 0.1 * m('for') + b.coin + 0.1 * eq('piglet'), revive: m('rev') > 0 ? 1 : 0,
@@ -399,7 +560,7 @@ const spacing = (a, b) => (a.r + b.r) * 0.78;
 
 function spawnSnake(g, n) {
   const pig = g.mode === 'pig', boss = isBossStage(n), len = pig ? 40 : snakeLength(n), segs = [];
-  const hpB = pig ? hpBase(1 + 2 * n) * 0.5 : hpBase(n);
+  const hpB = (pig ? hpBase(1 + 2 * n) * 0.5 : hpBase(n)) * (g.hard ? HARD_HP : 1);
   let ps = 240;   // the face starts just inside the top edge
   for (let i = 0; i < len; i++) {
     const kind = pickKind(g, n, boss, i, len), r = segRadius(boss, i, len);
@@ -450,7 +611,7 @@ export function createGame(opts = {}) {
   const loadout = (opts.loadout || Object.keys(unlocked)).filter(id => unlocked[id]).slice(0, LOADOUT_SIZE);
   const g = {
     rand: rng(opts.seed || 1), t: 0, phase: 'play', stage: 0, sid: 0, path: null,
-    p: makePlayer(opts.meta, petBonus(opts.pets), opts.petEquip), mode: opts.mode || '', coinK: opts.mode === 'pig' ? 6 : 1, pets: (opts.petEquip || []).slice(0, PET_SLOTS), petStars: opts.pets || {}, petT: {}, snakes: [], bullets: [], vq: [], pickups: [], zones: [], maws: [], towers: [],
+    p: makePlayer(opts.meta, mergeBonus(petBonus(opts.pets), keepBonus(opts.arts)), opts.petEquip), mode: opts.mode || '', hard: !!opts.hard, revivesLeft: 3, revivesUsed: 0, dmgBy: {}, src: '', coinK: (opts.mode === 'pig' ? 6 : 1) * (opts.hard ? 2 : 1), pets: (opts.petEquip || []).slice(0, PET_SLOTS), petStars: opts.pets || {}, petT: {}, snakes: [], bullets: [], vq: [], pickups: [], zones: [], maws: [], towers: [],
     events: [], ups: {}, val: {}, weap: {}, unlocked, skillLv, loadout,
     level: 1, cells: 0, upgradeLeft: 0, pending: 0, choices: [], resume: 'play', rerolls: 4,
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
@@ -488,8 +649,10 @@ function nearestTarget(g, x, y, maxD = 1e9) {
 }
 const frontSegs = g => g.snakes.map(sn => sn.segs[0]).filter(s => s && visible(s));
 
+const damageSegAs = (src, g, ...a) => { g.src = src; damageSeg(g, ...a); g.src = ''; };
 function damageSeg(g, s, dmg, crit, x, y) {
   if (s.hp <= 0 || s.shield || s.wave) return;
+  const srcId = g.src || 'capsule'; g.dmgBy[srcId] = (g.dmgBy[srcId] || 0) + Math.min(dmg, s.hp);
   s.hp -= dmg; s.flash = 0.12;
   g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s });
 }
@@ -508,7 +671,7 @@ function petTick(g, dt) {
   for (const id of g.pets) {
     const t = (g.petT[id] = (g.petT[id] || 0) + dt), n = st(id);
     if (id === 'kitten' && t > 20 - 2 * n) { g.petT[id] = 0; for (const w of Object.values(g.weap)) w.cd = 0; g.events.push({ t: 'pet', id }); }
-    else if (id === 'puppy' && t > 11) { g.petT[id] = 0; const all = g.snakes.flatMap(sn => sn.segs).filter(q => visible(q) && !q.shield && q.hp > 0).sort((a, b) => b.y - a.y).slice(0, 2 + (n >= 3 ? 1 : 0)); for (const q of all) damageSeg(g, q, dmgMul(g) * (3 + n), false, q.x, q.y); g.events.push({ t: 'pet', id }); }
+    else if (id === 'puppy' && t > 11) { g.petT[id] = 0; const all = g.snakes.flatMap(sn => sn.segs).filter(q => visible(q) && !q.shield && q.hp > 0).sort((a, b) => b.y - a.y).slice(0, 2 + (n >= 3 ? 1 : 0)); for (const q of all) damageSegAs('puppy', g, q, dmgMul(g) * (3 + n), false, q.x, q.y); g.events.push({ t: 'pet', id }); }
     else if (id === 'lamb' && t > 24 - 2 * n) { g.petT[id] = 0; p.shield = Math.max(p.shield, 3); g.events.push({ t: 'pet', id }); }
     else if (id === 'turtle' && t > 10) { g.petT[id] = 0; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * (0.03 + 0.01 * n)); g.events.push({ t: 'pet', id }); }
   }
@@ -566,8 +729,18 @@ function hurtPlayer(g, dmg, fx, fy) {
     } else { p.hp = 0; g.phase = 'dead'; g.result = makeResult(g, false); g.events.push({ t: 'dead' }); }
   }
 }
+export const reviveCost = used => 10 * (used + 1);
+// Revive: back up with half HP and the whole snake knocked back.
+export function reviveGame(g) {
+  if (g.phase !== 'dead' || g.revivesLeft < 1) return false;
+  g.revivesLeft--; g.revivesUsed++; g.phase = 'play'; g.result = null;
+  g.p.hp = Math.round(g.p.maxHp * 0.6); g.p.iframes = 3;
+  for (const sn of g.snakes) { sn.tail -= 520; for (const q of sn.segs) q.ps -= 520; sn.breach = false; sn.breachT = 0; }
+  g.events.push({ t: 'revive' });
+  return true;
+}
 function makeResult(g, won) {
-  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, progress: g.progress, frags: { ...g.frags } };
+  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
 }
 // the face has reached the membrane and is chewing through it: HP drains until you finish the cells
 // behind it (each kill pushes the face back off the membrane)
@@ -739,7 +912,7 @@ function updateWeapons(g, dt, canFire) {
       vis.sort((a, b) => b.hp - a.hp);
       for (let k = 0; k < 1 + Math.floor((L + 1) / 2); k++) {
         const s = vis[Math.floor(g.rand() * Math.min(vis.length, 5))];
-        damageSeg(g, s, Math.max(1.8 * (1 + 0.3 * L) * dm('satellite'), s.max * (0.02 + 0.008 * L) * Math.min(dm('satellite') / 10, 3)), false, s.x, s.y);
+        damageSegAs('satellite', g, s, Math.max(1.8 * (1 + 0.3 * L) * dm('satellite'), s.max * (0.02 + 0.008 * L) * Math.min(dm('satellite') / 10, 3)), false, s.x, s.y);
         g.events.push({ t: 'strike', x: s.x, y: s.y });
       }
       w.cd = (3.6 - 0.25 * L) * cm;
@@ -758,7 +931,7 @@ function updateWeapons(g, dt, canFire) {
     p.orbAng += dt * (3.2 + 0.2 * dl);
     for (let i = 0; i < 1 + dl; i++) {
       const pos = daggerPos(g, i);
-      eachTarget(g, s => { if (s.orbCd <= 0 && Math.hypot(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSeg(g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } });
+      eachTarget(g, s => { if (s.orbCd <= 0 && Math.hypot(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } });
     }
   }
   // massage stick (sweeping bar)
@@ -768,7 +941,7 @@ function updateWeapons(g, dt, canFire) {
       const sg = stickSeg(g, k);
       eachTarget(g, s => {
         if (s.orbCd > 0) return;
-        if (distToSeg(s.x, s.y, sg.x0, sg.y0, sg.x1, sg.y1) < s.r + 12) { s.orbCd = 0.35; damageSeg(g, s, 1.8 * (1 + 0.35 * sl) * dm('stick'), false, s.x, s.y); }
+        if (distToSeg(s.x, s.y, sg.x0, sg.y0, sg.x1, sg.y1) < s.r + 12) { s.orbCd = 0.35; damageSegAs('stick', g, s, 1.8 * (1 + 0.35 * sl) * dm('stick'), false, s.x, s.y); }
       });
     }
   }
@@ -780,13 +953,13 @@ function updateWeapons(g, dt, canFire) {
       t.cd = (2.4 - 0.15 * tl) * cm; t.pulse = 0.5;
       const R = 170 + 18 * tl;
       g.events.push({ t: 'pulse', x: t.x, y: t.y, r: R });
-      eachTarget(g, s => { if (Math.hypot(s.x - t.x, s.y - t.y) < R + s.r) damageSeg(g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); });
+      eachTarget(g, s => { if (Math.hypot(s.x - t.x, s.y - t.y) < R + s.r) damageSegAs('tower', g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); });
     }
   }
   // swab zones tick
   for (let i = g.zones.length - 1; i >= 0; i--) {
     const z = g.zones[i]; z.life -= dt; z.tick -= dt;
-    if (z.tick <= 0) { z.tick = 0.25; eachTarget(g, s => { if (Math.hypot(s.x - z.x, s.y - z.y) < z.r + s.r) damageSeg(g, s, z.dmg, false, s.x, s.y); }); }
+    if (z.tick <= 0) { z.tick = 0.25; eachTarget(g, s => { if (Math.hypot(s.x - z.x, s.y - z.y) < z.r + s.r) damageSegAs('swab', g, s, z.dmg, false, s.x, s.y); }); }
     if (z.life <= 0) g.zones.splice(i, 1);
   }
   // maws execute
@@ -796,7 +969,7 @@ function updateWeapons(g, dt, canFire) {
       m.tick = 0.2;
       eachTarget(g, s => {
         if (Math.hypot(s.x - m.x, s.y - m.y) >= m.r + s.r) return;
-        if (s.hp <= s.max * m.exec) damageSeg(g, s, s.hp + 1, false, s.x, s.y); else damageSeg(g, s, m.dmg, false, s.x, s.y);
+        if (s.hp <= s.max * m.exec) damageSegAs('maw', g, s, s.hp + 1, false, s.x, s.y); else damageSegAs('maw', g, s, m.dmg, false, s.x, s.y);
       });
     }
     if (m.life <= 0) g.maws.splice(i, 1);
@@ -902,7 +1075,7 @@ export function step(g, dt, input) {
       for (const sn of g.snakes) for (const s of sn.segs) {
         if (dead || s.hp <= 0 || s.shield || s.wave || b.hit.includes(s) || Math.hypot(s.x - b.x, s.y - b.y) >= s.r + b.r) continue;
         b.hit.push(s);
-        damageSeg(g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g);
+        damageSegAs(({ needle: 'needles', snot: 'dragon', bubble: 'bubble' })[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g);
         if (b.slow) sn.slow = Math.max(sn.slow, b.slow);
         if (b.splash > 0) {
           const sd = b.dmg * (b.kind === 'bubble' ? 2.2 : 0.5);
