@@ -60,6 +60,16 @@
   .chips{display:flex;gap:8px;overflow-x:auto;width:100%;padding:4px 2px;touch-action:pan-x} .chip{flex:none;min-width:46px;height:46px;border-radius:12px;border:3px solid var(--line);background:#231a55;color:#fff;font:inherit;font-weight:900;font-size:17px;cursor:pointer} .chip.sel{background:var(--pink);color:#1b0a24} .chip.lock{opacity:.35} .chip.done{border-color:var(--lime)}
   .info{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;color:var(--dim);font-size:14px} .info b{color:#fff}
   .duo{width:min(150px,38vw);filter:drop-shadow(0 8px 14px rgba(0,0,0,.5))}
+  /* end-of-round screen: everything fits on one phone screen without scrolling */
+  #result{gap:8px;justify-content:center;padding-top:calc(10px + env(safe-area-inset-top));padding-bottom:calc(10px + env(safe-area-inset-bottom));overflow:hidden}
+  #result h2{margin:0;font-size:clamp(20px,5.4vh,30px);text-align:center;line-height:1.1}
+  #result .hero{height:clamp(84px,17vh,170px);width:auto;max-width:60vw;object-fit:contain}
+  #result .sub{font-size:13px;line-height:1.25;max-width:92vw;text-align:center;margin:0}
+  #result .stars{font-size:clamp(22px,4.6vh,32px);letter-spacing:4px;line-height:1}
+  #result .result-list{flex-direction:row;flex-wrap:wrap;justify-content:center;gap:6px 8px;font-size:14px;max-width:94vw}
+  #result .result-list .r{padding:4px 10px;border-radius:99px;background:rgba(255,255,255,.1);gap:5px;font-size:14px} #result .result-list img{width:22px;height:22px}
+  #result .rextra{grid-template-columns:repeat(4,auto);justify-content:center;gap:2px 14px;font-size:12px;margin:0;width:auto;max-width:94vw;text-align:center} #result .rextra span:last-child{grid-column:1/-1}
+  #result .btn{padding:11px 24px;font-size:18px;min-width:0;width:min(320px,86vw)} #result .row{display:flex;gap:10px;width:min(320px,86vw)} #result .row .btn{flex:1;width:auto;padding:10px 8px;font-size:15px}
   .result-list{display:flex;flex-direction:column;gap:8px;align-items:center;font-size:18px;font-weight:800}
   .result-list .r{display:flex;align-items:center;gap:8px} .result-list img{width:30px;height:30px;object-fit:contain}
   .loot{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:420px}
@@ -98,7 +108,7 @@
 
   /* hub, part two */
   .cur.e{display:flex;align-items:center;gap:6px} .plus{appearance:none;border:0;width:24px;height:24px;border-radius:8px;background:linear-gradient(180deg,#fff3b0,#ffc83d);font-weight:900;color:#5a3410;cursor:pointer;padding:0}
-  #toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,20px);max-width:86vw;background:rgba(10,8,30,.92);border:2px solid var(--line);color:#fff;font-weight:800;padding:10px 16px;border-radius:14px;opacity:0;pointer-events:none;transition:.25s;z-index:30;text-align:center} #toast.on{opacity:1;transform:translate(-50%,0)}
+  #toast{position:fixed;left:50%;top:calc(8px + env(safe-area-inset-top));transform:translate(-50%,-20px);max-width:86vw;background:rgba(10,8,30,.92);border:2px solid var(--line);color:#fff;font-weight:800;padding:10px 16px;border-radius:14px;opacity:0;pointer-events:none;transition:.25s;z-index:30;text-align:center} #toast.on{opacity:1;transform:translate(-50%,0)}
   .side{display:flex;gap:8px;margin-bottom:6px;overflow-x:auto;width:100%;padding:6px 4px 4px;scrollbar-width:none}.side::-webkit-scrollbar{display:none} .sidebtn{position:relative;appearance:none;border:2px solid rgba(255,255,255,.2);background:var(--glass);color:#fff;font:inherit;font-weight:800;font-size:11px;border-radius:14px;padding:6px 10px;min-width:70px;cursor:pointer} .sidebtn b{display:block;font-size:22px}
   .alert{position:absolute;top:-6px;right:-4px;background:#ff3d5a;border-radius:50%;width:18px;height:18px;font-style:normal;font-weight:900;font-size:12px;display:grid;place-items:center}
   .diffrow{display:flex;gap:8px;align-items:center;justify-content:center;margin:6px 0} .dbtn{appearance:none;border:2px solid rgba(255,255,255,.25);background:rgba(0,0,0,.3);color:var(--dim);font:inherit;font-weight:900;border-radius:12px;padding:7px 16px;cursor:pointer} .dbtn.on{color:#10131c;background:#9dff6d;border-color:#9dff6d} .dbtn.hard.on{background:#b06cff;border-color:#b06cff;color:#fff} .dbtn[disabled]{opacity:.5} .rec{font-size:12px;color:var(--dim);font-weight:800}
@@ -233,7 +243,7 @@
 
 <section class="scr" id="result">
   <h2 id="rTitle">THE VIRUS WINS</h2>
-  <img class="hero" id="rImg" src="assets/duo_idle.png" style="width:min(200px,46vw)" alt="">
+  <img class="hero" id="rImg" src="assets/duo_idle.png" alt="">
   <div class="sub" id="rSub"></div>
   <div class="stars" id="rStars"></div>
   <div class="result-list" id="rList"></div>
