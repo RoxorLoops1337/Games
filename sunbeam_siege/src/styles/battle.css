@@ -250,6 +250,7 @@ html.reduce-motion .b-vig.flash{animation-duration:.25s}
 .b-bottom{flex:0 0 auto;height:clamp(180px,30vh,310px);display:grid;grid-template-columns:152px 1fr 152px;grid-template-rows:auto 1fr;grid-template-areas:"left prompt right" "left hand right";
   gap:2px 10px;padding:4px 10px 6px;position:relative;z-index:10}
 .b-status{display:contents}
+.b-extras{display:contents}
 .b-status .sp{display:none}
 .b-left{grid-area:left;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding-top:4px}
 .b-meters{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
@@ -322,36 +323,107 @@ html.reduce-motion .growth-row{animation:none}
 .keys .field{gap:14px} kbd{font:700 .9em var(--font-mono);background:#140f26;border:2px solid var(--ui-border-hi);border-bottom-width:4px;border-radius:4px;padding:1px 8px;white-space:nowrap}
 .pause .field label{font-weight:600}
 
-/* ====================== PHONE PORTRAIT ====================== */
-.battle[data-mode=phone] .b-top{height:42px;gap:6px;padding:0 6px}
+/* ====================== PHONE PORTRAIT ======================
+   Top to bottom: slim status bar, the house at full width (the hero), a one line Garden strip, one resource row (Zoomies, piles, End Turn
+   in the thumb zone), then the hand as a shallow fan of 4 to 5 readable cards. Prompts and abilities float over the Garden strip. */
+.ck-main,.ck-sub{display:contents}
+.battle[data-mode=phone]{max-height:100dvh;--res-h:50px;--ts:min(var(--text-scale),1.2)} /* phone chrome follows the text size setting, capped so the bars keep their shape */
+.battle[data-mode=phone] .b-top{height:auto;min-height:52px;padding-top:4px;padding-bottom:4px;gap:6px;padding:0 8px;background:linear-gradient(#2d2354,var(--ui-panel))}
 .battle[data-mode=phone] .b-helpbtn{display:none}
-.battle[data-mode=phone] .ck-msg{display:none}
-.battle[data-mode=phone] .b-clock{padding:2px 8px;gap:5px}
-.battle[data-mode=phone] .b-clock small{display:none}
-.battle[data-mode=phone] .b-clock.hot::after{content:"!";font-weight:900;color:#c3ccff}
-.battle[data-mode=phone] .b-relic{width:28px;height:28px}
-.battle[data-mode=phone] .b-main{padding:4px 6px 0;flex:0 0 auto}
+.battle[data-mode=phone] .b-top>.btn{flex:none;min-width:46px;min-height:42px;height:42px;padding:2px 4px;gap:1px;flex-direction:column;align-items:center;justify-content:center;border-radius:8px}
+.battle[data-mode=phone] .b-top>.btn::after{display:block;font:800 10px/1 var(--font-display);letter-spacing:.06em;text-transform:uppercase;color:var(--ui-text-dim)}
+.battle[data-mode=phone] .b-top>.btn[aria-label="Pause menu"]::after{content:"Menu"}
+.battle[data-mode=phone] .b-top>.btn[aria-label="Battle log"]::after{content:"Log"}
+.battle[data-mode=phone] .b-deckbtn{display:grid;grid-template-columns:auto auto;column-gap:4px;justify-content:center;align-content:center}
+.battle[data-mode=phone] .b-deckbtn::after{content:"Deck";grid-column:1/-1;text-align:center}
+.battle[data-mode=phone] .b-deckn{font-size:14px}
+.battle[data-mode=phone] .b-clock{flex:0 1 auto;min-width:0;min-height:42px;padding:3px 10px 3px 8px;gap:7px;border-radius:10px;justify-content:flex-start;overflow:hidden}
+.battle[data-mode=phone] .ck-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.battle[data-mode=phone] .ck-r{white-space:nowrap;line-height:1.05} .battle[data-mode=phone] .ck-r b{font-size:calc(14px*var(--ts))}
+.battle[data-mode=phone] .ck-r small{display:inline;font-size:calc(11px*var(--ts))}
+.battle[data-mode=phone] .ck-sub{display:flex;align-items:center;gap:6px;min-width:0}
+.battle[data-mode=phone] .ck-msg{display:inline;font-size:calc(11px*var(--ts));font-weight:800;white-space:nowrap;letter-spacing:.02em}
+.battle[data-mode=phone] .ck-pips i{width:8px;height:8px}
+.battle[data-mode=phone] .b-clock.hot{background:#1d1a52;border-color:#8a9aff}
+.battle[data-mode=phone] .b-relics{padding:4px 0;gap:6px;touch-action:pan-x}
+.battle[data-mode=phone] .b-relic{width:30px;height:30px}
+.battle[data-mode=phone] .b-main{padding:6px 4px 0;flex:0 0 auto}
 .battle[data-mode=phone] .b-scenecol{flex:none;width:100%}
 .battle[data-mode=phone] .b-wrap{flex:none}
-.battle[data-mode=phone] .b-bottom{height:auto;flex:1 1 0;min-height:0;grid-template-columns:1fr 76px;grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"status status" "prompt prompt" "hand end";gap:0 6px;padding:2px 6px calc(6px + var(--safe-b))}
-.battle[data-mode=phone] .b-status{display:flex;grid-area:status;align-items:center;gap:6px;min-height:46px}
-.battle[data-mode=phone] .b-status .sp{display:block;flex:1}
-.battle[data-mode=phone] .b-left{display:flex;flex-direction:row;align-items:center;gap:6px;padding:0}
-.battle[data-mode=phone] .b-meters{flex-direction:row;align-items:center;gap:5px;flex-wrap:nowrap}
-.battle[data-mode=phone] .b-right{padding:0;gap:6px}
-.battle[data-mode=phone] .b-end{grid-area:end;height:96px;align-self:end}
-.battle[data-mode=phone] .b-status{min-height:46px;gap:6px}
-.battle[data-mode=phone] .b-handwrap{min-height:0}
-.battle[data-mode=phone] .b-pile{width:34px;height:46px} .battle[data-mode=phone] .b-pile i{width:28px;height:40px}
-.battle[data-mode=phone] .orb{width:20px;height:20px;border-width:2px} .battle[data-mode=phone] .b-orbs{gap:3px;padding:3px 7px 3px 4px}
-.battle[data-mode=phone] .b-end{font-size:calc(15px*var(--text-scale));margin:4px 0;padding:.3em}
-.battle[data-mode=phone] .b-garden{min-height:30px;padding:2px 6px;margin-top:2px}
-.battle[data-mode=phone] .g-pest{width:26px;height:26px}
-.battle[data-mode=phone] .b-nip .nip-bar i{width:5px}
-.battle[data-mode=phone] .b-nip,.battle[data-mode=phone] .b-bank{padding:3px 7px;font-size:.78em;gap:4px}
-.battle.lefty[data-mode=phone] .b-bottom{grid-template-columns:76px 1fr;grid-template-areas:"status status" "prompt prompt" "end hand"}
-.battle[data-mode=phone] .b-prompt{margin-bottom:2px;padding:3px 8px;font-size:.92em;flex-wrap:wrap}
+.battle[data-mode=phone] .b-stage{border-radius:10px;border-color:#5a4a8a;box-shadow:0 0 0 1px #0a0716,0 6px 16px rgba(0,0,0,.45)}
+.battle[data-mode=phone] .b-warm{width:calc(var(--u)*90)}
+.battle[data-mode=phone] .b-flabel{font-size:calc(11px*min(var(--ts),1.1));padding:0 8px;border-radius:4px}
+.battle[data-mode=phone] .b-garden{min-height:34px;padding:2px 10px;margin-top:5px;gap:7px;border-radius:10px;background:linear-gradient(rgba(27,42,58,.95),rgba(20,32,46,.95));border-color:#2c4660}
+.battle[data-mode=phone] .g-label{font-size:11px;margin-right:2px}
+.battle[data-mode=phone] .g-empty{font-size:12px}
+.battle[data-mode=phone] .g-pest{width:28px;height:28px}
+.battle[data-mode=phone] .b-log{top:calc(54px + var(--safe-t))}
+
+/* bottom block: [resource row | End Turn] over [hand] */
+.battle[data-mode=phone] .b-bottom{position:relative;display:grid;height:auto;flex:1 1 auto;min-height:var(--hand-h,150px);grid-template-columns:minmax(0,1fr) auto auto auto auto;grid-template-rows:auto var(--res-h) var(--hand-h,150px);
+  align-content:end;gap:0;padding:6px 8px 8px}
+.battle[data-mode=phone] .b-status,.battle[data-mode=phone] .b-left,.battle[data-mode=phone] .b-right,.battle[data-mode=phone] .b-meters{display:contents}
+.battle[data-mode=phone] .b-status .sp{display:none}
+.battle[data-mode=phone] .b-extras{display:flex;grid-row:1;grid-column:1/-1;flex-wrap:wrap;gap:0 6px;align-items:center}
+.battle[data-mode=phone] .b-extras>:not(.hidden){margin-bottom:6px}
+.battle[data-mode=phone] .b-orbs{grid-row:2;grid-column:1;justify-self:start;align-self:center}
+.battle[data-mode=phone] .b-pile{grid-row:2;grid-column:2;align-self:center;width:40px;height:52px;margin:0 0 0 6px;transform:none}
+.battle[data-mode=phone] .b-pile.exhaust{grid-column:3}
+.battle[data-mode=phone] .b-pile.discard{grid-column:4}
+.battle[data-mode=phone] .b-pile i{width:30px;height:38px;border-radius:5px}
+.battle[data-mode=phone] .b-pile .pb3{left:2px;top:5px} .battle[data-mode=phone] .b-pile .pb2{left:5px;top:3px} .battle[data-mode=phone] .b-pile .pb1{left:8px;top:1px}
+.battle[data-mode=phone] .b-pile::after{content:"Draw";position:absolute;left:-4px;right:-4px;bottom:0;text-align:center;font:800 10px/1 var(--font-display);letter-spacing:.04em;color:var(--ui-text-dim);text-transform:uppercase}
+.battle[data-mode=phone] .b-pile.discard::after{content:"Discard"} .battle[data-mode=phone] .b-pile.exhaust::after{content:"Burnt"}
+.battle[data-mode=phone] .b-pile .pn{right:-3px;top:-3px;bottom:auto;min-width:22px;font-size:12px}
+.battle[data-mode=phone] .b-orbs{gap:3px;padding:4px 10px 4px 6px;min-height:38px;max-width:100%;border-radius:12px;background:linear-gradient(#241a45,#1a1333)}
+.battle[data-mode=phone] .orb{width:23px;height:23px;border-width:2px;flex:0 1 23px;min-width:15px}
+.battle[data-mode=phone] .orbn{font-size:calc(16px*var(--ts));margin-left:4px}
+.battle[data-mode=phone] .b-nip,.battle[data-mode=phone] .b-bank{padding:3px 8px;font-size:12px;gap:5px;min-height:30px}
+.battle[data-mode=phone] .b-nip .nip-bar i{width:5px;height:12px}
+.battle[data-mode=phone] .b-end{grid-row:2;grid-column:5;align-self:center;justify-self:end;margin-left:8px;display:grid;grid-template-columns:auto auto;column-gap:.3em;justify-content:center;align-content:center;
+  min-width:108px;height:46px;margin:0;padding:0 18px;border-radius:99px;font-size:calc(16px*var(--ts));font-weight:900;letter-spacing:.02em;line-height:1.1}
+.battle[data-mode=phone] .b-end.glow::after{content:"Nothing left to play";grid-column:1/-1;text-align:center;font-size:10px;font-weight:800;letter-spacing:.02em;opacity:.8;white-space:nowrap;line-height:1}
+.battle[data-mode=phone] .b-end.glow{height:50px;box-shadow:0 3px 0 var(--btn-lo),0 5px 0 var(--ui-shadow),0 0 14px 2px rgba(255,209,138,.55)}
+.battle.lefty[data-mode=phone] .b-bottom{grid-template-columns:auto minmax(0,1fr) auto auto auto}
+.battle.lefty[data-mode=phone] .b-end{grid-column:1;justify-self:start;margin:0 8px 0 0}
+.battle.lefty[data-mode=phone] .b-orbs{grid-column:2}
+.battle.lefty[data-mode=phone] .b-pile{grid-column:3} .battle.lefty[data-mode=phone] .b-pile.exhaust{grid-column:4} .battle.lefty[data-mode=phone] .b-pile.discard{grid-column:5}
+
+/* prompt and ability tray float over the Garden strip so the hand never resizes */
+.battle[data-mode=phone] .b-pw{grid-area:auto;position:absolute;left:8px;right:8px;top:0;transform:translateY(calc(-100% - 4px));display:flex;flex-direction:column;align-items:stretch;gap:4px;z-index:130;pointer-events:none}
+.battle[data-mode=phone] .b-pw>*{pointer-events:auto}
+.battle[data-mode=phone] .b-prompt{margin:0;padding:4px 10px;min-height:48px;flex:none;border-radius:12px;font-size:calc(14px*var(--ts));flex-wrap:wrap;background:rgba(35,26,61,.97);box-shadow:0 6px 16px rgba(0,0,0,.55)}
 .battle[data-mode=phone] .b-prompt .insp{width:100%}
+.battle[data-mode=phone] .b-tray{background:rgba(20,15,38,.9);border-radius:12px;padding:3px}
+.battle[data-mode=phone] .b-tray .btn{min-height:40px}
+
+/* the hand: a shallow fan, 4 to 5 cards at once. Stats move to the left of the type ribbon so a card overlapped on its right edge still shows them. */
+.battle[data-mode=phone] .b-handwrap{grid-row:3;grid-column:1/-1;min-height:0}
+.battle[data-mode=phone] .b-hand .card{bottom:8px;height:calc(var(--cw)*var(--card-ar,1.4))}
+.battle[data-mode=phone] .b-hand .card.sz-hand{font-size:calc(var(--cw)*.104)}
+.battle[data-mode=phone] .b-hand .card .c-head{min-height:2.1em;padding-left:2.3em}
+.battle[data-mode=phone] .b-hand .card .c-name,.battle[data-mode=phone] .b-hand .card .c-name.long,.battle[data-mode=phone] .b-hand .card .c-name.xlong{font-size:.98em;white-space:normal;line-height:1.02;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.battle[data-mode=phone] .b-hand .card .c-name.xlong{font-size:.86em}
+.battle[data-mode=phone] .b-hand .card .c-art{flex-basis:29%}
+.battle[data-mode=phone] .b-hand .card .c-ribbon{padding:.1em .3em;gap:.25em}
+.battle[data-mode=phone] .b-hand .card .c-ribbon .c-stat{order:-1;font-size:1.3em;padding:0 .2em}
+.battle[data-mode=phone] .b-hand .card .c-ribbon .c-stat.hp{margin-right:.2em}
+.battle[data-mode=phone] .b-hand .card .c-ribbon .sp{display:none}
+.battle[data-mode=phone] .b-hand .card .c-text{font-size:.98em;padding:.25em .35em;line-height:1.18}
+.battle[data-mode=phone] .b-hand .card .c-text.t-sm{font-size:.9em} .battle[data-mode=phone] .b-hand .card .c-text.t-xs{font-size:.82em}
+.battle[data-mode=phone] .b-hand .card .c-foot{display:none}
+.battle[data-mode=phone] .b-hand .card.playable:not(.selected){--lift:-8px}
+.battle[data-mode=phone] .b-hand .card.unaff:not(.selected){--lift:4px}
+.battle[data-mode=phone] .b-hand .card.selected{--lift:-30px;--sc:1.14}
+
+@media (max-height:700px){
+  .battle[data-mode=phone] .b-top{min-height:46px}
+  .battle[data-mode=phone] .b-top>.btn{height:38px;min-height:38px}
+  .battle[data-mode=phone] .b-clock{min-height:38px}
+  .battle[data-mode=phone]{--res-h:46px}
+  .battle[data-mode=phone] .b-garden{min-height:30px;margin-top:3px}
+  .battle[data-mode=phone] .b-log{top:calc(46px + var(--safe-t))}
+}
 
 /* short landscape screens: use the desktop layout, tighter */
 html.short .battle[data-mode=desktop] .b-bottom{height:clamp(120px,34vh,210px);grid-template-columns:120px 1fr 112px}
@@ -433,3 +505,6 @@ html.reduce-motion .b-ring,html.reduce-motion .b-ghost,html.reduce-motion .b-zon
 .battle[data-mode=desktop] .b-flabel{font-size:calc(var(--hud)*1.02);justify-content:center;padding:0;width:calc(var(--u)*60);letter-spacing:.16em}
 .battle[data-mode=desktop] .b-room{border-width:2px;border-radius:5px}
 .battle[data-mode=desktop] .b-room.filled{background:rgba(122,83,38,.7)}
+
+/* while a card is being dragged the aim label above the card says where it lands, so the prompt bar must not cover the bottom floor */
+.b-dragging .b-prompt{opacity:0;pointer-events:none;transition:none}
