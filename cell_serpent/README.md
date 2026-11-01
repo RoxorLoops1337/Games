@@ -11,7 +11,9 @@ A Cell Survivor - Shoot Defense style game, with RoxorLoops & Jasmin as the cell
 - The snake is **one connected chain**. A destroyed cell is removed and the cells in front slide back to close the gap,
   so it just gets shorter and every kill pushes the face away from the membrane.
 - The **face is shielded** (no HP, cannot be targeted) until every other cell is gone, then it pops and the stage is cleared.
-  If the face reaches the membrane it drains HP until you finish the cells behind it.
+  **There are no hit points**: RoxorLoops and Jasmin stand below the line. The moment the face touches the line the run is over, and you can
+  spend Sparkles to revive (it knocks the snake back). Stamina, Warm Up and Ear Plugs became slowing and push-back effects: Stamina and
+  Calm Down slow the snake, Door Stopper and the Lamb push it back, the Turtle and the hush pickup slow it for a while.
 - Snakes are long (32 cells in stage 1, growing by 4 per stage, 150 max). Lane shapes include tall hairpins, big lobes and castle steps.
 - About one cell in 15 carries a **chest** (at least two): aim for them first. Chests give Beats and a skill fragment.
 - Upgrades come only from the **yellow upgrade cells** (a star on a yellow cell, about one per 7 cells, at least 4 per
