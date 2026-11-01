@@ -9,6 +9,7 @@ import * as AE from './art_entities.js';
 import * as AW from './art_world.js';
 import * as K from './doodle_kit.js';
 import * as DH from './doodle_hud.js';
+import * as DD from './doodle_depth.js';
 import { R } from './battle.js';
 
 const C = K.C, INK = C.ink, TAU = Math.PI * 2;
@@ -41,7 +42,7 @@ function rrectStroke(ctx, x, y, w, h, r, col, lw, alpha, dash, march) {
 // ---------------------------------------------------------------------------------------------------- board
 export function drawBoard(b, ctx, t, beat) {
   const run = b.run, fx = b.fx;
-  AW.drawBoard(ctx, run.map.id, run.world.id, t, { beat, slotHint: b.slotHint, hoverSlot: b.hoverSlot ? [b.hoverSlot.c, b.hoverSlot.r] : null, dropSlot: b.targetSlot != null ? [b.targetSlot % COLS, Math.floor(b.targetSlot / COLS)] : null });
+  AW.drawBoard(ctx, run.map.id, run.world.id, t, { beat, slotHint: b.slotHint, hoverSlot: b.hoverSlot ? [b.hoverSlot.c, b.hoverSlot.r] : null, dropSlot: b.targetSlot != null ? [b.targetSlot % COLS, Math.floor(b.targetSlot / COLS)] : null, skin: b.skin });
   AW.drawStageBase(ctx, run.world.id, run.map.base.x, run.map.base.y, { t, hp: run.stageFrac, hit: Math.max(0, b.hurtFlash), beat, studio: (b.prof && b.prof.studio) || null });
   drawGates(b, ctx, t);
   // selected range: a pale tinted disc with a marching dashed crayon edge
@@ -75,9 +76,16 @@ export function drawBoard(b, ctx, t, beat) {
     }
     AE.drawTurret(ctx, tu.type, tu.level, tu.x, tu.y, {
       t, ang: tu.ang, fire: Math.max(0, tu.fire), jammed: tu.jam > 0, buff: tu.auraRate > 0 ? 'rate' : tu.auraDmg > 0 ? 'dmg' : null,
-      selected: tu.id === b.selected, alpha: hidden ? 0.3 : 1, spawn: clamp(age / 0.25, 0, 1),
+      selected: tu.id === b.selected, alpha: hidden ? 0.3 : tu.stolen > 0 ? 0.4 : 1, spawn: clamp(age / 0.25, 0, 1),
     });
+    if (!hidden) {
+      DD.drawTurretMark(b, ctx, tu, t); DD.drawOverclock(b, ctx, tu, t);
+      if (tu.branch) DD.drawBranchMark(b, ctx, tu);
+      else if (tu.id === b.selected && b.panelCards) ring(ctx, tu.x, tu.y, 42, C.gold, 4, t, { dash: [10, 7], march: t * 24, alpha: 0.9, seed: tu.id + 5 });
+      if (!tu.branch && run.canBranch(tu)) DD.drawBranchBadge(b, ctx, tu, t);
+    }
   }
+  DD.drawDarkLane(b, ctx, t);
   drawLinks(b, ctx, t);
   // enemies: bosses get a marching dashed threat ring, elites a coloured ring
   const en = run.enemies.slice().sort((a, c) => (a.flying - c.flying) || (a.y - c.y));
@@ -86,6 +94,7 @@ export function drawBoard(b, ctx, t, beat) {
       const bc = BOSSES[e.type].color;
       ring(ctx, e.x, e.y + e.r * 0.5, e.r * 1.5, e.gated ? C.gold : bc, 4, t, { dash: [14, 10], march: t * 30, alpha: 0.55 + 0.25 * Math.sin(t * 5), seed: 1 });
       AE.drawBoss(ctx, e.type, e.x, e.y, { t, ang: e.ang, hp: e.hp / e.maxHp, hit: e.hitT > 0 ? e.hitT / 0.12 : 0, gated: e.gated, phase: e.phase, scale: e.r / BOSSES[e.type].r });
+      DD.drawBossMarks(b, ctx, e, t); DD.drawFrozenMark(b, ctx, e, t);
     } else {
       if (e.affix) ring(ctx, e.x, e.y, e.r * 1.45, AFFIX_COL[e.affix] || C.gold, 3, t, { dash: [8, 6], march: t * 22, alpha: 0.7 + 0.2 * Math.sin(t * 6 + e.id), seed: e.id });
       const sc = e.r / ENEMIES[e.type].r;
@@ -93,8 +102,10 @@ export function drawBoard(b, ctx, t, beat) {
         t, ang: e.ang, hp: e.hp / e.maxHp, hit: e.hitT > 0 ? e.hitT / 0.12 : 0, slow: e.slowT > 0 && e.slowAmt > 0, stun: e.stun > 0, burn: e.burnT > 0, mark: e.markT > 0,
         shield: e.shieldMax ? e.shield / e.shieldMax : 0, affix: e.affix, scale: sc, rage: e.rage, id: e.id,
       });
+      DD.drawFrozenMark(b, ctx, e, t);
     }
   }
+  DD.drawWorldFx(b, ctx, t);
   // projectiles: the doodle projectile and a ribbon trail, no glow
   for (const p of run.projectiles) {
     if (p.delay > 0) continue;
@@ -229,7 +240,17 @@ export function drawPanel(b, ctx, tu) {
     AE.drawTurretIconFlat(ctx, pp.partner, px, py, 26);
     if (linked.has(pp.partner)) { ctx.save(); ctx.fillStyle = C.pink; ctx.strokeStyle = INK; ctx.lineWidth = 1.6; heartPath(ctx, px + 12, py - 10, 6); ctx.fill(); ctx.stroke(); ctx.restore(); }
   });
+  const br = DD.branchOf(tu);
+  if (br) {   // the chosen upgrade path: emblem and name next to the level pips
+    DD.emblem(ctx, box.x + 190, box.y + 36, 11, br.glyph, def.color);
+    DH.text(ctx, fit(ctx, br.name, 96, 13), box.x + 206, box.y + 36, 13, '#d6358a', 'left');
+  }
   b.panel = { box, mode: isAttacker ? mode : { x: -99, y: -99, w: 0, h: 0 }, sell };
+  b.panelCards = false;
+  if (run.canBranch(tu) && !(b.drag && b.drag.moved)) {   // a prominent "Choose upgrade" sheet with two big cards
+    const lay = DD.drawBranchPanel(b, ctx, tu, box);
+    b.panel.cards = lay.cards; b.panel.sheet = lay.box; b.panelCards = true;
+  }
   ctx.restore();
 }
 
@@ -334,8 +355,9 @@ export function drawHud(b, ctx, t, beat) {
     const bx = 52, by = 112, bw2 = 436, bf = clamp(boss.hp / boss.maxHp, 0, 1);
     if (b.bossLag == null || b.bossLag < bf) b.bossLag = bf; else b.bossLag += (bf - b.bossLag) * 0.05;
     DH.glass(ctx, bx - 8, by - 6, bw2 + 16, 30, 12, { edge: C.red, glow: C.red, glowA: 0.35 });
-    DH.liquidBar(ctx, bx, by, bw2, 18, bf, boss.gated ? '#e0a21c' : C.red, boss.gated ? C.yellow : '#ff8a7a', t, { lag: b.bossLag, ticks: boss.type === 'playback' ? [0.33, 0.66] : null });
+    DH.liquidBar(ctx, bx, by, bw2, 18, bf, boss.gated ? '#e0a21c' : C.red, boss.gated ? C.yellow : '#ff8a7a', t, { lag: b.bossLag, ticks: DD.phaseTicks(b, boss) || (boss.type === 'playback' ? [0.33, 0.66] : null) });
     DH.text(ctx, BOSSES[boss.type].name.toUpperCase(), W / 2, by + 10, 13, '#fff', 'center');
+    DD.drawBossHud(b, ctx, boss, bx, by, bw2, t);
   } else b.bossLag = null;
   // bottom bar
   b.drawHero(ctx, 'roxor', R.heroR, t);
@@ -345,6 +367,7 @@ export function drawHud(b, ctx, t, beat) {
   rerollBtn(b, ctx, R.reroll, false, t); rerollBtn(b, ctx, R.rerollG, true, t);
   b.drawDeploy(ctx, t, beat);
   drawPool(b, ctx, t);
+  DD.drawModBadges(b, ctx, t);
   const slotsLeft = run.slotCapacity() - run.turrets.length;
   DH.text(ctx, run.turrets.length + '/' + run.slotCapacity(), 54, 849, 14, slotsLeft < 3 ? '#d4620a' : INK, 'center');
   DH.text(ctx, 'tiles', 54, 862, 10, DIM, 'center');
@@ -450,8 +473,8 @@ export function drawHero(b, ctx, who, c, t) {
   if (!ready) DH.text(ctx, Math.ceil(cd) + '', c.x, c.y, 26, '#fff', 'center');
   if (ready) ring(ctx, c.x, c.y, c.r + 6 + pulse * 3, col, 4, t, { dash: [10, 8], march: t * 26, alpha: 0.6 + pulse * 0.4, seed: who === 'roxor' ? 2 : 4 });
   ctx.restore();
-  const lab = who === 'roxor' ? 'BLAST' : 'SONG';
-  DH.text(ctx, ready ? lab : lab[0] + lab.slice(1).toLowerCase(), c.x, c.y + c.r + 12, 12, ready ? (who === 'roxor' ? '#2a8a30' : '#d6358a') : DIM, 'center');
+  const lab = DD.drawHeroTag(b, ctx, who, c, t);
+  DH.text(ctx, lab, c.x, c.y + c.r + 12, 12, ready ? (who === 'roxor' ? '#2a8a30' : '#d6358a') : DIM, 'center');
 }
 
 // ---------------------------------------------------------------------------------------------------- banner: a taped paper strip

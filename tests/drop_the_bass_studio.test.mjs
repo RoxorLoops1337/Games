@@ -70,4 +70,19 @@ for (let l = 1; l <= FAME_MAX; l++) ok(typeof fameTitle(l) === 'string' && fameT
 // ---- house rules
 const src = readFileSync(new URL('../drop_the_bass/js/doodle_env.js', import.meta.url), 'utf8');
 ok(!/Math\.random|Date\.now|performance\.now/.test(src) && !src.includes(String.fromCharCode(8212)), 'no randomness, clock or em dash in the env art');
+// ---- Studio hero levels unlock the Setlist hero moves; the wardrobe and skins are in the Band tab
+{
+  const M = await import('../drop_the_bass/js/meta.js');
+  const p = M.newProfile(1); p.records = 1e7;
+  ok(M.heroAbilityList(p, 'roxor').filter((a) => a.unlocked).length === 1, 'level 1: only the original move');
+  while (p.heroLv.roxor < 4) M.upgradeHero(p, 'roxor');
+  ok(M.heroAbilityList(p, 'roxor').filter((a) => a.unlocked).length === 2 && M.setHeroAbility(p, 'roxor', 'freeze').ok, 'hero level 4 unlocks the second move');
+  while (p.heroLv.roxor < 7) M.upgradeHero(p, 'roxor');
+  ok(M.heroAbilityList(p, 'roxor').every((a) => a.unlocked) && M.setHeroAbility(p, 'roxor', 'overclock').ok, 'hero level 7 unlocks the third move');
+  const q = M.migrate(JSON.parse(JSON.stringify(p)), 1); ok(q.heroAbility.roxor === 'overclock', 'the pick survives a save');
+  ok(M.outfitList(p, 'jasmin').length === 7 && M.outfitList(p, 'jasmin').every((o) => typeof o.how === 'string'), 'wardrobe rows for the Band tab');
+  p.diamonds = 500; const price = M.outfitList(p, 'jasmin').find((o) => o.id === 'rocker').price;
+  ok(M.buyOutfit(p, 'jasmin', 'rocker').ok && p.diamonds === 500 - price && p.outfits.worn.jasmin === 'rocker', 'outfit bought and worn with diamonds');
+  ok(M.buyOutfit(p, 'jasmin', 'beach').reason === 'locked', 'a story outfit stays locked until the stage is cleared');
+}
 console.log('drop_the_bass studio: ' + n + ' checks passed');

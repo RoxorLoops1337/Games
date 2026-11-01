@@ -318,4 +318,92 @@ const mockStore = (o = {}) => { const m = new Map(Object.entries(o)); return { g
   const lose = fresh(); const o4 = M.applyRunResult(lose, Object.assign({}, res, { won: false, cleared: 3 }), makeRng(5), NOW); ok(o4.challenge.first && !(lose.pendingCrates || []).length, 'a short loss still claims the week but earns no crate');
   ok(M.weeklyGig(r1, Date.UTC(2026, 10, 3)).done === true && M.weeklyGig(r1, Date.UTC(2026, 10, 10)).done === false, 'done flag follows the week');
 }
+// ---- Setlist: hero abilities, run modifiers, payout multipliers, Endless milestones, board skins, epilogues, new profile fields
+{
+  const p = fresh();
+  ok(p.heroAbility.roxor === 'blast' && p.heroAbility.jasmin === 'song' && Array.isArray(p.modifiers) && p.modifiers.length === 0 && p.modPin === false, 'new profile ability and modifier defaults');
+  ok(p.skins.owned.length === 1 && p.skins.owned[0] === 'skin_paper' && p.settings.skin === 'skin_paper' && p.settings.analytics === true && p.settings.skipSetlist === false, 'new profile skin and settings defaults');
+  ok(p.milestones && p.milestones.claimed && Array.isArray(p.milestones.cosmetics) && p.story.epilogues && typeof p.story.epilogues === 'object', 'new profile milestones and epilogues');
+  // an old save (no new fields) migrates to the defaults, bad values are cleaned
+  const old = M.migrate({ records: 9, stats: {}, prog: {}, settings: { analytics: undefined } }, NOW);
+  ok(old.settings.analytics === true && old.heroAbility.roxor === 'blast' && old.skins.owned.includes('skin_paper') && old.settings.skin === 'skin_paper' && old.modifiers.length === 0, 'old save migrates');
+  const dirty = M.migrate({ records: 9, stats: {}, heroAbility: { roxor: 'nope', jasmin: 'coinrain' }, modifiers: ['glass_stage', 'glass_stage', 'x', 'speedrun', 'lone_lane', 'cramped'], skins: { owned: ['skin_chalk', 'skin_nope'] }, settings: { skin: 'skin_midnight', analytics: false },
+    milestones: { claimed: { endless_25: true, bogus: true }, cosmetics: ['a', 'a', 5] }, story: { epilogues: { garage: true, nowhere: true } } }, NOW);
+  ok(dirty.heroAbility.roxor === 'blast' && dirty.heroAbility.jasmin === 'coinrain', 'ability ids validated');
+  ok(dirty.modifiers.join() === 'glass_stage,speedrun,lone_lane', 'modifiers deduped, known only, max 3');
+  ok(dirty.skins.owned.join() === 'skin_paper,skin_chalk' && dirty.settings.skin === 'skin_paper', 'an unowned equipped skin falls back to the default');
+  ok(dirty.settings.analytics === false && dirty.milestones.claimed.endless_25 && !dirty.milestones.claimed.bogus && dirty.milestones.cosmetics.join() === 'a', 'analytics, milestones kept and cleaned');
+  ok(dirty.story.epilogues.garage && !dirty.story.epilogues.nowhere, 'epilogue flags cleaned');
+  const rt = M.parseSave(M.serialize(dirty), NOW); ok(rt.skins.owned.length === 2 && rt.modifiers.length === 3, 'new fields survive a round trip');
+  ok(Object.keys(p.prog).length === WORLDS.length && WORLDS.length === 7 && M.worldStarsMax() === 7 * 3 * 6, 'seven worlds, stars max is data driven');
+
+  // hero abilities: locked until the hero level
+  const q = fresh();
+  ok(M.setHeroAbility(q, 'roxor', 'freeze').reason === 'locked' && q.heroAbility.roxor === 'blast', 'locked ability refused');
+  q.heroLv.roxor = 4; ok(M.setHeroAbility(q, 'roxor', 'freeze').ok && M.heroAbilitySetup(q).roxor === 'freeze', 'unlocked ability picked');
+  q.heroLv.roxor = 1; ok(M.heroAbilitySetup(q).roxor === 'blast', 'a pick that is no longer unlocked falls back');
+  ok(M.setHeroAbility(q, 'roxor', 'bogus').reason === 'unknown' && M.setHeroAbility(q, 'nobody', 'blast').reason === 'unknown', 'unknown ability refused');
+  const lst = M.heroAbilityList(q, 'jasmin'); ok(lst.length === 3 && lst[0].unlocked && !lst[1].unlocked && lst[1].unlockLv === 4 && lst[0].chosen, 'ability list');
+  const run = new Run({ world: 'garage', mode: 'story', seed: 4, heroAbility: M.heroAbilitySetup(q), heroLv: { roxor: 7, jasmin: 7 } }); ok(run.heroAbility.roxor === 'blast', 'the sim takes opts.heroAbility');
+
+  // modifiers: toggle, cap at 3, payout product, consumed unless pinned
+  const m = fresh();
+  ok(M.toggleModifier(m, 'glass_stage').on && M.toggleModifier(m, 'speedrun').on && M.toggleModifier(m, 'lone_lane').on, 'three modifiers on');
+  ok(M.toggleModifier(m, 'cramped').reason === 'full' && M.modifiersOf(m).length === 3, 'a fourth is refused');
+  ok(M.toggleModifier(m, 'speedrun').on === false && M.modifiersOf(m).length === 2, 'toggle off');
+  ok(M.toggleModifier(m, 'bogus').reason === 'unknown', 'unknown modifier');
+  const mul = M.modMulOf(['glass_stage', 'speedrun']); ok(Math.abs(mul.records - 1.4 * 1.3) < 0.001 && Math.abs(mul.diamonds - 1.3 * 1.2) < 0.001, 'payout multiplier is the product');
+  ok(M.modMulOf([]).records === 1 && M.modMulOf(['x']).fans === 1, 'no modifiers pay x1');
+  ok(M.modFlames('double_trouble') === 3 && M.modFlames('small_band') === 1 && M.modFlames('bogus') === 0, 'flames per modifier');
+  const used = M.consumeModifiers(m); ok(used.length === 2 && M.modifiersOf(m).length === 0, 'consumed when the run starts');
+  m.modPin = true; M.toggleModifier(m, 'speedrun'); ok(M.consumeModifiers(m).length === 1 && M.modifiersOf(m).length === 1, 'pinned modifiers stay');
+
+  // payout wiring: records, fans and diamonds multiplied, shown in out
+  const base = { won: true, world: 'garage', encore: 0, mode: 'story', cleared: 20, wave: 20, kills: 300, leaks: 0, merges: 40, deploys: 60, bossKills: 2, bossTypes: [], bestCombo: 10, coinsEarned: 5000, stars: 3, gems: 10 };
+  const a = fresh(), b = fresh();
+  const oa = M.applyRunResult(a, Object.assign({}, base), makeRng(8), NOW);
+  const ob = M.applyRunResult(b, Object.assign({}, base, { modifiers: ['glass_stage', 'speedrun'], modMul: M.modMulOf(['glass_stage', 'speedrun']) }), makeRng(8), NOW);
+  ok(ob.records === Math.round(oa.records * 1.82) && ob.fans === Math.round(oa.fans * 1.82) && ob.diamonds === Math.round(oa.diamonds * 1.56), 'modMul multiplies records, fans and diamonds');
+  ok(ob.modMul && ob.modMul.records === 1.82 && ob.modifiers.join() === 'glass_stage,speedrun' && oa.modMul === null && oa.modifiers.length === 0, 'out reports the multiplier and the modifiers');
+  const c = fresh(); const oc = M.applyRunResult(c, Object.assign({}, base, { modifiers: ['glass_stage'], modMul: { records: 1, fans: 1, diamonds: 1 } }), makeRng(8), NOW);
+  ok(oc.records === oa.records, 'a sim modMul of 1 changes nothing');
+  const dly = fresh(); const od = M.applyRunResult(dly, { won: true, world: 'garage', mode: 'daily', cleared: 15, wave: 15, kills: 100, leaks: 0, merges: 1, deploys: 1, bossKills: 0, bossTypes: [], bestCombo: 1, coinsEarned: 1, stars: 3, modifiers: ['glass_stage'], modMul: { records: 1.4, fans: 1.4, diamonds: 1.3 } }, makeRng(9), NOW);
+  ok(od.modMul === null, 'daily never applies modifiers');
+
+  // endless milestones: paid once, cosmetic remembered
+  const e = fresh(), er = { won: false, world: 'garage', mode: 'endless', endless: true, cleared: 55, wave: 55, kills: 900, leaks: 5, merges: 40, deploys: 60, bossKills: 5, bossTypes: [], bestCombo: 10, coinsEarned: 5000, milestones: ['endless_25', 'endless_50', 'bogus'] };
+  const d0 = e.diamonds; const oe = M.applyRunResult(e, Object.assign({}, er), makeRng(10), NOW);
+  ok(oe.milestones.length === 2 && oe.milestones[0].id === 'endless_25' && e.milestones.claimed.endless_50 && e.milestones.cosmetics.includes('milestone_50'), 'milestones claimed with their cosmetic');
+  ok(e.diamonds - d0 >= 35 && oe.diamonds >= 35, 'milestone diamonds paid');
+  const d1 = e.diamonds; const of2 = M.applyRunResult(e, Object.assign({}, er), makeRng(10), NOW);
+  ok(of2.milestones.length === 0 && e.milestones.cosmetics.length === 1 && of2.diamonds === 0 && d1 >= 0, 'a milestone pays once per profile');
+  const of3 = M.applyRunResult(e, Object.assign({}, er, { milestones: ['endless_100'] }), makeRng(11), NOW); ok(of3.milestones.length === 1 && e.milestones.cosmetics.includes('milestone_100'), 'a later milestone still pays');
+
+  // new outfits are reported by applyRunResult
+  const o = fresh(); const ow = M.applyRunResult(o, Object.assign({}, base, { world: 'beach', cleared: 25, wave: 25 }), makeRng(12), NOW);
+  ok(Array.isArray(ow.newOutfits) && ow.newOutfits.some((x) => x.id === 'beach' && x.who === 'roxor') && ow.newOutfits.length === 2, 'beach clear reports the new outfits');
+
+  // board skins
+  const s = fresh();
+  const names = { skin_chalk: { name: 'Chalk', desc: 'd' } };
+  const sl = M.skinList(s, names); ok(sl.length === 4 && sl[0].id === 'skin_paper' && sl[0].owned && sl[0].worn && sl[0].price === 0 && sl[1].name === 'Chalk' && sl[2].name.length > 0, 'skin list with fallback names');
+  ok(sl.map((x) => x.price).join() === '0,60,100,140', 'skin prices');
+  ok(M.equipSkin(s, 'skin_chalk').ok === false, 'cannot equip an unowned skin');
+  s.diamonds = 50; ok(M.buySkin(s, 'skin_chalk').reason === 'diamonds' && s.diamonds === 50 && !s.skins.owned.includes('skin_chalk'), 'too poor');
+  s.diamonds = 400; ok(M.buySkin(s, 'skin_chalk').ok && s.diamonds === 340 && s.skins.owned.includes('skin_chalk'), 'bought');
+  ok(M.buySkin(s, 'skin_chalk').reason === 'owned' && s.diamonds === 340, 'no double buy');
+  ok(M.equipSkin(s, 'skin_chalk').ok && s.settings.skin === 'skin_chalk' && M.skinList(s)[1].worn, 'equipped');
+  ok(M.equipSkin(s, 'skin_paper').ok && s.settings.skin === 'skin_paper', 'back to the default');
+  ok(M.buySkin(s, 'skin_nope').reason === 'unknown', 'unknown skin');
+  ok(M.migrate(JSON.parse(JSON.stringify(s)), NOW).skins.owned.includes('skin_chalk'), 'skins persist');
+
+  // epilogues: first clear of a world, once, story only; the Moon adds the credits
+  const ep = fresh();
+  ok(M.takeEpilogues(ep, 'garage', false, 'story').length === 0, 'no epilogue without a first clear');
+  ok(M.takeEpilogues(ep, 'garage', true, 'daily').length === 0 && !ep.story.epilogues.garage, 'daily never plays one');
+  ok(M.takeEpilogues(ep, 'garage', true, 'story').join() === 'epilogue_garage' && ep.story.epilogues.garage, 'first clear plays the epilogue');
+  ok(M.takeEpilogues(ep, 'garage', true, 'story').length === 0, 'only once per profile');
+  ok(M.takeEpilogues(ep, 'moon', true, 'story').join() === 'epilogue_moon,credits_moon', 'the Moon adds the credits');
+  ok(M.takeEpilogues(ep, 'nowhere', true, 'story').length === 0, 'unknown world');
+}
 console.log('drop_the_bass meta: ' + n + ' checks passed');

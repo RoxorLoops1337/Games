@@ -1,5 +1,5 @@
 {
- "version": "125a1cbcce31",
+ "version": "7f5ab47afd71",
  "files": [
   "fonts/PatrickHand-latin-ext.woff2",
   "fonts/PatrickHand-latin.woff2",
@@ -21,10 +21,12 @@
   "js/cutscene.js",
   "js/data_core.js",
   "js/data_depth.js",
+  "js/data_hints_extra.js",
   "js/data_meta.js",
   "js/data_run.js",
   "js/data_story.js",
   "js/doodle_battle.js",
+  "js/doodle_depth.js",
   "js/doodle_enemies.js",
   "js/doodle_env.js",
   "js/doodle_fx.js",
@@ -51,6 +53,8 @@
   "js/ui_core.js",
   "js/ui_hub.js",
   "js/ui_run.js",
+  "js/ui_setlist.js",
+  "js/ui_wardrobe.js",
   "manifest.webmanifest",
   "ui.css",
   "ui_doodle.css"

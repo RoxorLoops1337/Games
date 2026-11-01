@@ -161,7 +161,7 @@ export function drawDarkLane(b, ctx, t) {
   }
   ctx.stroke(); ctx.restore();
   const cx = (x0 + x1) / 2;
-  ctx.save(); ctx.globalAlpha = a; DH.glass(ctx, cx - 58, y0 + 6, 116, 26, 9, { edge: C.purple }); DH.text(ctx, 'DARK LANE ' + Math.ceil(Math.max(0, left)) + 's', cx, y0 + 19, 13, INK, 'center'); ctx.restore();
+  ctx.save(); ctx.globalAlpha = a; DH.glass(ctx, cx - 58, y0 + 30, 116, 26, 9, { edge: C.purple }); DH.text(ctx, 'DARK LANE ' + Math.ceil(Math.max(0, left)) + 's', cx, y0 + 43, 13, INK, 'center'); ctx.restore();
 }
 // a gray smudge on turrets that are jammed, in the dark or stolen
 export function drawTurretMark(b, ctx, tu, t) {
@@ -199,7 +199,7 @@ export function drawTurretMark(b, ctx, tu, t) {
 export function drawOverclock(b, ctx, tu, t) {
   if (!(b.run.overclockT > 0)) return;
   const k = 0.5 + 0.5 * Math.sin(t * 11 + tu.id), left = b.run.overclockT, a = left < 1 ? 0.4 + 0.6 * Math.sin(t * 24) * Math.sin(t * 24) : 1;
-  wobRing(ctx, tu.x, tu.y, 36 + k * 5, C.orange, 4, t, { alpha: (0.55 + 0.4 * k) * a, seed: tu.id });
+  wobRing(ctx, tu.x, tu.y, 33 + k * 3, C.orange, 3.5, t, { alpha: (0.55 + 0.4 * k) * a, seed: tu.id });
   ctx.save(); ctx.translate(tu.x - 24, tu.y - 24); ctx.globalAlpha = 0.9 * a; ctx.beginPath(); ctx.moveTo(4, -9); ctx.lineTo(-5, 2); ctx.lineTo(0, 2); ctx.lineTo(-4, 10); ctx.lineTo(6, -2); ctx.lineTo(1, -2); ctx.closePath();
   ctx.fillStyle = C.yellow; ctx.fill(); ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.stroke(); ctx.restore();
 }
@@ -234,8 +234,7 @@ export function phaseTicks(b, boss) {
 export function drawBossHud(b, ctx, boss, bx, by, bw, t) {
   const info = b.run.bossInfo ? b.run.bossInfo(boss.id) : null; if (!info) return;
   if (info.shieldFrac > 0) {
-    ctx.save(); ctx.fillStyle = INK; ctx.fillRect(bx, by + 19, bw, 6); ctx.fillStyle = C.sky; ctx.fillRect(bx + 1, by + 20, (bw - 2) * info.shieldFrac, 4); ctx.restore();
-    AE.drawGlyph(ctx, 'shield', bx + 10, by + 29, 16, C.sky);
+    ctx.save(); ctx.fillStyle = INK; ctx.fillRect(bx, by + 19.5, bw, 5.5); ctx.fillStyle = C.sky; ctx.fillRect(bx + 1, by + 20.5, (bw - 2) * info.shieldFrac, 3.5); ctx.restore();
   }
   if (info.phases > 1) DH.text(ctx, 'PHASE ' + Math.min(info.phase, info.phases) + '/' + info.phases, bx + bw - 6, by + 10, 11, '#fff', 'right');
 }
@@ -246,7 +245,7 @@ export function drawWorldFx(b, ctx, t) {
   const s = st(b), run = b.run;
   if (s.freezeT > 0) {
     const k = clamp(s.freezeT / 0.5, 0, 1) * clamp((s.freezeMax - s.freezeT) / 0.15 + 0.2, 0, 1);
-    ctx.save(); ctx.globalAlpha = 0.17 * k; ctx.fillStyle = '#9fdcff'; ctx.fillRect(BOARD_X, BOARD_Y, BOARD_W, BOARD_H);
+    ctx.save(); ctx.globalAlpha = 0.24 * k; ctx.fillStyle = '#8fd0ff'; ctx.fillRect(BOARD_X, BOARD_Y, BOARD_W, BOARD_H);
     ctx.globalAlpha = 0.5 * k; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.beginPath();
     for (let i = -6; i < 24; i++) { ctx.moveTo(BOARD_X + i * 26, BOARD_Y); ctx.lineTo(BOARD_X + i * 26 + 150, BOARD_Y + 150); }
     ctx.stroke();

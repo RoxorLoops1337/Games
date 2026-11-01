@@ -8,6 +8,10 @@ import * as M from '../drop_the_bass/js/meta.js';
 import { TUTORIAL } from '../drop_the_bass/js/data_story.js';
 import { WORLDS, BOARD_X, BOARD_Y, TILE } from '../drop_the_bass/js/data_core.js';
 import { setStyle } from '../drop_the_bass/js/style.js';
+import { HINTS } from '../drop_the_bass/js/data_story.js';
+import { HINTS_EXTRA } from '../drop_the_bass/js/data_hints_extra.js';
+import { POOL_HIT, modsHit } from '../drop_the_bass/js/doodle_depth.js';
+import { TURRET_BRANCHES, HERO_ABILITIES } from '../drop_the_bass/js/data_depth.js';
 setStyle('doodle');   // the game has one look
 
 let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
@@ -160,6 +164,118 @@ for (const w of WORLDS) {
   b.setPause(true); ok(calls.filter((c) => c[0] === 'hb').pop()[1] === false, 'heartbeat off on pause'); b.setPause(false); frame(b, ctx, 0.5); ok(calls.filter((c) => c[0] === 'hb').pop()[1] === true, 'heartbeat resumes');
   battleIdle(spy); ok(calls.filter((c) => c[0] === 'hb').pop()[1] === false, 'heartbeat off when leaving the battle');
   ok(ctx.__st.saves === ctx.__st.restores, 'new HUD pieces keep save/restore balanced');
+}
+
+// ---- depth systems: branch choice, boss phases, hero abilities, pool popover, hints, modifier badges, skin
+function depthRig(runOpts = {}, profFn) {
+  const calls = []; const spy = Object.assign(Object.create(AudioFx), { play: (n, o) => calls.push(n), heartbeat() {}, setMusicState() {}, musicStart() {}, musicIntensity() {}, beatInfo: () => null });
+  const p = M.newProfile(0); p.tutorial.done = true; if (profFn) profFn(p);
+  const app = stubApp(p); app.audio = spy;
+  const run = new Run(Object.assign({ world: 'garage', seed: 9, firstPrep: 999, loadout: ['kick', 'snare', 'hat', 'sub', 'mic', 'synth', 'horn', 'scratch', 'loop', 'cowbell', 'amp', 'vocal'] }, runOpts));
+  run.coins = 99999;
+  const b = new Battle(app, { run }); const ctx = mockCtx();
+  return { calls, p, app, run, b, ctx };
+}
+{
+  // the hint texts exist (copied into HINTS when data_story does not define them yet)
+  const IDS = ['hint_synergy', 'hint_branch', 'hint_preview', 'hint_reroll', 'hint_bossphase', 'hint_hero_ready'];
+  ok(IDS.every((id) => HINTS_EXTRA[id] && HINTS_EXTRA[id].title && HINTS_EXTRA[id].text && HINTS[id]), 'HINTS_EXTRA ids are readable through HINTS');
+  ok(IDS.every((id) => !/—/.test(HINTS_EXTRA[id].text + HINTS_EXTRA[id].title)), 'no em dashes in hint text');
+
+  // ---- branch choice
+  const { calls, run, b, ctx, app } = depthRig();
+  run.nextType = 'kick'; run.deploy(null, { onBeat: false }); const tu = run.turrets[0];
+  frame(b, ctx, 0.5);
+  b.selected = tu.id; frame(b, ctx, 0.2); ok(!b.panel.cards, 'no upgrade cards below level 4');
+  tu.level = 4; b.handleEvents([{ k: 'branchReady', id: tu.id, x: tu.x, y: tu.y }]); ok(calls.includes('branch_ready'), 'branch_ready sfx');
+  frame(b, ctx, 0.3);
+  ok(b.panel.cards && b.panel.cards.length === 2, 'two upgrade cards for a level 4 turret');
+  ok(b.panel.cards.every((c) => c.h >= 61 && c.w >= 61), 'upgrade cards are big enough to tap: ' + b.panel.cards.map((c) => c.w + 'x' + c.h));
+  ok(b.panel.cards.map((c) => c.id).join() === TURRET_BRANCHES.kick.map((x) => x.id).join(), 'cards are the turret branches');
+  // a drag in flight hides the cards (no accidental pick)
+  b.drag = { id: tu.id, x: 200, y: 400, sx: 0, sy: 0, moved: true }; frame(b, ctx, 0.1); ok(!b.panel || !b.panel.cards, 'cards hidden while dragging'); b.drag = null; frame(b, ctx, 0.1);
+  // tapping the panel background keeps the selection, tapping a card picks; works with the pause flag set
+  const sh = b.panel.sheet; b.pointerDown(sh.x + sh.w - 6, sh.y + 6); ok(b.selected === tu.id, 'tapping the choice sheet keeps the turret selected');
+  b.paused = true; const c1 = b.panel.cards[1]; b.pointerDown(c1.x + c1.w / 2, c1.y + c1.h / 2); b.paused = false;
+  ok(tu.branch === c1.id, 'tapping a card runs chooseBranch (also while paused)');
+  b.update(1 / 60); ok(calls.includes('branch_pick'), 'branch_pick sfx'); frame(b, ctx, 0.3);
+  ok(!b.panel.cards, 'the cards go away once a branch is chosen'); ok(b.run.canBranch(tu) === false, 'branched turret cannot branch again');
+  // keyboard shortcut on a second turret
+  run.nextType = 'snare'; run.deploy(null, { onBeat: false }); const t2 = run.turrets[1]; t2.level = 5; b.selected = t2.id; frame(b, ctx, 0.2); b.key('1'); ok(!!t2.branch, 'key 1 picks the first path');
+  // the turret badge is drawn without trouble and state stays balanced
+  run.nextType = 'hat'; run.deploy(null, { onBeat: false }); run.turrets[2].level = 4; b.selected = null; frame(b, ctx, 0.5);
+  ok(ctx.__st.saves === ctx.__st.restores, 'branch drawing keeps save/restore balanced');
+  ok(app.log.hints.includes('hint_branch'), 'first branchReady shows the branch coach mark');
+}
+{
+  // ---- boss phases
+  const { calls, run, b, ctx } = depthRig();
+  for (const ty of ['kick', 'snare', 'hat', 'sub', 'mic', 'synth']) { run.nextType = ty; run.deploy(null, { onBeat: false }); }
+  frame(b, ctx, 0.3);
+  run.phase = 'wave'; const e = run.spawnEnemy({ type: 'boss:djglitch', lane: 0, hpBase: 4000, w: 10, d: 250, scale: 1 }); b.bossId = e.id;
+  const fire = (ph) => { calls.length = 0; b.banner = null; b.bannerQ = []; b.fx.flash = 0; run.bossPhaseFx(e, ph); b.update(1 / 60); };
+  fire({ id: 'dark_lane', text: 'Lights out!', at: 0.5, dur: 6, cols: 2 });
+  ok(b.banner && /DARK LANE/.test(b.banner.text) && b.banner.sub === 'Lights out!', 'phase banner shows the effect and the phase text'); ok(b.fx.flash > 0 && calls.includes('boss_phase'), 'phase flashes and plays boss_phase');
+  ok(b.dx.dark && b.dx.dark.c1 - b.dx.dark.c0 === 1, 'dark lane band comes from the event columns'); frame(b, ctx, 0.5);
+  b.t += 10; b.update(1 / 60); ok(b.dx.dark === null, 'dark lane scribble ends with its duration');
+  fire({ id: 'steal_turret', text: 'Mine now!', at: 0.4, dur: 3 });
+  const stolen = run.turrets.find((t) => t.stolen > 0); ok(stolen && b.dx.steals[stolen.id], 'steal_turret tracks the borrowed turret'); ok(calls.includes('turret_stolen'), 'turret_stolen sfx');
+  frame(b, ctx, 0.5); ok(ctx.__st.saves === ctx.__st.restores, 'steal drawing balanced');
+  calls.length = 0; run.advance(3.5); b.update(1 / 60); ok(calls.includes('turret_returned') && !(stolen.stolen > 0), 'turret_returned sfx when it comes back'); ok(!b.dx.steals[stolen.id], 'borrowed state cleared');
+  fire({ id: 'bulwark', text: 'Shield up', at: 0.3, frac: 0.2 }); fire({ id: 'enrage', text: 'Angry', at: 0.2, speed: 1.3 }); fire({ id: 'jam_pulse', text: 'Jam', at: 0.1, radius: 600, dur: 3, max: 4 }); fire({ id: 'heal_pulse', text: 'Heal', at: 0.1 }); fire({ id: 'summon_wave', text: 'More', at: 0.1, n: 3 });
+  frame(b, ctx, 0.6); ok(e.bulwarkMax > 0 && e.rageMul > 1 && run.turrets.some((t) => t.jam > 0), 'bulwark, enrage and jam are on'); ok(ctx.__st.saves === ctx.__st.restores, 'every boss phase effect draws balanced');
+  ok(b.phaseTicksOk !== false, 'boss bar draws with phase notches');
+  b.handleEvents([{ k: 'bossPhase', boss: 'djglitch', id: 'unknown_effect', text: 'x', bossId: e.id, x: 100, y: 100, phase: 1 }]); frame(b, ctx, 0.1); ok(true, 'unknown phase effect id does not throw');
+}
+{
+  // ---- hero abilities: each one has its own sfx and visual state; the buttons show the ability
+  const names = { freeze: 'hero_freeze', overclock: 'hero_overclock', coinrain: 'hero_coinrain', shield: 'hero_shield' };
+  for (const [ab, sfxName] of Object.entries(names)) {
+    const who = HERO_ABILITIES.roxor.some((a) => a.id === ab) ? 'roxor' : 'jasmin';
+    const { calls, run, b, ctx } = depthRig({ heroLv: { roxor: 9, jasmin: 9 }, heroAbility: { [who]: ab } });
+    for (const ty of ['kick', 'snare', 'hat']) { run.nextType = ty; run.deploy(null, { onBeat: false }); }
+    run.phase = 'wave'; for (let i = 0; i < 3; i++) run.spawnEnemy({ type: 'fuzz', lane: 0, hpBase: 5000, w: 2, d: 100 + i * 50 });
+    frame(b, ctx, 0.3); run.heroCd[who] = 0;
+    b.pointerDown((who === 'roxor' ? R.heroR : R.heroJ).x, (who === 'roxor' ? R.heroR : R.heroJ).y); b.update(1 / 60);
+    ok(run.heroAbility[who] === ab && calls.includes(sfxName), ab + ' plays ' + sfxName);
+    ok(b.banner || b.bannerQ.length, ab + ' shows a banner'); frame(b, ctx, 0.6);
+    if (ab === 'freeze') ok(b.dx.freezeT > 0 && run.enemies.some((e) => e.frozen && e.stun > 0), 'freeze overlay timer and frozen enemies');
+    if (ab === 'overclock') ok(run.overclockT > 0, 'overclock is active (turrets pulse)');
+    if (ab === 'coinrain') ok(b.dx.coins.length > 5, 'coin rain spawns falling coins');
+    if (ab === 'shield') { ok(run.shieldT > 0, 'shield is up'); calls.length = 0; b.handleEvents([{ k: 'leak', n: 0, shield: true }]); ok(b.dx.ping > 0 && b.hurtFlash <= 0 && !calls.includes('leak'), 'a blocked leak ripples the dome and does not flash red'); }
+    ok(ctx.__st.saves === ctx.__st.restores, ab + ' draws balanced');
+  }
+  const { calls, run, b, ctx } = depthRig(); run.heroCd.roxor = 0; b.hero('roxor'); b.update(1 / 60); ok(calls.includes('hero_roxor'), 'blast keeps its sfx'); run.heroCd.jasmin = 0; b.hero('jasmin'); b.update(1 / 60); ok(calls.includes('hero_jasmin'), 'song keeps its sfx');
+}
+{
+  // ---- pool strip popover, modifier badges, skin
+  const { calls, run, b, ctx, p } = depthRig({ modifiers: ['glass_stage', 'speedrun'] }, (pp) => { pp.settings.skin = 'skin_chalk'; });
+  frame(b, ctx, 0.4);
+  ok(POOL_HIT.h >= 30 && POOL_HIT.y + POOL_HIT.h <= R.deploy.y && POOL_HIT.y >= 836, 'pool strip tap area sits between the board and the DROP row: ' + POOL_HIT.h + ' tall');
+  ok(!(POOL_HIT.x < R.merge.x + R.merge.w && POOL_HIT.x + POOL_HIT.w > R.merge.x && POOL_HIT.y + POOL_HIT.h > R.merge.y), 'pool area does not overlap the DROP row hit areas');
+  b.pointerDown(R.deploy.x + 20, R.deploy.y + 20); ok(!b.popover, 'the DROP button does not open a card');
+  const n = b.pool.odds.length, r = R.pool, pitch = Math.min(29, (r.w - 16) / n), x0 = r.x + r.w / 2 - (n - 1) * pitch / 2;
+  b.pointerDown(x0 + 3 * pitch, POOL_HIT.y + 4); ok(b.popover && b.popover.kind === 'pool' && b.popover.type === b.pool.odds[3].type, 'tapping a pool icon opens that turret card');
+  const seen = b.popover.type; frame(b, ctx, 0.4); ok(ctx.__st.saves === ctx.__st.restores, 'pool card draws balanced');
+  const t0 = run.t; frame(b, ctx, 0.5); ok(run.t === t0, 'the sim waits while a card is open');
+  b.pointerDown(x0 + 5 * pitch, POOL_HIT.y + 4); ok(b.popover && b.popover.type === b.pool.odds[5].type && b.popover.type !== seen, 'tapping another icon swaps the card');
+  b.pointerDown(270, 300); ok(!b.popover, 'any other tap closes the card');
+  ok(modsHit(b) && modsHit(b).h >= 40, 'modifier badges have a tap area'); b.pointerDown(520, 140); ok(b.popover && b.popover.kind === 'mods', 'tapping the badges opens the modifier card'); frame(b, ctx, 0.4); ok(ctx.__st.saves === ctx.__st.restores, 'modifier card draws balanced'); b.pointerDown(270, 300);
+  ok(b.skin === 'skin_chalk', 'board skin read from settings'); p.settings.skin = 'skin_nope'; ok(b.skin === undefined, 'unknown skin falls back');
+  const plain = depthRig(); ok(modsHit(plain.b) === null, 'no badge area without modifiers'); plain.b.pointerDown(520, 140); ok(!plain.b.popover, 'no card without modifiers');
+}
+{
+  // ---- first-time hints: synergy, branch, preview, reroll, boss phase, hero ready (one at a time, 15 s apart)
+  const { run, b, ctx, app, p } = depthRig();
+  b.handleEvents([{ k: 'synergy', id: 'x', x: 100, y: 300 }]); ok(app.log.hints.includes('hint_synergy'), 'synergy hint');
+  b.handleEvents([{ k: 'branchReady', id: 1, x: 100, y: 300 }]); ok(!app.log.hints.includes('hint_branch'), 'a second hint within 15 s waits');
+  b.t += 16; b.handleEvents([{ k: 'branchReady', id: 1, x: 100, y: 300 }]); ok(app.log.hints.includes('hint_branch'), 'branch hint after the gap'); ok(p.tutorial.hints.hint_branch, 'hint is remembered in the profile');
+  b.t += 16; run.wave = 1; run.phase = 'prep'; b.slowTick(); ok(app.log.hints.includes('hint_preview'), 'wave preview hint');
+  b.t += 16; b.slowTick(); ok(app.log.hints.includes('hint_reroll'), 'reroll hint');
+  b.t += 16; run.wave = 2; run.heroCd.roxor = 0; b.slowTick(); ok(app.log.hints.includes('hint_hero_ready'), 'hero ready hint');
+  b.t += 16; b.handleEvents([{ k: 'bossPhase', boss: 'djglitch', id: 'enrage', text: 'x', bossId: 1, x: 100, y: 100, phase: 1 }]); ok(app.log.hints.includes('hint_bossphase'), 'boss phase hint');
+  const n0 = app.log.hints.length; b.t += 16; b.handleEvents([{ k: 'synergy', id: 'x', x: 100, y: 300 }]); ok(app.log.hints.length === n0, 'each hint shows only once');
+  const tut = depthRig(); tut.b.tut = { i: 0, t: 0, flags: {}, done: false }; tut.b.handleEvents([{ k: 'synergy', id: 'x', x: 1, y: 1 }]); ok(!tut.app.log.hints.length, 'no depth hints during the tutorial');
 }
 
 console.log('drop_the_bass battle: ' + n + ' checks passed');

@@ -414,7 +414,7 @@ export function modMulOf(ids) {
   return m;
 }
 // the risk level shown as flames: 1 to 3 per modifier from its bonus, summed and capped at 5 for the selection
-export function modFlames(id) { const m = RUN_MODIFIER_BY_ID[id]; if (!m) return 0; const r = (m.mul && m.mul.records) || 1; return r >= 1.4 ? 3 : r >= 1.25 ? 2 : 1; }
+export function modFlames(id) { const m = RUN_MODIFIER_BY_ID[id]; if (!m) return 0; const r = (m.mul && m.mul.records) || 1; return r >= 1.45 ? 3 : r >= 1.3 ? 2 : 1; }
 export function modifiersOf(p) { return cleanModifiers(p.modifiers); }
 export function toggleModifier(p, id) {
   if (!RUN_MODIFIER_BY_ID[id]) return { ok: false, reason: 'unknown' };
