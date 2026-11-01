@@ -275,8 +275,8 @@ export function rollRarity(rand, luck) {
 // vals[rarity] is what one pick adds; cap is the most a run can stack.
 export const CAPSULE_UPS = [
   { id: 'aspd', name: 'Faster Tempo', max: 12, w: 1.2, vals: [8, 12, 18, 26, 38, 55], cap: 300, fmt: v => '+' + v + '% attack speed', desc: '+15% attack speed' },
-  { id: 'notes', name: 'Harmony', max: 5, w: 1.0, vals: [1, 1, 1, 2, 2, 3], cap: 5, fmt: v => '+' + v + ' note' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 note per shot, side by side' },
-  { id: 'burst', name: 'Echo', max: 3, w: 0.9, vals: [1, 1, 1, 2, 2, 2], cap: 3, fmt: v => '+' + v + ' burst' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 burst per shot, a quick echo of the notes' },
+  { id: 'notes', name: 'Harmony', max: 5, w: 1.0, min: 1, vals: [1, 1, 1, 2, 2, 3], cap: 5, fmt: v => '+' + v + ' note' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 note per shot, side by side' },
+  { id: 'burst', name: 'Echo', max: 3, w: 0.9, min: 2, vals: [1, 1, 1, 2, 2, 2], cap: 3, fmt: v => '+' + v + ' burst' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 burst per shot, a quick echo of the notes' },
   { id: 'cdmg', name: 'Volume Up', max: 12, w: 1.2, vals: [12, 18, 28, 42, 65, 100], cap: 600, fmt: v => '+' + v + '% capsule damage', desc: '+30% capsule damage' },
 ];
 export const PASSIVES = [
@@ -889,10 +889,17 @@ function rollChoices(g) {
     for (; k < pool.length - 1; k++) { r -= pool[k].w; if (r <= 0) break; }
     out.push(pool.splice(k, 1)[0]);
   }
-  // one random card is always common; the others roll with your luck
-  const common = Math.floor(g.rand() * out.length);
+  // Speed and damage are common kinds; extra notes are at least rare and extra bursts at least epic (they add the most DPS).
+  // One random card is always common, so it has to be a kind that can be common.
+  const canBeCommon = c => !(c.u && c.u.min);
+  let eligible = out.map((c, i) => i).filter(i => canBeCommon(out[i]));
+  if (!eligible.length && out.length) {
+    const alt = CAPSULE_UPS.filter(u => !u.min && (g.ups[u.id] || 0) < u.max && uv(g, u.id) < u.cap && !out.some(o => o.id === u.id))[0] || PASSIVES.find(u => (g.ups[u.id] || 0) < u.max && !out.some(o => o.id === u.id));
+    if (alt) { const l = g.ups[alt.id] || 0; out[out.length - 1] = { id: alt.id, kind: CAPSULE_UPS.includes(alt) ? 'capsule' : 'passive', name: alt.name, u: alt, lvl: l, max: alt.max, isNew: !l, w: 1 }; eligible = [out.length - 1]; }
+  }
+  const common = eligible.length ? eligible[Math.floor(g.rand() * eligible.length)] : -1;
   out.forEach((c, i) => {
-    c.rarity = i === common ? 0 : rollRarity(g.rand, luck);
+    c.rarity = i === common ? 0 : Math.max((c.u && c.u.min) || 0, rollRarity(g.rand, luck));
     if (c.kind === 'weapon') {
       c.gain = Math.min(c.max - c.lvl, [1, 1, 2, 2, 3, 3][c.rarity]);
       c.stat = c.isNew ? `New skill, starts at Lv ${c.gain}` : `Level ${c.lvl} → ${c.lvl + c.gain}`;
