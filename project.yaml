@@ -1,0 +1,47 @@
+# CCGS project configuration — single source of truth for project settings.
+# Schema: grep the `## <key>` section of .claude/docs/effects-map.md —
+# it is ~31k tokens whole, ~900 per section. Do not open it entire.
+
+schema_version: 1
+
+framework:
+  version: 1.2.0
+  last_upgraded: 2026-10-25
+
+project:
+  stage: Concept
+
+modes:
+  rigor: full
+  automation: guided
+
+engine:
+  name: "Godot"
+  version: "4.7.1"
+  language: "GDScript"
+  rendering: "Compatibility"
+  physics: "Godot Physics 2D"
+  # TODO: godot was not found on PATH when this was written (installed version NOT DETERMINED).
+  # Set engine.path to the editor executable via /settings if it is not on PATH.
+
+specialists:
+  code: "godot-gdscript-specialist"
+  shader: "godot-shader-specialist"
+  ui: "godot-specialist"
+  additional: ["godot-gdextension-specialist"]
+
+naming:
+  classes: PascalCase
+  variables: snake_case
+  constants: SCREAMING_SNAKE
+  signals: past_tense
+  files: snake_case
+  scenes: snake_case
+
+commands:
+  # The Godot project lives in pitch_story/, so every command passes --path pitch_story.
+  # test: the project uses its own headless runner (tests/run_tests.gd), not gdUnit4.
+  build: "bash pitch_story/build_web.sh"
+  test: "godot --headless --path pitch_story -s tests/run_tests.gd"
+  run: "godot --path pitch_story --windowed --resolution 1280x720"
+  smoke: "godot --headless --path pitch_story --quit-after 5"

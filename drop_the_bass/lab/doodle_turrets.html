@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Doodle turrets lab</title>
+<style>body{margin:0;background:#fbf6e6;font:14px sans-serif}canvas{display:block}</style></head><body>
+<canvas id="c"></canvas>
+<script type="module">
+import { drawTurret, drawTurretIconFlat, drawProjectile, setArtScale } from '../js/doodle_turrets.js';
+import { paper } from '../js/doodle_kit.js';
+import { TURRET_IDS } from '../js/data_core.js';
+const q = new URLSearchParams(location.search);
+const dpr = 2, W = 760, H = 1560;
+const cv = document.getElementById('c'); cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+const ctx = cv.getContext('2d'); setArtScale(2);
+function frame(ms) {
+  const t = ms / 1000; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  paper(ctx, 0, 0, W, H, { holes: true });
+  ctx.fillStyle = '#2b2733'; ctx.font = '700 15px sans-serif'; ctx.fillText('12 turrets x levels 1..7 (rows = type)', 70, 22);
+  TURRET_IDS.forEach((id, r) => { ctx.fillText(id, 4, 70 + r * 82 + 40); for (let L = 1; L <= 7; L++) drawTurret(ctx, id, L, 100 + (L - 1) * 90, 70 + r * 82 + 20, { t, ang: -0.5 + Math.sin(t) * 0.6 }); });
+  // states row
+  const sy = 1070; ctx.fillText('states: idle, firing, jammed, buff rate, buff dmg, selected, spawn', 70, sy - 36);
+  const st = [{}, { fire: 0.9 }, { jammed: true }, { buff: 'rate' }, { buff: 'dmg' }, { selected: true }, { spawn: (t % 1.5) / 1.5 }];
+  st.forEach((o, i) => drawTurret(ctx, i < 4 ? 'kick' : 'cowbell', 4, 100 + i * 90, sy + 10, Object.assign({ t, ang: 0.3 }, o)));
+  ['kick','snare','hat','cowbell','mic','vocal','scratch'].forEach((k, i) => drawProjectile(ctx, k, 100 + i * 90, sy + 100, { t, ang: 0.2 }));
+  TURRET_IDS.forEach((id, i) => drawTurretIconFlat(ctx, id, 60 + (i % 6) * 110, sy + 190 + Math.floor(i / 6) * 86, 56));
+  // phone size check at 72px tiles on a ruled page
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script></body></html>

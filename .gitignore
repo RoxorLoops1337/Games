@@ -7,6 +7,15 @@ beatbox_story/beatbox-story.bundle.js.map
 !.claude/commands/
 !.claude/skills/
 !.claude/settings.json
+# Game studio framework (imported from donchitos/claude-code-game-studios)
+!.claude/agents/
+!.claude/rules/
+!.claude/scripts/
+!.claude/docs/
+!.claude/hooks/
+!.claude/statusline.sh
+!.claude/GAME_STUDIOS_LICENSE
+!.claude/GAME_STUDIOS_SOURCE.md
 
 
 # Polish-loop scratch: keep the screenshot rig, drop agents' throwaway probes

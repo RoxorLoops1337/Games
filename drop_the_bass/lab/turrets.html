@@ -1,0 +1,56 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Drop the Bass: turret art lab</title>
+<style>html,body{margin:0;background:#1a1236;color:#fff6ea;font:12px sans-serif}canvas{display:block}</style>
+<canvas id="c"></canvas>
+<script type="module">
+// Contact sheets for js/art_turrets.js. ?sheet=levels|states|board|projectiles&t=1.3&z=2&rows=0-5
+import { drawTurret, drawTurretIconFlat, drawProjectile, setArtScale } from '../js/art_turrets.js';
+import { TURRETS, buildMap, BOARD_X, BOARD_Y } from '../js/data_core.js';
+import { drawBoard } from '../js/legacy_world.js';
+const q = new URLSearchParams(location.search);
+const sheet = q.get('sheet') || 'levels', T = parseFloat(q.get('t') || '1.3'), Z = parseFloat(q.get('z') || '1');
+const ids = Object.keys(TURRETS);
+const [r0, r1] = (q.get('rows') || '0-11').split('-').map(Number);
+const cv = document.getElementById('c');
+const dpr = 2;
+let W = 8 * 92 * Z + 90, H = (r1 - r0 + 1) * 92 * Z + 20;
+if (sheet === 'board') { W = 540; H = 960; }
+if (sheet === 'projectiles') { W = 700; H = 260; }
+if (sheet === 'states') { W = 900; H = 640; }
+cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px';
+setArtScale(Math.max(2, Z * 2));
+const c = cv.getContext('2d'); c.scale(dpr, dpr);
+c.fillStyle = '#2a1c5a'; c.fillRect(0, 0, W, H);
+c.font = '12px sans-serif';
+if (sheet === 'levels') {
+  c.scale(Z, Z);
+  for (let r = r0; r <= r1; r++) {
+    const id = ids[r], y = 48 + (r - r0) * 92;
+    c.fillStyle = '#fff6ea'; c.fillText(id, 6, y + 4);
+    for (let L = 1; L <= 7; L++) drawTurret(c, id, L, 90 + (L - 1) * 90, y, { t: T, ang: -0.35, fire: 0 });
+    drawTurretIconFlat(c, id, 740, y, 44);
+  }
+} else if (sheet === 'states') {
+  const list = ['kick', 'mic', 'hat', 'synth', 'cowbell', 'loop'];
+  list.forEach((id, i) => {
+    const y = 60 + i * 100;
+    c.fillStyle = '#fff6ea'; c.fillText(id, 6, y + 4);
+    drawTurret(c, id, 3, 90, y, { t: T, ang: 0.5, fire: 0 });
+    drawTurret(c, id, 3, 190, y, { t: T, ang: 0.5, fire: 1 });
+    drawTurret(c, id, 3, 290, y, { t: T, ang: 0.5, jammed: true });
+    drawTurret(c, id, 3, 390, y, { t: T, ang: 0.5, buff: 'rate' });
+    drawTurret(c, id, 3, 490, y, { t: T, ang: 0.5, buff: 'dmg', selected: true });
+    drawTurret(c, id, 5, 590, y, { t: T, ang: 0.5, fire: 0.8, selected: true });
+    drawTurret(c, id, 7, 690, y, { t: T, ang: 0.5, fire: 0.7 });
+    drawTurret(c, id, 7, 790, y, { t: T, ang: 0.5, spawn: 0.5 });
+  });
+} else if (sheet === 'projectiles') {
+  ['kick', 'snare', 'hat', 'scratch', 'cowbell', 'orb', 'synth'].forEach((k, i) => { drawProjectile(c, k, 60 + i * 95, 60, { t: T, ang: 0 }); drawProjectile(c, k, 60 + i * 95, 150, { t: T, ang: 0.8, scale: 1.4 }); c.fillStyle = '#fff6ea'; c.fillText(k, 40 + i * 95, 220); });
+} else {
+  drawBoard(c, 'club', 'club', T, {});
+  const m = buildMap('club'); const types = ids; let n = 0;
+  for (const s of m.buildable) { if (s.r % 2 === 1 && s.c % 2 === 0) continue; const id = types[n % types.length]; drawTurret(c, id, 1 + (n * 3) % 7, s.x, s.y, { t: T, ang: (n % 8) * 0.8, fire: n % 5 === 0 ? 0.8 : 0 }); n++; }
+}
+window.__ready = true;
+</script>

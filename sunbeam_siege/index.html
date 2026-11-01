@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#140f26">
+<title>SUNBEAM SIEGE: Nine Lives to Hold the House</title>
+<style>
+  /* Minimal inline styles so the loader error screen works even if every file is missing. */
+  html,body{margin:0;height:100%;background:#140f26;color:#f6ecd8;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+  #boot-msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-size:15px;color:#b7a9c9;z-index:1}
+  #boot-msg b{color:#ffd95a;letter-spacing:.08em}
+  #loader-error{position:fixed;inset:0;z-index:99999;background:#140f26;color:#f6ecd8;padding:24px 16px;overflow:auto;display:none}
+  #loader-error h1{font-size:22px;margin:0 0 6px;color:#ff5d6c;letter-spacing:.04em}
+  #loader-error p{margin:6px 0;color:#b7a9c9;line-height:1.4}
+  #loader-error ul{padding-left:18px;margin:10px 0;font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.6}
+  #loader-error li.req{color:#ff9aa4} #loader-error li.opt{color:#ffd95a}
+  #loader-error button{font:inherit;font-weight:700;background:#ffb347;color:#2b1606;border:0;border-bottom:4px solid #c27a1f;padding:10px 16px;margin:6px 8px 0 0;cursor:pointer;min-height:44px}
+  #loader-error button.alt{background:#3a2c64;color:#f6ecd8;border-bottom-color:#231a3d}
+  #loader-error pre{white-space:pre-wrap;background:#231a3d;padding:10px;font-size:12px;max-height:30vh;overflow:auto}
+</style>
+<link rel="stylesheet" href="src/styles/base.css">
+<link rel="stylesheet" href="src/styles/battle.css">
+<link rel="stylesheet" href="src/styles/screens.css">
+</head>
+<body>
+<div id="boot-msg"><b>SUNBEAM SIEGE</b><span id="boot-sub">Warming up the cushion...</span></div>
+<div id="stars" aria-hidden="true"></div>
+<div id="topbar" role="navigation" aria-label="Run status" hidden></div>
+<main id="app" aria-live="polite"></main>
+<div id="overlay-root"></div>
+<div id="toast-root" aria-live="polite"></div>
+<div id="loader-error" role="alert"></div>
+
+<script>
+/* Loader: classic scripts in the exact order from design/API.md, with a visible error screen for any
+ * file that fails to load or throws while evaluating. Scripts are injected with async=false so they run in order. */
+(function () {
+  'use strict';
+  var R = true, O = false; // R = required, O = optional (engine files that may not exist yet)
+  var data = ['cards-alley', 'cards-hearth', 'cards-moon', 'cards-mischief', 'cards-neutral', 'cards-starters',
+    'champions-ah', 'champions-mm', 'enemies-rodents', 'enemies-dogs', 'enemies-household', 'enemies-wild', 'enemies-bosses',
+    'relics', 'upgrades', 'events', 'story', 'tutorial', 'meta', 'glossary', 'encounters'];
+  var dataOpt = { 'cards-starters': 1 };
+  var engine = ['util', 'registry', 'content', 'card-inst', 'battle', 'battle-ai', 'run', 'map', 'rewards', 'shop', 'post', 'nook', 'events-engine', 'profile'];
+  var opsFiles = ['ops-bosses', 'ops-pests', 'ops-alley', 'ops-hearth', 'ops-moon', 'ops-mischief', 'ops-neutral', 'ops-champions'];
+  var gfx = ['pawprint', 'pestprint', 'icons', 'fx'];
+  var gfxOpt = { fx: 1 };
+  var ui = ['ui-core', 'kit', 'topbar', 'scenes', 'title', 'settings', 'collection', 'story', 'newrun', 'map', 'reward', 'shop', 'event', 'post', 'nook', 'treasure', 'summary', 'gameover', 'tutorial'];
+  // Other agents own these; they are loaded when present so the shell never blocks on a screen it does not own.
+  var uiExtra = ['deck-viewer', 'battle'];
+  var list = [];
+  data.forEach(function (n) { list.push(['src/data/' + n + '.js', !dataOpt[n]]); });
+  engine.forEach(function (n) { list.push(['src/engine/' + n + '.js', O]); });
+  opsFiles.forEach(function (n) { list.push(['src/engine/' + n + '.js', O]); });
+  gfx.forEach(function (n) { list.push(['src/gfx/' + n + '.js', !gfxOpt[n]]); });
+  list.push(['src/audio.js', R]);
+  ui.forEach(function (n) { list.push(['src/ui/' + n + '.js', n === 'ui-core' || n === 'kit' || n === 'topbar' || n === 'scenes' || n === 'title' ? R : O]); });
+  uiExtra.forEach(function (n) { list.push(['src/ui/' + n + '.js', O]); });
+  list.push(['src/main.js', R]);
+
+  // Optional dev hook: index.html?mock loads src/ui/mocks/*.js between the engine and the UI (testing without engine files).
+  var qs = location.search || '';
+  var useMock = /[?&]mock(=|&|$)/.test(qs);
+  if (useMock) {
+    var at = list.findIndex(function (x) { return x[0] === 'src/ui/ui-core.js'; });
+    list.splice(at, 0, ['src/ui/mocks/mock-core.js', R], ['src/ui/mocks/mock-engine.js', R]);
+  }
+
+  var failed = [], errors = [], pending = list.length, finished = false;
+  window.__bootErrors = errors;
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t.tagName === 'SCRIPT') return;
+    if (/ResizeObserver loop/.test(e.message || '')) { e.stopImmediatePropagation(); return; }
+    errors.push((e.filename ? e.filename.split('/').slice(-2).join('/') + ':' + e.lineno + ' ' : '') + (e.message || 'error'));
+    if (finished && window.SB && SB.main && SB.main.fatal) SB.main.fatal(e.error || new Error(e.message));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    errors.push('Unhandled promise: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason));
+    if (finished && window.SB && SB.main && SB.main.fatal) SB.main.fatal(e.reason);
+  });
+
+  function show() {
+    var box = document.getElementById('loader-error');
+    var req = failed.filter(function (f) { return f.req; }), opt = failed.filter(function (f) { return !f.req; });
+    var h = '<h1>The cat knocked a script off the shelf</h1>';
+    if (req.length) h += '<p>These required files did not load:</p><ul>' + req.map(function (f) { return '<li class="req">' + f.src + '</li>'; }).join('') + '</ul>';
+    if (opt.length) h += '<p>' + (req.length ? 'Also missing (optional or not written yet):' : 'These optional files are missing:') + '</p><ul>' + opt.map(function (f) { return '<li class="opt">' + f.src + '</li>'; }).join('') + '</ul>';
+    if (errors.length) h += '<p>Errors while running:</p><pre>' + errors.slice(0, 8).map(function (s) { return String(s).replace(/</g, '&lt;'); }).join('\n') + '</pre>';
+    h += '<p>Serve the folder or open index.html straight from disk. File names are case sensitive.</p>';
+    h += '<button id="le-reload">Reload</button>' + (req.length ? '' : '<button class="alt" id="le-go">Try to start anyway</button>');
+    box.innerHTML = h; box.style.display = 'block';
+    document.getElementById('le-reload').onclick = function () { location.reload(); };
+    var go = document.getElementById('le-go');
+    if (go) go.onclick = function () { box.style.display = 'none'; start(true); };
+  }
+  function start(force) {
+    var bm = document.getElementById('boot-msg'); if (bm) bm.style.display = 'none';
+    try {
+      if (window.SB && SB.main && SB.main.boot) SB.main.boot({ missing: failed.map(function (f) { return f.src; }), force: !!force });
+      else throw new Error('SB.main.boot is not defined (src/main.js did not load)');
+    } catch (err) { errors.push(err.stack || err.message); show(); }
+  }
+  function done() {
+    finished = true;
+    var reqFail = failed.some(function (f) { return f.req; });
+    if (reqFail || errors.length && !(window.SB && SB.main)) { show(); return; }
+    start(false);
+  }
+  function one(item) {
+    var s = document.createElement('script');
+    s.src = item[0]; s.async = false;
+    s.onload = function () { if (--pending === 0) done(); };
+    s.onerror = function () { failed.push({ src: item[0], req: item[1] }); if (--pending === 0) done(); };
+    document.body.appendChild(s);
+  }
+  list.forEach(one);
+})();
+</script>
+</body>
+</html>

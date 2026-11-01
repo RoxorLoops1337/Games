@@ -1,0 +1,474 @@
+// Stacking Cats: the Cat Kingdom, items and loot, coins, and the stats that show the impact of choices.
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import {
+  newGame, addCat, startWave, step, makeEnemy, catMaxHp, calcMods, itemFx, estDps, explainMods, rollItemChoices, equipItem, unequipItem,
+  takeItem, useReroll, fxOf, mergeCats, releaseCat, findCat, aliveCats, overflow, sellItem, forgePlan, forgeItems, rollBoxTier, rollBoxRelic, openBox,
+} from '../stacking_cats/sim.js';
+import {
+  ITEMS, ITEM_BY_ID, BUILDINGS, emptyKingdom, kingdomBonuses, buyUpgrade, upgradeCost, kingdomLevel, buildingLevel, MAX_STASH, CATS, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, relicProgress, noteRelics, teamRelics, BOXES, BOX_BY_ID, COIN, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, RARITIES, ACHIEVEMENTS,
+} from '../stacking_cats/cats.js';
+import { CAT_BY_ID, CAT_TAGS, SPECIALS, SYNERGIES, unlockProgress } from '../stacking_cats/cats.js';
+import { catStory } from '../stacking_cats/story.js';
+
+let n = 0;
+const t = (name, fn) => { fn(); n++; console.log('ok', name); };
+const ALL = CATS.map((c) => c.id);
+
+function fight(g, secs, mk) {
+  startWave(g); g.state = 'fight'; g.queue = [];
+  if (mk) mk(g);
+  for (let i = 0; i < secs * 30 && g.enemies.some((e) => !e.dead); i++) step(g);
+}
+
+t('items: 61 relics with text, valid effects and rarities', () => {
+  assert.equal(ITEMS.length, 61);
+  for (const it of ITEMS) {
+    assert.ok(it.name && it.icon && it.desc && ['common', 'rare', 'epic', 'legendary', 'mythic'].includes(it.rarity), it.id);
+    assert.ok(Object.keys(it.fx).length, it.id);
+    assert.ok(!/—/.test(JSON.stringify(it)));
+  }
+});
+
+t('every item has its own icon, none shared with another item or a synergy badge', () => {
+  const icons = ITEMS.map((it) => it.icon.replace(/\uFE0F/g, ''));
+  assert.equal(new Set(icons).size, icons.length, 'two items share an icon');
+  const syn = Object.values(SYNERGIES).map((x) => x.icon.replace(/\uFE0F/g, ''));
+  for (const it of ITEMS) assert.ok(!syn.includes(it.icon.replace(/\uFE0F/g, '')), it.id + ' shares an icon with a synergy badge');
+});
+
+t('kingdom: buy upgrades with coins, costs rise, max level, bonuses add up', () => {
+  const k = emptyKingdom();
+  assert.equal(buyUpgrade(k, 'dojo'), false);
+  k.coins = 10000;
+  assert.ok(upgradeCost('dojo', 1) > upgradeCost('dojo', 0));
+  for (let i = 0; i < 5; i++) assert.ok(buyUpgrade(k, 'dojo'));
+  assert.equal(buyUpgrade(k, 'dojo'), false);
+  for (let i = 0; i < 9; i++) buyUpgrade(k, 'tent');
+  assert.equal(buildingLevel(k, 'tent'), 4);
+  const b = kingdomBonuses(k);
+  assert.ok(Math.abs(b.dmg - 0.2) < 1e-9 && b.rerolls === 4);
+  assert.equal(kingdomLevel(k), 9);
+  assert.ok(k.coins < 10000 && k.coins > 0);
+  for (const bl of BUILDINGS) assert.ok(bl.name && bl.icon && bl.text(1) && bl.text(bl.max));
+});
+
+t('kingdom bonuses reach the fight: more hp, damage, rerolls', () => {
+  const k = emptyKingdom(); k.lv = { dojo: 5, beds: 5, tent: 3, vault: 2 };
+  const a = newGame({ seed: 1 }), b = newGame({ seed: 1, kingdom: k });
+  addCat(a, 'tabby'); addCat(b, 'tabby');
+  assert.ok(catMaxHp(b, b.cats[0]) > catMaxHp(a, a.cats[0]) * 1.2);
+  assert.ok(calcMods(b).dmg > calcMods(a).dmg + 0.19);
+  assert.equal(b.rerolls, 3);
+  assert.ok(useReroll(b) && b.rerolls === 2);
+  assert.equal(useReroll(a), false);
+});
+
+t('equip: items go to the stash, cats hold 1 (2 at Lv3), swaps return the old item', () => {
+  const g = newGame({ seed: 2 });
+  addCat(g, 'tabby');
+  const c = g.cats[0];
+  for (const id of ['claws', 'bell', 'cushion']) assert.ok(takeItem(g, id));
+  const hp0 = catMaxHp(g, c);
+  assert.ok(equipItem(g, g.stash.indexOf('cushion'), c.uid));
+  assert.ok(catMaxHp(g, c) > hp0 * 1.25);
+  assert.ok(c.hp > hp0);
+  assert.ok(equipItem(g, 0, c.uid));
+  assert.equal(c.items.length, 1);
+  assert.ok(g.stash.includes('cushion'), 'old item went back to the stash');
+  assert.ok(unequipItem(g, c.uid, 0));
+  assert.equal(c.items.length, 0);
+  c.lvl = 3;
+  equipItem(g, 0, c.uid); equipItem(g, 0, c.uid);
+  assert.equal(c.items.length, 2);
+  const had = g.stash.length;
+  for (let i = 0; i < 20; i++) takeItem(g, 'claws');
+  // picks are never refused (no soft lock); the pack overflows and selling brings it back under the limit
+  assert.equal(g.stash.length, had + 20);
+  assert.equal(overflow(g), had + 20 - MAX_STASH);
+  const coins0 = g.run.coins;
+  while (overflow(g) > 0) assert.ok(sellItem(g, g.stash.length - 1) > 0);
+  assert.equal(g.stash.length, MAX_STASH);
+  assert.ok(g.run.coins > coins0);
+});
+
+t('forging turns three of a rarity into one of the next, and picks nothing it cannot afford', () => {
+  const g = newGame({ seed: 9 });
+  g.stash = ['claws', 'bell', 'claws', 'fang'];
+  assert.equal(forgePlan(g, 3), null);                    // only one rare
+  const plan = forgePlan(g, 0);
+  assert.deepEqual(plan.slice().sort(), [0, 1, 2]);
+  const out = forgeItems(g, 0);
+  assert.equal(ITEM_BY_ID[out].rarity, 'rare');
+  assert.deepEqual(g.stash.length, 2);
+  g.stash = ['fang', 'heart', 'scarf', 'claws'];
+  assert.equal(ITEM_BY_ID[forgeItems(g, 0)].rarity, 'epic');
+  g.stash = ['crown', 'hourglass', 'mask'];
+  assert.equal(ITEM_BY_ID[forgeItems(g, 0)].rarity, 'legendary');
+  g.stash = ['kingcrown', 'timeknot', 'wheart'];
+  const coins = g.run.coins, e = forgeItems(g, 0);
+  assert.equal(ITEM_BY_ID[e].rarity, 'mythic'); assert.ok(g.run.coins > coins); assert.equal(g.stash.length, 1);
+});
+
+t('merging and releasing keep items (extra ones return to the stash)', () => {
+  const g = newGame({ seed: 3 });
+  addCat(g, 'ember'); addCat(g, 'sparky');
+  const e1 = g.cats[0];
+  g.bench.push(Object.assign({}, e1, { uid: 999, items: ['bell'], _sig: '' }));
+  e1.items = ['claws'];
+  assert.ok(mergeCats(g, e1.uid, 999));
+  assert.equal(e1.lvl, 2);
+  assert.equal(e1.items.length, 2, 'a Lv 2 cat has two slots, so both items stay');
+  assert.equal(g.stash.length, 0);
+  const s = g.cats[1];
+  s.items = ['vest'];
+  releaseCat(g, s.uid);
+  assert.ok(g.stash.includes('vest'));
+});
+
+t('item effects: damage, haste, thorns, lifesteal, regen, extra shot, burn', () => {
+  const f = (items) => { const g = newGame({ seed: 5 }); addCat(g, 'tabby'); g.cats[0].items = items; return [g, itemFx(g.cats[0])]; };
+  assert.equal(f(['claws'])[1].dmg, 0.2);
+  assert.ok(f(['crown'])[1].dmg === 0.25 && f(['crown'])[1].hp === 0.25);
+  const base = (() => { const g = newGame({ seed: 5 }); addCat(g, 'sparky'); return estDps(g.cats[0], g.mods = calcMods(g)); })();
+  const gi = newGame({ seed: 5 }); addCat(gi, 'sparky'); gi.cats[0].items = ['claws', 'bell', 'whistle'];
+  assert.ok(estDps(gi.cats[0], calcMods(gi)) > base * 1.7);
+  // thorns hurt the attacker
+  const g = newGame({ seed: 6 }); addCat(g, 'mochi'); g.cats[0].items = ['spikes'];
+  startWave(g); g.state = 'fight'; g.queue = [];
+  const mouse = makeEnemy(g, 'brute', 1, { x: 240 }); mouse.hp = mouse.maxHp = 500; g.enemies.push(mouse);
+  for (let i = 0; i < 30 * 6; i++) step(g);
+  assert.ok(g.cats[0].dmgDone > 0 && mouse.hp < 500);
+  // regen and lifesteal heal
+  // (a far away mouse keeps the wave going so no wave rest heals; compare with a cat that carries no regen relic)
+  const run = (items) => { const h = newGame({ seed: 7 }); addCat(h, 'tabby'); h.cats[0].items = items; h.cats[0].hp = 10; startWave(h); h.state = 'fight'; h.queue = []; const far = makeEnemy(h, 'brute', 1, { x: 900 }); far.hp = far.maxHp = 99999; h.enemies.push(far); for (let i = 0; i < 90; i++) step(h); return h.cats[0].hp; };
+  assert.ok(run(['heart']) > run([]) + 3, 'regen ' + run(['heart']) + ' vs ' + run([]));
+  // burn item sets mice on fire
+  const b = newGame({ seed: 8 }); addCat(b, 'tabby'); b.cats[0].items = ['flamering'];
+  startWave(b); b.state = 'fight'; b.queue = []; const m2 = makeEnemy(b, 'brute', 1, { x: 240 }); m2.hp = m2.maxHp = 900; b.enemies.push(m2);
+  let burned = false; for (let i = 0; i < 60; i++) { step(b); if (m2.burn) burned = true; }
+  assert.ok(burned);
+});
+
+t('every item can be equipped and a fight runs without errors', () => {
+  for (const it of ITEMS) {
+    const g = newGame({ seed: 9, unlocked: ALL, events: false });
+    addCat(g, 'sparky'); addCat(g, 'nebula');
+    g.cats[0].items = [it.id]; g.cats[1].items = [it.id];
+    fight(g, 20, (gg) => { gg.enemies.push(makeEnemy(gg, 'mouse', 3, { x: 400 }), makeEnemy(gg, 'armored', 6, { x: 460 })); });
+    assert.ok(g.run.dmg > 0, it.id);
+  }
+});
+
+t('coins, chests and loot: kills pay, vault boosts, chests turn into item rewards', () => {
+  const g = newGame({ seed: 10, events: false }); addCat(g, 'tabby'); addCat(g, 'ember');
+  fight(g, 40, (gg) => { for (let i = 0; i < 6; i++) gg.enemies.push(makeEnemy(gg, 'mouse', 1, { x: 300 + i * 40 })); });
+  assert.ok(g.run.coins >= 6 * COIN.kill, 'six kills pay at least six kill coins: ' + g.run.coins);
+  const k = emptyKingdom(); k.lv = { vault: 5 };
+  const v = newGame({ seed: 10, kingdom: k, events: false }); addCat(v, 'tabby'); addCat(v, 'ember');
+  fight(v, 40, (gg) => { for (let i = 0; i < 6; i++) gg.enemies.push(makeEnemy(gg, 'mouse', 1, { x: 300 + i * 40 })); });
+  assert.ok(v.run.coins > g.run.coins * 1.3);
+  // force boxes: at most two are opened after a wave, the rest wait for the next one
+  const c = newGame({ seed: 11, events: false }); addCat(c, 'tabby'); c.boxes = ['cardboard', 'basket', 'silver'];
+  startWave(c); c.enemies = []; c.queue = []; c.state = 'fight'; step(c, 0.1);
+  assert.equal(c.state, 'clear');
+  assert.deepEqual(c.reward, ['box:cardboard', 'box:basket', 'snack']);
+  assert.deepEqual(c.boxes, ['silver']);
+  assert.deepEqual(c.report.boxes, ['cardboard', 'basket']);
+  const ch = rollItemChoices(c);
+  assert.equal(new Set(ch).size, 3);
+  ch.forEach((id) => assert.ok(ITEM_BY_ID[id]));
+});
+
+t('lootboxes: four cat themed qualities, each better than the last, one random relic each', () => {
+  assert.deepEqual(BOXES.map((b) => b.id), ['cardboard', 'basket', 'silver', 'golden']);
+  assert.equal(new Set(BOXES.map((b) => b.icon)).size, BOXES.length, 'unique icons');
+  for (const b of BOXES) { assert.ok(b.name && b.blurb && Object.keys(b.odds).length, b.id); for (const r of Object.keys(b.odds)) assert.ok(RARITIES.includes(r), b.id + ' odds name a rarity: ' + r); assert.equal(BOX_BY_ID[b.id], b); }
+  const g = newGame({ seed: 21, events: false }); addCat(g, 'tabby');
+  const mean = (tier) => { let s = 0; for (let i = 0; i < 1500; i++) s += RARITIES.indexOf(ITEM_BY_ID[rollBoxRelic(g, tier)].rarity); return s / 1500; };
+  const m = BOXES.map((b) => mean(b.id));
+  for (let i = 1; i < m.length; i++) assert.ok(m[i] > m[i - 1] + 0.25, BOXES[i].id + ' beats ' + BOXES[i - 1].id + ': ' + m);
+  assert.ok(m[0] < 0.6, 'a cardboard box is mostly commons, mean rarity ' + m[0]);
+  for (let i = 0; i < 400; i++) assert.notEqual(ITEM_BY_ID[rollBoxRelic(g, 'golden')].rarity, 'common', 'golden never gives a common');
+  const before = g.stash.length, runItems = g.run.items;
+  const id = openBox(g, 'basket');
+  assert.ok(ITEM_BY_ID[id] && g.stash.length === before + 1 && g.stash[g.stash.length - 1] === id && g.run.items === runItems + 1, 'the relic lands in the backpack');
+});
+
+t('lootbox tiers: elites mostly drop cardboard, nests never do, luck lifts the quality', () => {
+  const g = newGame({ seed: 22, events: false }); addCat(g, 'tabby');
+  const tally = (src, n, game = g) => { const c = {}; for (let i = 0; i < 3000; i++) { const k = rollBoxTier(game, src, n); c[k] = (c[k] || 0) + 1; } return c; };
+  const e = tally('elite', 0), nest = tally('nest', 1);
+  assert.ok(e.cardboard / 3000 > 0.6 && e.cardboard / 3000 < 0.9, 'elite cardboard ' + e.cardboard / 3000);
+  assert.ok(!e.golden, 'an elite never drops a golden chest');
+  assert.ok(!nest.cardboard, 'a nest never drops cardboard');
+  assert.ok(nest.basket > nest.silver && nest.silver > (nest.golden || 0), 'nest tiers fall off: ' + JSON.stringify(nest));
+  const lucky = newGame({ seed: 22, events: false, kingdom: { ...emptyKingdom(), lv: { shrine: 5 } } }); addCat(lucky, 'tabby');
+  const le = tally('elite', 0, lucky);
+  assert.ok((le.cardboard || 0) < e.cardboard, 'luck lowers the share of cardboard: ' + le.cardboard + ' vs ' + e.cardboard);
+  const late = tally('nest', 6);
+  assert.ok((late.golden || 0) > (nest.golden || 0), 'later nests give golden chests more often');
+});
+
+t('impact stats: damage per cat, wave report, biggest hit, team stat sources', () => {
+  const g = newGame({ seed: 12, events: false }); addCat(g, 'tabby'); addCat(g, 'sparky');
+  fight(g, 40, (gg) => { for (let i = 0; i < 5; i++) gg.enemies.push(makeEnemy(gg, 'mouse', 1, { x: 300 + i * 40 })); });
+  g.state === 'clear' || step(g, 0.1);
+  assert.ok(g.report && g.report.dmg > 100 && g.report.kills >= 5);
+  assert.equal(g.report.cats.length, 2);
+  assert.ok(g.report.cats[0].dmg >= g.report.cats[1].dmg);
+  const sum = g.report.cats.reduce((a, c) => a + c.dmg, 0);
+  assert.ok(Math.abs(sum - g.report.dmg) < 1);
+  assert.ok(g.run.biggest > 5);
+  assert.ok(Object.keys(g.run.byCat).length === 2);
+  eatSnackFor(g);
+  const rows = explainMods(g);
+  assert.ok(rows.dmg.some((r) => r.label === 'Salmon Sushi'));
+});
+function eatSnackFor(g) { g.perm.push('sushi'); }
+
+t('estimated dps is higher for stronger cats and levels', () => {
+  const g = newGame({ seed: 13 }); addCat(g, 'tabby');
+  const m = calcMods(g), c = g.cats[0];
+  const d1 = estDps(c, m); c.lvl = 2;
+  assert.ok(estDps(c, m) > d1 * 2);
+  g.cats.length = 0; g.stash.length = 0;
+  for (const id of ALL) { const gg = newGame({ seed: 1, unlocked: ALL }); addCat(gg, id); assert.ok(estDps(gg.cats[0], calcMods(gg)) > 0, id); }
+});
+
+t('items: Warm Mittens is a common that adds health and attack speed together', () => {
+  const it = ITEM_BY_ID.mitten;
+  assert.ok(it && it.rarity === 'common', 'mittens exist as a common');
+  assert.ok(it.fx.hp > 0 && it.fx.haste > 0, 'two small bonuses');
+  const g = newGame({ seed: 5 }); addCat(g, 'tabby');
+  const base = catMaxHp(g, g.cats[0]), baseHaste = itemFx(g.cats[0]).haste || 0;
+  g.cats[0].items = ['mitten'];
+  assert.ok(catMaxHp(g, g.cats[0]) > base, 'more health');
+  assert.ok(itemFx(g.cats[0]).haste > baseHaste, 'and faster attacks');
+});
+
+
+t('cheapestUpgrade names the cheapest building the player can afford, or null', () => {
+  const k = emptyKingdom();
+  assert.equal(cheapestUpgrade(k), null, 'no coins, no hint');
+  k.coins = 60;
+  const id = cheapestUpgrade(k);
+  assert.ok(id && upgradeCost(id, 0) <= 60, 'an affordable building is named');
+  for (const b of BUILDINGS) if (upgradeCost(b.id, 0) <= 60) assert.ok(upgradeCost(id, 0) <= upgradeCost(b.id, 0), 'and it is the cheapest');
+  for (const b of BUILDINGS) k.lv[b.id] = b.max;
+  k.coins = 1e9;
+  assert.equal(cheapestUpgrade(k), null, 'maxed buildings are never named');
+});
+
+t('affordableWonder names the cheapest unowned wonder the gems can pay for', () => {
+  const k = emptyKingdom();
+  assert.equal(affordableWonder(k), null, 'no gems, no hint');
+  k.gems = 3;
+  assert.ok(['bench', 'coin'].includes(affordableWonder(k)), 'a 3 gem wonder is named');
+  k.wonders.bench = true; k.wonders.coin = true;
+  assert.equal(affordableWonder(k), null, 'owned wonders are skipped');
+  k.gems = 99;
+  assert.ok(affordableWonder(k), 'more gems name another wonder');
+});
+
+t('nextGoal names the cheapest unmaxed building with the coins still missing', () => {
+  const k = emptyKingdom();
+  const g0 = nextGoal(k);
+  assert.ok(g0 && g0.cost === Math.min(...BUILDINGS.map((b) => upgradeCost(b.id, 0))), 'the cheapest building is the goal');
+  assert.equal(g0.need, g0.cost, 'with no coins all of it is missing');
+  k.coins = g0.cost - 5;
+  assert.equal(nextGoal(k).need, 5, 'only the gap is reported');
+  k.coins = g0.cost + 1000;
+  assert.equal(nextGoal(k).need, 0, 'an affordable goal needs nothing');
+  for (const b of BUILDINGS) k.lv[b.id] = b.max;
+  assert.equal(nextGoal(k), null, 'a fully built kingdom has no goal');
+});
+
+t('beating King Squeakimus earns its own trophy, and only after the finale', () => {
+  const a = ACHIEVEMENTS.find((x) => x.id === 'king');
+  assert.ok(a, 'the king trophy exists');
+  assert.ok(!a.name.includes('\u2014') && !a.desc.includes('\u2014'));
+  assert.ok(a.coins > 0, 'it pays coins');
+  assert.equal(!!a.check({ stats: {}, run: {}, save: {}, kingdom: {} }), false, 'not before the finale');
+  assert.equal(!!a.check({ stats: {}, run: {}, save: { storyDone: true }, kingdom: {} }), true, 'after the finale');
+});
+
+t('the king trophy is the last trophy and its text says where to find the king', () => {
+  assert.equal(ACHIEVEMENTS[ACHIEVEMENTS.length - 1].id, 'king', 'the final boss trophy closes the list');
+  assert.ok(/wave 30/i.test(ACHIEVEMENTS[ACHIEVEMENTS.length - 1].desc), 'the text names the wave');
+});
+
+t('the Silk Ribbon item is a rare with damage and crit', () => {
+  const r = ITEMS.find((x) => x.id === 'ribbon');
+  assert.ok(r, 'the ribbon exists');
+  assert.equal(r.rarity, 'rare');
+  assert.ok(r.fx.dmg > 0 && r.fx.crit > 0);
+  assert.ok(!r.desc.includes('\u2014') && !r.name.includes('\u2014'));
+});
+
+t('Biscuit the royal baker is a cat of her own and the collector trophy needs every cat', () => {
+  const b = CATS.find((c) => c.id === 'biscuit');
+  assert.ok(b && b.role === 'Baker' && b.atk.t === 'lob', 'Biscuit lobs loaves');
+  assert.ok(b.unlock && b.unlock.k === 'recruits', 'she is unlocked by recruiting');
+  const a = ACHIEVEMENTS.find((x) => x.id === 'coll30');
+  const all = CATS.map((c) => c.id);
+  assert.equal(!!a.check({ save: { unlocked: all.slice(1) } }), false, 'one cat short is not enough');
+  assert.equal(!!a.check({ save: { unlocked: all } }), true, 'every cat unlocks the trophy');
+  assert.ok(a.desc.includes(String(CATS.length)), 'the text names the real number of cats');
+});
+
+t('the Cozy Basket is a common item that adds health and a little regeneration', () => {
+  const b = ITEMS.find((x) => x.id === 'basket');
+  assert.ok(b && b.rarity === 'common');
+  assert.ok(b.fx.hp > 0 && b.fx.regen > 0);
+  assert.ok(!b.name.includes('\u2014') && !b.desc.includes('\u2014'));
+});
+
+t('titleStackIds: the title stack shows the five most used unlocked cats, bottom to top', () => {
+  const starters = ['tabby', 'ember', 'sparky', 'buckshot', 'mochi'];
+  assert.deepEqual(titleStackIds(starters, {}), starters, 'a fresh save keeps the starters in order');
+  const unlocked = [...starters, 'yuki', 'zeus'];
+  const stats = { zeus: { runs: 9 }, yuki: { runs: 5 }, tabby: { runs: 4 }, ember: { runs: 1 }, ghost: { runs: 99 } };
+  const ids = titleStackIds(unlocked, stats);
+  assert.equal(ids.length, 5);
+  assert.deepEqual(ids.slice(0, 3), ['zeus', 'yuki', 'tabby'], 'most used first');
+  assert.ok(!ids.includes('ghost'), 'locked or unknown cats never appear');
+  assert.equal(new Set(ids).size, 5, 'no duplicates');
+  assert.deepEqual(titleStackIds(['tabby'], {}), ['tabby'], 'fewer cats than five is fine');
+});
+
+t('Pearl the tide singer: slows mice, dodges, has a special, a story, a tag and a rule to unlock her', () => {
+  const d = CAT_BY_ID.pearl;
+  assert.ok(d && d.atk.t === 'proj' && d.atk.fx.slow > 0 && d.pas.dodge > 0);
+  assert.ok(CAT_TAGS.pearl && SPECIALS.pearl && catStory('pearl').length > 20);
+  assert.ok(!/\u2014/.test(d.desc + catStory('pearl') + SPECIALS.pearl.name), 'no em dash');
+  assert.equal(unlockProgress(d, { merges: 10 }).have, 10);
+  assert.ok(ACHIEVEMENTS.find((a) => a.id === 'coll30').desc.includes(String(CATS.length)), 'collection trophy text matches the cat count');
+});
+
+t('Lucky Shell: a dodge item that stacks with the cat\'s own dodge and never touches the random stream when absent', () => {
+  const shell = ITEM_BY_ID.shell;
+  assert.ok(shell && shell.rarity === 'rare' && shell.fx.dodge > 0 && shell.fx.hp > 0);
+  assert.equal(fxOf(['shell', 'shell']).dodge, shell.fx.dodge * 2);
+  assert.equal(fxOf(['mitten']).dodge, 0, 'other items have no dodge');
+  const src = readFileSync(new URL('../stacking_cats/sim.js', import.meta.url), 'utf8');
+  assert.ok(/const dodge = \(d\.pas && d\.pas\.dodge \|\| 0\) \+ cx\.dodge;\s*if \(dodge > 0 && g\.rnd\(\) < dodge\)/.test(src), 'hurtCat rolls only when there is a dodge chance');
+});
+
+t('relic book: progress counts per rarity, noting relics returns only the new ones and ignores unknown ids', () => {
+  const none = relicProgress({});
+  assert.equal(none.total, ITEMS.length); assert.equal(none.got, 0);
+  assert.deepEqual(RARITIES.map((r) => none.by[r].total), RARITIES.map((r) => ITEMS.filter((i) => i.rarity === r).length));
+  const found = {};
+  assert.deepEqual(noteRelics(found, ['claws', 'kingcrown', 'claws', 'nope']), ['claws', 'kingcrown']);
+  assert.deepEqual(noteRelics(found, ['claws', 'bell']), ['bell'], 'already found ones are not new again');
+  const p = relicProgress(found);
+  assert.equal(p.got, 3); assert.equal(p.by.common.got, 2); assert.equal(p.by.mythic.got, 1); assert.equal(p.by.rare.got, 0);
+  assert.equal(relicProgress(undefined).got, 0, 'a missing book is an empty book');
+});
+
+t('team relics: one line per kind with count and carriers, rarest first, unknown ids skipped', () => {
+  const cats = [{ id: 'mochi', items: ['claws', 'kingcrown'] }, { id: 'pearl', items: ['claws', 'nope'] }, { id: 'tuna' }];
+  const r = teamRelics(cats);
+  assert.deepEqual(r.map((e) => e.id), ['kingcrown', 'claws']);
+  assert.equal(r[1].n, 2); assert.deepEqual(r[1].carriers, ['mochi', 'pearl']);
+  assert.ok(r[0].desc && r[0].name && r[0].icon);
+  assert.deepEqual(teamRelics([]), []);
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/teamRelics\(cats\)/.test(js) && /Items worn/.test(js), 'Team stats lists them');
+});
+
+t('relic sets: ids exist, three different relics from a set give its bonus and five double it, only living tower cats count', () => {
+  const ids = new Set();
+  for (const s of RELIC_SETS) {
+    assert.ok(s.name && s.ids.length >= 5 && Object.keys(s.fx).length, s.id + ' is complete');
+    for (const id of s.ids) assert.ok(ITEM_BY_ID[id], s.id + ' lists a real relic: ' + id);
+    assert.equal(new Set(s.ids).size, s.ids.length, 'no duplicates in ' + s.id); ids.add(s.id);
+  }
+  assert.equal(ids.size, RELIC_SETS.length);
+  const bells = RELIC_SETS.find((s) => s.id === 'noise');
+  const mk = (...items) => ({ id: 'tabby', items, ko: false });
+  assert.deepEqual(activeSets([mk('bell', 'gbell')]).filter((a) => a.mult).map((a) => a.set.id), [], 'two is not enough');
+  const three = activeSets([mk('bell', 'gbell'), mk('jingle')]).find((a) => a.set.id === 'noise');
+  assert.equal(three.mult, 1); assert.equal(three.have.length, 3);
+  assert.equal(activeSets([mk('bell', 'bell', 'bell')]).find((a) => a.set.id === 'noise').mult, 0, 'copies of one relic count once');
+  const five = activeSets([mk(...bells.ids.slice(0, 3)), mk(...bells.ids.slice(3, 5), 'rind', 'cookie')]).find((a) => a.set.id === 'noise');
+  assert.equal(five.have.length, 5); assert.equal(five.mult, 2);
+  assert.equal(activeSets([{ ...mk('bell', 'gbell', 'jingle'), ko: true }]).find((a) => a.set.id === 'noise').mult, 0, 'a knocked out cat does not count');
+  assert.deepEqual(activeSets([]).map((a) => a.mult), RELIC_SETS.map(() => 0));
+});
+
+t('relic sets: setUps reports a set only when it turns on or doubles, once', () => {
+  const mk = (...items) => ({ id: 'tabby', items, ko: false });
+  const seen = {};
+  assert.deepEqual(setUps(seen, [mk('vest', 'cushion')]), [], 'two relics: nothing yet');
+  const a = setUps(seen, [mk('vest', 'cushion', 'mitten')]);
+  assert.deepEqual(a.map((x) => [x.set.id, x.mult]), [['armor', 1]]);
+  assert.deepEqual(setUps(seen, [mk('vest', 'cushion', 'mitten')]), [], 'not again');
+  const b = setUps(seen, [mk('vest', 'cushion', 'mitten', 'shell', 'cloak')]);
+  assert.deepEqual(b.map((x) => [x.set.id, x.mult]), [['armor', 2]], 'doubling is news too');
+  assert.deepEqual(setUps(seen, [mk('vest')]), [], 'losing a set is silent');
+  assert.deepEqual(setUps(seen, [mk('vest', 'cushion', 'mitten')]).map((x) => x.mult), [1], 'getting it back is news again');
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/function noteSets\(/.test(js) && /noteSets\(\)/.test(js.slice(js.indexOf('function beginWave'), js.indexOf('function beginWave') + 400)), 'checked when a wave begins');
+  const ns = js.slice(js.indexOf('function noteSets'), js.indexOf('function beginWave'));
+  assert.ok(/sfx\.play\('synergy'/.test(ns) && /!paused/.test(ns), 'a set turning on also chimes (never over the pause menu)');
+});
+
+t('relic sets: the card hint names the set, its progress and when this relic completes or doubles it', () => {
+  const mk = (...items) => ({ id: 'tabby', items, ko: false });
+  assert.equal(setHint('claws', []), 'Sharp Set 0/3', 'progress even when nothing is held');
+  assert.match(setHint('mitten', [mk('vest')]), /Armor Set 1\/3/);
+  assert.match(setHint('mitten', [mk('vest', 'cushion')]), /Armor Set 2\/3.*completes it/);
+  assert.match(setHint('cloak', [mk('vest', 'cushion', 'mitten', 'shell')]), /doubles it/);
+  assert.doesNotMatch(setHint('vest', [mk('vest', 'cushion')]), /completes/, 'a copy does not help');
+  assert.equal(setHint('rainbow', []), '', 'a relic with no set has no hint');
+  assert.ok(/setHint\(id, g\.cats\)/.test(readFileSync('stacking_cats/main.js', 'utf8')), 'shown on the relic cards');
+});
+
+t('relic book trophies: collection sizes and sets in play, and the final boss trophy still closes the list', () => {
+  const by = (id) => ACHIEVEMENTS.find((a) => a.id === id);
+  const book = (n) => ({ save: { relics: Object.fromEntries(ITEMS.slice(0, n).map((i) => [i.id, true])) }, run: {}, stats: {}, kingdom: {} });
+  assert.ok(!by('book10').check(book(9)) && by('book10').check(book(10)));
+  assert.ok(!by('book30').check(book(29)) && by('book30').check(book(30)));
+  assert.ok(!by('bookall').check(book(ITEMS.length - 1)) && by('bookall').check(book(ITEMS.length)));
+  assert.equal(by('book10').check({ save: {}, run: {}, stats: {}, kingdom: {} }), false, 'no book yet is fine');
+  assert.ok(!by('set1').check({ run: { setMax: 0 } }) && by('set1').check({ run: { setMax: 1 } }));
+  assert.ok(!by('set3').check({ run: { setMax: 2 } }) && by('set3').check({ run: { setMax: 3 } }));
+  assert.equal(ACHIEVEMENTS[ACHIEVEMENTS.length - 1].id, 'king');
+  const g = newGame({ seed: 3, events: false });
+  for (const id of ['tabby', 'ember', 'mochi']) addCat(g, id);
+  g.cats[0].items.push('vest', 'cushion'); g.cats[1].items.push('mitten');
+  g.state = 'fight'; g.queue = []; step(g);
+  assert.equal(g.run.setMax, 1, 'the sim records how many sets were active at once');
+});
+
+t('relic book line for the end of a run: only when the run found something, singular and plural, with the book total', () => {
+  assert.equal(relicBookLine(0, 5, 61), '');
+  assert.equal(relicBookLine(1, 5, 61), '1 new item in the Item Book (5/61)');
+  assert.equal(relicBookLine(3, 12, 61), '3 new items in the Item Book (12/61)');
+  assert.ok(!relicBookLine(2, 2, 61).includes(String.fromCharCode(0x2014)));
+  const js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/runNewRelics \+= fresh\.length/.test(js) && /relicBookLine\(runNewRelics/.test(js), 'counted while playing, shown on the game over screen');
+  assert.ok(/runNewRelics = 0/.test(js), 'reset for each run');
+});
+
+t('relic sets wiring: calcMods applies them and Team stats lists them', () => {
+  const sim = readFileSync('stacking_cats/sim.js', 'utf8'), js = readFileSync('stacking_cats/main.js', 'utf8');
+  assert.ok(/activeSets\(g\.cats\)/.test(sim), 'calcMods reads the sets');
+  assert.ok(/Item sets/.test(js) && /activeSets\(/.test(js), 'Team stats shows them');
+});
+
+t('relic book wiring: a screen, a title button, found relics saved with the run, and a toast for new ones', () => {
+  const js = readFileSync('stacking_cats/main.js', 'utf8'), css = readFileSync('stacking_cats/index.html', 'utf8');
+  assert.ok(/function showRelics\(back/.test(js) && /relics: \(\) => showRelics\(showTitle\)/.test(js), 'screen and title action');
+  assert.ok(/data-act="relics"/.test(js), 'title button');
+  assert.ok(/function noteRelics\(/.test(js) && /noteRelics\(\)/.test(js.slice(js.indexOf('function beginWave'), js.indexOf('function beginWave') + 3000)), 'relics are noted when a wave begins');
+  assert.ok(/New item/.test(js), 'a toast for a new relic');
+  assert.ok(/function freshSave\(\) \{\s*return \{[^}]*relics: \{\}/.test(js), 'a brand new save already has an empty book (new players must not crash on their first relic)');
+  assert.ok(/if \(!save\.relics\) save\.relics = \{\}/.test(js), 'noting relics never assumes the field exists');
+  assert.ok(/relics: Object\.fromEntries\(Object\.keys\(s\.relics \|\| \{\}\)\.filter\(\(id\) => ITEM_BY_ID\[id\]/.test(js), 'the loader keeps only real relics in the book');
+  assert.ok(/\.rtile\.locked/.test(css) && /\.rtile\.r-mythic/.test(css), 'tile styles, locked and by rarity');
+});
+
+console.log(`${n} tests passed`);

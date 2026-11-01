@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>gfx cats</title>
+<body style="margin:0;background:#3a3350;color:#f6ecd8;font:10px sans-serif">
+<canvas id="c"></canvas>
+<script src="../src/gfx/pawprint.js"></script>
+<script>
+var P=SB.gfx.pawprint,c=document.getElementById('c'),x=c.getContext('2d');
+var mode=(location.search.match(/m=(\w+)/)||[])[1]||'coats';
+var rows=[];
+function cell(g,pose,ox,oy,s,label){x.fillStyle='#4b4468';x.fillRect(ox,oy+32*s-1,32*s*1.25,1);P.drawCat(x,g,pose,ox+4,oy+4,s,0);if(label){x.fillStyle='#f6ecd8';x.fillText(label,ox+2,oy+9);}}
+if(mode==='coats'){
+ var SC=+((location.search.match(/s=(\d)/)||[])[1]||2),CW=SC*40+16,furs=P.FURS,pats=P.PATTERNS;c.width=pats.length*CW+10;c.height=furs.length*CW+10;
+ furs.forEach(function(f,i){pats.forEach(function(p,j){cell(P.normalize({seed:3+i,body:'tabby',fur:f,pattern:p,eyeColor:'green',accessory:'collar'}),'idle0',j*CW+4,i*CW+4,SC,f+' '+p);});});
+}else if(mode==='acc'){
+ var A=P.ACCESSORIES;c.width=8*76*1+10;c.height=Math.ceil(A.length/8)*(76+76)+10;
+ A.forEach(function(a,i){var ox=(i%8)*76+4,oy=((i/8)|0)*152+4;var g=P.normalize({seed:5,body:'tabby',fur:'ginger',pattern:'stripes',accessory:a});cell(g,'idle0',ox,oy,2,a);
+  cell(Object.assign({},g,{scale:1.25}),'idle0',ox,oy+70,2,'champ');});
+}else if(mode==='poses'){
+ var poses=['idle0','idle1','blink0','attack','hurt','sleep0','boxed0','hidden0','dead'];
+ var gs=[P.normalize({seed:1,body:'chonk',fur:'ginger',pattern:'stripes',cape:true,accessory:'hat_crown'}),P.normalize({seed:2,body:'slim',fur:'black',pattern:'solid',accessory:'hat_wizard'}),P.normalize({seed:4,body:'floof',fur:'white',pattern:'calico',accessory:'bandana'}),P.fromId('champion_sunbeam')];
+ c.width=poses.length*140+10;c.height=gs.length*(140+20)*1+10;
+ gs.forEach(function(g,i){poses.forEach(function(p,j){var ox=j*140+4,oy=i*160+4;cell(g,p,ox,oy,1,p);cell(g,p,ox+40,oy+10,3,'');});});
+}else if(mode==='champs'){
+ // champion hints from data
+ var fs=['champions-ah','champions-mm'];
+}
+document.title='ok';
+</script>

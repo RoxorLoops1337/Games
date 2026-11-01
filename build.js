@@ -90,8 +90,12 @@ const STATIC_PATHS = [
   'ludus_maximus',
   'ludus_maximus_3d',
   'blockmates',
+  'stacking_cats',
+  'graftwork',
+  'sunbeam_siege',
   'rustgrift',
   'midnight_mog',
+  'drop_the_bass',
   'tools',
 ];
 
@@ -154,6 +158,18 @@ const buildAwesomeFarm = () => {
   }
 };
 
+// Pitch Story is a Godot 4 project (pitch_story/). Like Awesome Farm, its web export is kept in git in pitch_story/play/
+// (rebuild with `npm run build:pitchstory`, needs Godot 4.7.1 + web templates, then commit play/). The site serves the repo as
+// it is, so the game runs at /pitch_story/play/ and pitch_story/index.html forwards /pitch_story/ there. The 39 MB engine is
+// shipped gzipped (host limit 25 MiB).
+const buildPitchStory = () => {
+  const play = path.join(REPO, 'pitch_story', 'play');
+  if (!fs.existsSync(path.join(play, 'index.html'))) { console.log('pitch_story: no build in pitch_story/play (npm run build:pitchstory makes one)'); return; }
+  fs.cpSync(play, path.join(DIST, 'pitch_story', 'play'), { recursive: true });
+  fs.copyFileSync(path.join(REPO, 'pitch_story', 'index.html'), path.join(DIST, 'pitch_story', 'index.html'));
+  console.log('copied pitch_story/play → dist/pitch_story/play');
+};
+
 // Beatbox Heroes ESM splitting build (park3d/entry.js -> r3/entry.js + r3/p3-*.js): one tool owns the esbuild options (tools/beatbox_heroes/build_park3d.mjs --esm).
 // Output is mirrored into the source tree like the other bundles, and the entry URL is stamped into index.html as window.BBH_R3.
 const R3_SRC = path.join(REPO, 'beatbox_heroes', 'r3');
@@ -184,7 +200,7 @@ const wipeDist = () => {
 // folder). Clawspire: the old pre-rendered intro (js/intro.js draws it live, no
 // code requests these) and the design docs.
 // Encore Island 3D keeps its preview/lab pages and notes next to the code; none of it is part of the site
-const DEV_ONLY = /^(encore_island\/view3d\/(lab[\w]*\.html|[\w]*lab[\w]*\.js|README\.md)|encore_island_3d\/(preview_\w+\.html|DESIGN\.md)|ludus_maximus_3d\/(lab\/.*|ART_BIBLE\.md|ROADMAP\.md))$/;
+const DEV_ONLY = /^(sunbeam_siege\/(demo|design|tests)\/.*|sunbeam_siege\/NOTES\.md|encore_island\/view3d\/(lab[\w]*\.html|[\w]*lab[\w]*\.js|README\.md)|encore_island_3d\/(preview_\w+\.html|DESIGN\.md)|ludus_maximus_3d\/(lab\/.*|ART_BIBLE\.md|ROADMAP\.md))$/;
 const SKIP_IN_DIST = {
   clawspire: new Set(['intro.mp4', 'intro.webm', 'intro_poster.jpg', 'DESIGN.md', 'ART_PROMPTS.md']),
   // Hocus Vocus: the re-theme plan (hundreds of KB of design notes) is never deployed
@@ -336,6 +352,7 @@ const minifyClawspire = () => {
   writeArtManifest();
   minifyClawspire();
   buildAwesomeFarm();
+  buildPitchStory();
 
   for (const t of BUNDLES) {
     await esbuild.build(buildOpts(t));
