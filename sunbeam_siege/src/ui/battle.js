@@ -32,17 +32,20 @@
   function geometry(mode) {
     var G;
     if (mode === 'phone') {
-      G = { mode: mode, W: 288, H: 296, roofH: 26, floorH: 88, feetOff: 66, x0: 4, x1: 284, catPitch: 34, catRight: 142, pestLeft: 148, pestUnit: 27, labelInline: false };
+      // phone (portrait): 208 logical px across, drawn at about 1.9 css px per logical px on a 412 wide screen, so cats sit about 58 css px apart and pests 40 css px per size unit.
+      // floorH is retuned by fit() to the free height (G.setFloor); pestMax is the pest lane width, beyond it a crowded floor squeezes its pests together.
+      G = { mode: mode, W: 208, H: 270, roofH: 24, floorH: 80, feetOff: 58, x0: 3, x1: 205, catPitch: 31, catRight: 126, pestLeft: 129, pestUnit: 21, pestMax: 76, labelInline: false };
+      G.setFloor = function (fh) { G.floorH = fh; G.feetOff = fh - 18; G.H = G.roofH + 3 * fh + 6; };
     } else {
       G = { mode: mode, W: 384, H: 208, roofH: 24, floorH: 60, feetOff: 45, x0: 22, x1: 362, catPitch: 36, catRight: 232, pestLeft: 238, pestUnit: 24, labelInline: true };
     }
     G.top = function (f) { return G.roofH + (2 - f) * G.floorH; };
     G.feet = function (f) { return G.top(f) + G.feetOff; };
     G.catX = function (start, size) { return G.catRight - (start + size / 2) * G.catPitch; };
-    G.pestX = function (start, size) { return G.pestLeft + (start + size / 2) * G.pestUnit; };
-    G.room = function (f, i) { return G.labelInline ? { x: 28 + i * 26, y: G.top(f) + 22, w: 24, h: 24 } : { x: 62 + i * 24, y: G.top(f) + 2, w: 22, h: 22 }; };
-    G.label = function (f) { return G.labelInline ? { x: 28, y: G.top(f) + 5, w: 50, h: 12 } : { x: 6, y: G.top(f) + 3, w: 52, h: 16 }; };
-    G.inc = function (f) { return G.labelInline ? { x: G.x1 - 36, y: G.top(f) + 4, w: 34, h: 14 } : { x: G.W - 58, y: G.top(f) + 3, w: 52, h: 16 }; };
+    G.pestX = function (start, size, tot) { var u = G.pestUnit; if (G.pestMax && tot && tot * u > G.pestMax) u = G.pestMax / tot; return G.pestLeft + (start + size / 2) * u; };
+    G.room = function (f, i) { return G.labelInline ? { x: 28 + i * 26, y: G.top(f) + 22, w: 24, h: 24 } : { x: 50 + i * 22, y: G.top(f) + 2, w: 20, h: 20 }; };
+    G.label = function (f) { return G.labelInline ? { x: 28, y: G.top(f) + 5, w: 50, h: 12 } : { x: 5, y: G.top(f) + 3, w: 36, h: 12 }; };
+    G.inc = function (f) { return G.labelInline ? { x: G.x1 - 36, y: G.top(f) + 4, w: 34, h: 14 } : { x: G.W - 40, y: G.top(f) + 3, w: 36, h: 12 }; };
     return G;
   }
 
@@ -127,7 +130,8 @@
     el.hand = h('div.b-hand', { role: 'list', 'aria-label': 'Hand', 'data-tut': 'hand' });
     el.handWrap.appendChild(el.hand);
     el.end = h('button.btn.b-end', { 'data-tut': 'endturn', onclick: function () { endTurn(); } }, h('span', {}, 'End'), h('span', {}, 'Turn'));
-    el.left = h('div.b-left', {}, el.drawPile, h('div.b-meters', {}, el.orbs, el.nip, el.bank));
+    el.extras = h('div.b-extras', {}, el.nip, el.bank); // display:contents on desktop, its own row above the resource row on a phone
+    el.left = h('div.b-left', {}, el.drawPile, h('div.b-meters', {}, el.orbs, el.extras));
     el.right = h('div.b-right', {}, el.exhPile, el.discPile);
     el.status.appendChild(el.left); el.status.appendChild(h('span.sp')); el.status.appendChild(el.right);
     el.bottom.appendChild(el.status); el.bottom.appendChild(el.pw); el.bottom.appendChild(el.handWrap); el.bottom.appendChild(el.end);
@@ -209,7 +213,7 @@
       for (var ry2 = 0; ry2 < G.roofH - 6; ry2 += 4) { var inset2 = Math.floor((G.roofH - ry2) * 0.9); var rw = hx1 - hx0 + 8 - (inset2 - 12) * 2; for (var sx2 = 0; sx2 < rw; sx2 += 8) x.fillRect(hx0 - 4 + inset2 - 12 + sx2, ry2 + 6, 7, 1); }
       // garden strip
       R('#1b2a3a', 0, H - 5, W, 5); for (var gx = 0; gx < W; gx += 5) R('#2f5a4a', gx, H - 6 - ((gx * 3) % 3), 2, 3);
-      bg = c; bgKey = mode + G.W;
+      bg = c; bgKey = mode + G.W + 'x' + G.H;
     }
 
     // ---------------- sizing
@@ -220,7 +224,24 @@
       rootEl.setAttribute('data-mode', mode);
       var availW = el.sceneCol.clientWidth, gardenH = el.garden.offsetHeight || 0;
       var availH = el.sceneCol.clientHeight - gardenH - 4;
-      if (mode === 'phone') availH = L.h - el.top.offsetHeight - Math.max(gardenH, 32) - 12 - 232 - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-b') || 0);
+      var cwCard;
+      if (mode === 'phone') {
+        // portrait phone: the house takes the full width, the hand takes the widest cards that still leave the floors tall enough, and every floor gets the height that is left
+        var rcs = getComputedStyle(rootEl), safeB = (parseFloat(rcs.paddingBottom) || 0) + (parseFloat(rcs.paddingTop) || 0), sW = availW / G.W; // the safe-area insets (notch, rounded corners, gesture bar) are padding on the battle root
+        var fixedH = el.top.offsetHeight + Math.max(gardenH, 30) + 4 + (el.extras.offsetHeight + (parseFloat(rcs.getPropertyValue('--res-h')) || 50) + 6) + 10 + 8 + safeB, handW = el.bottom.clientWidth - 16, fh;
+        var cwTop = Math.max(76, Math.min(112, Math.floor(handW / 4.2))), cardH;
+        for (cwCard = cwTop; ; cwCard -= 4) {
+          fh = ((L.h - fixedH - Math.round(cwCard * 1.4) - 30) / sW - G.roofH - 6) / 3;
+          if (fh >= 78 || cwCard - 4 < 76) break;
+        }
+        cardH = cwCard * 1.4;
+        if (fh > 94) { cardH = Math.min(cwCard * 1.62, cardH + (fh - 94) * 3 * sW); fh = 94; } // a tall phone: spare height makes the cards taller (more room for rules text) instead of leaving a gap
+        fh = Math.max(66, Math.min(100, Math.floor(fh)));
+        if (G.setFloor) G.setFloor(fh);
+        availH = L.h - fixedH - Math.round(cardH) - 30;
+        rootEl.style.setProperty('--hand-h', Math.round(cardH) + 30 + 'px');
+        rootEl.style.setProperty('--card-ar', (cardH / cwCard).toFixed(3));
+      }
       if (availW < 50 || availH < 50) return;
       var sc = Math.min(availW / G.W, availH / G.H);
       if (mode === 'desktop' && sc >= 2.4) sc = Math.floor(sc * 4) / 4;
@@ -229,24 +250,17 @@
       el.stage.style.width = cw + 'px'; el.stage.style.height = chh + 'px';
       el.canvas.width = G.W; el.canvas.height = G.H; el.canvas.style.width = cw + 'px'; el.canvas.style.height = chh + 'px';
       rootEl.style.setProperty('--u', s + 'px');
-      var hudFont = Math.max(9, Math.min(13, 4.6 * s));
+      var hudFont = mode === 'phone' ? Math.max(11, Math.min(13, 6 * s)) : Math.max(9, Math.min(13, 4.6 * s));
       rootEl.style.setProperty('--hud', hudFont + 'px');
-      var cwCard;
-      if (mode === 'phone') {
-        var handAvail = L.h - el.top.offsetHeight - chh - Math.max(gardenH, 32) - 12 - 46 - 10 - 40;
-        cwCard = Math.max(78, Math.min(114, Math.round(handAvail / 1.4 * 0.9)));
-        // use the real height of the hand row when it is known, so spare vertical room becomes bigger, more readable cards
-        var realH = el.handWrap.clientHeight;
-        if (realH > 90) cwCard = Math.max(78, Math.min(136, Math.round((realH - 30) / 1.42)));
-      } else {
+      if (mode !== 'phone') {
         var hh = el.handWrap.clientHeight || 160;
         cwCard = Math.max(L.short ? 64 : 92, Math.min(150, Math.round(hh / 1.4 * 0.74)));
       }
       el.hand.style.setProperty('--hand-cw', cwCard + 'px');
-      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth].join(',');
+      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth, el.extras.offsetHeight, rootEl.style.getPropertyValue('--hand-h')].join(',');
       if (sig === fitSig && !force) return;
       fitSig = sig;
-      if (!bg || bgKey !== mode + G.W) buildBg();
+      if (!bg || bgKey !== mode + G.W + 'x' + G.H) buildBg();
       buildBoardFrame();
       layoutUnits(true);
       renderHud();
@@ -419,9 +433,10 @@
           v.tx = G.catX(start, size); v.ty = G.feet(f); start += size; if (v.x == null || snap) { v.x = v.tx; v.y = v.ty; }
         });
         start = 0;
+        var ptot = 0; (fl.pests || []).forEach(function (p) { ptot += pestSize(p); });
         (fl.pests || []).slice().sort(function (a, b) { return a.pos - b.pos; }).forEach(function (p) {
           var v = viewOf(p.uid); if (!v) return; var size = pestSize(p);
-          v.tx = G.pestX(start, size); v.ty = G.feet(f); start += size; if (v.x == null || snap) { v.x = v.tx; v.y = v.ty; }
+          v.tx = G.pestX(start, size, ptot); v.ty = G.feet(f); start += size; if (v.x == null || snap) { v.x = v.tx; v.y = v.ty; }
         });
       }
     }
@@ -632,6 +647,11 @@
     }
     // fan geometry for card i of n: writes SL.x / SL.y / SL.r (no allocation)
     function computeSlot(i, n, W, cwc) {
+      if (mode === 'phone') { // portrait: a shallow fan across the full width, 4 to 5 cards side by side with a little overlap, more cards squeeze closer
+        var pgap = Math.min(cwc * 1.02, (W - cwc - 24) / Math.max(1, n - 1)), ptotal = (n - 1) * pgap + cwc, pk = i - (n - 1) / 2;
+        SL.x = Math.round((W - ptotal) / 2 + i * pgap); SL.y = Math.round(pk * pk * (n > 6 ? 0.8 : 1.6)); SL.r = pk * (n > 6 ? 1.5 : 2.2);
+        return;
+      }
       var room = W - cwc * 1.5 - 28, gap = Math.min(cwc * 0.92, room / Math.max(1, n - 1)), total = (n - 1) * gap + cwc, x0 = (W - total) / 2 - 6; // 1.5: a hovered, rotated edge card grows ~50% wider and must not reach End Turn
       var k = i - (n - 1) / 2;
       SL.x = Math.round(x0 + i * gap); SL.y = Math.round(k * k * (n > 7 ? 1.1 : 1.8)); SL.r = k * (n > 7 ? 2 : 3);
@@ -639,11 +659,9 @@
     function layoutHand(skipUid) {
       var order = skipUid ? handOrder.filter(function (u) { return u !== skipUid; }) : handOrder;
       var n = order.length, W = el.hand.clientWidth, cwc = parseFloat(el.hand.style.getPropertyValue('--hand-cw')) || 110;
-      var phone = mode === 'phone';
-      el.hand.classList.toggle('row', phone);
+      el.hand.classList.remove('row');
       order.forEach(function (uid, i) {
         var rec = handEls.get(uid); if (!rec) return; var c = rec.el;
-        if (phone) { c.style.setProperty('--x', '0px'); c.style.setProperty('--y', '0px'); c.style.setProperty('--r', '0deg'); c.style.marginRight = '6px'; return; } // no overlap on phones: the stats sit on the right edge of a card and must stay readable
         c.style.marginRight = '';
         computeSlot(i, n, W, cwc);
         rec.bx = SL.x;
@@ -1332,6 +1350,8 @@
       el.bank.classList.toggle('hidden', !showBank); ui.clear(el.bank);
       el.bank.appendChild(ui.icon('lives', { size: '1.3em' })); el.bank.appendChild(h('b.num', {}, 'Banked ' + (vm.bank || 0)));
       // end turn button
+      var hasExtra = !el.nip.classList.contains('hidden') || !el.bank.classList.contains('hidden');
+      if (rootEl.classList.contains('has-extra') !== hasExtra) { rootEl.classList.toggle('has-extra', hasExtra); if (mode === 'phone') fit(); }
       el.end.disabled = vm.turn !== 'player' || playing || ended;
       el.end.classList.toggle('glow', !playing && vm.turn === 'player' && !(vm.hand || []).some(function (x) { var cp = tryf(function () { return B.canPlay(x.uid); }); return cp && cp.ok; }));
       // topbar
@@ -1348,10 +1368,10 @@
         pips.appendChild(h('i' + (rr === r ? '.now' : rr < r ? '.past' : '') + (isW ? '.moon' : '')));
       }
       el.clock.appendChild(ui.icon('moon', { size: '1.3em', cls: 'neutral' }));
-      el.clock.appendChild(h('span.ck-r', {}, h('b', {}, 'Round ' + r), run && run.night ? h('small', {}, ' Night ' + run.night + '/9') : null));
-      el.clock.appendChild(pips);
       var msg = c.isWitching ? 'WITCHING HOUR' : left === 1 ? 'Witching next round!' : left > 1 ? 'Witching in ' + left : '';
-      if (msg) el.clock.appendChild(h('span.ck-msg' + (c.isWitching || left === 1 ? '.hot' : ''), {}, msg));
+      // ck-main / ck-sub are display:contents on desktop; the phone stacks them into two labelled lines (Night and Round, then the hour pips and the witching message)
+      el.clock.appendChild(h('span.ck-main', {}, h('span.ck-r', {}, h('b', {}, 'Round ' + r), run && run.night ? h('small', {}, ' Night ' + run.night + '/9') : null),
+        h('span.ck-sub', {}, pips, msg ? h('span.ck-msg' + (c.isWitching || left === 1 ? '.hot' : ''), {}, msg) : null)));
       el.clock.classList.toggle('hot', !!(c.isWitching || left === 1));
       rootEl.classList.toggle('b-witching', !!c.isWitching);
     }
