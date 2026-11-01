@@ -40,7 +40,7 @@ function putLayer(ctx, e, t, alpha, dx, dy) {
   if (alpha <= 0.01) return;
   const a0 = ctx.globalAlpha; ctx.globalAlpha = a0 * alpha;
   if (e.direct) { ctx.save(); ctx.translate(dx || 0, dy || 0); e.draw(new Pen(ctx, e.seed, 1), ctx); ctx.restore(); }
-  else ctx.drawImage(e.frames[Math.floor(t * 6) % e.frames.length], dx || 0, dy || 0, 540, 960);
+  else ctx.drawImage(e.frames[(((Math.floor(t * 6) || 0) % e.frames.length) + e.frames.length) % e.frames.length], dx || 0, dy || 0, 540, 960);
   ctx.globalAlpha = a0;
 }
 const sp = (key, w, h, draw, seed) => sprite('dsc:' + key, w, h, draw, { seed: seed || 5 });

@@ -491,10 +491,10 @@ const BULB_COLS = [C.pink, C.cyan, C.yellow, C.lime, C.orange];
 // string light bulbs for the Static stage, in stage-centre coordinates
 function lightBulbs(tier) {
   const n = [0, 3, 5, 7][tier] || 0, out = [];
-  for (let i = 0; i < n; i++) { const k = n === 1 ? 0.5 : i / (n - 1); out.push({ i, x: -56 + k * 112, y: -76 + Math.sin(k * Math.PI) * 9 + 3, col: BULB_COLS[i % 5] }); }
+  for (let i = 0; i < n; i++) { const k = n === 1 ? 0.5 : i / (n - 1); out.push({ i, x: -56 + k * 112, y: -82 + Math.sin(k * Math.PI) * 8 + 3, col: BULB_COLS[i % 5] }); }
   return out;
 }
-const EXW = 200, EXH = 140;
+const EXW = 200, EXH = 150;
 const extraCache = new Map();
 function stageExtras(worldId, sp) {
   if (!(sp.amps || sp.banner || sp.lights || sp.truss)) return null;
@@ -516,17 +516,17 @@ function paintExtras(p, c, sp, accent) {
     }
   }
   if (poles) {
-    const hgt = sp.truss >= 2 ? 118 : 104;
+    const hgt = sp.banner > 0 || sp.lights > 0 ? 112 : sp.truss >= 2 ? 92 : 82;
     for (const sd of [-1, 1]) { p.ln([sd * 62, 22, sd * 62, 22 - hgt], INK, 3.2, false, 0.5); if (sp.truss >= 1) for (let k = 0; k < 4; k++) p.ln([sd * 62 - 4, 22 - k * 30, sd * 62 + 4, 22 - k * 30 - 22], INK, 1.6, false, 0.3); }
     p.ln([-62, 22 - hgt, 62, 22 - hgt], INK, 3.2, false, 0.5);
     if (sp.truss >= 3) for (const x of [-34, 0, 34]) p.shp(rect(x - 5, 22 - hgt + 2, 10, 8, 2), C.yellow, INK, 1.8, { gap: 4 });
   }
   if (sp.banner > 0) {
-    const ty = 22 - 96;
+    const ty = -80;
     if (sp.banner >= 2) { p.shp([-48, ty, 48, ty, 48, ty + 22, 0, ty + 28, -48, ty + 22], C.pink, INK, 2.6, { gap: 5, f2: C.yellow }); p.txt('BASS', 0, ty + 18, 12, C.paper, { align: 'c', out: INK, ow: 3.4, w: 2.6 }); }
     else for (let i = 0; i < 6; i++) p.shp([-50 + i * 20, ty, -38 + i * 20, ty, -44 + i * 20, ty + 14], BULB_COLS[i % 5], INK, 1.8, { gap: 4 });
   }
-  if (sp.lights > 0) { const q = []; for (let i = 0; i <= 10; i++) q.push(-58 + i * 11.6, -76 + Math.sin(i / 10 * Math.PI) * 9); p.ln(q, INK, 1.8, false, 0.4); }
+  if (sp.lights > 0) { const q = []; for (let i = 0; i <= 10; i++) q.push(-58 + i * 11.6, -82 + Math.sin(i / 10 * Math.PI) * 8); p.ln(q, INK, 1.8, false, 0.4); }
 }
 
 // ---------------------------------------------------------------- the Studio tab backstage scene

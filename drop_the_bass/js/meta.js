@@ -683,6 +683,7 @@ export function applyRunResult(p, result, rng, now = 0) {
     p.daily.challengeBest = Math.max(p.daily.challengeBest || 0, result.cleared);
   }
   out.diamonds += result.gems || 0;
+  if (result.rewardMul) { records = Math.round(records * (result.rewardMul.records || 1)); fans = Math.round(fans * (result.rewardMul.fans || 1)); }   // easy pays less, hard pays more
   p.records += records; out.records = records;
   p.diamonds += out.diamonds;
   out.fans = fans;

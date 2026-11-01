@@ -597,7 +597,7 @@ export function boardModal(app, id, title) {
         const act = e.me ? null : e.friend ? h('button', { class: 'lb-x', 'aria-label': 'Remove friend', title: 'Remove friend', onclick: () => { M.removeFriend(p, e.name); state.msg = ''; app.save(); draw(); } }, 'x')
           : h('button', { class: 'lb-add', 'aria-label': 'Add friend', title: 'Add friend', onclick: () => addFriend(e.name) }, '+');
         body.append(h('div', { class: 'row lb-row' + (e.me ? ' me' : '') + (e.friend ? ' friend' : '') + (e.missing ? ' missing' : '') },
-          h('div', { class: 'lb-rank', style: top3 ? 'color:var(--gold)' : '' }, e.rank > 0 ? '#' + e.rank : '-'),
+          h('div', { class: 'lb-rank', style: top3 ? 'color:#c77d00' : '' }, e.rank > 0 ? '#' + e.rank : '-'),
           h('div', { class: 'grow lb-name' }, e.name, e.me ? h('span', { class: 'lb-tag you' }, 'YOU') : null, e.friend ? h('span', { class: 'lb-tag fr' }, 'FRIEND') : null),
           h('div', { class: 'lb-score' }, e.score == null ? '-' : e.score), act));
       });
