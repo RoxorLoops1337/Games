@@ -12,10 +12,12 @@ A Cell Survivor - Shoot Defense style game, with RoxorLoops & Jasmin as the cell
   so it just gets shorter and every kill pushes the face away from the membrane.
 - The **face is shielded** (no HP, cannot be targeted) until every other cell is gone, then it pops and the stage is cleared.
   If the face reaches the membrane it drains HP until you finish the cells behind it.
-- Two cells per snake carry a **chest**: aim for them first. Chests give Beats and a skill fragment.
-- Upgrades come only from the **yellow upgrade cells** (a star on a yellow cell, about one per 7 cells, at least 3 per
+- Snakes are long (32 cells in stage 1, growing by 4 per stage, 150 max). Lane shapes include tall hairpins, big lobes and castle steps.
+- About one cell in 15 carries a **chest** (at least two): aim for them first. Chests give Beats and a skill fragment.
+- Upgrades come only from the **yellow upgrade cells** (a star on a yellow cell, about one per 7 cells, at least 4 per
   snake). Pop one, then pick 1 of 3 with 4 **Free Refreshes** per run. The first two picks are capsule upgrades only
-  (attack speed, extra note, extra burst, damage); skills and passives join after that. Cards show the numbers
+  (attack speed, extra note, extra burst, damage); skills and passives join after that. Each card has a **rarity** (Common, Rare, Epic, Legendary, Mythic, Godlike) that scales its effect. One of the three is always
+  common, and every pick raises your luck so better rarities slowly become likelier. Cards show the numbers
   (for example "Notes per shot: 2 -> 3") and the HUD shows what the capsule does right now.
 - **Groove**: every note that lands builds the groove meter (+1.5% damage per point, up to 20). Stop hitting and it fades.
   The cell glows when the groove is high.
@@ -29,8 +31,9 @@ A Cell Survivor - Shoot Defense style game, with RoxorLoops & Jasmin as the cell
 - **Battle**: stage select. Clear a stage to unlock the next. The first run starts straight in stage 1.
 - **Skills**: nine pieces of music gear. Beat Pad (a drum pad under the snake), Spinning Vinyl (orbiting records), Speaker Stack
   (bass thumps), Autotune (homing winged notes), Treble Pins (piercing fan), Drumsticks (sweeping sticks), Hum Bubbles
-  (slowing bubbles), Spotlight Storm (percent-HP beams), Bass Drop (executes weak cells). Four are owned from the start, the rest
-  unlock with fragments. Fragments plus Beats level a skill up (permanent damage bonus). Internal ids (`swab`, `daggers`, ...)
+  (slowing bubbles), Spotlight Storm (percent-HP beams), Bass Drop (executes weak cells). Five are owned from the start, the rest
+  unlock with fragments. Skills level up with **fragments only** (permanent damage bonus).
+  You choose a **loadout of 5 skills** to take into battle; a run always starts with just your notes and only loadout skills show up as picks. Internal ids (`swab`, `daggers`, ...)
   are save keys and never change.
 - **Stats**: Volume, Pitch, Tempo, Stamina, Fame and Encore, bought with Beats.
 - **Daily gigs**: three new goals every day (pop cells, clear stages, collect chests, reach a groove, pick upgrades) that pay Beats or Sparkles.

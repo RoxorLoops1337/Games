@@ -1,6 +1,6 @@
 // Canvas renderer. Reads the sim state, never changes it. Uses sprites from art.js
 // where they exist and draws procedural stand-ins otherwise.
-import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg } from './sim.js';
+import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv } from './sim.js';
 import { INK, mix } from './art_draw.js';
 
 const TAU = Math.PI * 2;
@@ -299,7 +299,7 @@ export function createRenderer(canvas, art, kit) {
     text('x ' + (g.upgradeLeft || 0), pad + 40, 46, 24, '#ffd84d', '#0b1020', 'left');
     text('UPGRADE CELLS', pad, 78, 12, '#fff1a8', '#0b1020', 'left');
     // what the capsule does right now
-    const up = id => g.ups[id] || 0;
+    const up = id => Math.round(uv(g, id));
     const gv = g.groove || 0, gw = 300, gx = W / 2 - gw / 2, gy = H - 128;
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(gx - 3, gy - 3, gw + 6, 18);
     const gg = ctx.createLinearGradient(gx, 0, gx + gw, 0); gg.addColorStop(0, '#ff7eb6'); gg.addColorStop(1, gv >= 15 ? '#ffd84d' : '#6fe3ff');
@@ -311,7 +311,7 @@ export function createRenderer(canvas, art, kit) {
       const hint = g.t < 7 ? 'SLIDE LEFT AND RIGHT: YOUR NOTES FLY STRAIGHT UP' : (g.upgradeLeft > 0 && g.pending === 0 && g.kills < 4) ? 'POP THE YELLOW CELLS FOR UPGRADES' : alone ? 'THE FACE POPS WHEN IT IS ALONE' : '';
       if (hint) { ctx.save(); ctx.globalAlpha = 0.75 + Math.sin(S.t * 4) * 0.2; text(hint, W / 2, H * 0.5, 24, '#ffffff', '#0b1020'); ctx.restore(); }
     }
-    text(`NOTES ${1 + up('notes')}  BURSTS ${1 + up('burst')}  SPEED +${15 * up('aspd')}%  DMG +${30 * up('cdmg')}%`, W / 2, H - 92, 17, '#bfe9ff', '#0b1020');
+    text(`NOTES ${1 + up('notes')}  BURSTS ${1 + up('burst')}  SPEED +${up('aspd')}%  DMG +${up('cdmg')}%`, W / 2, H - 92, 17, '#bfe9ff', '#0b1020');
     // chapter, virus name, and progress with chests at 25% / 50% / 100%
     const boss = isBossStage(g.stage);
     text(boss ? 'BOSS  ' + g.stage : 'STAGE ' + g.stage, W / 2, 34, 26, boss ? '#ff7a9a' : '#fff');

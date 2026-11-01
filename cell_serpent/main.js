@@ -1,4 +1,4 @@
-import { W, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
+import { W, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
@@ -45,7 +45,27 @@ function iconURL(id) {
   }
   return (iconCache[id] = spr && spr.c.toDataURL ? spr.c.toDataURL() : '');
 }
-const icon = id => (iconURL(id) ? `<img ${WEAPONS.some(w => w.id === id) || id === 'maw' ? 'class="zoom" ' : ''}src="${iconURL(id)}" alt="">` : (id[0] || '?').toUpperCase());
+const PICON = { power: '🎤', haste: '⏱️', crit: '🎯', vital: '❤️', guard: '🎧', speed: '👟' };
+const icon = id => (PICON[id] ? PICON[id] : iconURL(id) ? `<img ${WEAPONS.some(w => w.id === id) || id === 'maw' ? 'class="zoom" ' : ''}src="${iconURL(id)}" alt="">` : (id[0] || '?').toUpperCase());
+const STATICON = { atk: '🔊', crt: '🎵', cdn: '⏱️', vit: '❤️', for: '⭐', rev: '🎤' };
+function tile({ cls = '', ic, name, chip, chipCls = '', desc, bar, barText, pips, btn, gold, disabled, onclick, one }) {
+  const t = document.createElement('div'); t.className = 'tile ' + cls + (one ? ' one' : '');
+  t.innerHTML = `<div class="top"><div class="ic">${ic}</div><div style="min-width:0"><div class="nm">${name}</div>${chip ? `<span class="lv ${chipCls}">${chip}</span>` : ''}</div></div>` +
+    `<div class="ds">${desc}</div>` + (bar !== undefined ? `<div class="bar"><i style="width:${bar}%"></i></div><div class="sm">${barText || ''}</div>` : '') + (pips ? `<div class="pips">${pips}</div>` : '') +
+    (btn ? `<button class="btn small go ${gold ? 'gold' : ''}" ${disabled ? 'disabled' : ''}>${btn}</button>` : '');
+  const b = t.querySelector('button'); if (b && onclick) b.onclick = onclick;
+  return t;
+}
+function loadoutRow(el, link) {
+  el.innerHTML = '';
+  for (let i = 0; i < LOADOUT_SIZE; i++) {
+    const id = save.loadout[i], b = document.createElement('button'); b.className = 'slot' + (id ? ' full' : '');
+    b.innerHTML = id ? icon(id) : '+';
+    if (id && !link) b.title = 'Tap to remove';
+    b.onclick = () => { audio.play('click'); if (link) { hubTab = 'Skills'; renderHub(); } else if (id && toggleLoadout(save, id)) { persist(); renderHub(); } };
+    el.appendChild(b);
+  }
+}
 const curImg = c => `<img src="${iconURL(c)}" alt="" style="width:22px;height:22px;vertical-align:middle">`;
 const skillLevels = () => Object.fromEntries(Object.entries(save.skills).map(([id, k]) => [id, k.lv]));
 
@@ -78,6 +98,7 @@ function renderBattle() {
   const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : '<span><b>Cleared ✓</b></span>';
   $('stInfo').innerHTML = `<span>Cells <b>${info.length}</b></span><span>Cell HP <b>${Math.round(info.hp / 10) * 10 >= 1000 ? (info.hp / 1000).toFixed(1) + 'k' : info.hp}</b></span>${first}`;
   const go = $('stGo'); go.disabled = !playable; go.textContent = playable ? 'START THE BATTLE' : `CLEAR STAGE ${save.cleared + 1} FIRST`;
+  loadoutRow($('battleLoad'), true);
   renderGoals();
   const chip = chips.querySelector('.sel'); if (chip && chip.scrollIntoView) { try { chips.scrollTo({ left: chip.offsetLeft - 120 }); } catch (e) { /* ignore */ } }
 }
@@ -115,43 +136,46 @@ function renderGoals() {
   for (const goal of dailyGoals(day)) {
     const prog = goalProgress(save, day, goal), done = prog >= goal.target, claimed = !!(save.daily && save.daily.day === day && save.daily.claimed[goal.id]);
     const rw = goal.reward.beats ? `${goal.reward.beats} ${curImg('beats')}` : `${goal.reward.sparkles} ${curImg('sparkles')}`;
-    const card = document.createElement('div'); card.className = 'card c-passive'; card.style.cursor = 'default';
-    card.innerHTML = `<div style="flex:1"><div class="nm">${goal.text}</div><div class="bar" style="margin-top:6px"><i style="width:${Math.round(prog / goal.target * 100)}%"></i></div><div class="ds">${prog} / ${goal.target}</div></div><div class="end"><button class="btn gold small" ${done && !claimed ? '' : 'disabled'}>${claimed ? 'CLAIMED' : done ? 'CLAIM ' + rw : rw}</button></div>`;
-    card.querySelector('button').onclick = () => { if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); renderHub(); } };
+    const card = tile({ cls: 't-gold one', ic: '🎯', name: goal.text, desc: '', bar: Math.round(Math.min(1, prog / goal.target) * 100), barText: prog + ' / ' + goal.target, btn: claimed ? 'CLAIMED' : done ? 'CLAIM ' + rw : rw, gold: true, disabled: !(done && !claimed),
+      onclick: () => { if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); renderHub(); } } });
+    card.querySelector('.ds').remove();
     list.appendChild(card);
   }
 }
 function renderSkills() {
   const list = $('skillList'); list.innerHTML = '';
+  loadoutRow($('loadoutRow'), false);
   for (const w of WEAPONS) {
-    const k = save.skills[w.id], owned = k.lv > 0;
-    const card = document.createElement('div'); card.className = 'card c-weapon'; card.style.cursor = 'default';
-    let need, can, label, act;
+    const k = save.skills[w.id], owned = k.lv > 0, eq = save.loadout.includes(w.id);
+    let need = 0, can = false, label = '', act = () => false;
     if (!owned) { need = w.frag; can = k.frag >= need; label = 'UNLOCK'; act = () => unlockSkill(save, w.id); }
-    else if (k.lv >= SKILL_MAX_LV) { need = 0; can = false; label = 'MAX'; act = () => false; }
-    else { const c = skillUpgradeCost(k.lv); need = c.frag; can = k.frag >= c.frag && save.beats >= c.beats; label = `UPGRADE ${c.beats}`; act = () => levelSkill(save, w.id); }
-    const pct = need ? Math.min(100, Math.round((k.frag / need) * 100)) : 100;
-    card.innerHTML = `<div class="ic">${icon(w.id)}</div><div style="flex:1;min-width:0"><div class="nm">${w.name} ${owned ? `<span style="color:#ffd84d;font-size:14px">Lv ${k.lv}</span>` : '<span style="color:#ff9ad6;font-size:14px">LOCKED</span>'}</div><div class="ds">${w.desc}</div><div class="bar" style="margin-top:6px"><i style="width:${pct}%"></i></div><div class="ds">${need ? `Fragments ${k.frag} / ${need}` : 'Fully upgraded'}</div></div><div class="end"><button class="btn small" ${can ? '' : 'disabled'}>${label}${owned && k.lv < SKILL_MAX_LV ? ' ' : ''}${owned && k.lv < SKILL_MAX_LV ? curImg('beats') : ''}</button></div>`;
-    card.querySelector('button').onclick = () => { if (act()) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } };
-    list.appendChild(card);
+    else if (k.lv >= SKILL_MAX_LV) label = 'MAX LEVEL';
+    else { const c = skillUpgradeCost(k.lv); need = c.frag; can = k.frag >= c.frag; label = 'UPGRADE'; act = () => levelSkill(save, w.id); }
+    const t = tile({ cls: 't-weapon' + (eq ? ' on-loadout' : ''), ic: icon(w.id), name: w.name, chip: owned ? ('Lv ' + k.lv + (eq ? ' ✓' : '')) : 'LOCKED', chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: w.desc,
+      bar: need ? Math.min(100, Math.round((k.frag / need) * 100)) : 100, barText: need ? 'Fragments ' + k.frag + ' / ' + need : 'Fully upgraded', btn: label, disabled: !can, onclick: () => { if (act()) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } } });
+    if (owned) {
+      const e = document.createElement('button'); e.className = 'btn small go alt'; e.textContent = eq ? 'REMOVE FROM LOADOUT' : 'EQUIP';
+      e.disabled = eq ? save.loadout.length <= 1 : save.loadout.length >= LOADOUT_SIZE;
+      e.onclick = () => { if (toggleLoadout(save, w.id)) { persist(); audio.play('click'); renderHub(); } };
+      t.appendChild(e);
+    }
+    list.appendChild(t);
   }
 }
 function renderStats() {
   const list = $('statList'); list.innerHTML = '';
   for (const d of META) {
     const lvl = save.meta[d.id] || 0, maxed = lvl >= d.max, cost = metaCost(d, lvl);
-    const b = document.createElement('div'); b.className = 'card c-capsule'; b.style.cursor = 'default';
     const pips = Array.from({ length: Math.min(d.max, 12) }, (_, i) => `<span class="pip ${i < lvl ? 'on' : ''}"></span>`).join('');
-    b.innerHTML = `<div class="ic">${d.name[0]}</div><div style="flex:1"><div class="nm">${d.name} <span style="color:#ffd84d;font-size:14px">Lv ${lvl}</span></div><div class="ds">${d.desc(Math.max(1, maxed ? lvl : lvl + 1))}${maxed ? '' : ' (next)'}</div><div class="pips">${pips}</div></div><div class="end"><button class="btn small" ${maxed || save.beats < cost ? 'disabled' : ''}>${maxed ? 'MAX' : cost + ' ' + curImg('beats')}</button></div>`;
-    b.querySelector('button').onclick = () => { if (buyMeta(save, d.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } };
-    list.appendChild(b);
+    list.appendChild(tile({ cls: 't-stat' + (d.max === 1 ? ' one' : ''), ic: STATICON[d.id] || d.name[0], name: d.name, chip: d.max === 1 ? (lvl ? 'OWNED' : 'Not owned') : 'Lv ' + lvl, desc: d.desc(Math.max(1, maxed ? lvl : lvl + 1)) + (maxed || d.max === 1 ? '' : ' (next level)'), pips: d.max > 1 ? pips : '',
+      btn: maxed ? 'MAX' : cost + ' ' + curImg('beats'), disabled: maxed || save.beats < cost, onclick: () => { if (buyMeta(save, d.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } } }));
   }
 }
 function renderShop() {
   const list = $('boxList'); list.innerHTML = '';
   for (const b of BOXES) {
-    const can = save[b.cur] >= b.price, card = document.createElement('div'); card.className = 'card ' + (b.id === 'spark' ? 'c-passive' : 'c-weapon'); card.style.cursor = 'default';
-    card.innerHTML = `<div class="ic" style="width:72px;height:72px">${icon(b.id === 'spark' ? 'boxspark' : 'boxbeat')}</div><div style="flex:1"><div class="nm">${b.name}</div><div class="ds">${b.desc}</div></div><div class="end"><button class="btn ${b.id === 'spark' ? 'gold' : ''} small" ${can ? '' : 'disabled'}>${b.price} ${curImg(b.cur)}</button></div>`;
+    const can = save[b.cur] >= b.price;
+    const card = tile({ cls: (b.id === 'spark' ? 't-gold' : 't-weapon') + ' one', ic: icon(b.id === 'spark' ? 'boxspark' : 'boxbeat'), name: b.name, desc: b.desc, btn: b.price + ' ' + curImg(b.cur), gold: b.id === 'spark', disabled: !can });
     card.querySelector('button').onclick = () => {
       audio.unlock();
       const got = openBox(save, b.id); if (!got) return;
@@ -174,7 +198,7 @@ function newDemo() {
 function startRun(stage) {
   audio.unlock(); audio.music(true);
   sel = stage; ranResult = false; endT = 0;
-  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), stage });
+  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), loadout: save.loadout, stage });
   mode = 'play'; acc = 0; cardsFor = null; show('');
   window.CS.g = g;
 }
@@ -184,9 +208,9 @@ function toTitle() { mode = 'title'; audio.music(false); refreshCur(); newDemo()
 function showCards() {
   const wrap = $('cards'); wrap.innerHTML = '';
   g.choices.forEach((c, i) => {
-    const b = document.createElement('button'); b.className = 'card pick c-' + c.kind;
-    const pips = Array.from({ length: c.max }, (_, k) => `<span class="pip ${k <= c.lvl ? 'on' : ''}"></span>`).join('');
-    const tag = c.isNew ? '<span style="color:#9dff6d;font-size:13px"> NEW</span>' : `<span style="color:#ffd84d;font-size:13px"> Lv ${c.lvl} → ${c.lvl + 1}</span>`;
+    const rar = RARITIES[c.rarity || 0], b = document.createElement('button'); b.className = 'card pick c-' + c.kind + ' r' + (c.rarity || 0);
+    const pips = Array.from({ length: Math.min(c.max, 12) }, (_, k) => `<span class="pip ${k < c.lvl + (c.gain && c.kind === 'weapon' ? c.gain : 1) ? 'on' : ''}"></span>`).join('');
+    const tag = `<span class="rar">${rar.name.toUpperCase()}</span>` + (c.isNew ? '<span style="color:#9dff6d;font-size:13px"> NEW</span>' : '');
     b.innerHTML = `<div class="ic">${icon(c.id)}</div><div><div class="nm">${c.name}${tag}</div><div class="ds">${c.desc}</div>${c.stat ? `<div class="ds" style="color:#bfe9ff;font-weight:800">${c.stat}</div>` : ''}<div class="pips">${pips}</div></div>`;
     b.onclick = () => pick(i);
     wrap.appendChild(b);

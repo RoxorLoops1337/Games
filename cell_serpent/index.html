@@ -56,13 +56,36 @@
   #stCanvas{width:min(330px,70vw);aspect-ratio:330/310;border-radius:20px;border:3px solid var(--line);background:#150f38}
   .chips{display:flex;gap:8px;overflow-x:auto;width:100%;padding:4px 2px;touch-action:pan-x} .chip{flex:none;min-width:46px;height:46px;border-radius:12px;border:3px solid var(--line);background:#231a55;color:#fff;font:inherit;font-weight:900;font-size:17px;cursor:pointer} .chip.sel{background:var(--pink);color:#1b0a24} .chip.lock{opacity:.35} .chip.done{border-color:var(--lime)}
   .info{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;color:var(--dim);font-size:14px} .info b{color:#fff}
-  .duo{width:min(260px,60vw);filter:drop-shadow(0 8px 14px rgba(0,0,0,.5))}
+  .duo{width:min(150px,38vw);filter:drop-shadow(0 8px 14px rgba(0,0,0,.5))}
   .result-list{display:flex;flex-direction:column;gap:8px;align-items:center;font-size:18px;font-weight:800}
   .result-list .r{display:flex;align-items:center;gap:8px} .result-list img{width:30px;height:30px;object-fit:contain}
   .loot{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:420px}
   .loot .it{display:flex;flex-direction:column;align-items:center;gap:2px;width:92px;padding:8px 4px;border-radius:14px;border:3px solid var(--line);background:#231a55;font-weight:900;opacity:0;animation:pop .35s forwards}
   .loot .it img{width:56px;height:56px;object-fit:contain} .loot .it small{font-size:11px;color:var(--dim);text-align:center}
   @keyframes pop{from{opacity:0;transform:scale(.4) rotate(-8deg)}to{opacity:1;transform:none}}
+  /* hub tiles: icon | text, then one full-width button, so nothing ever overflows */
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:min(520px,100%)}
+  .tile{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:20px;border:3px solid rgba(255,255,255,.18);background:var(--glass);box-shadow:0 8px 20px rgba(0,0,0,.4);min-width:0;position:relative}
+  .tile.one{grid-column:1/-1}
+  .tile .top{display:flex;gap:10px;align-items:center;min-width:0}
+  .tile .ic{flex:none;width:58px;height:58px;border-radius:16px;display:grid;place-items:center;font-size:28px;background:rgba(255,255,255,.12);overflow:hidden} .tile .ic img{width:50px;height:50px;object-fit:contain}
+  .tile .nm{font-weight:900;font-size:16px;line-height:1.15;overflow-wrap:anywhere} .tile .lv{display:inline-block;margin-top:3px;padding:1px 8px;border-radius:99px;background:rgba(255,216,77,.18);color:#ffd84d;font-size:12px;font-weight:900}
+  .tile .lv.lock{background:rgba(255,154,214,.18);color:#ff9ad6} .tile .lv.eq{background:rgba(157,255,109,.2);color:#9dff6d}
+  .tile .ds{flex:1;font-size:12.5px;color:var(--dim);line-height:1.3} .tile .go{width:100%;min-width:0;padding:10px 6px;font-size:15px;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:6px}
+  .tile .bar{min-width:0} .tile .sm{font-size:11px;color:var(--dim);margin-top:-4px;font-weight:700}
+  .tile.t-weapon{border-color:#9dff6d88;background:linear-gradient(180deg,#1d4a2e,#10301e)} .tile.t-stat{border-color:#4fb8ff88;background:linear-gradient(180deg,#143a66,#0f2548)} .tile.t-gold{border-color:#ffb04d88;background:linear-gradient(180deg,#5a3410,#3a200a)}
+  .tile.on-loadout{box-shadow:0 0 0 3px #9dff6d,0 8px 20px rgba(0,0,0,.4)}
+  .tile .pips{display:flex;gap:3px} .tile .pip{flex:1;height:7px;border-radius:4px;background:rgba(255,255,255,.18)} .tile .pip.on{background:var(--lime)}
+  .loadout{display:flex;gap:8px;justify-content:center;margin:6px 0 4px;width:min(520px,100%)}
+  .slot{flex:1;max-width:92px;aspect-ratio:1;border-radius:16px;border:3px dashed rgba(255,255,255,.3);background:rgba(0,0,0,.25);display:grid;place-items:center;overflow:hidden;position:relative;cursor:pointer;font:inherit;color:var(--dim);padding:0}
+  .slot.full{border-style:solid;border-color:#9dff6d;background:linear-gradient(180deg,#1d4a2e,#10301e)} .slot img{width:80%;height:80%;object-fit:contain}
+  .slot.sm img{width:70%;height:70%}
+  .lohint{font-size:12px;color:var(--dim);text-align:center;margin-bottom:8px}
+  /* rarity colours on the pick cards */
+  .card.pick{--rc:#cfd8e8;border-color:var(--rc)} .card.pick .rar{display:inline-block;margin-left:6px;padding:1px 9px;border-radius:99px;font-size:11px;font-weight:900;letter-spacing:.06em;color:#10131c;background:var(--rc);vertical-align:middle}
+  .card.pick.r1{--rc:#4fb8ff;box-shadow:0 0 18px #4fb8ff55} .card.pick.r2{--rc:#b06cff;box-shadow:0 0 22px #b06cff66} .card.pick.r3{--rc:#ffb04d;box-shadow:0 0 26px #ffb04d77}
+  .card.pick.r4{--rc:#ff4d7a;box-shadow:0 0 30px #ff4d7a88} .card.pick.r5{--rc:#ffe14a;box-shadow:0 0 34px #ffe14a;animation:godglow 1.2s infinite alternate}
+  @keyframes godglow{from{filter:brightness(1)}to{filter:brightness(1.25) saturate(1.2)}}
   #muteBtn{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:5;width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:20px;cursor:pointer;display:none}
   #muteBtn.on{display:block}
 </style>
@@ -93,13 +116,14 @@
         <div class="stagepick"><button class="arrow" id="stPrev">◀</button><canvas id="stCanvas" width="660" height="620"></canvas><button class="arrow" id="stNext">▶</button></div>
         <div class="chips" id="stChips"></div>
         <div class="info" id="stInfo"></div>
+        <div class="loadout" id="battleLoad"></div>
         <button class="btn" id="stGo">START THE BATTLE</button>
       </div>
-      <div class="stagebox"><h2 style="font-size:20px">DAILY GIGS</h2><div class="sub">Three new goals every day.</div><div class="cards" id="goalList"></div></div>
+      <div class="stagebox"><h2 style="font-size:20px">DAILY GIGS</h2><div class="sub">Three new goals every day.</div><div class="tiles" id="goalList"></div></div>
     </div>
-    <div class="tab" id="tabSkills"><h2>SKILLS</h2><div class="sub">Open loot boxes for fragments. Unlock skills, then level them up for permanent damage.</div><div class="cards" id="skillList"></div></div>
-    <div class="tab" id="tabStats"><img class="duo" src="assets/duo_idle.png" alt=""><h2>STATS</h2><div class="cards" id="statList"></div></div>
-    <div class="tab" id="tabShop"><h2>SHOP</h2><div class="sub">Loot boxes hold skill fragments.</div><div class="cards" id="boxList"></div></div>
+    <div class="tab" id="tabSkills"><h2>SKILLS</h2><div class="sub">Open loot boxes for fragments. Unlock skills, then level them up for permanent damage.</div><div class="lohint">YOUR LOADOUT: pick 5 skills to take into battle. Every run starts with just your notes.</div><div class="loadout" id="loadoutRow"></div><div class="tiles" id="skillList"></div></div>
+    <div class="tab" id="tabStats"><img class="duo" src="assets/duo_idle.png" alt=""><h2>STATS</h2><div class="tiles" id="statList"></div></div>
+    <div class="tab" id="tabShop"><h2>SHOP</h2><div class="sub">Loot boxes hold skill fragments.</div><div class="tiles" id="boxList"></div></div>
   </div>
   <nav class="tabs">
     <button data-tab="Battle"><b>⚔</b>Battle</button><button data-tab="Skills"><b>✦</b>Skills</button><button data-tab="Stats"><b>♥</b>Stats</button><button data-tab="Shop"><b>🎁</b>Shop</button>
