@@ -76,7 +76,7 @@ itself when frames run slow, then raises it again when it runs fast.
 - **Shop**: daily treats with discounts and a refresh, a one-time Welcome Chest, a shop level that sweetens chests, a Beats store.
 - Battle side buttons: Sign in (7 days), Fan Fund (free stage rewards), Backstage tip jar (idle Beats), Fragment Swap.
 - In a run: speed readout, per-source damage panel (tap the bars icon), 25/50/100% chests on the bar, and Revive for Sparkles (3 times, knocks the snake back).
-- Balance: cells have about 25 to 40 shots of HP in stage 1 and capsule upgrades are small (common +8% speed, +12% damage).
+- Balance: cells have about 18 to 30 shots of HP in stage 1 and the snake crawls fast (the lane is not drawn) and capsule upgrades are small (common +8% speed, +12% damage).
 
 ## Round four: wardrobe, events, instances, shops
 
