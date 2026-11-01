@@ -3,6 +3,7 @@
 import {
   COLS, ROWS, TILE, TURRETS, ENEMIES, BOSSES, AFFIXES, WORLD_BY_ID, ECON, MAX_LEVEL, RARITY,
   buildMap, laneAt, lvlDmg, lvlRate, lvlRange, encoreHp, encoreSpeed, tileCx, tileCy,
+  SYNERGIES, SYN_FLAT, synergyScale, DIFFICULTY, TURRET_PARTNERS,
 } from './data_core.js';
 import { freshMods, applyFx, REMIX, RELICS, WAVE_MODS, DAILY_MODS } from './data_run.js';
 import { makeRng } from './rng.js';
@@ -10,6 +11,29 @@ import { makeRng } from './rng.js';
 export const DT = 1 / 60;
 const INTRO_WAVE = { fuzz: 1, zip: 2, drone: 3, echo: 4, brick: 5, leech: 6, gate: 7, rager: 7, squeal: 8, mute: 9 };
 const NONE_WM = Object.freeze({});
+const synv = (t, k) => (t.syn && t.syn[k]) || 0;      // synergy effect value of a turret (0 when none)
+const normOdds = (ws) => { const tot = ws.reduce((a, x) => a + x.w, 0) || 1; return ws.map((x) => ({ type: x.type, p: x.w / tot })); };
+
+// plain-language recap tips (no em dashes): by enemy type that leaked most, and by the boss that finished the run
+const ENEMY_TIPS = {
+  fuzz: 'Plain Fuzz piled up: add more turrets and merge them.',
+  zip: 'Fast Glitch Zips slipped past: Sub Bass slows them.',
+  brick: 'Brickwalls shrug off small hits: try Kick Cannon or Cowbell Sniper.',
+  echo: 'Echoes split when they die: splash turrets clean up the pieces.',
+  leech: 'Hum Healers keep the Static topped up: burst them down first.',
+  drone: 'Autotune Drones fly straight over the path: long range turrets catch them.',
+  gate: 'Gate Guards soak damage with a shield: pile on big hits.',
+  squeal: 'Feedback screeches jam nearby turrets: keep your turrets spread out.',
+  mute: 'Mute Ghosts ignore slows and stuns: raw damage beats them.',
+  rager: 'Glitchbugs speed up when hurt: finish them off quickly.',
+};
+const BOSS_TIPS = {
+  compressor: 'The Compressor squashes big hits: many fast small hits beat it.',
+  noisegate: 'Noise Gate shuts out damage now and then: hold your hero moves until it opens.',
+  reverb: 'Reverb Titan leaves echoes behind: splash turrets help.',
+  djglitch: 'DJ Glitch jams the nearest turrets: keep a few spares further from the path.',
+  playback: 'Mr. Playback has three phases: save your heroes for the last one.',
+};
 const RUSH_BOSSES = ['compressor', 'noisegate', 'reverb', 'djglitch', 'playback'];
 
 // ------------------------------------------------------------------------------------------------ wave generation (pure)
@@ -109,7 +133,8 @@ export class Run {
     this.curSpec = null;
     this.wm = NONE_WM; this.wmId = null;
 
-    this.stageMax = ECON.stageHp + this.mods.stageHp + (opts.stageHpBonus || 0);
+    this.difficulty = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
+    this.stageMax = Math.max(1, ECON.stageHp + this.mods.stageHp + (opts.stageHpBonus || 0) + DIFFICULTY[this.difficulty].stageHp);
     if (this.daily && this.daily.stageHp) this.stageMax = this.daily.stageHp;
     this.stageHp = this.stageMax;
     this.coins = ECON.startCoins + this.mods.startCoins;
@@ -133,6 +158,13 @@ export class Run {
     this.speedHint = 1;
     this.autoMergeOwned = !!opts.autoMerge;
     this.forceDrops = (opts.forceDrops || []).slice();
+    // drop pool state: the last dropped types (anti-streak), reroll stats
+    this.dropHist = []; this.dropRerolls = 0; this.gemsSpent = 0;
+    // synergies: keys of the pairs that are active right now ("id:lowTurretId-highTurretId"), so an activation is announced once
+    this.synKeys = []; this.synEver = false;
+    // recap tracking
+    this.leaksByLane = this.map.lanes.map(() => 0); this.leakTypeCount = {}; this.stageDmgByType = {}; this.waveLeaks = {};
+    this.bossFinisher = null; this.deployedByType = {}; this.bestLvlByType = {};
     this.nextType = this.rollDrop();
     this.bpm = this.world.bpm;
     this.beatOffset = 0;
@@ -146,13 +178,67 @@ export class Run {
   drain() { const e = this.events; this.events = []; return e; }
   get stageFrac() { return this.stageHp / this.stageMax; }
   beatPhase() { return (((this.t + this.beatOffset) * this.bpm / 60) % 1 + 1) % 1; }
-  baseHp(w = this.wave || 1) { return waveBaseHp(this.world, w, this.encore) * this.mods.enemyHp; }
-  rollDrop() {
-    if (this.forceDrops.length) return this.forceDrops.shift();
-    return this.rng.pick(this.loadout);
+  get diff() { return DIFFICULTY[this.difficulty] || DIFFICULTY.normal; }
+  baseHp(w = this.wave || 1) { return waveBaseHp(this.world, w, this.encore) * this.mods.enemyHp * this.diff.hpMul; }
+
+  // ---------------------------------------------------------------- drop pool
+  // Weights of the drop pool. Anti-streak: a type that just dropped has 60% weight, and one that dropped twice in a row has 0, so the
+  // same type never drops three times in a row (when the pool has 2+ types). `exclude` removes one type (used by rerolls).
+  dropWeights(exclude = null) {
+    const types = [...new Set(this.loadout)];
+    const h = this.dropHist; const last = h[h.length - 1], prev = h[h.length - 2];
+    return types.map((type) => {
+      let w = 1;
+      if (types.length > 1) {
+        if (type === last) w = type === prev ? 0 : 0.6;
+        if (exclude != null && type === exclude) w = 0;
+      }
+      return { type, w };
+    });
   }
-  deployCost(onBeat = false) {
-    if (this.mods.freeDeploys > 0) return 0;
+  // probabilities the queued drop was drawn from ([{type, p}], sums to 1). A reroll draws from rerollOdds() instead.
+  poolOdds() { return normOdds(this.dropWeights()); }
+  rerollOdds() { return normOdds(this.dropWeights(this.nextType)); }
+  rollDrop(exclude = null) {
+    if (this.forceDrops.length && exclude == null) return this.forceDrops.shift();
+    const items = this.dropWeights(exclude).filter((x) => x.w > 0);
+    if (!items.length) return this.nextType != null ? this.nextType : this.loadout[0];
+    return this.rng.weighted(items, (x) => x.w).type;
+  }
+  dropRerollCost(payWith = 'coins') {
+    if (payWith === 'gems') return ECON.dropRerollGems;
+    return Math.ceil(ECON.dropRerollCoinPct * this.deployCost(false, true));
+  }
+  // Re-roll the NEXT dropped type. A free reroll (mods.rerolls, e.g. Spare Setlist) is used first. Then payWith 'coins' (45% of the
+  // current deploy cost, rounded up) or 'gems' (ECON.dropRerollGems diamonds). For 'gems', pass the player's diamond balance as
+  // `balance`: the sim only checks it and returns spendDiamonds, the caller deducts it from the profile. Without `balance` the gems
+  // found in this run (runGems) pay. Returns { ok, reason, cost, type, paid, spendDiamonds }.
+  rerollNext(payWith = 'coins', balance) {
+    const fail = (reason, cost = 0) => ({ ok: false, reason, cost, type: this.nextType, paid: null, spendDiamonds: 0 });
+    if (this.choice || this.phase === 'won' || this.phase === 'lost') return fail('busy');
+    if (new Set(this.loadout).size < 2) return fail('single');
+    if (!this.dropWeights(this.nextType).some((x) => x.w > 0)) return fail('locked');
+    let cost = 0, paid = 'free', spend = 0;
+    if (this.rerolls > 0) this.rerolls--;
+    else if (payWith === 'coins') {
+      cost = this.dropRerollCost('coins');
+      if (this.coins < cost) return fail('coins', cost);
+      this.coins -= cost; paid = 'coins';
+    } else if (payWith === 'gems') {
+      cost = this.dropRerollCost('gems');
+      const have = typeof balance === 'number' ? balance : this.runGems;
+      if (have < cost) return fail('gems', cost);
+      if (typeof balance === 'number') { spend = cost; this.gemsSpent += cost; } else this.runGems -= cost;
+      paid = 'gems';
+    } else return fail('pay');
+    this.nextType = this.rollDrop(this.nextType);
+    this.dropRerolls++;
+    this.emit({ k: 'reroll' });
+    this.emit({ k: 'rerollDrop', type: this.nextType });
+    return { ok: true, reason: null, cost, type: this.nextType, paid, spendDiamonds: spend };
+  }
+  deployCost(onBeat = false, ignoreFree = false) {
+    if (!ignoreFree && this.mods.freeDeploys > 0) return 0;
     const n = this.deploys;
     let c = (ECON.deployBase + ECON.deployStep * n + ECON.deployCurve * n * n) * this.mods.deployCost;
     if (onBeat) c *= 1 - Math.min(0.5, 0.1 * this.mods.beatBonus);
@@ -170,10 +256,16 @@ export class Run {
     const t = {
       id: this.uid++, type, level, c: slot.c, r: slot.r, x: slot.x, y: slot.y, slot: slot.idx, cd: 0.3, paid, ang: -Math.PI / 2,
       fire: 0, mode: 'first', jam: 0, spin: 0, shots: 0, overdrive: 0, auraRate: 0, auraDmg: 0, auraRange: 0, auraCrit: 0, echo: 0,
-      pulse2: 0, born: this.t, alt: 0,
+      pulse2: 0, born: this.t, alt: 0, syn: {},
     };
+    this.noteTurret(type, level);
     this.turrets.push(t); this.grid.set(slot.idx, t);
     return t;
+  }
+  // recap bookkeeping: how many of each type were built and the best level each type reached
+  noteTurret(type, level) {
+    this.deployedByType[type] = (this.deployedByType[type] || 0) + 1;
+    this.bestLvlByType[type] = Math.max(this.bestLvlByType[type] || 0, level);
   }
   removeTurret(t) {
     this.turrets.splice(this.turrets.indexOf(t), 1);
@@ -200,6 +292,7 @@ export class Run {
     if (slotIdx != null) slot = this.map.buildable.find((s) => s.idx === slotIdx);
     else { const e = this.emptySlots(); slot = e[Math.floor(this.rng.next() * e.length)]; }
     const type = this.nextType;
+    this.dropHist.push(type); if (this.dropHist.length > 4) this.dropHist.shift();
     this.nextType = this.rollDrop();
     let level = this.mods.startLevel || 1;
     if (this.mods.lucky && this.rng.chance(this.mods.lucky)) level = Math.min(MAX_LEVEL, level + 1);
@@ -217,15 +310,10 @@ export class Run {
     const err = Math.min(ph, 1 - ph) * beatLen;
     return err <= ECON.beatWindow;
   }
+  // legacy free reroll (uses the free reroll counter only): kept for the battle view
   rerollDrop() {
     if (this.rerolls <= 0 || this.choice) return false;
-    this.rerolls--;
-    const old = this.nextType;
-    let n = this.rollDrop(); let guard = 0;
-    while (n === old && this.loadout.length > 1 && guard++ < 8) n = this.rollDrop();
-    this.nextType = n;
-    this.emit({ k: 'reroll' });
-    return true;
+    return this.rerollNext('free').ok;
   }
   canMerge(a, b) {
     if (!a || !b || a === b) return false;
@@ -242,7 +330,7 @@ export class Run {
     let type = b.type;
     if (kind === 'remix') type = this.rng.pick([a.type, b.type, this.rng.pick(this.loadout)]);
     this.removeTurret(a);
-    b.type = type; b.level += 1; b.paid += a.paid; b.spin = 0; b.born = this.t; b.cd = Math.min(b.cd, 0.2);
+    b.type = type; b.level += 1; b.paid += a.paid; this.bestLvlByType[type] = Math.max(this.bestLvlByType[type] || 0, b.level); b.spin = 0; b.born = this.t; b.cd = Math.min(b.cd, 0.2);
     this.merges++;
     this.maxLevelSeen = Math.max(this.maxLevelSeen, b.level);
     this.hype += 4 * b.level * this.mods.hype;
@@ -305,14 +393,60 @@ export class Run {
   }
   setMode(id, mode) { const t = this.turretById(id); if (t) t.mode = mode; }
 
+  // ---------------------------------------------------------------- synergies (orthogonal neighbours, see SYNERGIES in data_core.js)
+  // Every active synergy of a turret: [{ s, side, n, low }] (one per synergy id, the partner with the highest lower level wins).
+  findSynergies(t) {
+    const best = new Map();
+    for (const n of this.turrets) {
+      if (n === t || Math.abs(n.c - t.c) + Math.abs(n.r - t.r) !== 1) continue;
+      for (const s of SYNERGIES) {
+        const side = s.a === t.type && s.b === n.type ? 'a' : s.b === t.type && s.a === n.type ? 'b' : null;
+        if (!side) continue;
+        const low = Math.min(t.level, n.level);
+        const cur = best.get(s.id);
+        if (!cur || low > cur.low || (low === cur.low && n.id < cur.n.id)) best.set(s.id, { s, side, n, low });
+      }
+    }
+    return [...best.values()];
+  }
+  // run.synergiesOf(turretOrId) -> [{ id, name, desc, withId, withType }]
+  synergiesOf(turret) {
+    const t = typeof turret === 'object' ? turret : this.turretById(turret);
+    if (!t) return [];
+    return this.findSynergies(t).map(({ s, n, low }) => ({ id: s.id, name: s.name, desc: s.desc, withId: n.id, withType: n.type, scale: synergyScale(low) }));
+  }
+  recalcSynergies() {
+    const old = new Set(this.synKeys);
+    const now = new Map();
+    for (const t of this.turrets) {
+      const agg = {};
+      for (const { s, side, n, low } of this.findSynergies(t)) {
+        const sc = synergyScale(low);
+        const fx = s.fx[side] || {};
+        for (const k of Object.keys(fx)) {
+          const v = SYN_FLAT.includes(k) ? fx[k] : fx[k] * sc;
+          if (k === 'healEvery') agg[k] = agg[k] == null ? v : Math.min(agg[k], v); else agg[k] = (agg[k] || 0) + v;
+        }
+        const key = s.id + ':' + Math.min(t.id, n.id) + '-' + Math.max(t.id, n.id);
+        if (!now.has(key)) now.set(key, { id: s.id, x: (t.x + n.x) / 2, y: (t.y + n.y) / 2 });
+      }
+      if (agg.aura > 0.4) agg.aura = 0.4;
+      t.syn = agg;
+    }
+    for (const [key, v] of now) if (!old.has(key)) this.emit({ k: 'synergy', id: v.id, x: v.x, y: v.y });
+    this.synKeys = [...now.keys()];
+    if (now.size) this.synEver = true;
+  }
+
   recalcAuras() {
+    this.recalcSynergies();
     for (const t of this.turrets) { t.auraRate = 0; t.auraDmg = 0; t.auraRange = 0; t.auraCrit = 0; t.echo = 0; }
     for (const s of this.turrets) {
       const def = TURRETS[s.type];
       if (def.kind !== 'aura_rate' && def.kind !== 'aura_dmg') continue;
       const L = s.level;
       const per = this.mods.per[s.type];
-      let a = def.aura * (1 + 0.2 * (L - 1)) * this.mods.auraBoost * (1 + per.extra);
+      let a = def.aura * (1 + 0.2 * (L - 1)) * this.mods.auraBoost * (1 + per.extra) * (1 + ((s.syn && s.syn.aura) || 0));
       if (L >= 7) a *= 1.5;
       for (const t of this.turrets) {
         if (t === s) continue;
@@ -332,14 +466,14 @@ export class Run {
   // ---------------------------------------------------------------- stats of a turret (shared with the UI for the info panel)
   turretDmg(t) {
     const def = TURRETS[t.type];
-    let d = def.dmg * lvlDmg(t.level) * this.mods.dmg * this.mods.per[t.type].dmg * (1 + t.auraDmg);
+    let d = def.dmg * lvlDmg(t.level) * this.mods.dmg * this.mods.per[t.type].dmg * (1 + t.auraDmg) * (1 + synv(t, 'dmg'));
     if (this.wm.dmg) d *= this.wm.dmg;
     if (this.mods.lastStand && this.stageHp <= 6) d *= 1 + this.mods.lastStand;
     return d;
   }
   turretRate(t) {
     const def = TURRETS[t.type];
-    let r = def.rate * lvlRate(t.level) * this.mods.rate * this.mods.per[t.type].rate * (1 + t.auraRate);
+    let r = def.rate * lvlRate(t.level) * this.mods.rate * this.mods.per[t.type].rate * (1 + t.auraRate) * (1 + synv(t, 'rate'));
     if (t.overdrive > 0) r *= 1.3;
     if (this.wm.rate) r *= this.wm.rate;
     if (this.mods.hotStreak && this.combo >= 10) r *= 1 + this.mods.hotStreak;
@@ -348,11 +482,11 @@ export class Run {
   }
   turretRange(t) {
     const def = TURRETS[t.type];
-    return def.range * lvlRange(t.level) * this.mods.range * this.mods.per[t.type].range * (1 + t.auraRange);
+    return def.range * lvlRange(t.level) * this.mods.range * this.mods.per[t.type].range * (1 + t.auraRange) * (1 + synv(t, 'range'));
   }
   turretCrit(t) {
     const def = TURRETS[t.type];
-    let c = this.mods.crit + (def.crit || 0) + t.auraCrit;
+    let c = this.mods.crit + (def.crit || 0) + t.auraCrit + synv(t, 'crit');
     if (t.type === 'snare' && t.level >= 5) c += 0.15;
     return Math.min(0.95, c);
   }
@@ -370,6 +504,53 @@ export class Run {
     if (this.mode === 'rush') return { w, groups: [{ type: 'fuzz', count: 5 + w, gap: 0.55, delay: 0.5 }], boss: RUSH_BOSSES[(w - 1) % 5], bossScale: 0.5 + 0.06 * w, mod: null, duration: 20 };
     return genWave(this.world, w, this.seed, { endless: this.endless, wavesTotal: this.wavesTotal });
   }
+  // Lane of every group enemy of a wave, in group order. Deterministic from (seed, wave) only, so previews match the real spawn.
+  planLanes(spec, w) {
+    const lanes = this.map.lanes.length;
+    let ctr = lanes <= 1 ? 0 : Math.floor(makeRng((Math.imul(this.seed, 2246822519) + Math.imul(w, 3266489917) + 5) >>> 0).next() * lanes);
+    const out = [];
+    for (const g of spec.groups) for (let i = 0; i < g.count; i++) out.push(ctr++ % lanes);
+    return out;
+  }
+  // entries: [{ type, lane, boss, elite }] -> { lanes: [{ lane, enemies: [{ type, count, flying, armored, elite }], boss }], total, hasBoss }
+  summarizeLanes(entries) {
+    const lanes = this.map.lanes.map((_, i) => ({ lane: i, enemies: [], boss: null }));
+    for (const en of entries) {
+      const L = lanes[en.lane % lanes.length];
+      if (en.boss) { L.boss = en.type; continue; }
+      let row = L.enemies.find((r) => r.type === en.type);
+      if (!row) { const d = ENEMIES[en.type]; row = { type: en.type, count: 0, flying: !!(d && d.flying), armored: !!(d && d.armor > 0), elite: false }; L.enemies.push(row); }
+      row.count++;
+      if (en.elite) row.elite = true;
+    }
+    return { lanes, total: entries.length, hasBoss: lanes.some((l) => l.boss) };
+  }
+  modInfo(id) { const m = id && WAVE_MODS[id]; return m ? { id: m.id, name: m.name, desc: m.desc } : null; }
+  // The upcoming wave, built from the same genWave and lane plan the spawn uses. elite means "may carry elite affixes" (wave 4+).
+  nextWavePreview() {
+    if (this.phase === 'won' || this.phase === 'lost') return null;
+    if (!this.endless && this.wave >= this.wavesTotal) return null;
+    const w = this.wave + 1;
+    const spec = this.upcoming(w);
+    const plan = this.planLanes(spec, w);
+    const entries = []; let pi = 0;
+    for (const g of spec.groups) for (let i = 0; i < g.count; i++) entries.push({ type: g.type, lane: plan[pi++], elite: w >= 4 && g.type !== 'mini' });
+    if (spec.boss) entries.push({ type: spec.boss, lane: 0, boss: true });
+    const s = this.summarizeLanes(entries);
+    return { wave: w, lanes: s.lanes, total: s.total, hasBoss: s.hasBoss, mod: this.modInfo(spec.mod) };
+  }
+  // The wave in progress with what is still to come (queued plus alive). null outside a wave.
+  currentWaveInfo() {
+    if (this.phase !== 'wave' || !this.curSpec) return null;
+    const entries = [];
+    for (const s of this.spawnQ) {
+      const boss = s.type.startsWith('boss:');
+      entries.push({ type: boss ? s.type.slice(5) : s.type, lane: s.lane, boss, elite: !boss && s.w >= 4 && s.type !== 'mini' });
+    }
+    for (const e of this.enemies) if (!e.dead) entries.push({ type: e.type, lane: e.lane, boss: e.boss, elite: !!e.affix });
+    const s = this.summarizeLanes(entries);
+    return { wave: this.wave, lanes: s.lanes, total: s.total, hasBoss: s.hasBoss, mod: this.modInfo(this.wmId) };
+  }
   startWave(early = false) {
     if (this.phase === 'won' || this.phase === 'lost' || this.choice) return false;
     if (this.phase === 'wave' && this.spawnQ.length) return false;
@@ -383,11 +564,12 @@ export class Run {
     const lanes = this.map.lanes.length;
     const w = this.wave;
     const hpBase = this.baseHp(this.mode === 'rush' ? 6 + 2 * w : w) * (this.wm.hp || 1);
-    let laneCtr = this.rng.int(0, lanes - 1);
+    const plan = this.planLanes(spec, w);
+    let pi = 0;
     const q = [];
     for (const g of spec.groups) {
       for (let i = 0; i < g.count; i++) {
-        q.push({ at: this.t + g.delay + i * g.gap, type: g.type, lane: laneCtr++ % lanes, hpBase, w });
+        q.push({ at: this.t + g.delay + i * g.gap, type: g.type, lane: plan[pi++], hpBase, w });
       }
     }
     if (spec.boss) q.push({ at: this.t + 1.2, type: 'boss:' + spec.boss, lane: 0, hpBase, w, scale: spec.bossScale });
@@ -434,7 +616,7 @@ export class Run {
     if (isBoss) { e.timer = 4; }
     this.enemies.push(e);
     this.placeEnemy(e);
-    this.emit({ k: 'spawn', id: e.id, type: e.type, boss: isBoss, x: e.x, y: e.y });
+    this.emit({ k: 'spawn', id: e.id, type: e.type, boss: isBoss, x: e.x, y: e.y, lane: e.lane });
     if (isBoss) this.emit({ k: 'boss', id: e.id, type: e.type, small: (s.scale || 1) < 1 });
     return e;
   }
@@ -450,7 +632,7 @@ export class Run {
     }
   }
   enemySpeedMul(e) {
-    let m = encoreSpeed(this.encore) * (this.wm.speed || 1) * this.mods.enemySpeed * (1 - Math.min(0.6, this.mods.enemySlow));
+    let m = encoreSpeed(this.encore) * (this.wm.speed || 1) * this.mods.enemySpeed * (1 - Math.min(0.6, this.mods.enemySlow)) * this.diff.speedMul;
     if (this.daily && this.daily.mods) m *= 1;
     return m;
   }
@@ -485,7 +667,7 @@ export class Run {
     this.kills++;
     this.combo = Math.min(ECON.comboMax, this.combo + 1); this.comboT = ECON.comboWindow; this.bestCombo = Math.max(this.bestCombo, this.combo);
     const comboBonus = Math.min(0.5, this.combo * 0.01) * this.mods.comboBonus;
-    let coins = e.coins * waveCoinScale(e.w) * this.world.coinMul * this.mods.coin * (this.wm.coin || 1) * (1 + comboBonus);
+    let coins = e.coins * waveCoinScale(e.w) * this.world.coinMul * this.mods.coin * (this.wm.coin || 1) * (1 + comboBonus) * this.diff.coinMul;
     if (o.crit && this.mods.coinOnCrit) coins += this.mods.coinOnCrit;
     if (e.type === 'mini') coins *= 0.5;
     this.addCoins(coins, e.x, e.y);
@@ -624,7 +806,7 @@ export class Run {
       this.emit({ k: 'hero', who });
       for (const e of this.enemies.slice()) {
         this.hurt(e, base * 2.4 * pw, { quiet: false });
-        if (e.hp > 0 && !e.immune) { this.stunE(e, e.boss ? 0.6 : 1.4); if (!e.boss) e.d = Math.max(0, e.d - 70); }
+        if (e.hp > 0 && !e.immune) { this.stunE(e, e.boss ? 0.6 : 1.4); this.pushE(e, 70); }
       }
       for (const t of this.turrets) t.jam = 0;
     } else {
@@ -709,6 +891,8 @@ export class Run {
       bestCombo: this.bestCombo, coinsEarned: this.coinsEarned, gems: this.runGems, deploys: this.deploys, time: this.t,
       stars: won ? (leaks <= 2 ? 3 : leaks <= 7 ? 2 : 1) : 0, level: this.level, relics: this.relics.slice(), world: this.world.id,
       encore: this.encore, mode: this.mode, heroUses: this.heroUses, perfects: this.perfects, duets: this.duets, remixes: this.remixCount, maxLevel: this.maxLevelSeen, bossTypes: this.bossTypes.slice(), endless: this.endless, hpLeft: this.stageHp, stageMax: this.stageMax,
+      difficulty: this.difficulty, rewardMul: { records: this.diff.recordsMul, fans: this.diff.fansMul },
+      recap: this.recap(),
     };
     this.emit({ k: won ? 'win' : 'lose' });
   }
@@ -720,7 +904,7 @@ export class Run {
     for (const e of this.enemies.slice()) { this.enemies.splice(this.enemies.indexOf(e), 1); e.dead = true; }
     this.spawnQ.length = 0;
     this.projectiles.length = 0;
-    this.phase = 'prep'; this.prepT = ECON.prepSeconds; this.result = null;
+    this.phase = 'prep'; this.prepT = ECON.prepSeconds; this.result = null; this.bossFinisher = null;
     this.emit({ k: 'revive' });
     return true;
   }
@@ -729,7 +913,12 @@ export class Run {
     if (idx >= 0) this.enemies.splice(idx, 1);
     e.dead = true;
     const dmg = e.boss ? Math.max(8, Math.ceil(this.stageMax * 0.4)) : (ENEMIES[e.type] && ENEMIES[e.type].hp >= 3 ? 3 : ENEMIES[e.type] && ENEMIES[e.type].hp >= 1.8 ? 2 : 1);
-    this.leaks += e.boss ? 3 : 1;
+    const lw = e.boss ? 3 : 1;
+    this.leaks += lw;
+    this.leaksByLane[e.lane] = (this.leaksByLane[e.lane] || 0) + lw;
+    this.leakTypeCount[e.type] = (this.leakTypeCount[e.type] || 0) + 1;
+    this.stageDmgByType[e.type] = (this.stageDmgByType[e.type] || 0) + dmg;
+    this.waveLeaks[e.w] = (this.waveLeaks[e.w] || 0) + lw;
     this.stageHp -= dmg;
     this.combo = 0;
     this.emit({ k: 'leak', x: e.x, y: e.y, n: dmg, boss: e.boss });
@@ -738,12 +927,14 @@ export class Run {
         this.revived = true; this.stageHp = Math.ceil(this.stageMax / 2);
         for (const en of this.enemies.slice()) { en.dead = true; } this.enemies.length = 0;
         this.emit({ k: 'revive' });
-      } else { this.stageHp = 0; this.finish(false); }
+      } else { this.stageHp = 0; if (e.boss) this.bossFinisher = e.type; this.finish(false); }
     }
   }
 
   // a stun cannot be chained: after it ends the enemy shrugs stuns off for a moment (no permanent stun lock at the spawn)
-  stunE(e, dur) { if (e.stunCd > 0) return; e.stun = Math.max(e.stun, dur); }
+  // push-backs draw on a small per-enemy budget that refills slowly, so slows plus shoves can never hold an enemy in place for good
+  pushE(e, amount) { if (e.boss || e.dead) return; const b = e.pushBudget == null ? 90 : e.pushBudget; const use = Math.min(amount, b); e.pushBudget = b - use; e.d = Math.max(0, e.d - use); }
+  stunE(e, dur) { if (e.stunCd > 0 || e.stun > 0) return; e.stun = Math.max(e.stun, dur); }
   updateEnemies(dt) {
     const sm = this.enemySpeedMul();
     const list = this.enemies.slice();
@@ -753,6 +944,7 @@ export class Run {
       if (e.hitT > 0) e.hitT -= dt;
       // statuses
       if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slowAmt = 0; }
+      if (e.pushBudget != null && e.pushBudget < 90) e.pushBudget = Math.min(90, e.pushBudget + 12 * dt);
       if (e.stun > 0) { e.stun -= dt; if (e.stun <= 0) e.stunCd = 1.4; } else if (e.stunCd > 0) e.stunCd -= dt;
       if (e.markT > 0) e.markT -= dt;
       if (e.burnT > 0) { e.burnT -= dt; this.hurt(e, e.burnDps * dt, { dot: true, quiet: true }); if (e.dead) continue; if (e.burnT <= 0) e.burnDps = 0; }
@@ -860,7 +1052,7 @@ export class Run {
       if (def.kind === 'gatling') {
         // spin up while there is a target, wind down otherwise
         const tg = this.findTarget(t, range);
-        t.spin = tg ? Math.min(1, t.spin + dt * 0.35) : Math.max(0, t.spin - dt * 0.8);
+        t.spin = tg ? Math.min(1, Math.max(t.spin, synv(t, 'spinFloor')) + dt * 0.35) : Math.max(0, t.spin - dt * 0.8);
         if (t.cd > 0 || !tg) continue;
         t.cd += 1 / rate;
         this.fire(t, tg, range);
@@ -915,7 +1107,7 @@ export class Run {
         const flight = Math.hypot(tg.x - t.x, tg.y - t.y) / 380;
         const tx = tg.x + (tg.vx || 0) * flight, ty = tg.y + (tg.vy || 0) * flight;
         const radius = (def.splash + 6 * (L - 1)) * (L >= 3 ? 1.25 : 1) * this.mods.splash * (big ? 1.6 : 1);
-        this.addProj({ kind: 'shell', style: 'kick', x: t.x, y: t.y, tx, ty, speed: 380, dmg: dmg * (big ? 2 : 1), crit, from: t.id, radius, slow: L >= 5, big });
+        this.addProj({ kind: 'shell', style: 'kick', x: t.x, y: t.y, tx, ty, speed: 380, dmg: dmg * (big ? 2 : 1), crit, from: t.id, radius, slow: L >= 5, big, bonusSlowed: synv(t, 'slowedDmg'), bonusStunned: synv(t, 'stunnedDmg') });
         break;
       }
       case 'pulse': {
@@ -929,7 +1121,7 @@ export class Run {
         break;
       }
       case 'chain': {
-        const chains = def.chains + (L >= 3 ? 1 : 0) + (L >= 5 ? 1 : 0) + (L >= 7 ? 1 : 0) + this.mods.chains;
+        const chains = def.chains + (L >= 3 ? 1 : 0) + (L >= 5 ? 1 : 0) + (L >= 7 ? 1 : 0) + this.mods.chains + synv(t, 'chains');
         const pts = [{ x: t.x, y: t.y - 10 }];
         const hit = new Set();
         let cur = tg; let dmg = baseDmg;
@@ -949,7 +1141,7 @@ export class Run {
       }
       case 'cone': {
         const spread = (L >= 7 ? Math.PI : L >= 5 ? 0.9 : 0.6);
-        const stun = def.stun + (L >= 3 ? 0.4 : 0) + 0.05 * (L - 1);
+        const stun = def.stun + (L >= 3 ? 0.4 : 0) + 0.05 * (L - 1) + synv(t, 'stun');
         const rng2 = range;
         for (const e of this.enemies.slice()) {
           if (e.dead || e.gated) continue;
@@ -962,7 +1154,7 @@ export class Run {
           if (e.hp > 0) {
             if (e.immune) continue;
             this.stunE(e, e.boss ? stun * 0.25 : stun);
-            if (!e.boss) e.d = Math.max(0, e.d - 36);
+            this.pushE(e, 36);
           }
         }
         this.emit({ k: 'cone', x: t.x, y: t.y, ang: t.ang, range: rng2, spread: Math.min(spread, Math.PI), color: def.color });
@@ -973,7 +1165,7 @@ export class Run {
         for (let i = 0; i < n; i++) {
           const off = n === 1 ? 0 : (i - (n - 1) / 2) * 0.35;
           const { dmg, crit } = this.rollCrit(t, baseDmg);
-          this.addProj({ kind: 'disc', style: 'scratch', x: t.x, y: t.y, ox: t.x, oy: t.y, ang: t.ang + off, dist: range, travelled: 0, back: false, speed: 330, dmg, crit, from: t.id, armorPierce: L >= 5 ? 1 : 0, hits: new Set(), hits2: new Set() });
+          this.addProj({ kind: 'disc', style: 'scratch', x: t.x, y: t.y, ox: t.x, oy: t.y, ang: t.ang + off, dist: range, travelled: 0, back: false, speed: 330, dmg, crit, from: t.id, armorPierce: L >= 5 ? 1 : 0, hits: new Set(), hits2: new Set(), arc: synv(t, 'chain') });
         }
         break;
       }
@@ -986,7 +1178,7 @@ export class Run {
         const n = L >= 7 ? 2 : 1;
         for (let i = 0; i < n; i++) {
           const { dmg, crit } = this.rollCrit(t, baseDmg);
-          this.addProj({ kind: 'orb', style: 'vocal', x: t.x, y: t.y, ang: t.ang + (i ? 0.9 : 0), speed: 150, turn: L >= 3 ? 7 : 4.5, dmg, crit, from: t.id, life: 3.5, radius: 44 * this.mods.splash, heal: L >= 5 });
+          this.addProj({ kind: 'orb', style: 'vocal', x: t.x, y: t.y, ang: t.ang + (i ? 0.9 : 0), speed: 150, turn: L >= 3 ? 7 : 4.5, dmg, crit, from: t.id, life: 3.5, radius: 44 * this.mods.splash, heal: L >= 5 || synv(t, 'healChance') > 0, healBonus: synv(t, 'healChance') });
         }
         break;
       }
@@ -1016,7 +1208,7 @@ export class Run {
       this.hurt(e, r.dmg, { crit: r.crit });
       if (e.hp > 0 && !e.immune) {
         e.slowAmt = Math.max(e.slowAmt, slow); e.slowT = Math.max(e.slowT, 2);
-        if (L >= 5 && !e.boss) e.d = Math.max(0, e.d - 22);
+        if (L >= 5) this.pushE(e, 22);
       }
     }
     this.emit({ k: 'pulse', x: t.x, y: t.y, r: radius, color: def.color, bass: true });
@@ -1035,7 +1227,7 @@ export class Run {
         this.hurt(e, r.dmg, { crit: r.crit });
       }
     }
-    if (!second && L >= 5 && t.shots % 8 === 0 && this.stageHp < this.stageMax) { this.stageHp++; this.emit({ k: 'heal', n: 1 }); }
+    if (!second && (L >= 5 || synv(t, 'healAny')) && t.shots % (synv(t, 'healEvery') || 8) === 0 && this.stageHp < this.stageMax) { this.stageHp++; this.emit({ k: 'heal', n: 1 }); }
     this.emit({ k: 'beam', x1: t.x, y1: t.y, x2, y2, w: width, color: def.color });
   }
 
@@ -1094,6 +1286,7 @@ export class Run {
           if (dist2(e.x, e.y, p.x, p.y) <= (e.r + 16) * (e.r + 16)) {
             set.add(e.id);
             this.hurt(e, p.dmg, { crit: p.crit, pierce: p.armorPierce });
+            if (p.arc) this.arcFrom(e, p.dmg * 0.4 * p.arc, set);
           }
         }
         p.spin = (p.spin || 0) + dt * 18;
@@ -1114,6 +1307,14 @@ export class Run {
       if (remove) this.projectiles.splice(i, 1);
     }
   }
+  // Record Chain synergy: a spark jumps from a hit enemy to the nearest other enemy within 90 px
+  arcFrom(e, dmg, skip) {
+    let nxt = null, nd = 90 * 90;
+    for (const o of this.enemies) { if (o === e || o.dead || o.gated || skip.has(o.id)) continue; const d2 = dist2(o.x, o.y, e.x, e.y); if (d2 < nd) { nd = d2; nxt = o; } }
+    if (!nxt) return;
+    this.emit({ k: 'chain', pts: [{ x: e.x, y: e.y }, { x: nxt.x, y: nxt.y }], color: TURRETS.synth.color });
+    this.hurt(nxt, dmg, {});
+  }
   explode(p) {
     const r2 = p.radius * p.radius;
     for (const e of this.enemies.slice()) {
@@ -1122,10 +1323,13 @@ export class Run {
       const rr = p.radius + e.r * 0.5;
       if (d2 > rr * rr) continue;
       const f = 1 - 0.4 * Math.min(1, Math.sqrt(d2) / (p.radius + 1));
-      this.hurt(e, p.dmg * f, { crit: p.crit });
+      let dm = p.dmg * f;
+      if (p.bonusSlowed && e.slowT > 0 && e.slowAmt > 0) dm *= 1 + p.bonusSlowed;
+      if (p.bonusStunned && e.stun > 0) dm *= 1 + p.bonusStunned;
+      this.hurt(e, dm, { crit: p.crit });
       if (p.slow && e.hp > 0 && !e.immune) { e.slowAmt = Math.max(e.slowAmt, 0.3); e.slowT = Math.max(e.slowT, 1.5); }
     }
-    if (p.heal && this.stageHp < this.stageMax && this.rng.chance(0.15)) { this.stageHp++; this.emit({ k: 'heal', n: 1 }); }
+    if (p.heal && this.stageHp < this.stageMax && this.rng.chance(0.15 + (p.healBonus || 0))) { this.stageHp++; this.emit({ k: 'heal', n: 1 }); }
     this.emit({ k: 'explode', x: p.x, y: p.y, r: p.radius, style: p.style, big: !!p.big });
   }
 
@@ -1150,8 +1354,48 @@ export class Run {
     run.wm = run.wmId ? WAVE_MODS[run.wmId].wm : NONE_WM;
     const byId = new Map(run.enemies.map((e) => [e.id, e]));
     run.projectiles = s.projectiles.map((p) => Object.assign(p, { target: p.target != null ? byId.get(p.target) || null : null, hits: p.hits ? new Set(p.hits) : undefined, hits2: p.hits2 ? new Set(p.hits2) : undefined }));
+    run.recalcAuras();
     run.events = []; run.result = null; run.opts = s.opts;
     return run;
+  }
+
+  // ---------------------------------------------------------------- recap (live and in result.recap)
+  // { leaksByLane:[n], leakTypes:[{type,count}], worstWave:number|null, topKillers:[{type,count}] (count = stage damage dealt),
+  //   bossFinisher: bossId|null (the boss whose leak ended the run), turretUse:[{type,deployed,bestLevel}], tips:[up to 3 strings] }
+  recap() {
+    const sortRows = (obj) => Object.keys(obj).map((type) => ({ type, count: obj[type] })).sort((a, b) => b.count - a.count || (a.type < b.type ? -1 : 1));
+    let worstWave = null, wl = 0;
+    for (const k of Object.keys(this.waveLeaks).map(Number).sort((a, b) => a - b)) if (this.waveLeaks[k] > wl) { wl = this.waveLeaks[k]; worstWave = k; }
+    const turretUse = Object.keys(this.deployedByType).map((type) => ({ type, deployed: this.deployedByType[type], bestLevel: this.bestLvlByType[type] || 1 }))
+      .sort((a, b) => b.deployed - a.deployed || (a.type < b.type ? -1 : 1));
+    const base = { leaksByLane: this.leaksByLane.slice(), leakTypes: sortRows(this.leakTypeCount), worstWave, topKillers: sortRows(this.stageDmgByType), bossFinisher: this.bossFinisher, turretUse };
+    return Object.assign(base, { tips: this.recapTips(base) });
+  }
+  recapTips(r) {
+    const tips = [];
+    const nl = r.leaksByLane.length, total = r.leaksByLane.reduce((a, b) => a + b, 0);
+    if (r.bossFinisher && BOSS_TIPS[r.bossFinisher]) tips.push(BOSS_TIPS[r.bossFinisher]);
+    if (nl > 1 && total >= 3) {
+      let bi = 0; r.leaksByLane.forEach((v, i) => { if (v > r.leaksByLane[bi]) bi = i; });
+      if (r.leaksByLane[bi] / total >= 0.5) {
+        const names = nl === 2 ? ['left', 'right'] : nl === 3 ? ['left', 'right', 'middle'] : null;
+        tips.push('Most leaks came from the ' + (names ? names[bi] : 'number ' + (bi + 1)) + ' lane: build there.');
+      }
+    }
+    const lt = r.leakTypes.find((x) => ENEMY_TIPS[x.type] && x.count >= 2) || r.leakTypes.find((x) => ENEMY_TIPS[x.type]);
+    if (lt) tips.push(ENEMY_TIPS[lt.type]);
+    if (this.merges === 0 && this.deploys >= 4) tips.push('You never merged: drag two turrets of the same level together to double their power.');
+    else if (this.maxLevelSeen <= 3 && this.deploys >= 8) tips.push('You never merged past level 3: merge pairs to double power.');
+    if (this.phase === 'lost' && this.coins >= 3 * this.deployCost(false, true)) tips.push('You ended with spare coins: turn them into turrets before the wave.');
+    if (this.heroUses === 0 && this.wave >= 3) tips.push('Roxor and Jasmin never played: tap a hero when the stage fills up.');
+    if (!this.synEver) {
+      const have = Object.keys(this.deployedByType);
+      let pair = SYNERGIES.find((s) => have.includes(s.a) && have.includes(s.b));
+      if (!pair && have.length) { const p = TURRET_PARTNERS[have[0]][0]; if (p) pair = SYNERGIES.find((s) => s.id === p.id); }
+      if (pair) tips.push('Try pairing ' + TURRETS[pair.a].name + ' with ' + TURRETS[pair.b].name + ' for a synergy bonus.');
+    }
+    if (!tips.length && this.phase === 'won') tips.push('Clean run! Try Hard difficulty or a higher Encore.');
+    return tips.slice(0, 3);
   }
 
   // ---------------------------------------------------------------- bot helpers (also used by the tutorial and tests)

@@ -94,6 +94,36 @@ for (const [id, c] of Object.entries(S.CUTSCENES)) for (const p of c.panels) { o
 for (const w of C.WORLDS) { ok(S.CUTSCENES['world_' + w.id], 'world cutscene ' + w.id); ok(S.CUTSCENES['boss_' + w.boss], 'boss cutscene ' + w.boss); }
 for (const k of Object.keys(C.ENEMIES)) if (!C.ENEMIES[k].hidden) ok(S.HINTS[k], 'hint for ' + k);
 
+// ---- synergies, partners and difficulty
+{
+  const FX_KEYS = ['rate', 'dmg', 'range', 'crit', 'slowedDmg', 'stunnedDmg', 'stun', 'spinFloor', 'healAny', 'healEvery', 'healChance', 'chain', 'chains', 'aura'];
+  ok(C.SYNERGIES.length >= 10 && C.SYNERGIES.length <= 14, 'about 10 to 14 synergies: ' + C.SYNERGIES.length);
+  const ids = new Set(), pairs = new Set();
+  for (const s of C.SYNERGIES) {
+    ok(/^[a-z][a-z0-9_]*$/.test(s.id) && !ids.has(s.id), 'synergy id ' + s.id); ids.add(s.id);
+    ok(C.TURRETS[s.a] && C.TURRETS[s.b] && s.a !== s.b, 'synergy types ' + s.id);
+    const pk = [s.a, s.b].sort().join('+'); ok(!pairs.has(pk), 'one synergy per pair ' + pk); pairs.add(pk);
+    ok(s.name && s.desc && s.desc.length <= 80, 'synergy text ' + s.id);
+    ok(s.fx && (s.fx.a || s.fx.b), 'synergy has an effect ' + s.id);
+    for (const side of ['a', 'b']) for (const [k, v] of Object.entries(s.fx[side] || {})) ok(FX_KEYS.includes(k) && typeof v === 'number' && v > 0, 'synergy fx ' + s.id + ' ' + k);
+  }
+  for (const id of Object.keys(C.TURRETS)) ok(Array.isArray(C.TURRET_PARTNERS[id]) && C.TURRET_PARTNERS[id].length >= 1, 'every turret has a partner ' + id);
+  let partnerRows = 0;
+  for (const [id, rows] of Object.entries(C.TURRET_PARTNERS)) for (const r of rows) {
+    partnerRows++;
+    const s = C.SYNERGY_BY_ID[r.id]; ok(s && ((s.a === id && s.b === r.partner) || (s.b === id && s.a === r.partner)), 'partner row matches synergy ' + id + ' ' + r.id);
+    ok(r.name === s.name && r.desc === s.desc, 'partner row text');
+  }
+  ok(partnerRows === C.SYNERGIES.length * 2, 'each synergy listed for both turrets');
+  ok(C.synergyScale(1) === 1 && C.synergyScale(4) > 1 && C.synergyScale(7) <= C.SYN_SCALE_MAX && C.synergyScale(7) > C.synergyScale(4), 'synergy scale grows mildly and caps');
+  ok(C.ECON.dropRerollGems === 2 && C.ECON.dropRerollCoinPct === 0.45, 'drop reroll prices');
+  for (const id of ['easy', 'normal', 'hard']) { const d = C.DIFFICULTY[id]; ok(d && d.id === id && d.name && d.desc && d.hpMul > 0 && d.speedMul > 0, 'difficulty ' + id); }
+  const { easy, normal, hard } = C.DIFFICULTY;
+  ok(easy.hpMul === 0.7 && easy.stageHp === 6 && easy.speedMul === 0.92 && easy.recordsMul === 0.75, 'easy table');
+  ok(hard.hpMul === 1.3 && hard.stageHp === -4 && hard.speedMul === 1.06 && hard.coinMul === 1.15 && hard.recordsMul === 1.25, 'hard table');
+  ok(normal.hpMul === 1 && normal.stageHp === 0 && normal.recordsMul === 1, 'normal table');
+}
+
 // ---- house rule: no em dash in any source, doc or test of this game
 const walk = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walk(p) : [p]; });
 const files = walk('drop_the_bass').concat(readdirSync('tests').filter((f) => f.startsWith('drop_the_bass_')).map((f) => join('tests', f)));

@@ -1,7 +1,11 @@
 /* ui_doodle.css: the CRAYON NOTEBOOK look for every DOM screen. Everything is scoped under body.doodle, so body.classic (and the plain ui.css) is untouched.
    Cream paper with ruled lines, thick ink outlines with slightly wobbly corners, flat crayon colours, hard offset shadows, a hand-written face
-   (Patrick Hand from Google Fonts, with Comic Sans style fallbacks). No blur, no glow, no glossy gradients, no shine sweeps. Hit areas, the 540 px
+   (Patrick Hand, self-hosted, with Comic Sans style fallbacks). No blur, no glow, no glossy gradients, no shine sweeps. Hit areas, the 540 px
    layout width and reduced motion handling stay as in ui.css. */
+
+/* Patrick Hand is self-hosted (fonts/, SIL OFL 1.1, see fonts/OFL.txt) so the look survives offline play. */
+@font-face{font-family:"Patrick Hand";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/PatrickHand-latin-ext.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Patrick Hand";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/PatrickHand-latin.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 
 body.doodle{
   --ink:#2b2733; --ink2:#3a3445; --panel:#fbf6e6; --panel2:#f3ead0; --line:#2b2733; --bone:#2b2733; --dim:#6b6477;
@@ -230,3 +234,55 @@ body.doodle .rangeRow input[type=range]{background:transparent}
 body.doodle #boot b{font-weight:400;color:#ff5fb0;text-shadow:3px 3px 0 #2b2733}
 body.doodle .world .ttl{color:#2b2733!important;background:#fbf6e6;border:3px solid #2b2733;border-radius:var(--wob);padding:0 12px;box-shadow:2px 3px 0 #2b2733;text-shadow:none;font-size:28px;transform:rotate(-1.5deg);left:14px;bottom:10px}
 body.doodle #boot small{text-shadow:none}
+
+/* ---- defeat recap ("What happened") and share button ---- */
+body.doodle .recap{margin:8px 0;padding:10px 12px;box-shadow:3px 4px 0 #2b2733}
+body.doodle .recap h3{margin:0 0 4px;font-size:24px}
+body.doodle .rc-row{margin:6px 0}
+body.doodle .rc-lbl{font-size:17px;color:#6b6477}
+body.doodle .rc-bars{display:flex;gap:6px;align-items:flex-end;justify-content:center;min-height:76px;padding-top:4px}
+body.doodle .rc-bar{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;width:34px;font-size:15px}
+body.doodle .rc-bar i{display:block;width:100%;background:repeating-linear-gradient(-45deg,#2f7de1 0 5px,#7fb2f0 5px 8px);border:2.5px solid #2b2733;border-radius:5px 3px 6px 3px}
+body.doodle .rc-bar.worst i{background:repeating-linear-gradient(-45deg,#e8403f 0 5px,#f59a98 5px 8px)}
+body.doodle .rc-bar span{color:#6b6477;font-size:14px}
+body.doodle .rc-types{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+body.doodle .rc-type{display:flex;flex-direction:column;align-items:center;min-width:64px;font-size:14px;line-height:1.1;text-align:center}
+body.doodle .rc-type b{font-weight:400;font-size:19px}
+body.doodle .rc-type span{color:#6b6477;max-width:78px;overflow-wrap:anywhere}
+body.doodle .rc-line{font-size:18px;margin:4px 0}
+body.doodle .rc-line b{font-weight:400;color:#e8403f}
+body.doodle .rc-tips{margin-top:6px}
+body.doodle .rc-tip{display:flex;gap:8px;align-items:flex-start;font-size:18px;line-height:1.2;margin:5px 0;color:#4b4455}
+body.doodle .rc-tip canvas{flex:none;margin-top:1px}
+
+/* ---- phone tap targets: #ui is scaled by --s (set in main.js), so ask for 44 CSS px in ui units ---- */
+body.doodle #ui{--tap:calc(44px / var(--s,1))}
+body.doodle #ui .btn,body.doodle #ui .tab,body.doodle #ui .iconbtn,body.doodle #ui .seg button,body.doodle #ui .enc button,body.doodle #ui .pick,body.doodle #ui .cut-skip{min-height:var(--tap)}
+body.doodle #ui .btn,body.doodle #ui .iconbtn,body.doodle #ui .seg button,body.doodle #ui .enc button{min-width:var(--tap)}
+body.doodle #ui .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+body.doodle .recap .rc-bar{width:40px}
+
+/* ---- meta additions: fame title, studio scene, difficulty, weekly gig, leaderboard tabs and friends, continue run ---- */
+body.doodle .fame-title{font-family:var(--hand);font-size:17px;letter-spacing:0;text-transform:none;color:#2b2733;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.05}
+body.doodle .fame-pbar{position:relative;height:16px;overflow:hidden}
+body.doodle .fame-cnt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:400 13px var(--hand);color:#2b2733;text-shadow:-1px -1px 0 #fbf6e6,1px -1px 0 #fbf6e6,-1px 1px 0 #fbf6e6,1px 1px 0 #fbf6e6;letter-spacing:0}
+body.doodle .studio-scene{border:3px solid #2b2733;border-radius:var(--wob);overflow:hidden;background:#fbf6e6;box-shadow:2px 3px 0 #2b2733;margin:0 0 10px}
+body.doodle .studio-scene canvas{display:block;width:100%!important;height:auto!important}
+body.doodle .studio-cap{padding:4px 10px 6px;font-size:14px;text-align:center;border-top:3px dashed #2b2733;margin:0}
+body.doodle .seg.diff button{font-size:20px}
+body.doodle .lb-row{padding:6px 6px;border-bottom:2px dashed #2b2733;align-items:center;gap:6px}
+body.doodle .lb-row.friend{background:#d4f2b8}
+body.doodle .lb-row.me{background:#ffe28a}
+body.doodle .lb-row.missing{opacity:.6}
+body.doodle .lb-rank{width:38px;font-weight:900;color:#6b6477}
+body.doodle .lb-name{font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.doodle .lb-score{font-weight:900;min-width:30px;text-align:right}
+body.doodle .lb-tag{font:400 12px var(--hand);margin-left:6px;padding:0 6px;border:2px solid #2b2733;border-radius:8px;vertical-align:middle}
+body.doodle .lb-tag.you{background:#ff5fb0;color:#fff}
+body.doodle .lb-tag.fr{background:#9dff3a;color:#2b2733}
+body.doodle .lb-add,body.doodle .lb-x{width:30px;height:30px;border:3px solid #2b2733;border-radius:50%;background:#fbf6e6;font:400 20px var(--hand);color:#2b2733;line-height:1;padding:0;cursor:pointer}
+body.doodle .lb-x{background:#ece8f2;color:#6b6477}
+body.doodle .lb-addrow{margin-top:10px;gap:8px}
+body.doodle .lb-input{flex:1;min-width:0;font:400 20px var(--hand);padding:8px 10px;border-radius:10px;border:3px solid #2b2733}
+body.doodle .cont-run{display:flex;flex-direction:column;align-items:center;gap:0;line-height:1.05}
+body.doodle .cont-run .cr-s{font:400 15px var(--hand);opacity:.85}

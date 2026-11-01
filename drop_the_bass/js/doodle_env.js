@@ -2,7 +2,12 @@
 // a pencil-shaded lane, the stage tile is a doodled stage. Same exports, anchors and option semantics as the classic art_env.js.
 //   drawBackdrop(ctx, id, w, h, t, o)        id: title hub garage busk club festival arena. o: beat 0..1, staticAmt 0..1
 //   drawBoard(ctx, mapId, worldId, t, o)     logical coords, board at BOARD_X/BOARD_Y. o: beat, slotHint [[c,r]], hoverSlot [c,r], dropSlot [c,r]
-//   drawStageBase(ctx, worldId, x, y, o)     (x,y) = stage tile centre. o: t, hp 0..1, hit 0..1, beat
+//   drawStageBase(ctx, worldId, x, y, o)     (x,y) = stage tile centre. o: t, hp 0..1, hit 0..1, beat,
+//                                            studio (optional object of Studio upgrade levels, e.g. profile.studio: { amp: 7, hype: 3, ... }).
+//                                            With o.studio the stage gains props by level: amp stacks (amp), a banner (heropow + herocd), string
+//                                            lights (hype + lucky) and truss poles (stagehp). Missing or empty o.studio draws the plain stage.
+//   studioProps(levels)                      pure: Studio levels -> { amps 0..4, riser 0..3, cables, charm, jar 0..4, banner 0..2, lights 0..3, van 0..3, truss 0..3, eq 0..3, total }
+//   drawStudioScene(ctx, w, h, t, studio, o) the animated "backstage" picture for the Studio tab (w x h about 504 x 170). o: heroLv {roxor,jasmin}, outfits {roxor,jasmin}
 // Everything static is baked once into 2 or 3 "boil" frames (different seeds) and replayed slowly; per frame work is a drawImage plus a few cheap
 // live bits (twinkles, notes, rain, bunting, lasers, chevrons). No gradients, no glow, no unseeded randomness, no clock. Safe in node with a mock ctx.
 import { C, Pen, arc, rect, star, heart, makeCanvas as kitCanvas, setScale, getScale } from './doodle_kit.js';
@@ -17,7 +22,7 @@ const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) 
 const hn = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };   // deterministic 0..1 noise from an integer
 
 const bgCache = new Map(), boardCache = new Map(), stageCache = new Map(), heroFrames = new Map();
-export function setArtScale(n) { setScale(n); bgCache.clear(); boardCache.clear(); stageCache.clear(); heroFrames.clear(); creepCache.clear(); }
+export function setArtScale(n) { setScale(n); bgCache.clear(); boardCache.clear(); stageCache.clear(); heroFrames.clear(); creepCache.clear(); extraCache.clear(); sceneCache.clear(); }
 
 // ------------------------------------------------------------------------------------------------ baking
 // draw(pen, c, f) paints in logical units with (0,0) at the top-left of a w x h box; the pen strokes are logical px wide (sc 1).
@@ -397,6 +402,8 @@ export function drawStageBase(ctx, worldId, x, y, o) {
   o = o || {}; const t = o.t || 0, hp = o.hp == null ? 1 : clamp(o.hp, 0, 1), hit = clamp(o.hit || 0, 0, 1), beat = clamp(o.beat || 0, 0, 1);
   const wd = WORLD_BY_ID[worldId] || { accent: C.pink }, ok = hp > 0.34, cracked = hp < 0.5;
   ctx.save(); ctx.translate(x + (hit > 0.05 ? Math.sin(t * 90) * 2.6 * hit : 0), y + 5);
+  const sp = o.studio ? studioProps(o.studio) : null, ex = sp ? stageExtras(worldId, sp) : null;
+  if (ex) put(ctx, ex, -EXW / 2, -EXH + 48, t, 3);
   const e = stageEntry(worldId, ok, cracked);
   if (e.direct) { ctx.save(); ctx.translate(-SW / 2, -SH / 2 - 8); e.draw(new Pen(ctx, hashStr(e.key), 1), ctx, 0); ctx.restore(); } else put(ctx, e, -SW / 2, -SH / 2 - 8, t, 3);
   // live bits: swaying light beams, bouncing equalizer bars, speaker arcs on the beat
@@ -407,6 +414,7 @@ export function drawStageBase(ctx, worldId, x, y, o) {
     for (let i = 0; i < 7; i++) { const bh = 3 + (0.3 + 0.7 * Math.abs(Math.sin(t * (2.4 + hn(i) * 3) + i))) * (8 + beat * 7); ctx.fillStyle = i % 2 ? wd.accent : C.cyan; ctx.fillRect(-22 + i * 6.6, -12 - bh, 4, bh); }
     for (const sd of [-1, 1]) { ctx.strokeStyle = wd.accent; ctx.lineWidth = 2.2; ctx.globalAlpha = 0.3 + beat * 0.6; ctx.beginPath(); ctx.arc(sd * 42, -10, 16 + beat * 5, sd < 0 ? Math.PI - 0.9 : -0.9, sd < 0 ? Math.PI + 0.9 : 0.9); ctx.stroke(); } ctx.globalAlpha = 1;
   }
+  if (sp && sp.lights > 0 && ok) for (const b of lightBulbs(sp.lights)) { ctx.globalAlpha = 0.55 + 0.45 * Math.sin(t * 3.1 + b.i * 1.9); ctx.fillStyle = b.col; ctx.beginPath(); ctx.arc(b.x, b.y, 3.1, 0, TAU); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.stroke(); } ctx.globalAlpha = 1;
   const pose = hp <= 0.34 ? 'sad' : hit > 0.2 ? 'shock' : (hp > 0.7 ? 'cheer' : 'beat');
   const hs = heroSprite(pose, t);
   if (hs) ctx.drawImage(hs, -44, -26 - 3, 88, 52); else { ctx.save(); ctx.translate(0, -3); miniHeroes(ctx, new Pen(ctx, 99, 1), pose, t); ctx.restore(); }
@@ -417,5 +425,181 @@ export function drawStageBase(ctx, worldId, x, y, o) {
   if (hp < 0.6) for (let i = 0; i < 4; i++) { const k = (t * 0.7 + i * 0.26) % 1; ctx.globalAlpha = (1 - k) * 0.8; ctx.strokeStyle = '#8a869a'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(-34 + i * 22 + Math.sin(t * 2 + i) * 4, -40 - k * 30, 4 + k * 8, 0, TAU); ctx.stroke(); }
   ctx.globalAlpha = 1;
   if (hp < 0.5) for (let i = 0; i < 3; i++) { const k = (t * 2.2 + i * 0.33) % 1; ctx.fillStyle = i % 2 ? C.yellow : C.orange; ctx.globalAlpha = 1 - k; ctx.fillRect(-30 + i * 30 + Math.sin(i * 9) * 6, -26 - k * 18, 3, 3); } ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// ================================================================================================================ STUDIO PROGRESS
+// Studio upgrade levels become things you can see: props on the Static-attacked stage (drawStageBase o.studio) and a backstage scene in the Studio tab.
+const tierOf = (v, steps) => { let n = 0; for (const s of steps) if (v >= s) n++; return n; };
+export function studioProps(levels) {
+  const L = levels && typeof levels === 'object' ? levels : {};
+  const g = (id) => { const v = Math.floor(+L[id]); return v > 0 && Number.isFinite(v) ? v : 0; };
+  let total = 0; for (const k of Object.keys(L)) total += g(k);
+  return {
+    amps: tierOf(g('amp'), [1, 5, 10, 15]), riser: tierOf(g('tempo'), [1, 6, 12]), cables: tierOf(g('range'), [1, 4, 8]),
+    charm: tierOf(g('crit') + g('critdmg'), [1, 10]), jar: tierOf(g('coin') + g('tipcup'), [1, 6, 12, 20]),
+    banner: tierOf(g('heropow') + g('herocd'), [1, 6]), lights: tierOf(g('hype') + g('lucky'), [1, 4, 9]),
+    van: tierOf(g('rack') * 3 + g('stream'), [1, 4, 9]), truss: tierOf(g('stagehp'), [1, 5, 10]), eq: tierOf(total, [4, 20, 60]), total,
+  };
+}
+const sketch = (p, pts) => { p.ctx.globalAlpha = 0.7; p.ln(pts, '#9b96ad', 2.2, true, 0.7, [6, 7]); p.ctx.globalAlpha = 1; };
+function ampBox(p, x, y, w, h, tint) {   // (x, y) = bottom-left corner
+  p.shp(rect(x, y - h, w, h, 3), '#3d3750', INK, 3, { gap: 5, alpha: 0.95, f2: tint });
+  const cx = x + w / 2, cy = y - h * 0.44, r = Math.min(w, h) * 0.3;
+  p.shp(arc(cx, cy, r, r, 0, 360, 10), C.grey, INK, 2.2, { gap: 4 }); p.dot(cx, cy, r * 0.34, INK);
+  p.dot(x + 7, y - h + 6, 2.2, C.yellow); p.dot(x + 14, y - h + 6, 2.2, C.pink);
+}
+const AMP_SPOTS = [
+  [], [[40, 0, 40, 38]], [[34, 0, 44, 44], [84, 0, 36, 34]],
+  [[30, 0, 48, 50], [30, -50, 48, 40], [84, 0, 38, 38]],
+  [[14, 0, 50, 52], [14, -52, 50, 44], [68, 0, 48, 52], [68, -52, 48, 44], [60, -96, 34, 30]],
+];
+function drumKit(p, cx, y, tier) {   // cx centre, y = riser top
+  const kick = (x, r) => { p.shp(arc(x, y - r, r, r * 0.95, 0, 360, 12), C.pink, INK, 3, { gap: 5, f2: C.yellow }); p.shp(arc(x, y - r, r * 0.38, r * 0.38, 0, 360, 8), C.paper, INK, 2, { gap: 5 }); };
+  if (tier >= 1) kick(cx, 17);
+  if (tier >= 2) {
+    p.ln([cx - 46, y, cx - 40, y - 24], INK, 2.6, false, 0.6); p.shp(arc(cx - 40, y - 28, 12, 6, 0, 360, 10), C.paper, INK, 2.4, { gap: 4 });
+    p.ln([cx + 44, y, cx + 44, y - 34], INK, 2.6, false, 0.6); p.shp(arc(cx + 44, y - 36, 15, 4, 0, 360, 10), C.gold, INK, 2.4, { gap: 4 });
+  }
+  if (tier >= 3) {
+    kick(cx + 30, 11);
+    p.ln([cx - 24, y - 20, cx - 36, y - 56], INK, 2.4, false, 0.6); p.shp(arc(cx - 36, y - 58, 17, 4.5, 0, 360, 10), C.yellow, INK, 2.4, { gap: 4 });
+    p.ln([cx + 8, y - 28, cx + 20, y - 62], INK, 2.4, false, 0.6); p.shp(arc(cx + 20, y - 64, 15, 4, 0, 360, 10), C.gold, INK, 2.4, { gap: 4 });
+  }
+}
+function vanArt(p, x, y, tier, ghost) {   // (x, y) = bottom-left on the floor
+  const body = [x, y - 8, x, y - 46, x + 66, y - 46, x + 66, y - 8], cab = [x + 66, y - 8, x + 66, y - 36, x + 80, y - 36, x + 96, y - 20, x + 96, y - 8];
+  if (ghost) { sketch(p, body); sketch(p, cab); p.ctx.globalAlpha = 0.7; p.ln(arc(x + 22, y - 6, 8, 8, 0, 360, 10), '#9b96ad', 2.2, true, 0.5, [5, 5]); p.ln(arc(x + 76, y - 6, 8, 8, 0, 360, 10), '#9b96ad', 2.2, true, 0.5, [5, 5]); p.ctx.globalAlpha = 1; return; }
+  const col = tier >= 3 ? C.gold : tier === 2 ? C.pink : '#b9b4c6';
+  p.shp(body, col, INK, 3, { gap: 5, f2: tier >= 2 ? C.paper : null }); p.shp(cab, col, INK, 3, { gap: 5 });
+  p.shp([x + 71, y - 33, x + 79, y - 33, x + 91, y - 21, x + 71, y - 21], C.sky, INK, 2.2, { gap: 4 });
+  p.shp(rect(x + 8, y - 38, 20, 14, 2), C.sky, INK, 2.2, { gap: 4 });
+  if (tier >= 2) { p.ln([x + 2, y - 15, x + 64, y - 15], C.cyan, 3.4, false, 0.6); p.shp(star(x + 42, y - 31, 7, 0.45, 0.2), C.yellow, INK, 1.8, { gap: 4 }); }
+  if (tier >= 3) { p.ln([x + 6, y - 50, x + 60, y - 50], INK, 2.4, false, 0.4); for (let i = 0; i < 4; i++) p.ln([x + 10 + i * 15, y - 46, x + 10 + i * 15, y - 50], INK, 2, false, 0.2); p.txt('TOUR', x + 22, y - 52, 8, C.red, { align: 'c', w: 2 }); p.shp(rect(x + 44, y - 64, 14, 12, 2), '#3d3750', INK, 2.2, { gap: 4 }); }
+  else if (tier === 1) p.ln([x + 14, y - 30, x + 20, y - 24, x + 15, y - 18], INK, 1.8, false, 0.8);
+  for (const wx of [x + 22, x + 76]) { p.shp(arc(wx, y - 6, 9, 9, 0, 360, 10), '#3d3750', INK, 2.8, { gap: 4 }); p.shp(arc(wx, y - 6, 3.4, 3.4, 0, 360, 6), C.grey, INK, 1.6, { gap: 3 }); }
+}
+function jarArt(p, x, y, tier, ghost) {   // (x, y) = bottom centre
+  const gl = [x - 11, y - 34, x - 13, y - 4, x - 9, y, x + 9, y, x + 13, y - 4, x + 11, y - 34];
+  if (ghost) { sketch(p, gl); return; }
+  if (tier >= 1) p.shp([x - 12, y - 4 - tier * 6, x - 13, y - 4, x - 9, y, x + 9, y, x + 13, y - 4, x + 12, y - 4 - tier * 6], C.gold, null, 1, { gap: 4, alpha: 0.95 });
+  p.ln(gl, INK, 2.6, false, 0.6); p.ln([x - 14, y - 34, x + 14, y - 34], INK, 3.2, false, 0.4);
+  for (let i = 0; i < tier; i++) p.dot(x - 6 + (i % 2) * 11, y - 8 - i * 4, 3.4, C.yellow);
+  if (tier >= 3) p.shp(star(x, y - 40, 7, 0.45, 0), C.yellow, INK, 1.8, { gap: 4 });
+}
+const BULB_COLS = [C.pink, C.cyan, C.yellow, C.lime, C.orange];
+// string light bulbs for the Static stage, in stage-centre coordinates
+function lightBulbs(tier) {
+  const n = [0, 3, 5, 7][tier] || 0, out = [];
+  for (let i = 0; i < n; i++) { const k = n === 1 ? 0.5 : i / (n - 1); out.push({ i, x: -56 + k * 112, y: -82 + Math.sin(k * Math.PI) * 8 + 3, col: BULB_COLS[i % 5] }); }
+  return out;
+}
+const EXW = 200, EXH = 150;
+const extraCache = new Map();
+function stageExtras(worldId, sp) {
+  if (!(sp.amps || sp.banner || sp.lights || sp.truss)) return null;
+  const key = [worldId, sp.amps, sp.banner, sp.lights, sp.truss, getScale()].join('|');
+  let e = extraCache.get(key);
+  if (!e) e = lruSet(extraCache, key, bake('extras|' + key, EXW, EXH, 2, getScale(), (p, c) => paintExtras(p, c, sp, (WORLD_BY_ID[worldId] || { accent: C.pink }).accent)), 24);
+  return e;
+}
+function paintExtras(p, c, sp, accent) {
+  c.translate(EXW / 2, EXH - 48);   // stage centre
+  const poles = sp.truss > 0 || sp.banner > 0 || sp.lights > 0;
+  if (sp.amps > 0) {
+    const sides = sp.amps >= 2 ? [-1, 1] : [1];
+    for (const sd of sides) {
+      const stack = sp.amps >= 4 ? 2 : sp.amps >= 3 ? 1 : 0;
+      ampBox(p, sd < 0 ? -90 : 56, 34, 32, 36, accent);
+      if (stack >= 1) ampBox(p, sd < 0 ? -88 : 58, -2, 28, 28, accent);
+      if (stack >= 2) ampBox(p, sd < 0 ? -86 : 60, -30, 24, 22, accent);
+    }
+  }
+  if (poles) {
+    const hgt = sp.banner > 0 || sp.lights > 0 ? 112 : sp.truss >= 2 ? 92 : 82;
+    for (const sd of [-1, 1]) { p.ln([sd * 62, 22, sd * 62, 22 - hgt], INK, 3.2, false, 0.5); if (sp.truss >= 1) for (let k = 0; k < 4; k++) p.ln([sd * 62 - 4, 22 - k * 30, sd * 62 + 4, 22 - k * 30 - 22], INK, 1.6, false, 0.3); }
+    p.ln([-62, 22 - hgt, 62, 22 - hgt], INK, 3.2, false, 0.5);
+    if (sp.truss >= 3) for (const x of [-34, 0, 34]) p.shp(rect(x - 5, 22 - hgt + 2, 10, 8, 2), C.yellow, INK, 1.8, { gap: 4 });
+  }
+  if (sp.banner > 0) {
+    const ty = -80;
+    if (sp.banner >= 2) { p.shp([-48, ty, 48, ty, 48, ty + 22, 0, ty + 28, -48, ty + 22], C.pink, INK, 2.6, { gap: 5, f2: C.yellow }); p.txt('BASS', 0, ty + 18, 12, C.paper, { align: 'c', out: INK, ow: 3.4, w: 2.6 }); }
+    else for (let i = 0; i < 6; i++) p.shp([-50 + i * 20, ty, -38 + i * 20, ty, -44 + i * 20, ty + 14], BULB_COLS[i % 5], INK, 1.8, { gap: 4 });
+  }
+  if (sp.lights > 0) { const q = []; for (let i = 0; i <= 10; i++) q.push(-58 + i * 11.6, -82 + Math.sin(i / 10 * Math.PI) * 8); p.ln(q, INK, 1.8, false, 0.4); }
+}
+
+// ---------------------------------------------------------------- the Studio tab backstage scene
+const SCENE_W = 504, SCENE_H = 170, SFLOOR = 144;
+const sceneCache = new Map();
+function paintScene(p, c, sp, accent) {
+  ruled(c, SCENE_W, SCENE_H, { paper: C.paper, line: C.line, step: 30, margin: C.margin });
+  // floor boards
+  p.hatch([0, SFLOOR, SCENE_W, SFLOOR, SCENE_W, SCENE_H, 0, SFLOOR + 26], '#c79a63', 7, 0.25, 0.8); p.ln([0, SFLOOR, SCENE_W, SFLOOR], INK, 3.4, false, 1);
+  for (let x = 40; x < SCENE_W; x += 70) p.ln([x, SFLOOR, x - 10, SCENE_H], INK, 1.4, false, 0.4);
+  // cables on the floor
+  for (let i = 0; i < sp.cables; i++) { const y0 = SFLOOR + 8 + i * 6, q = []; for (let k = 0; k <= 16; k++) q.push(20 + k * 24, y0 + Math.sin(k * 0.9 + i * 2) * (4 + i)); p.ln(q, [C.red, C.blue, C.green][i], 3, false, 0.5); }
+  // string lights wire and truss
+  const hasPoles = sp.truss > 0 || sp.banner > 0 || sp.lights > 0;
+  if (hasPoles) {
+    const top = 14;
+    for (const x of [140, 384]) { p.ln([x, SFLOOR, x, top], INK, 3.4, false, 0.6); for (let k = 0; k < 6; k++) p.ln([x - 5, SFLOOR - k * 22, x + 5, SFLOOR - k * 22 - 16], INK, 1.5, false, 0.3); }
+    p.ln([140, top, 384, top], INK, 3.4, false, 0.5);
+    if (sp.truss >= 2) for (const x of [190, 262, 334]) { p.shp(rect(x - 7, top + 2, 14, 10, 2), C.yellow, INK, 2, { gap: 4 }); }
+  }
+  if (sp.lights > 0) { const q = []; for (let i = 0; i <= 24; i++) q.push(i * SCENE_W / 24, 8 + Math.sin(i / 24 * Math.PI) * 18); p.ln(q, INK, 2, false, 0.5); }
+  else sketch(p, [10, 8, 494, 8, 494, 12, 10, 12]);
+  if (sp.banner >= 1) {
+    if (sp.banner >= 2) { p.shp([250, 20, 378, 20, 378, 42, 314, 47, 250, 42], C.pink, INK, 3, { gap: 5, f2: C.yellow }); p.txt('DROP THE BASS', 314, 38, 10, C.paper, { align: 'c', out: INK, ow: 3.4, w: 2.4 }); }
+    else for (let i = 0; i < 6; i++) p.shp([248 + i * 22, 18, 264 + i * 22, 18, 256 + i * 22, 36], BULB_COLS[i % 5], INK, 2, { gap: 4 });
+  } else sketch(p, [250, 20, 378, 20, 378, 42, 250, 42]);
+  if (sp.charm > 0) { p.ln([356, 46, 356, 58], INK, 1.8, false, 0.2); for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.4; p.shp(arc(356 + Math.cos(a) * 6, 67 + Math.sin(a) * 6, 5, 5, 0, 360, 8), C.green, INK, 1.8, { gap: 3 }); } if (sp.charm >= 2) p.ln(arc(356, 67, 13, 13, 0, 360, 14), C.gold, 2.4, true, 0.4); }
+  // amps
+  if (sp.amps === 0) { sketch(p, rect(30, SFLOOR - 38, 44, 38)); sketch(p, rect(82, SFLOOR - 38, 38, 38)); }
+  else for (const [x, dy, w, h] of AMP_SPOTS[sp.amps]) ampBox(p, x, SFLOOR + dy, w, h, accent);
+  // drum riser
+  const rw = [0, 100, 128, 156][sp.riser] || 0, rh = [0, 14, 20, 26][sp.riser] || 0;
+  if (sp.riser === 0) sketch(p, rect(246, SFLOOR - 14, 100, 14)); else { const rx = 300 - rw / 2; p.shp(rect(rx, SFLOOR - rh, rw, rh, 2), '#a7794a', INK, 3, { gap: 5, f2: C.yellow }); for (let i = 1; i < rw / 28; i++) p.ln([rx + i * 28, SFLOOR - rh + 2, rx + i * 28, SFLOOR - 2], INK, 1.5, false, 0.3); drumKit(p, 300, SFLOOR - rh, sp.riser); }
+  // van
+  vanArt(p, 398, SFLOOR + 6, sp.van, sp.van === 0);
+  jarArt(p, 372, SFLOOR + 24, sp.jar, sp.jar === 0);
+  // equaliser frame
+  if (sp.eq === 0) sketch(p, rect(398, 24, 92, 48));
+  else { p.shp(rect(398, 24, 92, 48, 4), '#2a2548', INK, 3, { gap: 6 }); }
+  if (sp.total === 0) p.txt('EMPTY STUDIO', 72, 44, 10, C.purple, { align: 'c', w: 2 });
+}
+function sceneEntry(sp, accent) {
+  const key = ['scene', sp.amps, sp.riser, sp.cables, sp.charm, sp.jar, sp.banner, sp.lights, sp.van, sp.truss, sp.eq, sp.total > 0 ? 1 : 0, getScale()].join('|');
+  let e = sceneCache.get(key);
+  if (!e) e = lruSet(sceneCache, key, bake(key, SCENE_W, SCENE_H, 3, getScale(), (p, c) => paintScene(p, c, sp, accent)), 12);
+  return e;
+}
+const HERO_POSE = { roxor: 'beat', jasmin: 'sing' };
+export function drawStudioScene(ctx, w, h, t, studio, o) {
+  o = o || {}; t = t || 0;
+  const sp = studioProps(studio), hl = o.heroLv || {}, outfits = o.outfits || {};
+  ctx.save(); ctx.translate(0, 0); if (w && h && (w !== SCENE_W || h !== SCENE_H)) ctx.scale(w / SCENE_W, h / SCENE_H);
+  put(ctx, sceneEntry(sp, C.pink), 0, 0, t, 2.5);
+  // live: glowing equaliser, twinkling bulbs, heroes with their level
+  const bars = [0, 5, 7, 9][sp.eq];
+  for (let i = 0; i < bars; i++) {
+    const bw = 76 / bars, bh = 6 + (0.25 + 0.75 * Math.abs(Math.sin(t * (2.2 + hn(i) * 2.8) + i))) * (28 + sp.eq * 4), x = 405 + i * (bw + 0.8), col = [C.cyan, C.lime, C.yellow, C.pink][i % 4];
+    ctx.globalAlpha = 0.28; ctx.fillStyle = col; ctx.fillRect(x - 2, 66 - bh - 3, bw - 1.4 + 4, bh + 6);
+    ctx.globalAlpha = 1; ctx.fillStyle = col; ctx.fillRect(x, 66 - bh, bw - 1.4, bh);
+  }
+  if (sp.lights > 0) for (let i = 0; i < 12 + sp.lights * 3; i++) { const n = 12 + sp.lights * 3, k = i / (n - 1), x = k * SCENE_W, y = 8 + Math.sin(k * Math.PI) * 18 + 4; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 2.6 + i * 1.7); ctx.fillStyle = BULB_COLS[i % 5]; ctx.beginPath(); ctx.arc(x, y, 3.6, 0, TAU); ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  if (sp.truss >= 3) { ctx.lineCap = 'round'; for (const [x, col] of [[190, C.pink], [262, C.yellow], [334, C.cyan]]) { const a = Math.PI / 2 + Math.sin(t * 1.3 + x) * 0.35; ctx.strokeStyle = col; ctx.globalAlpha = 0.4; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, 28); ctx.lineTo(x + Math.cos(a) * 90, 28 + Math.sin(a) * 90); ctx.stroke(); } ctx.globalAlpha = 1; }
+  let hv = 0;
+  for (const [who, x] of [['roxor', 176], ['jasmin', 226]]) {
+    const lv = Math.max(1, Math.min(10, Math.floor(+hl[who]) || 1)); hv += lv;
+    const tr = tierOf(lv, [3, 6, 10]);
+    try { drawHero(ctx, who, x, SFLOOR + 6, 96 + tr * 3, { t: t + (who === 'jasmin' ? 0.4 : 0), pose: HERO_POSE[who], outfit: outfits[who] || 'default' }); } catch (e) { /* art must never break the menu */ }
+    if (tr >= 1) for (let i = 0; i < 3 + tr * 2; i++) { const a = t * 0.9 + i * 6.283 / (3 + tr * 2), r = 34 + tr * 4; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 3 + i); ctx.strokeStyle = who === 'roxor' ? C.lime : C.pink; ctx.lineWidth = 2.4; const sx = x + Math.cos(a) * r, sy = SFLOOR - 50 + Math.sin(a) * r * 0.9; ctx.beginPath(); ctx.moveTo(sx - 4, sy); ctx.lineTo(sx + 4, sy); ctx.moveTo(sx, sy - 4); ctx.lineTo(sx, sy + 4); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    if (tr >= 3) { const cy = SFLOOR - 100 + Math.sin(t * 2) * 2; ctx.fillStyle = C.gold; ctx.strokeStyle = INK; ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(x - 12, cy + 10); ctx.lineTo(x - 13, cy - 2); ctx.lineTo(x - 6, cy + 4); ctx.lineTo(x, cy - 6); ctx.lineTo(x + 6, cy + 4); ctx.lineTo(x + 13, cy - 2); ctx.lineTo(x + 12, cy + 10); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    // level pips under the feet
+    for (let i = 0; i < 10; i++) { const px = x - 22.5 + i * 5, py = SFLOOR + 17; ctx.beginPath(); ctx.arc(px, py, 2, 0, TAU); ctx.fillStyle = i < lv ? (who === 'roxor' ? C.lime : C.pink) : 'rgba(255,255,255,0.55)'; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke(); }
+  }
   ctx.restore();
 }

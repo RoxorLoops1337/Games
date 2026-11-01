@@ -8,18 +8,27 @@ import { WORLDS } from '../drop_the_bass/js/data_core.js';
 
 const LOAD = ['kick', 'snare', 'hat', 'sub', 'mic', 'synth', 'horn', 'scratch', 'loop', 'cowbell', 'amp', 'vocal'];   // the whole drop pool, as in the game
 const UP = ['amp', 'tempo', 'range', 'crit', 'critdmg', 'coin', 'deploy', 'cash', 'stagehp', 'herocd', 'heropow', 'hype', 'lucky', 'rebate', 'tipcup'];
-function play(world, seed, level, encore = 0, mode = 'story', bot = 'good') {
+function play(world, seed, level, encore = 0, mode = 'story', bot = 'good', difficulty = 'normal') {
   const p = M.newProfile(0);
   for (const id of UP) p.studio[id] = Math.min(level, 20);
   p.heroLv = { roxor: Math.min(10, 1 + Math.floor(level / 2)), jasmin: Math.min(10, 1 + Math.floor(level / 2)) };
   const s = M.computeRunSetup(p);
-  const run = new Run({ world, seed, encore, loadout: LOAD, baseFx: s.baseFx, heroLv: s.heroLv, mode });
+  const run = new Run({ world, seed, encore, loadout: bot === 'auraonly' ? ['loop', 'amp'] : LOAD, baseFx: s.baseFx, heroLv: s.heroLv, mode, difficulty });
   for (let i = 0; i < 200000 && run.phase !== 'won' && run.phase !== 'lost'; i++) { run.advance(0.1); botStep(run, bot); run.drain(); if (mode === 'endless' && run.wave >= 25) break; }
   return run;
 }
 // 'good' merges and spends; 'nomerge' only spends (wrong choice); 'idle' never builds (wrong choice)
 function botStep(run, bot) {
-  if (bot === 'good') { run.autoPlayStep({ early: true }); return; }
+  if (bot === 'good' || bot === 'auraonly') { run.autoPlayStep({ early: true }); return; }
+  if (bot === 'noheroes') { run.autoPlayStep({ early: true, heroes: false }); return; }
+  if (bot === 'sellall') {
+    // builds, then sells everything again: never keeps a defence
+    if (run.choice) run.pick(0);
+    if (run.coins >= run.deployCost() && run.canDeploy().ok) run.deploy(null, { onBeat: false });
+    for (const t of run.turrets.slice()) run.sell(t.id);
+    if (run.phase === 'prep' && run.prepT > 2 && run.enemies.length === 0) run.startWave(true);
+    return;
+  }
   if (run.choice) run.pick(0);
   if (bot === 'nomerge') for (let k = 0; k < 4; k++) { if (run.coins >= run.deployCost() && run.canDeploy().ok) run.deploy(null, { onBeat: false }); else break; }
   if (run.phase === 'prep' && run.prepT > 2 && run.enemies.length === 0) run.startWave(true);
@@ -48,5 +57,19 @@ assert.ok(R('club', 12, 3) <= R('club', 12, 0) + 0.01, 'encores are harder than 
 // endless: the bot should be able to push past the story length with strong upgrades but not be immortal early
 const e = play('garage', 3, 12, 0, 'endless'); assert.ok(e.wave >= 21, 'endless goes past 20 with upgrades: ' + e.wave);
 const e0 = play('arena', 3, 0, 0, 'endless'); assert.ok(e0.wave < 12, 'arena endless is hard without upgrades');
+// mistake bots on Garage Days at level 0: the wrong choices are punished for real
+const mistakes = {};
+for (const bot of ['good', 'nomerge', 'auraonly', 'sellall', 'noheroes']) { let w = 0, lk = 0; for (let s = 1; s <= 4; s++) { const r = play('garage', s * 7, 0, 0, 'story', bot); if (r.phase === 'won') w++; lk += r.leaks; } mistakes[bot] = { win: w / 4, leaks: lk / 4 }; }
+assert.ok(mistakes.sellall.win === 0, 'selling everything loses');
+assert.ok(mistakes.auraonly.win <= 0.25, 'aura turrets alone cannot win: ' + mistakes.auraonly.win);
+assert.ok(mistakes.nomerge.win <= mistakes.good.win, 'never merging is no better than merging');
+// difficulty: easy is the gentle option, hard is not easier than easy (4 seeds, garage, level 0)
+const diffRate = {}; for (const d of ['easy', 'normal', 'hard']) { let w = 0, lk = 0; for (let s = 1; s <= 4; s++) { const r = play('garage', s * 7, 0, 0, 'story', 'good', d); if (r.phase === 'won') w++; lk += r.leaks; } diffRate[d] = { win: w / 4, leaks: lk / 4 }; }
+assert.ok(diffRate.easy.win >= 0.5, 'easy garage is winnable: ' + diffRate.easy.win);
+assert.ok(diffRate.hard.win <= diffRate.easy.win, 'hard is not easier than easy');
+// strong upgrades still clear a stage on hard (arena is the toughest)
+assert.ok(play('garage', 7, 12, 0, 'story', 'good', 'hard').phase === 'won', 'hard garage is winnable with upgrades');
+console.log('mistake bots (garage L0, win rate / mean leaks): ' + Object.entries(mistakes).map(([k, v]) => k + '=' + v.win + '/' + v.leaks).join('  '));
+console.log('difficulty (garage L0, good bot): ' + Object.entries(diffRate).map(([k, v]) => k + '=' + v.win + '/' + v.leaks).join('  '));
 console.log('balance report (bot win rate, 4 seeds): ' + Object.entries(table).map(([k, v]) => k.replace(/:/g, ' L').replace(' L0$', '') + '=' + v).join('  '));
 console.log('drop_the_bass balance: ok');

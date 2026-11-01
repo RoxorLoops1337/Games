@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import * as M from '../drop_the_bass/js/meta.js';
 import { makeRng } from '../drop_the_bass/js/rng.js';
 import { Run } from '../drop_the_bass/js/sim.js';
+import { DAILY_MODS as DM } from '../drop_the_bass/js/data_run.js';
 import { applyFx, freshMods } from '../drop_the_bass/js/data_run.js';
+import { fameTitle, FAME_TITLES, WEEKLY_GIGS, WEEKLY_WAVES, FAME_MAX } from '../drop_the_bass/js/data_meta.js';
 import { STUDIO, GEAR, CRATES, ACHIEVEMENTS, SLOTS, PITY, AUTOMERGE_PRICE, QUESTS } from '../drop_the_bass/js/data_meta.js';
 import { WORLDS, TURRETS, RARITY_ORDER } from '../drop_the_bass/js/data_core.js';
 
@@ -146,5 +148,122 @@ const rng = () => makeRng(42);
   const seen = {}; const rr = makeRng(11); for (let i = 0; i < 300; i++) { const q = fresh(); const x = M.spinWheel(q, NOW, rr); seen[x.seg.id] = 1; } ok(Object.keys(seen).length >= 6, 'wheel pays many things');
   const c = fresh(); c.seen.enemies = { fuzz: 1, zip: 1, mini: 1 }; ok(M.statValueOf(c, 'seenEnemies') === 2, 'hidden enemies do not count'); c.bossesSeen.playback = true; c.seen.bosses.reverb = 1; ok(M.statValueOf(c, 'seenBosses') === 2, 'bosses seen'); ok(M.statValueOf(c, 'turretsOwned') === 12, 'turrets owned');
   const rush = fresh(); const o = M.applyRunResult(rush, { won: true, world: 'garage', encore: 0, mode: 'rush', cleared: 10, wave: 10, kills: 100, leaks: 0, merges: 10, deploys: 30, bossKills: 10, bossTypes: [], bestCombo: 9, coinsEarned: 500, stars: 3 }, makeRng(1), NOW); ok(rush.stats.rushBest === 10 && o.diamonds >= 55 && !rush.prog.garage.cleared, 'boss rush pays and does not clear the stage');
+}
+
+// ---- save robustness: validate-then-commit, backup, recovery, damaged saves
+const mockStore = (o = {}) => { const m = new Map(Object.entries(o)); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { if (o.__full) throw new Error('quota'); m.set(k, String(v)); }, removeItem: (k) => m.delete(k), _m: m }; };
+{
+  const st = mockStore(); const p = fresh(); p.records = 4321; p.studio.amp = 4; p.stats.runs = 12; p.fame = 5;
+  const c = M.commitSave(st, p); ok(c.ok && st.getItem(M.SAVE_KEY) && st.getItem(M.SAVE_BAK_KEY), 'commit writes the main save and the backup');
+  ok(M.SAVE_BAK_KEY === 'drop_the_bass_save_v1_bak' && M.SAVE_KEY === 'drop_the_bass_save_v1', 'key names (old key untouched, new bak key)');
+  let L = M.loadSave(st, NOW); ok(L.source === 'main' && !L.recovered && L.profile.records === 4321 && L.hadSave, 'load main');
+  // resume is left out of the backup
+  const q = fresh(); q.resume = { cfg: {}, snap: { big: 1 } }; M.commitSave(st, q); ok(JSON.parse(st.getItem(M.SAVE_BAK_KEY)).resume === null && JSON.parse(st.getItem(M.SAVE_KEY)).resume !== null, 'backup has no run snapshot');
+  M.commitSave(st, p);
+  // corrupt JSON, truncated JSON, wrong types, empty object: each recovers from the backup
+  for (const [label, bad] of [['garbage', 'not json at all {{{'], ['truncated', st.getItem(M.SAVE_KEY).slice(0, 400)], ['array', '[1,2,3]'], ['null', 'null'], ['string', '"hello"'], ['empty object', '{}'], ['number', '42'], ['no stats', '{"records":5}'], ['blank', '   ']]) {
+    const s2 = mockStore(); M.commitSave(s2, p); s2.setItem(M.SAVE_KEY, bad);
+    L = M.loadSave(s2, NOW); ok(L.recovered && L.source === 'backup' && L.profile.records === 4321 && L.profile.studio.amp === 4, 'recovers from backup: ' + label);
+    ok(s2.getItem(M.SAVE_CORRUPT_KEY) === bad, 'damaged main save is kept for rescue: ' + label);
+  }
+  const s3 = mockStore(); M.commitSave(s3, p); s3._m.delete(M.SAVE_KEY); L = M.loadSave(s3, NOW); ok(L.recovered && L.profile.records === 4321, 'missing main save recovers from backup');
+  const s4 = mockStore({ [M.SAVE_KEY]: '{oops' }); L = M.loadSave(s4, NOW); ok(!L.recovered && L.corrupt && !L.hadSave && L.source === 'new' && L.profile.records === 250, 'corrupt with no backup starts fresh and says so');
+  L = M.loadSave(mockStore(), NOW); ok(!L.recovered && !L.corrupt && !L.hadSave, 'first launch');
+  const s5 = mockStore({ [M.SAVE_KEY]: '{oops', [M.SAVE_BAK_KEY]: '{also bad' }); L = M.loadSave(s5, NOW); ok(L.source === 'new' && L.corrupt, 'both damaged');
+  ok(M.loadSave({ getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } }, NOW).source === 'new', 'blocked storage does not throw');
+  // wrong types inside an otherwise valid save are sanitised
+  const wt = M.parseSave(JSON.stringify({ stats: {}, prog: {}, records: 'lots', diamonds: null, fame: 9999, fans: -5, studio: [1, 2], heroLv: { roxor: 'x', jasmin: 99 }, settings: 5, loadout: 'kick', gear: { items: 'no', uid: 'a' }, friends: 'bob', pendingCrates: ['zzz', 'garage', 7], name: { a: 1 } }), NOW);
+  ok(wt && wt.records === 0 && wt.diamonds === 0 && wt.fame === 50 && wt.fans === 0 && Object.keys(wt.studio).length === 0, 'wrong number types fall back safely');
+  ok(wt.heroLv.roxor === 1 && wt.heroLv.jasmin === 10 && wt.settings.difficulty === 'normal' && wt.loadout.length === 12 && wt.gear.items.length === 0 && wt.friends.length === 0 && wt.pendingCrates.join() === 'garage' && wt.name === '', 'wrong containers fall back safely');
+  const nan = M.parseSave('{"stats":{"kills":"x","runs":null},"records":1e999,"prog":{"garage":{"stars":"no","cleared":1}}}', NOW); ok(nan.stats.kills === 0 && Number.isFinite(nan.records) && nan.prog.garage.stars.length === 6 && nan.prog.garage.cleared === true, 'NaN, Infinity and strings are repaired');
+  // commit refuses a poisoned profile and leaves the last good save alone
+  const good = mockStore(); M.commitSave(good, p); const before = good.getItem(M.SAVE_KEY);
+  const poison = fresh(); poison.records = NaN; ok(!M.commitSave(good, poison).ok && good.getItem(M.SAVE_KEY) === before, 'NaN records are not committed');
+  const circ = fresh(); circ.self = circ; ok(M.commitSave(good, circ).reason === 'serialize' && good.getItem(M.SAVE_KEY) === before, 'unserialisable profile is not committed');
+  const bad2 = fresh(); bad2.settings = null; ok(!M.commitSave(good, bad2).ok, 'broken shape is not committed');
+  M.repairProfile(poison, NOW); ok(Number.isFinite(poison.records) && M.commitSave(good, poison, { force: true }).ok, 'repairProfile makes it committable');
+  // a reset-looking profile does not wipe a far more advanced backup unless forced
+  const adv = mockStore(); const big = fresh(); big.stats.runs = 80; big.fame = 20; big.records = 99999; M.commitSave(adv, big);
+  const wiped = fresh(); const r1 = M.commitSave(adv, wiped); ok(r1.ok && r1.keptBackup && JSON.parse(adv.getItem(M.SAVE_BAK_KEY)).records === 99999, 'backup survives an accidental fresh profile');
+  M.commitSave(adv, wiped, { force: true }); ok(JSON.parse(adv.getItem(M.SAVE_BAK_KEY)).records === 250, 'force replaces the backup (reset or import)');
+  const full = mockStore({ __full: true }); ok(M.commitSave(full, fresh()).reason === 'storage', 'a full disk is reported, not thrown');
+}
+
+// ---- save code export and import
+{
+  const p = fresh(); p.records = 5555; p.name = 'Dan'; p.friends = ['Jas']; p.resume = { cfg: {}, snap: {} }; p.studio.crit = 3;
+  const code = M.exportCode(p); ok(code.startsWith('DTB1.') && !/\s/.test(code), 'code has a version prefix');
+  const back = M.importCode(code, NOW); ok(back && back.records === 5555 && back.friends[0] === 'Jas' && back.studio.crit === 3 && back.resume === null, 'code round trip drops the run snapshot');
+  ok(M.importCode('  ' + code.slice(0, 40) + '\n' + code.slice(40) + '  ', NOW).records === 5555, 'whitespace and line breaks are tolerated');
+  ok(M.importCode('"' + code + '"', NOW).records === 5555, 'quotes are tolerated');
+  ok(M.importCode(code.slice(0, code.length - 30), NOW) === null, 'truncated code is rejected');
+  ok(M.importCode(code.replace('DTB1.', 'DTB1.A'), NOW) === null, 'edited code fails the checksum');
+  ok(M.importCode('DTB1.' + code.split('.')[1], NOW) === null, 'code without checksum is rejected');
+  const legacy = Buffer.from(JSON.stringify({ stats: {}, prog: {}, records: 77 }), 'utf8').toString('base64'); ok(M.importCode(legacy, NOW).records === 77, 'old raw base64 codes still import');
+  ok(M.importCode('', NOW) === null && M.importCode(null, NOW) === null && M.importCode(12, NOW) === null && M.importCode(Buffer.from('{"a":1}').toString('base64'), NOW) === null && M.importCode(Buffer.from('[]').toString('base64'), NOW) === null, 'empty, wrong type and non-save codes are rejected');
+  const odd = fresh(); odd.name = 'Zoe'; ok(M.importCode(M.exportCode(odd), NOW).name === 'Zoe', 'plain names survive');
+}
+
+// ---- resume sanity
+{
+  const mk = () => { const r = new Run({ world: 'garage', mode: 'story', seed: 3 }); r.coins = 5000; r.t = 100; for (let i = 0; i < 4; i++) r.deploy(null, { onBeat: false }); r.startWave(true); for (let i = 0; i < 200; i++) r.advance(1 / 30); r.cfg = { mode: 'story', world: 'garage', encore: 0, seed: 3 }; return r; };
+  const run = mk();
+  const res = () => JSON.parse(JSON.stringify({ cfg: run.cfg, snap: run.snapshot(), world: run.world.id, wave: run.wave, mode: run.mode, t: 1 }));
+  ok(M.checkResume(res()).ok, 'a real snapshot passes');
+  const sum = M.resumeSummary(res()); ok(sum.stage === 'Garage' || typeof sum.stage === 'string', 'summary has a stage'); ok(sum.turrets === 4 && sum.wave === 1, 'summary counts turrets and wave');
+  const restored = Run.restore(res().snap); ok(restored.turrets.length === 4, 'and restores');
+  const mut = (fn) => { const r = res(); fn(r); return M.checkResume(r); };
+  ok(!mut((r) => { r.snap.turrets[0].born = r.snap.t + 50; }).ok, 'turret born after the run clock is rejected');
+  ok(!mut((r) => { r.snap.coins = NaN; r.snap = JSON.parse(JSON.stringify(r.snap, (k, v) => (v !== v ? null : v))); }).ok, 'NaN (null after JSON) coins rejected');
+  ok(!mut((r) => { r.snap.t = -5; }).ok && !mut((r) => { r.snap.stageHp = -1; }).ok && !mut((r) => { r.snap.stageMax = 0; }).ok, 'impossible numbers rejected');
+  ok(!mut((r) => { delete r.snap.turrets; }).ok && !mut((r) => { delete r.snap.enemies; }).ok && !mut((r) => { r.snap.turrets = 'x'; }).ok, 'missing lists rejected');
+  ok(!mut((r) => { r.snap.turrets[0].type = 'nope'; }).ok && !mut((r) => { r.snap.turrets[0].level = 9; }).ok && !mut((r) => { r.snap.turrets[1].slot = r.snap.turrets[0].slot; }).ok, 'bad turrets rejected');
+  ok(!mut((r) => { r.snap.enemies[0].hp = 'a'; }).ok && !mut((r) => { r.snap.enemies[0].x = null; }).ok, 'bad enemies rejected');
+  ok(!mut((r) => { r.snap.phase = 'dead'; }).ok && !mut((r) => { r.cfg = null; }).ok && !mut((r) => { r.cfg.world = 'moon'; }).ok && !mut((r) => { r.snap = null; }).ok && !mut((r) => { r.snap.opts = {}; }).ok, 'missing setup rejected');
+  ok(!M.checkResume(null).ok && !M.checkResume('x').ok && !M.checkResume([]).ok && !M.checkResume({}).ok, 'garbage resume rejected');
+  ok(!mut((r) => { r.snap.rngState = undefined; }).ok, 'missing rng state rejected');
+}
+
+// ---- difficulty, fame titles, friends in the profile
+{
+  const p = fresh(); ok(p.settings.difficulty === 'normal' && M.difficultyOf(p) === 'normal', 'default difficulty is normal');
+  p.settings.difficulty = 'hard'; ok(M.difficultyOf(p) === 'hard' && M.computeRunSetup(p).difficulty === 'hard', 'difficulty reaches the run setup');
+  p.settings.difficulty = 'nightmare'; ok(M.difficultyOf(p) === 'normal', 'unknown difficulty falls back to normal');
+  ok(M.migrate({ settings: { difficulty: 'zzz' } }, NOW).settings.difficulty === 'normal' && M.migrate({ settings: { difficulty: 'easy' } }, NOW).settings.difficulty === 'easy', 'difficulty is sanitised on load');
+  for (const id of M.DIFFICULTY_IDS) { const d = M.difficultyInfo(id); ok(d.id === id && d.name.length > 0 && d.desc.length > 0, 'difficulty info ' + id); }
+  ok(M.difficultyInfo('bogus').id === 'normal', 'difficulty info fallback');
+  ok(fameTitle(1) === 'Garage Band' && fameTitle(10) === 'Local Legend' && fameTitle(FAME_MAX) === 'Bass Legend' && fameTitle(0) === 'Garage Band', 'fame titles');
+  ok(FAME_TITLES.every((t, i) => i === 0 || t[0] > FAME_TITLES[i - 1][0]) && FAME_TITLES[0][0] === 1 && !FAME_TITLES.some((t) => t[1].includes(String.fromCharCode(8212))), 'fame titles ascend');
+  const f = fresh(); ok(M.addFriend(f, 'Jas').ok && f.friends.length === 1 && !M.addFriend(f, 'jas').ok, 'profile friends'); M.removeFriend(f, 'JAS'); ok(f.friends.length === 0, 'remove friend');
+  f.name = 'Me'; ok(M.addFriend(f, 'me').reason === 'self', 'cannot befriend yourself');
+}
+
+// ---- weekly gig
+{
+  const wk = M.isoWeek(Date.UTC(2026, 10, 1, 12)); ok(wk.id === '2026-W44' && wk.week === 44, 'iso week of 1 Nov 2026');
+  ok(M.isoWeek(Date.UTC(2026, 10, 2, 0, 0, 1)).id === '2026-W45' && M.isoWeek(Date.UTC(2026, 9, 26)).id === '2026-W44', 'weeks start on Monday (UTC)');
+  const p = fresh(), a = M.weeklyGig(p, Date.UTC(2026, 10, 3)), b = M.weeklyGig(fresh(), Date.UTC(2026, 10, 8, 23));
+  ok(a.seed === b.seed && a.mod === b.mod && a.world === b.world && a.waves === WEEKLY_WAVES && a.waves === 25, 'everyone gets the same weekly run all week');
+  ok(M.weeklyGig(p, Date.UTC(2026, 10, 9)).seed !== a.seed, 'next week has another seed');
+  const seenGig = new Set(); let prev = null;
+  for (let w = 0; w < 30; w++) { const g = M.weeklyGig(p, Date.UTC(2026, 0, 5) + w * 7 * 86400000); seenGig.add(g.gig.id); ok(g.id !== (prev && prev.id) && (!prev || prev.gig.id !== g.gig.id), 'neighbouring weeks differ ' + w); prev = g; }
+  ok(seenGig.size === WEEKLY_GIGS.length, 'every gig comes round');
+  for (const g of WEEKLY_GIGS) {
+    ok(Object.keys(DM).includes(g.mod), 'gig mod exists ' + g.id);
+    const setup = M.computeRunSetup(fresh());
+    const run = new Run({ world: g.world, mode: 'daily', daily: g.mod, wavesTotal: 25, seed: 5, loadout: setup.loadout, baseFx: setup.baseFx.concat(g.extra), heroLv: setup.heroLv });
+    run.coins = 3000; for (let i = 0; i < 200; i++) { run.autoPlayStep({ early: true }); run.advance(1 / 20); if (run.phase === 'won' || run.phase === 'lost') break; }
+    ok(run.wavesTotal === 25 && Number.isFinite(run.coins) && run.wave >= 1, 'weekly run plays: ' + g.id);
+  }
+  // rewards: first claim pays big, later plays pay half and no diamonds, one claim per week
+  const r1 = fresh(), res = { won: true, world: 'club', encore: 0, mode: 'daily', weekly: true, weekId: '2026-W44', cleared: 25, wave: 25, kills: 400, leaks: 0, merges: 50, deploys: 90, bossKills: 2, bossTypes: [], bestCombo: 20, coinsEarned: 9000, stars: 3 };
+  const d0 = r1.diamonds; const o1 = M.applyRunResult(r1, res, makeRng(2), NOW);
+  ok(o1.challenge && o1.challenge.first && o1.challenge.weekly && o1.diamonds >= 70 && r1.diamonds >= d0 + 70 && r1.pendingCrates.includes('studio') && r1.weekly.done && r1.weekly.best === 25 && r1.stats.weeklies === 1, 'first weekly claim pays big');
+  ok(r1.daily.challengeDay === -1 && r1.stats.dailies === 0, 'weekly does not eat the daily claim');
+  const dm = r1.diamonds, pc = r1.pendingCrates.length; const o2 = M.applyRunResult(r1, Object.assign({}, res, { cleared: 12, won: false }), makeRng(3), NOW);
+  ok(!o2.challenge.first && o2.diamonds === 0 && r1.diamonds === dm && r1.pendingCrates.length === pc && r1.weekly.best === 25, 'second play the same week pays no weekly bonus');
+  const o3 = M.applyRunResult(r1, Object.assign({}, res, { weekId: '2026-W45' }), makeRng(4), NOW); ok(o3.challenge.first && r1.weekly.id === '2026-W45', 'a new week can be claimed again');
+  const lose = fresh(); const o4 = M.applyRunResult(lose, Object.assign({}, res, { won: false, cleared: 3 }), makeRng(5), NOW); ok(o4.challenge.first && !(lose.pendingCrates || []).length, 'a short loss still claims the week but earns no crate');
+  ok(M.weeklyGig(r1, Date.UTC(2026, 10, 3)).done === true && M.weeklyGig(r1, Date.UTC(2026, 10, 10)).done === false, 'done flag follows the week');
 }
 console.log('drop_the_bass meta: ' + n + ' checks passed');

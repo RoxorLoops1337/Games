@@ -120,3 +120,11 @@ scratchpad, LOOK at it (Read the png), fix, repeat. Lab pages live in `drop_the_
   offline Streaming Royalties, lucky wheel, boosters.
 - Tests: `npm run test:dropbass` (data, sim, meta, battle view headless, balance bot, board function, audio, art, browser smoke when Playwright exists).
 - Balance: tests/drop_the_bass_balance.test.mjs prints the bot win-rate table. Stage difficulty is set by WORLDS[].hpMul/coinMul and ECON.hpGrowth.
+
+## Added systems (read these before changing the area)
+- `GAMEPLAY_API.md`: sim API (synergies, poolOdds, rerollNext, nextWavePreview, currentWaveInfo, recap, difficulty). Stun and push-back are budgeted (`stunE`, `pushE`) so nothing can be locked in place forever.
+- `AUDIO_EVENTS.md`: new sfx, `AudioFx.setMusicState`, heartbeat, beat sync.
+- `META_NOTES.md`: weekly gig, friends, save robustness (backup key `drop_the_bass_save_v1_bak`), studio scene.
+- `js/share.js`: results share card. `fonts/`: self-hosted Patrick Hand.
+- The game has ONE look (crayon doodle). All 12 turrets are in the drop pool from the first run.
+- Resume: turret ages use the run clock (`run.t - tu.born`), never the view clock. `tests/drop_the_bass_visual.test.mjs` guards that turrets stay visible after a resume.
