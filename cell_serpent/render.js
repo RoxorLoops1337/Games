@@ -322,7 +322,12 @@ export function createRenderer(canvas, art, kit) {
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(bx - 3, by - 3, bw + 6, 20);
     ctx.fillStyle = boss ? '#ff3d6e' : '#ff7eb6'; ctx.fillRect(bx, by, bw * (g.progress || 0), 14);
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.strokeRect(bx - 3, by - 3, bw + 6, 20);
-    for (const th of [1]) { const done = (g.progress || 0) >= th - 1e-6; ctx.save(); ctx.globalAlpha = done ? 0.45 : 1; blit(kit && kit.SPR.pickup('chest'), bx + bw * th - (th === 1 ? 4 : 0), by + 7, 46); ctx.restore(); }
+    for (const th of [0.25, 0.5, 1]) { const done = (g.progress || 0) >= th - 1e-6; ctx.save(); ctx.globalAlpha = done ? 0.45 : 1; blit(kit && kit.SPR.pickup('chest'), bx + bw * th - (th === 1 ? 4 : 0), by + 7, th === 1 ? 46 : 34); ctx.restore(); }
+    text('Progress: ' + Math.floor((g.progress || 0) * 100) + '%', W / 2, 116, 15, '#ffd0e6', '#0b1020');
+    if (g.hard) text('HARD', W / 2 + 104, 62, 15, '#c9a0ff', '#0b1020');
+    { const sn = g.snakes[0], mult = sn ? (sn.surge === 'go' ? 2.6 : sn.slow > 0 ? 0.6 : 1) : 1;   // how fast the snake is going right now
+      blit(kit && kit.SPR.body(g.skin, false, ''), pad + 28, 140, 64, 0); text('SPEED x' + mult.toFixed(1), pad, 178, 13, mult > 1 ? '#ff8a8a' : '#cfe', '#0b1020', 'left'); }
+    ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(W - 40, 112, 24, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; for (const [i, hgt] of [[0, 12], [1, 20], [2, 28]]) ctx.fillRect(W - 54 + i * 10, 124 - hgt, 7, hgt);
     // coins
     blit(kit && kit.SPR.pickup('coin'), W - pad - 172, 38, 52); text(String(Math.floor(g.coins)), W - pad - 152, 38, 24, '#ffd24a', '#0b1020', 'left');
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(W - 40, 38, 24, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(W - 48, 28, 6, 20); ctx.fillRect(W - 36, 28, 6, 20);
