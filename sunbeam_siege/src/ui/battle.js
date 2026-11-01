@@ -691,7 +691,7 @@
       c.addEventListener('pointermove', function (e) {
         if (!down) return;
         var dx = e.clientX - down.x, dy = e.clientY - down.y;
-        if (!drag && (Math.abs(dy) > 10 || (mode !== 'phone' && Math.abs(dx) > 10)) && (mode !== 'phone' || dy < -10)) {
+        if (!drag && (Math.abs(dy) > 10 || (mode !== 'phone' && Math.abs(dx) > 10)) && (mode !== 'phone' || dy < -7)) {
           moved = true; clearTimeout(longT); startDrag(uid, c, e);
         }
         if (drag) moveDrag(e);
@@ -944,8 +944,8 @@
     function q2(v) { return Math.round(v * 100) / 100; }
     function ensureGhost() {
       if (GH) return GH;
-      GH = { layer: h('div.b-ghostlayer', { 'aria-hidden': 'true' }), shadow: h('div.b-dshadow'), ghost: h('canvas.b-ghost', { width: 32, height: 32 }), zones: [], gctx: null, drawn: '' };
-      GH.layer.appendChild(GH.shadow); GH.layer.appendChild(GH.ghost);
+      GH = { layer: h('div.b-ghostlayer', { 'aria-hidden': 'true' }), shadow: h('div.b-dshadow'), ghost: h('canvas.b-ghost', { width: 32, height: 32 }), zones: [], gctx: null, drawn: '', tag: h('div.b-tag'), tagTxt: '' };
+      GH.layer.appendChild(GH.shadow); GH.layer.appendChild(GH.ghost); GH.layer.appendChild(GH.tag);
       for (var i = 0; i < 3; i++) { var z = h('div.b-zone'); GH.zones.push(z); GH.layer.appendChild(z); }
       GH.gctx = GH.ghost.getContext('2d'); GH.gctx.imageSmoothingEnabled = false;
       rootEl.appendChild(GH.layer);
@@ -957,8 +957,11 @@
       var key = (card && (card.id || card.name)) || '?'; if (GH.drawn === key) return; GH.drawn = key;
       tryf(function () { var g = ui.genome(card && card.art, card && card.id); GH.gctx.clearRect(0, 0, 32, 32); if (g) pp.drawCat(GH.gctx, g, { name: 'idle', flash: false, alpha: 1 }, 0, 0, 1, 0); });
     }
+    function buzz(ms) { try { if (!ui.reduced() && navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* no haptics here */ } }
     function setHotEl(n) {
       if (DR.hotEl === n) return;
+      el.stage.classList.toggle('aimhot', !!n && DR.cp && DR.cp.needsTarget === 'floor');
+      if (n && DR.touch) buzz(7);
       if (DR.hotEl) DR.hotEl.classList.remove('drop-hot');
       DR.hotEl = n; if (n) n.classList.add('drop-hot');
     }
@@ -1055,7 +1058,7 @@
       D.red = ui.reduced(); D.px = e.clientX; D.py = e.clientY; D.dirty = true; D.hot = false; D.hotEl = null;
       D.f = -1; D.z = -1; D.ti = -1; D.mag = 0; D.mcx = 0; D.mcy = 0; D.ghostInit = false; D.gx = 0; D.gy = 0; D.tn = 0;
       D.cx0 = r.left + r.width / 2; D.cy0 = r.top + r.height / 2;
-      D.offX = D.cx0 - e.clientX; D.offY = D.cy0 - e.clientY; D.tOffY = D.touch ? -hh * 0.55 : -hh * 0.1;
+      D.offX = D.cx0 - e.clientX; D.offY = D.cy0 - e.clientY; D.tOffY = D.touch ? -56 : -hh * 0.1; // phone: the small card token rides 56px above the fingertip and IS the aim point, so the finger never hides the slot
       var hovered = c.classList.contains('hov');
       D.S[0] = D.cx0; D.S[1] = D.cy0; D.S[2] = 0; D.S[3] = hovered ? 1.2 : 1; D.S[4] = 0; D.S[5] = 0;
       for (i = 0; i < 6; i++) D.V[i] = 0;
@@ -1069,10 +1072,10 @@
       D.pid = e.pointerId;
       D.rec = rec; D.age = 0; D.recached = false;
       cacheGeometry();
-      GH.shadow.style.width = w + 'px'; GH.shadow.style.height = hh + 'px'; GH.shadow.classList.add('on');
+      GH.tagTxt = '\u0001'; GH.shadow.style.width = w + 'px'; GH.shadow.style.height = hh + 'px'; GH.shadow.classList.add('on');
       c.style.willChange = 'transform';
       layoutHand(uid);
-      sfx('card_pick');
+      sfx('card_pick'); if (D.touch) buzz(10);
       updateAim(); kick();
     }
     function moveDrag(e) {
@@ -1082,9 +1085,27 @@
       var D = DR, n = Math.ceil(dt / 0.008), hd = dt / n, S = D.S, V = D.V, T = D.T, K = D.K, C = D.C;
       for (var i = 0; i < n; i++) for (var ch = 0; ch < 6; ch++) { V[ch] += (K[ch] * (T[ch] - S[ch]) - C[ch] * V[ch]) * hd; S[ch] += V[ch] * hd; }
     }
+    // phone only: a label that rides just above the card token (never under the finger) naming exactly where the drop would land
+    function tagText() {
+      var D = DR, nm;
+      if (D.cp.needsTarget === 'floor') {
+        if (D.f < 0) return '';
+        nm = FLOOR_NAMES[D.f] || 'Floor';
+        if (D.unit && D.zc[D.f] > 1 && D.z >= 0) nm += ': ' + (D.zc[D.f] === 3 ? ['Front', 'Middle', 'Back'] : ['Front', 'Back'])[D.z];
+        return nm;
+      }
+      if (D.cp.needsTarget === 'none') return D.hot ? 'Release to play' : '';
+      if (D.ti >= 0) { var tv = D.tV[D.ti]; return tv && tv.d && tv.d.name ? tv.d.name : 'Target'; }
+      return '';
+    }
     function applyCard(lift) {
       var D = DR, S = D.S, c = D.el;
       c.style.transform = 'translate3d(' + q2(S[0] - D.w / 2) + 'px,' + q2(S[1] - D.h / 2) + 'px,0) perspective(800px) rotateX(' + q2(S[4]) + 'deg) rotateY(' + q2(S[5]) + 'deg) rotate(' + q2(S[2]) + 'deg) scale(' + q2(S[3]) + ')';
+      if (D.touch) {
+        var txt = tagText(), tg = GH.tag;
+        if (txt !== GH.tagTxt) { GH.tagTxt = txt; tg.textContent = txt; tg.classList.toggle('on', !!txt); }
+        tg.style.transform = 'translate3d(' + q2(S[0]) + 'px,' + q2(S[1] - D.h * S[3] / 2 - 6) + 'px,0) translate(-50%,-100%)';
+      }
       var sh = GH.shadow.style;
       sh.transform = 'translate3d(' + q2(S[0] - D.w / 2 + lift * 10) + 'px,' + q2(S[1] - D.h / 2 + 6 + lift * 30) + 'px,0) rotate(' + q2(S[2]) + 'deg) scale(' + q2(S[3] * (1 - lift * 0.04)) + ')';
       sh.opacity = q2(0.22 + lift * 0.22);
@@ -1106,7 +1127,7 @@
       else {
         T[0] = gx; T[1] = gy;
         T[2] = clampf(V[0] * 0.008, -14, 14); T[5] = clampf(V[0] * 0.006, -16, 16); T[4] = clampf(-V[1] * 0.005, -12, 12);
-        T[3] = (D.touch ? 0.8 : 1.08) + (D.ti >= 0 || D.f >= 0 || D.hot ? 0.03 : 0); // on a phone the lifted card shrinks so the board stays visible
+        T[3] = (D.touch ? 0.4 : 1.08) + (D.ti >= 0 || D.f >= 0 || D.hot ? (D.touch ? 0.04 : 0.03) : 0); // on a phone the lifted card shrinks to a token so the board stays visible
         stepSprings(dt);
         lift = clampf(lift + Math.sqrt(V[0] * V[0] + V[1] * V[1]) / 5000, 0, 1);
         applyCard(lift);
@@ -1169,7 +1190,7 @@
     }
     function finishAnim() {
       var D = DR, ph = animPhase; animPhase = '';
-      if (GH) { GH.shadow.classList.remove('on'); GH.shadow.style.opacity = ''; }
+      if (GH) { GH.shadow.classList.remove('on'); GH.shadow.style.opacity = ''; GH.tag.classList.remove('on'); GH.tagTxt = ''; }
       if (D.ph && D.ph.parentNode) D.ph.parentNode.removeChild(D.ph); D.ph = null;
       if (ph === 'ret') { if (D.el && D.el.parentNode) resetCardEl(D.el); applyHover(); }
       else if (ph === 'drop') {
@@ -1222,7 +1243,7 @@
         kick(); return;
       }
       // spells and other cards: hand the natural-size element to the play animation, which flies it to the board and the pile
-      if (GH) GH.shadow.classList.remove('on');
+      if (GH) { GH.shadow.classList.remove('on'); GH.tag.classList.remove('on'); GH.tagTxt = ''; }
       c.style.transform = 'none'; c.style.left = Math.round(D.S[0] - D.w / 2) + 'px'; c.style.top = Math.round(D.S[1] - D.h / 2) + 'px'; c.style.willChange = '';
       c.classList.remove('drag'); c.style.position = 'fixed'; c.style.width = D.w + 'px';
       if (D.ph && D.ph.parentNode) D.ph.parentNode.removeChild(D.ph); D.ph = null; D.el = null;
@@ -2051,6 +2072,7 @@
       var s2 = ui.settings;
       function seg(key, opts) { var wrap = h('div.seg'); opts.forEach(function (o) { var b = h('button' + (s2.get(key) === o[0] ? '.on' : ''), { onclick: function () { s2.set(key, o[0]); ui.$$('button', wrap).forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); fit(); } }, o[1]); wrap.appendChild(b); }); return wrap; }
       function sw(key) { var i = h('input.switch', { type: 'checkbox', onchange: function () { s2.set(key, i.checked); } }); i.checked = !!s2.get(key); return i; }
+      body.appendChild(h('div.field', {}, h('label', {}, 'Full screen'), ui.fullscreenButton('.btn.alt.sm', true)));
       body.appendChild(h('div.field', {}, h('label', {}, 'Text size'), seg('textSize', [['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL']])));
       body.appendChild(h('div.field', {}, h('label', {}, 'Animation speed'), seg('fast', [[1, 'x1'], [2, 'x2'], [3, 'x3']])));
       body.appendChild(h('div.field', {}, h('label', {}, 'Screen shake'), seg('shake', [[0, 'Off'], [0.5, 'Half'], [1, 'Full']])));

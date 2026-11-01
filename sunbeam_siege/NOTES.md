@@ -23,7 +23,8 @@ Open `index.html` in any modern browser, no install, no network. Phones work in 
 - D and X open the draw and discard piles, L the battle log
 - Esc cancels, then opens the pause menu, ? shows this list in game
 - Off the battlefield, D opens your deck and M the map
-- On a phone: tap a card, tap a target, long press for the details. Left-handed layout is in Settings.
+- On a phone: drag a card up onto the board. It shrinks to a small token above your fingertip with a label (for example "Cellar: Front"), only the aimed floor lights up, and releasing drops it there. Or tap a card, then tap a floor. Long press for the details. Left-handed layout is in Settings.
+- Full screen: the title menu, Settings and the pause menu all have a Full screen button. On iPhone use Share, then Add to Home Screen.
 
 **Clan hints (loops to look for)**
 - *Alley Tabbies* hit first and pay in Lives. Stack Claws, chain Pounces, spend a Life on purpose to get Cornered (+2 Attack at your last Life).
