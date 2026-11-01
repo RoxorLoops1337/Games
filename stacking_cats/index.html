@@ -14,6 +14,13 @@
 <title>Stacking Cats</title>
 <!-- the module graph is fetched in parallel instead of one import level at a time -->
 <link rel="modulepreload" href="main.js">
+<link rel="modulepreload" href="kingdom_input.js">
+<link rel="modulepreload" href="kingdom_cat.js">
+<link rel="modulepreload" href="kingdom_walk.js">
+<link rel="modulepreload" href="kingdom_layout.js">
+<link rel="modulepreload" href="kingdom_life.js">
+<link rel="modulepreload" href="kingdom_world.js">
+<link rel="modulepreload" href="kingdom_strips.js">
 <link rel="modulepreload" href="cats.js">
 <link rel="modulepreload" href="relics.js">
 <link rel="modulepreload" href="i18n.js">
@@ -1748,6 +1755,54 @@ body.nomotion .sumtile,body.nomotion .sumtile.best::before{animation:none}
 /* the two faces: the back shows only while the card faces away (set by reveal_fx.js), no 3D needed */
 .tcard .tc-back{visibility:hidden}.tcard.showback .tc-back{visibility:visible}.tcard.showback .tc-front{visibility:hidden}
 /* REVEALJUICE END */
+
+/* ---- Whiskerton Walk: controls, HUD and the bottom sheets */
+body.walk #hud,body.walk #bFull{display:none!important}
+body.walk #screen{position:absolute;inset:0;z-index:6;pointer-events:none}body.walk #screen>*{pointer-events:auto}
+body.scr .kwin{pointer-events:none}
+.kwin{position:absolute;inset:0;touch-action:none;-webkit-user-select:none;user-select:none;z-index:3}
+.kwstick{position:absolute;width:0;height:0;pointer-events:none}
+.kwstick[hidden]{display:none}
+.kwring{position:absolute;left:-52px;top:-52px;width:104px;height:104px;border-radius:50%;border:4px solid rgba(255,255,255,.55);background:rgba(36,22,64,.28)}
+.kwknob{position:absolute;left:-26px;top:-26px;width:52px;height:52px;border-radius:50%;background:rgba(255,236,170,.9);border:3px solid var(--ink,#2a1840);box-shadow:0 3px 0 rgba(0,0,0,.3)}
+.kwbtn{position:absolute;border:4px solid var(--ink,#2a1840);color:var(--ink,#2a1840);font-weight:800;font-size:18px;font-family:var(--display);border-radius:50%;box-shadow:0 5px 0 var(--ink,#2a1840);touch-action:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.kwbtn[hidden]{display:none}
+.kwbtn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ink,#2a1840)}
+.kwjump{right:34px;bottom:34px;width:84px;height:84px;background:#ffd23f}
+.kwact{right:136px;bottom:46px;min-width:110px;max-width:240px;height:64px;padding:0 16px;border-radius:32px;background:#8fe0b4;font-size:19px}
+body:not(.touch) .kwact{right:50%;transform:translateX(50%);bottom:40px}
+body:not(.touch) .kwact:active{transform:translateX(50%) translateY(3px)}
+#kwhud{position:absolute;left:0;right:0;top:0;display:flex;gap:8px;align-items:center;padding:8px 10px;z-index:4;pointer-events:none}
+#kwhud>*{pointer-events:auto}
+.kwb{min-height:48px;min-width:48px;padding:0 16px;font-weight:800;font-size:17px;font-family:var(--display);color:var(--ink,#2a1840);background:#fff6df;border:3px solid var(--ink,#2a1840);border-radius:14px;box-shadow:0 3px 0 var(--ink,#2a1840);cursor:pointer}
+.kwb:focus-visible,.kwrow:focus-visible,.kwav:focus-visible,.kwbtn:focus-visible{outline:4px solid #fff;outline-offset:2px}
+.kwb[data-kw=list]{margin-left:auto}
+.kwcoins2{background:rgba(36,22,64,.72);color:#ffe3c4;border-radius:14px;padding:6px 14px;font-weight:800;font-size:20px;border:2px solid rgba(255,255,255,.25)}
+.kwcoins2 b{color:#ffd23f}
+#kwsay{position:absolute;top:150px;transform:translateX(-50%);max-width:340px;background:var(--paper,#fff6df);color:var(--ink,#2a1840);border:3px solid var(--ink,#2a1840);border-radius:16px;padding:8px 14px;font-weight:700;font-size:17px;line-height:1.15;z-index:4;pointer-events:none;text-align:center}
+#kwsay[hidden]{display:none}
+#kwfade{position:absolute;inset:0;background:#1a1030;opacity:0;pointer-events:none;transition:opacity .08s;z-index:5}
+#kwfade.on{opacity:.85}
+.screen.sheet{justify-content:flex-end;padding:0 20px 10px;background:linear-gradient(rgba(24,14,48,0) 35%,rgba(24,14,48,.82));backdrop-filter:none}
+.screen.sheet h2{font-size:26px}
+.screen.sheet .kd{margin:4px 0 6px}
+.screen.sheet.tall{justify-content:center;background:rgba(24,14,48,.72);backdrop-filter:blur(3px);overflow-y:auto}
+.kwcoins{margin:0 0 2px}.kwcoins b{font-size:26px}
+.kwlist{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:900px;max-height:330px;overflow-y:auto;margin:6px 0;padding:2px}
+.kwrow,.kwav{position:relative;display:flex;align-items:center;gap:8px;min-height:52px;padding:6px 12px;background:var(--paper,#fff6df);color:var(--ink,#2a1840);border:3px solid var(--ink,#2a1840);border-radius:14px;box-shadow:0 3px 0 var(--ink,#2a1840);font-family:inherit;text-align:left;cursor:pointer}
+.kwrow b,.kwav b{font-size:17px}.kwrow small{margin-left:auto;font-weight:800;font-size:14px;color:#5a4a70}
+.kwrow .kic{font-size:26px}.kwrow.ok{background:#d6f5e0}.kwrow .bang{position:absolute;right:-6px;top:-8px}
+.kwav img{width:42px;height:42px}.kwav.on{background:#ffe9a6}
+.kwcats{grid-template-columns:repeat(4,1fr)}
+.kwpaper{background:#f3ead2;color:#2a1840;border:3px solid var(--ink,#2a1840);padding:14px 20px;width:640px;font-size:24px;text-align:center;transform:rotate(-1deg)}
+.kwpaper ul{font-size:16px;text-align:left}
+.kwplinth{position:relative;background:#8d8a99;border:4px solid var(--ink,#2a1840);border-radius:12px;padding:10px 16px;min-width:300px;min-height:84px}
+.kwstone{display:flex;justify-content:center;gap:2px}
+.kwstone img{width:60px;height:60px;filter:grayscale(1) contrast(1.1) brightness(1.15)}
+.kwcloth{position:absolute;inset:0;border:0;border-radius:8px;background:repeating-linear-gradient(90deg,#c0392b 0 14px,#a52d22 14px 28px);color:#fff;font-weight:800;font-size:18px;font-family:var(--display);cursor:pointer}
+.kwnests{list-style:none;margin:2px 0 6px;padding:0;font-weight:700;color:#ffe3c4;columns:2;text-align:left}
+body.nomotion .kwbtn:active{transform:none}
+@media (prefers-reduced-motion:reduce){#kwfade{transition:none}}
 </style>
 </head>
 <body>
