@@ -10,7 +10,7 @@ import {
 } from './sim.js';
 
 const STATICON = { atk: '🔊', crt: '🎵', cdn: '⏱️', vit: '❤️', for: '⭐', rev: '🎤' };
-const STAT_TEXT = { atk: v => `+${Math.round(v * 100)}% Volume`, crit: v => `+${(v * 100).toFixed(1)}% Pitch`, vit: v => `snake ${Math.round(v / 12 * 2)}% slower`, coin: v => `+${Math.round(v * 100)}% Beats`, guard: v => `snake ${Math.round(v * 50)}% slower`, cdn: v => `${(v * 100).toFixed(1)}% quicker Tempo`, speed: v => `+${Math.round(v * 100)}% dance speed` };
+const STAT_TEXT = { atk: v => `+${Math.round(v * 100)}% Volume`, crit: v => `+${(v * 100).toFixed(1)}% Pitch`, vit: v => `snake ${Math.round(v / 12 * 2)}% slower`, coin: v => `+${Math.round(v * 100)}% Beats`, guard: v => `snake ${Math.round(v * 50)}% slower`, cdn: v => `${(v * 100).toFixed(1)}% quicker Tempo`, speed: v => `+${Math.round(v * 100)}% singing speed` };
 const kicon = id => `<span class="kemo">${KEEPSAKES.find(k => k.id === id).icon}</span>`;
 
 export function createHub2(c) {

@@ -225,7 +225,7 @@ ok('skill picks: 3 distinct choices; locked skills never appear; maxed ones stop
     for (let k = 0; k < u.max + 2; k++) { p.phase = 'levelup'; p.pending = 1; p.choices = [{ id: u.id, kind: 'passive', lvl: p.ups[u.id] || 0, max: u.max }]; if (k < u.max) sim.choose(p, 0); }
     assert.equal(p.ups[u.id], u.max, u.id);
   }
-  assert.ok(p.p.slow > 0.3 && p.p.speed > 300 && p.p.crit > 0.2, 'Calm Down slows the snake');
+  assert.ok(p.p.slow > 0.3 && sim.uv(p, 'speed') >= 3 && p.p.crit > 0.2, 'Calm Down slows the snake, Sharp Notes pierce');
 });
 
 ok('every skill works at every level and hurts the virus; a permanent skill level makes it hit harder', () => {
@@ -508,7 +508,7 @@ ok('pets: eggs hatch into fragments, stars give permanent bonuses even when benc
   assert.ok(bonus.atk > 0.1 && bonus.vit > 0);
   const base = sim.createGame({ seed: 3 }), pet = sim.createGame({ seed: 3, pets: { kitten: 2 }, petEquip: [] });
   assert.ok(pet.p.atk > base.p.atk, 'a benched pet still helps');
-  const hamster = sim.createGame({ seed: 3, pets: { hamster: 1 }, petEquip: ['hamster'] }); assert.ok(hamster.p.speed > base.p.speed);
+  const hamster = sim.createGame({ seed: 3, pets: { hamster: 1 }, petEquip: ['hamster'] }); assert.ok(hamster.p.rate > base.p.rate);
   const kit = sim.createGame({ seed: 4, pets: { kitten: 1 }, petEquip: ['kitten'], unlocked: ALL }); kit.weap.swab = { lv: 1, cd: 99 }; run(kit, 20, {}); assert.ok(kit.events.length >= 0 && kit.weap.swab.cd < 99, 'the kitten resets cooldowns');
   const back = sim.sanitizeSave(JSON.parse(JSON.stringify(s))); assert.equal(back.pets.kitten.star, 2); assert.equal(back.petEquip.length, 2);
   assert.equal(sim.sanitizeSave({ petEquip: ['turtle'] }).petEquip.length, 0, 'cannot equip a pet you do not own');
@@ -630,6 +630,12 @@ ok('card kinds have their own rarity: speed and damage can be common, extra note
   }
   assert.ok(seen.aspd.has(0) && seen.cdmg.has(0), 'speed and damage do show up as common');
   assert.ok(!seen.notes.has(0) && !seen.burst.has(0) && !seen.burst.has(1));
+});
+
+ok('Sharp Notes make capsule notes pierce; every cell is the same size so numbers stay readable', () => {
+  const mk = ups => { const g = sim.createGame({ seed: 40 }); Object.assign(g.ups, ups); g.p.cd = 0; g.bullets.length = 0; sim.step(g, 1 / 60, {}); return g.bullets[0]; };
+  assert.equal(mk({}).pierce, 0); assert.equal(mk({ speed: 2 }).pierce, 2);
+  const sn = sim.createGame({ seed: 41 }).snakes[0]; const radii = new Set(sn.segs.slice(1).map(q => q.r)); assert.equal(radii.size, 1, 'no tiny tail cells');
 });
 
 console.log(`cell_serpent: ${n} groups passed`);

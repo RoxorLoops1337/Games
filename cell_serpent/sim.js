@@ -285,7 +285,7 @@ export const PASSIVES = [
   { id: 'crit', name: 'Perfect Pitch', max: 8, w: 0.7, vals: [3, 4, 6, 9, 13, 18], cap: 40, fmt: v => '+' + v + '% crit chance', desc: '+8% crit chance for the capsule and needles', apply: (p, v) => { p.crit += v / 100; } },
   { id: 'vital', name: 'Calm Down', max: 8, w: 0.7, vals: [20, 30, 45, 70, 100, 150], cap: 200, fmt: v => 'The snake crawls ' + Math.round(v / 4) + '% slower', desc: 'The snake crawls 5% slower', apply: (p, v) => { p.slow = Math.min(0.5, p.slow + v / 400); } },
   { id: 'guard', name: 'Door Stopper', max: 6, w: 0.6, vals: [15, 22, 30, 40, 50, 60], cap: 600, fmt: v => 'Pushes the snake back ' + v * 6 + ' px', desc: 'Pushes the snake back 90 px', apply: (p, v, g) => { if (g) knockBack(g, v * 6); } },
-  { id: 'speed', name: 'Dance Shoes', max: 6, w: 0.6, vals: [6, 9, 13, 18, 25, 35], cap: 60, fmt: v => '+' + v + '% move speed', desc: '+12% move speed', apply: (p, v) => { p.speed *= 1 + v / 100; } },
+  { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
 const CAP_UP = Object.fromEntries(CAPSULE_UPS.map(u => [u.id, u]));
@@ -556,9 +556,9 @@ export function applyResult(save, r) {
 
 // ---------------------------------------------------------------- stages
 export const isBossStage = n => n % 5 === 0;
-export const hpBase = n => 12 * (23 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
+export const hpBase = n => 12 * (18 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
 export const snakeLength = n => Math.min(150, 32 + 4 * (n - 1) + (isBossStage(n) ? 12 : 0));
-export const arrivalTime = n => 0.95 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) + (isBossStage(n) ? 36 : 0);   // seconds for the face to reach the membrane if you do nothing
+export const arrivalTime = n => 0.75 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) + (isBossStage(n) ? 36 : 0);   // seconds for the face to reach the membrane if you do nothing
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
 export const SKINS = ['love', 'rust', 'sneezy', 'grumpy', 'sleepy', 'disco', 'sour', 'mighty', 'frosty', 'gloomy'];
 export const skinFor = n => SKINS[(n - 1) % SKINS.length];
@@ -639,9 +639,9 @@ const mergeBonus = (a, b) => { const o = { ...a }; for (const k of Object.keys(b
 export function makePlayer(metaLv, pb, equip) {
   const m = id => (metaLv && metaLv[id]) || 0, b = Object.assign({ atk: 0, vit: 0, coin: 0, guard: 0, crit: 0, cdn: 0, speed: 0 }, pb || {}), eq = id => (equip && equip.includes(id) ? 1 : 0);
   return {
-    x: W / 2, y: ROW_Y, r: 16, kx: 0, slow: Math.min(0.45, 0.02 * m('vit') + (b.vit / 12) * 0.02 + b.guard * 0.5), speed: 300 * (1 + 0.15 * eq('hamster')) * (1 + b.speed),
+    x: W / 2, y: ROW_Y, r: 16, kx: 0, slow: Math.min(0.45, 0.02 * m('vit') + (b.vit / 12) * 0.02 + b.guard * 0.5), speed: 300,
     atk: 1 + 0.10 * m('atk') + b.atk, crit: 0.05 + 0.02 * m('crt') + b.crit, critMul: 2.5 + 0.08 * m('crt'), cdBase: Math.max(0.4, 1 - 0.05 * m('cdn') - b.cdn),
-    rate: 2.0, bspeed: 900,
+    rate: 2.0 * (1 + 0.15 * eq('hamster')) * (1 + b.speed), bspeed: 900,
     coinMul: 1 + 0.1 * m('for') + b.coin + 0.1 * eq('piglet'), revive: m('rev') > 0 ? 1 : 0,
     iframes: 0, shield: 0, rage: 0, cd: 0, aim: -Math.PI / 2, orbAng: 0, mx: 0,
     zone: { x0: 40, x1: W - 40 },
@@ -660,8 +660,7 @@ export function segRadius(boss, i, len) {
   const sc = boss ? 1.3 : 1;
   if (i === 0) return 38 * sc;
   const fromTail = len - 1 - i;
-  const taper = fromTail < 5 ? 0.62 + 0.38 * (fromTail / 5) : 1;
-  return 30 * sc * taper;
+  return 30 * sc;   // every cell is the same size so every number stays readable
 }
 const spacing = (a, b) => (a.r + b.r) * 0.78;
 
@@ -962,7 +961,7 @@ function shootCapsule(g, dt) {
     const n = 1 + Math.round(up('notes'));
     for (let k = 0; k < n; k++) {
       const crit = g.rand() < p.crit;
-      fire(g, { x: p.x + (k - (n - 1) / 2) * 42, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, r: 6, life: 1.4, kind: 'pill' });
+      fire(g, { x: p.x + (k - (n - 1) / 2) * 42, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
     }
     g.shots++; g.events.push({ t: 'shoot' });
   }

@@ -85,3 +85,6 @@ itself when frames run slow, then raises it again when it runs fast.
 - **Giant Serpent Gig**: a boss instance, two tries a day, pays Ribbons, an egg and pet fragments (the solo stand-in for the co-op boss mode).
 - **Fan Club Pass**, **Limit Shop** (weekly stock, Beats), **Exchange Shop** (Ribbons), **Weapon Exchange** (Sparkles skip the fragment grind, stage gate still applies).
 - **Preview** shows every virus species; **Trophy Shelf** holds one-time rewards for milestones.
+
+- Dance Shoes became **Sharp Notes** (your notes pierce more cells); moving faster was never worth a card. The Hamster and Wheel Speaker now add singing speed.
+- Every cell is the same size (no tiny tail cells) and the numbers are bigger, so they stay readable. The snake crawls faster from the start.
