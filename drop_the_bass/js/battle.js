@@ -208,7 +208,7 @@ export class Battle {
         if (this.comboPrev < m && cb >= m) {
           this.comboPulse = 1; this.comboTier = i + 1;
           this.sfx('combo_milestone', null, { pitch: [1, 1.25, 1.5, 2][i] });
-          this.fx.floater(R.hype.x + 70, R.hype.y + 76, m + ' COMBO!', i >= 2 ? COL.red : COL.gold, 22 + i * 2, { life: 1.1, vy: -20 });
+          this.fx.floater(150, 172, m + ' COMBO!', i >= 2 ? COL.red : COL.gold, 22 + i * 2, { life: 1.1, vy: -20 });
           this.fx.ring(R.hype.x + 40, R.hype.y + 66, 70 + i * 20, i >= 2 ? COL.red : COL.gold, { life: 0.5, w: 5 });
           this.shake(2 + i * 2);
           if (i >= 2) this.stop = Math.max(this.stop, 0.05);
@@ -697,6 +697,7 @@ export class Battle {
     ctx.setTransform(view.dpr * view.s, 0, 0, view.dpr * view.s, view.dpr * view.ox, view.dpr * view.oy);
     this.drawHud(ctx, t, beat);
     this.drawBanner(ctx);
+    if (this.pv.open && isDoodle()) DB.drawPreview(this, ctx);
     if (this.tut && !this.tut.done) this.drawTutorial(ctx);
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
     if (this.hurtFlash > 0 && isDoodle()) DFX.hurt(fx, ctx, view.cw, view.ch, view.dpr, this.hurtFlash);
@@ -712,7 +713,7 @@ export class Battle {
     if (isDoodle()) return DB.drawBoard(this, ctx, t, beat);
     const run = this.run, fx = this.fx;
     AW.drawBoard(ctx, run.map.id, run.world.id, t, { beat, slotHint: this.slotHint, hoverSlot: this.hoverSlot ? [this.hoverSlot.c, this.hoverSlot.r] : null, dropSlot: this.targetSlot != null ? [this.targetSlot % COLS, Math.floor(this.targetSlot / COLS)] : null });
-    AW.drawStageBase(ctx, run.world.id, run.map.base.x, run.map.base.y, { t, hp: run.stageFrac, hit: Math.max(0, this.hurtFlash), beat });
+    AW.drawStageBase(ctx, run.world.id, run.map.base.x, run.map.base.y, { t, hp: run.stageFrac, hit: Math.max(0, this.hurtFlash), beat, studio: (this.prof && this.prof.studio) || null });
     // selected range: a soft lit disc with a marching dashed edge
     const sel = this.selected ? run.turretById(this.selected) : null;
     if (sel) {
@@ -909,10 +910,11 @@ export class Battle {
     this.drawHero(ctx, 'jasmin', R.heroJ, t);
     const locked = !this.prof.autoMerge;
     button(ctx, R.merge, locked ? '#2f2150' : '#2a8a5a', { icon: locked ? 'lock' : 'merge', glyph: AE.drawGlyph, sub: 'MERGE', size: 13, press: this.pressK('merge'), dim: locked });
-    button(ctx, R.reroll, '#3a2a86', { icon: 'reroll', glyph: AE.drawGlyph, sub: run.rerolls > 0 ? run.rerolls + ' free' : '3 gems', size: 13, press: this.pressK('reroll') });
+    button(ctx, R.reroll, '#3a2a86', { icon: 'reroll', glyph: AE.drawGlyph, sub: run.rerolls > 0 ? run.rerolls + ' free' : this.pool.cost.coins + ' c', size: 13, press: this.pressK('reroll') });
+    button(ctx, R.rerollG, '#5a3aa8', { icon: 'reroll', glyph: AE.drawGlyph, sub: this.pool.cost.gems + ' gems', size: 13, press: this.pressK('rerollG') });
     this.drawDeploy(ctx, t, beat);
     const slotsLeft = run.slotCapacity() - run.turrets.length;
-    text(ctx, run.turrets.length + '/' + run.slotCapacity() + ' tiles', W / 2, 833, 13, slotsLeft < 3 ? COL.orange : COL.dim, 'center');
+    text(ctx, run.turrets.length + '/' + run.slotCapacity() + ' tiles', 54, 855, 13, slotsLeft < 3 ? COL.orange : COL.dim, 'center');
   }
   drawDeploy(ctx, t, beat) {
     if (isDoodle()) return DB.drawDeploy(this, ctx, t, beat);

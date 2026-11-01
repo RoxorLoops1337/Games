@@ -4,7 +4,7 @@ import { Run } from './sim.js';
 import { AudioFx } from './audio.js';
 import * as M from './meta.js';
 import { makeRng } from './rng.js';
-import { Battle } from './battle.js';
+import { Battle, battleIdle } from './battle.js';
 import { Cutscene } from './cutscene.js';
 import { buildHub, settingsModal, codexModal } from './ui_hub.js';
 import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo } from './ui_run.js';
@@ -312,6 +312,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
   const v = app.view;
   try {
+    if (!(app.screen === 'battle' && app.battle)) battleIdle(AudioFx);
     if (app.cut && app.screen === 'cut') { app.cut.update(dt); app.cut.draw(ctx, v); }
     else if (app.screen === 'battle' && app.battle) { app.battle.update(dt); app.battle.draw(ctx, v); }
     else if (app.screen === 'title') {
