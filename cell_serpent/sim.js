@@ -275,8 +275,8 @@ export function rollRarity(rand, luck) {
 // vals[rarity] is what one pick adds; cap is the most a run can stack.
 export const CAPSULE_UPS = [
   { id: 'aspd', name: 'Faster Tempo', max: 12, w: 1.2, vals: [8, 12, 18, 26, 38, 55], cap: 300, fmt: v => '+' + v + '% attack speed', desc: '+15% attack speed' },
-  { id: 'notes', name: 'Harmony', max: 5, w: 1.0, min: 1, vals: [1, 1, 1, 2, 2, 3], cap: 5, fmt: v => '+' + v + ' note' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 note per shot, side by side' },
-  { id: 'burst', name: 'Echo', max: 3, w: 0.9, min: 2, vals: [1, 1, 1, 2, 2, 2], cap: 3, fmt: v => '+' + v + ' burst' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 burst per shot, a quick echo of the notes' },
+  { id: 'notes', name: 'Harmony', max: 5, w: 1.0, min: 1, minStage: 3, vals: [1, 1, 1, 2, 2, 3], cap: 5, fmt: v => '+' + v + ' note' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 note per shot, side by side' },
+  { id: 'burst', name: 'Echo', max: 3, w: 0.9, min: 2, minStage: 6, vals: [1, 1, 1, 2, 2, 2], cap: 3, fmt: v => '+' + v + ' burst' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 burst per shot, a quick echo of the notes' },
   { id: 'cdmg', name: 'Volume Up', max: 12, w: 1.2, vals: [12, 18, 28, 42, 65, 100], cap: 600, fmt: v => '+' + v + '% capsule damage', desc: '+30% capsule damage' },
 ];
 export const PASSIVES = [
@@ -285,7 +285,7 @@ export const PASSIVES = [
   { id: 'crit', name: 'Perfect Pitch', max: 8, w: 0.7, vals: [3, 4, 6, 9, 13, 18], cap: 40, fmt: v => '+' + v + '% crit chance', desc: '+8% crit chance for the capsule and needles', apply: (p, v) => { p.crit += v / 100; } },
   { id: 'vital', name: 'Calm Down', max: 8, w: 0.7, vals: [20, 30, 45, 70, 100, 150], cap: 200, fmt: v => 'The snake crawls ' + Math.round(v / 4) + '% slower', desc: 'The snake crawls 5% slower', apply: (p, v) => { p.slow = Math.min(0.5, p.slow + v / 400); } },
   { id: 'guard', name: 'Door Stopper', max: 6, w: 0.6, vals: [15, 22, 30, 40, 50, 60], cap: 600, fmt: v => 'Pushes the snake back ' + v * 6 + ' px', desc: 'Pushes the snake back 90 px', apply: (p, v, g) => { if (g) knockBack(g, v * 6); } },
-  { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
+  { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, minStage: 4, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
 const CAP_UP = Object.fromEntries(CAPSULE_UPS.map(u => [u.id, u]));
@@ -529,7 +529,7 @@ export function claimGoal(save, day, id) {
   save.daily.claimed[id] = 1; save.beats += goal.reward.beats || 0; save.sparkles += goal.reward.sparkles || 0;
   return true;
 }
-export const canPlay = (save, n) => n >= 1 && n <= save.cleared + 1;
+export const canPlay = (save, n) => n >= 1 && n <= Math.min(MAX_STAGE, save.cleared + 1);
 export const clearReward = n => ({ sparkles: (isBossStage(n) ? 40 : 15) + 3 * n });
 // Applies a finished run to the save and returns what was earned.
 export function applyResult(save, r) {
@@ -556,9 +556,9 @@ export function applyResult(save, r) {
 
 // ---------------------------------------------------------------- stages
 export const isBossStage = n => n % 5 === 0;
-export const hpBase = n => 12 * (18 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
+export const hpBase = n => 12 * (12.5 * Math.pow(1.17, Math.min(n - 1, 9)) * Math.pow(1.04, Math.max(0, n - 10)) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
 export const snakeLength = n => Math.min(150, 32 + 4 * (n - 1) + (isBossStage(n) ? 12 : 0));
-export const arrivalTime = n => 0.75 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) + (isBossStage(n) ? 36 : 0);   // seconds for the face to reach the membrane if you do nothing
+export const arrivalTime = n => 0.74 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) + (isBossStage(n) ? 36 : 0);   // seconds for the face to reach the membrane if you do nothing
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
 export const SKINS = ['love', 'rust', 'sneezy', 'grumpy', 'sleepy', 'disco', 'sour', 'mighty', 'frosty', 'gloomy'];
 export const skinFor = n => SKINS[(n - 1) % SKINS.length];
@@ -571,7 +571,12 @@ export const pathKind = n => PATH_ORDER[(n - 1) % PATH_ORDER.length];
 export const PIG_NAME = 'Piggy Bank Parade';
 const nameOf = g => (g.mode === 'pig' ? PIG_NAME : g.mode === 'inv' ? INV_NAME : virusName(g.stage));
 const skinOf = (g, n) => (g.mode === 'pig' ? 'piggy' : skinFor(n));
-export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: PATH_KINDS[pathKind(n)], hp: Math.round(hpBase(n)) });
+export const MAX_STAGE = 50;
+// Most stages are one snake and a line at the bottom. Some stages have two snakes, and some put the duo in the middle with a circle around them.
+export const stageKind = n => (n % 6 === 0 ? 'ring' : (n % 7 === 0 || n % 10 === 8) ? 'double' : 'lane');
+export const KIND_LABEL = { lane: '', double: 'Two snakes', ring: 'Circle' };
+export const RING = { cx: W / 2, cy: 720, R: 175 };
+export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: stageKind(n) === 'ring' ? 'Spiral' : PATH_KINDS[pathKind(n)], kind: stageKind(n), hp: Math.round(hpBase(n)) });
 
 const KIND = { normal: { hp: 1 }, armor: { hp: 2.6 }, bomb: { hp: 1 }, upgrade: { hp: 1.6 } };
 
@@ -595,7 +600,18 @@ function resample(poly, step) {
   }
   return out;
 }
+function ringPath() {
+  const { cx, cy, R } = RING, r0 = 330, turns = 1.6, pts = [];
+  for (let y = -200; y <= cy; y += 6) pts.push({ x: cx - r0, y });
+  const steps = 360;
+  for (let k = 1; k <= steps; k++) { const t = k / steps, a = Math.PI - TAU * turns * t, r = r0 - (r0 - R) * t; pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }); }
+  const poly = resample(pts, 6), cum = [0];
+  for (let i = 1; i < poly.length; i++) cum.push(cum[i - 1] + Math.hypot(poly[i].x - poly[i - 1].x, poly[i].y - poly[i - 1].y));
+  return { pts: poly, cum, len: cum[cum.length - 1], kind: 'ring' };
+}
+const mirrorPath = p => ({ ...p, pts: p.pts.map(q => ({ x: W - q.x, y: q.y })) });
 export function buildPath(n) {
+  if (stageKind(n) === 'ring') return ringPath();
   const R = rng(n * 7919 + 13), k = pathKind(n), end = LINE_Y + 40, cx = W / 2;
   let poly = [];
   const sine = (A, lam, ph, grow = 0) => { for (let y = -160; y <= end; y += 6) poly.push({ x: cx + (A + grow * (y / end)) * Math.sin((y / lam) * TAU + ph), y }); };
@@ -663,16 +679,17 @@ export function segRadius(boss, i, len) {
 }
 const spacing = (a, b) => (a.r + b.r) * 0.78;
 
-function spawnSnake(g, n) {
-  const pig = g.mode === 'pig', inv = g.mode === 'inv', boss = isBossStage(n), len = pig ? 40 : inv ? 70 : snakeLength(n), segs = [];
+function spawnSnake(g, n, o = {}) {
+  const pig = g.mode === 'pig', inv = g.mode === 'inv', boss = isBossStage(n), len = o.len || (pig ? 40 : inv ? 70 : snakeLength(n)), segs = [];
+  const path = o.mirror ? mirrorPath(g.path) : g.path;
   const hpB = (pig ? hpBase(1 + 2 * n) * 0.5 : inv ? hpBase(n) * 1.3 : hpBase(n)) * (g.hard ? HARD_HP : 1);
   const ramp = i => 0.4 + 1.35 * Math.pow(i / Math.max(1, len - 1), 1.3);   // the first cells are soft, then it gets tougher and tougher
-  let ps = 240;   // the face starts just inside the top edge
+  let ps = o.startPs === undefined ? 240 : o.startPs;   // the face starts just inside the top edge
   for (let i = 0; i < len; i++) {
     const kind = pickKind(g, n, boss, i, len), r = segRadius(boss, i, len);
     let hp = hpB * ramp(i) * KIND[kind].hp * (boss ? 1.5 : 1) * (0.9 + g.rand() * 0.2);
     hp = i === 0 ? 1 : Math.max(1, Math.round(hp));   // the face has no real HP: it is shielded until it is alone
-    const pos = pointAt(g.path, ps);
+    const pos = pointAt(path, ps);
     segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0 });
     ps -= (r + segRadius(boss, i + 1, len)) * 0.78;
   }
@@ -689,9 +706,9 @@ function spawnSnake(g, n) {
     while (j < len - 1 && (segs[j].kind !== 'normal' || segs[j].carry)) j++;
     segs[j].carry = 'chest';
   }
-  g.upgradeLeft = ups;
-  const speed = (g.path.len - 240) / arrivalTime(n);
-  g.snakes.push({ id: ++g.sid, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
+  g.upgradeLeft = (g.upgradeLeft || 0) + ups;
+  const speed = (path.len - 240) / arrivalTime(n);
+  g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
 }
 
@@ -700,8 +717,11 @@ export function startStage(g, n) {
   g.snakes.length = 0; g.stageHpMax = 0; g.zones.length = 0; g.maws.length = 0; g.bullets.length = 0; g.vq.length = 0;
   g.path = buildPath(n);
   const p = g.p;
-  p.zone = { x0: 40, x1: W - 40 }; p.x = W / 2; p.y = ROW_Y; p.kx = 0;
-  spawnSnake(g, n);
+  g.ring = g.mode === '' && stageKind(n) === 'ring' ? RING : null;
+  g.upgradeLeft = 0;
+  p.zone = g.ring ? { x0: RING.cx - 100, x1: RING.cx + 100 } : { x0: 40, x1: W - 40 }; p.x = W / 2; p.y = g.ring ? RING.cy : ROW_Y; p.kx = 0;
+  if (g.mode === '' && stageKind(n) === 'double') { const L = snakeLength(n); spawnSnake(g, n, { len: Math.ceil(L * 0.6) }); spawnSnake(g, n, { len: Math.ceil(L * 0.55), mirror: true, startPs: -520 }); }
+  else spawnSnake(g, n);
   rebuildTowers(g);
   g.phase = 'play'; g.clearT = 0; g.progress = 0;
   g.events.push({ t: 'stage', n, boss: isBossStage(n), name: nameOf(g) });
@@ -846,11 +866,15 @@ function statText(id, cur, add) {
   if (id === 'notes' || id === 'burst') return `${STAT_NAME[id]}: ${1 + cur} → ${1 + cur + add}`;
   return `${STAT_NAME[id] || UPV[id].name}: +${cur}% → +${cur + add}%`;
 }
+// In the first stages the upgrade cards are weak; they grow to full strength by stage ten.
+const COUNT_UPS = new Set(['notes', 'burst', 'speed']);
+const earlyMul = stage => clamp(0.5 + 0.055 * (stage - 1), 0.5, 1);
 function rollChoices(g) {
   const pool = [];
   const early = g.level < 3;   // the first two picks are capsule upgrades only
-  const luck = g.level - 1;
-  for (const u of CAPSULE_UPS) { const l = g.ups[u.id] || 0, cur = uv(g, u.id); if (l < u.max && cur < u.cap) pool.push({ id: u.id, kind: 'capsule', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w * (early ? 2 : 1) }); }
+  const luck = (g.level - 1) * clamp((g.stage || 1) / 10, 0.1, 1);   // early stages: poor luck
+  const stg = g.stage || 1;
+  for (const u of CAPSULE_UPS) { const l = g.ups[u.id] || 0, cur = uv(g, u.id); if (l < u.max && cur < u.cap && !(u.minStage && stg < u.minStage)) pool.push({ id: u.id, kind: 'capsule', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w * (early ? 2 : 1) }); }
   if (!early) {
     const owned = Object.keys(g.weap).length;
     for (const w of WEAPONS) {
@@ -859,7 +883,9 @@ function rollChoices(g) {
       if (l >= w.max || (!l && owned >= LOADOUT_SIZE)) continue;
       pool.push({ id: w.id, kind: 'weapon', name: w.name, desc: w.desc, lvl: l, max: w.max, isNew: !l, w: l ? 1.7 : 1.2 });
     }
-    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max && uv(g, u.id) < u.cap) pool.push({ id: u.id, kind: 'passive', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w }); }
+  }
+  if (!early || stg < 3) {   // the first two picks are the capsule's, except in the first stages where only a few kinds exist yet
+    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max && uv(g, u.id) < u.cap && !(u.minStage && stg < u.minStage)) pool.push({ id: u.id, kind: 'passive', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w }); }
   }
   const out = [];
   while (out.length < 3 && pool.length) {
@@ -883,7 +909,7 @@ function rollChoices(g) {
       c.gain = Math.min(c.max - c.lvl, [1, 1, 2, 2, 3, 3][c.rarity]);
       c.stat = c.isNew ? `New skill, starts at Lv ${c.gain}` : `Level ${c.lvl} → ${c.lvl + c.gain}`;
     } else {
-      const add = c.u.vals[c.rarity], cur = uv(g, c.id), room = c.u.cap - cur;
+      const raw = c.u.vals[c.rarity], add = COUNT_UPS.has(c.id) ? raw : Math.max(1, Math.round(raw * earlyMul(stg))), cur = uv(g, c.id), room = c.u.cap - cur;
       c.gain = Math.min(add, room);
       c.desc = c.u.fmt(c.gain);
       c.stat = c.kind === 'capsule' ? statText(c.id, cur, c.gain) : '';
@@ -1094,7 +1120,7 @@ export function step(g, dt, input) {
   p.mx = input ? clamp(input.mx || 0, -1, 1) : 0;
   p.x += (p.mx * p.speed + p.kx) * dt;
   p.kx *= Math.exp(-9 * dt);
-  p.x = clamp(p.x, p.zone.x0, p.zone.x1); p.y = ROW_Y;
+  p.x = clamp(p.x, p.zone.x0, p.zone.x1); p.y = g.ring ? g.ring.cy : ROW_Y;
   if (p.iframes > 0) p.iframes -= dt;
   if (p.shield > 0) p.shield -= dt;
   if (p.rage > 0) p.rage -= dt;
@@ -1116,7 +1142,7 @@ export function step(g, dt, input) {
     const segs = sn.segs, last = segs.length - 1;
     let total = 0;
     for (let i = 0; i < last; i++) total += spacing(segs[i], segs[i + 1]);
-    const maxTail = g.path.len - total;
+    const path = sn.path || g.path, maxTail = path.len - total;
     sn.tail = Math.min(sn.tail + v * dt, maxTail);
     sn.breach = sn.tail >= maxTail - 0.5;
     let target = sn.tail;
@@ -1132,7 +1158,7 @@ export function step(g, dt, input) {
     for (const s of segs) {
       const ox = s.x, oy = s.y;
       s.ps = s.tp >= s.ps ? s.tp : Math.max(s.tp, s.ps - 320 * dt);
-      const pos = pointAt(g.path, s.ps), pa = pointAt(g.path, s.ps - 8), pb = pointAt(g.path, s.ps + 8);
+      const pos = pointAt(path, s.ps), pa = pointAt(path, s.ps - 8), pb = pointAt(path, s.ps + 8);
       s.x = pos.x; s.y = pos.y; s.ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
       s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
       stageHp += Math.max(0, s.hp);

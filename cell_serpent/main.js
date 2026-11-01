@@ -1,4 +1,4 @@
-import { W, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
+import { W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { createHub2 } from './hub2.js';
 import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
@@ -78,7 +78,7 @@ function openHub(tab = hubTab) {
   mode = 'hub'; hubTab = tab; audio.music(false);
   if (dayLogin(save, dayKey())) persist();
   refreshCur();
-  sel = Math.max(1, Math.min(sel, save.cleared + 4));
+  sel = Math.max(1, Math.min(sel, MAX_STAGE, save.cleared + 4));
   renderHub(); show('hub');
 }
 function renderHub() {
@@ -92,10 +92,10 @@ for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { a
 function renderBattle() {
   const info = stageInfo(sel), playable = canPlay(save, sel), done = sel <= save.cleared;
   $('stTitle').textContent = `Stage ${sel}: ${info.name}`;
-  $('stSub').textContent = `${info.path}${info.boss ? '  ·  BOSS' : ''}`;
-  $('stPrev').disabled = sel <= 1; $('stNext').disabled = sel >= save.cleared + 4;
+  $('stSub').textContent = `${info.path}${KIND_LABEL[info.kind] ? '  ·  ' + KIND_LABEL[info.kind] : ''}${info.boss ? '  ·  BOSS' : ''}`;
+  $('stPrev').disabled = sel <= 1; $('stNext').disabled = sel >= Math.min(MAX_STAGE, save.cleared + 4);
   const chips = $('stChips'); chips.innerHTML = '';
-  for (let n = 1; n <= save.cleared + 4; n++) {
+  for (let n = 1; n <= Math.min(MAX_STAGE, save.cleared + 4); n++) {
     const c = document.createElement('button'); c.className = 'chip' + (n === sel ? ' sel' : '') + (n > save.cleared + 1 ? ' lock' : '') + (n <= save.cleared ? ' done' : '');
     c.textContent = n > save.cleared + 1 ? '🔒' : n; c.onclick = () => { audio.play('click'); sel = n; renderBattle(); };
     chips.appendChild(c);
@@ -115,7 +115,7 @@ function renderBattle() {
   const chip = chips.querySelector('.sel'); if (chip && chip.scrollIntoView) { try { chips.scrollTo({ left: chip.offsetLeft - 120 }); } catch (e) { /* ignore */ } }
 }
 $('stPrev').onclick = () => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
-$('stNext').onclick = () => { audio.play('click'); sel = Math.min(save.cleared + 4, sel + 1); renderBattle(); };
+$('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
 $('stGo').onclick = () => { audio.unlock(); audio.play('click'); beginStage(sel); };
 $('enPlus').onclick = () => { audio.unlock(); if (buyEnergy(save, Date.now())) { persist(); audio.play('upgrade'); refreshCur(); toast('Voice +10'); } else toast('Not enough Sparkles'); };
 // a stage costs Voice; the Piggy Bank Parade is free
@@ -126,6 +126,7 @@ function beginStage(stage) {
 
 // the stage picture: the lane for this stage with the virus on it
 const stCtx = $('stCanvas').getContext('2d');
+const W_ = 720;
 let pvKey = -1, pvPath = null;
 function drawPreview(t) {
   if (!kit) return;
@@ -136,15 +137,16 @@ function drawPreview(t) {
   c.save(); c.translate(ox, oy); c.scale(k, k);
   c.lineJoin = 'round'; c.lineCap = 'round'; c.beginPath(); pvPath.pts.forEach((q, i) => (i % 3 === 0 ? (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)) : 0));
   c.lineWidth = 90; c.strokeStyle = 'rgba(255,255,255,.07)'; c.stroke(); c.lineWidth = 8; c.strokeStyle = 'rgba(255,255,255,.2)'; c.setLineDash([22, 30]); c.lineDashOffset = -t * 60; c.stroke(); c.setLineDash([]);
-  c.strokeStyle = 'rgba(255,150,190,.8)'; c.lineWidth = 12; c.beginPath(); c.moveTo(0, 1190); c.lineTo(720, 1190); c.stroke();
+  if (info.kind === 'ring') { c.strokeStyle = 'rgba(255,150,190,.85)'; c.lineWidth = 12; c.beginPath(); c.arc(RING.cx, RING.cy, RING.R, 0, Math.PI * 2); c.stroke(); } else { c.strokeStyle = 'rgba(255,150,190,.8)'; c.lineWidth = 12; c.beginPath(); c.moveTo(0, 1055); c.lineTo(720, 1055); c.stroke(); }
   const head = 700 + Math.sin(t * 1.2) * 60, n = Math.min(info.length, 16);
   for (let i = n - 1; i >= 1; i--) {
     const ps = head - i * 47, a = pointAt(pvPath, ps), b = pointAt(pvPath, ps + 10), kind = info.boss ? true : false;
     const spr = kit.SPR.body(info.skin, kind, ''); if (spr) kit.blit(c, spr, a.x, a.y, 30 * 3.9 * (i > n - 4 ? 0.8 : 1), Math.atan2(b.y - a.y, b.x - a.x));
   }
+  if (info.kind === 'double') { for (let i = 9; i >= 1; i--) { const ps = head - 520 - i * 47, a = pointAt(pvPath, ps), b = pointAt(pvPath, ps + 10), spr = kit.SPR.body(info.skin, false, ''); if (spr) kit.blit(c, spr, W_ - a.x, a.y, 30 * 3.9, -Math.atan2(b.y - a.y, b.x - a.x) + Math.PI); } }
   const hp = pointAt(pvPath, head), hp2 = pointAt(pvPath, head + 10);
   kit.drawHead(c, hp.x, hp.y, 38 * (info.boss ? 1.3 : 1) * 1.14, Math.atan2(hp2.y - hp.y, hp2.x - hp.x), { skin: info.skin, boss: info.boss, t, look: [0, 1] });
-  const duo = art && art.get('duo_idle'); if (duo) { const dh = 190, dw = dh * duo.width / duo.height; c.drawImage(duo, 360 - dw / 2, 1090 - dh * 0.75, dw, dh); }
+  const duo = art && art.get('duo_idle'); if (duo) { const dh = 190, dw = dh * duo.width / duo.height; c.drawImage(duo, 360 - dw / 2, (info.kind === 'ring' ? RING.cy - 20 : 1150) - dh * 0.75, dw, dh); }
   c.restore();
 }
 

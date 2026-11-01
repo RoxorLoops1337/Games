@@ -38,19 +38,40 @@ ok('deterministic: same seed, same run', () => {
   assert.equal(snap(a), snap(b)); assert.equal(a.kills, b.kills); assert.equal(a.coins, b.coins);
 });
 
-ok('every stage has its own lane shape; all lanes run from above the screen down past the membrane', () => {
+ok('every lane stage has its own shape and runs from above the screen past the line; ring stages spiral into a circle', () => {
   assert.equal(sim.PATH_KINDS.length, 9);
-  const sigs = new Set();
+  const sigs = new Set(); let lanes = 0;
   for (let s = 1; s <= 9; s++) {
     const p = sim.buildPath(s);
+    if (sim.stageKind(s) === 'ring') { assert.equal(p.kind, 'ring'); continue; }
+    lanes++;
     assert.ok(p.pts[0].y < 0 && p.pts.at(-1).y > LINE_Y, 'stage ' + s);
     assert.ok(p.len > H, 'the lane winds, so it is longer than the screen');
     assert.ok(p.pts.every(q => q.x > -50 && q.x < W + 50), 'stays on screen');
     sigs.add(sim.PATH_KINDS[sim.pathKind(s)] + ':' + Math.round(p.len / 10));
   }
-  assert.equal(sigs.size, 9);
+  assert.equal(sigs.size, lanes);
   const a = sim.buildPath(1), b = sim.buildPath(2); assert.notEqual(Math.round(a.len), Math.round(b.len));
   assert.ok(sim.pointAt(a, -50).y < sim.pointAt(a, 0).y && sim.pointAt(a, 900).y > sim.pointAt(a, 100).y);
+  const ring = sim.buildPath(6), end = sim.pointAt(ring, ring.len);
+  assert.ok(Math.abs(Math.hypot(end.x - sim.RING.cx, end.y - sim.RING.cy) - sim.RING.R) < 12, 'the spiral ends on the circle');
+  assert.ok(ring.pts.every(q => q.x > -40 && q.x < W + 40), 'the spiral fits the screen');
+});
+
+ok('50 stages: some have two snakes, some a circle around the duo, and the circle ends the run when the snake reaches it', () => {
+  assert.equal(sim.MAX_STAGE, 50);
+  const kinds = new Set(Array.from({ length: 50 }, (_, i) => sim.stageKind(i + 1)));
+  assert.deepEqual([...kinds].sort(), ['double', 'lane', 'ring']);
+  assert.equal(sim.stageKind(1), 'lane'); assert.equal(sim.stageKind(6), 'ring'); assert.equal(sim.stageKind(7), 'double');
+  assert.ok(!sim.canPlay({ cleared: 50 }, 51) && sim.canPlay({ cleared: 49 }, 50));
+  const d = sim.createGame({ seed: 3, stage: 7 }); assert.equal(d.snakes.length, 2); assert.notEqual(d.snakes[0].path, d.snakes[1].path);
+  assert.equal(d.upgradeLeft, d.snakes.reduce((a, sn) => a + sn.segs.filter(q => q.kind === 'upgrade').length, 0));
+  for (let i = 0; i < 60 * 20; i++) sim.step(d, 1 / 60, {});
+  assert.ok(d.snakes.every(sn => sn.segs[0].y > -100 || sn.segs[0].ps < 300), 'the second snake enters later');
+  const r = sim.createGame({ seed: 4, stage: 6 }); assert.ok(r.ring); assert.equal(r.p.y, sim.RING.cy); assert.ok(r.p.zone.x1 - r.p.zone.x0 < 260);
+  for (let i = 0; i < 30; i++) sim.step(r, 1 / 60, { mx: 1 }); assert.ok(r.p.x <= sim.RING.cx + 100 && r.p.y === sim.RING.cy, 'the duo stays inside the circle');
+  r.snakes[0].tail = 1e9; sim.step(r, 1 / 60, {}); assert.equal(r.phase, 'dead', 'the snake reached the circle');
+  const f = sim.createGame({ seed: 4, stage: 3 }); assert.ok(!f.ring);
 });
 
 ok('stages: names, five skins, boss every 5th, longer snakes and more HP per cell as you go', () => {
@@ -64,7 +85,7 @@ ok('stages: names, five skins, boss every 5th, longer snakes and more HP per cel
 });
 
 ok('only the snake: no small viruses, no enemy shots, no falling things', () => {
-  const g = sim.createGame({ seed: 2, stage: 6 });
+  const g = sim.createGame({ seed: 2, stage: 4 });
   run(g, 30, bot);
   assert.equal(g.minions, undefined); assert.equal(g.ebullets, undefined);
   assert.ok(!sim.createGame({ seed: 2, stage: 9 }).snakes[0].segs.some(q => q.kind === 'spitter'));
@@ -85,13 +106,19 @@ ok('it starts weak: 10 to 20 capsule shots per cell, one note, no skills; and th
   assert.equal(Object.keys(g.weap).length, 0); assert.equal(g.level, 1);
   const capsule = 10 * g.p.atk;
   const normals = g.snakes[0].segs.filter(q => q.kind === 'normal' && q.i > 0), shotsOf = q => q.max / capsule;
-  for (const q of normals) assert.ok(shotsOf(q) >= 8 && shotsOf(q) <= 55, `cell needs ${shotsOf(q)} shots`);
+  for (const q of normals) assert.ok(shotsOf(q) >= 4 && shotsOf(q) <= 55, `cell needs ${shotsOf(q)} shots`);
   const first = normals.slice(0, 4).reduce((a, q) => a + shotsOf(q), 0) / 4, last = normals.slice(-4).reduce((a, q) => a + shotsOf(q), 0) / 4;
   assert.ok(first < 15 && last > first * 2, 'the first cells are soft and the snake gets tougher and tougher: ' + first + ' -> ' + last);
   assert.ok(g.p.rate <= 2.2);
-  for (const first of [0, 1]) {   // the first two picks only ever offer capsule upgrades
+  const g4 = sim.createGame({ seed: 5, stage: 4 });
+  for (const first of [0, 1]) {   // the first two picks only ever offer capsule upgrades (once the stage has enough kinds of them)
+    g4.pending = 1; sim.step(g4, 1 / 60, {});
+    assert.equal(g4.phase, 'levelup'); assert.ok(g4.choices.every(c => c.kind === 'capsule'), 'pick ' + first);
+    sim.choose(g4, 0);
+  }
+  for (const first of [0, 1]) {   // in the very first stages only two kinds exist, so a weak passive fills the third card
     g.pending = 1; sim.step(g, 1 / 60, {});
-    assert.equal(g.phase, 'levelup'); assert.ok(g.choices.every(c => c.kind === 'capsule'), 'pick ' + first);
+    assert.equal(g.phase, 'levelup'); assert.ok(g.choices.every(c => c.kind !== 'weapon'), 'pick ' + first); assert.equal(g.choices.length, 3);
     sim.choose(g, 0);
   }
   g.pending = 1; sim.step(g, 1 / 60, {});
@@ -199,7 +226,7 @@ ok('upgrades come only from the yellow upgrade cells; Free Refresh gives new cho
 });
 
 ok('every extra note counts: each pick adds a note, spaced apart so you can see it, and the card says so', () => {
-  const g = sim.createGame({ seed: 5 });
+  const g = sim.createGame({ seed: 5, stage: 3 });
   const card = () => g.choices.find(c => c.id === 'notes');
   const pickNotes = () => { g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); for (let k = 0; k < 40 && !card(); k++) { g.rerolls = 4; sim.reroll(g); } const i = g.choices.indexOf(card()); assert.ok(i >= 0); return sim.choose(g, i); };
   const volley = () => { g.bullets.length = 0; g.vq.length = 0; g.p.cd = 0; g.p.crit = 0; sim.step(g, 1 / 60, {}); sim.step(g, 0.05, {}); return g.bullets; };
@@ -230,7 +257,7 @@ ok('skill picks: 3 distinct choices; locked skills never appear; maxed ones stop
 
 ok('every skill works at every level and hurts the virus; a permanent skill level makes it hit harder', () => {
   for (const w of sim.WEAPONS) for (const L of [1, 3, 5]) {
-    const g = sim.createGame({ seed: 20 + L, unlocked: ALL, stage: 6 });
+    const g = sim.createGame({ seed: 20 + L, unlocked: ALL, stage: 4 });
     g.weap[w.id] = { lv: L, cd: 0 };
     g.p.hp = g.p.maxHp = 1e6; g.p.rate = 0.0001; g.p.cd = 99;   // silence the capsule so only the skill deals damage
     bringNear(g); g.snakes[0].speed = 0.01;
@@ -434,7 +461,7 @@ ok('renderer draws every phase and every skill against a stub context, with and 
   const fakeArt = { get: () => ({ width: 100, height: 80 }), has: () => true };
   for (const [art, kit] of [[null, null], [fakeArt, createArtDraw(stubCanvas, 2)]]) {
     const R = createRenderer(canvas, art, kit);
-    const g = sim.createGame({ seed: 16, stage: 12, meta: { rev: 1 }, unlocked: ALL });
+    const g = sim.createGame({ seed: 16, stage: 11, meta: { rev: 1 }, unlocked: ALL });
     for (const w of sim.WEAPONS) g.weap[w.id] = { lv: 3, cd: 0 };
     g.p.shield = 2; g.p.rage = 2; g.p.hp = g.p.maxHp = 1e6; g.ups.notes = 3; g.ups.burst = 2;
     g.snakes[0].surgeT = 0.5;
@@ -469,7 +496,7 @@ ok('rarity: one of the three cards is always common, and luck makes better rarit
   const w0 = sim.rarityWeights(0), w20 = sim.rarityWeights(20), share = w => 1 - w[0] / w.reduce((a, b) => a + b, 0);
   assert.ok(share(w20) > share(w0) * 1.5, 'luck lifts the chance of better rarities');
   assert.ok(w0[0] > w0[1] && w0[1] > w0[2] && w0[4] > w0[5], 'rare things are rarer at the start');
-  const mean = lvl => { let t = 0, n = 0; for (let i = 0; i < 150; i++) { const g = sim.createGame({ seed: 100 + i }); g.level = lvl; g.pending = 1; sim.step(g, 1 / 60, {}); assert.ok(g.choices.some(c => c.rarity === 0), 'a common card'); for (const c of g.choices) { t += c.rarity; n++; } } return t / n; };
+  const mean = lvl => { let t = 0, n = 0; for (let i = 0; i < 150; i++) { const g = sim.createGame({ seed: 100 + i, stage: 10 }); g.level = lvl; g.pending = 1; sim.step(g, 1 / 60, {}); assert.ok(g.choices.some(c => c.rarity === 0), 'a common card'); for (const c of g.choices) { t += c.rarity; n++; } } return t / n; };
   assert.ok(mean(25) > mean(3) + 0.4, 'later picks are better on average');
 });
 
@@ -624,7 +651,7 @@ ok('wardrobe, seasonal event, Giant Serpent Gig, monthly pass, limit and exchang
 ok('card kinds have their own rarity: speed and damage can be common, extra notes are at least rare, extra bursts at least epic', () => {
   const seen = {};
   for (let i = 0; i < 400; i++) {
-    const g = sim.createGame({ seed: 300 + i }); g.level = 1 + (i % 20); g.pending = 1; sim.step(g, 1 / 60, {});
+    const g = sim.createGame({ seed: 300 + i, stage: 10 }); g.level = 1 + (i % 20); g.pending = 1; sim.step(g, 1 / 60, {});
     assert.ok(g.choices.some(c => c.rarity === 0), 'one common card is always there');
     for (const c of g.choices) { (seen[c.id] = seen[c.id] || new Set()).add(c.rarity); if (c.id === 'notes') assert.ok(c.rarity >= 1, 'notes are never common'); if (c.id === 'burst') assert.ok(c.rarity >= 2, 'bursts are never common'); }
   }

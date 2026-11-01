@@ -148,6 +148,12 @@ export function createRenderer(canvas, art, kit) {
     }
     ctx.globalAlpha = 1;
     // the stage floor below the line, where the duo stands; if the snake touches the line it is over
+    if (g.ring) {   // a circle around the duo in the middle: if the snake reaches it, it is over
+      const { cx, cy, R } = g.ring, fl = ctx.createRadialGradient(cx, cy, 20, cx, cy, R); fl.addColorStop(0, 'rgba(255,90,140,.12)'); fl.addColorStop(1, 'rgba(255,90,140,.34)');
+      ctx.fillStyle = fl; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
+      ctx.lineWidth = 16; ctx.strokeStyle = 'rgba(255,90,140,.18)'; ctx.stroke(); ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,150,190,.8)'; ctx.setLineDash([22, 12]); ctx.lineDashOffset = -S.t * 20; ctx.stroke(); ctx.setLineDash([]);
+      return;
+    }
     { const fl = ctx.createLinearGradient(0, LINE_Y, 0, H); fl.addColorStop(0, 'rgba(255,90,140,.22)'); fl.addColorStop(1, 'rgba(10,6,30,.75)'); ctx.fillStyle = fl; ctx.fillRect(0, LINE_Y, W, H - LINE_Y); }
     ctx.save(); ctx.beginPath();
     for (let x = 0; x <= W; x += 20) { const y = LINE_Y + Math.sin(x * 0.05 + S.t * 2.2) * 5; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
