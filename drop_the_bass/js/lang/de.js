@@ -1,4 +1,4 @@
-// de: German translation. Keep every key, change only the right-hand side. Plurals are "one|many".
+// de: translations. Keys come from en.js (tools/dtb_i18n.mjs --stub keeps them in sync); an entry equal to the English text is not translated yet.
 export default {
   'band.empty': 'Noch nichts da. Gewinne Bühnen und öffne Kisten für Ausrüstung.',
   'band.equipped': 'Angelegt',
@@ -530,6 +530,7 @@ export default {
   'studio.hint': 'Dauerhafte Upgrades, gekauft mit Platten. Sie helfen in jedem Run.',
   'studio.need_fame': 'Ruhm {n}',
   'studio.perk': 'Lv{lv}: {desc}',
+  'studio.scene_empty': 'LEERES STUDIO',
   'studio.sec.heroes': 'Helden',
   'studio.sec.turrets': 'Türme',
   'studio.sec.upgrades': 'Upgrades',

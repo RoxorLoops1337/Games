@@ -530,6 +530,7 @@ export default {
   'studio.hint': 'Permanente opgraderinger købt med Plader. De hjælper i hver runde.',
   'studio.need_fame': 'Berømmelse {n}',
   'studio.perk': 'Niv{lv}: {desc}',
+  'studio.scene_empty': 'TOMT STUDIE',
   'studio.sec.heroes': 'Helte',
   'studio.sec.turrets': 'Tårne',
   'studio.sec.upgrades': 'Opgraderinger',

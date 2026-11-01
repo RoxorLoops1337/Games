@@ -530,6 +530,7 @@ export default {
   'studio.hint': 'Blijvende upgrades, gekocht met Platen. Ze helpen in elke run.',
   'studio.need_fame': 'Roem {n}',
   'studio.perk': 'Lv{lv}: {desc}',
+  'studio.scene_empty': 'LEEG STUDIO',
   'studio.sec.heroes': 'Helden',
   'studio.sec.turrets': 'Torens',
   'studio.sec.upgrades': 'Upgrades',

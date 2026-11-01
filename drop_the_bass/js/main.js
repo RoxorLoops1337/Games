@@ -14,6 +14,7 @@ import { setStyle } from './style.js';
 import { initPwa } from './pwa.js';
 import * as Stats from './stats.js';
 import * as I18N from './i18n.js';
+import { initDataLang } from './i18n_data.js';
 import { t, tn } from './i18n.js';
 
 const canvas = document.getElementById('game');
@@ -27,6 +28,7 @@ let loaded;
 try { loaded = M.loadSave(localStorage, Date.now()); } catch (e) { loaded = { profile: M.newProfile(Date.now()), source: 'new', recovered: false, corrupt: false, hadSave: false }; }
 let profile = loaded.profile;
 // language before the first paint: the profile choice, else the one stored on this device, else the browser language (see I18N.md)
+initDataLang();   // names and descriptions of the data tables follow the language (before initLang so the first paint is already translated)
 await I18N.initLang({ profile: profile.settings.lang });
 profile.settings.lang = I18N.getLangPref();
 const hadSave = loaded.hadSave;

@@ -121,7 +121,7 @@ for (const c of ['da', 'nl', 'de']) {
 I.setDataDict('de', { 'TURRETS.kick.name': 'DE Kick' });
 setLang('de'); await langReady(); eq(CORE.TURRETS.kick.name, 'DE Kick', 'onLang applies the data overlay');
 setLang('en'); eq(CORE.TURRETS.kick.name, origKick, 'and reverts'); I.setDataDict('de', null);
-I.applyDataLang('de'); eq(CORE.TURRETS.kick.name, origKick, 'stub dictionary is English'); I.applyDataLang('en');
+I.applyDataLang('de'); ok(typeof CORE.TURRETS.kick.name === 'string' && CORE.TURRETS.kick.name.length > 0, 'real german dictionary applies'); I.applyDataLang('en'); eq(CORE.TURRETS.kick.name, origKick, 'english restored');
 
 // ---- checker unit behaviour
 const bad = checkDict('da', { a: 'Hi {n}', 'X.name': 'ok' }, { a: 'Hej', b: 'extra', 'X.name': 'a \u2014 b' });

@@ -530,6 +530,7 @@ export default {
   'studio.hint': 'Permanent upgrades, bought with Records. They help in every run.',
   'studio.need_fame': 'Fame {n}',
   'studio.perk': 'Lv{lv}: {desc}',
+  'studio.scene_empty': 'EMPTY STUDIO',
   'studio.sec.heroes': 'Heroes',
   'studio.sec.turrets': 'Turrets',
   'studio.sec.upgrades': 'Upgrades',
