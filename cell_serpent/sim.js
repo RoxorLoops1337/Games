@@ -556,7 +556,7 @@ export function applyResult(save, r) {
 
 // ---------------------------------------------------------------- stages
 export const isBossStage = n => n % 5 === 0;
-export const hpBase = n => 12 * (19 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
+export const hpBase = n => 12 * (23 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
 export const snakeLength = n => Math.min(150, 32 + 4 * (n - 1) + (isBossStage(n) ? 12 : 0));
 export const arrivalTime = n => 0.95 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) + (isBossStage(n) ? 36 : 0);   // seconds for the face to reach the membrane if you do nothing
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
@@ -668,10 +668,11 @@ const spacing = (a, b) => (a.r + b.r) * 0.78;
 function spawnSnake(g, n) {
   const pig = g.mode === 'pig', inv = g.mode === 'inv', boss = isBossStage(n), len = pig ? 40 : inv ? 70 : snakeLength(n), segs = [];
   const hpB = (pig ? hpBase(1 + 2 * n) * 0.5 : inv ? hpBase(n) * 1.3 : hpBase(n)) * (g.hard ? HARD_HP : 1);
+  const ramp = i => 0.4 + 1.35 * Math.pow(i / Math.max(1, len - 1), 1.3);   // the first cells are soft, then it gets tougher and tougher
   let ps = 240;   // the face starts just inside the top edge
   for (let i = 0; i < len; i++) {
     const kind = pickKind(g, n, boss, i, len), r = segRadius(boss, i, len);
-    let hp = hpB * KIND[kind].hp * (boss ? 1.5 : 1) * (0.9 + g.rand() * 0.2);
+    let hp = hpB * ramp(i) * KIND[kind].hp * (boss ? 1.5 : 1) * (0.9 + g.rand() * 0.2);
     hp = i === 0 ? 1 : Math.max(1, Math.round(hp));   // the face has no real HP: it is shielded until it is alone
     const pos = pointAt(g.path, ps);
     segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0 });
@@ -681,7 +682,7 @@ function spawnSnake(g, n) {
   const ups = Math.max(4, Math.round(len / 7));
   for (let k = 0; k < ups; k++) {
     const c = segs[clamp(3 + Math.round(((len - 5) * (k + 0.5)) / ups), 1, len - 1)];
-    c.kind = 'upgrade'; c.max = c.hp = Math.max(1, Math.round(hpB * KIND.upgrade.hp * (boss ? 1.5 : 1)));
+    c.kind = 'upgrade'; c.max = c.hp = Math.max(1, Math.round(hpB * ramp(c.i) * KIND.upgrade.hp * (boss ? 1.5 : 1)));
   }
   // chest cells (a chest on the cell): aim for them first too
   const nch = Math.max(2, Math.round(len / 15));
