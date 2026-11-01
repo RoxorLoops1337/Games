@@ -23,7 +23,7 @@ const bot = g => sim.botInput(g);
 // the tail drives the chain, so to move the whole virus shift both the tail and every cell
 const shiftChain = (g, shift) => { const sn = g.snakes[0]; sn.tail += shift; for (const q of sn.segs) q.ps += shift; };
 // park the virus so cell number `idx` sits `dy` px straight above the cell (the cell slides under it)
-const bringNear = (g, dy = 100, idx = 3) => {
+const bringNear = (g, dy = 170, idx = 0) => {
   const sn = g.snakes[0]; let target = 0;
   for (let t = 0; t < g.path.len; t += 2) if (sim.pointAt(g.path, t).y >= ROW_Y - dy) { target = t; break; }
   shiftChain(g, target - sn.segs[idx].ps);
@@ -124,26 +124,26 @@ ok('the face cannot be hit or targeted until it is the last cell; then it pops a
   const g = sim.createGame({ seed: 4 });
   const sn = g.snakes[0], face = sn.segs[0]; sn.speed = 0.01;
   assert.ok(face.shield && face.isHead);
-  bringNear(g, 120); g.p.hp = g.p.maxHp = 1e6; g.p.iframes = 1e6;
+  bringNear(g, 170); g.p.hp = g.p.maxHp = 1e6; g.p.iframes = 1e6;
   run(g, 4, {});
   assert.equal(face.hp, 1, 'shots and skills pass through the face'); assert.ok(face.shield);
   for (const q of sn.segs.slice(1)) q.hp = 0;
-  sim.step(g, 1 / 60, {});
+  g.p.x = face.x; run(g, 2, {});
   assert.equal(g.snakes.length, 0, 'the face pops once it is alone');
   assert.ok(g.events.some(e => e.t === 'kill' && e.head) && ['clear', 'levelup'].includes(g.phase));
 });
 
-ok('if the face reaches the membrane it drains HP until you finish the cells; each kill pushes it back', () => {
+ok('if the face reaches the line the run is over; an Encore saves it once', () => {
   const g = sim.createGame({ seed: 5 });
   const sn = g.snakes[0], face = sn.segs[0];
-  g.p.iframes = 5; const hp0 = g.p.hp;
   sn.tail = 1e9; sim.step(g, 1 / 60, {});
-  assert.ok(sn.breach && g.p.hp < hp0 && g.events.some(e => e.t === 'leak'));
-  assert.ok(face.ps <= g.path.len + 0.01, 'the face stops at the membrane');
-  const hp1 = g.p.hp; sn.speed = 0.01; run(g, 1.1, {}); assert.ok(g.p.hp < hp1 - 4, 'keeps draining');
-  const before = face.ps; for (const q of sn.segs.slice(1, 4)) q.hp = 0; run(g, 1, {});
-  assert.ok(face.ps < before - 80, 'killing cells pushes the face back off the membrane');
-  assert.ok(LINE_Y === 1190 && ROW_Y < LINE_Y);
+  assert.equal(g.phase, 'dead'); assert.ok(g.events.some(e => e.t === 'leak') && g.result && !g.result.won);
+  assert.ok(face.ps <= g.path.len + 0.01, 'the face stops at the line');
+  const r = sim.createGame({ seed: 5, meta: { rev: 1 } }); r.snakes[0].tail = 1e9; sim.step(r, 1 / 60, {});
+  assert.equal(r.phase, 'play', 'the Encore saves the first loss'); assert.ok(r.revived && r.snakes[0].segs[0].ps < r.path.len - 400);
+  r.snakes[0].tail = 1e9; sim.step(r, 1 / 60, {}); assert.equal(r.phase, 'dead', 'only once');
+  assert.ok(LINE_Y === 1055 && ROW_Y > LINE_Y + 80, 'the duo stands below the line');
+  assert.ok(!('hp' in g.p) || g.p.hp === undefined, 'no hit points');
 });
 
 ok('now and then the virus surges for a second, with a warning first', () => {
@@ -222,7 +222,7 @@ ok('skill picks: 3 distinct choices; locked skills never appear; maxed ones stop
     for (let k = 0; k < u.max + 2; k++) { p.phase = 'levelup'; p.pending = 1; p.choices = [{ id: u.id, kind: 'passive', lvl: p.ups[u.id] || 0, max: u.max }]; if (k < u.max) sim.choose(p, 0); }
     assert.equal(p.ups[u.id], u.max, u.id);
   }
-  assert.ok(p.p.maxHp > 100 && p.p.speed > 300 && p.p.crit > 0.2 && p.p.guard > 0.5);
+  assert.ok(p.p.slow > 0.3 && p.p.speed > 300 && p.p.crit > 0.2, 'Calm Down slows the snake');
 });
 
 ok('every skill works at every level and hurts the virus; a permanent skill level makes it hit harder', () => {
@@ -260,27 +260,21 @@ ok('a bomb cell chain-reacts into its neighbours and the cell', () => {
   bomb.kind = 'bomb'; bomb.hp = 0; bomb.max = 10; s.segs[5].hp = 1; s.segs[6].hp = 1;
   const pos = sim.pointAt(g.path, bomb.ps + 1);
   g.p.zone = { x0: -500, x1: 2000 }; g.p.x = pos.x + 90; g.p.iframes = 0; g.p.y = pos.y;
-  const hp0 = g.p.hp;
   sim.step(g, 1 / 60, {});
   assert.ok(g.events.some(e => e.t === 'boom'));
   assert.ok(g.snakes.every(x => x.segs.every(q => q.i !== 5 && q.i !== 6)), 'neighbours died in the blast');
-  assert.ok(g.p.hp <= hp0);
 });
 
-ok('contact hurts and grants i-frames; dying ends the run; Second Wind revives once; shield, heal and rage work', () => {
-  const g = sim.createGame({ seed: 16 });
-  g.snakes[0].speed = 0.01; const hd = g.snakes[0].segs[0]; g.p.zone = { x0: -500, x1: 2000 }; g.p.x = hd.x;
-  const hp0 = g.p.hp; hd.y = g.p.y; sim.step(g, 1 / 60, {});
-  g.p.y = ROW_Y;
-  const d = sim.createGame({ seed: 17 }); d.p.hp = 1; d.snakes[0].tail = 1e9; sim.step(d, 1 / 60, {});
+ok('losing ends the run; the Encore saves it once; the hush pickup slows and the wall pickup pushes the snake back; rage works', () => {
+  const d = sim.createGame({ seed: 17 }); d.snakes[0].tail = 1e9; sim.step(d, 1 / 60, {});
   assert.equal(d.phase, 'dead'); assert.ok(d.result && d.result.won === false && d.result.stage === 1 && d.result.name);
-  const t = d.t; sim.step(d, 1 / 60, {}); assert.equal(d.t, t);
-  const r = sim.createGame({ seed: 17, meta: { rev: 1 } }); r.p.hp = 1; r.snakes[0].tail = 1e9; sim.step(r, 1 / 60, {});
+  const t = d.t; sim.step(d, 1 / 60, {}); assert.equal(d.t, t, 'the world stops');
+  const r = sim.createGame({ seed: 17, meta: { rev: 1 } }); r.snakes[0].tail = 1e9; sim.step(r, 1 / 60, {});
   assert.equal(r.phase, 'play'); assert.ok(r.events.some(e => e.t === 'revive'));
-  const s = sim.createGame({ seed: 18 }); s.p.shield = 3; s.snakes[0].tail = 1e9; sim.step(s, 1 / 60, {}); assert.equal(s.p.hp, s.p.maxHp);
-  s.p.shield = 0; s.p.hp = 10; s.pickups.push({ kind: 'heal', x: s.p.x, y: s.p.y, vx: 0, vy: 0, v: 1, age: 1, vac: true }, { kind: 'rage', x: s.p.x, y: s.p.y, vx: 0, vy: 0, v: 1, age: 1, vac: true });
-  sim.step(s, 1 / 60, {}); assert.ok(s.p.hp > 10 && s.p.rage > 0);
-  assert.ok(hp0 > 0);
+  const s = sim.createGame({ seed: 18 }); const sn = s.snakes[0], ps0 = sn.segs[0].ps;
+  const put = k => s.pickups.push({ kind: k, x: s.p.x, y: s.p.y, vx: 0, vy: 0, v: 1, age: 1, vac: true });
+  put('heal'); put('shield'); put('rage'); sim.step(s, 1 / 60, {});
+  assert.ok(sn.slow > 1 && s.p.rage > 0 && sn.segs[0].ps < ps0 - 100);
 });
 
 ok('one run is one stage: clearing the virus wins the run once the loot is in (no automatic next stage)', () => {
@@ -342,7 +336,7 @@ ok('save: sanitising, migration from the old coins save, defaults', () => {
   assert.equal(sim.sanitizeSave(null).beats, 0);
   assert.ok(sim.sanitizeSave({ skills: { swab: { lv: 0 } } }).skills.swab.lv >= 1, 'starter skills can never be locked');
   const p = sim.makePlayer({ atk: 5, crt: 5, cdn: 5, vit: 2 });
-  assert.ok(p.atk > 1.3 && p.crit > 0.1 && p.cdBase < 0.8 && p.maxHp === 124);
+  assert.ok(p.atk > 1.3 && p.crit > 0.1 && p.cdBase < 0.8 && Math.abs(p.slow - 0.04) < 1e-9);
 });
 
 ok('bot plays full runs: bounded entities, finite numbers, and clears an early stage with a little shop progress', () => {
@@ -352,7 +346,7 @@ ok('bot plays full runs: bounded entities, finite numbers, and clears an early s
     for (let i = 0; i < 60 * 400 && g.phase !== 'dead' && g.phase !== 'won'; i++) {
       sim.step(g, 1 / 60, bot(g)); if (g.phase === 'levelup') sim.choose(g, Math.floor(g.rand() * g.choices.length));
       assert.ok(g.bullets.length < 600 && g.pickups.length < 700 && g.zones.length < 20);
-      assert.ok(Number.isFinite(g.p.x) && g.p.x >= 0 && g.p.x <= W && g.p.y === ROW_Y && Number.isFinite(g.p.hp));
+      assert.ok(Number.isFinite(g.p.x) && g.p.x >= 0 && g.p.x <= W && g.p.y === ROW_Y);
     }
     if (g.phase === 'won') wins++;
     for (const sn of g.snakes) for (const q of sn.segs) assert.ok(Number.isFinite(q.x) && Number.isFinite(q.y) && q.hp > 0);
@@ -363,14 +357,14 @@ ok('bot plays full runs: bounded entities, finite numbers, and clears an early s
 ok('groove: every note that lands builds it (+2% damage per point), a pause in the hits lets it fade', () => {
   const g = sim.createGame({ seed: 50 });
   assert.equal(g.groove, 0); assert.equal(sim.GROOVE_MAX, 20);
-  const sn = g.snakes[0]; sn.speed = 0.01; bringNear(g, 120); g.p.hp = g.p.maxHp = 1e9; g.p.iframes = 1e9;
+  const sn = g.snakes[0]; sn.speed = 0.01; bringNear(g, 170); g.p.hp = g.p.maxHp = 1e9; g.p.iframes = 1e9;
   const dmgNow = () => { g.bullets.length = 0; g.vq.length = 0; g.p.cd = 0; g.p.crit = 0; const x = g.p.x; sim.step(g, 1 / 60, {}); g.p.x = x; return g.bullets[0].dmg; };
   const d0 = dmgNow();
   run(g, 6, {}); assert.ok(g.groove >= 3, 'hits build groove: ' + g.groove); assert.ok(g.grooveMax >= g.groove);
   assert.ok(dmgNow() > d0, 'groove raises damage'); assert.ok(g.groove <= sim.GROOVE_MAX);
   g.groove = 12; g.bullets.length = 0; g.p.cd = 99; g.p.x = 20;   // nothing above you any more
   run(g, 4, {}); assert.ok(g.groove < 12, 'it fades when the hits stop: ' + g.groove);
-  const h = sim.createGame({ seed: 51 }); h.snakes[0].speed = 0.01; bringNear(h, 120); sim.step(h, 1 / 60, {}); h.groove = 4; h.events.length = 0;
+  const h = sim.createGame({ seed: 51 }); h.snakes[0].speed = 0.01; bringNear(h, 170); sim.step(h, 1 / 60, {}); h.groove = 4; h.events.length = 0;
   const cell = h.snakes[0].segs[3]; h.bullets.push({ x: cell.x, y: cell.y, vx: 0, vy: -1, dmg: 1, crit: false, pierce: 0, r: 6, life: 1, hit: [], kind: 'pill', home: 0, splash: 0, slow: 0 });
   sim.step(h, 1 / 60, {}); assert.equal(h.groove, 5); assert.ok(h.events.some(e => e.t === 'groove' && e.n === 5));
 });
@@ -386,7 +380,7 @@ ok('boss shield wave: a wave of shields rolls down the chain; cells in it cannot
   }
   assert.ok(maxWave >= 2 && maxWave <= 4, 'a short wave: ' + maxWave); assert.ok(seen.size > 8, 'it travels down the snake: ' + seen.size);
   assert.ok(sn.segs.every(q => q.i > 0 || !q.wave), 'never on the face');
-  bringNear(g, 120); const cell = sn.segs[5]; const hp0 = cell.hp; g.bullets.push({ x: cell.x, y: cell.y, vx: 0, vy: -1, dmg: 500, crit: false, pierce: 0, r: 6, life: 1, hit: [], kind: 'pill', home: 0, splash: 0, slow: 0 });
+  bringNear(g, 170); const cell = sn.segs[5]; const hp0 = cell.hp; g.bullets.push({ x: cell.x, y: cell.y, vx: 0, vy: -1, dmg: 500, crit: false, pierce: 0, r: 6, life: 1, hit: [], kind: 'pill', home: 0, splash: 0, slow: 0 });
   const waveOn = (t) => { for (let i = 0; i < 60 * 8; i++) { sim.step(g, 1 / 60, {}); if (sn.segs[5] && sn.segs[5].wave) return true; } return false; };
   assert.ok(waveOn(), 'the wave reaches cell 5');
   { const c5 = sn.segs[5]; g.bullets.length = 0; g.bullets.push({ x: c5.x, y: c5.y, vx: 0, vy: -1, dmg: 500, crit: false, pierce: 0, r: 6, life: 1, hit: [], kind: 'pill', home: 0, splash: 0, slow: 0 }); const hpIn = c5.hp; sim.step(g, 1 / 60, {}); assert.equal(c5.hp, hpIn, 'a shielded cell takes no damage'); }
@@ -577,7 +571,7 @@ ok('hard mode: tougher cells, double coins, its own first-clear reward', () => {
 ok('revive: costs Sparkles, restores HP and knocks the snake back, at most three times', () => {
   const g = sim.createGame({ seed: 4 }); g.p.hp = 1; g.snakes[0].breach = true; 
   g.phase = 'dead'; const face0 = g.snakes[0].segs[0].ps;
-  assert.ok(sim.reviveGame(g)); assert.equal(g.phase, 'play'); assert.ok(g.p.hp > 10 && g.snakes[0].segs[0].ps < face0 - 400 && !g.snakes[0].breach);
+  assert.ok(sim.reviveGame(g)); assert.equal(g.phase, 'play'); assert.ok(g.snakes[0].segs[0].ps < face0 - 400 && !g.snakes[0].breach);
   for (let i = 0; i < 2; i++) { g.phase = 'dead'; assert.ok(sim.reviveGame(g)); } g.phase = 'dead'; assert.ok(!sim.reviveGame(g), 'three is the limit');
   assert.ok(sim.reviveCost(1) > sim.reviveCost(0));
 });

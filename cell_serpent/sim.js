@@ -9,8 +9,8 @@
 // Between runs you spend Beats and Sparkles on stats, loot boxes and skill levels (meta section).
 export const W = 720;
 export const H = 1280;
-export const LINE_Y = 1190;   // the membrane at the bottom
-export const ROW_Y = 1090;    // the cell's row
+export const LINE_Y = 1055;   // the membrane at the bottom
+export const ROW_Y = 1170;    // the cell's row
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
@@ -283,8 +283,8 @@ export const PASSIVES = [
   { id: 'power', name: 'Loud Vocals', max: 8, w: 0.9, vals: [8, 12, 18, 28, 42, 65], cap: 300, fmt: v => '+' + v + '% damage for every skill', desc: '+20% damage for every skill', apply: () => {} },
   { id: 'haste', name: 'Tempo Up', max: 8, w: 0.9, vals: [5, 7, 10, 15, 20, 28], cap: 50, fmt: v => 'Every skill recharges ' + v + '% faster', desc: 'Every skill recharges 10% faster', apply: () => {} },
   { id: 'crit', name: 'Perfect Pitch', max: 8, w: 0.7, vals: [3, 4, 6, 9, 13, 18], cap: 40, fmt: v => '+' + v + '% crit chance', desc: '+8% crit chance for the capsule and needles', apply: (p, v) => { p.crit += v / 100; } },
-  { id: 'vital', name: 'Warm Up', max: 8, w: 0.7, vals: [20, 30, 45, 70, 100, 150], cap: 99999, fmt: v => '+' + v + ' max HP and heal ' + v, desc: '+30 max HP and heal 30', apply: (p, v) => { p.maxHp += v; p.hp = Math.min(p.maxHp, p.hp + v); } },
-  { id: 'guard', name: 'Ear Plugs', max: 6, w: 0.6, vals: [15, 22, 30, 40, 50, 60], cap: 60, fmt: v => 'Breaches hurt ' + v + '% less', desc: 'Breaches hurt 15% less', apply: (p, v) => { p.guard = Math.min(0.8, p.guard + v / 100); } },
+  { id: 'vital', name: 'Calm Down', max: 8, w: 0.7, vals: [20, 30, 45, 70, 100, 150], cap: 200, fmt: v => 'The snake crawls ' + Math.round(v / 4) + '% slower', desc: 'The snake crawls 5% slower', apply: (p, v) => { p.slow = Math.min(0.5, p.slow + v / 400); } },
+  { id: 'guard', name: 'Door Stopper', max: 6, w: 0.6, vals: [15, 22, 30, 40, 50, 60], cap: 600, fmt: v => 'Pushes the snake back ' + v * 6 + ' px', desc: 'Pushes the snake back 90 px', apply: (p, v, g) => { if (g) knockBack(g, v * 6); } },
   { id: 'speed', name: 'Dance Shoes', max: 6, w: 0.6, vals: [6, 9, 13, 18, 25, 35], cap: 60, fmt: v => '+' + v + '% move speed', desc: '+12% move speed', apply: (p, v) => { p.speed *= 1 + v / 100; } },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
@@ -297,7 +297,7 @@ export const META = [
   { id: 'atk', name: 'Volume', max: 12, base: 30, grow: 1.45, desc: l => `+${10 * l}% damage` },
   { id: 'crt', name: 'Pitch', max: 10, base: 30, grow: 1.45, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
   { id: 'cdn', name: 'Tempo', max: 10, base: 30, grow: 1.45, desc: l => `-${5 * l}% cooldowns` },
-  { id: 'vit', name: 'Stamina', max: 10, base: 25, grow: 1.45, desc: l => `+${12 * l} max HP` },
+  { id: 'vit', name: 'Stamina', max: 10, base: 25, grow: 1.45, desc: l => `The snake crawls ${2 * l}% slower` },
   { id: 'for', name: 'Fame', max: 10, base: 40, grow: 1.5, desc: l => `+${10 * l}% Beats` },
   { id: 'rev', name: 'Encore', max: 1, base: 400, grow: 1, desc: () => 'Get back up once per run' },
 ];
@@ -558,7 +558,7 @@ export function applyResult(save, r) {
 export const isBossStage = n => n % 5 === 0;
 export const hpBase = n => 12 * (26 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
 export const snakeLength = n => Math.min(150, 32 + 4 * (n - 1) + (isBossStage(n) ? 12 : 0));
-export const arrivalTime = n => 1.5 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) + (isBossStage(n) ? 36 : 0);   // seconds for the face to reach the membrane if you do nothing
+export const arrivalTime = n => 1.35 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) + (isBossStage(n) ? 36 : 0);   // seconds for the face to reach the membrane if you do nothing
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
 export const SKINS = ['love', 'rust', 'sneezy', 'grumpy', 'sleepy', 'disco', 'sour', 'mighty', 'frosty', 'gloomy'];
 export const skinFor = n => SKINS[(n - 1) % SKINS.length];
@@ -638,9 +638,8 @@ export function pointAt(path, s) {
 const mergeBonus = (a, b) => { const o = { ...a }; for (const k of Object.keys(b)) o[k] = (o[k] || 0) + b[k]; return o; };
 export function makePlayer(metaLv, pb, equip) {
   const m = id => (metaLv && metaLv[id]) || 0, b = Object.assign({ atk: 0, vit: 0, coin: 0, guard: 0, crit: 0, cdn: 0, speed: 0 }, pb || {}), eq = id => (equip && equip.includes(id) ? 1 : 0);
-  const maxHp = 100 + 12 * m('vit') + b.vit;
   return {
-    x: W / 2, y: ROW_Y, r: 16, kx: 0, maxHp, hp: maxHp, speed: 300 * (1 + 0.15 * eq('hamster')) * (1 + b.speed), guard: Math.min(0.5, b.guard),
+    x: W / 2, y: ROW_Y, r: 16, kx: 0, slow: Math.min(0.45, 0.02 * m('vit') + (b.vit / 12) * 0.02 + b.guard * 0.5), speed: 300 * (1 + 0.15 * eq('hamster')) * (1 + b.speed),
     atk: 1 + 0.10 * m('atk') + b.atk, crit: 0.05 + 0.02 * m('crt') + b.crit, critMul: 2.5 + 0.08 * m('crt'), cdBase: Math.max(0.4, 1 - 0.05 * m('cdn') - b.cdn),
     rate: 2.0, bspeed: 900,
     coinMul: 1 + 0.1 * m('for') + b.coin + 0.1 * eq('piglet'), revive: m('rev') > 0 ? 1 : 0,
@@ -780,8 +779,8 @@ function petTick(g, dt) {
     const t = (g.petT[id] = (g.petT[id] || 0) + dt), n = st(id);
     if (id === 'kitten' && t > 20 - 2 * n) { g.petT[id] = 0; for (const w of Object.values(g.weap)) w.cd = 0; g.events.push({ t: 'pet', id }); }
     else if (id === 'puppy' && t > 11) { g.petT[id] = 0; const all = g.snakes.flatMap(sn => sn.segs).filter(q => visible(q) && !q.shield && q.hp > 0).sort((a, b) => b.y - a.y).slice(0, 2 + (n >= 3 ? 1 : 0)); for (const q of all) damageSegAs('puppy', g, q, dmgMul(g) * (3 + n), false, q.x, q.y); g.events.push({ t: 'pet', id }); }
-    else if (id === 'lamb' && t > 24 - 2 * n) { g.petT[id] = 0; p.shield = Math.max(p.shield, 3); g.events.push({ t: 'pet', id }); }
-    else if (id === 'turtle' && t > 10) { g.petT[id] = 0; p.hp = Math.min(p.maxHp, p.hp + p.maxHp * (0.03 + 0.01 * n)); g.events.push({ t: 'pet', id }); }
+    else if (id === 'lamb' && t > 24 - 2 * n) { g.petT[id] = 0; knockBack(g, 60 + 15 * n); g.events.push({ t: 'pet', id }); }
+    else if (id === 'turtle' && t > 10) { g.petT[id] = 0; for (const sn of g.snakes) sn.slow = Math.max(sn.slow, 2 + 0.5 * n); g.events.push({ t: 'pet', id }); }
   }
 }
 function onKill(g, s, sn) {
@@ -800,7 +799,6 @@ function onKill(g, s, sn) {
     const R = 150;
     g.events.push({ t: 'boom', x: s.x, y: s.y, r: R });
     for (const o of g.snakes) for (const q of o.segs) if (q !== s && q.hp > 0 && Math.hypot(q.x - s.x, q.y - s.y) < R + q.r) damageSeg(g, q, Math.max(2, s.max * 0.9), false, q.x, q.y);
-    if (Math.hypot(g.p.x - s.x, g.p.y - s.y) < R) hurtPlayer(g, 14, s.x, s.y);
   }
 }
 
@@ -822,44 +820,26 @@ function reap(g) {
   }
 }
 
-function hurtPlayer(g, dmg, fx, fy) {
+// The face reached the line: the run is over (unless an Encore saves it).
+const knockBack = (g, px) => { for (const sn of g.snakes) { sn.tail -= px; for (const q of sn.segs) { q.ps -= px; if (q.tp !== undefined) q.tp -= px; } sn.breach = false; } };
+function loseRun(g) {
   const p = g.p;
-  if (p.iframes > 0 || g.phase === 'dead') return;
-  if (p.shield > 0) { p.iframes = 0.3; g.events.push({ t: 'block', x: p.x, y: p.y }); return; }
-  p.hp -= dmg; p.iframes = 0.9;
-  p.kx = (p.x >= fx ? 1 : -1) * 420;
-  g.combo = 0;
-  g.events.push({ t: 'hurt', x: p.x, y: p.y, d: dmg });
-  if (p.hp <= 0) {
-    if (p.revive > 0 && !g.revived) {
-      g.revived = true; p.revive = 0; p.hp = Math.round(p.maxHp * 0.5); p.iframes = 2.2;
-      g.events.push({ t: 'revive' });
-    } else { p.hp = 0; g.phase = 'dead'; g.result = makeResult(g, false); g.events.push({ t: 'dead' }); }
-  }
+  if (g.phase === 'dead') return;
+  if (p.revive > 0 && !g.revived) { g.revived = true; p.revive = 0; knockBack(g, 520); g.events.push({ t: 'revive' }); return; }
+  g.phase = 'dead'; g.result = makeResult(g, false); g.events.push({ t: 'dead' });
 }
 export const reviveCost = used => 10 * (used + 1);
 // Revive: back up with half HP and the whole snake knocked back.
 export function reviveGame(g) {
   if (g.phase !== 'dead' || g.revivesLeft < 1) return false;
   g.revivesLeft--; g.revivesUsed++; g.phase = 'play'; g.result = null;
-  g.p.hp = Math.round(g.p.maxHp * 0.6); g.p.iframes = 3;
-  for (const sn of g.snakes) { sn.tail -= 520; for (const q of sn.segs) q.ps -= 520; sn.breach = false; sn.breachT = 0; }
+  knockBack(g, 520);
   g.events.push({ t: 'revive' });
   return true;
 }
 function makeResult(g, won) {
   return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
 }
-// the face has reached the membrane and is chewing through it: HP drains until you finish the cells
-// behind it (each kill pushes the face back off the membrane)
-function breachTick(g, sn) {
-  const dmg = (4 + g.stage * 0.4) * (1 - Math.min(0.6, g.p.guard)), p = g.p, keep = p.iframes;
-  p.iframes = 0; g.leaks++;
-  g.events.push({ t: 'leak', x: sn.segs[0].x, y: LINE_Y, d: dmg });
-  hurtPlayer(g, dmg, sn.segs[0].x, LINE_Y - 80);
-  p.iframes = Math.max(keep, 0);
-}
-
 // ---------------------------------------------------------------- skill picks
 // what an upgrade does now and after this pick, so every pick is visible in numbers
 const STAT_NAME = { aspd: 'Attack speed', notes: 'Notes per shot', burst: 'Bursts per shot', cdmg: 'Capsule damage' };
@@ -927,7 +907,7 @@ export function reroll(g) {
 }
 function rebuildTowers(g) {
   const L = lv(g, 'tower'), n = L ? 1 + (L >= 3 ? 1 : 0) + (L >= 5 ? 1 : 0) : 0;
-  const offs = [[-150, -40], [150, -40], [0, -150]], p = g.p;
+  const offs = [[-150, -190], [150, -190], [0, -300]], p = g.p;
   g.towers = Array.from({ length: n }, (_, i) => ({ x: p.x + offs[i][0], y: p.y + offs[i][1], cd: 0.8 + i * 0.4, pulse: 0 }));
 }
 export function choose(g, idx) {
@@ -939,7 +919,7 @@ export function choose(g, idx) {
     const w = g.weap[c.id] || (g.weap[c.id] = { lv: 0, cd: 0.5 });
     w.lv = Math.min(WEAPON[c.id].max, w.lv + gain);
     if (c.id === 'tower') rebuildTowers(g);
-  } else if (c.kind === 'passive') { const cur = uv(g, c.id); PASSIVE[c.id].apply(g.p, gain); g.val[c.id] = cur + gain; g.ups[c.id] = (g.ups[c.id] || 0) + 1; }
+  } else if (c.kind === 'passive') { const cur = uv(g, c.id); PASSIVE[c.id].apply(g.p, gain, g); g.val[c.id] = cur + gain; g.ups[c.id] = (g.ups[c.id] || 0) + 1; }
   else { g.val[c.id] = uv(g, c.id) + gain; g.ups[c.id] = (g.ups[c.id] || 0) + 1; }
   g.pending--; g.level++;
   g.events.push({ t: 'upgrade', id: c.id, kind: c.kind, rarity: c.rarity || 0 });
@@ -948,8 +928,8 @@ export function choose(g, idx) {
 }
 function collect(g, pk) {
   const p = g.p;
-  if (pk.kind === 'heal') { p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.3)); g.events.push({ t: 'power', kind: 'heal', x: pk.x, y: pk.y }); return; }
-  if (pk.kind === 'shield') { p.shield = 6; g.events.push({ t: 'power', kind: 'shield', x: pk.x, y: pk.y }); return; }
+  if (pk.kind === 'heal') { for (const sn of g.snakes) sn.slow = Math.max(sn.slow, 5); g.events.push({ t: 'power', kind: 'heal', x: pk.x, y: pk.y }); return; }   // a hush: the snake crawls for a while
+  if (pk.kind === 'shield') { knockBack(g, 200); g.events.push({ t: 'power', kind: 'shield', x: pk.x, y: pk.y }); return; }   // a wall of sound pushes it back
   if (pk.kind === 'rage') { p.rage = 8; g.events.push({ t: 'power', kind: 'rage', x: pk.x, y: pk.y }); return; }
   if (pk.kind === 'chest') {   // chests give Beats and a skill fragment, never a skill pick
     const id = randomFragment(g);
@@ -1092,12 +1072,12 @@ function updateWeapons(g, dt, canFire) {
 }
 export function daggerPos(g, i) {
   const dl = lv(g, 'daggers'), p = g.p, a = p.orbAng + (i / Math.max(1, 1 + dl)) * TAU, R = 92 + 8 * dl;
-  return { x: p.x + Math.cos(a) * R, y: p.y + Math.sin(a) * R, a };
+  return { x: p.x + Math.cos(a) * R, y: p.y - 150 + Math.sin(a) * R, a };   // they circle a post just above the line
 }
 export function stickSeg(g, k = 0) {
-  const sl = lv(g, 'stick'), p = g.p, len = 150 + 12 * sl;
+  const sl = lv(g, 'stick'), p = g.p, len = 190 + 14 * sl;
   const a = -Math.PI / 2 + Math.sin(g.t * 2.2 + k * Math.PI) * 1.15;
-  return { x0: p.x, y0: p.y, x1: p.x + Math.cos(a) * len, y1: p.y + Math.sin(a) * len, a, len };
+  return { x0: p.x, y0: p.y - 80, x1: p.x + Math.cos(a) * len, y1: p.y - 80 + Math.sin(a) * len, a, len };
 }
 function distToSeg(px, py, x0, y0, x1, y1) {
   const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy || 1;
@@ -1133,7 +1113,7 @@ export function step(g, dt, input) {
       else if (sn.surge === 'warn' && sn.surgeT <= 0) { sn.surge = 'go'; sn.surgeT = 1.1; g.events.push({ t: 'surge' }); }
       else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.surgeT = (sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5); }
     }
-    const v = sn.speed * (sn.slow > 0 ? 0.55 : 1) * (sn.surge === 'go' ? 2.6 : 1) * (g.phase === 'clear' ? 0 : 1);
+    const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? 0.55 : 1) * (sn.surge === 'go' ? 2.6 : 1) * (g.phase === 'clear' ? 0 : 1);
     const segs = sn.segs, last = segs.length - 1;
     let total = 0;
     for (let i = 0; i < last; i++) total += spacing(segs[i], segs[i + 1]);
@@ -1149,7 +1129,7 @@ export function step(g, dt, input) {
     // boss: a wave of shields rolls down the chain like a beat. Cells inside it cannot be hit, so time your shots.
     const wavePos = sn.boss ? (g.t * 4.5) % (segs.length + 8) : -99;
     for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && Math.abs(i - wavePos) < 1.6;
-    if (sn.breach && g.phase === 'play') { sn.breachT -= dt; if (sn.breachT <= 0) { sn.breachT = 0.5; breachTick(g, sn); } } else sn.breachT = 0;
+    if (sn.breach && g.phase === 'play') { g.leaks++; g.events.push({ t: 'leak', x: segs[0].x, y: LINE_Y }); loseRun(g); }
     for (const s of segs) {
       const ox = s.x, oy = s.y;
       s.ps = s.tp >= s.ps ? s.tp : Math.max(s.tp, s.ps - 320 * dt);
@@ -1159,7 +1139,6 @@ export function step(g, dt, input) {
       stageHp += Math.max(0, s.hp);
       if (s.flash > 0) s.flash -= dt;
       if (s.orbCd > 0) s.orbCd -= dt;
-      if (s.hp > 0 && Math.hypot(s.x - p.x, s.y - p.y) < s.r + p.r * 0.75) hurtPlayer(g, 9 + g.stage * 0.5, s.x, s.y);
     }
   }
   g.stageHp = stageHp;
