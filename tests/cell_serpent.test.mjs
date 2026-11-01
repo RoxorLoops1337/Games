@@ -708,4 +708,20 @@ ok('stars, star bonuses, login streak, claim-all helpers, hatch all, backup code
   const day = 20200, v = sim.defaultSave(); sim.addRunStats(v, day, { bombs: 4, won: true, boss: true, starsGained: 3 }); assert.deepEqual([v.daily.progress.bombs, v.daily.progress.bosses, v.daily.progress.starsEarned], [4, 1, 3]);
 });
 
+ok('a yellow cell caught in a bomb blast still gives its upgrade, even when it sits in front of the bomb', () => {
+  const g = sim.createGame({ seed: 5 }); const sn = g.snakes[0];
+  for (const q of sn.segs) { if (q.kind === 'upgrade') q.kind = 'normal'; q.carry = null; }
+  const yellow = sn.segs[4], bomb = sn.segs[5];
+  yellow.kind = 'upgrade'; yellow.hp = 1; yellow.max = 1; bomb.kind = 'bomb'; bomb.hp = 0; bomb.max = 10; g.upgradeLeft = 1;
+  sim.step(g, 1 / 60, {});
+  assert.ok(!sn.segs.includes(yellow), 'the blast killed it');
+  assert.equal(g.phase, 'levelup', 'and the upgrade prompt appears'); assert.equal(g.upgradeLeft, 0);
+});
+
+ok('bombs are rare and never sit next to each other', () => {
+  let bombs = 0, cells = 0;
+  for (let seed = 1; seed <= 20; seed++) for (const stage of [3, 9, 20]) { const sn = sim.createGame({ seed, stage }).snakes[0]; sn.segs.forEach((q, i) => { cells++; if (q.kind === 'bomb') { bombs++; assert.notEqual(sn.segs[i - 1] && sn.segs[i - 1].kind, 'bomb', 'no two bombs in a row'); } }); }
+  assert.ok(bombs / cells < 0.08, 'bombs are ' + (bombs / cells));
+});
+
 console.log(`cell_serpent: ${n} groups passed`);
