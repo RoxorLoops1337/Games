@@ -80,6 +80,7 @@ const GAME_SUITES = {
   midnight_mog: ['test:midnightmog'],
   drop_the_bass: ['test:dropbass'],
   pitch_story: ['test:pitchstory'],
+  groove_lock: ['test:groovelock'],
 };
 
 // Folders the site serves that have no test suite: a change there only needs
@@ -88,7 +89,7 @@ const NO_SUITE = [
   'Carnegiendon', 'DhauwieSurvival', 'beatbox_story', 'carmanager', 'chase_hq',
   'crypto', 'cutie_merge', 'decktest', 'evolve_and_conquer', 'gamedevloop',
   'mazekeep', 'messenger', 'night_shift', 'pitchdeck', 'ralpherizer',
-  'roblox_obby', 'thieu_excuses_app', 'tower-defense-sprites', 'verb_collector',
+  'roblox_obby', 'thieu_excuses_app', 'tower-defense-sprites',
 ];
 
 const FUNCTION_SUITES = {
