@@ -8,7 +8,7 @@ const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) +
 
 export function createRenderer(canvas, art, kit) {
   const ctx = canvas.getContext('2d');
-  const S = { particles: [], floats: [], rings: [], trauma: 0, flash: 0, flashCol: '#fff', banner: null, t: 0, specks: [], hurtT: 0, popped: 0, lastShot: -9, bolts: [] };
+  const S = { particles: [], floats: [], rings: [], trauma: 0, flash: 0, flashCol: '#fff', banner: null, t: 0, specks: [], hurtT: 0, popped: 0, lastShot: -9, bolts: [], warn: 0 };
   for (let i = 0; i < 26; i++) S.specks.push({ i, x: Math.random() * W, y: Math.random() * H, r: 26 + Math.random() * 70, v: 4 + Math.random() * 10, a: Math.random() * TAU });
   S.petals = [];
   for (let i = 0; i < 22; i++) S.petals.push({ x: Math.random() * W, y: Math.random() * H, s: 6 + Math.random() * 7, v: 18 + Math.random() * 26, a: Math.random() * TAU, rot: 0.4 + Math.random(), c: i % 3 ? '#ff9ac6' : '#ffe0ee' });
@@ -62,7 +62,7 @@ export function createRenderer(canvas, art, kit) {
       case 'kill': {
         const SKC = { purple: ['#b7a2ff', '#6a4cd6', '#fff'], mint: ['#9af0c8', '#2fae78', '#fff'], sun: ['#ffd08a', '#d9791e', '#fff'], sky: ['#a8dcff', '#3d8fd6', '#fff'] };
         const sk = SKC[e.skin] || ['#ff9ad6', '#e0489d', '#fff'];
-        burst(e.x, e.y, e.head ? 40 : 14, e.kind === 'minion' ? ['#9dff6d', '#fff', '#39f0ff'] : sk, e.head ? 360 : 240, 0.7, 6);
+        burst(e.x, e.y, e.head ? 40 : 14, sk, e.head ? 360 : 240, 0.7, 6);
         ring(e.x, e.y, e.r * 2.4, '#fff', 0.35);
         if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); }
         break;
@@ -81,9 +81,10 @@ export function createRenderer(canvas, art, kit) {
       case 'power': ring(e.x, e.y, 60, e.kind === 'heal' ? '#ff6a8a' : e.kind === 'shield' ? '#39d0ff' : '#ffd24a', 0.5); addFloat(g.p.x, g.p.y - 60, e.kind === 'heal' ? 'HEAL' : e.kind === 'shield' ? 'SHIELD' : 'RAGE', '#fff', 26, -60); break;
       case 'coin': if (S.floats.length < 40) addFloat(g.p.x + 20, g.p.y - 40, '+' + Math.max(1, Math.round(e.v * g.p.coinMul)), '#ffd24a', 15, -50); break;
       case 'levelup': S.flash = 0.4; S.flashCol = '#9dff6d'; ring(g.p.x, g.p.y, 220, '#9dff6d', 0.6); break;
-      case 'stage': S.banner = { text: e.boss ? 'BOSS' : 'CHAPTER ' + e.n, sub: e.name || '', t: 0, dur: 2.0, boss: e.boss }; if (e.boss) S.trauma = 0.6; break;
-      case 'clear': S.banner = { text: 'CHAPTER CLEAR', sub: '+' + e.bonus + ' coins', t: 0, dur: 2.2, clear: true }; break;
-      case 'roar': S.trauma = Math.min(1, S.trauma + 0.35); break;
+      case 'stage': S.banner = { text: e.boss ? 'BOSS' : 'STAGE ' + e.n, sub: e.name || '', t: 0, dur: 2.0, boss: e.boss }; if (e.boss) S.trauma = 0.6; break;
+      case 'clear': S.banner = { text: 'STAGE CLEAR', sub: '+' + e.bonus + ' Beats', t: 0, dur: 2.2, clear: true }; break;
+      case 'surgewarn': S.warn = 0.7; break;
+      case 'surge': S.warn = 0; S.trauma = Math.min(1, S.trauma + 0.3); break;
       case 'revive': S.flash = 0.6; S.flashCol = '#fff'; ring(g.p.x, g.p.y, 300, '#fff', 0.8); break;
       case 'shoot': S.lastShot = S.t; break;
       case 'dead': S.trauma = 1; burst(g.p.x, g.p.y, 50, ['#fff', '#ff6a8a', '#39f0ff'], 420, 1, 7); break;
@@ -145,7 +146,7 @@ export function createRenderer(canvas, art, kit) {
         continue;
       }
       const bob = 1 + Math.sin(S.t * 6 - i * 0.5) * 0.03;
-      const upright = s.kind === 'armor' || s.kind === 'bomb' || s.kind === 'spitter';
+      const upright = s.kind === 'armor' || s.kind === 'bomb';
       if (s.kind === 'bomb') { const pulse = 0.5 + Math.sin(S.t * 9 + i) * 0.5; glow(s.x, s.y, r * 1.8, '#ff3b5c', 0.15 + pulse * 0.25); }
       if (s.kind === 'gold') glow(s.x, s.y, r * 1.9, '#ffd24a', 0.35);
       const spr = kit && kit.SPR.body(sn.skin, sn.boss, s.kind === 'normal' ? '' : s.kind);
@@ -162,15 +163,6 @@ export function createRenderer(canvas, art, kit) {
     if (sn.slow > 0) { const h = segs[0]; glow(h.x, h.y, h.r * 2, '#7fe8ff', 0.3); }
   }
   function sparkleAt(x, y, r) { if (kit) { ctx.save(); ctx.translate(x, y); ctx.scale(r / 20, r / 20); kit.sparkle(ctx, 0, 0, 20); ctx.restore(); } }
-
-  function drawMinion(m) {
-    const bob = Math.sin(S.t * 8 + m.ph) * 3, size = m.r * 6.4;
-    ctx.save(); ctx.globalAlpha = 0.3; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(m.x, m.y + m.r * 1.1, m.r * 0.9, m.r * 0.3, 0, 0, TAU); ctx.fill(); ctx.restore();
-    const spr = kit && kit.SPR.minion(m.type.art), rot = Math.sin(S.t * 5 + m.ph) * 0.08;
-    if (spr) { blit(spr, m.x, m.y + bob, size, rot, m.vx < -5); if (m.flash > 0) flashBlit(spr, m.x, m.y + bob, size, rot, m.flash * 5); }
-    else { ctx.fillStyle = '#9dff6d'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, TAU); ctx.fill(); ctx.stroke(); }
-    text(num(m.hp), m.x, m.y + m.r * 1.25, 14, '#fff', INK);
-  }
 
   function drawPickup(pk) {
     const k = pk.kind, bob = Math.sin(S.t * 6 + pk.x) * 2;
@@ -215,12 +207,6 @@ export function createRenderer(canvas, art, kit) {
       const spr = kit && kit.SPR.note(b.crit);
       if (spr) blit(spr, b.x, b.y, b.crit ? 104 : 84, S.t * 6 + b.x * 0.05);
       else { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, TAU); ctx.fill(); }
-    }
-    for (const b of g.ebullets) {
-      glow(b.x, b.y, b.r * 2.6, '#7dff5e', 0.5);
-      const spr = kit && kit.SPR.acid();
-      if (spr) blit(spr, b.x, b.y, b.r * 4.6, Math.sin(S.t * 8 + b.x) * 0.3);
-      else { ctx.fillStyle = '#7dff5e'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill(); }
     }
   }
 
@@ -291,7 +277,7 @@ export function createRenderer(canvas, art, kit) {
     text((g.nextUp - g.cells) + ' cells', pad, 56, 20, '#fff', '#0b1020', 'left');
     // chapter, virus name, and progress with chests at 25% / 50% / 100%
     const boss = isBossStage(g.stage);
-    text(boss ? 'BOSS  ' + g.stage : 'CHAPTER ' + g.stage, W / 2, 34, 26, boss ? '#ff7a9a' : '#fff');
+    text(boss ? 'BOSS  ' + g.stage : 'STAGE ' + g.stage, W / 2, 34, 26, boss ? '#ff7a9a' : '#fff');
     text(virusName(g.stage), W / 2, 62, 17, '#ffd0e6');
     const bw = 400, bx = W / 2 - bw / 2, by = 84;
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(bx - 3, by - 3, bw + 6, 20);
@@ -344,12 +330,16 @@ export function createRenderer(canvas, art, kit) {
     ctx.save(); ctx.translate((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh);
     for (const pk of g.pickups) drawPickup(pk);
     for (const sn of g.snakes) drawSnake(g, sn);
-    for (const m of g.minions) drawMinion(m);
     drawWeapons(g);
     if (g.phase !== 'dead') drawPlayer(g);
     drawBullets(g);
     drawFx(dt);
     ctx.restore();
+    if (S.warn > 0) {   // the virus is about to surge
+      S.warn -= dt; const a = 0.25 + 0.2 * Math.sin(S.t * 30);
+      const gr = ctx.createLinearGradient(0, 0, 0, 260); gr.addColorStop(0, `rgba(255,40,80,${a})`); gr.addColorStop(1, 'rgba(255,40,80,0)');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, W, 260); text('SURGE!', W / 2, 170, 54, '#ff5a78');
+    }
     if (S.flash > 0) { ctx.save(); ctx.globalAlpha = S.flash * 0.5; ctx.fillStyle = S.flashCol; ctx.fillRect(0, 0, W, H); ctx.restore(); }
     // low-hp vignette
     if (g.p.hp / g.p.maxHp < 0.3 && g.phase !== 'dead') { const a = 0.18 + Math.sin(S.t * 6) * 0.08; const gr = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.7); gr.addColorStop(0, 'rgba(255,0,40,0)'); gr.addColorStop(1, `rgba(255,0,40,${a})`); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H); }

@@ -196,14 +196,26 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   };
 
   // ---- pickups ----
+  function PICK_CHEST(g, body, bodySh, lid, lidSh, band) {
+    const r = B * 0.85;
+    cel(g, body, poly([[-r, -r * 0.2], [r, -r * 0.2], [r, r * 0.8], [-r, r * 0.8]]), { r, shadow: bodySh, lw: 3, hi: false });
+    cel(g, lid, poly([[-r, -r * 0.2], [-r * 0.9, -r * 0.8], [r * 0.9, -r * 0.8], [r, -r * 0.2]]), { r, shadow: lidSh, lw: 3, hi: false });
+    g.fillStyle = band; g.fillRect(-r * 0.12, -r * 0.8, r * 0.24, r * 1.6); ink(g, 2); g.strokeRect(-r * 0.12, -r * 0.8, r * 0.24, r * 1.6);
+    cel(g, '#fff1a8', circ(0, r * 0.12, r * 0.22), { r: r * 0.22, shadow: '#e0a82a', lw: 2.4, hi: false }); sparkle(g, r * 0.7, -r * 0.95, r * 0.3);
+  }
   const PICK = {
     gem: g => { const r = B * 0.7; cel(g, '#39f0ff', poly([[0, -r], [r * 0.75, -r * 0.1], [0, r], [-r * 0.75, -r * 0.1]]), { r, shadow: '#1b9ccf', lw: 3 }); line(g, [[-r * 0.75, -r * 0.1], [r * 0.75, -r * 0.1]], 2.2, '#1b9ccf'); sparkle(g, r * 0.2, -r * 0.4, r * 0.28); },
-    coin: g => { const r = B * 0.7; cel(g, '#ffd84d', circ(0, 0, r), { r, shadow: '#d49a1e' }); g.strokeStyle = '#d49a1e'; g.lineWidth = r * 0.12; circ(0, 0, r * 0.66)(g); g.stroke(); cel(g, '#fff1a8', star(5, r * 0.42, r * 0.18, -Math.PI / 2), { r: r * 0.4, hi: false, lw: 1.6, shadow: '#e0a82a' }); },
-    chest: g => { const r = B * 0.85;
-      cel(g, '#c9803c', poly([[-r, -r * 0.2], [r, -r * 0.2], [r, r * 0.8], [-r, r * 0.8]]), { r, shadow: '#8c4f22', lw: 3, hi: false });
-      cel(g, '#e09a52', poly([[-r, -r * 0.2], [-r * 0.9, -r * 0.8], [r * 0.9, -r * 0.8], [r, -r * 0.2]]), { r, shadow: '#a8622b', lw: 3, hi: false });
-      g.fillStyle = '#ffd84d'; g.fillRect(-r * 0.12, -r * 0.8, r * 0.24, r * 1.6); ink(g, 2); g.strokeRect(-r * 0.12, -r * 0.8, r * 0.24, r * 1.6);
-      cel(g, '#fff1a8', circ(0, r * 0.12, r * 0.22), { r: r * 0.22, shadow: '#e0a82a', lw: 2.4, hi: false }); sparkle(g, r * 0.7, -r * 0.95, r * 0.3); },
+    coin: g => { const r = B * 0.7; cel(g, '#ffd84d', circ(0, 0, r), { r, shadow: '#d49a1e' }); g.strokeStyle = '#d49a1e'; g.lineWidth = r * 0.12; circ(0, 0, r * 0.66)(g); g.stroke();
+      // a music note: Beats
+      line(g, [[r * 0.18, r * 0.2], [r * 0.18, -r * 0.45]], r * 0.2); line(g, [[r * 0.18, r * 0.2], [r * 0.18, -r * 0.45]], r * 0.1, '#b9760f');
+      g.beginPath(); g.moveTo(r * 0.18, -r * 0.45); g.quadraticCurveTo(r * 0.55, -r * 0.35, r * 0.42, -r * 0.05); ink(g, r * 0.2); g.stroke(); ink(g, r * 0.1, '#b9760f'); g.stroke();
+      cel(g, '#b9760f', ell(-r * 0.08, r * 0.22, r * 0.3, r * 0.22, -0.4), { r: r * 0.3, hi: false, lw: 2, shadow: '#7a4a08' }); },
+    // Sparkles: a pink four-point star gem
+    spark: g => { const r = B * 0.85; cel(g, '#ff7eb6', star(4, r, r * 0.38, 0), { r, shadow: '#c93a8f', lw: 3.2 });
+      cel(g, '#ffc2dc', star(4, r * 0.5, r * 0.2, 0), { r: r * 0.5, hi: false, lw: 1.8, shadow: '#ff9ac6' }); sparkle(g, r * 0.5, -r * 0.5, r * 0.25); },
+    boxbeat: g => PICK_CHEST(g, '#c9803c', '#8c4f22', '#e09a52', '#a8622b', '#ffd84d'),
+    boxspark: g => PICK_CHEST(g, '#a070f0', '#6a3fc4', '#c49aff', '#8a5ae0', '#ff7eb6'),
+    chest: g => PICK_CHEST(g, '#c9803c', '#8c4f22', '#e09a52', '#a8622b', '#ffd84d'),
     heal: g => { const r = B * 0.8; const path = gg => { gg.beginPath(); gg.moveTo(0, r * 0.85); gg.bezierCurveTo(-r * 1.4, -r * 0.1, -r * 0.7, -r * 1.0, 0, -r * 0.35); gg.bezierCurveTo(r * 0.7, -r * 1.0, r * 1.4, -r * 0.1, 0, r * 0.85); gg.closePath(); };
       cel(g, '#ff5a7e', path, { r, shadow: '#c42a54', hy: -r * 0.2 }); g.fillStyle = '#fff8ec'; g.fillRect(-r * 0.1, -r * 0.3, r * 0.2, r * 0.6); g.fillRect(-r * 0.3, -r * 0.1, r * 0.6, r * 0.2); },
     shield: g => { const r = B * 0.85, path = gg => { gg.beginPath(); gg.moveTo(-r * 0.8, -r * 0.7); gg.quadraticCurveTo(0, -r * 1.05, r * 0.8, -r * 0.7); gg.lineTo(r * 0.8, -r * 0.05); gg.quadraticCurveTo(r * 0.7, r * 0.7, 0, r); gg.quadraticCurveTo(-r * 0.7, r * 0.7, -r * 0.8, -r * 0.05); gg.closePath(); };
@@ -226,6 +238,15 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     stick: g => { const r = B; line(g, [[-r * 2, 0], [r * 1.6, 0]], r * 0.5); line(g, [[-r * 2, 0], [r * 1.6, 0]], r * 0.32, '#ff9ac6'); line(g, [[-r * 2, -r * 0.05], [r * 1.2, -r * 0.05]], r * 0.07, '#ffd0e6');
       for (const x of [0.5, 1.0, 1.5]) cel(g, '#ffe3f0', circ(r * x, 0, r * 0.3), { r: r * 0.3, shadow: '#ff9ac6', lw: 3, hi: false });
       cel(g, '#ffd84d', circ(-r * 2, 0, r * 0.34), { r: r * 0.34, shadow: '#d49a1e', lw: 3, hi: false }); },
+    dragon: g => { const r = B * 0.8;
+      for (const s of [-1, 1]) cel(g, '#ffd84d', poly([[s * r * 0.35, -r * 0.75], [s * r * 0.8, -r * 1.2], [s * r * 0.85, -r * 0.6]]), { r: r * 0.4, hi: false, lw: 2.4, shadow: '#d49a1e' });
+      cel(g, '#8dff6a', circ(0, 0, r), { r, shadow: '#43b83a' }); eye(g, -r * 0.34, -r * 0.15, r * 0.2, r * 0.26, { iris: '#2d170f' }); eye(g, r * 0.34, -r * 0.15, r * 0.2, r * 0.26, { iris: '#2d170f' });
+      g.fillStyle = '#7a1633'; ell(0, r * 0.42, r * 0.3, r * 0.2)(g); g.fill(); ink(g, 2.4); g.stroke(); g.fillStyle = '#ff9ac0'; ell(0, r * 0.52, r * 0.15, r * 0.1)(g); g.fill(); },
+    bubble: g => { const r = B * 0.95; g.fillStyle = 'rgba(190,235,255,.35)'; circ(0, 0, r)(g); g.fill(); ink(g, 4, '#2d170f'); g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.arc(0, 0, r * 0.66, -2.5, -1.2); g.stroke(); sparkle(g, r * 0.4, r * 0.3, r * 0.22); },
+    satellite: g => { const r = B * 0.9; cel(g, '#b69cf0', star(8, r, r * 0.6, 0.2), { r, shadow: '#6a4cd6', lw: 3 });
+      cel(g, '#ffe14a', poly([[r * 0.15, -r * 0.7], [-r * 0.35, r * 0.05], [-r * 0.02, r * 0.05], [-r * 0.2, r * 0.7], [r * 0.4, -r * 0.15], [r * 0.05, -r * 0.15]]), { r: r * 0.5, hi: false, lw: 2.4, shadow: '#e0a82a' }); },
+    maw: g => { const r = B * 0.9; g.fillStyle = '#240a3d'; circ(0, 0, r)(g); g.fill(); ink(g, 4); g.stroke(); g.fillStyle = '#4b1a85'; circ(0, 0, r * 0.62)(g); g.fill();
+      g.fillStyle = '#fff8ec'; for (let i = 0; i < 10; i++) { const an = (i / 10) * TAU; g.save(); g.rotate(an); g.beginPath(); g.moveTo(r * 0.86, -r * 0.11); g.lineTo(r * 0.58, 0); g.lineTo(r * 0.86, r * 0.11); g.closePath(); g.fill(); ink(g, 1.6); g.stroke(); g.restore(); } },
     tower: g => { const r = B;
       cel(g, '#fff8ec', poly([[-r * 0.6, r * 0.9], [-r * 0.5, -r * 0.5], [r * 0.5, -r * 0.5], [r * 0.6, r * 0.9]]), { r, shadow: '#e6d6c8', lw: 3.4, hi: false });
       cel(g, '#4fb8ff', poly([[-r * 0.8, -r * 0.5], [0, -r * 1.25], [r * 0.8, -r * 0.5]]), { r, shadow: '#2a78d6', lw: 3.4, hi: false });
