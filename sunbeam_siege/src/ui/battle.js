@@ -29,20 +29,52 @@
   }
 
   // ----------------------------------------------------------------- geometry
-  function geometry(mode) {
+  // Landscape and desktop: the logical board is as wide as the screen allows (up to about 2.9 : 1) and the pitches
+  // (cat 84 css px, pest 60 css px at least) are derived from the final scale, so unit pills never touch.
+  // o = { availW, availH } in css px; without it a mid size laptop is assumed.
+  function wideLayout(o) {
+    o = o || {};
+    var availW = o.availW || 1200, availH = o.availH || 480;
+    var H = 208, roofH = 24, floorH = 60, x0 = 30;
+    var sh = Math.max(0.8, availH / H);
+    if (sh >= 2.4) sh = Math.floor(sh * 4) / 4;
+    var maxW = Math.round(H * 2.9);
+    var wantCat = Math.max(40, Math.ceil(84 / sh)), wantPest = Math.max(32, Math.ceil(60 / sh));
+    var A0 = 74, R0 = 30, MID = 8, NC = 4, NP = 5;
+    var needDesired = A0 + NC * wantCat + MID + NP * wantPest + R0 + 2 * x0;
+    var W = Math.max(384, Math.floor(Math.min(availW / sh, Math.max(maxW, needDesired))));
+    var iw = W - 2 * x0, cp = wantCat, pu = wantPest, extra;
+    if (A0 + NC * cp + MID + NP * pu + R0 > iw) { // squeeze, never below the sprite plus pill width
+      var k = (iw - A0 - MID - R0) / (NC * cp + NP * pu);
+      cp = Math.max(36, Math.floor(cp * k)); pu = Math.max(26, Math.floor(pu * k));
+    }
+    extra = iw - (A0 + NC * cp + MID + NP * pu + R0);
+    if (extra > 0) { // spend spare width on roomier pitches first, then on the margins
+      var gc = Math.min(Math.floor(extra * 0.4 / NC), 12), gp = Math.min(Math.floor(extra * 0.35 / NP), 8);
+      cp += gc; pu += gp; extra -= gc * NC + gp * NP;
+    }
+    var A = A0 + Math.max(0, Math.floor(extra * 0.4)), catRight = x0 + A + NC * cp, pestLeft = catRight + MID;
+    // windows sit in the wall gaps: one over the back of the cat line, one over the far end of the pest line
+    var wins = [x0 + A + Math.round(NC * cp * 0.42), pestLeft + Math.round(NP * pu * 0.4)];
+    return { W: W, H: H, roofH: roofH, floorH: floorH, feetOff: 45, x0: x0, x1: W - x0, catPitch: cp, catRight: catRight, pestLeft: pestLeft, pestUnit: pu, labelInline: true, wins: wins, key: [W, cp, pu, A].join('/') };
+  }
+  function geometry(mode, o) {
     var G;
     if (mode === 'phone') {
-      G = { mode: mode, W: 288, H: 296, roofH: 26, floorH: 88, feetOff: 66, x0: 4, x1: 284, catPitch: 34, catRight: 142, pestLeft: 148, pestUnit: 27, labelInline: false };
+      // phone (portrait): 208 logical px across, drawn at about 1.9 css px per logical px on a 412 wide screen, so cats sit about 58 css px apart and pests 40 css px per size unit.
+      // floorH is retuned by fit() to the free height (G.setFloor); pestMax is the pest lane width, beyond it a crowded floor squeezes its pests together.
+      G = { mode: mode, W: 208, H: 270, roofH: 24, floorH: 80, feetOff: 58, x0: 3, x1: 205, catPitch: 31, catRight: 126, pestLeft: 129, pestUnit: 21, pestMax: 76, labelInline: false };
+      G.setFloor = function (fh) { G.floorH = fh; G.feetOff = fh - 18; G.H = G.roofH + 3 * fh + 6; };
     } else {
-      G = { mode: mode, W: 384, H: 208, roofH: 24, floorH: 60, feetOff: 45, x0: 22, x1: 362, catPitch: 36, catRight: 232, pestLeft: 238, pestUnit: 24, labelInline: true };
+      G = wideLayout(o); G.mode = mode;
     }
     G.top = function (f) { return G.roofH + (2 - f) * G.floorH; };
     G.feet = function (f) { return G.top(f) + G.feetOff; };
     G.catX = function (start, size) { return G.catRight - (start + size / 2) * G.catPitch; };
-    G.pestX = function (start, size) { return G.pestLeft + (start + size / 2) * G.pestUnit; };
-    G.room = function (f, i) { return G.labelInline ? { x: 28 + i * 26, y: G.top(f) + 22, w: 24, h: 24 } : { x: 62 + i * 24, y: G.top(f) + 2, w: 22, h: 22 }; };
-    G.label = function (f) { return G.labelInline ? { x: 28, y: G.top(f) + 5, w: 50, h: 12 } : { x: 6, y: G.top(f) + 3, w: 52, h: 16 }; };
-    G.inc = function (f) { return G.labelInline ? { x: G.x1 - 36, y: G.top(f) + 4, w: 34, h: 14 } : { x: G.W - 58, y: G.top(f) + 3, w: 52, h: 16 }; };
+    G.pestX = function (start, size, tot) { var u = G.pestUnit; if (G.pestMax && tot && tot * u > G.pestMax) u = G.pestMax / tot; return G.pestLeft + (start + size / 2) * u; };
+    G.room = function (f, i) { return G.labelInline ? { x: G.x0 + 6 + i * 31, y: G.top(f) + 20, w: 29, h: 29 } : { x: 50 + i * 22, y: G.top(f) + 2, w: 20, h: 20 }; };
+    G.label = function (f) { return G.labelInline ? { x: G.x0 + 6, y: G.top(f) + 4, w: 60, h: 14 } : { x: 5, y: G.top(f) + 3, w: 36, h: 12 }; };
+    G.inc = function (f) { return G.labelInline ? { x: G.x1 - 40, y: G.top(f) + 4, w: 34, h: 14 } : { x: G.W - 40, y: G.top(f) + 3, w: 36, h: 12 }; };
     return G;
   }
 
@@ -127,7 +159,8 @@
     el.hand = h('div.b-hand', { role: 'list', 'aria-label': 'Hand', 'data-tut': 'hand' });
     el.handWrap.appendChild(el.hand);
     el.end = h('button.btn.b-end', { 'data-tut': 'endturn', onclick: function () { endTurn(); } }, h('span', {}, 'End'), h('span', {}, 'Turn'));
-    el.left = h('div.b-left', {}, el.drawPile, h('div.b-meters', {}, el.orbs, el.nip, el.bank));
+    el.extras = h('div.b-extras', {}, el.nip, el.bank); // display:contents on desktop, its own row above the resource row on a phone
+    el.left = h('div.b-left', {}, el.drawPile, h('div.b-meters', {}, el.orbs, el.extras));
     el.right = h('div.b-right', {}, el.exhPile, el.discPile);
     el.status.appendChild(el.left); el.status.appendChild(h('span.sp')); el.status.appendChild(el.right);
     el.bottom.appendChild(el.status); el.bottom.appendChild(el.pw); el.bottom.appendChild(el.handWrap); el.bottom.appendChild(el.end);
@@ -152,10 +185,28 @@
     }
 
     // ---------------- scene bg (cached)
-    var bg = null, bgKey = '';
+    var bg = null, bgKey = '', bgCtx = null;
     function mkCanvas(w, hh) { var c = document.createElement('canvas'); c.width = w; c.height = hh; return c; }
+    // landscape only: beams, frames, lamps and cellar vents spread along the wider walls so they do not look stretched
+    function x0px() { return Math.max(0, G.x0 - 6); }
+    function wideDecor(f, t, ix0, iw, fh) {
+      var x = bgCtx;
+      function R(col, a, b, w2, h2) { x.fillStyle = col; x.fillRect(a, b, w2, h2); }
+      var step = 140, off = (f * 37) % 40;
+      for (var bx = ix0 + 70 + off; bx < ix0 + iw - 40; bx += step) {
+        if (G.wins.some(function (wv) { return Math.abs(wv + 9 - bx) < 22; })) continue;
+        if (f === 2) { R('#4a3024', bx, t + 2, 4, fh - 6); R('#8a6246', bx, t + 2, 1, fh - 6); R('#4a3024', bx - 3, t + 2, 10, 3); }
+        else if (f === 1) {
+          R('#3b2530', bx - 1, t + 11, 20, 22); R('#d9a96a', bx, t + 12, 18, 20); R('#2f1c28', bx + 2, t + 14, 14, 16); R('#7b5266', bx + 4, t + 22, 10, 6); R('#ffd95a', bx + 12, t + 17, 2, 2);
+        } else {
+          R('#24223a', bx, t + 10, 16, 10); R('#14122a', bx + 1, t + 11, 14, 8); for (var vy = 0; vy < 3; vy++) R('#4d4a62', bx + 1, t + 12 + vy * 3, 14, 1);
+          R('#2c3a54', bx + 20, t + 22, 1, 12); R('#2c3a54', bx + 19, t + 34, 3, 2);
+        }
+      }
+      var lx = ix0 + iw - 46; R('#2a1d2a', lx, t + 6, 6, 9); R(f === 0 ? '#9ad0ff' : '#ffc766', lx + 1, t + 7, 4, 6); R('#fff1c9', lx + 2, t + 8, 2, 2);
+    }
     function buildBg() {
-      var c = mkCanvas(G.W, G.H), x = c.getContext('2d'), W = G.W, H = G.H;
+      var c = mkCanvas(G.W, G.H), x = c.getContext('2d'), W = G.W, H = G.H; bgCtx = x;
       x.imageSmoothingEnabled = false;
       function R(col, a, b, w2, h2) { x.fillStyle = col; x.fillRect(a, b, w2, h2); }
       // sky with dither bands
@@ -191,7 +242,9 @@
           R('#4a3024', ix0, t, iw, 2);
         }
         // window glow (centered between cats and pests)
-        if (f > 0) { var wx = (mode === 'phone' ? G.W / 2 - 9 : 150), wy = t + 8; R('#2a1d2a', wx - 1, wy - 1, 20, 20); R('#ffc766', wx, wy, 18, 18); R('#ffe2a0', wx, wy, 18, 4); R('#8a5a3a', wx + 8, wy, 2, 18); R('#8a5a3a', wx, wy + 8, 18, 2); }
+        var wxs = mode === 'phone' ? [G.W / 2 - 9] : G.wins;
+        if (f > 0) wxs.forEach(function (wx0) { var wx = Math.round(wx0), wy = t + 8; R('#2a1d2a', wx - 1, wy - 1, 20, 20); R('#ffc766', wx, wy, 18, 18); R('#ffe2a0', wx, wy, 18, 4); R('#8a5a3a', wx + 8, wy, 2, 18); R('#8a5a3a', wx, wy + 8, 18, 2); });
+        if (mode !== 'phone') wideDecor(f, t, ix0, iw, fh);
         // slab
         R('#8a5a5a', ix0, t + fh - 4, iw, 1); R('#3b2530', ix0, t + fh - 3, iw, 3);
         // stairs on the right (decor)
@@ -207,9 +260,14 @@
       for (var ry = 0; ry < G.roofH - 6; ry += 4) { var inset = Math.floor((G.roofH - ry) * 0.9); x.fillRect(hx0 - 4 + inset - 12, ry + 6, hx1 - hx0 + 8 - (inset - 12) * 2, 4); }
       x.fillStyle = '#7a3a4a';
       for (var ry2 = 0; ry2 < G.roofH - 6; ry2 += 4) { var inset2 = Math.floor((G.roofH - ry2) * 0.9); var rw = hx1 - hx0 + 8 - (inset2 - 12) * 2; for (var sx2 = 0; sx2 < rw; sx2 += 8) x.fillRect(hx0 - 4 + inset2 - 12 + sx2, ry2 + 6, 7, 1); }
+      if (mode !== 'phone') { // lamp posts and fence in the side bands outside the house
+        [[4, 1], [W - 8, -1]].forEach(function (lp) { var lx2 = lp[0]; R('#14102a', lx2, H - 70, 3, 64); R('#14102a', lx2 - (lp[1] > 0 ? 0 : 5), H - 72, 8, 3); R('#ffe2a0', lx2 + (lp[1] > 0 ? 3 : -4), H - 70, 3, 3); });
+        for (var fx = 0; fx < x0px(); fx += 4) { R('#1b1535', fx, H - 22, 2, 16); R('#1b1535', W - 1 - fx, H - 22, 2, 16); }
+        R('#1b1535', 0, H - 17, x0px(), 2); R('#1b1535', W - x0px(), H - 17, x0px(), 2);
+      }
       // garden strip
       R('#1b2a3a', 0, H - 5, W, 5); for (var gx = 0; gx < W; gx += 5) R('#2f5a4a', gx, H - 6 - ((gx * 3) % 3), 2, 3);
-      bg = c; bgKey = mode + G.W;
+      bg = c; bgKey = mode + G.W + 'x' + G.H + (G.key || '');
     }
 
     // ---------------- sizing
@@ -220,7 +278,28 @@
       rootEl.setAttribute('data-mode', mode);
       var availW = el.sceneCol.clientWidth, gardenH = el.garden.offsetHeight || 0;
       var availH = el.sceneCol.clientHeight - gardenH - 4;
-      if (mode === 'phone') availH = L.h - el.top.offsetHeight - Math.max(gardenH, 32) - 12 - 232 - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-b') || 0);
+      if (mode !== 'phone' && availW >= 50 && availH >= 50) { // landscape: the board shape follows the screen
+        var G2 = geometry(mode, { availW: availW, availH: availH });
+        if (G2.key !== G.key) { G = G2; bg = null; }
+      }
+      var cwCard;
+      if (mode === 'phone') {
+        // portrait phone: the house takes the full width, the hand takes the widest cards that still leave the floors tall enough, and every floor gets the height that is left
+        var rcs = getComputedStyle(rootEl), safeB = (parseFloat(rcs.paddingBottom) || 0) + (parseFloat(rcs.paddingTop) || 0), sW = availW / G.W; // the safe-area insets (notch, rounded corners, gesture bar) are padding on the battle root
+        var fixedH = el.top.offsetHeight + Math.max(gardenH, 30) + 4 + (el.extras.offsetHeight + (parseFloat(rcs.getPropertyValue('--res-h')) || 50) + 6) + 10 + 8 + safeB, handW = el.bottom.clientWidth - 16, fh;
+        var cwTop = Math.max(76, Math.min(112, Math.floor(handW / 4.2))), cardH;
+        for (cwCard = cwTop; ; cwCard -= 4) {
+          fh = ((L.h - fixedH - Math.round(cwCard * 1.4) - 30) / sW - G.roofH - 6) / 3;
+          if (fh >= 78 || cwCard - 4 < 76) break;
+        }
+        cardH = cwCard * 1.4;
+        if (fh > 94) { cardH = Math.min(cwCard * 1.62, cardH + (fh - 94) * 3 * sW); fh = 94; } // a tall phone: spare height makes the cards taller (more room for rules text) instead of leaving a gap
+        fh = Math.max(66, Math.min(100, Math.floor(fh)));
+        if (G.setFloor) G.setFloor(fh);
+        availH = L.h - fixedH - Math.round(cardH) - 30;
+        rootEl.style.setProperty('--hand-h', Math.round(cardH) + 30 + 'px');
+        rootEl.style.setProperty('--card-ar', (cardH / cwCard).toFixed(3));
+      }
       if (availW < 50 || availH < 50) return;
       var sc = Math.min(availW / G.W, availH / G.H);
       if (mode === 'desktop' && sc >= 2.4) sc = Math.floor(sc * 4) / 4;
@@ -229,24 +308,18 @@
       el.stage.style.width = cw + 'px'; el.stage.style.height = chh + 'px';
       el.canvas.width = G.W; el.canvas.height = G.H; el.canvas.style.width = cw + 'px'; el.canvas.style.height = chh + 'px';
       rootEl.style.setProperty('--u', s + 'px');
-      var hudFont = Math.max(9, Math.min(13, 4.6 * s));
+      var hudFont = mode === 'phone' ? Math.max(11, Math.min(13, 6 * s)) : Math.max(9, Math.min(13, 4.6 * s));
       rootEl.style.setProperty('--hud', hudFont + 'px');
-      var cwCard;
-      if (mode === 'phone') {
-        var handAvail = L.h - el.top.offsetHeight - chh - Math.max(gardenH, 32) - 12 - 46 - 10 - 40;
-        cwCard = Math.max(78, Math.min(114, Math.round(handAvail / 1.4 * 0.9)));
-        // use the real height of the hand row when it is known, so spare vertical room becomes bigger, more readable cards
-        var realH = el.handWrap.clientHeight;
-        if (realH > 90) cwCard = Math.max(78, Math.min(136, Math.round((realH - 30) / 1.42)));
-      } else {
+      unitFont = unitHudFont(); rootEl.style.setProperty('--uh', unitFont + 'px');
+      if (mode !== 'phone') {
         var hh = el.handWrap.clientHeight || 160;
-        cwCard = Math.max(L.short ? 64 : 92, Math.min(150, Math.round(hh / 1.4 * 0.74)));
+        cwCard = Math.max(L.short ? 64 : 92, Math.min(L.short ? 150 : 172, Math.round(hh / 1.4 * 0.74)));
       }
       el.hand.style.setProperty('--hand-cw', cwCard + 'px');
-      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth].join(',');
+      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth, unitFont, G.key, el.extras.offsetHeight, rootEl.style.getPropertyValue('--hand-h')].join(',');
       if (sig === fitSig && !force) return;
       fitSig = sig;
-      if (!bg || bgKey !== mode + G.W) buildBg();
+      if (!bg || bgKey !== mode + G.W + 'x' + G.H + (G.key || '')) buildBg();
       buildBoardFrame();
       layoutUnits(true);
       renderHud();
@@ -419,9 +492,10 @@
           v.tx = G.catX(start, size); v.ty = G.feet(f); start += size; if (v.x == null || snap) { v.x = v.tx; v.y = v.ty; }
         });
         start = 0;
+        var ptot = 0; (fl.pests || []).forEach(function (p) { ptot += pestSize(p); });
         (fl.pests || []).slice().sort(function (a, b) { return a.pos - b.pos; }).forEach(function (p) {
           var v = viewOf(p.uid); if (!v) return; var size = pestSize(p);
-          v.tx = G.pestX(start, size); v.ty = G.feet(f); start += size; if (v.x == null || snap) { v.x = v.tx; v.y = v.ty; }
+          v.tx = G.pestX(start, size, ptot); v.ty = G.feet(f); start += size; if (v.x == null || snap) { v.x = v.tx; v.y = v.ty; }
         });
       }
     }
@@ -430,10 +504,42 @@
       (vm.intents || []).forEach(function (x) { if (x.pestUid === p.uid) it = x; });
       return it || (p.intent && typeof p.intent === 'object' ? p.intent : null);
     }
-    function hpColorClass(hp, max) { return max && hp / max < 0.4 ? ' low' : ''; }
+    // ---- unit HUD (agent: legibility pass). Readable-width contract, in em of the unit font (--uh, px from unitHudFont):
+    //   one stat pill is 1.5em wide (+0.62em per digit past two), the cat pair (ATK left, HP right) is at most ~3.4em, and every unit
+    //   HUD is shrunk per unit (font-size on .u) so its plate never exceeds its own slot (catPitch*size*s or pestUnit*size*s).
+    var unitFont = 12;
+    function unitHudFont() {
+      var ts = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--text-scale')) || 1;
+      var pref = Math.max(12, Math.min(22, 8 * s)) * ts;
+      var cap = G.catPitch * s / 3.7; // the widest cat plate (3.1em for two 2-digit stats, 3.4em with a 3-digit one) plus a small gap must fit one cat slot
+      var capV = (G.floorH - 27) * s / 5.7; // lives and nap above the head plus plate and chip row below the feet must fit one floor
+      var capB = (G.H - G.feet(0)) * s / 2.9; // the chip row of the bottom floor must stay on the canvas
+      return Math.round(Math.max(9, Math.min(pref, cap, capV, capB)) * 10) / 10;
+    }
+    function pillEm(val) { var n = String(val).length; return Math.max(1.5, 0.5 + 0.62 * n); }
+    function hpState(hp, max, buffMax) {
+      var r = max ? hp / max : 1;
+      if (max && r <= 0.2) return 'crit';
+      if (max && r < 0.4) return 'low';
+      return buffMax > 0 ? 'buff' : buffMax < 0 ? 'debuff' : '';
+    }
+    function makePill(kind, icon) {
+      var num = h('b.num'), ar = h('i.pl-ar');
+      var el = h('span.pl.' + kind, {}, h('span.pl-ic', {}, ui.icon(icon, { size: '1em' }), ar), num);
+      el._num = num; el._ar = ar; el._v = null; el._st = '';
+      return el;
+    }
+    // update a pill in place so a changed value can play its pop animation once (rebuilding the DOM would cut it short)
+    function setPill(el, val, st) {
+      var changed = el._v !== null && el._v !== val, dir = changed ? (val > el._v ? 'up' : 'down') : '';
+      if (el._v !== val) el._num.textContent = String(val);
+      el._v = val;
+      if (el._st !== st) { el._st = st; if (st) el.setAttribute('data-st', st); else el.removeAttribute('data-st'); el._ar.textContent = st === 'buff' ? '▲' : st === 'debuff' ? '▼' : ''; }
+      if (changed && !ui.reduced()) { el.classList.remove('pop-up', 'pop-down'); void el.offsetWidth; el.classList.add('pop-' + dir); }
+    }
     function buildHud(v) {
       var d = v.d, u = h('div.u.' + v.side + (d.champion ? '.champ' : ''), { 'data-uid': d.uid });
-      v.hud = u; v._hx = null; v._hy = null;
+      v.hud = u; v._hx = null; v._hy = null; v._plateSig = null;
       v.hit = h('button.u-hit', { 'data-uid': d.uid, 'data-side': v.side, onclick: function (e) { e.stopPropagation(); onUnitTap(v); } });
       u.appendChild(v.hit);
       v.top = h('div.u-top'); v.plate = h('div.u-plate'); v.chips = h('div.u-chips');
@@ -452,60 +558,73 @@
       });
     }
     function updateHud(v) {
-      var d = v.d, si = spriteInfo(v), hs = (si.h - 3) * s, ws = Math.min(si.w * 0.7, 40) * s;
+      var d = v.d, si = spriteInfo(v), hs = (si.h - 3) * s, ws = Math.min(si.w * 0.7, 40) * s, isCat = v.side === 'cat';
       var hit = v.hit;
       hit.style.width = Math.round(ws * 1.25) + 'px'; hit.style.height = Math.round(hs) + 'px'; hit.style.left = Math.round(-ws * 0.625) + 'px'; hit.style.top = Math.round(-hs) + 'px';
       v.top.style.bottom = Math.round(hs - 1 * s) + 'px';
-      v.plate.style.top = Math.round(-2.5 * s) + 'px';
-      v.chips.style.top = Math.round(6.2 * s) + 'px';
       v.hud.classList.toggle('napping', !!d.napping); v.hud.classList.toggle('hidden-unit', !!d.hidden);
-      // plate
-      ui.clear(v.plate);
-      if (v.side === 'cat') {
-        var hpLow = hpColorClass(d.health, d.maxHealth);
-        v.plate.appendChild(h('span.pl.atk', {}, ui.icon('sword', { size: '.85em' }), h('b.num', {}, String(d.power))));
-        v.plate.appendChild(h('span.pl.hp' + hpLow, {}, ui.icon('heart', { size: '.85em' }), h('b.num', {}, String(d.health))));
+      // plate: one stat pill per number, ATK left and HP right on a cat, fluff left and HP right on a pest
+      var fl = isCat ? 0 : (d.fluff || 0);
+      var hpV = isCat ? d.health : d.hp, hpMax = isCat ? d.maxHealth : d.maxHp;
+      var sig = v.side + (fl ? 'f' : '');
+      if (v._plateSig !== sig) {
+        ui.clear(v.plate); v._plateSig = sig;
+        v.pA = isCat ? makePill('atk', 'sword') : null; v.pF = fl ? makePill('fl', 'cloud') : null; v.pH = makePill('hp', 'heart');
+        [v.pA, v.pF, v.pH].forEach(function (pe) { if (pe) v.plate.appendChild(pe); });
+      }
+      var slot = (isCat ? G.catPitch * (d.size || 1) : G.pestUnit * pestSize(d)) * s;
+      var need = pillEm(hpV) + (isCat ? pillEm(d.power) + 0.12 : 0) + (fl ? pillEm(fl) + 0.12 : 0);
+      var uf = Math.min(1, slot * 0.99 / (need * unitFont)), fpx = unitFont * uf;
+      v.hud.style.fontSize = (Math.round(fpx * 10) / 10) + 'px';
+      v._fpx = fpx; v._slot = slot;
+      if (isCat) {
+        setPill(v.pA, d.power, d.basePower != null ? (d.power > d.basePower ? 'buff' : d.power < d.basePower ? 'debuff' : '') : '');
+        setPill(v.pH, hpV, hpState(hpV, hpMax, d.baseMax != null ? Math.sign(d.maxHealth - d.baseMax) : 0));
+      } else {
+        if (v.pF) setPill(v.pF, fl, '');
+        setPill(v.pH, hpV, hpState(hpV, hpMax, 0));
+      }
+      ui.clear(v.top);
+      v.top.style.maxWidth = Math.round(Math.max(slot, 4 * fpx)) + 'px';
+      if (isCat) {
         hit.setAttribute('aria-label', d.name + ', attack ' + d.power + ', health ' + d.health + ' of ' + d.maxHealth + ', ' + d.lives + ' lives' + (d.napping ? ', napping' : ''));
-        // top: lives and nap
-        ui.clear(v.top);
         var lives = h('span.u-lives', { 'data-tip': d.name + ': ' + d.lives + (d.maxLives ? ' of ' + d.maxLives : '') + ' lives left' });
         if ((d.maxLives || d.lives) <= 5) { for (var i = 0; i < (d.maxLives || d.lives); i++) lives.appendChild(h('i' + (i < d.lives ? '' : '.off') + (v._pipDrop === i ? '.spent' : ''))); }
         else lives.appendChild(h('span', {}, ui.icon('paw', { size: '1em' }), 'x' + d.lives));
         if (v._pipDrop != null) { lives.classList.add('pulse'); v._pipDrop = null; }
         v.top.appendChild(lives);
+        var acts = h('div.u-acts');
         var nap = h('button.u-nap' + (d.napping ? '.on' : ''), { 'aria-pressed': d.napping ? 'true' : 'false', 'aria-label': (d.napping ? 'Wake ' : 'Nap ') + d.name, 'data-tip': d.napping ? 'Wake up (Stretch attack)' : 'Nap: skip attacking, heal 2, gain Rested',
           onclick: function (e) { e.stopPropagation(); doNap(d.uid); } }, ui.icon('zzz', { size: '85%' }));
-        v.top.appendChild(nap);
+        acts.appendChild(nap);
         var par = (vm.attached || []).filter(function (a) { return a.host === d.uid && !a.dead; })[0];
         if (par) {
           var pd = tryf(function () { return SB.content.pest(par.id) || {}; }, {}), cost = pd.parasite && pd.parasite.removeCost != null ? pd.parasite.removeCost : 1;
-          v.top.appendChild(h('button.u-scratch', { 'aria-label': 'Scratch off ' + (par.name || 'parasite') + ' for ' + cost + ' Zoomies', 'data-tip': (par.name || 'Parasite') + ' is clinging on. Tap to scratch it off for ' + cost + ' Zoomies.',
+          acts.appendChild(h('button.u-scratch', { 'aria-label': 'Scratch off ' + (par.name || 'parasite') + ' for ' + cost + ' Zoomies', 'data-tip': (par.name || 'Parasite') + ' is clinging on. Tap to scratch it off for ' + cost + ' Zoomies.',
             onclick: function (e) { e.stopPropagation(); doScratch(d.uid); } }, ui.icon('claw', { size: '85%' }), h('b.num', {}, String(cost))));
         }
+        v.top.appendChild(acts);
       } else {
-        var fl = d.fluff || 0;
-        v.plate.appendChild(h('span.pl.hp' + hpColorClass(d.hp, d.maxHp), {}, ui.icon('heart', { size: '.85em' }), h('b.num', {}, String(d.hp))));
-        if (fl) v.plate.appendChild(h('span.pl.fl', { 'data-gl': 'fluff' }, ui.icon('cloud', { size: '.85em' }), h('b.num', {}, String(fl))));
         if (d.meter) Object.keys(d.meter).forEach(function (mk) {
           var mv = d.meter[mk], mx = d.meterMax && d.meterMax[mk];
           if (typeof mv !== 'number' || (!mv && !mx)) return;
-          v.plate.appendChild(h('span.pl.mt', { 'data-tip': (d.name || 'Boss') + ' ' + mk + ' ' + mv + (mx ? '/' + mx : '') }, h('b.num', {}, mk.slice(0, 4) + ' ' + mv + (mx ? '/' + mx : ''))));
+          v.top.appendChild(h('span.pl-mt', { 'data-tip': (d.name || 'Boss') + ' ' + mk + ' ' + mv + (mx ? '/' + mx : '') }, mk.slice(0, 4) + ' ' + mv + (mx ? '/' + mx : '')));
         });
         var it = intentOf(d);
         hit.setAttribute('aria-label', d.name + ', health ' + d.hp + ' of ' + d.maxHp + (it ? ', intent: ' + (it.text || it.kind) : ''));
-        ui.clear(v.top);
         if (it) {
           var ib = intentBubble(it, d), isg = (it.icon || '') + '|' + (it.kind || '') + '|' + (it.dmg || '') + '|' + (it.hits || '');
           if (v._isig !== undefined && v._isig !== isg) ib.classList.add('new');
           v._isig = isg; v.top.appendChild(ib);
         }
       }
-      // chips
+      // chips: as many as fit one slot (a chip is about 1.35em wide), the rest fold into a +N chip with a tooltip
       ui.clear(v.chips);
       var list = ui.statusList(d.statuses);
-      if (v.side === 'cat' && d.hidden) list.unshift({ id: 'hidden', n: 1, name: 'Hidden', icon: 'peek-box', tone: 'neutral', gl: ui.gl('hidden') });
-      list.slice(0, 4).forEach(function (st) { v.chips.appendChild(ui.statusChip(st)); });
-      if (list.length > 4) v.chips.appendChild(h('span.st-chip.more', { 'data-tip': list.slice(4).map(function (x) { return x.name + ' ' + x.n; }).join(', ') }, '+' + (list.length - 4)));
+      if (isCat && d.hidden) list.unshift({ id: 'hidden', n: 1, name: 'Hidden', icon: 'peek-box', tone: 'neutral', gl: ui.gl('hidden') });
+      var allow = Math.max(2, Math.floor(slot / (1.35 * 0.74 * fpx))), shown = list.length > allow ? allow - 1 : list.length;
+      list.slice(0, shown).forEach(function (st) { v.chips.appendChild(ui.statusChip(st)); });
+      if (list.length > shown) v.chips.appendChild(h('span.st-chip.more', { 'data-tip': list.slice(shown).map(function (x) { return x.name + ' ' + x.n; }).join(', ') }, '+' + (list.length - shown)));
     }
     function intentBubble(it, p) {
       var kind = it.kind || '';
@@ -632,6 +751,11 @@
     }
     // fan geometry for card i of n: writes SL.x / SL.y / SL.r (no allocation)
     function computeSlot(i, n, W, cwc) {
+      if (mode === 'phone') { // portrait: a shallow fan across the full width, 4 to 5 cards side by side with a little overlap, more cards squeeze closer
+        var pgap = Math.min(cwc * 1.02, (W - cwc - 24) / Math.max(1, n - 1)), ptotal = (n - 1) * pgap + cwc, pk = i - (n - 1) / 2;
+        SL.x = Math.round((W - ptotal) / 2 + i * pgap); SL.y = Math.round(pk * pk * (n > 6 ? 0.8 : 1.6)); SL.r = pk * (n > 6 ? 1.5 : 2.2);
+        return;
+      }
       var room = W - cwc * 1.5 - 28, gap = Math.min(cwc * 0.92, room / Math.max(1, n - 1)), total = (n - 1) * gap + cwc, x0 = (W - total) / 2 - 6; // 1.5: a hovered, rotated edge card grows ~50% wider and must not reach End Turn
       var k = i - (n - 1) / 2;
       SL.x = Math.round(x0 + i * gap); SL.y = Math.round(k * k * (n > 7 ? 1.1 : 1.8)); SL.r = k * (n > 7 ? 2 : 3);
@@ -639,11 +763,9 @@
     function layoutHand(skipUid) {
       var order = skipUid ? handOrder.filter(function (u) { return u !== skipUid; }) : handOrder;
       var n = order.length, W = el.hand.clientWidth, cwc = parseFloat(el.hand.style.getPropertyValue('--hand-cw')) || 110;
-      var phone = mode === 'phone';
-      el.hand.classList.toggle('row', phone);
+      el.hand.classList.remove('row');
       order.forEach(function (uid, i) {
         var rec = handEls.get(uid); if (!rec) return; var c = rec.el;
-        if (phone) { c.style.setProperty('--x', '0px'); c.style.setProperty('--y', '0px'); c.style.setProperty('--r', '0deg'); c.style.marginRight = '6px'; return; } // no overlap on phones: the stats sit on the right edge of a card and must stay readable
         c.style.marginRight = '';
         computeSlot(i, n, W, cwc);
         rec.bx = SL.x;
@@ -1075,7 +1197,7 @@
       GH.tagTxt = '\u0001'; GH.shadow.style.width = w + 'px'; GH.shadow.style.height = hh + 'px'; GH.shadow.classList.add('on');
       c.style.willChange = 'transform';
       layoutHand(uid);
-      sfx('card_pick'); if (D.touch) buzz(10);
+      sfx('card_pick'); if (D.touch) buzz(10); rootEl.classList.add('b-dragging');
       updateAim(); kick();
     }
     function moveDrag(e) {
@@ -1190,7 +1312,7 @@
     }
     function finishAnim() {
       var D = DR, ph = animPhase; animPhase = '';
-      if (GH) { GH.shadow.classList.remove('on'); GH.shadow.style.opacity = ''; GH.tag.classList.remove('on'); GH.tagTxt = ''; }
+      if (GH) { GH.shadow.classList.remove('on'); GH.shadow.style.opacity = ''; GH.tag.classList.remove('on'); GH.tagTxt = ''; rootEl.classList.remove('b-dragging'); }
       if (D.ph && D.ph.parentNode) D.ph.parentNode.removeChild(D.ph); D.ph = null;
       if (ph === 'ret') { if (D.el && D.el.parentNode) resetCardEl(D.el); applyHover(); }
       else if (ph === 'drop') {
@@ -1243,7 +1365,7 @@
         kick(); return;
       }
       // spells and other cards: hand the natural-size element to the play animation, which flies it to the board and the pile
-      if (GH) { GH.shadow.classList.remove('on'); GH.tag.classList.remove('on'); GH.tagTxt = ''; }
+      if (GH) { GH.shadow.classList.remove('on'); GH.tag.classList.remove('on'); GH.tagTxt = ''; rootEl.classList.remove('b-dragging'); }
       c.style.transform = 'none'; c.style.left = Math.round(D.S[0] - D.w / 2) + 'px'; c.style.top = Math.round(D.S[1] - D.h / 2) + 'px'; c.style.willChange = '';
       c.classList.remove('drag'); c.style.position = 'fixed'; c.style.width = D.w + 'px';
       if (D.ph && D.ph.parentNode) D.ph.parentNode.removeChild(D.ph); D.ph = null; D.el = null;
@@ -1332,6 +1454,8 @@
       el.bank.classList.toggle('hidden', !showBank); ui.clear(el.bank);
       el.bank.appendChild(ui.icon('lives', { size: '1.3em' })); el.bank.appendChild(h('b.num', {}, 'Banked ' + (vm.bank || 0)));
       // end turn button
+      var hasExtra = !el.nip.classList.contains('hidden') || !el.bank.classList.contains('hidden');
+      if (rootEl.classList.contains('has-extra') !== hasExtra) { rootEl.classList.toggle('has-extra', hasExtra); if (mode === 'phone') fit(); }
       el.end.disabled = vm.turn !== 'player' || playing || ended;
       el.end.classList.toggle('glow', !playing && vm.turn === 'player' && !(vm.hand || []).some(function (x) { var cp = tryf(function () { return B.canPlay(x.uid); }); return cp && cp.ok; }));
       // topbar
@@ -1348,10 +1472,10 @@
         pips.appendChild(h('i' + (rr === r ? '.now' : rr < r ? '.past' : '') + (isW ? '.moon' : '')));
       }
       el.clock.appendChild(ui.icon('moon', { size: '1.3em', cls: 'neutral' }));
-      el.clock.appendChild(h('span.ck-r', {}, h('b', {}, 'Round ' + r), run && run.night ? h('small', {}, ' Night ' + run.night + '/9') : null));
-      el.clock.appendChild(pips);
       var msg = c.isWitching ? 'WITCHING HOUR' : left === 1 ? 'Witching next round!' : left > 1 ? 'Witching in ' + left : '';
-      if (msg) el.clock.appendChild(h('span.ck-msg' + (c.isWitching || left === 1 ? '.hot' : ''), {}, msg));
+      // ck-main / ck-sub are display:contents on desktop; the phone stacks them into two labelled lines (Night and Round, then the hour pips and the witching message)
+      el.clock.appendChild(h('span.ck-main', {}, h('span.ck-r', {}, h('b', {}, 'Round ' + r), run && run.night ? h('small', {}, ' Night ' + run.night + '/9') : null),
+        h('span.ck-sub', {}, pips, msg ? h('span.ck-msg' + (c.isWitching || left === 1 ? '.hot' : ''), {}, msg) : null)));
       el.clock.classList.toggle('hot', !!(c.isWitching || left === 1));
       rootEl.classList.toggle('b-witching', !!c.isWitching);
     }
@@ -2210,7 +2334,7 @@
       ctx.drawImage(bg, 0, 0);
       var sb = vm.sunbeam || { warmth: 40, max: 40 }, pct = sb.warmth / (sb.max || 1);
       // stars
-      for (var i = 0; i < 14; i++) {
+      for (var i = 0, ns = Math.round(14 * G.W / 384); i < ns; i++) {
         var sx = (i * 53 + 11) % G.W, sy = (i * 29 + 5) % (G.roofH + 6), on = ui.reduced() ? 1 : (Math.floor(tn / 1000 + i * 0.7) % 2);
         if (sx > G.x0 - 6 && sx < G.x1 + 6 && sy > 6) continue;
         ctx.fillStyle = on ? '#ffe9a8' : '#8a7aa8'; ctx.fillRect(sx, sy, on ? 2 : 1, on ? 2 : 1);

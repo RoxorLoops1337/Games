@@ -635,16 +635,18 @@ const ACC = {
 };
 
 // ---------------------------------------------------------------- main
-export function drawCat(ctx, d, variant = 'open') {
+export function drawCat(ctx, d, variant = 'open', opts = {}) {
+  // opts.part: 'full' (default, unchanged), 'body' (everything but the tail) or 'tail' (only the tail); the walking cat swings its tail on its own layer
+  const part = opts.part || 'full';
   const A = d.art, id = d.id, acc = ACC[id] || {}, B = acc.body || {};
   const fur = A.fur, belly = A.belly;
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   if (B.ghost) ctx.globalAlpha = 0.93;
 
-  acc.back && acc.back(ctx, A);
+  if (part !== 'tail') acc.back && acc.back(ctx, A);
 
   // mane behind the head for the lion
-  if (A.pat === 'mane') {
+  if (A.pat === 'mane' && part !== 'tail') {
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * TAU;
       fillPath(ctx, ell(ctx, 60 + Math.cos(a) * 28, 56 + Math.sin(a) * 25, 11, 9, a), A.accent, 1);
@@ -652,7 +654,7 @@ export function drawCat(ctx, d, variant = 'open') {
   }
 
   // tail: tapered from a thick root to a slim tip, with a lighter tip and breed bands
-  const tailFur = id === 'boo' ? null : fur;
+  const tailFur = id === 'boo' || part === 'body' ? null : fur;
   if (tailFur) {
     const P = [[76, 102], [102, 106], [112, 88], [102, 64]], L = [], R = [], N = 14;
     const at = (u) => { const m = 1 - u; return [0, 1].map((k) => m * m * m * P[0][k] + 3 * m * m * u * P[1][k] + 3 * m * u * u * P[2][k] + u * u * u * P[3][k]); };
@@ -684,6 +686,7 @@ export function drawCat(ctx, d, variant = 'open') {
     ctx.restore();
     ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 1.1; ctx.stroke(tp);
   }
+  if (part === 'tail') { ctx.globalAlpha = 1; return; }
 
   // body
   const bs = B.chubby || 1;

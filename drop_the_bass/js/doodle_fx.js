@@ -119,6 +119,9 @@ export function drawWorld(f, ctx) {
     } else if (p.shape === 'flare') {
       const r = p.size * (0.6 + 0.8 * k);
       ctx.globalAlpha = al; ctx.fillStyle = p.color; poly(ctx, K.star(p.x, p.y, r * 1.1, 0.4, p.ang || 0, 4)); ctx.fill(); ctx.stroke();
+    } else if (p.shape === 'puff') {   // a swelling smoke daub
+      const s = p.size * (1.1 + 1.5 * (1 - k));
+      ctx.globalAlpha = Math.min(0.9, k * 1.4); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, TAU); ctx.fill(); if (!lite) ctx.stroke();
     } else {
       const kind = p.k == null ? 0 : p.k, s = p.size * (1.1 + 0.9 * k);
       ctx.globalAlpha = al; ctx.fillStyle = p.color;

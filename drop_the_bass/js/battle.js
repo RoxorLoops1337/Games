@@ -2,6 +2,7 @@
 // turns sim events into particles and sounds, draws the HUD, and drives the guided tutorial.
 import {
   W, H, COLS, ROWS, TILE, BOARD_X, BOARD_Y, BOARD_W, BOARD_H, TURRETS, ENEMIES, BOSSES, WORLD_BY_ID, COL, ECON, MAX_LEVEL, fmt, tileCx, tileCy,
+  TURRET_PARTNERS, SYNERGY_BY_ID,
 } from './data_core.js';
 import { Run } from './sim.js';
 import { Fx } from './fx.js';
@@ -20,21 +21,36 @@ const inR = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.
 const inC = (c, x, y) => (x - c.x) * (x - c.x) + (y - c.y) * (y - c.y) <= c.r * c.r;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
-// HUD geometry (logical px)
+// HUD geometry (logical px). R is what is DRAWN; HIT is what is TAPPABLE (every rect at least about 61 logical units each way, which is 44 px on a
+// 390 wide phone). A hit area may be larger than the drawn button. Round hero buttons are r 38 (76 across).
 export const R = {
-  pause:  { x: 8, y: 8, w: 52, h: 48 },
+  pause:  { x: 4, y: 2, w: 62, h: 62 },
   hp:     { x: 68, y: 10, w: 190, h: 44 },
   wave:   { x: 266, y: 10, w: 130, h: 44 },
   coins:  { x: 404, y: 10, w: 128, h: 44 },
   hype:   { x: 12, y: 66, w: 280, h: 40 },
   speed:  { x: 298, y: 62, w: 56, h: 46 },
   call:   { x: 360, y: 62, w: 172, h: 46 },
-  deploy: { x: 168, y: 856, w: 204, h: 92 },
-  merge:  { x: 104, y: 868, w: 58, h: 68 },
-  reroll: { x: 378, y: 868, w: 58, h: 68 },
-  heroR:  { x: 56, y: 902, r: 44 },
-  heroJ:  { x: 484, y: 902, r: 44 },
+  deploy: { x: 153, y: 872, w: 169, h: 80 },
+  merge:  { x: 88, y: 872, w: 61, h: 78 },
+  reroll: { x: 326, y: 872, w: 61, h: 78 },    // re-roll the next drop for coins
+  rerollG: { x: 391, y: 872, w: 61, h: 78 },   // the same for gems
+  pool:   { x: 96, y: 840, w: 348, h: 28 },    // the drop pool strip (display only)
+  heroR:  { x: 46, y: 908, r: 38 },
+  heroJ:  { x: 494, y: 908, r: 38 },
 };
+export const HIT = {
+  pause: R.pause,
+  wave: { x: 262, y: 0, w: 142, h: 61 },            // tap the wave pill: the wave preview card
+  speed: { x: 292, y: 58, w: 66, h: 63 },
+  call: { x: 358, y: 58, w: 176, h: 63 },
+  deploy: R.deploy, merge: R.merge, reroll: R.reroll, rerollG: R.rerollG,
+};
+const NUM_BOX = { x0: BOARD_X + 22, x1: BOARD_X + BOARD_W - 22, y0: BOARD_Y + 14, y1: BOARD_Y + BOARD_H - 8 };
+const MILESTONES = [10, 25, 50, 100];
+let hbLive = false;
+// main.js calls this every frame it is NOT in a battle: makes sure the heartbeat loop never outlives the battle view
+export function battleIdle(audio) { if (hbLive && audio) { hbLive = false; if (audio.heartbeat) audio.heartbeat(false); } }
 
 export class Battle {
   constructor(app, o = {}) {
@@ -68,7 +84,19 @@ export class Battle {
     this.tutBubble = null;
     if (this.tut) this.tutEnter();
     this.rects = {};   // dynamic rects for the tutorial (turrets)
+    this.pv = { open: false, t: 0, next: null, cur: null };        // wave preview card (open flag) and the cached sim data
+    this.pool = { odds: [], next: 0, free: 0, cost: { coins: 0, gems: 0 }, can: { coins: false, gems: false }, why: null };
+    this.links = [];                                                // active synergy pairs [{ id, a, b }] (turret refs)
+    this.synHint = { tiles: [], partners: [], types: [] };           // tiles/turrets where a partner of the selected turret would link
+    this.hb = false; this.tickT = 0;
+    this.recentNums = [];
+    this.stop = 0;                                                  // hit-stop seconds left
+    this.comboPulse = 0; this.comboPrev = o.run.combo || 0; this.comboTier = 0;
+    this.sevenSeen = o.run.turrets.some((t) => t.level >= 7);
+    this.bossHitT = -9; this.rerollSpin = 0; this.kills3 = 0; this.synPop = 0;
+    this.fx.noShake = !app.profile.settings.shake || !!app.profile.settings.reduce;
     app.audio.musicStart('world_' + this.world.id);
+    this.slowTick();
   }
 
   get beatPhase() {
@@ -94,7 +122,12 @@ export class Battle {
       let d = info.phase - simPh; if (d > 0.5) d -= 1; if (d < -0.5) d += 1;
       run.beatOffset += d * 60 / run.bpm * 0.15;
     }
-    const frozen = this.paused || this.hold || this.hintQueue.length > 0 || run.choice || this.ended || (this.tut && this.tutBlocking());
+    if (this.stop > 0) this.stop = Math.max(0, this.stop - dt);
+    if (this.rerollSpin > 0) this.rerollSpin = Math.max(0, this.rerollSpin - dt * 3);
+    if (this.comboPulse > 0) this.comboPulse = Math.max(0, this.comboPulse - dt * 2.4);
+    if (this.synPop > 0) this.synPop = Math.max(0, this.synPop - dt * 3);
+    if (this.pv.open) this.pv.t += dt;
+    const frozen = this.paused || this.hold || this.hintQueue.length > 0 || run.choice || this.ended || this.stop > 0 || (this.tut && this.tutBlocking());
     if (!frozen) {
       const steps = this.speed;
       run.advance(dt * steps);
@@ -103,9 +136,9 @@ export class Battle {
     if (this.tut) this.tutUpdate(dt);
     // combo feedback
     this.comboShow = run.combo >= 3 ? Math.min(1, this.comboShow + dt * 6) : Math.max(0, this.comboShow - dt * 4);
-    // music intensity follows how busy the board is
-    const inten = clamp(run.enemies.length / 25 + (run.stageHp / run.stageMax < 0.4 ? 0.3 : 0), 0, 1);
-    this.app.audio.musicIntensity(this.paused ? 0.1 : inten);
+    this.comboWatch();
+    this.tickT += dt;
+    if (this.tickT >= 0.25) { this.tickT = 0; this.slowTick(); }
     // end
     if ((run.phase === 'won' || run.phase === 'lost') && !this.ended) {
       this.endTimer += dt;
@@ -113,6 +146,97 @@ export class Battle {
     }
     if (run.choice && !this.choiceOpen) { this.choiceOpen = true; this.app.hooks.onChoice(run, this); }
     if (!run.choice) this.choiceOpen = false;
+  }
+  // every 250 ms: adaptive music state, heartbeat, and the cached sim read-outs the HUD draws (pool odds, wave preview, synergy links)
+  slowTick() {
+    const run = this.run, au = this.app.audio;
+    this.refreshPool(); this.refreshPreview(); this.refreshLinks();
+    const st = {
+      wave: Math.max(1, run.wave), wavesTotal: run.endless ? 20 : run.wavesTotal, hypePct: clamp(run.hype / run.hypeNeed, 0, 1),
+      bossAlive: run.enemies.some((e) => e.boss), stageHpPct: clamp(run.stageHp / run.stageMax, 0, 1), enemiesOnField: run.enemies.length,
+    };
+    if (this.paused) { st.hypePct = 0; st.bossAlive = false; st.enemiesOnField = 0; }
+    if (au.setMusicState) au.setMusicState(st);
+    else if (au.musicIntensity) au.musicIntensity(this.paused ? 0.1 : clamp(st.enemiesOnField / 25 + (st.stageHpPct < 0.4 ? 0.3 : 0), 0, 1));
+    this.syncHeartbeat();
+  }
+  // heartbeat on at stage hp <= 30%, off again above 40%; always off while paused, over, or when the view is left
+  syncHeartbeat() {
+    const run = this.run, f = run.stageHp / run.stageMax;
+    const live = !this.paused && !this.ended && run.phase !== 'won' && run.phase !== 'lost';
+    const want = live && (this.hb ? f <= 0.4 : f <= 0.3);
+    if (want === this.hb && want === hbLive) return;
+    this.hb = want; hbLive = want;
+    const au = this.app.audio;
+    if (au.heartbeat) au.heartbeat(want); else if (au.play) au.play('stage_low', want ? {} : { off: true });
+  }
+  refreshPool() {
+    const run = this.run, p = this.pool;
+    p.odds = run.poolOdds();
+    const me = p.odds.find((o) => o.type === run.nextType);
+    p.next = me ? me.p : 0;
+    p.free = run.rerolls > 0 ? run.rerolls : 0;
+    p.cost = { coins: run.dropRerollCost('coins'), gems: run.dropRerollCost('gems') };
+    let why = null;
+    if (new Set(run.loadout).size < 2) why = 'single';
+    else if (!run.rerollOdds().some((o) => o.type !== run.nextType && o.p > 0)) why = 'locked';
+    else if (run.choice || run.phase === 'won' || run.phase === 'lost') why = 'busy';
+    p.why = why;
+    p.can.coins = !why && (p.free > 0 || run.coins >= p.cost.coins);
+    p.can.gems = !why && p.free <= 0 && (this.prof.diamonds || 0) >= p.cost.gems;
+  }
+  refreshPreview() {
+    const run = this.run;
+    this.pv.next = run.nextWavePreview ? run.nextWavePreview() : null;
+    this.pv.cur = run.currentWaveInfo ? run.currentWaveInfo() : null;
+  }
+  refreshLinks() {
+    const run = this.run, out = [];
+    for (const key of run.synKeys || []) {
+      const c = key.indexOf(':'), d = key.indexOf('-', c);
+      const a = run.turretById(+key.slice(c + 1, d)), b = run.turretById(+key.slice(d + 1));
+      if (a && b) out.push({ id: key.slice(0, c), a, b });
+    }
+    this.links = out;
+  }
+  // combo milestones (10, 25, 50, 100): sound with a rising pitch, a pulse on the meter, a tier colour change
+  comboWatch() {
+    const run = this.run, cb = run.combo;
+    if (cb > this.comboPrev) {
+      for (let i = 0; i < MILESTONES.length; i++) {
+        const m = MILESTONES[i];
+        if (this.comboPrev < m && cb >= m) {
+          this.comboPulse = 1; this.comboTier = i + 1;
+          this.sfx('combo_milestone', null, { pitch: [1, 1.25, 1.5, 2][i] });
+          this.fx.floater(150, 172, m + ' COMBO!', i >= 2 ? COL.red : COL.gold, 22 + i * 2, { life: 1.1, vy: -20 });
+          this.fx.ring(R.hype.x + 40, R.hype.y + 66, 70 + i * 20, i >= 2 ? COL.red : COL.gold, { life: 0.5, w: 5 });
+          this.shake(2 + i * 2);
+          if (i >= 2) this.stop = Math.max(this.stop, 0.05);
+        }
+      }
+    }
+    if (cb < 3) this.comboTier = 0;
+    this.comboPrev = cb;
+  }
+  get lite() { return !!this.prof.settings.lowfx; }
+  n(k) { return this.lite ? Math.max(1, Math.round(k * 0.4)) : k; }   // particle counts shrink on Low graphics
+  shake(v) { this.fx.addShake(v); }
+  freeze(sec) { if (!this.prof.settings.reduce) this.stop = Math.max(this.stop, sec); }
+  // combat text kept inside the board and away from the HUD; numbers that would stack on a recent one are nudged apart
+  num(x, y, text, color, size, o) {
+    const b = NUM_BOX;
+    x = clamp(x, b.x0, b.x1);
+    y = clamp(y, b.y0 + (this.run.enemies.some((e) => e.boss) ? 22 : 0), b.y1);
+    const now = this.t, rec = this.recentNums;
+    while (rec.length && now - rec[0].t > 0.4) rec.shift();
+    for (let tries = 0; tries < 3; tries++) {
+      const hit = rec.find((r) => Math.abs(r.x - x) < 24 && Math.abs(r.y - y) < 15);
+      if (!hit) break;
+      y -= 15; x += (tries % 2 ? -12 : 12);
+      x = clamp(x, b.x0, b.x1); y = clamp(y, b.y0, b.y1);
+    }
+    rec.push({ x, y, t: now }); if (rec.length > 24) rec.shift();
+    this.fx.floater(x, y, text, color, size, o);
   }
   tutBlocking() {
     if (!this.tut || this.tut.done) return false;
@@ -140,36 +264,55 @@ export class Battle {
       switch (e.k) {
         case 'deploy': {
           const def = TURRETS[e.type];
-          fx.burst(e.x, e.y, [def.color, def.accent, '#fff'], 14, { speed: 160, life: 0.5 });
-          fx.sparks(e.x, e.y, [def.accent, '#fff'], 8, { speed: 220 });
+          fx.burst(e.x, e.y, [def.color, def.accent, '#fff'], this.n(14), { speed: 160, life: 0.5 });
+          fx.sparks(e.x, e.y, [def.accent, '#fff'], this.n(8), { speed: 220 });
           fx.ring(e.x, e.y, 46, def.color, { life: 0.35 });
           fx.light(e.x, e.y, 90, def.color, 0.3, 0.8);
           fx.pillar(e.x, e.y + 6, def.color, 120, 0.45);
-          if (e.cost > 0) fx.floater(e.x, e.y - 30, '-' + e.cost, COL.coin, 15, { vy: -30 });
-          else fx.floater(e.x, e.y - 30, 'FREE', COL.green, 15);
+          if (e.cost > 0) this.num(e.x, e.y - 30, '-' + e.cost, COL.coin, 15, { vy: -30 });
+          else this.num(e.x, e.y - 30, 'FREE', COL.green, 15);
           this.sfx('deploy', e.x); this.deployPulse = 1;
-          if (e.bonus) fx.floater(e.x, e.y - 52, 'BONUS!', COL.pink, 16);
+          if (e.bonus) this.num(e.x, e.y - 52, 'BONUS!', COL.pink, 16);
+          this.refreshPool(); this.refreshLinks();
           break;
         }
-        case 'perfect': fx.floater(e.x, e.y - 52, 'ON BEAT!', COL.cyan, 16, { life: 0.9 }); this.sfx('combo', e.x); break;
+        case 'perfect': this.num(e.x, e.y - 52, 'ON BEAT!', COL.cyan, 16, { life: 0.9 }); this.sfx('perfect_beat', e.x); break;
         case 'merge': {
-          const def = TURRETS[e.type];
-          fx.burst(e.x, e.y, [def.color, def.accent, '#fff', COL.gold], e.big ? 34 : 20, { speed: 240, life: 0.7 });
-          fx.ring(e.x, e.y, e.big ? 90 : 62, '#fff', { life: 0.45, w: 5 });
-          fx.ring(e.x, e.y, e.big ? 70 : 48, def.color, { life: 0.5, w: 6, fill: true });
-          fx.ring(e.x, e.y, e.big ? 130 : 84, def.color, { life: 0.7, w: 3 });
-          fx.pillar(e.x, e.y + 6, e.level >= 5 ? COL.gold : def.color, 120 + e.level * 40, 0.7);
-          fx.light(e.x, e.y, 130 + e.level * 12, def.accent, 0.4, 0.9);
-          fx.sparks(e.x, e.y, [def.accent, '#fff', COL.gold], 10 + e.level * 2, { speed: 300 });
-          if (e.level >= 5) fx.raysBurst(e.x, e.y, COL.gold, 160 + e.level * 16, 0.8, 12);
-          fx.floater(e.x, e.y - 34, e.level >= MAX_LEVEL ? 'MAX LEVEL!' : 'LEVEL ' + e.level, e.level >= 5 ? COL.gold : '#fff', e.big ? 22 : 18, { life: 1.0 });
-          if (e.kind === 'remix') fx.floater(e.x, e.y - 58, 'REMIX!', COL.pink, 16);
-          if (e.big) { fx.addShake(8); fx.addChroma(0.4); fx.confetti(e.x, e.y, 26); } else fx.addShake(e.level >= 3 ? 2 : 0);
-          this.sfx(e.big ? 'merge_big' : 'merge', e.x, { pitch: 1 + (e.level - 2) * 0.06 });
+          const def = TURRETS[e.type], L = e.level;
+          const big = L >= 5, hot = L >= 6, top = L >= MAX_LEVEL;
+          fx.burst(e.x, e.y, [def.color, def.accent, '#fff', COL.gold], this.n(big ? 34 : 20), { speed: 240, life: 0.7 });
+          fx.ring(e.x, e.y, big ? 90 : 62, '#fff', { life: 0.45, w: 5 });
+          fx.ring(e.x, e.y, big ? 70 : 48, def.color, { life: 0.5, w: 6, fill: true });
+          fx.ring(e.x, e.y, big ? 130 : 84, def.color, { life: 0.7, w: 3 });
+          fx.pillar(e.x, e.y + 6, L >= 5 ? COL.gold : def.color, 120 + L * 40, 0.7);
+          fx.light(e.x, e.y, 130 + L * 12, def.accent, 0.4, 0.9);
+          fx.sparks(e.x, e.y, [def.accent, '#fff', COL.gold], this.n(10 + L * 2), { speed: 300 });
+          // the sparkle ring grows with the level: 6 stars at level 2, up to 20 at level 7
+          fx.sparkRing(e.x, e.y, this.n(4 + L * 2), [COL.gold, '#fff', def.color], 150 + L * 14, 0.55 + L * 0.03);
+          if (L >= 5) fx.raysBurst(e.x, e.y, COL.gold, 160 + L * 16, 0.8, 12);
+          if (L >= 4) fx.doFlash(top ? '#fff' : COL.gold, [0, 0, 0, 0.12, 0.2, 0.3, 0.42, 0.7][Math.min(7, L)]);
+          this.num(e.x, e.y - 34, top ? 'MAX LEVEL!' : 'LEVEL ' + L, L >= 5 ? COL.gold : '#fff', big ? 22 : 18, { life: 1.0 });
+          if (e.kind === 'remix') this.num(e.x, e.y - 58, 'REMIX!', COL.pink, 16);
+          if (big) { fx.addChroma(0.4); fx.confetti(e.x, e.y, this.n(L >= 6 ? 36 : 26)); }
+          this.shake([0, 0, 1, 2, 4, 8, 11, 15][Math.min(7, L)]);
+          if (top) this.freeze(0.09);
+          this.sfx(top ? 'merge_7' : big ? 'merge_big' : 'merge', e.x, { pitch: 1 + (L - 2) * 0.06 });
+          if (top && !this.sevenSeen) { this.sevenSeen = true; this.sfx('drop_big', null, { at: 0.45 }); this.queueBanner('LEVEL 7!', def.name + ' is maxed out', COL.gold, 1.5, { small: true }); }
+          this.refreshPool(); this.refreshLinks();
           break;
         }
-        case 'sell': fx.floater(e.x, e.y - 20, '+' + e.v, COL.coin, 16); fx.burst(e.x, e.y, COL.coin, 8, { speed: 100 }); this.sfx('sell', e.x); break;
-        case 'move': this.sfx('ui_click', e.x); break;
+        case 'sell': this.num(e.x, e.y - 20, '+' + e.v, COL.coin, 16); fx.burst(e.x, e.y, COL.coin, this.n(8), { speed: 100 }); this.sfx('sell', e.x); this.refreshLinks(); break;
+        case 'move': this.sfx('ui_click', e.x); this.refreshLinks(); break;
+        case 'synergy': {
+          const sy = SYNERGY_BY_ID[e.id];
+          fx.burst(e.x, e.y, [COL.pink, '#fff', COL.gold], this.n(12), { speed: 130, up: 40, g: -20, life: 0.8 });
+          fx.sparkRing(e.x, e.y, this.n(8), [COL.pink, '#fff'], 90, 0.6);
+          fx.ring(e.x, e.y, 54, COL.pink, { life: 0.45, w: 5 });
+          if (sy) this.num(e.x, e.y - 28, sy.name + '!', COL.pink, 17, { life: 1.3, vy: -26 });
+          this.sfx('synergy', e.x); this.synPop = 1; this.refreshLinks();
+          if (!this.tut) this.hint('synergy');
+          break;
+        }
         case 'shot': {
           const def = TURRETS[e.type];
           if (e.type !== 'hat' || (this.t * 60 | 0) % 3 === 0) fx.muzzle(e.x, e.y, e.ang, def.color, e.type === 'kick' || e.type === 'cowbell' ? 1.3 : e.type === 'hat' ? 0.55 : 0.9);
@@ -178,29 +321,44 @@ export class Battle {
         }
         case 'hit': {
           hits++;
+          const isBoss = (this.bossId != null && e.id === this.bossId) || (e.id != null && run.enemies.some((x) => x.boss && x.id === e.id));
           if (set.numbers && (e.crit || e.heavy || hits < 5) && !e.dot) {
-            fx.floater(e.x, e.y - 8, fmt(e.v), e.crit ? COL.gold : e.shield ? COL.cyan : '#fff', e.crit ? 22 : e.heavy ? 18 : 13, { life: e.crit ? 0.8 : 0.6, vy: -50, crit: e.crit });
+            this.num(e.x, e.y - 8, fmt(e.v), e.crit ? COL.gold : e.shield ? COL.cyan : '#fff', e.crit ? 22 : e.heavy ? 18 : 13, { life: e.crit ? 0.8 : 0.6, vy: -50, crit: e.crit });
           }
-          if (e.crit) { fx.sparks(e.x, e.y, [COL.gold, '#fff'], 9, { speed: 330 }); fx.light(e.x, e.y, 60, COL.gold, 0.18, 0.7); fx.ring(e.x, e.y, 34, COL.gold, { life: 0.25, w: 3 }); this.sfx('crit', e.x); }
-          else if (hits < 3) fx.sparks(e.x, e.y, ['#fff', '#cfe9ff'], 3, { speed: 200, life: 0.2 });
+          if (e.crit) { fx.sparks(e.x, e.y, [COL.gold, '#fff'], this.n(9), { speed: 330 }); fx.light(e.x, e.y, 60, COL.gold, 0.18, 0.7); fx.ring(e.x, e.y, 34, COL.gold, { life: 0.25, w: 3 }); this.sfx('crit', e.x); }
+          else if (hits < 3) fx.sparks(e.x, e.y, ['#fff', '#cfe9ff'], this.n(3), { speed: 200, life: 0.2 });
           else if (hits < 4) this.sfx('hit', e.x, { vol: 0.5 });
+          if (isBoss && !e.dot && this.t - this.bossHitT > 0.12) {   // a boss takes a hit: a thud and a small shake that grows with the blow
+            this.bossHitT = this.t;
+            this.sfx('boss_hit', e.x, { vol: e.crit || e.heavy ? 1 : 0.7 });
+            this.shake(e.crit ? 4 : e.heavy ? 3 : 1.4);
+          }
           break;
         }
         case 'kill': {
           const def = e.boss ? BOSSES[e.type] : ENEMIES[e.type];
           const col = e.affix === 'golden' ? COL.coin : def.color;
-          fx.burst(e.x, e.y, [col, '#fff', '#2fe6ff', '#ff5fb0'], e.boss ? 40 : 10, { speed: e.boss ? 260 : 150, life: e.boss ? 0.9 : 0.5, size: e.boss ? 5 : 3 });
+          fx.burst(e.x, e.y, [col, '#fff', '#2fe6ff', '#ff5fb0'], this.n(e.boss ? 40 : 10), { speed: e.boss ? 260 : 150, life: e.boss ? 0.9 : 0.5, size: e.boss ? 5 : 3 });
           fx.ring(e.x, e.y, e.boss ? 110 : e.r * 2.4, col, { life: e.boss ? 0.6 : 0.3 });
           fx.light(e.x, e.y, e.boss ? 220 : e.r * 3.4, col, e.boss ? 0.6 : 0.22, e.boss ? 1 : 0.55);
-          fx.sparks(e.x, e.y, [col, '#fff'], e.boss ? 22 : 5, { speed: e.boss ? 360 : 230 });
+          fx.sparks(e.x, e.y, [col, '#fff'], this.n(e.boss ? 22 : 5), { speed: e.boss ? 360 : 230 });
+          if (!e.boss) {
+            fx.puff(e.x, e.y, this.n(e.r > 18 ? 6 : 4), undefined, e.r);   // death puff
+            // a crayon POW on some kills: always on big ones, every third small one, never on Low graphics
+            this.kills3++;
+            if (!this.lite && fx.floats.length < 36 && (e.r > 18 || this.kills3 % 3 === 0)) {
+              const words = ['POW', 'BAM', 'ZAP', 'BOP', 'WHAM'];
+              this.num(e.x, e.y - 6, words[(e.id * 7 + this.kills3) % words.length], e.r > 18 ? COL.orange : COL.pink, e.r > 18 ? 22 : 17, { life: 0.5, vy: -26, crit: true });
+            }
+          }
           this.sfx(e.boss ? 'boss_die' : (e.r > 18 ? 'kill_big' : 'kill'), e.x);
-          if (e.boss) { fx.addShake(14); fx.addChroma(0.8); fx.doFlash('#fff', 0.6); fx.confetti(e.x, e.y, 40); fx.raysBurst(e.x, e.y, col, 420, 1.1, 18); fx.ring(e.x, e.y, 260, '#fff', { life: 0.8, w: 8 }); fx.pillar(e.x, e.y + 10, col, 360, 0.9); this.bossBar = null; }
+          if (e.boss) { this.shake(16); fx.addChroma(0.8); fx.doFlash('#fff', 0.6); fx.confetti(e.x, e.y, this.n(40)); fx.raysBurst(e.x, e.y, col, 420, 1.1, 18); fx.ring(e.x, e.y, 260, '#fff', { life: 0.8, w: 8 }); fx.pillar(e.x, e.y + 10, col, 360, 0.9); fx.sparkRing(e.x, e.y, this.n(16), [COL.gold, '#fff', col], 220, 0.8); this.freeze(0.12); this.bossBar = null; }
           break;
         }
-        case 'coin': if (set.numbers) fx.floater(e.x, e.y - 14, '+' + e.v, COL.coin, 13, { life: 0.7, vy: -34 }); if (e.v >= 3) this.sfx('coin', e.x, { vol: 0.5 }); break;
-        case 'gem': fx.floater(e.x, e.y - 24, '+1', COL.diamond, 18, { life: 1 }); fx.burst(e.x, e.y, COL.diamond, 10, { speed: 150 }); fx.sparks(e.x, e.y, [COL.diamond, '#fff'], 10, { speed: 300 }); fx.light(e.x, e.y, 70, COL.diamond, 0.4, 0.8); this.sfx('diamond', e.x); break;
+        case 'coin': if (set.numbers) this.num(e.x, e.y - 14, '+' + e.v, COL.coin, 13, { life: 0.7, vy: -34 }); if (e.v >= 3) this.sfx('coin', e.x, { vol: 0.5 }); break;
+        case 'gem': this.num(e.x, e.y - 24, '+1', COL.diamond, 18, { life: 1 }); fx.burst(e.x, e.y, COL.diamond, 10, { speed: 150 }); fx.sparks(e.x, e.y, [COL.diamond, '#fff'], 10, { speed: 300 }); fx.light(e.x, e.y, 70, COL.diamond, 0.4, 0.8); this.sfx('diamond', e.x); break;
         case 'leak': {
-          fx.addShake(e.boss ? 16 : 7); fx.addChroma(e.boss ? 0.9 : 0.5); fx.doFlash('#ff2a4a', e.boss ? 0.55 : 0.28); this.hurtFlash = 1;
+          this.shake(e.boss ? 16 : 7); fx.addChroma(e.boss ? 0.9 : 0.5); fx.doFlash('#ff2a4a', e.boss ? 0.55 : 0.28); this.hurtFlash = 1;
           fx.ring(this.run.map.base.x, this.run.map.base.y, 130, '#ff4a5e', { life: 0.5, w: 6 }); fx.light(this.run.map.base.x, this.run.map.base.y, 150, '#ff4a5e', 0.4, 0.9);
           fx.floater(this.run.map.base.x, this.run.map.base.y - 36, '-' + e.n, COL.red, 22, { life: 1 });
           this.sfx('leak'); this.vibrate(e.boss ? 160 : 60);
@@ -252,7 +410,7 @@ export class Battle {
           break;
         }
         case 'duet': fx.doFlash('#fff', 0.8); fx.addShake(18); fx.addChroma(1); fx.confetti(W / 2, H / 2, 60); fx.raysBurst(W / 2, H / 2, COL.gold, 760, 1.3, 24); fx.ring(W / 2, H / 2, 600, COL.gold, { life: 0.9, w: 12 }); fx.aurora('#ffc83d', 1.6); this.sfx('duet'); this.queueBanner('DUET FINALE!', '', COL.gold, 1.4, { small: true }); break;
-        case 'levelup': fx.light(R.hype.x + 27, R.hype.y + 20, 90, COL.gold, 0.5, 0.9); fx.sparks(R.hype.x + 27, R.hype.y + 20, [COL.gold, '#fff'], 12, { speed: 240 }); this.sfx('levelup'); fx.floater(R.hype.x + 140, R.hype.y + 52, 'LEVEL UP!', COL.gold, 20, { life: 1.1 }); break;
+        case 'levelup': fx.light(R.hype.x + 27, R.hype.y + 20, 90, COL.gold, 0.5, 0.9); fx.sparks(R.hype.x + 27, R.hype.y + 20, [COL.gold, '#fff'], this.n(12), { speed: 240 }); this.sfx('drop_big'); fx.floater(R.hype.x + 140, R.hype.y + 52, 'LEVEL UP!', COL.gold, 20, { life: 1.1 }); break;
         case 'choice': this.sfx('chest'); if (e.kind === 'chest') this.hint('chest'); break;
         case 'remix': this.sfx('remix_pick'); break;
         case 'relic': this.sfx('relic'); break;
@@ -260,7 +418,15 @@ export class Battle {
         case 'jam': fx.burst(e.x, e.y, ['#ff6b6b', '#fff'], 8, { speed: 100 }); this.sfx('jam', e.x); break;
         case 'blink': fx.burst(e.x, e.y, ['#35f0c8', '#ff5fb0'], 8, { speed: 120 }); break;
         case 'drop': fx.doFlash('#7a5cff', 0.4); fx.addShake(10); fx.addChroma(0.6); fx.ring(W / 2, H / 2, 600, '#9b6bff', { life: 0.7, w: 12 }); this.sfx('merge_big'); break;
-        case 'reroll': this.sfx('reroll'); break;
+        case 'reroll': if (run.choice) this.sfx('reroll'); break;
+        case 'rerollDrop': {
+          const d = R.deploy, def = TURRETS[e.type] || TURRETS[run.nextType];
+          this.sfx('reroll_drop'); this.rerollSpin = 1;
+          fx.burst(d.x + 36, d.y + d.h / 2 - 4, [def.color, def.accent, '#fff'], this.n(12), { speed: 140 });
+          fx.ring(d.x + 36, d.y + d.h / 2 - 4, 44, def.color, { life: 0.35, w: 4 });
+          this.refreshPool();
+          break;
+        }
         case 'revive': this.queueBanner('SECOND WIND', 'The stage rises again', COL.green, 2); fx.doFlash('#fff', 0.6); this.sfx('heal'); break;
         case 'win': this.sfx('win'); fx.confetti(W / 2, 400, 80); fx.confetti(120, 500, 40); fx.confetti(420, 500, 40); fx.doFlash('#fff', 0.5); fx.raysBurst(W / 2, 420, COL.gold, 700, 1.4, 20); break;
         case 'lose': this.sfx('lose'); fx.addShake(10); break;
@@ -296,13 +462,27 @@ export class Battle {
     const n = this.run.mergeAll(10);
     if (!n) { this.fx.floater(R.merge.x + 29, R.merge.y - 6, 'No pairs', COL.dim, 15); this.sfx('error'); }
   }
-  doReroll() {
-    const run = this.run;
-    if (run.rerolls <= 0) {
-      if (this.prof.diamonds >= ECON.rerollCostDiamonds) { this.app.hooks.spendDiamonds(ECON.rerollCostDiamonds); run.rerolls++; }
-      else { this.app.hooks.toast('Rerolls cost 3 diamonds. Earn more in runs and quests!'); this.sfx('error'); return; }
+  // Re-roll the NEXT dropped type. pay: 'coins' (free setlist rerolls are used first) or 'gems' (diamonds from the profile, deducted here and saved).
+  doReroll(pay = 'coins') {
+    const run = this.run, d = pay === 'gems' ? R.rerollG : R.reroll;
+    if (run.phase === 'won' || run.phase === 'lost' || this.paused) return null;
+    const r = run.rerollNext(pay, pay === 'gems' ? (this.prof.diamonds || 0) : undefined);
+    const fl = (txt, col) => this.fx.floater(d.x + d.w / 2, d.y - 10, txt, col, 16, { life: 0.9 });
+    if (r.ok) {
+      if (r.spendDiamonds > 0) {
+        if (this.app.hooks && this.app.hooks.spendDiamonds) this.app.hooks.spendDiamonds(r.spendDiamonds);
+        else { this.prof.diamonds = Math.max(0, (this.prof.diamonds || 0) - r.spendDiamonds); if (this.app.save) this.app.save(); }
+        fl('-' + r.spendDiamonds + ' gems', COL.diamond);
+      } else if (r.paid === 'coins') fl('-' + r.cost, COL.coin);
+      else if (r.paid === 'free') fl('FREE', COL.green);
+      this.app.audio.resume();
+    } else {
+      const msg = { coins: 'Need ' + r.cost + ' coins', gems: 'Need ' + r.cost + ' gems', single: 'Only one type in your pool', locked: 'Nothing else to roll', pay: '', busy: '' }[r.reason];
+      if (msg) fl(msg, r.reason === 'gems' ? COL.diamond : COL.red);
+      this.sfx('error');
     }
-    run.rerollDrop();
+    this.refreshPool();
+    return r;
   }
   doCall() {
     const run = this.run;
@@ -312,7 +492,11 @@ export class Battle {
     }
   }
   toggleSpeed() { this.speed = this.speed >= 3 ? 1 : this.speed + 1; this.prof.settings.speed = this.speed; this.sfx('ui_click'); }
-  setPause(v) { this.paused = v; this.sfx(v ? 'ui_open' : 'ui_back'); }
+  setPause(v) { this.paused = v; this.sfx(v ? 'ui_open' : 'ui_back'); this.syncHeartbeat(); if (!v) this.pv.open = false; }
+  togglePreview() {
+    this.pv.open = !this.pv.open; this.pv.t = 0;
+    if (this.pv.open) { this.refreshPreview(); this.sfx('wave_preview'); this.hint('preview'); } else this.sfx('ui_pop');
+  }
   hero(who) {
     if (this.paused) return;
     if (!this.run.heroReady(who)) { this.sfx('error'); return; }
@@ -341,12 +525,15 @@ export class Battle {
     this.setPress(x, y);
     if (this.paused || this.hintQueue.length || this.run.choice) return;
     const run = this.run;
-    if (inR(R.pause, x, y)) { this.app.hooks.onPause(this); return; }
-    if (inR(R.speed, x, y)) { this.toggleSpeed(); return; }
-    if (inR(R.call, x, y)) { if (this.tutAllows('wave')) this.doCall(); return; }
-    if (inR(R.deploy, x, y)) { if (this.tutAllows('deploy')) this.doDeploy(); return; }
-    if (inR(R.merge, x, y)) { if (this.tutAllows('merge')) this.doMergeAll(); return; }
-    if (inR(R.reroll, x, y)) { if (this.tutAllows('reroll')) this.doReroll(); return; }
+    if (this.pv.open) { this.togglePreview(); return; }   // any tap closes the wave preview card
+    if (inR(HIT.pause, x, y)) { this.app.hooks.onPause(this); return; }
+    if (inR(HIT.speed, x, y)) { this.toggleSpeed(); return; }
+    if (inR(HIT.call, x, y)) { if (this.tutAllows('wave')) this.doCall(); return; }
+    if (inR(HIT.wave, x, y)) { if (!this.tut || this.tut.done) this.togglePreview(); return; }
+    if (inR(HIT.deploy, x, y)) { if (this.tutAllows('deploy')) this.doDeploy(); return; }
+    if (inR(HIT.merge, x, y)) { if (this.tutAllows('merge')) this.doMergeAll(); return; }
+    if (inR(HIT.reroll, x, y)) { if (this.tutAllows('reroll')) this.doReroll('coins'); return; }
+    if (inR(HIT.rerollG, x, y)) { if (this.tutAllows('reroll')) this.doReroll('gems'); return; }
     if (inC(R.heroR, x, y)) { this.hero('roxor'); return; }
     if (inC(R.heroJ, x, y)) { this.hero('jasmin'); return; }
     // selected turret panel buttons
@@ -402,7 +589,9 @@ export class Battle {
     else if (k === 'w' || k === 'W') this.hero('jasmin');
     else if (k === 'n' || k === 'N') this.doCall();
     else if (k === 'f' || k === 'F') this.toggleSpeed();
-    else if (k === 'r' || k === 'R') this.doReroll();
+    else if (k === 'r' || k === 'R') this.doReroll('coins');
+    else if (k === 'g' || k === 'G') this.doReroll('gems');
+    else if (k === 'v' || k === 'V') this.togglePreview();
     else if (k === 'Escape' || k === 'p' || k === 'P') this.app.hooks.onPause(this);
     else if (k === 's' || k === 'S') { if (this.selected) { this.run.sell(this.selected); this.selected = null; } }
   }
@@ -464,8 +653,8 @@ export class Battle {
       case 'deploy': return { x: R.deploy.x - 8, y: R.deploy.y - 8, w: R.deploy.w + 16, h: R.deploy.h + 16 };
       case 'coins': return { x: R.coins.x - 6, y: R.coins.y - 6, w: R.coins.w + 12, h: R.coins.h + 12 };
       case 'wave': return { x: R.call.x - 6, y: R.call.y - 6, w: R.call.w + 12, h: R.call.h + 12 };
-      case 'heroR': return { x: R.heroR.x - 52, y: R.heroR.y - 52, w: 104, h: 104, round: true };
-      case 'heroJ': return { x: R.heroJ.x - 52, y: R.heroJ.y - 52, w: 104, h: 104, round: true };
+      case 'heroR': return { x: R.heroR.x - 48, y: R.heroR.y - 48, w: 96, h: 96, round: true };
+      case 'heroJ': return { x: R.heroJ.x - 48, y: R.heroJ.y - 48, w: 96, h: 96, round: true };
       case 'turrets': {
         const ts = this.run.turrets;
         if (ts.length < 2) return null;
@@ -481,7 +670,7 @@ export class Battle {
   pressK(name) { return this.press && this.press.name === name ? Math.max(0, 1 - (this.t - this.press.t) / 0.16) : 0; }
   setPress(x, y) {
     let name = null;
-    for (const k of ['pause', 'speed', 'call', 'deploy', 'merge', 'reroll']) if (inR(R[k], x, y)) name = k;
+    for (const k of ['pause', 'speed', 'call', 'deploy', 'merge', 'reroll', 'rerollG', 'wave']) if (inR(HIT[k], x, y)) name = k;
     if (inC(R.heroR, x, y)) name = 'heroR'; else if (inC(R.heroJ, x, y)) name = 'heroJ';
     if (name) this.press = { name, t: this.t };
   }
@@ -508,6 +697,7 @@ export class Battle {
     ctx.setTransform(view.dpr * view.s, 0, 0, view.dpr * view.s, view.dpr * view.ox, view.dpr * view.oy);
     this.drawHud(ctx, t, beat);
     this.drawBanner(ctx);
+    if (this.pv.open && isDoodle()) DB.drawPreview(this, ctx);
     if (this.tut && !this.tut.done) this.drawTutorial(ctx);
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
     if (this.hurtFlash > 0 && isDoodle()) DFX.hurt(fx, ctx, view.cw, view.ch, view.dpr, this.hurtFlash);
@@ -523,7 +713,7 @@ export class Battle {
     if (isDoodle()) return DB.drawBoard(this, ctx, t, beat);
     const run = this.run, fx = this.fx;
     AW.drawBoard(ctx, run.map.id, run.world.id, t, { beat, slotHint: this.slotHint, hoverSlot: this.hoverSlot ? [this.hoverSlot.c, this.hoverSlot.r] : null, dropSlot: this.targetSlot != null ? [this.targetSlot % COLS, Math.floor(this.targetSlot / COLS)] : null });
-    AW.drawStageBase(ctx, run.world.id, run.map.base.x, run.map.base.y, { t, hp: run.stageFrac, hit: Math.max(0, this.hurtFlash), beat });
+    AW.drawStageBase(ctx, run.world.id, run.map.base.x, run.map.base.y, { t, hp: run.stageFrac, hit: Math.max(0, this.hurtFlash), beat, studio: (this.prof && this.prof.studio) || null });
     // selected range: a soft lit disc with a marching dashed edge
     const sel = this.selected ? run.turretById(this.selected) : null;
     if (sel) {
@@ -720,10 +910,11 @@ export class Battle {
     this.drawHero(ctx, 'jasmin', R.heroJ, t);
     const locked = !this.prof.autoMerge;
     button(ctx, R.merge, locked ? '#2f2150' : '#2a8a5a', { icon: locked ? 'lock' : 'merge', glyph: AE.drawGlyph, sub: 'MERGE', size: 13, press: this.pressK('merge'), dim: locked });
-    button(ctx, R.reroll, '#3a2a86', { icon: 'reroll', glyph: AE.drawGlyph, sub: run.rerolls > 0 ? run.rerolls + ' free' : '3 gems', size: 13, press: this.pressK('reroll') });
+    button(ctx, R.reroll, '#3a2a86', { icon: 'reroll', glyph: AE.drawGlyph, sub: run.rerolls > 0 ? run.rerolls + ' free' : this.pool.cost.coins + ' c', size: 13, press: this.pressK('reroll') });
+    button(ctx, R.rerollG, '#5a3aa8', { icon: 'reroll', glyph: AE.drawGlyph, sub: this.pool.cost.gems + ' gems', size: 13, press: this.pressK('rerollG') });
     this.drawDeploy(ctx, t, beat);
     const slotsLeft = run.slotCapacity() - run.turrets.length;
-    text(ctx, run.turrets.length + '/' + run.slotCapacity() + ' tiles', W / 2, 833, 13, slotsLeft < 3 ? COL.orange : COL.dim, 'center');
+    text(ctx, run.turrets.length + '/' + run.slotCapacity() + ' tiles', 54, 855, 13, slotsLeft < 3 ? COL.orange : COL.dim, 'center');
   }
   drawDeploy(ctx, t, beat) {
     if (isDoodle()) return DB.drawDeploy(this, ctx, t, beat);

@@ -1,7 +1,7 @@
 // Drop the Bass: the battle view, headless. A mock 2D context and a stub app: plays a whole practice run through pointer input,
 // the tutorial, the HUD, and checks nothing throws and the canvas state stays balanced.
 import assert from 'node:assert/strict';
-import { Battle, R } from '../drop_the_bass/js/battle.js';
+import { Battle, R, HIT, battleIdle } from '../drop_the_bass/js/battle.js';
 import { Run } from '../drop_the_bass/js/sim.js';
 import { AudioFx } from '../drop_the_bass/js/audio.js';
 import * as M from '../drop_the_bass/js/meta.js';
@@ -115,4 +115,51 @@ for (const w of WORLDS) {
   for (let i = 0; i < 60 * 300 && run.phase !== 'won' && run.phase !== 'lost'; i++) { b.update(1 / 60); if (run.choice) run.pick(0); if (i % 30 === 0) run.autoPlayStep({ early: true }); }
   ok(run.phase === 'won' && run.result.mode === 'tutorial', 'the practice run is winnable');
 }
+// ---- drop pool strip, reroll, wave preview, synergies, juice, audio wiring
+{
+  const calls = []; const spy = Object.assign(Object.create(AudioFx), { play: (n, o) => calls.push(['play', n, o]), heartbeat: (v) => calls.push(['hb', v]), setMusicState: (st) => calls.push(['state', st]), musicStart() {}, musicIntensity() {}, beatInfo: () => null });
+  const p = M.newProfile(0); p.tutorial.done = true; p.diamonds = 5; const app = stubApp(p); app.audio = spy;
+  const run = new Run({ world: 'festival', seed: 4, firstPrep: 999, difficulty: 'hard', loadout: ['kick', 'snare', 'hat', 'sub', 'mic', 'synth', 'horn', 'scratch', 'loop', 'cowbell', 'amp', 'vocal'] });
+  run.coins = 5000;
+  const b = new Battle(app, { run }); const ctx = mockCtx();
+  // tappable rects are big enough (44 px on a 390 phone = 61 logical units)
+  for (const k of Object.keys(HIT)) ok(HIT[k].w >= 58 && HIT[k].h >= 58, 'hit area ' + k + ' is large enough: ' + HIT[k].w + 'x' + HIT[k].h);
+  ok(R.heroR.r * 2 >= 61 && R.heroJ.r * 2 >= 61, 'hero buttons are big enough');
+  // pool strip data
+  ok(b.pool.odds.length === 12 && Math.abs(b.pool.odds.reduce((a, o) => a + o.p, 0) - 1) < 1e-6, 'pool odds cover 12 types and sum to 1');
+  ok(b.pool.can.coins && b.pool.can.gems, 'reroll affordable with coins and gems');
+  frame(b, ctx, 0.5);
+  // reroll for coins, then for gems (diamonds leave the profile)
+  const c0 = run.coins, t0 = run.nextType; const r1 = b.doReroll('coins'); ok(r1.ok && run.coins < c0 && run.nextType !== t0, 'coin reroll works');
+  b.update(1 / 60); ok(calls.some((c) => c[1] === 'reroll_drop'), 'reroll_drop sfx');
+  const d0 = p.diamonds; const r2 = b.doReroll('gems'); ok(r2.ok && p.diamonds === d0 - r2.spendDiamonds && r2.spendDiamonds > 0, 'gem reroll deducts diamonds');
+  p.diamonds = 0; b.refreshPool(); ok(!b.pool.can.gems, 'gem reroll disabled without diamonds'); ok(!b.doReroll('gems').ok && p.diamonds === 0, 'gem reroll refused');
+  run.coins = 0; b.refreshPool(); ok(!b.pool.can.coins, 'coin reroll disabled when unaffordable'); const rc = b.doReroll('coins'); ok(!rc.ok && rc.reason === 'coins', 'coin reroll refused');
+  b.pointerDown(R.reroll.x + 3, R.reroll.y + 3); b.pointerDown(R.rerollG.x + 3, R.rerollG.y + 3); b.key('g'); b.key('r'); frame(b, ctx, 0.3);
+  run.coins = 5000;
+  // wave preview card opens on the wave pill, plays its sfx, closes on any tap
+  b.pointerDown(HIT.wave.x + 5, HIT.wave.y + 5); ok(b.pv.open, 'wave pill opens the preview'); ok(calls.some((c) => c[1] === 'wave_preview'), 'wave_preview sfx'); frame(b, ctx, 0.4);
+  ok(b.pv.next && b.pv.next.lanes.length === 2, 'festival preview has two lanes'); b.pointerDown(270, 500); ok(!b.pv.open, 'tap closes the preview');
+  // synergy: two partners side by side link, the event bursts and the selected panel shows it
+  const sl = run.emptySlots(); const a1 = run.map.buildable.find((s) => !run.grid.has(s.idx) && !run.grid.has(s.idx + 1) && s.c < 5 && !run.map.buildable.every((q) => q.idx !== s.idx + 1));
+  run.nextType = 'snare'; run.deploy(a1.idx, { onBeat: false }); run.nextType = 'hat'; run.deploy(a1.idx + 1, { onBeat: false });
+  frame(b, ctx, 0.3); ok(b.links.length >= 1, 'active synergy link tracked'); ok(calls.some((c) => c[1] === 'synergy'), 'synergy sfx');
+  b.selected = run.grid.get(a1.idx).id; frame(b, ctx, 0.3); ok(b.panel && b.panel.box.h >= 110, 'panel shows synergy rows');
+  b.selected = run.turrets[0].id; b.drag = { id: b.selected, x: 200, y: 400, sx: 0, sy: 0, moved: true }; frame(b, ctx, 0.2); b.drag = null; b.selected = null;
+  // juice: hit-stop on a level 7 merge and a boss kill, bounded particles, damage numbers inside the board
+  b.handleEvents([{ k: 'merge', id: 1, type: 'kick', level: 7, x: 200, y: 400, big: true }]); ok(b.stop > 0.05, 'level 7 merge hit-stops'); ok(calls.some((c) => c[1] === 'merge_7'), 'merge_7 sfx'); ok(calls.some((c) => c[1] === 'drop_big'), 'drop_big on the first level 7');
+  const n0 = calls.filter((c) => c[1] === 'drop_big').length; b.handleEvents([{ k: 'merge', id: 2, type: 'kick', level: 7, x: 200, y: 400, big: true }]); ok(calls.filter((c) => c[1] === 'drop_big').length === n0, 'drop_big only for the first level 7');
+  for (let i = 0; i < 80; i++) b.num(2, 2, '9', '#fff', 14); ok(b.fx.floats.every((f) => f.x >= 30 && f.y >= 120), 'damage numbers stay inside the board');
+  for (let i = 0; i < 100; i++) b.handleEvents([{ k: 'kill', id: i, x: 100 + i, y: 300, type: 'fuzz', boss: false, r: 15 }]); ok(b.fx.parts.length <= 420 && b.fx.floats.length <= 60, 'particle and floater counts bounded');
+  p.settings.reduce = true; b.stop = 0; b.handleEvents([{ k: 'kill', id: 1, x: 100, y: 300, type: 'compressor', boss: true, r: 40 }]); ok(b.stop === 0, 'reduce motion skips hit-stop'); p.settings.reduce = false;
+  // combo milestone sound with pitch
+  run.combo = 12; b.update(1 / 60); ok(calls.some((c) => c[1] === 'combo_milestone' && c[2] && c[2].pitch >= 1), 'combo_milestone with pitch');
+  // audio: music state every 250 ms, heartbeat at low stage hp, off on pause, win and leaving
+  calls.length = 0; frame(b, ctx, 1); ok(calls.filter((c) => c[0] === 'state').length >= 3, 'setMusicState about 4 times a second');
+  run.stageHp = Math.floor(run.stageMax * 0.2); frame(b, ctx, 0.6); ok(calls.some((c) => c[0] === 'hb' && c[1] === true), 'heartbeat on at low stage hp');
+  b.setPause(true); ok(calls.filter((c) => c[0] === 'hb').pop()[1] === false, 'heartbeat off on pause'); b.setPause(false); frame(b, ctx, 0.5); ok(calls.filter((c) => c[0] === 'hb').pop()[1] === true, 'heartbeat resumes');
+  battleIdle(spy); ok(calls.filter((c) => c[0] === 'hb').pop()[1] === false, 'heartbeat off when leaving the battle');
+  ok(ctx.__st.saves === ctx.__st.restores, 'new HUD pieces keep save/restore balanced');
+}
+
 console.log('drop_the_bass battle: ' + n + ' checks passed');

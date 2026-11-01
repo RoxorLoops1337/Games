@@ -231,3 +231,28 @@ export const WHEEL = [
   { id: 'c2',    weight: 4,  label: 'Studio', reward: { crate: 'studio' }, glyph: 'gift' },
   { id: 'd30',   weight: 2,  label: '30',    reward: { diamonds: 30 },  glyph: 'diamond' },
 ];
+
+// ---------------------------------------------------------------- Fame titles (shown next to the Fame level)
+export const FAME_TITLES = [
+  [1, 'Garage Band'], [3, 'Street Busker'], [6, 'Open Mic Hero'], [10, 'Local Legend'], [14, 'Club Regular'], [19, 'Opening Act'],
+  [25, 'Household Name'], [31, 'Festival Headliner'], [38, 'Chart Topper'], [45, 'Arena Star'], [50, 'Bass Legend'],
+];
+export function fameTitle(lv) {
+  let t = FAME_TITLES[0][1];
+  for (const [min, name] of FAME_TITLES) if (lv >= min) t = name;
+  return t;
+}
+
+// ---------------------------------------------------------------- Weekly Gig (one fixed run per ISO week, same seed for everyone)
+// Each gig = one DAILY_MODS id (the sim's opts.daily) + a few extra base effects, on a fixed stage, 25 waves.
+// Rotation is by week number, so neighbouring weeks never repeat.
+export const WEEKLY_WAVES = 25;
+export const WEEKLY_GIGS = [
+  { id: 'garage_marathon', name: 'Garage Marathon',  mod: 'rich_tour',       world: 'garage',   extra: [['enemyHp', 'mul', 1.25]] },
+  { id: 'street_sprint',   name: 'Street Sprint',    mod: 'speed_run',       world: 'busk',     extra: [['enemyHp', 'mul', 1.15]] },
+  { id: 'club_glass',      name: 'Glass Night',      mod: 'glass_cannon',    world: 'club',     extra: [['rate', 'mul', 1.15]] },
+  { id: 'festival_remix',  name: 'Festival Remix',   mod: 'level_three',     world: 'festival', extra: [['enemyHp', 'mul', 1.2]] },
+  { id: 'solo_tour',       name: 'Solo Tour',        mod: 'no_merge',        world: 'busk',     extra: [['enemyHp', 'mul', 1.3]] },
+  { id: 'arena_duet',      name: 'Arena Duet',       mod: 'two_instruments', world: 'arena',    extra: [['enemyHp', 'mul', 1.35]] },
+];
+export const WEEKLY_REWARD = { diamonds: 20, perWave: 1, winDiamonds: 25, records: 600, perWaveRecords: 60, fans: 120, crate: 'studio', crateMinWaves: 15 };

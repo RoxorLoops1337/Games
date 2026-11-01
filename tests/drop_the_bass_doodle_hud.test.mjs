@@ -68,7 +68,7 @@ function fxScene(fx) {
   fx.cone(100, 100, 0.5, 120, 0.4, '#ff5fb0'); fx.light(100, 100, 60, '#ffc83d'); fx.pillar(300, 400, '#9dff3a'); fx.raysBurst(270, 400, '#ffd23c'); fx.aurora('#ff5fb0');
   for (let i = 0; i < 6; i++) fx.trail(1, 10 + i * 10, 10 + i * 5, '#ffb070');
   fx.floater(100, 100, '1234', '#ff9226', 18); fx.floater(140, 100, 'CRIT 99', '#ffc83d', 26, { crit: true }); fx.floater(180, 100, '+5 coins', '#fff', 14); fx.floater(220, 100, 'Weird * chars?', '#fff', 16); fx.floater(260, 100, '', '#fff', 16);
-  fx.addShake(10); fx.addChroma(1); fx.doFlash('#ff2a4a', 0.5);
+  fx.addShake(10); fx.addChroma(1); fx.doFlash('#ff2a4a', 0.5); fx.puff(100, 100, 6); fx.sparkRing(100, 100, 12, ['#fff', '#ffc83d']);
 }
 for (const style of ['doodle']) {
   setStyle(style);
