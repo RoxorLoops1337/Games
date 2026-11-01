@@ -251,8 +251,8 @@ function depthRig(runOpts = {}, profFn) {
   // ---- pool strip popover, modifier badges, skin
   const { calls, run, b, ctx, p } = depthRig({ modifiers: ['glass_stage', 'speedrun'] }, (pp) => { pp.settings.skin = 'skin_chalk'; });
   frame(b, ctx, 0.4);
-  ok(POOL_HIT.h >= 30 && POOL_HIT.y + POOL_HIT.h <= R.deploy.y && POOL_HIT.y >= 836, 'pool strip tap area sits between the board and the DROP row: ' + POOL_HIT.h + ' tall');
-  ok(!(POOL_HIT.x < R.merge.x + R.merge.w && POOL_HIT.x + POOL_HIT.w > R.merge.x && POOL_HIT.y + POOL_HIT.h > R.merge.y), 'pool area does not overlap the DROP row hit areas');
+  ok(POOL_HIT.h >= 60 && POOL_HIT.y + POOL_HIT.h <= HIT.deploy.y && POOL_HIT.y >= 836, 'pool strip tap area sits between the board and the DROP row: ' + POOL_HIT.h + ' tall');
+  ok(!(POOL_HIT.x < R.merge.x + R.merge.w && POOL_HIT.x + POOL_HIT.w > HIT.merge.x && POOL_HIT.y + POOL_HIT.h > HIT.merge.y), 'pool area does not overlap the DROP row hit areas');
   b.pointerDown(R.deploy.x + 20, R.deploy.y + 20); ok(!b.popover, 'the DROP button does not open a card');
   const n = b.pool.odds.length, r = R.pool, pitch = Math.min(29, (r.w - 16) / n), x0 = r.x + r.w / 2 - (n - 1) * pitch / 2;
   b.pointerDown(x0 + 3 * pitch, POOL_HIT.y + 4); ok(b.popover && b.popover.kind === 'pool' && b.popover.type === b.pool.odds[3].type, 'tapping a pool icon opens that turret card');

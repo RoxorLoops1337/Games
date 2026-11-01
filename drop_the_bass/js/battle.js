@@ -7,7 +7,7 @@ import {
 import { Run } from './sim.js';
 import { Fx } from './fx.js';
 import { REMIX, WAVE_MODS } from './data_run.js';
-import { BOSS_PHASE_EFFECTS, BRANCH_BY_ID } from './data_depth.js';
+import { BOSS_PHASE_EFFECTS, BRANCH_BY_ID, ENDLESS_MILESTONES } from './data_depth.js';
 import { TUTORIAL, HINTS, LOOPY_TIPS } from './data_story.js';
 import * as AE from './art_entities.js';
 import * as AW from './art_world.js';
@@ -38,26 +38,39 @@ export const R = {
   hype:   { x: 12, y: 66, w: 280, h: 40 },
   speed:  { x: 298, y: 62, w: 56, h: 46 },
   call:   { x: 360, y: 62, w: 172, h: 46 },
-  deploy: { x: 153, y: 872, w: 169, h: 80 },
-  merge:  { x: 88, y: 872, w: 61, h: 78 },
-  reroll: { x: 326, y: 872, w: 61, h: 78 },    // re-roll the next drop for coins
-  rerollG: { x: 391, y: 872, w: 61, h: 78 },   // the same for gems
-  pool:   { x: 96, y: 838, w: 348, h: 32 },    // the drop pool strip: tap an icon for its card (hit area DD.POOL_HIT, as tall as the layout allows)
+  deploy: { x: 153, y: 899, w: 169, h: 59 },
+  merge:  { x: 88, y: 899, w: 61, h: 59 },
+  reroll: { x: 326, y: 899, w: 61, h: 59 },    // re-roll the next drop for coins
+  rerollG: { x: 391, y: 899, w: 61, h: 59 },   // the same for gems
+  pool:   { x: 96, y: 846, w: 348, h: 46 },    // the drop pool strip (drawn): tap an icon for its card (hit area DD.POOL_HIT, 61 units = 44 px on a 390 wide phone)
   heroR:  { x: 46, y: 908, r: 38 },
   heroJ:  { x: 494, y: 908, r: 38 },
 };
+// The bottom stack (board ends at y 840): pool strip hit 840..901, then the DROP row hit 901..962 (the canvas ends at 960, a tap just below is
+// still on the button). Neither steals a tap from the board's bottom row, and the two never overlap.
+export const ROW_HIT = { y: 901, h: 61 };
+const rowHit = (r) => ({ x: r.x, y: ROW_HIT.y, w: r.w, h: ROW_HIT.h });
 export const HIT = {
   pause: R.pause,
   wave: { x: 262, y: 0, w: 142, h: 61 },            // tap the wave pill: the wave preview card
   speed: { x: 292, y: 58, w: 66, h: 63 },
   call: { x: 358, y: 58, w: 176, h: 63 },
-  deploy: R.deploy, merge: R.merge, reroll: R.reroll, rerollG: R.rerollG,
+  deploy: rowHit(R.deploy), merge: rowHit(R.merge), reroll: rowHit(R.reroll), rerollG: rowHit(R.rerollG),
 };
 const NUM_BOX = { x0: BOARD_X + 22, x1: BOARD_X + BOARD_W - 22, y0: BOARD_Y + 14, y1: BOARD_Y + BOARD_H - 8 };
 const MILESTONES = [10, 25, 50, 100];
-let hbLive = false;
-// main.js calls this every frame it is NOT in a battle: makes sure the heartbeat loop never outlives the battle view
-export function battleIdle(audio) { if (hbLive && audio) { hbLive = false; if (audio.heartbeat) audio.heartbeat(false); } }
+let hbLive = false, autoLowRestore = null;
+// main.js calls this every frame it is NOT in a battle: makes sure the heartbeat loop never outlives the battle view, and that a run-only
+// automatic Low graphics (see Battle.perfWatch) gives the art resolution back once the run is left
+export function battleIdle(audio) {
+  if (hbLive && audio) { hbLive = false; if (audio.heartbeat) audio.heartbeat(false); }
+  if (autoLowRestore) { const f = autoLowRestore; autoLowRestore = null; try { f(); } catch (e) { /* ignore */ } }
+}
+// Auto low graphics (settings.autolow): a battle whose frames average over SLOW_MS for WINDOW_MS of active play switches to Low graphics for the run.
+// GRACE_S: no judging while the view is new (asset baking), GAP_MS: a frame this long is a hidden tab or a stall, never counted.
+export const AUTOLOW = { SLOW_MS: 28, WINDOW_MS: 4000, GRACE_S: 3, GAP_MS: 250 };
+// Haptics (settings.vibrate): pulse lengths in ms and the shortest gap between two pulses (a heavier one may cut in sooner)
+export const HAPTIC = { merge: [12, 12, 12, 12, 30, 40, 55], boss: [45, 60, 45], bossKill: [60, 70, 60], leak: 90, leakBoss: 160, gap: 0.12, gapHeavy: 0.03 };
 
 export class Battle {
   constructor(app, o = {}) {
@@ -104,6 +117,9 @@ export class Battle {
     this.popover = null;                                            // { kind: 'pool' | 'mods', type?, t } card over the board
     this.branchPress = null; this.lastHintT = -99;
     this.fx.noShake = !app.profile.settings.shake || !!app.profile.settings.reduce;
+    this.clock = o.clock || null;                                   // frame clock in ms (tests pass a fake one), default performance.now
+    this.perf = { last: null, acc: 0, n: 0 }; this.autoLow = false;
+    this.vibT = -9; this.vibPri = 0; this.msFlash = 0;              // haptics rate limit, endless milestone chip flash
     app.audio.musicStart('world_' + this.world.id);
     this.slowTick();
   }
@@ -118,6 +134,8 @@ export class Battle {
   update(dt) {
     this.t += dt;
     const run = this.run;
+    this.perfWatch();
+    if (this.msFlash > 0) this.msFlash = Math.max(0, this.msFlash - dt * 0.7);
     this.fx.update(dt);
     if (this.hurtFlash > 0) this.hurtFlash -= dt * 2.2;
     if (this.deployPulse > 0) this.deployPulse -= dt * 4;
@@ -158,6 +176,31 @@ export class Battle {
     }
     if (run.choice && !this.choiceOpen) { this.choiceOpen = true; this.app.hooks.onChoice(run, this); }
     if (!run.choice) this.choiceOpen = false;
+  }
+  // Auto low graphics: judged on the REAL frame clock (update's dt is capped). Not while paused or held, not in the first GRACE_S seconds, not for
+  // hidden-tab or stalled frames. Once on it stays on for the run; the saved setting is never touched.
+  perfWatch() {
+    if (this.autoLow) return;
+    const now = this.clock ? this.clock() : (typeof performance !== 'undefined' ? performance.now() : 0), pf = this.perf;
+    const last = pf.last; pf.last = now;
+    const st = this.prof.settings;
+    if (st.autolow === false || st.lowfx) return;
+    const hidden = typeof document !== 'undefined' && !!document.hidden;
+    if (hidden || this.paused || this.hold || this.ended || this.t < AUTOLOW.GRACE_S) { pf.acc = 0; pf.n = 0; return; }
+    if (last == null) return;
+    const ms = now - last;
+    if (!(ms > 0) || ms > AUTOLOW.GAP_MS) return;
+    pf.acc += ms; pf.n++;
+    if (pf.acc < AUTOLOW.WINDOW_MS) return;
+    const avg = pf.acc / pf.n; pf.acc = 0; pf.n = 0;
+    if (avg > AUTOLOW.SLOW_MS) this.enableAutoLow();
+  }
+  enableAutoLow() {
+    if (this.autoLow) return;
+    this.autoLow = true; this.fx.bloomOn = false;
+    const v = this.app.view;
+    if (v && v.dpr) { AE.setArtScale(1.25); AW.setArtScale(1.25); autoLowRestore = () => { const as = Math.max(1.5, Math.min(3, v.dpr * v.s)); AE.setArtScale(as); AW.setArtScale(as); }; }
+    this.fx.floater(W / 2, 190, BT.autoLow(), COL.cyan, 17, { life: 3.2, vy: -8 });
   }
   // every 250 ms: adaptive music state, heartbeat, and the cached sim read-outs the HUD draws (pool odds, wave preview, synergy links)
   slowTick() {
@@ -240,7 +283,7 @@ export class Battle {
     this.comboPrev = cb;
   }
   get skin() { const s = this.prof.settings.skin, ids = AW.BOARD_SKIN_IDS; return s && ids && ids.includes(s) ? s : undefined; }
-  get lite() { return !!this.prof.settings.lowfx; }
+  get lite() { return !!this.prof.settings.lowfx || this.autoLow; }
   n(k) { return this.lite ? Math.max(1, Math.round(k * 0.4)) : k; }   // particle counts shrink on Low graphics
   shake(v) { this.fx.addShake(v); }
   freeze(sec) { if (!this.prof.settings.reduce) this.stop = Math.max(this.stop, sec); }
@@ -325,6 +368,7 @@ export class Battle {
           if (big) { fx.addChroma(0.4); fx.confetti(e.x, e.y, this.n(L >= 6 ? 36 : 26)); }
           this.shake([0, 0, 1, 2, 4, 8, 11, 15][Math.min(7, L)]);
           if (top) this.freeze(0.09);
+          this.vibrate(HAPTIC.merge[Math.min(6, Math.max(0, L - 1))], L >= 5 ? 1 : 0);
           this.sfx(top ? 'merge_7' : big ? 'merge_big' : 'merge', e.x, { pitch: 1 + (L - 2) * 0.06 });
           if (top && !this.sevenSeen) { this.sevenSeen = true; this.sfx('drop_big', null, { at: 0.45 }); this.queueBanner(BT.level7(), BT.maxedOut(def.name), COL.gold, 1.5, { small: true }); }
           this.refreshPool(); this.refreshLinks();
@@ -380,7 +424,7 @@ export class Battle {
             }
           }
           this.sfx(e.boss ? 'boss_die' : (e.r > 18 ? 'kill_big' : 'kill'), e.x);
-          if (e.boss) { this.shake(16); fx.addChroma(0.8); fx.doFlash('#fff', 0.6); fx.confetti(e.x, e.y, this.n(40)); fx.raysBurst(e.x, e.y, col, 420, 1.1, 18); fx.ring(e.x, e.y, 260, '#fff', { life: 0.8, w: 8 }); fx.pillar(e.x, e.y + 10, col, 360, 0.9); fx.sparkRing(e.x, e.y, this.n(16), [COL.gold, '#fff', col], 220, 0.8); this.freeze(0.12); this.bossBar = null; }
+          if (e.boss) { this.shake(16); fx.addChroma(0.8); fx.doFlash('#fff', 0.6); fx.confetti(e.x, e.y, this.n(40)); fx.raysBurst(e.x, e.y, col, 420, 1.1, 18); fx.ring(e.x, e.y, 260, '#fff', { life: 0.8, w: 8 }); fx.pillar(e.x, e.y + 10, col, 360, 0.9); fx.sparkRing(e.x, e.y, this.n(16), [COL.gold, '#fff', col], 220, 0.8); this.freeze(0.12); this.bossBar = null; this.vibrate(HAPTIC.bossKill, 2); }
           break;
         }
         case 'coin': if (set.numbers) this.num(e.x, e.y - 14, '+' + e.v, COL.coin, 13, { life: 0.7, vy: -34 }); if (e.v >= 3) this.sfx('coin', e.x, { vol: 0.5 }); break;
@@ -394,7 +438,7 @@ export class Battle {
           this.shake(e.boss ? 16 : 7); fx.addChroma(e.boss ? 0.9 : 0.5); fx.doFlash('#ff2a4a', e.boss ? 0.55 : 0.28); this.hurtFlash = 1;
           fx.ring(this.run.map.base.x, this.run.map.base.y, 130, '#ff4a5e', { life: 0.5, w: 6 }); fx.light(this.run.map.base.x, this.run.map.base.y, 150, '#ff4a5e', 0.4, 0.9);
           fx.floater(this.run.map.base.x, this.run.map.base.y - 36, '-' + e.n, COL.red, 22, { life: 1 });
-          this.sfx('leak'); this.vibrate(e.boss ? 160 : 60);
+          this.sfx('leak'); this.vibrate(e.boss ? HAPTIC.leakBoss : HAPTIC.leak, 2);
           break;
         }
         case 'spawn': {
@@ -415,7 +459,7 @@ export class Battle {
           this.queueBanner(meta ? BT.phaseName(meta.name.toUpperCase()) : BT.phaseDefault(), e.text, COL.red, 2.6, { boss: true });
           fx.doFlash('#ff2a4a', 0.4); fx.addShake(12); fx.addChroma(0.7); this.freeze(0.06);
           fx.ring(e.x, e.y, 170, COL.red, { life: 0.6, w: 7 }); fx.sparkRing(e.x, e.y, this.n(10), [COL.red, '#fff', COL.gold], 200, 0.6);
-          this.sfx('boss_phase'); this.vibrate(90);
+          this.sfx('boss_phase'); this.vibrate(HAPTIC.boss, 2);
           if (e.id === 'steal_turret' && e.turretId != null) { fx.burst(e.x, e.y, ['#fff', '#d8d2e4', COL.purple || '#7a5cff'], this.n(14), { speed: 140, life: 0.6 }); this.sfx('turret_stolen', e.x, { at: 0.1 }); }
           this.hint2('hint_bossphase');
           break;
@@ -439,7 +483,7 @@ export class Battle {
           this.shake(4); this.sfx('branch_pick', e.x); this.refreshLinks();
           break;
         }
-        case 'bossphase': this.queueBanner(BT.phaseN(e.phase), BT.playbackSerious(), COL.pink, 2); fx.addShake(10); this.sfx('boss_warn'); break;
+        case 'bossphase': this.queueBanner(BT.phaseN(e.phase), BT.playbackSerious(), COL.pink, 2); fx.addShake(10); this.sfx('boss_warn'); this.vibrate(HAPTIC.boss, 2); break;
         case 'gate': this.sfx(e.on ? 'jam' : 'whoosh'); break;
         case 'wave': {
           const mod = e.mod ? WAVE_MODS[e.mod] : null;
@@ -466,12 +510,12 @@ export class Battle {
           if (ab === 'freeze') {
             fx.ring(hc.x, hc.y, 900, COL.cyan, { life: 0.8, w: 12 }); fx.ring(W / 2, H / 2, 640, '#fff', { life: 0.6, w: 8 }); fx.doFlash('#bfe8ff', 0.5); fx.addShake(7); fx.addChroma(0.6);
             fx.burst(W / 2, 260, ['#fff', '#bfe8ff', '#8fd8ff'], this.n(40), { speed: 180, life: 1.2, size: 4, up: -40, g: 60 });
-            this.sfx('hero_freeze'); this.vibrate(80);
+            this.sfx('hero_freeze'); this.vibrate(80, 1);
             this.queueBanner(BT.freeze(), BT.freezeSub(), COL.cyan, 1.2, { small: true });
           } else if (ab === 'overclock') {
             fx.ring(hc.x, hc.y, 900, COL.orange, { life: 0.7, w: 12 }); fx.doFlash(COL.orange, 0.4); fx.addShake(6);
             for (const tu of run.turrets) { fx.ring(tu.x, tu.y, 56, COL.orange, { life: 0.5, w: 5 }); fx.sparks(tu.x, tu.y, [COL.orange, COL.gold], this.n(4), { speed: 200 }); }
-            this.sfx('hero_overclock'); this.vibrate(80);
+            this.sfx('hero_overclock'); this.vibrate(80, 1);
             this.queueBanner(BT.overclock(), BT.overclockSub(), COL.orange, 1.2, { small: true });
           } else if (ab === 'coinrain') {
             fx.ring(hc.x, hc.y, 900, COL.gold, { life: 0.7, w: 12 }); fx.doFlash(COL.gold, 0.3); fx.confetti(W / 2, 200, this.n(30));
@@ -483,7 +527,7 @@ export class Battle {
             this.queueBanner(BT.shield(), BT.shieldSub(), COL.cyan, 1.2, { small: true });
           } else if (e.who === 'roxor') {
             fx.ring(R.heroR.x, R.heroR.y, 900, COL.green, { life: 0.7, w: 14 }); fx.ring(W / 2, H / 2, 700, '#fff', { life: 0.5, w: 8 }); fx.ring(W / 2, H / 2, 420, COL.green, { life: 0.9, w: 10 }); fx.addChroma(1); fx.raysBurst(W / 2, H / 2, COL.green, 700, 0.8, 20);
-            fx.addShake(14); fx.doFlash(COL.green, 0.45); this.sfx('hero_roxor'); this.vibrate(120);
+            fx.addShake(14); fx.doFlash(COL.green, 0.45); this.sfx('hero_roxor'); this.vibrate(120, 1);
             this.queueBanner(BT.blastBanner(), '', COL.green, 1.0, { small: true });
           } else {
             fx.ring(R.heroJ.x, R.heroJ.y, 900, COL.pink, { life: 0.8, w: 14 }); fx.doFlash(COL.pink, 0.4); fx.aurora('#ff5fb0', 2.2); fx.burst(W / 2, 700, [COL.pink, '#fff', '#ffd0f0'], 30, { speed: 220, up: 120, g: -40, life: 1.2, size: 4 }); this.sfx('hero_jasmin');
@@ -512,6 +556,14 @@ export class Battle {
         case 'revive': this.queueBanner(BT.secondWind(), BT.secondWindSub(), COL.green, 2); fx.doFlash('#fff', 0.6); this.sfx('heal'); break;
         case 'win': this.sfx('win'); fx.confetti(W / 2, 400, 80); fx.confetti(120, 500, 40); fx.confetti(420, 500, 40); fx.doFlash('#fff', 0.5); fx.raysBurst(W / 2, 420, COL.gold, 700, 1.4, 20); break;
         case 'lose': this.sfx('lose'); fx.addShake(10); break;
+        case 'milestone': {   // endless: a wave milestone was reached (the chip under the wave pill flashes, the meta layer pays it)
+          const ms = ENDLESS_MILESTONES.find((q) => q.id === e.id);
+          this.msFlash = 1; this.sfx('milestone');
+          fx.ring(R.wave.x + R.wave.w / 2, R.wave.y + 52, 90, COL.gold, { life: 0.6, w: 6 }); fx.sparkRing(R.wave.x + R.wave.w / 2, R.wave.y + 52, this.n(10), [COL.gold, '#fff', COL.pink], 90, 0.6);
+          fx.floater(W / 2, 250, BT.milestone(), COL.gold, 24, { life: 1.6, vy: -16 });
+          if (ms) this.queueBanner(BT.named(ms.name.toUpperCase()), BT.waveBanner(e.wave, 0), COL.gold, 2, { small: true });
+          break;
+        }
         case 'echoes': fx.burst(e.x, e.y, '#d6c7ff', 8, { speed: 90 }); break;
         case 'hum': break;
         case 'rage': fx.burst(e.x, e.y, '#ff8a3c', 6, { speed: 100 }); break;
@@ -520,7 +572,18 @@ export class Battle {
       if (this.tut) this.tutEvent(e);
     }
   }
-  vibrate(ms) { if (this.prof.settings.vibrate && typeof navigator !== 'undefined' && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } }
+  // pri: 0 light, 1 normal, 2 heavy. Never under Reduce motion, never faster than HAPTIC.gap (heavy pulses may cut in after gapHeavy).
+  vibrate(pat, pri = 1) {
+    const set = this.prof.settings;
+    if (!set.vibrate || set.reduce) return false;
+    const nav = this.o.navigator || (typeof navigator !== 'undefined' ? navigator : null);
+    if (!nav || typeof nav.vibrate !== 'function') return false;
+    const since = this.t - this.vibT;
+    if (since < (pri > this.vibPri ? HAPTIC.gapHeavy : HAPTIC.gap)) return false;
+    this.vibT = this.t; this.vibPri = pri;
+    try { nav.vibrate(pat); } catch (e) { return false; }
+    return true;
+  }
 
   // ------------------------------------------------------------------------------------------------ actions
   doDeploy() {

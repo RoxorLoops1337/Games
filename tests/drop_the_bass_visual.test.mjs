@@ -78,7 +78,7 @@ try {
   if (!font) fail('Patrick Hand did not load (self-hosted font missing?)');
 
   // ---- hub, all five tabs
-  await page.evaluate(() => { const a = __dtb.app; a.profile.tutorial.done = true; a.profile.story.intro = true; a.profile.story.worlds.garage = true; a.sessionGreeted = true; a.openHub('tour'); });
+  await page.evaluate(() => { const a = __dtb.app; a.profile.tutorial.done = true; a.profile.story.intro = true; a.profile.story.worlds.garage = true; a.sessionGreeted = true; for (const k of ['hint_setlist', 'hint_wardrobe', 'hint_skin_buy', 'hint_studio_scene', 'hint_weekly', 'lang_offer']) a.profile.tutorial.hints[k] = true; a.openHub('tour'); });
   await page.waitForSelector('.tabs');
   for (const t of ['Tour', 'Studio', 'Band', 'Crates', 'Goals']) {
     await noModals();

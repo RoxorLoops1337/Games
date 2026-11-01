@@ -1,6 +1,6 @@
 // ui_wardrobe.js: the Band tab cosmetics. Per hero a horizontal outfit strip (each outfit drawn on the hero) and the Stage skins strip
 // (live board thumbnails). Buying goes through meta.buyOutfit / meta.buySkin, wearing through the same calls.
-import { BOARD_X, BOARD_Y, BOARD_W, BOARD_H } from './data_core.js';
+import { BOARD_X, BOARD_Y, BOARD_W, BOARD_H, WORLD_BY_ID } from './data_core.js';
 import { SKIN_FALLBACK, SKIN_PRICES } from './data_meta.js';
 import * as M from './meta.js';
 import { t } from './i18n.js';
@@ -18,7 +18,10 @@ function outfitCard(app, who, o, rerender) {
   let state;
   if (o.worn) state = h('div', { class: 'ward-state worn' }, icon('check', 18, '#43b94a'), t('ward.worn', 'Worn'));
   else if (o.owned) state = act(t('ward.wear', 'Wear'), () => { M.buyOutfit(p, who, o.id); app.audio.play('ui_click'); app.save(); rerender(); }, 'green');
-  else if (o.locked) state = h('div', { class: 'ward-state lock' }, icon('lock', 16, '#6b6477'), o.how);
+  else if (o.locked) {
+    const how = o.unlock && o.unlock.world !== undefined ? t('ward.clear_stage', 'Clear {stage}', { stage: (WORLD_BY_ID[o.unlock.world] || {}).name || o.unlock.world }) : t('ward.reach_endless', 'Reach Endless wave {n}', { n: o.unlock && o.unlock.endless });
+    state = h('div', { class: 'ward-state lock' }, icon('lock', 16, '#6b6477'), how);
+  }
   else {
     const can = p.diamonds >= o.price;
     state = act([icon('diamond', 18), o.price], () => {
