@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0e0721">
+<title>Groove Lock</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%2730%27 fill=%27%231d1243%27 stroke=%27%23ff78c4%27 stroke-width=%274%27/%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%2711%27 fill=%27%23ffd34d%27/%3E%3Crect x=%2726%27 y=%274%27 width=%2712%27 height=%2712%27 rx=%274%27 fill=%27%23ff5a4e%27/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#0e0721; --panel:#1d1243; --edge:#6a4fd8; --cy:#35d6ff; --pk:#ff78c4; --gold:#ffd34d; --ok:#5dff9a; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  [hidden] { display:none !important; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:#fff; touch-action:none; user-select:none; -webkit-user-select:none;
+    font:700 15px ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif; }
+  #cv { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  #stage { position:fixed; top:0; bottom:0; pointer-events:none; }
+  #stage > * { pointer-events:auto; }
+  button { font:inherit; color:inherit; cursor:pointer; border:0; }
+
+  #hud { position:absolute; left:0; right:0; top:0; height:58px; padding:8px 10px 0; display:flex; align-items:center; gap:10px; }
+  .rb { width:42px; height:42px; border-radius:50%; background:linear-gradient(#3a2a78,#241657); border:2px solid #6a4fd8aa; box-shadow:0 3px 0 #120a2b; font-size:20px; line-height:1; flex:none; }
+  .rb:active { transform:translateY(2px); box-shadow:0 1px 0 #120a2b; }
+  #ttl { flex:1; min-width:0; text-align:center; pointer-events:none; }
+  #ttl b { display:block; font-size:18px; letter-spacing:.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #ttl small { display:block; font-size:11.5px; opacity:.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #moves { flex:none; min-width:74px; padding:5px 10px 4px; border-radius:14px; background:#1a1040; border:2px solid #6a4fd8aa; text-align:center; line-height:1.05; }
+  #moves b { font-size:20px; } #moves small { opacity:.75; font-size:11px; display:block; }
+  #moves.good b { color:var(--ok); } #moves.mid b { color:var(--gold); } #moves.bad b { color:#ff8a5c; }
+
+  #tools { position:absolute; left:0; right:0; height:76px; display:flex; align-items:center; justify-content:center; gap:9px; }
+  .tb { position:relative; width:54px; height:56px; border-radius:18px; background:linear-gradient(#3a2a78,#241657); border:2px solid #6a4fd8aa; box-shadow:0 4px 0 #120a2b;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; font-size:10px; letter-spacing:.2px; }
+  .tb i { font-style:normal; font-size:21px; line-height:1; }
+  .tb:active { transform:translateY(3px); box-shadow:0 1px 0 #120a2b; }
+  .tb.big { width:70px; height:66px; border-radius:22px; background:linear-gradient(#8a5cff,#5a32d8); border-color:#c2a8ff; }
+  .tb.big svg { width:34px; height:34px; }
+  .tb[disabled] { opacity:.32; pointer-events:none; filter:grayscale(.6); }
+  .tb.hp { animation:hp .45s ease-in-out infinite alternate; }
+  @keyframes hp { from { box-shadow:0 4px 0 #120a2b,0 0 0 0 #ffd34d00; transform:scale(1); } to { box-shadow:0 4px 0 #120a2b,0 0 22px 6px #ffd34dcc; transform:scale(1.09); } }
+
+  #toast { position:absolute; left:50%; transform:translate(-50%,8px); max-width:92%; padding:9px 16px; border-radius:16px; background:#000000bb; border:1.5px solid #ffffff30;
+    font-size:14px; text-align:center; line-height:1.3; opacity:0; transition:opacity .25s,transform .25s; pointer-events:none !important; backdrop-filter:blur(3px); }
+  #toast.on { opacity:1; transform:translate(-50%,0); }
+
+  .overlay { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; padding:20px; z-index:5; text-align:center; }
+  .overlay.on { display:flex; }
+  #menu { justify-content:space-between; padding:6vh 18px 5vh; pointer-events:none; }
+  #menu > * { pointer-events:auto; }
+  .logo { font-size:min(15vw,70px); line-height:.9; font-weight:900; letter-spacing:1px; text-transform:uppercase;
+    background:linear-gradient(#fff 8%,#ffd9f4 40%,#ff78c4 55%,#8d63ff 100%); -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 4px 0 #2a0f6a) drop-shadow(0 0 22px #8d63ffaa); }
+  .tag { margin-top:10px; font-size:14px; opacity:.9; text-shadow:0 2px 8px #000a; }
+  .tag b { color:var(--pk); }
+  .btnrow { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top:12px; }
+  .cta { padding:16px 44px; border-radius:26px; font-size:24px; font-weight:900; letter-spacing:1px; background:linear-gradient(#ffe36a,#ffb21f); color:#3a1d00; box-shadow:0 6px 0 #a35f00,0 0 30px #ffb21f88; }
+  .cta:active { transform:translateY(4px); box-shadow:0 2px 0 #a35f00; }
+  .sec { padding:11px 18px; border-radius:18px; background:linear-gradient(#3a2a78,#241657); border:2px solid #6a4fd8aa; box-shadow:0 4px 0 #120a2b; }
+  .sec:active { transform:translateY(3px); box-shadow:0 1px 0 #120a2b; }
+  .foot { font-size:11.5px; opacity:.55; margin-top:10px; }
+
+  #levels { background:#0b0520ee; justify-content:flex-start; padding-top:max(18px,4vh); overflow:auto; touch-action:pan-y; }
+  #levels h2 { margin:6px 0 4px; font-size:26px; } #levels p { margin:0 0 14px; opacity:.7; font-size:13px; }
+  #grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; width:min(100%,520px); }
+  .card { position:relative; text-align:left; padding:12px 12px 10px; border-radius:18px; background:linear-gradient(#2c1c68,#1d1243); border:2px solid #6a4fd8aa; box-shadow:0 4px 0 #120a2b; min-height:104px; }
+  .card:active { transform:translateY(3px); box-shadow:0 1px 0 #120a2b; }
+  .card .n { font-size:11px; opacity:.6; letter-spacing:1px; } .card b { display:block; font-size:17px; margin:1px 0 2px; } .card small { display:block; font-size:11.5px; opacity:.72; line-height:1.25; }
+  .card .st { position:absolute; right:10px; bottom:8px; font-size:18px; letter-spacing:1px; color:var(--gold); text-shadow:0 0 8px #ffd34d88; }
+  .card .st s { color:#ffffff30; text-decoration:none; text-shadow:none; }
+  .card.lock { opacity:.45; pointer-events:none; filter:grayscale(.7); }
+  .card.jam { grid-column:1 / -1; background:linear-gradient(#5a2a88,#34135e); border-color:#ff78c4aa; }
+
+  #win { position:fixed; left:0; right:0; bottom:0; z-index:4; display:none; justify-content:center; pointer-events:none; }
+  #win.on { display:flex; }
+  #winp { pointer-events:auto; width:min(94%,500px); margin-bottom:max(12px,env(safe-area-inset-bottom)); padding:14px 16px 16px; border-radius:26px; text-align:center;
+    background:linear-gradient(#2e1c6e,#1a0f45); border:2.5px solid #ffd34d; box-shadow:0 0 40px #ffd34d55,0 10px 0 #0a0420; animation:up .5s cubic-bezier(.2,1.4,.4,1) both; }
+  @keyframes up { from { transform:translateY(120%); } to { transform:none; } }
+  #winp h3 { margin:0; font-size:26px; letter-spacing:1px; color:var(--gold); text-shadow:0 0 16px #ffd34d88; }
+  #stars { font-size:44px; letter-spacing:4px; margin:2px 0; color:var(--gold); text-shadow:0 0 14px #ffd34d99; }
+  #stars s { text-decoration:none; color:#ffffff28; text-shadow:none; }
+  #winp .sub { font-size:13px; opacity:.8; margin-bottom:10px; line-height:1.35; }
+  #winp .btnrow { margin-top:6px; } #winp .cta { padding:12px 34px; font-size:20px; }
+  #tip { position:absolute; left:50%; transform:translateX(-50%); width:min(92%,430px); padding:10px 14px; border-radius:16px; background:#150a38ee; border:2px solid var(--cy); font-size:13.5px; line-height:1.35; text-align:center; display:none; box-shadow:0 0 24px #35d6ff55; }
+  #tip.on { display:block; } #tip u { display:block; margin-top:7px; text-decoration:none; color:var(--cy); font-size:12px; letter-spacing:.5px; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="stage">
+  <div id="hud" hidden>
+    <button class="rb" id="bMenu" aria-label="Menu">&#9776;</button>
+    <div id="ttl"><b id="lvName">Heartbeat</b><small id="lvSub"></small></div>
+    <div id="moves" title="Moves / par"><b id="mv">0</b><small id="parTxt">par 8</small></div>
+    <button class="rb" id="bRestart" aria-label="Restart">&#8635;</button>
+  </div>
+  <div id="tools" hidden>
+    <button class="tb" id="bUndo" aria-label="Undo"><i>&#8630;</i>Undo</button>
+    <button class="tb" id="bGoal" aria-label="Hear the goal groove"><i>&#9835;</i>Goal</button>
+    <button class="tb big" id="bL" aria-label="Spin counter clockwise"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleX(-1)"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 3.5V8h-4.5"/></svg></button>
+    <button class="tb big" id="bR" aria-label="Spin clockwise"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 3.5V8h-4.5"/></svg></button>
+    <button class="tb" id="bHint" aria-label="Hint"><i>&#10024;</i>Hint</button>
+  </div>
+  <div id="toast"></div>
+  <div id="tip"></div>
+</div>
+
+<div id="menu" class="overlay on">
+  <div>
+    <div class="logo">Groove<br>Lock</div>
+    <div class="tag">a loop puzzle with <b>RoxorLoops</b> &amp; <b>Jasmin</b></div>
+  </div>
+  <div>
+    <div class="btnrow"><button class="cta" id="bPlay">PLAY</button></div>
+    <div class="btnrow"><button class="sec" id="bLevels">Levels</button><button class="sec" id="bSound">Sound on</button></div>
+    <div class="foot">Tap anywhere to hear the finished song. Prototype.</div>
+  </div>
+</div>
+
+<div id="levels" class="overlay">
+  <h2>Midnight Loop</h2>
+  <p>Six layers. Lock them all to finish the song.</p>
+  <div id="grid"></div>
+  <div class="btnrow" style="margin-top:16px"><button class="sec" id="bBack">Back</button></div>
+</div>
+
+<div id="win"><div id="winp">
+  <h3 id="winT">GROOVE LOCKED!</h3>
+  <div id="stars"></div>
+  <div class="sub" id="winS"></div>
+  <div class="btnrow"><button class="cta" id="bNext">NEXT</button><button class="sec" id="bRetry">Retry</button><button class="sec" id="bLv">Levels</button></div>
+</div></div>
+
+<script src="rj-cast.js"></script>
+<script type="module" src="game.js"></script>
+</body>
+</html>

@@ -15,6 +15,7 @@ Reply formatting:
 - `blockmates/`: original 2D block sandbox for up to 16 players (plain ES modules, no build; the same `World` simulation runs in the browser for solo play, in `server/node.js` and in a Cloudflare Durable Object). Its own `CLAUDE.md` has the rules (append-only ids, no art files); tests `npm run test:blockmates`.
 - `functions/api/*.js`: Cloudflare Pages Functions (leaderboards + cloud saves, KV binding `BOARD`).
 - `tests/<game>_*.test.mjs`: headless suites, one `test:<name>` npm script per game. Write new tests there; never create throwaway harnesses outside `tests/`.
+- `groove_lock/`: Groove Lock, a loop puzzle (vinyl ring, lorries of beatbox/vocal cubes, solver-computed par and hints). Plain ES modules; its own `CLAUDE.md`; tests `npm run test:groovelock`.
 - `awesome_farm/`: Awesome Farm, a Vite + TypeScript game with its own `package.json`, `CLAUDE.md` and `npm run check` (run them inside that folder). The site serves the repo as it is (no build on Pages), so its build is committed in `awesome_farm/play/` (served at `/awesome_farm/play/`; `/awesome_farm/` forwards there): after changing the game run `npm run build:pages` in that folder (or `FARM=1 node build.js`) and commit `play/`. Its tests are not in the root `check` (`npm run test:farm` runs them). Its always-on world is a separate Cloudflare Worker (`awesome_farm/server/cf/`, deployed by hand, never by Pages).
 
 # Verify
