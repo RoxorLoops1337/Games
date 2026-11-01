@@ -16,7 +16,7 @@ import * as Stats from './stats.js';
 import * as I18N from './i18n.js';
 import { initDataLang } from './i18n_data.js';
 import { t, tn } from './i18n.js';
-import { applyA11y, makePerfWatch, langOffer } from './a11y.js';
+import { applyA11y, langOffer } from './a11y.js';
 
 const canvas = document.getElementById('game');
 const ui = document.getElementById('ui');
@@ -350,19 +350,9 @@ window.addEventListener('pagehide', () => { saveResume(); writeSave(); });
 
 // ------------------------------------------------------------------------------------------------ loop
 let last = performance.now(), T = 0;
-const perfWatch = makePerfWatch();
 function frame(now) {
   const rawMs = now - last;
   const dt = Math.min(0.05, rawMs / 1000); last = now; T += dt;
-  // Auto low graphics: a battle that stays slow switches the profile to Low graphics once (and says so)
-  {
-    const b = app.battle, st = app.profile.settings;
-    const active = app.screen === 'battle' && !!b && !b.paused && !b.ended && !document.hidden;
-    if (st.autolow && !st.lowfx && !app.profile.tutorial.hints.autolow_done && perfWatch.sample(rawMs, active)) {
-      st.lowfx = true; app.profile.tutorial.hints.autolow_done = true; app.applySettings(); app.save();
-      toast(t('toast.autolow', 'Running slowly, so Low graphics is on now. Change it in Settings.'), 4200);
-    }
-  }
   const v = app.view;
   try {
     if (!(app.screen === 'battle' && app.battle)) battleIdle(AudioFx);
