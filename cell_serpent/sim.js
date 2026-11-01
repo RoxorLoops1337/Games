@@ -29,15 +29,15 @@ export function rng(seed) {
 // ---------------------------------------------------------------- skills (weapons)
 // `frag` is how many fragments unlock a locked skill (0 = owned from the start).
 export const WEAPONS = [
-  { id: 'swab', name: 'Kitty Paws', max: 5, frag: 0, desc: 'Soft paw prints that thump where the snake crawls.' },
-  { id: 'daggers', name: 'Chick Circle', max: 5, frag: 0, desc: 'Fluffy chicks that zoom around you.' },
-  { id: 'tower', name: 'Cow Choir', max: 5, frag: 0, desc: 'Moooo! Big cows, bigger bass.' },
-  { id: 'dragon', name: 'Dove Squad', max: 5, frag: 0, desc: 'Little doves that never miss.' },
-  { id: 'needles', name: 'Hedgehog Quills', max: 5, frag: 0, desc: 'A sneeze of spiky love.' },
-  { id: 'stick', name: 'Bunny Thump', max: 5, frag: 20, desc: 'Thump thump! Fluffy feet, serious kicks.' },
-  { id: 'bubble', name: 'Duckling Splash', max: 5, frag: 30, desc: 'Bubble baths with a quack.' },
-  { id: 'satellite', name: 'Owl Spotlight', max: 5, frag: 40, desc: 'Wise eyes that light up the weak.' },
-  { id: 'maw', name: 'Bulldog Chomp', max: 5, frag: 60, desc: 'Good boy. Very hungry boy.' },
+  { id: 'swab', stage: 0, tier: 0, name: 'Kitty Paws', max: 5, frag: 0, desc: 'Soft paw prints that thump where the snake crawls.' },
+  { id: 'daggers', stage: 0, tier: 0, name: 'Chick Circle', max: 5, frag: 0, desc: 'Fluffy chicks that zoom around you.' },
+  { id: 'tower', stage: 0, tier: 1, name: 'Cow Choir', max: 5, frag: 0, desc: 'Moooo! Big cows, bigger bass.' },
+  { id: 'dragon', stage: 0, tier: 1, name: 'Dove Squad', max: 5, frag: 0, desc: 'Little doves that never miss.' },
+  { id: 'needles', stage: 0, tier: 1, name: 'Hedgehog Quills', max: 5, frag: 0, desc: 'A sneeze of spiky love.' },
+  { id: 'stick', stage: 3, tier: 1, name: 'Bunny Thump', max: 5, frag: 20, desc: 'Thump thump! Fluffy feet, serious kicks.' },
+  { id: 'bubble', stage: 6, tier: 2, name: 'Duckling Splash', max: 5, frag: 30, desc: 'Bubble baths with a quack.' },
+  { id: 'satellite', stage: 10, tier: 3, name: 'Owl Spotlight', max: 5, frag: 40, desc: 'Wise eyes that light up the weak.' },
+  { id: 'maw', stage: 15, tier: 4, name: 'Bulldog Chomp', max: 5, frag: 60, desc: 'Good boy. Very hungry boy.' },
 ];
 const WEAPON = Object.fromEntries(WEAPONS.map(w => [w.id, w]));
 export const WEAPON_STARTERS = WEAPONS.filter(w => !w.frag).map(w => w.id);
@@ -117,7 +117,7 @@ export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
   const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0 };
-  return { v: 5, loadout: [...WEAPON_STARTERS], pets, petEquip: [], eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
+  return { v: 5, loadout: [...WEAPON_STARTERS], pets, petEquip: [], prog: {}, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -137,10 +137,16 @@ export function sanitizeSave(raw) {
   if (Array.isArray(raw.petEquip)) s.petEquip = raw.petEquip.filter((id, i, a) => PET[id] && s.pets[id].star > 0 && a.indexOf(id) === i).slice(0, PET_SLOTS);
   if (raw.eggs !== undefined) s.eggs = num(raw.eggs); else if (raw.runs) s.eggs = 1;
   s.login = num(raw.login);
+  if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
   if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
   const lo = Array.isArray(raw.loadout) ? raw.loadout.filter((id, i, a) => WEAPON[id] && s.skills[id].lv > 0 && a.indexOf(id) === i).slice(0, LOADOUT_SIZE) : [];
   if (lo.length) s.loadout = lo; else if (Array.isArray(raw.loadout)) s.loadout = [...WEAPON_STARTERS].filter(id => s.skills[id].lv > 0).slice(0, LOADOUT_SIZE);
   return s;
+}
+// One big number for how strong the account is.
+export function power(save) {
+  const sum = o => Object.values(o).reduce((a, x) => a + x, 0);
+  return Math.round(100 + 60 * sum(save.meta) + 45 * Object.values(save.skills).reduce((a, k) => a + k.lv, 0) + 80 * Object.values(save.pets).reduce((a, k) => a + k.star, 0));
 }
 export function buyMeta(save, id) {
   const d = META.find(m => m.id === id);
@@ -206,7 +212,7 @@ export const pigTier = save => (save.pig ? save.pig.best : 0) + 1;
 export function usePigAttempt(save, day) { dayLogin(save, day); if (save.pig.left < 1) return false; save.pig.left--; return true; }
 export function unlockSkill(save, id) {
   const w = WEAPON[id], k = save.skills[id];
-  if (!w || !k || k.lv > 0 || k.frag < w.frag) return false;
+  if (!w || !k || k.lv > 0 || k.frag < w.frag || (save.cleared || 0) < (w.stage || 0)) return false;
   k.frag -= w.frag; k.lv = 1;
   if (save.loadout.length < LOADOUT_SIZE && !save.loadout.includes(id)) save.loadout.push(id);
   return true;
@@ -272,6 +278,7 @@ export function applyResult(save, r) {
   const out = { beats: r.coins, sparkles: 0, first: false, egg: false, frags: r.frags || {} };
   save.beats += r.coins; save.runs++; save.kills += r.kills;
   for (const id of Object.keys(out.frags)) save.skills[id].frag += out.frags[id];
+  if (r.mode !== 'pig' && r.stage) save.prog[r.stage] = Math.max(save.prog[r.stage] || 0, r.won ? 100 : Math.floor((r.progress || 0) * 100));
   if (r.mode === 'pig') { if (r.won) { save.pig.best = Math.max(save.pig.best, r.stage); save.eggs++; out.egg = true; } return out; }
   if (r.won) {
     if (r.stage > save.cleared) { out.first = true; out.sparkles = clearReward(r.stage).sparkles; save.sparkles += out.sparkles; save.cleared = r.stage; save.eggs++; out.egg = true; }
@@ -560,7 +567,7 @@ function hurtPlayer(g, dmg, fx, fy) {
   }
 }
 function makeResult(g, won) {
-  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, frags: { ...g.frags } };
+  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, progress: g.progress, frags: { ...g.frags } };
 }
 // the face has reached the membrane and is chewing through it: HP drains until you finish the cells
 // behind it (each kill pushes the face back off the membrane)

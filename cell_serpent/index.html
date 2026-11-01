@@ -86,6 +86,12 @@
   .card.pick.r1{--rc:#4fb8ff;box-shadow:0 0 18px #4fb8ff55} .card.pick.r2{--rc:#b06cff;box-shadow:0 0 22px #b06cff66} .card.pick.r3{--rc:#ffb04d;box-shadow:0 0 26px #ffb04d77}
   .card.pick.r4{--rc:#ff4d7a;box-shadow:0 0 30px #ff4d7a88} .card.pick.r5{--rc:#ffe14a;box-shadow:0 0 34px #ffe14a;animation:godglow 1.2s infinite alternate}
   @keyframes godglow{from{filter:brightness(1)}to{filter:brightness(1.25) saturate(1.2)}}
+  .stprog{width:min(460px,100%);margin:4px 0 6px} .stprog .pgl{font-size:13px;color:var(--dim);text-align:center;margin-bottom:4px} .stprog b{color:#fff}
+  .pgr{position:relative;height:10px;border-radius:5px;background:rgba(255,255,255,.16);margin:0 26px 30px} .pgr i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#9dff6d,#39f0ff)}
+  .pgr span{position:absolute;top:-14px;transform:translateX(-50%);text-align:center;filter:grayscale(1) brightness(.7)} .pgr span.got{filter:none} .pgr span img{width:34px;height:34px;object-fit:contain;display:block} .pgr em{font-style:normal;font-size:11px;font-weight:900;color:var(--dim)}
+  .tile.tier0{border-color:#9dff6d88} .tile.tier1{border-color:#4fb8ffaa;background:linear-gradient(180deg,#164a66,#0f3048)} .tile.tier2{border-color:#b06cffaa;background:linear-gradient(180deg,#3b2370,#241448)} .tile.tier3{border-color:#ffb04daa;background:linear-gradient(180deg,#5a3410,#3a200a)} .tile.tier4{border-color:#ff4d7aaa;background:linear-gradient(180deg,#5a1630,#3a0c1e)}
+  .tile.unowned .ic{filter:grayscale(.8) brightness(.8)}
+  #hPower{font-weight:900;color:#ffd84d;font-size:14px;text-align:center;padding-bottom:4px}
   #muteBtn{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:5;width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:20px;cursor:pointer;display:none}
   #muteBtn.on{display:block}
 </style>
@@ -107,7 +113,7 @@
 </section>
 
 <section class="scr hub" id="hub">
-  <div class="hubtop"><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div>
+  <div class="hubtop"><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div><div id="hPower"></div>
   <div class="hubbody">
     <div class="tab" id="tabBattle">
       <div class="stagebox">
@@ -116,6 +122,7 @@
         <div class="stagepick"><button class="arrow" id="stPrev">◀</button><canvas id="stCanvas" width="660" height="620"></canvas><button class="arrow" id="stNext">▶</button></div>
         <div class="chips" id="stChips"></div>
         <div class="info" id="stInfo"></div>
+        <div class="stprog" id="stProg"></div>
         <div class="loadout" id="battleLoad"></div>
         <button class="btn" id="stGo">START THE BATTLE</button>
       </div>

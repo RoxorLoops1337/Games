@@ -1,4 +1,4 @@
-import { W, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
+import { W, power, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
@@ -28,7 +28,7 @@ function resize() {
 addEventListener('resize', resize); resize();
 
 function show(id) { for (const s of document.querySelectorAll('.scr')) s.classList.toggle('on', s.id === id); $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); }
-function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) $(id).textContent = v; }
+function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) $(id).textContent = v; const pw = $('hPower'); if (pw) pw.textContent = 'Power ' + power(save); }
 
 // ---------------------------------------------------------------- icons (all drawn by the art kit)
 const iconCache = {};
@@ -40,7 +40,7 @@ function iconURL(id) {
     if (['aspd', 'notes', 'burst', 'cdmg'].includes(id)) spr = kit.SPR.note(id === 'cdmg');
     else if (id === 'beats') spr = kit.SPR.pickup('coin');
     else if (id === 'sparkles') spr = kit.SPR.pickup('spark');
-    else if (id === 'boxbeat' || id === 'boxspark') spr = kit.SPR.pickup(id);
+    else if (id === 'boxbeat' || id === 'boxspark' || id === 'chest') spr = kit.SPR.pickup(id);
     else if (id === 'egg') spr = kit.SPR.pickup('egg');
     else if (PETS.some(p => p.id === id)) spr = kit.SPR.pet(id);
     else if (WEAPONS.some(w => w.id === id)) spr = kit.SPR.weapon(WICON[id] || id);
@@ -103,6 +103,7 @@ function renderBattle() {
   $('stInfo').innerHTML = `<span>Cells <b>${info.length}</b></span><span>Cell HP <b>${Math.round(info.hp / 10) * 10 >= 1000 ? (info.hp / 1000).toFixed(1) + 'k' : info.hp}</b></span>${first}`;
   const go = $('stGo'); go.disabled = !playable; go.textContent = playable ? 'START THE BATTLE' : `CLEAR STAGE ${save.cleared + 1} FIRST`;
   loadoutRow($('battleLoad'), true);
+  { const pr = save.prog[sel] || 0; $('stProg').innerHTML = `<div class="pgl">Highest progress <b>${pr}%</b></div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}<em>${t}%</em></span>`).join('')}</div>`; }
   renderPig();
   renderGoals();
   const chip = chips.querySelector('.sel'); if (chip && chip.scrollIntoView) { try { chips.scrollTo({ left: chip.offsetLeft - 120 }); } catch (e) { /* ignore */ } }
@@ -177,10 +178,11 @@ function renderSkills() {
   for (const w of WEAPONS) {
     const k = save.skills[w.id], owned = k.lv > 0, eq = save.loadout.includes(w.id);
     let need = 0, can = false, label = '', act = () => false;
-    if (!owned) { need = w.frag; can = k.frag >= need; label = 'UNLOCK'; act = () => unlockSkill(save, w.id); }
+    const gated = !owned && (save.cleared || 0) < (w.stage || 0);
+    if (!owned) { need = w.frag; can = k.frag >= need && !gated; label = gated ? 'CLEAR STAGE ' + w.stage : 'UNLOCK'; act = () => unlockSkill(save, w.id); }
     else if (k.lv >= SKILL_MAX_LV) label = 'MAX LEVEL';
     else { const c = skillUpgradeCost(k.lv); need = c.frag; can = k.frag >= c.frag; label = 'UPGRADE'; act = () => levelSkill(save, w.id); }
-    const t = tile({ cls: 't-weapon' + (eq ? ' on-loadout' : ''), ic: icon(w.id), name: w.name, chip: owned ? ('Lv ' + k.lv + (eq ? ' ✓' : '')) : 'LOCKED', chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: w.desc,
+    const t = tile({ cls: 't-weapon tier' + (w.tier || 0) + (eq ? ' on-loadout' : '') + (owned ? '' : ' unowned'), ic: icon(w.id), name: w.name, chip: owned ? ('Lv ' + k.lv + (eq ? ' ✓' : '')) : 'LOCKED', chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: w.desc,
       bar: need ? Math.min(100, Math.round((k.frag / need) * 100)) : 100, barText: need ? 'Fragments ' + k.frag + ' / ' + need : 'Fully upgraded', btn: label, disabled: !can, onclick: () => { if (act()) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } } });
     if (owned) {
       const e = document.createElement('button'); e.className = 'btn small go alt'; e.textContent = eq ? 'REMOVE FROM LOADOUT' : 'EQUIP';

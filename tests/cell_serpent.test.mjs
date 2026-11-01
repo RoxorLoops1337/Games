@@ -321,7 +321,7 @@ ok('shop: stats cost Beats; skills unlock and level up with fragments; loot boxe
   // skills: the first five are owned, the rest need fragments
   assert.ok(sim.WEAPON_STARTERS.every(id => s.skills[id].lv === 1) && s.skills.maw.lv === 0);
   assert.ok(!sim.unlockSkill(s, 'maw'), 'not enough fragments');
-  s.skills.maw.frag = 70; assert.ok(sim.unlockSkill(s, 'maw')); assert.equal(s.skills.maw.lv, 1); assert.equal(s.skills.maw.frag, 10);
+  s.skills.maw.frag = 70; assert.ok(!sim.unlockSkill(s, 'maw'), 'needs the stage cleared first'); s.cleared = 15; assert.ok(sim.unlockSkill(s, 'maw')); assert.equal(s.skills.maw.lv, 1); assert.equal(s.skills.maw.frag, 10);
   assert.ok(!sim.levelSkill(s, 'swab'), 'no fragments yet');
   s.skills.swab.frag = sim.skillUpgradeCost(1).frag; const b0 = s.beats; assert.ok(sim.levelSkill(s, 'swab'), 'fragments alone are enough'); assert.equal(s.skills.swab.lv, 2); assert.equal(s.skills.swab.frag, 0); assert.equal(s.beats, b0);
   assert.ok(sim.skillMul(5) > sim.skillMul(1) * 1.4);
@@ -538,6 +538,14 @@ ok('checkpoint chests appear at 25% and 50% progress and pay Beats, never a frag
   while (g.phase === 'levelup') sim.choose(g, 0);
   const f0 = Object.keys(g.frags).length, c0 = g.coins; g.p.x = 360; for (const p of g.pickups) { p.x = g.p.x; p.y = g.p.y; } sim.step(g, 1 / 60, {});
   assert.ok(g.coins > c0, 'coins'); assert.equal(Object.keys(g.frags).length, f0, 'no fragment from a checkpoint');
+});
+
+ok('progress is remembered per stage and power grows with everything you collect', () => {
+  const s = sim.defaultSave(); const p0 = sim.power(s);
+  sim.applyResult(s, { won: false, stage: 4, coins: 1, kills: 1, frags: {}, progress: 0.7 }); assert.equal(s.prog[4], 70);
+  sim.applyResult(s, { won: false, stage: 4, coins: 1, kills: 1, frags: {}, progress: 0.3 }); assert.equal(s.prog[4], 70, 'keeps the best');
+  s.meta.atk = 3; s.pets.kitten.star = 2; assert.ok(sim.power(s) > p0 + 200);
+  assert.equal(sim.sanitizeSave(JSON.parse(JSON.stringify(s))).prog[4], 70);
 });
 
 console.log(`cell_serpent: ${n} groups passed`);
