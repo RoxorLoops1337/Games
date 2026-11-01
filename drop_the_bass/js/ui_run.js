@@ -1,11 +1,13 @@
 // ui_run.js: DOM overlays used during and right after a run: Remix/relic pick, pause, hints, defeat, results, how-to-play.
 import { WORLDS, WORLD_BY_ID, BOSSES, ENEMIES, TURRETS, RARITY, RARITY_ORDER, COL, ECON, fmt } from './data_core.js';
 import { REMIX, RELICS, WAVE_MODS } from './data_run.js';
-import { GEAR } from './data_meta.js';
+import { GEAR, OUTFITS } from './data_meta.js';
+import { RUN_MODIFIER_BY_ID, ENDLESS_MILESTONES } from './data_depth.js';
 import * as M from './meta.js';
 import { HINTS } from './data_story.js';
-import { h, canvasOf, icon, gearIcon, enemyIcon, turretIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE } from './ui_core.js';
+import { h, canvasOf, icon, gearIcon, enemyIcon, turretIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW } from './ui_core.js';
 import { settingsModal } from './ui_hub.js';
+import { flames } from './ui_setlist.js';
 import { makeShareCard, shareCard, shareText } from './share.js';
 
 // ------------------------------------------------------------------------------------------------ remix / relic pick
@@ -148,6 +150,7 @@ export function showResults(app, run, out, opts = {}) {
   const m = modal(body, { sticky: true });
   app.audio.musicStart(win ? 'victory' : 'defeat');
   body.append(h('div', { class: 'res-title ' + (win ? 'win' : 'lose') }, win ? (r.mode === 'tutorial' ? 'PRACTICE DONE!' : 'VICTORY!') : r.mode === 'endless' || r.mode === 'daily' ? 'RUN OVER' : 'DEFEAT'));
+  if (r.mode === 'daily') body.append(h('div', { class: 'res-sub', style: 'text-align:center;font-weight:900;color:var(--pink)' }, r.weekly ? 'Weekly Gig' + (r.weekId ? ' ' + r.weekId : '') : 'Daily Challenge'));
   if (win && r.mode === 'story') {
     const st = h('div', { class: 'big-stars' });
     for (let i = 0; i < 3; i++) setTimeout(() => { const c = canvasOf(64, 64, (ctx) => { ctx.globalAlpha = i < r.stars ? 1 : 0.25; AE.drawGlyph(ctx, 'star', 32, 32, 60, i < r.stars ? '#ffc83d' : '#8a7cc0'); }); c.className = 'pop'; st.append(c); if (i < r.stars) app.audio.play('star_pop', { pitch: 1 + i * 0.15 }); }, 250 + i * 350);
@@ -165,6 +168,25 @@ export function showResults(app, run, out, opts = {}) {
   if (out.fans) add('fans', out.fans, i++);
   if (out.diamonds) add('diamonds', out.diamonds, i++);
   body.append(rew);
+  // run modifiers: what was on and what it paid
+  if (out.modifiers && out.modifiers.length && out.modMul) {
+    const fl = out.modifiers.reduce((a, id) => a + M.modFlames(id), 0);
+    body.append(h('div', { class: 'card res-mods' }, h('div', { class: 'row', style: 'flex-wrap:wrap;gap:6px;justify-content:center' }, out.modifiers.map((id) => { const md = RUN_MODIFIER_BY_ID[id]; return md ? h('span', { class: 'chip', title: md.desc }, icon(md.glyph, 18), md.name) : null; })),
+      h('div', { style: 'text-align:center;margin-top:4px' }, flames(fl, 18), h('b', null, ' Payout x' + (Math.round(out.modMul.records * 100) / 100) + ' Records and Fans, x' + (Math.round(out.modMul.diamonds * 100) / 100) + ' diamonds'))));
+  }
+  for (const ms of out.milestones || []) {
+    body.append(h('div', { class: 'card res-milestone', style: 'border-color:var(--gold);margin:8px 0 0;padding:8px;text-align:center' }, icon('crown', 34, '#ffc83d'),
+      h('div', { style: 'font-weight:900;color:var(--gold)' }, 'Milestone reached: ' + ms.name), h('div', { class: 'sub' }, 'Endless wave ' + ms.wave + (ms.reward && ms.reward.diamonds ? '. +' + ms.reward.diamonds + ' diamonds' : '') + (ms.reward && ms.reward.cosmetic ? ' and a keepsake' : '') + '.')));
+    app.audio.play('achievement');
+  }
+  for (const no of out.newOutfits || []) {
+    const o = OUTFITS[no.who] && OUTFITS[no.who][no.id];
+    if (!o) continue;
+    body.append(h('div', { class: 'card res-outfit', style: 'border-color:var(--pink);margin:8px 0 0;padding:8px' }, h('div', { class: 'row' },
+      canvasOf(60, 80, (ctx) => AW.drawHero(ctx, no.who, 30, 76, 72, { t: 0.4, outfit: no.id, pose: 'cheer' })),
+      h('div', { class: 'grow' }, h('b', null, 'New outfit: ' + o.name), h('div', { class: 'sub' }, (no.who === 'roxor' ? 'RoxorLoops' : 'Jasmin') + '. Find it in the Band tab.')))));
+    app.audio.play('reveal_epic');
+  }
   if (out.firstClear) body.append(h('div', { style: 'text-align:center;font-weight:900;color:var(--gold)' }, 'First clear bonus!' + (out.unlockedWorld ? ' ' + WORLD_BY_ID[out.unlockedWorld].name + ' unlocked!' : '')));
   if (out.challenge && out.challenge.first) body.append(h('div', { style: 'text-align:center;font-weight:900;color:var(--gold)' }, 'Daily challenge complete!'));
   if (out.firstBosses.length) body.append(h('div', { class: 'sub', style: 'text-align:center' }, 'First time defeating: ' + out.firstBosses.map((b) => BOSSES[b].name).join(', ') + ' (+8 diamonds each)'));

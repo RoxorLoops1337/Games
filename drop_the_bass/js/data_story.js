@@ -206,6 +206,13 @@ export const HINTS = {
   full:    { title: 'Board full', text: 'No free tiles. Merge turrets to make room, or sell a weak one.' },
 };
 
+// The battle engineer may add js/data_hints_extra.js (export const HINTS_EXTRA = { id: { title, text } }). Merged in when it exists; entries never replace a core hint.
+try {
+  const ex = await import('./data_hints_extra.js');
+  const extra = ex && ex.HINTS_EXTRA;
+  if (extra && typeof extra === 'object') for (const k of Object.keys(extra)) if (!HINTS[k] && extra[k] && typeof extra[k].text === 'string') HINTS[k] = extra[k];
+} catch (e) { /* the file is optional */ }
+
 export const LOOPY_TIPS = [
   'Tip: matching turrets of the same level merge. Different types of the same level can remix into a surprise.',
   'Tip: tap an empty tile first, then DROP to place the next turret exactly there.',

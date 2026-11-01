@@ -213,7 +213,7 @@ export const MAPS = {
       [[3, -1], [3, 1], [0, 1], [0, 5], [3, 5], [3, 9]],
       [[3, -1], [3, 1], [6, 1], [6, 5], [3, 5], [3, 9]],
     ],
-    blocked: [[0, 0], [6, 0], [0, 9], [1, 9], [5, 9], [6, 9]],
+    blocked: [[3, 3], [0, 0], [6, 0], [0, 9], [1, 9], [5, 9], [6, 9]],
   },
   // Moon Stage: one long inward spiral (clockwise from the bottom right) ending at the stage in the centre.
   moon: {

@@ -15,6 +15,11 @@ import { drawGlow } from './fx.js';
 import { isDoodle } from './style.js';
 import * as DB from './doodle_battle.js';
 import * as DFX from './doodle_fx.js';
+import * as DD from './doodle_depth.js';
+import { HINTS_EXTRA } from './data_hints_extra.js';
+
+// coach marks for the depth systems: ids that data_story.js HINTS does not define yet are filled in from data_hints_extra.js
+for (const k of Object.keys(HINTS_EXTRA || {})) if (!HINTS[k]) HINTS[k] = HINTS_EXTRA[k];
 
 const FONT = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
 const inR = (r, x, y) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -35,7 +40,7 @@ export const R = {
   merge:  { x: 88, y: 872, w: 61, h: 78 },
   reroll: { x: 326, y: 872, w: 61, h: 78 },    // re-roll the next drop for coins
   rerollG: { x: 391, y: 872, w: 61, h: 78 },   // the same for gems
-  pool:   { x: 96, y: 840, w: 348, h: 28 },    // the drop pool strip (display only)
+  pool:   { x: 96, y: 838, w: 348, h: 32 },    // the drop pool strip: tap an icon for its card (hit area DD.POOL_HIT, as tall as the layout allows)
   heroR:  { x: 46, y: 908, r: 38 },
   heroJ:  { x: 494, y: 908, r: 38 },
 };
@@ -94,6 +99,8 @@ export class Battle {
     this.comboPulse = 0; this.comboPrev = o.run.combo || 0; this.comboTier = 0;
     this.sevenSeen = o.run.turrets.some((t) => t.level >= 7);
     this.bossHitT = -9; this.rerollSpin = 0; this.kills3 = 0; this.synPop = 0;
+    this.popover = null;                                            // { kind: 'pool' | 'mods', type?, t } card over the board
+    this.branchPress = null; this.lastHintT = -99;
     this.fx.noShake = !app.profile.settings.shake || !!app.profile.settings.reduce;
     app.audio.musicStart('world_' + this.world.id);
     this.slowTick();
@@ -127,6 +134,8 @@ export class Battle {
     if (this.comboPulse > 0) this.comboPulse = Math.max(0, this.comboPulse - dt * 2.4);
     if (this.synPop > 0) this.synPop = Math.max(0, this.synPop - dt * 3);
     if (this.pv.open) this.pv.t += dt;
+    if (this.popover) this.popover.t += dt;
+    DD.tick(this, dt);
     const frozen = this.paused || this.hold || this.hintQueue.length > 0 || run.choice || this.ended || this.stop > 0 || (this.tut && this.tutBlocking());
     if (!frozen) {
       const steps = this.speed;
@@ -218,6 +227,7 @@ export class Battle {
     if (cb < 3) this.comboTier = 0;
     this.comboPrev = cb;
   }
+  get skin() { const s = this.prof.settings.skin, ids = AW.BOARD_SKIN_IDS; return s && ids && ids.includes(s) ? s : undefined; }
   get lite() { return !!this.prof.settings.lowfx; }
   n(k) { return this.lite ? Math.max(1, Math.round(k * 0.4)) : k; }   // particle counts shrink on Low graphics
   shake(v) { this.fx.addShake(v); }

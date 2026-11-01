@@ -189,7 +189,8 @@ export const ACHIEVEMENTS = [
   { id: 'a_boss1',    stat: 'bosses',    goal: 5,      name: 'Boss Fight',        text: 'Defeat 5 bosses.',              diamonds: 10 },
   { id: 'a_boss2',    stat: 'bosses',    goal: 50,     name: 'Boss Rush',         text: 'Defeat 50 bosses.',             diamonds: 40 },
   { id: 'a_world2',   stat: 'worlds',    goal: 2,      name: 'On The Street',     text: 'Clear 2 stages.',               diamonds: 15, max: true },
-  { id: 'a_world5',   stat: 'worlds',    goal: 5,      name: 'Mega Arena',        text: 'Clear all 5 stages.',           diamonds: 80, max: true },
+  { id: 'a_world5',   stat: 'worlds',    goal: 5,      name: 'Mega Arena',        text: 'Clear the first 5 stages.',        diamonds: 80, max: true },
+  { id: 'a_world7',   stat: 'worlds',    goal: 7,      name: 'Moon Walk',         text: 'Clear all 7 stages, up to the Moon.', diamonds: 120, max: true },
   { id: 'a_stars15',  stat: 'stars',     goal: 15,     name: 'Starstruck',        text: 'Collect 15 stars.',             diamonds: 20, max: true },
   { id: 'a_stars50',  stat: 'stars',     goal: 50,     name: 'Constellation',     text: 'Collect 50 stars.',             diamonds: 60, max: true },
   { id: 'a_combo',    stat: 'bestCombo', goal: 30,     name: 'Combo Breaker',     text: 'Reach a 30 kill combo.',        diamonds: 10, max: true },
@@ -275,3 +276,17 @@ export const WEEKLY_GIGS = [
   { id: 'arena_duet',      name: 'Arena Duet',       mod: 'two_instruments', world: 'arena',    extra: [['enemyHp', 'mul', 1.35]] },
 ];
 export const WEEKLY_REWARD = { diamonds: 20, perWave: 1, winDiamonds: 25, records: 600, perWaveRecords: 60, fans: 120, crate: 'studio', crateMinWaves: 15 };
+
+// ---------------------------------------------------------------- Board skins (cosmetic, bought with diamonds)
+// The art lives in doodle_env.js (BOARD_SKINS names and descriptions). Here only the shop side: ids (append-only) and prices.
+// Owned skins: profile.skins.owned, equipped one: profile.settings.skin. The default skin is free and always owned.
+export const SKIN_DEFAULT = 'skin_paper';
+export const SKIN_PRICES = { skin_paper: 0, skin_chalk: 60, skin_sticker: 100, skin_midnight: 140 };
+export const SKIN_IDS = Object.keys(SKIN_PRICES);
+// fallback names, used when doodle_env.js has no BOARD_SKINS yet
+export const SKIN_FALLBACK = {
+  skin_paper: { name: 'Notebook Paper', desc: 'The classic ruled page with tape and crayon.' },
+  skin_chalk: { name: 'Chalkboard', desc: 'A dark slate board with chalk-white outlines.' },
+  skin_sticker: { name: 'Scrapbook', desc: 'A bright pastel page with washi tape and stickers.' },
+  skin_midnight: { name: 'Midnight Page', desc: 'An inky night page with glow crayon lines.' },
+};

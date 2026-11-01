@@ -11,6 +11,10 @@ import { REMIX, RELICS, DAILY_MODS } from './data_run.js';
 import * as M from './meta.js';
 import { fetchBoard, rankOf, boardRows, cleanName, FRIENDS_MAX } from './lb.js';
 import { drawStudioScene, studioProps } from './doodle_env.js';
+import { setlistSheet } from './ui_setlist.js';
+import { wardrobeSection, skinsSection } from './ui_wardrobe.js';
+import { canInstall, promptInstall, onInstallChange, isInstalled } from './pwa.js';
+export { setlistSheet };
 import {
   h, canvasOf, icon, turretIcon, turretLive, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW,
 } from './ui_core.js';
@@ -106,22 +110,23 @@ function tourTab(app, st, rerender) {
     const w = WORLDS.find((x) => x.id === dc.world);
     wrap.append(h('div', { class: 'card', style: 'border-color:var(--gold)' },
       h('div', { class: 'row' }, h('div', { class: 'ic icbox' }, icon(mod.glyph, 38)),
-        h('div', { class: 'grow' }, h('h3', null, 'Daily Challenge: ' + mod.name), h('div', { class: 'sub' }, mod.desc), h('div', { class: 'sub' }, w.name + ', 15 waves'))),
+        h('div', { class: 'grow' }, h('h3', null, 'Daily Challenge: ' + mod.name), h('div', { class: 'sub' }, mod.desc), h('div', { class: 'sub' }, w.name + ', ' + dc.waves + ' waves'))),
       h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, dc.done ? 'Reward claimed today. Play again for fun (half rewards).' : 'First clear today: diamonds, Records and fans!'),
         btn(icon('crown', 24), () => boardModal(app, 'daily', 'Daily Challenge'), 'dark small', { 'aria-label': 'Leaderboard' }),
-        btn(dc.done ? 'Play' : 'Play!', () => app.startRun({ mode: 'daily', world: dc.world, encore: 0, seed: dc.seed, daily: dc.mod, wavesTotal: dc.waves }), dc.done ? 'dark' : 'gold'))));
+        btn(dc.done ? 'Play' : 'Play!', () => app.requestRun({ mode: 'daily', world: dc.world, encore: 0, seed: dc.seed, daily: dc.mod, wavesTotal: dc.waves }), dc.done ? 'dark' : 'gold'))));
     wrap.append(weeklyCard(app));
   }
 
   if (M.endlessUnlocked(p) && p.prog.arena.cleared) {
     wrap.append(h('div', { class: 'card', style: 'border-color:var(--red)' }, h('div', { class: 'row' }, enemyIcon('playback', 56, true),
       h('div', { class: 'grow' }, h('h3', null, 'Boss Rush'), h('div', { class: 'sub' }, 'Ten bosses back to back, no breaks. Best: ' + (p.stats.rushBest || 0) + '/10. Diamonds for every boss.')),
-      btn('Play', () => { const m = modal(h('div', null, h('h2', null, 'Boss Rush'), h('div', { class: 'sub', style: 'text-align:center' }, 'Pick the stage to fight on.'), h('div', { class: 'col', style: 'margin-top:10px' }, WORLDS.filter((w) => p.prog[w.id].cleared).map((w) => btn(w.name, () => { m.close(); app.startRun({ mode: 'rush', world: w.id, encore: 0 }); }, 'dark'))))); }, 'red small'))));
+      btn('Play', () => { const m = modal(h('div', null, h('h2', null, 'Boss Rush'), h('div', { class: 'sub', style: 'text-align:center' }, 'Pick the stage to fight on.'), h('div', { class: 'col', style: 'margin-top:10px' }, WORLDS.filter((w) => p.prog[w.id].cleared).map((w) => btn(w.name, () => { m.close(); app.requestRun({ mode: 'rush', world: w.id, encore: 0 }); }, 'dark'))))); }, 'red small'))));
   }
   wrap.append(h('h2', null, 'The Tour'));
   const ts = M.totalStars(p);
   wrap.append(h('div', { class: 'sub', style: 'margin:-4px 2px 8px' }, 'Stars ' + ts + '/' + (WORLDS.length * 3 * (ENCORE_MAX + 1)) + '. Clear a stage to unlock the next. Higher Encores are tougher and pay more.'));
   WORLDS.forEach((w) => {
+    if (w.n === 6) wrap.append(h('h2', { class: 'tour2' }, 'The Second Tour'), h('div', { class: 'sub', style: 'margin:-4px 2px 8px' }, 'Two more stages beyond the Mega Arena: a bonfire cove and the Moon.'));
     const unlocked = M.worldUnlocked(p, w.id);
     const pr = p.prog[w.id];
     const enc = st['enc_' + w.id] || 0;
@@ -145,8 +150,8 @@ function tourTab(app, st, rerender) {
       encRow.append(e);
     }
     body.append(encRow);
-    const acts = h('div', { class: 'btnrow' }, btn('PLAY', () => app.startRun({ mode: 'story', world: w.id, encore: enc }), 'green'));
-    if (pr.cleared) acts.append(btn('ENDLESS', () => app.startRun({ mode: 'endless', world: w.id, encore: enc }), 'blue'), btn(icon('crown', 24), () => boardModal(app, 'endless:' + w.id, w.name + ' Endless'), 'dark small', { 'aria-label': 'Leaderboard' }));
+    const acts = h('div', { class: 'btnrow' }, btn('PLAY', () => app.requestRun({ mode: 'story', world: w.id, encore: enc }), 'green'));
+    if (pr.cleared) acts.append(btn('ENDLESS', () => app.requestRun({ mode: 'endless', world: w.id, encore: enc }), 'blue'), btn(icon('crown', 24), () => boardModal(app, 'endless:' + w.id, w.name + ' Endless'), 'dark small', { 'aria-label': 'Leaderboard' }));
     body.append(acts);
     card.append(art, body);
     if (!unlocked) {
@@ -174,7 +179,7 @@ function weeklyCard(app) {
       h('div', { class: 'grow' }, h('h3', null, 'Weekly Gig: ' + wg.name), h('div', { class: 'sub' }, mod.name + ': ' + mod.desc + (extra ? ' Also: ' + extra + '.' : '')), h('div', { class: 'sub' }, w.name + ', ' + wg.waves + ' waves. Same run for everyone. ' + timeLeft(wg.msLeft) + ' left.'))),
     h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, wg.done ? 'Reward claimed this week (best ' + wg.best + '/' + wg.waves + '). Replays pay half Records, no bonus.' : 'One big reward a week: ' + (WEEKLY_REWARD.diamonds + WEEKLY_REWARD.winDiamonds) + '+ diamonds, Records, fans and a Studio crate for a win.'),
       btn(icon('crown', 24), () => boardModal(app, 'weekly', 'Weekly Gig: ' + wg.name), 'dark small', { 'aria-label': 'Leaderboard' }),
-      btn(wg.done ? 'Play' : 'Play!', () => app.startRun({ mode: 'daily', world: wg.world, encore: 0, seed: wg.seed, daily: wg.mod, wavesTotal: wg.waves, weekly: true, weekId: wg.id, extraFx: wg.extra }), wg.done ? 'dark' : 'gold')));
+      btn(wg.done ? 'Play' : 'Play!', () => app.requestRun({ mode: 'daily', world: wg.world, encore: 0, seed: wg.seed, daily: wg.mod, wavesTotal: wg.waves, weekly: true, weekId: wg.id, extraFx: wg.extra }), wg.done ? 'dark' : 'gold')));
 }
 // the next prop the Studio will grow, as a one-line hint under the backstage scene
 function studioCaption(p) {
@@ -258,17 +263,16 @@ function bandTab(app, st, rerender) {
   const p = app.profile;
   const wrap = h('div');
   wrap.append(h('h2', null, 'The Band'));
-  // heroes + outfits
+  // heroes + wardrobe (every outfit drawn on the hero, buy or wear), then the stage skins
   const heroes = h('div', { class: 'row', style: 'gap:8px;margin-bottom:10px' });
   for (const who of ['roxor', 'jasmin']) {
     const col = who === 'roxor' ? 'var(--green)' : 'var(--pink)';
     heroes.append(h('div', { class: 'card grow', style: 'text-align:center;margin:0;border-color:' + col },
       canvasOf(150, 176, (ctx, t) => AW.drawHero(ctx, who, 75, 168, 138, { t, outfit: p.outfits.worn[who], pose: 'cheer' }), { live: true }),
-      h('div', { style: 'font-weight:900;color:' + col }, who === 'roxor' ? 'RoxorLoops' : 'Jasmin'),
-      h('div', { class: 'row', style: 'justify-content:center;margin-top:6px' }, btn(p.outfits.worn[who] === 'onesie' ? 'Classic' : (p.outfits.owned[who].includes('onesie') ? 'Onesie' : [icon('diamond', 18), OUTFITS[who].onesie.price]),
-        () => { const target = p.outfits.worn[who] === 'onesie' ? 'default' : 'onesie'; const r = M.buyOutfit(p, who, target); if (!r.ok) { toast('Need ' + OUTFITS[who].onesie.price + ' diamonds for the ' + OUTFITS[who].onesie.name + '.'); app.audio.play('error'); } else app.audio.play('reveal_rare'); rerender(); }, 'dark small'))));
+      h('div', { style: 'font-weight:900;color:' + col }, who === 'roxor' ? 'RoxorLoops' : 'Jasmin')));
   }
   wrap.append(heroes);
+  wrap.append(wardrobeSection(app, 'roxor', rerender), wardrobeSection(app, 'jasmin', rerender), skinsSection(app, rerender));
 
   // equipped slots
   wrap.append(h('h3', null, 'Equipped'));
@@ -498,9 +502,26 @@ export function settingsModal(app) {
   const draw = () => {
     body.replaceChildren(h('h2', null, 'Settings'));
     const slider = (label, key, apply) => h('div', { class: 'rangeRow' }, h('span', { style: 'width:80px' }, label), h('input', { type: 'range', min: 0, max: 100, value: Math.round(s[key] * 100), oninput: (e) => { s[key] = e.target.value / 100; apply(); app.save(); }, onchange: () => app.audio.play('ui_click') }));
+    // Install the app: hidden once installed; Safari on iOS has no prompt, so it gets a how-to hint instead
+    const installRow = () => {
+      if (isInstalled()) return null;
+      const row = h('div', { class: 'install-row' });
+      const fill = () => {
+        row.replaceChildren();
+        if (isInstalled()) return;
+        if (canInstall()) row.append(h('div', { class: 'toggle' }, 'Install the app', btn('Install', async () => { const r = await promptInstall(); if (r === 'accepted') toast('Installed! Look for it on your home screen.'); fill(); }, 'gold small')));
+        else row.append(h('div', { class: 'sub install-hint', style: 'font-size:15px' }, 'Install: in Safari tap Share, then Add to Home Screen. Chrome and Edge offer an Install button when the game is ready.'));
+      };
+      fill();
+      const off = onInstallChange(() => { if (!row.isConnected) { off(); return; } fill(); });
+      return row;
+    };
     const tog = (label, key) => h('div', { class: 'toggle' }, label, btn(s[key] ? 'ON' : 'OFF', () => { s[key] = !s[key]; app.applySettings(); app.save(); draw(); }, s[key] ? 'green small' : 'dark small'));
     body.append(slider('Music', 'music', () => app.applySettings()), slider('Sound', 'sfx', () => app.applySettings()),
       tog('Screen shake', 'shake'), tog('Damage numbers', 'numbers'), tog('Vibration', 'vibrate'), tog('Beat helper (DROP ring)', 'beat'), tog('Reduce motion', 'reduce'), tog('Low graphics (faster)', 'lowfx'));
+    body.append(tog2('Show the Setlist before a run', !s.skipSetlist, () => { s.skipSetlist = !s.skipSetlist; app.save(); draw(); }));
+    body.append(tog('Share anonymous play stats', 'analytics'), h('div', { class: 'sub', style: 'font-size:14px;margin:-4px 0 6px' }, 'Helps balance the game. No names or identifiers are sent.'));
+    body.append(installRow());
     if (p.autoMerge) body.append(tog2('Auto-merge after each drop', p.autoMergeOn, () => { p.autoMergeOn = !p.autoMergeOn; app.save(); draw(); }));
     body.append(h('div', { class: 'hr' }), h('h3', null, 'Leaderboard name'), h('input', { type: 'text', maxlength: 16, value: p.name || '', placeholder: 'Your name (optional)', style: 'width:100%;font:400 20px var(--hand,sans-serif);padding:10px;border-radius:10px;border:3px solid var(--line)', oninput: (e) => { p.name = e.target.value.replace(/[^\w \-.']/g, '').slice(0, 16); app.save(); } }));
     body.append(h('div', { class: 'hr' }), h('h3', null, 'Save data'), h('div', { class: 'sub' }, 'Your progress is saved on this device. Copy the code to move it to another device.'));

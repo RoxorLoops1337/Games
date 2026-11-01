@@ -49,7 +49,7 @@ for (const id of ids) { const a = mockCtx(), b = mockCtx(); drawBackdrop(a, id, 
 // ---- the second tour worlds and the board skins
 ok(WORLDS.some((w) => w.id === 'beach') && WORLDS.some((w) => w.id === 'moon'), 'beach and moon are worlds');
 ok(BOARD_SKIN_IDS.join() === 'skin_paper,skin_chalk,skin_sticker,skin_midnight', 'skin ids');
-for (const id of BOARD_SKIN_IDS) ok(BOARD_SKINS[id] && BOARD_SKINS[id].name && BOARD_SKINS[id].desc && !/—/.test(BOARD_SKINS[id].name + BOARD_SKINS[id].desc), 'skin info ' + id);
+for (const id of BOARD_SKIN_IDS) ok(BOARD_SKINS[id] && BOARD_SKINS[id].name && BOARD_SKINS[id].desc && !(BOARD_SKINS[id].name + BOARD_SKINS[id].desc).includes(String.fromCharCode(8212)), 'skin info ' + id);
 ok(Object.keys(BOARD_SKINS).length === BOARD_SKIN_IDS.length, 'one info entry per skin id');
 const log = (fn) => { const c = mockCtx(); fn(c); ok(c.__st.saves === c.__st.restores && c.__st.bad === 0, 'balanced and finite'); return c.__st.calls; };
 for (const sc of [1, 2]) {
