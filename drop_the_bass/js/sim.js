@@ -1675,4 +1675,4 @@ export class Run {
   }
 }
 
-export { REMIX, RELICS, WAVE_MODS };
+export { REMIX, RELICS, WAVE_MODS, ENEMY_TIPS, BOSS_TIPS };

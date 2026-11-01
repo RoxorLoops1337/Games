@@ -128,3 +128,7 @@ scratchpad, LOOK at it (Read the png), fix, repeat. Lab pages live in `drop_the_
 - `js/share.js`: results share card. `fonts/`: self-hosted Patrick Hand.
 - The game has ONE look (crayon doodle). All 12 turrets are in the drop pool from the first run.
 - Resume: turret ages use the run clock (`run.t - tu.born`), never the view clock. `tests/drop_the_bass_visual.test.mjs` guards that turrets stay visible after a resume.
+
+## Backlog (improvement loop notes)
+- Round 1: added tests/drop_the_bass_recap_tips.test.mjs, which fails if any recap tip sentence from sim.js has no da, nl or de translation (the UI matches the English sentence; moving to tip ids is still a good cleanup).
+- Ideas next: boss hint card and codex art for lowpass and silence; per-modifier balance review with the bot matrix; colour-blind cues (shapes plus colour on lanes, ally and enemy rings); a Larger text setting; more first-time hints (hero abilities pick, skins); recap tips as ids; a mid-run "what changed" summary after boss phases; stats.html review once real data arrives; check the 25 wave stages with real play.
