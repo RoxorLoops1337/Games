@@ -651,6 +651,17 @@ export default {
   'Destroy # nests': 'Ødelæg {1} reder', 'Merge cats # times': 'Slå katte sammen {1} gange', 'Eat # snacks in total': 'Spis {1} snacks i alt',
   'Eat # temporary snacks': 'Spis {1} midlertidige snacks', 'Merge cats up to Lv 3, # times': 'Slå katte sammen op til Lv 3, {1} gange',
 
+  // rest stop and cashing out
+  'A road lasts until the next nest and replaces the last one.': 'En vej gælder til næste rede og afløser den forrige.',
+  'Cashed out!': 'Hentet hjem!', 'You took everything home safely.': 'Du tog alt sikkert med hjem.',
+  'Rest stop': 'Rastested', 'coins': 'mønter', 'gems': 'juveler', 'Cash out': 'Hent hjem', 'Keep going': 'Fortsæt',
+  'Wave # done. Cash out to take everything home, or go on and risk losing #% of your loot if the stack falls.': 'Bølge {1} klaret. Hent hjem for at tage alt med, eller fortsæt og risikér at miste {2}% af dit bytte, hvis stakken falder.',
+  'Nothing to lose yet.': 'Intet at miste endnu.',
+  'At risk if you fall: {} coins and {} gems.': 'På spil hvis du falder: {1} mønter og {2} juveler.',
+  'At risk if you fall: {} coins.': 'På spil hvis du falder: {1} mønter.',
+  'The fall cost you {}. Cash out at a rest stop to keep it all.': 'Faldet kostede dig {1}. Hent hjem ved et rastested for at beholde det hele.',
+  '# coins': '{1} mønter', '# gems': '{1} juveler', '# coins and # gems': '{1} mønter og {2} juveler',
+
   // ---------------------------------------------------------------- generic helpers (last: low priority)
   '{} · {}': '{1} · {2}',
 };
