@@ -62,5 +62,25 @@ const inHand = (B, name) => B.state.hand.find(h => h.card.name === name);
   const names = B.state.floors[0].cats.map(c => c.name);
   ok(names.length === 4 && names[2] === 'Biscuit' && names[3] === 'Hall Tabby' && names[0] === 'Hall Tabby', 'cats sit where they were put: ' + names.join(','));
 }
+
+{ // a sleeping cat must never fall back to the standing sprite, whatever its (possibly negative) hashed seed
+  const SB = makeSB();
+  const vmctx = vm.createContext({ console, Math, Date, JSON, window: {}, document: { createElement: () => ({ getContext: () => ({}) }) } });
+  vmctx.window = vmctx; vmctx.SB = SB;
+  let loaded = true;
+  try { vm.runInContext(fs.readFileSync(path.join(root, 'src/gfx/pawprint.js'), 'utf8'), vmctx, { filename: 'pawprint.js' }); } catch (e) { loaded = false; ok(false, 'pawprint loads in node: ' + e.message); }
+  if (loaded && SB.gfx && SB.gfx.pawprint && SB.gfx.pawprint.poseFrame) {
+    const P = SB.gfx.pawprint;
+    let bad = [];
+    [-788556745, -347051673, -1, -97, 0, 1, 110165458].forEach(seed => {
+      const g = { body: 'tabby', fur: 'orange', pattern: 'stripes', ears: 'point', eyes: 'round', eyeColor: 'amber', tail: 'long', seed };
+      for (let t = 0; t < 600; t += 7) {
+        ['sleep', 'boxed', 'hidden'].forEach(n => { const f = P.poseFrame(g, n, t); if (!new RegExp('^' + n + '[01]$').test(f)) bad.push(n + ':' + seed + '@' + t + '=' + f); });
+        const idle = P.poseFrame(g, 'idle', t); if (!/^(idle|blink)[01]$/.test(idle)) bad.push('idle:' + seed + '@' + t + '=' + idle);
+      }
+    });
+    ok(bad.length === 0, 'pose frames stay valid for negative seeds: ' + bad.slice(0, 3).join(' '));
+  } else if (loaded) ok(false, 'pawprint exposes poseFrame');
+}
 console.log(fails ? 'FAIL new-flow: ' + fails + ' of ' + checks : 'PASS new-flow: ' + checks + ' checks');
 process.exit(fails ? 1 : 0);
