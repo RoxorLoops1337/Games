@@ -390,6 +390,30 @@ function reveal(out, t, n) { // n 1..5 escalating
   if (n >= 5) { tone(out, 'sine', 160, 28, t + 0.5, 1.4, 0.55, S); for (let i = 0; i < 8; i++) tone(out, 'sine', 1800 + i * 390, null, t + 0.7 + i * 0.07, 0.4, 0.07, S); for (const d of [-14, 0, 14]) tone(out, 'sawtooth', 261.6, null, t + 0.5, 1.6, 0.06, { sfx: 1, detune: d, attack: 0.3, filter: { type: 'lowpass', f: 1200, q: 0.6 } }); }
 }
 
+// riser: noise sweep plus a rising saw and sine, volume climbs linearly for the whole duration, then cuts in 40 ms (the silent beat)
+function riser(out, t, dur) {
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.linearRampToValueAtTime(0.58, t + dur - 0.04);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  env.connect(out);
+  const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.Q.value = 1.2;
+  nf.frequency.setValueAtTime(200, t); nf.frequency.exponentialRampToValueAtTime(9000, t + dur);
+  const ns = ctx.createBufferSource(); ns.buffer = noiseBuf; ns.loop = true;
+  const ng = ctx.createGain(); ng.gain.value = 0.5; // 0.3 of the 0.58 total
+  counter++; ns.connect(nf); nf.connect(ng); ng.connect(env); ns.start(t, (counter * 0.37) % 1.5); ns.stop(t + dur + 0.04);
+  const sweeps = [['sawtooth', 110, 1400, 0.2], ['sine', 220 * cur.pitch, 1760 * cur.pitch, 0.28]];
+  for (const [type, f0, f1, g] of sweeps) {
+    const osc = ctx.createOscillator(); osc.type = type;
+    const a = clamp(fin(f0, 200) * (type === 'sawtooth' ? cur.pitch : 1), 20, 18000), b = clamp(fin(f1, 1000) * (type === 'sawtooth' ? cur.pitch : 1), 20, 18000);
+    osc.frequency.setValueAtTime(a, t); osc.frequency.exponentialRampToValueAtTime(b, t + dur);
+    const og = ctx.createGain(); og.gain.value = g;
+    if (type === 'sawtooth') { const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.Q.value = 2; osc.connect(lp); lp.connect(og); } else osc.connect(og);
+    og.connect(env); osc.start(t); osc.stop(t + dur + 0.04);
+  }
+  voiceEnds.push(t + dur + 0.04, t + dur + 0.04, t + dur + 0.04);
+}
+
 const SFX = {
   ui_click: (o, t) => tone(o, 'square', 900, 600, t, 0.05, 0.16, S),
   ui_back: (o, t) => tone(o, 'square', 600, 380, t, 0.07, 0.16, S),
@@ -449,16 +473,14 @@ const SFX = {
   // ---- the drop pack
   // drop_big: 1.4 s riser, 0.45 s of near silence (music is ducked by play()), then a heavy sub hit with a crash. Hit lands at t + 1.85.
   drop_big: (o, t) => {
-    noise(o, 'bandpass', 200, 9000, t, 1.4, 0.3, { q: 1.2, attack: 1.2, sfx: 1 });
-    tone(o, 'sawtooth', 110, 1400, t, 1.4, 0.12, { sfx: 1, attack: 1.0, filter: { type: 'lowpass', f: 2600, q: 2 } });
-    tone(o, 'sine', 220, 1760, t, 1.4, 0.16, { sfx: 1, attack: 1.0 });
+    riser(o, t, 1.4);
     for (let i = 0; i < 6; i++) tone(o, 'square', 1200 + i * 180, null, t + 0.5 + i * 0.15, 0.06, 0.05, S); // ticking build
     const h = t + 1.85;
-    tone(o, 'sine', 95, 30, h, 1.3, 0.7, S);
-    tone(o, 'sine', 190, 50, h, 0.3, 0.35, S);
-    noise(o, 'lowpass', 1400, 150, h, 0.08, 0.3, S);
-    noise(o, 'highpass', 3500, 6500, h, 1.1, 0.22, { q: 0.6, sfx: 1 });
-    for (const d of [-9, 0, 9]) tone(o, 'sawtooth', 110, null, h, 0.9, 0.06, { sfx: 1, detune: d, filter: { type: 'lowpass', f: 900, q: 1 } });
+    tone(o, 'sine', 95, 30, h, 1.3, 0.6, S);
+    tone(o, 'sine', 190, 50, h, 0.3, 0.25, S);
+    noise(o, 'lowpass', 1400, 150, h, 0.08, 0.25, S);
+    noise(o, 'highpass', 3500, 6500, h, 1.1, 0.18, { q: 0.6, sfx: 1 });
+    for (const d of [-9, 0, 9]) tone(o, 'sawtooth', 110, null, h, 0.9, 0.05, { sfx: 1, detune: d, filter: { type: 'lowpass', f: 900, q: 1 } });
   },
   hype_full: (o, t) => {
     tone(o, 'sawtooth', 180, 900, t, 0.3, 0.14, { sfx: 1, attack: 0.1, filter: { type: 'lowpass', f: 2200, q: 2 } });
@@ -614,7 +636,7 @@ export const AudioFx = {
     if (!ctx || !music) return null;
     // phase is corrected for the output latency so it matches what the player HEARS (onBeat fires on the audio clock, slightly earlier)
     const t = ctx.currentTime, lat = fin(ctx.outputLatency, 0) + fin(ctx.baseLatency, 0), bd = 60 / music.def.bpm;
-    const x = Math.max(0, (t - lat - music.t0) / bd);
+    const x = Math.max(0, (t - lat - music.t0) / bd + 1e-9); // epsilon: an exact downbeat never reads as 0.99999 of the previous beat
     const beat = Math.floor(x), phase = x - beat;
     return { bpm: music.def.bpm, beat, phase, t, beatDur: bd, toNext: (1 - phase) * bd, sinceLast: phase * bd, latency: lat };
   },

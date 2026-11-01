@@ -264,6 +264,6 @@ const mockStore = (o = {}) => { const m = new Map(Object.entries(o)); return { g
   ok(!o2.challenge.first && o2.diamonds === 0 && r1.diamonds === dm && r1.pendingCrates.length === pc && r1.weekly.best === 25, 'second play the same week pays no weekly bonus');
   const o3 = M.applyRunResult(r1, Object.assign({}, res, { weekId: '2026-W45' }), makeRng(4), NOW); ok(o3.challenge.first && r1.weekly.id === '2026-W45', 'a new week can be claimed again');
   const lose = fresh(); const o4 = M.applyRunResult(lose, Object.assign({}, res, { won: false, cleared: 3 }), makeRng(5), NOW); ok(o4.challenge.first && !(lose.pendingCrates || []).length, 'a short loss still claims the week but earns no crate');
-  ok(M.weeklyGig(r1, Date.UTC(2026, 10, 9)).done === true && M.weeklyGig(r1, Date.UTC(2026, 10, 16)).done === false, 'done flag follows the week');
+  ok(M.weeklyGig(r1, Date.UTC(2026, 10, 3)).done === true && M.weeklyGig(r1, Date.UTC(2026, 10, 10)).done === false, 'done flag follows the week');
 }
 console.log('drop_the_bass meta: ' + n + ' checks passed');

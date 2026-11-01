@@ -616,7 +616,7 @@ export class Run {
     if (isBoss) { e.timer = 4; }
     this.enemies.push(e);
     this.placeEnemy(e);
-    this.emit({ k: 'spawn', id: e.id, type: e.type, boss: isBoss, x: e.x, y: e.y });
+    this.emit({ k: 'spawn', id: e.id, type: e.type, boss: isBoss, x: e.x, y: e.y, lane: e.lane });
     if (isBoss) this.emit({ k: 'boss', id: e.id, type: e.type, small: (s.scale || 1) < 1 });
     return e;
   }

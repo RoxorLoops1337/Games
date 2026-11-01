@@ -254,3 +254,10 @@ body.doodle .rc-line b{font-weight:400;color:#e8403f}
 body.doodle .rc-tips{margin-top:6px}
 body.doodle .rc-tip{display:flex;gap:8px;align-items:flex-start;font-size:18px;line-height:1.2;margin:5px 0;color:#4b4455}
 body.doodle .rc-tip canvas{flex:none;margin-top:1px}
+
+/* ---- phone tap targets: #ui is scaled by --s (set in main.js), so ask for 44 CSS px in ui units ---- */
+body.doodle #ui{--tap:calc(44px / var(--s,1))}
+body.doodle #ui .btn,body.doodle #ui .tab,body.doodle #ui .iconbtn,body.doodle #ui .seg button,body.doodle #ui .enc button,body.doodle #ui .pick,body.doodle #ui .cut-skip{min-height:var(--tap)}
+body.doodle #ui .btn,body.doodle #ui .iconbtn,body.doodle #ui .seg button,body.doodle #ui .enc button{min-width:var(--tap)}
+body.doodle #ui .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+body.doodle .recap .rc-bar{width:40px}

@@ -18,12 +18,22 @@ const ctx = canvas.getContext('2d');
 setRoot(ui);
 
 // ------------------------------------------------------------------------------------------------ profile
-let profile;
-try { profile = M.parseSave(localStorage.getItem(GAME.saveKey) || '', Date.now()); } catch (e) { profile = null; }
-const hadSave = !!profile;
-if (!profile) profile = M.newProfile(Date.now());
-let saveT = 0;
-function writeSave() { try { localStorage.setItem(GAME.saveKey, M.serialize(app.profile)); } catch (e) { /* storage blocked */ } }
+// loadSave: the main save, else the last good backup (recovered), else a new profile. Never throws.
+let loaded;
+try { loaded = M.loadSave(localStorage, Date.now()); } catch (e) { loaded = { profile: M.newProfile(Date.now()), source: 'new', recovered: false, corrupt: false, hadSave: false }; }
+let profile = loaded.profile;
+const hadSave = loaded.hadSave;
+let saveT = 0, saveFailT = 0;
+// validate-then-commit (meta.commitSave): a profile that does not survive serialise + parse back never overwrites the last good save
+function writeSave(opts) {
+  let r;
+  try { r = M.commitSave(localStorage, app.profile, opts && opts.force ? opts : undefined); } catch (e) { r = { ok: false, reason: 'storage' }; }
+  if (!r.ok && r.reason !== 'storage' && r.reason !== 'verify') {
+    try { M.repairProfile(app.profile, Date.now()); r = M.commitSave(localStorage, app.profile, opts && opts.force ? opts : undefined); } catch (e) { /* give up below */ }
+  }
+  if (!r.ok && Date.now() - saveFailT > 60000) { saveFailT = Date.now(); try { toast('Could not save your game. Is the browser storage full?', 4200); } catch (e) { /* no ui yet */ } }
+  return !!r.ok;
+}
 
 let rngCounter = 1;
 const app = {
@@ -34,7 +44,10 @@ const app = {
   save() { clearTimeout(saveT); saveT = setTimeout(writeSave, 150); },
   saveNow: writeSave,
   spendDiamonds(n) { app.profile.diamonds = Math.max(0, app.profile.diamonds - n); app.save(); },
-  replaceProfile(np) { app.profile = np; profile = np; writeSave(); app.applySettings(); app.openHub('tour'); },
+  replaceProfile(np) {
+    try { localStorage.setItem(M.SAVE_PREV_KEY, M.serialize(Object.assign({}, app.profile, { resume: null }))); } catch (e) { /* keep going */ }
+    app.profile = np; profile = np; writeSave({ force: true }); app.applySettings(); app.openHub('tour');
+  },
   applySettings() {
     const s = app.profile.settings;
     AudioFx.setVolume({ music: s.music, sfx: s.sfx });
@@ -78,6 +91,7 @@ function resize() {
   const v = app.view;
   v.cw = cw; v.ch = ch; v.dpr = dpr; v.s = s; v.ox = (cw - W * s) / 2; v.oy = (ch - H * s) / 2;
   canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
+  ui.style.setProperty('--s', String(s));   // css px per ui px: menu tap targets are sized with it so they stay at least 44 css px
   ui.style.left = v.ox + 'px'; ui.style.height = ch / s + 'px'; ui.style.transform = 'scale(' + s + ')';
   const as = app.profile.settings.lowfx ? 1.25 : Math.max(1.5, Math.min(3, dpr * s));
   AE.setArtScale(as); AW.setArtScale(as);
@@ -94,6 +108,13 @@ function showTitle() {
   const wrap = h('div', { class: 'title-wrap' });
   const menu = h('div', { class: 'menu' });
   const started = p.tutorial.done || p.story.intro;
+  // a saved run that cannot be played is dropped here, with a clear message, instead of failing later in the battle
+  let resume = null;
+  if (p.resume) {
+    const chk = M.checkResume(p.resume);
+    if (chk.ok) resume = M.resumeSummary(p.resume);
+    else { p.resume = null; app.save(); setTimeout(() => toast('Your unfinished run was damaged, so it was dropped. Your progress is safe.', 5000), 400); }
+  }
   const tap = h('div', { class: 'tap' }, 'TAP TO START');
   wrap.append(tap);
   ui.append(wrap);
@@ -101,7 +122,8 @@ function showTitle() {
     app.audio.init(); app.audio.resume(); app.applySettings(); app.audio.musicStart('title');
     tap.remove(); wrap.removeEventListener('pointerdown', showMenu);
     menu.replaceChildren(...[
-      started ? btn('CONTINUE', () => openHub(app.hubTab), 'green big') : btn('PLAY', () => newGame(), 'green big'),
+      resume ? btn([h('span', { class: 'cr-t' }, 'CONTINUE RUN'), h('span', { class: 'cr-s' }, resume.stage + ', wave ' + resume.wave + ', ' + resume.turrets + ' turret' + (resume.turrets === 1 ? '' : 's') + (resume.mode === 'endless' ? ' (Endless)' : ''))], () => resumeRun(), 'gold big cont-run') : null,
+      started ? btn(resume ? 'TO THE HUB' : 'CONTINUE', () => openHub(app.hubTab), resume ? 'green' : 'green big') : btn('PLAY', () => newGame(), 'green big'),
       started ? btn('New game', () => { const m = modal(h('div', null, h('h2', null, 'Start over?'), h('div', { class: 'sub', style: 'text-align:center' }, 'This deletes your current progress.'), h('div', { class: 'btnrow' }, btn('Delete and start', () => { m.close(); app.replaceProfile(M.newProfile(Date.now())); showTitle(); newGame(); }, 'red'), btn('Cancel', () => m.close(), 'green')))); }, 'dark small') : null,
       h('div', { class: 'btnrow', style: 'margin:0' }, btn('Settings', () => settingsModal(app), 'dark small'), btn('How to play', () => showHowTo(app), 'dark small')),
     ].filter(Boolean));
@@ -161,12 +183,14 @@ function startRun(cfg) {
   const b = M.useBoosters(p);
   if (!b.ok) { toast('Not enough diamonds for your boosters (' + b.total + ').'); return; }
   const setup = M.computeRunSetup(p);
+  const difficulty = cfg.mode === 'daily' ? 'normal' : setup.difficulty;
   const run = new Run({
     world: cfg.world, mode: cfg.mode, encore: cfg.encore || 0, seed: cfg.seed != null ? cfg.seed : (Date.now() & 0x7fffffff),
-    loadout: setup.loadout, baseFx: setup.baseFx.concat(b.fx), heroLv: setup.heroLv, autoMerge: setup.autoMerge, autoMergeOn: setup.autoMergeOn,
+    loadout: setup.loadout, baseFx: setup.baseFx.concat(b.fx, cfg.extraFx || []), heroLv: setup.heroLv, autoMerge: setup.autoMerge, autoMergeOn: setup.autoMergeOn,
     daily: cfg.daily, wavesTotal: cfg.wavesTotal,
+    difficulty,   // 'easy'|'normal'|'hard' (the sim ignores it until Run supports opts.difficulty). Daily and the Weekly Gig are always 'normal': same run for everyone.
   });
-  run.cfg = { mode: cfg.mode, world: cfg.world, encore: cfg.encore || 0, seed: run.seed, daily: cfg.daily, wavesTotal: cfg.wavesTotal };
+  run.cfg = { mode: cfg.mode, world: cfg.world, encore: cfg.encore || 0, seed: run.seed, daily: cfg.daily, wavesTotal: cfg.wavesTotal, difficulty, weekly: !!cfg.weekly, weekId: cfg.weekId, extraFx: cfg.extraFx };
   if (b.hype) { run.hype = run.hypeNeed; run.checkHype(); }
   app.save();
   const go = () => beginBattle(run, false);
@@ -178,20 +202,34 @@ function saveResume() {
   if (app.screen !== 'battle' || !b || b.ended || b.tut || !b.run.cfg) return;
   const run = b.run;
   if (run.phase === 'won' || run.phase === 'lost') return;
-  try { app.profile.resume = { cfg: run.cfg, snap: run.snapshot(), world: run.world.id, wave: run.wave, mode: run.mode, t: Date.now() }; writeSave(); } catch (e) { /* too big or blocked: skip */ }
+  try {
+    const resume = { cfg: run.cfg, snap: run.snapshot(), world: run.world.id, wave: run.wave, mode: run.mode, t: Date.now() };
+    // never overwrite a good resume with a snapshot that could not be played (NaN, bad turret times...)
+    if (!M.checkResume(resume).ok) return;
+    app.profile.resume = resume; writeSave();
+  } catch (e) { /* too big or blocked: skip */ }
 }
 function resumeRun() {
   const r = app.profile.resume;
   if (!r) return;
-  let run;
-  try { run = Run.restore(r.snap); } catch (e) { app.profile.resume = null; toast('That run could not be restored.'); app.save(); return; }
+  let run = null, why = M.checkResume(r).reason || '';
+  if (!why) {
+    try { run = Run.restore(r.snap); Run.restore(r.snap).advance(0.1); } catch (e) { run = null; why = 'restore failed'; }
+  }
+  if (!run) {
+    // fall back to the hub with a clear message instead of a broken battle
+    console.warn('resume rejected:', why);
+    app.profile.resume = null; app.saveNow(); openHub('tour');
+    toast('That saved run was damaged, so it could not be continued. Your progress and rewards are safe.', 5200);
+    return;
+  }
   run.cfg = r.cfg;
   beginBattle(run, false);
 }
 async function submitBoard(run) {
   const p = app.profile, r = run.result;
   if (!r || !p.name) return 0;
-  const id = r.mode === 'endless' ? 'endless:' + r.world : r.mode === 'daily' ? 'daily' : null;
+  const id = r.mode === 'endless' ? 'endless:' + r.world : r.mode === 'daily' ? (r.weekly ? 'weekly' : 'daily') : null;
   if (!id || r.cleared < 1) return 0;
   const top = await submitScore(id, p.name, r.cleared);
   return rankOf(top, p.name);
@@ -210,6 +248,8 @@ function onRunEnd(run, battle) {
 function finalize(run, battle) {
   const p = app.profile;
   if (!run.result) run.finish(false);
+  if (run.cfg && run.cfg.weekly) { run.result.weekly = true; run.result.weekId = run.cfg.weekId || M.isoWeek(app.now()).id; }
+  if (run.cfg && run.cfg.difficulty) run.result.difficulty = run.cfg.difficulty;
   const out = M.applyRunResult(p, run.result, app.rng(), app.now());
   p.resume = null;
   if (run.mode === 'tutorial') {
@@ -295,6 +335,8 @@ function frame(now) {
 resize();
 app.applySettings();
 showTitle();
+if (loaded.recovered) { writeSave(); setTimeout(() => toast('Recovered your last save', 4200), 300); }
+else if (loaded.corrupt) setTimeout(() => toast('Your save could not be read, so you are starting fresh. The damaged copy is kept.', 5200), 300);
 document.getElementById('boot').remove();
 window.__dtbReady = true;
 requestAnimationFrame(frame);
