@@ -55,7 +55,7 @@ ok('every stage has its own lane shape; all lanes run from above the screen down
 
 ok('stages: names, five skins, boss every 5th, longer snakes and more HP per cell as you go', () => {
   assert.ok(!sim.isBossStage(4) && sim.isBossStage(5) && sim.isBossStage(10));
-  assert.equal(sim.virusName(1), 'Love-Struck Virus'); assert.equal(new Set([1, 2, 3, 4, 5].map(sim.skinFor)).size, 5);
+  assert.equal(sim.virusName(1), 'Love-Struck Virus'); assert.equal(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(sim.skinFor)).size, 10, 'ten different species');
   assert.ok(sim.snakeLength(1) >= 12 && sim.snakeLength(10) > sim.snakeLength(1) && sim.snakeLength(5) > sim.snakeLength(4));
   assert.ok(sim.hpBase(1) >= 100, 'numbers are big');
   assert.ok(sim.hpBase(10) > sim.hpBase(1) * 1.5);
@@ -87,7 +87,7 @@ ok('it starts weak: 10 to 20 capsule shots per cell, one note, no skills; and th
   for (const q of g.snakes[0].segs) if (q.kind === 'normal' && q.i > 0) { const shots = q.max / capsule; assert.ok(shots >= 10 && shots <= 20, `cell needs ${shots} shots`); }
   assert.ok(g.p.rate <= 2.2);
   for (const first of [0, 1]) {   // the first two picks only ever offer capsule upgrades
-    g.pending = 1; g.cells = 5; sim.step(g, 1 / 60, {});
+    g.pending = 1; sim.step(g, 1 / 60, {});
     assert.equal(g.phase, 'levelup'); assert.ok(g.choices.every(c => c.kind === 'capsule'), 'pick ' + first);
     sim.choose(g, 0);
   }
@@ -166,7 +166,6 @@ ok('a destroyed cell that carried a chest drops it: chests give Beats and a skil
   const g = sim.createGame({ seed: 11 });
   const sn = g.snakes[0], carriers = sn.segs.filter(q => q.carry === 'chest');
   assert.equal(carriers.length, 2); assert.ok(carriers.every(q => q.i > 0));
-  g.nextUp = 1e9;
   carriers[0].hp = 0; sim.step(g, 1 / 60, {});
   const chest = g.pickups.find(p => p.kind === 'chest');
   assert.ok(chest && g.events.some(e => e.t === 'chestdrop'));
@@ -176,15 +175,38 @@ ok('a destroyed cell that carried a chest drops it: chests give Beats and a skil
   assert.equal(Object.values(g.frags).reduce((a, b) => a + b, 0), 1); assert.ok(sim.WEAPONS.some(w => g.frags[w.id]));
 });
 
-ok('a skill pick comes after 5 cells, then every 10; Free Refresh gives new choices, 4 times', () => {
-  const g = sim.createGame({ seed: 12 });
-  const kill = k => { let c = 0; for (const sn of g.snakes) for (const q of sn.segs) if (c < k && q.hp > 0 && !q.shield) { q.hp = 0; c++; } sim.step(g, 1 / 60, {}); };
-  kill(4); assert.equal(g.phase, 'play'); assert.equal(g.cells, 4);
-  kill(1); assert.equal(g.phase, 'levelup'); assert.equal(g.cells, 5); assert.equal(g.choices.length, 3); assert.equal(g.nextUp, 15);
+ok('upgrades come only from the yellow upgrade cells; Free Refresh gives new choices, 4 times', () => {
+  for (const stage of [1, 3, 6, 10]) {
+    const g = sim.createGame({ seed: stage, stage }), segs = g.snakes[0].segs, ups = segs.filter(q => q.kind === 'upgrade');
+    assert.equal(ups.length, g.upgradeLeft); assert.ok(ups.length >= 3 && ups.length <= Math.round(segs.length / 7) + 1, 'about one per 7 cells: ' + ups.length);
+    assert.ok(ups.every(q => q.i > 0 && !q.carry), 'never the face, never a chest cell');
+    assert.ok(ups.every(q => q.max > segs.find(x => x.kind === 'normal' && x.i > 0).max), 'a little tougher than a plain cell');
+  }
+  const g = sim.createGame({ seed: 12 }), sn = g.snakes[0];
+  const plain = sn.segs.filter(q => q.kind === 'normal' && q.i > 0 && !q.carry).slice(0, 6);
+  for (const q of plain) q.hp = 0; sim.step(g, 1 / 60, {});
+  assert.equal(g.phase, 'play', 'popping plain cells never gives an upgrade'); assert.equal(g.pending, 0);
+  const left0 = g.upgradeLeft, first = sn.segs.find(q => q.kind === 'upgrade'); first.hp = 0; sim.step(g, 1 / 60, {});
+  assert.equal(g.phase, 'levelup'); assert.equal(g.choices.length, 3); assert.equal(g.upgradeLeft, left0 - 1); assert.ok(g.events.some(e => e.t === 'upgradecell'));
   const before = g.choices.map(c => c.id).join();
   let changed = false; for (let i = 0; i < 4; i++) { assert.ok(sim.reroll(g)); if (g.choices.map(c => c.id).join() !== before) changed = true; }
   assert.ok(changed); assert.ok(!sim.reroll(g), 'only 4 refreshes'); assert.equal(g.rerolls, 0);
   sim.choose(g, 0); assert.equal(g.phase, 'play'); assert.equal(g.level, 2);
+  assert.ok(!sim.createGame({ seed: 3, stage: 9 }).snakes[0].segs.some(q => q.kind === 'gold' || q.kind === 'spitter'));
+});
+
+ok('every extra note counts: each pick adds a note, spaced apart so you can see it, and the card says so', () => {
+  const g = sim.createGame({ seed: 5 });
+  const card = () => g.choices.find(c => c.id === 'notes');
+  const pickNotes = () => { g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); for (let k = 0; k < 40 && !card(); k++) { g.rerolls = 4; sim.reroll(g); } const i = g.choices.indexOf(card()); assert.ok(i >= 0); return sim.choose(g, i); };
+  const volley = () => { g.bullets.length = 0; g.vq.length = 0; g.p.cd = 0; g.p.crit = 0; sim.step(g, 1 / 60, {}); sim.step(g, 0.05, {}); return g.bullets; };
+  assert.equal(volley().length, 1);
+  g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); for (let k = 0; k < 40 && !card(); k++) { g.rerolls = 4; sim.reroll(g); }
+  assert.match(card().stat, /Notes per shot: 1 → 2/); sim.choose(g, g.choices.indexOf(card()));
+  const two = volley(); assert.equal(two.length, 2); assert.ok(Math.abs(two[0].x - two[1].x) >= 40, 'visibly apart'); assert.ok(two.every(b => b.dmg === 10 * g.p.atk));
+  assert.ok(pickNotes()); g.phase = 'play';
+  const three = volley(); assert.equal(three.length, 3); assert.equal(g.ups.notes, 2);
+  assert.equal(new Set(three.map(b => Math.round(b.x))).size, 3);
 });
 
 ok('skill picks: 3 distinct choices; locked skills never appear; maxed ones stop; at most six skills; every passive applies', () => {
@@ -339,7 +361,7 @@ ok('bot plays full runs: bounded entities, finite numbers, and clears an early s
 
 ok('drawing kit bakes every skin, kind, pickup, currency, loot box, skill icon and shot, and draws heads', () => {
   const kit = createArtDraw(stubCanvas, 2), g = stubCtx();
-  for (const skin of sim.SKINS) for (const boss of [false, true]) for (const kind of ['', 'armor', 'bomb', 'gold']) assert.ok(kit.SPR.body(skin, boss, kind), `${skin} ${boss} ${kind}`);
+  for (const skin of sim.SKINS) for (const boss of [false, true]) for (const kind of ['', 'armor', 'bomb', 'upgrade']) assert.ok(kit.SPR.body(skin, boss, kind), `${skin} ${boss} ${kind}`);
   for (const k of ['coin', 'spark', 'heal', 'shield', 'rage', 'chest', 'boxbeat', 'boxspark']) assert.ok(kit.SPR.pickup(k), k);
   for (const w of ['swab', 'dagger', 'needle', 'stick', 'tower', 'dragon', 'bubble', 'satellite', 'maw']) assert.ok(kit.SPR.weapon(w), w);
   assert.ok(kit.SPR.note(false) && kit.SPR.note(true));

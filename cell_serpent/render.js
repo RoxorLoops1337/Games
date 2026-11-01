@@ -56,12 +56,12 @@ export function createRenderer(canvas, art, kit) {
     switch (e.t) {
       case 'hit':
         S.popped++;
-        if (e.crit || S.popped % 2 === 0) addFloat(e.x + (Math.random() - 0.5) * 20, e.y - 10, num(e.d), e.crit ? '#ffe14a' : '#ffffff', e.crit ? 26 : 17);
+        addFloat(e.x + (Math.random() - 0.5) * 20, e.y - 10, num(e.d), e.crit ? '#ffe14a' : '#ffffff', e.crit ? 26 : 17);
         burst(e.x, e.y, e.crit ? 5 : 2, e.crit ? ['#ffe14a', '#fff'] : ['#fff', '#b9f3ff'], 160, 0.3, 3);
         break;
       case 'kill': {
-        const SKC = { purple: ['#b7a2ff', '#6a4cd6', '#fff'], mint: ['#9af0c8', '#2fae78', '#fff'], sun: ['#ffd08a', '#d9791e', '#fff'], sky: ['#a8dcff', '#3d8fd6', '#fff'] };
-        const sk = SKC[e.skin] || ['#ff9ad6', '#e0489d', '#fff'];
+        const sp = kit && kit.SPECIES[e.skin];
+        const sk = e.kind === 'upgrade' ? ['#ffd84d', '#fff1a8', '#fff'] : sp ? [sp.lite, sp.base, '#fff'] : ['#ff9ad6', '#e0489d', '#fff'];
         burst(e.x, e.y, e.head ? 40 : 14, sk, e.head ? 360 : 240, 0.7, 6);
         ring(e.x, e.y, e.r * 2.4, '#fff', 0.35);
         if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); }
@@ -146,16 +146,16 @@ export function createRenderer(canvas, art, kit) {
         continue;
       }
       const bob = 1 + Math.sin(S.t * 6 - i * 0.5) * 0.03;
-      const upright = s.kind === 'armor' || s.kind === 'bomb';
+      const upright = s.kind === 'armor' || s.kind === 'bomb' || s.kind === 'upgrade';
       if (s.kind === 'bomb') { const pulse = 0.5 + Math.sin(S.t * 9 + i) * 0.5; glow(s.x, s.y, r * 1.8, '#ff3b5c', 0.15 + pulse * 0.25); }
-      if (s.kind === 'gold') glow(s.x, s.y, r * 1.9, '#ffd24a', 0.35);
+      if (s.kind === 'upgrade') glow(s.x, s.y, r * 2.1, '#ffd24a', 0.45 + Math.sin(S.t * 6 + i) * 0.15);
       const spr = kit && kit.SPR.body(sn.skin, sn.boss, s.kind === 'normal' ? '' : s.kind);
       if (spr) {
         const size = r * 3.9 * bob;
         blit(spr, s.x, s.y, size, upright ? 0 : ang);
         if (s.flash > 0) flashBlit(spr, s.x, s.y, size, upright ? 0 : ang, s.flash * 5);
         if (s.kind === 'bomb') { const f = 0.6 + Math.sin(S.t * 18 + i) * 0.4; sparkleAt(s.x + r * 0.1, s.y - r * 1.2, r * 0.3 * f); }
-        if (s.kind === 'gold') sparkleAt(s.x + r * 0.5 + Math.sin(S.t * 4 + i) * 4, s.y - r * 0.5, r * 0.28);
+        if (s.kind === 'upgrade') sparkleAt(s.x + r * 0.55 + Math.sin(S.t * 4 + i) * 4, s.y - r * 0.55, r * 0.3);
       } else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
       if (s.carry === 'chest') { glow(s.x, s.y, r * 1.8, '#ffd84d', 0.5 + Math.sin(S.t * 6 + i) * 0.2); blit(kit && kit.SPR.pickup('chest'), s.x, s.y - r * 0.9, r * 2.2, Math.sin(S.t * 4 + i) * 0.1); }
       text(num(s.hp), s.x, s.y + r * 0.05, Math.max(12, r * 0.64), '#fff', INK);
@@ -268,13 +268,14 @@ export function createRenderer(canvas, art, kit) {
 
   function drawHud(g, ui) {
     const p = g.p, pad = 22;
-    // XP bar
-    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, W, 14);
-    const gx = ctx.createLinearGradient(0, 0, W, 0); gx.addColorStop(0, '#1ad9ff'); gx.addColorStop(1, '#9dff6d');
-    const span = Math.max(1, g.nextUp - g.prevUp);
-    ctx.fillStyle = gx; ctx.fillRect(0, 0, W * Math.min(1, Math.max(0, (g.cells - g.prevUp) / span)), 14);
-    text('SKILL IN', pad, 36, 14, '#bfe9ff', '#0b1020', 'left');
-    text((g.nextUp - g.cells) + ' cells', pad, 56, 20, '#fff', '#0b1020', 'left');
+    // yellow upgrade cells still on the snake
+    ctx.save(); ctx.translate(pad + 14, 44); ctx.fillStyle = '#ffd84d'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 18, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+    sparkleAt(pad + 14, 44, 13);
+    text('x ' + (g.upgradeLeft || 0), pad + 40, 46, 24, '#ffd84d', '#0b1020', 'left');
+    text('UPGRADE CELLS', pad, 78, 12, '#fff1a8', '#0b1020', 'left');
+    // what the capsule does right now
+    const up = id => g.ups[id] || 0;
+    text(`NOTES ${1 + up('notes')}  BURSTS ${1 + up('burst')}  SPEED +${15 * up('aspd')}%  DMG +${30 * up('cdmg')}%`, W / 2, H - 92, 17, '#bfe9ff', '#0b1020');
     // chapter, virus name, and progress with chests at 25% / 50% / 100%
     const boss = isBossStage(g.stage);
     text(boss ? 'BOSS  ' + g.stage : 'STAGE ' + g.stage, W / 2, 34, 26, boss ? '#ff7a9a' : '#fff');

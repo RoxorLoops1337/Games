@@ -171,7 +171,7 @@ function showCards() {
     const b = document.createElement('button'); b.className = 'card pick c-' + c.kind;
     const pips = Array.from({ length: c.max }, (_, k) => `<span class="pip ${k <= c.lvl ? 'on' : ''}"></span>`).join('');
     const tag = c.isNew ? '<span style="color:#9dff6d;font-size:13px"> NEW</span>' : `<span style="color:#ffd84d;font-size:13px"> Lv ${c.lvl} → ${c.lvl + 1}</span>`;
-    b.innerHTML = `<div class="ic">${icon(c.id)}</div><div><div class="nm">${c.name}${tag}</div><div class="ds">${c.desc}</div><div class="pips">${pips}</div></div>`;
+    b.innerHTML = `<div class="ic">${icon(c.id)}</div><div><div class="nm">${c.name}${tag}</div><div class="ds">${c.desc}</div>${c.stat ? `<div class="ds" style="color:#bfe9ff;font-weight:800">${c.stat}</div>` : ''}<div class="pips">${pips}</div></div>`;
     b.onclick = () => pick(i);
     wrap.appendChild(b);
   });
@@ -281,7 +281,7 @@ loadArt('assets/').then(a => {
   art = a; kit = createArtDraw((w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }, 2);
   for (const im of document.querySelectorAll('img[data-cur]')) im.src = iconURL(im.dataset.cur);
   // title decoration: snake heads in four colours
-  [['pink', 'deco1'], ['purple', 'deco2'], ['mint', 'deco3'], ['sun', 'deco4']].forEach(([skin, el], i) => {
+  [['love', 'deco1'], ['grumpy', 'deco2'], ['sneezy', 'deco3'], ['sleepy', 'deco4']].forEach(([skin, el], i) => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
   R = createRenderer(canvas, art, kit); window.CS.art = art; window.CS.R = R;

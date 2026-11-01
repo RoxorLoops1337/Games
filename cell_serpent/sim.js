@@ -4,7 +4,7 @@
 // One run is ONE snake (one stage). A long segmented virus crawls down a winding lane toward
 // the bottom of the screen as one connected chain. Your cell slides left and right along the
 // bottom row and fires notes straight up, so where you stand is your aim. Every cell takes
-// 10 to 20 shots. A skill pick comes after 5 cells, then every 10. The snake's face is shielded
+// 10 to 20 shots. Upgrades come only from the yellow upgrade cells on the snake. Its face is shielded
 // until every other cell is gone. If the face reaches the membrane it drains your HP.
 // Between runs you spend Beats and Sparkles on stats, loot boxes and skill levels (meta section).
 export const W = 720;
@@ -160,15 +160,16 @@ export const isBossStage = n => n % 5 === 0;
 export const hpBase = n => 10 * (14 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
 export const snakeLength = n => Math.min(60, 12 + 2 * (n - 1) + (isBossStage(n) ? 6 : 0));
 export const arrivalTime = n => Math.max(45, 80 - 0.8 * n) + (isBossStage(n) ? 18 : 0);   // seconds for the face to reach the membrane if you do nothing
-export const SKINS = ['pink', 'purple', 'mint', 'sun', 'sky'];
-export const skinFor = n => SKINS[(n - 1 + Math.floor((n - 1) / 5)) % SKINS.length];
+// Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
+export const SKINS = ['love', 'rust', 'sneezy', 'grumpy', 'sleepy', 'disco', 'sour', 'mighty', 'frosty', 'gloomy'];
+export const skinFor = n => SKINS[(n - 1) % SKINS.length];
 const NAMES = ['Love-Struck Virus', 'Rustic Virus', 'Sneezy Virus', 'Grumpy Flu', 'Sleepy Spore', 'Disco Germ', 'Sour Strain', 'Mighty Mold', 'Frosty Fever', 'Gloomy Gunk'];
 export const virusName = n => NAMES[(n - 1) % NAMES.length] + (n > NAMES.length ? ' ' + 'I'.repeat(1 + Math.floor((n - 1) / NAMES.length)) : '');
 export const PATH_KINDS = ['Gentle waves', 'Hairpin lanes', 'Tight waves', 'Sharp zigzag', 'Wide S', 'Wild lanes'];
 export const pathKind = n => (n - 1) % PATH_KINDS.length;
 export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: PATH_KINDS[pathKind(n)], hp: Math.round(hpBase(n)) });
 
-const KIND = { normal: { hp: 1 }, armor: { hp: 2.6 }, bomb: { hp: 1 }, gold: { hp: 1.6 } };
+const KIND = { normal: { hp: 1 }, armor: { hp: 2.6 }, bomb: { hp: 1 }, upgrade: { hp: 1.6 } };
 
 // ---------------------------------------------------------------- the track
 // Every stage has its own lane shape. Control points are corner-cut into smooth curves.
@@ -246,7 +247,6 @@ function pickKind(g, n, boss, i, len) {
   const r = g.rand();
   if (n >= 3 && r < 0.12) return 'armor';
   if (n >= 2 && r < 0.2) return 'bomb';
-  if (r > 0.95 || (boss && i === Math.floor(len / 2))) return 'gold';
   return 'normal';
 }
 export function segRadius(boss, i, len) {
@@ -269,7 +269,19 @@ function spawnSnake(g, n) {
     segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0 });
     ps -= (r + segRadius(boss, i + 1, len)) * 0.78;
   }
-  for (const f of [0.3, 0.6]) { const c = segs[Math.max(1, Math.min(len - 1, Math.round(len * f)))]; c.carry = 'chest'; }   // chest cells: aim for them first
+  // yellow upgrade cells: pop one to choose an upgrade. About one per 7 cells (at least 3), spread along the snake.
+  const ups = Math.max(3, Math.round(len / 7));
+  for (let k = 0; k < ups; k++) {
+    const c = segs[clamp(3 + Math.round(((len - 5) * (k + 0.5)) / ups), 1, len - 1)];
+    c.kind = 'upgrade'; c.max = c.hp = Math.max(1, Math.round(hpBase(n) * KIND.upgrade.hp * (boss ? 1.5 : 1)));
+  }
+  // chest cells (a chest on the cell): aim for them first too
+  for (const f of [0.3, 0.62]) {
+    let j = clamp(Math.round(len * f), 1, len - 1);
+    while (j < len - 1 && (segs[j].kind !== 'normal' || segs[j].carry)) j++;
+    segs[j].carry = 'chest';
+  }
+  g.upgradeLeft = ups;
   const speed = (g.path.len - 240) / arrivalTime(n);
   g.snakes.push({ id: ++g.sid, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinFor(n), name: virusName(n), surge: 'idle', surgeT: 4 + g.rand() * 3 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
@@ -297,7 +309,7 @@ export function createGame(opts = {}) {
     rand: rng(opts.seed || 1), t: 0, phase: 'play', stage: 0, sid: 0, path: null,
     p: makePlayer(opts.meta), snakes: [], bullets: [], vq: [], pickups: [], zones: [], maws: [], towers: [],
     events: [], ups: {}, weap: {}, unlocked, skillLv,
-    level: 1, cells: 0, prevUp: 0, nextUp: 5, pending: 0, choices: [], resume: 'play', rerolls: 4,
+    level: 1, cells: 0, upgradeLeft: 0, pending: 0, choices: [], resume: 'play', rerolls: 4,
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
     frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
   };
@@ -341,12 +353,12 @@ function randomFragment(g) {
 function onKill(g, s, sn) {
   const st = g.stage;
   g.kills++; g.cells++;
-  while (g.cells >= g.nextUp) { g.pending++; g.prevUp = g.nextUp; g.nextUp += 10; }   // a skill at 5 cells, then every 10
+  if (s.kind === 'upgrade') { g.pending++; g.upgradeLeft = Math.max(0, g.upgradeLeft - 1); g.events.push({ t: 'upgradecell', x: s.x, y: s.y }); }   // yellow cell: pick an upgrade
   g.lastKillPos = { x: s.x, y: s.y };
   g.combo = g.t - g.lastKill < 2.2 ? Math.min(99, g.combo + 1) : 1; g.lastKill = g.t;
   g.score += Math.round(s.max * (1 + Math.min(g.combo, 50) * 0.05));
   const coinV = (1 + Math.floor(st / 2)) * (s.isHead ? 3 : 1) * (s.kind === 'armor' ? 2 : 1);
-  if (s.kind === 'gold') { for (let k = 0; k < 4; k++) dropPickup(g, 'coin', s.x, s.y, coinV); if (g.rand() < 0.3) dropPickup(g, ['heal', 'shield', 'rage'][Math.floor(g.rand() * 3)], s.x, s.y, 1); }
+  if (s.kind === 'upgrade') { for (let k = 0; k < 3; k++) dropPickup(g, 'coin', s.x, s.y, coinV); if (g.rand() < 0.3) dropPickup(g, ['heal', 'shield', 'rage'][Math.floor(g.rand() * 3)], s.x, s.y, 1); }
   else dropPickup(g, 'coin', s.x, s.y, coinV);
   if (s.carry === 'chest') { g.pickups.push({ kind: 'chest', x: s.x, y: s.y, vx: 0, vy: 40, v: 1, age: 0, vac: false }); g.events.push({ t: 'chestdrop', x: s.x, y: s.y }); }
   g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin });
@@ -405,10 +417,17 @@ function breachTick(g, sn) {
 }
 
 // ---------------------------------------------------------------- skill picks
+// what the capsule does now and after this pick, so every upgrade is visible in numbers
+function capStat(id, l) {
+  if (id === 'notes') return `Notes per shot: ${1 + l} → ${2 + l}`;
+  if (id === 'burst') return `Bursts per shot: ${1 + l} → ${2 + l}`;
+  if (id === 'aspd') return `Attack speed: +${15 * l}% → +${15 * (l + 1)}%`;
+  return `Capsule damage: +${30 * l}% → +${30 * (l + 1)}%`;
+}
 function rollChoices(g) {
   const pool = [];
   const early = g.level < 3;   // the first two picks are capsule upgrades only
-  for (const u of CAPSULE_UPS) { const l = g.ups[u.id] || 0; if (l < u.max) pool.push({ id: u.id, kind: 'capsule', name: u.name, desc: u.desc, lvl: l, max: u.max, isNew: !l, w: u.w * (early ? 2 : 1) }); }
+  for (const u of CAPSULE_UPS) { const l = g.ups[u.id] || 0; if (l < u.max) pool.push({ id: u.id, kind: 'capsule', name: u.name, desc: u.desc, stat: capStat(u.id, l), lvl: l, max: u.max, isNew: !l, w: u.w * (early ? 2 : 1) }); }
   if (!early) {
     const owned = Object.keys(g.weap).length;
     for (const w of WEAPONS) {
@@ -495,7 +514,7 @@ function shootCapsule(g, dt) {
     const n = 1 + up('notes');
     for (let k = 0; k < n; k++) {
       const crit = g.rand() < p.crit;
-      fire(g, { x: p.x + (k - (n - 1) / 2) * 24, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + 0.3 * up('cdmg')) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, r: 6, life: 1.4, kind: 'pill' });
+      fire(g, { x: p.x + (k - (n - 1) / 2) * 42, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + 0.3 * up('cdmg')) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, r: 6, life: 1.4, kind: 'pill' });
     }
     g.shots++; g.events.push({ t: 'shoot' });
   }
