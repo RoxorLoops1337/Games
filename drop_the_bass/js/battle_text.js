@@ -142,6 +142,5 @@ export const BT = {
   flying: () => t('battle.preview.flying', 'flying'),
   armored: () => t('battle.preview.armored', 'armored'),
   elite: () => t('battle.preview.elite', 'elite?'),
-  countX: (name, n) => t('battle.preview.count_x', '{name} x{n}', { name, n }),
   bossCard: (name) => t('battle.preview.boss', 'BOSS: {name}', { name }),
 };

@@ -190,11 +190,26 @@ export function text(ctx, s, x, y, size, color, align = 'left', weight = 900, o)
   }
   ctx.restore();
 }
-export function wrapText(ctx, s, x, y, maxW, size, lh, color, align = 'left') {
-  ctx.save(); ctx.font = size + 'px ' + FONT;
-  const words = String(s).split(' '); let line = ''; const lines = [];
-  for (const w of words) { const test = line ? line + ' ' + w : w; if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test; }
-  if (line) lines.push(line);
-  ctx.restore();
-  lines.slice(0, 5).forEach((l, i) => { ctx.save(); ctx.font = 'bold ' + size + 'px ' + FONT; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillStyle = color; ctx.fillText(l, x, y + i * lh); ctx.restore(); });
+// Wrapped text. maxLines (optional, default 5) keeps long translations inside their box: the font shrinks (down to 78%) until the text fits in maxLines,
+// then the last line is cut with an ellipsis.
+export function wrapText(ctx, s, x, y, maxW, size, lh, color, align = 'left', maxLines = 5) {
+  const lay = (sz) => {
+    ctx.save(); ctx.font = sz + 'px ' + FONT;
+    const words = String(s).split(' '); let line = ''; const lines = [];
+    for (const w of words) { const test = line ? line + ' ' + w : w; if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test; }
+    if (line) lines.push(line);
+    ctx.restore(); return lines;
+  };
+  let sz = size, lines = lay(sz);
+  const cap = Math.max(1, maxLines);
+  while (lines.length > cap && sz > size * 0.78) { sz = Math.max(size * 0.78, sz - 1); lines = lay(sz); }
+  if (lines.length > cap) {
+    lines = lines.slice(0, cap);
+    let last = lines[cap - 1];
+    ctx.save(); ctx.font = 'bold ' + sz + 'px ' + FONT;
+    while (last.length > 1 && ctx.measureText(last + '\u2026').width > maxW) last = last.slice(0, -1);
+    ctx.restore(); lines[cap - 1] = last.trimEnd() + '\u2026';
+  }
+  const lh2 = lh * sz / size;
+  lines.forEach((l, i) => { ctx.save(); ctx.font = 'bold ' + sz + 'px ' + FONT; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillStyle = color; ctx.fillText(l, x, y + i * lh2); ctx.restore(); });
 }

@@ -7,6 +7,7 @@ import { TURRET_BRANCHES, BRANCH_BY_ID, BOSS_PHASE_EFFECTS, RUN_MODIFIER_BY_ID, 
 import * as AE from './art_entities.js';
 import * as K from './doodle_kit.js';
 import * as DH from './doodle_hud.js';
+import { BT } from './battle_text.js';
 import { R } from './battle.js';
 
 const C = K.C, INK = C.ink, TAU = Math.PI * 2, DIM = '#6b6477';
@@ -117,16 +118,16 @@ export function drawBranchPanel(b, ctx, tu, box) {
   ctx.save();
   DH.glass(ctx, B.x, B.y, B.w, B.h, 16, { edge: C.gold, glow: C.gold, glowA: 0.55 + 0.3 * Math.sin(t * 6) });
   starPath(ctx, B.x + 26, B.y + 18, 10 + Math.sin(t * 5) * 1.5, t * 0.8); ctx.fillStyle = C.yellow; ctx.fill(); ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.stroke();
-  DH.text(ctx, 'Choose upgrade', B.x + 46, B.y + 18, 20, INK, 'left');
-  DH.text(ctx, def.name + ' is level ' + tu.level + '. Pick one path, forever.', B.x + B.w - 14, B.y + 18, 12, DIM, 'right');
+  DH.text(ctx, BT.chooseUpgrade(), B.x + 46, B.y + 18, 20, INK, 'left', 900, { maxW: 170 });
+  DH.text(ctx, BT.pickPath(def.name, tu.level), B.x + B.w - 14, B.y + 18, 12, DIM, 'right', 900, { maxW: B.w - 250 });
   for (let i = 0; i < lay.cards.length; i++) {
     const c = lay.cards[i], down = pr === c.id, dy = down ? 3 : 0, k = 0.5 + 0.5 * Math.sin(t * 4 + i * 1.7);
     DH.glass(ctx, c.x, c.y + dy, c.w, c.h, 14, { edge: def.color, glow: i === 0 ? null : null });
     ctx.save(); ctx.globalAlpha = 0.5 + 0.4 * k; ctx.setLineDash([8, 7]); ctx.lineDashOffset = -t * 20; DH.rrect(ctx, c.x - 2, c.y + dy - 2, c.w + 4, c.h + 4, 16); ctx.strokeStyle = def.color; ctx.lineWidth = 3; ctx.stroke(); ctx.restore();
     emblem(ctx, c.x + 30, c.y + dy + 32, 20, c.glyph, def.color);
     DH.text(ctx, fitText(ctx, c.name, c.w - 66, 17), c.x + 58, c.y + dy + 20, 17, INK, 'left');
-    DH.wrapText(ctx, c.desc, c.x + 58, c.y + dy + 42, c.w - 66, 12, 15, INK, 'left');
-    DH.text(ctx, 'TAP', c.x + 30, c.y + dy + c.h - 14, 11, def.color === C.yellow ? '#b8780a' : def.color, 'center');
+    DH.wrapText(ctx, c.desc, c.x + 58, c.y + dy + 42, c.w - 66, 12, 15, INK, 'left', 3);
+    DH.text(ctx, BT.tap(), c.x + 30, c.y + dy + c.h - 14, 11, def.color === C.yellow ? '#b8780a' : def.color, 'center', 900, { maxW: 50 });
   }
   ctx.restore();
   return lay;
@@ -161,7 +162,7 @@ export function drawDarkLane(b, ctx, t) {
   }
   ctx.stroke(); ctx.restore();
   const cx = (x0 + x1) / 2;
-  ctx.save(); ctx.globalAlpha = a; DH.glass(ctx, cx - 58, y0 + 30, 116, 26, 9, { edge: C.purple }); DH.text(ctx, 'DARK LANE ' + Math.ceil(Math.max(0, left)) + 's', cx, y0 + 43, 13, INK, 'center'); ctx.restore();
+  ctx.save(); ctx.globalAlpha = a; DH.glass(ctx, cx - 58, y0 + 30, 116, 26, 9, { edge: C.purple }); DH.text(ctx, BT.darkLane(Math.ceil(Math.max(0, left))), cx, y0 + 43, 13, INK, 'center', 900, { maxW: 104 }); ctx.restore();
 }
 // a gray smudge on turrets that are jammed, in the dark or stolen
 export function drawTurretMark(b, ctx, tu, t) {
@@ -173,7 +174,7 @@ export function drawTurretMark(b, ctx, tu, t) {
     for (let i = -2; i <= 2; i++) { ctx.moveTo(tu.x + i * 11 - 12, tu.y + 26); ctx.lineTo(tu.x + i * 11 + 12, tu.y - 22); }
     ctx.stroke(); ctx.restore();
     if (jam && !stolen) DH.text(ctx, 'zz', tu.x + 18, tu.y - 26 + Math.sin(t * 4 + tu.id) * 2, 13, C.purple, 'center');
-    if (dark && !stolen) DH.text(ctx, 'dark', tu.x, tu.y - 30, 11, '#fff', 'center');
+    if (dark && !stolen) DH.text(ctx, BT.dark(), tu.x, tu.y - 30, 11, '#fff', 'center', 900, { maxW: 60 });
   }
   if (stolen) {
     const info = s.steals[tu.id] || (s.steals[tu.id] = { total: Math.max(8, tu.stolen) }), total = Math.max(info.total, tu.stolen), f = clamp(tu.stolen / total, 0, 1);
@@ -236,7 +237,7 @@ export function drawBossHud(b, ctx, boss, bx, by, bw, t) {
   if (info.shieldFrac > 0) {
     ctx.save(); ctx.fillStyle = INK; ctx.fillRect(bx, by + 19.5, bw, 5.5); ctx.fillStyle = C.sky; ctx.fillRect(bx + 1, by + 20.5, (bw - 2) * info.shieldFrac, 3.5); ctx.restore();
   }
-  if (info.phases > 1) DH.text(ctx, 'PHASE ' + Math.min(info.phase, info.phases) + '/' + info.phases, bx + bw - 6, by + 10, 11, '#fff', 'right');
+  if (info.phases > 1) DH.text(ctx, BT.phaseOf(Math.min(info.phase, info.phases), info.phases), bx + bw - 6, by + 10, 11, '#fff', 'right', 900, { maxW: 90 });
 }
 
 // ================================================================================================ 3. hero abilities
@@ -293,7 +294,7 @@ export function drawHeroTag(b, ctx, who, c, t) {
   if (left > 0) wobRing(ctx, c.x, c.y, c.r + 12, col, 5, t, { a0: -Math.PI / 2, a1: -Math.PI / 2 + TAU * left, seed: who === 'roxor' ? 1 : 2 });
   const bx = c.x + (who === 'roxor' ? 27 : -27), by = c.y - 29;
   emblem(ctx, bx, by, 13, ABILITY_GLYPH[ab] || 'star', col);
-  return ABILITY_SHORT[ab] || ab;
+  return BT.ability(ab, ab);
 }
 
 // ================================================================================================ 4. popovers
@@ -315,28 +316,28 @@ export function drawPoolCard(b, ctx) {
   const P = sheet(ctx, h, def.color, k, 828), x = P.x + 18;
   let y = P.y;
   AE.drawTurretIconFlat(ctx, pc.type, P.x + 44, y + 38, 54);
-  DH.text(ctx, def.name, P.x + 82, y + 26, 22, INK, 'left');
-  DH.text(ctx, pct > 0 ? 'Drop chance ' + pct + '%' : 'Not in the pool right now', P.x + 82, y + 48, 14, '#d6358a', 'left');
-  DH.text(ctx, def.kind === 'aura_rate' || def.kind === 'aura_dmg' ? 'support' : 'attacker', P.x + P.w - 18, y + 26, 13, DIM, 'right');
+  DH.text(ctx, def.name, P.x + 82, y + 26, 22, INK, 'left', 900, { maxW: 240 });
+  DH.text(ctx, pct > 0 ? BT.dropChance(pct) : BT.notInPool(), P.x + 82, y + 48, 14, '#d6358a', 'left', 900, { maxW: P.w - 100 });
+  DH.text(ctx, def.kind === 'aura_rate' || def.kind === 'aura_dmg' ? BT.support() : BT.attacker(), P.x + P.w - 18, y + 26, 13, DIM, 'right', 900, { maxW: 110 });
   y += 66;
-  DH.wrapText(ctx, def.blurb, x, y + 6, P.w - 36, 14, 17, INK, 'left'); y += 40;
-  DH.text(ctx, 'Gets better at', x, y + 6, 13, C.purple, 'left'); y += 22;
-  for (const lv of perks) { DH.text(ctx, 'Lv ' + lv, x + 4, y + 2, 13, '#b8780a', 'left'); DH.text(ctx, fitText(ctx, def.perks[lv], P.w - 90, 13), x + 54, y + 2, 13, INK, 'left'); y += 18; }
+  DH.wrapText(ctx, def.blurb, x, y + 6, P.w - 36, 14, 17, INK, 'left', 2); y += 40;
+  DH.text(ctx, BT.getsBetter(), x, y + 6, 13, C.purple, 'left', 900, { maxW: P.w - 36 }); y += 22;
+  for (const lv of perks) { DH.text(ctx, BT.lv(lv), x + 4, y + 2, 13, '#b8780a', 'left', 900, { maxW: 48 }); DH.text(ctx, fitText(ctx, def.perks[lv], P.w - 90, 13), x + 54, y + 2, 13, INK, 'left'); y += 18; }
   y += 4;
-  DH.text(ctx, 'Works well with (put them side by side)', x, y + 6, 13, C.purple, 'left'); y += 22;
+  DH.text(ctx, BT.worksWithSide(), x, y + 6, 13, C.purple, 'left', 900, { maxW: P.w - 36 }); y += 22;
   for (const pp of partners) {
     AE.drawTurretIconFlat(ctx, pp.partner, x + 14, y + 6, 24);
     const sy = SYNERGY_BY_ID[pp.id];
-    DH.text(ctx, fitText(ctx, (TURRETS[pp.partner] ? TURRETS[pp.partner].name : pp.partner) + ': ' + (pp.name || (sy && sy.name) || '') + ', ' + (pp.desc || ''), P.w - 70, 12), x + 34, y + 6, 12, INK, 'left'); y += 24;
+    DH.text(ctx, fitText(ctx, BT.partnerLine(TURRETS[pp.partner] ? TURRETS[pp.partner].name : pp.partner, pp.name || (sy && sy.name) || '', pp.desc || ''), P.w - 70, 12), x + 34, y + 6, 12, INK, 'left'); y += 24;
   }
   y += 4;
-  DH.text(ctx, 'Level ' + BRANCH_LEVEL + ' upgrade paths', x, y + 6, 13, C.purple, 'left'); y += 22;
+  DH.text(ctx, BT.upgradePaths(BRANCH_LEVEL), x, y + 6, 13, C.purple, 'left', 900, { maxW: P.w - 36 }); y += 22;
   for (const br of branches) {
     emblem(ctx, x + 14, y + 9, 12, br.glyph, def.color);
-    DH.text(ctx, br.name, x + 36, y + 2, 13, INK, 'left');
+    DH.text(ctx, br.name, x + 36, y + 2, 13, INK, 'left', 900, { maxW: P.w - 72 });
     DH.text(ctx, fitText(ctx, br.desc, P.w - 72, 11), x + 36, y + 19, 11, DIM, 'left'); y += 38;
   }
-  DH.text(ctx, 'tap anywhere to close', W / 2, P.y + h - 14, 12, DIM, 'center');
+  DH.text(ctx, BT.closeHint(), W / 2, P.y + h - 14, 12, DIM, 'center', 900, { maxW: P.w - 40 });
   ctx.restore();
 }
 export function drawModBadges(b, ctx, t) {
@@ -358,16 +359,16 @@ export function drawModCard(b, ctx) {
   ctx.save(); ctx.globalAlpha = 0.4 * k; ctx.fillStyle = INK; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = k;
   const P = sheet(ctx, h, C.orange, k, 560), x = P.x + 18;
   let y = P.y;
-  DH.text(ctx, 'Run modifiers', x, y + 28, 22, INK, 'left');
+  DH.text(ctx, BT.runMods(), x, y + 28, 22, INK, 'left', 900, { maxW: 250 });
   const mul = { records: 1, fans: 1, diamonds: 1 }; for (const m of mods) for (const q of Object.keys(mul)) mul[q] *= (m.mul && m.mul[q]) || 1;
-  DH.text(ctx, 'Rewards x' + mul.records.toFixed(2).replace(/0$/, ''), P.x + P.w - 18, y + 28, 15, '#2a8a30', 'right');
+  DH.text(ctx, BT.rewardsMul(mul.records.toFixed(2).replace(/0$/, '')), P.x + P.w - 18, y + 28, 15, '#2a8a30', 'right', 900, { maxW: 190 });
   y += 54;
   for (const m of mods) {
     emblem(ctx, x + 20, y + 20, 18, m.glyph, C.orange);
-    DH.text(ctx, m.name, x + 50, y + 8, 16, INK, 'left');
-    DH.wrapText(ctx, m.desc, x + 50, y + 28, P.w - 100, 12, 15, DIM, 'left');
+    DH.text(ctx, m.name, x + 50, y + 8, 16, INK, 'left', 900, { maxW: P.w - 100 });
+    DH.wrapText(ctx, m.desc, x + 50, y + 28, P.w - 100, 12, 15, DIM, 'left', 2);
     y += 56;
   }
-  DH.text(ctx, 'tap anywhere to close', W / 2, P.y + h - 14, 12, DIM, 'center');
+  DH.text(ctx, BT.closeHint(), W / 2, P.y + h - 14, 12, DIM, 'center', 900, { maxW: P.w - 40 });
   ctx.restore();
 }

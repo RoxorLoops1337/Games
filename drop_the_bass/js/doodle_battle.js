@@ -11,6 +11,7 @@ import * as K from './doodle_kit.js';
 import * as DH from './doodle_hud.js';
 import * as DD from './doodle_depth.js';
 import { R } from './battle.js';
+import { BT } from './battle_text.js';
 
 const C = K.C, INK = C.ink, TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -210,30 +211,30 @@ export function drawPanel(b, ctx, tu) {
   ctx.save();
   DH.glass(ctx, box.x, box.y, box.w, box.h, 16, { edge: def.color });
   AE.drawTurretIconFlat(ctx, tu.type, box.x + 38, box.y + 36, 54);
-  DH.text(ctx, def.name, box.x + 76, box.y + 18, 19, INK, 'left');
+  DH.text(ctx, def.name, box.x + 76, box.y + 18, 19, INK, 'left', 900, { maxW: 200 });
   for (let i = 0; i < MAX_LEVEL; i++) {   // level pips: inked dots
     ctx.beginPath(); ctx.arc(box.x + 78 + i * 13, box.y + 36, 4.4, 0, TAU);
     ctx.fillStyle = i < tu.level ? (tu.level >= 7 ? C.gold : def.color) : 'rgba(43,39,51,0.14)'; ctx.fill(); ctx.lineWidth = 1.8; ctx.strokeStyle = INK; ctx.stroke();
   }
   let line;
-  if (def.kind === 'aura_rate') line = '+' + Math.round(def.aura * (1 + 0.2 * (tu.level - 1)) * 100 * (tu.level >= 7 ? 1.5 : 1)) + '% neighbour fire rate';
-  else if (def.kind === 'aura_dmg') line = '+' + Math.round(def.aura * (1 + 0.2 * (tu.level - 1)) * 100 * (tu.level >= 7 ? 1.5 : 1)) + '% neighbour damage';
-  else line = 'DMG ' + fmt(run.turretDmg(tu)) + '   RATE ' + run.turretRate(tu).toFixed(1) + '/s';
-  DH.text(ctx, line, box.x + 76, box.y + 53, 14, DIM, 'left');
+  if (def.kind === 'aura_rate') line = BT.auraRate(Math.round(def.aura * (1 + 0.2 * (tu.level - 1)) * 100 * (tu.level >= 7 ? 1.5 : 1)));
+  else if (def.kind === 'aura_dmg') line = BT.auraDmg(Math.round(def.aura * (1 + 0.2 * (tu.level - 1)) * 100 * (tu.level >= 7 ? 1.5 : 1)));
+  else line = BT.stats(fmt(run.turretDmg(tu)), run.turretRate(tu).toFixed(1));
+  DH.text(ctx, line, box.x + 76, box.y + 53, 14, DIM, 'left', 900, { maxW: 214 });
   const perk = Object.keys(def.perks).map(Number).filter((k) => k > tu.level).sort((a, c) => a - c)[0];
-  DH.text(ctx, fit(ctx, perk ? 'Lv ' + perk + ': ' + def.perks[perk] : 'Fully upgraded', 214, 12), box.x + 76, box.y + 70, 12, '#b8780a', 'left');
+  DH.text(ctx, fit(ctx, perk ? BT.perk(perk, def.perks[perk]) : BT.maxed(), 214, 12), box.x + 76, box.y + 70, 12, '#b8780a', 'left');
   const mode = { x: box.x + box.w - 202, y: box.y + 4, w: 106, h: 62 };
   const sell = { x: box.x + box.w - 94, y: box.y + 4, w: 86, h: 62 };
   const isAttacker = def.kind !== 'aura_rate' && def.kind !== 'aura_dmg';
-  if (isAttacker) DH.button(ctx, mode, '#b9a6f0', { label: { first: 'First', last: 'Last', strong: 'Strongest', close: 'Closest' }[tu.mode], sub: 'TARGET', size: 15 });
-  DH.button(ctx, sell, C.red, { label: '+' + Math.floor(tu.paid * Math.min(0.95, ECON.sellBack + run.mods.sell)), sub: 'SELL', size: 17 });
+  if (isAttacker) DH.button(ctx, mode, '#b9a6f0', { label: BT.mode(tu.mode), sub: BT.target(), size: 15 });
+  DH.button(ctx, sell, C.red, { label: '+' + Math.floor(tu.paid * Math.min(0.95, ECON.sellBack + run.mods.sell)), sub: BT.sell(), size: 17 });
   // synergies: the active ones with their text, then "works well with" icons (a heart on the partners that are linked right now)
   const act = run.synergiesOf(tu), y0 = box.y + 84;
   ctx.save(); ctx.strokeStyle = 'rgba(43,39,51,0.25)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(box.x + 14, y0 - 12); ctx.lineTo(box.x + box.w - 14, y0 - 12); ctx.stroke(); ctx.restore();
   ctx.save(); ctx.fillStyle = C.pink; ctx.strokeStyle = INK; ctx.lineWidth = 1.8; heartPath(ctx, box.x + 26, y0 - 1, 8); ctx.fill(); ctx.stroke(); ctx.restore();
-  if (act.length) DH.text(ctx, fit(ctx, act[0].name + ': ' + act[0].desc + (act.length > 1 ? '  (+' + (act.length - 1) + ')' : ''), 450, 13), box.x + 42, y0, 13, '#d6358a', 'left');
-  else DH.text(ctx, 'No link yet. Park a partner right next to it.', box.x + 42, y0, 13, DIM, 'left');
-  DH.text(ctx, 'Works well with:', box.x + 14, y0 + 22, 13, INK, 'left');
+  if (act.length) DH.text(ctx, fit(ctx, act.length > 1 ? BT.synMore(BT.synLine(act[0].name, act[0].desc), act.length - 1) : BT.synLine(act[0].name, act[0].desc), 450, 13), box.x + 42, y0, 13, '#d6358a', 'left');
+  else DH.text(ctx, fit(ctx, BT.noLink(), 450, 13), box.x + 42, y0, 13, DIM, 'left');
+  DH.text(ctx, BT.worksWith(), box.x + 14, y0 + 22, 13, INK, 'left', 900, { maxW: 130 });
   const ps = TURRET_PARTNERS[tu.type] || [], linked = new Set(act.map((a) => a.withType));
   ps.forEach((pp, i) => {
     const px = box.x + 150 + i * 44, py = y0 + 21;
@@ -288,18 +289,18 @@ export function drawHud(b, ctx, t, beat) {
   // wave
   const w = R.wave;
   DH.glass(ctx, w.x, w.y, w.w, w.h, 14, { edge: C.blue });
-  DH.text(ctx, run.endless ? 'WAVE ' + Math.max(1, run.wave) : 'WAVE ' + Math.max(1, run.wave) + '/' + run.wavesTotal, w.x + w.w / 2, w.y + 16, 19, INK, 'center');
-  if (run.wmId) { const m = WAVE_MODS[run.wmId]; DH.text(ctx, m.name, w.x + w.w / 2, w.y + 37, 14, m.good ? C.green : C.orange, 'center'); }
+  DH.text(ctx, BT.wave(Math.max(1, run.wave), run.endless ? 0 : run.wavesTotal), w.x + w.w / 2, w.y + 16, 19, INK, 'center', 900, { maxW: w.w - 14 });
+  if (run.wmId) { const m = WAVE_MODS[run.wmId]; DH.text(ctx, m.name, w.x + w.w / 2, w.y + 37, 14, m.good ? C.green : C.orange, 'center', 900, { maxW: w.w - 14 }); }
   else if (run.phase === 'prep' && (run.endless || run.wave < run.wavesTotal)) {
     const spec = run.upcoming();
     const types = [...new Set(spec.groups.map((gr) => gr.type))].slice(0, 3);
     const n = types.length + (spec.boss ? 1 : 0) + (spec.mod ? 1 : 0);
     let x = w.x + w.w / 2 - (n - 1) * 13;
-    DH.text(ctx, 'NEXT', w.x + 12, w.y + 37, 10, DIM, 'left');
+    DH.text(ctx, BT.next(), w.x + 12, w.y + 37, 10, DIM, 'left', 900, { maxW: 36 });
     for (const ty of types) { AE.drawEnemy(ctx, ty, x + 8, w.y + 36, { t, scale: 0.62, hp: 1 }); x += 26; }
     if (spec.boss) { AE.drawGlyph(ctx, 'crown', x + 8, w.y + 36, 22, C.red); x += 26; }
     if (spec.mod) AE.drawGlyph(ctx, WAVE_MODS[spec.mod].glyph, x + 8, w.y + 36, 20, WAVE_MODS[spec.mod].good ? C.green : C.orange);
-  } else DH.text(ctx, run.world.name, w.x + w.w / 2, w.y + 37, 13, DIM, 'center');
+  } else DH.text(ctx, run.world.name, w.x + w.w / 2, w.y + 37, 13, DIM, 'center', 900, { maxW: w.w - 14 });
   { const q = b.pv.open ? 1 : 0.8 + 0.2 * Math.sin(t * 4), qx = w.x + w.w - 10, qy = w.y + 9;   // "tap for the wave preview" badge
     ctx.save(); ctx.beginPath(); ctx.arc(qx, qy, 9 * q, 0, TAU); ctx.fillStyle = b.pv.open ? C.yellow : C.sky; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke(); ctx.restore();
     DH.text(ctx, '?', qx, qy + 1, 12, INK, 'center'); }
@@ -318,7 +319,7 @@ export function drawHud(b, ctx, t, beat) {
   DH.liquidBar(ctx, h.x + 58, h.y + 10, h.w - 66, 20, hf, C.pink, C.gold, t, {});
   DH.bezel(ctx, h.x + 27, h.y + 20, 17, C.gold);
   DH.text(ctx, run.level + '', h.x + 27, h.y + 21, 16, INK, 'center');
-  DH.text(ctx, 'HYPE', h.x + 58 + (h.w - 66) / 2, h.y + 20, 12, '#fff', 'center');
+  DH.text(ctx, BT.hype(), h.x + 58 + (h.w - 66) / 2, h.y + 20, 12, '#fff', 'center', 900, { maxW: h.w - 74 });
   // combo meter: a spiky badge that grows with the combo, changes colour at 10, 25, 50, 100 and pulses on each milestone
   if (b.comboShow > 0.01) {
     const cb = run.combo, tier = b.comboTier, col = [C.sky, C.gold, C.orange, C.red, C.mag][tier];
@@ -331,24 +332,24 @@ export function drawHud(b, ctx, t, beat) {
     if (tier > 0) ring(ctx, cx, cy, r * 1.25 + 7 + b.comboPulse * 6, col, 3.5, t, { dash: [8, 7], march: t * 28, alpha: b.comboShow * 0.9, seed: tier });
     ctx.save(); ctx.globalAlpha = b.comboShow;
     DH.text(ctx, String(cb), cx, cy - 2, Math.round(16 + Math.min(8, cb * 0.08)), tier >= 3 ? '#fff' : INK, 'center');
-    DH.text(ctx, 'COMBO', cx, cy + r * 1.25 + 9, 11, INK, 'center');
+    DH.text(ctx, BT.combo(), cx, cy + r * 1.25 + 9, 11, INK, 'center', 900, { maxW: 60 });
     const f = clamp(run.comboT / (ECON.comboWindow || 1), 0, 1);   // time left before the combo drops
     ctx.fillStyle = INK; ctx.fillRect(cx - 22, cy + r * 1.25 + 18, 44, 5); ctx.fillStyle = col; ctx.fillRect(cx - 21, cy + r * 1.25 + 19, 42 * f, 3);
     ctx.restore();
   }
   if (run.combo !== b._comboLast) { b._comboLast = run.combo; b.comboT = t; }
   // speed
-  DH.button(ctx, R.speed, C.sky, { label: b.speed + 'x', sub: 'SPEED', size: 20, press: b.pressK('speed') });
+  DH.button(ctx, R.speed, C.sky, { label: b.speed + 'x', sub: BT.speed(), size: 20, press: b.pressK('speed') });
   // call wave
   const call = R.call;
   const prep = run.phase === 'prep', canCall = prep || (run.phase === 'wave' && !run.spawnQ.length);
   const left = prep ? Math.max(0, Math.ceil(run.prepT)) : 0;
   const lastWave = !run.endless && run.wave >= run.wavesTotal;
   const cp = b.pressK('call');
-  if (lastWave && run.phase !== 'prep') DH.button(ctx, call, C.purple, { label: 'FINAL WAVE', size: 17, press: cp, glow: 0.4 + 0.3 * Math.sin(t * 6), glowColor: C.pink });
-  else if (prep) DH.button(ctx, call, C.green, { label: run.wave === 0 ? 'START WAVE 1' : 'NEXT WAVE', sub: run.prepT > 100 ? 'tap to begin' : left + 's  +' + Math.round(Math.min(ECON.prepSeconds, run.prepT) * ECON.earlyBonusPerSec) + ' coins', size: 17, press: cp, glow: 0.25 + 0.25 * Math.sin(t * 6), glowColor: C.lime });
-  else if (canCall) DH.button(ctx, call, C.blue, { label: 'CALL NEXT', sub: 'bonus coins', size: 17, press: cp });
-  else DH.button(ctx, call, '#b9b3c8', { label: run.enemies.length + ' left', sub: 'fighting', size: 17, dim: true, press: cp });
+  if (lastWave && run.phase !== 'prep') DH.button(ctx, call, C.purple, { label: BT.finalWave(), size: 17, press: cp, glow: 0.4 + 0.3 * Math.sin(t * 6), glowColor: C.pink });
+  else if (prep) DH.button(ctx, call, C.green, { label: run.wave === 0 ? BT.startWave1() : BT.nextWave(), sub: run.prepT > 100 ? BT.tapToBegin() : BT.prepSub(left, Math.round(Math.min(ECON.prepSeconds, run.prepT) * ECON.earlyBonusPerSec)), size: 17, press: cp, glow: 0.25 + 0.25 * Math.sin(t * 6), glowColor: C.lime });
+  else if (canCall) DH.button(ctx, call, C.blue, { label: BT.callNext(), sub: BT.bonusCoins(), size: 17, press: cp });
+  else DH.button(ctx, call, '#b9b3c8', { label: BT.left(run.enemies.length), sub: BT.fighting(), size: 17, dim: true, press: cp });
   // boss bar: a taped nameplate over a scribble bar with a ghost
   const boss = run.enemies.find((e) => e.boss);
   if (boss) {
@@ -356,21 +357,21 @@ export function drawHud(b, ctx, t, beat) {
     if (b.bossLag == null || b.bossLag < bf) b.bossLag = bf; else b.bossLag += (bf - b.bossLag) * 0.05;
     DH.glass(ctx, bx - 8, by - 6, bw2 + 16, 30, 12, { edge: C.red, glow: C.red, glowA: 0.35 });
     DH.liquidBar(ctx, bx, by, bw2, 18, bf, boss.gated ? '#e0a21c' : C.red, boss.gated ? C.yellow : '#ff8a7a', t, { lag: b.bossLag, ticks: DD.phaseTicks(b, boss) || (boss.type === 'playback' ? [0.33, 0.66] : null) });
-    DH.text(ctx, BOSSES[boss.type].name.toUpperCase(), W / 2, by + 10, 13, '#fff', 'center');
+    DH.text(ctx, BOSSES[boss.type].name.toUpperCase(), W / 2, by + 10, 13, '#fff', 'center', 900, { maxW: 300 });
     DD.drawBossHud(b, ctx, boss, bx, by, bw2, t);
   } else b.bossLag = null;
   // bottom bar
   b.drawHero(ctx, 'roxor', R.heroR, t);
   b.drawHero(ctx, 'jasmin', R.heroJ, t);
   const locked = !b.prof.autoMerge;
-  DH.button(ctx, R.merge, locked ? '#b9b3c8' : C.green, { icon: locked ? 'lock' : 'merge', glyph: AE.drawGlyph, sub: 'MERGE', size: 13, press: b.pressK('merge'), dim: locked });
+  DH.button(ctx, R.merge, locked ? '#b9b3c8' : C.green, { icon: locked ? 'lock' : 'merge', glyph: AE.drawGlyph, sub: BT.merge(), size: 13, press: b.pressK('merge'), dim: locked });
   rerollBtn(b, ctx, R.reroll, false, t); rerollBtn(b, ctx, R.rerollG, true, t);
   b.drawDeploy(ctx, t, beat);
   drawPool(b, ctx, t);
   DD.drawModBadges(b, ctx, t);
   const slotsLeft = run.slotCapacity() - run.turrets.length;
   DH.text(ctx, run.turrets.length + '/' + run.slotCapacity(), 54, 849, 14, slotsLeft < 3 ? '#d4620a' : INK, 'center');
-  DH.text(ctx, 'tiles', 54, 862, 10, DIM, 'center');
+  DH.text(ctx, BT.tiles(), 54, 862, 10, DIM, 'center', 900, { maxW: 60 });
 }
 // the re-roll buttons: coins (or a free setlist reroll first) and gems. Greyed with the price in red when it cannot be paid.
 function rerollBtn(b, ctx, r, gem, t) {
@@ -382,10 +383,10 @@ function rerollBtn(b, ctx, r, gem, t) {
       const cx = x + r.w / 2;
       c.save(); c.translate(cx, y + 24); c.rotate(b.rerollSpin * TAU); AE.drawGlyph(c, 'reroll', 0, 0, 32, '#fff'); c.restore();
       const col = can ? '#fff' : '#e8403f';
-      if (free) DH.text(c, 'FREE', cx, y + bh - 28, 14, C.lime, 'center');
-      else if (p.why === 'single' || p.why === 'locked') DH.text(c, 'no', cx, y + bh - 28, 13, DIM, 'center');
+      if (free) DH.text(c, BT.free(), cx, y + bh - 28, 14, C.lime, 'center', 900, { maxW: r.w - 10 });
+      else if (p.why === 'single' || p.why === 'locked') DH.text(c, BT.no(), cx, y + bh - 28, 13, DIM, 'center', 900, { maxW: r.w - 10 });
       else { AE.drawGlyph(c, gem ? 'diamond' : 'coin', cx - 13, y + bh - 28, 18); DH.text(c, fmt(price), cx + 6, y + bh - 27, 15, col, 'center'); }
-      DH.text(c, gem ? 'GEMS' : free ? 'x' + p.free : 'ROLL', cx, y + bh - 10, 11, '#fff', 'center');
+      DH.text(c, gem ? BT.gems() : free ? 'x' + p.free : BT.roll(), cx, y + bh - 10, 11, '#fff', 'center', 900, { maxW: r.w - 8 });
     },
   });
 }
@@ -402,7 +403,7 @@ function drawPool(b, ctx, t) {
     ctx.restore();
   });
   const pct = Math.max(p.next > 0 ? 1 : 0, Math.round(p.next * 100));
-  DH.text(ctx, 'NEXT', 487, 849, 10, DIM, 'center'); DH.text(ctx, pct + '%', 487, 862, 15, '#d6358a', 'center');
+  DH.text(ctx, BT.next(), 487, 849, 10, DIM, 'center', 900, { maxW: 44 }); DH.text(ctx, pct + '%', 487, 862, 15, '#d6358a', 'center');
 }
 
 export function drawDeploy(b, ctx, t, beat) {
@@ -437,9 +438,9 @@ export function drawDeploy(b, ctx, t, beat) {
   const pct = Math.max(b.pool.next > 0 ? 1 : 0, Math.round(b.pool.next * 100));
   DH.glass(ctx, d.x + 3, d.y + 1, 38, 18, 8, { edge: C.pink });
   DH.text(ctx, pct + '%', d.x + 22, d.y + 11, 12, INK, 'center');
-  DH.text(ctx, 'DROP', d.x + 70, d.y + 26, 27, '#fff', 'left', 900);
-  DH.text(ctx, nextDef.name, d.x + 70, d.y + 47, 13, '#fff', 'left');
-  if (run.mods.freeDeploys > 0) DH.text(ctx, 'FREE x' + run.mods.freeDeploys, d.x + 70, d.y + 66, 17, C.lime, 'left');
+  DH.text(ctx, BT.drop(), d.x + 70, d.y + 26, 27, '#fff', 'left', 900, { maxW: d.w - 78 });
+  DH.text(ctx, nextDef.name, d.x + 70, d.y + 47, 13, '#fff', 'left', 900, { maxW: d.w - 78 });
+  if (run.mods.freeDeploys > 0) DH.text(ctx, BT.freeN(run.mods.freeDeploys), d.x + 70, d.y + 66, 17, C.lime, 'left', 900, { maxW: d.w - 78 });
   else { AE.drawGlyph(ctx, 'coin', d.x + 80, d.y + 65, 20); DH.text(ctx, fmt(cost), d.x + 94, d.y + 66, 20, can ? C.yellow : '#ffd0d0', 'left'); }
   if (b.targetSlot != null) AE.drawGlyph(ctx, 'target', d.x + d.w - 18, d.y + 47, 18, '#fff');
   ctx.restore();
@@ -474,7 +475,7 @@ export function drawHero(b, ctx, who, c, t) {
   if (ready) ring(ctx, c.x, c.y, c.r + 6 + pulse * 3, col, 4, t, { dash: [10, 8], march: t * 26, alpha: 0.6 + pulse * 0.4, seed: who === 'roxor' ? 2 : 4 });
   ctx.restore();
   const lab = DD.drawHeroTag(b, ctx, who, c, t);
-  DH.text(ctx, lab, c.x, c.y + c.r + 12, 12, ready ? (who === 'roxor' ? '#2a8a30' : '#d6358a') : DIM, 'center');
+  DH.text(ctx, lab, c.x, c.y + c.r + 12, 12, ready ? (who === 'roxor' ? '#2a8a30' : '#d6358a') : DIM, 'center', 900, { maxW: 84 });
 }
 
 // ---------------------------------------------------------------------------------------------------- banner: a taped paper strip
@@ -496,9 +497,9 @@ export function drawBanner(b, ctx) {
       ctx.stroke(); ctx.globalAlpha = a;
     }
   }
-  DH.text(ctx, bn.text, 0, bn.small ? 0 : -14, bn.small ? 38 : (bn.text.length > 20 ? 28 : 40), bn.color, 'center', 900);
-  if (bn.sub && !bn.small) DH.wrapText(ctx, bn.sub, 0, 28, 460, 16, 20, INK, 'center');
-  else if (bn.sub) DH.text(ctx, bn.sub, 0, 36, 16, '#fff', 'center');
+  DH.text(ctx, bn.text, 0, bn.small ? 0 : -14, bn.small ? 38 : (bn.text.length > 20 ? 28 : 40), bn.color, 'center', 900, { maxW: 470 });
+  if (bn.sub && !bn.small) DH.wrapText(ctx, bn.sub, 0, 28, 460, 16, 20, INK, 'center', 2);
+  else if (bn.sub) DH.text(ctx, bn.sub, 0, 36, 16, '#fff', 'center', 900, { maxW: 470 });
   ctx.restore();
 }
 
@@ -534,7 +535,7 @@ export function drawTutorial(b, ctx) {
   ctx.beginPath(); ctx.moveTo(bx - 4, by + bh - 7); ctx.lineTo(bx + 20, by + bh - 7); ctx.strokeStyle = K.C.paper; ctx.lineWidth = 6; ctx.stroke();
   AW.drawLoopy(ctx, 50, by + bh - 20, 78, { t: b.t, mood: 'happy', talk: b.tut.t < 2.5 });
   DH.wrapText(ctx, b.tutBubble ? b.tutBubble.text : '', bx + 70, by + 32, bw - 100, 20, 24, INK, 'left');
-  if (s.wait === 'tap') { const k2 = 0.5 + 0.5 * Math.sin(b.t * 5); ctx.globalAlpha = 0.6 + 0.4 * k2; DH.text(ctx, 'tap to continue', bx - 30 + bw - 20, by + bh - 16, 14, C.purple, 'right'); }
+  if (s.wait === 'tap') { const k2 = 0.5 + 0.5 * Math.sin(b.t * 5); ctx.globalAlpha = 0.6 + 0.4 * k2; DH.text(ctx, BT.tapToContinue(), bx - 30 + bw - 20, by + bh - 16, 14, C.purple, 'right', 900, { maxW: 220 }); }
   ctx.restore();
 }
 
@@ -556,40 +557,40 @@ export function drawPreview(b, ctx) {
   ctx.globalAlpha = 0.45 * k; ctx.fillStyle = INK; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = k;
   ctx.translate(W / 2, y + h / 2); ctx.scale(sc, sc); ctx.translate(-W / 2, -(y + h / 2));
   DH.glass(ctx, x, y, CW, h, 18, { edge: pv && pv.hasBoss ? C.red : C.blue });
-  if (!pv) { DH.text(ctx, 'No more waves. Finish the fight!', W / 2, y + h / 2, 18, INK, 'center'); ctx.restore(); return; }
-  DH.text(ctx, 'NEXT: WAVE ' + pv.wave + (run.endless ? '' : ' / ' + run.wavesTotal), x + 20, y + 28, 22, INK, 'left');
-  DH.text(ctx, pv.total + ' Static', x + CW - 20, y + 28, 16, DIM, 'right');
+  if (!pv) { DH.text(ctx, BT.noMoreWaves(), W / 2, y + h / 2, 18, INK, 'center', 900, { maxW: CW - 30 }); ctx.restore(); return; }
+  DH.text(ctx, BT.nextWaveCard(pv.wave, run.endless ? 0 : run.wavesTotal), x + 20, y + 28, 22, INK, 'left', 900, { maxW: 270 });
+  DH.text(ctx, BT.staticCount(pv.total), x + CW - 20, y + 28, 16, DIM, 'right', 900, { maxW: 150 });
   let yy = y + 50;
   if (pv.mod) {
     const m = WAVE_MODS[pv.mod.id], good = m && m.good;
     if (m && m.glyph) AE.drawGlyph(ctx, m.glyph, x + 32, yy + 8, 22, good ? C.green : C.orange);
-    DH.text(ctx, pv.mod.name, x + 52, yy + 2, 15, good ? '#2a8a30' : '#d4620a', 'left');
+    DH.text(ctx, fit(ctx, pv.mod.name, CW - 70, 15), x + 52, yy + 2, 15, good ? '#2a8a30' : '#d4620a', 'left');
     DH.text(ctx, fit(ctx, pv.mod.desc, CW - 70, 12), x + 52, yy + 20, 12, DIM, 'left'); yy += 24;
   }
   yy = y + head;
-  if (b.pv.cur) { DH.text(ctx, 'On the field now: ' + b.pv.cur.total + ' left', x + 20, yy + 4, 13, DIM, 'left'); yy += 24; }
+  if (b.pv.cur) { DH.text(ctx, BT.onField(b.pv.cur.total), x + 20, yy + 4, 13, DIM, 'left', 900, { maxW: CW - 40 }); yy += 24; }
   lanes.forEach((l, li) => {
     ctx.save(); ctx.strokeStyle = 'rgba(43,39,51,0.3)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(x + 14, yy); ctx.lineTo(x + CW - 14, yy); ctx.stroke(); ctx.restore();
-    DH.text(ctx, pv.lanes.length > 1 ? 'GATE ' + (l.lane + 1) : 'ENEMIES', x + 20, yy + 14, 13, C.purple, 'left');
+    DH.text(ctx, pv.lanes.length > 1 ? BT.gate(l.lane + 1) : BT.enemies(), x + 20, yy + 14, 13, C.purple, 'left', 900, { maxW: 200 });
     yy += 24;
     l.enemies.forEach((en, i) => {
       const d = ENEMIES[en.type], cx = x + 16 + (i % 2) * (CW / 2), cy = yy + Math.floor(i / 2) * CELL + CELL / 2 - 2;
       AE.drawEnemy(ctx, en.type, cx + 14, cy, { t: b.t, scale: clamp(13 / d.r, 0.4, 0.9), hp: 1 });
       DH.text(ctx, fit(ctx, d.name, 120, 14) + ' x' + en.count, cx + 36, cy - 6, 14, INK, 'left');
       let bx = cx + 36; const bd = [];
-      if (en.flying) bd.push(['flying', C.sky]); if (en.armored) bd.push(['armored', '#7a7f92']); if (en.elite) bd.push(['elite?', C.orange]);
-      for (const [lab, col] of bd) { DH.text(ctx, lab, bx, cy + 10, 11, col, 'left'); bx += lab.length * 6 + 10; }
+      if (en.flying) bd.push([BT.flying(), C.sky]); if (en.armored) bd.push([BT.armored(), '#7a7f92']); if (en.elite) bd.push([BT.elite(), C.orange]);
+      for (const [lab, col] of bd) { DH.text(ctx, lab, bx, cy + 10, 11, col, 'left', 900, { maxW: 70 }); bx += Math.min(70, lab.length * 6) + 10; }
     });
     yy += Math.ceil(l.enemies.length / 2) * CELL;
     if (l.boss) {
       const bd = BOSSES[l.boss];
       AE.drawGlyph(ctx, 'crown', x + 34, yy + 12, 24, C.red);
-      DH.text(ctx, 'BOSS: ' + (bd ? bd.name : l.boss), x + 56, yy + 7, 15, C.red, 'left');
+      DH.text(ctx, BT.bossCard(bd ? bd.name : l.boss), x + 56, yy + 7, 15, C.red, 'left', 900, { maxW: CW - 76 });
       if (bd && bd.trick) DH.text(ctx, fit(ctx, bd.trick, CW - 76, 11), x + 56, yy + 23, 11, DIM, 'left');
       yy += 30;
     }
     yy += 6;
   });
-  DH.text(ctx, 'tap anywhere to close', W / 2, y + h - 16, 12, DIM, 'center');
+  DH.text(ctx, BT.closeHint(), W / 2, y + h - 16, 12, DIM, 'center', 900, { maxW: CW - 40 });
   ctx.restore();
 }

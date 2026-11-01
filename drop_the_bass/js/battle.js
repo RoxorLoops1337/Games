@@ -18,6 +18,7 @@ import * as DB from './doodle_battle.js';
 import * as DFX from './doodle_fx.js';
 import * as DD from './doodle_depth.js';
 import { HINTS_EXTRA } from './data_hints_extra.js';
+import { BT } from './battle_text.js';
 
 // coach marks for the depth systems: ids that data_story.js HINTS does not define yet are filled in from data_hints_extra.js
 for (const k of Object.keys(HINTS_EXTRA || {})) if (!HINTS[k]) HINTS[k] = HINTS_EXTRA[k];
@@ -228,7 +229,7 @@ export class Battle {
         if (this.comboPrev < m && cb >= m) {
           this.comboPulse = 1; this.comboTier = i + 1;
           this.sfx('combo_milestone', null, { pitch: [1, 1.25, 1.5, 2][i] });
-          this.fx.floater(150, 172, m + ' COMBO!', i >= 2 ? COL.red : COL.gold, 22 + i * 2, { life: 1.1, vy: -20 });
+          this.fx.floater(150, 172, BT.comboMilestone(m), i >= 2 ? COL.red : COL.gold, 22 + i * 2, { life: 1.1, vy: -20 });
           this.fx.ring(R.hype.x + 40, R.hype.y + 66, 70 + i * 20, i >= 2 ? COL.red : COL.gold, { life: 0.5, w: 5 });
           this.shake(2 + i * 2);
           if (i >= 2) this.stop = Math.max(this.stop, 0.05);
@@ -298,13 +299,13 @@ export class Battle {
           fx.light(e.x, e.y, 90, def.color, 0.3, 0.8);
           fx.pillar(e.x, e.y + 6, def.color, 120, 0.45);
           if (e.cost > 0) this.num(e.x, e.y - 30, '-' + e.cost, COL.coin, 15, { vy: -30 });
-          else this.num(e.x, e.y - 30, 'FREE', COL.green, 15);
+          else this.num(e.x, e.y - 30, BT.free(), COL.green, 15);
           this.sfx('deploy', e.x); this.deployPulse = 1;
-          if (e.bonus) this.num(e.x, e.y - 52, 'BONUS!', COL.pink, 16);
+          if (e.bonus) this.num(e.x, e.y - 52, BT.bonus(), COL.pink, 16);
           this.refreshPool(); this.refreshLinks();
           break;
         }
-        case 'perfect': this.num(e.x, e.y - 52, 'ON BEAT!', COL.cyan, 16, { life: 0.9 }); this.sfx('perfect_beat', e.x); break;
+        case 'perfect': this.num(e.x, e.y - 52, BT.onBeat(), COL.cyan, 16, { life: 0.9 }); this.sfx('perfect_beat', e.x); break;
         case 'merge': {
           const def = TURRETS[e.type], L = e.level;
           const big = L >= 5, hot = L >= 6, top = L >= MAX_LEVEL;
@@ -319,13 +320,13 @@ export class Battle {
           fx.sparkRing(e.x, e.y, this.n(4 + L * 2), [COL.gold, '#fff', def.color], 150 + L * 14, 0.55 + L * 0.03);
           if (L >= 5) fx.raysBurst(e.x, e.y, COL.gold, 160 + L * 16, 0.8, 12);
           if (L >= 4) fx.doFlash(top ? '#fff' : COL.gold, [0, 0, 0, 0.12, 0.2, 0.3, 0.42, 0.7][Math.min(7, L)]);
-          this.num(e.x, e.y - 34, top ? 'MAX LEVEL!' : 'LEVEL ' + L, L >= 5 ? COL.gold : '#fff', big ? 22 : 18, { life: 1.0 });
-          if (e.kind === 'remix') this.num(e.x, e.y - 58, 'REMIX!', COL.pink, 16);
+          this.num(e.x, e.y - 34, top ? BT.maxLevel() : BT.level(L), L >= 5 ? COL.gold : '#fff', big ? 22 : 18, { life: 1.0 });
+          if (e.kind === 'remix') this.num(e.x, e.y - 58, BT.remix(), COL.pink, 16);
           if (big) { fx.addChroma(0.4); fx.confetti(e.x, e.y, this.n(L >= 6 ? 36 : 26)); }
           this.shake([0, 0, 1, 2, 4, 8, 11, 15][Math.min(7, L)]);
           if (top) this.freeze(0.09);
           this.sfx(top ? 'merge_7' : big ? 'merge_big' : 'merge', e.x, { pitch: 1 + (L - 2) * 0.06 });
-          if (top && !this.sevenSeen) { this.sevenSeen = true; this.sfx('drop_big', null, { at: 0.45 }); this.queueBanner('LEVEL 7!', def.name + ' is maxed out', COL.gold, 1.5, { small: true }); }
+          if (top && !this.sevenSeen) { this.sevenSeen = true; this.sfx('drop_big', null, { at: 0.45 }); this.queueBanner(BT.level7(), BT.maxedOut(def.name), COL.gold, 1.5, { small: true }); }
           this.refreshPool(); this.refreshLinks();
           break;
         }
@@ -336,7 +337,7 @@ export class Battle {
           fx.burst(e.x, e.y, [COL.pink, '#fff', COL.gold], this.n(12), { speed: 130, up: 40, g: -20, life: 0.8 });
           fx.sparkRing(e.x, e.y, this.n(8), [COL.pink, '#fff'], 90, 0.6);
           fx.ring(e.x, e.y, 54, COL.pink, { life: 0.45, w: 5 });
-          if (sy) this.num(e.x, e.y - 28, sy.name + '!', COL.pink, 17, { life: 1.3, vy: -26 });
+          if (sy) this.num(e.x, e.y - 28, BT.named(sy.name), COL.pink, 17, { life: 1.3, vy: -26 });
           this.sfx('synergy', e.x); this.synPop = 1; this.refreshLinks();
           if (!this.tut) this.hint2('hint_synergy');
           break;
@@ -375,8 +376,7 @@ export class Battle {
             // a crayon POW on some kills: always on big ones, every third small one, never on Low graphics
             this.kills3++;
             if (!this.lite && fx.floats.length < 36 && (e.r > 18 || this.kills3 % 3 === 0)) {
-              const words = ['POW', 'BAM', 'ZAP', 'BOP', 'WHAM'];
-              this.num(e.x, e.y - 6, words[(e.id * 7 + this.kills3) % words.length], e.r > 18 ? COL.orange : COL.pink, e.r > 18 ? 22 : 17, { life: 0.5, vy: -26, crit: true });
+              this.num(e.x, e.y - 6, BT.kill((e.id * 7 + this.kills3) % 5), e.r > 18 ? COL.orange : COL.pink, e.r > 18 ? 22 : 17, { life: 0.5, vy: -26, crit: true });
             }
           }
           this.sfx(e.boss ? 'boss_die' : (e.r > 18 ? 'kill_big' : 'kill'), e.x);
@@ -388,7 +388,7 @@ export class Battle {
         case 'leak': {
           if (e.shield) {   // the stage shield soaked it up: a ripple, no damage flash
             const bs = run.map.base;
-            fx.ring(bs.x, bs.y, 130, COL.cyan, { life: 0.5, w: 6 }); fx.floater(clamp(bs.x, 110, W - 110), bs.y - 40, 'BLOCKED!', COL.cyan, 22, { life: 0.9 }); this.sfx('ui_pop'); this.shake(2);
+            fx.ring(bs.x, bs.y, 130, COL.cyan, { life: 0.5, w: 6 }); fx.floater(clamp(bs.x, 110, W - 110), bs.y - 40, BT.blocked(), COL.cyan, 22, { life: 0.9 }); this.sfx('ui_pop'); this.shake(2);
             break;
           }
           this.shake(e.boss ? 16 : 7); fx.addChroma(e.boss ? 0.9 : 0.5); fx.doFlash('#ff2a4a', e.boss ? 0.55 : 0.28); this.hurtFlash = 1;
@@ -402,7 +402,7 @@ export class Battle {
           break;
         }
         case 'boss': {
-          this.queueBanner('BOSS: ' + BOSSES[e.type].name.toUpperCase(), BOSSES[e.type].trick, COL.red, 3.2, { boss: true });
+          this.queueBanner(BT.boss(BOSSES[e.type].name.toUpperCase()), BOSSES[e.type].trick, COL.red, 3.2, { boss: true });
           this.sfx('boss_warn'); fx.addShake(8); this.prof.seen.bosses[e.type] = true;
           this.bossId = e.id; this.bossType = e.type;
           if (!e.small) { this.app.audio.musicStart('boss'); this.musicBoss = true; if (this.app.hooks.bossIntro && !this.tut) this.app.hooks.bossIntro(e.type, this); }
@@ -412,7 +412,7 @@ export class Battle {
         case 'bossdie': if (this.musicBoss) { this.app.audio.musicStart('world_' + this.world.id); this.musicBoss = false; } this.bossId = null; break;
         case 'bossPhase': {
           const meta = BOSS_PHASE_EFFECTS[e.id];
-          this.queueBanner((meta ? meta.name : 'Phase').toUpperCase() + '!', e.text, COL.red, 2.6, { boss: true });
+          this.queueBanner(meta ? BT.phaseName(meta.name.toUpperCase()) : BT.phaseDefault(), e.text, COL.red, 2.6, { boss: true });
           fx.doFlash('#ff2a4a', 0.4); fx.addShake(12); fx.addChroma(0.7); this.freeze(0.06);
           fx.ring(e.x, e.y, 170, COL.red, { life: 0.6, w: 7 }); fx.sparkRing(e.x, e.y, this.n(10), [COL.red, '#fff', COL.gold], 200, 0.6);
           this.sfx('boss_phase'); this.vibrate(90);
@@ -422,11 +422,11 @@ export class Battle {
         }
         case 'turretReturn': {
           fx.burst(e.x, e.y, [COL.green, '#fff', COL.gold], this.n(12), { speed: 150, life: 0.6 }); fx.ring(e.x, e.y, 54, COL.green, { life: 0.4, w: 5 });
-          fx.floater(e.x, e.y - 34, 'BACK!', COL.green, 18, { life: 0.9 }); this.sfx('turret_returned', e.x);
+          fx.floater(e.x, e.y - 34, BT.back(), COL.green, 18, { life: 0.9 }); this.sfx('turret_returned', e.x);
           break;
         }
         case 'branchReady': {
-          fx.sparkRing(e.x, e.y, this.n(6), [COL.gold, '#fff'], 90, 0.6); fx.floater(e.x, e.y - 40, 'UPGRADE READY!', COL.gold, 15, { life: 1.1, vy: -24 });
+          fx.sparkRing(e.x, e.y, this.n(6), [COL.gold, '#fff'], 90, 0.6); fx.floater(e.x, e.y - 40, BT.upgradeReady(), COL.gold, 15, { life: 1.1, vy: -24 });
           this.sfx('branch_ready', e.x);
           if (!this.tut) this.hint2('hint_branch');
           break;
@@ -435,21 +435,21 @@ export class Battle {
           const br = BRANCH_BY_ID[e.branch];
           fx.burst(e.x, e.y, [COL.gold, '#fff', COL.pink], this.n(20), { speed: 220, life: 0.7 }); fx.sparkRing(e.x, e.y, this.n(10), [COL.gold, '#fff'], 160, 0.7);
           fx.ring(e.x, e.y, 70, COL.gold, { life: 0.5, w: 6 });
-          if (br) this.num(e.x, e.y - 40, br.name + '!', COL.gold, 19, { life: 1.3, vy: -26 });
+          if (br) this.num(e.x, e.y - 40, BT.named(br.name), COL.gold, 19, { life: 1.3, vy: -26 });
           this.shake(4); this.sfx('branch_pick', e.x); this.refreshLinks();
           break;
         }
-        case 'bossphase': this.queueBanner('PHASE ' + e.phase, 'Mr. Playback gets serious', COL.pink, 2); fx.addShake(10); this.sfx('boss_warn'); break;
+        case 'bossphase': this.queueBanner(BT.phaseN(e.phase), BT.playbackSerious(), COL.pink, 2); fx.addShake(10); this.sfx('boss_warn'); break;
         case 'gate': this.sfx(e.on ? 'jam' : 'whoosh'); break;
         case 'wave': {
           const mod = e.mod ? WAVE_MODS[e.mod] : null;
-          this.queueBanner('WAVE ' + e.w + (e.total ? ' / ' + e.total : ''), mod ? mod.name + ': ' + mod.desc : '', mod ? (mod.good ? COL.green : COL.orange) : COL.bone, mod ? 2.6 : 1.4);
+          this.queueBanner(BT.waveBanner(e.w, e.total), mod ? BT.waveMod(mod.name, mod.desc) : '', mod ? (mod.good ? COL.green : COL.orange) : COL.bone, mod ? 2.6 : 1.4);
           this.sfx('wave_start');
           if (mod) this.hint('mod');
           break;
         }
         case 'clear': {
-          this.queueBanner('WAVE CLEAR', '+' + e.coins + ' coins', COL.green, 1.5);
+          this.queueBanner(BT.waveClear(), BT.waveClearSub(e.coins), COL.green, 1.5);
           this.sfx('wave_clear');
           if (this.app.hooks.onWaveClear && !this.tut) setTimeout(() => this.app.hooks.onWaveClear(), 50);
           this.tip = LOOPY_TIPS[(run.wave * 7 + run.seed) % LOOPY_TIPS.length];
@@ -467,36 +467,36 @@ export class Battle {
             fx.ring(hc.x, hc.y, 900, COL.cyan, { life: 0.8, w: 12 }); fx.ring(W / 2, H / 2, 640, '#fff', { life: 0.6, w: 8 }); fx.doFlash('#bfe8ff', 0.5); fx.addShake(7); fx.addChroma(0.6);
             fx.burst(W / 2, 260, ['#fff', '#bfe8ff', '#8fd8ff'], this.n(40), { speed: 180, life: 1.2, size: 4, up: -40, g: 60 });
             this.sfx('hero_freeze'); this.vibrate(80);
-            this.queueBanner('BASS FREEZE!', 'Everything stops cold', COL.cyan, 1.2, { small: true });
+            this.queueBanner(BT.freeze(), BT.freezeSub(), COL.cyan, 1.2, { small: true });
           } else if (ab === 'overclock') {
             fx.ring(hc.x, hc.y, 900, COL.orange, { life: 0.7, w: 12 }); fx.doFlash(COL.orange, 0.4); fx.addShake(6);
             for (const tu of run.turrets) { fx.ring(tu.x, tu.y, 56, COL.orange, { life: 0.5, w: 5 }); fx.sparks(tu.x, tu.y, [COL.orange, COL.gold], this.n(4), { speed: 200 }); }
             this.sfx('hero_overclock'); this.vibrate(80);
-            this.queueBanner('OVERCLOCK!', 'Turrets fire 60% faster', COL.orange, 1.2, { small: true });
+            this.queueBanner(BT.overclock(), BT.overclockSub(), COL.orange, 1.2, { small: true });
           } else if (ab === 'coinrain') {
             fx.ring(hc.x, hc.y, 900, COL.gold, { life: 0.7, w: 12 }); fx.doFlash(COL.gold, 0.3); fx.confetti(W / 2, 200, this.n(30));
             this.sfx('hero_coinrain');
-            this.queueBanner('COIN RAIN!', 'Double coins for a while', COL.gold, 1.2, { small: true });
+            this.queueBanner(BT.coinRain(), BT.coinRainSub(), COL.gold, 1.2, { small: true });
           } else if (ab === 'shield') {
             fx.ring(hc.x, hc.y, 900, COL.cyan, { life: 0.7, w: 12 }); fx.ring(base.x, base.y, 150, COL.cyan, { life: 0.7, w: 7 }); fx.doFlash('#bfe8ff', 0.3);
             this.sfx('hero_shield');
-            this.queueBanner('STAGE SHIELD!', 'Leaks bounce off', COL.cyan, 1.2, { small: true });
+            this.queueBanner(BT.shield(), BT.shieldSub(), COL.cyan, 1.2, { small: true });
           } else if (e.who === 'roxor') {
             fx.ring(R.heroR.x, R.heroR.y, 900, COL.green, { life: 0.7, w: 14 }); fx.ring(W / 2, H / 2, 700, '#fff', { life: 0.5, w: 8 }); fx.ring(W / 2, H / 2, 420, COL.green, { life: 0.9, w: 10 }); fx.addChroma(1); fx.raysBurst(W / 2, H / 2, COL.green, 700, 0.8, 20);
             fx.addShake(14); fx.doFlash(COL.green, 0.45); this.sfx('hero_roxor'); this.vibrate(120);
-            this.queueBanner('BEATBOX BLAST!', '', COL.green, 1.0, { small: true });
+            this.queueBanner(BT.blastBanner(), '', COL.green, 1.0, { small: true });
           } else {
             fx.ring(R.heroJ.x, R.heroJ.y, 900, COL.pink, { life: 0.8, w: 14 }); fx.doFlash(COL.pink, 0.4); fx.aurora('#ff5fb0', 2.2); fx.burst(W / 2, 700, [COL.pink, '#fff', '#ffd0f0'], 30, { speed: 220, up: 120, g: -40, life: 1.2, size: 4 }); this.sfx('hero_jasmin');
-            this.queueBanner('SIREN SONG', 'Slowed, vulnerable, stage mended', COL.pink, 1.2, { small: true });
+            this.queueBanner(BT.songBanner(), BT.songSub(), COL.pink, 1.2, { small: true });
           }
           break;
         }
-        case 'duet': fx.doFlash('#fff', 0.8); fx.addShake(18); fx.addChroma(1); fx.confetti(W / 2, H / 2, 60); fx.raysBurst(W / 2, H / 2, COL.gold, 760, 1.3, 24); fx.ring(W / 2, H / 2, 600, COL.gold, { life: 0.9, w: 12 }); fx.aurora('#ffc83d', 1.6); this.sfx('duet'); this.queueBanner('DUET FINALE!', '', COL.gold, 1.4, { small: true }); break;
-        case 'levelup': fx.light(R.hype.x + 27, R.hype.y + 20, 90, COL.gold, 0.5, 0.9); fx.sparks(R.hype.x + 27, R.hype.y + 20, [COL.gold, '#fff'], this.n(12), { speed: 240 }); this.sfx('drop_big'); fx.floater(R.hype.x + 140, R.hype.y + 52, 'LEVEL UP!', COL.gold, 20, { life: 1.1 }); break;
+        case 'duet': fx.doFlash('#fff', 0.8); fx.addShake(18); fx.addChroma(1); fx.confetti(W / 2, H / 2, 60); fx.raysBurst(W / 2, H / 2, COL.gold, 760, 1.3, 24); fx.ring(W / 2, H / 2, 600, COL.gold, { life: 0.9, w: 12 }); fx.aurora('#ffc83d', 1.6); this.sfx('duet'); this.queueBanner(BT.duet(), '', COL.gold, 1.4, { small: true }); break;
+        case 'levelup': fx.light(R.hype.x + 27, R.hype.y + 20, 90, COL.gold, 0.5, 0.9); fx.sparks(R.hype.x + 27, R.hype.y + 20, [COL.gold, '#fff'], this.n(12), { speed: 240 }); this.sfx('drop_big'); fx.floater(R.hype.x + 140, R.hype.y + 52, BT.levelUp(), COL.gold, 20, { life: 1.1 }); break;
         case 'choice': this.sfx('chest'); if (e.kind === 'chest') this.hint('chest'); break;
         case 'remix': this.sfx('remix_pick'); break;
         case 'relic': this.sfx('relic'); break;
-        case 'heal': fx.floater(run.map.base.x, run.map.base.y - 40, '+' + e.n + ' HP', COL.green, 20); fx.pillar(run.map.base.x, run.map.base.y + 10, COL.green, 200, 0.8); fx.burst(run.map.base.x, run.map.base.y, [COL.green, '#fff'], 14, { speed: 120, up: 100, g: -30, life: 1 }); this.sfx('heal'); break;
+        case 'heal': fx.floater(run.map.base.x, run.map.base.y - 40, BT.hp(e.n), COL.green, 20); fx.pillar(run.map.base.x, run.map.base.y + 10, COL.green, 200, 0.8); fx.burst(run.map.base.x, run.map.base.y, [COL.green, '#fff'], 14, { speed: 120, up: 100, g: -30, life: 1 }); this.sfx('heal'); break;
         case 'jam': fx.burst(e.x, e.y, ['#ff6b6b', '#fff'], 8, { speed: 100 }); this.sfx('jam', e.x); break;
         case 'blink': fx.burst(e.x, e.y, ['#35f0c8', '#ff5fb0'], 8, { speed: 120 }); break;
         case 'drop': fx.doFlash('#7a5cff', 0.4); fx.addShake(10); fx.addChroma(0.6); fx.ring(W / 2, H / 2, 600, '#9b6bff', { life: 0.7, w: 12 }); this.sfx('merge_big'); break;
@@ -509,7 +509,7 @@ export class Battle {
           this.refreshPool();
           break;
         }
-        case 'revive': this.queueBanner('SECOND WIND', 'The stage rises again', COL.green, 2); fx.doFlash('#fff', 0.6); this.sfx('heal'); break;
+        case 'revive': this.queueBanner(BT.secondWind(), BT.secondWindSub(), COL.green, 2); fx.doFlash('#fff', 0.6); this.sfx('heal'); break;
         case 'win': this.sfx('win'); fx.confetti(W / 2, 400, 80); fx.confetti(120, 500, 40); fx.confetti(420, 500, 40); fx.doFlash('#fff', 0.5); fx.raysBurst(W / 2, 420, COL.gold, 700, 1.4, 20); break;
         case 'lose': this.sfx('lose'); fx.addShake(10); break;
         case 'echoes': fx.burst(e.x, e.y, '#d6c7ff', 8, { speed: 90 }); break;
@@ -534,15 +534,15 @@ export class Battle {
     if (slotIdx == null && this.tut && !this.tut.done) slotIdx = [16, 17, 30, 32, 44, 45, 18, 15].find((i) => !run.grid.has(i) && run.map.buildable.some((s) => s.idx === i)) ?? null;
     const r = run.deploy(slotIdx, { onBeat });
     if (r.ok) { this.targetSlot = null; this.selected = null; this.app.audio.resume(); }
-    else if (r.reason === 'coins') { this.fx.floater(R.deploy.x + R.deploy.w / 2, R.deploy.y - 12, 'Need ' + r.cost + ' coins', COL.red, 17, { life: 0.9 }); this.sfx('error'); this.deployPulse = 0; }
-    else if (r.reason === 'full') { this.fx.floater(R.deploy.x + R.deploy.w / 2, R.deploy.y - 12, 'Board full! Merge or sell', COL.orange, 17, { life: 1.1 }); this.sfx('error'); this.hint('full'); }
+    else if (r.reason === 'coins') { this.fx.floater(R.deploy.x + R.deploy.w / 2, R.deploy.y - 12, BT.needCoins(r.cost), COL.red, 17, { life: 0.9 }); this.sfx('error'); this.deployPulse = 0; }
+    else if (r.reason === 'full') { this.fx.floater(R.deploy.x + R.deploy.w / 2, R.deploy.y - 12, BT.boardFull(), COL.orange, 17, { life: 1.1 }); this.sfx('error'); this.hint('full'); }
     else if (r.reason === 'slot') { this.targetSlot = null; }
     return r;
   }
   doMergeAll() {
-    if (!this.prof.autoMerge) { this.app.hooks.toast('Merge All is a shop unlock (150 diamonds).'); this.sfx('error'); return; }
+    if (!this.prof.autoMerge) { this.app.hooks.toast(BT.mergeAllLocked()); this.sfx('error'); return; }
     const n = this.run.mergeAll(10);
-    if (!n) { this.fx.floater(R.merge.x + 29, R.merge.y - 6, 'No pairs', COL.dim, 15); this.sfx('error'); }
+    if (!n) { this.fx.floater(R.merge.x + 29, R.merge.y - 6, BT.noPairs(), COL.dim, 15); this.sfx('error'); }
   }
   // Re-roll the NEXT dropped type. pay: 'coins' (free setlist rerolls are used first) or 'gems' (diamonds from the profile, deducted here and saved).
   doReroll(pay = 'coins') {
@@ -554,13 +554,13 @@ export class Battle {
       if (r.spendDiamonds > 0) {
         if (this.app.hooks && this.app.hooks.spendDiamonds) this.app.hooks.spendDiamonds(r.spendDiamonds);
         else { this.prof.diamonds = Math.max(0, (this.prof.diamonds || 0) - r.spendDiamonds); if (this.app.save) this.app.save(); }
-        fl('-' + r.spendDiamonds + ' gems', COL.diamond);
+        fl(BT.gemsSpent(r.spendDiamonds), COL.diamond);
       } else if (r.paid === 'coins') fl('-' + r.cost, COL.coin);
-      else if (r.paid === 'free') fl('FREE', COL.green);
+      else if (r.paid === 'free') fl(BT.free(), COL.green);
       this.app.audio.resume();
     } else {
-      const msg = { coins: 'Need ' + r.cost + ' coins', gems: 'Need ' + r.cost + ' gems', single: 'Only one type in your pool', locked: 'Nothing else to roll', pay: '', busy: '' }[r.reason];
-      if (msg) fl(msg, r.reason === 'gems' ? COL.diamond : COL.red);
+      const msg = { coins: () => BT.needCoins(r.cost), gems: () => BT.needGems(r.cost), single: () => BT.oneType(), locked: () => BT.nothingToRoll(), pay: () => '', busy: () => '' }[r.reason];
+      if (msg && msg()) fl(msg(), r.reason === 'gems' ? COL.diamond : COL.red);
       this.sfx('error');
     }
     this.refreshPool();
@@ -907,21 +907,21 @@ export class Battle {
     glass(ctx, box.x, box.y, box.w, box.h, 16, { tint: '#1a0f3d', edge: def.color, alpha: 0.9, glow: def.color, glowA: 0.45 });
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; drawGlow(ctx, box.x + 40, box.y + 43, 52, def.color, 0.5); ctx.restore();
     AE.drawTurretIconFlat(ctx, tu.type, box.x + 40, box.y + 43, 56);
-    text(ctx, def.name, box.x + 80, box.y + 24, 20, '#fff', 'left');
+    text(ctx, def.name, box.x + 80, box.y + 24, 20, '#fff', 'left', 900, { maxW: 210 });
     // level pips
     for (let i = 0; i < MAX_LEVEL; i++) { ctx.beginPath(); ctx.arc(box.x + 80 + 220 + i * 13, box.y + 24, 4.5, 0, Math.PI * 2); ctx.fillStyle = i < tu.level ? (tu.level >= 7 ? COL.gold : def.color) : 'rgba(255,255,255,0.14)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#0a0420'; ctx.stroke(); }
     let line;
-    if (def.kind === 'aura_rate') line = '+' + Math.round(def.aura * (1 + 0.2 * (tu.level - 1)) * 100 * (tu.level >= 7 ? 1.5 : 1)) + '% neighbour fire rate';
-    else if (def.kind === 'aura_dmg') line = '+' + Math.round(def.aura * (1 + 0.2 * (tu.level - 1)) * 100 * (tu.level >= 7 ? 1.5 : 1)) + '% neighbour damage';
-    else line = 'DMG ' + fmt(run.turretDmg(tu)) + '   RATE ' + run.turretRate(tu).toFixed(1) + '/s';
-    text(ctx, line, box.x + 80, box.y + 48, 15, COL.dim, 'left');
+    if (def.kind === 'aura_rate') line = BT.auraRate(Math.round(def.aura * (1 + 0.2 * (tu.level - 1)) * 100 * (tu.level >= 7 ? 1.5 : 1)));
+    else if (def.kind === 'aura_dmg') line = BT.auraDmg(Math.round(def.aura * (1 + 0.2 * (tu.level - 1)) * 100 * (tu.level >= 7 ? 1.5 : 1)));
+    else line = BT.stats(fmt(run.turretDmg(tu)), run.turretRate(tu).toFixed(1));
+    text(ctx, line, box.x + 80, box.y + 48, 15, COL.dim, 'left', 900, { maxW: 270 });
     const perk = Object.keys(def.perks).map(Number).filter((k) => k > tu.level).sort((a, b) => a - b)[0];
-    text(ctx, perk ? 'Lv ' + perk + ': ' + def.perks[perk] : 'Fully upgraded', box.x + 80, box.y + 70, 13, COL.gold, 'left');
+    text(ctx, perk ? BT.perk(perk, def.perks[perk]) : BT.maxed(), box.x + 80, box.y + 70, 13, COL.gold, 'left', 900, { maxW: 270 });
     const mode = { x: box.x + box.w - 214, y: box.y + 14, w: 112, h: 58 };
     const sell = { x: box.x + box.w - 94, y: box.y + 14, w: 84, h: 58 };
     const isAttacker = def.kind !== 'aura_rate' && def.kind !== 'aura_dmg';
-    if (isAttacker) button(ctx, mode, '#3f2b8f', { label: { first: 'First', last: 'Last', strong: 'Strongest', close: 'Closest' }[tu.mode], sub: 'TARGET', size: 15 });
-    button(ctx, sell, '#b53a52', { label: '+' + Math.floor(tu.paid * Math.min(0.95, ECON.sellBack + run.mods.sell)), sub: 'SELL', size: 17 });
+    if (isAttacker) button(ctx, mode, '#3f2b8f', { label: BT.mode(tu.mode), sub: BT.target(), size: 15 });
+    button(ctx, sell, '#b53a52', { label: '+' + Math.floor(tu.paid * Math.min(0.95, ECON.sellBack + run.mods.sell)), sub: BT.sell(), size: 17 });
     this.panel = { box, mode: isAttacker ? mode : { x: -99, y: -99, w: 0, h: 0 }, sell };
     ctx.restore();
   }
@@ -958,18 +958,18 @@ export class Battle {
     // wave
     const w = R.wave;
     glass(ctx, w.x, w.y, w.w, w.h, 14, { tint: '#1a0f3d', edge: '#5b3fd0' });
-    text(ctx, run.endless ? 'WAVE ' + Math.max(1, run.wave) : 'WAVE ' + Math.max(1, run.wave) + '/' + run.wavesTotal, w.x + w.w / 2, w.y + 16, 19, '#fff', 'center');
-    if (run.wmId) { const m = WAVE_MODS[run.wmId]; text(ctx, m.name, w.x + w.w / 2, w.y + 37, 14, m.good ? COL.green : COL.orange, 'center'); }
+    text(ctx, BT.wave(Math.max(1, run.wave), run.endless ? 0 : run.wavesTotal), w.x + w.w / 2, w.y + 16, 19, '#fff', 'center', 900, { maxW: w.w - 14 });
+    if (run.wmId) { const m = WAVE_MODS[run.wmId]; text(ctx, m.name, w.x + w.w / 2, w.y + 37, 14, m.good ? COL.green : COL.orange, 'center', 900, { maxW: w.w - 14 }); }
     else if (run.phase === 'prep' && (run.endless || run.wave < run.wavesTotal)) {
       const spec = run.upcoming();
       const types = [...new Set(spec.groups.map((gr) => gr.type))].slice(0, 3);
       const n = types.length + (spec.boss ? 1 : 0) + (spec.mod ? 1 : 0);
       let x = w.x + w.w / 2 - (n - 1) * 13;
-      text(ctx, 'NEXT', w.x + 12, w.y + 37, 10, COL.dim, 'left');
+      text(ctx, BT.next(), w.x + 12, w.y + 37, 10, COL.dim, 'left', 900, { maxW: 36 });
       for (const ty of types) { AE.drawEnemy(ctx, ty, x + 8, w.y + 36, { t, scale: 0.62, hp: 1 }); x += 26; }
       if (spec.boss) { AE.drawGlyph(ctx, 'crown', x + 8, w.y + 36, 22, '#ff4a5e'); x += 26; }
       if (spec.mod) AE.drawGlyph(ctx, WAVE_MODS[spec.mod].glyph, x + 8, w.y + 36, 20, WAVE_MODS[spec.mod].good ? COL.green : COL.orange);
-    } else text(ctx, run.world.name, w.x + w.w / 2, w.y + 37, 13, COL.dim, 'center');
+    } else text(ctx, run.world.name, w.x + w.w / 2, w.y + 37, 13, COL.dim, 'center', 900, { maxW: w.w - 14 });
     // coins: the number pops when it changes
     const c = R.coins;
     if (this._coinLast == null) this._coinLast = run.coins;
@@ -987,28 +987,28 @@ export class Battle {
     liquidBar(ctx, h.x + 58, h.y + 10, h.w - 66, 20, hf, '#ff5fb0', '#ffc83d', t, { glow: hf > 0.85 ? 0.8 : 0.3 });
     bezel(ctx, h.x + 27, h.y + 20, 17, '#ffc83d');
     text(ctx, run.level + '', h.x + 27, h.y + 21, 16, COL.gold, 'center');
-    text(ctx, 'HYPE', h.x + 58 + (h.w - 66) / 2, h.y + 20, 12, '#fff', 'center');
+    text(ctx, BT.hype(), h.x + 58 + (h.w - 66) / 2, h.y + 20, 12, '#fff', 'center', 900, { maxW: h.w - 74 });
     // combo
     if (this.comboShow > 0.01) {
       ctx.save(); ctx.globalAlpha = this.comboShow;
       const big = run.combo >= 25, cs2 = 1 + Math.max(0, 1 - (t - (this.comboT || 0)) * 6) * 0.25;
       ctx.translate(R.hype.x + 10, R.hype.y + 56); ctx.scale(cs2, cs2);
-      text(ctx, run.combo + ' COMBO', 0, 0, big ? 18 : 15, big ? COL.gold : COL.cyan, 'left', 900, big ? { glow: COL.gold, blur: 12 } : null);
+      text(ctx, BT.comboN(run.combo), 0, 0, big ? 18 : 15, big ? COL.gold : COL.cyan, 'left', 900, big ? { glow: COL.gold, blur: 12, maxW: 150 } : { maxW: 150 });
       ctx.restore();
     }
     if (run.combo !== this._comboLast) { this._comboLast = run.combo; this.comboT = t; }
     // speed
-    button(ctx, R.speed, '#3a2a86', { label: this.speed + 'x', sub: 'SPEED', size: 20, press: this.pressK('speed') });
+    button(ctx, R.speed, '#3a2a86', { label: this.speed + 'x', sub: BT.speed(), size: 20, press: this.pressK('speed') });
     // call wave
     const call = R.call;
     const prep = run.phase === 'prep', canCall = prep || (run.phase === 'wave' && !run.spawnQ.length);
     const left = prep ? Math.max(0, Math.ceil(run.prepT)) : 0;
     const lastWave = !run.endless && run.wave >= run.wavesTotal;
     const cp = this.pressK('call');
-    if (lastWave && run.phase !== 'prep') button(ctx, call, '#5a3aa8', { label: 'FINAL WAVE', size: 17, press: cp, glow: 0.4 + 0.3 * Math.sin(t * 6), glowColor: '#ff5fb0' });
-    else if (prep) button(ctx, call, '#2fa84a', { label: run.wave === 0 ? 'START WAVE 1' : 'NEXT WAVE', sub: run.prepT > 100 ? 'tap to begin' : left + 's  +' + Math.round(Math.min(ECON.prepSeconds, run.prepT) * ECON.earlyBonusPerSec) + ' coins', size: 17, press: cp, shine: (t * 0.5) % 1, glow: 0.25 + 0.25 * Math.sin(t * 6), glowColor: '#9dff7a' });
-    else if (canCall) button(ctx, call, '#2a74b8', { label: 'CALL NEXT', sub: 'bonus coins', size: 17, press: cp, shine: (t * 0.35) % 1 });
-    else button(ctx, call, '#33266e', { label: run.enemies.length + ' left', sub: 'fighting', size: 17, dim: true, press: cp });
+    if (lastWave && run.phase !== 'prep') button(ctx, call, '#5a3aa8', { label: BT.finalWave(), size: 17, press: cp, glow: 0.4 + 0.3 * Math.sin(t * 6), glowColor: '#ff5fb0' });
+    else if (prep) button(ctx, call, '#2fa84a', { label: run.wave === 0 ? BT.startWave1() : BT.nextWave(), sub: run.prepT > 100 ? BT.tapToBegin() : BT.prepSub(left, Math.round(Math.min(ECON.prepSeconds, run.prepT) * ECON.earlyBonusPerSec)), size: 17, press: cp, shine: (t * 0.5) % 1, glow: 0.25 + 0.25 * Math.sin(t * 6), glowColor: '#9dff7a' });
+    else if (canCall) button(ctx, call, '#2a74b8', { label: BT.callNext(), sub: BT.bonusCoins(), size: 17, press: cp, shine: (t * 0.35) % 1 });
+    else button(ctx, call, '#33266e', { label: BT.left(run.enemies.length), sub: BT.fighting(), size: 17, dim: true, press: cp });
     // boss bar: a nameplate over a segmented fluid bar with a lag ghost
     const boss = run.enemies.find((e) => e.boss);
     if (boss) {
@@ -1016,18 +1016,18 @@ export class Battle {
       if (this.bossLag == null || this.bossLag < bf) this.bossLag = bf; else this.bossLag += (bf - this.bossLag) * 0.05;
       glass(ctx, bx - 8, by - 6, bw + 16, 30, 12, { tint: '#2a0a1c', edge: '#ff4a5e', alpha: 0.9, glow: '#ff4a5e', glowA: 0.25 });
       liquidBar(ctx, bx, by, bw, 18, bf, boss.gated ? '#e0a21c' : '#c4182f', boss.gated ? '#ffe066' : '#ff6a5a', t, { lag: this.bossLag, ticks: boss.type === 'playback' ? [0.33, 0.66] : null, glow: 0.4 });
-      text(ctx, BOSSES[boss.type].name.toUpperCase(), W / 2, by + 10, 13, '#fff', 'center');
+      text(ctx, BOSSES[boss.type].name.toUpperCase(), W / 2, by + 10, 13, '#fff', 'center', 900, { maxW: bw - 24 });
     } else this.bossLag = null;
     // bottom bar: heroes, merge, deploy, reroll
     this.drawHero(ctx, 'roxor', R.heroR, t);
     this.drawHero(ctx, 'jasmin', R.heroJ, t);
     const locked = !this.prof.autoMerge;
-    button(ctx, R.merge, locked ? '#2f2150' : '#2a8a5a', { icon: locked ? 'lock' : 'merge', glyph: AE.drawGlyph, sub: 'MERGE', size: 13, press: this.pressK('merge'), dim: locked });
-    button(ctx, R.reroll, '#3a2a86', { icon: 'reroll', glyph: AE.drawGlyph, sub: run.rerolls > 0 ? run.rerolls + ' free' : this.pool.cost.coins + ' c', size: 13, press: this.pressK('reroll') });
-    button(ctx, R.rerollG, '#5a3aa8', { icon: 'reroll', glyph: AE.drawGlyph, sub: this.pool.cost.gems + ' gems', size: 13, press: this.pressK('rerollG') });
+    button(ctx, R.merge, locked ? '#2f2150' : '#2a8a5a', { icon: locked ? 'lock' : 'merge', glyph: AE.drawGlyph, sub: BT.merge(), size: 13, press: this.pressK('merge'), dim: locked });
+    button(ctx, R.reroll, '#3a2a86', { icon: 'reroll', glyph: AE.drawGlyph, sub: run.rerolls > 0 ? BT.rerollFree(run.rerolls) : BT.rerollCoins(this.pool.cost.coins), size: 13, press: this.pressK('reroll') });
+    button(ctx, R.rerollG, '#5a3aa8', { icon: 'reroll', glyph: AE.drawGlyph, sub: BT.rerollGems(this.pool.cost.gems), size: 13, press: this.pressK('rerollG') });
     this.drawDeploy(ctx, t, beat);
     const slotsLeft = run.slotCapacity() - run.turrets.length;
-    text(ctx, run.turrets.length + '/' + run.slotCapacity() + ' tiles', 54, 855, 13, slotsLeft < 3 ? COL.orange : COL.dim, 'center');
+    text(ctx, BT.tilesN(run.turrets.length, run.slotCapacity()), 54, 855, 13, slotsLeft < 3 ? COL.orange : COL.dim, 'center', 900, { maxW: 80 });
   }
   drawDeploy(ctx, t, beat) {
     if (isDoodle()) return DB.drawDeploy(this, ctx, t, beat);
@@ -1057,11 +1057,11 @@ export class Battle {
     ctx.beginPath(); ctx.arc(d.x + 44, d.y + d.h / 2 - 4, 31, 0, Math.PI * 2); ctx.fillStyle = 'rgba(14,5,38,0.85)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#0a0420'; ctx.stroke();
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; drawGlow(ctx, d.x + 44, d.y + d.h / 2 - 4, 40, nextDef.color, 0.55); ctx.restore();
     AE.drawTurretIconFlat(ctx, run.nextType, d.x + 44, d.y + d.h / 2 - 4, 54);
-    text(ctx, 'DROP', d.x + 90, d.y + 28, 27, '#fff', 'left', 900, can ? { glow: '#ff9ad6', blur: 8 } : null);
-    text(ctx, nextDef.name, d.x + 90, d.y + 50, 13, 'rgba(255,255,255,0.9)', 'left');
-    if (run.mods.freeDeploys > 0) text(ctx, 'FREE x' + run.mods.freeDeploys, d.x + 90, d.y + 71, 17, COL.green, 'left');
+    text(ctx, BT.drop(), d.x + 90, d.y + 28, 27, '#fff', 'left', 900, can ? { glow: '#ff9ad6', blur: 8, maxW: d.w - 100 } : { maxW: d.w - 100 });
+    text(ctx, nextDef.name, d.x + 90, d.y + 50, 13, 'rgba(255,255,255,0.9)', 'left', 900, { maxW: d.w - 100 });
+    if (run.mods.freeDeploys > 0) text(ctx, BT.freeN(run.mods.freeDeploys), d.x + 90, d.y + 71, 17, COL.green, 'left', 900, { maxW: d.w - 100 });
     else { AE.drawGlyph(ctx, 'coin', d.x + 100, d.y + 70, 20); text(ctx, fmt(cost), d.x + 114, d.y + 71, 20, can ? COL.coin : '#ff9a9a', 'left'); }
-    if (this.targetSlot != null) text(ctx, 'to chosen tile', d.x + d.w - 10, d.y + 71, 12, COL.cyan, 'right');
+    if (this.targetSlot != null) text(ctx, BT.toChosen(), d.x + d.w - 10, d.y + 71, 12, COL.cyan, 'right', 900, { maxW: 80 });
     ctx.restore();
   }
   drawHero(ctx, who, c, t) {
@@ -1097,8 +1097,8 @@ export class Battle {
     if (!ready) text(ctx, Math.ceil(cd) + '', c.x, c.y, 26, '#fff', 'center');
     if (ready) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5 + pulse * 0.4; ctx.lineWidth = 4; ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(c.x, c.y, c.r + 3 + pulse * 3, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
     ctx.restore();
-    const lab = who === 'roxor' ? 'BLAST' : 'SONG';
-    text(ctx, ready ? lab : lab[0] + lab.slice(1).toLowerCase(), c.x, c.y + c.r + 12, 12, ready ? col : COL.dim, 'center');
+    const lab = who === 'roxor' ? (ready ? BT.blast() : BT.blastMixed()) : (ready ? BT.song() : BT.songMixed());
+    text(ctx, lab, c.x, c.y + c.r + 12, 12, ready ? col : COL.dim, 'center', 900, { maxW: 80 });
   }
   drawBanner(ctx) {
     if (isDoodle()) return DB.drawBanner(this, ctx);
@@ -1122,9 +1122,9 @@ export class Battle {
       const wid = 260 * easeOutBack(inK), sg = ctx.createLinearGradient(-wid, 0, wid, 0); sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, b.color); sg.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = sg; ctx.fillRect(-wid, -2, wid * 2, 4); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a;
     }
-    text(ctx, b.text, 0, b.small ? 0 : -14, b.small ? 38 : (b.text.length > 20 ? 28 : 40), b.color, 'center', 900, { glow: b.color, blur: b.small ? 22 : 12 });
+    text(ctx, b.text, 0, b.small ? 0 : -14, b.small ? 38 : (b.text.length > 20 ? 28 : 40), b.color, 'center', 900, { glow: b.color, blur: b.small ? 22 : 12, maxW: 470 });
     if (b.sub && !b.small) wrapText(ctx, b.sub, 0, 28, 460, 16, 20, '#efe7ff', 'center');
-    else if (b.sub) text(ctx, b.sub, 0, 36, 16, '#fff', 'center');
+    else if (b.sub) text(ctx, b.sub, 0, 36, 16, '#fff', 'center', 900, { maxW: 470 });
     ctx.restore();
   }
   drawTutorial(ctx) {
@@ -1162,7 +1162,7 @@ export class Battle {
     ctx.globalCompositeOperation = 'lighter'; drawGlow(ctx, 50, by + bh - 20, 60, '#2fe6ff', 0.25); ctx.globalCompositeOperation = 'source-over';
     AW.drawLoopy(ctx, 50, by + bh - 20, 78, { t: this.t, mood: 'happy', talk: this.tut.t < 2.5 });
     wrapText(ctx, this.tutBubble ? this.tutBubble.text : '', bx + 70, by + 32, bw - 100, 20, 24, '#241140', 'left');
-    if (s.wait === 'tap') { const k2 = 0.5 + 0.5 * Math.sin(this.t * 5); ctx.globalAlpha = 0.6 + 0.4 * k2; text(ctx, 'tap to continue', bx - 30 + bw - 20, by + bh - 16, 14, '#7a5cff', 'right'); }
+    if (s.wait === 'tap') { const k2 = 0.5 + 0.5 * Math.sin(this.t * 5); ctx.globalAlpha = 0.6 + 0.4 * k2; text(ctx, BT.tapToContinue(), bx - 30 + bw - 20, by + bh - 16, 14, '#7a5cff', 'right', 900, { maxW: 220 }); }
     ctx.restore();
   }
 }

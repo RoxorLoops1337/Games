@@ -9,13 +9,11 @@ import { h, canvasOf, icon, gearIcon, enemyIcon, turretIcon, currencyChip, modal
 import { settingsModal } from './ui_hub.js';
 import { flames } from './ui_setlist.js';
 import { makeShareCard, shareCard, shareText } from './share.js';
-import { t, tn } from './i18n.js';
+import { t } from './i18n.js';
 
-// A translated string with DOM nodes in its {placeholders}: tb('key', 'Toughest wave: {n}', { n: h('b', null, '5') }) returns an array of text and nodes.
-const tb = (key, en, vars) => {
-  const m = {}; for (const k in vars) m[k] = '\u0001' + k + '\u0001';
-  return t(key, en, m).split('\u0001').map((p, i) => (i % 2 ? vars[p] : p));
-};
+// A translated string with DOM nodes in its {placeholders}: tb(t('key', 'Toughest wave: {n}', mk('n')), { n: h('b', null, '5') }) returns an array of text and nodes.
+const mk = (...names) => { const m = {}; for (const k of names) m[k] = '\u0001' + k + '\u0001'; return m; };
+const tb = (str, vars) => str.split('\u0001').map((p, i) => (i % 2 ? vars[p] : p));
 
 // ------------------------------------------------------------------------------------------------ remix / relic pick
 export function showChoice(app, run, battle) {
@@ -108,43 +106,44 @@ function shareBtn(app, run, small) {
 const arr = (v) => (Array.isArray(v) ? v : []);
 const typeIcon = (type, px) => (ENEMIES[type] ? enemyIcon(type, px) : BOSSES[type] ? enemyIcon(type, px, true) : TURRETS[type] ? turretIcon(type, px) : null);
 // Recap tips arrive from sim.js as English sentences. They are matched here (exact text, or the two sentences with numbers/names) and shown from the dictionary.
-const TIP_FIXED = () => [
-  ['Plain Fuzz piled up: add more turrets and merge them.', 'run.tip.fuzz'],
-  ['Fast Glitch Zips slipped past: Sub Bass slows them.', 'run.tip.zip'],
-  ['Brickwalls shrug off small hits: try Kick Cannon or Cowbell Sniper.', 'run.tip.brick'],
-  ['Echoes split when they die: splash turrets clean up the pieces.', 'run.tip.echo'],
-  ['Hum Healers keep the Static topped up: burst them down first.', 'run.tip.leech'],
-  ['Autotune Drones fly straight over the path: long range turrets catch them.', 'run.tip.drone'],
-  ['Gate Guards soak damage with a shield: pile on big hits.', 'run.tip.gate'],
-  ['Feedback screeches jam nearby turrets: keep your turrets spread out.', 'run.tip.squeal'],
-  ['Mute Ghosts ignore slows and stuns: raw damage beats them.', 'run.tip.mute'],
-  ['Glitchbugs speed up when hurt: finish them off quickly.', 'run.tip.rager'],
-  ['The Compressor squashes big hits: many fast small hits beat it.', 'run.tip.compressor'],
-  ['Noise Gate shuts out damage now and then: hold your hero moves until it opens.', 'run.tip.noisegate'],
-  ['Reverb Titan leaves echoes behind: splash turrets help.', 'run.tip.reverb'],
-  ['DJ Glitch jams the nearest turrets: keep a few spares further from the path.', 'run.tip.djglitch'],
-  ['Mr. Playback has three phases: save your heroes for the last one.', 'run.tip.playback'],
-  ['The Low-Pass Tide shrugs off weak shots: bring big hits like Kick Cannon and Cowbell Sniper.', 'run.tip.lowpass'],
-  ['Dr. Dead Air mutes and steals turrets: keep spares and save your heroes for the end.', 'run.tip.silence'],
-  ['You never merged: drag two turrets of the same level together to double their power.', 'run.tip.no_merge'],
-  ['You never merged past level 3: merge pairs to double power.', 'run.tip.low_merge'],
-  ['You ended with spare coins: turn them into turrets before the wave.', 'run.tip.spare_coins'],
-  ['Roxor and Jasmin never played: tap a hero when the stage fills up.', 'run.tip.no_hero'],
-  ['Clean run! Try Hard difficulty or a higher Encore.', 'run.tip.clean'],
-];
+// Recap tips arrive from sim.js as English sentences; this table (built per call, so a language switch applies) maps each exact sentence to its translation.
+const tipTable = () => ({
+  'Plain Fuzz piled up: add more turrets and merge them.': t('run.tip.fuzz', 'Plain Fuzz piled up: add more turrets and merge them.'),
+  'Fast Glitch Zips slipped past: Sub Bass slows them.': t('run.tip.zip', 'Fast Glitch Zips slipped past: Sub Bass slows them.'),
+  'Brickwalls shrug off small hits: try Kick Cannon or Cowbell Sniper.': t('run.tip.brick', 'Brickwalls shrug off small hits: try Kick Cannon or Cowbell Sniper.'),
+  'Echoes split when they die: splash turrets clean up the pieces.': t('run.tip.echo', 'Echoes split when they die: splash turrets clean up the pieces.'),
+  'Hum Healers keep the Static topped up: burst them down first.': t('run.tip.leech', 'Hum Healers keep the Static topped up: burst them down first.'),
+  'Autotune Drones fly straight over the path: long range turrets catch them.': t('run.tip.drone', 'Autotune Drones fly straight over the path: long range turrets catch them.'),
+  'Gate Guards soak damage with a shield: pile on big hits.': t('run.tip.gate', 'Gate Guards soak damage with a shield: pile on big hits.'),
+  'Feedback screeches jam nearby turrets: keep your turrets spread out.': t('run.tip.squeal', 'Feedback screeches jam nearby turrets: keep your turrets spread out.'),
+  'Mute Ghosts ignore slows and stuns: raw damage beats them.': t('run.tip.mute', 'Mute Ghosts ignore slows and stuns: raw damage beats them.'),
+  'Glitchbugs speed up when hurt: finish them off quickly.': t('run.tip.rager', 'Glitchbugs speed up when hurt: finish them off quickly.'),
+  'The Compressor squashes big hits: many fast small hits beat it.': t('run.tip.compressor', 'The Compressor squashes big hits: many fast small hits beat it.'),
+  'Noise Gate shuts out damage now and then: hold your hero moves until it opens.': t('run.tip.noisegate', 'Noise Gate shuts out damage now and then: hold your hero moves until it opens.'),
+  'Reverb Titan leaves echoes behind: splash turrets help.': t('run.tip.reverb', 'Reverb Titan leaves echoes behind: splash turrets help.'),
+  'DJ Glitch jams the nearest turrets: keep a few spares further from the path.': t('run.tip.djglitch', 'DJ Glitch jams the nearest turrets: keep a few spares further from the path.'),
+  'Mr. Playback has three phases: save your heroes for the last one.': t('run.tip.playback', 'Mr. Playback has three phases: save your heroes for the last one.'),
+  'The Low-Pass Tide shrugs off weak shots: bring big hits like Kick Cannon and Cowbell Sniper.': t('run.tip.lowpass', 'The Low-Pass Tide shrugs off weak shots: bring big hits like Kick Cannon and Cowbell Sniper.'),
+  'Dr. Dead Air mutes and steals turrets: keep spares and save your heroes for the end.': t('run.tip.silence', 'Dr. Dead Air mutes and steals turrets: keep spares and save your heroes for the end.'),
+  'You never merged: drag two turrets of the same level together to double their power.': t('run.tip.no_merge', 'You never merged: drag two turrets of the same level together to double their power.'),
+  'You never merged past level 3: merge pairs to double power.': t('run.tip.low_merge', 'You never merged past level 3: merge pairs to double power.'),
+  'You ended with spare coins: turn them into turrets before the wave.': t('run.tip.spare_coins', 'You ended with spare coins: turn them into turrets before the wave.'),
+  'Roxor and Jasmin never played: tap a hero when the stage fills up.': t('run.tip.no_hero', 'Roxor and Jasmin never played: tap a hero when the stage fills up.'),
+  'Clean run! Try Hard difficulty or a higher Encore.': t('run.tip.clean', 'Clean run! Try Hard difficulty or a higher Encore.'),
+});
+const laneTips = () => ({ left: t('run.tip.lane_left', 'Most leaks came from the left lane: build there.'), right: t('run.tip.lane_right', 'Most leaks came from the right lane: build there.'), middle: t('run.tip.lane_middle', 'Most leaks came from the middle lane: build there.') });
 export function tipText(s) {
   s = String(s);
-  for (const [en, key] of TIP_FIXED()) if (s === en) return t(key, en);
+  const fixed = tipTable();
+  if (fixed[s]) return fixed[s];
   let m = /^Most leaks came from the (left|right|middle) lane: build there\.$/.exec(s);
-  if (m) return t('run.tip.lane_' + m[1], s);
+  if (m) return laneTips()[m[1]];
   m = /^Most leaks came from the number (\d+) lane: build there\.$/.exec(s);
   if (m) return t('run.tip.lane_n', 'Most leaks came from the number {n} lane: build there.', { n: m[1] });
   m = /^Try pairing (.+) with (.+) for a synergy bonus\.$/.exec(s);
   if (m) return t('run.tip.pair', 'Try pairing {a} with {b} for a synergy bonus.', { a: m[1], b: m[2] });
   return s;
 }
-// the three lane tips need literal keys for the extractor
-void [t('run.tip.lane_left', 'Most leaks came from the left lane: build there.'), t('run.tip.lane_right', 'Most leaks came from the right lane: build there.'), t('run.tip.lane_middle', 'Most leaks came from the middle lane: build there.')];
 const typeName = (type) => (ENEMIES[type] ? ENEMIES[type].name : BOSSES[type] ? BOSSES[type].name : TURRETS[type] ? TURRETS[type].name : String(type));
 // 'What happened': leaks per lane as mini bars, the Static that got through, top killers and up to 3 tips. Every field is optional.
 export function recapCard(recap) {
@@ -164,8 +163,8 @@ export function recapCard(recap) {
       h('div', { class: 'rc-types ' + (cls || '') }, items.map((x) => h('div', { class: 'rc-type', title: typeName(x.type) }, typeIcon(x.type, 40), h('b', null, 'x' + x.count), h('span', null, typeName(x.type))))));
   };
   parts.push(chips(recap.leakTypes, t('run.recap.got_through', 'Got through'), 'bad'));
-  if (recap.worstWave > 0) parts.push(h('div', { class: 'rc-line' }, tb('run.recap.toughest', 'Toughest wave: {n}', { n: h('b', null, String(recap.worstWave)) })));
-  if (recap.bossFinisher && (BOSSES[recap.bossFinisher] || ENEMIES[recap.bossFinisher])) parts.push(h('div', { class: 'rc-line' }, tb('run.recap.finished_by', 'Finished by: {name}', { name: h('b', null, typeName(recap.bossFinisher)) })));
+  if (recap.worstWave > 0) parts.push(h('div', { class: 'rc-line' }, tb(t('run.recap.toughest', 'Toughest wave: {n}', mk('n')), { n: h('b', null, String(recap.worstWave)) })));
+  if (recap.bossFinisher && (BOSSES[recap.bossFinisher] || ENEMIES[recap.bossFinisher])) parts.push(h('div', { class: 'rc-line' }, tb(t('run.recap.finished_by', 'Finished by: {name}', mk('name')), { name: h('b', null, typeName(recap.bossFinisher)) })));
   parts.push(chips(recap.topKillers, t('run.recap.top_killers', 'Top killers'), 'good'));
   const tips = arr(recap.tips).filter((x) => typeof x === 'string' && x).slice(0, 3);
   if (tips.length) parts.push(h('div', { class: 'rc-tips' }, tips.map((x) => h('div', { class: 'rc-tip' }, icon('bolt', 20), h('span', null, tipText(x))))));
