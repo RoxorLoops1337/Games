@@ -251,10 +251,10 @@ SCENES.epilogue_garage = {
     sun(P, 270, 430, 50, '#ffb347'); P.hatch(rect(116, 380, 308, 64), '#c9946a', 9, 0.3, 0.9); P.ln([110, 450, 430, 450], INK, 5, false, 1);
     poly(P, rect(110, 60, 320, 40), '#cfc7dd', 5, { gap: 8 }); for (let i = 1; i < 3; i++) P.ln([110, 60 + i * 13, 430, 60 + i * 13], INK, 3, false, 1.4);
     floor(P, 560, '#c9925c'); lightCone(P, 270, 450, 200, 420, '#ffe27a', 0.3);
-    speaker(P, 440, 380, 84, 120, C.purple); drumKit(P, 82, 650, 0.9);
+    speaker(P, 440, 380, 84, 120, C.purple); drumKit(P, 70, 600, 0.8);
   },
-  mid: (P) => { chair(P, 52, 560, 0.9); chair(P, 130, 570, 0.8, C.orange); catDoodle(P, 462, 536, 0.8); P.txt('MEOW', 470, 470, 20, C.red, { align: 'c', rot: -0.15, w: 3.2 }); },
-  live(ctx, t) { notes(ctx, t, [C.orange, C.pink, C.sky]); duo(ctx, t, { pa: 'cheer', pb: 'cheer' }); drawLoopy(ctx, 270, 704, 70, { t, mood: 'happy' }); ctx.save(); ctx.translate(430, 300 + Math.sin(t * 2.4) * 6); ctx.rotate(-0.15); blit(ctx, sp('thumb', 120, 130, (P) => thumbsUp(P, 0, -4, 1.1), 11), 0, 0, t, { scale: 1.25 }); ctx.restore(); },
+  mid: (P) => { chair(P, 230, 700, 0.8); chair(P, 316, 706, 0.7, C.orange); catDoodle(P, 462, 570, 0.8); P.txt('MEOW', 470, 500, 20, C.red, { align: 'c', rot: -0.15, w: 3.2 }); },
+  live(ctx, t) { notes(ctx, t, [C.orange, C.pink, C.sky]); duo(ctx, t, { a: [140, 870, 272], b: [402, 870, 262], k: 0.8, pa: 'cheer', pb: 'cheer' }); drawLoopy(ctx, 270, 850, 64, { t, mood: 'happy' }); ctx.save(); ctx.translate(430, 300 + Math.sin(t * 2.4) * 6); ctx.rotate(-0.15); blit(ctx, sp('thumb', 120, 130, (P) => thumbsUp(P, 0, -4, 1.1), 11), 0, 0, t, { scale: 1.25 }); ctx.restore(); },
 };
 SCENES.epilogue_busk = {
   bg: (P) => {
@@ -269,7 +269,7 @@ SCENES.epilogue_busk = {
     P.shp(P.blob(220, 856, 28, 12, 8), '#e8c17a', INK, 3, { gap: 4 }); P.ln([196, 856, 244, 856], '#7aa04a', 4);   // a very old sandwich
     crowdRow(P, 936, 7, 3, CROWD);
   },
-  live(ctx, t) { duo(ctx, t, { a: [170, 760, 300], b: [372, 760, 290], pa: 'cheer', pb: 'sing', bob: 3 }); for (const x of [150, 250, 330, 430]) clapLines(ctx, t + x, x, 906); },
+  live(ctx, t) { duo(ctx, t, { a: [160, 800, 272], b: [382, 800, 262], k: 0.8, pa: 'cheer', pb: 'sing', bob: 3 }); for (const x of [150, 250, 330, 430]) clapLines(ctx, t + x, x, 912); },
 };
 SCENES.epilogue_club = {
   bg: (P) => {
@@ -278,8 +278,8 @@ SCENES.epilogue_club = {
     ball(P, 270, 90); speaker(P, 20, 420, 96, 200, '#3b3158'); speaker(P, 424, 420, 96, 200, '#3b3158');
     for (let r = 0; r < 5; r++) for (let q = 0; q < 6; q++) P.shp(rect(q * 90 + (r % 2) * 10, 700 + r * 52, 88, 50), (q + r) % 2 ? C.mag : C.cyan, INK, 2.6, { gap: 7, alpha: 0.8 });
   },
-  mid: (P) => { poly(P, rect(330, 700, 190, 40, 6), '#4b4458', 5, { gap: 8 }); drinkGlass(P, 410, 700, 0.9); },
-  live(ctx, t, p) { fogPuffs(ctx, t, 120, 800); ctx.save(); ctx.translate(100, 752 + Math.abs(Math.sin(t * 4)) * -10); blit(ctx, sp('fogm', 160, 150, (P) => fogMachine(P, 0, 0, 1), 19), 0, 0, t, { scale: 1 }); ctx.restore(); duo(ctx, t, { a: [226, 800, 280], b: [372, 800, 270], pa: 'hype', pb: 'hype', bob: 4 }); sparks(ctx, t, 270, 480); },
+  mid: (P) => { poly(P, rect(440, 800, 100, 36, 6), '#4b4458', 5, { gap: 8 }); drinkGlass(P, 494, 800, 0.8); },
+  live(ctx, t, p) { fogPuffs(ctx, t, 90, 810); ctx.save(); ctx.translate(70, 780 + Math.abs(Math.sin(t * 4)) * -10); blit(ctx, sp('fogm', 160, 150, (P) => fogMachine(P, 0, 0, 1), 19), 0, 0, t, { scale: 1 }); ctx.restore(); duo(ctx, t, { a: [226, 840, 272], b: [380, 840, 262], k: 0.8, pa: 'hype', pb: 'hype', bob: 4 }); sparks(ctx, t, 270, 560); },
 };
 SCENES.epilogue_festival = {
   bg: (P) => {
@@ -288,28 +288,28 @@ SCENES.epilogue_festival = {
     for (let i = 0; i < 5; i++) P.ln([40 + i * 110, 340, 40 + i * 110, 600], INK, 3, false, 1); for (let i = 0; i < 5; i++) { for (let k = 0; k < 4; k++) P.shp([50 + i * 110, 350 + k * 22, 90 + i * 110, 356 + k * 22, 50 + i * 110, 370 + k * 22], [C.red, C.yellow, C.sky, C.pink][(i + k) % 4], INK, 2.4, { gap: 4 }); }
   },
   mid: (P) => { crowdRow(P, 905, 8, 7, CROWD); crowdRow(P, 950, 9, 12, CROWD); for (let i = 0; i < 4; i++) { P.ln(arc(270, 220 + i * 6, 240 - i * 4, 50, 200, 340, 14), 'rgba(43,39,51,0.4)', 2.6, false, 2); } },
-  live(ctx, t) { for (let i = 0; i < 9; i++) { const x = 40 + i * 56, y = 130 + Math.sin(t * 2 + i * 0.7) * 24 + (i % 3) * 22; ctx.save(); ctx.globalAlpha = 0.9; blit(ctx, noteSprite([C.red, C.yellow, C.pink, C.sky][i % 4]), x, y, t, { scale: 1.1 + 0.15 * Math.sin(t * 3 + i) }); ctx.restore(); } confetti(ctx, t); duo(ctx, t, { a: [186, 770, 280], b: [356, 770, 272], pa: 'sing', pb: 'sing', bob: 3 }); },
+  live(ctx, t) { for (let i = 0; i < 9; i++) { const x = 40 + i * 56, y = 130 + Math.sin(t * 2 + i * 0.7) * 24 + (i % 3) * 22; ctx.save(); ctx.globalAlpha = 0.9; blit(ctx, noteSprite([C.red, C.yellow, C.pink, C.sky][i % 4]), x, y, t, { scale: 1.1 + 0.15 * Math.sin(t * 3 + i) }); ctx.restore(); } confetti(ctx, t); duo(ctx, t, { a: [170, 810, 272], b: [372, 810, 262], k: 0.8, pa: 'sing', pb: 'sing', bob: 3 }); },
 };
 SCENES.epilogue_arena = {
   bg: (P) => {
     wash(P, 0, 0, 540, 960, '#a8a0e8', 0.9, 11, 0.4); wash(P, 0, 0, 540, 220, '#5a4ab8', 0.5, 11, 0.4); for (let r = 0; r < 6; r++) P.ln(arc(270, 700, 310 - r * 38, 270 - r * 32, 180, 360, 18), ['#5a6ad0', '#7a5ad0', '#9a5ac0', '#c05aa0', '#e05a80', '#f06060'][r], 16, false, 3);
-    for (let i = 0; i < 4; i++) P.hatch([60 + i * 130, 0, 90 + i * 130, 0, 190 + i * 40, 560, 140 + i * 40, 560], '#fff7a0', 9, 0.9, 0.16); stars(P, 14, 20, 260, 9); floor(P, 700, '#34346a', false);
-    for (let i = 0; i < 14; i++) P.dot(30 + i * 36 + (i % 2) * 8, 650 + (i % 3) * 14, 9, [C.pink, C.sky, C.yellow, C.lime][i % 4]);
+    for (let i = 0; i < 4; i++) P.hatch([60 + i * 130, 0, 90 + i * 130, 0, 190 + i * 40, 560, 140 + i * 40, 560], '#fff7a0', 9, 0.9, 0.16); stars(P, 14, 20, 260, 9); floor(P, 690, '#34346a', false);
+    for (let i = 0; i < 14; i++) P.dot(30 + i * 36 + (i % 2) * 8, 640 + (i % 3) * 14, 9, [C.pink, C.sky, C.yellow, C.lime][i % 4]);
   },
   mid: (P) => { mapScroll(P, 270, 380, 340, 210, -0.05); P.ln([140, 276, 120, 210], INK, 4); P.ln([400, 276, 420, 210], INK, 4); },
-  live(ctx, t) { duo(ctx, t, { a: [150, 830, 300], b: [392, 830, 290], pa: 'point', pb: 'cheer', bob: 3 }); drawLoopy(ctx, 270, 800, 80, { t, mood: 'excited', talk: true }); sparks(ctx, t, 270, 270); },
+  live(ctx, t) { duo(ctx, t, { a: [150, 860, 272], b: [392, 860, 262], k: 0.8, pa: 'point', pb: 'cheer', bob: 3 }); drawLoopy(ctx, 270, 840, 66, { t, mood: 'excited', talk: true }); sparks(ctx, t, 270, 270); },
 };
 SCENES.epilogue_beach = {
   bg: (P) => {
-    ['#ffe08a', '#ffb56a', '#f7808f', '#9a6ad0', '#3a3a98'].forEach((col, i) => wash(P, 0, 380 - i * 82, 540, 96, col, 0.9, 11, 0.2 + i * 0.05)); stars(P, 14, 10, 200, 14); moon(P, 420, 120, 54);
+    wash(P, 0, 0, 540, 200, '#3a3a98', 0.95, 11, 0.2); ['#ffe08a', '#ffb56a', '#f7808f', '#9a6ad0'].forEach((col, i) => wash(P, 0, 300 - i * 82, 540, 96, col, 0.9, 11, 0.2 + i * 0.05)); stars(P, 14, 10, 200, 14); moon(P, 420, 120, 54);
     wash(P, 0, 380, 540, 130, '#2fc4b2', 0.95, 11, 0.1); P.ln([0, 380, 540, 384], INK, 4, false, 2); for (let q = 0; q < 12; q++) P.ln(arc(q * 48 + 10, 420 + (q % 3) * 26, 20, 7, 200, 340, 5), '#eafffb', 3, false, 1);
-    floor(P, 510, '#f6d38a', false); wash(P, 0, 510, 540, 26, '#d9b070', 0.7, 9, 0.3); AP.palmTree(P, 50, 720, 340, 0.3); AP.palmTree(P, 490, 740, 300, -0.3); AP.logsAndStones(P, 270, 700, 150);
-    AP.surfboard(P, 130, 830, 200, -1.2, C.pink, '#fff'); AP.beachBall(P, 440, 880, 30); AP.starfish(P, 330, 900, 18, C.orange);
+    floor(P, 510, '#f6d38a', false); wash(P, 0, 510, 540, 26, '#d9b070', 0.7, 9, 0.3); AP.palmTree(P, 36, 760, 340, 0.3); AP.palmTree(P, 506, 780, 300, -0.3); AP.logsAndStones(P, 270, 770, 150);
+    AP.surfboard(P, 70, 900, 200, -1.25, C.pink, '#fff'); AP.beachBall(P, 470, 910, 30); AP.starfish(P, 330, 930, 18, C.orange);
   },
-  live(ctx, t) { AP.flames(ctx, 270, 704, 120, t, 0); for (let i = 0; i < 8; i++) { const k = (t * 0.3 + i * 0.125) % 1; ctx.save(); ctx.globalAlpha = 1 - k; blit(ctx, starSprite(C.yellow, 5), 270 + Math.sin(i * 5 + t) * 50, 650 - k * 260, t, { scale: 0.5 }); ctx.restore(); }
-    duo(ctx, t, { a: [150, 800, 290], b: [392, 800, 280], pa: 'cheer', pb: 'point', bob: 2 });
-    ctx.save(); ctx.strokeStyle = '#7a4d28'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(200, 700); ctx.lineTo(250, 628); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(254, 622, 11, 8, -0.8, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();   // the surviving marshmallow
-    drawLoopy(ctx, 270, 600, 66, { t, mood: 'excited', talk: true }); },
+  live(ctx, t) { AP.flames(ctx, 270, 774, 120, t, 0); for (let i = 0; i < 8; i++) { const k = (t * 0.3 + i * 0.125) % 1; ctx.save(); ctx.globalAlpha = 1 - k; blit(ctx, starSprite(C.yellow, 5), 270 + Math.sin(i * 5 + t) * 50, 700 - k * 300, t, { scale: 0.5 }); ctx.restore(); }
+    duo(ctx, t, { a: [140, 880, 272], b: [410, 880, 262], k: 0.8, pa: 'cheer', pb: 'point', bob: 2 });
+    ctx.save(); ctx.strokeStyle = '#7a4d28'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(210, 760); ctx.lineTo(252, 690); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(256, 684, 11, 8, -0.8, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();   // the surviving marshmallow
+    drawLoopy(ctx, 270, 600, 62, { t, mood: 'excited', talk: true }); },
 };
 SCENES.epilogue_moon = {
   bg: (P) => {
@@ -317,12 +317,12 @@ SCENES.epilogue_moon = {
     for (let i = 0; i < 9; i++) { const col = [C.mag, C.cyan, C.lime, C.yellow, C.pink, C.orange, C.red, C.blue, C.purple][i]; P.ln(arc(270, 270, 120 + i * 11, 120 + i * 11, 180 + i * 6, 360 - i * 4, 16), col, 7, false, 1.4); }
     moon(P, 270, 270, 110); P.ln(arc(270, 270, 124, 124, 0, 360, 24), C.cyan, 5, true, 2); P.ln(arc(274, 274, 132, 132, 0, 360, 24), C.mag, 3.4, true, 2);
     AP.planet(P, 80, 180, 30, '#5f8cff', false); AP.planet(P, 470, 120, 20, '#ff8ac8', true);
-    AP.floatRock(P, 100, 700, 180, 100); AP.floatRock(P, 450, 660, 170, 100); AP.floatRock(P, 270, 790, 250, 130, '#b4baff');
-    for (const [x, y, r, col] of [[60, 680, -0.8, C.lime], [130, 680, 0.8, C.pink], [430, 640, 0.4, C.cyan], [480, 640, -0.6, C.yellow]]) AP.glowStick(P, x, y, 64, r, col);
-    wash(P, 0, 900, 540, 60, '#7c82d8', 0.9, 11, 0.3);
+    AP.floatRock(P, 90, 640, 170, 100); AP.floatRock(P, 460, 600, 160, 90); AP.floatRock(P, 270, 850, 380, 100, '#b4baff');
+    for (const [x, y, r, col] of [[50, 620, -0.8, C.lime], [120, 620, 0.8, C.pink], [430, 580, 0.4, C.cyan], [490, 580, -0.6, C.yellow]]) AP.glowStick(P, x, y, 64, r, col);
+    wash(P, 0, 930, 540, 30, '#7c82d8', 0.9, 11, 0.3);
   },
   live(ctx, t) { lowGrav(ctx, t); confetti(ctx, t); for (let i = 0; i < 6; i++) { const a = t * 0.8 + i * 1.05; ctx.save(); ctx.strokeStyle = [C.mag, C.cyan, C.lime, C.yellow, C.pink, C.orange][i]; ctx.globalAlpha = 0.5; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(270, 270); ctx.lineTo(270 + Math.cos(a) * 560, 270 + Math.sin(a) * 560); ctx.stroke(); ctx.restore(); }
-    duo(ctx, t, { a: [186, 800, 280], b: [356, 800, 270], pa: 'cheer', pb: 'sing', bob: 5 }); drawLoopy(ctx, 270, 770, 64, { t, mood: 'excited' }); },
+    duo(ctx, t, { a: [170, 860, 272], b: [372, 860, 262], k: 0.8, pa: 'cheer', pb: 'sing', bob: 5 }); drawLoopy(ctx, 270, 830, 58, { t, mood: 'excited' }); },
 };
 SCENES.credits_moon = {
   bg: (P) => {
@@ -364,7 +364,7 @@ function worldScene(id) {
       if (k === 'club') { for (let i = 0; i < 5; i++) { const a = -0.9 + i * 0.45; P.hatch([60 + i * 100, 0, 80 + i * 100, 0, 200 + i * 60 + Math.sin(a) * 200, 520, 160 + i * 60, 520], ['#ff2fb9', '#19d3ff', '#9dff3a', '#ffd60a', '#ff5fb0'][i], 8, 0.9, 0.55); } poly(P, rect(110, 150, 320, 110), '#fff1b8', 6, { gap: 7 }); P.txt('CLUB', 270, 238, 74, '#ff5fb0', { align: 'c', w: 8, out: INK, ow: 5 }); ball(P, 460, 60); for (let r = 0; r < 4; r++) for (let q = 0; q < 6; q++) P.shp(rect(q * 90 + (r % 2) * 10, 640 + r * 70, 88, 68), (q + r) % 2 ? C.mag : C.cyan, INK, 2.6, { gap: 7, alpha: 0.8 }); }
       if (k === 'festival') { sun(P, 270, 400, 120, '#ffd05a'); for (const [x, y, c] of [[40, 380, C.red], [210, 340, C.yellow], [380, 380, C.sky]]) { poly(P, [x - 20, y + 140, x + 70, y - 40, x + 160, y + 140], c, 5, { gap: 8 }); poly(P, rect(x + 10, y + 100, 120, 80), '#fff7e0', 4, { gap: 9 }); } bunting(P, 250); floor(P, 640, '#6fbf5c', false); for (let i = 0; i < 20; i++) P.ln([20 + i * 27, 650 + (i % 3) * 20, 22 + i * 27, 638 + (i % 3) * 20], '#3e8a3a', 3); poly(P, rect(130, 500, 280, 140), '#5a3d7a', 5, { gap: 8 }); speaker(P, 100, 480, 50, 160, C.purple); speaker(P, 390, 480, 50, 160, C.purple); }
       if (k === 'beach') { for (const [i, col] of ['#ffe08a', '#ffb56a', '#f7808f', '#b88ae0'].entries()) wash(P, 0, 360 - i * 90, 540, 100, col, 0.85, 11, 0.2 + i * 0.05); sun(P, 270, 400, 70, '#ffd05a'); wash(P, 0, 400, 540, 130, '#2fc4b2', 0.95, 11, 0.1); P.ln([0, 400, 540, 404], INK, 4, false, 2); for (let q = 0; q < 12; q++) P.ln(arc(q * 48 + 10, 440 + (q % 3) * 24, 20, 7, 200, 340, 5), '#eafffb', 3, false, 1); floor(P, 530, '#f6d38a', false); wash(P, 0, 530, 540, 26, '#d9b070', 0.7, 9, 0.3); AP.palmTree(P, 56, 700, 300, 0.3); AP.palmTree(P, 488, 720, 340, -0.32); AP.sailboat(P, 420, 402, 22); AP.logsAndStones(P, 270, 640, 130); P.ln(arc(270, 70, 330, 90, 20, 160, 16), INK, 3, false, 1.2); for (let q = 0; q < 12; q++) { const a = (24 + q * 11) * Math.PI / 180; P.dot(270 + Math.cos(a) * 330, 70 + Math.sin(a) * 90, 7, [C.yellow, C.pink, C.cyan, C.lime][q % 4]); } }
-      if (k === 'moon') { wash(P, 0, 0, 540, 700, '#3a4ad0', 0.4, 12, 0.5); stars(P, 40, 20, 540, 8); for (let q = 0; q < 14; q++) { const a = q / 14 * TAU; P.ln([270, 300, 270 + Math.cos(a) * 520, 300 + Math.sin(a) * 520], q % 2 ? 'rgba(95,232,255,0.35)' : 'rgba(255,95,200,0.3)', 6, false, 1); } moon(P, 270, 300, 150); AP.planet(P, 80, 160, 36, '#5f8cff', false); AP.planet(P, 470, 200, 24, '#ff8ac8', true); AP.floatRock(P, 130, 640, 190, 110); AP.floatRock(P, 420, 600, 170, 100); AP.floatRock(P, 270, 700, 240, 130, '#b4baff'); P.ln(arc(270, 640, 80, 80, 180, 360, 14), C.mag, 8, false, 1); P.ln(arc(270, 640, 56, 56, 180, 360, 12), C.cyan, 6, false, 1); AP.glowStick(P, 100, 618, 70, -0.8, C.lime); AP.glowStick(P, 160, 618, 70, 0.9, C.pink); AP.glowStick(P, 440, 580, 70, 0.4, C.cyan); wash(P, 0, 780, 540, 180, '#7c82d8', 0.9, 11, 0.3); P.ln([0, 780, 540, 786], INK, 4, false, 2); for (const [cx, cy, rw] of [[90, 860, 60], [300, 900, 80], [460, 850, 50]]) P.shp(arc(cx, cy, rw, rw * 0.3, 0, 360, 12), '#5a5fb8', INK, 3.4, { gap: 6 }); }
+      if (k === 'moon') { wash(P, 0, 0, 540, 700, '#3a4ad0', 0.4, 12, 0.5); stars(P, 40, 20, 540, 8); for (let q = 0; q < 14; q++) { const a = q / 14 * TAU; P.ln([270, 300, 270 + Math.cos(a) * 520, 300 + Math.sin(a) * 520], q % 2 ? 'rgba(95,232,255,0.35)' : 'rgba(255,95,200,0.3)', 6, false, 1); } P.ln(arc(270, 300, 166, 166, 0, 360, 24), C.cyan, 6, true, 2); P.ln(arc(274, 304, 176, 176, 0, 360, 24), C.mag, 4, true, 2); moon(P, 270, 300, 150); AP.planet(P, 80, 160, 36, '#5f8cff', false); AP.planet(P, 470, 200, 24, '#ff8ac8', true); AP.floatRock(P, 130, 640, 190, 110); AP.floatRock(P, 420, 600, 170, 100); AP.floatRock(P, 270, 700, 240, 130, '#b4baff'); P.ln(arc(270, 640, 80, 80, 180, 360, 14), C.mag, 8, false, 1); P.ln(arc(270, 640, 56, 56, 180, 360, 12), C.cyan, 6, false, 1); AP.glowStick(P, 100, 618, 70, -0.8, C.lime); AP.glowStick(P, 160, 618, 70, 0.9, C.pink); AP.glowStick(P, 440, 580, 70, 0.4, C.cyan); wash(P, 0, 780, 540, 180, '#7c82d8', 0.9, 11, 0.3); P.ln([0, 780, 540, 786], INK, 4, false, 2); for (const [cx, cy, rw] of [[90, 860, 60], [300, 900, 80], [460, 850, 50]]) P.shp(arc(cx, cy, rw, rw * 0.3, 0, 360, 12), '#5a5fb8', INK, 3.4, { gap: 6 }); }
       if (k === 'arena') { for (let r = 0; r < 6; r++) P.ln(arc(270, 680, 300 - r * 36, 250 - r * 30, 180, 360, 18), ['#5a6ad0', '#7a5ad0', '#9a5ac0', '#c05aa0', '#e05a80', '#f06060'][r], 16, false, 3); for (let i = 0; i < 4; i++) P.hatch([60 + i * 130, 0, 90 + i * 130, 0, 190 + i * 40, 520, 140 + i * 40, 520], '#fff7a0', 9, 0.9, 0.18); poly(P, rect(60, 70, 130, 90), '#ffe9a0', 5, { gap: 6 }); poly(P, rect(350, 70, 130, 90), '#ffe9a0', 5, { gap: 6 }); P.txt('LIVE', 125, 130, 40, C.red, { align: 'c', w: 5, out: INK, ow: 4 }); P.txt('LIVE', 415, 130, 40, C.blue, { align: 'c', w: 5, out: INK, ow: 4 }); floor(P, 660, '#34346a', false); for (const x of [90, 270, 450]) P.ln([x, 960, 270, 700], '#e9e5f5', 8, false, 2, [18, 14]); }
     },
     mid: (P) => { if (id === 'world_garage' || id === 'world_busk') for (let i = 0; i < 4; i++) fuzzDraw(P, null, 16, 0.4, i % 2 === 0); },
@@ -387,9 +387,11 @@ function bossArt(P, key) {
   const x = 270, y = 400;
   if (key === 'playback') { tvRobot(P, x, y, 1.45); return; }
   if (key === 'lowpass' || key === 'silence') {   // the real boss doodles, drawn big
-    const r = key === 'lowpass' ? 170 : 150;
-    P.ctx.save(); P.ctx.translate(x, key === 'lowpass' ? y + 10 : y + 70); const eyes = paintBoss(P, key, r, { phase: key === 'silence' ? 2 : 1 });
+    const r = key === 'lowpass' ? 84 : 74;   // painted at half size and drawn at double size: fat crayon strokes
+    P.ctx.save(); P.ctx.translate(x, key === 'lowpass' ? y + 20 : y + 80); P.ctx.scale(2, 2); const eyes = paintBoss(P, key, r, { phase: 1 });
     for (const e of eyes) P.dot(e.x + e.r * 0.2, e.y + e.r * 0.15, e.r * 0.5, key === 'silence' ? '#fff' : INK);
+    P.ctx.restore(); P.ctx.save();
+    if (key === 'silence') for (const [nx, ny] of [[70, 250], [470, 230], [90, 560], [450, 600], [270, 120]]) { note(P, nx, ny, 1.3, '#a9a5c0'); P.ln([nx - 20, ny + 8, nx + 26, ny - 40], C.red, 4); P.ln([nx + 26, ny + 8, nx - 20, ny - 40], C.red, 4); }
     P.ctx.restore(); return;
   }
   if (key === 'compressor') {

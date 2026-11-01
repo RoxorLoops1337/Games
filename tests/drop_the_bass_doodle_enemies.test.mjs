@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as D from '../drop_the_bass/js/doodle_enemies.js';
+import { Pen } from '../drop_the_bass/js/doodle_kit.js';
 import { ENEMY_IDS, BOSS_IDS, AFFIXES } from '../drop_the_bass/js/data_core.js';
 
 let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
@@ -29,6 +30,10 @@ const OPTS = [{}, { t: 3.3, ang: 2, id: 7 }, { hp: 0.4, hit: 0.7, slow: true }, 
 for (const id of ENEMY_IDS) for (const aff of [null, ...Object.keys(AFFIXES)]) for (const o of OPTS) { D.drawEnemy(ctx, id, 50, 60, o ? Object.assign({ affix: aff }, o) : undefined); }
 for (const id of BOSS_IDS) for (const ph of [1, 2, 3]) for (const g of [false, true]) for (const o of [{}, { t: 5, ang: 1, hp: 0.3, hit: 0.5, scale: 1.2 }]) D.drawBoss(ctx, id, 80, 90, Object.assign({ gated: g, phase: ph }, o));
 D.drawBoss(ctx, 'playback', 0, 0); D.drawEnemy(ctx, 'fuzz', 0, 0);
+ok(BOSS_IDS.includes('lowpass') && BOSS_IDS.includes('silence'), 'the second tour bosses exist');
+for (const id of ['lowpass', 'silence']) { const c = mock(); const eyes = D.paintBoss(new Pen(c, 5, 1), id, 40, { phase: 2, gated: true }); ok(Array.isArray(eyes) && eyes.length === 2, id + ' paints with eyes'); ok(c.__st.calls > 80 && c.__st.nan === 0, id + ' paints plenty'); }
+ok(D.paintBoss(null, 'nope', 10).length === 0, 'paintBoss ignores unknown ids');
+for (const id of ['lowpass', 'silence']) { const a = mock(), b = mock(); D.drawBoss(a, id, 50, 50, { t: 2.2, phase: 3, hit: 0.4, ang: 0.7 }); D.drawBoss(b, id, 50, 50, { t: 2.2, phase: 3, hit: 0.4, ang: 0.7 }); ok(a.__st.calls === b.__st.calls && a.__st.calls > 20, id + ' draws deterministically'); }
 ok(ctx.__st.saves === ctx.__st.restores, 'save and restore balance ' + ctx.__st.saves + '/' + ctx.__st.restores);
 ok(ctx.__st.nan === 0, 'no NaN reached the context: ' + ctx.__st.nan);
 ok(ctx.__st.calls > 5000, 'something was drawn');

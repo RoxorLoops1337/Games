@@ -16,6 +16,7 @@ export const drawBoard = (...a) => V().drawBoard(...a);
 export const drawStageBase = (...a) => V().drawStageBase(...a);
 export const drawScene = (...a) => S().drawScene(...a);
 export const drawTitle = (...a) => S().drawTitle(...a);
-export const SCENE_IDS = CS.SCENE_IDS;
+export const SCENE_IDS = DS.SCENE_IDS;   // the 19 classic scenes plus the second tour's 12 (the doodle style is the only one drawn, see style.js)
+export const BOARD_SKIN_IDS = DV.BOARD_SKIN_IDS, BOARD_SKINS = DV.BOARD_SKINS;   // cosmetic board skins, see doodle_env.js (o.skin on drawBackdrop and drawBoard)
 export const makeCanvas = CV.makeCanvas;
 export function setArtScale(n) { for (const m of [CH, CV, CS, DH, DV, DS]) if (m.setArtScale) m.setArtScale(n); }
