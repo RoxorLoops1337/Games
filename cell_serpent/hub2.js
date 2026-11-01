@@ -5,7 +5,7 @@ import {
   META, metaCost, buyMeta, levelInfo, levelReward, power,
   SIGN_DAYS, claimSign, FUND, fundReady, claimFund, idleAmount, claimIdle, idleRate, ENERGY_MAX, buyEnergy, tickEnergy,
   BOXES, WEAPONS, PETS, openBox, shopLevel, dealsFor, buyDeal, refreshDeals, welcomeReady, claimWelcome, GOLD_PACKS, buyGold, EGG_PRICE, buyEgg,
-  exchangeFrags, OUTFITS, outfitAvailable, buyOutfit, wearOutfit, eventInfo, EVENT_MILES, claimEventMile, ensureEvent, EXCHANGE_ITEMS, buyExchange, LIMIT_ITEMS, buyLimit,
+  upgradeAllKeeps, claimAllFund, claimAllTrophies, exchangeFrags, OUTFITS, outfitAvailable, buyOutfit, wearOutfit, eventInfo, EVENT_MILES, claimEventMile, ensureEvent, EXCHANGE_ITEMS, buyExchange, LIMIT_ITEMS, buyLimit,
   CARD_PRICE, buyCard, cardActive, claimCard, TROPHIES, trophyReady, claimTrophy, weaponExchange, WEAPON_EXCHANGE_PRICE, SKINS, SKIN_NAMES,
 } from './sim.js';
 
@@ -64,6 +64,7 @@ export function createHub2(c) {
   }
   function openFund() {
     openPanel('FAN CLUB FUND', body => {
+      { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'CLAIM ALL'; b.onclick = () => { if (claimAllFund(save())) { c.persist(); audio.play('levelup'); c.refreshCur(); openFund(); } }; body.appendChild(b); }
       const grid = document.createElement('div'); grid.className = 'tiles';
       for (const f of FUND) {
         const got = save().fund[f.stage], ready = fundReady(save(), f), r = f.reward;
@@ -140,6 +141,7 @@ export function createHub2(c) {
         }
       }
     }
+    { const ready = KEEPSAKES.filter(k => keepCanUp(s, k.id)).length; if (ready) { const b = document.createElement('button'); b.className = 'btn small gold'; b.style.margin = '10px auto'; b.style.display = 'block'; b.textContent = 'LEVEL UP ALL READY (' + ready + ')'; b.onclick = () => { const n = upgradeAllKeeps(save()); if (n) { c.persist(); audio.play('upgrade'); c.renderHub(); } }; box.appendChild(b); } }
     // chests
     sec(box, 'Keepsake Chest');
     const row = document.createElement('div'); row.className = 'tiles'; box.appendChild(row);
@@ -237,6 +239,7 @@ export function createHub2(c) {
   function openTrophies() {
     const s = save();
     openPanel('TROPHY SHELF', body => {
+      { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'CLAIM ALL'; b.onclick = () => { if (claimAllTrophies(save())) { c.persist(); audio.play('levelup'); c.refreshCur(); openTrophies(); } }; body.appendChild(b); }
       const grid = document.createElement('div'); grid.className = 'tiles';
       for (const t of TROPHIES) {
         const got = s.trophies[t.id], ready = trophyReady(s, t), cur = Math.min(t.at, t.get(s)), r = t.reward;

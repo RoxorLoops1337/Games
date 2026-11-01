@@ -433,7 +433,7 @@ ok('daily gigs: three deterministic goals a day; progress counts finished runs; 
   assert.ok(a.every(x => x.text && x.target > 0 && (x.reward.beats || x.reward.sparkles)));
   const s = sim.defaultSave();
   assert.ok(!sim.claimGoal(s, day, a[0].id), 'nothing done yet');
-  sim.addRunStats(s, day, { kills: 500, won: true, chests: 50, picks: 50, groove: 20 });
+  sim.addRunStats(s, day, { kills: 500, won: true, boss: true, bombs: 50, starsGained: 50, chests: 50, picks: 50, groove: 20 });
   for (const goal of a) assert.equal(sim.goalProgress(s, day, goal), goal.target);
   const b0 = s.beats, sp0 = s.sparkles;
   assert.ok(sim.claimGoal(s, day, a[0].id)); assert.ok(!sim.claimGoal(s, day, a[0].id), 'only once');
@@ -672,6 +672,40 @@ ok('snakes get faster and tougher every stage, and a boss is much tougher than i
   const hp = n => sim.createGame({ seed: 7, stage: n }).stageHpMax / sim.createGame({ seed: 7, stage: n }).snakes[0].segs.length;
   assert.ok(hp(4) < hp(5) && hp(5) > hp(4) * 1.8, 'the stage 5 boss is far tougher per cell than stage 4');
   assert.ok(hp(10) > hp(5) * 1.3 && hp(30) > hp(10));
+});
+
+ok('stage twists, menders, danger, groove coins, skipping a card', () => {
+  assert.equal(sim.stageMod(1), null); assert.ok(sim.stageMod(4) && sim.stageMod(7)); assert.equal(sim.stageMod(10), null, 'no twist on bosses');
+  const thick = sim.MODS.find(m => m.id === 'thick'), n = [4, 7, 13, 16, 19, 22].find(x => sim.stageMod(x) === thick);
+  const m1 = sim.createGame({ seed: 3, stage: n }); assert.equal(m1.mod, thick); assert.ok(m1.coinK > 1);
+  const mend = sim.createGame({ seed: 5, stage: 12 }); const sn = mend.snakes[0]; mend.p.cd = 99;
+  assert.ok(sn.segs.some(q => q.kind === 'mender'), 'menders from stage 9');
+  const mi = sn.segs.findIndex(q => q.kind === 'mender'), nb = sn.segs[mi + 1]; nb.hp = nb.max * 0.5; mend.t = 0; sn.speed = 0.01;
+  for (let i = 0; i < 80; i++) sim.step(mend, 1 / 60, {}); assert.ok(nb.hp > nb.max * 0.5, 'a mender heals the cells beside it');
+  const d = sim.createGame({ seed: 6 }), dn = d.snakes[0]; dn.speed = 0.01; const need = d.path.len - 100; const shift = need - dn.segs[0].ps; dn.tail += shift; for (const q of dn.segs) { q.ps += shift; q.tp = q.ps; }
+  sim.step(d, 1 / 60, {}); assert.ok(d.events.some(e => e.t === 'danger') && d.danger > 0.5, 'the face is close to the line');
+  const g = sim.createGame({ seed: 8 }); g.groove = 16; g.pickups.push({ kind: 'coin', x: g.p.x, y: g.p.y, vx: 0, vy: 0, v: 4, age: 1, vac: true }); sim.step(g, 1 / 60, {});
+  assert.ok(g.coins >= 4 * g.coinK * 1.25 - 1e-6, 'a hot groove pays 25% more');
+  const k = sim.createGame({ seed: 9 }); k.pending = 2; sim.step(k, 1 / 60, {}); const c0 = k.coins, lv0 = k.level;
+  assert.ok(sim.skipPick(k) && k.coins > c0 && k.level === lv0 && k.phase === 'levelup', 'two cards waiting: the second shows'); assert.ok(sim.skipPick(k) && k.phase === 'play');
+});
+
+ok('stars, star bonuses, login streak, claim-all helpers, hatch all, backup code', () => {
+  const s = sim.defaultSave();
+  const win = (stage, extra) => ({ won: true, stage, coins: 1, kills: 1, frags: {}, stars: 3, ...extra });
+  const r1 = sim.applyResult(s, win(1)); assert.equal(s.stars[1], 3); assert.equal(r1.starsGained, 3);
+  const r2 = sim.applyResult(s, win(1, { stars: 2 })); assert.equal(r2.starsGained, 0, 'only a better result counts');
+  for (let n = 2; n <= 4; n++) sim.applyResult(s, win(n)); assert.equal(sim.totalStars(s), 12); assert.ok(s.sparkles >= 10, 'ten stars pay a bonus');
+  const g = sim.createGame({ seed: 10 }); for (const q of g.snakes[0].segs) q.hp = 0; for (let i = 0; i < 200; i++) { sim.step(g, 1 / 60, {}); if (g.phase === 'levelup') sim.choose(g, 0); if (g.phase === 'won') break; }
+  assert.equal(g.phase, 'won'); assert.equal(g.result.stars, 3, 'a calm clear without a revive is three stars');
+  const t = sim.defaultSave(); sim.dayLogin(t, 100); assert.equal(t.streak.n, 1); sim.dayLogin(t, 101); assert.equal(t.streak.n, 2); const b0 = t.beats; sim.dayLogin(t, 103); assert.equal(t.streak.n, 1, 'a missed day breaks it'); assert.ok(t.beats > b0);
+  const u = sim.defaultSave(); u.cleared = 10; u.kills = 9999; u.runs = 99; for (const k of sim.KEEPSAKES.slice(0, 3)) u.keeps[k.id].frag = 500; u.pets.kitten.frag = 100; u.skills.swab.frag = 500;
+  assert.ok(sim.upgradeAllKeeps(u) > 3 && sim.upgradeAllPets(u) > 1 && sim.upgradeAllSkills(u) > 1); assert.ok(sim.claimAllTrophies(u) > 2); assert.ok(sim.claimAllFund(u) >= 3);
+  u.eggs = 5; assert.equal(sim.hatchAll(u, () => 0.9).length, 5); assert.equal(u.eggs, 0);
+  const code = sim.exportSave(u), back = sim.importSave(code); assert.ok(code.startsWith('CS1.') && back && back.cleared === 10 && back.skills.swab.lv === u.skills.swab.lv);
+  assert.equal(sim.importSave('nonsense'), null); assert.equal(sim.importSave('CS1.@@@'), null);
+  assert.equal(sim.sanitizeSave({ settings: { vibrate: false, music: 'x', evil: true } }).settings.vibrate, false); assert.equal(sim.sanitizeSave({ settings: { music: 'x' } }).settings.music, true);
+  const day = 20200, v = sim.defaultSave(); sim.addRunStats(v, day, { bombs: 4, won: true, boss: true, starsGained: 3 }); assert.deepEqual([v.daily.progress.bombs, v.daily.progress.bosses, v.daily.progress.starsEarned], [4, 1, 3]);
 });
 
 console.log(`cell_serpent: ${n} groups passed`);

@@ -58,8 +58,10 @@ export function createRenderer(canvas, art, kit) {
   }
 
   // -------------------------------------------------- events -> particles
+  const OPT = { reduceMotion: false, lowQuality: false, bigNumbers: false };
   function burst(x, y, n, cols, sp = 220, life = 0.6, size = 5) {
-    for (let i = 0; i < n && S.particles.length < 420; i++) {
+    if (OPT.lowQuality) n = Math.ceil(n * 0.4);
+    for (let i = 0; i < n && S.particles.length < (OPT.lowQuality ? 140 : 420); i++) {
       const a = Math.random() * TAU, v = sp * (0.3 + Math.random() * 0.8);
       S.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life, max: life, size: size * (0.5 + Math.random()), col: cols[(Math.random() * cols.length) | 0] });
     }
@@ -97,7 +99,10 @@ export function createRenderer(canvas, art, kit) {
       case 'power': ring(e.x, e.y, 60, e.kind === 'heal' ? '#ff6a8a' : e.kind === 'shield' ? '#39d0ff' : '#ffd24a', 0.5); addFloat(g.p.x, g.p.y - 60, e.kind === 'heal' ? 'HEAL' : e.kind === 'shield' ? 'SHIELD' : 'RAGE', '#fff', 26, -60); break;
       case 'coin': if (S.floats.length < 40) addFloat(g.p.x + 20, g.p.y - 40, '+' + Math.max(1, Math.round(e.v * g.p.coinMul)), '#ffd24a', 15, -50); break;
       case 'levelup': S.flash = 0.4; S.flashCol = '#9dff6d'; ring(g.p.x, g.p.y, 220, '#9dff6d', 0.6); break;
-      case 'stage': S.banner = { text: e.boss ? 'BOSS' : 'STAGE ' + e.n, sub: e.name || '', t: 0, dur: 2.0, boss: e.boss }; if (e.boss) S.trauma = 0.6; break;
+      case 'pet': addFloat(g.p.x, g.p.y - 150, ({ kitten: 'Meow!', puppy: 'Woof!', lamb: 'Baa!', turtle: 'Slow down!', piglet: 'Oink!', hamster: 'Squeak!' })[e.id] || '!', '#ffe14a', 22, -40); break;
+      case 'skip': addFloat(g.p.x, g.p.y - 120, 'Beats!', '#ffd24a', 20, -50); break;
+      case 'mend': ring(e.x, e.y, 46, '#6fe08a', 0.3); break;
+      case 'stage': S.banner = { text: e.boss ? 'BOSS' : 'STAGE ' + e.n, sub: (e.name || '') + (e.mod ? '  ·  ' + e.mod : ''), t: 0, dur: 2.0, boss: e.boss }; if (e.boss) S.trauma = 0.6; break;
       case 'clear': S.banner = { text: 'STAGE CLEAR', sub: '+' + e.bonus + ' Beats', t: 0, dur: 2.2, clear: true }; break;
       case 'surgewarn': S.warn = 0.7; break;
       case 'surge': S.warn = 0; S.trauma = Math.min(1, S.trauma + 0.3); break;
@@ -192,7 +197,8 @@ export function createRenderer(canvas, art, kit) {
         if (s.kind === 'upgrade') sparkleAt(s.x + r * 0.55 + Math.sin(S.t * 4 + i) * 4, s.y - r * 0.55, r * 0.3);
       } else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
       if (s.carry === 'chest') { glow(s.x, s.y, r * 1.8, '#ffd84d', 0.5 + Math.sin(S.t * 6 + i) * 0.2); blit(kit && kit.SPR.pickup('chest'), s.x, s.y - r * 0.9, r * 2.2, Math.sin(S.t * 4 + i) * 0.1); }
-      text(num(s.hp), s.x, s.y + r * 0.05, Math.max(20, r * 0.85), '#fff', INK);
+      text(num(s.hp), s.x, s.y + r * 0.05, Math.max(20, r * 0.85) * (OPT.bigNumbers ? 1.2 : 1), '#fff', INK);
+      if (s.kind === 'mender') { glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12); ctx.save(); ctx.fillStyle = '#6fe08a'; ctx.strokeStyle = INK; ctx.lineWidth = 3; const q = r * 0.34; for (const [px, py, w2, h2] of [[-q * 0.35, -q, q * 0.7, q * 2], [-q, -q * 0.35, q * 2, q * 0.7]]) { ctx.fillRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); ctx.strokeRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); } ctx.restore(); }
     }
     if (sn.slow > 0) { const h = segs[0]; glow(h.x, h.y, h.r * 2, '#7fe8ff', 0.3); }
   }
@@ -305,6 +311,9 @@ export function createRenderer(canvas, art, kit) {
     sparkleAt(pad + 14, 44, 13);
     text('x ' + (g.upgradeLeft || 0), pad + 40, 46, 24, '#ffd84d', '#0b1020', 'left');
     text('UPGRADE CELLS', pad, 78, 12, '#fff1a8', '#0b1020', 'left');
+    { let ch = 0; for (const sn of g.snakes) for (const q of sn.segs) if (q.carry === 'chest' && q.hp > 0) ch++; if (ch) { blit(kit && kit.SPR.pickup('chest'), pad + 98, 44, 40); text('x ' + ch, pad + 122, 46, 20, '#ffe9a8', '#0b1020', 'left'); } }
+    if ((g.danger || 0) > 0.05 && g.phase === 'play') { const a = Math.min(0.5, g.danger * 0.45) * (0.65 + 0.35 * Math.sin(S.t * 14)); const rg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75); rg.addColorStop(0, 'rgba(255,40,80,0)'); rg.addColorStop(1, `rgba(255,40,80,${a})`); ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H); }
+    for (const sn of g.snakes) if (sn.surge === 'warn') { const h = sn.segs[0]; text('!', h.x, h.y - h.r - 34 + Math.sin(S.t * 20) * 4, 40, '#ff3d5a', '#0b1020'); }
     // what the capsule does right now
     const up = id => Math.round(uv(g, id));
     const gv = g.groove || 0, gw = 230, gx = pad + 4, gy = H - 30;
@@ -366,6 +375,7 @@ export function createRenderer(canvas, art, kit) {
     const L = layout();
     S.t += dt; if (S.banner) { S.banner.t += dt; if (S.banner.t > S.banner.dur) S.banner = null; }
     S.trauma = Math.max(0, S.trauma - dt * 1.6); S.flash = Math.max(0, S.flash - dt * 1.5);
+    if (OPT.reduceMotion) { S.trauma = 0; S.flash = 0; }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawBg(g, L);
     const sh = S.trauma * S.trauma * 22;
@@ -388,5 +398,5 @@ export function createRenderer(canvas, art, kit) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
-  return { draw, onEvent, layout, state: S, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
+  return { setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
 }
