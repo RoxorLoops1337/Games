@@ -59,6 +59,7 @@ function adoptSave(s) {
     relics: Object.fromEntries(Object.keys(s.relics || {}).filter((id) => ITEM_BY_ID[id] && s.relics[id]).map((id) => [id, true])),
     ach: { ...(s.ach || {}) }, catStats: { ...(s.catStats || {}) }, daily: { ...(s.daily || {}) },
     diff: DIFF_ORDER.includes(s.diff) ? s.diff : 'normal', name: String(s.name || ''), nameAsked: !!s.nameAsked,
+    records: KLife.cleanRecords(s.records), walk: KLife.cleanWalk(s.walk, s.unlocked),
     weekly: { ...(s.weekly || {}) }, ladder: Math.max(0, Math.min(5, (s.ladder | 0))), owned: (s.owned || []).filter((id) => COSMETIC_BY_ID[id]), wardrobe: { ...(s.wardrobe || {}) },
   };
 }
@@ -897,7 +898,7 @@ function bumpBuilding(id) { if (walk) walk.state.bumps[id] = tAnim; }
 function openBuilding(id) {
   const b = BUILDING_BY_ID[id];
   if (!b) return;
-  const show = () => openSheet(`<h2>${b.name}</h2>${sheetCoins()}<div id="kdetail" aria-live="polite">${kdSelDetail({ type: 'building', id })}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, {
+  const show = () => openSheet(`<h2>${b.name}</h2><div id="kdetail" aria-live="polite">${kdSelDetail({ type: 'building', id })}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, {
     back: closeSheet,
     buy: (d) => { if (buyBuildingNow(d.id)) { bumpBuilding(d.id); show(); } },
   });
@@ -906,7 +907,7 @@ function openBuilding(id) {
 function openWonder(id) {
   const w = WONDER_BY_ID[id];
   if (!w) return;
-  const show = () => openSheet(`<h2>${w.name}</h2>${sheetCoins()}<div id="kdetail" aria-live="polite">${kdSelDetail({ type: 'wonder', id })}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, {
+  const show = () => openSheet(`<h2>${w.name}</h2><div id="kdetail" aria-live="polite">${kdSelDetail({ type: 'wonder', id })}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, {
     back: closeSheet,
     buyw: (d) => { if (buyWonderNow(d.id)) show(); },
   });

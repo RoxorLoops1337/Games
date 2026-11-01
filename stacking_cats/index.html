@@ -1757,7 +1757,9 @@ body.nomotion .sumtile,body.nomotion .sumtile.best::before{animation:none}
 /* REVEALJUICE END */
 
 /* ---- Whiskerton Walk: controls, HUD and the bottom sheets */
-body.walk #hud{display:none!important}
+body.walk #hud,body.walk #bFull{display:none!important}
+body.walk #screen{position:absolute;inset:0;z-index:6;pointer-events:none}body.walk #screen>*{pointer-events:auto}
+body.scr .kwin{pointer-events:none}
 .kwin{position:absolute;inset:0;touch-action:none;-webkit-user-select:none;user-select:none;z-index:3}
 .kwstick{position:absolute;width:0;height:0;pointer-events:none}
 .kwstick[hidden]{display:none}

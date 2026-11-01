@@ -29,7 +29,7 @@ export function createInput(el, o = {}) {
   const stageW = o.stageW || 960;
   const active = o.isActive || (() => true);
   const hasDom = !!(el && el.appendChild && typeof document !== 'undefined');
-  const st = { stick: 0, keys: new Set(), jump: false, interact: false, moveTo: null, moveAt: 0, dead: false, buttons: !!o.buttons };
+  const st = { stick: 0, keys: new Set(), jump: false, jumpHeld: false, interact: false, moveTo: null, moveAt: 0, dead: false, buttons: !!o.buttons };
   const ptrs = new Map();
   let root = null, ring = null, knob = null, bJump = null, bAct = null, now = 0;
   const tick = () => (now = (typeof performance !== 'undefined' ? performance.now() : Date.now()));
@@ -44,7 +44,8 @@ export function createInput(el, o = {}) {
     bJump = root.querySelector('.kwjump'); bAct = root.querySelector('.kwact');
     bJump.hidden = !st.buttons;
     const press = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); if (active()) fn(); };
-    bJump.addEventListener('pointerdown', press(() => { st.jump = true; }));
+    bJump.addEventListener('pointerdown', press(() => { st.jump = true; st.jumpHeld = true; }));
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) bJump.addEventListener(ev, () => { st.jumpHeld = false; });
     bAct.addEventListener('pointerdown', press(() => { st.interact = true; if (o.onSide) o.onSide('prompt'); }));
     // a keyboard or screen reader user can still press the buttons (Enter or Space on a focused button fires click with no pointer)
     bJump.addEventListener('click', (e) => { if (e.detail === 0 && active()) st.jump = true; });
@@ -103,11 +104,11 @@ export function createInput(el, o = {}) {
     e.preventDefault(); e.stopImmediatePropagation();
     if (e.repeat) return;
     if (isMove) { st.keys.add(k); st.moveTo = null; }
-    if (isJump) { st.jump = true; st.keys.add(k); }
+    if (isJump) { st.jump = true; st.jumpHeld = true; st.keys.add(k); }
     if (isAct) st.interact = true;
     if (side && o.onSide) o.onSide(side);
   };
-  const onUp = (e) => { st.keys.delete(String(e.key).toLowerCase()); };
+  const onUp = (e) => { const k = String(e.key).toLowerCase(); st.keys.delete(k); if (JUMP.includes(k)) st.jumpHeld = false; };
   const onBlur = () => { st.keys.clear(); st.stick = 0; ptrs.clear(); if (ring) ring.hidden = true; };
   if (typeof addEventListener === 'function') {
     addEventListener('keydown', onKey, true); addEventListener('keyup', onUp, true); addEventListener('blur', onBlur);
@@ -120,7 +121,7 @@ export function createInput(el, o = {}) {
       if (!active()) { st.jump = st.interact = false; dir = 0; }
       if (dir !== 0) st.moveTo = null;
       if (st.moveTo != null && now - st.moveAt > MOVETO_TTL * 1000) st.moveTo = null;
-      const r = { dir: clamp(dir, -1, 1), jump: st.jump, interact: st.interact, moveTo: st.moveTo };
+      const r = { dir: clamp(dir, -1, 1), jump: st.jump, jumpHeld: st.jump || st.jumpHeld, interact: st.interact, moveTo: st.moveTo };
       st.jump = st.interact = false;
       return r;
     },
