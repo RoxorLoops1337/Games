@@ -17,6 +17,9 @@ const { execFileSync, execSync } = require('child_process');
 
 const watch = process.argv.includes('--watch');
 
+// Drop the Bass: refresh the service worker precache list and version before the static copy (a test checks it too).
+try { execFileSync(process.execPath, [path.join(__dirname, 'tools', 'dtb_make_manifest.mjs')], { stdio: 'inherit' }); } catch (e) { console.warn('dtb manifest not refreshed:', e.message); }
+
 const REPO = __dirname;
 const DIST = path.join(REPO, 'dist');
 

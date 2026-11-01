@@ -1,7 +1,7 @@
 // Drop the Bass: the doodle cutscene and title art, headless. Every scene and the title draw on a mock ctx without throwing, balanced, deterministic, no unseeded randomness.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SCENE_IDS, drawScene, drawTitle, setArtScale } from '../drop_the_bass/js/doodle_scenes.js';
+import { SCENE_IDS, NEW_IDS, drawScene, drawTitle, setArtScale } from '../drop_the_bass/js/doodle_scenes.js';
 
 let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
 function mock() {
@@ -22,7 +22,9 @@ function mock() {
 }
 setArtScale(2);
 const chk = (c, m) => { ok(c.__st.saves === c.__st.restores, m + ' balanced'); ok(c.__st.nan === 0, m + ' no NaN'); ok(c.__st.calls > 5, m + ' draws'); };
-ok(SCENE_IDS.length === 19, '19 scene ids');
+ok(SCENE_IDS.length === 31, '19 classic and 12 second tour scene ids');
+for (const id of NEW_IDS) ok(SCENE_IDS.includes(id), 'second tour scene registered ' + id);
+ok(new Set(SCENE_IDS).size === SCENE_IDS.length, 'scene ids are unique');
 for (const id of SCENE_IDS) for (const [t, p] of [[0.4, 0], [3.1, 0.5], [7, 1]]) { const c = mock(); drawScene(c, id, 540, 960, t, { progress: p }); chk(c, id + p); }
 for (const [w, h] of [[540, 960], [390, 844], [1280, 720]]) { const c = mock(); drawScene(c, 'garage_day', w, h, 1, { progress: 0.5 }); chk(c, 'size ' + w); }
 for (const beat of [0, 0.5, 1]) { const c = mock(); drawTitle(c, 540, 960, 2.2, { beat }); chk(c, 'title ' + beat); }
@@ -31,6 +33,9 @@ for (const id of ['victory_stage', 'boss_playback']) {
   const a = mock(), b = mock(); drawScene(a, id, 540, 960, 2, { progress: 0.6 }); drawScene(b, id, 540, 960, 2, { progress: 0.6 });
   ok(a.__st.log.join() === b.__st.log.join(), id + ' deterministic');
 }
+for (const id of NEW_IDS) for (const [w, h] of [[540, 960], [390, 844], [1280, 720]]) { const c = mock(); drawScene(c, id, w, h, 4.4, { progress: 0.8 }); chk(c, 'new scene size ' + id + w); }
+for (const id of ['epilogue_arena', 'boss_silence', 'credits_moon']) { const a = mock(), b = mock(); drawScene(a, id, 540, 960, 2, { progress: 0.6 }); drawScene(b, id, 540, 960, 2, { progress: 0.6 }); ok(a.__st.log.join() === b.__st.log.join(), id + ' deterministic'); }
+setArtScale(1); for (const id of NEW_IDS) { const c = mock(); drawScene(c, id, 540, 960, 1, { progress: 1 }); chk(c, 'low graphics ' + id); } setArtScale(2);
 const src = readFileSync(new URL('../drop_the_bass/js/doodle_scenes.js', import.meta.url), 'utf8');
 ok(!/Math\.random|Date\.now|new Date/.test(src), 'no unseeded randomness or clock'); ok(!src.includes(String.fromCharCode(8212)), 'no em dash');
 console.log('drop_the_bass doodle_scenes: ' + n + ' checks passed');

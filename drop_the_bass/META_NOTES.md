@@ -36,3 +36,16 @@
 ## Difficulty
 - `profile.settings.difficulty` ('easy' | 'normal' | 'hard', default 'normal'), segmented control at the top of the Tour tab. `startRun` passes `difficulty` to `new Run(...)` as
   `opts.difficulty` (also in `run.cfg.difficulty` and `run.result.difficulty`). Name and description are read from `DIFFICULTY` in data_core.js with a fallback (`M.difficultyInfo`).
+
+## Board skins (cosmetic, selectable per profile)
+- `doodle_env.js` exports `BOARD_SKIN_IDS = ['skin_paper', 'skin_chalk', 'skin_sticker', 'skin_midnight']` and `BOARD_SKINS = { id: { name, desc } }` (`art_world.js` re-exports both).
+- Use it as an option: `drawBackdrop(ctx, worldId, w, h, t, { skin })` and `drawBoard(ctx, mapId, worldId, t, { skin })`. A missing, null or unknown id is `'skin_paper'` and draws exactly the look the game had before skins existed.
+- `skin_paper` the ruled notebook page (default). `skin_chalk` dark slate with chalk-white outlines, dust smudges and a chalk border. `skin_sticker` bright scrapbook: pastel page, striped washi tape in the corners, die-cut star and heart stickers on the frame. `skin_midnight` inky navy page with glow-cyan outlines, neon stars and a faint frame glow.
+- A skin overrides the palette (paper, lines, page, pads, lane, outline colour, tape) and adds decor on top of each world's own theme; props and enemies are not recoloured. Baked sprites are keyed by skin, so a switch costs one bake per (world, skin) and nothing per frame; Low graphics (`setArtScale(1)`) works the same.
+- WIRING TODO (profile and shop agent): store the chosen id in the profile (for example `profile.settings.boardSkin`), validate it against `BOARD_SKIN_IDS`, and pass `{ skin: app.profile.settings.boardSkin }` in the battle view's `drawBoard` and `drawBackdrop` calls (`doodle_battle.js` and `battle.js`). The shop can list `BOARD_SKIN_IDS` with `BOARD_SKINS[id].name` and `.desc`.
+
+## Second tour art (beach and moon)
+- Backdrops, boards and stages exist for `beach` (Bonfire Beach) and `moon` (Moonlight Rave); the stage is a little boat on the beach and a floating moon rock on the moon.
+- The bonfire sits on tile (3,3) of the beach map (animated crayon flames, drawn live over the baked stone ring). That tile is a buildable slot in `MAPS.beach`; the art shows the fire instead of a pad. If you want it solid, add `[3, 3]` to `blocked` in the beach map (the art handles both).
+- Studio props (`drawStageBase` with `o.studio`) now only use free neighbour tiles (no lane, no blocked decor, on the board). Busk Street, where the stage is mid board, keeps both amp stacks in the free tiles beside the stage; stages with the lane arriving from above get a shorter truss and banner; stages with no free side tile (Mega Arena, Garage) tuck small amps behind the stage.
+- 12 new cutscene scenes are in `doodle_scenes.js` (`NEW_IDS`, appended to `SCENE_IDS`, which `art_world.js` now takes from the doodle module). The boss scenes reuse the real boss art through `paintBoss` in `doodle_enemies.js`.

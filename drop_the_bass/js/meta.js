@@ -6,7 +6,10 @@ import {
 import {
   STUDIO, STUDIO_IDS, HERO_MAX, heroCost, LOADOUT_BASE, AUTOMERGE_PRICE, SLOTS, STATS, SETS, GEAR, GEAR_IDS, GEAR_MAX_LEVEL,
   gearUpgradeCost, GEAR_SELL, CRATES, PITY, fansForLevel, FAME_MAX, fameReward, OUTFITS, LOGIN_REWARDS, QUESTS, ACHIEVEMENTS, STAR_MILESTONES, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE,
+  SKIN_DEFAULT, SKIN_PRICES, SKIN_IDS, SKIN_FALLBACK,
 } from './data_meta.js';
+import { EPILOGUES, CREDITS_FINAL } from './data_story.js';
+import { HERO_ABILITIES, HERO_ABILITY_DEFAULT, RUN_MODIFIERS, RUN_MODIFIER_BY_ID, MAX_RUN_MODIFIERS, ENDLESS_MILESTONES } from './data_depth.js';
 import { DAILY_MODS, DAILY_MOD_IDS } from './data_run.js';
 import { makeRng, hashSeed } from './rng.js';
 import * as CORE from './data_core.js';
@@ -37,10 +40,12 @@ export function newProfile(now = 0) {
     login: { lastDay: -1, streak: 0, claimedDay: -1 },
     crate: { sinceEpic: 0, sinceLegend: 0 },
     tutorial: { done: false, hints: {} },
-    story: { intro: false, worlds: {}, ending: false },
+    story: { intro: false, worlds: {}, ending: false, epilogues: {} },
+    heroAbility: { roxor: HERO_ABILITY_DEFAULT.roxor, jasmin: HERO_ABILITY_DEFAULT.jasmin }, modifiers: [], modPin: false,
+    skins: { owned: [SKIN_DEFAULT] }, milestones: { claimed: {}, cosmetics: [] },
     seen: { turrets: {}, enemies: {}, bosses: {}, relics: {} },
     autoMerge: false, autoMergeOn: true,
-    settings: { style: 'doodle', lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1, difficulty: 'normal' },
+    settings: { style: 'doodle', lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1, difficulty: 'normal', skin: SKIN_DEFAULT, analytics: true, skipSetlist: false },
   };
 }
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -63,6 +68,12 @@ export function difficultyInfo(id) {
 }
 export const difficultyOf = (p) => (p && p.settings && DIFFICULTY_IDS.includes(p.settings.difficulty) ? p.settings.difficulty : 'normal');
 
+// ---- run modifiers (Setlist). Up to MAX_RUN_MODIFIERS known ids, no duplicates.
+export function cleanModifiers(list) {
+  const out = [];
+  if (Array.isArray(list)) for (const id of list) if (typeof id === 'string' && RUN_MODIFIER_BY_ID[id] && !out.includes(id) && out.length < MAX_RUN_MODIFIERS) out.push(id);
+  return out;
+}
 export function migrate(p, now = 0) {
   const base = newProfile(now);
   if (!isObj(p)) return base;
@@ -97,6 +108,22 @@ export function migrate(p, now = 0) {
   for (const k of ['lowfx', 'shake', 'numbers', 'vibrate', 'reduce', 'beat']) s[k] = !!s[k];
   s.style = s.style === 'classic' ? 'classic' : 'doodle';
   s.difficulty = DIFFICULTY_IDS.includes(s.difficulty) ? s.difficulty : 'normal';
+  s.analytics = s.analytics === undefined ? true : !!s.analytics;
+  s.skipSetlist = !!s.skipSetlist;
+  // second tour fields: ability picks, pinned modifiers, epilogues seen, board skins, claimed Endless milestones
+  out.story.epilogues = isObj(out.story.epilogues) ? Object.fromEntries(Object.entries(out.story.epilogues).filter(([k, v]) => WORLD_BY_ID[k] && v).map(([k]) => [k, true])) : {};
+  out.heroAbility = {};
+  for (const who of ['roxor', 'jasmin']) { const id = isObj(p.heroAbility) ? p.heroAbility[who] : null; out.heroAbility[who] = (HERO_ABILITIES[who] || []).some((a) => a.id === id) ? id : HERO_ABILITY_DEFAULT[who]; }
+  out.modifiers = cleanModifiers(p.modifiers); out.modPin = !!p.modPin;
+  const ownedSk = [SKIN_DEFAULT];
+  if (isObj(p.skins) && Array.isArray(p.skins.owned)) for (const id of p.skins.owned) if (typeof id === 'string' && SKIN_PRICES[id] !== undefined && !ownedSk.includes(id)) ownedSk.push(id);
+  out.skins = { owned: ownedSk };
+  s.skin = ownedSk.includes(s.skin) ? s.skin : SKIN_DEFAULT;
+  out.milestones = { claimed: {}, cosmetics: [] };
+  if (isObj(p.milestones)) {
+    if (isObj(p.milestones.claimed)) for (const m of ENDLESS_MILESTONES) if (p.milestones.claimed[m.id]) out.milestones.claimed[m.id] = true;
+    if (Array.isArray(p.milestones.cosmetics)) out.milestones.cosmetics = p.milestones.cosmetics.filter((c, i, a) => typeof c === 'string' && a.indexOf(c) === i).slice(0, 20);
+  }
   out.weekly = { id: typeof out.weekly.id === 'string' ? out.weekly.id : '', done: !!out.weekly.done, best: int(out.weekly.best, 0) };
   out.daily.day = num(out.daily.day, -1, -1); out.daily.challengeDay = num(out.daily.challengeDay, -1, -1); out.daily.challengeBest = int(out.daily.challengeBest, 0);
   if (!Array.isArray(out.daily.quests)) out.daily.quests = [];
@@ -111,6 +138,17 @@ export function migrate(p, now = 0) {
   out.gear.equipped = Object.assign({}, base.gear.equipped, isObj(p.gear && p.gear.equipped) ? p.gear.equipped : {});
   for (const sl of SLOTS) if (out.gear.equipped[sl] != null && !out.gear.items.some((g) => g.uid === out.gear.equipped[sl])) out.gear.equipped[sl] = null;
   out.gear.uid = Math.max(int(out.gear.uid, 1, 1), 1 + out.gear.items.reduce((m, g) => Math.max(m, +g.uid || 0), 0));
+  // outfits: keep only known ids (ids are append-only, so a newer save never loses one), always own 'default', never wear an outfit that is not owned
+  out.outfits = { owned: {}, worn: {} };
+  for (const who of ['roxor', 'jasmin']) {
+    const raw = isObj(p.outfits) && isObj(p.outfits.owned) && Array.isArray(p.outfits.owned[who]) ? p.outfits.owned[who] : [];
+    const own = ['default'];
+    for (const id of raw) if (typeof id === 'string' && OUTFITS[who][id] && !own.includes(id)) own.push(id);
+    out.outfits.owned[who] = own;
+    const wn = isObj(p.outfits) && isObj(p.outfits.worn) ? p.outfits.worn[who] : 'default';
+    out.outfits.worn[who] = own.includes(wn) ? wn : 'default';
+  }
+  syncOutfits(out);
   out.v = GAME.version;
   return out;
 }
@@ -299,14 +337,126 @@ export function buyAutoMerge(p) {
   if (p.diamonds < AUTOMERGE_PRICE) return { ok: false, reason: 'diamonds' };
   p.diamonds -= AUTOMERGE_PRICE; p.autoMerge = true; return { ok: true };
 }
+// ---- outfits (cosmetic). p.outfits = { owned: { roxor: [ids], jasmin: [ids] }, worn: { roxor: id, jasmin: id } }
+const HEROES = ['roxor', 'jasmin'];
+// best Endless wave reached on any stage (stats.endless, or the per-stage best when an old save has only that)
+export function bestEndlessWave(p) { let b = (p.stats && +p.stats.endless) || 0; for (const w of WORLDS) b = Math.max(b, (p.prog && p.prog[w.id] && +p.prog[w.id].bestEndless) || 0); return b; }
+// is an unlock rule { world: 'beach' } (that stage is cleared) or { endless: 50 } (best Endless wave) met? No rule means always.
+export function outfitUnlockMet(p, unlock) {
+  if (!unlock) return true;
+  if (unlock.world !== undefined) { const pr = p.prog && p.prog[unlock.world]; if (!(pr && pr.cleared)) return false; }
+  if (unlock.endless !== undefined && bestEndlessWave(p) < unlock.endless) return false;
+  return true;
+}
+export function outfitUnlocked(p, who, id) { const o = OUTFITS[who] && OUTFITS[who][id]; return !!o && outfitUnlockMet(p, o.unlock); }
+// grant every earned outfit (free, no diamonds). Returns the new ones as [{ who, id }]. Safe to call any time.
+export function syncOutfits(p) {
+  const fresh = [];
+  for (const who of HEROES) {
+    if (!isObj(p.outfits)) p.outfits = {};
+    if (!isObj(p.outfits.owned)) p.outfits.owned = {};
+    if (!isObj(p.outfits.worn)) p.outfits.worn = {};
+    if (!Array.isArray(p.outfits.owned[who])) p.outfits.owned[who] = ['default'];
+    const own = p.outfits.owned[who];
+    for (const id of Object.keys(OUTFITS[who])) if (OUTFITS[who][id].unlock && !own.includes(id) && outfitUnlockMet(p, OUTFITS[who][id].unlock)) { own.push(id); fresh.push({ who, id }); }
+  }
+  return fresh;
+}
+// the wardrobe of one hero for the UI: every outfit with owned, worn, locked (rule not met yet), the price and a short "how to get it" line
+export function outfitList(p, who) {
+  syncOutfits(p);
+  return Object.keys(OUTFITS[who] || {}).map((id) => {
+    const o = OUTFITS[who][id], owned = p.outfits.owned[who].includes(id), locked = !owned && !outfitUnlockMet(p, o.unlock);
+    let how = owned ? 'Owned' : o.price > 0 ? o.price + ' diamonds' : 'Free';
+    if (locked) how = o.unlock.world !== undefined ? 'Clear ' + ((WORLD_BY_ID[o.unlock.world] || {}).name || o.unlock.world) : 'Reach Endless wave ' + o.unlock.endless;
+    return { id, name: o.name, desc: o.desc, price: o.price, unlock: o.unlock || null, owned, worn: p.outfits.worn[who] === id, locked, how };
+  });
+}
 export function buyOutfit(p, who, id) {
   const o = OUTFITS[who] && OUTFITS[who][id];
   if (!o) return { ok: false };
+  syncOutfits(p);
   if (p.outfits.owned[who].includes(id)) { p.outfits.worn[who] = id; return { ok: true, equipped: true }; }
+  if (!outfitUnlockMet(p, o.unlock)) return { ok: false, reason: 'locked' };
   if (p.diamonds < o.price) return { ok: false, reason: 'diamonds' };
   p.diamonds -= o.price; p.outfits.owned[who].push(id); p.outfits.worn[who] = id;
   return { ok: true };
 }
+
+// ---- Setlist: hero abilities, run modifiers, board skins (pre-run choices and cosmetics)
+// hero abilities: p.heroAbility = { roxor, jasmin }. The sim falls back to the original when a pick is still locked; the UI shows the hero level needed.
+export function heroAbilityList(p, who) {
+  const lv = (p.heroLv && p.heroLv[who]) || 1, chosen = heroAbilityOf(p, who);
+  return (HERO_ABILITIES[who] || []).map((a) => ({ id: a.id, name: a.name, desc: a.desc, unlockLv: a.unlockLv, cdMul: a.cdMul, unlocked: lv >= a.unlockLv, chosen: a.id === chosen }));
+}
+export function heroAbilityOf(p, who) {
+  const list = HERO_ABILITIES[who] || [], id = p.heroAbility && p.heroAbility[who];
+  const a = list.find((x) => x.id === id);
+  if (a && ((p.heroLv && p.heroLv[who]) || 1) >= a.unlockLv) return a.id;
+  return HERO_ABILITY_DEFAULT[who];
+}
+export function setHeroAbility(p, who, id) {
+  const a = (HERO_ABILITIES[who] || []).find((x) => x.id === id);
+  if (!a) return { ok: false, reason: 'unknown' };
+  if (((p.heroLv && p.heroLv[who]) || 1) < a.unlockLv) return { ok: false, reason: 'locked', need: a.unlockLv };
+  if (!isObj(p.heroAbility)) p.heroAbility = Object.assign({}, HERO_ABILITY_DEFAULT);
+  p.heroAbility[who] = id;
+  return { ok: true };
+}
+// what the sim gets as opts.heroAbility (always valid for the current hero levels)
+export const heroAbilitySetup = (p) => ({ roxor: heroAbilityOf(p, 'roxor'), jasmin: heroAbilityOf(p, 'jasmin') });
+
+// run modifiers: payout multiplier for a list of ids (product of each mul). Without modifiers { records:1, fans:1, diamonds:1 }.
+export function modMulOf(ids) {
+  const m = { records: 1, fans: 1, diamonds: 1 };
+  for (const id of cleanModifiers(ids)) { const d = RUN_MODIFIER_BY_ID[id].mul || {}; for (const k of ['records', 'fans', 'diamonds']) m[k] *= d[k] || 1; }
+  for (const k of Object.keys(m)) m[k] = Math.round(m[k] * 1000) / 1000;
+  return m;
+}
+// the risk level shown as flames: 1 to 3 per modifier from its bonus, summed and capped at 5 for the selection
+export function modFlames(id) { const m = RUN_MODIFIER_BY_ID[id]; if (!m) return 0; const r = (m.mul && m.mul.records) || 1; return r >= 1.45 ? 3 : r >= 1.3 ? 2 : 1; }
+export function modifiersOf(p) { return cleanModifiers(p.modifiers); }
+export function toggleModifier(p, id) {
+  if (!RUN_MODIFIER_BY_ID[id]) return { ok: false, reason: 'unknown' };
+  const cur = cleanModifiers(p.modifiers), i = cur.indexOf(id);
+  if (i >= 0) { cur.splice(i, 1); p.modifiers = cur; return { ok: true, on: false }; }
+  if (cur.length >= MAX_RUN_MODIFIERS) return { ok: false, reason: 'full' };
+  cur.push(id); p.modifiers = cur; return { ok: true, on: true };
+}
+// called when a run starts: the picks are used up unless pinned
+export function consumeModifiers(p) { const ids = cleanModifiers(p.modifiers); if (!p.modPin) p.modifiers = []; return ids; }
+
+export function skinList(p, names) {
+  return SKIN_IDS.map((id) => {
+    const n = (names && names[id]) || SKIN_FALLBACK[id] || { name: id, desc: '' };
+    const owned = p.skins.owned.includes(id);
+    return { id, name: n.name, desc: n.desc, price: SKIN_PRICES[id], owned, worn: p.settings.skin === id };
+  });
+}
+export function buySkin(p, id) {
+  if (SKIN_PRICES[id] === undefined) return { ok: false, reason: 'unknown' };
+  if (p.skins.owned.includes(id)) return { ok: false, reason: 'owned' };
+  if (p.diamonds < SKIN_PRICES[id]) return { ok: false, reason: 'diamonds', cost: SKIN_PRICES[id] };
+  p.diamonds -= SKIN_PRICES[id]; p.skins.owned.push(id);
+  return { ok: true, cost: SKIN_PRICES[id] };
+}
+export function equipSkin(p, id) {
+  if (!p.skins.owned.includes(id)) return { ok: false, reason: 'not owned' };
+  p.settings.skin = id; return { ok: true };
+}
+
+// ---- epilogues: the first clear of a world plays its epilogue once per profile; the first Moon clear also plays the credits.
+// Never in the tutorial or daily runs. Returns the cutscene ids to play ([] when none) and marks them seen.
+export function takeEpilogues(p, world, firstClear, mode) {
+  if (!firstClear || mode !== 'story' || !WORLD_BY_ID[world]) return [];
+  if (!isObj(p.story.epilogues)) p.story.epilogues = {};
+  if (p.story.epilogues[world]) return [];
+  p.story.epilogues[world] = true;
+  const list = [EPILOGUES[world]];
+  if (world === WORLDS[WORLDS.length - 1].id) list.push(CREDITS_FINAL);
+  return list.filter(Boolean);
+}
+export const worldStarsMax = () => WORLDS.length * 3 * (ENCORE_MAX + 1);
 
 // ------------------------------------------------------------------------------------------------ gear
 const rarIdx = (r) => RARITY_ORDER.indexOf(r);
@@ -617,7 +767,7 @@ export function runRewards(result) {
   return { records, fans };
 }
 export function applyRunResult(p, result, rng, now = 0) {
-  const out = { records: 0, fans: 0, diamonds: 0, loot: [], levelUps: [], newStars: 0, firstClear: false, unlockedWorld: null, firstBosses: [], challenge: null, newBestEndless: false };
+  const out = { records: 0, fans: 0, diamonds: 0, loot: [], levelUps: [], newStars: 0, firstClear: false, unlockedWorld: null, firstBosses: [], challenge: null, newBestEndless: false, modifiers: [], modMul: null, milestones: [], newOutfits: [] };
   const w = WORLD_BY_ID[result.world];
   const rw = runRewards(result);
   let records = rw.records, fans = rw.fans;
@@ -683,7 +833,27 @@ export function applyRunResult(p, result, rng, now = 0) {
     p.daily.challengeBest = Math.max(p.daily.challengeBest || 0, result.cleared);
   }
   out.diamonds += result.gems || 0;
+  // run modifiers: the sim only reports modMul, the payout is multiplied here (records, fans and diamonds)
+  const mods = cleanModifiers(result.modifiers);
+  const mm = result.modMul && isObj(result.modMul) ? result.modMul : (mods.length ? modMulOf(mods) : null);
+  if (mm && mods.length && result.mode !== 'daily') {
+    const f = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 1);
+    records = Math.round(records * f(mm.records)); fans = Math.round(fans * f(mm.fans)); out.diamonds = Math.round(out.diamonds * f(mm.diamonds));
+    out.modifiers = mods; out.modMul = { records: f(mm.records), fans: f(mm.fans), diamonds: f(mm.diamonds) };
+  }
   if (result.rewardMul) { records = Math.round(records * (result.rewardMul.records || 1)); fans = Math.round(fans * (result.rewardMul.fans || 1)); }   // easy pays less, hard pays more
+  // Endless milestones: each id pays its reward once per profile
+  if (!isObj(p.milestones)) p.milestones = { claimed: {}, cosmetics: [] };
+  if (!isObj(p.milestones.claimed)) p.milestones.claimed = {};
+  if (!Array.isArray(p.milestones.cosmetics)) p.milestones.cosmetics = [];
+  for (const id of Array.isArray(result.milestones) ? result.milestones : []) {
+    const ms = ENDLESS_MILESTONES.find((x) => x.id === id);
+    if (!ms || p.milestones.claimed[id]) continue;
+    p.milestones.claimed[id] = true;
+    out.diamonds += (ms.reward && ms.reward.diamonds) || 0;
+    if (ms.reward && ms.reward.cosmetic && !p.milestones.cosmetics.includes(ms.reward.cosmetic)) p.milestones.cosmetics.push(ms.reward.cosmetic);
+    out.milestones.push({ id: ms.id, name: ms.name, wave: ms.wave, reward: ms.reward });
+  }
   p.records += records; out.records = records;
   p.diamonds += out.diamonds;
   out.fans = fans;
@@ -693,6 +863,7 @@ export function applyRunResult(p, result, rng, now = 0) {
   if (dropChance && rng.chance(dropChance)) out.loot.push(rollGearItem(p, 'garage', rng));
   if (result.won && result.stars === 3) out.loot.push(rollGearItem(p, 'garage', rng, { min: 'rare' }));
   p.lastSeen = now || p.lastSeen;
+  out.newOutfits = syncOutfits(p);
   return out;
 }
 

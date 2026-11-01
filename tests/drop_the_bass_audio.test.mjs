@@ -52,11 +52,12 @@ class FakeCtx {
 }
 
 // 2. contract surface
-assert.equal(SFX_NAMES.length, 69, 'sfx count');
+assert.equal(SFX_NAMES.length, 81, 'sfx count');
+for (const n of ['branch_pick', 'branch_ready', 'hero_freeze', 'hero_overclock', 'hero_coinrain', 'hero_shield', 'boss_phase', 'turret_stolen', 'turret_returned', 'milestone', 'mod_select', 'install_ready']) assert.ok(SFX_NAMES.includes(n), n);
 for (const n of ['drop_big', 'hype_full', 'synergy', 'reroll_drop', 'wave_preview', 'perfect_beat', 'boss_hit', 'merge_7', 'combo_milestone', 'stage_low', 'ui_pop']) assert.ok(SFX_NAMES.includes(n), n);
 assert.equal(new Set(SFX_NAMES).size, SFX_NAMES.length);
 for (const n of ['ui_click', 'merge_big', 'reveal_mythic', 'star_pop', 'typewriter', 'crate_shake', 'shoot_vocal', 'boss_die']) assert.ok(SFX_NAMES.includes(n), n);
-assert.deepEqual(TRACK_IDS, ['title', 'hub', 'world_garage', 'world_busk', 'world_club', 'world_festival', 'world_arena', 'boss', 'victory', 'defeat', 'cutscene_warm', 'cutscene_dark']);
+assert.deepEqual(TRACK_IDS, ['title', 'hub', 'world_garage', 'world_busk', 'world_club', 'world_festival', 'world_arena', 'boss', 'victory', 'defeat', 'cutscene_warm', 'cutscene_dark', 'world_beach', 'world_moon', 'epilogue', 'credits']);
 
 // 3. before init: music request is remembered and starts at init
 globalThis.AudioContext = FakeCtx;
@@ -191,7 +192,8 @@ function peakSum(envs, a, b, step = 0.005) {
 }
 
 // 11. the drop pack: every new sfx is audible, bounded in loudness (pre-bus worst-case envelope sum) and limited per name
-const NEW_SFX = ['drop_big', 'hype_full', 'synergy', 'reroll_drop', 'wave_preview', 'perfect_beat', 'boss_hit', 'merge_7', 'combo_milestone', 'stage_low', 'ui_pop'];
+const NEW_SFX = ['drop_big', 'hype_full', 'synergy', 'reroll_drop', 'wave_preview', 'perfect_beat', 'boss_hit', 'merge_7', 'combo_milestone', 'stage_low', 'ui_pop',
+  'branch_pick', 'branch_ready', 'hero_freeze', 'hero_overclock', 'hero_coinrain', 'hero_shield', 'boss_phase', 'turret_stolen', 'turret_returned', 'milestone', 'mod_select', 'install_ready'];
 {
   AudioFx._reset(); AudioFx.init(); ctx = AudioFx._state().ctx;
   let worstAll = 0, worstName = '';
@@ -336,15 +338,20 @@ const NEW_SFX = ['drop_big', 'hype_full', 'synergy', 'reroll_drop', 'wave_previe
 {
   const infos = TRACK_IDS.map((id) => AudioFx.trackInfo(id));
   assert.equal(AudioFx.trackInfo('nope'), null);
-  assert.equal(new Set(infos.map((i) => i.bpm)).size, TRACK_IDS.length, 'every track has its own bpm');
+  const byId = Object.fromEntries(infos.map((i) => [i.id, i]));
+  // credits deliberately shares 120 bpm with world_club (the brief asks for a 120 bpm singalong): it must differ in everything else
+  assert.equal(new Set(infos.filter((i) => i.id !== 'credits').map((i) => i.bpm)).size, TRACK_IDS.length - 1, 'every track has its own bpm (credits aside)');
+  assert.equal(new Set(infos.map((i) => i.bpm)).size, TRACK_IDS.length - 1, 'credits is the only bpm twin');
+  for (const k of ['root', 'style', 'drums', 'bass']) assert.notEqual(byId.credits[k], byId.world_club[k], 'credits differs from world_club in ' + k);
   assert.equal(new Set(infos.map((i) => JSON.stringify({ ...i, id: 0 }))).size, TRACK_IDS.length);
   const worlds = infos.filter((i) => i.id.startsWith('world_'));
-  assert.equal(worlds.length, 5);
-  for (const k of ['style', 'root', 'bass', 'drums']) assert.equal(new Set(worlds.map((i) => i[k])).size, 5, 'world tracks differ in ' + k);
-  assert.equal(new Set(worlds.map((i) => i.chords.join('-'))).size, 5, 'world chord colours differ');
-  assert.equal(new Set(worlds.map((i) => [i.lead, i.leadFilt, i.lead2].join('/'))).size, 5, 'world lead timbres differ');
-  const bpms = worlds.map((i) => i.bpm); assert.deepEqual([...bpms].sort((a, b) => a - b), bpms, 'worlds speed up stage by stage');
-  const byId = Object.fromEntries(infos.map((i) => [i.id, i]));
+  assert.equal(worlds.length, 7);
+  for (const k of ['style', 'root', 'bass', 'drums']) assert.equal(new Set(worlds.map((i) => i[k])).size, 7, 'world tracks differ in ' + k);
+  assert.equal(new Set(worlds.map((i) => i.chords.join('-'))).size, 7, 'world chord colours differ');
+  assert.equal(new Set(worlds.map((i) => [i.lead, i.leadFilt, i.lead2].join('/'))).size, 7, 'world lead timbres differ');
+  const bpms = worlds.slice(0, 5).map((i) => i.bpm); assert.deepEqual([...bpms].sort((a, b) => a - b), bpms, 'the five story worlds speed up stage by stage');
+  assert.ok(byId.world_beach.bpm === 112 && byId.world_moon.bpm === 138 && byId.epilogue.bpm < 100 && byId.credits.bpm === 120, 'new track tempos');
+  assert.ok(byId.world_moon.bpm < byId.boss.bpm && byId.world_beach.root !== byId.world_moon.root);
   assert.ok(byId.boss.bpm > byId.world_arena.bpm, 'boss is the fastest');
   assert.ok(byId.defeat.bpm < 80 && byId.victory.style === 'fanfare');
 }

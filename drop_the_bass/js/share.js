@@ -37,6 +37,7 @@ function card(ctx, x, y, w, h, fill = '#fbf6e6', shadow = true) {
 function safe(fn) { try { fn(); } catch (e) { /* art must never break the card */ } }
 
 export function makeShareCard(run, result, profile) {
+  const worn = (who) => (profile && profile.outfits && profile.outfits.worn && profile.outfits.worn[who]) || "default";
   const cv = newCanvas();
   if (!cv) return null;
   const ctx = cv.getContext('2d');
@@ -95,8 +96,8 @@ export function makeShareCard(run, result, profile) {
   const ty = by + 4 * 52 + 2;
   const room = by + bh - ty;
   const bust = Math.min(110, room - 14);
-  safe(() => AW.drawBust(ctx, 'roxor', sx + sw * 0.27, ty + room * 0.5, bust, { t: 0, pose: won ? 'cheer' : 'sad' }));
-  safe(() => AW.drawBust(ctx, 'jasmin', sx + sw * 0.76, ty + room * 0.5, bust, { t: 0, pose: won ? 'cheer' : 'sad' }));
+  safe(() => AW.drawBust(ctx, 'roxor', sx + sw * 0.27, ty + room * 0.5, bust, { t: 0, pose: won ? 'cheer' : 'sad', outfit: worn('roxor') }));
+  safe(() => AW.drawBust(ctx, 'jasmin', sx + sw * 0.76, ty + room * 0.5, bust, { t: 0, pose: won ? 'cheer' : 'sad', outfit: worn('jasmin') }));
   say(ctx, 'RoxorLoops & Jasmin', sx + sw / 2, by + bh - 2, 16, INK, 'center', { halo: '#fbf6e6', haloW: 5 });
 
   // footer: the call and the url

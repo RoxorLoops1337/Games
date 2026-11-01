@@ -6,11 +6,13 @@ import * as M from './meta.js';
 import { makeRng } from './rng.js';
 import { Battle, battleIdle } from './battle.js';
 import { Cutscene } from './cutscene.js';
-import { buildHub, settingsModal, codexModal } from './ui_hub.js';
+import { buildHub, settingsModal, codexModal, setlistSheet } from './ui_hub.js';
 import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo } from './ui_run.js';
 import { setRoot, h, btn, modal, toast, tickLive, AE, AW } from './ui_core.js';
 import { submitScore, rankOf } from './lb.js';
 import { setStyle } from './style.js';
+import { initPwa } from './pwa.js';
+import * as Stats from './stats.js';
 
 const canvas = document.getElementById('game');
 const ui = document.getElementById('ui');
@@ -62,7 +64,7 @@ const app = {
     app.screen = 'cut';
     app.cut = new Cutscene(app, id, () => { app.cut = null; if (done) done(); });
   },
-  showTitle, openHub, startRun, quitRun, afterResults, resumeRun, submitBoard,
+  showTitle, openHub, startRun, requestRun, quitRun, afterResults, resumeRun, submitBoard,
   hooks: {
     toast: (m) => toast(m),
     spendDiamonds: (n) => app.spendDiamonds(n),
@@ -172,6 +174,13 @@ function startTutorial() {
   run.cfg = { mode: 'tutorial' };
   beginBattle(run, true);
 }
+// every Play button comes here: the Setlist sheet (hero moves, modifiers, difficulty, Start) unless the player turned it off or this is the tutorial
+function requestRun(cfg) {
+  const p = app.profile;
+  if (!p.tutorial.done) { startTutorial(); return; }
+  if (p.settings.skipSetlist) { startRun(cfg); return; }
+  setlistSheet(app, cfg);
+}
 function startRun(cfg) {
   const p = app.profile;
   if (!p.tutorial.done) { startTutorial(); return; }
@@ -183,14 +192,17 @@ function startRun(cfg) {
   const b = M.useBoosters(p);
   if (!b.ok) { toast('Not enough diamonds for your boosters (' + b.total + ').'); return; }
   const setup = M.computeRunSetup(p);
+  // Setlist picks: modifiers apply to Story, Endless and Rush only (never Daily or the Weekly Gig); a retry keeps the modifiers of the run it repeats
+  const modifiers = cfg.mode === 'daily' ? [] : (Array.isArray(cfg.modifiers) ? M.cleanModifiers(cfg.modifiers) : M.consumeModifiers(p));
+  const heroAbility = Object.assign(M.heroAbilitySetup(p), cfg.heroAbility || {});
   const difficulty = cfg.mode === 'daily' ? 'normal' : setup.difficulty;
   const run = new Run({
     world: cfg.world, mode: cfg.mode, encore: cfg.encore || 0, seed: cfg.seed != null ? cfg.seed : (Date.now() & 0x7fffffff),
     loadout: setup.loadout, baseFx: setup.baseFx.concat(b.fx, cfg.extraFx || []), heroLv: setup.heroLv, autoMerge: setup.autoMerge, autoMergeOn: setup.autoMergeOn,
-    daily: cfg.daily, wavesTotal: cfg.wavesTotal,
+    daily: cfg.daily, wavesTotal: cfg.wavesTotal, heroAbility, modifiers,
     difficulty,   // 'easy'|'normal'|'hard' (the sim ignores it until Run supports opts.difficulty). Daily and the Weekly Gig are always 'normal': same run for everyone.
   });
-  run.cfg = { mode: cfg.mode, world: cfg.world, encore: cfg.encore || 0, seed: run.seed, daily: cfg.daily, wavesTotal: cfg.wavesTotal, difficulty, weekly: !!cfg.weekly, weekId: cfg.weekId, extraFx: cfg.extraFx };
+  run.cfg = { mode: cfg.mode, world: cfg.world, encore: cfg.encore || 0, seed: run.seed, daily: cfg.daily, wavesTotal: cfg.wavesTotal, difficulty, heroAbility, modifiers, weekly: !!cfg.weekly, weekId: cfg.weekId, extraFx: cfg.extraFx };
   if (b.hype) { run.hype = run.hypeNeed; run.checkHype(); }
   app.save();
   const go = () => beginBattle(run, false);
@@ -251,13 +263,21 @@ function finalize(run, battle) {
   if (run.cfg && run.cfg.weekly) { run.result.weekly = true; run.result.weekId = run.cfg.weekId || M.isoWeek(app.now()).id; }
   if (run.cfg && run.cfg.difficulty) run.result.difficulty = run.cfg.difficulty;
   const out = M.applyRunResult(p, run.result, app.rng(), app.now());
+  // epilogue (and the credits after the Moon) on the first clear of a world, once per profile. Tutorial and daily never.
+  out.epilogues = run.mode === 'story' && run.result.won ? M.takeEpilogues(p, run.world.id, out.firstClear, run.mode) : [];
+  Stats.trackRunEnd(run, run.result);
   p.resume = null;
   if (run.mode === 'tutorial') {
     p.tutorial.done = true; p.records += 150; p.diamonds += 20; p.pendingCrates = (p.pendingCrates || []).concat(['garage']);
     out.records += 150; out.diamonds += 20; app.sessionGreeted = true;
   }
   app.saveNow();
-  showResults(app, run, out);
+  const show = () => { app.screen = 'battle'; showResults(app, run, out); };
+  const playNext = (i) => {
+    if (i >= out.epilogues.length) { show(); return; }
+    app.playCutscene(out.epilogues[i], () => playNext(i + 1));
+  };
+  playNext(0);
 }
 function quitRun(battle) {
   const run = battle.run;
@@ -269,8 +289,8 @@ function afterResults(run, out, opt) {
   const p = app.profile;
   app.battle = null;
   const done = () => {
-    if (opt.next) startRun({ mode: 'story', world: opt.next, encore: 0 });
-    else if (opt.retry) startRun(run.cfg);
+    if (opt.next) requestRun({ mode: 'story', world: opt.next, encore: 0 });
+    else if (opt.retry) startRun(Object.assign({}, run.cfg, { modifiers: (run.cfg && run.cfg.modifiers) || [] }));
     else openHub(run.mode === 'tutorial' ? 'shop' : 'tour');
   };
   if (run.result && run.result.won && run.mode === 'story' && run.world.id === 'arena' && !p.story.ending) {
@@ -318,7 +338,7 @@ function frame(now) {
     else if (app.screen === 'title') {
       ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
       const bi = AudioFx.beatInfo && AudioFx.beatInfo();
-      AW.drawTitle(ctx, v.cw, v.ch, T, { beat: bi ? Math.pow(1 - bi.phase, 3) : 0 });
+      AW.drawTitle(ctx, v.cw, v.ch, T, { beat: bi ? Math.pow(1 - bi.phase, 3) : 0, outfit: app.profile.outfits.worn.roxor });
       ctx.setTransform(v.dpr * v.s, 0, 0, v.dpr * v.s, v.dpr * v.ox, v.dpr * v.oy);
       AW.drawLogo(ctx, W / 2, 190, 480, T);
     } else if (app.screen === 'hub') {
@@ -340,6 +360,8 @@ if (loaded.recovered) { writeSave(); setTimeout(() => toast('Recovered your last
 else if (loaded.corrupt) setTimeout(() => toast('Your save could not be read, so you are starting fresh. The damaged copy is kept.', 5200), 300);
 document.getElementById('boot').remove();
 window.__dtbReady = true;
+Stats.init(() => app.profile.settings);
+initPwa();
 requestAnimationFrame(frame);
 // autosave the run every few seconds so a reload, a discarded tab or a crash never loses turrets placed since the last wave
 setInterval(() => { try { saveResume(); } catch (e) { /* ignore */ } }, 4000);

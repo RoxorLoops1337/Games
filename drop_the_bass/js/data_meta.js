@@ -125,9 +125,28 @@ export function fameReward(lv) {   // reward for reaching level lv
 }
 
 // ---------------------------------------------------------------- Outfits (cosmetic)
+// Every outfit: id, name, desc, price (diamonds, 0 when it is earned instead) and optional unlock: { world: 'beach' } (that stage is cleared) or { endless: 50 }
+// (best Endless wave reached on any stage). An outfit with an unlock is granted free the moment the rule is met (meta.js syncOutfits). Ids are append-only.
+const O = (id, name, desc, price, unlock) => (unlock ? { id, name, desc, price, unlock } : { id, name, desc, price });
 export const OUTFITS = {
-  roxor:  { default: { id: 'default', name: 'Classic Tee', price: 0 }, onesie: { id: 'onesie', name: 'Monster Onesie', price: 120 } },
-  jasmin: { default: { id: 'default', name: 'Pink Top',    price: 0 }, onesie: { id: 'onesie', name: 'Unicorn Onesie', price: 120 } },
+  roxor: {
+    default: O('default', 'Classic Tee', 'The black tee with the yellow smiley.', 0),
+    onesie: O('onesie', 'Monster Onesie', 'A cosy green monster hood with horns.', 120),
+    stage: O('stage', 'Stage Sparkle', 'A purple sequin jacket, gold stripes and star pins.', 80),
+    rocker: O('rocker', 'Punk Rocker', 'Studded leather jacket, band tee, ripped jeans and boots.', 160),
+    beach: O('beach', 'Beach Bum', 'Flower shirt, board shorts, sandals and a straw hat. Clear Bonfire Beach.', 0, { world: 'beach' }),
+    moon: O('moon', 'Moonlight Raver', 'Holographic jacket, glow-stick bracelets and a star visor. Clear Moonlight Rave.', 0, { world: 'moon' }),
+    outfit_gold: O('outfit_gold', 'Golden Headliner', 'A gold sequin stage look. Reach wave 50 in Endless.', 0, { endless: 50 }),
+  },
+  jasmin: {
+    default: O('default', 'Pink Top', 'The pink crop top and baggy cargo pants.', 0),
+    onesie: O('onesie', 'Unicorn Onesie', 'A fluffy unicorn hood with a rainbow mane.', 120),
+    stage: O('stage', 'Stage Sparkle', 'A pink sequin dress with star motifs and gold bangles.', 80),
+    rocker: O('rocker', 'Punk Rocker', 'Plaid skirt, fishnet sleeves, band top and chunky boots.', 160),
+    beach: O('beach', 'Beach Bloom', 'A sunny sundress, sandals and a flower crown. Clear Bonfire Beach.', 0, { world: 'beach' }),
+    moon: O('moon', 'Moonlight Raver', 'Holographic jacket, glow-stick bracelets and a moon hair clip. Clear Moonlight Rave.', 0, { world: 'moon' }),
+    outfit_gold: O('outfit_gold', 'Golden Headliner', 'A gold sequin stage dress and tiara. Reach wave 50 in Endless.', 0, { endless: 50 }),
+  },
 };
 
 // ---------------------------------------------------------------- Daily login and quests
@@ -170,7 +189,8 @@ export const ACHIEVEMENTS = [
   { id: 'a_boss1',    stat: 'bosses',    goal: 5,      name: 'Boss Fight',        text: 'Defeat 5 bosses.',              diamonds: 10 },
   { id: 'a_boss2',    stat: 'bosses',    goal: 50,     name: 'Boss Rush',         text: 'Defeat 50 bosses.',             diamonds: 40 },
   { id: 'a_world2',   stat: 'worlds',    goal: 2,      name: 'On The Street',     text: 'Clear 2 stages.',               diamonds: 15, max: true },
-  { id: 'a_world5',   stat: 'worlds',    goal: 5,      name: 'Mega Arena',        text: 'Clear all 5 stages.',           diamonds: 80, max: true },
+  { id: 'a_world5',   stat: 'worlds',    goal: 5,      name: 'Mega Arena',        text: 'Clear the first 5 stages.',        diamonds: 80, max: true },
+  { id: 'a_world7',   stat: 'worlds',    goal: 7,      name: 'Moon Walk',         text: 'Clear all 7 stages, up to the Moon.', diamonds: 120, max: true },
   { id: 'a_stars15',  stat: 'stars',     goal: 15,     name: 'Starstruck',        text: 'Collect 15 stars.',             diamonds: 20, max: true },
   { id: 'a_stars50',  stat: 'stars',     goal: 50,     name: 'Constellation',     text: 'Collect 50 stars.',             diamonds: 60, max: true },
   { id: 'a_combo',    stat: 'bestCombo', goal: 30,     name: 'Combo Breaker',     text: 'Reach a 30 kill combo.',        diamonds: 10, max: true },
@@ -256,3 +276,17 @@ export const WEEKLY_GIGS = [
   { id: 'arena_duet',      name: 'Arena Duet',       mod: 'two_instruments', world: 'arena',    extra: [['enemyHp', 'mul', 1.35]] },
 ];
 export const WEEKLY_REWARD = { diamonds: 20, perWave: 1, winDiamonds: 25, records: 600, perWaveRecords: 60, fans: 120, crate: 'studio', crateMinWaves: 15 };
+
+// ---------------------------------------------------------------- Board skins (cosmetic, bought with diamonds)
+// The art lives in doodle_env.js (BOARD_SKINS names and descriptions). Here only the shop side: ids (append-only) and prices.
+// Owned skins: profile.skins.owned, equipped one: profile.settings.skin. The default skin is free and always owned.
+export const SKIN_DEFAULT = 'skin_paper';
+export const SKIN_PRICES = { skin_paper: 0, skin_chalk: 60, skin_sticker: 100, skin_midnight: 140 };
+export const SKIN_IDS = Object.keys(SKIN_PRICES);
+// fallback names, used when doodle_env.js has no BOARD_SKINS yet
+export const SKIN_FALLBACK = {
+  skin_paper: { name: 'Notebook Paper', desc: 'The classic ruled page with tape and crayon.' },
+  skin_chalk: { name: 'Chalkboard', desc: 'A dark slate board with chalk-white outlines.' },
+  skin_sticker: { name: 'Scrapbook', desc: 'A bright pastel page with washi tape and stickers.' },
+  skin_midnight: { name: 'Midnight Page', desc: 'An inky night page with glow crayon lines.' },
+};
