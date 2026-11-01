@@ -197,16 +197,16 @@ ok('upgrades come only from the yellow upgrade cells; Free Refresh gives new cho
 
 ok('every extra note counts: each pick adds a note, spaced apart so you can see it, and the card says so', () => {
   const g = sim.createGame({ seed: 5 });
-  const card = () => g.choices.find(c => c.id === 'notes' && c.rarity === 0);
+  const card = () => g.choices.find(c => c.id === 'notes');
   const pickNotes = () => { g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); for (let k = 0; k < 40 && !card(); k++) { g.rerolls = 4; sim.reroll(g); } const i = g.choices.indexOf(card()); assert.ok(i >= 0); return sim.choose(g, i); };
   const volley = () => { g.bullets.length = 0; g.vq.length = 0; g.p.cd = 0; g.p.crit = 0; sim.step(g, 1 / 60, {}); sim.step(g, 0.05, {}); return g.bullets; };
   assert.equal(volley().length, 1);
   g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); for (let k = 0; k < 40 && !card(); k++) { g.rerolls = 4; sim.reroll(g); }
-  assert.match(card().stat, /Notes per shot: 1 → 2/); sim.choose(g, g.choices.indexOf(card()));
-  const two = volley(); assert.equal(two.length, 2); assert.ok(Math.abs(two[0].x - two[1].x) >= 40, 'visibly apart'); assert.ok(two.every(b => b.dmg === 10 * g.p.atk));
+  assert.match(card().stat, /Notes per shot: 1 → \d/); const gain1 = card().gain; sim.choose(g, g.choices.indexOf(card()));
+  const two = volley(); assert.equal(two.length, 1 + gain1); assert.ok(Math.abs(two[0].x - two[1].x) >= 40, 'visibly apart'); assert.ok(two.every(b => b.dmg === 10 * g.p.atk));
   assert.ok(pickNotes()); g.phase = 'play';
-  const three = volley(); assert.equal(three.length, 3); assert.equal(g.ups.notes, 2);
-  assert.equal(new Set(three.map(b => Math.round(b.x))).size, 3);
+  const three = volley(); assert.equal(three.length, 1 + Math.round(sim.uv(g, 'notes'))); assert.equal(g.ups.notes, 2);
+  assert.equal(new Set(three.map(b => Math.round(b.x))).size, three.length);
 });
 
 ok('skill picks: 3 distinct choices; locked skills never appear; maxed ones stop; at most five skills; every passive applies', () => {
@@ -622,6 +622,17 @@ ok('wardrobe, seasonal event, Giant Serpent Gig, monthly pass, limit and exchang
   s.cleared = 3; assert.ok(sim.weaponExchange(s, 'stick') && s.skills.stick.lv === 1 && !sim.weaponExchange(s, 'maw'), 'stage gate still counts');
   s.kills = 150; const t = sim.TROPHIES.find(x => x.id === 'k100'); assert.ok(sim.trophyReady(s, t) && sim.claimTrophy(s, 'k100') && !sim.claimTrophy(s, 'k100'));
   const back = sim.sanitizeSave(JSON.parse(JSON.stringify(s))); assert.ok(back.outfits.owned.wig && back.trophies.k100 && back.card.until > day);
+});
+
+ok('card kinds have their own rarity: speed and damage can be common, extra notes are at least rare, extra bursts at least epic', () => {
+  const seen = {};
+  for (let i = 0; i < 400; i++) {
+    const g = sim.createGame({ seed: 300 + i }); g.level = 1 + (i % 20); g.pending = 1; sim.step(g, 1 / 60, {});
+    assert.ok(g.choices.some(c => c.rarity === 0), 'one common card is always there');
+    for (const c of g.choices) { (seen[c.id] = seen[c.id] || new Set()).add(c.rarity); if (c.id === 'notes') assert.ok(c.rarity >= 1, 'notes are never common'); if (c.id === 'burst') assert.ok(c.rarity >= 2, 'bursts are never common'); }
+  }
+  assert.ok(seen.aspd.has(0) && seen.cdmg.has(0), 'speed and damage do show up as common');
+  assert.ok(!seen.notes.has(0) && !seen.burst.has(0) && !seen.burst.has(1));
 });
 
 console.log(`cell_serpent: ${n} groups passed`);
