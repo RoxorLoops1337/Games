@@ -380,17 +380,16 @@ const BOSS = {
     for (const [bx, by, br] of [[-1.3, -0.1, 0.1], [1.32, 0.4, 0.08], [-1.2, 0.55, 0.07]]) { pen.ln(arc(bx * r, by * r, br * r, br * r, 0, 360, 8), '#6fd6e4', 2.2, true, 0.4); }   // bubbles
     pen.shp(mound, '#3fb8c8', INK, 5, { gap: 6.5, f2: '#bdf0f7' });
     for (let i = 0; i < 3; i++) pen.ln(smooth(sc([-0.95 + i * 0.1, 0.25 + i * 0.17, -0.5, 0.2 + i * 0.17 - 0.06, 0.0, 0.3 + i * 0.17, 0.5, 0.2 + i * 0.17 - 0.05, 0.95 - i * 0.1, 0.3 + i * 0.17], r), false, 4), 'rgba(255,255,255,0.7)', 2.4, false, 0.5);   // water ripples
-    const crest = arc(0.08 * r, -0.2 * r, 1.0 * r, 0.8 * r, 200, 345, 14).concat(arc(0.1 * r, -0.2 * r, 0.8 * r, 0.6 * r, 345, 200, 12));   // the curling crest
-    pen.shp(crest, '#d9f7fb', INK, 4.2, { gap: 5, f2: '#fff' });
-    pen.ln(smooth(sc([0.82, -0.62, 0.98, -0.5, 0.92, -0.32, 0.74, -0.36, 0.72, -0.5], r), false, 4), INK, 3.2, false, 0.5);   // the curl's tip
-    for (const [fx, fy, fr, m] of [[-0.76, -0.56, 0.17, false], [-0.4, -0.84, 0.19, true], [0.08, -0.97, 0.2, false], [0.5, -0.88, 0.17, true]]) speakerCone(pen, fx * r, fy * r, fr * r, m);
+    const curl = []; for (let i = 0; i <= 30; i++) { const k = i / 30, a = 3.5 + k * 1.75 * TAU, rad = 0.46 - 0.35 * k; curl.push((0.5 + Math.cos(a) * rad) * r, (-0.74 + Math.sin(a) * rad * 0.95) * r); }   // the curling lip of the wave
+    pen.ln(curl, INK, 12.5, false, 0.6); pen.ln(curl, '#e4fbfe', 7.6, false, 0.5); pen.ln(curl.slice(8, 40), '#ffffff', 2.4, false, 0.4);
+    for (const [fx, fy, fr, m] of [[-0.8, -0.4, 0.17, false], [-0.5, -0.74, 0.19, true], [-0.12, -0.93, 0.2, false]]) speakerCone(pen, fx * r, fy * r, fr * r, m);
     const eyes = bossEyes('lowpass', r, st);
     for (const e of eyes) eyeWhite(pen, e, false);
     for (const e of eyes) { const sd = e.x < 0 ? -1 : 1; pen.ln([e.x - sd * e.r * 1.25, e.y - e.r * 1.35, e.x + sd * e.r * 1.0, e.y - e.r * 1.0 - sd * e.r * 0.25], INK, Math.max(2.6, e.r * 0.34), false, 0.5); pen.ln([e.x - e.r * 0.9, e.y + e.r * 1.25, e.x + e.r * 0.9, e.y + e.r * 1.25], '#2a8a9a', 2.2, false, 0.3); }   // low heavy brows, tired bags
     pen.shp(rect(-r * 0.38, r * 0.22, r * 0.76, r * 0.34, r * 0.1), '#e9e6f2', INK, 3.4, { gap: 4.5 });   // a speaker-cloth muffle over the mouth
     for (let i = 1; i < 6; i++) pen.ln([-r * 0.38 + i * r * 0.127, r * 0.24, -r * 0.38 + i * r * 0.127, r * 0.54], '#a9a5bd', 1.6, false, 0.2); for (let i = 1; i < 3; i++) pen.ln([-r * 0.36, r * 0.22 + i * r * 0.113, r * 0.36, r * 0.22 + i * r * 0.113], '#a9a5bd', 1.6, false, 0.2);
     pen.ln([-r * 0.3, r * 0.68, -r * 0.1, r * 0.74, r * 0.1, r * 0.68, r * 0.3, r * 0.74], '#fff', 2.4, false, 0.4);
-    if (st.gated) padlock(pen, 0, r * 0.05, r * 0.5);
+    if (st.gated) padlock(pen, r * 0.72, r * 0.38, r * 0.46);
     return eyes;
   },
   silence(pen, r, st) {   // Dr. Dead Air: a tall pale ghost shaped like the muted-speaker icon, hollow calm face, a headphone cable
@@ -435,6 +434,8 @@ const BOSS = {
     return eyes;
   },
 };
+// paint a boss body with a given pen at radius r (the cutscenes reuse the real boss art): returns the eyes; pupils are the caller's
+export function paintBoss(pen, id, r, st) { return BOSS[id] ? BOSS[id](pen, r, st || {}) : []; }
 function bossSprite(id, phase, gated) {
   const def = BOSSES[id], r = def.r, S = Math.ceil(r * 3.9);
   const sp = sprite('bo|' + id + '|' + phase + '|' + (gated ? 1 : 0), S, S, (pen) => { BOSS[id](pen, r, { phase, gated }); }, { seed: 23 + (hashStr(id) % 61) });

@@ -131,6 +131,35 @@ for (const k of Object.keys(C.ENEMIES)) if (!C.ENEMIES[k].hidden) ok(S.HINTS[k],
   ok(normal.hpMul === 1 && normal.stageHp === 0 && normal.recordsMul === 1, 'normal table');
 }
 
+// ---- depth data (data_depth.js): branches, hero abilities, run modifiers, boss phases, endless milestones
+{
+  const X = await import('../drop_the_bass/js/data_depth.js');
+  const idRe = /^[a-z][a-z0-9_]*$/;
+  const seen = new Set();
+  for (const type of Object.keys(C.TURRETS)) {
+    const list = X.TURRET_BRANCHES[type]; ok(Array.isArray(list) && list.length === 2, 'two branches for ' + type);
+    for (const b of list) {
+      ok(idRe.test(b.id) && !seen.has(b.id) && b.name && b.desc && GLYPH_NAMES.includes(b.glyph), 'branch row ' + b.id); seen.add(b.id);
+      ok(X.BRANCH_TURRET[b.id] === type && X.BRANCH_BY_ID[b.id] === b, 'branch lookup ' + b.id);
+      for (const [k, v] of Object.entries(b.fx)) ok(X.BRANCH_FX_KEYS.includes(k) && typeof v === 'number', 'branch fx key ' + b.id + ' ' + k);
+    }
+  }
+  ok(seen.size === 24, '24 branches');
+  for (const who of ['roxor', 'jasmin']) {
+    const l = X.HERO_ABILITIES[who]; ok(l.length === 3 && l[0].id === X.HERO_ABILITY_DEFAULT[who] && l[0].unlockLv === 1 && l[1].unlockLv === 4 && l[2].unlockLv === 7, 'abilities ' + who);
+    for (const a of l) ok(idRe.test(a.id) && a.name && a.desc && a.cdMul > 0, 'ability row ' + a.id);
+  }
+  ok(X.RUN_MODIFIERS.length === 10 && X.MAX_RUN_MODIFIERS === 3, 'ten modifiers, max three');
+  for (const m of X.RUN_MODIFIERS) ok(idRe.test(m.id) && m.name && m.desc && GLYPH_NAMES.includes(m.glyph) && m.mul.records > 1 && m.mul.fans > 1 && m.mul.diamonds > 1 && X.RUN_MODIFIER_BY_ID[m.id] === m, 'modifier ' + m.id);
+  for (const [id, list] of Object.entries(X.BOSS_PHASES)) {
+    ok(C.BOSSES[id], 'boss phases for a real boss ' + id);
+    for (const ph of list) ok(X.BOSS_PHASE_EFFECTS[ph.id] && ph.at > 0 && ph.at <= 1 && ph.text.length > 3, 'phase ' + id + ' ' + ph.id);
+  }
+  for (const id of C.BOSS_IDS) ok(X.BOSS_PHASES[id] && X.BOSS_PHASES[id].length >= 2, 'every boss has phases ' + id);
+  for (const [id, e] of Object.entries(X.BOSS_PHASE_EFFECTS)) ok(e.id === id && e.name && e.desc && e.defaults, 'phase effect ' + id);
+  ok(X.ENDLESS_MILESTONES.map((m) => m.wave).join() === '25,50,100' && X.ENDLESS_MILESTONES.every((m) => idRe.test(m.id) && m.reward.diamonds > 0), 'endless milestones');
+}
+
 // ---- house rule: no em dash in any source, doc or test of this game
 const walk = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walk(p) : [p]; });
 const files = walk('drop_the_bass').concat(readdirSync('tests').filter((f) => f.startsWith('drop_the_bass_')).map((f) => join('tests', f)));

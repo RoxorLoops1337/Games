@@ -182,6 +182,7 @@ function floatRock(p, x, y, w, h, top) {   // a floating stage platform: lit top
   p.ln([x - w * 0.2, y + h * 0.3, x - w * 0.08, y + h * 0.18], INK, 1.8, false, 0.3);
 }
 function planet(p, x, y, r, col, ring) { if (ring) p.ln(arc(x, y, r * 1.7, r * 0.45, 0, 360, 18), C.mag, 3, true, 0.8); p.shp(arc(x, y, r, r, 0, 360, 14), col, INK, 3, { gap: 5, f2: '#fff' }); if (ring) p.ln(arc(x, y, r * 1.7, r * 0.45, 180, 360, 10), C.mag, 3, false, 0.8); }
+export const ART_PIECES = { palmTree, surfboard, driftwood, glowStick, crystalProp, logsAndStones, flames, floatRock, planet, sailboat, beachBall, starfish };   // reused by the cutscenes
 const bulbPos = (k, w, y0, sag) => [w * k, y0 + Math.sin(k * Math.PI) * sag];
 const BULBS = [C.yellow, C.pink, C.cyan, C.lime, C.orange];
 function wirePts(w, y0, sag, n = 16) { const q = []; for (let i = 0; i <= n; i++) q.push(...bulbPos(i / n, w, y0, sag)); return q; }

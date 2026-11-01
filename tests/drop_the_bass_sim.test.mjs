@@ -426,7 +426,7 @@ console.log('drop_the_bass sim: ' + n + ' checks passed');
   const slotIdx = (run, c, r) => run.map.buildable.find((s) => s.c === c && s.r === r).idx;
   const place = (run, type, c, r, level = 4, branch = null) => {
     const s = run.map.buildable.find((x) => x.c === c && x.r === r);
-    const t = run.makeTurret(type, level, s, 0); if (branch) t.branch = branch; run.recalcAuras(); return t;
+    const t = run.makeTurret(type, level, s, 0); if (branch) t.branch = branch; run.recalcAuras(); run.choice = null; run.choiceQ.length = 0; return t;
   };
   const evs = (run, sec) => { const out = []; for (let i = 0; i < Math.round(sec * 60); i++) { run.tick(DT); out.push(...run.drain()); } return out; };
   // a lab: one turret at (2,2) with three still enemies on the path next to it; runs until the first shot, returns state at that moment
@@ -561,19 +561,19 @@ console.log('drop_the_bass sim: ' + n + ' checks passed');
     const f = mk({ heroLv: { roxor: 4, jasmin: 1 }, heroAbility: { roxor: 'freeze' } }); const fe = [spawn(f, 'fuzz', { hpBase: 1e7 }), spawn(f, 'zip', { hpBase: 1e7 }), spawn(f, 'mute', { hpBase: 1e7 })];
     f.heroCd.roxor = 0; f.drain(); ok(f.useHero('roxor'), 'freeze used'); const fev = f.drain();
     ok(fev.some((e) => e.k === 'hero' && e.who === 'roxor' && e.ability === 'freeze'), 'hero event carries the ability');
-    ok(fe[0].stun >= 3 && fe[1].stun >= 3 && fe[2].stun === 0, 'freeze stops every enemy that is not immune'); const d0 = fe[0].d; evs(f, 2.5); ok(fe[0].d === d0, 'frozen enemies stay put'); evs(f, 1.5); ok(fe[0].d > d0, 'they move again');
+    ok(fe[0].stun >= 3 && fe[1].stun >= 3 && fe[2].stun === 0, 'freeze stops every enemy that is not immune'); const d0 = fe[0].d; evs(f, 2.5); ok(fe[0].d === d0, 'frozen enemies stay put'); evs(f, 2.5); ok(fe[0].d > d0, 'they move again');
     // overclock
     const oc = mk({ heroLv: { roxor: 7, jasmin: 1 }, heroAbility: { roxor: 'overclock' } }); const ot = place(oc, 'snare', 2, 2, 2); const r0 = oc.turretRate(ot);
-    oc.heroCd.roxor = 0; oc.useHero('roxor'); ok(Math.abs(oc.turretRate(ot) / r0 - 1.6) < 1e-9, 'overclock +60%'); evs(oc, 6.2); ok(Math.abs(oc.turretRate(ot) / r0 - 1) < 1e-9, 'overclock ends');
+    oc.heroCd.roxor = 0; oc.useHero('roxor'); ok(Math.abs(oc.turretRate(ot) / r0 - 1.6) < 1e-9, 'overclock +60%'); evs(oc, 9.7); ok(Math.abs(oc.turretRate(ot) / r0 - 1) < 1e-9, 'overclock ends');
     // coin rain
     const cr = mk({ heroLv: { roxor: 1, jasmin: 4 }, heroAbility: { jasmin: 'coinrain' } }); cr.wave = 3; const c0 = cr.coins; cr.heroCd.jasmin = 0; cr.useHero('jasmin'); const cev = cr.drain();
     ok(cr.coins > c0 && cev.some((e) => e.k === 'hero' && e.ability === 'coinrain') && cev.some((e) => e.k === 'coin'), 'coin burst');
     const killGain = (r) => { const e = spawn(r, 'fuzz', { hpBase: 1 }); const a = r.coins + r.coinFrac; r.hurt(e, 1e9); return r.coins + r.coinFrac - a; };
-    const plain = mk(); plain.wave = 3; const withRain = killGain(cr); ok(Math.abs(withRain / killGain(plain) - 2) < 0.05, 'double coins per kill during the rain'); evs(cr, 8.5); const after = killGain(cr); ok(after < withRain * 0.6, 'rain ends');
+    const plain = mk(); plain.wave = 3; const withRain = killGain(cr); ok(Math.abs(withRain / killGain(plain) - 2) < 0.05, 'double coins per kill during the rain'); evs(cr, 11.5); const after = killGain(cr); ok(after < withRain * 0.6, 'rain ends');
     // shield
     const sh = mk({ heroLv: { roxor: 1, jasmin: 7 }, heroAbility: { jasmin: 'shield' } }); sh.heroCd.jasmin = 0; sh.useHero('jasmin');
     const lk = spawn(sh, 'brick'); lk.d = lk.total - 1; evs(sh, 0.2); ok(sh.stageHp === sh.stageMax && sh.leaks === 0, 'shielded leak does no damage');
-    evs(sh, 6.5); const lk2 = spawn(sh, 'brick'); lk2.d = lk2.total - 1; evs(sh, 0.2); ok(sh.stageHp < sh.stageMax, 'leaks hurt again after the shield');
+    evs(sh, 10); const lk2 = spawn(sh, 'brick'); lk2.d = lk2.total - 1; evs(sh, 0.2); ok(sh.stageHp < sh.stageMax, 'leaks hurt again after the shield');
     // duet with any pair
     const du = mk({ heroLv: { roxor: 7, jasmin: 7 }, heroAbility: { roxor: 'overclock', jasmin: 'coinrain' } }); spawn(du, 'fuzz', { hpBase: 1e7 }); du.heroCd.roxor = du.heroCd.jasmin = 0;
     du.useHero('roxor'); du.useHero('jasmin'); ok(du.duets === 1 && du.drain().some((e) => e.k === 'duet'), 'duet finale with a mixed pair');
