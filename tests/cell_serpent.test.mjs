@@ -39,16 +39,16 @@ ok('deterministic: same seed, same run', () => {
 });
 
 ok('every stage has its own lane shape; all lanes run from above the screen down past the membrane', () => {
-  assert.equal(sim.PATH_KINDS.length, 6);
+  assert.equal(sim.PATH_KINDS.length, 9);
   const sigs = new Set();
-  for (let s = 1; s <= 6; s++) {
+  for (let s = 1; s <= 9; s++) {
     const p = sim.buildPath(s);
     assert.ok(p.pts[0].y < 0 && p.pts.at(-1).y > LINE_Y, 'stage ' + s);
     assert.ok(p.len > H, 'the lane winds, so it is longer than the screen');
     assert.ok(p.pts.every(q => q.x > -50 && q.x < W + 50), 'stays on screen');
     sigs.add(sim.PATH_KINDS[sim.pathKind(s)] + ':' + Math.round(p.len / 10));
   }
-  assert.equal(sigs.size, 6);
+  assert.equal(sigs.size, 9);
   const a = sim.buildPath(1), b = sim.buildPath(2); assert.notEqual(Math.round(a.len), Math.round(b.len));
   assert.ok(sim.pointAt(a, -50).y < sim.pointAt(a, 0).y && sim.pointAt(a, 900).y > sim.pointAt(a, 100).y);
 });
@@ -56,10 +56,10 @@ ok('every stage has its own lane shape; all lanes run from above the screen down
 ok('stages: names, five skins, boss every 5th, longer snakes and more HP per cell as you go', () => {
   assert.ok(!sim.isBossStage(4) && sim.isBossStage(5) && sim.isBossStage(10));
   assert.equal(sim.virusName(1), 'Love-Struck Virus'); assert.equal(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(sim.skinFor)).size, 10, 'ten different species');
-  assert.ok(sim.snakeLength(1) >= 12 && sim.snakeLength(10) > sim.snakeLength(1) && sim.snakeLength(5) > sim.snakeLength(4));
+  assert.ok(sim.snakeLength(1) >= 30 && sim.snakeLength(10) > sim.snakeLength(1) && sim.snakeLength(5) > sim.snakeLength(4));
   assert.ok(sim.hpBase(1) >= 100, 'numbers are big');
   assert.ok(sim.hpBase(10) > sim.hpBase(1) * 1.5);
-  const info = sim.stageInfo(7); assert.ok(info.name && info.skin && info.path && info.length > 12);
+  const info = sim.stageInfo(7); assert.ok(info.name && info.skin && info.path && info.length > 30);
   assert.ok(sim.createGame({ seed: 3, stage: 5 }).snakes[0].boss);
 });
 
@@ -197,7 +197,7 @@ ok('upgrades come only from the yellow upgrade cells; Free Refresh gives new cho
 
 ok('every extra note counts: each pick adds a note, spaced apart so you can see it, and the card says so', () => {
   const g = sim.createGame({ seed: 5 });
-  const card = () => g.choices.find(c => c.id === 'notes');
+  const card = () => g.choices.find(c => c.id === 'notes' && c.rarity === 0);
   const pickNotes = () => { g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); for (let k = 0; k < 40 && !card(); k++) { g.rerolls = 4; sim.reroll(g); } const i = g.choices.indexOf(card()); assert.ok(i >= 0); return sim.choose(g, i); };
   const volley = () => { g.bullets.length = 0; g.vq.length = 0; g.p.cd = 0; g.p.crit = 0; sim.step(g, 1 / 60, {}); sim.step(g, 0.05, {}); return g.bullets; };
   assert.equal(volley().length, 1);
@@ -209,13 +209,13 @@ ok('every extra note counts: each pick adds a note, spaced apart so you can see 
   assert.equal(new Set(three.map(b => Math.round(b.x))).size, 3);
 });
 
-ok('skill picks: 3 distinct choices; locked skills never appear; maxed ones stop; at most six skills; every passive applies', () => {
+ok('skill picks: 3 distinct choices; locked skills never appear; maxed ones stop; at most five skills; every passive applies', () => {
   const g = sim.createGame({ seed: 13 });
   g.level = 5; g.pending = 1; sim.step(g, 1 / 60, {});
   assert.equal(g.choices.length, 3); assert.equal(new Set(g.choices.map(c => c.id)).size, 3);
-  for (let i = 0; i < 40; i++) { g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); assert.ok(g.choices.every(c => !['needles', 'stick', 'bubble', 'satellite', 'maw'].includes(c.id)), 'locked'); sim.choose(g, 0); }
-  const h = sim.createGame({ seed: 14, skills: { needles: 1, stick: 1, bubble: 1, satellite: 1, maw: 1 } }); h.level = 9;
-  for (const w of sim.WEAPONS.slice(0, 6)) h.weap[w.id] = { lv: w.id === 'swab' ? 5 : 2, cd: 0 };
+  for (let i = 0; i < 40; i++) { g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); assert.ok(g.choices.every(c => !['stick', 'bubble', 'satellite', 'maw'].includes(c.id)), 'locked'); sim.choose(g, 0); }
+  const h = sim.createGame({ seed: 14, skills: { stick: 1, bubble: 1, satellite: 1, maw: 1 } }); h.level = 9;
+  for (const w of sim.WEAPONS.slice(0, 5)) h.weap[w.id] = { lv: w.id === 'swab' ? 5 : 2, cd: 0 };
   for (let i = 0; i < 40; i++) { h.phase = 'play'; h.pending = 1; sim.step(h, 1 / 60, {}); assert.ok(h.choices.every(c => c.id !== 'swab' && (c.kind !== 'weapon' || h.weap[c.id]))); sim.choose(h, 0); }
   const p = sim.createGame({ seed: 15 });
   for (const u of sim.PASSIVES) {
@@ -318,12 +318,12 @@ ok('shop: stats cost Beats; skills unlock and level up with fragments; loot boxe
   assert.ok(['atk', 'crt', 'cdn'].every(id => sim.META.some(m => m.id === id)));
   assert.ok(sim.buyMeta(s, 'atk')); assert.equal(s.meta.atk, 1); assert.ok(sim.metaCost(sim.META[0], 3) > sim.metaCost(sim.META[0], 1));
   for (let i = 0; i < 50; i++) sim.buyMeta(s, 'atk'); assert.equal(s.meta.atk, sim.META[0].max);
-  // skills: the first four are owned, the rest need fragments
+  // skills: the first five are owned, the rest need fragments
   assert.ok(sim.WEAPON_STARTERS.every(id => s.skills[id].lv === 1) && s.skills.maw.lv === 0);
   assert.ok(!sim.unlockSkill(s, 'maw'), 'not enough fragments');
   s.skills.maw.frag = 70; assert.ok(sim.unlockSkill(s, 'maw')); assert.equal(s.skills.maw.lv, 1); assert.equal(s.skills.maw.frag, 10);
   assert.ok(!sim.levelSkill(s, 'swab'), 'no fragments yet');
-  s.skills.swab.frag = 5; const b0 = s.beats; assert.ok(sim.levelSkill(s, 'swab')); assert.equal(s.skills.swab.lv, 2); assert.equal(s.skills.swab.frag, 0); assert.ok(s.beats < b0);
+  s.skills.swab.frag = sim.skillUpgradeCost(1).frag; const b0 = s.beats; assert.ok(sim.levelSkill(s, 'swab'), 'fragments alone are enough'); assert.equal(s.skills.swab.lv, 2); assert.equal(s.skills.swab.frag, 0); assert.equal(s.beats, b0);
   assert.ok(sim.skillMul(5) > sim.skillMul(1) * 1.4);
   // boxes
   let k = 0; const rand = () => { k = (k * 9301 + 49297) % 233280; return k / 233280; };
@@ -463,6 +463,38 @@ ok('index.html wires the module, the hub and every screen; the save key is kept;
   assert.ok(main.includes("'cell_serpent_save_v1'"));
   assert.ok(/'cell_serpent'/.test(readFileSync(join(root, '..', 'build.js'), 'utf8')), 'in build.js STATIC_PATHS');
   assert.ok(readFileSync(join(root, '..', 'index.html'), 'utf8').includes('/cell_serpent/'), 'on the arcade page');
+});
+
+
+ok('rarity: one of the three cards is always common, and luck makes better rarities likelier', () => {
+  assert.equal(sim.RARITIES.length, 6);
+  const w0 = sim.rarityWeights(0), w20 = sim.rarityWeights(20), share = w => 1 - w[0] / w.reduce((a, b) => a + b, 0);
+  assert.ok(share(w20) > share(w0) * 1.5, 'luck lifts the chance of better rarities');
+  assert.ok(w0[0] > w0[1] && w0[1] > w0[2] && w0[4] > w0[5], 'rare things are rarer at the start');
+  const mean = lvl => { let t = 0, n = 0; for (let i = 0; i < 150; i++) { const g = sim.createGame({ seed: 100 + i }); g.level = lvl; g.pending = 1; sim.step(g, 1 / 60, {}); assert.ok(g.choices.some(c => c.rarity === 0), 'a common card'); for (const c of g.choices) { t += c.rarity; n++; } } return t / n; };
+  assert.ok(mean(25) > mean(3) + 0.4, 'later picks are better on average');
+});
+
+ok('rarity scales the effect: a better card adds more, and the number on the card is what you get', () => {
+  const g = sim.createGame({ seed: 60 });
+  const u = sim.CAPSULE_UPS.find(x => x.id === 'cdmg');
+  g.phase = 'levelup'; g.pending = 1; g.choices = [{ id: 'cdmg', kind: 'capsule', u, rarity: 4, gain: u.vals[4], lvl: 0, max: u.max }];
+  assert.ok(sim.choose(g, 0)); assert.equal(sim.uv(g, 'cdmg'), u.vals[4]); assert.ok(u.vals[4] > u.vals[0] * 4);
+  const w = sim.createGame({ seed: 61 }); w.level = 5; w.pending = 1; sim.step(w, 1 / 60, {});
+  const wc = w.choices.find(c => c.kind === 'weapon');
+  if (wc) { const before = (w.weap[wc.id] || { lv: 0 }).lv; sim.choose(w, w.choices.indexOf(wc)); assert.equal(w.weap[wc.id].lv, before + wc.gain); }
+});
+
+ok('loadout: five skills max, only they are offered, runs start with just the capsule', () => {
+  const s = sim.defaultSave();
+  assert.equal(s.loadout.length, 5); assert.ok(sim.toggleLoadout(s, 'dragon')); assert.equal(s.loadout.length, 4);
+  assert.ok(!sim.toggleLoadout(s, 'maw'), 'a locked skill cannot be equipped');
+  s.skills.maw.lv = 1; assert.ok(sim.toggleLoadout(s, 'maw'));
+  s.skills.stick.lv = 1; assert.ok(!sim.toggleLoadout(s, 'stick'), 'full');
+  assert.equal(sim.sanitizeSave({ loadout: ['maw', 'maw', 'swab', 'x'] }).loadout.join(), 'swab');
+  const g = sim.createGame({ seed: 70, unlocked: ALL, loadout: ['swab', 'maw'] });
+  assert.equal(Object.keys(g.weap).length, 0, 'start with notes only');
+  g.level = 9; for (let i = 0; i < 30; i++) { g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); assert.ok(g.choices.every(c => c.kind !== 'weapon' || ['swab', 'maw'].includes(c.id))); }
 });
 
 console.log(`cell_serpent: ${n} groups passed`);

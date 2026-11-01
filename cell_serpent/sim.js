@@ -33,7 +33,7 @@ export const WEAPONS = [
   { id: 'daggers', name: 'Spinning Vinyl', max: 5, frag: 0, desc: 'Records spin around you and slice through cells.' },
   { id: 'tower', name: 'Speaker Stack', max: 5, frag: 0, desc: 'Speakers beside you thump bass waves at everything nearby.' },
   { id: 'dragon', name: 'Autotune', max: 5, frag: 0, desc: 'Winged notes that always find their cell.' },
-  { id: 'needles', name: 'Treble Pins', max: 5, frag: 20, desc: 'A fan of piercing high notes that skewer whole rows.' },
+  { id: 'needles', name: 'Treble Pins', max: 5, frag: 0, desc: 'A fan of piercing high notes that skewer whole rows.' },
   { id: 'stick', name: 'Drumsticks', max: 5, frag: 20, desc: 'Sticks sweep in front of you and whack cells.' },
   { id: 'bubble', name: 'Hum Bubbles', max: 5, frag: 30, desc: 'Humming bubbles burst on contact and slow the snake.' },
   { id: 'satellite', name: 'Spotlight Storm', max: 5, frag: 40, desc: 'Stage lights strike for a percent of cell HP.' },
@@ -41,21 +41,41 @@ export const WEAPONS = [
 ];
 const WEAPON = Object.fromEntries(WEAPONS.map(w => [w.id, w]));
 export const WEAPON_STARTERS = WEAPONS.filter(w => !w.frag).map(w => w.id);
+export const LOADOUT_SIZE = 5;
 
+// Rarity of an upgrade choice. Every pick raises your luck, so better rarities slowly become likelier;
+// one of the three cards is always common.
+export const RARITIES = [
+  { id: 'common', name: 'Common', color: '#cfd8e8' },
+  { id: 'rare', name: 'Rare', color: '#4fb8ff' },
+  { id: 'epic', name: 'Epic', color: '#b06cff' },
+  { id: 'legendary', name: 'Legendary', color: '#ffb04d' },
+  { id: 'mythic', name: 'Mythic', color: '#ff4d7a' },
+  { id: 'godlike', name: 'Godlike', color: '#ffe14a' },
+];
+const RARITY_BASE = [100, 32, 11, 3.2, 1, 0.3];
+export const LUCK_MAX = 30;
+export const rarityWeights = luck => RARITY_BASE.map((w, t) => w * Math.exp(0.045 * t * Math.min(LUCK_MAX, Math.max(0, luck))));
+export function rollRarity(rand, luck) {
+  const w = rarityWeights(luck); let r = rand() * w.reduce((x, y) => x + y, 0);
+  for (let t = 0; t < w.length; t++) { r -= w[t]; if (r <= 0) return t; }
+  return 0;
+}
 // The capsule is the cell's own gun; its upgrades are the first thing you are offered.
+// vals[rarity] is what one pick adds; cap is the most a run can stack.
 export const CAPSULE_UPS = [
-  { id: 'aspd', name: 'Faster Tempo', max: 8, w: 1.2, desc: '+15% attack speed' },
-  { id: 'notes', name: 'Harmony', max: 4, w: 1.0, desc: '+1 note per shot, side by side' },
-  { id: 'burst', name: 'Echo', max: 3, w: 0.9, desc: '+1 burst per shot, a quick echo of the notes' },
-  { id: 'cdmg', name: 'Volume Up', max: 8, w: 1.2, desc: '+30% capsule damage' },
+  { id: 'aspd', name: 'Faster Tempo', max: 12, w: 1.2, vals: [15, 25, 40, 60, 90, 140], cap: 400, fmt: v => '+' + v + '% attack speed', desc: '+15% attack speed' },
+  { id: 'notes', name: 'Harmony', max: 5, w: 1.0, vals: [1, 1, 2, 2, 3, 4], cap: 5, fmt: v => '+' + v + ' note' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 note per shot, side by side' },
+  { id: 'burst', name: 'Echo', max: 3, w: 0.9, vals: [1, 1, 2, 2, 3, 3], cap: 3, fmt: v => '+' + v + ' burst' + (v > 1 ? 's' : '') + ' per shot', desc: '+1 burst per shot, a quick echo of the notes' },
+  { id: 'cdmg', name: 'Volume Up', max: 12, w: 1.2, vals: [30, 50, 80, 130, 200, 320], cap: 900, fmt: v => '+' + v + '% capsule damage', desc: '+30% capsule damage' },
 ];
 export const PASSIVES = [
-  { id: 'power', name: 'Loud Vocals', max: 5, w: 0.9, desc: '+20% damage for every skill', apply: () => {} },
-  { id: 'haste', name: 'Tempo Up', max: 5, w: 0.9, desc: 'Every skill recharges 10% faster', apply: () => {} },
-  { id: 'crit', name: 'Perfect Pitch', max: 5, w: 0.7, desc: '+8% crit chance for the capsule and needles', apply: p => { p.crit += 0.08; } },
-  { id: 'vital', name: 'Warm Up', max: 5, w: 0.7, desc: '+30 max HP and heal 30', apply: p => { p.maxHp += 30; p.hp = Math.min(p.maxHp, p.hp + 30); } },
-  { id: 'guard', name: 'Ear Plugs', max: 4, w: 0.6, desc: 'Breaches hurt 15% less', apply: p => { p.guard += 0.15; } },
-  { id: 'speed', name: 'Dance Shoes', max: 4, w: 0.6, desc: '+12% move speed', apply: p => { p.speed *= 1.12; } },
+  { id: 'power', name: 'Loud Vocals', max: 8, w: 0.9, vals: [20, 35, 55, 85, 130, 200], cap: 400, fmt: v => '+' + v + '% damage for every skill', desc: '+20% damage for every skill', apply: () => {} },
+  { id: 'haste', name: 'Tempo Up', max: 8, w: 0.9, vals: [10, 16, 24, 36, 50, 70], cap: 60, fmt: v => 'Every skill recharges ' + v + '% faster', desc: 'Every skill recharges 10% faster', apply: () => {} },
+  { id: 'crit', name: 'Perfect Pitch', max: 8, w: 0.7, vals: [8, 12, 18, 26, 38, 55], cap: 60, fmt: v => '+' + v + '% crit chance', desc: '+8% crit chance for the capsule and needles', apply: (p, v) => { p.crit += v / 100; } },
+  { id: 'vital', name: 'Warm Up', max: 8, w: 0.7, vals: [30, 50, 80, 120, 180, 280], cap: 99999, fmt: v => '+' + v + ' max HP and heal ' + v, desc: '+30 max HP and heal 30', apply: (p, v) => { p.maxHp += v; p.hp = Math.min(p.maxHp, p.hp + v); } },
+  { id: 'guard', name: 'Ear Plugs', max: 6, w: 0.6, vals: [15, 22, 30, 40, 50, 60], cap: 60, fmt: v => 'Breaches hurt ' + v + '% less', desc: 'Breaches hurt 15% less', apply: (p, v) => { p.guard = Math.min(0.8, p.guard + v / 100); } },
+  { id: 'speed', name: 'Dance Shoes', max: 6, w: 0.6, vals: [12, 18, 26, 36, 50, 70], cap: 100, fmt: v => '+' + v + '% move speed', desc: '+12% move speed', apply: (p, v) => { p.speed *= 1 + v / 100; } },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
 const CAP_UP = Object.fromEntries(CAPSULE_UPS.map(u => [u.id, u]));
@@ -74,7 +94,7 @@ export const META = [
 export const metaCost = (def, lvl) => Math.round(def.base * Math.pow(def.grow, lvl));
 export const SKILL_MAX_LV = 10;
 export const skillMul = lv => 1 + 0.12 * (Math.max(1, lv) - 1);          // permanent skill level -> damage
-export const skillUpgradeCost = lv => ({ frag: 5 * lv, beats: 40 * lv }); // lv -> lv + 1
+export const skillUpgradeCost = lv => ({ frag: 4 + 3 * lv, beats: 0 });   // lv -> lv + 1, fragments only
 export const BOXES = [
   { id: 'beat', name: 'Beat Box', cur: 'beats', price: 150, frags: 5, feature: 0, desc: '5 skill fragments' },
   { id: 'spark', name: 'Spark Box', cur: 'sparkles', price: 30, frags: 15, feature: 8, desc: '15 skill fragments, 8 of one skill' },
@@ -83,7 +103,7 @@ export const BOXES = [
 export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
-  return { v: 3, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
+  return { v: 4, loadout: [...WEAPON_STARTERS], beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -99,6 +119,8 @@ export function sanitizeSave(raw) {
     if (r) { s.skills[w.id].lv = Math.min(SKILL_MAX_LV, num(r.lv, s.skills[w.id].lv)); s.skills[w.id].frag = num(r.frag); }
     if (!w.frag) s.skills[w.id].lv = Math.max(1, s.skills[w.id].lv);
   }
+  const lo = Array.isArray(raw.loadout) ? raw.loadout.filter((id, i, a) => WEAPON[id] && s.skills[id].lv > 0 && a.indexOf(id) === i).slice(0, LOADOUT_SIZE) : [];
+  if (lo.length) s.loadout = lo; else if (Array.isArray(raw.loadout)) s.loadout = [...WEAPON_STARTERS].filter(id => s.skills[id].lv > 0).slice(0, LOADOUT_SIZE);
   return s;
 }
 export function buyMeta(save, id) {
@@ -111,18 +133,28 @@ export function buyMeta(save, id) {
   save.beats -= c; save.meta[id] = lvl + 1;
   return true;
 }
+// Equip or unequip a skill for the next runs (at most five, all owned).
+export function toggleLoadout(save, id) {
+  const k = save.skills[id];
+  if (!k || k.lv < 1) return false;
+  const i = save.loadout.indexOf(id);
+  if (i >= 0) { if (save.loadout.length <= 1) return false; save.loadout.splice(i, 1); return true; }
+  if (save.loadout.length >= LOADOUT_SIZE) return false;
+  save.loadout.push(id); return true;
+}
 export function unlockSkill(save, id) {
   const w = WEAPON[id], k = save.skills[id];
   if (!w || !k || k.lv > 0 || k.frag < w.frag) return false;
   k.frag -= w.frag; k.lv = 1;
+  if (save.loadout.length < LOADOUT_SIZE && !save.loadout.includes(id)) save.loadout.push(id);
   return true;
 }
 export function levelSkill(save, id) {
   const k = save.skills[id];
   if (!k || k.lv < 1 || k.lv >= SKILL_MAX_LV) return false;
   const c = skillUpgradeCost(k.lv);
-  if (k.frag < c.frag || save.beats < c.beats) return false;
-  k.frag -= c.frag; save.beats -= c.beats; k.lv++;
+  if (k.frag < c.frag) return false;
+  k.frag -= c.frag; k.lv++;
   return true;
 }
 // Opens a loot box: pays, adds fragments, returns [{id, n}] sorted by amount.
@@ -188,15 +220,16 @@ export function applyResult(save, r) {
 // ---------------------------------------------------------------- stages
 export const isBossStage = n => n % 5 === 0;
 export const hpBase = n => 12 * (14 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
-export const snakeLength = n => Math.min(60, 12 + 2 * (n - 1) + (isBossStage(n) ? 6 : 0));
-export const arrivalTime = n => Math.max(45, 80 - 0.8 * n) + (isBossStage(n) ? 18 : 0);   // seconds for the face to reach the membrane if you do nothing
+export const snakeLength = n => Math.min(150, 32 + 4 * (n - 1) + (isBossStage(n) ? 12 : 0));
+export const arrivalTime = n => Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) + (isBossStage(n) ? 24 : 0);   // seconds for the face to reach the membrane if you do nothing
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
 export const SKINS = ['love', 'rust', 'sneezy', 'grumpy', 'sleepy', 'disco', 'sour', 'mighty', 'frosty', 'gloomy'];
 export const skinFor = n => SKINS[(n - 1) % SKINS.length];
 const NAMES = ['Love-Struck Virus', 'Rustic Virus', 'Sneezy Virus', 'Grumpy Flu', 'Sleepy Spore', 'Disco Germ', 'Sour Strain', 'Mighty Mold', 'Frosty Fever', 'Gloomy Gunk'];
 export const virusName = n => NAMES[(n - 1) % NAMES.length] + (n > NAMES.length ? ' ' + 'I'.repeat(1 + Math.floor((n - 1) / NAMES.length)) : '');
-export const PATH_KINDS = ['Gentle waves', 'Hairpin lanes', 'Tight waves', 'Sharp zigzag', 'Wide S', 'Wild lanes'];
-export const pathKind = n => (n - 1) % PATH_KINDS.length;
+export const PATH_KINDS = ['Gentle waves', 'Tall hairpins', 'Big lobes', 'Castle steps', 'Tight waves', 'Sharp zigzag', 'Wide S', 'Hairpin lanes', 'Wild lanes'];
+const PATH_ORDER = [0, 1, 3, 2, 6, 4, 7, 5, 8];   // which shape each stage gets
+export const pathKind = n => PATH_ORDER[(n - 1) % PATH_ORDER.length];
 export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: PATH_KINDS[pathKind(n)], hp: Math.round(hpBase(n)) });
 
 const KIND = { normal: { hp: 1 }, armor: { hp: 2.6 }, bomb: { hp: 1 }, upgrade: { hp: 1.6 } };
@@ -227,10 +260,13 @@ export function buildPath(n) {
   const sine = (A, lam, ph, grow = 0) => { for (let y = -160; y <= end; y += 6) poly.push({ x: cx + (A + grow * (y / end)) * Math.sin((y / lam) * TAU + ph), y }); };
   const lanes = (pts, smooth) => { poly = [{ x: cx, y: -160 }, ...pts.map(([x, y]) => ({ x, y })), { x: cx, y: end }]; poly = chaikin(poly, smooth); };
   if (k === 0) sine(230, 640, R() * TAU);
-  else if (k === 1) lanes([[560, 60], [120, 60], [120, 250], [560, 250], [560, 440], [120, 440], [120, 630], [560, 630], [560, 820], [120, 820], [120, 1010], [560, 1010]], 2);   // hairpin lanes
-  else if (k === 2) sine(250, 410, R() * TAU, 20);
-  else if (k === 3) lanes([[660, 40], [60, 190], [660, 340], [60, 490], [660, 640], [60, 790], [660, 940], [60, 1090]], 1);   // angular zigzag
-  else if (k === 4) { for (let y = -160; y <= end; y += 6) poly.push({ x: cx + 250 * Math.sin((y / 900) * TAU + 0.8) + 70 * Math.sin((y / 300) * TAU), y }); }
+  else if (k === 1) lanes([[80, -160], [80, 590], [226, 590], [226, 70], [366, 70], [366, 615], [500, 615], [500, 80], [624, 80], [624, 745], [86, 745], [86, 930], [610, 930], [610, 1070], [150, 1070], [150, 1260]], 2);   // tall hairpins, then wide lanes
+  else if (k === 2) { for (let y = -160; y <= end; y += 6) { const a = (y / 520) * TAU + R() * 0, sg = Math.sin(a); poly.push({ x: cx + 270 * Math.sign(sg) * Math.pow(Math.abs(sg), 0.55), y }); } poly = chaikin(poly, 1); }   // big rounded lobes
+  else if (k === 3) lanes([[100, -160], [100, 180], [650, 180], [650, 300], [80, 300], [80, 420], [650, 420], [650, 560], [100, 560], [100, 940], [310, 940], [310, 700], [410, 700], [410, 930], [540, 930], [540, 700], [650, 700], [650, 1260]], 1);   // castle notches
+  else if (k === 4) sine(250, 410, R() * TAU, 20);
+  else if (k === 5) lanes([[660, 40], [60, 190], [660, 340], [60, 490], [660, 640], [60, 790], [660, 940], [60, 1090]], 1);   // angular zigzag
+  else if (k === 6) { for (let y = -160; y <= end; y += 6) poly.push({ x: cx + 250 * Math.sin((y / 900) * TAU + 0.8) + 70 * Math.sin((y / 300) * TAU), y }); }
+  else if (k === 7) lanes([[560, 60], [120, 60], [120, 250], [560, 250], [560, 440], [120, 440], [120, 630], [560, 630], [560, 820], [120, 820], [120, 1010], [560, 1010]], 2);   // hairpin lanes
   else {   // wild lanes: hairpins with random widths
     const pts = []; let y = 60, right = R() < 0.5;
     while (y < 1050) {
@@ -300,14 +336,15 @@ function spawnSnake(g, n) {
     ps -= (r + segRadius(boss, i + 1, len)) * 0.78;
   }
   // yellow upgrade cells: pop one to choose an upgrade. About one per 7 cells (at least 3), spread along the snake.
-  const ups = Math.max(3, Math.round(len / 7));
+  const ups = Math.max(4, Math.round(len / 7));
   for (let k = 0; k < ups; k++) {
     const c = segs[clamp(3 + Math.round(((len - 5) * (k + 0.5)) / ups), 1, len - 1)];
     c.kind = 'upgrade'; c.max = c.hp = Math.max(1, Math.round(hpBase(n) * KIND.upgrade.hp * (boss ? 1.5 : 1)));
   }
   // chest cells (a chest on the cell): aim for them first too
-  for (const f of [0.3, 0.62]) {
-    let j = clamp(Math.round(len * f), 1, len - 1);
+  const nch = Math.max(2, Math.round(len / 15));
+  for (let q = 0; q < nch; q++) {
+    let j = clamp(Math.round(len * (0.2 + (0.7 * (q + 0.5)) / nch)), 1, len - 1);
     while (j < len - 1 && (segs[j].kind !== 'normal' || segs[j].carry)) j++;
     segs[j].carry = 'chest';
   }
@@ -335,10 +372,12 @@ export function createGame(opts = {}) {
   const skillLv = Object.fromEntries(WEAPON_STARTERS.map(id => [id, 1]));
   if (opts.skills) for (const id of Object.keys(opts.skills)) { const lv = opts.skills[id]; if (lv > 0) { unlocked[id] = 1; skillLv[id] = lv; } else if (!WEAPON_STARTERS.includes(id)) delete unlocked[id]; }
   if (opts.unlocked) for (const id of Object.keys(opts.unlocked)) { unlocked[id] = 1; skillLv[id] = skillLv[id] || 1; }
+  // the loadout: only these (up to five) can be offered in a run. Default: everything owned, first five.
+  const loadout = (opts.loadout || Object.keys(unlocked)).filter(id => unlocked[id]).slice(0, LOADOUT_SIZE);
   const g = {
     rand: rng(opts.seed || 1), t: 0, phase: 'play', stage: 0, sid: 0, path: null,
     p: makePlayer(opts.meta), snakes: [], bullets: [], vq: [], pickups: [], zones: [], maws: [], towers: [],
-    events: [], ups: {}, weap: {}, unlocked, skillLv,
+    events: [], ups: {}, val: {}, weap: {}, unlocked, skillLv, loadout,
     level: 1, cells: 0, upgradeLeft: 0, pending: 0, choices: [], resume: 'play', rerolls: 4,
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
     groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
@@ -348,15 +387,18 @@ export function createGame(opts = {}) {
 }
 
 const visible = s => s.y > 8 && s.y < H - 8 && s.x > 8 && s.x < W - 8;
+// accumulated effect of a run upgrade: summed rarity values, or the common value per pick if set directly
+const UPV = Object.fromEntries([...CAPSULE_UPS, ...PASSIVES].map(u => [u.id, u]));
+export const uv = (g, id) => (g.val && g.val[id] !== undefined ? g.val[id] : (g.ups[id] || 0) * UPV[id].vals[0]);
 const lv = (g, id) => (g.weap[id] ? g.weap[id].lv : 0);
 export const GROOVE_MAX = 20;
 // Groove: every note that lands builds it, a pause in the hits lets it fade. Each point is +1.5% damage.
-const dmgMul = g => 10 * g.p.atk * (1 + 0.2 * (g.ups.power || 0)) * (1 + 0.015 * g.groove);   // x10: damage and HP are shown as big numbers
+const dmgMul = g => 10 * g.p.atk * (1 + uv(g, 'power') / 100) * (1 + 0.015 * g.groove);   // x10: damage and HP are shown as big numbers
 function bumpGroove(g) {
   g.grooveT = 0;
   if (g.groove < GROOVE_MAX) { g.groove++; if (g.groove > g.grooveMax) g.grooveMax = g.groove; if (g.groove % 5 === 0) g.events.push({ t: 'groove', n: g.groove }); }
 }
-const cdMul = g => g.p.cdBase * Math.pow(0.9, g.ups.haste || 0);
+const cdMul = g => g.p.cdBase * Math.max(0.3, 1 - uv(g, 'haste') / 100);
 
 function eachTarget(g, fn) {
   for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave) fn(s, sn);
@@ -453,26 +495,26 @@ function breachTick(g, sn) {
 }
 
 // ---------------------------------------------------------------- skill picks
-// what the capsule does now and after this pick, so every upgrade is visible in numbers
-function capStat(id, l) {
-  if (id === 'notes') return `Notes per shot: ${1 + l} → ${2 + l}`;
-  if (id === 'burst') return `Bursts per shot: ${1 + l} → ${2 + l}`;
-  if (id === 'aspd') return `Attack speed: +${15 * l}% → +${15 * (l + 1)}%`;
-  return `Capsule damage: +${30 * l}% → +${30 * (l + 1)}%`;
+// what an upgrade does now and after this pick, so every pick is visible in numbers
+const STAT_NAME = { aspd: 'Attack speed', notes: 'Notes per shot', burst: 'Bursts per shot', cdmg: 'Capsule damage' };
+function statText(id, cur, add) {
+  if (id === 'notes' || id === 'burst') return `${STAT_NAME[id]}: ${1 + cur} → ${1 + cur + add}`;
+  return `${STAT_NAME[id] || UPV[id].name}: +${cur}% → +${cur + add}%`;
 }
 function rollChoices(g) {
   const pool = [];
   const early = g.level < 3;   // the first two picks are capsule upgrades only
-  for (const u of CAPSULE_UPS) { const l = g.ups[u.id] || 0; if (l < u.max) pool.push({ id: u.id, kind: 'capsule', name: u.name, desc: u.desc, stat: capStat(u.id, l), lvl: l, max: u.max, isNew: !l, w: u.w * (early ? 2 : 1) }); }
+  const luck = g.level - 1;
+  for (const u of CAPSULE_UPS) { const l = g.ups[u.id] || 0, cur = uv(g, u.id); if (l < u.max && cur < u.cap) pool.push({ id: u.id, kind: 'capsule', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w * (early ? 2 : 1) }); }
   if (!early) {
     const owned = Object.keys(g.weap).length;
     for (const w of WEAPONS) {
-      if (!g.unlocked[w.id]) continue;
+      if (!g.loadout.includes(w.id)) continue;
       const l = lv(g, w.id);
-      if (l >= w.max || (!l && owned >= 6)) continue;
+      if (l >= w.max || (!l && owned >= LOADOUT_SIZE)) continue;
       pool.push({ id: w.id, kind: 'weapon', name: w.name, desc: w.desc, lvl: l, max: w.max, isNew: !l, w: l ? 1.7 : 1.2 });
     }
-    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max) pool.push({ id: u.id, kind: 'passive', name: u.name, desc: u.desc, lvl: l, max: u.max, isNew: !l, w: u.w }); }
+    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max && uv(g, u.id) < u.cap) pool.push({ id: u.id, kind: 'passive', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w }); }
   }
   const out = [];
   while (out.length < 3 && pool.length) {
@@ -481,6 +523,20 @@ function rollChoices(g) {
     for (; k < pool.length - 1; k++) { r -= pool[k].w; if (r <= 0) break; }
     out.push(pool.splice(k, 1)[0]);
   }
+  // one random card is always common; the others roll with your luck
+  const common = Math.floor(g.rand() * out.length);
+  out.forEach((c, i) => {
+    c.rarity = i === common ? 0 : rollRarity(g.rand, luck);
+    if (c.kind === 'weapon') {
+      c.gain = Math.min(c.max - c.lvl, [1, 1, 2, 2, 3, 3][c.rarity]);
+      c.stat = c.isNew ? `New skill, starts at Lv ${c.gain}` : `Level ${c.lvl} → ${c.lvl + c.gain}`;
+    } else {
+      const add = c.u.vals[c.rarity], cur = uv(g, c.id), room = c.u.cap - cur;
+      c.gain = Math.min(add, room);
+      c.desc = c.u.fmt(c.gain);
+      c.stat = c.kind === 'capsule' ? statText(c.id, cur, c.gain) : '';
+    }
+  });
   return out;
 }
 function maybeLevelUp(g) {
@@ -505,14 +561,15 @@ export function choose(g, idx) {
   if (g.phase !== 'levelup') return false;
   const c = g.choices[idx];
   if (!c) return false;
+  const gain = c.gain || (c.kind === 'weapon' ? 1 : c.u ? c.u.vals[c.rarity || 0] : (UPV[c.id] ? UPV[c.id].vals[0] : 1));
   if (c.kind === 'weapon') {
     const w = g.weap[c.id] || (g.weap[c.id] = { lv: 0, cd: 0.5 });
-    w.lv++;
+    w.lv = Math.min(WEAPON[c.id].max, w.lv + gain);
     if (c.id === 'tower') rebuildTowers(g);
-  } else if (c.kind === 'passive') { PASSIVE[c.id].apply(g.p); g.ups[c.id] = (g.ups[c.id] || 0) + 1; }
-  else g.ups[c.id] = (g.ups[c.id] || 0) + 1;
+  } else if (c.kind === 'passive') { const cur = uv(g, c.id); PASSIVE[c.id].apply(g.p, gain); g.val[c.id] = cur + gain; g.ups[c.id] = (g.ups[c.id] || 0) + 1; }
+  else { g.val[c.id] = uv(g, c.id) + gain; g.ups[c.id] = (g.ups[c.id] || 0) + 1; }
   g.pending--; g.level++;
-  g.events.push({ t: 'upgrade', id: c.id, kind: c.kind });
+  g.events.push({ t: 'upgrade', id: c.id, kind: c.kind, rarity: c.rarity || 0 });
   if (g.pending > 0) { g.choices = rollChoices(g); if (!g.choices.length) { g.pending = 0; g.phase = g.resume; } } else g.phase = g.resume;
   return true;
 }
@@ -535,22 +592,22 @@ function fire(g, o) {
 }
 // the capsule: straight up, [1 + extra notes] side by side, [1 + extra bursts] volleys per shot
 function shootCapsule(g, dt) {
-  const p = g.p, up = id => g.ups[id] || 0;
+  const p = g.p, up = id => uv(g, id);
   p.aim = -Math.PI / 2;
   p.cd -= dt;
   while (p.cd <= 0) {
-    p.cd += (1 / p.rate) * cdMul(g) / (1 + 0.15 * up('aspd')) * (p.rage > 0 ? 0.77 : 1);
-    for (let b = 0; b <= up('burst'); b++) g.vq.push({ t: b * 0.1 });
+    p.cd += (1 / p.rate) * cdMul(g) / (1 + up('aspd') / 100) * (p.rage > 0 ? 0.77 : 1);
+    for (let b = 0; b <= Math.round(up('burst')); b++) g.vq.push({ t: b * 0.1 });
     if (p.cd < -0.2) p.cd = 0;
   }
   for (let i = g.vq.length - 1; i >= 0; i--) {
     const v = g.vq[i]; v.t -= dt;
     if (v.t > 0) continue;
     g.vq.splice(i, 1);
-    const n = 1 + up('notes');
+    const n = 1 + Math.round(up('notes'));
     for (let k = 0; k < n; k++) {
       const crit = g.rand() < p.crit;
-      fire(g, { x: p.x + (k - (n - 1) / 2) * 42, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + 0.3 * up('cdmg')) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, r: 6, life: 1.4, kind: 'pill' });
+      fire(g, { x: p.x + (k - (n - 1) / 2) * 42, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, r: 6, life: 1.4, kind: 'pill' });
     }
     g.shots++; g.events.push({ t: 'shoot' });
   }
