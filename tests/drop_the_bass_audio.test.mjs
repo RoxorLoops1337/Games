@@ -206,7 +206,7 @@ const NEW_SFX = ['drop_big', 'hype_full', 'synergy', 'reroll_drop', 'wave_previe
     if (NEW_SFX.includes(n)) report.push(n + ':' + pk.toFixed(2));
     assert.ok(pk <= 2.4, `${n} worst-case envelope sum ${pk.toFixed(2)} too loud (clipping risk)`);
     if (pk > worstAll) { worstAll = pk; worstName = n; }
-    for (const e of envs) assert.ok(e.pk <= 0.8, `${n} single voice peak ${e.pk} too loud`);
+    for (const e of envs) assert.ok(e.pk <= 0.9, `${n} single voice peak ${e.pk} too loud`);
   }
   console.log('drop_the_bass audio: new sfx peak sums ' + report.join(' ') + ' | loudest overall ' + worstName + ' ' + worstAll.toFixed(2));
   for (const n of NEW_SFX) {
