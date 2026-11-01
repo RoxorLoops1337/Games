@@ -148,6 +148,29 @@ export const BOSS_PHASES = {
     { at: 0.5, id: 'bulwark', text: 'Mr. Playback cranks the master volume!', frac: 0.08 },
     { at: 0.2, id: 'steal_turret', text: 'Mr. Playback skips one of your tracks!', dur: 8 },
   ],
+  lowpass: [
+    { at: 0.85, id: 'dark_lane', text: 'The tide rolls over a band of the stage.', dur: 4.5 },
+    { at: 0.66, id: 'summon_wave', text: 'The Tide washes in a crowd!', n: 6 },
+    { at: 0.4, id: 'bulwark', text: 'A wall of water rises around the Tide!', frac: 0.1 },
+    { at: 0.19, id: 'enrage', text: 'The tide is coming in fast!', speed: 1.35 },
+  ],
+  silence: [
+    { at: 1, id: 'jam_pulse', text: 'Dr. Dead Air mutes the room.', dur: 2, max: 4 },
+    { at: 0.66, id: 'steal_turret', text: 'Dr. Dead Air steals one of your instruments!', dur: 8 },
+    { at: 0.66, id: 'dark_lane', text: 'A pocket of dead air swallows the sound.', dur: 4.5 },
+    { at: 0.33, id: 'summon_wave', text: 'The silence calls its biggest crowd!', n: 7 },
+    { at: 0.33, id: 'heal_pulse', text: 'Dr. Dead Air drinks in the quiet.', frac: 0.05 },
+    { at: 0.33, id: 'bulwark', text: 'A wall of silence rises!', frac: 0.1 },
+    { at: 0.09, id: 'enrage', text: 'Dr. Dead Air is closing in!', speed: 1.35 },
+  ],
+};
+// Per-boss damage tricks read by sim.js hurt(): hits weaker than weakFrac of the boss max health are multiplied by weakMul.
+export const BOSS_TRICKS = {
+  lowpass: { weakFrac: 0.002, weakMul: 0.4 },
+};
+// Periodic mute: every `every` seconds the nearest `n` turrets are jammed for `dur` seconds (Dr. Dead Air mutes turrets in waves).
+export const BOSS_PULSES = {
+  silence: { every: 9, n: 3, dur: 1.8 },
 };
 
 // ---------------------------------------------------------------- 5. endless milestones (data and event only, the meta layer pays them)

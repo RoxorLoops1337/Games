@@ -7,6 +7,10 @@ import {
 } from './data_core.js';
 import { freshMods, applyFx, REMIX, RELICS, WAVE_MODS, DAILY_MODS } from './data_run.js';
 import { makeRng } from './rng.js';
+import {
+  TURRET_BRANCHES, BRANCH_BY_ID, BRANCH_TURRET, BRANCH_LEVEL, HERO_ABILITIES, HERO_ABILITY_DEFAULT, HERO_ABILITY_NUMS,
+  RUN_MODIFIERS, RUN_MODIFIER_BY_ID, RUN_MODIFIER_NUMS, MAX_RUN_MODIFIERS, BOSS_PHASES, BOSS_PHASE_EFFECTS, BOSS_TRICKS, BOSS_PULSES, ENDLESS_MILESTONES,
+} from './data_depth.js';
 
 export const DT = 1 / 60;
 const INTRO_WAVE = { fuzz: 1, zip: 2, drone: 3, echo: 4, brick: 5, leech: 6, gate: 7, rager: 7, squeal: 8, mute: 9 };
@@ -33,13 +37,17 @@ const BOSS_TIPS = {
   reverb: 'Reverb Titan leaves echoes behind: splash turrets help.',
   djglitch: 'DJ Glitch jams the nearest turrets: keep a few spares further from the path.',
   playback: 'Mr. Playback has three phases: save your heroes for the last one.',
+  lowpass: 'The Low-Pass Tide shrugs off weak shots: bring big hits like Kick Cannon and Cowbell Sniper.',
+  silence: 'Dr. Dead Air mutes and steals turrets: keep spares and save your heroes for the end.',
 };
-const RUSH_BOSSES = ['compressor', 'noisegate', 'reverb', 'djglitch', 'playback'];
+const RUSH_BOSSES = ['compressor', 'noisegate', 'reverb', 'djglitch', 'playback', 'lowpass', 'silence'];
+const ENDLESS_BOSSES = RUSH_BOSSES;
 
 // ------------------------------------------------------------------------------------------------ wave generation (pure)
 export function waveBaseHp(world, w, encore = 0) {
-  const g1 = Math.pow(ECON.hpGrowth, Math.min(w, 20) - 1);
-  const g2 = Math.pow(ECON.hpGrowthLate, Math.max(0, w - 20));
+  const cap = Math.max(20, world.wavesTotal || 20);   // growth keeps going through the stage length (25-wave stages), then the late rate
+  const g1 = Math.pow(ECON.hpGrowth, Math.min(w, cap) - 1);
+  const g2 = Math.pow(ECON.hpGrowthLate, Math.max(0, w - cap));
   return ECON.hpPerWaveBase * g1 * g2 * world.hpMul * encoreHp(encore);
 }
 export const waveCoinScale = (w) => 1 + 0.09 * (w - 1);
@@ -48,7 +56,9 @@ export function genWave(world, w, seed, o = {}) {
   const rng = makeRng(((seed >>> 0) * 2654435761 + w * 40503 + 17) >>> 0);
   const endless = !!o.endless;
   const avail = world.pool.filter((t) => (INTRO_WAVE[t] || 1) <= w);
-  const bossWave = w % 10 === 0;
+  const total = o.wavesTotal || world.wavesTotal;
+  const finalExtra = !endless && total === world.wavesTotal && total % 10 !== 0 && w === total;   // 25-wave stages: the final boss closes wave 25
+  const bossWave = w % 10 === 0 || finalExtra;
   const budget = 6 + 1.7 * w;
   const nGroups = w < 3 ? 1 : w < 9 ? 2 : 3;
   const types = [];
@@ -77,8 +87,9 @@ export function genWave(world, w, seed, o = {}) {
   if (tot > 80) { const k = 80 / tot; delay = 0.6; for (const g of groups) { g.count = Math.max(2, Math.floor(g.count * k)); g.delay = delay; delay += g.count * g.gap + 1.2; } }
   let boss = null, bossScale = 1;
   if (bossWave) {
-    if (endless) { const ids = ['compressor', 'noisegate', 'reverb', 'djglitch', 'playback']; boss = ids[(Math.floor(w / 10) - 1) % ids.length]; bossScale = 1 + 0.35 * Math.floor((w - 1) / 50); }
+    if (endless) { const ids = ENDLESS_BOSSES; boss = ids[(Math.floor(w / 10) - 1) % ids.length]; bossScale = 1 + 0.35 * Math.floor((w - 1) / 50); }
     else if (w === 10) { boss = world.boss10; bossScale = 0.42; }
+    else if (total === world.wavesTotal && w < total) { boss = world.boss10; bossScale = 0.75; }
     else { boss = world.boss; bossScale = 1; }
     for (const g of groups) g.count = Math.max(2, Math.round(g.count * 0.55));
   }

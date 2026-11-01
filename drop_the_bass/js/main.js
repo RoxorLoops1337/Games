@@ -11,6 +11,8 @@ import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo } f
 import { setRoot, h, btn, modal, toast, tickLive, AE, AW } from './ui_core.js';
 import { submitScore, rankOf } from './lb.js';
 import { setStyle } from './style.js';
+import { initPwa } from './pwa.js';
+import * as Stats from './stats.js';
 
 const canvas = document.getElementById('game');
 const ui = document.getElementById('ui');
@@ -251,6 +253,7 @@ function finalize(run, battle) {
   if (run.cfg && run.cfg.weekly) { run.result.weekly = true; run.result.weekId = run.cfg.weekId || M.isoWeek(app.now()).id; }
   if (run.cfg && run.cfg.difficulty) run.result.difficulty = run.cfg.difficulty;
   const out = M.applyRunResult(p, run.result, app.rng(), app.now());
+  Stats.trackRunEnd(run, run.result);
   p.resume = null;
   if (run.mode === 'tutorial') {
     p.tutorial.done = true; p.records += 150; p.diamonds += 20; p.pendingCrates = (p.pendingCrates || []).concat(['garage']);
@@ -340,6 +343,8 @@ if (loaded.recovered) { writeSave(); setTimeout(() => toast('Recovered your last
 else if (loaded.corrupt) setTimeout(() => toast('Your save could not be read, so you are starting fresh. The damaged copy is kept.', 5200), 300);
 document.getElementById('boot').remove();
 window.__dtbReady = true;
+Stats.init(() => app.profile.settings);
+initPwa();
 requestAnimationFrame(frame);
 // autosave the run every few seconds so a reload, a discarded tab or a crash never loses turrets placed since the last wave
 setInterval(() => { try { saveResume(); } catch (e) { /* ignore */ } }, 4000);
