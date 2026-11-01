@@ -74,7 +74,7 @@ export function createRenderer(canvas, art, kit) {
       case 'pulse': ring(e.x, e.y, e.r, '#7fe8ff', 0.5); break;
       case 'strike': S.bolts.push({ x: e.x, y: e.y, life: 0.28, seed: Math.random() * 9 }); burst(e.x, e.y, 12, ['#d8c4ff', '#fff'], 280, 0.4, 5); ring(e.x, e.y, 70, '#b69cf0', 0.35); break;
       case 'maw': ring(e.x, e.y, 130, '#8a4fe0', 0.7); break;
-      case 'chestdrop': S.banner = { text: 'CHEST!', sub: e.pct + '% of the virus down', t: 0, dur: 1.4, clear: true }; break;
+      case 'chestdrop': S.banner = { text: 'CHEST!', sub: 'Nice aim', t: 0, dur: 1.2, clear: true }; ring(e.x, e.y, 90, '#ffd84d', 0.5); break;
       case 'chest': ring(e.x, e.y, 100, '#ffd84d', 0.6); burst(e.x, e.y, 28, ['#ffd84d', '#fff', '#ff7eb6'], 380, 0.8, 6); break;
       case 'hurt': S.trauma = Math.min(1, S.trauma + 0.6); S.flash = 0.35; S.flashCol = '#ff2a4d'; burst(e.x, e.y, 16, ['#ff2a4d', '#ff8aa0'], 300, 0.5, 5); addFloat(e.x, e.y - 30, '-' + Math.ceil(e.d), '#ff5a78', 28, -90); break;
       case 'block': ring(e.x, e.y, 46, '#39d0ff', 0.3); break;
@@ -153,6 +153,7 @@ export function createRenderer(canvas, art, kit) {
         if (s.kind === 'bomb') { const f = 0.6 + Math.sin(S.t * 18 + i) * 0.4; sparkleAt(s.x + r * 0.1, s.y - r * 1.2, r * 0.3 * f); }
         if (s.kind === 'gold') sparkleAt(s.x + r * 0.5 + Math.sin(S.t * 4 + i) * 4, s.y - r * 0.5, r * 0.28);
       } else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
+      if (s.carry === 'chest') { glow(s.x, s.y, r * 1.8, '#ffd84d', 0.5 + Math.sin(S.t * 6 + i) * 0.2); blit(kit && kit.SPR.pickup('chest'), s.x, s.y - r * 0.9, r * 2.2, Math.sin(S.t * 4 + i) * 0.1); }
       text(num(s.hp), s.x, s.y + r * 0.05, Math.max(12, r * 0.64), '#fff', INK);
     }
     if (sn.slow > 0) { const h = segs[0]; glow(h.x, h.y, h.r * 2, '#7fe8ff', 0.3); }
@@ -293,7 +294,7 @@ export function createRenderer(canvas, art, kit) {
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(bx - 3, by - 3, bw + 6, 20);
     ctx.fillStyle = boss ? '#ff3d6e' : '#ff7eb6'; ctx.fillRect(bx, by, bw * (g.progress || 0), 14);
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.strokeRect(bx - 3, by - 3, bw + 6, 20);
-    for (const th of [0.25, 0.5, 1]) { const done = (g.progress || 0) >= th - 1e-6; ctx.save(); ctx.globalAlpha = done ? 0.45 : 1; blit(kit && kit.SPR.pickup('chest'), bx + bw * th - (th === 1 ? 4 : 0), by + 7, 46); ctx.restore(); }
+    for (const th of [1]) { const done = (g.progress || 0) >= th - 1e-6; ctx.save(); ctx.globalAlpha = done ? 0.45 : 1; blit(kit && kit.SPR.pickup('chest'), bx + bw * th - (th === 1 ? 4 : 0), by + 7, 46); ctx.restore(); }
     // coins
     blit(kit && kit.SPR.pickup('coin'), W - pad - 172, 38, 52); text(String(Math.floor(g.coins)), W - pad - 152, 38, 24, '#ffd24a', '#0b1020', 'left');
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(W - 40, 38, 24, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(W - 48, 28, 6, 20); ctx.fillRect(W - 36, 28, 6, 20);

@@ -70,7 +70,7 @@ ok('it starts weak: every cell takes 10 to 20 capsule shots, and you have no ski
   assert.equal(Object.keys(g.weap).length, 0); assert.equal(g.level, 1);
   const capsule = 1.0 * g.p.atk;
   for (const q of g.snakes[0].segs) if (q.kind === 'normal' && q.i > 0) { const shots = q.max / capsule; assert.ok(shots >= 10 && shots <= 20, `cell needs ${shots} shots`); }
-  assert.ok(g.p.rate <= 1.7, 'slow fire rate');
+  assert.ok(g.p.rate <= 2.2, 'slow fire rate');
 });
 
 ok('killing a middle segment splits the virus into two pieces that both keep crawling', () => {
@@ -115,12 +115,18 @@ ok('a bomb segment chain-reacts into neighbours and the player', () => {
   assert.ok(g.p.hp < hp0, 'the cell inside the blast is hurt');
 });
 
-ok('the capsule auto-aims at the nearest visible target and bullets land', () => {
+ok('the capsule never aims: it fires straight up, so you hit only what is above you', () => {
   const g = sim.createGame({ seed: 6 });
-  const h = g.snakes[0].segs[0]; h.ps = 600; sim.step(g, 1 / 60, {});
-  run(g, 5, {});   // the capsule is slow on purpose
-  assert.ok(g.shots >= 6 && g.events.some(e => e.t === 'hit'));
-  assert.ok(g.snakes[0].segs[0].hp < g.snakes[0].segs[0].max || g.kills > 0);
+  run(g, 3, {});   // nothing above the cell yet: it still fires, straight up
+  assert.ok(g.shots >= 3 && g.bullets.every(b => Math.abs(b.vx) < 1e-6 && b.vy < 0));
+  assert.equal(g.p.aim, -Math.PI / 2);
+  // park the head right above the cell: the shots land. Park it far to the side: they miss.
+  const sn = g.snakes[0], hd = sn.segs[0]; sn.speed = 0.01;
+  for (const q of sn.segs) q.ps += 400 - hd.ps; run(g, 0.05, {});
+  g.p.x = hd.x; g.events.length = 0; const hp0 = hd.hp; run(g, 4, {});
+  assert.ok(hd.hp < hp0 && g.events.some(e => e.t === 'hit'), 'standing under it hits');
+  g.p.x = hd.x < W / 2 ? hd.x + 300 : hd.x - 300; run(g, 2, {}); g.events.length = 0; const hp1 = hd.hp; run(g, 4, {});   // (let shots already in flight land first)
+  assert.equal(hd.hp, hp1, 'standing away from it misses');
 });
 
 ok('every weapon works at every level and hurts the virus', () => {
@@ -128,7 +134,7 @@ ok('every weapon works at every level and hurts the virus', () => {
     const g = sim.createGame({ seed: 20 + L, unlocked: ALL, stage: 6 });
     g.weap[w.id] = { lv: L, cd: 0 }; if (w.id === 'tower') g.weap.tower.lv = L;
     g.p.hp = g.p.maxHp = 1e6; g.p.rate = 0.0001; g.p.cd = 99;   // silence the capsule so only the weapon deals damage
-    bringNear(g); g.snakes[0].speed = 0.01;                      // park the virus by the cell
+    bringNear(g); g.snakes[0].speed = 0.01; g.p.x = g.snakes[0].segs[0].x;   // park the virus right above the cell
     sim.step(g, 1 / 60, {});
     const before = g.stageHp, ev = new Set();
     for (let i = 0; i < 60 * 12; i++) { sim.step(g, 1 / 60, { mx: 0, my: 0 }); for (const e of g.events) ev.add(e.t); g.events.length = 0; if (g.phase === 'levelup') sim.choose(g, 0); }
@@ -150,14 +156,16 @@ ok('swab plants a zone on the front of the virus; towers pulse; maw executes wea
   assert.ok(!g3.snakes.some(s => s.segs.includes(weak)), 'executed');
 });
 
-ok('chests drop at 25% and 50% of the virus health and give coins only', () => {
+ok('two chest cells per virus carry a chest: kill one and it drops, and it only gives coins', () => {
   const g = sim.createGame({ seed: 11 });
-  const sn = g.snakes[0], total = g.stageHpMax; let dead = 0;
-  for (const q of sn.segs) { if (dead / total >= 0.27) break; dead += q.hp; q.hp = 0; }
+  const sn = g.snakes[0], carriers = sn.segs.filter(q => q.carry === 'chest');
+  assert.equal(carriers.length, 2); assert.ok(carriers.every(q => q.i > 0));
   g.nextUp = 1e9;   // keep skill picks out of this test
-  sim.step(g, 1 / 60, {});
-  assert.ok(g.progress >= 0.25 && g.chestsDone[25] && g.pickups.some(p => p.kind === 'chest') && g.events.some(e => e.t === 'chestdrop'));
-  const chest = g.pickups.find(p => p.kind === 'chest'); chest.x = g.p.x; chest.y = g.p.y; chest.age = 1;
+  assert.ok(!g.pickups.some(p => p.kind === 'chest'));
+  carriers[0].hp = 0; sim.step(g, 1 / 60, {});
+  const chest = g.pickups.find(p => p.kind === 'chest');
+  assert.ok(chest && g.events.some(e => e.t === 'chestdrop'));
+  chest.x = g.p.x; chest.y = g.p.y; chest.age = 1;
   const coins0 = g.coins; sim.step(g, 1 / 60, {});
   assert.equal(g.phase, 'play', 'a chest never opens a skill pick'); assert.ok(g.coins > coins0);
 });
@@ -219,11 +227,16 @@ ok('clearing the virus clears the chapter: bonus chest, then the next chapter st
   assert.equal(g.stage, 2); assert.equal(g.phase, 'play'); assert.equal(g.snakes.length, 1); assert.notEqual(g.path, path1);
 });
 
-ok('minions swarm in from chapter 2, chase the cell, and can be shot', () => {
+ok('minions swarm in from chapter 2 and crawl straight down to the membrane; a leak costs a little HP; they can be shot', () => {
   const g = sim.createGame({ seed: 14, stage: 3 });
   g.wave = 0.01; sim.step(g, 0.05, {});
   assert.ok(g.minions.length > 0 && g.events.some(e => e.t === 'swarm'));
-  const m = g.minions[0]; m.hp = 0; sim.step(g, 1 / 60, {}); assert.ok(!g.minions.includes(m));
+  assert.ok(g.minions.every(m => m.y < 0), 'they enter from the top');
+  const m = g.minions[0], y0 = m.y; g.snakes[0].speed = 0.01; run(g, 2, {}); assert.ok(m.y > y0 + 20, 'moves down');
+  g.p.zone = { x0: 0, x1: W, y0: 20, y1: 20 }; g.p.x = 5000;   // keep the cell out of the way
+  const hp0 = g.p.hp; m.y = sim.LINE_Y + 1; sim.step(g, 1 / 60, {});
+  assert.ok(!g.minions.includes(m) && g.p.hp < hp0 && g.leaks >= 1, 'a minion that reaches the membrane leaks');
+  const m2 = g.minions[0]; if (m2) { m2.hp = 0; sim.step(g, 1 / 60, {}); assert.ok(!g.minions.includes(m2)); }
 });
 
 ok('shop: stats, weapon unlocks, save sanitising', () => {

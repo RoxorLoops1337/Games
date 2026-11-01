@@ -11,7 +11,7 @@ How the real game works (from store listings and community guides) and how this 
 | The cell spawns at the bottom or in the centre, depending on the stage. | `spawnMode(n)`: odd chapters bottom, even chapters centre. You move only inside the spawn zone. |
 | Always-on Capsule, plus skills picked 1 of 3 at level-ups and from chests. | Capsule (music notes) plus nine skills, each Lv 1 to 5, and six passives. |
 | Skills: Sterile Swab (targets the head), Spinning Daggers, Medical Tower, Snot Dragon, Acupuncture, Massage Stick, Disinfectant Bubble, Satellite Storm (% HP), Abyssal Maw (execute). | All nine in `sim.js` (`WEAPONS`). The first four are free, the rest are unlocked with coins. |
-| Chests at 25%, 50% and 100% of stage progress. | Chests drop at 25% and 50% of the virus HP and one more on clear. |
+| Chests at 25%, 50% and 100% of stage progress. | Two chest cells per virus carry a chest (aim for them first: the capsule only fires straight up), plus one on clear. Chests give coins. |
 | Coins upgrade Attack, Crit and Cooldown permanently. | Same three stats in the shop, plus Vitality, Fortune and Second Wind. |
 
 Files: `sim.js` (pure simulation), `art_draw.js` (all art, drawn in code in the Hocus Vocus chibi
