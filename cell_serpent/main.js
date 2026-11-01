@@ -31,7 +31,7 @@ function newDemo() { demo = createGame({ seed: (Math.random() * 1e9) | 0, bot: t
 function startRun() {
   audio.unlock(); audio.music(true);
   const qs = new URLSearchParams(location.search);
-  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, unlocked: save.unlocked, firstPick: true, stage: Math.max(1, +qs.get('stage') || 1) });
+  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, unlocked: save.unlocked, stage: Math.max(1, +qs.get('stage') || 1) });
   mode = 'play'; acc = 0; cardsFor = null; show('');
   window.CS.g = g;
 }
@@ -92,9 +92,9 @@ canvas.addEventListener('pointerdown', e => {
 canvas.addEventListener('pointermove', e => {
   if (!joy.on || e.pointerId !== joy.id) return;
   const L = R.layout(), dpr = canvas.width / innerWidth, rad = 70 * L.s / dpr;
-  let dx = (e.clientX - joy.sx) / rad, dy = (e.clientY - joy.sy) / rad; const l = Math.hypot(dx, dy);
-  if (l > 1) { dx /= l; dy /= l; joy.sx = e.clientX - dx * rad; joy.sy = e.clientY - dy * rad; }   // anchor follows the finger
-  const gp = R.toGame(joy.sx * dpr, joy.sy * dpr); joy.x = gp.x; joy.y = gp.y;
+  let dx = (e.clientX - joy.sx) / rad; const dy = 0;
+  if (Math.abs(dx) > 1) { dx = Math.sign(dx); joy.sx = e.clientX - dx * rad; }   // anchor follows the finger
+  const gp = R.toGame(joy.sx * dpr, joy.sy * dpr); joy.x = gp.x;
   joy.dx = dx; joy.dy = dy;
 });
 const endJoy = e => { if (e.pointerId === joy.id) { joy.on = false; joy.dx = joy.dy = 0; } };
@@ -109,10 +109,9 @@ addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (mode === 'play' && g.phase !== 'levelup') pause(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'play' && g.phase !== 'levelup') pause(); });
 function readInput() {
-  let mx = joy.dx, my = joy.dy;
+  let mx = joy.dx;   // the cell slides left and right only
   if (keys.a || keys.arrowleft) mx -= 1; if (keys.d || keys.arrowright) mx += 1;
-  if (keys.w || keys.arrowup) my -= 1; if (keys.s || keys.arrowdown) my += 1;
-  return { mx, my };
+  return { mx, my: 0 };
 }
 function pause() { if (mode !== 'play' || g.phase === 'dead') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; show('pause'); }
 function resume() { mode = 'play'; show(''); last = performance.now(); }
@@ -124,7 +123,7 @@ function finishRun() {
   const newBest = r.stage > save.best;
   save.coins += r.coins; save.runs++; save.kills += r.kills; if (newBest) save.best = r.stage; persist();
   $('oStage').textContent = r.stage; $('oBest').textContent = newBest ? 'NEW BEST!' : '';
-  $('oKills').textContent = r.kills; $('oLevel').textContent = r.level; $('oScore').textContent = r.score; $('oCoins').textContent = r.coins;
+  $('oKills').textContent = r.kills; $('oLevel').textContent = Math.max(0, r.level - 1); $('oScore').textContent = r.score; $('oCoins').textContent = r.coins;
   $('overTitle').textContent = r.name ? r.name.toUpperCase() + ' WINS' : 'THE VIRUS WINS';
   show('over');
 }
