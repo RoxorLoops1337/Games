@@ -481,17 +481,17 @@ export function codexModal(app) {
   const m = modal(body, { wide: true });
   let sec = 'turrets';
   const draw = () => {
-    body.replaceChildren(h('h2', null, 'Codex'));
+    body.replaceChildren(h('h2', null, t('codex.title', 'Codex')));
     const seg = h('div', { class: 'seg' });
-    for (const [id, nm] of [['turrets', 'Turrets'], ['enemies', 'Static'], ['bosses', 'Bosses'], ['remix', 'Remix'], ['relics', 'Merch']]) seg.append(h('button', { class: sec === id ? 'on' : '', onclick: () => { sec = id; draw(); } }, nm));
+    for (const [id, nm] of [['turrets', t('codex.turrets', 'Turrets')], ['enemies', t('codex.static', 'Static')], ['bosses', t('codex.bosses', 'Bosses')], ['remix', t('codex.remix', 'Remix')], ['relics', t('codex.merch', 'Merch')]]) seg.append(h('button', { class: sec === id ? 'on' : '', onclick: () => { sec = id; draw(); } }, nm));
     body.append(seg);
     const g = h('div', { class: 'codexgrid' });
-    if (sec === 'turrets') for (const id of TURRET_IDS) { const t = TURRETS[id]; const own = p.turretsUnlocked[id]; g.append(h('div', { class: 'cdx' + (own ? '' : ' unk') }, turretLive(id, 4, 72), h('div', { class: 'nm' }, own ? t.name : '???'), h('div', { class: 'ds' }, own ? t.blurb : 'Fame ' + t.unlock.fame))); }
-    if (sec === 'enemies') for (const id of ENEMY_IDS) { const e = ENEMIES[id]; if (e.hidden) continue; const seen = p.seen.enemies[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 70), h('div', { class: 'nm' }, seen ? e.name : '???'), h('div', { class: 'ds' }, seen ? e.blurb : 'Not met yet'))); }
-    if (sec === 'bosses') for (const id of BOSS_IDS) { const b = BOSSES[id]; const seen = p.seen.bosses[id] || p.bossesSeen[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 80, true), h('div', { class: 'nm' }, seen ? b.name : '???'), h('div', { class: 'ds' }, seen ? b.trick : 'Not met yet'))); }
+    if (sec === 'turrets') for (const id of TURRET_IDS) { const tu = TURRETS[id]; const own = p.turretsUnlocked[id]; g.append(h('div', { class: 'cdx' + (own ? '' : ' unk') }, turretLive(id, 4, 72), h('div', { class: 'nm' }, own ? tu.name : '???'), h('div', { class: 'ds' }, own ? tu.blurb : t('studio.need_fame', 'Fame {n}', { n: tu.unlock.fame })))); }
+    if (sec === 'enemies') for (const id of ENEMY_IDS) { const e = ENEMIES[id]; if (e.hidden) continue; const seen = p.seen.enemies[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 70), h('div', { class: 'nm' }, seen ? e.name : '???'), h('div', { class: 'ds' }, seen ? e.blurb : t('codex.not_met', 'Not met yet')))); }
+    if (sec === 'bosses') for (const id of BOSS_IDS) { const b = BOSSES[id]; const seen = p.seen.bosses[id] || p.bossesSeen[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 80, true), h('div', { class: 'nm' }, seen ? b.name : '???'), h('div', { class: 'ds' }, seen ? b.trick : t('codex.not_met', 'Not met yet')))); }
     if (sec === 'remix') for (const c of Object.values(REMIX)) g.append(h('div', { class: 'cdx' }, icon(c.glyph, 44, RARITY[c.rarity].color), h('div', { class: 'nm ' + rarClass(c.rarity) }, c.name), h('div', { class: 'ds' }, c.desc)));
     if (sec === 'relics') for (const c of Object.values(RELICS)) g.append(h('div', { class: 'cdx' }, icon(c.glyph, 44, RARITY[c.rarity].color), h('div', { class: 'nm ' + rarClass(c.rarity) }, c.name), h('div', { class: 'ds' }, c.desc)));
-    body.append(g, h('div', { class: 'btnrow' }, btn('Close', () => m.close(), 'dark')));
+    body.append(g, h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'dark')));
   };
   draw();
 }
@@ -501,7 +501,7 @@ export function settingsModal(app) {
   const body = h('div');
   const m = modal(body);
   const draw = () => {
-    body.replaceChildren(h('h2', null, 'Settings'));
+    body.replaceChildren(h('h2', null, t('settings.title', 'Settings')));
     const slider = (label, key, apply) => h('div', { class: 'rangeRow' }, h('span', { style: 'width:80px' }, label), h('input', { type: 'range', min: 0, max: 100, value: Math.round(s[key] * 100), oninput: (e) => { s[key] = e.target.value / 100; apply(); app.save(); }, onchange: () => app.audio.play('ui_click') }));
     // Install the app: hidden once installed; Safari on iOS has no prompt, so it gets a how-to hint instead
     const installRow = () => {
@@ -510,50 +510,50 @@ export function settingsModal(app) {
       const fill = () => {
         row.replaceChildren();
         if (isInstalled()) return;
-        if (canInstall()) row.append(h('div', { class: 'toggle' }, 'Install the app', btn('Install', async () => { const r = await promptInstall(); if (r === 'accepted') toast('Installed! Look for it on your home screen.'); fill(); }, 'gold small')));
-        else row.append(h('div', { class: 'sub install-hint', style: 'font-size:15px' }, 'Install: in Safari tap Share, then Add to Home Screen. Chrome and Edge offer an Install button when the game is ready.'));
+        if (canInstall()) row.append(h('div', { class: 'toggle' }, t('settings.install_app', 'Install the app'), btn(t('settings.install', 'Install'), async () => { const r = await promptInstall(); if (r === 'accepted') toast(t('settings.installed', 'Installed! Look for it on your home screen.')); fill(); }, 'gold small')));
+        else row.append(h('div', { class: 'sub install-hint', style: 'font-size:15px' }, t('settings.install_hint', 'Install: in Safari tap Share, then Add to Home Screen. Chrome and Edge offer an Install button when the game is ready.')));
       };
       fill();
       const off = onInstallChange(() => { if (!row.isConnected) { off(); return; } fill(); });
       return row;
     };
-    const tog = (label, key) => h('div', { class: 'toggle' }, label, btn(s[key] ? 'ON' : 'OFF', () => { s[key] = !s[key]; app.applySettings(); app.save(); draw(); }, s[key] ? 'green small' : 'dark small'));
-    body.append(slider('Music', 'music', () => app.applySettings()), slider('Sound', 'sfx', () => app.applySettings()),
-      tog('Screen shake', 'shake'), tog('Damage numbers', 'numbers'), tog('Vibration', 'vibrate'), tog('Beat helper (DROP ring)', 'beat'), tog('Reduce motion', 'reduce'), tog('Low graphics (faster)', 'lowfx'));
-    body.append(tog2('Show the Setlist before a run', !s.skipSetlist, () => { s.skipSetlist = !s.skipSetlist; app.save(); draw(); }));
-    body.append(tog('Share anonymous play stats', 'analytics'), h('div', { class: 'sub', style: 'font-size:14px;margin:-4px 0 6px' }, 'Helps balance the game. No names or identifiers are sent.'));
+    const tog = (label, key) => h('div', { class: 'toggle' }, label, btn(s[key] ? t('common.on', 'ON') : t('common.off', 'OFF'), () => { s[key] = !s[key]; app.applySettings(); app.save(); draw(); }, s[key] ? 'green small' : 'dark small'));
+    body.append(slider(t('settings.music', 'Music'), 'music', () => app.applySettings()), slider(t('settings.sound', 'Sound'), 'sfx', () => app.applySettings()),
+      tog(t('settings.shake', 'Screen shake'), 'shake'), tog(t('settings.numbers', 'Damage numbers'), 'numbers'), tog(t('settings.vibration', 'Vibration'), 'vibrate'), tog(t('settings.beat', 'Beat helper (DROP ring)'), 'beat'), tog(t('settings.reduce', 'Reduce motion'), 'reduce'), tog(t('settings.lowfx', 'Low graphics (faster)'), 'lowfx'));
+    body.append(tog2(t('settings.show_setlist', 'Show the Setlist before a run'), !s.skipSetlist, () => { s.skipSetlist = !s.skipSetlist; app.save(); draw(); }));
+    body.append(tog(t('settings.analytics', 'Share anonymous play stats'), 'analytics'), h('div', { class: 'sub', style: 'font-size:14px;margin:-4px 0 6px' }, t('settings.analytics_hint', 'Helps balance the game. No names or identifiers are sent.')));
     body.append(h('div', { class: 'hr' }), h('h3', null, t('settings.language', 'Language')), langPicker(app, true, draw));
     body.append(installRow());
-    if (p.autoMerge) body.append(tog2('Auto-merge after each drop', p.autoMergeOn, () => { p.autoMergeOn = !p.autoMergeOn; app.save(); draw(); }));
-    body.append(h('div', { class: 'hr' }), h('h3', null, 'Leaderboard name'), h('input', { type: 'text', maxlength: 16, value: p.name || '', placeholder: 'Your name (optional)', style: 'width:100%;font:400 20px var(--hand,sans-serif);padding:10px;border-radius:10px;border:3px solid var(--line)', oninput: (e) => { p.name = e.target.value.replace(/[^\w \-.']/g, '').slice(0, 16); app.save(); } }));
-    body.append(h('div', { class: 'hr' }), h('h3', null, 'Save data'), h('div', { class: 'sub' }, 'Your progress is saved on this device. Copy the code to move it to another device.'));
+    if (p.autoMerge) body.append(tog2(t('settings.automerge', 'Auto-merge after each drop'), p.autoMergeOn, () => { p.autoMergeOn = !p.autoMergeOn; app.save(); draw(); }));
+    body.append(h('div', { class: 'hr' }), h('h3', null, t('settings.lb_name', 'Leaderboard name')), h('input', { type: 'text', maxlength: 16, value: p.name || '', placeholder: t('settings.name_ph', 'Your name (optional)'), style: 'width:100%;font:400 20px var(--hand,sans-serif);padding:10px;border-radius:10px;border:3px solid var(--line)', oninput: (e) => { p.name = e.target.value.replace(/[^\w \-.']/g, '').slice(0, 16); app.save(); } }));
+    body.append(h('div', { class: 'hr' }), h('h3', null, t('settings.save_data', 'Save data')), h('div', { class: 'sub' }, t('settings.save_hint', 'Your progress is saved on this device. Copy the code to move it to another device.')));
     const ta = h('textarea', { class: 'code', readonly: true }, M.exportCode(p));
-    body.append(ta, h('div', { class: 'btnrow' }, btn('Copy code', () => { ta.select(); const fb = () => { try { document.execCommand('copy'); toast('Copied!'); } catch (e) { toast('Select the code and copy it by hand.'); } }; try { navigator.clipboard.writeText(ta.value).then(() => toast('Copied!'), fb); } catch (e) { fb(); } }, 'blue small'),
-      btn('Import code', () => importModal(app), 'dark small')));
-    body.append(h('div', { class: 'btnrow' }, btn('How to play', () => { m.close(); app.showHowTo(); }, 'dark small'), btn('Codex', () => { m.close(); codexModal(app); }, 'dark small')));
-    body.append(h('div', { class: 'btnrow' }, btn('Replay intro', () => { m.close(); app.playCutscene('intro', () => app.openHub()); }, 'dark small'), btn('Reset game', () => resetModal(app), 'red small')));
-    body.append(h('div', { class: 'credit', style: 'text-align:center;margin-top:10px;font-size:12px;color:var(--dim)' }, GAME.title + ' by RoxorLoops & Jasmin. Keyboard: Space drop, M merge all, Q/W heroes, N next wave, F speed, Esc pause.'));
-    body.append(h('div', { class: 'btnrow' }, btn('Close', () => m.close(), 'green')));
+    body.append(ta, h('div', { class: 'btnrow' }, btn(t('settings.copy_code', 'Copy code'), () => { ta.select(); const fb = () => { try { document.execCommand('copy'); toast(t('settings.copied', 'Copied!')); } catch (e) { toast(t('settings.copy_by_hand', 'Select the code and copy it by hand.')); } }; try { navigator.clipboard.writeText(ta.value).then(() => toast(t('settings.copied', 'Copied!')), fb); } catch (e) { fb(); } }, 'blue small'),
+      btn(t('settings.import_code', 'Import code'), () => importModal(app), 'dark small')));
+    body.append(h('div', { class: 'btnrow' }, btn(t('settings.how_to', 'How to play'), () => { m.close(); app.showHowTo(); }, 'dark small'), btn(t('codex.title', 'Codex'), () => { m.close(); codexModal(app); }, 'dark small')));
+    body.append(h('div', { class: 'btnrow' }, btn(t('settings.replay_intro', 'Replay intro'), () => { m.close(); app.playCutscene('intro', () => app.openHub()); }, 'dark small'), btn(t('settings.reset', 'Reset game'), () => resetModal(app), 'red small')));
+    body.append(h('div', { class: 'credit', style: 'text-align:center;margin-top:10px;font-size:12px;color:var(--dim)' }, t('settings.credit', '{title} by RoxorLoops & Jasmin. Keyboard: Space drop, M merge all, Q/W heroes, N next wave, F speed, Esc pause.', { title: GAME.title })));
+    body.append(h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'green')));
   };
   draw();
 }
-function tog2(label, on, fn) { return h('div', { class: 'toggle' }, label, btn(on ? 'ON' : 'OFF', fn, on ? 'green small' : 'dark small')); }
+function tog2(label, on, fn) { return h('div', { class: 'toggle' }, label, btn(on ? t('common.on', 'ON') : t('common.off', 'OFF'), fn, on ? 'green small' : 'dark small')); }
 function importModal(app) {
-  const ta = h('textarea', { class: 'code', placeholder: 'Paste your save code here (it starts with DTB1.)' });
+  const ta = h('textarea', { class: 'code', placeholder: t('import.placeholder', 'Paste your save code here (it starts with DTB1.)') });
   const body = h('div');
   const m = modal(body);
-  const ask = () => body.replaceChildren(h('h2', null, 'Import save'), h('div', { class: 'sub' }, 'This replaces the progress on this device. Your current save is kept as a backup first.'), ta,
-    h('div', { class: 'btnrow' }, btn('Check code', () => {
+  const ask = () => body.replaceChildren(h('h2', null, t('import.title', 'Import save')), h('div', { class: 'sub' }, t('import.hint', 'This replaces the progress on this device. Your current save is kept as a backup first.')), ta,
+    h('div', { class: 'btnrow' }, btn(t('import.check', 'Check code'), () => {
       const np = M.importCode(ta.value, app.now());
-      if (!np) { toast('That code did not work. Copy the whole code, from DTB1 to the end.', 3600); app.audio.play('error'); return; }
-      body.replaceChildren(h('h2', null, 'Found a save'), h('div', { class: 'sub', style: 'text-align:center' }, 'Fame ' + np.fame + ' (' + fameTitle(np.fame) + '), ' + fmt(np.records) + ' Records, ' + fmt(np.diamonds) + ' diamonds, ' + M.clearedCount(np) + ' stages cleared.'),
-        h('div', { class: 'btnrow' }, btn('Replace my save', () => { app.replaceProfile(np); m.close(); toast('Save imported!'); }, 'green'), btn('Back', ask, 'dark')));
-    }, 'green'), btn('Cancel', () => m.close(), 'dark')));
+      if (!np) { toast(t('import.bad', 'That code did not work. Copy the whole code, from DTB1 to the end.'), 3600); app.audio.play('error'); return; }
+      body.replaceChildren(h('h2', null, t('import.found', 'Found a save')), h('div', { class: 'sub', style: 'text-align:center' }, t('import.summary', 'Fame {fame} ({title}), {records} Records, {diamonds} diamonds, {stages} stages cleared.', { fame: np.fame, title: fameTitle(np.fame), records: fmt(np.records), diamonds: fmt(np.diamonds), stages: M.clearedCount(np) })),
+        h('div', { class: 'btnrow' }, btn(t('import.replace', 'Replace my save'), () => { app.replaceProfile(np); m.close(); toast(t('import.done', 'Save imported!')); }, 'green'), btn(t('common.back', 'Back'), ask, 'dark')));
+    }, 'green'), btn(t('common.cancel', 'Cancel'), () => m.close(), 'dark')));
   ask();
 }
 function resetModal(app) {
-  const m = modal(h('div', null, h('h2', null, 'Reset everything?'), h('div', { class: 'sub', style: 'text-align:center' }, 'This deletes all progress on this device. It cannot be undone.'),
-    h('div', { class: 'btnrow' }, btn('Delete it all', () => { app.replaceProfile(M.newProfile(app.now())); m.close(); app.showTitle(); }, 'red'), btn('Keep playing', () => m.close(), 'green'))));
+  const m = modal(h('div', null, h('h2', null, t('reset.title', 'Reset everything?')), h('div', { class: 'sub', style: 'text-align:center' }, t('reset.hint', 'This deletes all progress on this device. It cannot be undone.')),
+    h('div', { class: 'btnrow' }, btn(t('reset.delete', 'Delete it all'), () => { app.replaceProfile(M.newProfile(app.now())); m.close(); app.showTitle(); }, 'red'), btn(t('reset.keep', 'Keep playing'), () => m.close(), 'green'))));
 }
 
 // ================================================================================================ lucky wheel and leaderboard
@@ -561,6 +561,7 @@ function wheelCard(app, rerender) {
   const p = app.profile, now = app.now();
   const st = M.wheelState(p, now);
   const seg = Math.PI * 2 / WHEEL.length;
+  const wlab = (w) => (w.id === 'c1' ? t('wheel.crate', 'Crate') : w.id === 'c2' ? t('wheel.studio', 'Studio') : w.label);
   const anim = { a: 0, from: 0, to: 0, t0: 0, dur: 0, spinning: false };
   const cv = canvasOf(240, 250, (ctx, t) => {
     if (anim.spinning) { const k = Math.min(1, (performance.now() - anim.t0) / anim.dur); const e = 1 - Math.pow(1 - k, 3); anim.a = anim.from + (anim.to - anim.from) * e; if (k >= 1) anim.spinning = false; }
@@ -572,23 +573,23 @@ function wheelCard(app, rerender) {
       ctx.fillStyle = ['#ff8cc6', '#b79af0', '#7fd6f5', '#ffd95a'][i % 4]; ctx.fill(); ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = '#2b2733'; ctx.stroke();
       ctx.save(); ctx.clip(); ctx.strokeStyle = 'rgba(43,39,51,0.16)'; ctx.lineWidth = 2; ctx.beginPath(); for (let k = -120; k < 120; k += 9) { ctx.moveTo(k, -110); ctx.lineTo(k + 60, 110); } ctx.stroke(); ctx.restore();
       ctx.save(); ctx.rotate(a0 + seg / 2); AE.drawGlyph(ctx, w.glyph, 74, 0, 26, '#fff');
-      ctx.translate(48, 0); ctx.rotate(Math.PI / 2 * 0); ctx.fillStyle = '#fff'; ctx.font = '400 16px "Patrick Hand","Comic Sans MS",system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = '#2b2733'; ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeText(w.label, 0, 0); ctx.fillText(w.label, 0, 0); ctx.restore();
+      ctx.translate(48, 0); ctx.rotate(Math.PI / 2 * 0); ctx.fillStyle = '#fff'; ctx.font = '400 16px "Patrick Hand","Comic Sans MS",system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = '#2b2733'; ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeText(wlab(w), 0, 0); ctx.fillText(wlab(w), 0, 0); ctx.restore();
     });
     ctx.restore();
     ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fillStyle = '#ffd60a'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#2b2733'; ctx.stroke();
     ctx.restore();
     ctx.beginPath(); ctx.moveTo(120, 36); ctx.lineTo(108, 10); ctx.lineTo(132, 10); ctx.closePath(); ctx.fillStyle = '#e8403f'; ctx.fill(); ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeStyle = '#2b2733'; ctx.stroke();
   }, { live: true });
-  const label = h('div', { class: 'sub', style: 'text-align:center' }, st.free ? 'Your free daily spin is ready!' : 'Come back tomorrow for a free spin, or spin for ' + WHEEL_SPIN_PRICE + ' diamonds.');
+  const label = h('div', { class: 'sub', style: 'text-align:center' }, st.free ? t('wheel.free_ready', 'Your free daily spin is ready!') : t('wheel.come_back', 'Come back tomorrow for a free spin, or spin for {n} diamonds.', { n: WHEEL_SPIN_PRICE }));
   let busy = false;
-  const spin = btn(st.free ? 'SPIN!' : [icon('diamond', 20), WHEEL_SPIN_PRICE + ' Spin'], () => {
+  const spin = btn(st.free ? t('wheel.spin_free', 'SPIN!') : [icon('diamond', 20), t('wheel.spin_paid', '{n} Spin', { n: WHEEL_SPIN_PRICE })], () => {
     if (busy) return;
     const r = M.spinWheel(p, now, app.rng());
-    if (!r.ok) { app.audio.play('error'); toast('Need ' + WHEEL_SPIN_PRICE + ' diamonds.'); return; }
+    if (!r.ok) { app.audio.play('error'); toast(t('wheel.need', 'Need {n} diamonds.', { n: WHEEL_SPIN_PRICE })); return; }
     busy = true; app.audio.play('crate_shake');
     anim.from = anim.a % (Math.PI * 2); anim.to = anim.from + Math.PI * 2 * 5 + ((-(r.index * seg + seg / 2) - anim.from) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2); anim.t0 = performance.now(); anim.dur = 3600; anim.spinning = true;
     let ticks = 0; const tk = setInterval(() => { if (!anim.spinning) { clearInterval(tk); return; } app.audio.play('tick', { vol: 0.4, pitch: 1 + (ticks++ % 3) * 0.05 }); }, 140);
-    setTimeout(() => { app.audio.play('reveal_' + (r.seg.reward.crate || r.seg.reward.diamonds >= 10 ? 'epic' : 'rare')); toast('You won ' + r.seg.label + (r.seg.reward.records ? ' Records' : r.seg.reward.diamonds ? ' diamonds' : ' crate') + '!', 2600); if (r.loot && r.loot.length) crateOpening(app, r.seg.reward.crate, r.loot, rerender); else rerender(); }, 3800);
+    setTimeout(() => { app.audio.play('reveal_' + (r.seg.reward.crate || r.seg.reward.diamonds >= 10 ? 'epic' : 'rare')); toast(r.seg.reward.records ? t('wheel.won_records', 'You won {n} Records!', { n: r.seg.label }) : r.seg.reward.diamonds ? t('wheel.won_diamonds', 'You won {n} diamonds!', { n: r.seg.label }) : t('wheel.won_crate', 'You won a crate!'), 2600); if (r.loot && r.loot.length) crateOpening(app, r.seg.reward.crate, r.loot, rerender); else rerender(); }, 3800);
   }, st.free ? 'gold big' : 'blue');
   return h('div', { class: 'card', style: 'text-align:center' }, cv, label, h('div', { style: 'margin-top:8px' }, spin));
 }
@@ -600,35 +601,35 @@ export function boardModal(app, id, title) {
   const m = modal(body);
   const addFriend = (name) => {
     const r = M.addFriend(p, name);
-    state.msg = r.ok ? 'Added ' + r.name + ' to your friends.' : ({ empty: 'Type a name first.', self: 'That is you!', dup: 'Already a friend.', full: 'Your friend list is full (' + FRIENDS_MAX + ').' })[r.reason];
+    state.msg = r.ok ? t('board.added', 'Added {name} to your friends.', { name: r.name }) : ({ empty: t('board.err_empty', 'Type a name first.'), self: t('board.err_self', 'That is you!'), dup: t('board.err_dup', 'Already a friend.'), full: t('board.err_full', 'Your friend list is full ({max}).', { max: FRIENDS_MAX }) })[r.reason];
     if (r.ok) app.audio.play('ui_click'); else app.audio.play('error');
     app.save(); draw();
   };
   const draw = () => {
     body.replaceChildren(h('h2', null, title));
     const seg = h('div', { class: 'seg' });
-    for (const [tid, nm] of [['all', 'All'], ['friends', 'Friends (' + p.friends.length + ')']]) seg.append(h('button', { class: state.tab === tid ? 'on' : '', onclick: () => { state.tab = tid; state.msg = ''; draw(); } }, nm));
+    for (const [tid, nm] of [['all', t('board.all', 'All')], ['friends', t('board.friends', 'Friends ({n})', { n: p.friends.length })]]) seg.append(h('button', { class: state.tab === tid ? 'on' : '', onclick: () => { state.tab = tid; state.msg = ''; draw(); } }, nm));
     body.append(seg);
-    if (state.top === undefined) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, 'Loading...'));
+    if (state.top === undefined) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, t('board.loading', 'Loading...')));
     else {
-      if (!state.top) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, 'The leaderboard is offline right now. Your own best is still saved.'));
-      else if (!state.top.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, 'No scores yet. Be the first!'));
+      if (!state.top) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, t('board.offline', 'The leaderboard is offline right now. Your own best is still saved.')));
+      else if (!state.top.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, t('board.empty', 'No scores yet. Be the first!')));
       const rows = boardRows(state.top || [], p.friends, p.name, state.tab);
-      if (state.tab === 'friends' && !p.friends.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, 'Add friends by name to follow their scores here.'));
+      if (state.tab === 'friends' && !p.friends.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, t('board.no_friends', 'Add friends by name to follow their scores here.')));
       rows.forEach((e) => {
         const top3 = e.rank > 0 && e.rank <= 3;
-        const act = e.me ? null : e.friend ? h('button', { class: 'lb-x', 'aria-label': 'Remove friend', title: 'Remove friend', onclick: () => { M.removeFriend(p, e.name); state.msg = ''; app.save(); draw(); } }, 'x')
-          : h('button', { class: 'lb-add', 'aria-label': 'Add friend', title: 'Add friend', onclick: () => addFriend(e.name) }, '+');
+        const act = e.me ? null : e.friend ? h('button', { class: 'lb-x', 'aria-label': t('board.remove_friend', 'Remove friend'), title: t('board.remove_friend', 'Remove friend'), onclick: () => { M.removeFriend(p, e.name); state.msg = ''; app.save(); draw(); } }, 'x')
+          : h('button', { class: 'lb-add', 'aria-label': t('board.add_friend', 'Add friend'), title: t('board.add_friend', 'Add friend'), onclick: () => addFriend(e.name) }, '+');
         body.append(h('div', { class: 'row lb-row' + (e.me ? ' me' : '') + (e.friend ? ' friend' : '') + (e.missing ? ' missing' : '') },
           h('div', { class: 'lb-rank', style: top3 ? 'color:#c77d00' : '' }, e.rank > 0 ? '#' + e.rank : '-'),
-          h('div', { class: 'grow lb-name' }, e.name, e.me ? h('span', { class: 'lb-tag you' }, 'YOU') : null, e.friend ? h('span', { class: 'lb-tag fr' }, 'FRIEND') : null),
+          h('div', { class: 'grow lb-name' }, e.name, e.me ? h('span', { class: 'lb-tag you' }, t('board.you', 'YOU')) : null, e.friend ? h('span', { class: 'lb-tag fr' }, t('board.friend', 'FRIEND')) : null),
           h('div', { class: 'lb-score' }, e.score == null ? '-' : e.score), act));
       });
     }
-    const inp = h('input', { type: 'text', maxlength: 16, placeholder: 'Add a friend by name', class: 'lb-input', 'aria-label': 'Friend name', onkeydown: (ev) => { if (ev.key === 'Enter') addFriend(inp.value); } });
-    body.append(h('div', { class: 'row lb-addrow' }, inp, btn('Add', () => addFriend(cleanName(inp.value)), 'blue small')));
+    const inp = h('input', { type: 'text', maxlength: 16, placeholder: t('board.add_ph', 'Add a friend by name'), class: 'lb-input', 'aria-label': t('board.friend_name', 'Friend name'), onkeydown: (ev) => { if (ev.key === 'Enter') addFriend(inp.value); } });
+    body.append(h('div', { class: 'row lb-addrow' }, inp, btn(t('board.add', 'Add'), () => addFriend(cleanName(inp.value)), 'blue small')));
     if (state.msg) body.append(h('div', { class: 'sub', style: 'font-size:13px;text-align:center' }, state.msg));
-    body.append(h('div', { class: 'sub', style: 'font-size:12px;text-align:center;margin-top:8px' }, p.name ? 'You appear as ' + p.name + '.' : 'Set your name in Settings to join the board.'), h('div', { class: 'btnrow' }, btn('Close', () => m.close(), 'green')));
+    body.append(h('div', { class: 'sub', style: 'font-size:12px;text-align:center;margin-top:8px' }, p.name ? t('board.you_appear', 'You appear as {name}.', { name: p.name }) : t('board.set_name', 'Set your name in Settings to join the board.')), h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'green')));
   };
   draw();
   fetchBoard(id).then((top) => { state.top = top; draw(); });
@@ -638,5 +639,5 @@ export function boardModal(app, id, title) {
 export function langPicker(app, withAuto, redraw) {
   const cur = getLangPref(), now = withAuto ? cur : (cur === 'auto' ? app.langNow() : cur);
   const opts = (withAuto ? [{ code: 'auto', name: t('settings.lang_auto', 'Auto') }] : []).concat(LANGS);
-  return h('div', { class: 'seg langpick', style: 'flex-wrap:wrap' }, opts.map((o) => h('button', { class: now === o.code ? 'on' : '', lang: o.code === 'auto' ? undefined : o.code, onclick: () => { app.audio.play('ui_click'); app.setLangPref(o.code); if (redraw) redraw(); } }, o.name)));
+  return h('div', { class: 'seg langpick', style: 'flex-wrap:wrap' }, opts.map((o) => h('button', { style: 'flex:none;white-space:nowrap;padding-left:10px;padding-right:10px', class: now === o.code ? 'on' : '', lang: o.code === 'auto' ? undefined : o.code, onclick: () => { app.audio.play('ui_click'); app.setLangPref(o.code); if (redraw) redraw(); } }, o.name)));
 }

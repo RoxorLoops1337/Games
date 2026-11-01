@@ -1,5 +1,5 @@
 {
- "version": "b8a5bb3e6619",
+ "version": "c333589d4098",
  "files": [
   "fonts/PatrickHand-latin-ext.woff2",
   "fonts/PatrickHand-latin.woff2",
@@ -41,9 +41,13 @@
   "js/hudx.js",
   "js/i18n.js",
   "js/i18n_data.js",
+  "js/lang/da.js",
   "js/lang/da_data.js",
+  "js/lang/de.js",
   "js/lang/de_data.js",
+  "js/lang/en.js",
   "js/lang/en_data.js",
+  "js/lang/nl.js",
   "js/lang/nl_data.js",
   "js/lb.js",
   "js/legacy_entities.js",

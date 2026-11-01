@@ -4,6 +4,7 @@
 // Wiring an install button (ui_hub.js settings): import { canInstall, promptInstall, onInstallChange, isInstalled } from './pwa.js';
 //   const b = btn('Install the app', async () => { await promptInstall(); }); b.hidden = !canInstall();
 //   onInstallChange(() => { b.hidden = !canInstall(); });
+import { t } from './i18n.js';
 let deferred = null;
 const listeners = new Set();
 let installed = false;
@@ -32,7 +33,7 @@ export const UPDATE_TEXT = 'New version ready, tap to refresh';
 function showUpdateToast(onTap, text) {
   if (typeof document === 'undefined' || document.getElementById('dtb-update')) return;
   const b = document.createElement('button');
-  b.id = 'dtb-update'; b.type = 'button'; b.textContent = text || UPDATE_TEXT;
+  b.id = 'dtb-update'; b.type = 'button'; b.textContent = text || t('pwa.update', 'New version ready, tap to refresh');
   b.setAttribute('role', 'status');
   b.style.cssText = 'position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:99999;max-width:90vw;padding:12px 18px;min-height:44px;border:3px solid #2b2733;border-radius:16px;background:#ffd23c;color:#2b2733;font:20px "Patrick Hand",system-ui,sans-serif;box-shadow:0 4px 0 #2b2733;cursor:pointer';
   b.addEventListener('click', () => { b.disabled = true; onTap(); });

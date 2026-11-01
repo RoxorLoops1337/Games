@@ -15,7 +15,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_ROOT = path.resolve(HERE, '..', 'drop_the_bass');
 export const OTHER_LANGS = ['da', 'nl', 'de'];
 export const KEY_RE = /^[a-z0-9_]+(\.[a-z0-9_]+)+$/;
-export const EM_DASH = '—';
+export const EM_DASH = '\u2014';
 
 // ------------------------------------------------------------------------------------------------ tokenizer
 // tokens: { t: 'id'|'str'|'tpl'|'num'|'p', v, line, dyn } ; 'tpl' with dyn=true has ${} inside; str/tpl values are decoded
@@ -175,7 +175,7 @@ export function scan(jsDir) {
 }
 
 // ------------------------------------------------------------------------------------------------ files
-const q = (s) => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/ /g, '\\u2028').replace(/ /g, '\\u2029') + "'";
+const q = (s) => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029') + "'";
 export function dictSource(dict, header) {
   return (header ? '// ' + header + '\n' : '') + 'export default {\n' + Object.keys(dict).sort().map((k) => '  ' + q(k) + ': ' + q(dict[k]) + ',').join('\n') + '\n};\n';
 }

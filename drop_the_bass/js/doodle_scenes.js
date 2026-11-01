@@ -8,6 +8,7 @@ import { WORLD_BY_ID, BOSSES } from './data_core.js';
 import { SCENE_IDS as CLASSIC_IDS } from './art_scenes.js';
 import { ART_PIECES as AP } from './doodle_env.js';
 import { paintBoss } from './doodle_enemies.js';
+import { t, getLang } from './i18n.js';
 
 // the 19 original scenes plus the second tour: seven epilogues, two world cards, two boss cards and the moon credits
 export const NEW_IDS = ['epilogue_garage', 'epilogue_busk', 'epilogue_club', 'epilogue_festival', 'epilogue_arena', 'epilogue_beach', 'epilogue_moon', 'world_beach', 'world_moon', 'boss_lowpass', 'boss_silence', 'credits_moon'];
@@ -27,7 +28,7 @@ function touch(id) {
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h | 0; }
 // a 540 x 960 layer baked at up to 1.5 px per unit, 2 boil frames; draw(P, c) paints in top-left unit coordinates
 function layer(scene, name, draw) {
-  const key = scene + '|' + name + '|' + getScale();
+  const key = scene + '|' + name + '|' + getScale() + '|' + getLang();
   let e = layers.get(key);
   if (e) return e;
   const s = Math.min(getScale(), 1.5);
@@ -47,7 +48,7 @@ function putLayer(ctx, e, t, alpha, dx, dy) {
   else ctx.drawImage(e.frames[(((Math.floor(t * 6) || 0) % e.frames.length) + e.frames.length) % e.frames.length], dx || 0, dy || 0, 540, 960);
   ctx.globalAlpha = a0;
 }
-const sp = (key, w, h, draw, seed) => sprite('dsc:' + key, w, h, draw, { seed: seed || 5 });
+const sp = (key, w, h, draw, seed) => sprite('dsc:' + getLang() + ':' + key, w, h, draw, { seed: seed || 5 });
 
 // ===================================================================================================== doodle props (all take the pen P)
 const wash = (P, x, y, w, h, col, a = 0.88, gap = 12, ang = -0.55) => P.hatch(rect(x, y, w, h), col, gap, ang, a);
@@ -80,7 +81,7 @@ function lamp(P, x, y) { P.ln([x, y, x, y + 130], INK, 4); poly(P, [x - 24, y + 
 function lightCone(P, x, y, spread, len, col, a = 0.5) { P.hatch([x - 8, y, x + 8, y, x + spread, y + len, x - spread, y + len], col, 9, 0.9, a); }
 function speaker(P, x, y, w, h, col = C.purple) { poly(P, rect(x, y, w, h, 6), col, 4.5, { gap: 7 }); P.shp(P.blob(x + w / 2, y + h * 0.3, w * 0.28, w * 0.28, 10), '#4b4458', INK, 3.5, { gap: 5 }); P.shp(P.blob(x + w / 2, y + h * 0.7, w * 0.38, w * 0.38, 12), '#4b4458', INK, 3.5, { gap: 5 }); P.dot(x + w / 2, y + h * 0.7, w * 0.1, C.grey); }
 function drumKit(P, x, y, s = 1) {
-  poly(P, P.blob(x, y, 62 * s, 50 * s, 14, 0.04), C.red, 4.5, { gap: 8 }); P.ln(arc(x, y, 40 * s, 32 * s, 0, 360, 12), '#fff', 4, true, 1); P.txt('BASS', x, y + 10 * s, 18 * s, '#fff', { align: 'c', w: 3 });
+  poly(P, P.blob(x, y, 62 * s, 50 * s, 14, 0.04), C.red, 4.5, { gap: 8 }); P.ln(arc(x, y, 40 * s, 32 * s, 0, 360, 12), '#fff', 4, true, 1); P.txt(t('scene.bass', 'BASS'), x, y + 10 * s, 18 * s, '#fff', { align: 'c', w: 3 });
   poly(P, P.blob(x - 80 * s, y - 40 * s, 34 * s, 14 * s, 12), C.yellow, 4, { gap: 6 }); P.ln([x - 80 * s, y - 30 * s, x - 80 * s, y + 40 * s], INK, 4);
   poly(P, P.blob(x + 78 * s, y - 24 * s, 30 * s, 18 * s, 12), C.orange, 4, { gap: 6 }); P.ln([x + 70 * s, y - 6 * s, x + 66 * s, y + 40 * s], INK, 4);
 }
@@ -135,7 +136,7 @@ function garageBg(P, dim) {
   poly(P, rect(110, 90, 320, 360), C.sky, 5.5, { gap: 10 }); for (let i = 1; i < 7; i++) P.ln([110, 90 + i * 50, 430, 90 + i * 50], INK, 3, false, 1.5);   // open garage door with a sunny outside
   P.hatch(rect(116, 96, 308, 100), C.sky, 8, 0.4, 0.9); sun(P, 360, 150, 32);
   floor(P, 560, '#c28a55');
-  poly(P, rect(20, 60, 70, 100), C.pink, 4, { gap: 8 }); P.txt('ROCK', 55, 122, 22, INK, { align: 'c', w: 3 }); poly(P, rect(445, 70, 74, 96), C.lime, 4, { gap: 8 }); P.shp(star(482, 118, 20, 0.45, 0), C.yellow, INK, 3, { gap: 5 });
+  poly(P, rect(20, 60, 70, 100), C.pink, 4, { gap: 8 }); P.txt(t('scene.rock', 'ROCK'), 55, 122, 22, INK, { align: 'c', w: 3 }); poly(P, rect(445, 70, 74, 96), C.lime, 4, { gap: 8 }); P.shp(star(482, 118, 20, 0.45, 0), C.yellow, INK, 3, { gap: 5 });
   lamp(P, 270, -10); lightCone(P, 270, 128, 150, 400, C.yellow, 0.28);
   poly(P, rect(20, 190, 90, 12), C.brown, 3.5, { gap: 6 });
   speaker(P, 436, 380, 84, 120, C.purple); speaker(P, 440, 270, 78, 106, C.violet || C.purple);
@@ -226,7 +227,7 @@ function mapScroll(P, x, y, w, h, rot) {   // the tour map: fold lines, a dotted
   P.ln(arc(w * 0.06, h * 0.32, 22, 8, 200, 340, 6), C.blue, 3); P.ln(arc(w * 0.06 + 14, h * 0.4, 22, 8, 200, 340, 6), C.blue, 3);
   P.ln([w * 0.0, h * 0.16, w * 0.0, h * 0.0], '#7a4d28', 4); for (let i = 0; i < 4; i++) P.ln([w * 0.0, h * 0.0, w * 0.0 + Math.cos(-2.6 + i * 0.7) * 20, h * 0.0 + Math.sin(-2.6 + i * 0.7) * 14], C.green, 4);   // the beach palm
   P.shp(P.blob(w * 0.34, -h * 0.34, 18, 18, 10), '#fff3b0', INK, 3, { gap: 4 }); P.shp(star(w * 0.34 + 28, -h * 0.34 - 16, 6, 0.46, 0), C.cyan, INK, 1.8, { gap: 3 });   // the moon
-  P.txt('TOUR 2', 0, -h * 0.36, 22, C.red, { align: 'c', w: 3.4 });
+  P.txt(t('scene.tour2', 'TOUR 2'), 0, -h * 0.36, 22, C.red, { align: 'c', w: 3.4 });
   c.restore();
 }
 function campfire(P, x, y, s = 1) { AP.logsAndStones(P, x, y, 140 * s); }
@@ -253,7 +254,7 @@ SCENES.epilogue_garage = {
     floor(P, 560, '#c9925c'); lightCone(P, 270, 450, 200, 420, '#ffe27a', 0.3);
     speaker(P, 440, 380, 84, 120, C.purple); drumKit(P, 70, 600, 0.8);
   },
-  mid: (P) => { chair(P, 230, 700, 0.8); chair(P, 316, 706, 0.7, C.orange); catDoodle(P, 462, 570, 0.8); P.txt('MEOW', 470, 500, 20, C.red, { align: 'c', rot: -0.15, w: 3.2 }); },
+  mid: (P) => { chair(P, 230, 700, 0.8); chair(P, 316, 706, 0.7, C.orange); catDoodle(P, 462, 570, 0.8); P.txt(t('scene.meow', 'MEOW'), 470, 500, 20, C.red, { align: 'c', rot: -0.15, w: 3.2 }); },
   live(ctx, t) { notes(ctx, t, [C.orange, C.pink, C.sky]); duo(ctx, t, { a: [140, 870, 272], b: [402, 870, 262], k: 0.8, pa: 'cheer', pb: 'cheer' }); drawLoopy(ctx, 270, 850, 64, { t, mood: 'happy' }); ctx.save(); ctx.translate(430, 300 + Math.sin(t * 2.4) * 6); ctx.rotate(-0.15); blit(ctx, sp('thumb', 120, 130, (P) => thumbsUp(P, 0, -4, 1.1), 11), 0, 0, t, { scale: 1.25 }); ctx.restore(); },
 };
 SCENES.epilogue_busk = {
@@ -342,7 +343,7 @@ function blueprint(P) {
   poly(P, rect(90, 70, 360, 300), '#dff1ff', 5, { gap: 10, alpha: 0.95 });
   for (const [x, y] of [[104, 82], [436, 82]]) P.dot(x, y, 6, C.red);
   P.ln(arc(270, 250, 70, 70, 0, 360, 14), C.blue, 4, true, 1.5); P.ln(arc(270, 250, 38, 38, 0, 360, 12), C.blue, 3.5, true, 1.2);
-  P.ln([270, 250, 380, 160, 392, 176, 296, 262], C.blue, 4, false, 1.5); P.ln([160, 340, 380, 340], C.blue, 3, false, 1.5, [10, 8]); P.txt('KICK CANNON', 270, 118, 26, C.blue, { align: 'c', w: 3.5 });
+  P.ln([270, 250, 380, 160, 392, 176, 296, 262], C.blue, 4, false, 1.5); P.ln([160, 340, 380, 340], C.blue, 3, false, 1.5, [10, 8]); P.txt(t('scene.kick_cannon', 'KICK CANNON'), 270, 118, 26, C.blue, { align: 'c', w: 3.5 });
   P.ln([420, 120, 430, 110, 440, 120], C.red, 3); P.txt('X2', 380, 345, 20, C.red, { align: 'c', w: 3 });
 }
 function frozen(P, x, y, i) {
@@ -350,7 +351,7 @@ function frozen(P, x, y, i) {
   poly(P, [x - 22, y - 34, x + 22, y - 34, x + 26, y + 40, x - 26, y + 40], '#c4c2d2', 4, { gap: 7 }); P.ln([x - 22, y - 28, x - 44, y - 56], INK, 4); P.ln([x + 22, y - 28, x + 44, y - 56], INK, 4);
   note(P, x + 52, y - 94, 1.0, '#bdbdcb'); P.ln([x + 36, y - 112, x + 74, y - 70], C.red, 4); P.ln([x + 74, y - 112, x + 36, y - 70], C.red, 4);
 }
-function sign(P) { P.ln([430, 640, 430, 520], INK, 5); poly(P, rect(340, 470, 180, 64), '#ffe98f', 4.5, { gap: 8 }); P.txt('MEGA ARENA', 430, 515, 22, INK, { align: 'c', w: 3.4 }); P.ln([356, 548, 400, 548, 392, 540, 400, 548, 392, 556], INK, 3.4); }
+function sign(P) { P.ln([430, 640, 430, 520], INK, 5); poly(P, rect(340, 470, 180, 64), '#ffe98f', 4.5, { gap: 8 }); P.txt(t('scene.mega_arena', 'MEGA ARENA'), 430, 515, 22, INK, { align: 'c', w: 3.4 }); P.ln([356, 548, 400, 548, 392, 540, 400, 548, 392, 556], INK, 3.4); }
 function worldScene(id) {
   const W = WORLD_BY_ID[id.slice(6)];
   const title = W.name.toUpperCase();
@@ -398,12 +399,12 @@ function bossArt(P, key) {
     poly(P, rect(x - 150, y - 200, 300, 70, 14), '#8f9ab8', 5.5, { gap: 9 }); P.ln([x - 100, y - 130, x - 100, y - 20], INK, 6); P.ln([x + 100, y - 130, x + 100, y - 20], INK, 6);
     poly(P, rect(x - 170, y + 20, 340, 80, 14), '#8f9ab8', 5.5, { gap: 9 }); for (let i = -2; i <= 2; i++) P.dot(x + i * 60, y + 62, 8, INK);
     poly(P, P.blob(x, y - 50, 110, 60, 16, 0.05), '#b3b9d2', 5.5, { gap: 8 }); P.eye(x - 40, y - 62, 24, 0.8); P.eye(x + 40, y - 62, 24, 0.8); P.ln([x - 70, y - 100, x - 20, y - 82], INK, 7); P.ln([x + 70, y - 100, x + 20, y - 82], INK, 7); P.ln(arc(x, y - 30, 44, 20, 20, 160, 10), INK, 6);
-    P.ln([x - 126, y - 130, x - 126, y - 230, x - 98, y - 230], INK, 4); P.txt('SQUASH', x, y - 236, 28, C.red, { align: 'c', w: 4 });
+    P.ln([x - 126, y - 130, x - 126, y - 230, x - 98, y - 230], INK, 4); P.txt(t('scene.squash', 'SQUASH'), x, y - 236, 28, C.red, { align: 'c', w: 4 });
   } else if (key === 'noisegate') {
     poly(P, rect(x - 150, y - 230, 300, 340, 24), '#ffd24a', 5.5, { gap: 9 }); for (let i = -3; i <= 3; i++) P.ln([x + i * 40, y - 230, x + i * 40, y + 110], INK, 6);
     poly(P, rect(x - 56, y - 40, 112, 96, 14), C.gold, 5.5, { gap: 7 }); P.ln(arc(x, y - 40, 32, 40, 180, 360, 10), INK, 9); P.dot(x, y + 8, 12, INK); P.ln([x, y + 10, x, y + 36], INK, 5);
     P.eye(x - 60, y - 140, 28, 0.9); P.eye(x + 60, y - 140, 28, 0.9); P.ln([x - 100, y - 190, x - 30, y - 160], INK, 8); P.ln([x + 100, y - 190, x + 30, y - 160], INK, 8);
-    for (let i = 0; i < 3; i++) P.txt('SHH', x - 160 + i * 20, y - 250 + i * 6, 22, C.red, { rot: -0.2, w: 3.2 });
+    for (let i = 0; i < 3; i++) P.txt(t('scene.shh', 'SHH'), x - 160 + i * 20, y - 250 + i * 6, 22, C.red, { rot: -0.2, w: 3.2 });
   } else if (key === 'reverb') {
     for (let i = 3; i >= 0; i--) P.ln(P.blob(x + i * 8, y + i * 6, 140 + i * 30, 130 + i * 30, 18, 0.04), ['#5a2aa0', '#7b4fd0', '#a58cf0', '#d9ccf5'][3 - i], 6 - i, true, 1.5);
     poly(P, P.blob(x, y, 150, 140, 18, 0.05), '#9f7bff', 5.5, { gap: 8 }); P.eye(x - 50, y - 40, 32, 0.8); P.eye(x + 50, y - 40, 36, 0.9); P.ln([x - 90, y - 90, x - 20, y - 70], INK, 8); P.ln([x + 90, y - 90, x + 20, y - 70], INK, 8);
