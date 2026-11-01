@@ -118,10 +118,7 @@ export function createRenderer(canvas, art, kit) {
       c.fillStyle = gr; c.fillRect(0, 0, W, H);
       const v = c.createLinearGradient(0, 0, 0, H); v.addColorStop(0, 'rgba(0,0,0,.35)'); v.addColorStop(0.2, 'rgba(0,0,0,0)'); v.addColorStop(0.85, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.35)');
       c.fillStyle = v; c.fillRect(0, 0, W, H);
-      if (g.path) {   // the lane the virus crawls along
-        c.lineJoin = 'round'; c.lineCap = 'round'; c.beginPath(); g.path.pts.forEach((q, i) => (i % 3 === 0 ? (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)) : 0));
-        c.lineWidth = 96; c.strokeStyle = 'rgba(255,255,255,.05)'; c.stroke(); c.lineWidth = 4; c.strokeStyle = 'rgba(255,255,255,.16)'; c.setLineDash([12, 20]); c.stroke();
-      }
+      // no lane is drawn: you cannot see where the snake is going to go
       c.lineWidth = 8; c.strokeStyle = mix(th.base, '#ffffff', 0.15) + '8c'; c.strokeRect(4, 4, W - 8, H - 8);
       c.lineWidth = 2; c.strokeStyle = 'rgba(111,227,255,.6)'; c.strokeRect(10, 10, W - 20, H - 20);
     });
