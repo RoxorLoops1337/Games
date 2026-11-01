@@ -624,7 +624,7 @@ t('the start pick screen uses the story subtitle', () => {
 
 t('the road choice screen subtitle comes from roadLine', () => {
   const js = readFileSync('stacking_cats/main.js', 'utf8');
-  assert.ok(/Choose your road<\/h2><p class="sub">\$\{roadLine\(g\.wave, THEMES\)\}<\/p>/.test(js), 'wired');
+  assert.ok(/Choose your road<\/h2><p class="sub">\$\{roadLine\(g\.wave, THEMES\)\} /.test(js), 'wired');
 });
 
 t('the cutscene caption wraps with wrapCaption', () => {
