@@ -659,8 +659,7 @@ function pickKind(g, n, boss, i, len) {
 export function segRadius(boss, i, len) {
   const sc = boss ? 1.3 : 1;
   if (i === 0) return 38 * sc;
-  const fromTail = len - 1 - i;
-  return 30 * sc;   // every cell is the same size so every number stays readable
+  return (28 + 11 * Math.pow(i / Math.max(1, len - 1), 1.1)) * sc;   // the tougher cells further back are bigger, so their numbers stay readable
 }
 const spacing = (a, b) => (a.r + b.r) * 0.78;
 

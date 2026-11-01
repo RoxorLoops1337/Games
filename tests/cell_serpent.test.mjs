@@ -635,7 +635,8 @@ ok('card kinds have their own rarity: speed and damage can be common, extra note
 ok('Sharp Notes make capsule notes pierce; every cell is the same size so numbers stay readable', () => {
   const mk = ups => { const g = sim.createGame({ seed: 40 }); Object.assign(g.ups, ups); g.p.cd = 0; g.bullets.length = 0; sim.step(g, 1 / 60, {}); return g.bullets[0]; };
   assert.equal(mk({}).pierce, 0); assert.equal(mk({ speed: 2 }).pierce, 2);
-  const sn = sim.createGame({ seed: 41 }).snakes[0]; const radii = new Set(sn.segs.slice(1).map(q => q.r)); assert.equal(radii.size, 1, 'no tiny tail cells');
+  const sn = sim.createGame({ seed: 41 }).snakes[0]; const rs = sn.segs.slice(1).map(q => q.r);
+  assert.ok(Math.min(...rs) >= 28 && rs.every((x, k) => k === 0 || x >= rs[k - 1]) && rs.at(-1) >= 37, 'cells never shrink; the tail is the biggest');
 });
 
 console.log(`cell_serpent: ${n} groups passed`);
