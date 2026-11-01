@@ -1,6 +1,6 @@
 // ui_hub.js: the DOM hub shown between runs. Tabs: Tour (stages), Studio (upgrades), Band (heroes and gear), Shop (crates), Goals (daily).
 import {
-  WORLDS, TURRETS, TURRET_IDS, ENEMIES, ENEMY_IDS, BOSSES, BOSS_IDS, RARITY, RARITY_ORDER, COL, ENCORE_MAX, fmt, MAX_LEVEL, GAME,
+  WORLDS, TURRETS, TURRET_IDS, ENEMIES, ENEMY_IDS, BOSSES, BOSS_IDS, RARITY, RARITY_ORDER, COL, ENCORE_MAX, fmt, MAX_LEVEL, GAME, SYNERGIES,
 } from './data_core.js';
 import {
   STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, OUTFITS, LOGIN_REWARDS, ACHIEVEMENTS,
@@ -8,16 +8,18 @@ import {
   fameTitle, WEEKLY_REWARD,
 } from './data_meta.js';
 import { REMIX, RELICS, DAILY_MODS } from './data_run.js';
+import { TURRET_BRANCHES } from './data_depth.js';
 import * as M from './meta.js';
 import { fetchBoard, rankOf, boardRows, cleanName, FRIENDS_MAX } from './lb.js';
 import { drawStudioScene, studioProps } from './doodle_env.js';
 import { t, tn, LANGS, getLangPref } from './i18n.js';
+import { resetText } from './countdown.js';
 import { setlistSheet } from './ui_setlist.js';
-import { wardrobeSection, skinsSection } from './ui_wardrobe.js';
+import { wardrobeSection, skinsSection, skinThumb } from './ui_wardrobe.js';
 import { canInstall, promptInstall, onInstallChange, isInstalled } from './pwa.js';
 export { setlistSheet };
 import {
-  h, canvasOf, icon, turretIcon, turretLive, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW,
+  h, canvasOf, icon, turretIcon, turretLive, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW, hubHint,
 } from './ui_core.js';
 
 const TABS = [['tour', () => t('hub.tab.tour', 'Tour'), 'play'], ['studio', () => t('hub.tab.studio', 'Studio'), 'gear'], ['band', () => t('hub.tab.band', 'Band'), 'mic'], ['shop', () => t('hub.tab.crates', 'Crates'), 'gift'], ['goals', () => t('hub.tab.goals', 'Goals'), 'star']];
@@ -62,6 +64,17 @@ export function buildHub(app, startTab) {
   };
   state.render = render;
   render();
+  // Daily and Weekly countdowns: refresh the text every 20 s while this hub is on screen; a new day rebuilds the cards
+  state.day = M.dayOf(app.now());
+  const tickCd = () => {
+    if (!el.isConnected) { if (el.__seen) clearInterval(cdTimer); return; }
+    el.__seen = true;
+    const now = app.now();
+    if (M.dayOf(now) !== state.day) { state.day = M.dayOf(now); M.ensureDaily(p, now); render(); return; }
+    for (const n of el.querySelectorAll('[data-cd]')) { const txt = resetText(n.dataset.cd === 'weekly' ? M.weeklyResetMs(now) : M.dailyResetMs(now)); if (n.textContent !== txt) n.textContent = txt; }
+  };
+  const cdTimer = setInterval(tickCd, 20000);
+  state.tickCd = tickCd;
   return { el, render, state };
 }
 
@@ -111,7 +124,8 @@ function tourTab(app, st, rerender) {
     const w = WORLDS.find((x) => x.id === dc.world);
     wrap.append(h('div', { class: 'card', style: 'border-color:var(--gold)' },
       h('div', { class: 'row' }, h('div', { class: 'ic icbox' }, icon(mod.glyph, 38)),
-        h('div', { class: 'grow' }, h('h3', null, t('tour.daily_title', 'Daily Challenge: {mod}', { mod: mod.name })), h('div', { class: 'sub' }, mod.desc), h('div', { class: 'sub' }, t('tour.stage_waves', '{stage}, {n} waves', { stage: w.name, n: dc.waves })))),
+        h('div', { class: 'grow' }, h('h3', null, t('tour.daily_title', 'Daily Challenge: {mod}', { mod: mod.name })), h('div', { class: 'sub' }, mod.desc), h('div', { class: 'sub' }, t('tour.stage_waves', '{stage}, {n} waves', { stage: w.name, n: dc.waves })),
+          h('div', { class: 'sub cd', 'data-cd': 'daily' }, resetText(M.dailyResetMs(app.now()))))),
       h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, dc.done ? t('tour.daily_done', 'Reward claimed today. Play again for fun (half rewards).') : t('tour.daily_first', 'First clear today: diamonds, Records and fans!')),
         btn(icon('crown', 24), () => boardModal(app, 'daily', t('mode.daily', 'Daily Challenge')), 'dark small', { 'aria-label': t('hub.leaderboard', 'Leaderboard') }),
         btn(dc.done ? t('common.play', 'Play') : t('common.play_bang', 'Play!'), () => app.requestRun({ mode: 'daily', world: dc.world, encore: 0, seed: dc.seed, daily: dc.mod, wavesTotal: dc.waves }), dc.done ? 'dark' : 'gold'))));
@@ -171,16 +185,19 @@ function difficultyCard(app, rerender) {
     h('div', { class: 'sub', style: 'font-size:12px' }, t('tour.diff_hint', 'Applies to Story, Endless and Boss Rush. The Daily and Weekly Gigs are always Normal, so everyone plays the same run.')));
 }
 const FX_TEXT = { enemyHp: (v) => t('weekly.fx_hp', 'Static have +{n}% health', { n: Math.round((v - 1) * 100) }), rate: (v) => t('weekly.fx_rate', 'turrets fire {n}% faster', { n: Math.round((v - 1) * 100) }), coin: (v) => t('weekly.fx_coin', '+{n}% coins', { n: Math.round((v - 1) * 100) }), enemySpeed: (v) => t('weekly.fx_speed', 'Static move {n}% faster', { n: Math.round((v - 1) * 100) }) };
-function timeLeft(ms) { const h2 = Math.floor(ms / 3600000); return h2 >= 24 ? t('time.d_h', '{d}d {h}h', { d: Math.floor(h2 / 24), h: h2 % 24 }) : t('time.h', '{h}h', { h: h2 }); }
 function weeklyCard(app) {
   const p = app.profile, wg = M.weeklyGig(p, app.now()), mod = DAILY_MODS[wg.mod], w = WORLDS.find((x) => x.id === wg.world);
   const extra = wg.extra.map(([path, , v]) => (FX_TEXT[path] ? FX_TEXT[path](v) : '')).filter(Boolean).join(', ');
   return h('div', { class: 'card weekly', style: 'border-color:var(--pink)' },
     h('div', { class: 'row' }, h('div', { class: 'ic icbox' }, icon('ticket', 38)),
-      h('div', { class: 'grow' }, h('h3', null, t('weekly.title', 'Weekly Gig: {name}', { name: wg.name })), h('div', { class: 'sub' }, mod.name + ': ' + mod.desc + (extra ? ' ' + t('weekly.also', 'Also: {fx}.', { fx: extra }) : '')), h('div', { class: 'sub' }, t('weekly.info', '{stage}, {n} waves. Same run for everyone. {time} left.', { stage: w.name, n: wg.waves, time: timeLeft(wg.msLeft) })))),
+      h('div', { class: 'grow' }, h('h3', null, t('weekly.title', 'Weekly Gig: {name}', { name: wg.name })), h('div', { class: 'sub' }, mod.name + ': ' + mod.desc + (extra ? ' ' + t('weekly.also', 'Also: {fx}.', { fx: extra }) : '')), h('div', { class: 'sub' }, t('weekly.info2', '{stage}, {n} waves. Same run for everyone.', { stage: w.name, n: wg.waves })),
+        h('div', { class: 'sub cd', 'data-cd': 'weekly' }, resetText(M.weeklyResetMs(app.now()))))),
     h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, wg.done ? t('weekly.done', 'Reward claimed this week (best {best}/{total}). Replays pay half Records, no bonus.', { best: wg.best, total: wg.waves }) : t('weekly.reward', 'One big reward a week: {n}+ diamonds, Records, fans and a Studio crate for a win.', { n: WEEKLY_REWARD.diamonds + WEEKLY_REWARD.winDiamonds })),
       btn(icon('crown', 24), () => boardModal(app, 'weekly', t('weekly.title', 'Weekly Gig: {name}', { name: wg.name })), 'dark small', { 'aria-label': t('hub.leaderboard', 'Leaderboard') }),
-      btn(wg.done ? t('common.play', 'Play') : t('common.play_bang', 'Play!'), () => app.requestRun({ mode: 'daily', world: wg.world, encore: 0, seed: wg.seed, daily: wg.mod, wavesTotal: wg.waves, weekly: true, weekId: wg.id, extraFx: wg.extra }), wg.done ? 'dark' : 'gold')));
+      btn(wg.done ? t('common.play', 'Play') : t('common.play_bang', 'Play!'), () => {
+        const go = () => app.requestRun({ mode: 'daily', world: wg.world, encore: 0, seed: wg.seed, daily: wg.mod, wavesTotal: wg.waves, weekly: true, weekId: wg.id, extraFx: wg.extra });
+        if (!hubHint(app, 'hint_weekly', go)) go();   // the first Weekly Gig explains itself, then starts
+      }, wg.done ? 'dark' : 'gold')));
 }
 // the next prop the Studio will grow, as a one-line hint under the backstage scene
 function studioCaption(p) {
@@ -215,6 +232,7 @@ function studioTab(app, st, rerender) {
   wrap.append(h('h2', null, t('studio.title', 'The Studio')), h('div', { class: 'sub', style: 'margin:-4px 2px 8px' }, t('studio.hint', 'Permanent upgrades, bought with Records. They help in every run.')));
   wrap.append(h('div', { class: 'studio-scene' }, canvasOf(504, 170, (ctx, t) => drawStudioScene(ctx, 504, 170, t, p.studio, { heroLv: p.heroLv, outfits: p.outfits.worn }), { live: true }),
     h('div', { class: 'sub studio-cap' }, studioCaption(p))));
+  hubHint(app, 'hint_studio_scene');
   const seg = h('div', { class: 'seg' });
   const sec = st.studioSec || 'up';
   for (const [id, name] of [['up', t('studio.sec.upgrades', 'Upgrades')], ['turrets', t('studio.sec.turrets', 'Turrets')], ['heroes', t('studio.sec.heroes', 'Heroes')]]) seg.append(h('button', { class: sec === id ? 'on' : '', onclick: () => { st.studioSec = id; rerender(); } }, name));
@@ -274,13 +292,15 @@ function bandTab(app, st, rerender) {
   }
   wrap.append(heroes);
   wrap.append(wardrobeSection(app, 'roxor', rerender), wardrobeSection(app, 'jasmin', rerender), skinsSection(app, rerender));
+  hubHint(app, 'hint_wardrobe');
+  if (M.cosmeticAffordable(p)) hubHint(app, 'hint_skin_buy');
 
   // equipped slots
   wrap.append(h('h3', null, t('band.equipped', 'Equipped')));
   const slots = h('div', { class: 'slots' });
   for (const s of SLOTS) {
     const g = M.gearById(p, p.gear.equipped[s]);
-    const b = h('button', { class: 'gslot', style: g ? 'border-color:' + RARITY[g.rarity].color : '', onclick: () => { if (g) gearModal(app, g, rerender); else { st.gearSlot = s; rerender(); } } },
+    const b = h('button', { class: 'gslot', 'data-rar': g ? g.rarity : null, style: g ? 'border-color:' + RARITY[g.rarity].color : '', onclick: () => { if (g) gearModal(app, g, rerender); else { st.gearSlot = s; rerender(); } } },
       g ? gearIcon(g, 64) : canvasOf(64, 64, (ctx) => { ctx.globalAlpha = 0.35; AE.drawGear(ctx, s, 'empty', 'common', 32, 32, 40); }), g ? h('span', { class: 'lv' }, g.lvl) : null);
     slots.append(b);
   }
@@ -310,7 +330,7 @@ function bandTab(app, st, rerender) {
   const mgKeys = new Set(mergeable.map((l) => l[0].tpl + ':' + l[0].rarity));
   for (const g of items) {
     const eq = p.gear.equipped[GEAR[g.tpl].slot] === g.uid;
-    grid.append(h('button', { class: 'gitem', style: 'border-color:' + RARITY[g.rarity].color, onclick: () => { g.fresh = false; gearModal(app, g, rerender); } },
+    grid.append(h('button', { class: 'gitem', 'data-rar': g.rarity, style: 'border-color:' + RARITY[g.rarity].color, onclick: () => { g.fresh = false; gearModal(app, g, rerender); } },
       gearIcon(g, 64), h('span', { class: 'lv' }, g.lvl), eq ? h('span', { class: 'eq' }, t('common.on', 'ON')) : null, g.fresh ? h('span', { class: 'new' }, t('common.new', 'NEW')) : null, mgKeys.has(g.tpl + ':' + g.rarity) ? h('span', { class: 'mg' }, 'x3') : null));
   }
   if (!items.length) wrap.append(h('div', { class: 'sub', style: 'text-align:center;padding:16px' }, t('band.empty', 'Nothing here yet. Win stages and open crates to find gear.')));
@@ -483,15 +503,49 @@ export function codexModal(app) {
   const draw = () => {
     body.replaceChildren(h('h2', null, t('codex.title', 'Codex')));
     const seg = h('div', { class: 'seg' });
-    for (const [id, nm] of [['turrets', t('codex.turrets', 'Turrets')], ['enemies', t('codex.static', 'Static')], ['bosses', t('codex.bosses', 'Bosses')], ['remix', t('codex.remix', 'Remix')], ['relics', t('codex.merch', 'Merch')]]) seg.append(h('button', { class: sec === id ? 'on' : '', onclick: () => { sec = id; draw(); } }, nm));
+    for (const [id, nm] of [['turrets', t('codex.turrets', 'Turrets')], ['enemies', t('codex.static', 'Static')], ['bosses', t('codex.bosses', 'Bosses')], ['branches', t('codex.branches', 'Paths')], ['synergies', t('codex.synergies', 'Pairs')], ['remix', t('codex.remix', 'Remix')], ['relics', t('codex.merch', 'Merch')], ['looks', t('codex.looks', 'Looks')]]) seg.append(h('button', { class: sec === id ? 'on' : '', onclick: () => { sec = id; draw(); body.parentElement.scrollTop = 0; } }, nm));
     body.append(seg);
+    seg.classList.add('codex-seg');
     const g = h('div', { class: 'codexgrid' });
+    if (sec === 'branches') {
+      g.classList.add('cdx-list');
+      body.append(h('div', { class: 'sub', style: 'text-align:center;margin-bottom:6px' }, t('codex.branches_hint', 'A level 4 turret can pick one of two upgrade paths. The choice is permanent for that turret.')));
+      for (const id of TURRET_IDS) {
+        const list = TURRET_BRANCHES[id]; if (!list) continue;
+        const own = p.turretsUnlocked[id];
+        g.append(h('div', { class: 'cdx-row' + (own ? '' : ' unk'), 'data-branches': id }, h('div', { class: 'cdx-who' }, turretIcon(id, 56), h('div', { class: 'nm' }, TURRETS[id].name)),
+          h('div', { class: 'cdx-pair' }, list.map((b) => h('div', { class: 'cdx cdx-b', 'data-branch': b.id }, icon(b.glyph, 34, TURRETS[id].color), h('div', { class: 'nm' }, b.name), h('div', { class: 'ds' }, b.desc))))));
+      }
+    }
+    if (sec === 'synergies') {
+      g.classList.add('cdx-list');
+      body.append(h('div', { class: 'sub', style: 'text-align:center;margin-bottom:6px' }, t('codex.synergies_hint', 'Put these pairs side by side (not diagonal) and they boost each other.')));
+      for (const sy of SYNERGIES) {
+        const have = p.turretsUnlocked[sy.a] && p.turretsUnlocked[sy.b];
+        g.append(h('div', { class: 'cdx cdx-syn' + (have ? '' : ' unk'), 'data-syn': sy.id }, h('div', { class: 'syn-ic' }, turretIcon(sy.a, 46), icon('plus', 20), turretIcon(sy.b, 46)),
+          h('div', { class: 'nm' }, sy.name), h('div', { class: 'ds' }, sy.desc), h('div', { class: 'ds syn-who' }, TURRETS[sy.a].name + ' + ' + TURRETS[sy.b].name)));
+      }
+    }
+    if (sec === 'looks') {
+      g.classList.add('cdx-list');
+      for (const who of ['roxor', 'jasmin']) {
+        body.append(h('h3', { style: 'margin:8px 0 4px;color:' + (who === 'roxor' ? 'var(--green)' : 'var(--pink)') }, who === 'roxor' ? 'RoxorLoops' : 'Jasmin'));
+        const row = h('div', { class: 'codexgrid' });
+        for (const o of M.outfitList(p, who)) row.append(h('div', { class: 'cdx' + (o.owned ? '' : ' unk'), 'data-outfit': who + ':' + o.id }, canvasOf(70, 92, (ctx) => AW.drawHero(ctx, who, 35, 88, 84, { t: 0.4, outfit: o.id, pose: 'idle' })), h('div', { class: 'nm' }, o.name), h('div', { class: 'ds' }, o.desc)));
+        body.append(row);
+      }
+      const row = h('div', { class: 'codexgrid' });
+      body.append(h('h3', { style: 'margin:8px 0 4px' }, t('ward.skins', 'Stage skins')));
+      for (const sk of M.skinList(p, AW.BOARD_SKINS || null)) row.append(h('div', { class: 'cdx' + (sk.owned ? '' : ' unk'), 'data-skin': sk.id }, skinThumb(sk.id, 70, 98), h('div', { class: 'nm' }, sk.name), h('div', { class: 'ds' }, sk.desc)));
+      body.append(row);
+    }
     if (sec === 'turrets') for (const id of TURRET_IDS) { const tu = TURRETS[id]; const own = p.turretsUnlocked[id]; g.append(h('div', { class: 'cdx' + (own ? '' : ' unk') }, turretLive(id, 4, 72), h('div', { class: 'nm' }, own ? tu.name : '???'), h('div', { class: 'ds' }, own ? tu.blurb : t('studio.need_fame', 'Fame {n}', { n: tu.unlock.fame })))); }
     if (sec === 'enemies') for (const id of ENEMY_IDS) { const e = ENEMIES[id]; if (e.hidden) continue; const seen = p.seen.enemies[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 70), h('div', { class: 'nm' }, seen ? e.name : '???'), h('div', { class: 'ds' }, seen ? e.blurb : t('codex.not_met', 'Not met yet')))); }
     if (sec === 'bosses') for (const id of BOSS_IDS) { const b = BOSSES[id]; const seen = p.seen.bosses[id] || p.bossesSeen[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 80, true), h('div', { class: 'nm' }, seen ? b.name : '???'), h('div', { class: 'ds' }, seen ? b.trick : t('codex.not_met', 'Not met yet')))); }
     if (sec === 'remix') for (const c of Object.values(REMIX)) g.append(h('div', { class: 'cdx' }, icon(c.glyph, 44, RARITY[c.rarity].color), h('div', { class: 'nm ' + rarClass(c.rarity) }, c.name), h('div', { class: 'ds' }, c.desc)));
     if (sec === 'relics') for (const c of Object.values(RELICS)) g.append(h('div', { class: 'cdx' }, icon(c.glyph, 44, RARITY[c.rarity].color), h('div', { class: 'nm ' + rarClass(c.rarity) }, c.name), h('div', { class: 'ds' }, c.desc)));
-    body.append(g, h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'dark')));
+    if (g.children.length) body.append(g);
+    body.append(h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'dark')));
   };
   draw();
 }
@@ -517,11 +571,16 @@ export function settingsModal(app) {
       const off = onInstallChange(() => { if (!row.isConnected) { off(); return; } fill(); });
       return row;
     };
+    const help = (txt) => h('div', { class: 'sub set-help' }, txt);
     const tog = (label, key) => h('div', { class: 'toggle' }, label, btn(s[key] ? t('common.on', 'ON') : t('common.off', 'OFF'), () => { s[key] = !s[key]; app.applySettings(); app.save(); draw(); }, s[key] ? 'green small' : 'dark small'));
     body.append(slider(t('settings.music', 'Music'), 'music', () => app.applySettings()), slider(t('settings.sound', 'Sound'), 'sfx', () => app.applySettings()),
-      tog(t('settings.shake', 'Screen shake'), 'shake'), tog(t('settings.numbers', 'Damage numbers'), 'numbers'), tog(t('settings.vibration', 'Vibration'), 'vibrate'), tog(t('settings.beat', 'Beat helper (DROP ring)'), 'beat'), tog(t('settings.reduce', 'Reduce motion'), 'reduce'), tog(t('settings.lowfx', 'Low graphics (faster)'), 'lowfx'));
+      tog(t('settings.shake', 'Screen shake'), 'shake'), tog(t('settings.numbers', 'Damage numbers'), 'numbers'), tog(t('settings.vibration', 'Vibration'), 'vibrate'), tog(t('settings.beat', 'Beat helper (DROP ring)'), 'beat'), tog(t('settings.reduce', 'Reduce motion'), 'reduce'), tog(t('settings.lowfx', 'Low graphics (faster)'), 'lowfx'),
+      tog(t('settings.autolow', 'Auto low graphics when slow'), 'autolow'), help(t('settings.autolow_hint', 'If a battle runs slowly for a few seconds, Low graphics turns on by itself.')));
+    body.append(h('div', { class: 'hr' }), h('h3', null, t('settings.access', 'Accessibility')),
+      tog(t('settings.bigtext', 'Larger text'), 'bigtext'), help(t('settings.bigtext_hint', 'Makes menu and battle text bigger.')),
+      tog(t('settings.colorblind', 'Colour-blind cues'), 'colorblind'), help(t('settings.colorblind_hint', 'Adds shapes and marks next to colours: rarity, risk, on and off.')));
     body.append(tog2(t('settings.show_setlist', 'Show the Setlist before a run'), !s.skipSetlist, () => { s.skipSetlist = !s.skipSetlist; app.save(); draw(); }));
-    body.append(tog(t('settings.analytics', 'Share anonymous play stats'), 'analytics'), h('div', { class: 'sub', style: 'font-size:14px;margin:-4px 0 6px' }, t('settings.analytics_hint', 'Helps balance the game. No names or identifiers are sent.')));
+    body.append(tog(t('settings.analytics', 'Share anonymous play stats'), 'analytics'), h('div', { class: 'sub set-help' }, t('settings.analytics_hint', 'Helps balance the game. No names or identifiers are sent.')));
     body.append(h('div', { class: 'hr' }), h('h3', null, t('settings.language', 'Language')), langPicker(app, true, draw));
     body.append(installRow());
     if (p.autoMerge) body.append(tog2(t('settings.automerge', 'Auto-merge after each drop'), p.autoMergeOn, () => { p.autoMergeOn = !p.autoMergeOn; app.save(); draw(); }));

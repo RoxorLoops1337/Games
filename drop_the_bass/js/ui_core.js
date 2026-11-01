@@ -3,6 +3,7 @@ import * as AE from './art_entities.js';
 import * as AW from './art_world.js';
 import { TURRETS, RARITY, COL } from './data_core.js';
 import { GEAR } from './data_meta.js';
+import { HINTS } from './data_story.js';
 
 // Element.append / replaceChildren turn null and false into the text "null": drop them instead, so conditional children are safe.
 if (typeof Element !== 'undefined' && !Element.prototype.__dtbPatched) {
@@ -91,6 +92,37 @@ export function toast(msg, ms = 2200) {
   root.append(toastEl);
   clearTimeout(toastT); toastT = setTimeout(() => { if (toastEl) toastEl.remove(); toastEl = null; }, ms);
 }
+// An actionable toast: a message plus one button (the language offer). Stays a bit longer, replaces any toast.
+export function actionToast(msg, label, fn, ms = 9000) {
+  if (toastEl) toastEl.remove();
+  const el = h('div', { class: 'toast act' }, h('span', { class: 'toast-msg' }, msg),
+    h('button', { class: 'btn small green', onclick: () => { el.remove(); if (toastEl === el) toastEl = null; fn(); } }, label));
+  toastEl = el; root.append(el);
+  clearTimeout(toastT); toastT = setTimeout(() => { el.remove(); if (toastEl === el) toastEl = null; }, ms);
+  return el;
+}
+// First-time hints in the hub flows. Each id lives in HINTS (data_hints_extra.js) and is shown once per profile (profile.tutorial.hints[id]).
+// Hints queue, so two that trigger together show one after the other. Returns true when the hint will be shown.
+const hintQ = [];
+let hintBusy = false, hintActive = false;
+export function hubHint(app, id, done) {
+  const p = app.profile;
+  if (!HINTS[id] || !p.tutorial.done || p.tutorial.hints[id] || hintQ.some((q) => q.id === id)) { return false; }
+  p.tutorial.hints[id] = true; app.save();
+  hintQ.push({ id, done });
+  // a hint card that was torn down without closing (screen rebuilt) must not block the queue for good
+  if (hintBusy && hintActive && typeof document !== 'undefined' && !document.querySelector('.hint-card')) { hintBusy = false; hintActive = false; }
+  if (!hintBusy) { hintBusy = true; setTimeout(() => nextHint(app), 450); }
+  return true;
+}
+function nextHint(app) {
+  const q = hintQ.shift();
+  if (!q) { hintBusy = false; return; }
+  hintBusy = true; hintActive = true;
+  const fin = () => { hintActive = false; if (q.done) q.done(); setTimeout(() => nextHint(app), 250); };
+  if (app.hooks && app.hooks.onHint) app.hooks.onHint(q.id, fin); else fin();
+}
+export const hintsPending = () => hintQ.length + (hintBusy ? 1 : 0);
 export const rarClass = (r) => 'rar-' + r;
 export const rarName = (r) => RARITY[r].name;
 export function currencyChip(kind, n) { return h('span', { class: 'chip' }, currencyIcon(kind, 18), String(n)); }

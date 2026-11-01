@@ -332,3 +332,56 @@ body.doodle .btn{max-width:100%}
 body.doodle .chip,body.doodle .pill{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 body.doodle .ward-name,body.doodle .ward-state,body.doodle .sl-abn,body.doodle .sl-abd{min-width:0;overflow-wrap:anywhere}
 body.doodle .toggle>:first-child{min-width:0}
+
+/* ---- round 2: settings helpers, countdowns, codex lists, action toast, accessibility (Larger text, Colour-blind cues) ---- */
+body.doodle .set-help{font-size:14px;margin:-4px 0 6px;line-height:1.1}
+body.doodle .sub.cd{color:#7b4fd0;font-size:16px}
+body.doodle .toast.act{display:flex;align-items:center;gap:10px;pointer-events:auto;max-width:94%;text-align:left}
+body.doodle .toast.act .toast-msg{flex:1;min-width:0}
+body.doodle .toast.act .btn{flex:none}
+body.doodle .codex-seg{flex-wrap:wrap}
+body.doodle .codex-seg button{flex:1 1 auto;padding-left:8px;padding-right:8px}
+body.doodle .codexgrid .cdx canvas{max-width:100%}
+body.doodle .cdx-list{grid-template-columns:1fr}
+body.doodle .cdx-row{display:grid;grid-template-columns:76px 1fr;gap:8px;align-items:start;padding:6px;border:3px solid #2b2733;border-radius:var(--wob);background:#fffaf0;box-shadow:2px 3px 0 #2b2733}
+body.doodle .cdx-row.unk{filter:brightness(.7)}
+body.doodle .cdx-who{text-align:center}
+body.doodle .cdx-who .nm{font-size:15px;line-height:1.05}
+body.doodle .cdx-pair{display:flex;flex-direction:column;gap:6px;min-width:0}
+body.doodle .cdx-b{display:grid;grid-template-columns:38px 1fr;column-gap:6px;text-align:left;padding:5px 7px;box-shadow:none}
+body.doodle .cdx-b canvas{grid-row:1 / span 2;align-self:center;width:34px;height:34px}
+body.doodle .cdx-b .nm,body.doodle .cdx-b .ds{min-width:0}
+body.doodle .cdx-syn .syn-ic{display:flex;align-items:center;justify-content:center;gap:4px}
+body.doodle .cdx-syn .syn-ic canvas{width:46px;height:46px}
+body.doodle .cdx-syn .syn-ic canvas:nth-child(2){width:20px;height:20px}
+body.doodle .cdx-syn .syn-who{font-size:12px;margin-top:2px}
+body.doodle .cdx .nm,body.doodle .cdx .ds{overflow-wrap:anywhere}
+
+/* Larger text: zoom the text-bearing layers (the layout width stays 540, so everything just reflows and wraps) */
+body.doodle.bigtext .hub-main>*,body.doodle.bigtext .hub-top>*,body.doodle.bigtext .tabs>*,body.doodle.bigtext .modal>*,body.doodle.bigtext .toast,
+body.doodle.bigtext .cut-box,body.doodle.bigtext .menu>*{zoom:1.15}
+body.doodle.bigtext .modal>*{zoom:1.12}
+body.doodle.bigtext .tabs .tab{font-size:15px}
+
+/* Colour-blind cues: shapes and marks next to colour (rarity, risk, chosen/on states, disabled) */
+body.doodle.colorblind .rar-common::before{content:"\25CB\00a0"}
+body.doodle.colorblind .rar-rare::before{content:"\25A0\00a0"}
+body.doodle.colorblind .rar-epic::before{content:"\25B2\00a0"}
+body.doodle.colorblind .rar-legendary::before{content:"\2605\00a0"}
+body.doodle.colorblind .rar-mythic::before{content:"\25C6\00a0"}
+body.doodle.colorblind .gitem::before,body.doodle.colorblind .gslot::before{position:absolute;left:3px;top:1px;z-index:3;font-size:16px;line-height:1;color:#2b2733;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff}
+body.doodle.colorblind .gitem,body.doodle.colorblind .gslot{position:relative}
+body.doodle.colorblind [data-rar=common]::before{content:"\25CB"}
+body.doodle.colorblind [data-rar=rare]::before{content:"\25A0"}
+body.doodle.colorblind [data-rar=epic]::before{content:"\25B2"}
+body.doodle.colorblind [data-rar=legendary]::before{content:"\2605"}
+body.doodle.colorblind [data-rar=mythic]::before{content:"\25C6"}
+body.doodle.colorblind .sl-mod.on .sl-mn::after{content:"\00a0\2713";font-weight:700}
+body.doodle.colorblind .seg button.on{text-decoration:underline;text-underline-offset:3px}
+body.doodle.colorblind .seg button.on::before{content:"\2713\00a0"}
+body.doodle.colorblind .tab.on{border-style:dashed}
+body.doodle.colorblind .btn.off,body.doodle.colorblind .btn:disabled{border-style:dashed}
+body.doodle.colorblind .ward-card.worn,body.doodle.colorblind .sl-mod.on,body.doodle.colorblind .sl-ab.on{border-style:double;border-width:5px}
+body.doodle.colorblind .sl-ab.locked{border-style:dashed}
+body.doodle.colorblind .flames .cb-n{display:inline}
+body.doodle .flames .cb-n{display:none;font-size:14px;margin-left:2px}

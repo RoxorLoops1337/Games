@@ -19,6 +19,9 @@ const hh = (n) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s
 const easeOutBack = (k) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); };
 const AFFIX_COL = { golden: '#ffc83a', swift: '#2fc4b2', armored: '#9a9aa6', regen: '#43b94a', giant: '#ff9226' };
 const DIM = '#6b6477';
+// colour-blind cue vocabulary: ALLY rings are solid or long dashes, ENEMY rings are dots or dash-dot, so a ring is never told apart by colour alone
+const CBD = { enemy: [2, 8], boss: [18, 6, 3, 6], ally: [20, 6], range: [24, 7] };
+const AFFIX_GLYPH = { golden: 'coin', swift: 'bolt', armored: 'shield', regen: 'plus', giant: 'arrow_up' };
 const frame = (t) => Math.floor(t * K.BOIL_FPS) % 3;
 
 // a live wobbly crayon ring (cheap: one ink pass, one colour pass). dash optional.
@@ -42,7 +45,7 @@ function rrectStroke(ctx, x, y, w, h, r, col, lw, alpha, dash, march) {
 
 // ---------------------------------------------------------------------------------------------------- board
 export function drawBoard(b, ctx, t, beat) {
-  const run = b.run, fx = b.fx;
+  const run = b.run, fx = b.fx, cb = DD.cbOn(b);
   AW.drawBoard(ctx, run.map.id, run.world.id, t, { beat, slotHint: b.slotHint, hoverSlot: b.hoverSlot ? [b.hoverSlot.c, b.hoverSlot.r] : null, dropSlot: b.targetSlot != null ? [b.targetSlot % COLS, Math.floor(b.targetSlot / COLS)] : null, skin: b.skin });
   AW.drawStageBase(ctx, run.world.id, run.map.base.x, run.map.base.y, { t, hp: run.stageFrac, hit: Math.max(0, b.hurtFlash), beat, studio: (b.prof && b.prof.studio) || null });
   drawGates(b, ctx, t);
@@ -51,7 +54,7 @@ export function drawBoard(b, ctx, t, beat) {
   if (sel) {
     const rg = run.turretRange(sel), def = TURRETS[sel.type];
     ctx.save(); ctx.globalAlpha = 0.14; ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(sel.x, sel.y, rg, 0, TAU); ctx.fill(); ctx.restore();
-    ring(ctx, sel.x, sel.y, rg, def.color, 4, t, { dash: [12, 9], march: t * 24, alpha: 0.9, seed: sel.id });
+    ring(ctx, sel.x, sel.y, rg, def.color, 4, t, { dash: cb ? CBD.range : [12, 9], march: t * 24, alpha: 0.9, seed: sel.id });
   }
   const dragT = b.drag && b.drag.moved ? run.turretById(b.drag.id) : null;
   const hintT = dragT || sel;
@@ -70,10 +73,11 @@ export function drawBoard(b, ctx, t, beat) {
     if (age < 0.5) ring(ctx, tu.x, tu.y, 20 + age * 70, def.color, 3.5, t, { alpha: (0.5 - age) * 1.8, seed: tu.id });
     if (tu.fire > 0.5) ring(ctx, tu.x, tu.y, 38, def.color, 3, t, { alpha: (tu.fire - 0.5) * 1.2, ink: false, seed: tu.id });
     const canMerge = hintT && hintT !== tu && run.canMerge(hintT, tu);
-    if (syn && syn.partners.has(tu.id) && !canMerge) ring(ctx, tu.x, tu.y, 40, C.pink, 3.5, t, { dash: [8, 7], march: -t * 18, alpha: 0.8, seed: tu.id + 9 });
+    if (syn && syn.partners.has(tu.id) && !canMerge) ring(ctx, tu.x, tu.y, 40, C.pink, 3.5, t, { dash: cb ? CBD.ally : [8, 7], march: -t * 18, alpha: 0.8, seed: tu.id + 9 });
     if (canMerge) {
       const k = 0.5 + 0.5 * Math.sin(t * 8);
       ring(ctx, tu.x, tu.y, 41 + k * 4, C.lime, 5, t, { alpha: 0.7 + 0.3 * k, seed: tu.id + 3 });
+      if (cb) { ctx.save(); ctx.beginPath(); ctx.arc(tu.x - 28, tu.y - 28, 8, 0, TAU); ctx.fillStyle = C.paper; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke(); ctx.restore(); AE.drawGlyph(ctx, 'merge', tu.x - 28, tu.y - 28, 12, INK); }
     }
     AE.drawTurret(ctx, tu.type, tu.level, tu.x, tu.y, {
       t, ang: tu.ang, fire: Math.max(0, tu.fire), jammed: tu.jam > 0, buff: tu.auraRate > 0 ? 'rate' : tu.auraDmg > 0 ? 'dmg' : null,
@@ -93,11 +97,18 @@ export function drawBoard(b, ctx, t, beat) {
   for (const e of en) {
     if (e.boss) {
       const bc = BOSSES[e.type].color;
-      ring(ctx, e.x, e.y + e.r * 0.5, e.r * 1.5, e.gated ? C.gold : bc, 4, t, { dash: [14, 10], march: t * 30, alpha: 0.55 + 0.25 * Math.sin(t * 5), seed: 1 });
+      ring(ctx, e.x, e.y + e.r * 0.5, e.r * 1.5, e.gated ? C.gold : bc, 4, t, { dash: cb ? CBD.boss : [14, 10], march: t * 30, alpha: 0.55 + 0.25 * Math.sin(t * 5), seed: 1 });
       AE.drawBoss(ctx, e.type, e.x, e.y, { t, ang: e.ang, hp: e.hp / e.maxHp, hit: e.hitT > 0 ? e.hitT / 0.12 : 0, gated: e.gated, phase: e.phase, scale: e.r / BOSSES[e.type].r });
       DD.drawBossMarks(b, ctx, e, t); DD.drawFrozenMark(b, ctx, e, t);
     } else {
-      if (e.affix) ring(ctx, e.x, e.y, e.r * 1.45, AFFIX_COL[e.affix] || C.gold, 3, t, { dash: [8, 6], march: t * 22, alpha: 0.7 + 0.2 * Math.sin(t * 6 + e.id), seed: e.id });
+      if (e.affix) {
+        ring(ctx, e.x, e.y, e.r * 1.45, AFFIX_COL[e.affix] || C.gold, cb ? 3.6 : 3, t, { dash: cb ? CBD.enemy : [8, 6], march: t * 22, alpha: 0.7 + 0.2 * Math.sin(t * 6 + e.id), seed: e.id });
+        if (cb) {   // each elite kind has its own symbol on a sticker
+          const gx = e.x + e.r * 0.95, gy = e.y - e.r * 0.95;
+          ctx.save(); ctx.beginPath(); ctx.arc(gx, gy, 8.5, 0, TAU); ctx.fillStyle = C.paper; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke(); ctx.restore();
+          AE.drawGlyph(ctx, AFFIX_GLYPH[e.affix] || 'star', gx, gy, 12, AFFIX_COL[e.affix] || C.gold);
+        }
+      }
       const sc = e.r / ENEMIES[e.type].r;
       AE.drawEnemy(ctx, e.type, e.x, e.y, {
         t, ang: e.ang, hp: e.hp / e.maxHp, hit: e.hitT > 0 ? e.hitT / 0.12 : 0, slow: e.slowT > 0 && e.slowAmt > 0, stun: e.stun > 0, burn: e.burnT > 0, mark: e.markT > 0,
@@ -150,12 +161,18 @@ function synHints(b, src) {
 }
 // a short linked-chain and a little heart between two adjacent turrets that have an active synergy
 function drawLinks(b, ctx, t) {
+  const cb = DD.cbOn(b);
   for (const L of b.links || []) {
     const A = L.a, B = L.b, mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2, ang = Math.atan2(B.y - A.y, B.x - A.x), bob = Math.sin(t * 5 + A.id) * 2;
+    if (cb) {   // colour-blind cue: a dotted tether runs turret to turret, so a link reads as a chain by its shape, not by pink
+      ctx.save(); ctx.lineCap = 'round'; ctx.setLineDash([2, 9]); ctx.lineDashOffset = -t * 10;
+      ctx.beginPath(); ctx.moveTo(A.x, A.y + 6); ctx.lineTo(B.x, B.y + 6); ctx.strokeStyle = INK; ctx.lineWidth = 6; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(A.x, A.y + 6); ctx.lineTo(B.x, B.y + 6); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.restore();
+    }
     ctx.save(); ctx.translate(mx, my); ctx.rotate(ang); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (const dx of [-9, 9]) {   // two interlocked chain links
       ctx.beginPath(); ctx.ellipse(dx, 0, 10, 6, 0, 0, TAU); ctx.strokeStyle = INK; ctx.lineWidth = 6; ctx.stroke();
-      ctx.strokeStyle = C.pink; ctx.lineWidth = 3; ctx.stroke();
+      ctx.strokeStyle = cb ? '#fff' : C.pink; ctx.lineWidth = 3; ctx.stroke();
     }
     ctx.restore();
     ctx.save(); ctx.fillStyle = C.pink; ctx.strokeStyle = INK; ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; heartPath(ctx, mx, my - 12 + bob, 9 + b.synPop * 4); ctx.fill(); ctx.stroke(); ctx.restore();
@@ -164,7 +181,7 @@ function drawLinks(b, ctx, t) {
 // spawn gate markers: an arrow and a tag with the incoming enemy types and counts per lane (small arrow and total while a wave is running)
 function drawGates(b, ctx, t) {
   const pv = b.pv && b.pv.next; if (!pv) return;
-  const run = b.run, mid = run.phase === 'wave';
+  const run = b.run, mid = run.phase === 'wave', cb = DD.cbOn(b);
   for (const L of pv.lanes) {
     const lane = run.map.lanes[L.lane]; if (!lane) continue;
     const p0 = lane.pts[0], p1 = lane.pts[1];
@@ -174,7 +191,9 @@ function drawGates(b, ctx, t) {
     const ang = Math.atan2(p1.y - p0.y, p1.x - p0.x), dx = Math.cos(ang), dy = Math.sin(ang), bob = Math.sin(t * 5 + L.lane) * 3;
     const ax = gx + dx * (14 + bob), ay = gy + dy * (14 + bob);
     ctx.save(); ctx.translate(ax, ay); ctx.rotate(ang); ctx.fillStyle = L.boss ? C.red : C.orange; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.lineJoin = 'round';
-    ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -11); ctx.lineTo(-2, 0); ctx.lineTo(-6, 11); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+    ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -11); ctx.lineTo(-2, 0); ctx.lineTo(-6, 11); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (cb && L.boss) { ctx.translate(-9, 0); ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -11); ctx.lineTo(-2, 0); ctx.lineTo(-6, 11); ctx.closePath(); ctx.fill(); ctx.stroke(); }   // boss gates: a double arrow
+    ctx.restore();
     const rows = L.enemies.slice().sort((a, c) => c.count - a.count), tot = rows.reduce((a, r) => a + r.count, 0);
     const shown = mid ? [] : rows.slice(0, 3), extra = rows.length - shown.length;
     const tw = mid ? 44 : 10 + shown.length * 38 + (extra > 0 && !mid ? 18 : 0) + (L.boss ? 28 : 0), th = mid ? 22 : 32;
@@ -191,6 +210,11 @@ function drawGates(b, ctx, t) {
       }
       if (extra > 0) { DH.text(ctx, '+' + extra, x + 4, cy + 1, 11, DIM, 'center'); x += 18; }
       if (L.boss) AE.drawGlyph(ctx, 'crown', x + 12, cy, 22, C.red);
+    }
+    if (cb) {   // colour-blind cue: the lane number on a sticker at the corner of the tag (the preview card calls the same lane GATE n)
+      const nx = cx - tw / 2 + 1, ny = cy - th / 2 + 1;
+      ctx.beginPath(); ctx.arc(nx, ny, 10, 0, TAU); ctx.fillStyle = L.boss ? C.red : C.yellow; ctx.fill(); ctx.lineWidth = 2.6; ctx.strokeStyle = INK; ctx.stroke();
+      DH.text(ctx, String(L.lane + 1), nx, ny + 0.5, 14, L.boss ? '#fff' : INK, 'center', 900, { maxW: 14 });
     }
     ctx.restore();
   }
@@ -267,7 +291,7 @@ function band(ctx, key, y, h, accent, ruleAtBottom, t) {
 }
 export function drawHud(b, ctx, t, beat) {
   DH.setHudTime(t);
-  const run = b.run;
+  const run = b.run, cbx = DD.cbOn(b);
   const accent = b.world.accent;
   band(ctx, 'top', 0, 118, accent, true, t);
   band(ctx, 'bot', 838, H - 838, accent, false, t);
@@ -286,11 +310,22 @@ export function drawHud(b, ctx, t, beat) {
   AE.drawGlyph(ctx, 'heart', 0, 0, 30, COL.red);
   ctx.restore();
   DH.text(ctx, run.stageHp + '/' + run.stageMax, hp.x + 52 + bw / 2, hp.y + 23, 15, '#fff', 'center');
+  if (cbx && f < 0.5) {   // colour-blind cue: low health is also a hatched bar, a dashed edge and a warning triangle that pulses when it is critical
+    const crit = f < 0.3, fw = bw * f;
+    ctx.save(); ctx.beginPath(); ctx.rect(hp.x + 52, hp.y + 11, Math.max(0, fw), 22); ctx.clip(); ctx.strokeStyle = 'rgba(43,39,51,0.55)'; ctx.lineWidth = 2.4; ctx.beginPath();
+    for (let x = hp.x + 40; x < hp.x + 52 + fw + 24; x += 9) { ctx.moveTo(x, hp.y + 33); ctx.lineTo(x + 22, hp.y + 11); }
+    ctx.stroke(); ctx.restore();
+    if (crit) rrectStroke(ctx, hp.x, hp.y, hp.w, hp.h, 14, INK, 3, 0.9, [7, 6], t * 16);
+    const k = crit ? 1 + 0.25 * Math.max(0, Math.sin(t * 9)) : 1, tx = hp.x + hp.w - 13, ty = hp.y + 5;
+    ctx.save(); ctx.translate(tx, ty); ctx.scale(k, k); ctx.beginPath(); ctx.moveTo(0, -11); ctx.lineTo(11, 8); ctx.lineTo(-11, 8); ctx.closePath();
+    ctx.fillStyle = crit ? C.red : C.yellow; ctx.fill(); ctx.lineWidth = 2.6; ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.stroke(); ctx.restore();
+    DH.text(ctx, crit ? '!!' : '!', tx, ty + 2.5 * k, 12 * k, crit ? '#fff' : INK, 'center', 900, { maxW: 16 });
+  }
   // wave
   const w = R.wave;
   DH.glass(ctx, w.x, w.y, w.w, w.h, 14, { edge: C.blue });
   DH.text(ctx, BT.wave(Math.max(1, run.wave), run.endless ? 0 : run.wavesTotal), w.x + w.w / 2, w.y + 16, 19, INK, 'center', 900, { maxW: w.w - 14 });
-  if (run.wmId) { const m = WAVE_MODS[run.wmId]; DH.text(ctx, m.name, w.x + w.w / 2, w.y + 37, 14, m.good ? C.green : C.orange, 'center', 900, { maxW: w.w - 14 }); }
+  if (run.wmId) { const m = WAVE_MODS[run.wmId]; DH.text(ctx, (cbx ? (m.good ? '+ ' : '- ') : '') + m.name, w.x + w.w / 2, w.y + 37, 14, m.good ? C.green : C.orange, 'center', 900, { maxW: w.w - 14 }); }
   else if (run.phase === 'prep' && (run.endless || run.wave < run.wavesTotal)) {
     const spec = run.upcoming();
     const types = [...new Set(spec.groups.map((gr) => gr.type))].slice(0, 3);
@@ -299,11 +334,12 @@ export function drawHud(b, ctx, t, beat) {
     DH.text(ctx, BT.next(), w.x + 12, w.y + 37, 10, DIM, 'left', 900, { maxW: 36 });
     for (const ty of types) { AE.drawEnemy(ctx, ty, x + 8, w.y + 36, { t, scale: 0.62, hp: 1 }); x += 26; }
     if (spec.boss) { AE.drawGlyph(ctx, 'crown', x + 8, w.y + 36, 22, C.red); x += 26; }
-    if (spec.mod) AE.drawGlyph(ctx, WAVE_MODS[spec.mod].glyph, x + 8, w.y + 36, 20, WAVE_MODS[spec.mod].good ? C.green : C.orange);
+    if (spec.mod) { AE.drawGlyph(ctx, WAVE_MODS[spec.mod].glyph, x + 8, w.y + 36, 20, WAVE_MODS[spec.mod].good ? C.green : C.orange); if (cbx) DH.text(ctx, WAVE_MODS[spec.mod].good ? '+' : '-', x + 23, w.y + 36, 16, INK, 'center', 900, { maxW: 12 }); }
   } else DH.text(ctx, run.world.name, w.x + w.w / 2, w.y + 37, 13, DIM, 'center', 900, { maxW: w.w - 14 });
   { const q = b.pv.open ? 1 : 0.8 + 0.2 * Math.sin(t * 4), qx = w.x + w.w - 10, qy = w.y + 9;   // "tap for the wave preview" badge
     ctx.save(); ctx.beginPath(); ctx.arc(qx, qy, 9 * q, 0, TAU); ctx.fillStyle = b.pv.open ? C.yellow : C.sky; ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = INK; ctx.stroke(); ctx.restore();
     DH.text(ctx, '?', qx, qy + 1, 12, INK, 'center'); }
+  DD.drawMilestoneChip(b, ctx, t);
   // coins: the number pops when it changes
   const c = R.coins;
   if (b._coinLast == null) b._coinLast = run.coins;
@@ -320,19 +356,27 @@ export function drawHud(b, ctx, t, beat) {
   DH.bezel(ctx, h.x + 27, h.y + 20, 17, C.gold);
   DH.text(ctx, run.level + '', h.x + 27, h.y + 21, 16, INK, 'center');
   DH.text(ctx, BT.hype(), h.x + 58 + (h.w - 66) / 2, h.y + 20, 12, '#fff', 'center', 900, { maxW: h.w - 74 });
+  if (cbx && hf > 0.85) {   // colour-blind cue: nearly full hype is a pulsing star, not only a gold edge
+    const k = 1 + 0.18 * Math.sin(t * 8);
+    ctx.save(); ctx.translate(h.x + h.w - 20, h.y + 20); ctx.scale(k, k); ctx.beginPath(); ctx.arc(0, 0, 13, 0, TAU); ctx.fillStyle = C.paper; ctx.fill(); ctx.lineWidth = 2.6; ctx.strokeStyle = INK; ctx.stroke(); ctx.restore();
+    AE.drawGlyph(ctx, 'star', h.x + h.w - 20, h.y + 20, 18 * k, C.gold);
+  }
   // combo meter: a spiky badge that grows with the combo, changes colour at 10, 25, 50, 100 and pulses on each milestone
   if (b.comboShow > 0.01) {
     const cb = run.combo, tier = b.comboTier, col = [C.sky, C.gold, C.orange, C.red, C.mag][tier];
     const r = (17 + Math.min(15, cb * 0.18) + b.comboPulse * 9) * (0.6 + 0.4 * b.comboShow), cx = 42, cy = 142 + (tier > 0 ? 4 : 0);
     const bump = 1 + Math.max(0, 1 - (t - (b.comboT || 0)) * 7) * 0.18;
     ctx.save(); ctx.globalAlpha = b.comboShow; ctx.translate(cx, cy); ctx.scale(bump, bump); ctx.rotate(Math.sin(t * 3) * 0.05 * (1 + tier));
-    const st = K.star(0, 0, r * 1.25, 0.72, t * (0.3 + tier * 0.15), 10);
+    const st = K.star(0, 0, r * 1.25, 0.72, t * (0.3 + tier * 0.15), cbx ? 8 + tier * 2 : 10);   // colour-blind cue: more spikes at every tier
     ctx.beginPath(); ctx.moveTo(st[0], st[1]); for (let i = 2; i < st.length; i += 2) ctx.lineTo(st[i], st[i + 1]); ctx.closePath();
     ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 3.6; ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.stroke(); ctx.restore();
     if (tier > 0) ring(ctx, cx, cy, r * 1.25 + 7 + b.comboPulse * 6, col, 3.5, t, { dash: [8, 7], march: t * 28, alpha: b.comboShow * 0.9, seed: tier });
     ctx.save(); ctx.globalAlpha = b.comboShow;
     DH.text(ctx, String(cb), cx, cy - 2, Math.round(16 + Math.min(8, cb * 0.08)), tier >= 3 ? '#fff' : INK, 'center');
     DH.text(ctx, BT.combo(), cx, cy + r * 1.25 + 9, 11, INK, 'center', 900, { maxW: 60 });
+    if (cbx && tier > 0) {   // tier pips: one diamond per milestone reached (10, 25, 50, 100)
+      for (let i = 0; i < tier; i++) { const px = cx - (tier - 1) * 6 + i * 12, py = cy - r * 1.25 - 7; ctx.beginPath(); ctx.moveTo(px, py - 5); ctx.lineTo(px + 5, py); ctx.lineTo(px, py + 5); ctx.lineTo(px - 5, py); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke(); }
+    }
     const f = clamp(run.comboT / (ECON.comboWindow || 1), 0, 1);   // time left before the combo drops
     ctx.fillStyle = INK; ctx.fillRect(cx - 22, cy + r * 1.25 + 18, 44, 5); ctx.fillStyle = col; ctx.fillRect(cx - 21, cy + r * 1.25 + 19, 42 * f, 3);
     ctx.restore();
@@ -381,12 +425,12 @@ function rerollBtn(b, ctx, r, gem, t) {
     press: b.pressK(gem ? 'rerollG' : 'reroll'), dim: !can && !p.why ? false : !can,
     draw: (c, x, y, bh) => {
       const cx = x + r.w / 2;
-      c.save(); c.translate(cx, y + 24); c.rotate(b.rerollSpin * TAU); AE.drawGlyph(c, 'reroll', 0, 0, 32, '#fff'); c.restore();
+      c.save(); c.translate(cx, y + 15); c.rotate(b.rerollSpin * TAU); AE.drawGlyph(c, 'reroll', 0, 0, 25, '#fff'); c.restore();
       const col = can ? '#fff' : '#e8403f';
-      if (free) DH.text(c, BT.free(), cx, y + bh - 28, 14, C.lime, 'center', 900, { maxW: r.w - 10 });
-      else if (p.why === 'single' || p.why === 'locked') DH.text(c, BT.no(), cx, y + bh - 28, 13, DIM, 'center', 900, { maxW: r.w - 10 });
-      else { AE.drawGlyph(c, gem ? 'diamond' : 'coin', cx - 13, y + bh - 28, 18); DH.text(c, fmt(price), cx + 6, y + bh - 27, 15, col, 'center'); }
-      DH.text(c, gem ? BT.gems() : free ? 'x' + p.free : BT.roll(), cx, y + bh - 10, 11, '#fff', 'center', 900, { maxW: r.w - 8 });
+      if (free) DH.text(c, BT.free(), cx, y + bh - 22, 14, C.lime, 'center', 900, { maxW: r.w - 10 });
+      else if (p.why === 'single' || p.why === 'locked') DH.text(c, BT.no(), cx, y + bh - 22, 13, DIM, 'center', 900, { maxW: r.w - 10 });
+      else { AE.drawGlyph(c, gem ? 'diamond' : 'coin', cx - 13, y + bh - 22, 17); DH.text(c, fmt(price), cx + 6, y + bh - 21, 15, col, 'center'); }
+      DH.text(c, gem ? BT.gems() : free ? 'x' + p.free : BT.roll(), cx, y + bh - 7, 11, '#fff', 'center', 900, { maxW: r.w - 8 });
     },
   });
 }
@@ -394,12 +438,12 @@ function rerollBtn(b, ctx, r, gem, t) {
 function drawPool(b, ctx, t) {
   const r = R.pool, p = b.pool, run = b.run, n = p.odds.length; if (!n) return;
   DH.glass(ctx, r.x, r.y, r.w, r.h, 10, { edge: C.lav });
-  const pitch = Math.min(29, (r.w - 16) / n), x0 = r.x + r.w / 2 - (n - 1) * pitch / 2, cy = r.y + r.h / 2;
+  const pitch = Math.min(29, (r.w - 16) / n), x0 = r.x + r.w / 2 - (n - 1) * pitch / 2, cy = r.y + r.h / 2 + 1;
   p.odds.forEach((o, i) => {
     const x = x0 + i * pitch, nx = o.type === run.nextType;
-    ctx.save(); ctx.globalAlpha = nx ? 1 : o.p > 0 ? 0.7 : 0.25;
-    if (nx) { ring(ctx, x, cy - 1, 15, TURRETS[o.type].color, 3.5, t, { seed: i, alpha: 1 }); }
-    AE.drawTurretIconFlat(ctx, o.type, x, cy - 1 - (nx ? 2 + Math.sin(t * 7) : 0), nx ? 28 : 21);
+    ctx.save(); ctx.globalAlpha = nx ? 1 : o.p > 0 ? 0.75 : 0.25;
+    if (nx) { ring(ctx, x, cy - 1, 17, TURRETS[o.type].color, 3.5, t, { seed: i, alpha: 1 }); }
+    AE.drawTurretIconFlat(ctx, o.type, x, cy - 1 - (nx ? 2 + Math.sin(t * 7) : 0), nx ? 31 : 25);
     ctx.restore();
   });
   const pct = Math.max(p.next > 0 ? 1 : 0, Math.round(p.next * 100));
@@ -427,22 +471,22 @@ export function drawDeploy(b, ctx, t, beat) {
   DH.button(ctx, d, can ? C.pink : '#b9b3c8', { radius: 22, press: pk, glow: can ? 0.2 + 0.2 * beat : 0, glowColor: C.lime });
   // equalizer in the corner, bouncing to the beat
   ctx.save(); ctx.globalAlpha = can ? 0.7 : 0.35; ctx.fillStyle = '#fff';
-  for (let i = 0; i < 5; i++) { const hh2 = 6 + 12 * (0.5 + 0.5 * Math.sin(t * (5 + i * 1.3) + i)) * (0.5 + beat * 0.7); DH.rrect(ctx, d.x + d.w - 38 + i * 6, d.y + 28 - hh2, 4, hh2, 2); ctx.fill(); }
+  for (let i = 0; i < 5; i++) { const hh2 = 5 + 10 * (0.5 + 0.5 * Math.sin(t * (5 + i * 1.3) + i)) * (0.5 + beat * 0.7); DH.rrect(ctx, d.x + d.w - 38 + i * 6, d.y + 24 - hh2, 4, hh2, 2); ctx.fill(); }
   ctx.restore();
   // socket with the next turret: a paper disc with an inked rim; it spins when the drop is re-rolled
-  const sx = d.x + 38, sy = d.y + d.h / 2 - 2;
-  ctx.beginPath(); ctx.arc(sx, sy, 28, 0, TAU); ctx.fillStyle = C.paper; ctx.fill();
-  ring(ctx, sx, sy, 28, nextDef.color, 3.5, t, { seed: 11 });
-  ctx.save(); ctx.translate(sx, sy); ctx.rotate(b.rerollSpin * TAU); AE.drawTurretIconFlat(ctx, run.nextType, 0, 0, 48); ctx.restore();
+  const sx = d.x + 33, sy = d.y + d.h / 2;
+  ctx.beginPath(); ctx.arc(sx, sy, 24, 0, TAU); ctx.fillStyle = C.paper; ctx.fill();
+  ring(ctx, sx, sy, 24, nextDef.color, 3.5, t, { seed: 11 });
+  ctx.save(); ctx.translate(sx, sy); ctx.rotate(b.rerollSpin * TAU); AE.drawTurretIconFlat(ctx, run.nextType, 0, 0, 42); ctx.restore();
   // the chance of this drop, as a paper sticker on the socket
   const pct = Math.max(b.pool.next > 0 ? 1 : 0, Math.round(b.pool.next * 100));
-  DH.glass(ctx, d.x + 3, d.y + 1, 38, 18, 8, { edge: C.pink });
-  DH.text(ctx, pct + '%', d.x + 22, d.y + 11, 12, INK, 'center');
-  DH.text(ctx, BT.drop(), d.x + 70, d.y + 26, 27, '#fff', 'left', 900, { maxW: d.w - 78 });
-  DH.text(ctx, nextDef.name, d.x + 70, d.y + 47, 13, '#fff', 'left', 900, { maxW: d.w - 78 });
-  if (run.mods.freeDeploys > 0) DH.text(ctx, BT.freeN(run.mods.freeDeploys), d.x + 70, d.y + 66, 17, C.lime, 'left', 900, { maxW: d.w - 78 });
-  else { AE.drawGlyph(ctx, 'coin', d.x + 80, d.y + 65, 20); DH.text(ctx, fmt(cost), d.x + 94, d.y + 66, 20, can ? C.yellow : '#ffd0d0', 'left'); }
-  if (b.targetSlot != null) AE.drawGlyph(ctx, 'target', d.x + d.w - 18, d.y + 47, 18, '#fff');
+  DH.glass(ctx, d.x + 1, d.y - 1, 36, 17, 8, { edge: C.pink });
+  DH.text(ctx, pct + '%', d.x + 19, d.y + 8, 12, INK, 'center');
+  DH.text(ctx, BT.drop(), d.x + 64, d.y + 19, 25, '#fff', 'left', 900, { maxW: d.w - 90 });
+  DH.text(ctx, nextDef.name, d.x + 64, d.y + 36, 12, '#fff', 'left', 900, { maxW: d.w - 72 });
+  if (run.mods.freeDeploys > 0) DH.text(ctx, BT.freeN(run.mods.freeDeploys), d.x + 64, d.y + 50, 16, C.lime, 'left', 900, { maxW: d.w - 72 });
+  else { AE.drawGlyph(ctx, 'coin', d.x + 72, d.y + 49, 18); DH.text(ctx, fmt(cost), d.x + 85, d.y + 50, 19, can ? C.yellow : '#ffd0d0', 'left'); }
+  if (b.targetSlot != null) AE.drawGlyph(ctx, 'target', d.x + d.w - 18, d.y + 40, 18, '#fff');
   ctx.restore();
 }
 

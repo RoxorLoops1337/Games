@@ -8,7 +8,7 @@ import { Battle, battleIdle } from './battle.js';
 import { Cutscene } from './cutscene.js';
 import { buildHub, settingsModal, codexModal, setlistSheet, langPicker } from './ui_hub.js';
 import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo } from './ui_run.js';
-import { setRoot, h, btn, modal, toast, tickLive, AE, AW } from './ui_core.js';
+import { setRoot, h, btn, modal, toast, actionToast, tickLive, AE, AW } from './ui_core.js';
 import { submitScore, rankOf } from './lb.js';
 import { setStyle } from './style.js';
 import { initPwa } from './pwa.js';
@@ -16,6 +16,7 @@ import * as Stats from './stats.js';
 import * as I18N from './i18n.js';
 import { initDataLang } from './i18n_data.js';
 import { t, tn } from './i18n.js';
+import { applyA11y, makePerfWatch, langOffer } from './a11y.js';
 
 const canvas = document.getElementById('game');
 const ui = document.getElementById('ui');
@@ -64,6 +65,7 @@ const app = {
     if (s.lang !== I18N.getLangPref()) I18N.setLangPref(s.lang);
     AudioFx.setVolume({ music: s.music, sfx: s.sfx });
     document.body.classList.toggle('reduce', !!s.reduce);
+    applyA11y(s);
     setStyle(); document.body.classList.add('doodle'); document.body.classList.remove('classic');
     if (app.battle) { app.battle.fx.noShake = !s.shake || !!s.reduce; if (s.lowfx) app.battle.fx.bloomOn = false; }
     if (app.view && app.view.lowfx !== !!s.lowfx) { app.view.lowfx = !!s.lowfx; resize(); }
@@ -161,6 +163,12 @@ function openHub(tab) {
   ui.replaceChildren(app.hub.el);
   app.audio.musicStart('hub');
   app.save();
+  // one-time offer to switch to the device language (a Dansk, Nederlands or Deutsch device that is showing English)
+  const offer = langOffer(p, typeof navigator !== 'undefined' ? (navigator.languages && navigator.languages.length ? navigator.languages : navigator.language) : 'en', I18N.getLang());
+  if (offer) {
+    p.tutorial.hints.lang_offer = true; app.save();
+    setTimeout(() => { if (app.screen === 'hub') actionToast(t('toast.lang_offer', 'Switch to {lang}?', { lang: I18N.langName(offer) }), t('toast.lang_switch', 'Switch'), () => app.setLangPref(offer), 9000); }, 1400);
+  }
   // welcome-back bits
   const now = app.now();
   if (!app.sessionGreeted && p.tutorial.done) {
@@ -342,8 +350,19 @@ window.addEventListener('pagehide', () => { saveResume(); writeSave(); });
 
 // ------------------------------------------------------------------------------------------------ loop
 let last = performance.now(), T = 0;
+const perfWatch = makePerfWatch();
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
+  const rawMs = now - last;
+  const dt = Math.min(0.05, rawMs / 1000); last = now; T += dt;
+  // Auto low graphics: a battle that stays slow switches the profile to Low graphics once (and says so)
+  {
+    const b = app.battle, st = app.profile.settings;
+    const active = app.screen === 'battle' && !!b && !b.paused && !b.ended && !document.hidden;
+    if (st.autolow && !st.lowfx && !app.profile.tutorial.hints.autolow_done && perfWatch.sample(rawMs, active)) {
+      st.lowfx = true; app.profile.tutorial.hints.autolow_done = true; app.applySettings(); app.save();
+      toast(t('toast.autolow', 'Running slowly, so Low graphics is on now. Change it in Settings.'), 4200);
+    }
+  }
   const v = app.view;
   try {
     if (!(app.screen === 'battle' && app.battle)) battleIdle(AudioFx);

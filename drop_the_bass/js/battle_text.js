@@ -46,6 +46,7 @@ export const BT = {
   phaseOf: (n, m) => t('battle.hud.phase_of', 'PHASE {n}/{m}', { n, m }),
   darkLane: (s) => t('battle.hud.dark_lane', 'DARK LANE {s}s', { s }),
   dark: () => t('battle.hud.dark', 'dark'),
+  goalWave: (n) => t('battle.hud.goal_wave', 'GOAL: WAVE {n}', { n }),
 
   // ---- floaters
   comboMilestone: (n) => t('battle.float.combo', '{n} COMBO!', { n }),
@@ -54,6 +55,8 @@ export const BT = {
   maxLevel: () => t('battle.float.max_level', 'MAX LEVEL!'),
   level: (n) => t('battle.float.level', 'LEVEL {n}', { n }),
   remix: () => t('battle.float.remix', 'REMIX!'),
+  autoLow: () => t('battle.float.autolow', 'Low graphics on for this run'),
+  milestone: () => t('battle.float.milestone', 'MILESTONE!'),
   blocked: () => t('battle.float.blocked', 'BLOCKED!'),
   back: () => t('battle.float.back', 'BACK!'),
   upgradeReady: () => t('battle.float.upgrade_ready', 'UPGRADE READY!'),

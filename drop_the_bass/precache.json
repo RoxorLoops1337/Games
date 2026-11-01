@@ -1,5 +1,5 @@
 {
- "version": "d0d0f85f76b6",
+ "version": "5dbbb9d698bb",
  "files": [
   "fonts/PatrickHand-latin-ext.woff2",
   "fonts/PatrickHand-latin.woff2",
@@ -8,6 +8,7 @@
   "icons/icon-512.png",
   "icons/icon-maskable-512.png",
   "index.html",
+  "js/a11y.js",
   "js/art_enemies.js",
   "js/art_entities.js",
   "js/art_env.js",
@@ -19,6 +20,7 @@
   "js/audio.js",
   "js/battle.js",
   "js/battle_text.js",
+  "js/countdown.js",
   "js/cutscene.js",
   "js/data_core.js",
   "js/data_depth.js",
