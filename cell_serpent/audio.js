@@ -1,6 +1,6 @@
 // Tiny synth: every sound is generated, no audio files.
 export function createAudio() {
-  let ac = null, master = null, muted = false, noiseBuf = null, musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
+  let ac = null, master = null, muted = false, musicAllowed = true, noiseBuf = null, musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
   const last = {};
   function ensure() {
     if (ac) return ac;
@@ -52,6 +52,21 @@ export function createAudio() {
     revive: () => [392, 523, 659, 784].forEach((f, i) => tone(f, 0.2, 'sine', 0.12, 0, i * 0.08)),
     dead: () => { [330, 262, 196, 131].forEach((f, i) => tone(f, 0.4, 'sawtooth', 0.14, -30, i * 0.18)); noise(0.8, 0.2, 800, 60); },
     click: () => tone(600, 0.05, 'square', 0.06),
+    // animal voices: every skill has a sound
+    moo: () => gate('moo', 160) && (tone(115, 0.5, 'sawtooth', 0.1, -28), tone(230, 0.45, 'triangle', 0.05, -50)),
+    meow: () => gate('meow', 140) && (tone(650, 0.16, 'triangle', 0.09, 350), tone(960, 0.22, 'triangle', 0.08, -480, 0.14)),
+    chirp: () => gate('chirp', 90) && (tone(1800, 0.06, 'sine', 0.07, 700), tone(2300, 0.06, 'sine', 0.06, -500, 0.07)),
+    bark: () => gate('bark', 140) && (noise(0.08, 0.2, 2600, 500), tone(270, 0.12, 'sawtooth', 0.12, -130)),
+    quack: () => gate('quack', 120) && (tone(540, 0.11, 'sawtooth', 0.07, -190), tone(500, 0.1, 'sawtooth', 0.06, -160, 0.12)),
+    hoot: () => gate('hoot', 220) && (tone(430, 0.3, 'sine', 0.1, -70), tone(430, 0.3, 'sine', 0.08, -70, 0.34)),
+    coo: () => gate('coo', 120) && tone(620, 0.18, 'sine', 0.07, 140),
+    squeak: () => gate('squeak', 80) && tone(2400, 0.05, 'square', 0.035, -900),
+    baa: () => gate('baa', 200) && (tone(320, 0.4, 'sawtooth', 0.08, 45), tone(330, 0.4, 'sawtooth', 0.05, 40, 0.01)),
+    oink: () => gate('oink', 200) && (tone(190, 0.1, 'sawtooth', 0.1, 60), tone(200, 0.1, 'sawtooth', 0.09, -40, 0.11)),
+    boop: () => gate('boop', 200) && tone(330, 0.2, 'sine', 0.1, -120),
+    danger: () => gate('danger', 300) && (tone(150, 0.1, 'square', 0.12), tone(150, 0.1, 'square', 0.12, 0, 0.16)),
+    mend: () => gate('mend', 300) && tone(880, 0.12, 'sine', 0.05, 520),
+    skip: () => tone(420, 0.1, 'triangle', 0.08, -120),
   };
   // Looping bass + arp, scheduled slightly ahead of the clock.
   const BASS = [55, 55, 82.4, 55, 65.4, 65.4, 98, 65.4], ARP = [220, 277, 330, 277, 262, 330, 392, 330];
@@ -74,10 +89,12 @@ export function createAudio() {
     setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5; },
     get muted() { return muted; },
     music(on) {
-      musicOn = on;
-      if (on && ensure()) { nextT = ac.currentTime + 0.05; clearInterval(timer); timer = setInterval(pump, 80); }
+      musicOn = on && musicAllowed;
+      if (musicOn && ensure()) { nextT = ac.currentTime + 0.05; clearInterval(timer); timer = setInterval(pump, 80); }
       else clearInterval(timer);
     },
+    setMusicAllowed(b) { musicAllowed = b; if (!b) { musicOn = false; clearInterval(timer); } },
+    get musicAllowed() { return musicAllowed; },
     intensity(v) { intensity = v; },
   };
 }

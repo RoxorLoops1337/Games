@@ -1,0 +1,11 @@
+{
+  "name": "Cell Serpent",
+  "short_name": "Cell Serpent",
+  "description": "RoxorLoops & Jasmin vs the Serpent",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0d0924",
+  "theme_color": "#0d0924",
+  "icons": [{ "src": "assets/duo_idle.png", "sizes": "any", "type": "image/png", "purpose": "any" }]
+}

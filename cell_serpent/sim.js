@@ -315,7 +315,7 @@ export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
   const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0 };
-  return { v: 6, loadout: [...WEAPON_STARTERS], pets, petEquip: [], prog: {}, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
+  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, lowQuality: false, bigNumbers: false }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -335,6 +335,10 @@ export function sanitizeSave(raw) {
   if (Array.isArray(raw.petEquip)) s.petEquip = raw.petEquip.filter((id, i, a) => PET[id] && s.pets[id].star > 0 && a.indexOf(id) === i).slice(0, PET_SLOTS);
   if (raw.eggs !== undefined) s.eggs = num(raw.eggs); else if (raw.runs) s.eggs = 1;
   s.ribbons = num(raw.ribbons);
+  if (raw.stars && typeof raw.stars === 'object') for (const k of Object.keys(raw.stars)) if (/^\d+$/.test(k)) s.stars[k] = Math.min(3, num(raw.stars[k]));
+  if (raw.streak && typeof raw.streak === 'object') s.streak = { last: num(raw.streak.last), n: num(raw.streak.n) };
+  if (raw.last && typeof raw.last === 'object') s.last = { stage: Math.max(1, Math.min(50, num(raw.last.stage, 1))), hard: !!raw.last.hard };
+  if (raw.settings && typeof raw.settings === 'object') for (const k of Object.keys(s.settings)) if (typeof raw.settings[k] === 'boolean') s.settings[k] = raw.settings[k];
   if (raw.outfits && typeof raw.outfits === 'object') { for (const o of OUTFITS) if (raw.outfits.owned && raw.outfits.owned[o.id]) s.outfits.owned[o.id] = 1; if (OUTFIT[raw.outfits.worn] && s.outfits.owned[raw.outfits.worn]) s.outfits.worn = raw.outfits.worn; }
   if (raw.event && typeof raw.event === 'object') { s.event = { key: num(raw.event.key), earned: num(raw.event.earned), claimed: {} }; for (const k of Object.keys(raw.event.claimed || {})) if (raw.event.claimed[k]) s.event.claimed[k] = 1; }
   if (raw.inv && typeof raw.inv === 'object') s.inv = { day: num(raw.inv.day), left: Math.min(2, num(raw.inv.left, 2)), best: num(raw.inv.best) };
@@ -414,7 +418,7 @@ export function petBonus(pets) {   // permanent, whether the pet is equipped or 
 // A fresh day gives a fresh egg and fresh Piggy Bank attempts.
 export function dayLogin(save, day) {
   let fresh = false;
-  if (save.login !== day) { save.login = day; save.eggs++; fresh = true; }
+  if (save.login !== day) { save.login = day; save.eggs++; fresh = true; save.streak = { last: day, n: (save.streak.last === day - 1 ? save.streak.n : 0) + 1 }; save.beats += 40 * Math.min(7, save.streak.n); }
   ensureEvent(save, day); if (!save.inv || save.inv.day !== day) save.inv = { day, left: 2, best: (save.inv && save.inv.best) || 0 };
   if (save.shop.day !== day) save.shop = { ...save.shop, day, refresh: 0, bought: {}, free: 0 };
   if (!save.pig || save.pig.day !== day) save.pig = { day, left: 3, best: (save.pig && save.pig.best) || 0 };
@@ -506,6 +510,9 @@ export const GOAL_DEFS = [
   { id: 'wins', text: n => `Clear ${n} stage${n > 1 ? 's' : ''}`, targets: [1, 2, 3], stat: 'wins', reward: [{ sparkles: 8 }, { sparkles: 14 }, { sparkles: 22 }] },
   { id: 'chests', text: n => `Collect ${n} chests`, targets: [3, 5, 8], stat: 'chests', reward: [{ beats: 40 }, { beats: 70 }, { beats: 110 }] },
   { id: 'groove', text: n => `Reach groove ${n}`, targets: [8, 14, 20], stat: 'groove', max: true, reward: [{ sparkles: 6 }, { sparkles: 10 }, { sparkles: 16 }] },
+  { id: 'bombs', text: n => `Pop ${n} bombs`, targets: [3, 6, 10], stat: 'bombs', reward: [{ beats: 50 }, { beats: 80 }, { beats: 120 }] },
+  { id: 'bosses', text: n => (n > 1 ? `Beat ${n} bosses` : 'Beat a boss'), targets: [1, 1, 2], stat: 'bosses', reward: [{ sparkles: 10 }, { sparkles: 14 }, { sparkles: 24 }] },
+  { id: 'stars', text: n => `Earn ${n} stars`, targets: [2, 4, 6], stat: 'starsEarned', reward: [{ sparkles: 6 }, { sparkles: 10 }, { sparkles: 16 }] },
   { id: 'picks', text: n => `Pick ${n} upgrades`, targets: [4, 7, 10], stat: 'picks', reward: [{ beats: 40 }, { beats: 70 }, { beats: 110 }] },
 ];
 export function dailyGoals(day) {
@@ -521,6 +528,7 @@ export function addRunStats(save, day, r) {
   const p = save.daily.progress, add = (k, v) => { p[k] = (p[k] || 0) + v; };
   add('kills', r.kills || 0); add('wins', r.won ? 1 : 0); add('chests', r.chests || 0); add('picks', r.picks || 0);
   p.groove = Math.max(p.groove || 0, r.groove || 0);
+  add('bombs', r.bombs || 0); add('bosses', r.won && r.boss && !r.mode ? 1 : 0); add('starsEarned', r.starsGained || 0);
 }
 export const goalProgress = (save, day, goal) => (save.daily && save.daily.day === day ? Math.min(goal.target, (save.daily.progress[goal.stat] || 0)) : 0);
 export function claimGoal(save, day, id) {
@@ -529,15 +537,30 @@ export function claimGoal(save, day, id) {
   save.daily.claimed[id] = 1; save.beats += goal.reward.beats || 0; save.sparkles += goal.reward.sparkles || 0;
   return true;
 }
+export function claimAllGoals(save, day) { let n = 0; for (const g of dailyGoals(day)) if (claimGoal(save, day, g.id)) n++; return n; }
+export function claimAllFund(save) { let n = 0; for (const f of FUND) if (claimFund(save, f.stage)) n++; return n; }
+export function claimAllTrophies(save) { let n = 0; for (const t of TROPHIES) if (claimTrophy(save, t.id)) n++; return n; }
+export function upgradeAllKeeps(save) { let n = 0, again = true; while (again) { again = false; for (const k of KEEPSAKES) if (keepUp(save, k.id)) { n++; again = true; } } return n; }
+export function upgradeAllPets(save) { let n = 0, again = true; while (again) { again = false; for (const p of PETS) if (petUp(save, p.id)) { n++; again = true; } } return n; }
+export function upgradeAllSkills(save) { let n = 0, again = true; while (again) { again = false; for (const w of WEAPONS) if (levelSkill(save, w.id)) { n++; again = true; } } return n; }
+export function hatchAll(save, rand = Math.random) { const out = []; let h; while ((h = hatchEgg(save, rand))) out.push(h); return out; }
+// A backup code you can copy: the whole save as text.
+export const exportSave = save => 'CS1.' + btoa(JSON.stringify(save));
+export function importSave(code) {
+  try { if (typeof code !== 'string' || !code.trim().startsWith('CS1.')) return null; return sanitizeSave(JSON.parse(atob(code.trim().slice(4)))); } catch (e) { return null; }
+}
 export const canPlay = (save, n) => n >= 1 && n <= Math.min(MAX_STAGE, save.cleared + 1);
 export const clearReward = n => ({ sparkles: (isBossStage(n) ? 40 : 15) + 3 * n });
 // Applies a finished run to the save and returns what was earned.
+export const totalStars = save => Object.values(save.stars || {}).reduce((a, v) => a + v, 0);
 export function applyResult(save, r) {
   const out = { beats: r.coins, sparkles: 0, first: false, egg: false, levelUps: 0, frags: r.frags || {} };
   const lv0 = levelInfo(save.xp).lv; save.xp += Math.round((r.kills || 0) + 25 * (r.stage || 1) * (r.won ? 2 : 1) * (r.hard ? 1.5 : 1));
   const lv1 = levelInfo(save.xp).lv; out.levelUps = lv1 - lv0;
   for (let l = lv0 + 1; l <= lv1; l++) { const rw = levelReward(l); if (rw) { save.sparkles += rw.sparkles; out.sparkles += rw.sparkles; } }
   if (r.cp50) addEnergy(save, ENERGY_BACK);
+  out.prevPct = save.prog[r.stage] || 0; out.starsGained = 0;
+  if (r.won && !r.mode && !r.hard && r.stars) { const old = save.stars[r.stage] || 0; if (r.stars > old) { const before = totalStars(save); save.stars[r.stage] = r.stars; out.starsGained = r.stars - old; const ms = Math.floor((before + out.starsGained) / 10) - Math.floor(before / 10); if (ms > 0) { save.sparkles += 10 * ms; out.sparkles += 10 * ms; out.starBonus = 10 * ms; } } }
   if (r.won && r.mode !== 'pig' && r.mode !== 'inv') { const rb = (3 + Math.floor((r.stage || 1) / 3)) * (r.hard ? 2 : 1); addRibbons(save, rb); out.ribbons = rb; }
   save.beats += r.coins; save.runs++; save.kills += r.kills;
   for (const id of Object.keys(out.frags)) save.skills[id].frag += out.frags[id];
@@ -574,13 +597,23 @@ export const PIG_NAME = 'Piggy Bank Parade';
 const nameOf = g => (g.mode === 'pig' ? PIG_NAME : g.mode === 'inv' ? INV_NAME : virusName(g.stage));
 const skinOf = (g, n) => (g.mode === 'pig' ? 'piggy' : skinFor(n));
 export const MAX_STAGE = 50;
+// Some stages carry a twist, shown before you start.
+export const MODS = [
+  { id: 'swift', name: 'Swift', blurb: 'The snake is 25% faster', speed: 1.25 },
+  { id: 'thick', name: 'Thick', blurb: 'Tougher cells, richer Beats', hp: 1.3, coin: 1.4 },
+  { id: 'fragile', name: 'Fragile', blurb: 'Softer cells', hp: 0.8 },
+  { id: 'armored', name: 'Armored', blurb: 'Lots of armored cells', armor: 0.3 },
+  { id: 'boomy', name: 'Boomy', blurb: 'Lots of bombs', bomb: 0.3 },
+  { id: 'rich', name: 'Rich', blurb: 'Beats are worth much more', coin: 1.6 },
+];
+export const stageMod = n => (n >= 4 && n % 5 !== 0 && n % 3 === 1 ? MODS[Math.floor(n / 3) % MODS.length] : null);
 // Most stages are one snake and a line at the bottom. Some stages have two snakes, and some put the duo in the middle with a circle around them.
 export const stageKind = n => (n % 6 === 0 ? 'ring' : (n % 7 === 0 || n % 10 === 8) ? 'double' : 'lane');
 export const KIND_LABEL = { lane: '', double: 'Two snakes', ring: 'Circle' };
 export const RING = { cx: W / 2, cy: 720, R: 175 };
-export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: stageKind(n) === 'ring' ? 'Spiral' : PATH_KINDS[pathKind(n)], kind: stageKind(n), hp: Math.round(hpBase(n)) });
+export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: stageKind(n) === 'ring' ? 'Spiral' : PATH_KINDS[pathKind(n)], kind: stageKind(n), mod: stageMod(n), hp: Math.round(hpBase(n)) });
 
-const KIND = { normal: { hp: 1 }, armor: { hp: 2.6 }, bomb: { hp: 1 }, upgrade: { hp: 1.6 } };
+const KIND = { normal: { hp: 1 }, armor: { hp: 2.6 }, bomb: { hp: 1 }, upgrade: { hp: 1.6 }, mender: { hp: 1.3 } };
 
 // ---------------------------------------------------------------- the track
 // Every stage has its own lane shape. Control points are corner-cut into smooth curves.
@@ -670,8 +703,10 @@ export function makePlayer(metaLv, pb, equip) {
 function pickKind(g, n, boss, i, len) {
   if (i === 0) return 'normal';
   const r = g.rand();
-  if (n >= 3 && r < 0.12) return 'armor';
-  if (n >= 2 && r < 0.2) return 'bomb';
+  const m = g.mod || {};
+  if (n >= 3 && r < (m.armor || 0.12)) return 'armor';
+  if (n >= 2 && r < (m.armor ? 0.4 : m.bomb ? 0.3 : 0.2)) return 'bomb';
+  if (n >= 9 && r < 0.28) return 'mender';
   return 'normal';
 }
 export function segRadius(boss, i, len) {
@@ -684,7 +719,7 @@ const spacing = (a, b) => (a.r + b.r) * 0.78;
 function spawnSnake(g, n, o = {}) {
   const pig = g.mode === 'pig', inv = g.mode === 'inv', boss = isBossStage(n), len = o.len || (pig ? 40 : inv ? 70 : snakeLength(n)), segs = [];
   const path = o.mirror ? mirrorPath(g.path) : g.path;
-  const hpB = (pig ? hpBase(1 + 2 * n) * 0.5 : inv ? hpBase(n) * 1.3 : hpBase(n)) * (g.hard ? HARD_HP : 1);
+  const hpB = (pig ? hpBase(1 + 2 * n) * 0.5 : inv ? hpBase(n) * 1.3 : hpBase(n)) * (g.hard ? HARD_HP : 1) * ((g.mod && g.mod.hp) || 1);
   const ramp = i => 0.4 + 1.35 * Math.pow(i / Math.max(1, len - 1), 1.3);   // the first cells are soft, then it gets tougher and tougher
   let ps = o.startPs === undefined ? 240 : o.startPs;   // the face starts just inside the top edge
   for (let i = 0; i < len; i++) {
@@ -709,7 +744,7 @@ function spawnSnake(g, n, o = {}) {
     segs[j].carry = 'chest';
   }
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
-  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n);
+  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1);
   g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
 }
@@ -719,6 +754,7 @@ export function startStage(g, n) {
   g.snakes.length = 0; g.stageHpMax = 0; g.zones.length = 0; g.maws.length = 0; g.bullets.length = 0; g.vq.length = 0;
   g.path = buildPath(n);
   const p = g.p;
+  g.mod = g.mode === '' ? stageMod(n) : null; if (g.mod && g.mod.coin) g.coinK *= g.mod.coin;
   g.ring = g.mode === '' && stageKind(n) === 'ring' ? RING : null;
   g.upgradeLeft = 0;
   p.zone = g.ring ? { x0: RING.cx - 100, x1: RING.cx + 100 } : { x0: 40, x1: W - 40 }; p.x = W / 2; p.y = g.ring ? RING.cy : ROW_Y; p.kx = 0;
@@ -726,7 +762,7 @@ export function startStage(g, n) {
   else spawnSnake(g, n);
   rebuildTowers(g);
   g.phase = 'play'; g.clearT = 0; g.progress = 0;
-  g.events.push({ t: 'stage', n, boss: isBossStage(n), name: nameOf(g) });
+  g.events.push({ t: 'stage', n, boss: isBossStage(n), name: nameOf(g), mod: g.mod ? g.mod.name : '' });
 }
 
 // ---------------------------------------------------------------- game
@@ -743,7 +779,7 @@ export function createGame(opts = {}) {
     events: [], ups: {}, val: {}, weap: {}, unlocked, skillLv, loadout,
     level: 1, cells: 0, upgradeLeft: 0, pending: 0, choices: [], resume: 'play', rerolls: 4,
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
-    groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
+    groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, faceMax: 0, bombsPopped: 0, dangerT: 0, danger: 0, mod: null, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
   };
   startStage(g, opts.stage || 1);
   return g;
@@ -817,6 +853,7 @@ function onKill(g, s, sn) {
   if (s.carry === 'chest') { g.pickups.push({ kind: 'chest', x: s.x, y: s.y, vx: 0, vy: 40, v: 1, age: 0, vac: false }); g.events.push({ t: 'chestdrop', x: s.x, y: s.y }); }
   g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin });
   if (s.kind === 'bomb') {
+    g.bombsPopped++;
     const R = 150;
     g.events.push({ t: 'boom', x: s.x, y: s.y, r: R });
     for (const o of g.snakes) for (const q of o.segs) if (q !== s && q.hp > 0 && Math.hypot(q.x - s.x, q.y - s.y) < R + q.r) damageSeg(g, q, Math.max(2, s.max * 0.9), false, q.x, q.y);
@@ -859,7 +896,7 @@ export function reviveGame(g) {
   return true;
 }
 function makeResult(g, won) {
-  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
+  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, bombs: g.bombsPopped, stars: won && !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0, mod: g.mod ? g.mod.id : '', hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
 }
 // ---------------------------------------------------------------- skill picks
 // what an upgrade does now and after this pick, so every pick is visible in numbers
@@ -927,6 +964,13 @@ function maybeLevelUp(g) {
     g.events.push({ t: 'levelup', level: g.level });
   }
 }
+// Skip the cards: take Beats instead.
+export function skipPick(g) {
+  if (g.phase !== 'levelup') return false;
+  g.coins += (20 + 4 * g.stage) * g.p.coinMul; g.pending--; g.events.push({ t: 'skip' });
+  if (g.pending > 0) { g.choices = rollChoices(g); if (!g.choices.length) { g.pending = 0; g.phase = g.resume; } } else g.phase = g.resume;
+  return true;
+}
 export function reroll(g) {
   if (g.phase !== 'levelup' || g.rerolls <= 0) return false;
   g.rerolls--; g.choices = rollChoices(g);
@@ -964,7 +1008,7 @@ function collect(g, pk) {
     g.coins += (4 + g.stage * 2) * p.coinMul * (cp ? cp * 2 : 1) * (g.coinK || 1); if (!cp) g.frags[id] = (g.frags[id] || 0) + 1; g.chestsOpened++;
     g.events.push({ t: 'chest', x: pk.x, y: pk.y, frag: id }); return;
   }
-  if (pk.kind === 'coin') { g.coins += pk.v * p.coinMul * (g.coinK || 1); g.events.push({ t: 'coin', x: pk.x, y: pk.y, v: pk.v }); }
+  if (pk.kind === 'coin') { g.coins += pk.v * p.coinMul * (g.coinK || 1) * (g.groove >= 15 ? 1.25 : 1); g.events.push({ t: 'coin', x: pk.x, y: pk.y, v: pk.v }); }
 }
 
 // ---------------------------------------------------------------- shooting and skills
@@ -1131,6 +1175,7 @@ export function step(g, dt, input) {
   // the virus rides the track as one connected chain driven by its tail. Cells in front of a gap
   // slide back to close it, so every kill also pushes the face away from the membrane.
   let stageHp = 0;
+  g.danger *= 0.97;
   for (const sn of g.snakes) {
     sn.slow = Math.max(0, sn.slow - dt);
     // now and then it surges for a second (with a warning beforehand)
@@ -1153,6 +1198,9 @@ export function step(g, dt, input) {
       segs[i].tp = target;
     }
     segs[0].shield = segs.length > 1;
+    sn.healT = (sn.healT === undefined ? 1.2 : sn.healT) - dt;
+    if (sn.healT <= 0 && g.phase === 'play') { sn.healT = 1.2; for (let i = 1; i < segs.length; i++) if (segs[i].kind === 'mender' && segs[i].hp > 0) { for (let j = Math.max(1, i - 2); j <= Math.min(segs.length - 1, i + 2); j++) if (j !== i && segs[j].hp > 0 && segs[j].hp < segs[j].max) segs[j].hp = Math.min(segs[j].max, segs[j].hp + segs[j].max * 0.06); g.events.push({ t: 'mend', x: segs[i].x, y: segs[i].y }); } }
+    { const left = path.len - segs[0].ps, close = clamp(1 - left / 300, 0, 1); g.faceMax = Math.max(g.faceMax, segs[0].ps / path.len); if (g.phase === 'play' && close > 0) { g.danger = Math.max(g.danger * 0.9, close); g.dangerT -= dt; if (g.dangerT <= 0) { g.dangerT = 0.8; g.events.push({ t: 'danger', k: close }); } } }
     // boss: a wave of shields rolls down the chain like a beat. Cells inside it cannot be hit, so time your shots.
     const wavePos = sn.boss ? (g.t * 4.5) % (segs.length + 8) : -99;
     for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && Math.abs(i - wavePos) < 1.6;

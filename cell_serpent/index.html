@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0d0924">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Cell Serpent</title>
 <style>
   :root{ --bg:#0d0924; --ink:#eaf8ff; --dim:#9fb3cc; --pink:#ff5cb8; --cyan:#39f0ff; --lime:#9dff6d; --gold:#ffd24a; --glass:rgba(16,12,44,.92); --line:#2d170f; }
@@ -122,6 +125,17 @@
   .dmgrow{display:grid;grid-template-columns:150px 1fr 44px;gap:8px;align-items:center;width:min(460px,92vw);margin:6px 0;font-weight:800;font-size:14px} .dmgrow .dn img{width:26px;height:26px;vertical-align:middle;object-fit:contain} .dmgrow b{text-align:right}
   .wardtop{text-align:center;width:100%;margin-bottom:8px} .wardhero{position:relative;display:inline-block} .wardhero img{width:120px} .wardhat{position:absolute;top:-6px;left:50%;transform:translateX(-50%);font-size:38px}
   .beasts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%} .beast{text-align:center;border:3px solid rgba(255,255,255,.2);border-radius:16px;padding:8px 4px;background:var(--glass)} .beast.off img{filter:brightness(0)} .bpic{height:70px;display:grid;place-items:center} .bpic img{width:64px;height:64px;object-fit:contain} .bname{font-weight:900;font-size:12px;line-height:1.1;min-height:28px} .beast small{color:var(--dim)}
+  html,body{overscroll-behavior:none}
+  .gear{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px;z-index:6;width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:22px;cursor:pointer}
+  .tabs button{position:relative} .tabs .dot{position:absolute;top:6px;right:calc(50% - 22px);width:12px;height:12px;border-radius:50%;background:#ff3d5a;border:2px solid #150f38}
+  .tgl{display:flex;justify-content:space-between;align-items:center;gap:10px;width:min(420px,92vw);padding:10px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.18);background:var(--glass);font-weight:800;margin:5px 0;cursor:pointer;color:var(--ink);font:inherit;font-weight:800}
+  .tgl b{min-width:54px;text-align:center;padding:3px 10px;border-radius:99px;background:#46576a;font-size:13px} .tgl.on b{background:#9dff6d;color:#10131c}
+  #settings{overflow:auto;justify-content:flex-start;padding-top:calc(18px + env(safe-area-inset-top));padding-bottom:30px}
+  #settings .box{width:min(420px,92vw);margin:8px 0;font-size:13px;color:var(--dim);line-height:1.4} #settings textarea{width:100%;height:84px;border-radius:12px;border:2px solid var(--line);background:#150f38;color:#fff;font:12px monospace;padding:8px}
+  .stars{font-size:34px;letter-spacing:6px;color:#ffd24a;text-shadow:0 2px 0 #7a4a08} .stars .off{color:#46576a;text-shadow:none}
+  .chip .st{display:block;font-size:9px;line-height:1;color:#ffd24a;letter-spacing:0} .chip .kk{position:absolute;top:-6px;right:-4px;font-size:12px}
+  .chip{position:relative} .modline{font-size:13px;font-weight:800;color:#ffcf7a;text-align:center;min-height:18px}
+  .rextra{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:13px;color:var(--dim);margin-top:6px;width:min(360px,90vw)} .rextra b{color:#fff}
   #muteBtn{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:5;width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:20px;cursor:pointer;display:none}
   #muteBtn.on{display:block}
 </style>
@@ -139,11 +153,13 @@
   <img class="hero" src="assets/duo_sing.png" alt="RoxorLoops and Jasmin">
   <div class="sub">RoxorLoops &amp; Jasmin vs the Serpent.</div>
   <button class="btn" id="playBtn">PLAY</button>
+  <div class="sub" id="titleInfo" style="margin-top:6px"></div>
+  <button class="gear" id="setBtnT" aria-label="Settings">⚙</button>
   <div class="row"><div class="cur b"><img data-cur="beats" alt=""><b id="tBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="tSpark">0</b></div></div>
 </section>
 
 <section class="scr hub" id="hub">
-  <div class="hubtop"><div class="cur e"><b>⚡</b><b id="hEnergy">0</b><button class="plus" id="enPlus">+</button></div><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div><div id="hPower"></div>
+  <div class="hubtop"><button class="gear" id="setBtnH" aria-label="Settings" style="position:static;flex:none;width:38px;height:38px;font-size:19px">⚙</button><div class="cur e"><b>⚡</b><b id="hEnergy">0</b><button class="plus" id="enPlus">+</button></div><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div><div id="hPower"></div>
   <div class="hubbody">
     <div class="tab" id="tabBattle">
       <div class="stagebox">
@@ -153,13 +169,15 @@
         <div class="stagepick"><button class="arrow" id="stPrev">◀</button><canvas id="stCanvas" width="660" height="620"></canvas><button class="arrow" id="stNext">▶</button></div>
         <div class="chips" id="stChips"></div>
         <div class="diffrow" id="diffRow"></div>
+        <div class="modline" id="stMod"></div>
         <div class="info" id="stInfo"></div>
         <div class="stprog" id="stProg"></div>
         <div class="loadout" id="battleLoad"></div>
         <button class="btn" id="stGo">START THE BATTLE</button>
+        <button class="btn alt" id="contBtn" style="margin-top:8px;font-size:15px;padding:10px 20px">CONTINUE</button>
       </div>
       <div class="stagebox"><div class="tiles" id="pigBox"></div></div>
-      <div class="stagebox"><h2 style="font-size:20px">DAILY GIGS</h2><div class="tiles" id="goalList"></div></div>
+      <div class="stagebox"><h2 style="font-size:20px">DAILY GIGS</h2><button class="btn small alt" id="claimGigs" style="margin-bottom:6px">CLAIM ALL</button><div class="tiles" id="goalList"></div></div>
     </div>
     <div class="tab" id="tabSkills"><h2>SKILLS</h2><div class="sub">Pick your five.</div><div class="loadout" id="loadoutRow"></div><div class="tiles" id="skillList"></div></div>
     <div class="tab" id="tabPets"><h2>PETS</h2><div class="sub">Little friends.</div><div class="tiles" id="petList"></div></div>
@@ -177,7 +195,22 @@
   <h2>Choose an upgrade</h2>
   <div class="cards" id="cards"></div>
   <button class="btn alt" id="refreshBtn">FREE REFRESH</button>
+  <button class="btn dim" id="skipBtn" style="margin-top:8px;font-size:14px;padding:9px 18px">SKIP FOR BEATS</button>
   <div class="sub" id="refreshLeft"></div>
+</section>
+
+<section class="scr" id="settings">
+  <h2>SETTINGS</h2>
+  <button class="tgl" data-k="sound"><span>Sound effects</span><b>ON</b></button>
+  <button class="tgl" data-k="music"><span>Music</span><b>ON</b></button>
+  <button class="tgl" data-k="vibrate"><span>Vibration</span><b>ON</b></button>
+  <button class="tgl" data-k="reduceMotion"><span>Reduce motion (no shake or flashes)</span><b>OFF</b></button>
+  <button class="tgl" data-k="lowQuality"><span>Low quality (fewer sparkles, faster)</span><b>OFF</b></button>
+  <button class="tgl" data-k="bigNumbers"><span>Bigger numbers on cells</span><b>OFF</b></button>
+  <div class="box"><b style="color:#fff">Backup</b><br>Copy this code somewhere safe. Paste it back to restore your game on any phone.<textarea id="bkCode" spellcheck="false"></textarea></div>
+  <div class="row"><button class="btn small alt" id="bkCopy">COPY CODE</button><button class="btn small gold" id="bkLoad">LOAD CODE</button></div>
+  <div class="box">Keys: A / D or arrows slide, P pauses, M mutes, 1 2 3 pick a card.<br>Cell Serpent, by RoxorLoops &amp; Jasmin. Version 2.0.</div>
+  <button class="btn dim" id="setClose">CLOSE</button>
 </section>
 
 <section class="scr" id="panel"><h2 id="pTitle"></h2><div class="panelbody" id="pBody"></div><button class="btn dim" id="pClose">CLOSE</button></section>
@@ -193,6 +226,8 @@
 <section class="scr" id="pause">
   <h2>PAUSED</h2>
   <button class="btn" id="resumeBtn">RESUME</button>
+  <button class="btn alt" id="pStats">WHO DID WHAT</button>
+  <button class="btn alt" id="pSet">SETTINGS</button>
   <button class="btn dim" id="quitBtn">GIVE UP</button>
 </section>
 
@@ -200,7 +235,9 @@
   <h2 id="rTitle">THE VIRUS WINS</h2>
   <img class="hero" id="rImg" src="assets/duo_idle.png" style="width:min(200px,46vw)" alt="">
   <div class="sub" id="rSub"></div>
+  <div class="stars" id="rStars"></div>
   <div class="result-list" id="rList"></div>
+  <div class="rextra" id="rExtra"></div>
   <button class="btn" id="rNext">NEXT STAGE</button>
   <div class="row"><button class="btn alt" id="rRetry">RETRY</button><button class="btn dim" id="rHub">MENU</button></div>
 </section>
