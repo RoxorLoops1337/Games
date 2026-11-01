@@ -76,6 +76,7 @@ export const SPECIES = {
   sour: { name: 'Sour', base: '#5fb85f', sh: '#2f7a3a', lite: '#b7f0a8', eye: '#2d170f', acc: '#ff9ac0', cell: 'drop', face: 'sour', hat: 'none' },
   mighty: { name: 'Mighty', base: '#8fa3c7', sh: '#5b6d94', lite: '#d3def2', eye: '#ff5a78', acc: '#7ad04a', cell: 'stone', face: 'cyclops', hat: 'horns' },
   frosty: { name: 'Frosty', base: '#bfe9ff', sh: '#6fb4e0', lite: '#f0fbff', eye: '#2d170f', acc: '#ff7eb6', cell: 'snow', face: 'shy', hat: 'none' },
+  piggy: { name: 'Piggy Bank', base: '#ffa8b8', sh: '#d9648f', lite: '#ffd6de', eye: '#2d170f', acc: '#ffd84d', cell: 'round', face: 'shy', hat: 'hearts' },
   gloomy: { name: 'Gloomy', base: '#6a4cb0', sh: '#3a2670', lite: '#a58be0', eye: '#ff5a8a', acc: '#9dff6d', cell: 'blob', face: 'sad', hat: 'spikes' },
 };
 const UPGRADE_PAL = { base: '#ffd84d', sh: '#d49a1e', lite: '#fff1a8' };
@@ -259,6 +260,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     // Sparkles: a pink four-point star gem
     spark: g => { const r = B * 0.85; cel(g, '#ff7eb6', star(4, r, r * 0.38, 0), { r, shadow: '#c93a8f', lw: 3.2 });
       cel(g, '#ffc2dc', star(4, r * 0.5, r * 0.2, 0), { r: r * 0.5, hi: false, lw: 1.8, shadow: '#ff9ac6' }); sparkle(g, r * 0.5, -r * 0.5, r * 0.25); },
+    egg: g => { const r = B * 0.8; cel(g, '#fff4dc', ell(0, 0, r * 0.78, r * 1.0), { r, shadow: '#e0c8a0' }); for (const [x, y, k, col] of [[-0.25, -0.3, 0.18, '#ff9ac0'], [0.28, 0.05, 0.2, '#6fe3ff'], [-0.12, 0.45, 0.15, '#b06cff']]) { g.fillStyle = col; circ(x * r, y * r, k * r)(g); g.fill(); } },
     boxbeat: g => PICK_CHEST(g, '#c9803c', '#8c4f22', '#e09a52', '#a8622b', '#ffd84d'),
     boxspark: g => PICK_CHEST(g, '#a070f0', '#6a3fc4', '#c49aff', '#8a5ae0', '#ff7eb6'),
     chest: g => PICK_CHEST(g, '#c9803c', '#8c4f22', '#e09a52', '#a8622b', '#ffd84d'),
@@ -278,46 +280,126 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     g.beginPath(); g.moveTo(x + s * 0.5, y - s * 1.2); g.bezierCurveTo(x + s * 1.5, y - s * 1.0, x + s * 1.3, y - s * 0.2, x + s * 1.0, y + s * 0.1); ink(g, s * 0.34); g.stroke(); ink(g, s * 0.16, col); g.stroke();
     cel(g, col, ell(x, y + s * 0.35, s * 0.62, s * 0.46, -0.4), { r: s * 0.6, lw: s * 0.14, shadow: shade(col, 0.3) });
   }
-  // The skills are music gear (ids stay the same for saves): swab = Beat Pad, dagger = Spinning Vinyl,
-  // tower = Speaker Stack, dragon = Autotune Notes, needle = Treble Pins, stick = Drumsticks,
-  // bubble = Hum Bubbles, satellite = Spotlight Storm, maw = Bass Drop. No faces on gear.
+  // ---- cute animals: the skills (ids stay as save keys) and the pets ----
+  // swab = Kitty Paws, dagger = Chick Circle, tower = Cow Choir, dragon = Dove Squad, needle = Hedgehog Quills,
+  // stick = Bunny Thump, bubble = Duckling Splash, satellite = Owl Spotlight, maw = Bulldog Chomp.
+  const dot = (g, x, y, r) => { g.fillStyle = INK; circ(x, y, r)(g); g.fill(); };
+  const smile = (g, x, y, w) => { line(g, [[x - w, y - w * 0.2], [x - w * 0.4, y + w * 0.35], [x, y], [x + w * 0.4, y + w * 0.35], [x + w, y - w * 0.2]], Math.max(2, w * 0.28)); };
+  const eyes2 = (g, dx, y, rr, iris = '#2d170f') => { eye(g, -dx, y, rr, rr * 1.15, { iris }); eye(g, dx, y, rr, rr * 1.15, { iris }); };
+  function critter(g, k, r) {
+    if (k === 'chick') {
+      for (const s of [-1, 1]) cel(g, '#ffd23a', ell(s * r * 0.98, r * 0.15, r * 0.3, r * 0.46, s * 0.4), { r: r * 0.4, hi: false, lw: r * 0.1, shadow: '#e0a82a' });
+      cel(g, '#ffe14a', circ(0, 0, r), { r, shadow: '#e8b52a' });
+      for (const a of [-0.35, 0, 0.35]) line(g, [[Math.sin(a) * r * 0.1, -r * 0.92], [Math.sin(a) * r * 0.5, -r * 1.3]], r * 0.12);
+      eyes2(g, r * 0.36, -r * 0.1, r * 0.17);
+      cel(g, '#ff9a2e', poly([[-r * 0.2, r * 0.12], [r * 0.2, r * 0.12], [0, r * 0.42]]), { r: r * 0.25, hi: false, lw: r * 0.08, shadow: '#d6601a' });
+      blush(g, -r * 0.62, r * 0.2, r * 0.18); blush(g, r * 0.62, r * 0.2, r * 0.18);
+    } else if (k === 'cow') {
+      for (const s of [-1, 1]) { cel(g, '#fff1c9', poly([[s * r * 0.55, -r * 0.7], [s * r * 0.8, -r * 1.2], [s * r * 0.3, -r * 0.9]]), { r: r * 0.3, hi: false, lw: r * 0.09 }); cel(g, '#fffaf0', ell(s * r * 1.0, -r * 0.2, r * 0.36, r * 0.22, s * -0.4), { r: r * 0.3, hi: false, lw: r * 0.1, shadow: '#d9c9b0' }); }
+      cel(g, '#fffaf0', circ(0, 0, r), { r, shadow: '#d9c9b0' });
+      g.save(); circ(0, 0, r)(g); g.clip(); g.fillStyle = '#3a2d3a'; ell(-r * 0.62, -r * 0.55, r * 0.48, r * 0.4, 0.5)(g); g.fill(); g.restore();
+      eyes2(g, r * 0.4, -r * 0.18, r * 0.15);
+      cel(g, '#ffb3c7', ell(0, r * 0.42, r * 0.58, r * 0.4), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#e88aa6' }); dot(g, -r * 0.2, r * 0.42, r * 0.06); dot(g, r * 0.2, r * 0.42, r * 0.06);
+    } else if (k === 'dove') {
+      for (const s of [-1, 1]) cel(g, '#ffffff', poly([[s * r * 0.3, -r * 0.1], [s * r * 1.5, -r * 1.0], [s * r * 1.35, -r * 0.1], [s * r * 1.05, r * 0.3], [s * r * 0.4, r * 0.35]]), { r: r * 0.9, hi: false, lw: r * 0.1, shadow: '#bfd0ee' });
+      cel(g, '#ffffff', circ(0, r * 0.05, r * 0.72), { r, shadow: '#c9d8f2' });
+      eyes2(g, r * 0.26, -r * 0.05, r * 0.11);
+      cel(g, '#ff9a2e', poly([[-r * 0.14, r * 0.12], [r * 0.14, r * 0.12], [0, r * 0.36]]), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#d6601a' });
+      blush(g, -r * 0.45, r * 0.2, r * 0.12); blush(g, r * 0.45, r * 0.2, r * 0.12);
+    } else if (k === 'hedgehog') {
+      g.save(); g.rotate(0.2); cel(g, '#7a5236', star(11, r * 1.4, r * 0.95, -Math.PI / 2), { r: r * 1.1, hi: false, lw: r * 0.09, shadow: '#4a301c' }); g.restore();
+      cel(g, '#f1cfa0', ell(0, r * 0.18, r * 0.85, r * 0.78), { r, shadow: '#d3a672' });
+      eyes2(g, r * 0.3, 0, r * 0.14); dot(g, 0, r * 0.3, r * 0.1); smile(g, 0, r * 0.5, r * 0.16);
+      blush(g, -r * 0.55, r * 0.3, r * 0.14); blush(g, r * 0.55, r * 0.3, r * 0.14);
+    } else if (k === 'duck') {
+      cel(g, '#ffe14a', circ(0, 0, r), { r, shadow: '#e8b52a' });
+      cel(g, '#ffe14a', ell(0, -r * 0.95, r * 0.12, r * 0.22), { r: r * 0.2, hi: false, lw: r * 0.08 });
+      eyes2(g, r * 0.4, -r * 0.2, r * 0.15);
+      cel(g, '#ff9a2e', ell(0, r * 0.28, r * 0.5, r * 0.26), { r: r * 0.4, hi: false, lw: r * 0.09, shadow: '#d6601a' }); line(g, [[-r * 0.3, r * 0.28], [r * 0.3, r * 0.28]], r * 0.05);
+      blush(g, -r * 0.68, r * 0.1, r * 0.15); blush(g, r * 0.68, r * 0.1, r * 0.15);
+    } else if (k === 'owl') {
+      for (const s of [-1, 1]) cel(g, '#8a6240', poly([[s * r * 0.3, -r * 0.8], [s * r * 0.95, -r * 1.2], [s * r * 0.85, -r * 0.35]]), { r: r * 0.4, hi: false, lw: r * 0.09, shadow: '#5a3a22' });
+      cel(g, '#a8774c', circ(0, 0, r), { r, shadow: '#6e4a2c' });
+      cel(g, '#e8cfa6', ell(0, r * 0.42, r * 0.55, r * 0.48), { r: r * 0.5, hi: false, lw: r * 0.08, shadow: '#c9a878' });
+      for (const s of [-1, 1]) { cel(g, '#fff6dc', circ(s * r * 0.4, -r * 0.1, r * 0.34), { r: r * 0.34, hi: false, lw: r * 0.09, shadow: '#e6d3a0' }); eye(g, s * r * 0.4, -r * 0.1, r * 0.2, r * 0.22, { iris: '#2d170f' }); }
+      cel(g, '#ff9a2e', poly([[-r * 0.12, r * 0.08], [r * 0.12, r * 0.08], [0, r * 0.34]]), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#d6601a' });
+    } else if (k === 'bulldog') {
+      for (const s of [-1, 1]) cel(g, '#6b4430', ell(s * r * 0.92, -r * 0.2, r * 0.3, r * 0.55, s * 0.3), { r: r * 0.5, hi: false, lw: r * 0.1, shadow: '#3f261a' });
+      cel(g, '#d9a066', circ(0, 0, r), { r, shadow: '#a8703c' });
+      cel(g, '#f1d2a4', ell(0, r * 0.42, r * 0.7, r * 0.5), { r: r * 0.6, hi: false, lw: r * 0.09, shadow: '#d3a672' });
+      eyes2(g, r * 0.4, -r * 0.25, r * 0.15); dot(g, 0, r * 0.22, r * 0.17);
+      line(g, [[-r * 0.45, r * 0.5], [0, r * 0.62], [r * 0.45, r * 0.5]], r * 0.07);
+      for (const s of [-1, 1]) cel(g, '#fffaf0', poly([[s * r * 0.3, r * 0.55], [s * r * 0.4, r * 0.3], [s * r * 0.2, r * 0.42]]), { r: r * 0.2, hi: false, lw: r * 0.06 });
+    } else if (k === 'kitten') {
+      for (const s of [-1, 1]) { cel(g, '#ffb56a', poly([[s * r * 0.35, -r * 0.7], [s * r * 0.95, -r * 1.2], [s * r * 0.95, -r * 0.25]]), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#d88a3a' }); cel(g, '#ffc2dc', poly([[s * r * 0.55, -r * 0.7], [s * r * 0.8, -r * 0.95], [s * r * 0.8, -r * 0.45]]), { r: r * 0.2, hi: false, lw: 0.1 }); }
+      cel(g, '#ffb56a', circ(0, 0, r), { r, shadow: '#d88a3a' });
+      for (const x of [-0.18, 0, 0.18]) line(g, [[x * r, -r * 0.92], [x * r * 1.2, -r * 0.62]], r * 0.07, '#d88a3a');
+      eyes2(g, r * 0.38, -r * 0.08, r * 0.16, '#3a8a4a');
+      cel(g, '#ff7eb6', poly([[-r * 0.1, r * 0.18], [r * 0.1, r * 0.18], [0, r * 0.3]]), { r: r * 0.1, hi: false, lw: r * 0.05 });
+      smile(g, 0, r * 0.42, r * 0.14); for (const s of [-1, 1]) for (const dy of [0, 0.12]) line(g, [[s * r * 0.5, r * (0.3 + dy)], [s * r * 1.05, r * (0.22 + dy * 2)]], r * 0.04);
+      blush(g, -r * 0.62, r * 0.28, r * 0.15); blush(g, r * 0.62, r * 0.28, r * 0.15);
+    } else if (k === 'puppy') {
+      for (const s of [-1, 1]) cel(g, '#8a5a3a', ell(s * r * 0.92, r * 0.05, r * 0.32, r * 0.6, s * 0.15), { r: r * 0.5, hi: false, lw: r * 0.1, shadow: '#5a3822' });
+      cel(g, '#f6e2c4', circ(0, 0, r), { r, shadow: '#d3b88c' });
+      g.save(); circ(0, 0, r)(g); g.clip(); g.fillStyle = '#8a5a3a'; ell(r * 0.55, -r * 0.5, r * 0.4, r * 0.34, 0.4)(g); g.fill(); g.restore();
+      eyes2(g, r * 0.36, -r * 0.1, r * 0.15); cel(g, '#2d1a14', ell(0, r * 0.2, r * 0.2, r * 0.15), { r: r * 0.2, hi: false, lw: r * 0.06 });
+      smile(g, 0, r * 0.42, r * 0.2); cel(g, '#ff7e9a', ell(0, r * 0.6, r * 0.12, r * 0.18), { r: r * 0.15, hi: false, lw: r * 0.06 });
+      blush(g, -r * 0.62, r * 0.25, r * 0.14); blush(g, r * 0.62, r * 0.25, r * 0.14);
+    } else if (k === 'piglet') {
+      for (const s of [-1, 1]) cel(g, '#ff9ac0', poly([[s * r * 0.35, -r * 0.75], [s * r * 1.0, -r * 1.0], [s * r * 0.95, -r * 0.3]]), { r: r * 0.45, hi: false, lw: r * 0.09, shadow: '#d9648f' });
+      cel(g, '#ffb3cf', circ(0, 0, r), { r, shadow: '#e07aa3' });
+      eyes2(g, r * 0.4, -r * 0.2, r * 0.14);
+      cel(g, '#ff8fb8', ell(0, r * 0.32, r * 0.42, r * 0.3), { r: r * 0.4, hi: false, lw: r * 0.09, shadow: '#d9648f' }); dot(g, -r * 0.14, r * 0.32, r * 0.055); dot(g, r * 0.14, r * 0.32, r * 0.055);
+      blush(g, -r * 0.7, r * 0.15, r * 0.16); blush(g, r * 0.7, r * 0.15, r * 0.16);
+    } else if (k === 'lamb') {
+      for (const [x, y] of [[-0.8, -0.4], [-0.5, -0.85], [0, -1.0], [0.5, -0.85], [0.8, -0.4], [-0.85, 0.2], [0.85, 0.2]]) cel(g, '#fffaf0', circ(x * r, y * r, r * 0.4), { r: r * 0.4, hi: false, lw: r * 0.08, shadow: '#d8ccd8' });
+      for (const s of [-1, 1]) cel(g, '#5a4a5a', ell(s * r * 0.95, r * 0.25, r * 0.3, r * 0.14, s * 0.4), { r: r * 0.3, hi: false, lw: r * 0.08 });
+      cel(g, '#fffaf0', circ(0, -r * 0.4, r * 0.4), { r: r * 0.4, hi: false, lw: r * 0.08, shadow: '#d8ccd8' });
+      cel(g, '#6a5668', ell(0, r * 0.15, r * 0.62, r * 0.72), { r, shadow: '#443748' });
+      eyes2(g, r * 0.26, r * 0.02, r * 0.13, '#2d170f'); dot(g, 0, r * 0.3, r * 0.07); smile(g, 0, r * 0.42, r * 0.12);
+      blush(g, -r * 0.42, r * 0.28, r * 0.1, '#ff9ac0'); blush(g, r * 0.42, r * 0.28, r * 0.1, '#ff9ac0');
+    } else if (k === 'hamster') {
+      for (const s of [-1, 1]) cel(g, '#e8b878', circ(s * r * 0.7, -r * 0.75, r * 0.3), { r: r * 0.3, hi: false, lw: r * 0.09, shadow: '#b88848' });
+      cel(g, '#f0c48c', ell(0, 0, r * 1.05, r * 0.92), { r, shadow: '#c8935a' });
+      cel(g, '#fff4e0', ell(0, r * 0.35, r * 0.7, r * 0.5), { r: r * 0.6, hi: false, lw: r * 0.08, shadow: '#e6d3b0' });
+      eyes2(g, r * 0.38, -r * 0.15, r * 0.13); cel(g, '#ff9ab0', poly([[-r * 0.09, r * 0.12], [r * 0.09, r * 0.12], [0, r * 0.22]]), { r: r * 0.1, hi: false, lw: r * 0.05 }); smile(g, 0, r * 0.38, r * 0.14);
+      blush(g, -r * 0.7, r * 0.2, r * 0.17); blush(g, r * 0.7, r * 0.2, r * 0.17);
+    } else if (k === 'turtle') {
+      cel(g, '#6fbf5a', circ(0, -r * 0.1, r * 0.95), { r, shadow: '#3f8a3a' });
+      for (const [x, y] of [[0, -0.5], [-0.5, -0.1], [0.5, -0.1], [-0.25, 0.3], [0.25, 0.3]]) cel(g, '#8fd878', circ(x * r, (y - 0.15) * r, r * 0.22), { r: r * 0.22, hi: false, lw: r * 0.07, shadow: '#5ab04a' });
+      cel(g, '#bfe38a', circ(0, r * 0.5, r * 0.45), { r: r * 0.45, shadow: '#8ab858' });
+      eyes2(g, r * 0.2, r * 0.44, r * 0.1); smile(g, 0, r * 0.66, r * 0.1);
+      blush(g, -r * 0.36, r * 0.62, r * 0.08); blush(g, r * 0.36, r * 0.62, r * 0.08);
+    }
+  }
+  function pawPrint(g, r, col, shadow) {
+    cel(g, col, ell(0, r * 0.28, r * 0.5, r * 0.42), { r: r * 0.5, hi: false, lw: r * 0.07, shadow });
+    for (const [x, y, s] of [[-0.62, -0.15, 0.2], [-0.22, -0.52, 0.22], [0.22, -0.52, 0.22], [0.62, -0.15, 0.2]]) cel(g, col, ell(x * r, y * r, r * s, r * s * 1.15, x * 0.5), { r: r * 0.2, hi: false, lw: r * 0.06, shadow });
+  }
   const WPN = {
-    swab: g => { const r = B * 1.35;
-      cel(g, '#3a2d7a', circ(0, 0, r), { r, shadow: '#241a52', lw: 4, hi: false });
-      for (const [k, col] of [[0.86, '#ff7eb6'], [0.62, '#6fe3ff'], [0.38, '#ffd84d']]) { g.strokeStyle = col; g.lineWidth = r * 0.07; circ(0, 0, r * k)(g); g.stroke(); }
-      cel(g, '#ff7eb6', circ(0, 0, r * 0.2), { r: r * 0.2, hi: false, lw: 3, shadow: '#c93a8f' });
-      for (let i = 0; i < 8; i++) { const an = (i / 8) * TAU; cel(g, '#fff8ec', circ(Math.cos(an) * r * 0.96, Math.sin(an) * r * 0.96, r * 0.05), { r: r * 0.06, hi: false, lw: 1.4 }); } },
-    dagger: g => { const r = B * 0.9;
-      cel(g, '#2a2140', circ(0, 0, r), { r, shadow: '#16102a', lw: 3.2, hi: false });
-      for (const k of [0.82, 0.7, 0.58]) { g.strokeStyle = 'rgba(255,255,255,.16)'; g.lineWidth = r * 0.04; circ(0, 0, r * k)(g); g.stroke(); }
-      g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = r * 0.1; g.lineCap = 'round'; g.beginPath(); g.arc(0, 0, r * 0.72, -2.4, -1.4); g.stroke();
-      cel(g, '#ff7eb6', circ(0, 0, r * 0.34), { r: r * 0.34, hi: false, lw: 2.4, shadow: '#c93a8f' }); g.fillStyle = INK; circ(0, 0, r * 0.07)(g); g.fill(); },
+    swab: g => { const r = B * 1.35;   // a glowing pad with a big paw print
+      g.fillStyle = 'rgba(255,170,210,.32)'; circ(0, 0, r)(g); g.fill();
+      for (const [k, col] of [[0.98, '#ff9ac6'], [0.76, '#ffc2dc']]) { g.strokeStyle = col; g.lineWidth = r * 0.06; circ(0, 0, r * k)(g); g.stroke(); }
+      pawPrint(g, r * 0.72, '#ffe3f0', '#ff9ac6'); },
+    dagger: g => { critter(g, 'chick', B * 0.8); },
     needle: g => { const r = B;
-      cel(g, '#f2f6ff', poly([[r * 1.25, 0], [-r * 0.5, -r * 0.14], [-r * 0.5, r * 0.14]]), { r: r * 0.6, hi: false, lw: 2.4, shadow: '#9aa6c6' });
-      noteGlyph(g, -r * 0.95, r * 0.1, r * 0.3, '#ff7eb6'); },
-    stick: g => { const r = B;
-      line(g, [[-r * 2, 0], [r * 1.5, 0]], r * 0.5); line(g, [[-r * 2, 0], [r * 1.5, 0]], r * 0.32, '#e0a468'); line(g, [[-r * 2, -r * 0.06], [r * 1.2, -r * 0.06]], r * 0.07, '#f6d5a8');
-      cel(g, '#e0a468', ell(r * 1.6, 0, r * 0.44, r * 0.36), { r: r * 0.4, hi: false, lw: 3, shadow: '#a8682b' });
-      cel(g, '#f6d5a8', circ(-r * 2, 0, r * 0.2), { r: r * 0.2, hi: false, lw: 2, shadow: '#e0a468' }); },
-    tower: g => { const r = B;
-      cel(g, '#3a2d7a', poly([[-r * 0.7, -r * 1.0], [r * 0.7, -r * 1.0], [r * 0.7, r * 1.0], [-r * 0.7, r * 1.0]]), { r, shadow: '#241a52', lw: 3.4, hi: false });
-      cel(g, '#1a1238', circ(0, r * 0.35, r * 0.46), { r: r * 0.46, hi: false, lw: 3, shadow: '#0d0924' }); cel(g, '#ff7eb6', circ(0, r * 0.35, r * 0.2), { r: r * 0.2, hi: false, lw: 2.4, shadow: '#c93a8f' });
-      cel(g, '#1a1238', circ(0, -r * 0.5, r * 0.24), { r: r * 0.24, hi: false, lw: 2.4, shadow: '#0d0924' }); cel(g, '#6fe3ff', circ(0, -r * 0.5, r * 0.1), { r: r * 0.1, hi: false, lw: 2, shadow: '#2a9ccf' });
-      sparkle(g, r * 0.55, -r * 1.1, r * 0.22); },
-    dragon: g => { const r = B * 0.9;
-      for (const s of [-1, 1]) cel(g, '#bfe9ff', poly([[s * r * 0.3, -r * 0.2], [s * r * 1.3, -r * 0.9], [s * r * 1.1, -r * 0.1], [s * r * 0.9, r * 0.3], [s * r * 0.4, r * 0.1]]), { r: r * 0.8, hi: false, lw: 2.4, shadow: '#6fb4e0' });
-      noteGlyph(g, -r * 0.1, r * 0.15, r * 0.8, '#8dff6a'); },
-    bubble: g => { const r = B * 0.95; g.fillStyle = 'rgba(190,235,255,.35)'; circ(0, 0, r)(g); g.fill(); ink(g, 4); g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.arc(0, 0, r * 0.66, -2.5, -1.2); g.stroke(); noteGlyph(g, -r * 0.2, r * 0.2, r * 0.38, '#ff7eb6'); },
+      cel(g, '#7a5236', poly([[r * 1.25, 0], [-r * 0.5, -r * 0.16], [-r * 0.5, r * 0.16]]), { r: r * 0.6, hi: false, lw: 2.4, shadow: '#4a301c' });
+      cel(g, '#f1cfa0', poly([[r * 1.25, 0], [r * 0.75, -r * 0.08], [r * 0.75, r * 0.08]]), { r: r * 0.2, hi: false, lw: 1.5 });
+      cel(g, '#ff7eb6', poly([[-r * 0.95, -r * 0.08], [-r * 0.6, -r * 0.3], [-r * 0.6, r * 0.08]]), { r: r * 0.25, hi: false, lw: 1.5, shadow: '#c93a8f' }); },
+    stick: g => { const r = B;   // a fluffy bunny leg ending in a big foot with toe beans (+x)
+      line(g, [[-r * 2, 0], [r * 1.0, 0]], r * 0.6); line(g, [[-r * 2, 0], [r * 1.0, 0]], r * 0.42, '#fffaf0');
+      cel(g, '#fffaf0', ell(r * 1.4, 0, r * 0.7, r * 0.5), { r: r * 0.6, hi: false, lw: 3, shadow: '#d8ccd8' });
+      for (const y of [-0.22, 0, 0.22]) cel(g, '#ffb3cf', circ(r * 1.75, y * r, r * 0.12), { r: r * 0.12, hi: false, lw: 1.6 });
+      cel(g, '#ffb3cf', ell(r * 1.3, 0, r * 0.24, r * 0.3), { r: r * 0.24, hi: false, lw: 1.8 }); },
+    tower: g => { critter(g, 'cow', B * 0.95); },
+    dragon: g => { critter(g, 'dove', B * 0.7); },
+    bubble: g => { const r = B * 0.95; critter(g, 'duck', r * 0.55); g.fillStyle = 'rgba(190,235,255,.3)'; circ(0, 0, r)(g); g.fill(); ink(g, 4); g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.arc(0, 0, r * 0.8, -2.5, -1.2); g.stroke(); },
     satellite: g => { const r = B * 0.9;
-      g.fillStyle = 'rgba(255,240,170,.55)'; g.beginPath(); g.moveTo(r * 0.2, -r * 0.2); g.lineTo(r * 1.3, -r * 0.9); g.lineTo(r * 1.3, r * 0.9); g.lineTo(r * 0.2, r * 0.2); g.closePath(); g.fill();
-      line(g, [[-r * 0.4, 0], [-r * 0.9, r * 0.8]], r * 0.16);
-      cel(g, '#4a3a8a', poly([[-r * 0.9, -r * 0.45], [r * 0.3, -r * 0.3], [r * 0.3, r * 0.3], [-r * 0.9, r * 0.45]]), { r, shadow: '#2a2060', lw: 3, hi: false });
-      cel(g, '#ffe14a', circ(r * 0.3, 0, r * 0.3), { r: r * 0.3, hi: false, lw: 2.4, shadow: '#e0a82a' }); },
-    maw: g => { const r = B * 0.95;
-      cel(g, '#240a3d', circ(0, 0, r), { r, shadow: '#12051f', lw: 3.4, hi: false });
-      for (const [k, col] of [[0.8, '#8a4fe0'], [0.6, '#b69cf0'], [0.4, '#ff7eb6']]) { g.strokeStyle = col; g.lineWidth = r * 0.09; circ(0, 0, r * k)(g); g.stroke(); }
-      cel(g, '#0d0924', circ(0, 0, r * 0.2), { r: r * 0.2, hi: false, lw: 2.4, shadow: '#000' }); },
+      g.fillStyle = 'rgba(255,240,170,.5)'; g.beginPath(); g.moveTo(r * 0.3, -r * 0.2); g.lineTo(r * 1.6, -r * 1.0); g.lineTo(r * 1.6, r * 1.0); g.lineTo(r * 0.3, r * 0.2); g.closePath(); g.fill();
+      g.save(); g.translate(-r * 0.35, 0); critter(g, 'owl', r * 0.75); g.restore(); },
+    maw: g => { critter(g, 'bulldog', B * 1.0); },
   };
+  const PETSPR = { kitten: 'kitten', puppy: 'puppy', piglet: 'piglet', lamb: 'lamb', hamster: 'hamster', turtle: 'turtle' };
 
   // ---- shots: music notes (sound is the currency of this world) ----
   function noteFn(col, crit) {
@@ -338,6 +420,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     pickup: k => bake('pk|' + k, B * 2.4, B * 2.4, PICK[k] || PICK.gem),
     note: crit => bake('note|' + (crit ? 1 : 0), B * 2.4, B * 2.4, noteFn(crit ? '#ffd84d' : '#6fe3ff', crit), 1),
     acid: () => bake('acid', B * 1.6, B * 1.6, acidFn),
+    pet: id => bake('pet|' + id, B * 3, B * 3, g => critter(g, PETSPR[id] || 'kitten', B * 0.9), 1),
     weapon: id => bake('wpn|' + id, B * 4.6, B * 3.4, WPN[id] || WPN.dagger, 1),
   };
 

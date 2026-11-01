@@ -321,7 +321,7 @@ ok('shop: stats cost Beats; skills unlock and level up with fragments; loot boxe
   // skills: the first five are owned, the rest need fragments
   assert.ok(sim.WEAPON_STARTERS.every(id => s.skills[id].lv === 1) && s.skills.maw.lv === 0);
   assert.ok(!sim.unlockSkill(s, 'maw'), 'not enough fragments');
-  s.skills.maw.frag = 70; assert.ok(sim.unlockSkill(s, 'maw')); assert.equal(s.skills.maw.lv, 1); assert.equal(s.skills.maw.frag, 10);
+  s.skills.maw.frag = 70; assert.ok(!sim.unlockSkill(s, 'maw'), 'needs the stage cleared first'); s.cleared = 15; assert.ok(sim.unlockSkill(s, 'maw')); assert.equal(s.skills.maw.lv, 1); assert.equal(s.skills.maw.frag, 10);
   assert.ok(!sim.levelSkill(s, 'swab'), 'no fragments yet');
   s.skills.swab.frag = sim.skillUpgradeCost(1).frag; const b0 = s.beats; assert.ok(sim.levelSkill(s, 'swab'), 'fragments alone are enough'); assert.equal(s.skills.swab.lv, 2); assert.equal(s.skills.swab.frag, 0); assert.equal(s.beats, b0);
   assert.ok(sim.skillMul(5) > sim.skillMul(1) * 1.4);
@@ -329,8 +329,9 @@ ok('shop: stats cost Beats; skills unlock and level up with fragments; loot boxe
   let k = 0; const rand = () => { k = (k * 9301 + 49297) % 233280; return k / 233280; };
   const before = Object.values(s.skills).reduce((a, x) => a + x.frag, 0), bb = s.beats;
   const got = sim.openBox(s, 'beat', rand); assert.ok(got && got.reduce((a, x) => a + x.n, 0) === 5); assert.equal(s.beats, bb - 150);
-  const sp = s.sparkles, big = sim.openBox(s, 'spark', rand); assert.equal(big.reduce((a, x) => a + x.n, 0), 15); assert.ok(big[0].n >= 8, 'one featured skill'); assert.equal(s.sparkles, sp - 30);
-  assert.equal(Object.values(s.skills).reduce((a, x) => a + x.frag, 0), before + 20);
+  const sp = s.sparkles, big = sim.openBox(s, 'spark', rand); assert.equal(big.reduce((a, x) => a + x.n, 0), 12); assert.equal(s.sparkles, sp - 30);
+  s.sparkles = 300; const grand = sim.openBox(s, 'spark10', rand); assert.equal(grand.reduce((a, x) => a + x.n, 0), 150); assert.ok(grand[0].n >= 45, 'a star prize'); assert.equal(s.sparkles, 30);
+  assert.equal(Object.values(s.skills).reduce((a, x) => a + x.frag, 0), before + 5 + 12 + 150);
   const poor = sim.defaultSave(); assert.equal(sim.openBox(poor, 'beat'), null); assert.equal(poor.skills.swab.frag, 0);
 });
 
@@ -393,9 +394,9 @@ ok('boss shield wave: a wave of shields rolls down the chain; cells in it cannot
   assert.ok(hp0 > 0 && shielded);
 });
 
-ok('skills are music gear with stable save ids; no medical leftovers', () => {
+ok('skills are cute animals with stable save ids; no medical leftovers', () => {
   assert.deepEqual(sim.WEAPONS.map(w => w.id), ['swab', 'daggers', 'tower', 'dragon', 'needles', 'stick', 'bubble', 'satellite', 'maw']);
-  assert.deepEqual(sim.WEAPONS.map(w => w.name), ['Beat Pad', 'Spinning Vinyl', 'Speaker Stack', 'Autotune', 'Treble Pins', 'Drumsticks', 'Hum Bubbles', 'Spotlight Storm', 'Bass Drop']);
+  assert.deepEqual(sim.WEAPONS.map(w => w.name), ['Kitty Paws', 'Chick Circle', 'Cow Choir', 'Dove Squad', 'Hedgehog Quills', 'Bunny Thump', 'Duckling Splash', 'Owl Spotlight', 'Bulldog Chomp']);
   const text = JSON.stringify([sim.WEAPONS, sim.CAPSULE_UPS, sim.PASSIVES.map(p => [p.name, p.desc]), sim.META.map(m => m.name)]);
   assert.ok(!/swab|medical|acupunct|massage|membrane|antibod|disinfect|snot|dagger/i.test(text.replace(/"id":"(swab|daggers)"/g, '')), 'no medical words: ' + text.match(/swab|medical|acupunct|massage|membrane|antibod|disinfect|snot|dagger/i));
   assert.deepEqual(sim.META.map(m => m.id), ['atk', 'crt', 'cdn', 'vit', 'for', 'rev']);
@@ -495,6 +496,56 @@ ok('loadout: five skills max, only they are offered, runs start with just the ca
   const g = sim.createGame({ seed: 70, unlocked: ALL, loadout: ['swab', 'maw'] });
   assert.equal(Object.keys(g.weap).length, 0, 'start with notes only');
   g.level = 9; for (let i = 0; i < 30; i++) { g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); assert.ok(g.choices.every(c => c.kind !== 'weapon' || ['swab', 'maw'].includes(c.id))); }
+});
+
+ok('pets: eggs hatch into fragments, stars give permanent bonuses even when benched, two can walk with you', () => {
+  const s = sim.defaultSave(); assert.equal(s.eggs, 1); assert.equal(s.petEquip.length, 0);
+  let k = 0; const rand = () => { k = (k * 9301 + 49297) % 233280; return k / 233280; };
+  const h = sim.hatchEgg(s, () => 0.9); assert.ok(h && h.id && h.n >= 1); assert.equal(s.eggs, 0); assert.equal(sim.hatchEgg(s, rand), null, 'no egg left');
+  assert.ok(sim.hatchEgg(Object.assign(sim.defaultSave(), {}), () => 0.1).beats > 0, 'some hatches are just Beats');
+  s.pets.kitten.frag = 5; assert.ok(sim.petUp(s, 'kitten')); assert.equal(s.pets.kitten.star, 1); assert.deepEqual(s.petEquip, ['kitten']);
+  s.pets.puppy.frag = 5; sim.petUp(s, 'puppy'); s.pets.lamb.frag = 5; sim.petUp(s, 'lamb'); assert.equal(s.petEquip.length, 2, 'at most two walk with you');
+  assert.ok(!sim.petUp(s, 'turtle'), 'not enough fragments');
+  s.pets.kitten.frag = sim.petCost(1); assert.ok(sim.petUp(s, 'kitten')); assert.equal(s.pets.kitten.star, 2);
+  const stars = id => s.pets[id].star, bonus = sim.petBonus({ kitten: stars('kitten'), puppy: stars('puppy') });
+  assert.ok(bonus.atk > 0.1 && bonus.vit > 0);
+  const base = sim.createGame({ seed: 3 }), pet = sim.createGame({ seed: 3, pets: { kitten: 2 }, petEquip: [] });
+  assert.ok(pet.p.atk > base.p.atk, 'a benched pet still helps');
+  const hamster = sim.createGame({ seed: 3, pets: { hamster: 1 }, petEquip: ['hamster'] }); assert.ok(hamster.p.speed > base.p.speed);
+  const kit = sim.createGame({ seed: 4, pets: { kitten: 1 }, petEquip: ['kitten'], unlocked: ALL }); kit.weap.swab = { lv: 1, cd: 99 }; run(kit, 20, {}); assert.ok(kit.events.length >= 0 && kit.weap.swab.cd < 99, 'the kitten resets cooldowns');
+  const back = sim.sanitizeSave(JSON.parse(JSON.stringify(s))); assert.equal(back.pets.kitten.star, 2); assert.equal(back.petEquip.length, 2);
+  assert.equal(sim.sanitizeSave({ petEquip: ['turtle'] }).petEquip.length, 0, 'cannot equip a pet you do not own');
+});
+
+ok('Piggy Bank Parade: three tries a day, pays big Beats, a win brings an egg and a higher tier', () => {
+  const s = sim.defaultSave(); const day = 20000;
+  sim.dayLogin(s, day); assert.equal(s.pig.left, 3); const eggs0 = s.eggs;
+  assert.ok(sim.usePigAttempt(s, day) && sim.usePigAttempt(s, day) && sim.usePigAttempt(s, day)); assert.ok(!sim.usePigAttempt(s, day), 'out of tries');
+  assert.ok(!sim.dayLogin(s, day), 'no second egg the same day'); assert.ok(sim.dayLogin(s, day + 1)); assert.equal(s.eggs, eggs0 + 1); assert.equal(s.pig.left, 3);
+  const pig = sim.createGame({ seed: 5, mode: 'pig', stage: 1 }), reg = sim.createGame({ seed: 5, stage: 1 });
+  assert.equal(pig.snakes[0].name, sim.PIG_NAME); assert.equal(pig.snakes[0].skin, 'piggy'); assert.equal(pig.snakes[0].segs.length, 40);
+  assert.ok(pig.coinK > reg.coinK);
+  const r = sim.applyResult(s, { won: true, stage: 1, coins: 500, kills: 10, frags: {}, mode: 'pig' });
+  assert.ok(r.egg); assert.equal(s.pig.best, 1); assert.equal(s.cleared, 0, 'does not count as clearing a stage'); assert.equal(s.sparkles, 0); assert.equal(sim.pigTier(s), 2);
+});
+
+ok('checkpoint chests appear at 25% and 50% progress and pay Beats, never a fragment', () => {
+  const g = sim.createGame({ seed: 8 }); g.p.hp = g.p.maxHp = 1e6;
+  const sn = g.snakes[0]; const total = g.stageHpMax;
+  for (const q of sn.segs.slice(1)) { if (g.stageHpMax - sn.segs.filter(z => z.hp > 0 && z !== q).reduce((a, z) => a + z.hp, 0) > total * 0.26) break; q.hp = 0; q.dead = true; }
+  sim.step(g, 1 / 60, {});
+  assert.ok(g.cp && g.cp[0.25], 'quarter chest'); assert.ok(g.pickups.some(p => p.kind === 'chest' && p.cp === 1));
+  while (g.phase === 'levelup') sim.choose(g, 0);
+  const f0 = Object.keys(g.frags).length, c0 = g.coins; g.p.x = 360; for (const p of g.pickups) { p.x = g.p.x; p.y = g.p.y; } sim.step(g, 1 / 60, {});
+  assert.ok(g.coins > c0, 'coins'); assert.equal(Object.keys(g.frags).length, f0, 'no fragment from a checkpoint');
+});
+
+ok('progress is remembered per stage and power grows with everything you collect', () => {
+  const s = sim.defaultSave(); const p0 = sim.power(s);
+  sim.applyResult(s, { won: false, stage: 4, coins: 1, kills: 1, frags: {}, progress: 0.7 }); assert.equal(s.prog[4], 70);
+  sim.applyResult(s, { won: false, stage: 4, coins: 1, kills: 1, frags: {}, progress: 0.3 }); assert.equal(s.prog[4], 70, 'keeps the best');
+  s.meta.atk = 3; s.pets.kitten.star = 2; assert.ok(sim.power(s) > p0 + 200);
+  assert.equal(sim.sanitizeSave(JSON.parse(JSON.stringify(s))).prog[4], 70);
 });
 
 console.log(`cell_serpent: ${n} groups passed`);
