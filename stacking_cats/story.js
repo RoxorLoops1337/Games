@@ -222,3 +222,17 @@ export function kingdomLine(level) {
 
 // the line over the cats a run has just freed from the Gnaw Army (unlocked), one or several
 export const freedLineFor = (n) => (n === 1 ? 'A caged cat is free and joins the royal guard!' : `${n} caged cats are free and join the royal guard!`);
+
+// ---- the Daily Mewsprint (Whiskerton Walk): a front page built from the last run, the save and the real date. Pure and deterministic.
+// Every line is English with # for numbers and {} for names so the Danish dictionary can match it whole.
+import { mewsprintHeadline, seasonOf, dayPart, streetPercent, WEATHER_LINES } from './kingdom_life.js';
+export const MEWSPRINT_TITLE = 'The Whiskerton Mewsprint';
+export function mewsprint(save, lastRun, now = 0) {
+  const r = lastRun && Number(lastRun.wave) > 0 ? lastRun : null;
+  const stories = [];
+  stories.push(r ? `Last trip: wave ${Math.floor(r.wave)} and ${Math.floor(Number(r.kills) || 0)} mice defeated.` : 'No trips yet. The tower is waiting by the gate.');
+  const freed = Math.max(0, ((save && save.unlocked && save.unlocked.length) | 0));
+  stories.push(freed === 1 ? '1 cat calls Whiskerton home.' : `${freed} cats call Whiskerton home.`);
+  stories.push(`The street is ${streetPercent(save && save.kingdom)}% built.`);
+  return { title: MEWSPRINT_TITLE, headline: mewsprintHeadline(save, lastRun), stories, weather: WEATHER_LINES[seasonOf(now)], part: dayPart(now) };
+}

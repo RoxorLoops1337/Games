@@ -39,7 +39,7 @@ export function createInput(el, o = {}) {
     root.innerHTML = '<div class="kwstick" hidden><i class="kwring"></i><i class="kwknob"></i></div>' +
       '<button type="button" class="kwbtn kwjump" aria-label="Jump" hidden><span>Jump</span></button>' +
       '<button type="button" class="kwbtn kwact" hidden></button>';
-    el.appendChild(root);
+    if (o.before && o.before.parentNode === el) el.insertBefore(root, o.before); else el.appendChild(root);
     const stick = root.querySelector('.kwstick'); ring = stick; knob = root.querySelector('.kwknob');
     bJump = root.querySelector('.kwjump'); bAct = root.querySelector('.kwact');
     bJump.hidden = !st.buttons;

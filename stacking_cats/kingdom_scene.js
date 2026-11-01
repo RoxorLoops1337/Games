@@ -421,3 +421,13 @@ export function createKingdomScene(canvas, getKingdom, onSelect) {
     stop() { cancelAnimationFrame(raf); canvas.removeEventListener('pointerdown', onDown); freeKingdomArt(); },
   };
 }
+
+// ---- read-only access for the walkable Kingdom (kingdom_world.js): the same cached sprites and prop art, no copies
+export { sprite as buildingSprite, propSprite, PROP_BOX, drawProp, villageCat };
+// frees one cached building sprite (the walk keeps only the buildings near the camera resident)
+export function dropBuildingSprite(id, lvl) {
+  const key = id + ':' + lvl, c = sprites.get(key);
+  if (!c) return false;
+  c.width = c.height = 0; sprites.delete(key);
+  return true;
+}
