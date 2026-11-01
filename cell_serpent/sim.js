@@ -556,9 +556,11 @@ export function applyResult(save, r) {
 
 // ---------------------------------------------------------------- stages
 export const isBossStage = n => n % 5 === 0;
-export const hpBase = n => 12 * (12.5 * Math.pow(1.17, Math.min(n - 1, 9)) * Math.pow(1.04, Math.max(0, n - 10)) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
+// Every stage the snakes crawl a little faster.
+export const speedMul = n => Math.min(2.6, 1 + 0.035 * (n - 1));
+export const hpBase = n => 12 * (12.5 * Math.pow(1.17, Math.min(n - 1, 13)) * Math.pow(1.055, Math.max(0, n - 14)) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
 export const snakeLength = n => Math.min(150, 32 + 4 * (n - 1) + (isBossStage(n) ? 12 : 0));
-export const arrivalTime = n => 0.74 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) + (isBossStage(n) ? 36 : 0);   // seconds for the face to reach the membrane if you do nothing
+export const arrivalTime = n => 0.74 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) * (isBossStage(n) ? 0.9 : 1);   // bosses crawl a bit faster too   // seconds for the face to reach the membrane if you do nothing
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
 export const SKINS = ['love', 'rust', 'sneezy', 'grumpy', 'sleepy', 'disco', 'sour', 'mighty', 'frosty', 'gloomy'];
 export const skinFor = n => SKINS[(n - 1) % SKINS.length];
@@ -687,7 +689,7 @@ function spawnSnake(g, n, o = {}) {
   let ps = o.startPs === undefined ? 240 : o.startPs;   // the face starts just inside the top edge
   for (let i = 0; i < len; i++) {
     const kind = pickKind(g, n, boss, i, len), r = segRadius(boss, i, len);
-    let hp = hpB * ramp(i) * KIND[kind].hp * (boss ? 1.5 : 1) * (0.9 + g.rand() * 0.2);
+    let hp = hpB * ramp(i) * KIND[kind].hp * (boss ? 2.4 : 1) * (0.9 + g.rand() * 0.2);
     hp = i === 0 ? 1 : Math.max(1, Math.round(hp));   // the face has no real HP: it is shielded until it is alone
     const pos = pointAt(path, ps);
     segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0 });
@@ -697,7 +699,7 @@ function spawnSnake(g, n, o = {}) {
   const ups = Math.max(4, Math.round(len / 7));
   for (let k = 0; k < ups; k++) {
     const c = segs[clamp(3 + Math.round(((len - 5) * (k + 0.5)) / ups), 1, len - 1)];
-    c.kind = 'upgrade'; c.max = c.hp = Math.max(1, Math.round(hpB * ramp(c.i) * KIND.upgrade.hp * (boss ? 1.5 : 1)));
+    c.kind = 'upgrade'; c.max = c.hp = Math.max(1, Math.round(hpB * ramp(c.i) * KIND.upgrade.hp * (boss ? 2.4 : 1)));
   }
   // chest cells (a chest on the cell): aim for them first too
   const nch = Math.max(2, Math.round(len / 15));
@@ -707,7 +709,7 @@ function spawnSnake(g, n, o = {}) {
     segs[j].carry = 'chest';
   }
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
-  const speed = (path.len - 240) / arrivalTime(n);
+  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n);
   g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
 }
