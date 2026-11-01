@@ -118,10 +118,7 @@ export function createRenderer(canvas, art, kit) {
       c.fillStyle = gr; c.fillRect(0, 0, W, H);
       const v = c.createLinearGradient(0, 0, 0, H); v.addColorStop(0, 'rgba(0,0,0,.35)'); v.addColorStop(0.2, 'rgba(0,0,0,0)'); v.addColorStop(0.85, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.35)');
       c.fillStyle = v; c.fillRect(0, 0, W, H);
-      if (g.path) {   // the lane the virus crawls along
-        c.lineJoin = 'round'; c.lineCap = 'round'; c.beginPath(); g.path.pts.forEach((q, i) => (i % 3 === 0 ? (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)) : 0));
-        c.lineWidth = 96; c.strokeStyle = 'rgba(255,255,255,.05)'; c.stroke(); c.lineWidth = 4; c.strokeStyle = 'rgba(255,255,255,.16)'; c.setLineDash([12, 20]); c.stroke();
-      }
+      // no lane is drawn: you cannot see where the snake is going to go
       c.lineWidth = 8; c.strokeStyle = mix(th.base, '#ffffff', 0.15) + '8c'; c.strokeRect(4, 4, W - 8, H - 8);
       c.lineWidth = 2; c.strokeStyle = 'rgba(111,227,255,.6)'; c.strokeRect(10, 10, W - 20, H - 20);
     });
@@ -150,7 +147,8 @@ export function createRenderer(canvas, art, kit) {
       else { ctx.save(); ctx.translate(x, y); ctx.rotate(S.t * p.rot + p.a); ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, TAU); ctx.fill(); ctx.restore(); }
     }
     ctx.globalAlpha = 1;
-    // the membrane: where breaches hurt
+    // the stage floor below the line, where the duo stands; if the snake touches the line it is over
+    { const fl = ctx.createLinearGradient(0, LINE_Y, 0, H); fl.addColorStop(0, 'rgba(255,90,140,.22)'); fl.addColorStop(1, 'rgba(10,6,30,.75)'); ctx.fillStyle = fl; ctx.fillRect(0, LINE_Y, W, H - LINE_Y); }
     ctx.save(); ctx.beginPath();
     for (let x = 0; x <= W; x += 20) { const y = LINE_Y + Math.sin(x * 0.05 + S.t * 2.2) * 5; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.lineWidth = 16; ctx.strokeStyle = 'rgba(255,90,140,.18)'; ctx.stroke(); ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,150,190,.75)'; ctx.stroke(); ctx.restore();
@@ -217,6 +215,7 @@ export function createRenderer(canvas, art, kit) {
     if (im) { const h = 170, w = h * im.width / im.height; img(key, p.x, p.y - 26, w / sq, h * sq, p.mx * 0.05); }
     else { glow(p.x, p.y, 40, '#39f0ff', 0.7); ctx.fillStyle = '#39f0ff'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 22, 0, TAU); ctx.fill(); ctx.stroke(); }
     (g.pets || []).forEach((id, i) => { const s2 = i ? 1 : -1, bob = Math.abs(Math.sin(S.t * 6 + i * 2)) * 8, px = p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6; ctx.save(); ctx.globalAlpha *= 0.3; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, 22, 7, 0, 0, TAU); ctx.fill(); ctx.restore(); blit(kit && kit.SPR.pet(id), px, p.y + 8 - bob, 92, s2 * Math.sin(S.t * 6 + i * 2) * 0.08); });
+    if (g.outfit) { glow(p.x, p.y - 20, 70, g.outfit.color, 0.22); ctx.save(); ctx.font = '44px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g.outfit.hat, p.x - 4, p.y - 124 + Math.sin(S.t * 4) * 3); ctx.restore(); }
     // hitbox core: the part that actually gets hurt
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 9, 0, TAU); ctx.stroke();
     ctx.fillStyle = '#ff5a78'; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 3.5, 0, TAU); ctx.fill();
@@ -245,7 +244,7 @@ export function createRenderer(canvas, art, kit) {
   function drawZones(g) {
     const pad = kit && kit.SPR.weapon('swab');
     for (const z of g.zones) {
-      const fade = Math.min(1, z.life * 2), ph = 1 - Math.max(0, Math.min(1, z.tick / 0.25));
+      const fade = Math.min(1, z.life * 2), ph = 1 - Math.max(0, Math.min(1, z.tick / 0.3));
       ctx.save(); ctx.globalAlpha = 0.9 * fade; blit(pad, z.x, z.y, z.r * 3.4 * (1 + 0.05 * (1 - ph)), 0); ctx.restore();
       ctx.save(); ctx.globalAlpha = (1 - ph) * 0.8 * fade; ctx.strokeStyle = '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(z.x, z.y, z.r * (0.45 + 0.55 * ph), 0, TAU); ctx.stroke(); ctx.restore();
     }
@@ -302,18 +301,18 @@ export function createRenderer(canvas, art, kit) {
     text('UPGRADE CELLS', pad, 78, 12, '#fff1a8', '#0b1020', 'left');
     // what the capsule does right now
     const up = id => Math.round(uv(g, id));
-    const gv = g.groove || 0, gw = 300, gx = W / 2 - gw / 2, gy = H - 128;
+    const gv = g.groove || 0, gw = 230, gx = pad + 4, gy = H - 30;
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(gx - 3, gy - 3, gw + 6, 18);
     const gg = ctx.createLinearGradient(gx, 0, gx + gw, 0); gg.addColorStop(0, '#ff7eb6'); gg.addColorStop(1, gv >= 15 ? '#ffd84d' : '#6fe3ff');
     ctx.fillStyle = gg; ctx.fillRect(gx, gy, gw * Math.min(1, gv / 20), 12);
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.strokeRect(gx - 3, gy - 3, gw + 6, 18);
-    text(gv >= 20 ? 'GROOVE: ON FIRE' : 'GROOVE ' + Math.floor(gv) + '  (+' + Math.floor(gv * 1.5) + '% dmg)', W / 2, gy - 16, 15, gv >= 15 ? '#ffd84d' : '#ffc2dc', '#0b1020');
+    text(gv >= 20 ? 'GROOVE: ON FIRE' : 'GROOVE ' + Math.floor(gv) + '  (+' + Math.floor(gv * 1.5) + '% dmg)', gx + gw / 2, gy - 14, 14, gv >= 15 ? '#ffd84d' : '#ffc2dc', '#0b1020');
     if (ui && ui.hints) {   // short hints for the first runs
       const sn = g.snakes[0], alone = sn && sn.segs.length <= 3 && sn.segs[0].shield;
       const hint = g.t < 7 ? 'SLIDE LEFT AND RIGHT: YOUR NOTES FLY STRAIGHT UP' : (g.upgradeLeft > 0 && g.pending === 0 && g.kills < 4) ? 'POP THE YELLOW CELLS FOR UPGRADES' : alone ? 'THE FACE POPS WHEN IT IS ALONE' : '';
       if (hint) { ctx.save(); ctx.globalAlpha = 0.75 + Math.sin(S.t * 4) * 0.2; text(hint, W / 2, H * 0.5, 24, '#ffffff', '#0b1020'); ctx.restore(); }
     }
-    text(`NOTES ${1 + up('notes')}  BURSTS ${1 + up('burst')}  SPEED +${up('aspd')}%  DMG +${up('cdmg')}%`, W / 2, H - 92, 17, '#bfe9ff', '#0b1020');
+    text(`NOTES ${1 + up('notes')}  BURSTS ${1 + up('burst')}  SPEED +${up('aspd')}%  DMG +${up('cdmg')}%`, W / 2, 166, 13, '#bfe9ff', '#0b1020');
     // chapter, virus name, and progress with chests at 25% / 50% / 100%
     const boss = isBossStage(g.stage);
     text(boss ? 'BOSS  ' + g.stage : 'STAGE ' + g.stage, W / 2, 34, 26, boss ? '#ff7a9a' : '#fff');
@@ -322,17 +321,15 @@ export function createRenderer(canvas, art, kit) {
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(bx - 3, by - 3, bw + 6, 20);
     ctx.fillStyle = boss ? '#ff3d6e' : '#ff7eb6'; ctx.fillRect(bx, by, bw * (g.progress || 0), 14);
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.strokeRect(bx - 3, by - 3, bw + 6, 20);
-    for (const th of [1]) { const done = (g.progress || 0) >= th - 1e-6; ctx.save(); ctx.globalAlpha = done ? 0.45 : 1; blit(kit && kit.SPR.pickup('chest'), bx + bw * th - (th === 1 ? 4 : 0), by + 7, 46); ctx.restore(); }
+    for (const th of [0.25, 0.5, 1]) { const done = (g.progress || 0) >= th - 1e-6; ctx.save(); ctx.globalAlpha = done ? 0.45 : 1; blit(kit && kit.SPR.pickup('chest'), bx + bw * th - (th === 1 ? 4 : 0), by + 7, th === 1 ? 46 : 34); ctx.restore(); }
+    text('Progress: ' + Math.floor((g.progress || 0) * 100) + '%', W / 2, 116, 15, '#ffd0e6', '#0b1020');
+    if (g.hard) text('HARD', W / 2 + 104, 62, 15, '#c9a0ff', '#0b1020');
+    { const sn = g.snakes[0], mult = sn ? (sn.surge === 'go' ? 2.6 : sn.slow > 0 ? 0.6 : 1) : 1;   // how fast the snake is going right now
+      blit(kit && kit.SPR.body(g.skin, false, ''), pad + 28, 140, 64, 0); text('SPEED x' + mult.toFixed(1), pad, 178, 13, mult > 1 ? '#ff8a8a' : '#cfe', '#0b1020', 'left'); }
+    ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(W - 40, 112, 24, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; for (const [i, hgt] of [[0, 12], [1, 20], [2, 28]]) ctx.fillRect(W - 54 + i * 10, 124 - hgt, 7, hgt);
     // coins
     blit(kit && kit.SPR.pickup('coin'), W - pad - 172, 38, 52); text(String(Math.floor(g.coins)), W - pad - 152, 38, 24, '#ffd24a', '#0b1020', 'left');
     ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(W - 40, 38, 24, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(W - 48, 28, 6, 20); ctx.fillRect(W - 36, 28, 6, 20);
-    // player hp
-    const hx = pad, hy = H - 46, hw = 250;
-    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(hx - 3, hy - 3, hw + 6, 26);
-    const hf = Math.max(0, p.hp / p.maxHp); ctx.fillStyle = hf > 0.35 ? '#5df08a' : '#ff4d6d'; ctx.fillRect(hx, hy, hw * hf, 20);
-    ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 2; ctx.strokeRect(hx - 3, hy - 3, hw + 6, 26);
-    text(`${Math.ceil(p.hp)} / ${p.maxHp}`, hx + hw / 2, hy + 10, 16);
-    blit(kit && kit.SPR.pickup('heal'), hx + 6, hy - 26, 56);
     if (p.shield > 0) text('SHIELD ' + p.shield.toFixed(0), W - pad, H - 78, 18, '#7fe8ff', '#0b1020', 'right');
     if (p.rage > 0) text('RAGE ' + p.rage.toFixed(0), W - pad, H - 50, 18, '#ffd24a', '#0b1020', 'right');
     if (g.combo > 2 && g.t - g.lastKill < 2.2) text('COMBO x' + g.combo, W / 2, 136, 24 + Math.min(10, g.combo * 0.3), '#ffe14a');
@@ -381,8 +378,6 @@ export function createRenderer(canvas, art, kit) {
       ctx.fillStyle = gr; ctx.fillRect(0, 0, W, 260); text('SURGE!', W / 2, 170, 54, '#ff5a78');
     }
     if (S.flash > 0) { ctx.save(); ctx.globalAlpha = S.flash * 0.5; ctx.fillStyle = S.flashCol; ctx.fillRect(0, 0, W, H); ctx.restore(); }
-    // low-hp vignette
-    if (g.p.hp / g.p.maxHp < 0.3 && g.phase !== 'dead') { const a = 0.18 + Math.sin(S.t * 6) * 0.08; const gr = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.7); gr.addColorStop(0, 'rgba(255,0,40,0)'); gr.addColorStop(1, `rgba(255,0,40,${a})`); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H); }
     if (ui) drawHud(g, ui);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }

@@ -11,12 +11,14 @@ A Cell Survivor - Shoot Defense style game, with RoxorLoops & Jasmin as the cell
 - The snake is **one connected chain**. A destroyed cell is removed and the cells in front slide back to close the gap,
   so it just gets shorter and every kill pushes the face away from the membrane.
 - The **face is shielded** (no HP, cannot be targeted) until every other cell is gone, then it pops and the stage is cleared.
-  If the face reaches the membrane it drains HP until you finish the cells behind it.
+  **There are no hit points**: RoxorLoops and Jasmin stand below the line. The moment the face touches the line the run is over, and you can
+  spend Sparkles to revive (it knocks the snake back). Stamina, Warm Up and Ear Plugs became slowing and push-back effects: Stamina and
+  Calm Down slow the snake, Door Stopper and the Lamb push it back, the Turtle and the hush pickup slow it for a while.
 - Snakes are long (32 cells in stage 1, growing by 4 per stage, 150 max). Lane shapes include tall hairpins, big lobes and castle steps.
 - About one cell in 15 carries a **chest** (at least two): aim for them first. Chests give Beats and a skill fragment.
 - Upgrades come only from the **yellow upgrade cells** (a star on a yellow cell, about one per 7 cells, at least 4 per
   snake). Pop one, then pick 1 of 3 with 4 **Free Refreshes** per run. The first two picks are capsule upgrades only
-  (attack speed, extra note, extra burst, damage); skills and passives join after that. Each card has a **rarity** (Common, Rare, Epic, Legendary, Mythic, Godlike) that scales its effect. One of the three is always
+  (attack speed, extra note, extra burst, damage); skills and passives join after that. Each card has a **rarity** (speed and damage cards are common kinds, extra notes are at least rare, extra bursts at least epic) (Common, Rare, Epic, Legendary, Mythic, Godlike) that scales its effect. One of the three is always
   common, and every pick raises your luck so better rarities slowly become likelier. Cards show the numbers
   (for example "Notes per shot: 2 -> 3") and the HUD shows what the capsule does right now.
 - **Groove**: every note that lands builds the groove meter (+1.5% damage per point, up to 20). Stop hitting and it fades.
@@ -63,3 +65,23 @@ itself when frames run slow, then raises it again when it runs fast.
 - **Piggy Bank Parade**: a daily side stage (3 tries a day) with a parade of piggy banks that pays a lot of Beats. A win raises its tier.
 - **Checkpoint chests** drop at 25% and 50% progress and pay Beats even if the run is lost.
 - The shop has a cheap Spark Box and a Grand Spark Box (ten in one with a star prize). The hub deliberately explains very little.
+
+## The hub, round three (from the reference screenshots)
+
+- Tabs: Shop, Stats, Battle, Skills, Pets, Gear. Code split: `hub2.js` holds the shop, keepsake collection, character page and panels.
+- **Voice** (energy): a stage costs 5, it refills slowly (cap 32, rewards may overflow it), the 50% chest gives 10 back. The Piggy Bank Parade is free.
+- **Normal / Hard** per stage, with a recommended power. Hard has 2.4x cell HP and pays double.
+- **Gear**: keepsakes (Fine to Legendary) with fragments, levels and set bonuses, found in Keepsake Chests.
+- **Stats** is the character page: power, account level with Sparkle milestones, Volume / Pitch / Tempo cards.
+- **Shop**: daily treats with discounts and a refresh, a one-time Welcome Chest, a shop level that sweetens chests, a Beats store.
+- Battle side buttons: Sign in (7 days), Fan Fund (free stage rewards), Backstage tip jar (idle Beats), Fragment Swap.
+- In a run: speed readout, per-source damage panel (tap the bars icon), 25/50/100% chests on the bar, and Revive for Sparkles (3 times, knocks the snake back).
+- Balance: cells have about 8 shots of HP near the face and over 40 near the tail in stage 1 (the first cells are soft, then it gets tougher and tougher) and the snake crawls fast (the lane is not drawn) and capsule upgrades are small (common +8% speed, +12% damage).
+
+## Round four: wardrobe, events, instances, shops
+
+- **Wardrobe**: outfits (a hat and a perk for one animal skill) bought with Ribbons, which stage wins and the seasonal event hand out. The worn outfit shows above the duo in runs.
+- **Seasonal event** (Blossom Bash, Sunny Fair, Harvest Hootenanny, Snowy Sing-Along, by month): ribbon milestones, an exclusive outfit, and the Exchange Shop.
+- **Giant Serpent Gig**: a boss instance, two tries a day, pays Ribbons, an egg and pet fragments (the solo stand-in for the co-op boss mode).
+- **Fan Club Pass**, **Limit Shop** (weekly stock, Beats), **Exchange Shop** (Ribbons), **Weapon Exchange** (Sparkles skip the fragment grind, stage gate still applies).
+- **Preview** shows every virus species; **Trophy Shelf** holds one-time rewards for milestones.

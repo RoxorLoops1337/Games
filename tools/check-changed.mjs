@@ -85,6 +85,7 @@ const GAME_SUITES = {
   midnight_mog: ['test:midnightmog'],
   drop_the_bass: ['test:dropbass'],
   pitch_story: ['test:pitchstory'],
+  groove_lock: ['test:groovelock'],
 };
 
 // Folders the site serves that have no test suite: a change there only needs

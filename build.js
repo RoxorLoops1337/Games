@@ -95,6 +95,7 @@ const STATIC_PATHS = [
   'rustgrift',
   'midnight_mog',
   'drop_the_bass',
+  'groove_lock',
   'tools',
 ];
 

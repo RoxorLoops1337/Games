@@ -92,6 +92,36 @@
   .tile.tier0{border-color:#9dff6d88} .tile.tier1{border-color:#4fb8ffaa;background:linear-gradient(180deg,#164a66,#0f3048)} .tile.tier2{border-color:#b06cffaa;background:linear-gradient(180deg,#3b2370,#241448)} .tile.tier3{border-color:#ffb04daa;background:linear-gradient(180deg,#5a3410,#3a200a)} .tile.tier4{border-color:#ff4d7aaa;background:linear-gradient(180deg,#5a1630,#3a0c1e)}
   .tile.unowned .ic{filter:grayscale(.8) brightness(.8)}
   #hPower{font-weight:900;color:#ffd84d;font-size:14px;text-align:center;padding-bottom:4px}
+
+  /* hub, part two */
+  .cur.e{display:flex;align-items:center;gap:6px} .plus{appearance:none;border:0;width:24px;height:24px;border-radius:8px;background:linear-gradient(180deg,#fff3b0,#ffc83d);font-weight:900;color:#5a3410;cursor:pointer;padding:0}
+  #toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,20px);max-width:86vw;background:rgba(10,8,30,.92);border:2px solid var(--line);color:#fff;font-weight:800;padding:10px 16px;border-radius:14px;opacity:0;pointer-events:none;transition:.25s;z-index:30;text-align:center} #toast.on{opacity:1;transform:translate(-50%,0)}
+  .side{display:flex;gap:8px;margin-bottom:6px;overflow-x:auto;width:100%;padding:6px 4px 4px;scrollbar-width:none}.side::-webkit-scrollbar{display:none} .sidebtn{position:relative;appearance:none;border:2px solid rgba(255,255,255,.2);background:var(--glass);color:#fff;font:inherit;font-weight:800;font-size:11px;border-radius:14px;padding:6px 10px;min-width:70px;cursor:pointer} .sidebtn b{display:block;font-size:22px}
+  .alert{position:absolute;top:-6px;right:-4px;background:#ff3d5a;border-radius:50%;width:18px;height:18px;font-style:normal;font-weight:900;font-size:12px;display:grid;place-items:center}
+  .diffrow{display:flex;gap:8px;align-items:center;justify-content:center;margin:6px 0} .dbtn{appearance:none;border:2px solid rgba(255,255,255,.25);background:rgba(0,0,0,.3);color:var(--dim);font:inherit;font-weight:900;border-radius:12px;padding:7px 16px;cursor:pointer} .dbtn.on{color:#10131c;background:#9dff6d;border-color:#9dff6d} .dbtn.hard.on{background:#b06cff;border-color:#b06cff;color:#fff} .dbtn[disabled]{opacity:.5} .rec{font-size:12px;color:var(--dim);font-weight:800}
+  .herobox{text-align:center} .herobox .duo{width:min(150px,38vw)} .heroname{font-weight:900;font-size:20px} .heropow{display:inline-block;margin:6px 0;padding:4px 22px;border-radius:99px;background:linear-gradient(180deg,#8a2a3a,#5a1626);border:3px solid #ffb04d;font-weight:900;font-size:26px;color:#ffe14a}
+  .lvbar{width:min(520px,100%);margin:6px auto 12px} .lvrow{display:flex;align-items:center;gap:8px} .lvrow .bar{flex:1;height:12px} .lvbadge{min-width:38px;text-align:center;padding:5px 8px;border-radius:12px;background:#b06cff;font-weight:900;border:2px solid #fff} .lvbadge.s{background:#ffb04d;color:#3a200a} .lvnext{text-align:right;font-size:12px;color:var(--dim);margin-top:3px}
+  .stat3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:min(520px,100%);margin:0 auto}
+  .sc{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 6px 10px;border-radius:16px;border:3px solid #b06cffaa;background:linear-gradient(180deg,#4a2a8a,#2a1658);text-align:center} .sc.maxed{background:linear-gradient(180deg,#5a3aa0,#3a2078)}
+  .sct{font-weight:900;font-size:13px} .sci{font-size:34px;line-height:1.1} .scn{font-weight:900;font-size:14px} .scd{font-size:11px;color:var(--dim);line-height:1.2;min-height:28px} .sc .go{width:100%;min-width:0;padding:8px 4px;font-size:14px;display:flex;justify-content:center;gap:4px}
+  .filters{display:flex;gap:6px;align-items:center;width:min(520px,100%);margin:0 auto 8px} .filters .ttl{flex:1;font-size:18px} .filters button{appearance:none;border:2px solid rgba(255,255,255,.2);background:rgba(0,0,0,.3);color:var(--dim);font:inherit;font-weight:900;font-size:12px;border-radius:10px;padding:7px 8px;cursor:pointer} .filters button.on{background:#ff8a5c;color:#3a1008;border-color:#ff8a5c}
+  #gearBody{width:min(520px,100%);margin:0 auto} .sec,.refrow,.shoplv{grid-column:1/-1} #gearBody .sec{margin:12px 0 8px}
+  .sec{text-align:center;margin:10px 0 2px} .sec span{display:inline-block;padding:4px 26px;border-radius:99px;background:#7a4cd6;font-weight:900;font-size:17px;border:2px solid rgba(255,255,255,.4);color:#10131c}
+  .kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:6px}
+  .kcard{position:relative;appearance:none;font:inherit;color:#fff;padding:6px 3px 4px;border-radius:12px;border:3px solid var(--tc);background:linear-gradient(180deg,color-mix(in srgb,var(--tc) 45%,#10131c),color-mix(in srgb,var(--tc) 22%,#10131c));cursor:pointer;text-align:center} .kcard.off .kic{filter:grayscale(1) brightness(.6)}
+  .kic{font-size:34px;line-height:1.2} .kname{font-weight:900;font-size:11px;line-height:1.1;min-height:24px;padding:2px} .kbar{position:relative;height:13px;border-radius:7px;background:rgba(0,0,0,.45);overflow:hidden;margin:2px 3px} .kbar i{display:block;height:100%;background:#9dff6d} .kbar span{position:absolute;inset:0;font-size:10px;font-weight:900;line-height:13px}
+  .kstar{position:absolute;top:-8px;left:-6px;width:22px;height:22px;border-radius:50%;background:#ffb04d;color:#3a200a;font-style:normal;font-weight:900;font-size:12px;display:grid;place-items:center;border:2px solid #fff} .kup{position:absolute;top:-8px;right:-6px;font-style:normal;color:#9dff6d;font-weight:900;text-shadow:0 0 6px #000}
+  .setbox{border:3px solid rgba(255,255,255,.2);border-radius:16px;padding:10px;margin-bottom:10px;background:var(--glass);text-align:center} .setbox.full{border-color:#ffe14a} .setn{font-weight:900;font-size:17px} .setm{font-size:34px;margin:6px 0} .setm .off{filter:grayscale(1) brightness(.5)} .setb{color:#9dff6d;font-weight:800}
+  .kdetail{text-align:center;width:min(340px,86vw);border:4px solid var(--tc);border-radius:22px;padding:18px;background:linear-gradient(180deg,color-mix(in srgb,var(--tc) 35%,#10131c),#10131c)} .kbig{font-size:80px} .ktier{color:var(--tc);font-weight:900} .klv{font-weight:900;margin:4px 0} .kst{font-size:18px;font-weight:800;margin:6px 0} .kst small{display:block;color:var(--dim);font-size:12px} .kset{color:#ffe14a;font-size:13px;margin-bottom:6px} .kdetail .go{width:100%;margin-top:10px}
+  .shoplv{display:flex;align-items:center;gap:8px;margin:2px 0 4px} .shoplv .bar{flex:1;height:12px} .shoplv small{color:var(--dim);font-weight:800}
+  .refrow{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--dim);font-weight:800;font-size:13px;padding:2px 4px}
+  .tile.deal{padding-top:18px} .dealbadge{position:absolute;top:-8px;left:-6px;background:#ff3d5a;color:#fff;font-style:normal;font-weight:900;font-size:11px;padding:2px 8px;border-radius:8px;border:2px solid #fff}
+  .tile .go img{width:22px;height:22px;object-fit:contain} .tile .ds img{width:20px;height:20px;vertical-align:middle;object-fit:contain} .tile.done{opacity:.65} .kemo{font-size:46px;line-height:1}
+  .swap{display:flex;flex-direction:column;gap:10px;align-items:center;width:min(340px,86vw)} .swap select{width:100%;padding:12px;border-radius:12px;background:#231a55;color:#fff;font:inherit;font-weight:800;border:2px solid var(--line)}
+  .panelbody{max-height:62vh;overflow:auto;width:min(540px,100%);display:flex;flex-direction:column;align-items:center;gap:10px} .panelbody .tiles{width:100%}
+  .dmgrow{display:grid;grid-template-columns:150px 1fr 44px;gap:8px;align-items:center;width:min(460px,92vw);margin:6px 0;font-weight:800;font-size:14px} .dmgrow .dn img{width:26px;height:26px;vertical-align:middle;object-fit:contain} .dmgrow b{text-align:right}
+  .wardtop{text-align:center;width:100%;margin-bottom:8px} .wardhero{position:relative;display:inline-block} .wardhero img{width:120px} .wardhat{position:absolute;top:-6px;left:50%;transform:translateX(-50%);font-size:38px}
+  .beasts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%} .beast{text-align:center;border:3px solid rgba(255,255,255,.2);border-radius:16px;padding:8px 4px;background:var(--glass)} .beast.off img{filter:brightness(0)} .bpic{height:70px;display:grid;place-items:center} .bpic img{width:64px;height:64px;object-fit:contain} .bname{font-weight:900;font-size:12px;line-height:1.1;min-height:28px} .beast small{color:var(--dim)}
   #muteBtn{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:5;width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:20px;cursor:pointer;display:none}
   #muteBtn.on{display:block}
 </style>
@@ -107,20 +137,22 @@
   <img class="deco" id="deco4" style="right:4vw;bottom:11vh;animation-delay:-.5s" alt="">
   <h1>CELL<br>SERPENT</h1>
   <img class="hero" src="assets/duo_sing.png" alt="RoxorLoops and Jasmin">
-  <div class="sub">A giant virus snake crawls toward the stage. Slide left and right: RoxorLoops and Jasmin sing straight up. Pop the cells before the face gets through. You might not make it on the first try.</div>
+  <div class="sub">RoxorLoops &amp; Jasmin vs the Serpent.</div>
   <button class="btn" id="playBtn">PLAY</button>
   <div class="row"><div class="cur b"><img data-cur="beats" alt=""><b id="tBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="tSpark">0</b></div></div>
 </section>
 
 <section class="scr hub" id="hub">
-  <div class="hubtop"><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div><div id="hPower"></div>
+  <div class="hubtop"><div class="cur e"><b>⚡</b><b id="hEnergy">0</b><button class="plus" id="enPlus">+</button></div><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div><div id="hPower"></div>
   <div class="hubbody">
     <div class="tab" id="tabBattle">
       <div class="stagebox">
+        <div class="side" id="battleSide"></div>
         <div class="stagetitle" id="stTitle"></div>
         <div class="stagesub" id="stSub"></div>
         <div class="stagepick"><button class="arrow" id="stPrev">◀</button><canvas id="stCanvas" width="660" height="620"></canvas><button class="arrow" id="stNext">▶</button></div>
         <div class="chips" id="stChips"></div>
+        <div class="diffrow" id="diffRow"></div>
         <div class="info" id="stInfo"></div>
         <div class="stprog" id="stProg"></div>
         <div class="loadout" id="battleLoad"></div>
@@ -131,11 +163,12 @@
     </div>
     <div class="tab" id="tabSkills"><h2>SKILLS</h2><div class="sub">Pick your five.</div><div class="loadout" id="loadoutRow"></div><div class="tiles" id="skillList"></div></div>
     <div class="tab" id="tabPets"><h2>PETS</h2><div class="sub">Little friends.</div><div class="tiles" id="petList"></div></div>
-    <div class="tab" id="tabStats"><img class="duo" src="assets/duo_idle.png" alt=""><h2>STATS</h2><div class="tiles" id="statList"></div></div>
+    <div class="tab" id="tabStats"><div class="herobox"><img class="duo" src="assets/duo_idle.png" alt=""><div id="heroBox"></div></div><div class="lvbar" id="lvBar"></div><div id="statList"></div></div>
+    <div class="tab" id="tabGear"><div class="filters" id="gearFilters"><b class="ttl">Collection</b><button data-f="All">All</button><button data-f="Owned">Owned</button><button data-f="Set">Set</button><button data-f="Upgrade">Ready</button></div><div id="gearBody"></div></div>
     <div class="tab" id="tabShop"><h2>SHOP</h2><div class="sub">Treats and surprises.</div><div class="tiles" id="boxList"></div></div>
   </div>
   <nav class="tabs">
-    <button data-tab="Battle"><b>⚔</b>Battle</button><button data-tab="Skills"><b>✦</b>Skills</button><button data-tab="Pets"><b>🐾</b>Pets</button><button data-tab="Stats"><b>♥</b>Stats</button><button data-tab="Shop"><b>🎁</b>Shop</button>
+    <button data-tab="Shop"><b>🛍️</b>Shop</button><button data-tab="Stats"><b>♥</b>Stats</button><button data-tab="Battle"><b>⚔</b>Battle</button><button data-tab="Skills"><b>✦</b>Skills</button><button data-tab="Pets"><b>🐾</b>Pets</button><button data-tab="Gear"><b>🎒</b>Gear</button>
   </nav>
 </section>
 
@@ -145,6 +178,16 @@
   <div class="cards" id="cards"></div>
   <button class="btn alt" id="refreshBtn">FREE REFRESH</button>
   <div class="sub" id="refreshLeft"></div>
+</section>
+
+<section class="scr" id="panel"><h2 id="pTitle"></h2><div class="panelbody" id="pBody"></div><button class="btn dim" id="pClose">CLOSE</button></section>
+
+<section class="scr" id="revive">
+  <h2>ENCORE?</h2>
+  <img class="hero" src="assets/duo_idle.png" style="width:min(180px,42vw)" alt="">
+  <div class="sub">The crowd wants one more song. The snake gets knocked back.</div>
+  <button class="btn gold" id="rvGo">REVIVE</button><div class="sub" id="rvLeft"></div>
+  <button class="btn dim" id="rvNo">GIVE UP</button>
 </section>
 
 <section class="scr" id="pause">
@@ -168,6 +211,7 @@
   <button class="btn" id="bOk">NICE</button>
 </section>
 
+<div id="toast"></div>
 <script type="module" src="main.js"></script>
 </body>
 </html>

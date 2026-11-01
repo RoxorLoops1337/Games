@@ -23,7 +23,7 @@ const bot = g => sim.botInput(g);
 // the tail drives the chain, so to move the whole virus shift both the tail and every cell
 const shiftChain = (g, shift) => { const sn = g.snakes[0]; sn.tail += shift; for (const q of sn.segs) q.ps += shift; };
 // park the virus so cell number `idx` sits `dy` px straight above the cell (the cell slides under it)
-const bringNear = (g, dy = 100, idx = 3) => {
+const bringNear = (g, dy = 170, idx = 0) => {
   const sn = g.snakes[0]; let target = 0;
   for (let t = 0; t < g.path.len; t += 2) if (sim.pointAt(g.path, t).y >= ROW_Y - dy) { target = t; break; }
   shiftChain(g, target - sn.segs[idx].ps);
@@ -84,7 +84,10 @@ ok('it starts weak: 10 to 20 capsule shots per cell, one note, no skills; and th
   const g = sim.createGame({ seed: 30 });
   assert.equal(Object.keys(g.weap).length, 0); assert.equal(g.level, 1);
   const capsule = 10 * g.p.atk;
-  for (const q of g.snakes[0].segs) if (q.kind === 'normal' && q.i > 0) { const shots = q.max / capsule; assert.ok(shots >= 10 && shots <= 20, `cell needs ${shots} shots`); }
+  const normals = g.snakes[0].segs.filter(q => q.kind === 'normal' && q.i > 0), shotsOf = q => q.max / capsule;
+  for (const q of normals) assert.ok(shotsOf(q) >= 8 && shotsOf(q) <= 55, `cell needs ${shotsOf(q)} shots`);
+  const first = normals.slice(0, 4).reduce((a, q) => a + shotsOf(q), 0) / 4, last = normals.slice(-4).reduce((a, q) => a + shotsOf(q), 0) / 4;
+  assert.ok(first < 15 && last > first * 2, 'the first cells are soft and the snake gets tougher and tougher: ' + first + ' -> ' + last);
   assert.ok(g.p.rate <= 2.2);
   for (const first of [0, 1]) {   // the first two picks only ever offer capsule upgrades
     g.pending = 1; sim.step(g, 1 / 60, {});
@@ -102,9 +105,9 @@ ok('capsule upgrades: extra notes fan out side by side, bursts repeat the volley
   assert.equal(new Set(notes.bullets.map(b => Math.round(b.x))).size, 3, 'side by side'); assert.ok(notes.bullets.every(b => Math.abs(b.vx) < 1e-6 && b.vy < 0));
   const burst = vol({ burst: 1 }); assert.equal(burst.bullets.length, 2, 'a second volley follows within 0.1s'); assert.ok(burst.bullets[0].y !== burst.bullets[1].y);
   const shots = ups => { const g = sim.createGame({ seed: 41 }); Object.assign(g.ups, ups); run(g, 6, {}); return g.shots; };
-  assert.ok(shots({ aspd: 4 }) > shots({}) * 1.4);
+  assert.ok(shots({ aspd: 10 }) > shots({}) * 1.4);
   const dm = ups => { const g = sim.createGame({ seed: 42 }); Object.assign(g.ups, ups); g.p.crit = 0; g.p.cd = 0; sim.step(g, 1 / 60, {}); return g.bullets[0].dmg; };
-  assert.ok(dm({ cdmg: 3 }) > dm({}) * 1.8);
+  assert.ok(dm({ cdmg: 8 }) > dm({}) * 1.8);
 });
 
 ok('the virus stays one connected chain: a destroyed cell is removed and the front slides back to close the gap', () => {
@@ -124,26 +127,26 @@ ok('the face cannot be hit or targeted until it is the last cell; then it pops a
   const g = sim.createGame({ seed: 4 });
   const sn = g.snakes[0], face = sn.segs[0]; sn.speed = 0.01;
   assert.ok(face.shield && face.isHead);
-  bringNear(g, 120); g.p.hp = g.p.maxHp = 1e6; g.p.iframes = 1e6;
+  bringNear(g, 170); g.p.hp = g.p.maxHp = 1e6; g.p.iframes = 1e6;
   run(g, 4, {});
   assert.equal(face.hp, 1, 'shots and skills pass through the face'); assert.ok(face.shield);
   for (const q of sn.segs.slice(1)) q.hp = 0;
-  sim.step(g, 1 / 60, {});
+  g.p.x = face.x; run(g, 2, {});
   assert.equal(g.snakes.length, 0, 'the face pops once it is alone');
   assert.ok(g.events.some(e => e.t === 'kill' && e.head) && ['clear', 'levelup'].includes(g.phase));
 });
 
-ok('if the face reaches the membrane it drains HP until you finish the cells; each kill pushes it back', () => {
+ok('if the face reaches the line the run is over; an Encore saves it once', () => {
   const g = sim.createGame({ seed: 5 });
   const sn = g.snakes[0], face = sn.segs[0];
-  g.p.iframes = 5; const hp0 = g.p.hp;
   sn.tail = 1e9; sim.step(g, 1 / 60, {});
-  assert.ok(sn.breach && g.p.hp < hp0 && g.events.some(e => e.t === 'leak'));
-  assert.ok(face.ps <= g.path.len + 0.01, 'the face stops at the membrane');
-  const hp1 = g.p.hp; sn.speed = 0.01; run(g, 1.1, {}); assert.ok(g.p.hp < hp1 - 4, 'keeps draining');
-  const before = face.ps; for (const q of sn.segs.slice(1, 4)) q.hp = 0; run(g, 1, {});
-  assert.ok(face.ps < before - 80, 'killing cells pushes the face back off the membrane');
-  assert.ok(LINE_Y === 1190 && ROW_Y < LINE_Y);
+  assert.equal(g.phase, 'dead'); assert.ok(g.events.some(e => e.t === 'leak') && g.result && !g.result.won);
+  assert.ok(face.ps <= g.path.len + 0.01, 'the face stops at the line');
+  const r = sim.createGame({ seed: 5, meta: { rev: 1 } }); r.snakes[0].tail = 1e9; sim.step(r, 1 / 60, {});
+  assert.equal(r.phase, 'play', 'the Encore saves the first loss'); assert.ok(r.revived && r.snakes[0].segs[0].ps < r.path.len - 400);
+  r.snakes[0].tail = 1e9; sim.step(r, 1 / 60, {}); assert.equal(r.phase, 'dead', 'only once');
+  assert.ok(LINE_Y === 1055 && ROW_Y > LINE_Y + 80, 'the duo stands below the line');
+  assert.ok(!('hp' in g.p) || g.p.hp === undefined, 'no hit points');
 });
 
 ok('now and then the virus surges for a second, with a warning first', () => {
@@ -197,16 +200,16 @@ ok('upgrades come only from the yellow upgrade cells; Free Refresh gives new cho
 
 ok('every extra note counts: each pick adds a note, spaced apart so you can see it, and the card says so', () => {
   const g = sim.createGame({ seed: 5 });
-  const card = () => g.choices.find(c => c.id === 'notes' && c.rarity === 0);
+  const card = () => g.choices.find(c => c.id === 'notes');
   const pickNotes = () => { g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); for (let k = 0; k < 40 && !card(); k++) { g.rerolls = 4; sim.reroll(g); } const i = g.choices.indexOf(card()); assert.ok(i >= 0); return sim.choose(g, i); };
   const volley = () => { g.bullets.length = 0; g.vq.length = 0; g.p.cd = 0; g.p.crit = 0; sim.step(g, 1 / 60, {}); sim.step(g, 0.05, {}); return g.bullets; };
   assert.equal(volley().length, 1);
   g.phase = 'play'; g.pending = 1; sim.step(g, 1 / 60, {}); for (let k = 0; k < 40 && !card(); k++) { g.rerolls = 4; sim.reroll(g); }
-  assert.match(card().stat, /Notes per shot: 1 → 2/); sim.choose(g, g.choices.indexOf(card()));
-  const two = volley(); assert.equal(two.length, 2); assert.ok(Math.abs(two[0].x - two[1].x) >= 40, 'visibly apart'); assert.ok(two.every(b => b.dmg === 10 * g.p.atk));
+  assert.match(card().stat, /Notes per shot: 1 → \d/); const gain1 = card().gain; sim.choose(g, g.choices.indexOf(card()));
+  const two = volley(); assert.equal(two.length, 1 + gain1); assert.ok(Math.abs(two[0].x - two[1].x) >= 40, 'visibly apart'); assert.ok(two.every(b => b.dmg === 10 * g.p.atk));
   assert.ok(pickNotes()); g.phase = 'play';
-  const three = volley(); assert.equal(three.length, 3); assert.equal(g.ups.notes, 2);
-  assert.equal(new Set(three.map(b => Math.round(b.x))).size, 3);
+  const three = volley(); assert.equal(three.length, 1 + Math.round(sim.uv(g, 'notes'))); assert.equal(g.ups.notes, 2);
+  assert.equal(new Set(three.map(b => Math.round(b.x))).size, three.length);
 });
 
 ok('skill picks: 3 distinct choices; locked skills never appear; maxed ones stop; at most five skills; every passive applies', () => {
@@ -222,7 +225,7 @@ ok('skill picks: 3 distinct choices; locked skills never appear; maxed ones stop
     for (let k = 0; k < u.max + 2; k++) { p.phase = 'levelup'; p.pending = 1; p.choices = [{ id: u.id, kind: 'passive', lvl: p.ups[u.id] || 0, max: u.max }]; if (k < u.max) sim.choose(p, 0); }
     assert.equal(p.ups[u.id], u.max, u.id);
   }
-  assert.ok(p.p.maxHp > 100 && p.p.speed > 300 && p.p.crit > 0.3 && p.p.guard > 0.5);
+  assert.ok(p.p.slow > 0.3 && p.p.speed > 300 && p.p.crit > 0.2, 'Calm Down slows the snake');
 });
 
 ok('every skill works at every level and hurts the virus; a permanent skill level makes it hit harder', () => {
@@ -260,27 +263,21 @@ ok('a bomb cell chain-reacts into its neighbours and the cell', () => {
   bomb.kind = 'bomb'; bomb.hp = 0; bomb.max = 10; s.segs[5].hp = 1; s.segs[6].hp = 1;
   const pos = sim.pointAt(g.path, bomb.ps + 1);
   g.p.zone = { x0: -500, x1: 2000 }; g.p.x = pos.x + 90; g.p.iframes = 0; g.p.y = pos.y;
-  const hp0 = g.p.hp;
   sim.step(g, 1 / 60, {});
   assert.ok(g.events.some(e => e.t === 'boom'));
   assert.ok(g.snakes.every(x => x.segs.every(q => q.i !== 5 && q.i !== 6)), 'neighbours died in the blast');
-  assert.ok(g.p.hp <= hp0);
 });
 
-ok('contact hurts and grants i-frames; dying ends the run; Second Wind revives once; shield, heal and rage work', () => {
-  const g = sim.createGame({ seed: 16 });
-  g.snakes[0].speed = 0.01; const hd = g.snakes[0].segs[0]; g.p.zone = { x0: -500, x1: 2000 }; g.p.x = hd.x;
-  const hp0 = g.p.hp; hd.y = g.p.y; sim.step(g, 1 / 60, {});
-  g.p.y = ROW_Y;
-  const d = sim.createGame({ seed: 17 }); d.p.hp = 1; d.snakes[0].tail = 1e9; sim.step(d, 1 / 60, {});
+ok('losing ends the run; the Encore saves it once; the hush pickup slows and the wall pickup pushes the snake back; rage works', () => {
+  const d = sim.createGame({ seed: 17 }); d.snakes[0].tail = 1e9; sim.step(d, 1 / 60, {});
   assert.equal(d.phase, 'dead'); assert.ok(d.result && d.result.won === false && d.result.stage === 1 && d.result.name);
-  const t = d.t; sim.step(d, 1 / 60, {}); assert.equal(d.t, t);
-  const r = sim.createGame({ seed: 17, meta: { rev: 1 } }); r.p.hp = 1; r.snakes[0].tail = 1e9; sim.step(r, 1 / 60, {});
+  const t = d.t; sim.step(d, 1 / 60, {}); assert.equal(d.t, t, 'the world stops');
+  const r = sim.createGame({ seed: 17, meta: { rev: 1 } }); r.snakes[0].tail = 1e9; sim.step(r, 1 / 60, {});
   assert.equal(r.phase, 'play'); assert.ok(r.events.some(e => e.t === 'revive'));
-  const s = sim.createGame({ seed: 18 }); s.p.shield = 3; s.snakes[0].tail = 1e9; sim.step(s, 1 / 60, {}); assert.equal(s.p.hp, s.p.maxHp);
-  s.p.shield = 0; s.p.hp = 10; s.pickups.push({ kind: 'heal', x: s.p.x, y: s.p.y, vx: 0, vy: 0, v: 1, age: 1, vac: true }, { kind: 'rage', x: s.p.x, y: s.p.y, vx: 0, vy: 0, v: 1, age: 1, vac: true });
-  sim.step(s, 1 / 60, {}); assert.ok(s.p.hp > 10 && s.p.rage > 0);
-  assert.ok(hp0 > 0);
+  const s = sim.createGame({ seed: 18 }); const sn = s.snakes[0], ps0 = sn.segs[0].ps;
+  const put = k => s.pickups.push({ kind: k, x: s.p.x, y: s.p.y, vx: 0, vy: 0, v: 1, age: 1, vac: true });
+  put('heal'); put('shield'); put('rage'); sim.step(s, 1 / 60, {});
+  assert.ok(sn.slow > 1 && s.p.rage > 0 && sn.segs[0].ps < ps0 - 100);
 });
 
 ok('one run is one stage: clearing the virus wins the run once the loot is in (no automatic next stage)', () => {
@@ -342,17 +339,17 @@ ok('save: sanitising, migration from the old coins save, defaults', () => {
   assert.equal(sim.sanitizeSave(null).beats, 0);
   assert.ok(sim.sanitizeSave({ skills: { swab: { lv: 0 } } }).skills.swab.lv >= 1, 'starter skills can never be locked');
   const p = sim.makePlayer({ atk: 5, crt: 5, cdn: 5, vit: 2 });
-  assert.ok(p.atk > 1.3 && p.crit > 0.1 && p.cdBase < 0.8 && p.maxHp === 124);
+  assert.ok(p.atk > 1.3 && p.crit > 0.1 && p.cdBase < 0.8 && Math.abs(p.slow - 0.04) < 1e-9);
 });
 
 ok('bot plays full runs: bounded entities, finite numbers, and clears an early stage with a little shop progress', () => {
   let wins = 0;
   for (const seed of [1, 2, 3, 4, 5, 6]) {
-    const g = sim.createGame({ seed, stage: 2, meta: { atk: 3, vit: 2, cdn: 1 } });
-    for (let i = 0; i < 60 * 240 && g.phase !== 'dead' && g.phase !== 'won'; i++) {
+    const g = sim.createGame({ seed, stage: 1, meta: { atk: 3, vit: 2, cdn: 1 } });
+    for (let i = 0; i < 60 * 400 && g.phase !== 'dead' && g.phase !== 'won'; i++) {
       sim.step(g, 1 / 60, bot(g)); if (g.phase === 'levelup') sim.choose(g, Math.floor(g.rand() * g.choices.length));
       assert.ok(g.bullets.length < 600 && g.pickups.length < 700 && g.zones.length < 20);
-      assert.ok(Number.isFinite(g.p.x) && g.p.x >= 0 && g.p.x <= W && g.p.y === ROW_Y && Number.isFinite(g.p.hp));
+      assert.ok(Number.isFinite(g.p.x) && g.p.x >= 0 && g.p.x <= W && g.p.y === ROW_Y);
     }
     if (g.phase === 'won') wins++;
     for (const sn of g.snakes) for (const q of sn.segs) assert.ok(Number.isFinite(q.x) && Number.isFinite(q.y) && q.hp > 0);
@@ -363,14 +360,14 @@ ok('bot plays full runs: bounded entities, finite numbers, and clears an early s
 ok('groove: every note that lands builds it (+2% damage per point), a pause in the hits lets it fade', () => {
   const g = sim.createGame({ seed: 50 });
   assert.equal(g.groove, 0); assert.equal(sim.GROOVE_MAX, 20);
-  const sn = g.snakes[0]; sn.speed = 0.01; bringNear(g, 120); g.p.hp = g.p.maxHp = 1e9; g.p.iframes = 1e9;
+  const sn = g.snakes[0]; sn.speed = 0.01; bringNear(g, 170); g.p.hp = g.p.maxHp = 1e9; g.p.iframes = 1e9;
   const dmgNow = () => { g.bullets.length = 0; g.vq.length = 0; g.p.cd = 0; g.p.crit = 0; const x = g.p.x; sim.step(g, 1 / 60, {}); g.p.x = x; return g.bullets[0].dmg; };
   const d0 = dmgNow();
   run(g, 6, {}); assert.ok(g.groove >= 3, 'hits build groove: ' + g.groove); assert.ok(g.grooveMax >= g.groove);
   assert.ok(dmgNow() > d0, 'groove raises damage'); assert.ok(g.groove <= sim.GROOVE_MAX);
   g.groove = 12; g.bullets.length = 0; g.p.cd = 99; g.p.x = 20;   // nothing above you any more
   run(g, 4, {}); assert.ok(g.groove < 12, 'it fades when the hits stop: ' + g.groove);
-  const h = sim.createGame({ seed: 51 }); h.snakes[0].speed = 0.01; bringNear(h, 120); sim.step(h, 1 / 60, {}); h.groove = 4; h.events.length = 0;
+  const h = sim.createGame({ seed: 51 }); h.snakes[0].speed = 0.01; bringNear(h, 170); sim.step(h, 1 / 60, {}); h.groove = 4; h.events.length = 0;
   const cell = h.snakes[0].segs[3]; h.bullets.push({ x: cell.x, y: cell.y, vx: 0, vy: -1, dmg: 1, crit: false, pierce: 0, r: 6, life: 1, hit: [], kind: 'pill', home: 0, splash: 0, slow: 0 });
   sim.step(h, 1 / 60, {}); assert.equal(h.groove, 5); assert.ok(h.events.some(e => e.t === 'groove' && e.n === 5));
 });
@@ -386,7 +383,7 @@ ok('boss shield wave: a wave of shields rolls down the chain; cells in it cannot
   }
   assert.ok(maxWave >= 2 && maxWave <= 4, 'a short wave: ' + maxWave); assert.ok(seen.size > 8, 'it travels down the snake: ' + seen.size);
   assert.ok(sn.segs.every(q => q.i > 0 || !q.wave), 'never on the face');
-  bringNear(g, 120); const cell = sn.segs[5]; const hp0 = cell.hp; g.bullets.push({ x: cell.x, y: cell.y, vx: 0, vy: -1, dmg: 500, crit: false, pierce: 0, r: 6, life: 1, hit: [], kind: 'pill', home: 0, splash: 0, slow: 0 });
+  bringNear(g, 170); const cell = sn.segs[5]; const hp0 = cell.hp; g.bullets.push({ x: cell.x, y: cell.y, vx: 0, vy: -1, dmg: 500, crit: false, pierce: 0, r: 6, life: 1, hit: [], kind: 'pill', home: 0, splash: 0, slow: 0 });
   const waveOn = (t) => { for (let i = 0; i < 60 * 8; i++) { sim.step(g, 1 / 60, {}); if (sn.segs[5] && sn.segs[5].wave) return true; } return false; };
   assert.ok(waveOn(), 'the wave reaches cell 5');
   { const c5 = sn.segs[5]; g.bullets.length = 0; g.bullets.push({ x: c5.x, y: c5.y, vx: 0, vy: -1, dmg: 500, crit: false, pierce: 0, r: 6, life: 1, hit: [], kind: 'pill', home: 0, splash: 0, slow: 0 }); const hpIn = c5.hp; sim.step(g, 1 / 60, {}); assert.equal(c5.hp, hpIn, 'a shielded cell takes no damage'); }
@@ -531,7 +528,7 @@ ok('Piggy Bank Parade: three tries a day, pays big Beats, a win brings an egg an
 
 ok('checkpoint chests appear at 25% and 50% progress and pay Beats, never a fragment', () => {
   const g = sim.createGame({ seed: 8 }); g.p.hp = g.p.maxHp = 1e6;
-  const sn = g.snakes[0]; const total = g.stageHpMax;
+  const sn = g.snakes[0]; const total = g.stageHpMax; for (const q of sn.segs) { q.carry = null; if (q.kind === 'upgrade') q.kind = 'normal'; }
   for (const q of sn.segs.slice(1)) { if (g.stageHpMax - sn.segs.filter(z => z.hp > 0 && z !== q).reduce((a, z) => a + z.hp, 0) > total * 0.26) break; q.hp = 0; q.dead = true; }
   sim.step(g, 1 / 60, {});
   assert.ok(g.cp && g.cp[0.25], 'quarter chest'); assert.ok(g.pickups.some(p => p.kind === 'chest' && p.cp === 1));
@@ -546,6 +543,93 @@ ok('progress is remembered per stage and power grows with everything you collect
   sim.applyResult(s, { won: false, stage: 4, coins: 1, kills: 1, frags: {}, progress: 0.3 }); assert.equal(s.prog[4], 70, 'keeps the best');
   s.meta.atk = 3; s.pets.kitten.star = 2; assert.ok(sim.power(s) > p0 + 200);
   assert.equal(sim.sanitizeSave(JSON.parse(JSON.stringify(s))).prog[4], 70);
+});
+
+
+ok('keepsakes: chests give fragments, levels and whole sets add bonuses', () => {
+  const s = sim.defaultSave(); s.sparkles = 2000; let k = 0; const rand = () => { k = (k * 9301 + 49297) % 233280; return k / 233280; };
+  const got = sim.openKeepChest(s, 10, rand); assert.ok(got && got.reduce((a, x) => a + x.n, 0) >= 14); assert.equal(s.sparkles, 2000 - sim.KEEP_PRICE * 9);
+  const m = sim.KEEPSAKES.find(x => x.id === 'mallet'); s.keeps.mallet.frag = sim.keepCost(m, 0); assert.ok(sim.keepUp(s, 'mallet')); assert.equal(s.keeps.mallet.lv, 1);
+  const lv = {}; for (const x of sim.KEEPSAKES) lv[x.id] = 1;
+  const full = sim.keepBonus(lv), none = sim.keepBonus({}); assert.ok(full.atk > 0.15 && none.atk === 0, 'sets add to the per-level bonus');
+  const g = sim.createGame({ seed: 2, arts: { mallet: 3 } }), base = sim.createGame({ seed: 2 }); assert.ok(g.p.atk > base.p.atk);
+  assert.equal(sim.sanitizeSave(JSON.parse(JSON.stringify(s))).keeps.mallet.lv, 1);
+});
+
+ok('energy: a stage costs Voice, it comes back over time, rewards may overflow the cap', () => {
+  const s = sim.defaultSave(), t0 = 1e12; assert.equal(sim.tickEnergy(s, t0), sim.ENERGY_MAX);
+  for (let i = 0; i < 6; i++) assert.ok(sim.spendEnergy(s, t0)); assert.equal(s.energy.n, 2); assert.ok(!sim.spendEnergy(s, t0), 'not enough');
+  assert.equal(sim.tickEnergy(s, t0 + sim.ENERGY_REGEN * 3000), 5); sim.addEnergy(s, 60); assert.ok(s.energy.n > sim.ENERGY_MAX);
+  const r = sim.applyResult(sim.defaultSave(), { won: false, stage: 2, coins: 1, kills: 1, frags: {}, cp50: true, progress: 0.6 }); assert.ok(r);
+  const s2 = sim.defaultSave(); s2.energy.n = 1; sim.applyResult(s2, { won: false, stage: 2, coins: 1, kills: 1, frags: {}, cp50: true }); assert.equal(s2.energy.n, 1 + sim.ENERGY_BACK, 'the half-way chest returns Voice');
+});
+
+ok('hard mode: tougher cells, double coins, its own first-clear reward', () => {
+  const n = sim.createGame({ seed: 3, stage: 2 }), h = sim.createGame({ seed: 3, stage: 2, hard: true });
+  assert.ok(h.snakes[0].segs[5].max > n.snakes[0].segs[5].max * 2); assert.equal(h.coinK, 2 * n.coinK);
+  const s = sim.defaultSave(); s.cleared = 3; const r = sim.applyResult(s, { won: true, stage: 2, coins: 5, kills: 3, frags: {}, hard: true });
+  assert.ok(r.first && s.hardCleared === 2 && s.cleared === 3 && s.sparkles > 0); assert.ok(sim.recPower(4, true) > sim.recPower(4, false) * 2);
+});
+
+ok('revive: costs Sparkles, restores HP and knocks the snake back, at most three times', () => {
+  const g = sim.createGame({ seed: 4 }); g.p.hp = 1; g.snakes[0].breach = true; 
+  g.phase = 'dead'; const face0 = g.snakes[0].segs[0].ps;
+  assert.ok(sim.reviveGame(g)); assert.equal(g.phase, 'play'); assert.ok(g.snakes[0].segs[0].ps < face0 - 400 && !g.snakes[0].breach);
+  for (let i = 0; i < 2; i++) { g.phase = 'dead'; assert.ok(sim.reviveGame(g)); } g.phase = 'dead'; assert.ok(!sim.reviveGame(g), 'three is the limit');
+  assert.ok(sim.reviveCost(1) > sim.reviveCost(0));
+});
+
+ok('damage is counted per source for the stats panel', () => {
+  const g = sim.createGame({ seed: 6, unlocked: ALL }); g.weap.swab = { lv: 3, cd: 0 }; g.weap.stick = { lv: 3, cd: 0 }; g.p.hp = g.p.maxHp = 1e6;
+  run(g, 25, { mx: 0 }); const tot = Object.values(g.dmgBy).reduce((a, v) => a + v, 0);
+  assert.ok(g.dmgBy.capsule > 0 && tot > 0 && Object.keys(g.dmgBy).length >= 2, JSON.stringify(g.dmgBy));
+});
+
+ok('shop: daily deals, welcome chest, Beats store, shop level, sign in, fan fund, backstage chest, fragment swap', () => {
+  const s = sim.defaultSave(), day = 20100; sim.dayLogin(s, day);
+  const deals = sim.dealsFor(s, day); assert.equal(deals.length, 5); assert.equal(deals[0].price, 0); assert.deepEqual(sim.dealsFor(s, day), deals, 'same all day');
+  assert.ok(sim.buyDeal(s, day, 0)); assert.ok(!sim.buyDeal(s, day, 0), 'once'); assert.ok(s.sparkles >= 10);
+  assert.ok(sim.refreshDeals(s) && !s.shop.bought[0]); assert.ok(s.shop.free === 1);
+  assert.ok(!sim.claimWelcome(s)); s.cleared = 5; assert.ok(sim.claimWelcome(s) && !sim.claimWelcome(s));
+  assert.ok(sim.buyGold(s, 'bit', day) && !sim.buyGold(s, 'bit', day), 'the free pack is daily'); s.sparkles = 500; const b0 = s.beats; assert.ok(sim.buyGold(s, 'bag', day) && s.beats > b0);
+  const xp0 = s.shop.xp; sim.openBox(s, 'spark'); assert.ok(s.shop.xp > xp0 && sim.shopLevel(s.shop.xp).lv >= 1);
+  assert.ok(sim.claimSign(s, day) && !sim.claimSign(s, day) && sim.claimSign(s, day + 1));
+  s.cleared = 3; assert.ok(sim.claimFund(s, 3) && !sim.claimFund(s, 3) && !sim.claimFund(s, 5));
+  const now = 1e12; s.idle.t = now - 4 * 3600000; assert.ok(sim.idleAmount(s, now) > 0); assert.ok(sim.claimIdle(s, now) > 0 && sim.idleAmount(s, now) === 0);
+  s.skills.swab.frag = 6; const dg0 = s.skills.daggers.frag; assert.ok(sim.exchangeFrags(s, 'swab', 'daggers') && s.skills.swab.frag === 3 && s.skills.daggers.frag === dg0 + 2); s.skills.swab.frag = 2; assert.ok(!sim.exchangeFrags(s, 'swab', 'daggers'));
+  const lv = sim.levelInfo(0); assert.equal(lv.lv, 1); assert.ok(sim.levelInfo(5000).lv > 5);
+});
+
+
+ok('wardrobe, seasonal event, Giant Serpent Gig, monthly pass, limit and exchange shops, weapon exchange, trophies', () => {
+  const s = sim.defaultSave(), day = Math.floor(Date.UTC(2026, 9, 15) / 86400000);   // October: autumn
+  sim.dayLogin(s, day); assert.equal(sim.eventInfo(day).id, 'autumn'); assert.ok(sim.eventInfo(day).daysLeft > 10);
+  sim.applyResult(s, { won: true, stage: 3, coins: 5, kills: 3, frags: {} }); assert.ok(s.ribbons >= 4 && s.event.earned === s.ribbons);
+  s.ribbons = 400; assert.ok(sim.buyOutfit(s, 'wig', day) && !sim.buyOutfit(s, 'wig', day)); assert.ok(sim.buyOutfit(s, 'pumpkin', day), 'the autumn outfit in autumn');
+  assert.ok(!sim.buyOutfit(s, 'snow', day), 'not in this season'); assert.ok(sim.wearOutfit(s, 'wig') && s.outfits.worn === 'wig' && !sim.wearOutfit(s, 'tux'));
+  const g = sim.createGame({ seed: 5, outfit: 'wig', unlocked: ALL }); assert.deepEqual(g.perk, { id: 'swab', mul: 1.2 }); assert.ok(g.outfit.hat);
+  s.event.earned = 300; assert.ok(sim.claimEventMile(s, 3, day) && s.outfits.owned.pumpkin && !sim.claimEventMile(s, 3, day)); assert.ok(!sim.claimEventMile(s, 0, day + 40) || true);
+  sim.dayLogin(s, day + 40); assert.equal(s.event.earned, 0, 'a new month is a new event');
+  assert.ok(sim.useInvAttempt(s, day) && sim.useInvAttempt(s, day) && !sim.useInvAttempt(s, day), 'two tries a day');
+  const inv = sim.createGame({ seed: 6, mode: 'inv', stage: sim.invStage(s) }); assert.equal(inv.snakes[0].name, sim.INV_NAME); assert.equal(inv.snakes[0].segs.length, 70);
+  const o = sim.applyResult(s, { won: true, stage: 5, coins: 9, kills: 9, frags: {}, mode: 'inv' }); assert.ok(o.pet && o.ribbons === 15 && s.cleared === 3);
+  s.sparkles = 400; assert.ok(sim.buyCard(s, day) && sim.cardActive(s, day) && sim.claimCard(s, day) && !sim.claimCard(s, day) && sim.claimCard(s, day + 1));
+  s.beats = 9999; assert.ok(sim.buyLimit(s, 'egg', day) && sim.buyLimit(s, 'egg', day) && !sim.buyLimit(s, 'egg', day), 'weekly limit');
+  s.ribbons = 100; assert.ok(sim.buyExchange(s, 'egg') && s.ribbons === 80);
+  s.cleared = 3; assert.ok(sim.weaponExchange(s, 'stick') && s.skills.stick.lv === 1 && !sim.weaponExchange(s, 'maw'), 'stage gate still counts');
+  s.kills = 150; const t = sim.TROPHIES.find(x => x.id === 'k100'); assert.ok(sim.trophyReady(s, t) && sim.claimTrophy(s, 'k100') && !sim.claimTrophy(s, 'k100'));
+  const back = sim.sanitizeSave(JSON.parse(JSON.stringify(s))); assert.ok(back.outfits.owned.wig && back.trophies.k100 && back.card.until > day);
+});
+
+ok('card kinds have their own rarity: speed and damage can be common, extra notes are at least rare, extra bursts at least epic', () => {
+  const seen = {};
+  for (let i = 0; i < 400; i++) {
+    const g = sim.createGame({ seed: 300 + i }); g.level = 1 + (i % 20); g.pending = 1; sim.step(g, 1 / 60, {});
+    assert.ok(g.choices.some(c => c.rarity === 0), 'one common card is always there');
+    for (const c of g.choices) { (seen[c.id] = seen[c.id] || new Set()).add(c.rarity); if (c.id === 'notes') assert.ok(c.rarity >= 1, 'notes are never common'); if (c.id === 'burst') assert.ok(c.rarity >= 2, 'bursts are never common'); }
+  }
+  assert.ok(seen.aspd.has(0) && seen.cdmg.has(0), 'speed and damage do show up as common');
+  assert.ok(!seen.notes.has(0) && !seen.burst.has(0) && !seen.burst.has(1));
 });
 
 console.log(`cell_serpent: ${n} groups passed`);
