@@ -36,7 +36,6 @@ const STATIC_PATHS = [
   'Carnegiendon',
   'loop_jam',
   'gamedevloop',
-  'verb_collector',
   'thieu_excuses_app',
   'mazekeep',
   'ralpherizer',
@@ -108,10 +107,6 @@ const BUNDLES = [
   {
     entryPoints: [path.join('beatbox_heroes', 'park3d', 'main.js')],
     outfile: path.join(DIST, 'beatbox_heroes', 'park3d.bundle.js'),
-  },
-  {
-    entryPoints: [path.join('verb_collector', 'main.tsx')],
-    outfile: path.join(DIST, 'verb_collector', 'verb-collector.bundle.js'),
   },
 ];
 
@@ -383,7 +378,7 @@ const minifyClawspire = () => {
     const sourceCopyPath = path.join(REPO, sourceGameDir, bundleBaseName);
     // Mirror bundle into the source folder so the site works without a
     // Pages build step (e.g. file:// previews).
-    if (sourceGameDir === 'beatbox_heroes') copyIfChanged(t.outfile, sourceCopyPath); else fs.copyFileSync(t.outfile, sourceCopyPath);   // an unchanged committed mirror is not rewritten
+    copyIfChanged(t.outfile, sourceCopyPath);   // an unchanged committed mirror is not rewritten
     console.log(`mirrored        → ${path.relative(REPO, sourceCopyPath)}`);
     // Rewrite both index.html copies (dist + source) to pin the hash.
     const stamp = (htmlPath) => {
