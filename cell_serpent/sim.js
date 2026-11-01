@@ -1003,7 +1003,7 @@ function updateWeapons(g, dt, canFire) {
       const n = 1 + (L >= 4 ? 1 : 0);
       for (let k = 0; k < n; k++) {
         const t = fronts[0], dur = 2.6 + 0.5 * L;
-        g.zones.push({ x: t.x + (k ? 90 : 0), y: t.y, r: 62 + 16 * L, life: dur, max: dur, tick: 0, dmg: 0.8 * (1 + 0.3 * L) * dm('swab') });
+        g.zones.push({ x: t.x + (k ? 90 : 0), y: t.y, r: 62 + 16 * L, life: dur, max: dur, tick: 0, dmg: 0.2 * (1 + 0.25 * L) * dm('swab') });
       }
       g.events.push({ t: 'swab' }); w.cd = (4.2 - 0.3 * L) * cm;
     } else if (id === 'dragon') {
@@ -1074,7 +1074,7 @@ function updateWeapons(g, dt, canFire) {
   // swab zones tick
   for (let i = g.zones.length - 1; i >= 0; i--) {
     const z = g.zones[i]; z.life -= dt; z.tick -= dt;
-    if (z.tick <= 0) { z.tick = 0.25; eachTarget(g, s => { if (Math.hypot(s.x - z.x, s.y - z.y) < z.r + s.r) damageSegAs('swab', g, s, z.dmg, false, s.x, s.y); }); }
+    if (z.tick <= 0) { z.tick = 0.3; eachTarget(g, s => { if (Math.hypot(s.x - z.x, s.y - z.y) < z.r + s.r) damageSegAs('swab', g, s, z.dmg, false, s.x, s.y); }); }
     if (z.life <= 0) g.zones.splice(i, 1);
   }
   // maws execute
