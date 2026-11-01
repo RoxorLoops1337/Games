@@ -231,6 +231,7 @@
       rootEl.style.setProperty('--u', s + 'px');
       var hudFont = Math.max(9, Math.min(13, 4.6 * s));
       rootEl.style.setProperty('--hud', hudFont + 'px');
+      unitFont = unitHudFont(); rootEl.style.setProperty('--uh', unitFont + 'px');
       var cwCard;
       if (mode === 'phone') {
         var handAvail = L.h - el.top.offsetHeight - chh - Math.max(gardenH, 32) - 12 - 46 - 10 - 40;
@@ -243,7 +244,7 @@
         cwCard = Math.max(L.short ? 64 : 92, Math.min(150, Math.round(hh / 1.4 * 0.74)));
       }
       el.hand.style.setProperty('--hand-cw', cwCard + 'px');
-      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth].join(',');
+      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth, unitFont].join(',');
       if (sig === fitSig && !force) return;
       fitSig = sig;
       if (!bg || bgKey !== mode + G.W) buildBg();
@@ -430,10 +431,42 @@
       (vm.intents || []).forEach(function (x) { if (x.pestUid === p.uid) it = x; });
       return it || (p.intent && typeof p.intent === 'object' ? p.intent : null);
     }
-    function hpColorClass(hp, max) { return max && hp / max < 0.4 ? ' low' : ''; }
+    // ---- unit HUD (agent: legibility pass). Readable-width contract, in em of the unit font (--uh, px from unitHudFont):
+    //   one stat pill is 1.5em wide (+0.62em per digit past two), the cat pair (ATK left, HP right) is at most ~3.4em, and every unit
+    //   HUD is shrunk per unit (font-size on .u) so its plate never exceeds its own slot (catPitch*size*s or pestUnit*size*s).
+    var unitFont = 12;
+    function unitHudFont() {
+      var ts = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--text-scale')) || 1;
+      var pref = Math.max(12, Math.min(22, 8 * s)) * ts;
+      var cap = G.catPitch * s / 3.7; // the widest cat plate (3.1em for two 2-digit stats, 3.4em with a 3-digit one) plus a small gap must fit one cat slot
+      var capV = (G.floorH - 27) * s / 5.7; // lives and nap above the head plus plate and chip row below the feet must fit one floor
+      var capB = (G.H - G.feet(0)) * s / 2.9; // the chip row of the bottom floor must stay on the canvas
+      return Math.round(Math.max(9, Math.min(pref, cap, capV, capB)) * 10) / 10;
+    }
+    function pillEm(val) { var n = String(val).length; return Math.max(1.5, 0.5 + 0.62 * n); }
+    function hpState(hp, max, buffMax) {
+      var r = max ? hp / max : 1;
+      if (max && r <= 0.2) return 'crit';
+      if (max && r < 0.4) return 'low';
+      return buffMax > 0 ? 'buff' : buffMax < 0 ? 'debuff' : '';
+    }
+    function makePill(kind, icon) {
+      var num = h('b.num'), ar = h('i.pl-ar');
+      var el = h('span.pl.' + kind, {}, h('span.pl-ic', {}, ui.icon(icon, { size: '1em' }), ar), num);
+      el._num = num; el._ar = ar; el._v = null; el._st = '';
+      return el;
+    }
+    // update a pill in place so a changed value can play its pop animation once (rebuilding the DOM would cut it short)
+    function setPill(el, val, st) {
+      var changed = el._v !== null && el._v !== val, dir = changed ? (val > el._v ? 'up' : 'down') : '';
+      if (el._v !== val) el._num.textContent = String(val);
+      el._v = val;
+      if (el._st !== st) { el._st = st; if (st) el.setAttribute('data-st', st); else el.removeAttribute('data-st'); el._ar.textContent = st === 'buff' ? '▲' : st === 'debuff' ? '▼' : ''; }
+      if (changed && !ui.reduced()) { el.classList.remove('pop-up', 'pop-down'); void el.offsetWidth; el.classList.add('pop-' + dir); }
+    }
     function buildHud(v) {
       var d = v.d, u = h('div.u.' + v.side + (d.champion ? '.champ' : ''), { 'data-uid': d.uid });
-      v.hud = u; v._hx = null; v._hy = null;
+      v.hud = u; v._hx = null; v._hy = null; v._plateSig = null;
       v.hit = h('button.u-hit', { 'data-uid': d.uid, 'data-side': v.side, onclick: function (e) { e.stopPropagation(); onUnitTap(v); } });
       u.appendChild(v.hit);
       v.top = h('div.u-top'); v.plate = h('div.u-plate'); v.chips = h('div.u-chips');
@@ -452,60 +485,73 @@
       });
     }
     function updateHud(v) {
-      var d = v.d, si = spriteInfo(v), hs = (si.h - 3) * s, ws = Math.min(si.w * 0.7, 40) * s;
+      var d = v.d, si = spriteInfo(v), hs = (si.h - 3) * s, ws = Math.min(si.w * 0.7, 40) * s, isCat = v.side === 'cat';
       var hit = v.hit;
       hit.style.width = Math.round(ws * 1.25) + 'px'; hit.style.height = Math.round(hs) + 'px'; hit.style.left = Math.round(-ws * 0.625) + 'px'; hit.style.top = Math.round(-hs) + 'px';
       v.top.style.bottom = Math.round(hs - 1 * s) + 'px';
-      v.plate.style.top = Math.round(-2.5 * s) + 'px';
-      v.chips.style.top = Math.round(6.2 * s) + 'px';
       v.hud.classList.toggle('napping', !!d.napping); v.hud.classList.toggle('hidden-unit', !!d.hidden);
-      // plate
-      ui.clear(v.plate);
-      if (v.side === 'cat') {
-        var hpLow = hpColorClass(d.health, d.maxHealth);
-        v.plate.appendChild(h('span.pl.atk', {}, ui.icon('sword', { size: '.85em' }), h('b.num', {}, String(d.power))));
-        v.plate.appendChild(h('span.pl.hp' + hpLow, {}, ui.icon('heart', { size: '.85em' }), h('b.num', {}, String(d.health))));
+      // plate: one stat pill per number, ATK left and HP right on a cat, fluff left and HP right on a pest
+      var fl = isCat ? 0 : (d.fluff || 0);
+      var hpV = isCat ? d.health : d.hp, hpMax = isCat ? d.maxHealth : d.maxHp;
+      var sig = v.side + (fl ? 'f' : '');
+      if (v._plateSig !== sig) {
+        ui.clear(v.plate); v._plateSig = sig;
+        v.pA = isCat ? makePill('atk', 'sword') : null; v.pF = fl ? makePill('fl', 'cloud') : null; v.pH = makePill('hp', 'heart');
+        [v.pA, v.pF, v.pH].forEach(function (pe) { if (pe) v.plate.appendChild(pe); });
+      }
+      var slot = (isCat ? G.catPitch * (d.size || 1) : G.pestUnit * pestSize(d)) * s;
+      var need = pillEm(hpV) + (isCat ? pillEm(d.power) + 0.12 : 0) + (fl ? pillEm(fl) + 0.12 : 0);
+      var uf = Math.min(1, slot * 0.99 / (need * unitFont)), fpx = unitFont * uf;
+      v.hud.style.fontSize = (Math.round(fpx * 10) / 10) + 'px';
+      v._fpx = fpx; v._slot = slot;
+      if (isCat) {
+        setPill(v.pA, d.power, d.basePower != null ? (d.power > d.basePower ? 'buff' : d.power < d.basePower ? 'debuff' : '') : '');
+        setPill(v.pH, hpV, hpState(hpV, hpMax, d.baseMax != null ? Math.sign(d.maxHealth - d.baseMax) : 0));
+      } else {
+        if (v.pF) setPill(v.pF, fl, '');
+        setPill(v.pH, hpV, hpState(hpV, hpMax, 0));
+      }
+      ui.clear(v.top);
+      v.top.style.maxWidth = Math.round(Math.max(slot, 4 * fpx)) + 'px';
+      if (isCat) {
         hit.setAttribute('aria-label', d.name + ', attack ' + d.power + ', health ' + d.health + ' of ' + d.maxHealth + ', ' + d.lives + ' lives' + (d.napping ? ', napping' : ''));
-        // top: lives and nap
-        ui.clear(v.top);
         var lives = h('span.u-lives', { 'data-tip': d.name + ': ' + d.lives + (d.maxLives ? ' of ' + d.maxLives : '') + ' lives left' });
         if ((d.maxLives || d.lives) <= 5) { for (var i = 0; i < (d.maxLives || d.lives); i++) lives.appendChild(h('i' + (i < d.lives ? '' : '.off') + (v._pipDrop === i ? '.spent' : ''))); }
         else lives.appendChild(h('span', {}, ui.icon('paw', { size: '1em' }), 'x' + d.lives));
         if (v._pipDrop != null) { lives.classList.add('pulse'); v._pipDrop = null; }
         v.top.appendChild(lives);
+        var acts = h('div.u-acts');
         var nap = h('button.u-nap' + (d.napping ? '.on' : ''), { 'aria-pressed': d.napping ? 'true' : 'false', 'aria-label': (d.napping ? 'Wake ' : 'Nap ') + d.name, 'data-tip': d.napping ? 'Wake up (Stretch attack)' : 'Nap: skip attacking, heal 2, gain Rested',
           onclick: function (e) { e.stopPropagation(); doNap(d.uid); } }, ui.icon('zzz', { size: '85%' }));
-        v.top.appendChild(nap);
+        acts.appendChild(nap);
         var par = (vm.attached || []).filter(function (a) { return a.host === d.uid && !a.dead; })[0];
         if (par) {
           var pd = tryf(function () { return SB.content.pest(par.id) || {}; }, {}), cost = pd.parasite && pd.parasite.removeCost != null ? pd.parasite.removeCost : 1;
-          v.top.appendChild(h('button.u-scratch', { 'aria-label': 'Scratch off ' + (par.name || 'parasite') + ' for ' + cost + ' Zoomies', 'data-tip': (par.name || 'Parasite') + ' is clinging on. Tap to scratch it off for ' + cost + ' Zoomies.',
+          acts.appendChild(h('button.u-scratch', { 'aria-label': 'Scratch off ' + (par.name || 'parasite') + ' for ' + cost + ' Zoomies', 'data-tip': (par.name || 'Parasite') + ' is clinging on. Tap to scratch it off for ' + cost + ' Zoomies.',
             onclick: function (e) { e.stopPropagation(); doScratch(d.uid); } }, ui.icon('claw', { size: '85%' }), h('b.num', {}, String(cost))));
         }
+        v.top.appendChild(acts);
       } else {
-        var fl = d.fluff || 0;
-        v.plate.appendChild(h('span.pl.hp' + hpColorClass(d.hp, d.maxHp), {}, ui.icon('heart', { size: '.85em' }), h('b.num', {}, String(d.hp))));
-        if (fl) v.plate.appendChild(h('span.pl.fl', { 'data-gl': 'fluff' }, ui.icon('cloud', { size: '.85em' }), h('b.num', {}, String(fl))));
         if (d.meter) Object.keys(d.meter).forEach(function (mk) {
           var mv = d.meter[mk], mx = d.meterMax && d.meterMax[mk];
           if (typeof mv !== 'number' || (!mv && !mx)) return;
-          v.plate.appendChild(h('span.pl.mt', { 'data-tip': (d.name || 'Boss') + ' ' + mk + ' ' + mv + (mx ? '/' + mx : '') }, h('b.num', {}, mk.slice(0, 4) + ' ' + mv + (mx ? '/' + mx : ''))));
+          v.top.appendChild(h('span.pl-mt', { 'data-tip': (d.name || 'Boss') + ' ' + mk + ' ' + mv + (mx ? '/' + mx : '') }, mk.slice(0, 4) + ' ' + mv + (mx ? '/' + mx : '')));
         });
         var it = intentOf(d);
         hit.setAttribute('aria-label', d.name + ', health ' + d.hp + ' of ' + d.maxHp + (it ? ', intent: ' + (it.text || it.kind) : ''));
-        ui.clear(v.top);
         if (it) {
           var ib = intentBubble(it, d), isg = (it.icon || '') + '|' + (it.kind || '') + '|' + (it.dmg || '') + '|' + (it.hits || '');
           if (v._isig !== undefined && v._isig !== isg) ib.classList.add('new');
           v._isig = isg; v.top.appendChild(ib);
         }
       }
-      // chips
+      // chips: as many as fit one slot (a chip is about 1.35em wide), the rest fold into a +N chip with a tooltip
       ui.clear(v.chips);
       var list = ui.statusList(d.statuses);
-      if (v.side === 'cat' && d.hidden) list.unshift({ id: 'hidden', n: 1, name: 'Hidden', icon: 'peek-box', tone: 'neutral', gl: ui.gl('hidden') });
-      list.slice(0, 4).forEach(function (st) { v.chips.appendChild(ui.statusChip(st)); });
-      if (list.length > 4) v.chips.appendChild(h('span.st-chip.more', { 'data-tip': list.slice(4).map(function (x) { return x.name + ' ' + x.n; }).join(', ') }, '+' + (list.length - 4)));
+      if (isCat && d.hidden) list.unshift({ id: 'hidden', n: 1, name: 'Hidden', icon: 'peek-box', tone: 'neutral', gl: ui.gl('hidden') });
+      var allow = Math.max(2, Math.floor(slot / (1.35 * 0.74 * fpx))), shown = list.length > allow ? allow - 1 : list.length;
+      list.slice(0, shown).forEach(function (st) { v.chips.appendChild(ui.statusChip(st)); });
+      if (list.length > shown) v.chips.appendChild(h('span.st-chip.more', { 'data-tip': list.slice(shown).map(function (x) { return x.name + ' ' + x.n; }).join(', ') }, '+' + (list.length - shown)));
     }
     function intentBubble(it, p) {
       var kind = it.kind || '';
