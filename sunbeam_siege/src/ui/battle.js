@@ -29,20 +29,49 @@
   }
 
   // ----------------------------------------------------------------- geometry
-  function geometry(mode) {
+  // Landscape and desktop: the logical board is as wide as the screen allows (up to about 2.9 : 1) and the pitches
+  // (cat 84 css px, pest 60 css px at least) are derived from the final scale, so unit pills never touch.
+  // o = { availW, availH } in css px; without it a mid size laptop is assumed.
+  function wideLayout(o) {
+    o = o || {};
+    var availW = o.availW || 1200, availH = o.availH || 480;
+    var H = 208, roofH = 24, floorH = 60, x0 = 30;
+    var sh = Math.max(0.8, availH / H);
+    if (sh >= 2.4) sh = Math.floor(sh * 4) / 4;
+    var maxW = Math.round(H * 2.9);
+    var wantCat = Math.max(40, Math.ceil(84 / sh)), wantPest = Math.max(32, Math.ceil(60 / sh));
+    var A0 = 74, R0 = 30, MID = 8, NC = 4, NP = 5;
+    var needDesired = A0 + NC * wantCat + MID + NP * wantPest + R0 + 2 * x0;
+    var W = Math.max(384, Math.floor(Math.min(availW / sh, Math.max(maxW, needDesired))));
+    var iw = W - 2 * x0, cp = wantCat, pu = wantPest, extra;
+    if (A0 + NC * cp + MID + NP * pu + R0 > iw) { // squeeze, never below the sprite plus pill width
+      var k = (iw - A0 - MID - R0) / (NC * cp + NP * pu);
+      cp = Math.max(36, Math.floor(cp * k)); pu = Math.max(26, Math.floor(pu * k));
+    }
+    extra = iw - (A0 + NC * cp + MID + NP * pu + R0);
+    if (extra > 0) { // spend spare width on roomier pitches first, then on the margins
+      var gc = Math.min(Math.floor(extra * 0.4 / NC), 12), gp = Math.min(Math.floor(extra * 0.35 / NP), 8);
+      cp += gc; pu += gp; extra -= gc * NC + gp * NP;
+    }
+    var A = A0 + Math.max(0, Math.floor(extra * 0.4)), catRight = x0 + A + NC * cp, pestLeft = catRight + MID;
+    // windows sit in the wall gaps: one over the back of the cat line, one over the far end of the pest line
+    var wins = [x0 + A + Math.round(NC * cp * 0.42), pestLeft + Math.round(NP * pu * 0.4)];
+    return { W: W, H: H, roofH: roofH, floorH: floorH, feetOff: 45, x0: x0, x1: W - x0, catPitch: cp, catRight: catRight, pestLeft: pestLeft, pestUnit: pu, labelInline: true, wins: wins, key: [W, cp, pu, A].join('/') };
+  }
+  function geometry(mode, o) {
     var G;
     if (mode === 'phone') {
       G = { mode: mode, W: 288, H: 296, roofH: 26, floorH: 88, feetOff: 66, x0: 4, x1: 284, catPitch: 34, catRight: 142, pestLeft: 148, pestUnit: 27, labelInline: false };
     } else {
-      G = { mode: mode, W: 384, H: 208, roofH: 24, floorH: 60, feetOff: 45, x0: 22, x1: 362, catPitch: 36, catRight: 232, pestLeft: 238, pestUnit: 24, labelInline: true };
+      G = wideLayout(o); G.mode = mode;
     }
     G.top = function (f) { return G.roofH + (2 - f) * G.floorH; };
     G.feet = function (f) { return G.top(f) + G.feetOff; };
     G.catX = function (start, size) { return G.catRight - (start + size / 2) * G.catPitch; };
     G.pestX = function (start, size) { return G.pestLeft + (start + size / 2) * G.pestUnit; };
-    G.room = function (f, i) { return G.labelInline ? { x: 28 + i * 26, y: G.top(f) + 22, w: 24, h: 24 } : { x: 62 + i * 24, y: G.top(f) + 2, w: 22, h: 22 }; };
-    G.label = function (f) { return G.labelInline ? { x: 28, y: G.top(f) + 5, w: 50, h: 12 } : { x: 6, y: G.top(f) + 3, w: 52, h: 16 }; };
-    G.inc = function (f) { return G.labelInline ? { x: G.x1 - 36, y: G.top(f) + 4, w: 34, h: 14 } : { x: G.W - 58, y: G.top(f) + 3, w: 52, h: 16 }; };
+    G.room = function (f, i) { return G.labelInline ? { x: G.x0 + 6 + i * 31, y: G.top(f) + 20, w: 29, h: 29 } : { x: 62 + i * 24, y: G.top(f) + 2, w: 22, h: 22 }; };
+    G.label = function (f) { return G.labelInline ? { x: G.x0 + 6, y: G.top(f) + 4, w: 60, h: 14 } : { x: 6, y: G.top(f) + 3, w: 52, h: 16 }; };
+    G.inc = function (f) { return G.labelInline ? { x: G.x1 - 40, y: G.top(f) + 4, w: 34, h: 14 } : { x: G.W - 58, y: G.top(f) + 3, w: 52, h: 16 }; };
     return G;
   }
 
@@ -152,10 +181,28 @@
     }
 
     // ---------------- scene bg (cached)
-    var bg = null, bgKey = '';
+    var bg = null, bgKey = '', bgCtx = null;
     function mkCanvas(w, hh) { var c = document.createElement('canvas'); c.width = w; c.height = hh; return c; }
+    // landscape only: beams, frames, lamps and cellar vents spread along the wider walls so they do not look stretched
+    function x0px() { return Math.max(0, G.x0 - 6); }
+    function wideDecor(f, t, ix0, iw, fh) {
+      var x = bgCtx;
+      function R(col, a, b, w2, h2) { x.fillStyle = col; x.fillRect(a, b, w2, h2); }
+      var step = 140, off = (f * 37) % 40;
+      for (var bx = ix0 + 70 + off; bx < ix0 + iw - 40; bx += step) {
+        if (G.wins.some(function (wv) { return Math.abs(wv + 9 - bx) < 22; })) continue;
+        if (f === 2) { R('#4a3024', bx, t + 2, 4, fh - 6); R('#8a6246', bx, t + 2, 1, fh - 6); R('#4a3024', bx - 3, t + 2, 10, 3); }
+        else if (f === 1) {
+          R('#3b2530', bx - 1, t + 11, 20, 22); R('#d9a96a', bx, t + 12, 18, 20); R('#2f1c28', bx + 2, t + 14, 14, 16); R('#7b5266', bx + 4, t + 22, 10, 6); R('#ffd95a', bx + 12, t + 17, 2, 2);
+        } else {
+          R('#24223a', bx, t + 10, 16, 10); R('#14122a', bx + 1, t + 11, 14, 8); for (var vy = 0; vy < 3; vy++) R('#4d4a62', bx + 1, t + 12 + vy * 3, 14, 1);
+          R('#2c3a54', bx + 20, t + 22, 1, 12); R('#2c3a54', bx + 19, t + 34, 3, 2);
+        }
+      }
+      var lx = ix0 + iw - 46; R('#2a1d2a', lx, t + 6, 6, 9); R(f === 0 ? '#9ad0ff' : '#ffc766', lx + 1, t + 7, 4, 6); R('#fff1c9', lx + 2, t + 8, 2, 2);
+    }
     function buildBg() {
-      var c = mkCanvas(G.W, G.H), x = c.getContext('2d'), W = G.W, H = G.H;
+      var c = mkCanvas(G.W, G.H), x = c.getContext('2d'), W = G.W, H = G.H; bgCtx = x;
       x.imageSmoothingEnabled = false;
       function R(col, a, b, w2, h2) { x.fillStyle = col; x.fillRect(a, b, w2, h2); }
       // sky with dither bands
@@ -191,7 +238,9 @@
           R('#4a3024', ix0, t, iw, 2);
         }
         // window glow (centered between cats and pests)
-        if (f > 0) { var wx = (mode === 'phone' ? G.W / 2 - 9 : 150), wy = t + 8; R('#2a1d2a', wx - 1, wy - 1, 20, 20); R('#ffc766', wx, wy, 18, 18); R('#ffe2a0', wx, wy, 18, 4); R('#8a5a3a', wx + 8, wy, 2, 18); R('#8a5a3a', wx, wy + 8, 18, 2); }
+        var wxs = mode === 'phone' ? [G.W / 2 - 9] : G.wins;
+        if (f > 0) wxs.forEach(function (wx0) { var wx = Math.round(wx0), wy = t + 8; R('#2a1d2a', wx - 1, wy - 1, 20, 20); R('#ffc766', wx, wy, 18, 18); R('#ffe2a0', wx, wy, 18, 4); R('#8a5a3a', wx + 8, wy, 2, 18); R('#8a5a3a', wx, wy + 8, 18, 2); });
+        if (mode !== 'phone') wideDecor(f, t, ix0, iw, fh);
         // slab
         R('#8a5a5a', ix0, t + fh - 4, iw, 1); R('#3b2530', ix0, t + fh - 3, iw, 3);
         // stairs on the right (decor)
@@ -207,9 +256,14 @@
       for (var ry = 0; ry < G.roofH - 6; ry += 4) { var inset = Math.floor((G.roofH - ry) * 0.9); x.fillRect(hx0 - 4 + inset - 12, ry + 6, hx1 - hx0 + 8 - (inset - 12) * 2, 4); }
       x.fillStyle = '#7a3a4a';
       for (var ry2 = 0; ry2 < G.roofH - 6; ry2 += 4) { var inset2 = Math.floor((G.roofH - ry2) * 0.9); var rw = hx1 - hx0 + 8 - (inset2 - 12) * 2; for (var sx2 = 0; sx2 < rw; sx2 += 8) x.fillRect(hx0 - 4 + inset2 - 12 + sx2, ry2 + 6, 7, 1); }
+      if (mode !== 'phone') { // lamp posts and fence in the side bands outside the house
+        [[4, 1], [W - 8, -1]].forEach(function (lp) { var lx2 = lp[0]; R('#14102a', lx2, H - 70, 3, 64); R('#14102a', lx2 - (lp[1] > 0 ? 0 : 5), H - 72, 8, 3); R('#ffe2a0', lx2 + (lp[1] > 0 ? 3 : -4), H - 70, 3, 3); });
+        for (var fx = 0; fx < x0px(); fx += 4) { R('#1b1535', fx, H - 22, 2, 16); R('#1b1535', W - 1 - fx, H - 22, 2, 16); }
+        R('#1b1535', 0, H - 17, x0px(), 2); R('#1b1535', W - x0px(), H - 17, x0px(), 2);
+      }
       // garden strip
       R('#1b2a3a', 0, H - 5, W, 5); for (var gx = 0; gx < W; gx += 5) R('#2f5a4a', gx, H - 6 - ((gx * 3) % 3), 2, 3);
-      bg = c; bgKey = mode + G.W;
+      bg = c; bgKey = mode + G.W + (G.key || '');
     }
 
     // ---------------- sizing
@@ -220,6 +274,10 @@
       rootEl.setAttribute('data-mode', mode);
       var availW = el.sceneCol.clientWidth, gardenH = el.garden.offsetHeight || 0;
       var availH = el.sceneCol.clientHeight - gardenH - 4;
+      if (mode !== 'phone' && availW >= 50 && availH >= 50) { // landscape: the board shape follows the screen
+        var G2 = geometry(mode, { availW: availW, availH: availH });
+        if (G2.key !== G.key) { G = G2; bg = null; }
+      }
       if (mode === 'phone') availH = L.h - el.top.offsetHeight - Math.max(gardenH, 32) - 12 - 232 - parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-b') || 0);
       if (availW < 50 || availH < 50) return;
       var sc = Math.min(availW / G.W, availH / G.H);
@@ -241,13 +299,13 @@
         if (realH > 90) cwCard = Math.max(78, Math.min(136, Math.round((realH - 30) / 1.42)));
       } else {
         var hh = el.handWrap.clientHeight || 160;
-        cwCard = Math.max(L.short ? 64 : 92, Math.min(150, Math.round(hh / 1.4 * 0.74)));
+        cwCard = Math.max(L.short ? 64 : 92, Math.min(L.short ? 150 : 172, Math.round(hh / 1.4 * 0.74)));
       }
       el.hand.style.setProperty('--hand-cw', cwCard + 'px');
-      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth, unitFont].join(',');
+      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth, unitFont, G.key].join(',');
       if (sig === fitSig && !force) return;
       fitSig = sig;
-      if (!bg || bgKey !== mode + G.W) buildBg();
+      if (!bg || bgKey !== mode + G.W + (G.key || '')) buildBg();
       buildBoardFrame();
       layoutUnits(true);
       renderHud();
@@ -2256,7 +2314,7 @@
       ctx.drawImage(bg, 0, 0);
       var sb = vm.sunbeam || { warmth: 40, max: 40 }, pct = sb.warmth / (sb.max || 1);
       // stars
-      for (var i = 0; i < 14; i++) {
+      for (var i = 0, ns = Math.round(14 * G.W / 384); i < ns; i++) {
         var sx = (i * 53 + 11) % G.W, sy = (i * 29 + 5) % (G.roofH + 6), on = ui.reduced() ? 1 : (Math.floor(tn / 1000 + i * 0.7) % 2);
         if (sx > G.x0 - 6 && sx < G.x1 + 6 && sy > 6) continue;
         ctx.fillStyle = on ? '#ffe9a8' : '#8a7aa8'; ctx.fillRect(sx, sy, on ? 2 : 1, on ? 2 : 1);
