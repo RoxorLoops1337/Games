@@ -164,4 +164,5 @@ await import('./stacking_cats_i18n.test.mjs');
 await import('./stacking_cats_chestgems.test.mjs');
 await import('./stacking_cats_cashout.test.mjs');
 await import('./stacking_cats_enemies.test.mjs');   // the Rat Gang's newcomers
+await import('./stacking_cats_walk.test.mjs');   // Whiskerton Walk sim, layout and village life
 console.log(n + ' tests passed');

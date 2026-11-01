@@ -19,7 +19,7 @@ const rng = (n) => { n = (n + 0x6D2B79F5) | 0; let t = Math.imul(n ^ (n >>> 15),
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (u) => u * u * (3 - 2 * u);
 
-const ZONE_PENALTY = { npc: 30, bench: 40, statue: 5 };
+const ZONE_PENALTY = { npc: 3, bench: 4 };
 
 // the zone the player stands in (nearest centre, NPCs and benches lose ties), or null
 export function nearestZone(layout, x, y, onGround = true) {
@@ -53,7 +53,8 @@ export function createWalk(layout, opts = {}) {
   st.cam.x = camTarget(st);
   st.cam.y = camYTarget(st);
   st.pcam = { ...st.cam };
-  st.near = nearestZone(layout, st.x, st.y, true);
+  const z0 = nearestZone(layout, st.x, st.y, true);
+  st.near = z0 ? { type: z0.type, id: z0.id } : null;
   return st;
 }
 
@@ -84,7 +85,8 @@ function stepCamera(st) {
   if (st.reduced) { st.cam.x = camTarget(st); st.cam.y = camYTarget(st); return; }
   const want = clamp(st.x + WALK.lookAhead * st.face - view / 2, 0, w - view);
   const d = want - st.cam.x;
-  if (Math.abs(d) > WALK.deadzone) st.cam.x += (d - Math.sign(d) * WALK.deadzone) * WALK.camLerp;
+  const dz = (want <= 0 || want >= w - view) ? 0 : WALK.deadzone;   // no dead zone against the world edge
+  if (Math.abs(d) > dz) st.cam.x += (d - Math.sign(d) * dz) * WALK.camLerp;
   st.cam.x = clamp(st.cam.x, 0, w - view);
   st.cam.y += (camYTarget(st) - st.cam.y) * WALK.camYLerp;
 }
@@ -196,6 +198,7 @@ function sub(st, input) {
   st.idleT = still ? st.idleT + STEP : 0;
   let pose;
   if (!st.onGround) pose = st.vy < 0 ? 'jump' : 'fall';
+  else if (st.sitting && st.idleT > 0) pose = 'sit';
   else if (st.landT > 0) pose = 'land';
   else if (Math.abs(st.vx) > 20) pose = 'run';
   else if (st.idleT > WALK.sleepAfter) pose = 'sleep';
@@ -249,5 +252,6 @@ export function teleport(st, x, y) {
   st.y = st.py = y != null ? y : st.layout.groundY;
   st.vx = st.vy = 0; st.onGround = true; st.target = null; st.lift = null; st.sitting = false;
   st.cam.x = st.pcam.x = camTarget(st); st.cam.y = st.pcam.y = camYTarget(st);
-  st.near = nearestZone(st.layout, st.x, st.y, true);
+  const z0 = nearestZone(st.layout, st.x, st.y, true);
+  st.near = z0 ? { type: z0.type, id: z0.id } : null;
 }

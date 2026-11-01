@@ -9,6 +9,7 @@ import {
 import { COSMETICS, COSMETIC_BY_ID, SLOTS, SLOT_NAMES, lookOf, lookSig, drawLook, drawCosmetic, canWear, buyCosmetic, toggleWear, isOwned } from './cosmetics.js';
 import { createKingdomScene } from './kingdom_scene.js';
 import { createInput } from './kingdom_input.js';
+import * as KLife from './kingdom_life.js';
 import { setWalkLook, freeWalkCats } from './kingdom_cat.js';
 import { encodeSave, decodeSave } from './savecode.js';
 import { dailyScore, fetchBoard, submitScore, submitRun, rankOf, dailyStreak, passedBest, milestoneLine, bestTag, nameOk, cleanName, suggestName } from './daily.js';
@@ -855,25 +856,26 @@ function buyWonderNow(id) {
 }
 
 let walk = null;   // the live walk: { state, layout, world, input, ... } or null
-let KLife = null;  // kingdom_life.js when it has loaded (pure helpers for lines and headlines), optional
-import('./kingdom_life.js').then((m) => { KLife = m; }).catch(() => {});
 const kwReduced = () => !save.opt.motion || REDUCED_MOTION || document.body.classList.contains('nomotion');
 const openKingdom = (back, opts) => (save.opt.walk === false ? showKingdom(back) : showKingdomWalk(back, opts));
-const zcx = (z) => z.x + (z.w || 0) / 2;
-const NPC_LINES = {
-  mouse: ['I used to raid the stall. Now I work here. Same hours, better pay.', 'Please do not ask where the sweater begins. We lost it in March.', 'I watch the nests so you do not have to. Mostly I watch my sandwich.', 'The cheese is safe. The cheese is always safe. Someone check the cheese.'],
-  cat: ['Rule one of the gate, the door opens outward. Rule two, see rule one.', 'The moon is up, the rain is down, and I am exactly between them.'],
-};
+const zcx = (z) => z.x;   // zones are centred on x
 function walkAvatar() {
   const ok = (id) => id && CAT_BY_ID[id] && save.unlocked.includes(id);
   const w = save.walk && save.walk.avatar;
   return ok(w) ? w : (titleStackIds(save.unlocked, save.catStats)[0] || 'tabby');
 }
-function noteRecord(run) {   // a new best wave: carve the tower into the Stackstone (a list, newest last)
+function noteRecord(run) {   // a new best wave: the tower is carved into the Stackstone (records are cleaned and kept by kingdom_life.js)
   const cats = (g && g.cats ? g.cats.map((c) => c.id) : Object.keys(run.byCat || {})).slice(0, 8);
-  const rec = { wave: run.wave | 0, date: dayKey(), cats };
-  save.records = [...(Array.isArray(save.records) ? save.records : []), rec].slice(-24);
+  const r = KLife.recordsUpdate(save.records, { wave: run.wave | 0, cats, date: Date.now() });
+  if (!r.isNew) return;
+  save.records = r.records;
   save.walk = { ...(save.walk || {}), unveil: true };
+}
+function giveStamp(id) {
+  const r = KLife.claimStamp(save.walk, id);
+  if (!r.gained) return;
+  save.walk = { ...r.walk, unveil: save.walk && save.walk.unveil };
+  persist(); toast(`Stamp: ${KLife.STAMPS[id].name}!`);
 }
 function walkEl(id, cls, html) {
   let e = document.getElementById(id);
@@ -891,7 +893,7 @@ function closeSheet() {
   if (walk) { walk.pending = null; const f = document.getElementById('kwhud'); if (f) f.querySelector('[data-kw=back]').focus({ preventScroll: true }); }
 }
 function sheetCoins() { const k = save.kingdom; return `<div class="kcoins kwcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <span class="gem">&#128142;</span> <b>${k.gems}</b></div>`; }
-function bumpBuilding(id) { if (walk) walk.bumps[id] = tAnim; }
+function bumpBuilding(id) { if (walk) walk.state.bumps[id] = tAnim; }
 function openBuilding(id) {
   const b = BUILDING_BY_ID[id];
   if (!b) return;
@@ -933,24 +935,22 @@ function openNests() {
   openSheet(`<h2>Nest map</h2><p class="sub">${n ? `${n} nests destroyed so far.` : 'No nest destroyed yet. Go on a trip and find one.'}</p>${list ? `<ul class="kwnests">${list}</ul>` : ''}<div class="row"><button class="btn" data-act="back">Back</button></div>`, { back: closeSheet }, 'tall');
 }
 function openNews() {
-  let h = null;
-  try { h = KLife && KLife.mewsprintHeadline ? KLife.mewsprintHeadline(save, g ? g.run : null) : null; } catch (e) { h = null; }
-  const head = typeof h === 'string' ? h : h && h.headline ? h.headline : 'Whiskerton is quiet today. Go on a trip and give us something to print.';
-  const more = h && Array.isArray(h.stories) ? h.stories.map((s) => `<li>${s}</li>`).join('') : '';
-  openSheet(`<h2>The Daily Mewsprint</h2><div class="kwpaper"><b>${head}</b>${more ? `<ul>${more}</ul>` : ''}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, { back: closeSheet });
+  let head = 'Extra, extra! Read all about it!';
+  try { head = KLife.mewsprintHeadline(save, g ? lastRunView(g.run) : null) || head; } catch (e) { /* the plain line stays */ }
+  openSheet(`<h2>The Daily Mewsprint</h2><div class="kwpaper"><b>${head}</b></div><div class="row"><button class="btn" data-act="back">Back</button></div>`, { back: closeSheet });
 }
+const lastRunView = (r) => ({ wave: r.wave, kills: r.kills, bossKills: r.bossKills, cashed: !!r.cashed, daily: !!r.daily, newBest: !!(save.walk && save.walk.unveil), cats: Object.keys(r.byCat || {}) });
 // the Stackstone: your best tower in stone; a new record is unveiled from under a red cloth
 function openStackstone(unveil) {
-  const recs = (Array.isArray(save.records) ? save.records : []).filter((r) => r && r.wave > 0);
-  const best = recs.slice().sort((a, b) => b.wave - a.wave || recs.indexOf(b) - recs.indexOf(a))[0];
+  const v = KLife.stackstoneView(save.records), best = v.top;
   const stone = (r) => `<div class="kwstone">${(r.cats || []).filter((id) => CAT_BY_ID[id]).map((id) => `<img src="${thumbURL(id)}" alt="${CAT_BY_ID[id].name}">`).join('')}</div>`;
-  const older = recs.filter((r) => r !== best).slice(-6).reverse().map((r) => `<li>Wave ${r.wave}, ${r.date}</li>`).join('');
-  const cloth = unveil && best && save.walk && save.walk.unveil;
-  openSheet(`<h2>The Stackstone</h2>${best ? `<p class="sub">Wave ${best.wave}, ${best.date}</p><div class="kwplinth">${stone(best)}${cloth ? '<button class="kwcloth" data-act="unveil">Tap to unveil your tower</button>' : ''}</div>${older ? `<p class="sub">Older towers on the Statue Walk</p><ul class="kwnests">${older}</ul>` : ''}` : '<p class="sub">Nothing carved yet. Beat your best wave and your tower is set in stone here.</p>'}<div class="row"><button class="btn" data-act="back">Back</button></div>`, {
-    back: () => { if (save.walk && save.walk.unveil && !cloth) { save.walk.unveil = false; persist(); } closeSheet(); },
+  const older = v.walk.slice().reverse().map((r) => `<li>${r.plaque}${r.dateText ? ', ' + r.dateText : ''}</li>`).join('');
+  const cloth = !!(unveil && best && save.walk && save.walk.unveil);
+  openSheet(`<h2>The Stackstone</h2>${best ? `<p class="sub">${best.plaque}${best.dateText ? ', ' + best.dateText : ''}</p><div class="kwplinth">${stone(best)}${cloth ? '<button class="kwcloth" data-act="unveil">Tap to unveil your tower</button>' : ''}</div>${older ? `<p class="sub">Older towers on the Statue Walk</p><ul class="kwnests">${older}</ul>` : ''}` : '<p class="sub">Nothing carved yet. Beat your best wave and your tower is set in stone here.</p>'}<div class="row"><button class="btn" data-act="back">Back</button></div>`, {
+    back: closeSheet,
     unveil: (d, el) => {
       const c = el && el.parentNode; if (el) el.remove();
-      if (save.walk) { save.walk.unveil = false; persist(); }
+      save.walk = { ...(save.walk || {}), unveil: false, unveiled: ((save.walk && save.walk.unveiled) | 0) + 1 }; persist(); giveStamp('statue_unveiled');
       sfx.play('achieve', 0.9); sfx.meow(villageCat(), 'cheer', 0.14);
       if (c) { const r = c.getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 30, ['#ffd23f', '#fff', '#ff8fb7', '#9fd4ff'], 'NEW RECORD!'); }
     },
@@ -961,17 +961,8 @@ function sayAt(x, text, secs = 3.6) {
   walk.say = { x, text, until: tAnim + secs };
   const b = walkEl('kwsay'); b.textContent = text; b.hidden = false;
 }
-function npcLine(n) {
-  if (n.kind === 'crier') { try { const h = KLife && KLife.mewsprintHeadline ? KLife.mewsprintHeadline(save, g ? g.run : null) : null; if (typeof h === 'string') return h; if (h && h.headline) return h.headline; } catch (e) { /* plain line below */ } return 'Extra, extra! Read the Daily Mewsprint!'; }
-  if (n.kind === 'cat' && n.catId && CAT_BY_ID[n.catId]) {
-    const st = save.catStats[n.catId] || {};
-    let line = null;
-    try { line = KLife && KLife.freedCatLine ? KLife.freedCatLine(n.catId, st) : null; } catch (e) { line = null; }
-    if (!line) line = st.kills ? `We have bopped ${num(st.kills)} mice together.` : 'Take me on a trip some day. I am ready.';
-    return `${CAT_BY_ID[n.catId].name}: ${line}`;
-  }
-  const pool = NPC_LINES[n.kind] || NPC_LINES.mouse;
-  return pool[hash(String(n.id)) % pool.length];
+function npcLine(id, n = 0) {
+  try { return KLife.npcLine(id, save, g ? lastRunView(g.run) : null, n) || ''; } catch (e) { return ''; }
 }
 function walkAct(z) {
   if (!z) return;
@@ -979,13 +970,14 @@ function walkAct(z) {
   switch (z.type) {
     case 'building': bumpBuilding(z.id); openBuilding(z.id); break;
     case 'wonder': openWonder(z.id); break;
-    case 'gate': { const back = walk && walk.back; leaveWalk(); showDiffPicker(() => openKingdom(back), true); break; }
-    case 'lookout': openNests(); break;
+    case 'gate': { const back = walk && walk.back; giveStamp('gate_pass'); leaveWalk(); showDiffPicker(() => openKingdom(back), true); break; }
+    case 'lookout': giveStamp('lookout_view'); openNests(); break;
     case 'statue': openStackstone(true); break;
     case 'bench': sayAt(walk.state.x, 'A nice quiet spot. Nothing to buy here.'); break;
     case 'npc': {
-      const n = walk.layout.npcs.find((q) => q.id === z.id);
-      if (n && n.kind === 'crier') openNews(); else if (n) sayAt(n.x, npcLine(n));
+      const n = walk.state.npcs.find((q) => q.id === z.id);
+      if (!n) break;
+      if (n.kind === 'crier') openNews(); else { walk.talk = (walk.talk | 0) + 1; sayAt(n.x, npcLine(n.id, walk.talk)); }
       break;
     }
     default: break;
@@ -997,8 +989,9 @@ const zoneLabel = (z) => {
   if (z.type === 'gate') return 'Go on a trip';
   if (z.type === 'lookout') return 'Nest map';
   if (z.type === 'statue') return 'The Stackstone';
-  if (z.type === 'npc') { const n = walk && walk.layout.npcs.find((q) => q.id === z.id); return n && n.kind === 'crier' ? 'Daily Mewsprint' : n && n.kind === 'cat' && n.catId ? (CAT_BY_ID[n.catId] || {}).name : 'Say hello'; }
+  if (z.type === 'npc') { const n = walk && walk.layout.npcs.find((q) => q.id === z.id); return n && n.kind === 'crier' ? 'Daily Mewsprint' : n && n.catId ? (CAT_BY_ID[n.catId] || {}).name : 'Say hello'; }
   if (z.type === 'bench') return 'Sit down';
+  if (z.type === 'lift') return 'Ride the wind lift';
   return null;
 };
 function walkTap(sx, sy) {   // a short tap on the street: a building or neighbour is walked to and opened, anywhere else the cat just walks there
@@ -1014,16 +1007,15 @@ function walkTap(sx, sy) {   // a short tap on the street: a building or neighbo
     if (Math.abs(cx - w.state.x) > 420) walkJump(cx - 70 * Math.sign(cx - w.state.x));   // far away: hop there at once so buying stays quick
     return cx;
   }
-  const nz = w.layout.npcs.find((n) => Math.abs(wx - n.x) < 44);
+  const nz = w.state.npcs.find((n) => Math.abs(wx - n.x) < 44);
   if (nz) { w.pending = { z: { type: 'npc', id: nz.id }, at: tAnim }; if (Math.abs(nz.x - w.state.x) > 420) walkJump(nz.x - 60 * Math.sign(nz.x - w.state.x)); return nz.x; }
   w.pending = null;
   return Math.max(20, Math.min(w.layout.width - 20, wx));
 }
 function walkJump(x) {   // a quick fade and the cat stands at x
-  const w = walk, s = w.state, f = document.getElementById('kwfade');
+  const w = walk, f = document.getElementById('kwfade');
   if (f && !kwReduced()) { f.classList.add('on'); setTimeout(() => f.classList.remove('on'), 160); }
-  s.x = Math.max(20, Math.min(w.layout.width - 20, x)); s.vx = 0;
-  if (s.cam) s.cam.x = Math.max(0, Math.min(w.layout.width - 960, s.x - 480));
+  w.WK.teleport(w.state, x, w.layout.groundY);
 }
 function walkHud() {
   const hud = walkEl('kwhud', '');
@@ -1047,13 +1039,11 @@ async function showKingdomWalk(back, opts = {}) {
     const [WK, LY, WD] = await Promise.all([import('./kingdom_walk.js'), import('./kingdom_layout.js'), import('./kingdom_world.js')]);
     const k = save.kingdom, avatarId = walkAvatar();
     const layout = LY.buildLayout(kingdomLevel(k), k, save);
-    let spawn = layout.spawn;
-    const goalZ = opts.goal && layout.zones.find((z) => z.type === 'building' && z.id === opts.goal);
-    const stoneZ = save.walk && save.walk.unveil && layout.zones.find((z) => z.type === 'statue');
-    const at = stoneZ || goalZ;
-    if (at) spawn = { x: zcx(at) - 80, y: spawn.y };
-    const state = WK.createWalk(layout, { avatarId, spawn });
-    wk = { prevMode: mode === 'walk' ? 'title' : mode, WK, layout, state, avatarId, back, bumps: {}, pending: null, say: null, nearKey: '', saidAt: {}, coinTxt: '', input: null, world: null };
+    const stoneZ = save.walk && save.walk.unveil && layout.zones.find((z) => z.id === 'stackstone');
+    let spawn = KLife.spawnFor(save, !!opts.fromOver, layout);
+    if (stoneZ) spawn = { x: stoneZ.x - 90, y: layout.groundY };
+    const state = WK.createWalk(layout, { avatarId, spawn, reduced: kwReduced() });
+    wk = { prevMode: mode === 'walk' ? 'title' : mode, WK, layout, state, avatarId, back, pending: null, say: null, nearKey: '', saidAt: {}, coinTxt: '', input: null, world: null };
     walk = wk;
     wk.world = WD.createWorld(cv, layout, () => save.kingdom, { getSave: () => save });
     wk.input = createInput(app, {
@@ -1065,6 +1055,7 @@ async function showKingdomWalk(back, opts = {}) {
     if (wk.world.setNow) wk.world.setNow(new Date());
     if (wk.world.setReduced) wk.world.setReduced(kwReduced());
     setLookForWalk();
+    giveStamp('first_steps');
     mode = 'walk'; paused = false; coverScreen = false;
     setScreen(''); walkHud();
     document.body.classList.add('walk'); cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', 'Whiskerton Walk, your cat village');
@@ -1079,6 +1070,7 @@ async function showKingdomWalk(back, opts = {}) {
 function setLookForWalk() { setWalkLook((id) => { const sig = lookSig(save, id); return { sig, look: lookOf(save, id) }; }); }
 function leaveWalk() {
   const w = walk; walk = null;
+  if (w && w.state) { save.walk = { ...(save.walk || {}), x: Math.round(w.state.x), visits: ((save.walk && save.walk.visits) | 0) + 1 }; persist(); }
   document.body.classList.remove('walk'); cv.removeAttribute('role'); cv.removeAttribute('aria-label');
   for (const id of ['kwhud', 'kwsay', 'kwfade']) { const e = document.getElementById(id); if (e) e.remove(); }
   if (w) { try { w.input && w.input.destroy(); } catch (e) { /* gone */ } try { w.world && w.world.free(); } catch (e) { /* gone */ } }
@@ -1097,7 +1089,7 @@ function walkTick(dt) {
       else if (e.k === 'interact') { const z = e.zone || e.near || s.near; if (z && z.type) { w.pending = null; walkAct(z); } }
     }
     if (w.pending) {   // a tapped building: open it as soon as the cat is at the door (or after a short wait)
-      const z = w.pending.z, cx = z.type === 'npc' ? (w.layout.npcs.find((n) => n.id === z.id) || {}).x : zcx(z);
+      const z = w.pending.z, cx = z.type === 'npc' ? (s.npcs.find((n) => n.id === z.id) || {}).x : zcx(z);
       const at = s.near && s.near.id === z.id || Math.abs(s.x - cx) < 36 || tAnim - w.pending.at > 2.6;
       if (at) { w.pending = null; walkAct(z.type === 'npc' ? z : z); }
     }
@@ -1107,8 +1099,8 @@ function walkTick(dt) {
     w.nearKey = key;
     w.input.setPrompt(near ? zoneLabel(near) : null);
     if (near && near.type === 'npc' && tAnim - (w.saidAt[near.id] || -99) > 10) {
-      const n = w.layout.npcs.find((q) => q.id === near.id);
-      if (n && n.kind !== 'crier') { w.saidAt[near.id] = tAnim; sayAt(n.x, npcLine(n)); }
+      const n = s.npcs.find((q) => q.id === near.id);
+      if (n && n.kind !== 'crier') { w.saidAt[near.id] = tAnim; sayAt(n.x, npcLine(n.id)); }
     }
   }
   const coins = `🪙 ${num(save.kingdom.coins)}  💎 ${save.kingdom.gems}`;
@@ -1119,9 +1111,8 @@ function walkTick(dt) {
     if (tAnim > w.say.until) { w.say = null; if (b) b.hidden = true; }
     else if (b) { b.style.left = Math.round(Math.max(90, Math.min(870, w.say.x - cam.x))) + 'px'; }
   }
-  // the NPCs: they turn to face the cat when it is close, cats nap when it is far
-  const view = w.layout.npcs.map((n, i) => ({ id: n.id, kind: n.kind, catId: n.catId, x: n.x, face: Math.abs(s.x - n.x) < 260 ? (s.x < n.x ? -1 : 1) : (i % 2 ? 1 : -1), pose: Math.abs(s.x - n.x) < 260 || i % 3 ? 'idle' : 'sit' }));
-  const snap = { ...s, npcs: view, avatarId: walkAvatar(), bumps: w.bumps };
+  s.avatarId = walkAvatar();
+  const snap = s;
   ctx.setTransform(res, 0, 0, res, 0, 0);
   ctx.clearRect(0, 0, W, H);
   if (w.world.setQuality) w.world.setQuality(gfx);
@@ -2115,7 +2106,7 @@ function showOver(fresh) {
         .then((res) => { if (el && el.isConnected) el.textContent = 'Share'; if (res === 'downloaded') toast('Picture saved!'); });
     },
     setname: () => showNamePrompt(() => showOver(fresh)),
-    again: () => startRun({ daily: !!r.daily && !r.weekly, weekly: !!r.weekly }), title: () => { g = null; showTitle(); }, kingdom: () => openKingdom(() => showOver(fresh), { goal: goal && goal.id }), none: () => {},
+    again: () => startRun({ daily: !!r.daily && !r.weekly, weekly: !!r.weekly }), title: () => { g = null; showTitle(); }, kingdom: () => openKingdom(() => showOver(fresh), { fromOver: true }), none: () => {},
     sendscore: () => { const inp = screenEl.querySelector('input[data-n]'); if (inp) { save.name = inp.value.replace(/[^\w \-.']/g, '').slice(0, 12); persist(); } postDaily(); },
   };
   if ((r.ach || []).length) sfx.play('achieve');

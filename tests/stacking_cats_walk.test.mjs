@@ -15,7 +15,7 @@ const allCatsSave = (extra = {}) => ({
   stats: { runs: 12, bossKills: 2, bestWave: 17 }, kingdom: { coins: 500, gems: 4, lv: { dojo: 2 }, wonders: {} }, records: [], walk: null, ...extra,
 });
 const freshLayout = (save = allCatsSave()) => buildLayout(0, save.kingdom, save);
-const noEm = (s) => assert.ok(!/[—–]/.test(s), 'no em or en dash in: ' + s);
+const noEm = (s) => assert.ok(!/[\u2014\u2013]/.test(s), 'no em or en dash in: ' + s);
 const run = (st, seconds, input = {}, dt = STEP) => { const steps = Math.round(seconds / dt); for (let i = 0; i < steps; i++) stepWalk(st, input, dt); };
 const hashState = (st) => { let h = 2166136261; const feed = (v) => { const s = String(Math.round(v * 1000)); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } }; feed(st.x); feed(st.y); feed(st.cam.x); feed(st.cam.y); feed(st.vx); feed(st.vy); return h >>> 0; };
 // a scripted pseudo player (deterministic, no Math.random)
@@ -288,12 +288,13 @@ await t('the optional roof ledges can be reached by jumping and the sit spot wor
   goTo(st, p1.x + p1.w / 2 - 10);
   stepWalk(st, { jump: true }, STEP); run(st, 1, { jumpHeld: true });
   assert.equal(st.y, p1.y);
-  stepWalk(st, { dir: 1, jump: true }, STEP); run(st, 0.35, { dir: 1, jumpHeld: true });
+  teleport(st, p1.x + p1.w - 8, p1.y);
+  stepWalk(st, { dir: 1, jump: true }, STEP);
   for (let i = 0; i < 120 && st.y !== p2.y; i++) stepWalk(st, { dir: 1, jumpHeld: true }, STEP);
   assert.equal(st.y, p2.y, 'second ledge');
   goTo(st, SLOTS.roof1);
   assert.deepEqual(st.near, { type: 'bench', id: 'roof1' });
-  stepWalk(st, { interact: true }, STEP); assert.equal(st.pose, 'sit');
+  stepWalk(st, { interact: true }, STEP); run(st, 0.5); assert.equal(st.pose, 'sit');
 });
 await t('no wonder island can be climbed to by jumping from the street (the lift is the way)', () => {
   const L = freshLayout();

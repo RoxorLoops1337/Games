@@ -13,7 +13,7 @@ export const MAX_WALK_STATUES = 6;       // the Statue Walk shows this many olde
 
 // door x of every building, lift pad x of every wonder, and the fixed props (never move: keeps the street stable forever)
 export const SLOTS = {
-  gate: 100, crier: 190, stall: 260, pip: 310, spawn: 340, bench: 450, vault: 590, coin: 720, stackstone: 860,
+  gate: 100, crier: 190, stall: 260, pip: 300, spawn: 372, bench: 450, vault: 590, coin: 720, stackstone: 860,
   walk0: 960, walkStep: 46,
   dojo: 1320, yarn: 1500, knotty: 1560, cafe: 1680, beds: 1860, academy: 2040, bench1: 2300,
   tent: 2520, tower: 2700, roof1: 2745, shrine: 2880, paw: 3040, spa: 3200, spring: 3360, squeaks: 3440, lookout: 3510,
@@ -96,7 +96,8 @@ export function buildLayout(kingdomLevel, k, save) {
     const home = HOME_BY_TAG[tag] != null ? HOME_BY_TAG[tag] : SLOTS.stackstone;
     const n = used[home] = (used[home] || 0) + 1;
     const side = n % 2 ? 1 : -1;
-    const x = Math.max(60, Math.min(WORLD_W - 60, home + side * (100 + 55 * Math.floor((n - 1) / 2))));
+    let x = Math.max(60, Math.min(WORLD_W - 60, home + side * (100 + 55 * Math.floor((n - 1) / 2))));
+    for (let g = 0; g < 40 && (npcs.some((o) => Math.abs(o.x - x) < 48) || zones.some((z) => z.type !== 'npc' && z.y === GROUND && Math.abs(z.x - x) < 28)); g++) x += x > WORLD_W / 2 ? -50 : 50;   // never stack two NPCs on one spot
     addNpc({ id: 'cat:' + id, kind: 'cat', x, catId: id }, 40, 56);
   }
 
