@@ -93,3 +93,4 @@ itself when frames run slow, then raises it again when it runs fast.
 
 - **MAX_STAGE = 50.** `stageKind(n)`: every 6th stage is a **circle** stage (the duo stands in the middle, inside a ring, the snake spirals in and the run ends when it reaches the ring); stages 7, 8, 14, 21, 28, 35, 38 and 49 have **two snakes** (the second one is mirrored and enters later); the rest are one snake and the line.
 - Early stages are deliberately harsh: cell HP grows quickly for the first ten stages, the snake is fast, and upgrade cards are weak at first (they reach full strength around stage ten; extra notes unlock at stage 3, pierce at 4, bursts at 6, and luck is poor early on). With no menu upgrades, stage 3 is out of reach.
+- Every stage the snakes crawl a bit faster (`speedMul`, +3.5% per stage) and cell HP keeps climbing; bosses have about 2.4x cell HP and crawl a bit faster than their neighbours.
