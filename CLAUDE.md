@@ -1,5 +1,6 @@
 Workflow:
 - Commit and push the feature branch whenever it helps, without waiting for tests, and open the PR (draft) right after the push.
+- Test scope: run only what your change can affect. `npm run check:changed` does exactly that. NEVER run `npm run check` (every game's suites) unless the user asks for it. If `check:changed` still says FULL, read which file made it say so and fix the map in `tools/check-changed.mjs` (a new game folder, a new shared file) instead of running everything; run your own game's suites meanwhile and say so in the reply.
 - Before MERGING to main: run `npm run check:changed` (build + the test suites of the games you changed). Never merge red. When it is green, mark the PR ready and squash-merge to main without asking. Skip the "want me to merge?" question. While tests are still running, the branch and the draft PR may already be pushed; just hold the merge.
 - Commit messages end with the session link the harness provides. Never put a model identifier in commits/PRs.
 
@@ -24,8 +25,10 @@ Reply formatting:
     npm run check:changed -- --dry   # just print which suites it would run
 
 `check:changed` diffs against origin/main and maps each changed file to its game's suites
-(`tools/check-changed.mjs`). Changes to shared files (`build.js`, `package.json`, root
-`index.html`, an unmapped folder) automatically run the FULL check. When you add a new game
+(`tools/check-changed.mjs`). Shared files have precise rules: `package.json` runs only the suites of the `test:` scripts
+you added or changed (a dependency or an existing non-test script changing still runs the FULL check), `build.js` runs the
+suites whose tests mention build.js or dist/, the root `index.html` runs `test:site` (every game card points at a real folder),
+root notes run nothing. Only a file it cannot place (`package-lock.json`, an unknown root file, an unmapped folder) falls back to the FULL check. When you add a new game
 with tests, add its folder and `test:` scripts to `GAME_SUITES` in that file, and add the
 `test:` script to `check` in `package.json`.
 
