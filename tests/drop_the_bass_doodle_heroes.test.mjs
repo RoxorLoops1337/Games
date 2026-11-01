@@ -24,7 +24,7 @@ function mock() {
 setArtScale(2);
 const poses = ['idle', 'cheer', 'sing', 'beat', 'sad', 'shock', 'talk', 'point', 'hype'];
 const chk = (c, m) => { ok(c.__st.saves === c.__st.restores, m + ' balanced'); ok(c.__st.nan === 0, m + ' no NaN'); ok(c.__st.calls > 5, m + ' draws'); };
-for (const who of ['roxor', 'jasmin']) for (const outfit of ['default', 'onesie']) for (const pose of poses) for (const extra of [{}, { flip: true, talk: 1 }]) {
+for (const who of ['roxor', 'jasmin']) for (const outfit of ['default', 'onesie', 'stage', 'beach', 'rocker', 'moon', 'outfit_gold', 'gold', 'nope']) for (const pose of poses) for (const extra of [{}, { flip: true, talk: 1 }]) {
   const o = Object.assign({ t: 1.3, outfit, pose }, extra);
   let c = mock(); drawHero(c, who, 200, 300, 118, o); chk(c, who + pose);
   c = mock(); drawBust(c, who, 200, 300, 100, o); chk(c, 'bust ' + who + pose);
@@ -34,6 +34,15 @@ for (const w of [200, 360, 480, 700]) { const c = mock(); drawLogo(c, 270, 200, 
 drawHero(mock(), 'nope', 0, 0, 50); drawBust(mock(), 'nope', 0, 0, 50, null); drawLoopy(mock(), 0, 0, 40); n += 3;
 const a = mock(), b = mock(); drawHero(a, 'jasmin', 10, 10, 118, { t: 2, pose: 'sing' }); drawHero(b, 'jasmin', 10, 10, 118, { t: 2, pose: 'sing' });
 ok(a.__st.log.join() === b.__st.log.join(), 'deterministic');
+{ // every outfit is its own look: different draw calls than the classic one, deterministic, and the old ids still draw
+  for (const who of ['roxor', 'jasmin']) {
+    const logs = {};
+    for (const outfit of ['default', 'onesie', 'stage', 'beach', 'rocker', 'moon', 'outfit_gold']) { const c = mock(); drawHero(c, who, 50, 90, 118, { t: 0.7, pose: 'cheer', outfit }); logs[outfit] = c.__st.log.join(); }
+    const ids = Object.keys(logs); ok(new Set(Object.values(logs)).size === ids.length, who + ' every outfit draws differently');
+    const g = mock(); drawHero(g, who, 50, 90, 118, { t: 0.7, pose: 'cheer', outfit: 'gold' }); ok(g.__st.log.join() === logs.outfit_gold, who + ' gold alias');
+    for (const outfit of ids) for (const [w, hgt] of [[40, 40], [60, 60]]) { const c = mock(); drawBust(c, who, 30, 30, hgt, { t: 2.1, pose: 'talk', outfit }); chk(c, 'small bust ' + who + outfit + w); }
+  }
+}
 const src = readFileSync(new URL('../drop_the_bass/js/doodle_heroes.js', import.meta.url), 'utf8');
 ok(!/Math\.random|Date\.now|new Date/.test(src), 'no unseeded randomness or clock'); ok(!src.includes(String.fromCharCode(8212)), 'no em dash');
 console.log('drop_the_bass doodle_heroes: ' + n + ' checks passed');

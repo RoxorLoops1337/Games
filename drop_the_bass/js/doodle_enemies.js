@@ -1,4 +1,4 @@
-// doodle_enemies.js: the Static and the five bosses as crayon notebook doodles (the DOODLE style). Same API as art_enemies.js:
+// doodle_enemies.js: the Static and the seven bosses as crayon notebook doodles (the DOODLE style). Same API as art_enemies.js:
 //   drawEnemy(ctx, type, x, y, o)   o: { t, ang, hp (0..1), hit (0..1), slow, stun, burn, mark, shield (0..1), affix, scale, rage, alpha, id }
 //   drawBoss(ctx, id, x, y, o)      o: { t, ang, hp (0..1), hit, gated, phase, scale, alpha }
 // Every creature body is baked once into 3 "boil" frames (doodle_kit sprite) keyed by type and affix; per frame we only blit, bob, squash,
@@ -290,9 +290,28 @@ function bossEyes(id, r, st) {
     case 'noisegate': return st.gated ? [] : mk(0.3, -0.2, 0.22);
     case 'reverb': return mk(0.33, -0.12, 0.26);
     case 'djglitch': return mk(0.3, -0.12, 0.22);
+    case 'lowpass': return mk(0.3, -0.12, 0.2);
+    case 'silence': return mk(0.22, -1.08, 0.15);
     default: return mk(0.38, -0.3, 0.22);
   }
 }
+
+// a smooth closed or open curve through points (Catmull-Rom), as a flat polyline
+function smooth(pts, closed, n = 5) {
+  const out = [], m = pts.length / 2, g = (i) => { const k = closed ? ((i % m) + m) % m : Math.max(0, Math.min(m - 1, i)); return [pts[k * 2], pts[k * 2 + 1]]; };
+  for (let i = 0; i < (closed ? m : m - 1); i++) {
+    const a = g(i - 1), b = g(i), c = g(i + 1), d = g(i + 2);
+    for (let j = 0; j < n; j++) { const t = j / n, t2 = t * t, t3 = t2 * t; out.push(0.5 * ((2 * b[0]) + (-a[0] + c[0]) * t + (2 * a[0] - 5 * b[0] + 4 * c[0] - d[0]) * t2 + (-a[0] + 3 * b[0] - 3 * c[0] + d[0]) * t3), 0.5 * ((2 * b[1]) + (-a[1] + c[1]) * t + (2 * a[1] - 5 * b[1] + 4 * c[1] - d[1]) * t2 + (-a[1] + 3 * b[1] - 3 * c[1] + d[1]) * t3)); }
+  }
+  if (!closed) out.push(pts[pts.length - 2], pts[pts.length - 1]);
+  return out;
+}
+const sc = (pts, r) => pts.map((v) => v * r);
+function speakerCone(pen, x, y, rr, muted) {   // foam: a little speaker cone seen from the front
+  pen.dot(x, y, rr, '#fff'); pen.ln(arc(x, y, rr, rr, 0, 360, 10), INK, 2.6, true, 0.5); pen.ln(arc(x, y, rr * 0.58, rr * 0.58, 0, 360, 8), INK, 1.8, true, 0.4); pen.dot(x, y, rr * 0.2, INK);
+  if (muted) pen.ln([x - rr * 0.8, y + rr * 0.8, x + rr * 0.8, y - rr * 0.8], C.red, 2.6, false, 0.3);
+}
+function padlock(pen, x, y, w) { pen.ln(arc(x, y - w * 0.4, w * 0.28, w * 0.34, 180, 360, 8), INK, 4, false, 0.5); pen.shp(rect(x - w * 0.4, y - w * 0.4, w * 0.8, w * 0.62, 4), C.gold, INK, 3, { gap: 4 }); pen.dot(x, y - w * 0.1, w * 0.07, INK); }
 const BOSS = {
   compressor(pen, r, st) {
     const body = rect(-r * 0.95, -r * 0.55, r * 1.9, r * 1.1, 10);
@@ -355,6 +374,48 @@ const BOSS = {
     crown(pen, 0, -r * 1.12, r * 0.85, C.cyan);
     return eyes;
   },
+  lowpass(pen, r, st) {   // The Low-Pass Tide: a friendly-scary crayon wave, muffled googly eyes, foam like muted speaker cones
+    const mound = smooth(sc([-1.05, 0.78, -1.12, 0.05, -0.82, -0.55, -0.3, -0.9, 0.32, -0.96, 0.82, -0.7, 1.12, -0.12, 1.06, 0.72, 0.62, 0.86, 0.2, 0.7, -0.22, 0.86, -0.62, 0.72], r), true, 4);
+    pen.ln(shift(mound, 3.4, -1.4), CY, 2.6, true, 1); pen.ln(shift(mound, -3.4, 1.6), MG, 2.6, true, 1);
+    for (const [bx, by, br] of [[-1.3, -0.1, 0.1], [1.32, 0.4, 0.08], [-1.2, 0.55, 0.07]]) { pen.ln(arc(bx * r, by * r, br * r, br * r, 0, 360, 8), '#6fd6e4', 2.2, true, 0.4); }   // bubbles
+    pen.shp(mound, '#3fb8c8', INK, 5, { gap: 6.5, f2: '#bdf0f7' });
+    for (let i = 0; i < 3; i++) pen.ln(smooth(sc([-0.95 + i * 0.1, 0.25 + i * 0.17, -0.5, 0.2 + i * 0.17 - 0.06, 0.0, 0.3 + i * 0.17, 0.5, 0.2 + i * 0.17 - 0.05, 0.95 - i * 0.1, 0.3 + i * 0.17], r), false, 4), 'rgba(255,255,255,0.7)', 2.4, false, 0.5);   // water ripples
+    const crest = arc(0.08 * r, -0.2 * r, 1.0 * r, 0.8 * r, 200, 345, 14).concat(arc(0.1 * r, -0.2 * r, 0.8 * r, 0.6 * r, 345, 200, 12));   // the curling crest
+    pen.shp(crest, '#d9f7fb', INK, 4.2, { gap: 5, f2: '#fff' });
+    pen.ln(smooth(sc([0.82, -0.62, 0.98, -0.5, 0.92, -0.32, 0.74, -0.36, 0.72, -0.5], r), false, 4), INK, 3.2, false, 0.5);   // the curl's tip
+    for (const [fx, fy, fr, m] of [[-0.76, -0.56, 0.17, false], [-0.4, -0.84, 0.19, true], [0.08, -0.97, 0.2, false], [0.5, -0.88, 0.17, true]]) speakerCone(pen, fx * r, fy * r, fr * r, m);
+    const eyes = bossEyes('lowpass', r, st);
+    for (const e of eyes) eyeWhite(pen, e, false);
+    for (const e of eyes) { const sd = e.x < 0 ? -1 : 1; pen.ln([e.x - sd * e.r * 1.25, e.y - e.r * 1.35, e.x + sd * e.r * 1.0, e.y - e.r * 1.0 - sd * e.r * 0.25], INK, Math.max(2.6, e.r * 0.34), false, 0.5); pen.ln([e.x - e.r * 0.9, e.y + e.r * 1.25, e.x + e.r * 0.9, e.y + e.r * 1.25], '#2a8a9a', 2.2, false, 0.3); }   // low heavy brows, tired bags
+    pen.shp(rect(-r * 0.38, r * 0.22, r * 0.76, r * 0.34, r * 0.1), '#e9e6f2', INK, 3.4, { gap: 4.5 });   // a speaker-cloth muffle over the mouth
+    for (let i = 1; i < 6; i++) pen.ln([-r * 0.38 + i * r * 0.127, r * 0.24, -r * 0.38 + i * r * 0.127, r * 0.54], '#a9a5bd', 1.6, false, 0.2); for (let i = 1; i < 3; i++) pen.ln([-r * 0.36, r * 0.22 + i * r * 0.113, r * 0.36, r * 0.22 + i * r * 0.113], '#a9a5bd', 1.6, false, 0.2);
+    pen.ln([-r * 0.3, r * 0.68, -r * 0.1, r * 0.74, r * 0.1, r * 0.68, r * 0.3, r * 0.74], '#fff', 2.4, false, 0.4);
+    if (st.gated) padlock(pen, 0, r * 0.05, r * 0.5);
+    return eyes;
+  },
+  silence(pen, r, st) {   // Dr. Dead Air: a tall pale ghost shaped like the muted-speaker icon, hollow calm face, a headphone cable
+    const ph = st.phase || 1, dark = ph >= 3, body = dark ? '#4a4866' : '#ecebf6', f2 = dark ? '#7a77a0' : '#c9c6e6', line = dark ? '#e6e3f6' : INK;
+    const hem = []; for (let i = 0; i <= 6; i++) hem.push(0.97 - i * 0.3233, 0.78 + (i % 2 ? 0.14 : -0.02));
+    const robe = sc([0.46, -0.66, ...hem, -0.46, -0.66], r);
+    const head = rect(-r * 0.52, -r * 1.5, r * 1.04, r * 0.86, r * 0.18);
+    if (ph >= 2) { for (let i = 0; i < 4; i++) { const ox = (i % 2 ? 1 : -1) * r * (0.2 + i * 0.07); pen.ln(shift(robe, ox, -r * 0.03 * i), i % 2 ? CY : MG, 2, true, 1.2, [8, 7]); } }   // it is fading: stray dashed copies
+    pen.shp(robe, body, null, 0, { gap: 6.5, f2 }); pen.ln(robe, line, 4.6, true, 1.1, ph === 2 ? [16, 7] : undefined);
+    pen.shp(head, body, null, 0, { gap: 6.5, f2 }); pen.ln(head, line, 4.6, true, 1.1, ph === 2 ? [16, 7] : undefined);
+    pen.ln([-r * 0.3, -r * 0.7, -r * 0.3, -r * 0.62], line, 3, false, 0.3); pen.ln([r * 0.3, -r * 0.7, r * 0.3, -r * 0.62], line, 3, false, 0.3);   // the neck seam between box and cone
+    const eyes = bossEyes('silence', r, st);
+    for (const e of eyes) { pen.dot(e.x, e.y, e.r, dark ? '#f6f4ff' : '#2e2b44'); pen.ln(arc(e.x, e.y, e.r, e.r, 0, 360, 10), line, 2.6, true, 0.6); }   // hollow eye sockets
+    pen.ln([-r * 0.14, -r * 0.82, r * 0.14, -r * 0.82], line, 3, false, 0.3);   // a calm flat mouth
+    for (const sd of [-1, 1]) { pen.shp(rect(sd * r * 0.62 - r * 0.1, -r * 1.34, r * 0.2, r * 0.46, r * 0.06), '#4a4866', INK, 3, { gap: 4 }); }   // headphone cups
+    pen.ln(arc(0, -r * 1.1, r * 0.62, r * 0.55, 200, 340, 10), '#4a4866', 4.4, false, 0.5);   // headphone band
+    pen.ln(smooth([-r * 0.62, -r * 0.9, -r * 0.82, -r * 0.4, -r * 0.5, 0.1 * r, -r * 0.95, 0.5 * r, -r * 1.14, 0.8 * r, -r * 1.3, 0.84 * r], false, 5), '#4a4866', 3.4, false, 0.6);   // the cable
+    pen.shp(rect(-r * 1.42, r * 0.74, r * 0.22, r * 0.2, 3), '#4a4866', INK, 2.4, { gap: 3 });   // the plug
+    // the muted-speaker icon on the robe: cone shape, sound waves, a slash through them
+    pen.ln(arc(r * 0.08, -r * 0.05, r * 0.3, r * 0.3, -50, 50, 6), line, 3.2, false, 0.5); pen.ln(arc(r * 0.08, -r * 0.05, r * 0.52, r * 0.52, -50, 50, 7), line, 3.2, false, 0.5);
+    pen.ln([-r * 0.38, r * 0.3, r * 0.4, -r * 0.4], C.red, 6, false, 0.6); pen.ln([-r * 0.38, -r * 0.4, r * 0.4, r * 0.3], C.red, 6, false, 0.6);
+    if (ph >= 2) for (let i = 0; i < 3; i++) { const nx = (i - 1) * r * 0.55, ny = r * (0.45 + (i % 2) * 0.1); pen.dot(nx, ny, r * 0.07, '#9a96b4'); pen.ln([nx + r * 0.07, ny, nx + r * 0.07, ny - r * 0.26], '#9a96b4', 2.2, false, 0.3); }   // drained grey notes
+    if (st.gated) padlock(pen, 0, r * 0.62, r * 0.46);
+    return eyes;
+  },
   playback(pen, r, st) {
     const ph = st.phase || 1;
     if (ph >= 3) for (let i = 0; i < 5; i++) { const a = -Math.PI + i * Math.PI / 4; pen.shp([Math.cos(a) * r * 1.0, Math.sin(a) * r * 0.9, Math.cos(a - 0.2) * r * 1.5, Math.sin(a - 0.2) * r * 1.4, Math.cos(a + 0.2) * r * 1.4, Math.sin(a + 0.2) * r * 1.35], C.orange, C.red, 2.6, { gap: 4, f2: C.yellow }); }   // flames
@@ -395,13 +456,17 @@ export function drawBoss(ctx, id, x, y, o) {
   if (id === 'compressor') { const sq = Math.sin(t * 2.2) * 0.07; sxs = 1 + sq; sys = 1 - sq; }
   else if (id === 'reverb') { const p = 1 + Math.sin(t * 3) * 0.03; sxs = p; sys = p; }
   else if (id === 'djglitch') { const j = Math.sin(t * 17) > 0.92 ? 4 : 0; ctx.translate(j, 0); }
+  else if (id === 'lowpass') { const sw = Math.sin(t * 1.7) * 0.05; sxs = 1 + sw; sys = 1 - sw * 0.8; }
+  else if (id === 'silence') { sxs = 1 + Math.sin(t * 1.1) * 0.015; sys = 1 + Math.sin(t * 1.1 + 1) * 0.02; ctx.translate(0, Math.sin(t * 0.9) * 3); if (phase === 2 && Math.sin(t * 13) > 0.8) ctx.globalAlpha *= 0.6; }
   const bs = bossSprite(id, phase, gated);
   ctx.save(); ctx.translate(0, bobY); ctx.scale(sc * sxs, sc * sys);
   blit(ctx, bs.sp, 0, 0, t);
   if (id === 'reverb') for (let i = 0; i < 2; i++) { const k = (t * 0.7 + i * 0.5) % 1; ctx.save(); ctx.globalAlpha *= 0.6 * (1 - k); ctx.strokeStyle = '#a98be6'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.arc(0, 0, r * (1.1 + k * 0.9), 0, TAU); ctx.stroke(); ctx.restore(); }
+  if (id === 'lowpass') { ctx.save(); ctx.strokeStyle = '#8fe0ec'; ctx.lineWidth = 2.6; ctx.lineCap = 'round'; for (let i = 0; i < 4; i++) { const k = (t * 0.6 + i * 0.25) % 1, px = (i - 1.5) * r * 0.55, py = -r * 0.95 - k * r * 0.5; ctx.save(); ctx.globalAlpha = (1 - k) * 0.9; ctx.beginPath(); ctx.arc(px, py, 3 + k * 2, 0, TAU); ctx.stroke(); ctx.restore(); } ctx.restore(); }
   if (id === 'djglitch') { ctx.save(); ctx.rotate(t * 5); ctx.strokeStyle = 'rgba(43,39,51,0.5)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(r * 0.1, 0); ctx.lineTo(r * 0.6, 0); ctx.stroke(); ctx.restore(); }
   const ax = Math.cos(ang), ay = Math.sin(ang) * 0.5 + 0.3;
   for (const e of bs.eyes) { const px = e.x + ax * e.r * 0.34, py = e.y + ay * e.r * 0.34; ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(px, py, e.r * 0.5, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(px - e.r * 0.14, py - e.r * 0.16, e.r * 0.15, 0, TAU); ctx.fill(); }
+  if (id === 'silence') { ctx.save(); ctx.fillStyle = phase >= 3 ? '#4a4866' : '#fff'; for (const e of bs.eyes) { ctx.beginPath(); ctx.arc(e.x + ax * e.r * 0.3, e.y + e.r * 0.1, e.r * 0.22, 0, TAU); ctx.fill(); } ctx.strokeStyle = '#9a96b4'; ctx.lineWidth = 2.2; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { const k = (t * 0.35 + i * 0.33) % 1, a2 = -0.8 + i * 0.8, px = Math.cos(a2) * r * (1.0 + k * 0.6) + r * 0.3, py = -r * 0.1 - k * r * 0.4 + i * 4; ctx.globalAlpha = (1 - k) * 0.7; ctx.beginPath(); ctx.moveTo(px - 4, py); ctx.lineTo(px + 4, py); ctx.moveTo(px, py - 4); ctx.lineTo(px, py + 4); ctx.stroke(); } ctx.restore(); }
   if (id === 'playback' && phase >= 2) { ctx.save(); ctx.strokeStyle = C.yellow; ctx.lineWidth = 3; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { const a = t * 3 + i * 2.1, px = Math.cos(a) * r * 1.25, py = Math.sin(a) * r * 1.1 - r * 0.2; ctx.beginPath(); ctx.moveTo(px - 4, py); ctx.lineTo(px + 4, py); ctx.moveTo(px, py - 4); ctx.lineTo(px, py + 4); ctx.stroke(); } ctx.restore(); }
   if ((o.hit || 0) > 0) { ctx.save(); ctx.globalAlpha *= clamp(o.hit * 0.5, 0, 0.5); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.0, r * 0.9, 0, 0, TAU); ctx.fill(); ctx.restore(); }
   ctx.restore();

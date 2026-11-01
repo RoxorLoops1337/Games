@@ -6,6 +6,7 @@ import { Run } from '../drop_the_bass/js/sim.js';
 import { DAILY_MODS as DM } from '../drop_the_bass/js/data_run.js';
 import { applyFx, freshMods } from '../drop_the_bass/js/data_run.js';
 import { fameTitle, FAME_TITLES, WEEKLY_GIGS, WEEKLY_WAVES, FAME_MAX } from '../drop_the_bass/js/data_meta.js';
+import { OUTFITS } from '../drop_the_bass/js/data_meta.js';
 import { STUDIO, GEAR, CRATES, ACHIEVEMENTS, SLOTS, PITY, AUTOMERGE_PRICE, QUESTS } from '../drop_the_bass/js/data_meta.js';
 import { WORLDS, TURRETS, RARITY_ORDER } from '../drop_the_bass/js/data_core.js';
 
@@ -152,6 +153,41 @@ const rng = () => makeRng(42);
   const s = fresh(); s.diamonds = AUTOMERGE_PRICE; ok(M.buyAutoMerge(s).ok && s.autoMerge && !M.buyAutoMerge(s).ok, 'auto merge'); s.diamonds = 500; ok(M.buyOutfit(s, 'roxor', 'onesie').ok && s.outfits.worn.roxor === 'onesie' && s.diamonds === 380, 'outfit');
   ok(M.buyOutfit(s, 'roxor', 'default').ok && s.outfits.worn.roxor === 'default', 'switch outfit back for free');
   ok(M.readyBadges(fresh(), NOW).goals >= 1, 'badge for the daily reward');
+}
+// ---- outfits: 4 wardrobe looks + the Endless gold look per hero, rules, migration
+{
+  for (const who of ['roxor', 'jasmin']) {
+    const ids = Object.keys(OUTFITS[who]);
+    ok(['default', 'onesie', 'stage', 'beach', 'rocker', 'moon', 'outfit_gold'].every((id) => ids.includes(id)), who + ' has every outfit id');
+    for (const id of ids) { const o = OUTFITS[who][id]; ok(o.id === id && o.name && o.desc && o.price >= 0 && !/\u2014/.test(o.name + o.desc), who + ' ' + id + ' entry'); }
+    ok(OUTFITS[who].beach.unlock.world === 'beach' && OUTFITS[who].moon.unlock.world === 'moon' && OUTFITS[who].outfit_gold.unlock.endless === 50, who + ' unlock rules');
+    ok(OUTFITS[who].stage.price > 0 && OUTFITS[who].rocker.price > OUTFITS[who].stage.price, who + ' price ladder');
+  }
+  const p = fresh(); p.diamonds = 1000;
+  ok(!M.buyOutfit(p, 'roxor', 'beach').ok && M.buyOutfit(p, 'roxor', 'beach').reason === 'locked' && p.diamonds === 1000, 'beach is locked until Bonfire Beach is cleared');
+  ok(!M.buyOutfit(p, 'jasmin', 'moon').ok && !M.buyOutfit(p, 'jasmin', 'outfit_gold').ok, 'moon and gold locked');
+  ok(M.buyOutfit(p, 'jasmin', 'stage').ok && p.diamonds === 920 && p.outfits.worn.jasmin === 'stage' && p.outfits.owned.jasmin.includes('stage'), 'buy stage');
+  ok(M.buyOutfit(p, 'jasmin', 'rocker').ok && p.diamonds === 760, 'buy rocker');
+  p.prog.beach.cleared = true;
+  ok(M.outfitUnlocked(p, 'roxor', 'beach') && !M.outfitUnlocked(p, 'roxor', 'moon'), 'unlock check by cleared stage');
+  const r = M.buyOutfit(p, 'roxor', 'beach'); ok(r.ok && p.diamonds === 760 && p.outfits.worn.roxor === 'beach', 'beach is free once the stage is cleared');
+  ok(p.outfits.owned.jasmin.includes('beach'), 'beach granted to both heroes');
+  p.stats.endless = 49; ok(!M.outfitUnlocked(p, 'roxor', 'outfit_gold'), 'wave 49 is not enough');
+  const res = { mode: 'endless', world: 'garage', cleared: 50, kills: 10, merges: 0, deploys: 0, bossKills: 0, bestCombo: 0, maxLevel: 1, won: false, leaks: 0 };
+  const out = M.applyRunResult(p, res, rng(), NOW);
+  ok(p.stats.endless >= 50 && M.outfitUnlocked(p, 'jasmin', 'outfit_gold') && out.newOutfits.some((x) => x.id === 'outfit_gold') && p.outfits.owned.roxor.includes('outfit_gold'), 'Endless wave 50 grants the gold look');
+  ok(M.buyOutfit(p, 'roxor', 'outfit_gold').ok && p.outfits.worn.roxor === 'outfit_gold', 'wear gold');
+  const list = M.outfitList(fresh(), 'roxor'); ok(list.length === 7 && list.find((x) => x.id === 'beach').locked && /Clear/.test(list.find((x) => x.id === 'beach').how) && /Endless/.test(list.find((x) => x.id === 'outfit_gold').how) && list.find((x) => x.id === 'default').worn, 'outfitList');
+  // old saves: only default and onesie, still wearing the onesie
+  const old = { v: 1, records: 5, diamonds: 7, stats: {}, prog: {}, outfits: { owned: { roxor: ['default', 'onesie'], jasmin: ['default'] }, worn: { roxor: 'onesie', jasmin: 'default' } } };
+  const m = M.migrate(JSON.parse(JSON.stringify(old)), NOW);
+  ok(m.outfits.owned.roxor.includes('onesie') && m.outfits.worn.roxor === 'onesie' && m.outfits.owned.jasmin.length === 1 && m.diamonds === 7, 'old save keeps its outfits');
+  const bad = M.migrate({ stats: {}, prog: {}, outfits: { owned: { roxor: ['default', 'nope', 7, 'stage', 'stage'] }, worn: { roxor: 'ghost', jasmin: 'moon' } } }, NOW);
+  ok(bad.outfits.owned.roxor.join() === 'default,stage' && bad.outfits.worn.roxor === 'default' && bad.outfits.worn.jasmin === 'default', 'damaged outfits are sanitised');
+  const none = M.migrate({ stats: {}, prog: {} }, NOW); ok(none.outfits.owned.roxor[0] === 'default' && none.outfits.worn.jasmin === 'default', 'missing outfits become the default');
+  const cleared = M.migrate({ stats: { endless: 60 }, prog: { moon: { cleared: true } } }, NOW);
+  ok(cleared.outfits.owned.roxor.includes('moon') && cleared.outfits.owned.jasmin.includes('outfit_gold') && !cleared.outfits.owned.roxor.includes('beach'), 'migration grants outfits the old save already earned');
+  const rt = M.parseSave(M.serialize(p), NOW); ok(rt.outfits.worn.roxor === 'outfit_gold' && rt.outfits.owned.jasmin.includes('rocker'), 'outfits survive save and load');
 }
 // ---- boosters, wheel, codex stats
 {

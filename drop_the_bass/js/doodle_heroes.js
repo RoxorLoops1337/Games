@@ -329,6 +329,319 @@ function armsAndMic(pen, who, onesie, st, hands, only) {
   }
 }
 
+// ------------------------------------------------------------------------------------------------ wardrobe: stage, beach, rocker, moon, gold
+// Faces and hair never change. A wardrobe outfit swaps the legs, shoes, torso and sleeves (bodyOutfit) and adds head gear on top of the hair (headOutfit).
+// Public outfit ids: 'stage', 'beach', 'rocker', 'moon', 'outfit_gold' (drawn as 'gold'). Anything else draws the classic look.
+const NEWOX = ['stage', 'beach', 'rocker', 'moon', 'gold'];
+const oxOf = (id) => { const v = id === 'outfit_gold' ? 'gold' : id; return NEWOX.includes(v) ? v : ''; };
+const GOLD = { a: '#ffd23c', b: '#e0a800', c: '#fff0a0', d: '#a67c00' };
+const SILVER = '#dfe3f0';
+function bbox(p) { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (let i = 0; i < p.length; i += 2) { x0 = Math.min(x0, p[i]); x1 = Math.max(x1, p[i]); y0 = Math.min(y0, p[i + 1]); y1 = Math.max(y1, p[i + 1]); } return [x0, y0, x1, y1]; }
+// sequins: n tiny glints scattered inside a polygon
+function seq(pen, p, cols, n, r = 0.9) { const b = bbox(p); clipped(pen, p, () => { for (let i = 0; i < n; i++) pen.dot(pen.rr(b[0], b[2]), pen.rr(b[1], b[3]), r, cols[i % cols.length]); }); }
+function spark(pen, x, y, r, col, w = 1.1) { pen.ln([x - r, y, x + r, y], col, w, false, 0.05); pen.ln([x, y - r, x, y + r], col, w, false, 0.05); }
+function flower(pen, x, y, r, petal, centre, line) {
+  for (let i = 0; i < 5; i++) { const a = i / 5 * TAU - 1.57; pen.dot(x + Math.cos(a) * r * 0.78, y + Math.sin(a) * r * 0.78, r * 0.62, line); }
+  for (let i = 0; i < 5; i++) { const a = i / 5 * TAU - 1.57; pen.dot(x + Math.cos(a) * r * 0.78, y + Math.sin(a) * r * 0.78, r * 0.5, petal); }
+  pen.dot(x, y, r * 0.5, centre);
+}
+function holo(pen, p, o = {}) { pf(pen, p, '#cdeeff', '#ff9ad2', o.line || '#7a6cc8', { gap: 2.2, ang: -0.6, hi: '#b8a6ff', ha: 0.55, a: 0.55 }); pen.hatch(p, '#7ff0e0', 3.4, 0.5, 0.35); }
+function crescent(pen, x, y, r, col, line) {
+  const pts = arc(x, y, r, r, 75, 285, 14).concat(arc(x + r * 0.5, y, r * 0.74, r * 0.84, 285, 75, 14));
+  pf(pen, pts, col, null, line, { lw: 1.2 });
+}
+
+// ---- shoes
+function shoeNew(pen, sp, s, fx, fy) {
+  const S = sp.shoe, x0 = fx - 10 + (s > 0 ? 2 : -2), x1 = fx + 12 + (s > 0 ? 3 : -1);
+  if (S.kind === 'sandal') {
+    pf(pen, [x0 + 1, fy - 4, x1 - 2, fy - 4, x1, fy + 2, x0, fy + 2], SKIN[sp.who], SKIN2[sp.who], LN.skin, { gap: 2.2, lw: 1.1, a: 0.25 });
+    pf(pen, [x0 - 1, fy + 1.5, x1 + 1, fy + 1.5, x1 + 1, fy + 4.8, x0 - 1, fy + 4.8], S.base, S.tone, S.line, { gap: 2, lw: 1.1 });
+    pen.ln([fx - 3, fy - 4, fx + 3, fy + 1.5], S.line, 1.7, false, 0.1); pen.ln([fx + 3, fy - 4, fx - 3, fy + 1.5], S.line, 1.7, false, 0.1);
+    pen.ln([fx - 3, fy - 4, fx + 3, fy + 1.5], S.strap, 1, false, 0.1); pen.ln([fx + 3, fy - 4, fx - 3, fy + 1.5], S.strap, 1, false, 0.1);
+    return;
+  }
+  if (S.kind === 'boot') {
+    const hh = S.shaft || 16, sh = [fx - 8.5, fy - 5 - hh, fx + 8.5, fy - 5 - hh, fx + 9.5, fy - 5, fx - 9.5, fy - 5];
+    pf(pen, sh, S.base, S.tone, S.line, { gap: 2.2, hi: S.hi || '#8a849c', lw: 1.3 });
+    pen.ln([fx - 8.5, fy - 2 - hh, fx + 8.5, fy - 2 - hh], S.line, 1.2, false, 0.2);
+    for (let i = 0; i < Math.floor((hh - 4) / 3.4); i++) pen.ln([fx - 3.5, fy - 2 - hh + 3 + i * 3.4, fx + 3.5, fy - 2 - hh + 4 + i * 3.4], S.lace || '#fff', 1.1, false, 0.1);
+    if (S.stud) { pen.dot(fx + 7, fy - 2 - hh, 1.3, SILVER); pen.dot(fx - 7, fy - 2 - hh, 1.3, SILVER); }
+  }
+  pf(pen, [x0, fy - 6, x1 - 1, fy - 6, x1 + 1, fy + 4, x0 - 1, fy + 4], S.base, S.tone, S.line, { gap: 2.2, hi: S.hi });
+  pf(pen, [x0 - 0.5, fy + 0.5, x1 + 1, fy + 0.5, x1 + 1, fy + 4.5, x0 - 1, fy + 4.5], S.sole, null, S.line, { gap: 2, lw: 1.1 });
+  if (S.glow) pen.ln([x0 + 1, fy + 5.4, x1, fy + 5.4], S.glow, 1.6, false, 0.1);
+  if (S.kind !== 'boot') pen.ln([fx - 1 + s, fy - 5, fx + 5 + s, fy - 3], S.lace || '#fff', 1.3, false, 0.1);
+}
+function legsNew(pen, sp, st) {
+  const P = sp.pants;
+  for (const s of [-1, 1]) {
+    const lift = st.foot && s > 0 ? -8 : 0, foot = lift ? [s * 14, -8] : [s * 10, -2];
+    limb(pen, s * 7, -28, foot[0], foot[1] - 5, P.col, P.w, 0, P.oc);
+    const fx = foot[0], fy = foot[1];
+    if (P.stripe) pen.ln([s * 10.5, -26, fx + s * 4.5, fy - 7], P.stripe, 1.6, false, 0.3);
+    if (P.rip && s < 0) {
+      const mx = (s * 7 + fx) / 2, my = (-28 + fy - 5) / 2;
+      pf(pen, [mx - 4, my - 3, mx + 4, my - 4, mx + 4, my + 3, mx - 4, my + 4], SKIN2[sp.who], null, '#2c3d6e', { lw: 1 });
+      pen.ln([mx - 4, my - 1.5, mx + 4, my - 1.5], '#e8eefc', 1, false, 0.2); pen.ln([mx - 4, my + 1.5, mx + 4, my + 1.5], '#e8eefc', 1, false, 0.2);
+    }
+    shoeNew(pen, sp, s, fx, fy);
+  }
+}
+
+// ---- tops
+function roxorJacket(pen, sl, o) {
+  const tee = [-10, -58 + sl, 10, -58 + sl, 14, -27, -14, -27];
+  pf(pen, tee, o.tee, o.teeTone, o.teeLine || o.line, { gap: 2.2, lw: 1.2 });
+  if (o.motif) o.motif(pen);
+  for (const s of [-1, 1]) {
+    const half = [s * 18, -58 + sl, s * 8.5, -58 + sl, s * 12, -27, s * 24, -27];
+    pf(pen, half, o.col, o.tone, o.line, { gap: 2.2, ang: -0.5, hi: o.hi, ha: 0.45 });
+    if (o.seq) seq(pen, half, o.seq, 16, 0.85);
+    pf(pen, [s * 8.5, -58 + sl, s * 15, -57 + sl, s * 9, -46 + sl], o.lapel, o.lapelTone || o.tone, o.line, { gap: 1.8, lw: 1.1 });
+    if (o.studs) for (let i = 0; i < 4; i++) pen.dot(s * (11 + i * 1.6), -54 + sl + i * 5, 1.15, SILVER);
+  }
+  pen.ln([-24, -29, -12, -29], o.line, 1.2, false, 0.2); pen.ln([24, -29, 12, -29], o.line, 1.2, false, 0.2);
+}
+const SPEC = {};
+SPEC['stage:roxor'] = {
+  who: 'roxor',
+  pants: { col: '#2b2733', oc: LN.blk, w: 11.5, stripe: GOLD.a },
+  shoe: { kind: 'sneaker', base: GOLD.a, tone: GOLD.c, line: GOLD.d, sole: '#fff', hi: '#fff5c4', lace: GOLD.d },
+  arm: { col: '#8a4fe0', oc: '#3d1d80', cap: '#8a4fe0', capTone: '#5b2fb0', capLine: '#3d1d80', capHi: '#c9a6ff', fx: 'seq', fxCols: ['#fff', GOLD.c], bands: null },
+  top(pen, st) {
+    roxorJacket(pen, st.slump || 0, { col: '#8a4fe0', tone: '#5b2fb0', line: '#3d1d80', hi: '#c9a6ff', tee: '#fff', teeTone: '#e3d8fa', seq: ['#fff', GOLD.c, '#ff9ad2'], lapel: GOLD.a, lapelTone: GOLD.b,
+      motif: (p) => { pf(p, star(0, -42, 7.5, 0.45), GOLD.a, GOLD.c, GOLD.d, { gap: 1.8, lw: 1.1 }); } });
+    pen.ln([-22, -29, 22, -29], GOLD.a, 1.6, false, 0.2); spark(pen, -19, -50, 2.6, '#fff'); spark(pen, 17, -36, 2.2, GOLD.c);
+  },
+};
+SPEC['stage:jasmin'] = {
+  who: 'jasmin',
+  pants: { col: SKIN.jasmin, oc: LN.skin, w: 8.5 },
+  shoe: { kind: 'boot', base: '#c9cde0', tone: '#9fa5c4', line: '#6a6f90', sole: '#fff', hi: '#fff', lace: '#6a6f90' },
+  arm: { col: null, oc: null, cap: null, bands: [GOLD.a, GOLD.c], bandW: 2.6 },
+  top(pen, st) { sequinDress(pen, st, { col: '#ff4fa8', tone: '#c2247c', line: '#9a1a62', hi: '#ff9ad2', seq: ['#fff', GOLD.c, '#7ff0e0'], trim: GOLD.a }); },
+};
+function sequinDress(pen, st, o) {
+  const sl = st.slump || 0;
+  const skirt = [-12, -44, 12, -44, 17, -30, 25, -15, 17, -12.5, 9, -15, 0, -12.5, -9, -15, -17, -12.5, -25, -15, -17, -30];
+  pf(pen, skirt, o.col, o.tone, o.line, { gap: 2.2, ang: 1.1, hi: o.hi, ha: 0.45 });
+  seq(pen, skirt, o.seq, 26, 0.9);
+  pen.ln([-25, -15, -17, -12.5, -9, -15, 0, -12.5, 9, -15, 17, -12.5, 25, -15], o.trim, 1.6, false, 0.2);
+  const bod = [-14, -56 + sl, 14, -56 + sl, 12.5, -43, -12.5, -43];
+  pf(pen, bod, o.col, o.tone, o.line, { gap: 2.2, hi: o.hi, ha: 0.45 }); seq(pen, bod, o.seq, 10, 0.85);
+  pen.ln([-12.5, -43, 12.5, -43], o.trim, 1.8, false, 0.2);
+  pf(pen, star(0, -49 + sl * 0.5, 5.2, 0.45), o.trim, GOLD.c, GOLD.d, { gap: 1.6, lw: 1 });
+  spark(pen, 19, -26, 2.4, '#fff'); spark(pen, -17, -22, 2, GOLD.c);
+}
+SPEC['beach:roxor'] = {
+  who: 'roxor',
+  pants: { col: SKIN.roxor, oc: LN.skin, w: 8.8 },
+  shoe: { kind: 'sandal', base: '#b9783c', tone: '#8a5326', line: '#5a3418', strap: '#ff6f61' },
+  arm: { col: null, oc: null, cap: '#2fb7b0', capTone: '#1d8a86', capLine: '#146a66', capHi: '#8af0e6', capR: 9.4 },
+  top(pen, st, bust) {
+    const sl = st.slump || 0;
+    if (!bust) for (const s of [-1, 1]) {   // board shorts
+      const sh = [s * 0.5, -31, s * 16, -31, s * 17.5, -11, s * 3, -11];
+      pf(pen, sh, '#ff8f3c', '#d9601a', '#a33f0a', { gap: 2.2, hi: '#ffd08a' });
+      pen.ln([s * 15.5, -30, s * 17, -12], '#fff', 2, false, 0.2);
+    }
+    const body = [-18, -58 + sl, 18, -58 + sl, 24, -26, -24, -26];
+    pf(pen, body, '#2fb7b0', '#1d8a86', '#146a66', { gap: 2.4, ang: -0.4, hi: '#8af0e6' });
+    clipped(pen, body, () => {
+      const fl = [[-12, -50, '#ff6f91'], [12, -44, '#ffd60a'], [-14, -36, '#fff'], [8, -33, '#ff6f91'], [-3, -42, '#ffd60a'], [18, -54, '#fff']];
+      for (const [x, y, c] of fl) flower(pen, x, y + sl * 0.3, 3.8, c, c === '#ffd60a' ? '#ff8f3c' : '#ffd60a', '#146a66');
+    });
+    pf(pen, [-5, -58 + sl, 5, -58 + sl, 0, -46 + sl], SKIN.roxor, SKIN2.roxor, LN.skin, { gap: 2.4, lw: 1.1, a: 0.3 });   // open collar
+    pf(pen, [-5, -58 + sl, -13, -56 + sl, -9, -47 + sl, 0, -46 + sl], '#1fa39d', '#146a66', '#146a66', { gap: 2, lw: 1.1 });
+    pf(pen, [5, -58 + sl, 13, -56 + sl, 9, -47 + sl, 0, -46 + sl], '#1fa39d', '#146a66', '#146a66', { gap: 2, lw: 1.1 });
+    pen.ln([-23, -29, 23, -29], '#146a66', 1.2, false, 0.3);
+  },
+};
+SPEC['beach:jasmin'] = {
+  who: 'jasmin',
+  pants: { col: SKIN.jasmin, oc: LN.skin, w: 8.5 },
+  shoe: { kind: 'sandal', base: '#ffb0d9', tone: '#ff7fbf', line: '#c42f7c', strap: '#fff' },
+  arm: { col: null, oc: null, cap: null },
+  top(pen, st) {
+    const sl = st.slump || 0;
+    pf(pen, [-13, -58 + sl, 13, -58 + sl, 13, -50 + sl, -13, -50 + sl], SKIN.jasmin, SKIN2.jasmin, LN.skin, { gap: 2.4, lw: 1.1, a: 0.2 });
+    const skirt = [-12, -44, 12, -44, 16, -30, 24, -14, 12, -16, 0, -13, -12, -16, -24, -14, -16, -30];
+    pf(pen, skirt, '#ffe066', '#f5b82e', '#b88a00', { gap: 2.3, ang: 1.1, hi: '#fff5b0' });
+    clipped(pen, skirt, () => { for (const [x, y, c] of [[-14, -22, '#ff6f91'], [-3, -30, '#fff'], [10, -20, '#ff6f91'], [16, -33, '#fff'], [3, -17, '#7ec8ff'], [-17, -34, '#7ec8ff']]) flower(pen, x, y, 3.2, c, '#ff9226', '#b88a00'); });
+    const bod = [-12.5, -52 + sl, 12.5, -52 + sl, 12, -43, -12, -43];
+    pf(pen, bod, '#ffe066', '#f5b82e', '#b88a00', { gap: 2.3, hi: '#fff5b0' });
+    pen.ln(arc(0, -52 + sl, 12.5, 2.2, 10, 170), '#b88a00', 1.1, false, 0.2);
+    for (const sx of [-1, 1]) pen.ln([sx * 8.5, -52 + sl, sx * 7, -58 + sl], '#ffe066', 2.2, false, 0.1);
+    flower(pen, 0, -47 + sl * 0.5, 3.4, '#ff6f91', '#fff', '#b88a00');
+    pen.ln([-24, -15, -12, -16, 0, -13, 12, -16, 24, -14], '#b88a00', 1.1, false, 0.2);
+  },
+};
+SPEC['rocker:roxor'] = {
+  who: 'roxor',
+  pants: { col: '#4a6aa8', oc: '#26365e', w: 11.5, rip: true },
+  shoe: { kind: 'boot', base: '#2b2733', tone: '#46404f', line: LN.blk, sole: '#6b6578', hi: '#6b6578', lace: '#dfe3f0', stud: true, shaft: 9 },
+  arm: { col: '#2b2733', oc: LN.blk, cap: '#2b2733', capTone: '#17141d', capLine: LN.blk, capHi: '#6b6578', fx: 'studs', bands: [SILVER], bandW: 3.4 },
+  top(pen, st) {
+    roxorJacket(pen, st.slump || 0, { col: '#2b2733', tone: '#17141d', line: LN.blk, hi: '#6b6578', tee: '#d8332f', teeTone: '#a31f20', teeLine: '#7a1416', lapel: '#3a3646', studs: true,
+      motif: (p) => { p.ln([2, -52, -4, -44, 3, -43, -3, -34], '#fff', 2.4, false, 0.1); p.ln([2, -52, -4, -44, 3, -43, -3, -34], '#ffd60a', 1.2, false, 0.1); } });
+    pen.ln([-22, -29, 22, -29], SILVER, 1.4, false, 0.2);
+    pen.ln([18, -29, 21, -22, 17, -16], '#9fa5c4', 1.2, false, 0.1);   // wallet chain
+  },
+};
+SPEC['rocker:jasmin'] = {
+  who: 'jasmin',
+  pants: { col: SKIN.jasmin, oc: LN.skin, w: 8.5 },
+  shoe: { kind: 'boot', base: '#2b2733', tone: '#46404f', line: LN.blk, sole: '#6b6578', hi: '#6b6578', lace: '#ff7fbf', stud: true },
+  arm: { col: null, oc: null, cap: null, fx: 'net', bands: ['#2b2733'], bandW: 3 },
+  top(pen, st) {
+    const sl = st.slump || 0;
+    const skirt = [-12, -34, 12, -34, 24, -13, 12, -11.5, 0, -13, -12, -11.5, -24, -13];
+    pf(pen, skirt, '#c4304f', '#8e1a35', '#4a0e1c', { gap: 2.4, hi: '#ff7a8f' });
+    clipped(pen, skirt, () => { for (let i = -5; i <= 5; i++) { pen.ln([i * 4.6, -35, i * 7.5, -10], '#2b2733', 1.5, false, 0.1); } for (let j = 0; j < 4; j++) pen.ln([-26, -31 + j * 5.2, 26, -31 + j * 5.2], '#2b2733', 1.5, false, 0.1); pen.ln([-26, -28.4, 26, -28.4], '#ffd60a', 0.8, false, 0.1); });
+    pen.ln([-12, -34, 12, -34], '#2b2733', 2.4, false, 0.1); for (let i = -2; i <= 2; i++) pen.dot(i * 5, -34, 1.1, SILVER);
+    pf(pen, [-10, -41, 10, -41, 10, -33, -10, -33], SKIN.jasmin, SKIN2.jasmin, LN.skin, { gap: 2.4, lw: 1.3, a: 0.2 });
+    const tee = [-15, -57 + sl, 15, -57 + sl, 12, -40, -12, -40];
+    pf(pen, tee, '#2b2733', '#17141d', LN.blk, { gap: 2.2, hi: '#6b6578' });
+    pf(pen, heart(0, -46.5 + sl * 0.5, 7), '#ff5fb0', '#ff9ad2', '#c42f7c', { gap: 1.6, lw: 1 });
+    pen.ln([-5, -49 + sl * 0.5, 5, -44 + sl * 0.5], '#fff', 1, false, 0.1);
+  },
+  neck(pen, st) {   // black choker with a stud
+    const sl = st.slump || 0; pen.ln([-6, -56.5 + sl, 0, -54.5 + sl, 6, -56.5 + sl], '#17141d', 3, false, 0.1); pen.dot(0, -54.6 + sl, 1.5, SILVER);
+  },
+};
+SPEC['moon:roxor'] = {
+  who: 'roxor',
+  pants: { col: '#1f2670', oc: '#0d1240', w: 11.5, stripe: '#5fe8ff' },
+  shoe: { kind: 'sneaker', base: '#dfe9ff', tone: '#b8a6ff', line: '#4a4a9a', sole: '#fff', hi: '#fff', glow: '#5fe8ff', lace: '#7a6cc8' },
+  arm: { col: '#bfe6ff', oc: '#7a6cc8', cap: '#bfe6ff', capTone: '#ff9ad2', capLine: '#7a6cc8', capHi: '#7ff0e0', fx: 'holo', bands: ['#9dff3a', '#ff5fb0', '#5fe8ff'], bandW: 3, glow: true },
+  top(pen, st) {
+    const sl = st.slump || 0;
+    pf(pen, [-10, -58 + sl, 10, -58 + sl, 14, -27, -14, -27], '#1a1a4a', '#0d1240', '#0d1240', { gap: 2.2, lw: 1.2, hi: '#3a3a8a' });
+    crescent(pen, -1, -43, 6.4, '#fff3b0', '#e0a800', '#1a1a4a'); spark(pen, 6, -50, 2, '#5fe8ff'); spark(pen, 5, -36, 1.8, '#ff9ad2');
+    for (const s of [-1, 1]) {
+      const half = [s * 18, -58 + sl, s * 8.5, -58 + sl, s * 12, -27, s * 24, -27];
+      holo(pen, half); pen.ln([s * 8.5, -58 + sl, s * 12, -27], '#7a6cc8', 1.3, false, 0.2); pen.ln(half, '#7a6cc8', 1.4, true, 0.4);
+    }
+    pen.ln([-24, -29, -12, -29], '#5fe8ff', 1.6, false, 0.2); pen.ln([24, -29, 12, -29], '#5fe8ff', 1.6, false, 0.2);
+  },
+};
+SPEC['moon:jasmin'] = {
+  who: 'jasmin',
+  pants: { col: '#1f2670', oc: '#0d1240', w: 10.5, stripe: '#ff5fb0' },
+  shoe: { kind: 'sneaker', base: '#dfe9ff', tone: '#ffb0d9', line: '#7a6cc8', sole: '#fff', hi: '#fff', glow: '#ff5fb0', lace: '#7a6cc8' },
+  arm: { col: '#bfe6ff', oc: '#7a6cc8', cap: null, fx: 'holo', bands: ['#ff5fb0', '#9dff3a', '#5fe8ff'], bandW: 3, glow: true },
+  top(pen, st) {
+    const sl = st.slump || 0;
+    pf(pen, [-12, -33, 12, -33, 19, -24, -19, -24], '#1f2670', '#0d1240', '#0d1240', { gap: 2.2, hi: '#3a3a8a' });
+    pen.ln([-12, -31, 12, -31], '#5fe8ff', 1.5, false, 0.3);
+    pf(pen, [-10, -41, 10, -41, 10, -32, -10, -32], SKIN.jasmin, SKIN2.jasmin, LN.skin, { gap: 2.4, lw: 1.3, a: 0.2 });
+    pf(pen, [-14, -57 + sl, 14, -57 + sl, 11, -40, -11, -40], '#1a1a4a', '#0d1240', '#0d1240', { gap: 2.2, hi: '#3a3a8a' });
+    crescent(pen, -1, -48 + sl * 0.5, 4.6, '#fff3b0', '#e0a800', '#1a1a4a');
+    for (const s of [-1, 1]) { const half = [s * 16, -57 + sl, s * 5, -57 + sl, s * 7, -38, s * 14, -39]; holo(pen, half); pen.ln(half, '#7a6cc8', 1.4, true, 0.4); }
+    pen.ln([-12, -40, 12, -40], '#5fe8ff', 1.2, false, 0.3);
+  },
+};
+SPEC['gold:roxor'] = {
+  who: 'roxor',
+  pants: { col: '#2b2733', oc: LN.blk, w: 11.5, stripe: GOLD.a },
+  shoe: { kind: 'sneaker', base: GOLD.a, tone: GOLD.c, line: GOLD.d, sole: '#fff', hi: '#fff5c4', lace: GOLD.d },
+  arm: { col: GOLD.a, oc: GOLD.d, cap: GOLD.a, capTone: GOLD.b, capLine: GOLD.d, capHi: GOLD.c, fx: 'seq', fxCols: ['#fff', '#fff'], bands: [GOLD.c], bandW: 3 },
+  top(pen, st) {
+    roxorJacket(pen, st.slump || 0, { col: GOLD.a, tone: GOLD.b, line: GOLD.d, hi: GOLD.c, tee: '#2b2733', teeTone: '#17141d', teeLine: LN.blk, seq: ['#fff', GOLD.c, '#fff'], lapel: '#fff5c4', lapelTone: GOLD.c,
+      motif: (p) => { pf(p, star(0, -42, 7.5, 0.45), '#fff', GOLD.c, GOLD.d, { gap: 1.8, lw: 1.1 }); } });
+    pen.ln([-22, -29, 22, -29], '#fff', 1.4, false, 0.2); spark(pen, -19, -50, 2.8, '#fff'); spark(pen, 17, -36, 2.4, '#fff');
+  },
+};
+SPEC['gold:jasmin'] = {
+  who: 'jasmin',
+  pants: { col: SKIN.jasmin, oc: LN.skin, w: 8.5 },
+  shoe: { kind: 'boot', base: GOLD.a, tone: GOLD.c, line: GOLD.d, sole: '#fff', hi: '#fff5c4', lace: GOLD.d },
+  arm: { col: null, oc: null, cap: null, bands: [GOLD.a, '#fff'], bandW: 2.8 },
+  top(pen, st) { sequinDress(pen, st, { col: GOLD.a, tone: GOLD.b, line: GOLD.d, hi: GOLD.c, seq: ['#fff', '#fff5c4', GOLD.d], trim: '#fff' }); },
+};
+
+function bodyOutfit(pen, who, st, bust) {
+  const sp = SPEC[st.ox + ':' + who];
+  if (!bust) legsNew(pen, sp, st);
+  sp.top(pen, st, bust);
+  const slump = st.slump || 0;
+  pf(pen, [-6, -60 + slump, 6, -60 + slump, 6, -54 + slump, -6, -54 + slump], SKIN[who], SKIN2[who], LN.skin, { gap: 2.4, lw: 1.2, a: 0.3 });
+  if (who === 'jasmin') for (let i = 0; i < 8; i++) { const a = (20 + i * 20) * Math.PI / 180, bx = Math.cos(a) * 8, by = -57 + slump + Math.sin(a) * 6 + 1; pen.dot(bx, by, 2.1, '#8a8fa6'); pen.dot(bx, by, 1.5, '#f0f2fa'); }
+  if (sp.neck) sp.neck(pen, st);
+}
+// extra marks along an arm path: sequin glints, studs, holo stripes, fishnet
+function armOutfit(pen, A, sh, h, s) {
+  const mx = (sh[0] + h[0]) / 2 + s * 5, my = (sh[1] + h[1]) / 2 + Math.abs(s * 5) * 0.4;
+  const at = (f) => { const a = (1 - f) * (1 - f), b = 2 * f * (1 - f), c = f * f; return [a * sh[0] + b * mx + c * h[0], a * sh[1] + b * my + c * h[1]]; };
+  if (A.fx === 'seq') for (let i = 1; i < 5; i++) { const q = at(i / 5); pen.dot(q[0] + (i % 2 ? 1 : -1), q[1], 0.85, A.fxCols[i % A.fxCols.length]); }
+  else if (A.fx === 'studs') for (let i = 1; i < 4; i++) { const q = at(i / 4); pen.dot(q[0], q[1], 1.1, SILVER); }
+  else if (A.fx === 'holo') { pen.ln([sh[0], sh[1], mx, my, h[0], h[1]], '#ff9ad2', 1.8, false, 0.1); for (let i = 1; i < 4; i++) { const q = at(i / 4); pen.dot(q[0], q[1], 1, '#fff'); } }
+  else if (A.fx === 'net') for (let i = 1; i < 6; i++) { const q = at(i / 6.5); pen.ln([q[0] - 2.4, q[1] - 2.4, q[0] + 2.4, q[1] + 2.4], '#2b2733', 0.9, false, 0.05); pen.ln([q[0] + 2.4, q[1] - 2.4, q[0] - 2.4, q[1] + 2.4], '#2b2733', 0.9, false, 0.05); }
+}
+// glow sticks and bangles at the wrist, perpendicular to the forearm
+function wristBands(pen, sh, h, cols) {
+  const dx = sh[0] - h[0], dy = sh[1] - h[1], d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d, nx = -uy, ny = ux;
+  cols.forEach((col, i) => {
+    const wx = h[0] + ux * (7 + i * 3.2), wy = h[1] + uy * (7 + i * 3.2), r = 5.2;
+    pen.ln([wx - nx * r, wy - ny * r, wx + nx * r, wy + ny * r], col === SILVER ? '#8a849c' : LN.blk, 4.4, false, 0.05);
+    pen.ln([wx - nx * r, wy - ny * r, wx + nx * r, wy + ny * r], col, 2.8, false, 0.05);
+    pen.ln([wx - nx * 2, wy - ny * 2, wx + nx * 1, wy + ny * 1], '#fff', 0.9, false, 0.05);
+  });
+}
+
+// ---- head gear (drawn over the hair, in head space, centre (0, -80))
+function headOutfit(pen, who, ox, st) {
+  const hx = 0, hy = -80, roxor = who === 'roxor';
+  const star1 = (x, y, r, a, b, d) => pf(pen, star(x, y, r, 0.46), a, b, d, { gap: 1.6, lw: 1 });
+  if (ox === 'stage') {
+    if (roxor) { star1(hx - 20, hy - 12, 5.2, GOLD.a, GOLD.c, GOLD.d); spark(pen, hx + 31, hy - 26, 3.4, GOLD.a); spark(pen, hx - 30, hy - 30, 2.4, '#7ff0e0'); }
+    else { star1(hx - 17, hy - 28, 6.4, GOLD.a, GOLD.c, GOLD.d); spark(pen, hx + 30, hy - 34, 3.2, GOLD.a); star1(hx - 27, hy + 20, 3, GOLD.a, GOLD.c, GOLD.d); }
+  } else if (ox === 'beach') {
+    if (roxor) {   // straw hat band with the spikes poking out of the open crown, and a hibiscus
+      const brim = arc(hx, hy - 24, 36, 7.2, 0, 360, 24), crown = [hx - 17, hy - 25, hx + 17, hy - 25, hx + 15, hy - 36, hx - 15, hy - 36];
+      pf(pen, brim, '#f3d27a', '#d9a93a', '#a67c24', { gap: 2.2, ang: 0.2, hi: '#fff0b8', lw: 1.4 });
+      pf(pen, crown, '#f3d27a', '#d9a93a', '#a67c24', { gap: 2, ang: 1.2, hi: '#fff0b8', lw: 1.4 });
+      pen.ln(arc(hx, hy - 36, 15, 3.2, 0, 360, 14), '#a67c24', 1.3, true, 0.1);
+      pf(pen, [hx - 17, hy - 26, hx + 17, hy - 26, hx + 16.4, hy - 30, hx - 16.4, hy - 30], '#ff6f61', '#d93c3c', '#a32727', { gap: 1.8, lw: 1.1 });
+      flower(pen, hx + 12, hy - 29, 5, '#ff4f6f', '#ffd60a', '#8e1a35'); pen.ln([hx + 12, hy - 29, hx + 15, hy - 33], '#ffd60a', 1.1, false, 0.1);
+    } else {   // flower crown
+      for (let i = 0; i < 9; i++) {
+        const a = (196 + i * 18.5) * Math.PI / 180, x = hx + Math.cos(a) * 28, y = hy - 8 + Math.sin(a) * 28;
+        const cols = [['#ff6f91', '#ffd60a'], ['#fff', '#ff9226'], ['#7ec8ff', '#ffd60a'], ['#ffd60a', '#ff6f91']][i % 4];
+        flower(pen, x, y, 4.6, cols[0], cols[1], '#6a2a4a');
+        if (i % 2) { pen.ln([x - 4, y + 3, x - 7, y + 5], '#43b94a', 2, false, 0.1); }
+      }
+    }
+  } else if (ox === 'rocker') {
+    if (roxor) { for (let i = 0; i < 3; i++) pen.dot(hx - 28, hy - 3 + i * 5, 1.3, SILVER); pen.ln(arc(hx - 27, hy + 12, 3.2, 4.6, 60, 380), '#9fa5c4', 1.3, false, 0.1); }
+    else {   // black lightning clip over the pink one
+      pf(pen, [hx - 22, hy - 30, hx - 12, hy - 33, hx - 10, hy - 25, hx - 20, hy - 22], '#2b2733', '#46404f', LN.blk, { gap: 1.8, lw: 1.1 });
+      pen.ln([hx - 16, hy - 31, hx - 19, hy - 27, hx - 14, hy - 27, hx - 17, hy - 23], '#ffd60a', 1.5, false, 0.05);
+    }
+  } else if (ox === 'moon') {
+    if (roxor) {   // star visor: a glassy band across the forehead
+      const outer = arc(hx, hy - 9, 29, 22, 196, 344, 18), inner = arc(hx, hy - 9, 29, 17.5, 344, 196, 18);
+      const band = outer.concat(inner);
+      pf(pen, band, 'rgba(95,232,255,0.92)', '#7a6cc8', '#4a4a9a', { gap: 1.6, hi: '#fff', lw: 1.3, ha: 0.5 });
+      star1(hx, hy - 28.5, 6.4, GOLD.a, GOLD.c, GOLD.d); spark(pen, hx + 20, hy - 34, 2.6, '#fff'); spark(pen, hx - 21, hy - 33, 2, '#ff9ad2');
+    } else {   // crescent moon clip
+      crescent(pen, hx - 17, hy - 30, 8.2, '#fff3b0', '#e0a800', HAIR.mid); star1(hx - 9, hy - 36, 3, '#5fe8ff', '#fff', '#4a4a9a'); spark(pen, hx + 28, hy - 14, 2.4, '#5fe8ff');
+    }
+  } else if (ox === 'gold') {
+    if (roxor) {
+      const outer = arc(hx, hy - 9, 29, 22, 196, 344, 18), inner = arc(hx, hy - 9, 29, 18.5, 344, 196, 18);
+      pf(pen, outer.concat(inner), GOLD.a, GOLD.c, GOLD.d, { gap: 1.6, hi: '#fff', lw: 1.3 });
+      star1(hx, hy - 29, 6.8, '#fff', GOLD.c, GOLD.d); spark(pen, hx + 22, hy - 33, 2.6, '#fff');
+    } else {   // little tiara
+      const ti = [hx - 15, hy - 30, hx - 11, hy - 40, hx - 6, hy - 33, hx, hy - 44, hx + 6, hy - 33, hx + 11, hy - 40, hx + 15, hy - 30];
+      pf(pen, ti, GOLD.a, GOLD.c, GOLD.d, { gap: 1.8, hi: '#fff', lw: 1.2 });
+      pen.dot(hx, hy - 38, 1.6, '#ff5fb0'); pen.dot(hx - 10, hy - 35, 1.1, '#7ff0e0'); pen.dot(hx + 10, hy - 35, 1.1, '#7ff0e0');
+      spark(pen, hx + 26, hy - 20, 2.6, GOLD.a);
+    }
+  }
+}
+
 function drawFigure(pen, ctx, who, pose, onesie, v) {
   const P = POSE[pose], hands = (v && P.alt) ? P.alt : P.hands;
   const st = { who, ox: v.ox, pose, eye: P.eye, mouth: v.mouth, blink: v.blink, look: who === 'roxor' ? 0.25 : 0.1, mic: P.mic, micMouth: P.micMouth, slump: P.slump || 0, foot: P.foot && v.alt, point: P.point };

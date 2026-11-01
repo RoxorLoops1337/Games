@@ -111,6 +111,17 @@ export function migrate(p, now = 0) {
   out.gear.equipped = Object.assign({}, base.gear.equipped, isObj(p.gear && p.gear.equipped) ? p.gear.equipped : {});
   for (const sl of SLOTS) if (out.gear.equipped[sl] != null && !out.gear.items.some((g) => g.uid === out.gear.equipped[sl])) out.gear.equipped[sl] = null;
   out.gear.uid = Math.max(int(out.gear.uid, 1, 1), 1 + out.gear.items.reduce((m, g) => Math.max(m, +g.uid || 0), 0));
+  // outfits: keep only known ids (ids are append-only, so a newer save never loses one), always own 'default', never wear an outfit that is not owned
+  out.outfits = { owned: {}, worn: {} };
+  for (const who of ['roxor', 'jasmin']) {
+    const raw = isObj(p.outfits) && isObj(p.outfits.owned) && Array.isArray(p.outfits.owned[who]) ? p.outfits.owned[who] : [];
+    const own = ['default'];
+    for (const id of raw) if (typeof id === 'string' && OUTFITS[who][id] && !own.includes(id)) own.push(id);
+    out.outfits.owned[who] = own;
+    const wn = isObj(p.outfits) && isObj(p.outfits.worn) ? p.outfits.worn[who] : 'default';
+    out.outfits.worn[who] = own.includes(wn) ? wn : 'default';
+  }
+  syncOutfits(out);
   out.v = GAME.version;
   return out;
 }
@@ -299,10 +310,47 @@ export function buyAutoMerge(p) {
   if (p.diamonds < AUTOMERGE_PRICE) return { ok: false, reason: 'diamonds' };
   p.diamonds -= AUTOMERGE_PRICE; p.autoMerge = true; return { ok: true };
 }
+// ---- outfits (cosmetic). p.outfits = { owned: { roxor: [ids], jasmin: [ids] }, worn: { roxor: id, jasmin: id } }
+const HEROES = ['roxor', 'jasmin'];
+// best Endless wave reached on any stage (stats.endless, or the per-stage best when an old save has only that)
+export function bestEndlessWave(p) { let b = (p.stats && +p.stats.endless) || 0; for (const w of WORLDS) b = Math.max(b, (p.prog && p.prog[w.id] && +p.prog[w.id].bestEndless) || 0); return b; }
+// is an unlock rule { world: 'beach' } (that stage is cleared) or { endless: 50 } (best Endless wave) met? No rule means always.
+export function outfitUnlockMet(p, unlock) {
+  if (!unlock) return true;
+  if (unlock.world !== undefined) { const pr = p.prog && p.prog[unlock.world]; if (!(pr && pr.cleared)) return false; }
+  if (unlock.endless !== undefined && bestEndlessWave(p) < unlock.endless) return false;
+  return true;
+}
+export function outfitUnlocked(p, who, id) { const o = OUTFITS[who] && OUTFITS[who][id]; return !!o && outfitUnlockMet(p, o.unlock); }
+// grant every earned outfit (free, no diamonds). Returns the new ones as [{ who, id }]. Safe to call any time.
+export function syncOutfits(p) {
+  const fresh = [];
+  for (const who of HEROES) {
+    if (!isObj(p.outfits)) p.outfits = {};
+    if (!isObj(p.outfits.owned)) p.outfits.owned = {};
+    if (!isObj(p.outfits.worn)) p.outfits.worn = {};
+    if (!Array.isArray(p.outfits.owned[who])) p.outfits.owned[who] = ['default'];
+    const own = p.outfits.owned[who];
+    for (const id of Object.keys(OUTFITS[who])) if (OUTFITS[who][id].unlock && !own.includes(id) && outfitUnlockMet(p, OUTFITS[who][id].unlock)) { own.push(id); fresh.push({ who, id }); }
+  }
+  return fresh;
+}
+// the wardrobe of one hero for the UI: every outfit with owned, worn, locked (rule not met yet), the price and a short "how to get it" line
+export function outfitList(p, who) {
+  syncOutfits(p);
+  return Object.keys(OUTFITS[who] || {}).map((id) => {
+    const o = OUTFITS[who][id], owned = p.outfits.owned[who].includes(id), locked = !owned && !outfitUnlockMet(p, o.unlock);
+    let how = owned ? 'Owned' : o.price > 0 ? o.price + ' diamonds' : 'Free';
+    if (locked) how = o.unlock.world !== undefined ? 'Clear ' + ((WORLD_BY_ID[o.unlock.world] || {}).name || o.unlock.world) : 'Reach Endless wave ' + o.unlock.endless;
+    return { id, name: o.name, desc: o.desc, price: o.price, unlock: o.unlock || null, owned, worn: p.outfits.worn[who] === id, locked, how };
+  });
+}
 export function buyOutfit(p, who, id) {
   const o = OUTFITS[who] && OUTFITS[who][id];
   if (!o) return { ok: false };
+  syncOutfits(p);
   if (p.outfits.owned[who].includes(id)) { p.outfits.worn[who] = id; return { ok: true, equipped: true }; }
+  if (!outfitUnlockMet(p, o.unlock)) return { ok: false, reason: 'locked' };
   if (p.diamonds < o.price) return { ok: false, reason: 'diamonds' };
   p.diamonds -= o.price; p.outfits.owned[who].push(id); p.outfits.worn[who] = id;
   return { ok: true };
@@ -693,6 +741,7 @@ export function applyRunResult(p, result, rng, now = 0) {
   if (dropChance && rng.chance(dropChance)) out.loot.push(rollGearItem(p, 'garage', rng));
   if (result.won && result.stars === 3) out.loot.push(rollGearItem(p, 'garage', rng, { min: 'rare' }));
   p.lastSeen = now || p.lastSeen;
+  out.newOutfits = syncOutfits(p);
   return out;
 }
 

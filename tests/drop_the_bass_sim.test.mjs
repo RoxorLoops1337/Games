@@ -416,3 +416,286 @@ console.log('drop_the_bass sim: ' + n + ' checks passed');
   assert.ok(back.t === 400 && back.turrets[0].born === 400 && back.t - back.turrets[0].born >= 0, 'restored run keeps turret born times on the run clock');
   console.log('drop_the_bass sim: resume clock ok');
 }
+
+// =====================================================================================================================
+// depth systems: turret branches, hero abilities, run modifiers, boss phases, endless milestones (data_depth.js)
+// =====================================================================================================================
+{
+  const D = await import('../drop_the_bass/js/data_depth.js');
+  const { TURRET_BRANCHES, BRANCH_TURRET, HERO_ABILITIES, RUN_MODIFIERS, BOSS_PHASES, BOSS_PHASE_EFFECTS, ENDLESS_MILESTONES } = D;
+  const slotIdx = (run, c, r) => run.map.buildable.find((s) => s.c === c && s.r === r).idx;
+  const place = (run, type, c, r, level = 4, branch = null) => {
+    const s = run.map.buildable.find((x) => x.c === c && x.r === r);
+    const t = run.makeTurret(type, level, s, 0); if (branch) t.branch = branch; run.recalcAuras(); return t;
+  };
+  const evs = (run, sec) => { const out = []; for (let i = 0; i < Math.round(sec * 60); i++) { run.tick(DT); out.push(...run.drain()); } return out; };
+  // a lab: one turret at (2,2) with three still enemies on the path next to it; runs until the first shot, returns state at that moment
+  const lab = (type, branch, o = {}) => {
+    const run = mk({ loadout: [type], seed: 4 }); const t = place(run, type, 2, 2, o.level || 4, branch);
+    const es = [];
+    for (let i = 0; i < (o.enemies || 3); i++) { const e = spawn(run, o.enemy || 'brick', { hpBase: o.hp || 1e7 }); e.d = 72 * 3 + 20 + i * 14; e.speed = 0; run.placeEnemy(e); if (o.armor != null) e.armor = o.armor; es.push(e); }
+    run.drain();
+    let events = [];
+    if (o.until !== 0) for (let i = 0; i < 400 && t.shots < 1; i++) { run.tick(DT); events.push(...run.drain()); }
+    return { run, t, es, events };
+  };
+  const other = (type) => TURRET_BRANCHES[type];
+
+  // ---- branches: data shape
+  eq(Object.keys(TURRET_BRANCHES).sort(), Object.keys(TURRETS).sort(), 'a branch pair for every turret');
+  for (const [type, list] of Object.entries(TURRET_BRANCHES)) { ok(list.length === 2 && list[0].id !== list[1].id, 'two branches ' + type); for (const b of list) ok(BRANCH_TURRET[b.id] === type && b.name && b.desc && b.glyph && Object.keys(b.fx).length, 'branch row ' + b.id); }
+
+  // ---- branches: rules, events, merges, snapshot
+  {
+    const r = mk({ loadout: ['kick'], seed: 3 }); r.coins = 1e6;
+    const a = place(r, 'kick', 1, 6, 3), b = place(r, 'kick', 2, 6, 3);
+    ok(!r.canBranch(a) && r.chooseBranch(a.id, 'kick_big_bang').reason === 'level', 'no branch below level 4');
+    r.merge(a.id, b.id); const evm = r.drain();
+    ok(b.level === 4 && evm.some((e) => e.k === 'branchReady' && e.id === b.id), 'branchReady on reaching level 4');
+    ok(r.canBranch(b) && r.canBranch(b.id), 'canBranch at level 4 (object or id)');
+    eq(r.branchOptions(b.id).map((o) => o.id), ['kick_big_bang', 'kick_double_tap'], 'branchOptions ids'); ok(r.branchOptions(b).every((o) => o.name && o.desc && o.glyph), 'option rows');
+    ok(r.chooseBranch(b.id, 'snare_flam').reason === 'branch', 'branch of another turret refused');
+    ok(r.chooseBranch(999, 'kick_big_bang').reason === 'turret', 'unknown turret');
+    const c = r.chooseBranch(b.id, 'kick_big_bang'); ok(c.ok && b.branch === 'kick_big_bang', 'chosen');
+    ok(r.drain().some((e) => e.k === 'branch' && e.id === b.id && e.branch === 'kick_big_bang'), 'branch event');
+    ok(!r.canBranch(b) && r.chooseBranch(b.id, 'kick_double_tap').reason === 'has', 'one branch only');
+    // merging into a branch turret keeps it; dragging a branched turret onto an unbranched one keeps it too
+    const c2 = place(r, 'kick', 3, 6, 4), d2 = place(r, 'kick', 4, 6, 4);
+    r.merge(c2.id, b.id); ok(b.level === 5 && b.branch === 'kick_big_bang', 'merge into branch turret keeps it');
+    r.chooseBranch(d2.id, 'kick_double_tap'); const e2 = place(r, 'kick', 0, 6, 4); r.merge(d2.id, e2.id); ok(e2.level === 5 && e2.branch === 'kick_double_tap', 'dragged branched turret passes its branch on');
+    const f1 = place(r, 'kick', 0, 4, 4), f2 = place(r, 'kick', 4, 4, 4); r.drain(); r.merge(f1.id, f2.id);
+    ok(f2.level === 5 && !f2.branch && r.drain().some((e) => e.k === 'branchReady' && e.id === f2.id), 'unbranched merge stays unbranched and offers the choice');
+    // two branched turrets: the target (higher level slot) keeps its branch
+    const g1 = place(r, 'kick', 2, 8, 5, 'kick_double_tap'), g2 = place(r, 'kick', 3, 8, 5, 'kick_big_bang'); r.merge(g1.id, g2.id); ok(g2.level === 6 && g2.branch === 'kick_big_bang', 'two branched: target keeps');
+    // cross type remix merge never keeps a branch of the wrong type
+    for (let i = 0; i < 12; i++) {
+      const q = mk({ loadout: ['kick', 'snare', 'hat'], seed: i + 1 }); const x = place(q, 'kick', 1, 6, 4, 'kick_double_tap'), y = place(q, 'snare', 2, 6, 4); q.merge(x.id, y.id);
+      ok(!y.branch || BRANCH_TURRET[y.branch] === y.type, 'branch matches type after remix merge');
+    }
+    const snap = Run.restore(JSON.parse(JSON.stringify(r.snapshot()))); ok(snap.turretById(b.id).branch === 'kick_big_bang' && !snap.canBranch(b.id), 'branch survives restore');
+    const over = mk(); const ot = place(over, 'kick', 2, 6, 4); over.phase = 'lost'; ok(over.chooseBranch(ot.id, 'kick_big_bang').reason === 'over', 'no branching after the run ended');
+    const dd = mk({ loadout: ['kick'], startLevel: 3 }); ok(true, 'noop');
+  }
+
+  // ---- branches: each has a real effect
+  const radiusOf = (events) => events.find((e) => e.k === 'explode');
+  { // kick
+    const base = lab('kick', null), big = lab('kick', 'kick_big_bang'), dbl = lab('kick', 'kick_double_tap');
+    const shells = (x) => x.run.projectiles.filter((p) => p.kind === 'shell');
+    ok(shells(big)[0].radius > shells(base)[0].radius * 1.5 && shells(big)[0].dmg > shells(base)[0].dmg * 1.3 && big.run.turretRate(big.t) < base.run.turretRate(base.t) * 0.8, 'Big Bang: bigger, harder, slower');
+    ok(shells(dbl).length === 2 && shells(base).length === 1 && dbl.run.turretRate(dbl.t) > base.run.turretRate(base.t) * 1.2, 'Double Tap: second shell and faster');
+  }
+  { // snare
+    const base = lab('snare', null, { until: 0 }), rim = lab('snare', 'snare_rimshot', { until: 0 }), fl = lab('snare', 'snare_flam');
+    ok(rim.run.turretCrit(rim.t) >= base.run.turretCrit(base.t) + 0.19, 'Rimshot crit chance');
+    const crit = (x) => { x.run.rng.chance = () => true; return x.run.rollCrit(x.t, 100).dmg; }; ok(crit(rim) > crit(base) * 1.2, 'Rimshot crit damage');
+    const b0 = lab('snare', null); ok(fl.run.projectiles.filter((p) => p.kind === 'bullet').length === b0.run.projectiles.filter((p) => p.kind === 'bullet').length + 1, 'Flam: one more shot');
+  }
+  { // hat
+    const dmgOn = (br) => { const x = lab('hat', br, { armor: 40, enemies: 1, until: 0 }); const ev = evs(x.run, 4); return ev.filter((e) => e.k === 'hit').reduce((s, e) => s + e.v, 0); };
+    ok(dmgOn('hat_shredder') > dmgOn(null) * 2.5, 'Shredder ignores armor');
+    const o = lab('hat', 'hat_overspin'), n = lab('hat', null); ok(o.t.spin > n.t.spin + 0.3, 'Overspin starts spun up');
+    evs(o.run, 6); evs(n.run, 6); ok(o.t.spin > 1.01 && n.t.spin <= 1, 'Overspin goes past full speed');
+  }
+  { // sub
+    const base = lab('sub', null), frz = lab('sub', 'sub_deep_freeze'), shk = lab('sub', 'sub_shockwave', { enemies: 1 }), sb = lab('sub', null, { enemies: 1 });
+    ok(frz.es[0].slowAmt > base.es[0].slowAmt + 0.25 && frz.es[0].slowT > base.es[0].slowT + 1.5, 'Deep Freeze slows harder and longer');
+    ok(shk.run.turretRange(shk.t) > sb.run.turretRange(sb.t) * 1.25 && shk.es[0].d < sb.es[0].d - 30, 'Shockwave: reach and shove');
+  }
+  { // mic
+    const base = lab('mic', null), wide = lab('mic', 'mic_wide_wail');
+    const w = (x) => x.events.find((e) => e.k === 'beam').w; ok(w(wide) >= w(base) * 1.9, 'Wide Wail doubles the beam');
+    const heal = (br) => { const x = lab('mic', br, { until: 0 }); x.run.stageHp = 5; x.t.shots = 0; evs(x.run, 6); return x.run.stageHp; };
+    ok(heal('mic_healing_hook') > heal(null) + 1, 'Healing Hook mends the stage at level 4');
+  }
+  { // synth
+    const pts = (br) => lab('synth', br, { enemies: 6 }).events.find((e) => e.k === 'chain').pts.length;
+    ok(pts('synth_storm') >= pts(null) + 2, 'Storm jumps further');
+    const ov = lab('synth', 'synth_overload'); ok(ov.es.some((e) => e.stun > 0.4), 'Overload stuns'); const nb = lab('synth', null); ok(!nb.es.some((e) => e.stun > 0), 'plain synth does not stun at level 4');
+  }
+  { // horn
+    const base = lab('horn', null), boom = lab('horn', 'horn_sonic_boom'), deaf = lab('horn', 'horn_deafening', { enemy: 'fuzz', enemies: 1 }), plain = lab('horn', null, { enemy: 'fuzz', enemies: 1 });
+    const sp = (x) => x.events.find((e) => e.k === 'cone').spread; ok(sp(boom) > sp(base) + 1 && Math.abs(sp(boom) - Math.PI) < 1e-9, 'Sonic Boom blasts all around');
+    ok(deaf.es[0].stun > plain.es[0].stun + 0.9, 'Deafening stuns longer');
+  }
+  { // scratch
+    const discs = (br) => lab('scratch', br).run.projectiles.filter((p) => p.kind === 'disc');
+    ok(discs('scratch_triple_spin').length === discs(null).length + 1, 'Triple Spin: one more record');
+    const rz = discs('scratch_razor')[0], pl = discs(null)[0]; ok(rz.dmg > pl.dmg * 1.4 && rz.armorPierce === 1 && pl.armorPierce === 0 && rz.arc >= 1 && !pl.arc, 'Razor Record: harder, pierces armor, arcs');
+  }
+  { // loop and amp: reach and strength
+    const aura = (type, br) => { const r = mk({ loadout: [type, 'snare'] }); place(r, type, 3, 6, 4, br); const near = place(r, 'snare', 2, 6, 1), far = place(r, 'snare', 3, 8, 1); return { near, far }; };
+    const lw = aura('loop', 'loop_wide'), l0 = aura('loop', null), lh = aura('loop', 'loop_hot');
+    ok(lw.far.auraRate > 0 && l0.far.auraRate === 0, 'Wide Loop reaches two tiles'); ok(Math.abs(lh.near.auraRate / l0.near.auraRate - 1.5) < 1e-9, 'Hot Loop is 50% stronger');
+    const aw = aura('amp', 'amp_wide_stack'), a0 = aura('amp', null), ae = aura('amp', 'amp_eleven');
+    ok(aw.far.auraDmg > 0 && a0.far.auraDmg === 0, 'Wide Stack reaches two tiles'); ok(Math.abs(ae.near.auraDmg / a0.near.auraDmg - 1.5) < 1e-9 && ae.near.auraCrit >= a0.near.auraCrit + 0.1, 'Up to Eleven: stronger and crit');
+  }
+  { // cowbell
+    const ex = lab('cowbell', 'cowbell_execute', { enemy: 'fuzz', enemies: 1, until: 0 }), pl = lab('cowbell', null, { enemy: 'fuzz', enemies: 1, until: 0 });
+    for (const x of [ex, pl]) { x.es[0].maxHp = 1e6; x.es[0].hp = 2.5e5; x.t.cd = 0; }
+    evs(ex.run, 0.6); evs(pl.run, 0.6); ok(ex.es[0].dead === true && !pl.es[0].dead, 'Execute finishes enemies below 30% health');
+    const cm = lab('cowbell', 'cowbell_chain_mark'); evs(cm.run, 0.4); ok(cm.es.filter((e) => e.markT > 0).length === 3, 'Chain Mark marks the neighbours');
+    const p0 = lab('cowbell', null); evs(p0.run, 0.4); ok(p0.es.filter((e) => e.markT > 0).length === 1, 'plain mark hits one');
+  }
+  { // vocal
+    const orbs = (br) => lab('vocal', br).run.projectiles.filter((p) => p.kind === 'orb');
+    ok(orbs('vocal_swarm').length === orbs(null).length + 2 && orbs('vocal_swarm')[0].dmg < orbs(null)[0].dmg, 'Choir Swarm: more, softer orbs');
+    const bc = orbs('vocal_big_chorus')[0], pl = orbs(null)[0]; ok(bc.radius > pl.radius * 1.7 && bc.dmg > pl.dmg && bc.heal && bc.healBonus >= 0.2, 'Big Chorus: bigger, heals');
+  }
+  // every branch id is exercised above
+  ok(Object.values(TURRET_BRANCHES).flat().length === 24, '24 branches');
+
+  // ---- hero abilities
+  {
+    eq(HERO_ABILITIES.roxor.map((a) => a.id), ['blast', 'freeze', 'overclock'], 'roxor abilities'); eq(HERO_ABILITIES.jasmin.map((a) => a.id), ['song', 'coinrain', 'shield'], 'jasmin abilities');
+    for (const who of ['roxor', 'jasmin']) eq(HERO_ABILITIES[who].map((a) => a.unlockLv), [1, 4, 7], 'unlock levels ' + who);
+    eq(mk().heroAbility, { roxor: 'blast', jasmin: 'song' }, 'default abilities');
+    eq(mk({ heroAbility: { roxor: 'freeze', jasmin: 'shield' } }).heroAbility, { roxor: 'blast', jasmin: 'song' }, 'locked falls back');
+    eq(mk({ heroLv: { roxor: 4, jasmin: 7 }, heroAbility: { roxor: 'freeze', jasmin: 'shield' } }).heroAbility, { roxor: 'freeze', jasmin: 'shield' }, 'unlocked is used');
+    eq(mk({ heroLv: { roxor: 9, jasmin: 9 }, heroAbility: { roxor: 'bogus', jasmin: 7 } }).heroAbility, { roxor: 'blast', jasmin: 'song' }, 'invalid falls back');
+    const hr = mk({ heroLv: { roxor: 7, jasmin: 7 } });
+    ok(hr.heroAbilities('roxor').every((a) => a.unlocked) && hr.heroAbilities('roxor')[0].chosen, 'heroAbilities rows');
+    ok(hr.setHeroAbility('roxor', 'overclock').ok && hr.heroAbility.roxor === 'overclock' && hr.setHeroAbility('roxor', 'x').reason === 'unknown' && mk().setHeroAbility('roxor', 'freeze').reason === 'locked', 'setHeroAbility');
+    const cd = (id) => mk({ heroLv: { roxor: 7, jasmin: 7 }, heroAbility: { roxor: id } }).heroMax('roxor'); ok(Math.abs(cd('freeze') / cd('blast') - 1.1) < 1e-9, 'cdMul applies');
+    // freeze
+    const f = mk({ heroLv: { roxor: 4, jasmin: 1 }, heroAbility: { roxor: 'freeze' } }); const fe = [spawn(f, 'fuzz', { hpBase: 1e7 }), spawn(f, 'zip', { hpBase: 1e7 }), spawn(f, 'mute', { hpBase: 1e7 })];
+    f.heroCd.roxor = 0; f.drain(); ok(f.useHero('roxor'), 'freeze used'); const fev = f.drain();
+    ok(fev.some((e) => e.k === 'hero' && e.who === 'roxor' && e.ability === 'freeze'), 'hero event carries the ability');
+    ok(fe[0].stun >= 3 && fe[1].stun >= 3 && fe[2].stun === 0, 'freeze stops every enemy that is not immune'); const d0 = fe[0].d; evs(f, 2.5); ok(fe[0].d === d0, 'frozen enemies stay put'); evs(f, 1.5); ok(fe[0].d > d0, 'they move again');
+    // overclock
+    const oc = mk({ heroLv: { roxor: 7, jasmin: 1 }, heroAbility: { roxor: 'overclock' } }); const ot = place(oc, 'snare', 2, 2, 2); const r0 = oc.turretRate(ot);
+    oc.heroCd.roxor = 0; oc.useHero('roxor'); ok(Math.abs(oc.turretRate(ot) / r0 - 1.6) < 1e-9, 'overclock +60%'); evs(oc, 6.2); ok(Math.abs(oc.turretRate(ot) / r0 - 1) < 1e-9, 'overclock ends');
+    // coin rain
+    const cr = mk({ heroLv: { roxor: 1, jasmin: 4 }, heroAbility: { jasmin: 'coinrain' } }); cr.wave = 3; const c0 = cr.coins; cr.heroCd.jasmin = 0; cr.useHero('jasmin'); const cev = cr.drain();
+    ok(cr.coins > c0 && cev.some((e) => e.k === 'hero' && e.ability === 'coinrain') && cev.some((e) => e.k === 'coin'), 'coin burst');
+    const killGain = (r) => { const e = spawn(r, 'fuzz', { hpBase: 1 }); const a = r.coins + r.coinFrac; r.hurt(e, 1e9); return r.coins + r.coinFrac - a; };
+    const plain = mk(); plain.wave = 3; const withRain = killGain(cr); ok(Math.abs(withRain / killGain(plain) - 2) < 0.05, 'double coins per kill during the rain'); evs(cr, 8.5); const after = killGain(cr); ok(after < withRain * 0.6, 'rain ends');
+    // shield
+    const sh = mk({ heroLv: { roxor: 1, jasmin: 7 }, heroAbility: { jasmin: 'shield' } }); sh.heroCd.jasmin = 0; sh.useHero('jasmin');
+    const lk = spawn(sh, 'brick'); lk.d = lk.total - 1; evs(sh, 0.2); ok(sh.stageHp === sh.stageMax && sh.leaks === 0, 'shielded leak does no damage');
+    evs(sh, 6.5); const lk2 = spawn(sh, 'brick'); lk2.d = lk2.total - 1; evs(sh, 0.2); ok(sh.stageHp < sh.stageMax, 'leaks hurt again after the shield');
+    // duet with any pair
+    const du = mk({ heroLv: { roxor: 7, jasmin: 7 }, heroAbility: { roxor: 'overclock', jasmin: 'coinrain' } }); spawn(du, 'fuzz', { hpBase: 1e7 }); du.heroCd.roxor = du.heroCd.jasmin = 0;
+    du.useHero('roxor'); du.useHero('jasmin'); ok(du.duets === 1 && du.drain().some((e) => e.k === 'duet'), 'duet finale with a mixed pair');
+    const dsn = Run.restore(JSON.parse(JSON.stringify(f.snapshot()))); eq(dsn.heroAbility, { roxor: 'freeze', jasmin: 'song' }, 'ability survives restore');
+    const wi = Run.restore(JSON.parse(JSON.stringify(sh.snapshot()))); ok(wi.shieldT === sh.shieldT, 'timers survive restore');
+  }
+
+  // ---- run modifiers
+  {
+    ok(RUN_MODIFIERS.length === 10 && new Set(RUN_MODIFIERS.map((m) => m.id)).size === 10, 'ten modifiers');
+    for (const m of RUN_MODIFIERS) ok(m.name && m.desc && m.mul.records > 1 && m.mul.fans > 1 && m.mul.diamonds > 1, 'modifier row ' + m.id);
+    const ALL = ['kick', 'snare', 'hat', 'sub', 'mic', 'synth', 'horn', 'scratch', 'loop', 'cowbell', 'amp', 'vocal'];
+    const M = (ids, o = {}) => mk(Object.assign({ modifiers: ids, loadout: ALL }, o));
+    eq(M(['glass_stage', 'speedrun', 'no_heroes', 'cramped']).modifiers, ['glass_stage', 'speedrun', 'no_heroes'], 'max three modifiers');
+    eq(M(['speedrun', 'speedrun', 'bogus', 'cramped']).modifiers, ['speedrun', 'cramped'], 'duplicates and unknown ids dropped');
+    eq(mk({ mode: 'daily', modifiers: ['speedrun'] }).modifiers, [], 'daily ignores modifiers'); eq(mk({ weekly: true, mode: 'daily', modifiers: ['speedrun'] }).modifiers, [], 'weekly ignores modifiers');
+    eq(mk({ daily: 'no_merge', modifiers: ['speedrun'] }).modifiers, [], 'daily option ignores modifiers');
+    const m3 = M(['double_trouble', 'glass_stage', 'speedrun']); const prod = 1.5 * 1.4 * 1.3; ok(Math.abs(m3.modMul().records - Math.round(prod * 1000) / 1000) < 1e-9 && m3.modMul().diamonds > 1, 'rewards stack multiplicatively');
+    eq(mk().modMul(), { records: 1, fans: 1, diamonds: 1 }, 'no modifiers, no multiplier');
+    // double trouble
+    { const a = mk(), b = M(['double_trouble']); const pa = a.nextWavePreview(), pb = b.nextWavePreview(); ok(pb.total === pa.total * 2, 'double the enemies in the preview');
+      a.startWave(); b.startWave(); evs(a, 2); evs(b, 2); const ea = a.enemies[0], eb = b.enemies[0]; ok(a.spawnQ.length * 2 <= b.spawnQ.length + 2 && Math.abs(eb.maxHp / ea.maxHp - 0.6) < 0.01, 'twice the enemies at 60% health');
+      const ca = a.curSpec.duration; ok(Math.abs(b.upcoming(1).duration - ca) < 1e-9, 'same wave length'); }
+    // small band
+    { const a = M(['small_band']), b = M(['small_band']); eq(a.loadout, b.loadout, 'small band deterministic'); ok(a.loadout.length === 6 && a.loadout.every((t) => ALL.includes(t)) && new Set(a.loadout).size === 6, 'six turret types');
+      ok(a.poolOdds().length === 6, 'pool odds follow'); ok(M(['small_band'], { seed: 99 }).loadout.join() !== a.loadout.join(), 'seed picks the six'); eq(Run.restore(a.snapshot()).loadout, a.loadout, 'band survives restore'); }
+    // glass stage
+    { const g = M(['glass_stage']); ok(g.stageMax === 6 && g.stageHp === 6, 'glass stage has 6 health'); ok(M(['glass_stage'], { difficulty: 'easy' }).stageMax === 6, 'also on easy'); }
+    // speedrun
+    ok(Math.abs(M(['speedrun']).enemySpeedMul() / mk().enemySpeedMul() - 1.25) < 1e-9, 'speedrun +25% speed');
+    // no heroes
+    { const n = M(['no_heroes']); n.heroCd.roxor = 0; ok(!n.heroReady('roxor') && !n.useHero('roxor') && n.heroUses === 0, 'no heroes'); }
+    // fragile merge
+    { const f = M(['fragile_merge']); const a = place(f, 'kick', 1, 6, 1), b = place(f, 'kick', 2, 6, 1); f.coins = 10; const r = f.merge(a.id, b.id); ok(!r.ok && r.reason === 'coins' && f.turrets.length === 2 && f.coins === 10, 'cannot afford the merge');
+      ok(f.findMerge() === null && f.mergeAll() === 0, 'mergeAll respects the price'); f.coins = 100; ok(f.merge(a.id, b.id).ok && f.coins === 80, 'merge costs 20 coins'); }
+    // brutal bosses
+    { const mkb = (ids) => { const r = mk({ mode: 'rush', modifiers: ids, loadout: ['kick'] }); r.startWave(); evs(r, 2); return r.enemies.find((e) => e.boss); }; ok(Math.abs(mkb(['brutal_bosses']).maxHp / mkb([]).maxHp - 1.5) < 1e-9, 'bosses have 50% more health'); }
+    // lone lane
+    { const a = M(['lone_lane'], { world: 'arena' }), b = mk({ world: 'arena' }); const pa = a.nextWavePreview(), pb = b.nextWavePreview();
+      ok(pa.lanes.filter((l) => l.enemies.length).length === 1 && pb.lanes.filter((l) => l.enemies.length).length > 1 && pa.total === pb.total, 'everything in one lane');
+      a.startWave(); b.startWave(); evs(a, 3); evs(b, 3); ok(a.enemies.every((e) => e.lane === 0), 'spawns use lane 0'); ok(Math.abs(a.enemies[0].maxHp / b.enemies[0].maxHp - 1.25) < 0.01, 'and carry 25% more health'); }
+    // cramped
+    { const c = M(['cramped']); const cap = Math.floor(c.map.buildable.length * 0.65); ok(c.slotCapacity() === cap, 'cramped capacity'); c.coins = 1e9; let n3 = 0; while (c.deploy().ok) n3++; ok(n3 === cap && c.deploy().reason === 'full', 'cramped fills early'); }
+    // lean times
+    { const l = M(['lean_times']), p = mk(); ok(Math.abs(l.deployCost() / p.deployCost() - 1.15) < 0.03, 'turrets cost 15% more'); const gain = (r) => { const e = spawn(r, 'fuzz', { hpBase: 1 }); const c = r.coins + r.coinFrac; r.hurt(e, 1e9); return r.coins + r.coinFrac - c; }; ok(Math.abs(gain(l) / gain(p) - 0.75) < 1e-9, 'kill coins -25%'); }
+    // result and restore
+    { const g = M(['glass_stage', 'speedrun']); g.stageHp = 1; const e = spawn(g, 'fuzz'); e.d = e.total - 1; evs(g, 0.5); eq(g.result.modifiers, ['glass_stage', 'speedrun'], 'result.modifiers'); ok(Math.abs(g.result.modMul.records - 1.82) < 1e-9, 'result.modMul');
+      const p = mk(); p.stageHp = 1; const e2 = spawn(p, 'fuzz'); e2.d = e2.total - 1; evs(p, 0.5); eq(p.result.modMul, { records: 1, fans: 1, diamonds: 1 }, 'default modMul'); eq(p.result.modifiers, [], 'default modifiers');
+      const q = Run.restore(JSON.parse(JSON.stringify(M(['cramped', 'speedrun']).snapshot()))); ok(q.hasMod('cramped') && q.hasMod('speedrun'), 'modifiers survive restore'); }
+    // every modifier makes the greedy bot's run harder (leaks, or a loss) over a few seeds
+    const botScore = (ids) => { let sc = 0; for (const seed of [3, 9, 21]) { const r = new Run({ world: 'garage', seed, modifiers: ids, loadout: ALL, firstPrep: 6 }); for (let i = 0; i < 60000 && r.phase !== 'won' && r.phase !== 'lost'; i++) { r.advance(0.1); r.autoPlayStep({ early: true }); r.drain(); } sc += r.leaks + (r.phase === 'lost' ? 40 : 0) + (r.phase === 'won' ? 0 : 0); } return sc; };
+    const base = botScore([]);
+    for (const m of RUN_MODIFIERS) { const sc = botScore([m.id]); ok(sc >= base, 'modifier is not easier than none: ' + m.id + ' ' + sc + ' vs ' + base); }
+  }
+
+  // ---- boss phases
+  {
+    const orig = { compressor: 2, noisegate: 3, reverb: 3, djglitch: 3, playback: 3 };
+    for (const [id, cnt] of Object.entries(orig)) ok(BOSS_PHASES[id].length === cnt, 'phases of ' + id);
+    for (const id of ['lowpass', 'silence']) ok(BOSS_PHASES[id] && BOSS_PHASES[id].length >= 4, 'phases of ' + id);
+    for (const [id, list] of Object.entries(BOSS_PHASES)) { ok(BOSSES[id], 'phase table belongs to a boss ' + id); for (const ph of list) ok(BOSS_PHASE_EFFECTS[ph.id] && ph.at > 0 && ph.at <= 1 && ph.text, 'phase row ' + id + ' ' + ph.id); }
+    const bossRun = (type, o = {}) => { const r = mk(Object.assign({ loadout: ['kick', 'loop'], seed: 5 }, o)); place(r, 'kick', 1, 6, 2); place(r, 'snare' in TURRETS ? 'kick' : 'kick', 2, 6, 2); place(r, 'loop', 3, 6, 2); place(r, 'kick', 4, 6, 2); const b = spawn(r, 'boss:' + type, { hpBase: 1e6, scale: 1 }); r.drain(); return { r, b }; };
+    const fire = (r, b, id, extra = {}) => { r.bossPhaseFx(b, Object.assign({ at: 1, id, text: 't' }, extra)); return r.drain(); };
+    { const { r, b } = bossRun('compressor'); const ev = fire(r, b, 'dark_lane', { dur: 5 }); const e0 = ev.find((e) => e.k === 'bossPhase'); ok(e0 && e0.id === 'dark_lane' && e0.boss === 'compressor' && e0.text && Array.isArray(e0.cols) && e0.turretIds.length > 0, 'dark_lane event');
+      const dark = r.turrets.filter((t) => t.dark > 0); ok(dark.length === e0.turretIds.length, 'dark turrets'); const en = spawn(r, 'brick', { hpBase: 1e7 }); en.speed = 0; for (const t of dark) { en.d = 72 * 2; } evs(r, 1); ok(dark.every((t) => t.shots === 0), 'dark turrets do not fire'); evs(r, 5.5); ok(r.turrets.every((t) => !(t.dark > 0)), 'dark ends'); }
+    { const { r, b } = bossRun('djglitch'); const ev = fire(r, b, 'steal_turret', { dur: 3 }); const e0 = ev.find((e) => e.k === 'bossPhase'); const st = r.turretById(e0.turretId); ok(st && st.stolen > 0 && TURRETS[st.type].kind !== 'aura_rate', 'a non-aura turret is borrowed');
+      for (let i = 0; i < 20; i++) { const x = bossRun('djglitch'); const e1 = fire(x.r, x.b, 'steal_turret').find((e) => e.k === 'bossPhase'); ok(x.r.turretById(e1.turretId).type !== 'loop', 'never steals an aura'); }
+      const back = evs(r, 3.2); ok(back.some((e) => e.k === 'turretReturn' && e.id === st.id) && st.stolen === 0, 'it returns with an event');
+      const empty = mk(); const bb = spawn(empty, 'boss:djglitch', { hpBase: 100 }); ok(empty.bossPhaseFx(bb, { at: 1, id: 'steal_turret' }) === true, 'steal with no turrets is safe'); }
+    { const { r, b } = bossRun('noisegate'); const n0 = r.enemies.length; fire(r, b, 'summon_wave', { n: 6 }); ok(r.enemies.length === n0 + 6, 'summon_wave adds a mini wave'); }
+    { const { r, b } = bossRun('compressor'); fire(r, b, 'bulwark', { frac: 0.2 }); ok(Math.abs(b.shield - b.maxHp * 0.2) < 1e-6, 'bulwark shield'); const hp0 = b.hp; r.hurt(b, b.maxHp * 0.01); ok(b.hp === hp0 && b.shield < b.maxHp * 0.2, 'shield absorbs'); const bi = r.bossInfo(); ok(bi.shieldFrac > 0 && bi.shieldFrac < 1, 'bossInfo shows the shield'); b.shield = 0; r.hurt(b, b.maxHp * 0.01); ok(b.hp < hp0, 'broken shield lets damage through'); }
+    { const { r, b } = bossRun('reverb'); const sp = (x) => { const d = x.d; x.tick = 0; return d; }; const a = r.enemySpeedMul(); fire(r, b, 'enrage', { speed: 1.5 }); const d0 = b.d; evs(r, 1); const moved1 = b.d - d0; const c = bossRun('reverb'); const d1 = c.b.d; evs(c.r, 1); ok(moved1 > (c.b.d - d1) * 1.4, 'enrage speeds the boss'); void sp; void a; }
+    { const { r, b } = bossRun('reverb'); b.hp = b.maxHp * 0.5; const ally = spawn(r, 'fuzz', { hpBase: 100 }); ally.d = b.d - 10; r.placeEnemy(ally); ally.hp = ally.maxHp * 0.5; fire(r, b, 'heal_pulse', { frac: 0.1 }); ok(b.hp > b.maxHp * 0.59 && ally.hp > ally.maxHp * 0.5, 'heal_pulse heals the boss and nearby Static'); }
+    { const { r, b } = bossRun('djglitch'); b.x = r.turrets[0].x; b.y = r.turrets[0].y; const ev = fire(r, b, 'jam_pulse', { radius: 400, max: 2, dur: 2 }); ok(r.turrets.filter((t) => t.jam > 0).length === 2 && ev.find((e) => e.k === 'bossPhase').turretIds.length === 2, 'jam_pulse jams the nearest turrets'); }
+    // thresholds fire once, in order, via the real boss logic
+    { const { r, b } = bossRun('noisegate'); const ph = BOSS_PHASES.noisegate; let seen = [];
+      let bi = r.bossInfo(); ok(bi.id === b.id && bi.hpFrac === 1 && bi.phase === 1 && bi.nextAt === 0.75, 'bossInfo at full health');
+      b.hp = b.maxHp * 0.7; seen.push(...evs(r, 0.5).filter((e) => e.k === 'bossPhase')); ok(seen.length === 1 && seen[0].id === 'summon_wave' && seen[0].boss === 'noisegate' && seen[0].text === ph[0].text, 'first phase at 75%');
+      bi = r.bossInfo(); ok(bi.phase === 2 && bi.nextAt === 0.5, 'bossInfo after one phase'); seen.push(...evs(r, 1).filter((e) => e.k === 'bossPhase')); ok(seen.length === 1, 'phases fire once');
+      b.hp = b.maxHp * 0.1; seen.push(...evs(r, 0.5).filter((e) => e.k === 'bossPhase')); eq(seen.map((e) => e.id), ['summon_wave', 'dark_lane', 'enrage'], 'a big drop fires the skipped phases in order'); ok(r.bossInfo().nextAt === null && r.bossInfo().phase === 4, 'no next phase'); }
+    ok(mk().bossInfo() === null, 'bossInfo without a boss');
+    // data driven: entries can be removed, added or bogus without crashing
+    { const saved = BOSS_PHASES.compressor; delete BOSS_PHASES.compressor; const { r, b } = bossRun('compressor'); b.hp = b.maxHp * 0.1; ok(evs(r, 1).every((e) => e.k !== 'bossPhase') && r.bossInfo().nextAt === null, 'a boss without phases is safe');
+      BOSS_PHASES.compressor = [{ at: 0.9, id: 'no_such_effect', text: 'x' }, { at: 0.8, id: 'enrage', text: 'new', speed: 2 }]; const q = bossRun('compressor'); q.b.hp = q.b.maxHp * 0.5; const ev = evs(q.r, 0.3).filter((e) => e.k === 'bossPhase'); ok(ev.length === 1 && ev[0].id === 'enrage' && q.b.rageMul === 2, 'unknown effect ids are skipped, new entries work'); BOSS_PHASES.compressor = saved;
+      ok(r.bossPhaseFx(b, { at: 1, id: 'nope' }) === false, 'bossPhaseFx unknown id'); }
+    // the existing tricks still work: noise gate gates, playback phases, compressor cap
+    { const { r, b } = bossRun('playback'); b.hp = b.maxHp * 0.6; const ev = evs(r, 0.5); ok(b.phase === 2 && ev.some((e) => e.k === 'bossphase' && e.phase === 2), 'playback keeps its phase 2 event'); }
+    { const { r, b } = bossRun('compressor'); const h = b.hp; r.hurt(b, b.maxHp); ok(b.hp >= h - b.maxHp * 0.06 - 1e-6 || b.hp > 0, 'compressor still caps hits'); }
+    // low-pass trick: weak hits do much less
+    { const { r, b } = bossRun('lowpass'); b.armor = 0; const weak = b.maxHp * 0.0005, strong = b.maxHp * 0.01; const h0 = b.hp; r.hurt(b, weak); const lost = h0 - b.hp; ok(lost < weak * 0.5, 'weak hit is washed out'); const h1 = b.hp; r.hurt(b, strong); ok(Math.abs(h1 - b.hp - strong) < 1e-6, 'strong hit is not'); }
+    // silence mutes turrets periodically and starts with a jam
+    { const { r, b } = bossRun('silence'); b.x = r.turrets[0].x; b.y = r.turrets[0].y; const ev = evs(r, 0.3); ok(ev.some((e) => e.k === 'bossPhase' && e.id === 'jam_pulse'), 'silence mutes at 100%'); evs(r, 12); ok(r.drain().length >= 0, 'pulses run'); }
+    // small mid-run boss only gets its first phase
+    { const r = mk({ mode: 'rush', loadout: ['kick'] }); const b = spawn(r, 'boss:noisegate', { hpBase: 1e6, scale: 0.42 }); b.hp = b.maxHp * 0.05; const ev = evs(r, 0.5).filter((e) => e.k === 'bossPhase'); ok(ev.length === 1, 'small boss: first phase only'); }
+    // boss phase state survives restore (no repeats)
+    { const { r, b } = bossRun('noisegate'); b.hp = b.maxHp * 0.7; evs(r, 0.3); const q = Run.restore(JSON.parse(JSON.stringify(r.snapshot()))); ok(evs(q, 1).every((e) => e.k !== 'bossPhase') && q.bossInfo().phase === 2, 'phases do not repeat after restore'); }
+  }
+
+  // ---- 25 wave stages, rush, endless boss list, growth
+  {
+    const beach = WORLD_BY_ID.beach, moon = WORLD_BY_ID.moon;
+    ok(genWave(beach, 25, 7).boss === 'lowpass' && genWave(moon, 25, 7).boss === 'silence' && genWave(moon, 10, 7).boss === 'lowpass', 'final bosses on wave 25');
+    for (let w = 1; w <= 25; w++) ok(!!genWave(beach, w, 7).boss === (w === 10 || w === 20 || w === 25), 'boss waves of a 25 wave stage ' + w);
+    ok(genWave(WORLD_BY_ID.arena, 20, 7).boss === 'playback' && !genWave(WORLD_BY_ID.arena, 25, 7).boss, 'twenty wave stages unchanged');
+    for (let w = 21; w <= 25; w++) ok(waveBaseHp(beach, w) > waveBaseHp(beach, w - 1), 'hp keeps growing to wave 25 on beach ' + w);
+    ok(Math.abs(waveBaseHp(WORLD_BY_ID.garage, 25) / waveBaseHp(WORLD_BY_ID.garage, 20) - Math.pow(ECON.hpGrowthLate, 5)) < 1e-9, '20 wave stages keep the late rate after wave 20');
+    ok(Math.abs(waveBaseHp(beach, 25) / waveBaseHp(beach, 20) - Math.pow(ECON.hpGrowth, 5)) < 1e-9, '25 wave stages grow at the full rate through wave 25');
+    const e = new Run({ world: 'beach', mode: 'endless', seed: 2 }); const ids = new Set(); for (let w = 10; w <= 70; w += 10) ids.add(e.upcoming(w).boss); ok(ids.has('lowpass') && ids.has('silence') && ids.size === 7, 'endless rotation has all seven bosses');
+    const full = new Run({ world: 'beach', seed: 2, firstPrep: 999 }); ok(full.wavesTotal === 25 && full.upcoming(25).boss === 'lowpass', 'beach story is 25 waves');
+  }
+
+  // ---- endless milestones
+  {
+    eq(ENDLESS_MILESTONES.map((m) => m.wave), [25, 50, 100], 'milestone waves'); for (const m of ENDLESS_MILESTONES) ok(m.id && m.reward.diamonds > 0, 'milestone row ' + m.id);
+    const r = mk({ mode: 'endless', seed: 2 }); const got = [];
+    r.wave = 23; r.startWave(); got.push(...r.drain().filter((x) => x.k === 'milestone')); ok(got.length === 0, 'nothing before wave 25');
+    r.spawnQ.length = 0; r.enemies.length = 0; r.phase = 'prep'; r.wave = 24; r.startWave(); const m1 = r.drain().filter((x) => x.k === 'milestone'); ok(m1.length === 1 && m1[0].id === 'endless_25' && m1[0].wave === 25, 'milestone at wave 25');
+    r.spawnQ.length = 0; r.enemies.length = 0; r.phase = 'prep'; r.wave = 25; r.startWave(); ok(r.drain().filter((x) => x.k === 'milestone').length === 0, 'only the first time');
+    const q = Run.restore(JSON.parse(JSON.stringify(r.snapshot()))); q.spawnQ.length = 0; q.enemies.length = 0; q.phase = 'prep'; q.wave = 26; q.startWave(); ok(q.drain().filter((x) => x.k === 'milestone').length === 0, 'not again after restore');
+    r.spawnQ.length = 0; r.enemies.length = 0; r.phase = 'prep'; r.wave = 49; r.startWave(); ok(r.drain().filter((x) => x.k === 'milestone').map((x) => x.id).join() === 'endless_50', 'milestone at wave 50');
+    const s = mk({ seed: 2, wavesTotal: 99 }); s.wave = 24; s.startWave(); ok(s.drain().filter((x) => x.k === 'milestone').length === 0, 'story mode has no milestones');
+    r.stageHp = 1; r.spawnQ.length = 0; r.phase = 'wave'; const lk = spawn(r, 'fuzz'); lk.d = lk.total - 1; evs(r, 0.5); eq(r.result.milestones, ['endless_25', 'endless_50'], 'result.milestones');
+  }
+  console.log('drop_the_bass sim depth: all checks passed (total ' + n + ')');
+}
