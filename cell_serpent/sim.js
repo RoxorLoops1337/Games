@@ -704,9 +704,10 @@ function pickKind(g, n, boss, i, len) {
   if (i === 0) return 'normal';
   const r = g.rand();
   const m = g.mod || {};
-  if (n >= 3 && r < (m.armor || 0.12)) return 'armor';
-  if (n >= 2 && r < (m.armor ? 0.4 : m.bomb ? 0.3 : 0.2)) return 'bomb';
-  if (n >= 9 && r < 0.28) return 'mender';
+  const armorP = n >= 3 ? (m.armor || 0.12) : 0, bombP = n >= 2 ? (m.bomb ? 0.1 : m.armor ? 0.03 : 0.04) : 0, menderP = n >= 9 ? 0.07 : 0;
+  if (r < armorP) return 'armor';
+  if (r < armorP + bombP) return 'bomb';
+  if (r < armorP + bombP + menderP) return 'mender';
   return 'normal';
 }
 export function segRadius(boss, i, len) {
@@ -723,7 +724,8 @@ function spawnSnake(g, n, o = {}) {
   const ramp = i => 0.4 + 1.35 * Math.pow(i / Math.max(1, len - 1), 1.3);   // the first cells are soft, then it gets tougher and tougher
   let ps = o.startPs === undefined ? 240 : o.startPs;   // the face starts just inside the top edge
   for (let i = 0; i < len; i++) {
-    const kind = pickKind(g, n, boss, i, len), r = segRadius(boss, i, len);
+    let kind = pickKind(g, n, boss, i, len); if (kind === 'bomb' && segs.length && segs[segs.length - 1].kind === 'bomb') kind = 'normal';
+    const r = segRadius(boss, i, len);
     let hp = hpB * ramp(i) * KIND[kind].hp * (boss ? 2.4 : 1) * (0.9 + g.rand() * 0.2);
     hp = i === 0 ? 1 : Math.max(1, Math.round(hp));   // the face has no real HP: it is shielded until it is alone
     const pos = pointAt(path, ps);
@@ -869,7 +871,8 @@ function reap(g) {
       if (sn.segs.length === 1 && sn.segs[0].hp > 0) { sn.segs[0].shield = false; sn.segs[0].hp = 0; }
       if (!sn.segs.some(q => q.hp <= 0)) continue;
       any = true;
-      for (const q of sn.segs) if (q.hp <= 0) onKill(g, q, sn);
+      // a bomb blast inside onKill can kill cells we already walked past (in front of the bomb): keep going until every dead cell has been counted
+      for (let guard = 0; guard < 30 && sn.segs.some(q => q.hp <= 0 && !q.counted); guard++) for (const q of sn.segs.slice()) if (q.hp <= 0 && !q.counted) { q.counted = true; onKill(g, q, sn); }
       sn.segs = sn.segs.filter(q => q.hp > 0);
       g.events.push({ t: 'close' });
     }
