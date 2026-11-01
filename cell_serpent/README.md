@@ -88,3 +88,8 @@ itself when frames run slow, then raises it again when it runs fast.
 
 - Dance Shoes became **Sharp Notes** (your notes pierce more cells); moving faster was never worth a card. The Hamster and Wheel Speaker now add singing speed.
 - Cells grow toward the tail (the tougher cells are the biggest) and the numbers are bigger, so they stay readable. The snake crawls faster from the start.
+
+## Fifty stages
+
+- **MAX_STAGE = 50.** `stageKind(n)`: every 6th stage is a **circle** stage (the duo stands in the middle, inside a ring, the snake spirals in and the run ends when it reaches the ring); stages 7, 8, 14, 21, 28, 35, 38 and 49 have **two snakes** (the second one is mirrored and enters later); the rest are one snake and the line.
+- Early stages are deliberately harsh: cell HP grows quickly for the first ten stages, the snake is fast, and upgrade cards are weak at first (they reach full strength around stage ten; extra notes unlock at stage 3, pierce at 4, bursts at 6, and luck is poor early on). With no menu upgrades, stage 3 is out of reach.
