@@ -175,14 +175,13 @@ function spawnSnake(g, n) {
   for (let i = 0; i < len; i++) {
     const kind = pickKind(g, n, boss, i, len), r = segRadius(boss, i, len);
     let hp = hpBase(n) * KIND[kind].hp * (boss ? 1.5 : 1) * (0.9 + g.rand() * 0.2);
-    if (i === 0) hp *= boss ? 3 : 2;
-    hp = Math.max(1, Math.round(hp));
+    hp = i === 0 ? 1 : Math.max(1, Math.round(hp));   // the face has no real HP: it is shielded until it is alone
     const pos = pointAt(g.path, ps);
-    segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, spit: 1.5 + g.rand() * 2.5, i, carry: null });
+    segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, spit: 1.5 + g.rand() * 2.5, i, carry: null, shield: i === 0, isHead: i === 0 });
     ps -= (r + segRadius(boss, i + 1, len)) * 0.78;
   }
   for (const f of [0.3, 0.6]) { const c = segs[Math.max(1, Math.min(len - 1, Math.round(len * f)))]; c.carry = 'chest'; }   // chest cells: aim for them first
-  g.snakes.push({ id: ++g.sid, segs, speed: snakeSpeed(n), slow: 0, boss, skin: skinFor(n), name: virusName(n), fan: 2.5, ring: 6 });
+  g.snakes.push({ id: ++g.sid, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed: snakeSpeed(n), slow: 0, boss, skin: skinFor(n), name: virusName(n), fan: 2.5, ring: 6 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
 }
 
@@ -221,7 +220,7 @@ const dmgMul = g => g.p.atk * (1 + 0.2 * (g.ups.power || 0));
 const cdMul = g => g.p.cdBase * Math.pow(0.9, g.ups.haste || 0);
 
 function eachTarget(g, fn) {
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0) fn(s, sn);
+  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield) fn(s, sn);
   for (const s of g.minions) if (s.hp > 0) fn(s, null);
 }
 function nearestTarget(g, x, y, maxD = 1e9, needVisible = true) {
@@ -233,13 +232,13 @@ function nearestTarget(g, x, y, maxD = 1e9, needVisible = true) {
   });
   return best;
 }
-// the segment closest to leaking: the front of the most advanced piece
+// the face of each virus (a good place to plant a swab: its neighbours are in reach)
 function frontSegs(g) {
   return g.snakes.map(sn => sn.segs[0]).filter(s => s && visible(s)).sort((a, b) => b.ps - a.ps);
 }
 
 function damageSeg(g, s, dmg, crit, x, y) {
-  if (s.hp <= 0) return;
+  if (s.hp <= 0 || s.shield) return;
   s.hp -= dmg; s.flash = 0.12;
   g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s });
 }
@@ -280,28 +279,21 @@ function onKill(g, s, sn) {
   }
 }
 
-// Remove dead segments. A kill in the middle splits the virus in two pieces; both keep crawling.
+// Remove dead cells. The virus stays one connected chain: the cells in front of a gap slide back to
+// close it (see the chain update in step), so it just gets shorter. The face pops once it is alone.
 function reap(g) {
   if (g.minions.some(m => m.hp <= 0)) g.minions = g.minions.filter(m => { if (m.hp > 0) return true; onMinionKill(g, m); return false; });
-  for (let pass = 0; pass < 6; pass++) {
+  for (let pass = 0; pass < 8; pass++) {
     let any = false;
-    const next = [];
     for (const sn of g.snakes) {
-      if (!sn.segs.some(q => q.hp <= 0)) { next.push(sn); continue; }
+      if (sn.segs.length === 1 && sn.segs[0].hp > 0) { sn.segs[0].shield = false; sn.segs[0].hp = 0; }
+      if (!sn.segs.some(q => q.hp <= 0)) continue;
       any = true;
-      const parts = [];
-      let cur = [];
-      for (const q of sn.segs) {
-        if (q.hp <= 0) { onKill(g, q, sn); if (cur.length) { parts.push(cur); cur = []; } } else cur.push(q);
-      }
-      if (cur.length) parts.push(cur);
-      parts.forEach(segs => {
-        if (segs[0] === sn.segs[0]) { sn.segs = segs; next.push(sn); return; }
-        next.push({ ...sn, id: ++g.sid, segs, boss: false, slow: 0 });
-        g.events.push({ t: 'split', x: segs[0].x, y: segs[0].y });
-      });
+      for (const q of sn.segs) if (q.hp <= 0) onKill(g, q, sn);
+      sn.segs = sn.segs.filter(q => q.hp > 0);
+      g.events.push({ t: 'close' });
     }
-    g.snakes = next;
+    g.snakes = g.snakes.filter(sn => sn.segs.length > 0);
     if (!any) break;
   }
 }
@@ -326,14 +318,13 @@ function hurtPlayer(g, dmg, fx, fy) {
     }
   }
 }
-// a segment slipped past the membrane: leaks always hurt, whatever i-frames you have
-function leak(g, s, sn) {
-  s.leaked = true; s.hp = 0; g.leaks++;
-  const dmg = (s === sn.segs[0] ? 12 + g.stage * 0.7 : 5 + g.stage * 0.35) * (1 - Math.min(0.6, g.p.guard));
-  const p = g.p, keep = p.iframes;
-  p.iframes = 0;
-  g.events.push({ t: 'leak', x: s.x, y: LINE_Y, d: dmg });
-  hurtPlayer(g, dmg, s.x, LINE_Y - 80);
+// the face has reached the membrane and is chewing through it: HP drains until you finish the cells
+// behind it (each kill pushes the face back off the membrane)
+function breachTick(g, sn) {
+  const dmg = (4 + g.stage * 0.4) * (1 - Math.min(0.6, g.p.guard)), p = g.p, keep = p.iframes;
+  p.iframes = 0; g.leaks++;
+  g.events.push({ t: 'leak', x: sn.segs[0].x, y: LINE_Y, d: dmg });
+  hurtPlayer(g, dmg, sn.segs[0].x, LINE_Y - 80);
   p.iframes = Math.max(keep, 0);
 }
 
@@ -540,14 +531,28 @@ export function step(g, dt, input) {
   if (p.shield > 0) p.shield -= dt;
   if (p.rage > 0) p.rage -= dt;
 
-  // the virus rides the track
+  // the virus rides the track as one connected chain driven by its tail. Cells in front of a gap
+  // slide back to close it, so every kill also pushes the face away from the membrane.
   let stageHp = 0;
   for (const sn of g.snakes) {
     sn.slow = Math.max(0, sn.slow - dt);
     const v = sn.speed * (sn.slow > 0 ? 0.55 : 1) * (g.phase === 'clear' ? 0 : 1);
-    for (const s of sn.segs) {
+    const segs = sn.segs, last = segs.length - 1;
+    let total = 0;
+    for (let i = 0; i < last; i++) total += (segs[i].r + segs[i + 1].r) * 0.78;
+    const maxTail = g.path.len - total;
+    sn.tail = Math.min(sn.tail + v * dt, maxTail);
+    sn.breach = sn.tail >= maxTail - 0.5;
+    let target = sn.tail;
+    for (let i = last; i >= 0; i--) {
+      if (i < last) target += (segs[i].r + segs[i + 1].r) * 0.78;
+      segs[i].tp = target;
+    }
+    segs[0].shield = segs.length > 1;
+    if (sn.breach && g.phase === 'play') { sn.breachT -= dt; if (sn.breachT <= 0) { sn.breachT = 0.5; breachTick(g, sn); } } else sn.breachT = 0;
+    for (const s of segs) {
       const ox = s.x, oy = s.y;
-      s.ps += v * dt;
+      s.ps = s.tp >= s.ps ? s.tp : Math.max(s.tp, s.ps - 320 * dt);
       const pos = pointAt(g.path, s.ps), pa = pointAt(g.path, s.ps - 8), pb = pointAt(g.path, s.ps + 8);
       s.x = pos.x; s.y = pos.y; s.ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
       s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
@@ -578,7 +583,6 @@ export function step(g, dt, input) {
   }
   g.stageHp = stageHp;
   g.progress = g.stageHpMax ? clamp(1 - stageHp / g.stageHpMax, 0, 1) : 0;
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && s.ps >= g.path.len) leak(g, s, sn);
 
   // minions walk in from the top and chase
   if (g.phase === 'play') {
@@ -635,7 +639,7 @@ export function step(g, dt, input) {
     let dead = b.life <= 0 || b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30;
     if (!dead) {
       const test = (s, sn) => {
-        if (dead || s.hp <= 0 || b.hit.includes(s) || Math.hypot(s.x - b.x, s.y - b.y) >= s.r + b.r) return;
+        if (dead || s.hp <= 0 || s.shield || b.hit.includes(s) || Math.hypot(s.x - b.x, s.y - b.y) >= s.r + b.r) return;
         b.hit.push(s);
         damageSeg(g, s, b.dmg, b.crit, b.x, b.y);
         if (b.slow && sn) sn.slow = Math.max(sn.slow, b.slow);
@@ -724,7 +728,7 @@ export function botInput(g) {
   for (const b of g.ebullets) push(b.x, b.y, 120, 1.6);
   // aim: chest cells first, otherwise the cell closest to leaking
   let tgt = null;
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && s.y > 40 && s.y < p.y - 120) {
+  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && s.y > 40 && s.y < p.y - 120) {
     if (s.carry === 'chest') { tgt = s; break; }
     if (!tgt || s.ps > tgt.ps) tgt = s;
   }
