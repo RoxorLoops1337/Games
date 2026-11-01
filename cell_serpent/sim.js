@@ -3,8 +3,8 @@
 //
 // The loop follows Cell Survivor - Shoot Defense: a long segmented virus crawls DOWN a
 // winding track toward the bottom of the screen. Your cell sits near its spawn point,
-// fires a weak capsule on its own (every cell takes 10 to 20 shots) and slides left and
-// right only. You pick 1 of 3 skills every 5 or 10 cells destroyed, nothing else. Kill
+// fires a weak capsule straight up on its own (every cell takes 10 to 20 shots) and slides
+// left and right only, so where you stand is your aim. You pick 1 of 3 skills every 5 or 10 cells destroyed, nothing else. Kill
 // the segments before they leak past the bottom line. Coins buy permanent Attack / Crit /
 // Cooldown, so the first run is allowed to fail.
 export const W = 720;
@@ -92,7 +92,7 @@ export function buyWeapon(save, id) {
 }
 
 // ---------------------------------------------------------------- tuning
-export const hpBase = n => 14 * Math.pow(1.26, n - 1) + 0.5 * n;   // ~14 capsule shots per cell in chapter 1
+export const hpBase = n => 14 * Math.pow(1.27, n - 1) + 0.5 * n;   // ~14 capsule shots per cell in chapter 1
 export const isBossStage = n => n % 5 === 0;
 export const snakeLength = n => (isBossStage(n) ? Math.min(46, Math.round(20 + n)) : Math.min(38, Math.round(8 + 2 * n)));
 export const snakeSpeed = n => (isBossStage(n) ? Math.min(50, 22 + 0.8 * n) : Math.min(60, 26 + 1.1 * n));
@@ -144,7 +144,7 @@ export function makePlayer(metaLv) {
   return {
     x: W / 2, y: 1090, r: 16, kx: 0, ky: 0, maxHp, hp: maxHp, speed: 300, guard: 0,
     atk: 1 + 0.10 * m('atk'), crit: 0.05 + 0.02 * m('crt'), critMul: 2.5 + 0.08 * m('crt'), cdBase: 1 - 0.05 * m('cdn'),
-    rate: 1.6, bspeed: 900,
+    rate: 2.2, bspeed: 900,
     coinMul: 1 + 0.1 * m('for'), revive: m('rev') > 0 ? 1 : 0,
     iframes: 0, shield: 0, rage: 0, cd: 0, aim: -Math.PI / 2, orbAng: 0, regenAcc: 0, mx: 0, my: 0,
     zone: { x0: 40, x1: W - 40, y0: 1090, y1: 1090 },
@@ -175,13 +175,13 @@ function spawnSnake(g, n) {
   for (let i = 0; i < len; i++) {
     const kind = pickKind(g, n, boss, i, len), r = segRadius(boss, i, len);
     let hp = hpBase(n) * KIND[kind].hp * (boss ? 1.5 : 1) * (0.9 + g.rand() * 0.2);
-    if (i === 0) hp *= boss ? 3 : 2;
-    hp = Math.max(1, Math.round(hp));
+    hp = i === 0 ? 1 : Math.max(1, Math.round(hp));   // the face has no real HP: it is shielded until it is alone
     const pos = pointAt(g.path, ps);
-    segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, spit: 1.5 + g.rand() * 2.5, i });
+    segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, spit: 1.5 + g.rand() * 2.5, i, carry: null, shield: i === 0, isHead: i === 0 });
     ps -= (r + segRadius(boss, i + 1, len)) * 0.78;
   }
-  g.snakes.push({ id: ++g.sid, segs, speed: snakeSpeed(n), slow: 0, boss, skin: skinFor(n), name: virusName(n), fan: 2.5, ring: 6 });
+  for (const f of [0.3, 0.6]) { const c = segs[Math.max(1, Math.min(len - 1, Math.round(len * f)))]; c.carry = 'chest'; }   // chest cells: aim for them first
+  g.snakes.push({ id: ++g.sid, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed: snakeSpeed(n), slow: 0, boss, skin: skinFor(n), name: virusName(n), fan: 2.5, ring: 6 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
 }
 
@@ -190,7 +190,6 @@ export function startStage(g, n) {
   g.snakes.length = 0; g.stageHpMax = 0; g.ebullets.length = 0; g.minions.length = 0; g.zones.length = 0; g.maws.length = 0; g.bullets.length = 0;
   g.wave = isBossStage(n) ? 4 : 9;
   g.path = buildPath(n);
-  g.chestsDone = { 25: false, 50: false };
   const p = g.p, bottom = spawnMode(n) === 'bottom';
   const row = bottom ? 1090 : 740;   // the cell only slides left and right along its row
   p.zone = { x0: 40, x1: W - 40, y0: row, y1: row };
@@ -208,7 +207,7 @@ export function createGame(opts = {}) {
     p: makePlayer(opts.meta), snakes: [], minions: [], wave: 9, bullets: [], ebullets: [], pickups: [], zones: [], maws: [], towers: [],
     events: [], ups: {}, weap: {}, unlocked: Object.assign(Object.fromEntries(WEAPON_STARTERS.map(id => [id, 1])), opts.unlocked || {}),
     level: 1, cells: 0, prevUp: 0, nextUp: 5, pending: 0, choices: [], resume: 'play',
-    coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, chestsDone: {}, lastKillPos: { x: W / 2, y: 300 },
+    coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
     revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
   };
   startStage(g, opts.stage || 1);
@@ -221,7 +220,7 @@ const dmgMul = g => g.p.atk * (1 + 0.2 * (g.ups.power || 0));
 const cdMul = g => g.p.cdBase * Math.pow(0.9, g.ups.haste || 0);
 
 function eachTarget(g, fn) {
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0) fn(s, sn);
+  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield) fn(s, sn);
   for (const s of g.minions) if (s.hp > 0) fn(s, null);
 }
 function nearestTarget(g, x, y, maxD = 1e9, needVisible = true) {
@@ -233,13 +232,13 @@ function nearestTarget(g, x, y, maxD = 1e9, needVisible = true) {
   });
   return best;
 }
-// the segment closest to leaking: the front of the most advanced piece
+// the face of each virus (a good place to plant a swab: its neighbours are in reach)
 function frontSegs(g) {
   return g.snakes.map(sn => sn.segs[0]).filter(s => s && visible(s)).sort((a, b) => b.ps - a.ps);
 }
 
 function damageSeg(g, s, dmg, crit, x, y) {
-  if (s.hp <= 0) return;
+  if (s.hp <= 0 || s.shield) return;
   s.hp -= dmg; s.flash = 0.12;
   g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s });
 }
@@ -269,6 +268,7 @@ function onKill(g, s, sn) {
   if (s.kind === 'gold') { for (let k = 0; k < 4; k++) dropPickup(g, 'coin', s.x, s.y, coinV); if (g.rand() < 0.3) dropPickup(g, ['heal', 'shield', 'rage'][Math.floor(g.rand() * 3)], s.x, s.y, 1); }
   else dropPickup(g, 'coin', s.x, s.y, coinV);
   if (sn.boss && s === sn.segs[0]) dropPickup(g, 'heal', s.x, s.y, 1);
+  if (s.carry === 'chest') { g.pickups.push({ kind: 'chest', x: s.x, y: s.y, vx: 0, vy: 40, v: 1, age: 0, vac: false }); g.events.push({ t: 'chestdrop', x: s.x, y: s.y }); }
   g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s === sn.segs[0], boss: sn.boss, i: s.i, skin: sn.skin });
   if (s.kind === 'bomb') {
     const R = 150;
@@ -279,28 +279,21 @@ function onKill(g, s, sn) {
   }
 }
 
-// Remove dead segments. A kill in the middle splits the virus in two pieces; both keep crawling.
+// Remove dead cells. The virus stays one connected chain: the cells in front of a gap slide back to
+// close it (see the chain update in step), so it just gets shorter. The face pops once it is alone.
 function reap(g) {
   if (g.minions.some(m => m.hp <= 0)) g.minions = g.minions.filter(m => { if (m.hp > 0) return true; onMinionKill(g, m); return false; });
-  for (let pass = 0; pass < 6; pass++) {
+  for (let pass = 0; pass < 8; pass++) {
     let any = false;
-    const next = [];
     for (const sn of g.snakes) {
-      if (!sn.segs.some(q => q.hp <= 0)) { next.push(sn); continue; }
+      if (sn.segs.length === 1 && sn.segs[0].hp > 0) { sn.segs[0].shield = false; sn.segs[0].hp = 0; }
+      if (!sn.segs.some(q => q.hp <= 0)) continue;
       any = true;
-      const parts = [];
-      let cur = [];
-      for (const q of sn.segs) {
-        if (q.hp <= 0) { onKill(g, q, sn); if (cur.length) { parts.push(cur); cur = []; } } else cur.push(q);
-      }
-      if (cur.length) parts.push(cur);
-      parts.forEach(segs => {
-        if (segs[0] === sn.segs[0]) { sn.segs = segs; next.push(sn); return; }
-        next.push({ ...sn, id: ++g.sid, segs, boss: false, slow: 0 });
-        g.events.push({ t: 'split', x: segs[0].x, y: segs[0].y });
-      });
+      for (const q of sn.segs) if (q.hp <= 0) onKill(g, q, sn);
+      sn.segs = sn.segs.filter(q => q.hp > 0);
+      g.events.push({ t: 'close' });
     }
-    g.snakes = next;
+    g.snakes = g.snakes.filter(sn => sn.segs.length > 0);
     if (!any) break;
   }
 }
@@ -325,14 +318,13 @@ function hurtPlayer(g, dmg, fx, fy) {
     }
   }
 }
-// a segment slipped past the membrane: leaks always hurt, whatever i-frames you have
-function leak(g, s, sn) {
-  s.leaked = true; s.hp = 0; g.leaks++;
-  const dmg = (s === sn.segs[0] ? 15 + g.stage * 0.8 : 6 + g.stage * 0.4) * (1 - Math.min(0.6, g.p.guard));
-  const p = g.p, keep = p.iframes;
-  p.iframes = 0;
-  g.events.push({ t: 'leak', x: s.x, y: LINE_Y, d: dmg });
-  hurtPlayer(g, dmg, s.x, LINE_Y - 80);
+// the face has reached the membrane and is chewing through it: HP drains until you finish the cells
+// behind it (each kill pushes the face back off the membrane)
+function breachTick(g, sn) {
+  const dmg = (4 + g.stage * 0.4) * (1 - Math.min(0.6, g.p.guard)), p = g.p, keep = p.iframes;
+  p.iframes = 0; g.leaks++;
+  g.events.push({ t: 'leak', x: sn.segs[0].x, y: LINE_Y, d: dmg });
+  hurtPlayer(g, dmg, sn.segs[0].x, LINE_Y - 80);
   p.iframes = Math.max(keep, 0);
 }
 
@@ -409,7 +401,7 @@ function updateWeapons(g, dt, canFire) {
   const wantTowers = lv(g, 'tower') ? 1 + (lv(g, 'tower') >= 3 ? 1 : 0) + (lv(g, 'tower') >= 5 ? 1 : 0) : 0;
   if (g.towers.length !== wantTowers) rebuildTowers(g);
   const tgt = nearestTarget(g, p.x, p.y, 1400);
-  const aim = tgt ? Math.atan2(tgt.y - p.y, tgt.x - p.x) : -Math.PI / 2;
+  const aim = -Math.PI / 2;   // nothing auto-aims except the Snot Dragon's homing
   for (const id of Object.keys(g.weap)) {
     const w = g.weap[id], L = w.lv;
     if (id === 'daggers' || id === 'stick' || id === 'tower') continue;   // continuous / own timers below
@@ -430,7 +422,6 @@ function updateWeapons(g, dt, canFire) {
       for (let k = 0; k < n; k++) fire(g, { x: p.x, y: p.y - 20, a: -Math.PI / 2 + (k - (n - 1) / 2) * 0.7, sp: 440, dmg: 2.0 * (1 + 0.4 * L) * dm, r: 11, life: 2.6, kind: 'snot', home: 7, splash: 46 });
       g.events.push({ t: 'dragon' }); w.cd = (1.8 - 0.1 * L) * cm;
     } else if (id === 'needles') {
-      if (!tgt) { w.cd = 0.3; continue; }
       const n = 3 + L;
       for (let k = 0; k < n; k++) {
         const crit = g.rand() < p.crit;
@@ -438,7 +429,6 @@ function updateWeapons(g, dt, canFire) {
       }
       g.events.push({ t: 'needles' }); w.cd = (1.8 - 0.12 * L) * cm;
     } else if (id === 'bubble') {
-      if (!tgt) { w.cd = 0.3; continue; }
       for (let k = 0; k < (L >= 4 ? 2 : 1); k++) fire(g, { x: p.x, y: p.y - 30, a: aim + (k ? 0.5 : 0), sp: 190, dmg: 1.2 * (1 + 0.3 * L) * dm, r: 22 + 3 * L, life: 3.2, kind: 'bubble', splash: 70 + 10 * L, slow: 2 });
       g.events.push({ t: 'bubble' }); w.cd = (3.4 - 0.2 * L) * cm;
     } else if (id === 'satellite') {
@@ -541,14 +531,28 @@ export function step(g, dt, input) {
   if (p.shield > 0) p.shield -= dt;
   if (p.rage > 0) p.rage -= dt;
 
-  // the virus rides the track
+  // the virus rides the track as one connected chain driven by its tail. Cells in front of a gap
+  // slide back to close it, so every kill also pushes the face away from the membrane.
   let stageHp = 0;
   for (const sn of g.snakes) {
     sn.slow = Math.max(0, sn.slow - dt);
     const v = sn.speed * (sn.slow > 0 ? 0.55 : 1) * (g.phase === 'clear' ? 0 : 1);
-    for (const s of sn.segs) {
+    const segs = sn.segs, last = segs.length - 1;
+    let total = 0;
+    for (let i = 0; i < last; i++) total += (segs[i].r + segs[i + 1].r) * 0.78;
+    const maxTail = g.path.len - total;
+    sn.tail = Math.min(sn.tail + v * dt, maxTail);
+    sn.breach = sn.tail >= maxTail - 0.5;
+    let target = sn.tail;
+    for (let i = last; i >= 0; i--) {
+      if (i < last) target += (segs[i].r + segs[i + 1].r) * 0.78;
+      segs[i].tp = target;
+    }
+    segs[0].shield = segs.length > 1;
+    if (sn.breach && g.phase === 'play') { sn.breachT -= dt; if (sn.breachT <= 0) { sn.breachT = 0.5; breachTick(g, sn); } } else sn.breachT = 0;
+    for (const s of segs) {
       const ox = s.x, oy = s.y;
-      s.ps += v * dt;
+      s.ps = s.tp >= s.ps ? s.tp : Math.max(s.tp, s.ps - 320 * dt);
       const pos = pointAt(g.path, s.ps), pa = pointAt(g.path, s.ps - 8), pb = pointAt(g.path, s.ps + 8);
       s.x = pos.x; s.y = pos.y; s.ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
       s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
@@ -579,7 +583,6 @@ export function step(g, dt, input) {
   }
   g.stageHp = stageHp;
   g.progress = g.stageHpMax ? clamp(1 - stageHp / g.stageHpMax, 0, 1) : 0;
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && s.ps >= g.path.len) leak(g, s, sn);
 
   // minions walk in from the top and chase
   if (g.phase === 'play') {
@@ -589,34 +592,35 @@ export function step(g, dt, input) {
       spawnMinions(g, Math.min(8, 1 + Math.floor(g.stage / 3) + (isBossStage(g.stage) ? 2 : 0)));
     }
   }
-  for (const m of g.minions) {
-    const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy) || 1;
-    let ax = dx / d, ay = dy / d;
-    if (m.type.erratic) { const w = Math.sin(g.t * 3 + m.ph) * 0.9, c = Math.cos(w), s2 = Math.sin(w); const nx = ax * c - ay * s2; ay = ax * s2 + ay * c; ax = nx; }
-    const sp = m.type.speed * (1 + Math.min(0.5, g.stage * 0.02));
-    m.vx += (ax * sp - m.vx) * Math.min(1, dt * 4); m.vy += (ay * sp - m.vy) * Math.min(1, dt * 4);
-    m.x += m.vx * dt; m.y += m.vy * dt;
+  // small viruses crawl down the screen toward the membrane (they never chase: the cell can only shoot up)
+  for (let i = g.minions.length - 1; i >= 0; i--) {
+    const m = g.minions[i];
+    const sway = Math.sin(g.t * (m.type.erratic ? 3.2 : 1.6) + m.ph) * (m.type.erratic ? 130 : 45);
+    m.vx += (sway - m.vx) * Math.min(1, dt * 3); m.vy = m.type.speed * 0.7 * (1 + Math.min(0.5, g.stage * 0.02)) * (g.phase === 'clear' ? 0 : 1);
+    m.x = clamp(m.x + m.vx * dt, 20, W - 20); m.y += m.vy * dt;
     if (m.flash > 0) m.flash -= dt;
     if (m.orbCd > 0) m.orbCd -= dt;
-    if (d < m.r + p.r * 0.75) hurtPlayer(g, m.type.dmg + g.stage * 0.4, m.x, m.y);
+    if (Math.hypot(m.x - p.x, m.y - p.y) < m.r + p.r * 0.75) hurtPlayer(g, m.type.dmg * 0.7 + g.stage * 0.3, m.x, m.y);
+    if (m.y > LINE_Y) {   // slipped past: a small leak
+      const keep = p.iframes; p.iframes = 0;
+      g.events.push({ t: 'leak', x: m.x, y: LINE_Y, d: 3 });
+      hurtPlayer(g, (3 + g.stage * 0.2) * (1 - Math.min(0.6, p.guard)), m.x, LINE_Y - 80); p.iframes = Math.max(keep, 0);
+      g.leaks++; g.minions.splice(i, 1);
+    }
   }
 
-  // the capsule is always on; skills fire on their own timers
+  // the capsule never aims: it fires straight up the screen, so you aim by sliding
   const canFire = g.phase === 'play';
   if (canFire) {
-    const tgt = nearestTarget(g, p.x, p.y, 1400);
-    if (tgt) {
-      const dx = tgt.x - p.x, dy = tgt.y - p.y, tt = Math.hypot(dx, dy) / p.bspeed;
-      p.aim = Math.atan2(dy + (tgt.vy || 0) * tt * 0.9, dx + (tgt.vx || 0) * tt * 0.9);
-      p.cd -= dt;
-      while (p.cd <= 0) {
-        p.cd += (1 / p.rate) * cdMul(g) * (p.rage > 0 ? 0.77 : 1);
-        const crit = g.rand() < p.crit;
-        fire(g, { x: p.x + Math.cos(p.aim) * 22, y: p.y + Math.sin(p.aim) * 22, a: p.aim, sp: p.bspeed, dmg: 1.0 * dmgMul(g) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, r: 6, life: 1.3, kind: 'pill' });
-        g.shots++; g.events.push({ t: 'shoot' });
-        if (p.cd < -0.2) p.cd = 0;
-      }
-    } else p.cd = Math.min(p.cd, 0);
+    p.aim = -Math.PI / 2;
+    p.cd -= dt;
+    while (p.cd <= 0) {
+      p.cd += (1 / p.rate) * cdMul(g) * (p.rage > 0 ? 0.77 : 1);
+      const crit = g.rand() < p.crit;
+      fire(g, { x: p.x, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: 1.0 * dmgMul(g) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, r: 6, life: 1.4, kind: 'pill' });
+      g.shots++; g.events.push({ t: 'shoot' });
+      if (p.cd < -0.2) p.cd = 0;
+    }
   }
   updateWeapons(g, dt, canFire);
 
@@ -635,7 +639,7 @@ export function step(g, dt, input) {
     let dead = b.life <= 0 || b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30;
     if (!dead) {
       const test = (s, sn) => {
-        if (dead || s.hp <= 0 || b.hit.includes(s) || Math.hypot(s.x - b.x, s.y - b.y) >= s.r + b.r) return;
+        if (dead || s.hp <= 0 || s.shield || b.hit.includes(s) || Math.hypot(s.x - b.x, s.y - b.y) >= s.r + b.r) return;
         b.hit.push(s);
         damageSeg(g, s, b.dmg, b.crit, b.x, b.y);
         if (b.slow && sn) sn.slow = Math.max(sn.slow, b.slow);
@@ -660,15 +664,6 @@ export function step(g, dt, input) {
   }
 
   reap(g);
-
-  // chests at 25% and 50% of the virus's health
-  for (const th of [25, 50]) {
-    if (!g.chestsDone[th] && g.progress >= th / 100 && g.phase === 'play') {
-      g.chestsDone[th] = true;
-      g.pickups.push({ kind: 'chest', x: clamp(g.lastKillPos.x, 80, W - 80), y: clamp(g.lastKillPos.y, 160, 700), vx: 0, vy: 0, v: 1, age: 0, vac: false });
-      g.events.push({ t: 'chestdrop', pct: th });
-    }
-  }
 
   // pickups drift toward you
   for (let i = g.pickups.length - 1; i >= 0; i--) {
@@ -712,8 +707,8 @@ function spawnMinions(g, n) {
     const tot = pool.reduce((a, m) => a + m.w, 0);
     let r = g.rand() * tot, k = 0;
     for (; k < pool.length - 1; k++) { r -= pool[k].w; if (r <= 0) break; }
-    const t = pool[k], side = Math.floor(g.rand() * 3);
-    const x = side === 0 ? -20 : side === 1 ? W + 20 : 40 + g.rand() * (W - 80), y = side === 2 ? -20 : 80 + g.rand() * 400;
+    const t = pool[k];
+    const x = 50 + g.rand() * (W - 100), y = -30 - g.rand() * 160;
     const hp = Math.max(1, Math.round(hpBase(g.stage) * 0.4 * t.hp));
     g.minions.push({ x, y, vx: 0, vy: 0, r: t.r, hp, max: hp, type: t, flash: 0, orbCd: 0, ph: g.rand() * TAU, kind: 'minion' });
   }
@@ -731,7 +726,12 @@ export function botInput(g) {
   for (const sn of g.snakes) for (const s of sn.segs) push(s.x, s.y, 170 + s.r, 2.6);
   for (const s of g.minions) push(s.x, s.y, 130 + s.r, 2);
   for (const b of g.ebullets) push(b.x, b.y, 120, 1.6);
-  const z = p.zone;
-  ax += ((z.x0 + z.x1) / 2 - p.x) / W * 0.6;
+  // aim: chest cells first, otherwise the cell closest to leaking
+  let tgt = null;
+  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && s.y > 40 && s.y < p.y - 120) {
+    if (s.carry === 'chest') { tgt = s; break; }
+    if (!tgt || s.ps > tgt.ps) tgt = s;
+  }
+  if (tgt) ax += clamp((tgt.x - p.x) / 120, -1, 1) * 0.9;
   return { mx: clamp(ax, -1, 1), my: 0 };
 }

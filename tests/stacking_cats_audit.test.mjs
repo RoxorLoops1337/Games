@@ -162,5 +162,8 @@ t('burning mice draw flame tongues and embers, and the drain shows dot numbers s
 await import('./stacking_cats_relics.test.mjs');   // the relic system has its own file
 await import('./stacking_cats_i18n.test.mjs');
 await import('./stacking_cats_chestgems.test.mjs');
+await import('./stacking_cats_cashout.test.mjs');
 await import('./stacking_cats_enemies.test.mjs');   // the Rat Gang's newcomers
+await import('./stacking_cats_walk.test.mjs');   // Whiskerton Walk sim, layout and village life
+await import('./stacking_cats_world.test.mjs');   // Whiskerton Walk renderer
 console.log(n + ' tests passed');

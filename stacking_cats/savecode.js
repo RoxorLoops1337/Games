@@ -1,6 +1,7 @@
 // Save backup: turn the save into a text code and back. Used by Settings (copy, download, paste to restore).
 import { CAT_BY_ID, ITEM_BY_ID, STARTERS, BUILDINGS, WONDERS, ACHIEVEMENTS, DIFF_ORDER, LADDER_TIERS, WEEK_RE, masteryLevel, diffAllowed } from './cats.js';
 import { cleanWardrobe } from './cosmetics.js';
+import { cleanWalk, cleanRecords } from './kingdom_life.js';
 
 const PREFIX = 'SC1:';
 const bytesToB64 = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
@@ -50,6 +51,8 @@ export function decodeSave(text) {
     s.ladder = Math.min(LADDER_TIERS, num(raw.ladder, 99));
     const wd = cleanWardrobe(raw.owned, raw.wardrobe, (id) => masteryLevel(s.catStats[id]));
     s.owned = wd.owned; s.wardrobe = wd.wardrobe;
+    // Whiskerton Walk (additive): record statues and the walk's own small state
+    s.records = cleanRecords(raw.records); s.walk = cleanWalk(raw.walk, s.unlocked);
     if (!diffAllowed(s, s.diff)) s.diff = 'hard';
     return { ok: true, save: s };
   } catch (e) {

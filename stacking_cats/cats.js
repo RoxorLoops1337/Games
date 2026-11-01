@@ -574,6 +574,8 @@ export const ROUTES = [
   { id: 'moon',     name: 'Moon Path',     icon: '🌙', desc: 'Mice move 15% slower, but the nest is 30% tougher. Better loot.', enemyHp: 1, enemyDmg: 1, coin: 1.1, chest: 0.5, budget: 1, bossHp: 1.3, rare: 1, snackExtra: 0, healNow: 0, speed: 0.85 },
   { id: 'market',   name: 'Snack Market',  icon: '🍣', desc: 'One extra snack to choose from after every wave of this stage.', enemyHp: 1.05, enemyDmg: 1, coin: 1, chest: 0, budget: 1, bossHp: 1, rare: 0, snackExtra: 1, healNow: 0, speed: 1 },
 ];
+// cashing out: after every CASH_EVERY waves the player may bank the whole run and go home; carrying on risks FALL_LOSS of the loot (coins and gems) if the stack falls
+export const CASH_EVERY = 5, FALL_LOSS = 0.5;
 export const ROUTE_BY_ID = Object.fromEntries(ROUTES.map((r) => [r.id, r]));
 
 // ---------------------------------------------------------------- the daily challenge

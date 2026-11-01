@@ -107,27 +107,53 @@ html.reduce-motion .b-floor.tgt{animation:none}
 .u-hit.kbd-hot,.u-hit.drop-hot{outline:3px solid #fff;background:rgba(255,255,255,.2)}
 html.reduce-motion .u-hit.tgt{animation:none}
 .u.champ .u-hit::after{content:"";position:absolute;left:12%;right:12%;bottom:0;height:3px;background:#ffcf4a;opacity:.7;border-radius:2px}
-.u-top,.u-plate,.u-chips{position:absolute;left:0;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:3px;pointer-events:none;white-space:nowrap}
-.u-top>*,.u-chips>*{pointer-events:auto}
-.u-plate{font-size:var(--hud);gap:2px}
-.pl{display:inline-flex;align-items:center;gap:2px;padding:0 4px;border-radius:3px;color:#fff;font:900 1em/1.35 var(--font-num);text-shadow:0 1px 0 rgba(0,0,0,.8);box-shadow:0 2px 0 rgba(0,0,0,.45);border:1px solid rgba(0,0,0,.5)}
-.pl.atk{background:#7a2c2c} .pl.hp{background:#2f6a4a} .pl.hp.low b{color:#ffb0b8} .pl.fl{background:#2a4a7a}
-.pl .ico{--s:.85em}
-.u.napping .pl.atk{opacity:.5}
-.u-chips{font-size:calc(var(--hud)*.88);gap:2px}
-.u-lives{display:inline-flex;gap:2px;align-items:center;padding:1px 3px;background:rgba(10,7,22,.7);border-radius:99px;font:800 calc(var(--hud)*.85) var(--font-num);color:var(--sunbeam);cursor:help}
-.u-lives i{display:block;width:calc(var(--hud)*.55);height:calc(var(--hud)*.55);border-radius:50%;background:var(--sunbeam);border:1px solid #7a5a00}
-.u-lives i.off{background:transparent;border-color:#7f7298}
+.u{font-size:var(--uh,12px)}
+.u-top,.u-plate,.u-chips{position:absolute;left:0;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:.12em;pointer-events:none;white-space:nowrap}
+.u-top{flex-direction:column;gap:.18em}
+.u-acts{display:flex;align-items:center;justify-content:center;gap:.2em}
+.u-top>*,.u-chips>*,.u-acts>*{pointer-events:auto}
+/* stat pills: icon over number, ~1.5em wide each, so ATK (left, red) and HP (right, green) always fit one slot */
+.u-plate{top:-.55em;gap:.12em;align-items:flex-start}
+.pl{--pl-a:#e8504c;--pl-b:#8c1f24;--pl-n:#fff;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:1.5em;padding:.1em .16em .14em;border-radius:.5em;line-height:1;color:#fff;
+  background:linear-gradient(180deg,var(--pl-a),var(--pl-b));border:.09em solid rgba(8,4,18,.9);box-shadow:0 .14em 0 rgba(0,0,0,.55),inset 0 .08em 0 rgba(255,255,255,.28);transform-origin:50% 70%}
+.pl.atk{--pl-a:#f06a45;--pl-b:#a02a20}
+.pl.hp{--pl-a:#44c46f;--pl-b:#1d7443}
+.pl.fl{--pl-a:#5b8fe0;--pl-b:#274f93}
+.pl-ic{display:flex;align-items:center;justify-content:center;gap:.06em;height:.62em;font-size:.62em;line-height:1;color:#fff4d8;opacity:.95}
+.pl-ic .ico{--s:1em;vertical-align:0}
+.pl-ar{font-style:normal;font-size:.9em;line-height:1}
+.pl .num{display:block;font:900 1.14em/1.02 var(--font-num);letter-spacing:-.02em;color:var(--pl-n);-webkit-text-stroke:.12em rgba(8,4,18,.9);paint-order:stroke fill;text-shadow:0 .07em 0 rgba(0,0,0,.8)}
+.pl[data-st=buff]{--pl-n:#c8ffd2;box-shadow:0 .14em 0 rgba(0,0,0,.55),inset 0 .08em 0 rgba(255,255,255,.28),0 0 .5em rgba(120,255,160,.55)} .pl[data-st=buff] .pl-ar{color:#9dff9d}
+.pl[data-st=debuff]{--pl-n:#ffc4c8} .pl[data-st=debuff] .pl-ar{color:#ff8a94}
+.pl.hp[data-st=low]{--pl-a:#e5483f;--pl-b:#8a1220;--pl-n:#fff}
+.pl.hp[data-st=crit]{--pl-a:#ff3b3b;--pl-b:#7a0a18;--pl-n:#fff;animation:pl-crit .9s ease-in-out infinite}
+.pl.pop-up{animation:pl-pop-up .5s cubic-bezier(.2,1.6,.4,1)} .pl.pop-down{animation:pl-pop-down .5s ease-out}
+@keyframes pl-pop-up{0%{transform:scale(1);filter:none}30%{transform:scale(1.28);filter:brightness(1.5) saturate(1.2)}100%{transform:scale(1);filter:none}}
+@keyframes pl-pop-down{0%{transform:scale(1)}25%{transform:scale(1.2) rotate(-4deg);filter:brightness(1.7) hue-rotate(-12deg)}60%{transform:scale(.93)}100%{transform:scale(1);filter:none}}
+@keyframes pl-crit{50%{filter:brightness(1.35);box-shadow:0 .14em 0 rgba(0,0,0,.55),0 0 .6em rgba(255,60,60,.8)}}
+html.reduce-motion .pl.pop-up,html.reduce-motion .pl.pop-down,html.reduce-motion .pl.hp[data-st=crit]{animation:none}
+html.high-contrast .pl{border-color:#fff;background:#000;box-shadow:0 .14em 0 #000}
+html.high-contrast .pl.atk{background:#9a0000} html.high-contrast .pl.hp{background:#005a1c} html.high-contrast .pl.hp[data-st=low],html.high-contrast .pl.hp[data-st=crit]{background:#c40018} html.high-contrast .pl.fl{background:#12308a}
+html.high-contrast .pl .num{-webkit-text-stroke:0;text-shadow:none;color:#fff}
+.pl-mt{display:inline-block;padding:.05em .4em;border-radius:.5em;background:#3a2c64;color:#ffd95a;border:.09em solid #ffd95a;font:900 .8em/1.3 var(--font-num);cursor:help}
+.u.napping .pl.atk{opacity:.55}
+.u.hidden-unit .u-hit{opacity:.9}
+.u-chips{top:1.62em;gap:.1em}
+.u-chips .st-chip{font-size:.74em;padding:0 .2em;border-radius:.4em}
+.u-chips .st-chip b{font-size:1em}
+.u-lives{display:inline-flex;gap:.16em;align-items:center;padding:.12em .3em;background:rgba(10,7,22,.82);border:1px solid rgba(255,217,90,.35);border-radius:99px;font:800 .85em var(--font-num);color:var(--sunbeam);cursor:help}
+.u-lives i{display:block;width:.62em;height:.62em;border-radius:50%;background:var(--sunbeam);border:1px solid #7a5a00;box-shadow:0 0 .3em rgba(255,217,90,.6)}
+.u-lives i.off{background:transparent;border-color:#8f84ad;box-shadow:none}
 .u-lives.pulse{animation:lives-pulse .55s ease-out}
 .u-lives i.spent{animation:pip-spent .6s cubic-bezier(.2,.8,.3,1)}
 @keyframes lives-pulse{0%{transform:scale(1);box-shadow:0 0 0 0 rgba(255,217,90,.9)}25%{transform:scale(1.35);box-shadow:0 0 0 5px rgba(255,217,90,.5)}60%{transform:scale(.94)}100%{transform:scale(1);box-shadow:0 0 0 8px rgba(255,217,90,0)}}
 @keyframes pip-spent{0%{background:var(--sunbeam);border-color:#fff;transform:scale(1)}30%{background:#fff;transform:scale(1.9)}100%{background:transparent;border-color:#7f7298;transform:scale(1)}}
 html.reduce-motion .u-lives.pulse,html.reduce-motion .u-lives i.spent{animation:none}
-.u-nap{appearance:none;cursor:pointer;width:calc(var(--hud)*2.1);height:calc(var(--hud)*2.1);min-width:20px;min-height:20px;border-radius:50%;border:2px solid var(--ui-border-hi);background:#2b2358;color:#c3ccff;padding:2px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 0 var(--ui-shadow);position:relative}
-.u-nap::before{content:"";position:absolute;inset:-8px}
+.u-nap{appearance:none;cursor:pointer;width:1.9em;height:1.9em;min-width:22px;min-height:22px;border-radius:50%;border:2px solid var(--ui-border-hi);background:#2b2358;color:#c3ccff;padding:2px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 0 var(--ui-shadow);position:relative}
+.u-nap::before{content:"";position:absolute;inset:-8px} /* hit area at least 36px even for the 22px minimum button */
 .u-nap.on{background:#7a8cff;color:#10143a;border-color:#fff}
 .u-nap:hover{filter:brightness(1.2)}
-.u-intent{display:inline-flex;align-items:center;gap:2px;padding:1px 6px 1px 4px;border-radius:99px;border:2px solid var(--ui-border-hi);background:#2a2144;color:var(--ui-text);font:900 calc(var(--hud)*1.05)/1.35 var(--font-num);cursor:help;box-shadow:0 2px 0 rgba(0,0,0,.5)}
+.u-intent{display:inline-flex;align-items:center;gap:2px;padding:.05em .4em .05em .3em;border-radius:99px;border:2px solid var(--ui-border-hi);background:#2a2144;color:var(--ui-text);font:900 1em/1.3 var(--font-num);cursor:help;box-shadow:0 2px 0 rgba(0,0,0,.5)}
 .u-intent.atk{border-color:var(--danger);background:#3a1620;color:#ffd0d4}
 .u-intent.sun{border-color:var(--warm-loss);background:#4a2410;color:#ffe0b0;animation:lethal .8s steps(2) infinite}
 .u-intent.climb{border-color:var(--sunbeam);background:#3a3010;color:#fff0a0}
@@ -224,6 +250,7 @@ html.reduce-motion .b-vig.flash{animation-duration:.25s}
 .b-bottom{flex:0 0 auto;height:clamp(180px,30vh,310px);display:grid;grid-template-columns:152px 1fr 152px;grid-template-rows:auto 1fr;grid-template-areas:"left prompt right" "left hand right";
   gap:2px 10px;padding:4px 10px 6px;position:relative;z-index:10}
 .b-status{display:contents}
+.b-extras{display:contents}
 .b-status .sp{display:none}
 .b-left{grid-area:left;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding-top:4px}
 .b-meters{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
@@ -296,36 +323,107 @@ html.reduce-motion .growth-row{animation:none}
 .keys .field{gap:14px} kbd{font:700 .9em var(--font-mono);background:#140f26;border:2px solid var(--ui-border-hi);border-bottom-width:4px;border-radius:4px;padding:1px 8px;white-space:nowrap}
 .pause .field label{font-weight:600}
 
-/* ====================== PHONE PORTRAIT ====================== */
-.battle[data-mode=phone] .b-top{height:42px;gap:6px;padding:0 6px}
+/* ====================== PHONE PORTRAIT ======================
+   Top to bottom: slim status bar, the house at full width (the hero), a one line Garden strip, one resource row (Zoomies, piles, End Turn
+   in the thumb zone), then the hand as a shallow fan of 4 to 5 readable cards. Prompts and abilities float over the Garden strip. */
+.ck-main,.ck-sub{display:contents}
+.battle[data-mode=phone]{max-height:100dvh;--res-h:50px;--ts:min(var(--text-scale),1.2)} /* phone chrome follows the text size setting, capped so the bars keep their shape */
+.battle[data-mode=phone] .b-top{height:auto;min-height:52px;padding-top:4px;padding-bottom:4px;gap:6px;padding:0 8px;background:linear-gradient(#2d2354,var(--ui-panel))}
 .battle[data-mode=phone] .b-helpbtn{display:none}
-.battle[data-mode=phone] .ck-msg{display:none}
-.battle[data-mode=phone] .b-clock{padding:2px 8px;gap:5px}
-.battle[data-mode=phone] .b-clock small{display:none}
-.battle[data-mode=phone] .b-clock.hot::after{content:"!";font-weight:900;color:#c3ccff}
-.battle[data-mode=phone] .b-relic{width:28px;height:28px}
-.battle[data-mode=phone] .b-main{padding:4px 6px 0;flex:0 0 auto}
+.battle[data-mode=phone] .b-top>.btn{flex:none;min-width:46px;min-height:42px;height:42px;padding:2px 4px;gap:1px;flex-direction:column;align-items:center;justify-content:center;border-radius:8px}
+.battle[data-mode=phone] .b-top>.btn::after{display:block;font:800 10px/1 var(--font-display);letter-spacing:.06em;text-transform:uppercase;color:var(--ui-text-dim)}
+.battle[data-mode=phone] .b-top>.btn[aria-label="Pause menu"]::after{content:"Menu"}
+.battle[data-mode=phone] .b-top>.btn[aria-label="Battle log"]::after{content:"Log"}
+.battle[data-mode=phone] .b-deckbtn{display:grid;grid-template-columns:auto auto;column-gap:4px;justify-content:center;align-content:center}
+.battle[data-mode=phone] .b-deckbtn::after{content:"Deck";grid-column:1/-1;text-align:center}
+.battle[data-mode=phone] .b-deckn{font-size:14px}
+.battle[data-mode=phone] .b-clock{flex:0 1 auto;min-width:0;min-height:42px;padding:3px 10px 3px 8px;gap:7px;border-radius:10px;justify-content:flex-start;overflow:hidden}
+.battle[data-mode=phone] .ck-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.battle[data-mode=phone] .ck-r{white-space:nowrap;line-height:1.05} .battle[data-mode=phone] .ck-r b{font-size:calc(14px*var(--ts))}
+.battle[data-mode=phone] .ck-r small{display:inline;font-size:calc(11px*var(--ts))}
+.battle[data-mode=phone] .ck-sub{display:flex;align-items:center;gap:6px;min-width:0}
+.battle[data-mode=phone] .ck-msg{display:inline;font-size:calc(11px*var(--ts));font-weight:800;white-space:nowrap;letter-spacing:.02em}
+.battle[data-mode=phone] .ck-pips i{width:8px;height:8px}
+.battle[data-mode=phone] .b-clock.hot{background:#1d1a52;border-color:#8a9aff}
+.battle[data-mode=phone] .b-relics{padding:4px 0;gap:6px;touch-action:pan-x}
+.battle[data-mode=phone] .b-relic{width:30px;height:30px}
+.battle[data-mode=phone] .b-main{padding:6px 4px 0;flex:0 0 auto}
 .battle[data-mode=phone] .b-scenecol{flex:none;width:100%}
 .battle[data-mode=phone] .b-wrap{flex:none}
-.battle[data-mode=phone] .b-bottom{height:auto;flex:1 1 0;min-height:0;grid-template-columns:1fr 76px;grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"status status" "prompt prompt" "hand end";gap:0 6px;padding:2px 6px calc(6px + var(--safe-b))}
-.battle[data-mode=phone] .b-status{display:flex;grid-area:status;align-items:center;gap:6px;min-height:46px}
-.battle[data-mode=phone] .b-status .sp{display:block;flex:1}
-.battle[data-mode=phone] .b-left{display:flex;flex-direction:row;align-items:center;gap:6px;padding:0}
-.battle[data-mode=phone] .b-meters{flex-direction:row;align-items:center;gap:5px;flex-wrap:nowrap}
-.battle[data-mode=phone] .b-right{padding:0;gap:6px}
-.battle[data-mode=phone] .b-end{grid-area:end;height:96px;align-self:end}
-.battle[data-mode=phone] .b-status{min-height:46px;gap:6px}
-.battle[data-mode=phone] .b-handwrap{min-height:0}
-.battle[data-mode=phone] .b-pile{width:34px;height:46px} .battle[data-mode=phone] .b-pile i{width:28px;height:40px}
-.battle[data-mode=phone] .orb{width:20px;height:20px;border-width:2px} .battle[data-mode=phone] .b-orbs{gap:3px;padding:3px 7px 3px 4px}
-.battle[data-mode=phone] .b-end{font-size:calc(15px*var(--text-scale));margin:4px 0;padding:.3em}
-.battle[data-mode=phone] .b-garden{min-height:30px;padding:2px 6px;margin-top:2px}
-.battle[data-mode=phone] .g-pest{width:26px;height:26px}
-.battle[data-mode=phone] .b-nip .nip-bar i{width:5px}
-.battle[data-mode=phone] .b-nip,.battle[data-mode=phone] .b-bank{padding:3px 7px;font-size:.78em;gap:4px}
-.battle.lefty[data-mode=phone] .b-bottom{grid-template-columns:76px 1fr;grid-template-areas:"status status" "prompt prompt" "end hand"}
-.battle[data-mode=phone] .b-prompt{margin-bottom:2px;padding:3px 8px;font-size:.92em;flex-wrap:wrap}
+.battle[data-mode=phone] .b-stage{border-radius:10px;border-color:#5a4a8a;box-shadow:0 0 0 1px #0a0716,0 6px 16px rgba(0,0,0,.45)}
+.battle[data-mode=phone] .b-warm{width:calc(var(--u)*90)}
+.battle[data-mode=phone] .b-flabel{font-size:calc(11px*min(var(--ts),1.1));padding:0 8px;border-radius:4px}
+.battle[data-mode=phone] .b-garden{min-height:34px;padding:2px 10px;margin-top:5px;gap:7px;border-radius:10px;background:linear-gradient(rgba(27,42,58,.95),rgba(20,32,46,.95));border-color:#2c4660}
+.battle[data-mode=phone] .g-label{font-size:11px;margin-right:2px}
+.battle[data-mode=phone] .g-empty{font-size:12px}
+.battle[data-mode=phone] .g-pest{width:28px;height:28px}
+.battle[data-mode=phone] .b-log{top:calc(54px + var(--safe-t))}
+
+/* bottom block: [resource row | End Turn] over [hand] */
+.battle[data-mode=phone] .b-bottom{position:relative;display:grid;height:auto;flex:1 1 auto;min-height:var(--hand-h,150px);grid-template-columns:minmax(0,1fr) auto auto auto auto;grid-template-rows:auto var(--res-h) var(--hand-h,150px);
+  align-content:end;gap:0;padding:6px 8px 8px}
+.battle[data-mode=phone] .b-status,.battle[data-mode=phone] .b-left,.battle[data-mode=phone] .b-right,.battle[data-mode=phone] .b-meters{display:contents}
+.battle[data-mode=phone] .b-status .sp{display:none}
+.battle[data-mode=phone] .b-extras{display:flex;grid-row:1;grid-column:1/-1;flex-wrap:wrap;gap:0 6px;align-items:center}
+.battle[data-mode=phone] .b-extras>:not(.hidden){margin-bottom:6px}
+.battle[data-mode=phone] .b-orbs{grid-row:2;grid-column:1;justify-self:start;align-self:center}
+.battle[data-mode=phone] .b-pile{grid-row:2;grid-column:2;align-self:center;width:40px;height:52px;margin:0 0 0 6px;transform:none}
+.battle[data-mode=phone] .b-pile.exhaust{grid-column:3}
+.battle[data-mode=phone] .b-pile.discard{grid-column:4}
+.battle[data-mode=phone] .b-pile i{width:30px;height:38px;border-radius:5px}
+.battle[data-mode=phone] .b-pile .pb3{left:2px;top:5px} .battle[data-mode=phone] .b-pile .pb2{left:5px;top:3px} .battle[data-mode=phone] .b-pile .pb1{left:8px;top:1px}
+.battle[data-mode=phone] .b-pile::after{content:"Draw";position:absolute;left:-4px;right:-4px;bottom:0;text-align:center;font:800 10px/1 var(--font-display);letter-spacing:.04em;color:var(--ui-text-dim);text-transform:uppercase}
+.battle[data-mode=phone] .b-pile.discard::after{content:"Discard"} .battle[data-mode=phone] .b-pile.exhaust::after{content:"Burnt"}
+.battle[data-mode=phone] .b-pile .pn{right:-3px;top:-3px;bottom:auto;min-width:22px;font-size:12px}
+.battle[data-mode=phone] .b-orbs{gap:3px;padding:4px 10px 4px 6px;min-height:38px;max-width:100%;border-radius:12px;background:linear-gradient(#241a45,#1a1333)}
+.battle[data-mode=phone] .orb{width:23px;height:23px;border-width:2px;flex:0 1 23px;min-width:15px}
+.battle[data-mode=phone] .orbn{font-size:calc(16px*var(--ts));margin-left:4px}
+.battle[data-mode=phone] .b-nip,.battle[data-mode=phone] .b-bank{padding:3px 8px;font-size:12px;gap:5px;min-height:30px}
+.battle[data-mode=phone] .b-nip .nip-bar i{width:5px;height:12px}
+.battle[data-mode=phone] .b-end{grid-row:2;grid-column:5;align-self:center;justify-self:end;margin-left:8px;display:grid;grid-template-columns:auto auto;column-gap:.3em;justify-content:center;align-content:center;
+  min-width:108px;height:46px;margin:0;padding:0 18px;border-radius:99px;font-size:calc(16px*var(--ts));font-weight:900;letter-spacing:.02em;line-height:1.1}
+.battle[data-mode=phone] .b-end.glow::after{content:"Nothing left to play";grid-column:1/-1;text-align:center;font-size:10px;font-weight:800;letter-spacing:.02em;opacity:.8;white-space:nowrap;line-height:1}
+.battle[data-mode=phone] .b-end.glow{height:50px;box-shadow:0 3px 0 var(--btn-lo),0 5px 0 var(--ui-shadow),0 0 14px 2px rgba(255,209,138,.55)}
+.battle.lefty[data-mode=phone] .b-bottom{grid-template-columns:auto minmax(0,1fr) auto auto auto}
+.battle.lefty[data-mode=phone] .b-end{grid-column:1;justify-self:start;margin:0 8px 0 0}
+.battle.lefty[data-mode=phone] .b-orbs{grid-column:2}
+.battle.lefty[data-mode=phone] .b-pile{grid-column:3} .battle.lefty[data-mode=phone] .b-pile.exhaust{grid-column:4} .battle.lefty[data-mode=phone] .b-pile.discard{grid-column:5}
+
+/* prompt and ability tray float over the Garden strip so the hand never resizes */
+.battle[data-mode=phone] .b-pw{grid-area:auto;position:absolute;left:8px;right:8px;top:0;transform:translateY(calc(-100% - 4px));display:flex;flex-direction:column;align-items:stretch;gap:4px;z-index:130;pointer-events:none}
+.battle[data-mode=phone] .b-pw>*{pointer-events:auto}
+.battle[data-mode=phone] .b-prompt{margin:0;padding:4px 10px;min-height:48px;flex:none;border-radius:12px;font-size:calc(14px*var(--ts));flex-wrap:wrap;background:rgba(35,26,61,.97);box-shadow:0 6px 16px rgba(0,0,0,.55)}
 .battle[data-mode=phone] .b-prompt .insp{width:100%}
+.battle[data-mode=phone] .b-tray{background:rgba(20,15,38,.9);border-radius:12px;padding:3px}
+.battle[data-mode=phone] .b-tray .btn{min-height:40px}
+
+/* the hand: a shallow fan, 4 to 5 cards at once. Stats move to the left of the type ribbon so a card overlapped on its right edge still shows them. */
+.battle[data-mode=phone] .b-handwrap{grid-row:3;grid-column:1/-1;min-height:0}
+.battle[data-mode=phone] .b-hand .card{bottom:8px;height:calc(var(--cw)*var(--card-ar,1.4))}
+.battle[data-mode=phone] .b-hand .card.sz-hand{font-size:calc(var(--cw)*.104)}
+.battle[data-mode=phone] .b-hand .card .c-head{min-height:2.1em;padding-left:2.3em}
+.battle[data-mode=phone] .b-hand .card .c-name,.battle[data-mode=phone] .b-hand .card .c-name.long,.battle[data-mode=phone] .b-hand .card .c-name.xlong{font-size:.98em;white-space:normal;line-height:1.02;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.battle[data-mode=phone] .b-hand .card .c-name.xlong{font-size:.86em}
+.battle[data-mode=phone] .b-hand .card .c-art{flex-basis:29%}
+.battle[data-mode=phone] .b-hand .card .c-ribbon{padding:.1em .3em;gap:.25em}
+.battle[data-mode=phone] .b-hand .card .c-ribbon .c-stat{order:-1;font-size:1.3em;padding:0 .2em}
+.battle[data-mode=phone] .b-hand .card .c-ribbon .c-stat.hp{margin-right:.2em}
+.battle[data-mode=phone] .b-hand .card .c-ribbon .sp{display:none}
+.battle[data-mode=phone] .b-hand .card .c-text{font-size:.98em;padding:.25em .35em;line-height:1.18}
+.battle[data-mode=phone] .b-hand .card .c-text.t-sm{font-size:.9em} .battle[data-mode=phone] .b-hand .card .c-text.t-xs{font-size:.82em}
+.battle[data-mode=phone] .b-hand .card .c-foot{display:none}
+.battle[data-mode=phone] .b-hand .card.playable:not(.selected){--lift:-8px}
+.battle[data-mode=phone] .b-hand .card.unaff:not(.selected){--lift:4px}
+.battle[data-mode=phone] .b-hand .card.selected{--lift:-30px;--sc:1.14}
+
+@media (max-height:700px){
+  .battle[data-mode=phone] .b-top{min-height:46px}
+  .battle[data-mode=phone] .b-top>.btn{height:38px;min-height:38px}
+  .battle[data-mode=phone] .b-clock{min-height:38px}
+  .battle[data-mode=phone]{--res-h:46px}
+  .battle[data-mode=phone] .b-garden{min-height:30px;margin-top:3px}
+  .battle[data-mode=phone] .b-log{top:calc(46px + var(--safe-t))}
+}
 
 /* short landscape screens: use the desktop layout, tighter */
 html.short .battle[data-mode=desktop] .b-bottom{height:clamp(120px,34vh,210px);grid-template-columns:120px 1fr 112px}
@@ -345,14 +443,13 @@ html.short .battle[data-mode=desktop] .b-end{height:auto;font-size:calc(15px*var
 html.short .battle[data-mode=desktop] .b-orbs .orb{width:20px;height:20px;border-width:2px}
 html.short .battle[data-mode=desktop] .b-left{gap:2px}
 html.short .battle[data-mode=desktop] .b-main{padding-top:3px}
-.u-scratch{appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:1px;min-width:20px;min-height:20px;border-radius:10px;border:2px solid #ffd95a;background:#5a2a2a;color:#ffd95a;padding:1px 4px;font:900 9px var(--font-num);position:relative;animation:scratchPulse 1.2s ease-in-out infinite}
+.u-scratch{appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:1px;min-width:22px;min-height:22px;border-radius:99px;border:2px solid #ffd95a;background:#5a2a2a;color:#ffd95a;padding:1px 4px;font:900 .8em var(--font-num);position:relative;animation:scratchPulse 1.2s ease-in-out infinite}
 .u-scratch::before{content:"";position:absolute;inset:-8px}
 @keyframes scratchPulse{50%{filter:brightness(1.35)}}
 .b-room.fragile{cursor:pointer;border-color:#ff9a5a}
 .b-room.fragile:hover{filter:brightness(1.25)}
 .b-rdur.frag{left:1px;right:auto;color:#ffb347}
 .u-parasited{outline:1px dashed #ffd95a}
-.pl.mt{background:#3a2c64;color:#ffd95a;border-color:#ffd95a}
 
 /* ---------- abilities and retain tray (QA pass) ---------- */
 .b-pw{grid-area:prompt;display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -394,3 +491,20 @@ html[data-mode=phone] .btn.sm{min-height:44px}
 .u-hit{transition:background .12s,outline-color .12s}
 .u-hit.drop-hot{outline-offset:3px}
 html.reduce-motion .b-ring,html.reduce-motion .b-ghost,html.reduce-motion .b-zone{transition:none;animation:none}
+
+/* phone drag: once a floor is the aim, the other valid floors fade back so it is obvious which one you would land on */
+.b-stage.aimhot .b-floor.tgt:not(.drop-hot){border-color:rgba(123,228,149,.22);background:rgba(15,11,36,.34);animation:none}
+.b-stage.aimhot .b-floor.drop-hot{border-width:3px;border-color:#fff;background:rgba(123,228,149,.3);box-shadow:inset 0 0 22px rgba(123,228,149,.7),0 0 16px rgba(123,228,149,.55);animation:none}
+.b-tag{position:fixed;left:0;top:0;z-index:410;pointer-events:none;opacity:0;padding:3px 10px;border-radius:99px;background:var(--good);color:#0b2a14;border:2px solid #fff;font-weight:900;font-size:13px;letter-spacing:.02em;white-space:nowrap;box-shadow:0 2px 0 var(--ui-shadow);transition:opacity .12s;will-change:transform}
+.b-tag.on{opacity:1}
+
+/* ---------- landscape and desktop: framing and larger floor furniture ---------- */
+.battle[data-mode=desktop] .b-main{background:radial-gradient(ellipse 70% 90% at 50% 45%,rgba(255,190,110,.10),transparent 70%),repeating-linear-gradient(90deg,rgba(255,255,255,.018) 0 2px,transparent 2px 22px)}
+.battle[data-mode=desktop] .b-stage{border-color:#3b2f66;box-shadow:0 0 0 2px #120d26,0 0 70px rgba(255,190,110,.14),0 6px 0 var(--ui-shadow)}
+.battle[data-mode=desktop].b-witching .b-stage{box-shadow:0 0 0 2px #7a8cff,0 0 70px rgba(122,140,255,.25),0 6px 0 var(--ui-shadow)}
+.battle[data-mode=desktop] .b-flabel{font-size:calc(var(--hud)*1.02);justify-content:center;padding:0;width:calc(var(--u)*60);letter-spacing:.16em}
+.battle[data-mode=desktop] .b-room{border-width:2px;border-radius:5px}
+.battle[data-mode=desktop] .b-room.filled{background:rgba(122,83,38,.7)}
+
+/* while a card is being dragged the aim label above the card says where it lands, so the prompt bar must not cover the bottom floor */
+.b-dragging .b-prompt{opacity:0;pointer-events:none;transition:none}

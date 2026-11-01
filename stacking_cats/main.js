@@ -1,13 +1,16 @@
 // Stacking Cats: renderer, effects, HUD and screens. The rules live in sim.js.
 import {
   CATS, CAT_BY_ID, SNACK_BY_ID, THEMES, STARTERS, START_CATS, MAX_STACK, MAX_BENCH, BOSS_EVERY, ENEMY_TYPES, NESTS, SPECIAL_TEXT,
-  emptyStats, checkUnlocks, mergeRun, unlockProgress,
+  emptyStats, checkUnlocks, mergeRun, unlockProgress, CASH_EVERY, FALL_LOSS,
   ITEM_BY_ID, ITEMS, RARITIES, relicProgress, noteRelics as bookRelics, teamRelics, RELIC_SETS, activeSets, setUps, setHint, relicBookLine, BOXES, BOX_BY_ID, BOX_PITY, RARITY_CHEER, SET_NEED, SET_DOUBLE, MAX_STASH, FORGE_NEXT, FORGE_COUNT, itemSlots, BUILDINGS, BUILDING_BY_ID, emptyKingdom, buildingLevel, cheapestUpgrade, affordableWonder, nextGoal, titleStackIds, upgradeCost, buyUpgrade, kingdomLevel,
   TEMP_WAVES, DIFFS, CAT_TAGS, SYNERGIES, synergyText, ROUTE_BY_ID, dayKey, dayInfo, WONDERS, WONDER_BY_ID, buyWonder, ACHIEVEMENTS,
   masteryProgress, masteryMap, masteryBonus, MASTERY_MAX, DIFF_ORDER, LADDER_RULES, LADDER_WAVE, ladderTier, ladderUnlocked, diffAllowed, ladderClears, weekKey, weekInfo,
 } from './cats.js';
 import { COSMETICS, COSMETIC_BY_ID, SLOTS, SLOT_NAMES, lookOf, lookSig, drawLook, drawCosmetic, canWear, buyCosmetic, toggleWear, isOwned } from './cosmetics.js';
 import { createKingdomScene } from './kingdom_scene.js';
+import { createInput } from './kingdom_input.js';
+import * as KLife from './kingdom_life.js';
+import { setWalkLook, freeWalkCats } from './kingdom_cat.js';
 import { encodeSave, decodeSave } from './savecode.js';
 import { dailyScore, fetchBoard, submitScore, submitRun, rankOf, dailyStreak, passedBest, milestoneLine, bestTag, nameOk, cleanName, suggestName } from './daily.js';
 import { drawBuilding } from './art_kingdom.js';
@@ -40,7 +43,7 @@ const sfx = new Sfx();
 // ---------------------------------------------------------------- save
 // a player whose system asks for reduced motion starts with screen shake and flashes off (they can still turn them on)
 const REDUCED_MOTION = (() => { try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
-const DEFAULT_OPT = { shake: REDUCED_MOTION ? 0 : 1, colorblind: false, bigText: false, quality: 'auto', motion: !REDUCED_MOTION, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, meows: true, meowMusic: true, autoSpecial: false, fast: false, lang: 'auto' };
+const DEFAULT_OPT = { shake: REDUCED_MOTION ? 0 : 1, colorblind: false, bigText: false, quality: 'auto', motion: !REDUCED_MOTION, sfxVol: 1, musicVol: 0.7, tutorial: true, haptics: true, meows: true, meowMusic: true, autoSpecial: false, fast: false, lang: 'auto', walk: true };
 function freshSave() {
   return { v: 1, relics: {}, stats: emptyStats(), unlocked: [...STARTERS], sound: true, music: true, tips: {}, kingdom: emptyKingdom(), meter: true, diff: 'normal', name: '', nameAsked: false, ach: {}, catStats: {}, daily: {}, opt: { ...DEFAULT_OPT }, weekly: {}, ladder: 0, owned: [], wardrobe: {} };
 }
@@ -56,6 +59,7 @@ function adoptSave(s) {
     relics: Object.fromEntries(Object.keys(s.relics || {}).filter((id) => ITEM_BY_ID[id] && s.relics[id]).map((id) => [id, true])),
     ach: { ...(s.ach || {}) }, catStats: { ...(s.catStats || {}) }, daily: { ...(s.daily || {}) },
     diff: DIFF_ORDER.includes(s.diff) ? s.diff : 'normal', name: String(s.name || ''), nameAsked: !!s.nameAsked,
+    records: KLife.cleanRecords(s.records), walk: KLife.cleanWalk(s.walk, s.unlocked),
     weekly: { ...(s.weekly || {}) }, ladder: Math.max(0, Math.min(5, (s.ladder | 0))), owned: (s.owned || []).filter((id) => COSMETIC_BY_ID[id]), wardrobe: { ...(s.wardrobe || {}) },
   };
 }
@@ -451,7 +455,7 @@ function showTitle() {
     <div class="hint">${total.runs ? `Best wave ${total.bestWave} &middot; ${total.kills} mice defeated &middot; ${total.bossKills} nests destroyed` : (coarse ? 'Tap the big pink Play button to start' : 'Click the big pink Play button, or press Enter, to start')}</div>`, 'clear tpad');
   acts = {
     relics: () => showRelics(showTitle),
-    play: () => showDiffPicker(showTitle, true), collection: () => showCollection(showTitle), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => showKingdom(showTitle),
+    play: () => showDiffPicker(showTitle, true), collection: () => showCollection(showTitle), dex: () => showDex(showTitle), how: () => showHow(showTitle), kingdom: () => openKingdom(showTitle),
     daily: () => showDaily(showTitle), trophies: () => showTrophies(showTitle), settings: () => showSettings(showTitle),
     weekly: () => showDaily(showTitle, true), story: () => watchIntro(() => showTitle()),
     diff: () => showDiffPicker(showTitle), ranking: () => showRanking(showTitle), lang: (d) => chooseLang(d.v, showTitle),
@@ -479,6 +483,7 @@ function showSettings(back, msg) {
         ${tog('colorblind', 'Colorblind friendly colors', o.colorblind, 'Blue, yellow and orange bars')}
         ${tog('bigText', 'Larger text', o.bigText)}
         ${tog('meows', 'Cat meows', o.meows !== false, 'Turn off to silence the cat voices')}
+        ${tog('walk', 'Walk around the Kingdom', o.walk !== false, 'Off shows the old village picture')}
         ${tog('meowMusic', 'Meows in the music', o.meowMusic !== false, 'Turn off for the plain soundtrack')}
         ${tog('haptics', 'Vibration', o.haptics !== false, 'Short buzzes on hits, if your device has them')}
         ${tog('autoSpecial', 'Auto special moves', !!o.autoSpecial, 'Charged specials fire by themselves when mice are close')}
@@ -504,7 +509,7 @@ function showSettings(back, msg) {
       sfx.play('pick', 1.1);
     },
     tog: (d, el) => {
-      const on = !save.opt[d.k]; save.opt[d.k] = on; persist(); applyOptions();
+      const on = d.k === 'walk' ? save.opt.walk === false : !save.opt[d.k]; save.opt[d.k] = on; persist(); applyOptions();
       if (!el || !el.isConnected) { showSettings(back); return; }
       el.classList.toggle('on', on); el.classList.remove('flip'); void el.offsetWidth; el.classList.add('flip');
       sfx.play(on ? 'pick' : 'pip', on ? 1.3 : 0.75); buzz('tick');
@@ -823,6 +828,299 @@ function showWardrobe(back, startCat) {
   };
 }
 
+// ---------------------------------------------------------------- Whiskerton Walk: the Kingdom as a street you walk down
+// The detail panel and the buy buttons are shared by the walk (a bottom sheet) and the old village picture (showKingdom).
+function kdSelDetail(sel) {
+  const k = save.kingdom;
+  if (sel.type === 'wonder') {
+    const w = WONDER_BY_ID[sel.id], owned = !!k.wonders[w.id], afford = !owned && k.gems >= w.cost;
+    return `<div class="kd"><span class="kic">${w.icon}</span><div class="kt"><b>${w.name}</b><small>${w.desc}</small></div><button class="btn small ${afford ? 'green' : 'grey'}" data-act="buyw" data-id="${w.id}" ${afford ? '' : 'disabled'}>${owned ? 'Built' : `Buy &#128142; ${w.cost}`}</button></div>`;
+  }
+  const b = BUILDING_BY_ID[sel.id], l = buildingLevel(k, b.id), maxed = l >= b.max, cost = maxed ? 0 : upgradeCost(b.id, l), afford = !maxed && k.coins >= cost;
+  return `<div class="kd"><span class="kic">${b.icon}</span><div class="kt"><b>${b.name} <span class="pips">${Array.from({ length: b.max }, (_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</span></b><small>${l ? `Now: ${b.text(l)}` : b.blurb}</small>${maxed ? '<small class="nx">Fully upgraded!</small>' : `<small class="nx">Next: ${b.text(l + 1)}</small>`}</div><button class="btn small ${afford ? 'green' : 'grey'}" data-act="buy" data-id="${b.id}" ${afford ? '' : 'disabled'}>${maxed ? 'Complete' : `${l ? 'Upgrade' : 'Build'} &#129689; ${cost}`}</button></div>`;
+}
+function buyBuildingNow(id) {
+  const b = BUILDING_BY_ID[id];
+  if (!b || !buyUpgrade(save.kingdom, id)) return false;
+  persist(); sfx.play('upgrade'); sfx.meow(villageCat(), 'cheer', 0.12); toast(`${b.icon} ${b.name} is now Lv ${buildingLevel(save.kingdom, id)}!`);
+  { const r = (screenEl.querySelector('[data-act=buy]') || screenEl).getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 22, ['#ffd23f', '#fff', '#ff8fb7', '#8fe0b4'], 'LEVEL UP!'); buzz('pop'); }
+  const ach = checkAch({ ...(g ? g.run : {}), wave: 0 });
+  for (const a of ach) toast(`Trophy: ${a.name}!`);
+  return true;
+}
+function buyWonderNow(id) {
+  const w = WONDER_BY_ID[id];
+  if (!w || !buyWonder(save.kingdom, id)) return false;
+  { const r = (screenEl.querySelector('[data-act=buyw]') || screenEl).getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 30, ['#9fd4ff', '#fff', '#ffd23f', '#e7a0ff'], 'BUILT!'); buzz('jackpot'); }
+  persist(); sfx.play('upgrade'); sfx.meow(villageCat(), 'cheer', 0.12); toast(`${w.icon} ${w.name} built!`);
+  return true;
+}
+
+let walk = null;   // the live walk: { state, layout, world, input, ... } or null
+const kwReduced = () => !save.opt.motion || REDUCED_MOTION || document.body.classList.contains('nomotion');
+const openKingdom = (back, opts) => (save.opt.walk === false ? showKingdom(back) : showKingdomWalk(back, opts));
+const zcx = (z) => z.x;   // zones are centred on x
+function walkAvatar() {
+  const ok = (id) => id && CAT_BY_ID[id] && save.unlocked.includes(id);
+  const w = save.walk && save.walk.avatar;
+  return ok(w) ? w : (titleStackIds(save.unlocked, save.catStats)[0] || 'tabby');
+}
+function noteRecord(run) {   // a new best wave: the tower is carved into the Stackstone (records are cleaned and kept by kingdom_life.js)
+  const cats = (g && g.cats ? g.cats.map((c) => c.id) : Object.keys(run.byCat || {})).slice(0, 8);
+  const r = KLife.recordsUpdate(save.records, { wave: run.wave | 0, cats, date: Date.now() });
+  if (!r.isNew) return;
+  save.records = r.records;
+  save.walk = { ...(save.walk || {}), unveil: true };
+}
+function giveStamp(id) {
+  const r = KLife.claimStamp(save.walk, id);
+  if (!r.gained) return;
+  save.walk = { ...r.walk, unveil: save.walk && save.walk.unveil };
+  persist(); toast(`Stamp: ${KLife.STAMPS[id].name}!`);
+}
+function walkEl(id, cls, html) {
+  let e = document.getElementById(id);
+  if (!e) { e = document.createElement('div'); e.id = id; if (cls) e.className = cls; app.insertBefore(e, screenEl); }
+  if (html != null) e.innerHTML = html;
+  return e;
+}
+function openSheet(html, a, cls = '') {
+  setScreen(html, 'clear sheet ' + cls);
+  acts = a;
+  if (walk) walk.input.clearMoveTo();
+}
+function closeSheet() {
+  closeScreen();
+  if (walk) { walk.pending = null; const f = document.getElementById('kwhud'); if (f) f.querySelector('[data-kw=back]').focus({ preventScroll: true }); }
+}
+function sheetCoins() { const k = save.kingdom; return `<div class="kcoins kwcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <span class="gem">&#128142;</span> <b>${k.gems}</b></div>`; }
+function bumpBuilding(id) { if (walk) walk.state.bumps[id] = tAnim; }
+function openBuilding(id) {
+  const b = BUILDING_BY_ID[id];
+  if (!b) return;
+  const show = () => openSheet(`<h2>${b.name}</h2><div id="kdetail" aria-live="polite">${kdSelDetail({ type: 'building', id })}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, {
+    back: closeSheet,
+    buy: (d) => { if (buyBuildingNow(d.id)) { bumpBuilding(d.id); show(); } },
+  });
+  show();
+}
+function openWonder(id) {
+  const w = WONDER_BY_ID[id];
+  if (!w) return;
+  const show = () => openSheet(`<h2>${w.name}</h2><div id="kdetail" aria-live="polite">${kdSelDetail({ type: 'wonder', id })}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, {
+    back: closeSheet,
+    buyw: (d) => { if (buyWonderNow(d.id)) show(); },
+  });
+  show();
+}
+// the list of every building and wonder: for players who cannot or would rather not walk
+function openList() {
+  const k = save.kingdom;
+  const row = (type, o, lv, txt, ok) => `<button class="kwrow ${ok ? 'ok' : ''}" data-act="${type === 'wonder' ? 'lw' : 'lb'}" data-id="${o.id}"><span class="kic">${o.icon}</span><b>${o.name}</b><small>${txt}</small>${ok ? '<i class="bang">!</i>' : ''}</button>`;
+  const bl = BUILDINGS.map((b) => { const l = buildingLevel(k, b.id), max = l >= b.max; return row('building', b, l, max ? 'Fully upgraded!' : `Lv ${l} &middot; &#129689; ${upgradeCost(b.id, l)}`, !max && k.coins >= upgradeCost(b.id, l)); }).join('');
+  const wl = WONDERS.map((w) => row('wonder', w, 0, k.wonders[w.id] ? 'Built' : `&#128142; ${w.cost}`, !k.wonders[w.id] && k.gems >= w.cost)).join('');
+  openSheet(`<h2>Open buildings</h2>${sheetCoins()}<div class="kwlist">${bl}${wl}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, {
+    back: closeSheet, lb: (d) => openBuilding(d.id), lw: (d) => openWonder(d.id),
+  }, 'tall');
+}
+function openAvatars() {
+  const cur = walkAvatar();
+  const items = save.unlocked.filter((id) => CAT_BY_ID[id]).map((id) => `<button class="kwav ${id === cur ? 'on' : ''}" data-act="pickav" data-id="${id}" aria-pressed="${id === cur}"><img src="${thumbURL(id)}" alt=""><b>${CAT_BY_ID[id].name}</b></button>`).join('');
+  openSheet(`<h2>Choose your cat</h2><p class="sub">Any cat you have freed can walk the Kingdom.</p><div class="kwlist kwcats">${items}</div><div class="row"><button class="btn" data-act="back">Back</button></div>`, {
+    back: closeSheet,
+    pickav: (d) => { save.walk = { ...(save.walk || {}), avatar: d.id }; persist(); if (walk) walk.avatarId = d.id; sfx.meow(d.id, 'happy', 0.12); closeSheet(); },
+  }, 'tall');
+}
+function openNests() {
+  const n = save.stats.bossKills | 0, list = Array.from({ length: Math.min(12, n) }, (_, i) => `<li>${NESTS[i % NESTS.length].name}: smashed</li>`).join('');
+  openSheet(`<h2>Nest map</h2><p class="sub">${n ? `${n} nests destroyed so far.` : 'No nest destroyed yet. Go on a trip and find one.'}</p>${list ? `<ul class="kwnests">${list}</ul>` : ''}<div class="row"><button class="btn" data-act="back">Back</button></div>`, { back: closeSheet }, 'tall');
+}
+function openNews() {
+  let head = 'Extra, extra! Read all about it!';
+  try { head = KLife.mewsprintHeadline(save, g ? lastRunView(g.run) : null) || head; } catch (e) { /* the plain line stays */ }
+  openSheet(`<h2>The Daily Mewsprint</h2><div class="kwpaper"><b>${head}</b></div><div class="row"><button class="btn" data-act="back">Back</button></div>`, { back: closeSheet });
+}
+const lastRunView = (r) => ({ wave: r.wave, kills: r.kills, bossKills: r.bossKills, cashed: !!r.cashed, daily: !!r.daily, newBest: !!(save.walk && save.walk.unveil), cats: Object.keys(r.byCat || {}) });
+// the Stackstone: your best tower in stone; a new record is unveiled from under a red cloth
+function openStackstone(unveil) {
+  const v = KLife.stackstoneView(save.records), best = v.top;
+  const stone = (r) => `<div class="kwstone">${(r.cats || []).filter((id) => CAT_BY_ID[id]).map((id) => `<img src="${thumbURL(id)}" alt="${CAT_BY_ID[id].name}">`).join('')}</div>`;
+  const older = v.walk.slice().reverse().map((r) => `<li>${r.plaque}${r.dateText ? ', ' + r.dateText : ''}</li>`).join('');
+  const cloth = !!(unveil && best && save.walk && save.walk.unveil);
+  openSheet(`<h2>The Stackstone</h2>${best ? `<p class="sub">${best.plaque}${best.dateText ? ', ' + best.dateText : ''}</p><div class="kwplinth">${stone(best)}${cloth ? '<button class="kwcloth" data-act="unveil">Tap to unveil your tower</button>' : ''}</div>${older ? `<p class="sub">Older towers on the Statue Walk</p><ul class="kwnests">${older}</ul>` : ''}` : '<p class="sub">Nothing carved yet. Beat your best wave and your tower is set in stone here.</p>'}<div class="row"><button class="btn" data-act="back">Back</button></div>`, {
+    back: closeSheet,
+    unveil: (d, el) => {
+      const c = el && el.parentNode; if (el) el.remove();
+      save.walk = { ...(save.walk || {}), unveil: false, unveiled: ((save.walk && save.walk.unveiled) | 0) + 1 }; persist(); giveStamp('statue_unveiled');
+      sfx.play('achieve', 0.9); sfx.meow(villageCat(), 'cheer', 0.14);
+      if (c) { const r = c.getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 30, ['#ffd23f', '#fff', '#ff8fb7', '#9fd4ff'], 'NEW RECORD!'); }
+    },
+  }, 'tall');
+}
+function sayAt(x, text, secs = 3.6) {
+  if (!walk) return;
+  walk.say = { x, text, until: tAnim + secs };
+  const b = walkEl('kwsay'); b.textContent = text; b.hidden = false;
+}
+function npcLine(id, n = 0) {
+  try { return KLife.npcLine(id, save, g ? lastRunView(g.run) : null, n) || ''; } catch (e) { return ''; }
+}
+function walkAct(z) {
+  if (!z) return;
+  sfx.play('ui');
+  switch (z.type) {
+    case 'building': bumpBuilding(z.id); openBuilding(z.id); break;
+    case 'wonder': openWonder(z.id); break;
+    case 'gate': { const back = walk && walk.back; giveStamp('gate_pass'); leaveWalk(); showDiffPicker(() => openKingdom(back), true); break; }
+    case 'lookout': giveStamp('lookout_view'); openNests(); break;
+    case 'statue': openStackstone(true); break;
+    case 'bench': sayAt(walk.state.x, 'A nice quiet spot. Nothing to buy here.'); break;
+    case 'npc': {
+      const n = walk.state.npcs.find((q) => q.id === z.id);
+      if (!n) break;
+      if (n.kind === 'crier') openNews(); else { walk.talk = (walk.talk | 0) + 1; sayAt(n.x, npcLine(n.id, walk.talk)); }
+      break;
+    }
+    default: break;
+  }
+}
+const zoneLabel = (z) => {
+  if (z.type === 'building') return (BUILDING_BY_ID[z.id] || {}).name || null;
+  if (z.type === 'wonder') return (WONDER_BY_ID[z.id] || {}).name || null;
+  if (z.type === 'gate') return 'Go on a trip';
+  if (z.type === 'lookout') return 'Nest map';
+  if (z.type === 'statue') return 'The Stackstone';
+  if (z.type === 'npc') { const n = walk && walk.layout.npcs.find((q) => q.id === z.id); return n && n.kind === 'crier' ? 'Daily Mewsprint' : n && n.catId ? (CAT_BY_ID[n.catId] || {}).name : 'Say hello'; }
+  if (z.type === 'bench') return 'Sit down';
+  if (z.type === 'lift') return 'Ride the wind lift';
+  return null;
+};
+function walkTap(sx, sy) {   // a short tap on the street: a building or neighbour is walked to and opened, anywhere else the cat just walks there
+  const w = walk; if (!w) return null;
+  const cam = w.state.cam || { x: 0, y: 0 }, wx = cam.x + sx;
+  const hit = (z) => Math.abs(wx - zcx(z)) < Math.max(50, (z.w || 0) / 2 + 14);
+  const wz = sy < 250 ? w.layout.zones.find((z) => z.type === 'wonder' && hit(z)) : null;
+  if (wz) { sfx.play('ui'); openWonder(wz.id); return null; }
+  const bz = w.layout.zones.find((z) => (z.type === 'building' || z.type === 'gate' || z.type === 'lookout' || z.type === 'statue') && hit(z));
+  if (bz) {
+    w.pending = { z: bz, at: tAnim };
+    const cx = zcx(bz);
+    if (Math.abs(cx - w.state.x) > 420) walkJump(cx - 70 * Math.sign(cx - w.state.x));   // far away: hop there at once so buying stays quick
+    return cx;
+  }
+  const nz = w.state.npcs.find((n) => Math.abs(wx - n.x) < 44);
+  if (nz) { w.pending = { z: { type: 'npc', id: nz.id }, at: tAnim }; if (Math.abs(nz.x - w.state.x) > 420) walkJump(nz.x - 60 * Math.sign(nz.x - w.state.x)); return nz.x; }
+  w.pending = null;
+  return Math.max(20, Math.min(w.layout.width - 20, wx));
+}
+function walkJump(x) {   // a quick fade and the cat stands at x
+  const w = walk, f = document.getElementById('kwfade');
+  if (f && !kwReduced()) { f.classList.add('on'); setTimeout(() => f.classList.remove('on'), 160); }
+  w.WK.teleport(w.state, x, w.layout.groundY);
+}
+function walkHud() {
+  const hud = walkEl('kwhud', '');
+  hud.setAttribute('role', 'region');
+  hud.setAttribute('aria-label', 'Whiskerton Walk, your cat village. Use Back to leave, or Open buildings to upgrade without walking.');
+  hud.innerHTML = `<button class="kwb" data-kw="back" title="Back (Esc)">Back</button><div class="kwcoins2" id="kwcoins" aria-live="off"></div><button class="kwb" data-kw="list" title="Open buildings (L)">Open buildings</button><button class="kwb" data-kw="avatar" title="Choose your cat">Choose cat</button>`;
+  hud.onclick = (e) => {
+    const b = e.target.closest('[data-kw]'); if (!b) return;
+    sfx.unlock(); sfx.play(b.dataset.kw === 'back' ? 'back' : 'ui'); buzz('ui');
+    if (document.body.classList.contains('scr') && b.dataset.kw !== 'back') return;
+    if (b.dataset.kw === 'back') { const bk = walk && walk.back; leaveWalk(); if (bk) bk(); else showTitle(); }
+    else if (b.dataset.kw === 'list') openList(); else if (b.dataset.kw === 'avatar') openAvatars();
+  };
+  walkEl('kwsay', '').hidden = true;
+  walkEl('kwfade', '');
+}
+async function showKingdomWalk(back, opts = {}) {
+  if (walk) leaveWalk();
+  let wk;
+  try {
+    const [WK, LY, WD] = await Promise.all([import('./kingdom_walk.js'), import('./kingdom_layout.js'), import('./kingdom_world.js')]);
+    const k = save.kingdom, avatarId = walkAvatar();
+    const layout = LY.buildLayout(kingdomLevel(k), k, save);
+    const stoneZ = save.walk && save.walk.unveil && layout.zones.find((z) => z.id === 'stackstone');
+    let spawn = KLife.spawnFor(save, !!opts.fromOver, layout);
+    if (stoneZ) spawn = { x: stoneZ.x - 90, y: layout.groundY };
+    const state = WK.createWalk(layout, { avatarId, spawn, reduced: kwReduced() });
+    wk = { prevMode: mode === 'walk' ? 'title' : mode, WK, layout, state, avatarId, back, pending: null, say: null, nearKey: '', saidAt: {}, coinTxt: '', input: null, world: null };
+    walk = wk;
+    wk.world = WD.createWorld(cv, layout, () => save.kingdom, { getSave: () => save });
+    wk.input = createInput(app, {
+      stagePoint, stageW: W, before: screenEl, buttons: coarse,
+      isActive: () => mode === 'walk' && !document.body.classList.contains('scr'),
+      onTap: walkTap,
+      onSide: (n) => { if (n === 'back') { const bk = wk.back; leaveWalk(); if (bk) bk(); else showTitle(); } else if (n === 'list') openList(); },
+    });
+    if (wk.world.setNow) wk.world.setNow(new Date());
+    if (wk.world.setReduced) wk.world.setReduced(kwReduced());
+    setLookForWalk();
+    giveStamp('first_steps');
+    mode = 'walk'; paused = false; coverScreen = false;
+    setScreen(''); walkHud();
+    document.body.classList.add('walk'); cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', 'Whiskerton Walk, your cat village');
+    sfx.music('calm');
+    if (stoneZ) setTimeout(() => { if (walk === wk && mode === 'walk' && !document.body.classList.contains('scr')) openStackstone(true); }, 900);
+  } catch (e) {
+    console.warn('Whiskerton Walk could not start, using the village picture', e);
+    const pm = wk && wk.prevMode; leaveWalk(); mode = pm || 'title';
+    showKingdom(back);
+  }
+}
+function setLookForWalk() { setWalkLook((id) => { const sig = lookSig(save, id); return { sig, look: lookOf(save, id) }; }); }
+function leaveWalk() {
+  const w = walk; walk = null;
+  if (w && w.state) { save.walk = { ...(save.walk || {}), x: Math.round(w.state.x), visits: ((save.walk && save.walk.visits) | 0) + 1 }; persist(); }
+  document.body.classList.remove('walk'); cv.removeAttribute('role'); cv.removeAttribute('aria-label');
+  for (const id of ['kwhud', 'kwsay', 'kwfade']) { const e = document.getElementById(id); if (e) e.remove(); }
+  if (w) { try { w.input && w.input.destroy(); } catch (e) { /* gone */ } try { w.world && w.world.free(); } catch (e) { /* gone */ } }
+  freeWalkCats();
+  if (mode === 'walk') mode = w ? w.prevMode : 'title';
+  closeScreen();
+}
+function walkTick(dt) {
+  const w = walk, s = w.state, blocked = document.body.classList.contains('scr');
+  const inp = w.input.read();
+  if (!blocked) {
+    w.WK.stepWalk(s, inp, Math.min(dt, 0.05));
+    const evs = s.events ? s.events.splice(0) : [];
+    for (const e of evs) {
+      if (e.k === 'jump' && save.opt.motion) sfx.play('hover', 1.5);
+      else if (e.k === 'interact') { const z = e.zone || e.near || s.near; if (z && z.type) { w.pending = null; walkAct(z); } }
+    }
+    if (w.pending) {   // a tapped building: open it as soon as the cat is at the door (or after a short wait)
+      const z = w.pending.z, cx = z.type === 'npc' ? (s.npcs.find((n) => n.id === z.id) || {}).x : zcx(z);
+      const at = s.near && s.near.id === z.id || Math.abs(s.x - cx) < 36 || tAnim - w.pending.at > 2.6;
+      if (at) { w.pending = null; walkAct(z.type === 'npc' ? z : z); }
+    }
+  }
+  const near = !blocked && s.near && s.near.type ? s.near : null, key = near ? near.type + ':' + near.id : '';
+  if (key !== w.nearKey) {
+    w.nearKey = key;
+    w.input.setPrompt(near ? zoneLabel(near) : null);
+    if (near && near.type === 'npc' && tAnim - (w.saidAt[near.id] || -99) > 10) {
+      const n = s.npcs.find((q) => q.id === near.id);
+      if (n && n.kind !== 'crier') { w.saidAt[near.id] = tAnim; sayAt(n.x, npcLine(n.id)); }
+    }
+  }
+  const coins = `🪙 ${num(save.kingdom.coins)}  💎 ${save.kingdom.gems}`;
+  if (coins !== w.coinTxt) { w.coinTxt = coins; const c = document.getElementById('kwcoins'); if (c) c.innerHTML = `<span>&#129689;</span> <b>${num(save.kingdom.coins)}</b> <span>&#128142;</span> <b>${save.kingdom.gems}</b>`; }
+  const cam = s.cam || { x: 0, y: 0 };
+  if (w.say) {
+    const b = document.getElementById('kwsay');
+    if (tAnim > w.say.until) { w.say = null; if (b) b.hidden = true; }
+    else if (b) { b.style.left = Math.round(Math.max(90, Math.min(870, w.say.x - cam.x))) + 'px'; }
+  }
+  s.avatarId = walkAvatar();
+  const snap = s;
+  ctx.setTransform(res, 0, 0, res, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if (w.world.setQuality) w.world.setQuality(gfx);
+  if (tAnim - (w.nowAt || 0) > 30) { w.nowAt = tAnim; if (w.world.setNow) w.world.setNow(new Date()); if (w.world.setReduced) w.world.setReduced(kwReduced()); }
+  w.world.draw(ctx, snap, 1, tAnim, { reduced: kwReduced(), gfx });
+}
+
 // ---------------------------------------------------------------- the Cat Kingdom: a village you can tap
 let kScene = null, kNav = null, bestShown = false, heartAt = 0, quitArmed = 0;
 const worried = new Set();   // cats that already gave their worried mew
@@ -840,12 +1138,7 @@ function showKingdom(back, selected) {
       if (wd) return `<div class="kd hint2">You have enough gems for the <b>${WONDER_BY_ID[wd].name}</b> ${WONDER_BY_ID[wd].icon}. Tap the floating wonder, then tap the green Buy button.</div>`;
     }
     if (!sel) return `<div class="kd hint2">${kingdomLine(kingdomLevel(k))} Tap a building to see what it does. Tap a floating wonder to buy it with gems.` + (coarse ? '' : ' With a keyboard, use the arrow keys to move and Enter to buy.') + '</div>';
-    if (sel.type === 'wonder') {
-      const w = WONDER_BY_ID[sel.id], owned = !!k.wonders[w.id], afford = !owned && k.gems >= w.cost;
-      return `<div class="kd"><span class="kic">${w.icon}</span><div class="kt"><b>${w.name}</b><small>${w.desc}</small></div><button class="btn small ${afford ? 'green' : 'grey'}" data-act="buyw" data-id="${w.id}" ${afford ? '' : 'disabled'}>${owned ? 'Built' : `Buy &#128142; ${w.cost}`}</button></div>`;
-    }
-    const b = BUILDING_BY_ID[sel.id], l = buildingLevel(k, b.id), maxed = l >= b.max, cost = maxed ? 0 : upgradeCost(b.id, l), afford = !maxed && k.coins >= cost;
-    return `<div class="kd"><span class="kic">${b.icon}</span><div class="kt"><b>${b.name} <span class="pips">${Array.from({ length: b.max }, (_, i) => `<i class="${i < l ? 'on' : ''}"></i>`).join('')}</span></b><small>${l ? `Now: ${b.text(l)}` : b.blurb}</small>${maxed ? '<small class="nx">Fully upgraded!</small>' : `<small class="nx">Next: ${b.text(l + 1)}</small>`}</div><button class="btn small ${afford ? 'green' : 'grey'}" data-act="buy" data-id="${b.id}" ${afford ? '' : 'disabled'}>${maxed ? 'Complete' : `${l ? 'Upgrade' : 'Build'} &#129689; ${cost}`}</button></div>`;
+    return kdSelDetail(sel);
   };
   setScreen(`<h2>Cat Kingdom <small class="klv">Lv ${kingdomLevel(k)}</small></h2>
     <div class="kcoins"><span>&#129689;</span> <b>${num(k.coins)}</b> <span class="gem">&#128142;</span> <b>${k.gems}</b> <small>${num(k.earned)} coins earned so far. Coins pay for upgrades. Gems pay for wonders.</small></div>
@@ -866,21 +1159,13 @@ function showKingdom(back, selected) {
     back: () => { if (kScene) { kScene.stop(); kScene = null; } kNav = null; back(); },
     wardrobe: () => { if (kScene) { kScene.stop(); kScene = null; } kNav = null; showWardrobe(() => showKingdom(back)); },
     buy: (d) => {
-      const b = BUILDING_BY_ID[d.id];
-      if (buyUpgrade(save.kingdom, d.id)) {
-        persist(); sfx.play('upgrade'); sfx.meow(villageCat(), 'cheer', 0.12); toast(`${b.icon} ${b.name} is now Lv ${buildingLevel(save.kingdom, d.id)}!`);
-        { const r = (screenEl.querySelector('[data-act=buy]') || screenEl).getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 22, ['#ffd23f', '#fff', '#ff8fb7', '#8fe0b4'], 'LEVEL UP!'); buzz('pop'); }
-        const ach = checkAch({ ...(g ? g.run : {}), wave: 0 });
-        for (const a of ach) toast(`Trophy: ${a.name}!`);
+      if (buyBuildingNow(d.id)) {
         kScene.bump(d.id);
         showKingdom(back, { type: 'building', id: d.id });
         if (kScene) kScene.bump(d.id);
       }
     },
-    buyw: (d) => {
-      const w = WONDER_BY_ID[d.id];
-      if (buyWonder(save.kingdom, d.id)) { { const r = (screenEl.querySelector('[data-act=buyw]') || screenEl).getBoundingClientRect(); domBurst(r.left + r.width / 2, r.top + r.height / 2, 30, ['#9fd4ff', '#fff', '#ffd23f', '#e7a0ff'], 'BUILT!'); buzz('jackpot'); } persist(); sfx.play('upgrade'); sfx.meow(villageCat(), 'cheer', 0.12); toast(`${w.icon} ${w.name} built!`); showKingdom(back, { type: 'wonder', id: d.id }); }
-    },
+    buyw: (d) => { if (buyWonderNow(d.id)) showKingdom(back, { type: 'wonder', id: d.id }); },
   };
 }
 
@@ -894,7 +1179,7 @@ function startRun(opts = {}) {
   g = S.newGame({ seed: (Math.random() * 2147483647) | 0, unlocked: [...save.unlocked], kingdom: save.kingdom, difficulty: save.diff, daily, mastery: masteryMap(save.catStats) });
   if (opts.weekly) g.run.weekly = true;
   startTotal = START_CATS + g.meta.startPicks;
-  setsSeen = {}; runNewRelics = 0; runCommitted = false; bestShown = false; pickN = 0; prepSeen = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
+  setsSeen = {}; runNewRelics = 0; runCommitted = false; bestShown = false; pickN = 0; prepSeen = 0; campSeen = 0; fx.length = 0; speed = save.opt.fast ? 2 : 1; paused = false; rewardChoices = null;
   combo = 0; multiKill = 0; flawless = 0; maxComboRun = 0; coinShown = 0; dpsHist.length = 0; sfx.setIntensity(0);
   $('bSpeed').textContent = 'x' + speed;
   showPickStart();
@@ -1046,15 +1331,33 @@ function showFinale() {
   };
   card();
 }
+let campSeen = 0;   // the last wave whose rest stop was shown
 let prepSeen = 0;   // how many items the run had found at the last prepare screen
 function nextReward() {
   const r = queue.shift();
   rewardChoices = null;
+  if (!r && g.wave >= CASH_EVERY && g.wave % CASH_EVERY === 0 && campSeen !== g.wave && mode !== 'over') { campSeen = g.wave; showCamp(); return; }
   if (!r) {   // everything is picked: new items are handed out on the prepare screen, then the wave starts
     if (g.run.items > prepSeen && g.stash.length) { prepSeen = g.run.items; showTower(nextReward, { prepare: true }); return; }
     beginWave(); return;
   }
   if (r === 'finale') showFinale(); else if (r === 'event') showEvent(); else if (r === 'cat') showCatReward(); else if (r.startsWith('box:')) showBox(r.slice(4)); else if (r === 'route') showRouteReward(); else if (r === 'relic') showRelicReward(); else showSnackReward();
+}
+
+// the loot of this run so far: coins and the gems it would pay out now (a gem for every sixth nest ever destroyed, plus gems found in chests)
+const runLoot = (run) => ({ coins: Math.floor(run.coins), gems: Math.floor((save.stats.bossKills + (run.bossKills || 0)) / 6) - Math.floor(save.stats.bossKills / 6) + (run.boxGems || 0) });
+// the rest stop after every 5th wave: cash out and keep everything, or go on and risk half of it
+function showCamp() {
+  const run = g.run, loot = runLoot(run), risk = Math.round(FALL_LOSS * 100);
+  sfx.play('route'); sfx.music('calm');
+  setScreen(`<h2>Rest stop</h2><p class="sub">Wave ${g.wave} done. Cash out to take everything home, or go on and risk losing ${risk}% of your loot if the stack falls.</p>
+    <div class="campbox"><div>&#129689; <b>${num(loot.coins)}</b> coins</div><div>&#128142; <b>${loot.gems}</b> gems</div></div>
+    <p class="sub">${loot.coins ? `At risk if you fall: <b>${num(Math.ceil(loot.coins * FALL_LOSS))}</b> coins${loot.gems ? ` and <b>${Math.ceil(loot.gems * FALL_LOSS)}</b> gems` : ''}.` : 'Nothing to lose yet.'}</p>
+    <div class="row"><button class="btn big green" data-act="cash">Cash out</button><button class="btn big" data-act="go">Keep going</button></div>`);
+  acts = {
+    cash: () => { run.cashed = true; mode = 'over'; paused = false; sfx.play('win'); showOver(commitRun()); },
+    go: () => { run.risk = true; sfx.play('pick', 1.2); nextReward(); },
+  };
 }
 
 function reportHtml() {
@@ -1150,7 +1453,7 @@ function showRouteReward() {
     r.enemyHp !== 1 ? `Mice health x${r.enemyHp}` : '', r.enemyDmg !== 1 ? `Mice damage x${r.enemyDmg}` : '', r.coin !== 1 ? `Coins x${r.coin}` : '',
     r.chest ? 'More loot chests' : '', r.rare ? 'Better loot' : '', r.speed !== 1 ? `Mice speed x${r.speed}` : '', r.bossHp !== 1 ? `Nest health x${r.bossHp}` : '', r.snackExtra ? '+1 snack choice' : '', r.healNow ? `Heal ${r.healNow * 100}% now` : '',
   ].filter(Boolean).map((x) => `<div class="impact">${x}</div>`).join('');
-  setScreen(`<h2>Choose your road</h2><p class="sub">${roadLine(g.wave, THEMES)}</p>
+  setScreen(`<h2>Choose your road</h2><p class="sub">${roadLine(g.wave, THEMES)} <small>A road lasts until the next nest and replaces the last one.</small></p>
     <div class="cards">${rewardChoices.map((id) => { const r = ROUTE_BY_ID[id]; return `<div class="card route" data-act="pickRoute" data-id="${id}"><div class="ic">${r.icon}</div><h3>${r.name}</h3><p>${r.desc}</p>${effects(r)}</div>`; }).join('')}</div>
     <div class="row hint">${rerollBtn()}</div>`);
   coach('c13', 'Pick the road to walk next. A harder road gives better rewards.', 480, 400, 'up', { target: '.card' });
@@ -1741,15 +2044,19 @@ function recordCatStats(run) {
 function commitRun() {
   if (runCommitted || !g) return [];
   runCommitted = true;
-  const run = g.run, oldNests = save.stats.bossKills;
+  const run = g.run, oldNests = save.stats.bossKills, oldBest = save.stats.bestWave;
   run.maxCombo = maxComboRun;
   save.stats = mergeRun(save.stats, run);
+  if (save.stats.bestWave > oldBest && run.wave > 1) noteRecord(run);
   const fresh = checkUnlocks(save.stats, new Set(save.unlocked));
   save.unlocked.push(...fresh);
-  run.earned = Math.floor(run.coins);
+  const keep = run.risk && !run.cashed ? 1 - FALL_LOSS : 1;   // after turning down a cash out, a fall costs part of the loot
+  run.earned = Math.floor(run.coins * keep);
+  run.lostCoins = Math.floor(run.coins) - run.earned;
   save.kingdom.coins += run.earned;
   save.kingdom.earned += run.earned;
   run.gems = Math.floor(save.stats.bossKills / 6) - Math.floor(oldNests / 6) + (run.boxGems || 0);   // one gem for every sixth nest ever destroyed, plus gems found in chests
+  run.lostGems = run.gems - Math.floor(run.gems * keep); run.gems -= run.lostGems;
   if (run.daily) {
     const book = run.weekly ? save.weekly : save.daily;
     const score = dailyScore(run), prev = book[run.daily];
@@ -1785,10 +2092,10 @@ function showOver(fresh) {
   const trophies = chips.length ? `<div class="trow">${chips.join('')}</div>` : '';
   const goal = nextGoal(k), goalB = goal && BUILDING_BY_ID[goal.id];
   const goalLine = goalB ? (goal.need ? ` &middot; ${goalB.icon} ${goalB.name} needs ${num(goal.need)} more` : ` &middot; ${goalB.icon} ${goalB.name} is ready to upgrade`) : '';
-  setScreen(`<h2>The stack has fallen</h2><p class="sub">${r.wave >= best && r.wave > 1 ? 'A new personal best!' : fallLine(r.wave)} <small>${d.icon} ${d.name} &middot; Chapter ${chapterOf(r.wave).n}${r.daily ? (r.weekly ? ' &middot; Weekly' : ' &middot; Daily') : ''}</small></p>${metaNotes(r)}
+  setScreen(`<h2>${r.cashed ? 'Cashed out!' : 'The stack has fallen'}</h2><p class="sub">${r.cashed ? 'You took everything home safely.' : r.wave >= best && r.wave > 1 ? 'A new personal best!' : fallLine(r.wave)} <small>${d.icon} ${d.name} &middot; Chapter ${chapterOf(r.wave).n}${r.daily ? (r.weekly ? ' &middot; Weekly' : ' &middot; Daily') : ''}</small></p>${metaNotes(r)}
     <div class="overcols"><div><div class="stats"><div><b>${r.wave}</b>Wave reached</div><div><b>${r.kills}</b>Mice defeated</div><div><b>${r.bossKills}</b>Nests destroyed</div><div><b>${r.merges}</b>Merges</div>
       <div><b>${num(r.dmg)}</b>Damage dealt</div><div><b>${num(r.biggest)}</b>Biggest hit</div><div><b>${num(r.taken)}</b>Damage taken</div><div><b>${num(r.healed)}</b>Healed</div></div>
-      <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span><small>Total ${num(k.coins)}${goalLine}</small>${r.daily ? '' : '<small class="rankmsg" id="rankMsg"></small>'}</div>${dailyBox}</div>
+      <div class="earn">&#129689; <b id="earn" data-to="${r.earned}">0</b> <span>coins earned${r.gems ? ` &middot; &#128142; +${r.gems}` : ''}</span>${r.lostCoins || r.lostGems ? `<small class="lost">The fall cost you ${r.lostCoins ? num(r.lostCoins) + ' coins' : ''}${r.lostCoins && r.lostGems ? ' and ' : ''}${r.lostGems ? r.lostGems + ' gems' : ''}. Cash out at a rest stop to keep it all.</small>` : ''}<small>Total ${num(k.coins)}${goalLine}</small>${r.daily ? '' : '<small class="rankmsg" id="rankMsg"></small>'}</div>${dailyBox}</div>
       <div class="rbars big"><div class="rh"><b>Who did the work</b></div>${bars || '<small>No damage dealt</small>'}</div></div>
     ${trophies}${fresh.length ? `<p class="sub">${freedLineFor(fresh.length)}</p><div class="newcats">${fresh.map((id) => catCard(id, { act: 'none' })).join('')}</div>` : ''}
     <div class="row overbtns tgrid gover"><button class="btn big" data-act="again">Try again</button><button class="btn green" data-act="kingdom">Kingdom${goal && !goal.need ? '<i class="bang">!</i>' : ''}</button><button class="btn amber" data-act="share">Share</button><button class="btn grey" data-act="title">Title</button></div>`, 'wide');
@@ -1800,7 +2107,7 @@ function showOver(fresh) {
         .then((res) => { if (el && el.isConnected) el.textContent = 'Share'; if (res === 'downloaded') toast('Picture saved!'); });
     },
     setname: () => showNamePrompt(() => showOver(fresh)),
-    again: () => startRun({ daily: !!r.daily && !r.weekly, weekly: !!r.weekly }), title: () => { g = null; showTitle(); }, kingdom: () => showKingdom(() => showOver(fresh)), none: () => {},
+    again: () => startRun({ daily: !!r.daily && !r.weekly, weekly: !!r.weekly }), title: () => { g = null; showTitle(); }, kingdom: () => openKingdom(() => showOver(fresh), { fromOver: true }), none: () => {},
     sendscore: () => { const inp = screenEl.querySelector('input[data-n]'); if (inp) { save.name = inp.value.replace(/[^\w \-.']/g, '').slice(0, 12); persist(); } postDaily(); },
   };
   if ((r.ach || []).length) sfx.play('achieve');
@@ -1932,7 +2239,7 @@ function updateMeter() {
   el.innerHTML = `<div class="mh"><b>DPS</b><span>${num(liveDps())}</span></div>` + cats.map((c) => `<div class="mr ${c.ko ? 'ko' : ''}"><img src="${thumbURL(c.id)}" alt=""><div class="bar"><i style="width:${(100 * c.wDmg) / max}%"></i></div><span>${num(c.wDmg)}</span></div>`).join('');
 }
 function updateHud(dt) {
-  const inRun = g && g.wave > 0 && mode !== 'title' && mode !== 'pick' && mode !== 'over';
+  const inRun = g && g.wave > 0 && mode !== 'title' && mode !== 'pick' && mode !== 'over' && mode !== 'walk';
   $('hud').style.display = inRun ? 'block' : 'none';
   if (!inRun) return;
   const playing = mode === 'play';
@@ -3215,6 +3522,7 @@ document.addEventListener('visibilitychange', () => {
     catSprites.clear(); silSprites.clear(); iconCache.clear(); shadowCache.clear(); glowCache.clear();
     for (const [k, v] of backdrops) { freeBackdrop(v); backdrops.delete(k); }
     resetWorldArt(); bd = null; bdIdx = -1;
+    if (walk) { freeWalkCats(); try { walk.world.free(); import('./kingdom_world.js').then((WD) => { if (walk) walk.world = WD.createWorld(cv, walk.layout, () => save.kingdom, { getSave: () => save }); }); } catch (e) { /* the next tick falls back */ } }
   }
 });
 addEventListener('pagehide', () => { if (g && mode !== 'over' && g.wave > 1) commitRun(); });
@@ -3294,6 +3602,10 @@ function frame(ts) {
     updateFx(paused || tipHold ? 0 : dt);
   }
   // under a dimmed menu the scene only needs a third of the frames: the GPU skips two re-blurs out of three and a phone runs cooler
+  if (mode === 'walk' && walk) {
+    try { walkTick(dt); } catch (e) { console.warn('Whiskerton Walk stopped, using the village picture', e); const bk = walk && walk.back, pm = walk && walk.prevMode; leaveWalk(); mode = pm || 'title'; showKingdom(bk || showTitle); }
+    updateHud(dt); requestAnimationFrame(frame); return;
+  }
   coverDt += dt;
   if (coverScreen && (paused || mode !== 'play') && ++coverSkip % 3) { updateHud(dt); requestAnimationFrame(frame); return; }
   render(coverDt); coverDt = 0;
@@ -3301,7 +3613,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-window.stackingCats = { i18nMissing, clearChoices: () => { rewardChoices = null; }, ui: { showTitle, showSettings, showTrophies, showHow, showDex, showRelics, showDaily, showNamePrompt, showRanking, showCollection, showDiffPicker, showWardrobe, showKingdom, showPickStart, showFinale, showEvent, showRouteReward, showCatReward, showFull, showBox, showBoxSummary, showBoxReveal, showSnackReward, showRelicReward, showStats, showTower, showOver, showPause }, nextReward, get queue() { return queue; }, setLangNow: (c) => chooseLang(c), showRelicReward, showBox, showEvent, setCombo: (n) => { combo = n; comboT = 2.4; }, get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; } };
+window.stackingCats = { i18nMissing, clearChoices: () => { rewardChoices = null; }, ui: { showTitle, showSettings, showTrophies, showHow, showDex, showRelics, showDaily, showNamePrompt, showRanking, showCollection, showDiffPicker, showWardrobe, showKingdom, showKingdomWalk, openBuilding, openWonder, showPickStart, showFinale, showEvent, showRouteReward, showCatReward, showFull, showBox, showBoxSummary, showBoxReveal, showSnackReward, showRelicReward, showStats, showTower, showOver, showPause }, nextReward, get queue() { return queue; }, setLangNow: (c) => chooseLang(c), showRelicReward, showBox, showEvent, setCombo: (n) => { combo = n; comboT = 2.4; }, get sfx() { return sfx; }, coach, beginWave, showFinale, get g() { return g; }, get mode() { return mode; }, S, save: () => save, hideCoach, startRun, toast, get res() { return res; }, get fxCount() { return fx.length; }, showTower, showBox, showEvent, showRouteReward, showCatReward, showSnackReward, doSpecial, showBoxReveal, showStats, showPause, showOver, showFull, showTitle, banner, clearChoices: () => { rewardChoices = null; }, get gfx() { return gfx; }, set gfx(v) { gfx = v; }, get walk() { return walk; }, openList, openAvatars, leaveWalk };
 await setLang(save.opt.lang);   // Auto follows the browser; the Danish dictionary loads only when it is needed
 startDom(document.body);
 showTitle();
