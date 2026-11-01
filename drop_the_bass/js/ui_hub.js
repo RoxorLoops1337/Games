@@ -5,10 +5,12 @@ import {
 import {
   STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, OUTFITS, LOGIN_REWARDS, ACHIEVEMENTS,
   STAR_MILESTONES, AUTOMERGE_PRICE, fansForLevel, fameReward, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE, GEAR_MAX_LEVEL, GEAR_SELL,
+  fameTitle, WEEKLY_REWARD,
 } from './data_meta.js';
 import { REMIX, RELICS, DAILY_MODS } from './data_run.js';
 import * as M from './meta.js';
-import { fetchBoard, rankOf } from './lb.js';
+import { fetchBoard, rankOf, boardRows, cleanName, FRIENDS_MAX } from './lb.js';
+import { drawStudioScene } from './doodle_env.js';
 import {
   h, canvasOf, icon, turretIcon, turretLive, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW,
 } from './ui_core.js';
@@ -30,8 +32,8 @@ export function buildHub(app, startTab) {
     top.append(
       h('div', { class: 'fame', onclick: () => fameInfo(app) },
         h('div', { class: 'lv' }, p.fame),
-        h('div', { class: 'bar' }, h('div', { class: 'nm' }, 'FAME  ' + fmt(p.fans) + ' / ' + (need === Infinity ? 'MAX' : fmt(need))),
-          h('div', { class: 'pbar' }, h('i', { style: 'width:' + (need === Infinity ? 100 : Math.min(100, p.fans / need * 100)) + '%' })))),
+        h('div', { class: 'bar' }, h('div', { class: 'nm fame-title', title: 'Fame ' + p.fame }, fameTitle(p.fame)),
+          h('div', { class: 'pbar fame-pbar' }, h('i', { style: 'width:' + (need === Infinity ? 100 : Math.min(100, p.fans / need * 100)) + '%' }), h('span', { class: 'fame-cnt' }, fmt(p.fans) + ' / ' + (need === Infinity ? 'MAX' : fmt(need)))))),
       h('div', { class: 'cur', title: 'Records' }, icon('record', 26), fmt(p.records)),
       h('div', { class: 'cur', title: 'Diamonds' }, icon('diamond', 26), fmt(p.diamonds)),
       h('button', { class: 'iconbtn', onclick: () => { app.audio.play('ui_open'); settingsModal(app); }, 'aria-label': 'Settings' }, icon('gear', 28)),
@@ -75,12 +77,14 @@ function tourTab(app, st, rerender) {
     h('div', { class: 'row', style: 'flex-wrap:wrap' }, p.loadout.map((id) => h('div', { style: 'text-align:center;width:60px' }, turretIcon(id, 50), h('div', { class: 'sub', style: 'font-size:11px' }, TURRETS[id].name.split(' ')[0])))),
     h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, p.loadout.length + '/' + M.loadoutSize(p) + ' turrets in your drop pool.'), btn('Edit', () => loadoutModal(app, rerender), 'dark small')));
   wrap.append(lo);
+  if (p.tutorial.done) wrap.append(difficultyCard(app, rerender));
 
   // resume a saved run
+  if (p.resume && !M.checkResume(p.resume).ok) { p.resume = null; app.save(); }
   if (p.resume) {
-    const rw = WORLDS.find((x) => x.id === p.resume.world);
+    const rs = M.resumeSummary(p.resume);
     wrap.append(h('div', { class: 'card', style: 'border-color:var(--green)' }, h('div', { class: 'row' }, icon('play', 40, '#9dff3a'),
-      h('div', { class: 'grow' }, h('h3', null, 'Run in progress'), h('div', { class: 'sub' }, rw.name + ', wave ' + p.resume.wave + (p.resume.mode === 'endless' ? ' (Endless)' : ''))),
+      h('div', { class: 'grow' }, h('h3', null, 'Run in progress'), h('div', { class: 'sub' }, rs.stage + ', wave ' + rs.wave + ', ' + rs.turrets + ' turret' + (rs.turrets === 1 ? '' : 's') + (rs.mode === 'endless' ? ' (Endless)' : ''))),
       btn('Resume', () => app.resumeRun(), 'green small'), btn('Drop', () => { p.resume = null; app.save(); rerender(); }, 'dark small'))));
   }
   // boosters
@@ -104,7 +108,9 @@ function tourTab(app, st, rerender) {
       h('div', { class: 'row' }, h('div', { class: 'ic icbox' }, icon(mod.glyph, 38)),
         h('div', { class: 'grow' }, h('h3', null, 'Daily Challenge: ' + mod.name), h('div', { class: 'sub' }, mod.desc), h('div', { class: 'sub' }, w.name + ', 15 waves'))),
       h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, dc.done ? 'Reward claimed today. Play again for fun (half rewards).' : 'First clear today: diamonds, Records and fans!'),
+        btn(icon('crown', 24), () => boardModal(app, 'daily', 'Daily Challenge'), 'dark small', { 'aria-label': 'Leaderboard' }),
         btn(dc.done ? 'Play' : 'Play!', () => app.startRun({ mode: 'daily', world: dc.world, encore: 0, seed: dc.seed, daily: dc.mod, wavesTotal: dc.waves }), dc.done ? 'dark' : 'gold'))));
+    wrap.append(weeklyCard(app));
   }
 
   if (M.endlessUnlocked(p) && p.prog.arena.cleared) {
@@ -174,6 +180,8 @@ function studioTab(app, st, rerender) {
   const p = app.profile;
   const wrap = h('div');
   wrap.append(h('h2', null, 'The Studio'), h('div', { class: 'sub', style: 'margin:-4px 2px 8px' }, 'Permanent upgrades, bought with Records. They help in every run.'));
+  wrap.append(h('div', { class: 'studio-scene' }, canvasOf(504, 170, (ctx, t) => drawStudioScene(ctx, 504, 170, t, p.studio, { heroLv: p.heroLv, outfits: p.outfits.worn }), { live: true }),
+    h('div', { class: 'sub studio-cap' }, M.studioSceneCaption(p))));
   const seg = h('div', { class: 'seg' });
   const sec = st.studioSec || 'up';
   for (const [id, name] of [['up', 'Upgrades'], ['turrets', 'Turrets'], ['heroes', 'Heroes']]) seg.append(h('button', { class: sec === id ? 'on' : '', onclick: () => { st.studioSec = id; rerender(); } }, name));
