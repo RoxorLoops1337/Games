@@ -8,15 +8,18 @@ export const SFX_NAMES = ['ui_click', 'ui_back', 'ui_open', 'ui_tab', 'coin', 'd
   'shoot_kick', 'shoot_snare', 'shoot_hat', 'shoot_sub', 'shoot_mic', 'shoot_synth', 'shoot_scratch', 'shoot_cowbell', 'shoot_horn', 'shoot_vocal',
   'hit', 'crit', 'kill', 'kill_big', 'leak', 'wave_start', 'wave_clear', 'boss_warn', 'boss_die', 'hero_roxor', 'hero_jasmin', 'duet', 'levelup',
   'remix_pick', 'relic', 'chest', 'crate_shake', 'crate_open', 'reveal_common', 'reveal_rare', 'reveal_epic', 'reveal_legendary', 'reveal_mythic',
-  'win', 'lose', 'error', 'countdown', 'tick', 'achievement', 'typewriter', 'whoosh', 'jam', 'heal', 'freeze', 'combo', 'reroll', 'star_pop'];
+  'win', 'lose', 'error', 'countdown', 'tick', 'achievement', 'typewriter', 'whoosh', 'jam', 'heal', 'freeze', 'combo', 'reroll', 'star_pop',
+  // appended: the drop pack (see drop_the_bass/AUDIO_EVENTS.md)
+  'drop_big', 'hype_full', 'synergy', 'reroll_drop', 'wave_preview', 'perfect_beat', 'boss_hit', 'merge_7', 'combo_milestone', 'stage_low', 'ui_pop'];
 
 export const TRACK_IDS = ['title', 'hub', 'world_garage', 'world_busk', 'world_club', 'world_festival', 'world_arena', 'boss', 'victory', 'defeat', 'cutscene_warm', 'cutscene_dark'];
 
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
 // ------------------------------------------------------------------------------------------------ music data
-const QUAL = { m7: [0, 3, 7, 10], maj7: [0, 4, 7, 11], dom7: [0, 4, 7, 10], m: [0, 3, 7, 12], maj: [0, 4, 7, 12], dim: [0, 3, 6, 9], sus: [0, 5, 7, 10] };
-const SCALES = { mpent: [0, 3, 5, 7, 10, 12, 15], majpent: [0, 2, 4, 7, 9, 12, 14], dorian: [0, 2, 3, 5, 7, 9, 10, 12] };
+const QUAL = { m7: [0, 3, 7, 10], maj7: [0, 4, 7, 11], dom7: [0, 4, 7, 10], m: [0, 3, 7, 12], maj: [0, 4, 7, 12], dim: [0, 3, 6, 9], sus: [0, 5, 7, 10],
+  m9: [0, 3, 10, 14], maj9: [0, 4, 11, 14], dom9: [0, 4, 10, 14], maj6: [0, 4, 7, 9], m6: [0, 3, 7, 9] };
+const SCALES = { mpent: [0, 3, 5, 7, 10, 12, 15], majpent: [0, 2, 4, 7, 9, 12, 14], dorian: [0, 2, 3, 5, 7, 9, 10, 12], mixo: [0, 2, 4, 5, 7, 9, 10, 12] };
 
 // drum patterns: x = hit, o = soft hit, . = rest
 const PAT = {
@@ -30,12 +33,14 @@ const PAT = {
   sad:     { k: 'x.......x.......', s: '................', h: '.......o.......o', o: '................' },
   fanfare: { k: 'x...x...x...x...', s: '....x.......x.x.', h: 'x.x.x.x.x.x.x.x.', o: '..x...x...x...x.' },
   soft:    { k: '................', s: '................', h: '................', o: '................' },
+  anthem:  { k: 'x.......x..x....', s: '........x.......', h: '..x...x...x...x.', o: '......x.......x.' }, // half-time, big and slow
+  stomp:   { k: 'x.....x.x.......', s: '....x.......x...', h: 'x.xxx.xxx.xxx.xx', o: '..............x.' }, // busker stomp and clap
 };
 // bass: semitones above the chord root (two octaves down), null = rest
 const BASS = {
   funk:    [0, null, null, 0, null, null, 12, null, 0, null, 7, null, null, 10, null, null],
   groove:  [0, null, 0, null, null, 7, null, 12, null, 0, null, null, 10, null, 7, null],
-  house:   [null, null, 0, null, null, null, 0, null, null, null, 0, null, null, null, 12, null],
+  house:   [null, null, 0, 0, null, null, 0, 0, null, null, 0, 0, null, null, 12, 0], // rolling offbeat bass
   bright:  [0, null, 0, 12, null, 0, null, 12, 0, null, 0, 12, null, 7, null, 12],
   epic:    [0, null, 0, null, 0, null, 7, null, 0, null, 0, null, 10, null, 7, null],
   boss:    [0, 0, null, 0, 0, null, 1, 0, 0, 0, null, 0, 0, null, 6, 5],
@@ -43,6 +48,8 @@ const BASS = {
   sad:     [0, null, null, null, null, null, null, null, 7, null, null, null, null, null, null, null],
   fanfare: [0, null, 0, null, 7, null, 7, null, 0, null, 0, null, 12, null, 7, null],
   soft:    [0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+  anthem:  [0, null, null, null, null, null, null, null, 7, null, null, null, 12, null, 10, null],
+  stomp:   [0, null, null, null, 7, null, null, null, 0, null, null, null, 5, null, 7, null],
 };
 // chord stabs: steps and length (steps) and oscillator
 const CH = {
@@ -51,6 +58,7 @@ const CH = {
   epic: { steps: [0, 8], len: 7, wave: 'sawtooth' }, boss: { steps: [0, 6, 8, 14], len: 3, wave: 'sawtooth' },
   chill: { steps: [0, 10], len: 8, wave: 'triangle' }, sad: { steps: [0], len: 15, wave: 'triangle' },
   fanfare: { steps: [0, 4, 8, 12], len: 3.5, wave: 'square' }, soft: { steps: [0], len: 15, wave: 'triangle' },
+  anthem: { steps: [0, 8], len: 7, wave: 'sawtooth' }, stomp: { steps: [0, 3, 6, 8, 11, 14], len: 1.2, wave: 'triangle' },
 };
 // arp: chord tone index per sixteenth (0..3, 4..7 = octave up), null = rest
 const ARP = {
@@ -59,18 +67,20 @@ const ARP = {
   epic: [0, 2, 3, 2, 1, 2, 3, 4, 0, 2, 3, 2, 1, 2, 3, 5], boss: [0, 0, 2, 0, 3, 0, 2, 0, 1, 1, 3, 1, 4, 1, 3, 1],
   chill: [0, null, 2, null, 1, null, 3, null, 0, null, 2, null, 4, null, 3, null], sad: [0, null, null, 1, null, null, 2, null, null, 3, null, null, 2, null, 1, null],
   fanfare: [0, 1, 2, 4, 2, 1, 0, 1, 2, 3, 4, 5, 4, 3, 2, 1], soft: [0, null, null, null, 1, null, null, null, 2, null, null, null, 3, null, null, null],
+  anthem: [0, null, 1, null, 2, null, 3, null, 4, null, 3, null, 2, null, 1, null], stomp: [0, 2, 1, 2, 3, 2, 1, 2, 0, 2, 1, 2, 4, 2, 1, 2],
 };
 
 const TRACKS = {
-  title:         { bpm: 96,  root: 57, style: 'groove',  prog: [[0, 'm7'], [8, 'maj7'], [3, 'maj7'], [10, 'dom7']], scale: 'mpent',   lead: 'triangle', swing: 0.14, defInt: 0.7, leadMin: 0.5, seed: 3, dens: 55 },
-  hub:           { bpm: 92,  root: 53, style: 'chill',   prog: [[0, 'maj7'], [2, 'm7'], [7, 'm7'], [5, 'maj7']],     scale: 'majpent', lead: 'sine',     swing: 0.16, defInt: 0.55, leadMin: 0.4, seed: 5, dens: 40 },
-  world_garage:  { bpm: 100, root: 52, style: 'funk',    prog: [[0, 'm7'], [0, 'm7'], [5, 'm7'], [7, 'dom7']],       scale: 'dorian',  lead: 'square',   swing: 0.12, defInt: 0.5, leadMin: 0.8, seed: 7, dens: 50 },
-  world_busk:    { bpm: 108, root: 55, style: 'groove',  prog: [[0, 'm7'], [5, 'dom7'], [0, 'm7'], [3, 'maj7']],     scale: 'dorian',  lead: 'triangle', swing: 0.1,  defInt: 0.5, leadMin: 0.75, seed: 11, dens: 55 },
-  world_club:    { bpm: 120, root: 57, style: 'house',   prog: [[0, 'm7'], [8, 'maj7'], [3, 'maj7'], [10, 'dom7']],  scale: 'mpent',   lead: 'sawtooth', swing: 0.0,  defInt: 0.5, leadMin: 0.8, seed: 13, dens: 60 },
-  world_festival:{ bpm: 126, root: 50, style: 'bright',  prog: [[0, 'maj7'], [7, 'dom7'], [9, 'm7'], [5, 'maj7']],   scale: 'majpent', lead: 'square',   swing: 0.0,  defInt: 0.5, leadMin: 0.7, seed: 17, dens: 65 },
-  world_arena:   { bpm: 132, root: 48, style: 'epic',    prog: [[0, 'm'], [8, 'maj'], [3, 'maj'], [10, 'maj']],      scale: 'mpent',   lead: 'sawtooth', swing: 0.0,  defInt: 0.55, leadMin: 0.7, seed: 19, dens: 60 },
+  // optional per-track colour: bassWave, bassCut, chordWave, chordF, arpWave, leadFilt, leadQ, leadSend, vibRate, lead2 (detune cents of a second lead osc)
+  title:         { bpm: 96,  root: 57, style: 'anthem',  prog: [[0, 'm9'], [8, 'maj9'], [3, 'maj7'], [10, 'dom9']],  scale: 'mpent',   lead: 'triangle', swing: 0.05, defInt: 0.7, leadMin: 0.5, seed: 3, dens: 55, bassWave: 'sawtooth', bassCut: 420, chordF: 2400, leadSend: 0.6, vibRate: 4.5 },
+  hub:           { bpm: 92,  root: 53, style: 'chill',   prog: [[0, 'maj7'], [2, 'm7'], [7, 'm7'], [5, 'maj7']],     scale: 'majpent', lead: 'sine',     swing: 0.16, defInt: 0.55, leadMin: 0.4, seed: 5, dens: 40, bassWave: 'triangle', chordF: 1400, leadSend: 0.55, vibRate: 4 },
+  world_garage:  { bpm: 100, root: 52, style: 'funk',    prog: [[0, 'm9'], [0, 'm7'], [5, 'dom9'], [7, 'm7']],       scale: 'dorian',  lead: 'square',   swing: 0.12, defInt: 0.5, leadMin: 0.8, seed: 7, dens: 50, bassCut: 800, chordF: 2000, leadFilt: 2200, vibRate: 6.5 },
+  world_busk:    { bpm: 108, root: 55, style: 'stomp',   prog: [[0, 'maj6'], [5, 'maj6'], [7, 'dom7'], [0, 'maj6']], scale: 'mixo',    lead: 'triangle', swing: 0.1,  defInt: 0.5, leadMin: 0.75, seed: 11, dens: 55, bassWave: 'triangle', chordWave: 'triangle', arpWave: 'triangle', leadSend: 0.25, vibRate: 5 },
+  world_club:    { bpm: 120, root: 57, style: 'house',   prog: [[0, 'm9'], [8, 'maj7'], [3, 'maj7'], [10, 'dom7']],  scale: 'mpent',   lead: 'sawtooth', swing: 0.0,  defInt: 0.5, leadMin: 0.8, seed: 13, dens: 60, bassWave: 'sawtooth', bassCut: 500, chordF: 3000, leadFilt: 1500, leadQ: 4, leadSend: 0.5 },
+  world_festival:{ bpm: 126, root: 50, style: 'bright',  prog: [[0, 'maj9'], [7, 'dom7'], [9, 'm7'], [5, 'maj7']],   scale: 'majpent', lead: 'sawtooth', swing: 0.0,  defInt: 0.5, leadMin: 0.7, seed: 17, dens: 65, lead2: 12, leadFilt: 4200, leadSend: 0.5, vibRate: 6 },
+  world_arena:   { bpm: 132, root: 48, style: 'epic',    prog: [[0, 'm'], [8, 'maj'], [3, 'maj'], [10, 'maj']],      scale: 'mpent',   lead: 'square',   swing: 0.0,  defInt: 0.55, leadMin: 0.7, seed: 19, dens: 60, bassCut: 700, chordF: 2600, leadFilt: 2000, leadSend: 0.65, vibRate: 4.5 },
   boss:          { bpm: 140, root: 45, style: 'boss',    prog: [[0, 'm'], [1, 'maj'], [0, 'm'], [6, 'dim']],         scale: 'mpent',   lead: 'sawtooth', swing: 0.0,  defInt: 1.0, leadMin: 0.5, seed: 23, dens: 70 },
-  victory:       { bpm: 120, root: 55, style: 'fanfare', prog: [[0, 'maj'], [5, 'maj'], [7, 'maj'], [0, 'maj']],     scale: 'majpent', lead: 'square',   swing: 0.0,  defInt: 1.0, leadMin: 0.3, seed: 29, dens: 75 },
+  victory:       { bpm: 116, root: 55, style: 'fanfare', prog: [[0, 'maj'], [5, 'maj'], [7, 'maj'], [0, 'maj']],     scale: 'majpent', lead: 'square',   swing: 0.0,  defInt: 1.0, leadMin: 0.3, seed: 29, dens: 75 },
   defeat:        { bpm: 70,  root: 50, style: 'sad',     prog: [[0, 'm'], [8, 'maj'], [5, 'm'], [7, 'dom7']],        scale: 'mpent',   lead: 'sine',     swing: 0.0,  defInt: 0.5, leadMin: 0.3, seed: 31, dens: 35 },
   cutscene_warm: { bpm: 80,  root: 55, style: 'soft',    prog: [[0, 'maj7'], [5, 'maj7'], [2, 'm7'], [7, 'dom7']],   scale: 'majpent', lead: 'sine',     swing: 0.0,  defInt: 0.6, leadMin: 0.4, seed: 37, dens: 35 },
   cutscene_dark: { bpm: 66,  root: 46, style: 'soft',    prog: [[0, 'm'], [1, 'maj'], [0, 'm'], [6, 'dim']],         scale: 'mpent',   lead: 'triangle', swing: 0.0,  defInt: 0.55, leadMin: 0.45, seed: 41, dens: 30 },
@@ -82,6 +92,10 @@ let vol = { music: 0.7, sfx: 0.85 }, muted = false;
 let music = null, wantTrack = null, timer = null, intTarget = 0.5;
 let voiceEnds = [];
 let counter = 0;
+let tensionLp = null, hbOut = null;
+let intRate = 0.2, bossTarget = 0, lowTarget = 0, lastLpAt = -1, lastLpLow = -1;
+let hbOn = false, hbNext = 0, hbPeriod = 0.9;
+let mstate = null;
 const lastPlay = {};
 const listeners = new Set();
 let pendingBeats = [];
@@ -101,7 +115,11 @@ function attach(c) {
   master.connect(comp); comp.connect(ctx.destination);
   sfxBus = ctx.createGain(); sfxBus.gain.value = vol.sfx * 1.35; sfxBus.connect(master);
   musicBus = ctx.createGain(); musicBus.gain.value = vol.music * 0.8; musicBus.connect(master);
-  duckG = ctx.createGain(); duckG.gain.value = 1; duckG.connect(musicBus);
+  // tension filter sits between the duck and the music bus (opens fully unless the stage is in danger)
+  tensionLp = ctx.createBiquadFilter(); tensionLp.type = 'lowpass'; tensionLp.frequency.value = 20000; tensionLp.Q.value = 0.5; tensionLp.connect(musicBus);
+  duckG = ctx.createGain(); duckG.gain.value = 1; duckG.connect(tensionLp);
+  hbOut = ctx.createGain(); hbOut.gain.value = 0.9; hbOut.connect(sfxBus);
+  lastLpAt = -1; lastLpLow = -1;
   // shared echo for lead and arp
   delayIn = ctx.createGain(); delayIn.gain.value = 1;
   const dl = ctx.createDelay(2); dl.delayTime.value = 0.375;
@@ -115,6 +133,11 @@ function attach(c) {
   let s = 12345;
   for (let i = 0; i < len; i++) { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; d[i] = (s / 4294967296) * 2 - 1; }
   if (wantTrack) { const w = wantTrack; wantTrack = null; musicStart(w); }
+  if (hbOn) { hbNext = ctx.currentTime + 0.05; ensureTimer(); }
+}
+
+function ensureTimer() {
+  if (timer == null && typeof setInterval === 'function') { timer = setInterval(pump, 25); if (timer && timer.unref) timer.unref(); }
 }
 
 // ------------------------------------------------------------------------------------------------ voice helpers
@@ -213,7 +236,7 @@ function scheduleStep(m, i, time) {
   }
   if (I >= 0.25 && P.s[s] !== '.') {
     snare(dest, time, P.s[s] === 'x' ? 0.7 : 0.35, st);
-    if (st === 'house' || st === 'bright' || st === 'fanfare') clap(dest, time, 0.5);
+    if (st === 'house' || st === 'bright' || st === 'fanfare' || st === 'stomp') clap(dest, time, 0.5);
   }
   if (I >= 0.15) {
     if (P.h[s] !== '.') hat(dest, time, (P.h[s] === 'x' ? 0.6 : 0.3) * accent, false);
@@ -224,21 +247,21 @@ function scheduleStep(m, i, time) {
   const bn = BASS[st][s];
   if (I >= 0.2 && bn != null) {
     const f = mtof(m.root + cr - 12 + bn);
-    tone(dest, st === 'house' || st === 'epic' || st === 'boss' ? 'sawtooth' : 'square', f, f, time, sd * (st === 'sad' ? 7 : st === 'house' ? 2.2 : 1.6), 0.26, { filter: { type: 'lowpass', f: st === 'boss' ? 900 : 650, q: 3 }, attack: 0.005 });
+    tone(dest, T.bassWave || (st === 'house' || st === 'epic' || st === 'boss' ? 'sawtooth' : 'square'), f, f, time, sd * (st === 'sad' ? 7 : st === 'house' ? 1.3 : 1.6), 0.26, { filter: { type: 'lowpass', f: T.bassCut || (st === 'boss' ? 900 : 650), q: 3 }, attack: 0.005 });
     tone(dest, 'sine', f, f, time, sd * 1.8, 0.22, {});
   }
   const C = CH[st];
   if (I >= 0.35 && C.steps.indexOf(s) >= 0) {
     for (let n = 0; n < chord.length; n++) {
       const f = mtof(chord[n] + 12);
-      tone(dest, C.wave, f, f, time, sd * C.len, 0.07, { detune: n % 2 ? 6 : -6, filter: { type: 'lowpass', f: 1800, q: 0.6 }, attack: C.len > 5 ? 0.06 : 0.008, send: 0.12 });
+      tone(dest, T.chordWave || C.wave, f, f, time, sd * C.len, 0.07, { detune: n % 2 ? 6 : -6, filter: { type: 'lowpass', f: T.chordF || 1800, q: 0.6 }, attack: C.len > 5 ? 0.06 : 0.008, send: 0.12 });
     }
   }
   const A = ARP[st][s];
   if (I >= 0.55 && A != null) {
     const note = chord[A % 4] + (A >= 4 ? 12 : 0) + 12;
     const f = mtof(note);
-    tone(dest, st === 'boss' || st === 'epic' ? 'sawtooth' : 'square', f, f, time, sd * 0.9, 0.05, { filter: { type: 'lowpass', f: 2600, q: 1 }, send: 0.4 });
+    tone(dest, T.arpWave || (st === 'boss' || st === 'epic' ? 'sawtooth' : 'square'), f, f, time, sd * 0.9, 0.05, { filter: { type: 'lowpass', f: 2600, q: 1 }, send: 0.4 });
   }
   if (I >= T.leadMin) {
     const sc = SCALES[T.scale];
@@ -249,19 +272,49 @@ function scheduleStep(m, i, time) {
       const deg = h % sc.length;
       const note = (h >>> 9) % 3 === 0 ? chord[(h >>> 5) % 3] + 12 : m.root + cr + sc[deg] + 12;
       const f = mtof(note + 12);
-      tone(dest, T.lead, f, f, time, sd * (((h >>> 11) % 2) + 1.6), 0.08, { attack: 0.01, send: 0.45, vib: { rate: 5.5, depth: f * 0.004 }, filter: T.lead === 'sawtooth' ? { type: 'lowpass', f: 2400, q: 0.8 } : null });
+      const ld = sd * (((h >>> 11) % 2) + 1.6);
+      const lf = T.leadFilt ? { type: 'lowpass', f: T.leadFilt, q: T.leadQ || 0.8 } : T.lead === 'sawtooth' ? { type: 'lowpass', f: 2400, q: 0.8 } : null;
+      tone(dest, T.lead, f, f, time, ld, T.lead2 ? 0.06 : 0.08, { attack: 0.01, send: T.leadSend == null ? 0.45 : T.leadSend, vib: { rate: T.vibRate || 5.5, depth: f * 0.004 }, filter: lf });
+      if (T.lead2) tone(dest, T.lead, f, f, time, ld, 0.05, { attack: 0.01, detune: T.lead2, send: 0.2, filter: lf });
     }
   }
+  // adaptive layers driven by setMusicState: a boss layer (sub drone, tom hits) and a tension layer (dissonant drone)
+  if (m.boss > 0.4) {
+    if (s % 8 === 0) tone(dest, 'sawtooth', mtof(m.root + cr - 12), null, time, sd * 7, 0.09 * m.boss, { filter: { type: 'lowpass', f: 500, q: 1 }, attack: 0.04 });
+    if (s % 4 === 2) noise(dest, 'bandpass', 700, 220, time, 0.1, 0.2 * m.boss, { q: 1.2 });
+  }
+  if (m.low > 0.5 && s === 0) tone(dest, 'sine', mtof(m.root + cr - 11), null, time, sd * 14, 0.09 * m.low, { attack: 0.3 });
   if (s % 4 === 0) pendingBeats.push({ beat: Math.floor(i / 4), time });
 }
 
 function stepTime(m, i) { const sd = 60 / m.def.bpm / 4; return m.t0 + i * sd + (i % 2 === 1 ? m.def.swing * sd : 0); }
 
+// heartbeat: lub-dub thumps on their own clock (works with or without music)
+function hbThump(t, v) {
+  cur.pitch = 1;
+  tone(hbOut, 'sine', 64, 40, t, 0.16, 0.5 * v, S);
+  noise(hbOut, 'lowpass', 320, 120, t, 0.06, 0.18 * v, S);
+  tone(hbOut, 'sine', 56, 38, t + 0.21, 0.13, 0.38 * v, S);
+}
+function pumpHeartbeat(t) {
+  if (!hbOn || !hbOut) return;
+  if (muted || ctx.state === 'suspended') { hbNext = t + 0.05; return; }
+  if (hbNext < t - 0.5) hbNext = t;
+  let g = 0;
+  while (hbNext < t + 0.18 && g++ < 8) { hbThump(hbNext, 1); hbNext += hbPeriod; }
+}
+
 function pump() {
-  if (!ctx || !music) return;
+  if (!ctx) return;
+  pumpHeartbeat(ctx.currentTime);
+  if (!music) return;
   const t = ctx.currentTime, m = music;
-  m.int += (intTarget - m.int) * 0.2;
+  m.int += (intTarget - m.int) * intRate;
   if (Math.abs(intTarget - m.int) < 0.002) m.int = intTarget;
+  m.boss += (bossTarget - m.boss) * 0.08;
+  if (Math.abs(bossTarget - m.boss) < 0.01) m.boss = bossTarget;
+  m.low += (lowTarget - m.low) * 0.08;
+  if (Math.abs(lowTarget - m.low) < 0.01) m.low = lowTarget;
   if (t > m.t0 && stepTime(m, m.next) < t - 0.3) { // woke from a throttled tab: skip ahead
     const sd = 60 / m.def.bpm / 4;
     m.next = Math.ceil((t - m.t0) / sd) + 1;
@@ -288,10 +341,11 @@ function musicStart(id) {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.linearRampToValueAtTime(1, t + 0.35);
   g.connect(duckG);
-  intTarget = def.defInt;
-  music = { id, def, gain: g, root: def.root, t0: t + 0.08, next: 0, int: def.defInt };
+  intTarget = def.defInt; intRate = 0.2; bossTarget = 0; lowTarget = 0; mstate = null;
+  applyTension(0, true);
+  music = { id, def, gain: g, root: def.root, t0: t + 0.08, next: 0, int: def.defInt, boss: 0, low: 0 };
   pendingBeats = [];
-  if (timer == null && typeof setInterval === 'function') { timer = setInterval(pump, 25); if (timer && timer.unref) timer.unref(); }
+  ensureTimer();
   pump();
 }
 
@@ -307,7 +361,17 @@ function musicStop(fadeSec) {
   wantTrack = null;
   if (music) { fadeOut(music, fadeSec == null ? 0.5 : fadeSec); music = null; }
   pendingBeats = [];
-  if (timer != null) { clearInterval(timer); timer = null; }
+  if (timer != null && !hbOn) { clearInterval(timer); timer = null; }
+}
+
+// low-pass the whole music bus as the stage nears death (low 0..1). Throttled so the automation list stays short.
+function applyTension(low, force) {
+  if (!ctx || !tensionLp) return;
+  const t = ctx.currentTime;
+  if (!force && (Math.abs(low - lastLpLow) < 0.03 || (t - lastLpAt < 0.15 && t >= lastLpAt))) return;
+  lastLpAt = t; lastLpLow = low;
+  const f = 20000 * Math.pow(900 / 20000, clamp(low, 0, 1));
+  tensionLp.frequency.setTargetAtTime(f, t, 0.35);
 }
 
 // ------------------------------------------------------------------------------------------------ sfx
@@ -382,17 +446,85 @@ const SFX = {
   combo: (o, t) => { tone(o, 'square', 660, null, t, 0.06, 0.14, S); tone(o, 'square', 990, null, t + 0.05, 0.1, 0.14, S); },
   reroll: (o, t) => { for (let i = 0; i < 5; i++) noise(o, 'bandpass', 2500 + i * 300, 2500, t + i * 0.04, 0.03, 0.18, { q: 2, sfx: 1 }); tone(o, 'triangle', 800, 1200, t + 0.2, 0.1, 0.12, S); },
   star_pop: (o, t) => { tone(o, 'sine', 600, 1400, t, 0.12, 0.25, S); arpUp(o, t + 0.08, [2093, 2637, 3136], 0.05, 0.25, 0.08, 'sine'); },
+  // ---- the drop pack
+  // drop_big: 1.4 s riser, 0.45 s of near silence (music is ducked by play()), then a heavy sub hit with a crash. Hit lands at t + 1.85.
+  drop_big: (o, t) => {
+    noise(o, 'bandpass', 200, 9000, t, 1.4, 0.3, { q: 1.2, attack: 1.2, sfx: 1 });
+    tone(o, 'sawtooth', 110, 1400, t, 1.4, 0.12, { sfx: 1, attack: 1.0, filter: { type: 'lowpass', f: 2600, q: 2 } });
+    tone(o, 'sine', 220, 1760, t, 1.4, 0.16, { sfx: 1, attack: 1.0 });
+    for (let i = 0; i < 6; i++) tone(o, 'square', 1200 + i * 180, null, t + 0.5 + i * 0.15, 0.06, 0.05, S); // ticking build
+    const h = t + 1.85;
+    tone(o, 'sine', 95, 30, h, 1.3, 0.7, S);
+    tone(o, 'sine', 190, 50, h, 0.3, 0.35, S);
+    noise(o, 'lowpass', 1400, 150, h, 0.08, 0.3, S);
+    noise(o, 'highpass', 3500, 6500, h, 1.1, 0.22, { q: 0.6, sfx: 1 });
+    for (const d of [-9, 0, 9]) tone(o, 'sawtooth', 110, null, h, 0.9, 0.06, { sfx: 1, detune: d, filter: { type: 'lowpass', f: 900, q: 1 } });
+  },
+  hype_full: (o, t) => {
+    tone(o, 'sawtooth', 180, 900, t, 0.3, 0.14, { sfx: 1, attack: 0.1, filter: { type: 'lowpass', f: 2200, q: 2 } });
+    arpUp(o, t + 0.25, [523.25, 659.25, 783.99, 1046.5, 1318.5], 0.05, 0.4, 0.15, 'square');
+    tone(o, 'sine', 130, 55, t + 0.25, 0.45, 0.4, S);
+    for (let i = 0; i < 5; i++) tone(o, 'sine', 2400 + i * 330, null, t + 0.4 + i * 0.04, 0.2, 0.05, S);
+  },
+  synergy: (o, t) => {
+    tone(o, 'sine', 783.99, null, t, 0.5, 0.2, S); tone(o, 'sine', 1567.98, null, t, 0.3, 0.05, S);
+    tone(o, 'sine', 1174.66, null, t + 0.11, 0.7, 0.2, S); tone(o, 'sine', 2349.3, null, t + 0.11, 0.4, 0.05, S);
+  },
+  reroll_drop: (o, t) => {
+    for (let i = 0; i < 6; i++) noise(o, 'bandpass', 1800 + i * 450, 2400 + i * 450, t + i * 0.03, 0.03, 0.16, { q: 2, sfx: 1 });
+    tone(o, 'sine', 260, 110, t + 0.2, 0.08, 0.25, S);
+  },
+  wave_preview: (o, t) => {
+    noise(o, 'bandpass', 700, 2600, t, 0.24, 0.1, { q: 0.9, attack: 0.1, sfx: 1 });
+    tone(o, 'sine', 1400, null, t + 0.2, 0.05, 0.07, S);
+  },
+  perfect_beat: (o, t) => {
+    noise(o, 'highpass', 4500, 6000, t, 0.018, 0.28, S);
+    tone(o, 'square', 1900, 1200, t, 0.04, 0.13, S);
+    tone(o, 'sine', 2600, null, t + 0.01, 0.08, 0.09, S);
+  },
+  boss_hit: (o, t) => {
+    tone(o, 'sine', 120, 42, t, 0.22, 0.55, S);
+    noise(o, 'lowpass', 1300, 180, t, 0.07, 0.3, S);
+    tone(o, 'triangle', 190, 90, t, 0.1, 0.18, S);
+  },
+  merge_7: (o, t) => {
+    arpUp(o, t, [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568], 0.06, 0.4, 0.17, 'triangle');
+    tone(o, 'sine', 120, 45, t, 0.55, 0.45, S);
+    for (const x of [523.25, 659.25, 783.99, 1046.5]) tone(o, 'square', x, null, t + 0.38, 0.9, 0.05, { sfx: 1, attack: 0.02, filter: { type: 'lowpass', f: 2400, q: 0.7 } });
+    for (let i = 0; i < 8; i++) tone(o, 'sine', 2200 + i * 330, null, t + 0.3 + i * 0.05, 0.22, 0.05, S);
+  },
+  // combo_milestone: pass { pitch } rising with the combo (1.0 at 10, up to about 2.0). Works at any pitch from 0.5 to 2.5.
+  combo_milestone: (o, t) => {
+    tone(o, 'square', 660, null, t, 0.07, 0.13, S); tone(o, 'square', 880, null, t + 0.06, 0.07, 0.13, S);
+    tone(o, 'triangle', 1320, null, t + 0.12, 0.25, 0.18, S); tone(o, 'sine', 1980, null, t + 0.12, 0.3, 0.06, S);
+  },
+  // stage_low: one lub-dub with a low warning pad. play() also starts the heartbeat loop (see AudioFx.heartbeat), unless o.loop === false.
+  stage_low: (o, t) => {
+    tone(o, 'sine', 64, 40, t, 0.16, 0.5, S); tone(o, 'sine', 56, 38, t + 0.21, 0.13, 0.38, S);
+    tone(o, 'sawtooth', 98, 92, t, 0.5, 0.07, { sfx: 1, attack: 0.1, filter: { type: 'lowpass', f: 400, q: 1 } });
+  },
+  ui_pop: (o, t) => { tone(o, 'sine', 420, 1000, t, 0.06, 0.2, S); noise(o, 'highpass', 5000, 5000, t, 0.012, 0.06, S); },
 };
 
-const GAP = { shoot_hat: 0.05, shoot_snare: 0.035, shoot_kick: 0.04, hit: 0.035, kill: 0.04, coin: 0.05, typewriter: 0.03, tick: 0.03, shoot_scratch: 0.05, shoot_synth: 0.05, combo: 0.05, ui_click: 0.04 };
-const LOW = { hit: 1, shoot_hat: 1, shoot_snare: 1, tick: 1, typewriter: 1, coin: 1, kill: 1, shoot_kick: 1, shoot_synth: 1, shoot_scratch: 1 };
+const GAP = { shoot_hat: 0.05, shoot_snare: 0.035, shoot_kick: 0.04, hit: 0.035, kill: 0.04, coin: 0.05, typewriter: 0.03, tick: 0.03, shoot_scratch: 0.05, shoot_synth: 0.05, combo: 0.05, ui_click: 0.04,
+  drop_big: 2.5, hype_full: 0.6, synergy: 0.15, reroll_drop: 0.15, wave_preview: 0.3, perfect_beat: 0.06, boss_hit: 0.12, merge_7: 0.5, combo_milestone: 0.12, stage_low: 1.0, ui_pop: 0.04 };
+const LOW = { boss_hit: 1, perfect_beat: 1, ui_pop: 1, hit: 1, shoot_hat: 1, shoot_snare: 1, tick: 1, typewriter: 1, coin: 1, kill: 1, shoot_kick: 1, shoot_synth: 1, shoot_scratch: 1 };
+
+function heartbeat(on, period) {
+  hbOn = !!on;
+  if (period != null && Number.isFinite(period)) hbPeriod = clamp(period, 0.4, 1.5);
+  if (hbOn) { if (ctx) { hbNext = ctx.currentTime + 0.05; ensureTimer(); } }
+  else if (timer != null && !music) { clearInterval(timer); timer = null; }
+}
 
 function play(name, o) {
+  o = o || {};
+  if (name === 'stage_low' && o.off) { heartbeat(false); return; }
   if (!ctx || muted) return;
   const fn = SFX[name];
   if (!fn) return;
   if (ctx.state === 'suspended') return;
-  o = o || {};
   const t0 = ctx.currentTime;
   const gap = GAP[name] == null ? 0.02 : GAP[name];
   if (lastPlay[name] != null && t0 - lastPlay[name] < gap && t0 >= lastPlay[name]) return;
@@ -405,8 +537,36 @@ function play(name, o) {
   if (o.pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = clamp(o.pan, -1, 1); out.connect(p); tail = p; }
   tail.connect(sfxBus);
   cur.pitch = clamp(fin(o.pitch, 1), 0.25, 4);
-  try { fn(out, t0 + 0.005 + (o.at || 0)); } catch (e) { /* a broken voice never breaks the game */ }
+  const at = t0 + 0.005 + fin(o.at, 0);
+  try { fn(out, at); } catch (e) { /* a broken voice never breaks the game */ }
   cur.pitch = 1;
+  try {
+    if (name === 'drop_big') { // music falls away into the silent beat, then slams back on the hit
+      duckG.gain.cancelScheduledValues(at);
+      duckG.gain.setTargetAtTime(0.06, at + 1.2, 0.08);
+      duckG.gain.setTargetAtTime(1, at + 1.85, 0.06);
+    } else if (name === 'stage_low' && o.loop !== false && !hbOn) { heartbeat(true); hbNext = at + hbPeriod; }
+  } catch (e) { /* ignore */ }
+}
+
+// Map battle state to music layers. All fields optional. Fractions are 0..1 (a value above 1 is read as a percent 0..100).
+function setMusicState(s) {
+  s = s || {};
+  const frac = (v, d) => { v = fin(v, d); return clamp(v > 1 ? v / 100 : v, 0, 1); };
+  const total = Math.max(1, fin(s.wavesTotal, 20)), wave = clamp(fin(s.wave, 1), 1, total);
+  const wp = total > 1 ? (wave - 1) / (total - 1) : 0;
+  const hype = frac(s.hypePct, 0), hp = frac(s.stageHpPct, 1);
+  const en = clamp(fin(s.enemiesOnField, 0) / 25, 0, 1);
+  const boss = s.bossAlive ? 1 : 0;
+  const low = clamp((0.35 - hp) / 0.35, 0, 1);
+  let target = 0.3 + 0.35 * wp + 0.2 * hype + 0.12 * en;
+  if (boss) target = Math.max(target, 0.9);
+  target = clamp(target - 0.1 * low, 0, 1);
+  intTarget = target; intRate = 0.04; bossTarget = boss; lowTarget = low;
+  hbPeriod = 0.55 + 0.4 * (1 - low);
+  mstate = { intensity: target, boss, low };
+  applyTension(low, false);
+  return mstate;
 }
 
 // ------------------------------------------------------------------------------------------------ public API
@@ -433,7 +593,16 @@ export const AudioFx = {
   mute(b) { muted = !!b; if (ctx) master.gain.setTargetAtTime(muted ? 0.0001 : 0.9, ctx.currentTime, 0.02); },
   play,
   musicStart, musicStop,
-  musicIntensity(v) { intTarget = clamp(fin(v, 0.5), 0, 1); },
+  musicIntensity(v) { intTarget = clamp(fin(v, 0.5), 0, 1); intRate = 0.2; },
+  setMusicState,
+  heartbeat,
+  trackInfo(id) {
+    const T = TRACKS[id];
+    if (!T) return null;
+    return { id, bpm: T.bpm, root: T.root, style: T.style, scale: T.scale, lead: T.lead, swing: T.swing, chords: T.prog.map((p) => p[1]),
+      bass: BASS[T.style].map((x) => (x == null ? '.' : x)).join(','), drums: PAT[T.style].k + PAT[T.style].s + PAT[T.style].h,
+      bassWave: T.bassWave || null, chordWave: T.chordWave || CH[T.style].wave, leadFilt: T.leadFilt || null, lead2: T.lead2 || null };
+  },
   musicDuck(sec) {
     if (!ctx) return;
     const t = ctx.currentTime, d = clamp(fin(sec, 0.5), 0.05, 10);
@@ -443,14 +612,16 @@ export const AudioFx = {
   },
   beatInfo() {
     if (!ctx || !music) return null;
-    const t = ctx.currentTime, x = Math.max(0, (t - music.t0) * music.def.bpm / 60);
-    const beat = Math.floor(x);
-    return { bpm: music.def.bpm, beat, phase: x - beat, t };
+    // phase is corrected for the output latency so it matches what the player HEARS (onBeat fires on the audio clock, slightly earlier)
+    const t = ctx.currentTime, lat = fin(ctx.outputLatency, 0) + fin(ctx.baseLatency, 0), bd = 60 / music.def.bpm;
+    const x = Math.max(0, (t - lat - music.t0) / bd);
+    const beat = Math.floor(x), phase = x - beat;
+    return { bpm: music.def.bpm, beat, phase, t, beatDur: bd, toNext: (1 - phase) * bd, sinceLast: phase * bd, latency: lat };
   },
   onBeat(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   current() { return music ? music.id : null; },
   // test and lab hooks
-  _attach: attach, _tick: pump, _state() { return { ctx, music, voices: voiceEnds.length, intTarget, muted, vol }; },
-  _reset() { musicStop(0.01); ctx = null; voiceEnds = []; for (const k in lastPlay) delete lastPlay[k]; listeners.clear(); wantTrack = null; },
+  _attach: attach, _tick: pump, _state() { return { ctx, music, voices: voiceEnds.length, intTarget, muted, vol, mstate, hbOn, hbPeriod, tension: tensionLp }; },
+  _reset() { hbOn = false; musicStop(0.01); ctx = null; tensionLp = null; hbOut = null; mstate = null; intRate = 0.2; bossTarget = 0; lowTarget = 0; hbPeriod = 0.9; voiceEnds = []; for (const k in lastPlay) delete lastPlay[k]; listeners.clear(); wantTrack = null; },
 };
 export default AudioFx;

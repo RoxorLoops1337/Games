@@ -1,11 +1,12 @@
 // ui_run.js: DOM overlays used during and right after a run: Remix/relic pick, pause, hints, defeat, results, how-to-play.
-import { WORLDS, WORLD_BY_ID, BOSSES, ENEMIES, RARITY, RARITY_ORDER, COL, ECON, fmt } from './data_core.js';
+import { WORLDS, WORLD_BY_ID, BOSSES, ENEMIES, TURRETS, RARITY, RARITY_ORDER, COL, ECON, fmt } from './data_core.js';
 import { REMIX, RELICS, WAVE_MODS } from './data_run.js';
 import { GEAR } from './data_meta.js';
 import * as M from './meta.js';
 import { HINTS } from './data_story.js';
-import { h, canvasOf, icon, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE } from './ui_core.js';
+import { h, canvasOf, icon, gearIcon, enemyIcon, turretIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE } from './ui_core.js';
 import { settingsModal } from './ui_hub.js';
+import { makeShareCard, shareCard, shareText } from './share.js';
 
 // ------------------------------------------------------------------------------------------------ remix / relic pick
 export function showChoice(app, run, battle) {
@@ -79,6 +80,53 @@ export function showHint(app, id, done) {
   app.audio.play('ui_open');
 }
 
+
+// ------------------------------------------------------------------------------------------------ share and recap helpers
+// A Share button: draws the crayon brag card, then shares it as a file (phones) or downloads the PNG.
+function shareBtn(app, run, small) {
+  let busy = false;
+  return btn([icon('star', 22), 'Share'], async () => {
+    if (busy) return; busy = true;
+    try {
+      try { if (document.fonts && document.fonts.load) await document.fonts.load('40px "Patrick Hand"'); } catch (e) { /* font optional */ }
+      const cv = makeShareCard(run, run.result, app.profile);
+      const how = await shareCard(cv, shareText(run.result, run.world));
+      if (how === 'downloaded') toast('Picture saved. Post it anywhere!');
+      else if (how === 'failed') toast('Could not share that picture.');
+    } finally { busy = false; }
+  }, 'gold' + (small ? ' small' : ''), { 'data-share': '1' });
+}
+const arr = (v) => (Array.isArray(v) ? v : []);
+const typeIcon = (type, px) => (ENEMIES[type] ? enemyIcon(type, px) : BOSSES[type] ? enemyIcon(type, px, true) : TURRETS[type] ? turretIcon(type, px) : null);
+const typeName = (type) => (ENEMIES[type] ? ENEMIES[type].name : BOSSES[type] ? BOSSES[type].name : TURRETS[type] ? TURRETS[type].name : String(type));
+// 'What happened': leaks per lane as mini bars, the Static that got through, top killers and up to 3 tips. Every field is optional.
+export function recapCard(recap) {
+  if (!recap || typeof recap !== 'object') return null;
+  const parts = [];
+  const lanes = arr(recap.leaksByLane).map((n) => Math.max(0, +n || 0));
+  const maxLane = Math.max(0, ...lanes);
+  if (maxLane > 0) {
+    parts.push(h('div', { class: 'rc-row' }, h('div', { class: 'rc-lbl' }, 'Leaks per lane'),
+      h('div', { class: 'rc-bars' }, lanes.map((n, i) => h('div', { class: 'rc-bar' + (n === maxLane ? ' worst' : ''), title: 'Lane ' + (i + 1) + ': ' + n },
+        h('b', null, n || ''), h('i', { style: 'height:' + Math.max(n ? 8 : 3, Math.round(n / maxLane * 48)) + 'px' }), h('span', null, i + 1))))));
+  }
+  const chips = (list, label, cls) => {
+    const items = arr(list).filter((x) => x && x.type && typeIcon(x.type, 40) !== null && (+x.count || 0) > 0).slice(0, 5);
+    if (!items.length) return null;
+    return h('div', { class: 'rc-row' }, h('div', { class: 'rc-lbl' }, label),
+      h('div', { class: 'rc-types ' + (cls || '') }, items.map((x) => h('div', { class: 'rc-type', title: typeName(x.type) }, typeIcon(x.type, 40), h('b', null, 'x' + x.count), h('span', null, typeName(x.type))))));
+  };
+  parts.push(chips(recap.leakTypes, 'Got through', 'bad'));
+  if (recap.worstWave > 0) parts.push(h('div', { class: 'rc-line' }, 'Toughest wave: ', h('b', null, String(recap.worstWave))));
+  if (recap.bossFinisher && (BOSSES[recap.bossFinisher] || ENEMIES[recap.bossFinisher])) parts.push(h('div', { class: 'rc-line' }, 'Finished by: ', h('b', null, typeName(recap.bossFinisher))));
+  parts.push(chips(recap.topKillers, 'Top killers', 'good'));
+  const tips = arr(recap.tips).filter((x) => typeof x === 'string' && x).slice(0, 3);
+  if (tips.length) parts.push(h('div', { class: 'rc-tips' }, tips.map((x) => h('div', { class: 'rc-tip' }, icon('bolt', 20), h('span', null, x)))));
+  const kids = parts.filter(Boolean);
+  if (!kids.length) return null;
+  return h('div', { class: 'recap card' }, h('h3', null, 'What happened'), kids);
+}
+
 // ------------------------------------------------------------------------------------------------ defeat and results
 export function showDefeat(app, run, battle, onGiveUp) {
   const body = h('div');
@@ -86,10 +134,11 @@ export function showDefeat(app, run, battle, onGiveUp) {
   const canRevive = app.profile.diamonds >= ECON.reviveDiamonds && run.mode !== 'tutorial';
   body.append(h('div', { class: 'res-title lose' }, 'DEFEAT'), h('div', { class: 'sub', style: 'text-align:center' }, 'The Static took the stage on wave ' + run.wave + '. But the music is not over...'),
     h('div', { style: 'text-align:center;margin:8px 0' }, canvasOf(120, 120, (ctx, t) => AE.drawGlyph(ctx, 'skull', 60, 60, 80, '#dcd8e8'))),
+    recapCard(run.result && run.result.recap),
     h('div', { class: 'btnrow' }, btn([icon('diamond', 22), 'Revive ' + ECON.reviveDiamonds], () => {
       if (!canRevive) { toast('You need ' + ECON.reviveDiamonds + ' diamonds to revive.'); return; }
       app.spendDiamonds(ECON.reviveDiamonds); run.revive(); battle.ended = false; battle.endTimer = 0; battle.queueBanner('ENCORE!', 'Half the stage is back', COL.green, 1.8); m.close();
-    }, canRevive ? 'gold' : 'dark off'), btn('Give up', () => { m.close(); onGiveUp(); }, 'dark')));
+    }, canRevive ? 'gold' : 'dark off'), shareBtn(app, run), btn('Give up', () => { m.close(); onGiveUp(); }, 'dark')));
 }
 
 export function showResults(app, run, out, opts = {}) {
@@ -108,6 +157,7 @@ export function showResults(app, run, out, opts = {}) {
   const wave = r.mode === 'endless' ? r.cleared + (out.newBestEndless ? ' BEST!' : '') : r.mode === 'daily' ? r.cleared + '' : r.cleared + (r.mode === 'tutorial' ? '/3' : '/' + run.wavesTotal);
   body.append(h('div', { class: 'statgrid' }, h('div', null, r.mode === 'endless' ? 'Wave reached' : 'Waves cleared', h('b', null, wave)), h('div', null, 'Kills', h('b', null, fmt(r.kills))), h('div', null, 'Merges', h('b', null, r.merges)), h('div', null, 'Best combo', h('b', null, r.bestCombo)),
     h('div', null, 'Bosses', h('b', null, r.bossKills)), h('div', null, 'Time', h('b', null, Math.floor(r.time / 60) + 'm ' + Math.round(r.time % 60) + 's'))));
+  if (!win) body.append(recapCard(r.recap));
   const rew = h('div', { class: 'rew' });
   const add = (kind, n, i) => rew.append(h('div', { class: 'rewi', style: 'animation-delay:' + (300 + i * 150) + 'ms' }, kind === 'fans' ? icon('fans', 28) : icon(kind === 'records' ? 'record' : 'diamond', 28), '+' + fmt(n)));
   let i = 0;
@@ -144,6 +194,7 @@ export function showResults(app, run, out, opts = {}) {
   if (win && r.mode === 'story' && out.unlockedWorld) btns.append(btn('Next Stage', () => { m.close(); app.afterResults(run, out, { next: out.unlockedWorld }); }, 'green'));
   btns.append(btn(win && r.mode === 'story' && out.unlockedWorld ? 'Hub' : 'Continue', () => { m.close(); app.afterResults(run, out, {}); }, win && out.unlockedWorld ? 'dark' : 'green'));
   if (r.mode !== 'tutorial') btns.append(btn('Retry', () => { m.close(); app.afterResults(run, out, { retry: true }); }, 'blue'));
+  if (r.mode !== 'tutorial') btns.append(shareBtn(app, run));
   body.append(btns);
 }
 
@@ -155,8 +206,13 @@ export function showHowTo(app) {
     sec('Drop and merge', 'Tap DROP to place a random turret. Tap an empty tile first to choose exactly where. Two turrets of the same level can be merged: drag one onto the other, or tap one then the other. Every level doubles the power (up to level 7). Different turrets of the same level can remix into a surprise.'),
     sec('Coins and hype', 'Kills give coins, which buy more drops (each drop costs a bit more). Kills also fill the HYPE bar. When it fills you pick a Remix card, a run-long upgrade. Bosses and chests give Merch relics.'),
     sec('Heroes', 'RoxorLoops and Jasmin each have a special move with a cooldown. Beatbox Blast hits everything. Siren Song slows and heals. Use both within 2 seconds for a Duet Finale.'),
+    sec('Synergies', 'Turrets help their neighbours. Loop Station and Amp Stack boost the turrets next to them, and some pairs unlock a bonus when they sit side by side. Tap a turret to see what it likes. Plan your board, do not just fill it.'),
+    sec('Re-roll the next drop', 'The small box above DROP shows which turret you will get. Do not like it? Tap the re-roll button beside DROP to draw a different one. Re-rolls are limited and get pricier, so save them for the turret you really need.'),
+    sec('Wave preview', 'Before each wave you can see what is coming, including its modifier and any boss. Use the prep time to place the right turrets, such as splash for swarms and heavy hitters for armour.'),
+    sec('Difficulty', 'Each stage has Encore levels. Higher Encores make the Static tougher and pay more Records and Fans. Start at Encore 0, win with 3 stars, then climb. Every stage is a new challenge, so check the hints on the Tour tab.'),
     sec('The beat', 'The ring on the DROP button closes in with the music. Drop on the beat for a discount and to keep your streak. Kills in a row make a combo that boosts coins.'),
     sec('Between runs', 'Spend Records in the Studio for permanent upgrades and new turrets. Open crates for gear, equip it on the Band tab, upgrade it and merge duplicates into higher rarities. Do daily quests and the daily challenge for diamonds.'),
-    sec('Tips', 'Set turret targeting (First, Last, Strongest, Closest) by tapping a turret. Loop Station and Amp Stack boost their neighbours. Sell weak turrets late to make room. Save hero moves for bosses.'),
+    sec('After a defeat', 'The defeat screen shows what happened: which lane leaked most, which Static got through and a few tips. Press Share to save a picture of your board and show your friends.'),
+    sec('Tips', 'Set turret targeting (First, Last, Strongest, Closest) by tapping a turret. Sell weak turrets late to make room. Save hero moves for bosses.'),
     h('div', { class: 'btnrow' }, btn('Got it', () => m.close(), 'green'))), { wide: true });
 }

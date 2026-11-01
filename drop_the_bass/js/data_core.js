@@ -100,6 +100,44 @@ export const TURRETS = {
 export const TURRET_IDS = Object.keys(TURRETS);
 export const STARTER_TURRETS = Object.keys(TURRETS);   // every turret is in the drop pool from the first run
 
+// ---------------------------------------------------------------- turret synergies
+// Two turrets on ORTHOGONALLY adjacent tiles (up, down, left, right; not diagonal) trigger a pair bonus. These are extra: the
+// neighbour auras of Loop Station and Amp Stack (which reach diagonals) keep working as before.
+// fx.a applies to the turret of type a, fx.b to the turret of type b. Numeric effects scale with the LOWER level of the pair:
+// scale = min(SYN_SCALE_MAX, 1 + SYN_SCALE_PER_LEVEL * (lowerLevel - 1)). Keys in SYN_FLAT never scale.
+// Effect keys: rate dmg range crit (additive fractions), slowedDmg / stunnedDmg (kick shells vs slowed / stunned enemies),
+// stun (extra seconds), spinFloor (Hi-Hat starts spun up), healAny + healEvery (Siren Mic heals at any level every N beams),
+// healChance (Choir Orb burst heal chance), chain (Vinyl records arc to a neighbour), chains (Arc Synth extra jumps), aura (aura strength).
+export const SYN_SCALE_PER_LEVEL = 0.1;
+export const SYN_SCALE_MAX = 1.6;
+export const SYN_FLAT = ['healAny', 'healEvery', 'chain', 'chains'];
+export const SYNERGIES = [
+  { id: 'slow_smash',   a: 'sub',     b: 'kick',    name: 'Slow and Smash',  desc: 'Kick shells hit slowed enemies 25% harder.', fx: { b: { slowedDmg: 0.25 } } },
+  { id: 'sharp_amp',    a: 'cowbell', b: 'amp',     name: 'Sharp and Loud',  desc: 'Cowbell Sniper gets more crit and damage.', fx: { a: { crit: 0.1, dmg: 0.08 } } },
+  { id: 'spin_loop',    a: 'hat',     b: 'loop',    name: 'Looped Roll',     desc: 'Hi-Hat starts spun up and the loop gets louder.', fx: { a: { spinFloor: 0.35 }, b: { aura: 0.1 } } },
+  { id: 'tight_kit',    a: 'snare',   b: 'hat',     name: 'Tight Kit',       desc: 'Snare and Hi-Hat both play 10% faster.', fx: { a: { rate: 0.1 }, b: { rate: 0.1 } } },
+  { id: 'healing_duet', a: 'mic',     b: 'vocal',   name: 'Healing Duet',    desc: 'The beam heals the stage more often.', fx: { a: { healAny: 1, healEvery: 5 }, b: { healChance: 0.1 } } },
+  { id: 'blast_stun',   a: 'horn',    b: 'sub',     name: 'Stun Bass',       desc: 'Air Horn stuns longer and Sub Bass hits harder.', fx: { a: { stun: 0.4 }, b: { dmg: 0.12 } } },
+  { id: 'record_chain', a: 'scratch', b: 'synth',   name: 'Sparking Records', desc: 'Records throw sparks to a nearby enemy.', fx: { a: { chain: 1 }, b: { rate: 0.1 } } },
+  { id: 'shove_smash',  a: 'horn',    b: 'kick',    name: 'Shove and Smash', desc: 'Kick shells hit stunned enemies 30% harder.', fx: { a: { range: 0.06 }, b: { stunnedDmg: 0.3 } } },
+  { id: 'hot_wire',     a: 'synth',   b: 'amp',     name: 'Hot Wire',        desc: 'Arc Synth jumps one more time and hits harder.', fx: { a: { chains: 1, dmg: 0.08 } } },
+  { id: 'duet_crit',    a: 'mic',     b: 'cowbell', name: 'Perfect Pitch',   desc: 'Both land more critical hits.', fx: { a: { crit: 0.06 }, b: { crit: 0.06 } } },
+  { id: 'double_stack', a: 'loop',    b: 'amp',     name: 'Double Stack',    desc: 'Both auras get 15% stronger.', fx: { a: { aura: 0.15 }, b: { aura: 0.15 } } },
+  { id: 'steady_beat',  a: 'snare',   b: 'loop',    name: 'Steady Beat',     desc: 'Snare plays faster with more crit.', fx: { a: { rate: 0.08, crit: 0.05 }, b: { aura: 0.1 } } },
+  { id: 'choir_loop',   a: 'vocal',   b: 'loop',    name: 'Endless Chorus',  desc: 'Choir Orb fires faster and reaches further.', fx: { a: { rate: 0.15, range: 0.05 } } },
+];
+export const SYNERGY_BY_ID = Object.fromEntries(SYNERGIES.map((s) => [s.id, s]));
+// derived: TURRET_PARTNERS[type] = [{ partner, id, name, desc }] so a UI can show "works well with"
+export const TURRET_PARTNERS = (() => {
+  const out = Object.fromEntries(Object.keys(TURRETS).map((id) => [id, []]));
+  for (const s of SYNERGIES) {
+    out[s.a].push({ partner: s.b, id: s.id, name: s.name, desc: s.desc });
+    out[s.b].push({ partner: s.a, id: s.id, name: s.name, desc: s.desc });
+  }
+  return out;
+})();
+export const synergyScale = (lowerLevel) => Math.min(SYN_SCALE_MAX, 1 + SYN_SCALE_PER_LEVEL * (Math.max(1, lowerLevel) - 1));
+
 // ---------------------------------------------------------------- enemies (the Static)
 // hp is a multiplier of the wave's base hp. speed in px per second. armor is flat damage removed per hit (min 25% of the hit goes through).
 export const ENEMIES = {
@@ -263,11 +301,26 @@ export const ECON = {
   critMul: 2.0,
   heroCdRoxor: 30, heroCdJasmin: 34,
   duetWindow: 2.0,
-  rerollCostDiamonds: 3,
+  rerollCostDiamonds: 3,   // remix card reroll (UI pays this when no free reroll is left)
+  dropRerollCoinPct: 0.45, // re-roll the next dropped turret: 45% of the current deploy cost (rounded up)
+  dropRerollGems: 2,       // ... or this many diamonds
   reviveDiamonds: 50,
   hpPerWaveBase: 28,       // base hp of a 'fuzz' on wave 1 (before world and encore multipliers)
   hpGrowth: 1.21,         // per wave
   hpGrowthLate: 1.15,      // after wave 20 (endless)
+};
+
+// ---------------------------------------------------------------- difficulty (Run opts.difficulty, default 'normal')
+// hpMul multiplies enemy health, stageHp is added to the stage health, speedMul multiplies enemy speed, coinMul multiplies kill coins.
+// recordsMul / fansMul are the reward multipliers the meta layer applies to the end-of-run payout (result.rewardMul mirrors them).
+export const DIFFICULTY_IDS = ['easy', 'normal', 'hard'];
+export const DIFFICULTY = {
+  easy:   { id: 'easy',   name: 'Easy',   desc: 'Softer Static, a bigger stage and slower enemies. Rewards -25%.',
+            hpMul: 0.7, stageHp: 6, speedMul: 0.92, coinMul: 1, recordsMul: 0.75, fansMul: 0.75 },
+  normal: { id: 'normal', name: 'Normal', desc: 'The way the band intended.',
+            hpMul: 1, stageHp: 0, speedMul: 1, coinMul: 1, recordsMul: 1, fansMul: 1 },
+  hard:   { id: 'hard',   name: 'Hard',   desc: 'Tougher Static, a smaller stage and faster enemies. Coins +15%, rewards +25%.',
+            hpMul: 1.3, stageHp: -4, speedMul: 1.06, coinMul: 1.15, recordsMul: 1.25, fansMul: 1.25 },
 };
 
 export const fmt = (n) => {

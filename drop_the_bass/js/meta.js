@@ -9,6 +9,9 @@ import {
 } from './data_meta.js';
 import { DAILY_MODS, DAILY_MOD_IDS } from './data_run.js';
 import { makeRng, hashSeed } from './rng.js';
+import * as CORE from './data_core.js';
+import { WEEKLY_GIGS, WEEKLY_WAVES, WEEKLY_REWARD } from './data_meta.js';
+import { cleanName, cleanFriends, addFriend as lbAddFriend, removeFriend as lbRemoveFriend, FRIENDS_MAX } from './lb.js';
 
 const DAY = 86400000;
 export const dayOf = (now) => Math.floor((now - new Date(now).getTimezoneOffset() * 60000) / DAY);
@@ -21,14 +24,14 @@ export function newProfile(now = 0) {
   for (const t of STARTER_TURRETS) turretsUnlocked[t] = true;
   return {
     v: GAME.version, poolV: 2, created: now, lastSeen: now,
-    records: 250, diamonds: 30, fans: 0, fame: 1, name: '', resume: null, boosters: {}, wheel: null,
+    records: 250, diamonds: 30, fans: 0, fame: 1, name: '', resume: null, boosters: {}, wheel: null, friends: [], weekly: { id: '', done: false, best: 0 },
     studio: {}, heroLv: { roxor: 1, jasmin: 1 },
     turretsUnlocked, loadout: STARTER_TURRETS.slice(),
     prog, bossesSeen: {}, encoreCleared: {},
     gear: { items: [], equipped: { head: null, mic: null, body: null, chain: null, feet: null }, uid: 1 },
     outfits: { owned: { roxor: ['default'], jasmin: ['default'] }, worn: { roxor: 'default', jasmin: 'default' } },
     stats: { kills: 0, merges: 0, deploys: 0, runs: 0, wins: 0, bosses: 0, waves: 0, heroUses: 0, bestCombo: 0, perfects: 0, remixes: 0, maxLevel: 0,
-             crates: 0, spins: 0, rushBest: 0, legendary: 0, gearMerges: 0, endless: 0, relics: 0, dailies: 0, duets: 0, flawless: 0, streak: 0, coins: 0 },
+             crates: 0, spins: 0, rushBest: 0, legendary: 0, gearMerges: 0, endless: 0, relics: 0, dailies: 0, duets: 0, flawless: 0, streak: 0, coins: 0, weeklies: 0 },
     achClaimed: {}, starClaimed: {},
     daily: { day: -1, quests: [], rerolled: false, prog: {}, challengeDay: -1, challengeBest: 0 },
     login: { lastDay: -1, streak: 0, claimedDay: -1 },
@@ -37,44 +40,211 @@ export function newProfile(now = 0) {
     story: { intro: false, worlds: {}, ending: false },
     seen: { turrets: {}, enemies: {}, bosses: {}, relics: {} },
     autoMerge: false, autoMergeOn: true,
-    settings: { style: 'doodle', lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1 },
+    settings: { style: 'doodle', lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1, difficulty: 'normal' },
   };
 }
+const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+// number clamp: undefined keeps the default, anything that is not a finite number falls back to lo
+const num = (v, d, lo = 0, hi = Infinity) => (v === undefined ? d : (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo));
+const int = (v, d, lo = 0, hi = Infinity) => Math.floor(num(v, d, lo, hi));
+
+export const DIFFICULTY_IDS = ['easy', 'normal', 'hard'];
+const DIFF_FALLBACK = {
+  easy:   { id: 'easy',   name: 'Easy',   desc: 'Gentler Static. Good for a chill session.' },
+  normal: { id: 'normal', name: 'Normal', desc: 'The standard tour.' },
+  hard:   { id: 'hard',   name: 'Hard',   desc: 'Tougher Static, bigger rewards.' },
+};
+// name and description come from data_core.js DIFFICULTY when it exists, with a safe fallback
+export function difficultyInfo(id) {
+  const t = CORE.DIFFICULTY && isObj(CORE.DIFFICULTY) ? CORE.DIFFICULTY : null;
+  const k = DIFFICULTY_IDS.includes(id) ? id : 'normal';
+  const e = t && isObj(t[k]) ? t[k] : {};
+  return { id: k, name: typeof e.name === 'string' ? e.name : DIFF_FALLBACK[k].name, desc: typeof e.desc === 'string' ? e.desc : DIFF_FALLBACK[k].desc };
+}
+export const difficultyOf = (p) => (p && p.settings && DIFFICULTY_IDS.includes(p.settings.difficulty) ? p.settings.difficulty : 'normal');
+
 export function migrate(p, now = 0) {
   const base = newProfile(now);
-  if (!p || typeof p !== 'object') return base;
+  if (!isObj(p)) return base;
   const out = Object.assign({}, base, p);
-  for (const k of ['settings', 'stats', 'tutorial', 'story', 'seen', 'login', 'daily', 'crate', 'outfits', 'gear', 'heroLv']) out[k] = Object.assign({}, base[k], p[k] || {});
+  for (const k of ['settings', 'stats', 'tutorial', 'story', 'seen', 'login', 'daily', 'crate', 'outfits', 'gear', 'heroLv', 'weekly']) out[k] = Object.assign({}, base[k], isObj(p[k]) ? p[k] : {});
   out.prog = Object.assign({}, base.prog);
-  for (const w of WORLDS) out.prog[w.id] = Object.assign({}, base.prog[w.id], (p.prog || {})[w.id] || {});
-  out.turretsUnlocked = Object.assign({}, base.turretsUnlocked, p.turretsUnlocked || {});
+  for (const w of WORLDS) out.prog[w.id] = Object.assign({}, base.prog[w.id], isObj((p.prog || {})[w.id]) ? p.prog[w.id] : {});
+  out.turretsUnlocked = Object.assign({}, base.turretsUnlocked, isObj(p.turretsUnlocked) ? p.turretsUnlocked : {});
+  // ---- sanitise types (a damaged or hand-edited save must never poison the game with NaN or strings)
+  out.records = int(p.records, base.records); out.diamonds = int(p.diamonds, base.diamonds); out.fans = int(p.fans, base.fans);
+  out.fame = int(p.fame, base.fame, 1, FAME_MAX);
+  out.created = num(p.created, base.created); out.lastSeen = num(p.lastSeen, base.lastSeen);
+  out.name = typeof p.name === 'string' ? cleanName(p.name) : '';
+  out.friends = cleanFriends(p.friends);
+  out.resume = isObj(p.resume) ? p.resume : null;
+  out.boosters = isObj(p.boosters) ? p.boosters : {};
+  out.wheel = isObj(p.wheel) ? p.wheel : null;
+  out.autoMerge = !!p.autoMerge; out.autoMergeOn = p.autoMergeOn === undefined ? true : !!p.autoMergeOn;
+  out.pendingCrates = (Array.isArray(p.pendingCrates) ? p.pendingCrates : []).filter((c) => typeof c === 'string' && CRATES[c]);
+  out.studio = {};
+  if (isObj(p.studio)) for (const id of STUDIO_IDS) { const l = int(p.studio[id], 0, 0, STUDIO[id].max); if (l > 0) out.studio[id] = l; }
+  for (const who of ['roxor', 'jasmin']) out.heroLv[who] = int(out.heroLv[who], 1, 1, HERO_MAX);
+  for (const k of Object.keys(base.stats)) out.stats[k] = num(out.stats[k], base.stats[k]);
+  for (const k of Object.keys(base.crate)) out.crate[k] = int(out.crate[k], base.crate[k]);
+  for (const w of WORLDS) {
+    const pr = out.prog[w.id], bs = base.prog[w.id];
+    pr.cleared = !!pr.cleared; pr.bestEndless = int(pr.bestEndless, 0); pr.bestWave = int(pr.bestWave, 0);
+    pr.stars = bs.stars.map((_, i) => int(Array.isArray(pr.stars) ? pr.stars[i] : 0, 0, 0, 3));
+  }
+  const s = out.settings, bsn = base.settings;
+  s.music = num(s.music, bsn.music, 0, 1); s.sfx = num(s.sfx, bsn.sfx, 0, 1); s.speed = num(s.speed, 1, 1, 3);
+  for (const k of ['lowfx', 'shake', 'numbers', 'vibrate', 'reduce', 'beat']) s[k] = !!s[k];
+  s.style = s.style === 'classic' ? 'classic' : 'doodle';
+  s.difficulty = DIFFICULTY_IDS.includes(s.difficulty) ? s.difficulty : 'normal';
+  out.weekly = { id: typeof out.weekly.id === 'string' ? out.weekly.id : '', done: !!out.weekly.done, best: int(out.weekly.best, 0) };
+  out.daily.day = num(out.daily.day, -1, -1); out.daily.challengeDay = num(out.daily.challengeDay, -1, -1); out.daily.challengeBest = int(out.daily.challengeBest, 0);
+  if (!Array.isArray(out.daily.quests)) out.daily.quests = [];
+  out.daily.quests = out.daily.quests.filter((q) => isObj(q) && typeof q.id === 'string');
+  if (!isObj(out.daily.prog)) out.daily.prog = {};
   if (!Array.isArray(out.loadout) || !out.loadout.length) out.loadout = STARTER_TURRETS.slice();
   if (!p.poolV) { out.loadout = STARTER_TURRETS.slice(); out.poolV = 2; }   // older saves had a 4 to 8 turret pool: every drop now draws from all of them
   out.loadout = out.loadout.filter((t) => TURRETS[t] && out.turretsUnlocked[t]);
   if (!out.loadout.length) out.loadout = STARTER_TURRETS.slice();
   if (!Array.isArray(out.gear.items)) out.gear.items = [];
-  out.gear.items = out.gear.items.filter((g) => g && GEAR[g.tpl] && RARITY[g.rarity]);
-  out.gear.equipped = Object.assign({}, base.gear.equipped, p.gear && p.gear.equipped || {});
-  for (const s of SLOTS) if (out.gear.equipped[s] != null && !out.gear.items.some((g) => g.uid === out.gear.equipped[s])) out.gear.equipped[s] = null;
+  out.gear.items = out.gear.items.filter((g) => isObj(g) && GEAR[g.tpl] && RARITY[g.rarity]).map((g) => Object.assign({}, g, { lvl: int(g.lvl, 1, 1, GEAR_MAX_LEVEL) }));
+  out.gear.equipped = Object.assign({}, base.gear.equipped, isObj(p.gear && p.gear.equipped) ? p.gear.equipped : {});
+  for (const sl of SLOTS) if (out.gear.equipped[sl] != null && !out.gear.items.some((g) => g.uid === out.gear.equipped[sl])) out.gear.equipped[sl] = null;
+  out.gear.uid = Math.max(int(out.gear.uid, 1, 1), 1 + out.gear.items.reduce((m, g) => Math.max(m, +g.uid || 0), 0));
   out.v = GAME.version;
   return out;
 }
 export function serialize(p) { return JSON.stringify(p); }
+// a raw (already JSON parsed) value that plausibly is a Drop the Bass save: an object with stats and either prog or records
+export function looksLikeSave(raw) { return isObj(raw) && isObj(raw.stats) && (isObj(raw.prog) || typeof raw.records === 'number'); }
 export function parseSave(str, now = 0) {
-  try { return migrate(JSON.parse(str), now); } catch (e) { return null; }
+  try {
+    if (typeof str !== 'string' || !str.trim()) return null;
+    const raw = JSON.parse(str);
+    return looksLikeSave(raw) ? migrate(raw, now) : null;
+  } catch (e) { return null; }
 }
+// repair a live profile in place (NaN, strings in number fields...) so the next save can pass validation
+export function repairProfile(p, now = 0) {
+  const fixed = migrate(JSON.parse(JSON.stringify(p, (k, v) => (typeof v === 'number' && !Number.isFinite(v) ? 0 : v))), now);
+  for (const k of Object.keys(p)) delete p[k];
+  Object.assign(p, fixed);
+  return p;
+}
+
+// ---- save storage: validate-then-commit with a second copy of the last good save
+export const SAVE_KEY = GAME.saveKey;
+export const SAVE_BAK_KEY = GAME.saveKey + '_bak';         // last good save (no run snapshot)
+export const SAVE_PREV_KEY = GAME.saveKey + '_prev';       // the profile that was replaced by an import or a reset
+export const SAVE_CORRUPT_KEY = GAME.saveKey + '_corrupt'; // an unreadable main save, kept for manual rescue
+const safeGet = (store, k) => { try { return store.getItem(k); } catch (e) { return null; } };
+const safeSet = (store, k, v) => { try { store.setItem(k, v); return true; } catch (e) { return false; } };
+export function progressScore(p) {
+  if (!isObj(p)) return 0;
+  const st = isObj(p.stats) ? p.stats : {}, studio = isObj(p.studio) ? p.studio : {};
+  let n = (+st.runs || 0) * 3 + (+st.kills || 0) / 200 + (+p.fame || 0) * 10 + (+p.fans || 0) / 50;
+  for (const k of Object.keys(studio)) n += +studio[k] || 0;
+  if (isObj(p.prog)) for (const w of Object.keys(p.prog)) if (p.prog[w] && p.prog[w].cleared) n += 25;
+  return n;
+}
+// Serialise, parse it back and check the shape BEFORE touching storage. A bad profile never overwrites a good save.
+// Returns { ok, reason?, bytes? }. opts.force = replace the backup even if the new save has less progress (reset, import).
+export function commitSave(store, p, opts = {}) {
+  let str, raw;
+  try { str = serialize(p); raw = JSON.parse(str); } catch (e) { return { ok: false, reason: 'serialize' }; }
+  if (!looksLikeSave(raw)) return { ok: false, reason: 'shape' };
+  for (const k of ['records', 'diamonds', 'fans', 'fame']) if (typeof raw[k] !== 'number' || !Number.isFinite(raw[k]) || raw[k] < 0) return { ok: false, reason: 'bad_' + k };
+  if (!isObj(raw.settings) || !isObj(raw.studio) || !isObj(raw.gear)) return { ok: false, reason: 'shape' };
+  // the backup first (without the run snapshot, so it stays small), unless it would replace a far more advanced one
+  const slim = Object.assign({}, raw, { resume: null });
+  const oldBak = safeGet(store, SAVE_BAK_KEY);
+  let keepBak = false;
+  if (oldBak && !opts.force) { const ob = parseSave(oldBak, 0); if (ob && progressScore(ob) > 20 && progressScore(slim) < progressScore(ob) * 0.5) keepBak = true; }
+  if (!keepBak) safeSet(store, SAVE_BAK_KEY, JSON.stringify(slim));
+  if (!safeSet(store, SAVE_KEY, str)) return { ok: false, reason: 'storage' };
+  if (safeGet(store, SAVE_KEY) !== str) return { ok: false, reason: 'verify' };
+  return { ok: true, bytes: str.length, keptBackup: keepBak };
+}
+// Load: the main save, else the backup (recovered:true), else a new profile. A corrupt main save is kept under SAVE_CORRUPT_KEY.
+export function loadSave(store, now = 0) {
+  const rawMain = safeGet(store, SAVE_KEY), rawBak = safeGet(store, SAVE_BAK_KEY);
+  const main = rawMain ? parseSave(rawMain, now) : null;
+  if (main) return { profile: main, source: 'main', recovered: false, corrupt: false, hadSave: true };
+  const corrupt = !!rawMain;
+  if (corrupt) safeSet(store, SAVE_CORRUPT_KEY, rawMain);
+  const bak = rawBak ? parseSave(rawBak, now) : null;
+  if (bak) return { profile: bak, source: 'backup', recovered: true, corrupt, hadSave: true };
+  return { profile: newProfile(now), source: 'new', recovered: false, corrupt, hadSave: false };
+}
+
+// ---- save code: DTB1.<base64>.<checksum>. Old raw base64 codes still import. The run snapshot is left out.
+const b64enc = (s) => (typeof btoa === 'function' ? btoa(unescape(encodeURIComponent(s))) : Buffer.from(s, 'utf8').toString('base64'));
+const b64dec = (s) => (typeof atob === 'function' ? decodeURIComponent(escape(atob(s))) : Buffer.from(s, 'base64').toString('utf8'));
+export function checksum(s) { let a = 0x811c9dc5; for (let i = 0; i < s.length; i++) { a ^= s.charCodeAt(i); a = Math.imul(a, 16777619) >>> 0; } return a.toString(36); }
 export function exportCode(p) {
-  const s = JSON.stringify(p);
-  return typeof btoa === 'function' ? btoa(unescape(encodeURIComponent(s))) : Buffer.from(s, 'utf8').toString('base64');
+  const s = JSON.stringify(Object.assign({}, p, { resume: null }));
+  const body = b64enc(s);
+  return 'DTB1.' + body + '.' + checksum(body);
 }
 export function importCode(code, now = 0) {
   try {
-    const s = typeof atob === 'function' ? decodeURIComponent(escape(atob(code.trim()))) : Buffer.from(code.trim(), 'base64').toString('utf8');
-    const p = JSON.parse(s);
-    if (!p || typeof p !== 'object' || !p.stats) return null;
-    return migrate(p, now);
+    if (typeof code !== 'string') return null;
+    let c = code.replace(/[\s"'`]/g, '');
+    if (!c) return null;
+    if (c.startsWith('DTB1.')) {
+      const parts = c.split('.');
+      if (parts.length !== 3 || checksum(parts[1]) !== parts[2]) return null;   // truncated or edited
+      c = parts[1];
+    }
+    c = c.replace(/-/g, '+').replace(/_/g, '/');
+    const raw = JSON.parse(b64dec(c));
+    if (!looksLikeSave(raw)) return null;
+    const p = migrate(raw, now); p.resume = null;
+    return p;
   } catch (e) { return null; }
 }
+
+// ---- resume safety net: reject a run snapshot that cannot be played (NaN, missing fields, born times after the run clock)
+const fin = (v) => typeof v === 'number' && Number.isFinite(v);
+export function checkResume(r) {
+  const bad = (reason) => ({ ok: false, reason });
+  if (!isObj(r)) return bad('no resume');
+  if (!isObj(r.cfg) || typeof r.cfg.mode !== 'string' || !WORLD_BY_ID[r.cfg.world]) return bad('missing run setup');
+  const s = r.snap;
+  if (!isObj(s)) return bad('missing snapshot');
+  if (!isObj(s.opts) || !WORLD_BY_ID[s.opts.world]) return bad('missing stage');
+  for (const k of ['t', 'coins', 'stageHp', 'stageMax', 'wave', 'cleared', 'hype', 'hypeNeed', 'uid', 'rngState', 'prepT']) if (!fin(s[k])) return bad('bad ' + k);
+  if (s.t < 0 || s.coins < 0 || s.stageMax <= 0 || s.stageHp < 0 || s.stageHp > s.stageMax + 50 || s.wave < 0 || s.wave > 500) return bad('impossible numbers');
+  if (s.phase !== 'prep' && s.phase !== 'wave') return bad('bad phase');
+  if (!Array.isArray(s.turrets) || !Array.isArray(s.enemies) || !Array.isArray(s.spawnQ) || !Array.isArray(s.projectiles) || !Array.isArray(s.loadout)) return bad('missing lists');
+  if (!isObj(s.mods) || !isObj(s.heroLv)) return bad('missing mods');
+  if (s.turrets.length > 70) return bad('too many turrets');
+  const slots = new Set();
+  for (const t of s.turrets) {
+    if (!isObj(t) || !TURRETS[t.type]) return bad('unknown turret');
+    if (!fin(t.level) || t.level < 1 || t.level > 7 || !fin(t.slot) || t.slot < 0 || slots.has(t.slot)) return bad('bad turret');
+    if (!fin(t.x) || !fin(t.y) || !fin(t.born) || !fin(t.cd)) return bad('bad turret numbers');
+    if (t.born > s.t + 0.001) return bad('turret born after the run clock');
+    slots.add(t.slot);
+  }
+  for (const e of s.enemies) {
+    if (!isObj(e) || typeof e.type !== 'string') return bad('bad enemy');
+    if (!fin(e.hp) || !fin(e.maxHp) || e.maxHp <= 0 || !fin(e.x) || !fin(e.y) || !fin(e.d) || !fin(e.speed)) return bad('bad enemy numbers');
+  }
+  for (const q of s.spawnQ) if (!isObj(q) || !fin(q.at) || typeof q.type !== 'string') return bad('bad spawn queue');
+  return { ok: true };
+}
+export function resumeSummary(r) {
+  if (!isObj(r)) return null;
+  const w = WORLD_BY_ID[r.world] || WORLD_BY_ID[r.cfg && r.cfg.world];
+  const turrets = r.snap && Array.isArray(r.snap.turrets) ? r.snap.turrets.length : 0;
+  return { stage: w ? w.name : 'Unknown stage', wave: +r.wave || 0, turrets, mode: r.mode || (r.cfg && r.cfg.mode) || 'story' };
+}
+
+// ---- friends (names only; pure helpers live in lb.js)
+export function addFriend(p, name) { const r = lbAddFriend(p.friends, name, p.name); if (r.ok) p.friends = r.list; return r; }
+export function removeFriend(p, name) { p.friends = lbRemoveFriend(p.friends, name); return p.friends; }
+export { FRIENDS_MAX };
 
 // ------------------------------------------------------------------------------------------------ studio, heroes, turrets
 export const studioLevel = (p, id) => p.studio[id] || 0;
@@ -307,7 +477,7 @@ export function computeRunSetup(p) {
     for (const l of gearStatLines(g)) fx.push(...STATS[l.stat].fx(l.value));
   }
   for (const b of setBonuses(p)) fx.push(...STATS[b.stat].fx(b.v));
-  return { baseFx: fx, heroLv: Object.assign({}, p.heroLv), loadout: p.loadout.slice(), autoMerge: p.autoMerge, autoMergeOn: p.autoMergeOn };
+  return { baseFx: fx, heroLv: Object.assign({}, p.heroLv), loadout: p.loadout.slice(), autoMerge: p.autoMerge, autoMergeOn: p.autoMergeOn, difficulty: difficultyOf(p) };
 }
 
 // ------------------------------------------------------------------------------------------------ daily: login, quests, challenge
@@ -368,6 +538,27 @@ export function dailyChallenge(p, now) {
   const maxW = highestUnlockedWorld(p);
   const world = WORLDS[Math.floor(r.next() * (maxW + 1))].id;
   return { day, mod, world, seed: hashSeed('dailyseed' + day), waves: 15, done: p.daily.challengeDay === day };
+}
+// ---- Weekly Gig: one fixed run per ISO week (UTC), same seed and mods for everybody, 25 waves, one big reward claim per week
+export function isoWeek(now) {
+  const d = new Date(now), t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const dow = (new Date(t).getUTCDay() + 6) % 7;                 // Monday = 0
+  const thu = t + (3 - dow) * DAY, year = new Date(thu).getUTCFullYear();
+  const week = Math.floor((thu - Date.UTC(year, 0, 1)) / DAY / 7) + 1;
+  return { year, week, id: year + '-W' + String(week).padStart(2, '0'), start: t - dow * DAY, end: t - dow * DAY + 7 * DAY };
+}
+export function weeklyGig(p, now) {
+  const w = isoWeek(now);
+  const gig = WEEKLY_GIGS[(w.year * 53 + w.week) % WEEKLY_GIGS.length];
+  const mine = p && p.weekly && p.weekly.id === w.id ? p.weekly : null;
+  return { id: w.id, week: w.week, gig, name: gig.name, mod: gig.mod, world: gig.world, extra: gig.extra, seed: hashSeed('weekly' + w.id), waves: WEEKLY_WAVES,
+    done: !!(mine && mine.done), best: mine ? mine.best : 0, endsAt: w.end, msLeft: Math.max(0, w.end - now) };
+}
+export function weeklyRewards(result, first) {
+  const R = WEEKLY_REWARD, c = result.cleared;
+  const o = { diamonds: R.diamonds + c * R.perWave + (result.won ? R.winDiamonds : 0), records: R.records + c * R.perWaveRecords, fans: R.fans, crate: (result.won || c >= R.crateMinWaves) ? R.crate : null };
+  if (!first) { o.diamonds = 0; o.crate = null; o.records = 0; o.fans = 0; }
+  return o;
 }
 export function offlineRate(p) { return 18 + 6 * p.fame + 14 * studioLevel(p, 'stream'); }
 export function offlineCapHours(p) { return 6 + 2 * studioLevel(p, 'stream'); }
@@ -470,6 +661,17 @@ export function applyRunResult(p, result, rng, now = 0) {
   } else if (result.mode === 'rush') {
     S.rushBest = Math.max(S.rushBest || 0, result.bossKills);
     out.diamonds += result.bossKills * 3 + (result.won ? 25 : 0);
+  } else if (result.mode === 'daily' && result.weekly) {
+    const wid = String(result.weekId || '');
+    const first = !(p.weekly && p.weekly.id === wid && p.weekly.done);
+    const wr = weeklyRewards(result, first);
+    out.challenge = { first, weekly: true, bonus: { diamonds: wr.diamonds, records: wr.records, fans: wr.fans, crate: wr.crate } };
+    if (first) {
+      S.weeklies = (S.weeklies || 0) + 1;
+      out.diamonds += wr.diamonds; records += wr.records; fans += wr.fans;
+      if (wr.crate) p.pendingCrates = (p.pendingCrates || []).concat([wr.crate]);
+    } else { records = Math.round(records * 0.5); fans = Math.round(fans * 0.5); }
+    p.weekly = { id: wid, done: true, best: Math.max(p.weekly && p.weekly.id === wid ? p.weekly.best : 0, result.cleared) };
   } else if (result.mode === 'daily') {
     out.challenge = { first: p.daily.challengeDay !== dayOf(now) };
     if (out.challenge.first) {

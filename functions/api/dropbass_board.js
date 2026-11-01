@@ -6,6 +6,7 @@
 //
 //   GET  /api/dropbass_board?b=endless:<world>   -> { top:[{name,score,t},...] }   all-time, per stage
 //   GET  /api/dropbass_board?b=daily             -> { top:[...] }                  today's daily challenge (UTC day)
+//   GET  /api/dropbass_board?b=weekly            -> { top:[...] }                  this ISO week's Weekly Gig (UTC week, 25 waves)
 //   POST /api/dropbass_board {b,name,score}      -> validates and clamps, keeps each name's best, 30s per-IP write
 //                                                   throttle, caps 50, returns { top }.
 // The board id is whitelisted: client input can never build an arbitrary KV key.
@@ -18,9 +19,16 @@ const kv = (env) => env.BOARD || env.board || env.Board || null;
 const WORLDS = ['garage', 'busk', 'club', 'festival', 'arena'];
 const CAP = 50;
 const p2 = (n) => String(n).padStart(2, '0');
+// ISO 8601 week id (UTC), e.g. '2026-W44'. The client computes the same id for the Weekly Gig seed.
+export function isoWeekId(now) {
+  const d = new Date(now), t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const dow = (new Date(t).getUTCDay() + 6) % 7, thu = t + (3 - dow) * 86400000, year = new Date(thu).getUTCFullYear();
+  return year + '-W' + p2(Math.floor((thu - Date.UTC(year, 0, 1)) / 86400000 / 7) + 1);
+}
 
 function boardKey(b, now) {
   if (b === 'daily') { const d = new Date(now); return { key: 'dtb:d:' + d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate()), ttl: 3 * 86400, max: 20 }; }
+  if (b === 'weekly') return { key: 'dtb:w:' + isoWeekId(now), ttl: 15 * 86400, max: 25 };
   if (typeof b === 'string' && b.startsWith('endless:') && WORLDS.includes(b.slice(8))) return { key: 'dtb:e:' + b.slice(8), ttl: 0, max: 2000 };
   return null;
 }
@@ -43,7 +51,7 @@ export async function onRequestPost({ request, env }) {
   let body; try { body = await request.json(); } catch (_) { return json({ error: 'bad json' }, 400); }
   const k = boardKey(body.b, Date.now());
   if (!k) return json({ error: 'bad board' }, 400);
-  const name = String(body.name || '').replace(/[^\w \-.']/g, '').trim().slice(0, 16) || 'Anonymous';
+  const name = String(body.name || '').replace(/[^\w \-.']/g, '').replace(/\s+/g, ' ').trim().slice(0, 16) || 'Anonymous';
   const score = Math.floor(+body.score);
   if (!Number.isFinite(score) || score < 1 || score > k.max) return json({ error: 'bad score' }, 400);
   const top = JSON.parse((await KV.get(k.key)) || '[]');
