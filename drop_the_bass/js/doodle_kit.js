@@ -98,6 +98,50 @@ export const GLYPHS = {
   ',': [[2, 5.4, 1.4, 6.6]]
 };
 
+// ---- accents and typography for da / nl / de: built from the base glyphs plus small crayon marks drawn ABOVE the cap line (y < 0) or
+// below the baseline, so the 4 x 6 body and the advance never change. The font is upper case only (Pen.txt upper-cases, ß becomes the
+// capital sharp s), the lower case keys are aliases so a direct lookup of any letter of these languages works too.
+const MARKS = {
+  uml: [[1, -1.7, 1, -1.4], [3, -1.7, 3, -1.4]],
+  acute: [[2.9, -2.4, 1.5, -.6]],
+  grave: [[1.1, -2.4, 2.5, -.6]],
+  circ: [[.9, -.8, 2, -2.4, 3.1, -.8]],
+  ring: [arc(2, -1.8, 1, 1, 0, 360, 10)],
+  tilde: [[.6, -1.2, 1.3, -2.2, 2.7, -1.2, 3.4, -2.2]],
+};
+const withMark = (base, mark, dx = 0) => GLYPHS[base].concat(MARKS[mark].map((st) => (dx ? st.map((v, i) => (i % 2 ? v : v + dx)) : st)));
+const ACCENTED = {
+  'Ä': ['A', 'uml'], 'Ö': ['O', 'uml'], 'Ü': ['U', 'uml'], 'Ë': ['E', 'uml'], 'Ï': ['I', 'uml'], 'Ÿ': ['Y', 'uml'],
+  'Á': ['A', 'acute'], 'É': ['E', 'acute'], 'Í': ['I', 'acute'], 'Ó': ['O', 'acute'], 'Ú': ['U', 'acute'],
+  'À': ['A', 'grave'], 'È': ['E', 'grave'], 'Ì': ['I', 'grave'], 'Ò': ['O', 'grave'], 'Ù': ['U', 'grave'],
+  'Â': ['A', 'circ'], 'Ê': ['E', 'circ'], 'Î': ['I', 'circ'], 'Ô': ['O', 'circ'], 'Û': ['U', 'circ'],
+  'Å': ['A', 'ring'], 'Ñ': ['N', 'tilde'],
+};
+for (const k in ACCENTED) GLYPHS[k] = withMark(ACCENTED[k][0], ACCENTED[k][1]);
+GLYPHS['Ç'] = GLYPHS['C'].concat([[2.1, 6, 2.2, 6.9, 1.2, 7.5]]);
+GLYPHS['Ø'] = GLYPHS['O'].concat([[3.8, .5, .2, 5.5]]);
+GLYPHS['Æ'] = [[0, 6, 1.9, 0], [.6, 4.2, 2.1, 4.2], [4, 0, 1.9, 0, 1.9, 6, 4, 6], [1.9, 3, 3.4, 3]];
+GLYPHS['Œ'] = [arc(1.9, 3, 1.9, 3, -90, 270), [4, 0, 2.1, 0, 2.1, 6, 4, 6], [2.1, 3, 3.5, 3]];
+GLYPHS['ẞ'] = [[0, 6, 0, 1.9].concat(arc(1.8, 1.9, 1.8, 1.9, 180, 380, 10), [2.6, 3.1, 1.2, 3.4], arc(2, 4.7, 2, 1.4, -80, 105, 10))];
+GLYPHS['ß'] = GLYPHS['ẞ'];
+GLYPHS["'"] = [[2.3, 0, 1.8, 2]];
+GLYPHS['"'] = [[1.2, 0, .8, 2], [3.2, 0, 2.8, 2]];
+GLYPHS['\u2019'] = [[2.4, 0, 2.4, .7, 1.7, 2]];
+GLYPHS['\u2018'] = [[2.4, 2, 2.4, 1.3, 1.7, 0]];
+GLYPHS['\u201A'] = [[2.4, 5.3, 2.4, 6, 1.7, 7.2]];
+GLYPHS['\u201C'] = [GLYPHS['\u2018'][0].map((v, i) => (i % 2 ? v : v - .9)), GLYPHS['\u2018'][0].map((v, i) => (i % 2 ? v : v + 1))];
+GLYPHS['\u201D'] = [GLYPHS['\u2019'][0].map((v, i) => (i % 2 ? v : v - .9)), GLYPHS['\u2019'][0].map((v, i) => (i % 2 ? v : v + 1))];
+GLYPHS['\u201E'] = [GLYPHS['\u201A'][0].map((v, i) => (i % 2 ? v : v - .9)), GLYPHS['\u201A'][0].map((v, i) => (i % 2 ? v : v + 1))];
+GLYPHS['\u00AB'] = [[2.2, 1.8, .4, 3, 2.2, 4.2], [3.9, 1.8, 2.1, 3, 3.9, 4.2]];
+GLYPHS['\u00BB'] = [[.1, 1.8, 1.9, 3, .1, 4.2], [1.8, 1.8, 3.6, 3, 1.8, 4.2]];
+GLYPHS['\u20AC'] = [arc(2.5, 3, 1.8, 2.7, -45, -315), [0, 2.2, 3.1, 2.2], [0, 3.8, 3.1, 3.8]];
+GLYPHS['\u00B0'] = [arc(2, 1, 1, 1, 0, 360, 10)];
+GLYPHS['\u2026'] = [[.6, 5.5, .6, 5.7], [2, 5.5, 2, 5.7], [3.4, 5.5, 3.4, 5.7]];
+GLYPHS['\u00B7'] = [[2, 3, 2, 3.2]];
+for (const k of Object.keys(GLYPHS)) { const lo = k.toLowerCase(); if (lo !== k && lo.length === 1 && !GLYPHS[lo]) GLYPHS[lo] = GLYPHS[k]; }
+// the characters the three languages need, for tests and tools
+export const STROKE_EXTRA = 'ÆØÅÄÖÜẞÉÈÊËÏÓÚÁÍæøåäöüßéèêëïóúáí\'"\u2019\u2018\u201C\u201D\u201E\u00AB\u00BB\u20AC';
+
 export class Pen {
   // sc is the scale the ctx is drawn at (strokes are kept the same on-screen width); seed picks the doodle
   constructor(ctx, seed = 1, sc = 1) { this.ctx = ctx; this.sc = sc || 1; this.s = (seed | 0) || 1; }
@@ -157,7 +201,7 @@ export class Pen {
   }
   // hand-made text. o: align 'c'|'r', rot, out (outline colour), ow, w (stroke), adv, rainbow []
   txt(str, x, y, size, col, o = {}) {
-    str = String(str).toUpperCase(); const u = size / 6, adv = (o.adv || 5.2) * u;
+    str = String(str).replace(/ß/g, '\u1E9E').toUpperCase(); const u = size / 6, adv = (o.adv || 5.2) * u;
     const wTot = str.length * adv - 1.2 * u, dx = o.align === 'c' ? -wTot / 2 : o.align === 'r' ? -wTot : 0;
     const lw = o.w || Math.max(2.2, size * 0.15), jj = Math.min(1.4, size * 0.04 + 0.3);
     const ctx = this.ctx, sv = this.sc; this.sc = 1; ctx.save(); ctx.translate(x, y); ctx.rotate(o.rot || 0);

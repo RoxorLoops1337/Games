@@ -15,5 +15,13 @@ export const glass = (...a) => H().glass(...a);
 export const button = (...a) => H().button(...a);
 export const liquidBar = (...a) => H().liquidBar(...a);
 export const bezel = (...a) => H().bezel(...a);
-export const text = (...a) => H().text(...a);
+// o.maxW (fit to width) works in both styles: the doodle HUD does it itself, the classic one is fitted here with the same helper
+export const text = (ctx, s, x, y, size, color, align, weight, o) => {
+  if (o && o.maxW && !isDoodle()) {
+    const f = D.fitText(ctx, s, size, o.maxW, o.minScale, (c, str, sz) => { c.save(); c.font = '900 ' + sz + 'px ' + FONT; const w = c.measureText ? c.measureText(str).width : str.length * sz * 0.55; c.restore(); return w; });
+    return C.text(ctx, f.s, x, y, f.size, color, align, weight, o);
+  }
+  return H().text(ctx, s, x, y, size, color, align, weight, o);
+};
+export const fitText = (...a) => D.fitText(...a);
 export const wrapText = (...a) => H().wrapText(...a);

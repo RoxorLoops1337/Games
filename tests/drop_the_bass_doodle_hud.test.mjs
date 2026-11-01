@@ -113,4 +113,20 @@ ok(!readFileSync(new URL('../drop_the_bass/ui_doodle.css', import.meta.url), 'ut
   ok(DD.POOL_HIT.w >= 300 && DD.POOL_HIT.h >= 30, 'pool strip tap area is wide and as tall as the layout allows');
 }
 
+
+// ---- fit to width (long German and Dutch strings): scales down to the minimum, then cuts with an ellipsis; English that fits is untouched
+{
+  const c = mock();
+  const same = DH.fitText(c, 'Wave 3', 20, 400);
+  ok(same.s === 'Wave 3' && same.size === 20, 'text that fits is left alone');
+  const small = DH.fitText(c, 'Naechste Welle beginnen', 18, 150);
+  ok(small.size < 18 && small.size >= 18 * 0.6 - 0.01, 'long text shrinks, never below the minimum scale');
+  const cut = DH.fitText(c, 'Eine sehr lange deutsche Beschriftung ohne Ende', 18, 60);
+  ok(cut.s.endsWith('\u2026') && DH.measureStr(c, cut.s, cut.size) <= 60, 'text that cannot fit is cut with an ellipsis');
+  const t0 = c.__st.calls; DH.text(c, 'Eine sehr lange deutsche Beschriftung', 10, 10, 16, '#ffffff', 'left', 900, { maxW: 80 }); HX.text(c, 'Eine sehr lange deutsche Beschriftung', 10, 10, 16, '#ffffff', 'left', 900, { maxW: 80 });
+  ok(c.__st.calls > t0 && c.__st.nan === 0, 'text with maxW draws in both styles');
+  DH.wrapText(c, 'Eine sehr lange deutsche Beschriftung die ueber viele Zeilen laeuft und nicht in zwei Zeilen passt', 10, 10, 60, 12, 15, '#000', 'left', 2);
+  ok(c.__st.nan === 0, 'wrapText with maxLines draws');
+}
+
 console.log('drop_the_bass doodle_hud: ' + n + ' checks passed');

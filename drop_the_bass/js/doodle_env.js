@@ -18,6 +18,9 @@
 import { C, Pen, arc, rect, star, heart, makeCanvas as kitCanvas, setScale, getScale } from './doodle_kit.js';
 import { BOARD_X, BOARD_Y, BOARD_W, BOARD_H, TILE, COLS, ROWS, WORLD_BY_ID, MAPS, buildMap, laneAt, tileCx, tileCy } from './data_core.js';
 import { drawHero } from './doodle_heroes.js';
+import { t, getLang } from './i18n.js';
+const wt = (id) => String((WORLD_BY_ID[id] || { name: id }).name).toUpperCase();   // the world sign on a backdrop follows the language
+const wf = (id) => Math.min(1, 12 / Math.max(1, wt(id).length));
 
 export const makeCanvas = kitCanvas;
 const TAU = Math.PI * 2;
@@ -218,7 +221,7 @@ const PAINT = {
   garage(p, c, w, h) {
     p.shp(rect(w * 0.2, h * 0.04, w * 0.6, h * 0.17), '#d9d3c3', '#7d7688', 3, { gap: 9, alpha: 0.5 });
     for (let i = 1; i < 5; i++) p.ln([w * 0.2, h * (0.04 + i * 0.034), w * 0.8, h * (0.04 + i * 0.034)], '#9e97aa', 2.4, false, 0.8);
-    if (!BAKE_THUMB) p.txt('GARAGE DAYS', w * 0.5, h * 0.265, Math.min(46, w * 0.09), C.orange, { align: 'c', out: INK, ow: 5 });
+    if (!BAKE_THUMB) p.txt(wt('garage'), w * 0.5, h * 0.265, Math.min(46, w * 0.09) * wf('garage'), C.orange, { align: 'c', out: INK, ow: 5 });
     c.fillStyle = 'rgba(138,90,43,0.2)'; c.beginPath(); const sx = w * 0.7, sy = h * 0.78; for (let i = 0; i <= 14; i++) { const a = i / 14 * TAU, r = 70 + hn(i + 4) * 38; c.lineTo(sx + Math.cos(a) * r * 1.3, sy + Math.sin(a) * r * 0.8); } c.fill();
     drumProp(p, w * 0.06, h * 0.4, 70, C.red); amp(p, w, h); guitarProp(p, w * 0.93, h * 0.58, 90, -0.4); cymbalProp(p, w * 0.07, h * 0.62, 70);
     for (let r = 0; r < 7; r++) for (let k = 0; k < 10; k++) { const bx = w * 0.12 + k * w * 0.077 + (r % 2) * 18, by = h * 0.86 + r * 14; if (bx < w * 0.93 && by < h - 8) p.hatch(rect(bx, by, w * 0.068, 10), '#d98a63', 6, 0.1, 0.35); }
@@ -231,7 +234,7 @@ const PAINT = {
     let x = -10; for (let i = 0; x < w; i++) { const bw = 70 + hn(i * 3 + 9) * 80, bh = h * (0.16 + hn(i * 5 + 4) * 0.2); p.shp(rect(x, h * 0.6 - bh, bw, bh), '#6f82a6', INK, 2.8, { gap: 8, alpha: 0.55 }); for (let r = 0; r < Math.floor(bh / 42); r++) for (let k = 0; k < Math.floor(bw / 30); k++) if (hn(i * 17 + r * 5 + k) > 0.4) p.shp(rect(x + 10 + k * 28, h * 0.6 - bh + 12 + r * 40, 14, 20), C.yellow, null, 1, { gap: 4, alpha: 0.85 }); x += bw + 8; }
     for (let k = 0; k < 4; k++) lamp(p, w * (0.14 + k * 0.24), h * 0.66, h * 0.17, '#ffe27a');
     for (let r = 0; r < 9; r++) for (let k = 0; k < Math.ceil(w / 54); k++) { const cx = k * 54 + (r % 2) * 27, cy = h * 0.67 + r * 22; if (cy < h - 4) p.ln(arc(cx, cy, 24, 11, 200, 340, 6), chalk, 2, false, 0.7); }
-    if (!BAKE_THUMB) p.txt('OLD TOWN', w * 0.5, h * 0.09, Math.min(44, w * 0.09), C.yellow, { align: 'c', out: INK, ow: 5 });
+    if (!BAKE_THUMB) p.txt(wt('busk'), w * 0.5, h * 0.09, Math.min(44, w * 0.09) * wf('busk'), C.yellow, { align: 'c', out: INK, ow: 5 });
     marginDoodles(p, w, h, [C.yellow, C.pink, C.sky], 31);
   },
   club(p, c, w, h) {
@@ -241,7 +244,7 @@ const PAINT = {
     for (let i = 0; i < 7; i++) { const a = -0.9 + i * 0.3; p.ln([w * 0.5, h * 0.12, w * 0.5 + Math.sin(a) * h * 0.8, h * 0.12 + Math.cos(a) * h * 0.8], cols[i % 5], 2.8, false, 1.6); }
     for (let k = 0; k < 2; k++) { const sx = k ? w * 0.9 : w * 0.1; for (let r = 0; r < 3; r++) speakerProp(p, sx, h * (0.3 + r * 0.13), 56, '#3b3158'); }
     const tw = Math.ceil(w / 60), th = 6; for (let r = 0; r < th; r++) for (let k = 0; k < tw; k++) if ((r + k) % 2) p.hatch(rect(k * 60, h * 0.78 + r * ((h * 0.22) / th), 60, (h * 0.22) / th), cols[(r + k) % 5], 8, 0.8, 0.45);
-    if (!BAKE_THUMB) p.txt('NEON CLUB', w * 0.5, h * 0.27, Math.min(44, w * 0.09), C.pink, { align: 'c', out: INK, ow: 5 });
+    if (!BAKE_THUMB) p.txt(wt('club'), w * 0.5, h * 0.27, Math.min(44, w * 0.09) * wf('club'), C.pink, { align: 'c', out: INK, ow: 5 });
     sparkleDots(p, w, h * 0.7, 26, [C.mag, C.cyan, C.orange, C.yellow], 41);
   },
   festival(p, c, w, h) {
@@ -252,12 +255,12 @@ const PAINT = {
     for (let i = 0; i < 4; i++) p.shp(arc(w * (0.1 + i * 0.3), h * 0.68, w * 0.32, h * 0.08, 180, 360, 14).concat([w * (0.1 + i * 0.3) + w * 0.32, h * 0.8, w * (0.1 + i * 0.3) - w * 0.32, h * 0.8]), i % 2 ? '#4fb85a' : '#6cc84a', INK, 2.8, { gap: 7 });
     tentProp(p, w * 0.2, h * 0.7, 54, C.red); tentProp(p, w * 0.82, h * 0.72, 62, C.blue); tentProp(p, w * 0.6, h * 0.69, 40, C.pink);
     p.hatch(rect(0, h * 0.8, w, h * 0.2), '#5a8a3a', 8, -0.3, 0.7);
-    if (!BAKE_THUMB) p.txt('SUNSET FEST', w * 0.5, h * 0.27, Math.min(46, w * 0.095), '#fff', { align: 'c', out: INK, ow: 6 });
+    if (!BAKE_THUMB) p.txt(wt('festival'), w * 0.5, h * 0.27, Math.min(46, w * 0.095) * wf('festival'), '#fff', { align: 'c', out: INK, ow: 6 });
     cloud(p, w * 0.2, h * 0.34, 50, '#fff'); cloud(p, w * 0.82, h * 0.3, 44, '#fff');
   },
   arena(p, c, w, h) {
     p.shp(rect(w * 0.2, h * 0.012, w * 0.6, h * 0.085, 10), '#ffe9a0', INK, 3.4, { gap: 8, alpha: 0.7 });
-    if (!BAKE_THUMB) p.txt('MEGA ARENA', w * 0.5, h * 0.078, Math.min(40, w * 0.08), C.red, { align: 'c', out: INK, ow: 5 });
+    if (!BAKE_THUMB) p.txt(wt('arena'), w * 0.5, h * 0.078, Math.min(40, w * 0.08) * wf('arena'), C.red, { align: 'c', out: INK, ow: 5 });
     for (let k = 0; k < 2; k++) { const tx = k ? w * 0.93 : w * 0.07; p.ln([tx, h * 0.5, tx, h * 0.16], INK, 4, false, 0.8); p.shp(rect(tx - 26, h * 0.1, 52, 38, 4), '#f3e9a0', INK, 3, { gap: 6 }); for (let i = -1; i <= 1; i++) p.ln([tx + i * 12, h * 0.15, tx + i * 90 * (k ? -1 : 1) - 30, h * 0.46], '#ffe27a', 2.2, false, 1.2); }
     const heads = [C.pink, C.sky, C.yellow, C.lime, C.orange, C.lav];
     for (let r = 0; r < 9; r++) { const y = h * 0.28 + r * h * 0.045, cnt = Math.floor(w / 26); p.ln([w * 0.04, y + 14, w * 0.96, y + 14], '#a9a39a', 2.2, false, 0.9); for (let k = 0; k < cnt; k++) { const x = w * 0.04 + (k + 0.5) / cnt * w * 0.92 + (r % 2) * 6; p.dot(x, y + 4, 7, heads[(k * 7 + r * 3) % 6]); p.ln(arc(x, y + 4, 7, 7, 0, 360, 8), INK, 1.4, true, 0.4); } }
@@ -284,7 +287,7 @@ const PAINT = {
     driftwood(p, w * 0.58, h * 0.968, 110 * u + 20, 0.07); driftwood(p, w * 0.09, h * 0.84, 90 * u + 20, -0.5); beachBall(p, w * 0.7, h * 0.95, 22 * u + 8);
     for (const [fx, fy, r, col] of [[0.43, 0.945, 11, C.orange], [0.9, 0.9, 12, C.pink], [0.12, 0.7, 10, C.red], [0.88, 0.5, 10, C.orange]]) starfish(p, w * fx, h * fy, r * u + 4, col);
     for (let i = 0; i < 18; i++) p.dot(hn(i * 3 + 5) * w, h * (0.25 + hn(i * 5 + 1) * 0.72), 1.6 + hn(i) * 1.6, 'rgba(138,90,43,0.45)');
-    if (!BAKE_THUMB) p.txt('BONFIRE BEACH', w * 0.5, h * 0.268, Math.min(44, w * 0.09), '#fff', { align: 'c', out: INK, ow: 5 });
+    if (!BAKE_THUMB) p.txt(wt('beach'), w * 0.5, h * 0.268, Math.min(44, w * 0.09) * wf('beach'), '#fff', { align: 'c', out: INK, ow: 5 });
   },
   moon(p, c, w, h) {   // deep navy paper, crayon neon, a big moon, stars, floating stage platforms, glow sticks, a lunar floor
     const u = Math.min(w / 540, h / 960);
@@ -301,7 +304,7 @@ const PAINT = {
     const fy = h * 0.92; p.hatch([0, fy + 12, w * 0.2, fy - 6, w * 0.42, fy + 8, w * 0.7, fy - 10, w, fy + 6, w, h, 0, h], '#7c82d8', 9, 0.35, 0.78); p.ln([0, fy + 12, w * 0.2, fy - 6, w * 0.42, fy + 8, w * 0.7, fy - 10, w, fy + 6], INK, 3.2, false, 1.2);
     for (const [fx, fyy, rw] of [[0.12, 0.955, 30], [0.4, 0.975, 42], [0.64, 0.95, 26], [0.88, 0.97, 36]]) { p.shp(arc(w * fx, h * fyy, rw * u + 8, (rw * 0.32) * u + 3, 0, 360, 12), '#5a5fb8', INK, 2.4, { gap: 4 }); }
     for (const [gx, gy, rot, col] of [[0.3, 0.935, -0.4, C.lime], [0.34, 0.94, 0.6, C.pink], [0.75, 0.93, 0.3, C.cyan], [0.8, 0.945, -0.8, C.yellow]]) glowStick(p, w * gx, h * gy, 34 * u + 10, rot, col);
-    if (!BAKE_THUMB) p.txt('MOONLIGHT RAVE', w * 0.5, h * 0.268, Math.min(42, w * 0.085), C.cyan, { align: 'c', out: INK, ow: 5 });
+    if (!BAKE_THUMB) p.txt(wt('moon'), w * 0.5, h * 0.268, Math.min(42, w * 0.085) * wf('moon'), C.cyan, { align: 'c', out: INK, ow: 5 });
   },
 };
 function bgScale(w, h) { return clamp(Math.min(getScale(), Math.sqrt(1.4e6 / Math.max(1, w * h))), 0.6, 2); }
@@ -432,7 +435,7 @@ let BAKE_THUMB = false;
 export function drawBackdrop(ctx, id, w, h, t, o) {
   o = o || {}; t = t || 0; id = STAGES[id] ? id : 'title';
   const beat = clamp(o.beat || 0, 0, 1), skin = skinOf(o);
-  const key = id + '|' + Math.round(w) + 'x' + Math.round(h) + '|' + getScale() + (o.thumb ? '|t' : '') + skinTag(skin);
+  const key = id + '|' + Math.round(w) + 'x' + Math.round(h) + '|' + getScale() + (o.thumb ? '|t' : '') + skinTag(skin) + '|' + getLang();
   let e = bgCache.get(key); if (!e) { BAKE_THUMB = !!o.thumb; e = lruSet(bgCache, key, bakeBg(id, w, h, skin), 10); BAKE_THUMB = false; }
   ctx.save();
   put(ctx, e, 0, 0, t, 2.5);
@@ -846,7 +849,7 @@ function paintScene(p, c, sp, accent) {
   // equaliser frame
   if (sp.eq === 0) sketch(p, rect(398, 24, 92, 48));
   else { p.shp(rect(398, 24, 92, 48, 4), '#2a2548', INK, 3, { gap: 6 }); }
-  if (sp.total === 0) p.txt('EMPTY STUDIO', 72, 44, 10, C.purple, { align: 'c', w: 2 });
+  if (sp.total === 0) p.txt(t('studio.scene_empty', 'EMPTY STUDIO'), 72, 44, 10, C.purple, { align: 'c', w: 2 });
 }
 function sceneEntry(sp, accent) {
   const key = ['scene', sp.amps, sp.riser, sp.cables, sp.charm, sp.jar, sp.banner, sp.lights, sp.van, sp.truss, sp.eq, sp.total > 0 ? 1 : 0, getScale()].join('|');

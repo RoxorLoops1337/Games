@@ -1,6 +1,7 @@
 // lb.js: tiny client for the leaderboard Pages Function (functions/api/dropbass_board.js) plus the pure name and friends helpers.
 // Every network call fails soft: offline or an unconfigured server just means "no board", never an error in the game.
 // Board ids: 'endless:<world>', 'daily' (UTC day), 'weekly' (ISO week, the Weekly Gig).
+import { t } from './i18n.js';
 const URL_BASE = '/api/dropbass_board';
 export const FRIENDS_MAX = 30;
 export const NAME_MAX = 16;
@@ -60,7 +61,7 @@ export function boardRows(top, friends, me, tab, limit = 20) {
   const rows = (Array.isArray(top) ? top : []).filter((e) => e && typeof e.name === 'string').map((e, i) => {
     const k = e.name.toLowerCase();
     const isMe = !!mk && k === mk;
-    return { rank: i + 1, name: cleanName(e.name) || 'Anonymous', score: Math.floor(+e.score) || 0, friend: !isMe && fs.has(k), me: isMe, missing: false };
+    return { rank: i + 1, name: cleanName(e.name) || t('board.anonymous', 'Anonymous'), score: Math.floor(+e.score) || 0, friend: !isMe && fs.has(k), me: isMe, missing: false };
   });
   if (tab === 'friends') {
     const out = rows.filter((r) => r.friend || r.me);

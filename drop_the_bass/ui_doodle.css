@@ -323,3 +323,12 @@ body.doodle .ward-act{padding:4px 10px;font-size:17px}
 body.doodle .ward-card.skin canvas{border:2px solid #2b2733;border-radius:6px}
 body.doodle .res-mods{margin-top:8px;padding:8px}
 body.doodle .install-row{margin:4px 0}
+/* i18n: long German and Dutch words must wrap or ellipsize instead of overflowing tabs, buttons and chips */
+body.doodle{overflow-wrap:break-word}
+html[lang=de] body.doodle .btn,html[lang=nl] body.doodle .btn,html[lang=da] body.doodle .btn,html[lang=de] body.doodle .sub,html[lang=de] body.doodle .ds,html[lang=de] body.doodle .nm{hyphens:auto}
+body.doodle .tab{min-width:0;overflow-wrap:anywhere}
+body.doodle .seg button{min-width:0;overflow:hidden;text-overflow:ellipsis}
+body.doodle .btn{max-width:100%}
+body.doodle .chip,body.doodle .pill{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+body.doodle .ward-name,body.doodle .ward-state,body.doodle .sl-abn,body.doodle .sl-abd{min-width:0;overflow-wrap:anywhere}
+body.doodle .toggle>:first-child{min-width:0}

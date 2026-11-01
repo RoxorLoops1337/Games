@@ -6,13 +6,16 @@ import * as M from './meta.js';
 import { makeRng } from './rng.js';
 import { Battle, battleIdle } from './battle.js';
 import { Cutscene } from './cutscene.js';
-import { buildHub, settingsModal, codexModal, setlistSheet } from './ui_hub.js';
+import { buildHub, settingsModal, codexModal, setlistSheet, langPicker } from './ui_hub.js';
 import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo } from './ui_run.js';
 import { setRoot, h, btn, modal, toast, tickLive, AE, AW } from './ui_core.js';
 import { submitScore, rankOf } from './lb.js';
 import { setStyle } from './style.js';
 import { initPwa } from './pwa.js';
 import * as Stats from './stats.js';
+import * as I18N from './i18n.js';
+import { initDataLang } from './i18n_data.js';
+import { t, tn } from './i18n.js';
 
 const canvas = document.getElementById('game');
 const ui = document.getElementById('ui');
@@ -24,6 +27,10 @@ setRoot(ui);
 let loaded;
 try { loaded = M.loadSave(localStorage, Date.now()); } catch (e) { loaded = { profile: M.newProfile(Date.now()), source: 'new', recovered: false, corrupt: false, hadSave: false }; }
 let profile = loaded.profile;
+// language before the first paint: the profile choice, else the one stored on this device, else the browser language (see I18N.md)
+initDataLang();   // names and descriptions of the data tables follow the language (before initLang so the first paint is already translated)
+await I18N.initLang({ profile: profile.settings.lang });
+profile.settings.lang = I18N.getLangPref();
 const hadSave = loaded.hadSave;
 let saveT = 0, saveFailT = 0;
 // validate-then-commit (meta.commitSave): a profile that does not survive serialise + parse back never overwrites the last good save
@@ -33,7 +40,7 @@ function writeSave(opts) {
   if (!r.ok && r.reason !== 'storage' && r.reason !== 'verify') {
     try { M.repairProfile(app.profile, Date.now()); r = M.commitSave(localStorage, app.profile, opts && opts.force ? opts : undefined); } catch (e) { /* give up below */ }
   }
-  if (!r.ok && Date.now() - saveFailT > 60000) { saveFailT = Date.now(); try { toast('Could not save your game. Is the browser storage full?', 4200); } catch (e) { /* no ui yet */ } }
+  if (!r.ok && Date.now() - saveFailT > 60000) { saveFailT = Date.now(); try { toast(t('toast.save_failed', 'Could not save your game. Is the browser storage full?'), 4200); } catch (e) { /* no ui yet */ } }
   return !!r.ok;
 }
 
@@ -50,8 +57,11 @@ const app = {
     try { localStorage.setItem(M.SAVE_PREV_KEY, M.serialize(Object.assign({}, app.profile, { resume: null }))); } catch (e) { /* keep going */ }
     app.profile = np; profile = np; writeSave({ force: true }); app.applySettings(); app.openHub('tour');
   },
+  langNow: () => I18N.getLang(),
+  setLangPref(pref) { app.profile.settings.lang = pref; app.save(); return I18N.setLangPref(pref); },
   applySettings() {
     const s = app.profile.settings;
+    if (s.lang !== I18N.getLangPref()) I18N.setLangPref(s.lang);
     AudioFx.setVolume({ music: s.music, sfx: s.sfx });
     document.body.classList.toggle('reduce', !!s.reduce);
     setStyle(); document.body.classList.add('doodle'); document.body.classList.remove('classic');
@@ -115,21 +125,25 @@ function showTitle() {
   if (p.resume) {
     const chk = M.checkResume(p.resume);
     if (chk.ok) resume = M.resumeSummary(p.resume);
-    else { p.resume = null; app.save(); setTimeout(() => toast('Your unfinished run was damaged, so it was dropped. Your progress is safe.', 5000), 400); }
+    else { p.resume = null; app.save(); setTimeout(() => toast(t('toast.run_damaged', 'Your unfinished run was damaged, so it was dropped. Your progress is safe.'), 5000), 400); }
   }
-  const tap = h('div', { class: 'tap' }, 'TAP TO START');
+  const tap = h('div', { class: 'tap' }, t('title.tap', 'TAP TO START'));
   wrap.append(tap);
   ui.append(wrap);
+  // first title screen: a small text row to pick the language (stays visible under the menu)
+  const langRow = h('div', { class: 'lang-row', style: 'position:absolute;left:0;right:0;top:385px;display:flex;justify-content:center;z-index:5;transform:scale(.8);transform-origin:top center' }, langPicker(app, false));
+  langRow.addEventListener('pointerdown', (e) => e.stopPropagation());
+  wrap.append(langRow);
   const showMenu = () => {
     app.audio.init(); app.audio.resume(); app.applySettings(); app.audio.musicStart('title');
     tap.remove(); wrap.removeEventListener('pointerdown', showMenu);
     menu.replaceChildren(...[
-      resume ? btn([h('span', { class: 'cr-t' }, 'CONTINUE RUN'), h('span', { class: 'cr-s' }, resume.stage + ', wave ' + resume.wave + ', ' + resume.turrets + ' turret' + (resume.turrets === 1 ? '' : 's') + (resume.mode === 'endless' ? ' (Endless)' : ''))], () => resumeRun(), 'gold big cont-run') : null,
-      started ? btn(resume ? 'TO THE HUB' : 'CONTINUE', () => openHub(app.hubTab), resume ? 'green' : 'green big') : btn('PLAY', () => newGame(), 'green big'),
-      started ? btn('New game', () => { const m = modal(h('div', null, h('h2', null, 'Start over?'), h('div', { class: 'sub', style: 'text-align:center' }, 'This deletes your current progress.'), h('div', { class: 'btnrow' }, btn('Delete and start', () => { m.close(); app.replaceProfile(M.newProfile(Date.now())); showTitle(); newGame(); }, 'red'), btn('Cancel', () => m.close(), 'green')))); }, 'dark small') : null,
-      h('div', { class: 'btnrow', style: 'margin:0' }, btn('Settings', () => settingsModal(app), 'dark small'), btn('How to play', () => showHowTo(app), 'dark small')),
+      resume ? btn([h('span', { class: 'cr-t' }, t('title.continue_run', 'CONTINUE RUN')), h('span', { class: 'cr-s' }, resume.mode === 'endless' ? tn('tour.resume_info_endless', resume.turrets, '{stage}, wave {wave}, {n} turret (Endless)', '{stage}, wave {wave}, {n} turrets (Endless)', { stage: resume.stage, wave: resume.wave }) : tn('tour.resume_info', resume.turrets, '{stage}, wave {wave}, {n} turret', '{stage}, wave {wave}, {n} turrets', { stage: resume.stage, wave: resume.wave }))], () => resumeRun(), 'gold big cont-run') : null,
+      started ? btn(resume ? t('title.to_hub', 'TO THE HUB') : t('title.continue', 'CONTINUE'), () => openHub(app.hubTab), resume ? 'green' : 'green big') : btn(t('title.play', 'PLAY'), () => newGame(), 'green big'),
+      started ? btn(t('title.new_game', 'New game'), () => { const m = modal(h('div', null, h('h2', null, t('title.start_over', 'Start over?')), h('div', { class: 'sub', style: 'text-align:center' }, t('title.start_over_hint', 'This deletes your current progress.')), h('div', { class: 'btnrow' }, btn(t('title.delete_start', 'Delete and start'), () => { m.close(); app.replaceProfile(M.newProfile(Date.now())); showTitle(); newGame(); }, 'red'), btn(t('common.cancel', 'Cancel'), () => m.close(), 'green')))); }, 'dark small') : null,
+      h('div', { class: 'btnrow', style: 'margin:0' }, btn(t('hub.settings', 'Settings'), () => settingsModal(app), 'dark small'), btn(t('settings.how_to', 'How to play'), () => showHowTo(app), 'dark small')),
     ].filter(Boolean));
-    wrap.append(menu, h('div', { class: 'credit' }, 'RoxorLoops & Jasmin  |  Keep the music live'));
+    wrap.append(menu, h('div', { class: 'credit' }, t('title.credit', 'RoxorLoops & Jasmin  |  Keep the music live')));
     app.audio.play('ui_open');
   };
   wrap.addEventListener('pointerdown', showMenu);
@@ -154,11 +168,11 @@ function openHub(tab) {
     const off = M.offlineRecords(p, now);
     const ls = M.loginStatus(p, now);
     if (ls.claimable) {
-      const m = modal(h('div', null, h('h2', null, 'Daily Gig!'), h('div', { class: 'sub', style: 'text-align:center' }, 'Day ' + ls.reward.day + ' of your tour. Streak: ' + ls.streak),
-        h('div', { class: 'btnrow' }, btn('Claim reward', () => { const r = M.claimLogin(p, now, app.rng()); m.close(); app.audio.play('chest'); toast('Claimed!'); app.hub.render(); }, 'gold'))));
+      const m = modal(h('div', null, h('h2', null, t('welcome.daily_gig', 'Daily Gig!')), h('div', { class: 'sub', style: 'text-align:center' }, t('welcome.daily_info', 'Day {day} of your tour. Streak: {streak}', { day: ls.reward.day, streak: ls.streak })),
+        h('div', { class: 'btnrow' }, btn(t('welcome.claim', 'Claim reward'), () => { const r = M.claimLogin(p, now, app.rng()); m.close(); app.audio.play('chest'); toast(t('welcome.claimed', 'Claimed!')); app.hub.render(); }, 'gold'))));
     } else if (off >= 30) {
-      const m = modal(h('div', null, h('h2', null, 'Welcome back!'), h('div', { class: 'sub', style: 'text-align:center' }, 'Your songs kept streaming while you were away: ' + off + ' Records.'),
-        h('div', { class: 'btnrow' }, btn('Collect', () => { M.claimOffline(p, now); m.close(); app.audio.play('record'); app.hub.render(); }, 'green'))));
+      const m = modal(h('div', null, h('h2', null, t('welcome.back', 'Welcome back!')), h('div', { class: 'sub', style: 'text-align:center' }, t('welcome.streaming', 'Your songs kept streaming while you were away: {n} Records.', { n: off })),
+        h('div', { class: 'btnrow' }, btn(t('welcome.collect', 'Collect'), () => { M.claimOffline(p, now); m.close(); app.audio.play('record'); app.hub.render(); }, 'green'))));
     }
   }
 }
@@ -185,12 +199,12 @@ function startRun(cfg) {
   const p = app.profile;
   if (!p.tutorial.done) { startTutorial(); return; }
   if (p.resume && !cfg.confirmed) {
-    const m = modal(h('div', null, h('h2', null, 'Start a new run?'), h('div', { class: 'sub', style: 'text-align:center' }, 'You have a run in progress. Starting a new one drops it.'),
-      h('div', { class: 'btnrow' }, btn('Start new', () => { m.close(); p.resume = null; startRun(Object.assign({}, cfg, { confirmed: true })); }, 'red'), btn('Back', () => m.close(), 'green'))));
+    const m = modal(h('div', null, h('h2', null, t('newrun.title', 'Start a new run?')), h('div', { class: 'sub', style: 'text-align:center' }, t('newrun.hint', 'You have a run in progress. Starting a new one drops it.')),
+      h('div', { class: 'btnrow' }, btn(t('newrun.start', 'Start new'), () => { m.close(); p.resume = null; startRun(Object.assign({}, cfg, { confirmed: true })); }, 'red'), btn(t('common.back', 'Back'), () => m.close(), 'green'))));
     return;
   }
   const b = M.useBoosters(p);
-  if (!b.ok) { toast('Not enough diamonds for your boosters (' + b.total + ').'); return; }
+  if (!b.ok) { toast(t('toast.boosters_short', 'Not enough diamonds for your boosters ({n}).', { n: b.total })); return; }
   const setup = M.computeRunSetup(p);
   // Setlist picks: modifiers apply to Story, Endless and Rush only (never Daily or the Weekly Gig); a retry keeps the modifiers of the run it repeats
   const modifiers = cfg.mode === 'daily' ? [] : (Array.isArray(cfg.modifiers) ? M.cleanModifiers(cfg.modifiers) : M.consumeModifiers(p));
@@ -232,7 +246,7 @@ function resumeRun() {
     // fall back to the hub with a clear message instead of a broken battle
     console.warn('resume rejected:', why);
     app.profile.resume = null; app.saveNow(); openHub('tour');
-    toast('That saved run was damaged, so it could not be continued. Your progress and rewards are safe.', 5200);
+    toast(t('toast.resume_damaged', 'That saved run was damaged, so it could not be continued. Your progress and rewards are safe.'), 5200);
     return;
   }
   run.cfg = r.cfg;
@@ -254,7 +268,7 @@ function beginBattle(run, tutorial) {
 }
 function onRunEnd(run, battle) {
   if (run.phase === 'lost' && run.mode !== 'tutorial') showDefeat(app, run, battle, () => finalize(run, battle));
-  else if (run.phase === 'lost' && run.mode === 'tutorial') { toast('Let us try that practice again.'); startTutorial(); }
+  else if (run.phase === 'lost' && run.mode === 'tutorial') { toast(t('toast.practice_again', 'Let us try that practice again.')); startTutorial(); }
   else finalize(run, battle);
 }
 function finalize(run, battle) {
@@ -352,12 +366,24 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// the language changed: redraw the current screen (battle canvas text reads t() every frame, so it follows by itself)
+function rerender() {
+  if (app.screen === 'hub' && app.hub && app.hub.render) app.hub.render();
+  else if (app.screen === 'title') {
+    const menuShown = !!ui.querySelector('.menu button');
+    showTitle();
+    if (menuShown) { const w = ui.querySelector('.title-wrap'); if (w) w.dispatchEvent(new Event('pointerdown')); }
+  }
+}
+app.rerender = rerender;
+I18N.onLang(() => app.rerender());
+
 // ------------------------------------------------------------------------------------------------ boot
 resize();
 app.applySettings();
 showTitle();
-if (loaded.recovered) { writeSave(); setTimeout(() => toast('Recovered your last save', 4200), 300); }
-else if (loaded.corrupt) setTimeout(() => toast('Your save could not be read, so you are starting fresh. The damaged copy is kept.', 5200), 300);
+if (loaded.recovered) { writeSave(); setTimeout(() => toast(t('toast.save_recovered', 'Recovered your last save'), 4200), 300); }
+else if (loaded.corrupt) setTimeout(() => toast(t('toast.save_corrupt', 'Your save could not be read, so you are starting fresh. The damaged copy is kept.'), 5200), 300);
 document.getElementById('boot').remove();
 window.__dtbReady = true;
 Stats.init(() => app.profile.settings);
