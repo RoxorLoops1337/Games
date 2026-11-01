@@ -37,7 +37,7 @@ ok('the virus rides a winding track downward: head enters first, segments follow
   assert.equal(s.segs.length, sim.snakeLength(1));
   assert.ok(s.segs[0].r > s.segs[3].r && s.segs.at(-1).r < s.segs[3].r, 'big head, tapering tail');
   for (let i = 1; i < s.segs.length; i++) assert.ok(s.segs[i].ps < s.segs[i - 1].ps, 'ordered along the track');
-  const y0 = s.segs[0].y; run(g, 4, {});
+  const y0 = s.segs[0].y; run(g, 10, {});
   assert.ok(s.segs[0].y > y0 + 40, 'moves down the screen');
   assert.ok(g.path.len > H, 'the lane winds, so it is longer than the screen');
   const a = sim.pointAt(g.path, 100), b = sim.pointAt(g.path, 900);
@@ -57,10 +57,20 @@ ok('chapters: names, five skins, bosses every 5th, alternating spawn points', ()
   assert.ok(sim.createGame({ seed: 3, stage: 5 }).snakes[0].boss);
 });
 
-ok('the cell moves inside its spawn zone only', () => {
+ok('the cell only slides left and right along its spawn row', () => {
   const g = sim.createGame({ seed: 4 });
-  run(g, 3, { mx: -1, my: 1 }); assert.ok(g.p.x >= g.p.zone.x0 && g.p.y <= g.p.zone.y1);
-  run(g, 3, { mx: 1, my: -1 }); assert.ok(g.p.x <= g.p.zone.x1 && g.p.y >= g.p.zone.y0);
+  const y0 = g.p.y;
+  run(g, 3, { mx: -1, my: 1 }); assert.equal(g.p.x, g.p.zone.x0); assert.equal(g.p.y, y0, 'vertical input is ignored');
+  run(g, 3, { mx: 1, my: -1 }); assert.equal(g.p.x, g.p.zone.x1); assert.equal(g.p.y, y0);
+  assert.equal(g.p.zone.y0, g.p.zone.y1);
+});
+
+ok('it starts weak: every cell takes 10 to 20 capsule shots, and you have no skills yet', () => {
+  const g = sim.createGame({ seed: 30 });
+  assert.equal(Object.keys(g.weap).length, 0); assert.equal(g.level, 1);
+  const capsule = 1.0 * g.p.atk;
+  for (const q of g.snakes[0].segs) if (q.kind === 'normal' && q.i > 0) { const shots = q.max / capsule; assert.ok(shots >= 10 && shots <= 20, `cell needs ${shots} shots`); }
+  assert.ok(g.p.rate <= 1.7, 'slow fire rate');
 });
 
 ok('killing a middle segment splits the virus into two pieces that both keep crawling', () => {
@@ -108,8 +118,8 @@ ok('a bomb segment chain-reacts into neighbours and the player', () => {
 ok('the capsule auto-aims at the nearest visible target and bullets land', () => {
   const g = sim.createGame({ seed: 6 });
   const h = g.snakes[0].segs[0]; h.ps = 600; sim.step(g, 1 / 60, {});
-  run(g, 1.5, {});
-  assert.ok(g.shots > 0 && g.events.some(e => e.t === 'hit'));
+  run(g, 5, {});   // the capsule is slow on purpose
+  assert.ok(g.shots >= 6 && g.events.some(e => e.t === 'hit'));
   assert.ok(g.snakes[0].segs[0].hp < g.snakes[0].segs[0].max || g.kills > 0);
 });
 
@@ -140,25 +150,34 @@ ok('swab plants a zone on the front of the virus; towers pulse; maw executes wea
   assert.ok(!g3.snakes.some(s => s.segs.includes(weak)), 'executed');
 });
 
-ok('chests drop at 25% and 50% of the virus health and open a skill pick', () => {
+ok('chests drop at 25% and 50% of the virus health and give coins only', () => {
   const g = sim.createGame({ seed: 11 });
-  const s = g.snakes[0], total = g.stageHpMax; let dead = 0;
-  for (const q of s.segs) { if (dead / total >= 0.27) break; dead += q.hp; q.hp = 0; }
+  const sn = g.snakes[0], total = g.stageHpMax; let dead = 0;
+  for (const q of sn.segs) { if (dead / total >= 0.27) break; dead += q.hp; q.hp = 0; }
+  g.nextUp = 1e9;   // keep skill picks out of this test
   sim.step(g, 1 / 60, {});
   assert.ok(g.progress >= 0.25 && g.chestsDone[25] && g.pickups.some(p => p.kind === 'chest') && g.events.some(e => e.t === 'chestdrop'));
   const chest = g.pickups.find(p => p.kind === 'chest'); chest.x = g.p.x; chest.y = g.p.y; chest.age = 1;
   const coins0 = g.coins; sim.step(g, 1 / 60, {});
-  assert.equal(g.phase, 'levelup'); assert.ok(g.coins > coins0); assert.equal(g.choices.length, 3);
+  assert.equal(g.phase, 'play', 'a chest never opens a skill pick'); assert.ok(g.coins > coins0);
+});
+
+ok('a skill pick comes after 5 cells, then every 10, and never from anything else', () => {
+  const g = sim.createGame({ seed: 12 });
+  const kill = n => { let k = 0; for (const sn of g.snakes) for (const q of sn.segs) if (k < n && q.hp > 0) { q.hp = 0; k++; } sim.step(g, 1 / 60, {}); };
+  kill(4); assert.equal(g.phase, 'play'); assert.equal(g.cells, 4);
+  kill(1); assert.equal(g.phase, 'levelup'); assert.equal(g.cells, 5); assert.equal(g.choices.length, 3);
+  sim.choose(g, 0); assert.equal(g.phase, 'play'); assert.equal(g.level, 2);
+  g.nextUp = 15; g.snakes = []; run(g, 0.1, {});   // (clear flow not needed here)
 });
 
 ok('level-up offers 3 distinct choices (new weapons, weapon levels, passives); picks apply; maxed and locked are excluded', () => {
   const g = sim.createGame({ seed: 12 });
-  g.pickups.push({ kind: 'gem', x: g.p.x, y: g.p.y, vx: 0, vy: 0, v: g.xpNeed + 1, age: 1, vac: true });
-  sim.step(g, 1 / 60, {});
-  assert.equal(g.phase, 'levelup'); assert.equal(g.level, 2); assert.equal(g.choices.length, 3);
+  g.cells = 5; g.pending = 1; sim.step(g, 1 / 60, {});
+  assert.equal(g.phase, 'levelup'); assert.equal(g.choices.length, 3);
   assert.equal(new Set(g.choices.map(c => c.id)).size, 3);
   assert.ok(!g.choices.some(c => ['needles', 'stick', 'bubble', 'satellite', 'maw'].includes(c.id)), 'locked weapons never appear');
-  const c = g.choices[0]; assert.ok(sim.choose(g, 0)); assert.equal(g.phase, 'play');
+  const c = g.choices[0]; assert.ok(sim.choose(g, 0)); assert.equal(g.phase, 'play'); assert.equal(g.level, 2);
   assert.ok(c.kind === 'weapon' ? g.weap[c.id].lv === 1 : g.ups[c.id] === 1);
   assert.ok(!sim.choose(g, 0));
   // maxed weapons stop being offered; at most six weapons are carried
@@ -174,12 +193,6 @@ ok('every passive applies and respects its max level', () => {
     assert.equal(g.ups[u.id], u.max, u.id);
   }
   assert.ok(g.p.maxHp > 100 && g.p.speed > 270 && g.p.crit > 0.3);
-});
-
-ok('firstPick opens a skill choice before anything else', () => {
-  const g = sim.createGame({ seed: 15, firstPick: true });
-  sim.step(g, 1 / 60, {}); assert.equal(g.phase, 'levelup'); assert.equal(g.choices.length, 3);
-  sim.choose(g, 0); assert.equal(g.phase, 'play');
 });
 
 ok('contact hurts, grants i-frames; dying ends the run; Second Wind revives once; shield, heal and rage pickups work', () => {
@@ -229,7 +242,7 @@ ok('shop: stats, weapon unlocks, save sanitising', () => {
 ok('bot plays full runs without errors: bounded entities, finite numbers, survives several chapters', () => {
   let best = 0;
   for (const seed of [1, 2, 3, 4]) {
-    const g = sim.createGame({ seed, firstPick: true, unlocked: ALL });
+    const g = sim.createGame({ seed, unlocked: ALL });
     for (let i = 0; i < 60 * 300 && g.phase !== 'dead'; i++) {
       sim.step(g, 1 / 60, bot(g)); if (g.phase === 'levelup') sim.choose(g, Math.floor(g.rand() * g.choices.length));
       assert.ok(g.bullets.length < 600 && g.pickups.length < 700 && g.ebullets.length < 400 && g.minions.length < 80 && g.zones.length < 20);
@@ -238,7 +251,7 @@ ok('bot plays full runs without errors: bounded entities, finite numbers, surviv
     best = Math.max(best, g.stage);
     for (const sn of g.snakes) for (const q of sn.segs) assert.ok(Number.isFinite(q.x) && Number.isFinite(q.y) && q.hp > 0);
   }
-  assert.ok(best >= 3, 'best chapter ' + best);
+  assert.ok(best >= 2, 'best chapter ' + best);
 });
 
 ok('drawing kit bakes every skin, kind, minion, pickup, weapon and shot, and draws heads', () => {

@@ -57,6 +57,7 @@
     menu.appendChild(item('Collection', function () { SB.ui.flow.go('collection', {}); }, { icon: 'deck' }));
     menu.appendChild(item('Settings', function () { SB.ui.flow.go('settings', {}); }, { icon: 'cog' }));
     menu.appendChild(item('Credits', credits, { icon: 'paw' }));
+    if (SB.ui.fullscreen && (SB.ui.fullscreen.supported() || !SB.ui.fullscreen.standalone())) menu.appendChild(item('Full screen', function () { SB.ui.fullscreen.toggle(); }, { icon: 'expand' }));
 
     var muted = !!(SB.audio && SB.audio.isMuted && SB.audio.isMuted('master'));
     var muteBtn = h('button.ibtn', { type: 'button', 'aria-pressed': String(muted), 'aria-label': 'Mute all sound', title: 'Mute', on: { click: function () {
