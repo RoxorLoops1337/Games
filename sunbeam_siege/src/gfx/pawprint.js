@@ -1149,11 +1149,13 @@
   }
 
   // ---------------------------------------------------------------- animation selection
+  // seeds come from string hashes and can be negative; a plain % then gives -1 and the frame name 'sleep-1' does not exist (the cat stood up while its Zzz kept going)
+  function pmod(a, n) { return ((a % n) + n) % n; }
   function idlePose(g, tick, bobPeriod) {
-    var off = (g.seed * 37) % 97;
+    var off = pmod(g.seed * 37, 97);
     var t = (tick | 0) + off;
-    var bob = Math.floor(t / (bobPeriod || 36)) % 2;
-    var cycle = 220 + (g.seed % 7) * 25;
+    var bob = pmod(Math.floor(t / (bobPeriod || 36)), 2);
+    var cycle = 220 + pmod(g.seed, 7) * 25;
     var blink = (t % cycle) < 8 ? 1 : 0;
     return (blink ? 'blink' : 'idle') + bob;
   }
@@ -1163,9 +1165,9 @@
     var name = o.name || 'idle', frame;
     var bobP = 36;
     if (name === 'idle') frame = idlePose(g, tick);
-    else if (name === 'sleep') frame = 'sleep' + (Math.floor(((tick | 0) + g.seed) / 48) % 2);
-    else if (name === 'boxed') frame = 'boxed' + (Math.floor(((tick | 0) + g.seed) / 40) % 2);
-    else if (name === 'hidden') frame = 'hidden' + (Math.floor(((tick | 0) + g.seed) / 50) % 2);
+    else if (name === 'sleep') frame = 'sleep' + pmod(Math.floor(((tick | 0) + g.seed) / 48), 2);
+    else if (name === 'boxed') frame = 'boxed' + pmod(Math.floor(((tick | 0) + g.seed) / 40), 2);
+    else if (name === 'hidden') frame = 'hidden' + pmod(Math.floor(((tick | 0) + g.seed) / 50), 2);
     else if (name === 'dead') frame = 'dead';
     else frame = normPose(name);
     return { frame: frame, name: name, flip: !!o.flip, flash: !!o.flash, alpha: o.alpha === undefined ? 1 : o.alpha, tint: o.tint || null };
@@ -1250,6 +1252,7 @@
     flashFrame: flashFrame,
     idlePose: function (genome, tick) { return idlePose(normalize(genome), tick); },
     clearCache: function () { CACHE.clear(); stats.hits = 0; stats.misses = 0; },
+    poseFrame: function (genome, name, tick) { return resolvePose(normalize(genome), { name: name }, tick || 0).frame; },
     cacheStats: function () { return { size: CACHE.size, max: CACHE_MAX, hits: stats.hits, misses: stats.misses }; },
     setCacheMax: function (n) { CACHE_MAX = Math.max(16, n | 0); },
     _hash: hashStr, _rng: mulberry32
