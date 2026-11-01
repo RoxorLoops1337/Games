@@ -359,6 +359,67 @@ ok('bot plays full runs: bounded entities, finite numbers, and clears an early s
   assert.ok(wins >= 3, 'wins ' + wins);
 });
 
+ok('groove: every note that lands builds it (+2% damage per point), a pause in the hits lets it fade', () => {
+  const g = sim.createGame({ seed: 50 });
+  assert.equal(g.groove, 0); assert.equal(sim.GROOVE_MAX, 20);
+  const sn = g.snakes[0]; sn.speed = 0.01; bringNear(g, 120); g.p.hp = g.p.maxHp = 1e9; g.p.iframes = 1e9;
+  const dmgNow = () => { g.bullets.length = 0; g.vq.length = 0; g.p.cd = 0; g.p.crit = 0; const x = g.p.x; sim.step(g, 1 / 60, {}); g.p.x = x; return g.bullets[0].dmg; };
+  const d0 = dmgNow();
+  run(g, 6, {}); assert.ok(g.groove >= 3, 'hits build groove: ' + g.groove); assert.ok(g.grooveMax >= g.groove);
+  assert.ok(dmgNow() > d0, 'groove raises damage'); assert.ok(g.groove <= sim.GROOVE_MAX);
+  g.groove = 12; g.bullets.length = 0; g.p.cd = 99; g.p.x = 20;   // nothing above you any more
+  run(g, 4, {}); assert.ok(g.groove < 12, 'it fades when the hits stop: ' + g.groove);
+  const h = sim.createGame({ seed: 51 }); h.snakes[0].speed = 0.01; bringNear(h, 120); sim.step(h, 1 / 60, {}); h.groove = 4; h.events.length = 0;
+  const cell = h.snakes[0].segs[3]; h.bullets.push({ x: cell.x, y: cell.y, vx: 0, vy: -1, dmg: 1, crit: false, pierce: 0, r: 6, life: 1, hit: [], kind: 'pill', home: 0, splash: 0, slow: 0 });
+  sim.step(h, 1 / 60, {}); assert.equal(h.groove, 5); assert.ok(h.events.some(e => e.t === 'groove' && e.n === 5));
+});
+
+ok('boss shield wave: a wave of shields rolls down the chain; cells in it cannot be hit; plain stages have none', () => {
+  const g = sim.createGame({ seed: 52, stage: 5 }), sn = g.snakes[0];
+  assert.ok(sn.boss); sn.speed = 0.01; g.p.hp = g.p.maxHp = 1e9; g.p.iframes = 1e9;
+  const seen = new Set(); let maxWave = 0, shielded = null;
+  for (let i = 0; i < 60 * 12; i++) {
+    sim.step(g, 1 / 60, {});
+    const w = sn.segs.filter(q => q.wave);
+    maxWave = Math.max(maxWave, w.length); w.forEach(q => seen.add(q.i)); if (w.length && !shielded) shielded = w[0];
+  }
+  assert.ok(maxWave >= 2 && maxWave <= 4, 'a short wave: ' + maxWave); assert.ok(seen.size > 8, 'it travels down the snake: ' + seen.size);
+  assert.ok(sn.segs.every(q => q.i > 0 || !q.wave), 'never on the face');
+  bringNear(g, 120); const cell = sn.segs[5]; const hp0 = cell.hp; g.bullets.push({ x: cell.x, y: cell.y, vx: 0, vy: -1, dmg: 500, crit: false, pierce: 0, r: 6, life: 1, hit: [], kind: 'pill', home: 0, splash: 0, slow: 0 });
+  const waveOn = (t) => { for (let i = 0; i < 60 * 8; i++) { sim.step(g, 1 / 60, {}); if (sn.segs[5] && sn.segs[5].wave) return true; } return false; };
+  assert.ok(waveOn(), 'the wave reaches cell 5');
+  { const c5 = sn.segs[5]; g.bullets.length = 0; g.bullets.push({ x: c5.x, y: c5.y, vx: 0, vy: -1, dmg: 500, crit: false, pierce: 0, r: 6, life: 1, hit: [], kind: 'pill', home: 0, splash: 0, slow: 0 }); const hpIn = c5.hp; sim.step(g, 1 / 60, {}); assert.equal(c5.hp, hpIn, 'a shielded cell takes no damage'); }
+  const plain = sim.createGame({ seed: 53, stage: 4 }); run(plain, 8, {}); assert.ok(plain.snakes[0].segs.every(q => !q.wave));
+  assert.ok(hp0 > 0 && shielded);
+});
+
+ok('skills are music gear with stable save ids; no medical leftovers', () => {
+  assert.deepEqual(sim.WEAPONS.map(w => w.id), ['swab', 'daggers', 'tower', 'dragon', 'needles', 'stick', 'bubble', 'satellite', 'maw']);
+  assert.deepEqual(sim.WEAPONS.map(w => w.name), ['Beat Pad', 'Spinning Vinyl', 'Speaker Stack', 'Autotune', 'Treble Pins', 'Drumsticks', 'Hum Bubbles', 'Spotlight Storm', 'Bass Drop']);
+  const text = JSON.stringify([sim.WEAPONS, sim.CAPSULE_UPS, sim.PASSIVES.map(p => [p.name, p.desc]), sim.META.map(m => m.name)]);
+  assert.ok(!/swab|medical|acupunct|massage|membrane|antibod|disinfect|snot|dagger/i.test(text.replace(/"id":"(swab|daggers)"/g, '')), 'no medical words: ' + text.match(/swab|medical|acupunct|massage|membrane|antibod|disinfect|snot|dagger/i));
+  assert.deepEqual(sim.META.map(m => m.id), ['atk', 'crt', 'cdn', 'vit', 'for', 'rev']);
+});
+
+ok('daily gigs: three deterministic goals a day; progress counts finished runs; claim once; a new day resets', () => {
+  const day = 20000, a = sim.dailyGoals(day), b = sim.dailyGoals(day), c = sim.dailyGoals(day + 1);
+  assert.deepEqual(a, b); assert.equal(a.length, 3); assert.equal(new Set(a.map(x => x.id)).size, 3);
+  assert.notDeepEqual(a.map(x => x.id + x.target), c.map(x => x.id + x.target));
+  assert.ok(a.every(x => x.text && x.target > 0 && (x.reward.beats || x.reward.sparkles)));
+  const s = sim.defaultSave();
+  assert.ok(!sim.claimGoal(s, day, a[0].id), 'nothing done yet');
+  sim.addRunStats(s, day, { kills: 500, won: true, chests: 50, picks: 50, groove: 20 });
+  for (const goal of a) assert.equal(sim.goalProgress(s, day, goal), goal.target);
+  const b0 = s.beats, sp0 = s.sparkles;
+  assert.ok(sim.claimGoal(s, day, a[0].id)); assert.ok(!sim.claimGoal(s, day, a[0].id), 'only once');
+  assert.equal(s.beats + s.sparkles, b0 + sp0 + (a[0].reward.beats || 0) + (a[0].reward.sparkles || 0));
+  assert.equal(sim.goalProgress(s, day + 1, sim.dailyGoals(day + 1)[0]), 0, 'a new day starts fresh');
+  sim.addRunStats(s, day + 1, { kills: 1, won: false, chests: 0, picks: 0, groove: 3 }); assert.equal(s.daily.day, day + 1); assert.ok(!s.daily.claimed[a[0].id]);
+  const clean = sim.sanitizeSave(JSON.parse(JSON.stringify(s))); assert.equal(clean.daily.day, day + 1); assert.equal(clean.daily.progress.kills, 1);
+  assert.equal(sim.sanitizeSave({ daily: 'junk' }).daily.day, 0);
+  const g = sim.createGame({ seed: 54 }); for (const q of g.snakes[0].segs) q.hp = 0; run(g, 8, {}); assert.ok(g.result && g.result.won && 'chests' in g.result && 'groove' in g.result && g.result.picks >= 0);
+});
+
 ok('drawing kit bakes every skin, kind, pickup, currency, loot box, skill icon and shot, and draws heads', () => {
   const kit = createArtDraw(stubCanvas, 2), g = stubCtx();
   for (const skin of sim.SKINS) for (const boss of [false, true]) for (const kind of ['', 'armor', 'bomb', 'upgrade']) assert.ok(kit.SPR.body(skin, boss, kind), `${skin} ${boss} ${kind}`);

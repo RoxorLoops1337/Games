@@ -86,14 +86,23 @@ const KIND = { armor: '#aebbd6', bomb: '#ff4d6d' };
 export function createArtDraw(makeCanvas, dpr = 2) {
   const cache = new Map();
   // bake(key, w, h, fn): fn draws around (0,0); the sprite is w x h logical units.
-  function bake(key, w, h, fn) {
+  function bake(key, w, h, fn, scale = dpr) {
     if (cache.has(key)) return cache.get(key);
     let spr = null;
-    const c = makeCanvas && makeCanvas(Math.ceil(w * dpr), Math.ceil(h * dpr));
-    if (c) { const g = c.getContext('2d'); g.scale(dpr, dpr); g.translate(w / 2, h / 2); fn(g); spr = { c, w, h }; }
+    const c = makeCanvas && makeCanvas(Math.ceil(w * scale), Math.ceil(h * scale));
+    if (c) { const g = c.getContext('2d'); g.scale(scale, scale); g.translate(w / 2, h / 2); fn(g); spr = { c, w, h }; }
     cache.set(key, spr); return spr;
   }
   const B = 40;   // bake radius
+  // layer(key, w, h, scale, fn): ONE big static layer (the background); a new key replaces the old one.
+  let layerKey = null, layerSpr = null;
+  function layer(key, w, h, scale, fn) {
+    if (layerKey === key) return layerSpr;
+    const c = makeCanvas && makeCanvas(Math.ceil(w * scale), Math.ceil(h * scale));
+    layerKey = key; layerSpr = null;
+    if (c) { const g = c.getContext('2d'); g.scale(scale, scale); fn(g); layerSpr = { c, w, h }; }
+    return layerSpr;
+  }
 
   // ---- snake cells ----
   // One drawing per cell style; the species picks the style. Faces are only ever on the head.
@@ -262,34 +271,52 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   };
 
   // ---- weapon pieces (face +x unless upright) ----
+  // A small eighth note glyph, used on skills and bubbles.
+  function noteGlyph(g, x, y, s, col) {
+    const stem = [[x + s * 0.5, y + s * 0.3], [x + s * 0.5, y - s * 1.2]];
+    line(g, stem, s * 0.34); line(g, stem, s * 0.16, col);
+    g.beginPath(); g.moveTo(x + s * 0.5, y - s * 1.2); g.bezierCurveTo(x + s * 1.5, y - s * 1.0, x + s * 1.3, y - s * 0.2, x + s * 1.0, y + s * 0.1); ink(g, s * 0.34); g.stroke(); ink(g, s * 0.16, col); g.stroke();
+    cel(g, col, ell(x, y + s * 0.35, s * 0.62, s * 0.46, -0.4), { r: s * 0.6, lw: s * 0.14, shadow: shade(col, 0.3) });
+  }
+  // The skills are music gear (ids stay the same for saves): swab = Beat Pad, dagger = Spinning Vinyl,
+  // tower = Speaker Stack, dragon = Autotune Notes, needle = Treble Pins, stick = Drumsticks,
+  // bubble = Hum Bubbles, satellite = Spotlight Storm, maw = Bass Drop. No faces on gear.
   const WPN = {
-    swab: g => { const r = B; line(g, [[-r * 1.2, 0], [r * 1.2, 0]], r * 0.42); line(g, [[-r * 1.2, 0], [r * 1.2, 0]], r * 0.24, '#ffe8c8');
-      for (const s of [-1, 1]) cel(g, '#fffaf0', circ(s * r * 1.3, 0, r * 0.46), { r: r * 0.46, shadow: '#e6d6c8', lw: 3 }); },
-    dagger: g => { const r = B;
-      cel(g, '#dfe6f6', poly([[r * 1.2, 0], [r * 0.1, -r * 0.3], [-r * 0.35, 0], [r * 0.1, r * 0.3]]), { r: r * 0.7, shadow: '#9aa6c6', lw: 3, hi: false });
-      line(g, [[r * 0.9, 0], [-r * 0.2, 0]], 2, '#9aa6c6');
-      cel(g, '#ffd84d', poly([[-r * 0.35, -r * 0.4], [-r * 0.2, -r * 0.4], [-r * 0.2, r * 0.4], [-r * 0.35, r * 0.4]]), { r: r * 0.3, shadow: '#d49a1e', lw: 2.4, hi: false });
-      cel(g, '#ff7eb6', poly([[-r * 0.85, -r * 0.14], [-r * 0.35, -r * 0.14], [-r * 0.35, r * 0.14], [-r * 0.85, r * 0.14]]), { r: r * 0.3, shadow: '#d9488f', lw: 2.4, hi: false }); },
-    needle: g => { const r = B; line(g, [[-r * 1.0, 0], [r * 1.2, 0]], r * 0.2); line(g, [[-r * 1.0, 0], [r * 1.2, 0]], r * 0.09, '#f2f6ff');
-      cel(g, '#ff7eb6', circ(-r * 1.05, 0, r * 0.2), { r: r * 0.2, shadow: '#d9488f', lw: 2.4, hi: false }); },
-    stick: g => { const r = B; line(g, [[-r * 2, 0], [r * 1.6, 0]], r * 0.5); line(g, [[-r * 2, 0], [r * 1.6, 0]], r * 0.32, '#ff9ac6'); line(g, [[-r * 2, -r * 0.05], [r * 1.2, -r * 0.05]], r * 0.07, '#ffd0e6');
-      for (const x of [0.5, 1.0, 1.5]) cel(g, '#ffe3f0', circ(r * x, 0, r * 0.3), { r: r * 0.3, shadow: '#ff9ac6', lw: 3, hi: false });
-      cel(g, '#ffd84d', circ(-r * 2, 0, r * 0.34), { r: r * 0.34, shadow: '#d49a1e', lw: 3, hi: false }); },
-    dragon: g => { const r = B * 0.8;
-      for (const s of [-1, 1]) cel(g, '#ffd84d', poly([[s * r * 0.35, -r * 0.75], [s * r * 0.8, -r * 1.2], [s * r * 0.85, -r * 0.6]]), { r: r * 0.4, hi: false, lw: 2.4, shadow: '#d49a1e' });
-      cel(g, '#8dff6a', circ(0, 0, r), { r, shadow: '#43b83a' }); eye(g, -r * 0.34, -r * 0.15, r * 0.2, r * 0.26, { iris: '#2d170f' }); eye(g, r * 0.34, -r * 0.15, r * 0.2, r * 0.26, { iris: '#2d170f' });
-      g.fillStyle = '#7a1633'; ell(0, r * 0.42, r * 0.3, r * 0.2)(g); g.fill(); ink(g, 2.4); g.stroke(); g.fillStyle = '#ff9ac0'; ell(0, r * 0.52, r * 0.15, r * 0.1)(g); g.fill(); },
-    bubble: g => { const r = B * 0.95; g.fillStyle = 'rgba(190,235,255,.35)'; circ(0, 0, r)(g); g.fill(); ink(g, 4, '#2d170f'); g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.arc(0, 0, r * 0.66, -2.5, -1.2); g.stroke(); sparkle(g, r * 0.4, r * 0.3, r * 0.22); },
-    satellite: g => { const r = B * 0.9; cel(g, '#b69cf0', star(8, r, r * 0.6, 0.2), { r, shadow: '#6a4cd6', lw: 3 });
-      cel(g, '#ffe14a', poly([[r * 0.15, -r * 0.7], [-r * 0.35, r * 0.05], [-r * 0.02, r * 0.05], [-r * 0.2, r * 0.7], [r * 0.4, -r * 0.15], [r * 0.05, -r * 0.15]]), { r: r * 0.5, hi: false, lw: 2.4, shadow: '#e0a82a' }); },
-    maw: g => { const r = B * 0.9; g.fillStyle = '#240a3d'; circ(0, 0, r)(g); g.fill(); ink(g, 4); g.stroke(); g.fillStyle = '#4b1a85'; circ(0, 0, r * 0.62)(g); g.fill();
-      g.fillStyle = '#fff8ec'; for (let i = 0; i < 10; i++) { const an = (i / 10) * TAU; g.save(); g.rotate(an); g.beginPath(); g.moveTo(r * 0.86, -r * 0.11); g.lineTo(r * 0.58, 0); g.lineTo(r * 0.86, r * 0.11); g.closePath(); g.fill(); ink(g, 1.6); g.stroke(); g.restore(); } },
+    swab: g => { const r = B * 1.35;
+      cel(g, '#3a2d7a', circ(0, 0, r), { r, shadow: '#241a52', lw: 4, hi: false });
+      for (const [k, col] of [[0.86, '#ff7eb6'], [0.62, '#6fe3ff'], [0.38, '#ffd84d']]) { g.strokeStyle = col; g.lineWidth = r * 0.07; circ(0, 0, r * k)(g); g.stroke(); }
+      cel(g, '#ff7eb6', circ(0, 0, r * 0.2), { r: r * 0.2, hi: false, lw: 3, shadow: '#c93a8f' });
+      for (let i = 0; i < 8; i++) { const an = (i / 8) * TAU; cel(g, '#fff8ec', circ(Math.cos(an) * r * 0.96, Math.sin(an) * r * 0.96, r * 0.05), { r: r * 0.06, hi: false, lw: 1.4 }); } },
+    dagger: g => { const r = B * 0.9;
+      cel(g, '#2a2140', circ(0, 0, r), { r, shadow: '#16102a', lw: 3.2, hi: false });
+      for (const k of [0.82, 0.7, 0.58]) { g.strokeStyle = 'rgba(255,255,255,.16)'; g.lineWidth = r * 0.04; circ(0, 0, r * k)(g); g.stroke(); }
+      g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = r * 0.1; g.lineCap = 'round'; g.beginPath(); g.arc(0, 0, r * 0.72, -2.4, -1.4); g.stroke();
+      cel(g, '#ff7eb6', circ(0, 0, r * 0.34), { r: r * 0.34, hi: false, lw: 2.4, shadow: '#c93a8f' }); g.fillStyle = INK; circ(0, 0, r * 0.07)(g); g.fill(); },
+    needle: g => { const r = B;
+      cel(g, '#f2f6ff', poly([[r * 1.25, 0], [-r * 0.5, -r * 0.14], [-r * 0.5, r * 0.14]]), { r: r * 0.6, hi: false, lw: 2.4, shadow: '#9aa6c6' });
+      noteGlyph(g, -r * 0.95, r * 0.1, r * 0.3, '#ff7eb6'); },
+    stick: g => { const r = B;
+      line(g, [[-r * 2, 0], [r * 1.5, 0]], r * 0.5); line(g, [[-r * 2, 0], [r * 1.5, 0]], r * 0.32, '#e0a468'); line(g, [[-r * 2, -r * 0.06], [r * 1.2, -r * 0.06]], r * 0.07, '#f6d5a8');
+      cel(g, '#e0a468', ell(r * 1.6, 0, r * 0.44, r * 0.36), { r: r * 0.4, hi: false, lw: 3, shadow: '#a8682b' });
+      cel(g, '#f6d5a8', circ(-r * 2, 0, r * 0.2), { r: r * 0.2, hi: false, lw: 2, shadow: '#e0a468' }); },
     tower: g => { const r = B;
-      cel(g, '#fff8ec', poly([[-r * 0.6, r * 0.9], [-r * 0.5, -r * 0.5], [r * 0.5, -r * 0.5], [r * 0.6, r * 0.9]]), { r, shadow: '#e6d6c8', lw: 3.4, hi: false });
-      cel(g, '#4fb8ff', poly([[-r * 0.8, -r * 0.5], [0, -r * 1.25], [r * 0.8, -r * 0.5]]), { r, shadow: '#2a78d6', lw: 3.4, hi: false });
-      g.fillStyle = '#ff5a7e'; g.fillRect(-r * 0.09, -r * 0.1, r * 0.18, r * 0.5); g.fillRect(-r * 0.25, r * 0.06, r * 0.5, r * 0.18);
-      eye(g, -r * 0.22, -r * 0.3, r * 0.1, r * 0.13, { iris: '#2d170f' }); eye(g, r * 0.22, -r * 0.3, r * 0.1, r * 0.13, { iris: '#2d170f' });
+      cel(g, '#3a2d7a', poly([[-r * 0.7, -r * 1.0], [r * 0.7, -r * 1.0], [r * 0.7, r * 1.0], [-r * 0.7, r * 1.0]]), { r, shadow: '#241a52', lw: 3.4, hi: false });
+      cel(g, '#1a1238', circ(0, r * 0.35, r * 0.46), { r: r * 0.46, hi: false, lw: 3, shadow: '#0d0924' }); cel(g, '#ff7eb6', circ(0, r * 0.35, r * 0.2), { r: r * 0.2, hi: false, lw: 2.4, shadow: '#c93a8f' });
+      cel(g, '#1a1238', circ(0, -r * 0.5, r * 0.24), { r: r * 0.24, hi: false, lw: 2.4, shadow: '#0d0924' }); cel(g, '#6fe3ff', circ(0, -r * 0.5, r * 0.1), { r: r * 0.1, hi: false, lw: 2, shadow: '#2a9ccf' });
       sparkle(g, r * 0.55, -r * 1.1, r * 0.22); },
+    dragon: g => { const r = B * 0.9;
+      for (const s of [-1, 1]) cel(g, '#bfe9ff', poly([[s * r * 0.3, -r * 0.2], [s * r * 1.3, -r * 0.9], [s * r * 1.1, -r * 0.1], [s * r * 0.9, r * 0.3], [s * r * 0.4, r * 0.1]]), { r: r * 0.8, hi: false, lw: 2.4, shadow: '#6fb4e0' });
+      noteGlyph(g, -r * 0.1, r * 0.15, r * 0.8, '#8dff6a'); },
+    bubble: g => { const r = B * 0.95; g.fillStyle = 'rgba(190,235,255,.35)'; circ(0, 0, r)(g); g.fill(); ink(g, 4); g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.arc(0, 0, r * 0.66, -2.5, -1.2); g.stroke(); noteGlyph(g, -r * 0.2, r * 0.2, r * 0.38, '#ff7eb6'); },
+    satellite: g => { const r = B * 0.9;
+      g.fillStyle = 'rgba(255,240,170,.55)'; g.beginPath(); g.moveTo(r * 0.2, -r * 0.2); g.lineTo(r * 1.3, -r * 0.9); g.lineTo(r * 1.3, r * 0.9); g.lineTo(r * 0.2, r * 0.2); g.closePath(); g.fill();
+      line(g, [[-r * 0.4, 0], [-r * 0.9, r * 0.8]], r * 0.16);
+      cel(g, '#4a3a8a', poly([[-r * 0.9, -r * 0.45], [r * 0.3, -r * 0.3], [r * 0.3, r * 0.3], [-r * 0.9, r * 0.45]]), { r, shadow: '#2a2060', lw: 3, hi: false });
+      cel(g, '#ffe14a', circ(r * 0.3, 0, r * 0.3), { r: r * 0.3, hi: false, lw: 2.4, shadow: '#e0a82a' }); },
+    maw: g => { const r = B * 0.95;
+      cel(g, '#240a3d', circ(0, 0, r), { r, shadow: '#12051f', lw: 3.4, hi: false });
+      for (const [k, col] of [[0.8, '#8a4fe0'], [0.6, '#b69cf0'], [0.4, '#ff7eb6']]) { g.strokeStyle = col; g.lineWidth = r * 0.09; circ(0, 0, r * k)(g); g.stroke(); }
+      cel(g, '#0d0924', circ(0, 0, r * 0.2), { r: r * 0.2, hi: false, lw: 2.4, shadow: '#000' }); },
   };
 
   // ---- shots: music notes (sound is the currency of this world) ----
@@ -309,9 +336,9 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     body: (skin, boss, kind) => bake(`body|${skin}|${boss ? 1 : 0}|${kind || ''}`, B * 3.2, B * 3.2, bodyFn(skin, boss, kind)),
     minion: id => bake('min|' + id, B * 3.4, B * 3.4, MIN[id] || MIN.green),
     pickup: k => bake('pk|' + k, B * 2.4, B * 2.4, PICK[k] || PICK.gem),
-    note: crit => bake('note|' + (crit ? 1 : 0), B * 2.4, B * 2.4, noteFn(crit ? '#ffd84d' : '#6fe3ff', crit)),
+    note: crit => bake('note|' + (crit ? 1 : 0), B * 2.4, B * 2.4, noteFn(crit ? '#ffd84d' : '#6fe3ff', crit), 1),
     acid: () => bake('acid', B * 1.6, B * 1.6, acidFn),
-    weapon: id => bake('wpn|' + id, B * 4.6, B * 3.4, WPN[id] || WPN.dagger),
+    weapon: id => bake('wpn|' + id, B * 4.6, B * 3.4, WPN[id] || WPN.dagger, 1),
   };
 
   // blit a baked sprite centred at (x, y), `size` wide, optional rotation / flip
@@ -405,5 +432,5 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   function text2(g, ch, x, y, size) { g.font = `900 ${size}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = size * 0.25; g.strokeStyle = INK; g.strokeText(ch, x, y); g.fillStyle = '#fff'; g.fillText(ch, x, y); }
 
   // flat colour fallback shapes are not needed: the kit always draws. Expose helpers for UI art too.
-  return { SPR, blit, drawHead, cel, eye, sparkle, SPECIES, MINION_IDS: Object.keys(MIN), cache, B };
+  return { SPR, blit, drawHead, cel, eye, sparkle, SPECIES, MINION_IDS: Object.keys(MIN), cache, B, bake, layer, makeCanvas, dpr };
 }

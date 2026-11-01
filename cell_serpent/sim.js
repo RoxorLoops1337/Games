@@ -29,33 +29,33 @@ export function rng(seed) {
 // ---------------------------------------------------------------- skills (weapons)
 // `frag` is how many fragments unlock a locked skill (0 = owned from the start).
 export const WEAPONS = [
-  { id: 'swab', name: 'Sterile Swab', max: 5, frag: 0, desc: 'Plants a huge swab by the face. Bigger and longer with levels.' },
-  { id: 'daggers', name: 'Spinning Daggers', max: 5, frag: 0, desc: 'Daggers orbit your cell and cut anything they touch.' },
-  { id: 'tower', name: 'Medical Tower', max: 5, frag: 0, desc: 'Towers pulse area damage around your cell.' },
-  { id: 'dragon', name: 'Snot Dragon', max: 5, frag: 0, desc: 'Fires homing snot balls that never miss.' },
-  { id: 'needles', name: 'Acupuncture', max: 5, frag: 20, desc: 'A fan of piercing needles that skewer whole rows.' },
-  { id: 'stick', name: 'Massage Stick', max: 5, frag: 20, desc: 'A stick sweeps in front of you and whacks cells.' },
-  { id: 'bubble', name: 'Disinfectant Bubble', max: 5, frag: 30, desc: 'Floating bubbles burst on contact and slow the virus.' },
-  { id: 'satellite', name: 'Satellite Storm', max: 5, frag: 40, desc: 'Lightning strikes that deal a percent of cell HP.' },
-  { id: 'maw', name: 'Abyssal Maw', max: 5, frag: 60, desc: 'A maw that executes weakened cells outright.' },
+  { id: 'swab', name: 'Beat Pad', max: 5, frag: 0, desc: 'Drops a drum pad under the snake that pulses damage in time. Bigger and longer with levels.' },
+  { id: 'daggers', name: 'Spinning Vinyl', max: 5, frag: 0, desc: 'Records spin around you and slice through cells.' },
+  { id: 'tower', name: 'Speaker Stack', max: 5, frag: 0, desc: 'Speakers beside you thump bass waves at everything nearby.' },
+  { id: 'dragon', name: 'Autotune', max: 5, frag: 0, desc: 'Winged notes that always find their cell.' },
+  { id: 'needles', name: 'Treble Pins', max: 5, frag: 20, desc: 'A fan of piercing high notes that skewer whole rows.' },
+  { id: 'stick', name: 'Drumsticks', max: 5, frag: 20, desc: 'Sticks sweep in front of you and whack cells.' },
+  { id: 'bubble', name: 'Hum Bubbles', max: 5, frag: 30, desc: 'Humming bubbles burst on contact and slow the snake.' },
+  { id: 'satellite', name: 'Spotlight Storm', max: 5, frag: 40, desc: 'Stage lights strike for a percent of cell HP.' },
+  { id: 'maw', name: 'Bass Drop', max: 5, frag: 60, desc: 'A sub-bass drop that wipes out weakened cells.' },
 ];
 const WEAPON = Object.fromEntries(WEAPONS.map(w => [w.id, w]));
 export const WEAPON_STARTERS = WEAPONS.filter(w => !w.frag).map(w => w.id);
 
 // The capsule is the cell's own gun; its upgrades are the first thing you are offered.
 export const CAPSULE_UPS = [
-  { id: 'aspd', name: 'Faster Notes', max: 8, w: 1.2, desc: '+15% attack speed' },
-  { id: 'notes', name: 'Extra Note', max: 4, w: 1.0, desc: '+1 note per shot, side by side' },
-  { id: 'burst', name: 'Double Burst', max: 3, w: 0.9, desc: '+1 burst per shot' },
-  { id: 'cdmg', name: 'Louder Notes', max: 8, w: 1.2, desc: '+30% capsule damage' },
+  { id: 'aspd', name: 'Faster Tempo', max: 8, w: 1.2, desc: '+15% attack speed' },
+  { id: 'notes', name: 'Harmony', max: 4, w: 1.0, desc: '+1 note per shot, side by side' },
+  { id: 'burst', name: 'Echo', max: 3, w: 0.9, desc: '+1 burst per shot, a quick echo of the notes' },
+  { id: 'cdmg', name: 'Volume Up', max: 8, w: 1.2, desc: '+30% capsule damage' },
 ];
 export const PASSIVES = [
-  { id: 'power', name: 'Strong Antibodies', max: 5, w: 0.9, desc: '+20% damage for every skill', apply: () => {} },
-  { id: 'haste', name: 'Hyper Metabolism', max: 5, w: 0.9, desc: 'Every skill recharges 10% faster', apply: () => {} },
-  { id: 'crit', name: 'Lethal Mutation', max: 5, w: 0.7, desc: '+8% crit chance for the capsule and needles', apply: p => { p.crit += 0.08; } },
-  { id: 'vital', name: 'Thick Membrane', max: 5, w: 0.7, desc: '+30 max HP and heal 30', apply: p => { p.maxHp += 30; p.hp = Math.min(p.maxHp, p.hp + 30); } },
-  { id: 'guard', name: 'Tough Membrane', max: 4, w: 0.6, desc: 'Breaches hurt 15% less', apply: p => { p.guard += 0.15; } },
-  { id: 'speed', name: 'Flagella', max: 4, w: 0.6, desc: '+12% move speed', apply: p => { p.speed *= 1.12; } },
+  { id: 'power', name: 'Loud Vocals', max: 5, w: 0.9, desc: '+20% damage for every skill', apply: () => {} },
+  { id: 'haste', name: 'Tempo Up', max: 5, w: 0.9, desc: 'Every skill recharges 10% faster', apply: () => {} },
+  { id: 'crit', name: 'Perfect Pitch', max: 5, w: 0.7, desc: '+8% crit chance for the capsule and needles', apply: p => { p.crit += 0.08; } },
+  { id: 'vital', name: 'Warm Up', max: 5, w: 0.7, desc: '+30 max HP and heal 30', apply: p => { p.maxHp += 30; p.hp = Math.min(p.maxHp, p.hp + 30); } },
+  { id: 'guard', name: 'Ear Plugs', max: 4, w: 0.6, desc: 'Breaches hurt 15% less', apply: p => { p.guard += 0.15; } },
+  { id: 'speed', name: 'Dance Shoes', max: 4, w: 0.6, desc: '+12% move speed', apply: p => { p.speed *= 1.12; } },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
 const CAP_UP = Object.fromEntries(CAPSULE_UPS.map(u => [u.id, u]));
@@ -64,12 +64,12 @@ const CAP_UP = Object.fromEntries(CAPSULE_UPS.map(u => [u.id, u]));
 // Beats (gold music-note coins) come from cells and clears. Sparkles (pink star gems) come from
 // clearing a stage for the first time. Fragments come from chest cells and loot boxes.
 export const META = [
-  { id: 'atk', name: 'Attack', max: 12, base: 30, grow: 1.45, desc: l => `+${10 * l}% damage` },
-  { id: 'crt', name: 'Crit', max: 10, base: 30, grow: 1.45, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
-  { id: 'cdn', name: 'Cooldown', max: 10, base: 30, grow: 1.45, desc: l => `-${5 * l}% cooldowns` },
-  { id: 'vit', name: 'Vitality', max: 10, base: 25, grow: 1.45, desc: l => `+${12 * l} max HP` },
-  { id: 'for', name: 'Fortune', max: 10, base: 40, grow: 1.5, desc: l => `+${10 * l}% Beats` },
-  { id: 'rev', name: 'Second Wind', max: 1, base: 400, grow: 1, desc: () => 'Revive once per run' },
+  { id: 'atk', name: 'Volume', max: 12, base: 30, grow: 1.45, desc: l => `+${10 * l}% damage` },
+  { id: 'crt', name: 'Pitch', max: 10, base: 30, grow: 1.45, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
+  { id: 'cdn', name: 'Tempo', max: 10, base: 30, grow: 1.45, desc: l => `-${5 * l}% cooldowns` },
+  { id: 'vit', name: 'Stamina', max: 10, base: 25, grow: 1.45, desc: l => `+${12 * l} max HP` },
+  { id: 'for', name: 'Fame', max: 10, base: 40, grow: 1.5, desc: l => `+${10 * l}% Beats` },
+  { id: 'rev', name: 'Encore', max: 1, base: 400, grow: 1, desc: () => 'Get back up once per run' },
 ];
 export const metaCost = (def, lvl) => Math.round(def.base * Math.pow(def.grow, lvl));
 export const SKILL_MAX_LV = 10;
@@ -83,7 +83,7 @@ export const BOXES = [
 export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
-  return { v: 3, beats: 0, sparkles: 0, meta: {}, skills, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
+  return { v: 3, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -92,6 +92,7 @@ export function sanitizeSave(raw) {
   s.beats = num(raw.beats ?? raw.coins); s.sparkles = num(raw.sparkles);
   s.cleared = num(raw.cleared); s.best = Math.max(s.cleared, num(raw.best)); s.runs = num(raw.runs); s.kills = num(raw.kills);
   s.muted = !!raw.muted;
+  if (raw.daily && typeof raw.daily === 'object') { s.daily.day = num(raw.daily.day); for (const k of Object.keys(raw.daily.progress || {})) s.daily.progress[k] = num(raw.daily.progress[k]); for (const k of Object.keys(raw.daily.claimed || {})) if (raw.daily.claimed[k]) s.daily.claimed[k] = 1; }
   for (const d of META) s.meta[d.id] = Math.min(d.max, num(raw.meta && raw.meta[d.id]));
   for (const w of WEAPONS) {
     const r = raw.skills && raw.skills[w.id];
@@ -141,6 +142,35 @@ export function openBox(save, boxId, rand = Math.random) {
   for (const id of Object.keys(got)) save.skills[id].frag += got[id];
   return Object.entries(got).map(([id, n]) => ({ id, n })).sort((a, b) => b.n - a.n);
 }
+// Daily gigs: three goals per day, the same for everyone that day. Progress is counted from finished runs.
+export const GOAL_DEFS = [
+  { id: 'cells', text: n => `Pop ${n} cells`, targets: [30, 50, 80], stat: 'kills', reward: [{ beats: 40 }, { beats: 70 }, { beats: 110 }] },
+  { id: 'wins', text: n => `Clear ${n} stage${n > 1 ? 's' : ''}`, targets: [1, 2, 3], stat: 'wins', reward: [{ sparkles: 8 }, { sparkles: 14 }, { sparkles: 22 }] },
+  { id: 'chests', text: n => `Collect ${n} chests`, targets: [3, 5, 8], stat: 'chests', reward: [{ beats: 40 }, { beats: 70 }, { beats: 110 }] },
+  { id: 'groove', text: n => `Reach groove ${n}`, targets: [8, 14, 20], stat: 'groove', max: true, reward: [{ sparkles: 6 }, { sparkles: 10 }, { sparkles: 16 }] },
+  { id: 'picks', text: n => `Pick ${n} upgrades`, targets: [4, 7, 10], stat: 'picks', reward: [{ beats: 40 }, { beats: 70 }, { beats: 110 }] },
+];
+export function dailyGoals(day) {
+  const R = rng((Math.imul(day | 0, 2654435761) >>> 0) || 1), pool = GOAL_DEFS.slice(), out = [];
+  for (let i = 0; i < 3; i++) {
+    const d = pool.splice(Math.floor(R() * pool.length), 1)[0], tier = Math.min(2, Math.floor(R() * 2.2));
+    out.push({ id: d.id, target: d.targets[tier], text: d.text(d.targets[tier]), stat: d.stat, max: !!d.max, reward: d.reward[tier] });
+  }
+  return out;
+}
+export function addRunStats(save, day, r) {
+  if (!save.daily || save.daily.day !== day) save.daily = { day, progress: {}, claimed: {} };
+  const p = save.daily.progress, add = (k, v) => { p[k] = (p[k] || 0) + v; };
+  add('kills', r.kills || 0); add('wins', r.won ? 1 : 0); add('chests', r.chests || 0); add('picks', r.picks || 0);
+  p.groove = Math.max(p.groove || 0, r.groove || 0);
+}
+export const goalProgress = (save, day, goal) => (save.daily && save.daily.day === day ? Math.min(goal.target, (save.daily.progress[goal.stat] || 0)) : 0);
+export function claimGoal(save, day, id) {
+  const goal = dailyGoals(day).find(x => x.id === id);
+  if (!goal || goalProgress(save, day, goal) < goal.target || (save.daily.claimed && save.daily.claimed[id])) return false;
+  save.daily.claimed[id] = 1; save.beats += goal.reward.beats || 0; save.sparkles += goal.reward.sparkles || 0;
+  return true;
+}
 export const canPlay = (save, n) => n >= 1 && n <= save.cleared + 1;
 export const clearReward = n => ({ sparkles: (isBossStage(n) ? 40 : 15) + 3 * n });
 // Applies a finished run to the save and returns what was earned.
@@ -157,7 +187,7 @@ export function applyResult(save, r) {
 
 // ---------------------------------------------------------------- stages
 export const isBossStage = n => n % 5 === 0;
-export const hpBase = n => 10 * (14 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
+export const hpBase = n => 12 * (14 * Math.pow(1.08, n - 1) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
 export const snakeLength = n => Math.min(60, 12 + 2 * (n - 1) + (isBossStage(n) ? 6 : 0));
 export const arrivalTime = n => Math.max(45, 80 - 0.8 * n) + (isBossStage(n) ? 18 : 0);   // seconds for the face to reach the membrane if you do nothing
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
@@ -288,7 +318,7 @@ function spawnSnake(g, n) {
 }
 
 export function startStage(g, n) {
-  g.stage = n;
+  g.stage = n; g.skin = skinFor(n);
   g.snakes.length = 0; g.stageHpMax = 0; g.zones.length = 0; g.maws.length = 0; g.bullets.length = 0; g.vq.length = 0;
   g.path = buildPath(n);
   const p = g.p;
@@ -311,7 +341,7 @@ export function createGame(opts = {}) {
     events: [], ups: {}, weap: {}, unlocked, skillLv,
     level: 1, cells: 0, upgradeLeft: 0, pending: 0, choices: [], resume: 'play', rerolls: 4,
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
-    frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
+    groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
   };
   startStage(g, opts.stage || 1);
   return g;
@@ -319,11 +349,17 @@ export function createGame(opts = {}) {
 
 const visible = s => s.y > 8 && s.y < H - 8 && s.x > 8 && s.x < W - 8;
 const lv = (g, id) => (g.weap[id] ? g.weap[id].lv : 0);
-const dmgMul = g => 10 * g.p.atk * (1 + 0.2 * (g.ups.power || 0));   // x10: damage and HP are shown as big numbers
+export const GROOVE_MAX = 20;
+// Groove: every note that lands builds it, a pause in the hits lets it fade. Each point is +1.5% damage.
+const dmgMul = g => 10 * g.p.atk * (1 + 0.2 * (g.ups.power || 0)) * (1 + 0.015 * g.groove);   // x10: damage and HP are shown as big numbers
+function bumpGroove(g) {
+  g.grooveT = 0;
+  if (g.groove < GROOVE_MAX) { g.groove++; if (g.groove > g.grooveMax) g.grooveMax = g.groove; if (g.groove % 5 === 0) g.events.push({ t: 'groove', n: g.groove }); }
+}
 const cdMul = g => g.p.cdBase * Math.pow(0.9, g.ups.haste || 0);
 
 function eachTarget(g, fn) {
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield) fn(s, sn);
+  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave) fn(s, sn);
 }
 function nearestTarget(g, x, y, maxD = 1e9) {
   let best = null, bd = maxD;
@@ -337,7 +373,7 @@ function nearestTarget(g, x, y, maxD = 1e9) {
 const frontSegs = g => g.snakes.map(sn => sn.segs[0]).filter(s => s && visible(s));
 
 function damageSeg(g, s, dmg, crit, x, y) {
-  if (s.hp <= 0 || s.shield) return;
+  if (s.hp <= 0 || s.shield || s.wave) return;
   s.hp -= dmg; s.flash = 0.12;
   g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s });
 }
@@ -404,7 +440,7 @@ function hurtPlayer(g, dmg, fx, fy) {
   }
 }
 function makeResult(g, won) {
-  return { won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: virusName(g.stage), frags: { ...g.frags } };
+  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: virusName(g.stage), frags: { ...g.frags } };
 }
 // the face has reached the membrane and is chewing through it: HP drains until you finish the cells
 // behind it (each kill pushes the face back off the membrane)
@@ -487,7 +523,7 @@ function collect(g, pk) {
   if (pk.kind === 'rage') { p.rage = 8; g.events.push({ t: 'power', kind: 'rage', x: pk.x, y: pk.y }); return; }
   if (pk.kind === 'chest') {   // chests give Beats and a skill fragment, never a skill pick
     const id = randomFragment(g);
-    g.coins += (4 + g.stage * 2) * p.coinMul; g.frags[id] = (g.frags[id] || 0) + 1;
+    g.coins += (4 + g.stage * 2) * p.coinMul; g.frags[id] = (g.frags[id] || 0) + 1; g.chestsOpened++;
     g.events.push({ t: 'chest', x: pk.x, y: pk.y, frag: id }); return;
   }
   if (pk.kind === 'coin') { g.coins += pk.v * p.coinMul; g.events.push({ t: 'coin', x: pk.x, y: pk.y, v: pk.v }); }
@@ -652,6 +688,7 @@ export function step(g, dt, input) {
   if (p.iframes > 0) p.iframes -= dt;
   if (p.shield > 0) p.shield -= dt;
   if (p.rage > 0) p.rage -= dt;
+  g.grooveT += dt; if (g.grooveT > 1.2 && g.groove > 0) g.groove = Math.max(0, g.groove - 8 * dt);   // the groove fades when the hits stop
 
   // the virus rides the track as one connected chain driven by its tail. Cells in front of a gap
   // slide back to close it, so every kill also pushes the face away from the membrane.
@@ -678,6 +715,9 @@ export function step(g, dt, input) {
       segs[i].tp = target;
     }
     segs[0].shield = segs.length > 1;
+    // boss: a wave of shields rolls down the chain like a beat. Cells inside it cannot be hit, so time your shots.
+    const wavePos = sn.boss ? (g.t * 4.5) % (segs.length + 8) : -99;
+    for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && Math.abs(i - wavePos) < 1.6;
     if (sn.breach && g.phase === 'play') { sn.breachT -= dt; if (sn.breachT <= 0) { sn.breachT = 0.5; breachTick(g, sn); } } else sn.breachT = 0;
     for (const s of segs) {
       const ox = s.x, oy = s.y;
@@ -714,9 +754,9 @@ export function step(g, dt, input) {
     let dead = b.life <= 0 || b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30;
     if (!dead) {
       for (const sn of g.snakes) for (const s of sn.segs) {
-        if (dead || s.hp <= 0 || s.shield || b.hit.includes(s) || Math.hypot(s.x - b.x, s.y - b.y) >= s.r + b.r) continue;
+        if (dead || s.hp <= 0 || s.shield || s.wave || b.hit.includes(s) || Math.hypot(s.x - b.x, s.y - b.y) >= s.r + b.r) continue;
         b.hit.push(s);
-        damageSeg(g, s, b.dmg, b.crit, b.x, b.y);
+        damageSeg(g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g);
         if (b.slow) sn.slow = Math.max(sn.slow, b.slow);
         if (b.splash > 0) {
           const sd = b.dmg * (b.kind === 'bubble' ? 2.2 : 0.5);
@@ -771,7 +811,7 @@ export function botInput(g) {
   }
   // aim: chest cells first, otherwise the cell closest to the membrane
   let tgt = null;
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && s.y > 40 && s.y < p.y - 120) {
+  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && s.y > 40 && s.y < p.y - 120) {
     if (s.carry === 'chest') { tgt = s; break; }
     if (!tgt || s.ps > tgt.ps) tgt = s;
   }

@@ -17,16 +17,23 @@ A Cell Survivor - Shoot Defense style game, with RoxorLoops & Jasmin as the cell
   snake). Pop one, then pick 1 of 3 with 4 **Free Refreshes** per run. The first two picks are capsule upgrades only
   (attack speed, extra note, extra burst, damage); skills and passives join after that. Cards show the numbers
   (for example "Notes per shot: 2 -> 3") and the HUD shows what the capsule does right now.
+- **Groove**: every note that lands builds the groove meter (+1.5% damage per point, up to 20). Stop hitting and it fades.
+  The cell glows when the groove is high.
+- **Boss shield wave**: on boss stages a wave of shields rolls down the snake like a beat. Cells inside it cannot be hit, so
+  time your shots.
 - Every stage has its own **species** (colour, cell style, face and headgear): Love-Struck, Rustic, Sneezy, Grumpy, Sleepy,
   Disco, Sour, Mighty, Frosty, Gloomy. Only the head has a face. Bomb cells are red with a fuse, armor cells have a plate.
 
 ## Between runs (the hub)
 
 - **Battle**: stage select. Clear a stage to unlock the next. The first run starts straight in stage 1.
-- **Skills**: nine skills (Sterile Swab, Spinning Daggers, Medical Tower, Snot Dragon, Acupuncture, Massage Stick,
-  Disinfectant Bubble, Satellite Storm, Abyssal Maw). Four are owned from the start, the rest unlock with fragments.
-  Fragments plus Beats level a skill up (permanent damage bonus).
-- **Stats**: Attack, Crit, Cooldown, Vitality, Fortune, Second Wind, bought with Beats.
+- **Skills**: nine pieces of music gear. Beat Pad (a drum pad under the snake), Spinning Vinyl (orbiting records), Speaker Stack
+  (bass thumps), Autotune (homing winged notes), Treble Pins (piercing fan), Drumsticks (sweeping sticks), Hum Bubbles
+  (slowing bubbles), Spotlight Storm (percent-HP beams), Bass Drop (executes weak cells). Four are owned from the start, the rest
+  unlock with fragments. Fragments plus Beats level a skill up (permanent damage bonus). Internal ids (`swab`, `daggers`, ...)
+  are save keys and never change.
+- **Stats**: Volume, Pitch, Tempo, Stamina, Fame and Encore, bought with Beats.
+- **Daily gigs**: three new goals every day (pop cells, clear stages, collect chests, reach a groove, pick upgrades) that pay Beats or Sparkles.
 - **Shop**: Beat Box (Beats) and Spark Box (Sparkles) hold skill fragments.
 - Two currencies: **Beats** (gold music-note coins, from cells and clears) and **Sparkles** (pink star gems, from clearing
   a stage for the first time).
@@ -36,3 +43,9 @@ A Cell Survivor - Shoot Defense style game, with RoxorLoops & Jasmin as the cell
 `sim.js` (pure simulation and the whole meta economy), `art_draw.js` (all art, drawn in code in the Hocus Vocus chibi
 candy style), `render.js`, `audio.js`, `main.js` (input, hub, screens, save), `assets/` (the duo PNGs, baked from the
 Hocus Vocus kit). Tests: `npm run test:serpent`.
+
+## Performance notes
+
+Static art is baked once: cells, skills, glows, HUD text and the stage background are all cached canvases that are blitted.
+Cells off screen are skipped, the hub stops rendering the game behind it, and the game lowers its resolution (down to 1x) by
+itself when frames run slow, then raises it again when it runs fast.
