@@ -3,9 +3,10 @@
 //
 // The loop follows Cell Survivor - Shoot Defense: a long segmented virus crawls DOWN a
 // winding track toward the bottom of the screen. Your cell sits near its spawn point,
-// fires a capsule on its own, and you pick 1 of 3 random skills at every level-up and
-// from the chests that appear at 25% and 50% of the virus's health. Kill every segment
-// before they leak past the bottom line. Coins buy permanent Attack / Crit / Cooldown.
+// fires a weak capsule on its own (every cell takes 10 to 20 shots) and slides left and
+// right only. You pick 1 of 3 skills every 5 or 10 cells destroyed, nothing else. Kill
+// the segments before they leak past the bottom line. Coins buy permanent Attack / Crit /
+// Cooldown, so the first run is allowed to fail.
 export const W = 720;
 export const H = 1280;
 export const LINE_Y = 1190;   // the membrane: segments that reach it leak and hurt
@@ -39,24 +40,24 @@ export const WEAPONS = [
 ];
 const WEAPON = Object.fromEntries(WEAPONS.map(w => [w.id, w]));
 export const PASSIVES = [
-  { id: 'power', name: 'Strong Antibodies', max: 5, w: 0.9, desc: '+18% damage for every weapon', apply: () => {} },
+  { id: 'power', name: 'Strong Antibodies', max: 5, w: 0.9, desc: '+20% damage for every weapon', apply: () => {} },
   { id: 'haste', name: 'Hyper Metabolism', max: 5, w: 0.9, desc: 'Every weapon recharges 10% faster', apply: () => {} },
   { id: 'crit', name: 'Lethal Mutation', max: 5, w: 0.7, desc: '+8% crit chance for the capsule and needles', apply: p => { p.crit += 0.08; } },
   { id: 'vital', name: 'Thick Membrane', max: 5, w: 0.7, desc: '+30 max HP and heal 30', apply: p => { p.maxHp += 30; p.hp = Math.min(p.maxHp, p.hp + 30); } },
   { id: 'speed', name: 'Flagella', max: 4, w: 0.6, desc: '+12% move speed', apply: p => { p.speed *= 1.12; } },
-  { id: 'magnet', name: 'Gravity Well', max: 4, w: 0.6, desc: '+40% pickup range', apply: p => { p.magnet *= 1.4; } },
+  { id: 'guard', name: 'Tough Membrane', max: 4, w: 0.6, desc: 'Leaks hurt 15% less', apply: p => { p.guard += 0.15; } },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
 export const WEAPON_STARTERS = ['swab', 'daggers', 'tower', 'dragon'];
 
 // ---------------------------------------------------------------- meta (shop)
 export const META = [
-  { id: 'atk', name: 'Attack', max: 12, base: 50, grow: 1.5, desc: l => `+${8 * l}% damage` },
-  { id: 'crt', name: 'Crit', max: 10, base: 50, grow: 1.5, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
-  { id: 'cdn', name: 'Cooldown', max: 10, base: 50, grow: 1.5, desc: l => `-${5 * l}% weapon cooldowns` },
-  { id: 'vit', name: 'Vitality', max: 10, base: 40, grow: 1.5, desc: l => `+${12 * l} max HP` },
-  { id: 'for', name: 'Fortune', max: 10, base: 60, grow: 1.55, desc: l => `+${10 * l}% coins` },
-  { id: 'rev', name: 'Second Wind', max: 1, base: 500, grow: 1, desc: () => 'Revive once per run' },
+  { id: 'atk', name: 'Attack', max: 12, base: 30, grow: 1.45, desc: l => `+${10 * l}% damage` },
+  { id: 'crt', name: 'Crit', max: 10, base: 30, grow: 1.45, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
+  { id: 'cdn', name: 'Cooldown', max: 10, base: 30, grow: 1.45, desc: l => `-${5 * l}% weapon cooldowns` },
+  { id: 'vit', name: 'Vitality', max: 10, base: 25, grow: 1.45, desc: l => `+${12 * l} max HP` },
+  { id: 'for', name: 'Fortune', max: 10, base: 40, grow: 1.5, desc: l => `+${10 * l}% coins` },
+  { id: 'rev', name: 'Second Wind', max: 1, base: 400, grow: 1, desc: () => 'Revive once per run' },
 ];
 export const metaCost = (def, lvl) => Math.round(def.base * Math.pow(def.grow, lvl));
 
@@ -91,11 +92,10 @@ export function buyWeapon(save, id) {
 }
 
 // ---------------------------------------------------------------- tuning
-export const hpBase = n => 5 * Math.pow(1.34, n - 1) + 1.5 * n;
+export const hpBase = n => 14 * Math.pow(1.26, n - 1) + 0.5 * n;   // ~14 capsule shots per cell in chapter 1
 export const isBossStage = n => n % 5 === 0;
-export const snakeLength = n => (isBossStage(n) ? Math.min(46, Math.round(22 + n)) : Math.min(40, Math.round(10 + 2 * n)));
-export const snakeSpeed = n => (isBossStage(n) ? Math.min(66, 30 + 1.2 * n) : Math.min(80, 34 + 1.6 * n));
-export const xpNeed = lvl => Math.round(16 + 11 * (lvl - 1) + 2 * (lvl - 1) * (lvl - 1));
+export const snakeLength = n => (isBossStage(n) ? Math.min(46, Math.round(20 + n)) : Math.min(38, Math.round(8 + 2 * n)));
+export const snakeSpeed = n => (isBossStage(n) ? Math.min(50, 22 + 0.8 * n) : Math.min(60, 26 + 1.1 * n));
 export const SKINS = ['pink', 'purple', 'mint', 'sun', 'sky'];
 export const skinFor = n => SKINS[(n - 1 + Math.floor((n - 1) / 5)) % SKINS.length];
 const NAMES = ['Love-Struck Virus', 'Rustic Virus', 'Sneezy Virus', 'Grumpy Flu', 'Sleepy Spore', 'Disco Germ', 'Sour Strain', 'Mighty Mold', 'Frosty Fever', 'Gloomy Gunk'];
@@ -142,12 +142,12 @@ export function makePlayer(metaLv) {
   const m = id => (metaLv && metaLv[id]) || 0;
   const maxHp = 100 + 12 * m('vit');
   return {
-    x: W / 2, y: 1090, r: 16, kx: 0, ky: 0, maxHp, hp: maxHp, speed: 270,
-    atk: 1 + 0.08 * m('atk'), crit: 0.05 + 0.02 * m('crt'), critMul: 2.5 + 0.08 * m('crt'), cdBase: 1 - 0.05 * m('cdn'),
-    rate: 2.6, bspeed: 900, magnet: 130,
+    x: W / 2, y: 1090, r: 16, kx: 0, ky: 0, maxHp, hp: maxHp, speed: 300, guard: 0,
+    atk: 1 + 0.10 * m('atk'), crit: 0.05 + 0.02 * m('crt'), critMul: 2.5 + 0.08 * m('crt'), cdBase: 1 - 0.05 * m('cdn'),
+    rate: 1.6, bspeed: 900,
     coinMul: 1 + 0.1 * m('for'), revive: m('rev') > 0 ? 1 : 0,
     iframes: 0, shield: 0, rage: 0, cd: 0, aim: -Math.PI / 2, orbAng: 0, regenAcc: 0, mx: 0, my: 0,
-    zone: { x0: 40, x1: W - 40, y0: 930, y1: 1200 },
+    zone: { x0: 40, x1: W - 40, y0: 1090, y1: 1090 },
   };
 }
 
@@ -192,8 +192,9 @@ export function startStage(g, n) {
   g.path = buildPath(n);
   g.chestsDone = { 25: false, 50: false };
   const p = g.p, bottom = spawnMode(n) === 'bottom';
-  p.zone = bottom ? { x0: 40, x1: W - 40, y0: 930, y1: 1200 } : { x0: 40, x1: W - 40, y0: 560, y1: 900 };
-  p.x = W / 2; p.y = bottom ? 1090 : 740; p.kx = p.ky = 0;
+  const row = bottom ? 1090 : 740;   // the cell only slides left and right along its row
+  p.zone = { x0: 40, x1: W - 40, y0: row, y1: row };
+  p.x = W / 2; p.y = row; p.kx = p.ky = 0;
   spawnSnake(g, n);
   rebuildTowers(g);
   g.phase = 'play'; g.clearT = 0; g.progress = 0;
@@ -206,18 +207,17 @@ export function createGame(opts = {}) {
     rand: rng(opts.seed || 1), t: 0, phase: 'play', stage: 0, sid: 0, path: null,
     p: makePlayer(opts.meta), snakes: [], minions: [], wave: 9, bullets: [], ebullets: [], pickups: [], zones: [], maws: [], towers: [],
     events: [], ups: {}, weap: {}, unlocked: Object.assign(Object.fromEntries(WEAPON_STARTERS.map(id => [id, 1])), opts.unlocked || {}),
-    level: 1, xp: 0, xpNeed: xpNeed(1), pending: 0, choices: [], resume: 'play', chest: false,
+    level: 1, cells: 0, prevUp: 0, nextUp: 5, pending: 0, choices: [], resume: 'play',
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, chestsDone: {}, lastKillPos: { x: W / 2, y: 300 },
     revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
   };
   startStage(g, opts.stage || 1);
-  if (opts.firstPick) { g.pending = 1; g.chest = true; }
   return g;
 }
 
 const visible = s => s.y > 8 && s.y < H - 8 && s.x > 8 && s.x < W - 8;
 const lv = (g, id) => (g.weap[id] ? g.weap[id].lv : 0);
-const dmgMul = g => g.p.atk * (1 + 0.18 * (g.ups.power || 0));
+const dmgMul = g => g.p.atk * (1 + 0.2 * (g.ups.power || 0));
 const cdMul = g => g.p.cdBase * Math.pow(0.9, g.ups.haste || 0);
 
 function eachTarget(g, fn) {
@@ -252,8 +252,7 @@ function onMinionKill(g, m) {
   g.kills++;
   g.combo = g.t - g.lastKill < 2.2 ? Math.min(99, g.combo + 1) : 1; g.lastKill = g.t;
   g.score += Math.round(m.max * 12 * (1 + Math.min(g.combo, 50) * 0.05));
-  dropPickup(g, 'gem', m.x, m.y, (1.2 + g.stage * 0.2) * m.type.hp);
-  if (g.rand() < 0.4) dropPickup(g, 'coin', m.x, m.y, 1);
+  if (g.rand() < 0.6) dropPickup(g, 'coin', m.x, m.y, 1 + Math.floor(g.stage / 4));
   if (g.rand() < 0.05) dropPickup(g, ['heal', 'shield', 'rage'][Math.floor(g.rand() * 3)], m.x, m.y, 1);
   g.events.push({ t: 'kill', x: m.x, y: m.y, r: m.r, kind: 'minion', art: m.type.art });
 }
@@ -261,15 +260,14 @@ function onMinionKill(g, m) {
 function onKill(g, s, sn) {
   const st = g.stage;
   if (s.leaked) return;
-  g.kills++;
+  g.kills++; g.cells++;
+  while (g.cells >= g.nextUp) { g.pending++; g.prevUp = g.nextUp; g.nextUp += 10; }   // a skill at 5 cells, then every 10
   g.lastKillPos = { x: s.x, y: s.y };
   g.combo = g.t - g.lastKill < 2.2 ? Math.min(99, g.combo + 1) : 1; g.lastKill = g.t;
   g.score += Math.round(s.max * 10 * (1 + Math.min(g.combo, 50) * 0.05));
-  const xpV = (1.6 + st * 0.3) * KIND[s.kind].xp * (sn.boss ? 1.3 : 1);
-  const n = s.kind === 'armor' ? 3 : s.kind === 'gold' ? 2 : 1;
-  for (let k = 0; k < n; k++) dropPickup(g, 'gem', s.x, s.y, xpV / n);
-  if (s.kind === 'gold') { for (let k = 0; k < 5; k++) dropPickup(g, 'coin', s.x, s.y, 1 + Math.floor(st / 3)); if (g.rand() < 0.3) dropPickup(g, ['heal', 'shield', 'rage'][Math.floor(g.rand() * 3)], s.x, s.y, 1); }
-  else if (g.rand() < 0.55) dropPickup(g, 'coin', s.x, s.y, 1 + (s.i === 0 || s.kind === 'armor' ? 2 : 0));
+  const coinV = (1 + Math.floor(st / 2)) * (s.i === 0 ? 3 : 1) * (s.kind === 'armor' ? 2 : 1);
+  if (s.kind === 'gold') { for (let k = 0; k < 4; k++) dropPickup(g, 'coin', s.x, s.y, coinV); if (g.rand() < 0.3) dropPickup(g, ['heal', 'shield', 'rage'][Math.floor(g.rand() * 3)], s.x, s.y, 1); }
+  else dropPickup(g, 'coin', s.x, s.y, coinV);
   if (sn.boss && s === sn.segs[0]) dropPickup(g, 'heal', s.x, s.y, 1);
   g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s === sn.segs[0], boss: sn.boss, i: s.i, skin: sn.skin });
   if (s.kind === 'bomb') {
@@ -330,7 +328,7 @@ function hurtPlayer(g, dmg, fx, fy) {
 // a segment slipped past the membrane: leaks always hurt, whatever i-frames you have
 function leak(g, s, sn) {
   s.leaked = true; s.hp = 0; g.leaks++;
-  const dmg = (s === sn.segs[0] ? 10 + g.stage * 0.5 : 4 + g.stage * 0.35);
+  const dmg = (s === sn.segs[0] ? 15 + g.stage * 0.8 : 6 + g.stage * 0.4) * (1 - Math.min(0.6, g.p.guard));
   const p = g.p, keep = p.iframes;
   p.iframes = 0;
   g.events.push({ t: 'leak', x: s.x, y: LINE_Y, d: dmg });
@@ -347,9 +345,9 @@ function rollChoices(g) {
     const l = lv(g, w.id);
     if (l >= w.max) continue;
     if (!l && owned >= 6) continue;
-    pool.push({ id: w.id, kind: 'weapon', name: w.name, desc: w.desc, lvl: l, max: w.max, isNew: !l, w: l ? (g.chest ? 2.2 : 1.7) : (g.chest ? 1.6 : 1.2) });
+    pool.push({ id: w.id, kind: 'weapon', name: w.name, desc: w.desc, lvl: l, max: w.max, isNew: !l, w: l ? 1.7 : 1.2 });
   }
-  for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max) pool.push({ id: u.id, kind: 'passive', name: u.name, desc: u.desc, lvl: l, max: u.max, isNew: !l, w: g.chest ? 0.4 : u.w }); }
+  for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max) pool.push({ id: u.id, kind: 'passive', name: u.name, desc: u.desc, lvl: l, max: u.max, isNew: !l, w: u.w }); }
   const out = [];
   while (out.length < 3 && pool.length) {
     const tot = pool.reduce((a, u) => a + u.w, 0);
@@ -364,7 +362,7 @@ function maybeLevelUp(g) {
     g.resume = g.phase; g.phase = 'levelup';
     g.choices = rollChoices(g);
     if (!g.choices.length) { g.pending = 0; g.phase = g.resume; return; }
-    g.events.push({ t: 'levelup', level: g.level, chest: g.chest });
+    g.events.push({ t: 'levelup', level: g.level });
   }
 }
 function rebuildTowers(g) {
@@ -381,9 +379,9 @@ export function choose(g, idx) {
     w.lv++;
     if (c.id === 'tower') rebuildTowers(g);
   } else { PASSIVE[c.id].apply(g.p); g.ups[c.id] = (g.ups[c.id] || 0) + 1; }
-  g.pending--;
+  g.pending--; g.level++;
   g.events.push({ t: 'upgrade', id: c.id, kind: c.kind });
-  if (g.pending > 0) { g.choices = rollChoices(g); if (!g.choices.length) { g.pending = 0; g.phase = g.resume; } } else { g.phase = g.resume; g.chest = false; }
+  if (g.pending > 0) { g.choices = rollChoices(g); if (!g.choices.length) { g.pending = 0; g.phase = g.resume; } } else { g.phase = g.resume; }
   return true;
 }
 function collect(g, pk) {
@@ -391,14 +389,11 @@ function collect(g, pk) {
   if (pk.kind === 'heal') { p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.3)); g.events.push({ t: 'power', kind: 'heal', x: pk.x, y: pk.y }); return; }
   if (pk.kind === 'shield') { p.shield = 6; g.events.push({ t: 'power', kind: 'shield', x: pk.x, y: pk.y }); return; }
   if (pk.kind === 'rage') { p.rage = 8; g.events.push({ t: 'power', kind: 'rage', x: pk.x, y: pk.y }); return; }
-  if (pk.kind === 'chest') {
-    g.coins += (10 + g.stage * 2) * p.coinMul; g.pending++; g.chest = true;
+  if (pk.kind === 'chest') {   // chests are coins only: upgrades come from destroyed cells
+    g.coins += (4 + g.stage * 2) * p.coinMul;
     g.events.push({ t: 'chest', x: pk.x, y: pk.y }); return;
   }
   if (pk.kind === 'coin') { g.coins += pk.v * p.coinMul; g.events.push({ t: 'coin', x: pk.x, y: pk.y, v: pk.v }); return; }
-  g.xp += pk.v;
-  g.events.push({ t: 'gem', x: pk.x, y: pk.y });
-  while (g.xp >= g.xpNeed) { g.xp -= g.xpNeed; g.level++; g.xpNeed = xpNeed(g.level); g.pending++; }
 }
 function fireEnemy(g, x, y, a, sp, dmg, r) {
   g.ebullets.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: r || 9, dmg, life: 6 });
@@ -426,25 +421,25 @@ function updateWeapons(g, dt, canFire) {
       const n = 1 + (L >= 4 ? 1 : 0);
       for (let k = 0; k < n; k++) {
         const t = fronts[k] || fronts[0], off = k >= fronts.length ? 90 : 0, dur = 2.6 + 0.5 * L;
-        g.zones.push({ x: t.x + off, y: t.y, r: 62 + 16 * L, life: dur, max: dur, tick: 0, dmg: 2.4 * (1 + 0.3 * L) * dm });
+        g.zones.push({ x: t.x + off, y: t.y, r: 62 + 16 * L, life: dur, max: dur, tick: 0, dmg: 0.8 * (1 + 0.3 * L) * dm });
       }
       g.events.push({ t: 'swab' }); w.cd = (4.2 - 0.3 * L) * cm;
     } else if (id === 'dragon') {
       if (!tgt) { w.cd = 0.3; continue; }
       const n = 1 + Math.floor((L + 1) / 2);
-      for (let k = 0; k < n; k++) fire(g, { x: p.x, y: p.y - 20, a: -Math.PI / 2 + (k - (n - 1) / 2) * 0.7, sp: 440, dmg: 7 * (1 + 0.4 * L) * dm, r: 11, life: 2.6, kind: 'snot', home: 7, splash: 46 });
+      for (let k = 0; k < n; k++) fire(g, { x: p.x, y: p.y - 20, a: -Math.PI / 2 + (k - (n - 1) / 2) * 0.7, sp: 440, dmg: 2.0 * (1 + 0.4 * L) * dm, r: 11, life: 2.6, kind: 'snot', home: 7, splash: 46 });
       g.events.push({ t: 'dragon' }); w.cd = (1.8 - 0.1 * L) * cm;
     } else if (id === 'needles') {
       if (!tgt) { w.cd = 0.3; continue; }
       const n = 3 + L;
       for (let k = 0; k < n; k++) {
         const crit = g.rand() < p.crit;
-        fire(g, { x: p.x, y: p.y - 10, a: aim + (k - (n - 1) / 2) * 0.09, sp: 1100, dmg: 2.6 * (1 + 0.3 * L) * dm * (crit ? p.critMul : 1), crit, pierce: 2 + L, r: 5, life: 1.2, kind: 'needle' });
+        fire(g, { x: p.x, y: p.y - 10, a: aim + (k - (n - 1) / 2) * 0.09, sp: 1100, dmg: 0.8 * (1 + 0.3 * L) * dm * (crit ? p.critMul : 1), crit, pierce: 2 + L, r: 5, life: 1.2, kind: 'needle' });
       }
       g.events.push({ t: 'needles' }); w.cd = (1.8 - 0.12 * L) * cm;
     } else if (id === 'bubble') {
       if (!tgt) { w.cd = 0.3; continue; }
-      for (let k = 0; k < (L >= 4 ? 2 : 1); k++) fire(g, { x: p.x, y: p.y - 30, a: aim + (k ? 0.5 : 0), sp: 190, dmg: 4 * (1 + 0.3 * L) * dm, r: 22 + 3 * L, life: 3.2, kind: 'bubble', splash: 70 + 10 * L, slow: 2 });
+      for (let k = 0; k < (L >= 4 ? 2 : 1); k++) fire(g, { x: p.x, y: p.y - 30, a: aim + (k ? 0.5 : 0), sp: 190, dmg: 1.2 * (1 + 0.3 * L) * dm, r: 22 + 3 * L, life: 3.2, kind: 'bubble', splash: 70 + 10 * L, slow: 2 });
       g.events.push({ t: 'bubble' }); w.cd = (3.4 - 0.2 * L) * cm;
     } else if (id === 'satellite') {
       const vis = []; eachTarget(g, s => { if (visible(s)) vis.push(s); });
@@ -452,7 +447,7 @@ function updateWeapons(g, dt, canFire) {
       vis.sort((a, b) => b.hp - a.hp);
       for (let k = 0; k < 1 + Math.floor((L + 1) / 2); k++) {
         const s = vis[Math.floor(g.rand() * Math.min(vis.length, 5))];
-        damageSeg(g, s, Math.max(6 * (1 + 0.3 * L) * dm, s.max * (0.05 + 0.015 * L) * Math.min(dm, 3)), false, s.x, s.y);
+        damageSeg(g, s, Math.max(1.8 * (1 + 0.3 * L) * dm, s.max * (0.02 + 0.008 * L) * Math.min(dm, 3)), false, s.x, s.y);
         g.events.push({ t: 'strike', x: s.x, y: s.y });
       }
       w.cd = (3.6 - 0.25 * L) * cm;
@@ -461,7 +456,7 @@ function updateWeapons(g, dt, canFire) {
       if (!vis.length) { w.cd = 0.3; continue; }
       vis.sort((a, b) => b.hp - a.hp);
       const t = vis[Math.floor(g.rand() * Math.min(vis.length, 3))];
-      g.maws.push({ x: t.x, y: t.y, r: 110 + 12 * L, life: 1.6, max: 1.6, tick: 0, exec: 0.15 + 0.04 * L, dmg: 3 * (1 + 0.3 * L) * dm });
+      g.maws.push({ x: t.x, y: t.y, r: 110 + 12 * L, life: 1.6, max: 1.6, tick: 0, exec: 0.1 + 0.03 * L, dmg: 0.9 * (1 + 0.3 * L) * dm });
       g.events.push({ t: 'maw', x: t.x, y: t.y }); w.cd = (7.5 - 0.6 * L) * cm;
     }
   }
@@ -471,7 +466,7 @@ function updateWeapons(g, dt, canFire) {
     p.orbAng += dt * (3.2 + 0.2 * dl);
     for (let i = 0; i < 1 + dl; i++) {
       const pos = daggerPos(g, i);
-      eachTarget(g, s => { if (s.orbCd <= 0 && Math.hypot(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSeg(g, s, 4 * (1 + 0.3 * dl) * dm, false, pos.x, pos.y); } });
+      eachTarget(g, s => { if (s.orbCd <= 0 && Math.hypot(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSeg(g, s, 1.2 * (1 + 0.3 * dl) * dm, false, pos.x, pos.y); } });
     }
   }
   // massage stick (sweeping bar)
@@ -481,7 +476,7 @@ function updateWeapons(g, dt, canFire) {
       const sg = stickSeg(g, k);
       eachTarget(g, s => {
         if (s.orbCd > 0) return;
-        if (distToSeg(s.x, s.y, sg.x0, sg.y0, sg.x1, sg.y1) < s.r + 12) { s.orbCd = 0.35; damageSeg(g, s, 6 * (1 + 0.35 * sl) * dm, false, s.x, s.y); }
+        if (distToSeg(s.x, s.y, sg.x0, sg.y0, sg.x1, sg.y1) < s.r + 12) { s.orbCd = 0.35; damageSeg(g, s, 1.8 * (1 + 0.35 * sl) * dm, false, s.x, s.y); }
       });
     }
   }
@@ -493,7 +488,7 @@ function updateWeapons(g, dt, canFire) {
       t.cd = (2.4 - 0.15 * tl) * cm; t.pulse = 0.5;
       const R = 170 + 18 * tl;
       g.events.push({ t: 'pulse', x: t.x, y: t.y, r: R });
-      eachTarget(g, s => { if (Math.hypot(s.x - t.x, s.y - t.y) < R + s.r) damageSeg(g, s, 5 * (1 + 0.35 * tl) * dm, false, s.x, s.y); });
+      eachTarget(g, s => { if (Math.hypot(s.x - t.x, s.y - t.y) < R + s.r) damageSeg(g, s, 1.5 * (1 + 0.35 * tl) * dm, false, s.x, s.y); });
     }
   }
   // swab zones tick
@@ -536,11 +531,10 @@ export function step(g, dt, input) {
   g.t += dt;
   const p = g.p;
 
-  // player movement, kept inside the spawn zone
-  const mx = input ? clamp(input.mx || 0, -1, 1) : 0, my = input ? clamp(input.my || 0, -1, 1) : 0;
-  const ml = Math.hypot(mx, my), k = ml > 1 ? 1 / ml : 1;
-  p.mx = mx * k; p.my = my * k;
-  p.x += (p.mx * p.speed + p.kx) * dt; p.y += (p.my * p.speed + p.ky) * dt;
+  // player movement: horizontal only, along the spawn row
+  const mx = input ? clamp(input.mx || 0, -1, 1) : 0;
+  p.mx = mx; p.my = 0;
+  p.x += (p.mx * p.speed + p.kx) * dt;
   const kd = Math.exp(-9 * dt); p.kx *= kd; p.ky *= kd;
   p.x = clamp(p.x, p.zone.x0, p.zone.x1); p.y = clamp(p.y, p.zone.y0, p.zone.y1);
   if (p.iframes > 0) p.iframes -= dt;
@@ -561,7 +555,7 @@ export function step(g, dt, input) {
       stageHp += Math.max(0, s.hp);
       if (s.flash > 0) s.flash -= dt;
       if (s.orbCd > 0) s.orbCd -= dt;
-      if (s.hp > 0 && Math.hypot(s.x - p.x, s.y - p.y) < s.r + p.r * 0.75) hurtPlayer(g, 12 + g.stage * 0.6, s.x, s.y);
+      if (s.hp > 0 && Math.hypot(s.x - p.x, s.y - p.y) < s.r + p.r * 0.75) hurtPlayer(g, 9 + g.stage * 0.5, s.x, s.y);
       if (s.kind === 'spitter' && visible(s) && g.phase === 'play' && s.hp > 0) {
         s.spit -= dt;
         if (s.spit <= 0) { s.spit = Math.max(1.6, 4 - g.stage * 0.12) + g.rand() * 1.5; fireEnemy(g, s.x, s.y, Math.atan2(p.y - s.y, p.x - s.x), 230, 9 + g.stage * 0.3); }
@@ -618,7 +612,7 @@ export function step(g, dt, input) {
       while (p.cd <= 0) {
         p.cd += (1 / p.rate) * cdMul(g) * (p.rage > 0 ? 0.77 : 1);
         const crit = g.rand() < p.crit;
-        fire(g, { x: p.x + Math.cos(p.aim) * 22, y: p.y + Math.sin(p.aim) * 22, a: p.aim, sp: p.bspeed, dmg: 3 * dmgMul(g) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, r: 6, life: 1.3, kind: 'pill' });
+        fire(g, { x: p.x + Math.cos(p.aim) * 22, y: p.y + Math.sin(p.aim) * 22, a: p.aim, sp: p.bspeed, dmg: 1.0 * dmgMul(g) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, r: 6, life: 1.3, kind: 'pill' });
         g.shots++; g.events.push({ t: 'shoot' });
         if (p.cd < -0.2) p.cd = 0;
       }
@@ -681,10 +675,9 @@ export function step(g, dt, input) {
     const pk = g.pickups[i];
     pk.age += dt;
     const d = Math.hypot(p.x - pk.x, p.y - pk.y);
-    const range = pk.kind === 'chest' ? 99999 : p.magnet;
-    if (g.phase === 'clear' || (pk.age > 0.35 && d < range)) pk.vac = true;
+    if (pk.age > 0.5 || g.phase === 'clear') pk.vac = true;
     if (pk.vac) {
-      const sp = (pk.kind === 'chest' ? 260 : 420) + pk.age * 90, a = Math.atan2(p.y - pk.y, p.x - pk.x);
+      const sp = (pk.kind === 'chest' ? 300 : 460) + pk.age * 90, a = Math.atan2(p.y - pk.y, p.x - pk.x);
       pk.vx = Math.cos(a) * sp; pk.vy = Math.sin(a) * sp;
     } else { const f = Math.exp(-4 * dt); pk.vx *= f; pk.vy *= f; pk.vy += 40 * dt; }
     pk.x += pk.vx * dt; pk.y += pk.vy * dt;
@@ -697,7 +690,7 @@ export function step(g, dt, input) {
     g.phase = 'clear'; g.clearT = 0; g.ebullets.length = 0;
     for (const m of g.minions) { dropPickup(g, 'gem', m.x, m.y, 1); g.events.push({ t: 'kill', x: m.x, y: m.y, r: m.r, kind: 'minion', art: m.type.art }); }
     g.minions.length = 0;
-    const bonus = (10 + g.stage * 5) * (isBossStage(g.stage) ? 3 : 1);
+    const bonus = (6 + g.stage * 3) * (isBossStage(g.stage) ? 3 : 1);
     g.coins += bonus * p.coinMul;
     g.pickups.push({ kind: 'chest', x: W / 2, y: 300, vx: 0, vy: 0, v: 1, age: 0, vac: false });
     g.events.push({ t: 'clear', n: g.stage, bonus: Math.round(bonus * p.coinMul), boss: isBossStage(g.stage), name: virusName(g.stage) });
@@ -721,7 +714,7 @@ function spawnMinions(g, n) {
     for (; k < pool.length - 1; k++) { r -= pool[k].w; if (r <= 0) break; }
     const t = pool[k], side = Math.floor(g.rand() * 3);
     const x = side === 0 ? -20 : side === 1 ? W + 20 : 40 + g.rand() * (W - 80), y = side === 2 ? -20 : 80 + g.rand() * 400;
-    const hp = Math.max(1, Math.round(hpBase(g.stage) * 0.8 * t.hp));
+    const hp = Math.max(1, Math.round(hpBase(g.stage) * 0.4 * t.hp));
     g.minions.push({ x, y, vx: 0, vy: 0, r: t.r, hp, max: hp, type: t, flash: 0, orbCd: 0, ph: g.rand() * TAU, kind: 'minion' });
   }
   g.events.push({ t: 'swarm', n });
@@ -730,24 +723,15 @@ function spawnMinions(g, n) {
 // ---------------------------------------------------------------- bot (tests + title attract mode)
 export function botInput(g) {
   const p = g.p;
-  let ax = 0, ay = 0;
-  for (const sn of g.snakes) for (const s of sn.segs) {
-    const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1, reach = 150 + s.r;
-    if (d < reach) { const w = (reach - d) / reach; ax += (dx / d) * w * 2.6; ay += (dy / d) * w * 2.6; }
-  }
-  for (const s of g.minions) {
-    const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1, reach = 110 + s.r;
-    if (d < reach) { const w = (reach - d) / reach; ax += (dx / d) * w * 1.8; ay += (dy / d) * w * 1.8; }
-  }
-  for (const b of g.ebullets) {
-    const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy) || 1;
-    if (d < 120) { const w = (120 - d) / 120; ax += (dx / d) * w * 1.6; ay += (dy / d) * w * 1.6; }
-  }
-  const z = p.zone, cx = (z.x0 + z.x1) / 2, cy = (z.y0 + z.y1) / 2;
-  ax += (cx - p.x) / W * 0.8; ay += (cy - p.y) / 300 * 0.8;
-  let best = null, bd = 220;
-  for (const pk of g.pickups) { const d = Math.hypot(pk.x - p.x, pk.y - p.y); if (d < bd) { bd = d; best = pk; } }
-  if (best) { ax += (best.x - p.x) / bd * 0.4; ay += (best.y - p.y) / bd * 0.4; }
-  const l = Math.hypot(ax, ay);
-  return l > 1 ? { mx: ax / l, my: ay / l } : { mx: ax, my: ay };
+  let ax = 0;
+  const push = (x, y, reach, k) => {
+    const dx = p.x - x, dy = p.y - y, d = Math.hypot(dx, dy) || 1;
+    if (d < reach) ax += (dx >= 0 ? 1 : -1) * ((reach - d) / reach) * k;
+  };
+  for (const sn of g.snakes) for (const s of sn.segs) push(s.x, s.y, 170 + s.r, 2.6);
+  for (const s of g.minions) push(s.x, s.y, 130 + s.r, 2);
+  for (const b of g.ebullets) push(b.x, b.y, 120, 1.6);
+  const z = p.zone;
+  ax += ((z.x0 + z.x1) / 2 - p.x) / W * 0.6;
+  return { mx: clamp(ax, -1, 1), my: 0 };
 }

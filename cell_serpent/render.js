@@ -281,8 +281,10 @@ export function createRenderer(canvas, art, kit) {
     // XP bar
     ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, W, 14);
     const gx = ctx.createLinearGradient(0, 0, W, 0); gx.addColorStop(0, '#1ad9ff'); gx.addColorStop(1, '#9dff6d');
-    ctx.fillStyle = gx; ctx.fillRect(0, 0, W * Math.min(1, g.xp / g.xpNeed), 14);
-    text('LV ' + g.level, pad, 38, 22, '#fff', '#0b1020', 'left');
+    const span = Math.max(1, g.nextUp - g.prevUp);
+    ctx.fillStyle = gx; ctx.fillRect(0, 0, W * Math.min(1, Math.max(0, (g.cells - g.prevUp) / span)), 14);
+    text('SKILL IN', pad, 36, 14, '#bfe9ff', '#0b1020', 'left');
+    text((g.nextUp - g.cells) + ' cells', pad, 56, 20, '#fff', '#0b1020', 'left');
     // chapter, virus name, and progress with chests at 25% / 50% / 100%
     const boss = isBossStage(g.stage);
     text(boss ? 'BOSS  ' + g.stage : 'CHAPTER ' + g.stage, W / 2, 34, 26, boss ? '#ff7a9a' : '#fff');
