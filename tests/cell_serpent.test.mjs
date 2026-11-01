@@ -84,7 +84,10 @@ ok('it starts weak: 10 to 20 capsule shots per cell, one note, no skills; and th
   const g = sim.createGame({ seed: 30 });
   assert.equal(Object.keys(g.weap).length, 0); assert.equal(g.level, 1);
   const capsule = 10 * g.p.atk;
-  for (const q of g.snakes[0].segs) if (q.kind === 'normal' && q.i > 0) { const shots = q.max / capsule; assert.ok(shots >= 20 && shots <= 40, `cell needs ${shots} shots`); }
+  const normals = g.snakes[0].segs.filter(q => q.kind === 'normal' && q.i > 0), shotsOf = q => q.max / capsule;
+  for (const q of normals) assert.ok(shotsOf(q) >= 8 && shotsOf(q) <= 55, `cell needs ${shotsOf(q)} shots`);
+  const first = normals.slice(0, 4).reduce((a, q) => a + shotsOf(q), 0) / 4, last = normals.slice(-4).reduce((a, q) => a + shotsOf(q), 0) / 4;
+  assert.ok(first < 15 && last > first * 2, 'the first cells are soft and the snake gets tougher and tougher: ' + first + ' -> ' + last);
   assert.ok(g.p.rate <= 2.2);
   for (const first of [0, 1]) {   // the first two picks only ever offer capsule upgrades
     g.pending = 1; sim.step(g, 1 / 60, {});
@@ -525,7 +528,7 @@ ok('Piggy Bank Parade: three tries a day, pays big Beats, a win brings an egg an
 
 ok('checkpoint chests appear at 25% and 50% progress and pay Beats, never a fragment', () => {
   const g = sim.createGame({ seed: 8 }); g.p.hp = g.p.maxHp = 1e6;
-  const sn = g.snakes[0]; const total = g.stageHpMax;
+  const sn = g.snakes[0]; const total = g.stageHpMax; for (const q of sn.segs) { q.carry = null; if (q.kind === 'upgrade') q.kind = 'normal'; }
   for (const q of sn.segs.slice(1)) { if (g.stageHpMax - sn.segs.filter(z => z.hp > 0 && z !== q).reduce((a, z) => a + z.hp, 0) > total * 0.26) break; q.hp = 0; q.dead = true; }
   sim.step(g, 1 / 60, {});
   assert.ok(g.cp && g.cp[0.25], 'quarter chest'); assert.ok(g.pickups.some(p => p.kind === 'chest' && p.cp === 1));
