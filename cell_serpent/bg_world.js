@@ -5,6 +5,7 @@ import { mix } from './art_draw.js';
 import { bakeFloor, ringSurface, hasVinyl, rimOf } from './bg_floor.js';
 import { drawFloorFx, drawRain, drawBossCracks } from './floor_fx.js';
 import { makeBanks, drawMist, makeWind, stepWind, drawGust, dashState } from './bg_mist.js';
+import { makeB8, headKill, drawNight, stepB8, drawSquall, drawPetalStorm, readHeads, drawBossLights } from './bg_b8.js';
 import { bakeStageExtras, drawClouds, drawFootlights, drawBossFx, drawCrowdLights, paintGrooves } from './bg_stage.js';
 
 const TAU = Math.PI * 2;
@@ -379,22 +380,26 @@ export function drawBossPhase(c, kit, t, ph, pulse, flash, reduce, low) {
   c.restore();
 }
 export function createBgFx() {
-  const bg = { weather: makeWeather(), banks: makeBanks(), wind: makeWind(), flare: 0, dashK: 0, goT: -9, goX: W / 2, nextBolt: 3, boltT: -9, boltX: 300, dbl: false, r: rnd(77) };
+  const bg = { weather: makeWeather(), banks: makeBanks(), wind: makeWind(), b8: makeB8(), flare: 0, dashK: 0, goT: -9, goX: W / 2, nextBolt: 3, boltT: -9, boltX: 300, dbl: false, r: rnd(77) };
   // o: { kit, skin, stage, boss, th, t, reduce, low, kick (seconds since the last kill) }
+  bg.headKill = (t, x, y) => headKill(bg.b8, t, x, y);
   bg.draw = (c, o) => {
     const { t, th, boss } = o, kit = o.kit, cheer = Math.max(0, 1 - o.kick / 1.3);
     const pulse = o.reduce ? 0 : beatPulse(t, o.stage, boss);
     const wk = weatherFor(o.skin, o.stage), wd = bg.wind;
     stepWind(wd, t, o.kick, o.reduce); bg.wx = wd.wx;
+    const b8 = bg.b8; b8.skin = o.skin; if (!o.reduce) { stepB8(b8, t, wd); b8.windv = wd.wv; }   // 03-backgrounds b8: squalls, petal storms, parting mist, night and boss lamps
     if (o.snakes) {   // a snake winding up or dashing: the stone floor rumbles and its cracks flare
       const ds = dashState(o.snakes), dt = Math.min(0.1, Math.max(0, t - (bg.ft === undefined ? t : bg.ft))); bg.ft = t;
       if (ds.k === 2 && bg.dashK !== 2) { bg.goT = t; bg.goX = ds.x; }
       bg.dashK = ds.k; const tg = ds.k === 2 ? 1 : ds.k === 1 ? 0.4 : 0; bg.flare += (tg - bg.flare) * Math.min(1, dt * (tg > bg.flare ? 14 : 2.2));
     }
     if (!o.reduce) drawClouds(c, kit, o.skin, mix(worldOf(o.skin).bot, '#ffffff', 0.6), skyGrade(o.stage).k, t, boss, o.low);
-    if (!o.reduce) drawMist(c, kit, o.skin, bg.banks, t, wd.wx, boss, o.low);
+    if (!o.reduce) drawNight(c, b8, t, skyGrade(o.stage).k, boss ? 0.6 : 1, o.low);
+    if (!o.reduce) drawMist(c, kit, o.skin, bg.banks, t, wd.wx, boss, o.low, o.snakes ? readHeads(b8, o.snakes) : null);
     if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26, wd.wx, wd.wv);
     if (!o.reduce) drawGust(c, wd, t, o.low);
+    if (!o.reduce) { drawSquall(c, b8, t, o.low); drawPetalStorm(c, b8, t, th, o.low); if (boss) drawBossLights(c, kit, b8, t, pulse, o.phase || 0, o.snakes, o.low); }
     if (boss && !o.reduce && !o.noFlash) lightning(c, bg, t, o.phase || 0);
     if (boss && o.phase > 0.01) drawBossPhase(c, kit, t, o.phase, pulse, o.flash || 0, o.reduce, o.low);
     if (!o.reduce) { if (boss) drawBossFx(c, t, pulse, o.low, kit); drawFootlights(c, t, pulse, th, boss); }
