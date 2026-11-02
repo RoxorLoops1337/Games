@@ -632,6 +632,23 @@
   #settings .cbrow.now .cbl{color:#ffd84d}
   #settings .cbrow i{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.55);box-shadow:inset 0 -4px 0 rgba(0,0,0,.18);flex:none}
   /* end @css:18-access round 4 */
+  /* @css:18-access round 5 */
+  /* text size preview: a real menu line that grows with the slider (the row is zoomed by --ts) */
+  #settings .tsprev{flex:0 0 100%;display:flex;align-items:baseline;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(14,9,48,.55);border:1.5px dashed rgba(255,255,255,.22);font-size:13px;font-weight:800;line-height:1.25;flex-wrap:wrap}
+  #settings .tsprev b{color:#ffd84d} #settings .tsprev i{font-style:normal;color:#e8e4ff;flex:1 1 auto} #settings .tsprev u{text-decoration:none;color:#9dff6d;font-size:.92em}
+  /* tap targets: small controls keep their look but get a 44px hit area (invisible, centred, no layout change) */
+  :is(#setBtnH,#enPlus,#qSeason,#qAch,#contBtn,#loadEdit,#claimGigs,.gl-btn,.seg .dbtn){position:relative}
+  :is(#setBtnH,#enPlus,#qSeason,#qAch,#contBtn,#loadEdit,#claimGigs,.gl-btn,.seg .dbtn)::before{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:max(100%,44px);transform:translate(-50%,-50%)}
+  #enPlus::before{width:100%;height:max(100%,44px)}   /* sits inside a clipped pill: grow upward and downward only */
+  @media (max-height:700px){#hub .nextrew{min-height:44px;padding-top:4px;padding-bottom:4px}}
+  /* high contrast for the newer panels: brighter hairlines, solid text */
+  html.hc .qmain,html.hc .qpill,html.hc .pill,html.hc .nextrew,html.hc .stagebox,html.hc .gl-btn,html.hc .dbtn,html.hc .seg{border-color:#fff!important}
+  html.hc .gl-btn:disabled,html.hc .gl-btn.wait{color:#fff;background:rgba(0,0,0,.6)}
+  html.hc .qmain small,html.hc .qpill,html.hc .bt-lt,html.hc .bt-fact,html.hc .nextrew small,html.hc .dbtn:not(.on){color:#fff}
+  html.ts .qpill{font-size:calc(13px / var(--ts));padding-left:4px;padding-right:4px;min-width:0}
+  html.hc .tsprev,html.hc #settings .tsrow{border-color:#fff}
+  html.hc .chip .st,html.hc .stars .off{color:#d6e2f2}
+  /* end @css:18-access round 5 */
   /* end @css:18-access */
   /* @css:08-battle-tab */
   #tabBattle{gap:10px} #tabBattle .stagebox{gap:8px}
@@ -1371,7 +1388,7 @@
   <button class="tgl" data-k="colorBlind"><i class="ti">🎨</i><span>Colour-blind mode (shapes, safer colours)</span><b>OFF</b></button>
   <div class="cbstrip" id="cbStrip"></div>
   <button class="tgl" data-k="highContrast"><i class="ti">🌗</i><span>High-contrast numbers</span><b>OFF</b></button>
-  <label class="volrow tsrow"><i class="ti">Aa</i><span>Menu text size</span><output id="tsOut">100%</output><input id="tsRange" type="range" min="100" max="140" step="5" value="100" aria-label="Menu text size"></label>
+  <label class="volrow tsrow"><i class="ti">Aa</i><span>Menu text size</span><output id="tsOut">100%</output><input id="tsRange" type="range" min="100" max="140" step="5" value="100" aria-label="Menu text size"><span class="tsprev" aria-hidden="true"><b>Stage 3</b><i>Kitten Choir</i><u>1,250 Beats</u></span></label>
   <h3 class="setgrp">ONE HAND AND THUMBS</h3>
   <button class="tgl" data-k="slider"><i class="ti">↔</i><span>On-screen slide bar (thumb at the bottom)</span><b>OFF</b></button>
   <button class="tgl" data-k="leftHand"><i class="ti">🤚</i><span>Left-handed slide bar</span><b>OFF</b></button>
