@@ -271,11 +271,21 @@
     }
 
     // ---------------- sizing
-    var fitSig = '';
+    var fitSig = '', handAnimT = 0;
+    // portrait hand strip: card size from the free height under the board and the width of the strip. About 3 cards (2.7 to 3.3) are visible and the next one peeks in; cards are 100 to 150 wide and 1.4 to 1.55 times as tall.
+    function handSizeFor(freeHandH, handW) {
+      var gap = 8, usable = Math.max(0, freeHandH - 30); // 30: room above the cards for the lift of a playable or selected card
+      var cwMin = (handW + gap) / 3.3 - gap, cwMax = (handW + gap) / 2.7 - gap;
+      var cw = Math.max(100, Math.min(150, Math.max(cwMin, Math.min(cwMax, usable / 1.5))));
+      if (usable < cw * 1.4) cw = Math.max(88, usable / 1.4); // a very short screen: smaller cards rather than a clipped hand
+      var ratio = Math.max(1.4, Math.min(1.55, usable / cw));
+      return { cw: Math.round(cw), cardH: Math.round(cw * ratio) };
+    }
     function fit(force) {
       var L = ui.layout(); mode = L.mode;
       if (G.mode !== mode) { G = geometry(mode); bg = null; }
       rootEl.setAttribute('data-mode', mode);
+      el.hand.classList.toggle('row', mode === 'phone'); // portrait phone: the hand is a scroll strip (class "row"), otherwise the fan
       var availW = el.sceneCol.clientWidth, gardenH = el.garden.offsetHeight || 0;
       var availH = el.sceneCol.clientHeight - gardenH - 4;
       if (mode !== 'phone' && availW >= 50 && availH >= 50) { // landscape: the board shape follows the screen
@@ -286,19 +296,19 @@
       if (mode === 'phone') {
         // portrait phone: the house takes the full width, the hand takes the widest cards that still leave the floors tall enough, and every floor gets the height that is left
         var rcs = getComputedStyle(rootEl), safeB = (parseFloat(rcs.paddingBottom) || 0) + (parseFloat(rcs.paddingTop) || 0), sW = availW / G.W; // the safe-area insets (notch, rounded corners, gesture bar) are padding on the battle root
-        var fixedH = el.top.offsetHeight + Math.max(gardenH, 30) + 4 + (el.extras.offsetHeight + (parseFloat(rcs.getPropertyValue('--res-h')) || 50) + 6) + 10 + 8 + safeB, handW = el.bottom.clientWidth - 16, fh;
-        var cwTop = Math.max(76, Math.min(112, Math.floor(handW / 4.2))), cardH;
-        for (cwCard = cwTop; ; cwCard -= 4) {
-          fh = ((L.h - fixedH - Math.round(cwCard * 1.4) - 30) / sW - G.roofH - 6) / 3;
-          if (fh >= 70 || cwCard - 4 < 76) break;
+        var fixedH = el.top.offsetHeight + Math.max(gardenH, 30) + 4 + (el.extras.offsetHeight + (parseFloat(rcs.getPropertyValue('--res-h')) || 50) + 6) + 10 + 8 + safeB, handW = el.bottom.clientWidth - 8, fh; // 8: the strip's left padding (its right edge bleeds to the screen edge so the next card peeks in)
+        // the floors take their best height (80, down to 56 on a very short screen); what is left under the board is the free hand height
+        var freeH, hs;
+        for (fh = 80; ; fh--) {
+          freeH = L.h - fixedH - Math.round((G.roofH + 6 + 3 * fh) * sW);
+          if (freeH >= 170 || fh <= 56) break;
         }
-        cardH = cwCard * 1.4;
-        if (fh > 76) { cardH = Math.min(cwCard * 1.95, cardH + (fh - 76) * 3 * sW); fh = 76; } // a tall phone: spare height makes the cards taller (more room for rules text) instead of leaving a gap
-        fh = Math.max(64, Math.min(80, Math.floor(fh)));
+        hs = handSizeFor(freeH, handW); cwCard = hs.cw;
         if (G.setFloor) G.setFloor(fh);
-        availH = L.h - fixedH - Math.round(cardH) - 30;
-        rootEl.style.setProperty('--hand-h', Math.round(cardH) + 30 + 'px');
-        rootEl.style.setProperty('--card-ar', (cardH / cwCard).toFixed(3));
+        availH = L.h - fixedH - Math.round(hs.cardH) - 30;
+        rootEl.style.setProperty('--hand-h', Math.round(hs.cardH) + 30 + 'px');
+        rootEl.style.setProperty('--card-ar', (hs.cardH / hs.cw).toFixed(3));
+        if (!handAnimT) handAnimT = requestAnimationFrame(function () { rootEl.classList.add('hand-anim'); }); // size changes animate, but not the very first sizing
       }
       if (availW < 50 || availH < 50) return;
       var sc = Math.min(availW / G.W, availH / G.H);
@@ -689,6 +699,7 @@
     function renderHand() {
       var turnOk = vm.turn === 'player' && !playing && !ended;
       var seen = {};
+      if (!handEls.size && el.hand.scrollLeft) el.hand.scrollLeft = 0; // a fresh hand starts at its first card
       handOrder = [];
       (vm.hand || []).forEach(function (entry, i) {
         seen[entry.uid] = 1; handOrder.push(entry.uid);
@@ -751,9 +762,8 @@
     }
     // fan geometry for card i of n: writes SL.x / SL.y / SL.r (no allocation)
     function computeSlot(i, n, W, cwc) {
-      if (mode === 'phone') { // portrait: a shallow fan across the full width, 4 to 5 cards side by side with a little overlap, more cards squeeze closer
-        var pgap = Math.min(cwc * 1.02, (W - cwc - 24) / Math.max(1, n - 1)), ptotal = (n - 1) * pgap + cwc, pk = i - (n - 1) / 2;
-        SL.x = Math.round((W - ptotal) / 2 + i * pgap); SL.y = Math.round(pk * pk * (n > 6 ? 0.8 : 1.6)); SL.r = pk * (n > 6 ? 1.5 : 2.2);
+      if (mode === 'phone') { // portrait: a scroll strip, cards side by side without overlap (the CSS flex row places them; this mirrors it for slotTarget)
+        SL.x = Math.round(8 + i * (cwc + 8) - el.hand.scrollLeft); SL.y = 0; SL.r = 0;
         return;
       }
       var room = W - cwc * 1.5 - 28, gap = Math.min(cwc * 0.92, room / Math.max(1, n - 1)), total = (n - 1) * gap + cwc, x0 = (W - total) / 2 - 6; // 1.5: a hovered, rotated edge card grows ~50% wider and must not reach End Turn
@@ -763,6 +773,7 @@
     function layoutHand(skipUid) {
       var order = skipUid ? handOrder.filter(function (u) { return u !== skipUid; }) : handOrder;
       var n = order.length, W = el.hand.clientWidth, cwc = parseFloat(el.hand.style.getPropertyValue('--hand-cw')) || 110;
+      if (mode === 'phone') { layoutStrip(); return; }
       el.hand.classList.remove('row');
       order.forEach(function (uid, i) {
         var rec = handEls.get(uid); if (!rec) return; var c = rec.el;
@@ -774,6 +785,57 @@
         c.style.setProperty('--r', SL.r.toFixed(1) + 'deg');
       });
       applyHover();
+    }
+    // ---- portrait strip: the DOM order is the hand order (the CSS flex row does the placing); when cards come or go the others slide (FLIP) instead of jumping
+    var stripCw = 0;
+    function layoutStrip() {
+      var hand = el.hand, want = [], i, ref, node, rec, c;
+      hand.classList.add('row');
+      for (i = 0; i < handOrder.length; i++) {
+        rec = handEls.get(handOrder[i]); if (!rec) continue;
+        c = rec.el;
+        if (drag && DR.uid === handOrder[i] && DR.ph && DR.ph.parentNode) c = DR.ph; // the dragged card is fixed; its placeholder holds the place
+        else if (c.classList.contains('drag')) continue;
+        want.push(c);
+        c.style.removeProperty('--x'); c.style.removeProperty('--y'); c.style.removeProperty('--r'); c.style.removeProperty('--hx');
+        c.classList.remove('hov');
+      }
+      ref = hand.firstElementChild;
+      for (i = 0; i < want.length; i++) {
+        node = want[i];
+        while (ref && ref !== node && (ref.classList.contains('drag') || want.indexOf(ref) < 0)) ref = ref.nextElementSibling;
+        if (ref === node) ref = ref.nextElementSibling; else hand.insertBefore(node, ref);
+      }
+      var cwNow = parseFloat(hand.style.getPropertyValue('--hand-cw')) || 0, resized = cwNow !== stripCw; stripCw = cwNow;
+      var red = ui.reduced() || !hand.firstElementChild || !hand.firstElementChild.animate, moves = null;
+      for (i = 0; i < want.length; i++) { // one read pass, then the writes
+        node = want[i];
+        var ox = node.offsetLeft;
+        if (!resized && !red && node.__ox != null && Math.abs(node.__ox - ox) > 2) (moves = moves || []).push([node, node.__ox - ox]);
+        node.__ox = ox;
+      }
+      if (moves) moves.forEach(function (m) { m[0].animate([{ translate: m[1] + 'px 0' }, { translate: '0 0' }], { duration: 240, easing: 'cubic-bezier(.2,.8,.25,1)' }); });
+      stripFade();
+    }
+    // soft shadow at the edge(s) where more cards are scrolled out of view
+    var fadeRaf = 0, fadeSig = '';
+    function stripFade() {
+      var hand = el.hand, l = hand.scrollLeft > 6, r = hand.scrollLeft + hand.clientWidth < hand.scrollWidth - 6, sg = (l ? 'l' : '') + (r ? 'r' : '');
+      if (mode !== 'phone') { sg = ''; }
+      if (sg === fadeSig) return; fadeSig = sg;
+      el.handWrap.classList.toggle('more-l', l && mode === 'phone'); el.handWrap.classList.toggle('more-r', r && mode === 'phone');
+    }
+    el.hand.addEventListener('scroll', function () { if (fadeRaf) return; fadeRaf = requestAnimationFrame(function () { fadeRaf = 0; stripFade(); }); }, { passive: true });
+    el.hand.addEventListener('wheel', function (e) { if (mode !== 'phone' || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return; el.hand.scrollLeft += e.deltaY; e.preventDefault(); }, { passive: false });
+    // bring a card fully into view (smooth) when it is partly hidden by the strip edges or the fades
+    function revealCard(uid) {
+      if (mode !== 'phone') return;
+      var rec = handEls.get(uid); if (!rec) return;
+      var hand = el.hand, c = rec.el, left = c.offsetLeft, right = left + c.offsetWidth, vs = hand.scrollLeft, ve = vs + hand.clientWidth, to = vs;
+      if (left < vs + 8) to = left - 8; else if (right > ve - 8) to = right + 8 - hand.clientWidth;
+      to = Math.max(0, Math.min(hand.scrollWidth - hand.clientWidth, to));
+      if (Math.abs(to - vs) < 2) return;
+      hand.scrollTo({ left: to, behavior: ui.reduced() ? 'auto' : 'smooth' });
     }
     // ---- hover fan: hover intent with hysteresis, neighbours spread apart. Driven by the pointer x against the resting fan, never by :hover, so a card that rises under the pointer cannot flicker.
     function applyHover() {
@@ -813,7 +875,7 @@
       c.addEventListener('pointermove', function (e) {
         if (!down) return;
         var dx = e.clientX - down.x, dy = e.clientY - down.y;
-        if (!drag && (Math.abs(dy) > 10 || (mode !== 'phone' && Math.abs(dx) > 10)) && (mode !== 'phone' || dy < -7)) {
+        if (!drag && (Math.abs(dy) > 10 || (mode !== 'phone' && Math.abs(dx) > 10)) && (mode !== 'phone' || (dy < -7 && -dy > Math.abs(dx) * 0.9))) { // phone: only a mostly vertical swipe up lifts the card; a sideways swipe belongs to the strip's native scroll
           moved = true; clearTimeout(longT); startDrag(uid, c, e);
         }
         if (drag) moveDrag(e);
@@ -850,7 +912,7 @@
       sel = { uid: uid, cp: cp }; tgtCursor = -1;
       hook('select', { uid: uid, cp: cp });
       sfx('ui_click');
-      refreshTargets(); renderHand();
+      refreshTargets(); renderHand(); revealCard(uid);
     }
     function clearSel() {
       sel = null; refreshTargets(); renderHand(); renderTray(); el.arrow.style.display = 'none';
@@ -1187,7 +1249,7 @@
       var wn = 26; D.K[0] = D.K[1] = wn * wn; D.C[0] = D.C[1] = 2 * wn;
       D.K[2] = D.K[4] = D.K[5] = 170; D.C[2] = D.C[4] = D.C[5] = 2 * Math.sqrt(170);
       D.K[3] = 260; D.C[3] = 2 * Math.sqrt(260) * 0.8;
-      if (rowMode) { D.ph = h('div.card-ph', { style: { width: w + 'px', height: hh + 'px', marginRight: '6px' } }); c.parentNode.insertBefore(D.ph, c); } else D.ph = null;
+      if (rowMode) { D.ph = h('div.card-ph', { style: { width: w + 'px', height: hh + 'px' } }); c.parentNode.insertBefore(D.ph, c); } else D.ph = null;
       c.style.setProperty('--dw', w + 'px'); c.style.transition = 'none';
       c.classList.add('drag'); c.style.transform = 'translate3d(' + (D.cx0 - w / 2) + 'px,' + (D.cy0 - hh / 2) + 'px,0) scale(' + D.S[3] + ')';
       c.setPointerCapture && tryf(function () { c.setPointerCapture(e.pointerId); });
