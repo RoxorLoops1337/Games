@@ -174,3 +174,6 @@ Ideas next (round 5): lane chevrons still stroked live (about 0.5 ms); tablet an
 8. Quick mute toggle on the title screen and in the pause menu.
 9. Default Reduce motion on for fresh profiles when the system prefers reduced motion.
 10. Tablet and landscape check: no clipped HUD, sensible centring (verified with screenshots at 1280x720, 820x1180, 844x390).
+
+Round 5 result: items 1 to 9 shipped (title picker moved, sign hidden when covered on wide screens, baked chevrons, codex boss phase diagrams, friend invite links, import on the title menu, offline ready toast and Offline chip, quick mute, reduced motion default). Item 10: portrait tablet is fine; landscape phones and desktops show the 540x960 column scaled to height with decorative sides (a real landscape layout is a bigger design task).
+Ideas next (round 6): a real landscape layout (side panels with turret list and stats); gamepad support; tutorial step for preview and reroll; seasonal limited-time event; sound mix check on phones; daily quest variety; leaderboard seasons; share card in the player's outfits (done) plus animated GIF replay; accessibility audit with a screen reader (aria for DOM menus); balance review of modifiers with the bot matrix.
