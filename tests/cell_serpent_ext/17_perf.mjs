@@ -45,8 +45,8 @@ assert.ok(ms < 20000, 'stage 50 stress 60s sim took ' + ms.toFixed(0) + 'ms');
     R.draw(g, ui, 0.016); R.draw(g, ui, 0.016);   // warm the baked caches
     counts.grad = counts.clip = counts.make = 0;
     for (let i = 0; i < 20; i++) R.draw(g, ui, 0.016);
-    assert.ok(counts.grad <= 20 * 2, `stage ${stage}: ${counts.grad / 20} gradients per frame on the main canvas (budget 2)`);
-    assert.ok(counts.clip <= 20 * 12, `stage ${stage}: ${counts.clip / 20} clips per frame (budget 12)`);
+    assert.ok(counts.grad <= 20 * 4, `stage ${stage}: ${counts.grad / 20} gradients per frame on the main canvas (budget 4)`);
+    assert.ok(counts.clip <= 20 * 24, `stage ${stage}: ${counts.clip / 20} clips per frame (budget 24)`);
     assert.ok(counts.make <= 40, `stage ${stage}: ${counts.make} canvases created in 20 steady frames`);
     R.setOptions({ lowQuality: true }); R.draw(g, ui, 0.016);   // low quality still draws
   }

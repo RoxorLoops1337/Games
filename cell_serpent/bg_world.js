@@ -234,13 +234,18 @@ export function beatPulse(t, stage, boss) {
   const bpm = boss ? 138 : 104 + (Math.floor(Math.max(0, stage - 1) / 5) % 6) * 3, ph = (t * bpm / 60) % 1;
   return Math.exp(-ph * 5.5);
 }
-export function drawRing(c, ring, t, boss, pulse) {
+export function drawRing(c, ring, t, boss, pulse, kit) {
   const { cx, cy, R } = ring, beat = pulse === undefined ? 0.5 + 0.5 * Math.sin(t * 4.2) : pulse, hue = boss ? '255,50,90' : '255,90,140';
-  // a dark disc so the circle reads over any skyline, then the warm floor light on top of it
-  const dk = c.createRadialGradient(cx, cy, 10, cx, cy, R); dk.addColorStop(0, 'rgba(8,3,26,.5)'); dk.addColorStop(0.8, 'rgba(8,3,26,.58)'); dk.addColorStop(1, 'rgba(8,3,26,.7)');
-  c.fillStyle = dk; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill();
-  const fl = c.createRadialGradient(cx, cy, 20, cx, cy, R); fl.addColorStop(0, `rgba(255,225,170,${0.2 + beat * 0.1})`); fl.addColorStop(0.6, `rgba(${hue},.16)`); fl.addColorStop(1, `rgba(${hue},${0.36 + beat * 0.14})`);
-  c.fillStyle = fl; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill();
+  // a dark disc so the circle reads over any skyline, then the warm floor light on top of it; baked once, the beat is an alpha swing
+  const paint = (b, x, y, bt) => {
+    const dk = b.createRadialGradient(x, y, 10, x, y, R); dk.addColorStop(0, 'rgba(8,3,26,.5)'); dk.addColorStop(0.8, 'rgba(8,3,26,.58)'); dk.addColorStop(1, 'rgba(8,3,26,.7)');
+    b.fillStyle = dk; b.beginPath(); b.arc(x, y, R, 0, TAU); b.fill();
+    const fl = b.createRadialGradient(x, y, 20, x, y, R); fl.addColorStop(0, `rgba(255,225,170,${0.2 + bt * 0.1})`); fl.addColorStop(0.6, `rgba(${hue},.16)`); fl.addColorStop(1, `rgba(${hue},${0.36 + bt * 0.14})`);
+    b.fillStyle = fl; b.beginPath(); b.arc(x, y, R, 0, TAU); b.fill();
+  };
+  const disc = kit && kit.bake ? kit.bake('ringfloor2|' + boss + '|' + R, R * 2, R * 2, bb => paint(bb, 0, 0, 0.5), 1) : null;
+  if (disc) { c.save(); c.globalAlpha = 0.85 + beat * 0.3 > 1 ? 1 : 0.85 + beat * 0.3; c.drawImage(disc.c, cx - R, cy - R); c.restore(); }
+  else paint(c, cx, cy, beat);
   for (let i = 1; i <= 2; i++) { const ph = (t * 0.7 + i * 0.5) % 1; c.strokeStyle = `rgba(255,200,230,${0.25 * (1 - ph)})`; c.lineWidth = 3; c.beginPath(); c.arc(cx, cy, R * (0.3 + ph * 0.7), 0, TAU); c.stroke(); }
   // glow: stacked wide strokes, outside and inside the rim (no shadowBlur, cheap on phones)
   c.save(); c.globalCompositeOperation = 'lighter';
