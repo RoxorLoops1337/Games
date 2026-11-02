@@ -11,7 +11,7 @@ import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from
 import { drawHints } from './hints.js';
 import { drawCellFlags, drawCellBadge, drawQuartetLinks, drawDashLane } from './cellfx.js';
 import { bakeHat } from './hats.js';
-import { createCheer, HAT_FX, hatPose } from './cheer.js';
+import { createCheer, HAT_FX, hatPose, EMOTE, heart, drawEmote } from './cheer.js';
 import { createBoltLayer, boltPose, paintBolt } from './bolts_fx.js';
 
 const TAU = Math.PI * 2;
@@ -353,6 +353,17 @@ export function createRenderer(canvas, art, kit) {
       else if (id === 'hamster' && ph < 0.4) { const f = ph / 0.4; sparkleAt(px + s2 * 14, py + 10 + f * 14, 4 * Math.sin(f * Math.PI)); }
     }
   }
+  // 09-skills-pets r6: a pet at full happiness glows pink at its feet and puffs a heart or its own emote every few seconds
+  function joyEmote(px, py, gy, s2, i, id) {
+    const T = 3.4, ph = ((S.t + i * 1.7) % T) / T;
+    ctx.save(); ctx.globalAlpha *= 0.22 + 0.1 * Math.sin(S.t * 4 + i); ctx.fillStyle = '#ff7eb6'; ctx.beginPath(); ctx.ellipse(px, gy, 30, 9, 0, 0, TAU); ctx.fill(); ctx.restore();
+    if (ph < 0.34) {
+      const f = ph / 0.34, a = Math.sin(f * Math.PI), sig = EMOTE[id], x = px + s2 * 4 + Math.sin(f * 7) * 7, y = py - 58 - f * 36;
+      ctx.save(); ctx.globalAlpha *= a; const r = 6 + a * 3;
+      if (sig && (((S.t + i * 1.7) / T) | 0) % 2) drawEmote(ctx, x, y, r * 1.1, S.t * 3, sig); else heart(ctx, x, y, r, '#ff7eb6');
+      ctx.restore();
+    }
+  }
   function petsDraw(g, p, singing) {
     const ps = g.pets || [];
     let near = 1e9; for (const sn of g.snakes) { const h = sn.segs[0]; if (h) { const d = Math.hypot(h.x - p.x, h.y - p.y); if (d < near) near = d; } }
@@ -374,6 +385,7 @@ export function createRenderer(canvas, art, kit) {
       if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq : 1), sy / (ch ? ch.sq : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px, base - idle - hopY, sz, s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0)); ctx.restore(); }
       if (st.hop > 0.6) sparkleAt(px + s2 * 28, base - idle - hopY - 36, 7 + st.hop * 3);
       petExtras(id, st, px, base - idle - hopY, s2, i);
+      if (g.petJoy && g.petJoy[i] && !OPT.reduceMotion) joyEmote(px, base - idle - hopY, p.y + 40, s2, i, id);
     });
     cheerHit = false;
     if (!OPT.reduceMotion) CH.draw(ctx, lastDt, kit, sparkleAt, blit);

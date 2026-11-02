@@ -402,6 +402,18 @@
   @keyframes whrt{0%{transform:translateY(0) scale(.6);opacity:0}20%{opacity:1}100%{transform:translateY(-34px) scale(1.2);opacity:0}}
   @media (prefers-reduced-motion:reduce){.joy.full .jbar i,.joy.full .jh,.dswalk .whrt{animation:none}}
   /* end @css:09-skills-pets round 5 */
+  /* @css:09-skills-pets round 6 */
+  .prcell{position:relative}
+  .prren{position:absolute;top:0;right:0;width:36px;height:36px;border:0;background:none;color:rgba(255,255,255,.55);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .prren:active{color:#ffe14a}
+  .prinp{width:92%;min-width:0;height:26px;border-radius:8px;border:2px solid #ffe14a;background:rgba(0,0,0,.45);color:#fff;font:900 14px/1 inherit;text-align:center;outline:0;padding:0 2px}
+  .prmain b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 18px}
+  .prsave.warn{background:rgba(255,120,60,.3);color:#ffd9b8;animation:prwarn .5s ease-in-out infinite alternate}
+  @keyframes prwarn{to{background:rgba(255,120,60,.5)}}
+  .prauto{align-self:center;min-height:26px;padding:0 12px;border-radius:13px;border:1.5px solid #9dff6d;background:rgba(157,255,109,.14);color:#c8ffa8;font:900 11px/1 inherit;letter-spacing:.1em;cursor:pointer}
+  .prauto:active{background:rgba(157,255,109,.35)}
+  @media (prefers-reduced-motion:reduce){.prsave.warn{animation:none}}
+  /* end @css:09-skills-pets round 6 */
   /* end @css:09-skills-pets */
   /* @css:07-cards */
   #levelup{gap:8px;justify-content:center}

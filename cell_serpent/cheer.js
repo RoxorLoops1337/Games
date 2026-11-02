@@ -97,6 +97,7 @@ const EMOTE_DRAW = {
   },
 };
 
+export function drawEmote(ctx, x, y, r, rot, kind) { const f = EMOTE_DRAW[kind]; if (f) f(ctx, x, y, r, rot); }
 export function heart(ctx, x, y, k, col) {
   ctx.save(); ctx.translate(x, y); ctx.fillStyle = col; ctx.strokeStyle = '#4a1a33'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
   ctx.beginPath(); ctx.moveTo(0, k); ctx.bezierCurveTo(-k * 2, -k * 0.6, -k * 0.8, -k * 1.8, 0, -k * 0.6); ctx.bezierCurveTo(k * 0.8, -k * 1.8, k * 2, -k * 0.6, 0, k); ctx.fill(); ctx.stroke();

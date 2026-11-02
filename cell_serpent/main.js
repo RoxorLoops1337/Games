@@ -300,7 +300,9 @@ function renderPets() {
   eggNudge(egg, save); list.appendChild(egg);
   { const rdy = PETS.filter(p => petCanUp(save, p.id)).length; if (save.eggs > 1 || rdy) { const row = document.createElement('div'); row.className = 'refrow'; row.style.justifyContent = 'center'; row.style.gap = '10px'; if (save.eggs > 1) { const b = document.createElement('button'); b.className = 'btn small alt'; b.textContent = 'HATCH ALL (' + save.eggs + ')'; b.onclick = () => { const res = hatchAll(save); if (res.length) { persist(); audio.play('levelup'); refreshCur(); toast(res.length + ' eggs hatched'); renderHub(); } }; row.appendChild(b); } if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'STAR UP ALL (' + rdy + ')'; b.onclick = () => { if (upgradePetsAll(save)) { persist(); audio.play('upgrade'); renderHub(); } }; row.appendChild(b); } list.appendChild(row); } }
   list.appendChild(chipRow(['All', 'Owned', 'Ready'], petFilter, o => { petFilter = o; audio.play('click'); renderPets(); }, { Ready: PETS.filter(p => petCanUp(save, p.id)).length }));
-  for (const p of PETS) {
+  { const row = list.lastElementChild; const sb = document.createElement('button'); sb.className = 'fchip'; sb.textContent = 'Sort: ' + petSort; sb.onclick = () => { petSort = petSort === 'Order' ? 'Stars' : petSort === 'Stars' ? 'Joy' : petSort === 'Joy' ? 'Rarity' : 'Order'; audio.play('click'); renderPets(); }; if (row && row.classList.contains('fchips')) row.appendChild(sb); }
+  const petKey = p => { const k = save.pets[p.id]; return petSort === 'Stars' ? -k.star : petSort === 'Joy' ? -(k.joy || 0) : petSort === 'Rarity' ? -(PET_RARITY[p.id] || 0) : 0; };
+  for (const p of (petSort === 'Order' ? PETS : PETS.slice().sort((a, b) => petKey(a) - petKey(b)))) {
     if (petFilter === 'Owned' && save.pets[p.id].star < 1) continue; if (petFilter === 'Ready' && !petCanUp(save, p.id)) continue;
     const k = save.pets[p.id], owned = k.star > 0, maxed = k.star >= PET_MAX_STAR, need = maxed ? 0 : petCost(k.star), eq = save.petEquip.includes(p.id);
     const stars = '★ ' + k.star + '/' + PET_MAX_STAR;
@@ -338,7 +340,7 @@ function renderSkills() {
   { const rdy = WEAPONS.filter(w => save.skills[w.id].lv > 0 && save.skills[w.id].lv < SKILL_MAX_LV && save.skills[w.id].frag >= skillUpgradeCost(save.skills[w.id].lv).frag).length; if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold sec'; b.style.cssText = 'grid-column:1/-1;margin:2px auto'; b.textContent = 'LEVEL UP ALL READY (' + rdy + ')'; b.onclick = () => { if (upgradeAllSkills(save)) { persist(); audio.play('upgrade'); renderHub(); } }; list.appendChild(b); } }
   const isRdy = w => { const k = save.skills[w.id]; return k.lv > 0 ? k.lv < SKILL_MAX_LV && k.frag >= skillUpgradeCost(k.lv).frag : k.frag >= w.frag && (save.cleared || 0) >= (w.stage || 0); };
   { const row = chipRow(['All', 'Owned', 'Ready'], skFilter, o => { skFilter = o; audio.play('click'); renderSkills(); }, { Ready: WEAPONS.filter(isRdy).length });
-    const sb = document.createElement('button'); sb.className = 'fchip'; sb.textContent = 'Sort: ' + skSort; sb.onclick = () => { skSort = skSort === 'Tier' ? 'Level' : skSort === 'Level' ? 'Rank' : 'Tier'; audio.play('click'); renderSkills(); }; row.appendChild(sb); list.appendChild(row); }
+    const sb = document.createElement('button'); sb.className = 'fchip'; sb.textContent = 'Sort: ' + skSort; sb.onclick = () => { skSort = skSort === 'Tier' ? 'Level' : skSort === 'Level' ? 'Rank' : skSort === 'Rank' ? 'Closest' : 'Tier'; audio.play('click'); renderSkills(); }; row.appendChild(sb); list.appendChild(row); }
   const groups = [[], [], []], keyOf = new Map();
   for (const w of WEAPONS) {
     const k = save.skills[w.id], owned = k.lv > 0, eq = save.loadout.includes(w.id);
@@ -359,7 +361,7 @@ function renderSkills() {
       e.onclick = () => { if (full) { audio.play('click'); swapSheet({ save: () => save, persist: () => persist(), audio, icon, rerender: () => renderHub() }, w.id); return; } if (toggleLoadout(save, w.id)) { persist(); audio.play('click'); renderHub(); } };
       t.appendChild(e);
     }
-    if (owned) { const rk = skillRank(save, w.id); t.querySelector('.ds').insertAdjacentHTML('beforebegin', `<em class="rk r${rk.rank}" title="Mastery rank">🎖 ${rk.name}</em>`); keyOf.set(t, skSort === 'Level' ? -k.lv : skSort === 'Rank' ? -rk.val : (w.tier || 0)); } else keyOf.set(t, skSort === 'Tier' ? (w.tier || 0) : 0);
+    if (owned) { const rk = skillRank(save, w.id); t.querySelector('.ds').insertAdjacentHTML('beforebegin', `<em class="rk r${rk.rank}" title="Mastery rank">🎖 ${rk.name}</em>`); keyOf.set(t, skSort === 'Level' ? -k.lv : skSort === 'Rank' ? -rk.val : skSort === 'Closest' ? -(need ? k.frag / need : 0) : (w.tier || 0)); } else keyOf.set(t, skSort === 'Tier' ? (w.tier || 0) : skSort === 'Closest' ? -(need ? k.frag / need : 0) : 0);
     if (isNewItem(save, 's', w.id)) t.insertAdjacentHTML('afterbegin', newRibbonHTML);
     t.tabIndex = 0; t.onclick = e => { if (!e.target.closest('button')) { audio.play('click'); sheets.skillSheet(w.id); } };
     groups[eq ? 0 : owned ? 1 : 2].push(t);
@@ -372,7 +374,7 @@ function renderSkills() {
     for (const t of groups[i]) list.appendChild(t);
   });
 }
-let skFilter = 'All', skSort = 'Tier', petFilter = 'All';
+let skFilter = 'All', skSort = 'Tier', petFilter = 'All', petSort = 'Order';
 const sheets = createSheets({ save: () => save, persist: () => persist(), audio, icon, rerender: () => renderHub() });
 const defaultBoxOk = () => { audio.play('click'); openHub('Shop'); };
 $('bOk').onclick = defaultBoxOk;
@@ -389,6 +391,7 @@ function startRun(stage, mode2 = '') {
   audio.unlock(); audio.music(true);
   sel = stage; ranResult = false; endT = 0;
   g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
+  g.petJoy = save.petEquip.map(id => (save.pets[id].joy || 0) >= 100);   // round 6: an overjoyed pet shows off in the run (cosmetic)
   mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove();
   announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + 'Slide to move, the duo shoots up on its own.');
   window.CS.g = g;

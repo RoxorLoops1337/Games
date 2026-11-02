@@ -1,9 +1,20 @@
 // Cell Serpent: loadout presets (3 saved builds), drag to reorder the loadout row, pet happiness meter.
 // Rules stay tiny and live here; the save fields (save.presets, pets[id].joy) are sanitized in sim.js.
-import { LOADOUT_SIZE, PET_JOY_MAX } from './sim.js';
+import { LOADOUT_SIZE, PET_JOY_MAX, WEAPONS } from './sim.js';
 
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
 const NAMES = ['A', 'B', 'C'];
+export const NAME_MAX = 8;
+export const cleanName = v => String(v == null ? '' : v).replace(/[^\w \-!+&.]/g, '').trim().slice(0, NAME_MAX);
+export const buildName = (save, i) => (save.presetNames && cleanName(save.presetNames[i])) || NAMES[i];
+export function renameBuild(save, i, v) { if (i < 0 || i > 2) return false; const n = cleanName(v); if (!save.presetNames) save.presetNames = ['', '', '']; save.presetNames[i] = n; return true; }
+// auto-suggest: the best owned skills (level first, then tier), one of each, LOADOUT_SIZE of them
+export function suggestBuild(save) {
+  const own = WEAPONS.filter(w => save.skills[w.id] && save.skills[w.id].lv > 0);
+  own.sort((a, b) => (save.skills[b.id].lv * 10 + (b.tier || 0)) - (save.skills[a.id].lv * 10 + (a.tier || 0)));
+  return own.slice(0, LOADOUT_SIZE).map(w => w.id);
+}
+let undoLoadout = null, armed = -1, armT = 0;
 const sameSet = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
 
 // a preset can be loaded when all of it is still owned
@@ -20,17 +31,35 @@ export function renderPresets(host, c) {
   const { save, persist, audio, icon, rerender } = c, s = save();
   host.innerHTML = '';
   if (!s.presets) s.presets = [[], [], []];
-  host.appendChild(el('div', 'prhd', '<span>BUILDS</span><small>Save a loadout, swap in one tap</small>'));
+  const hd = el('div', 'prhd', '<span>BUILDS</span><small>Save a loadout, swap in one tap</small>');
+  { const sug = suggestBuild(s), cur = s.loadout.slice(0, LOADOUT_SIZE), better = sug.length > 0 && !sameSet(sug.slice().sort(), cur.slice().sort());
+    if (undoLoadout || better) {
+      const ab = el('button', 'prauto', undoLoadout ? 'UNDO' : 'AUTO'); ab.setAttribute('aria-label', undoLoadout ? 'Undo the suggested build' : 'Suggest my strongest build');
+      ab.onclick = () => { if (undoLoadout) { s.loadout = undoLoadout; undoLoadout = null; } else { undoLoadout = s.loadout.slice(); s.loadout = sug; } persist(); audio.play('upgrade'); rerender(); };
+      hd.querySelector('small').replaceWith(ab);
+    } }
+  host.appendChild(hd);
   const row = el('div', 'prrow');
   for (let i = 0; i < 3; i++) {
     const ids = s.presets[i] || [], has = ids.length > 0, ok = has && presetUsable(s, ids), on = has && sameSet(ids, s.loadout);
     const cell = el('div', 'prcell' + (has ? ' has' : '') + (on ? ' on' : '') + (has && !ok ? ' bad' : ''));
-    const main = el('button', 'prmain', `<b>${NAMES[i]}</b>` + (has ? `<span class="prics">${ids.map(id => `<i>${icon(id)}</i>`).join('')}</span>` : '<span class="prem">empty</span>'));
-    main.setAttribute('aria-label', has ? `Load build ${NAMES[i]}` : `Build ${NAMES[i]} is empty`);
+    const nm = buildName(s, i), main = el('button', 'prmain', `<b>${nm.replace(/&/g, '&amp;')}</b>` + (has ? `<span class="prics">${ids.map(id => `<i>${icon(id)}</i>`).join('')}</span>` : '<span class="prem">empty</span>'));
+    main.setAttribute('aria-label', has ? `Load build ${nm}` : `Build ${nm} is empty`);
     main.disabled = !has;
     main.onclick = () => { if (loadPreset(s, i)) { persist(); audio.play('upgrade'); rerender(); } else audio.play('click'); };
-    const sv = el('button', 'prsave', on ? 'SAVED' : 'SAVE'); sv.setAttribute('aria-label', `Save current loadout as build ${NAMES[i]}`); sv.disabled = on;
-    sv.onclick = () => { savePreset(s, i); persist(); audio.play('click'); rerender(); };
+    const arm = armed === i && Date.now() < armT, sv = el('button', 'prsave' + (arm ? ' warn' : ''), on ? 'SAVED' : arm ? 'OVERWRITE?' : 'SAVE'); sv.setAttribute('aria-label', `Save current loadout as build ${nm}`); sv.disabled = on;
+    sv.onclick = () => {
+      if (has && !on && !arm) { armed = i; armT = Date.now() + 2600; audio.play('click'); rerender(); setTimeout(() => { if (armed === i && Date.now() >= armT) { armed = -1; if (host.isConnected) rerender(); } }, 2700); return; }
+      armed = -1; savePreset(s, i); persist(); audio.play('click'); rerender();
+    };
+    if (has) {
+      const rn = el('button', 'prren', '✎'); rn.setAttribute('aria-label', `Rename build ${nm}`); cell.appendChild(rn);
+      rn.onclick = e => {
+        e.stopPropagation(); const inp = el('input', 'prinp'); inp.maxLength = NAME_MAX; inp.value = buildName(s, i); inp.setAttribute('aria-label', 'Build name'); main.innerHTML = ''; main.appendChild(inp); main.disabled = true; rn.remove(); inp.focus(); inp.select();
+        let done = false; const fin = ok => { if (done) return; done = true; if (ok) { renameBuild(s, i, inp.value); persist(); audio.play('click'); } rerender(); };
+        inp.onkeydown = ev => { if (ev.key === 'Enter') fin(true); else if (ev.key === 'Escape') fin(false); }; inp.onblur = () => fin(true);
+      };
+    }
     cell.append(main, sv); row.appendChild(cell);
   }
   host.appendChild(row);
