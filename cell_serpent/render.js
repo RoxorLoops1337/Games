@@ -17,6 +17,7 @@ import { drawFar } from './bg_far.js';
 import { ringDanger } from './bg_mist.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
+import { drawRingHint } from './hints_ring_b12n.js';
 import { drawBellLinks, drawBellRings } from './bell_fx.js';
 import { hpSizeB12m, hpDropB12m } from './cells_b12m.js';
 import { bossTierB12m } from './boss_tier_b12m.js';
