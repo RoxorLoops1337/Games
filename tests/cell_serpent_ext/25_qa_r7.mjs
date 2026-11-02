@@ -119,7 +119,7 @@ if (chromium) {
           }
           const hit = await p.evaluate(() => ['rRetry', 'rHub'].map(id => { const e = document.getElementById(id), r = e.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!(r.bottom <= innerHeight && r.top >= 0 && t && e.contains(t)); }));
           assert.deepEqual(hit, [true, true], `${w}x${h} ${sv}: RETRY and MENU are on screen and tappable after ${kind}`);
-          await p.evaluate(() => document.getElementById('rHub').click()); await p.waitForTimeout(500);
+          await p.evaluate(() => document.getElementById('rHub').click()); await p.waitForFunction(() => window.CS.mode() === 'hub', null, { timeout: 4000 }).catch(() => {}); await p.waitForTimeout(150);   // the close curtain swaps to the hub after its 230 ms close
           assert.equal(await p.evaluate(() => window.CS.mode()), 'hub', `${w}x${h} ${sv}: MENU after ${kind} returns to the hub`);
         }
         assert.deepEqual(errs, [], `${w}x${h} ${sv}: no console or page errors`);
