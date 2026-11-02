@@ -64,12 +64,16 @@
       // phone (portrait): 208 logical px across, drawn at about 1.9 css px per logical px on a 412 wide screen, so cats sit about 58 css px apart and pests 40 css px per size unit.
       // floorH is retuned by fit() to the free height (G.setFloor); pestMax is the pest lane width, beyond it a crowded floor squeezes its pests together.
       G = { mode: mode, W: 208, H: 270, roofH: 24, floorH: 80, feetOff: 58, x0: 3, x1: 205, catPitch: 31, catRight: 126, pestLeft: 129, pestUnit: 21, pestMax: 76, labelInline: false };
-      G.setFloor = function (fh) { G.floorH = fh; G.feetOff = fh - 18; G.H = G.roofH + 3 * fh + 6; };
+      // Empty floors shrink (portrait only): G.hs holds the CURRENT height of each floor (animated by stepHeights), floorH stays the full height.
+      G.hs = [80, 80, 80]; G.Hfull = 270; G.compactH = 48;
+      G.setFloor = function (fh, ch) { G.floorH = fh; G.compactH = Math.min(fh, ch || fh); G.Hfull = G.roofH + 3 * fh + 6; G.setHeights([fh, fh, fh]); };
+      G.setHeights = function (a) { G.hs = [a[0], a[1], a[2]]; G.H = G.roofH + a[0] + a[1] + a[2] + 6; };
     } else {
       G = wideLayout(o); G.mode = mode;
     }
-    G.top = function (f) { return G.roofH + (2 - f) * G.floorH; };
-    G.feet = function (f) { return G.top(f) + G.feetOff; };
+    G.fh = function (f) { return G.hs ? G.hs[f] : G.floorH; }; // current height of floor f
+    G.top = function (f) { var t = G.roofH; for (var g = 2; g > f; g--) t += G.fh(g); return t; };
+    G.feet = function (f) { return G.top(f) + (G.hs ? G.hs[f] - 18 : G.feetOff); };
     G.catX = function (start, size) { return G.catRight - (start + size / 2) * G.catPitch; };
     G.pestX = function (start, size, tot) { var u = G.pestUnit; if (G.pestMax && tot && tot * u > G.pestMax) u = G.pestMax / tot; return G.pestLeft + (start + size / 2) * u; };
     G.room = function (f, i) { return G.labelInline ? { x: G.x0 + 6 + i * 31, y: G.top(f) + 20, w: 29, h: 29 } : { x: 50 + i * 22, y: G.top(f) + 2, w: 20, h: 20 }; };
@@ -205,7 +209,9 @@
       }
       var lx = ix0 + iw - 46; R('#2a1d2a', lx, t + 6, 6, 9); R(f === 0 ? '#9ad0ff' : '#ffc766', lx + 1, t + 7, 4, 6); R('#fff1c9', lx + 2, t + 8, 2, 2);
     }
+    function bgKeyNow() { return mode + G.W + 'x' + (G.Hfull || G.H) + (G.key || ''); }
     function buildBg() {
+      var savedHs = G.hs; if (savedHs) G.setHeights([G.floorH, G.floorH, G.floorH]); // the cached art is always drawn at full floor height, draw() slices it
       var c = mkCanvas(G.W, G.H), x = c.getContext('2d'), W = G.W, H = G.H; bgCtx = x;
       x.imageSmoothingEnabled = false;
       function R(col, a, b, w2, h2) { x.fillStyle = col; x.fillRect(a, b, w2, h2); }
@@ -224,7 +230,7 @@
       // moon
       var mx = mode === 'phone' ? 18 : 10, my = 12; R('#fff1c9', mx, my, 7, 7); R('#ffe2a0', mx + 4, my + 3, 3, 3); R('#fff8e0', mx + 1, my + 1, 2, 2);
       // house shell
-      var hx0 = G.x0 - 4, hx1 = G.x1 + 4, houseTop = G.roofH, houseBot = G.top(0) + G.floorH;
+      var hx0 = G.x0 - 4, hx1 = G.x1 + 4, houseTop = G.roofH, houseBot = G.top(0) + G.fh(0);
       R('#4a2e3c', hx0, houseTop, hx1 - hx0, houseBot - houseTop);
       for (var f = 2; f >= 0; f--) {
         var t = G.top(f), fh = G.floorH, ix0 = G.x0, iw = G.x1 - G.x0;
@@ -267,7 +273,78 @@
       }
       // garden strip
       R('#1b2a3a', 0, H - 5, W, 5); for (var gx = 0; gx < W; gx += 5) R('#2f5a4a', gx, H - 6 - ((gx * 3) % 3), 2, 3);
-      bg = c; bgKey = mode + G.W + 'x' + G.H + (G.key || '');
+      bg = c; bgKey = bgKeyNow();
+      if (savedHs) G.setHeights(savedHs);
+    }
+
+    // ---------------- empty floors shrink (portrait phone only)
+    // Every floor has a full height (G.floorH) and a compact one (G.compactH). A floor is compact when nothing lives on it in the replayed view state (vm), nothing is
+    // still animating out of it and it has been empty for a moment. stepHeights() eases the current heights (G.hs) towards those targets in 220 ms; applyHeights() moves
+    // everything that hangs on the floors (stage, canvas, overlay buttons, units, hand area) in one go, so nothing is rebuilt per frame.
+    var HT = { init: false, cur: [80, 80, 80], from: [80, 80, 80], to: [80, 80, 80], t0: 0, on: false, empty: [0, 0, 0], base: 150, ms: 220 };
+    function floorOccupied(f) { var fl = vm.floors[f]; return !!(fl && ((fl.cats && fl.cats.length) || (fl.pests && fl.pests.length))); }
+    function bottomsOf() { var b = [], t = G.roofH; for (var f = 2; f >= 0; f--) { t += G.fh(f); b[f] = t; } return b; }
+    function floorAtY(y, b) { for (var f = 2; f > 0; f--) if (y < b[f]) return f; return 0; }
+    function shiftY(y, ob, nb) { if (y < G.roofH) return y; var f = floorAtY(y, ob); return y + (nb[f] - ob[f]); }
+    function floorBusy(f) { // a unit is still hopping, falling, fading or dying in this floor: keep it open
+      var b = bottomsOf(), busy = false;
+      V.units.forEach(function (v) {
+        if (busy || v.y == null || !(v.mv || v.dying || v.fall || v.alpha < 1)) return;
+        if (floorAtY(v.y, b) === f || (v.mv && (floorAtY(v.mv.y0, b) === f || floorAtY(v.mv.y1, b) === f))) busy = true;
+      });
+      return busy;
+    }
+    function heightTargets(real) {
+      var out = [];
+      for (var f = 0; f < 3; f++) {
+        if (floorOccupied(f)) { HT.empty[f] = 0; out[f] = G.floorH; continue; }
+        if (!HT.empty[f]) HT.empty[f] = real;
+        out[f] = (real - HT.empty[f] > 320 && !floorBusy(f)) ? G.compactH : HT.to[f];
+      }
+      return out;
+    }
+    function initHeights() {
+      var real = performance.now(), to = [];
+      for (var f = 0; f < 3; f++) { var occ = floorOccupied(f); to[f] = occ ? G.floorH : G.compactH; HT.empty[f] = occ ? 0 : real - 1000; }
+      G.setHeights(to); HT.cur = to.slice(); HT.from = to.slice(); HT.to = to.slice(); HT.on = false; HT.init = true;
+    }
+    function publishHeights() { rootEl.style.setProperty('--hand-h', Math.round(HT.base + (G.Hfull - G.H) * s) + 'px'); } // the height the board gave back goes to the hand area
+    function sizeStage() {
+      var cw = Math.round(G.W * s), chh = Math.round(G.H * s);
+      el.stage.style.width = cw + 'px'; el.stage.style.height = chh + 'px';
+      el.canvas.width = G.W; el.canvas.height = G.H; el.canvas.style.width = cw + 'px'; el.canvas.style.height = chh + 'px';
+    }
+    function placeFrame() { // (re)position everything that hangs on a floor from the current heights
+      for (var f = 0; f < 3; f++) {
+        var fb = frame.floors[f]; if (!fb) continue;
+        fb.style.top = px(G.top(f)); fb.style.height = px(G.fh(f) - 2);
+        frame.labels[f].style.top = px(G.label(f).y);
+        for (var i = 0; i < 2; i++) frame.rooms[f][i].style.top = px(G.room(f, i).y);
+        frame.inc[f].style.top = px(G.inc(f).y);
+      }
+    }
+    function applyHeights(hs) {
+      var ob = bottomsOf(); G.setHeights(hs); var nb = bottomsOf();
+      V.units.forEach(function (v) { // units keep their offset from the floor they stand on, so they ride the animation
+        if (v.y == null) return;
+        v.y = shiftY(v.y, ob, nb);
+        if (v.mv) { v.mv.y0 = shiftY(v.mv.y0, ob, nb); v.mv.y1 = shiftY(v.mv.y1, ob, nb); }
+      });
+      layoutUnits(false);
+      sizeStage(); placeFrame(); publishHeights();
+    }
+    function stepHeights(real) {
+      if (mode !== 'phone' || !HT.init || !G.hs) return;
+      var inst = ui.reduced() || !!drag; // reduced motion jumps; a drag in flight must not move under the finger (the 120 ms re-cache then sees the final rects)
+      var to = drag ? HT.to : heightTargets(real), chg = false, f;
+      for (f = 0; f < 3; f++) if (to[f] !== HT.to[f]) chg = true;
+      if (chg) { HT.from = HT.cur.slice(); HT.to = to; HT.t0 = real; HT.on = true; }
+      if (!HT.on) return;
+      var p = inst ? 1 : Math.min(1, (real - HT.t0) / HT.ms), e = 1 - Math.pow(1 - p, 3), nxt = [];
+      for (f = 0; f < 3; f++) nxt[f] = p >= 1 ? HT.to[f] : Math.round(HT.from[f] + (HT.to[f] - HT.from[f]) * e);
+      HT.cur = nxt; if (p >= 1) HT.on = false;
+      applyHeights(nxt);
+      if (p >= 1) { layoutHand(); refreshTargets(); }
     }
 
     // ---------------- sizing
@@ -295,18 +372,20 @@
         cardH = cwCard * 1.4;
         if (fh > 76) { cardH = Math.min(cwCard * 1.95, cardH + (fh - 76) * 3 * sW); fh = 76; } // a tall phone: spare height makes the cards taller (more room for rules text) instead of leaving a gap
         fh = Math.max(64, Math.min(80, Math.floor(fh)));
-        if (G.setFloor) G.setFloor(fh);
+        var prevFh = G.floorH, prevHs = G.hs;
+        if (G.setFloor) G.setFloor(fh, Math.max(Math.round(fh * 0.58), Math.ceil(62 / Math.min(sW, (L.h - fixedH - Math.round(cardH) - 30) / (G.roofH + 3 * fh + 6))))); // compact floor: about 58 percent, never under 60 css px
+        if (HT.init && prevFh === fh && prevHs) G.setHeights(prevHs); else initHeights(); // same floor size: keep the animated heights, otherwise snap to the occupancy
         availH = L.h - fixedH - Math.round(cardH) - 30;
-        rootEl.style.setProperty('--hand-h', Math.round(cardH) + 30 + 'px');
+        HT.base = Math.round(cardH) + 30; // hand area height when every floor is full; publishHeights() adds what the empty floors give back
+        rootEl.style.setProperty('--hand-h', HT.base + 'px');
         rootEl.style.setProperty('--card-ar', (cardH / cwCard).toFixed(3));
       }
       if (availW < 50 || availH < 50) return;
-      var sc = Math.min(availW / G.W, availH / G.H);
+      var sc = Math.min(availW / G.W, availH / (G.Hfull || G.H));
       if (mode === 'desktop' && sc >= 2.4) sc = Math.floor(sc * 4) / 4;
       s = Math.max(0.8, sc);
-      var cw = Math.round(G.W * s), chh = Math.round(G.H * s);
-      el.stage.style.width = cw + 'px'; el.stage.style.height = chh + 'px';
-      el.canvas.width = G.W; el.canvas.height = G.H; el.canvas.style.width = cw + 'px'; el.canvas.style.height = chh + 'px';
+      var cw = Math.round(G.W * s), chh = Math.round((G.Hfull || G.H) * s);
+      sizeStage();
       rootEl.style.setProperty('--u', s + 'px');
       var hudFont = mode === 'phone' ? Math.max(11, Math.min(13, 6 * s)) : Math.max(9, Math.min(13, 4.6 * s));
       rootEl.style.setProperty('--hud', hudFont + 'px');
@@ -316,10 +395,11 @@
         cwCard = Math.max(L.short ? 64 : 92, Math.min(L.short ? 150 : 172, Math.round(hh / 1.4 * 0.74)));
       }
       el.hand.style.setProperty('--hand-cw', cwCard + 'px');
-      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth, unitFont, G.key, el.extras.offsetHeight, rootEl.style.getPropertyValue('--hand-h')].join(',');
+      if (mode === 'phone') publishHeights();
+      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth, unitFont, G.key, el.extras.offsetHeight, HT.base, G.floorH, G.compactH].join(',');
       if (sig === fitSig && !force) return;
       fitSig = sig;
-      if (!bg || bgKey !== mode + G.W + 'x' + G.H + (G.key || '')) buildBg();
+      if (!bg || bgKey !== bgKeyNow()) buildBg();
       buildBoardFrame();
       layoutUnits(true);
       renderHud();
@@ -332,7 +412,7 @@
     function px(v) { return Math.round(v * s) + 'px'; }
     function buildBoardFrame() {
       ui.clear(el.overlay);
-      frame = { floors: [], rooms: [], inc: [] };
+      frame = { floors: [], rooms: [], inc: [], labels: [] };
       // roof overlay
       var roof = h('div.b-roof', { style: { left: px(G.x0), width: px(G.x1 - G.x0), top: '0px', height: px(G.roofH) } });
       el.sun = h('div.b-sun', { 'data-tut': 'warmth', tabindex: '0', 'data-gl': 'warmth' },
@@ -347,11 +427,11 @@
         (function (f) {
           var top = G.top(f);
           var fb = h('button.b-floor', { 'data-floor': f, 'data-tut': 'floor-' + f, 'aria-label': FLOOR_NAMES[f] + ' floor', onclick: function () { onFloorTap(f); },
-            style: { left: px(G.x0), top: px(top), width: px(G.x1 - G.x0), height: px(G.floorH - 2) } });
+            style: { left: px(G.x0), top: px(top), width: px(G.x1 - G.x0), height: px(G.fh(f) - 2) } });
           el.overlay.appendChild(fb); frame.floors[f] = fb;
           var lb = G.label(f);
           var lab = h('span.b-flabel', { style: { left: px(lb.x), top: px(lb.y), height: px(lb.h) } }, FLOOR_NAMES[f]);
-          el.overlay.appendChild(lab);
+          el.overlay.appendChild(lab); frame.labels[f] = lab;
           frame.rooms[f] = [];
           for (var i = 0; i < 2; i++) {
             var r = G.room(f, i);
@@ -366,6 +446,7 @@
       // unit layers
       el.units = h('div.b-units'); el.overlay.appendChild(el.units);
       V.units.forEach(function (v) { v.hud = null; });
+      placeFrame();
       updateFloorMeta();
     }
 
@@ -1095,7 +1176,7 @@
       for (var j = 0; j < 3; j++) {
         var z = zs[j];
         if (zc > 1 && j < zc) {
-          z.setAttribute('data-l', names[j]); z.style.width = Math.round(bw) + 'px'; z.style.height = Math.round(G.floorH * k) + 'px';
+          z.setAttribute('data-l', names[j]); z.style.width = Math.round(bw) + 'px'; z.style.height = Math.round(G.fh(f) * k) + 'px';
           z.style.transform = 'translate3d(' + Math.round(D.zx[f * 3 + j] - bw / 2) + 'px,' + Math.round(D.fl[f * 4 + 1]) + 'px,0)'; z.classList.add('on');
         } else z.classList.remove('on', 'hot');
       }
@@ -2292,6 +2373,7 @@
         var p = Math.min(1, (tn - w.t0) / w.d); w.o[w.k] = w.a + (w.b - w.a) * w.e(p);
         if (p >= 1) { w.o[w.k] = w.b; w.done(); return false; } return true;
       });
+      stepHeights(real);
       // unit smoothing (and scripted moves: climb arc, deploy drop)
       V.units.forEach(function (v) {
         if (v.tx === undefined) return;
@@ -2327,11 +2409,23 @@
       }
       draw(tk, tn);
     }
+    // The cached art is full height. With compact floors, each floor shows its top 28 rows (label, window, rooms) and the rest from its bottom (feet, baseboard, slab).
+    function drawBg() {
+      if (!G.hs || (G.hs[0] === G.floorH && G.hs[1] === G.floorH && G.hs[2] === G.floorH)) { ctx.drawImage(bg, 0, 0); return; }
+      var W = G.W, fh = G.floorH, A = 28, f, h2, ft, dt;
+      ctx.drawImage(bg, 0, 0, W, G.roofH, 0, 0, W, G.roofH);
+      for (f = 2; f >= 0; f--) {
+        h2 = G.hs[f]; ft = G.roofH + (2 - f) * fh; dt = G.top(f);
+        if (h2 >= fh) ctx.drawImage(bg, 0, ft, W, fh, 0, dt, W, fh);
+        else { ctx.drawImage(bg, 0, ft, W, A, 0, dt, W, A); ctx.drawImage(bg, 0, ft + fh - (h2 - A), W, h2 - A, 0, dt + A, W, h2 - A); }
+      }
+      ctx.drawImage(bg, 0, bg.height - 6, W, 6, 0, G.H - 6, W, 6);
+    }
     function draw(tk, tn) {
       if (!bg) buildBg();
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, G.W, G.H);
-      ctx.drawImage(bg, 0, 0);
+      drawBg();
       var sb = vm.sunbeam || { warmth: 40, max: 40 }, pct = sb.warmth / (sb.max || 1);
       // stars
       for (var i = 0, ns = Math.round(14 * G.W / 384); i < ns; i++) {
@@ -2375,7 +2469,7 @@
       // loss: lights out floor by floor, top to bottom
       if (V.dark) {
         var prog = (tn - V.dark) / (200 / ui.speed());
-        for (var f2 = 2; f2 >= 0; f2--) { var idx = 2 - f2, a2 = Math.max(0, Math.min(1, prog - idx)); if (a2 > 0) { ctx.fillStyle = 'rgba(10,7,22,' + (0.72 * a2).toFixed(2) + ')'; ctx.fillRect(G.x0, G.top(f2), G.x1 - G.x0, G.floorH); } }
+        for (var f2 = 2; f2 >= 0; f2--) { var idx = 2 - f2, a2 = Math.max(0, Math.min(1, prog - idx)); if (a2 > 0) { ctx.fillStyle = 'rgba(10,7,22,' + (0.72 * a2).toFixed(2) + ')'; ctx.fillRect(G.x0, G.top(f2), G.x1 - G.x0, G.fh(f2)); } }
         if (prog > 0.5) { ctx.fillStyle = 'rgba(10,7,22,' + Math.min(0.7, (prog - 0.5) * 0.3).toFixed(2) + ')'; ctx.fillRect(0, 0, G.W, G.roofH); }
       }
     }
