@@ -150,28 +150,58 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       if (decor) { g.save(); g.globalAlpha = 0.7; g.fillStyle = lite; for (const [x, y, s] of [[-0.35, 0.05, 0.1], [0.05, 0.38, 0.08], [0.1, -0.36, 0.07]]) { circ(x * r, y * r, s * r)(g); g.fill(); } g.restore(); }
     }
   }
+  // a soft dark pad under the HP number so the white digits read on every cell colour
+  function hpPad(g, r, k = 0.62, a = 0.34) {
+    if (!g.createRadialGradient) return;
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, r * k); gr.addColorStop(0, `rgba(45,23,15,${a})`); gr.addColorStop(0.7, `rgba(45,23,15,${a * 0.55})`); gr.addColorStop(1, 'rgba(45,23,15,0)');
+    g.fillStyle = gr; circ(0, 0, r * k)(g); g.fill();
+  }
+  function glossDot(g, r, x = 0.46, y = -0.5) { g.save(); g.globalAlpha = 0.6; g.fillStyle = '#fff'; ell(x * r, y * r, r * 0.11, r * 0.07, -0.7)(g); g.fill(); circ((x + 0.14) * r, (y + 0.1) * r, r * 0.035)(g); g.fill(); g.restore(); }
+  const plusPath = (r, w) => poly([[-w, -r], [w, -r], [w, -w], [r, -w], [r, w], [w, w], [w, r], [-w, r], [-w, w], [-r, w], [-r, -w], [-w, -w]]);
   function bodyFn(species, boss, kind) {
     const P = SPECIES[species] || SPECIES.love;
     return g => {
       const r = B;
-      if (kind === 'bomb') {   // a bomb cell: red, a lit fuse, no face
-        cel(g, KIND.bomb, circ(0, 0, r * 0.92), { r, shadow: '#b32b4a' });
-        line(g, [[r * 0.2, -r * 0.85], [r * 0.35, -r * 1.1], [r * 0.1, -r * 1.25]], r * 0.12);
-        cel(g, '#fff8ec', poly([[-r * 0.09, -r * 0.45], [r * 0.09, -r * 0.45], [r * 0.06, r * 0.1], [-r * 0.06, r * 0.1]]), { r: r * 0.2, hi: false, lw: 2, shadow: '#e6d6c8' });
-        cel(g, '#fff8ec', circ(0, r * 0.32, r * 0.1), { r: r * 0.1, hi: false, lw: 2 }); return;
+      if (kind === 'bomb') {   // a bomb cell: glossy red, steel cap, curly fuse with a spark
+        cel(g, KIND.bomb, circ(0, 0, r * 0.92), { r, shadow: '#a8203f' });
+        glossDot(g, r, 0.42, -0.46);
+        cel(g, '#7b86a0', poly([[-r * 0.3, -r * 0.84], [r * 0.3, -r * 0.84], [r * 0.24, -r * 1.02], [-r * 0.24, -r * 1.02]]), { r: r * 0.3, shadow: '#4b5470', hi: false, lw: 2.4 });
+        g.beginPath(); g.moveTo(0, -r * 1.0); g.bezierCurveTo(r * 0.05, -r * 1.25, r * 0.5, -r * 1.12, r * 0.42, -r * 1.34); ink(g, r * 0.17); g.stroke(); ink(g, r * 0.08, '#f1d9a0'); g.stroke();
+        sparkle(g, r * 0.45, -r * 1.38, r * 0.28, '#ffd84d');
+        hpPad(g, r, 0.6, 0.4);
+        for (const s of [-1, 1]) line(g, [[s * r * 0.45, -r * 0.5], [s * r * 0.62, -r * 0.3]], r * 0.07, '#ffd0d8');   // worried brow ticks
+        return;
       }
-      if (kind === 'upgrade') {   // yellow: pop it for an upgrade
-        cellShape(g, P, r, { ...UPGRADE_PAL, decor: false });
-        cel(g, '#fff8ec', star(5, r * 0.55, r * 0.24, -Math.PI / 2), { r: r * 0.55, shadow: '#e0a82a', lw: 2.4 }); return;
+      if (kind === 'upgrade') {   // yellow: golden cell with a ring of light and a star badge, centre left clear for the number
+        g.save(); g.globalAlpha = 0.9; for (let i = 0; i < 8; i++) { const an = i / 8 * TAU + 0.2; poly([[Math.cos(an) * r * 0.95, Math.sin(an) * r * 0.95], [Math.cos(an + 0.13) * r * 1.3, Math.sin(an + 0.13) * r * 1.3], [Math.cos(an - 0.13) * r * 1.3, Math.sin(an - 0.13) * r * 1.3]])(g); g.fillStyle = '#fff1a8'; g.fill(); }
+        g.restore();
+        cellShape(g, P, r, { ...UPGRADE_PAL, decor: false, legs: false });
+        g.save(); circ(0, 0, r * 0.9)(g); g.clip(); g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = r * 0.14; for (const o of [-0.5, 0.1]) { g.beginPath(); g.moveTo(-r + o * r, r); g.lineTo(o * r + r * 0.7, -r); g.stroke(); } g.restore();
+        hpPad(g, r, 0.6, 0.38);
+        g.save(); g.translate(r * 0.55, -r * 0.58); cel(g, '#fff8ec', star(5, r * 0.5, r * 0.22, -Math.PI / 2), { r: r * 0.5, shadow: '#f0b52a', lw: 2.6 }); g.restore();
+        return;
+      }
+      if (kind === 'mender') {   // a soft green plus-shaped pillow with stitching
+        cel(g, '#86e8a2', plusPath(r * 0.98, r * 0.46), { r, shadow: '#3fb067', lw: r * 0.1 });
+        g.save(); plusPath(r * 0.98, r * 0.46)(g); g.clip();
+        g.setLineDash && g.setLineDash([r * 0.12, r * 0.1]); g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = r * 0.05; plusPath(r * 0.82, r * 0.31)(g); g.stroke(); g.setLineDash && g.setLineDash([]);
+        g.restore();
+        for (const [x, y] of [[0, -0.74], [0, 0.74], [-0.74, 0], [0.74, 0]]) { cel(g, '#fff8ec', circ(x * r, y * r, r * 0.09), { r: r * 0.09, hi: false, lw: 1.6, shadow: '#cfeccf' }); }
+        glossDot(g, r, 0.2, -0.76);
+        hpPad(g, r, 0.62, 0.4);
+        return;
       }
       cellShape(g, P, r);
       if (kind === 'armor') {
-        const pl = poly(Array.from({ length: 8 }, (_, i) => [Math.cos(i / 8 * TAU + 0.39) * r * 0.86, Math.sin(i / 8 * TAU + 0.39) * r * 0.86]));
-        cel(g, KIND.armor, pl, { r, shadow: '#6f7d9a', hr: r * 0.9 });
-        for (let i = 0; i < 4; i++) { const an = i / 4 * TAU + Math.PI / 4; cel(g, '#e9eef8', circ(Math.cos(an) * r * 0.55, Math.sin(an) * r * 0.55, r * 0.09), { r: r * 0.1, hi: false, lw: 1.6 }); }
-        line(g, [[-r * 0.5, 0], [r * 0.5, 0]], r * 0.07, '#6f7d9a'); line(g, [[0, -r * 0.5], [0, r * 0.5]], r * 0.07, '#6f7d9a');
+        const pl = poly(Array.from({ length: 8 }, (_, i) => [Math.cos(i / 8 * TAU + 0.39) * r * 0.96, Math.sin(i / 8 * TAU + 0.39) * r * 0.96]));
+        cel(g, '#9fb0d4', pl, { r, shadow: '#5b6b8e', hr: r * 0.9, lw: r * 0.12 });
+        g.save(); pl(g); g.clip(); g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = r * 0.1; g.beginPath(); g.moveTo(-r, -r * 0.1); g.lineTo(-r * 0.1, -r); g.stroke(); g.restore();
+        cel(g, '#6b7b9e', circ(0, 0, r * 0.58), { r: r * 0.58, shadow: '#47557a', hi: false, lw: 2.4 });
+        hpPad(g, r, 0.55, 0.3);
+        for (let i = 0; i < 8; i++) { const an = i / 8 * TAU + 0.39; cel(g, '#eef3ff', circ(Math.cos(an) * r * 0.76, Math.sin(an) * r * 0.76, r * 0.07), { r: r * 0.08, hi: false, lw: 1.5, shadow: '#9aa8c8' }); }
         return;
       }
+      glossDot(g, r); hpPad(g, r);
       if (boss) for (const s of [-1, 1]) for (const x of [-0.3, 0.2]) cel(g, P.acc, poly([[x * r - r * 0.12, s * r * 0.82], [x * r + r * 0.12, s * r * 0.82], [x * r, s * r * 1.22]]), { r: r * 0.2, hi: false, lw: 2, shadow: shade(P.acc) });   // boss spikes
     };
   }
@@ -437,11 +467,16 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     const P = SPECIES[o.skin] || SPECIES.love, boss = !!o.boss, t = o.t || 0, R = B;
     g.save(); g.translate(x, y); g.scale(r / B, r / B);
     g.save(); g.rotate(ang); cellShape(g, P, R, { decor: false }); g.restore();
+    glossDot(g, R, 0.46, -0.5);
     // headgear (upright, on top of the head)
     const top = -R * 0.92, sw = Math.sin(t * 5) * R * 0.1;
-    if (boss) {   // a crown
-      cel(g, '#ffd84d', poly([[-R * 0.6, top + R * 0.12], [-R * 0.6, top - R * 0.4], [-R * 0.3, top - R * 0.15], [0, top - R * 0.5], [R * 0.3, top - R * 0.15], [R * 0.6, top - R * 0.4], [R * 0.6, top + R * 0.12]]), { r: R * 0.7, hi: false, lw: 3, shadow: '#d49a1e' });
-      cel(g, P.acc, circ(0, top - R * 0.06, R * 0.1), { r: R * 0.1, hi: false, lw: 1.8 });
+    if (boss) {   // a cute little crown with jewels, tip pearls and a shine
+      const cy = top + R * 0.05 + Math.sin(t * 3) * R * 0.02;
+      cel(g, '#ffd84d', poly([[-R * 0.62, cy + R * 0.14], [-R * 0.66, cy - R * 0.42], [-R * 0.33, cy - R * 0.14], [0, cy - R * 0.55], [R * 0.33, cy - R * 0.14], [R * 0.66, cy - R * 0.42], [R * 0.62, cy + R * 0.14]]), { r: R * 0.7, hi: false, lw: 3, shadow: '#d98f1a' });
+      line(g, [[-R * 0.5, cy + R * 0.02], [R * 0.5, cy + R * 0.02]], R * 0.05, '#d98f1a');
+      for (const [x, y] of [[-0.66, -0.46], [0, -0.6], [0.66, -0.46]]) cel(g, '#fff8ec', circ(x * R, cy + (y + 0.04) * R, R * 0.085), { r: R * 0.09, hi: false, lw: 1.8, shadow: '#e6d6c8' });
+      for (const [x, c] of [[-0.3, '#ff5a8a'], [0, '#6fe3ff'], [0.3, '#ff5a8a']]) cel(g, c, circ(x * R, cy - R * 0.1, R * 0.075), { r: R * 0.08, hi: false, lw: 1.6 });
+      g.fillStyle = 'rgba(255,255,255,.7)'; ell(-R * 0.45, cy - R * 0.2, R * 0.04, R * 0.1, 0.5)(g); g.fill();
     } else if (P.hat === 'antenna' || P.hat === 'hearts') {
       for (const s of [-1, 1]) {
         line(g, [[s * R * 0.35, top + R * 0.1], [s * R * 0.6, top - R * 0.4 + sw * s], [s * R * 0.75, top - R * 0.7 + sw * s]], R * 0.14); line(g, [[s * R * 0.35, top + R * 0.1], [s * R * 0.6, top - R * 0.4 + sw * s], [s * R * 0.75, top - R * 0.7 + sw * s]], R * 0.07, P.base);
@@ -458,7 +493,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     }
     // the face stays upright and looks at the player
     g.translate(Math.cos(ang) * R * 0.18, Math.sin(ang) * R * 0.18 - R * 0.04);
-    const open = (t % 3.7) > 3.55 ? 0.1 : 1, look = o.look || [0, 0], iris = boss ? '#ff3d5a' : P.eye;
+    const open = ((t % 3.7) > 3.55 || (t % 9.1) > 8.78 && (t % 9.1) < 8.9) ? 0.1 : 1, look = o.look || [Math.sin(t * 0.8) * 0.5, Math.cos(t * 0.55) * 0.3],
+      tongue = (t % 7) > 5.2 && (t % 7) < 5.9, sneezing = (t % 6) > 5.1, iris = boss ? '#ff3d5a' : P.eye;
     const E = (ex, ey, rx, ry) => eye(g, ex, ey, rx, ry, { iris, look, open });
     const squint = (ex, dir) => line(g, [[ex - dir * R * 0.2, -R * 0.26], [ex + dir * R * 0.12, -R * 0.1], [ex - dir * R * 0.2, R * 0.06]], R * 0.1);
     const f = P.face;
@@ -473,8 +509,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       fangsMouth(g, 0, R * 0.38, R * 0.26, 0.5);
     } else if (f === 'sneeze') {
       squint(-R * 0.36, -1); squint(R * 0.36, 1);
-      g.fillStyle = '#7a1633'; ell(0, R * 0.38, R * 0.26, R * 0.3)(g); g.fill(); ink(g, R * 0.08); g.stroke();
-      g.fillStyle = '#bfe9ff'; for (const [dx, dy] of [[0.5, 0.55], [0.62, 0.35], [0.45, 0.8]]) { circ(R * dx, R * dy, R * 0.07)(g); g.fill(); }
+      g.fillStyle = '#7a1633'; ell(0, R * 0.38, R * 0.26 * (sneezing ? 1.2 : 0.7), R * 0.3 * (sneezing ? 1.1 : 0.6))(g); g.fill(); ink(g, R * 0.08); g.stroke();
+      if (sneezing) { g.fillStyle = '#bfe9ff'; const k = (t % 6 - 5.1) / 0.9; for (const [dx, dy] of [[0.5, 0.55], [0.62, 0.35], [0.45, 0.8], [0.8, 0.6]]) { circ(R * (dx + k * 0.5), R * (dy + k * 0.2), R * 0.07)(g); g.fill(); } }
     } else if (f === 'grumpy') {
       E(-R * 0.34, -R * 0.05, R * 0.18, R * 0.22); E(R * 0.34, -R * 0.05, R * 0.18, R * 0.22);
       brow(g, -R * 0.7, -R * 0.42, -R * 0.08, -R * 0.2, R * 0.14); brow(g, R * 0.7, -R * 0.42, R * 0.08, -R * 0.2, R * 0.14);
@@ -509,6 +545,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     } else {
       E(-R * 0.36, -R * 0.1, R * 0.28, R * 0.34); E(R * 0.36, -R * 0.1, R * 0.28, R * 0.34); fangsMouth(g, 0, R * 0.34, R * 0.3, 0.6);
     }
+    if (tongue && (f === 'goggles' || f === 'shades' || f === 'grumpy' || f === 'shy')) cel(g, '#ff7a9a', ell(R * 0.1, R * (f === 'goggles' ? 0.62 : f === 'shades' ? 0.62 : f === 'grumpy' ? 0.72 : 0.56), R * 0.1, R * 0.13), { r: R * 0.13, hi: false, lw: 2, shadow: '#d9486a' });
     if (o.flash > 0) { g.fillStyle = `rgba(255,255,255,${Math.min(0.7, o.flash * 5)})`; circ(0, 0, R * 1.05)(g); g.fill(); }
     g.restore();
   }
