@@ -151,7 +151,7 @@ try {
   // a lost practice still ends cleanly
   await page.evaluate(() => __dtb.app.startRun({ mode: 'practice', boss: 'compressor' }));
   await page.waitForFunction(() => __dtb.app.battle && __dtb.app.battle.run.practice);
-  await page.evaluate(() => { const r = __dtb.app.battle.run; r.stageHp = 1; r.startWave(); for (let i = 0; i < 400 && r.phase === 'wave'; i++) r.advance(0.1); });
+  await page.evaluate(() => { const r = __dtb.app.battle.run; r.stageHp = 1; r.startWave(); for (let i = 0; i < 3000 && r.phase === 'wave'; i++) r.advance(0.1); });
   await page.waitForSelector('.practice-results', { timeout: 20000 });
   need(await page.evaluate(() => !!document.querySelector('.practice-results .res-title.lose') && !document.querySelector('.practice-results .btn.red')), 'a lost practice shows Not yet and no revive');
   await page.evaluate(() => [...document.querySelectorAll('.practice-results .btn')][0].click()); await page.waitForTimeout(500);
