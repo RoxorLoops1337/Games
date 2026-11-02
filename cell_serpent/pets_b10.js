@@ -38,7 +38,7 @@ export function masteryPath(save, id) {
 }
 export function masteryPathHTML(save, id) {
   const mp = masteryPath(save, id), fmt = n => n >= 1000 ? (n / 1000) + 'k' : String(n);
-  return '<div class="mpath" role="list" aria-label="Mastery rewards">' + mp.steps.map((s, i) => `<div class="mp ${s.state}" role="listitem"><i>${s.state === 'done' ? '✓' : i + 1}</i><b>${fmt(s.at)}</b><small>${s.text}</small></div>`).join('') + '</div>';
+  return '<div class="mpath" role="list" aria-label="Mastery rewards">' + mp.steps.map((s, i) => s.state === 'ready' ? `<button class="mp ready" role="listitem" data-i="${i}" aria-label="Claim step ${i + 1}: ${s.text}"><i>${i + 1}</i><b>${fmt(s.at)}</b><small>${s.text}</small><u>TAP</u></button>` : `<div class="mp ${s.state}" role="listitem"><i>${s.state === 'done' ? '✓' : i + 1}</i><b>${fmt(s.at)}</b><small>${s.text}</small></div>`).join('') + '</div>';
 }
 
 // upgrade ceremony: a banner and a ring of sparks on the open sheet

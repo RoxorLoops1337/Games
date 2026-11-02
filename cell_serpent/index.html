@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0d0924">
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-180_fs.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cell Serpent">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Cell Serpent</title>
@@ -619,6 +622,16 @@
   @keyframes htagpop{from{transform:scale(0)}to{transform:scale(1)}}
   @media (prefers-reduced-motion:reduce){.dstreat.shake,.dsic.uppop,.dsic .treath,.upcer,.upring i,.mpath .mp.ready,.htag.new{animation:none!important}}
   /* end @css:09-skills-pets round 10 */
+  /* @css:09-skills-pets round 11 */
+  .tile.coll .ic .jbdg{position:absolute;left:-5px;top:-5px;min-width:22px;height:22px;padding:0 4px;box-sizing:border-box;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:1px;font-size:13px;line-height:1;font-weight:900;border:2px solid #fff;background:#3a2a55;color:#fff;box-shadow:0 2px 5px rgba(0,0,0,.5);pointer-events:none}
+  .jbdg em{font-style:normal;font-size:10px}
+  .jbdg.jt0{background:#3a3a52;color:#c8c8dc;border-color:#9a9ab4} .jbdg.jt1{background:#7a2f55;color:#ffd0e0;border-color:#ffb0c8} .jbdg.jt2{background:#b0386a;color:#fff;border-color:#ffd0e0}
+  .jbdg.jt3{background:#d8326b;color:#fff;border-color:#ffe0ec} .jbdg.jt4{background:linear-gradient(135deg,#ff4f8b,#ffb12a);color:#fff;border-color:#fff3a8;animation:joybeat 1s ease-in-out infinite}
+  .mpath button.mp{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;min-height:44px} .mpath .mp u{text-decoration:none;font-size:9px;font-weight:900;letter-spacing:.08em;color:#4a2a00;background:#ffd24a;border-radius:6px;padding:0 5px;line-height:13px}
+  .mpath button.mp:active{transform:scale(.94)}
+  .prpw{font-size:10px;font-weight:900;letter-spacing:.04em;line-height:1;padding:2px 6px;border-radius:7px;background:rgba(255,255,255,.12);color:#e6e0ff} .prpw.up{background:#1f6b3a;color:#d8ffe4} .prpw.dn{background:#6b2a2a;color:#ffd8d8} .prpw.eq{background:#2a5a7a;color:#d8f4ff}
+  @media (prefers-reduced-motion:reduce){.jbdg.jt4{animation:none}}
+  /* end @css:09-skills-pets round 11 */
   /* end @css:09-skills-pets */
   /* @css:07-cards */
   #levelup{gap:8px;justify-content:center}
@@ -967,6 +980,28 @@
   @media (max-height:700px){#levelup .dealchip{display:none}}
   @media (prefers-reduced-motion:reduce){.card.pick .ic.ant,.card.pick .lnk,#levelup .dealchip,.pbur u,.pbur s{animation:none!important}.pbur{display:none}}
   /* end @css:07-cards round 10 */
+  /* @css:07-cards round 11 */
+  /* keyboard lock (L then a number), a focus ring on the lock, one name line on short phones so card 3 clears Refresh */
+  .card.pick .lockb{border-radius:9px}
+  .card.pick .lockb:focus-visible{outline:2px solid #ffe14a;outline-offset:1px;opacity:1}
+  .card.pick.kept .shine{display:block;position:absolute;top:0;bottom:0;left:0;width:34%;background:linear-gradient(100deg,transparent,#ffe14a99 50%,transparent);transform:translateX(-160%) skewX(-18deg);animation:shine1 .8s ease-out .05s 1 both}
+  #levelup .cards.lockarm .lockb{opacity:1;color:#ffe14a;background:#ffe14a22;box-shadow:0 0 0 1px #ffe14a88;animation:lockarm .5s ease-in-out infinite alternate}
+  @keyframes lockarm{from{transform:scale(1)}to{transform:scale(1.18)}}
+  .card.pick .nm .nt{min-width:0}
+  @media (max-height:700px){
+    .card.pick .nm{flex-wrap:nowrap;font-size:15px}
+    .card.pick .nm .nt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .card.pick .rar{flex:none;font-size:9px;padding:0 6px}
+    .card.pick .lnk{bottom:4px;right:10px;font-size:8px;line-height:11px;padding:0 6px;max-width:44%}
+    .card.pick.linked .pips{max-width:52%;overflow:hidden}
+    .card.pick .pips{flex-wrap:nowrap} .card.pick .pip{flex:0 1 12px;min-width:3px}
+    #levelup .lvrow{margin-top:8px}
+    .card.pick .bet{top:1px;bottom:auto;right:52px;font-size:0;line-height:11px;padding:0 5px}
+    .card.pick .bet::before{content:'\25B2';font-size:9px}
+    .card.pick .lnk:has(~ .bet){left:auto;right:10px}
+  }
+  @media (prefers-reduced-motion:reduce){#levelup .cards.lockarm .lockb,.card.pick.kept .shine{animation:none!important}}
+  /* end @css:07-cards round 11 */
   /* end @css:07-cards */
   /* @css:18-access */
   :focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #ff5cb8}
@@ -1057,6 +1092,16 @@
   @media (max-width:340px){#tabBattle .bt-load{flex-wrap:wrap;justify-content:center} #tabBattle .bt-load>.loadout{flex:1 1 100%;justify-content:center} #tabBattle #loadEdit{margin:0 auto}}
   html.hc .bt-load .slot{border-color:#fff}
   /* end @css:18-access round 6 */
+  /* @css:18-access round 11 */
+  /* Bigger buttons (settings > one hand and thumbs): 52px targets and a little more air between neighbours; layouts keep their width */
+  html.bigtap .tgl,html.bigtap .arrow,html.bigtap .filters button,html.bigtap .btn.small,html.bigtap .kcard,html.bigtap .chip,html.bigtap .gl-btn,html.bigtap .dsx,html.bigtap #setClose,html.bigtap #pClose,html.bigtap .btn{min-height:52px}
+  html.bigtap .arrow,html.bigtap .gear,html.bigtap #muteBtn,html.bigtap .dsx{min-width:52px}
+  html.bigtap #setBtnH,html.bigtap #setBtnT{min-height:48px;min-width:48px}
+  html.bigtap .tabs button{min-height:56px}
+  html.bigtap #settings .tgl{margin:6px 0}
+  html.bigtap .card.pick .lockb{width:44px;height:44px;right:10px}
+  html.bigtap .tgl[data-k="bigTap"] .ti{font-size:20px}
+  /* end @css:18-access round 11 */
   /* end @css:18-access */
   /* @css:08-battle-tab */
   #tabBattle{gap:10px} #tabBattle .stagebox{gap:8px}
@@ -1240,6 +1285,33 @@
   .wstrip i.d{background:#9dff6d} .wstrip i.x{background:#ffe14a;box-shadow:0 0 6px #ffe14a;height:8px} .wstrip i.b{height:9px;border-radius:2px 2px 0 0} .wstrip i.b.l{background:rgba(255,225,74,.3)}
   .wstrip i.s{outline:1.5px solid #fff;outline-offset:1px}
   @media (prefers-reduced-motion:reduce){.rec.hardrec.low .pneed{animation:none}}
+  /* @css:33-battle-b11 */
+  .wstrip{height:auto;gap:4px;align-items:stretch;margin:0 0 4px;padding:0 2px}
+  .wact{appearance:none;flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:3px;padding:4px 3px 5px;border-radius:10px;border:1.5px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:#e6e1ff;font:inherit;cursor:pointer;min-height:44px;text-align:left}
+  .wact .wh{display:flex;align-items:center;justify-content:space-between;gap:2px;min-width:0;line-height:1} .wact .wh em{font-style:normal;font-size:12px;flex:none} .wact .wn{font-size:9px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.1;letter-spacing:-.2px} @media (max-width:350px){.wact{padding:4px 2px 5px} .wact .wn{font-size:8px;letter-spacing:-.35px} .wact .wh u{font-size:7.5px}}
+  .wact .wh u{text-decoration:none;font-size:8px;font-weight:800;color:#ffe14a;flex:none}
+  .wact .wt{display:flex;gap:1px;align-items:flex-end;height:10px;width:100%}
+  .wact.on{border-color:#ffe14a;background:rgba(255,225,74,.12)} .wact.full .wh u{color:#9dff6d} .wact.lock{opacity:.62} .wact.lock .wh u{color:#cfc8ff}
+  .wact:active{transform:scale(.96)} .wact:focus-visible{outline:2px solid #fff;outline-offset:1px}
+  .bt-rowh .ovb{appearance:none;border:0;background:none;font:inherit;font-weight:900;font-size:12px;letter-spacing:.1em;color:#e6e1ff;padding:8px 6px 8px 0;cursor:pointer;white-space:nowrap}
+  .bt-rowh .ovb:active{color:#ffe14a} .bt-rowh .pill{white-space:nowrap} @media (max-width:350px){.bt-rowh .ovl{display:none} .bt-rowh .ovb{font-size:18px;padding:8px 10px 8px 2px} .bt-rowh .pill{padding:5px 9px;font-size:11px}}
+  .gapfix{appearance:none;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;min-height:44px;padding:5px 10px;border-radius:14px;border:2px solid #ffb04d;background:linear-gradient(180deg,rgba(255,176,77,.22),rgba(255,176,77,.08));color:#fff;font:inherit;text-align:left;cursor:pointer;margin-top:2px}
+  .gapfix[hidden]{display:none}
+  .gapfix .gfi{font-size:20px;flex:none;width:26px;text-align:center} .gapfix .gft{display:flex;flex-direction:column;min-width:0;flex:1;line-height:1.15} .gapfix .gft b{font-size:12px;color:#ffe3b8} .gapfix .gft small{font-size:11px;color:#f1e9ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gapfix .gfg{flex:none;padding:6px 12px;border-radius:99px;background:linear-gradient(180deg,#ffd24a,#ff9a2e);color:#2b1608;font-weight:900;font-size:12px}
+  .gapfix:active{transform:scale(.98)}
+  .alert.num{width:auto;min-width:18px;padding:0 4px;border-radius:9px;font-size:11px}
+  .ovsheet{gap:12px} .ovhd{display:flex;flex-direction:column;gap:2px;padding-right:48px} .ovhd b{font-size:16px;letter-spacing:.1em;color:#fff} .ovhd small{font-size:12px;color:#d9d3ff}
+  .ovw h3{display:flex;align-items:center;gap:6px;margin:0 0 6px;font-size:13px;color:#fff;letter-spacing:.04em} .ovw h3 em{font-style:normal;font-size:16px} .ovw h3 span{margin-left:auto;font-size:11px;font-weight:800;color:#ffe14a}
+  .ovw.lock h3{color:#cfc8ff}
+  .ovg{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .ovc{appearance:none;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:48px;padding:4px 2px;border-radius:12px;border:2px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#fff;font:inherit;cursor:pointer}
+  .ovc b{font-size:15px;line-height:1} .ovc .ovs{font-size:9px;line-height:1;color:#a79fd8;letter-spacing:-.5px} .ovc .ovs u{text-decoration:none;color:#ffd24a}
+  .ovc.done{border-color:#7fe05a;background:rgba(127,224,90,.12)} .ovc.perfect{border-color:#ffd24a;background:rgba(255,210,74,.16)} .ovc.nxt{border-color:#ffe14a;box-shadow:0 0 10px rgba(255,225,74,.6)} .ovc.sel{outline:2.5px solid #fff;outline-offset:1px}
+  .ovc.lock{opacity:.6;cursor:default} .ovc .ovk{position:absolute;top:-6px;right:-3px;font-style:normal;font-size:12px} .ovc .ovh{position:absolute;top:-5px;left:-3px;width:15px;height:15px;border-radius:50%;background:#8a4bd8;color:#fff;font-style:normal;font-size:9px;font-weight:900;display:grid;place-items:center}
+  .ovc:active{transform:scale(.94)} .ovc:focus-visible{outline:2px solid #fff}
+  @media (max-height:600px){.gapfix{min-height:40px;padding:3px 8px} .gapfix .gft small{font-size:10.5px}}
+  /* end @css:33-battle-b11 */
   /* end @css:08-battle-tab */
 /* @css:19-transitions */
   /* screens: fade + scale in, fade out (transform and opacity only) */
@@ -1543,6 +1615,10 @@
   @keyframes sec10{0%{scale:.3}60%{scale:1.3}100%{scale:1}}
   #title .kb10{position:absolute;left:50%;bottom:6px;translate:-50% 0;z-index:7;padding:6px 14px;border-radius:99px;border:2px solid #fff;background:#4a0f3a;color:#fff;font:900 13px system-ui,sans-serif;opacity:0;pointer-events:none}
   #title .kb10:focus-visible{opacity:1;pointer-events:auto;outline:3px solid #ffd84d;outline-offset:2px}
+  #title .kb11{position:absolute;left:50%;bottom:40px;translate:-50% 0;z-index:7;display:flex;gap:6px;opacity:0;pointer-events:none}
+  #title .kb11:focus-within{opacity:1;pointer-events:auto}
+  #title .kb11 button{padding:6px 12px;border-radius:99px;border:2px solid #fff;background:#4a0f3a;color:#fff;font:900 13px system-ui,sans-serif}
+  #title .kb11 button:focus-visible{outline:3px solid #ffd84d;outline-offset:2px}
   #title .kbl10{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   .wb12-c{margin:6px auto 0;max-width:290px;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:800;line-height:1.25;color:#fff7c8;background:rgba(0,0,0,.32);border:1px solid rgba(255,230,140,.45)}
   @media (max-height:700px){.wb12-c{margin-top:3px;font-size:11px;padding:2px 10px}}
@@ -2103,6 +2179,8 @@
   @keyframes lvRing{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(7)}}
   @keyframes lvRise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
   @media (prefers-reduced-motion:reduce){#levelup .banner,#levelup .banner::after,#levelup::before,#levelup .luckbox{animation:none}}
+  .rvwipe em{font-style:normal;font-size:13px;font-weight:900;letter-spacing:.04em;color:#ff9ab8;text-align:center;margin-top:2px}
+  .rvwipe small{font-size:11px;font-weight:800;color:#ffd9e6;opacity:.92;text-align:center}
   /* end @css:05-screen-feel */
 /* @css:18-access round 7 */
   .qpill{min-height:44px} #tabBattle .qpill{min-height:44px}
@@ -2291,6 +2369,16 @@
   #curtain10 .cu.l{left:0;border-right:3px solid #ffd84d}
   #curtain10 .cu.r{right:0;border-left:3px solid #ffd84d}
 /* end @css:19-buttons round 9 */
+/* @css:19-buttons round 11 */
+  .tabs .dot.flyin{animation:tbFly .55s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes tbFly{0%{translate:0 -26px;scale:.3;opacity:0}55%{translate:0 2px;scale:1.45;opacity:1}100%{translate:0 0;scale:1}}
+  .tabs .dot.sink{animation:tbSink .4s ease-out}
+  @keyframes tbSink{0%{scale:1.35;filter:brightness(1.6)}100%{scale:1;filter:none}}
+  html.rm .tabs .dot.flyin,html.rm .tabs .dot.sink{animation:none}
+  /* one pressed state for the tappable rows and chips that had none: a small squash and a brighter face (individual scale, so it composes with their own transforms) */
+  :is(.qmain,.qpill,.pill,.slot,.stk,.prmain,.prsave,.sbchip,.kcard,.eggstage,.nextrew.ready,.gl-btn:not(.wait)):not([disabled]):active{scale:.96;filter:brightness(1.12);transition:scale .06s,filter .06s}
+  html.rm :is(.qmain,.qpill,.pill,.slot,.stk,.prmain,.prsave,.sbchip,.kcard,.eggstage,.nextrew.ready,.gl-btn):active{scale:1}
+/* end @css:19-buttons round 11 */
 /* @css:10-hub round 10 */
   .recgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:min(520px,100%);margin:0 auto 6px}
   .recbox{width:min(520px,100%);margin:6px auto 4px} .recbox .sec{margin:12px 0 8px}
@@ -2310,6 +2398,197 @@
   .treatline{text-align:center;font-size:12px;font-weight:800;color:#ffe3a8;margin:6px 0 2px}
   @media (max-height:660px){.rec{min-height:50px}}
 /* end @css:10-hub round 10 */
+/* @css:10-hub round 11 */
+  .runbox{width:min(520px,100%);margin:6px auto 4px} .runbox .sec{margin:12px 0 8px}
+  .runlog{border:2px solid #2f8fd066;border-radius:16px;background:linear-gradient(180deg,rgba(47,143,208,.16),rgba(0,0,0,.28));padding:10px 10px 8px}
+  .rlbars{display:flex;align-items:flex-end;justify-content:center;gap:5px;height:84px;padding-bottom:2px;border-bottom:2px solid rgba(255,255,255,.14)}
+  .rb{position:relative;flex:1 1 0;max-width:30px;min-height:12px;border-radius:7px 7px 3px 3px;background:linear-gradient(180deg,#ff8ab8,#c8416f);border:2px solid #3a1d0c55;font-style:normal;animation:rbgrow .5s cubic-bezier(.2,1.3,.4,1) both;transform-origin:bottom}
+  .rb.win{background:linear-gradient(180deg,#9dff6d,#2f9f3a)} .rb.last{box-shadow:0 0 0 2px #fff,0 0 10px rgba(255,255,255,.5)}
+  .rb u{position:absolute;left:50%;top:-15px;transform:translateX(-50%);text-decoration:none;font-size:10px;font-weight:900;color:#eaf8ff}
+  .rb:nth-child(2){animation-delay:.03s} .rb:nth-child(3){animation-delay:.06s} .rb:nth-child(4){animation-delay:.09s} .rb:nth-child(5){animation-delay:.12s} .rb:nth-child(6){animation-delay:.15s}
+  .rb:nth-child(7){animation-delay:.18s} .rb:nth-child(8){animation-delay:.21s} .rb:nth-child(9){animation-delay:.24s} .rb:nth-child(10){animation-delay:.27s} .rb:nth-child(11){animation-delay:.3s} .rb:nth-child(12){animation-delay:.33s}
+  @keyframes rbgrow{from{transform:scaleY(.05)}}
+  .rlcap{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-top:7px;font-size:12px;font-weight:800;color:#e4ecff} .rlcap b{color:#9dff6d;font-size:14px} .rlcap span{color:#cfe0ff}
+  .tile .snk{display:block;font-size:10px;font-weight:800;color:#9dff6d;opacity:.9;margin-top:1px;letter-spacing:.3px}
+  .tile.bundle,.tile.bestval{overflow:hidden} .bunrib{position:absolute;top:13px;right:-38px;width:124px;transform:rotate(38deg);text-align:center;font-style:normal;font-size:10px;font-weight:900;letter-spacing:.4px;padding:3px 0;color:#fff;background:linear-gradient(180deg,#2a9d3c,#1b6f2a);text-shadow:0 1px 0 rgba(0,0,0,.4);box-shadow:0 2px 4px rgba(0,0,0,.35);pointer-events:none}
+  .bunrib.sv{background:linear-gradient(180deg,#e23a5e,#a8183a)}
+  .tile.pack .top{flex-direction:column;align-items:center;text-align:center;gap:6px} .tile.pack .nm{width:100%;font-size:15px;overflow-wrap:normal;hyphens:none;word-break:normal;text-wrap:balance} .tile.pack .ds{text-align:center}
+  .tile.bundle .ic{position:relative} .bunx{position:absolute;right:-8px;bottom:-4px;padding:1px 6px;border-radius:99px;background:#1a1235;border:2px solid #ffd84d;color:#ffd84d;font-size:11px;font-weight:900}
+  .tile.bundle{box-shadow:0 0 0 2px #ffd84d66,0 0 14px rgba(255,216,77,.3)}
+  .tpips{display:flex;justify-content:center;gap:5px;margin-top:5px} .tpips i{width:11px;height:11px;border-radius:50% 50% 50% 8%;background:linear-gradient(180deg,#ffb36b,#e0762a);border:1.5px solid #3a1d0c88;transform:rotate(-40deg)} .tpips i.eaten{background:transparent;border-style:dashed;border-color:#ffe3a888}
+  .spflight{position:fixed;z-index:9999;width:22px;height:22px;background:center/contain no-repeat;pointer-events:none;filter:drop-shadow(0 0 6px #ff9ad6)}
+  .cur.spgot{animation:spgot .4s ease-out} @keyframes spgot{40%{transform:scale(1.18);box-shadow:0 0 14px #ff9ad6}}
+  .kdetail .kbig[data-k=milk]{font-size:80px} .kdetail .kbig[data-k=milk] .gs9{width:.92em;height:.92em} .kdetail .kbig[data-k=milk] .gs9 *{stroke-width:.95px}
+  @media (prefers-reduced-motion:reduce){.rb{animation:none}.cur.spgot{animation:none}}
+  @media (max-height:660px){.rlbars{height:64px}}
+/* end @css:10-hub round 11 */
+/* @css:33-retain-b11 */
+  .wbrow.wbopen{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;background:rgba(0,0,0,.18);border:1.5px solid rgba(255,210,74,.3);border-radius:14px;padding:8px 8px 7px;margin-top:6px}
+  .wbrow.wbopen:active{transform:scale(.985)} .wbrow .wbh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px} .wbrow .wbh b u{text-decoration:none;font-size:10px;padding:1px 6px;border-radius:99px;background:#9dff6d;color:#10331a;margin-left:4px}
+  .wbrow .wbh>span{font-size:11px;font-weight:800;color:#ffe28a;white-space:nowrap}
+  .wbrow .wbg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .wbrow .wbd{flex-direction:row;gap:3px;padding:4px 4px;justify-content:flex-start;min-height:42px} .wbrow .wbd small{font-size:10.5px;letter-spacing:-.1px;text-align:left;white-space:normal;overflow:visible;text-overflow:clip;color:#d6dcf5;flex:1;min-width:0} .wbrow .wbd.got small{color:#ffe9a8}
+  .wbrow .wbd .medal,.bshg .medal{display:block;flex:none;object-fit:contain} .wbrow .wbd:not(.got) .medal{opacity:.8}
+  .bshh{text-align:center;margin-bottom:10px} .bshh b{display:block;font-size:18px;color:#ffe28a} .bshh span{font-size:12px;font-weight:700;color:#d6dcf5}
+  .bshg{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .bsh{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:12px 8px 10px;border-radius:16px;background:rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.14);text-align:center}
+  .bsh.got{border-color:#ffd24a;background:linear-gradient(160deg,rgba(255,210,74,.28),rgba(0,0,0,.3))} .bsh.got .medal{filter:drop-shadow(0 0 8px rgba(255,210,74,.75))} .bsh.now:not(.got){border-color:#4fd8f0}
+  .bsh b{font-size:15px;color:#fff} .bsh small{font-size:12px;font-weight:700;color:#d6dcf5;line-height:1.25}
+  .bsh em{position:absolute;top:-8px;right:8px;font-style:normal;font-size:10px;font-weight:900;padding:2px 8px;border-radius:99px;background:#9dff6d;color:#10331a;border:2px solid #fff;animation:nrpulse 1.6s ease-in-out infinite}
+  .bsh.fresh .medal{animation:qpop 1.2s ease-in-out 2}
+  .sday.nx:not(.on){border-color:#ffd24a;box-shadow:0 0 10px rgba(255,210,74,.55);animation:nrpulse 1.8s ease-in-out infinite}
+  @media (max-width:340px){.bshg{grid-template-columns:1fr 1fr;gap:7px}.wbrow .wbg{grid-template-columns:repeat(2,1fr)}}
+  @media (prefers-reduced-motion:reduce){.bsh em,.bsh.fresh .medal,.sday.nx:not(.on){animation:none}}
+/* end @css:33-retain-b11 */
+  /* @css:33-result-settings */
+  #settings [hidden]{display:none!important}
+  #settings .setfind11{width:min(420px,92vw);box-sizing:border-box;margin:0 0 6px;padding:11px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.28);background:#150f38;color:#fff;font:800 15px system-ui,sans-serif}
+  #settings .setfind11::placeholder{color:#c9c2f0;opacity:1}
+  #settings .setfind11:focus{outline:none;border-color:#ffd84d;box-shadow:0 0 0 3px rgba(255,216,77,.28)}
+  #settings #setClose{bottom:0;padding-bottom:calc(13px + env(safe-area-inset-bottom))}
+  #settings{justify-content:flex-start!important}
+  #settings #setClose{box-shadow:0 0 0 8px #08051e,0 -16px 14px 8px rgba(8,5,30,.92),0 120px 0 0 #08051e,0 4px 0 8px rgba(0,0,0,.35)}
+  .rvbar11{display:block;width:min(220px,60vw);height:8px;margin:5px auto 3px;border-radius:99px;background:rgba(255,255,255,.16);overflow:hidden}
+  .rvbar11 u{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ff9d4a,#ffd84d)}
+  .rvneed11{display:block;font-style:normal;font-size:12px;font-weight:900;color:#ffb3b3;margin-top:2px}
+  .rshare11{align-self:center;flex:none;margin:2px 0 0;padding:8px 18px;min-height:40px;border-radius:99px;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);color:#fff;font:900 13px system-ui,sans-serif;letter-spacing:.08em}
+  @media (max-height:760px){.rshare11{display:none}}
+  /* end @css:33-result-settings */
+/* @css:34-fullscreen */
+html,body{height:100%;height:100dvh;overscroll-behavior:none;-webkit-touch-callout:none;-webkit-text-size-adjust:100%}
+canvas#c{touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+button,.btn{touch-action:manipulation;-webkit-touch-callout:none}
+img{-webkit-touch-callout:none;-webkit-user-drag:none}
+#title>#fsBtn{right:calc(64px + env(safe-area-inset-right))}
+#fsBtn[hidden]{display:none}
+#fsBtn.on{background:rgba(57,240,255,.3)}
+#a2hsFs{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99990;width:min(340px,calc(100vw - 24px));display:flex;align-items:center;gap:10px;padding:10px 10px 10px 14px;border-radius:16px;background:#1c1548;border:2px solid #39f0ff;color:#eaf8ff;box-shadow:0 8px 24px rgba(0,0,0,.5);animation:a2in34 .4s ease-out}
+#a2hsFs .a2t{display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:1.3;flex:1;min-width:0}
+#a2hsFs .a2t b{font-size:14px;color:#ffd24a}
+#a2hsFs .a2t u{text-decoration:none;font-weight:700;color:#39f0ff}
+#a2hsFs .a2x{border:0;border-radius:12px;background:#ff5cb8;color:#1a0b2e;font-weight:800;font-size:14px;padding:10px 16px;min-height:44px;cursor:pointer}
+#a2hsFs .a2arrow{position:absolute;left:50%;bottom:-11px;width:18px;height:18px;margin-left:-9px;background:#1c1548;border-right:2px solid #39f0ff;border-bottom:2px solid #39f0ff;transform:rotate(45deg)}
+@keyframes a2in34{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
+#rotateFs{display:none;position:fixed;inset:0;z-index:100000;background:#0d0924;color:#eaf8ff;align-items:center;justify-content:center;text-align:center;font-family:inherit}
+#rotateFs>div{display:flex;flex-direction:column;align-items:center;gap:6px}
+#rotateFs i{width:34px;height:56px;border:4px solid #39f0ff;border-radius:8px;animation:rot34 2s ease-in-out infinite}
+#rotateFs b{font-size:18px;color:#ffd24a}
+#rotateFs span{font-size:13px;color:#cdd8ee}
+@keyframes rot34{0%,30%{transform:rotate(-90deg)}70%,100%{transform:rotate(0)}}
+@media (pointer:coarse) and (orientation:landscape) and (max-height:520px){#rotateFs{display:flex}}
+@media (prefers-reduced-motion:reduce){#a2hsFs,#rotateFs i{animation:none}}
+/* end @css:34-fullscreen */
+/* @css:34-phone-run */
+/* phone pass for the in-run overlays: 44px tap targets with 8px gaps, 12px text floor, no tap delay, pressed feedback, safe areas */
+.scr button,.scr [role=button],.card,.tgl,.lockb{touch-action:manipulation}
+.scr button:not(.btn):not(.card):not(.chip):active,.pb9[data-w]:active,#levelup .buildstrip:active,#rGoal:active{transform:scale(.96);filter:brightness(1.25);transition:transform .05s}
+/* result: RETRY and MENU are 48px tall, side by side with 10px between */
+#result .row{gap:10px}
+#result .row .btn,#result #rRetry,#result #rHub{min-height:48px;padding:11px 8px;font-size:16px}
+#result .rhint,#result .rmoment8,#result .rlevel small,#result .rcost{font-size:12px}
+/* pause: primary RESUME sits in the thumb zone (lower half), every control 44px+ */
+#pause #resumeBtn{margin-top:auto}
+#pause .pbtn,#pause #resumeBtn{min-height:48px}
+#pause #quitBtn{min-height:44px}
+#pause #pBuild.rpmark{gap:8px;row-gap:8px}
+#pause #pBuild.rpmark span.pb9[data-w]{min-width:44px;min-height:44px;justify-content:center;font-size:12px;padding:2px 6px 2px 4px}
+#pause #pBuild.rpmark span.pb9[data-w] img{width:26px;height:26px}
+#pause .precap div,#pause .pb9n,#pause .pb9n.cap10,#pause .plose{font-size:12px}
+#pause .precap .pbar em{font-size:12px;line-height:16px}
+.sgrp{font-size:12px}
+#settings{padding-bottom:calc(30px + env(safe-area-inset-bottom))}
+#settings #setClose,#panel #pClose,#boxModal #bOk{min-height:48px}
+#settings .tgl{min-height:56px;margin:4px 0}
+#settings #setClose{bottom:calc(8px + env(safe-area-inset-bottom))}
+#result>.row{margin-top:3px}
+#result .rgoal{margin-bottom:3px}
+/* revive: the Timer link and Give up reach 44px */
+#revive .rvtimer{min-height:44px;padding:12px 18px;font-size:13px}
+#revive #rvNo{min-height:48px}
+#revive{gap:10px}
+/* level-up cards: 8px between cards and buttons on every height, a 44px lock target, 12px text */
+#levelup{gap:8px}
+#levelup .cards{gap:8px}
+#levelup .lvrow{gap:8px}
+#levelup .lvrow .btn{min-height:48px}
+#levelup #skipBtn{font-size:13px}
+#levelup .lk,#levelup .lkl,#levelup .lk b{font-size:12px}
+.card.pick .nm{padding-right:30px}
+.card.pick .rar{font-size:11px;padding:1px 8px}
+.card.pick .ds{font-size:12px}
+.card.pick .dl{font-size:12px}
+.card.pick .key{display:none}
+.card.pick .ic .kd{font-size:10px;line-height:15px;padding:0 6px}
+.card.pick .ic .newtag{font-size:10px;line-height:15px}
+.card.pick .lockb{top:0;right:2px;width:44px;height:44px;opacity:.85}
+.card.pick .lockb svg{width:20px;height:20px}
+@media (max-width:340px){.card.pick .dl,.card.pick .ds{font-size:12px}.card.pick .rar{font-size:12px;padding:0 6px}.card.pick .nm{font-size:16px}}
+@media (max-height:700px){#levelup{gap:8px}#levelup .cards{gap:8px}.card.pick{padding:6px 9px}}
+#pause .plose,#pause .plose b{font-size:12px}
+#result :is(.rhint,.rextra,.rgoal,.rlevel,.rnudge,.rkeep,.rmoment8,.rribbon,.sub) :is(span,small,i,em,u,s,b,div){font-size:max(12px,1em)}
+#levelup #skipBtn .sk2{font-size:12px}
+.card.pick .rar{font-size:12px}
+.card.pick .ic .kd,.card.pick .ic .newtag{font-size:12px;line-height:16px}
+#result .rprog small{font-size:12px}
+#result .rgoal,#result #rGoal{min-height:44px}
+#result{gap:6px}
+@media (max-height:700px){#result{gap:6px}#result .row .btn,#result #rRetry,#result #rHub{min-height:44px;padding:8px}#result .hero{height:clamp(40px,7vh,56px)}#result .stars{font-size:clamp(22px,4.2vh,30px)}}
+  #rShare.rshare11{min-height:44px;min-width:44px} .rvwipe small{font-size:12px}
+/* end @css:34-phone-run */
+/* @css:34-phone-hub */
+  /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
+  :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  :where(button,[role=button]):not(:disabled):active{filter:brightness(1.14)}
+  :where(#skillList,#petList)>.tile:active{transform:scale(.985);transition:transform .08s}
+  :where(.tile .go,.sc .go,.btn):not(:disabled):active{transform:translateY(2px) scale(.985);transition:transform .06s}
+  /* 2 no sticky hover on touch screens */
+  @media (hover:none){.card:hover{transform:none;border-color:rgba(255,255,255,.2)} .card:active{transform:scale(1.02);border-color:var(--lime)} .radar .rhit:hover{fill:transparent}}
+  /* 3 tap targets: the look stays, the hit area grows (invisible ::before). Energy plus and the settings gear sit in a crowded top bar */
+  #hub .hubtop .cur.e{padding-right:12px;overflow:visible}   /* room for the 44 px wide invisible hit area of the plus */
+  #hub #enPlus{position:relative}
+  #hub #enPlus::before{width:max(100%,44px);height:max(100%,44px);left:50%;top:50%}
+  #hub #setBtnH::before{width:44px;height:44px;left:50%;top:50%;transform:translate(-60%,-50%)}
+  .filters button{min-width:44px}
+  .stk{position:relative} .stk::before{content:"";position:absolute;inset:-3px}
+  #panel #pClose,#boxModal #bOk,#settings .btn,#pause .btn{min-height:48px;flex:none}
+  .btn.small,.tile .go,.sc .go,#panel .go{min-height:44px;flex-shrink:0}
+  #settings input[type=range]{min-height:44px;margin:0;padding:0;touch-action:pan-y}
+  #settings .volrow{min-height:48px}
+  /* 4 text: readable text is never under 12 px, pure badges and counters keep 11 */
+  #hub #glCount,#hub .gl-n,#hub #stSub.stagesub,#hub .lv,#hub .bt-hero .stprog .pgl,#hub .pgl b,#hub .chip .rw,#hub .qt small,#hub .tile .sm,#hub .sm,#panel .sm,#hub .ev-tx small,#hub .evn small,#panel .evn small,#panel .sday small,#hub .sday small{font-size:12px}
+  #hub #tabBattle .sidebtn,#hub .bt-side .tapme,#hub .tapme{font-size:12px}
+  #tabBattle .side .sidebtn{min-width:72px}
+  #hub .colp small,#hub .kbar span,#hub .kname,#hub .sbn,#hub .sbv,#hub .heropow small,#hub .rec small,#hub .scd,#hub .snk,#hub .tile.deal .snk,#hub .fbtx em,#hub .tile .lk small,#hub .prem,#hub .prhd small,#hub .whint,#panel .whint,#panel .evi b,#hub .evi b,#settings .sgrp,#hub .lk small{font-size:12px}
+  #hub #pigBox .tile .lv,#hub .bt-lt,#hub .ev-cd small,#hub .fbtx span{font-size:12px}
+  #hub #setBtnH{position:relative!important;z-index:3}   /* the inline style makes it static: the invisible hit area needs a positioned parent above the pills */
+  #hub #enPlus{z-index:2}
+  #hub .bt-load>#battleLoad{min-width:max-content;flex-shrink:0}   /* the five 44 px slots used to spill under the EDIT pill on wide phones */
+  @media (max-width:440px){#hub .bt-lt{display:none}}
+  #hub #loadEdit::before{width:100%}   /* the 44 px wide hit area used to cover the last loadout slot */
+  #hub #loadoutRow{max-width:100%;align-items:flex-start} #hub #loadoutRow .slot{min-width:0;flex:1 1 0;min-height:44px;max-width:92px}   /* five slots always fit, even on 320 */
+  @media (max-width:340px){#hub #loadoutRow{gap:4px;padding-left:4px;padding-right:4px} #hub .bt-rowh{flex-wrap:wrap;gap:6px 4px}}
+  @media (max-width:340px){#hub .hubtop{justify-content:flex-start;gap:3px;padding-left:6px;padding-right:4px} #hub .hubtop .cur{font-size:13px;padding:2px 5px 2px 3px;gap:2px} #hub .hubtop .cur.e{padding-right:12px} #hub .hubtop .cur img{width:18px;height:18px}}   /* 320 wide: the gear was cut by the screen edge */
+  #hub .kname{min-height:28px}
+  #hub .rec small{line-height:1.15}
+  .hfrag,#bLoot.reveal .it small.hfrag,#bLoot.reveal .it small.htag{font-size:12px}
+  /* badges and counters: 11 px minimum */
+  #stGo .gt,.rchip,.hotbadge,.bestrib,.stk em,.tabs .dot,#hub .dot{font-size:11px}
+  .stk em{padding:1px 5px}
+  /* 5 cards and tiles: names wrap cleanly, no clipping */
+  .tile .nm,.kname{overflow-wrap:break-word;word-break:normal;hyphens:auto}
+  .tile .ds{font-size:13px}
+  /* 6 thumb zone: the big bottom dock and tab bar stay one-hand sized */
+  .tabs button{min-height:56px}
+  @media (pointer:coarse){.scr:not(.hub){backdrop-filter:none;background:rgba(8,5,30,.82)} .tile,.sc,.kcard,.card,.stagebox{box-shadow:0 3px 8px rgba(0,0,0,.35)}}
+  /* 7 scroll: momentum on every hub list, no sideways bounce */
+  .hubbody,.scr,.panelbody,.side,.chips{-webkit-overflow-scrolling:touch;overscroll-behavior-x:none}
+  @media (max-width:350px){#hub .wstrip{gap:1px;padding:0} #hub .wstrip .wact{padding:4px 1px} #hub .wstrip .wact .wn{letter-spacing:-.8px}}
+  #hub .bunx{font-size:12px} @media (max-width:350px){#hub .bt-rowh .pill{font-size:12px;padding:5px 6px;letter-spacing:0}}
+  @media (max-width:420px){#hub .bt-rowh .ovl{display:none} #hub .bt-rowh .ovb{font-size:20px;padding:8px 10px} #hub .wstrip{gap:2px} #hub .wstrip .wact{padding:4px 2px} #hub .wstrip .wact .wn{white-space:normal;overflow:visible;text-overflow:clip;font-weight:700;line-height:1.1;overflow-wrap:normal;letter-spacing:-.5px}}
+  #hub .wstrip .wact .wh{flex-wrap:wrap;row-gap:2px} #hub .wstrip .wact .wh em{order:1} #hub .wstrip .wact .wh u{order:1;font-size:12px} #hub .wstrip .wact .wn{order:2;flex:1 1 100%;font-size:12px;letter-spacing:0} #hub .alert.num{font-size:12px}
+  #stOverview.ovb{min-height:44px;min-width:44px}
+  #result .sub{color:#e4def6} #result .gt small{color:#e4def6}
+/* end @css:34-phone-hub */
 </style>
 </head>
 <body>
@@ -2331,6 +2610,7 @@
   <button class="btn" id="playBtn"><span>PLAY</span></button>
   <div class="sub" id="titleInfo"></div>
   <button class="gear" id="setBtnT" aria-label="Settings">⚙</button>
+  <button class="gear" id="fsBtn" aria-label="Full screen" hidden>⛶</button>
   <div class="row"><div class="cur b"><img data-cur="beats" alt=""><b id="tBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="tSpark">0</b></div></div>
 </section>
 
@@ -2352,10 +2632,11 @@
           <div class="bt-fact" id="btFact" hidden></div>
           <div class="stprog" id="stProg"></div>
         </div>
-        <div class="bt-rowh" id="btRowH"><b>STAGES</b><button class="pill" id="contBtn">CONTINUE</button></div>
-        <div class="wstrip" id="wStrip" aria-hidden="true"></div>
+        <div class="bt-rowh" id="btRowH"><button class="ovb" id="stOverview" type="button" aria-label="All stages">▦<span class="ovl"> STAGES</span></button><button class="pill" id="contBtn">CONTINUE</button></div>
+        <div class="wstrip" id="wStrip" role="group" aria-label="Worlds"></div>
 
         <div class="diffrow" id="diffRow"></div>
+        <button class="gapfix" id="gapFix" type="button" hidden></button>
         <div class="bt-hint" id="btHint"></div>
         <div class="bt-load"><b class="bt-lt">LOADOUT</b><div class="loadout" id="battleLoad"></div><button class="pill" id="loadEdit">EDIT</button></div>
       </div>
@@ -2390,11 +2671,14 @@
 
 <section class="scr" id="settings">
   <h2>SETTINGS</h2>
+  <input id="setFind11" class="setfind11" type="search" placeholder="Find a setting" aria-label="Find a setting" autocomplete="off" enterkeyhint="search">
+  <div class="box" id="setNone11" hidden>No setting matches that.</div>
   <h3 class="setgrp">SOUND AND FEEL</h3>
   <button class="tgl" data-k="sound"><i class="ti">🔊</i><span>Sound effects</span><b>ON</b></button>
   <button class="tgl" data-k="music"><i class="ti">🎵</i><span>Music</span><b>ON</b></button>
   <button class="tgl" data-k="beatTick"><i class="ti">🥁</i><span>Beat tick (a click on every beat, with music)</span><b>OFF</b></button>
   <button class="tgl" data-k="pump"><i class="ti">🎚️</i><span>Music pump (tap to change)</span><b>Full</b></button>
+  <button class="tgl" data-k="fullscreen"><i class="ti">⛶</i><span>Full screen (tap PLAY to go full screen)</span><b>ON</b></button>
   <button class="tgl" data-k="vibrate"><i class="ti">📳</i><span>Vibration</span><b>ON</b></button>
   <h3 class="setgrp">SEEING THE GAME</h3>
   <button class="tgl" data-k="reduceMotion"><i class="ti">🌀</i><span>Reduce motion (no shake, calm movement)</span><b>OFF</b></button>
@@ -2411,6 +2695,7 @@
   <button class="tgl" data-k="leftHand"><i class="ti">🤚</i><span>Left-handed slide bar</span><b>OFF</b></button>
   <button class="tgl" data-k="thumbZone"><i class="ti">👍</i><span>Thumb zone: steer from the bottom third only</span><b>OFF</b></button>
   <button class="tgl" data-k="pauseGuard"><i class="ti">⏸</i><span>Pause button needs two taps</span><b>OFF</b></button>
+  <button class="tgl" data-k="bigTap"><i class="ti">👆</i><span>Bigger buttons (larger touch targets, more space)</span><b>OFF</b></button>
   <label class="volrow" style="display:flex;align-items:center;gap:10px;width:min(420px,92vw);padding:11px 14px;margin:4px 0;border-radius:14px;border:2px solid rgba(255,255,255,.18);background:var(--glass);font-weight:800;font-size:15px"><i class="ti" style="font-style:normal;font-size:20px;width:26px;text-align:center">🔈</i><span style="flex:1">Volume</span><input id="volRange" type="range" min="0" max="100" step="5" value="100" style="width:42%" aria-label="Master volume"></label>
   <div class="sgrp">Save data</div>
   <div class="box"><b style="color:#fff">Backup</b><br>Copy this code somewhere safe. Paste it back to restore your game on any phone.<textarea id="bkCode" spellcheck="false"></textarea></div>
@@ -2460,6 +2745,7 @@
   <div class="rkeep" id="rKeep"></div>
   <button class="btn" id="rNext">NEXT STAGE</button>
   <div class="row"><button class="btn alt" id="rRetry">RETRY</button><button class="btn dim" id="rHub">MENU</button></div>
+  <button class="rshare11" id="rShare" type="button">&#10150; SHARE</button>
 </section>
 
 <section class="scr" id="boxModal">

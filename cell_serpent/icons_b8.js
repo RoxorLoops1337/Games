@@ -16,10 +16,12 @@ export const SET_ICONS = {
   bigNumbers: ['#ff8fb8', sv(`<path ${F} d="M3 7.5l3.2-2h1.9v13H6V8.4L4.2 9.6zM12 18.5v-1.8c3.2-2 4.7-3.4 4.7-4.9 0-1-.7-1.6-1.7-1.6-.9 0-1.6.5-2.1 1.4l-1.6-1.1c.8-1.6 2.1-2.4 3.8-2.4 2.2 0 3.7 1.4 3.7 3.4 0 2-1.5 3.4-3.6 4.8h3.7v2.2z"/>`)],
   colorBlind: ['#c084fc', sv(`<path ${F} d="M12 2.5C6.5 2.5 2.5 6.4 2.5 11.3c0 3.4 2.3 5 4.6 5 1.4 0 2.1.7 2.1 1.6 0 1 .3 3.6 2.8 3.6 5.6 0 9.5-4.1 9.5-9.6 0-5.1-4-9.4-9.5-9.4z"/><circle cx="7.6" cy="10.4" r="1.7" fill="#2b1a5e"/><circle cx="11" cy="6.8" r="1.7" fill="#2b1a5e"/><circle cx="16" cy="8" r="1.7" fill="#2b1a5e"/>`)],
   highContrast: ['#e5e7eb', sv(`<circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="2.2"/><path ${F} d="M12 3.4a8.6 8.6 0 0 1 0 17.2z"/>`)],
+  fullscreen: ['#38bdf8', sv(`<path ${S} d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>`)],
   slider: ['#4ade80', sv(`<path ${S} d="M7.5 7.5L3 12l4.5 4.5M16.5 7.5L21 12l-4.5 4.5M4 12h16"/>`)],
   leftHand: ['#fb923c', sv(`<path ${F} d="M7 21c-2.2-2-3-4.6-3-7l.2-3.4a1.4 1.4 0 0 1 2.8 0V13h.8V5a1.5 1.5 0 0 1 3 0v6h.8V4a1.5 1.5 0 0 1 3 0v7h.8V6a1.5 1.5 0 0 1 3 0v9.2c0 3.2-1.6 5.8-4.4 5.8z"/>`)],
   thumbZone: ['#60a5fa', sv(`<rect x="5.5" y="2.5" width="13" height="19" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path ${F} d="M6.5 15h11v3.2a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z"/>`)],
   pauseGuard: ['#f472b6', sv(`<rect x="5" y="3.5" width="5" height="17" rx="1.8" ${F}/><rect x="14" y="3.5" width="5" height="17" rx="1.8" ${F}/>`)],
+  bigTap: ['#34d399', sv(`<rect x="2.8" y="2.8" width="18.4" height="18.4" rx="4.6" fill="none" stroke="currentColor" stroke-width="2"/><rect x="7.2" y="7.2" width="9.6" height="9.6" rx="2.6" ${F}/>`)],
   volume: ['#39b6ff', sv(`<path ${F} d="M3 9.5h3.6L11.5 5v14L6.6 14.5H3z"/><path ${S} d="M15 9a4.2 4.2 0 0 1 0 6"/>`)],
 };
 

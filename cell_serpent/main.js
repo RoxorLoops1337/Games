@@ -1,5 +1,6 @@
 import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { skinFor, recordAddictRun, eventInfo, ensureEvent } from './sim.js';
+import { deathCauseOf } from './screen_b11.js';
 import { createHub2 } from './hub2.js';
 import { keepSnap, keepResult } from './keep_ui.js';
 import { teaseGoal, hideTease } from './keep10.js';
@@ -15,25 +16,29 @@ import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.j
 import { initA11y7 } from './a11y7.js';
 import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed, announce, watchGroove, watchStreak, resetGroove, showZone, inThumbZone, zoneSteer, initKeyboard, RARITY_WORDS } from './access.js';
 import { createMotion } from './motion.js';
-import { curtainOpen } from './curtain_ui.js';
+import { curtainOpen, curtainClose, onCurtain } from './curtain_ui.js';
 import { celebrateBest, stopBest } from './best_fx.js';
 import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
 import { setupTune, wantsHand } from './title_b8.js';
 import { setupSecrets } from './title_b9.js';
 import { setupTitle10 } from './title_b10.js';
+import { setupTitle11 } from './title_b11.js';
+import { deathCoach } from './coach_b11.js';
 import { firstGoalHTML, welcomeBack, welcomeHTML, hoursAway, stampVisit } from './title12b.js';
 import { bakeCardArt } from './card_bake.js';
 import { partnerIds, markPartners, betterRoll, luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand, cardFoilHTML, markReroll, chainPulse } from './cards_ui.js';
-import { offeredLinks, markLinks, lockState, lockHTML, toggleLock, keepLocked, dealChipHTML, pickBurst } from './cards_b10.js';
+import { offeredLinks, markLinks, lockState, lockHTML, toggleLock, keepLocked, dealChipHTML, pickBurst, lockKey } from './cards_b10.js';
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
-import { paintTabIcons, bindHubSwipe, setTabCount } from './tabs_ui.js';
+import { paintTabIcons, bindHubSwipe, setTabCount, onTabUp } from './tabs_ui.js';
 import { paintButtonGlyphs, RECAP, emptyCard } from './btn_glyphs.js';
 import { paintSettingIcons } from './icons_b8.js';
 import { watchGlyphs } from './glyph_sweep.js';
 import { dressToast } from './toast_ui.js';
+import { readyNudge } from './badges_b11.js';
 import { flashDone } from './btn_state.js';
-import { watchSideIcons } from './side_icons.js';
+import { watchSideIcons, sideIconURL, SIDE_ICON_NAMES } from './side_icons.js';
+import { warmIdle } from './icon_warm_b11.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
 import { renderRecStrip, recFor, bestBuild } from './build_rec.js';
 import { petLabel } from './pet_names.js';
@@ -41,20 +46,24 @@ import { emptyCard as emptyCardUx } from './empty_ux.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
 import { momentLine } from './hit_juice8.js';
 import { bringHTML, twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide, starsHTML, claimInfo, eventReadyCount, claimChips, fanRects, powerHTML, powerGap, bestTag, worldStrip, portraitSpring } from './battle_ui.js';
+import { actStripHTML, actTarget, gapFix, gapFixHTML, openOverview } from './battle_b11.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
 import { hatchTag } from './pets_b10.js';
-import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collectionCelebrate } from './pets_b9.js';
+import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collectionCelebrate, joyBadge } from './pets_b9.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
 import { pauseBuild, buildChipHTML, buildLine, pauseSub } from './result_b9.js';
+import { bindSettingsFind, hubStickerPop, markStickersSeen, reviveInfoHTML, shareText, shareResult } from './result_b11.js';
 import { bindBuildChips, chipStatsText, stickerIds, newStickers, showStickerPop, clearStickerPop, bumpStatsTab, shineStars } from './result_b10.js';
 import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
 import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
 import { dressDuo, wornOutfit } from './duo_pose.js';
 import { PUMP_LEVELS, pumpLevel } from './audio_pump.js';
 import { createCues, wantsMuffle, sheetSound } from './audio_cues.js';
+import { logRun } from './hub_b11.js';
+import { initFullscreen, fsOnRun } from './fullscreen_fs.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
@@ -76,6 +85,16 @@ const clk = createClock();   // 05-screen-feel: fixed-step clock fed with dt * s
 let reviveAsked = false, hard = false, mode = 'title', g = null, demo = null, acc = 0, last = 0, endT = 0, cardsFor = null, hubTab = 'Battle', sel = 1, ranResult = false;
 const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
 const keys = {};
+const aimS = { now: -Math.PI / 2, tgt: -Math.PI / 2 };   // b11: circle stages aim all round: the finger or mouse sets the target angle, the sim gets an eased angle
+const AIM_HINT_KEY = 'cell_serpent_aimhint_b11';
+const aimHintLeft = () => { try { return +(localStorage.getItem(AIM_HINT_KEY) || 0) < 3; } catch (e) { return true; } };
+const aimHintBump = () => { try { localStorage.setItem(AIM_HINT_KEY, String(+(localStorage.getItem(AIM_HINT_KEY) || 0) + 1)); } catch (e) { /* ignore */ } };
+let aimHint = false;
+function aimAt(clientX, clientY) {   // the finger relative to the duo; a touch right on the duo keeps the old aim
+  if (!g || !g.ring) return;
+  const dpr = canvas.width / innerWidth, gp = R.toGame(clientX * dpr, clientY * dpr), dx = gp.x - g.p.x, dy = gp.y - g.p.y;
+  if (dx * dx + dy * dy > 26 * 26) aimS.tgt = Math.atan2(dy, dx);
+}
 sel = Math.max(1, save.last.stage); hard = save.last.hard;
 
 let dprCap = 2;   // lowered automatically on slow phones (dynamic resolution)
@@ -83,7 +102,7 @@ function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
   canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
 }
-addEventListener('resize', resize); resize();
+addEventListener('resize', resize); resize(); initFullscreen(() => save.settings.fullscreen !== false);
 initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap = true; }); initKeyboard(); initSrPass(); initA11y7(); initGridNav(document.getElementById('tabBattle')); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
 
 let shownId = '';
@@ -148,12 +167,18 @@ const skillLevels = () => Object.fromEntries(Object.entries(save.skills).map(([i
 
 // ---------------------------------------------------------------- hub
 const TABS = ['Shop', 'Stats', 'Battle', 'Skills', 'Pets', 'Gear'];
+// round 11: one kind line when a reward is waiting, once per thing per visit (never over a panel or the welcome gift)
+const nudged = new Set();
+function hubNudge() {
+  try { const n = readyNudge(save, dayKey(), Date.now(), nudged); if (!n) return; nudged.add(n.key); setTimeout(() => { const nr = document.getElementById('nextRew'); if (nr && nr.classList.contains('ready')) return; /* the Next Reward banner already says it, and the toast would cover the currency pills */ if (mode === 'hub' && shownId === 'hub') toast(n.icon + ' ' + n.text + '!'); }, 900); } catch (e) { /* ignore */ }
+}
 function openHub(tab = hubTab) {
   mode = 'hub'; hubTab = tab; audio.hubWorld(skinFor(sel)); audio.music(false); audio.hub(true);
   if (dayLogin(save, dayKey())) persist();
   refreshCur();
   sel = Math.max(1, Math.min(sel, MAX_STAGE, save.cleared + 4));
-  renderHub(); show('hub'); if (!hub2.addict.maybeComeback()) hub2.retain.checkAch();
+  renderHub(); show('hub'); if (!hub2.addict.maybeComeback()) { if (!hub2.retain.checkAch()) hubNudge(); }
+  try { hubStickerPop(save, { reduce: !!(save.settings.reduceMotion || systemReduceMotion()), valid: () => mode === 'hub' }); } catch (e) { /* cosmetic */ }
 }
 function badgeTabs() {
   const day = dayKey(), s = save, out = new Set();
@@ -225,6 +250,7 @@ function renderBattle() {
   { const rp = recPower(sel, hard), mine = power(save);
     $('diffRow').innerHTML = `<div class="seg ${hard ? 'h' : ''}"><i></i><button class="dbtn ${hard ? '' : 'on'}" data-h="0">Normal</button><button class="dbtn hard ${hard ? 'on' : ''}" data-h="1" ${hardOk ? '' : 'disabled'}>${hardOk ? 'Hard' : '🔒 Hard'}</button></div>${powerHTML(mine, rp, hard)}`; }
   for (const b of $('diffRow').querySelectorAll('.dbtn')) b.onclick = () => { audio.play('click'); hard = b.dataset.h === '1'; renderBattle(); };
+  { const gf = $('gapFix'), gap = powerGap(power(save), recPower(sel, hard)).gap, fx = gapFix(gap, badgeCounts()); gf.hidden = !fx; gf.dataset.tab = fx ? fx.tab : ''; gf.innerHTML = gapFixHTML(fx, gap); }   // b11: one tap to what closes the power gap
   $('stMod').innerHTML = twistHTML(info.mod); $('btFact').hidden = true; $('btHero').classList.remove('fact');
   { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; syncRwFilter(chips, cb); cb.textContent = 'CONTINUE ▶ ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
   const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : `<span><b>Cleared ✓</b> ${starsHTML(save.stars[sel] || 0)}</span>${sel > (save.hardCleared || 0) ? `<span class="hardpay">Hard pays <b>${curImg('sparkles')} ${Math.round(clearReward(sel).sparkles * 1.5)}</b></span>` : ''}`;
@@ -233,7 +259,7 @@ function renderBattle() {
   $('btHint').textContent = !save.cleared && !save.runs ? 'Slide left and right, shoot up, keep the snake off the pink line!' : (playable && save.energy && tickEnergy(save, Date.now()) < ENERGY_COST ? 'Out of Voice! Tap + up top, or rest a bit.' : '');
   loadoutRow($('battleLoad'), true);
   { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; bestPct = pr; $('stProg').innerHTML = `<div class="pgl${pr ? ' has' : ''}">Best <b>${pr}%</b>${bestTag(hard, powerGap(power(save), recPower(sel, hard)).gap)}</div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
-  { const ws = $('wStrip'), wk = save.cleared + '|' + sel; if (ws && ws.dataset.k !== wk) { ws.dataset.k = wk; ws.innerHTML = worldStrip(save.cleared, sel, MAX_STAGE, isBossStage); } }   // r10: 50 ticks, boss crowns taller
+  { const ws = $('wStrip'), wk = save.cleared + '|' + sel; if (ws && ws.dataset.k !== wk) { ws.dataset.k = wk; ws.innerHTML = actStripHTML(save.cleared, sel, MAX_STAGE, isBossStage, Math.min(MAX_STAGE, save.cleared + 4)); } }   // b11: five named worlds over the 50 ticks (worldStrip draws the ticks)   // r10: 50 ticks, boss crowns taller
   hub2.renderSide(); watchSideIcons($('battleSide')); watchSide($('battleSide'));
   renderPig();
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
@@ -254,6 +280,9 @@ $('btClaim').onclick = () => { if ($('btClaim').dataset.k === 'event') { audio.p
 let claimFrom = null;   // batch 9: the claim row is where the reward chips fly from
 $('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) gigFlies(fl.map(([b, g], i) => ({ snap: claimFrom && claimFrom.rect ? { rect: fanRects(claimFrom.rect, fl.length)[i], src: (b && b.src) || iconURL(g && g.reward.beats ? 'beats' : 'sparkles') } : b && !b.src ? { rect: b.rect, src: iconURL(g && g.reward.beats ? 'beats' : 'sparkles') } : b, kind: g && g.reward.beats ? 'beats' : 'sparkles', amt: g ? g.reward.beats || g.reward.sparkles || 0 : 0 }))); if (n) { persist(); audio.play('claimrow'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });
+$('gapFix').onclick = () => { const t = $('gapFix').dataset.tab; if (!t) return; audio.play('click'); hubTab = t; hubTabSwitch(); };
+$('wStrip').onclick = e => { const b = e.target.closest('.wact'); if (!b) return; const r = actTarget(+b.dataset.act, save.cleared, Math.min(MAX_STAGE, save.cleared + 4)); if (!r) return; if (r.locked) { audio.play('deny'); toast('Clear stage ' + Math.max(1, r.need) + ' to open this world'); return; } audio.play('click'); sel = r.stage; renderBattle(); };
+$('stOverview').onclick = () => { audio.play('click'); openOverview({ save: () => save, max: MAX_STAGE, isBoss: isBossStage, kindOf: stageKind, reach: () => Math.min(MAX_STAGE, save.cleared + 4), sel: () => sel, audio, pick: n => { sel = n; renderBattle(); } }); };
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
 $('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
 $('stGo').onclick = () => { audio.unlock(); audio.play('click'); const b = $('stGo'); b.classList.remove('go-hit'); void b.offsetWidth; b.classList.add('go-hit'); beginStage(sel); };
@@ -402,7 +431,7 @@ function renderPets() {
     if (isNewItem(save, 'p', p.id)) t.insertAdjacentHTML('afterbegin', newRibbonHTML);
     if (owned) t.querySelector('.ds').insertAdjacentHTML('afterend', joyHTML(k, true));
     t.onclick = e => { if (!e.target.closest('button')) { audio.play('click'); sheets.petSheet(p.id); } };
-    tileA11y(t, petTileLabel(save, p, k, eq, petCanUp(save, p.id)), () => t.onclick({ target: t })); if (owned) petOnTile(t, p.id, audio, systemReduceMotion());
+    tileA11y(t, petTileLabel(save, p, k, eq, petCanUp(save, p.id)), () => t.onclick({ target: t })); if (owned) { petOnTile(t, p.id, audio, systemReduceMotion()); joyBadge(t, k.joy || 0); }
     list.appendChild(t);
   }
   if (!list.querySelector('.tile')) list.appendChild(emptyCardUx('pets', petFilter, () => { petFilter = 'All'; audio.play('click'); renderPets(); }));
@@ -482,13 +511,14 @@ function newDemo() {
 function startRun(stage, mode2 = '') {
   const fromHub = shownId === 'hub';
   if (!mode2) save.last = { stage, hard: !!(hard && stage <= save.cleared) };
-  audio.unlock(); audio.music(true, stage === 1 && !mode2);
+  audio.unlock(); fsOnRun(); audio.music(true, stage === 1 && !mode2);
   sel = stage; ranResult = false; endT = 0;
   g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
   g.petJoy = save.petEquip.map(id => (save.pets[id].joy || 0) >= 100);   // round 6: an overjoyed pet shows off in the run (cosmetic)
   mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove(); if (fromHub) curtainOpen(document.documentElement.classList.contains('rm'));
-  announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + 'Slide to move, the duo shoots up on its own.');
+  announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + (g.ring ? 'Drag to aim, the duo shoots on its own.' : 'Slide to move, the duo shoots up on its own.'));
   window.CS.g = g;
+  aimS.now = aimS.tgt = -Math.PI / 2; aimHint = !!g.ring && aimHintLeft(); if (g.ring) aimHintBump();
   if (!mode2) teaseGoal(save, dayKey(), !!(save.settings.reduceMotion || systemReduceMotion())); else hideTease();
 }
 let awayH = hoursAway(Date.now()); addEventListener('pagehide', () => stampVisit(Date.now()));
@@ -522,7 +552,7 @@ function showCards() {
   { const bonus = Math.round((20 + 4 * g.stage) * g.p.coinMul); $('skipBtn').innerHTML = skipHTML(bonus); $('skipBtn').setAttribute('aria-label', 'Skip for ' + bonus + ' beats'); }
   $('refreshBtn').disabled = g.rerolls <= 0; $('refreshLeft').innerHTML = '<span class="rp">' + refreshPips(g) + '</span>'; $('refreshBtn').classList.toggle('empty', g.rerolls <= 0); $('luckBox').innerHTML = luckHTML(g) + (rrChip ? dealChipHTML(g, g.choices) : ''); rrChip = false; $('buildStrip').innerHTML = buildHTML(g, icon); markPartners($('buildStrip'), partnerIds(g, g.choices));
   cardsFor = g.choices; { let mr = 0; for (const c of g.choices) mr = Math.max(mr, c.rarity || 0); audio.play('card' + mr); if (mr >= 3) setTimeout(() => { if (mode === 'play' && g.phase === 'levelup') audio.play('stinger'); }, 220); } show('levelup');
-  announce('Choose an upgrade. ' + g.choices.map((c, i) => `${i + 1}: ${c.name}, ${RARITY_WORDS[c.rarity || 0]}`).join('. ') + '. Press 1, 2 or 3, or Tab to a card and press Enter.');
+  announce('Choose an upgrade. ' + g.choices.map((c, i) => `${i + 1}: ${c.name}, ${RARITY_WORDS[c.rarity || 0]}`).join('. ') + '. Press 1, 2 or 3, or Tab to a card and press Enter.' + (g.rerolls > 0 ? ' Press L then a number to lock a card for the refresh.' : ''));
 }
 let pickLock = false, rrChip = false;
 { const bs = $('buildStrip'), sh = $('bandSheet'); const tog = () => { if (!bs.innerHTML) return; if (!sh.classList.contains('on')) { sh.innerHTML = bandSheetHTML(g, icon); sh.classList.add('on'); } else sh.classList.remove('on'); }; bs.onclick = tog; sh.onclick = () => sh.classList.remove('on'); bs.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tog(); } }; }
@@ -548,13 +578,15 @@ canvas.addEventListener('pointerdown', e => {
   if (zone === 'pause') { if (pauseAllowed(save.settings.pauseGuard)) pause(); else toast('Tap again to pause'); return; }
   if (zone === 'stats') { showStats(); return; }
   if (g.encore >= 1 && Math.hypot(gp.x - g.p.x, gp.y - g.p.y) < 110) encoreTap = true;   // tap the duo for the Encore blast
-  if (save.settings.thumbZone && !inThumbZone(e.clientY, innerHeight)) return;   // thumb zone: only the bottom third steers
+  if (g.ring) aimAt(e.clientX, e.clientY);   // b11: a touch anywhere on the playfield aims at it
+  if (!g.ring && save.settings.thumbZone && !inThumbZone(e.clientY, innerHeight)) return;   // thumb zone: only the bottom third steers
   if (joy.on) return;
   joy.on = true; joy.id = e.pointerId; joy.sx = e.clientX; joy.sy = e.clientY; joy.dx = joy.dy = 0;
   joy.x = gp.x; joy.y = gp.y; joy.tz = save.settings.thumbZone ? gp.x : null;
   canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove', e => {
+  if (mode === 'play' && g.ring && (e.pointerType === 'mouse' || (joy.on && e.pointerId === joy.id))) { aimAt(e.clientX, e.clientY); return; }   // b11: drag (or hover with a mouse) to sweep the aim
   if (!joy.on || e.pointerId !== joy.id) return;
   if (joy.tz != null) { joy.tz = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; return; }   // thumb zone: the duo follows the finger
   const L = R.layout(), dpr = canvas.width / innerWidth, rad = 70 * L.s / dpr;
@@ -569,6 +601,7 @@ addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
   if (e.key === 'Escape') goBack(false);
   else if (e.key.toLowerCase() === 'p') { mode === 'play' ? pause() : mode === 'pause' && !$('settings').classList.contains('on') && !$('panel').classList.contains('on') ? resume() : 0; }
+  if (mode === 'play' && g.phase === 'levelup' && !pickLock) { const lk = lockKey(e, $('cards'), g.rerolls); if (lk) { if (lk.i >= 0) { e.preventDefault(); const on = toggleLock($('cards'), lk.i) === lk.i; audio.play('click'); announce(on ? 'Card ' + (lk.i + 1) + ' locked. A reroll keeps it.' : 'Lock removed.'); } else if (lk.armed) announce('Lock: press 1, 2 or 3.'); else if (e.key.toLowerCase() === 'l') announce('Nothing to lock, no refreshes left.'); return; } }
   if (mode === 'play' && g.phase === 'levelup' && '123'.includes(e.key)) pick(+e.key - 1);
   if (e.key.toLowerCase() === 'm') toggleMute();
 });
@@ -577,6 +610,14 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (mode
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'play' && g.phase !== 'levelup') pause(); });
 let encoreTap = false;
 function readInput() {
+  if (g.ring) {   // b11: circle stages: the duo is fixed, left/right (or A/D) turn the aim, the sim gets an eased angle
+    if (keys.a || keys.arrowleft) aimS.tgt -= 2.8 / 60; if (keys.d || keys.arrowright) aimS.tgt += 2.8 / 60;
+    if (keys.arrowup || keys.w) aimS.tgt = -Math.PI / 2; if (keys.arrowdown || keys.s) aimS.tgt = Math.PI / 2;
+    let da = (aimS.tgt - aimS.now) % (Math.PI * 2); if (da > Math.PI) da -= Math.PI * 2; else if (da < -Math.PI) da += Math.PI * 2;
+    aimS.now += da * 0.35; if (aimS.now > Math.PI) aimS.now -= Math.PI * 2; else if (aimS.now < -Math.PI) aimS.now += Math.PI * 2;
+    const enc2 = encoreTap || !!keys[' ']; encoreTap = false;
+    return { mx: 0, my: 0, aim: aimS.now, encore: enc2 };
+  }
   let mx = joy.dx + (joy.sdx || 0);
   if (joy.on && joy.tz != null) mx += zoneSteer(joy.tz, g.p.x);
   if (keys.a || keys.arrowleft) mx -= 1; if (keys.d || keys.arrowright) mx += 1;
@@ -618,7 +659,7 @@ function openSettings(back) {
   $('bkCopy').onclick = async () => { const t = $('bkCode').value; try { await navigator.clipboard.writeText(t); toast('Code copied'); flashDone($('bkCopy'), 'COPIED'); } catch (e) { $('bkCode').select(); toast('Select and copy the code'); } };
   $('bkLoad').onclick = () => { const s2 = importSave($('bkCode').value); if (!s2) { toast('That code does not work'); return; } save = s2; persist(); applySettings(); refreshCur(); toast('Game loaded'); paint(); };
   $('setClose').onclick = () => { audio.play('click'); (back || (() => (mode === 'hub' ? openHub() : toTitle())))(); };
-  paint(); show('settings');
+  paint(); bindSettingsFind($('settings')); show('settings');
 }
 function toggleMute() { save.muted = !save.muted; audio.setMuted(save.muted); $('muteBtn').textContent = save.muted ? '🔇' : '🔊'; persist(); }
 
@@ -626,8 +667,8 @@ function toggleMute() { save.muted = !save.muted; audio.setMuted(save.muted); $(
 function showRevive() {
   reviveAsked = true; const cost = reviveCost(g.revivesUsed);
   $('rvLeft').textContent = 'Remaining ×' + g.revivesLeft; $('rvGo').innerHTML = 'REVIVE  ' + cost + ' ' + curImg('sparkles'); $('rvGo').disabled = save.sparkles < cost;
-  { const pc = Math.round((g.progress || 0) * 100), w = $('rvWipe'); if (w) { w.innerHTML = `<b>WIPEOUT!</b><span>${pc > 0 ? pc + '% of the serpent popped' : 'the serpent got through'}</span><i><u style="width:${pc}%"></u></i>`; w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); } }
-  { const pc = Math.floor((g.progress || 0) * 100); $('rvInfo').innerHTML = `Stage ${g.stage}: ${pc}% cleared<small>${save.sparkles} sparkles in your pocket</small>`; }
+  { const pc = Math.round((g.progress || 0) * 100), w = $('rvWipe'); if (w) { w.innerHTML = `<b>WIPEOUT!</b><span>${pc > 0 ? pc + '% of the serpent popped' : 'the serpent got through'}</span>${(dc => dc ? `<em>${dc.head}</em><small>${dc.sub}</small>` : '')(deathCauseOf(g))}<i><u style="width:${pc}%"></u></i>`; w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); } }
+  $('rvInfo').innerHTML = reviveInfoHTML(g.stage, g.progress, save.sparkles, cost);
   let stopRing = () => {};
   $('rvGo').onclick = () => { if (save.sparkles < cost) return; stopRing(); stopFx(); save.sparkles -= cost; persist(); reviveGame(g); reviveAsked = false; endT = 0; audio.play('levelup'); show(''); };
   const giveUp = () => { stopRing(); stopFx(); g.revivesLeft = 0; reviveAsked = false; show(''); };
@@ -667,7 +708,7 @@ function flyRibbonsHome(nFly) {   // the result's Ribbons chip flies to the hub 
 }
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
-  const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), stk0 = stickerIds(save), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
+  const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), stk0 = stickerIds(save), out = applyResult(save, r); logRun(r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
   stopFx(); stopBest(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
   if (out.ribbons) rows.push(`<div class="r">${BOW} ${cu(out.ribbons)} Ribbons</div>`);
@@ -683,7 +724,7 @@ function showResult() {
   $('result').classList.toggle('won', !!r.won); { const cc = closeCall(r); $('result').classList.toggle('close', !!cc); if (cc) { $('rTitle').textContent = cc.title; $('rSub').textContent = cc.sub; } }
   announce((r.won ? 'Stage clear. ' : 'Game over. ') + $('rTitle').textContent + '. ' + r.kills + (r.kills === 1 ? ' cell' : ' cells') + ' popped, ' + out.beats + ' beats earned.');
   if (r.hard) hard = true;
-  { const nmz = {}; for (const w of WEAPONS) nmz[w.id] = w.name; $('rHint').textContent = lossHint(r, save.loadout, nmz); }
+  { const nmz = {}; for (const w of WEAPONS) nmz[w.id] = w.name; $('rHint').textContent = deathCoach(r, save) || lossHint(r, save.loadout, nmz); }
   if (out.levelUps) rows.push(`<div class="r">⭐ Level ${levelInfo(save.xp).lv}!</div>`);
   const li1 = levelInfo(save.xp), reduce = save.settings.reduceMotion;
   levelBar(li0, li1, reduce);
@@ -698,9 +739,10 @@ function showResult() {
   $('rNext').onclick = () => { audio.play('click'); clearStickerPop(); beginStage(r.stage + 1); };
   $('rRetry').innerHTML = 'RETRY <span class="rcost">⚡' + ENERGY_COST + '</span>';
   { const gl = nextGoal(save); renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
+  $('rShare').onclick = () => { audio.play('click'); shareResult(shareText(r, r.mode ? '' : stageInfo(r.stage).name, location.origin + location.pathname), toast); };
   $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); clearStickerPop(); try { retryFly($('rRetry'), rewardSnaps($('rList')), !!(save.settings.reduceMotion || systemReduceMotion())); } catch (e) { /* cosmetic */ } beginStage(r.stage); };
-  $('rHub').onclick = () => { audio.play('click'); clearStickerPop(); const fl = rewardSnaps($('rList')); flyRibbonsHome(fl.length); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; gigFlies(fl.map(it => ({ snap: it.s, kind: it.kind, amt: it.n })), 420); openHub('Battle'); };   // the hub pills wait at their old totals and count up as each chip lands (batch 7)
+  $('rHub').onclick = () => { audio.play('click'); curtainClose(document.documentElement.classList.contains('rm'), () => { clearStickerPop(); const fl = rewardSnaps($('rList')); flyRibbonsHome(fl.length); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; gigFlies(fl.map(it => ({ snap: it.s, kind: it.kind, amt: it.n })), 420); openHub('Battle'); }); };   // the hub pills wait at their old totals and count up as each chip lands (batch 7)
   { const st = r.stars || 0; $('rStars').innerHTML = r.won && !r.mode && !r.hard ? [1, 2, 3].map(i => `<span class="${i <= st ? '' : 'off'}">★</span>`).join('') : '';
     if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + Math.min(3, i + 1)); if (i === st - 1 && !reduce) confetti($('result'), st === 3 ? 30 : st === 2 ? 18 : 10); }, reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
@@ -711,7 +753,7 @@ function showResult() {
     // no toast here: it used to cover the title on the result screen, and the ribbon plus the Sparkles row already say it
   }
   { const rd = !!(save.settings.reduceMotion || systemReduceMotion()); setTimeout(() => shineStars($('rStars'), out.starsGained, rd), 900 + (r.stars || 0) * 260);
-    showStickerPop(newStickers(stk0, stickerIds(save)), { reduce: rd, valid: () => mode === 'over' && $('result').classList.contains('on'), onLand: bumpStatsTab }); }
+    markStickersSeen(save); showStickerPop(newStickers(stk0, stickerIds(save)), { reduce: rd, valid: () => mode === 'over' && $('result').classList.contains('on'), onLand: bumpStatsTab }); }
   if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
   try { dressDuo($('rImg'), { outfit: wornOutfit(save), pets: save.petEquip, kit, mood: r.won ? 'win' : 'lose', joy: Object.fromEntries(save.petEquip.map(id => [id, save.pets[id].joy || 0])) }); } catch (e) { /* ignore */ }
   show('result'); mode = 'over';
@@ -744,6 +786,7 @@ function drain(game, sound) {
     if (sound && e.t === 'kill' && e.head && !e.boss) audio.play('finishblow', { src: now8() - hitAt < 250 ? hitSrc : '' });
     if (sound && e.t === 'stage' && game.skin) e.skin = game.skin;   // the stage card sting is per species
     if (sound && (e.t === 'snack' || e.t === 'snackget' || e.t === 'snackgone' || e.t === 'startle' || e.t === 'ringskip')) audio.play(e.t === 'snack' ? 'snackdrop' : e.t, e);
+    if (sound && (e.t === 'mirror' || e.t === 'beatrun' || e.t === 'btwist')) audio.play(e.t, e);
     if (sound && (e.t === 'bell' || (e.t === 'trait' && !e.warn))) audio.play(e.t === 'bell' ? 'bellring' : 'traitcue', e);
     if (!sound) continue;
     if (FX_SOUND.has(e.t)) audio.play(SFX[e.t] || e.t, e); else if (e.t === 'pet') audio.play(PETSND[e.id] || 'chirp');
@@ -781,7 +824,7 @@ function frame(now) {
     if (g.phase === 'play') audio.sync(beatPhase(g));
   }
   if (mode === 'pause') { if (pauseN > 2 && pauseW === canvas.width && pauseH === canvas.height) return; pauseN++; pauseW = canvas.width; pauseH = canvas.height; } else pauseN = 0;   // a paused picture is frozen: draw it a few times (and again after a resize), then leave the canvas alone
-  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2 }, mode === 'pause' ? 0 : dt);
+  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2, aimHint }, mode === 'pause' ? 0 : dt);
     if (mode === 'play') for (const n of R.takeSounds()) audio.play(n); else R.takeSounds(); }
 }
 
@@ -814,8 +857,9 @@ loadArt('assets/').then(a => {
   [['love', 'deco1'], ['grumpy', 'deco2'], ['sneezy', 'deco3'], ['sleepy', 'deco4']].forEach(([skin, el], i) => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
-  setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); setupTune($('title'), audio, () => { save.sparkles += 3; persist(); refreshCur(); toast('Sticker! +3 Sparkles'); }); setupSecrets($('title'), audio); setupTitle10($('title'), audio); $('title').addEventListener('snakepoke', e => (e.detail && e.detail.hit ? audio.play('snakesqueak', e.detail) : audio.play('click'))); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
-  R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready'), onMilestone: n => audio.play('streakmile', { n }), onPetCall: id => audio.play('petcall', { id }), beatStreak: () => audio.beatStreak }); applySettings(); resize(); refreshTitle();
+  setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); setupTune($('title'), audio, () => { save.sparkles += 3; persist(); refreshCur(); toast('Sticker! +3 Sparkles'); }); setupSecrets($('title'), audio); setupTitle10($('title'), audio); setupTitle11($('title')); $('title').addEventListener('snakepoke', e => (e.detail && e.detail.hit ? audio.play('snakesqueak', e.detail) : audio.play('click'))); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
+    onTabUp(() => audio.play('tabping')); onCurtain(() => audio.play('curtain')); R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready'), onMilestone: n => audio.play('streakmile', { n }), onPetCall: id => audio.play('petcall', { id }), onPetGlance: () => audio.play('petglance'), onPounce: () => audio.play('pounce'), beatStreak: () => audio.beatStreak }); applySettings(); resize(); refreshTitle();
+  warmIdle([...['beats', 'sparkles', 'egg', 'chest', 'boxbeat', 'boxspark', 'aspd', 'notes', 'burst', 'cdmg'], ...WEAPONS.map(w => w.id), ...PETS.map(p => p.id)].map(id => () => iconURL(id)).concat(SIDE_ICON_NAMES.map(n => () => sideIconURL(n))));   // 11-perf: icon PNGs encode in idle time
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();
   if (qs.get('stage')) { startRun(Math.max(1, +qs.get('stage'))); }   // dev shortcut: ?stage=N

@@ -61,7 +61,7 @@ export function renderStickerBook(host, s, click, onPrize) {
     const claimed = prizeClaimed(), pz = document.createElement('button'); pz.type = 'button'; pz.className = 'stkprize' + (claimed ? ' got' : '');
     pz.innerHTML = claimed ? '<b>BOOK COMPLETE</b><small>Every sticker found</small>' : `<b>BOOK COMPLETE!</b><small>Tap to claim ${STICKER_PRIZE} Sparkles</small>`;
     pz.disabled = claimed;
-    pz.onclick = () => { if (prizeClaimed()) return; markPrize(); if (onPrize) onPrize(STICKER_PRIZE); pz.disabled = true; pz.classList.add('got', 'pop'); pz.innerHTML = '<b>BOOK COMPLETE</b><small>+' + STICKER_PRIZE + ' Sparkles claimed</small>'; };
+    pz.onclick = () => { if (prizeClaimed()) return; markPrize(); if (onPrize) onPrize(STICKER_PRIZE, pz); pz.disabled = true; pz.classList.add('got', 'pop'); pz.innerHTML = '<b>BOOK COMPLETE</b><small>+' + STICKER_PRIZE + ' Sparkles claimed</small>'; };
     host.insertBefore(pz, cap);
   }
   if (fresh) { wrSeen(seen); cap.innerHTML = `<b>${fresh} new sticker${fresh > 1 ? 's' : ''}!</b> Tap to look`; }

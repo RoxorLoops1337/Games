@@ -15,6 +15,7 @@ const bakes = [];
 const kit = createArtDraw((w, h) => ({ width: w, height: h, getContext: stubCtx }), 2);
 const ob = kit.bake; kit.bake = (k, ...a) => { bakes.push(k); return ob.call(kit, k, ...a); };
 const R = createRenderer(canvas, null, kit);
+R.state.numLog = texts;   // b11: numbers are drawn glyph by glyph, the renderer reports each value here
 const g = sim.createGame({ seed: 9, stage: 12, meta: { rev: 1 } });
 const draw = (dt = 1 / 30) => R.draw(g, { joy: { on: false } }, dt);
 for (let i = 0; i < 6; i++) draw();

@@ -32,10 +32,10 @@ export function markLinks(cards, links) {
 
 // One card can be locked: a reroll deals new cards and keeps it in its slot.
 export const lockState = { i: -1, keep: false };
-export function lockHTML(i) { return `<span class="lockb${lockState.i === i ? ' on' : ''}" data-i="${i}" aria-hidden="true"><svg viewBox="0 0 16 16" width="15" height="15"><path d="M4 7V5a4 4 0 0 1 8 0v2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><rect x="2.5" y="7" width="11" height="8" rx="2" fill="currentColor"/></svg></span>`; }
+export function lockHTML(i) { const on = lockState.i === i; return `<span class="lockb${on ? ' on' : ''}" data-i="${i}" role="button" tabindex="0" aria-pressed="${on}" aria-label="${on ? 'Unlock' : 'Lock'} card ${i + 1} so a reroll keeps it. Keyboard: L, then ${i + 1}"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M4 7V5a4 4 0 0 1 8 0v2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><rect x="2.5" y="7" width="11" height="8" rx="2" fill="currentColor"/></svg></span>`; }
 export function toggleLock(cards, i) {
   lockState.i = lockState.i === i ? -1 : i;
-  if (cards) for (const e of cards.children) { const l = e.querySelector('.lockb'); if (!l) continue; const on = +l.dataset.i === lockState.i; l.classList.toggle('on', on); e.classList.toggle('kept', on); }
+  if (cards) for (const e of cards.children) { const l = e.querySelector('.lockb'); if (!l) continue; const on = +l.dataset.i === lockState.i; l.classList.toggle('on', on); l.setAttribute('aria-pressed', String(on)); l.setAttribute('aria-label', (on ? 'Unlock' : 'Lock') + ' card ' + (+l.dataset.i + 1) + ' so a reroll keeps it. Keyboard: L, then ' + (+l.dataset.i + 1)); e.classList.toggle('kept', on); }
   return lockState.i;
 }
 // After reroll(): put the locked card back in its slot (a duplicate of it elsewhere takes the card it replaced). True when it kept one.
@@ -70,4 +70,25 @@ export function pickBurst(el, col, rn) {
     ic.classList.remove('ant'); void ic.offsetWidth; ic.classList.add('ant');
     return n;
   } catch (e) { return 0; }
+}
+
+// Keyboard lock (batch 11): press L, then the card number (1 to 3) within 2.5 seconds. Enter or Space on a focused lock works too.
+// Returns null when the key is not ours, {armed:true} after L, {i} when a lock should flip, {miss:true} for a number with no lock to flip.
+let armedAt = 0, armTimer = 0;
+export const lockArmed = () => armedAt > 0;
+function disarm(cards) { armedAt = 0; clearTimeout(armTimer); if (cards && cards.classList) cards.classList.remove('lockarm'); }
+export function lockKey(e, cards, rerolls, now = Date.now()) {
+  const k = String(e.key || '').toLowerCase(), act = typeof document !== 'undefined' ? document.activeElement : null;
+  if ((k === 'enter' || k === ' ') && act && act.classList && act.classList.contains('lockb')) { disarm(cards); return { i: +act.dataset.i }; }
+  if (k === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (!(rerolls > 0) || !cards) { disarm(cards); return { miss: true }; }
+    armedAt = now; cards.classList.add('lockarm'); clearTimeout(armTimer); armTimer = setTimeout(() => disarm(cards), 2500);
+    return { armed: true };
+  }
+  if (armedAt && now - armedAt < 2500 && k.length === 1 && k >= '1' && k <= '9') {
+    disarm(cards); const i = +k - 1, el = cards && cards.children[i];
+    return el && el.querySelector && el.querySelector('.lockb') ? { i } : { miss: true };
+  }
+  if (armedAt) disarm(cards);
+  return null;
 }

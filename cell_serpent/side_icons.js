@@ -83,9 +83,9 @@ const BY_LABEL = { 'Sign in': 'calendar', 'Fan Fund': 'ribbon', Backstage: 'bask
 export function sideIconURL(name) {
   if (name in cache) return cache[name];
   if (typeof document === 'undefined' || !DRAW[name]) return (cache[name] = '');
-  const c = document.createElement('canvas'); c.width = c.height = S;
+  const k = Math.min(3, Math.max(1, Math.ceil(window.devicePixelRatio || 1))), c = document.createElement('canvas'); c.width = c.height = S * k;   // baked at the screen density
   const g = c.getContext('2d'); if (!g) return (cache[name] = '');
-  g.lineJoin = 'round'; g.lineCap = 'round'; DRAW[name](g);
+  g.scale(k, k); g.lineJoin = 'round'; g.lineCap = 'round'; DRAW[name](g);
   return (cache[name] = c.toDataURL());
 }
 export const SIDE_ICON_NAMES = Object.keys(DRAW);

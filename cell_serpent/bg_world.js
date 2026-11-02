@@ -8,6 +8,7 @@ import { makeBanks, drawMist, makeWind, stepWind, drawGust, dashState } from './
 import { makeB8, headKill, drawNight, stepB8, drawSquall, drawPetalStorm, readHeads, drawBossLights, stepBeam } from './bg_b8.js';
 import { makeB9, stepFlyers, drawFlyers, drawLamps } from './bg_b9.js';
 import { makeB10, scare, clearFlourish, stepB10, drawScatter, drawClear } from './bg_b10.js';
+import { makeB11, weather11For, drawLayer2, drawTwinkle, drawFinale } from './bg_b11.js';
 import { bakeStageExtras, drawClouds, drawFootlights, drawBossFx, drawCrowdLights, paintGrooves } from './bg_stage.js';
 
 const TAU = Math.PI * 2;
@@ -235,6 +236,8 @@ export function bakeWorld(c, skin, boss, ring, th, stage = 1, part = 0) {
   c.lineWidth = 2; c.strokeStyle = 'rgba(111,227,255,.6)'; c.strokeRect(10, 10, W - 20, H - 20);
 }
 
+const RGB = new Map();
+function rgbOf(hue) { let v = RGB.get(hue); if (v === undefined) RGB.set(hue, v = `rgb(${hue})`); return v; }
 // ---- animated pieces (cheap: a baked beam sprite, ~18 motes)
 export function makeMotes() {
   const a = [], r = rnd(3);
@@ -303,16 +306,17 @@ export function drawRing(c, ring, t, boss, pulse, kit, skin = 'love', danger = 0
   c.globalAlpha = ga;
   // glow: stacked wide strokes, outside and inside the rim (no shadowBlur, cheap on phones)
   c.save(); c.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < 4; i++) { c.lineWidth = 56 - i * 13 + beat * 10; c.strokeStyle = `rgba(${hue},${0.05 + i * 0.035 + beat * 0.03})`; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke(); }
+  c.strokeStyle = rgbOf(hue);   // 11-perf: a cached opaque colour plus globalAlpha, so the glow builds no rgba string per frame
+  for (let i = 0; i < 4; i++) { c.lineWidth = 56 - i * 13 + beat * 10; c.globalAlpha = ga * (0.05 + i * 0.035 + beat * 0.03); c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke(); }
   c.restore();
   c.beginPath(); c.arc(cx, cy, R, 0, TAU);
   c.lineWidth = 11; c.strokeStyle = 'rgba(8,3,26,.55)'; c.stroke();
-  c.lineWidth = 5.5; c.strokeStyle = `rgba(${hue},.95)`; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
-  c.lineWidth = 1.5; c.strokeStyle = `rgba(255,255,255,${0.45 + beat * 0.3})`; c.beginPath(); c.arc(cx, cy, R - 6, 0, TAU); c.stroke();
+  c.lineWidth = 5.5; c.strokeStyle = rgbOf(hue); c.globalAlpha = ga * 0.95; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
+  c.lineWidth = 1.5; c.strokeStyle = '#fff'; c.globalAlpha = ga * (0.45 + beat * 0.3); c.beginPath(); c.arc(cx, cy, R - 6, 0, TAU); c.stroke(); c.globalAlpha = ga;
   if (danger > 0.02) {   // a head is closing in: the rim heats up and flickers red, brighter the closer it is
     const fl = 0.55 + 0.45 * Math.sin(t * (9 + danger * 12)); c.save(); c.globalCompositeOperation = 'lighter';
-    c.lineWidth = 16; c.strokeStyle = `rgba(255,40,70,${danger * 0.18 * fl})`; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke();
-    c.lineWidth = 5.5; c.strokeStyle = `rgba(255,110,130,${danger * (0.35 + 0.4 * fl)})`; c.stroke(); c.restore();
+    c.lineWidth = 16; c.strokeStyle = 'rgb(255,40,70)'; c.globalAlpha = ga * danger * 0.18 * fl; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke();
+    c.lineWidth = 5.5; c.strokeStyle = 'rgb(255,110,130)'; c.globalAlpha = ga * danger * (0.35 + 0.4 * fl); c.stroke(); c.restore();
   }
   const lit = Math.floor(t * 6) % 3;   // the 24 bulbs: lit ones and dim ones are each one path and one fill
   for (let pass = 0; pass < 2; pass++) {
@@ -335,13 +339,13 @@ export function makeWeather(n = 26) {
   for (let i = 0; i < n; i++) a.push({ x: r() * W, y: r() * H, z: [0.55, 0.85, 1.25][i % 3], p: r() * TAU, v: 0.7 + r() * 0.6 });
   return a;
 }
-function drawWeather(c, kind, th, list, t, n, wx = 0, wv = 0) {
+function drawWeather(c, kind, th, list, t, n, wx = 0, wv = 0, pulse = 0) {
   c.save();
   for (let i = 0; i < n && i < list.length; i++) {
     const m = list[i], z = m.z;
     if (kind === 'fireflies') {   // wander near their spot and blink
       const x = m.x + Math.sin(t * 0.5 * m.v + m.p) * 40 * z, y = LINE_Y - 60 - ((m.y * 0.6 + Math.cos(t * 0.4 * m.v + m.p) * 30) % 520), b = Math.max(0, Math.sin(t * 1.7 * m.v + m.p));
-      c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.16 * b * z; c.fillStyle = 'rgb(210,255,120)'; c.beginPath(); c.arc(x, y, 9 * z, 0, TAU); c.fill();
+      c.globalCompositeOperation = 'lighter'; c.globalAlpha = (0.16 + pulse * 0.16) * b * z; c.fillStyle = 'rgb(210,255,120)'; c.beginPath(); c.arc(x, y, 9 * z, 0, TAU); c.fill();
       c.globalAlpha = 0.9 * b; c.fillStyle = 'rgb(255,255,190)'; c.beginPath(); c.arc(x, y, 2 * z, 0, TAU); c.fill();
     } else {
       const sp = (kind === 'snow' ? 26 : 38) * z * m.v, span = H + 80, y = ((m.y + t * sp) % span) - 40, x = ((m.x + Math.sin(t * 0.6 * m.v + m.p) * 22 * z + t * (kind === 'petals' ? 14 : 4) * z + wx * z) % (W + 60) + W + 60) % (W + 60) - 30;
@@ -371,7 +375,7 @@ function lightning(c, bg, t, ph = 0) {
 export function drawBossPhase(c, kit, t, ph, pulse, flash, reduce, low) {
   const beat = reduce ? 0.4 : pulse;
   c.save();
-  c.fillStyle = `rgba(255,24,64,${ph * (0.04 + beat * 0.07)})`; c.fillRect(0, 0, W, LINE_Y);
+  const ga0 = c.globalAlpha; c.fillStyle = 'rgb(255,24,64)'; c.globalAlpha = ga0 * ph * (0.04 + beat * 0.07); c.fillRect(0, 0, W, LINE_Y); c.globalAlpha = ga0;
   const vig = kit && kit.bake('bossvig', W / 2, H / 2, b => {
     const g = b.createRadialGradient(0, 0, 90, 0, 0, 330); g.addColorStop(0, 'rgba(255,30,70,0)'); g.addColorStop(0.6, 'rgba(255,30,70,.10)'); g.addColorStop(1, 'rgba(255,30,70,.42)');
     b.fillStyle = g; b.fillRect(-W / 4, -H / 4, W / 2, H / 2);
@@ -382,7 +386,7 @@ export function drawBossPhase(c, kit, t, ph, pulse, flash, reduce, low) {
   c.restore();
 }
 export function createBgFx() {
-  const bg = { weather: makeWeather(), banks: makeBanks(), wind: makeWind(), b8: makeB8(), b9: makeB9(), b10: makeB10(), flare: 0, dashK: 0, goT: -9, goX: W / 2, nextBolt: 3, boltT: -9, boltX: 300, dbl: false, r: rnd(77) };
+  const bg = { weather: makeWeather(), banks: makeBanks(), wind: makeWind(), b8: makeB8(), b9: makeB9(), b10: makeB10(), b11: makeB11(), flare: 0, dashK: 0, goT: -9, goX: W / 2, nextBolt: 3, boltT: -9, boltX: 300, dbl: false, r: rnd(77) };
   // o: { kit, skin, stage, boss, th, t, reduce, low, kick (seconds since the last kill) }
   bg.headKill = (t, x, y) => { headKill(bg.b8, t, x, y); scare(bg.b10, bg.b8.skin, t, x, y); };   // batch 10: the world's creature scatters from a dead head
   bg.clear = (t, skin, x, y) => { clearFlourish(bg.b10, skin, t, x, y); if (skin === 'sleepy') bg.b8.shoot.next = t; };   // batch 10: a flourish per world on a stage clear
@@ -401,7 +405,8 @@ export function createBgFx() {
     if (!o.reduce) drawNight(c, b8, t, skyGrade(o.stage).k, boss ? 0.6 : 1, o.low);
     if (!o.reduce) { drawFlyers(c, bg.b9, o.skin, th, t); drawLamps(c, kit, bg.b9, o.skin, th, o.gt, o.low); drawLamps(c, kit, bg.b9, o.skin, th, t - bg.b10.lampT, o.low); drawScatter(c, bg.b10, t, th, o.low); drawClear(c, bg.b10, t, th, o.low); }   // 03-backgrounds b9: sky creature, stage-intro lamps
     if (!o.reduce) drawMist(c, kit, o.skin, bg.banks, t, wd.wx, boss, o.low, o.snakes ? readHeads(b8, o.snakes) : null);
-    if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26, wd.wx, wd.wv);
+    if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26, wd.wx, wd.wv, pulse);
+    if (!o.reduce) { drawTwinkle(c, kit, bg.b11, skyGrade(o.stage).k, t, pulse, o.low); drawLayer2(c, kit, weather11For(o.skin), bg.b11, t, pulse, wd.wx, wd.wv, o.low); drawFinale(c, kit, bg.b11, o.stage, boss, t, pulse, o.low); }   // batch 11
     if (!o.reduce) drawGust(c, wd, t, o.low);
     if (!o.reduce) { drawSquall(c, b8, t, o.low); drawPetalStorm(c, b8, t, th, o.low); if (boss) drawBossLights(c, kit, b8, t, pulse, o.phase || 0, o.snakes, o.low); }
     if (boss && !o.reduce && !o.noFlash) lightning(c, bg, t, o.phase || 0);

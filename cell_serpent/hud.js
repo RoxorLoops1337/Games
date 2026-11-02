@@ -5,6 +5,7 @@ import { landBounce } from './hitjuice.js';
 import { paintPauseGlyph, paintStatsGlyph } from './glyphs_ui.js';
 import { W, H, WEAPONS, uv, isBossStage, virusName, GOLD_TIME } from './sim.js';
 import { heartbeat } from './feel6.js';
+import { createTileMemo, createBuffChips, levelSparkle } from './hud_b11.js';
 
 const TAU = Math.PI * 2;
 const WMAX = Object.fromEntries(WEAPONS.map(w => [w.id, w.max]));
@@ -36,8 +37,10 @@ export function safeUnits(L) {
   return { t: Math.min(140, Math.max(0, c.t * dpr - L.oy) / L.s), b: Math.min(140, Math.max(0, c.b * dpr - L.oy) / L.s) };
 }
 // pause and stats round buttons, top right; t is the top inset in game units (main.js hit test uses this too)
-export function hudZone(gp, t = 0) {
-  if (gp.x > W - 76) { if (gp.y < t + 76) return 'pause'; if (gp.y < t + 150) return 'stats'; }
+// u is the CSS pixels per game unit (0 = unknown): the zones grow so the pause button is at least 44 CSS px square on a phone (34-phone-run)
+export function hudZone(gp, t = 0, u = 0) {
+  const m = u > 0 ? Math.min(160, 45 / u) : 0, pe = Math.max(76, 40 + m / 2, m + 1), se = Math.max(150, pe + m);
+  if (gp.x > W - Math.max(76, m)) { if (gp.y < t + pe) return 'pause'; if (gp.y < t + se) return 'stats'; }
   return '';
 }
 // 06-hud b10: skill tile layout. Tiles are about 10 percent bigger up to 4 skills, and a 9 skill row squeezes to
@@ -395,6 +398,17 @@ export function createHud(env) {
     if (!reduce() && age < 0.4) sparkleAt(cx + (age * 40 - 20) % 60 - 30, py - 20, 8 * (1 - age / 0.4) + 3);
   }
 
+  // 06-hud b11: the tile disc is memoised on (colour, radius, contrast): no key string per tile per frame
+  let TMO = null, BCH = null;
+  const tileMemo = () => TMO || (TMO = createTileMemo(kit && kit.bake, (c, col, r, hc) => {   // dark glass disc, a colour wash lit from the top, a gloss arc and a thin coloured rim
+        c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = hc ? 'rgba(6,4,24,.97)' : 'rgba(14,9,48,.78)'; c.fill();
+        const rg = c.createRadialGradient(0, -r * 0.5, 2, 0, 0, r); rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)');
+        c.globalAlpha = 0.5; c.fillStyle = rg; c.beginPath(); c.arc(0, 0, r - 1, 0, TAU); c.fill(); c.globalAlpha = 1;
+        c.beginPath(); c.arc(0, -r * 0.2, r * 0.78, Math.PI * 1.12, Math.PI * 1.88); c.strokeStyle = 'rgba(255,255,255,.3)'; c.lineWidth = 3; c.lineCap = 'round'; c.stroke();
+        c.beginPath(); c.arc(0, 0, r, 0, TAU); c.strokeStyle = hc ? '#ffffff' : col; c.globalAlpha = hc ? 1 : 0.7; c.lineWidth = hc ? 2.5 : 1.5; c.stroke();
+  }));
+  const HB = () => ({ ctx, text, blit, kit, S, glass, rr, reduce, fz, star, W, H });
+
   function skills(g) {
     let nSk = 0; for (const id in g.weap) nSk++;
     const LY = skillLayout(nSk), r = LY.r, pitch = LY.pitch, cy = H - 60 - T.ins.b, hc = hcOn() ? 1 : 0;
@@ -415,13 +429,7 @@ export function createHud(env) {
       const ll = T.lvLast[id]; if (w.lv > (ll === undefined ? (S.t - T.t0 > 1 ? 0 : w.lv) : ll)) { T.lvAt[id] = S.t; if (!ll && S.t - T.t0 > 1) T.newAt[id] = S.t; } T.lvLast[id] = w.lv;
       const lk = Math.max(0, 1 - (S.t - (T.lvAt[id] === undefined ? -9 : T.lvAt[id])) / 0.7), lsc = lk > 0 && !reduce() ? 1 + 0.32 * Math.sin(lk * Math.PI) * lk : 1;
       ctx.save(); if (lsc !== 1) { ctx.translate(x, cy); ctx.scale(lsc, lsc); ctx.translate(-x, -cy); }
-      const tb = kit && kit.bake ? kit.bake('tile06|' + col + '|' + r + '|' + hc, r * 2 + 8, r * 2 + 8, c => {   // dark glass disc, a colour wash lit from the top, a gloss arc and a thin coloured rim
-        c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = hc ? 'rgba(6,4,24,.97)' : 'rgba(14,9,48,.78)'; c.fill();
-        const rg = c.createRadialGradient(0, -r * 0.5, 2, 0, 0, r); rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)');
-        c.globalAlpha = 0.5; c.fillStyle = rg; c.beginPath(); c.arc(0, 0, r - 1, 0, TAU); c.fill(); c.globalAlpha = 1;
-        c.beginPath(); c.arc(0, -r * 0.2, r * 0.78, Math.PI * 1.12, Math.PI * 1.88); c.strokeStyle = 'rgba(255,255,255,.3)'; c.lineWidth = 3; c.lineCap = 'round'; c.stroke();
-        c.beginPath(); c.arc(0, 0, r, 0, TAU); c.strokeStyle = hc ? '#ffffff' : col; c.globalAlpha = hc ? 1 : 0.7; c.lineWidth = hc ? 2.5 : 1.5; c.stroke();
-      }) : null;
+      const tb = tileMemo().get(col, r, hc);
       if (tb) ctx.drawImage(tb.c, x - r - 4, cy - r - 4, r * 2 + 8, r * 2 + 8);
       else { ctx.beginPath(); ctx.arc(x, cy, r, 0, TAU); ctx.fillStyle = 'rgba(14,9,48,.62)'; ctx.fill();
         ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, cy, r - 2, 0, TAU); ctx.fill(); ctx.restore(); }
@@ -459,6 +467,7 @@ export function createHud(env) {
         if (bb) ctx.drawImage(bb.c, bx - (bw2 + 8) / 2, by - 18, bw2 + 8, 36);
         text(maxed ? 'MAX' : w.lv + '', bx, by + 1, maxed ? 18 : 21, maxed ? '#4a3600' : '#ffffff', maxed ? '#fff3a0' : '#0b1020');
       }
+      if (lk > 0 && !reduce()) levelSparkle(HB(), x, cy, r, col, lk);
       if (lk > 0 && !reduce()) { ctx.save(); ctx.globalAlpha = lk * 0.9; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3 * lk + 1; ctx.beginPath(); ctx.arc(x, cy, r + 4 + 24 * (1 - lk), 0, TAU); ctx.stroke(); ctx.restore(); }
       const PW = pw * (max - 1) + 14, lvc = Math.min(w.lv, max), pb = kit && kit.bake ? kit.bake('pips07|' + lvc + '|' + max, PW, 12, c => {   // one baked row per level: lit pips white (gold when maxed), empty ones faint
         c.translate(-((max - 1) * pw) / 2, 0);
@@ -485,7 +494,7 @@ export function createHud(env) {
     if (v < T.bossV - 0.0005) T.bossHitAt = S.t;
     T.bossV += (v - T.bossV) * 0.25;
     T.bossGhost = Math.max(T.bossV, T.bossGhost - 0.004);   // pale chunk that lingers where the last hit took the bar from
-    const x = 26, w = 574, y = 128, h = 16, hit = Math.max(0, 1 - (S.t - T.bossHitAt) / 0.25), low = v > 0 && v < 0.25, lp = low && !reduce() ? 0.5 + 0.5 * Math.sin(S.t * 9) : 0;
+    const x = 26, w = 508, y = 128, h = 18, hit = Math.max(0, 1 - (S.t - T.bossHitAt) / 0.25), low = v > 0 && v < 0.25, lp = low && !reduce() ? 0.5 + 0.5 * Math.sin(S.t * 9) : 0;
     glass(x - 4, y - 4, w + 8, h + 8, (h + 8) / 2, low ? `rgba(255,${70 + Math.round(lp * 60)},${90 + Math.round(lp * 40)},.95)` : 'rgba(255,90,130,.75)', 'rgba(50,6,26,.7)');
     ctx.save(); rr(x, y, w, h, h / 2); ctx.clip();
     const fw = Math.max(h, w * T.bossV), gr = ctx.createLinearGradient(x, 0, x + w, 0); gr.addColorStop(0, '#ff3d6e'); gr.addColorStop(1, '#ffb347');
@@ -494,10 +503,13 @@ export function createHud(env) {
     ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(x, y, v > 0 ? fw : 0, h * 0.4);
     if (hit > 0) { ctx.fillStyle = `rgba(255,255,255,${0.55 * hit})`; ctx.fillRect(x, y, fw, h); }
     if (low) { ctx.fillStyle = `rgba(255,255,255,${0.18 * lp})`; ctx.fillRect(x, y, fw, h); }
-    ctx.fillStyle = 'rgba(40,4,20,.5)'; for (let i = 1; i < 4; i++) ctx.fillRect(x + (w * i) / 4 - 1, y, 2, h);   // quarter marks
     if (v > 0.02) { ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(x + fw - 2, y, 2, h); }   // bright leading edge
     ctx.restore();
-    text('SERPENT ' + Math.ceil(T.bossV * 100) + '%', x + w / 2, y + h / 2 + 1, 16, low ? '#fff3a0' : '#ffffff', '#4a0a24');
+    // b11: cleaner plate: the name sits in the bar, the percent gets its own pill at the right end (no ticks, no crowded centred text)
+    text('SERPENT', x + 14, y + h / 2 + 1, 16, '#ffffff', '#4a0a24', 'left');
+    const px = x + w + 10, pw = 92;
+    glass(px, y - 4, pw, h + 8, (h + 8) / 2, low ? `rgba(255,${100 + Math.round(lp * 60)},110,.95)` : 'rgba(255,90,130,.75)', 'rgba(50,6,26,.7)');
+    text(Math.ceil(T.bossV * 100) + '%', px + pw / 2, y + h / 2 + 1, 18, low ? '#fff3a0' : '#ffffff', '#4a0a24');
   }
 
   // gold cell countdown: the soonest-to-fade live gold cell, in seconds, with a draining bar
@@ -609,11 +621,13 @@ export function createHud(env) {
     const y = 183 + T.ins.t + (isBossStage(g.stage) ? BOSS_DY : 0) + 24, sc = pop('combo', g.combo), left = Math.max(0, Math.min(1, 1 - (g.t - g.lastKill) / 2.2));
     const col = g.combo >= 20 ? '#ff7ad9' : g.combo >= 10 ? '#ff9a4a' : '#ffe14a', n = g.combo >= 20 ? 3 : g.combo >= 10 ? 2 : 1;
     ctx.save(); ctx.globalAlpha = left < 0.25 ? 0.4 + left * 2.4 : 1;
-    scaled(W / 2, y, sc, () => {
+    const hp = reduce() ? 0 : Math.max(0, 1 - (S.t - (S.hitPulse || -9)) / 0.16);   // 04-hit-juice b11: every landed hit makes the plate tick and the timer flash
+    scaled(W / 2, y, sc * (1 + 0.045 * hp), () => {
       glass(-112, -26, 224, 52, 26, col + 'aa', 'rgba(14,9,48,.5)');
       text('COMBO x' + g.combo, 0, -4, 24 + Math.min(10, g.combo * 0.3), col, '#0b1020');
       ctx.fillStyle = 'rgba(255,255,255,.18)'; rr(-84, 14, 168, 7, 3.5); ctx.fill();
       ctx.fillStyle = left < 0.3 && !reduce() && Math.sin(S.t * 24) > 0 ? '#ff6a7a' : col; rr(-84, 14, Math.max(5, 168 * left), 7, 3.5); ctx.fill();   // b9: a thicker timer that flashes red when the combo is about to drop
+      if (hp > 0) { ctx.fillStyle = `rgba(255,255,255,${0.75 * hp})`; rr(-84, 14, Math.max(5, 168 * left), 7, 3.5); ctx.fill(); glow(-84 + Math.max(5, 168 * left), 17.5, 16 + 10 * hp, '#ffffff', 0.55 * hp); }
       const tn = comboTier(g.combo);
       if (tn) {   // 06-hud b10: a small tier tag riding the top rim of the plate (NICE, GROOVY, SUPER, MEGA); it hops when the tier changes
         const tk = pop('ctier', g.combo >= 40 ? 4 : g.combo >= 20 ? 3 : g.combo >= 10 ? 2 : 1), tw = tn.length * 11 + 26;
@@ -651,8 +665,7 @@ export function createHud(env) {
     groove(g); beatStreak(g); skills(g);
     const p = g.p, b = T.ins.b;
     S.chipB = b;   // hitjuice: where the power-up icons fly to
-    if (p.shield > 0) { const k = landBounce(S, 'shield'); ctx.save(); ctx.translate(W - 100, H - 113 - b); ctx.scale(k, k); ctx.translate(-(W - 100), -(H - 113 - b)); glass(W - 180, H - 130 - b, 160, 34, 17, 'rgba(127,232,255,.7)'); text('SHIELD ' + p.shield.toFixed(0), W - 100, H - 112 - b, fz(18), '#7fe8ff'); ctx.restore(); }
-    if (p.rage > 0) { const k = landBounce(S, 'rage'); ctx.save(); ctx.translate(W - 100, H - 153 - b); ctx.scale(k, k); ctx.translate(-(W - 100), -(H - 153 - b)); glass(W - 180, H - 170 - b, 160, 34, 17, 'rgba(255,210,74,.7)'); text('RAGE ' + p.rage.toFixed(0), W - 100, H - 152 - b, fz(18), '#ffd24a'); ctx.restore(); }
+    (BCH || (BCH = createBuffChips(HB()))).draw(g, b, landBounce);   // b11: Shield, Rage and Snack chips with a draining timer bar
   }
   return { press: id => { T.pressAt[id] = S.t; }, reward: (e, g) => reward8start(e, g), draw, encore, combo, dy, top: () => T.ins.t };
 }

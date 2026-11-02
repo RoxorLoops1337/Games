@@ -52,11 +52,11 @@ if (chromium) {
         assert.equal(await p.evaluate(() => document.getElementById('settings').getAttribute('aria-modal')), 'true', `${w}: settings is modal`);
         assert.ok(await p.evaluate(() => !!document.getElementById('rfPrev')), `${w}: flash preview exists`);
         // the trap: Shift+Tab from the first control wraps to CLOSE, Tab from CLOSE wraps to the first control
-        await p.evaluate(() => document.querySelector('#settings .tgl').focus());
+        await p.evaluate(() => document.getElementById('setFind11').focus());
         await p.keyboard.press('Shift+Tab');
         assert.equal(await p.evaluate(() => document.activeElement.id), 'setClose', `${w}: shift+tab wraps to CLOSE`);
         await p.keyboard.press('Tab');
-        assert.equal(await p.evaluate(() => document.activeElement.classList.contains('tgl')), true, `${w}: tab wraps to the first control`);
+        assert.equal(await p.evaluate(() => document.activeElement.id === 'setFind11'), true, `${w}: tab wraps to the first control (the search box)`);
         // focus that escaped the dialog is pulled back in
         await p.evaluate(() => document.activeElement.blur());
         await p.keyboard.press('Tab');

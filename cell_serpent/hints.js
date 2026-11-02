@@ -51,6 +51,13 @@ export function drawHints(ctx, g, S, h) {
       ctx.save(); ctx.globalAlpha = a; h.text('CLEAR THE CHAIN', 360, y - 12, 32, '#fff', '#0b1020'); h.text(left + ' CELLS LEFT, THEN POP THE FACE', 360, y + 22, 21, '#ffe36b', '#0b1020'); ctx.restore();
     }
   }
+  // 6. stage 2 teaches the upgrade cell in words, once: a pill until the first pick (or 12 s)
+  if (g.stage === 2 && g.level === 1 && g.upgradeLeft > 0 && g.phase === 'play' && g.t > 1.5 && g.t < 12) {
+    const a = Math.min(1, (g.t - 1.5) * 2) * Math.min(1, (12 - g.t) / 1.5), y = 232 + Math.sin(S.t * 3) * 3;
+    ctx.save(); ctx.globalAlpha = a * 0.9; ctx.fillStyle = 'rgba(16,10,50,.72)'; ctx.strokeStyle = '#ffe14a'; ctx.lineWidth = 4;
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(120, y - 40, 480, 80, 40); else ctx.rect(120, y - 40, 480, 80); ctx.fill(); ctx.stroke(); ctx.restore();
+    ctx.save(); ctx.globalAlpha = a; h.text('YELLOW CELLS = UPGRADES', 360, y - 12, 30, '#fff', '#0b1020'); h.text('POP ONE TO PICK A POWER-UP', 360, y + 22, 21, '#ffe36b', '#0b1020'); ctx.restore();
+  }
   // 4. the face pops when alone: a short hint, 4 s at most
   const sn = g.snakes[0];
   if (sn && sn.segs.length <= 3 && sn.segs[0].shield && st.alone < 4) { st.alone += dt; const hd = sn.segs[0]; h.glow(hd.x, hd.y, hd.r * 3, '#bfe9ff', 0.5); h.text('ALONE = POP!', hd.x, hd.y + hd.r * 2.2, 26, '#fff', '#0b1020'); }

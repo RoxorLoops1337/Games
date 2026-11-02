@@ -2,6 +2,7 @@
 // Rules stay tiny and live here; the save fields (save.presets, pets[id].joy) are sanitized in sim.js.
 import { LOADOUT_SIZE, PET_JOY_MAX, WEAPONS } from './sim.js';
 import { announce } from './access.js';
+import { skillPower } from './skill_sheet.js';
 // a rebuild drops keyboard focus: put it back on the same build (the SAVE button just turned into SAVED and is disabled)
 const refocus = (host, i, cls) => setTimeout(() => { const b = host.querySelectorAll('.prcell')[i]; const t = b && b.querySelector('.' + cls + ':not([disabled])'); if (t && (!document.activeElement || document.activeElement === document.body)) t.focus({ preventScroll: true }); }, 30);
 const wn = id => (WEAPONS.find(w => w.id === id) || { name: id }).name;
@@ -21,6 +22,12 @@ export function suggestBuild(save) {
 let undoLoadout = null, armed = -1, armT = 0;
 const sameSet = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
 
+// round 11: rough power of a build (sum of skill power at the owned levels) and how it compares with what is equipped
+export const buildPower = (save, ids) => ids.reduce((a, id) => a + (save.skills[id] ? skillPower(id, save.skills[id].lv) : 0), 0);
+export function buildDelta(save, ids) {
+  const cur = buildPower(save, save.loadout), p = buildPower(save, ids); if (cur <= 0) return 0;
+  return Math.round((p / cur - 1) * 100);
+}
 // a preset can be loaded when all of it is still owned
 export function presetUsable(save, ids) { return ids.length > 0 && ids.every(id => save.skills[id] && save.skills[id].lv > 0); }
 export function savePreset(save, i) { if (i < 0 || i > 2) return false; if (!save.presets) save.presets = [[], [], []]; save.presets[i] = save.loadout.slice(0, LOADOUT_SIZE); return true; }
@@ -48,6 +55,7 @@ export function renderPresets(host, c) {
     const ids = s.presets[i] || [], has = ids.length > 0, ok = has && presetUsable(s, ids), on = has && sameSet(ids, s.loadout);
     const cell = el('div', 'prcell' + (has ? ' has' : '') + (on ? ' on' : '') + (has && !ok ? ' bad' : ''));
     const nm = buildName(s, i), main = el('button', 'prmain', `<b>${nm.replace(/&/g, '&amp;')}</b>` + (has ? `<span class="prics">${ids.map(id => `<i>${icon(id)}</i>`).join('')}</span>` : '<span class="prem">empty</span>'));
+    if (has && ok) { const d = on ? 0 : buildDelta(s, ids); main.insertAdjacentHTML('beforeend', `<small class="prpw ${on ? 'eq' : d > 0 ? 'up' : d < 0 ? 'dn' : ''}">${on ? 'EQUIPPED' : d > 0 ? '▲ ' + (d > 99 ? '99+' : d) + '%' : d < 0 ? '▼ ' + -d + '%' : 'SAME'}</small>`); }
     main.setAttribute('aria-label', has ? `${on ? 'Build ' + nm + ' is equipped' : ok ? 'Load build ' + nm : 'Build ' + nm + ' needs a skill you no longer own'}: ${ids.map(wn).join(', ')}` : `Build ${nm} is empty`);
     if (has) main.setAttribute('aria-pressed', on ? 'true' : 'false'); cell.setAttribute('role', 'group'); cell.setAttribute('aria-label', 'Build ' + nm);
     main.disabled = !has;

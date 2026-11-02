@@ -4,6 +4,7 @@ import { pointAt, pointInto, W } from './sim.js';
 const PT1 = { x: 0, y: 0 }, PT2 = { x: 0, y: 0 };   // perf r10: scratch points for the dash telegraph (no object per path lookup per frame)
 import { drawMark9, isNewKind, CHIP_COL } from './hit_juice9.js';
 import { CRIT_FEEL, FINISH_FEEL, CRIT_GAP, CLASS_CAP, classOf, sparkCol, CASCADE_DUR, drawCascade } from './hit_juice10.js';
+import { drawMark11, isKind11, numMotion } from './hit_fx_b11.js';
 import { createMoments, rungOf, drawSpeciesDeath, drawMuzzle, DEATH_DUR } from './hit_juice8.js';
 const TAU = Math.PI * 2;
 export const UP_X = 42, UP_Y = 40, CHIP_X = 620;   // CHIP_X: the RAGE and SHIELD chips (hud.js) sit at the right edge
@@ -13,7 +14,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
   const powers = [], chipfly = [], orbs = [], smoke = [], trail = [], flashes = [], marks = [];
   const lastKill = { x: 0, y: 0, t: -9, n: 0 };   // for the chain links
   const lastHit = { x: 0, y: 0, t: -9, src: '' };   // the latest hit, so a kill can pop in the style of the weapon that landed it
-  let cls = '', skinNow = '', critFeelT = -9;   // round 10: the mark class of the event being handled, the skin of the snake it hit
+  let cls = '', skinNow = '', critFeelT = -9, finishFeelT = -9;   // round 10: the mark class of the event being handled, the skin of the snake it hit
   const casc = { t: 9, col: '#ffe14a', seed: 0 };   // the full chain clear cascade
   const lastSrc = {};   // per weapon: time of its last impact mark, so a busy fight does not drown in them
   const CHAIN_COL = ['#ffffff', '#9dff6d', '#6fe3ff', '#ffd84d', '#ff9ad6', '#ff6a3d'];
@@ -64,7 +65,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
     cls = e.t === 'kill' ? 'pop' : e.t === 'hit' ? 'hit' : '';
     if (e.t === 'clear') { casc.t = 0; casc.seed = (S.t * 13) | 0; casc.col = e.boss ? '#ff9ad6' : '#ffe14a'; }
     switch (e.t) {
-      case 'hit': if (e.crit) { critN = S.t - critT < 1.6 ? critN + 1 : 1; critT = S.t; } lastHit.x = e.x; lastHit.y = e.y; lastHit.t = S.t; lastHit.src = e.src || ''; skinNow = skinOf(e, g); impact(e); if (e.crit) critFeel(e); break;
+      case 'hit': if (e.crit) { critN = S.t - critT < 1.6 ? critN + 1 : 1; critT = S.t; } lastHit.x = e.x; lastHit.y = e.y; lastHit.t = S.t; lastHit.src = e.src || ''; S.hitPulse = S.t; skinNow = skinOf(e, g); impact(e); if (e.s && e.s.kind === 'armor' && !(e.s.hp <= 0)) { const q = P('clank', e.x, e.y, 30 * (e.crit ? 1.4 : 1), 0.26, '#fff', Math.random() * 3); q.seed = Math.random() * 6; } if (e.crit) critFeel(e); break;
       case 'kill': {
         // a white flash disc and a starburst of rays where the cell was; heads get a bigger one
         const R = (e.r || 26) * (e.head ? 2.6 : 1.7);
@@ -79,6 +80,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
           if (n >= 2) { const l = M('link', lastKill.x, lastKill.y, 0, 0.3); l.x1 = e.x; l.y1 = e.y; l.col = col; l.w = 3 + Math.min(n, 12) * 0.4;
             const q = M('note', e.x + 20, e.y - 6, 11 + Math.min(n, 14), 0.55); q.col = col; q.vy = -70 - Math.min(n, 14) * 6; q.vx = (n & 1 ? 1 : -1) * 18; }
           lastKill.x = e.x; lastKill.y = e.y; lastKill.t = S.t; lastKill.n = n; }
+        if (e.kind === 'armor') { const q = M('plates', e.x, e.y, (e.r || 26) * 1.2, 0.75); q.seed = Math.random() * 6; }   // round 11: the armor falls apart in steel plates
         if (e.kind === 'upgrade') {   // the yellow cell pops hard: gold rays, a fat ring and a UP badge that rises
           mark({ k: 'rays', x: e.x, y: e.y, r: 170, n: 12, rot: 0.2, t: 0, dur: 0.5, gold: 1 });
           if (S.floats.length < 56) S.floats.push({ x: e.x, y: e.y - 36, str: 'UPGRADE!', acc: 0, key: 'badge', col: '#ffe14a', size: 26, vy: -46, life: 1.0, max: 1.0, pop: 1 });
@@ -95,9 +97,11 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         if (powers.length < 4 && sprite) powers.push({ x0: e.x, y0: e.y, kind: e.kind, p: g.p, t: 0, dur: 0.42, lastTrail: 0 });
         break;
       case 'chest': chestJuice(e); break;
+      case 'goldpop': M('goldburst', e.x, e.y, 54, 0.85, true); break;   // round 11: a fan of spinning coins
       case 'boom': {
         const x = e.x, y = e.y, R = e.r || 150;
         bombJuice(x, y, R);
+        { const q = M('blast', x, y, R * 1.1, 0.5, true); q.seed = Math.random() * 6; if (feel) feel(x, y, 0.028, 0.7, 0.1); }   // round 11: a cracked scorch ring and a small thud
         ring(x, y, R * 1.15, '#fff2c8', 0.35);
         ring(x, y, R * 0.8, '#ff9a3d', 0.55);
         shaped(x, y, 12, 'c', ['#3a2a2a', '#6b4a3a', '#ff9a3d', '#ffd24a'], 520, 1.0, 9, 900);
@@ -141,6 +145,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
   // the finishing blow: the snake head fell, so a badge in the silhouette and colours of the weapon that landed it pops up
   function finish(src, e) {
     const m = M('finish', Math.max(120, Math.min(600, e.x)), Math.max(190, e.y - 70), 36, 1.25, true); m.wk = CRIT_COL[src] ? src : 'capsule'; m.rot = (Math.random() - 0.5) * 0.16;
+    finishFeelT = S.t;
     if (feel) { const f = FINISH_FEEL[m.wk] || FINISH_FEEL.capsule; feel(e.x, e.y, f[0], f[1], f[2]); }
     M('rays', e.x, e.y, 230, 0.5, true).gold = 1;
     const ring2 = M('ring', e.x, e.y, 210, 0.5, true); ring2.col = CRIT_COL[m.wk][0];
@@ -165,7 +170,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
   function skinOf(e, g) { if (!g || !g.snakes) return g && g.skin || ''; for (let i = 0; i < g.snakes.length; i++) { const sn = g.snakes[i]; if (e.s && sn.segs && sn.segs.indexOf(e.s) >= 0) return sn.skin || g.skin || ''; } return g.skin || ''; }
   // a crit lands with the weapon's own weight: a short slow-mo and a tiny zoom around the cell
   function critFeel(e) {
-    if (!feel || S.t - critFeelT < CRIT_GAP) return;
+    if (!feel || S.t - critFeelT < CRIT_GAP || S.t - finishFeelT < 0.55) return;   // r11: a light crit never cuts a finishing slow-mo short
     const f = CRIT_FEEL[e.src || 'capsule'] || CRIT_FEEL.capsule; critFeelT = S.t;
     feel(e.x, e.y, f[0] * (1 + 0.15 * Math.min(3, critTier())), f[1], f[2]);
   }
@@ -237,6 +242,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
       const k = m.t / m.dur, a = 1 - k;
       ctx.save(); ctx.globalAlpha = a; ctx.translate(m.x, m.y);
       if (isNewKind(m.k)) { drawMark9(ctx, m, k, a, glow); ctx.restore(); continue; }
+      if (isKind11(m.k)) { drawMark11(ctx, m, k, a, glow); ctx.restore(); continue; }
       switch (m.k) {
         case 'flash': glow(0, 0, m.r * (0.7 + k * 0.6), '#fff', 0.9 * a); ctx.fillStyle = '#fff'; ctx.globalAlpha = a * a; ctx.beginPath(); ctx.arc(0, 0, m.r * 0.35 * (1 - k * 0.5), 0, TAU); ctx.fill(); break;
         case 'link': { ctx.translate(-m.x, -m.y); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.strokeStyle = m.col; ctx.lineWidth = m.w * (0.5 + a); ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(m.x1, m.y1); ctx.stroke(); ctx.globalAlpha = a * a; ctx.strokeStyle = '#fff'; ctx.lineWidth = m.w * 0.35; ctx.stroke(); break; }
@@ -373,6 +379,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
   }
 
   // styled floating numbers: crit = starburst badge and tilt, heavy hits = weapon coloured outline, chain = pill, badge = upgrade ribbon
+  const NUMM = { dx: 0, dy: 0, rot: 0, sc: 1 };
   function float(f) {
     if (!text) return false;
     const k = f.pop > 0 ? 1 + 0.3 * f.pop : 1;
@@ -405,7 +412,12 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
       const sz = Math.round(f.size * k / 4) * 4;
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(-0.06); text(f.str, 0, 0, sz, '#fff3a0', '#8a5a00'); ctx.restore(); return true;
     }
-    if (f.key && f.size >= 20) { text(f.str, f.x, f.y, Math.round(f.size * k / 4) * 4, f.col, DARK[f.src] || '#10131c'); return true; }
+    if (f.key && f.size >= 20) {
+      if (calm()) { text(f.str, f.x, f.y, Math.round(f.size * k / 4) * 4, f.col, DARK[f.src] || '#10131c'); return true; }
+      const mo = numMotion(f.src, f.max - f.life, S.t, NUMM);   // round 11: the number moves like the weapon that hit
+      ctx.save(); ctx.translate(f.x + mo.dx, f.y + mo.dy); ctx.rotate(mo.rot); if (mo.sc !== 1) ctx.scale(mo.sc, mo.sc);
+      text(f.str, 0, 0, Math.round(f.size * k / 4) * 4, f.col, DARK[f.src] || '#10131c'); ctx.restore(); return true;
+    }
     return false;
   }
 

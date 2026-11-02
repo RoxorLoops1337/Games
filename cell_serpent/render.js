@@ -2,9 +2,11 @@
 // where they exist and draws procedural stand-ins otherwise.
 import { SNACK_LIFE } from './sim.js';
 import { LATE_CUE } from './trait_ui.js';
-import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt, pointInto } from './sim.js';
+import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt, pointInto, RING_SCALE } from './sim.js';
 import { INK, mix } from './art_draw.js';
 import { deathMotion, crownMotion } from './head_death.js';
+import { SIB_TIME } from './sibling_b11.js';
+import { armorWearLevel } from './armor_b11.js';
 import { createHud, hudZone } from './hud.js';
 import { createHitJuice } from './hitjuice.js';
 import { createDigitAtlas } from './digits.js';
@@ -19,7 +21,9 @@ import { bakeHat } from './hats.js';
 import { createCheer, HAT_FX, hatPose, EMOTE, heart, drawEmote } from './cheer.js';
 import { cheerFrame } from './duo_cheer.js';
 import { drawDuoLife } from './duo_idle.js';
+import { glanceEdge } from './audio_b11b.js';
 import { createReact, reactEvent, barkDue, barkU, barkDraw, koPose, starAt, revivePose, glance, pouncePose, clawDraw } from './duo_react10.js';
+import { createB11, b11Event, pickPose, ringStar, weaponPose, lookUp, WEAPON_SPR, BOSS_TIER } from './duo_b11.js';
 import { newLeash, petFollow, scareEdge, tuckMood, SCARE_CALL, SCARE_COL, createDust, dustStep, dustDraw } from './duo_life9.js';
 import { createBoltLayer, boltPose, paintBolt } from './bolts_fx.js';
 
@@ -83,13 +87,40 @@ export function createRenderer(canvas, art, kit) {
     }
     return t;
   }
+  const SIZE_LADDER = [10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 40, 44, 48, 56, 64, 72, 80, 96, 112, 128];
+  function presetSize(size) {   // the nearest rung of the ladder, so every size from 20 to 26 shares a handful of strips
+    if (!(size > 10)) return 10;
+    if (size >= 128) return Math.round(size / 16) * 16;
+    let best = SIZE_LADDER[0], bd = 1e9;
+    for (let i = 0; i < SIZE_LADDER.length; i++) { const d = Math.abs(SIZE_LADDER[i] - size); if (d < bd) { bd = d; best = SIZE_LADDER[i]; } }
+    return best;
+  }
+  // numbers (damage, HP, combo, timers) are laid out from one strip per glyph, so a value never seen before bakes nothing
+  const NUMSTR = /^[0-9+x.,%s!-]+$/, ADV = new Map();
+  function advOf(ps, ch) {
+    let m = ADV.get(ps); if (!m) ADV.set(ps, m = new Map());
+    let a = m.get(ch); if (a === undefined) { ctx.font = `800 ${ps}px system-ui, -apple-system, "Segoe UI", sans-serif`; m.set(ch, a = ctx.measureText(ch).width); }
+    return a;
+  }
+  function drawNumber(str, x, y, ps, q, fill, stroke, align) {
+    if (S.numLog) S.numLog.push(str);   // tests set S.numLog to read which values were drawn (glyph strips hide the string)
+    let tw = 0; for (let i = 0; i < str.length; i++) tw += advOf(ps, str[i]);
+    let cx = align === 'left' ? x : align === 'right' ? x - tw * q : x - tw * q / 2;
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i], a = advOf(ps, ch) * q, t = textSprite(ch, ps, fill, stroke);
+      if (t.c) { const w = t.w * q, h = t.h * q; ctx.drawImage(t.c, cx + a / 2 - w / 2, y - h / 2, w, h); }
+      cx += a;
+    }
+  }
   function text(str, x, y, size, fill = '#fff', stroke = '#10131c', align = 'center') {
     if (typeof str !== 'string') str = String(str);
-    size = size >= 20 ? Math.round(size) : Math.round(size * 2) / 2;   // 17-perf: pulsing sizes share a few baked strips instead of baking one per frame
-    if (kit && kit.makeCanvas) {
-      const t = textSprite(str, size, fill, stroke);
-      if (t.c) { ctx.drawImage(t.c, align === 'left' ? x - t.pad : align === 'right' ? x - t.w + t.pad : x - t.w / 2, y - t.h / 2, t.w, t.h); return; }
+    if (kit && kit.makeCanvas) {   // 11-perf: strips are baked at preset sizes only and scaled to the exact size, so a pulsing number never bakes a canvas
+      const ps = presetSize(size), q = size / ps;
+      if (str.length > 1 && NUMSTR.test(str)) { drawNumber(str, x, y, ps, q, fill, stroke, align); return; }
+      const t = textSprite(str, ps, fill, stroke), w = t.w * q, h = t.h * q, pad = t.pad * q;
+      if (t.c) { ctx.drawImage(t.c, align === 'left' ? x - pad : align === 'right' ? x - w + pad : x - w / 2, y - h / 2, w, h); return; }
     }
+    size = size >= 20 ? Math.round(size) : Math.round(size * 2) / 2;
     ctx.font = `800 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2, size * 0.2); ctx.strokeStyle = stroke; ctx.strokeText(str, x, y);
     ctx.fillStyle = fill; ctx.fillText(str, x, y);
@@ -134,6 +165,9 @@ export function createRenderer(canvas, art, kit) {
   let FX = null;   // whole-screen feedback (screenfx.js), created after the helpers below exist
   function onEvent(e, g) {
     if (!OPT.reduceMotion) { reactEvent(R10, e, g.p.x, S.t); if (e.t === 'revive') { S.slump = null; for (const q of petState) q.hop = 1; } }   // r10: duo reactions
+    if (!OPT.reduceMotion) { const c11 = b11Event(B11, e, g, S.t);   // r11: celebrations
+      if (c11 === 'boss') { CH.force(BOSS_TIER); cheerHit = true; if (FX) FX.confetti(40); }
+      else if (c11) { for (const q of petState) q.hop = 1; if (c11 === 'weapon') addFloat(g.p.x, g.p.y - 190, 'NEW!', '#ffe14a', 26, -34); } }
     if (FX) FX.onEvent(e, g);
     if (HJ) HJ.event(e, g);
     switch (e.t) {
@@ -142,6 +176,7 @@ export function createRenderer(canvas, art, kit) {
         dmgFloat(e);
         if (e.crit) { ring(e.x, e.y, 70, '#ffe14a', 0.3); shaped(e.x, e.y, OPT.lowQuality ? 4 : 8, 's', ['#ffe14a', '#fff'], 300, 0.45, 9); }
         burst(e.x, e.y, e.crit ? 5 : 2, e.crit ? ['#ffe14a', '#fff'] : ['#fff', '#b9f3ff'], 160, 0.3, 3);
+        if (e.s && e.s.kind === 'armor' && e.s.hp > 0 && armorWearLevel(e.s.hp + e.d, e.s.max) < armorWearLevel(e.s.hp, e.s.max)) { ring(e.s.x, e.s.y, 54, '#dfe8ff', 0.3); shaped(e.s.x, e.s.y, OPT.lowQuality ? 3 : 6, 's', ['#dfe8ff', '#9fb0d4', '#fff'], 260, 0.55, 7); }   // 01-enemy-art b11: a plate chip flies off when the armour cracks
         break;
       case 'kill': {
         S.killT = S.t;
@@ -165,8 +200,9 @@ export function createRenderer(canvas, art, kit) {
         }
         if (e.carry === 'chest' && !OPT.reduceMotion) S.props.push({ k: 'chest', x: e.x, y: e.y, vx: (Math.random() - 0.5) * 80, vy: -300, rot: 0, life: 0.9, max: 0.9, size: e.r * 2.6 });
         if (e.carry === 'chest') { ring(e.x, e.y, 150, '#ffd84d', 0.5); shaped(e.x, e.y, 8, 's', ['#ffd84d', '#fff', '#ff7eb6'], 330, 0.7, 10, 200); }
+        if (e.head && g.snakes.length > 1 && !OPT.reduceMotion) S.sibT = S.t;   // 01-enemy-art b11: the surviving heads react
         if (e.head && S.bgfx && !OPT.reduceMotion) S.bgfx.headKill(S.t, e.x, e.y);   // 03-backgrounds b8: squall or petal storm
-        if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); if (kit && !OPT.reduceMotion && S.props.length < 8) S.props.push({ k: 'dazed', skin: e.skin, boss: !!e.boss, x: e.x, y: e.y, vx: 0, vy: -90, rot: 0, life: 1.5, max: 1.5, size: e.r * 3.9 }); if (e.boss && kit && !OPT.reduceMotion && S.props.length < 9) S.props.push({ k: 'crown', skin: e.skin, x: e.x, y: e.y - e.r * 0.8, vx: 0, vy: 0, rot: 0, life: 2.2, max: 2.2, size: e.r * 1.9, side: e.x < W / 2 ? 1 : -1, hit: 0 }); }   // 01-enemy-art r7: a dazed face floats up with its halo
+        if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); if (kit && !OPT.reduceMotion && S.props.length < 8) S.props.push({ k: 'dazed', skin: e.skin, boss: !!e.boss, x: e.x, y: e.y, vx: 0, vy: -90, rot: 0, life: 1.5, max: 1.5, size: e.r * 3.9 }); if (e.boss && kit && !OPT.reduceMotion && S.props.length < 9) S.props.push({ k: 'crown', skin: e.skin, x: e.x, y: e.y - e.r * 0.8, vx: 0, vy: 0, rot: 0, life: 2.2, max: 2.2, size: e.r * 1.9, side: e.x < W / 2 ? 1 : -1, hit: 0, tr: 0 }); }   // 01-enemy-art r7: a dazed face floats up with its halo
         break;
       }
       case 'boom': ring(e.x, e.y, e.r, '#ff6a3d', 0.5); ring(e.x, e.y, e.r * 0.6, '#ffd24a', 0.35); burst(e.x, e.y, 30, ['#ff6a3d', '#ffd24a', '#fff'], 420, 0.6, 7); S.trauma = Math.min(1, S.trauma + 0.55); break;
@@ -182,6 +218,9 @@ export function createRenderer(canvas, art, kit) {
       case 'metro': if (e.hit) { ring(e.x, e.y, 130, '#9bffe0', 0.55); burst(e.x, e.y, 20, ['#9bffe0', '#fff', '#ffe36b'], 400, 0.7, 5); addFloat(e.x, e.y - 40, 'ON BEAT +' + e.v, '#b8ffe8', 26, -70); } else addFloat(e.x, e.y - 24, 'off beat', '#8fb5aa', 16, -36); break;
       case 'snack': ring(e.x, e.y, 90, '#ffcf70', 0.5); burst(e.x, e.y, 10, ['#ffcf70', '#fff', '#e8b25c'], 200, 0.6, 5); addFloat(e.x, e.y - 36, 'SNACK!', '#ffe0a0', 24, -50); break;
       case 'snackget': ring(e.x, e.y, 120, '#ffe08a', 0.6); burst(e.x, e.y, 22, ['#ffcf70', '#fff', '#ffe36b'], 420, 0.8, 6); addFloat(g.p.x, g.p.y - 70, 'YUM! RAGE', '#ffe36b', 30, -70); break;
+      case 'mirror': if (e.brk) { ring(e.x, e.y, 100, '#e6f2ff', 0.45); burst(e.x, e.y, 14, ['#e6f2ff', '#fff', '#9ec8ff'], 340, 0.7, 4); addFloat(e.x, e.y - 30, 'SHATTER', '#e6f2ff', 22, -50); } else { ring(e.x, e.y, 70, '#cfe6ff', 0.3); burst(e.x - 30, e.y, 3, ['#fff', '#9ec8ff'], 220, 0.35, 3); burst(e.x + 30, e.y, 3, ['#fff', '#9ec8ff'], 220, 0.35, 3); } break;
+      case 'beatrun': ring(e.x, e.y, 110, '#9bffe0', 0.5); burst(e.x, e.y, 14, ['#9bffe0', '#fff', '#ffe36b'], 330, 0.6, 5); addFloat(e.x, e.y - 20, 'BEAT RUN', '#b8ffe8', 26, -70); break;
+      case 'btwist': { const K = { drop: [e.warn ? 'boom...' : 'BASS DROP!', '#ff9ad6'], hold: ['HOLD YOUR FIRE', '#bff3ff'], regrow: ['SECOND WIND', '#9dffc0'] }[e.k]; if (K) { addFloat(e.x, e.y - 50, K[0], K[1], e.warn ? 22 : 28, -50); if (!e.warn) ring(e.x, e.y, 130, K[1], 0.5); if (e.k === 'drop' && !e.warn) S.trauma = Math.min(1, S.trauma + 0.35); } break; }
       case 'snackgone': burst(e.x, e.y, 6, ['#c9a46a', '#fff'], 90, 0.5, 4); break;
       case 'startle': ring(e.x, e.y, 130, '#c9b6ff', 0.55); addFloat(e.x, e.y - 40, 'STARTLED!', '#d9ccff', 26, -60); S.trauma = Math.min(1, S.trauma + 0.35); break;
       case 'ringskip': ring(g.ring.cx, g.ring.cy, e.warn ? 150 : 260, e.warn ? '#ffd0a0' : '#ff9a6a', 0.55); addFloat(g.ring.cx, g.ring.cy - 120, e.warn ? 'scratch...' : 'SKIP!', '#ffb98a', e.warn ? 22 : 30, -50); if (!e.warn) S.trauma = Math.min(1, S.trauma + 0.4); break;
@@ -211,7 +250,7 @@ export function createRenderer(canvas, art, kit) {
       case 'skip': addFloat(g.p.x, g.p.y - 120, 'Beats!', '#ffd24a', 20, -50); break;
       case 'lull': ring(e.x, e.y, 160, '#b79bff', 0.6); burst(e.x, e.y, 14, ['#d9c8ff', '#fff', '#b79bff'], 220, 0.7, 5); addFloat(e.x, e.y - 40, 'Lullaby', '#d9c8ff', 22, -40); break;
       case 'phase2': S.banner = { text: 'FINAL CHORUS', sub: 'The boss picks up the pace', t: 0, dur: 1.8 }; S.trauma = Math.min(1, S.trauma + 0.7); S.flash = 0.35; S.flashCol = '#ff9a4a'; ring(g.p.x, g.p.y, 360, '#ff9a4a', 0.8); break;
-      case 'mend': ring(e.x, e.y, 46, '#6fe08a', 0.3); break;
+      case 'mend': ring(e.x, e.y, 46, '#6fe08a', 0.3); if (!OPT.reduceMotion) shaped(e.x, e.y - 6, 3, 'p', ['#86e8a2', '#e6ffee', '#6fe08a'], 90, 0.8, 8, -180); break;   // 01-enemy-art b11: little plusses drift up from a healing mender
       case 'stage': if (e.boss) S.trauma = 0.6; break;   // the title card is drawn by screenfx.js
       case 'clear': S.banner = { text: 'STAGE CLEAR', sub: '+' + e.bonus + ' Beats', t: 0, dur: 2.2, clear: true }; if (S.bgfx && !OPT.reduceMotion) S.bgfx.clear(S.t, g.skin, g.p.x, g.p.y); break;   // 03-backgrounds b10
       case 'surgewarn': S.warn = 0.7; break;
@@ -307,7 +346,7 @@ export function createRenderer(canvas, art, kit) {
       if (s.y < -r * 3 || s.y > H + r * 3) continue;   // not on screen: skip the drawing
       const ang = s.ang;
       if (i === 0) {
-        if (kit) { const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1; kit.drawHead(ctx, s.x, s.y, r * 1.14, ang, { skin: sn.skin, boss: sn.boss, t: S.t + sn.id, look: [dx / d, dy / d], flash: s.flash, sg: OPT.reduceMotion ? '' : sn.surge, slow: sn.slow, p2: sn.p2, alone: !s.shield, panic: !sn.boss && sn.surge === 'idle' && g.danger > 0.55 && sn.segs[0].y > H * 0.5 && !g.ring ? Math.min(1, (g.danger - 0.55) / 0.3) : 0, fury: sn.surge !== 'idle' ? 1 : (g.danger > 0.5 && sn.segs[0].y > H * 0.5 ? 0.6 : 0) }); }
+        if (kit) { const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1; kit.drawHead(ctx, s.x, s.y, r * 1.14, ang, { skin: sn.skin, boss: sn.boss, t: S.t + sn.id, look: [dx / d, dy / d], flash: s.flash, sg: OPT.reduceMotion ? '' : sn.surge, slow: sn.slow, p2: sn.p2, alone: !s.shield, sib: S.sibT !== undefined && S.t - S.sibT < SIB_TIME ? (S.t - S.sibT) / SIB_TIME : 0, panic: !sn.boss && sn.surge === 'idle' && g.danger > 0.55 && sn.segs[0].y > H * 0.5 && !g.ring ? Math.min(1, (g.danger - 0.55) / 0.3) : 0, fury: sn.surge !== 'idle' ? 1 : (g.danger > 0.5 && sn.segs[0].y > H * 0.5 ? 0.6 : 0) }); }
         else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
         if (s.shield) {   // the face cannot be hit until it is alone
           ctx.save(); ctx.globalAlpha = 0.5 + Math.sin(S.t * 5) * 0.15; ctx.strokeStyle = '#bfe9ff'; ctx.fillStyle = 'rgba(190,235,255,.16)'; ctx.lineWidth = 4;
@@ -322,7 +361,7 @@ export function createRenderer(canvas, art, kit) {
         ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.3, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
       }
       if (s.gold) { const live = s.goldT > 0; glow(s.x, s.y, r * (live ? 2.3 : 1.5), '#ffd24a', live ? 0.55 + Math.sin(S.t * 9 + i) * 0.2 : 0.15); if (live) { ctx.save(); ctx.strokeStyle = s.goldT > 2.5 ? '#fff1a8' : (Math.sin(S.t * 22) > 0 ? '#ff9a6a' : '#fff1a8'); ctx.lineWidth = s.goldT > 2.5 ? 5 : 5 + (2.5 - s.goldT) * 1.2; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.18, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0, s.goldT / 9)); ctx.stroke(); ctx.restore(); } }
-      if (s.ward || s.warded || s.lull || s.drum || s.choir || s.quartet || s.bell || s.frost || s.metro || s.pillow || s.snack) drawCellFlags(ctx, s, r, ft, i, glow);
+      if (s.ward || s.warded || s.lull || s.drum || s.choir || s.quartet || s.bell || s.frost || s.metro || s.pillow || s.snack || s.mirror) drawCellFlags(ctx, s, r, ft, i, glow);
       if (s.kind === 'bomb') { const pulse = 0.5 + Math.sin(S.t * 9 + i) * 0.5; glow(s.x, s.y, r * 1.8, '#ff3b5c', 0.15 + pulse * 0.25); }
       if (s.kind === 'mender') glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12);
       if (s.kind === 'upgrade') glow(s.x, s.y, r * 2.1, '#ffd24a', 0.45 + Math.sin(S.t * 6 + i) * 0.15);
@@ -339,6 +378,7 @@ export function createRenderer(canvas, art, kit) {
           if (s.flash > 0) flashBlit(spr, s.x, s.y, size, upright ? 0 : ang, s.flash * 5);
         }
         if (sn.slow > 0) blit(kit.SPR.frost(), s.x, s.y, r * 2.7, 0, false, Math.min(1, sn.slow * 2));
+        if (s.kind === 'armor') { const wl = armorWearLevel(s.hp, s.max); if (wl) blit(kit.SPR.armorWear(wl), s.x, s.y, size, 0); }   // 01-enemy-art b11: the plate shows its wear
         if (s.kind === 'bomb') { const f = 0.6 + Math.sin(S.t * 18 + i) * 0.4; sparkleAt(s.x + r * 0.1, s.y - r * 1.2, r * 0.3 * f); }
         if (s.kind === 'upgrade') sparkleAt(s.x + r * 0.55 + Math.sin(S.t * 4 + i) * 4, s.y - r * 0.55, r * 0.3);
       } else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
@@ -350,7 +390,7 @@ export function createRenderer(canvas, art, kit) {
       if (OPT.colorBlind && (s.kind !== 'normal' || s.carry === 'chest')) kindMark(s.carry === 'chest' && s.kind === 'normal' ? 'chest' : s.kind, s.x, s.y - r * 1.02, r * 0.36);
       if (s.kind === 'mender') { glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12); ctx.save(); ctx.fillStyle = '#6fe08a'; ctx.strokeStyle = INK; ctx.lineWidth = 3; const q = r * 0.34; for (const [px, py, w2, h2] of [[-q * 0.35, -q, q * 0.7, q * 2], [-q, -q * 0.35, q * 2, q * 0.7]]) { ctx.fillRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); ctx.strokeRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); } ctx.restore(); }
     }
-    for (let i = segs.length - 1; i > 0; i--) { const s = segs[i]; if ((s.ward || s.lull || s.drum || s.choir || s.quartet || s.bell || s.metro || s.pillow || s.snack) && s.y > -s.r * 3 && s.y < H + s.r * 3) drawCellBadge(ctx, s, s.r, ft, i, kit); }   // QA r10: badges in a pass of their own, so the neighbour toward the head no longer hides them
+    for (let i = segs.length - 1; i > 0; i--) { const s = segs[i]; if ((s.ward || s.lull || s.drum || s.choir || s.quartet || s.bell || s.metro || s.pillow || s.snack || s.mirror) && s.y > -s.r * 3 && s.y < H + s.r * 3) drawCellBadge(ctx, s, s.r, ft, i, kit); }   // QA r10: badges in a pass of their own, so the neighbour toward the head no longer hides them
     drawBellRings(ctx, sn, ft);
     drawQuartetLinks(ctx, sn, ft);
     if (sn.slow > 0) { const h = segs[0]; glow(h.x, h.y, h.r * 2, '#7fe8ff', 0.3); }
@@ -377,7 +417,7 @@ export function createRenderer(canvas, art, kit) {
   }
 
   // 02-animal-art: pets bob, blink, hop when the duo sings and look alert when a snake head is near
-  const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }], duoDust = createDust(), R10 = createReact(), STAR10 = { x: 0, y: 0, front: false, s: 1 };   // r9: springy pets and dust; r10: run end, revive, glance, pounce, bark
+  const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }], duoDust = createDust(), R10 = createReact(), B11 = createB11(), RING11 = { x: 0, y: 0, s: 1, a: 1 }, DUO11 = { y: 0, rot: 0, sq: 1, arms: false }, STAR10 = { x: 0, y: 0, front: false, s: 1 };   // r9: springy pets and dust; r10: run end, revive, glance, pounce, bark
   const CH = createCheer(); let cheerHit = false;   // 02-animal-art r4: pets cheer on kill streaks
   // 02-animal-art: fire reactions (kitten swats a paw, puppy wags its tail) and idle emotes (turtle Zzz, lamb hums, piglet hearts)
   function petExtras(id, st, px, py, s2, i) {
@@ -430,6 +470,7 @@ export function createRenderer(canvas, art, kit) {
     const ps = g.pets || [];
     let near = 1e9, nearX = NaN; for (const sn of g.snakes) { const h = sn.segs[0]; if (h) { const d = Math.hypot(h.x - p.x, h.y - p.y); if (d < near) { near = d; nearX = h.x; } } }
     const barkNow = !OPT.reduceMotion && g.phase === 'play' && barkDue(R10, S.t), bu = OPT.reduceMotion ? -1 : barkU(R10, S.t), pn = OPT.reduceMotion ? null : pouncePose(S.t - R10.pT, R10.pDir);   // r10
+    if (pn && pn.u >= 0 && R10.pHeard !== R10.pT) { R10.pHeard = R10.pT; if (OPT.onPounce) OPT.onPounce(); }   // r11: the pounce sound once per crit
     const scared = near < 330;
     ps.forEach((id, i) => {
       const st = petState[i] || (petState[i] = { hop: 0, last: 0 });
@@ -446,15 +487,16 @@ export function createRenderer(canvas, art, kit) {
       const lf = st.leash || (st.leash = newLeash()), px = OPT.reduceMotion ? p.x + s2 * 92 : petFollow(lf, p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6, S.t).x, base = p.y + 8;   // r9: the pets trot after the duo on a springy leash
       const calls = scareEdge(st, scared, S.t); if (calls && OPT.onPetCall) OPT.onPetCall(id);   // r10: the pet's own voice
       if (calls && !OPT.reduceMotion) { st.hop = 1; addFloat(px, base - 62, SCARE_CALL[id] || '!', SCARE_COL[id] || '#fff', 20, -34); }   // r9: each pet calls out when a head gets close
-      const gl = OPT.reduceMotion || S.ko ? 0 : glance(st, px, nearX, near, lastDt), pk = id === 'kitten' && pn && pn.u >= 0 ? pn : null;   // r10: lean toward the nearest head; the kitten pounces on crits
+      const gl = OPT.reduceMotion || S.ko ? 0 : glance(st, px, nearX, near, lastDt); if (glanceEdge(st, gl) && OPT.onPetGlance) OPT.onPetGlance(id);   // r11
+      const pk = id === 'kitten' && pn && pn.u >= 0 ? pn : null;   // r10: lean toward the nearest head; the kitten pounces on crits
       if (barkNow && id === 'puppy') { st.hop = 1; addFloat(px, base - 78, 'WOOF!', '#ffd24a', 28, -30); }
       const blink = (S.t * 0.8 + i * 1.7) % 3.1 < 0.13;
       const sl = slumpK(), tk = OPT.reduceMotion || ch || scared || sl > 0.05 || st.hop > 0.1 ? null : petTrick(id, i), mood = sl > 0.2 || tuckMood(id, scared) >= 0 ? 7 : st.hop > 0.35 || ch ? 3 : tk && tk.mood >= 0 ? tk.mood : scared ? 2 : blink ? 1 : 0;   // slump: eyes shut
       const k = Math.abs(Math.sin(ph));
-      ctx.save(); ctx.globalAlpha *= 0.3 * (1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, 24 - (idle + hopY) * 0.3, 7, 0, 0, TAU); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.globalAlpha *= 0.3 * Math.max(0, 1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, Math.max(4, 24 - (idle + hopY) * 0.3), 7, 0, 0, TAU); ctx.fill(); ctx.restore();
       const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = (1 + (1 - k) * 0.05 + st.hop * 0.05 + sl * 0.1 + (OPT.reduceMotion ? 0 : lf.stretch * 0.08)) * (tk ? tk.sx : 1), sy = (1 - (1 - k) * 0.05 - st.hop * 0.03 - sl * 0.12) * (tk ? tk.sy : 1);
       if (cheerHit && !OPT.reduceMotion) CH.burst(px, base - 40, Math.max(0, CH.tier), id);
-      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq * ch.sx : 1) * (pk ? pk.sx : 1), sy / (ch ? ch.sq : 1) * (pk ? pk.sy : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px + (pk ? pk.dx : 0), base - idle - hopY - (tk ? tk.dy : 0) - (pk ? pk.dy : 0), sz, gl + (pk ? pk.rot : 0) + (tk ? tk.rot : 0) + s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0) - s2 * sl * 0.2 + (OPT.reduceMotion ? 0 : lf.lean)); ctx.restore(); }
+      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq * ch.sx : 1) * (pk ? pk.sx : 1), sy / (ch ? ch.sq : 1) * (pk ? pk.sy : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px + (pk ? pk.dx : 0), base - idle - hopY - (tk ? tk.dy : 0) - (pk ? pk.dy : 0), sz, gl + (pk ? pk.rot : 0) + (tk ? tk.rot : 0) + s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0) - s2 * sl * 0.2 - (OPT.reduceMotion ? 0 : s2 * 0.14 * lookUp(S.t - B11.wT)) + (OPT.reduceMotion ? 0 : lf.lean)); ctx.restore(); }
       if (st.hop > 0.6) sparkleAt(px + s2 * 28, base - idle - hopY - 36, 7 + st.hop * 3);
       if (tk && tk.u >= 0) {   // trick extras: a question mark over the tilting puppy, dust under the running hamster
         if (id === 'puppy') { ctx.save(); ctx.globalAlpha = Math.sin(tk.u * Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2d1a14'; ctx.lineWidth = 3; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.strokeText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.fillText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.restore(); }
@@ -476,6 +518,10 @@ export function createRenderer(canvas, art, kit) {
 
   // r10: run end sink with dizzy stars, revive hop
   function drawPlayerR(g) {
+    if (g.ring && !ringScaled) {   // b11: the duo and pets are smaller inside the circle, then the aim line is drawn at full size
+      ringScaled = true; ctx.save(); ctx.translate(g.p.x, g.p.y); ctx.scale(RING_SCALE, RING_SCALE); ctx.translate(-g.p.x, -g.p.y); drawPlayerR(g); ctx.restore(); ringScaled = false;
+      if (!S.ko) drawAimLine(g); return;
+    }
     const p = g.p, ko = S.ko && R10.koT > -1 ? koPose(S.t - R10.koT, OPT.reduceMotion) : null, rv = ko || OPT.reduceMotion ? null : revivePose(S.t - R10.rvT);
     if (!ko && !(rv && rv.u >= 0)) { drawPlayer(g); return; }
     ctx.save();
@@ -487,6 +533,23 @@ export function createRenderer(canvas, art, kit) {
       for (let h = 0; h < 2; h++) for (let i = 0; i < 3; i++) { const o = starAt(STAR10, i, 3, p.x + (h ? 46 : -46), p.y - 104, 30, 8, S.t + h * 1.3, OPT.reduceMotion); sparkleAt(o.x, o.y, 8 * o.s); }
     }
     ctx.restore();
+  }
+  function duo11() {   // r11: the duo's pick hop, and the arms-up pose while a new weapon is held high
+    const pk = pickPose(S.t - B11.pickT), wp = weaponPose(S.t - B11.wT, false);
+    if (pk.u < 0 && !wp.hold) return null;
+    DUO11.y = pk.u < 0 ? 0 : pk.dy; DUO11.sq = pk.u < 0 ? 1 : pk.sy; DUO11.rot = 0; DUO11.arms = wp.hold;
+    return DUO11;
+  }
+  function star4(x, y, r, col) {   // r11: a chunky four-point star with a dark outline, readable on any stage
+    ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = -Math.PI / 2 + k * Math.PI / 4, rr = k & 1 ? r * 0.42 : r; ctx[k ? 'lineTo' : 'moveTo'](x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath();
+    ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = '#3a1d33'; ctx.stroke(); ctx.fillStyle = col; ctx.fill();
+  }
+  function celebrate11(p) {   // r11: stars ring the duo after a pick, the new weapon spins in over their heads
+    const pu = S.t - B11.pickT;
+    if (pu >= 0 && pu < 0.7) { ctx.save(); for (let i = 0; i < 6; i++) { const o = ringStar(RING11, i, 6, p.x, p.y - 30, pu / 0.7); ctx.globalAlpha = o.a; star4(o.x, o.y, o.s * 1.5, i & 1 ? '#fff6a8' : '#ffe14a'); } ctx.restore(); }
+    const wp = weaponPose(S.t - B11.wT, false);
+    if (wp.u >= 0) { const id = WEAPON_SPR[B11.wId], spr = kit && id && kit.SPR.weapon(id);
+      if (spr) { glow(p.x, p.y + wp.y, 70 * wp.s, '#ffe14a', 0.4 * wp.a); ctx.save(); ctx.globalAlpha = wp.a; blit(spr, p.x, p.y + wp.y, 150 * wp.s, wp.rot); ctx.restore(); if (wp.hold) sparkleAt(p.x + Math.cos(S.t * 6) * 44, p.y + wp.y + Math.sin(S.t * 6) * 26, 7); } }
   }
   function drawPlayer(g) {
     const p = g.p;
@@ -503,8 +566,8 @@ export function createRenderer(canvas, art, kit) {
     const key = singing ? 'duo_sing' : 'duo_idle';
     const moving = Math.hypot(p.mx, p.my) > 0.1, hop = S.t - S.lastShot < 0.12 ? 1 - (S.t - S.lastShot) / 0.12 : 0;
     const sq = 1 + Math.sin(S.t * (moving ? 9 : 2.6)) * (moving ? 0.05 : 0.018) + hop * 0.03;
-    const im = art && art.get(key), dch = OPT.reduceMotion ? null : CH.duo(S.t), dY = dch ? dch.y : 0;   // 02-animal-art r5: the duo hops on a streak
-    const cf = dch && im ? cheerFrame(art.get(key), singing) : null;   // r7: arms up while the cheer lasts; r8: the singing picture has its own arms-up frame
+    const im = art && art.get(key), dch = OPT.reduceMotion ? null : CH.duo(S.t) || duo11(), dY = dch ? dch.y : 0;   // 02-animal-art r5: the duo hops on a streak
+    const cf = dch && dch.arms !== false && im ? cheerFrame(art.get(key), singing) : null;   // r7: arms up while the cheer lasts; r8: the singing picture has its own arms-up frame
     if (cf) { const h = 170, w = h * im.width / im.height, dq = dch.sq; ctx.save(); ctx.translate(p.x, p.y - 26 - hop * 4 - dY); ctx.rotate(p.mx * 0.05 + dch.rot); const ww = w / sq / dq, hh = h * sq * dq; ctx.drawImage(cf, -ww / 2, -hh / 2, ww, hh); ctx.restore(); idleSparkles(p, singing); }
     else if (im && !OPT.reduceMotion && im.width === 520) {   // r7: R and J sway on their own phases, heads nod on the beat
       const h = 170, w = h * im.width / im.height, dq = dch ? dch.sq : 1, ww = w / sq / dq, hh = h * sq * dq, nod = g.phase === 'play' ? Math.pow(1 - beatPhase(g), 5) * ((g.groove || 0) >= 6 ? 1 : 0.5) : 0.3;
@@ -512,6 +575,7 @@ export function createRenderer(canvas, art, kit) {
     }
     else if (im) { const h = 170, w = h * im.width / im.height, dq = dch ? dch.sq : 1; img(key, p.x, p.y - 26 - hop * 4 - dY, w / sq / dq, h * sq * dq, p.mx * 0.05 + (moving ? 0 : Math.sin(S.t * 1.3) * 0.012) + (dch ? dch.rot : 0)); idleSparkles(p, singing); }
     else { glow(p.x, p.y, 40, '#39f0ff', 0.7); ctx.fillStyle = '#39f0ff'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 22, 0, TAU); ctx.fill(); ctx.stroke(); }
+    if (!OPT.reduceMotion) celebrate11(p);
     if (!OPT.reduceMotion && g.phase === 'play') { dustStep(duoDust, p.x, p.y + 38, p.mx, Math.min(0.05, lastDt)); dustDraw(ctx, duoDust); }   // r9: dust kicks up under the duo's feet
     petsDraw(g, p, singing);
     drawHog(g);
@@ -525,6 +589,19 @@ export function createRenderer(canvas, art, kit) {
     if (p.shield > 0) { ctx.strokeStyle = `rgba(80,210,255,${0.5 + Math.sin(S.t * 10) * 0.2})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 54, 0, TAU); ctx.stroke(); glow(p.x, p.y, 60, '#39d0ff', 0.25); }
     if (p.rage > 0) glow(p.x, p.y, 70, '#ffb020', 0.3 + Math.sin(S.t * 14) * 0.1);
     ctx.globalAlpha = 1;
+  }
+
+  // b11: circle stages, a dotted line from the duo out to the circle shows where the notes will fly, with a chevron on the circle
+  let ringScaled = false; const AIM_DASH = [1, 12], NO_DASH = [];
+  function drawAimLine(g) {
+    const p = g.p, a = p.aim, c = Math.cos(a), s = Math.sin(a), r0 = 30, r1 = g.ring.R - 6;
+    ctx.save(); ctx.lineCap = 'round'; ctx.setLineDash(AIM_DASH); ctx.lineDashOffset = OPT.reduceMotion ? 0 : -S.t * 26;
+    ctx.globalAlpha = 0.4; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(p.x + c * r0, p.y + s * r0); ctx.lineTo(p.x + c * r1, p.y + s * r1); ctx.stroke();
+    ctx.globalAlpha = 0.95; ctx.strokeStyle = '#ffe36b'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(p.x + c * r0, p.y + s * r0); ctx.lineTo(p.x + c * r1, p.y + s * r1); ctx.stroke();
+    ctx.setLineDash(NO_DASH); ctx.translate(p.x + c * (r1 + 2), p.y + s * (r1 + 2)); ctx.rotate(a);
+    ctx.globalAlpha = 0.95; ctx.fillStyle = '#ffe36b'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -9); ctx.lineTo(-2, 0); ctx.lineTo(-6, 9); ctx.closePath(); ctx.stroke(); ctx.fill();
+    ctx.restore();
+    if (S.aimHint && g.t < 7 && g.phase === 'play') { const k = Math.min(1, g.t * 2, (7 - g.t) * 1.5); ctx.save(); ctx.globalAlpha = k; text('DRAG TO AIM', p.x, p.y + g.ring.R + 46, 28, '#ffffff', '#0b1020'); ctx.restore(); }   // b11: shown on the first circle stages only
   }
 
   function noteTrail(b, col) {
@@ -627,6 +704,7 @@ export function createRenderer(canvas, art, kit) {
       case 'd': ctx.beginPath(); ctx.moveTo(0, -s * 1.2); ctx.quadraticCurveTo(s * 0.9, s * 0.2, 0, s * 0.8); ctx.quadraticCurveTo(-s * 0.9, s * 0.2, 0, -s * 1.2); ctx.fill(); break;
       case 'n': ctx.rotate(Math.sin(q.rot) * 0.3); ctx.beginPath(); ctx.ellipse(-s * 0.3, s * 0.6, s * 0.55, s * 0.4, -0.4, 0, TAU); ctx.fill(); ctx.fillRect(s * 0.1, -s * 1.0, s * 0.2, s * 1.6); ctx.fillRect(s * 0.1, -s * 1.0, s * 0.7, s * 0.3); break;
       case 's': ctx.rotate(q.rot); ctx.beginPath(); for (let i = 0; i < 8; i++) { const rr = i & 1 ? s * 0.35 : s * 1.1, an = i * Math.PI / 4; ctx.lineTo(Math.cos(an) * rr, Math.sin(an) * rr); } ctx.closePath(); ctx.fill(); break;
+      case 'p': { const w = s * 0.34; ctx.beginPath(); ctx.rect(-w, -s, w * 2, s * 2); ctx.rect(-s, -w, s * 2, w * 2); ctx.fill(); break; }   // a plus (mender)
       default: ctx.rotate(q.rot); ctx.fillRect(-s * 0.6, -s * 0.3, s * 1.2, s * 0.6);   // confetti
     }
     ctx.restore();
@@ -634,7 +712,7 @@ export function createRenderer(canvas, art, kit) {
   function drawProps(dt) {
     for (let i = S.props.length - 1; i >= 0; i--) {   // chest cell pop: the chest hops out and flips its lid
       const p = S.props[i]; p.life -= dt; if (p.life <= 0) { S.props.splice(i, 1); continue; }
-      if (p.k === 'crown') { const sp = kit && kit.SPR.crown(p.skin); if (sp) { const cm = crownMotion(1 - p.life / p.max, p.size * 1.6, p.side); ctx.save(); ctx.globalAlpha = cm.a; kit.blit(ctx, sp, p.x + cm.dx, p.y + cm.dy, p.size * cm.sc, cm.rot); ctx.restore(); if (cm.hit && !p.hit) { p.hit = 1; ring(p.x + cm.dx, p.y + cm.dy + p.size * 0.2, 60, '#ffe9a0', 0.3); sparkleAt(p.x + cm.dx, p.y + cm.dy, p.size * 0.4); } else if (!cm.hit) p.hit = 0; } continue; }   // 01-enemy-art r10: the boss crown rolls away
+      if (p.k === 'crown') { const sp = kit && kit.SPR.crown(p.skin); if (sp) { const cm = crownMotion(1 - p.life / p.max, p.size * 1.6, p.side); ctx.save(); ctx.globalAlpha = cm.a; kit.blit(ctx, sp, p.x + cm.dx, p.y + cm.dy, p.size * cm.sc * 1.25, cm.rot); ctx.restore(); p.tr = (p.tr || 0) - dt; if (p.tr <= 0 && cm.a > 0.5 && !OPT.lowQuality) { p.tr = 0.09; sparkleAt(p.x + cm.dx - p.side * p.size * 0.5, p.y + cm.dy - p.size * 0.1, p.size * 0.2); } if (cm.hit && !p.hit) { p.hit = 1; ring(p.x + cm.dx, p.y + cm.dy + p.size * 0.2, 60, '#ffe9a0', 0.3); sparkleAt(p.x + cm.dx, p.y + cm.dy, p.size * 0.4); } else if (!cm.hit) p.hit = 0; } continue; }   // 01-enemy-art r10: the boss crown rolls away
       if (p.k === 'dazed') { const u = 1 - p.life / p.max, sp = kit && kit.SPR.dazed(p.skin, p.boss); p.y += p.vy * dt; p.vy *= 1 - Math.min(1, dt * 2.2); if (sp) { const dm = deathMotion(p.skin, u, p.size, p.x < W / 2 ? 1 : -1), px = p.x + dm.dx, py = p.y + dm.dy; ctx.save(); ctx.globalAlpha = Math.min(1, p.life / 0.4) * dm.a; const sc = (0.7 + Math.min(1, u * 5) * 0.3 + Math.sin(u * 9) * 0.04) * dm.sc; kit.blit(ctx, sp, px, py, p.size * sc, dm.rot); for (let q = 0; q < 3; q++) { const a = S.t * 5 + q * 2.094; sparkleAt(px + Math.cos(a) * p.size * 0.5 * dm.sc, py - p.size * 0.46 * dm.sc + Math.sin(a) * p.size * 0.1, p.size * 0.16 * dm.sc); } ctx.restore(); } continue; }   // 01-enemy-art r9: leaves in its species style
       p.vy += 700 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += dt * 9;
       const cs = Math.cos(p.rot);
@@ -692,12 +770,14 @@ export function createRenderer(canvas, art, kit) {
         q.fillStyle = bg; q.fillRect(-48, -2, 96, 4); q.fillStyle = '#fff'; q.fillRect(-48 * 0.106, -2, 96 * 0.106, 4);
       });
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a;
-      if (spr) ctx.drawImage(spr.c, x - ww / 2, 0, ww, g.p.y);
+      if (g.ring) { ctx.translate(x, g.p.y); ctx.rotate((g.beam.a === undefined ? -Math.PI / 2 : g.beam.a) + Math.PI / 2); }   // b11: the beam follows the aim in circle stages
+      if (g.ring) { if (spr) ctx.drawImage(spr.c, -ww / 2, -1500, ww, 1500); else { ctx.fillStyle = '#ffe9a0'; ctx.fillRect(-bw * 0.6, -1500, bw * 1.2, 1500); } }
+      else if (spr) ctx.drawImage(spr.c, x - ww / 2, 0, ww, g.p.y);
       else { ctx.fillStyle = '#ffe9a0'; ctx.fillRect(x - bw * 0.6, 0, bw * 1.2, g.p.y); }
       ctx.restore();
     }
     hud.encore(g);   // the meter lives in hud.js
-    if (ui && ui.hints) drawHints(ctx, g, S, { glow, text });   // first-run guide (hints.js)
+    if (ui && ui.hints && !g.ring) drawHints(ctx, g, S, { glow, text });   // first-run guide (hints.js)
     hud.combo(g);
     // joystick
     if (ui && ui.joy && ui.joy.on) {
@@ -716,6 +796,7 @@ export function createRenderer(canvas, art, kit) {
 
   function draw(g, ui, dt) {
     const L = layout();
+    S.aimHint = !!(ui && ui.aimHint);
     lastDt = dt; S.t += dt; if (S.banner) { S.banner.t += dt; if (S.banner.t > S.banner.dur) S.banner = null; }
     if (FX) FX.update(dt, g);
     if (g && g.phase === 'play' && CH.step(g, dt)) { cheerHit = true; if (!OPT.reduceMotion) S.flash = Math.max(S.flash, 0.12), S.flashCol = '#ffe9a8'; }
@@ -747,5 +828,5 @@ export function createRenderer(canvas, art, kit) {
   HJ = createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, blit, sprite: k => kit && kit.SPR.pickup(k), sound: n => { if (FX) FX.state.sounds.push(n); }, feel: (x, y, amp, k, d) => { if (!FX || OPT.reduceMotion) return; const F = FX.state; F.zoom.x = x; F.zoom.y = y; F.zoom.amp = Math.max(F.zoom.amp, amp); F.zoom.t = F.zoom.dur = 0.42; if (F.slow.t < d || F.slow.k > k) F.slow = { t: d, dur: d, k }; } });   // 04 r10: per-weapon crit and finish feel
   FX = createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst });
 
-  return { hj: HJ, timeScale: () => (FX ? FX.timeScale() : 1), setBeat: fn => FX.setBeat(fn), clearBusy: () => FX.clearBusy(), resumeFx: g => { if (g && g.phase === 'play' && !OPT.reduceMotion) S.petWake = S.t; FX.resumeFx(g); }, takeSounds: () => FX.takeSounds(), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, hudPress: z => getHud().press(z), safeTop: () => (hud ? hud.top() : 0), hudZone: gp => hudZone(gp, hud ? hud.top() : 0), toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
+  return { hj: HJ, timeScale: () => (FX ? FX.timeScale() : 1), setBeat: fn => FX.setBeat(fn), clearBusy: () => FX.clearBusy(), resumeFx: g => { if (g && g.phase === 'play' && !OPT.reduceMotion) S.petWake = S.t; FX.resumeFx(g); }, takeSounds: () => FX.takeSounds(), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, hudPress: z => getHud().press(z), safeTop: () => (hud ? hud.top() : 0), hudZone: gp => { const L = layout(); return hudZone(gp, hud ? hud.top() : 0, typeof innerWidth === 'number' && innerWidth > 0 ? L.s * innerWidth / L.cw : 0); }, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
 }

@@ -18,7 +18,7 @@ assert.ok(s5.win < s3.win, 'the stage 5 boss is a wall compared with stage 3');
 // ring stages: the long spiral used to be a spike (stage 6 about 16% while stage 7 was 100% at meta 8)
 const m8 = { atk: 8, cdn: 8, crt: 8 };
 const r6 = runs(6, { meta: m8 }, 3), r7 = runs(7, { meta: m8 }, 3);
-assert.ok(sim.RING_SPEED < 1, 'circle stages crawl a bit slower than lanes');
+assert.ok(sim.RING_SPEED > 0.5 && sim.RING_SPEED < 2.5, 'circle stage speed is a sane multiplier (b11: the circle is smaller and the aim is free, so the shorter spiral is walked faster)');
 assert.ok(r6.prog >= 0.4 && r6.prog >= r7.prog * 0.4, 'stage 6 (circle) is hard but not a wall next to stage 7: ' + r6.prog.toFixed(2) + ' vs ' + r7.prog.toFixed(2));
 assert.ok(r6.win < 1 || r7.win < 1 || r6.win <= r7.win, 'the circle is never the easier stage');
 
