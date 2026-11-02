@@ -59,6 +59,7 @@ const { createClock, STEP } = await import(join(root, 'clock.js'));
 {
   const P = mk(); const g3 = sim.createGame({ seed: 5, stage: 10 });
   P.onEvent({ t: 'kill', x: 300, y: 300, r: 40, head: true, boss: true, skin: g3.skin }, g3);
+  P.draw(g3, ui, 0.1);   // the boss hit-stop (agent 04) freezes the clock for 0.09 s first, then the slow motion holds
   const k0 = P.timeScale(); P.draw(g3, ui, 0); P.draw(g3, ui, 0);
   assert.equal(P.timeScale(), k0, 'paused frames (dt 0) do not eat the slow motion');
   assert.ok(k0 > 0.25, 'the sim never stops completely, so a tap or card always gets a step');

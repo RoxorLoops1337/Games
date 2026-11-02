@@ -13,7 +13,7 @@ assert(!/—/.test(html + main + fx));
 // round 2: star sounds, confetti, heartbeat, gentle revive, loss hint
 {
   const au = readFileSync(join(root, 'audio.js'), 'utf8');
-  assert(main.includes("audio.play('star' + (i + 1))") && main.includes('confetti(') && au.includes('sfx.heartbeat'));
+  assert(main.includes("audio.play('star' + Math.min(3, i + 1))") && main.includes('confetti(') && au.includes('sfx.heartbeat'));
   assert(fx.includes('holdEls') && fx.includes('onBeat') && html.includes('id="rvTimer"') && html.includes('id="rHint"'));
   const { lossHint } = await import('../../cell_serpent/result_fx.js');
   const names = { daggers: 'Chick Circle', swab: 'Kitty Paws' };
