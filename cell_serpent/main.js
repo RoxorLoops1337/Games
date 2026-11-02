@@ -32,6 +32,7 @@ import { paintButtonGlyphs, RECAP, emptyCard } from './btn_glyphs.js';
 import { paintSettingIcons } from './icons_b8.js';
 import { watchGlyphs } from './glyph_sweep.js';
 import { dressToast } from './toast_ui.js';
+import { readyNudge } from './badges_b11.js';
 import { flashDone } from './btn_state.js';
 import { watchSideIcons } from './side_icons.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
@@ -148,12 +149,17 @@ const skillLevels = () => Object.fromEntries(Object.entries(save.skills).map(([i
 
 // ---------------------------------------------------------------- hub
 const TABS = ['Shop', 'Stats', 'Battle', 'Skills', 'Pets', 'Gear'];
+// round 11: one kind line when a reward is waiting, once per thing per visit (never over a panel or the welcome gift)
+const nudged = new Set();
+function hubNudge() {
+  try { const n = readyNudge(save, dayKey(), Date.now(), nudged); if (!n) return; nudged.add(n.key); setTimeout(() => { if (mode === 'hub' && shownId === 'hub') toast(n.icon + ' ' + n.text + '!'); }, 900); } catch (e) { /* ignore */ }
+}
 function openHub(tab = hubTab) {
   mode = 'hub'; hubTab = tab; audio.hubWorld(skinFor(sel)); audio.music(false); audio.hub(true);
   if (dayLogin(save, dayKey())) persist();
   refreshCur();
   sel = Math.max(1, Math.min(sel, MAX_STAGE, save.cleared + 4));
-  renderHub(); show('hub'); if (!hub2.addict.maybeComeback()) hub2.retain.checkAch();
+  renderHub(); show('hub'); if (!hub2.addict.maybeComeback()) { if (!hub2.retain.checkAch()) hubNudge(); }
 }
 function badgeTabs() {
   const day = dayKey(), s = save, out = new Set();

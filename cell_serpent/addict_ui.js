@@ -8,6 +8,7 @@ import {
 import { todayHTML, flyChips, flyReward } from './goals_polish.js';
 import { readyMasteryReward, hasReward } from './result_b9.js';
 import { riskHTML, bookCell, nextUnmet } from './keep_ui.js';
+import { rowHTML, shelfHTML, markBadgesSeen } from './badges_b11.js';
 import { protectLine, weekBadgesHTML, comebackExtra, awayText } from './keep10.js';
 import { tomorrowPeek, questNear, stickerAlbum, claimSticker, stickerHint, stickerGridHTML } from './chase.js';
 
@@ -63,6 +64,11 @@ export function createAddictUI(c, openPanel, sec) {
   function openGoals() {
     openPanel('GOALS', body => build(body), () => { c.openHub(); });
   }
+  // round 11: the badge shelf, big medals with full names
+  function openShelf(thisId) {
+    const sv = save(), html = shelfHTML(sv, thisId); markBadgesSeen(sv); c.persist();
+    openPanel('BADGES', body => { const d = document.createElement('div'); d.className = 'bshelf'; d.innerHTML = html; body.appendChild(d); }, () => openGoals());
+  }
   function rebuild() { const body = $('pBody'), top = body.scrollTop; body.innerHTML = ''; build(body); body.scrollTop = top; }
   function grid(body) { const g = document.createElement('div'); g.className = 'tiles'; body.appendChild(g); return g; }
   function build(body) {
@@ -94,7 +100,8 @@ export function createAddictUI(c, openPanel, sec) {
       const rc = [WEEK_REWARD.sparkles ? `✨ ${WEEK_REWARD.sparkles}` : '', WEEK_REWARD.eggs ? `🥚 ${WEEK_REWARD.eggs}` : '', WEEK_REWARD.energy ? `⚡ ${WEEK_REWARD.energy}` : ''].filter(Boolean).map(x => `<b>${x}</b>`).join('');
       const hint = wclaimed ? 'Claimed, see you on Monday!' : wdone ? 'Done! Come and get it' : per <= 0 ? '' : left === 0 ? 'Last day, you can do it!' : `About ${per} a day gets you there`;
       const card = document.createElement('div'); card.className = 'wkcard' + (wclaimed ? ' claimed' : wdone ? ' ready' : '');
-      card.innerHTML = `<div class="wkt"><span class="wki">🏅</span><b>${esc(wc.text)}</b></div><div class="wkdays">${pips}<em>${left ? left + (left === 1 ? ' day left' : ' days left') : 'Last day'}</em></div><div class="wkbar"><i style="width:${pct}%"></i><span>${wk.prog} / ${wc.target}</span></div><div class="wkh">${esc(hint)}</div><div class="wkr">${rc}</div>${weekBadgesHTML(save(), wc.id)}`;
+      card.innerHTML = `<div class="wkt"><span class="wki">🏅</span><b>${esc(wc.text)}</b></div><div class="wkdays">${pips}<em>${left ? left + (left === 1 ? ' day left' : ' days left') : 'Last day'}</em></div><div class="wkbar"><i style="width:${pct}%"></i><span>${wk.prog} / ${wc.target}</span></div><div class="wkh">${esc(hint)}</div><div class="wkr">${rc}</div>${rowHTML(save(), wc.id)}`;
+      card.querySelector('.wbopen').onclick = () => { audio.play('click'); openShelf(wc.id); };
       const wb = document.createElement('button'); wb.className = 'btn small go gold'; wb.disabled = !wdone; wb.textContent = wclaimed ? 'CLAIMED' : wdone ? 'CLAIM' : 'KEEP GOING';
       wb.onclick = () => { const fl = [...card.querySelectorAll('.wkr b')]; if (claimWeek(save(), day)) { after(); audio.play('levelup'); flyChips(fl, reduce()); if (!reduce()) burst(card, 18, '#ffd24a'); setTimeout(() => { rebuild(); renderNext(); }, reduce() ? 0 : 700); } };
       card.appendChild(wb); body.appendChild(card); }

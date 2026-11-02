@@ -74,14 +74,14 @@ export function createRetainUI(c, openPanel, sec, openTrophies) {
     const nxt = se.miles.find(m => !m.got), left = nxt ? nxt.at - se.stamps : 0;
     const flags = se.miles.map(m => `<i class="sflag${m.got ? ' got' : ''}" style="left:${Math.round(m.at / SEASON_DAYS * 100)}%">${m.claimed ? '✔' : '🎁'}</i>`).join('');
     head.innerHTML = `<div class="sealine"><b>Day ${se.dayNo} of ${SEASON_DAYS}</b><span>${se.daysLeft ? se.daysLeft + ' days left' : 'Last day!'}</span></div><div class="searail"><div class="seabar"><i style="width:${Math.round(se.stamps / SEASON_DAYS * 100)}%"></i></div>${flags}</div>` +
-      `<div class="seastat"><span class="${se.stampedToday ? 'ok' : 'todo'}">${se.stampedToday ? '⭐ Today\'s stamp is yours' : '🐾 Play a run to stamp today'}</span><span>${nxt ? 'Next gift in ' + left + (left === 1 ? ' stamp' : ' stamps') : 'Every gift unlocked!'}</span></div>` + tokenRowHTML(s) + (se.note ? `<div class="seanote">${esc(se.note)}</div>` : '');
+      `<div class="seastat"><span class="${se.stampedToday ? 'ok' : 'todo'}">${se.stampedToday ? '⭐ Today\'s stamp is yours' : '🐾 Play a run to stamp today'}</span><span>${nxt ? 'Next gift in ' + left + (left === 1 ? ' stamp' : ' stamps') + ': ' + esc(rewardText(nxt.reward)) : 'Every gift unlocked!'}</span></div>` + tokenRowHTML(s) + (se.note ? `<div class="seanote">${esc(se.note)}</div>` : '');
     body.appendChild(head);
     if (se.note) { clearSeasonNote(s); c.persist(); }
     const grid = document.createElement('div'); grid.className = 'seagrid';
     let html = '';
     for (let i = 1; i <= SEASON_DAYS; i++) {
       const mi = se.miles.find(m => m.at === i), stamped = i <= se.stamps;
-      html += `<span class="sday${stamped ? ' on' : ''}${stamped && i === se.stamps && se.stampedToday ? ' fresh' : ''}${i === se.dayNo ? ' today' : ''}${mi ? ' ms' : ''}"><small>${i}</small><b>${stamped ? '⭐' : mi ? '🎁' : ''}</b></span>`;
+      html += `<span class="sday${stamped ? ' on' : ''}${stamped && i === se.stamps && se.stampedToday ? ' fresh' : ''}${i === se.dayNo ? ' today' : ''}${mi ? ' ms' : ''}${mi && nxt && mi.at === nxt.at ? ' nx' : ''}"><small>${i}</small><b>${stamped ? '⭐' : mi ? '🎁' : ''}</b></span>`;
     }
     grid.innerHTML = html; body.appendChild(grid);
     const g = document.createElement('div'); g.className = 'tiles'; g.style.marginTop = '12px'; body.appendChild(g);
