@@ -6,7 +6,7 @@ import { SPIN_PRIZES, spinPrize, QS_BONUS, questState, grantReward, rewardText, 
 // Chest streak as the player should see it: alive when the last chest was today or yesterday.
 export function questStreak(save, day) {
   const q = save.addict.qs || { last: 0, n: 0, b: 0 };
-  const alive = q.n > 0 && (q.last === day || q.last === day - 1), n = alive ? q.n : 0, openedToday = q.last === day;
+  const alive = q.n > 0 && (q.last === day || q.last === day - 1 || (q.last === day - 2 && save.addict.tok > 0)), n = alive ? q.n : 0, openedToday = q.last === day;
   const nx = QS_BONUS.find(m => m.at > n) || null;
   return { n, openedToday, atRisk: alive && !openedToday && n >= 2, next: nx ? { at: nx.at, left: nx.at - n - (openedToday ? 0 : 1), reward: nx.reward } : null, bonus: openedToday && q.b ? QS_BONUS[q.b - 1] : null };
 }
