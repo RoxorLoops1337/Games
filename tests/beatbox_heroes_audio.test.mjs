@@ -579,18 +579,27 @@ const NEW_API = ['gameMode', 'isGameMode', 'metronome', 'metronomeInfo', 'shaker
 /* ---------------------------------------------------------------- offline render: shaker + metronome */
 {
   const SR = 32000;
-  const one = (acc) => { const r = R.makeRig(SR); r.A.shaker(acc); r.run(0.4); return r.out(); };
-  const s = one(false), a = one(true);
-  for (const [x, n] of [[s, 'shaker'], [a, 'accent shaker']]) {
-    ok(!R.hasNaN(x), n + ' no NaN'); ok(R.smoothStep(x, 8) < 0.1, n + ' is soft, no clicks');
-    between(R.lastActive(x, 0.002) / SR, 0.04, 0.15, n + ' is short');
-  }
-  between(R.peak(s), 0.04, 0.2, 'shaker sits low under the game (' + R.peak(s).toFixed(3) + ')');
-  ok(R.peak(s) < R.peak(R.renderDrum(0, { vel: 1 }, SR, 0.4)) * 0.4, 'shaker is much quieter than a player kick');
-  let rs = 0, ra = 0; for (let i = 0; i < 4; i++) { rs += R.rms(one(false), 0, 3200); ra += R.rms(one(true), 0, 3200); } // average out the random noise grain
-  ok(ra > rs * 1.08 && ra < rs * 1.8, 'accent is slightly louder (' + (ra / rs).toFixed(2) + 'x)');
-  ok(R.spectrum(a, SR, 8192).centroid > R.spectrum(s, SR, 8192).centroid * 1.08, 'accent is brighter');
-  ok(R.spectrum(s, SR, 8192).high > 0.9, 'shaker energy is high and airy');
+  // The shaker's noise grain starts at a random offset, so the accent / normal level ratio is random (mean 1.28, sd 0.10 with 4 clicks averaged: about 1 run
+  // in 300 fell under the 1.08 limit; seed 920 is one of them: 1.04, re-seeded right before the averaging loop). Math.random is seeded for this block, so it can never flip, and 16 clicks are averaged
+  // (sd 0.05) so the check also holds for any other seed. Restored below.
+  const realRandom = Math.random; let seed = 1;
+  const reseed = (n) => { seed = n; };
+  Math.random = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  try {
+    const one = (acc) => { const r = R.makeRig(SR); r.A.shaker(acc); r.run(0.4); return r.out(); };
+    const s = one(false), a = one(true);
+    for (const [x, n] of [[s, 'shaker'], [a, 'accent shaker']]) {
+      ok(!R.hasNaN(x), n + ' no NaN'); ok(R.smoothStep(x, 8) < 0.1, n + ' is soft, no clicks');
+      between(R.lastActive(x, 0.002) / SR, 0.04, 0.15, n + ' is short');
+    }
+    between(R.peak(s), 0.04, 0.2, 'shaker sits low under the game (' + R.peak(s).toFixed(3) + ')');
+    ok(R.peak(s) < R.peak(R.renderDrum(0, { vel: 1 }, SR, 0.4)) * 0.4, 'shaker is much quieter than a player kick');
+    reseed(920);   // the regression seed: the old 4-click average gives 1.04 here (fails), the 16-click average 1.28
+    let rs = 0, ra = 0; for (let i = 0; i < 16; i++) { rs += R.rms(one(false), 0, 3200); ra += R.rms(one(true), 0, 3200); } // average out the random noise grain
+    ok(ra > rs * 1.08 && ra < rs * 1.8, 'accent is slightly louder (' + (ra / rs).toFixed(2) + 'x)');
+    ok(R.spectrum(a, SR, 8192).centroid > R.spectrum(s, SR, 8192).centroid * 1.08, 'accent is brighter');
+    ok(R.spectrum(s, SR, 8192).high > 0.9, 'shaker energy is high and airy');
+  } finally { Math.random = realRandom; }
   // a metronome render: onsets land on the grid
   const rig = R.makeRig(SR);
   const m = rig.A.metronome(150, { offset: 0.1 }); rig.run(2.2);
