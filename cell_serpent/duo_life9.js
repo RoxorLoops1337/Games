@@ -51,16 +51,16 @@ export function dustStep(d, px, py, mx, dt) {
   }
   d.prev = mx;
   d.acc += dt * m;
-  if (d.acc > 0.075) { d.acc = 0; dustPuff(d, px - Math.sign(mx) * 22, py, -Math.sign(mx) * 30, 6 + Math.random() * 3, 0.45); }
+  if (d.acc > 0.06) { d.acc = 0; dustPuff(d, px - Math.sign(mx) * 22, py, -Math.sign(mx) * 30, 9 + Math.random() * 4, 0.5); }
   for (let i = 0; i < N; i++) if (d.life[i] > 0) { d.life[i] -= dt; d.x[i] += d.vx[i] * dt; d.vx[i] *= 0.93; }
 }
 export function dustDraw(ctx, d) {
   let any = false;  for (let i = 0; i < N; i++) {
     const l = d.life[i]; if (l <= 0) continue;
     const u = 1 - l / d.max[i];
-    if (!any) { any = true; ctx.save(); ctx.fillStyle = '#efe3d0'; }
-    ctx.globalAlpha = 0.6 * (1 - u);
-    ctx.beginPath(); ctx.ellipse(d.x[i], d.y[i] - u * 10, d.r[i] * (0.7 + u * 1.2), d.r[i] * (0.5 + u * 0.7), 0, 0, 6.2832); ctx.fill();
+    if (!any) { any = true; ctx.save(); ctx.fillStyle = '#f7eddc'; ctx.strokeStyle = 'rgba(70,50,40,.45)'; ctx.lineWidth = 2; }   // r10: a soft outline so the puff shows on light and dark floors
+    ctx.globalAlpha = 0.85 * (1 - u);
+    ctx.beginPath(); ctx.ellipse(d.x[i], d.y[i] - u * 10, d.r[i] * (0.7 + u * 1.2), d.r[i] * (0.5 + u * 0.7), 0, 0, 6.2832); ctx.fill(); ctx.stroke();
   }
   if (any) ctx.restore();
 }
