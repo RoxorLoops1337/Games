@@ -635,6 +635,33 @@
   .sc .sci{min-height:40px;display:grid;place-items:center} .sc .sci .cico{margin:0} .spips{display:flex;gap:2px;width:90%;min-height:5px} .spips i{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.2)} .spips i.on{background:#9dff6d;box-shadow:0 0 4px rgba(157,255,109,.7)}
   .sc.maxed{border-color:#ffd84d;box-shadow:0 0 12px rgba(255,216,77,.4)}
   @media (prefers-reduced-motion:reduce){.chest3 .cl,.featban .fbray,.kcard.t3,.kcard.max,.loot .it.rar2,.loot .it.rar3,.loot .it.rar3::after{animation:none}}
+  /* round 2: star badge with two digits, radar taps, deal cheer, loot reveal, set rings, wardrobe stage */
+  .kstar{width:28px;height:28px} .kstar b{line-height:1;margin-top:3px} .kstar.w{width:34px;height:34px;top:-12px;left:-12px} .kstar.w b{font-size:10px;letter-spacing:-.5px;margin-top:4px}
+  .radar .rhit{fill:transparent;cursor:pointer;pointer-events:all} .radar .rhit:hover{fill:rgba(255,255,255,.14)}
+  .sc.flash{animation:scflash 1.3s ease-out} @keyframes scflash{0%,40%{box-shadow:0 0 0 4px #ffe14a,0 0 22px #ffe14a;transform:scale(1.04)}100%{box-shadow:none;transform:none}}
+  .dealfx{position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden}
+  .dcoin{position:absolute;width:28px;height:28px;margin:-14px 0 0 -14px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.5));animation:dcoin 1.35s cubic-bezier(.2,.7,.4,1) both} .dcoin img{width:100%;height:100%;object-fit:contain;display:block}
+  @keyframes dcoin{0%{transform:translate(0,0) scale(.4);opacity:0}15%{opacity:1}50%{transform:translate(var(--dx),var(--dy)) scale(1.1);opacity:1}80%{opacity:1}100%{transform:translate(var(--dx),calc(var(--dy) + var(--fall))) scale(.7);opacity:0}}
+  .dealpet{position:absolute;width:60px;height:60px;animation:dpet 1.5s cubic-bezier(.3,1.5,.5,1) both} .dealpet img{width:60px;height:60px;object-fit:contain;filter:drop-shadow(0 3px 4px rgba(0,0,0,.5))}
+  .dealpet b{position:absolute;left:50%;top:0;color:#ff5a8a;font-size:18px;opacity:0;animation:dheart 1.2s ease-out .25s both} .dealpet b:nth-of-type(2){margin-left:-22px;animation-delay:.4s} .dealpet b:nth-of-type(3){margin-left:16px;animation-delay:.55s}
+  @keyframes dpet{0%{transform:translateY(30px) scale(.5);opacity:0}25%{transform:translateY(-14px) scale(1.15) rotate(-8deg);opacity:1}45%{transform:translateY(0) scale(1) rotate(8deg)}60%{transform:translateY(-10px) rotate(-6deg)}75%{transform:translateY(0) rotate(0)}100%{transform:translateY(-6px);opacity:0}}
+  @keyframes dheart{0%{transform:translateY(0) scale(.5);opacity:0}25%{opacity:1}100%{transform:translateY(-44px) scale(1.2);opacity:0}}
+  .lootx{position:relative;isolation:isolate} .lootx .lbanner{width:100%;text-align:center;font-weight:900;font-size:22px;letter-spacing:3px;color:var(--rc);text-shadow:0 0 14px var(--rc),0 2px 0 rgba(0,0,0,.6);opacity:0;animation:lbn .6s cubic-bezier(.2,1.6,.4,1) .15s forwards} @keyframes lbn{from{opacity:0;transform:scale(.3)}to{opacity:1;transform:none}}
+  .lootx .lrays{position:absolute;left:50%;top:50%;width:520px;height:520px;margin:-260px 0 0 -260px;z-index:-1;border-radius:50%;pointer-events:none;background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--rc) 38%,transparent) 0 7deg,transparent 7deg 20deg);-webkit-mask:radial-gradient(circle,#000 8%,transparent 68%);mask:radial-gradient(circle,#000 8%,transparent 68%);animation:fbspin 18s linear infinite}
+  .lootx .lrays.r1{opacity:.55} .lootx.grand .it{width:104px}
+  .lootx .it{overflow:hidden} .lootx .it.rar1{box-shadow:0 0 14px color-mix(in srgb,var(--rc) 60%,transparent)}
+  .lootx .shn{position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.7) 50%,transparent 62%) 160% 0/260% 100% no-repeat;animation:rarshine 1.1s ease-out .5s 1} .lootx .it.rar3 .shn{animation:rarshine 1.8s linear .6s infinite}
+  .lootx .it.rar3{border-width:4px} .lootx .it .cnt{font-size:18px;font-variant-numeric:tabular-nums}
+  .setbox.setx{display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer} .setx .setinfo{flex:1;min-width:0} .setx .setm{display:flex;gap:6px;font-size:26px;margin:4px 0;flex-wrap:wrap} .setx .setm span{position:relative;line-height:1} .setx .setm span i{position:absolute;right:-4px;bottom:-4px;font-style:normal;font-size:11px;width:15px;height:15px;border-radius:50%;background:#3fd05a;color:#fff;display:grid;place-items:center;border:2px solid #1a1240} .setx .setm span:not(.off) i{display:grid} .setx .setm .off i{display:none}
+  .setring{position:relative;flex:none;width:72px;height:72px} .setring svg{width:72px;height:72px;transform:rotate(-90deg)} .setring circle{fill:none;stroke-width:7;stroke-linecap:round} .setring .bg{stroke:rgba(255,255,255,.16)} .setring .fg{stroke:#9dff6d;transition:stroke-dashoffset .8s ease-out;filter:drop-shadow(0 0 4px rgba(157,255,109,.6))}
+  .setx.full .setring .fg{stroke:#ffe14a;filter:drop-shadow(0 0 6px #ffe14a)} .setring b{position:absolute;inset:0;display:grid;place-items:center;font-size:20px} .setring small{font-size:12px;opacity:.7}
+  .setx .setb{font-size:13px;color:var(--dim)} .setx .setb.on{color:#9dff6d}
+  .wardhero2{position:relative;width:min(250px,70%);margin:26px auto 6px;padding-top:0} .wardhero2 .wduo{display:block;width:100%;position:relative;z-index:2;filter:drop-shadow(0 6px 8px rgba(0,0,0,.45))}
+  .wardhero2 .wglow{position:absolute;left:5%;right:5%;top:-8%;bottom:-6%;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--oc) 55%,transparent),transparent 68%);z-index:0}
+  .wardhero2 .wped{position:absolute;left:4%;right:4%;bottom:-4%;height:12%;border-radius:50%;background:radial-gradient(ellipse at 50% 40%,var(--oc),#6a3a14 75%);border:3px solid rgba(255,255,255,.5);z-index:1}
+  .wardhero2 .what{position:absolute;z-index:3;transform:translateX(-50%);filter:drop-shadow(0 3px 3px rgba(0,0,0,.45));animation:what 2.4s ease-in-out infinite} @keyframes what{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-3px) rotate(2deg)}}
+  .wname{font-weight:900;font-size:17px;color:#ffe98a} .tile .ic .cico{margin:0}
+  @media (prefers-reduced-motion:reduce){.sc.flash,.dealpet,.dcoin,.lootx .lrays,.lootx .shn,.wardhero2 .what{animation:none}}
   /* end @css:10-shop-gear-stats */
   /* @css:16-addiction */
   .nextrew{flex:none;width:100%;display:flex;align-items:center;gap:10px;padding:7px 14px;background:rgba(20,14,56,.92);border-bottom:2px solid var(--line);cursor:pointer;min-height:44px}
