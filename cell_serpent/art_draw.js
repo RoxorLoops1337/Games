@@ -638,7 +638,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     minion: id => bake('min|' + id, B * 3.4, B * 3.4, MIN[id] || MIN.green),
     pickup: k => bake('pk|' + k, B * 2.4, B * 2.4, PICK[k] || PICK.gem),
     note: crit => bake('note|' + (crit ? 1 : 0), B * 2.4, B * 2.4, noteFn(crit ? '#ffd84d' : '#6fe3ff', crit), 1),
-    dazed: (skin, boss) => { const k = SPECIES[skin] ? skin : 'love', P = SPECIES[k], b = boss ? 1 : 0; return bake('dazed|' + k + (b ? '|b' : ''), B * 3.4, B * 3.4, g => { cellShape(g, P, B, { decor: false }); pattern(g, P, k, B); EF.dazed(g, B, P, b); if (b) { const cm = BOSS_METAL[k] || ['#ffd84d', '#d98f1a']; EF.dazedCrown(g, B, c => crownPaint(c, B, 0, cm)); } }, 2); },   // 01-enemy-art r7: the face that pops out of a killed head (r8: a boss keeps a crooked crown)
+    dazed: (skin, boss) => { const k = SPECIES[skin] ? skin : 'love', P = SPECIES[k], b = boss ? 1 : 0; return bake('dazed|' + k + (b ? '|b' : ''), B * 3.4, B * 3.4, g => { cellShape(g, P, B, { decor: false }); pattern(g, P, k, B); EF.dazed(g, B, P, b); }, 2); },   // r10: the crown is its own prop now (SPR.crown), the king falls and the crown rolls away
+    crown: (skin) => { const k = SPECIES[skin] ? skin : 'love', cm = BOSS_METAL[k] || ['#ffd84d', '#d98f1a']; return bake('crownprop|' + k, B * 1.7, B * 1.4, g => { g.translate(0, B * 0.2); crownPaint(g, B, 0, cm); }, 3); },   // 01-enemy-art r7: the face that pops out of a killed head (r8: a boss keeps a crooked crown)
     tail: skin => { const k = SPECIES[skin] ? skin : 'love'; return EF.tailSpr(k, SPECIES[k], B); },
     acid: () => bake('acid', B * 1.6, B * 1.6, acidFn),
     pet: (id, mood = 0) => bake('pet|' + id + '|' + mood, B * 3, B * 3, g => { MOOD = mood; critter(g, PETSPR[id] || 'kitten', B * 0.9); petMood(g, PETSPR[id] || 'kitten', B * 0.9); petAcc(g, PETSPR[id] || 'kitten', B * 0.9); MOOD = 0; }, 1),
@@ -651,6 +652,19 @@ export function createArtDraw(makeCanvas, dpr = 2) {
         disc('#2b3f78', '#1b2a55'); const q = r * 0.44;
         cel(g, '#8fe3ff', poly([[-q, -q * 0.8], [q, -q * 0.8], [q, q * 0.1], [q * 0.8, q * 0.7], [0, q * 1.2], [-q * 0.8, q * 0.7], [-q, q * 0.1]]), { r: q * 1.2, hi: false, lw: 2, shadow: '#3fa8d8' });
         line(g, [[-q * 0.45, q * 0.05], [-q * 0.1, q * 0.45], [q * 0.5, -q * 0.35]], r * 0.17, '#fff'); return;
+      }
+      if (k === 'metro') {   // r10: a mint metronome on a deep teal disc (the needle swings live, drawn by cellfx)
+        disc('#1f5d57', '#123f3b'); const q = r * 0.5;
+        cel(g, '#9bffe0', poly([[-q * 0.95, q * 1.0], [-q * 0.4, -q * 1.05], [q * 0.4, -q * 1.05], [q * 0.95, q * 1.0]]), { r: q * 1.3, hi: false, lw: 2, shadow: '#3fc4a0' });
+        cel(g, '#fff8ec', circ(0, q * 0.62, q * 0.2), { r: q * 0.2, hi: false, lw: 1.6, shadow: '#e6d6c8' });
+        line(g, [[-q * 0.5, q * 0.22], [q * 0.5, q * 0.22]], r * 0.07, '#2a8f78'); line(g, [[-q * 0.3, -q * 0.3], [q * 0.3, -q * 0.3]], r * 0.07, '#2a8f78'); return;
+      }
+      if (k === 'pillow') {   // r10: a fat pink pillow with four corner tufts and a stitched seam, on a plum disc
+        disc('#7a3a78', '#52214f'); const q = r * 0.5;
+        for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cel(g, '#ff9ccd', circ(sx * q * 0.98, sy * q * 0.62, q * 0.26), { r: q * 0.26, hi: false, lw: 1.6, shadow: '#d9609b' });
+        cel(g, '#ffc8e6', poly([[-q * 0.95, -q * 0.62], [0, -q * 0.78], [q * 0.95, -q * 0.62], [q * 0.8, 0], [q * 0.95, q * 0.62], [0, q * 0.78], [-q * 0.95, q * 0.62], [-q * 0.8, 0]]), { r: q * 1.2, hi: false, lw: 2, shadow: '#e88fbd' });
+        g.save(); g.setLineDash([r * 0.1, r * 0.1]); line(g, [[-q * 0.55, 0], [q * 0.55, 0]], r * 0.06, '#fff'); g.restore();
+        text2(g, 'z', q * 0.72, -q * 0.6, r * 0.34); return;
       }
       disc('#4a3590', '#2f2166');   // lullaby: crescent moon, a star and a z on a night disc
       g.beginPath(); g.arc(-r * 0.1, 0, r * 0.5, 0.55, TAU - 0.55); g.arc(r * 0.12, -r * 0.08, r * 0.4, TAU - 0.85, 0.85, true); g.closePath(); g.fillStyle = '#e6dcff'; g.fill(); ink(g, 1.6); g.stroke();
@@ -787,6 +801,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     } else {
       E(-R * 0.36, -R * 0.1, R * 0.28, R * 0.34); E(R * 0.36, -R * 0.1, R * 0.28, R * 0.34); fangsMouth(g, 0, R * 0.34, R * 0.3, 0.6);
     }
+    if (!hurt && !o.sg && !(o.panic > 0)) EF.idleBits(g, R, P, t, boss);   // 01-enemy-art r10: snore bubble, rolling tear, fluttering scarf
     if (o.sg === 'go' && !hurt) EF.yell(g, R, P, t); else if (hurt) EF.wail(g, R, P, t);   // 01-enemy-art r7
     if (boss && f !== 'grumpy' && f !== 'sad' && f !== 'cyclops' && f !== 'shades') { brow(g, -R * 0.66, -R * 0.6, -R * 0.1, -R * 0.4, R * 0.13); brow(g, R * 0.66, -R * 0.6, R * 0.1, -R * 0.4, R * 0.13); }
     if (hurt) for (const s of [-1, 1]) sparkle(g, s * R * 0.86, -R * 0.3, R * 0.2, '#ffd84d');

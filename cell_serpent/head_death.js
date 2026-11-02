@@ -28,3 +28,26 @@ export function deathMotion(skin, u, size, side) {
   o.a = k < 0.65 ? 1 : Math.max(0, 1 - (k - 0.65) / 0.35);
   return o;
 }
+
+// 01-enemy-art r10: a killed boss loses its crown. It is tossed off the head, bounces twice on the floor and rolls away, slowing
+// to a wobble, then fades. Same contract as deathMotion: one reused object, u 0..1, size = on-screen crown size, side = -1 or 1.
+const COUT = { dx: 0, dy: 0, rot: 0, sc: 1, a: 1, hit: 0 };
+const G = 0.9, B1 = 0.4, B2 = 0.58, B3 = 0.68;   // floor depth (x size) and the end of each bounce (u)
+export function crownMotion(u, size, side) {
+  const o = COUT, k = u < 0 ? 0 : u > 1 ? 1 : u;
+  let y;
+  o.hit = 0;
+  if (k < B1) y = -7 * k + 23.1 * k * k;
+  else if (k < B2) { const f = (k - B1) / (B2 - B1); y = G - 0.28 * 4 * f * (1 - f); }
+  else if (k < B3) { const f = (k - B2) / (B3 - B2); y = G - 0.09 * 4 * f * (1 - f); }
+  else y = G;
+  const roll = 1 - Math.pow(1 - k, 1.7);   // fast at first, slowing to a stop
+  o.dx = side * size * 4.6 * roll;
+  o.dy = y * size * 1.15;
+  o.rot = side * (roll * 11 * 2.1 + (k > B3 ? Math.sin((k - B3) * 38) * 0.35 * (1 - k) * (1 - k) * 4 : 0));
+  o.sc = 1 - Math.max(0, k - 0.9) * 2;
+  o.a = k < 0.8 ? 1 : Math.max(0, 1 - (k - 0.8) / 0.2);
+  // flag the frame of each landing so the renderer can flash a sparkle
+  o.hit = (Math.abs(k - B1) < 0.03 || Math.abs(k - B2) < 0.03) ? 1 : 0;
+  return o;
+}

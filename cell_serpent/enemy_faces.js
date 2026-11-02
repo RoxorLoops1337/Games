@@ -109,8 +109,25 @@ export function createEnemyFaces(H) {
   // BOSS DAZED (r8): a popped boss face keeps its crown, knocked askew, so the kill reads as a king falling
   function dazedCrown(g, R, crownFn) { g.save(); g.translate(R * 0.2, -R * 0.78); g.rotate(0.38); crownFn(g); g.restore(); }
 
+  // IDLE BITS (r10): small living details for the quiet species, drawn over the face when it is calm (no allocations, only arcs and lines).
+  // sleepy: a snore bubble swells from its mouth and pops; sad: a tear rolls down from the eye and falls; shy: the scarf end flutters.
+  function idleBits(g, R, P, t, boss) {
+    const f = P.face;
+    if (f === 'sleepy' && !boss) {
+      const k = (t % 4.2) / 4.2, grow = k < 0.8 ? k / 0.8 : 1, rr = R * (0.05 + 0.28 * grow * grow + Math.sin(t * 3) * 0.01 * grow);
+      if (k < 0.8) { g.save(); g.globalAlpha = 0.85; g.fillStyle = 'rgba(200,235,255,.55)'; g.beginPath(); g.arc(R * 0.18 + rr * 0.6, R * 0.44 + rr * 0.2, rr, 0, TAU); g.fill(); ink(g, R * 0.05, '#ffffff'); g.stroke(); g.fillStyle = '#fff'; g.beginPath(); g.arc(R * 0.18 + rr * 0.15, R * 0.44 - rr * 0.1, rr * 0.22, 0, TAU); g.fill(); g.restore(); }
+      else if (k < 0.88) { const q = (k - 0.8) / 0.08; g.save(); g.globalAlpha = 1 - q; ink(g, R * 0.045, '#ffffff'); const rp = R * 0.25 * (1 + q * 0.5); for (let i = 0; i < 6; i++) { const a = i * 1.047 + 0.3; g.beginPath(); g.moveTo(R * 0.18 + R * 0.15 + Math.cos(a) * rp, R * 0.5 + Math.sin(a) * rp); g.lineTo(R * 0.18 + R * 0.15 + Math.cos(a) * (rp + R * 0.1), R * 0.5 + Math.sin(a) * (rp + R * 0.1)); g.stroke(); } g.restore(); }
+    } else if (f === 'sad') {
+      const k = (t % 2.6) / 2.6, x = R * 0.34 + R * 0.04, y = R * 0.18 + k * k * R * 0.95;
+      g.save(); g.globalAlpha = k < 0.85 ? 0.95 : (1 - k) / 0.15 * 0.95; g.fillStyle = '#9fd8ff'; ink(g, R * 0.035, '#5aa8e0'); g.beginPath(); g.moveTo(x, y - R * 0.1); g.quadraticCurveTo(x + R * 0.08, y + R * 0.02, x, y + R * 0.07); g.quadraticCurveTo(x - R * 0.08, y + R * 0.02, x, y - R * 0.1); g.fill(); g.stroke(); g.restore();
+    } else if (f === 'shy') {
+      const fl = Math.sin(t * 4.2) * R * 0.1;
+      g.save(); ink(g, R * 0.14, '#ff7eb6'); g.beginPath(); g.moveTo(R * 0.7, R * 0.62); g.quadraticCurveTo(R * 0.9, R * 0.7 + fl, R * 1.0, R * 0.9 + fl * 1.6); g.stroke(); ink(g, R * 0.04, '#fff'); g.globalAlpha = 0.7; g.beginPath(); g.moveTo(R * 0.74, R * 0.6); g.quadraticCurveTo(R * 0.92, R * 0.68 + fl, R * 1.0, R * 0.86 + fl * 1.6); g.stroke(); g.restore();
+    }
+  }
+
   return {
-    yell, wail, surgeRing, streaks, dazed, spine, dazedCrown,
+    idleBits, yell, wail, surgeRing, streaks, dazed, spine, dazedCrown,
     tailSpr: (skin, P, R) => bake('tailtip|' + skin, R * 4.6, R * 1.6, g => { g.translate(R * 0.55, 0); tailTip(g, R, P, skin); }, 2),
   };
 }
