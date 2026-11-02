@@ -1,5 +1,6 @@
 // Battle tab extras (agent 08): species fun facts, the daily twist badge, the event banner with a live countdown.
 import { EVENT_MILES, clearReward, HARD_HP } from './sim.js';
+import { bringBtnHTML } from './result_b9.js';
 
 // short, cute, snake-themed (real snake traits, told by the species)
 export const FACTS = {
@@ -132,7 +133,7 @@ export function watchSide(el) {
 export function bringHTML(b) {
   if (!b || !b.items || !b.items.length) return '';
   const have = b.items.filter(x => x.eq).length;
-  return `<div class="ff-bring"><b>BRING</b>${b.items.map(x => `<i class="${x.eq ? 'eq' : x.own ? '' : 'lock'}" title="${x.name}">${x.ic}<u>${x.eq ? '\u2713' : x.own ? '+' : '?'}</u></i>`).join('')}<em>${b.why}. ${have >= b.items.length ? 'All packed!' : have + ' of ' + b.items.length + ' in your loadout.'}</em></div>`;
+  return `<div class="ff-bring"><b>BRING</b>${b.items.map(x => `<i class="${x.eq ? 'eq' : x.own ? '' : 'lock'}" title="${x.name}">${x.ic}<u>${x.eq ? '\u2713' : x.own ? '+' : '?'}</u></i>`).join('')}<em>${b.why}. ${have >= b.items.length ? 'All packed!' : have + ' of ' + b.items.length + ' in your loadout.'}</em>${bringBtnHTML(b.can)}</div>`;
 }
 export const starsHTML = n => `<span class="stk" aria-label="${n} of 3 stars">${[1, 2, 3].map(q => q <= n ? '<u>\u2605</u>' : '\u2605').join('')}</span>`;
 // what is ready to collect right now: gigs first, then event milestones. null when nothing is ready

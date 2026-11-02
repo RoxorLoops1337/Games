@@ -28,7 +28,7 @@ import { paintSettingIcons } from './icons_b8.js';
 import { flashDone } from './btn_state.js';
 import { watchSideIcons } from './side_icons.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
-import { renderRecStrip, recFor } from './build_rec.js';
+import { renderRecStrip, recFor, bestBuild } from './build_rec.js';
 import { petLabel } from './pet_names.js';
 import { emptyCard as emptyCardUx } from './empty_ux.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
@@ -39,6 +39,7 @@ import { swapSheet, rarityChip } from './loadout_ux.js';
 import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
+import { pauseBuild, buildChipHTML, buildLine, pauseSub } from './result_b9.js';
 import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
 import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
 import { dressDuo, wornOutfit } from './duo_pose.js';
@@ -304,14 +305,19 @@ function drawPortrait(t, info) {
 setInterval(() => { if (mode !== 'hub' || hubTab !== 'Battle') return; const e = document.getElementById('evCd'); if (e) e.textContent = countdownText(monthEndMs(dayKey()) - Date.now()); }, 1000);
 // the Bring line: the best build for this species, marked with what is already in the loadout
 function bringFor(skin) {
-  const r = recFor(skin); return { why: r.why, items: r.ids.map(id => ({ name: (WEAPONS.find(w => w.id === id) || { name: id }).name, ic: icon(id), eq: save.loadout.includes(id), own: !!(save.skills[id] && save.skills[id].lv > 0) })) };
+  const r = recFor(skin); return { why: r.why, can: !!bestBuild(save, skin), items: r.ids.map(id => ({ name: (WEAPONS.find(w => w.id === id) || { name: id }).name, ic: icon(id), eq: save.loadout.includes(id), own: !!(save.skills[id] && save.skills[id].lv > 0) })) };
 }
 // tap the portrait: species fun fact plus what the stage pays
 $('stPortrait').onclick = () => {
   const box = $('btFact'), hero = $('btHero'); if (!box.hidden) { box.hidden = true; hero.classList.remove('fact'); return; }
   audio.play('click'); const info = stageInfo(sel), sp = (kit && kit.SPECIES && kit.SPECIES[info.skin]) || null;
-  box.innerHTML = factHTML({ info, sp, hard, done: sel <= save.cleared, sparkleIcon: curImg('sparkles'), bring: bringFor(info.skin) }); box.hidden = false; hero.classList.add('fact'); try { hero.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* ignore */ }
-  box.querySelector('.ff-x').onclick = e => { e.stopPropagation(); audio.play('click'); box.hidden = true; hero.classList.remove('fact'); };
+  const fill = () => {
+    box.innerHTML = factHTML({ info, sp, hard, done: sel <= save.cleared, sparkleIcon: curImg('sparkles'), bring: bringFor(info.skin) });
+    box.querySelector('.ff-x').onclick = e => { e.stopPropagation(); audio.play('click'); box.hidden = true; hero.classList.remove('fact'); };
+    const bb = box.querySelector('.ff-go9');   // batch 9: pack the best owned skills for this species in one tap (undo lives on the Skills tab strip)
+    if (bb) bb.onclick = e => { e.stopPropagation(); const out = bestBuild(save, info.skin); if (!out) return; audio.play('upgrade'); save.loadout = out; persist(); fill(); renderHub(); box.hidden = false; hero.classList.add('fact'); toast('Packed for ' + (sp ? sp.name : 'the show')); };
+  };
+  fill(); box.hidden = false; hero.classList.add('fact'); try { hero.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* ignore */ }
 };
 $('loadEdit').onclick = () => { audio.play('click'); hubTab = 'Skills'; renderHub(); };
 const resetIn = () => { const ms = 86400000 - (Date.now() % 86400000), h = Math.floor(ms / 3600000); return h ? h + 'h ' + Math.floor(ms % 3600000 / 60000) + 'm' : Math.floor(ms / 60000) + 'm'; };
@@ -596,7 +602,8 @@ function pauseRecap() {
   const pc = Math.floor((g.progress || 0) * 100), t = Math.floor(g.t || 0), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   $('pRecap').innerHTML = `<div><i>${RECAP.flag}</i>Stage<b>${g.stage}</b></div><div><i>${RECAP.clock}</i>Time<b>${mm}:${ss}</b></div><div><i>${RECAP.target}</i>Popped<b>${g.kills}</b></div><div class="pbar"><i style="width:${pc}%"></i><em>${pc}% of the way</em></div>`;
   { const ll = lossLine(g); $('quitBtn').title = 'Ends the run: ' + ll.text; $('quitBtn').setAttribute('aria-label', 'Hold to give up. You would lose ' + ll.text); $('pLose').innerHTML = `<b>Giving up ends this run</b>${ll.text}`; }
-  $('pBuild').innerHTML = (save.loadout || []).map(id => { const w = WEAPONS.find(x => x.id === id), k = save.skills[id]; return w ? `<span>${icon(id)}LV ${k ? k.lv : 1}</span>` : ''; }).join('');
+  { const pb = pauseBuild(g.weap, save.loadout).filter(it => WEAPONS.some(x => x.id === it.id)); $('pBuild').innerHTML = pb.map(it => buildChipHTML(it, icon(it.id))).join('') + (pb.length ? `<em class="pb9n">${buildLine(pb)}</em>` : ''); $('pBuild').hidden = !pb.length;
+    const ps = document.querySelector('#pause .pnote'); if (ps) ps.textContent = pauseSub(g.stage, g.mode ? '' : stageInfo(g.stage).name); }
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
 function showStats() {
