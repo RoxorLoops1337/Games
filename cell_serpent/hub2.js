@@ -208,7 +208,7 @@ export function createHub2(c) {
     });
     bestBuy(core, s);
     { const rc = document.createElement('div'); rc.className = 'recbox'; rc.innerHTML = recordsHTML(s); list.appendChild(rc); }
-    { const bk = document.createElement('div'); list.appendChild(bk); renderStickerBook(bk, s, () => audio.play('click'), n => { save().sparkles += n; c.persist(); audio.play('levelup'); c.refreshCur(); }); }
+    { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t), n => { save().sparkles += n; c.persist(); audio.play('levelup'); c.refreshCur(); }); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }
   }
   // the cheapest upgrade you can afford right now wears a "BEST BUY" ribbon (a nudge, never a rule)
   function bestBuy(core, s) {

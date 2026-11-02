@@ -51,7 +51,8 @@ export function renderStickerBook(host, s, click, onPrize) {
     b.style.setProperty('--sc', t.col);
     b.setAttribute('aria-label', t.got ? 'Sticker: ' + t.name : t.secret ? 'Secret sticker, not found yet' : 'Locked sticker: ' + t.hint);
     b.innerHTML = `<span class="stkface">${t.got || !t.secret ? `<i class="stkic">${t.icon}</i>` : '<i class="stkq">?</i>'}</span>${isNew ? '<em>NEW</em>' : ''}`;
-    b.onclick = () => { if (click) click(); cap.innerHTML = t.got ? `<b>${t.name}</b> ${t.hint}` : t.secret ? '<b>Secret sticker</b> keep exploring' : `<b>${t.name}</b> ${t.hint}`; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); };
+    const idx = grid.children.length;
+    b.onclick = () => { if (click) click({ got: t.got, i: idx }); cap.innerHTML = t.got ? `<b>${t.name}</b> ${t.hint}` : t.secret ? '<b>Secret sticker</b> keep exploring' : `<b>${t.name}</b> ${t.hint}`; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); };
     if (isNew) { b.style.animationDelay = (fresh++ * 0.12) + 's'; seen.add(t.id); }
     grid.appendChild(b);
   }
