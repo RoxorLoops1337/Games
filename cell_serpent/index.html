@@ -1513,6 +1513,21 @@
   @media (max-height:700px){.dpet,.dheart{display:none}}
   @media (prefers-reduced-motion:reduce){.dwrap,.dhat,.dpet,.dnote,.dheart{animation:none!important} .dheart{opacity:.9}}
   /* end @css:02-animal-art */
+  /* @css:05-screen-feel */
+  .rribbon.fx6{position:relative;font-size:16px;padding:6px 26px;overflow:visible;filter:drop-shadow(0 0 10px rgba(255,200,61,.6));animation:rpIn .5s .5s cubic-bezier(.2,1.6,.4,1) both,rb6Glow 1.6s 1s ease-in-out 2}
+  .rribbon.fx6::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 35%,rgba(255,255,255,.85) 50%,transparent 65%);transform:translateX(-120%);animation:rb6Sweep 1.1s 1.1s ease-out 2 both;pointer-events:none}
+  .rribbon .rb6d{margin-left:8px;padding:1px 7px;border-radius:9px;background:#1b0a24;color:#ffe27a;font-size:12px;letter-spacing:.04em;vertical-align:1px}
+  @keyframes rb6Glow{50%{filter:drop-shadow(0 0 18px rgba(255,216,77,.95))}}
+  @keyframes rb6Sweep{to{transform:translateX(120%)}}
+  .rb6fx{position:fixed;z-index:30;width:0;height:0;pointer-events:none}
+  .rb6fx s{position:absolute;left:-8px;top:-8px;width:16px;height:16px;filter:drop-shadow(0 0 4px var(--c));background:var(--c);clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);opacity:0;animation:rb6Spark 1.1s cubic-bezier(.15,.8,.3,1) both}
+  .rb6ring{position:absolute;left:-70px;top:-24px;width:140px;height:48px;border-radius:50%;border:3px solid #ffd84d;opacity:0;animation:rb6Ring .8s ease-out both}
+  .rb6ring.b{border-color:#ff9ad6;animation-delay:.14s}
+  @keyframes rb6Spark{0%{opacity:1;transform:translate(0,0) scale(.4) rotate(0)}60%{opacity:1}100%{opacity:0;transform:translate(var(--dx),calc(var(--dy) + 26px)) scale(1.5) rotate(160deg)}}
+  @keyframes rb6Ring{0%{opacity:.9;transform:scale(.3)}100%{opacity:0;transform:scale(2.6)}}
+  @media (prefers-reduced-motion:reduce){.rribbon.fx6,.rribbon.fx6::after{animation:none!important}.rb6fx{display:none}}
+  @media (max-height:700px){.rribbon.fx6{font-size:14px;padding:4px 22px}}
+  /* end @css:05-screen-feel */
 </style>
 </head>
 <body>

@@ -13,6 +13,7 @@ import { applyCbPalette, paintCbStrip } from './cb_palette.js';
 import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.js';
 import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed, announce, watchGroove, watchStreak, resetGroove, showZone, inThumbZone, zoneSteer, initKeyboard, RARITY_WORDS } from './access.js';
 import { createMotion } from './motion.js';
+import { celebrateBest, stopBest } from './best_fx.js';
 import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
 import { firstGoalHTML, welcomeBack, welcomeHTML, hoursAway, stampVisit } from './title12b.js';
@@ -571,7 +572,7 @@ function statsPanel(onClose) {
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
   const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
-  stopFx(); const cu = n => `+<span data-to="${n}">${n}</span>`;
+  stopFx(); stopBest(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
   if (out.ribbons) rows.push(`<div class="r">🎀 ${cu(out.ribbons)} Ribbons</div>`);
   if (out.pet) rows.push(`<div class="r">${icon(out.pet.id)}${cu(out.pet.n)} ${PETS.find(p => p.id === out.pet.id).name} fragments</div>`);
@@ -589,7 +590,7 @@ function showResult() {
   const li1 = levelInfo(save.xp), reduce = save.settings.reduceMotion;
   levelBar(li0, li1, reduce);
   { const pct = Math.floor((r.progress || 0) * 100), best = out.first || out.starsGained > 0 || (!r.won && !r.mode && !r.hard && pct > out.prevPct && out.prevPct > 0);
-    $('rRibbon').textContent = best ? (out.first ? 'FIRST CLEAR!' : out.starsGained > 0 ? 'NEW BEST STARS!' : 'NEW BEST ' + pct + '%') : ''; $('rRibbon').classList.toggle('on', !!best); }
+    $('rRibbon').textContent = best ? (out.first ? 'FIRST CLEAR!' : out.starsGained > 0 ? 'NEW BEST STARS!' : 'NEW BEST ' + pct + '%') : ''; $('rRibbon').classList.toggle('on', !!best); celebrateBest($('rRibbon'), { reduce, delta: best && !out.first && !(out.starsGained > 0) ? pct - out.prevPct : 0, play: () => audio.play('star3') }); }
   if (r.cp50) rows.push(`<div class="r">⚡ +10 Voice back</div>`);
   $('rList').innerHTML = rows.join(''); countUp($('rList'), reduce, () => audio.play('countend'), f => audio.play('count', { f }));
   for (const el of $('rList').children) el.classList.add('got');
