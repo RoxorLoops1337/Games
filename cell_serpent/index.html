@@ -1063,6 +1063,10 @@
   @media (max-width:360px){.fbtx span{font-size:11.5px;gap:2px 5px} .fbtx img{width:15px;height:15px}}
   @media (max-width:370px){.tile.deal .top{flex-direction:column;align-items:center;text-align:center;gap:2px} .tile.deal .nm{font-size:14px;width:100%}}   /* Today's Treats on 320px phones: icon above the name, so 'Sparkles x10' is no longer broken letter by letter */
   @media (max-width:370px){.chestcard .top{flex-direction:column;align-items:center;text-align:center;gap:2px} .chestcard .nm{width:100%;font-size:15px}}   /* Gear chests: the name no longer wraps one letter per line */
+  .rvtimer{min-height:36px;padding:9px 14px}   /* round 4: the Timer link was a 27px tap target */
+  /* round 4: the win result on short phones. It used to clip the title and squash NEXT STAGE; now it compacts, and scrolls if still too tall */
+  #result{overflow-x:hidden;overflow-y:auto;justify-content:safe center} #result > *{flex-shrink:0}
+  @media (max-height:700px){#result{gap:5px;padding-top:calc(6px + env(safe-area-inset-top));padding-bottom:calc(8px + env(safe-area-inset-bottom))} #result .hero{height:clamp(56px,11vh,84px)} #result .stars{font-size:clamp(26px,5vh,34px)} #result .result-list{gap:3px 6px} #result .result-list .r{padding:2px 9px;font-size:13px} #result .result-list img{width:18px;height:18px} #result .btn{padding:9px 20px} #result #rNext{padding:10px 20px;font-size:20px} #result .row .btn{padding:8px}}
   /* end @css:20-qa */
   /* @css:17-perf */
   .hub-skel .tab.on>*{opacity:.35;pointer-events:none;transition:opacity .12s}
