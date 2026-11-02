@@ -15,9 +15,12 @@ export function heartbeat(t, rate) {
   return clamp(a + b, 0, 1);
 }
 
+// heartbeats per second at a danger strength d (0..1); the danger tick sound in audio.js follows the same pulse
+export const dangerRate = d => 1.3 + d * 1.9;
+
 export function createFeel6({ ctx, W, H, kit, S, OPT, ring, burst, text, glow, edges, vignette, slow, confetti, sounds }) {
   const calm = () => OPT.reduceMotion;
-  const st = { rev: null, blasts: [], bossT: 0, lastBeat: 0 };
+  const st = { rev: null, blasts: [], bossT: 0, lastBeat: 0, lastTick: 0 };
 
   function lineBand() {
     return kit && kit.bake ? kit.bake('d6line', W, 300, g => {
@@ -78,13 +81,15 @@ export function createFeel6({ ctx, W, H, kit, S, OPT, ring, burst, text, glow, e
 
   function drawDanger(g) {
     const d = dangerK(g); if (d <= 0) return;
-    const rate = 1.3 + d * 1.9, hb = calm() ? 0.55 : heartbeat(S.t, rate);
+    const rate = dangerRate(d), raw = heartbeat(S.t, rate), hb = calm() ? 0.55 : raw;
+    if (raw > 0.65 && st.hbHot !== true) { st.hbHot = true; if (sounds) sounds.push('dangerbeat'); } else if (raw < 0.4) st.hbHot = false;   // the lub of the heartbeat is also a sound
     edges('#ff2850', (0.06 + 0.5 * d) * (0.35 + 0.65 * hb));
     if (d > 0.45) vignette((d - 0.45) * 0.9 * (0.5 + 0.5 * hb), '90,0,20');
     if (!g.ring) {   // the line itself runs hot
       const spr = lineBand();
       if (spr) { ctx.save(); ctx.globalAlpha = clamp(d * (0.22 + 0.5 * hb), 0, 0.8); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(spr.c, 0, LINE_Y - 150, W, 300); ctx.restore(); }
     }
+    if (d > 0.3 && sounds && heartbeat(S.t, rate) > 0.85 && S.t - st.lastTick > 0.28) { st.lastTick = S.t; sounds.push('dangertick'); }   // a dry tick on every lub, so the ear follows the screen pulse
     if (!calm() && hb > 0.85 && S.t - st.lastBeat > 0.25) { st.lastBeat = S.t; S.trauma = Math.min(1, S.trauma + 0.04 + 0.06 * d); }
   }
 

@@ -7,11 +7,14 @@
 // canvas (the browser passes document.createElement, the tests pass a stub), so baked
 // sprites are cached once and blitted. Anything that must move its face (heads) is drawn
 // live with drawHead().
+import { createEnemyFaces } from './enemy_faces.js';
 export const INK = '#2d170f';
 const TAU = Math.PI * 2;
 
 const rgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-export const mix = (a, b, t) => { const x = rgb(a), y = rgb(b); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+const MIXC = new Map();
+export const mix = (a, b, t) => { let m = MIXC.get(a); if (!m) { if (MIXC.size > 300) return mixRaw(a, b, t); MIXC.set(a, m = new Map()); } let n = m.get(b); if (!n) m.set(b, n = new Map()); let v = n.get(t); if (v === undefined) { v = mixRaw(a, b, t); if (n.size < 64) n.set(t, v); } return v; };
+const mixRaw = (a, b, t) => { const x = rgb(a), y = rgb(b); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
 export const shade = (h, k = 0.28) => mix(h, '#4a1a30', k);
 export const tint = (h, k = 0.35) => mix(h, '#ffffff', k);
 
@@ -88,7 +91,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   const cache = new Map();
   // bake(key, w, h, fn): fn draws around (0,0); the sprite is w x h logical units.
   function bake(key, w, h, fn, scale = dpr) {
-    if (cache.has(key)) { if (key.startsWith('far|')) { const v = cache.get(key); cache.delete(key); cache.set(key, v); } return cache.get(key); }   // far skylines (1.1 MB each) are kept most-recent-last
+    const hit = cache.get(key);
+    if (hit !== undefined) { if (key.charCodeAt(0) === 102 && key.startsWith('far|')) { cache.delete(key); cache.set(key, hit); } return hit; }   // cache hits are the per-frame path: one lookup, no startsWith unless it can be a far skyline   // far skylines (1.1 MB each) are kept most-recent-last
     if (key.startsWith('far|')) { let n = 0, first = null; for (const k of cache.keys()) if (k.startsWith('far|')) { n++; if (!first) first = k; } if (n >= FAR_KEEP) { const old = cache.get(first); if (old && old.c) old.c.width = 0; cache.delete(first); } }   // a long session visits all 50 skylines: drop the least recent
     let spr = null;
     const c = makeCanvas && makeCanvas(Math.ceil(w * scale), Math.ceil(h * scale));
@@ -97,6 +101,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   }
   const FAR_KEEP = 6;
   const B = 40;   // bake radius
+  const EF = createEnemyFaces({ bake, cel, poly, circ, ell, line, heartPath, sparkle, shade, INK, mix });   // 01-enemy-art r7
   // layer(key, w, h, scale, fn): ONE big static layer (the background); a new key replaces the old one.
   let layerKey = null, layerSpr = null;
   function layer(key, w, h, scale, fn) {
@@ -383,6 +388,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   let MOOD = 0;
   const eyes2 = (g, dx, y, rr, iris = '#2d170f') => {
     if (MOOD === 3) { for (const s of [-1, 1]) { g.beginPath(); g.arc(s * dx, y + rr * 0.5, rr * 0.9, Math.PI * 1.1, Math.PI * 1.9); ink(g, Math.max(2.2, rr * 0.36)); g.stroke(); } return; }
+    if (MOOD === 7) { for (const s of [-1, 1]) { g.beginPath(); g.arc(s * dx, y - rr * 0.1, rr * 0.9, Math.PI * 0.12, Math.PI * 0.88); ink(g, Math.max(2.2, rr * 0.36)); g.stroke(); line(g, [[s * (dx + rr * 1.2), y - rr * 1.4], [s * (dx - rr * 1.0), y - rr * 2.3]], Math.max(2, rr * 0.3)); } return; }   // 02-animal-art r7: slump face, shut sad eyes under worried brows
     const o = MOOD === 1 ? 0.05 : 1, k = MOOD >= 2 ? 1.22 : 1;
     eye(g, -dx, y, rr * k, rr * 1.15 * k, { iris, open: o, look: [0, MOOD >= 2 ? -0.6 : 0] }); eye(g, dx, y, rr * k, rr * 1.15 * k, { iris, open: o, look: [0, MOOD >= 2 ? -0.6 : 0] });
   };
@@ -453,7 +459,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       }
       for (const s of [-1, 1]) cel(g, '#fffaf0', poly([[s * r * 0.3, r * 0.55], [s * r * 0.4, r * 0.3], [s * r * 0.2, r * 0.42]]), { r: r * 0.2, hi: false, lw: r * 0.06 });
     } else if (k === 'kitten') {
-      for (const s of [-1, 1]) { cel(g, '#ffb56a', poly([[s * r * 0.35, -r * 0.7], [s * r * 0.95, -r * 1.2], [s * r * 0.95, -r * 0.25]]), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#d88a3a' }); cel(g, '#ffc2dc', poly([[s * r * 0.55, -r * 0.7], [s * r * 0.8, -r * 0.95], [s * r * 0.8, -r * 0.45]]), { r: r * 0.2, hi: false, lw: 0.1 }); }
+      if (MOOD === 7) for (const s of [-1, 1]) cel(g, '#ffb56a', poly([[s * r * 0.35, -r * 0.8], [s * r * 1.35, -r * 0.62], [s * r * 0.95, -r * 0.2]]), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#d88a3a' });   // r7: ears flat
+      else for (const s of [-1, 1]) { cel(g, '#ffb56a', poly([[s * r * 0.35, -r * 0.7], [s * r * 0.95, -r * 1.2], [s * r * 0.95, -r * 0.25]]), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#d88a3a' }); cel(g, '#ffc2dc', poly([[s * r * 0.55, -r * 0.7], [s * r * 0.8, -r * 0.95], [s * r * 0.8, -r * 0.45]]), { r: r * 0.2, hi: false, lw: 0.1 }); }
       cel(g, '#ffb56a', circ(0, 0, r), { r, shadow: '#d88a3a' });
       for (const x of [-0.18, 0, 0.18]) line(g, [[x * r, -r * 0.92], [x * r * 1.2, -r * 0.62]], r * 0.07, '#d88a3a');
       eyes2(g, r * 0.38, -r * 0.08, r * 0.16, '#3a8a4a');
@@ -461,11 +468,12 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       smile(g, 0, r * 0.42, r * 0.14); for (const s of [-1, 1]) for (const dy of [0, 0.12]) line(g, [[s * r * 0.5, r * (0.3 + dy)], [s * r * 1.05, r * (0.22 + dy * 2)]], r * 0.04);
       blush(g, -r * 0.62, r * 0.28, r * 0.15); blush(g, r * 0.62, r * 0.28, r * 0.15);
     } else if (k === 'puppy') {
-      for (const s of [-1, 1]) cel(g, '#8a5a3a', ell(s * r * 0.92, r * 0.05, r * 0.32, r * 0.6, s * 0.15), { r: r * 0.5, hi: false, lw: r * 0.1, shadow: '#5a3822' });
+      for (const s of [-1, 1]) cel(g, '#8a5a3a', MOOD === 7 ? ell(s * r * 0.97, r * 0.42, r * 0.3, r * 0.74, s * 0.08) : ell(s * r * 0.92, r * 0.05, r * 0.32, r * 0.6, s * 0.15), { r: r * 0.5, hi: false, lw: r * 0.1, shadow: '#5a3822' });   // r7: ears hang when slumped
       cel(g, '#f6e2c4', circ(0, 0, r), { r, shadow: '#d3b88c' });
       g.save(); circ(0, 0, r)(g); g.clip(); g.fillStyle = '#8a5a3a'; ell(r * 0.55, -r * 0.5, r * 0.4, r * 0.34, 0.4)(g); g.fill(); g.restore();
       eyes2(g, r * 0.36, -r * 0.1, r * 0.15); cel(g, '#2d1a14', ell(0, r * 0.2, r * 0.2, r * 0.15), { r: r * 0.2, hi: false, lw: r * 0.06 });
-      smile(g, 0, r * 0.42, r * 0.2); cel(g, '#ff7e9a', ell(0, r * 0.6, r * 0.12, r * 0.18), { r: r * 0.15, hi: false, lw: r * 0.06 });
+      if (MOOD === 7) line(g, [[-r * 0.2, r * 0.52], [-r * 0.08, r * 0.42], [r * 0.08, r * 0.42], [r * 0.2, r * 0.52]], r * 0.06);
+      else { smile(g, 0, r * 0.42, r * 0.2); cel(g, '#ff7e9a', ell(0, r * 0.6, r * 0.12, r * 0.18), { r: r * 0.15, hi: false, lw: r * 0.06 }); }
       blush(g, -r * 0.62, r * 0.25, r * 0.14); blush(g, r * 0.62, r * 0.25, r * 0.14);
     } else if (k === 'piglet') {
       for (const s of [-1, 1]) cel(g, '#ff9ac0', poly([[s * r * 0.35, -r * 0.75], [s * r * 1.0, -r * 1.0], [s * r * 0.95, -r * 0.3]]), { r: r * 0.45, hi: false, lw: r * 0.09, shadow: '#d9648f' });
@@ -486,6 +494,12 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       cel(g, '#fff4e0', ell(0, r * 0.35, r * 0.7, r * 0.5), { r: r * 0.6, hi: false, lw: r * 0.08, shadow: '#e6d3b0' });
       eyes2(g, r * 0.38, -r * 0.15, r * 0.13); cel(g, '#ff9ab0', poly([[-r * 0.09, r * 0.12], [r * 0.09, r * 0.12], [0, r * 0.22]]), { r: r * 0.1, hi: false, lw: r * 0.05 }); smile(g, 0, r * 0.38, r * 0.14);
       blush(g, -r * 0.7, r * 0.2, r * 0.17); blush(g, r * 0.7, r * 0.2, r * 0.17);
+    } else if (k === 'turtle' && MOOD === 7) {   // r7: it pulls its head and feet into the shell, only two eyes glint in the dark gap
+      cel(g, '#4a9a42', ell(0, r * 0.62, r * 0.62, r * 0.2), { r: r * 0.3, hi: false, lw: r * 0.07, shadow: '#2f6e2c' });
+      cel(g, '#2a2036', ell(0, r * 0.52, r * 0.5, r * 0.2), { r: r * 0.3, hi: false, lw: r * 0.07, shadow: '#1a1224' });
+      for (const s of [-1, 1]) { g.fillStyle = '#fff'; g.beginPath(); g.ellipse(s * r * 0.2, r * 0.5, r * 0.07, r * 0.09, 0, 0, TAU); g.fill(); g.fillStyle = INK; g.beginPath(); g.arc(s * r * 0.2, r * 0.52, r * 0.04, 0, TAU); g.fill(); }
+      cel(g, '#6fbf5a', ell(0, -r * 0.12, r * 1.0, r * 0.82), { r, shadow: '#3f8a3a' });
+      for (const [x, y] of [[0, -0.5], [-0.5, -0.12], [0.5, -0.12], [-0.25, 0.28], [0.25, 0.28]]) cel(g, '#8fd878', circ(x * r, (y - 0.15) * r, r * 0.2), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#5ab04a' });
     } else if (k === 'turtle') {
       cel(g, '#6fbf5a', circ(0, -r * 0.1, r * 0.95), { r, shadow: '#3f8a3a' });
       for (const [x, y] of [[0, -0.5], [-0.5, -0.1], [0.5, -0.1], [-0.25, 0.3], [0.25, 0.3]]) cel(g, '#8fd878', circ(x * r, (y - 0.15) * r, r * 0.22), { r: r * 0.22, hi: false, lw: r * 0.07, shadow: '#5ab04a' });
@@ -588,11 +602,20 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   }
   function acidFn(g) { const r = B * 0.55; cel(g, '#8dff6a', circ(0, 0, r), { r, shadow: '#43b83a' }); fangsMouth(g, 0, r * 0.12, r * 0.28, 0.2, '#2f7a2a'); eye(g, -r * 0.3, -r * 0.3, r * 0.14, r * 0.18, { iris: '#2d170f' }); eye(g, r * 0.3, -r * 0.3, r * 0.14, r * 0.18, { iris: '#2d170f' }); }
 
+  let BODY_MEMO = Object.create(null);
   const SPR = {
-    body: (skin, boss, kind) => bake(`body|${skin}|${boss ? 1 : 0}|${kind || ''}`, B * 3.2, B * 3.2, bodyFn(skin, boss, kind)),
+    body: (skin, boss, kind) => {   // called for every cell every frame: remember the sprite per (skin, boss, kind) instead of building the key string
+      const kk = kind || '', slot = boss ? 1 : 0;
+      let bs = BODY_MEMO[skin]; if (!bs) bs = BODY_MEMO[skin] = [{}, {}];
+      let sp = bs[slot][kk];
+      if (sp === undefined) { sp = bake(`body|${skin}|${slot}|${kk}`, B * 3.2, B * 3.2, bodyFn(skin, boss, kind)); if (sp) bs[slot][kk] = sp; }
+      return sp;
+    },
     minion: id => bake('min|' + id, B * 3.4, B * 3.4, MIN[id] || MIN.green),
     pickup: k => bake('pk|' + k, B * 2.4, B * 2.4, PICK[k] || PICK.gem),
     note: crit => bake('note|' + (crit ? 1 : 0), B * 2.4, B * 2.4, noteFn(crit ? '#ffd84d' : '#6fe3ff', crit), 1),
+    dazed: skin => { const k = SPECIES[skin] ? skin : 'love', P = SPECIES[k]; return bake('dazed|' + k, B * 3.4, B * 3.4, g => { cellShape(g, P, B, { decor: false }); pattern(g, P, k, B); EF.dazed(g, B, P); }, 2); },   // 01-enemy-art r7: the face that pops out of a killed head
+    tail: skin => { const k = SPECIES[skin] ? skin : 'love'; return EF.tailSpr(k, SPECIES[k], B); },
     acid: () => bake('acid', B * 1.6, B * 1.6, acidFn),
     pet: (id, mood = 0) => bake('pet|' + id + '|' + mood, B * 3, B * 3, g => { MOOD = mood; critter(g, PETSPR[id] || 'kitten', B * 0.9); petMood(g, PETSPR[id] || 'kitten', B * 0.9); petAcc(g, PETSPR[id] || 'kitten', B * 0.9); MOOD = 0; }, 1),
     // round discs that read on any cell colour: coin (gold cell), shield (ward cell), moon (lullaby cell)
@@ -618,6 +641,24 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     feather: () => bake('feather', B * 1.4, B * 1.4, featherFn, 1),
     weapon: (id, mood = 0) => mood ? bake('wpn|' + id + '|' + mood, B * 4.6, B * 3.4, g => { MOOD = mood; (WPN[id] || WPN.dagger)(g); MOOD = 0; }, 1) : bake('wpn|' + id, B * 4.6, B * 3.4, WPN[id] || WPN.dagger, 1),
   };
+  // steady frames look sprites up by value: the key string and the bake closure are only built the first time (cache.clear drops these too)
+  const memo = new Map();
+  let gen = 0;   // bumps whenever the baked sprites are dropped, so callers that remember a sprite know to look it up again
+  { const clr = cache.clear.bind(cache); cache.clear = () => { clr(); memo.clear(); BODY_MEMO = Object.create(null); gen++; }; }
+  const sprMemo = (tag, a, b, fn, x, y, z) => {
+    let m = memo.get(tag); if (!m) memo.set(tag, m = new Map());
+    let n = m.get(a); if (!n) m.set(a, n = new Map());
+    let v = n.get(b); if (v === undefined) { v = fn(x, y, z); n.set(b, v === undefined ? null : v); }
+    return v;
+  };
+  { const body = SPR.body, minion = SPR.minion, pickup = SPR.pickup, note = SPR.note, pet = SPR.pet, weapon = SPR.weapon;
+    SPR.body = (skin, boss, kind) => sprMemo(boss ? 'bodyB' : 'body', skin, kind || '', body, skin, boss, kind);
+    SPR.minion = id => sprMemo('min', id, 0, minion, id);
+    SPR.pickup = k => sprMemo('pk', k, 0, pickup, k);
+    SPR.note = crit => sprMemo('note', !!crit, 0, note, crit);
+    SPR.pet = (id, mood = 0) => sprMemo('pet', id, mood, pet, id, mood);
+    SPR.weapon = (id, mood = 0) => sprMemo('wpn', id, mood, weapon, id, mood);
+  }
 
   // blit a baked sprite centred at (x, y), `size` wide, optional rotation / flip
   function blit(g, spr, x, y, size, rot = 0, flip = false, alpha = 1) {
@@ -628,6 +669,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   }
 
   // live head: body and feelers rotate with the snake, the FACE stays upright and looks at the player.
+  const headBody = (skin, P, R) => bake('headbody|' + (SPECIES[skin] ? skin : 'love'), B * 3.4, B * 3.4, gg => { cellShape(gg, P, R, { decor: false }); pattern(gg, P, skin, R); }, 3);
   function drawHead(g, x, y, r, ang, o = {}) {
     const P = SPECIES[o.skin] || SPECIES.love, boss = !!o.boss, t = o.t || 0, R = B;
     g.save(); g.translate(x, y); g.scale(r / B, r / B);
@@ -635,9 +677,10 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     let sq = 0; if (o.flash > 0) sq = -Math.min(1, o.flash / 0.12) * 0.16; if (o.sg === 'go') sq += 0.15; else if (o.sg === 'warn') sq -= 0.05 + Math.sin(t * 40) * 0.04;
     if (sq) { g.rotate(ang); g.scale(1 + sq, 1 - sq * 0.8); g.rotate(-ang); }
     if (boss && o.p2) p2Halo(g, R, t);
-    if (o.sg === 'go' || (o.sg === 'warn' && boss && o.p2)) dashSpikes(g, R, ang, t, boss && !!o.p2, o.sg === 'warn');
+    if (o.sg === 'go' || (o.sg === 'warn' && boss && o.p2)) dashSpikes(g, R, ang, t, boss && !!o.p2, o.sg === 'warn', o.skin);
+    if (!boss && (o.sg === 'go' || o.sg === 'warn')) EF.surgeRing(g, R, P, t, o.sg === 'warn');   // 01-enemy-art r7: the surge ring wears the species colours
     // the body never animates, only its heading: baked once per species at heading 0 and blitted rotated (cellShape + pattern cost ~15 clips and ~100 paths a head)
-    const bodySpr = bake('headbody|' + (SPECIES[o.skin] ? o.skin : 'love'), B * 3.4, B * 3.4, gg => { cellShape(gg, P, R, { decor: false }); pattern(gg, P, o.skin, R); }, 3);
+    const bodySpr = sprMemo('headbody', SPECIES[o.skin] ? o.skin : 'love', 0, headBody, o.skin, P, R);
     if (bodySpr) { g.save(); g.rotate(ang); g.drawImage(bodySpr.c, -bodySpr.w / 2, -bodySpr.h / 2, bodySpr.w, bodySpr.h); g.restore(); }
     else { g.save(); g.rotate(ang); cellShape(g, P, R, { decor: false }); pattern(g, P, o.skin, R); g.restore(); }
     glossDot(g, R, 0.46, -0.5);
@@ -720,11 +763,20 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     } else {
       E(-R * 0.36, -R * 0.1, R * 0.28, R * 0.34); E(R * 0.36, -R * 0.1, R * 0.28, R * 0.34); fangsMouth(g, 0, R * 0.34, R * 0.3, 0.6);
     }
+    if (o.sg === 'go' && !hurt) EF.yell(g, R, P, t); else if (hurt) EF.wail(g, R, P, t);   // 01-enemy-art r7
     if (boss && f !== 'grumpy' && f !== 'sad' && f !== 'cyclops' && f !== 'shades') { brow(g, -R * 0.66, -R * 0.6, -R * 0.1, -R * 0.4, R * 0.13); brow(g, R * 0.66, -R * 0.6, R * 0.1, -R * 0.4, R * 0.13); }
     if (hurt) for (const s of [-1, 1]) sparkle(g, s * R * 0.86, -R * 0.3, R * 0.2, '#ffd84d');
     else if (o.alone && f !== 'sad') {   // the shield is gone: it sweats and trembles
       const k = (t * 1.6) % 1; g.fillStyle = '#bfe9ff';
       for (const [dx, ph] of [[0.78, 0], [-0.82, 0.5]]) { const q = (k + ph) % 1; g.save(); g.globalAlpha = 1 - q * q; g.translate(dx * R, -R * 0.42 + q * R * 0.5); g.beginPath(); g.moveTo(0, -R * 0.18); g.quadraticCurveTo(R * 0.15, R * 0.02, 0, R * 0.1); g.quadraticCurveTo(-R * 0.15, R * 0.02, 0, -R * 0.18); g.fill(); ink(g, R * 0.05); g.stroke(); g.restore(); }
+    }
+    if (o.panic > 0 && !hurt && !boss) {   // 05 round 7: a face about to reach the line goes wide-eyed and screams, shaking (it is panicking, the duo is about to be wiped out)
+      const sh = Math.sin(t * 46) * R * 0.025 * o.panic;
+      g.save(); g.translate(sh, 0);
+      for (const s of [-1, 1]) { g.fillStyle = '#fff'; ell(s * R * 0.36, -R * 0.1, R * 0.27, R * 0.32)(g); g.fill(); ink(g, R * 0.08); g.stroke(); g.fillStyle = '#2d170f'; circ(s * R * 0.36 + (o.look ? o.look[0] * R * 0.07 : 0), -R * 0.08, R * 0.07)(g); g.fill(); }
+      g.fillStyle = '#7a1633'; ell(0, R * 0.46, R * 0.22, R * (0.2 + 0.07 * Math.abs(Math.sin(t * 18)))) (g); g.fill(); ink(g, R * 0.07); g.stroke();
+      g.fillStyle = '#ff7a9a'; ell(0, R * 0.56, R * 0.12, R * 0.07)(g); g.fill();
+      g.restore();
     }
     if (o.fury > 0 && !hurt) {   // the manga anger mark pops on the brow
       const k = 1 + Math.sin(t * 14) * 0.12 * o.fury; g.save(); g.translate(R * 0.7, -R * 0.66); g.scale(k, k); g.lineCap = 'round';
@@ -738,8 +790,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   }
   // 01-enemy-art r6: a surging head grows a fan of hot spikes along its heading (boss phase 2: seven big ones with a white core and a
   // speed-line wake; every other surge: three short streaks). Baked once, drawn rotated and stretched, so a dash costs two drawImage calls.
-  function dashSpikes(g, R, ang, t, big, warn) {
-    const key = big ? 'dashspk|big' : 'dashspk|min', sz = R * 4.6;
+  function dashSpikes(g, R, ang, t, big, warn, skin) {
+    const SP = SPECIES[skin], key = big ? 'dashspk|big' : 'dashspk|min|' + (SP ? skin : ''), sz = R * 4.6;
     const spr = bake(key, sz, sz, c => {
       if (big) {
         for (const dy of [-0.55, 0, 0.55]) line(c, [[-R * 1.4, R * dy], [-R * 2.2 - (dy ? 0 : R * 0.1), R * dy]], R * (dy ? 0.07 : 0.1), 'rgba(255,200,120,.75)');
@@ -750,7 +802,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
           line(c, [[x0, y0], [Math.cos(a) * (R * 0.8 + L * 0.7), Math.sin(a) * (R * 0.8 + L * 0.7)]], R * 0.05, '#fff1a8');
         }
       } else {
-        for (const dy of [-0.45, 0, 0.45]) line(c, [[-R * 1.2, R * dy], [-R * (1.8 + (dy ? 0 : 0.35)), R * dy]], R * 0.07, 'rgba(255,255,255,.6)');
+        if (SP) EF.streaks(c, R, SP); else for (const dy of [-0.45, 0, 0.45]) line(c, [[-R * 1.2, R * dy], [-R * (1.8 + (dy ? 0 : 0.35)), R * dy]], R * 0.07, 'rgba(255,255,255,.6)');
       }
     }, 2);
     if (!spr) return;
@@ -837,5 +889,5 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   function text2(g, ch, x, y, size) { g.font = `900 ${size}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = size * 0.25; g.strokeStyle = INK; g.strokeText(ch, x, y); g.fillStyle = '#fff'; g.fillText(ch, x, y); }
 
   // flat colour fallback shapes are not needed: the kit always draws. Expose helpers for UI art too.
-  return { SPR, blit, drawHead, cel, eye, sparkle, SPECIES, MINION_IDS: Object.keys(MIN), cache, B, bake, layer, layer2, makeCanvas, dpr };
+  return { SPR, blit, drawHead, cel, eye, sparkle, SPECIES, MINION_IDS: Object.keys(MIN), cache, B, bake, layer, layer2, makeCanvas, dpr, get gen() { return gen; } };
 }

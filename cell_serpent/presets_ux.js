@@ -61,7 +61,7 @@ export function renderPresets(host, c) {
       const rn = el('button', 'prren', '✎'); rn.setAttribute('aria-label', `Rename build ${nm}`); cell.appendChild(rn);
       rn.onclick = e => {
         e.stopPropagation(); const inp = el('input', 'prinp'); inp.maxLength = NAME_MAX; inp.value = buildName(s, i); inp.setAttribute('aria-label', 'Build name'); main.innerHTML = ''; main.appendChild(inp); main.disabled = true; rn.remove(); inp.focus(); inp.select();
-        let done = false; const fin = ok => { if (done) return; done = true; if (ok) { renameBuild(s, i, inp.value); persist(); audio.play('click'); } rerender(); };
+        let done = false; const fin = ok => { if (done) return; done = true; if (ok) { renameBuild(s, i, inp.value); persist(); audio.play('click'); announce('Build renamed to ' + buildName(s, i)); } rerender(); refocus(host, i, 'prren'); };
         inp.onkeydown = ev => { if (ev.key === 'Enter') fin(true); else if (ev.key === 'Escape') fin(false); }; inp.onblur = () => fin(true);
       };
     }

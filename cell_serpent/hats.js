@@ -83,8 +83,9 @@ export const HATS = {
   },
 };
 
+const HAT_KEY = Object.create(null);   // the cache key string is built once per hat, not every frame
 export function bakeHat(kit, hat) {
   if (!kit || !kit.bake) return null;
   const fn = HATS[hat]; if (!fn) return null;
-  return kit.bake('hat|' + hat, 86, 86, g => { g.translate(0, 8); fn(g); }, 2);
+  return kit.bake(HAT_KEY[hat] || (HAT_KEY[hat] = 'hat|' + hat), 86, 86, g => { g.translate(0, 8); fn(g); }, 2);
 }

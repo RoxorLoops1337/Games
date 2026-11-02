@@ -7,7 +7,7 @@ const TAU = Math.PI * 2;
 const FY0 = LINE_Y + 34, FY1 = H - 78, FH = FY1 - FY0;   // the visible boards: between the footlight rail and the crowd
 const ROWS = 4, COLS = 14;
 
-export const FLOOR_KINDS = { disco: 'tiles', love: 'hearts', piggy: 'hearts', grumpy: 'puddles', frosty: 'ice', mighty: 'ice' };
+export const FLOOR_KINDS = { disco: 'tiles', love: 'hearts', piggy: 'hearts', grumpy: 'puddles', frosty: 'ice', mighty: 'stone' };
 export const floorKind = skin => FLOOR_KINDS[skin] || '';
 
 // the same tempo family as bg_world.beatPulse, but the whole number of the beat so the tiles can roll their colours
@@ -87,6 +87,8 @@ export function drawFloorFx(c, o) {
         c.globalAlpha = 0.95 * (1 - q) * (1 - q); c.beginPath(); c.ellipse(x + Math.sin(p * 5 + Math.floor(t * 0.9 + p * 0.37 + k * 0.5) * 2.1) * w * 0.12, y, rr, rr * 0.24, 0, 0, TAU); c.stroke();
       }
     }
+  } else if (kind === 'stone') {
+    drawStone(c, o);
   } else if (kind === 'ice') {
     const gl = glint(kit), n = low ? 5 : GL.length;
     if (gl) {
@@ -100,6 +102,49 @@ export function drawFloorFx(c, o) {
     // a slow sheen band slides over the ice
     const sx = ((t * 55) % (W + 400)) - 200; c.globalAlpha = 0.07 + pulse * 0.04; c.fillStyle = 'rgb(220,245,255)';
     c.beginPath(); c.moveTo(sx, FY0); c.lineTo(sx + 46, FY0); c.lineTo(sx - 30, FY1); c.lineTo(sx - 76, FY1); c.closePath(); c.fill();
+  }
+  c.restore();
+}
+
+// mighty stone slabs: dark seams, a chequer of slightly paler slabs and a web of old cracks. When a snake winds up or dashes
+// the floor rumbles: the cracks glow through (o.flare 0..1), a shock ring runs out from the dash and dust shakes loose.
+function paintCracks(b, fh, layers) {
+  let s = 77; const r = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  b.translate(-W / 2, -fh / 2); b.lineCap = 'round'; b.lineJoin = 'round';
+  const lines = [];
+  for (let i = 0; i < 9; i++) {
+    let x = 20 + i * 68 + r() * 40, y = 6 + r() * 30; const pts = [[x, y]];
+    while (y < fh - 4) { y += 9 + r() * 14; x += (r() - 0.5) * 46; pts.push([x, y]); if (r() < 0.36 && y < fh - 30) { const f = [[x, y]]; let fx = x, fy = y; const d = r() < 0.5 ? -1 : 1; for (let k = 0; k < 3 + (r() * 3 | 0); k++) { fy += 5 + r() * 9; fx += d * (8 + r() * 16); f.push([fx, fy]); } lines.push(f); } }
+    lines.push(pts);
+  }
+  for (const [lw, col] of layers) { b.lineWidth = lw; b.strokeStyle = col; for (const pts of lines) { b.beginPath(); pts.forEach(([px, py], j) => j ? b.lineTo(px, py) : b.moveTo(px, py)); b.stroke(); } }
+}
+function drawStone(c, o) {
+  const { t, kit, low } = o, fl = o.flare || 0, fh = FH + 4;
+  c.save();
+  c.fillStyle = 'rgb(205,218,255)'; c.globalAlpha = 0.05; c.beginPath();
+  for (let r = 0; r < ROWS; r++) for (let i = 0; i < COLS; i++) if ((r + i) % 2 === 0) quadPath(c, r, i, 1);
+  c.fill();
+  c.lineCap = 'round'; c.beginPath();
+  for (let i = 0; i <= COLS; i++) { c.moveTo(tx(i, 0), ty(0)); c.lineTo(tx(i, ROWS), ty(ROWS)); }
+  for (let r = 0; r <= ROWS; r++) { c.moveTo(tx(0, r), ty(r)); c.lineTo(tx(COLS, r), ty(r)); }
+  c.strokeStyle = 'rgb(6,5,22)'; c.globalAlpha = 0.5; c.lineWidth = 2.4; c.stroke();
+  c.strokeStyle = 'rgb(190,205,245)'; c.globalAlpha = 0.1; c.lineWidth = 1; c.translate(0, 2); c.stroke(); c.translate(0, -2);
+  const dark = kit && kit.bake('stonecracks|d', W, fh, b => paintCracks(b, fh, [[5, 'rgba(4,3,16,.85)'], [1.3, 'rgba(170,185,230,.4)']]), 1);
+  const glow = kit && kit.bake('stonecracks|g', W, fh, b => paintCracks(b, fh, [[14, 'rgba(255,90,40,.3)'], [5, 'rgba(255,160,70,.95)'], [1.8, 'rgba(255,250,215,1)']]), 1);
+  const rum = fl > 0.02 ? Math.sin(t * 60) * fl * 1.4 : 0;   // the whole slab field shivers
+  if (dark) { c.globalAlpha = 0.85; c.drawImage(dark.c, 0, FY0 - 4 + rum, W, fh); }
+  if (glow && fl > 0.02) { c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, fl) * (0.55 + 0.35 * Math.sin(t * 22)); c.drawImage(glow.c, 0, FY0 - 4 + rum, W, fh); }
+  // the dash lands: a shock ring runs out along the floor from the head, and slab dust hops
+  const age = t - (o.goT === undefined ? -9 : o.goT);
+  if (age >= 0 && age < 0.8) {
+    const q = age / 0.8, x = o.goX, y = FY0 + FH * 0.3, rr = 30 + q * 330;
+    c.globalCompositeOperation = 'lighter'; c.strokeStyle = 'rgb(255,200,130)'; c.globalAlpha = (1 - q) * (1 - q) * 0.8; c.lineWidth = 5 * (1 - q) + 1.5;
+    c.beginPath(); c.ellipse(x, y, rr, rr * 0.22, 0, 0, TAU); c.stroke();
+    c.fillStyle = 'rgb(215,225,250)'; c.globalAlpha = (1 - q) * 0.55; c.beginPath();
+    const n = low ? 6 : 12;
+    for (let i = 0; i < n; i++) { const a = i / n * TAU + 0.4, d = rr * (0.7 + (i % 3) * 0.15), px = x + Math.cos(a) * d, py = y + Math.sin(a) * d * 0.22 - Math.sin(q * Math.PI) * (10 + (i % 4) * 7); c.moveTo(px + 3.5, py); c.arc(px, py, 3.5 * (1 - q * 0.5), 0, TAU); }
+    c.fill();
   }
   c.restore();
 }

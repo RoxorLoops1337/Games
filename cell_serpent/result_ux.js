@@ -61,3 +61,33 @@ export function trackModality(root = document.documentElement) {
     addEventListener('pointerdown', () => root.classList.remove('kbd'), true);
   } catch (e) { /* ignore */ }
 }
+
+// Batch 7: RETRY. The reward chips lift off the result list and fly up to the run HUD, and the energy spark peels off the button
+// and flies to the top-left corner (where the energy lives), so pressing RETRY visibly pays and spends. DOM only, WAAPI, a handful of nodes.
+export function retryTargets(w, h) { const top = (h - Math.min(h, w * 1.76)) / 2 + 18; return { energy: { x: 44, y: top }, beats: { x: Math.max(60, w - 90), y: top } }; }   // the run frame is letterboxed at about 1:1.76
+export function retryFly(btn, snaps, reduce, w = globalThis.innerWidth || 390, h = globalThis.innerHeight || 844) {
+  try {
+    if (reduce || !btn || !btn.getBoundingClientRect || typeof btn.animate !== 'function') return 0;
+    const tg = retryTargets(w, h), host = document.createElement('div'); host.className = 'gfx-host';
+    document.body.appendChild(host);
+    const mk = (x0, y0, to, txt, src, delay, dur) => {
+      const f = document.createElement('i'); f.className = 'gfx-fly'; f.style.left = x0 - 11 + 'px'; f.style.top = y0 - 11 + 'px';
+      if (src) f.style.backgroundImage = `url("${src}")`; else f.textContent = txt;
+      host.appendChild(f);
+      const dx = to.x - x0, dy = to.y - y0;
+      f.animate([{ transform: 'translate(0,0) scale(.6)', opacity: 0 }, { transform: `translate(${(dx * 0.12).toFixed(1)}px,${(dy * 0.12 - 30).toFixed(1)}px) scale(1.3)`, opacity: 1, offset: 0.22 },
+        { transform: `translate(${(dx * 0.75).toFixed(1)}px,${(dy * 0.75).toFixed(1)}px) scale(1)`, opacity: 1, offset: 0.78 }, { transform: `translate(${dx.toFixed(1)}px,${dy.toFixed(1)}px) scale(.45)`, opacity: 0 }],
+        { duration: dur, delay, easing: 'cubic-bezier(.45,.05,.5,1)', fill: 'both' });
+    };
+    const b = btn.getBoundingClientRect();
+    mk(b.left + b.width * 0.62, b.top + b.height / 2, tg.energy, '⚡', '', 0, 700);
+    let i = 0;
+    for (const it of snaps || []) {
+      if (!it.s || !it.s.rect) continue;
+      const r = it.s.rect, n = it.n > 40 ? 4 : 3;
+      for (let k = 0; k < n; k++) mk(r.left + 20 + k * 9, r.top + r.height / 2, tg.beats, it.kind === 'sparkles' ? '✦' : '●', it.s.src, 40 + (i++) * 70, 620);
+    }
+    setTimeout(() => host.remove(), 1700);
+    return i + 1;
+  } catch (e) { return 0; }
+}

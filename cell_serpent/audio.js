@@ -3,6 +3,7 @@
 // key and tempo change every 5 stages, bosses get their own tense track, and the layers follow
 // mix({ stage, boss, groove (0..1), danger (0..1) }).
 import { beatBpm as simBpm, SKINS, skinFor } from './sim.js';
+import { humOf, squeakHz, HUB_CHORD, HUB_TWINKLE, HUB_GAIN } from './audio_b7.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
@@ -59,6 +60,15 @@ export function createAudio() {
     const pts = pumpEnv(vol, dur, beat, depth); g.gain.setValueAtTime(pts[0][1], t + pts[0][0]);
     for (let i = 1; i < pts.length; i++) g.gain.linearRampToValueAtTime(pts[i][1], t + pts[i][0]);
     o.connect(g); g.connect(bus('m')); o.start(t); o.stop(t + dur + 0.02);
+    live++; o.onended = () => { live--; };
+  }
+  // a soft swelling note (slow attack, slow release) for the choir hum and the hub twinkle; vol is the peak
+  function swell(f, dur, type, vol, delay = 0, b = 's') {
+    if (!ac || muted || live > 40) return;
+    const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + dur * 0.4); g.gain.linearRampToValueAtTime(0.0008, t + dur);
+    o.connect(g); g.connect(bus(b)); o.start(t); o.stop(t + dur + 0.02);
     live++; o.onended = () => { live--; };
   }
   // lower the music for a moment (big moments), then let it swell back
@@ -134,8 +144,11 @@ export function createAudio() {
     squeak: () => gate('squeak', 80) && tone(2400, 0.05, 'square', 0.03, -900),
     baa: () => gate('baa', 200) && (tone(320, 0.4, 'sawtooth', 0.07, 45), tone(330, 0.4, 'sawtooth', 0.045, 40, 0.01)),
     oink: () => gate('oink', 200) && (tone(190, 0.1, 'sawtooth', 0.09, 60), tone(200, 0.1, 'sawtooth', 0.08, -40, 0.11)),
+    // the title snake: every cell squeaks a pentatonic step, the head low and the tail tip high, so a swipe along it plays a tune
+    cellsq: e => { if (!gate('cellsq', 70)) return; const c = Math.max(0, Math.min(12, (e && e.cell) | 0)), f = 392 * Math.pow(2, ([0, 2, 4, 7, 9][c % 5] + 12 * Math.floor(c / 5)) / 12); tone(f, 0.09, 'triangle', 0.09, f * 0.25); tone(f * 2, 0.05, 'sine', 0.035, 0, 0.01); },
     boop: () => gate('boop', 200) && tone(330, 0.2, 'sine', 0.09, -120),
     danger: () => gate('danger', 300) && (tone(150, 0.1, 'square', 0.1), tone(150, 0.1, 'square', 0.1, 0, 0.16)),
+    dangertick: () => gate('dangertick', 200) && (tone(1180, 0.035, 'square', 0.035, -200), tone(70, 0.1, 'sine', 0.12, -20)),
     mend: () => gate('mend', 300) && tone(880, 0.12, 'sine', 0.05, 520),
     skip: () => tone(420, 0.1, 'triangle', 0.07, -120),
     // loot count-up: a tiny rising pentatonic tick (e.n = 0..1 progress), and a big flash chord for a legendary find
@@ -225,6 +238,8 @@ export function createAudio() {
     // the window ran out and the linked cells healed: the chord goes flat and thins out
     quartetfail: () => { if (!gate('quartetfail', 300)) return; [72, 76, 79].forEach((m, i) => tone(hz(m), 0.3, 'sine', 0.035, -hz(m) * 0.06, i * 0.03)); tone(hz(66), 0.35, 'triangle', 0.03, -20, 0.1); },
     // a choir cell popped: a breathy three voice "ooh" that fades the way the choir stops regrowing the cells around it
+    bellring: () => { if (!gate('bellring', 120)) return; [1319, 1976, 2637].forEach((f, i) => tone(f, 0.55 - i * 0.1, 'sine', 0.06 - i * 0.012, 0, i * 0.012)); noise(0.06, 0.04, 5000, 2500, 'bandpass'); },
+    traitcue: () => { if (!gate('traitcue', 300)) return; tone(330, 0.16, 'triangle', 0.06, 160); tone(495, 0.14, 'sine', 0.04, 100, 0.05); },
     choirpop: () => { if (!gate('choirpop', 200)) return; [64, 67, 71].forEach((m, i) => { const f = hz(m); tone(f, 0.5, 'triangle', 0.02, -f * 0.12, i * 0.02); tone(f * 1.004, 0.5, 'sine', 0.025, -f * 0.12, i * 0.02); }); noise(0.35, 0.02, 1500, 400, 'bandpass', 0.01); },
     // Encore beam fires / becomes ready
     encore: () => { noise(0.9, 0.12, 400, 6000, 'bandpass'); tone(110, 0.9, 'sawtooth', 0.12, 440); [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.5, 'triangle', 0.06, 0, 0.1 + i * 0.05)); duck(0.55, 0.9); },
@@ -259,6 +274,28 @@ export function createAudio() {
   sfx.card3 = () => sfx.card({ rarity: 3 }); sfx.card4 = () => sfx.card({ rarity: 4 }); sfx.card5 = () => sfx.card({ rarity: 5 });
   // revive countdown: e.n is 3, 2, 1: the thump gets louder and a high tick joins in
   sfx.heartbeat = e => { const k = 1 + (3 - Math.max(1, Math.min(3, (e && e.n) || 3))) * 0.18; tone(62, 0.13, 'sine', Math.min(0.5, 0.3 * k), -18); tone(52, 0.16, 'sine', Math.min(0.4, 0.24 * k), -14, 0.17); if (e && e.n === 1) tone(1320, 0.05, 'square', 0.03, 0, 0.17); };
+  // danger tick (round 7): called from the screen feel on the lub of the red heartbeat, so the sound follows the picture and
+  // its rate. A soft thump, then the dub a little later, and from half danger a clock tick on top. It stays under the revive heartbeat.
+  sfx.dangerbeat = () => {
+    if (!gate('dangerbeat', 140)) return;
+    const d = Math.max(0, Math.min(1, mixS.danger)), rate = 1.3 + Math.max(0, d - 0.12) / 0.88 * 1.9;
+    tone(60, 0.12, 'sine', 0.1 + 0.1 * d, -16); tone(50, 0.14, 'sine', 0.07 + 0.08 * d, -12, 0.22 / rate);
+    if (d > 0.5) tone(1760, 0.025, 'square', 0.02 + d * 0.02, 0, 0.22 / rate);
+  };
+  // choir cells are regrowing the cells around them: a quiet swelling chord whose colour is the species (see audio_b7.js)
+  sfx.choirhum = e => {
+    const h = humOf(e && e.skin), k = 0.75 + 0.08 * Math.min(4, (e && e.n) || 1);
+    h.iv.forEach((iv, i) => swell(hz(h.m + iv), h.dur, h.w, h.v * k, i * 0.03, 'm'));
+  };
+  // tapped title snake: every cell has its own pitch, the head answers with a round low "oh"
+  sfx.snakesqueak = e => {
+    if (!gate('snakesqueak', 70)) return;
+    const i = (e && e.i) | 0;
+    if (i === 0) { tone(330, 0.2, 'sine', 0.09, -110); tone(495, 0.14, 'sine', 0.04, -150, 0.02); return; }
+    const f = squeakHz(i); tone(f, 0.09, 'sine', 0.07, f * 0.45); tone(f * 2, 0.05, 'triangle', 0.02, 0, 0.01);
+  };
+  // tutorial step 3: the shielded face pops (matches the burst in the slide)
+  sfx.tutpop = () => { if (!gate('tutpop', 400)) return; tone(520, 0.1, 'sine', 0.11, 700); noise(0.12, 0.09, 4000, 900, 'bandpass'); tone(1046, 0.16, 'triangle', 0.06, 0, 0.07); tone(1568, 0.22, 'sine', 0.04, 0, 0.12); };
   sfx.star1 = () => sfx.star({ n: 1 }); sfx.star2 = () => sfx.star({ n: 2 }); sfx.star3 = () => sfx.star({ n: 3 });
 
   // ---------------------------------------------------------------- music
@@ -348,8 +385,7 @@ export function createAudio() {
         }
         // accessibility: an optional woodblock click on every beat (higher on the bar line), so the rhythm can be felt without the mix
         if (beatTick && s % 4 === 0) tone(s === 0 && bar === 0 ? 1319 : 988, 0.05, 'triangle', s === 0 && bar === 0 ? 0.2 : 0.15, 0, t, 'm');
-        // danger: a ticking clock when the snake is close to the line
-        if (m.danger > 0.55 && s % 4 === 0) tone(1760, 0.03, 'square', 0.025 + m.danger * 0.02, 0, t, 'm');
+        // (danger ticking now lives in sfx.dangerbeat: it follows the red heartbeat instead of the music grid)
         // section ends: riser into a crash
         if (bar === 3 && s === 12 && lvl > 0.35) noise(sp * 4, 0.06, 800, 9000, 'bandpass', t, 'm');
         if (bar === 0 && s === 0 && step > 0 && lvl > 0.35) noise(0.5, 0.05, 7000, 3000, 'highpass', t, 'm');
@@ -361,17 +397,40 @@ export function createAudio() {
   // one short 4 note phrase per snake species (scale degrees), played softly as a bell over the groove
   const MOTIFS = [[0, 2, 4, 2], [0, 4, 2, 5], [4, 2, 0, 2], [0, 1, 4, 2], [2, 4, 5, 4], [0, 2, 1, 4], [4, 5, 4, 2], [0, 3, 2, 4], [5, 4, 2, 0], [2, 0, 2, 4]];
   const motifOf = stage => MOTIFS[(Math.max(1, stage | 0) - 1) % MOTIFS.length];
+  // ambient hub bed (round 7): a slow, quiet major seventh pad with a breathing level and a rare twinkle, on the music bus
+  // (so it follows the Music setting, the volume and the muffle). Starts when the hub opens, stops when a run's music starts.
+  let wantHub = false, hubN = null;
+  function hubStop() {
+    const n = hubN; if (!n) return; hubN = null; clearTimeout(n.timer);
+    try { const t = ac.currentTime; n.out.gain.cancelScheduledValues && n.out.gain.cancelScheduledValues(t); n.out.gain.setValueAtTime(Math.max(0.0001, n.out.gain.value || HUB_GAIN), t); n.out.gain.linearRampToValueAtTime(0.0001, t + 0.5); n.oscs.forEach(o => o.stop(t + 0.6)); } catch (e) { /* ignore */ }
+  }
+  function hubStart() {
+    const t = ac.currentTime, out = ac.createGain(), lp = ac.createBiquadFilter(), lfo = ac.createOscillator(), lg = ac.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = 900; out.gain.setValueAtTime(0.0001, t); out.gain.linearRampToValueAtTime(HUB_GAIN, t + 2.5);
+    lp.connect(out); out.connect(musBus);
+    const oscs = HUB_CHORD.map((f, i) => { const o = ac.createOscillator(), vg = ac.createGain(); o.type = i < 2 ? 'sine' : 'triangle'; o.frequency.setValueAtTime(f * (1 + 0.0015 * i), t); vg.gain.value = 0.5 * [1, 0.8, 0.6, 0.4][i]; o.connect(vg); vg.connect(lp); o.start(t); return o; });
+    lfo.type = 'sine'; lfo.frequency.setValueAtTime(0.07, t); lg.gain.value = HUB_GAIN * 0.25; lfo.connect(lg); lg.connect(out.gain); lfo.start(t); oscs.push(lfo);
+    const n = hubN = { out, oscs, timer: 0 };
+    const twinkle = () => { if (hubN !== n) return; swell(hz(HUB_TWINKLE[Math.floor(Math.random() * HUB_TWINKLE.length)]), 1.8, 'sine', 0.02, 0, 'm'); n.timer = setTimeout(twinkle, 3000 + Math.random() * 5000); };
+    n.timer = setTimeout(twinkle, 2500);
+  }
+  function hubSync() {
+    const want = wantHub && musicAllowed && !muted && !wantMusic && !!ac && !!musBus;
+    if (want && !hubN) { try { hubStart(); } catch (e) { hubN = null; } } else if (!want && hubN) hubStop();
+  }
   return {
-    unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } },
+    unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } hubSync(); },
+    hub(on) { wantHub = !!on; hubSync(); },
+    get hubOn() { return !!hubN; },
     play(name, e) { if (ac && sfx[name]) { try { sfx[name](e); } catch (err) { /* never break the game over a sound */ } } },
-    setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5 * vol; },
+    setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5 * vol; hubSync(); },
     setVolume(v) { vol = Math.max(0, Math.min(1, +v)); if (!(vol >= 0)) vol = 1; if (master && !muted) master.gain.value = 0.5 * vol; },
     get volume() { return vol; },
     motif: motifOf,
     get muted() { return muted; },
     // countIn: true plays one bar of ticks (the tick-only scheduler) before the song starts, used for the very first stages
     music(on, countIn) {
-      wantMusic = !!on; restart(); countSteps = on && musicOn && countIn ? 16 : 0;
+      wantMusic = !!on; if (on) wantHub = false; hubSync(); restart(); countSteps = on && musicOn && countIn ? 16 : 0;
     },
     // pump depth setting: 0 off, 1 soft, 2 full (default)
     setPump(v) { pumpSet = pumpLevel(v); },
@@ -383,7 +442,7 @@ export function createAudio() {
     },
     // the beat tick is a metronome of its own: with the music switched off it still clicks on every beat
     setBeatTick(b) { beatTick = !!b; if ((wantMusic && !musicAllowed && beatTick) !== tickOn) restart(); },
-    setMusicAllowed(b) { musicAllowed = b; if (!b || tickOn) restart(); },
+    setMusicAllowed(b) { musicAllowed = b; if (!b || tickOn) restart(); hubSync(); },
     get tickOnly() { return tickOn; },
     get musicAllowed() { return musicAllowed; },
     intensity(v) { intensity = v; },

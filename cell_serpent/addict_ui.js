@@ -3,8 +3,9 @@
 import {
   SPIN_PRIZES, spinReady, doSpin, spinPrize, weekChallenge, ensureWeek, weekReady, claimWeek, WEEK_REWARD,
   masteryList, claimMastery, claimAllMastery, bookStatus, claimBook, rewardText, comebackGift, claimComeback, touchSeen,
-  nextReward, nudgeFor, spinStreak, spinFrame, comebackLines, hasShield, SHIELD_AT,
+  nextReward, nudgeFor, spinStreak, spinFrame, comebackLines, hasShield, SHIELD_AT, idleAmount, claimIdle,
 } from './sim.js';
+import { todayHTML, flyChips } from './goals_polish.js';
 import { riskHTML, bookCell, nextUnmet } from './keep_ui.js';
 
 export function createAddictUI(c, openPanel, sec) {
@@ -62,6 +63,7 @@ export function createAddictUI(c, openPanel, sec) {
   function grid(body) { const g = document.createElement('div'); g.className = 'tiles'; body.appendChild(g); return g; }
   function build(body) {
     const s = save(), day = c.dayKey();
+    { const td = document.createElement('div'); td.innerHTML = todayHTML(s, day); body.appendChild(td.firstChild); }   // round 7: the friendly daily rhythm
     // a "ready to collect" banner so nothing waits unseen further down the page
     { const wk0 = ensureWeek(s, day), nm = masteryList(s).filter(m => m.ready >= 0).length, nb = bookStatus(s).cats.filter(k => k.ready && !s.addict.claimed['book:' + k.id]).length;
       const bits = []; if (spinReady(s, day)) bits.push('🎡 Spin'); if (!wk0.claimed && weekReady(s, day)) bits.push('🏅 Weekly'); if (nm) bits.push('🐍 ' + nm + ' rank' + (nm > 1 ? 's' : '')); if (nb) bits.push('📖 Book');
@@ -90,7 +92,7 @@ export function createAddictUI(c, openPanel, sec) {
       const card = document.createElement('div'); card.className = 'wkcard' + (wclaimed ? ' claimed' : wdone ? ' ready' : '');
       card.innerHTML = `<div class="wkt"><span class="wki">🏅</span><b>${esc(wc.text)}</b></div><div class="wkdays">${pips}<em>${left ? left + (left === 1 ? ' day left' : ' days left') : 'Last day'}</em></div><div class="wkbar"><i style="width:${pct}%"></i><span>${wk.prog} / ${wc.target}</span></div><div class="wkh">${esc(hint)}</div><div class="wkr">${rc}</div>`;
       const wb = document.createElement('button'); wb.className = 'btn small go gold'; wb.disabled = !wdone; wb.textContent = wclaimed ? 'CLAIMED' : wdone ? 'CLAIM' : 'KEEP GOING';
-      wb.onclick = () => { if (claimWeek(save(), day)) { after(); audio.play('levelup'); rebuild(); renderNext(); } };
+      wb.onclick = () => { const fl = [...card.querySelectorAll('.wkr b')]; if (claimWeek(save(), day)) { after(); audio.play('levelup'); flyChips(fl, reduce()); if (!reduce()) burst(card, 18, '#ffd24a'); setTimeout(() => { rebuild(); renderNext(); }, reduce() ? 0 : 700); } };
       card.appendChild(wb); body.appendChild(card); }
     // mastery
     sec(body, 'Mastery', '#4fd8f0');
@@ -105,7 +107,7 @@ export function createAddictUI(c, openPanel, sec) {
     for (const m of ms) {
       const rdy = m.ready >= 0, target = rdy ? m.miles[m.ready] : m.next, full = !rdy && !m.next;
       const pips = m.miles.map((_x, i) => `<i class="${i < m.done ? 'on' : ''}"></i>`).join('');
-      mg.appendChild(tile({ cls: 't-weapon mast', ic: m.kind === 'sk' ? c.icon(m.id) : '🐍', name: esc(m.name), chip: 'Rank ' + m.done + '/' + m.miles.length, desc: full ? 'Master!' : 'Reward: ' + rewardText(target.reward),
+      mg.appendChild(tile({ cls: 't-weapon mast', ic: m.kind === 'sk' ? c.icon(m.id) : (c.bodyURL && c.bodyURL(m.id) ? `<img src="${c.bodyURL(m.id)}" alt="">` : '🐍'), name: esc(m.name), chip: 'Rank ' + m.done + '/' + m.miles.length, desc: full ? 'Master!' : 'Reward: ' + rewardText(target.reward),
         bar: full ? 100 : Math.round(Math.min(1, m.val / target.at) * 100), barText: full ? m.val + ' ' + m.unit : m.val + ' / ' + target.at + ' ' + m.unit, pips,
         btn: rdy ? 'CLAIM' : full ? 'DONE' : 'KEEP GOING', gold: rdy, disabled: !rdy, onclick: () => { if (claimMastery(save(), m.key, m.ready)) { after(); audio.play('levelup'); rebuild(); renderNext(); } } }));
     }
@@ -114,7 +116,7 @@ export function createAddictUI(c, openPanel, sec) {
     sec(body, `Collection Book ${bk.got}/${bk.total}`, '#6fe08a');
     for (const cat of bk.cats) {
       const box = document.createElement('div'); box.className = 'bookcat'; box.dataset.cat = cat.id;
-      box.innerHTML = `<div class="bch"><b>${esc(cat.name)}</b><span>${cat.got}/${cat.total}</span></div><div class="bcg">${cat.list.map(x => bookCell(x, cat.id, c, s, nextUnmet(cat.list))).join('')}</div><div class="bcbar${cat.got >= cat.total ? ' full' : ''}"><i style="width:${Math.round(cat.got / cat.total * 100)}%"></i></div>`;
+      box.classList.toggle('pagefull', cat.got >= cat.total); box.innerHTML = `<div class="bch"><b><i class="bci">${{ species: '🐍', pets: '🐾', keeps: '🎁', outfits: '👗' }[cat.id] || '📖'}</i>${esc(cat.name)}</b><span>${cat.got}/${cat.total}</span><em class="bcp">${Math.round(cat.got / cat.total * 100)}%</em></div><div class="bcg">${cat.list.map(x => bookCell(x, cat.id, c, s, nextUnmet(cat.list))).join('')}</div><div class="bcbar${cat.got >= cat.total ? ' full' : ''}"><i style="width:${Math.round(cat.got / cat.total * 100)}%"></i></div>`;
       const b = document.createElement('button'); b.className = 'btn small go gold'; b.disabled = !cat.ready;
       b.textContent = s.addict.claimed['book:' + cat.id] ? 'COMPLETE' : cat.ready ? 'CLAIM ' + rewardText(cat.reward) : 'Complete for ' + rewardText(cat.reward);
       b.onclick = () => { if (claimBook(save(), cat.id)) { after(); audio.play('levelup'); rebuild(); renderNext(); pageDone(cat.id); } };
@@ -125,6 +127,11 @@ export function createAddictUI(c, openPanel, sec) {
       onclick: () => { if (claimBook(save(), 'all' + m.i)) { after(); audio.play('levelup'); rebuild(); renderNext(); } } })));
   }
 
+  // the tip jar chip on the welcome card: only when a fair amount has piled up
+  function idleChip() {
+    const n = idleAmount(save(), Date.now()); if (n < 40) return '';
+    return `<button class="cbidle" id="cbIdle" aria-label="Collect ${n} Beats from the tip jar"><b>🧺</b><span>The tip jar is full: <em>+${n} Beats</em></span><i>COLLECT</i></button>`;
+  }
   // ---- welcome back: a friendly gift after a break, shown once per visit, never expires
   function maybeComeback() {
     const s = save(), now = Date.now(), g = comebackGift(s, now);
@@ -136,7 +143,7 @@ export function createAddictUI(c, openPanel, sec) {
       const d = document.createElement('div'); d.className = 'comeback';
       const wait = lines.slice(1, -1).map(x => { const m = /^(\S+)\s+(.*)$/.exec(x); return m && m[1].charCodeAt(0) > 255 ? { ic: m[1], tx: m[2] } : { ic: '🐾', tx: x }; });
       const chips = rw => [rw.beats ? ['🪙', rw.beats, 'Beats'] : 0, rw.sparkles ? ['✨', rw.sparkles, 'Sparkles'] : 0, rw.energy ? ['⚡', rw.energy, 'Energy'] : 0, rw.eggs ? ['🥚', rw.eggs, rw.eggs > 1 ? 'Eggs' : 'Egg'] : 0].filter(Boolean).map(x => `<i class="cbchip"><b>${x[0]}</b>+${x[1]}<small>${x[2]}</small></i>`).join('');
-      d.innerHTML = `<div class="cbi"><span class="cbpet">🐱</span><button class="cbbox" id="cbBox" aria-label="Open your gift">🎁</button><span class="cbpet b">🐶</span></div><div class="cbt">We missed you!</div><div class="cbs">${esc(lines[0] || '')} ${g.days} days away, so here is a little gift from the whole band. Tap the box!</div><div class="cbr" id="cbR"></div><div class="cbwait"><em>Waiting for you</em>${wait.map(x => `<span><b>${x.ic}</b>${esc(x.tx)}</span>`).join('')}</div><div class="cbkind">${esc(lines[lines.length - 1] || '')}</div>`;
+      d.innerHTML = `<div class="cbi"><span class="cbpet">🐱</span><button class="cbbox" id="cbBox" aria-label="Open your gift">🎁</button><span class="cbpet b">🐶</span></div><div class="cbt">We missed you!</div><div class="cbs">${esc(lines[0] || '')} ${g.days} days away, so here is a little gift from the whole band. Tap the box!</div><div class="cbr" id="cbR"></div><div class="cbwait"><em>Waiting for you</em>${wait.map(x => `<span><b>${x.ic}</b>${esc(x.tx)}</span>`).join('')}</div>${idleChip()}<div class="cbkind">${esc(lines[lines.length - 1] || '')}</div>`;
       const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'OPEN MY GIFT'; const later = { remove() {} };
       let opened = false;
       const open = () => {
@@ -146,6 +153,8 @@ export function createAddictUI(c, openPanel, sec) {
         if (!reduce()) burst(d.querySelector('.cbi'), 30, '#ffd24a');
         b.textContent = "LET'S PLAY!"; later.remove();
       };
+      { const ib = d.querySelector('#cbIdle'); if (ib) ib.onclick = () => {   // round 7: Backstage tips waiting, collected with one tap
+        const n = claimIdle(save(), Date.now()); if (!n) return; after(); audio.play('coin'); ib.disabled = true; ib.classList.add('got'); ib.innerHTML = '<b>🧺</b><span>Collected <em>+' + n + ' Beats</em></span><i>&#10003;</i>'; flyChips([ib.querySelector('em') ? { getBoundingClientRect: () => ib.getBoundingClientRect(), textContent: '🪙' } : ib], reduce()); } }
       d.querySelector('#cbBox').onclick = open; b.onclick = open;
       d.appendChild(b); body.appendChild(d);
     }, () => { c.openHub(); });

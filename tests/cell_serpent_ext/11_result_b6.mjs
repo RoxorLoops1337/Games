@@ -15,6 +15,6 @@ const U = await import(join(root, 'result_ux.js'));
   assert.ok(/id="pLose"/.test(html) && /#quitBtn\.holding \.hfill/.test(html), 'recap line and hold fill');
   assert.ok(/html:not\(\.kbd\) \.scr :focus-visible/.test(html), 'focus ring only for keyboard');
   assert.ok(/#settings #setClose\{box-shadow:0 0 0 10px rgba\(8,5,30,\.98\)/.test(html), 'solid sticky close band');
-  assert.ok(/holdConfirm\(\$\('quitBtn'\)/.test(main) && /flyRewards\(fl/.test(main), 'wired');
+  assert.ok(/holdConfirm\(\$\('quitBtn'\)/.test(main) && /gigFlies\(fl\.map/.test(main), 'wired');
   const em = String.fromCharCode(8212);
   assert.ok(!html.includes(em) && !main.includes(em) && !readFileSync(join(root, 'result_ux.js'), 'utf8').includes(em), 'no em dash'); }

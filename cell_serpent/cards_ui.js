@@ -15,15 +15,25 @@ export function oddsAtLeast(luck) {
 }
 const pct = p => (p >= 0.995 ? '99' : p < 0.01 ? '<1' : String(Math.round(p * 100))) + '%';
 
+// round 7: the meter remembers its last fill, so it fills up from there and chips whose odds grew light up.
+let lastFill = -1, lastOdds = null;
 export function luckHTML(g) {
   const luck = luckNow(g), o = oddsAtLeast(luck), nx = oddsAtLeast(luck + lk(g));
   const fill = Math.round(Math.min(1, luck / LUCK_MAX) * 100), up = Math.round((nx[0] - o[0]) * 100);
-  const chip = (i, t) => `<span class="lk" style="--rc:${RARITIES[i + 1].color}"><i></i>${t}<b>${pct(o[i])}</b></span>`;
-  return `<div class="lkbar"><span class="lkl">LUCK</span><span class="lkt"><span style="width:${fill}%"></span></span>${up > 0 ? `<em>+${up}% next</em>` : ''}</div><div class="lkrow">${chip(0, 'Rare+')}${chip(1, 'Epic+')}${chip(2, 'Legend+')}</div>`;
+  const from = lastFill >= 0 && lastFill < fill ? lastFill : fill, grew = from < fill;
+  const chip = (i, t) => `<span class="lk${lastOdds && o[i] > lastOdds[i] + 0.004 ? ' up' : ''}" style="--rc:${RARITIES[i + 1].color}"><i></i>${t}<b>${pct(o[i])}</b></span>`;
+  const html = `<div class="lkbar"><span class="lkl">LUCK</span><span class="lkt"><span class="lkf${grew ? ' grow' : ''}" style="width:${fill}%;--from:${from}%"><s></s></span><u style="left:25%"></u><u style="left:50%"></u><u style="left:75%"></u></span>${up > 0 ? `<em>+${up}% next</em>` : ''}</div><div class="lkrow">${chip(0, 'Rare+')}${chip(1, 'Epic+')}${chip(2, 'Legend+')}</div>`;
+  lastFill = fill; lastOdds = o;
+  return html;
 }
 
+// Reroll feel: the pip that was just spent breaks (class "used") on the next draw of the pips.
+let rrJust = false;
+export function markReroll() { rrJust = true; }
+
 export function refreshPips(g, total = 4) {
-  return Array.from({ length: total }, (_, k) => `<i class="${k < g.rerolls ? 'on' : ''}"></i>`).join('');
+  const used = rrJust ? g.rerolls : -1; rrJust = false;
+  return Array.from({ length: total }, (_, k) => `<i class="${k < g.rerolls ? 'on' : k === used ? 'used' : ''}"></i>`).join('');
 }
 
 // Build strip: capsule and passive upgrades with their pick counts, then skills with their level.
@@ -117,4 +127,24 @@ export function tickBand(strip, id, add, iconFn) {
     const b = el.querySelector('b'); b.textContent = String((parseInt(b.textContent, 10) || 0) + (add > 0 ? add : 1));
     el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
   } catch (e) { /* cosmetic only */ }
+}
+
+// ---- round 7: card-wide foil for Epic and up, band strip pulse when a synergy chain completes
+// A sheen layer that covers the whole card (behind the text), with a drifting holographic band. Common and Rare get none.
+export function cardFoilHTML(rn) { return rn >= 2 ? `<span class="cfoil cf${rn | 0}" aria-hidden="true"></span>` : ''; }
+
+// Pairs that make a synergy chain (same list as the band sheet shows).
+const PAIRS = [['notes', 'burst'], ['crit', 'cdmg'], ['aspd', 'notes'], ['aspd', 'burst'], ['power', 'haste'], ['dbeat', 'aspd']];
+// Called after a pick landed on the strip: if the picked (new) upgrade just met its partner for the first time, the "i" pulses and names the chain.
+export function chainPulse(strip, g, id, isNew) {
+  try {
+    if (!strip || !g || !g.ups || !isNew) return false;
+    const hit = PAIRS.find(([a, b]) => (a === id && g.ups[b] > 0) || (b === id && g.ups[a] > 0));
+    if (!hit) return false;
+    const i = strip.querySelector('.bmore'); if (!i) return false;
+    i.classList.remove('chain'); void i.offsetWidth; i.classList.add('chain');
+    strip.querySelectorAll('.bi.link').forEach(e => e.classList.remove('link'));
+    for (const k of hit) { const e = strip.querySelector(`.bi[data-id="${k}"]`); if (e) { e.classList.remove('link'); void e.offsetWidth; e.classList.add('link'); } }
+    return true;
+  } catch (e) { return false; }
 }
