@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { rubber, swipeTarget } from '../../cell_serpent/tabs_ui.js';
 import { paintPauseGlyph, paintStatsGlyph } from '../../cell_serpent/glyphs_ui.js';
 
-assert.ok(Math.abs(rubber(-100, true)) === 55, 'follows at about half speed with a tab to go to');
+assert.ok(Math.abs(rubber(-100, true) + 55) < 1e-9, 'follows at about half speed with a tab to go to');
 assert.ok(rubber(-1000, true) >= -120, 'the follow is capped');
 assert.ok(rubber(300, false) > 0 && rubber(300, false) < 34, 'the edge bump is short and one way');
 assert.ok(rubber(80, false) < rubber(80, true), 'the edge is stiffer than a real swipe');
