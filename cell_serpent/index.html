@@ -2053,6 +2053,33 @@
   @media (max-height:700px){.wardhero2{width:min(160px,48%);margin-top:20px}.wperk{margin-top:3px}}
   @media (prefers-reduced-motion:reduce){.wardhero2.swap .what,.wardhero2.swap .wardhat,.wardhero2.swap .wglow{animation:none}}
   /* end @css:10-shop-gear-stats round 8 */
+  /* @css:10-shop-gear-stats round 9 */
+  .stkbook{width:min(520px,100%);margin:6px auto 14px} .stkbook .sec{margin:12px 0 8px}
+  .stkgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:10px;border-radius:18px;background:linear-gradient(180deg,#2a1658,#1b0f3a);border:3px solid #b06cff88}
+  .stk{position:relative;aspect-ratio:1;border:0;background:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;min-width:0}
+  .stkface{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:50%;border:3px solid #fff;font-size:24px;line-height:1;box-shadow:0 2px 0 rgba(0,0,0,.35);transform:rotate(var(--r,-4deg))}
+  .stk:nth-child(3n+2) .stkface{--r:5deg} .stk:nth-child(3n) .stkface{--r:-2deg}
+  .stk.got .stkface{background:radial-gradient(circle at 35% 28%,#fff8,transparent 55%),var(--sc)}
+  .stk.locked .stkface{background:#3a2a66;border-color:#6a5a96;filter:grayscale(1) brightness(.7)} .stk.locked .stkic{opacity:.45}
+  .stk.secret .stkface{background:repeating-linear-gradient(45deg,#2c2050 0 6px,#34265c 6px 12px);border:3px dashed #7a68b0} .stkq{font-style:normal;font-weight:900;font-size:22px;color:#a898d8}
+  .stk em{position:absolute;right:-4px;top:-6px;font-style:normal;font-weight:900;font-size:9px;background:#ff3f6c;color:#fff;border-radius:99px;padding:1px 5px;border:2px solid #fff;z-index:1}
+  .stk.new .stkface{animation:stkland .7s cubic-bezier(.2,1.6,.4,1) both} @keyframes stkland{0%{transform:scale(2.2) rotate(-30deg);opacity:0}100%{transform:scale(1) rotate(var(--r,-4deg));opacity:1}}
+  .stk.pop .stkface{animation:stkpop .35s ease-out} @keyframes stkpop{50%{transform:scale(1.2) rotate(8deg)}}
+  .stk:focus-visible{outline:3px solid #fff;outline-offset:2px;border-radius:50%}
+  .stkcap{text-align:center;font-size:12px;color:var(--dim);margin-top:8px;min-height:16px} .stkcap b{color:#ffe3a8;margin-right:4px}
+  /* gear upgrade ceremony */
+  .kdetail{position:relative;overflow:hidden} .kdetail.cer{animation:kflash .6s ease-out} @keyframes kflash{0%{box-shadow:0 0 0 0 #fff,inset 0 0 60px #fff}100%{box-shadow:0 0 0 14px transparent,inset 0 0 0 transparent}}
+  .kdetail .kbig{position:relative;z-index:1} .kdetail.cer .kbig{animation:kbigpop .7s cubic-bezier(.2,1.6,.4,1)} @keyframes kbigpop{0%{transform:scale(.6) rotate(-12deg)}60%{transform:scale(1.25) rotate(4deg)}100%{transform:none}}
+  .kring{position:absolute;left:50%;top:76px;width:90px;height:90px;margin:-45px 0 0 -45px;border-radius:50%;border:4px solid var(--tc);pointer-events:none;animation:kring .9s ease-out forwards} @keyframes kring{0%{transform:scale(.4);opacity:1}100%{transform:scale(2.6);opacity:0}}
+  .kspk{position:absolute;left:50%;top:76px;width:8px;height:8px;margin:-4px;border-radius:50%;background:#ffe14a;pointer-events:none;animation:kspk .9s ease-out forwards} @keyframes kspk{0%{transform:rotate(var(--a)) translateY(0);opacity:1}100%{transform:rotate(var(--a)) translateY(-84px) scale(.3);opacity:0}}
+  .kcer{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:3;padding:4px 16px;border-radius:99px;background:#ffe14a;color:#3a2000;font-weight:900;font-size:15px;letter-spacing:1px;border:3px solid #fff;white-space:nowrap;animation:kcer 1.7s ease-out both;pointer-events:none} .kcer.max{background:#b06cff;color:#fff}
+  @keyframes kcer{0%{transform:translate(-50%,16px) scale(.5);opacity:0}15%{transform:translate(-50%,0) scale(1.15);opacity:1}25%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{transform:translate(-50%,-10px);opacity:0}}
+  /* the treats clock gets urgent in the last hour */
+  .refrow.urgent span{color:#ff6a6a;font-weight:900;animation:urgp 1s ease-in-out infinite} @keyframes urgp{50%{opacity:.55}}
+  .tile.deal .snk{display:block;font-size:10px;font-weight:800;color:#9dff6d;opacity:.9;margin-top:1px;letter-spacing:.3px}
+  @media (max-width:360px){.stkgrid{gap:6px;padding:8px}.stkface{font-size:21px}}
+  @media (prefers-reduced-motion:reduce){.stk.new .stkface,.stk.pop .stkface,.kdetail.cer,.kdetail.cer .kbig,.refrow.urgent span{animation:none}.kcer{animation:none;opacity:1}}
+  /* end @css:10-shop-gear-stats round 9 */
 /* @css:18-access round 8 */
   /* contrast audit over every hub tab: text on its real background must reach 4.5:1 (3:1 for large text and icons) */
   :root{--dim:#b4c6de}
