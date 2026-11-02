@@ -285,6 +285,7 @@ canvas.addEventListener('pointerdown', e => {
   const gp = R.toGame(e.clientX * (canvas.width / innerWidth), e.clientY * (canvas.height / innerHeight));
   if (gp.x > W - 76 && gp.y < 76) { pause(); return; }
   if (gp.x > W - 76 && gp.y >= 76 && gp.y < 150) { showStats(); return; }
+  if (g.encore >= 1 && Math.hypot(gp.x - g.p.x, gp.y - g.p.y) < 110) encoreTap = true;   // tap the duo for the Encore blast
   if (joy.on) return;
   joy.on = true; joy.id = e.pointerId; joy.sx = e.clientX; joy.sy = e.clientY; joy.dx = joy.dy = 0;
   joy.x = gp.x; joy.y = gp.y;
@@ -309,10 +310,12 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (mode === 'play' && g.phase !== 'levelup') pause(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'play' && g.phase !== 'levelup') pause(); });
+let encoreTap = false;
 function readInput() {
   let mx = joy.dx;
   if (keys.a || keys.arrowleft) mx -= 1; if (keys.d || keys.arrowright) mx += 1;
-  return { mx, my: 0 };
+  const enc = encoreTap || !!keys[' ']; encoreTap = false;
+  return { mx, my: 0, encore: enc };
 }
 function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; show('pause'); }
 function resume() { mode = 'play'; show(''); last = performance.now(); }
