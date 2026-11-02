@@ -745,10 +745,30 @@ function spawnSnake(g, n, o = {}) {
     while (j < len - 1 && (segs[j].kind !== 'normal' || segs[j].carry)) j++;
     segs[j].carry = 'chest';
   }
+  markGold(g, n, segs, len);
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
   const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1);
   g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
+}
+
+// ---------------------------------------------------------------- gameplay extras (agent 14)
+// Gold cell: from stage 4 one plain cell per snake glitters. Pop it within GOLD_TIME seconds of it
+// showing on screen for a big Beats burst. No random numbers are drawn, so existing runs do not change.
+export const GOLD_TIME = 9, GOLD_MUL = 12, GOLD_FROM = 4;
+function markGold(g, n, segs, len) {
+  if (g.mode !== '' || n < GOLD_FROM || len < 12) return;
+  for (let j = Math.round(len * 0.55); j < len; j++) if (segs[j].kind === 'normal' && !segs[j].carry) { segs[j].gold = true; segs[j].goldT = GOLD_TIME; return; }
+}
+// Encore blast: hits and kills fill the meter, tap the duo (or the button) to fire a beam straight up.
+export const ENCORE_HIT = 0.007, ENCORE_KILL = 0.012, ENCORE_CLUTCH = 0.08, ENCORE_DMG = 8, ENCORE_W = 36, CLUTCH_DIST = 200;
+const addEncore = (g, v) => { g.encore = Math.min(1, g.encore + v); if (g.encore >= 1 && !g.encoreReady) { g.encoreReady = true; g.events.push({ t: 'encoreready' }); } };
+export function fireEncore(g) {
+  if (g.phase !== 'play' || g.encore < 1) return false;
+  const p = g.p; g.encore = 0; g.encoreReady = false; g.encoreUsed++; g.beam = { x: p.x, t: 0.5 };
+  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && s.y < p.y && Math.abs(s.x - p.x) < s.r + ENCORE_W) damageSegAs('encore', g, s, dmgMul(g) * ENCORE_DMG, true, s.x, s.y);
+  g.events.push({ t: 'encore', x: p.x });
+  return true;
 }
 
 export function startStage(g, n) {
@@ -782,6 +802,7 @@ export function createGame(opts = {}) {
     level: 1, cells: 0, upgradeLeft: 0, pending: 0, choices: [], resume: 'play', rerolls: 4,
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
     groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, faceMax: 0, bombsPopped: 0, dangerT: 0, danger: 0, mod: null, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
+    encore: 0, encoreUsed: 0, beam: null, goldPopped: 0, clutches: 0,
   };
   startStage(g, opts.stage || 1);
   return g;
@@ -796,7 +817,7 @@ export const GROOVE_MAX = 20;
 // Groove: every note that lands builds it, a pause in the hits lets it fade. Each point is +1.5% damage.
 const dmgMul = g => 10 * g.p.atk * (1 + uv(g, 'power') / 100) * (1 + 0.015 * g.groove);   // x10: damage and HP are shown as big numbers
 function bumpGroove(g) {
-  g.grooveT = 0;
+  g.grooveT = 0; addEncore(g, ENCORE_HIT);
   if (g.groove < GROOVE_MAX) { g.groove++; if (g.groove > g.grooveMax) g.grooveMax = g.groove; if (g.groove % 5 === 0) g.events.push({ t: 'groove', n: g.groove }); }
 }
 const cdMul = g => g.p.cdBase * Math.max(0.3, 1 - uv(g, 'haste') / 100);
@@ -853,6 +874,9 @@ function onKill(g, s, sn) {
   if (s.kind === 'upgrade') { for (let k = 0; k < 3; k++) dropPickup(g, 'coin', s.x, s.y, coinV); if (g.rand() < 0.3) dropPickup(g, ['heal', 'shield', 'rage'][Math.floor(g.rand() * 3)], s.x, s.y, 1); }
   else dropPickup(g, 'coin', s.x, s.y, coinV);
   if (s.carry === 'chest') { g.pickups.push({ kind: 'chest', x: s.x, y: s.y, vx: 0, vy: 40, v: 1, age: 0, vac: false }); g.events.push({ t: 'chestdrop', x: s.x, y: s.y }); }
+  addEncore(g, ENCORE_KILL);
+  if (s.gold && s.goldT > 0) { g.goldPopped++; const v = coinV * GOLD_MUL; g.coins += v * g.p.coinMul * (g.coinK || 1); g.events.push({ t: 'goldpop', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)) }); }
+  if (!s.isHead && s.y > LINE_Y - CLUTCH_DIST) { g.clutches++; addEncore(g, ENCORE_CLUTCH); g.events.push({ t: 'clutch', x: s.x, y: s.y }); }
   g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin });
   if (s.kind === 'bomb') {
     g.bombsPopped++;
@@ -1173,6 +1197,8 @@ export function step(g, dt, input) {
   if (p.iframes > 0) p.iframes -= dt;
   if (p.shield > 0) p.shield -= dt;
   if (p.rage > 0) p.rage -= dt;
+  if (g.beam) { g.beam.t -= dt; if (g.beam.t <= 0) g.beam = null; }
+  if (input && input.encore) fireEncore(g);
   g.grooveT += dt; if (g.grooveT > 1.2 && g.groove > 0) g.groove = Math.max(0, g.groove - 8 * dt);   // the groove fades when the hits stop
 
   // the virus rides the track as one connected chain driven by its tail. Cells in front of a gap
@@ -1216,6 +1242,7 @@ export function step(g, dt, input) {
       s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
       stageHp += Math.max(0, s.hp);
       if (s.flash > 0) s.flash -= dt;
+      if (s.gold && s.goldT > 0 && visible(s)) { s.goldT -= dt; if (s.goldT <= 0) g.events.push({ t: 'goldfade', x: s.x, y: s.y }); }
       if (s.orbCd > 0) s.orbCd -= dt;
     }
   }
@@ -1307,5 +1334,5 @@ export function botInput(g) {
     if (!tgt || s.ps > tgt.ps) tgt = s;
   }
   if (tgt) ax += clamp((tgt.x - p.x) / 120, -1, 1) * 0.9;
-  return { mx: clamp(ax, -1, 1), my: 0 };
+  return { mx: clamp(ax, -1, 1), my: 0, encore: g.encore >= 1 && !!tgt && Math.abs(tgt.x - p.x) < tgt.r };
 }

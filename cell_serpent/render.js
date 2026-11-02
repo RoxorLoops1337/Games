@@ -86,6 +86,11 @@ export function createRenderer(canvas, art, kit) {
       }
       case 'boom': ring(e.x, e.y, e.r, '#ff6a3d', 0.5); ring(e.x, e.y, e.r * 0.6, '#ffd24a', 0.35); burst(e.x, e.y, 30, ['#ff6a3d', '#ffd24a', '#fff'], 420, 0.6, 7); S.trauma = Math.min(1, S.trauma + 0.55); break;
       case 'splash': ring(e.x, e.y, e.r, '#7dff5e', 0.25); break;
+      case 'encoreready': addFloat(g.p.x, g.p.y - 110, 'ENCORE READY: TAP!', '#ffe36b', 26, -50); ring(g.p.x, g.p.y, 120, '#ffe36b', 0.5); break;
+      case 'encore': S.trauma = Math.min(1, S.trauma + 0.6); S.flash = 0.25; S.flashCol = '#fff6c2'; ring(e.x, g.p.y, 130, '#ffe36b', 0.5); burst(e.x, g.p.y - 40, 26, ['#ffe36b', '#fff', '#ff9ad6'], 520, 0.7, 6); break;
+      case 'goldpop': ring(e.x, e.y, 110, '#ffd24a', 0.6); burst(e.x, e.y, 30, ['#ffd24a', '#fff6c2', '#fff'], 460, 0.8, 6); addFloat(e.x, e.y - 40, 'GOLD +' + e.v, '#ffe36b', 30, -80); break;
+      case 'goldfade': addFloat(e.x, e.y, 'gold lost', '#c9b36a', 18, -40); break;
+      case 'clutch': addFloat(e.x, e.y - 30, 'CLOSE CALL!', '#ff9ad6', 24, -70); ring(e.x, e.y, 80, '#ff9ad6', 0.4); break;
       case 'burst': ring(e.x, e.y, e.r, '#bfe9ff', 0.4); burst(e.x, e.y, 16, ['#bfe9ff', '#fff'], 260, 0.5, 5); break;
       case 'leak': S.trauma = Math.min(1, S.trauma + 0.55); S.flash = 0.4; S.flashCol = '#ff2a4d'; ring(e.x, LINE_Y, 120, '#ff2a4d', 0.5); burst(e.x, LINE_Y - 10, 22, ['#ff2a4d', '#ffd0e6', '#fff'], 360, 0.6, 6); addFloat(e.x, LINE_Y - 70, 'LEAK -' + Math.ceil(e.d), '#ff5a78', 26, -60); break;
       case 'pulse': ring(e.x, e.y, e.r, '#7fe8ff', 0.5); break;
@@ -186,6 +191,7 @@ export function createRenderer(canvas, art, kit) {
         ctx.save(); ctx.globalAlpha = 0.55 + Math.sin(S.t * 14 + i) * 0.15; ctx.fillStyle = 'rgba(190,235,255,.2)'; ctx.strokeStyle = '#e6f6ff'; ctx.lineWidth = 4;
         ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.3, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
       }
+      if (s.gold) { const live = s.goldT > 0; glow(s.x, s.y, r * (live ? 2.3 : 1.5), '#ffd24a', live ? 0.55 + Math.sin(S.t * 9 + i) * 0.2 : 0.15); if (live) { ctx.save(); ctx.strokeStyle = '#fff1a8'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.18, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0, s.goldT / 9)); ctx.stroke(); ctx.restore(); } }
       if (s.kind === 'bomb') { const pulse = 0.5 + Math.sin(S.t * 9 + i) * 0.5; glow(s.x, s.y, r * 1.8, '#ff3b5c', 0.15 + pulse * 0.25); }
       if (s.kind === 'upgrade') glow(s.x, s.y, r * 2.1, '#ffd24a', 0.45 + Math.sin(S.t * 6 + i) * 0.15);
       const spr = kit && kit.SPR.body(sn.skin, sn.boss, s.kind === 'normal' ? '' : s.kind);
@@ -314,6 +320,9 @@ export function createRenderer(canvas, art, kit) {
     { let ch = 0; for (const sn of g.snakes) for (const q of sn.segs) if (q.carry === 'chest' && q.hp > 0) ch++; if (ch) { blit(kit && kit.SPR.pickup('chest'), pad + 98, 44, 40); text('x ' + ch, pad + 122, 46, 20, '#ffe9a8', '#0b1020', 'left'); } }
     if ((g.danger || 0) > 0.05 && g.phase === 'play') { const a = Math.min(0.5, g.danger * 0.45) * (0.65 + 0.35 * Math.sin(S.t * 14)); const rg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75); rg.addColorStop(0, 'rgba(255,40,80,0)'); rg.addColorStop(1, `rgba(255,40,80,${a})`); ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H); }
     for (const sn of g.snakes) if (sn.surge === 'warn') { const h = sn.segs[0]; text('!', h.x, h.y - h.r - 34 + Math.sin(S.t * 20) * 4, 40, '#ff3d5a', '#0b1020'); }
+    // Encore blast: the beam, the meter by the duo, and the tap hint
+    if (g.beam) { const a = Math.min(1, g.beam.t * 3); ctx.save(); const bg = ctx.createLinearGradient(g.beam.x - 60, 0, g.beam.x + 60, 0); bg.addColorStop(0, 'rgba(255,227,107,0)'); bg.addColorStop(0.5, `rgba(255,250,210,${a})`); bg.addColorStop(1, 'rgba(255,227,107,0)'); ctx.fillStyle = bg; ctx.fillRect(g.beam.x - 60, 0, 120, g.p.y); ctx.restore(); }
+    if (g.phase === 'play' && (g.encore || 0) > 0) { const ex = g.p.x, ey = g.p.y + 52, ew = 90, full = g.encore >= 1; ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(ex - ew / 2 - 2, ey - 2, ew + 4, 11); ctx.fillStyle = full ? '#ffe36b' : '#ff9ad6'; ctx.fillRect(ex - ew / 2, ey, ew * g.encore, 7); ctx.restore(); if (full) { ctx.save(); ctx.globalAlpha = 0.7 + 0.3 * Math.sin(S.t * 10); text('TAP = ENCORE', ex, ey + 26, 16, '#ffe36b', '#0b1020'); ctx.restore(); } }
     // what the capsule does right now
     const up = id => Math.round(uv(g, id));
     const gv = g.groove || 0, gw = 230, gx = pad + 4, gy = H - 30;
