@@ -285,10 +285,23 @@ html.reduce-motion .b-vig.flash{animation-duration:.25s}
 .card-ph{flex:none;visibility:hidden}
 html.reduce-motion .b-hand .card{transition:none}
 .b-hand .card.shake{animation:card-shake .22s linear}
-.b-hand.row{position:absolute;inset:0;display:flex;align-items:center;overflow-x:auto;overflow-y:visible;padding:20px 12px 4px;touch-action:pan-x;scrollbar-width:none}
-.b-hand.row .card{position:relative;bottom:auto;left:auto;transform:translateY(var(--lift,0px)) scale(var(--sc,1));touch-action:pan-x}
-.b-hand.row .card.selected{--lift:-18px;--sc:1.04}
+/* portrait phone: the hand is a horizontal scroll strip of full cards (class "row", set by fit()). It bleeds 8px into the board margin on both sides so the next card peeks in at the right edge. */
+@property --hand-cw{syntax:'<length>';inherits:true;initial-value:120px}
+@property --card-ar{syntax:'<number>';inherits:true;initial-value:1.4}
+.b-hand.row{position:absolute;inset:0 -8px;display:flex;align-items:flex-end;gap:8px;overflow-x:auto;overflow-y:hidden;padding:26px 8px 10px;touch-action:pan-x;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  scroll-snap-type:x proximity;scroll-padding:0 8px;overscroll-behavior-x:contain;overflow-anchor:none}
+.b-hand.row .card{position:relative;bottom:auto;left:auto;flex:none;transform:translateY(var(--lift,0px)) scale(var(--sc,1));touch-action:pan-x;scroll-snap-align:start}
+.b-hand.row .card.selected{--lift:-10px;--sc:1.04}
 .b-hand.row::-webkit-scrollbar{display:none}
+.battle.hand-anim[data-mode=phone]{transition:--card-ar .32s cubic-bezier(.2,.8,.25,1)}
+.battle.hand-anim[data-mode=phone] .b-hand.row{transition:--hand-cw .32s cubic-bezier(.2,.8,.25,1)}
+html.reduce-motion .battle.hand-anim[data-mode=phone],html.reduce-motion .battle.hand-anim[data-mode=phone] .b-hand.row{transition:none}
+html.reduce-motion .b-hand.row{scroll-behavior:auto}
+/* edge shadows while more cards are scrolled out of view */
+.battle[data-mode=phone] .b-handwrap::before,.battle[data-mode=phone] .b-handwrap::after{content:"";position:absolute;top:0;bottom:0;width:28px;pointer-events:none;opacity:0;transition:opacity .2s;z-index:120}
+.battle[data-mode=phone] .b-handwrap::before{left:-8px;background:linear-gradient(90deg,rgba(8,5,20,.85),rgba(8,5,20,0))}
+.battle[data-mode=phone] .b-handwrap::after{right:-8px;background:linear-gradient(270deg,rgba(8,5,20,.85),rgba(8,5,20,0))}
+.battle[data-mode=phone] .b-handwrap.more-l::before,.battle[data-mode=phone] .b-handwrap.more-r::after{opacity:1}
 .b-end{grid-area:right;align-self:end;justify-self:stretch;height:min(52%,110px);flex-direction:column;gap:0;font-size:calc(20px*var(--text-scale));line-height:1.05;margin:4px 0 6px;padding:.5em;border-radius:6px}
 .b-end.glow{animation:end-glow 1.2s ease-in-out infinite}
 @keyframes end-glow{50%{box-shadow:0 3px 0 var(--btn-lo),0 5px 0 var(--ui-shadow),0 0 0 4px rgba(255,209,138,.5)}}
@@ -399,22 +412,22 @@ html.reduce-motion .growth-row{animation:none}
 
 /* the hand: a shallow fan, 4 to 5 cards at once. Stats move to the left of the type ribbon so a card overlapped on its right edge still shows them. */
 .battle[data-mode=phone] .b-handwrap{grid-row:3;grid-column:1/-1;min-height:0}
-.battle[data-mode=phone] .b-hand .card{bottom:8px;height:calc(var(--cw)*var(--card-ar,1.4))}
-.battle[data-mode=phone] .b-hand .card.sz-hand{font-size:calc(var(--cw)*.104)}
+.battle[data-mode=phone] .b-hand .card{bottom:auto;height:calc(var(--cw)*var(--card-ar,1.4))}
+.battle[data-mode=phone] .b-hand .card.sz-hand{font-size:calc(var(--cw)*.108)}
 .battle[data-mode=phone] .b-hand .card .c-head{min-height:2.1em;padding-left:2.3em}
 .battle[data-mode=phone] .b-hand .card .c-name,.battle[data-mode=phone] .b-hand .card .c-name.long,.battle[data-mode=phone] .b-hand .card .c-name.xlong{font-size:.98em;white-space:normal;line-height:1.02;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.battle[data-mode=phone] .b-hand .card .c-name.xlong{font-size:.86em}
-.battle[data-mode=phone] .b-hand .card .c-art{flex-basis:29%}
+.battle[data-mode=phone] .b-hand .card .c-name.long{font-size:.9em} .battle[data-mode=phone] .b-hand .card .c-name.xlong{font-size:.82em}
+.battle[data-mode=phone] .b-hand .card .c-art{flex-basis:24%}
 .battle[data-mode=phone] .b-hand .card .c-ribbon{padding:.1em .3em;gap:.25em}
 .battle[data-mode=phone] .b-hand .card .c-ribbon .c-stat{order:-1;font-size:1.3em;padding:0 .2em}
 .battle[data-mode=phone] .b-hand .card .c-ribbon .c-stat.hp{margin-right:.2em}
 .battle[data-mode=phone] .b-hand .card .c-ribbon .sp{display:none}
-.battle[data-mode=phone] .b-hand .card .c-text{font-size:.98em;padding:.25em .35em;line-height:1.18}
-.battle[data-mode=phone] .b-hand .card .c-text.t-sm{font-size:.9em} .battle[data-mode=phone] .b-hand .card .c-text.t-xs{font-size:.82em}
+.battle[data-mode=phone] .b-hand .card .c-text{font-size:max(11px,.98em);padding:.2em .35em;line-height:1.15}
+.battle[data-mode=phone] .b-hand .card .c-text.t-sm{font-size:max(11px,.92em)} .battle[data-mode=phone] .b-hand .card .c-text.t-xs{font-size:max(11px,.88em)}
 .battle[data-mode=phone] .b-hand .card .c-foot{display:none}
 .battle[data-mode=phone] .b-hand .card.playable:not(.selected){--lift:-8px}
 .battle[data-mode=phone] .b-hand .card.unaff:not(.selected){--lift:4px}
-.battle[data-mode=phone] .b-hand .card.selected{--lift:-30px;--sc:1.14}
+.battle[data-mode=phone] .b-hand .card.selected{--lift:-10px;--sc:1.04}
 
 @media (max-height:700px){
   .battle[data-mode=phone] .b-top{min-height:46px}
