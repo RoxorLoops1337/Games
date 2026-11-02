@@ -143,6 +143,7 @@ export function createAudio() {
   };
   sfx.card0 = () => sfx.card({ rarity: 0 }); sfx.card1 = () => sfx.card({ rarity: 1 }); sfx.card2 = () => sfx.card({ rarity: 2 });
   sfx.card3 = () => sfx.card({ rarity: 3 }); sfx.card4 = () => sfx.card({ rarity: 4 }); sfx.card5 = () => sfx.card({ rarity: 5 });
+  sfx.heartbeat = () => { tone(62, 0.13, 'sine', 0.3, -18); tone(52, 0.16, 'sine', 0.24, -14, 0.17); };
   sfx.star1 = () => sfx.star({ n: 1 }); sfx.star2 = () => sfx.star({ n: 2 }); sfx.star3 = () => sfx.star({ n: 3 });
 
   // ---------------------------------------------------------------- music

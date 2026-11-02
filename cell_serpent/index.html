@@ -224,6 +224,13 @@
   #settings .tgl b::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 2px 3px rgba(0,0,0,.4);transition:transform .2s cubic-bezier(.3,1.5,.5,1)}
   #settings .tgl.on b{background:linear-gradient(180deg,#b6ff8f,#5fd63a)} #settings .tgl.on b::after{transform:translateX(22px)}
   #settings .tgl.on{border-color:rgba(157,255,109,.5)}
+  .rhint{font-size:13px;font-weight:900;color:#1b0a24;background:linear-gradient(180deg,#fff3b0,#ffd24a);padding:4px 14px;border-radius:99px;max-width:92vw;text-align:center;line-height:1.25;box-shadow:0 2px 0 #a8730a} .rhint:empty{display:none}
+  .rpConf{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:5} .rpConf i{position:absolute;top:-14px;width:8px;height:13px;border-radius:2px;opacity:0;animation:rpConf 2s ease-in forwards}
+  @keyframes rpConf{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--dx),105vh) rotate(var(--rot))}}
+  #revive #rvNo{border:2px solid rgba(255,255,255,.55);color:#fff;background:rgba(255,255,255,.1);min-height:44px;min-width:150px;font-size:16px}
+  .rvtimer{background:none;border:0;color:var(--dim);font:inherit;font-size:12px;text-decoration:underline;padding:6px}
+  #revive.hold .rvring b{background:#9dff6d} #revive.hold #rvLeft::after{content:" (timer paused)"}
+  @media (max-height:600px){.rhint{font-size:12px;padding:3px 10px}}
   /* end @css:11-result-pause */
   /* @css:09-skills-pets */
   .tile.tier0{--tc:#9dff6d} .tile.tier1{--tc:#4fb8ff} .tile.tier2{--tc:#b06cff} .tile.tier3{--tc:#ffb04d} .tile.tier4{--tc:#ff4d7a} .tile.pet{--tc:#ffd24a}
@@ -654,7 +661,8 @@
   <div class="rvring"><svg viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" id="rvArc" cx="60" cy="60" r="52"/></svg><img class="hero" src="assets/duo_idle.png" alt=""><b id="rvSec">10</b></div>
   <div class="sub">The crowd wants one more song. The snake gets knocked back.</div>
   <button class="btn gold" id="rvGo">REVIVE</button><div class="sub" id="rvLeft"></div>
-  <button class="btn dim" id="rvNo">GIVE UP</button>
+  <button class="btn dim" id="rvNo">Give up</button>
+  <button class="rvtimer" id="rvTimer"></button>
 </section>
 
 <section class="scr" id="pause">
@@ -670,6 +678,7 @@
   <h2 id="rTitle">THE VIRUS WINS</h2>
   <img class="hero" id="rImg" src="assets/duo_idle.png" alt="">
   <div class="sub" id="rSub"></div>
+  <div class="rhint" id="rHint"></div>
   <div class="rribbon" id="rRibbon"></div>
   <div class="stars" id="rStars"></div>
   <div class="rlevel" id="rLevel"><span class="lv" id="rLv">1</span><div class="lbar"><i id="rLbar"></i></div><small id="rLtxt"></small></div>
