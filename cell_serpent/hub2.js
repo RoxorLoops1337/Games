@@ -24,6 +24,7 @@ import { renderStickerBook } from './sticker_b9.js';
 import { foldTab } from './fold_b12r.js';
 import { recordsHTML, setStripState, setStripHTML, treatLine } from './hub_b10.js';
 import { statBuyJuice } from './juice_b13b.js';
+import { statTeaserEl } from './onboard_b14b.js';
 import { readRuns, runLogHTML, decorateBundles, sparkleFlight, treatPips } from './hub_b11.js';
 const STATICON = { atk: 'speaker', crt: 'note', cdn: 'clock', vit: 'heart', for: 'star', rev: 'mic' };
 // a six-axis radar of the core stats, drawn as inline svg
@@ -201,6 +202,7 @@ export function createHub2(c) {
     $('heroBox').innerHTML = `<div class="heroname">RoxorLoops &amp; Jasmin</div><div class="heropow"><span class="pwi">${ico('fist', 30)}</span><small>POWER</small><b>${power(s)}</b></div>${radar(s)}`;
     $('lvBar').innerHTML = `<div class="lvrow"><span class="lvbadge">${li.lv}</span><div class="bar"><i style="width:${Math.round((li.cur / li.need) * 100)}%"></i></div></div>` + (nextR ? `<div class="lvnext">Level ${nextR.lv}: ${nextR.r.sparkles} ${curImg('sparkles')}</div>` : '');
     const core = document.createElement('div'); core.className = 'stat3'; list.appendChild(core);
+    { const te = statTeaserEl(s); if (te) { te.style.marginTop = '10px'; list.appendChild(te); } }   // b14b: next stat level teaser
     $('heroBox').querySelector('.radar').addEventListener('click', ev => {   // tap an axis to jump to its upgrade card
       const id = ev.target.dataset && ev.target.dataset.id, cardEl = id && core.querySelector(`.sc[data-id="${id}"]`); if (!cardEl) return;
       audio.play('click'); cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); cardEl.classList.remove('flash'); void cardEl.offsetWidth; cardEl.classList.add('flash');
