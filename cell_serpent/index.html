@@ -2322,7 +2322,7 @@
 #title .snkmark.on{display:block}
 .stkgrid button:focus-visible{outline:3px solid #fff;outline-offset:3px}
   .recbox .sec span{background:#c9a8ff!important} .recbox .rec small{color:#e0dbf5;font-size:10.5px} .recbox .rec.zero{opacity:1} .recbox .rec.zero b,.recbox .rec.zero small{color:#d3cdec}
-  .card .ds{color:#d6d0ee}
+  .card .ds{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.75)}
 /* end @css:18-access round 10 */
 /* @css:19-buttons round 9 */
   .gs9w{display:inline-block;line-height:0;vertical-align:-.2em}
@@ -2571,6 +2571,8 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 @media (min-height:800px){#title #playBtn{margin-top:calc(10px + 8vh)}}
 @media (prefers-reduced-motion:reduce){#inst_b12n{animation:none}}
 /* end @css:35-n-title */
+/* title info chips: a darker chip behind the label keeps 4.5:1 over the animated title background */
+#title #titleInfo b{background:rgba(12,9,36,.74);text-shadow:0 1px 2px rgba(0,0,0,.6)}
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
