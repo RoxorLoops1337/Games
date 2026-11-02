@@ -45,3 +45,22 @@ console.log('02_animal_art ok');
   assert.ok(hatPose('🎩', 0.5).dy < -10, 'the top hat is doffed');
   console.log('02_animal_art r4 ok');
 }
+// round 5: pet-specific streak emotes, the duo hop and the dressed title/result duo
+{
+  const { createCheer, EMOTE, STREAKS } = await import(join(root, 'cheer.js'));
+  for (const id of ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']) assert.ok(EMOTE[id] >= 3, 'emote for ' + id);
+  assert.equal(new Set(Object.values(EMOTE)).size, 6, 'every pet has its own emote');
+  const ch = createCheer(); const g = { t: 10, combo: 0, lastKill: 10 };
+  ch.step(g, 0.016); assert.equal(ch.duo(0), null, 'no hop at rest');
+  g.combo = STREAKS[0]; g.lastKill = 10; assert.ok(ch.step(g, 0.016), 'milestone hit');
+  for (let i = 0; i < 10; i++) ch.step(g, 0.016);
+  const d = ch.duo(0); assert.ok(d && d.y >= 0 && d.sq >= 1, 'the duo hops on a streak');
+  ch.burst(100, 100, 0, 'puppy');
+  const calls = []; const spy = new Proxy({}, { get: (_t, k) => (k === 'save' || k === 'restore') ? noop : () => { calls.push(k); }, set: () => true });
+  ch.draw(spy, 0.016, null, noop, noop); assert.ok(calls.length > 0, 'emote particles draw');
+  const { hatPlacements } = await import(join(root, 'duo_pose.js'));
+  const { OUTFITS } = await import(join(root, 'sim.js'));
+  for (const o of OUTFITS) assert.equal(hatPlacements(o).length, 2, 'two heads or eyes for ' + o.id);
+  assert.deepEqual(hatPlacements(null), [], 'no outfit, no hats');
+  console.log('02_animal_art r5 ok');
+}

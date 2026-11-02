@@ -353,7 +353,7 @@ export function createRenderer(canvas, art, kit) {
       const k = Math.abs(Math.sin(ph));
       ctx.save(); ctx.globalAlpha *= 0.3 * (1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, 24 - (idle + hopY) * 0.3, 7, 0, 0, TAU); ctx.fill(); ctx.restore();
       const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = 1 + (1 - k) * 0.05 + st.hop * 0.05, sy = 1 - (1 - k) * 0.05 - st.hop * 0.03;
-      if (cheerHit && !OPT.reduceMotion) CH.burst(px, base - 40, Math.max(0, CH.tier));
+      if (cheerHit && !OPT.reduceMotion) CH.burst(px, base - 40, Math.max(0, CH.tier), id);
       if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq : 1), sy / (ch ? ch.sq : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px, base - idle - hopY, sz, s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0)); ctx.restore(); }
       if (st.hop > 0.6) sparkleAt(px + s2 * 28, base - idle - hopY - 36, 7 + st.hop * 3);
       petExtras(id, st, px, base - idle - hopY, s2, i);
@@ -381,13 +381,13 @@ export function createRenderer(canvas, art, kit) {
     const key = singing ? 'duo_sing' : 'duo_idle';
     const moving = Math.hypot(p.mx, p.my) > 0.1, hop = S.t - S.lastShot < 0.12 ? 1 - (S.t - S.lastShot) / 0.12 : 0;
     const sq = 1 + Math.sin(S.t * (moving ? 9 : 2.6)) * (moving ? 0.05 : 0.018) + hop * 0.03;
-    const im = art && art.get(key);
-    if (im) { const h = 170, w = h * im.width / im.height; img(key, p.x, p.y - 26 - hop * 4, w / sq, h * sq, p.mx * 0.05 + (moving ? 0 : Math.sin(S.t * 1.3) * 0.012)); idleSparkles(p, singing); }
+    const im = art && art.get(key), dch = OPT.reduceMotion ? null : CH.duo(S.t), dY = dch ? dch.y : 0;   // 02-animal-art r5: the duo hops on a streak
+    if (im) { const h = 170, w = h * im.width / im.height, dq = dch ? dch.sq : 1; img(key, p.x, p.y - 26 - hop * 4 - dY, w / sq / dq, h * sq * dq, p.mx * 0.05 + (moving ? 0 : Math.sin(S.t * 1.3) * 0.012) + (dch ? dch.rot : 0)); idleSparkles(p, singing); }
     else { glow(p.x, p.y, 40, '#39f0ff', 0.7); ctx.fillStyle = '#39f0ff'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 22, 0, TAU); ctx.fill(); ctx.stroke(); }
     petsDraw(g, p, singing);
     drawHog(g);
     if (g.outfit) { glow(p.x, p.y - 20, 70, g.outfit.color, 0.22); const hs = bakeHat(kit, g.outfit.hat), hb = Math.sin(S.t * 4) * 3;
-      if (hs) { const hp = hatPose(g.outfit.hat, OPT.reduceMotion ? 0 : CH.t, S.t), fxk = OPT.reduceMotion ? null : HAT_FX[g.outfit.hat]; ctx.save(); ctx.translate(p.x - 4, p.y - 108 + hb + hp.dy); ctx.rotate(Math.sin(S.t * 2.4) * 0.05 + p.mx * 0.08 + hp.rot); ctx.scale(hp.sx, hp.sx); ctx.drawImage(hs.c, -48, -48, 96, 96); if (fxk) fxk(ctx, S.t, CH.t); ctx.restore(); if (!OPT.reduceMotion) { const f = (S.t * 0.9) % 1; sparkleAt(p.x - 4 + Math.cos(S.t * 3) * 30, p.y - 122 + hb - f * 22, 5 * Math.sin(f * Math.PI)); } }
+      if (hs) { const hp = hatPose(g.outfit.hat, OPT.reduceMotion ? 0 : CH.t, S.t), fxk = OPT.reduceMotion ? null : HAT_FX[g.outfit.hat]; ctx.save(); ctx.translate(p.x - 4, p.y - 108 + hb + hp.dy - dY); ctx.rotate(Math.sin(S.t * 2.4) * 0.05 + p.mx * 0.08 + hp.rot); ctx.scale(hp.sx, hp.sx); ctx.drawImage(hs.c, -48, -48, 96, 96); if (fxk) fxk(ctx, S.t, CH.t); ctx.restore(); if (!OPT.reduceMotion) { const f = (S.t * 0.9) % 1; sparkleAt(p.x - 4 + Math.cos(S.t * 3) * 30, p.y - 122 + hb - f * 22, 5 * Math.sin(f * Math.PI)); } }
       else { ctx.save(); ctx.font = '44px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g.outfit.hat, p.x - 4, p.y - 124 + hb); ctx.restore(); } }
     // hitbox core: the part that actually gets hurt
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 9, 0, TAU); ctx.stroke();
