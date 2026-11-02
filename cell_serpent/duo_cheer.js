@@ -2,7 +2,7 @@
 // The idle picture has R pointing and J waving outwards. We copy it, rub those two arms out (they are plain
 // skin against empty space) and paint two raised fists in the same ink and skin colours. Built once, lazily.
 const INK = '#3a1d1d', SKIN = '#fdd4b7', SKIN_SH = '#f2b999', HAIR = '#5a2f1b';
-let cache = null, cacheFor = null;
+let cache = null, cacheFor = null, cacheS = null, cacheForS = null;   // r8: one frame per picture (idle and sing)
 
 function arm(g, pts, w) {
   g.lineCap = 'round'; g.lineJoin = 'round';
@@ -23,9 +23,9 @@ function fist(g, x, y, s, tilt) {
 }
 
 // im: the duo_idle image. Returns a canvas of the same size, or null when there is no DOM (headless tests)
-export function cheerFrame(im) {
+export function cheerFrame(im, sing) {
   if (!im || typeof document === 'undefined') return null;
-  if (cache && cacheFor === im) return cache;
+  if (sing ? cacheS && cacheForS === im : cache && cacheFor === im) return sing ? cacheS : cache;
   const W = im.width, H = im.height;
   if (W < 500 || H < 440) return null;   // not the shipped picture: leave it alone
   const c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -35,6 +35,7 @@ export function cheerFrame(im) {
   g.save(); g.globalCompositeOperation = 'destination-out';
   g.beginPath(); for (const [x, y] of [[0, 222], [40, 222], [50, 234], [64, 246], [67.5, 251], [84, 286], [80, 290], [0, 290]]) g.lineTo(x, y); g.closePath(); g.fill();
   g.beginPath(); for (const [x, y] of [[418, 262], [440, 258], [462, 262], [490, 262], [495, 272], [488, 305], [455, 318], [426, 322], [412, 312]]) g.lineTo(x, y); g.closePath(); g.fill();
+  if (sing) { g.beginPath(); for (const [x, y] of [[0, 196], [46, 196], [46, 232], [0, 232]]) g.lineTo(x, y); g.closePath(); g.fill(); }   // r8: the singing picture points a little higher
   g.restore();
   // J's waving hand sat in front of the ponytail tip: paint the hole it leaves with hair
   g.save(); g.globalCompositeOperation = 'destination-over'; g.fillStyle = HAIR; g.strokeStyle = INK; g.lineWidth = 4; g.lineJoin = 'round';
@@ -43,5 +44,6 @@ export function cheerFrame(im) {
   // 2) two raised arms, shoulders on the sleeves, fists above head height
   arm(g, [[80, 268], [38, 236], [30, 162], [30, 128]], 22); fist(g, 29, 112, 1.05, -0.12);
   arm(g, [[418, 288], [470, 268], [492, 196], [490, 160]], 20); fist(g, 490, 142, 1.0, 0.12);
-  cache = c; cacheFor = im; return c;
+  if (sing) { cacheS = c; cacheForS = im; } else { cache = c; cacheFor = im; }
+  return c;
 }

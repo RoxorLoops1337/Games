@@ -476,23 +476,26 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       else { smile(g, 0, r * 0.42, r * 0.2); cel(g, '#ff7e9a', ell(0, r * 0.6, r * 0.12, r * 0.18), { r: r * 0.15, hi: false, lw: r * 0.06 }); }
       blush(g, -r * 0.62, r * 0.25, r * 0.14); blush(g, r * 0.62, r * 0.25, r * 0.14);
     } else if (k === 'piglet') {
-      for (const s of [-1, 1]) cel(g, '#ff9ac0', poly([[s * r * 0.35, -r * 0.75], [s * r * 1.0, -r * 1.0], [s * r * 0.95, -r * 0.3]]), { r: r * 0.45, hi: false, lw: r * 0.09, shadow: '#d9648f' });
+      for (const s of [-1, 1]) cel(g, '#ff9ac0', MOOD === 7 ? poly([[s * r * 0.4, -r * 0.7], [s * r * 1.32, -r * 0.4], [s * r * 1.0, r * 0.12]]) : poly([[s * r * 0.35, -r * 0.75], [s * r * 1.0, -r * 1.0], [s * r * 0.95, -r * 0.3]]), { r: r * 0.45, hi: false, lw: r * 0.09, shadow: '#d9648f' });   // r8: ears flop out and down when slumped
       cel(g, '#ffb3cf', circ(0, 0, r), { r, shadow: '#e07aa3' });
       eyes2(g, r * 0.4, -r * 0.2, r * 0.14);
-      cel(g, '#ff8fb8', ell(0, r * 0.32, r * 0.42, r * 0.3), { r: r * 0.4, hi: false, lw: r * 0.09, shadow: '#d9648f' }); dot(g, -r * 0.14, r * 0.32, r * 0.055); dot(g, r * 0.14, r * 0.32, r * 0.055);
+      cel(g, '#ff8fb8', ell(0, r * (MOOD === 7 ? 0.38 : 0.32), r * 0.42, r * 0.3), { r: r * 0.4, hi: false, lw: r * 0.09, shadow: '#d9648f' }); dot(g, -r * 0.14, r * (MOOD === 7 ? 0.38 : 0.32), r * 0.055); dot(g, r * 0.14, r * (MOOD === 7 ? 0.38 : 0.32), r * 0.055);
+      if (MOOD === 7) line(g, [[-r * 0.2, r * 0.76], [-r * 0.08, r * 0.66], [r * 0.08, r * 0.66], [r * 0.2, r * 0.76]], r * 0.06);   // a wobbly frown under the snout
       blush(g, -r * 0.7, r * 0.15, r * 0.16); blush(g, r * 0.7, r * 0.15, r * 0.16);
     } else if (k === 'lamb') {
-      for (const [x, y] of [[-0.8, -0.4], [-0.5, -0.85], [0, -1.0], [0.5, -0.85], [0.8, -0.4], [-0.85, 0.2], [0.85, 0.2]]) cel(g, '#fffaf0', circ(x * r, y * r, r * 0.4), { r: r * 0.4, hi: false, lw: r * 0.08, shadow: '#d8ccd8' });
-      for (const s of [-1, 1]) cel(g, '#5a4a5a', ell(s * r * 0.95, r * 0.25, r * 0.3, r * 0.14, s * 0.4), { r: r * 0.3, hi: false, lw: r * 0.08 });
+      for (const [x, y] of [[-0.8, -0.4], [-0.5, -0.85], [0, -1.0], [0.5, -0.85], [0.8, -0.4], [-0.85, 0.2], [0.85, 0.2]]) cel(g, '#fffaf0', circ(x * r * (MOOD === 7 ? 1.06 : 1), (y + (MOOD === 7 ? 0.14 + (y < -0.5 ? 0.08 : 0) : 0)) * r, r * 0.4), { r: r * 0.4, hi: false, lw: r * 0.08, shadow: '#d8ccd8' });   // r8: the wool sags and spreads when slumped
+      for (const s of [-1, 1]) cel(g, '#5a4a5a', MOOD === 7 ? ell(s * r * 0.98, r * 0.48, r * 0.14, r * 0.3, s * 0.2) : ell(s * r * 0.95, r * 0.25, r * 0.3, r * 0.14, s * 0.4), { r: r * 0.3, hi: false, lw: r * 0.08 });
       cel(g, '#fffaf0', circ(0, -r * 0.4, r * 0.4), { r: r * 0.4, hi: false, lw: r * 0.08, shadow: '#d8ccd8' });
       cel(g, '#6a5668', ell(0, r * 0.15, r * 0.62, r * 0.72), { r, shadow: '#443748' });
-      eyes2(g, r * 0.26, r * 0.02, r * 0.13, '#2d170f'); dot(g, 0, r * 0.3, r * 0.07); smile(g, 0, r * 0.42, r * 0.12);
+      eyes2(g, r * 0.26, r * 0.02, r * 0.13, '#2d170f'); dot(g, 0, r * 0.3, r * 0.07);
+      if (MOOD === 7) line(g, [[-r * 0.14, r * 0.54], [-r * 0.05, r * 0.46], [r * 0.05, r * 0.46], [r * 0.14, r * 0.54]], r * 0.05); else smile(g, 0, r * 0.42, r * 0.12);
       blush(g, -r * 0.42, r * 0.28, r * 0.1, '#ff9ac0'); blush(g, r * 0.42, r * 0.28, r * 0.1, '#ff9ac0');
     } else if (k === 'hamster') {
-      for (const s of [-1, 1]) cel(g, '#e8b878', circ(s * r * 0.7, -r * 0.75, r * 0.3), { r: r * 0.3, hi: false, lw: r * 0.09, shadow: '#b88848' });
-      cel(g, '#f0c48c', ell(0, 0, r * 1.05, r * 0.92), { r, shadow: '#c8935a' });
+      for (const s of [-1, 1]) cel(g, '#e8b878', MOOD === 7 ? ell(s * r * 0.86, -r * 0.58, r * 0.34, r * 0.19, s * 0.55) : circ(s * r * 0.7, -r * 0.75, r * 0.3), { r: r * 0.3, hi: false, lw: r * 0.09, shadow: '#b88848' });   // r8: ears fold flat when slumped
+      cel(g, '#f0c48c', ell(0, MOOD === 7 ? r * 0.06 : 0, r * 1.05, r * (MOOD === 7 ? 0.84 : 0.92)), { r, shadow: '#c8935a' });
       cel(g, '#fff4e0', ell(0, r * 0.35, r * 0.7, r * 0.5), { r: r * 0.6, hi: false, lw: r * 0.08, shadow: '#e6d3b0' });
-      eyes2(g, r * 0.38, -r * 0.15, r * 0.13); cel(g, '#ff9ab0', poly([[-r * 0.09, r * 0.12], [r * 0.09, r * 0.12], [0, r * 0.22]]), { r: r * 0.1, hi: false, lw: r * 0.05 }); smile(g, 0, r * 0.38, r * 0.14);
+      eyes2(g, r * 0.38, -r * 0.15, r * 0.13); cel(g, '#ff9ab0', poly([[-r * 0.09, r * 0.12], [r * 0.09, r * 0.12], [0, r * 0.22]]), { r: r * 0.1, hi: false, lw: r * 0.05 });
+      if (MOOD === 7) line(g, [[-r * 0.16, r * 0.46], [-r * 0.06, r * 0.36], [r * 0.06, r * 0.36], [r * 0.16, r * 0.46]], r * 0.05); else smile(g, 0, r * 0.38, r * 0.14);
       blush(g, -r * 0.7, r * 0.2, r * 0.17); blush(g, r * 0.7, r * 0.2, r * 0.17);
     } else if (k === 'turtle' && MOOD === 7) {   // r7: it pulls its head and feet into the shell, only two eyes glint in the dark gap
       cel(g, '#4a9a42', ell(0, r * 0.62, r * 0.62, r * 0.2), { r: r * 0.3, hi: false, lw: r * 0.07, shadow: '#2f6e2c' });

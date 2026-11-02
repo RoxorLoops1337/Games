@@ -436,7 +436,7 @@ export function createRenderer(canvas, art, kit) {
     const moving = Math.hypot(p.mx, p.my) > 0.1, hop = S.t - S.lastShot < 0.12 ? 1 - (S.t - S.lastShot) / 0.12 : 0;
     const sq = 1 + Math.sin(S.t * (moving ? 9 : 2.6)) * (moving ? 0.05 : 0.018) + hop * 0.03;
     const im = art && art.get(key), dch = OPT.reduceMotion ? null : CH.duo(S.t), dY = dch ? dch.y : 0;   // 02-animal-art r5: the duo hops on a streak
-    const cf = dch && im ? cheerFrame(art.get('duo_idle')) : null;   // r7: arms up while the cheer lasts
+    const cf = dch && im ? cheerFrame(art.get(key), singing) : null;   // r7: arms up while the cheer lasts; r8: the singing picture has its own arms-up frame
     if (cf) { const h = 170, w = h * im.width / im.height, dq = dch.sq; ctx.save(); ctx.translate(p.x, p.y - 26 - hop * 4 - dY); ctx.rotate(p.mx * 0.05 + dch.rot); const ww = w / sq / dq, hh = h * sq * dq; ctx.drawImage(cf, -ww / 2, -hh / 2, ww, hh); ctx.restore(); idleSparkles(p, singing); }
     else if (im && !OPT.reduceMotion && im.width === 520) {   // r7: R and J sway on their own phases, heads nod on the beat
       const h = 170, w = h * im.width / im.height, dq = dch ? dch.sq : 1, ww = w / sq / dq, hh = h * sq * dq, nod = g.phase === 'play' ? Math.pow(1 - beatPhase(g), 5) * ((g.groove || 0) >= 6 ? 1 : 0.5) : 0.3;
