@@ -488,7 +488,7 @@ export function createRenderer(canvas, art, kit) {
       const lf = st.leash || (st.leash = newLeash());
       let tx = p.x + s2 * 92 + (OPT.reduceMotion ? 0 : Math.sin(S.t * 1.7 + i) * 6), oy = 0;   // b12h: in circle stages the pets keep to their side but slide off the aim line
       if (g.ring) { const sl = petSlot(SLOT12, s2, p.aim, OPT.reduceMotion ? 0 : S.t, i); tx = p.x + sl.x; oy = sl.y - 8; if (!OPT.reduceMotion) oy = petFollow(st.ly || (st.ly = newLeash()), oy, S.t).x; }
-      const px = OPT.reduceMotion ? tx : petFollow(lf, tx, S.t).x, base = p.y + 8 + oy;   // r9: the pets trot after the duo on a springy leash
+      const px = OPT.reduceMotion ? p.x + s2 * 92 + (g.ring ? tx - p.x - s2 * 92 : 0) : petFollow(lf, tx, S.t).x, base = p.y + 8 + oy;   // r9: the pets trot after the duo on a springy leash
       const calls = scareEdge(st, scared, S.t); if (calls && OPT.onPetCall) OPT.onPetCall(id);   // r10: the pet's own voice
       if (calls && !OPT.reduceMotion) { st.hop = 1; addFloat(px, base - 62, SCARE_CALL[id] || '!', SCARE_COL[id] || '#fff', 20, -34); }   // r9: each pet calls out when a head gets close
       const gl = OPT.reduceMotion || S.ko ? 0 : glance(st, px, nearX, near, lastDt); if (glanceEdge(st, gl) && OPT.onPetGlance) OPT.onPetGlance(id);   // r11
