@@ -2,7 +2,7 @@
 // storm city, dream castle, radio towers, giant fruit, fortress, ice palace, haunted manor), drawn between the
 // sky and the hills. The sprite is baked once per world and slides a few pixels against the duo for depth;
 // a handful of cheap animated bits (spinning wheel, blades, drifting airship, blinking beacons) sit on top.
-import { W, LINE_Y } from './sim.js';
+import { W, LINE_Y, skinFor, isBossStage } from './sim.js';
 import { mix } from './art_draw.js';
 import { WORLDS, skyGrade } from './bg_world.js';
 
@@ -168,11 +168,27 @@ function rgbaQ(rgb, a) {
   let v = RGBA.get(key); if (!v) RGBA.set(key, v = `rgba(${rgb},${q / 64})`);
   return v;
 }
+// 11-perf: the next stage's skyline (1.1 MB) is baked in idle time while the current one is on screen, so starting the next stage
+// does not spend a frame drawing it. One request per key; nothing runs where there is no idle callback (tests, old browsers).
+let wStage = -1;
+const WARMED = new Set();
+export function warmNextFar(kit, stage, idle) {
+  const n = stage + 1;
+  if (!kit || !kit.bake || n > 50) return false;
+  const skin = skinFor(n), boss = isBossStage(n), gr = skyGrade(n), k = Math.round(gr.k * 4), fm = farMemo(skin, boss, k, n, gr.k), fkey = fm.fkey;
+  if (WARMED.has(fkey)) return false;
+  const run = idle || (typeof requestIdleCallback === 'function' ? requestIdleCallback : null);
+  if (!run) return false;
+  WARMED.add(fkey);
+  run(() => { kit.bake(fkey, FAR_W, FAR_H, b => bakeFar(b, skin, boss, n, fkey), 1); });
+  return true;
+}
 // per frame: the sprite slid against the duo, plus the animated landmarks
 export function drawFar(c, kit, o) {
   const { skin, boss, stage, t, px, reduce, low, lit = 0, pop = 9 } = o, kind = farKind(skin), gr = skyGrade(stage), k = Math.round(gr.k * 4);
   const fm = farMemo(skin, boss, k, stage, gr.k), fkey = fm.fkey, spr = kit && kit.bake(fkey, FAR_W, FAR_H, b => bakeFar(b, skin, boss, stage, fkey), 1);
   if (!spr) return;
+  if (stage !== wStage) { wStage = stage; warmNextFar(kit, stage); }   // once per stage, not per frame
   const dx = reduce ? 0 : -((px - W / 2) / W) * FAR_MARGIN * 1.6, x0 = -FAR_MARGIN + dx;
   c.save(); c.globalAlpha = boss ? 0.85 : 0.96; c.drawImage(spr.c, x0, FAR_TOP, FAR_W, FAR_H); c.globalAlpha = 1;
   const wl = WINS.get(fkey);

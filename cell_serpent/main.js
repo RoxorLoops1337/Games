@@ -33,7 +33,8 @@ import { paintSettingIcons } from './icons_b8.js';
 import { watchGlyphs } from './glyph_sweep.js';
 import { dressToast } from './toast_ui.js';
 import { flashDone } from './btn_state.js';
-import { watchSideIcons } from './side_icons.js';
+import { watchSideIcons, sideIconURL, SIDE_ICON_NAMES } from './side_icons.js';
+import { warmIdle } from './icon_warm_b11.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
 import { renderRecStrip, recFor, bestBuild } from './build_rec.js';
 import { petLabel } from './pet_names.js';
@@ -816,6 +817,7 @@ loadArt('assets/').then(a => {
   });
   setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); setupTune($('title'), audio, () => { save.sparkles += 3; persist(); refreshCur(); toast('Sticker! +3 Sparkles'); }); setupSecrets($('title'), audio); setupTitle10($('title'), audio); $('title').addEventListener('snakepoke', e => (e.detail && e.detail.hit ? audio.play('snakesqueak', e.detail) : audio.play('click'))); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
   R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready'), onMilestone: n => audio.play('streakmile', { n }), onPetCall: id => audio.play('petcall', { id }), beatStreak: () => audio.beatStreak }); applySettings(); resize(); refreshTitle();
+  warmIdle([...['beats', 'sparkles', 'egg', 'chest', 'boxbeat', 'boxspark', 'aspd', 'notes', 'burst', 'cdmg'], ...WEAPONS.map(w => w.id), ...PETS.map(p => p.id)].map(id => () => iconURL(id)).concat(SIDE_ICON_NAMES.map(n => () => sideIconURL(n))));   // 11-perf: icon PNGs encode in idle time
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();
   if (qs.get('stage')) { startRun(Math.max(1, +qs.get('stage'))); }   // dev shortcut: ?stage=N

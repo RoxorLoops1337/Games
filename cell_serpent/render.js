@@ -83,13 +83,40 @@ export function createRenderer(canvas, art, kit) {
     }
     return t;
   }
+  const SIZE_LADDER = [10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 40, 44, 48, 56, 64, 72, 80, 96, 112, 128];
+  function presetSize(size) {   // the nearest rung of the ladder, so every size from 20 to 26 shares a handful of strips
+    if (!(size > 10)) return 10;
+    if (size >= 128) return Math.round(size / 16) * 16;
+    let best = SIZE_LADDER[0], bd = 1e9;
+    for (let i = 0; i < SIZE_LADDER.length; i++) { const d = Math.abs(SIZE_LADDER[i] - size); if (d < bd) { bd = d; best = SIZE_LADDER[i]; } }
+    return best;
+  }
+  // numbers (damage, HP, combo, timers) are laid out from one strip per glyph, so a value never seen before bakes nothing
+  const NUMSTR = /^[0-9+x.,%s!-]+$/, ADV = new Map();
+  function advOf(ps, ch) {
+    let m = ADV.get(ps); if (!m) ADV.set(ps, m = new Map());
+    let a = m.get(ch); if (a === undefined) { ctx.font = `800 ${ps}px system-ui, -apple-system, "Segoe UI", sans-serif`; m.set(ch, a = ctx.measureText(ch).width); }
+    return a;
+  }
+  function drawNumber(str, x, y, ps, q, fill, stroke, align) {
+    if (S.numLog) S.numLog.push(str);   // tests set S.numLog to read which values were drawn (glyph strips hide the string)
+    let tw = 0; for (let i = 0; i < str.length; i++) tw += advOf(ps, str[i]);
+    let cx = align === 'left' ? x : align === 'right' ? x - tw * q : x - tw * q / 2;
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i], a = advOf(ps, ch) * q, t = textSprite(ch, ps, fill, stroke);
+      if (t.c) { const w = t.w * q, h = t.h * q; ctx.drawImage(t.c, cx + a / 2 - w / 2, y - h / 2, w, h); }
+      cx += a;
+    }
+  }
   function text(str, x, y, size, fill = '#fff', stroke = '#10131c', align = 'center') {
     if (typeof str !== 'string') str = String(str);
-    size = size >= 20 ? Math.round(size) : Math.round(size * 2) / 2;   // 17-perf: pulsing sizes share a few baked strips instead of baking one per frame
-    if (kit && kit.makeCanvas) {
-      const t = textSprite(str, size, fill, stroke);
-      if (t.c) { ctx.drawImage(t.c, align === 'left' ? x - t.pad : align === 'right' ? x - t.w + t.pad : x - t.w / 2, y - t.h / 2, t.w, t.h); return; }
+    if (kit && kit.makeCanvas) {   // 11-perf: strips are baked at preset sizes only and scaled to the exact size, so a pulsing number never bakes a canvas
+      const ps = presetSize(size), q = size / ps;
+      if (str.length > 1 && NUMSTR.test(str)) { drawNumber(str, x, y, ps, q, fill, stroke, align); return; }
+      const t = textSprite(str, ps, fill, stroke), w = t.w * q, h = t.h * q, pad = t.pad * q;
+      if (t.c) { ctx.drawImage(t.c, align === 'left' ? x - pad : align === 'right' ? x - w + pad : x - w / 2, y - h / 2, w, h); return; }
     }
+    size = size >= 20 ? Math.round(size) : Math.round(size * 2) / 2;
     ctx.font = `800 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2, size * 0.2); ctx.strokeStyle = stroke; ctx.strokeText(str, x, y);
     ctx.fillStyle = fill; ctx.fillText(str, x, y);

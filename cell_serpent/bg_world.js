@@ -235,6 +235,8 @@ export function bakeWorld(c, skin, boss, ring, th, stage = 1, part = 0) {
   c.lineWidth = 2; c.strokeStyle = 'rgba(111,227,255,.6)'; c.strokeRect(10, 10, W - 20, H - 20);
 }
 
+const RGB = new Map();
+function rgbOf(hue) { let v = RGB.get(hue); if (v === undefined) RGB.set(hue, v = `rgb(${hue})`); return v; }
 // ---- animated pieces (cheap: a baked beam sprite, ~18 motes)
 export function makeMotes() {
   const a = [], r = rnd(3);
@@ -303,16 +305,17 @@ export function drawRing(c, ring, t, boss, pulse, kit, skin = 'love', danger = 0
   c.globalAlpha = ga;
   // glow: stacked wide strokes, outside and inside the rim (no shadowBlur, cheap on phones)
   c.save(); c.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < 4; i++) { c.lineWidth = 56 - i * 13 + beat * 10; c.strokeStyle = `rgba(${hue},${0.05 + i * 0.035 + beat * 0.03})`; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke(); }
+  c.strokeStyle = rgbOf(hue);   // 11-perf: a cached opaque colour plus globalAlpha, so the glow builds no rgba string per frame
+  for (let i = 0; i < 4; i++) { c.lineWidth = 56 - i * 13 + beat * 10; c.globalAlpha = ga * (0.05 + i * 0.035 + beat * 0.03); c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke(); }
   c.restore();
   c.beginPath(); c.arc(cx, cy, R, 0, TAU);
   c.lineWidth = 11; c.strokeStyle = 'rgba(8,3,26,.55)'; c.stroke();
-  c.lineWidth = 5.5; c.strokeStyle = `rgba(${hue},.95)`; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
-  c.lineWidth = 1.5; c.strokeStyle = `rgba(255,255,255,${0.45 + beat * 0.3})`; c.beginPath(); c.arc(cx, cy, R - 6, 0, TAU); c.stroke();
+  c.lineWidth = 5.5; c.strokeStyle = rgbOf(hue); c.globalAlpha = ga * 0.95; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
+  c.lineWidth = 1.5; c.strokeStyle = '#fff'; c.globalAlpha = ga * (0.45 + beat * 0.3); c.beginPath(); c.arc(cx, cy, R - 6, 0, TAU); c.stroke(); c.globalAlpha = ga;
   if (danger > 0.02) {   // a head is closing in: the rim heats up and flickers red, brighter the closer it is
     const fl = 0.55 + 0.45 * Math.sin(t * (9 + danger * 12)); c.save(); c.globalCompositeOperation = 'lighter';
-    c.lineWidth = 16; c.strokeStyle = `rgba(255,40,70,${danger * 0.18 * fl})`; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke();
-    c.lineWidth = 5.5; c.strokeStyle = `rgba(255,110,130,${danger * (0.35 + 0.4 * fl)})`; c.stroke(); c.restore();
+    c.lineWidth = 16; c.strokeStyle = 'rgb(255,40,70)'; c.globalAlpha = ga * danger * 0.18 * fl; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke();
+    c.lineWidth = 5.5; c.strokeStyle = 'rgb(255,110,130)'; c.globalAlpha = ga * danger * (0.35 + 0.4 * fl); c.stroke(); c.restore();
   }
   const lit = Math.floor(t * 6) % 3;   // the 24 bulbs: lit ones and dim ones are each one path and one fill
   for (let pass = 0; pass < 2; pass++) {
@@ -371,7 +374,7 @@ function lightning(c, bg, t, ph = 0) {
 export function drawBossPhase(c, kit, t, ph, pulse, flash, reduce, low) {
   const beat = reduce ? 0.4 : pulse;
   c.save();
-  c.fillStyle = `rgba(255,24,64,${ph * (0.04 + beat * 0.07)})`; c.fillRect(0, 0, W, LINE_Y);
+  const ga0 = c.globalAlpha; c.fillStyle = 'rgb(255,24,64)'; c.globalAlpha = ga0 * ph * (0.04 + beat * 0.07); c.fillRect(0, 0, W, LINE_Y); c.globalAlpha = ga0;
   const vig = kit && kit.bake('bossvig', W / 2, H / 2, b => {
     const g = b.createRadialGradient(0, 0, 90, 0, 0, 330); g.addColorStop(0, 'rgba(255,30,70,0)'); g.addColorStop(0.6, 'rgba(255,30,70,.10)'); g.addColorStop(1, 'rgba(255,30,70,.42)');
     b.fillStyle = g; b.fillRect(-W / 4, -H / 4, W / 2, H / 2);
