@@ -40,6 +40,16 @@ export function hudZone(gp, t = 0) {
   if (gp.x > W - 76) { if (gp.y < t + 76) return 'pause'; if (gp.y < t + 150) return 'stats'; }
   return '';
 }
+// 06-hud b10: skill tile layout. Tiles are about 10 percent bigger up to 4 skills, and a 9 skill row squeezes to
+// fit between the groove plate (right edge 244, plus a 12 unit safe gap) and the right margin. Pure, so tests can check it.
+export const SKILL_LEFT = 256, SKILL_RIGHT = 698;
+export function skillLayout(n) {
+  n = Math.max(1, n | 0);
+  const r0 = n <= 4 ? 29 : n === 5 ? 26.5 : 26, pitch = Math.min(2 * r0 + 6, (SKILL_RIGHT - SKILL_LEFT) / n), r = Math.min(r0, pitch / 2 - 2);
+  return { r, pitch, left: SKILL_RIGHT - (n - 1) * pitch - 2 * r, chipUp: SKILL_RIGHT - (n - 1) * pitch - 2 * r < 412 };
+}
+// combo tier names for the small tag on the combo plate
+export function comboTier(n) { return n >= 40 ? 'MEGA' : n >= 20 ? 'SUPER' : n >= 10 ? 'GROOVY' : n >= 5 ? 'NICE' : ''; }
 const BOSS_DY = 24;   // the boss HP bar pushes the stat row down
 
 export function createHud(env) {
@@ -157,7 +167,7 @@ export function createHud(env) {
     text(boss ? 'BOSS ' + g.stage : 'STAGE ' + g.stage, W / 2, 30, 28, boss ? '#ff7a9a' : '#ffffff');
     const nm = g.mode === 'pig' ? 'Piggy Bank Parade' : virusName(g.stage), fs = nm.length > 15 ? fzp(16) : fzp(20);
     text(nm, W / 2, 58, fs, '#ffd0e6');
-    if (g.hard) { text('HARD', px + 201, 11, fz(14), '#e2caff', '#0b1020'); }
+    if (g.hard) { text('HARD', px + 201, 11, 16, '#e2caff', '#0b1020'); }
     // coins, bouncing when they grow
     const coins = Math.floor(g.coins), sc = Math.max(pop('coin', coins), landBounce(S, 'coin'));
     // 06-hud b7: the number rolls up to the real total, the coin spins on a pickup and the plate catches a gold glint
@@ -331,7 +341,8 @@ export function createHud(env) {
     const ms = Math.floor(n / 10); if (ms > (T.bsMs | 0)) { T.bsMs = ms; T.bsB = S.t; }   // milestone 10 / 20 / 30: ring burst (the sound is audio.js streakburst)
     const bk = T.bsB === undefined ? 0 : Math.max(0, 1 - (S.t - T.bsB) / 0.6);
     const k = Math.max(bk, Math.max(0, 1 - (S.t - T.bsAt) / 0.3)), hot = n >= 10, leg = n >= 30, col = leg ? '#ffffff' : n >= 20 ? '#ff7ad9' : hot ? '#ffd84d' : '#6fe3ff';
-    const x = 256, y = H - 70 - T.ins.b, w = 150, h = 40;
+    let nSk = 0; for (const id in g.weap) nSk++;
+    const LY = skillLayout(nSk), x = 256, y = H - (LY.chipUp ? 132 : 70) - T.ins.b, w = LY.chipUp ? 150 : Math.min(150, Math.max(132, LY.left - 8 - 256)), h = 40;
     scaled(x + w / 2, y + h / 2, 1 + 0.18 * k * k, () => {
       glass(-w / 2, -h / 2, w, h, 20, leg ? 'rgba(255,255,255,.95)' : col + 'cc', leg ? 'rgba(60,24,90,.78)' : 'rgba(14,9,48,.62)');
       if (leg) {   // 06-hud b6: legend frame at 30+, a gold and pink double rim with travelling glints
@@ -343,7 +354,7 @@ export function createHud(env) {
       }
       blit(kit && kit.SPR.note(false), -w / 2 + 22, 0, 34, 0);
       text('x' + n, -w / 2 + 44, 1, 24, col, '#0b1020', 'left');
-      text('BEAT', w / 2 - 12, 2, 13, '#ffffff', '#0b1020', 'right');
+      text('BEAT', w / 2 - 12, 2, 16, '#ffffff', '#0b1020', 'right');
     });
     milestone(x + w / 2, y + h / 2);
   }
@@ -379,14 +390,15 @@ export function createHud(env) {
     const tx = Math.max(-pw / 2 + 14, Math.min(pw / 2 - 14, x - cx));   // pointer toward the tile
     ctx.beginPath(); ctx.moveTo(tx - 8, ph / 2 - 1); ctx.lineTo(tx + 8, ph / 2 - 1); ctx.lineTo(tx, ph / 2 + 9); ctx.closePath(); ctx.fillStyle = 'rgba(14,9,48,.9)'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
     text('NEW SKILL', 0, -10, fz(18), '#ffd84d', '#0b1020');
-    text(WNAME[id] || id, 0, 12, fz(15), '#ffffff', '#0b1020');
+    text(WNAME[id] || id, 0, 12, 16, '#ffffff', '#0b1020');
     ctx.restore();
     if (!reduce() && age < 0.4) sparkleAt(cx + (age * 40 - 20) % 60 - 30, py - 20, 8 * (1 - age / 0.4) + 3);
   }
 
   function skills(g) {
-    const r = 26, pitch = 58, cy = H - 60 - T.ins.b;
-    let x = W - 22 - r, nCap = 0;
+    let nSk = 0; for (const id in g.weap) nSk++;
+    const LY = skillLayout(nSk), r = LY.r, pitch = LY.pitch, cy = H - 60 - T.ins.b, hc = hcOn() ? 1 : 0;
+    let x = SKILL_RIGHT - r, nCap = 0;
     for (const id in g.weap) {
       const w = g.weap[id], col = env.WCOL[id] || '#fff', max = WMAX[id] || 5;
       // remember the longest cooldown seen so the ring can show progress
@@ -403,21 +415,21 @@ export function createHud(env) {
       const ll = T.lvLast[id]; if (w.lv > (ll === undefined ? (S.t - T.t0 > 1 ? 0 : w.lv) : ll)) { T.lvAt[id] = S.t; if (!ll && S.t - T.t0 > 1) T.newAt[id] = S.t; } T.lvLast[id] = w.lv;
       const lk = Math.max(0, 1 - (S.t - (T.lvAt[id] === undefined ? -9 : T.lvAt[id])) / 0.7), lsc = lk > 0 && !reduce() ? 1 + 0.32 * Math.sin(lk * Math.PI) * lk : 1;
       ctx.save(); if (lsc !== 1) { ctx.translate(x, cy); ctx.scale(lsc, lsc); ctx.translate(-x, -cy); }
-      const tb = kit && kit.bake ? kit.bake('tile06|' + col, r * 2 + 8, r * 2 + 8, c => {   // dark glass disc, a colour wash lit from the top, a gloss arc and a thin coloured rim
-        c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = 'rgba(14,9,48,.78)'; c.fill();
+      const tb = kit && kit.bake ? kit.bake('tile06|' + col + '|' + r + '|' + hc, r * 2 + 8, r * 2 + 8, c => {   // dark glass disc, a colour wash lit from the top, a gloss arc and a thin coloured rim
+        c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = hc ? 'rgba(6,4,24,.97)' : 'rgba(14,9,48,.78)'; c.fill();
         const rg = c.createRadialGradient(0, -r * 0.5, 2, 0, 0, r); rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)');
         c.globalAlpha = 0.5; c.fillStyle = rg; c.beginPath(); c.arc(0, 0, r - 1, 0, TAU); c.fill(); c.globalAlpha = 1;
         c.beginPath(); c.arc(0, -r * 0.2, r * 0.78, Math.PI * 1.12, Math.PI * 1.88); c.strokeStyle = 'rgba(255,255,255,.3)'; c.lineWidth = 3; c.lineCap = 'round'; c.stroke();
-        c.beginPath(); c.arc(0, 0, r, 0, TAU); c.strokeStyle = col; c.globalAlpha = 0.7; c.lineWidth = 1.5; c.stroke();
+        c.beginPath(); c.arc(0, 0, r, 0, TAU); c.strokeStyle = hc ? '#ffffff' : col; c.globalAlpha = hc ? 1 : 0.7; c.lineWidth = hc ? 2.5 : 1.5; c.stroke();
       }) : null;
       if (tb) ctx.drawImage(tb.c, x - r - 4, cy - r - 4, r * 2 + 8, r * 2 + 8);
       else { ctx.beginPath(); ctx.arc(x, cy, r, 0, TAU); ctx.fillStyle = 'rgba(14,9,48,.62)'; ctx.fill();
         ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, cy, r - 2, 0, TAU); ctx.fill(); ctx.restore(); }
-      blit(kit && kit.SPR.weapon(env.WSPR[id] || id), x, cy - 1, 78);
+      blit(kit && kit.SPR.weapon(env.WSPR[id] || id), x, cy - 1, 78 * r / 26);
       if (frac < 0.999) { ctx.save(); ctx.beginPath(); ctx.moveTo(x, cy); ctx.arc(x, cy, r - 1, -Math.PI / 2 + TAU * frac, Math.PI * 1.5); ctx.closePath(); ctx.fillStyle = 'rgba(8,5,30,.55)'; ctx.fill(); ctx.restore(); }
       ctx.lineCap = 'round';
       // 06-hud b7: the resting ring (track, or the full ready ring in the skill colour) is one baked blit; only the filling arc is drawn live
-      const RS = (r + 6) * 2, rb = kit && kit.bake ? kit.bake('ring07|' + (ready ? col : 'trk'), RS, RS, c => { c.beginPath(); c.arc(0, 0, r + 1.5, 0, TAU); c.strokeStyle = ready ? col : 'rgba(255,255,255,.22)'; c.lineWidth = 4; c.stroke(); }) : null;
+      const RS = (r + 6) * 2, rb = kit && kit.bake ? kit.bake('ring07|' + (ready ? col : 'trk') + '|' + r + '|' + hc, RS, RS, c => { c.beginPath(); c.arc(0, 0, r + 1.5, 0, TAU); c.strokeStyle = ready ? col : hc ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.22)'; c.lineWidth = 4; c.stroke(); }) : null;
       if (rb) { ctx.drawImage(rb.c, x - RS / 2, cy - RS / 2, RS, RS); if (!ready && frac > 0.01) { ctx.beginPath(); ctx.arc(x, cy, r + 1.5, -Math.PI / 2, -Math.PI / 2 + TAU * frac); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.stroke(); } }
       else {
         ctx.beginPath(); ctx.arc(x, cy, r + 1.5, 0, TAU); ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 4; ctx.stroke();
@@ -485,7 +497,7 @@ export function createHud(env) {
     ctx.fillStyle = 'rgba(40,4,20,.5)'; for (let i = 1; i < 4; i++) ctx.fillRect(x + (w * i) / 4 - 1, y, 2, h);   // quarter marks
     if (v > 0.02) { ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(x + fw - 2, y, 2, h); }   // bright leading edge
     ctx.restore();
-    text('SERPENT ' + Math.ceil(T.bossV * 100) + '%', x + w / 2, y + h / 2 + 1, 14, low ? '#fff3a0' : '#ffffff', '#4a0a24');
+    text('SERPENT ' + Math.ceil(T.bossV * 100) + '%', x + w / 2, y + h / 2 + 1, 16, low ? '#fff3a0' : '#ffffff', '#4a0a24');
   }
 
   // gold cell countdown: the soonest-to-fade live gold cell, in seconds, with a draining bar
@@ -497,7 +509,7 @@ export function createHud(env) {
     glass(x, cy - 19, w, 38, 19, urgent ? `rgba(255,${90 + Math.round(pul * 60)},90,.9)` : 'rgba(255,210,74,.75)', urgent ? 'rgba(70,10,20,.7)' : 'rgba(60,40,6,.6)');
     glow(x + 20, cy, 26, '#ffd24a', 0.35 + 0.2 * Math.sin(S.t * 8));
     blit(kit && kit.SPR.pickup('coin'), x + 20, cy - 1, 36);
-    text('GOLD', x + 42, cy - 8, 12, urgent ? '#ffb0b0' : '#ffe9a8', '#0b1020', 'left');
+    text('GOLD', x + 42, cy - 8, 16, urgent ? '#ffb0b0' : '#ffe9a8', '#0b1020', 'left');
     text(left.toFixed(1) + 's', x + w - 12, cy - 5, 20, urgent ? '#ff8a8a' : '#ffd24a', '#0b1020', 'right');
     ctx.fillStyle = 'rgba(255,255,255,.18)'; rr(x + 42, cy + 7, w - 56, 6, 3); ctx.fill();
     ctx.fillStyle = urgent ? '#ff6a6a' : '#ffd24a'; rr(x + 42, cy + 7, Math.max(6, (w - 56) * fr), 6, 3); ctx.fill();
@@ -519,7 +531,7 @@ export function createHud(env) {
     let fly = false; for (let i = 0; i < B8.fl.length; i++) if (B8.fl[i].on) { fly = true; break; }
     if (B8.ch === 0 && (fly || lk > 0)) {   // no chest is riding the snake: show the chip as an opened tally while the reward arrives
       glass(146, ty - 26, 92, 52, 26, 'rgba(255,233,168,.5)'); blit(kit && kit.SPR.pickup('chest'), CHX, ty, 44);
-      text('x ' + (g.chestsOpened || 0), 200, ty - 5, 22, '#ffe9a8', '#0b1020', 'left'); text('OPENED', 200, ty + 14, 10, '#ffd0e6', '#0b1020', 'left');
+      text('x ' + (g.chestsOpened || 0), 200, ty - 5, 22, '#ffe9a8', '#0b1020', 'left'); text('OPENED', 200, ty + 14, 16, '#ffd0e6', '#0b1020', 'left');
     }
     for (let i = 0; i < B8.fl.length; i++) {
       const f = B8.fl[i]; if (!f.on) continue;
@@ -550,7 +562,7 @@ export function createHud(env) {
       const a = gs > 1.3 ? Math.max(0, 1 - (gs - 1.3) / 0.4) : 1, pk = Math.max(0, 1 - gs / 0.25), sc = 1 + 0.35 * pk;
       ctx.save(); ctx.globalAlpha = a; ctx.translate(556, ty + 37); ctx.scale(sc, sc);
       glass(-40, -9, 80, 18, 9, 'rgba(255,210,74,.85)', 'rgba(60,40,6,.82)');
-      text('+' + B8.gainN, 0, 1, 14, '#ffe36b', '#0b1020');
+      text('+' + B8.gainN, 0, 1, 16, '#ffe36b', '#0b1020');
       ctx.restore();
     }
   }
@@ -588,8 +600,8 @@ export function createHud(env) {
     star(ex - w / 2 - 10, ey + h / 2, 1.15 + 0.25 * k, full ? '#ffe36b' : '#ff9ad6');
     if (full) {
       ctx.save(); const sc = 1 + 0.08 * pul + 0.3 * k; ctx.translate(Math.max(110, Math.min(W - 110, g.p.x)), g.p.y - 118); ctx.scale(sc, sc); text('TAP THE DUO!', 0, 0, 20, '#ffe36b', '#0b1020'); ctx.restore();
-      text('ENCORE READY', ex, ey + h / 2 + 1, 15, '#4a3600', '#fff3a0');
-    } else { text('ENCORE', ex, ey + h / 2 + 1, 15, '#ffffff', '#4a1038'); text(Math.floor(T.encV * 100) + '%', ex + w / 2 + 12, ey + h / 2 + 1, 13, '#ffc2dc', '#0b1020', 'left'); }
+      text('ENCORE READY', ex, ey + h / 2 + 1, 16, '#4a3600', '#fff3a0');
+    } else { text('ENCORE', ex, ey + h / 2 + 1, 16, '#ffffff', '#4a1038'); text(Math.floor(T.encV * 100) + '%', ex + w / 2 + 12, ey + h / 2 + 1, 16, '#ffc2dc', '#0b1020', 'left'); }
   }
 
   function combo(g) {
@@ -602,6 +614,14 @@ export function createHud(env) {
       text('COMBO x' + g.combo, 0, -4, 24 + Math.min(10, g.combo * 0.3), col, '#0b1020');
       ctx.fillStyle = 'rgba(255,255,255,.18)'; rr(-84, 14, 168, 7, 3.5); ctx.fill();
       ctx.fillStyle = left < 0.3 && !reduce() && Math.sin(S.t * 24) > 0 ? '#ff6a7a' : col; rr(-84, 14, Math.max(5, 168 * left), 7, 3.5); ctx.fill();   // b9: a thicker timer that flashes red when the combo is about to drop
+      const tn = comboTier(g.combo);
+      if (tn) {   // 06-hud b10: a small tier tag riding the top rim of the plate (NICE, GROOVY, SUPER, MEGA); it hops when the tier changes
+        const tk = pop('ctier', g.combo >= 40 ? 4 : g.combo >= 20 ? 3 : g.combo >= 10 ? 2 : 1), tw = tn.length * 11 + 26;
+        scaled(0, -27, reduce() ? 1 : 1 + (tk - 1) * 0.6, () => {
+          glass(-tw / 2, -12, tw, 24, 12, hcOn() ? '#ffffff' : col, hcOn() ? 'rgba(6,4,24,.97)' : 'rgba(14,9,48,.88)');
+          text(tn, 0, 1, 16, col, '#0b1020');
+        });
+      }
       for (let i = 1; i < n; i++) for (const sg of [-1, 1]) star(sg * (112 + 4 + i * 20), 0, 0.55 + 0.1 * i, col);
     });
     ctx.restore();
