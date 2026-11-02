@@ -64,6 +64,7 @@ import { PUMP_LEVELS, pumpLevel } from './audio_pump.js';
 import { createCues, wantsMuffle, sheetSound } from './audio_cues.js';
 import { logRun } from './hub_b11.js';
 import { initFullscreen, fsOnRun } from './fullscreen_fs.js';
+import { initInstall } from './install_b12n.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
@@ -102,7 +103,7 @@ function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
   canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
 }
-addEventListener('resize', resize); resize(); initFullscreen(() => save.settings.fullscreen !== false);
+addEventListener('resize', resize); resize(); initFullscreen(() => save.settings.fullscreen !== false); initInstall();
 initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap = true; }); initKeyboard(); initSrPass(); initA11y7(); initGridNav(document.getElementById('tabBattle')); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
 
 let shownId = '';

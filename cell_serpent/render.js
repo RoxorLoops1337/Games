@@ -15,6 +15,7 @@ import { drawFar } from './bg_far.js';
 import { ringDanger } from './bg_mist.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
+import { drawRingHint } from './hints_ring_b12n.js';
 import { drawBellLinks, drawBellRings } from './bell_fx.js';
 import { drawCellFlags,drawCellBadge, drawQuartetLinks, drawDashLane, drawStreak, drawChoirLinks, setBeatPhase } from './cellfx.js';
 import { bakeHat } from './hats.js';
@@ -601,7 +602,7 @@ export function createRenderer(canvas, art, kit) {
     ctx.setLineDash(NO_DASH); ctx.translate(p.x + c * (r1 + 2), p.y + s * (r1 + 2)); ctx.rotate(a);
     ctx.globalAlpha = 0.95; ctx.fillStyle = '#ffe36b'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -9); ctx.lineTo(-2, 0); ctx.lineTo(-6, 9); ctx.closePath(); ctx.stroke(); ctx.fill();
     ctx.restore();
-    if (S.aimHint && g.t < 7 && g.phase === 'play') { const k = Math.min(1, g.t * 2, (7 - g.t) * 1.5); ctx.save(); ctx.globalAlpha = k; text('DRAG TO AIM', p.x, p.y + g.ring.R + 46, 28, '#ffffff', '#0b1020'); ctx.restore(); }   // b11: shown on the first circle stages only
+    if (S.aimHint) drawRingHint(ctx, g, S, { glow, text });   // b12n: the DRAG TO AIM coach (finger on an arc, a pill, gone once the player has swept the aim) lives in hints_ring_b12n.js; first circle runs only
   }
 
   function noteTrail(b, col) {

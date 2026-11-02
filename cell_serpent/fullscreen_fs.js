@@ -45,7 +45,7 @@ function mq(q) { try { return !!(window.matchMedia && matchMedia(q).matches); } 
 function a2hsEnv() {
   return { ua: navigator.userAgent, platform: navigator.platform, touchPoints: navigator.maxTouchPoints, navStandalone: navigator.standalone === true, displayStandalone: mq('(display-mode: standalone)'), displayFullscreen: mq('(display-mode: fullscreen)'), seen: readSeen() };
 }
-function showA2hs() {
+export function showA2hs() {
   if (document.getElementById('a2hsFs')) return;
   const d = document.createElement('div'); d.id = 'a2hsFs'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Add to Home Screen for full screen');
   d.innerHTML = '<div class="a2t"><b>Full screen on iPhone</b><span>Tap <u>Share</u>, then <u>Add to Home Screen</u>. Open the game from its icon.</span></div><button type="button" class="a2x" aria-label="Close">OK</button><i class="a2arrow" aria-hidden="true"></i>';

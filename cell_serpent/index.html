@@ -2535,6 +2535,18 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 @media (max-height:700px){#result{gap:6px}#result .row .btn,#result #rRetry,#result #rHub{min-height:44px;padding:8px}#result .hero{height:clamp(40px,7vh,56px)}#result .stars{font-size:clamp(22px,4.2vh,30px)}}
   #rShare.rshare11{min-height:44px;min-width:44px} .rvwipe small{font-size:12px}
 /* end @css:34-phone-run */
+/* @css:35-n-title */
+#inst_b12n{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));translate:-50% 0;z-index:7;display:flex;align-items:center;gap:8px;min-height:44px;padding:0 16px 0 12px;border-radius:22px;border:2px solid #39f0ff;background:rgba(17,10,52,.9);color:#eaf8ff;font-weight:800;font-size:14px;line-height:1;font-family:inherit;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.45);cursor:pointer;animation:instIn35n .5s ease-out backwards;-webkit-tap-highlight-color:transparent}
+#inst_b12n i{width:18px;height:18px;border:2px solid #39f0ff;border-radius:5px;box-sizing:border-box;position:relative;flex:none}
+#inst_b12n i::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;background:#ffd24a;border-radius:2px}
+#inst_b12n:active{scale:.96}
+@keyframes instIn35n{from{opacity:0;translate:-50% 10px}to{opacity:1;translate:-50% 0}}
+@media (max-height:600px){#inst_b12n{bottom:calc(6px + env(safe-area-inset-bottom))}}
+/* thumb reach: on tall phones PLAY moves down by N while the logo and the duo stay where they were (the title pets are placed against them) */
+@media (min-height:720px){#title #playBtn{margin-top:calc(10px + 4vh)}}
+@media (min-height:800px){#title #playBtn{margin-top:calc(10px + 8vh)}}
+@media (prefers-reduced-motion:reduce){#inst_b12n{animation:none}}
+/* end @css:35-n-title */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
