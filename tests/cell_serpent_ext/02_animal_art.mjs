@@ -11,4 +11,6 @@ for (const id of ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']) for
 assert.notEqual(kit.SPR.pet('kitten', 0), kit.SPR.pet('kitten', 3), 'moods are separate sprites');
 assert.ok(kit.SPR.paw() && kit.SPR.feather(), 'paw and feather sprites');
 for (const id of ['bubble', 'dragon', 'swab']) assert.ok(kit.SPR.weapon(id), 'weapon ' + id);
+for (const id of ['tower', 'dagger', 'dragon', 'bubble', 'maw', 'hog', 'perch']) for (const m of [0, 1, 2, 3, 4]) assert.ok(kit.SPR.weapon(id, m), `weapon ${id} mood ${m}`);
+assert.notEqual(kit.SPR.weapon('maw', 0), kit.SPR.weapon('maw', 4), 'chomp is a separate sprite');
 console.log('02_animal_art ok');

@@ -261,6 +261,23 @@ export function createRenderer(canvas, art, kit) {
 
   // 02-animal-art: pets bob, blink, hop when the duo sings and look alert when a snake head is near
   const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }];
+  // 02-animal-art: fire reactions (kitten swats a paw, puppy wags its tail) and idle emotes (turtle Zzz, lamb hums, piglet hearts)
+  function petExtras(id, st, px, py, s2, i) {
+    const h = st.hop;
+    if (id === 'puppy') {   // tail behind the pet, wags fast after a shot
+      const w = Math.sin(S.t * (h > 0.05 ? 40 : 5)) * (h > 0.05 ? 0.7 : 0.25), bx = px - s2 * 40, by = py + 22;
+      ctx.save(); ctx.translate(bx, by); ctx.rotate(-s2 * 0.5 + w); ctx.lineCap = 'round'; ctx.strokeStyle = '#2d1a14'; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-s2 * 14, -14, -s2 * 8, -30); ctx.stroke(); ctx.strokeStyle = '#d9a066'; ctx.lineWidth = 6.5; ctx.stroke(); ctx.restore();
+    } else if (id === 'kitten' && h > 0.1) {   // a paw swats up and out
+      const u = 1 - h, a = -1.9 + u * 1.5 * s2 * 0 - s2 * u * 1.1; ctx.save(); ctx.globalAlpha = Math.min(1, h * 2.2); blit(kit && kit.SPR.paw(), px + s2 * (30 + u * 26), py - 8 - u * 38, 34 + h * 12, a + (s2 > 0 ? 0.6 : -0.6)); ctx.restore();
+      ctx.save(); ctx.globalAlpha = h * 0.7; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(px + s2 * 30, py - 4, 32 + u * 12, s2 > 0 ? -1.4 : Math.PI + 0.2, s2 > 0 ? -0.3 : Math.PI + 1.3); ctx.stroke(); ctx.restore();
+    } else {
+      const ph = (S.t * 0.35 + i * 0.5 + (id.length * 0.13)) % 1;
+      if (id === 'turtle') { for (let j = 0; j < 2; j++) { const f = (ph + j * 0.5) % 1; ctx.save(); ctx.globalAlpha = Math.sin(f * Math.PI) * 0.8; ctx.fillStyle = '#e8f4ff'; ctx.strokeStyle = '#3a4a6a'; ctx.lineWidth = 3; ctx.font = `bold ${14 + j * 6}px sans-serif`; ctx.textAlign = 'center'; ctx.strokeText('z', px + s2 * (26 + f * 16), py - 40 - f * 30); ctx.fillText('z', px + s2 * (26 + f * 16), py - 40 - f * 30); ctx.restore(); } }
+      else if (id === 'lamb' && ph < 0.6) { const f = ph / 0.6; ctx.save(); ctx.globalAlpha = Math.sin(f * Math.PI); ctx.translate(px + s2 * (-20 + Math.sin(f * 6) * 8), py - 46 - f * 34); ctx.scale(0.45, 0.45); blit(kit && kit.SPR.note(false), 0, 0, 66, Math.sin(f * 5) * 0.3); ctx.restore(); }
+      else if (id === 'piglet' && ph < 0.5) { const f = ph / 0.5; ctx.save(); ctx.globalAlpha = Math.sin(f * Math.PI); ctx.fillStyle = '#ff5a7e'; ctx.translate(px + s2 * 30, py - 46 - f * 28); const k = 5 + f * 3; ctx.beginPath(); ctx.moveTo(0, k); ctx.bezierCurveTo(-k * 2, -k * 0.6, -k * 0.8, -k * 1.8, 0, -k * 0.6); ctx.bezierCurveTo(k * 0.8, -k * 1.8, k * 2, -k * 0.6, 0, k); ctx.fill(); ctx.restore(); }
+      else if (id === 'hamster' && ph < 0.4) { const f = ph / 0.4; sparkleAt(px + s2 * 14, py + 10 + f * 14, 4 * Math.sin(f * Math.PI)); }
+    }
+  }
   function petsDraw(g, p, singing) {
     const ps = g.pets || [];
     let near = 1e9; for (const sn of g.snakes) { const h = sn.segs[0]; if (h) { const d = Math.hypot(h.x - p.x, h.y - p.y); if (d < near) near = d; } }
@@ -278,6 +295,7 @@ export function createRenderer(canvas, art, kit) {
       const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = 1 + (1 - k) * 0.05 + st.hop * 0.05, sy = 1 - (1 - k) * 0.05 - st.hop * 0.03;
       if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx, sy); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px, base - idle - hopY, sz, s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0)); ctx.restore(); }
       if (st.hop > 0.6) sparkleAt(px + s2 * 28, base - idle - hopY - 36, 7 + st.hop * 3);
+      petExtras(id, st, px, base - idle - hopY, s2, i);
     });
   }
   function idleSparkles(p, singing) {
@@ -303,6 +321,7 @@ export function createRenderer(canvas, art, kit) {
     if (im) { const h = 170, w = h * im.width / im.height; img(key, p.x, p.y - 26 - hop * 4, w / sq, h * sq, p.mx * 0.05 + (moving ? 0 : Math.sin(S.t * 1.3) * 0.012)); idleSparkles(p, singing); }
     else { glow(p.x, p.y, 40, '#39f0ff', 0.7); ctx.fillStyle = '#39f0ff'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 22, 0, TAU); ctx.fill(); ctx.stroke(); }
     petsDraw(g, p, singing);
+    drawHog(g);
     if (g.outfit) { glow(p.x, p.y - 20, 70, g.outfit.color, 0.22); ctx.save(); ctx.font = '44px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g.outfit.hat, p.x - 4, p.y - 124 + Math.sin(S.t * 4) * 3); ctx.restore(); }
     // hitbox core: the part that actually gets hurt
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 9, 0, TAU); ctx.stroke();
@@ -344,28 +363,51 @@ export function createRenderer(canvas, art, kit) {
       ctx.save(); ctx.globalAlpha = (1 - ph) * 0.8 * fade; ctx.strokeStyle = '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(z.x, z.y, z.r * (0.45 + 0.55 * ph), 0, TAU); ctx.stroke(); ctx.restore();
     }
   }
+  // 02-animal-art: weapon animals share the pet moods: 1 blink, 2 alert when a head is close, 0 calm
+  let wScared = false;
+  function wMood(seed) { return wScared ? 2 : (S.t * 0.8 + seed * 0.37) % 3.3 < 0.13 ? 1 : 0; }
+  const hog = { n: 0, puff: 0 };
+  function drawHog(g) {   // the hedgehog sits at the duo's feet and puffs its quills on every volley
+    if (!g.weap.needles) return;
+    let n = 0; for (const b of g.bullets) if (b.kind === 'needle') n++;
+    if (n > hog.n) hog.puff = 1; hog.n = n; hog.puff = Math.max(0, hog.puff - 0.016 * 4);
+    const p = g.p, pf = hog.puff, tx = p.x < W / 2 ? p.x + 150 : p.x - 150; hog.x = hog.x == null ? tx : hog.x + (tx - hog.x) * 0.08; const x = hog.x, y = p.y + 8 - Math.sin(pf * Math.PI) * 8;
+    ctx.save(); ctx.globalAlpha *= 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(x, p.y + 44, 26, 6, 0, 0, TAU); ctx.fill(); ctx.restore();
+    if (pf > 0.5) glow(x, y, 46, '#ffd9a0', (pf - 0.5) * 0.6);
+    blit(kit && kit.SPR.weapon('hog', pf > 0.25 ? 4 : wMood(7)), x, y, 96 * (1 + pf * 0.3), Math.sin(S.t * 3) * 0.04 + (pf > 0.25 ? Math.sin(S.t * 60) * 0.06 : 0));
+  }
   function drawWeapons(g) {
+    { wScared = false; for (const sn of g.snakes) { const h = sn.segs[0]; if (h && Math.hypot(h.x - g.p.x, h.y - g.p.y) < 330) { wScared = true; break; } } }
     for (const t of g.towers) {   // Speaker Stacks thump
       ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(t.x, t.y + 38, 32, 9, 0, 0, TAU); ctx.fill(); ctx.restore();
-      blit(kit && kit.SPR.weapon('tower'), t.x, t.y, 160 * (1 + 0.14 * Math.max(0, t.pulse)), Math.sin(S.t * 3 + t.x) * 0.03);
+      const mk = Math.max(0, t.pulse) / 0.5;   // 02-animal-art: the cow moos on every pulse, speaker rings roll out
+      if (mk > 0) { for (let j = 0; j < 3; j++) { const u = Math.min(1, (1 - mk) + j * 0.0); const rr = 40 + (1 - mk) * 50 + j * 16; ctx.save(); ctx.globalAlpha = Math.max(0, mk - j * 0.18) * 0.7; ctx.strokeStyle = j ? '#6fe3ff' : '#fff'; ctx.lineWidth = 4 - j; for (const sd of [-1, 1]) { ctx.beginPath(); ctx.arc(t.x, t.y - 4, rr, sd > 0 ? -0.7 : Math.PI - 0.7 + 0.0, sd > 0 ? 0.7 : Math.PI + 0.7); ctx.stroke(); } ctx.restore(); } }
+      blit(kit && kit.SPR.weapon('tower', mk > 0.1 ? 4 : wMood(t.x)), t.x, t.y, 160 * (1 + 0.14 * Math.max(0, t.pulse)), Math.sin(S.t * 3 + t.x) * 0.03 + (mk > 0.1 ? Math.sin(S.t * 50) * 0.05 : 0));
     }
     const dl = g.weap.daggers ? g.weap.daggers.lv : 0;   // Spinning Vinyl
-    for (let i = 0; i < (dl ? 1 + dl : 0); i++) { const d = daggerPos(g, i); blit(kit && kit.SPR.weapon('dagger'), d.x, d.y + Math.sin(S.t * 8 + i) * 4, 150, Math.sin(S.t * 7 + i) * 0.2); }
+    for (let i = 0; i < (dl ? 1 + dl : 0); i++) { const d = daggerPos(g, i); const dy = d.y + Math.sin(S.t * 8 + i) * 4; for (let j = 1; j <= 3; j++) { const q = daggerPos(g, i), a = S.t * 7 + i * 2 - j * 0.28; ctx.save(); ctx.globalAlpha = 0.22 / j; ctx.fillStyle = '#ffe14a'; ctx.beginPath(); ctx.arc(d.x - Math.cos(a + 1.57) * j * 9, dy - Math.sin(a + 1.57) * j * 9 + 6, 22 - j * 4, 0, TAU); ctx.fill(); ctx.restore(); }   // chick circle: a yellow trail
+      blit(kit && kit.SPR.weapon('dagger', wMood(i * 53)), d.x, dy, 150, Math.sin(S.t * 7 + i) * 0.2); }
     if (g.weap.stick) for (let k = 0; k < (g.weap.stick.lv >= 4 ? 2 : 1); k++) {   // Drumsticks
       const sg = stickSeg(g, k), sc = sg.len / 144, mid = 80 * sc;
       blit(kit && kit.SPR.weapon('stick'), sg.x0 + Math.cos(sg.a) * mid, sg.y0 + Math.sin(sg.a) * mid, 184 * sc, sg.a);
     }
     for (const m of g.maws) {   // Bass Drop: a sub-bass vortex with a thump
       const k = Math.min(1, m.life * 3, (m.max - m.life) * 4) || 0, ph = (S.t * 2) % 1;
-      ctx.save(); ctx.globalAlpha = 0.92 * k; blit(kit && kit.SPR.weapon('maw'), m.x, m.y, m.r * 3.4 * (1 + 0.06 * Math.sin(S.t * 14)), Math.sin(S.t * 9) * 0.1); ctx.restore();
+      ctx.save(); ctx.globalAlpha = 0.92 * k; const ch = Math.sin(S.t * 13 + m.x) > 0;   // the bulldog chomps: jaw open and shut with teeth
+      for (let j = 0; j < 3; j++) { const a = S.t * 4 + j * 2.09; ctx.strokeStyle = 'rgba(255,126,182,.55)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, m.r * 0.9, a, a + 0.8); ctx.stroke(); }
+      blit(kit && kit.SPR.weapon('maw', ch ? 4 : wMood(m.x)), m.x, m.y + (ch ? 3 : 0), m.r * 3.4 * (ch ? 1.05 : 1 + 0.06 * Math.sin(S.t * 14)), Math.sin(S.t * 9) * 0.1); ctx.restore();
       ctx.save(); ctx.globalAlpha = (1 - ph) * 0.8 * k; ctx.strokeStyle = '#ff7eb6'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(m.x, m.y, m.r * (0.2 + 0.8 * ph), 0, TAU); ctx.stroke(); ctx.restore();
     }
     for (let i = S.bolts.length - 1; i >= 0; i--) {   // Spotlight Storm: a beam from the rig above
       const b = S.bolts[i]; b.life -= 0.016; if (b.life <= 0) { S.bolts.splice(i, 1); continue; }
       const a = Math.min(1, b.life * 5);
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.45 * a; ctx.fillStyle = '#fff1a8';
-      ctx.beginPath(); ctx.moveTo(b.x - 12, -20); ctx.lineTo(b.x + 12, -20); ctx.lineTo(b.x + 62, b.y); ctx.lineTo(b.x - 62, b.y); ctx.closePath(); ctx.fill();
-      ctx.globalAlpha = 0.8 * a; ctx.beginPath(); ctx.ellipse(b.x, b.y, 58, 22, 0, 0, TAU); ctx.fill(); ctx.restore();
+      const age = 1 - b.life / 0.28, sw = Math.sin(age * 9 + b.seed) * 46 * (1 - age), ox = b.x + sw * 0.4, oy = 36 - Math.max(0, 1 - age * 6) * 60;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.45 * a; ctx.fillStyle = '#fff1a8';   // 02-animal-art: an owl perches up top, its beam sweeps onto the target
+      ctx.beginPath(); ctx.moveTo(ox - 10, oy + 30); ctx.lineTo(ox + 10, oy + 30); ctx.lineTo(b.x + 62 + sw, b.y); ctx.lineTo(b.x - 62 + sw, b.y); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 0.8 * a; ctx.beginPath(); ctx.ellipse(b.x + sw, b.y, 58, 22, 0, 0, TAU); ctx.fill();
+      for (let j = 0; j < 4; j++) { const f = (age * 2 + j / 4) % 1; ctx.globalAlpha = 0.6 * a * (1 - f); ctx.beginPath(); ctx.arc(b.x + sw + Math.sin(j * 4 + b.seed) * 40, b.y - f * 40, 3, 0, TAU); ctx.fill(); }
+      ctx.restore();
+      ctx.save(); ctx.globalAlpha = Math.min(1, a * 2.2); blit(kit && kit.SPR.weapon('perch', age > 0.8 ? 1 : age < 0.3 ? 2 : 0), ox, oy, 96, Math.sin(age * 9 + b.seed) * 0.12); ctx.restore();
     }
   }
   const CX = W - 22 - 172, CY = 38;   // the coin counter in the HUD
