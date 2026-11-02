@@ -29,8 +29,8 @@ export function refreshPips(g, total = 4) {
 // Build strip: capsule and passive upgrades with their pick counts, then skills with their level.
 export function buildHTML(g, iconFn) {
   const out = [];
-  for (const id of Object.keys(g.ups || {})) { const n = g.ups[id]; if (n > 0 && CAP_GLYPH[id]) out.push(`<span class="bi"><span class="g">${CAP_GLYPH[id]}</span><b>${n}</b></span>`); }
-  for (const w of WEAPONS) { const l = g.weap && g.weap[w.id] ? g.weap[w.id].lv : 0; if (l > 0) out.push(`<span class="bi sk"><span class="g">${iconFn(w.id)}</span><b>${l}</b></span>`); }
+  for (const id of Object.keys(g.ups || {})) { const n = g.ups[id]; if (n > 0 && CAP_GLYPH[id]) out.push(`<span class="bi" data-id="${id}"><span class="g">${CAP_GLYPH[id]}</span><b>${n}</b></span>`); }
+  for (const w of WEAPONS) { const l = g.weap && g.weap[w.id] ? g.weap[w.id].lv : 0; if (l > 0) out.push(`<span class="bi sk" data-id="${w.id}"><span class="g">${iconFn(w.id)}</span><b>${l}</b></span>`); }
   return out.length ? `<span class="bl">YOUR BAND</span>${out.join('')}<span class="bmore">i</span>` : '';
 }
 
@@ -94,3 +94,27 @@ export function levelRingHTML(m) {
   return `<span class="lvring${m.full ? ' full' : ''}" style="--a:${(m.a * 360).toFixed(0)}deg;--b:${((m.a + m.b) * 360).toFixed(0)}deg" aria-hidden="true"></span>`;
 }
 export function skipHTML(bonus) { return `<span class="sk1">SKIP</span><span class="sk2">+${bonus} BEATS</span>`; }
+
+// ---- round 6: per-rarity foil art behind the icon, chips that tick when you pick
+// A backdrop plate for every icon (spotlight for Common/Rare, holo, sunburst, lattice and prism foils for Epic and up).
+export function foilHTML(rn) { return `<span class="foil f${rn | 0}" aria-hidden="true"></span>`; }
+
+// Called when the flown icon lands on the build strip: the matching chip counts up (or appears) and pops.
+// id: upgrade or skill id, add: how much the count / level grows.
+export function tickBand(strip, id, add, iconFn) {
+  try {
+    if (!strip || !id) return;
+    let el = strip.querySelector(`.bi[data-id="${id}"]`);
+    const isW = WEAPONS.some(w => w.id === id);
+    if (!el) {
+      if (!isW && !CAP_GLYPH[id]) return;
+      el = document.createElement('span'); el.className = 'bi fresh' + (isW ? ' sk' : ''); el.dataset.id = id;
+      el.innerHTML = `<span class="g">${isW ? iconFn(id) : CAP_GLYPH[id]}</span><b>0</b>`;
+      const more = strip.querySelector('.bmore');
+      if (more) strip.insertBefore(el, more);
+      else { strip.insertAdjacentHTML('afterbegin', '<span class="bl">YOUR BAND</span>'); strip.appendChild(el); }
+    }
+    const b = el.querySelector('b'); b.textContent = String((parseInt(b.textContent, 10) || 0) + (add > 0 ? add : 1));
+    el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
+  } catch (e) { /* cosmetic only */ }
+}

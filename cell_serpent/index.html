@@ -587,6 +587,51 @@
   @media (max-width:340px){.card.pick{gap:9px;padding:8px 9px}.card.pick .dl{font-size:10px}.card.pick .nm{font-size:15px}.card.pick .rar{font-size:9px;padding:0 6px}#levelup .lvrow{gap:7px}#levelup #skipBtn .sk1{font-size:13px}#levelup #refreshBtn .rl{font-size:13px}}
   @media (prefers-reduced-motion:reduce){.card.pick .gb u,.card.pick .lvring,#levelup #refreshBtn .rl::before{animation:none!important}}
   /* end @css:07-cards round 5 */
+  /* @css:07-cards round 6 */
+  /* foil plate behind every card icon: spotlight (Common, Rare), then holo, sunburst, lattice and prism foils */
+  .card.pick .foil{position:absolute;inset:0;border-radius:13px;overflow:hidden;z-index:0;pointer-events:none;animation:foilin .55s ease-out calc(var(--d,0s) + .4s) both}
+  @keyframes foilin{from{clip-path:circle(0% at 50% 50%)}to{clip-path:circle(80% at 50% 50%)}}
+  .card.pick .foil::before,.card.pick .foil::after{content:'';position:absolute;pointer-events:none}
+  .card.pick .foil.f0,.card.pick .foil.f1{background:radial-gradient(circle at 50% 38%,#fff5 0,#fff0 60%),radial-gradient(circle,color-mix(in srgb,var(--rc) 45%,transparent) 1.1px,transparent 1.6px) 0 0/8px 8px}
+  .card.pick .foil.f1::before{inset:5px;border-radius:50%;border:1px solid color-mix(in srgb,var(--rc) 55%,transparent);box-shadow:inset 0 0 10px color-mix(in srgb,var(--rc) 35%,transparent)}
+  /* Epic: holographic pinstripes with a sheen that sweeps across */
+  .card.pick .foil.f2{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--rc) 55%,transparent) 0 1.5px,transparent 1.5px 6px),radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--rc) 55%,#fff) 0,transparent 70%)}
+  .card.pick .foil.f2::after{inset:0;background:linear-gradient(115deg,transparent 32%,#fff6 45%,#7ff5 52%,#f8f6 58%,transparent 70%) 0 0/260% 100%;animation:foilsweep 2.6s ease-in-out calc(var(--d,0s) + .9s) infinite}
+  @keyframes foilsweep{0%{background-position:120% 0}60%,100%{background-position:-60% 0}}
+  /* Legendary: slow golden sunburst plus glints */
+  .card.pick .foil.f3{background:radial-gradient(circle at 50% 50%,#9a6522 0,#6b4012 55%,#ffb04d66 100%)}
+  .card.pick .foil.f3::before{inset:-70%;background:repeating-conic-gradient(from 0deg,#ffd27a88 0 7deg,transparent 7deg 20deg);-webkit-mask:radial-gradient(circle,#000 10%,transparent 62%);mask:radial-gradient(circle,#000 10%,transparent 62%);animation:rayspin 11s linear infinite}
+  .card.pick .foil.f3::after,.card.pick .foil.f4::after,.card.pick .foil.f5::after{inset:0;background:radial-gradient(circle,#fff 0 1.4px,transparent 2px) 14% 20%/auto no-repeat,radial-gradient(circle,#fff 0 1px,transparent 1.6px) 80% 28%/auto no-repeat,radial-gradient(circle,#fff 0 1.2px,transparent 1.8px) 66% 82%/auto no-repeat,radial-gradient(circle,#fff 0 1px,transparent 1.6px) 22% 76%/auto no-repeat;animation:glint 1.7s ease-in-out infinite alternate}
+  @keyframes glint{from{opacity:.15}to{opacity:1}}
+  /* Mythic: crimson diamond lattice with a heartbeat glow */
+  .card.pick .foil.f4{background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--rc) 42%,transparent) 0 1px,transparent 1px 9px),repeating-linear-gradient(-45deg,color-mix(in srgb,var(--rc) 42%,transparent) 0 1px,transparent 1px 9px)}
+  .card.pick .foil.f4::before{inset:0;background:radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--rc) 75%,#fff) 0,transparent 66%);animation:foilbeat 1.1s ease-in-out infinite alternate}
+  @keyframes foilbeat{from{opacity:.35;transform:scale(.85)}to{opacity:.95;transform:scale(1.1)}}
+  /* Godlike: rainbow prism that turns over a gold lattice */
+  .card.pick .foil.f5{background:repeating-linear-gradient(45deg,#fff4 0 1px,transparent 1px 9px),repeating-linear-gradient(-45deg,#fff4 0 1px,transparent 1px 9px),#5a4600}
+  .card.pick .foil.f5::before{inset:-70%;background:conic-gradient(from 0deg,#ffe14a,#ff7ad0,#6fe3ff,#9dff6d,#ffe14a);opacity:.6;-webkit-mask:radial-gradient(circle,#000 8%,transparent 64%);mask:radial-gradient(circle,#000 8%,transparent 64%);animation:rayspin 5s linear infinite}
+  /* skill, boost and shot art no longer floats on a flat dark tile: a little lift and a shadow under the icon */
+  .card.pick .ic>img{filter:drop-shadow(0 2px 2px #000a) drop-shadow(0 0 5px color-mix(in srgb,var(--rc) 55%,transparent))}
+  /* entrance: the card flips in from the deck, overshoots, settles with a thud and a one-off light wipe */
+  @keyframes dealin{0%{opacity:0;transform:translate(130%,-90px) rotate(18deg) scale(.55) rotateY(80deg)}45%{opacity:1;transform:translate(-2%,6px) rotate(-2.5deg) scale(1.06) rotateY(-10deg)}68%{transform:translate(0,-3px) rotate(.8deg) scale(.985) rotateY(3deg)}84%{transform:translate(0,1px) scale(1.008)}100%{opacity:1;transform:none}}
+  .card.pick.r0 .shine,.card.pick.r1 .shine{display:block;position:absolute;top:0;bottom:0;left:0;width:34%;background:linear-gradient(100deg,transparent,#fff5 50%,transparent);transform:translateX(-160%) skewX(-18deg);animation:shine1 .8s ease-out calc(var(--d,0s) + .55s) 1 both}
+  @keyframes shine1{from{transform:translateX(-160%) skewX(-18deg)}to{transform:translateX(480%) skewX(-18deg)}}
+  .card.pick .nm .nt{animation:ntin .4s ease-out calc(var(--d,0s) + .35s) both}
+  @keyframes ntin{from{opacity:0;letter-spacing:.2em;transform:translateX(-8px)}to{opacity:1;letter-spacing:normal;transform:none}}
+  .card.pick .ds{animation:ntin .45s ease-out calc(var(--d,0s) + .45s) both}
+  /* build strip: a pill that ticks when you pick */
+  #levelup .buildstrip{padding:3px 8px;border-radius:14px;background:linear-gradient(#0009,#0005);border:1px solid #6fe3ff2e}
+  #levelup .bi{min-height:20px;background:linear-gradient(#1b1650,#0c0828);border-color:#fff3;box-shadow:0 1px 0 #0008}
+  #levelup .bi.sk{background:linear-gradient(#123a52,#0a1d2e)}
+  #levelup .bi b{min-width:8px;text-align:center;font-size:11px}
+  #levelup .bi.tick{animation:bitick .5s cubic-bezier(.2,1.6,.4,1)}
+  #levelup .bi.tick b{animation:bitickb .5s ease-out}
+  #levelup .bi.fresh{border-color:#9dff6d;box-shadow:0 0 10px #9dff6daa}
+  @keyframes bitick{0%{transform:scale(1)}30%{transform:scale(1.5) rotate(-5deg);box-shadow:0 0 14px #9dff6d}100%{transform:scale(1)}}
+  @keyframes bitickb{0%{color:#fff;transform:translateY(8px)}40%{color:#fff;transform:translateY(-3px)}100%{color:#9dff6d;transform:none}}
+  @media (prefers-reduced-motion:reduce){.card.pick .foil,.card.pick .foil::before,.card.pick .foil::after,.card.pick .nm .nt,.card.pick .ds,#levelup .bi.tick,#levelup .bi.tick b{animation:none!important}}
+  @media (max-height:700px){.card.pick .foil.f3::before,.card.pick .foil.f5::before{animation-duration:16s}}
+  /* end @css:07-cards round 6 */
   /* end @css:07-cards */
   /* @css:18-access */
   :focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #ff5cb8}

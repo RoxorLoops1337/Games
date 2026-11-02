@@ -15,7 +15,7 @@ import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSl
 import { createMotion } from './motion.js';
 import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
-import { luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML } from './cards_ui.js';
+import { luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand } from './cards_ui.js';
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { paintTabIcons, bindHubSwipe } from './tabs_ui.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
@@ -427,7 +427,7 @@ function showCards() {
     const stat = dm ? `<div class="delta"><span class="dl">${dm[1]}</span><span class="dv"><i>${dm[2]}</i><em>→</em><b>${dm[3]}</b></span>${ghostBarHTML(mt)}</div>` : c.stat ? `<div class="delta"><span class="dv"><b>${c.stat}</b></span>${ghostBarHTML(mt)}</div>` : '';
     const syn = synergyHint(g, c);
     const fx = rn >= 4 ? '<span class="rays"></span>' + Array.from({ length: rn === 5 ? 8 : 5 }, (_, k) => `<span class="pt" style="--x:${(8 + k * (84 / (rn === 5 ? 7 : 4))).toFixed(0)}%;--t:${(1.6 + (k * 0.37) % 1.2).toFixed(2)}s;--w:${((k * 0.29) % 1.5).toFixed(2)}s"></span>`).join('') : '';
-    b.innerHTML = `${fx}<span class="key">${i + 1}</span><div class="ic">${c.kind === 'weapon' ? levelRingHTML(mt) : ''}${icon(c.id)}<span class="kd">${kindLabel(c)}</span></div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}${syn ? `<div class="syn">${syn}</div>` : ''}<div class="pips">${pips}</div></div><span class="shine"></span>`;
+    b.innerHTML = `${fx}<span class="key">${i + 1}</span><div class="ic">${foilHTML(rn)}${c.kind === 'weapon' ? levelRingHTML(mt) : ''}${icon(c.id)}<span class="kd">${kindLabel(c)}</span></div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}${syn ? `<div class="syn">${syn}</div>` : ''}<div class="pips">${pips}</div></div><span class="shine"></span>`;
     b.setAttribute('aria-label', `Option ${i + 1}: ${c.name}, ${RARITY_WORDS[rn]} rarity${c.isNew ? ', new' : ''}. ${c.desc}${c.stat ? '. ' + c.stat : ''}`);
     b.onclick = () => pick(i);
     wrap.appendChild(b);
@@ -445,8 +445,8 @@ function pick(i) {
   audio.play('upgrade'); { const pr = (g.choices[i] && g.choices[i].rarity) | 0; audio.play('card' + pr); if (pr >= 4) audio.play('stinger'); }
   const cs = $('cards').children, el = cs[i];
   if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); return; }
-  pickLock = true; el.classList.add('chosen'); [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing'); flyPick(el, $('buildStrip'), 400);
-  setTimeout(() => { if (!pickLock) return; pickLock = false; if (mode !== 'play' || g.phase !== 'levelup') return; choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }, 420);
+  pickLock = true; el.classList.add('chosen'); [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing'); { const pc = g.choices[i]; flyPick(el, $('buildStrip'), 360, () => { if (pc) tickBand($('buildStrip'), pc.id, pc.kind === 'weapon' ? (pc.gain || 1) : 1, icon); }); }
+  setTimeout(() => { if (!pickLock) return; pickLock = false; if (mode !== 'play' || g.phase !== 'levelup') return; choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }, 580);
 }
 $('skipBtn').onclick = () => { if (mode === 'play' && skipPick(g)) { audio.play('skip'); cardsFor = null; if (g.phase === 'levelup') showCards(); else show(''); } };
 $('refreshBtn').onclick = () => { if (mode === 'play' && reroll(g)) { audio.play('click'); showCards(); } };
