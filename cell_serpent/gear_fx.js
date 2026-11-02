@@ -29,6 +29,22 @@ export function armChest(tileEl, forecast, calm) {
 }
 export const wasHeld = el => { const t = el && el.closest && el.closest('.tile, .featban'); const h = !!(t && t.dataset.held); if (t) t.dataset.held = ''; return h; };
 
+// Round 9: the upgrade ceremony. After a keepsake levels up (or is collected) the detail card flashes, a ring and a few
+// sparks fly out of the big icon and a banner says what happened. `calm` skips the motion but keeps the banner.
+export const ceremonyText = (lv, max, first) => (first ? 'COLLECTED!' : lv >= max ? 'MAX LEVEL!' : 'LEVEL ' + lv + '!');
+export function keepCeremony(detail, lv, max, first, calm) {
+  if (!detail) return null;
+  const ban = document.createElement('div'); ban.className = 'kcer' + (lv >= max ? ' max' : '') + (first ? ' first' : ''); ban.textContent = ceremonyText(lv, max, first);
+  detail.appendChild(ban);
+  if (!calm) {
+    detail.classList.remove('cer'); void detail.offsetWidth; detail.classList.add('cer');
+    const big = detail.querySelector('.kbig');
+    if (big) big.insertAdjacentHTML('afterend', '<i class="kring"></i>' + Array.from({ length: 8 }, (_, i) => `<i class="kspk" style="--a:${i * 45}deg"></i>`).join(''));
+  }
+  setTimeout(() => { ban.remove(); detail.querySelectorAll('.kring,.kspk').forEach(e => e.remove()); detail.classList.remove('cer'); }, 1700);
+  return ban;
+}
+
 // ---- keepsake detail pieces
 export function keepDetailHTML(k, a, max, STAT_TEXT, KEEPSAKES, KEEP_SETS, owned) {
   const lv = a.lv, pips = Array.from({ length: max }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');

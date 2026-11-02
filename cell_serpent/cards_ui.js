@@ -1,5 +1,6 @@
 // 07-cards round 2: odds hint, refresh pips and the build summary strip for the pick screen.
 // Pure display helpers: nothing here touches the simulation or its random numbers.
+import { COUNTERS } from './card_icons.js';
 import { rarityWeights, RARITIES, WEAPONS, LUCK_MAX, CAPSULE_UPS, PASSIVES, uv } from './sim.js';
 
 const CAP_GLYPH = { aspd: '⚡', notes: '🎵', burst: '🔁', cdmg: '🔊', power: '🎤', haste: '⏱️', crit: '🎯', vital: '❤️', guard: '🎧', speed: '👟' };
@@ -56,6 +57,7 @@ function totalText(id, v) {
 export function passiveStat(g, c) {
   if (c.kind !== 'passive' || !(c.gain > 0)) return '';
   if (c.id === 'guard') return 'Push back: ' + c.gain * 6 + ' px now';
+  if (COUNTERS[c.id]) { const cur = uv(g, c.id), nx = Math.min(100, cur + c.gain), left = v => (100 - v <= 0 ? 'none' : (100 - v) + '%'); return `${COUNTERS[c.id].shield}: ${left(cur)} → ${left(nx)}`; }
   const cur = uv(g, c.id), nm = PNAME[c.id] || c.name;
   return `${nm}: ${totalText(c.id, cur)} → ${totalText(c.id, cur + c.gain)}`;
 }
@@ -160,4 +162,23 @@ function chainToast(anchor, name, text) {
   el.innerHTML = `<b>SYNERGY</b><span>${name}</span><u>${text}</u>`;
   document.body.appendChild(el); toastEl = el; clearTimeout(toastT);
   toastT = setTimeout(() => { el.remove(); if (toastEl === el) toastEl = null; }, 2200);
+}
+
+// ---- batch 9: partner glow on the band strip, "better roll" mark after a reroll
+// Ids you already own that would link up with one of the offered cards (the strip chips glow, so the synergy is visible at a glance).
+export function partnerIds(g, choices) {
+  const ups = (g && g.ups) || {}, out = new Set();
+  for (const c of choices || []) for (const [a, b] of CHAINS) { if (c.id === a && ups[b] > 0) out.add(b); else if (c.id === b && ups[a] > 0) out.add(a); }
+  return out;
+}
+export function markPartners(strip, ids) {
+  try { if (!strip) return 0; let n = 0; strip.querySelectorAll('.bi').forEach(e => { const on = ids.has(e.dataset.id); e.classList.toggle('par', on); if (on) n++; }); return n; } catch (e) { return 0; }
+}
+// After a reroll: every card whose rarity beats the best card of the previous deal gets a rising mark.
+export function betterRoll(cards, prevTop) {
+  try {
+    if (!cards || !(prevTop >= 0)) return 0; let n = 0;
+    for (const el of cards.children) { const m = /\br(\d)\b/.exec(el.className), r = m ? +m[1] : 0; if (r > prevTop && r >= 1) { el.classList.add('better'); el.insertAdjacentHTML('beforeend', '<span class="bet" aria-hidden="true">&#9650; BETTER</span>'); n++; } }
+    return n;
+  } catch (e) { return 0; }
 }

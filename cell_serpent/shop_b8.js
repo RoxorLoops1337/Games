@@ -30,3 +30,18 @@ export function wardTry(ctx, o, tileEl, state) {
   if (!off) { perk.querySelector('span').textContent = ctx.perkOf(o); const btn = tileEl.querySelector('button'); act.innerHTML = btn.innerHTML; act.disabled = btn.disabled; act.className = btn.className + ' wtrygo'; act.hidden = false; act.onclick = () => btn.click(); }
   else act.hidden = true;
 }
+
+// Round 9: plant-based snack flavour lines for the daily treats, by deal kind
+export const SNACK_DESC = { frag: 'Hummus on toast', keep: 'Backstage snack', egg: 'Warm and wiggly', energy: 'Oat milk latte', sparkles: 'Glitter sprinkles', beats: 'Chickpea crunch' };
+
+// Round 9: the "new treats" clock ticks every second and turns urgent (red, pulsing) in the last hour of the day.
+export const URGENT_SEC = 3600;
+export const secsToMidnight = (d = new Date()) => Math.floor((new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1) - d) / 1000);
+export const clockText = t => { const p = n => String(n).padStart(2, '0'); return `${p(Math.floor(t / 3600))}:${p(Math.floor((t % 3600) / 60))}:${p(t % 60)}`; };
+export function tickTreats(row) {
+  const sp = row.querySelector('span'); if (!sp) return null;
+  const paint = () => { const t = secsToMidnight(); sp.textContent = 'New treats in ' + clockText(t); row.classList.toggle('urgent', t < URGENT_SEC); };
+  paint();
+  const id = setInterval(() => { if (!row.isConnected) { clearInterval(id); return; } paint(); }, 1000);
+  return id;
+}

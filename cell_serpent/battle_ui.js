@@ -132,13 +132,26 @@ export function watchSide(el) {
 export function bringHTML(b) {
   if (!b || !b.items || !b.items.length) return '';
   const have = b.items.filter(x => x.eq).length;
-  return `<div class="ff-bring"><b>BRING</b>${b.items.map(x => `<i class="${x.eq ? 'eq' : x.own ? '' : 'lock'}" title="${x.name}">${x.ic}<u>${x.eq ? '\u2713' : x.own ? '+' : '?'}</u></i>`).join('')}<em>${b.why}. ${have >= b.items.length ? 'All packed!' : have + ' of ' + b.items.length + ' in your loadout.'}</em></div>`;
+  return `<div class="ff-bring"><b>BRING</b>${b.items.map(x => `<i class="${x.eq ? 'eq' : x.own ? '' : 'lock'}" title="${x.name}">${x.ic}<u>${x.eq ? '\u2713' : x.own ? '+' : '?'}</u></i>`).join('')}<em>${b.why}. ${have >= b.items.length ? 'All packed!' : have + ' of ' + b.items.length + ' in your loadout.'}</em>${b.can ? '<button class="ff-bringgo" type="button">BRING THEM</button>' : ''}</div>`;
 }
 export const starsHTML = n => `<span class="stk" aria-label="${n} of 3 stars">${[1, 2, 3].map(q => q <= n ? '<u>\u2605</u>' : '\u2605').join('')}</span>`;
 // what is ready to collect right now: gigs first, then event milestones. null when nothing is ready
 export function claimInfo(gigsReady, firstGig, eventReady) {
-  if (gigsReady) return { kind: 'gig', html: gigsReady === 1 && firstGig ? `Gig done: <b>${firstGig}</b>` : `<b>${gigsReady} gigs</b> are done`, go: gigsReady > 1 ? 'CLAIM ALL' : 'CLAIM', ic: '\uD83C\uDF81' };
+  if (gigsReady) return { kind: 'gig', html: gigsReady === 1 && firstGig ? `Gig done: <b>${firstGig}</b>` : `<b>${gigsReady} gigs</b><span class="bc-d"> done</span>`, go: gigsReady > 1 ? 'CLAIM ALL' : 'CLAIM', ic: '\uD83C\uDF81' };
   if (eventReady) return { kind: 'event', html: `<b>${eventReady} event reward${eventReady > 1 ? 's' : ''}</b> ready`, go: 'OPEN', ic: '\uD83C\uDFAA' };
   return null;
 }
 export function eventReadyCount(earned, claimed) { let n = 0; EVENT_MILES.forEach((m, i) => { if (!claimed[i] && earned >= m.at) n++; }); return n; }
+
+// ---- round 9: reward chips in the claim row, and the points they fly from
+// rewards: [{ kind: 'beats' | 'sparkles', amt }] -> merged chips, beats first ("+300" with the currency icon). imgs: { beats, sparkles } html
+export function claimChips(rewards, imgs) {
+  const sum = { beats: 0, sparkles: 0 }; for (const r of rewards || []) if (r && sum[r.kind] !== undefined) sum[r.kind] += r.amt || 0;
+  return ['beats', 'sparkles'].filter(k => sum[k] > 0).map(k => `<i class="bc-chip ${k}">${imgs && imgs[k] ? imgs[k] : ''}+${sum[k]}</i>`).join('');
+}
+// where each of n flyers starts along a rect (left to right across the row), as small rect-like objects collectFly accepts
+export function fanRects(rect, n) {
+  const out = [], w = Math.max(8, rect.width - 24);
+  for (let i = 0; i < n; i++) { const cx = rect.left + 12 + w * (n === 1 ? 0.5 : i / (n - 1)); out.push({ left: cx - 4, top: rect.top, width: 8, height: rect.height }); }
+  return out;
+}

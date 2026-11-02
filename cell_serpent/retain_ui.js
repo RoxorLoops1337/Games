@@ -5,6 +5,7 @@ import {
   achievementCount, popAchievements, rewardText, spinStreak, spinFrame, hasShield, dailyGoals, goalProgress,
 } from './sim.js';
 import { landStamp } from './keep_ui.js';
+import { questStreak, questStreakLine } from './chase.js';
 
 export function createRetainUI(c, openPanel, sec, openTrophies) {
   const { $, tile, audio } = c;
@@ -20,10 +21,10 @@ export function createRetainUI(c, openPanel, sec, openTrophies) {
     const el = $('qStrip'); if (!el) return;
     const day = c.dayKey(), s = save(), q = questState(s, day), se = seasonStatus(s, day), ac = achievementCount(s);
     ensureSeasonSafe(s, day);
-    const segs = q.quests.map(x => `<span class="qseg${x.done ? ' done' : ''}" title="${esc(x.text)}"><b>${x.done ? '✔' : x.icon}</b><span class="qsb"><i style="width:${Math.round(x.prog / x.target * 100)}%"></i></span></span>`).join('');
+    const segs = q.quests.map(x => `<span class="qseg${x.done ? ' done' : x.prog / x.target >= 0.6 ? ' close' : ''}" title="${esc(x.text)}"><b>${x.done ? '✔' : x.icon}</b><span class="qsb"><i style="width:${Math.round(x.prog / x.target * 100)}%"></i></span></span>`).join('');
     const rg = readyGigs(s, day), gigChip = rg ? `<i class="qg" id="qGig" role="link" title="Daily Gigs ready to claim">\u{1F3A4} ${rg} ready</i>` : '';
-    const chest = q.chestOpened ? '📭' : q.chestReady ? '🎁' : '📦';
-    el.innerHTML = `<button class="qmain${q.chestReady ? ' ready' : ''}" id="qOpen" aria-label="Daily Quests, ${q.doneCount} of 3 done"><span class="qt"><b>Daily Quests</b><small>${q.chestOpened ? 'All done, see you tomorrow' : q.chestReady ? 'Open your chest!' : q.doneCount + ' / 3'}${gigChip}</small></span><span class="qsegs">${segs}</span><span class="qchest${q.chestReady ? ' pop' : ''}">${chest}</span></button>` +
+    const chest = q.chestOpened ? '📭' : q.chestReady ? '🎁' : '📦', qsk = questStreak(s, day), fire = qsk.n >= 2 ? `<i class="qg qfire${qsk.atRisk ? ' risk' : ''}" title="${esc(questStreakLine(s, day))}">\u{1F525} ${qsk.n}</i>` : '';
+    el.innerHTML = `<button class="qmain${q.chestReady ? ' ready' : ''}" id="qOpen" aria-label="Daily Quests, ${q.doneCount} of 3 done"><span class="qt"><b>Daily Quests</b><small>${q.chestOpened ? 'All done, see you tomorrow' : q.chestReady ? 'Open your chest!' : q.doneCount + ' / 3'}${gigChip}${fire}</small></span><span class="qsegs">${segs}</span><span class="qchest${q.chestReady ? ' pop' : ''}">${chest}</span></button>` +
       `<div class="qpills"><button class="qpill${se.ready ? ' ready' : ''}" id="qSeason"${hasShield(s) ? ' aria-label="Season, Streak Shield ready"' : ''}>🌟 Season <b>${se.stamps}/${SEASON_DAYS}</b>${hasShield(s) ? '<i class="qshield" title="Streak Shield ready">🛡️</i>' : ''}</button><button class="qpill" id="qAch">🏆 Achievements <b>${ac.got}/${ac.total}</b></button></div>`;
     $('qOpen').onclick = e => { audio.unlock(); audio.play('click'); if (e && e.target.closest && e.target.closest('#qGig')) return showGigs(); openQuests(); };
     $('qSeason').onclick = () => { audio.unlock(); audio.play('click'); openSeason(); };
@@ -53,10 +54,10 @@ export function createRetainUI(c, openPanel, sec, openTrophies) {
     // the chest: three padlocks that open as the quests finish
     const hero = document.createElement('div'); hero.className = 'qhero' + (q.chestReady ? ' ready' : q.chestOpened ? ' opened' : '');
     const locks = [0, 1, 2].map(i => `<i class="${i < q.doneCount ? 'on' : ''}">${i < q.doneCount ? '🔓' : '🔒'}</i>`).join('');
-    hero.innerHTML = `<div class="qhc">${q.chestOpened ? '📭' : q.chestReady ? '🎁' : '📦'}</div><div class="qhl">${locks}</div><div class="qhn">${q.chestOpened ? 'Opened today, see you tomorrow!' : q.chestReady ? 'Your chest is open!' : (3 - q.doneCount) + ' more to unlock'}</div><div class="qhr">Inside: ${esc(rewardText(q.chest))}</div>`;
+    hero.innerHTML = `<div class="qhc">${q.chestOpened ? '📭' : q.chestReady ? '🎁' : '📦'}</div><div class="qhl">${locks}</div><div class="qhn">${q.chestOpened ? 'Opened today, see you tomorrow!' : q.chestReady ? 'Your chest is open!' : (3 - q.doneCount) + ' more to unlock'}</div><div class="qhs">${esc(questStreakLine(save(), day))}</div><div class="qhr">Inside: ${esc(rewardText(q.chest))}</div>`;
     const cb = document.createElement('button'); cb.className = 'btn small go' + (q.chestReady ? ' gold' : ''); cb.disabled = !q.chestReady;
     cb.textContent = q.chestOpened ? 'OPENED' : q.chestReady ? 'OPEN CHEST' : 'FINISH 3 QUESTS';
-    cb.onclick = () => { const r = claimQuestChest(save(), day); if (r) { after(); audio.play('levelup'); c.toast('Quest chest: ' + rewardText(r)); rebuild(buildQuests); renderStrip(); c.renderNext && c.renderNext(); } };
+    cb.onclick = () => { const r = claimQuestChest(save(), day); if (r) { after(); audio.play('levelup'); c.toast('Quest chest: ' + rewardText(r)); { const qb = questStreak(save(), day).bonus; if (qb) setTimeout(() => c.toast('Chest streak bonus: ' + rewardText(qb.reward)), 900); } rebuild(buildQuests); renderStrip(); c.renderNext && c.renderNext(); } };
     hero.appendChild(cb); body.appendChild(hero);
   }
   function rebuild(fn) { const body = $('pBody'), top = body.scrollTop; body.innerHTML = ''; fn(body); body.scrollTop = top; }

@@ -57,6 +57,10 @@ function partOf(k, heads, x, y, dt) {
     const dx = x - heads.x[i], dy = Math.abs(y - heads.y[i]), nx = Math.max(0, 1 - Math.abs(dx) / 260), ny = Math.max(0, 1 - dy / 340), q = nx * ny;
     push += (dx < 0 ? -1 : 1) * q * 150; if (q > thin) thin = q;
   }
+  if (heads.bk > 0) {   // batch 9: the Encore beam blows a whole column of mist apart
+    const dx = x - heads.bx, q = Math.max(0, 1 - Math.abs(dx) / 300) * heads.bk;
+    push += (dx < 0 ? -1 : 1) * q * 230; if (q > thin) thin = q;
+  }
   const e = Math.min(1, dt * 3.2);
   k.pu = (k.pu || 0) + (push - (k.pu || 0)) * e; k.pa = (k.pa || 0) + (thin - (k.pa || 0)) * e;
   return thin;

@@ -7,11 +7,12 @@ import { beatBpm as simBpm, SKINS, skinFor } from './sim.js';
 import { humOf, squeakHz, HUB_CHORD, HUB_TWINKLE, HUB_GAIN } from './audio_b7.js';
 import { cardOf, deathOf, finishOf, rungSparkle, panicHz, bedOf } from './audio_b8.js';
 import { stageVoice } from './audio_stage.js';
+import { comboTier, shimmerVol, bossExtra, colourOf, admit, registerB9 } from './audio_b9.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
   let musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
-  let mixS = { stage: 1, boss: false, groove: 0, danger: 0, skin: 'love', bphase: 0 };
+  let mixS = { stage: 1, boss: false, groove: 0, danger: 0, skin: 'love', bphase: 0, ctier: 0 };
   let pumpSet = 2, countSteps = 0;
   let live = 0, chain = 0, chainT = 0, vol = 1, uiT = 0, bstreak = 0, lastBeatShot = 0, beatNow = 0, fresh = false;
   const last = {};
@@ -300,6 +301,7 @@ export function createAudio() {
   };
   // tutorial step 3: the shielded face pops (matches the burst in the slide)
   sfx.tutpop = () => { if (!gate('tutpop', 400)) return; tone(520, 0.1, 'sine', 0.11, 700); noise(0.12, 0.09, 4000, 900, 'bandpass'); tone(1046, 0.16, 'triangle', 0.06, 0, 0.07); tone(1568, 0.22, 'sine', 0.04, 0, 0.12); };
+  registerB9(sfx, tone, noise, gate);
   registerHj8(sfx, tone, noise, duck, gate);   // finishing blow per weapon, head death per species, ladder rungs (hit_juice8.js)
   // round 8: stage card sting per species (see audio_b8.js CARD), lands with the card slam half a second after the riser
   sfx.stagecard = e => {
@@ -307,6 +309,14 @@ export function createAudio() {
     const c = cardOf(e && e.skin);
     c.n.forEach((m, i) => tone(hz(m), c.dur, c.w, c.v, 0, 0.5 + i * c.gap));
     if (c.tail === 'ice') noise(0.4, 0.02, 7000, 3000, 'highpass', 0.5);
+  };
+  // round 9: the hub stage preview answers a new species with its own sting (no riser, no half second wait; quieter than the card)
+  sfx.stageprev = e => {
+    if (!gate('stageprev', 600)) return;
+    const v = stageVoice(e && e.skin, !!(e && e.boss)); if (!v) return;
+    const base = Math.min(...v.n.map(m => m[5]), ...(v.z || []).map(m => m[5]));
+    v.n.forEach(m => tone(m[0], m[1], m[2], m[3] * 0.7, m[4], m[5] - base + 0.02));
+    (v.z || []).forEach(m => noise(m[0], m[1] * 0.7, m[2], m[3], m[4], m[5] - base + 0.02));
   };
   // round 8: the head dies in its own voice per species (a sweep plus a colour), under the generic pop
   sfx.headdeath = e => {
@@ -417,6 +427,12 @@ export function createAudio() {
           const li = (bar * 4 + (s >> 2) + (s === 14 ? 1 : 0)) % 8, ld = deg + (boss ? LEADB : LEAD)[li];
           tone(hz(note(sc, ld, root + 36) + (bp >= 2 ? 12 : 0)), sp * 2.6, boss ? 'sawtooth' : V.lead, boss ? 0.03 : (V.lead === 'sawtooth' || V.lead === 'square' ? 0.032 : 0.05) * lightPump(s, lvl, boss, pumpSet), 0, t, 'm');
         }
+        // round 9: combo layers (open offbeat hats, a shimmer on the 16ths, a bar line sparkle), boss phase drums, and the world colour bell
+        if (m.ctier >= 1 && s % 4 === 2 && !boss) hat(t, 0.02 + m.ctier * 0.006, true);
+        if (m.ctier >= 3 && !boss && s % 2 === 1) hat(ts, 0.012);
+        if (m.ctier >= 2) { const sv = shimmerVol(m.ctier, s); if (sv) tone(hz([c1, c2, c0, c2][(s >> 1) % 4] + 12), sp * 1.2, 'sine', sv, 0, ts, 'm'); if (s === 0 && bar % 2 === 0) tone(hz(c2 + 12), sp * 6, 'sine', 0.014 * (m.ctier - 1), 0, t, 'm'); }
+        if (boss) { const bx = bossExtra(bp, bar, s); if (bx) { if (bx[0] === 'hat') hat(ts, bx[1]); else tone(120 - (s - 13) * 20, 0.14, 'sine', bx[1], -50, t, 'm'); } }
+        { const co = colourOf(m.skin); if (!boss && lvl > 0.2 && co.at.includes(s) && (bar & 1) === 0) tone(hz(note(sc, deg + co.off, root + co.oct)), sp * 3, co.w, co.v, 0, ts, 'm'); }
         // species motif: 4 notes spread over the second and fourth bar
         if ((bar & 1) === 1 && s % 4 === 0 && !boss && lvl > 0.05) tone(hz(note(sc, motifOf(m.stage)[s >> 2], root + 36)), sp * 3, 'sine', 0.032, 0, t, 'm');
         // boss only: sub drone, off-beat sub pulses, a rising siren and a snare roll that lead into the next section
@@ -470,7 +486,7 @@ export function createAudio() {
     hub(on, skin) { wantHub = !!on; if (skin) hubSkin = skin; hubSync(); },
     hubWorld(skin) { if (skin && skin !== hubSkin) { hubSkin = skin; if (wantHub) hubSync(); } },
     get hubOn() { return !!hubN; },
-    play(name, e) { if (ac && sfx[name]) { try { sfx[name](e); } catch (err) { /* never break the game over a sound */ } } },
+    play(name, e) { if (ac && sfx[name] && admit(name, live)) { try { sfx[name](e); } catch (err) { /* never break the game over a sound */ } } },
     setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5 * vol; hubSync(); },
     setVolume(v) { vol = Math.max(0, Math.min(1, +v)); if (!(vol >= 0)) vol = 1; if (master && !muted) master.gain.value = 0.5 * vol; },
     get volume() { return vol; },
@@ -495,7 +511,7 @@ export function createAudio() {
     get musicAllowed() { return musicAllowed; },
     intensity(v) { intensity = v; },
     // groove 0..1, danger 0..1 (how close the face is to the line), stage number, boss flag
-    mix(o) { if (o) mixS = { stage: o.stage || 1, boss: !!o.boss, groove: Math.max(0, Math.min(1, o.groove || 0)), danger: Math.max(0, Math.min(1, o.danger || 0)), skin: o.skin || skinFor(o.stage || 1), bphase: Math.max(0, Math.min(2, o.bphase | 0)) }; },
+    mix(o) { if (o) mixS = { stage: o.stage || 1, boss: !!o.boss, groove: Math.max(0, Math.min(1, o.groove || 0)), danger: Math.max(0, Math.min(1, o.danger || 0)), skin: o.skin || skinFor(o.stage || 1), bphase: Math.max(0, Math.min(2, o.bphase | 0)), ctier: comboTier(o.combo | 0) }; },
     // close the music behind a lowpass (cards, pause) and open it again; call every frame, only changes act
     muffle(on) {
       on = !!on; if (on === muffled) return; muffled = on;

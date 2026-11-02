@@ -56,7 +56,7 @@ export const RANK_STEPS = SKILL_MILES.length;
 export function collectionHTML(save) {
   const met = PETS.filter(p => save.pets[p.id].star > 0).length, full = PETS.filter(p => save.pets[p.id].star >= 5).length;
   const paws = PETS.map(p => `<i class="${save.pets[p.id].star >= 5 ? 'max' : save.pets[p.id].star > 0 ? 'on' : ''}">\u{1F43E}</i>`).join('');
-  return `<div class="pcoll" role="status" aria-label="${met} of ${PETS.length} friends met"><span class="paws">${paws}</span><b>${met} / ${PETS.length} friends</b><small>${full ? full + ' with full stars' : met === PETS.length ? 'Everyone is home' : 'Hatch eggs to meet more'}</small></div>`;
+  return `<div class="pcoll" role="status" aria-label="${met} of ${PETS.length} friends met"><span class="paws">${paws}</span><b>${met} / ${PETS.length} friends</b><small>${full === PETS.length ? 'Full house: every star shining' : full ? full + ' with full stars' : met === PETS.length ? 'Everyone is home' : 'Hatch eggs to meet more'}</small></div>`;
 }
 
 // light rays and a flash behind a hatched pet: rarity colour, stronger for rarer friends

@@ -54,8 +54,9 @@ if (chromium) {
     };
     const fails = [];
     try {
-      for (const [w, h] of [[390, 844], [360, 640], [320, 568]]) for (const sv of Object.keys(SAVES)) {
-        const p = await browser.newPage({ viewport: { width: w, height: h } }); const errs = [];
+      // the nine viewport x save combinations run in parallel, each in its own context
+      await Promise.all([[390, 844], [360, 640], [320, 568]].map(async ([w, h]) => { for (const sv of Object.keys(SAVES)) {
+        const p = await (await browser.newContext({ viewport: { width: w, height: h } })).newPage(); const errs = [];
         p.on('pageerror', e => errs.push('page: ' + e.message)); p.on('console', m => m.type() === 'error' && !/status of 404/.test(m.text()) && errs.push('console: ' + m.text()));
         await p.addInitScript(s => { if (s && !localStorage.getItem('seeded')) { localStorage.setItem('cell_serpent_save_v1', s); localStorage.setItem('seeded', '1'); } }, SAVES[sv] ? JSON.stringify(SAVES[sv]) : null);
         await p.goto(`http://localhost:${srv.address().port}/cell_serpent/`); await p.waitForFunction(() => window.CS && window.CS.R, null, { timeout: 15000 });
@@ -72,6 +73,29 @@ if (chromium) {
           await p.evaluate(i => { const l = document.querySelectorAll('#battleSide .sidebtn'); if (l[i]) l[i].click(); }, i); await p.waitForTimeout(450);
           await sweep('side' + i);
         }
+        // in-run overlays (batch 9): pause, settings and stats opened from pause, and the level-up cards
+        await p.evaluate(() => window.CS.startRun(3)); await p.waitForTimeout(700);
+        await p.evaluate(() => dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }))); await p.waitForTimeout(350);
+        assert.equal(await p.evaluate(() => window.CS.mode()), 'pause', `${w}x${h} ${sv}: P pauses the run`);
+        await sweep('pause');
+        await p.evaluate(() => document.getElementById('pSet').click()); await p.waitForTimeout(350); await sweep('pause-settings');
+        await p.evaluate(() => dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))); await p.waitForTimeout(350);
+        await p.evaluate(() => document.getElementById('pStats').click()); await p.waitForTimeout(350); await sweep('pause-stats');
+        await p.evaluate(() => dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))); await p.waitForTimeout(350);
+        await sweep('pause-back');
+        await p.evaluate(() => dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }))); await p.waitForTimeout(350);
+        assert.equal(await p.evaluate(() => window.CS.mode()), 'play', `${w}x${h} ${sv}: P resumes the run`);
+        await p.evaluate(() => { window.CS.g.pending = 1; });
+        await p.waitForFunction(() => document.getElementById('levelup').classList.contains('on'), null, { timeout: 8000 }).catch(() => {}); await p.waitForTimeout(600);
+        assert.equal(await p.evaluate(() => document.getElementById('levelup').classList.contains('on')), true, `${w}x${h} ${sv}: level-up cards open`);
+        const inFrame = () => [...document.querySelectorAll('#cards > *')].every(c => { const r = c.getBoundingClientRect(); return r.left >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1; });
+        await p.waitForFunction(inFrame, null, { timeout: 5000 }).catch(() => {});   // the cards slide in: let them settle
+        await sweep('levelup');
+        const cardsOk = await p.evaluate(inFrame);
+        assert.equal(cardsOk, true, `${w}x${h} ${sv}: level-up cards fit on screen`);
+        await p.evaluate(() => document.querySelector('#cards > *').click());
+        await p.waitForFunction(() => !document.getElementById('levelup').classList.contains('on'), null, { timeout: 6000 }).catch(() => {});
+        assert.equal(await p.evaluate(() => document.getElementById('levelup').classList.contains('on')), false, `${w}x${h} ${sv}: picking a card closes the cards`);
         for (const kind of ['dead', 'won']) {
           await p.evaluate(() => window.CS.openHub('Battle')); await p.waitForTimeout(250);
           await p.evaluate(() => window.CS.startRun(3)); await p.waitForTimeout(900);
@@ -99,8 +123,8 @@ if (chromium) {
           assert.equal(await p.evaluate(() => window.CS.mode()), 'hub', `${w}x${h} ${sv}: MENU after ${kind} returns to the hub`);
         }
         assert.deepEqual(errs, [], `${w}x${h} ${sv}: no console or page errors`);
-        await p.close();
-      }
+        await p.context().close();
+      } }));
     } finally { await browser.close(); srv.close(); }
     assert.deepEqual(fails, [], 'every visible button is hit-testable:\n' + fails.join('\n'));
   } else srv.close();
