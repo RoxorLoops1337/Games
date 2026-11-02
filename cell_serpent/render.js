@@ -7,6 +7,7 @@ import { createHitJuice } from './hitjuice.js';
 import { createDigitAtlas } from './digits.js';
 import { createScreenFx } from './screenfx.js';
 import { drawFar } from './bg_far.js';
+import { ringDanger } from './bg_mist.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
 import { drawCellFlags, drawCellBadge, drawQuartetLinks, drawDashLane, drawStreak, drawChoirLinks } from './cellfx.js';
@@ -255,12 +256,12 @@ export function createRenderer(canvas, art, kit) {
       ctx.beginPath(); ctx.arc(x, y, sp.r, 0, TAU); ctx.fill();
     }
     ctx.restore();
-    if (!OPT.reduceMotion) { if (!S.motes) S.motes = makeMotes(); if (!OPT.lowQuality) drawBeams(ctx, S.t, isBossStage(g.stage), th, kit); drawMotes(ctx, g.skin, th, OPT.lowQuality ? (S.motesLow || (S.motesLow = S.motes.filter((m, i) => i % 2 === 0))) : S.motes, S.t); }
+    if (!OPT.reduceMotion) { if (!S.motes) S.motes = makeMotes(); if (!OPT.lowQuality) drawBeams(ctx, S.t, isBossStage(g.stage), th, kit); drawMotes(ctx, g.skin, th, OPT.lowQuality ? (S.motesLow || (S.motesLow = S.motes.filter((m, i) => i % 2 === 0))) : S.motes, S.t, S.bgfx ? S.bgfx.wx || 0 : 0); }
     // weather, speaker thump, crowd and lightning (bg_world.js)
     const bph = bossPhase(g);
-    const bgp = (S.bgfx || (S.bgfx = createBgFx())).draw(ctx, { kit, skin: g.skin, phase: bph, flash: OPT.reduceFlash ? 0 : Math.max(0, 1 - (S.t - S.bpFlash) / 0.55), noFlash: OPT.reduceFlash, stage: g.stage, boss: isBossStage(g.stage), th, t: S.t, reduce: OPT.reduceMotion, low: OPT.lowQuality, kick: S.t - (S.killT === undefined ? -9 : S.killT) });
+    const bgp = (S.bgfx || (S.bgfx = createBgFx())).draw(ctx, { kit, skin: g.skin, phase: bph, flash: OPT.reduceFlash ? 0 : Math.max(0, 1 - (S.t - S.bpFlash) / 0.55), noFlash: OPT.reduceFlash, stage: g.stage, boss: isBossStage(g.stage), th, t: S.t, reduce: OPT.reduceMotion, low: OPT.lowQuality, kick: S.t - (S.killT === undefined ? -9 : S.killT), snakes: g.snakes });
     // the stage floor below the line, where the duo stands; if the snake touches the line it is over
-    if (g.ring) { drawRing(ctx, g.ring, S.t, isBossStage(g.stage), OPT.reduceMotion ? 0.4 : bgp, kit, g.skin); if (OPT.highContrast) hcLine(g.ring); return; }   // a circle around the duo in the middle
+    if (g.ring) { drawRing(ctx, g.ring, S.t, isBossStage(g.stage), OPT.reduceMotion ? 0.4 : bgp, kit, g.skin, OPT.reduceMotion ? 0 : ringDanger(g.snakes, g.ring)); if (OPT.highContrast) hcLine(g.ring); return; }   // a circle around the duo in the middle
     ctx.save(); ctx.beginPath();
     for (let x = 0; x <= W; x += 20) { const y = LINE_Y + Math.sin(x * 0.05 + S.t * 2.2) * 5; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.lineWidth = 16; ctx.strokeStyle = 'rgba(255,90,140,.18)'; ctx.stroke(); ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,150,190,.75)'; ctx.stroke(); ctx.restore();
