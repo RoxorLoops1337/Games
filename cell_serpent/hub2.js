@@ -19,6 +19,7 @@ import { emptyCard as emptyCardB8 } from './empty_ux.js';
 import { seeded, newSeed, armChest, wasHeld, keepDetailHTML, keepCeremony } from './gear_fx.js';
 import { renderStickerBook } from './sticker_b9.js';
 import { recordsHTML, setStripState, setStripHTML, treatLine } from './hub_b10.js';
+import { readRuns, runLogHTML, decorateBundles, sparkleFlight, treatPips } from './hub_b11.js';
 const STATICON = { atk: 'speaker', crt: 'note', cdn: 'clock', vit: 'heart', for: 'star', rev: 'mic' };
 // a six-axis radar of the core stats, drawn as inline svg
 function radar(s) {
@@ -208,7 +209,8 @@ export function createHub2(c) {
     });
     bestBuy(core, s);
     { const rc = document.createElement('div'); rc.className = 'recbox'; rc.innerHTML = recordsHTML(s); list.appendChild(rc); }
-    { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t), n => { save().sparkles += n; c.persist(); audio.play('levelup'); c.refreshCur(); }); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }
+    { const rl = runLogHTML(readRuns()); if (rl) { const rb = document.createElement('div'); rb.className = 'runbox'; rb.innerHTML = rl; list.appendChild(rb); } }
+    { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t), (n, from) => { save().sparkles += n; c.persist(); audio.play('levelup'); sparkleFlight(from, calmMotion(), () => c.refreshCur(), { src: iconURL('sparkles') }); }); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }
   }
   // the cheapest upgrade you can afford right now wears a "BEST BUY" ribbon (a nudge, never a rule)
   function bestBuy(core, s) {
@@ -282,7 +284,7 @@ export function createHub2(c) {
     openPanel(k.name.toUpperCase(), body => {
       const d = document.createElement('div'); d.className = 'kdetail'; d.style.setProperty('--tc', T.color);
       const cost = a.lv >= max ? 0 : keepCost(k, a.lv);
-      d.innerHTML = `<div class="kbig">${k.icon}</div><div class="ktier">${T.name}</div><div class="klv">${a.lv ? 'Level ' + a.lv + ' / ' + max : 'Not collected yet'}</div>` +
+      d.innerHTML = `<div class="kbig" data-k="${k.id}">${k.icon}</div><div class="ktier">${T.name}</div><div class="klv">${a.lv ? 'Level ' + a.lv + ' / ' + max : 'Not collected yet'}</div>` +
         keepDetailHTML(k, a, max, STAT_TEXT, KEEPSAKES, KEEP_SETS, Object.fromEntries(KEEPSAKES.map(q => [q.id, s.keeps[q.id].lv]))) +
         `<div class="bar"><i style="width:${cost ? Math.min(100, Math.round((a.frag / cost) * 100)) : 100}%"></i></div><div class="sm">${cost ? a.frag + ' / ' + cost : 'Fully polished'}</div>`;
       const b = document.createElement('button'); b.className = 'btn go gold'; b.textContent = a.lv >= max ? 'MAX LEVEL' : a.lv ? 'LEVEL UP' : 'COLLECT'; b.disabled = !keepCanUp(s, k.id);
@@ -326,7 +328,7 @@ export function createHub2(c) {
       if (deals.length % 2 && i === deals.length - 1) t.classList.add('wide');   // an odd last deal spans the row instead of sitting alone
       list.appendChild(t);
     });
-    { const tl = document.createElement('div'); tl.className = 'treatline'; tl.textContent = treatLine(deals, s.shop.bought); list.appendChild(tl); }
+    { const tl = document.createElement('div'); tl.className = 'treatline'; tl.textContent = treatLine(deals, s.shop.bought); tl.appendChild(treatPips(deals, s.shop.bought)); list.appendChild(tl); }
     const rr = document.createElement('div'); rr.className = 'refrow'; rr.innerHTML = `<span>New treats in ${countdown()}</span><button class="btn small alt">${s.shop.free ? '5 ' + curImg('sparkles') : 'FREE'} REFRESH</button>`;
     rr.querySelector('button').onclick = () => { if (refreshDeals(save())) { c.persist(); audio.play('click'); c.refreshCur(); renderShop(); } };
     list.appendChild(rr); tickTreats(rr);
@@ -345,6 +347,7 @@ export function createHub2(c) {
       const free = !p.price, used = free && s.shop.gold === day;
       list.appendChild(tile({ cls: 't-weapon', ic: curImg('beats'), name: p.name, desc: `${p.beats} Beats`, btn: used ? 'OBTAINED' : free ? 'FREE' : p.price + ' ' + curImg('sparkles'), disabled: used || (!free && s.sparkles < p.price), onclick: () => { if (buyGold(save(), p.id, day)) { c.persist(); audio.play('buy'); c.refreshCur(); renderShop(); } } }));
     }
+    decorateBundles(list, BOXES, GOLD_PACKS);
     shopExtras(list);
   }
 
