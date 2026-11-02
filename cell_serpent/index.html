@@ -464,6 +464,46 @@
   @media (max-height:700px){#title h1.logo{font-size:clamp(40px,12vw,60px)} .stage12{width:min(220px,50vw)} #title #playBtn{padding:12px 48px;margin-top:4px} #title .tagline{display:none}}
   @media (prefers-reduced-motion:reduce){#title *{animation:none!important}}
   /* end @css:12-title-onboarding */
+
+  /* @css:10-shop-gear-stats */
+  .cico{width:22px;height:22px;object-fit:contain;vertical-align:middle;margin-right:5px}
+  .sec span{display:inline-flex;align-items:center;justify-content:center} .sec .cico{margin:-3px 6px -3px -14px;filter:drop-shadow(0 1px 0 rgba(0,0,0,.4))}
+  /* chest with a lid that hops */
+  .chest3{position:relative;display:block;width:54px;height:54px;filter:hue-rotate(var(--hue,0deg))} .chest3 img{position:absolute;left:0;top:0;width:54px;height:54px;object-fit:contain;transform-origin:15% 62%}
+  .chest3 .cl{animation:lidhop 3.2s ease-in-out infinite} .chest3.open .cl{animation:lidopen .42s ease-out forwards} .chest3.open .cb{animation:chestshake .42s linear}
+  @keyframes lidhop{0%,82%,100%{transform:none}88%{transform:translateY(-5px) rotate(-8deg)}94%{transform:translateY(-1px) rotate(-2deg)}}
+  @keyframes lidopen{to{transform:translateY(-14px) rotate(-62deg)}} @keyframes chestshake{25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
+  .tile.chestcard .ic{overflow:visible;background:radial-gradient(circle at 50% 70%,rgba(255,216,77,.28),rgba(255,255,255,.08) 70%)}
+  /* featured banner */
+  .featban{grid-column:1/-1;position:relative;overflow:hidden;display:grid;grid-template-columns:62px 1fr;grid-template-areas:"c t" "b b";gap:6px 12px;align-items:center;padding:14px 14px 12px;border-radius:22px;border:3px solid #ffd84d;background:linear-gradient(135deg,#7a2a8a,#3a1670 55%,#5a2a9a);box-shadow:0 0 18px rgba(255,216,77,.35),0 8px 22px rgba(0,0,0,.45)}
+  .featban .fbray{position:absolute;inset:-60%;background:repeating-conic-gradient(from 0deg at 14% 40%,rgba(255,226,120,.16) 0 9deg,transparent 9deg 22deg);animation:fbspin 24s linear infinite;pointer-events:none} @keyframes fbspin{to{transform:rotate(360deg)}}
+  .featban .chest3{grid-area:c;width:62px;height:62px;z-index:1} .featban .chest3 img{width:62px;height:62px}
+  .fbtx{grid-area:t;position:relative;z-index:1;min-width:0;display:flex;flex-direction:column;gap:1px} .fbtx em{font-style:normal;font-weight:900;font-size:11px;letter-spacing:2px;color:#ffd84d} .fbtx b{font-size:21px;line-height:1.1} .fbtx span{font-size:12.5px;color:#e8dcff;font-weight:700} .fbtx img{width:18px;height:18px;vertical-align:middle;object-fit:contain}
+  .featban .go{grid-area:b;position:relative;z-index:1;width:100%;display:flex;justify-content:center;align-items:center;gap:6px}
+  /* deal cards: corner ribbon, strike-through */
+  .tile.deal{padding-top:14px;overflow:hidden} .tile.deal .nm{font-size:15px} .dealrib{position:absolute;top:11px;left:-30px;width:104px;transform:rotate(-38deg);background:linear-gradient(180deg,#ff5a78,#d02a4a);color:#fff;font-style:normal;text-align:center;font-size:12px;font-weight:900;padding:2px 0;border:0;border-radius:0;box-shadow:0 2px 4px rgba(0,0,0,.4);z-index:2} .dealrib.free{background:linear-gradient(180deg,#7be04a,#3a9a2a)}
+  .tile.deal{isolation:isolate} .tile.deal .top{gap:8px;padding-left:0} .tile.deal .ic{width:50px;height:50px} .tile.deal .ic img{width:42px;height:42px} .tile.deal .nm{overflow-wrap:break-word;hyphens:auto} .tile.deal .ds{font-weight:900;color:#ffd0d8;font-size:14px;text-align:center} .tile.deal .ds s{text-decoration-thickness:2px;text-decoration-color:#ff4d6d;opacity:.85}
+  /* loot reveal with rarity colours */
+  .loot .it{position:relative;border-color:var(--rc,var(--line));background:linear-gradient(180deg,color-mix(in srgb,var(--rc,#7a86a0) 35%,#231a55),#1a1240);box-shadow:0 0 10px color-mix(in srgb,var(--rc,transparent) 55%,transparent);overflow:visible}
+  .loot .it.rar2,.loot .it.rar3{animation:pop .35s forwards,rarglow 1.4s ease-in-out .5s infinite alternate} @keyframes rarglow{to{box-shadow:0 0 22px var(--rc),0 0 4px var(--rc)}}
+  .loot .it.rar3::after{content:"";position:absolute;inset:-3px;border-radius:15px;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.55) 50%,transparent 65%) 200% 0/250% 100% no-repeat;animation:rarshine 1.8s linear .6s infinite;pointer-events:none} @keyframes rarshine{to{background-position:-100% 0}}
+  .loot .it span{color:#fff} .loot .it.rar1 small,.loot .it.rar2 small,.loot .it.rar3 small{color:var(--rc)}
+  /* keepsake grid */
+  .kcard{box-shadow:0 0 0 1px rgba(0,0,0,.4) inset,0 4px 10px rgba(0,0,0,.35)} .kcard:not(.off){box-shadow:0 0 12px color-mix(in srgb,var(--tc) 55%,transparent),0 4px 10px rgba(0,0,0,.35)}
+  .kcard.t3:not(.off),.kcard.max{animation:kglow 2.2s ease-in-out infinite alternate} @keyframes kglow{to{box-shadow:0 0 20px var(--tc),0 4px 10px rgba(0,0,0,.35)}}
+  .kcard .kic{filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))} .kcard.off .kic{filter:grayscale(1) brightness(.55)} .kcard.off{box-shadow:none}
+  .kstar{width:26px;height:26px;border:0;border-radius:0;background:center/contain no-repeat;top:-10px;left:-8px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.6))} .kstar b{color:#3a200a;font-size:11px;font-weight:900;margin-top:2px}
+  /* character page */
+  .herobox{display:grid;grid-template-columns:42% 1fr;align-items:center;gap:4px 8px;width:min(520px,100%);margin:0 auto;text-align:center}
+  .stage{position:relative;display:grid;place-items:end center;padding-top:6px} .stage .duo{position:relative;z-index:2;width:min(150px,100%)}
+  .stage .spot{position:absolute;left:50%;top:-6px;width:130%;height:100%;transform:translateX(-50%);background:conic-gradient(from 180deg at 50% 0,transparent 160deg,rgba(255,236,160,.28) 180deg,transparent 200deg);pointer-events:none;z-index:1}
+  .stage .ped{position:absolute;bottom:-4px;left:6%;right:6%;height:22px;border-radius:50%;background:radial-gradient(ellipse at 50% 40%,#ffd84d,#a8601c 70%);border:3px solid #ffe98a;box-shadow:0 6px 12px rgba(0,0,0,.5),0 0 18px rgba(255,216,77,.4);z-index:0}
+  .heroname{font-size:17px} .heropow{display:flex;align-items:center;justify-content:center;gap:6px;margin:4px 0 0;padding:3px 14px 3px 8px;font-size:24px;line-height:1} .heropow small{font-size:10px;letter-spacing:1.5px;color:#ffcf9a} .heropow b{font-size:24px} .heropow .pwi .cico{margin:0}
+  .radar{width:100%;max-width:170px;margin-top:2px} .radar .rg polygon,.radar .rg line{fill:none;stroke:rgba(255,255,255,.22);stroke-width:1} .radar .rv{fill:rgba(157,255,109,.35);stroke:#9dff6d;stroke-width:2.5;stroke-linejoin:round;filter:drop-shadow(0 0 4px rgba(157,255,109,.6))}
+  .sc .sci{min-height:40px;display:grid;place-items:center} .sc .sci .cico{margin:0} .spips{display:flex;gap:2px;width:90%;min-height:5px} .spips i{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.2)} .spips i.on{background:#9dff6d;box-shadow:0 0 4px rgba(157,255,109,.7)}
+  .sc.maxed{border-color:#ffd84d;box-shadow:0 0 12px rgba(255,216,77,.4)}
+  @media (prefers-reduced-motion:reduce){.chest3 .cl,.featban .fbray,.kcard.t3,.kcard.max,.loot .it.rar2,.loot .it.rar3,.loot .it.rar3::after{animation:none}}
+  /* end @css:10-shop-gear-stats */
 </style>
 </head>
 <body>
@@ -513,7 +553,7 @@
     </div>
     <div class="tab" id="tabSkills"><h2>SKILLS</h2><div class="sub">Pick your five.</div><div class="loadout" id="loadoutRow"></div><div class="tiles" id="skillList"></div></div>
     <div class="tab" id="tabPets"><h2>PETS</h2><div class="sub">Little friends.</div><div class="tiles" id="petList"></div></div>
-    <div class="tab" id="tabStats"><div class="herobox"><img class="duo" src="assets/duo_idle.png" alt=""><div id="heroBox"></div></div><div class="lvbar" id="lvBar"></div><div id="statList"></div></div>
+    <div class="tab" id="tabStats"><div class="herobox"><div class="stage"><i class="spot"></i><img class="duo" src="assets/duo_idle.png" alt=""><i class="ped"></i></div><div id="heroBox"></div></div><div class="lvbar" id="lvBar"></div><div id="statList"></div></div>
     <div class="tab" id="tabGear"><div class="filters" id="gearFilters"><b class="ttl">Collection</b><button data-f="All">All</button><button data-f="Owned">Owned</button><button data-f="Set">Set</button><button data-f="Upgrade">Ready</button></div><div id="gearBody"></div></div>
     <div class="tab" id="tabShop"><h2>SHOP</h2><div class="sub">Treats and surprises.</div><div class="tiles" id="boxList"></div></div>
   </div>
