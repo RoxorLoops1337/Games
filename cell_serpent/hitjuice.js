@@ -1,16 +1,31 @@
 // 04-hit-juice (round 2): golden upgrade orbs that fly to the upgrade counter, bomb debris and smoke,
 // capsule muzzle flash and note trails. Own small pools with hard caps. Render-only: never touches the sim.
+import { pointAt } from './sim.js';
 const TAU = Math.PI * 2;
 export const UP_X = 42, UP_Y = 40;   // the upgrade counter in the HUD (hud.js)
 
 export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped }) {
-  const orbs = [], smoke = [], trail = [], flashes = [];
+  const orbs = [], smoke = [], trail = [], flashes = [], marks = [];
+  const lastSrc = {};   // per weapon: time of its last impact mark, so a busy fight does not drown in them
+  const TINT = { swab: '#ffd0ea', daggers: '#e8f4ff', tower: '#ffc98a', stick: '#fff08a', needles: '#a8f0ff', satellite: '#b6c8ff', maw: '#d9b2ff', puppy: '#ffe0b0', encore: '#fff2a0' };
+  const tint = src => TINT[src] || null;
+  function mark(m) { if (marks.length < cap(28)) marks.push(m); }
   S.land = S.land || { coin: -9, up: -9 };
   const calm = () => OPT.reduceMotion;
   const cap = n => (OPT.lowQuality ? n >> 1 : n);
 
   function event(e, g) {
     if (calm()) return;
+    switch (e.t) {
+      case 'hit': impact(e); break;
+      case 'kill': {
+        // a white flash disc and a starburst of rays where the cell was; heads get a bigger one
+        const R = (e.r || 26) * (e.head ? 2.6 : 1.7);
+        mark({ k: 'flash', x: e.x, y: e.y, r: R, t: 0, dur: e.head ? 0.3 : 0.2 });
+        mark({ k: 'rays', x: e.x, y: e.y, r: R * 1.5, n: e.head ? 10 : 6, rot: Math.random() * TAU, t: 0, dur: e.head ? 0.34 : 0.24 });
+        break;
+      }
+    }
     switch (e.t) {
       case 'kill':
         if (e.kind === 'upgrade' && orbs.length < 6)
@@ -37,6 +52,84 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped }) {
     }
   }
 
+  // a small mark per weapon where it lands: cotton puffs, slash lines, zaps, pings, rings
+  function impact(e) {
+    const src = e.src || 'capsule';
+    if (S.t - (lastSrc[src] || -9) < (src === 'capsule' ? 0.05 : 0.09) && !e.crit) return;
+    lastSrc[src] = S.t;
+    const x = e.x, y = e.y, big = e.crit ? 1.5 : 1;
+    switch (src) {
+      case 'swab': for (let i = 0; i < 4; i++) mark({ k: 'puff', x: x + (Math.random() - 0.5) * 26, y: y + (Math.random() - 0.5) * 20, r: 9 * big, t: 0, dur: 0.38, col: i & 1 ? '#fff' : '#ffc4e4', vx: (Math.random() - 0.5) * 60, vy: -30 - Math.random() * 30 }); break;
+      case 'daggers': mark({ k: 'slash', x, y, r: 40 * big, rot: -0.9 + (Math.random() - 0.5) * 0.5, t: 0, dur: 0.17, col: '#eaf6ff' }); break;
+      case 'tower': mark({ k: 'ring', x, y, r: 54 * big, t: 0, dur: 0.26, col: '#ffb15a' }); mark({ k: 'flash', x, y, r: 26 * big, t: 0, dur: 0.14 }); break;
+      case 'stick': mark({ k: 'zap', x, y, r: 34 * big, rot: Math.random() * TAU, t: 0, dur: 0.16, col: '#fff08a', seed: Math.random() * 9 }); break;
+      case 'needles': for (let i = 0; i < 3; i++) mark({ k: 'ping', x, y, r: 22 * big, rot: -Math.PI / 2 + (i - 1) * 0.7, t: 0, dur: 0.18, col: '#a8f0ff' }); break;
+      case 'satellite': mark({ k: 'ring', x, y, r: 38 * big, t: 0, dur: 0.24, col: '#9db4ff' }); break;
+      case 'maw': mark({ k: 'ring', x, y, r: 46 * big, t: 0, dur: 0.3, col: '#c79bff' }); break;
+      default: mark({ k: 'pow', x, y, r: (e.crit ? 34 : 20), n: e.crit ? 8 : 4, rot: Math.random() * TAU, t: 0, dur: e.crit ? 0.22 : 0.14, col: e.crit ? '#ffe14a' : '#ffffff' });
+    }
+  }
+
+  function drawMarks(dt) {
+    for (let i = marks.length - 1; i >= 0; i--) {
+      const m = marks[i]; m.t += dt; if (m.t >= m.dur) { marks.splice(i, 1); continue; }
+      const k = m.t / m.dur, a = 1 - k;
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(m.x, m.y);
+      switch (m.k) {
+        case 'flash': glow(0, 0, m.r * (0.7 + k * 0.6), '#fff', 0.9 * a); ctx.fillStyle = '#fff'; ctx.globalAlpha = a * a; ctx.beginPath(); ctx.arc(0, 0, m.r * 0.35 * (1 - k * 0.5), 0, TAU); ctx.fill(); break;
+        case 'rays': { ctx.rotate(m.rot); ctx.fillStyle = '#fff6c8'; const r0 = m.r * 0.25 + k * m.r * 0.35, r1 = m.r * (0.55 + k * 0.45);
+          for (let j = 0; j < m.n; j++) { ctx.rotate(TAU / m.n); ctx.beginPath(); ctx.moveTo(r0, -2.4 * a - 0.6); ctx.lineTo(r1, 0); ctx.lineTo(r0, 2.4 * a + 0.6); ctx.closePath(); ctx.fill(); } break; }
+        case 'pow': { ctx.rotate(m.rot); ctx.fillStyle = m.col; const r1 = m.r * (0.5 + k * 0.6), r0 = r1 * 0.3;
+          ctx.beginPath(); for (let j = 0; j < m.n * 2; j++) { const rr = j & 1 ? r0 : r1, aa = (j / (m.n * 2)) * TAU; ctx.lineTo(Math.cos(aa) * rr, Math.sin(aa) * rr); } ctx.closePath(); ctx.fill(); break; }
+        case 'puff': ctx.translate((m.vx || 0) * m.t, (m.vy || 0) * m.t); ctx.fillStyle = m.col; ctx.beginPath(); ctx.arc(0, 0, m.r * (0.8 + k * 0.9), 0, TAU); ctx.fill(); break;
+        case 'slash': { ctx.rotate(m.rot); const L = m.r * (0.6 + k * 0.6); ctx.strokeStyle = m.col; ctx.lineCap = 'round'; ctx.lineWidth = 4 * a + 1; ctx.beginPath(); ctx.moveTo(-L, 0); ctx.lineTo(L, 0); ctx.stroke(); ctx.lineWidth = 1.5; ctx.globalAlpha = a * 0.7; ctx.beginPath(); ctx.moveTo(-L * 0.6, 7); ctx.lineTo(L * 0.7, 7); ctx.stroke(); break; }
+        case 'ring': ctx.strokeStyle = m.col; ctx.lineWidth = 4 * a + 1; ctx.beginPath(); ctx.arc(0, 0, m.r * (0.3 + k * 0.7), 0, TAU); ctx.stroke(); break;
+        case 'zap': { ctx.rotate(m.rot); ctx.strokeStyle = m.col; ctx.lineWidth = 2.6; ctx.lineJoin = 'round'; ctx.beginPath(); const n = 5; for (let j = 0; j <= n; j++) { const xx = -m.r + (j / n) * m.r * 2, yy = j === 0 || j === n ? 0 : Math.sin(m.seed * 3 + j * 2.1 + Math.floor(m.t * 40)) * 9; j ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); break; }
+        case 'ping': { ctx.rotate(m.rot); ctx.strokeStyle = m.col; ctx.lineWidth = 2; ctx.lineCap = 'round'; const a0 = m.r * (0.3 + k * 0.9); ctx.beginPath(); ctx.moveTo(0, -a0); ctx.lineTo(0, -a0 - m.r * 0.7 * a); ctx.stroke(); break; }
+      }
+      ctx.restore();
+    }
+  }
+
+  // the dash telegraph: while a snake winds up (0.6s) red chevrons flow along the path in front of its head and a ring
+  // closes in on it; during the dash it leaves streaks behind it. Reduce motion: steady, no flicker.
+  function drawSurge(g) {
+    if (!g || !g.snakes) return;
+    for (let si = 0; si < g.snakes.length; si++) {
+      const sn = g.snakes[si]; if (sn.surge !== 'warn' && sn.surge !== 'go') continue;
+      const h = sn.segs[0]; if (!h || h.y < -30 || !sn.path) continue;
+      const warn = sn.surge === 'warn', k = warn ? 1 - Math.max(0, sn.surgeT) / 0.6 : 1, still = calm();
+      const pulse = still ? 0.8 : 0.65 + 0.35 * Math.sin(S.t * (warn ? 26 : 18));
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      if (warn) {
+        glow(h.x, h.y, h.r * (3.2 - k * 1.2), '#ff2a4d', 0.35 + 0.4 * k * pulse);
+        ctx.globalAlpha = 0.3 + 0.6 * k; ctx.strokeStyle = '#ff5a78'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(h.x, h.y, h.r * (2.6 - 1.4 * k), 0, TAU); ctx.stroke();
+        const flow = still ? 0 : (S.t * 3) % 1;
+        for (let i = 0; i < 6; i++) {
+          const d = 40 + (i + flow) * 44, p = pointAt(sn.path, h.ps + d), q = pointAt(sn.path, h.ps + d + 10);
+          if (p.y < -20 || p.y > 900) continue;
+          const ang = Math.atan2(q.y - p.y, q.x - p.x), fade = (1 - i / 7) * (0.7 + 0.3 * k);
+          ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(ang); ctx.globalAlpha = fade * pulse;
+          ctx.globalCompositeOperation = 'source-over'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+          ctx.beginPath(); ctx.moveTo(-8, -15); ctx.lineTo(8, 0); ctx.lineTo(-8, 15);
+          ctx.strokeStyle = 'rgba(40,4,16,.55)'; ctx.lineWidth = 12; ctx.stroke();
+          ctx.strokeStyle = i & 1 ? '#ff3d5a' : '#ff8aa0'; ctx.lineWidth = 7; ctx.stroke(); ctx.restore();
+        }
+      } else {
+        glow(h.x, h.y, h.r * 2.8, '#ff2a4d', 0.3 * pulse);
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 5; i++) {
+          const d = 26 + i * 30, p = pointAt(sn.path, h.ps - d), q = pointAt(sn.path, h.ps - d - 18);
+          if (p.y < -20) continue;
+          ctx.globalAlpha = (1 - i / 5) * 0.7; ctx.strokeStyle = i < 2 ? '#fff2f5' : '#ff5a78'; ctx.lineWidth = Math.max(2, h.r * 0.5 * (1 - i / 6));
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+  }
+
   // note trails behind the flying capsules (called from drawBullets with the live bullet list)
   function bullets(list, dt) {
     if (calm()) return;
@@ -46,7 +139,9 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped }) {
     }
   }
 
-  function draw(dt) {
+  function draw(dt, g) {
+    drawSurge(g);
+    drawMarks(dt);
     for (let i = smoke.length - 1; i >= 0; i--) {
       const q = smoke[i]; q.life -= dt; if (q.life <= 0) { smoke.splice(i, 1); continue; }
       const k = 1 - q.life / q.max; q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.96; q.vy *= 0.96;
@@ -77,7 +172,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped }) {
     ctx.globalAlpha = 1;
   }
 
-  return { event, bullets, draw, pools: { orbs, smoke, trail, flashes } };
+  return { event, bullets, draw, tint, pools: { orbs, smoke, trail, flashes, marks } };
 }
 
 // 1 at rest; right after a landing it pops and settles over 0.38s: the HUD takes the max with its own bounce
