@@ -150,7 +150,7 @@ console.log('16_addiction ok');
 {   // comeback: warm lines, never lost, streak is kept warm
   const s = fresh(), t0 = 1.7e12, dk = Math.floor((t0 + 6 * DAY) / DAY);
   S.touchSeen(s, t0); assert.deepEqual(S.comebackLines(s, dk, t0 + DAY), []);
-  const lines = S.comebackLines(s, dk, t0 + 6 * DAY); assert.ok(lines.length >= 3); assert.ok(lines.every(l => !l.includes('—')));
+  const lines = S.comebackLines(s, dk, t0 + 6 * DAY); assert.ok(lines.length >= 3); assert.ok(lines.every(l => !l.includes(String.fromCharCode(8212))));
   assert.match(lines[lines.length - 1], /Nothing is lost/);
   s.streak = { last: 1, n: 1 }; S.claimComeback(s, t0 + 6 * DAY); assert.equal(s.streak.n, 2);
   assert.ok(S.nextReward(fresh(), day, 0));
