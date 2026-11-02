@@ -973,6 +973,25 @@
   #stGo.go-hit{animation:gohit .32s cubic-bezier(.2,.9,.3,1)!important}
   @keyframes gohit{0%{transform:scale(.95);filter:brightness(1.5)}60%{transform:scale(1.05);box-shadow:0 6px 0 #a8530a,0 0 34px #fff3b0}100%{transform:scale(1)}}
   @media(prefers-reduced-motion:reduce){.qt .qg,#stGo.go-hit,.gl-box.gl-flash{animation:none!important}}
+  /* battle round 8: pinned claim row on the dock, Bring line in the fun fact, event tile fit at 360, hero stars */
+  .bt-claim{pointer-events:auto;display:flex;align-items:center;gap:8px;width:100%;max-width:520px;box-sizing:border-box;margin:0 auto 2px;padding:5px 6px 5px 10px;border-radius:14px;border:2px solid #ffe14a;background:linear-gradient(100deg,#5a3410,#2e1a08);color:#fff;font:inherit;text-align:left;cursor:pointer;box-shadow:0 0 14px rgba(255,225,74,.35)}
+  .bt-claim[hidden]{display:none} .bt-claim .bc-ic{font-size:18px;line-height:1;flex:none} .bt-claim .bc-tx{flex:1;min-width:0;font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .bt-claim .bc-tx b{color:#ffe14a}
+  .bt-claim .bc-go{flex:none;font-size:12px;font-weight:900;letter-spacing:.04em;padding:6px 12px;border-radius:10px;color:#2b1608;background:linear-gradient(180deg,#fff3b0,#ffc83d);box-shadow:0 2px 0 #a8530a;animation:qgp 1.4s ease-in-out infinite}
+  .bt-claim:active .bc-go{transform:translateY(2px);box-shadow:none}
+  @media(max-height:700px){.bt-claim{padding-top:2px;padding-bottom:2px;margin-bottom:0} .bt-claim .bc-go{padding:4px 10px}}
+  .ff-bring{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 8px;border-radius:11px;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.14)} .ff-bring>b{font-size:11px;letter-spacing:.1em;color:var(--dim);margin-right:2px}
+  .ff-bring i{position:relative;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;font-style:normal;background:rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.2)} .ff-bring i img{width:26px;height:26px;object-fit:contain} .ff-bring i.eq{border-color:#9dff6d} .ff-bring i.lock{opacity:.45;filter:grayscale(.7)}
+  .ff-bring i u{position:absolute;right:-5px;bottom:-5px;width:15px;height:15px;border-radius:50%;display:grid;place-items:center;text-decoration:none;font-size:9px;font-weight:900;background:#9dff6d;color:#10331a;border:1.5px solid #fff} .ff-bring i.lock u{background:#8a8a98;color:#fff}
+  .ff-bring em{flex:1;min-width:90px;font-style:normal;font-size:11px;font-weight:800;color:#d6d0ff;line-height:1.2}
+  .bt-hero .info .stk{font-size:15px;letter-spacing:3px;color:#46406e} .bt-hero .info .stk u{text-decoration:none;color:#ffd24a;text-shadow:0 0 6px #ffb04d}
+  .bt-hero .stprog .pgl.has b{color:#ffe14a}
+  @media(max-width:400px){
+    #pigBox .tile{column-gap:8px;padding:9px 10px} #pigBox .tile .ic{width:40px;height:40px;font-size:24px} #pigBox .tile .top{gap:8px}
+    #pigBox .tile .nm{font-size:15px;overflow-wrap:normal;text-wrap:balance} #pigBox .tile .lv{font-size:11px;white-space:nowrap;padding:1px 6px}
+    #pigBox .tile>.btn{grid-column:1/-1;grid-row:3;min-width:0;width:100%;padding:8px 10px;font-size:13px} #pigBox .tile .top{grid-column:1/-1} #pigBox .tile .ds{grid-column:1/-1}
+    .evbanner{padding:9px 10px} .ev-tx b{font-size:15px;line-height:1.1;overflow-wrap:normal;text-wrap:balance} .ev-tx small{font-size:11px} .ev-cd{padding:4px 7px} .ev-cd b{font-size:12px} .ev-cd small{display:none} .ev-cd::before{content:'\23F1  ';font-size:12px;color:#8fd8e8} .ev-cd{flex-direction:row;align-items:center} .ev-ic{font-size:26px}
+  }
+  @media(prefers-reduced-motion:reduce){.bt-claim .bc-go{animation:none}}
   /* end @css:08-battle-tab */
 /* @css:19-transitions */
   /* screens: fade + scale in, fade out (transform and opacity only) */
@@ -1816,7 +1835,7 @@
     <div class="tab" id="tabGear"><div class="filters" id="gearFilters"><b class="ttl">Collection</b><button data-f="All">All</button><button data-f="Owned">Owned</button><button data-f="Set">Set</button><button data-f="Upgrade">Ready</button></div><div id="gearBody"></div></div>
     <div class="tab" id="tabShop"><h2>SHOP</h2><div class="sub">Treats and surprises.</div><div class="tiles" id="boxList"></div></div>
   </div>
-  <div class="bt-dock" id="btDock"><div class="chips" id="stChips"></div><button class="btn" id="stGo">START THE BATTLE</button></div>
+  <div class="bt-dock" id="btDock"><button class="bt-claim" id="btClaim" type="button" hidden></button><div class="chips" id="stChips"></div><button class="btn" id="stGo">START THE BATTLE</button></div>
   <nav class="tabs">
     <button data-tab="Shop"><b>🛍️</b>Shop</button><button data-tab="Stats"><b>♥</b>Stats</button><button data-tab="Battle"><b>⚔</b>Battle</button><button data-tab="Skills"><b>✦</b>Skills</button><button data-tab="Pets"><b>🐾</b>Pets</button><button data-tab="Gear"><b>🎒</b>Gear</button>
   </nav>

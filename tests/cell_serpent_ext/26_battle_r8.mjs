@@ -1,0 +1,21 @@
+// battle round 8: Bring line, claim row info, hero stars
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cell_serpent');
+const { bringHTML, starsHTML, claimInfo, eventReadyCount, factHTML } = await import(join(root, 'battle_ui.js'));
+const items = [{ name: 'Swab', ic: 'S', eq: true, own: true }, { name: 'Daggers', ic: 'D', eq: false, own: true }, { name: 'Dragon', ic: 'G', eq: false, own: false }];
+const h = bringHTML({ why: 'Soft round cells', items });
+assert.ok(h.includes('BRING') && h.includes('1 of 3 in your loadout') && h.includes('class="eq"') && h.includes('class="lock"'));
+assert.equal(bringHTML(null), '');
+assert.ok(bringHTML({ why: 'x', items: items.map(i => ({ ...i, eq: true })) }).includes('All packed'));
+assert.equal((starsHTML(2).match(/<u>/g) || []).length, 2);
+assert.equal(claimInfo(0, '', 0), null);
+assert.equal(claimInfo(1, 'Pop 3 bombs', 0).go, 'CLAIM');
+assert.equal(claimInfo(3, '', 2).go, 'CLAIM ALL');
+assert.equal(claimInfo(0, '', 2).kind, 'event');
+assert.equal(eventReadyCount(0, {}), 0);
+assert.ok(eventReadyCount(1e9, {}) > 0 && eventReadyCount(1e9, { 0: 1 }) === eventReadyCount(1e9, {}) - 1);
+const f = factHTML({ info: { n: 3, skin: 'love', boss: false }, sp: { name: 'Love' }, hard: false, done: false, sparkleIcon: '', bring: { why: 'w', items } });
+assert.ok(f.includes('ff-bring'));
+for (const em of [h, f]) assert.ok(!em.includes('—'));
