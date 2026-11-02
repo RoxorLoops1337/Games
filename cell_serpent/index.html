@@ -375,6 +375,33 @@
   @keyframes prsheen{60%,100%{background-position:140% 0}}
   .tile.coll .go.alt{white-space:nowrap;font-size:14px}
   @media (prefers-reduced-motion:reduce){.dswalk.go .wlane,.dswalk.go .wic,.dswalk:not(.go) .wic,.tile.coll.prar2::after{animation:none}}
+  /* @css:09-skills-pets round 5 */
+  .presets{width:min(520px,100%);margin:2px auto 6px}
+  .prhd{display:flex;justify-content:space-between;align-items:baseline;padding:0 6px 4px;font-weight:900;font-size:12px;letter-spacing:.12em;color:#9dff6d} .prhd small{font-size:11px;font-weight:700;letter-spacing:0;color:var(--dim)}
+  .prrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .prcell{display:flex;flex-direction:column;border-radius:16px;border:2px dashed rgba(255,255,255,.22);background:rgba(0,0,0,.22);overflow:hidden}
+  .prcell.has{border-style:solid;border-color:rgba(157,255,109,.4);background:linear-gradient(180deg,rgba(29,74,46,.5),rgba(10,30,20,.65))}
+  .prcell.on{border-color:#9dff6d;box-shadow:0 0 12px rgba(157,255,109,.4)} .prcell.bad{opacity:.55}
+  .prmain{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 4px 5px;min-height:56px;border:0;background:none;color:#fff;font:inherit;cursor:pointer}
+  .prmain:disabled{cursor:default} .prmain b{font-size:15px;font-weight:900;line-height:1} .prem{font-size:11px;color:var(--dim);font-weight:700;padding:6px 0}
+  .prics{display:flex;flex-wrap:wrap;justify-content:center;gap:0} .prics i{width:17px;height:17px;display:block} .prics img{width:100%;height:100%;object-fit:contain}
+  .prsave{min-height:30px;border:0;border-top:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:#cfe;font:900 11px/1 inherit;letter-spacing:.1em;cursor:pointer}
+  .prsave:disabled{color:#9dff6d;background:rgba(157,255,109,.12);cursor:default}
+  .loadout.dragging .slot:not(.drag){opacity:.8} .slot.drag{z-index:5;box-shadow:0 8px 18px rgba(0,0,0,.55);transition:none;position:relative} .slot.dropto{outline:3px dashed #ffe14a;outline-offset:2px}
+  .loadout .slot{touch-action:manipulation;user-select:none;-webkit-user-select:none}
+  .joy{display:flex;align-items:center;gap:6px;margin:4px 0 2px;font-size:12px;font-weight:800;color:#ffb0c8}
+  .joy .jh{font-size:15px;line-height:1;filter:drop-shadow(0 0 4px rgba(255,90,140,.5))}
+  .joy .jbar{flex:1;height:9px;border-radius:6px;background:rgba(0,0,0,.4);overflow:hidden;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.12)}
+  .joy .jbar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#ff7aa8,#ffd0e0);transition:width .5s}
+  .joy b{min-width:56px;text-align:right;font-size:11px} .joy.sm b{min-width:34px}
+  .joy.full .jbar i{background:linear-gradient(90deg,#ff5d94,#ffe14a,#ff5d94);background-size:200% 100%;animation:joysh 1.6s linear infinite} .joy.full .jh{animation:joybeat 1s ease-in-out infinite}
+  @keyframes joysh{to{background-position:-200% 0}} @keyframes joybeat{50%{transform:scale(1.3)}}
+  .dsjoy{margin:2px 0 0} .dsjoy .joy{font-size:13px;padding:6px 10px;border-radius:12px;background:rgba(255,90,140,.1);border:1.5px solid rgba(255,122,168,.3)}
+  .dswalk .whrt{position:absolute;bottom:40px;color:#ff6b9a;font-size:16px;opacity:0;animation:whrt 2.2s ease-out infinite;pointer-events:none}
+  .dswalk .h1{left:34%} .dswalk .h2{left:42%;animation-delay:.7s} .dswalk .h3{left:38%;animation-delay:1.4s}
+  @keyframes whrt{0%{transform:translateY(0) scale(.6);opacity:0}20%{opacity:1}100%{transform:translateY(-34px) scale(1.2);opacity:0}}
+  @media (prefers-reduced-motion:reduce){.joy.full .jbar i,.joy.full .jh,.dswalk .whrt{animation:none}}
+  /* end @css:09-skills-pets round 5 */
   /* end @css:09-skills-pets */
   /* @css:07-cards */
   #levelup{gap:8px;justify-content:center}
@@ -1208,7 +1235,7 @@
       <div class="stagebox"><div class="tiles" id="pigBox"></div></div>
       <div class="stagebox gl-box"><div class="gl-head"><h2>DAILY GIGS <em id="glCount"></em></h2><button class="pill" id="claimGigs">CLAIM ALL</button></div><div class="gl-list" id="goalList"></div></div>
     </div>
-    <div class="tab" id="tabSkills"><h2>SKILLS</h2><div class="sub">Pick your five.</div><div class="loadout" id="loadoutRow"></div><div class="tiles" id="skillList"></div></div>
+    <div class="tab" id="tabSkills"><h2>SKILLS</h2><div class="sub">Pick your five.</div><div class="loadout" id="loadoutRow"></div><div class="presets" id="presetRow"></div><div class="tiles" id="skillList"></div></div>
     <div class="tab" id="tabPets"><h2>PETS</h2><div class="sub">Little friends.</div><div class="tiles" id="petList"></div></div>
     <div class="tab" id="tabStats"><div class="herobox"><div class="stage"><i class="spot"></i><img class="duo" src="assets/duo_idle.png" alt=""><i class="ped"></i></div><div id="heroBox"></div></div><div class="lvbar" id="lvBar"></div><div id="statList"></div></div>
     <div class="tab" id="tabGear"><div class="filters" id="gearFilters"><b class="ttl">Collection</b><button data-f="All">All</button><button data-f="Owned">Owned</button><button data-f="Set">Set</button><button data-f="Upgrade">Ready</button></div><div id="gearBody"></div></div>
