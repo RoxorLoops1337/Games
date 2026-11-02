@@ -3,6 +3,7 @@
 //  - first-run goal line under PLAY, and a "welcome back" greeting for returning players
 // Flags and the last-visit stamp live in their own localStorage keys so the save format never changes.
 const KEY_VISIT = 'cell_serpent_visit12';
+import { idleAmount } from './sim.js';
 const num = v => (Number.isFinite(+v) ? +v : 0);
 
 // ---- tutorial step 3 burst, placed inside .tface
@@ -35,8 +36,10 @@ export function welcomeBack(save, now, hours) {
   const next = Math.min(50, (save.cleared || 0) + 1);
   const away = awayText(hours === undefined ? hoursAway(now) : hours);
   const bits = [];
-  if (save.eggs > 0) bits.push(`\u{1F95A} ${save.eggs} egg${save.eggs === 1 ? '' : 's'} to hatch`);
+  if (save.eggs > 0) bits.push(`\u{1F95A} ${save.eggs} to hatch`);
   if (save.streak && save.streak.n > 1) bits.push(`\u{1F525} ${save.streak.n} day streak`);
+  const tip = away && save.idle ? idleAmount(save, now) : 0;
+  if (tip >= 50) bits.unshift(`\u{1F9FA} +${tip} Beats`);
   return { head: away ? 'Welcome back!' : 'Ready for more?', sub: `Stage ${next} is waiting` + (away ? ` · ${away}` : ''), bits };
 }
 export function welcomeHTML(w) {
