@@ -11,7 +11,7 @@ export const STORM = { love: 1, piggy: 1, sneezy: 1, sour: 1 };      // petal st
 const NSTAR = 16, NFLAKE = 44, NPET = 40;
 
 export function makeB8() {
-  const r = rnd(808), b = { r, skin: 'love', stars: [], flakes: [], petals: [], shoot: { t0: -99, next: 5, x: 0, y: 0, dx: 1, dy: 0.4, len: 150 }, sq: { t0: -99, dir: 1 }, heads: { n: 0, x: [0, 0, 0, 0], y: [0, 0, 0, 0] }, bx: W / 2, by: 300, bl: 0, lt: -1, pendingWind: 0, wind: 0 };
+  const r = rnd(808), b = { r, skin: 'love', stars: [], flakes: [], petals: [], shoot: { t0: -99, next: 5, x: 0, y: 0, dx: 1, dy: 0.4, len: 150 }, sq: { t0: -99, dir: 1 }, heads: { n: 0, x: [0, 0, 0, 0], y: [0, 0, 0, 0], bx: W / 2, bk: 0 }, bk: 0, lastBeam: null, bx: W / 2, by: 300, bl: 0, lt: -1, pendingWind: 0, wind: 0 };
   for (let i = 0; i < NSTAR; i++) b.stars.push({ x: 20 + r() * (W - 40), y: 300 + r() * 440, s: 3 + r() * 5, p: r() * TAU, v: 0.8 + r() * 1.6 });
   for (let i = 0; i < NFLAKE; i++) b.flakes.push({ x: r() * W, y: r() * 900, z: 0.6 + r() * 1.2, v: 0.8 + r() * 0.8 });
   for (let i = 0; i < NPET; i++) b.petals.push({ x: 0, y: 0, vx: 0, vy: 0, a: 0, w: 0, life: 0, max: 1, c: i % 3 });
@@ -28,6 +28,28 @@ export function headKill(b, t, x, y) {
     }
     b.pendingWind = (b.r() < 0.5 ? -1 : 1) * 210;
   } else b.pendingWind = (b.r() < 0.5 ? -1 : 1) * 140;
+}
+
+// the Encore beam fired at x: petals are sucked up along it, a squall leans away from it, anything else gets a small shove
+export function beamKill(b, t, x) {
+  const dir = x < W / 2 ? 1 : -1;
+  if (SQUALL[b.skin]) { b.sq.t0 = t; b.sq.dir = dir; b.pendingWind = dir * 300; }
+  else if (STORM[b.skin]) {
+    for (let i = 0; i < NPET; i++) {
+      const p = b.petals[i], side = i & 1 ? 1 : -1;
+      p.x = x + side * (14 + b.r() * 26); p.y = LINE_Y - 60 - b.r() * 640; p.vx = side * (60 + b.r() * 170); p.vy = -(160 + b.r() * 320);
+      p.a = b.r() * TAU; p.w = (b.r() - 0.5) * 11; p.life = p.max = 1.4 + b.r() * 1.2;
+    }
+    b.pendingWind = dir * 120;
+  } else b.pendingWind = dir * 150;
+}
+// per frame: notice a new beam, ease the beam's pull on the mist in (fast) and out (slow)
+export function stepBeam(b, beam, dt) {
+  if (beam && beam !== b.lastBeam) beamKill(b, b.lt, beam.x);
+  b.lastBeam = beam || null;
+  if (beam) b.heads.bx = beam.x;
+  b.bk += ((beam ? 1 : 0) - b.bk) * Math.min(1, dt * (beam ? 14 : 1.4)); if (b.bk < 0.003) b.bk = 0;
+  b.heads.bk = b.bk;
 }
 
 // ---- night: stars that really twinkle and a shooting star now and then
