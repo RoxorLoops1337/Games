@@ -10,7 +10,8 @@ import { drawFar } from './bg_far.js';
 import { ringDanger } from './bg_mist.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
-import { drawCellFlags, drawCellBadge, drawQuartetLinks, drawDashLane, drawStreak, drawChoirLinks } from './cellfx.js';
+import { drawBellLinks } from './bell_fx.js';
+import { drawCellFlags,drawCellBadge, drawQuartetLinks, drawDashLane, drawStreak, drawChoirLinks } from './cellfx.js';
 import { bakeHat } from './hats.js';
 import { createCheer, HAT_FX, hatPose, EMOTE, heart, drawEmote } from './cheer.js';
 import { cheerFrame } from './duo_cheer.js';
@@ -165,7 +166,7 @@ export function createRenderer(canvas, art, kit) {
       case 'quartetstart': addFloat(e.x, e.y - 30, 'HARMONY! ' + e.n + ' to go', '#fff6a8', 24, -50); break;
       case 'quartetfail': ring(e.x, e.y, 70, '#ff6a8a', 0.4); if (e.lost >= 2) addFloat(e.x, e.y - 30, 'STREAK LOST', '#ff9aae', 22, -50); break;
       case 'nap': addFloat(e.x, e.y - 40, 'Zzz...', '#b9c8ff', 30, -60); ring(e.x, e.y, 90, '#b9c8ff', 0.5); break;
-      case 'trait': { const T = { love: ['HEART PULSE', '#ff8fb8'], rust: ['CREAK', '#e0a060'], sneezy: [e.warn ? 'a-a-a...' : 'ACHOO!', '#9dffc0'], frosty: ['FROST', '#bfe9ff'] }[e.k]; if (T) { addFloat(e.x, e.y - 40, T[0], T[1], e.warn ? 22 : 26, -50); if (!e.warn) ring(e.x, e.y, 100, T[1], 0.5); if (e.k === 'sneezy' && !e.warn) S.trauma = Math.min(1, S.trauma + 0.3); } break; }
+      case 'trait': { const spc = kit && kit.SPECIES && kit.SPECIES[e.k], T = { love: ['HEART PULSE', '#ff8fb8'], rust: ['CREAK', '#e0a060'], sneezy: [e.warn ? 'a-a-a...' : 'ACHOO!', '#9dffc0'], frosty: ['FROST', '#bfe9ff'] }[e.k]; if (T) { if (spc && spc.lite) T[1] = spc.lite; addFloat(e.x, e.y - 40, T[0], T[1], e.warn ? 22 : 26, -50); if (!e.warn) ring(e.x, e.y, 100, T[1], 0.5); if (e.k === 'sneezy' && !e.warn) S.trauma = Math.min(1, S.trauma + 0.3); } break; }
       case 'bell': ring(e.x, e.y, 150, '#ffd9a0', 0.55); ring(e.x, e.y, 90, '#fff', 0.35); burst(e.x, e.y, 18, ['#ffd9a0', '#fff', '#ffb05a'], 380, 0.7, 5); addFloat(e.x, e.y - 36, 'DING!', '#ffe0a8', 28, -60); S.trauma = Math.min(1, S.trauma + 0.25); break;
       case 'gloom': addFloat(e.x, e.y - 40, 'GLOOM', '#b79bff', 26, -50); ring(e.x, e.y, 110, '#6a3fd0', 0.6); break;
       case 'soundcheck': ring(e.x, e.y, 80, '#ffd24a', 0.4); addFloat(e.x, e.y - 30, 'SOUNDCHECK', '#ffe36b', 20, -50); break;
@@ -281,6 +282,7 @@ export function createRenderer(canvas, art, kit) {
     const segs = sn.segs, p = g.p;
     if (sn.lane) drawDashLane(ctx, sn.path || g.path, pointAt, sn, S.t);
     drawChoirLinks(ctx, sn, S.t);
+    drawBellLinks(ctx, sn, S.t);
     for (let i = segs.length - 1; i >= 0; i--) {   // tail first so the head sits on top
       const s = segs[i], r = s.r;
       if (s.y < -r * 3 || s.y > H + r * 3) continue;   // not on screen: skip the drawing
