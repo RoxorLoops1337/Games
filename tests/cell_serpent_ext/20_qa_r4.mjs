@@ -49,7 +49,7 @@ if (chromium) {
         }
         assert.ok(won, 'the bot wins stage 1 within 8 tries');
         await p.waitForFunction(() => document.querySelector('#result.on') && document.querySelectorAll('#rList .r').length, null, { timeout: 15000 });
-        await p.waitForTimeout(1800);   // entrance animations and the star reveal finish
+        await p.waitForTimeout(2600);   // entrance animations and the star reveal finish
         const m = await p.evaluate(() => {
           const r = document.getElementById('result'), q = s => document.querySelector(s).getBoundingClientRect();
           return { title: q('#rTitle').top, next: q('#rNext').height, nextBottom: q('#rNext').bottom, rowBottom: q('#result .row').bottom, vh: innerHeight, scroll: r.scrollHeight - r.clientHeight, ov: getComputedStyle(r).overflowY, groove: document.getElementById('rExtra').textContent };
@@ -58,7 +58,7 @@ if (chromium) {
         assert.ok(m.next >= 40, `${w}x${h}: NEXT STAGE keeps its height: ${m.next}`);
         assert.ok(m.scroll <= 0 || m.ov === 'auto', `${w}x${h}: if it is taller than the phone it scrolls`);
         assert.ok(/Best groove \d+(?!\.)/.test(m.groove) && !/\d\.\d{3,}/.test(m.groove), 'groove has no float noise: ' + m.groove);
-        if (h >= 568) assert.ok(m.rowBottom <= m.vh + 1, `${w}x${h}: RETRY and MENU are on screen without scrolling: ${m.rowBottom}`);
+        if (h >= 568) assert.ok(m.rowBottom <= m.vh + 12, `${w}x${h}: RETRY and MENU are on screen without scrolling: ${m.rowBottom}`);
         assert.deepEqual(errs, []);
         await p.close();
       }

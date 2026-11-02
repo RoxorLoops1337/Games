@@ -1,6 +1,6 @@
 // Card pick flourish: the chosen card's icon lifts off, arcs down to the build strip and lands with a ring pop.
 // Pure DOM (Web Animations), no per-frame work; skipped when the animation API is missing.
-export function flyPick(card, strip, ms = 400) {
+export function flyPick(card, strip, ms = 400, onLand = null) {
   try {
     const src = card && card.querySelector('.ic'), dst = strip;
     if (!src || !dst || !src.animate) return;
@@ -20,7 +20,7 @@ export function flyPick(card, strip, ms = 400) {
     ], { duration: ms, easing: 'cubic-bezier(.5,0,.7,1)', fill: 'forwards' });
     const land = () => {
       if (!fly.isConnected) return;
-      fly.remove();
+      fly.remove(); if (onLand) { try { onLand(); } catch (e) { /* cosmetic */ } }
       const r = document.createElement('div'); r.className = 'pickring'; r.style.cssText = `left:${b.left + b.width / 2}px;top:${b.top + b.height / 2}px;--pc:${col}`;
       document.body.appendChild(r); setTimeout(() => r.remove(), 520);
     };

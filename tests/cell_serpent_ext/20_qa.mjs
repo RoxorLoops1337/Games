@@ -129,7 +129,9 @@ if (chromium) {
       assert.ok(await p.evaluate(() => location.pathname.includes('cell_serpent')), 'still on the game page');
       // give up in a pig run is a pig result and keeps the save sane
       await p.evaluate(() => window.CS.startRun(2, 'pig')); await p.waitForTimeout(400);
-      await p.keyboard.press('Escape'); await p.click('#quitBtn'); await p.waitForTimeout(300);
+      await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+      { const bb = await p.locator('#quitBtn').boundingBox(); await p.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await p.mouse.down(); await p.waitForTimeout(1100); await p.mouse.up(); }   // GIVE UP is hold-to-confirm since batch 6
+      await p.waitForTimeout(300);
       assert.match(await p.textContent('#rTitle'), /PIGGIES ESCAPED/);
       assert.ok(Object.values(await p.evaluate(() => window.CS.save().prog)).every(Number.isFinite));
       assert.deepEqual(p.errs, []);

@@ -15,22 +15,32 @@ export function oddsAtLeast(luck) {
 }
 const pct = p => (p >= 0.995 ? '99' : p < 0.01 ? '<1' : String(Math.round(p * 100))) + '%';
 
+// round 7: the meter remembers its last fill, so it fills up from there and chips whose odds grew light up.
+let lastFill = -1, lastOdds = null;
 export function luckHTML(g) {
   const luck = luckNow(g), o = oddsAtLeast(luck), nx = oddsAtLeast(luck + lk(g));
   const fill = Math.round(Math.min(1, luck / LUCK_MAX) * 100), up = Math.round((nx[0] - o[0]) * 100);
-  const chip = (i, t) => `<span class="lk" style="--rc:${RARITIES[i + 1].color}"><i></i>${t}<b>${pct(o[i])}</b></span>`;
-  return `<div class="lkbar"><span class="lkl">LUCK</span><span class="lkt"><span style="width:${fill}%"></span></span>${up > 0 ? `<em>+${up}% next</em>` : ''}</div><div class="lkrow">${chip(0, 'Rare+')}${chip(1, 'Epic+')}${chip(2, 'Legend+')}</div>`;
+  const from = lastFill >= 0 && lastFill < fill ? lastFill : fill, grew = from < fill;
+  const chip = (i, t) => `<span class="lk${lastOdds && o[i] > lastOdds[i] + 0.004 ? ' up' : ''}" style="--rc:${RARITIES[i + 1].color}"><i></i>${t}<b>${pct(o[i])}</b></span>`;
+  const html = `<div class="lkbar"><span class="lkl">LUCK</span><span class="lkt"><span class="lkf${grew ? ' grow' : ''}" style="width:${fill}%;--from:${from}%"><b class="lkw"><i></i></b><s></s></span><u style="left:25%"></u><u style="left:50%"></u><u style="left:75%"></u></span>${up > 0 ? `<em>+${up}% next</em>` : ''}</div><div class="lkrow">${chip(0, 'Rare+')}${chip(1, 'Epic+')}${chip(2, 'Legend+')}</div>`;
+  lastFill = fill; lastOdds = o;
+  return html;
 }
 
+// Reroll feel: the pip that was just spent breaks (class "used") on the next draw of the pips.
+let rrJust = false;
+export function markReroll() { rrJust = true; }
+
 export function refreshPips(g, total = 4) {
-  return Array.from({ length: total }, (_, k) => `<i class="${k < g.rerolls ? 'on' : ''}"></i>`).join('');
+  const used = rrJust ? g.rerolls : -1; rrJust = false;
+  return Array.from({ length: total }, (_, k) => `<i class="${k < g.rerolls ? 'on' : k === used ? 'used' : ''}"></i>`).join('');
 }
 
 // Build strip: capsule and passive upgrades with their pick counts, then skills with their level.
 export function buildHTML(g, iconFn) {
   const out = [];
-  for (const id of Object.keys(g.ups || {})) { const n = g.ups[id]; if (n > 0 && CAP_GLYPH[id]) out.push(`<span class="bi"><span class="g">${CAP_GLYPH[id]}</span><b>${n}</b></span>`); }
-  for (const w of WEAPONS) { const l = g.weap && g.weap[w.id] ? g.weap[w.id].lv : 0; if (l > 0) out.push(`<span class="bi sk"><span class="g">${iconFn(w.id)}</span><b>${l}</b></span>`); }
+  for (const id of Object.keys(g.ups || {})) { const n = g.ups[id]; if (n > 0 && CAP_GLYPH[id]) out.push(`<span class="bi" data-id="${id}"><span class="g">${CAP_GLYPH[id]}</span><b>${n}</b></span>`); }
+  for (const w of WEAPONS) { const l = g.weap && g.weap[w.id] ? g.weap[w.id].lv : 0; if (l > 0) out.push(`<span class="bi sk" data-id="${w.id}"><span class="g">${iconFn(w.id)}</span><b>${l}</b></span>`); }
   return out.length ? `<span class="bl">YOUR BAND</span>${out.join('')}<span class="bmore">i</span>` : '';
 }
 
@@ -50,7 +60,7 @@ export function passiveStat(g, c) {
   return `${nm}: ${totalText(c.id, cur)} → ${totalText(c.id, cur + c.gain)}`;
 }
 const NAMES = Object.fromEntries([...CAPSULE_UPS, ...PASSIVES].map(u => [u.id, u.name]));
-const CHAINS = [['notes', 'burst', 'Every note gets an echo'], ['crit', 'cdmg', 'Crits hit much harder'], ['aspd', 'notes', 'More notes, faster'], ['aspd', 'burst', 'Echoes come quicker'], ['power', 'haste', 'Hit harder, recharge faster'], ['dbeat', 'aspd', 'Land more notes on the beat']];
+const CHAINS = [['notes', 'burst', 'Every note gets an echo', 'Echo Chamber'], ['crit', 'cdmg', 'Crits hit much harder', 'Perfect Pitch'], ['aspd', 'notes', 'More notes, faster', 'Fast Fingers'], ['aspd', 'burst', 'Echoes come quicker', 'Quick Echo'], ['power', 'haste', 'Hit harder, recharge faster', 'Full Power Jam'], ['dbeat', 'aspd', 'Land more notes on the beat', 'Tight Groove']];
 export function bandSheetHTML(g, iconFn) {
   const rows = [], ups = g.ups || {};
   for (const id of ['aspd', 'notes', 'burst', 'cdmg', 'power', 'haste', 'crit', 'vital', 'enc', 'dbeat', 'speed']) {
@@ -58,10 +68,10 @@ export function bandSheetHTML(g, iconFn) {
     rows.push(`<div class="bsr"><span class="bsn">${CAP_GLYPH[id] || '🎶'} ${NAMES[id]}</span><i>x${ups[id]}</i><b>${totalText(id, uv(g, id))}</b></div>`);
   }
   for (const w of WEAPONS) { const l = g.weap && g.weap[w.id] ? g.weap[w.id].lv : 0; if (l > 0) rows.push(`<div class="bsr sk"><span class="bsn"><span class="bsg">${iconFn(w.id)}</span> ${w.name}</span><i>Lv</i><b>${l}</b></div>`); }
-  const chain = CHAINS.map(([a, b, t]) => {
+  const chain = CHAINS.map(([a, b, t, nm]) => {
     const A = ups[a] > 0, B = ups[b] > 0;
     if (!A && !B) return '';
-    return `<div class="bch ${A && B ? 'on' : ''}"><span>${NAMES[a]}</span><em>${A && B ? '+' : '?'}</em><span>${NAMES[b]}</span><u>${A && B ? t : 'Find ' + (A ? NAMES[b] : NAMES[a])}</u></div>`;
+    return `<div class="bch ${A && B ? 'on' : ''}"><span>${NAMES[a]}</span><em>${A && B ? '+' : '?'}</em><span>${NAMES[b]}</span><u>${A && B ? nm + ': ' + t : 'Find ' + (A ? NAMES[b] : NAMES[a])}</u></div>`;
   }).filter(Boolean).sort((x, y) => (y.includes('bch on') ? 1 : 0) - (x.includes('bch on') ? 1 : 0)).slice(0, 4).join('');
   return `<div class="bsh"><div class="bst">YOUR BAND</div>${rows.join('') || '<div class="bsr"><span class="bsn">Nothing yet</span></div>'}${chain ? `<div class="bst">SYNERGY CHAIN</div>${chain}` : ''}<div class="bsx">tap to close</div></div>`;
 }
@@ -94,3 +104,60 @@ export function levelRingHTML(m) {
   return `<span class="lvring${m.full ? ' full' : ''}" style="--a:${(m.a * 360).toFixed(0)}deg;--b:${((m.a + m.b) * 360).toFixed(0)}deg" aria-hidden="true"></span>`;
 }
 export function skipHTML(bonus) { return `<span class="sk1">SKIP</span><span class="sk2">+${bonus} BEATS</span>`; }
+
+// ---- round 6: per-rarity foil art behind the icon, chips that tick when you pick
+// A backdrop plate for every icon (spotlight for Common/Rare, holo, sunburst, lattice and prism foils for Epic and up).
+export function foilHTML(rn) { return `<span class="foil f${rn | 0}" aria-hidden="true"></span>`; }
+
+// Called when the flown icon lands on the build strip: the matching chip counts up (or appears) and pops.
+// id: upgrade or skill id, add: how much the count / level grows.
+export function tickBand(strip, id, add, iconFn, col) {
+  try {
+    if (!strip || !id) return;
+    let el = strip.querySelector(`.bi[data-id="${id}"]`);
+    const isW = WEAPONS.some(w => w.id === id);
+    if (!el) {
+      if (!isW && !CAP_GLYPH[id]) return;
+      el = document.createElement('span'); el.className = 'bi fresh' + (isW ? ' sk' : ''); el.dataset.id = id;
+      el.innerHTML = `<span class="g">${isW ? iconFn(id) : CAP_GLYPH[id]}</span><b>0</b>`;
+      const more = strip.querySelector('.bmore');
+      if (more) strip.insertBefore(el, more);
+      else { strip.insertAdjacentHTML('afterbegin', '<span class="bl">YOUR BAND</span>'); strip.appendChild(el); }
+    }
+    const b = el.querySelector('b'); b.textContent = String((parseInt(b.textContent, 10) || 0) + (add > 0 ? add : 1));
+    el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
+    if (col) el.style.setProperty('--pc', col);
+    const pl = document.createElement('s'); pl.className = 'plus'; pl.textContent = '+' + (add > 0 ? add : 1); pl.setAttribute('aria-hidden', 'true'); el.appendChild(pl); setTimeout(() => pl.remove(), 900);
+  } catch (e) { /* cosmetic only */ }
+}
+
+// ---- round 7: card-wide foil for Epic and up, band strip pulse when a synergy chain completes
+// A sheen layer that covers the whole card (behind the text), with a drifting holographic band. Common and Rare get none.
+export function cardFoilHTML(rn) { return rn >= 2 ? `<span class="cfoil cf${rn | 0}" aria-hidden="true"></span>` : ''; }
+
+// Pairs that make a synergy chain (same list as the band sheet shows).
+// Called after a pick landed on the strip: if the picked (new) upgrade just met its partner for the first time, the "i" pulses and names the chain.
+export function chainPulse(strip, g, id, isNew) {
+  try {
+    if (!strip || !g || !g.ups || !isNew) return false;
+    const hit = CHAINS.find(([a, b]) => (a === id && g.ups[b] > 0) || (b === id && g.ups[a] > 0));
+    if (!hit) return false;
+    const i = strip.querySelector('.bmore'); if (!i) return false;
+    i.classList.remove('chain'); void i.offsetWidth; i.classList.add('chain');
+    strip.querySelectorAll('.bi.link').forEach(e => e.classList.remove('link'));
+    for (const k of hit.slice(0, 2)) { const e = strip.querySelector(`.bi[data-id="${k}"]`); if (e) { e.classList.remove('link'); void e.offsetWidth; e.classList.add('link'); } }
+    chainToast(i, hit[3], hit[2]);
+    return true;
+  } catch (e) { return false; }
+}
+// round 8: the chain gets a name. A small pill rises from the "i" button (on the body, so it outlives the card screen closing).
+let toastEl = null, toastT = 0;
+function chainToast(anchor, name, text) {
+  if (toastEl) toastEl.remove();
+  const r = anchor.getBoundingClientRect(), hw = Math.min(150, innerWidth * 0.46), el = document.createElement('div');
+  el.className = 'chtoast'; el.setAttribute('role', 'status');
+  el.style.cssText = `left:${Math.round(Math.min(innerWidth - hw, Math.max(hw, r.left + r.width / 2)))}px;top:${Math.round(r.top - 8)}px`;
+  el.innerHTML = `<b>SYNERGY</b><span>${name}</span><u>${text}</u>`;
+  document.body.appendChild(el); toastEl = el; clearTimeout(toastT);
+  toastT = setTimeout(() => { el.remove(); if (toastEl === el) toastEl = null; }, 2200);
+}

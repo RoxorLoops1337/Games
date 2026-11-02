@@ -1,6 +1,7 @@
 // Audio cues derived from the live game: boss phases (by how much of the boss chain is left), the perfect clear
 // stinger, the music flavour per species and when the music should be muffled. Pure helpers plus one small tracker.
 import { skinFor } from './sim.js';
+import { createLife } from './audio_b7.js';
 
 // Boss phase 0..2 from the share of boss cells still alive: phase 1 below 66 percent, phase 2 below 33 percent.
 export function bossPhaseOf(g) {
@@ -21,10 +22,12 @@ export const sheetSound = (prev, next) => (next === prev ? null : SHEETS.has(nex
 
 export function createCues(audio) {
   let gRef = null, phase = 0, base = 0, cleared = false;
+  const life = createLife(audio);
   return {
     // call once per play frame; returns the boss phase for audio.mix
     tick(g) {
       if (g !== gRef) { gRef = g; phase = 0; cleared = false; base = 0; }
+      life.tick(g, typeof performance !== 'undefined' ? performance.now() : Date.now());   // choir regrow hum
       if (g.phase === 'clear' && !cleared) { cleared = true; if (perfectClear(g)) audio.play('perfect'); }
       let bp = 0;
       if (g.phase === 'play' || g.phase === 'levelup') { bp = bossPhaseOf(g); if (bp > phase) { phase = bp; audio.play('bossphase', { n: bp }); } }

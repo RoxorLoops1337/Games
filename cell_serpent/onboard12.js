@@ -2,6 +2,7 @@
 // very first run, the one-time "tap a pet" hub hint, and a rich demo loadout for the title backdrop.
 // Flags live in their own localStorage keys so the save format never changes.
 import { tutorialShotArt, tutorialShotHTML } from './onboard5.js';
+import { faceBurstHTML } from './title12b.js';
 const KEY_TUT = 'cell_serpent_tut12', KEY_PET = 'cell_serpent_pethint12';
 const getFlag = k => { try { return localStorage.getItem(k) === '1'; } catch (e) { return false; } };
 const setFlag = k => { try { localStorage.setItem(k, '1'); } catch (e) { /* ignore */ } };
@@ -51,20 +52,21 @@ export function tutorialArt(kit, art) {
 export function showTutorial(onDone, audio, kit, art) {
   const el = document.createElement('div'); el.className = 'tut12'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'How to play');
   const A = tutorialArt(kit, art || (window.CS && window.CS.art)), im = (u, c) => u ? `<img class="${c}" alt="" src="${u}">` : '';
-  const SH = A ? tutorialShotHTML(tutorialShotArt(kit)) : '';
+  const SA = A ? tutorialShotArt(kit) : null, SH = A ? tutorialShotHTML(SA) : '', FB = A ? faceBurstHTML(SA) : '';
   const duo = A && A.duo ? im(A.duo, 'tduo') : '<i class="tcell"></i>';
   el.classList.toggle('art12', !!A); el.classList.toggle('shot5', !!SH);
   el.innerHTML = `<div class="tbox">
     <div class="tstep s1 on"><div class="tcap">SLIDE</div><div class="tbar">${duo}<b class="tfinger">\u{1F446}</b></div><div class="tarrows"><em>◀</em><em>▶</em></div></div>
     <div class="tstep s2"><div class="tcap">SHOOT</div><div class="tgold">${A ? im(A.gold, 'tyelimg') : '<i class="tyel">★</i>'}${SH || '<i class="tshot"></i><i class="tburst"></i>'}</div><div class="tbar">${duo}</div></div>
-    <div class="tstep s3"><div class="tcap">POP THE FACE</div><div class="tchain">${A ? im(A.cell, 'tseg') + im(A.cell, 'tseg') + im(A.cell, 'tseg') : '<i></i><i></i><i></i>'}<div class="tface"><span class="tshield"></span>${A ? im(A.head, 'thead') : '<b>\u{1F40D}</b>'}</div></div><div class="tbar">${duo}</div></div>
+    <div class="tstep s3"><div class="tcap">POP THE FACE</div><div class="tchain">${A ? im(A.cell, 'tseg') + im(A.cell, 'tseg') + im(A.cell, 'tseg') : '<i></i><i></i><i></i>'}<div class="tface"><span class="tshield"></span>${A ? im(A.head, 'thead') : '<b>\u{1F40D}</b>'}${FB}</div></div><div class="tbar">${duo}</div></div>
     <div class="tdots"><i class="on"></i><i></i><i></i></div>
     <div class="tbtns"><button class="tskip" type="button">SKIP</button><button class="tnext" type="button" aria-label="Next">▶</button></div></div>`;
   document.body.appendChild(el);
-  let n = 0, done = false, timer = 0;
+  let n = 0, done = false, timer = 0, popT = 0, popI = 0;
   const steps = el.querySelectorAll('.tstep'), dots = el.querySelectorAll('.tdots i');
-  const go = k => { n = k; steps.forEach((s, i) => { s.classList.toggle('on', i === k); if (i === k) { s.style.animation = 'none'; void s.offsetWidth; s.style.animation = ''; } }); dots.forEach((d, i) => d.classList.toggle('on', i === k)); const nb = el.querySelector('.tnext'); nb.classList.toggle('go', k === 2); nb.textContent = k === 2 ? 'GO!' : '\u25B6'; clearTimeout(timer); timer = setTimeout(next, 3400); };
-  const finish = () => { if (done) return; done = true; clearTimeout(timer); setFlag(KEY_TUT); el.classList.add('out'); setTimeout(() => el.remove(), 220); onDone(); };
+  const go = k => { n = k; steps.forEach((s, i) => { s.classList.toggle('on', i === k); if (i === k) { s.style.animation = 'none'; void s.offsetWidth; s.style.animation = ''; } }); dots.forEach((d, i) => d.classList.toggle('on', i === k)); const nb = el.querySelector('.tnext'); nb.classList.toggle('go', k === 2); nb.textContent = k === 2 ? 'GO!' : '\u25B6'; clearTimeout(timer); timer = setTimeout(next, 3400); stopPop(); if (k === 2) { popT = setTimeout(() => { audio.play('tutpop'); popI = setInterval(() => audio.play('tutpop'), 3400); }, 2000); } };
+  const stopPop = () => { clearTimeout(popT); clearInterval(popI); };   // step 3: the face pops about 2.0 s into every 3.4 s loop
+  const finish = () => { if (done) return; done = true; clearTimeout(timer); stopPop(); setFlag(KEY_TUT); el.classList.add('out'); setTimeout(() => el.remove(), 220); onDone(); };
   const next = () => { audio.play('click'); if (n >= 2) finish(); else go(n + 1); };
   el.querySelector('.tnext').onclick = next;
   el.querySelector('.tskip').onclick = () => { audio.play('click'); finish(); };
@@ -83,7 +85,7 @@ export function petHint(tabsRoot, hubTab, save) {
 export function eggNudge(egg, save) { if (egg && save.eggs > 0) egg.classList.add('nudge12'); }
 
 // ---- title extras: rising music notes, a tagline that cycles, a sparkle burst when PLAY is tapped
-const TAGS = ['RoxorLoops & Jasmin vs the Serpent.', 'Slide. Shoot. Sing.', 'Pop the face, save the beat.', 'Every cell has a groove.'];
+const TAGS = ['RoxorLoops & Jasmin vs the Serpent.', 'Slide. Shoot. Sing.', 'Pop the face, save the beat.', 'Every cell has a groove.', 'Psst: the snake knows a song.'];
 export function setupTitleLife(notesHost, tagEl) {
   if (notesHost && !notesHost.childNodes.length) {
     const G = ['\u266A', '\u266B', '\u2661', '\u266A', '\u266B', '\u2736', '\u266A'];

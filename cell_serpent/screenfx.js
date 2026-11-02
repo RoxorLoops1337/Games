@@ -5,6 +5,9 @@ const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const easeOut = t => 1 - (1 - t) * (1 - t) * (1 - t);
 const backOut = t => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+import { createFeel6 } from './feel6.js';
+import { cardPose, cardFlair } from './card_flair.js';
+import { hasTrait, drawTraitIcon, TRAIT_LABEL } from './trait_ui.js';
 const CONFETTI = ['#ff7eb6', '#ffd84d', '#6fe3ff', '#9dff6d', '#c9a0ff', '#ffffff'];
 
 export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst }) {
@@ -22,6 +25,8 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     mile: null, go: null, mileDone: 0, lastBoss: false, ph: '', cc: null, p2: null, p2Done: false, perf: 0,   // milestone ribbon, GO! pop, stage progress milestones already shown
   };
   const calm = () => OPT.reduceMotion;
+  let F6 = null;   // round 6 screen feel (feel6.js), built lazily because it needs edges/vignette/confetti below
+  const feel6 = () => F6 || (F6 = createFeel6({ ctx, W, H, kit, S, OPT, ring, burst, text, glow, edges, vignette, slow: (k, d) => { F.slow = { t: d, dur: d, k }; }, confetti, sounds: F.sounds }));
 
   // a baked frame-shaped glow: transparent in the middle, the colour at the screen edges
   function edge(col) {
@@ -57,11 +62,12 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   }
 
   function onEvent(e, g) {
+    feel6().onEvent(e, g);
     switch (e.t) {
       case 'stage': {
         const boss = !!e.boss;
         F.mileDone = 0; F.mile = null; F.go = null; F.lastBoss = boss; F.p2 = null; F.p2Done = false; F.cc = null; F.perf = 0;
-        F.card = { n: e.n, boss, name: e.name || '', mod: e.mod || '', skin: g.skin, t: 0, dur: boss ? 2.9 : 2.3, slammed: false };
+        F.card = { n: e.n, boss, name: e.name || '', mod: e.mod || '', skin: g.skin, t: 0, dur: boss ? 2.9 : 2.3, slammed: false, trait: hasTrait(g.skin, e.n, boss, g.mode) ? g.skin : '' };
         F.deadT = 0;
         break;
       }
@@ -90,6 +96,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   function timeScale() {
     if (calm()) return 1;
     if (F.stop > 0) return 0.02;   // hit-stop: the sim holds still for a few frames
+    if (F.go && F.go.res && F.go.t < F.go.ready) return 0;   // the resume count-in: the song waits for 3, 2, 1
     if (F.slow.t <= 0) return 1;
     const k = F.slow.t / F.slow.dur;   // 1 -> 0, hold the low point then ease back out
     return 1 - (1 - F.slow.k) * Math.min(1, k * 3);
@@ -226,6 +233,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
 
   function update(dt, g) {
     if (F.clutchT > 0) F.clutchT = Math.max(0, F.clutchT - dt);
+    feel6().update(dt, g);
     updateClear(dt);
     if (F.stop > 0) F.stop = Math.max(0, F.stop - dt);   // the slow-mo clock waits while frozen
     else if (F.slow.t > 0) F.slow.t = Math.max(0, F.slow.t - dt);
@@ -284,6 +292,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       if (b) { const k = Math.pow(1 - b.phase, 3), dg = g.danger || 0; edges(dg > 0.5 ? '#ff4d7a' : '#6f8cff', (0.05 + 0.08 * Math.min(1, gv / 10) + 0.1 * dg) * k); }
       if (F.clutchT > 0) { const k = clamp(F.clutchT / 0.55, 0, 1) * (calm() ? 0.3 : 1); edges('#ff9a3d', k); edges('#ff4d7a', k * 0.8); }   // close call
     }
+    feel6().draw(g);
     const c = F.card;
     if (c && c.boss) vignette(Math.min(1, c.t / 0.35, (c.dur - c.t) / 0.5) * 0.85, '20,0,12');
     if (F.warnT > 0) {   // surge coming: red edges pulse, a hard flicker on the beat
@@ -326,12 +335,13 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   function deadBanner(g, e) {
     const t = F.deadT; if (t < 0.35) return;
     const k = calm() ? 1 : backOut(clamp((t - 0.35) / 0.4, 0, 1)), pct = Math.round(clamp(g.progress || 0, 0, 1) * 100), cy = H * 0.3;
-    ctx.save(); ctx.globalAlpha = e; ctx.translate(W / 2, cy); ctx.scale(k, k); ctx.rotate(calm() ? 0 : -0.04);
+    const lf = calm() ? 0 : easeOut(clamp((t - 0.85) / 0.25, 0, 1));   // the cards take over: the banner shrinks up toward the title
+    ctx.save(); ctx.globalAlpha = e * (1 - lf); ctx.translate(W / 2, cy - lf * H * 0.12); ctx.scale(k * (1 - 0.35 * lf), k * (1 - 0.35 * lf)); ctx.rotate(calm() ? 0 : -0.04);
     text('WIPEOUT!', 0, 0, 110, '#ff6a86', '#1a0210');
     ctx.rotate(calm() ? 0 : 0.04);
     text(pct > 0 ? pct + '% of the serpent popped' : 'the serpent got through', 0, 78, 36, '#ffd9e6', '#1a0210');
     {   // how far the song got: a bar that fills up to the spot where it ended
-      const bw = 270, bh = 16, fk = calm() ? 1 : easeOut(clamp((t - 0.6) / 0.7, 0, 1)), fw = bw * clamp(g.progress || 0, 0, 1) * fk;
+      const bw = 270, bh = 16, fk = calm() ? 1 : easeOut(clamp((t - 0.5) / 0.4, 0, 1)), fw = bw * clamp(g.progress || 0, 0, 1) * fk;
       ctx.fillStyle = 'rgba(10,4,18,.75)'; ctx.beginPath(); ctx.roundRect(-bw / 2 - 4, 112, bw + 8, bh + 8, 12); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.beginPath(); ctx.roundRect(-bw / 2, 116, bw, bh, 8); ctx.fill();
       if (fw > 1) { const gr = ctx.createLinearGradient(-bw / 2, 0, bw / 2, 0); gr.addColorStop(0, '#ff7eb6'); gr.addColorStop(1, '#ffd84d'); ctx.fillStyle = gr; ctx.beginPath(); ctx.roundRect(-bw / 2, 116, Math.max(fw, 12), bh, 8); ctx.fill(); }
@@ -394,6 +404,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   }
 
   // the title card, drawn on top of the HUD
+  const BOSS_TAG = { love: 'heartbreaker on stage', rust: 'rattling the whole hall', sneezy: 'ah ah ah choo', grumpy: 'woke up on the wrong side', sleepy: 'one more minute, please', disco: 'the floor is theirs', sour: 'puckering up', mighty: 'lifting the whole stage', frosty: 'ice cold encore', gloomy: 'a sad song, loudly', piggy: 'oink oink oink' };
   function drawCard(g) {
     const c = F.card; if (!c) return;
     const t = c.t, k = t / c.dur, out = clamp((c.dur - t) / 0.4, 0, 1), inn = clamp(t / 0.32, 0, 1);
@@ -411,8 +422,9 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       if (kit && kit.drawHead) { const bob = calm() ? 0 : Math.sin(t * 6) * 4; kit.drawHead(ctx, 0, -116 + bob - (calm() ? 0 : (1 - slam) * 160), 56, Math.PI / 2, { skin: c.skin, boss: true, t: S.t }); }
       if (!calm() && c.t < 1.1) { const gx = 9 * Math.max(0, 1 - (t - 0.4) * 1.6) * (c.slammed ? 1 : 0); if (gx > 0.4) { ctx.save(); ctx.globalAlpha *= 0.55; ctx.globalCompositeOperation = 'lighter'; text('BOSS', -gx, 28, 150, '#00e5ff'); text('BOSS', gx, 28, 150, '#ff2850'); ctx.restore(); } }
       text('BOSS', 0, 28, 150, '#ff4d7a', '#1a0210');
+      if (!calm() && slam > 0.6) { const sp = kit && kit.SPECIES && kit.SPECIES[c.skin]; cardFlair(ctx, c.skin, t, 0, -116, 62, sp ? sp.base : '#ff4d7a'); }   // r8: each boss arrives with its own species air (hearts, snow, coins...)
       ctx.restore();
-      ctx.save(); ctx.globalAlpha *= clamp((t - 0.45) / 0.3, 0, 1); text(c.name, W / 2, cy + 112, 44, '#ffd84d'); if (c.mod) text(c.mod, W / 2, cy + 156, 28, '#ffc2dc'); ctx.restore();
+      ctx.save(); ctx.globalAlpha *= clamp((t - 0.45) / 0.3, 0, 1); const tg = !c.mod && BOSS_TAG[c.skin]; text(c.name, W / 2, cy + (tg ? 98 : 112), 44, '#ffd84d'); if (c.mod) text(c.mod, W / 2, cy + 156, 28, '#ffc2dc'); else if (tg) text(tg, W / 2, cy + 134, 24, '#ffc2dc', '#2a0310'); ctx.restore();
     } else {
       // a band sweeps in from the left, the species portrait pops, name and twist slide in
       const bandH = 230, sx = calm() ? 0 : (1 - ease) * -W;
@@ -428,13 +440,21 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       }
       // portrait
       const pk = calm() ? 1 : clamp((t - 0.12) / 0.4, 0, 1), ps = calm() ? 1 : backOut(pk);
-      if (pk > 0 && kit && kit.drawHead) { ctx.save(); ctx.globalAlpha *= pk; glow(132, cy, 190, col, 0.5); kit.drawHead(ctx, 132, cy + (calm() ? 0 : Math.sin(t * 5) * 3), 78 * ps, Math.PI / 2, { skin: c.skin, boss: false, t: S.t }); ctx.restore(); }
+      if (pk > 0 && kit && kit.drawHead) { ctx.save(); ctx.globalAlpha *= pk; glow(132, cy, 190, col, 0.5);
+        if (calm()) kit.drawHead(ctx, 132, cy, 78 * ps, Math.PI / 2, { skin: c.skin, boss: false, t: S.t });
+        else { const po = cardPose(c.skin, t); ctx.translate(132 + po.dx, cy + po.dy + Math.sin(t * 5) * 3); ctx.rotate(po.rot); ctx.scale(po.sx, po.sy); kit.drawHead(ctx, 0, 0, 78 * ps, Math.PI / 2, { skin: c.skin, boss: false, t: S.t }); }   // each species arrives its own way (card_flair.js)
+        ctx.restore(); if (!calm()) cardFlair(ctx, c.skin, t, 132, cy, 70, col); }
       // words
       const tk = calm() ? 1 : easeOut(clamp((t - 0.22) / 0.4, 0, 1)), tx = 250 + (calm() ? 0 : (1 - tk) * 90);
       ctx.save(); ctx.globalAlpha *= tk;
       text('STAGE ' + c.n, tx, cy - 62, 36, '#9fb4ff', '#0b1020', 'left');
       { let fs = c.name.length > 11 ? 56 : 68; ctx.font = `800 ${fs}px system-ui, -apple-system, "Segoe UI", sans-serif`; const room = W - 24 - 250, wide = ctx.measureText(c.name).width; if (wide > room) fs = Math.max(30, Math.floor(fs * room / wide));   // long serpent names shrink to fit the band
         text(c.name, tx, cy - 8, fs, '#ffffff', '#0b1020', 'left'); }
+      if (c.trait) {   // batch 8: this species' late trait, icon plus name, top right of the band
+        const rk = calm() ? 1 : backOut(clamp((t - 0.45) / 0.35, 0, 1));
+        ctx.save(); ctx.globalAlpha *= clamp(rk, 0, 1); drawTraitIcon(ctx, c.trait, W - 52, cy - 70, 22 * rk, col, t);
+        text(TRAIT_LABEL[c.trait], W - 82, cy - 68, 20, '#e8ecff', '#0b1020', 'right'); ctx.restore();
+      }
       if (c.mod) { const mk = calm() ? 1 : clamp((t - 0.5) / 0.3, 0, 1); ctx.globalAlpha *= mk; text(c.mod, tx, cy + 64, 30, '#ffd24a', '#0b1020', 'left'); }
       ctx.restore();
     }
@@ -450,14 +470,15 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   }
   function tickCount(o) {
     while (o.tick < 3 && o.t >= o.w + o.tick * o.p) {
-      const i = o.tick++; F.sounds.push(i === 2 ? 'star2' : 'star1');
-      if (!calm()) { ring(W / 2, H * 0.4, 170 + i * 40, CNT_COL[i], 0.4); S.trauma = Math.min(1, S.trauma + 0.08 + i * 0.04); }
+      const i = o.tick++; F.sounds.push(o.res ? 'resumetick' + (3 - i) : i === 2 ? 'star2' : 'star1');
+      if (!calm()) { ring(W / 2, H * 0.4, 170 + i * 40, CNT_COL[i], 0.4); S.trauma = Math.min(1, S.trauma + 0.08 + i * 0.04); S.flash = Math.max(S.flash, 0.14 + i * 0.05); S.flashCol = CNT_COL[i]; o.kick = o.t; }
     }
   }
   function drawCount(o) {
     if (o.t < o.w) { const a = clamp(o.t / 0.12, 0, 1) * 0.9; ctx.save(); ctx.globalAlpha = a; text('GET READY', W / 2, H * 0.4 + 14, 52, '#ffe27a', '#3a1c00'); ctx.restore(); return; }
     const i = Math.min(2, Math.floor((o.t - o.w) / o.p)), u = clamp((o.t - o.w - i * o.p) / o.p, 0, 1), col = CNT_COL[i];
     const pop = easeOut(clamp(u / 0.22, 0, 1)), a = clamp((1 - u) / 0.3, 0, 1), sc = 1.7 - 0.7 * pop + 0.18 * u;
+    if (!calm()) { const bk = Math.pow(1 - clamp(u * 1.6, 0, 1), 2); edges(col, 0.55 * bk); if (i === 2) edges('#9dff6d', 0.3 * bk); }   // the room flashes on every count, the last one greener
     ctx.save(); ctx.translate(W / 2, H * 0.4);
     ctx.globalAlpha = (1 - u) * 0.7; ctx.beginPath(); ctx.arc(0, 0, 70 + u * 150, 0, TAU); ctx.lineWidth = 10 * (1 - u) + 2; ctx.strokeStyle = col; ctx.stroke();   // the beat ring
     for (let k = 0; k < 3; k++) { ctx.globalAlpha = (k <= i ? 1 : 0.28) * Math.min(1, o.t / 0.2); ctx.beginPath(); ctx.arc((k - 1) * 46, 112, 11, 0, TAU); ctx.fillStyle = k <= i ? col : '#ffffff'; ctx.fill(); }   // three beat dots
@@ -473,6 +494,11 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       ctx.save(); ctx.globalAlpha = a; ctx.translate(W / 2, H * 0.4); ctx.scale(sc, sc); ctx.rotate(0.04);
       glow(0, 0, 240, '#ffd84d', 0.3); text('READY?', 0, 0, 110, '#ffe27a', '#3a1c00'); ctx.restore(); return;
     }
+    if (o.res) {   // resume from pause: a smaller cyan pop
+      const q = o.t / o.dur, pp = easeOut(clamp(o.t / 0.14, 0, 1)), a = clamp((1 - q) / 0.45, 0, 1) * pp;
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(W / 2, H * 0.4); ctx.scale(1.5 - 0.5 * pp + 0.1 * q, 1.5 - 0.5 * pp + 0.1 * q); ctx.rotate(-0.04);
+      glow(0, 0, 200, '#6fe3ff', 0.3); text('BACK ON!', 0, 0, 78, '#9ff0ff', '#06202a'); ctx.restore(); return;
+    }
     const k = (o.t - (o.ready || 0)) / (o.dur - (o.ready || 0)), pop = easeOut(clamp((o.t - (o.ready || 0)) / 0.16, 0, 1)), sc = 1.9 - 0.9 * pop + 0.1 * k, a = clamp((1 - k) / 0.4, 0, 1) * pop;
     ctx.save(); ctx.globalAlpha = a; ctx.translate(W / 2, H * 0.4); ctx.scale(sc, sc); ctx.rotate(-0.05);
     glow(0, 0, 260, o.boss ? '#ff2850' : '#9dff6d', 0.35);
@@ -486,6 +512,14 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     glow(0, 0, 200, '#ff9a3d', 0.3); text('CLOSE CALL!', 0, 0, 74, '#ffb454', '#2a0a00');
     ctx.restore();
   }
+  // back from the pause screen: the song eases in from slow motion, a ring opens on the duo and BACK ON! pops
+  function resumeFx(g) {
+    if (calm() || !g || g.phase !== 'play' || F.card) return;
+    if (!F.go || F.go.res || !F.go.cnt) {   // 3, 2, 1 with a flash on every beat, then BACK ON! and the song moves again
+      const p = 0.27; F.go = { t: 0, p, w: 0, tick: 0, cnt: true, res: true, boss: false, ready: 3 * p, dur: 3 * p + 0.6 };
+    }
+    ring(g.p.x, g.p.y - 20, 190, '#9ff0ff', 0.5); edges('#6fe3ff', 0.35);
+  }
   function drawCardAll(g) { drawCard(g); drawMile(); drawGo(); drawClear(); drawCC(); drawP2(); }
-  return { confetti, onEvent, update, timeScale, rumble, zoomIn, aura, drawScreen, drawCard: drawCardAll, state: F, setBeat(fn) { F.beatFn = fn; }, clearBusy: () => !!F.clear, takeSounds() { return F.sounds.splice(0); } };
+  return { resumeFx, confetti, onEvent, update, timeScale, rumble, zoomIn, aura, drawScreen, drawCard: drawCardAll, state: F, setBeat(fn) { F.beatFn = fn; }, clearBusy: () => !!F.clear, takeSounds() { return F.sounds.splice(0); } };
 }

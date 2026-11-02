@@ -293,6 +293,12 @@ export const PASSIVES = [
   { id: 'fork', name: 'Tuning Fork', max: 4, w: 0.55, min: 1, minStage: 10, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Ward cells shield ' + v + '% less and lullabies last ' + v + '% longer', desc: 'Ward cells shield 25% less, lullabies last 25% longer', apply: () => {} },
   { id: 'gear', name: 'Golden Ear', max: 4, w: 0.55, min: 1, minStage: 6, vals: [30, 60, 100, 150], cap: 150, fmt: v => 'Gold cells stay ' + v + '% longer and pay ' + Math.round(v / 2) + '% more', desc: 'Gold cells stay 30% longer and pay 15% more', apply: () => {} },
   { id: 'harm', name: 'Four-Part Harmony', max: 4, w: 0.55, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Quartet cells stay linked ' + Math.round(v / 2) + '% longer and pay ' + v + '% more', desc: 'Quartet cells stay linked 12% longer and pay 25% more', apply: () => {} },
+  { id: 'chk', name: 'Soundcheck', max: 4, w: 0.5, min: 1, minStage: 16, vals: [8, 12, 18, 25], cap: 25, fmt: v => 'Popping a ward, lullaby or drummer cell fills ' + v + '% of the Encore', desc: 'Popping a ward, lullaby or drummer cell fills 8% of the Encore', apply: () => {} },
+  { id: 'cres', name: 'Crescendo', max: 4, w: 0.5, min: 1, minStage: 26, vals: [4, 6, 8, 10], cap: 10, fmt: v => 'Each Quartet in a row makes your notes hit ' + v + '% harder (up to 5 in a row)', desc: 'Each Quartet in a row makes your notes hit 4% harder, up to 5 in a row', apply: () => {} },
+  { id: 'fan', name: 'Fan Club', max: 4, w: 0.5, min: 1, minStage: 20, vals: [20, 35, 50, 75], cap: 75, fmt: v => 'Groove is worth ' + v + '% more damage per point', desc: 'Groove is worth 20% more damage per point', apply: () => {} },
+  { id: 'brg', name: 'Bridge', max: 4, w: 0.5, min: 1, minStage: 34, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Bell cells ring ' + v + '% harder and each ring adds 3 Groove with Fan Club', desc: 'Bell cells ring 25% harder', apply: () => {} },
+  { id: 'brk', name: 'Ice Breaker', skin: 'frosty', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Frost patches shield ' + v + '% less', desc: 'Frost patches shield 25% less', apply: () => {} },
+  { id: 'hbk', name: 'Heart Mender', skin: 'love', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Heart pulses heal ' + v + '% less', desc: 'Heart pulses heal 25% less', apply: () => {} },
   { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, minStage: 4, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
@@ -302,11 +308,11 @@ const CAP_UP = Object.fromEntries(CAPSULE_UPS.map(u => [u.id, u]));
 // Beats (gold music-note coins) come from cells and clears. Sparkles (pink star gems) come from
 // clearing a stage for the first time. Fragments come from chest cells and loot boxes.
 export const META = [
-  { id: 'atk', name: 'Volume', max: 12, base: 30, grow: 1.45, desc: l => `+${10 * l}% damage` },
-  { id: 'crt', name: 'Pitch', max: 10, base: 30, grow: 1.45, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
-  { id: 'cdn', name: 'Tempo', max: 10, base: 30, grow: 1.45, desc: l => `-${5 * l}% cooldowns` },
-  { id: 'vit', name: 'Stamina', max: 10, base: 25, grow: 1.45, desc: l => `The snake crawls ${2 * l}% slower` },
-  { id: 'for', name: 'Fame', max: 10, base: 40, grow: 1.5, desc: l => `+${10 * l}% Beats` },
+  { id: 'atk', name: 'Volume', max: 15, base: 30, grow: 1.45, desc: l => `+${10 * l}% damage` },
+  { id: 'crt', name: 'Pitch', max: 13, base: 30, grow: 1.45, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
+  { id: 'cdn', name: 'Tempo', max: 12, base: 30, grow: 1.45, desc: l => `-${5 * l}% cooldowns` },
+  { id: 'vit', name: 'Stamina', max: 13, base: 25, grow: 1.45, desc: l => `The snake crawls ${2 * l}% slower` },
+  { id: 'for', name: 'Fame', max: 13, base: 40, grow: 1.5, desc: l => `+${10 * l}% Beats` },
   { id: 'rev', name: 'Encore', max: 1, base: 400, grow: 1, desc: () => 'Get back up once per run' },
 ];
 export const metaCost = (def, lvl) => Math.round(def.base * Math.pow(def.grow, lvl));
@@ -323,7 +329,7 @@ export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
   const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0, joy: 0 };
-  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, reviveTimer: true, volume: 1, thumbZone: false, textScale: 1, beatTick: false }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
+  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, reviveTimer: true, volume: 1, thumbZone: false, textScale: 1, beatTick: false, pump: 2 }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -346,7 +352,7 @@ export function sanitizeSave(raw) {
   if (raw.stars && typeof raw.stars === 'object') for (const k of Object.keys(raw.stars)) if (/^\d+$/.test(k)) s.stars[k] = Math.min(3, num(raw.stars[k]));
   if (raw.streak && typeof raw.streak === 'object') s.streak = { last: num(raw.streak.last), n: num(raw.streak.n) };
   if (raw.last && typeof raw.last === 'object') s.last = { stage: Math.max(1, Math.min(50, num(raw.last.stage, 1))), hard: !!raw.last.hard };
-  if (raw.settings && typeof raw.settings === 'object') for (const k of Object.keys(s.settings)) if (k === 'textScale') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.textScale = Math.max(1, Math.min(1.4, raw.settings[k])); } else if (k === 'volume') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.volume = Math.max(0, Math.min(1, raw.settings[k])); } else if (typeof raw.settings[k] === 'boolean') s.settings[k] = raw.settings[k];
+  if (raw.settings && typeof raw.settings === 'object') for (const k of Object.keys(s.settings)) if (k === 'textScale') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.textScale = Math.max(1, Math.min(1.4, raw.settings[k])); } else if (k === 'pump') { if (raw.settings[k] === 0 || raw.settings[k] === 1 || raw.settings[k] === 2) s.settings.pump = raw.settings[k]; } else if (k === 'volume') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.volume = Math.max(0, Math.min(1, raw.settings[k])); } else if (typeof raw.settings[k] === 'boolean') s.settings[k] = raw.settings[k];
   if (raw.outfits && typeof raw.outfits === 'object') { for (const o of OUTFITS) if (raw.outfits.owned && raw.outfits.owned[o.id]) s.outfits.owned[o.id] = 1; if (OUTFIT[raw.outfits.worn] && s.outfits.owned[raw.outfits.worn]) s.outfits.worn = raw.outfits.worn; }
   if (raw.event && typeof raw.event === 'object') { s.event = { key: num(raw.event.key), earned: num(raw.event.earned), claimed: {} }; for (const k of Object.keys(raw.event.claimed || {})) if (raw.event.claimed[k]) s.event.claimed[k] = 1; }
   if (raw.inv && typeof raw.inv === 'object') s.inv = { day: num(raw.inv.day), left: Math.min(2, num(raw.inv.left, 2)), best: num(raw.inv.best) };
@@ -362,6 +368,8 @@ export function sanitizeSave(raw) {
   if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^h?\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
   if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
   s.addict = sanitizeAddict(raw.addict);
+  if (raw.petNames && typeof raw.petNames === 'object' && !Array.isArray(raw.petNames)) { const pn = {}; for (const p of PETS) { const v = raw.petNames[p.id]; const n = typeof v === 'string' ? v.replace(/[^\w \-!+&.]/g, '').trim().slice(0, 10) : ''; if (n) pn[p.id] = n; } s.petNames = pn; }
+  if (Array.isArray(raw.presetNames)) s.presetNames = [0, 1, 2].map(i => typeof raw.presetNames[i] === 'string' ? raw.presetNames[i].replace(/[^\w \-!+&.]/g, '').trim().slice(0, 8) : '');
   if (Array.isArray(raw.presets)) s.presets = [0, 1, 2].map(i => Array.isArray(raw.presets[i]) ? raw.presets[i].filter((id, j, a) => WEAPON[id] && a.indexOf(id) === j).slice(0, LOADOUT_SIZE) : []);
   const lo = Array.isArray(raw.loadout) ? raw.loadout.filter((id, i, a) => WEAPON[id] && s.skills[id].lv > 0 && a.indexOf(id) === i).slice(0, LOADOUT_SIZE) : [];
   if (lo.length) s.loadout = lo; else if (Array.isArray(raw.loadout)) s.loadout = [...WEAPON_STARTERS].filter(id => s.skills[id].lv > 0).slice(0, LOADOUT_SIZE);
@@ -592,9 +600,9 @@ export function applyResult(save, r) {
 export const isBossStage = n => n % 5 === 0;
 // Every stage the snakes crawl a little faster.
 export const speedMul = n => Math.min(2.6, 1 + 0.035 * (n - 1));
-export const hpBase = n => 12 * (12.5 * Math.pow(1.2, Math.min(n - 1, 13)) * Math.pow(1.055, Math.max(0, n - 14)) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
+export const hpBase = n => 12 * (12.5 * Math.pow(1.2, Math.min(n - 1, 13)) * Math.pow(1.047, Math.max(0, n - 14)) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
 export const snakeLength = n => Math.min(150, 32 + 4 * (n - 1) + (isBossStage(n) ? 12 : 0));
-export const arrivalTime = n => 0.74 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) * (isBossStage(n) ? 0.9 : 1);   // bosses crawl a bit faster too   // seconds for the face to reach the membrane if you do nothing
+export const arrivalTime = n => 0.74 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) * (isBossStage(n) ? (n >= 20 ? 1 : 0.9) : 1);   // bosses crawl a bit faster too   // seconds for the face to reach the membrane if you do nothing
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
 export const SKINS = ['love', 'rust', 'sneezy', 'grumpy', 'sleepy', 'disco', 'sour', 'mighty', 'frosty', 'gloomy'];
 export const skinFor = n => SKINS[(n - 1) % SKINS.length];
@@ -623,6 +631,8 @@ export const stageKind = n => (n % 6 === 0 ? 'ring' : (n % 7 === 0 || n % 10 ===
 export const KIND_LABEL = { lane: '', double: 'Two snakes', ring: 'Circle' };
 export const RING = { cx: W / 2, cy: 720, R: 175 };
 export const BOSS_HP = [0.8, 2.4, 0.5];   // boss cell HP multiplier at the face and at the tail (a flat 2.4 left the first yellow cell out of reach: typical players got 4 to 9 percent of the boss)
+export const RING_LATE = 0.9;   // from stage 18 the spiral crawls a little slower still (circle stages 18, 42 and 48 were walls)
+export const HAIRPIN_LATE = 0.9;   // the tall-hairpin lanes (stages 20, 29, 38, 47) were walls from stage 20 on: the snake crawls a little slower there
 export const RING_SPEED = 0.8;   // the spiral is long and most of it is out of reach of the straight shot, so the snake crawls slower in circle stages
 export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: stageKind(n) === 'ring' ? 'Spiral' : PATH_KINDS[pathKind(n)], kind: stageKind(n), mod: stageMod(n), hp: Math.round(hpBase(n)) });
 
@@ -648,12 +658,14 @@ function resample(poly, step) {
   }
   return out;
 }
+const RING_WOBBLE_FROM = 5;   // the 5th ring stage (30) and later: the spiral ripples like a petal flower, a different count each time
+export const ringWobble = (n, t) => { const idx = Math.floor(n / 6); return idx < RING_WOBBLE_FROM ? 0 : 15 * Math.sin(TAU * (5 + (idx % 3)) * t) * Math.sin(Math.PI * t) * (1 - t); };
 const RING_TURNS = [1.6, 1.25, 1.9];   // ring stages cycle through a loose, a short and a tight spiral
 function ringPath(n = 6) {
   const { cx, cy, R } = RING, r0 = 330, turns = RING_TURNS[(Math.floor(n / 6) - 1) % 3], pts = [];
   for (let y = -200; y <= cy; y += 6) pts.push({ x: cx - r0, y });
   const steps = 360;
-  for (let k = 1; k <= steps; k++) { const t = k / steps, a = Math.PI - TAU * turns * t, r = r0 - (r0 - R) * t; pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }); }
+  for (let k = 1; k <= steps; k++) { const t = k / steps, a = Math.PI - TAU * turns * t, r = r0 - (r0 - R) * t + ringWobble(n, t); pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }); }
   const poly = resample(pts, 6), cum = [0];
   for (let i = 1; i < poly.length; i++) cum.push(cum[i - 1] + Math.hypot(poly[i].x - poly[i - 1].x, poly[i].y - poly[i - 1].y));
   const path = { pts: poly, cum, len: cum[cum.length - 1], kind: 'ring' };
@@ -690,6 +702,17 @@ export function buildPath(n) {
   for (let i = poly.length - 1; i > 0; i--) if (poly[i].y >= LINE_Y) last = i; else break;
   return { pts: poly, cum, len: cum[last], kind: k };
 }
+// allocation free twin of pointAt: writes into [o] (the per-frame hot loop reuses three scratch points)
+export function pointInto(path, s, o) {
+  const pts = path.pts, cum = path.cum;
+  if (s <= 0) { const a = pts[0], b = pts[1], d = hyp(b.x - a.x, b.y - a.y) || 1; o.x = a.x + ((b.x - a.x) / d) * s; o.y = a.y + ((b.y - a.y) / d) * s; return o; }
+  if (s >= cum[cum.length - 1]) { const p = pts[pts.length - 1]; o.x = p.x; o.y = p.y + (s - cum[cum.length - 1]); return o; }
+  let lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }
+  const t = (s - cum[lo]) / (cum[hi] - cum[lo] || 1);
+  o.x = pts[lo].x + (pts[hi].x - pts[lo].x) * t; o.y = pts[lo].y + (pts[hi].y - pts[lo].y) * t; return o;
+}
+const PT_A = { x: 0, y: 0 }, PT_B = { x: 0, y: 0 }, PT_C = { x: 0, y: 0 };
 export function pointAt(path, s) {
   const { pts, cum } = path;
   if (s <= 0) { const a = pts[0], b = pts[1], d = Math.hypot(b.x - a.x, b.y - a.y) || 1; return { x: a.x + ((b.x - a.x) / d) * s, y: a.y + ((b.y - a.y) / d) * s }; }
@@ -732,6 +755,12 @@ export function segRadius(boss, i, len) {
 }
 const spacing = (a, b) => (a.r + b.r) * 0.78;
 
+// Every snake cell is created with ALL its fields in one fixed order (also the ones set later in the run), so the engine keeps one hidden class and step is not de-optimised. Tests: 29_perf_r8.
+export const CELL_KEYS = ['ps', 'x', 'y', 'ang', 'r', 'hp', 'max', 'kind', 'flash', 'orbCd', 'i', 'carry', 'shield', 'isHead', 'tp', 'vx', 'vy', 'wave', 'warded', 'gloom', 'frost', 'gold', 'goldT', 'ward', 'lull', 'drum', 'choir', 'bell', 'quartet', 'qPopped'];
+function newCell(ps, x, y, r, hp, kind, i) {
+  return { ps, x, y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0, tp: ps, vx: 0, vy: 0, wave: false, warded: false, gloom: false, frost: false, gold: false, goldT: 0, ward: false, lull: false, drum: false, choir: false, bell: false, quartet: false, qPopped: false };
+}
+export const SNAKE_KEYS = ['id', 'path', 'segs', 'tail', 'breach', 'breachT', 'speed', 'slow', 'boss', 'skin', 'name', 'surge', 'surgeT', 'healT', 'drum', 'lane', 'napT', 'gloomW', 'rushT', 'loveT', 'creak', 'snzT', 'snzW', 'frostW', 'qT', 'qDone', 'qWin', 'qNeed', 'p2', 'p2T'];
 function spawnSnake(g, n, o = {}) {
   const pig = g.mode === 'pig', inv = g.mode === 'inv', boss = isBossStage(n), len = o.len || (pig ? 40 : inv ? 70 : snakeLength(n)), segs = [];
   const path = o.mirror ? mirrorPath(g.path) : g.path;
@@ -745,7 +774,7 @@ function spawnSnake(g, n, o = {}) {
     let hp = hpB * ramp(i) * KIND[kind].hp * bossMul(i) *(0.9 + g.rand() * 0.2);
     hp = i === 0 ? 1 : Math.max(1, Math.round(hp));   // the face has no real HP: it is shielded until it is alone
     const pos = pointAt(path, ps);
-    segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0 });
+    segs.push(newCell(ps, pos.x, pos.y, r, hp, kind, i));
     ps -= (r + segRadius(boss, i + 1, len)) * 0.78;
   }
   // yellow upgrade cells: pop one to choose an upgrade. About one per 7 cells (at least 3), spread along the snake.
@@ -764,9 +793,9 @@ function spawnSnake(g, n, o = {}) {
   markGold(g, n, segs, len);
   markSpecials(g, n, segs, len);
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
-  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED : 1);
+  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED * (n >= 18 && !isBossStage(n) ? RING_LATE : 1) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
   segs.hpMax = segs.reduce((a, s) => a + s.max, 0);
-  g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
+  g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3, healT: undefined, drum: false, lane: null, napT: 0, gloomW: undefined, rushT: 0, loveT: undefined, creak: false, snzT: undefined, snzW: false, frostW: undefined, qT: 0, qDone: 0, qWin: 0, qNeed: 0, p2: false, p2T: 0 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
 }
 
@@ -788,14 +817,15 @@ export const DRUM_FROM = 18, DRUM_SPEED = 1.12;   // Drummer cell (stage 18+): w
 export const WARD_FROM = 10, LULL_FROM = 12, LULL_TIME = 2.5, WARD_CUT = 0.5, WARD_REACH = 2;
 function markSpecials(g, n, segs, len) {
   if (g.mode !== '' || len < 14) return;
-  const put = (frac, flag) => { for (let j = Math.round(len * frac); j < len; j++) if (segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull && !segs[j].drum && !segs[j].choir) { segs[j][flag] = true; return; } };
+  const put = (frac, flag) => { for (let j = Math.round(len * frac); j < len; j++) if (segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull && !segs[j].drum && !segs[j].choir && !segs[j].bell) { segs[j][flag] = true; return; } };
   if (n >= WARD_FROM) put(0.35, 'ward');
   if (n >= 25 && len >= 24) put(0.78, 'ward');
   if (n >= LULL_FROM) put(0.45, 'lull');
   if (n >= DRUM_FROM && len >= 16) put(0.62, 'drum');
   if (n >= CHOIR_FROM && len >= 24) put(0.7, 'choir');
+  if (n >= BELL_FROM && len >= 24 && !isBossStage(n)) put(0.52, 'bell');
   if (n >= QUARTET_FROM && len >= 22 && !isBossStage(n)) {   // four cells, every second one from 40% down the chain, linked
-    const free = j => segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull && !segs[j].drum && !segs[j].choir && !segs[j].quartet;
+    const free = j => segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull && !segs[j].drum && !segs[j].choir && !segs[j].bell && !segs[j].quartet;
     let j = Math.round(len * 0.4), k = 0;
     while (j < len && k < 4) { if (free(j)) { segs[j].quartet = true; k++; j += 2; } else j++; }
     if (k < 4) for (const q of segs) if (q.quartet) q.quartet = false;
@@ -804,6 +834,7 @@ function markSpecials(g, n, segs, len) {
 // Quartet cell (stage 22+): four linked cells. Pop the first and the other three must follow within QUARTET_TIME
 // seconds, or the survivors regrow to full health. Pop them all in time for a Beats burst and a slow crawl.
 // Choir cell (stage 28+): while it lives the cells around it slowly regrow whenever they are not being hit.
+export const QSTREAK_CAP = 5, QSTREAK_STEP = 0.1;   // quartet streak: every Quartet in a row pays 10% more, the Crescendo card also adds damage (5 in a row counts)
 export const QUARTET_FROM = 22, QUARTET_TIME = 2, QUARTET_MUL = 7, CHOIR_FROM = 28, CHOIR_REGEN = 0.06, CHOIR_REACH = 2;
 const quartetWin = g => QUARTET_TIME * (1 + uv(g, 'harm') / 200);
 function quartetKill(g, s, sn, coinV) {
@@ -816,17 +847,18 @@ function quartetKill(g, s, sn, coinV) {
   }
   sn.qDone++;
   if (sn.qDone >= sn.qNeed) {
-    const v = coinV * QUARTET_MUL * (sn.qNeed / 4) * (1 + uv(g, 'harm') / 100);
+    const full = sn.qNeed >= 4; if (full) { g.qStreak = (g.qStreak || 0) + 1; g.qBest = Math.max(g.qBest || 0, g.qStreak); }
+    const v = coinV * QUARTET_MUL * (sn.qNeed / 4) * (1 + uv(g, 'harm') / 100) * (1 + QSTREAK_STEP * Math.min(Math.max(0, (g.qStreak || 0) - 1), QSTREAK_CAP - 1));
     g.coins += v * g.p.coinMul * (g.coinK || 1); sn.slow = Math.max(sn.slow, 2.2); sn.qT = 0; sn.qDone = 0; g.quartets = (g.quartets || 0) + 1;
-    g.events.push({ t: 'quartet', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)), n: sn.qNeed });
+    g.events.push({ t: 'quartet', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)), n: sn.qNeed, streak: full ? g.qStreak : 0 });
   }
 }
 function quartetTick(g, sn, dt) {
   if (!(sn.qT > 0)) return;
   sn.qT -= dt;
   if (sn.qT <= 0) {
-    sn.qT = 0; sn.qDone = 0;
-    for (const q of sn.segs) if (q.quartet && q.hp > 0) { q.hp = q.max; g.events.push({ t: 'quartetfail', x: q.x, y: q.y }); }
+    sn.qT = 0; sn.qDone = 0; const lost = g.qStreak || 0; g.qStreak = 0;
+    for (const q of sn.segs) if (q.quartet && q.hp > 0) { q.hp = q.max; g.events.push({ t: 'quartetfail', x: q.x, y: q.y, lost }); }
   }
 }
 function choirTick(sn, dt) {
@@ -834,6 +866,71 @@ function choirTick(sn, dt) {
   for (let i = 1; i < segs.length; i++) if (segs[i].choir && segs[i].hp > 0) {
     for (let j = Math.max(1, i - CHOIR_REACH); j <= Math.min(segs.length - 1, i + CHOIR_REACH); j++) { const q = segs[j]; if (j !== i && q.hp > 0 && !(q.flash > 0)) q.hp = Math.min(q.max, q.hp + q.max * CHOIR_REGEN * dt); }
   }
+}
+// Boss behaviour per species group (late bosses only, so the early game is untouched; no random numbers).
+// Sleepy bosses (15, 25, 35, 45): the dash lasts longer, then the head naps and crawls at half speed for a moment.
+// Gloomy bosses (20, 30, 40, 50): every GLOOM_EVERY seconds a patch of cells wears a gloom cloud for GLOOM_TIME seconds and takes ward damage.
+export const NAP_FROM = 15, NAP_TIME = 1.6, NAP_SPEED = 0.5, NAP_EXTRA = 0.4;
+export const GLOOM_FROM = 20, GLOOM_EVERY = 10, GLOOM_TIME = 4, GLOOM_SIZE = 3;
+export const napBoss = (g, sn) => sn.boss && g.mode === '' && g.stage >= NAP_FROM && bossGroup(g.stage) === 'sleepy';
+export const bossGroup = n => (!isBossStage(n) ? '' : SKINS.indexOf(skinFor(n)) % 2 === 0 ? 'sleepy' : 'gloomy');
+function gloomTick(g, sn) {
+  const segs = sn.segs;
+  for (const q of segs) q.gloom = false;
+  if (!sn.boss || g.mode !== '' || g.stage < GLOOM_FROM || bossGroup(g.stage) !== 'gloomy' || g.phase !== 'play' || segs.length < GLOOM_SIZE + 4) return;
+  const w = Math.floor(g.t / GLOOM_EVERY), ph = g.t - w * GLOOM_EVERY;
+  if (ph < GLOOM_EVERY - GLOOM_TIME) { sn.gloomW = -1; return; }
+  const a = 1 + ((w * 7 + 3) % (segs.length - GLOOM_SIZE - 1));
+  if (sn.gloomW !== w) { sn.gloomW = w; const c = segs[Math.min(segs.length - 1, a + 1)]; g.events.push({ t: 'gloom', x: c.x, y: c.y }); }
+  for (let j = a; j < a + GLOOM_SIZE && j < segs.length; j++) if (segs[j].hp > 0) { segs[j].gloom = true; segs[j].warded = true; }
+}
+// Late species traits (agent 14 round 7): from stage 21 the non-boss snakes of the other eight species behave in their own way.
+// Bosses are always sleepy or gloomy (stages 5, 10, ...), so these are the "regular" snakes of the remaining species. No random numbers.
+// love: a heart pulse heals the cells nearest the face. rust: creaky stop-and-jerk crawl. grumpy: surges come sooner. disco: the crawl swings on the beat.
+// sour: every pop makes it rush for a moment. mighty: slowing effects are weaker. frosty: an ice patch shields two cells. sneezy: a sneeze jolts the whole snake forward.
+export const TRAIT_FROM = 21, LOVE_EVERY = 9, LOVE_HEAL = 0.12, LOVE_CELLS = 4, CREAK_EVERY = 7, CREAK_STALL = 0.8, CREAK_JERK = 0.8, GRUMPY_SURGE = 0.7;
+export const DISCO_SWING = 0.15, SOUR_RUSH = 0.8, SOUR_MUL = 1.12, MIGHTY_SLOW = 0.75, FROST_EVERY = 9, FROST_TIME = 3, FROST_SIZE = 2, SNEEZE_EVERY = 9, SNEEZE_WARN = 0.5, SNEEZE_JOLT = 36;
+export const TRAIT_SKINS = ['love', 'rust', 'grumpy', 'disco', 'sour', 'mighty', 'frosty', 'sneezy'];
+export const traitOf = (g, sn) => (g.mode === '' && !sn.boss && g.stage >= TRAIT_FROM ? sn.skin : '');
+function traitSpeed(g, sn) {
+  const k = traitOf(g, sn);
+  if (k === 'disco') return 1 + DISCO_SWING * Math.cos(6.2832 * beatPhase(g));
+  if (k === 'rust') { const ph = g.t % CREAK_EVERY; return ph < CREAK_STALL ? 0.3 : ph < CREAK_STALL + CREAK_JERK ? 1.6 : 1; }
+  if (k === 'sour' && sn.rushT > 0) return SOUR_MUL;
+  return 1;
+}
+function traitTick(g, sn, dt) {
+  if (sn.rushT > 0) sn.rushT -= dt;
+  const k = traitOf(g, sn); if (!k || g.phase !== 'play') return;
+  const segs = sn.segs, h = segs[0];
+  if (k === 'love') {
+    sn.loveT = (sn.loveT === undefined ? LOVE_EVERY : sn.loveT) - dt;
+    if (sn.loveT <= 0) { sn.loveT = LOVE_EVERY; let n = 0; for (let i = 1; i < segs.length && n < LOVE_CELLS; i++) if (segs[i].hp > 0) { segs[i].hp = Math.min(segs[i].max, segs[i].hp + segs[i].max * LOVE_HEAL * (1 - Math.min(1, uv(g, 'hbk') / 100))); n++; } g.events.push({ t: 'trait', k, x: h.x, y: h.y }); }
+  } else if (k === 'rust') {
+    const ph = g.t % CREAK_EVERY, on = ph < CREAK_STALL;
+    if (on && !sn.creak) g.events.push({ t: 'trait', k, x: h.x, y: h.y });
+    sn.creak = on;
+  } else if (k === 'sneezy') {
+    sn.snzT = (sn.snzT === undefined ? SNEEZE_EVERY : sn.snzT) - dt;
+    if (sn.snzT <= SNEEZE_WARN && !sn.snzW) { sn.snzW = true; g.events.push({ t: 'trait', k, x: h.x, y: h.y, warn: true }); }
+    if (sn.snzT <= 0) { sn.snzT = SNEEZE_EVERY; sn.snzW = false; sn.tail += SNEEZE_JOLT; g.events.push({ t: 'trait', k, x: h.x, y: h.y }); }
+  } else if (k === 'frosty') {
+    for (const q of segs) q.frost = false;
+    if (segs.length < FROST_SIZE + 6) return;
+    const w = Math.floor(g.t / FROST_EVERY), ph = g.t - w * FROST_EVERY;
+    if (ph < FROST_EVERY - FROST_TIME) { sn.frostW = -1; return; }
+    const a = 1 + ((w * 5 + 2) % (segs.length - FROST_SIZE - 1));
+    if (sn.frostW !== w) { sn.frostW = w; const c = segs[Math.min(segs.length - 1, a)]; g.events.push({ t: 'trait', k, x: c.x, y: c.y }); }
+    for (let j = a; j < a + FROST_SIZE && j < segs.length; j++) if (segs[j].hp > 0) { segs[j].frost = true; segs[j].warded = true; }
+  }
+}
+// Bell cell (stage 34+, regular snakes): pop it and it rings, hurting the cells either side of it. The Bridge card makes it ring harder.
+export const BELL_FROM = 34, BELL_DMG = 0.25, BELL_REACH = 3;
+function bellRing(g, s, sn) {
+  const segs = sn.segs, k = BELL_DMG * (1 + uv(g, 'brg') / 100);
+  for (let j = Math.max(1, s.i - BELL_REACH); j <= Math.min(segs.length - 1, s.i + BELL_REACH); j++) { const q = segs[j]; if (q !== s && q.hp > 0) damageSegAs('bell', g, q, q.max * k, false, q.x, q.y); }
+  if (uv(g, 'fan') > 0 && uv(g, 'brg') > 0) for (let n = 0; n < 3; n++) bumpGroove(g);
+  g.events.push({ t: 'bell', x: s.x, y: s.y });
 }
 function wardTick(sn) {
   const segs = sn.segs;
@@ -865,7 +962,7 @@ export function startStage(g, n) {
   else spawnSnake(g, n);
   rebuildTowers(g);
   g.phase = 'play'; g.clearT = 0; g.progress = 0;
-  g.events.push({ t: 'stage', n, boss: isBossStage(n), name: nameOf(g), mod: g.mod ? g.mod.name : '' });
+  g.events.push({ t: 'stage', n, boss: isBossStage(n), skin: g.skin, name: nameOf(g), mod: g.mod ? g.mod.name : '' });
 }
 
 // ---------------------------------------------------------------- game
@@ -883,7 +980,8 @@ export function createGame(opts = {}) {
     level: 1, cells: 0, upgradeLeft: 0, pending: 0, choices: [], resume: 'play', rerolls: 4,
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
     groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, faceMax: 0, bombsPopped: 0, dangerT: 0, danger: 0, mod: null, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
-    encore: 0, encoreUsed: 0, beam: null, goldPopped: 0, clutches: 0,
+    encore: 0, encoreUsed: 0, beam: null, goldPopped: 0, clutches: 0, qStreak: 0, qBest: 0,
+    skin: '', ring: null, beatShots: 0, bpool: [], cp: null, encoreReady: false, quartets: 0,
   };
   startStage(g, opts.stage || 1);
   return g;
@@ -903,7 +1001,7 @@ export const uv = (g, id) => (g.val && g.val[id] !== undefined ? g.val[id] : (g.
 const lv = (g, id) => (g.weap[id] ? g.weap[id].lv : 0);
 export const GROOVE_MAX = 20;
 // Groove: every note that lands builds it, a pause in the hits lets it fade. Each point is +1.5% damage.
-const dmgMul = g => 10 * g.p.atk * (1 + uv(g, 'power') / 100) * (1 + 0.015 * g.groove);   // x10: damage and HP are shown as big numbers
+const dmgMul = g => 10 * g.p.atk * (1 + uv(g, 'power') / 100) * (1 + 0.015 * (1 + uv(g, 'fan') / 100) * g.groove) * (g.qStreak > 0 ? 1 + Math.min(g.qStreak, QSTREAK_CAP) * uv(g, 'cres') / 100 : 1);   // x10: damage and HP are shown as big numbers
 function bumpGroove(g) {
   g.grooveT = 0; addEncore(g, ENCORE_HIT);
   if (g.groove < GROOVE_MAX) { g.groove++; if (g.groove > g.grooveMax) g.grooveMax = g.groove; if (g.groove % 5 === 0) g.events.push({ t: 'groove', n: g.groove }); }
@@ -911,15 +1009,29 @@ function bumpGroove(g) {
 const cdMul = g => g.p.cdBase * Math.max(0.3, 1 - uv(g, 'haste') / 100);
 
 function eachTarget(g, fn) {
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave) fn(s, sn);
+  const sns = g.snakes;
+  for (let a = 0; a < sns.length; a++) { const sn = sns[a], segs = sn.segs; for (let i = 0; i < segs.length; i++) { const s = segs[i]; if (s.hp > 0 && !s.shield && !s.wave) fn(s, sn); } }
+}
+// the visible targets in one reused array (the satellite and maw pick from it every few seconds): valid until the next call
+const VIS = [];
+function visibleTargets(g) {
+  VIS.length = 0;
+  const sns = g.snakes;
+  for (let a = 0; a < sns.length; a++) { const segs = sns[a].segs; for (let i = 0; i < segs.length; i++) { const s = segs[i]; if (s.hp > 0 && !s.shield && !s.wave && visible(s)) VIS.push(s); } }
+  return VIS;
 }
 function nearestTarget(g, x, y, maxD = 1e9) {
   let best = null, bd = maxD;
-  eachTarget(g, s => {
-    if (!visible(s)) return;
-    const d = Math.hypot(s.x - x, s.y - y) - s.r;
-    if (d < bd) { bd = d; best = s; }
-  });
+  const sns = g.snakes;
+  for (let a = 0; a < sns.length; a++) {
+    const segs = sns[a].segs;
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i];
+      if (s.hp <= 0 || s.shield || s.wave || !visible(s)) continue;
+      const d = hyp(s.x - x, s.y - y) - s.r;
+      if (d < bd) { bd = d; best = s; }
+    }
+  }
   return best;
 }
 const frontSegs = g => g.snakes.map(sn => sn.segs[0]).filter(s => s && visible(s));
@@ -928,7 +1040,7 @@ const damageSegAs = (src, g, ...a) => { g.src = src; damageSeg(g, ...a); g.src =
 function damageSeg(g, s, dmg, crit, x, y) {
   if (s.hp <= 0 || s.shield || s.wave) return;
   const srcId = g.src || 'capsule'; g.dmgBy[srcId] = (g.dmgBy[srcId] || 0) + Math.min(dmg, s.hp);
-  if (s.warded) dmg *= WARD_CUT + (1 - WARD_CUT) * uv(g, 'fork') / 100;
+  if (s.warded) dmg *= WARD_CUT + (1 - WARD_CUT) * (uv(g, 'fork') + (s.frost ? uv(g, 'brk') : 0)) / 100;
   s.hp -= dmg; s.flash = 0.12;
   g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s, src: srcId });
 }
@@ -966,32 +1078,36 @@ function onKill(g, s, sn) {
   addEncore(g, ENCORE_KILL);
   if (s.gold && s.goldT > 0) { g.goldPopped++; const v = coinV * GOLD_MUL * (1 + uv(g, 'gear') / 200); g.coins += v * g.p.coinMul * (g.coinK || 1); g.events.push({ t: 'goldpop', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)) }); }
   if (!s.isHead && s.y > LINE_Y - CLUTCH_DIST) { g.clutches++; addEncore(g, ENCORE_CLUTCH); g.events.push({ t: 'clutch', x: s.x, y: s.y }); }
-  g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin, carry: s.carry });
+  g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin, carry: s.carry, choir: !!s.choir });
   quartetKill(g, s, sn, coinV);
+  if (s.bell) bellRing(g, s, sn);
+  if (traitOf(g, sn) === 'sour') sn.rushT = SOUR_RUSH;
+  if ((s.ward || s.lull || s.drum || s.bell) && uv(g, 'chk') > 0) { addEncore(g, uv(g, 'chk') / 100); g.events.push({ t: 'soundcheck', x: s.x, y: s.y }); }
   if (s.lull) { for (const o of g.snakes) o.slow = Math.max(o.slow, LULL_TIME * (1 + uv(g, 'fork') / 100)); g.events.push({ t: 'lull', x: s.x, y: s.y }); }
   if (s.kind === 'bomb') {
     g.bombsPopped++;
     const R = 150;
     g.events.push({ t: 'boom', x: s.x, y: s.y, r: R });
-    for (const o of g.snakes) for (const q of o.segs) if (q !== s && q.hp > 0 && Math.hypot(q.x - s.x, q.y - s.y) < R + q.r) damageSeg(g, q, Math.max(2, s.max * 0.9), false, q.x, q.y);
+    for (const o of g.snakes) for (const q of o.segs) if (q !== s && q.hp > 0 && hyp(q.x - s.x, q.y - s.y) < R + q.r) damageSeg(g, q, Math.max(2, s.max * 0.9), false, q.x, q.y);
   }
 }
 
 // Remove dead cells. The serpent stays one connected chain: the cells in front of a gap slide back to
 // close it (see the chain update in step), so it just gets shorter. The face pops once it is alone.
+const isDead = q => q.hp <= 0, isUncounted = q => q.hp <= 0 && !q.counted, isAlive = q => q.hp > 0, isEmptySn = sn => sn.segs.length === 0;
 function reap(g) {
   for (let pass = 0; pass < 8; pass++) {
     let any = false;
     for (const sn of g.snakes) {
       if (sn.segs.length === 1 && sn.segs[0].hp > 0) { sn.segs[0].shield = false; sn.segs[0].hp = 0; }
-      if (!sn.segs.some(q => q.hp <= 0)) continue;
+      if (!sn.segs.some(isDead)) continue;
       any = true;
       // a bomb blast inside onKill can kill cells we already walked past (in front of the bomb): keep going until every dead cell has been counted
-      for (let guard = 0; guard < 30 && sn.segs.some(q => q.hp <= 0 && !q.counted); guard++) for (const q of sn.segs.slice()) if (q.hp <= 0 && !q.counted) { q.counted = true; onKill(g, q, sn); }
-      sn.segs = sn.segs.filter(q => q.hp > 0);
+      for (let guard = 0; guard < 30 && sn.segs.some(isUncounted); guard++) for (const q of sn.segs.slice()) if (q.hp <= 0 && !q.counted) { q.counted = true; onKill(g, q, sn); }
+      sn.segs = sn.segs.filter(isAlive);
       g.events.push({ t: 'close' });
     }
-    g.snakes = g.snakes.filter(sn => sn.segs.length > 0);
+    if (g.snakes.some(isEmptySn)) g.snakes = g.snakes.filter(sn => sn.segs.length > 0);
     if (!any) break;
   }
 }
@@ -1015,7 +1131,7 @@ export function reviveGame(g) {
 }
 export const quitResult = g => makeResult(g, false);   // GIVE UP from the pause menu: the same result a loss gives (mode, hard, progress, damage)
 function makeResult(g, won) {
-  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, bombs: g.bombsPopped, stars: won && !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0, mod: g.mod ? g.mod.id : '', hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
+  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, bombs: g.bombsPopped, stars: won && !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0, mod: g.mod ? g.mod.id : '', hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), quartets: g.quartets || 0, qBest: g.qBest || 0, progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
 }
 // ---------------------------------------------------------------- skill picks
 // what an upgrade does now and after this pick, so every pick is visible in numbers
@@ -1043,7 +1159,7 @@ function rollChoices(g) {
     }
   }
   if (!early || stg < 3) {   // the first two picks are the capsule's, except in the first stages where only a few kinds exist yet
-    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max && uv(g, u.id) < u.cap && !(u.minStage && stg < u.minStage)) pool.push({ id: u.id, kind: 'passive', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w }); }
+    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max && uv(g, u.id) < u.cap && !(u.minStage && stg < u.minStage) && !(u.skin && !l && u.skin !== g.skin)) pool.push({ id: u.id, kind: 'passive', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w }); }
   }
   const out = [];
   while (out.length < 3 && pool.length) {
@@ -1131,7 +1247,16 @@ function collect(g, pk) {
 }
 
 // ---------------------------------------------------------------- shooting and skills
+const hyp = (x, y) => Math.sqrt(x * x + y * y);   // Math.hypot allocates a number per call on V8; the sim only needs short distances
+const BULLET_POOL_MAX = 96;
+const BULLET_SRC = { needle: 'needles', snot: 'dragon', bubble: 'bubble' };
 function fire(g, o) {
+  const free = g.bpool, b = free && free.length ? free.pop() : null;
+  if (b) {   // reuse a spent bullet: same shape, no new object and no new hit list
+    b.x = o.x; b.y = o.y; b.vx = Math.cos(o.a) * o.sp; b.vy = Math.sin(o.a) * o.sp; b.dmg = o.dmg; b.crit = !!o.crit; b.pierce = o.pierce || 0; b.r = o.r || 6; b.life = o.life || 1.4;
+    b.hit.length = 0; b.beat = !!o.beat; b.kind = o.kind || 'pill'; b.home = o.home || 0; b.splash = o.splash || 0; b.slow = o.slow || 0;
+    g.bullets.push(b); return;
+  }
   g.bullets.push({ x: o.x, y: o.y, vx: Math.cos(o.a) * o.sp, vy: Math.sin(o.a) * o.sp, dmg: o.dmg, crit: !!o.crit, pierce: o.pierce || 0, r: o.r || 6, life: o.life || 1.4, hit: [], beat: !!o.beat, kind: o.kind || 'pill', home: o.home || 0, splash: o.splash || 0, slow: o.slow || 0 });
 }
 // the capsule: straight up, [1 + extra notes] side by side, [1 + extra bursts] volleys per shot
@@ -1164,7 +1289,7 @@ function updateWeapons(g, dt, canFire) {
   const wantTowers = lv(g, 'tower') ? 1 + (lv(g, 'tower') >= 3 ? 1 : 0) + (lv(g, 'tower') >= 5 ? 1 : 0) : 0;
   if (g.towers.length !== wantTowers) rebuildTowers(g);
   const aim = -Math.PI / 2;   // nothing auto-aims except the Snot Dragon's homing
-  for (const id of Object.keys(g.weap)) {
+  for (const id in g.weap) {
     const w = g.weap[id], L = w.lv;
     if (id === 'daggers' || id === 'stick' || id === 'tower') continue;   // continuous / own timers below
     w.cd -= dt;
@@ -1194,7 +1319,7 @@ function updateWeapons(g, dt, canFire) {
       for (let k = 0; k < (L >= 4 ? 2 : 1); k++) fire(g, { x: p.x, y: p.y - 30, a: aim + (k ? 0.5 : 0), sp: 190, dmg: 1.2 * (1 + 0.3 * L) * dm('bubble'), r: 22 + 3 * L, life: 3.2, kind: 'bubble', splash: 70 + 10 * L, slow: 2 });
       g.events.push({ t: 'bubble' }); w.cd = (3.4 - 0.2 * L) * cm;
     } else if (id === 'satellite') {
-      const vis = []; eachTarget(g, s => { if (visible(s)) vis.push(s); });
+      const vis = visibleTargets(g);
       if (!vis.length) { w.cd = 0.3; continue; }
       vis.sort((a, b) => b.hp - a.hp);
       for (let k = 0; k < 1 + Math.floor((L + 1) / 2); k++) {
@@ -1204,7 +1329,7 @@ function updateWeapons(g, dt, canFire) {
       }
       w.cd = (3.6 - 0.25 * L) * cm;
     } else if (id === 'maw') {
-      const vis = []; eachTarget(g, s => { if (visible(s)) vis.push(s); });
+      const vis = visibleTargets(g);
       if (!vis.length) { w.cd = 0.3; continue; }
       vis.sort((a, b) => b.hp - a.hp);
       const t = vis[Math.floor(g.rand() * Math.min(vis.length, 3))];
@@ -1218,7 +1343,7 @@ function updateWeapons(g, dt, canFire) {
     p.orbAng += dt * (3.2 + 0.2 * dl);
     for (let i = 0; i < 1 + dl; i++) {
       const pos = daggerPos(g, i);
-      eachTarget(g, s => { if (s.orbCd <= 0 && Math.hypot(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } });
+      eachTarget(g, s => { if (s.orbCd <= 0 && hyp(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } });
     }
   }
   // massage stick (sweeping bar)
@@ -1240,13 +1365,13 @@ function updateWeapons(g, dt, canFire) {
       t.cd = (2.4 - 0.15 * tl) * cm; t.pulse = 0.5;
       const R = 170 + 18 * tl;
       g.events.push({ t: 'pulse', x: t.x, y: t.y, r: R });
-      eachTarget(g, s => { if (Math.hypot(s.x - t.x, s.y - t.y) < R + s.r) damageSegAs('tower', g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); });
+      eachTarget(g, s => { if (hyp(s.x - t.x, s.y - t.y) < R + s.r) damageSegAs('tower', g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); });
     }
   }
   // swab zones tick
   for (let i = g.zones.length - 1; i >= 0; i--) {
     const z = g.zones[i]; z.life -= dt; z.tick -= dt;
-    if (z.tick <= 0) { z.tick = 0.3; eachTarget(g, s => { if (Math.hypot(s.x - z.x, s.y - z.y) < z.r + s.r) damageSegAs('swab', g, s, z.dmg, false, s.x, s.y); }); }
+    if (z.tick <= 0) { z.tick = 0.3; eachTarget(g, s => { if (hyp(s.x - z.x, s.y - z.y) < z.r + s.r) damageSegAs('swab', g, s, z.dmg, false, s.x, s.y); }); }
     if (z.life <= 0) g.zones.splice(i, 1);
   }
   // maws execute
@@ -1255,7 +1380,7 @@ function updateWeapons(g, dt, canFire) {
     if (m.tick <= 0) {
       m.tick = 0.2;
       eachTarget(g, s => {
-        if (Math.hypot(s.x - m.x, s.y - m.y) >= m.r + s.r) return;
+        if (hyp(s.x - m.x, s.y - m.y) >= m.r + s.r) return;
         if (s.hp <= s.max * m.exec) damageSegAs('maw', g, s, s.hp + 1, false, s.x, s.y); else damageSegAs('maw', g, s, m.dmg, false, s.x, s.y);
       });
     }
@@ -1274,10 +1399,27 @@ export function stickSeg(g, k = 0) {
 function distToSeg(px, py, x0, y0, x1, y1) {
   const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy || 1;
   const t = clamp(((px - x0) * dx + (py - y0) * dy) / l2, 0, 1);
-  return Math.hypot(px - (x0 + dx * t), py - (y0 + dy * t));
+  return hyp(px - (x0 + dx * t), py - (y0 + dy * t));
 }
 
 // ---------------------------------------------------------------- step
+// the per-cell glide along the path: its own small function so the JIT keeps the numbers unboxed (inside the huge step it did not). Returns the HP left in the chain.
+function moveSegs(g, segs, path, dt) {
+  let hp = 0;
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i], ox = s.x, oy = s.y;
+    s.ps = s.tp >= s.ps ? s.tp : Math.max(s.tp, s.ps - 320 * dt);
+    const pos = pointInto(path, s.ps, PT_A), pa = pointInto(path, s.ps - 8, PT_B), pb = pointInto(path, s.ps + 8, PT_C);
+    s.x = pos.x; s.y = pos.y; s.ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
+    s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
+    hp += s.hp > 0 ? s.hp : 0;
+    if (s.flash > 0) s.flash -= dt;
+    if (s.gold && s.goldT > 0 && visible(s)) { s.goldT -= dt / (1 + uv(g, 'gear') / 100); if (s.goldT <= 0) g.events.push({ t: 'goldfade', x: s.x, y: s.y }); }
+    if (s.orbCd > 0) s.orbCd -= dt;
+  }
+  return hp;
+}
+const CHEST_CP = [[0.25, 1], [0.5, 2]];
 export function step(g, dt, input) {
   if (g.phase !== 'play' && g.phase !== 'clear') return;
   g.t += dt;
@@ -1300,24 +1442,24 @@ export function step(g, dt, input) {
   let stageHp = 0;
   g.danger *= 0.97;
   for (const sn of g.snakes) {
-    sn.slow = Math.max(0, sn.slow - dt);
+    sn.slow = Math.max(0, sn.slow - dt); if (sn.napT > 0) sn.napT -= dt;
     // now and then it surges for a second (with a warning beforehand)
     if (g.phase === 'play') {
       sn.surgeT -= dt;
       if (sn.surge === 'idle' && sn.surgeT <= 0) { sn.surge = 'warn'; sn.surgeT = sn.p2 ? P2_WARN : 0.6; if (sn.p2) { const a = sn.segs[0].ps; sn.lane = { a, b: a + sn.speed * (1 - g.p.slow) * P2_DASH * 1.1, w: P2_WARN }; } g.events.push({ t: 'surgewarn', lane: !!sn.lane }); }
-      else if (sn.surge === 'warn' && sn.surgeT <= 0) { sn.surge = 'go'; sn.surgeT = 1.1; g.events.push({ t: 'surge' }); }
-      else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.lane = null; sn.surgeT = ((sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5)) * (sn.p2 ? 0.6 : 1); }
+      else if (sn.surge === 'warn' && sn.surgeT <= 0) { sn.surge = 'go'; sn.surgeT = napBoss(g, sn) ? 1.1 + NAP_EXTRA : 1.1; g.events.push({ t: 'surge' }); }
+      else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.lane = null; if (napBoss(g, sn)) { sn.napT = NAP_TIME; g.events.push({ t: 'nap', x: sn.segs[0].x, y: sn.segs[0].y }); } sn.surgeT = ((sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5)) * (sn.p2 ? 0.6 : 1) * (traitOf(g, sn) === 'grumpy' ? GRUMPY_SURGE : 1); }
     }
-    const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? 0.55 : 1) * (sn.surge === 'go' ? (sn.p2 ? P2_DASH : 2.6) : 1) * (sn.drum ? DRUM_SPEED : 1) * (g.phase === 'clear' ? 0 : 1);
+    const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? (traitOf(g, sn) === 'mighty' ? MIGHTY_SLOW : 0.55) : 1) * traitSpeed(g, sn) * (sn.surge === 'go' ? (sn.p2 ? P2_DASH : 2.6) : 1) * (sn.drum ? DRUM_SPEED : 1) * (sn.napT > 0 ? NAP_SPEED : 1) * (g.phase === 'clear' ? 0 : 1);
     const segs = sn.segs, last = segs.length - 1;
     let total = 0;
-    for (let i = 0; i < last; i++) total += spacing(segs[i], segs[i + 1]);
+    for (let i = 0; i < last; i++) total += (segs[i].r + segs[i + 1].r) * 0.78;
     const path = sn.path || g.path, maxTail = path.len - total;
     sn.tail = Math.min(sn.tail + v * dt, maxTail);
     sn.breach = sn.tail >= maxTail - 0.5;
     let target = sn.tail;
     for (let i = last; i >= 0; i--) {
-      if (i < last) target += spacing(segs[i], segs[i + 1]);
+      if (i < last) target += (segs[i].r + segs[i + 1].r) * 0.78;
       segs[i].tp = target;
     }
     segs[0].shield = segs.length > 1;
@@ -1329,24 +1471,14 @@ export function step(g, dt, input) {
     const wavePos = sn.boss ? ((sn.p2 ? sn.p2T * 4.5 + (g.t - sn.p2T) * P2_WAVE : g.t * 4.5)) % (segs.length + 8) : -99;
     const wave2 = sn.boss && g.stage >= ECHO_WAVE_FROM ? (segs.length + 8) - ((g.t * 3.2 + 7) % (segs.length + 8)) : -99;   // late bosses: a second wave runs back up the chain
     for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
-    wardTick(sn); choirTick(sn, dt); if (g.phase === 'play') quartetTick(g, sn, dt);
+    wardTick(sn); gloomTick(g, sn); traitTick(g, sn, dt); choirTick(sn, dt); if (g.phase === 'play') quartetTick(g, sn, dt);
     if (sn.breach && g.phase === 'play') { g.leaks++; g.events.push({ t: 'leak', x: segs[0].x, y: LINE_Y }); loseRun(g); }
-    for (const s of segs) {
-      const ox = s.x, oy = s.y;
-      s.ps = s.tp >= s.ps ? s.tp : Math.max(s.tp, s.ps - 320 * dt);
-      const pos = pointAt(path, s.ps), pa = pointAt(path, s.ps - 8), pb = pointAt(path, s.ps + 8);
-      s.x = pos.x; s.y = pos.y; s.ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
-      s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
-      stageHp += Math.max(0, s.hp);
-      if (s.flash > 0) s.flash -= dt;
-      if (s.gold && s.goldT > 0 && visible(s)) { s.goldT -= dt / (1 + uv(g, 'gear') / 100); if (s.goldT <= 0) g.events.push({ t: 'goldfade', x: s.x, y: s.y }); }
-      if (s.orbCd > 0) s.orbCd -= dt;
-    }
+    stageHp += moveSegs(g, segs, path, dt);
   }
   g.stageHp = stageHp;
   g.progress = g.stageHpMax ? clamp(1 - stageHp / g.stageHpMax, 0, 1) : 0;
   // chests at a quarter and half way: even a lost run pays for how far it got
-  for (const [th, k] of [[0.25, 1], [0.5, 2]]) if (g.phase === 'play' && g.progress >= th && !(g.cp || (g.cp = {}))[th]) { g.cp[th] = 1; g.pickups.push({ kind: 'chest', x: W / 2, y: 320, vx: 0, vy: 0, v: 1, cp: k, age: 0, vac: false }); g.events.push({ t: 'checkpoint', k }); }
+  for (const [th, k] of CHEST_CP) if (g.phase === 'play' && g.progress >= th && !(g.cp || (g.cp = {}))[th]) { g.cp[th] = 1; g.pickups.push({ kind: 'chest', x: W / 2, y: 320, vx: 0, vy: 0, v: 1, cp: k, age: 0, vac: false }); g.events.push({ t: 'checkpoint', k }); }
   if (g.phase === 'play') petTick(g, dt);
 
   // the capsule never aims: it fires straight up, so you aim by sliding
@@ -1360,7 +1492,7 @@ export function step(g, dt, input) {
     if (b.home > 0) {
       const t = nearestTarget(g, b.x, b.y, 320);
       if (t) {
-        const sp = Math.hypot(b.vx, b.vy), cur = Math.atan2(b.vy, b.vx);
+        const sp = hyp(b.vx, b.vy), cur = Math.atan2(b.vy, b.vx);
         const na = cur + clamp(angDiff(Math.atan2(t.y - b.y, t.x - b.x), cur), -b.home * dt, b.home * dt);
         b.vx = Math.cos(na) * sp; b.vy = Math.sin(na) * sp;
       }
@@ -1368,20 +1500,21 @@ export function step(g, dt, input) {
     b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
     let dead = b.life <= 0 || b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30;
     if (!dead) {
-      for (const sn of g.snakes) for (const s of sn.segs) {
-        if (dead || s.hp <= 0 || s.shield || s.wave || b.hit.includes(s) || Math.hypot(s.x - b.x, s.y - b.y) >= s.r + b.r) continue;
+      const sns = g.snakes;
+      for (let a = 0; a < sns.length && !dead; a++) { const sn = sns[a], segs = sn.segs; for (let i = 0; i < segs.length && !dead; i++) { const s = segs[i];
+        if (s.hp <= 0 || s.shield || s.wave || hyp(s.x - b.x, s.y - b.y) >= s.r + b.r || b.hit.includes(s)) continue;
         b.hit.push(s);
-        damageSegAs(({ needle: 'needles', snot: 'dragon', bubble: 'bubble' })[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g); if (b.beat && g.groove < GROOVE_MAX) g.groove += 0.5;
+        damageSegAs(BULLET_SRC[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g); if (b.beat && g.groove < GROOVE_MAX) g.groove += 0.5;
         if (b.slow) sn.slow = Math.max(sn.slow, b.slow);
         if (b.splash > 0) {
           const sd = b.dmg * (b.kind === 'bubble' ? 2.2 : 0.5);
-          eachTarget(g, (q, qs) => { if (q !== s && Math.hypot(q.x - s.x, q.y - s.y) < b.splash + q.r) { damageSeg(g, q, sd, false, q.x, q.y); if (b.slow) qs.slow = Math.max(qs.slow, b.slow); } });
+          eachTarget(g, (q, qs) => { if (q !== s && hyp(q.x - s.x, q.y - s.y) < b.splash + q.r) { damageSeg(g, q, sd, false, q.x, q.y); if (b.slow) qs.slow = Math.max(qs.slow, b.slow); } });
           g.events.push({ t: b.kind === 'bubble' ? 'burst' : 'splash', x: s.x, y: s.y, r: b.splash });
         }
         if (b.pierce-- <= 0) dead = true;
-      }
+      } }
     }
-    if (dead) g.bullets.splice(bi, 1);
+    if (dead) { g.bullets.splice(bi, 1); const bp = g.bpool || (g.bpool = []); if (bp.length < BULLET_POOL_MAX) bp.push(b); }
   }
 
   reap(g);
@@ -1390,7 +1523,7 @@ export function step(g, dt, input) {
   for (let i = g.pickups.length - 1; i >= 0; i--) {
     const pk = g.pickups[i];
     pk.age += dt;
-    const d = Math.hypot(p.x - pk.x, p.y - pk.y);
+    const d = hyp(p.x - pk.x, p.y - pk.y);
     if (pk.age > 0.5 || g.phase === 'clear') pk.vac = true;
     if (pk.vac) {
       const sp = (pk.kind === 'chest' ? 300 : 460) + pk.age * 90, a = Math.atan2(p.y - pk.y, p.x - pk.x);
@@ -1421,7 +1554,7 @@ export function botInput(g) {
   const p = g.p;
   let ax = 0;
   for (const sn of g.snakes) for (const s of sn.segs) {
-    const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1, reach = 170 + s.r;
+    const dx = p.x - s.x, dy = p.y - s.y, d = hyp(dx, dy) || 1, reach = 170 + s.r;
     if (d < reach) ax += (dx >= 0 ? 1 : -1) * ((reach - d) / reach) * 2.6;
   }
   // aim: chest cells first, otherwise the cell closest to the membrane

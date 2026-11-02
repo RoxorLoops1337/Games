@@ -9,10 +9,13 @@ import {
   CARD_PRICE, buyCard, cardActive, claimCard, TROPHIES, trophyReady, claimTrophy, weaponExchange, WEAPON_EXCHANGE_PRICE, SKINS, SKIN_NAMES,
 } from './sim.js';
 import { createAddictUI } from './addict_ui.js';
+import { trophyOrder, shelfHeadHTML, trophyTier, flyReward } from './goals_polish.js';
 import { createRetainUI } from './retain_ui.js';
 import { nextReward } from './sim.js';
 
 import { ico, iconURL } from './icons.js';
+import { ribIcon, ribHTML, dressIcon, setTint, wardTry } from './shop_b8.js';
+import { emptyCard as emptyCardB8 } from './empty_ux.js';
 import { seeded, newSeed, armChest, wasHeld, keepDetailHTML } from './gear_fx.js';
 const STATICON = { atk: 'speaker', crt: 'note', cdn: 'clock', vit: 'heart', for: 'star', rev: 'mic' };
 // a six-axis radar of the core stats, drawn as inline svg
@@ -25,8 +28,10 @@ function radar(s) {
   const axes = META.map((_, i) => { const p = pt(i, 1); return `<line x1="${cx}" y1="${cy}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}"/>`; }).join('');
   const labs = META.map((d, i) => { const p = pt(i, 1.32); return `<image href="${iconURL(STATICON[d.id])}" x="${(p[0] - 9).toFixed(1)}" y="${(p[1] - 9).toFixed(1)}" width="18" height="18"/>`; }).join('');
   const hits = META.map((d, i) => { const p = pt(i, 1.32); return `<circle class="rhit" data-id="${d.id}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="15"/>`; }).join('');
-  const lvb = META.map((d, i) => { const p = pt(i, 1.32), l = s.meta[d.id] || 0, mx = l >= d.max; return `<g class="rlv${mx ? ' mx' : ''}"><circle cx="${(p[0] + 9).toFixed(1)}" cy="${(p[1] + 8).toFixed(1)}" r="6.5"/><text x="${(p[0] + 9).toFixed(1)}" y="${(p[1] + 11.2).toFixed(1)}" text-anchor="middle">${mx ? '\u2605' : l}</text></g>`; }).join('');
-  return `<svg class="radar" viewBox="-8 0 176 170" role="group" aria-label="Stats, tap an icon to upgrade it"><g class="rg"><polygon points="${ring(1)}"/><polygon points="${ring(0.66)}"/><polygon points="${ring(0.33)}"/>${axes}</g><polygon class="rgh" points="${ghost}"/><polygon class="rv" points="${val}"/>${dots}${labs}${lvb}${hits}</svg>`;
+  let bb = null, bc = 1e9; for (const d of META) { const l = s.meta[d.id] || 0; if (l >= d.max) continue; const cst = metaCost(d, l); if (cst <= s.beats && cst < bc) { bc = cst; bb = d.id; } }
+  const bbp = bb && pt(META.findIndex(d => d.id === bb), 1.32), pulse = bbp ? `<circle class="rbb" cx="${bbp[0].toFixed(1)}" cy="${bbp[1].toFixed(1)}" r="11"/>` : '';
+  const lvb = META.map((d, i) => { const p = pt(i, 1.32), l = s.meta[d.id] || 0, mx = l >= d.max; if (!l) return ''; return `<g class="rlv${mx ? ' mx' : ''}"><circle cx="${(p[0] + 9).toFixed(1)}" cy="${(p[1] + 8).toFixed(1)}" r="6.5"/><text x="${(p[0] + 9).toFixed(1)}" y="${(p[1] + 11.2).toFixed(1)}" text-anchor="middle">${mx ? '\u2605' : l}</text></g>`; }).join('');
+  return `<svg class="radar" viewBox="-8 0 176 170" role="group" aria-label="Stats, tap an icon to upgrade it"><g class="rg"><polygon points="${ring(1)}"/><polygon points="${ring(0.66)}"/><polygon points="${ring(0.33)}"/>${axes}</g><polygon class="rgh" points="${ghost}"/><polygon class="rv" points="${val}"/>${dots}${pulse}${labs}${lvb}${hits}</svg>`;
 }
 const STAT_TEXT = { atk: v => `+${Math.round(v * 100)}% Volume`, crit: v => `+${(v * 100).toFixed(1)}% Pitch`, vit: v => `snake ${Math.round(v / 12 * 2)}% slower`, coin: v => `+${Math.round(v * 100)}% Beats`, guard: v => `snake ${Math.round(v * 50)}% slower`, cdn: v => `${(v * 100).toFixed(1)}% quicker Tempo`, speed: v => `+${Math.round(v * 100)}% singing speed` };
 // keepsakes the player has already looked at (a separate key, so saves stay untouched); the first visit marks what is owned as seen
@@ -82,6 +87,21 @@ export function createHub2(c) {
   }
   // loot reveal: rarity glow and shine per item, rays behind the best find, numbers that count up
   const RNAME = ['COMMON', 'RARE', 'EPIC', 'LEGENDARY'];
+  // a first-time find sends a star from its NEW badge down to the Gear tab, where the keepsake now lives
+  const lootStars = (root, items) => {
+    const tab = document.querySelector('nav [data-tab="Gear"]') || document.querySelector('[data-tab="Gear"]'); if (!tab) return;
+    root.querySelectorAll('.it').forEach((it, i) => {
+      if (!items[i] || !items[i].isNew) return;
+      setTimeout(() => {
+        if (!it.isConnected) return;
+        const a = it.getBoundingClientRect(), b = tab.getBoundingClientRect(), st = document.createElement('i'); st.className = 'lnewstar'; st.style.backgroundImage = `url(${iconURL('star')})`;
+        st.style.left = (a.right - 14) + 'px'; st.style.top = (a.top - 14) + 'px'; document.body.appendChild(st);
+        const tx = b.width ? b.left + b.width / 2 : innerWidth * 11 / 12, ty = b.height ? b.top + b.height / 2 : innerHeight - 34, dx = tx - (a.right - 14) - 14, dy = ty - (a.top - 14) - 14;
+        const an = st.animate([{ transform: 'translate(0,0) scale(.4) rotate(0)', opacity: 0 }, { transform: 'translate(0,-26px) scale(1.4) rotate(120deg)', opacity: 1, offset: .25 }, { transform: `translate(${dx}px,${dy}px) scale(.6) rotate(480deg)`, opacity: .9 }], { duration: 900, easing: 'cubic-bezier(.5,0,.8,.6)' });
+        an.onfinish = () => { st.remove(); tab.classList.remove('lnewhit'); void tab.offsetWidth; tab.classList.add('lnewhit'); setTimeout(() => tab.classList.remove('lnewhit'), 500); audio.play('counttick', { n: 1 }); };
+      }, 700 + i * 140);
+    });
+  };
   const lootModal = (title, items, back) => {
     $('bTitle').textContent = title;
     const top = items.reduce((m, x) => Math.max(m, x.rar || 0), 0), topItem = items.find(x => (x.rar || 0) === top), calm = calmMotion();
@@ -89,7 +109,8 @@ export function createHub2(c) {
     $('bLoot').className = 'loot lootx' + (grand ? ' grand' : '');
     $('bLoot').innerHTML = (top >= 1 ? `<i class="lrays r${top}" style="--rc:${topItem.color || '#ffd84d'}"></i>` : '') +
       (top >= 1 ? `<div class="lbanner r${top}" style="--rc:${topItem.color || '#ffd84d'}">${topItem.rname || RNAME[top]}!</div>` : '') +
-      items.map((x, i) => `<div class="it rar${x.rar || 0}" style="animation-delay:${0.25 + i * 0.14}s;${x.color ? `--rc:${x.color}` : ''}">${x.html}<span class="cnt" data-n="${x.n}">+${calm ? x.n : 0}</span><small>${x.name}</small><u class="shn"></u></div>`).join('');
+      items.map((x, i) => `<div class="it rar${x.rar || 0}" style="animation-delay:${0.25 + i * 0.14}s;${x.color ? `--rc:${x.color}` : ''}">${x.html}<span class="cnt" data-n="${x.n}">+${calm ? x.n : 0}</span><small>${x.name}</small><u class="shn"></u>${x.isNew ? '<i class="knew lnew">NEW</i>' : ''}</div>`).join('');
+    if (!calm) lootStars($('bLoot'), items);
     if (!calm) $('bLoot').querySelectorAll(".it .cnt").forEach((el, i) => {   // count-up, each item after its pop
       const n = +el.dataset.n, t0 = performance.now() + 300 + i * 140, dur = 650 + Math.min(500, n * 4);
       const step = t => { const k = Math.max(0, Math.min(1, (t - t0) / dur)); const v = Math.round(n * (1 - Math.pow(1 - k, 3))); if (v !== +el.dataset.shown && k > 0 && k < 1) { el.dataset.shown = v; audio.play('counttick', { n: k }); } el.textContent = '+' + v; if (k < 1 && el.isConnected) requestAnimationFrame(step); }; requestAnimationFrame(step);
@@ -138,7 +159,7 @@ export function createHub2(c) {
       for (const f of FUND) {
         const got = save().fund[f.stage], ready = fundReady(save(), f), r = f.reward;
         const txt = r.sparkles ? `${r.sparkles} ${curImg('sparkles')}` : r.eggs ? `${icon('egg')} Egg` : `⚡ ${r.energy}`;
-        grid.appendChild(tile({ cls: 't-weapon one', ic: '🎀', name: 'Clear stage ' + f.stage, desc: '', btn: got ? 'GOT IT' : ready ? 'CLAIM ' + txt : txt, gold: ready, disabled: !ready, onclick: () => { if (claimFund(save(), f.stage)) { c.persist(); audio.play('levelup'); c.refreshCur(); openFund(); } } }));
+        grid.appendChild(tile({ cls: 't-weapon one', ic: ribIcon(40), name: 'Clear stage ' + f.stage, desc: '', btn: got ? 'GOT IT' : ready ? 'CLAIM ' + txt : txt, gold: ready, disabled: !ready, onclick: () => { if (claimFund(save(), f.stage)) { c.persist(); audio.play('levelup'); c.refreshCur(); openFund(); } } }));
       }
       body.appendChild(grid);
     });
@@ -179,7 +200,7 @@ export function createHub2(c) {
     META.forEach((d, i) => {
       const lvl = s.meta[d.id] || 0, maxed = lvl >= d.max, cost = metaCost(d, lvl);
       const card = document.createElement('div'); card.className = 'sc' + (maxed ? ' maxed' : ''); card.dataset.id = d.id;
-      card.innerHTML = `<div class="sct">${maxed ? 'Max Level' : d.max === 1 ? (lvl ? 'Owned' : 'Not owned') : 'Level ' + lvl}</div><div class="sci">${ico(STATICON[d.id], 40) || ''}</div><div class="spips">${d.max <= 12 && d.max > 1 ? Array.from({ length: d.max }, (_, q) => `<i class="${q < lvl ? 'on' : ''}"></i>`).join('') : ''}</div><div class="scn">${d.name}</div><div class="scd">${d.desc(Math.max(1, maxed ? lvl : lvl + 1))}</div><button class="btn small go" ${maxed || s.beats < cost ? 'disabled' : ''}>${maxed ? '✔' : cost + ' ' + curImg('beats')}</button>`;
+      card.innerHTML = `<div class="sct">${maxed ? 'Max Level' : d.max === 1 ? (lvl ? 'Owned' : 'Not owned') : 'Level ' + lvl + ' \u2192 ' + (lvl + 1)}</div><div class="sci">${ico(STATICON[d.id], 40) || ''}</div><div class="spips">${d.max <= 15 && d.max > 1 ? Array.from({ length: d.max }, (_, q) => `<i class="${q < lvl ? 'on' : ''}"></i>`).join('') : ''}</div><div class="scn">${d.name}</div><div class="scd">${d.desc(Math.max(1, maxed ? lvl : lvl + 1))}</div><button class="btn small go" ${maxed || s.beats < cost ? 'disabled' : ''}>${maxed ? '✔' : cost + ' ' + curImg('beats')}</button>`;
       card.querySelector('button').onclick = () => { if (buyMeta(save(), d.id)) { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); } };
       core.appendChild(card);
     });
@@ -217,22 +238,25 @@ export function createHub2(c) {
         box.appendChild(d);
       }
     } else {
+      let shownB8 = 0;
       for (let t = 3; t >= 0; t--) {
         let items = KEEPSAKES.filter(k => k.tier === t);
         if (gearFilter === 'Owned') items = items.filter(k => lvl(k) > 0);
         if (gearFilter === 'Upgrade') items = items.filter(k => keepCanUp(s, k.id));
         if (!items.length) continue;
+        shownB8 += items.length;
         const T = KEEP_TIERS[t]; sec(box, T.name, T.color);
         const grid = document.createElement('div'); grid.className = 'kgrid'; box.appendChild(grid);
         for (const k of items) {
           const cost = lvl(k) >= keepMax(k) ? 0 : keepCost(k, lvl(k)), pct = cost ? Math.min(100, Math.round((frag(k) / cost) * 100)) : 100;
-          const b = document.createElement('button'); b.className = 'kcard t' + t + (lvl(k) ? '' : ' off') + (lvl(k) >= keepMax(k) ? ' max' : ''); b.style.setProperty('--tc', T.color);
-          b.innerHTML = `${lvl(k) ? `<i class="kstar${lvl(k) > 9 ? ' w' : ''}" style="background-image:url(${iconURL('star')})"><b>${lvl(k)}</b></i>` : ''}<div class="kic">${k.icon}</div><div class="kbar"><i style="width:${pct}%"></i><span>${frag(k)}/${cost || 'max'}</span></div><div class="kname">${k.name}</div>${keepCanUp(s, k.id) ? '<em class="kup">▲</em>' : ''}${lvl(k) && !seen.has(k.id) ? '<i class="knew">NEW</i>' : ''}`;
+          const b = document.createElement('button'); b.className = 'kcard t' + t + (lvl(k) ? '' : ' off') + (lvl(k) >= keepMax(k) ? ' max' : ''); b.style.setProperty('--tc', T.color); { const st = setTint(k); if (st) { b.classList.add('sett'); b.style.setProperty('--st', st); b.title = KEEP_SETS.find(q => q.id === k.set).name; } }
+          b.innerHTML = `${lvl(k) ? `<i class="kstar${lvl(k) > 9 ? ' w' : ''}" style="background-image:url(${iconURL('star')})"><b>${lvl(k)}</b></i>` : ''}<div class="kic">${k.icon}</div><div class="kbar"><i style="width:${pct}%"></i><span>${frag(k)}/${cost || 'max'}</span></div><div class="kname">${k.name}</div>${b.classList.contains('sett') ? '<i class="kset"></i>' : ''}${keepCanUp(s, k.id) ? '<em class="kup">▲</em>' : ''}${lvl(k) && !seen.has(k.id) ? '<i class="knew">NEW</i>' : ''}`;
           b.onclick = () => { audio.play('click'); openKeep(k); };
           grid.appendChild(b);
         }
       }
     }
+    if (gearFilter !== 'Set' && gearFilter !== 'All' && !box.querySelector('.kgrid')) box.appendChild(emptyCardB8('gear', gearFilter, () => { gearFilter = 'All'; audio.play('click'); renderGear(); }));
     { const ready = KEEPSAKES.filter(k => keepCanUp(s, k.id)).length; if (ready) { const b = document.createElement('button'); b.className = 'btn small gold'; b.style.margin = '10px auto'; b.style.display = 'block'; b.textContent = 'LEVEL UP ALL READY (' + ready + ')'; b.onclick = () => { const n = upgradeAllKeeps(save()); if (n) { c.persist(); audio.play('upgrade'); c.renderHub(); } }; box.appendChild(b); } }
     // chests
     sec(box, 'Keepsake Chest', '#c8843a', 'chest');
@@ -240,7 +264,7 @@ export function createHub2(c) {
     for (const n of [1, 10]) {
       const price = n === 10 ? KEEP_PRICE * 9 : KEEP_PRICE;
       row.appendChild(armT(tile({ cls: 'chestcard t-gold', ic: n === 10 ? ico('gift', 46) : chestArt(30), name: n === 10 ? 'Ten Chests' : 'Keepsake Chest', desc: n === 10 ? 'With a star prize' : 'Backstage finds', btn: price + ' ' + curImg('sparkles'), gold: true, disabled: save().sparkles < price,
-        onclick: ev => { const tt = ev.currentTarget.closest('.tile'), ch = tt.querySelector('.chest3'), fast = wasHeld(ev.currentTarget), sd = rollOf(tt); chestGo(ch, () => { rolls.delete(tt); const got = openKeepChest(save(), n, seeded(sd)); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color, rname: KEEP_TIERS[kk.tier].name.toUpperCase() }; }), 'Gear'); }, fast); } }), sd => keepTier(sd, n), KEEP_TIERS.map(q => q.color)));
+        onclick: ev => { const tt = ev.currentTarget.closest('.tile'), ch = tt.querySelector('.chest3'), fast = wasHeld(ev.currentTarget), sd = rollOf(tt); chestGo(ch, () => { rolls.delete(tt); const fresh = new Set(KEEPSAKES.filter(k => !save().keeps[k.id].lv && !save().keeps[k.id].frag).map(k => k.id)); const got = openKeepChest(save(), n, seeded(sd)); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color, rname: KEEP_TIERS[kk.tier].name.toUpperCase(), isNew: fresh.has(x.id) }; }), 'Gear'); }, fast); } }), sd => keepTier(sd, n), KEEP_TIERS.map(q => q.color)));
     }
   }
   function openKeep(k) {
@@ -289,6 +313,7 @@ export function createHub2(c) {
       const ds = t.querySelector('.ds'); if (d.base && !bought) ds.innerHTML = `<s>${d.base}</s> ${curImg('sparkles')}`; else ds.innerHTML = '&nbsp;';
       if (i === hotI) { t.classList.add('hot'); const hb = document.createElement('i'); hb.className = 'hotbadge'; hb.textContent = 'BEST DEAL'; t.appendChild(hb); }
       if (bought) { t.classList.add('done'); const ob = document.createElement('i'); ob.className = 'obt'; ob.textContent = 'GOT IT'; t.appendChild(ob); }
+      if (deals.length % 2 && i === deals.length - 1) t.classList.add('wide');   // an odd last deal spans the row instead of sitting alone
       list.appendChild(t);
     });
     const rr = document.createElement('div'); rr.className = 'refrow'; rr.innerHTML = `<span>New treats in ${countdown()}</span><button class="btn small alt">${s.shop.free ? '5 ' + curImg('sparkles') : 'FREE'} REFRESH</button>`;
@@ -319,19 +344,28 @@ export function createHub2(c) {
     const u = iconURL('hat_' + o.id); if (!u) return `<span class="wardhat">${o.hat}</span>`;
     return (o.id === 'sun' ? EYES : HEADS).map((h, i) => `<img class="what" src="${u}" alt="" style="left:${h.x}%;top:${h.y}%;width:${h.w}%;animation-delay:${i * 0.15}s">`).join('');
   }
-  const rib = n => `🎀 ${n}`;
+  const rib = n => ribHTML(n);
+  const xIcon = id => (id === 'egg' ? icon('egg') : id === 'sparkles' ? ico('sparkles', 44) : id === 'voice' ? ico('bolt', 44) : ico('chest', 44));
   function openWardrobe() {
     const s = save(), day = c.dayKey();
     openPanel('WARDROBE', body => {
       const top = document.createElement('div'); top.className = 'wardtop';
       const worn = OUTFITS.find(o => o.id === s.outfits.worn);
-      top.innerHTML = `<div class="wardhero2" style="--oc:${worn ? worn.color : '#ffd84d'}"><i class="wglow"></i><img class="wduo" src="assets/duo_idle.png" alt="">${worn ? hatsOn(worn) : ''}<i class="wped"></i></div><div class="wname">${worn ? worn.name : 'Everyday look'}</div><div class="sub">Ribbons ${rib(s.ribbons)}</div>`;
+      top.innerHTML = `<div class="wardhero2" style="--oc:${worn ? worn.color : '#ffd84d'}"><i class="wglow"></i><img class="wduo" src="assets/duo_idle.png" alt="">${worn ? hatsOn(worn) : ''}<i class="wped"></i></div><div class="wname">${worn ? worn.name : 'Everyday look'}</div><div class="wperk" hidden><span></span><button class="btn small gold" hidden></button></div><div class="sub">Ribbons ${rib(s.ribbons)}</div><div class="whint">Tap an outfit to try it on</div>`;
       body.appendChild(top);
       const grid = document.createElement('div'); grid.className = 'tiles';
+      const pw = top.querySelector('.wperk'), tstate = { id: '' };
+      const tctx = { grid, hero: top.querySelector('.wardhero2'), hatsOn, worn, label: top.querySelector('.wname'), perk: pw, act: pw.querySelector('button'),
+        perkOf: o => `${WEAPONS.find(w => w.id === o.weapon).name} +${Math.round((o.mul - 1) * 100)}%` };
       for (const o of OUTFITS) {
         const own = s.outfits.owned[o.id], av = outfitAvailable(o, day), wn = s.outfits.worn === o.id, wname = WEAPONS.find(w => w.id === o.weapon).name;
-        grid.appendChild(tile({ cls: 't-gold' + (wn ? ' on-loadout' : ''), ic: iconURL('hat_' + o.id) ? ico('hat_' + o.id, 42) : `<span class="kemo">${o.hat}</span>`, name: o.name, chip: o.event ? EVENT_THEMES_NAME(o.event) : '', desc: `${wname} +${Math.round((o.mul - 1) * 100)}%`, btn: own ? (wn ? 'TAKE OFF' : 'WEAR') : av ? rib(o.price) : 'Event only', gold: !own && av, disabled: !own && (!av || s.ribbons < o.price),
-          onclick: () => { const sv = save(); if (own) wearOutfit(sv, wn ? '' : o.id); else if (!buyOutfit(sv, o.id, day)) return; c.persist(); audio.play('buy'); openWardrobe(); } }));
+        const wt = tile({ cls: 't-gold xch ward' + (wn ? ' on-loadout worn' : '') + (!own && !av ? ' locked' : ''), ic: iconURL('hat_' + o.id) ? ico('hat_' + o.id, 42) : `<span class="kemo">${o.hat}</span>`, name: o.name, chip: o.event ? EVENT_THEMES_NAME(o.event) : '', desc: `${wname} +${Math.round((o.mul - 1) * 100)}%`, btn: own ? (wn ? 'TAKE OFF' : 'WEAR') : av ? rib(o.price) : 'Event only', gold: !own && av, disabled: !own && (!av || s.ribbons < o.price),
+          onclick: () => { const sv = save(); if (own) wearOutfit(sv, wn ? '' : o.id); else if (!buyOutfit(sv, o.id, day)) return; c.persist(); audio.play('buy'); openWardrobe(); } });
+        if (wn || own) { const bd = document.createElement('i'); bd.className = 'wbadge' + (wn ? ' on' : ''); bd.textContent = wn ? 'WORN' : 'OWNED'; wt.appendChild(bd); }
+        wt.tabIndex = 0; wt.setAttribute('aria-label', 'Try on ' + o.name);
+        const tryIt = ev => { if (ev && ev.target.closest && ev.target.closest('button')) return; audio.play('click'); wardTry(tctx, o, wt, tstate); };
+        wt.addEventListener('click', tryIt); wt.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target === wt) tryIt(); });
+        grid.appendChild(wt);
       }
       body.appendChild(grid);
     });
@@ -341,24 +375,36 @@ export function createHub2(c) {
     const s = save(), day = c.dayKey(); ensureEvent(s, day); const ev = eventInfo(day);
     openPanel(ev.name.toUpperCase(), body => {
       const hd = document.createElement('div'); hd.className = 'sub'; hd.innerHTML = `${ev.blurb}<br><b>${ev.daysLeft} days left</b>  ·  you gathered ${rib(s.event.earned)}  ·  you hold ${rib(s.ribbons)}`; body.appendChild(hd);
-      const grid = document.createElement('div'); grid.className = 'tiles';
+      const track = document.createElement('div'); track.className = 'evtrack';
+      let seg = 0; EVENT_MILES.forEach((m, i) => { const prev = i ? EVENT_MILES[i - 1].at : 0; seg += Math.max(0, Math.min(1, (s.event.earned - prev) / (m.at - prev))); });
+      const nxt = EVENT_MILES.findIndex((m, i) => !s.event.claimed[i] && s.event.earned < m.at);
+      track.innerHTML = `<div class="evbar"><i style="width:${Math.round(seg / EVENT_MILES.length * 100)}%"></i></div><div class="evms"></div>`;
+      const row = track.querySelector('.evms');
       EVENT_MILES.forEach((m, i) => {
         const got = s.event.claimed[i], ready = !got && s.event.earned >= m.at, r = m.reward;
-        const txt = r.eggs ? icon('egg') + ' Egg' : r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : r.energy ? '⚡ ' + r.energy : '👗 Outfit';
-        grid.appendChild(tile({ cls: 't-weapon', ic: '🎪', name: m.at + ' ribbons', desc: '', btn: got ? 'GOT IT' : ready ? 'CLAIM ' + txt : txt, gold: ready, disabled: !ready, onclick: () => { if (claimEventMile(save(), i, day)) { c.persist(); audio.play('levelup'); c.refreshCur(); openEvent(); } } }));
+        const ric = r.eggs ? icon('egg') : r.sparkles ? curImg('sparkles') : r.energy ? ico('bolt', 24) : dressIcon(24);
+        const qty = r.eggs ? '' : r.sparkles ? r.sparkles : r.energy ? r.energy : '';
+        const n = document.createElement('button'); n.className = 'evm' + (got ? ' got' : ready ? ' ready' : i === nxt ? ' next' : '');
+        n.innerHTML = `<span class="evi">${ric}${qty ? `<b>${qty}</b>` : ''}${got ? '<em>\u2714</em>' : ''}</span><span class="evlab">${m.at}</span>`;
+        n.disabled = !ready; n.setAttribute('aria-label', m.at + ' ribbons' + (got ? ', claimed' : ready ? ', claim' : ''));
+        n.onclick = () => { if (claimEventMile(save(), i, day)) { c.persist(); audio.play('levelup'); c.refreshCur(); openEvent(); } };
+        row.appendChild(n);
       });
-      for (const it of EXCHANGE_ITEMS) grid.appendChild(tile({ cls: 't-gold', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('buy'); c.refreshCur(); openEvent(); } } }));
+      body.appendChild(track);
+      const grid = document.createElement('div'); grid.className = 'tiles';
+      for (const it of EXCHANGE_ITEMS) grid.appendChild(tile({ cls: 't-gold xch', ic: xIcon(it.id), name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('buy'); c.refreshCur(); openEvent(); } } }));
       body.appendChild(grid);
     });
   }
   function openTrophies() {
     const s = save();
     openPanel('TROPHY SHELF', body => {
-      { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'CLAIM ALL'; b.onclick = () => { if (claimAllTrophies(save())) { c.persist(); audio.play('levelup'); c.refreshCur(); openTrophies(); } }; body.appendChild(b); }
+      { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'CLAIM ALL'; b.disabled = !TROPHIES.some(t => trophyReady(s, t)); b.onclick = () => { const sum = { sparkles: 0, eggs: 0 }; for (const t of TROPHIES) if (trophyReady(save(), t)) { sum.sparkles += t.reward.sparkles || 0; sum.eggs += t.reward.eggs || 0; } if (claimAllTrophies(save())) { flyReward(b, sum, !!save().settings.reduceMotion); c.persist(); audio.play('levelup'); c.refreshCur(); openTrophies(); } }; body.appendChild(b); }
+      { const hd = document.createElement('div'); hd.innerHTML = shelfHeadHTML(s, TROPHIES, t => trophyReady(s, t)); body.insertBefore(hd.firstChild, body.firstChild); }
       const grid = document.createElement('div'); grid.className = 'tiles';
-      for (const t of TROPHIES) {
+      for (const t of trophyOrder(s, TROPHIES)) {
         const got = s.trophies[t.id], ready = trophyReady(s, t), cur = Math.min(t.at, t.get(s)), r = t.reward;
-        grid.appendChild(tile({ cls: 't-gold one', ic: got ? '🏆' : '🥉', name: t.name, desc: '', bar: Math.round(cur / t.at * 100), barText: cur + ' / ' + t.at, btn: got ? 'GOT IT' : ready ? 'CLAIM ' + (r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : icon('egg') + ' ×' + r.eggs) : (r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : icon('egg') + ' ×' + r.eggs), gold: ready, disabled: !ready, onclick: () => { if (claimTrophy(save(), t.id)) { c.persist(); audio.play('levelup'); c.refreshCur(); openTrophies(); } } }));
+        grid.appendChild(tile({ cls: 't-gold one trph tt-' + trophyTier(r) + (got ? ' got' : ready ? ' rdy' : ''), ic: got ? '🏆' : { gold: '🥇', silver: '🥈', bronze: '🥉' }[trophyTier(r)], name: t.name, desc: '', bar: Math.round(cur / t.at * 100), barText: cur + ' / ' + t.at, btn: got ? 'GOT IT' : ready ? 'CLAIM ' + (r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : icon('egg') + ' ×' + r.eggs) : (r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : icon('egg') + ' ×' + r.eggs), gold: ready, disabled: !ready, onclick: ev => { const fb = ev && ev.currentTarget; if (claimTrophy(save(), t.id)) { flyReward(fb, r, !!save().settings.reduceMotion); c.persist(); audio.play('levelup'); c.refreshCur(); openTrophies(); } } }));
       }
       body.appendChild(grid);
     });
@@ -392,9 +438,9 @@ export function createHub2(c) {
   function shopExtras(list) {
     const s = save(), day = c.dayKey(), wk = Math.floor(day / 7), bought = s.shop.limit.week === wk ? s.shop.limit.bought : {};
     sec(list, 'Limit Shop');
-    for (const it of LIMIT_ITEMS) { const left = it.limit - (bought[it.id] || 0); list.appendChild(tile({ cls: 't-weapon', ic: it.id === 'egg' ? icon('egg') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, chip: left + ' left this week', desc: '', btn: it.price + ' ' + curImg('beats'), disabled: left < 1 || s.beats < it.price, onclick: () => { if (buyLimit(save(), it.id, day)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } })); }
+    for (const it of LIMIT_ITEMS) { const left = it.limit - (bought[it.id] || 0); list.appendChild(tile({ cls: 't-weapon', ic: xIcon(it.id), name: it.name, chip: left + ' left this week', desc: '', btn: it.price + ' ' + curImg('beats'), disabled: left < 1 || s.beats < it.price, onclick: () => { if (buyLimit(save(), it.id, day)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } })); }
     sec(list, 'Exchange Shop');
-    for (const it of EXCHANGE_ITEMS) list.appendChild(tile({ cls: 't-gold', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } }));
+    for (const it of EXCHANGE_ITEMS) list.appendChild(tile({ cls: 't-gold xch', ic: xIcon(it.id), name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } }));
     sec(list, 'Pass');
     list.appendChild(tile({ cls: 't-gold one', ic: '🎫', name: 'Fan Club Pass', desc: '30 days of daily gifts', btn: 'LOOK', gold: true, onclick: () => { audio.play('click'); openPass(); } }));
   }

@@ -17,7 +17,9 @@ export const farKind = skin => FAR_KIND[skin] || 'fair';
 // where the animated bits live (sprite coordinates, x already includes the margin)
 const WHEEL = { x: M + 470, y: FAR_HY - 78, r: 62 }, MILL = { x: M + 150, y: FAR_HY - 118, len: 52 };
 
-function win(c, x, y, w, h, on) { const f = c.fillStyle; c.fillStyle = `rgba(255,233,168,${on})`; c.fillRect(x, y, w, h); c.fillStyle = f; }
+let REC = null;   // while baking: every window rectangle, so kills can light them up later
+const WINS = new Map();
+function win(c, x, y, w, h, on) { if (REC) REC.push(x, y, w, h); const f = c.fillStyle; c.fillStyle = `rgba(255,233,168,${on})`; c.fillRect(x, y, w, h); c.fillStyle = f; }
 function tower(c, x, w, h, hy, roof) {
   c.fillRect(x, hy - h, w, h + 2);
   if (roof === 'tri') { c.beginPath(); c.moveTo(x - 4, hy - h); c.lineTo(x + w / 2, hy - h - w * 0.9); c.lineTo(x + w + 4, hy - h); c.fill(); }
@@ -127,7 +129,8 @@ function paintKind(c, kind, X) {
 }
 
 // bake the static sprite for one world; the cache key carries the sky grade so night stages get darker silhouettes
-export function bakeFar(b, skin, boss, stage) {
+export function bakeFar(b, skin, boss, stage, key) {
+  REC = key ? [] : null;
   const w = WORLDS[skin] || WORLDS.love, gr = skyGrade(stage), kind = farKind(skin);
   let col = mix(mix(w.far, w.bot, 0.3), '#050212', Math.min(0.7, gr.k * 0.5));
   if (boss) col = mix(col, '#12020c', 0.5);
@@ -143,23 +146,52 @@ export function bakeFar(b, skin, boss, stage) {
   b.save(); b.translate(FAR_W / 2, hy); b.scale(FAR_SC, FAR_SC); b.translate(-FAR_W / 2, -hy);
   paintKind(b, kind, { hy, col, lite, on, r });
   b.restore();
+  if (key) { WINS.set(key, REC); REC = null; }
 }
 
+// per frame memo: the sprite key and the landmark colours only change with skin, boss and stage, so build those strings once
+const FMEMO = new Map();
+function farMemo(skin, boss, k, stage, gk) {
+  let per = FMEMO.get(skin); if (!per) FMEMO.set(skin, per = []);
+  const idx = (boss ? 64 : 0) + (stage & 63);   // the grade only depends on the stage, so one entry per stage
+  let m = per[idx];
+  if (!m) {
+    const kq = gk, w = WORLDS[skin] || WORLDS.love;
+    m = per[idx] = { fkey: `far|${skin}|${boss ? 1 : 0}|${k}|${stage % 7}`, col: mix(mix(w.far, w.bot, 0.3), boss ? '#12020c' : '#050212', Math.min(0.7, kq * 0.5) + (boss ? 0.3 : 0)), gond: `rgba(255,214,150,${0.35 + 0.3 * kq})` };
+  }
+  return m;
+}
+// rgba strings for animated alphas: quantised to 1/64 and cached, so the per-frame blink does not build a new string every frame
+const RGBA = new Map();
+function rgbaQ(rgb, a) {
+  const q = Math.max(0, Math.min(64, Math.round(a * 64))), key = rgb + '|' + q;
+  let v = RGBA.get(key); if (!v) RGBA.set(key, v = `rgba(${rgb},${q / 64})`);
+  return v;
+}
 // per frame: the sprite slid against the duo, plus the animated landmarks
 export function drawFar(c, kit, o) {
-  const { skin, boss, stage, t, px, reduce, low } = o, kind = farKind(skin), gr = skyGrade(stage), k = Math.round(gr.k * 4);
-  const spr = kit && kit.bake(`far|${skin}|${boss ? 1 : 0}|${k}|${stage % 7}`, FAR_W, FAR_H, b => bakeFar(b, skin, boss, stage), 1);
+  const { skin, boss, stage, t, px, reduce, low, lit = 0, pop = 9 } = o, kind = farKind(skin), gr = skyGrade(stage), k = Math.round(gr.k * 4);
+  const fm = farMemo(skin, boss, k, stage, gr.k), fkey = fm.fkey, spr = kit && kit.bake(fkey, FAR_W, FAR_H, b => bakeFar(b, skin, boss, stage, fkey), 1);
   if (!spr) return;
   const dx = reduce ? 0 : -((px - W / 2) / W) * FAR_MARGIN * 1.6, x0 = -FAR_MARGIN + dx;
   c.save(); c.globalAlpha = boss ? 0.85 : 0.96; c.drawImage(spr.c, x0, FAR_TOP, FAR_W, FAR_H); c.globalAlpha = 1;
+  const wl = WINS.get(fkey);
+  if (wl && wl.length && lit > 0) {   // the skyline wakes up as the serpent is cleared: windows light in a scattered order, the newest one flashes
+    const n = wl.length >> 2, cnt = Math.min(n, Math.round(lit * n)), step = n % 7 ? 7 : 5, glow = pop < 0.5 ? 1 - pop * 2 : 0;
+    c.save(); c.translate(x0, FAR_TOP); c.translate(FAR_W / 2, FAR_HY); c.scale(FAR_SC, FAR_SC); c.translate(-FAR_W / 2, -FAR_HY);
+    c.globalCompositeOperation = 'lighter'; c.fillStyle = boss ? 'rgba(255,150,130,.8)' : 'rgba(255,226,150,.85)';
+    for (let i = 0; i < cnt; i++) { const j = ((i * step) % n) * 4; c.fillRect(wl[j], wl[j + 1], wl[j + 2], wl[j + 3]); }
+    if (cnt && glow > 0 && !low) { const j = (((cnt - 1) * step) % n) * 4; c.globalAlpha = glow * 0.6; c.fillStyle = '#ffe9a8'; c.fillRect(wl[j] - 4, wl[j + 1] - 4, wl[j + 2] + 8, wl[j + 3] + 8); }
+    c.restore();
+  }
   if (!reduce) {
-    const col = mix(mix((WORLDS[skin] || WORLDS.love).far, (WORLDS[skin] || WORLDS.love).bot, 0.3), boss ? '#12020c' : '#050212', Math.min(0.7, gr.k * 0.5) + (boss ? 0.3 : 0));
+    const col = fm.col;
     c.translate(x0, FAR_TOP); c.translate(FAR_W / 2, FAR_HY); c.scale(FAR_SC, FAR_SC); c.translate(-FAR_W / 2, -FAR_HY);
     if (kind === 'fair') {   // the ferris wheel turns, gondolas stay upright
       const { x, y, r } = WHEEL, n = low ? 6 : 10, rot = t * 0.18;
       c.strokeStyle = col; c.lineWidth = 3; c.beginPath(); c.arc(x, y, r, 0, TAU); c.stroke(); c.beginPath(); c.arc(x, y, r * 0.62, 0, TAU); c.lineWidth = 1.6; c.stroke();
       c.lineWidth = 1.8; c.beginPath(); for (let i = 0; i < n; i++) { const a = rot + i / n * TAU; c.moveTo(x, y); c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } c.stroke();
-      for (let i = 0; i < n; i++) { const a = rot + i / n * TAU, gx = x + Math.cos(a) * r, gy = y + Math.sin(a) * r; c.fillStyle = col; c.fillRect(gx - 4.5, gy, 9, 8); c.fillStyle = `rgba(255,214,150,${0.35 + 0.3 * gr.k})`; c.fillRect(gx - 2.5, gy + 2, 5, 3); }
+      for (let i = 0; i < n; i++) { const a = rot + i / n * TAU, gx = x + Math.cos(a) * r, gy = y + Math.sin(a) * r; c.fillStyle = col; c.fillRect(gx - 4.5, gy, 9, 8); c.fillStyle = fm.gond; c.fillRect(gx - 2.5, gy + 2, 5, 3); }
       c.fillStyle = col; c.beginPath(); c.arc(x, y, 5, 0, TAU); c.fill();
     } else if (kind === 'farm') {   // windmill blades
       const { x, y, len } = MILL, rot = t * 0.55; c.strokeStyle = col; c.lineWidth = 3.4; c.lineCap = 'round';
@@ -172,10 +204,10 @@ export function drawFar(c, kit, o) {
     } else if (kind === 'radio' || kind === 'storm' || kind === 'fort') {   // beacons blinking on the tallest points
       const on = Math.sin(t * 3) > 0.2 ? 1 : 0.25, pts = kind === 'radio' ? [[M + 421, FAR_HY - 232], [M + 230, FAR_HY - 212], [M + 496, FAR_HY - 192]] : kind === 'storm' ? [[M + 522, FAR_HY - 252]] : [[M + 360, FAR_HY - 254]];
       c.globalCompositeOperation = 'lighter';
-      for (const [x, y] of pts) { c.fillStyle = kind === 'fort' ? `rgba(255,200,120,${0.6 * on})` : `rgba(255,70,110,${0.9 * on})`; c.beginPath(); c.arc(x, y, 2.6, 0, TAU); c.fill(); c.fillStyle = `rgba(255,90,120,${0.18 * on})`; c.beginPath(); c.arc(x, y, 9, 0, TAU); c.fill(); }
-      if (kind === 'radio') { c.fillStyle = `rgba(255,120,220,${0.1 + 0.08 * Math.sin(t * 2)})`; c.fillRect(M + 206, FAR_HY - 212, 54, 8); c.fillStyle = `rgba(120,255,240,${0.1 + 0.08 * Math.sin(t * 2.6)})`; c.fillRect(M + 470, FAR_HY - 192, 52, 8); }
+      for (const [x, y] of pts) { c.fillStyle = kind === 'fort' ? rgbaQ('255,200,120', 0.6 * on) : rgbaQ('255,70,110', 0.9 * on); c.beginPath(); c.arc(x, y, 2.6, 0, TAU); c.fill(); c.fillStyle = rgbaQ('255,90,120', 0.18 * on); c.beginPath(); c.arc(x, y, 9, 0, TAU); c.fill(); }
+      if (kind === 'radio') { c.fillStyle = rgbaQ('255,120,220', 0.1 + 0.08 * Math.sin(t * 2)); c.fillRect(M + 206, FAR_HY - 212, 54, 8); c.fillStyle = rgbaQ('120,255,240', 0.1 + 0.08 * Math.sin(t * 2.6)); c.fillRect(M + 470, FAR_HY - 192, 52, 8); }
     } else if (kind === 'manor') {   // a candle moves from window to window
-      const i = Math.floor(t * 0.6) % 6, f = 0.6 + 0.4 * Math.sin(t * 9); c.globalCompositeOperation = 'lighter'; c.fillStyle = `rgba(255,200,110,${0.55 * f})`; c.fillRect(M + 196 + i * 42, FAR_HY - 78 + (i % 2) * 22, 8, 12);
+      const i = Math.floor(t * 0.6) % 6, f = 0.6 + 0.4 * Math.sin(t * 9); c.globalCompositeOperation = 'lighter'; c.fillStyle = rgbaQ('255,200,110', 0.55 * f); c.fillRect(M + 196 + i * 42, FAR_HY - 78 + (i % 2) * 22, 8, 12);
     }
   }
   c.restore();
