@@ -14,14 +14,14 @@ export function revealStars(el, got, onPop, reduce) {
 }
 
 // Count every [data-to] inside `root` up from 0, staggered.
-export function countUp(root, reduce, onTick) {
+export function countUp(root, reduce, onTick, onStep) {
   const els = root.querySelectorAll('[data-to]');
   els.forEach((e, k) => {
     const to = +e.dataset.to || 0; if (reduce || to < 2) { e.textContent = to; return; }
     e.textContent = 0; const t0 = 350 + k * 140, dur = Math.min(900, 300 + to * 2);
     later(() => {
       const st = performance.now();
-      const tick = () => { const f = Math.min(1, (performance.now() - st) / dur); e.textContent = Math.round(to * (1 - Math.pow(1 - f, 3))); if (f < 1) later(tick, 30); else if (onTick) onTick(); };
+      const tick = () => { const f = Math.min(1, (performance.now() - st) / dur); e.textContent = Math.round(to * (1 - Math.pow(1 - f, 3))); if (onStep) onStep(f); if (f < 1) later(tick, 30); else if (onTick) onTick(); };
       tick();
     }, t0);
   });

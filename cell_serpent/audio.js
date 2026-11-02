@@ -2,11 +2,12 @@
 // Buses: sfx and music (with a duck gain) -> master -> limiter -> out. Music is a sectioned 16-step groove:
 // key and tempo change every 5 stages, bosses get their own tense track, and the layers follow
 // mix({ stage, boss, groove (0..1), danger (0..1) }).
+import { beatBpm as simBpm } from './sim.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, muted = false, musicAllowed = true, noiseBuf = null;
   let musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
   let mixS = { stage: 1, boss: false, groove: 0, danger: 0 };
-  let live = 0, chain = 0, chainT = 0, vol = 1, uiT = 0;
+  let live = 0, chain = 0, chainT = 0, vol = 1, uiT = 0, bstreak = 0, lastBeatShot = 0, beatNow = 0, fresh = false;
   const last = {};
   function ensure() {
     if (ac) return ac;
@@ -61,7 +62,25 @@ export function createAudio() {
 
   const sfx = {
     shoot: () => gate('shoot', 70) && tone(520 + Math.random() * 60, 0.07, 'square', 0.04, -200),
-    hit: () => gate('hit', 35) && tone(240 + Math.random() * 80, 0.05, 'triangle', 0.07, -90),
+    // hit: the timbre follows the weapon that landed it (e.src), a crit adds a bright ping
+    hit: e => {
+      const src = (e && e.src) || 'capsule', R = Math.random();
+      if (!gate('hit' + src, src === 'capsule' ? 35 : 55) || !gate('hit', 18)) return;
+      switch (src) {
+        case 'swab': tone(150, 0.09, 'sine', 0.11, -60); noise(0.05, 0.05, 900, 200); break;
+        case 'daggers': tone(1500 + R * 250, 0.04, 'sine', 0.05, 500); break;
+        case 'tower': tone(100, 0.18, 'sawtooth', 0.07, -25); tone(200, 0.14, 'triangle', 0.04, -40); break;
+        case 'dragon': tone(720 + R * 80, 0.07, 'sine', 0.05, 220); noise(0.04, 0.025, 6000, 3000, 'highpass'); break;
+        case 'needles': tone(2100 + R * 200, 0.03, 'square', 0.03, -900); break;
+        case 'stick': tone(82, 0.13, 'sine', 0.16, -40); noise(0.04, 0.06, 1200, 300); break;
+        case 'bubble': tone(380 + R * 60, 0.09, 'sine', 0.07, 520); break;
+        case 'satellite': tone(1240, 0.12, 'sine', 0.04); tone(1860, 0.1, 'sine', 0.025, 0, 0.03); break;
+        case 'maw': noise(0.08, 0.15, 1800, 300); tone(110, 0.1, 'square', 0.08, -50); break;
+        case 'encore': tone(300, 0.14, 'sawtooth', 0.05, 700); break;
+        default: tone(240 + R * 80, 0.05, 'triangle', 0.07, -90);
+      }
+      if (e && e.crit) tone(1568 + R * 120, 0.06, 'triangle', 0.05, 0, 0.01);
+    },
     // pop: pitch climbs a pentatonic ladder along a kill chain
     kill: e => {
       if (!gate('kill', 30)) return;
@@ -134,6 +153,28 @@ export function createAudio() {
     groovehit: e => { if (!gate('groovehit', 200)) return; const k = Math.min(4, ((e && e.n) || 5) / 5 | 0); tone(pentHz(k + 2, 72), 0.14, 'triangle', 0.07); tone(pentHz(k + 4, 72), 0.2, 'sine', 0.05, 0, 0.06); },
     // snake reached the line: sharp alarm
     leak: () => { if (!gate('leak', 250)) return; tone(220, 0.25, 'sawtooth', 0.15, -110); tone(165, 0.3, 'square', 0.08, -60, 0.05); noise(0.3, 0.15, 1200, 100); duck(0.5, 0.4); },
+    // on-beat shot: a crisp tick, climbing a pentatonic ladder while the player keeps hitting every beat
+    beatshot: () => {
+      const spb = 60 / (beatNow || 120), n = now();
+      if (n - lastBeatShot < spb * 550) return;   // one tick per beat
+      bstreak = n - lastBeatShot < spb * 1600 ? bstreak + 1 : 1; lastBeatShot = n;
+      const f = pentHz(Math.min(9, bstreak), 84);
+      tone(f, 0.05, 'triangle', 0.05, 0); noise(0.02, 0.03, 8000, 4000, 'highpass');
+      if (bstreak > 0 && bstreak % 8 === 0) { tone(f * 2, 0.22, 'sine', 0.05, 0, 0.03); tone(f * 3, 0.3, 'sine', 0.025, 0, 0.06); }
+    },
+    // Encore beam fires / becomes ready
+    encore: () => { noise(0.9, 0.12, 400, 6000, 'bandpass'); tone(110, 0.9, 'sawtooth', 0.12, 440); [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.5, 'triangle', 0.06, 0, 0.1 + i * 0.05)); duck(0.55, 0.9); },
+    encoreready: () => { [784, 988, 1319].forEach((f, i) => tone(f, 0.12, 'sine', 0.07, 0, i * 0.07)); tone(1568, 0.5, 'triangle', 0.04, 0, 0.22); },
+    // gold cell popped: coin shower; gold cell faded away: a soft falling blip
+    goldpop: () => { if (!gate('goldpop', 80)) return; for (let i = 0; i < 5; i++) tone(1568 + i * 220 + (i % 2) * 90, 0.09, 'square', 0.03, 0, i * 0.04); tone(2093, 0.4, 'sine', 0.05, 0, 0.18); },
+    goldfade: () => gate('goldfade', 200) && tone(880, 0.25, 'sine', 0.04, -420),
+    // a cell died right at the line: tight rising whoosh
+    clutch: () => { if (!gate('clutch', 300)) return; noise(0.25, 0.08, 600, 5000, 'bandpass'); tone(330, 0.2, 'triangle', 0.07, 660); },
+    // run checkpoint chest: two-note banner
+    checkpoint: () => { tone(523, 0.12, 'triangle', 0.08); tone(784, 0.3, 'triangle', 0.08, 0, 0.1); tone(1047, 0.35, 'sine', 0.04, 0, 0.1); },
+    // result screen: numbers counting up (e.f 0..1 climbs the pitch) and the little ding when a row lands
+    count: e => { if (!gate('count', 48)) return; const f = Math.max(0, Math.min(1, (e && e.f) || 0)); tone(660 + f * 660, 0.03, 'square', 0.025); },
+    countend: () => { tone(1568, 0.06, 'triangle', 0.05); tone(2093, 0.12, 'sine', 0.04, 0, 0.04); },
     // soft UI set
     ready: () => { tone(1320, 0.07, 'sine', 0.05); tone(1760, 0.09, 'sine', 0.045, 0, 0.05); },
     tap: () => { uiT = now(); tone(760, 0.035, 'sine', 0.06, -150); },
@@ -145,7 +186,8 @@ export function createAudio() {
   };
   sfx.card0 = () => sfx.card({ rarity: 0 }); sfx.card1 = () => sfx.card({ rarity: 1 }); sfx.card2 = () => sfx.card({ rarity: 2 });
   sfx.card3 = () => sfx.card({ rarity: 3 }); sfx.card4 = () => sfx.card({ rarity: 4 }); sfx.card5 = () => sfx.card({ rarity: 5 });
-  sfx.heartbeat = () => { tone(62, 0.13, 'sine', 0.3, -18); tone(52, 0.16, 'sine', 0.24, -14, 0.17); };
+  // revive countdown: e.n is 3, 2, 1: the thump gets louder and a high tick joins in
+  sfx.heartbeat = e => { const k = 1 + (3 - Math.max(1, Math.min(3, (e && e.n) || 3))) * 0.18; tone(62, 0.13, 'sine', Math.min(0.5, 0.3 * k), -18); tone(52, 0.16, 'sine', Math.min(0.4, 0.24 * k), -14, 0.17); if (e && e.n === 1) tone(1320, 0.05, 'square', 0.03, 0, 0.17); };
   sfx.star1 = () => sfx.star({ n: 1 }); sfx.star2 = () => sfx.star({ n: 2 }); sfx.star3 = () => sfx.star({ n: 3 });
 
   // ---------------------------------------------------------------- music
@@ -164,11 +206,11 @@ export function createAudio() {
     const m = mixS, boss = m.boss, tier = Math.floor(Math.max(0, m.stage - 1) / 5) % ROOTS.length;
     // groove meter and snake closeness raise the layers
     const lvl = Math.min(1, m.groove * 0.75 + m.danger * 0.45 + intensity * 0.2);
-    const bpm = boss ? 138 + m.danger * 8 : 104 + tier * 3 + m.danger * 10;
+    const bpm = simBpm(m.stage);   // the sim beat clock tempo, so on-beat shots line up with the kick
     const sp = 60 / bpm / 4;
     while (nextT < ac.currentTime + 0.25) {
       const s = step % 16, bar = (step >> 4) % 4, sec = (step >> 6), t = Math.max(0, nextT - ac.currentTime);
-      if (s % 4 === 0) { beatAt = nextT; beatBpm = bpm; }   // for the screen edge pulse (see beat())
+      if (s % 4 === 0) { beatAt = nextT; beatBpm = bpm; beatNow = bpm; }   // for the screen edge pulse (see beat())
       if (!muted) {
         const sc = boss ? SCALES.phryg : (tier % 3 === 2 ? SCALES.minor : SCALES.major);
         const root = 36 + ROOTS[tier] + (boss ? 5 : 0);
@@ -193,6 +235,13 @@ export function createAudio() {
         }
         // species motif: 4 notes spread over the second and fourth bar
         if ((bar & 1) === 1 && s % 4 === 0 && !boss && lvl > 0.05) tone(hz(note(sc, motifOf(m.stage)[s >> 2], root + 36)), sp * 3, 'sine', 0.032, 0, t, 'm');
+        // boss only: sub drone, off-beat sub pulses, a rising siren and a snare roll that lead into the next section
+        if (boss) {
+          if (s === 0) tone(hz(bassM - 12), sp * 15.5, 'sine', 0.1, 0, t, 'm');
+          if (s % 4 === 2) tone(hz(bassM - 12), sp * 1.6, 'sine', 0.12, -3, t, 'm');
+          if (bar === 3 && s === 8) tone(330, sp * 8, 'sawtooth', 0.018, 520, t, 'm');
+          if (bar === 3 && s >= 12) snare(t, 0.05 + (s - 12) * 0.03);
+        }
         // danger: a ticking clock when the snake is close to the line
         if (m.danger > 0.55 && s % 4 === 0) tone(1760, 0.03, 'square', 0.025 + m.danger * 0.02, 0, t, 'm');
         // section ends: riser into a crash
@@ -216,7 +265,7 @@ export function createAudio() {
     music(on) {
       musicOn = on && musicAllowed;
       clearInterval(timer);
-      if (musicOn && ensure()) { step = 0; nextT = ac.currentTime + 0.05; timer = setInterval(pump, 80); }
+      if (musicOn && ensure()) { step = 0; fresh = true; nextT = ac.currentTime + 0.05; timer = setInterval(pump, 80); }
     },
     setMusicAllowed(b) { musicAllowed = b; if (!b) { musicOn = false; clearInterval(timer); } },
     get musicAllowed() { return musicAllowed; },
@@ -224,6 +273,19 @@ export function createAudio() {
     // groove 0..1, danger 0..1 (how close the face is to the line), stage number, boss flag
     mix(o) { if (o) mixS = { stage: o.stage || 1, boss: !!o.boss, groove: Math.max(0, Math.min(1, o.groove || 0)), danger: Math.max(0, Math.min(1, o.danger || 0)) }; },
     duck,
+    get beatStreak() { return bstreak && now() - lastBeatShot < 60 / (beatNow || 120) * 1600 ? bstreak : 0; },
+    // align the music grid to the sim beat clock: simPhase 0..1 is the sim's beat phase now (see beatPhase in sim.js)
+    sync(simPhase) {
+      if (!musicOn || !ac || !beatNow || !(simPhase >= 0)) return;
+      const spb = 60 / beatNow, sp = spb / 4, Q = nextT + ((4 - (step & 3)) & 3) * sp;
+      let ap = ((ac.currentTime - (ac.outputLatency || ac.baseLatency || 0) - Q) / spb) % 1; if (ap < 0) ap += 1;
+      let e = simPhase - ap; e -= Math.round(e);   // -0.5..0.5 of a beat; positive: the sim is ahead, so the music must come sooner
+      const sec = e * spb;
+      if (fresh && step < 5) { nextT += sec < 0 ? -sec : spb - sec; fresh = false; return; }   // first alignment after the music starts
+      fresh = false;
+      if (Math.abs(sec) > 0.1) { if (gate('resync', 1500)) nextT += sec < 0 ? -sec : spb - sec; return; }
+      if (Math.abs(sec) > 0.012) nextT -= Math.max(-0.0025, Math.min(0.0025, sec));
+    },
     // where we are in the beat: { bpm, phase 0..1 since the last kick }, or null when the music is not playing
     beat() {
       if (!musicOn || !ac || !beatBpm) return null;

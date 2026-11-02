@@ -851,7 +851,7 @@ function damageSeg(g, s, dmg, crit, x, y) {
   if (s.hp <= 0 || s.shield || s.wave) return;
   const srcId = g.src || 'capsule'; g.dmgBy[srcId] = (g.dmgBy[srcId] || 0) + Math.min(dmg, s.hp);
   s.hp -= dmg; s.flash = 0.12;
-  g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s });
+  g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s, src: srcId });
 }
 function dropPickup(g, kind, x, y, v) {
   const a = g.rand() * TAU, sp = 90 + g.rand() * 170;
