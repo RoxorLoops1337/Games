@@ -88,12 +88,14 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   const cache = new Map();
   // bake(key, w, h, fn): fn draws around (0,0); the sprite is w x h logical units.
   function bake(key, w, h, fn, scale = dpr) {
-    if (cache.has(key)) return cache.get(key);
+    if (cache.has(key)) { if (key.startsWith('far|')) { const v = cache.get(key); cache.delete(key); cache.set(key, v); } return cache.get(key); }   // far skylines (1.1 MB each) are kept most-recent-last
+    if (key.startsWith('far|')) { let n = 0, first = null; for (const k of cache.keys()) if (k.startsWith('far|')) { n++; if (!first) first = k; } if (n >= FAR_KEEP) { const old = cache.get(first); if (old && old.c) old.c.width = 0; cache.delete(first); } }   // a long session visits all 50 skylines: drop the least recent
     let spr = null;
     const c = makeCanvas && makeCanvas(Math.ceil(w * scale), Math.ceil(h * scale));
     if (c) { const g = c.getContext('2d'); g.scale(scale, scale); g.translate(w / 2, h / 2); fn(g); spr = { c, w, h }; }
     cache.set(key, spr); return spr;
   }
+  const FAR_KEEP = 6;
   const B = 40;   // bake radius
   // layer(key, w, h, scale, fn): ONE big static layer (the background); a new key replaces the old one.
   let layerKey = null, layerSpr = null;
@@ -609,7 +611,10 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     let sq = 0; if (o.flash > 0) sq = -Math.min(1, o.flash / 0.12) * 0.16; if (o.sg === 'go') sq += 0.15; else if (o.sg === 'warn') sq -= 0.05 + Math.sin(t * 40) * 0.04;
     if (sq) { g.rotate(ang); g.scale(1 + sq, 1 - sq * 0.8); g.rotate(-ang); }
     if (boss && o.p2) p2Halo(g, R, t);
-    g.save(); g.rotate(ang); cellShape(g, P, R, { decor: false }); pattern(g, P, o.skin, R); g.restore();
+    // the body never animates, only its heading: baked once per species at heading 0 and blitted rotated (cellShape + pattern cost ~15 clips and ~100 paths a head)
+    const bodySpr = bake('headbody|' + (SPECIES[o.skin] ? o.skin : 'love'), B * 3.4, B * 3.4, gg => { cellShape(gg, P, R, { decor: false }); pattern(gg, P, o.skin, R); }, 3);
+    if (bodySpr) { g.save(); g.rotate(ang); g.drawImage(bodySpr.c, -bodySpr.w / 2, -bodySpr.h / 2, bodySpr.w, bodySpr.h); g.restore(); }
+    else { g.save(); g.rotate(ang); cellShape(g, P, R, { decor: false }); pattern(g, P, o.skin, R); g.restore(); }
     glossDot(g, R, 0.46, -0.5);
     if (boss && o.p2) blit(g, bake('p2crack', B * 2.6, B * 2.6, p2CrackPaint), 0, 0, B * 2.6, 0, false, 0.75 + Math.sin(t * 9) * 0.25);
     if (boss) { bossRing(g, R, t, BOSS_METAL[o.skin]); blit(g, bake('bossorn|' + o.skin, B * 5, B * 5, gg => bossOrn(gg, B, o.skin, -1, P)), 0, 0, B * 5); bossLive(g, R, t, o.skin, !!o.p2); }
