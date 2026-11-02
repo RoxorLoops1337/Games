@@ -2766,6 +2766,21 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   .tabs button:has(.newb) .pethint12{display:none}
   .fold[hidden]{display:none!important}
 /* end @css:36-a-firstsession */
+/* @css:37-a-small-phone */
+/* 37-a: 320x568 fixes. Battle: the stage card leads the tab (the quest strip follows) so the dock never hides it, a long title wraps to two lines.
+   Encore card: the in-run HUD no longer ghosts behind the heading. Welcome Chest prizes fit one line. */
+@media (max-height:600px){
+#tabBattle > .stagebox.bt{order:-1} #tabBattle .stagebox.bt > .fold{order:9}
+#hub #tabBattle .bt-hero .stagetitle{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:17px;line-height:1.08}
+#hub #tabBattle .bt-hero .stagesub{white-space:nowrap;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis}
+#revive{background:radial-gradient(ellipse at 50% 40%,rgba(120,30,60,.55),rgba(8,5,30,.97) 74%);backdrop-filter:blur(8px)}
+#revive h2{position:relative;padding:2px 14px;border-radius:14px;background:rgba(8,5,30,.7)}
+}
+@media (max-width:340px){
+#hub .fbtx span{gap:2px 4px;font-size:12px}
+#hub .fbtx span img{width:14px;height:14px}
+}
+/* end @css:37-a-small-phone */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
