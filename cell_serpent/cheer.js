@@ -13,6 +13,7 @@ export function createCheer() {
   }
   return {
     get t() { return t; }, get tier() { return tier; },
+    force(tr) { tier = tr; t = 1; },   // r11: a boss kill starts the cheer at a chosen tier
     // call once per frame with the live game and the frame time; returns true on the frame a milestone is hit
     step(g, dt) {
       if (!g) return false;

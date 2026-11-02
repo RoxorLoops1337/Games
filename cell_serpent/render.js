@@ -20,6 +20,7 @@ import { createCheer, HAT_FX, hatPose, EMOTE, heart, drawEmote } from './cheer.j
 import { cheerFrame } from './duo_cheer.js';
 import { drawDuoLife } from './duo_idle.js';
 import { createReact, reactEvent, barkDue, barkU, barkDraw, koPose, starAt, revivePose, glance, pouncePose, clawDraw } from './duo_react10.js';
+import { createB11, b11Event, pickPose, ringStar, weaponPose, lookUp, WEAPON_SPR, BOSS_TIER } from './duo_b11.js';
 import { newLeash, petFollow, scareEdge, tuckMood, SCARE_CALL, SCARE_COL, createDust, dustStep, dustDraw } from './duo_life9.js';
 import { createBoltLayer, boltPose, paintBolt } from './bolts_fx.js';
 
@@ -134,6 +135,9 @@ export function createRenderer(canvas, art, kit) {
   let FX = null;   // whole-screen feedback (screenfx.js), created after the helpers below exist
   function onEvent(e, g) {
     if (!OPT.reduceMotion) { reactEvent(R10, e, g.p.x, S.t); if (e.t === 'revive') { S.slump = null; for (const q of petState) q.hop = 1; } }   // r10: duo reactions
+    if (!OPT.reduceMotion) { const c11 = b11Event(B11, e, g, S.t);   // r11: celebrations
+      if (c11 === 'boss') { CH.force(BOSS_TIER); cheerHit = true; if (FX) FX.confetti(40); }
+      else if (c11) { for (const q of petState) q.hop = 1; if (c11 === 'weapon') addFloat(g.p.x, g.p.y - 190, 'NEW!', '#ffe14a', 26, -34); } }
     if (FX) FX.onEvent(e, g);
     if (HJ) HJ.event(e, g);
     switch (e.t) {
@@ -377,7 +381,7 @@ export function createRenderer(canvas, art, kit) {
   }
 
   // 02-animal-art: pets bob, blink, hop when the duo sings and look alert when a snake head is near
-  const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }], duoDust = createDust(), R10 = createReact(), STAR10 = { x: 0, y: 0, front: false, s: 1 };   // r9: springy pets and dust; r10: run end, revive, glance, pounce, bark
+  const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }], duoDust = createDust(), R10 = createReact(), B11 = createB11(), RING11 = { x: 0, y: 0, s: 1, a: 1 }, DUO11 = { y: 0, rot: 0, sq: 1, arms: false }, STAR10 = { x: 0, y: 0, front: false, s: 1 };   // r9: springy pets and dust; r10: run end, revive, glance, pounce, bark
   const CH = createCheer(); let cheerHit = false;   // 02-animal-art r4: pets cheer on kill streaks
   // 02-animal-art: fire reactions (kitten swats a paw, puppy wags its tail) and idle emotes (turtle Zzz, lamb hums, piglet hearts)
   function petExtras(id, st, px, py, s2, i) {
@@ -451,10 +455,10 @@ export function createRenderer(canvas, art, kit) {
       const blink = (S.t * 0.8 + i * 1.7) % 3.1 < 0.13;
       const sl = slumpK(), tk = OPT.reduceMotion || ch || scared || sl > 0.05 || st.hop > 0.1 ? null : petTrick(id, i), mood = sl > 0.2 || tuckMood(id, scared) >= 0 ? 7 : st.hop > 0.35 || ch ? 3 : tk && tk.mood >= 0 ? tk.mood : scared ? 2 : blink ? 1 : 0;   // slump: eyes shut
       const k = Math.abs(Math.sin(ph));
-      ctx.save(); ctx.globalAlpha *= 0.3 * (1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, 24 - (idle + hopY) * 0.3, 7, 0, 0, TAU); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.globalAlpha *= 0.3 * Math.max(0, 1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, Math.max(4, 24 - (idle + hopY) * 0.3), 7, 0, 0, TAU); ctx.fill(); ctx.restore();
       const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = (1 + (1 - k) * 0.05 + st.hop * 0.05 + sl * 0.1 + (OPT.reduceMotion ? 0 : lf.stretch * 0.08)) * (tk ? tk.sx : 1), sy = (1 - (1 - k) * 0.05 - st.hop * 0.03 - sl * 0.12) * (tk ? tk.sy : 1);
       if (cheerHit && !OPT.reduceMotion) CH.burst(px, base - 40, Math.max(0, CH.tier), id);
-      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq * ch.sx : 1) * (pk ? pk.sx : 1), sy / (ch ? ch.sq : 1) * (pk ? pk.sy : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px + (pk ? pk.dx : 0), base - idle - hopY - (tk ? tk.dy : 0) - (pk ? pk.dy : 0), sz, gl + (pk ? pk.rot : 0) + (tk ? tk.rot : 0) + s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0) - s2 * sl * 0.2 + (OPT.reduceMotion ? 0 : lf.lean)); ctx.restore(); }
+      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq * ch.sx : 1) * (pk ? pk.sx : 1), sy / (ch ? ch.sq : 1) * (pk ? pk.sy : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px + (pk ? pk.dx : 0), base - idle - hopY - (tk ? tk.dy : 0) - (pk ? pk.dy : 0), sz, gl + (pk ? pk.rot : 0) + (tk ? tk.rot : 0) + s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0) - s2 * sl * 0.2 - (OPT.reduceMotion ? 0 : s2 * 0.14 * lookUp(S.t - B11.wT)) + (OPT.reduceMotion ? 0 : lf.lean)); ctx.restore(); }
       if (st.hop > 0.6) sparkleAt(px + s2 * 28, base - idle - hopY - 36, 7 + st.hop * 3);
       if (tk && tk.u >= 0) {   // trick extras: a question mark over the tilting puppy, dust under the running hamster
         if (id === 'puppy') { ctx.save(); ctx.globalAlpha = Math.sin(tk.u * Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2d1a14'; ctx.lineWidth = 3; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.strokeText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.fillText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.restore(); }
@@ -488,6 +492,23 @@ export function createRenderer(canvas, art, kit) {
     }
     ctx.restore();
   }
+  function duo11() {   // r11: the duo's pick hop, and the arms-up pose while a new weapon is held high
+    const pk = pickPose(S.t - B11.pickT), wp = weaponPose(S.t - B11.wT, false);
+    if (pk.u < 0 && !wp.hold) return null;
+    DUO11.y = pk.u < 0 ? 0 : pk.dy; DUO11.sq = pk.u < 0 ? 1 : pk.sy; DUO11.rot = 0; DUO11.arms = wp.hold;
+    return DUO11;
+  }
+  function star4(x, y, r, col) {   // r11: a chunky four-point star with a dark outline, readable on any stage
+    ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = -Math.PI / 2 + k * Math.PI / 4, rr = k & 1 ? r * 0.42 : r; ctx[k ? 'lineTo' : 'moveTo'](x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath();
+    ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = '#3a1d33'; ctx.stroke(); ctx.fillStyle = col; ctx.fill();
+  }
+  function celebrate11(p) {   // r11: stars ring the duo after a pick, the new weapon spins in over their heads
+    const pu = S.t - B11.pickT;
+    if (pu >= 0 && pu < 0.7) { ctx.save(); for (let i = 0; i < 6; i++) { const o = ringStar(RING11, i, 6, p.x, p.y - 30, pu / 0.7); ctx.globalAlpha = o.a; star4(o.x, o.y, o.s * 1.5, i & 1 ? '#fff6a8' : '#ffe14a'); } ctx.restore(); }
+    const wp = weaponPose(S.t - B11.wT, false);
+    if (wp.u >= 0) { const id = WEAPON_SPR[B11.wId], spr = kit && id && kit.SPR.weapon(id);
+      if (spr) { glow(p.x, p.y + wp.y, 70 * wp.s, '#ffe14a', 0.4 * wp.a); ctx.save(); ctx.globalAlpha = wp.a; blit(spr, p.x, p.y + wp.y, 150 * wp.s, wp.rot); ctx.restore(); if (wp.hold) sparkleAt(p.x + Math.cos(S.t * 6) * 44, p.y + wp.y + Math.sin(S.t * 6) * 26, 7); } }
+  }
   function drawPlayer(g) {
     const p = g.p;
     if (p.iframes > 0 && Math.floor(S.t * 20) % 2 === 0 && !(p.shield > 0)) ctx.globalAlpha = 0.45;
@@ -503,8 +524,8 @@ export function createRenderer(canvas, art, kit) {
     const key = singing ? 'duo_sing' : 'duo_idle';
     const moving = Math.hypot(p.mx, p.my) > 0.1, hop = S.t - S.lastShot < 0.12 ? 1 - (S.t - S.lastShot) / 0.12 : 0;
     const sq = 1 + Math.sin(S.t * (moving ? 9 : 2.6)) * (moving ? 0.05 : 0.018) + hop * 0.03;
-    const im = art && art.get(key), dch = OPT.reduceMotion ? null : CH.duo(S.t), dY = dch ? dch.y : 0;   // 02-animal-art r5: the duo hops on a streak
-    const cf = dch && im ? cheerFrame(art.get(key), singing) : null;   // r7: arms up while the cheer lasts; r8: the singing picture has its own arms-up frame
+    const im = art && art.get(key), dch = OPT.reduceMotion ? null : CH.duo(S.t) || duo11(), dY = dch ? dch.y : 0;   // 02-animal-art r5: the duo hops on a streak
+    const cf = dch && dch.arms !== false && im ? cheerFrame(art.get(key), singing) : null;   // r7: arms up while the cheer lasts; r8: the singing picture has its own arms-up frame
     if (cf) { const h = 170, w = h * im.width / im.height, dq = dch.sq; ctx.save(); ctx.translate(p.x, p.y - 26 - hop * 4 - dY); ctx.rotate(p.mx * 0.05 + dch.rot); const ww = w / sq / dq, hh = h * sq * dq; ctx.drawImage(cf, -ww / 2, -hh / 2, ww, hh); ctx.restore(); idleSparkles(p, singing); }
     else if (im && !OPT.reduceMotion && im.width === 520) {   // r7: R and J sway on their own phases, heads nod on the beat
       const h = 170, w = h * im.width / im.height, dq = dch ? dch.sq : 1, ww = w / sq / dq, hh = h * sq * dq, nod = g.phase === 'play' ? Math.pow(1 - beatPhase(g), 5) * ((g.groove || 0) >= 6 ? 1 : 0.5) : 0.3;
@@ -512,6 +533,7 @@ export function createRenderer(canvas, art, kit) {
     }
     else if (im) { const h = 170, w = h * im.width / im.height, dq = dch ? dch.sq : 1; img(key, p.x, p.y - 26 - hop * 4 - dY, w / sq / dq, h * sq * dq, p.mx * 0.05 + (moving ? 0 : Math.sin(S.t * 1.3) * 0.012) + (dch ? dch.rot : 0)); idleSparkles(p, singing); }
     else { glow(p.x, p.y, 40, '#39f0ff', 0.7); ctx.fillStyle = '#39f0ff'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 22, 0, TAU); ctx.fill(); ctx.stroke(); }
+    if (!OPT.reduceMotion) celebrate11(p);
     if (!OPT.reduceMotion && g.phase === 'play') { dustStep(duoDust, p.x, p.y + 38, p.mx, Math.min(0.05, lastDt)); dustDraw(ctx, duoDust); }   // r9: dust kicks up under the duo's feet
     petsDraw(g, p, singing);
     drawHog(g);
