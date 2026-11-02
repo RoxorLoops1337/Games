@@ -41,7 +41,7 @@ const BOSS_DY = 24;   // the boss HP bar pushes the stat row down
 
 export function createHud(env) {
   const { ctx, text, blit, kit, S, INK, glow, sparkleAt } = env;
-  const T = { g: null, pop: {}, cdMax: {}, cdLast: {}, chestAt: {}, lastProg: 0, readyAt: {}, lastSnd: -9, bossTot: 0, bossV: 1, bossHitAt: -9, encV: 0, encFull: -9, ins: { t: 0, b: 0 } };
+  const T = { g: null, pop: {}, cdMax: {}, cdLast: {}, chestAt: {}, lastProg: 0, readyAt: {}, lastSnd: -9, bossTot: 0, bossV: 1, bossHitAt: -9, encV: 0, encFull: -9, press: {}, ins: { t: 0, b: 0 } };
   const reduce = () => !!(env.OPT && env.OPT.reduceMotion);
 
   function rr(x, y, w, h, r) {
@@ -119,10 +119,27 @@ export function createHud(env) {
     scaled(542, cy + 2, sc, () => text(String(coins), 0, 0, 26, '#ffd24a', '#0b1020', 'left'));
     // pause and stats: round glass buttons (hit zones live in main.js at the same spots)
     const bx = W - 38;
+    const pk = pressK('pause');   // press pulse: dips under the finger, springs back, a ring rings out
+    ctx.save(); ctx.translate(bx, cy); ctx.scale(pk.s, pk.s); ctx.translate(-bx, -cy);
     glassCircle(bx, cy, 26); ctx.fillStyle = '#fff';
     rr(bx - 11, cy - 11, 7, 22, 3); ctx.fill(); rr(bx + 4, cy - 11, 7, 22, 3); ctx.fill();
+    ctx.restore(); pressRing(bx, cy, pk);
+    const sk = pressK('stats');
+    ctx.save(); ctx.translate(bx, 112); ctx.scale(sk.s, sk.s); ctx.translate(-bx, -112);
     glassCircle(bx, 112, 26); ctx.fillStyle = '#fff';
     for (const [i, hgt] of [[0, 12], [1, 20], [2, 28]]) { rr(bx - 15 + i * 11, 112 + 14 - hgt, 8, hgt, 3); ctx.fill(); }
+    ctx.restore(); pressRing(bx, 112, sk);
+  }
+  // canvas press pulse for the round HUD buttons (0.42 s): scale 0.82 -> 1.12 -> 1 plus a fading ring
+  function pressK(z) {
+    const k = (performance.now() - (T.press[z] === undefined ? -1e9 : T.press[z])) / 420;
+    if (reduce() || k < 0 || k >= 1) return { s: 1, k: 1 };
+    const s = k < 0.22 ? 1 - 0.18 * (k / 0.22) : 0.82 + 0.3 * Math.sin(Math.min(1, (k - 0.22) / 0.4) * Math.PI * 0.5) - 0.12 * Math.max(0, (k - 0.62) / 0.38);
+    return { s, k };
+  }
+  function pressRing(x, y, pk) {
+    if (pk.k >= 1) return;
+    ctx.beginPath(); ctx.arc(x, y, 26 + 20 * pk.k, 0, TAU); ctx.strokeStyle = `rgba(255,255,255,${(0.7 * (1 - pk.k)).toFixed(2)})`; ctx.lineWidth = 3 * (1 - pk.k) + 1; ctx.stroke();
   }
 
   function progress(g) {
@@ -345,5 +362,5 @@ export function createHud(env) {
     if (p.shield > 0) { glass(W - 180, H - 130 - b, 160, 34, 17, 'rgba(127,232,255,.7)'); text('SHIELD ' + p.shield.toFixed(0), W - 100, H - 112 - b, 18, '#7fe8ff'); }
     if (p.rage > 0) { glass(W - 180, H - 170 - b, 160, 34, 17, 'rgba(255,210,74,.7)'); text('RAGE ' + p.rage.toFixed(0), W - 100, H - 152 - b, 18, '#ffd24a'); }
   }
-  return { draw, encore, combo, dy, top: () => T.ins.t };
+  return { draw, encore, combo, dy, top: () => T.ins.t, press: z => { T.press[z] = performance.now(); } };
 }
