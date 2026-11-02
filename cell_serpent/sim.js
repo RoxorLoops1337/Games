@@ -1686,7 +1686,7 @@ export function botInput(g) {
 // ---------------------------------------------------------------- retention loops (all optional gifts, nothing here gates progress)
 // save.addict: sp (kills per snake species), sk (damage points per skill), claimed (mastery + collection rewards),
 // spin (last lucky spin day), week (weekly challenge), seen (last visit, ms) for the comeback gift.
-export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1, n: 0, shield: 0 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0, q: { day: 0, p: [0, 0, 0], chest: 0 }, season: { key: 0, n: 0, last: 0, claimed: {}, note: '' }, ann: {}, annInit: 0, qs: { last: 0, n: 0, b: 0 }, tok: 0, wb: {} });
+export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1, n: 0, shield: 0 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0, q: { day: 0, p: [0, 0, 0], chest: 0 }, season: { key: 0, n: 0, last: 0, claimed: {}, note: '' }, ann: {}, annInit: 0, qs: { last: 0, n: 0, b: 0 }, tok: 0, wb: {}, bs: 0 });
 export function sanitizeAddict(raw) {
   const a = addictDefault(), num = (v, d = 0) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : d);
   for (const k of SKINS) a.sp[k] = num(raw && raw.sp && raw.sp[k]);
@@ -1702,6 +1702,7 @@ export function sanitizeAddict(raw) {
   a.annInit = raw.annInit ? 1 : 0;
   a.tok = Math.min(TOKEN_MAX, num(raw.tok));
   if (raw.wb && typeof raw.wb === 'object') for (const d of WEEK_DEFS) { const n = Math.min(99, num(raw.wb[d.id])); if (n) a.wb[d.id] = n; }
+  a.bs = Math.min(63, num(raw.bs));
   if (raw.qs && typeof raw.qs === 'object') a.qs = { last: num(raw.qs.last), n: Math.min(9999, num(raw.qs.n)), b: Math.min(9, num(raw.qs.b)) };
   return a;
 }
