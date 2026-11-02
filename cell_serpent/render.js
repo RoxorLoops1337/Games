@@ -96,7 +96,7 @@ export function createRenderer(canvas, art, kit) {
     return best;
   }
   // numbers (damage, HP, combo, timers) are laid out from one strip per glyph, so a value never seen before bakes nothing
-  const NUMSTR = /^[0-9+x.,%s!-]+$/, ADV = new Map();
+  const NUMSTR = /^[0-9+x.,%s!kKM-]+$/, ADV = new Map();
   function advOf(ps, ch) {
     let m = ADV.get(ps); if (!m) ADV.set(ps, m = new Map());
     let a = m.get(ch); if (a === undefined) { ctx.font = `800 ${ps}px system-ui, -apple-system, "Segoe UI", sans-serif`; m.set(ch, a = ctx.measureText(ch).width); }
