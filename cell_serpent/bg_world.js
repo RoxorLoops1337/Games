@@ -2,6 +2,7 @@
 // a few cheap animated pieces (swinging spotlights, drifting motes, pulsing ring circle).
 import { W, H, LINE_Y } from './sim.js';
 import { mix } from './art_draw.js';
+import { drawFloorFx, drawRain, drawBossCracks } from './floor_fx.js';
 import { bakeStageExtras, drawClouds, drawFootlights, drawBossFx, drawCrowdLights, paintGrooves } from './bg_stage.js';
 
 const TAU = Math.PI * 2;
@@ -333,15 +334,7 @@ export function drawBossPhase(c, kit, t, ph, pulse, flash, reduce, low) {
     b.fillStyle = g; b.fillRect(-W / 4, -H / 4, W / 2, H / 2);
   }, 1);
   if (vig) { c.globalAlpha = ph * (0.7 + beat * 0.3); c.drawImage(vig.c, 0, 0, W, H); }
-  const cr = kit && kit.bake('bosscracks', W, H - LINE_Y, b => {
-    const r = rnd(41); b.translate(-W / 2, -(H - LINE_Y) / 2); b.lineCap = 'round'; b.lineJoin = 'round';
-    for (let i = 0; i < 9; i++) {
-      let x = 40 + i * 80 + r() * 30, y = 4; const pts = [[x, y]];
-      while (y < H - LINE_Y - 20) { y += 14 + r() * 18; x += (r() - 0.5) * 38; pts.push([x, y]); }
-      for (const [lw, col] of [[9, 'rgba(255,70,40,.25)'], [3.2, 'rgba(255,170,70,.95)'], [1.2, 'rgba(255,245,200,1)']]) { b.lineWidth = lw; b.strokeStyle = col; b.beginPath(); pts.forEach(([px, py], j) => j ? b.lineTo(px, py) : b.moveTo(px, py)); b.stroke(); }
-    }
-  }, 1);
-  if (cr) { c.globalCompositeOperation = 'lighter'; c.globalAlpha = ph * (0.3 + beat * 0.5); c.drawImage(cr.c, 0, LINE_Y); }
+  drawBossCracks(c, kit, t, ph, beat);   // floor_fx.js: forked cracks that run down from the rail as the phase builds
   if (flash > 0) { c.globalCompositeOperation = 'lighter'; c.globalAlpha = 1; c.fillStyle = `rgba(255,60,90,${0.5 * flash})`; c.fillRect(0, 0, W, H); const rg = c.createRadialGradient(W / 2, LINE_Y, 10, W / 2, LINE_Y, 640); rg.addColorStop(0, `rgba(255,220,200,${0.5 * flash})`); rg.addColorStop(1, 'rgba(255,60,90,0)'); c.fillStyle = rg; c.fillRect(0, 0, W, H); }
   c.restore();
 }
@@ -357,6 +350,8 @@ export function createBgFx() {
     if (boss && !o.reduce) lightning(c, bg, t, o.phase || 0);
     if (boss && o.phase > 0.01) drawBossPhase(c, kit, t, o.phase, pulse, o.flash || 0, o.reduce, o.low);
     if (!o.reduce) { if (boss) drawBossFx(c, t, pulse, o.low, kit); drawFootlights(c, t, pulse, th, boss); }
+    drawFloorFx(c, { kit, skin: o.skin, stage: o.stage, boss, t, pulse, reduce: o.reduce, low: o.low });
+    drawRain(c, t, { skin: o.skin, reduce: o.reduce, low: o.low });
     // speaker cones thump on the kick
     if (!o.reduce) {
       c.save();
