@@ -2,6 +2,7 @@
 // Pure rules (STICKERS, stickerState) plus a small renderer. Seen stickers live in their own localStorage key, the save is untouched.
 import { KEEPSAKES, keepMax, levelInfo } from './sim.js';
 import { hasSticker } from './title_b8.js';
+import { allSecrets } from './title_b10.js';
 
 const KEY = 'cell_serpent_stk9';
 const stars3 = s => Object.values(s.stars || {}).filter(v => v >= 3).length;
@@ -20,6 +21,7 @@ export const STICKERS = [
   { id: 'snack', icon: '🥕', name: 'Snack Table Set', hint: 'Complete the Snack Table set', col: '#7be0a0', ok: s => ownAll(s, 'snack') },
   { id: 'pop', icon: '💥', name: 'Pop Star', hint: 'Pop 2000 cells', col: '#ff6a6a', ok: s => s.kills >= 2000 },
   { id: 'tune', icon: '🎵', name: 'Snake Tune', hint: 'Poke the title snake', secret: true, col: '#ffd84d', ok: (s, x) => !!x.tune },
+  { id: 'keeper', icon: '🗝️', name: 'Secret Keeper', hint: 'Find every title secret', secret: true, col: '#ff9de0', ok: () => allSecrets() },
   { id: 'hot', icon: '🌶️', name: 'Spicy Mode', hint: 'Clear a stage on hard', secret: true, col: '#ff6a3a', ok: s => s.hardCleared >= 1 },
   { id: 'shine', icon: '✨', name: 'Polished', hint: 'Max out a keepsake', secret: true, col: '#4fd8f0', ok: s => KEEPSAKES.some(k => s.keeps[k.id].lv >= keepMax(k)) },
   { id: 'pig', icon: '🐷', name: 'Piggy Bank', hint: 'Hold 10000 beats at once', secret: true, col: '#ff9db0', ok: s => s.beats >= 10000 },

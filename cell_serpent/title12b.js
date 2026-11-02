@@ -30,6 +30,11 @@ export function awayText(h) {
   if (h < 24) return `${Math.floor(h)}h away`;
   const d = Math.floor(h / 24); return d === 1 ? '1 day away' : `${d} days away`;
 }
+// a short coach line for the first runs after a fall (tips use only rules the player has seen; no numbers)
+export function coachLine(save) {
+  if (!save || !save.runs || (save.cleared || 0) >= 2) return '';
+  return ['Tip: the shielded face pops once it is alone', 'Tip: pop yellow cells for upgrades', 'Tip: slide early, the face is heading for the line'][Math.min(2, save.runs - 1)];
+}
 // the greeting: a title line, and a small second line about what waits. Returns null for a brand new player.
 export function welcomeBack(save, now, hours) {
   if (!save || !save.runs) return null;
@@ -41,9 +46,9 @@ export function welcomeBack(save, now, hours) {
   const tip = away && save.idle ? idleAmount(save, now) : 0;
   if (tip >= 50) bits.unshift(`\u{1F9FA} +${tip} Beats`);
   if ((save.cleared || 0) === 2 && save.runs >= 3) bits.push('\u{1F4A1} Pop yellow cells to upgrade');   // a nudge for the harsh early stages, no numbers changed
-  return { head: away ? 'Welcome back!' : 'Ready for more?', sub: `Stage ${next} is waiting` + (away ? ` · ${away}` : ''), bits };
+  return { coach: coachLine(save), head: away ? 'Welcome back!' : 'Ready for more?', sub: `Stage ${next} is waiting` + (away ? ` · ${away}` : ''), bits };
 }
 export function welcomeHTML(w) {
   if (!w) return '';
-  return `<div class="wb12-t">${w.head}</div><div class="wb12-s">${w.sub}</div>` + (w.bits.length ? `<div class="wb12-b">${w.bits.map(b => `<span>${b}</span>`).join('')}</div>` : '');
+  return `<div class="wb12-t">${w.head}</div><div class="wb12-s">${w.sub}</div>` + (w.coach ? `<div class="wb12-c">${w.coach}</div>` : '') + (w.bits.length ? `<div class="wb12-b">${w.bits.map(b => `<span>${b}</span>`).join('')}</div>` : '');
 }
