@@ -288,6 +288,8 @@ export const PASSIVES = [
   { id: 'guard', name: 'Door Stopper', max: 6, w: 0.6, vals: [15, 22, 30, 40, 50, 60], cap: 600, fmt: v => 'Pushes the snake back ' + v * 6 + ' px', desc: 'Pushes the snake back 90 px', apply: (p, v, g) => { if (g) knockBack(g, v * 6); } },
   { id: 'enc', name: 'Standing Ovation', max: 4, w: 0.6, min: 1, minStage: 4, vals: [12, 16, 22, 30, 40, 50], cap: 120, fmt: v => 'Encore charges ' + v + '% faster and its beam is ' + Math.round(v / 2) + '% wider', desc: 'The Encore charges 15% faster, with a wider beam', apply: () => {} },
   { id: 'dbeat', name: 'Downbeat', max: 4, w: 0.6, min: 1, minStage: 5, vals: [20, 30, 45, 65, 90, 120], cap: 300, fmt: v => 'Notes fired on the beat hit ' + v + '% harder', desc: 'Notes fired on the beat hit 25% harder', apply: () => {} },
+  { id: 'fork', name: 'Tuning Fork', max: 4, w: 0.55, min: 1, minStage: 10, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Ward cells shield ' + v + '% less and lullabies last ' + v + '% longer', desc: 'Ward cells shield 25% less, lullabies last 25% longer', apply: () => {} },
+  { id: 'gear', name: 'Golden Ear', max: 4, w: 0.55, min: 1, minStage: 6, vals: [30, 60, 100, 150], cap: 150, fmt: v => 'Gold cells stay ' + v + '% longer and pay ' + Math.round(v / 2) + '% more', desc: 'Gold cells stay 30% longer and pay 15% more', apply: () => {} },
   { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, minStage: 4, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
@@ -639,18 +641,20 @@ function resample(poly, step) {
   }
   return out;
 }
-function ringPath() {
-  const { cx, cy, R } = RING, r0 = 330, turns = 1.6, pts = [];
+const RING_TURNS = [1.6, 1.25, 1.9];   // ring stages cycle through a loose, a short and a tight spiral
+function ringPath(n = 6) {
+  const { cx, cy, R } = RING, r0 = 330, turns = RING_TURNS[(Math.floor(n / 6) - 1) % 3], pts = [];
   for (let y = -200; y <= cy; y += 6) pts.push({ x: cx - r0, y });
   const steps = 360;
   for (let k = 1; k <= steps; k++) { const t = k / steps, a = Math.PI - TAU * turns * t, r = r0 - (r0 - R) * t; pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }); }
   const poly = resample(pts, 6), cum = [0];
   for (let i = 1; i < poly.length; i++) cum.push(cum[i - 1] + Math.hypot(poly[i].x - poly[i - 1].x, poly[i].y - poly[i - 1].y));
-  return { pts: poly, cum, len: cum[cum.length - 1], kind: 'ring' };
+  const path = { pts: poly, cum, len: cum[cum.length - 1], kind: 'ring' };
+  return (Math.floor(n / 6) - 1) % 2 === 0 ? path : mirrorPath(path);   // ring stages alternate the winding direction
 }
 const mirrorPath = p => ({ ...p, pts: p.pts.map(q => ({ x: W - q.x, y: q.y })) });
 export function buildPath(n) {
-  if (stageKind(n) === 'ring') return ringPath();
+  if (stageKind(n) === 'ring') return ringPath(n);
   const R = rng(n * 7919 + 13), k = pathKind(n), end = LINE_Y + 40, cx = W / 2;
   let poly = [];
   const sine = (A, lam, ph, grow = 0) => { for (let y = -160; y <= end; y += 6) poly.push({ x: cx + (A + grow * (y / end)) * Math.sin((y / lam) * TAU + ph), y }); };
@@ -753,6 +757,7 @@ function spawnSnake(g, n, o = {}) {
   markSpecials(g, n, segs, len);
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
   const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1);
+  segs.hpMax = segs.reduce((a, s) => a + s.max, 0);
   g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
 }
@@ -761,6 +766,7 @@ function spawnSnake(g, n, o = {}) {
 // Gold cell: from stage 4 one plain cell per snake glitters. Pop it within GOLD_TIME seconds of it
 // showing on screen for a big Beats burst. No random numbers are drawn, so existing runs do not change.
 export const ECHO_WAVE_FROM = 20;
+export const P2_HP = 0.4, P2_WAVE = 6.2;   // boss phase 2: below 40% hp the shield wave runs faster and the surges come sooner
 export const GOLD_TIME = 9, GOLD_MUL = 12, GOLD_FROM = 4;
 function markGold(g, n, segs, len) {
   if (g.mode !== '' || n < GOLD_FROM || len < 12) return;
@@ -769,17 +775,20 @@ function markGold(g, n, segs, len) {
 // Ward cell (stage 10+): while it lives, the two cells either side of it take half damage.
 // Lullaby cell (stage 12+): pop it and the whole snake crawls slowly for LULL_TIME seconds.
 // Both are plain cells with a flag and are placed without random numbers, so existing runs do not change.
+export const DRUM_FROM = 18, DRUM_SPEED = 1.12;   // Drummer cell (stage 18+): while it lives the whole snake crawls 12% faster
 export const WARD_FROM = 10, LULL_FROM = 12, LULL_TIME = 2.5, WARD_CUT = 0.5, WARD_REACH = 2;
 function markSpecials(g, n, segs, len) {
   if (g.mode !== '' || len < 14) return;
-  const put = (frac, flag) => { for (let j = Math.round(len * frac); j < len; j++) if (segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull) { segs[j][flag] = true; return; } };
+  const put = (frac, flag) => { for (let j = Math.round(len * frac); j < len; j++) if (segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull && !segs[j].drum) { segs[j][flag] = true; return; } };
   if (n >= WARD_FROM) put(0.35, 'ward');
   if (n >= 25 && len >= 24) put(0.78, 'ward');
   if (n >= LULL_FROM) put(0.45, 'lull');
+  if (n >= DRUM_FROM && len >= 16) put(0.62, 'drum');
 }
 function wardTick(sn) {
   const segs = sn.segs;
-  for (let i = 0; i < segs.length; i++) segs[i].warded = false;
+  sn.drum = false;
+  for (let i = 0; i < segs.length; i++) { segs[i].warded = false; if (segs[i].drum && segs[i].hp > 0) sn.drum = true; }
   for (let i = 1; i < segs.length; i++) if (segs[i].ward && segs[i].hp > 0) for (let j = Math.max(1, i - WARD_REACH); j <= Math.min(segs.length - 1, i + WARD_REACH); j++) if (j !== i) segs[j].warded = true;
 }
 // Encore blast: hits and kills fill the meter, tap the duo (or the button) to fire a beam straight up.
@@ -869,7 +878,7 @@ const damageSegAs = (src, g, ...a) => { g.src = src; damageSeg(g, ...a); g.src =
 function damageSeg(g, s, dmg, crit, x, y) {
   if (s.hp <= 0 || s.shield || s.wave) return;
   const srcId = g.src || 'capsule'; g.dmgBy[srcId] = (g.dmgBy[srcId] || 0) + Math.min(dmg, s.hp);
-  if (s.warded) dmg *= WARD_CUT;
+  if (s.warded) dmg *= WARD_CUT + (1 - WARD_CUT) * uv(g, 'fork') / 100;
   s.hp -= dmg; s.flash = 0.12;
   g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s, src: srcId });
 }
@@ -905,10 +914,10 @@ function onKill(g, s, sn) {
   else dropPickup(g, 'coin', s.x, s.y, coinV);
   if (s.carry === 'chest') { g.pickups.push({ kind: 'chest', x: s.x, y: s.y, vx: 0, vy: 40, v: 1, age: 0, vac: false }); g.events.push({ t: 'chestdrop', x: s.x, y: s.y }); }
   addEncore(g, ENCORE_KILL);
-  if (s.gold && s.goldT > 0) { g.goldPopped++; const v = coinV * GOLD_MUL; g.coins += v * g.p.coinMul * (g.coinK || 1); g.events.push({ t: 'goldpop', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)) }); }
+  if (s.gold && s.goldT > 0) { g.goldPopped++; const v = coinV * GOLD_MUL * (1 + uv(g, 'gear') / 200); g.coins += v * g.p.coinMul * (g.coinK || 1); g.events.push({ t: 'goldpop', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)) }); }
   if (!s.isHead && s.y > LINE_Y - CLUTCH_DIST) { g.clutches++; addEncore(g, ENCORE_CLUTCH); g.events.push({ t: 'clutch', x: s.x, y: s.y }); }
   g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin, carry: s.carry });
-  if (s.lull) { for (const o of g.snakes) o.slow = Math.max(o.slow, LULL_TIME); g.events.push({ t: 'lull', x: s.x, y: s.y }); }
+  if (s.lull) { for (const o of g.snakes) o.slow = Math.max(o.slow, LULL_TIME * (1 + uv(g, 'fork') / 100)); g.events.push({ t: 'lull', x: s.x, y: s.y }); }
   if (s.kind === 'bomb') {
     g.bombsPopped++;
     const R = 150;
@@ -1246,9 +1255,9 @@ export function step(g, dt, input) {
       sn.surgeT -= dt;
       if (sn.surge === 'idle' && sn.surgeT <= 0) { sn.surge = 'warn'; sn.surgeT = 0.6; g.events.push({ t: 'surgewarn' }); }
       else if (sn.surge === 'warn' && sn.surgeT <= 0) { sn.surge = 'go'; sn.surgeT = 1.1; g.events.push({ t: 'surge' }); }
-      else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.surgeT = (sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5); }
+      else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.surgeT = ((sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5)) * (sn.p2 ? 0.6 : 1); }
     }
-    const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? 0.55 : 1) * (sn.surge === 'go' ? 2.6 : 1) * (g.phase === 'clear' ? 0 : 1);
+    const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? 0.55 : 1) * (sn.surge === 'go' ? 2.6 : 1) * (sn.drum ? DRUM_SPEED : 1) * (g.phase === 'clear' ? 0 : 1);
     const segs = sn.segs, last = segs.length - 1;
     let total = 0;
     for (let i = 0; i < last; i++) total += spacing(segs[i], segs[i + 1]);
@@ -1265,7 +1274,8 @@ export function step(g, dt, input) {
     if (sn.healT <= 0 && g.phase === 'play') { sn.healT = 1.2; for (let i = 1; i < segs.length; i++) if (segs[i].kind === 'mender' && segs[i].hp > 0) { for (let j = Math.max(1, i - 2); j <= Math.min(segs.length - 1, i + 2); j++) if (j !== i && segs[j].hp > 0 && segs[j].hp < segs[j].max) segs[j].hp = Math.min(segs[j].max, segs[j].hp + segs[j].max * 0.06); g.events.push({ t: 'mend', x: segs[i].x, y: segs[i].y }); } }
     { const left = path.len - segs[0].ps, close = clamp(1 - left / 300, 0, 1); g.faceMax = Math.max(g.faceMax, segs[0].ps / path.len); if (g.phase === 'play' && close > 0) { g.danger = Math.max(g.danger * 0.9, close); g.dangerT -= dt; if (g.dangerT <= 0) { g.dangerT = 0.8; g.events.push({ t: 'danger', k: close }); } } }
     // boss: a wave of shields rolls down the chain like a beat. Cells inside it cannot be hit, so time your shots.
-    const wavePos = sn.boss ? (g.t * 4.5) % (segs.length + 8) : -99;
+    if (sn.boss && !sn.p2 && g.phase === 'play') { let left = 0; for (const q of segs) left += Math.max(0, q.hp); if (left < segs.hpMax * P2_HP) { sn.p2 = true; sn.p2T = g.t; sn.surgeT = Math.min(sn.surgeT, 1.2); g.events.push({ t: 'phase2' }); } }
+    const wavePos = sn.boss ? ((sn.p2 ? sn.p2T * 4.5 + (g.t - sn.p2T) * P2_WAVE : g.t * 4.5)) % (segs.length + 8) : -99;
     const wave2 = sn.boss && g.stage >= ECHO_WAVE_FROM ? (segs.length + 8) - ((g.t * 3.2 + 7) % (segs.length + 8)) : -99;   // late bosses: a second wave runs back up the chain
     for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
     wardTick(sn);
@@ -1278,7 +1288,7 @@ export function step(g, dt, input) {
       s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
       stageHp += Math.max(0, s.hp);
       if (s.flash > 0) s.flash -= dt;
-      if (s.gold && s.goldT > 0 && visible(s)) { s.goldT -= dt; if (s.goldT <= 0) g.events.push({ t: 'goldfade', x: s.x, y: s.y }); }
+      if (s.gold && s.goldT > 0 && visible(s)) { s.goldT -= dt / (1 + uv(g, 'gear') / 100); if (s.goldT <= 0) g.events.push({ t: 'goldfade', x: s.x, y: s.y }); }
       if (s.orbCd > 0) s.orbCd -= dt;
     }
   }
