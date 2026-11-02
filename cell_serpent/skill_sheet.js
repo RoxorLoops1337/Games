@@ -6,6 +6,8 @@ import { joyHTML } from './presets_ux.js';
 import { PET_JOY_MAX } from './sim.js';
 import { shinesVs } from './build_rec.js';
 import { SPECIES } from './art_draw.js';
+import { rankLadderHTML, petReact } from './skillpets8.js';
+import { systemReduceMotion } from './access.js';
 import { petLabel, petNick, setPetNick, nextIdea, NICK_MAX } from './pet_names.js';
 
 // what a skill does at the level a run starts with (weapon level 1), scaled by the permanent skill level
@@ -101,7 +103,7 @@ export function createSheets(c) {
       sh.className = 'dsheet tier' + (w.tier || 0); sh.appendChild(closeBtn());
       const head = el('div', 'dshead', `<div class="dsic">${icon(id)}</div><div class="dsnm"><b>${w.name}</b><span>${owned ? 'Lv ' + k.lv + ' / ' + SKILL_MAX_LV : gated ? 'Clear stage ' + w.stage : 'Not owned yet'}</span></div>`);
       if (owned) head.querySelector('.dsnm').appendChild(el('em', 'rank r' + rk.rank, '🎖 ' + rk.name + (rk.next ? ' · ' + rk.val + '/' + rk.next : ' · max')));
-      sh.appendChild(head); sh.appendChild(el('p', 'dsdesc', w.desc));
+      sh.appendChild(head); if (owned) sh.appendChild(el('div', '', rankLadderHTML(rk))); sh.appendChild(el('p', 'dsdesc', w.desc));
       const pv = skillPreview(id, owned ? k.lv : 1), showNext = owned && !maxed;
       const tb = el('div', 'dsrows');
       tb.appendChild(el('div', 'dshd', `<span></span><span>${owned ? 'NOW' : 'AT START'}</span><span>${showNext ? 'NEXT' : ''}</span>`));
@@ -161,7 +163,7 @@ export function createSheets(c) {
       sh.appendChild(el('div', 'dshead', `<div class="dsic">${icon(id)}</div><div class="dsnm"><b>${petLabel(s, p).replace(/&/g, '&amp;')}</b><span style="color:${rar.color}">${petNick(s, id) ? p.name + ' · ' : ''}${rar.name} friend · ${owned ? (eq ? 'walking with you' : 'at home') : 'not met yet'}</span></div>`));
       if (owned) nickRow(sh, s, id, p);
       sh.appendChild(el('p', 'dsdesc', PET_ABILITY[id] || p.flavor));
-      if (owned) { const wk = el('div', '', walkHTML(icon(id), eq, rar.color)); if (eq && (k.joy || 0) >= PET_JOY_MAX) wk.firstChild.insertAdjacentHTML('beforeend', '<span class="whrt h1">♥</span><span class="whrt h2">♥</span><span class="whrt h3">♥</span>'); sh.appendChild(wk); }
+      if (owned) { const wk = el('div', '', walkHTML(icon(id), eq, rar.color)); if (eq && (k.joy || 0) >= PET_JOY_MAX) wk.firstChild.insertAdjacentHTML('beforeend', '<span class="whrt h1">♥</span><span class="whrt h2">♥</span><span class="whrt h3">♥</span>'); wk.firstChild.classList.add('tap'); wk.firstChild.removeAttribute('aria-hidden'); wk.firstChild.setAttribute('role', 'button'); wk.firstChild.setAttribute('aria-label', 'Pet the ' + p.name.toLowerCase()); wk.firstChild.tabIndex = 0; wk.firstChild.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); wk.firstChild.click(); } }; wk.firstChild.onclick = () => petReact(wk.firstChild, id, audio, !!(save().settings.reduceMotion || systemReduceMotion())); sh.appendChild(wk); }
       if (owned) sh.appendChild(el('div', 'dsjoy', joyHTML(k)));
       sh.appendChild(el('div', 'dsstars', Array.from({ length: PET_MAX_STAR }, (_, n) => `<i class="star${n < k.star ? ' on' : ''}">★</i>`).join('')));
       sh.appendChild(el('div', 'dsrows', `<div class="dsrow one"><span>Star bonus</span><b>${owned ? petBonusText(p, k.star) : 'none yet'}</b></div>` + (maxed ? '' : `<div class="dsrow one"><span>Next star</span><b class="up">▲ ${petBonusText(p, k.star + 1)}</b></div>`)));

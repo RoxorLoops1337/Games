@@ -31,6 +31,7 @@ import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTut
 import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide } from './battle_ui.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
+import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
 import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
@@ -121,6 +122,7 @@ function loadoutRow(el, link) {
     b.onclick = () => { audio.play('click'); if (link) { hubTab = 'Skills'; renderHub(); } else if (id && toggleLoadout(save, id)) { persist(); renderHub(); } };
     el.appendChild(b);
   }
+  fitTags(el, save, !link);
 }
 const curImg = c => `<img src="${iconURL(c)}" alt="" style="width:22px;height:22px;vertical-align:middle">`;
 const skillLevels = () => Object.fromEntries(Object.entries(save.skills).map(([id, k]) => [id, k.lv]));
@@ -315,10 +317,12 @@ function renderPets() {
       const rar = h.beats ? null : petRarity(h.id), tier = h.beats ? 0 : (PET_RARITY[h.id] || 0) + 1;
       $('bLoot').innerHTML = h.beats ? `<div class="it">${curImg('beats')}<span>+${h.beats}</span></div>` : `<div class="it rar${PET_RARITY[h.id] || 0}" style="--rc:${rar.color}">${icon(h.id)}<span>+${h.n}</span><small>${rar.name.toUpperCase()}</small><small class="hfrag">${petCanUp(save, h.id) ? 'READY: tap ' + (save.pets[h.id].star ? 'MORE STARS' : 'WELCOME HOME') : 'Fragments ' + save.pets[h.id].frag + ' / ' + petCost(save.pets[h.id].star)}</small></div>`;
       hatchBurst($('bLoot'), rar ? rar.color : '#ffe14a', tier, !!(save.settings.reduceMotion || systemReduceMotion()));
+      hatchRays($('bLoot'), rar ? rar.color : '#ffe14a', tier, !!(save.settings.reduceMotion || systemReduceMotion()));
       $('bOk').onclick = () => { audio.play('click'); $('bLoot').className = 'loot'; $('bOk').onclick = defaultBoxOk; openHub('Pets'); }; show('boxModal');
     }, 650);
   };
   eggNudge(egg, save); list.appendChild(egg);
+  list.insertAdjacentHTML('beforeend', collectionHTML(save));
   { const rdy = PETS.filter(p => petCanUp(save, p.id)).length; if (save.eggs > 1 || rdy) { const row = document.createElement('div'); row.className = 'refrow'; row.style.justifyContent = 'center'; row.style.gap = '10px'; if (save.eggs > 1) { const b = document.createElement('button'); b.className = 'btn small alt'; b.textContent = 'HATCH ALL (' + save.eggs + ')'; b.onclick = () => { const res = hatchAll(save); if (res.length) { persist(); audio.play('levelup'); refreshCur(); toast(res.length + ' eggs hatched'); renderHub(); } }; row.appendChild(b); } if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'STAR UP ALL (' + rdy + ')'; b.onclick = () => { if (upgradePetsAll(save)) { persist(); audio.play('upgrade'); renderHub(); } }; row.appendChild(b); } list.appendChild(row); } }
   list.appendChild(chipRow(['All', 'Owned', 'Ready'], petFilter, o => { petFilter = o; audio.play('click'); renderPets(); }, { Ready: PETS.filter(p => petCanUp(save, p.id)).length }));
   { const row = list.lastElementChild; const sb = document.createElement('button'); sb.className = 'fchip'; sb.textContent = 'Sort: ' + petSort; sb.onclick = () => { petSort = petSort === 'Order' ? 'Stars' : petSort === 'Stars' ? 'Joy' : petSort === 'Joy' ? 'Rarity' : 'Order'; audio.play('click'); renderPets(); }; if (row && row.classList.contains('fchips')) row.appendChild(sb); }
