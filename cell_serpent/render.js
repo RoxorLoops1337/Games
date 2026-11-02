@@ -1,6 +1,6 @@
 // Canvas renderer. Reads the sim state, never changes it. Uses sprites from art.js
 // where they exist and draws procedural stand-ins otherwise.
-import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv } from './sim.js';
+import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase } from './sim.js';
 import { INK, mix } from './art_draw.js';
 import { createHud, hudZone } from './hud.js';
 import { createHitJuice } from './hitjuice.js';
@@ -138,7 +138,7 @@ export function createRenderer(canvas, art, kit) {
       case 'encore': S.trauma = Math.min(1, S.trauma + 0.6); S.flash = 0.25; S.flashCol = '#fff6c2'; ring(e.x, g.p.y, 130, '#ffe36b', 0.5); burst(e.x, g.p.y - 40, 26, ['#ffe36b', '#fff', '#ff9ad6'], 520, 0.7, 6); break;
       case 'goldpop': ring(e.x, e.y, 110, '#ffd24a', 0.6); burst(e.x, e.y, 30, ['#ffd24a', '#fff6c2', '#fff'], 460, 0.8, 6); addFloat(e.x, e.y - 40, 'GOLD +' + e.v, '#ffe36b', 30, -80); break;
       case 'goldfade': addFloat(e.x, e.y, 'gold lost', '#c9b36a', 18, -40); break;
-      case 'clutch': addFloat(e.x, e.y - 30, 'CLOSE CALL!', '#ff9ad6', 24, -70); ring(e.x, e.y, 80, '#ff9ad6', 0.4); break;
+      case 'clutch': addFloat(e.x, e.y - 30, 'CLOSE CALL!', '#ff9ad6', 30, -70); ring(e.x, e.y, 80, '#ff9ad6', 0.4); break;
       case 'burst': ring(e.x, e.y, e.r, '#bfe9ff', 0.4); burst(e.x, e.y, 16, ['#bfe9ff', '#fff'], 260, 0.5, 5); break;
       case 'leak': S.trauma = Math.min(1, S.trauma + 0.55); S.flash = 0.4; S.flashCol = '#ff2a4d'; ring(e.x, LINE_Y, 120, '#ff2a4d', 0.5); burst(e.x, LINE_Y - 10, 22, ['#ff2a4d', '#ffd0e6', '#fff'], 360, 0.6, 6); addFloat(e.x, LINE_Y - 70, 'LEAK -' + Math.ceil(e.d), '#ff5a78', 26, -60); break;
       case 'pulse': ring(e.x, e.y, e.r, '#7fe8ff', 0.5); break;
@@ -318,6 +318,7 @@ export function createRenderer(canvas, art, kit) {
     { const br = 1 + Math.sin(S.t * 2.2) * 0.04;   // 02-animal-art: soft two-layer shadow that breathes with the duo
       ctx.save(); ctx.globalAlpha *= 0.22; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 40, 66 * br, 17, 0, 0, TAU); ctx.fill(); ctx.globalAlpha *= 1.1; ctx.beginPath(); ctx.ellipse(p.x, p.y + 40, 44 * br, 10, 0, 0, TAU); ctx.fill(); ctx.restore(); }
     if ((g.groove || 0) >= 10) glow(p.x, p.y - 20, 100 + (g.groove - 10) * 3, '#ff7eb6', 0.18 + 0.1 * Math.sin(S.t * 8));
+    if (g.phase === 'play' && !OPT.reduceMotion) { const ph = beatPhase(g), a = Math.pow(1 - ph, 3) * 0.28; if (a > 0.02) { ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#9ff3ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 46 + ph * 26, 0, TAU); ctx.stroke(); ctx.restore(); } }
     FX.aura(g);
     // aim tick
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.aim); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6fe3ff';
@@ -485,7 +486,7 @@ export function createRenderer(canvas, art, kit) {
     if ((g.danger || 0) > 0.05 && g.phase === 'play') { const a = Math.min(0.5, g.danger * 0.45) * (0.65 + 0.35 * Math.sin(S.t * 14)); const rg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75); rg.addColorStop(0, 'rgba(255,40,80,0)'); rg.addColorStop(1, `rgba(255,40,80,${a})`); ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H); }
     for (const sn of g.snakes) if (sn.surge === 'warn') { const h = sn.segs[0]; text('!', h.x, h.y - h.r - 34 + Math.sin(S.t * 20) * 4, 40, '#ff3d5a', '#0b1020'); }
     // Encore blast: the beam, the meter by the duo, and the tap hint
-    if (g.beam) { const a = Math.min(1, g.beam.t * 3); ctx.save(); const bg = ctx.createLinearGradient(g.beam.x - 60, 0, g.beam.x + 60, 0); bg.addColorStop(0, 'rgba(255,227,107,0)'); bg.addColorStop(0.5, `rgba(255,250,210,${a})`); bg.addColorStop(1, 'rgba(255,227,107,0)'); ctx.fillStyle = bg; ctx.fillRect(g.beam.x - 60, 0, 120, g.p.y); ctx.restore(); }
+    if (g.beam) { const bw = (g.beam.w || 36), a = Math.min(1, g.beam.t * 3), x = g.beam.x; ctx.save(); ctx.globalCompositeOperation = 'lighter'; const bg = ctx.createLinearGradient(x - bw * 1.7, 0, x + bw * 1.7, 0); bg.addColorStop(0, 'rgba(255,200,60,0)'); bg.addColorStop(0.35, `rgba(255,210,90,${0.55 * a})`); bg.addColorStop(0.5, `rgba(255,255,230,${a})`); bg.addColorStop(0.65, `rgba(255,210,90,${0.55 * a})`); bg.addColorStop(1, 'rgba(255,200,60,0)'); ctx.fillStyle = bg; ctx.fillRect(x - bw * 1.7, 0, bw * 3.4, g.p.y); ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fillRect(x - bw * 0.18, 0, bw * 0.36, g.p.y); ctx.restore(); }
     hud.encore(g);   // the meter lives in hud.js
     if (ui && ui.hints) drawHints(ctx, g, S, { glow, text });   // first-run guide (hints.js)
     hud.combo(g);

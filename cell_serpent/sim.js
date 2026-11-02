@@ -285,6 +285,7 @@ export const PASSIVES = [
   { id: 'crit', name: 'Perfect Pitch', max: 8, w: 0.7, vals: [3, 4, 6, 9, 13, 18], cap: 40, fmt: v => '+' + v + '% crit chance', desc: '+8% crit chance for the capsule and needles', apply: (p, v) => { p.crit += v / 100; } },
   { id: 'vital', name: 'Calm Down', max: 8, w: 0.7, vals: [20, 30, 45, 70, 100, 150], cap: 200, fmt: v => 'The snake crawls ' + Math.round(v / 4) + '% slower', desc: 'The snake crawls 5% slower', apply: (p, v) => { p.slow = Math.min(0.5, p.slow + v / 400); } },
   { id: 'guard', name: 'Door Stopper', max: 6, w: 0.6, vals: [15, 22, 30, 40, 50, 60], cap: 600, fmt: v => 'Pushes the snake back ' + v * 6 + ' px', desc: 'Pushes the snake back 90 px', apply: (p, v, g) => { if (g) knockBack(g, v * 6); } },
+  { id: 'enc', name: 'Standing Ovation', max: 4, w: 0.6, min: 1, minStage: 4, vals: [12, 16, 22, 30, 40, 50], cap: 120, fmt: v => 'Encore charges ' + v + '% faster and its beam is ' + Math.round(v / 2) + '% wider', desc: 'The Encore charges 15% faster, with a wider beam', apply: () => {} },
   { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, minStage: 4, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
@@ -763,11 +764,11 @@ function markGold(g, n, segs, len) {
 }
 // Encore blast: hits and kills fill the meter, tap the duo (or the button) to fire a beam straight up.
 export const ENCORE_HIT = 0.007, ENCORE_KILL = 0.012, ENCORE_CLUTCH = 0.08, ENCORE_DMG = 8, ENCORE_W = 36, CLUTCH_DIST = 200;
-const addEncore = (g, v) => { g.encore = Math.min(1, g.encore + v); if (g.encore >= 1 && !g.encoreReady) { g.encoreReady = true; g.events.push({ t: 'encoreready' }); } };
+const addEncore = (g, v) => { g.encore = Math.min(1, g.encore + v * (1 + uv(g, 'enc') / 100)); if (g.encore >= 1 && !g.encoreReady) { g.encoreReady = true; g.events.push({ t: 'encoreready' }); } };
 export function fireEncore(g) {
   if (g.phase !== 'play' || g.encore < 1) return false;
-  const p = g.p; g.encore = 0; g.encoreReady = false; g.encoreUsed++; g.beam = { x: p.x, t: 0.5 };
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && s.y < p.y && Math.abs(s.x - p.x) < s.r + ENCORE_W) damageSegAs('encore', g, s, dmgMul(g) * ENCORE_DMG, true, s.x, s.y);
+  const p = g.p; g.encore = 0; g.encoreReady = false; g.encoreUsed++; const bw = ENCORE_W * (1 + uv(g, 'enc') / 200); g.beam = { x: p.x, t: 0.5, w: bw };
+  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && s.y < p.y && Math.abs(s.x - p.x) < s.r + bw) damageSegAs('encore', g, s, dmgMul(g) * ENCORE_DMG, true, s.x, s.y);
   g.events.push({ t: 'encore', x: p.x });
   return true;
 }
@@ -809,6 +810,13 @@ export function createGame(opts = {}) {
   return g;
 }
 
+// Rhythm: a fixed beat per stage band (same tempo family as the music). A note fired right on the beat
+// gets a small crit chance bonus and builds a touch of groove. Deterministic: it only reads g.t.
+export const BEAT_WIN = 0.07, BEAT_CRIT = 0.1;
+export const beatBpm = stage => (stage % 5 === 0 ? 138 : 104 + 3 * (Math.floor(Math.max(0, stage - 1) / 5) % 6));
+export const beatPeriod = g => 60 / beatBpm(g.stage || 1);
+export const beatPhase = g => { const T = beatPeriod(g); return (g.t % T) / T; };
+export const onBeat = g => { const T = beatPeriod(g), d = g.t % T; return Math.min(d, T - d) < BEAT_WIN; };
 const visible = s => s.y > 8 && s.y < H - 8 && s.x > 8 && s.x < W - 8;
 // accumulated effect of a run upgrade: summed rarity values, or the common value per pick if set directly
 const UPV = Object.fromEntries([...CAPSULE_UPS, ...PASSIVES].map(u => [u.id, u]));
@@ -1042,7 +1050,7 @@ function collect(g, pk) {
 
 // ---------------------------------------------------------------- shooting and skills
 function fire(g, o) {
-  g.bullets.push({ x: o.x, y: o.y, vx: Math.cos(o.a) * o.sp, vy: Math.sin(o.a) * o.sp, dmg: o.dmg, crit: !!o.crit, pierce: o.pierce || 0, r: o.r || 6, life: o.life || 1.4, hit: [], kind: o.kind || 'pill', home: o.home || 0, splash: o.splash || 0, slow: o.slow || 0 });
+  g.bullets.push({ x: o.x, y: o.y, vx: Math.cos(o.a) * o.sp, vy: Math.sin(o.a) * o.sp, dmg: o.dmg, crit: !!o.crit, pierce: o.pierce || 0, r: o.r || 6, life: o.life || 1.4, hit: [], beat: !!o.beat, kind: o.kind || 'pill', home: o.home || 0, splash: o.splash || 0, slow: o.slow || 0 });
 }
 // the capsule: straight up, [1 + extra notes] side by side, [1 + extra bursts] volleys per shot
 function shootCapsule(g, dt) {
@@ -1059,9 +1067,11 @@ function shootCapsule(g, dt) {
     if (v.t > 0) continue;
     g.vq.splice(i, 1);
     const n = 1 + Math.round(up('notes'));
+    const ob = onBeat(g);
+    if (ob) { g.beatShots = (g.beatShots || 0) + 1; g.events.push({ t: 'beatshot' }); }
     for (let k = 0; k < n; k++) {
-      const crit = g.rand() < p.crit;
-      fire(g, { x: p.x + (k - (n - 1) / 2) * 42, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
+      const crit = g.rand() < p.crit + (ob ? BEAT_CRIT : 0);
+      fire(g, { x: p.x + (k - (n - 1) / 2) * 42, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
     }
     g.shots++; g.events.push({ t: 'shoot' });
   }
@@ -1276,7 +1286,7 @@ export function step(g, dt, input) {
       for (const sn of g.snakes) for (const s of sn.segs) {
         if (dead || s.hp <= 0 || s.shield || s.wave || b.hit.includes(s) || Math.hypot(s.x - b.x, s.y - b.y) >= s.r + b.r) continue;
         b.hit.push(s);
-        damageSegAs(({ needle: 'needles', snot: 'dragon', bubble: 'bubble' })[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g);
+        damageSegAs(({ needle: 'needles', snot: 'dragon', bubble: 'bubble' })[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g); if (b.beat && g.groove < GROOVE_MAX) g.groove += 0.5;
         if (b.slow) sn.slow = Math.max(sn.slow, b.slow);
         if (b.splash > 0) {
           const sd = b.dmg * (b.kind === 'bubble' ? 2.2 : 0.5);
