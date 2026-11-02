@@ -1,6 +1,7 @@
 // 04-hit-juice (round 2): golden upgrade orbs that fly to the upgrade counter, bomb debris and smoke,
 // capsule muzzle flash and note trails. Own small pools with hard caps. Render-only: never touches the sim.
 import { pointAt } from './sim.js';
+import { drawMark9, isNewKind, CHIP_COL } from './hit_juice9.js';
 import { createMoments, rungOf, drawSpeciesDeath, drawMuzzle, DEATH_DUR } from './hit_juice8.js';
 const TAU = Math.PI * 2;
 export const UP_X = 42, UP_Y = 40, CHIP_X = 620;   // CHIP_X: the RAGE and SHIELD chips (hud.js) sit at the right edge
@@ -66,6 +67,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         if (e.head) { finish(mine ? lastHit.src : 'capsule', e); { const m = M('sdeath', e.x, e.y, 0, DEATH_DUR, true); m.wk = e.skin || 'love'; m.seed = Math.random() * 6; } }
         // kill chain: a glowing link from the previous kill and a note that climbs with the pitch ladder
         { const n = S.t - lastKill.t < 0.9 ? lastKill.n + 1 : 1, col = CHAIN_COL[Math.min(5, n >> 1)];
+          if (n >= 5 && n % 5 === 0) { const q = M('shock', e.x, e.y, 200 + Math.min(n, 30) * 8, 0.55, true); q.col = col; q.rot = Math.random() * TAU; }   // round 9: a milestone shockwave
           if (n >= 2) { const l = M('link', lastKill.x, lastKill.y, 0, 0.3); l.x1 = e.x; l.y1 = e.y; l.col = col; l.w = 3 + Math.min(n, 12) * 0.4;
             const q = M('note', e.x + 20, e.y - 6, 11 + Math.min(n, 14), 0.55); q.col = col; q.vy = -70 - Math.min(n, 14) * 6; q.vx = (n & 1 ? 1 : -1) * 18; }
           lastKill.x = e.x; lastKill.y = e.y; lastKill.t = S.t; lastKill.n = n; }
@@ -118,6 +120,13 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
       case 'needles': for (let i = 0; i < 8; i++) P('ping', x, y, 30, 0.24, '#a8f0ff', i / 8 * TAU); break;
       case 'satellite': P('ring', x, y, R * 1.4, 0.3, '#9db4ff'); P('ring', x, y, R * 0.8, 0.38, '#fff'); break;
       case 'maw': P('ring', x, y, R * 1.7, 0.38, '#c79bff').inv = 1; P('ring', x, y, R * 1.1, 0.3, '#e8d4ff').inv = 1; break;
+      // round 9: the weapons that had no pop of their own
+      case 'dragon': for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + Math.random(), m = P('feather', x, y, 11 + (i & 1) * 4, 0.9, '#fff', a); m.vx = Math.cos(a) * 95; m.vy = Math.sin(a) * 80 - 70; m.seed = Math.random() * 6; } break;
+      case 'bubble': P('bpop', x, y, R * 1.25, 0.42, '#fff').seed = Math.random() * 6; for (let i = 0; i < 3; i++) { const a = i / 3 * TAU + 0.6, q = P('bpop', x + Math.cos(a) * R * 0.8, y + Math.sin(a) * R * 0.8, R * 0.4, 0.36, '#fff'); q.seed = i; } break;
+      case 'puppy': P('paw', x, y, R * 0.9, 0.7, '#ffe0b0', (Math.random() - 0.5) * 0.7); break;
+      case 'bell': P('ding', x, y, R * 1.6, 0.5, '#ffd9a0'); for (let i = 0; i < 3; i++) { const m = P('twink', x, y, 9, 0.6, '#ffd9a0', i); m.vx = (i - 1) * 40; m.vy = -50 - i * 8; } break;
+      case 'encore': for (let i = 0; i < 5; i++) { const m = P('twink', x + (i - 2) * 14, y, 11, 0.7, '#ffe14a', i); m.vx = (i - 2) * 26; m.vy = -80 - (i & 1) * 30; } break;
+      default: for (let i = 0; i < 2; i++) { const m = M('note', x + (i ? 14 : -14), y, 13, 0.55); m.col = i ? '#ffd23a' : '#ff8a1a'; m.vy = -75; m.vx = (i ? 1 : -1) * 34; } break;   // the capsule: two notes hop out
     }
   }
 
@@ -157,8 +166,15 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
       case 'needles': for (let i = 0; i < 3; i++) P('ping', x, y, 22 * big, 0.18, '#a8f0ff', -Math.PI / 2 + (i - 1) * 0.7); break;
       case 'satellite': P('ring', x, y, 38 * big, 0.24, '#9db4ff'); break;
       case 'maw': P('ring', x, y, 46 * big, 0.3, '#c79bff'); break;
+      case 'dragon': for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + (i - 1) * 0.9 + (Math.random() - 0.5) * 0.4, m = P('feather', x, y, 13 * big, 0.6, '#fff', a); m.vx = Math.cos(a) * 70; m.vy = Math.sin(a) * 60; m.seed = Math.random() * 6; } break;
+      case 'bubble': P('bpop', x, y, 48 * big, 0.34, '#fff').seed = Math.random() * 6; break;
+      case 'puppy': P('paw', x, y, 30 * big, 0.55, '#ffe0b0', (Math.random() - 0.5) * 0.8); break;
+      case 'bell': P('ding', x, y, 58 * big, 0.38, '#ffd9a0'); break;
+      case 'encore': { const m = P('twink', x + (Math.random() - 0.5) * 24, y, 24 * big, 0.5, '#ffe14a', Math.random() * 3); m.vy = -50; break; }
       default: { const m = P('pow', x, y, e.crit ? 34 : 20, e.crit ? 0.22 : 0.14, e.crit ? '#ffe14a' : '#ffffff', Math.random() * TAU); m.n = e.crit ? 8 : 4; }
     }
+    // round 9: every hit knocks a couple of chips off the cell in the weapon's colour (more on a crit)
+    for (let i = 0, n = marks.length < cap(16) ? (e.crit ? 4 : 2) : 0; i < n; i++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, v = 90 + Math.random() * 120, m = P('chip', x, y, 5 + Math.random() * 2.4, 0.5, CHIP_COL[src] || '#ffd23a', Math.random() * TAU); m.vx = Math.cos(a) * v; m.vy = Math.sin(a) * v - 60; m.seed = Math.random() * 6; }
   }
 
   // the finishing blow badge: the weapon's own crit silhouette, a pop, a hold, a lift; its name above a big FINISH
@@ -203,6 +219,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
       const m = marks[i]; m.t += dt; if (m.t >= m.dur) { marks[i] = marks[marks.length - 1]; marks.pop(); if (m.pool) mfree.push(m); continue; }
       const k = m.t / m.dur, a = 1 - k;
       ctx.save(); ctx.globalAlpha = a; ctx.translate(m.x, m.y);
+      if (isNewKind(m.k)) { drawMark9(ctx, m, k, a, glow); ctx.restore(); continue; }
       switch (m.k) {
         case 'flash': glow(0, 0, m.r * (0.7 + k * 0.6), '#fff', 0.9 * a); ctx.fillStyle = '#fff'; ctx.globalAlpha = a * a; ctx.beginPath(); ctx.arc(0, 0, m.r * 0.35 * (1 - k * 0.5), 0, TAU); ctx.fill(); break;
         case 'link': { ctx.translate(-m.x, -m.y); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.strokeStyle = m.col; ctx.lineWidth = m.w * (0.5 + a); ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(m.x1, m.y1); ctx.stroke(); ctx.globalAlpha = a * a; ctx.strokeStyle = '#fff'; ctx.lineWidth = m.w * 0.35; ctx.stroke(); break; }
