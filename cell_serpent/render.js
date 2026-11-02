@@ -197,7 +197,15 @@ export function createRenderer(canvas, art, kit) {
     S.bph += ((on ? 1 : 0) - S.bph) * 0.05;
     return S.bph;
   }
+  // the stage world never paints on the letterbox bars of a tall phone (skyline, clouds, motes are clipped to the 720x1280 frame)
   function drawBg(g, L) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#0d0924'; ctx.fillRect(0, 0, L.cw, L.ch);
+    ctx.save();
+    if (L.ox > 0.5 || L.oy > 0.5) { ctx.setTransform(L.s, 0, 0, L.s, L.ox, L.oy); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip(); }
+    drawBg0(g, L);
+    ctx.restore(); ctx.setTransform(L.s, 0, 0, L.s, L.ox, L.oy);
+  }
+  function drawBg0(g, L) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#0d0924'; ctx.fillRect(0, 0, L.cw, L.ch);
     ctx.setTransform(L.s, 0, 0, L.s, L.ox, L.oy);

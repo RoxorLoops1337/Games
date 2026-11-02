@@ -1093,6 +1093,10 @@
   /* round 4: the win result on short phones. It used to clip the title and squash NEXT STAGE; now it compacts, and scrolls if still too tall */
   #result{overflow-x:hidden;overflow-y:auto;justify-content:safe center} #result > *{flex-shrink:0}
   @media (max-height:700px){#result{gap:5px;padding-top:calc(6px + env(safe-area-inset-top));padding-bottom:calc(8px + env(safe-area-inset-bottom))} #result .hero{height:clamp(56px,11vh,84px)} #result .stars{font-size:clamp(26px,5vh,34px)} #result .result-list{gap:3px 6px} #result .result-list .r{padding:2px 9px;font-size:13px} #result .result-list img{width:18px;height:18px} #result .btn{padding:9px 20px} #result #rNext{padding:10px 20px;font-size:20px} #result .row .btn{padding:8px}}
+  /* batch 4 merge: the result screen now has a goal chip, stamp chips and a nudge; on phones under 900px tall the 'tomorrow' chip hides and the hero shrinks so RETRY and MENU stay on screen */
+  @media (max-height:900px){.rkeep .kchip.soon{display:none} #result .hero{height:clamp(64px,10vh,100px)}}
+  @media (max-height:700px){#rNudge{display:none} .rkeep .kchip small{display:none}}   /* very short phones: the tip line and chip captions give way so RETRY and MENU stay on screen */
+  @media (max-height:600px){.rkeep{display:none} #result .hero{height:48px}}
   /* end @css:20-qa */
   /* @css:17-perf */
   .hub-skel .tab.on>*{opacity:.35;pointer-events:none;transition:opacity .12s}
