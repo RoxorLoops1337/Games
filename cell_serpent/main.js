@@ -43,7 +43,7 @@ function resize() {
   canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
 }
 addEventListener('resize', resize); resize();
-initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap = true; }); initKeys(() => mode !== 'play'); initKeyboard(); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
+initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap = true; }); initKeyboard(); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
 
 function show(id) { if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id); }
 function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) motion.num($(id), v); const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } { const ht = document.querySelector('.hubtop'), big = Math.max(save.beats, save.sparkles); if (ht) { ht.classList.toggle('big', big >= 10000); ht.classList.toggle('huge', big >= 100000); } }   // long numbers shrink the header pills on narrow phones
@@ -511,6 +511,7 @@ function showResult() {
 
     // no toast here: it used to cover the title on the result screen, and the ribbon plus the Sparkles row already say it
   }
+  if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
   show('result'); mode = 'over';
 }
 
