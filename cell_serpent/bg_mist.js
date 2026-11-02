@@ -30,7 +30,7 @@ export function makeBanks() {
   for (let i = 0; i < 6; i++) a.push({ x: r() * (W + 420), u: r(), v: 0.6 + r() * 0.8, p: r() * TAU, k: i & 1, z: 0.5 + r() * 0.9 });
   return a;
 }
-export function drawMist(c, kit, skin, banks, t, wx, boss, low) {
+export function drawMist(c, kit, skin, banks, t, wx, boss, low, heads) {
   const m = mistFor(skin); if (!m || !kit) return;
   let sprs = banks.spr;   // looked up once per world, not every frame
   if (!sprs || banks.sprSkin !== skin) {
@@ -38,15 +38,28 @@ export function drawMist(c, kit, skin, banks, t, wx, boss, low) {
     if (!sprs[0] || !sprs[1]) return;
     banks.spr = sprs; banks.sprSkin = skin;
   }
-  const n = low ? Math.min(3, m.n) : m.n, span = W + 420;
+  const n = low ? Math.min(3, m.n) : m.n, span = W + 420, dtp = Math.min(0.1, Math.max(0, t - (banks.lt === undefined ? t : banks.lt))); banks.lt = t;
   c.save();
   for (let i = 0; i < n; i++) {
     const k = banks[i], x = ((k.x + t * m.sp * k.v + wx * k.z) % span + span) % span - 210, y = LINE_Y - 14 - k.u * m.rise + Math.sin(t * 0.35 * k.v + k.p) * 5;
     const sc = 0.9 + k.u * 0.7, h = 100 * sc, w = 380 * sc;
-    c.globalAlpha = m.a * (0.75 + 0.25 * Math.sin(t * 0.5 + k.p)) * (boss ? 1.05 : 1) * (1 - k.u * 0.35);
-    c.drawImage(sprs[k.k].c, x - w / 2, y - h / 2, w, h);
+    const part = heads ? partOf(k, heads, x, y, dtp) : 0;   // batch 8: banks slide aside and thin out around a snake head
+    c.globalAlpha = m.a * (0.75 + 0.25 * Math.sin(t * 0.5 + k.p)) * (boss ? 1.05 : 1) * (1 - k.u * 0.35) * (1 - 0.6 * k.pa);
+    c.drawImage(sprs[k.k].c, x + k.pu - w / 2, y - h / 2, w, h);
   }
   c.restore();
+}
+
+// the push a bank gets from the heads near it, eased so it glides: k.pu is the sideways shove in px, k.pa how thin it went (0..1)
+function partOf(k, heads, x, y, dt) {
+  let push = 0, thin = 0;
+  for (let i = 0; i < heads.n; i++) {
+    const dx = x - heads.x[i], dy = Math.abs(y - heads.y[i]), nx = Math.max(0, 1 - Math.abs(dx) / 260), ny = Math.max(0, 1 - dy / 340), q = nx * ny;
+    push += (dx < 0 ? -1 : 1) * q * 150; if (q > thin) thin = q;
+  }
+  const e = Math.min(1, dt * 3.2);
+  k.pu = (k.pu || 0) + (push - (k.pu || 0)) * e; k.pa = (k.pa || 0) + (thin - (k.pa || 0)) * e;
+  return thin;
 }
 
 // ---- wind: a kill gives the air a shove (alternating mostly the same way). wx is the distance everything has been blown.

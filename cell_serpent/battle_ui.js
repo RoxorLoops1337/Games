@@ -34,11 +34,11 @@ export function twistHTML(mod) {
 }
 
 // the fun fact card: species line plus what this stage pays
-export function factHTML({ info, sp, hard, done, sparkleIcon }) {
+export function factHTML({ info, sp, hard, done, sparkleIcon, bring }) {
   const first = clearReward(info.n).sparkles, hardFirst = Math.round(first * 1.5);
   const fact = FACTS[info.skin] || FACTS.love;
   return `<div class="ff-top"><b class="ff-name">${sp ? sp.name : 'Serpent'}${info.boss ? ' (Boss)' : ''}</b><button class="ff-x" aria-label="Close">✕</button></div>` +
-    `<div class="ff-fact">${fact}</div>` + (info.boss ? '<div class="ff-fact ff-boss">Boss serpents wear a crown and take a lot more cheering.</div>' : '') +
+    `<div class="ff-fact">${fact}</div>` + (info.boss ? '<div class="ff-fact ff-boss">Boss serpents wear a crown and take a lot more cheering.</div>' : '') + bringHTML(bring) +
     `<div class="ff-rew"><b>Stage rewards</b>` +
     `<span class="${done ? 'got' : ''}">${sparkleIcon} ${first} + 🥚 egg<small>first clear</small></span>` +
     `<span class="${hard ? 'on' : ''}">${sparkleIcon} ${hardFirst} + 🥚 egg<small>first Hard clear (HP x${HARD_HP})</small></span>` +
@@ -126,3 +126,19 @@ export function watchSide(el) {
   if (!el.dataset.sw) { el.dataset.sw = '1'; el.addEventListener('scroll', m, { passive: true }); }
   m(); requestAnimationFrame(m);
 }
+
+// ---- round 8: the Bring line (the best build for this species, from build_rec.js), hero stars, the pinned claim row
+// bring: { why, items: [{ name, ic, eq, own }] }
+export function bringHTML(b) {
+  if (!b || !b.items || !b.items.length) return '';
+  const have = b.items.filter(x => x.eq).length;
+  return `<div class="ff-bring"><b>BRING</b>${b.items.map(x => `<i class="${x.eq ? 'eq' : x.own ? '' : 'lock'}" title="${x.name}">${x.ic}<u>${x.eq ? '\u2713' : x.own ? '+' : '?'}</u></i>`).join('')}<em>${b.why}. ${have >= b.items.length ? 'All packed!' : have + ' of ' + b.items.length + ' in your loadout.'}</em></div>`;
+}
+export const starsHTML = n => `<span class="stk" aria-label="${n} of 3 stars">${[1, 2, 3].map(q => q <= n ? '<u>\u2605</u>' : '\u2605').join('')}</span>`;
+// what is ready to collect right now: gigs first, then event milestones. null when nothing is ready
+export function claimInfo(gigsReady, firstGig, eventReady) {
+  if (gigsReady) return { kind: 'gig', html: gigsReady === 1 && firstGig ? `Gig done: <b>${firstGig}</b>` : `<b>${gigsReady} gigs</b> are done`, go: gigsReady > 1 ? 'CLAIM ALL' : 'CLAIM', ic: '\uD83C\uDF81' };
+  if (eventReady) return { kind: 'event', html: `<b>${eventReady} event reward${eventReady > 1 ? 's' : ''}</b> ready`, go: 'OPEN', ic: '\uD83C\uDFAA' };
+  return null;
+}
+export function eventReadyCount(earned, claimed) { let n = 0; EVENT_MILES.forEach((m, i) => { if (!claimed[i] && earned >= m.at) n++; }); return n; }

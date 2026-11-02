@@ -7,6 +7,7 @@ const easeOut = t => 1 - (1 - t) * (1 - t) * (1 - t);
 const backOut = t => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
 import { createFeel6 } from './feel6.js';
 import { cardPose, cardFlair } from './card_flair.js';
+import { hasTrait, drawTraitIcon, TRAIT_LABEL } from './trait_ui.js';
 const CONFETTI = ['#ff7eb6', '#ffd84d', '#6fe3ff', '#9dff6d', '#c9a0ff', '#ffffff'];
 
 export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst }) {
@@ -66,7 +67,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       case 'stage': {
         const boss = !!e.boss;
         F.mileDone = 0; F.mile = null; F.go = null; F.lastBoss = boss; F.p2 = null; F.p2Done = false; F.cc = null; F.perf = 0;
-        F.card = { n: e.n, boss, name: e.name || '', mod: e.mod || '', skin: g.skin, t: 0, dur: boss ? 2.9 : 2.3, slammed: false };
+        F.card = { n: e.n, boss, name: e.name || '', mod: e.mod || '', skin: g.skin, t: 0, dur: boss ? 2.9 : 2.3, slammed: false, trait: hasTrait(g.skin, e.n, boss, g.mode) ? g.skin : '' };
         F.deadT = 0;
         break;
       }
@@ -95,6 +96,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   function timeScale() {
     if (calm()) return 1;
     if (F.stop > 0) return 0.02;   // hit-stop: the sim holds still for a few frames
+    if (F.go && F.go.res && F.go.t < F.go.ready) return 0;   // the resume count-in: the song waits for 3, 2, 1
     if (F.slow.t <= 0) return 1;
     const k = F.slow.t / F.slow.dur;   // 1 -> 0, hold the low point then ease back out
     return 1 - (1 - F.slow.k) * Math.min(1, k * 3);
@@ -402,6 +404,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   }
 
   // the title card, drawn on top of the HUD
+  const BOSS_TAG = { love: 'heartbreaker on stage', rust: 'rattling the whole hall', sneezy: 'ah ah ah choo', grumpy: 'woke up on the wrong side', sleepy: 'one more minute, please', disco: 'the floor is theirs', sour: 'puckering up', mighty: 'lifting the whole stage', frosty: 'ice cold encore', gloomy: 'a sad song, loudly', piggy: 'oink oink oink' };
   function drawCard(g) {
     const c = F.card; if (!c) return;
     const t = c.t, k = t / c.dur, out = clamp((c.dur - t) / 0.4, 0, 1), inn = clamp(t / 0.32, 0, 1);
@@ -419,8 +422,9 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       if (kit && kit.drawHead) { const bob = calm() ? 0 : Math.sin(t * 6) * 4; kit.drawHead(ctx, 0, -116 + bob - (calm() ? 0 : (1 - slam) * 160), 56, Math.PI / 2, { skin: c.skin, boss: true, t: S.t }); }
       if (!calm() && c.t < 1.1) { const gx = 9 * Math.max(0, 1 - (t - 0.4) * 1.6) * (c.slammed ? 1 : 0); if (gx > 0.4) { ctx.save(); ctx.globalAlpha *= 0.55; ctx.globalCompositeOperation = 'lighter'; text('BOSS', -gx, 28, 150, '#00e5ff'); text('BOSS', gx, 28, 150, '#ff2850'); ctx.restore(); } }
       text('BOSS', 0, 28, 150, '#ff4d7a', '#1a0210');
+      if (!calm() && slam > 0.6) { const sp = kit && kit.SPECIES && kit.SPECIES[c.skin]; cardFlair(ctx, c.skin, t, 0, -116, 62, sp ? sp.base : '#ff4d7a'); }   // r8: each boss arrives with its own species air (hearts, snow, coins...)
       ctx.restore();
-      ctx.save(); ctx.globalAlpha *= clamp((t - 0.45) / 0.3, 0, 1); text(c.name, W / 2, cy + 112, 44, '#ffd84d'); if (c.mod) text(c.mod, W / 2, cy + 156, 28, '#ffc2dc'); ctx.restore();
+      ctx.save(); ctx.globalAlpha *= clamp((t - 0.45) / 0.3, 0, 1); const tg = !c.mod && BOSS_TAG[c.skin]; text(c.name, W / 2, cy + (tg ? 98 : 112), 44, '#ffd84d'); if (c.mod) text(c.mod, W / 2, cy + 156, 28, '#ffc2dc'); else if (tg) text(tg, W / 2, cy + 134, 24, '#ffc2dc', '#2a0310'); ctx.restore();
     } else {
       // a band sweeps in from the left, the species portrait pops, name and twist slide in
       const bandH = 230, sx = calm() ? 0 : (1 - ease) * -W;
@@ -446,6 +450,11 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       text('STAGE ' + c.n, tx, cy - 62, 36, '#9fb4ff', '#0b1020', 'left');
       { let fs = c.name.length > 11 ? 56 : 68; ctx.font = `800 ${fs}px system-ui, -apple-system, "Segoe UI", sans-serif`; const room = W - 24 - 250, wide = ctx.measureText(c.name).width; if (wide > room) fs = Math.max(30, Math.floor(fs * room / wide));   // long serpent names shrink to fit the band
         text(c.name, tx, cy - 8, fs, '#ffffff', '#0b1020', 'left'); }
+      if (c.trait) {   // batch 8: this species' late trait, icon plus name, top right of the band
+        const rk = calm() ? 1 : backOut(clamp((t - 0.45) / 0.35, 0, 1));
+        ctx.save(); ctx.globalAlpha *= clamp(rk, 0, 1); drawTraitIcon(ctx, c.trait, W - 52, cy - 70, 22 * rk, col, t);
+        text(TRAIT_LABEL[c.trait], W - 82, cy - 68, 20, '#e8ecff', '#0b1020', 'right'); ctx.restore();
+      }
       if (c.mod) { const mk = calm() ? 1 : clamp((t - 0.5) / 0.3, 0, 1); ctx.globalAlpha *= mk; text(c.mod, tx, cy + 64, 30, '#ffd24a', '#0b1020', 'left'); }
       ctx.restore();
     }
@@ -461,7 +470,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   }
   function tickCount(o) {
     while (o.tick < 3 && o.t >= o.w + o.tick * o.p) {
-      const i = o.tick++; F.sounds.push(i === 2 ? 'star2' : 'star1');
+      const i = o.tick++; F.sounds.push(o.res ? 'resumetick' + (3 - i) : i === 2 ? 'star2' : 'star1');
       if (!calm()) { ring(W / 2, H * 0.4, 170 + i * 40, CNT_COL[i], 0.4); S.trauma = Math.min(1, S.trauma + 0.08 + i * 0.04); S.flash = Math.max(S.flash, 0.14 + i * 0.05); S.flashCol = CNT_COL[i]; o.kick = o.t; }
     }
   }
@@ -506,10 +515,10 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   // back from the pause screen: the song eases in from slow motion, a ring opens on the duo and BACK ON! pops
   function resumeFx(g) {
     if (calm() || !g || g.phase !== 'play' || F.card) return;
-    F.slow = { t: 0.55, dur: 0.55, k: 0.2 };
-    if (!F.go) F.go = { t: 0, dur: 0.75, boss: false, res: true };
+    if (!F.go || F.go.res || !F.go.cnt) {   // 3, 2, 1 with a flash on every beat, then BACK ON! and the song moves again
+      const p = 0.27; F.go = { t: 0, p, w: 0, tick: 0, cnt: true, res: true, boss: false, ready: 3 * p, dur: 3 * p + 0.6 };
+    }
     ring(g.p.x, g.p.y - 20, 190, '#9ff0ff', 0.5); edges('#6fe3ff', 0.35);
-    F.sounds.push('star1');
   }
   function drawCardAll(g) { drawCard(g); drawMile(); drawGo(); drawClear(); drawCC(); drawP2(); }
   return { resumeFx, confetti, onEvent, update, timeScale, rumble, zoomIn, aura, drawScreen, drawCard: drawCardAll, state: F, setBeat(fn) { F.beatFn = fn; }, clearBusy: () => !!F.clear, takeSounds() { return F.sounds.splice(0); } };

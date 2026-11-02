@@ -82,7 +82,7 @@ export function createFeel6({ ctx, W, H, kit, S, OPT, ring, burst, text, glow, e
   function drawDanger(g) {
     const d = dangerK(g); if (d <= 0) return;
     const rate = dangerRate(d), raw = heartbeat(S.t, rate), hb = calm() ? 0.55 : raw;
-    if (raw > 0.65 && st.hbHot !== true) { st.hbHot = true; if (sounds) sounds.push('dangerbeat'); } else if (raw < 0.4) st.hbHot = false;   // the lub of the heartbeat is also a sound
+    if (raw > 0.65 && st.hbHot !== true) { st.hbHot = true; if (sounds) { sounds.push('dangerbeat'); if (g.danger > 0.55 && !g.ring) sounds.push('panic'); } } else if (raw < 0.4) st.hbHot = false;   // the lub of the heartbeat is also a sound
     edges('#ff2850', (0.06 + 0.5 * d) * (0.35 + 0.65 * hb));
     if (d > 0.45) vignette((d - 0.45) * 0.9 * (0.5 + 0.5 * hb), '90,0,20');
     if (!g.ring) {   // the line itself runs hot

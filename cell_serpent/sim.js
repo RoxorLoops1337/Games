@@ -297,6 +297,8 @@ export const PASSIVES = [
   { id: 'cres', name: 'Crescendo', max: 4, w: 0.5, min: 1, minStage: 26, vals: [4, 6, 8, 10], cap: 10, fmt: v => 'Each Quartet in a row makes your notes hit ' + v + '% harder (up to 5 in a row)', desc: 'Each Quartet in a row makes your notes hit 4% harder, up to 5 in a row', apply: () => {} },
   { id: 'fan', name: 'Fan Club', max: 4, w: 0.5, min: 1, minStage: 20, vals: [20, 35, 50, 75], cap: 75, fmt: v => 'Groove is worth ' + v + '% more damage per point', desc: 'Groove is worth 20% more damage per point', apply: () => {} },
   { id: 'brg', name: 'Bridge', max: 4, w: 0.5, min: 1, minStage: 34, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Bell cells ring ' + v + '% harder and each ring adds 3 Groove with Fan Club', desc: 'Bell cells ring 25% harder', apply: () => {} },
+  { id: 'brk', name: 'Ice Breaker', skin: 'frosty', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Frost patches shield ' + v + '% less', desc: 'Frost patches shield 25% less', apply: () => {} },
+  { id: 'hbk', name: 'Heart Mender', skin: 'love', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Heart pulses heal ' + v + '% less', desc: 'Heart pulses heal 25% less', apply: () => {} },
   { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, minStage: 4, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
@@ -753,6 +755,12 @@ export function segRadius(boss, i, len) {
 }
 const spacing = (a, b) => (a.r + b.r) * 0.78;
 
+// Every snake cell is created with ALL its fields in one fixed order (also the ones set later in the run), so the engine keeps one hidden class and step is not de-optimised. Tests: 29_perf_r8.
+export const CELL_KEYS = ['ps', 'x', 'y', 'ang', 'r', 'hp', 'max', 'kind', 'flash', 'orbCd', 'i', 'carry', 'shield', 'isHead', 'tp', 'vx', 'vy', 'wave', 'warded', 'gloom', 'frost', 'gold', 'goldT', 'ward', 'lull', 'drum', 'choir', 'bell', 'quartet', 'qPopped'];
+function newCell(ps, x, y, r, hp, kind, i) {
+  return { ps, x, y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0, tp: ps, vx: 0, vy: 0, wave: false, warded: false, gloom: false, frost: false, gold: false, goldT: 0, ward: false, lull: false, drum: false, choir: false, bell: false, quartet: false, qPopped: false };
+}
+export const SNAKE_KEYS = ['id', 'path', 'segs', 'tail', 'breach', 'breachT', 'speed', 'slow', 'boss', 'skin', 'name', 'surge', 'surgeT', 'healT', 'drum', 'lane', 'napT', 'gloomW', 'rushT', 'loveT', 'creak', 'snzT', 'snzW', 'frostW', 'qT', 'qDone', 'qWin', 'qNeed', 'p2', 'p2T'];
 function spawnSnake(g, n, o = {}) {
   const pig = g.mode === 'pig', inv = g.mode === 'inv', boss = isBossStage(n), len = o.len || (pig ? 40 : inv ? 70 : snakeLength(n)), segs = [];
   const path = o.mirror ? mirrorPath(g.path) : g.path;
@@ -766,7 +774,7 @@ function spawnSnake(g, n, o = {}) {
     let hp = hpB * ramp(i) * KIND[kind].hp * bossMul(i) *(0.9 + g.rand() * 0.2);
     hp = i === 0 ? 1 : Math.max(1, Math.round(hp));   // the face has no real HP: it is shielded until it is alone
     const pos = pointAt(path, ps);
-    segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0 });
+    segs.push(newCell(ps, pos.x, pos.y, r, hp, kind, i));
     ps -= (r + segRadius(boss, i + 1, len)) * 0.78;
   }
   // yellow upgrade cells: pop one to choose an upgrade. About one per 7 cells (at least 3), spread along the snake.
@@ -787,7 +795,7 @@ function spawnSnake(g, n, o = {}) {
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
   const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED * (n >= 18 && !isBossStage(n) ? RING_LATE : 1) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
   segs.hpMax = segs.reduce((a, s) => a + s.max, 0);
-  g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
+  g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3, healT: undefined, drum: false, lane: null, napT: 0, gloomW: undefined, rushT: 0, loveT: undefined, creak: false, snzT: undefined, snzW: false, frostW: undefined, qT: 0, qDone: 0, qWin: 0, qNeed: 0, p2: false, p2T: 0 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
 }
 
@@ -897,7 +905,7 @@ function traitTick(g, sn, dt) {
   const segs = sn.segs, h = segs[0];
   if (k === 'love') {
     sn.loveT = (sn.loveT === undefined ? LOVE_EVERY : sn.loveT) - dt;
-    if (sn.loveT <= 0) { sn.loveT = LOVE_EVERY; let n = 0; for (let i = 1; i < segs.length && n < LOVE_CELLS; i++) if (segs[i].hp > 0) { segs[i].hp = Math.min(segs[i].max, segs[i].hp + segs[i].max * LOVE_HEAL); n++; } g.events.push({ t: 'trait', k, x: h.x, y: h.y }); }
+    if (sn.loveT <= 0) { sn.loveT = LOVE_EVERY; let n = 0; for (let i = 1; i < segs.length && n < LOVE_CELLS; i++) if (segs[i].hp > 0) { segs[i].hp = Math.min(segs[i].max, segs[i].hp + segs[i].max * LOVE_HEAL * (1 - Math.min(1, uv(g, 'hbk') / 100))); n++; } g.events.push({ t: 'trait', k, x: h.x, y: h.y }); }
   } else if (k === 'rust') {
     const ph = g.t % CREAK_EVERY, on = ph < CREAK_STALL;
     if (on && !sn.creak) g.events.push({ t: 'trait', k, x: h.x, y: h.y });
@@ -954,7 +962,7 @@ export function startStage(g, n) {
   else spawnSnake(g, n);
   rebuildTowers(g);
   g.phase = 'play'; g.clearT = 0; g.progress = 0;
-  g.events.push({ t: 'stage', n, boss: isBossStage(n), name: nameOf(g), mod: g.mod ? g.mod.name : '' });
+  g.events.push({ t: 'stage', n, boss: isBossStage(n), skin: g.skin, name: nameOf(g), mod: g.mod ? g.mod.name : '' });
 }
 
 // ---------------------------------------------------------------- game
@@ -973,6 +981,7 @@ export function createGame(opts = {}) {
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
     groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, faceMax: 0, bombsPopped: 0, dangerT: 0, danger: 0, mod: null, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
     encore: 0, encoreUsed: 0, beam: null, goldPopped: 0, clutches: 0, qStreak: 0, qBest: 0,
+    skin: '', ring: null, beatShots: 0, bpool: [], cp: null, encoreReady: false, quartets: 0,
   };
   startStage(g, opts.stage || 1);
   return g;
@@ -1000,15 +1009,29 @@ function bumpGroove(g) {
 const cdMul = g => g.p.cdBase * Math.max(0.3, 1 - uv(g, 'haste') / 100);
 
 function eachTarget(g, fn) {
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave) fn(s, sn);
+  const sns = g.snakes;
+  for (let a = 0; a < sns.length; a++) { const sn = sns[a], segs = sn.segs; for (let i = 0; i < segs.length; i++) { const s = segs[i]; if (s.hp > 0 && !s.shield && !s.wave) fn(s, sn); } }
+}
+// the visible targets in one reused array (the satellite and maw pick from it every few seconds): valid until the next call
+const VIS = [];
+function visibleTargets(g) {
+  VIS.length = 0;
+  const sns = g.snakes;
+  for (let a = 0; a < sns.length; a++) { const segs = sns[a].segs; for (let i = 0; i < segs.length; i++) { const s = segs[i]; if (s.hp > 0 && !s.shield && !s.wave && visible(s)) VIS.push(s); } }
+  return VIS;
 }
 function nearestTarget(g, x, y, maxD = 1e9) {
   let best = null, bd = maxD;
-  eachTarget(g, s => {
-    if (!visible(s)) return;
-    const d = hyp(s.x - x, s.y - y) - s.r;
-    if (d < bd) { bd = d; best = s; }
-  });
+  const sns = g.snakes;
+  for (let a = 0; a < sns.length; a++) {
+    const segs = sns[a].segs;
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i];
+      if (s.hp <= 0 || s.shield || s.wave || !visible(s)) continue;
+      const d = hyp(s.x - x, s.y - y) - s.r;
+      if (d < bd) { bd = d; best = s; }
+    }
+  }
   return best;
 }
 const frontSegs = g => g.snakes.map(sn => sn.segs[0]).filter(s => s && visible(s));
@@ -1017,7 +1040,7 @@ const damageSegAs = (src, g, ...a) => { g.src = src; damageSeg(g, ...a); g.src =
 function damageSeg(g, s, dmg, crit, x, y) {
   if (s.hp <= 0 || s.shield || s.wave) return;
   const srcId = g.src || 'capsule'; g.dmgBy[srcId] = (g.dmgBy[srcId] || 0) + Math.min(dmg, s.hp);
-  if (s.warded) dmg *= WARD_CUT + (1 - WARD_CUT) * uv(g, 'fork') / 100;
+  if (s.warded) dmg *= WARD_CUT + (1 - WARD_CUT) * (uv(g, 'fork') + (s.frost ? uv(g, 'brk') : 0)) / 100;
   s.hp -= dmg; s.flash = 0.12;
   g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s, src: srcId });
 }
@@ -1136,7 +1159,7 @@ function rollChoices(g) {
     }
   }
   if (!early || stg < 3) {   // the first two picks are the capsule's, except in the first stages where only a few kinds exist yet
-    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max && uv(g, u.id) < u.cap && !(u.minStage && stg < u.minStage)) pool.push({ id: u.id, kind: 'passive', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w }); }
+    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max && uv(g, u.id) < u.cap && !(u.minStage && stg < u.minStage) && !(u.skin && !l && u.skin !== g.skin)) pool.push({ id: u.id, kind: 'passive', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w }); }
   }
   const out = [];
   while (out.length < 3 && pool.length) {
@@ -1296,7 +1319,7 @@ function updateWeapons(g, dt, canFire) {
       for (let k = 0; k < (L >= 4 ? 2 : 1); k++) fire(g, { x: p.x, y: p.y - 30, a: aim + (k ? 0.5 : 0), sp: 190, dmg: 1.2 * (1 + 0.3 * L) * dm('bubble'), r: 22 + 3 * L, life: 3.2, kind: 'bubble', splash: 70 + 10 * L, slow: 2 });
       g.events.push({ t: 'bubble' }); w.cd = (3.4 - 0.2 * L) * cm;
     } else if (id === 'satellite') {
-      const vis = []; eachTarget(g, s => { if (visible(s)) vis.push(s); });
+      const vis = visibleTargets(g);
       if (!vis.length) { w.cd = 0.3; continue; }
       vis.sort((a, b) => b.hp - a.hp);
       for (let k = 0; k < 1 + Math.floor((L + 1) / 2); k++) {
@@ -1306,7 +1329,7 @@ function updateWeapons(g, dt, canFire) {
       }
       w.cd = (3.6 - 0.25 * L) * cm;
     } else if (id === 'maw') {
-      const vis = []; eachTarget(g, s => { if (visible(s)) vis.push(s); });
+      const vis = visibleTargets(g);
       if (!vis.length) { w.cd = 0.3; continue; }
       vis.sort((a, b) => b.hp - a.hp);
       const t = vis[Math.floor(g.rand() * Math.min(vis.length, 3))];
@@ -1477,8 +1500,9 @@ export function step(g, dt, input) {
     b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
     let dead = b.life <= 0 || b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30;
     if (!dead) {
-      for (const sn of g.snakes) for (const s of sn.segs) {
-        if (dead || s.hp <= 0 || s.shield || s.wave || b.hit.includes(s) || hyp(s.x - b.x, s.y - b.y) >= s.r + b.r) continue;
+      const sns = g.snakes;
+      for (let a = 0; a < sns.length && !dead; a++) { const sn = sns[a], segs = sn.segs; for (let i = 0; i < segs.length && !dead; i++) { const s = segs[i];
+        if (s.hp <= 0 || s.shield || s.wave || hyp(s.x - b.x, s.y - b.y) >= s.r + b.r || b.hit.includes(s)) continue;
         b.hit.push(s);
         damageSegAs(BULLET_SRC[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g); if (b.beat && g.groove < GROOVE_MAX) g.groove += 0.5;
         if (b.slow) sn.slow = Math.max(sn.slow, b.slow);
@@ -1488,7 +1512,7 @@ export function step(g, dt, input) {
           g.events.push({ t: b.kind === 'bubble' ? 'burst' : 'splash', x: s.x, y: s.y, r: b.splash });
         }
         if (b.pierce-- <= 0) dead = true;
-      }
+      } }
     }
     if (dead) { g.bullets.splice(bi, 1); const bp = g.bpool || (g.bpool = []); if (bp.length < BULLET_POOL_MAX) bp.push(b); }
   }

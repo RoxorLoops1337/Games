@@ -285,6 +285,25 @@
   /* flying reward chips land softly */
   .gfx-bump{animation-duration:.45s}
   /* end @css:11-result-pause round 6 */
+  /* @css:11-result-pause round 8 */
+  .hpwrow8{display:flex;justify-content:center;align-items:center;gap:8px;max-width:100%;min-width:0}
+  .hrib8{display:inline-flex;align-items:center;gap:4px;padding:1px 9px 1px 6px;border-radius:99px;font-size:13px;font-weight:900;color:#ffd6ee;background:linear-gradient(180deg,rgba(255,92,184,.32),rgba(255,92,184,.12));border:1px solid rgba(255,143,208,.55);white-space:nowrap;line-height:1.5}
+  .hrib8[hidden]{display:none} .hrib8 b{font-variant-numeric:tabular-nums} .hrib8 .bow8{width:17px;height:17px}
+  .hrib8.gfx-bump8{animation:rb8Bump .5s ease-out} @keyframes rb8Bump{30%{transform:scale(1.25);box-shadow:0 0 16px #ff8fd0cc}}
+  .rib8f{background:none!important;filter:drop-shadow(0 0 6px #ff8fd0)} .rib8f .bow8{width:22px;height:22px}
+  #result .result-list .r .bow8{width:22px;height:22px;flex:none}
+  /* best moment chip on the result */
+  .rmoment8{display:none;align-items:center;gap:7px;padding:4px 12px 4px 7px;border-radius:99px;font-size:12.5px;font-weight:800;color:#fff;border:1px solid rgba(255,210,74,.55);background:linear-gradient(90deg,rgba(255,210,74,.26),rgba(255,92,184,.18));max-width:94vw;white-space:nowrap}
+  .rmoment8.on{display:flex;animation:rpIn .45s .9s both} .rmoment8 b{color:#ffd84d;font-weight:900}
+  .rmoment8 .mi8{font-style:normal;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.3);font-size:14px;line-height:1;flex:none} .rmoment8 .mi8 img{width:20px;height:20px;object-fit:contain}
+  .rmoment8.k-chain{border-color:rgba(57,240,255,.6);background:linear-gradient(90deg,rgba(57,240,255,.24),rgba(157,255,109,.14))} .rmoment8.k-chain b{color:#9dffe8}
+  @media (max-height:900px){.rmoment8{display:none!important}}
+  /* settings: every row icon is a flat glyph on a tinted tile */
+  #settings .tgl .ti8,#settings .volrow .ti8{display:grid;place-items:center;flex:none;width:32px;height:32px;border-radius:10px;font-size:0;background:color-mix(in srgb,var(--tc,#7ae8f8) 20%,rgba(0,0,0,.28));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tc,#7ae8f8) 38%,transparent)}
+  #settings .tgl.on .ti8{background:color-mix(in srgb,var(--tc,#7ae8f8) 34%,rgba(0,0,0,.22));box-shadow:inset 0 0 0 1px var(--tc,#7ae8f8),0 0 10px color-mix(in srgb,var(--tc,#7ae8f8) 40%,transparent)}
+  #settings .ti8 .si8{width:19px;height:19px}
+  @media (prefers-reduced-motion:reduce){.hrib8.gfx-bump8,.rmoment8.on{animation:none}}
+  /* end @css:11-result-pause round 8 */
   /* end @css:11-result-pause */
   /* @css:09-skills-pets */
   .tile.tier0{--tc:#9dff6d} .tile.tier1{--tc:#4fb8ff} .tile.tier2{--tc:#b06cff} .tile.tier3{--tc:#ffb04d} .tile.tier4{--tc:#ff4d7a} .tile.pet{--tc:#ffd24a}
@@ -478,6 +497,45 @@
   @keyframes emfloat{50%{transform:translateY(-6px)}}
   @media (prefers-reduced-motion:reduce){.emptycard .em-ic{animation:none}}
   /* end @css:09-skills-pets round 7 */
+  /* @css:09-skills-pets round 8 */
+  .slot .fitag{position:absolute;left:2px;top:2px;min-width:15px;height:15px;padding:0 3px;box-sizing:border-box;border-radius:8px;background:var(--fc,#9dff6d);color:#10131c;font:900 10px/15px inherit;text-align:center;text-decoration:none;box-shadow:0 1px 3px rgba(0,0,0,.5);pointer-events:none}
+  .slot .fitag.w{font-size:9px;letter-spacing:.06em;padding:0 5px;border-radius:8px}
+  .bt-load .slot .fitag{left:-1px;top:-1px;min-width:13px;height:13px;font-size:9px;line-height:13px}
+  html.hc .slot .fitag{background:#fff}
+  .dsrk{margin:0 0 8px;padding:8px 8px 6px;border-radius:14px;background:rgba(0,0,0,.25)}
+  .dsrk .rkrow{display:flex;justify-content:space-between;gap:2px}
+  .dsrk .rkm{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;opacity:.4}
+  .dsrk .rkd{display:block;width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,.4);font:900 11px/20px inherit;text-align:center;color:#fff;box-sizing:border-box}
+  .dsheet .dsrk .rkn{display:block;font-size:9px;font-weight:800;line-height:1;letter-spacing:0;color:#fff;white-space:nowrap}
+  .dsrk .rkm.on,.dsrk .rkm.now{opacity:1} .dsrk .rkm.on .rkd{background:#ffd24a;border-color:#fff3b0;color:#4a2d00;box-shadow:0 0 8px #ffb000aa}
+  .dsrk .rkm.now .rkd{border-style:dashed;border-color:#4fd8f0;background:linear-gradient(90deg,rgba(79,216,240,.55) var(--p),transparent var(--p))}
+  .dsrk small{display:block;text-align:center;margin-top:5px;font:800 11px/1 inherit;color:rgba(255,255,255,.7)}
+  .dswalk.tap{cursor:pointer;-webkit-tap-highlight-color:transparent} .dswalk.tap:focus-visible{outline:3px solid #ffe14a}
+  .dswalk .wpet{transform-origin:50% 100%}
+  .dswalk .rxw{position:absolute;left:60%;top:34px;white-space:nowrap;font:900 12px/1 inherit;padding:5px 9px;border-radius:10px;background:#fff;color:#2a1a5a;animation:rxword 1.3s ease-out forwards;pointer-events:none;z-index:2}
+  .dswalk .rxh{position:absolute;bottom:56px;color:#ff6b9a;font-size:15px;opacity:0;animation:rxheart 1.1s ease-out forwards;pointer-events:none}
+  @keyframes rxword{0%{opacity:0;transform:translateY(8px) scale(.6)}15%{opacity:1;transform:scale(1.08)}80%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
+  @keyframes rxheart{0%{opacity:0;transform:translateY(0) scale(.5)}20%{opacity:1}100%{opacity:0;transform:translateY(-36px) scale(1.2)}}
+  .dswalk .wpet.rx-pounce{animation:rxpounce .7s cubic-bezier(.3,1.4,.5,1)} .dswalk .wpet.rx-wag{animation:rxwag .7s ease-in-out}
+  .dswalk .wpet.rx-snuffle{animation:rxsnuf .8s ease-in-out} .dswalk .wpet.rx-fluff{animation:rxfluff .8s ease-out}
+  .dswalk .wpet.rx-zoom{animation:rxzoom .8s ease-in-out} .dswalk .wpet.rx-nod{animation:rxnod 1s ease-in-out}
+  @keyframes rxpounce{0%{transform:scale(1.15,.8)}35%{transform:translate(34px,-26px) rotate(14deg)}70%{transform:translate(0,0) scale(1.1,.9)}100%{transform:none}}
+  @keyframes rxwag{0%,100%{transform:rotate(0)}15%,45%,75%{transform:rotate(-12deg)}30%,60%,90%{transform:rotate(12deg)}}
+  @keyframes rxsnuf{0%,100%{transform:translateY(0)}20%,60%{transform:translateY(5px) rotate(8deg)}40%,80%{transform:translateY(0) rotate(-4deg)}}
+  @keyframes rxfluff{0%{transform:scale(1)}30%{transform:scale(1.28,1.2)}55%{transform:scale(.96,1.02)}100%{transform:scale(1)}}
+  @keyframes rxzoom{0%{transform:translateX(0)}30%{transform:translateX(-70px) scale(.95)}60%{transform:translateX(70px) scale(.95)}100%{transform:translateX(0)}}
+  @keyframes rxnod{0%,100%{transform:rotate(0)}25%,65%{transform:translateY(5px) rotate(10deg)}45%{transform:rotate(0)}}
+  .pcoll{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin:2px 0 10px;padding:8px 14px;border-radius:16px;background:rgba(0,0,0,.25);border:1.5px solid rgba(255,255,255,.14);grid-column:1/-1}
+  .pcoll .paws{display:flex;gap:3px} .pcoll .paws i{font-style:normal;font-size:16px;filter:grayscale(1);opacity:.35} .pcoll .paws i.on{filter:none;opacity:1} .pcoll .paws i.max{filter:none;opacity:1;text-shadow:0 0 8px #ffd24a}
+  .pcoll b{font:900 14px/1 inherit;color:#fff} .pcoll small{font:700 12px/1 inherit;color:rgba(255,255,255,.65)}
+  .hrays{position:absolute;left:50%;top:42%;width:0;height:0;pointer-events:none;z-index:0}
+  .hrays .hspin{position:absolute;left:-190px;top:-190px;width:380px;height:380px;border-radius:50%;background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--hc) 55%,transparent) 0 9deg,transparent 9deg 24deg);-webkit-mask:radial-gradient(circle,#000 18%,transparent 70%);mask:radial-gradient(circle,#000 18%,transparent 70%);animation:hrspin 6s linear infinite,hrfade 3.1s ease-out forwards}
+  .hrays.t2 .hspin{filter:brightness(1.2)} .hrays.t3 .hspin{left:-240px;top:-240px;width:480px;height:480px;filter:brightness(1.4)}
+  .hrays .hflash{position:absolute;left:-160px;top:-160px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,#fff,var(--hc) 40%,transparent 70%);opacity:0;animation:hrflash .6s ease-out forwards}
+  @keyframes hrspin{to{transform:rotate(360deg)}} @keyframes hrfade{0%{opacity:0}15%{opacity:1}80%{opacity:.8}100%{opacity:0}}
+  @keyframes hrflash{0%{opacity:.95;transform:scale(.2)}100%{opacity:0;transform:scale(1.4)}}
+  @media (prefers-reduced-motion:reduce){.dswalk .wpet,.dswalk .rxw,.dswalk .rxh,.hrays .hspin,.hrays .hflash{animation:none!important}}
+  /* end @css:09-skills-pets round 8 */
   /* end @css:09-skills-pets */
   /* @css:07-cards */
   #levelup{gap:8px;justify-content:center}
@@ -741,6 +799,55 @@
   @keyframes bilink{50%{box-shadow:0 0 12px #9dff6d;transform:translateY(-2px)}}
   @media (prefers-reduced-motion:reduce){.card.pick .cfoil::before,#levelup .lkf,#levelup .lkf s,#levelup .lkf::after,#levelup .lkbar em,#levelup .lk.up,#levelup .cards.rrx,#levelup #refreshBtn.rr,#levelup #refreshBtn.rr .rl::before,#refreshLeft .rp i.used,#levelup .bmore.chain,#levelup .bi.link{animation:none!important}}
   /* end @css:07-cards round 7 */
+  /* @css:07-cards round 8 */
+  /* baked foils and luck tip (card_bake.js sets the --cb-* images and html.cb): only transform and opacity animate */
+  html.cb .card.pick .foil.f0{background:var(--cb-f0) center/100% 100% no-repeat}
+  html.cb .card.pick .foil.f1{background:var(--cb-f1) center/100% 100% no-repeat}
+  html.cb .card.pick .foil.f2{background:var(--cb-f2) center/100% 100% no-repeat}
+  html.cb .card.pick .foil.f3{background:var(--cb-f3) center/100% 100% no-repeat}
+  html.cb .card.pick .foil.f4{background:var(--cb-f4) center/100% 100% no-repeat}
+  html.cb .card.pick .foil.f5{background:var(--cb-f5) center/100% 100% no-repeat}
+  html.cb .card.pick .foil.f1::before{display:none}
+  html.cb .card.pick .foil.f2::after{background:var(--cb-sweep) center/100% 100% no-repeat;animation:foilsweepT 2.6s ease-in-out calc(var(--d,0s) + .9s) infinite}
+  @keyframes foilsweepT{0%{transform:translateX(-95%)}60%,100%{transform:translateX(95%)}}
+  html.cb .card.pick .foil.f3::before{background:var(--cb-burst3) center/100% 100% no-repeat;-webkit-mask:none;mask:none}
+  html.cb .card.pick .foil.f5::before{background:var(--cb-burst5) center/100% 100% no-repeat;-webkit-mask:none;mask:none}
+  html.cb .card.pick .foil.f3::after,html.cb .card.pick .foil.f4::after,html.cb .card.pick .foil.f5::after{background:var(--cb-glint) center/100% 100% no-repeat}
+  html.cb .card.pick .foil.f4::before{background:var(--cb-beat4) center/100% 100% no-repeat}
+  html.cb .card.pick .cfoil{mix-blend-mode:normal}
+  html.cb .card.pick .cfoil.cf2::after{background:var(--cb-h2) 0 0/8px 8px}
+  html.cb .card.pick .cfoil.cf3::after{background:var(--cb-h3) 0 0/8px 8px,radial-gradient(circle at 88% 22%,#fff8 0 1.5px,transparent 2.5px),radial-gradient(circle at 62% 78%,#fff8 0 1.2px,transparent 2px),radial-gradient(circle at 30% 30%,#fff8 0 1.2px,transparent 2px)}
+  html.cb .card.pick .cfoil.cf4::after{background:var(--cb-h4) 0 0/8px 8px}
+  html.cb .card.pick .cfoil.cf5::after{background:var(--cb-h5) 0 0/8px 8px,conic-gradient(from 200deg at 15% 50%,#ff7ad022,#ffe14a22,#6fe3ff22,#ff7ad022)}
+  #levelup .lkw{display:none}
+  html.cb #levelup .lkf::after{display:none}
+  html.cb #levelup .lkw{display:block;position:absolute;inset:0;border-radius:4px;overflow:hidden;pointer-events:none}
+  html.cb #levelup .lkw i{position:absolute;top:0;bottom:0;left:0;width:55%;background:var(--cb-stripe) 0 0/100% 100% no-repeat;animation:lkwipe 2.6s linear infinite}
+  @keyframes lkwipe{from{transform:translateX(-100%)}to{transform:translateX(185%)}}
+  html.cb #levelup .lkf s{width:15px;right:-7px;top:-4px;bottom:-4px;background:var(--cb-tip) center/100% 100% no-repeat}
+  /* picking: the card glows in its own rarity colour, the band chip floats a +N in that colour */
+  .card.pick.chosen{border-color:var(--rc);box-shadow:0 0 0 3px #fff9,0 0 30px var(--rc),0 0 64px color-mix(in srgb,var(--rc) 70%,transparent)}
+  #levelup .bi{position:relative}
+  #levelup .bi.tick{border-color:var(--pc,#9dff6d);animation-name:bitick8}
+  #levelup .bi.fresh{border-color:var(--pc,#9dff6d);box-shadow:0 0 10px var(--pc,#9dff6d)}
+  @keyframes bitick8{0%{transform:scale(1)}30%{transform:scale(1.5) rotate(-5deg);box-shadow:0 0 14px var(--pc,#9dff6d)}100%{transform:scale(1)}}
+  #levelup .bi .plus{position:absolute;left:50%;top:-3px;text-decoration:none;font-size:13px;font-weight:900;line-height:1;color:var(--pc,#9dff6d);text-shadow:0 0 8px var(--pc,#9dff6d),0 1px 0 #000;pointer-events:none;animation:biplus .85s ease-out both}
+  @keyframes biplus{0%{opacity:0;transform:translate(-50%,6px) scale(.6)}25%{opacity:1;transform:translate(-50%,-10px) scale(1.3)}100%{opacity:0;transform:translate(-50%,-28px) scale(1)}}
+  /* synergy chain toast rising from the i button */
+  .chtoast{position:fixed;z-index:70;transform:translate(-50%,-100%);pointer-events:none;display:flex;flex-wrap:wrap;justify-content:center;gap:1px 6px;max-width:min(300px,92vw);padding:5px 14px 6px;border-radius:12px;text-align:center;background:linear-gradient(#173a14f2,#0a1a0cf2);border:1.5px solid #9dff6d;box-shadow:0 0 18px #9dff6d77,0 4px 10px #000a;animation:chtoast 2.2s cubic-bezier(.2,1.3,.4,1) both}
+  .chtoast b{width:100%;font-size:9px;letter-spacing:.16em;color:#9dff6d}
+  .chtoast span{font-size:16px;font-weight:900;color:#fff;text-shadow:0 0 10px #9dff6d99}
+  .chtoast u{width:100%;text-decoration:none;font-size:10px;font-weight:800;color:#c8ffa8}
+  @keyframes chtoast{0%{opacity:0;transform:translate(-50%,-60%) scale(.6)}12%{opacity:1;transform:translate(-50%,-100%) scale(1.08)}22%{transform:translate(-50%,-100%) scale(1)}82%{opacity:1;transform:translate(-50%,-112%)}100%{opacity:0;transform:translate(-50%,-126%)}}
+  /* rarity colour carries through the whole card: level pips, the filled part of the ghost bar and the level ring */
+  .card.pick .pip.on{background:var(--rc)}
+  .card.pick .gb i{background:linear-gradient(90deg,color-mix(in srgb,var(--rc) 60%,#000),var(--rc))}
+  .card.pick .lvring{background:conic-gradient(from 0deg,var(--rc) 0 var(--a),#9dff6dcc var(--a) var(--b),#ffffff38 var(--b) 360deg)}
+  /* text fit on narrow phones: the NEW tag clears the key digit, long stats shrink instead of overflowing */
+  .card.pick .nm{padding-right:14px}
+  @media (max-width:340px){.card.pick .dv b{font-size:17px}.card.pick .dv b:only-child{font-size:13px}.card.pick .delta{gap:5px;padding-left:6px;padding-right:6px}}
+  @media (prefers-reduced-motion:reduce){html.cb .card.pick .foil.f2::after,html.cb #levelup .lkw i,#levelup .bi .plus,.chtoast{animation:none!important}.chtoast{opacity:1;transform:translate(-50%,-100%)}}
+  /* end @css:07-cards round 8 */
   /* end @css:07-cards */
   /* @css:18-access */
   :focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #ff5cb8}
@@ -973,6 +1080,25 @@
   #stGo.go-hit{animation:gohit .32s cubic-bezier(.2,.9,.3,1)!important}
   @keyframes gohit{0%{transform:scale(.95);filter:brightness(1.5)}60%{transform:scale(1.05);box-shadow:0 6px 0 #a8530a,0 0 34px #fff3b0}100%{transform:scale(1)}}
   @media(prefers-reduced-motion:reduce){.qt .qg,#stGo.go-hit,.gl-box.gl-flash{animation:none!important}}
+  /* battle round 8: pinned claim row on the dock, Bring line in the fun fact, event tile fit at 360, hero stars */
+  .bt-claim{pointer-events:auto;display:flex;align-items:center;gap:8px;width:100%;max-width:520px;box-sizing:border-box;margin:0 auto 2px;padding:5px 6px 5px 10px;border-radius:14px;border:2px solid #ffe14a;background:linear-gradient(100deg,#5a3410,#2e1a08);color:#fff;font:inherit;text-align:left;cursor:pointer;box-shadow:0 0 14px rgba(255,225,74,.35)}
+  .bt-claim[hidden]{display:none} .bt-claim .bc-ic{font-size:18px;line-height:1;flex:none} .bt-claim .bc-tx{flex:1;min-width:0;font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .bt-claim .bc-tx b{color:#ffe14a}
+  .bt-claim .bc-go{flex:none;font-size:12px;font-weight:900;letter-spacing:.04em;padding:6px 12px;border-radius:10px;color:#2b1608;background:linear-gradient(180deg,#fff3b0,#ffc83d);box-shadow:0 2px 0 #a8530a;animation:qgp 1.4s ease-in-out infinite}
+  .bt-claim:active .bc-go{transform:translateY(2px);box-shadow:none}
+  @media(max-height:700px){.bt-claim{padding-top:2px;padding-bottom:2px;margin-bottom:0} .bt-claim .bc-go{padding:4px 10px}}
+  .ff-bring{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 8px;border-radius:11px;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.14)} .ff-bring>b{font-size:11px;letter-spacing:.1em;color:var(--dim);margin-right:2px}
+  .ff-bring i{position:relative;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;font-style:normal;background:rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.2)} .ff-bring i img{width:26px;height:26px;object-fit:contain} .ff-bring i.eq{border-color:#9dff6d} .ff-bring i.lock{opacity:.45;filter:grayscale(.7)}
+  .ff-bring i u{position:absolute;right:-5px;bottom:-5px;width:15px;height:15px;border-radius:50%;display:grid;place-items:center;text-decoration:none;font-size:9px;font-weight:900;background:#9dff6d;color:#10331a;border:1.5px solid #fff} .ff-bring i.lock u{background:#8a8a98;color:#fff}
+  .ff-bring em{flex:1;min-width:90px;font-style:normal;font-size:11px;font-weight:800;color:#d6d0ff;line-height:1.2}
+  .bt-hero .info .stk{font-size:15px;letter-spacing:3px;color:#46406e} .bt-hero .info .stk u{text-decoration:none;color:#ffd24a;text-shadow:0 0 6px #ffb04d}
+  .bt-hero .stprog .pgl.has b{color:#ffe14a}
+  @media(max-width:400px){
+    #pigBox .tile{column-gap:8px;padding:9px 10px} #pigBox .tile .ic{width:40px;height:40px;font-size:24px} #pigBox .tile .top{gap:8px}
+    #pigBox .tile .nm{font-size:15px;overflow-wrap:normal;text-wrap:balance} #pigBox .tile .lv{font-size:11px;white-space:nowrap;padding:1px 6px}
+    #pigBox .tile>.btn{grid-column:1/-1;grid-row:3;min-width:0;width:100%;padding:8px 10px;font-size:13px} #pigBox .tile .top{grid-column:1/-1} #pigBox .tile .ds{grid-column:1/-1}
+    .evbanner{padding:9px 10px} .ev-tx b{font-size:15px;line-height:1.1;overflow-wrap:normal;text-wrap:balance} .ev-tx small{font-size:11px} .ev-cd{padding:4px 7px} .ev-cd b{font-size:12px} .ev-cd small{display:none} .ev-cd::before{content:'\23F1  ';font-size:12px;color:#8fd8e8} .ev-cd{flex-direction:row;align-items:center} .ev-ic{font-size:26px}
+  }
+  @media(prefers-reduced-motion:reduce){.bt-claim .bc-go{animation:none}}
   /* end @css:08-battle-tab */
 /* @css:19-transitions */
   /* screens: fade + scale in, fade out (transform and opacity only) */
@@ -1234,6 +1360,31 @@
   @keyframes hand7{0%,100%{transform:translateY(0) scale(1)}45%{transform:translateY(-9px) scale(1.12)}60%{transform:translateY(-3px) scale(.94)}}
   .wb12-b span{white-space:nowrap}
   @media (prefers-reduced-motion:reduce){.goal12::before{animation:none}}
+  /* round 8: snake lane clear of the chips, the tune dots and sticker, the first-return hand */
+  #title .snake5{bottom:21%}
+  @media (max-height:700px){#title .snake5{bottom:19%}}
+  #title .tune13{position:absolute;left:50%;bottom:calc(21% + 92px);translate:-50% 0;display:flex;gap:6px;z-index:3;pointer-events:none;opacity:0;transition:opacity .25s}
+  .tune13.show{opacity:1}
+  .tune13 i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.28);border:1.5px solid #fff8;transition:transform .2s,background .2s}
+  .tune13 i.on{background:#ffd84d;border-color:#fff;transform:scale(1.35);box-shadow:0 0 8px #ffd84d}
+  #title .tn13{position:absolute;z-index:4;pointer-events:none;translate:-50% -50%;font-size:22px;font-weight:900;color:#ffd84d;text-shadow:0 2px 0 #4a0f3a;animation:tn13 .8s ease-out forwards}
+  .tn13.big{font-size:26px;animation-name:tn13b} .tn13.d1{color:#ff8fcf;animation-delay:.05s} .tn13.d2{color:#7fe6ff;animation-delay:.1s}
+  @keyframes tn13{to{transform:translateY(-46px) rotate(14deg) scale(1.2);opacity:0}}
+  @keyframes tn13b{to{transform:translateY(-90px) rotate(-18deg) scale(1.4);opacity:0}}
+  #title .stk13{position:absolute;left:14px;top:62px;width:44px;height:44px;padding:0;border:0;background:none;z-index:6;rotate:-12deg;filter:drop-shadow(0 3px 0 rgba(0,0,0,.4));cursor:pointer}
+  .stk13[hidden]{display:none}
+  .stk13 svg{width:100%;height:100%;display:block}
+  .stk13.land{animation:stkland 1s cubic-bezier(.2,1.5,.4,1)}
+  .stk13.bop{animation:stkbop .26s ease-out}
+  @keyframes stkland{0%{scale:0;rotate:200deg}60%{scale:1.5}100%{scale:1;rotate:-12deg}}
+  @keyframes stkbop{50%{scale:1.2}}
+  #title.hand13 #titleInfo::before{content:'\1F446';position:absolute;right:22px;top:-30px;font-size:28px;line-height:1;pointer-events:none;z-index:5;filter:drop-shadow(0 3px 0 rgba(0,0,0,.35));animation:hand7 1.1s ease-in-out infinite}
+  @media (max-height:700px){#title.hand13 #titleInfo::before{top:-26px;font-size:25px}}
+  @media (prefers-reduced-motion:reduce){#title.hand13 #titleInfo::before,.stk13.land,.stk13.bop{animation:none}}
+  #title h1.logo::before,#title h1.logo::after{content:'\2726';position:absolute;pointer-events:none;color:#fff;font-size:.34em;line-height:1;text-shadow:0 0 8px #ff8fcf,0 0 16px #ff5cb8;animation:twk13 2.6s ease-in-out infinite;z-index:3}
+  #title h1.logo::before{left:-4%;top:6%} #title h1.logo::after{right:-3%;bottom:14%;font-size:.26em;animation-delay:-1.3s;color:#ffe9a0}
+  @keyframes twk13{0%,100%{opacity:.15;transform:scale(.5) rotate(0)}50%{opacity:1;transform:scale(1.15) rotate(45deg)}}
+  @media (prefers-reduced-motion:reduce){#title h1.logo::before,#title h1.logo::after{animation:none;opacity:.8}}
   /* end @css:12-title-onboarding */
 
   /* @css:10-shop-gear-stats */
@@ -1559,6 +1710,8 @@
   @media (max-height:600px){.rkeep{display:none} #result .hero{height:48px}}
   #setBtnH{position:relative!important}   /* the inline position:static left its 44px hit pad (::before) stretching over the whole hub */
   .tile.mast .nm{min-width:0} @media (max-width:380px){.tile.mast .nm{font-size:11.5px;overflow-wrap:anywhere}}
+  /* QA r7: a win with five or six reward chips (random fragment drops) pushed RETRY and MENU 4px off a 390x844 screen: compact chips on mid-height phones */
+  @media (min-height:701px) and (max-height:880px){#result .result-list{gap:4px 6px} #result .result-list .r{padding:3px 8px;font-size:13px;gap:4px} #result .result-list img{width:20px;height:20px}}
   /* end @css:20-qa */
   /* @css:17-perf */
   .hub-skel .tab.on>*{opacity:.35;pointer-events:none;transition:opacity .12s}
@@ -1636,6 +1789,24 @@
   .empty7 b{font-size:17px;color:#fff} .empty7 span{font-size:13px;font-weight:700;color:var(--dim);margin-bottom:6px}
   .empty7 .e7i{animation:d19Float 2.6s ease-in-out infinite} @keyframes d19Float{50%{transform:translateY(-5px) rotate(6deg)}} html.rm .empty7 .e7i{animation:none}
 /* end @css:19-buttons round 7 b */
+/* @css:19-buttons round 8 */
+  #settings .tgl .ti.t8,#settings .volrow .ti.t8{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:10px;font-size:0;color:#10131c;background:linear-gradient(160deg,color-mix(in srgb,var(--tc) 60%,#fff),var(--tc));box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 2px 4px rgba(0,0,0,.35);transition:filter .25s,transform .25s cubic-bezier(.3,1.6,.5,1)}
+  #settings .tgl .ti.t8 .si8,#settings .volrow .ti.t8 .si8{width:19px;height:19px;display:block}
+  #settings .tgl:not(.on) .ti.t8{filter:saturate(.4) brightness(.8)}
+  #settings .tgl.on .ti.t8{transform:scale(1.06) rotate(-4deg)}
+  html.rm #settings .tgl.on .ti.t8{transform:none}
+  .emptycard .em-ic{display:block;font-size:0} .emptycard .em-svg{display:block;margin:0 auto;filter:drop-shadow(0 3px 5px rgba(0,0,0,.35))}
+  .btn.done8{background:linear-gradient(180deg,#b6ff8f,#5fd63a)!important;color:#10131c!important;pointer-events:none;animation:bs8Pop .4s cubic-bezier(.3,1.7,.5,1)}
+  .btn.done8 .bs8{vertical-align:-.12em;margin-right:.15em}
+  @keyframes bs8Pop{from{transform:scale(.9)}to{transform:scale(1)}}
+  .btn.busy8{position:relative;color:transparent!important;pointer-events:none}
+  .btn.busy8::before{content:"";position:absolute;left:50%;top:50%;width:1.1em;height:1.1em;margin:-.55em 0 0 -.55em;border-radius:50%;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;animation:bs8Spin .7s linear infinite}
+  @keyframes bs8Spin{to{transform:rotate(360deg)}}
+  html.rm .btn.busy8::before{animation:none;border-top-color:rgba(255,255,255,.35);border-right-color:#fff}
+  html.rm .btn.done8{animation:none}
+  #settings .tgl:active b::after{width:30px;transition:width .1s}
+  #settings .tgl.on:active b::after{transform:translateX(16px)}
+/* end @css:19-buttons round 8 */
   /* @css:11-result-goal */
   .rgoal{display:none;align-items:center;gap:10px;width:min(320px,86vw);padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);cursor:pointer;text-align:left;animation:rpIn .45s .9s both}
   .rgoal.on{display:flex}
@@ -1746,6 +1917,16 @@
   @keyframes rvFill{from{transform-origin:left;transform:scaleX(0)}to{transform:scaleX(1)}}
   @media (max-height:700px){.rvwipe{display:none}}
   @media (prefers-reduced-motion:reduce){.rvwipe.go,.rvwipe.go i u{animation:none}}
+  /* r8 level-up screen entrance: ENHANCE tightens its letters under a gold sweep line, a ring of light opens behind the cards, the luck bar rises last */
+  #levelup .banner{position:relative;animation:lvBan .55s cubic-bezier(.2,1.2,.4,1) both;text-shadow:0 0 14px rgba(157,255,109,.55)}
+  #levelup .banner::after{content:"";position:absolute;left:50%;bottom:-4px;width:150px;height:3px;margin-left:-75px;border-radius:2px;background:linear-gradient(90deg,transparent,#ffe27a,#fff,#ffe27a,transparent);transform:scaleX(0);animation:lvLine .7s .12s ease-out both}
+  #levelup::before{content:"";position:fixed;left:50%;top:44%;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:4px solid rgba(255,226,122,.85);box-shadow:0 0 26px rgba(255,216,77,.6),inset 0 0 26px rgba(255,216,77,.35);pointer-events:none;opacity:0;animation:lvRing .75s ease-out both}
+  #levelup .luckbox{animation:lvRise .45s .32s ease-out both}
+  @keyframes lvBan{0%{opacity:0;letter-spacing:.7em;transform:scale(1.5)}100%{opacity:1;letter-spacing:.16em;transform:none}}
+  @keyframes lvLine{0%{transform:scaleX(0);opacity:1}60%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1.25);opacity:0}}
+  @keyframes lvRing{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(7)}}
+  @keyframes lvRise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){#levelup .banner,#levelup .banner::after,#levelup::before,#levelup .luckbox{animation:none}}
   /* end @css:05-screen-feel */
 /* @css:18-access round 7 */
   .qpill{min-height:44px} #tabBattle .qpill{min-height:44px}
@@ -1759,6 +1940,59 @@
   html.rf .rfprev i{animation:none;opacity:.55} html.rf .rfprev .rft::after{content:"Steady: no flashes or lightning"} html.rf .rfprev .rft{color:#9dff6d}
   @media (prefers-reduced-motion:reduce){.rfprev i{animation:none;opacity:.55}}
 /* end @css:18-access round 7 */
+/* @css:16-retention */
+  .tdy.hasrd{border-color:rgba(255,210,74,.7);background:linear-gradient(160deg,rgba(255,210,74,.2),rgba(8,5,30,.55))} .tdy.hasrd .tdh b{color:var(--gold)}
+  .tdrd{display:flex;flex-wrap:wrap;gap:5px;justify-content:center} .tdgo{font:800 12px/1.2 inherit;padding:4px 10px;min-height:28px;border-radius:99px;border:1.5px solid rgba(255,210,74,.75);background:rgba(255,210,74,.18);color:var(--ink);cursor:pointer}
+  .tdgo:active{transform:scale(.95)} @media (max-height:700px){.tdy{padding:5px 8px 6px;gap:5px} .tdr i{padding:4px 2px 3px} .tdr i u{font-size:17px}}
+  .shelfhead{width:100%;padding:8px 12px 10px;margin-bottom:8px;border-radius:16px;border:2px solid rgba(255,210,74,.55);background:linear-gradient(160deg,rgba(255,210,74,.2),rgba(8,5,30,.6));display:flex;flex-direction:column;align-items:center;gap:6px}
+  .shl{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;justify-content:center} .shl b{font-size:26px;font-weight:900;color:var(--gold);line-height:1} .shl b small{font-size:13px;color:var(--dim);font-weight:800} .shl span{font-size:12px;font-weight:700;color:var(--dim)}
+  .shd{display:flex;flex-wrap:wrap;gap:5px;justify-content:center} .shd i{width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.22)}
+  .shd i.got{box-shadow:0 0 6px currentColor;color:#c77b3a;background:currentColor} .shd i.got.silver{color:#d6e0ee} .shd i.got.gold{color:#ffd24a} .shd i.rdy{box-shadow:inset 0 0 0 2px var(--gold);animation:nrpulse 1.8s ease-in-out infinite}
+  .shb{width:100%;height:6px;border-radius:99px;background:rgba(0,0,0,.4);overflow:hidden} .shb i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ffd24a,#9dff6d)}
+  .tile.trph{padding-top:8px;padding-bottom:8px} .tile.trph .ds{display:none} .tile.trph.got{opacity:.78;border-color:rgba(255,210,74,.5)} .tile.trph.got .btn{display:none}
+  .tile.trph:not(.rdy):not(.got) .ic{filter:grayscale(.75) brightness(.8)} .tile.trph.rdy{border-color:var(--gold);box-shadow:0 0 14px rgba(255,210,74,.45)}
+  .tile.trph.tt-gold .ic{background:rgba(255,210,74,.22)} .tile.trph.tt-silver .ic{background:rgba(214,224,238,.2)}
+  @media (max-height:700px){.tile.trph .bar{margin-top:2px}}
+  @media (prefers-reduced-motion:reduce){.shd i.rdy{animation:none}}
+/* end @css:16-retention */
+  /* @css:10-shop-gear-stats round 8 */
+  .ribi{width:18px;height:18px;vertical-align:-4px;display:inline-block}
+  .btn .ribi{margin-right:2px} .tile .ic .ribi{width:40px;height:40px;vertical-align:middle}
+  /* wardrobe try-on: the duo wears the outfit you tapped, with its perk and one button to buy or wear it */
+  .wname.try{color:#fff} .wname.try::before{content:"TRYING ON";display:block;font-size:10px;letter-spacing:1.6px;color:#9dff6d;margin-bottom:1px}
+  .wperk{display:flex;align-items:center;justify-content:center;gap:10px;margin:6px auto 0;padding:5px 6px 5px 14px;width:max-content;max-width:100%;border-radius:99px;background:rgba(0,0,0,.35);border:2px solid rgba(255,208,100,.45)} .wperk[hidden]{display:none}
+  .wperk span{font-weight:900;font-size:13px;color:#ffe3a8} .wperk .btn{min-height:36px;padding:6px 14px;font-size:14px;margin:0;min-width:0;white-space:nowrap} .wperk .btn[hidden]{display:none}
+  .whint{font-size:11px;color:var(--dim);margin-top:2px} .wperk:not([hidden])~.whint{display:none}
+  .wardhero2.swap .what,.wardhero2.swap .wardhat{animation:wtry .5s cubic-bezier(.2,1.5,.4,1) both,what 2.4s ease-in-out .5s infinite} @keyframes wtry{0%{opacity:0;transform:translateX(-50%) translateY(-26px) scale(.5) rotate(-12deg)}100%{opacity:1;transform:translateX(-50%)}}
+  .wardhero2.swap .wglow{animation:wglow .6s ease-out} @keyframes wglow{0%{transform:scale(.8);opacity:.3}60%{transform:scale(1.08);opacity:1}100%{transform:none}}
+  .tile.ward{cursor:pointer} .tile.ward.tryon{border-color:#9dff6d;box-shadow:0 0 0 2px rgba(157,255,109,.55),0 0 18px rgba(157,255,109,.45)} .tile.ward:focus-visible{outline:3px solid #fff;outline-offset:2px}
+  /* stat cards: equal height, button on the floor of every card, a next-level arrow in the title */
+  .sc .go{margin-top:auto} .sc .scd{flex:1;display:flex;align-items:center;justify-content:center}
+  /* keepsakes tier 2 and up wear the colour of their set */
+  .kcard.sett:not(.off){background:radial-gradient(circle at 18% 6%,color-mix(in srgb,var(--st) 62%,transparent),transparent 64%),linear-gradient(180deg,color-mix(in srgb,var(--tc) 45%,#10131c),color-mix(in srgb,var(--tc) 22%,#10131c))}
+  .kcard .kset{position:absolute;right:6px;top:6px;width:9px;height:9px;border-radius:50%;background:var(--st);border:2px solid #fff;box-shadow:0 0 6px var(--st)}
+  @media (max-height:700px){.wardhero2{width:min(160px,48%);margin-top:20px}.wperk{margin-top:3px}}
+  @media (prefers-reduced-motion:reduce){.wardhero2.swap .what,.wardhero2.swap .wardhat,.wardhero2.swap .wglow{animation:none}}
+  /* end @css:10-shop-gear-stats round 8 */
+/* @css:18-access round 8 */
+  /* contrast audit over every hub tab: text on its real background must reach 4.5:1 (3:1 for large text and icons) */
+  :root{--dim:#b4c6de}
+  .dealrib{background:linear-gradient(180deg,#e23a5e,#b81f40);text-shadow:0 1px 0 rgba(0,0,0,.35)} .dealrib.free{background:linear-gradient(180deg,#2a7d1c,#1f6317)}
+  .lvbadge{background:#8a4bd8;color:#fff} #hub .alert{background:#d62645}
+  .tile .lv.lock,.tile.coll .lv.lock{color:#ffc2e6}
+  #hub .chip .st{color:#8a82c8} #hub .chip.sel .st u,#hub .chip .st u{text-shadow:1px 0 #4a0a2c,-1px 0 #4a0a2c,0 1px #4a0a2c,0 -1px #4a0a2c}
+  .tile.coll .star{color:rgba(255,255,255,.5)}
+  #hub .chip .hk,#hub .chip .hk.hot{background:linear-gradient(180deg,#9558e6,#5b27b0)}
+  .tabs button{color:#cfdbee} .tabs button.on{color:#fff}
+  /* text size above 100%: the hub body is zoomed, so rows that were tuned for 390px get less room. Let them give way. */
+  html.ts #loadoutRow{gap:4px;padding-left:6px;padding-right:6px} html.ts #loadoutRow .slot{min-width:0}
+  html.ts .prhd{flex-wrap:wrap;gap:2px 8px} html.ts .recbar{grid-template-columns:1fr} html.ts .rec-ics{order:1} html.ts .rec-ft{flex-wrap:wrap}
+  .slot .slv{font-family:inherit;font-size:12px;font-weight:900;line-height:15px}
+  html.ts .recbar{align-self:stretch;width:100%;box-sizing:border-box}
+  /* colour-blind mode: rarity colours separated by lightness (see cb_palette.js) */
+  html.cbm .card.pick.r2,html.cbm .it.rar2,html.cbm .tile.prar2{--rc:#8a3dff!important} html.cbm .card.pick.r3,html.cbm .it.rar3,html.cbm .tile.prar3{--rc:#ff8a1f!important} html.cbm .card.pick.r5{--rc:#ffec8a!important}
+  html.cbm .card.pick.r2{box-shadow:0 0 22px #8a3dff88} html.cbm .card.pick.r3{box-shadow:0 0 26px #ff8a1f88} html.cbm .card.pick.r5{box-shadow:0 0 34px #ffec8a;animation:godglow 1.2s infinite alternate}
+/* end @css:18-access round 8 */
 </style>
 </head>
 <body>
@@ -1784,7 +2018,7 @@
 </section>
 
 <section class="scr hub" id="hub">
-  <div class="hubtop"><button class="gear" id="setBtnH" aria-label="Settings" style="position:static;flex:none;width:38px;height:38px;font-size:19px">⚙</button><div class="cur e"><b>⚡</b><b id="hEnergy">0</b><button class="plus" id="enPlus">+</button></div><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div><div id="hPower"></div>
+  <div class="hubtop"><button class="gear" id="setBtnH" aria-label="Settings" style="position:static;flex:none;width:38px;height:38px;font-size:19px">⚙</button><div class="cur e"><b>⚡</b><b id="hEnergy">0</b><button class="plus" id="enPlus">+</button></div><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div><div class="hpwrow8"><div id="hPower"></div></div>
   <div class="nextrew" id="nextRew"></div>
   <div class="hubbody">
     <div class="tab" id="tabBattle">
@@ -1816,7 +2050,7 @@
     <div class="tab" id="tabGear"><div class="filters" id="gearFilters"><b class="ttl">Collection</b><button data-f="All">All</button><button data-f="Owned">Owned</button><button data-f="Set">Set</button><button data-f="Upgrade">Ready</button></div><div id="gearBody"></div></div>
     <div class="tab" id="tabShop"><h2>SHOP</h2><div class="sub">Treats and surprises.</div><div class="tiles" id="boxList"></div></div>
   </div>
-  <div class="bt-dock" id="btDock"><div class="chips" id="stChips"></div><button class="btn" id="stGo">START THE BATTLE</button></div>
+  <div class="bt-dock" id="btDock"><button class="bt-claim" id="btClaim" type="button" hidden></button><div class="chips" id="stChips"></div><button class="btn" id="stGo">START THE BATTLE</button></div>
   <nav class="tabs">
     <button data-tab="Shop"><b>🛍️</b>Shop</button><button data-tab="Stats"><b>♥</b>Stats</button><button data-tab="Battle"><b>⚔</b>Battle</button><button data-tab="Skills"><b>✦</b>Skills</button><button data-tab="Pets"><b>🐾</b>Pets</button><button data-tab="Gear"><b>🎒</b>Gear</button>
   </nav>
@@ -1902,6 +2136,7 @@
   <div class="rlevel" id="rLevel"><span class="lv" id="rLv">1</span><div class="lbar"><i id="rLbar"></i></div><small id="rLtxt"></small></div>
   <div class="result-list" id="rList"></div>
   <div class="rextra" id="rExtra"></div>
+  <div class="rmoment8" id="rMoment"></div>
   <div class="rgoal" id="rGoal" role="button" tabindex="0"></div>
   <div class="rnudge" id="rNudge"></div>
   <div class="rkeep" id="rKeep"></div>

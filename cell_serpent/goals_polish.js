@@ -3,7 +3,7 @@
 import { spinReady, dailyGoals, seasonStatus, idleAmount } from './sim.js';
 
 // pure: today's four small habits and how many are done. Nothing here ever takes anything away.
-export function todayRhythm(save, day) {
+export function todayRhythm(save, day, hour) {
   const gigsDone = save.daily && save.daily.day === day ? dailyGoals(day).filter(g => save.daily.claimed && save.daily.claimed[g.id]).length : 0;
   const items = [
     { id: 'sign', icon: '📅', label: 'Sign in', done: !!(save.sign && save.sign.day === day) },
@@ -12,17 +12,19 @@ export function todayRhythm(save, day) {
     { id: 'stamp', icon: '⭐', label: 'Stamp', done: seasonStatus(save, day).stampedToday },
   ];
   const done = items.filter(i => i.done).length;
-  const line = done === items.length ? 'All done for today. See you tomorrow!' : done === 0 ? 'Four small things, whenever you feel like it' : done + ' of ' + items.length + ' done. No rush!';
+  const line = done === items.length ? 'All done for today. See you tomorrow!' : done === 0 ? (hour >= 5 && hour < 12 ? 'Good morning! ' : hour >= 12 && hour < 18 ? 'Hello again! ' : hour >= 18 || hour < 3 ? 'Nice to see you tonight! ' : '') + 'Four small things, whenever you like' : done + ' of ' + items.length + ' done. No rush!';
   return { items, done, line };
 }
-export function todayHTML(save, day) {
-  const t = todayRhythm(save, day);
-  return `<div class="tdy${t.done === t.items.length ? ' all' : ''}"><div class="tdh"><b>Today</b><span>${t.line}</span></div><div class="tdr">` +
+// round 8: the "ready to collect" bits live in the Today header now (one row instead of a separate 60px banner); each is a tap-to-scroll chip
+export function todayHTML(save, day, ready) {
+  const t = todayRhythm(save, day, new Date().getHours()), rd = ready && ready.length ? ready : null;
+  const mid = rd ? `<span class="tdrd">${rd.map(r => `<button type="button" class="tdgo" data-go="${r.go}">${r.text}</button>`).join('')}</span>` : `<span>${t.line}</span>`;
+  return `<div class="tdy${t.done === t.items.length ? ' all' : ''}${rd ? ' hasrd' : ''}"><div class="tdh"><b>${rd ? 'Ready' : 'Today'}</b>${mid}</div><div class="tdr">` +
     t.items.map(i => `<i class="${i.done ? 'ok' : ''}"><u>${i.icon}</u><small>${i.label}${!i.done && i.note ? ' ' + i.note : ''}</small>${i.done ? '<s>&#10003;</s>' : ''}</i>`).join('') + '</div></div>';
 }
 
 // reward chips (the green pills under the weekly card) hop up to the Beats / Sparkles pills or the top of the screen
-const PILL = { '✨': 'hSpark', '🪙': 'hBeats' };
+const PILL = { '✨': 'hSpark', '🪙': 'hBeats', '⚡': 'hEnergy' };
 export function flyChips(chips, reduce) {
   try {
     if (reduce || !chips || !chips.length || typeof Element.prototype.animate !== 'function') return 0;
@@ -50,3 +52,28 @@ export function flyChips(chips, reduce) {
 
 // welcome back: the Backstage tips waiting while the player was away, with its own tap-to-collect (separate from the gift)
 export const idleChipAmount = (save, now) => idleAmount(save, now);
+
+// round 8: a reward object (beats, sparkles, energy, eggs) hops from any element up to the pills, like the weekly chips do
+export function flyReward(from, rw, reduce) {
+  try {
+    if (reduce || !from || !rw) return 0;
+    const a = from.getBoundingClientRect(); if (!a.width) return 0;
+    const bits = [rw.beats ? '🪙 ' + rw.beats : '', rw.sparkles ? '✨ ' + rw.sparkles : '', rw.energy ? '⚡ ' + rw.energy : '', rw.eggs ? '🥚 ' + rw.eggs : ''].filter(Boolean);
+    const tmp = bits.map((t, i) => { const e = document.createElement('i'); e.className = 'gp-chip'; e.style.cssText = `visibility:hidden;left:${a.left + a.width / 2 - 34 + i * 6}px;top:${a.top + a.height / 2 - 10}px`; e.textContent = t; document.body.appendChild(e); return e; });
+    const n = flyChips(tmp, false);
+    tmp.forEach(e => e.remove());
+    return n;
+  } catch (e) { return 0; }
+}
+
+// round 8: the trophy shelf. A header with the count and one mini medal per trophy, a medal tier per trophy, ready ones first, finished last.
+export const trophyTier = r => (r && r.sparkles >= 60 ? 'gold' : r && (r.sparkles >= 25 || r.eggs) ? 'silver' : 'bronze');
+export function trophyOrder(save, list) {
+  const rank = t => save.trophies[t.id] ? 3 : t.get(save) >= t.at ? 0 : 1 + (1 - Math.min(1, t.get(save) / t.at)) * 0.99;
+  return list.map((t, i) => ({ t, i, r: rank(t) })).sort((a, b) => a.r - b.r || a.i - b.i).map(x => x.t);
+}
+export function shelfHeadHTML(save, list, ready) {
+  const got = list.filter(t => save.trophies[t.id]).length, pct = Math.round(got / list.length * 100);
+  const dots = list.map(t => `<i class="${save.trophies[t.id] ? 'got ' + trophyTier(t.reward) : ready(t) ? 'rdy' : ''}"></i>`).join('');
+  return `<div class="shelfhead"><div class="shl"><b>${got}<small> of ${list.length}</small></b><span>${got === list.length ? 'Every trophy is yours!' : got === 0 ? 'Your shelf is waiting' : 'on the shelf, nicely done'}</span></div><div class="shd">${dots}</div><div class="shb"><i style="width:${pct}%"></i></div></div>`;
+}

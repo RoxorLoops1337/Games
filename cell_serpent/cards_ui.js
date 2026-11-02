@@ -22,7 +22,7 @@ export function luckHTML(g) {
   const fill = Math.round(Math.min(1, luck / LUCK_MAX) * 100), up = Math.round((nx[0] - o[0]) * 100);
   const from = lastFill >= 0 && lastFill < fill ? lastFill : fill, grew = from < fill;
   const chip = (i, t) => `<span class="lk${lastOdds && o[i] > lastOdds[i] + 0.004 ? ' up' : ''}" style="--rc:${RARITIES[i + 1].color}"><i></i>${t}<b>${pct(o[i])}</b></span>`;
-  const html = `<div class="lkbar"><span class="lkl">LUCK</span><span class="lkt"><span class="lkf${grew ? ' grow' : ''}" style="width:${fill}%;--from:${from}%"><s></s></span><u style="left:25%"></u><u style="left:50%"></u><u style="left:75%"></u></span>${up > 0 ? `<em>+${up}% next</em>` : ''}</div><div class="lkrow">${chip(0, 'Rare+')}${chip(1, 'Epic+')}${chip(2, 'Legend+')}</div>`;
+  const html = `<div class="lkbar"><span class="lkl">LUCK</span><span class="lkt"><span class="lkf${grew ? ' grow' : ''}" style="width:${fill}%;--from:${from}%"><b class="lkw"><i></i></b><s></s></span><u style="left:25%"></u><u style="left:50%"></u><u style="left:75%"></u></span>${up > 0 ? `<em>+${up}% next</em>` : ''}</div><div class="lkrow">${chip(0, 'Rare+')}${chip(1, 'Epic+')}${chip(2, 'Legend+')}</div>`;
   lastFill = fill; lastOdds = o;
   return html;
 }
@@ -60,7 +60,7 @@ export function passiveStat(g, c) {
   return `${nm}: ${totalText(c.id, cur)} → ${totalText(c.id, cur + c.gain)}`;
 }
 const NAMES = Object.fromEntries([...CAPSULE_UPS, ...PASSIVES].map(u => [u.id, u.name]));
-const CHAINS = [['notes', 'burst', 'Every note gets an echo'], ['crit', 'cdmg', 'Crits hit much harder'], ['aspd', 'notes', 'More notes, faster'], ['aspd', 'burst', 'Echoes come quicker'], ['power', 'haste', 'Hit harder, recharge faster'], ['dbeat', 'aspd', 'Land more notes on the beat']];
+const CHAINS = [['notes', 'burst', 'Every note gets an echo', 'Echo Chamber'], ['crit', 'cdmg', 'Crits hit much harder', 'Perfect Pitch'], ['aspd', 'notes', 'More notes, faster', 'Fast Fingers'], ['aspd', 'burst', 'Echoes come quicker', 'Quick Echo'], ['power', 'haste', 'Hit harder, recharge faster', 'Full Power Jam'], ['dbeat', 'aspd', 'Land more notes on the beat', 'Tight Groove']];
 export function bandSheetHTML(g, iconFn) {
   const rows = [], ups = g.ups || {};
   for (const id of ['aspd', 'notes', 'burst', 'cdmg', 'power', 'haste', 'crit', 'vital', 'enc', 'dbeat', 'speed']) {
@@ -68,10 +68,10 @@ export function bandSheetHTML(g, iconFn) {
     rows.push(`<div class="bsr"><span class="bsn">${CAP_GLYPH[id] || '🎶'} ${NAMES[id]}</span><i>x${ups[id]}</i><b>${totalText(id, uv(g, id))}</b></div>`);
   }
   for (const w of WEAPONS) { const l = g.weap && g.weap[w.id] ? g.weap[w.id].lv : 0; if (l > 0) rows.push(`<div class="bsr sk"><span class="bsn"><span class="bsg">${iconFn(w.id)}</span> ${w.name}</span><i>Lv</i><b>${l}</b></div>`); }
-  const chain = CHAINS.map(([a, b, t]) => {
+  const chain = CHAINS.map(([a, b, t, nm]) => {
     const A = ups[a] > 0, B = ups[b] > 0;
     if (!A && !B) return '';
-    return `<div class="bch ${A && B ? 'on' : ''}"><span>${NAMES[a]}</span><em>${A && B ? '+' : '?'}</em><span>${NAMES[b]}</span><u>${A && B ? t : 'Find ' + (A ? NAMES[b] : NAMES[a])}</u></div>`;
+    return `<div class="bch ${A && B ? 'on' : ''}"><span>${NAMES[a]}</span><em>${A && B ? '+' : '?'}</em><span>${NAMES[b]}</span><u>${A && B ? nm + ': ' + t : 'Find ' + (A ? NAMES[b] : NAMES[a])}</u></div>`;
   }).filter(Boolean).sort((x, y) => (y.includes('bch on') ? 1 : 0) - (x.includes('bch on') ? 1 : 0)).slice(0, 4).join('');
   return `<div class="bsh"><div class="bst">YOUR BAND</div>${rows.join('') || '<div class="bsr"><span class="bsn">Nothing yet</span></div>'}${chain ? `<div class="bst">SYNERGY CHAIN</div>${chain}` : ''}<div class="bsx">tap to close</div></div>`;
 }
@@ -111,7 +111,7 @@ export function foilHTML(rn) { return `<span class="foil f${rn | 0}" aria-hidden
 
 // Called when the flown icon lands on the build strip: the matching chip counts up (or appears) and pops.
 // id: upgrade or skill id, add: how much the count / level grows.
-export function tickBand(strip, id, add, iconFn) {
+export function tickBand(strip, id, add, iconFn, col) {
   try {
     if (!strip || !id) return;
     let el = strip.querySelector(`.bi[data-id="${id}"]`);
@@ -126,6 +126,8 @@ export function tickBand(strip, id, add, iconFn) {
     }
     const b = el.querySelector('b'); b.textContent = String((parseInt(b.textContent, 10) || 0) + (add > 0 ? add : 1));
     el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
+    if (col) el.style.setProperty('--pc', col);
+    const pl = document.createElement('s'); pl.className = 'plus'; pl.textContent = '+' + (add > 0 ? add : 1); pl.setAttribute('aria-hidden', 'true'); el.appendChild(pl); setTimeout(() => pl.remove(), 900);
   } catch (e) { /* cosmetic only */ }
 }
 
@@ -134,17 +136,28 @@ export function tickBand(strip, id, add, iconFn) {
 export function cardFoilHTML(rn) { return rn >= 2 ? `<span class="cfoil cf${rn | 0}" aria-hidden="true"></span>` : ''; }
 
 // Pairs that make a synergy chain (same list as the band sheet shows).
-const PAIRS = [['notes', 'burst'], ['crit', 'cdmg'], ['aspd', 'notes'], ['aspd', 'burst'], ['power', 'haste'], ['dbeat', 'aspd']];
 // Called after a pick landed on the strip: if the picked (new) upgrade just met its partner for the first time, the "i" pulses and names the chain.
 export function chainPulse(strip, g, id, isNew) {
   try {
     if (!strip || !g || !g.ups || !isNew) return false;
-    const hit = PAIRS.find(([a, b]) => (a === id && g.ups[b] > 0) || (b === id && g.ups[a] > 0));
+    const hit = CHAINS.find(([a, b]) => (a === id && g.ups[b] > 0) || (b === id && g.ups[a] > 0));
     if (!hit) return false;
     const i = strip.querySelector('.bmore'); if (!i) return false;
     i.classList.remove('chain'); void i.offsetWidth; i.classList.add('chain');
     strip.querySelectorAll('.bi.link').forEach(e => e.classList.remove('link'));
-    for (const k of hit) { const e = strip.querySelector(`.bi[data-id="${k}"]`); if (e) { e.classList.remove('link'); void e.offsetWidth; e.classList.add('link'); } }
+    for (const k of hit.slice(0, 2)) { const e = strip.querySelector(`.bi[data-id="${k}"]`); if (e) { e.classList.remove('link'); void e.offsetWidth; e.classList.add('link'); } }
+    chainToast(i, hit[3], hit[2]);
     return true;
   } catch (e) { return false; }
+}
+// round 8: the chain gets a name. A small pill rises from the "i" button (on the body, so it outlives the card screen closing).
+let toastEl = null, toastT = 0;
+function chainToast(anchor, name, text) {
+  if (toastEl) toastEl.remove();
+  const r = anchor.getBoundingClientRect(), hw = Math.min(150, innerWidth * 0.46), el = document.createElement('div');
+  el.className = 'chtoast'; el.setAttribute('role', 'status');
+  el.style.cssText = `left:${Math.round(Math.min(innerWidth - hw, Math.max(hw, r.left + r.width / 2)))}px;top:${Math.round(r.top - 8)}px`;
+  el.innerHTML = `<b>SYNERGY</b><span>${name}</span><u>${text}</u>`;
+  document.body.appendChild(el); toastEl = el; clearTimeout(toastT);
+  toastT = setTimeout(() => { el.remove(); if (toastEl === el) toastEl = null; }, 2200);
 }
