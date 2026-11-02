@@ -287,6 +287,10 @@ export function showResults(app, run, out, opts = {}) {
   const wave = r.mode === 'endless' ? (out.newBestEndless ? t('run.results.best_wave', '{n} BEST!', { n: r.cleared }) : String(r.cleared)) : r.mode === 'daily' ? r.cleared + '' : r.cleared + (r.mode === 'tutorial' ? '/3' : '/' + run.wavesTotal);
   body.append(h('div', { class: 'statgrid' }, h('div', null, r.mode === 'endless' ? t('run.results.wave_reached', 'Wave reached') : t('run.results.waves_cleared', 'Waves cleared'), h('b', null, wave)), h('div', null, t('run.stat.kills', 'Kills'), h('b', null, fmt(r.kills))), h('div', null, t('run.stat.merges', 'Merges'), h('b', null, r.merges)), h('div', null, t('run.stat.best_combo', 'Best combo'), h('b', null, r.bestCombo)),
     h('div', null, t('run.results.bosses', 'Bosses'), h('b', null, r.bossKills)), h('div', null, t('run.results.time', 'Time'), h('b', null, t('run.results.time_fmt', '{m}m {s}s', { m: Math.floor(r.time / 60), s: Math.round(r.time % 60) })))));
+  {   // tactics line: only the counters the player actually used (re-rolls, sells, moves, upgrade paths)
+    const extra = [[t('run.stat.rerolls', 'Re-rolls'), r.dropRerolls], [t('run.stat.sold', 'Sold'), r.sells], [t('run.stat.moved', 'Moved'), r.moves], [t('run.stat.paths', 'Paths'), r.branches]].filter((x) => x[1] > 0);
+    if (extra.length) body.append(h('div', { class: 'statgrid statgrid-tactics' }, extra.map((x) => h('div', null, x[0], h('b', null, x[1])))));
+  }
   if (r.mode !== 'tutorial') body.append(bestsCard(app, out.bests));
   if (!win) body.append(recapCard(r.recap));
   const rew = h('div', { class: 'rew' });
@@ -318,6 +322,7 @@ export function showResults(app, run, out, opts = {}) {
   if (out.firstClear) body.append(h('div', { style: 'text-align:center;font-weight:900;color:var(--gold)' }, out.unlockedWorld ? t('run.results.first_clear_unlock', 'First clear bonus! {name} unlocked!', { name: WORLD_BY_ID[out.unlockedWorld].name }) : t('run.results.first_clear', 'First clear bonus!')));
   if (out.challenge && out.challenge.first) body.append(h('div', { style: 'text-align:center;font-weight:900;color:var(--gold)' }, t('run.results.daily_done', 'Daily challenge complete!')));
   if (out.firstBosses.length) body.append(h('div', { class: 'sub', style: 'text-align:center' }, t('run.results.first_bosses', 'First time defeating: {names} (+8 diamonds each)', { names: out.firstBosses.map((b) => BOSSES[b].name).join(', ') })));
+  if (out.questsDone && out.questsDone.length) body.append(h('div', { class: 'sub quest-done', style: 'text-align:center' }, t('run.results.quests_done', 'Daily quest done: {names}. Claim it in Goals.', { names: out.questsDone.map((id) => (M.questDef(id) || {}).text || id).join(', ') })));
   if (out.loot.length) {
     body.append(h('div', { style: 'text-align:center;font-weight:900;margin-top:6px' }, t('run.results.loot', 'Loot!')), h('div', { class: 'loot' }, out.loot.map((g, k) => { const el = gearIcon(g, 84); el.parentNode; const w = h('div', { class: 'gitem', style: 'border-color:' + RARITY[g.rarity].color + ';animation-delay:' + (700 + k * 250) + 'ms' }, el); return w; })));
     for (const g of out.loot) if (RARITY_ORDER.indexOf(g.rarity) >= 2) app.audio.play('reveal_' + g.rarity);

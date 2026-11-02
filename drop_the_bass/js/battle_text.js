@@ -185,6 +185,7 @@ export const BT = {
     start: () => t('battle.pad.help_start', 'Pause'),
     back: () => t('battle.pad.help_back', 'Wave preview'),
     triggers: () => t('battle.pad.help_triggers', 'Speed down and up'),
+    menus: () => t('battle.pad.help_menus', 'In menus: D-pad moves, A presses, B closes, LB and RB switch tabs'),
     stick: () => t('battle.pad.help_stick2', 'L3 calls the next wave. R3 twice sells the selected turret'),
   }[id] || (() => ''))(),
 };

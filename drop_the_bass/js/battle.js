@@ -584,10 +584,13 @@ export class Battle {
     const set = this.prof.settings;
     if (!set.vibrate || set.reduce) return false;
     const nav = this.o.navigator || (typeof navigator !== 'undefined' ? navigator : null);
-    if (!nav || typeof nav.vibrate !== 'function') return false;
+    const phone = !!nav && typeof nav.vibrate === 'function', padOn = !!(this.pad && this.pad.live && this.pad.live());
+    if (!phone && !padOn) return false;
     const since = this.t - this.vibT;
     if (since < (pri > this.vibPri ? HAPTIC.gapHeavy : HAPTIC.gap)) return false;
     this.vibT = this.t; this.vibPri = pri;
+    if (padOn) this.pad.rumble(pat);
+    if (!phone) return true;
     try { nav.vibrate(pat); } catch (e) { return false; }
     return true;
   }

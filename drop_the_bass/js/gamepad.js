@@ -24,6 +24,7 @@ export const GAMEPAD_HELP = [
   { pad: 'Back', id: 'back' },
   { pad: 'LT / RT', id: 'triggers' },
   { pad: 'L3 / R3', id: 'stick' },
+  { pad: 'Menus', id: 'menus' },
 ];
 export const gamepadHelp = () => GAMEPAD_HELP.map((h) => ({ pad: h.pad, text: BT.padHelp(h.id) }));
 
@@ -113,6 +114,16 @@ export class PadControl {
     return null;
   }
   hide() { this.active = false; }
+  // rumble on the same events as the phone haptics (pat: a vibrate pattern, ms). No actuator or no pad: nothing happens.
+  rumble(pat) {
+    const gp = this.live() ? this.pad() : null, act = gp && gp.vibrationActuator;
+    if (!act || typeof act.playEffect !== 'function') return false;
+    const arr = Array.isArray(pat) ? pat : [pat]; let ms = 0, peak = 0;
+    arr.forEach((v, i) => { if (i % 2 === 0) { ms += v; peak = Math.max(peak, v); } });
+    ms = Math.max(30, Math.min(450, ms));
+    try { act.playEffect('dual-rumble', { duration: ms, strongMagnitude: Math.min(1, 0.35 + peak / 160), weakMagnitude: 0.3 }); } catch (e) { return false; }
+    return true;
+  }
   // one frame. Returns the number of actions taken.
   poll(dt, b) {
     if (!this.live()) return 0;
@@ -277,4 +288,51 @@ function ring(ctx, x, y, w, h, r, lw, t) {
   path(); ctx.setLineDash([]); ctx.strokeStyle = K.C.ink; ctx.lineWidth = lw + 5; ctx.stroke();
   path(); ctx.setLineDash([14, 8]); ctx.lineDashOffset = -t * 30; ctx.strokeStyle = K.C.yellow; ctx.lineWidth = lw; ctx.stroke();
   ctx.setLineDash([]);
+}
+
+// ---- menus outside a battle (title, hub, modals): D-pad and stick move the focus through the buttons in reading order, A presses the focused one
+// (nothing focused yet: A focuses the first), B closes a modal (Escape), LB and RB switch the hub tab. Polled once per frame from main.js.
+const MENU_FOCUS = 'button:not([disabled]),[role=button],[role=tab],a[href],input:not([disabled]),select:not([disabled])';
+const shown = (el) => !el.hidden && el.offsetParent !== null && !el.closest('[hidden]') && !el.closest('[aria-hidden="true"]');
+export class MenuPad {
+  constructor(o = {}) { this.getPads = o.getPads || null; this.prev = {}; this.dir = null; this.hold = 0; this.rep = false; this.acts = 0; if (!this.getPads) listen(); }
+  live() { return !!this.getPads || seen; }
+  pad() { const list = this.getPads ? this.getPads() : systemPads(); if (!list) return null; for (let i = 0; i < list.length; i++) if (list[i] && list[i].connected !== false) return list[i]; return null; }
+  list(root) {
+    const top = [...document.querySelectorAll('.modal-bg')].pop();
+    const box = top || root || document.body;
+    return [...box.querySelectorAll(MENU_FOCUS)].filter(shown);
+  }
+  focusAt(el) { try { el.focus({ preventScroll: true, focusVisible: true }); } catch (e) { try { el.focus(); } catch (e2) { /* ignore */ } } try { el.scrollIntoView({ block: 'nearest' }); } catch (e) { /* ignore */ } }
+  step(dir, root) {
+    const l = this.list(root); if (!l.length) return false;
+    const i = l.indexOf(document.activeElement), fwd = dir === 'down' || dir === 'right';
+    this.focusAt(l[i < 0 ? (fwd ? 0 : l.length - 1) : (i + (fwd ? 1 : l.length - 1)) % l.length]); return true;
+  }
+  tab(d) {
+    const tabs = [...document.querySelectorAll('.tabs [role=tab], .tabs button')].filter(shown); if (tabs.length < 2) return false;
+    let i = tabs.findIndex((x) => x.getAttribute('aria-selected') === 'true' || x.classList.contains('on') || x.classList.contains('active'));
+    if (i < 0) i = 0; tabs[(i + d + tabs.length) % tabs.length].click(); return true;
+  }
+  // one frame; returns the number of actions taken. root: the element holding the screen (default the document)
+  poll(dt, root) {
+    if (typeof document === 'undefined' || !this.live()) return 0;
+    const gp = this.pad(); if (!gp) { this.prev = {}; this.dir = null; return 0; }
+    const s = readPad(gp); let n = 0;
+    const edge = (k) => { const now = !!s.b[k], was = !!this.prev[k]; this.prev[k] = now; return now && !was; };
+    const modal = !!document.querySelector('.modal-bg');
+    if (edge('A')) {
+      const a = document.activeElement, l = this.list(root), w = !modal && document.querySelector('.title-wrap');
+      if (w && w.querySelector('.tap')) {   // the 'TAP TO START' title: A starts it like a tap
+        try { w.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); n++; } catch (e) { /* no PointerEvent */ }
+      } else if (a && l.includes(a)) { a.click(); n++; } else if (l.length) { this.focusAt(l[0]); n++; }
+    }
+    if (edge('B')) { if (modal) { n += domPadKey('back') ? 1 : 0; } }
+    if (!modal) { if (edge('LB')) n += this.tab(-1) ? 1 : 0; if (edge('RB')) n += this.tab(1) ? 1 : 0; } else { edge('LB'); edge('RB'); }
+    if (s.dir) {
+      if (s.dir !== this.dir) { this.dir = s.dir; this.hold = 0; this.rep = false; n += this.step(s.dir, root) ? 1 : 0; }
+      else { this.hold += dt; if (this.hold >= (this.rep ? PAD_TUNING.rate : PAD_TUNING.delay)) { this.hold = 0; this.rep = true; n += this.step(s.dir, root) ? 1 : 0; } }
+    } else { this.dir = null; this.hold = 0; this.rep = false; }
+    this.acts += n; return n;
+  }
 }
