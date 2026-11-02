@@ -1,6 +1,7 @@
 // 04-hit-juice (round 2): golden upgrade orbs that fly to the upgrade counter, bomb debris and smoke,
 // capsule muzzle flash and note trails. Own small pools with hard caps. Render-only: never touches the sim.
-import { pointAt, W } from './sim.js';
+import { pointAt, pointInto, W } from './sim.js';
+const PT1 = { x: 0, y: 0 }, PT2 = { x: 0, y: 0 };   // perf r10: scratch points for the dash telegraph (no object per path lookup per frame)
 import { drawMark9, isNewKind, CHIP_COL } from './hit_juice9.js';
 import { CRIT_FEEL, FINISH_FEEL, CRIT_GAP, CLASS_CAP, classOf, sparkCol, CASCADE_DUR, drawCascade } from './hit_juice10.js';
 import { createMoments, rungOf, drawSpeciesDeath, drawMuzzle, DEATH_DUR } from './hit_juice8.js';
@@ -291,7 +292,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         ctx.beginPath(); ctx.arc(h.x, h.y, h.r * (2.6 - 1.4 * k), 0, TAU); ctx.stroke();
         const flow = still ? 0 : (S.t * 3) % 1;
         for (let i = 0; i < 6; i++) {
-          const d = 40 + (i + flow) * 44, p = pointAt(sn.path, h.ps + d), q = pointAt(sn.path, h.ps + d + 10);
+          const d = 40 + (i + flow) * 44, p = pointInto(sn.path, h.ps + d, PT1), q = pointInto(sn.path, h.ps + d + 10, PT2);
           if (p.y < -20 || p.y > 900) continue;
           const ang = Math.atan2(q.y - p.y, q.x - p.x), fade = (1 - i / 7) * (0.7 + 0.3 * k);
           ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(ang); ctx.globalAlpha = fade * pulse;
@@ -304,7 +305,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         glow(h.x, h.y, h.r * 2.8, '#ff2a4d', 0.3 * pulse);
         ctx.lineCap = 'round';
         for (let i = 0; i < 5; i++) {
-          const d = 26 + i * 30, p = pointAt(sn.path, h.ps - d), q = pointAt(sn.path, h.ps - d - 18);
+          const d = 26 + i * 30, p = pointInto(sn.path, h.ps - d, PT1), q = pointInto(sn.path, h.ps - d - 18, PT2);
           if (p.y < -20) continue;
           ctx.globalAlpha = (1 - i / 5) * 0.7; ctx.strokeStyle = i < 2 ? '#fff2f5' : '#ff5a78'; ctx.lineWidth = Math.max(2, h.r * 0.5 * (1 - i / 6));
           ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
@@ -341,7 +342,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
     ctx.save(); ctx.globalAlpha = 0.34 * Math.min(1, k * 1.6); ctx.fillStyle = '#0a0414'; ctx.fillRect(-200, -200, 1400, 1900); ctx.restore();
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     const w = h.r * 2 + 18; ctx.beginPath(); let n = 0;
-    for (let d = 0; d < 720 && n < 26; d += 30, n++) { const p = pointAt(lead.path, h.ps + d); if (n === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); }
+    for (let d = 0; d < 720 && n < 26; d += 30, n++) { const p = pointInto(lead.path, h.ps + d, PT1); if (n === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); }
     ctx.globalAlpha = 0.16 * Math.min(1, k * 1.5); ctx.strokeStyle = '#ff2a4d'; ctx.lineWidth = w; ctx.stroke();
     ctx.globalAlpha = 0.2 * Math.min(1, k * 1.5); ctx.strokeStyle = '#ff8aa0'; ctx.lineWidth = 3; ctx.setLineDash([14, 14]); ctx.lineDashOffset = calm() ? 0 : -S.t * 120; ctx.stroke();
     ctx.restore();
@@ -389,22 +390,22 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
       ctx.globalAlpha = 0.95 * fade; ctx.fillStyle = cs[1]; critPath(f.src, R * 0.8, 1); ctx.fill();
       if (f.src === 'satellite' || f.src === 'tower') { ctx.globalAlpha = 0.6 * fade; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; critPath(f.src, R * 0.9, 1); ctx.stroke(); }
       if (f.src === 'daggers') ctx.rotate(0.5);
-      ctx.globalAlpha = fade; text(f.str, 0, 0, Math.round(f.size * k / 2) * 2, '#fff', '#a8330a');
+      ctx.globalAlpha = fade; text(f.str, 0, 0, Math.round(f.size * k / 4) * 4, '#fff', '#a8330a');
       if (tier) text(tier >= 3 ? 'MEGA!' : tier >= 2 ? 'SUPER!' : 'CRIT!', 0, -R * 1.05 - 6, 16 + tier * 2, tier >= 3 ? '#ff9ad6' : '#fff2a8', '#7a2a08');
       ctx.restore(); return true;
     }
     if (f.key === 'chain') {
-      const sz = Math.round(f.size * k / 2) * 2, w = sz * (String(f.str).length * 0.62 + 1.3), h = sz * 1.15;
+      const sz = Math.round(f.size * k / 4) * 4, w = sz * (String(f.str).length * 0.62 + 1.3), h = sz * 1.15;
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(Math.sin(f.life * 12) * 0.05);
       ctx.fillStyle = 'rgba(16,19,28,.82)'; ctx.strokeStyle = f.col; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-w / 2, -h / 2, w, h, h / 2) : ctx.rect(-w / 2, -h / 2, w, h); ctx.fill(); ctx.stroke();
       text(f.str, 0, 1, sz, f.col); ctx.restore(); return true;
     }
     if (f.key === 'badge') {
-      const sz = Math.round(f.size * k / 2) * 2;
+      const sz = Math.round(f.size * k / 4) * 4;
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(-0.06); text(f.str, 0, 0, sz, '#fff3a0', '#8a5a00'); ctx.restore(); return true;
     }
-    if (f.key && f.size >= 20) { text(f.str, f.x, f.y, Math.round(f.size * k / 2) * 2, f.col, DARK[f.src] || '#10131c'); return true; }
+    if (f.key && f.size >= 20) { text(f.str, f.x, f.y, Math.round(f.size * k / 4) * 4, f.col, DARK[f.src] || '#10131c'); return true; }
     return false;
   }
 

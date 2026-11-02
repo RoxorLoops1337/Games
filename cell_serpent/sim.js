@@ -1402,7 +1402,7 @@ function updateWeapons(g, dt, canFire) {
     p.orbAng += dt * (3.2 + 0.2 * dl);
     const sns = g.snakes;
     for (let i = 0; i < 1 + dl; i++) {
-      const pos = daggerPos(g, i);
+      const pos = daggerPos(g, i, DP_SCRATCH);
       for (let a = 0; a < sns.length; a++) { const segs = sns[a].segs; for (let j = 0; j < segs.length; j++) { const s = segs[j];   // indexed, no closure (same order as eachTarget)
         if (s.hp > 0 && !s.shield && !s.wave && s.orbCd <= 0 && hyp(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } } }
     }
@@ -1411,7 +1411,7 @@ function updateWeapons(g, dt, canFire) {
   const sl = lv(g, 'stick');
   if (sl) {
     for (let k = 0; k < (sl >= 4 ? 2 : 1); k++) {
-      const sg = stickSeg(g, k);
+      const sg = stickSeg(g, k, SG_SCRATCH);
       const sns = g.snakes;
       for (let a = 0; a < sns.length; a++) { const segs = sns[a].segs; for (let j = 0; j < segs.length; j++) { const s = segs[j];
         if (!(s.hp > 0 && !s.shield && !s.wave) || s.orbCd > 0) continue;
@@ -1450,15 +1450,19 @@ function updateWeapons(g, dt, canFire) {
     if (m.life <= 0) g.maws.splice(i, 1);
   }
 }
-export function daggerPos(g, i) {
+// [o] (optional) is a scratch object the answer is written into, so the per-step and per-frame callers allocate nothing
+export function daggerPos(g, i, o) {
   const dl = lv(g, 'daggers'), p = g.p, a = p.orbAng + (i / Math.max(1, 1 + dl)) * TAU, R = 92 + 8 * dl;
+  if (o) { o.x = p.x + Math.cos(a) * R; o.y = p.y - 150 + Math.sin(a) * R; o.a = a; return o; }
   return { x: p.x + Math.cos(a) * R, y: p.y - 150 + Math.sin(a) * R, a };   // they circle a post just above the line
 }
-export function stickSeg(g, k = 0) {
+export function stickSeg(g, k = 0, o) {
   const sl = lv(g, 'stick'), p = g.p, len = 190 + 14 * sl;
   const a = -Math.PI / 2 + Math.sin(g.t * 2.2 + k * Math.PI) * 1.15;
+  if (o) { o.x0 = p.x; o.y0 = p.y - 80; o.x1 = p.x + Math.cos(a) * len; o.y1 = p.y - 80 + Math.sin(a) * len; o.a = a; o.len = len; return o; }
   return { x0: p.x, y0: p.y - 80, x1: p.x + Math.cos(a) * len, y1: p.y - 80 + Math.sin(a) * len, a, len };
 }
+const DP_SCRATCH = { x: 0, y: 0, a: 0 }, SG_SCRATCH = { x0: 0, y0: 0, x1: 0, y1: 0, a: 0, len: 0 };
 function distToSeg(px, py, x0, y0, x1, y1) {
   const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy || 1;
   const t = clamp(((px - x0) * dx + (py - y0) * dy) / l2, 0, 1);
