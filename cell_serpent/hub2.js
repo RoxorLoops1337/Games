@@ -132,17 +132,17 @@ export function createHub2(c) {
     const el = $('battleSide'); el.innerHTML = '';
     const s = save(), day = c.dayKey();
     const signReady = s.sign.day !== day, fundReadyAny = FUND.some(f => fundReady(s, f));
-    const mk = (emo, name, alert, fn) => { const b = document.createElement('button'); b.className = 'sidebtn'; b.innerHTML = `${hasAlert(alert) ? `<i class="alert${typeof alert === 'number' && alert > 1 ? ' num' : ''}">${alertLabel(alert)}</i>` : ''}<b>${emo}</b>${name}`; b.onclick = () => { audio.unlock(); audio.play('click'); fn(); }; el.appendChild(b); };
-    mk('📅', 'Sign in', signReady ? 1 : 0, openSign);
-    mk('🎀', 'Fan Fund', FUND.filter(f => fundReady(s, f)).length, openFund);
-    mk('🧺', 'Backstage', idleAmount(s, now()) >= 50, openIdle);
-    mk('🎪', eventInfo(day).name.split(' ')[0], s.event.earned > 0 && EVENT_MILES.filter((m, i) => !s.event.claimed[i] && s.event.earned >= m.at).length, openEvent);
-    mk('👗', 'Wardrobe', false, openWardrobe);
-    mk('🏆', 'Trophies', TROPHIES.filter(t => trophyReady(s, t)).length, openTrophies);
-    mk('📖', 'Preview', false, openBestiary);
-    mk('🎫', 'Pass', cardActive(s, day) && s.card.last !== day, openPass);
-    mk('🎡', 'Goals', nextReward(s, day).ready, () => addict.openGoals());
-    mk('🔀', 'Swap', false, openSwap);
+    const mk = (emo, name, alert, fn, uk) => { if (uk && c.unlocked && !c.unlocked(uk)) return; const b = document.createElement('button'); b.className = 'sidebtn'; if (uk) b.dataset.uk = uk; b.innerHTML = `${hasAlert(alert) ? `<i class="alert${typeof alert === 'number' && alert > 1 ? ' num' : ''}">${alertLabel(alert)}</i>` : ''}<b>${emo}</b>${name}`; b.onclick = () => { audio.unlock(); audio.play('click'); fn(); }; el.appendChild(b); };
+    mk('📅', 'Sign in', signReady ? 1 : 0, openSign, 'sign');
+    mk('🎀', 'Fan Fund', FUND.filter(f => fundReady(s, f)).length, openFund, 'fund');
+    mk('🧺', 'Backstage', idleAmount(s, now()) >= 50, openIdle, 'backstage');
+    mk('🎪', eventInfo(day).name.split(' ')[0], s.event.earned > 0 && EVENT_MILES.filter((m, i) => !s.event.claimed[i] && s.event.earned >= m.at).length, openEvent, 'event');
+    mk('👗', 'Wardrobe', false, openWardrobe, 'wardrobe');
+    mk('🏆', 'Trophies', TROPHIES.filter(t => trophyReady(s, t)).length, openTrophies, 'trophies');
+    mk('📖', 'Preview', false, openBestiary, 'bestiary');
+    mk('🎫', 'Pass', cardActive(s, day) && s.card.last !== day, openPass, 'pass');
+    mk('🎡', 'Goals', nextReward(s, day).ready, () => addict.openGoals(), 'wheel');
+    mk('🔀', 'Swap', false, openSwap, 'swap');
   }
   function openSign() {
     const s = save(), day = c.dayKey();

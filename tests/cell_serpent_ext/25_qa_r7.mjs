@@ -49,7 +49,8 @@ if (chromium) {
   if (browser) {
     const SAVES = {
       rich: { v: 8, beats: 900000, sparkles: 900, cleared: 40, best: 40, runs: 300, eggs: 30, ribbons: 80, xp: 90000, energy: { n: 40, t: 0 } },
-      fresh: null,
+      fresh: null,   // b12p: a brand new account only sees the Battle tab (tabs it asks for fall back to Battle), so this one is swept too
+      freshAll: null,   // b12p: the same empty save with every tab and panel opened by the ?unlock=all test param
       old: { v: 3, beats: 120, cleared: 2, best: 2, runs: 6 },
     };
     const fails = [];
@@ -59,7 +60,7 @@ if (chromium) {
         const p = await (await browser.newContext({ viewport: { width: w, height: h } })).newPage(); const errs = [];
         p.on('pageerror', e => errs.push('page: ' + e.message)); p.on('console', m => m.type() === 'error' && !/status of 404/.test(m.text()) && errs.push('console: ' + m.text()));
         await p.addInitScript(s => { if (s && !localStorage.getItem('seeded')) { localStorage.setItem('cell_serpent_save_v1', s); localStorage.setItem('seeded', '1'); } }, SAVES[sv] ? JSON.stringify(SAVES[sv]) : null);
-        await p.goto(`http://localhost:${srv.address().port}/cell_serpent/`); await p.waitForFunction(() => window.CS && window.CS.R, null, { timeout: 15000 });
+        await p.goto(`http://localhost:${srv.address().port}/cell_serpent/` + (sv === 'freshAll' ? '?unlock=all' : '')); await p.waitForFunction(() => window.CS && window.CS.R, null, { timeout: 15000 });
         await p.waitForTimeout(500);
         const sweep = async name => { const o = await p.evaluate(SWEEP); n++; for (const s of o) fails.push(`${w}x${h} ${sv} ${name}: ${s}`); };
         await sweep('title');
@@ -67,7 +68,7 @@ if (chromium) {
           await p.evaluate(t => window.CS.openHub(t), tab); await p.waitForTimeout(450); await sweep(tab);
         }
         const sides = await p.evaluate(() => document.querySelectorAll('#battleSide .sidebtn').length);
-        assert.ok(sides >= 3, `${w}x${h} ${sv}: the Battle side buttons exist`);
+        assert.ok(sides >= (sv === 'fresh' ? 0 : 3), `${w}x${h} ${sv}: the Battle side buttons exist`);
         for (let i = 0; i < sides; i++) {
           await p.evaluate(() => window.CS.openHub('Battle')); await p.waitForTimeout(250);
           await p.evaluate(i => { const l = document.querySelectorAll('#battleSide .sidebtn'); if (l[i]) l[i].click(); }, i); await p.waitForTimeout(450);
