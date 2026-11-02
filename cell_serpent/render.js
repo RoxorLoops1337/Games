@@ -95,7 +95,7 @@ export function createRenderer(canvas, art, kit) {
     if (dn >= (OPT.lowQuality ? 8 : 14) && !crit) return;   // cap: busy fights show fewer numbers, crits always show
     if (S.floats.length >= 60) return;
     const size = crit ? 30 : Math.min(24, 14 + Math.log2(e.d + 1) * 1.6);
-    S.floats.push({ x: e.x + (Math.random() - 0.5) * 24, y: e.y - 14, str: num(e.d), acc: e.d, key, col: crit ? '#ffe14a' : (HJ && HJ.tint(e.src)) || '#ffffff', size, vy: crit ? -85 : -60, life: crit ? 0.8 : 0.6, max: crit ? 0.8 : 0.6, pop: 1 });
+    S.floats.push({ x: e.x + (Math.random() - 0.5) * 24, y: e.y - 14, str: num(e.d), acc: e.d, key, crit: !!crit, src: e.src, col: crit ? '#ffe14a' : (HJ && HJ.tint(e.src)) || '#ffffff', size, vy: crit ? -85 : -60, life: crit ? 0.8 : 0.6, max: crit ? 0.8 : 0.6, pop: 1 });
   }
   let HJ = null;   // 04-hit-juice: orbs, smoke, muzzle flash, note trails (hitjuice.js)
   let lastDt = 0.016;
@@ -462,10 +462,10 @@ export function createRenderer(canvas, art, kit) {
     }
     for (let i = S.coins.length - 1; i >= 0; i--) {   // coins arc to the coin counter
       const c = S.coins[i]; c.t += dt; const k = Math.min(1, c.t / c.dur);
-      if (k >= 1) { S.coins.splice(i, 1); S.land.coin = S.t; if (S.coins.length < 12) glow(CX, CY, 38, '#ffd24a', 0.5); continue; }
+      if (k >= 1) { S.coins.splice(i, 1); S.land.coin = S.t; if (S.coins.length < 12) glow(CX, CY, 38, '#ffd24a', 0.5); HJ.coinLand(CX, CY); continue; }
       const u = k * k * (3 - 2 * k), m = 1 - u;
       const x = m * m * c.x0 + 2 * m * u * c.cx + u * u * CX, y = m * m * c.y0 + 2 * m * u * c.cy + u * u * CY;
-      ctx.save(); ctx.translate(x, y); ctx.scale(Math.max(0.3, Math.abs(Math.cos(c.t * 14))), 1); blit(kit && kit.SPR.pickup('coin'), 0, 0, 40 - 14 * k); ctx.restore();
+      ctx.save(); ctx.translate(x, y); ctx.scale(Math.max(0.3, Math.abs(Math.cos(c.t * 14))), 1); blit(kit && kit.SPR.pickup('coin'), 0, 0, 40 - 14 * k); ctx.restore(); HJ.coinSpark(x, y, k);
     }
   }
   function drawFx(dt, g) {
@@ -488,6 +488,7 @@ export function createRenderer(canvas, art, kit) {
     for (let i = S.floats.length - 1; i >= 0; i--) {
       const f = S.floats[i]; f.life -= dt; if (f.life <= 0) { S.floats.splice(i, 1); continue; }
       f.y += f.vy * dt; ctx.globalAlpha = Math.min(1, f.life / 0.3);
+      if (HJ.float(f)) { if (f.pop > 0) f.pop = Math.max(0, f.pop - dt * 8); continue; }
       if (f.pop > 0) { f.pop = Math.max(0, f.pop - dt * 8); text(f.str, f.x, f.y, Math.round(f.size * (1 + 0.3 * f.pop) / 2) * 2, f.col); }
       else text(f.str, f.x, f.y, f.size, f.col);
     }
@@ -545,6 +546,7 @@ export function createRenderer(canvas, art, kit) {
     ctx.save(); ctx.translate((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh); FX.zoomIn();
     for (const pk of g.pickups) drawPickup(pk);
     drawZones(g);
+    HJ.under(g);
     for (const sn of g.snakes) drawSnake(g, sn);
     drawWeapons(g);
     if (g.phase !== 'dead') drawPlayer(g);
@@ -559,7 +561,7 @@ export function createRenderer(canvas, art, kit) {
     if (ui) FX.drawCard(g);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
-  HJ = createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped });
+  HJ = createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text });
   FX = createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst });
 
   return { hj: HJ, timeScale: () => (FX ? FX.timeScale() : 1), setBeat: fn => FX.setBeat(fn), clearBusy: () => FX.clearBusy(), takeSounds: () => FX.takeSounds(), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, hudPress: z => getHud().press(z), safeTop: () => (hud ? hud.top() : 0), hudZone: gp => hudZone(gp, hud ? hud.top() : 0), toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
