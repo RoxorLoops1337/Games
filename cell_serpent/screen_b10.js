@@ -3,23 +3,24 @@
 // Pure helpers plus one sfx registrar (called from audio.js, tones are midi notes).
 const KEY_TIME = 'cell_serpent_best_time_b10', KEY_PROG = 'cell_serpent_best_prog_b10';
 const mem = {};
-const rd = k => { try { const r = JSON.parse(localStorage.getItem(k)); if (r && typeof r === 'object') return r; } catch (e) { /* private mode */ } return mem[k] || (mem[k] = {}); };
+const rd = k => { try { const r = JSON.parse(localStorage.getItem(k)); if (r && typeof r === 'object' && !Array.isArray(r)) return r; } catch (e) { /* private mode */ } return mem[k] || (mem[k] = {}); };
 const wr = (k, o) => { mem[k] = o; try { localStorage.setItem(k, JSON.stringify(o)); } catch (e) { /* ignore */ } };
+const okTime = v => (Number.isFinite(+v) && +v > 0 ? +v : 0);   // QA r11: ignore negative, NaN or infinite stored times
 export const stageKey = (stage, hard) => (hard ? 'h' : 's') + (stage | 0);
 
 // Clear time: returns { prev, best } where best is true only when a stored slower time was beaten (the first clear sets the mark quietly).
 export function recordTime(stage, hard, secs) {
-  const k = stageKey(stage, hard), o = rd(KEY_TIME), prev = +o[k] || 0;
+  const k = stageKey(stage, hard), o = rd(KEY_TIME), prev = okTime(o[k]);
   if (!(secs > 0)) return { prev, best: false };
   if (!prev || secs < prev) { o[k] = secs; wr(KEY_TIME, o); }
   return { prev, best: prev > 0 && secs < prev };
 }
-export const bestTime = (stage, hard) => +rd(KEY_TIME)[stageKey(stage, hard)] || 0;
+export const bestTime = (stage, hard) => okTime(rd(KEY_TIME)[stageKey(stage, hard)]);
 // Best progress (percent of the serpent popped) on a stage, for the ghost mark on the game over bar.
-export const bestProg = (stage, hard) => +rd(KEY_PROG)[stageKey(stage, hard)] || 0;
+export const bestProg = (stage, hard) => { const v = Math.round(+rd(KEY_PROG)[stageKey(stage, hard)]); return v > 0 ? Math.min(100, v) : 0; };   // QA r11: a damaged value never shows BEST 500%
 export function recordProg(stage, hard, pct) {
   const k = stageKey(stage, hard), o = rd(KEY_PROG), p = Math.max(0, Math.min(100, Math.round(pct)));
-  if (p > (+o[k] || 0)) { o[k] = p; wr(KEY_PROG, o); }
+  if (p > bestProg(stage, hard)) { o[k] = p; wr(KEY_PROG, o); }
 }
 export const fmtSecs = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 // The face got within a hair of the line and the player still won.
