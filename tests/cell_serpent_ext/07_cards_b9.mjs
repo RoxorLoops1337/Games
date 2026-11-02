@@ -19,7 +19,7 @@ assert.equal(passiveStat({ val: { hbk: 75 }, ups: {}, weap: {} }, card(hbk, 25))
 assert.ok(/^(.*?):?\s*([^:→]+?)\s*→\s*(.+)$/.test(passiveStat(g, card(hbk, 25))), 'main.js delta regex still splits it');
 assert.ok(synergyHint(g, card(brk, 25)).includes('Frosty'));
 assert.ok(synergyHint(g, card(hbk, 25)).includes('Love-Struck'));
-assert.deepEqual(Object.keys(COUNTERS).sort(), ['brk', 'hbk', 'hny', 'hwd', 'oil', 'swt', 'tis']);
+assert.deepEqual(Object.keys(COUNTERS).sort(), ['brk', 'hbk', 'hny', 'hwd', 'mir', 'muf', 'oil', 'swt', 'tea', 'tis']);
 for (const id of ['brk', 'hbk']) { assert.ok(capIconURL(id).length > 400, id + ' icon exists'); assert.ok(!/—/.test(decodeURIComponent(capIconURL(id)))); }
 { const m = cardMeter({ ups: {}, weap: {} }, card(brk, 25)); assert.ok(m && m.b > 0, 'ghost bar shows for a counter card'); }
 

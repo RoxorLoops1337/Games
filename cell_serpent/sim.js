@@ -304,6 +304,9 @@ export const PASSIVES = [
   { id: 'hwd', name: 'Heart Ward', skin: 'love', max: 4, w: 0.6, min: 1, minStage: 41, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Sweetheart wards last ' + v + '% shorter', desc: 'Sweetheart wards last 25% shorter', apply: () => {} },
   { id: 'hny', name: 'Honey Jar', skin: 'mighty', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Iron Hide shrugs off slows ' + v + '% less', desc: 'Iron Hide shrugs off slows 25% less', apply: () => {} },
   { id: 'tis', name: 'Tissue Box', skin: 'sneezy', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Sneeze jolts are ' + v + '% shorter', desc: 'Sneeze jolts are 25% shorter', apply: () => {} },
+  { id: 'mir', name: 'Pocket Mirror', reg: true, max: 4, w: 0.6, min: 1, minStage: 36, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Mirror cells glance ' + v + '% less', desc: 'Mirror cells glance 25% less', apply: () => {} },
+  { id: 'tea', name: 'Chamomile Tea', skin: 'grumpy', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Quick surges are ' + v + '% calmer', desc: 'Quick surges are 25% calmer', apply: () => {} },
+  { id: 'muf', name: 'Ear Muffs', skin: 'disco', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'The disco swing is ' + v + '% smaller', desc: 'The disco swing is 25% smaller', apply: () => {} },
   { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, minStage: 4, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
@@ -765,9 +768,9 @@ export function segRadius(boss, i, len) {
 const spacing = (a, b) => (a.r + b.r) * 0.78;
 
 // Every snake cell is created with ALL its fields in one fixed order (also the ones set later in the run), so the engine keeps one hidden class and step is not de-optimised. Tests: 29_perf_r8.
-export const CELL_KEYS = ['ps', 'x', 'y', 'ang', 'r', 'hp', 'max', 'kind', 'flash', 'orbCd', 'i', 'carry', 'shield', 'isHead', 'tp', 'vx', 'vy', 'wave', 'warded', 'gloom', 'frost', 'gold', 'goldT', 'ward', 'lull', 'drum', 'choir', 'bell', 'quartet', 'qPopped', 'metro', 'pillow', 'snack', 'mirror'];
+export const CELL_KEYS = ['ps', 'x', 'y', 'ang', 'r', 'hp', 'max', 'kind', 'flash', 'orbCd', 'i', 'carry', 'shield', 'isHead', 'tp', 'vx', 'vy', 'wave', 'warded', 'gloom', 'frost', 'gold', 'goldT', 'ward', 'lull', 'drum', 'choir', 'bell', 'quartet', 'qPopped', 'metro', 'pillow', 'snack', 'mirror', 'shell'];
 function newCell(ps, x, y, r, hp, kind, i) {
-  return { ps, x, y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0, tp: ps, vx: 0, vy: 0, wave: false, warded: false, gloom: false, frost: false, gold: false, goldT: 0, ward: false, lull: false, drum: false, choir: false, bell: false, quartet: false, qPopped: false, metro: false, pillow: false, snack: false, mirror: false };
+  return { ps, x, y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0, tp: ps, vx: 0, vy: 0, wave: false, warded: false, gloom: false, frost: false, gold: false, goldT: 0, ward: false, lull: false, drum: false, choir: false, bell: false, quartet: false, qPopped: false, metro: false, pillow: false, snack: false, mirror: false, shell: false };
 }
 export const SNAKE_KEYS = ['id', 'path', 'segs', 'tail', 'breach', 'breachT', 'speed', 'slow', 'boss', 'skin', 'name', 'surge', 'surgeT', 'healT', 'drum', 'lane', 'napT', 'gloomW', 'rushT', 'loveT', 'creak', 'snzT', 'snzW', 'frostW', 'qT', 'qDone', 'qWin', 'qNeed', 'p2', 'p2T', 'cue', 'skipT'];
 function spawnSnake(g, n, o = {}) {
@@ -843,6 +846,7 @@ function markSpecials(g, n, segs, len) {
   if (n >= PILLOW_FROM && len >= 26 && !isBossStage(n)) putFresh(segs, len, 0.58, 'pillow');
   if (n >= SNACK_FROM && len >= 24 && !isBossStage(n)) putFresh(segs, len, 0.42, 'snack');
   if (n >= MIRROR_FROM && len >= 26 && !isBossStage(n)) putFresh(segs, len, 0.66, 'mirror');
+  if (n >= SHELL_FROM && len >= 26 && !isBossStage(n) && stageKind(n) === 'ring') { putFresh(segs, len, 0.34, 'shell'); if (n >= 42) putFresh(segs, len, 0.8, 'shell'); }
 }
 // Metronome cell (stage 16+, regular snakes): pop it right on the beat for a Beats burst and a burst of Groove; off the beat it is a plain cell.
 // Pillow cell (stage 26+, regular snakes): pop it and the whole snake is shoved back PILLOW_PUSH px. Both are placed without random numbers.
@@ -870,12 +874,22 @@ function snackStep(g, pk, dt) {
 // the cell on each side takes 20%, so the total damage is unchanged: the question is whether to chew the mirror down to wear the
 // neighbours (armour, a yellow cell, a ward) or to slide away and hit them head on. Placed without random numbers.
 export const MIRROR_FROM = 36, MIRROR_SIDE = 0.2;
+export const mirrorSide = g => MIRROR_SIDE * (1 - Math.min(1, uv(g, 'mir') / 100));   // Pocket Mirror: the glance shrinks toward nothing
+// Shutter cell (batch 12, circle stages 24+, regular snakes): the duo stands still and aims all round, so a circle stage can ask WHERE you shoot from.
+// A Shutter cell wears a shield arc that turns slowly round it. A note that reaches it through the shield only does SHELL_CUT of its damage;
+// through the gap it hits in full. The shield arc is drawn on the cell, so you wait for the gap to turn toward you (or shoot the neighbours meanwhile).
+export const SHELL_FROM = 24, SHELL_CUT = 0.3, SHELL_HALF = 1.0, SHELL_W = 1.4;
+export const shellFacing = (g, s) => g.t * SHELL_W + s.i * 1.7;
+export function shellBlocked(g, s) {
+  const back = Math.atan2(g.p.y - s.y, g.p.x - s.x), d = shellFacing(g, s) - back;   // the shield blocks when it faces the duo
+  return Math.abs(Math.atan2(Math.sin(d), Math.cos(d))) < SHELL_HALF;
+}
 let splashing = false;   // the glance does not glance again
 function mirrorSplash(g, s, full) {
   let sn = null; for (const o of g.snakes) if (o.segs.indexOf(s) >= 0) { sn = o; break; }
   if (!sn) return;
   const segs = sn.segs, k = segs.indexOf(s);
-  for (let d = -1; d <= 1; d += 2) { const q = segs[k + d]; if (q && q.hp > 0 && q.i > 0) { splashing = true; damageSeg(g, q, full * MIRROR_SIDE, false, q.x, q.y); splashing = false; } }
+  for (let d = -1; d <= 1; d += 2) { const q = segs[k + d]; if (q && q.hp > 0 && q.i > 0) { splashing = true; damageSeg(g, q, full * mirrorSide(g), false, q.x, q.y); splashing = false; } }
 }
 // Quartet cell (stage 22+): four linked cells. Pop the first and the other three must follow within QUARTET_TIME
 // seconds, or the survivors regrow to full health. Pop them all in time for a Beats burst and a slow crawl.
@@ -938,19 +952,36 @@ function gloomTick(g, sn) {
 // drop: on the first beat of every bar the whole boss lurches DROP_JOLT px forward (a warning ring one beat before). hold: every HOLD_EVERY seconds the three cells behind the face
 // are warded for HOLD_TIME (save your shots). regrow: every REGROW_EVERY seconds the cells nearest the face heal REGROW_HEAL of their health.
 export const DROP_JOLT = 16, HOLD_EVERY = 9, HOLD_TIME = 1.2, HOLD_CELLS = 3, REGROW_EVERY = 4, REGROW_HEAL = 0.05, REGROW_CELLS = 3;
-export const bossTwistOf = n => (isBossStage(n) && n >= 10 && n <= 30 ? ['drop', 'hold', 'regrow', 'drop', 'hold'][n / 5 - 2] : '');
+// Batch 12 (stages 35 to 50, on top of the startle and the eclipse): 35 mirror (two Mirror cells appear in the chain), 40 swing (the whole boss sways on the beat),
+// 45 quartet (four linked cells: pop all four within the window or they regrow), 50 finale (a Mirror cell AND the bass drop).
+export const SWING_BOSS = 0.3, TWIST_LATE = { 35: 'mirror', 40: 'swing', 45: 'quartet', 50: 'finale' };
+export const bossTwistOf = n => (isBossStage(n) && n >= 10 && n <= 30 ? ['drop', 'hold', 'regrow', 'drop', 'hold'][n / 5 - 2] : isBossStage(n) && TWIST_LATE[n] ? TWIST_LATE[n] : '');
+function twistCells(g, sn, k) {   // once per boss, when phase 2 begins: mark cells (sn.cue is free on bosses, they have no species trait)
+  if (sn.cue) return; sn.cue = 1;
+  const segs = sn.segs, len = segs.length, free = j => j > 0 && segs[j] && segs[j].hp > 0 && !segs[j].ward && !segs[j].quartet && !segs[j].mirror && segs[j].kind === 'normal';
+  const at = f => { for (let j = Math.round(len * f); j < len; j++) if (free(j)) return segs[j]; return null; };
+  if (k === 'mirror' || k === 'finale') for (const f of k === 'finale' ? [0.5] : [0.4, 0.7]) { const c = at(f); if (c) { c.mirror = true; g.events.push({ t: 'btwist', k: 'mirror', x: c.x, y: c.y }); } }
+  if (k === 'quartet') {
+    let j = Math.round(len * 0.35), n = 0; const got = [];
+    while (j < len && n < 4) { if (free(j)) { got.push(segs[j]); n++; j += 2; } else j++; }
+    if (n === 4) { for (const c of got) c.quartet = true; g.events.push({ t: 'btwist', k, x: got[0].x, y: got[0].y }); }
+  }
+}
 function bossTwist(g, sn, dt) {
   if (!sn.boss || !sn.p2 || g.mode !== '' || g.phase !== 'play') return;
   const k = bossTwistOf(g.stage); if (!k) return;
   const pt = g.t - sn.p2T, segs = sn.segs, h = segs[0];
-  if (k === 'drop') {
+  if (k === 'mirror' || k === 'quartet' || k === 'finale') twistCells(g, sn, k);
+  if (k === 'drop' || k === 'finale') {
     const bp = beatPeriod(g), P = bp * 4;
-    if (Math.floor((pt + bp * 0.9) / P) > Math.floor((pt - dt + bp * 0.9) / P)) g.events.push({ t: 'btwist', k, warn: true, x: h.x, y: h.y });
-    if (Math.floor(pt / P) > Math.floor((pt - dt) / P)) { sn.tail += DROP_JOLT * (1 - Math.min(1, uv(g, 'tis') / 100)); g.events.push({ t: 'btwist', k, x: h.x, y: h.y }); }
+    if (Math.floor((pt + bp * 0.9) / P) > Math.floor((pt - dt + bp * 0.9) / P)) g.events.push({ t: 'btwist', k: 'drop', warn: true, x: h.x, y: h.y });
+    if (Math.floor(pt / P) > Math.floor((pt - dt) / P)) { sn.tail += DROP_JOLT * (1 - Math.min(1, uv(g, 'tis') / 100)); g.events.push({ t: 'btwist', k: 'drop', x: h.x, y: h.y }); }
+  } else if (k === 'swing') {
+    if (!(pt - dt > 0)) g.events.push({ t: 'btwist', k, x: h.x, y: h.y });
   } else if (k === 'hold') {
     const ph = pt % HOLD_EVERY;
     if (ph < HOLD_TIME) { for (let i = 1; i <= HOLD_CELLS && i < segs.length; i++) if (segs[i].hp > 0) segs[i].warded = true; if (ph - dt < 1e-6) g.events.push({ t: 'btwist', k, x: h.x, y: h.y }); }
-  } else if (Math.floor(pt / REGROW_EVERY) > Math.floor((pt - dt) / REGROW_EVERY)) {
+  } else if (k === 'regrow' && Math.floor(pt / REGROW_EVERY) > Math.floor((pt - dt) / REGROW_EVERY)) {
     let n = 0; for (let i = 1; i < segs.length && n < REGROW_CELLS; i++) if (segs[i].hp > 0) { segs[i].hp = Math.min(segs[i].max, segs[i].hp + segs[i].max * REGROW_HEAL * (1 - Math.min(1, uv(g, 'hbk') / 100))); n++; }
     g.events.push({ t: 'btwist', k, x: h.x, y: h.y });
   }
@@ -969,10 +1000,12 @@ export const traitOf = (g, sn) => (g.mode === '' && !sn.boss && g.stage >= TRAIT
 export const LATE_TRAIT_FROM = 41, LOVE_WARD_TIME = 2.5, CREAK_STALL_L = 1.2, CREAK_JERK_L = 1.0, CREAK_PUSH_L = 0.8, SNEEZE_AFTER = 0.6, SNEEZE_AFTER_MUL = 0.5, GRUMPY_LATE = 0.55;
 export const DISCO_SWING_L = 0.3, SOUR_RUSH_L = 1.3, SOUR_MUL_L = 1.2, MIGHTY_SLOW_L = 0.92;
 export const lateTrait = (g, sn) => (g.stage >= LATE_TRAIT_FROM ? traitOf(g, sn) : '');
+const grumpyMul = g => { const m = g.stage >= LATE_TRAIT_FROM ? GRUMPY_LATE : GRUMPY_SURGE; return m + (1 - m) * Math.min(1, uv(g, 'tea') / 100); };   // Chamomile Tea: the surges slow down again
 const mightySlow = g => { const m = g.stage >= LATE_TRAIT_FROM ? MIGHTY_SLOW_L : MIGHTY_SLOW; return m - (m - 0.55) * Math.min(1, uv(g, 'hny') / 100); };   // Honey Jar: the slow bites again
 function traitSpeed(g, sn) {
   const k = traitOf(g, sn), late = g.stage >= LATE_TRAIT_FROM;
-  if (k === 'disco') return 1 + (late ? DISCO_SWING_L : DISCO_SWING) * Math.cos(6.2832 * beatPhase(g));
+  if (sn.boss && sn.p2 && g.mode === '' && bossTwistOf(g.stage) === 'swing') return 1 + SWING_BOSS * Math.cos(6.2832 * beatPhase(g));   // stage 40: the boss sways on the beat
+  if (k === 'disco') return 1 + (late ? DISCO_SWING_L : DISCO_SWING) * (1 - Math.min(1, uv(g, 'muf') / 100)) * Math.cos(6.2832 * beatPhase(g));
   if (k === 'rust') { const ph = g.t % CREAK_EVERY, st = late ? CREAK_STALL_L : CREAK_STALL, jk = late ? CREAK_JERK_L : CREAK_JERK; return ph < st ? 0.3 : ph < st + jk ? 1 + (late ? CREAK_PUSH_L : 0.6) * (1 - Math.min(1, uv(g, 'oil') / 100)) : 1; }
   if (k === 'sour' && sn.rushT > 0) return 1 + ((late ? SOUR_MUL_L : SOUR_MUL) - 1) * (1 - Math.min(1, uv(g, 'swt') / 100));
   return 1;
@@ -1146,9 +1179,11 @@ function damageSeg(g, s, dmg, crit, x, y) {
   const srcId = g.src || 'capsule'; g.dmgBy[srcId] = (g.dmgBy[srcId] || 0) + Math.min(dmg, s.hp);
   if (s.warded) dmg *= WARD_CUT + (1 - WARD_CUT) * (uv(g, 'fork') + (s.frost ? uv(g, 'brk') : 0)) / 100;
   const full = dmg, glance = s.mirror && !splashing, fresh = s.flash <= 0;
-  if (glance) dmg *= 1 - 2 * MIRROR_SIDE;
+  if (glance) dmg *= 1 - 2 * mirrorSide(g);
+  const shut = s.shell && shellBlocked(g, s); if (shut) dmg *= SHELL_CUT;
   s.hp -= dmg; s.flash = 0.12;
   g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s, src: srcId });
+  if (shut && fresh) g.events.push({ t: 'shell', x: s.x, y: s.y });
   if (glance) { mirrorSplash(g, s, full); if (fresh) g.events.push({ t: 'mirror', x: s.x, y: s.y }); }
 }
 function dropPickup(g, kind, x, y, v) {
@@ -1270,7 +1305,7 @@ function rollChoices(g) {
     }
   }
   if (!early || stg < 3) {   // the first two picks are the capsule's, except in the first stages where only a few kinds exist yet
-    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max && uv(g, u.id) < u.cap && !(u.minStage && stg < u.minStage) && !(u.skin && !l && u.skin !== g.skin)) pool.push({ id: u.id, kind: 'passive', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w }); }
+    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max && uv(g, u.id) < u.cap && !(u.minStage && stg < u.minStage) && !(u.skin && !l && u.skin !== g.skin) && !(u.reg && (isBossStage(stg) || g.mode))) pool.push({ id: u.id, kind: 'passive', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w }); }
   }
   const out = [];
   while (out.length < 3 && pool.length) {
@@ -1571,7 +1606,7 @@ export function step(g, dt, input) {
       sn.surgeT -= dt;
       if (sn.surge === 'idle' && sn.surgeT <= 0) { sn.surge = 'warn'; sn.surgeT = sn.p2 ? P2_WARN : 0.6; if (sn.p2) { const a = sn.segs[0].ps; sn.lane = { a, b: a + sn.speed * (1 - g.p.slow) * P2_DASH * 1.1, w: P2_WARN }; } g.events.push({ t: 'surgewarn', lane: !!sn.lane }); }
       else if (sn.surge === 'warn' && sn.surgeT <= 0) { sn.surge = 'go'; sn.surgeT = napBoss(g, sn) ? 1.1 + NAP_EXTRA : 1.1; g.events.push({ t: 'surge' }); }
-      else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.lane = null; if (napBoss(g, sn)) { sn.napT = NAP_TIME; g.events.push({ t: 'nap', x: sn.segs[0].x, y: sn.segs[0].y }); if (sn.p2 && g.stage >= STARTLE_FROM) { sn.tail += STARTLE_JOLT; g.events.push({ t: 'startle', x: sn.segs[0].x, y: sn.segs[0].y }); } } sn.surgeT = ((sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5)) * (sn.p2 ? 0.6 : 1) * (traitOf(g, sn) === 'grumpy' ? (g.stage >= LATE_TRAIT_FROM ? GRUMPY_LATE : GRUMPY_SURGE) : 1); }
+      else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.lane = null; if (napBoss(g, sn)) { sn.napT = NAP_TIME; g.events.push({ t: 'nap', x: sn.segs[0].x, y: sn.segs[0].y }); if (sn.p2 && g.stage >= STARTLE_FROM) { sn.tail += STARTLE_JOLT; g.events.push({ t: 'startle', x: sn.segs[0].x, y: sn.segs[0].y }); } } sn.surgeT = ((sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5)) * (sn.p2 ? 0.6 : 1) * (traitOf(g, sn) === 'grumpy' ? grumpyMul(g) : 1); }
     }
     const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? (traitOf(g, sn) === 'mighty' ? mightySlow(g) : 0.55) : 1) * traitSpeed(g, sn) * (sn.surge === 'go' ? (sn.p2 ? P2_DASH : 2.6) : 1) * (sn.drum ? DRUM_SPEED : 1) * (sn.napT > 0 ? NAP_SPEED : 1) * (g.phase === 'clear' ? 0 : 1);
     const segs = sn.segs, last = segs.length - 1;

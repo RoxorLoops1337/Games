@@ -55,7 +55,7 @@ assert.equal(count(sim.MIRROR_FROM - 1, 'mirror'), 0); assert.equal(count(sim.MI
 }
 
 // ---- Boss phase 2 twists, stages 10 to 30
-assert.deepEqual([5, 10, 15, 20, 25, 30, 35, 40, 50].map(sim.bossTwistOf), ['', 'drop', 'hold', 'regrow', 'drop', 'hold', '', '', ''], 'one twist per boss, none from 35 (startle) and none before 10');
+assert.deepEqual([5, 10, 15, 20, 25, 30].map(sim.bossTwistOf), ['', 'drop', 'hold', 'regrow', 'drop', 'hold'], 'one twist per boss, none before 10 (35 and up: see 35_e_gameplay)');
 const boss = (n, seed = 3) => { const g = calm(sim.createGame({ seed, stage: n })), sn = g.snakes[0]; for (const s of sn.segs) { s.ward = false; s.warded = false; } sn.surgeT = 99; return { g, sn }; };
 {   // drop: a lurch on the first beat of each bar, with a warning one beat before; only in phase 2
   const { g, sn } = boss(10); tick(g, 600); assert.ok(!g.events.some(e => e.t === 'btwist'), 'phase 1 has no twist'); g.events.length = 0;
@@ -73,8 +73,8 @@ const boss = (n, seed = 3) => { const g = calm(sim.createGame({ seed, stage: n }
   const { g, sn } = boss(20); sn.p2 = true; sn.p2T = g.t; const c = sn.segs[2]; c.hp = c.max * 0.5; const h0 = c.hp; g.events.length = 0;
   tick(g, Math.ceil(60 * (sim.REGROW_EVERY + 0.3))); assert.ok(g.events.some(e => e.t === 'btwist' && e.k === 'regrow'), 'cue'); assert.ok(c.hp > h0, 'the cell healed: ' + c.hp + ' vs ' + h0);
 }
-{   // the 35 and up bosses and other modes never get a twist
-  const { g, sn } = boss(35); sn.p2 = true; sn.p2T = g.t; tick(g, 600); assert.ok(!g.events.some(e => e.t === 'btwist'));
+{   // batch 12: 35 and up have their own twists (35_e_gameplay); the early bosses never get a late one
+  const { g, sn } = boss(30); sn.p2 = true; sn.p2T = g.t; tick(g, 600); assert.ok(!g.events.some(e => e.t === 'btwist' && ['mirror', 'swing', 'quartet'].includes(e.k)));
 }
 
 // ---- Beat Run: a volley inside the beat window on three beats in a row pays Groove
