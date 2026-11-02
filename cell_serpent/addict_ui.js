@@ -41,6 +41,10 @@ export function createAddictUI(c, openPanel, sec) {
   function grid(body) { const g = document.createElement('div'); g.className = 'tiles'; body.appendChild(g); return g; }
   function build(body) {
     const s = save(), day = c.dayKey();
+    // a "ready to collect" banner so nothing waits unseen further down the page
+    { const wk0 = ensureWeek(s, day), nm = masteryList(s).filter(m => m.ready >= 0).length, nb = bookStatus(s).cats.filter(k => k.ready && !s.addict.claimed['book:' + k.id]).length;
+      const bits = []; if (spinReady(s, day)) bits.push('🎡 Spin'); if (!wk0.claimed && weekReady(s, day)) bits.push('🏅 Weekly'); if (nm) bits.push('🐍 ' + nm + ' rank' + (nm > 1 ? 's' : '')); if (nb) bits.push('📖 Book');
+      if (bits.length) { const rb = document.createElement('div'); rb.className = 'readybar'; rb.innerHTML = '<b>Ready to collect</b><span>' + bits.map(t => '<i>' + t + '</i>').join('') + '</span>'; body.appendChild(rb); } }
     // lucky spin
     sec(body, 'Lucky Spin', '#ff7eb6');
     const w = document.createElement('div'); w.className = 'spinbox';
@@ -63,7 +67,9 @@ export function createAddictUI(c, openPanel, sec) {
       onclick: () => { if (claimWeek(save(), day)) { after(); audio.play('levelup'); rebuild(); renderNext(); } } }));
     // mastery
     sec(body, 'Mastery', '#4fd8f0');
-    const ms = masteryList(s);
+    // closest to the next rank first: ready ones on top, finished ones last, so the list always shows what to chase
+    const mfrac = m => m.ready >= 0 ? 2 : m.next ? Math.min(1, m.val / m.next.at) : -1;
+    const ms = masteryList(s).map((m, i) => ({ m, i })).sort((a, b) => mfrac(b.m) - mfrac(a.m) || a.i - b.i).map(x => x.m);
     const claimAll = document.createElement('button'); claimAll.className = 'btn small alt'; claimAll.style.marginBottom = '6px';
     claimAll.textContent = 'CLAIM ALL'; claimAll.disabled = !ms.some(m => m.ready >= 0);
     claimAll.onclick = () => { const n = claimAllMastery(save()); if (n) { after(); audio.play('levelup'); c.toast && c.toast(n + ' mastery reward' + (n > 1 ? 's' : '')); rebuild(); renderNext(); } };
@@ -72,7 +78,7 @@ export function createAddictUI(c, openPanel, sec) {
     for (const m of ms) {
       const rdy = m.ready >= 0, target = rdy ? m.miles[m.ready] : m.next, full = !rdy && !m.next;
       const pips = m.miles.map((_x, i) => `<i class="${i < m.done ? 'on' : ''}"></i>`).join('');
-      mg.appendChild(tile({ cls: 't-weapon', ic: m.kind === 'sk' ? c.icon(m.id) : '🐍', name: esc(m.name), chip: 'Rank ' + m.done + '/' + m.miles.length, desc: full ? 'Master!' : 'Reward: ' + rewardText(target.reward),
+      mg.appendChild(tile({ cls: 't-weapon mast', ic: m.kind === 'sk' ? c.icon(m.id) : '🐍', name: esc(m.name), chip: 'Rank ' + m.done + '/' + m.miles.length, desc: full ? 'Master!' : 'Reward: ' + rewardText(target.reward),
         bar: full ? 100 : Math.round(Math.min(1, m.val / target.at) * 100), barText: full ? m.val + ' ' + m.unit : m.val + ' / ' + target.at + ' ' + m.unit, pips,
         btn: rdy ? 'CLAIM' : full ? 'DONE' : 'KEEP GOING', gold: rdy, disabled: !rdy, onclick: () => { if (claimMastery(save(), m.key, m.ready)) { after(); audio.play('levelup'); rebuild(); renderNext(); } } }));
     }
