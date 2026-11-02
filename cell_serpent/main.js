@@ -8,6 +8,7 @@ import { createAudio } from './audio.js';
 import { revealStars, countUp, levelBar, reviveRing, stopFx } from './result_fx.js';
 import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed } from './access.js';
 import { createMotion } from './motion.js';
+import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
@@ -25,6 +26,7 @@ function applySettings() { motion.applyReduced(); audio.setMuted(save.muted); au
 let art = null, R = null, kit = null;
 const dayKey = () => Math.floor(Date.now() / 86400000);
 let slowFrames = 0, fastFrames = 0;
+const clk = createClock();   // 05-screen-feel: fixed-step clock fed with dt * slow-motion scale
 let reviveAsked = false, hard = false, mode = 'title', g = null, demo = null, acc = 0, last = 0, endT = 0, cardsFor = null, hubTab = 'Battle', sel = 1, ranResult = false;
 const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
 const keys = {};
@@ -289,7 +291,7 @@ function startRun(stage, mode2 = '') {
   audio.unlock(); audio.music(true);
   sel = stage; ranResult = false; endT = 0;
   g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
-  mode = 'play'; acc = 0; cardsFor = null; reviveAsked = false; show('');
+  mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show('');
   window.CS.g = g;
 }
 function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)); }
@@ -477,13 +479,14 @@ function frame(now) {
     return;
   }
   if (mode === 'play') {
-    acc += dt * R.timeScale();   // slow motion on the last cell / boss face
-    while (acc >= 1 / 60) { acc -= 1 / 60; step(g, 1 / 60, readInput()); if (g.phase === 'levelup' || g.phase === 'dead' || g.phase === 'won') break; }
+    clk.feed(dt, R.timeScale());   // slow motion on the last cell / boss face
+    while (clk.take()) { step(g, 1 / 60, readInput()); if (g.phase === 'levelup' || g.phase === 'dead' || g.phase === 'won') { clk.drop(); break; } }   // never bank time while the sim waits (cards, game over)
     if (g.phase === 'levelup' && cardsFor !== g.choices) showCards();
-    if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5)) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked) showRevive(); else if (!reviveAsked) showResult(); } }
+    if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5) && !(g.phase === 'won' && R.clearBusy())) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked) showRevive(); else if (!reviveAsked) showResult(); } }
     audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0); audio.mix({ stage: g.stage, boss: isBossStage(g.stage), groove: g.groove / 20, danger: g.danger });
   }
-  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2 }, mode === 'pause' ? 0 : dt); }
+  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2 }, mode === 'pause' ? 0 : dt);
+    if (mode === 'play') for (const n of R.takeSounds()) audio.play(n); else R.takeSounds(); }
 }
 
 // ---------------------------------------------------------------- wiring
@@ -511,7 +514,7 @@ loadArt('assets/').then(a => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
   setupPeeks($('peeks'), kit);
-  R = createRenderer(canvas, art, kit); window.CS.art = art; window.CS.R = R; applySettings(); resize(); refreshTitle();
+  R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; applySettings(); resize(); refreshTitle();
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();
   if (qs.get('stage')) { startRun(Math.max(1, +qs.get('stage'))); }   // dev shortcut: ?stage=N

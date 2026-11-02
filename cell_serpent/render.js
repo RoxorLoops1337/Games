@@ -476,7 +476,7 @@ export function createRenderer(canvas, art, kit) {
     if (ui) FX.drawCard(g);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
-  FX = createScreenFx({ ctx, W, H, kit, text, glow, S, OPT, ring, burst });
+  FX = createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst });
 
-  return { timeScale: () => (FX ? FX.timeScale() : 1), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
+  return { timeScale: () => (FX ? FX.timeScale() : 1), setBeat: fn => FX.setBeat(fn), clearBusy: () => FX.clearBusy(), takeSounds: () => FX.takeSounds(), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
 }
