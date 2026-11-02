@@ -1,5 +1,5 @@
 {
- "version": "5547d4c71aab",
+ "version": "7f916e077d50",
  "files": [
   "fonts/PatrickHand-latin-ext.woff2",
   "fonts/PatrickHand-latin.woff2",
@@ -22,6 +22,7 @@
   "js/battle_text.js",
   "js/countdown.js",
   "js/cutscene.js",
+  "js/data_changelog.js",
   "js/data_core.js",
   "js/data_depth.js",
   "js/data_hints_extra.js",

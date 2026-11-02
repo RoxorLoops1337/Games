@@ -91,3 +91,9 @@ All data lives in `js/data_depth.js` (pure data). Everything is deterministic an
 ## Endless milestones
 - `ENDLESS_MILESTONES = [{ wave, id, name, reward: { diamonds, cosmetic? } }]` for waves 25, 50, 100 (`endless_25`, `endless_50`, `endless_100`).
 - Event `{ k: 'milestone', id, wave, reward }` the first time a wave start reaches each one in an endless run (`run.milestones` lists the earned ids, saved in the snapshot, also `result.milestones`). The sim pays nothing: meta.js pays `reward`.
+
+## Endless themed waves (round 4)
+- In endless mode every wave with `w % 10 === 5` from wave 15 (15, 25, 35, ...) is a themed wave, never a boss wave and never in story, daily or rush. `ENDLESS_THEMES` (data_depth.js): swarm, armored_parade, zip_rush, echo_chamber, heal_party, gold_rush, each `{ id, name, desc, glyph, good, theme: true, wm, types?, support?, supportFrac? }`.
+- `endlessThemeFor(seed, w)` (sim.js) is pure: the six themes come in a seeded shuffle, each once per six themed waves.
+- The theme IS the wave mod: `spec.mod === spec.theme === theme.id`, `nextWavePreview().mod` and `currentWaveInfo().mod` are `{ id, name, desc, theme: true }`, `run.wmId` is the id, and the `wave` event carries `mod` and `theme`. The themes are registered in `WAVE_MODS` (same objects) so every id lookup finds them, but `genWave` never picks them as a random mod. `wm` keys: `count` (genWave group size), `hp`, `coin`, and `echoSplit` (2: a mini born from an Echo splits once more, `enemy.gen` 1 then 2, capped at 160 enemies alive).
+- `run.themedWaves = [{ wave, id }]` (snapshot-safe) and `result.recap.themes = [{ wave, id, name }]`. After `Run.restore` a wave in progress rebuilds `curSpec` from `upcoming(wave)`, so `currentWaveInfo()` works after a resume.

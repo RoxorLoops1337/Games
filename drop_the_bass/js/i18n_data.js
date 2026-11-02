@@ -12,6 +12,7 @@ import * as META from './data_meta.js';
 import * as STORY from './data_story.js';
 import * as DEPTH from './data_depth.js';
 import * as HX from './data_hints_extra.js';
+import * as CL from './data_changelog.js';
 import { getLang, onLang, getData } from './i18n.js';
 
 export const DATA_LANGS = ['da', 'nl', 'de'];   // languages that have (or may get) a js/lang/<code>_data.js
@@ -58,6 +59,7 @@ export const TABLES = [
   T('HINTS', () => STORY.HINTS, '*.title', '*.text'),
   T('HINTS_EXTRA', () => HX.HINTS_EXTRA, '*.title', '*.text'),   // path prefix HINTS: the same ids as HINTS (see ALIAS)
   T('LOOPY_TIPS', () => STORY.LOOPY_TIPS, '*'),
+  T('CHANGELOG', () => CL.CHANGELOG, '*.title', '*.items.*'),
 ];
 // tables whose path prefix is another table's (merged in at import time: the same object, or a copy of the same strings)
 const ALIAS = { HINTS_EXTRA: 'HINTS' };
@@ -78,13 +80,13 @@ export const NON_TEXT_FIELDS = new Set([
   'id', 'hero', 'kind', 'color', 'accent', 'ground', 'sky', 'glyph', 'rarity', 'stat', 'slot', 'set', 'main', 'sub', 'turret', 'map',
   'mod', 'world', 'boss', 'boss10', 'pool', 'loadout', 'fx', 'mods', 'extra', 'music', 'who', 'scene', 'wait', 'spot', 'lock', 'special',
   'a', 'b', 'partner', 'reward', 'crate', 'cosmetic', 'fmt', 'guarantee', 'price', 'mul', 'wm', 'odds', 'unlock', 'paths', 'blocked',
-  'saveKey', 'title_id', 'defaults',
+  'saveKey', 'title_id', 'defaults', 'types', 'support',
 ]);
 // exact `Export.field` exceptions where the field name is text elsewhere (HINTS.title) but not here
 export const NON_TEXT_EXACT = new Set(['GAME.title']);
 // exported values that hold only ids / numbers / derived copies: never audited for text
 export const EXCLUDED_EXPORTS = new Set([
-  'TURRET_IDS', 'STARTER_TURRETS', 'ENEMY_IDS', 'BOSS_IDS', 'STUDIO_IDS', 'GEAR_IDS', 'CRATE_IDS', 'REMIX_IDS', 'RELIC_IDS', 'WAVE_MOD_IDS',
+  'TURRET_IDS', 'STARTER_TURRETS', 'ENEMY_IDS', 'BOSS_IDS', 'STUDIO_IDS', 'GEAR_IDS', 'CRATE_IDS', 'REMIX_IDS', 'RELIC_IDS', 'WAVE_MOD_IDS', 'ENDLESS_THEME_IDS',
   'DAILY_MOD_IDS', 'SKIN_IDS', 'BOOSTER_IDS', 'DIFFICULTY_IDS', 'RARITY_ORDER', 'WORLD_ORDER', 'BOSS_PHASE_EFFECT_IDS', 'NEW_SCENE_IDS',
   'SYN_FLAT', 'BRANCH_FX_KEYS', 'SLOTS', 'SKIN_DEFAULT', 'CREDITS_FINAL', 'EPILOGUES', 'HERO_ABILITY_DEFAULT', 'COL', 'MAPS',
   // copies or indexes of registered tables (checked by the test: same objects, or synced by afterApply)

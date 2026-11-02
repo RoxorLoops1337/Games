@@ -10,6 +10,7 @@ import { makeRng } from './rng.js';
 import {
   TURRET_BRANCHES, BRANCH_BY_ID, BRANCH_TURRET, BRANCH_LEVEL, HERO_ABILITIES, HERO_ABILITY_DEFAULT, HERO_ABILITY_NUMS,
   RUN_MODIFIERS, RUN_MODIFIER_BY_ID, RUN_MODIFIER_NUMS, MAX_RUN_MODIFIERS, BOSS_PHASES, BOSS_PHASE_EFFECTS, BOSS_TRICKS, BOSS_PULSES, ENDLESS_MILESTONES,
+  ENDLESS_THEMES, ENDLESS_THEME_IDS, ENDLESS_THEME_FIRST,
 } from './data_depth.js';
 
 export const DT = 1 / 60;
@@ -62,6 +63,15 @@ export function waveBaseHp(world, w, encore = 0) {
 }
 export const waveCoinScale = (w) => 1 + 0.09 * (w - 1);
 
+// Endless themed waves (data_depth.js ENDLESS_THEMES): w % 10 === 5 from wave 15, never a boss wave. The six themes come in a seeded shuffle, every theme once
+// per cycle of six themed waves (waves 15 to 65, then a new shuffle), so two themed waves in a row never repeat. Pure in (seed, w).
+export function endlessThemeFor(seed, w) {
+  if (w < ENDLESS_THEME_FIRST || w % 10 !== 5) return null;
+  const k = (w - ENDLESS_THEME_FIRST) / 10, cycle = Math.floor(k / ENDLESS_THEME_IDS.length), pos = k % ENDLESS_THEME_IDS.length;
+  const rng = makeRng((((seed >>> 0) * 2246822519) + cycle * 374761393 + 9173) >>> 0), order = ENDLESS_THEME_IDS.slice();
+  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng.next() * (i + 1)); const t = order[i]; order[i] = order[j]; order[j] = t; }
+  return order[pos];
+}
 export function genWave(world, w, seed, o = {}) {
   const rng = makeRng(((seed >>> 0) * 2654435761 + w * 40503 + 17) >>> 0);
   const endless = !!o.endless;
@@ -71,6 +81,7 @@ export function genWave(world, w, seed, o = {}) {
   const bossWave = w % 10 === 0 || finalExtra;
   const budget = 6 + 1.7 * w;
   const nGroups = w < 3 ? 1 : w < 9 ? 2 : 3;
+  const themeId = endless && !bossWave ? endlessThemeFor(seed, w) : null, theme = themeId ? ENDLESS_THEMES[themeId] : null;
   const types = [];
   const newbies = avail.filter((t) => INTRO_WAVE[t] === w);
   if (newbies.length) types.push(newbies[0]);
@@ -79,9 +90,11 @@ export function genWave(world, w, seed, o = {}) {
     if (!types.includes(t)) types.push(t); else if (rng.chance(0.5)) break;
   }
   if (!types.length) types.push('fuzz');
+  if (theme && theme.types) { types.length = 0; types.push(...theme.types); }   // a themed wave forces its enemy types
   // a mod on some waves (never the first 3, not on boss waves of story mode so the boss reads clean)
   let mod = null;
-  if (w >= 4 && !bossWave && rng.chance(Math.min(0.32, 0.12 + w * 0.01))) mod = rng.pick(Object.keys(WAVE_MODS));
+  if (w >= 4 && !bossWave && rng.chance(Math.min(0.32, 0.12 + w * 0.01))) mod = rng.pick(Object.keys(WAVE_MODS).filter((k) => !WAVE_MODS[k].theme));
+  if (theme) mod = theme.id;   // the theme replaces the random twist of that wave
   const wm = mod ? WAVE_MODS[mod].wm : NONE_WM;
   const countMul = wm.count || 1;
   const groups = [];
@@ -93,6 +106,10 @@ export function genWave(world, w, seed, o = {}) {
     groups.push({ type, count, gap, delay });
     delay += count * gap + 1.2;
   }
+  if (theme && theme.support) {   // e.g. Heal Party: a few of the support type walk with every group
+    const sdef = ENEMIES[theme.support], n0 = groups.length;
+    for (let i = 0; i < n0; i++) { const g = groups[i]; if (g.type === theme.support) continue; groups.push({ type: theme.support, count: Math.max(2, Math.round(g.count * (theme.supportFrac || 0.3))), gap: Math.max(sdef.speed >= 80 ? 0.4 : 0.65, g.gap * 2.4), delay: g.delay + 0.8 }); }
+  }
   const tot = groups.reduce((a, g) => a + g.count, 0);
   if (tot > 80) { const k = 80 / tot; delay = 0.6; for (const g of groups) { g.count = Math.max(2, Math.floor(g.count * k)); g.delay = delay; delay += g.count * g.gap + 1.2; } }
   let boss = null, bossScale = 1;
@@ -103,7 +120,9 @@ export function genWave(world, w, seed, o = {}) {
     else { boss = world.boss; bossScale = 1; }
     for (const g of groups) g.count = Math.max(2, Math.round(g.count * 0.55));
   }
-  return { w, groups, boss, bossScale, mod, duration: delay };
+  const spec = { w, groups, boss, bossScale, mod, duration: delay };
+  if (theme) spec.theme = theme.id;
+  return spec;
 }
 
 // ------------------------------------------------------------------------------------------------ geometry helpers
@@ -166,6 +185,7 @@ export class Run {
     this.prepT = opts.firstPrep ?? 8;
     this.spawnQ = [];
     this.curSpec = null;
+    this.themedWaves = [];   // endless: [{ wave, id }] of the themed waves reached (recap)
     this.wm = NONE_WM; this.wmId = null;
 
     this.difficulty = DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
@@ -628,7 +648,7 @@ export class Run {
     }
     return { lanes, total: entries.length, hasBoss: lanes.some((l) => l.boss) };
   }
-  modInfo(id) { const m = id && WAVE_MODS[id]; return m ? { id: m.id, name: m.name, desc: m.desc } : null; }
+  modInfo(id) { const m = id && WAVE_MODS[id]; return m ? (m.theme ? { id: m.id, name: m.name, desc: m.desc, theme: true } : { id: m.id, name: m.name, desc: m.desc }) : null; }
   // The upcoming wave, built from the same genWave and lane plan the spawn uses. elite means "may carry elite affixes" (wave 4+).
   nextWavePreview() {
     if (this.phase === 'won' || this.phase === 'lost') return null;
@@ -693,7 +713,8 @@ export class Run {
     if (this.endless) for (const m of ENDLESS_MILESTONES) {
       if (w >= m.wave && !this.milestones.includes(m.id)) { this.milestones.push(m.id); this.emit({ k: 'milestone', id: m.id, wave: m.wave, reward: m.reward }); }
     }
-    this.emit({ k: 'wave', w, mod: spec.mod, boss: spec.boss, total: this.endless ? 0 : this.wavesTotal });
+    if (spec.theme) this.themedWaves.push({ wave: w, id: spec.theme });
+    this.emit({ k: 'wave', w, mod: spec.mod, boss: spec.boss, total: this.endless ? 0 : this.wavesTotal, theme: spec.theme || null });
     return true;
   }
   spawnEnemy(s) {
@@ -794,6 +815,8 @@ export class Run {
     if (this.mods.healKills && this.kills % this.mods.healKills === 0 && this.stageHp < this.stageMax) { this.stageHp++; this.emit({ k: 'heal', n: 1 }); }
     if (e.type === 'echo') {
       for (let i = 0; i < 2; i++) this.spawnMini(e, i === 0 ? -14 : 14);
+    } else if (e.type === 'mini' && e.gen === 1 && this.wm.echoSplit >= 2 && this.enemies.length < 160) {   // Echo Chamber: the minis split once more
+      for (let i = 0; i < 2; i++) { const m = this.spawnMini(e, i === 0 ? -10 : 10); m.gen = 2; m.r *= 0.85; }
     } else if (e.type === 'squeal') {
       for (const t of this.turrets) if (dist2(t.x, t.y, e.x, e.y) < 140 * 140) { t.jam = 2.5; this.emit({ k: 'jam', x: t.x, y: t.y }); }
       this.emit({ k: 'pulse', x: e.x, y: e.y, r: 140, color: '#ff6b6b' });
@@ -811,6 +834,7 @@ export class Run {
     const lane = this.map.lanes[parent.lane];
     const hp = Math.max(1, parent.maxHp * 0.3);
     const e = this.spawnEnemy({ type: 'mini', lane: parent.lane, hpBase: 1, w: parent.w, d: Math.max(0, parent.d + off), hpOverride: hp });
+    e.gen = (parent.gen || 0) + 1;   // 1 = a mini from an Echo (or a boss echo), 2 = a mini of a mini (Echo Chamber)
     return e;
   }
 
@@ -1621,6 +1645,7 @@ export class Run {
     run.grid = new Map(); for (const t of run.turrets) run.grid.set(t.slot, t);
     run.relicSet = new Set(run.relics);
     run.wm = run.wmId ? WAVE_MODS[run.wmId].wm : NONE_WM;
+    run.curSpec = run.phase === 'wave' && run.wave > 0 ? run.upcoming(run.wave) : null;   // genWave is pure in (seed, wave): the wave in progress can always be rebuilt (currentWaveInfo after a resume)
     const byId = new Map(run.enemies.map((e) => [e.id, e]));
     run.projectiles = s.projectiles.map((p) => Object.assign(p, { target: p.target != null ? byId.get(p.target) || null : null, hits: p.hits ? new Set(p.hits) : undefined, hits2: p.hits2 ? new Set(p.hits2) : undefined }));
     run.recalcAuras();
@@ -1629,7 +1654,7 @@ export class Run {
   }
 
   // ---------------------------------------------------------------- recap (live and in result.recap)
-  // { leaksByLane:[n], leakTypes:[{type,count}], worstWave:number|null, topKillers:[{type,count}] (count = stage damage dealt),
+  // { themes:[{wave,id,name}] the endless themed waves reached, leaksByLane:[n], leakTypes:[{type,count}], worstWave:number|null, topKillers:[{type,count}] (count = stage damage dealt),
   //   bossFinisher: bossId|null (the boss whose leak ended the run), turretUse:[{type,deployed,bestLevel}], tips:[up to 3 English strings],
   //   tipIds:[{id,vars}] the same tips as ids for the UI dictionary }
   recap() {
@@ -1638,7 +1663,7 @@ export class Run {
     for (const k of Object.keys(this.waveLeaks).map(Number).sort((a, b) => a - b)) if (this.waveLeaks[k] > wl) { wl = this.waveLeaks[k]; worstWave = k; }
     const turretUse = Object.keys(this.deployedByType).map((type) => ({ type, deployed: this.deployedByType[type], bestLevel: this.bestLvlByType[type] || 1 }))
       .sort((a, b) => b.deployed - a.deployed || (a.type < b.type ? -1 : 1));
-    const base = { leaksByLane: this.leaksByLane.slice(), leakTypes: sortRows(this.leakTypeCount), worstWave, topKillers: sortRows(this.stageDmgByType), bossFinisher: this.bossFinisher, turretUse };
+    const base = { themes: this.themedWaves.map((x) => ({ wave: x.wave, id: x.id, name: (ENDLESS_THEMES[x.id] || { name: x.id }).name })), leaksByLane: this.leaksByLane.slice(), leakTypes: sortRows(this.leakTypeCount), worstWave, topKillers: sortRows(this.stageDmgByType), bossFinisher: this.bossFinisher, turretUse };
     const ent = this.recapTipEntries(base);
     return Object.assign(base, { tips: ent.map((e) => e.text), tipIds: ent.map((e) => ({ id: e.id, vars: e.vars })) });
   }

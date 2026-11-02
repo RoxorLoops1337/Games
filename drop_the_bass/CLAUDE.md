@@ -147,3 +147,18 @@ scratchpad, LOOK at it (Read the png), fix, repeat. Lab pages live in `drop_the_
 
 Round 3 result: all ten shipped. Notes: HUD canvas text honours Larger text (a11y.textScale); ring and icon caching cut canvas ops about 14 percent; the backdrop (about 4.7 ms) and the board floor (about 3.4 ms) in doodle_env.js are now the biggest frame costs (Low graphics barely helps there). Hint icons for synergy, branch, preview, reroll, boss phase and hero ready were added.
 Ideas next (round 4): cheaper backdrop and board floor in Low graphics; per-boss first-time hint cards; tutorial step for the preview and reroll; sound mix check on phones; daily streak rewards and a friendly welcome-back summary; tablet and landscape layout; more outfits and skins to chase; an in-game changelog card; endless mode variety (themed waves every 10); a 'practice a boss' mode from the codex.
+
+### Round 4 (ten improvements, in order)
+1. Cheaper backdrop and board floor drawing (cache static layers, simpler pass in Low graphics).
+2. First-time hint card per new boss (lowpass, silence and the older bosses), with the right icon.
+3. Practice a boss from the codex: a single boss wave, no rewards, no save changes.
+4. Next steps card for new players (preview, reroll, synergy, branch, hero move) with ticks as they are used.
+5. Welcome-back summary after a long absence (royalties, resets, weekly status).
+6. What's new card shown once per game version, in all four languages.
+7. Daily streak rewards at 7, 14 and 30 days.
+8. Keyboard shortcut list in How to Play on desktop.
+9. Endless: a themed wave every 10 waves announced with a banner.
+10. Canvas aria-label and page title follow the language.
+
+Round 4 result: all ten shipped (backdrop and board baked at device scale: about 4x cheaper, Low graphics skips live bits; per-boss hint cards; Practice a boss from the codex; Next steps card; Welcome back sheet; What's new card with GAME.version 2 and data_changelog.js; streak rewards at 7/14/30 days; desktop shortcuts in How to Play; language-aware page title and canvas label; themed endless waves from wave 15).
+Ideas next (round 5): lane chevrons still stroked live (about 0.5 ms); tablet and landscape layout; a short interactive tutorial step for the preview and reroll; a boss codex page with phase diagrams; leaderboard friends invite by link; sound mix check on phones; seasonal event (a limited-time stage skin and outfit); gamepad support; first-run onboarding polish (skip tutorial for returning players on a new device via save code).

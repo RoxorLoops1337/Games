@@ -73,7 +73,7 @@ function rrectStroke(ctx, x, y, w, h, r, col, lw, alpha, dash, march) {
 const SORT_T = [], SORT_E = [];
 export function drawBoard(b, ctx, t, beat) {
   const run = b.run, fx = b.fx, cb = DD.cbOn(b);
-  AW.drawBoard(ctx, run.map.id, run.world.id, t, { beat, slotHint: b.slotHint, hoverSlot: b.hoverSlot ? [b.hoverSlot.c, b.hoverSlot.r] : null, dropSlot: b.targetSlot != null ? [b.targetSlot % COLS, Math.floor(b.targetSlot / COLS)] : null, skin: b.skin });
+  AW.drawBoard(ctx, run.map.id, run.world.id, t, { beat, slotHint: b.slotHint, hoverSlot: b.hoverSlot ? [b.hoverSlot.c, b.hoverSlot.r] : null, dropSlot: b.targetSlot != null ? [b.targetSlot % COLS, Math.floor(b.targetSlot / COLS)] : null, skin: b.skin, lite: b.lite });
   AW.drawStageBase(ctx, run.world.id, run.map.base.x, run.map.base.y, { t, hp: run.stageFrac, hit: Math.max(0, b.hurtFlash), beat, studio: (b.prof && b.prof.studio) || null });
   drawGates(b, ctx, t);
   // selected range: a pale tinted disc with a marching dashed crayon edge

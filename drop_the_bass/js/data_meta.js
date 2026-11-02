@@ -154,6 +154,12 @@ export const LOGIN_REWARDS = [
   { day: 1, records: 150 }, { day: 2, diamonds: 8 }, { day: 3, records: 300 }, { day: 4, diamonds: 12 },
   { day: 5, records: 500, crate: 'garage' }, { day: 6, diamonds: 20 }, { day: 7, diamonds: 30, crate: 'studio' },
 ];
+// Streak bonuses on top of the 7-day calendar: each is paid once per profile the first time the login streak reaches `days`.
+export const STREAK_MILESTONES = [
+  { days: 7,  diamonds: 20 },
+  { days: 14, diamonds: 40 },
+  { days: 30, diamonds: 100, crate: 'studio' },
+];
 export const QUESTS = [
   { id: 'q_kills',   stat: 'kills',    goal: 150, text: 'Defeat 150 Static', reward: { records: 120 } },
   { id: 'q_kills2',  stat: 'kills',    goal: 400, text: 'Defeat 400 Static', reward: { records: 260 } },
