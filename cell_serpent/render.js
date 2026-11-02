@@ -190,6 +190,9 @@ export function createRenderer(canvas, art, kit) {
       case 'metro': if (e.hit) { ring(e.x, e.y, 130, '#9bffe0', 0.55); burst(e.x, e.y, 20, ['#9bffe0', '#fff', '#ffe36b'], 400, 0.7, 5); addFloat(e.x, e.y - 40, 'ON BEAT +' + e.v, '#b8ffe8', 26, -70); } else addFloat(e.x, e.y - 24, 'off beat', '#8fb5aa', 16, -36); break;
       case 'snack': ring(e.x, e.y, 90, '#ffcf70', 0.5); burst(e.x, e.y, 10, ['#ffcf70', '#fff', '#e8b25c'], 200, 0.6, 5); addFloat(e.x, e.y - 36, 'SNACK!', '#ffe0a0', 24, -50); break;
       case 'snackget': ring(e.x, e.y, 120, '#ffe08a', 0.6); burst(e.x, e.y, 22, ['#ffcf70', '#fff', '#ffe36b'], 420, 0.8, 6); addFloat(g.p.x, g.p.y - 70, 'YUM! RAGE', '#ffe36b', 30, -70); break;
+      case 'mirror': if (e.brk) { ring(e.x, e.y, 100, '#e6f2ff', 0.45); burst(e.x, e.y, 14, ['#e6f2ff', '#fff', '#9ec8ff'], 340, 0.7, 4); addFloat(e.x, e.y - 30, 'SHATTER', '#e6f2ff', 22, -50); } else { ring(e.x, e.y, 70, '#cfe6ff', 0.3); burst(e.x - 30, e.y, 3, ['#fff', '#9ec8ff'], 220, 0.35, 3); burst(e.x + 30, e.y, 3, ['#fff', '#9ec8ff'], 220, 0.35, 3); } break;
+      case 'beatrun': ring(e.x, e.y, 110, '#9bffe0', 0.5); burst(e.x, e.y, 14, ['#9bffe0', '#fff', '#ffe36b'], 330, 0.6, 5); addFloat(e.x, e.y - 20, 'BEAT RUN', '#b8ffe8', 26, -70); break;
+      case 'btwist': { const K = { drop: [e.warn ? 'boom...' : 'BASS DROP!', '#ff9ad6'], hold: ['HOLD YOUR FIRE', '#bff3ff'], regrow: ['SECOND WIND', '#9dffc0'] }[e.k]; if (K) { addFloat(e.x, e.y - 50, K[0], K[1], e.warn ? 22 : 28, -50); if (!e.warn) ring(e.x, e.y, 130, K[1], 0.5); if (e.k === 'drop' && !e.warn) S.trauma = Math.min(1, S.trauma + 0.35); } break; }
       case 'snackgone': burst(e.x, e.y, 6, ['#c9a46a', '#fff'], 90, 0.5, 4); break;
       case 'startle': ring(e.x, e.y, 130, '#c9b6ff', 0.55); addFloat(e.x, e.y - 40, 'STARTLED!', '#d9ccff', 26, -60); S.trauma = Math.min(1, S.trauma + 0.35); break;
       case 'ringskip': ring(g.ring.cx, g.ring.cy, e.warn ? 150 : 260, e.warn ? '#ffd0a0' : '#ff9a6a', 0.55); addFloat(g.ring.cx, g.ring.cy - 120, e.warn ? 'scratch...' : 'SKIP!', '#ffb98a', e.warn ? 22 : 30, -50); if (!e.warn) S.trauma = Math.min(1, S.trauma + 0.4); break;
@@ -330,7 +333,7 @@ export function createRenderer(canvas, art, kit) {
         ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.3, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
       }
       if (s.gold) { const live = s.goldT > 0; glow(s.x, s.y, r * (live ? 2.3 : 1.5), '#ffd24a', live ? 0.55 + Math.sin(S.t * 9 + i) * 0.2 : 0.15); if (live) { ctx.save(); ctx.strokeStyle = s.goldT > 2.5 ? '#fff1a8' : (Math.sin(S.t * 22) > 0 ? '#ff9a6a' : '#fff1a8'); ctx.lineWidth = s.goldT > 2.5 ? 5 : 5 + (2.5 - s.goldT) * 1.2; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.18, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0, s.goldT / 9)); ctx.stroke(); ctx.restore(); } }
-      if (s.ward || s.warded || s.lull || s.drum || s.choir || s.quartet || s.bell || s.frost || s.metro || s.pillow || s.snack) drawCellFlags(ctx, s, r, ft, i, glow);
+      if (s.ward || s.warded || s.lull || s.drum || s.choir || s.quartet || s.bell || s.frost || s.metro || s.pillow || s.snack || s.mirror) drawCellFlags(ctx, s, r, ft, i, glow);
       if (s.kind === 'bomb') { const pulse = 0.5 + Math.sin(S.t * 9 + i) * 0.5; glow(s.x, s.y, r * 1.8, '#ff3b5c', 0.15 + pulse * 0.25); }
       if (s.kind === 'mender') glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12);
       if (s.kind === 'upgrade') glow(s.x, s.y, r * 2.1, '#ffd24a', 0.45 + Math.sin(S.t * 6 + i) * 0.15);
@@ -359,7 +362,7 @@ export function createRenderer(canvas, art, kit) {
       if (OPT.colorBlind && (s.kind !== 'normal' || s.carry === 'chest')) kindMark(s.carry === 'chest' && s.kind === 'normal' ? 'chest' : s.kind, s.x, s.y - r * 1.02, r * 0.36);
       if (s.kind === 'mender') { glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12); ctx.save(); ctx.fillStyle = '#6fe08a'; ctx.strokeStyle = INK; ctx.lineWidth = 3; const q = r * 0.34; for (const [px, py, w2, h2] of [[-q * 0.35, -q, q * 0.7, q * 2], [-q, -q * 0.35, q * 2, q * 0.7]]) { ctx.fillRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); ctx.strokeRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); } ctx.restore(); }
     }
-    for (let i = segs.length - 1; i > 0; i--) { const s = segs[i]; if ((s.ward || s.lull || s.drum || s.choir || s.quartet || s.bell || s.metro || s.pillow || s.snack) && s.y > -s.r * 3 && s.y < H + s.r * 3) drawCellBadge(ctx, s, s.r, ft, i, kit); }   // QA r10: badges in a pass of their own, so the neighbour toward the head no longer hides them
+    for (let i = segs.length - 1; i > 0; i--) { const s = segs[i]; if ((s.ward || s.lull || s.drum || s.choir || s.quartet || s.bell || s.metro || s.pillow || s.snack || s.mirror) && s.y > -s.r * 3 && s.y < H + s.r * 3) drawCellBadge(ctx, s, s.r, ft, i, kit); }   // QA r10: badges in a pass of their own, so the neighbour toward the head no longer hides them
     drawBellRings(ctx, sn, ft);
     drawQuartetLinks(ctx, sn, ft);
     if (sn.slow > 0) { const h = segs[0]; glow(h.x, h.y, h.r * 2, '#7fe8ff', 0.3); }
