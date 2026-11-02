@@ -54,6 +54,8 @@ export const PETS = [
   { id: 'turtle', name: 'Turtle', stat: 'cdn', per: 0.03, flavor: 'Slow and steady.' },
 ];
 const PET = Object.fromEntries(PETS.map(p => [p.id, p]));
+export const PET_JOY_MAX = 100;   // happiness: fills while a pet walks with you (cosmetic, no stats)
+export const petJoyGain = r => 6 + Math.min(10, Math.floor((r.stage || 1) / 4)) + (r.won ? 6 : 0);
 export const petCost = star => (star === 0 ? 5 : 4 + 4 * star);   // fragments to own it, then for each star
 // Keepsakes: little treasures from backstage. Each level adds a permanent bonus; owning a whole set adds one more.
 export const KEEP_TIERS = [
@@ -319,8 +321,8 @@ export const BOXES = [
 export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
-  const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0 };
-  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, reviveTimer: true, volume: 1, thumbZone: false, textScale: 1, beatTick: false }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
+  const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0, joy: 0 };
+  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, reviveTimer: true, volume: 1, thumbZone: false, textScale: 1, beatTick: false }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -336,7 +338,7 @@ export function sanitizeSave(raw) {
     if (r) { s.skills[w.id].lv = Math.min(SKILL_MAX_LV, num(r.lv, s.skills[w.id].lv)); s.skills[w.id].frag = num(r.frag); }
     if (!w.frag) s.skills[w.id].lv = Math.max(1, s.skills[w.id].lv);
   }
-  for (const p of PETS) { const r = raw.pets && raw.pets[p.id]; if (r) { s.pets[p.id].star = Math.min(PET_MAX_STAR, num(r.star)); s.pets[p.id].frag = num(r.frag); } }
+  for (const p of PETS) { const r = raw.pets && raw.pets[p.id]; if (r) { s.pets[p.id].star = Math.min(PET_MAX_STAR, num(r.star)); s.pets[p.id].frag = num(r.frag); s.pets[p.id].joy = Math.min(PET_JOY_MAX, num(r.joy)); } }
   if (Array.isArray(raw.petEquip)) s.petEquip = raw.petEquip.filter((id, i, a) => PET[id] && s.pets[id].star > 0 && a.indexOf(id) === i).slice(0, PET_SLOTS);
   if (raw.eggs !== undefined) s.eggs = num(raw.eggs); else if (raw.runs) s.eggs = 1;
   s.ribbons = num(raw.ribbons);
@@ -359,6 +361,7 @@ export function sanitizeSave(raw) {
   if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^h?\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
   if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
   s.addict = sanitizeAddict(raw.addict);
+  if (Array.isArray(raw.presets)) s.presets = [0, 1, 2].map(i => Array.isArray(raw.presets[i]) ? raw.presets[i].filter((id, j, a) => WEAPON[id] && a.indexOf(id) === j).slice(0, LOADOUT_SIZE) : []);
   const lo = Array.isArray(raw.loadout) ? raw.loadout.filter((id, i, a) => WEAPON[id] && s.skills[id].lv > 0 && a.indexOf(id) === i).slice(0, LOADOUT_SIZE) : [];
   if (lo.length) s.loadout = lo; else if (Array.isArray(raw.loadout)) s.loadout = [...WEAPON_STARTERS].filter(id => s.skills[id].lv > 0).slice(0, LOADOUT_SIZE);
   return s;
@@ -569,6 +572,7 @@ export function applyResult(save, r) {
   if (r.won && !r.mode && !r.hard && r.stars) { const old = save.stars[r.stage] || 0; if (r.stars > old) { const before = totalStars(save); save.stars[r.stage] = r.stars; out.starsGained = r.stars - old; const ms = Math.floor((before + out.starsGained) / 10) - Math.floor(before / 10); if (ms > 0) { save.sparkles += 10 * ms; out.sparkles += 10 * ms; out.starBonus = 10 * ms; } } }
   if (r.won && r.mode !== 'pig' && r.mode !== 'inv') { const rb = (3 + Math.floor((r.stage || 1) / 3)) * (r.hard ? 2 : 1); addRibbons(save, rb); out.ribbons = rb; }
   save.beats += r.coins; save.runs++; save.kills += r.kills;
+  out.joy = {}; for (const id of save.petEquip) { const k = save.pets[id]; if (k) { const j0 = k.joy || 0; k.joy = Math.min(PET_JOY_MAX, j0 + petJoyGain(r)); out.joy[id] = [j0, k.joy]; } }
   for (const id of Object.keys(out.frags)) save.skills[id].frag += out.frags[id];
   if (r.won && r.mode === 'inv') { addRibbons(save, 15); out.ribbons = 15; save.eggs++; out.egg = true; save.inv.best = Math.max(save.inv.best, r.stage); const ids = PETS.map(p => p.id), pid = ids[(save.runs + r.stage) % ids.length]; save.pets[pid].frag += 3; out.pet = { id: pid, n: 3 }; return out; }
   if (r.mode === 'inv') return out;
