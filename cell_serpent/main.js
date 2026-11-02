@@ -1,5 +1,5 @@
 import { quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
-import { recordAddictRun } from './sim.js';
+import { recordAddictRun, eventInfo, ensureEvent } from './sim.js';
 import { createHub2 } from './hub2.js';
 import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
@@ -12,6 +12,7 @@ import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
 import { luckHTML, refreshPips, buildHTML } from './cards_ui.js';
 import { richDemo, setupTapAnimals, tagPets, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
+import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText } from './battle_ui.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
@@ -111,6 +112,7 @@ function renderHub() {
   hub2.addict.renderNext(); hub2.retain.renderStrip(); petHint(document.querySelector('.tabs'), hubTab, save);
   for (const t of TABS) { $('tab' + t).classList.toggle('on', t === hubTab); }
   for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === hubTab);
+  $('hub').classList.toggle('bt-on', hubTab === 'Battle');
   if (hubTab === 'Battle') renderBattle(); else if (hubTab === 'Skills') renderSkills(); else if (hubTab === 'Pets') renderPets(); else if (hubTab === 'Stats') hub2.renderStats(); else if (hubTab === 'Gear') hub2.renderGear(); else hub2.renderShop();
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { audio.unlock(); audio.play('click'); hubTab = b.dataset.tab; renderHub(); };
@@ -135,7 +137,7 @@ function renderBattle() {
   { const rp = recPower(sel, hard), mine = power(save);
     $('diffRow').innerHTML = `<div class="seg ${hard ? 'h' : ''}"><i></i><button class="dbtn ${hard ? '' : 'on'}" data-h="0">Normal</button><button class="dbtn hard ${hard ? 'on' : ''}" data-h="1" ${hardOk ? '' : 'disabled'}>${hardOk ? 'Hard' : '🔒 Hard'}</button></div><span class="rec ${mine < rp ? 'low' : ''}">Power <b>${mine}</b> / ${rp}</span>`; }
   for (const b of $('diffRow').querySelectorAll('.dbtn')) b.onclick = () => { audio.play('click'); hard = b.dataset.h === '1'; renderBattle(); };
-  $('stMod').textContent = info.mod ? '✦ ' + info.mod.name + ': ' + info.mod.blurb : '';
+  $('stMod').innerHTML = twistHTML(info.mod); $('btFact').hidden = true; $('btHero').classList.remove('fact');
   { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; $('btRowH').style.display = cb.style.display; cb.textContent = 'CONTINUE ▶ ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
   const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : '<span><b>Cleared ✓</b></span>';
   $('stInfo').innerHTML = `<span>Cells <b>${info.length}</b>  ·  HP <b>${(h => (h >= 1000 ? (h / 1000).toFixed(1) + 'k' : h))(Math.round(info.hp * (hard ? HARD_HP : 1)))}</b></span>${first}`;
@@ -145,6 +147,7 @@ function renderBattle() {
   { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; $('stProg').innerHTML = `<div class="pgl">Best <b>${pr}%</b></div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
   hub2.renderSide();
   renderPig();
+  { const dk = $('btDock'), tb = document.querySelector('.tabs'), hb = $('hub'); if (dk && tb) { hb.style.setProperty('--tabh', tb.offsetHeight + 'px'); hb.style.setProperty('--dockh', dk.offsetHeight + 'px'); } }
   renderGoals();
   const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } }
 }
@@ -197,11 +200,23 @@ function drawPortrait(t, info) {
   kit.drawHead(c, S / 2, S / 2 + bob, 78 * (info.boss ? 1.12 : 1) * sc, Math.PI / 2 + Math.sin(t * 0.9) * 0.15, { skin: info.skin, boss: info.boss, t, look: [Math.sin(t * 1.3) * 0.6, 0.8] });
 }
 
+// live countdown on the event banner (one cheap timer, only touches the DOM while the Battle tab is showing)
+setInterval(() => { if (mode !== 'hub' || hubTab !== 'Battle') return; const e = document.getElementById('evCd'); if (e) e.textContent = countdownText(monthEndMs(dayKey()) - Date.now()); }, 1000);
+// tap the portrait: species fun fact plus what the stage pays
+$('stPortrait').onclick = () => {
+  const box = $('btFact'), hero = $('btHero'); if (!box.hidden) { box.hidden = true; hero.classList.remove('fact'); return; }
+  audio.play('click'); const info = stageInfo(sel), sp = (kit && kit.SPECIES && kit.SPECIES[info.skin]) || null;
+  box.innerHTML = factHTML({ info, sp, hard, done: sel <= save.cleared, sparkleIcon: curImg('sparkles') }); box.hidden = false; hero.classList.add('fact'); try { hero.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* ignore */ }
+  box.querySelector('.ff-x').onclick = e => { e.stopPropagation(); audio.play('click'); box.hidden = true; hero.classList.remove('fact'); };
+};
+$('loadEdit').onclick = () => { audio.play('click'); hubTab = 'Skills'; renderHub(); };
 const resetIn = () => { const ms = 86400000 - (Date.now() % 86400000), h = Math.floor(ms / 3600000); return h ? h + 'h ' + Math.floor(ms % 3600000 / 60000) + 'm' : Math.floor(ms / 60000) + 'm'; };
 function renderPig() {
   const el = $('pigBox'); el.innerHTML = '';
   const left = save.pig.left, tier = pigTier(save);
-  { const ev = hub2.eventTile(); ev.classList.add('bn-ev'); el.appendChild(ev); }
+  { const day = dayKey(), evi = eventInfo(day); ensureEvent(save, day);
+    const ev = document.createElement('div'); ev.className = 'evbanner'; ev.innerHTML = eventBannerHTML(evi, save.event.earned, save.event.claimed, Date.now(), day);
+    ev.querySelector('.ev-go').onclick = () => { audio.play('click'); hub2.eventTile().querySelector('button').click(); }; el.appendChild(ev); }
   const gig = save.inv.left;
   el.appendChild(tile({ cls: 't-weapon one bn-inv', ic: '🐍', name: INV_NAME, chip: 'Stage ' + invStage(save) + '  ·  ' + gig + '/2  ·  ⏱ ' + resetIn(), desc: 'A giant serpent crashes the show. Beat it for ribbons and a little friend.', btn: gig ? 'TAKE THE STAGE' : 'COME BACK TOMORROW', disabled: !gig,
     onclick: () => { audio.unlock(); audio.play('click'); if (!useInvAttempt(save, dayKey())) return; if (!spendEnergy(save, Date.now())) { save.inv.left++; toast('Out of Voice!'); return; } persist(); startRun(invStage(save), 'inv'); } }));
