@@ -59,4 +59,35 @@ export function initChestSr() {
   }).observe(loot, { childList: true });
 }
 
-export function initA11y7() { try { initTrap(); initFlashPreview(); syncFilters(); initChestSr(); } catch (e) { /* never block the game */ } }
+// batch 8: while a bottom sheet is open the hub behind it is inert (no focus, no screen reader cursor), and a keyboard
+// press that rebuilds the hub no longer drops focus on the page: it returns to the same control (by name, else same place)
+export const inertWanted = () => !!document.querySelector('.dsheet-bg');
+export function syncInert() {
+  const want = inertWanted();
+  for (const id of ['hub', 'title']) { const s = document.getElementById(id); if (s && !!s.inert !== want) s.inert = want; }
+  return want;
+}
+const lab = el => (el.getAttribute('aria-label') || el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 40);
+const flist = root => [...root.querySelectorAll('button:not([disabled]),[tabindex="0"]')].filter(b => b.getClientRects().length);
+let sig = null;
+export function rememberFocus(el) {
+  const tab = el && el.closest && el.closest('.tab'); if (!tab) { sig = null; return null; }
+  sig = { tab: tab.id, i: flist(tab).indexOf(el), key: lab(el) }; return sig;
+}
+export function restoreFocus() {
+  if (!sig || document.querySelector('.dsheet-bg')) return false;
+  const a = document.activeElement; if (a && a !== document.body && a.isConnected) { sig = null; return false; }
+  const tab = document.getElementById(sig.tab); if (!tab || !tab.getClientRects().length) return false;
+  const l = flist(tab); const t = l.find(b => lab(b) === sig.key) || l[Math.max(0, Math.min(sig.i, l.length - 1))];
+  sig = null; if (!t) return false; try { t.focus({ preventScroll: true }); } catch (e) { /* ignore */ } return true;
+}
+export function initInertFocus() {
+  if (typeof document === 'undefined') return;
+  let t = 0; const later = () => { clearTimeout(t); t = setTimeout(restoreFocus, 90); };
+  new MutationObserver(() => { syncInert(); }).observe(document.body, { childList: true });
+  addEventListener('click', e => { if (e.detail === 0 && e.target && e.target.closest) rememberFocus(e.target.closest('button,[tabindex="0"]')); }, true);
+  const hub = document.getElementById('hub'); if (hub) new MutationObserver(() => { if (sig) later(); }).observe(hub, { childList: true, subtree: true });
+  new MutationObserver(ms => { for (const m of ms) for (const n of m.removedNodes) if (n.nodeType === 1 && n.classList && n.classList.contains('dsheet-bg')) later(); }).observe(document.body, { childList: true });
+}
+
+export function initA11y7() { try { initTrap(); initFlashPreview(); syncFilters(); initChestSr(); initInertFocus(); } catch (e) { /* never block the game */ } }

@@ -51,3 +51,14 @@ export function paintCbStrip(el, kit, on) {
   const names = pv.map(p => p.name).join(', ');
   el.setAttribute('role', 'img'); el.setAttribute('aria-label', 'Colour preview of the six snake species. Default colours, the same as seen with red-green colour blindness, and the safer palette as seen the same way. ' + (on ? 'Safer palette is on. ' : 'Safer palette is off. ') + names + '.');
 }
+
+// ---- rarity colours (round 8 audit). Under red-green colour blindness Rare/Epic (blue vs purple) and Legendary/Godlike
+// (orange vs yellow) came out within 18 Lab units of each other. The safer palette separates them by lightness: a deeper
+// violet for Epic, a deeper orange for Legendary and a pale butter for Godlike. Cards also carry the rarity word and a foil pattern.
+export const CB_RARITY = { 2: '#8a3dff', 3: '#ff8a1f', 5: '#ffec8a' };
+const rOrig = new Map();
+export function applyCbRarity(list, on) {
+  if (!Array.isArray(list)) return false; let ch = false;
+  for (const k of Object.keys(CB_RARITY)) { const r = list[k]; if (!r) continue; if (!rOrig.has(r)) rOrig.set(r, r.color); const want = on ? CB_RARITY[k] : rOrig.get(r); if (r.color !== want) { r.color = want; ch = true; } }
+  return ch;
+}

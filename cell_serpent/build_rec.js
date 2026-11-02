@@ -52,7 +52,8 @@ export function renderRecStrip(host, c) {
   const ics = r.ids.map(id => { const own = s.skills[id] && s.skills[id].lv > 0, eq = s.loadout.includes(id); return `<i class="rec-ic${eq ? ' eq' : own ? '' : ' lock'}" title="${wn(id)}">${c.icon(id)}${eq ? '<u>✓</u>' : ''}</i>`; }).join('');
   const verdict = f.have >= f.total ? 'Perfect fit' : f.have >= 2 ? 'Good fit' : f.have === 1 ? 'Could be better' : 'Not a fit yet';
   const wrap = el('div', 'recbar' + (f.have >= f.total ? ' full' : ''));
-  wrap.innerHTML = `<div class="rec-tx"><small>STAGE ${n} · ${(sp ? sp.name : skin).toUpperCase()}</small><b>Best build</b><span>${r.why}</span></div><div class="rec-ics">${ics}</div>`;
+  wrap.setAttribute('role', 'group'); wrap.setAttribute('aria-label', `Best build for stage ${n}, ${sp ? sp.name : skin}: ${r.ids.map(id => wn(id) + (s.loadout.includes(id) ? ' equipped' : s.skills[id] && s.skills[id].lv > 0 ? ' owned, not equipped' : ' not owned yet')).join(', ')}. ${r.why}. ${f.have} of ${f.total}, ${verdict}`);
+  wrap.innerHTML = `<div class="rec-tx"><small>STAGE ${n} · ${(sp ? sp.name : skin).toUpperCase()}</small><b>Best build</b><span>${r.why}</span></div><div class="rec-ics" aria-hidden="true">${ics}</div>`;
   const pets = s.petEquip.filter(id => s.pets[id] && s.pets[id].star > 0).slice(0, 2);
   const mood = f.have >= 2 ? 'cheer' : 'shrug', say = f.have >= f.total ? 'Perfect!' : f.have >= 2 ? 'Nice!' : f.have === 1 ? 'Hmm...' : 'Uh oh';
   const ft = el('div', 'rec-ft');
