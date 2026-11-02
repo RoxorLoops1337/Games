@@ -1005,6 +1005,24 @@
   .tabs button.on .tico{filter:drop-shadow(0 2px 5px rgba(255,92,184,.6));opacity:1;transform:translateY(-1px) scale(1.1)}
   .tabs button:active .tico{transform:scale(.88)}
 /* end @css:19-buttons */
+  /* @css:11-result-goal */
+  .rgoal{display:none;align-items:center;gap:10px;width:min(320px,86vw);padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);cursor:pointer;text-align:left;animation:rpIn .45s .9s both}
+  .rgoal.on{display:flex}
+  .rgoal .gi{font-size:22px;line-height:1}
+  .rgoal .gt{flex:1;display:flex;flex-direction:column;min-width:0} .rgoal .gt b{font-size:14px;color:#fff;line-height:1.2} .rgoal .gt small{font-size:11px;color:var(--dim);font-weight:800}
+  .rgoal .ga{font-size:24px;font-weight:900;color:var(--dim);line-height:1}
+  .rgoal.ready{background:linear-gradient(180deg,rgba(157,255,109,.3),rgba(57,240,255,.16));border-color:#9dff6d;box-shadow:0 0 14px rgba(157,255,109,.4);animation:rpIn .45s .9s both,rgGlow 1.8s 1.4s ease-in-out infinite}
+  .rgoal.ready .gt b{color:#d9ffc0} .rgoal.ready .ga{color:#9dff6d}
+  @keyframes rgGlow{50%{box-shadow:0 0 24px rgba(157,255,109,.75)}}
+  #result.close h2{background:linear-gradient(180deg,#fff,#9dff6d 70%,#39f0ff);-webkit-background-clip:text;background-clip:text}
+  #result .rcost{opacity:.75;font-size:.8em}
+  .rpmark{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;width:min(320px,84vw)} .rpmark:empty{display:none}
+  #pause .rpmark{flex-wrap:nowrap;gap:4px} #pause .rpmark span{padding:2px 6px 2px 3px;font-size:10px;gap:2px}
+  .rpmark span{display:flex;align-items:center;gap:4px;padding:3px 9px 3px 4px;border-radius:99px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);font-size:11px;font-weight:900;color:#fff}
+  .rpmark img{width:22px;height:22px;object-fit:contain}
+  @media (prefers-reduced-motion:reduce){.rgoal,.rgoal.ready{animation:none}}
+  @media (max-height:700px){.rgoal{padding:5px 10px}.rgoal .gt small{display:none}}
+  /* end @css:11-result-goal */
 </style>
 </head>
 <body>
@@ -1123,6 +1141,7 @@
   <h2>PAUSED</h2>
   <div class="sub pnote">Take a breath. The snake waits.</div>
   <div class="precap" id="pRecap"></div>
+  <div class="rpmark" id="pBuild"></div>
   <button class="btn pbig" id="resumeBtn">&#9654; RESUME</button>
   <button class="btn alt pbtn" id="pStats">&#128202; WHO DID WHAT</button>
   <button class="btn alt pbtn" id="pSet">&#9881; SETTINGS</button>
@@ -1139,6 +1158,7 @@
   <div class="rlevel" id="rLevel"><span class="lv" id="rLv">1</span><div class="lbar"><i id="rLbar"></i></div><small id="rLtxt"></small></div>
   <div class="result-list" id="rList"></div>
   <div class="rextra" id="rExtra"></div>
+  <div class="rgoal" id="rGoal" role="button" tabindex="0"></div>
   <div class="rnudge" id="rNudge"></div>
   <button class="btn" id="rNext">NEXT STAGE</button>
   <div class="row"><button class="btn alt" id="rRetry">RETRY</button><button class="btn dim" id="rHub">MENU</button></div>
