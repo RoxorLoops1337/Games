@@ -376,6 +376,30 @@
   #levelup .bi .g img{width:16px;height:16px;object-fit:contain}
   #levelup .bi.sk{border-color:#6fe3ff66} #levelup .bi b{color:#9dff6d}
   @media (max-height:700px){#levelup .lkrow,#levelup .bl{display:none}#levelup .luckbox{gap:0}#levelup .buildstrip{gap:3px}}
+  /* @css:07-cards round 3 */
+  #levelup .lvrow{display:flex;gap:10px;width:100%;max-width:420px;align-items:stretch}
+  #levelup .lvrow .btn{margin:0;min-width:0;flex:1 1 0;padding:9px 8px;font-size:14px;line-height:1.15;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+  #levelup #refreshBtn{flex:1.15}
+  #levelup #refreshBtn .sub{margin:0;line-height:0}
+  #levelup #refreshBtn.empty .rl{opacity:.6}
+  #levelup #skipBtn{border:2px dashed #ffffff44;background:#0000;color:#ffd86b;font-size:12px;box-shadow:none;text-shadow:none}
+  #levelup #refreshLeft{margin-top:0}
+  .card.pick .ic{overflow:visible}
+  .card.pick .ic .kd{position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);padding:0 6px;border-radius:7px;background:var(--rc);color:#10082a;font-size:8px;font-weight:900;letter-spacing:.08em;line-height:13px;box-shadow:0 1px 3px #000a;z-index:2}
+  .card.pick .ic .kd:empty{display:none}
+  .card.pick .ic img{object-fit:contain}
+  .card.pick .syn{margin-top:4px;display:inline-block;padding:1px 8px 1px 6px;border-radius:8px;background:linear-gradient(90deg,#9dff6d33,#0000);border-left:3px solid #9dff6d;font-size:10px;font-weight:800;color:#c8ffa8;letter-spacing:.02em;animation:synin .4s ease-out calc(var(--d,0s) + .7s) both}
+  .card.pick .syn::before{content:'+';margin-right:3px;color:#9dff6d;font-weight:900}
+  @keyframes synin{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+  /* reveal: a ring bursts off the icon when the card lands, bigger for higher rarity */
+  .card.pick.r2 .ic::after,.card.pick.r3 .ic::after,.card.pick.r4 .ic::after,.card.pick.r5 .ic::after{content:'';position:absolute;inset:-3px;border-radius:18px;border:3px solid var(--rc);pointer-events:none;opacity:0;animation:icring .7s ease-out calc(var(--d,0s) + .5s) both}
+  .card.pick.r4 .ic::after,.card.pick.r5 .ic::after{animation-name:icring2}
+  @keyframes icring{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(1.7)}}
+  @keyframes icring2{0%{opacity:1;transform:scale(1);border-width:5px}100%{opacity:0;transform:scale(2.3);border-width:1px}}
+  .card.pick .ic{animation:icpop .5s cubic-bezier(.2,1.6,.4,1) calc(var(--d,0s) + .42s) both}
+  @keyframes icpop{0%{transform:scale(.6) rotate(-10deg)}100%{transform:none}}
+  @media (max-height:700px){.card.pick .syn{margin-top:2px;font-size:9px}#levelup .lvrow .btn{padding:7px 6px}}
+  /* end @css:07-cards round 3 */
   /* end @css:07-cards */
   /* @css:18-access */
   :focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #ff5cb8}
@@ -821,9 +845,10 @@
   <div class="lvflash"></div>
   <div class="luckbox" id="luckBox"></div>
   <div class="cards" id="cards"></div>
-  <button class="btn alt" id="refreshBtn">FREE REFRESH</button>
-  <div class="sub" id="refreshLeft"></div>
-  <button class="btn dim" id="skipBtn" style="margin-top:8px;font-size:14px;padding:9px 18px">SKIP FOR BEATS</button>
+  <div class="lvrow">
+    <button class="btn alt" id="refreshBtn"><span class="rl">FREE REFRESH</span><span class="sub" id="refreshLeft"></span></button>
+    <button class="btn dim" id="skipBtn">SKIP FOR BEATS</button>
+  </div>
   <div class="buildstrip" id="buildStrip"></div>
 </section>
 
