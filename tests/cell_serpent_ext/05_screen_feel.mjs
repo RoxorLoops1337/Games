@@ -77,7 +77,7 @@ const { createClock, STEP } = await import(join(root, 'clock.js'));
   assert.deepEqual(snd, ['star1', 'star2', 'star3'], 'three star pops, one per star, in order');
   assert.ok(t > 1.5 && t < 4, 'the card is short');
   g4.revivesUsed = 1; g4.faceMax = 0.9; C.onEvent({ t: 'won' }, g4); const s1 = []; while (C.clearBusy()) { C.draw(g4, ui, 0.05); s1.push(...C.takeSounds()); }
-  assert.deepEqual(s1, ['star1'], 'only the earned stars pop');
+  assert.deepEqual(s1.filter(x => x !== 'phew'), ['star1'], 'only the earned stars pop');
   g4.mode = 'daily'; C.onEvent({ t: 'won' }, g4); assert.equal(C.clearBusy(), false, 'no stars, no card');
   const Q2 = mk(); Q2.setOptions({ reduceMotion: true }); const g5 = sim.createGame({ seed: 5, stage: 10 }); g5.faceMax = 0.2;
   Q2.onEvent({ t: 'won' }, g5); let tq = 0; while (Q2.clearBusy() && tq < 5) { Q2.draw(g5, ui, 0.05); tq += 0.05; } assert.ok(tq < 1.6, 'Reduce Motion: shorter static card');

@@ -1,8 +1,10 @@
 // Canvas renderer. Reads the sim state, never changes it. Uses sprites from art.js
 // where they exist and draws procedural stand-ins otherwise.
-import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt } from './sim.js';
+import { SNACK_LIFE } from './sim.js';
+import { LATE_CUE } from './trait_ui.js';
+import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt, pointInto } from './sim.js';
 import { INK, mix } from './art_draw.js';
-import { deathMotion } from './head_death.js';
+import { deathMotion, crownMotion } from './head_death.js';
 import { createHud, hudZone } from './hud.js';
 import { createHitJuice } from './hitjuice.js';
 import { createDigitAtlas } from './digits.js';
@@ -11,12 +13,13 @@ import { drawFar } from './bg_far.js';
 import { ringDanger } from './bg_mist.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
-import { drawBellLinks } from './bell_fx.js';
+import { drawBellLinks, drawBellRings } from './bell_fx.js';
 import { drawCellFlags,drawCellBadge, drawQuartetLinks, drawDashLane, drawStreak, drawChoirLinks, setBeatPhase } from './cellfx.js';
 import { bakeHat } from './hats.js';
 import { createCheer, HAT_FX, hatPose, EMOTE, heart, drawEmote } from './cheer.js';
 import { cheerFrame } from './duo_cheer.js';
 import { drawDuoLife } from './duo_idle.js';
+import { createReact, reactEvent, barkDue, barkU, barkDraw, koPose, starAt, revivePose, glance, pouncePose, clawDraw } from './duo_react10.js';
 import { newLeash, petFollow, scareEdge, tuckMood, SCARE_CALL, SCARE_COL, createDust, dustStep, dustDraw } from './duo_life9.js';
 import { createBoltLayer, boltPose, paintBolt } from './bolts_fx.js';
 
@@ -24,6 +27,10 @@ const TAU = Math.PI * 2;
 const NUMS = [];
 const num = v => { v = Math.ceil(v); if (v >= 0 && v < 1000) return NUMS[v] || (NUMS[v] = String(v)); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
 
+// perf r10: two alternating scratch points, so a lookup returns a point without allocating one (callers hold at most two at once)
+const DP_R = { x: 0, y: 0, a: 0 }, SG_R = { x0: 0, y0: 0, x1: 0, y1: 0, a: 0, len: 0 };
+const PS2 = [{ x: 0, y: 0 }, { x: 0, y: 0 }]; let ps2i = 0;
+const pointAtS = (path, s) => pointInto(path, s, PS2[ps2i ^= 1]);
 export function createRenderer(canvas, art, kit) {
   const ctx = canvas.getContext('2d');
   const S = { particles: [], floats: [], rings: [], trauma: 0, flash: 0, flashCol: '#fff', banner: null, t: 0, specks: [], hurtT: 0, popped: 0, lastShot: -9, bolts: [], warn: 0, props: [], coins: [], chain: { n: 0, t: -9 } };
@@ -126,6 +133,7 @@ export function createRenderer(canvas, art, kit) {
   let lastDt = 0.016;
   let FX = null;   // whole-screen feedback (screenfx.js), created after the helpers below exist
   function onEvent(e, g) {
+    if (!OPT.reduceMotion) { reactEvent(R10, e, g.p.x, S.t); if (e.t === 'revive') { S.slump = null; for (const q of petState) q.hop = 1; } }   // r10: duo reactions
     if (FX) FX.onEvent(e, g);
     if (HJ) HJ.event(e, g);
     switch (e.t) {
@@ -158,7 +166,7 @@ export function createRenderer(canvas, art, kit) {
         if (e.carry === 'chest' && !OPT.reduceMotion) S.props.push({ k: 'chest', x: e.x, y: e.y, vx: (Math.random() - 0.5) * 80, vy: -300, rot: 0, life: 0.9, max: 0.9, size: e.r * 2.6 });
         if (e.carry === 'chest') { ring(e.x, e.y, 150, '#ffd84d', 0.5); shaped(e.x, e.y, 8, 's', ['#ffd84d', '#fff', '#ff7eb6'], 330, 0.7, 10, 200); }
         if (e.head && S.bgfx && !OPT.reduceMotion) S.bgfx.headKill(S.t, e.x, e.y);   // 03-backgrounds b8: squall or petal storm
-        if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); if (kit && !OPT.reduceMotion && S.props.length < 8) S.props.push({ k: 'dazed', skin: e.skin, boss: !!e.boss, x: e.x, y: e.y, vx: 0, vy: -90, rot: 0, life: 1.5, max: 1.5, size: e.r * 3.9 }); }   // 01-enemy-art r7: a dazed face floats up with its halo
+        if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); if (kit && !OPT.reduceMotion && S.props.length < 8) S.props.push({ k: 'dazed', skin: e.skin, boss: !!e.boss, x: e.x, y: e.y, vx: 0, vy: -90, rot: 0, life: 1.5, max: 1.5, size: e.r * 3.9 }); if (e.boss && kit && !OPT.reduceMotion && S.props.length < 9) S.props.push({ k: 'crown', skin: e.skin, x: e.x, y: e.y - e.r * 0.8, vx: 0, vy: 0, rot: 0, life: 2.2, max: 2.2, size: e.r * 1.9, side: e.x < W / 2 ? 1 : -1, hit: 0 }); }   // 01-enemy-art r7: a dazed face floats up with its halo
         break;
       }
       case 'boom': ring(e.x, e.y, e.r, '#ff6a3d', 0.5); ring(e.x, e.y, e.r * 0.6, '#ffd24a', 0.35); burst(e.x, e.y, 30, ['#ff6a3d', '#ffd24a', '#fff'], 420, 0.6, 7); S.trauma = Math.min(1, S.trauma + 0.55); break;
@@ -170,8 +178,13 @@ export function createRenderer(canvas, art, kit) {
       case 'quartetstart': addFloat(e.x, e.y - 30, 'HARMONY! ' + e.n + ' to go', '#fff6a8', 24, -50); break;
       case 'quartetfail': ring(e.x, e.y, 70, '#ff6a8a', 0.4); if (e.lost >= 2) addFloat(e.x, e.y - 30, 'STREAK LOST', '#ff9aae', 22, -50); break;
       case 'nap': addFloat(e.x, e.y - 40, 'Zzz...', '#b9c8ff', 30, -60); ring(e.x, e.y, 90, '#b9c8ff', 0.5); break;
-      case 'trait': { const spc = kit && kit.SPECIES && kit.SPECIES[e.k], T = { love: ['HEART PULSE', '#ff8fb8'], rust: ['CREAK', '#e0a060'], sneezy: [e.warn ? 'a-a-a...' : 'ACHOO!', '#9dffc0'], frosty: ['FROST', '#bfe9ff'], grumpy: ['GRRR!', '#ff9a6a'], disco: ['SWING', '#ff9ad6'], sour: ['ZOOM!', '#d8ff6a'], mighty: ['STURDY', '#b9c8ff'] }[e.k]; if (T) { if (spc && spc.lite) T[1] = spc.lite; addFloat(e.x, e.y - 40, T[0], T[1], e.warn ? 22 : 26, -50); if (!e.warn) ring(e.x, e.y, 100, T[1], 0.5); if (e.k === 'sneezy' && !e.warn) S.trauma = Math.min(1, S.trauma + 0.3); } break; }
+      case 'trait': { const spc = kit && kit.SPECIES && kit.SPECIES[e.k], T = { love: ['HEART PULSE', '#ff8fb8'], rust: ['CREAK', '#e0a060'], sneezy: [e.warn ? 'a-a-a...' : 'ACHOO!', '#9dffc0'], frosty: ['FROST', '#bfe9ff'], grumpy: ['GRRR!', '#ff9a6a'], disco: ['SWING', '#ff9ad6'], sour: ['ZOOM!', '#d8ff6a'], mighty: ['STURDY', '#b9c8ff'] }[e.k]; if (T) { if (e.late && LATE_CUE[e.k] && !e.warn) T[0] = LATE_CUE[e.k]; if (spc && spc.lite) T[1] = spc.lite; addFloat(e.x, e.y - 40, T[0], T[1], e.warn ? 22 : 26, -50); if (!e.warn) ring(e.x, e.y, 100, T[1], 0.5); if (e.k === 'sneezy' && !e.warn) S.trauma = Math.min(1, S.trauma + 0.3); } break; }
       case 'metro': if (e.hit) { ring(e.x, e.y, 130, '#9bffe0', 0.55); burst(e.x, e.y, 20, ['#9bffe0', '#fff', '#ffe36b'], 400, 0.7, 5); addFloat(e.x, e.y - 40, 'ON BEAT +' + e.v, '#b8ffe8', 26, -70); } else addFloat(e.x, e.y - 24, 'off beat', '#8fb5aa', 16, -36); break;
+      case 'snack': ring(e.x, e.y, 90, '#ffcf70', 0.5); burst(e.x, e.y, 10, ['#ffcf70', '#fff', '#e8b25c'], 200, 0.6, 5); addFloat(e.x, e.y - 36, 'SNACK!', '#ffe0a0', 24, -50); break;
+      case 'snackget': ring(e.x, e.y, 120, '#ffe08a', 0.6); burst(e.x, e.y, 22, ['#ffcf70', '#fff', '#ffe36b'], 420, 0.8, 6); addFloat(g.p.x, g.p.y - 70, 'YUM! RAGE', '#ffe36b', 30, -70); break;
+      case 'snackgone': burst(e.x, e.y, 6, ['#c9a46a', '#fff'], 90, 0.5, 4); break;
+      case 'startle': ring(e.x, e.y, 130, '#c9b6ff', 0.55); addFloat(e.x, e.y - 40, 'STARTLED!', '#d9ccff', 26, -60); S.trauma = Math.min(1, S.trauma + 0.35); break;
+      case 'ringskip': ring(g.ring.cx, g.ring.cy, e.warn ? 150 : 260, e.warn ? '#ffd0a0' : '#ff9a6a', 0.55); addFloat(g.ring.cx, g.ring.cy - 120, e.warn ? 'scratch...' : 'SKIP!', '#ffb98a', e.warn ? 22 : 30, -50); if (!e.warn) S.trauma = Math.min(1, S.trauma + 0.4); break;
       case 'pillow': ring(e.x, e.y, 120, '#ffd0ec', 0.5); burst(e.x, e.y, 12, ['#ffd0ec', '#fff', '#ffb0d8'], 220, 0.6, 5); addFloat(e.x, e.y - 36, 'FLUFF!', '#ffd0ec', 24, -50); break;
       case 'bell': ring(e.x, e.y, 150, '#ffd9a0', 0.55); ring(e.x, e.y, 90, '#fff', 0.35); burst(e.x, e.y, 18, ['#ffd9a0', '#fff', '#ffb05a'], 380, 0.7, 5); addFloat(e.x, e.y - 36, 'DING!', '#ffe0a8', 28, -60); S.trauma = Math.min(1, S.trauma + 0.25); break;
       case 'gloom': addFloat(e.x, e.y - 40, 'GLOOM', '#b79bff', 26, -50); ring(e.x, e.y, 110, '#6a3fd0', 0.6); break;
@@ -200,7 +213,7 @@ export function createRenderer(canvas, art, kit) {
       case 'phase2': S.banner = { text: 'FINAL CHORUS', sub: 'The boss picks up the pace', t: 0, dur: 1.8 }; S.trauma = Math.min(1, S.trauma + 0.7); S.flash = 0.35; S.flashCol = '#ff9a4a'; ring(g.p.x, g.p.y, 360, '#ff9a4a', 0.8); break;
       case 'mend': ring(e.x, e.y, 46, '#6fe08a', 0.3); break;
       case 'stage': if (e.boss) S.trauma = 0.6; break;   // the title card is drawn by screenfx.js
-      case 'clear': S.banner = { text: 'STAGE CLEAR', sub: '+' + e.bonus + ' Beats', t: 0, dur: 2.2, clear: true }; break;
+      case 'clear': S.banner = { text: 'STAGE CLEAR', sub: '+' + e.bonus + ' Beats', t: 0, dur: 2.2, clear: true }; if (S.bgfx && !OPT.reduceMotion) S.bgfx.clear(S.t, g.skin, g.p.x, g.p.y); break;   // 03-backgrounds b10
       case 'surgewarn': S.warn = 0.7; break;
       case 'surge': S.warn = 0; S.trauma = Math.min(1, S.trauma + 0.3); break;
       case 'revive': S.flash = 0.6; S.flashCol = '#fff'; ring(g.p.x, g.p.y, 300, '#fff', 0.8); break;
@@ -285,10 +298,10 @@ export function createRenderer(canvas, art, kit) {
   }
 
   function drawSnake(g, sn) {
-    const segs = sn.segs, p = g.p;
-    if (sn.lane) drawDashLane(ctx, sn.path || g.path, pointAt, sn, S.t);
-    drawChoirLinks(ctx, sn, S.t);
-    drawBellLinks(ctx, sn, S.t); setBeatPhase(beatPhase(g));
+    const segs = sn.segs, p = g.p, ft = OPT.reduceMotion ? 0 : S.t;   // b10: flag glows, badges and the tether links hold still with reduce motion on
+    if (sn.lane) drawDashLane(ctx, sn.path || g.path, pointAtS, sn, S.t);
+    drawChoirLinks(ctx, sn, ft);
+    drawBellLinks(ctx, sn, ft); setBeatPhase(beatPhase(g));
     for (let i = segs.length - 1; i >= 0; i--) {   // tail first so the head sits on top
       const s = segs[i], r = s.r;
       if (s.y < -r * 3 || s.y > H + r * 3) continue;   // not on screen: skip the drawing
@@ -309,7 +322,7 @@ export function createRenderer(canvas, art, kit) {
         ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.3, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
       }
       if (s.gold) { const live = s.goldT > 0; glow(s.x, s.y, r * (live ? 2.3 : 1.5), '#ffd24a', live ? 0.55 + Math.sin(S.t * 9 + i) * 0.2 : 0.15); if (live) { ctx.save(); ctx.strokeStyle = s.goldT > 2.5 ? '#fff1a8' : (Math.sin(S.t * 22) > 0 ? '#ff9a6a' : '#fff1a8'); ctx.lineWidth = s.goldT > 2.5 ? 5 : 5 + (2.5 - s.goldT) * 1.2; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.18, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0, s.goldT / 9)); ctx.stroke(); ctx.restore(); } }
-      if (s.ward || s.warded || s.lull || s.drum || s.choir || s.quartet || s.bell || s.frost || s.metro || s.pillow) drawCellFlags(ctx, s, r, S.t, i, glow);
+      if (s.ward || s.warded || s.lull || s.drum || s.choir || s.quartet || s.bell || s.frost || s.metro || s.pillow || s.snack) drawCellFlags(ctx, s, r, ft, i, glow);
       if (s.kind === 'bomb') { const pulse = 0.5 + Math.sin(S.t * 9 + i) * 0.5; glow(s.x, s.y, r * 1.8, '#ff3b5c', 0.15 + pulse * 0.25); }
       if (s.kind === 'mender') glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12);
       if (s.kind === 'upgrade') glow(s.x, s.y, r * 2.1, '#ffd24a', 0.45 + Math.sin(S.t * 6 + i) * 0.15);
@@ -333,12 +346,13 @@ export function createRenderer(canvas, art, kit) {
       if (OPT.highContrast) { ctx.save(); ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.02, 0, TAU); ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.restore(); }
       if (OPT.highContrast) { ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.62)'; ctx.beginPath(); ctx.arc(s.x, s.y + r * 0.05, r * 0.62 * (OPT.bigNumbers ? 1.15 : 1), 0, TAU); ctx.fill(); ctx.restore(); }
       if (s.gold && kit) { const live = s.goldT > 0; blit(kit.SPR.badge(live ? 'coin' : 'coinx'), s.x - r * 0.62 + (live && s.goldT < 2.5 ? Math.sin(S.t * 50 + i) * r * 0.06 : 0), s.y - r * 0.7 + Math.sin(S.t * 3 + i) * 2, r * 1.0, live && s.goldT < 2.5 ? Math.sin(S.t * 30 + i) * 0.22 : Math.sin(S.t * 2 + i) * 0.12, false, live ? 1 : 0.75); if (live && Math.sin(S.t * 4 + i * 2) > 0.8) sparkleAt(s.x + r * 0.5, s.y + r * 0.5, r * 0.26); }
-      if (s.ward || s.lull || s.drum || s.choir || s.quartet || s.bell || s.metro || s.pillow) drawCellBadge(ctx, s, r, S.t, i, kit);
       { const hs = Math.max(20, r * 0.85) * (OPT.bigNumbers ? 1.2 : 1), hc = OPT.highContrast ? '#000' : INK; if (!DG || !DG.draw(ctx, num(s.hp), s.x, s.y + r * 0.05, hs, '#fff', hc)) text(num(s.hp), s.x, s.y + r * 0.05, hs, '#fff', hc); }
       if (OPT.colorBlind && (s.kind !== 'normal' || s.carry === 'chest')) kindMark(s.carry === 'chest' && s.kind === 'normal' ? 'chest' : s.kind, s.x, s.y - r * 1.02, r * 0.36);
       if (s.kind === 'mender') { glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12); ctx.save(); ctx.fillStyle = '#6fe08a'; ctx.strokeStyle = INK; ctx.lineWidth = 3; const q = r * 0.34; for (const [px, py, w2, h2] of [[-q * 0.35, -q, q * 0.7, q * 2], [-q, -q * 0.35, q * 2, q * 0.7]]) { ctx.fillRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); ctx.strokeRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); } ctx.restore(); }
     }
-    drawQuartetLinks(ctx, sn, S.t);
+    for (let i = segs.length - 1; i > 0; i--) { const s = segs[i]; if ((s.ward || s.lull || s.drum || s.choir || s.quartet || s.bell || s.metro || s.pillow || s.snack) && s.y > -s.r * 3 && s.y < H + s.r * 3) drawCellBadge(ctx, s, s.r, ft, i, kit); }   // QA r10: badges in a pass of their own, so the neighbour toward the head no longer hides them
+    drawBellRings(ctx, sn, ft);
+    drawQuartetLinks(ctx, sn, ft);
     if (sn.slow > 0) { const h = segs[0]; glow(h.x, h.y, h.r * 2, '#7fe8ff', 0.3); }
   }
   // colour-blind mode: every special cell kind gets its own white badge shape (star, square, triangle, plus, diamond)
@@ -358,11 +372,12 @@ export function createRenderer(canvas, art, kit) {
     if (k === 'gem') { glow(pk.x, pk.y, 22, '#39f0ff', 0.5); blit(kit && kit.SPR.pickup('gem'), pk.x, pk.y + bob, 64, Math.sin(S.t * 3 + pk.x) * 0.25); }
     else if (k === 'coin') { if ((S.t * 1.6 + pk.x * 0.1) % 1 < 0.4) sparkleAt(pk.x + 10, pk.y - 12, 8 * Math.sin(((S.t * 1.6 + pk.x * 0.1) % 1) * 2.5 * Math.PI / 1)); const sq = Math.max(0.3, Math.abs(Math.cos(S.t * 7 + pk.x))); ctx.save(); ctx.translate(pk.x, pk.y + bob); ctx.scale(sq, 1); blit(kit && kit.SPR.pickup('coin'), 0, 0, 58); ctx.restore(); }
     else if (k === 'chest') { if ((S.t * 1.3 + pk.x) % 1 < 0.5) sparkleAt(pk.x + 30, pk.y - 34, 11 * Math.sin(((S.t * 1.3 + pk.x) % 1) * 2 * Math.PI)); glow(pk.x, pk.y, 60, '#ffd84d', 0.55 + Math.sin(S.t * 5) * 0.2); blit(kit && kit.SPR.pickup('chest'), pk.x, pk.y + bob * 2, 104, Math.sin(S.t * 4) * 0.1); }
+    else if (k === 'snack') { const left = SNACK_LIFE - pk.age, fade = left < 2 ? (Math.sin(S.t * 18) > 0 ? 1 : 0.35) : 1; ctx.save(); ctx.globalAlpha = fade; glow(pk.x, pk.y, 44, '#ffcf70', 0.55); blit(kit && kit.SPR.pickup('snack'), pk.x, pk.y + bob * 2, 84, Math.sin(S.t * 4) * 0.14); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,224,138,.85)'; ctx.beginPath(); ctx.arc(pk.x, pk.y + bob * 2, 34, -Math.PI / 2, -Math.PI / 2 + 6.2832 * Math.max(0, left / SNACK_LIFE)); ctx.stroke(); ctx.restore(); }
     else { if (k === 'heal' && (S.t * 1.2 + pk.x) % 1 < 0.4) sparkleAt(pk.x + 22, pk.y - 26, 9 * Math.sin(((S.t * 1.2 + pk.x) % 1) * 2.5 * Math.PI)); const col = k === 'heal' ? '#ff6a8a' : k === 'shield' ? '#39d0ff' : '#ffb020'; glow(pk.x, pk.y, 38, col, 0.6); blit(kit && kit.SPR.pickup(k), pk.x, pk.y + bob * 2, 92, Math.sin(S.t * 4) * 0.12); }
   }
 
   // 02-animal-art: pets bob, blink, hop when the duo sings and look alert when a snake head is near
-  const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }], duoDust = createDust();   // r9: springy pets and dust
+  const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }], duoDust = createDust(), R10 = createReact(), STAR10 = { x: 0, y: 0, front: false, s: 1 };   // r9: springy pets and dust; r10: run end, revive, glance, pounce, bark
   const CH = createCheer(); let cheerHit = false;   // 02-animal-art r4: pets cheer on kill streaks
   // 02-animal-art: fire reactions (kitten swats a paw, puppy wags its tail) and idle emotes (turtle Zzz, lamb hums, piglet hearts)
   function petExtras(id, st, px, py, s2, i) {
@@ -393,7 +408,7 @@ export function createRenderer(canvas, art, kit) {
     }
   }
   // the streak broke (hitjuice sets S.slump): the pets sink, squash and tilt for a second, eyes shut, with a blue sweat drop
-  function slumpK() { const u = S.slump ? (S.t - S.slump.t) / 1.1 : 1; return OPT.reduceMotion || u < 0 || u >= 1 ? 0 : (u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85); }
+  function slumpK() { if (S.ko) return OPT.reduceMotion ? 0 : Math.min(1, (S.t - R10.koT) / 0.15); const u = S.slump ? (S.t - S.slump.t) / 1.1 : 1; return OPT.reduceMotion || u < 0 || u >= 1 ? 0 : (u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85); }
   function slumpDrop(x, y, k) { ctx.save(); ctx.globalAlpha = Math.min(1, k * 1.6); ctx.translate(x, y + (1 - k) * 16); ctx.fillStyle = '#7fd8ff'; ctx.strokeStyle = '#1b4a72'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, -11); ctx.bezierCurveTo(9, 0, 8, 9, 0, 9); ctx.bezierCurveTo(-8, 9, -9, 0, 0, -11); ctx.fill(); ctx.stroke(); ctx.restore(); }
   // 02-animal-art r8: every few seconds each pet does its own little idle trick (kitten stretches and yawns, puppy tilts its head, piglet snuffles,
   // lamb rocks side to side, hamster runs on the spot, turtle tucks in). One shared result object, nothing allocated per frame.
@@ -413,7 +428,8 @@ export function createRenderer(canvas, art, kit) {
   }
   function petsDraw(g, p, singing) {
     const ps = g.pets || [];
-    let near = 1e9; for (const sn of g.snakes) { const h = sn.segs[0]; if (h) { const d = Math.hypot(h.x - p.x, h.y - p.y); if (d < near) near = d; } }
+    let near = 1e9, nearX = NaN; for (const sn of g.snakes) { const h = sn.segs[0]; if (h) { const d = Math.hypot(h.x - p.x, h.y - p.y); if (d < near) { near = d; nearX = h.x; } } }
+    const barkNow = !OPT.reduceMotion && g.phase === 'play' && barkDue(R10, S.t), bu = OPT.reduceMotion ? -1 : barkU(R10, S.t), pn = OPT.reduceMotion ? null : pouncePose(S.t - R10.pT, R10.pDir);   // r10
     const scared = near < 330;
     ps.forEach((id, i) => {
       const st = petState[i] || (petState[i] = { hop: 0, last: 0 });
@@ -428,19 +444,24 @@ export function createRenderer(canvas, art, kit) {
       const ch = OPT.reduceMotion ? null : CH.pet(i, i ? 1 : -1, id);
       const s2 = i ? 1 : -1, ph = S.t * 6 + i * 2, idle = Math.abs(Math.sin(ph)) * (scared ? 3 : 8) * (ch ? 0.3 : 1), hopY = Math.sin(st.hop * Math.PI) * 14 + (ch ? ch.y : 0) + bop - slumpK() * 9;
       const lf = st.leash || (st.leash = newLeash()), px = OPT.reduceMotion ? p.x + s2 * 92 : petFollow(lf, p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6, S.t).x, base = p.y + 8;   // r9: the pets trot after the duo on a springy leash
-      if (scareEdge(st, scared, S.t) && !OPT.reduceMotion) { st.hop = 1; addFloat(px, base - 62, SCARE_CALL[id] || '!', SCARE_COL[id] || '#fff', 20, -34); }   // r9: each pet calls out when a head gets close
+      const calls = scareEdge(st, scared, S.t); if (calls && OPT.onPetCall) OPT.onPetCall(id);   // r10: the pet's own voice
+      if (calls && !OPT.reduceMotion) { st.hop = 1; addFloat(px, base - 62, SCARE_CALL[id] || '!', SCARE_COL[id] || '#fff', 20, -34); }   // r9: each pet calls out when a head gets close
+      const gl = OPT.reduceMotion || S.ko ? 0 : glance(st, px, nearX, near, lastDt), pk = id === 'kitten' && pn && pn.u >= 0 ? pn : null;   // r10: lean toward the nearest head; the kitten pounces on crits
+      if (barkNow && id === 'puppy') { st.hop = 1; addFloat(px, base - 78, 'WOOF!', '#ffd24a', 28, -30); }
       const blink = (S.t * 0.8 + i * 1.7) % 3.1 < 0.13;
       const sl = slumpK(), tk = OPT.reduceMotion || ch || scared || sl > 0.05 || st.hop > 0.1 ? null : petTrick(id, i), mood = sl > 0.2 || tuckMood(id, scared) >= 0 ? 7 : st.hop > 0.35 || ch ? 3 : tk && tk.mood >= 0 ? tk.mood : scared ? 2 : blink ? 1 : 0;   // slump: eyes shut
       const k = Math.abs(Math.sin(ph));
       ctx.save(); ctx.globalAlpha *= 0.3 * (1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, 24 - (idle + hopY) * 0.3, 7, 0, 0, TAU); ctx.fill(); ctx.restore();
       const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = (1 + (1 - k) * 0.05 + st.hop * 0.05 + sl * 0.1 + (OPT.reduceMotion ? 0 : lf.stretch * 0.08)) * (tk ? tk.sx : 1), sy = (1 - (1 - k) * 0.05 - st.hop * 0.03 - sl * 0.12) * (tk ? tk.sy : 1);
       if (cheerHit && !OPT.reduceMotion) CH.burst(px, base - 40, Math.max(0, CH.tier), id);
-      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq * ch.sx : 1), sy / (ch ? ch.sq : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px, base - idle - hopY - (tk ? tk.dy : 0), sz, (tk ? tk.rot : 0) + s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0) - s2 * sl * 0.2 + (OPT.reduceMotion ? 0 : lf.lean)); ctx.restore(); }
+      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq * ch.sx : 1) * (pk ? pk.sx : 1), sy / (ch ? ch.sq : 1) * (pk ? pk.sy : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px + (pk ? pk.dx : 0), base - idle - hopY - (tk ? tk.dy : 0) - (pk ? pk.dy : 0), sz, gl + (pk ? pk.rot : 0) + (tk ? tk.rot : 0) + s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0) - s2 * sl * 0.2 + (OPT.reduceMotion ? 0 : lf.lean)); ctx.restore(); }
       if (st.hop > 0.6) sparkleAt(px + s2 * 28, base - idle - hopY - 36, 7 + st.hop * 3);
       if (tk && tk.u >= 0) {   // trick extras: a question mark over the tilting puppy, dust under the running hamster
         if (id === 'puppy') { ctx.save(); ctx.globalAlpha = Math.sin(tk.u * Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2d1a14'; ctx.lineWidth = 3; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.strokeText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.fillText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.restore(); }
         else if (id === 'hamster') { const f = (S.t * 5) % 1; ctx.save(); ctx.globalAlpha = (1 - f) * 0.5; ctx.fillStyle = '#e8d8b8'; ctx.beginPath(); ctx.arc(px - s2 * (20 + f * 14), p.y + 38 - f * 8, 3 + f * 4, 0, TAU); ctx.fill(); ctx.restore(); }
       }
+      if (pk && pk.claws) clawDraw(ctx, px + pk.dx + s2 * 0 + R10.pDir * 30, base - idle - hopY - pk.dy - 6, R10.pDir);
+      if (id === 'puppy' && bu >= 0) barkDraw(ctx, px, base - idle - hopY, nearX === nearX && nearX < px ? -1 : 1, bu);
       petExtras(id, st, px, base - idle - hopY, s2, i);
       if (g.petJoy && g.petJoy[i] && !OPT.reduceMotion) joyEmote(px, base - idle - hopY, p.y + 40, s2, i, id);
       if (sl > 0.15) slumpDrop(px + s2 * 30, base - idle - hopY - 34, sl);
@@ -453,6 +474,20 @@ export function createRenderer(canvas, art, kit) {
     for (let i = 0; i < n; i++) { const a = S.t * 1.4 + i * 2.1, f = (S.t * 0.7 + i * 0.37) % 1; sparkleAt(p.x + Math.cos(a) * 60, p.y - 70 + Math.sin(a * 1.3) * 30 - f * 20, 5 * Math.sin(f * Math.PI)); }
   }
 
+  // r10: run end sink with dizzy stars, revive hop
+  function drawPlayerR(g) {
+    const p = g.p, ko = S.ko && R10.koT > -1 ? koPose(S.t - R10.koT, OPT.reduceMotion) : null, rv = ko || OPT.reduceMotion ? null : revivePose(S.t - R10.rvT);
+    if (!ko && !(rv && rv.u >= 0)) { drawPlayer(g); return; }
+    ctx.save();
+    if (ko) { ctx.translate(p.x, p.y + 40); ctx.rotate(ko.rot); ctx.scale(1, ko.sy); ctx.translate(-p.x, -p.y - 40 + ko.dy); }
+    else { ctx.translate(p.x, p.y + 40); ctx.scale(rv.sx, rv.sy); ctx.translate(-p.x, -p.y - 40 - rv.dy); }
+    drawPlayer(g);
+    if (ko && ko.stars > 0) {   // dizzy stars orbit above both heads
+      ctx.globalAlpha = ko.stars;
+      for (let h = 0; h < 2; h++) for (let i = 0; i < 3; i++) { const o = starAt(STAR10, i, 3, p.x + (h ? 46 : -46), p.y - 104, 30, 8, S.t + h * 1.3, OPT.reduceMotion); sparkleAt(o.x, o.y, 8 * o.s); }
+    }
+    ctx.restore();
+  }
   function drawPlayer(g) {
     const p = g.p;
     if (p.iframes > 0 && Math.floor(S.t * 20) % 2 === 0 && !(p.shield > 0)) ctx.globalAlpha = 0.45;
@@ -462,8 +497,8 @@ export function createRenderer(canvas, art, kit) {
     if (g.phase === 'play' && !OPT.reduceMotion) { const ph = beatPhase(g), a = Math.pow(1 - ph, 3) * 0.28; if (a > 0.02) { ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#9ff3ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 46 + ph * 26, 0, TAU); ctx.stroke(); ctx.restore(); } }
     FX.aura(g); drawStreak(ctx, g, S.t);
     // aim tick
-    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.aim); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6fe3ff';
-    ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(22, -6); ctx.lineTo(22, 6); ctx.fill(); ctx.restore();
+    if (!S.ko) { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.aim); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6fe3ff';
+    ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(22, -6); ctx.lineTo(22, 6); ctx.fill(); ctx.restore(); }
     const singing = S.t - S.lastShot < 0.22;
     const key = singing ? 'duo_sing' : 'duo_idle';
     const moving = Math.hypot(p.mx, p.my) > 0.1, hop = S.t - S.lastShot < 0.12 ? 1 - (S.t - S.lastShot) / 0.12 : 0;
@@ -484,6 +519,7 @@ export function createRenderer(canvas, art, kit) {
       if (hs) { const hp = hatPose(g.outfit.hat, OPT.reduceMotion ? 0 : CH.t, S.t), fxk = OPT.reduceMotion ? null : HAT_FX[g.outfit.hat]; ctx.save(); ctx.translate(p.x - 4, p.y - 108 + hb + hp.dy - dY); ctx.rotate(Math.sin(S.t * 2.4) * 0.05 + p.mx * 0.08 + hp.rot); ctx.scale(hp.sx, hp.sx); ctx.drawImage(hs.c, -48, -48, 96, 96); if (fxk) fxk(ctx, S.t, CH.t); ctx.restore(); if (!OPT.reduceMotion) { const f = (S.t * 0.9) % 1; sparkleAt(p.x - 4 + Math.cos(S.t * 3) * 30, p.y - 122 + hb - f * 22, 5 * Math.sin(f * Math.PI)); } }
       else { ctx.save(); ctx.font = '44px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g.outfit.hat, p.x - 4, p.y - 124 + hb); ctx.restore(); } }
     // hitbox core: the part that actually gets hurt
+    if (S.ko) { ctx.globalAlpha = 1; return; }
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 9, 0, TAU); ctx.stroke();
     ctx.fillStyle = '#ff5a78'; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 3.5, 0, TAU); ctx.fill();
     if (p.shield > 0) { ctx.strokeStyle = `rgba(80,210,255,${0.5 + Math.sin(S.t * 10) * 0.2})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 54, 0, TAU); ctx.stroke(); glow(p.x, p.y, 60, '#39d0ff', 0.25); }
@@ -555,10 +591,10 @@ export function createRenderer(canvas, art, kit) {
       blit(kit && kit.SPR.weapon('tower', (mk > 0.1 ? 4 : wMood(t.x)) + wT(g, 'tower')), t.x, t.y, 160 * (1 + 0.14 * Math.max(0, t.pulse)), Math.sin(S.t * 3 + t.x) * 0.03 + (mk > 0.1 ? Math.sin(S.t * 50) * 0.05 : 0));
     }
     const dl = g.weap.daggers ? g.weap.daggers.lv : 0;   // Spinning Vinyl
-    for (let i = 0; i < (dl ? 1 + dl : 0); i++) { const d = daggerPos(g, i); const dy = d.y + Math.sin(S.t * 8 + i) * 4; for (let j = 1; j <= 3; j++) { const q = daggerPos(g, i), a = S.t * 7 + i * 2 - j * 0.28; ctx.save(); ctx.globalAlpha = 0.22 / j; ctx.fillStyle = '#ffe14a'; ctx.beginPath(); ctx.arc(d.x - Math.cos(a + 1.57) * j * 9, dy - Math.sin(a + 1.57) * j * 9 + 6, 22 - j * 4, 0, TAU); ctx.fill(); ctx.restore(); }   // chick circle: a yellow trail
+    for (let i = 0; i < (dl ? 1 + dl : 0); i++) { const d = daggerPos(g, i, DP_R); const dy = d.y + Math.sin(S.t * 8 + i) * 4; for (let j = 1; j <= 3; j++) { const a = S.t * 7 + i * 2 - j * 0.28; ctx.save(); ctx.globalAlpha = 0.22 / j; ctx.fillStyle = '#ffe14a'; ctx.beginPath(); ctx.arc(d.x - Math.cos(a + 1.57) * j * 9, dy - Math.sin(a + 1.57) * j * 9 + 6, 22 - j * 4, 0, TAU); ctx.fill(); ctx.restore(); }   // chick circle: a yellow trail
       blit(kit && kit.SPR.weapon('dagger', wMood(i * 53) + wT(g, 'daggers')), d.x, dy, 150, Math.sin(S.t * 7 + i) * 0.2); }
     if (g.weap.stick) for (let k = 0; k < (g.weap.stick.lv >= 4 ? 2 : 1); k++) {   // Drumsticks
-      const sg = stickSeg(g, k), sc = sg.len / 144, mid = 80 * sc;
+      const sg = stickSeg(g, k, SG_R), sc = sg.len / 144, mid = 80 * sc;
       blit(kit && kit.SPR.weapon('stick'), sg.x0 + Math.cos(sg.a) * mid, sg.y0 + Math.sin(sg.a) * mid, 184 * sc, sg.a);
     }
     for (const m of g.maws) {   // Bass Drop: a sub-bass vortex with a thump
@@ -598,6 +634,7 @@ export function createRenderer(canvas, art, kit) {
   function drawProps(dt) {
     for (let i = S.props.length - 1; i >= 0; i--) {   // chest cell pop: the chest hops out and flips its lid
       const p = S.props[i]; p.life -= dt; if (p.life <= 0) { S.props.splice(i, 1); continue; }
+      if (p.k === 'crown') { const sp = kit && kit.SPR.crown(p.skin); if (sp) { const cm = crownMotion(1 - p.life / p.max, p.size * 1.6, p.side); ctx.save(); ctx.globalAlpha = cm.a; kit.blit(ctx, sp, p.x + cm.dx, p.y + cm.dy, p.size * cm.sc, cm.rot); ctx.restore(); if (cm.hit && !p.hit) { p.hit = 1; ring(p.x + cm.dx, p.y + cm.dy + p.size * 0.2, 60, '#ffe9a0', 0.3); sparkleAt(p.x + cm.dx, p.y + cm.dy, p.size * 0.4); } else if (!cm.hit) p.hit = 0; } continue; }   // 01-enemy-art r10: the boss crown rolls away
       if (p.k === 'dazed') { const u = 1 - p.life / p.max, sp = kit && kit.SPR.dazed(p.skin, p.boss); p.y += p.vy * dt; p.vy *= 1 - Math.min(1, dt * 2.2); if (sp) { const dm = deathMotion(p.skin, u, p.size, p.x < W / 2 ? 1 : -1), px = p.x + dm.dx, py = p.y + dm.dy; ctx.save(); ctx.globalAlpha = Math.min(1, p.life / 0.4) * dm.a; const sc = (0.7 + Math.min(1, u * 5) * 0.3 + Math.sin(u * 9) * 0.04) * dm.sc; kit.blit(ctx, sp, px, py, p.size * sc, dm.rot); for (let q = 0; q < 3; q++) { const a = S.t * 5 + q * 2.094; sparkleAt(px + Math.cos(a) * p.size * 0.5 * dm.sc, py - p.size * 0.46 * dm.sc + Math.sin(a) * p.size * 0.1, p.size * 0.16 * dm.sc); } ctx.restore(); } continue; }   // 01-enemy-art r9: leaves in its species style
       p.vy += 700 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += dt * 9;
       const cs = Math.cos(p.rot);
@@ -694,7 +731,7 @@ export function createRenderer(canvas, art, kit) {
     HJ.under(g);
     for (const sn of g.snakes) drawSnake(g, sn);
     drawWeapons(g);
-    if (g.phase !== 'dead') drawPlayer(g);
+    S.ko = g.phase === 'dead'; drawPlayerR(g);   // r10: the duo stays on screen, dizzy, while the revive prompt waits
     drawBullets(g);
     drawFx(dt, g);
     ctx.restore();
@@ -707,7 +744,7 @@ export function createRenderer(canvas, art, kit) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
   DG = kit && kit.bake ? createDigitAtlas(kit) : null;
-  HJ = createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, blit, sprite: k => kit && kit.SPR.pickup(k), sound: n => { if (FX) FX.state.sounds.push(n); } });
+  HJ = createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, blit, sprite: k => kit && kit.SPR.pickup(k), sound: n => { if (FX) FX.state.sounds.push(n); }, feel: (x, y, amp, k, d) => { if (!FX || OPT.reduceMotion) return; const F = FX.state; F.zoom.x = x; F.zoom.y = y; F.zoom.amp = Math.max(F.zoom.amp, amp); F.zoom.t = F.zoom.dur = 0.42; if (F.slow.t < d || F.slow.k > k) F.slow = { t: d, dur: d, k }; } });   // 04 r10: per-weapon crit and finish feel
   FX = createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst });
 
   return { hj: HJ, timeScale: () => (FX ? FX.timeScale() : 1), setBeat: fn => FX.setBeat(fn), clearBusy: () => FX.clearBusy(), resumeFx: g => { if (g && g.phase === 'play' && !OPT.reduceMotion) S.petWake = S.t; FX.resumeFx(g); }, takeSounds: () => FX.takeSounds(), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, hudPress: z => getHud().press(z), safeTop: () => (hud ? hud.top() : 0), hudZone: gp => hudZone(gp, hud ? hud.top() : 0), toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };

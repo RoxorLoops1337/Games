@@ -7,7 +7,7 @@ const TAU = Math.PI * 2;
 function rnd(seed) { let s = seed >>> 0 || 1; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
 
 export const INTRO_T = 2.6;   // seconds of run time the lamps sweep for
-export const FLYER = { love: 'butterfly', piggy: 'butterfly', sneezy: 'butterfly', sour: 'bee', gloomy: 'bat', rust: 'bird', mighty: 'bird', sleepy: 'zzz' };
+export const FLYER = { love: 'butterfly', piggy: 'butterfly', sneezy: 'butterfly', sour: 'bee', gloomy: 'bat', rust: 'bird', mighty: 'bird', sleepy: 'zzz', disco: 'moth', grumpy: 'duck', frosty: 'penguin' };   // batch 10: moth, duck, penguin
 export const flyerFor = skin => FLYER[skin] || '';
 
 export function makeB9() {
@@ -57,9 +57,9 @@ function launch(b9, f, skin) {
   const r = b9.r, kind = FLYER[skin];
   f.dir = r() < 0.5 ? -1 : 1; f.p = r() * TAU;
   f.big = kind === 'zzz' ? 1 : 0.8 + r() * 0.5;
-  f.vx = kind === 'bat' ? 150 + r() * 60 : kind === 'bird' ? 120 + r() * 60 : kind === 'zzz' ? 0 : 70 + r() * 40;
+  f.vx = kind === 'penguin' ? 60 + r() * 25 : kind === 'duck' ? 110 + r() * 40 : kind === 'bat' ? 150 + r() * 60 : kind === 'bird' ? 120 + r() * 60 : kind === 'zzz' ? 0 : 70 + r() * 40;
   f.x = kind === 'zzz' ? 90 + r() * (W - 180) : f.dir > 0 ? -50 : W + 50;
-  f.y = kind === 'zzz' ? 560 + r() * 160 : 330 + r() * 330;
+  f.y = kind === 'zzz' ? 560 + r() * 160 : kind === 'penguin' ? LINE_Y + 40 + r() * 50 : 330 + r() * 330;
   f.dur = kind === 'zzz' ? 4.2 : (W + 100) / f.vx;
 }
 export function stepFlyers(b9, t, skin) {
@@ -88,34 +88,59 @@ export function drawFlyers(c, b9, skin, th, t) {
       }
       continue;
     }
-    const x = f.x + f.dir * f.vx * u, bob = Math.sin(u * (kind === 'bee' ? 5 : 2.2) + f.p), y = f.y + bob * (kind === 'bee' ? 26 : 38) + (kind === 'bee' ? Math.sin(u * 13 + f.p) * 5 : 0);
-    const flap = Math.sin(u * (kind === 'bat' ? 16 : kind === 'bird' ? 9 : kind === 'bee' ? 60 : 10) + f.p), s = f.big;
+    const x = f.x + f.dir * f.vx * u, bob = Math.sin(u * (kind === 'bee' ? 5 : 2.2) + f.p), y = f.y + (kind === 'penguin' ? Math.abs(Math.sin(u * 3 + f.p)) * -5 : bob * (kind === 'bee' ? 26 : 38)) + (kind === 'bee' ? Math.sin(u * 13 + f.p) * 5 : 0);
+    const flap = Math.sin(u * (kind === 'bat' ? 16 : kind === 'bird' ? 9 : kind === 'bee' ? 60 : kind === 'moth' ? 13 : kind === 'duck' ? 8 : kind === 'penguin' ? 7 : 10) + f.p), s = f.big;
     c.globalAlpha = 0.92 * fade; c.save(); c.translate(x, y); c.scale(f.dir * s, s);
-    if (kind === 'butterfly') {
-      const w = 0.35 + 0.65 * Math.abs(flap);
-      c.fillStyle = i ? th.base : th.lite;
-      c.beginPath(); c.ellipse(-8 * w, -5, 10 * w, 8, -0.4, 0, TAU); c.ellipse(8 * w, -5, 10 * w, 8, 0.4, 0, TAU); c.fill();
-      c.fillStyle = '#ffe9f2'; c.beginPath(); c.ellipse(-6 * w, 5, 7 * w, 6, 0.4, 0, TAU); c.ellipse(6 * w, 5, 7 * w, 6, -0.4, 0, TAU); c.fill();
-      c.fillStyle = '#2a1030'; c.fillRect(-1.6, -9, 3.2, 20);
-    } else if (kind === 'bee') {
-      c.fillStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.ellipse(-3, -8 - Math.abs(flap) * 3, 6, 4, -0.5, 0, TAU); c.ellipse(4, -8 - Math.abs(flap) * 3, 6, 4, 0.5, 0, TAU); c.fill();
-      c.fillStyle = '#ffd23a'; c.beginPath(); c.ellipse(0, 0, 12, 8, 0, 0, TAU); c.fill();
-      c.fillStyle = '#2a1a10'; c.fillRect(-4, -7.5, 3, 15); c.fillRect(3, -6.5, 3, 13);
-      c.beginPath(); c.arc(11, 0, 4.5, 0, TAU); c.fill();
-    } else if (kind === 'bat') {
-      const w = flap * 14;
-      c.fillStyle = '#1a0f33'; c.beginPath(); c.ellipse(0, 0, 6, 8, 0, 0, TAU); c.fill();
-      c.beginPath(); c.moveTo(4, -2); c.quadraticCurveTo(16, -18 - w, 34, -6 - w * 1.4); c.quadraticCurveTo(24, -4, 22, 4); c.quadraticCurveTo(14, 0, 4, 6); c.closePath();
-      c.moveTo(-4, -2); c.quadraticCurveTo(-16, -18 - w, -34, -6 - w * 1.4); c.quadraticCurveTo(-24, -4, -22, 4); c.quadraticCurveTo(-14, 0, -4, 6); c.closePath(); c.fill();
-      c.beginPath(); c.moveTo(-5, -6); c.lineTo(-3, -13); c.lineTo(0, -7); c.lineTo(3, -13); c.lineTo(5, -6); c.closePath(); c.fill();
-      c.fillStyle = '#9dff9d'; c.fillRect(-3.5, -3, 2, 2); c.fillRect(1.5, -3, 2, 2);
-    } else {   // bird: two curved strokes that flap, a dot for the body
-      const w = flap * 11;
-      c.strokeStyle = skin === 'mighty' ? '#1e2438' : '#3a1a24'; c.lineWidth = 3.4; c.lineCap = 'round'; c.beginPath();
-      c.moveTo(-22, -w * 0.4 + 2); c.quadraticCurveTo(-11, -12 - w, 0, 0); c.quadraticCurveTo(11, -12 - w, 22, -w * 0.4 + 2); c.stroke();
-      c.fillStyle = c.strokeStyle; c.beginPath(); c.ellipse(0, 1, 4.5, 3.4, 0, 0, TAU); c.fill();
-    }
+    drawKind(c, kind, flap, i, skin, th);
     c.restore();
   }
   c.restore();
+}
+
+// one creature at the origin facing +x (the caller translates and scales). alt picks the second colour of a pair.
+export function drawKind(c, kind, flap, alt, skin, th) {
+  if (kind === 'butterfly') {
+    const w = 0.35 + 0.65 * Math.abs(flap);
+    c.fillStyle = alt ? th.base : th.lite;
+    c.beginPath(); c.ellipse(-8 * w, -5, 10 * w, 8, -0.4, 0, TAU); c.ellipse(8 * w, -5, 10 * w, 8, 0.4, 0, TAU); c.fill();
+    c.fillStyle = '#ffe9f2'; c.beginPath(); c.ellipse(-6 * w, 5, 7 * w, 6, 0.4, 0, TAU); c.ellipse(6 * w, 5, 7 * w, 6, -0.4, 0, TAU); c.fill();
+    c.fillStyle = '#2a1030'; c.fillRect(-1.6, -9, 3.2, 20);
+  } else if (kind === 'bee') {
+    c.fillStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.ellipse(-3, -8 - Math.abs(flap) * 3, 6, 4, -0.5, 0, TAU); c.ellipse(4, -8 - Math.abs(flap) * 3, 6, 4, 0.5, 0, TAU); c.fill();
+    c.fillStyle = '#ffd23a'; c.beginPath(); c.ellipse(0, 0, 12, 8, 0, 0, TAU); c.fill();
+    c.fillStyle = '#2a1a10'; c.fillRect(-4, -7.5, 3, 15); c.fillRect(3, -6.5, 3, 13);
+    c.beginPath(); c.arc(11, 0, 4.5, 0, TAU); c.fill();
+  } else if (kind === 'bat') {
+    const w = flap * 14;
+    c.fillStyle = '#1a0f33'; c.beginPath(); c.ellipse(0, 0, 6, 8, 0, 0, TAU); c.fill();
+    c.beginPath(); c.moveTo(4, -2); c.quadraticCurveTo(16, -18 - w, 34, -6 - w * 1.4); c.quadraticCurveTo(24, -4, 22, 4); c.quadraticCurveTo(14, 0, 4, 6); c.closePath();
+    c.moveTo(-4, -2); c.quadraticCurveTo(-16, -18 - w, -34, -6 - w * 1.4); c.quadraticCurveTo(-24, -4, -22, 4); c.quadraticCurveTo(-14, 0, -4, 6); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(-5, -6); c.lineTo(-3, -13); c.lineTo(0, -7); c.lineTo(3, -13); c.lineTo(5, -6); c.closePath(); c.fill();
+    c.fillStyle = '#9dff9d'; c.fillRect(-3.5, -3, 2, 2); c.fillRect(1.5, -3, 2, 2);
+  } else if (kind === 'moth') {   // a neon moth: soft glowing wings
+    const w = 0.4 + 0.6 * Math.abs(flap);
+    c.fillStyle = alt ? '#ff8fe0' : '#7dfcff'; c.beginPath(); c.ellipse(-9 * w, -4, 11 * w, 9, -0.5, 0, TAU); c.ellipse(9 * w, -4, 11 * w, 9, 0.5, 0, TAU); c.fill();
+    c.fillStyle = '#fff6ff'; c.beginPath(); c.ellipse(-6 * w, 5, 7 * w, 5, 0.5, 0, TAU); c.ellipse(6 * w, 5, 7 * w, 5, -0.5, 0, TAU); c.fill();
+    c.fillStyle = '#26143c'; c.beginPath(); c.ellipse(0, 1, 2.6, 9, 0, 0, TAU); c.fill();
+    c.strokeStyle = '#26143c'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(-1, -8); c.lineTo(-5, -15); c.moveTo(1, -8); c.lineTo(5, -15); c.stroke();
+  } else if (kind === 'duck') {   // a little duck, flapping, bill forward
+    const w = flap * 9;
+    c.fillStyle = '#fff4b8'; c.beginPath(); c.ellipse(0, 0, 14, 8.5, 0, 0, TAU); c.fill();
+    c.beginPath(); c.arc(12, -6, 6.5, 0, TAU); c.fill();
+    c.fillStyle = '#ffb347'; c.beginPath(); c.moveTo(17, -7); c.lineTo(25, -5); c.lineTo(17, -3); c.closePath(); c.fill();
+    c.fillStyle = '#e8d27a'; c.beginPath(); c.moveTo(-4, -2); c.quadraticCurveTo(-12, -16 - w, -22, -10 - w); c.quadraticCurveTo(-14, -3, -4, 3); c.closePath(); c.fill();
+    c.fillStyle = '#2a1a10'; c.fillRect(13, -9, 2.4, 2.4);
+  } else if (kind === 'penguin') {   // slides along the ground on its belly, flippers out
+    const w = flap * 3;
+    c.fillStyle = '#1b2438'; c.beginPath(); c.ellipse(0, 0, 18, 8, 0, 0, TAU); c.arc(14, -4, 6.5, 0, TAU); c.fill();
+    c.beginPath(); c.moveTo(-6, 2); c.lineTo(-10 - w, 14); c.lineTo(0, 6); c.closePath(); c.fill();
+    c.fillStyle = '#f4fbff'; c.beginPath(); c.ellipse(1, 3.5, 14, 4.6, 0, 0, TAU); c.fill(); c.beginPath(); c.arc(16, -3, 3.6, 0, TAU); c.fill();
+    c.fillStyle = '#ff9a3a'; c.beginPath(); c.moveTo(19, -5); c.lineTo(26, -3); c.lineTo(19, -1.5); c.closePath(); c.fill(); c.fillRect(-19 - w, 4, 5, 3);
+    c.fillStyle = '#111'; c.fillRect(15, -8, 2.2, 2.2);
+  } else {   // bird: two curved strokes that flap, a dot for the body
+    const w = flap * 11;
+    c.strokeStyle = skin === 'mighty' ? '#1e2438' : '#3a1a24'; c.lineWidth = 3.4; c.lineCap = 'round'; c.beginPath();
+    c.moveTo(-22, -w * 0.4 + 2); c.quadraticCurveTo(-11, -12 - w, 0, 0); c.quadraticCurveTo(11, -12 - w, 22, -w * 0.4 + 2); c.stroke();
+    c.fillStyle = c.strokeStyle; c.beginPath(); c.ellipse(0, 1, 4.5, 3.4, 0, 0, TAU); c.fill();
+  }
 }

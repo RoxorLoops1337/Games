@@ -8,6 +8,7 @@ import {
 import { todayHTML, flyChips, flyReward } from './goals_polish.js';
 import { readyMasteryReward, hasReward } from './result_b9.js';
 import { riskHTML, bookCell, nextUnmet } from './keep_ui.js';
+import { protectLine, weekBadgesHTML, comebackExtra, awayText } from './keep10.js';
 import { tomorrowPeek, questNear, stickerAlbum, claimSticker, stickerHint, stickerGridHTML } from './chase.js';
 
 export function createAddictUI(c, openPanel, sec) {
@@ -32,6 +33,7 @@ export function createAddictUI(c, openPanel, sec) {
   // streak shield: gifted at 7 and 14 spin days, forgives one missed day, used up when it saves the streak
   function shieldLine(sv, streak, pop) {
     if (hasShield(sv)) return `<span class="shieldrow on${pop ? ' pop' : ''}"><i>🛡️</i>Streak Shield ready: it forgives one missed day</span>`;
+    const pl = protectLine(sv); if (pl) return `<span class="shieldrow on tok${pop ? ' pop' : ''}"><i>🪙</i>${esc(pl)}</span>`;
     const nx = SHIELD_AT.find(a => a > streak);
     return nx ? `<span class="shieldrow"><i>🛡️</i>Streak Shield at ${nx} days</span>` : '';
   }
@@ -82,7 +84,7 @@ export function createAddictUI(c, openPanel, sec) {
       audio.unlock(); const r = doSpin(save(), day); if (!r) return; after(); audio.play('click');
       const wheel = w.querySelector('#wheel'), btn = w.querySelector('#spinGo'); btn.disabled = true; btn.textContent = 'SPINNING...';
       wheel.style.transition = reduce() ? 'none' : 'transform 3s cubic-bezier(.15,.7,.2,1)'; wheel.style.transform = `rotate(${360 * 4 - r.index * 45}deg)`;
-      setTimeout(() => { audio.play('levelup'); w.querySelector('#spinMsg').textContent = 'You won ' + rewardText(r.prize.reward) + '!' + (r.gift ? ' And a Streak Shield!' : '') + (r.saved ? ' Your shield saved the streak!' : ''); if (r.gift || r.saved) { const sh = w.querySelector('.shieldrow'); if (sh) sh.outerHTML = shieldLine(save(), save().addict.spin.n, r.gift); } btn.textContent = 'SEE YOU TOMORROW'; { const pk = document.createElement('div'); pk.className = 'spinpeek'; pk.id = 'spinPeek'; pk.textContent = tomorrowPeek(day).line; btn.before(pk); } w.querySelector('.wseg:nth-child(' + (r.index + 1) + ')').classList.add('win'); renderNext(); if (!reduce()) { burst(w.querySelector('.wheelwrap'), fr.burst + 8, fr.color); flyReward(w.querySelector('.wheelwrap'), r.prize.reward, false); } }, reduce() ? 0 : 3100);
+      setTimeout(() => { audio.play('levelup'); w.querySelector('#spinMsg').textContent = 'You won ' + rewardText(r.prize.reward) + '!' + (r.gift ? ' And a Streak Shield!' : '') + (r.saved ? (r.byToken ? ' Your Streak Token saved the streak!' : ' Your shield saved the streak!') : ''); if (r.gift || r.saved) { const sh = w.querySelector('.shieldrow'); if (sh) sh.outerHTML = shieldLine(save(), save().addict.spin.n, r.gift); } btn.textContent = 'SEE YOU TOMORROW'; { const pk = document.createElement('div'); pk.className = 'spinpeek'; pk.id = 'spinPeek'; pk.textContent = tomorrowPeek(day).line; btn.before(pk); } w.querySelector('.wseg:nth-child(' + (r.index + 1) + ')').classList.add('win'); renderNext(); if (!reduce()) { burst(w.querySelector('.wheelwrap'), fr.burst + 8, fr.color); flyReward(w.querySelector('.wheelwrap'), r.prize.reward, false); } }, reduce() ? 0 : 3100);
     };
     // weekly challenge
     sec(body, 'Weekly Challenge', '#ffd24a');
@@ -92,7 +94,7 @@ export function createAddictUI(c, openPanel, sec) {
       const rc = [WEEK_REWARD.sparkles ? `✨ ${WEEK_REWARD.sparkles}` : '', WEEK_REWARD.eggs ? `🥚 ${WEEK_REWARD.eggs}` : '', WEEK_REWARD.energy ? `⚡ ${WEEK_REWARD.energy}` : ''].filter(Boolean).map(x => `<b>${x}</b>`).join('');
       const hint = wclaimed ? 'Claimed, see you on Monday!' : wdone ? 'Done! Come and get it' : per <= 0 ? '' : left === 0 ? 'Last day, you can do it!' : `About ${per} a day gets you there`;
       const card = document.createElement('div'); card.className = 'wkcard' + (wclaimed ? ' claimed' : wdone ? ' ready' : '');
-      card.innerHTML = `<div class="wkt"><span class="wki">🏅</span><b>${esc(wc.text)}</b></div><div class="wkdays">${pips}<em>${left ? left + (left === 1 ? ' day left' : ' days left') : 'Last day'}</em></div><div class="wkbar"><i style="width:${pct}%"></i><span>${wk.prog} / ${wc.target}</span></div><div class="wkh">${esc(hint)}</div><div class="wkr">${rc}</div>`;
+      card.innerHTML = `<div class="wkt"><span class="wki">🏅</span><b>${esc(wc.text)}</b></div><div class="wkdays">${pips}<em>${left ? left + (left === 1 ? ' day left' : ' days left') : 'Last day'}</em></div><div class="wkbar"><i style="width:${pct}%"></i><span>${wk.prog} / ${wc.target}</span></div><div class="wkh">${esc(hint)}</div><div class="wkr">${rc}</div>${weekBadgesHTML(save(), wc.id)}`;
       const wb = document.createElement('button'); wb.className = 'btn small go gold'; wb.disabled = !wdone; wb.textContent = wclaimed ? 'CLAIMED' : wdone ? 'CLAIM' : 'KEEP GOING';
       wb.onclick = () => { const fl = [...card.querySelectorAll('.wkr b')]; if (claimWeek(save(), day)) { after(); audio.play('levelup'); flyChips(fl, reduce()); if (!reduce()) burst(card, 18, '#ffd24a'); setTimeout(() => { rebuild(); renderNext(); }, reduce() ? 0 : 700); } };
       card.appendChild(wb); body.appendChild(card); }
@@ -151,8 +153,8 @@ export function createAddictUI(c, openPanel, sec) {
     openPanel('WELCOME BACK!', body => {
       const d = document.createElement('div'); d.className = 'comeback';
       const wait = lines.slice(1, -1).map(x => { const m = /^(\S+)\s+(.*)$/.exec(x); return m && m[1].charCodeAt(0) > 255 ? { ic: m[1], tx: m[2] } : { ic: '🐾', tx: x }; });
-      const chips = rw => [rw.beats ? ['🪙', rw.beats, 'Beats'] : 0, rw.sparkles ? ['✨', rw.sparkles, 'Sparkles'] : 0, rw.energy ? ['⚡', rw.energy, 'Energy'] : 0, rw.eggs ? ['🥚', rw.eggs, rw.eggs > 1 ? 'Eggs' : 'Egg'] : 0].filter(Boolean).map(x => `<i class="cbchip"><b>${x[0]}</b>+${x[1]}<small>${x[2]}</small></i>`).join('');
-      d.innerHTML = `<div class="cbi"><span class="cbpet">🐱</span><button class="cbbox" id="cbBox" aria-label="Open your gift">🎁</button><span class="cbpet b">🐶</span></div><div class="cbt">We missed you!</div><div class="cbs">${esc(lines[0] || '')} ${g.days} days away, so here is a little gift from the whole band. Tap the box!</div><div class="cbr" id="cbR"></div><div class="cbwait"><em>Waiting for you</em>${wait.map(x => `<span><b>${x.ic}</b>${esc(x.tx)}</span>`).join('')}</div>${idleChip()}<div class="cbkind">${esc(lines[lines.length - 1] || '')}</div>`;
+      const chips = rw => [rw.beats ? ['🪙', rw.beats, 'Beats'] : 0, rw.tok ? ['🛡️', rw.tok, 'Token'] : 0, rw.sparkles ? ['✨', rw.sparkles, 'Sparkles'] : 0, rw.energy ? ['⚡', rw.energy, 'Energy'] : 0, rw.eggs ? ['🥚', rw.eggs, rw.eggs > 1 ? 'Eggs' : 'Egg'] : 0].filter(Boolean).map(x => `<i class="cbchip"><b>${x[0]}</b>+${x[1]}<small>${x[2]}</small></i>`).join('');
+      d.innerHTML = `<div class="cbi"><span class="cbpet">🐱</span><button class="cbbox" id="cbBox" aria-label="Open your gift">🎁</button><span class="cbpet b">🐶</span></div><div class="cbt">We missed you!</div><div class="cbs">${esc(lines[0] || '')} ${awayText(g.days)} away, so here is a little gift from the whole band. Tap the box!</div><div class="cbr" id="cbR"></div><div class="cbwait"><em>Waiting for you</em>${wait.map(x => `<span><b>${x.ic}</b>${esc(x.tx)}</span>`).join('')}</div>${idleChip()}${comebackExtra(s, g).length ? `<div class="cbsafe">${comebackExtra(s, g).map(x => `<span>${esc(x)}</span>`).join('')}</div>` : ''}<div class="cbkind">${esc(lines[lines.length - 1] || '')}</div>`;
       const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'OPEN MY GIFT'; const later = { remove() {} };
       let opened = false;
       const open = () => {

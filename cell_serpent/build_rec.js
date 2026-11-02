@@ -61,7 +61,7 @@ export function renderRecStrip(host, c) {
   const best = bestBuild(s, skin);
   if (undo || best) {
     const b = el('button', 'rec-go', undo ? 'UNDO' : 'BRING THEM'); b.setAttribute('aria-label', undo ? 'Undo the recommended build' : 'Equip the recommended skills you own');
-    b.onclick = () => { if (undo) { s.loadout = undo.slice(); undoB = null; } else { undoB = { prev: s.loadout.slice(), now: best.join() }; s.loadout = best; } c.persist(); c.audio.play('upgrade'); c.rerender(); };
+    b.onclick = () => { if (undo) { s.loadout = undo.slice(); undoB = null; } else { undoB = { prev: s.loadout.slice(), now: best.join() }; s.loadout = best; } c.persist(); c.audio.play(undo ? 'bringundo' : 'bringpack'); c.rerender(); };
     ft.appendChild(b);
   }
   if (pets.length) {

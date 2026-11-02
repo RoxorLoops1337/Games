@@ -23,12 +23,14 @@ const AUDIT_FN = () => {
   let nd;
   while ((nd = walker.nextNode())) {
     const txt = nd.textContent.trim(); if (!txt) continue;
-    const el = nd.parentElement; if (!el || seen.has(el) || el.closest('canvas,[aria-hidden="true"],.sr,.seg,.rec')) continue;
-    if (/[\u{1F000}-\u{1FFFF}\uFE0F]/u.test(txt) && !/[A-Za-z0-9]/.test(txt)) continue;   // colour emoji ignore the text colour
+    const el = nd.parentElement; if (!el || seen.has(el) || el.closest('canvas,[aria-hidden="true"],.sr')) continue;
+    if (/\p{Extended_Pictographic}/u.test(txt) && !/[A-Za-z0-9]/.test(txt)) continue;   // colour emoji ignore the text colour
     if (el.closest('button[disabled],[aria-disabled="true"]')) continue;   // disabled controls are exempt
     const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || cs.display === 'none') continue;
     let op = 1, a = el; while (a && a !== document.body) { op *= +getComputedStyle(a).opacity; a = a.parentElement; }
     const r = document.createRange(); r.selectNodeContents(nd); const bb = r.getBoundingClientRect();
+    const dock = document.querySelector('#hub .tabs'), lim = dock && dock.getClientRects().length ? dock.getBoundingClientRect().top : innerHeight;   // batch 10: text under the tab bar is read after scrolling (32_access_b10 walks every tab)
+    if (bb.bottom > lim + 0.5) continue;
     if (bb.width < 2 || bb.height < 2 || bb.bottom < 0 || bb.top > innerHeight || bb.right < 0 || bb.left > innerWidth) continue;
     const cx = Math.min(innerWidth - 1, Math.max(0, bb.left + bb.width / 2)), cy = Math.min(innerHeight - 1, Math.max(0, bb.top + bb.height / 2));
     const top = document.elementFromPoint(cx, cy); if (!top || !(el.contains(top) || top.contains(el))) continue;

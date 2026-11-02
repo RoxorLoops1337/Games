@@ -14,7 +14,7 @@ export function oddsAtLeast(luck) {
   const w = rarityWeights(luck), tot = w.reduce((a, b) => a + b, 0);
   return [1, 2, 3].map(t => w.slice(t).reduce((a, b) => a + b, 0) / tot);
 }
-const pct = p => (p >= 0.995 ? '99' : p < 0.01 ? '<1' : String(Math.round(p * 100))) + '%';
+export const pct = p => (p >= 0.995 ? '99' : p < 0.01 ? '<1' : String(Math.round(p * 100))) + '%';
 
 // round 7: the meter remembers its last fill, so it fills up from there and chips whose odds grew light up.
 let lastFill = -1, lastOdds = null;
@@ -62,7 +62,7 @@ export function passiveStat(g, c) {
   return `${nm}: ${totalText(c.id, cur)} → ${totalText(c.id, cur + c.gain)}`;
 }
 const NAMES = Object.fromEntries([...CAPSULE_UPS, ...PASSIVES].map(u => [u.id, u.name]));
-const CHAINS = [['notes', 'burst', 'Every note gets an echo', 'Echo Chamber'], ['crit', 'cdmg', 'Crits hit much harder', 'Perfect Pitch'], ['aspd', 'notes', 'More notes, faster', 'Fast Fingers'], ['aspd', 'burst', 'Echoes come quicker', 'Quick Echo'], ['power', 'haste', 'Hit harder, recharge faster', 'Full Power Jam'], ['dbeat', 'aspd', 'Land more notes on the beat', 'Tight Groove']];
+export const CHAINS = [['notes', 'burst', 'Every note gets an echo', 'Echo Chamber'], ['crit', 'cdmg', 'Crits hit much harder', 'Perfect Pitch'], ['aspd', 'notes', 'More notes, faster', 'Fast Fingers'], ['aspd', 'burst', 'Echoes come quicker', 'Quick Echo'], ['power', 'haste', 'Hit harder, recharge faster', 'Full Power Jam'], ['dbeat', 'aspd', 'Land more notes on the beat', 'Tight Groove']];
 export function bandSheetHTML(g, iconFn) {
   const rows = [], ups = g.ups || {};
   for (const id of ['aspd', 'notes', 'burst', 'cdmg', 'power', 'haste', 'crit', 'vital', 'enc', 'dbeat', 'speed']) {

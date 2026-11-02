@@ -20,13 +20,24 @@ export function smartBot(g) {
   return { mx: tgt ? clamp((tgt.x - p.x) / 40, -1, 1) : 0, my: 0, encore: g.encore >= 1 && !!tgt && Math.abs(tgt.x - p.x) < tgt.r };
 }
 
+// Informed picker (a real player reads the cards): the counter for this stage's snake first, then weapons, then the rarest card.
+const COUNTER_OF = { frosty: 'brk', love: 'hbk', rust: 'oil', sour: 'swt', sneezy: 'tis' };
+export function informedPick(g, pr) {
+  const want = g.stage >= sim.TRAIT_FROM && !sim.isBossStage(g.stage) ? COUNTER_OF[sim.skinFor(g.stage)] : null;
+  let best = 0, bs = -1;
+  g.choices.forEach((c, i) => {
+    const sc = (c.id === want ? 100 : 0) + (c.kind === 'weapon' ? 10 + (c.gain || 1) : 0) + (c.rarity || 0) * 2 + pr() * 0.5;
+    if (sc > bs) { bs = sc; best = i; }
+  });
+  return best;
+}
 export function playRun(stage, seed, opts = {}) {
   const g = sim.createGame({ seed, stage, meta: opts.meta, skills: opts.skills, loadout: opts.loadout, pets: opts.pets, petEquip: opts.petEquip, arts: opts.arts, outfit: opts.outfit });
   const pr = sim.rng(seed * 7919 + 13);
   const dt = opts.dt || DT, cap = 900, bot = opts.bot || smartBot;
   while (g.t < cap && g.phase !== 'dead' && g.phase !== 'won') {
     sim.step(g, dt, bot(g));
-    if (g.phase === 'levelup') sim.choose(g, Math.min(g.choices.length - 1, Math.floor(pr() * g.choices.length)));
+    if (g.phase === 'levelup') sim.choose(g, opts.pick ? opts.pick(g, pr) : Math.min(g.choices.length - 1, Math.floor(pr() * g.choices.length)));
     g.events.length = 0;
   }
   const r = g.result || { coins: Math.floor(g.coins) };

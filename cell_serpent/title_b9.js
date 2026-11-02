@@ -40,7 +40,7 @@ export function setupSecrets(title, audio) {
     logo.addEventListener('pointerdown', e => {
       play('snakesqueak', { i: 4 + Math.floor(Math.random() * 6) });
       if (!burst.tap(performance.now())) return;
-      play('streakmile', { n: 3 });
+      play('streakmile', { n: 3 }); title.dispatchEvent(new CustomEvent('secretfound', { detail: { id: 'logo' } }));
       const p = at(logo, e), r = logo.getBoundingClientRect(), tr = title.getBoundingClientRect();
       if (!reduced() && logo.querySelectorAll) [...logo.querySelectorAll('span')].forEach((sp, j) => sp.animate && sp.animate([{ translate: '0 0' }, { translate: '0 -16px', scale: '1.06', offset: 0.4 }, { translate: '0 0' }], { duration: 520, delay: j * 140, easing: 'cubic-bezier(.3,1.6,.5,1)' }));
       if (!reduced()) for (let j = 0; j < 8; j++) glyph(r.left - tr.left + (j + 0.5) * r.width / 8, r.top - tr.top + r.height * 0.7, ['♪', '♫', '✦', '♡'][j % 4], 'big d' + (j % 3));
@@ -56,7 +56,7 @@ export function setupSecrets(title, audio) {
       glyph(p.x, p.y - 20, side === 'L' ? '' : '', 'say', side === 'L' ? 'BOOTS' : 'CATS');
       hero.animate && !reduced() && hero.animate([{ rotate: '0deg' }, { rotate: (side === 'L' ? -2.5 : 2.5) + 'deg', offset: 0.35 }, { rotate: '0deg' }], { duration: 280, easing: 'ease-out' });
       if (res === 'done') {
-        play('levelup');
+        play('levelup'); title.dispatchEvent(new CustomEvent('secretfound', { detail: { id: 'duet' } }));
         if (!reduced()) for (let j = 0; j < 10; j++) glyph(p.x + (j - 5) * 16, p.y - 30, ['♪', '♫', '★', '♡', '✦'][j % 5], 'big d' + (j % 3));
         glyph(r.left - title.getBoundingClientRect().left + r.width / 2, p.y - 70, '', 'say big2', 'BOOTS & CATS!');
       }

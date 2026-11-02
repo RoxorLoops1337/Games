@@ -8,6 +8,9 @@ import { humOf, squeakHz, HUB_CHORD, HUB_TWINKLE, HUB_GAIN } from './audio_b7.js
 import { cardOf, deathOf, finishOf, rungSparkle, panicHz, bedOf } from './audio_b8.js';
 import { stageVoice } from './audio_stage.js';
 import { comboTier, shimmerVol, bossExtra, colourOf, admit, registerB9 } from './audio_b9.js';
+import { registerB10 } from './audio_b10.js';
+import { registerB10 as registerS10 } from './screen_b10.js';
+import { registerA10, keyLift, createAmbient } from './audio_b10b.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
@@ -302,6 +305,8 @@ export function createAudio() {
   // tutorial step 3: the shielded face pops (matches the burst in the slide)
   sfx.tutpop = () => { if (!gate('tutpop', 400)) return; tone(520, 0.1, 'sine', 0.11, 700); noise(0.12, 0.09, 4000, 900, 'bandpass'); tone(1046, 0.16, 'triangle', 0.06, 0, 0.07); tone(1568, 0.22, 'sine', 0.04, 0, 0.12); };
   registerB9(sfx, tone, noise, gate);
+  registerB10(sfx, tone, noise, gate);
+  registerS10(sfx, tone, noise, gate);   // milestone chords per species, best time, near miss (screen_b10.js)
   registerHj8(sfx, tone, noise, duck, gate);   // finishing blow per weapon, head death per species, ladder rungs (hit_juice8.js)
   // round 8: stage card sting per species (see audio_b8.js CARD), lands with the card slam half a second after the riser
   sfx.stagecard = e => {
@@ -400,7 +405,7 @@ export function createAudio() {
       else if (!muted) {
         const V = varOf(m.skin), bp = boss ? m.bphase : 0, ts = (s & 1) ? t + V.sw * sp : t;
         const sc = boss ? SCALES.phryg : (tier % 3 === 2 || V.minor ? SCALES.minor : SCALES.major);
-        const root = 36 + ROOTS[tier] + (boss ? 5 : 0);
+        const root = 36 + ROOTS[tier] + (boss ? 5 + keyLift(bp) : 0);
         const prog = (boss ? BPROG : PROG)[sec % 4], deg = prog[bar];
         const bassM = note(sc, deg, root), c0 = note(sc, deg, root + 24), c1 = note(sc, deg + 2, root + 24), c2 = note(sc, deg + 4, root + 24);
         // drums
@@ -478,23 +483,32 @@ export function createAudio() {
     if (want && hubN && hubN.skin !== hubSkin) hubStop();   // the selected world changed: the old bed fades out, the new one comes in
     if (want && !hubN) { try { hubStart(); } catch (e) { hubN = null; } } else if (!want && hubN) hubStop();
   }
+  // round 10: a quiet ambient bed per world under the run music (audio_b10.js AMBIENT), follows the Music setting and the muffle
+  let amb = null;
+  function ambSync() {
+    if (!ac || !musBus || !noiseBuf) return;
+    const want = wantMusic && musicAllowed && !muted && !tickOn && countSteps === 0;
+    if (!amb) amb = createAmbient(ac, musBus, noiseBuf);
+    if (want) amb.start(mixS.skin); else amb.stop();
+  }
   // resume count-in tick: a soft woodblock that climbs, e.n is 3, 2, 1
   sfx.resumetick3 = () => sfx.resumetick({ n: 3 }); sfx.resumetick2 = () => sfx.resumetick({ n: 2 }); sfx.resumetick1 = () => sfx.resumetick({ n: 1 });
   sfx.resumetick = e => { const n = Math.max(1, Math.min(3, (e && e.n) || 3)); tone(560 + (3 - n) * 140, 0.06, 'triangle', 0.08, -60); tone(1400 + (3 - n) * 300, 0.03, 'sine', 0.03); };
+  registerA10(sfx, tone, noise, duck, gate);   // round 10: boss fill, bring pack, sticker book, pet calls (audio_b10b.js)
   return {
-    unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } hubSync(); },
-    hub(on, skin) { wantHub = !!on; if (skin) hubSkin = skin; hubSync(); },
+    unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } hubSync(); ambSync(); },
+    hub(on, skin) { wantHub = !!on; if (skin) hubSkin = skin; hubSync(); ambSync(); },
     hubWorld(skin) { if (skin && skin !== hubSkin) { hubSkin = skin; if (wantHub) hubSync(); } },
     get hubOn() { return !!hubN; },
     play(name, e) { if (ac && sfx[name] && admit(name, live)) { try { sfx[name](e); } catch (err) { /* never break the game over a sound */ } } },
-    setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5 * vol; hubSync(); },
+    setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5 * vol; hubSync(); ambSync(); },
     setVolume(v) { vol = Math.max(0, Math.min(1, +v)); if (!(vol >= 0)) vol = 1; if (master && !muted) master.gain.value = 0.5 * vol; },
     get volume() { return vol; },
     motif: motifOf,
     get muted() { return muted; },
     // countIn: true plays one bar of ticks (the tick-only scheduler) before the song starts, used for the very first stages
     music(on, countIn) {
-      wantMusic = !!on; if (on) wantHub = false; hubSync(); restart(); countSteps = on && musicOn && countIn ? 16 : 0;
+      wantMusic = !!on; if (on) wantHub = false; hubSync(); restart(); countSteps = on && musicOn && countIn ? 16 : 0; ambSync();
     },
     // pump depth setting: 0 off, 1 soft, 2 full (default)
     setPump(v) { pumpSet = pumpLevel(v); },
@@ -506,12 +520,12 @@ export function createAudio() {
     },
     // the beat tick is a metronome of its own: with the music switched off it still clicks on every beat
     setBeatTick(b) { beatTick = !!b; if ((wantMusic && !musicAllowed && beatTick) !== tickOn) restart(); },
-    setMusicAllowed(b) { musicAllowed = b; if (!b || tickOn) restart(); hubSync(); },
+    setMusicAllowed(b) { musicAllowed = b; if (!b || tickOn) restart(); hubSync(); ambSync(); },
     get tickOnly() { return tickOn; },
     get musicAllowed() { return musicAllowed; },
     intensity(v) { intensity = v; },
     // groove 0..1, danger 0..1 (how close the face is to the line), stage number, boss flag
-    mix(o) { if (o) mixS = { stage: o.stage || 1, boss: !!o.boss, groove: Math.max(0, Math.min(1, o.groove || 0)), danger: Math.max(0, Math.min(1, o.danger || 0)), skin: o.skin || skinFor(o.stage || 1), bphase: Math.max(0, Math.min(2, o.bphase | 0)), ctier: comboTier(o.combo | 0) }; },
+    mix(o) { if (o) mixS = { stage: o.stage || 1, boss: !!o.boss, groove: Math.max(0, Math.min(1, o.groove || 0)), danger: Math.max(0, Math.min(1, o.danger || 0)), skin: o.skin || skinFor(o.stage || 1), bphase: Math.max(0, Math.min(2, o.bphase | 0)), ctier: comboTier(o.combo | 0) }; ambSync(); },
     // close the music behind a lowpass (cards, pause) and open it again; call every frame, only changes act
     muffle(on) {
       on = !!on; if (on === muffled) return; muffled = on;
