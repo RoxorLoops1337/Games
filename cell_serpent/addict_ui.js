@@ -6,6 +6,7 @@ import {
   nextReward, nudgeFor, spinStreak, spinFrame, comebackLines, hasShield, SHIELD_AT, idleAmount, claimIdle,
 } from './sim.js';
 import { todayHTML, flyChips, flyReward } from './goals_polish.js';
+import { readyMasteryReward, hasReward } from './result_b9.js';
 import { riskHTML, bookCell, nextUnmet } from './keep_ui.js';
 import { tomorrowPeek, questNear, stickerAlbum, claimSticker, stickerHint, stickerGridHTML } from './chase.js';
 
@@ -102,7 +103,7 @@ export function createAddictUI(c, openPanel, sec) {
     const ms = masteryList(s).map((m, i) => ({ m, i })).sort((a, b) => mfrac(b.m) - mfrac(a.m) || a.i - b.i).map(x => x.m);
     const claimAll = document.createElement('button'); claimAll.className = 'btn small alt'; claimAll.style.marginBottom = '6px';
     claimAll.textContent = 'CLAIM ALL'; claimAll.disabled = !ms.some(m => m.ready >= 0);
-    claimAll.onclick = () => { const n = claimAllMastery(save()); if (n) { after(); audio.play('levelup'); c.toast && c.toast(n + ' mastery reward' + (n > 1 ? 's' : '')); rebuild(); renderNext(); } };
+    claimAll.onclick = () => { const tot = readyMasteryReward(masteryList(save()), save().addict.claimed), n = claimAllMastery(save()); if (n) { if (hasReward(tot)) flyReward(claimAll, tot, reduce()); after(); audio.play('levelup'); c.toast && c.toast(n + ' mastery reward' + (n > 1 ? 's' : '')); rebuild(); renderNext(); } };
     body.appendChild(claimAll);
     const mg = grid(body);
     for (const m of ms) {

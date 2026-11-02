@@ -41,6 +41,7 @@ import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
 import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collectionCelebrate } from './pets_b9.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
+import { pauseBuild, buildChipHTML, buildLine, pauseSub } from './result_b9.js';
 import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
 import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
 import { dressDuo, wornOutfit } from './duo_pose.js';
@@ -614,7 +615,8 @@ function pauseRecap() {
   const pc = Math.floor((g.progress || 0) * 100), t = Math.floor(g.t || 0), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   $('pRecap').innerHTML = `<div><i>${RECAP.flag}</i>Stage<b>${g.stage}</b></div><div><i>${RECAP.clock}</i>Time<b>${mm}:${ss}</b></div><div><i>${RECAP.target}</i>Popped<b>${g.kills}</b></div><div class="pbar"><i style="width:${pc}%"></i><em>${pc}% of the way</em></div>`;
   { const ll = lossLine(g); $('quitBtn').title = 'Ends the run: ' + ll.text; $('quitBtn').setAttribute('aria-label', 'Hold to give up. You would lose ' + ll.text); $('pLose').innerHTML = `<b>Giving up ends this run</b>${ll.text}`; }
-  $('pBuild').innerHTML = (save.loadout || []).map(id => { const w = WEAPONS.find(x => x.id === id), k = save.skills[id]; return w ? `<span>${icon(id)}LV ${k ? k.lv : 1}</span>` : ''; }).join('');
+  { const pb = pauseBuild(g.weap, save.loadout).filter(it => WEAPONS.some(x => x.id === it.id)); $('pBuild').innerHTML = pb.map(it => buildChipHTML(it, icon(it.id))).join('') + (pb.length ? `<em class="pb9n">${buildLine(pb)}</em>` : ''); $('pBuild').hidden = !pb.length;
+    const ps = document.querySelector('#pause .pnote'); if (ps) ps.textContent = pauseSub(g.stage, g.mode ? '' : stageInfo(g.stage).name); }
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
 function showStats() {
