@@ -2,6 +2,7 @@
 // where they exist and draws procedural stand-ins otherwise.
 import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv } from './sim.js';
 import { INK, mix } from './art_draw.js';
+import { drawHints } from './hints.js';
 
 const TAU = Math.PI * 2;
 const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
@@ -322,11 +323,7 @@ export function createRenderer(canvas, art, kit) {
     ctx.fillStyle = gg; ctx.fillRect(gx, gy, gw * Math.min(1, gv / 20), 12);
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.strokeRect(gx - 3, gy - 3, gw + 6, 18);
     text(gv >= 20 ? 'GROOVE: ON FIRE' : 'GROOVE ' + Math.floor(gv) + '  (+' + Math.floor(gv * 1.5) + '% dmg)', gx + gw / 2, gy - 14, 14, gv >= 15 ? '#ffd84d' : '#ffc2dc', '#0b1020');
-    if (ui && ui.hints) {   // short hints for the first runs
-      const sn = g.snakes[0], alone = sn && sn.segs.length <= 3 && sn.segs[0].shield;
-      const hint = g.t < 7 ? 'SLIDE LEFT AND RIGHT: YOUR NOTES FLY STRAIGHT UP' : (g.upgradeLeft > 0 && g.pending === 0 && g.kills < 4) ? 'POP THE YELLOW CELLS FOR UPGRADES' : alone ? 'THE FACE POPS WHEN IT IS ALONE' : '';
-      if (hint) { ctx.save(); ctx.globalAlpha = 0.75 + Math.sin(S.t * 4) * 0.2; text(hint, W / 2, H * 0.5, 24, '#ffffff', '#0b1020'); ctx.restore(); }
-    }
+    if (ui && ui.hints) drawHints(ctx, g, S, { glow, text });   // first-run guide (hints.js)
     text(`NOTES ${1 + up('notes')}  BURSTS ${1 + up('burst')}  SPEED +${up('aspd')}%  DMG +${up('cdmg')}%`, W / 2, 166, 13, '#bfe9ff', '#0b1020');
     // chapter, virus name, and progress with chests at 25% / 50% / 100%
     const boss = isBossStage(g.stage);
