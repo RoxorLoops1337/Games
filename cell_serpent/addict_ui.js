@@ -83,9 +83,15 @@ export function createAddictUI(c, openPanel, sec) {
     // weekly challenge
     sec(body, 'Weekly Challenge', '#ffd24a');
     const wc = weekChallenge(day), wk = ensureWeek(s, day), wdone = weekReady(s, day), wclaimed = !!wk.claimed;
-    const wg = grid(body);
-    wg.appendChild(tile({ cls: 't-gold one', ic: '🏅', name: wc.text, desc: 'Bonus: ' + rewardText(WEEK_REWARD), bar: Math.round(wk.prog / wc.target * 100), barText: wk.prog + ' / ' + wc.target + '  (new one every Monday)', btn: wclaimed ? 'CLAIMED' : wdone ? 'CLAIM' : 'KEEP GOING', gold: true, disabled: !wdone,
-      onclick: () => { if (claimWeek(save(), day)) { after(); audio.play('levelup'); rebuild(); renderNext(); } } }));
+    { const di = ((day | 0) + 3) % 7, left = 6 - di, pct = Math.min(100, Math.round(wk.prog / wc.target * 100)), per = Math.ceil((wc.target - wk.prog) / (left + 1));
+      const pips = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((l, i) => `<i class="${i < di ? 'past' : i === di ? 'now' : ''}">${l}</i>`).join('');
+      const rc = [WEEK_REWARD.sparkles ? `✨ ${WEEK_REWARD.sparkles}` : '', WEEK_REWARD.eggs ? `🥚 ${WEEK_REWARD.eggs}` : '', WEEK_REWARD.energy ? `⚡ ${WEEK_REWARD.energy}` : ''].filter(Boolean).map(x => `<b>${x}</b>`).join('');
+      const hint = wclaimed ? 'Claimed, see you on Monday!' : wdone ? 'Done! Come and get it' : per <= 0 ? '' : left === 0 ? 'Last day, you can do it!' : `About ${per} a day gets you there`;
+      const card = document.createElement('div'); card.className = 'wkcard' + (wclaimed ? ' claimed' : wdone ? ' ready' : '');
+      card.innerHTML = `<div class="wkt"><span class="wki">🏅</span><b>${esc(wc.text)}</b></div><div class="wkdays">${pips}<em>${left ? left + (left === 1 ? ' day left' : ' days left') : 'Last day'}</em></div><div class="wkbar"><i style="width:${pct}%"></i><span>${wk.prog} / ${wc.target}</span></div><div class="wkh">${esc(hint)}</div><div class="wkr">${rc}</div>`;
+      const wb = document.createElement('button'); wb.className = 'btn small go gold'; wb.disabled = !wdone; wb.textContent = wclaimed ? 'CLAIMED' : wdone ? 'CLAIM' : 'KEEP GOING';
+      wb.onclick = () => { if (claimWeek(save(), day)) { after(); audio.play('levelup'); rebuild(); renderNext(); } };
+      card.appendChild(wb); body.appendChild(card); }
     // mastery
     sec(body, 'Mastery', '#4fd8f0');
     // closest to the next rank first: ready ones on top, finished ones last, so the list always shows what to chase

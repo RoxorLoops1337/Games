@@ -325,7 +325,7 @@ function renderGoals() {
     const prog = goalProgress(save, day, goal), done = prog >= goal.target, claimed = !!(save.daily && save.daily.day === day && save.daily.claimed[goal.id]);
     const rw = goal.reward.beats ? `${goal.reward.beats} ${curImg('beats')}` : `${goal.reward.sparkles} ${curImg('sparkles')}`;
     const state = claimed ? 'claimed' : done ? 'ready' : 'wait';
-    const row = document.createElement('div'); row.className = 'gl-row ' + state; row.innerHTML = goalRowHTML(goal.text, prog, goal.target, rw, state);
+    const row = document.createElement('div'); row.className = 'gl-row ' + state; row.innerHTML = goalRowHTML(goal.text, prog, goal.target, rw, state, goal.id);
     if (state === 'ready') row.querySelector('button').onclick = () => { { const btn = snap(row.querySelector('button')); if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); collectFly(btn, goal.reward.beats ? 'beats' : 'sparkles', { reduce: !!(save.settings.reduceMotion || systemReduceMotion()) }); renderHub(); } } };
     if (claimed) n++;
     list.appendChild(row);
