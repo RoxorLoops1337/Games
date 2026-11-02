@@ -155,3 +155,31 @@ export function fanRects(rect, n) {
   for (let i = 0; i < n; i++) { const cx = rect.left + 12 + w * (n === 1 ? 0.5 : i / (n - 1)); out.push({ left: cx - 4, top: rect.top, width: 8, height: rect.height }); }
   return out;
 }
+
+// ---- round 10: power gap hint, world progress strip, portrait spring
+// how far your power is from the recommended one: { low, gap, pct (0..100 of the way) }
+export function powerGap(mine, rec) {
+  const m = Math.max(0, mine | 0), r = Math.max(1, rec | 0), low = m < r;
+  return { low, gap: low ? r - m : 0, pct: Math.min(100, Math.round(m / r * 100)) };
+}
+// the "Power 445 / 900" label with a tiny meter and, when short, how much is missing
+export function powerHTML(mine, rec, hard) {
+  const g = powerGap(mine, rec);
+  return `<span class="rec ${g.low ? 'low' : ''}${hard ? ' hardrec' : ''}">Power <b>${mine}</b> / ${rec}<i class="pgap"><u style="width:${g.pct}%"></u></i>${g.low ? `<em class="pneed">+${g.gap} to go</em>` : '<em class="pneed ok">ready</em>'}</span>`;
+}
+// tags beside the Best flag text: Hard runs wear a purple HARD, and a short power shows the gap
+export function bestTag(hard, gap) {
+  if (!hard) return '';
+  return gap > 0 ? `<i class="pgh gap" title="Your power is ${gap} short of the recommended one">+${gap} PWR</i>` : '<i class="pgh">HARD</i>';
+}
+// one tick per stage: cleared, the next one, locked, plus boss crowns and the selected stage
+export function worldStrip(cleared, sel, max, isBoss) {
+  let h = '';
+  for (let n = 1; n <= max; n++) h += `<i class="${(n <= cleared ? 'd' : n === cleared + 1 ? 'x' : 'l') + (isBoss(n) ? ' b' : '') + (n === sel ? ' s' : '')}"></i>`;
+  return h;
+}
+// a small spring for the portrait when the species changes: starts small, overshoots a little, settles at 1
+export function portraitSpring(age) {
+  if (age <= 0) return 0.6; if (age >= 0.6) return 1;
+  return 1 - 0.4 * Math.exp(-8 * age) * Math.cos(14 * age);
+}
