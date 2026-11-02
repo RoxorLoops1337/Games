@@ -272,7 +272,7 @@ function showCards() {
   });
   { const bonus = Math.round((20 + 4 * g.stage) * g.p.coinMul); $('skipBtn').textContent = 'SKIP FOR ' + bonus + ' BEATS'; }
   $('refreshBtn').disabled = g.rerolls <= 0; $('refreshLeft').textContent = `Remaining attempts: ${g.rerolls}/4`;
-  cardsFor = g.choices; show('levelup');
+  cardsFor = g.choices; { let mr = 0; for (const c of g.choices) mr = Math.max(mr, c.rarity || 0); audio.play('card', { rarity: mr }); } show('levelup');
 }
 function pick(i) { if (mode !== 'play' || g.phase !== 'levelup') return; audio.play('upgrade'); choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }
 $('skipBtn').onclick = () => { if (mode === 'play' && skipPick(g)) { audio.play('skip'); cardsFor = null; if (g.phase === 'levelup') showCards(); else show(''); } };
@@ -385,10 +385,10 @@ function showResult() {
 }
 
 // ---------------------------------------------------------------- loop
-const SFX = { surgewarn: 'swarm', surge: 'roar', won: 'clear', chestdrop: 'power', chest: 'levelup', swab: 'meow', needles: 'squeak', dragon: 'coo', maw: 'bark', strike: 'hoot', bubble: 'quack', pulse: 'moo' };
+const SFX = { surgewarn: 'swarm', surge: 'roar', won: 'clear', chestdrop: 'power', chest: 'levelup', upgradecell: 'cell', groove: 'groovehit', leak: 'leak', swab: 'meow', needles: 'squeak', dragon: 'coo', maw: 'bark', strike: 'hoot', bubble: 'quack', pulse: 'moo' };
 const PETSND = { kitten: 'meow', puppy: 'bark', lamb: 'baa', turtle: 'boop', piglet: 'oink', hamster: 'squeak' };
 const BUZZ = { dead: [80, 40, 90], revive: 40, boom: 24, upgradecell: 16, levelup: 14, chest: 12, danger: 28, leak: 60 };
-const FX_SOUND = new Set(['shoot', 'hit', 'kill', 'boom', 'coin', 'hurt', 'block', 'power', 'levelup', 'clear', 'stage', 'revive', 'dead', 'swarm', 'roar', 'surgewarn', 'surge', 'won', 'chestdrop', 'chest', 'swab', 'needles', 'dragon', 'maw', 'strike', 'bubble', 'pulse', 'danger', 'mend', 'skip']);
+const FX_SOUND = new Set(['shoot', 'hit', 'kill', 'boom', 'coin', 'hurt', 'block', 'power', 'levelup', 'clear', 'stage', 'revive', 'dead', 'swarm', 'roar', 'surgewarn', 'surge', 'won', 'chestdrop', 'chest', 'swab', 'needles', 'dragon', 'maw', 'strike', 'bubble', 'pulse', 'danger', 'mend', 'skip', 'upgradecell', 'groove', 'leak']);
 function drain(game, sound) {
   const evs = game.events.splice(0);
   for (const e of evs) {
@@ -421,7 +421,7 @@ function frame(now) {
     while (acc >= 1 / 60) { acc -= 1 / 60; step(g, 1 / 60, readInput()); if (g.phase === 'levelup' || g.phase === 'dead' || g.phase === 'won') break; }
     if (g.phase === 'levelup' && cardsFor !== g.choices) showCards();
     if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5)) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked) showRevive(); else if (!reviveAsked) showResult(); } }
-    audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0);
+    audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0); audio.mix({ stage: g.stage, boss: isBossStage(g.stage), groove: g.groove / 20, danger: g.danger });
   }
   if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2 }, mode === 'pause' ? 0 : dt); }
 }
