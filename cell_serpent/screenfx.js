@@ -609,7 +609,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   }
   // r12: ring stage intro, a bright circle closes in on the real circle (dots ride it, a gold echo follows)
   function drawRingIn() {
-    const o = F.rf; if (!o) return;
+    const o = F.rf; if (!o || calm()) return;
     const a = ringAlpha(o.t); if (a <= 0.01) return;
     ctx.save(); ctx.translate(o.x, o.y); ctx.lineCap = 'round';
     for (let k = 0; k < 2; k++) {
