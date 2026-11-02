@@ -1,4 +1,4 @@
-import { quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
+import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { recordAddictRun, eventInfo, ensureEvent } from './sim.js';
 import { createHub2 } from './hub2.js';
 import { loadArt } from './art.js';
@@ -459,7 +459,8 @@ function showRevive() {
   $('rvNo').onclick = () => { audio.play('click'); giveUp(); };
   const timed = save.settings.reviveTimer !== false; $('rvTimer').textContent = timed ? 'Timer: ON' : 'Timer: OFF (take your time)';
   $('rvTimer').onclick = () => { audio.play('toggle'); save.settings.reviveTimer = !timed; persist(); stopRing(); stopFx(); showRevive(); };
-  show('revive'); stopRing = reviveRing(timed ? 10 : 0, giveUp, { holdEls: [$('rvGo')], onBeat: () => { audio.play('heartbeat'); buzz([30, 70, 22]); } });
+  audio.duck(0.55, timed ? 10 : 3);   // the music sinks under the countdown heartbeat
+  show('revive'); stopRing = reviveRing(timed ? 10 : 0, giveUp, { holdEls: [$('rvGo')], onBeat: n => { audio.play('heartbeat', { n }); buzz([30, 70, 22]); } });
   announce('Game over. The snake reached the line. Revive with ' + cost + ' sparkles, or give up. You have 10 seconds.');
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
@@ -496,7 +497,7 @@ function showResult() {
   { const pct = Math.floor((r.progress || 0) * 100), best = out.first || out.starsGained > 0 || (!r.won && !r.mode && !r.hard && pct > out.prevPct && out.prevPct > 0);
     $('rRibbon').textContent = best ? (out.first ? 'FIRST CLEAR!' : out.starsGained > 0 ? 'NEW BEST STARS!' : 'NEW BEST ' + pct + '%') : ''; $('rRibbon').classList.toggle('on', !!best); }
   if (r.cp50) rows.push(`<div class="r">⚡ +10 Voice back</div>`);
-  $('rList').innerHTML = rows.join(''); countUp($('rList'), reduce, null);
+  $('rList').innerHTML = rows.join(''); countUp($('rList'), reduce, () => audio.play('countend'), f => audio.play('count', { f }));
   const pigRun = r.mode === 'pig' || r.mode === 'inv', nextOk = !pigRun && r.won && canPlay(save, r.stage + 1);
   $('rNext').style.display = nextOk ? '' : 'none'; $('rNext').classList.toggle('pulse', nextOk);
   $('rNext').onclick = () => { audio.play('click'); beginStage(r.stage + 1); };
@@ -528,7 +529,7 @@ document.addEventListener('click', e => {
 const SFX = { lull: 'levelup', surgewarn: 'swarm', surge: 'roar', won: 'clear', chestdrop: 'power', chest: 'levelup', upgradecell: 'cell', groove: 'groovehit', leak: 'leak', swab: 'meow', needles: 'squeak', dragon: 'coo', maw: 'bark', strike: 'hoot', bubble: 'quack', pulse: 'moo' };
 const PETSND = { kitten: 'meow', puppy: 'bark', lamb: 'baa', turtle: 'boop', piglet: 'oink', hamster: 'squeak' };
 const BUZZ = { dead: [80, 40, 90], revive: 40, boom: 24, upgradecell: 16, levelup: 14, chest: 12, danger: 28, leak: 60 };
-const FX_SOUND = new Set(['shoot', 'hit', 'kill', 'boom', 'coin', 'hurt', 'block', 'power', 'levelup', 'clear', 'stage', 'revive', 'dead', 'swarm', 'roar', 'surgewarn', 'surge', 'won', 'chestdrop', 'chest', 'swab', 'needles', 'dragon', 'maw', 'strike', 'bubble', 'pulse', 'danger', 'mend', 'lull', 'skip', 'upgradecell', 'groove', 'leak']);
+const FX_SOUND = new Set(['shoot', 'hit', 'kill', 'boom', 'coin', 'hurt', 'block', 'power', 'levelup', 'clear', 'stage', 'revive', 'dead', 'swarm', 'roar', 'surgewarn', 'surge', 'won', 'chestdrop', 'chest', 'swab', 'needles', 'dragon', 'maw', 'strike', 'bubble', 'pulse', 'danger', 'mend', 'lull', 'skip', 'upgradecell', 'groove', 'leak', 'beatshot', 'encore', 'encoreready', 'goldpop', 'goldfade', 'clutch', 'checkpoint']);
 function drain(game, sound) {
   const evs = game.events.splice(0);
   for (const e of evs) {
@@ -563,6 +564,7 @@ function frame(now) {
     if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5) && !(g.phase === 'won' && R.clearBusy())) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked) showRevive(); else if (!reviveAsked) showResult(); } }
     watchGroove(g.groove);
     audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0); audio.mix({ stage: g.stage, boss: isBossStage(g.stage), groove: g.groove / 20, danger: g.danger });
+    if (g.phase === 'play') audio.sync(beatPhase(g));
   }
   if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2 }, mode === 'pause' ? 0 : dt);
     if (mode === 'play') for (const n of R.takeSounds()) audio.play(n); else R.takeSounds(); }
