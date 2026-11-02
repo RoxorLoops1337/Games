@@ -298,10 +298,10 @@ export function createRenderer(canvas, art, kit) {
   }
 
   function drawSnake(g, sn) {
-    const segs = sn.segs, p = g.p;
+    const segs = sn.segs, p = g.p, ft = OPT.reduceMotion ? 0 : S.t;   // b10: flag glows, badges and the tether links hold still with reduce motion on
     if (sn.lane) drawDashLane(ctx, sn.path || g.path, pointAtS, sn, S.t);
-    drawChoirLinks(ctx, sn, S.t);
-    drawBellLinks(ctx, sn, S.t); setBeatPhase(beatPhase(g));
+    drawChoirLinks(ctx, sn, ft);
+    drawBellLinks(ctx, sn, ft); setBeatPhase(beatPhase(g));
     for (let i = segs.length - 1; i >= 0; i--) {   // tail first so the head sits on top
       const s = segs[i], r = s.r;
       if (s.y < -r * 3 || s.y > H + r * 3) continue;   // not on screen: skip the drawing
@@ -322,7 +322,7 @@ export function createRenderer(canvas, art, kit) {
         ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.3, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
       }
       if (s.gold) { const live = s.goldT > 0; glow(s.x, s.y, r * (live ? 2.3 : 1.5), '#ffd24a', live ? 0.55 + Math.sin(S.t * 9 + i) * 0.2 : 0.15); if (live) { ctx.save(); ctx.strokeStyle = s.goldT > 2.5 ? '#fff1a8' : (Math.sin(S.t * 22) > 0 ? '#ff9a6a' : '#fff1a8'); ctx.lineWidth = s.goldT > 2.5 ? 5 : 5 + (2.5 - s.goldT) * 1.2; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.18, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0, s.goldT / 9)); ctx.stroke(); ctx.restore(); } }
-      if (s.ward || s.warded || s.lull || s.drum || s.choir || s.quartet || s.bell || s.frost || s.metro || s.pillow || s.snack) drawCellFlags(ctx, s, r, S.t, i, glow);
+      if (s.ward || s.warded || s.lull || s.drum || s.choir || s.quartet || s.bell || s.frost || s.metro || s.pillow || s.snack) drawCellFlags(ctx, s, r, ft, i, glow);
       if (s.kind === 'bomb') { const pulse = 0.5 + Math.sin(S.t * 9 + i) * 0.5; glow(s.x, s.y, r * 1.8, '#ff3b5c', 0.15 + pulse * 0.25); }
       if (s.kind === 'mender') glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12);
       if (s.kind === 'upgrade') glow(s.x, s.y, r * 2.1, '#ffd24a', 0.45 + Math.sin(S.t * 6 + i) * 0.15);
@@ -350,9 +350,9 @@ export function createRenderer(canvas, art, kit) {
       if (OPT.colorBlind && (s.kind !== 'normal' || s.carry === 'chest')) kindMark(s.carry === 'chest' && s.kind === 'normal' ? 'chest' : s.kind, s.x, s.y - r * 1.02, r * 0.36);
       if (s.kind === 'mender') { glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12); ctx.save(); ctx.fillStyle = '#6fe08a'; ctx.strokeStyle = INK; ctx.lineWidth = 3; const q = r * 0.34; for (const [px, py, w2, h2] of [[-q * 0.35, -q, q * 0.7, q * 2], [-q, -q * 0.35, q * 2, q * 0.7]]) { ctx.fillRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); ctx.strokeRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); } ctx.restore(); }
     }
-    for (let i = segs.length - 1; i > 0; i--) { const s = segs[i]; if ((s.ward || s.lull || s.drum || s.choir || s.quartet || s.bell || s.metro || s.pillow || s.snack) && s.y > -s.r * 3 && s.y < H + s.r * 3) drawCellBadge(ctx, s, s.r, S.t, i, kit); }   // QA r10: badges in a pass of their own, so the neighbour toward the head no longer hides them
-    drawBellRings(ctx, sn, S.t);
-    drawQuartetLinks(ctx, sn, S.t);
+    for (let i = segs.length - 1; i > 0; i--) { const s = segs[i]; if ((s.ward || s.lull || s.drum || s.choir || s.quartet || s.bell || s.metro || s.pillow || s.snack) && s.y > -s.r * 3 && s.y < H + s.r * 3) drawCellBadge(ctx, s, s.r, ft, i, kit); }   // QA r10: badges in a pass of their own, so the neighbour toward the head no longer hides them
+    drawBellRings(ctx, sn, ft);
+    drawQuartetLinks(ctx, sn, ft);
     if (sn.slow > 0) { const h = segs[0]; glow(h.x, h.y, h.r * 2, '#7fe8ff', 0.3); }
   }
   // colour-blind mode: every special cell kind gets its own white badge shape (star, square, triangle, plus, diamond)

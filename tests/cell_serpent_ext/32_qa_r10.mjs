@@ -33,7 +33,7 @@ for (const raw of BAD) {
 // render: the special-cell badge is drawn in a pass after the cells, so a neighbour can no longer cover it
 {
   const src = readFileSync(join(root, 'render.js'), 'utf8');
-  const i = src.indexOf('function drawSnake'), j = src.indexOf('drawBellRings(ctx, sn, S.t)', i), k = src.indexOf('drawCellBadge(ctx, s, s.r, S.t, i, kit)', i), m = src.indexOf('drawQuartetLinks(ctx, sn, S.t)', i);
+  const i = src.indexOf('function drawSnake'), j = src.indexOf('drawBellRings(ctx, sn, ft)', i), k = src.indexOf('drawCellBadge(ctx, s, s.r, ft, i, kit)', i), m = src.indexOf('drawQuartetLinks(ctx, sn, ft)', i);
   assert.ok(k > 0 && j > 0 && m > k, 'badge pass and bell rings run after the cell loop, before the quartet links');
   assert.ok(!/drawCellBadge\(ctx, s, r, S\.t, i, kit\)/.test(src), 'no badge call is left inside the per-cell loop');
 }
