@@ -385,3 +385,21 @@ body.doodle.colorblind .ward-card.worn,body.doodle.colorblind .sl-mod.on,body.do
 body.doodle.colorblind .sl-ab.locked{border-style:dashed}
 body.doodle.colorblind .flames .cb-n{display:inline}
 body.doodle .flames .cb-n{display:none;font-size:14px;margin-left:2px}
+
+/* personal bests on the results screen */
+body.doodle .res-bests{position:relative;margin-top:8px;padding:10px 12px;overflow:hidden}
+body.doodle .res-bests h3{margin:0 0 4px;text-align:center}
+body.doodle .bst-row{display:flex;align-items:baseline;gap:8px;font-size:19px;padding:2px 0;border-bottom:2px dashed rgba(43,39,51,.18)}
+body.doodle .bst-row:last-of-type{border-bottom:0}
+body.doodle .bst-l{flex:1 1 auto;min-width:0}
+body.doodle .bst-row b{font-weight:400;color:#2b2733}
+body.doodle .bst-row i{font-style:normal;color:var(--dim);font-size:16px;text-align:right;min-width:5.5em}
+body.doodle .bst-row.hit b{color:#c8780a;text-shadow:1px 1px 0 #fff3c4}
+body.doodle .nr-sticker{position:absolute;top:6px;right:8px;transform:rotate(7deg);background:var(--gold);color:#2b2733;border:3px solid #2b2733;border-radius:var(--wob);padding:2px 10px;font-size:21px;box-shadow:2px 3px 0 #2b2733;animation:d-pop .5s .4s backwards;max-width:46%;text-align:center;line-height:1.05}
+body.doodle .bst-count{text-align:center;font-size:15px;margin-top:2px}
+body.doodle .nr-confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+body.doodle .nr-confetti span{position:absolute;top:-8px;width:8px;height:12px;border:1.5px solid #2b2733;border-radius:2px;animation:nr-fall 1.6s ease-in forwards}
+@keyframes nr-fall{0%{transform:translate(0,0) rotate(0);opacity:1}100%{transform:translate(var(--dx),210px) rotate(var(--rot));opacity:0}}
+body.doodle.reduce .nr-confetti,body.doodle.reduce .nr-sticker{animation:none}
+body.doodle.reduce .nr-confetti{display:none}
+@media (prefers-reduced-motion:reduce){body.doodle .nr-confetti{display:none}body.doodle .nr-sticker{animation:none}}

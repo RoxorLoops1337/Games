@@ -12,6 +12,7 @@ import * as DH from './doodle_hud.js';
 import * as DD from './doodle_depth.js';
 import { R } from './battle.js';
 import { BT } from './battle_text.js';
+import * as A11Y from './a11y.js';
 
 const C = K.C, INK = C.ink, TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -25,16 +26,41 @@ const AFFIX_GLYPH = { golden: 'coin', swift: 'bolt', armored: 'shield', regen: '
 const frame = (t) => Math.floor(t * K.BOIL_FPS) % 3;
 
 // a live wobbly crayon ring (cheap: one ink pass, one colour pass). dash optional.
+// The wobble only depends on the radius, the boil frame (3 of them) and the seed, so the outline is built once per (radius rounded to half a pixel,
+// frame, seed mod 16) as a Path2D and replayed at the ring's centre: a ring costs two strokes instead of ~60 lineTo calls a frame. Node (no Path2D) builds it live.
+const RING_CACHE = new Map();
+function ringGeom(r, seed, fr) {
+  const n = clamp(Math.round(r / 3), 12, 30), sd = seed || 0, pts = [];
+  for (let i = 0; i <= n; i++) { const a = i / n * TAU, q = r * (1 + (hh((i % n) * 5.3 + fr * 9.1 + sd) - 0.5) * 0.07); pts.push(Math.cos(a) * q, Math.sin(a) * q); }
+  return pts;
+}
+function ringPath2D(r, seed, fr) {
+  const rr = Math.max(1, Math.round(r * 2) / 2), sd = ((seed || 0) % 16 + 16) % 16, key = rr + '|' + sd + '|' + fr;
+  let p = RING_CACHE.get(key);
+  if (!p) {
+    const pts = ringGeom(rr, sd, fr); p = new Path2D(); p.moveTo(pts[0], pts[1]);
+    for (let i = 2; i < pts.length; i += 2) p.lineTo(pts[i], pts[i + 1]);
+    if (RING_CACHE.size > 600) RING_CACHE.clear();
+    RING_CACHE.set(key, p);
+  }
+  return p;
+}
+const HAS_P2D = typeof Path2D !== 'undefined';
 function ring(ctx, x, y, r, col, w, t, o = {}) {
-  const fr = frame(t), n = clamp(Math.round(r / 3), 12, 30), seed = o.seed || 0;
-  const path = (rad) => {
-    ctx.beginPath();
-    for (let i = 0; i <= n; i++) { const a = i / n * TAU, q = rad * (1 + (hh((i % n) * 5.3 + fr * 9.1 + seed) - 0.5) * 0.07); const px = x + Math.cos(a) * q, py = y + Math.sin(a) * q; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
-  };
+  const fr = frame(t), seed = o.seed || 0;
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   if (o.dash) { ctx.setLineDash(o.dash); ctx.lineDashOffset = -(o.march || 0); }
-  if (o.ink !== false) { path(r); ctx.globalAlpha = (o.alpha == null ? 1 : o.alpha) * 0.85; ctx.strokeStyle = INK; ctx.lineWidth = w + 3; ctx.stroke(); }
-  path(r); ctx.globalAlpha = o.alpha == null ? 1 : o.alpha; ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke();
+  const al = o.alpha == null ? 1 : o.alpha;
+  if (HAS_P2D) {
+    const p = ringPath2D(r, seed, fr);
+    ctx.translate(x, y);
+    if (o.ink !== false) { ctx.globalAlpha = al * 0.85; ctx.strokeStyle = INK; ctx.lineWidth = w + 3; ctx.stroke(p); }
+    ctx.globalAlpha = al; ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(p);
+  } else {
+    const pts = ringGeom(r, seed, fr), path = () => { ctx.beginPath(); ctx.moveTo(x + pts[0], y + pts[1]); for (let i = 2; i < pts.length; i += 2) ctx.lineTo(x + pts[i], y + pts[i + 1]); };
+    if (o.ink !== false) { path(); ctx.globalAlpha = al * 0.85; ctx.strokeStyle = INK; ctx.lineWidth = w + 3; ctx.stroke(); }
+    path(); ctx.globalAlpha = al; ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke();
+  }
   ctx.restore();
 }
 function rrectStroke(ctx, x, y, w, h, r, col, lw, alpha, dash, march) {
@@ -44,6 +70,7 @@ function rrectStroke(ctx, x, y, w, h, r, col, lw, alpha, dash, march) {
 }
 
 // ---------------------------------------------------------------------------------------------------- board
+const SORT_T = [], SORT_E = [];
 export function drawBoard(b, ctx, t, beat) {
   const run = b.run, fx = b.fx, cb = DD.cbOn(b);
   AW.drawBoard(ctx, run.map.id, run.world.id, t, { beat, slotHint: b.slotHint, hoverSlot: b.hoverSlot ? [b.hoverSlot.c, b.hoverSlot.r] : null, dropSlot: b.targetSlot != null ? [b.targetSlot % COLS, Math.floor(b.targetSlot / COLS)] : null, skin: b.skin });
@@ -65,11 +92,17 @@ export function drawBoard(b, ctx, t, beat) {
     ctx.save(); ctx.globalAlpha = 0.75; ctx.fillStyle = C.pink; ctx.strokeStyle = INK; ctx.lineWidth = 1.8; heartPath(ctx, sl.x, sl.y + 20, 8); ctx.fill(); ctx.stroke(); ctx.restore();
   }
   // turrets: a scribbled ground shadow, a pop ring when new, and the merge invitation
-  const ts = run.turrets.slice().sort((a, c) => a.y - c.y);
+  const ts = SORT_T; ts.length = 0; for (const tu of run.turrets) ts.push(tu); ts.sort((a, c) => a.y - c.y);   // scratch arrays: no new array per frame
+  ctx.save(); ctx.fillStyle = INK;   // every ground shadow in one path and one fill (a dragged turret's shadow is fainter)
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.globalAlpha = pass ? 0.08 : 0.2; ctx.beginPath(); let any = false;
+    for (const tu of ts) { if (!!(b.drag && b.drag.moved && b.drag.id === tu.id) !== !!pass) continue; const rx = 25 + tu.level; ctx.moveTo(tu.x + rx, tu.y + 24); ctx.ellipse(tu.x, tu.y + 24, rx, 8, 0, 0, TAU); any = true; }
+    if (any) ctx.fill();
+  }
+  ctx.restore();
   for (const tu of ts) {
     const hidden = b.drag && b.drag.moved && b.drag.id === tu.id;
     const age = run.t - (tu.born || 0), def = TURRETS[tu.type];
-    ctx.save(); ctx.globalAlpha = hidden ? 0.08 : 0.2; ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(tu.x, tu.y + 24, 25 + tu.level, 8, 0, 0, TAU); ctx.fill(); ctx.restore();
     if (age < 0.5) ring(ctx, tu.x, tu.y, 20 + age * 70, def.color, 3.5, t, { alpha: (0.5 - age) * 1.8, seed: tu.id });
     if (tu.fire > 0.5) ring(ctx, tu.x, tu.y, 38, def.color, 3, t, { alpha: (tu.fire - 0.5) * 1.2, ink: false, seed: tu.id });
     const canMerge = hintT && hintT !== tu && run.canMerge(hintT, tu);
@@ -93,7 +126,7 @@ export function drawBoard(b, ctx, t, beat) {
   DD.drawDarkLane(b, ctx, t);
   drawLinks(b, ctx, t);
   // enemies: bosses get a marching dashed threat ring, elites a coloured ring
-  const en = run.enemies.slice().sort((a, c) => (a.flying - c.flying) || (a.y - c.y));
+  const en = SORT_E; en.length = 0; for (const e of run.enemies) en.push(e); en.sort((a, c) => (a.flying - c.flying) || (a.y - c.y));
   for (const e of en) {
     if (e.boss) {
       const bc = BOSSES[e.type].color;
@@ -139,7 +172,8 @@ export function drawBoard(b, ctx, t, beat) {
 // crayon-ish projectile ribbon colours: darker than the classic neon so they read on paper
 const PROJ_COL = { kick: '#ff9226', snare: '#ffb81c', hat: '#2fc4b2', scratch: '#7b4fd0', cowbell: '#e8a21c', vocal: '#ff5fb0', orb: '#ff5fb0' };
 
-function heartPath(ctx, cx, cy, sz) { const p = K.heart(cx, cy, sz); ctx.beginPath(); ctx.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]); ctx.closePath(); }
+const HEART_U = K.heart(0, 0, 16);   // the unit heart, scaled per call (no array per heart per frame)
+function heartPath(ctx, cx, cy, sz) { const k = sz / 16; ctx.beginPath(); ctx.moveTo(cx + HEART_U[0] * k, cy + HEART_U[1] * k); for (let i = 2; i < HEART_U.length; i += 2) ctx.lineTo(cx + HEART_U[i] * k, cy + HEART_U[i + 1] * k); ctx.closePath(); }
 const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 // empty tiles (and the partner turrets next to them) where a synergy partner of turret `src` would link. Cached per frame-ish by turret count and selection.
 function synHints(b, src) {
@@ -221,20 +255,38 @@ function drawGates(b, ctx, t) {
 }
 
 // ---------------------------------------------------------------------------------------------------- selected-turret panel
-// shorten a string with an ellipsis so it fits maxW at the hand font size (uses the context's measureText)
-function fit(ctx, str, maxW, size) {
-  ctx.save(); ctx.font = 'bold ' + size + 'px ' + DH.FONT; let w = ctx.measureText(str).width, out = str;
-  while (out.length > 4 && w > maxW) { out = out.slice(0, -2); w = ctx.measureText(out + '...').width; if (w <= maxW) { out += '...'; break; } }
-  ctx.restore(); return out;
+// Which half of the board the panel sits on: the half away from the selected turret, with hysteresis so it does not flip while a turret is nudged
+// around the middle. If the chosen half would still touch the turret (the upgrade-path sheet makes the panel taller) it flips.
+const PANEL_X = 16, PANEL_W = 508, SHEET_H = 154;
+export function panelSide(b, tu, h, sheet) {
+  const mid = BOARD_Y + BOARD_H / 2, HYS = 40, st = b.panelSide && b.panelSide.id === tu.id ? b.panelSide : null;
+  let top = st ? st.top : tu.y > mid;
+  if (st) { if (top && tu.y < mid - HYS) top = false; else if (!top && tu.y > mid + HYS) top = true; }
+  const ext = sheet ? SHEET_H : 0, TH = 40;   // the turret sprite is about 72 tall, a little slack for the pad glow
+  const hits = (isTop) => (isTop ? tu.y - TH < BOARD_Y + 6 + h + ext : tu.y + TH > BOARD_Y + BOARD_H - h - 6 - ext);
+  if (hits(top) && !hits(!top)) top = !top;
+  b.panelSide = { id: tu.id, top };
+  return top;
 }
 export function drawPanel(b, ctx, tu) {
   DH.setHudTime(b.t);
   const run = b.run, def = TURRETS[tu.type];
-  const top = tu.y > BOARD_Y + BOARD_H / 2, BH = 118;
-  const box = { x: 16, y: top ? BOARD_Y + 6 : BOARD_Y + BOARD_H - BH - 6, w: 508, h: BH };
+  // ---- text first, so the panel can size itself (a long German perk or synergy takes a second line; the Larger text setting grows everything)
+  const k = A11Y.textScale(), LH13 = 15, X0 = 16, TW = PANEL_W - 2 * X0;
+  const perkKey = Object.keys(def.perks).map(Number).filter((q) => q > tu.level).sort((a, c) => a - c)[0];
+  const perkL = DH.wrapLines(ctx, perkKey ? BT.perk(perkKey, def.perks[perkKey]) : BT.maxed(), TW, 13, LH13, 2);
+  const act = run.synergiesOf(tu);
+  const synStr = act.length ? (act.length > 1 ? BT.synMore(BT.synLine(act[0].name, act[0].desc), act.length - 1) : BT.synLine(act[0].name, act[0].desc)) : BT.noLink();
+  const synL = DH.wrapLines(ctx, synStr, PANEL_W - 42 - 14, 13, LH13, 2);
+  const yPerk = 78 + 6 * (k - 1), yDiv = yPerk + (perkL.lines.length - 1) * perkL.lh + 12 + 4 * (k - 1);
+  const ySyn = yDiv + 16 + 2 * (k - 1), yWork = ySyn + (synL.lines.length - 1) * synL.lh + 25 + 4 * (k - 1);
+  const BH = Math.round(yWork + 20 + 3 * (k - 1));
+  const canB = run.canBranch(tu) && !(b.drag && b.drag.moved);
+  const top = panelSide(b, tu, BH, canB);
+  const box = { x: PANEL_X, y: top ? BOARD_Y + 6 : BOARD_Y + BOARD_H - BH - 6, w: PANEL_W, h: BH };
   ctx.save();
   DH.glass(ctx, box.x, box.y, box.w, box.h, 16, { edge: def.color });
-  AE.drawTurretIconFlat(ctx, tu.type, box.x + 38, box.y + 36, 54);
+  DD.flatIcon(ctx, tu.type, box.x + 38, box.y + 36, 54);
   DH.text(ctx, def.name, box.x + 76, box.y + 18, 19, INK, 'left', 900, { maxW: 200 });
   for (let i = 0; i < MAX_LEVEL; i++) {   // level pips: inked dots
     ctx.beginPath(); ctx.arc(box.x + 78 + i * 13, box.y + 36, 4.4, 0, TAU);
@@ -244,35 +296,34 @@ export function drawPanel(b, ctx, tu) {
   if (def.kind === 'aura_rate') line = BT.auraRate(Math.round(def.aura * (1 + 0.2 * (tu.level - 1)) * 100 * (tu.level >= 7 ? 1.5 : 1)));
   else if (def.kind === 'aura_dmg') line = BT.auraDmg(Math.round(def.aura * (1 + 0.2 * (tu.level - 1)) * 100 * (tu.level >= 7 ? 1.5 : 1)));
   else line = BT.stats(fmt(run.turretDmg(tu)), run.turretRate(tu).toFixed(1));
-  DH.text(ctx, line, box.x + 76, box.y + 53, 14, DIM, 'left', 900, { maxW: 214 });
-  const perk = Object.keys(def.perks).map(Number).filter((k) => k > tu.level).sort((a, c) => a - c)[0];
-  DH.text(ctx, fit(ctx, perk ? BT.perk(perk, def.perks[perk]) : BT.maxed(), 214, 12), box.x + 76, box.y + 70, 12, '#b8780a', 'left');
+  DH.text(ctx, line, box.x + 76, box.y + 56 + 2 * (k - 1), 14, DIM, 'left', 900, { maxW: 214 });
+  // the next perk (or "fully upgraded") on its own full-width row, up to two lines
+  perkL.lines.forEach((l, i) => DH.text(ctx, l, box.x + X0, box.y + yPerk + i * perkL.lh, perkL.size, '#b8780a', 'left', 900, { maxW: TW, raw: true }));
   const mode = { x: box.x + box.w - 202, y: box.y + 4, w: 106, h: 62 };
   const sell = { x: box.x + box.w - 94, y: box.y + 4, w: 86, h: 62 };
   const isAttacker = def.kind !== 'aura_rate' && def.kind !== 'aura_dmg';
   if (isAttacker) DH.button(ctx, mode, '#b9a6f0', { label: BT.mode(tu.mode), sub: BT.target(), size: 15 });
   DH.button(ctx, sell, C.red, { label: '+' + Math.floor(tu.paid * Math.min(0.95, ECON.sellBack + run.mods.sell)), sub: BT.sell(), size: 17 });
   // synergies: the active ones with their text, then "works well with" icons (a heart on the partners that are linked right now)
-  const act = run.synergiesOf(tu), y0 = box.y + 84;
-  ctx.save(); ctx.strokeStyle = 'rgba(43,39,51,0.25)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(box.x + 14, y0 - 12); ctx.lineTo(box.x + box.w - 14, y0 - 12); ctx.stroke(); ctx.restore();
-  ctx.save(); ctx.fillStyle = C.pink; ctx.strokeStyle = INK; ctx.lineWidth = 1.8; heartPath(ctx, box.x + 26, y0 - 1, 8); ctx.fill(); ctx.stroke(); ctx.restore();
-  if (act.length) DH.text(ctx, fit(ctx, act.length > 1 ? BT.synMore(BT.synLine(act[0].name, act[0].desc), act.length - 1) : BT.synLine(act[0].name, act[0].desc), 450, 13), box.x + 42, y0, 13, '#d6358a', 'left');
-  else DH.text(ctx, fit(ctx, BT.noLink(), 450, 13), box.x + 42, y0, 13, DIM, 'left');
-  DH.text(ctx, BT.worksWith(), box.x + 14, y0 + 22, 13, INK, 'left', 900, { maxW: 130 });
+  ctx.save(); ctx.strokeStyle = 'rgba(43,39,51,0.25)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(box.x + 14, box.y + yDiv); ctx.lineTo(box.x + box.w - 14, box.y + yDiv); ctx.stroke(); ctx.restore();
+  ctx.save(); ctx.fillStyle = C.pink; ctx.strokeStyle = INK; ctx.lineWidth = 1.8; heartPath(ctx, box.x + 26, box.y + ySyn - 1, 8); ctx.fill(); ctx.stroke(); ctx.restore();
+  synL.lines.forEach((l, i) => DH.text(ctx, l, box.x + 42, box.y + ySyn + i * synL.lh, synL.size, act.length ? '#d6358a' : DIM, 'left', 900, { maxW: PANEL_W - 42 - 14, raw: true }));
+  const labW = 136 + 14 * (k - 1);
+  DH.text(ctx, BT.worksWith(), box.x + 14, box.y + yWork, 13, INK, 'left', 900, { maxW: labW });
   const ps = TURRET_PARTNERS[tu.type] || [], linked = new Set(act.map((a) => a.withType));
   ps.forEach((pp, i) => {
-    const px = box.x + 150 + i * 44, py = y0 + 21;
-    AE.drawTurretIconFlat(ctx, pp.partner, px, py, 26);
+    const px = box.x + 14 + labW + 14 + i * 44, py = box.y + yWork - 1;
+    DD.flatIcon(ctx, pp.partner, px, py, 26);
     if (linked.has(pp.partner)) { ctx.save(); ctx.fillStyle = C.pink; ctx.strokeStyle = INK; ctx.lineWidth = 1.6; heartPath(ctx, px + 12, py - 10, 6); ctx.fill(); ctx.stroke(); ctx.restore(); }
   });
   const br = DD.branchOf(tu);
   if (br) {   // the chosen upgrade path: emblem and name next to the level pips
     DD.emblem(ctx, box.x + 190, box.y + 36, 11, br.glyph, def.color);
-    DH.text(ctx, fit(ctx, br.name, 96, 13), box.x + 206, box.y + 36, 13, '#d6358a', 'left');
+    DH.text(ctx, br.name, box.x + 206, box.y + 36, 13, '#d6358a', 'left', 900, { maxW: 92 });
   }
   b.panel = { box, mode: isAttacker ? mode : { x: -99, y: -99, w: 0, h: 0 }, sell };
   b.panelCards = false;
-  if (run.canBranch(tu) && !(b.drag && b.drag.moved)) {   // a prominent "Choose upgrade" sheet with two big cards
+  if (canB) {   // a prominent "Choose upgrade" sheet with two big cards
     const lay = DD.drawBranchPanel(b, ctx, tu, box);
     b.panel.cards = lay.cards; b.panel.sheet = lay.box; b.panelCards = true;
   }
@@ -443,7 +494,7 @@ function drawPool(b, ctx, t) {
     const x = x0 + i * pitch, nx = o.type === run.nextType;
     ctx.save(); ctx.globalAlpha = nx ? 1 : o.p > 0 ? 0.75 : 0.25;
     if (nx) { ring(ctx, x, cy - 1, 17, TURRETS[o.type].color, 3.5, t, { seed: i, alpha: 1 }); }
-    AE.drawTurretIconFlat(ctx, o.type, x, cy - 1 - (nx ? 2 + Math.sin(t * 7) : 0), nx ? 31 : 25);
+    DD.flatIcon(ctx, o.type, x, cy - 1 - (nx ? 2 + Math.sin(t * 7) : 0), nx ? 31 : 25);
     ctx.restore();
   });
   const pct = Math.max(p.next > 0 ? 1 : 0, Math.round(p.next * 100));
@@ -477,7 +528,7 @@ export function drawDeploy(b, ctx, t, beat) {
   const sx = d.x + 33, sy = d.y + d.h / 2;
   ctx.beginPath(); ctx.arc(sx, sy, 24, 0, TAU); ctx.fillStyle = C.paper; ctx.fill();
   ring(ctx, sx, sy, 24, nextDef.color, 3.5, t, { seed: 11 });
-  ctx.save(); ctx.translate(sx, sy); ctx.rotate(b.rerollSpin * TAU); AE.drawTurretIconFlat(ctx, run.nextType, 0, 0, 42); ctx.restore();
+  ctx.save(); ctx.translate(sx, sy); ctx.rotate(b.rerollSpin * TAU); DD.flatIcon(ctx, run.nextType, 0, 0, 42); ctx.restore();
   // the chance of this drop, as a paper sticker on the socket
   const pct = Math.max(b.pool.next > 0 ? 1 : 0, Math.round(b.pool.next * 100));
   DH.glass(ctx, d.x + 1, d.y - 1, 36, 17, 8, { edge: C.pink });
@@ -608,8 +659,8 @@ export function drawPreview(b, ctx) {
   if (pv.mod) {
     const m = WAVE_MODS[pv.mod.id], good = m && m.good;
     if (m && m.glyph) AE.drawGlyph(ctx, m.glyph, x + 32, yy + 8, 22, good ? C.green : C.orange);
-    DH.text(ctx, fit(ctx, pv.mod.name, CW - 70, 15), x + 52, yy + 2, 15, good ? '#2a8a30' : '#d4620a', 'left');
-    DH.text(ctx, fit(ctx, pv.mod.desc, CW - 70, 12), x + 52, yy + 20, 12, DIM, 'left'); yy += 24;
+    DH.text(ctx, pv.mod.name, x + 52, yy + 2, 15, good ? '#2a8a30' : '#d4620a', 'left', 900, { maxW: CW - 70 });
+    DH.text(ctx, pv.mod.desc, x + 52, yy + 20, 12, DIM, 'left', 900, { maxW: CW - 70 }); yy += 24;
   }
   yy = y + head;
   if (b.pv.cur) { DH.text(ctx, BT.onField(b.pv.cur.total), x + 20, yy + 4, 13, DIM, 'left', 900, { maxW: CW - 40 }); yy += 24; }
@@ -620,7 +671,7 @@ export function drawPreview(b, ctx) {
     l.enemies.forEach((en, i) => {
       const d = ENEMIES[en.type], cx = x + 16 + (i % 2) * (CW / 2), cy = yy + Math.floor(i / 2) * CELL + CELL / 2 - 2;
       AE.drawEnemy(ctx, en.type, cx + 14, cy, { t: b.t, scale: clamp(13 / d.r, 0.4, 0.9), hp: 1 });
-      DH.text(ctx, fit(ctx, d.name, 120, 14) + ' x' + en.count, cx + 36, cy - 6, 14, INK, 'left');
+      DH.text(ctx, d.name + ' x' + en.count, cx + 36, cy - 6, 14, INK, 'left', 900, { maxW: 150 });
       let bx = cx + 36; const bd = [];
       if (en.flying) bd.push([BT.flying(), C.sky]); if (en.armored) bd.push([BT.armored(), '#7a7f92']); if (en.elite) bd.push([BT.elite(), C.orange]);
       for (const [lab, col] of bd) { DH.text(ctx, lab, bx, cy + 10, 11, col, 'left', 900, { maxW: 70 }); bx += Math.min(70, lab.length * 6) + 10; }
@@ -630,7 +681,7 @@ export function drawPreview(b, ctx) {
       const bd = BOSSES[l.boss];
       AE.drawGlyph(ctx, 'crown', x + 34, yy + 12, 24, C.red);
       DH.text(ctx, BT.bossCard(bd ? bd.name : l.boss), x + 56, yy + 7, 15, C.red, 'left', 900, { maxW: CW - 76 });
-      if (bd && bd.trick) DH.text(ctx, fit(ctx, bd.trick, CW - 76, 11), x + 56, yy + 23, 11, DIM, 'left');
+      if (bd && bd.trick) DH.text(ctx, bd.trick, x + 56, yy + 23, 11, DIM, 'left', 900, { maxW: CW - 76 });
       yy += 30;
     }
     yy += 6;

@@ -4,6 +4,7 @@
 // overlay plus a red crayon border when the stage is low. Jitter comes from a hash of position and the boil frame (no unseeded randomness, no clock).
 // Safe in node with a mock ctx (text sprites fall back to live drawing when there is no document).
 import * as K from './doodle_kit.js';
+import { textScale } from './a11y.js';
 
 const C = K.C, INK = C.ink, TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -13,17 +14,24 @@ const easeOutBack = (k) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Ma
 const HAND = '"Patrick Hand", "Gochi Hand", "Comic Sans MS", "Chalkboard SE", "Marker Felt", system-ui, sans-serif';
 
 // a closed wobbly ring path (smoothed through midpoints). seed picks the doodle, fr is the boil frame.
+const RP = new Float64Array(80);   // scratch for ringPath (up to 36 points): no array per ring per frame
 function ringPath(ctx, x, y, rad, seed, fr, amp = 0.07) {
-  const n = clamp(Math.round(rad / 3.2), 12, 36), pts = [];
+  const n = clamp(Math.round(rad / 3.2), 12, 36), pts = RP;
   for (let i = 0; i < n; i++) {
     const a = i / n * TAU, r = rad * (1 + (hh(i * 7.13 + fr * 13.7 + seed) - 0.5) * amp * 2);
-    pts.push(x + Math.cos(a) * r, y + Math.sin(a) * r);
+    pts[i * 2] = x + Math.cos(a) * r; pts[i * 2 + 1] = y + Math.sin(a) * r;
   }
-  ctx.beginPath(); ctx.moveTo((pts[0] + pts[pts.length - 2]) / 2, (pts[1] + pts[pts.length - 1]) / 2);
+  ctx.beginPath(); ctx.moveTo((pts[0] + pts[n * 2 - 2]) / 2, (pts[1] + pts[n * 2 - 1]) / 2);
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
     ctx.quadraticCurveTo(pts[i * 2], pts[i * 2 + 1], (pts[i * 2] + pts[j * 2]) / 2, (pts[i * 2 + 1] + pts[j * 2 + 1]) / 2);
   }
+  ctx.closePath();
+}
+// a star outline straight onto the path (same points as K.star, no array per particle per frame)
+function starTo(ctx, cx, cy, r, inner, rot, n = 5) {
+  ctx.beginPath();
+  for (let i = 0; i < n * 2; i++) { const a = -Math.PI / 2 + rot + i * Math.PI / n, q = i % 2 ? r * inner : r, x = cx + Math.cos(a) * q, y = cy + Math.sin(a) * q; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
   ctx.closePath();
 }
 function poly(ctx, p) { ctx.beginPath(); ctx.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]); ctx.closePath(); }
@@ -46,7 +54,7 @@ export function drawWorld(f, ctx) {
     ctx.beginPath(); ctx.moveTo(L + j(1), top + j(2)); ctx.lineTo(Rr + j(3), top + j(4)); ctx.lineTo(Rr + 6 + j(5), P.y + 10); ctx.lineTo(L - 6 + j(6), P.y + 10); ctx.closePath(); ctx.fill();
     ctx.globalAlpha = a * 0.85; ctx.strokeStyle = INK; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(L + j(1), top + j(2)); ctx.lineTo(L - 6 + j(6), P.y + 10); ctx.moveTo(Rr + j(3), top + j(4)); ctx.lineTo(Rr + 6 + j(5), P.y + 10); ctx.stroke();
-    ctx.globalAlpha = a * 0.9; ctx.fillStyle = P.color; poly(ctx, K.star(P.x, P.y, 40 * (1 - k * 0.4), 0.5, fr * 0.2)); ctx.fill(); ctx.lineWidth = 2.6; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.globalAlpha = a * 0.9; ctx.fillStyle = P.color; starTo(ctx, P.x, P.y, 40 * (1 - k * 0.4), 0.5, fr * 0.2); ctx.fill(); ctx.lineWidth = 2.6; ctx.strokeStyle = INK; ctx.stroke();
   }
   // 2) cones: a coloured wedge with a dashed ink edge
   for (const c of f.cones) {
@@ -99,7 +107,7 @@ export function drawWorld(f, ctx) {
       ctx.beginPath(); ctx.moveTo(R.x, R.y); ctx.lineTo(R.x + Math.cos(ang - w) * len, R.y + Math.sin(ang - w) * len); ctx.lineTo(R.x + Math.cos(ang + w) * len, R.y + Math.sin(ang + w) * len); ctx.closePath(); ctx.fill();
     }
     ctx.globalAlpha = a; ctx.fillStyle = '#fff6c8'; ctx.strokeStyle = INK; ctx.lineWidth = 3;
-    poly(ctx, K.star(R.x, R.y, R.r * 0.2 * (1 - k * 0.4), 0.5, fr * 0.15, 8)); ctx.fill(); ctx.stroke();
+    starTo(ctx, R.x, R.y, R.r * 0.2 * (1 - k * 0.4), 0.5, fr * 0.15, 8); ctx.fill(); ctx.stroke();
   }
   // 7) particles: three doodle kinds (daub, star, ticks) so a burst reads as scribbled confetti
   const lite = f.parts.length > 220;
@@ -118,7 +126,7 @@ export function drawWorld(f, ctx) {
       ctx.strokeStyle = INK; ctx.lineWidth = 1.8;
     } else if (p.shape === 'flare') {
       const r = p.size * (0.6 + 0.8 * k);
-      ctx.globalAlpha = al; ctx.fillStyle = p.color; poly(ctx, K.star(p.x, p.y, r * 1.1, 0.4, p.ang || 0, 4)); ctx.fill(); ctx.stroke();
+      ctx.globalAlpha = al; ctx.fillStyle = p.color; starTo(ctx, p.x, p.y, r * 1.1, 0.4, p.ang || 0, 4); ctx.fill(); ctx.stroke();
     } else if (p.shape === 'puff') {   // a swelling smoke daub
       const s = p.size * (1.1 + 1.5 * (1 - k));
       ctx.globalAlpha = Math.min(0.9, k * 1.4); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, TAU); ctx.fill(); if (!lite) ctx.stroke();
@@ -126,7 +134,7 @@ export function drawWorld(f, ctx) {
       const kind = p.k == null ? 0 : p.k, s = p.size * (1.1 + 0.9 * k);
       ctx.globalAlpha = al; ctx.fillStyle = p.color;
       if (kind === 0) { ctx.beginPath(); ctx.arc(p.x, p.y, s * 0.8, 0, TAU); ctx.fill(); if (!lite) ctx.stroke(); }
-      else if (kind === 1) { poly(ctx, K.star(p.x, p.y, s * 1.25, 0.45, p.x * 0.05)); ctx.fill(); if (!lite) ctx.stroke(); }
+      else if (kind === 1) { starTo(ctx, p.x, p.y, s * 1.25, 0.45, p.x * 0.05); ctx.fill(); if (!lite) ctx.stroke(); }
       else {
         const a0 = p.x * 0.07 + p.y * 0.03; ctx.strokeStyle = p.color; ctx.lineWidth = 3; ctx.beginPath();
         for (let i = 0; i < 3; i++) { const an = a0 + i * 2.094; ctx.moveTo(p.x + Math.cos(an) * s * 0.5, p.y + Math.sin(an) * s * 0.5); ctx.lineTo(p.x + Math.cos(an) * s * 1.6, p.y + Math.sin(an) * s * 1.6); }
@@ -178,14 +186,15 @@ export function drawFloaters(f, ctx) {
     const a = k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1;
     let x = fl.x, y = fl.y;
     if (fl.crit && k < 0.3) { x += (fl.seed - 0.5) * 4 * (1 - k / 0.3); y += Math.sin(f.t * 60) * 1.5; }
-    const want = fl.size * 1.18, str = String(fl.text).toUpperCase();
+    const ts = textScale(), want = fl.size * 1.18 * ts, str = String(fl.text).toUpperCase();   // Larger text setting scales floaters too
     ctx.globalAlpha = a;
     if (coverable(str) && str.length <= 14) {
       const sz = clamp(Math.round(want / 2) * 2, 14, 44), e = bakeText(str, sz, fl.color, fl.crit), s = pop * want / sz;
+      if (ts > 1) x = clamp(x, e.w * s / 2 + 4, 536 - e.w * s / 2);   // a bigger number must not run off the screen edge
       if (e.cv) ctx.drawImage(e.cv, x - e.w * s / 2, y - e.h * s / 2, e.w * s, e.h * s);
       else { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); e.draw(new K.Pen(ctx, str.length * 31 + sz * 7, 1), ctx); ctx.restore(); }
     } else {   // characters the stroke font does not have: hand font with a halo
-      const size = Math.round(fl.size * pop);
+      const size = Math.round(fl.size * pop * ts);
       ctx.font = '700 ' + size + 'px ' + HAND; ctx.lineWidth = Math.max(4, size * 0.34); ctx.strokeStyle = '#fff'; ctx.strokeText(fl.text, x, y);
       ctx.lineWidth = Math.max(2, size * 0.14); ctx.strokeStyle = INK; ctx.strokeText(fl.text, x, y); ctx.fillStyle = fl.color; ctx.fillText(fl.text, x, y);
     }

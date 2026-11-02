@@ -1,15 +1,16 @@
 // ui_run.js: DOM overlays used during and right after a run: Remix/relic pick, pause, hints, defeat, results, how-to-play.
-import { WORLDS, WORLD_BY_ID, BOSSES, ENEMIES, TURRETS, RARITY, RARITY_ORDER, COL, ECON, fmt } from './data_core.js';
+import { WORLD_BY_ID, BOSSES, ENEMIES, TURRETS, RARITY, RARITY_ORDER, COL, ECON, fmt } from './data_core.js';
 import { REMIX, RELICS, WAVE_MODS } from './data_run.js';
-import { GEAR, OUTFITS } from './data_meta.js';
-import { RUN_MODIFIER_BY_ID, ENDLESS_MILESTONES } from './data_depth.js';
+import { OUTFITS } from './data_meta.js';
+import { ENEMY_TIPS as ET, BOSS_TIPS as BT, FIXED_TIPS } from './sim.js';
+import { RUN_MODIFIER_BY_ID } from './data_depth.js';
 import * as M from './meta.js';
 import { HINTS } from './data_story.js';
 import { h, canvasOf, icon, gearIcon, enemyIcon, turretIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW } from './ui_core.js';
 import { settingsModal } from './ui_hub.js';
 import { flames } from './ui_setlist.js';
 import { makeShareCard, shareCard, shareText } from './share.js';
-import { t } from './i18n.js';
+import { t, tn } from './i18n.js';
 
 // A translated string with DOM nodes in its {placeholders}: tb(t('key', 'Toughest wave: {n}', mk('n')), { n: h('b', null, '5') }) returns an array of text and nodes.
 const mk = (...names) => { const m = {}; for (const k of names) m[k] = '\u0001' + k + '\u0001'; return m; };
@@ -79,7 +80,7 @@ export function showPause(app, battle) {
 
 // ------------------------------------------------------------------------------------------------ hints
 // glyph per coach mark (hub hints included); anything unlisted shows the lock
-const HINT_ICON = { boss: 'crown', chest: 'gift', mod: 'bolt', hint_setlist: 'mic', hint_wardrobe: 'sparkle', hint_skin_buy: 'diamond', hint_studio_scene: 'speaker', hint_weekly: 'ticket' };
+const HINT_ICON = { boss: 'crown', chest: 'gift', mod: 'bolt', hint_setlist: 'mic', hint_wardrobe: 'sparkle', hint_skin_buy: 'diamond', hint_studio_scene: 'speaker', hint_weekly: 'ticket', hint_synergy: 'heart', hint_branch: 'merge', hint_preview: 'eye', hint_reroll: 'reroll', hint_bossphase: 'crown', hint_hero_ready: 'sparkle' };
 export function showHint(app, id, done) {
   const hint = HINTS[id];
   const isEnemy = !!ENEMIES[id];
@@ -107,8 +108,7 @@ function shareBtn(app, run, small) {
 }
 const arr = (v) => (Array.isArray(v) ? v : []);
 const typeIcon = (type, px) => (ENEMIES[type] ? enemyIcon(type, px) : BOSSES[type] ? enemyIcon(type, px, true) : TURRETS[type] ? turretIcon(type, px) : null);
-// Recap tips arrive from sim.js as English sentences. They are matched here (exact text, or the two sentences with numbers/names) and shown from the dictionary.
-// Recap tips arrive from sim.js as English sentences; this table (built per call, so a language switch applies) maps each exact sentence to its translation.
+// Recap tips arrive from sim.js as ids (recap.tipIds) next to English sentences (recap.tips). Ids are looked up here first; the sentence matcher below is the fallback for old data. This table (built per call, so a language switch applies) maps each exact sentence to its translation.
 const tipTable = () => ({
   'Plain Fuzz piled up: add more turrets and merge them.': t('run.tip.fuzz', 'Plain Fuzz piled up: add more turrets and merge them.'),
   'Fast Glitch Zips slipped past: Sub Bass slows them.': t('run.tip.zip', 'Fast Glitch Zips slipped past: Sub Bass slows them.'),
@@ -134,6 +134,22 @@ const tipTable = () => ({
   'Clean run! Try Hard difficulty or a higher Encore.': t('run.tip.clean', 'Clean run! Try Hard difficulty or a higher Encore.'),
 });
 const laneTips = () => ({ left: t('run.tip.lane_left', 'Most leaks came from the left lane: build there.'), right: t('run.tip.lane_right', 'Most leaks came from the right lane: build there.'), middle: t('run.tip.lane_middle', 'Most leaks came from the middle lane: build there.') });
+// A tip id from sim.js ({ id, vars }) shown from the dictionary; null when the id is unknown (the caller falls back to the sentence).
+export function tipById(tip) {
+  if (!tip || typeof tip.id !== 'string') return null;
+  const v = tip.vars || {};
+  if (tip.id === 'lane') {
+    if (v.lane && laneTips()[v.lane]) return laneTips()[v.lane];
+    if (v.n != null) return t('run.tip.lane_n', 'Most leaks came from the number {n} lane: build there.', { n: v.n });
+    return null;
+  }
+  if (tip.id === 'pair') {
+    if (!TURRETS[v.a] || !TURRETS[v.b]) return null;
+    return t('run.tip.pair', 'Try pairing {a} with {b} for a synergy bonus.', { a: TURRETS[v.a].name, b: TURRETS[v.b].name });
+  }
+  const sentence = ET[tip.id] || BT[tip.id] || FIXED_TIPS[tip.id];
+  return sentence ? tipTable()[sentence] || null : null;
+}
 export function tipText(s) {
   s = String(s);
   const fixed = tipTable();
@@ -168,8 +184,10 @@ export function recapCard(recap) {
   if (recap.worstWave > 0) parts.push(h('div', { class: 'rc-line' }, tb(t('run.recap.toughest', 'Toughest wave: {n}', mk('n')), { n: h('b', null, String(recap.worstWave)) })));
   if (recap.bossFinisher && (BOSSES[recap.bossFinisher] || ENEMIES[recap.bossFinisher])) parts.push(h('div', { class: 'rc-line' }, tb(t('run.recap.finished_by', 'Finished by: {name}', mk('name')), { name: h('b', null, typeName(recap.bossFinisher)) })));
   parts.push(chips(recap.topKillers, t('run.recap.top_killers', 'Top killers'), 'good'));
-  const tips = arr(recap.tips).filter((x) => typeof x === 'string' && x).slice(0, 3);
-  if (tips.length) parts.push(h('div', { class: 'rc-tips' }, tips.map((x) => h('div', { class: 'rc-tip' }, icon('bolt', 20), h('span', null, tipText(x))))));
+  // ids first (translations keep working when a sentence is reworded), the English sentences when a recap carries no ids
+  const ids = arr(recap.tipIds), sentences = arr(recap.tips);
+  const tips = (ids.length ? ids.map((x, i) => tipById(x) || (typeof sentences[i] === 'string' ? tipText(sentences[i]) : null)) : sentences.map((x) => (typeof x === 'string' ? tipText(x) : null))).filter((x) => x).slice(0, 3);
+  if (tips.length) parts.push(h('div', { class: 'rc-tips' }, tips.map((x) => h('div', { class: 'rc-tip' }, icon('bolt', 20), h('span', null, x)))));
   const kids = parts.filter(Boolean);
   if (!kids.length) return null;
   return h('div', { class: 'recap card' }, h('h3', null, t('run.recap.title', 'What happened')), kids);
@@ -197,6 +215,40 @@ function milestoneLine(ms) {
   return t('run.results.ms_plain', 'Endless wave {n}.', { n });
 }
 
+// Personal bests card for the results screen: this run against the profile's previous best for the stage and mode (out.bests from meta.recordBests).
+// A beaten best shows gold with what it was; the NEW RECORD! sticker and a small confetti burst (skipped with Reduce motion) mark a record.
+const clock = (sec) => t('run.results.time_fmt', '{m}m {s}s', { m: Math.floor(sec / 60), s: Math.round(sec % 60) });
+export function bestsCard(app, bests) {
+  if (!bests || !bests.run || !bests.now) return null;
+  const rows = [
+    ['wave', t('run.bests.wave', 'Best wave'), (v) => String(v)],
+    ['combo', t('run.stat.best_combo', 'Best combo'), (v) => String(v)],
+    ['time', t('run.bests.fastest', 'Fastest clear'), clock],
+    ['kills', t('run.stat.kills', 'Kills'), (v) => fmt(v)],
+  ];
+  const lines = rows.map(([f, label, show]) => {
+    const was = bests.prev ? bests.prev[f] : 0, here = bests.run[f];
+    if (f === 'time' && !here) return h('div', { class: 'bst-row' }, h('span', { class: 'bst-l' }, label), h('b', null, '-'), h('i', null, bests.now.time ? t('run.bests.best', 'Best: {v}', { v: show(bests.now.time) }) : t('run.bests.win_to_set', 'Win to set one')));
+    const hit = bests.beaten[f];
+    return h('div', { class: 'bst-row' + (hit ? ' hit' : '') }, h('span', { class: 'bst-l' }, label), h('b', null, show(here)),
+      h('i', null, hit ? t('run.bests.was', 'was {v}', { v: show(was) }) : was > 0 ? t('run.bests.best', 'Best: {v}', { v: show(Math.max(was, here)) }) : t('run.bests.first', 'First score')));
+  });
+  const n = Object.values(bests.beaten).filter(Boolean).length;
+  const card = h('div', { class: 'card res-bests' + (bests.record ? ' record' : '') }, h('h3', null, t('run.bests.title', 'Personal bests')), lines,
+    bests.record ? h('div', { class: 'nr-sticker' }, t('run.bests.new_record', 'NEW RECORD!')) : null,
+    bests.record ? h('div', { class: 'sub bst-count' }, tn('run.bests.count', n, '{n} personal best beaten', '{n} personal bests beaten', { n })) : null);
+  if (bests.record) {
+    const calm = (app.profile && app.profile.settings && app.profile.settings.reduce) || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (!calm) {
+      const cols = ['#ff5fb0', '#43b94a', '#19d3ff', '#ffc83a', '#ff9226', '#7b4fd0'];
+      const box = h('div', { class: 'nr-confetti', 'aria-hidden': 'true' }, Array.from({ length: 24 }, (_, i) => h('span', { style: 'left:' + (4 + (i * 41) % 92) + '%;background:' + cols[i % cols.length] + ';animation-delay:' + ((i * 53) % 500) + 'ms;--dx:' + (((i * 29) % 60) - 30) + 'px;--rot:' + (180 + (i * 37) % 360) + 'deg' })));
+      card.append(box);
+    }
+    app.audio.play('record');
+  }
+  return card;
+}
+
 export function showResults(app, run, out, opts = {}) {
   const r = run.result, p = app.profile;
   const win = r.won;
@@ -214,6 +266,7 @@ export function showResults(app, run, out, opts = {}) {
   const wave = r.mode === 'endless' ? (out.newBestEndless ? t('run.results.best_wave', '{n} BEST!', { n: r.cleared }) : String(r.cleared)) : r.mode === 'daily' ? r.cleared + '' : r.cleared + (r.mode === 'tutorial' ? '/3' : '/' + run.wavesTotal);
   body.append(h('div', { class: 'statgrid' }, h('div', null, r.mode === 'endless' ? t('run.results.wave_reached', 'Wave reached') : t('run.results.waves_cleared', 'Waves cleared'), h('b', null, wave)), h('div', null, t('run.stat.kills', 'Kills'), h('b', null, fmt(r.kills))), h('div', null, t('run.stat.merges', 'Merges'), h('b', null, r.merges)), h('div', null, t('run.stat.best_combo', 'Best combo'), h('b', null, r.bestCombo)),
     h('div', null, t('run.results.bosses', 'Bosses'), h('b', null, r.bossKills)), h('div', null, t('run.results.time', 'Time'), h('b', null, t('run.results.time_fmt', '{m}m {s}s', { m: Math.floor(r.time / 60), s: Math.round(r.time % 60) })))));
+  if (r.mode !== 'tutorial') body.append(bestsCard(app, out.bests));
   if (!win) body.append(recapCard(r.recap));
   const rew = h('div', { class: 'rew' });
   const add = (kind, n, i) => rew.append(h('div', { class: 'rewi', style: 'animation-delay:' + (300 + i * 150) + 'ms' }, kind === 'fans' ? icon('fans', 28) : icon(kind === 'records' ? 'record' : 'diamond', 28), '+' + fmt(n)));

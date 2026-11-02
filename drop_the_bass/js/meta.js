@@ -1,16 +1,14 @@
 // meta.js: the profile (save data) and everything that changes it between runs. Pure functions on a plain object:
 // no DOM, no Math.random (callers pass an rng), no Date.now (callers pass `now` in ms).
-import {
-  GAME, WORLDS, WORLD_BY_ID, ENEMIES, BOSSES, TURRETS, STARTER_TURRETS, RARITY, RARITY_ORDER, ENCORE_MAX, encoreReward, ECON,
-} from './data_core.js';
+import { GAME, WORLDS, WORLD_BY_ID, ENEMIES, BOSSES, TURRETS, STARTER_TURRETS, RARITY, RARITY_ORDER, ENCORE_MAX, encoreReward } from './data_core.js';
 import {
   STUDIO, STUDIO_IDS, HERO_MAX, heroCost, LOADOUT_BASE, AUTOMERGE_PRICE, SLOTS, STATS, SETS, GEAR, GEAR_IDS, GEAR_MAX_LEVEL,
   gearUpgradeCost, GEAR_SELL, CRATES, PITY, fansForLevel, FAME_MAX, fameReward, OUTFITS, LOGIN_REWARDS, QUESTS, ACHIEVEMENTS, STAR_MILESTONES, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE,
   SKIN_DEFAULT, SKIN_PRICES, SKIN_IDS, SKIN_FALLBACK,
 } from './data_meta.js';
 import { EPILOGUES, CREDITS_FINAL } from './data_story.js';
-import { HERO_ABILITIES, HERO_ABILITY_DEFAULT, RUN_MODIFIERS, RUN_MODIFIER_BY_ID, MAX_RUN_MODIFIERS, ENDLESS_MILESTONES } from './data_depth.js';
-import { DAILY_MODS, DAILY_MOD_IDS } from './data_run.js';
+import { HERO_ABILITIES, HERO_ABILITY_DEFAULT, RUN_MODIFIER_BY_ID, MAX_RUN_MODIFIERS, ENDLESS_MILESTONES } from './data_depth.js';
+import { DAILY_MOD_IDS } from './data_run.js';
 import { makeRng, hashSeed } from './rng.js';
 import * as CORE from './data_core.js';
 import { WEEKLY_GIGS, WEEKLY_WAVES, WEEKLY_REWARD } from './data_meta.js';
@@ -27,7 +25,7 @@ export function newProfile(now = 0) {
   for (const t of STARTER_TURRETS) turretsUnlocked[t] = true;
   return {
     v: GAME.version, poolV: 2, created: now, lastSeen: now,
-    records: 250, diamonds: 30, fans: 0, fame: 1, name: '', resume: null, boosters: {}, wheel: null, friends: [], weekly: { id: '', done: false, best: 0 },
+    records: 250, diamonds: 30, fans: 0, fame: 1, name: '', resume: null, boosters: {}, wheel: null, friends: [], weekly: { id: '', done: false, best: 0 }, bests: {},
     studio: {}, heroLv: { roxor: 1, jasmin: 1 },
     turretsUnlocked, loadout: STARTER_TURRETS.slice(),
     prog, bossesSeen: {}, encoreCleared: {},
@@ -126,6 +124,7 @@ export function migrate(p, now = 0) {
     if (isObj(p.milestones.claimed)) for (const m of ENDLESS_MILESTONES) if (p.milestones.claimed[m.id]) out.milestones.claimed[m.id] = true;
     if (Array.isArray(p.milestones.cosmetics)) out.milestones.cosmetics = p.milestones.cosmetics.filter((c, i, a) => typeof c === 'string' && a.indexOf(c) === i).slice(0, 20);
   }
+  out.bests = cleanBests(p.bests, out);
   out.weekly = { id: typeof out.weekly.id === 'string' ? out.weekly.id : '', done: !!out.weekly.done, best: int(out.weekly.best, 0) };
   out.daily.day = num(out.daily.day, -1, -1); out.daily.challengeDay = num(out.daily.challengeDay, -1, -1); out.daily.challengeBest = int(out.daily.challengeBest, 0);
   if (!Array.isArray(out.daily.quests)) out.daily.quests = [];
@@ -766,6 +765,44 @@ export function readyBadges(p, now) {
   return { login: login.claimable ? 1 : 0, quests, ach, stars, goals: (login.claimable ? 1 : 0) + quests + ach + stars };
 }
 
+// ------------------------------------------------------------------------------------------------ personal bests
+// profile.bests[key] = { wave, combo, kills, time }: the best of each per stage and mode. time is the fastest WON run in seconds (0 = none yet).
+// Keys: story:<world>:<encore>, endless:<world>, rush, daily, weekly. Older saves are seeded from the numbers they already kept (wave only).
+export const BEST_FIELDS = ['wave', 'combo', 'kills', 'time'];
+export function bestKey(result) {
+  const m = result && result.mode, w = (result && result.world) || '';
+  if (m === 'story') return 'story:' + w + ':' + int(result.encore, 0, 0, ENCORE_MAX);
+  if (m === 'endless') return 'endless:' + w;
+  if (m === 'rush') return 'rush';
+  if (m === 'daily') return result.weekly ? 'weekly' : 'daily';
+  return null;
+}
+const cleanBest = (b) => ({ wave: int(b && b.wave, 0, 0, 100000), combo: int(b && b.combo, 0, 0, 100000), kills: int(b && b.kills, 0, 0, 10000000), time: int(b && b.time, 0, 0, 10000000) });
+function cleanBests(src, prof) {
+  const out = {};
+  if (isObj(src)) for (const k of Object.keys(src).slice(0, 200)) if (/^[a-z0-9_:]+$/.test(k) && isObj(src[k])) out[k] = cleanBest(src[k]);
+  const seed = (k, wave) => { if (wave > 0 && !out[k]) out[k] = cleanBest({ wave }); };
+  for (const w of WORLDS) { const pr = prof.prog && prof.prog[w.id]; if (pr) { seed('story:' + w.id + ':0', pr.bestWave); seed('endless:' + w.id, pr.bestEndless); } }
+  if (prof.daily) seed('daily', prof.daily.challengeBest);
+  if (prof.weekly) seed('weekly', prof.weekly.best);
+  return out;
+}
+// Compare a finished run with the stored best, then store the better numbers. Returns null for modes without bests (tutorial).
+// { key, prev: {wave,combo,kills,time}|null, now: {...}, beaten: { wave, combo, kills, time } booleans, record: any beaten against a real previous best }
+export function recordBests(p, result) {
+  const key = bestKey(result);
+  if (!key) return null;
+  if (!isObj(p.bests)) p.bests = {};
+  const prev = p.bests[key] ? cleanBest(p.bests[key]) : null;
+  const run = { wave: int(result.cleared, 0), combo: int(result.bestCombo, 0), kills: int(result.kills, 0), time: result.won && result.time > 0 ? Math.max(1, Math.round(result.time)) : 0 };
+  const beaten = { wave: false, combo: false, kills: false, time: false };
+  const now = prev ? Object.assign({}, prev) : cleanBest(null);
+  for (const f of ['wave', 'combo', 'kills']) if (run[f] > now[f]) { beaten[f] = !!prev && prev[f] > 0; now[f] = run[f]; }
+  if (run.time > 0 && (now.time === 0 || run.time < now.time)) { beaten.time = !!prev && prev.time > 0; now.time = run.time; }
+  p.bests[key] = now;
+  return { key, prev, now, run, beaten, record: Object.values(beaten).some(Boolean) };
+}
+
 // ------------------------------------------------------------------------------------------------ run results
 export function runRewards(result) {
   const w = WORLD_BY_ID[result.world]; const n = w.n;
@@ -779,6 +816,7 @@ export function runRewards(result) {
 export function applyRunResult(p, result, rng, now = 0) {
   const out = { records: 0, fans: 0, diamonds: 0, loot: [], levelUps: [], newStars: 0, firstClear: false, unlockedWorld: null, firstBosses: [], challenge: null, newBestEndless: false, modifiers: [], modMul: null, milestones: [], newOutfits: [] };
   const w = WORLD_BY_ID[result.world];
+  out.bests = recordBests(p, result);
   const rw = runRewards(result);
   let records = rw.records, fans = rw.fans;
   const pr = p.prog[w.id];

@@ -14,25 +14,6 @@ export function applyA11y(s) {
 export const textScale = () => (big ? BIGTEXT_SCALE : 1);
 export const colorblind = () => cb;
 
-// Slow-device watch for "Auto low graphics when slow". Feed it every frame with the real frame time in ms and whether a battle is actively
-// running; it returns true once, when the average over WINDOW seconds of active play stays below MIN_FPS. Gaps (tab switch, pause) are skipped.
-export const PERF = { WINDOW: 4, MIN_FPS: 34, GAP_MS: 250 };
-export function makePerfWatch() {
-  let acc = 0, n = 0, fired = false;
-  return {
-    sample(ms, active) {
-      if (fired) return false;
-      if (!active || !(ms > 0) || ms > PERF.GAP_MS) { if (!active) { acc = 0; n = 0; } return false; }
-      acc += ms; n++;
-      if (acc < PERF.WINDOW * 1000) return false;
-      const fps = n / (acc / 1000);
-      acc = 0; n = 0;
-      if (fps < PERF.MIN_FPS) { fired = true; return true; }
-      return false;
-    },
-  };
-}
-
 // One-time language offer: the device speaks da, nl or de but the game is showing something else (an explicit English pick, for example).
 // Returns the language code to offer, or null (already offered, device is English, or the game already uses it).
 export function langOffer(profile, navLangs, curLang) {
