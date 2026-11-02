@@ -110,13 +110,13 @@ for (const deg of [0, 90, 180]) {
 // ---- main.js input and render wiring
 {
   const m = src('main.js'), r = src('render.js');
-  assert.ok(/function aimAt\(clientX, clientY\)/.test(m) && /Math\.atan2\(dy, dx\)/.test(m), 'the finger sets an angle relative to the duo');
-  assert.ok(/if \(g\.ring\) aimAt\(e\.clientX, e\.clientY\)/.test(m), 'touch down aims');
-  assert.ok(/g\.ring && \(e\.pointerType === 'mouse' \|\| \(joy\.on && e\.pointerId === joy\.id\)\)\) \{ aimAt\(/.test(m), 'drag and mouse hover sweep the aim');
+  assert.ok(/function aimAt\(e, down\)/.test(m) && /Math\.atan2\(dy, dx\)/.test(src('aim_b12f.js')), 'the finger sets an angle relative to the duo (b12f: aim_b12f.js)');
+  assert.ok(/if \(g\.ring\) aimAt\(e, true\)/.test(m), 'touch down aims');
+  assert.ok(/g\.ring && \(e\.pointerType === 'mouse' \|\| \(joy\.on && e\.pointerId === joy\.id\)\)\) \{.*aimAt\(e, false\); return; \}/.test(m), 'drag and mouse hover sweep the aim');
   const ri = m.slice(m.indexOf('function readInput()'), m.indexOf('function pause()'));
-  assert.ok(/if \(g\.ring\) \{/.test(ri) && /aim: aimS\.now/.test(ri) && /mx: 0/.test(ri), 'readInput sends an eased aim and no movement in circle stages');
+  assert.ok(/if \(g\.ring\) \{/.test(ri) && /aim: aimAssisted\(aimS/.test(ri) && /mx: 0/.test(ri), 'readInput sends an eased aim and no movement in circle stages');
   assert.ok(/keys\.arrowleft\) aimS\.tgt -=/.test(ri) && /keys\.arrowright\) aimS\.tgt \+=/.test(ri), 'arrows rotate the aim');
-  assert.ok(/aimS\.now \+= da \* 0\./.test(ri), 'the aim is eased, no jumps');
+  assert.ok(/aimTick\(aimS/.test(ri) && /Math\.exp\(-dt \* 24\)/.test(src('aim_b12f.js')), 'the aim is eased, no jumps');
   assert.ok(/AIM_HINT_KEY/.test(m) && /DRAG TO AIM/.test(r), 'a drag to aim hint on the first circle stages');
   const al = r.slice(r.indexOf('function drawAimLine'), r.indexOf('function noteTrail'));
   assert.ok(al.length > 300 && /setLineDash\(AIM_DASH\)/.test(al), 'a dotted aim line to the circle');

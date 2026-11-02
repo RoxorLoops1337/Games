@@ -6,11 +6,11 @@ const ROWS = 8;
 
 // ctx is already translated to the picture centre (and rotated). w, h: drawn size. t: seconds.
 // nod 0..1: beat dip. amp 0..1: how much life (0 while reduced motion).
-export function drawDuoLife(ctx, im, w, h, t, nod, amp) {
+export function drawDuoLife(ctx, im, w, h, t, nod, amp, turn = 0) {   // b12h: turn shears the heads sideways (circle stages, the singers face their aim)
   const W = im.width, H = im.height, hw = W / 2, rh = H / ROWS;
   for (let col = 0; col < 2; col++) {
     const ph = col ? 1.9 : 0;
-    const lean = Math.sin(t * 1.25 + ph) * 2.8 * amp;
+    const lean = Math.sin(t * 1.25 + ph) * 2.8 * amp + turn;
     const dip = ((Math.sin(t * 2.3 + ph * 1.3) * 0.5 + 0.5) * 1.8 + nod * (col ? 2.8 : 3.4)) * amp;
     const sx = col * hw, dx = -w / 2 + col * hw * (w / W), dw = hw * (w / W);
     let y0 = -h / 2 + dip, x0 = lean;

@@ -15,13 +15,28 @@ assert.ok(!src.includes('—'), 'no em dash in hud.js');
 assert.equal(hudm.comboTier(3), ''); assert.equal(hudm.comboTier(5), 'NICE'); assert.equal(hudm.comboTier(10), 'GROOVY');
 assert.equal(hudm.comboTier(25), 'SUPER'); assert.equal(hudm.comboTier(40), 'MEGA');
 
-// text size floor: every text(...) call in hud.js with a literal size draws at 16 game units or more (about 9px on a 390 screen)
-let small = [];
-const re = /[^\w.]text\((?:[^;]*?),\s*(?:fzp?\()?(\d+(?:\.\d+)?)\)?,\s*(?:'#|urgent|low|gv|fire|maxed|ready|col|c\b|hot|leg)/g;
-let m, seen = 0;
-while ((m = re.exec(src))) { seen++; if (+m[1] < 16) small.push(m[0].slice(0, 70)); }
-assert.ok(seen > 25, 'the scan sees the text calls: ' + seen);
+// text size floor (batch 12): the frame is 720 units wide, a 360 phone shows 0.5 CSS px per unit, so 24 units is 12 CSS px.
+// Every text(...) call in hud.js and hud_b11.js uses TXT_MIN (24) or a literal of at least 24; no literal below the floor remains.
+assert.equal(hudm.TXT_MIN, 24, 'the HUD text floor is 24 units');
+assert.ok(hudm.TXT_MIN * 360 / 720 >= 12, 'at 360 wide the floor is 12 CSS px');
+const src11 = readFileSync(join(root, 'hud_b11.js'), 'utf8');
+let small = [], seen = 0;
+for (const [name, code] of [['hud.js', src], ['hud_b11.js', src11]]) {
+  const re = /[^\w.]text\(([^;\n]*)/g; let m;
+  while ((m = re.exec(code))) {
+    if (/function text|^\s*str\b/.test(m[1])) continue;
+    seen++;
+    // the size is the 4th argument: a bare literal, TXT_MIN, or TXT_MIN plus something; anything else with a number below 24 fails
+    const lit = m[1].match(/,\s*(\d+(?:\.\d+)?)\s*,\s*(?:'#|urgent|low|gv|fire|maxed|ready|col|c\b|hot|leg|info|gi)/);
+    if (lit && +lit[1] < 24) small.push(name + ': ' + m[0].slice(0, 70));
+    if (/\bfzp?\(\s*(\d+)\s*\)/.test(m[1]) && +RegExp.$1 < 24) small.push(name + ': ' + m[0].slice(0, 70));
+  }
+}
+assert.ok(seen > 30, 'the scan sees the text calls: ' + seen);
 assert.deepEqual(small, [], 'tiny HUD text: ' + small.join(' | '));
+// stage names lose the word Serpent and squeeze sideways instead of shrinking
+assert.equal(hudm.hudStageName('Love-Struck Serpent III'), 'Love-Struck III');
+assert.ok(hudm.nameSqueeze('Grumpy Python III', 208) < 1 && hudm.nameSqueeze('Grumpy Python III', 208) >= 0.72 && hudm.nameSqueeze('Sleepy Cobra', 208) === 1);
 
 // skill layout: 10 percent bigger tiles, never under the groove plate (right edge 244) or off the right margin
 assert.ok(hudm.skillLayout(3).r >= 26 * 1.1 - 0.3, 'tiles about 10 percent bigger');

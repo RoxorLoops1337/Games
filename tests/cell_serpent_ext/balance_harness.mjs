@@ -73,6 +73,31 @@ export const PROFILES = [
 export const profileFor = stage => PROFILES.find(p => stage >= p.band[0] && stage <= p.band[1]);
 export const typicalRate = (stage, n = 4) => runs(stage, profileFor(stage).build, n);
 
+// b12 (agent d): a human-like aimer for circle stages. A thumb turns the aim at a limited rate (default 60 deg/s), reads the
+// target with a lag (decisions about 0.25 s old), and wobbles (noise std about `noiseDeg`, re-rolled every 0.2 s).
+// Lane stages are unchanged (smartBot). Each call builds a fresh stateful bot: pass `bot: humanBot(seed)` to playRun.
+export function humanBot(seed = 1, o = {}) {
+  const maxTurn = (o.turnDeg || 60) * Math.PI / 180, noise = (o.noiseDeg || 6) * Math.PI / 180, lag = o.lag || 0.25, R = sim.rng(seed * 104729 + 7);
+  let aim = -Math.PI / 2, want = aim, nt = 0, wt = 0, off = 0, last = 0, enc = false;
+  const gauss = () => { let a = 0; for (let i = 0; i < 4; i++) a += R(); return (a - 2) * 1.73; };
+  return g => {
+    if (!g.ring) return smartBot(g);
+    const dt = g.t - last; last = g.t; nt -= dt; wt -= dt;
+    const b = smartBot(g);
+    if (wt <= 0) { wt = lag; want = b.aim; }
+    if (nt <= 0) { nt = 0.2; off = gauss() * noise; }
+    let d = want + off - aim; d = Math.atan2(Math.sin(d), Math.cos(d));
+    aim += Math.max(-maxTurn * dt, Math.min(maxTurn * dt, d));
+    return { mx: 0, my: 0, aim, encore: b.encore };
+  };
+}
+export function humanRuns(stage, opts, n = 8, ho = {}) {
+  let w = 0, coins = 0, prog = 0;
+  for (let i = 0; i < n; i++) { const seed = 100 + i * 17 + stage, r = playRun(stage, seed, { ...opts, bot: humanBot(seed, ho) }); if (r.won) w++; coins += r.coins; prog += r.progress; }
+  return { win: w / n, coins: coins / n, prog: prog / n };
+}
+export const BUILDS = { fresh: {}, regular: PROFILES[1].build, dedicated: PROFILES[2].build, veteran: PROFILES[3].build, master: PROFILES[4].build };
+
 if (process.argv[1] && process.argv[1].endsWith('balance_harness.mjs')) {
   const n = +process.argv[2] || 6, t0 = Date.now();
   const stages = process.argv[3] ? process.argv[3].split(',').map(Number) : null;

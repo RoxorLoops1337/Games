@@ -18,8 +18,8 @@ let made = 0;
 const mkCtx = () => { const cache = Object.create(null); return new Proxy({}, { get: (_t, k) => cache[k] || (cache[k] = k === 'measureText' ? () => MT : (k === 'createLinearGradient' || k === 'createRadialGradient') ? () => GR : noop), set: () => true }); };
 const mkCanvas = (w, h) => { made++; return { width: w, height: h, getContext: () => mkCtx() }; };
 const art = { get: () => ({ width: 100, height: 80 }), has: () => true };
-// caps raised in the batch 11 merge: agent 04's per-weapon damage numbers (hit_fx_b11.js) bake their own strips instead of using the text() size ladder (old code: 150 to 270 canvases). Batch 12: route them through the ladder.
-for (const [name, stage, cap] of [['ring 6', 6, 70], ['lane 12', 12, 70], ['boss 45', 45, 110]]) {
+// batch 12 (g): damage numbers use the text() ladder and glyph strips, the pop is a scale (measured 22, 34, 7); caps keep a little headroom.
+for (const [name, stage, cap] of [["ring 6", 6, 40], ["lane 12", 12, 40], ["boss 45", 45, 30]]) {
   const kit = createArtDraw(mkCanvas, 2), R = createRenderer({ width: 420, height: 860, getContext: () => mkCtx() }, art, kit);
   const g = sim.createGame({ seed: 5, stage, bot: true, skills: ALL });
   for (const w of sim.WEAPONS) g.weap[w.id] = { lv: 3, cd: 0 };

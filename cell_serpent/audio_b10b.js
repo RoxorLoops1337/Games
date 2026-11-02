@@ -45,6 +45,7 @@ export const AMBIENT = {
 export const ambientOf = skin => AMBIENT[skin] || AMBIENT.love;
 
 // One looping noise bed. start(skin) fades it in, stop() fades it out and frees the nodes. Never throws.
+import { dipBed } from './audio_b12i.js';
 export function createAmbient(ac, bus, buf) {
   let cur = null;
   const stop = () => {
@@ -59,13 +60,15 @@ export function createAmbient(ac, bus, buf) {
       const a = ambientOf(skin), t = ac.currentTime, src = ac.createBufferSource(), fl = ac.createBiquadFilter(), out = ac.createGain();
       src.buffer = buf; src.loop = true; fl.type = a.t; fl.frequency.value = a.f; if (fl.Q) fl.Q.value = a.q;
       out.gain.setValueAtTime(0.0001, t); out.gain.linearRampToValueAtTime(a.v, t + 2);
-      src.connect(fl); fl.connect(out); out.connect(bus); src.start(t);
+      let sc = null; try { sc = ac.createGain(); sc.gain.value = 1; out.connect(sc); sc.connect(bus); } catch (e) { sc = null; if (!sc) out.connect(bus); }   // b12: side-chain stage
+      src.connect(fl); fl.connect(out); src.start(t);
       let lfo = null;   // r11: the bed breathes, a slow sine adds to its level (rate per world)
       try { const br = breathOf(skin), lg = ac.createGain(); lfo = ac.createOscillator(); lfo.frequency.value = br.hz; lg.gain.value = a.v * br.depth; lfo.connect(lg); lg.connect(out.gain); lfo.start(t); } catch (e) { lfo = null; }
-      cur = { skin, src, out, v: a.v, lfo };
+      cur = { skin, src, out, v: a.v, lfo, sc };
     } catch (e) { cur = null; }
   };
-  return { start, stop, get skin() { return cur ? cur.skin : null; } };
+  const dip = (t, spb) => { if (cur && cur.sc) dipBed(cur.sc.gain, t, spb); };   // b12: the bed ducks a little on every kick
+  return { start, stop, dip, get skin() { return cur ? cur.skin : null; } };
 }
 
 export function registerA10(sfx, tone, noise, duck, gate) {

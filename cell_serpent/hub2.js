@@ -1,3 +1,4 @@
+import { platCard } from './plat_b12d.js';
 // Cell Serpent hub, part two: the shop, the keepsake collection, the character page, and the little panels
 // (sign in, fan fund, fragment swap). It gets everything it needs from main.js through `c`.
 import {
@@ -209,6 +210,7 @@ export function createHub2(c) {
       core.appendChild(card);
     });
     bestBuy(core, s);
+    { const pc = platCard(s, () => { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); }); if (pc) list.appendChild(pc); }   // b12d Gold Records
     { const rc = document.createElement('div'); rc.className = 'recbox'; rc.innerHTML = recordsHTML(s); list.appendChild(rc); }
     { const rl = runLogHTML(readRuns()); if (rl) { const rb = document.createElement('div'); rb.className = 'runbox'; rb.innerHTML = rl; list.appendChild(rb); } }
     { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t), (n, from) => { save().sparkles += n; c.persist(); audio.play('bookdone'); sparkleFlight(from, calmMotion(), () => c.refreshCur(), { src: iconURL('sparkles') }); }); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }

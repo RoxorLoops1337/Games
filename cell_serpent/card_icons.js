@@ -34,13 +34,19 @@ const ART = {
   hwd: `<path d="M0 12 C-17 0 -13 -13 -5 -12 C-2 -11.5 0 -8 0 -8 C0 -8 2 -11.5 5 -12 C13 -13 17 0 0 12 Z" fill="#ff7fae" stroke="#7a1f45" stroke-width="1.8" stroke-linejoin="round"/><path d="M-9 -7 q-3 3 -2 7" fill="none" stroke="#ffd0e2" stroke-width="2" stroke-linecap="round"/><path d="M0 -6 L9 -3 V4 Q9 10 0 15 Q-9 10 -9 4 V-3 Z" fill="#ffd86b" stroke="#7a4b00" stroke-width="1.7" stroke-linejoin="round"/><path d="M-4.5 4 L-1 7.5 L5 0" fill="none" stroke="#7a4b00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
   // Honey Jar (batch 11): a honey jar with a drip (sticky slows bite the Iron Hide snake again)
   hny: `<rect x="-11" y="-12" width="22" height="5" rx="2" fill="#c98a3a" stroke="#6a3a10" stroke-width="1.6"/><path d="M-12 -7 H12 L13 8 Q13 14 7 14 H-7 Q-13 14 -13 8 Z" fill="#ffc83a" stroke="#6a3a10" stroke-width="1.8" stroke-linejoin="round"/><path d="M-9 -3 V6" stroke="#fff2b0" stroke-width="2.2" stroke-linecap="round" opacity=".8"/><rect x="-7" y="-1" width="14" height="9" rx="3" fill="#fff4cf" stroke="#6a3a10" stroke-width="1.2"/><path d="M-2.5 3.5 q2.5 -2.5 5 0" fill="none" stroke="#c98a3a" stroke-width="1.6" stroke-linecap="round"/><path d="M5 -7 q0 7 3 7 q3 0 1 -7" fill="#ffc83a" stroke="#6a3a10" stroke-width="1.2"/>`,
+  // Pocket Mirror (batch 12): a hand mirror with a glint (mirror cells glance less)
+  mir: `<ellipse cx="0" cy="-3" rx="10" ry="12" fill="#dcecff" stroke="#3a5a8a" stroke-width="2"/><path d="M-4 -9 q3 -4 7 -2" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M0 9 V15 M-4 15 H4" stroke="#3a5a8a" stroke-width="3" stroke-linecap="round"/>`,
+  // Chamomile Tea (batch 12): a cup of tea with steam (grumpy surges calmer)
+  tea: `<path d="M-11 -2 H9 V5 Q9 12 1 12 H-3 Q-11 12 -11 5 Z" fill="#fff" stroke="#6a4a2a" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 0 Q15 0 15 5 Q15 9 9 8" fill="none" stroke="#6a4a2a" stroke-width="1.8"/><path d="M-6 -5 q3 -4 0 -8 M0 -5 q3 -4 0 -8 M5 -5 q3 -4 0 -8" fill="none" stroke="#9bd0ff" stroke-width="1.8" stroke-linecap="round"/><ellipse cx="-1" cy="15" rx="12" ry="2" fill="#c9a06a" stroke="#6a4a2a" stroke-width="1.2"/>`,
+  // Ear Muffs (batch 12): headband with two puffy muffs (the disco swing is smaller)
+  muf: `<path d="M-11 4 Q-11 -13 0 -13 Q11 -13 11 4" fill="none" stroke="#3a3a5a" stroke-width="3" stroke-linecap="round"/><ellipse cx="-11" cy="6" rx="5" ry="8" fill="#ff7fc8" stroke="#7a1f55" stroke-width="1.8"/><ellipse cx="11" cy="6" rx="5" ry="8" fill="#ff7fc8" stroke="#7a1f55" stroke-width="1.8"/>`,
 };
 const cache = {};
 export function capIconURL(id) { return ART[id] ? (cache[id] || (cache[id] = svgURL(ART[id]))) : ''; }
 
 const KIND = { weapon: 'SKILL', capsule: 'SHOT', passive: 'BOOST' };
 // batch 9: the two counter cards (Ice Breaker, Heart Mender) answer one snake trait, so they say so on the icon
-export const COUNTERS = { brk: { skin: 'frosty', what: 'Frosty', shield: 'Frost shield' }, hbk: { skin: 'love', what: 'Love-Struck', shield: 'Heart heal' }, oil: { skin: 'rust', what: 'Rusty', shield: 'Creak lurch' }, swt: { skin: 'sour', what: 'Sour', shield: 'Pop rush' }, tis: { skin: 'sneezy', what: 'Sneezy', shield: 'Sneeze jolt' }, hwd: { skin: 'love', what: 'Sweetheart', shield: 'Heart ward' }, hny: { skin: 'mighty', what: 'Iron Hide', shield: 'Iron shrug' } };
+export const COUNTERS = { brk: { skin: 'frosty', what: 'Frosty', shield: 'Frost shield' }, hbk: { skin: 'love', what: 'Love-Struck', shield: 'Heart heal' }, oil: { skin: 'rust', what: 'Rusty', shield: 'Creak lurch' }, swt: { skin: 'sour', what: 'Sour', shield: 'Pop rush' }, tis: { skin: 'sneezy', what: 'Sneezy', shield: 'Sneeze jolt' }, hwd: { skin: 'love', what: 'Sweetheart', shield: 'Heart ward' }, hny: { skin: 'mighty', what: 'Iron Hide', shield: 'Iron shrug' }, mir: { skin: '', what: 'Mirror cell', shield: 'Mirror glance', cell: true }, tea: { skin: 'grumpy', what: 'Grumpy', shield: 'Surge speed' }, muf: { skin: 'disco', what: 'Disco', shield: 'Disco swing' } };
 export const kindLabel = c => (COUNTERS[c.id] ? 'COUNTER' : KIND[c.kind] || '');
 
 // A short hint when this card works with what the player already has. Empty string when nothing special.
@@ -56,7 +62,7 @@ export function synergyHint(g, c) {
   if (c.id === 'fan' && (ups.brg | 0) > 0) return 'Bell rings add Groove';
   if (c.id === 'brg' && (ups.fan | 0) > 0) return 'Bell rings add Groove';
   if (c.id === 'brg' && (ups.chk | 0) > 0) return 'Soundcheck loves bells';
-  if (COUNTERS[c.id]) return 'Beats the ' + COUNTERS[c.id].what + ' snake here';
+  if (COUNTERS[c.id]) return 'Beats the ' + COUNTERS[c.id].what + (COUNTERS[c.id].cell ? ' here' : ' snake here');
   if (c.id === 'chk' && (ups.brg | 0) > 0) return 'Bells count too';
   if (c.kind === 'weapon' && !c.isNew && ((ups.power | 0) > 0 || (ups.haste | 0) > 0)) return (ups.power ? 'Loud Vocals' : 'Tempo Up') + ' helps it';
   if (c.kind === 'weapon' && c.isNew && (ups.haste | 0) > 0) return 'Tempo Up recharges it';
