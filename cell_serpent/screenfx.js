@@ -107,7 +107,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   function starsOf(g) { return !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0; }
   function startClear(g) {
     const stars = starsOf(g); if (!stars) return;
-    F.clear = { boss: F.lastBoss, n: g.stage, stars, t: 0, shown: 0, dur: calm() ? 1.3 : STAR_T[2] + 0.95 };
+    F.clear = { boss: F.lastBoss, n: g.stage, stars, secs: Math.max(0, Math.floor(g.t || 0)), close: Math.round(clamp(g.faceMax || 0, 0, 1) * 100), t: 0, shown: 0, dur: calm() ? 1.3 : STAR_T[2] + 0.95 };
   }
   function starPath(x, y, r) {
     ctx.beginPath();
@@ -127,6 +127,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     }
     if (c.t > c.dur) F.clear = null;
   }
+  const clearLine = c => Math.floor(c.secs / 60) + ':' + String(c.secs % 60).padStart(2, '0') + '  -  CLOSEST ' + c.close + '%';
   function drawClear() {
     const c = F.clear; if (!c) return;
     const t = c.t, out = clamp((c.dur - t) / 0.35, 0, 1), inn = calm() ? 1 : easeOut(clamp(t / 0.3, 0, 1)), cy = H * 0.4;
@@ -153,6 +154,8 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       starPath(0, -4, 36 * big); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fill();
       ctx.restore();
     }
+    { const ck = calm() ? clamp((t - 0.4) / 0.3, 0, 1) : clamp((t - STAR_T[2] + 0.25) / 0.35, 0, 1);   // r9: how long the song took and how close the serpent got
+      if (ck > 0 && c.secs > 0) { ctx.save(); ctx.globalAlpha *= ck; ctx.translate(0, (1 - ck) * 14); text(clearLine(c), W / 2, cy + 168, 30, '#cfd6ff', '#0b1020'); ctx.restore(); } }
     if (F.perf > 0) perfectBanner(cy + 300);
     ctx.restore();
   }
@@ -199,11 +202,13 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
 
   // ---- milestone ribbon: 25% / 50% / 75% of the serpent popped, a gold ribbon slides across the upper lane
   const MILE = { 25: ['QUARTER DOWN!', 'keep the beat going'], 50: ['HALFWAY!', 'chest incoming'], 75: ['ALMOST THERE!', 'finish the song'] };
+  // r9: the ribbon wears the colour of the species on the lane (gold when unknown)
+  const mileCol = g => { const sp = kit && kit.SPECIES && g && kit.SPECIES[g.skin]; return sp && sp.lite ? sp.lite : '#ffd84d'; };
   function showMile(pct, g) {
     if (F.mileDone >= pct) return;
     if (F.lastBoss && pct === 50) { F.mileDone = 50; startP2(g); return; }
     F.mileDone = pct; const m = MILE[pct];
-    F.mile = { pct, txt: m[0], sub: m[1], t: 0, dur: 1.7 };
+    F.mile = { pct, txt: m[0], sub: m[1], t: 0, dur: 1.7, col: mileCol(g) };
     F.sounds.push(pct === 75 ? 'star3' : 'star2');
     if (!calm()) { ring(W / 2, H * 0.27, 240, '#ffd84d', 0.5); burst(W / 2, H * 0.27, 14, ['#ffd84d', '#fff', '#ff9ad6'], 420, 0.7, 6); if (pct === 75) confetti(24); }
     void g;
@@ -218,11 +223,11 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     ctx.translate(sx, 0);
     const gr = ctx.createLinearGradient(0, 0, W, 0); gr.addColorStop(0, 'rgba(40,24,0,0)'); gr.addColorStop(0.14, 'rgba(40,24,6,.86)'); gr.addColorStop(0.86, 'rgba(40,24,6,.86)'); gr.addColorStop(1, 'rgba(40,24,0,0)');
     ctx.fillStyle = gr; ctx.fillRect(0, cy - bh / 2, W, bh);
-    ctx.fillStyle = '#ffd84d'; ctx.fillRect(50, cy - bh / 2, W - 100, 4); ctx.fillRect(50, cy + bh / 2 - 4, W - 100, 4);
+    const mc = m.col || '#ffd84d'; ctx.fillStyle = mc; ctx.fillRect(50, cy - bh / 2, W - 100, 4); ctx.fillRect(50, cy + bh / 2 - 4, W - 100, 4);
     const fill = calm() ? m.pct / 100 : m.pct / 100 * easeOut(clamp((t - 0.15) / 0.6, 0, 1)), px = 150, pr = 46;
-    glow(px, cy, 120, '#ffd84d', 0.35);
+    glow(px, cy, 120, mc, 0.35);
     ctx.beginPath(); ctx.arc(px, cy, pr, 0, TAU); ctx.fillStyle = '#2a1d3e'; ctx.fill();
-    piePath(px, cy, pr - 6, fill); ctx.fillStyle = '#ffd84d'; ctx.fill();
+    piePath(px, cy, pr - 6, fill); ctx.fillStyle = mc; ctx.fill();
     ctx.beginPath(); ctx.arc(px, cy, pr, 0, TAU); ctx.lineWidth = 7; ctx.strokeStyle = '#fff3b8'; ctx.stroke();
     const pop = calm() ? 1 : 1 + 0.12 * Math.max(0, 1 - (t - 0.2) * 4);
     ctx.save(); ctx.translate(250, cy - 14); ctx.scale(pop, pop);
@@ -475,7 +480,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     }
   }
   function drawCount(o) {
-    if (o.t < o.w) { const a = clamp(o.t / 0.12, 0, 1) * 0.9; ctx.save(); ctx.globalAlpha = a; text('GET READY', W / 2, H * 0.4 + 14, 52, '#ffe27a', '#3a1c00'); ctx.restore(); return; }
+    if (o.t < o.w) { if (o.res) return; const a = clamp(o.t / 0.12, 0, 1) * 0.9; ctx.save(); ctx.globalAlpha = a; text('GET READY', W / 2, H * 0.4 + 14, 52, '#ffe27a', '#3a1c00'); ctx.restore(); return; }
     const i = Math.min(2, Math.floor((o.t - o.w) / o.p)), u = clamp((o.t - o.w - i * o.p) / o.p, 0, 1), col = CNT_COL[i];
     const pop = easeOut(clamp(u / 0.22, 0, 1)), a = clamp((1 - u) / 0.3, 0, 1), sc = 1.7 - 0.7 * pop + 0.18 * u;
     if (!calm()) { const bk = Math.pow(1 - clamp(u * 1.6, 0, 1), 2); edges(col, 0.55 * bk); if (i === 2) edges('#9dff6d', 0.3 * bk); }   // the room flashes on every count, the last one greener
@@ -512,11 +517,13 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     glow(0, 0, 200, '#ff9a3d', 0.3); text('CLOSE CALL!', 0, 0, 74, '#ffb454', '#2a0a00');
     ctx.restore();
   }
+  // r9: the resume count-in ticks at the real tempo of the song (one number per beat), 0.27 s when no music plays
+  function resumeBeat() { const b = F.beatFn ? F.beatFn() : null; return b && b.bpm ? { p: clamp(60 / b.bpm, 0.27, 0.5), w: clamp((1 - b.phase) * 60 / b.bpm, 0, 0.5) } : { p: 0.27, w: 0 }; }
   // back from the pause screen: the song eases in from slow motion, a ring opens on the duo and BACK ON! pops
   function resumeFx(g) {
     if (calm() || !g || g.phase !== 'play' || F.card) return;
     if (!F.go || F.go.res || !F.go.cnt) {   // 3, 2, 1 with a flash on every beat, then BACK ON! and the song moves again
-      const p = 0.27; F.go = { t: 0, p, w: 0, tick: 0, cnt: true, res: true, boss: false, ready: 3 * p, dur: 3 * p + 0.6 };
+      const rb = resumeBeat(), p = rb.p, w = rb.w; F.go = { t: 0, p, w, tick: 0, cnt: true, res: true, boss: false, ready: w + 3 * p, dur: w + 3 * p + 0.6 };
     }
     ring(g.p.x, g.p.y - 20, 190, '#9ff0ff', 0.5); edges('#6fe3ff', 0.35);
   }
