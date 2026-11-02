@@ -894,6 +894,30 @@
   @keyframes betin{from{transform:translateY(8px) scale(.4);opacity:0}to{transform:none;opacity:1}}
   @media (prefers-reduced-motion:reduce){#levelup .bi.par,.card.pick .bet{animation:none!important}}
   /* end @css:07-cards round 9 */
+  /* @css:07-cards round 10 */
+  /* linked offers get a pill, a card can be locked for the reroll, the reroll says how lucky the deal was, picks burst */
+  .card.pick .lockb{position:absolute;top:-1px;right:18px;z-index:4;width:30px;height:28px;display:flex;align-items:center;justify-content:center;color:#cbbdf0;opacity:.7}
+  .card.pick .lockb svg{transition:transform .2s}
+  .card.pick .lockb.on{color:#ffe14a;opacity:1}
+  .card.pick .lockb.on svg{transform:scale(1.2) rotate(-8deg);filter:drop-shadow(0 0 4px #ffe14a)}
+  .card.pick.kept{box-shadow:0 0 0 2px #ffe14a99,0 0 14px #ffe14a55}
+  .card.pick.linked{border-color:#9dff6d}
+  .card.pick .lnk:has(~ .bet){right:auto;left:12px}
+  .card.pick .lnk{position:absolute;right:12px;bottom:6px;z-index:3;padding:0 7px;border-radius:8px;background:#9dff6d;color:#0e2a06;font-size:9px;font-weight:900;letter-spacing:.05em;line-height:14px;max-width:70%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 5px #000b;animation:lnkin .5s cubic-bezier(.3,1.6,.5,1) .5s both}
+  @keyframes lnkin{from{transform:translateY(8px) scale(.4);opacity:0}to{transform:none;opacity:1}}
+  #levelup .dealchip{margin:3px auto 0;display:flex;align-items:center;justify-content:center;gap:4px;width:max-content;padding:1px 9px;border-radius:9px;background:#0009;border:1px solid color-mix(in srgb,var(--rc,#cfd8e8) 60%,transparent);font-size:10px;font-weight:900;letter-spacing:.05em;color:#cfd8e8;animation:betin .5s cubic-bezier(.3,1.6,.5,1) both}
+  #levelup .dealchip i{width:6px;height:6px;border-radius:50%;background:var(--rc,#cfd8e8)} #levelup .dealchip b{color:var(--rc,#fff)}
+  #levelup .dealchip.lucky{box-shadow:0 0 10px var(--rc);color:#fff}
+  .card.pick .ic.ant{animation:icant .32s cubic-bezier(.3,1.5,.5,1) both}
+  @keyframes icant{0%{transform:scale(1)}30%{transform:scale(.8,.86)}65%{transform:scale(1.22,1.16)}100%{transform:scale(1.08)}}
+  .pbur{position:fixed;z-index:60;width:0;height:0;pointer-events:none}
+  .pbur u{position:absolute;left:-18px;top:-18px;width:36px;height:36px;border-radius:50%;border:3px solid var(--pc);box-shadow:0 0 12px var(--pc);animation:pburr .55s ease-out both}
+  .pbur s{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:var(--pc);box-shadow:0 0 6px var(--pc),0 0 2px #fff;animation:pburs .6s ease-out both}
+  @keyframes pburr{from{transform:scale(.3);opacity:1}to{transform:scale(3.2);opacity:0}}
+  @keyframes pburs{from{transform:translate(0,0) scale(1.2);opacity:1}to{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+  @media (max-height:700px){#levelup .dealchip{display:none}}
+  @media (prefers-reduced-motion:reduce){.card.pick .ic.ant,.card.pick .lnk,#levelup .dealchip,.pbur u,.pbur s{animation:none!important}.pbur{display:none}}
+  /* end @css:07-cards round 10 */
   /* end @css:07-cards */
   /* @css:18-access */
   :focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #ff5cb8}
