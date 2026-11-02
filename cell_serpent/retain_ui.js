@@ -2,7 +2,7 @@
 // the 30 day Season panel and the tiny achievement toast. Everything here is a free gift, none of it is required.
 import {
   questState, claimQuestChest, seasonStatus, claimSeason, ensureSeason, clearSeasonNote, SEASON_DAYS,
-  achievementCount, popAchievements, rewardText, spinStreak, spinFrame, hasShield,
+  achievementCount, popAchievements, rewardText, spinStreak, spinFrame, hasShield, dailyGoals, goalProgress,
 } from './sim.js';
 import { landStamp } from './keep_ui.js';
 
@@ -14,18 +14,26 @@ export function createRetainUI(c, openPanel, sec, openTrophies) {
   const reduce = () => !!save().settings.reduceMotion;
 
   // ---- the strip: three quest segments, the chest, and two small pills (Season, Achievements)
+  // gigs that can be claimed right now (the Daily Gigs list sits far down the Battle tab, so the strip points at it)
+  function readyGigs(s, day) { let n = 0; for (const g of dailyGoals(day)) if (goalProgress(s, day, g) >= g.target && !(s.daily && s.daily.day === day && s.daily.claimed[g.id])) n++; return n; }
   function renderStrip() {
     const el = $('qStrip'); if (!el) return;
     const day = c.dayKey(), s = save(), q = questState(s, day), se = seasonStatus(s, day), ac = achievementCount(s);
     ensureSeasonSafe(s, day);
     const segs = q.quests.map(x => `<span class="qseg${x.done ? ' done' : ''}" title="${esc(x.text)}"><b>${x.done ? '✔' : x.icon}</b><span class="qsb"><i style="width:${Math.round(x.prog / x.target * 100)}%"></i></span></span>`).join('');
+    const rg = readyGigs(s, day), gigChip = rg ? `<i class="qg" id="qGig" role="link" title="Daily Gigs ready to claim">\u{1F3A4} ${rg} ready</i>` : '';
     const chest = q.chestOpened ? '📭' : q.chestReady ? '🎁' : '📦';
-    el.innerHTML = `<button class="qmain${q.chestReady ? ' ready' : ''}" id="qOpen" aria-label="Daily Quests, ${q.doneCount} of 3 done"><span class="qt"><b>Daily Quests</b><small>${q.chestOpened ? 'All done, see you tomorrow' : q.chestReady ? 'Open your chest!' : q.doneCount + ' / 3'}</small></span><span class="qsegs">${segs}</span><span class="qchest${q.chestReady ? ' pop' : ''}">${chest}</span></button>` +
+    el.innerHTML = `<button class="qmain${q.chestReady ? ' ready' : ''}" id="qOpen" aria-label="Daily Quests, ${q.doneCount} of 3 done"><span class="qt"><b>Daily Quests</b><small>${q.chestOpened ? 'All done, see you tomorrow' : q.chestReady ? 'Open your chest!' : q.doneCount + ' / 3'}${gigChip}</small></span><span class="qsegs">${segs}</span><span class="qchest${q.chestReady ? ' pop' : ''}">${chest}</span></button>` +
       `<div class="qpills"><button class="qpill${se.ready ? ' ready' : ''}" id="qSeason"${hasShield(s) ? ' aria-label="Season, Streak Shield ready"' : ''}>🌟 Season <b>${se.stamps}/${SEASON_DAYS}</b>${hasShield(s) ? '<i class="qshield" title="Streak Shield ready">🛡️</i>' : ''}</button><button class="qpill" id="qAch">🏆 Achievements <b>${ac.got}/${ac.total}</b></button></div>`;
-    $('qOpen').onclick = () => { audio.unlock(); audio.play('click'); openQuests(); };
+    $('qOpen').onclick = e => { audio.unlock(); audio.play('click'); if (e && e.target.closest && e.target.closest('#qGig')) return showGigs(); openQuests(); };
     $('qSeason').onclick = () => { audio.unlock(); audio.play('click'); openSeason(); };
     $('qAch').onclick = () => { audio.unlock(); audio.play('click'); if (openTrophies) openTrophies(); };
     landStamp($('qSeason'), reduce());
+  }
+  function showGigs() {
+    const box = $('goalList') && $('goalList').closest('.gl-box'); if (!box) return openQuests();
+    try { box.scrollIntoView({ behavior: reduce() ? 'auto' : 'smooth', block: 'center' }); } catch (e) { box.scrollIntoView(); }
+    box.classList.remove('gl-flash'); void box.offsetWidth; box.classList.add('gl-flash'); setTimeout(() => box.classList.remove('gl-flash'), 1300);
   }
   function ensureSeasonSafe(s, day) { if (s.addict.season.key !== Math.floor(day / SEASON_DAYS)) { ensureSeason(s, day); c.persist(); } }
 
