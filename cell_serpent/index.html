@@ -583,6 +583,31 @@
     .bt-hero #stCanvas{width:26%} #stPortrait{width:64px;height:64px} .bt-dock .chips{padding-top:8px;padding-bottom:4px} #hub .chip{height:50px;font-size:18px} #hub .chip .st{font-size:9px}
   }
   @media(prefers-reduced-motion:reduce){.bt-hero.bt-sl,.bt-hero.bt-sr,.bt-hero.bt-bump{animation:none}}
+  /* battle round 4: chip reward markers, compact hero under 700px, daily gigs strip, side scroll fade */
+  #hub .chip .rw{font-size:11px;font-weight:900;letter-spacing:0;color:#2b1608;background:linear-gradient(180deg,#fff3b0,#ffc83d);border-radius:99px;padding:1px 6px 1px 5px;box-shadow:0 1px 0 #a8530a;white-space:nowrap} #hub .chip .rw::before{content:"\2726";margin-right:2px;font-size:9px}
+  #hub .chip.sel .rw{background:#fff;color:#7a1d52;box-shadow:0 1px 0 #b3406f}
+  #hub .chip .st.no{display:none}
+  #hub .chip .hk{position:absolute;top:-6px;left:-4px;width:17px;height:17px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:900;line-height:1;color:#fff;background:linear-gradient(180deg,#c98bff,#8a4bd8);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.5)}
+  #hub .chip{position:relative}
+  .side{-webkit-mask-image:none;mask-image:none} #tabBattle .side.more{-webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent)}
+  .gl-box{padding:8px 10px 10px!important;gap:6px} .gl-head{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%} .gl-head h2{font-size:17px;margin:0;display:flex;align-items:center;gap:8px} .gl-head h2 em{font-style:normal;font-size:11px;font-weight:900;letter-spacing:.06em;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.12);color:#ffe14a}
+  .gl-list{display:flex;flex-direction:column;gap:6px;width:100%}
+  .gl-row{display:grid;grid-template-columns:30px 1fr auto auto;align-items:center;column-gap:8px;padding:7px 8px;border-radius:14px;background:linear-gradient(100deg,#5a3410,#2e1a08);border:2px solid #b87a3a}
+  .gl-row.ready{border-color:#ffe14a;box-shadow:0 0 12px #ffe14a77} .gl-row.claimed{opacity:.55;border-color:#5f8f4a}
+  .gl-ic{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,.3);font-size:17px} .gl-row.claimed .gl-ic{background:#9dff6d;color:#10331a;font-weight:900}
+  .gl-tx{display:flex;flex-direction:column;gap:3px;min-width:0;text-align:left} .gl-tx b{font-size:13px;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gl-bar{display:block;height:6px;border-radius:3px;background:rgba(0,0,0,.5);overflow:hidden} .gl-bar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#4fd8f0,#9dff6d)}
+  .gl-n{font-size:11px;font-weight:900;color:var(--dim);font-variant-numeric:tabular-nums}
+  .gl-btn{appearance:none;font:inherit;font-size:12px;font-weight:900;min-width:62px;min-height:34px;padding:4px 9px;border-radius:11px;border:2px solid rgba(255,255,255,.18);background:rgba(0,0,0,.32);color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:3px} .gl-btn img{width:15px!important;height:15px!important}
+  .gl-btn.ready{background:linear-gradient(180deg,#fff3b0,#ffc83d);color:#2b1608;border-color:#fff;box-shadow:0 3px 0 #a8530a;cursor:pointer;animation:btnxt 1.4s ease-in-out infinite} .gl-btn.claimed{color:#9dff6d}
+  @media(max-height:700px){
+    .bt-hero .bt-body{gap:10px;margin-top:4px} .bt-hero #stCanvas{display:none}
+    .bt-hero .bt-side{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:12px;row-gap:3px;align-items:center;justify-items:start}
+    .bt-hero #stPortrait{grid-row:1/4;width:76px;height:76px} .bt-hero .bt-badges{justify-content:flex-start;min-height:0} .bt-hero .bt-badges:empty{display:none}
+    .bt-hero .info{align-items:flex-start;font-size:13px} .bt-hero .bt-side .tapme{display:block;margin:0;font-size:10px}
+    .bt-hero .stprog{margin-top:6px}
+  }
+  @media(prefers-reduced-motion:reduce){.gl-btn.ready{animation:none}}
   /* end @css:08-battle-tab */
 /* @css:19-transitions */
   /* screens: fade + scale in, fade out (transform and opacity only) */
@@ -976,7 +1001,7 @@
         <div class="bt-load"><b class="bt-lt">LOADOUT</b><div class="loadout" id="battleLoad"></div><button class="pill" id="loadEdit">EDIT</button></div>
       </div>
       <div class="stagebox"><div class="tiles" id="pigBox"></div></div>
-      <div class="stagebox"><h2 style="font-size:20px">DAILY GIGS</h2><button class="btn small alt" id="claimGigs" style="margin-bottom:6px">CLAIM ALL</button><div class="tiles" id="goalList"></div></div>
+      <div class="stagebox gl-box"><div class="gl-head"><h2>DAILY GIGS <em id="glCount"></em></h2><button class="pill" id="claimGigs">CLAIM ALL</button></div><div class="gl-list" id="goalList"></div></div>
     </div>
     <div class="tab" id="tabSkills"><h2>SKILLS</h2><div class="sub">Pick your five.</div><div class="loadout" id="loadoutRow"></div><div class="tiles" id="skillList"></div></div>
     <div class="tab" id="tabPets"><h2>PETS</h2><div class="sub">Little friends.</div><div class="tiles" id="petList"></div></div>

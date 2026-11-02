@@ -102,3 +102,24 @@ export function bindStageNav(hero, tabOn, step) {
   hero.addEventListener('pointercancel', () => { live = false; });
   addEventListener('keydown', e => { if (!tabOn() || e.ctrlKey || e.metaKey || e.altKey) return; if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1); });
 }
+
+// ---- round 4: first-clear reward markers on the stage chips, compact daily goals strip, scroll hint on the side buttons
+// the next stage shows what its first clear pays; cleared stages whose first Hard clear is still unclaimed get a purple H
+export function chipReward(n, cleared, hardCleared) {
+  if (n === cleared + 1) return `<span class="rw" title="First clear pays ${clearReward(n).sparkles} Sparkles and an egg">+${clearReward(n).sparkles}</span>`;
+  if (n <= cleared && n > (hardCleared || 0)) return `<span class="hk" title="First Hard clear still pays ${Math.round(clearReward(n).sparkles * 1.5)} Sparkles and an egg">H</span>`;
+  return '';
+}
+// one compact row per daily goal: text, mini bar, reward or CLAIM
+export function goalRowHTML(text, prog, target, rewardHTML, state) {
+  const pct = Math.round(Math.min(1, prog / target) * 100);
+  return `<span class="gl-ic">${state === 'claimed' ? '✓' : '🎯'}</span><span class="gl-tx"><b>${text}</b><span class="gl-bar"><i style="width:${pct}%"></i></span></span><span class="gl-n">${Math.min(prog, target)}/${target}</span>` +
+    `<button class="gl-btn ${state}" ${state === 'ready' ? '' : 'disabled'}>${state === 'claimed' ? 'DONE' : state === 'ready' ? 'CLAIM' : ''}${state === 'ready' ? '' : rewardHTML}</button>`;
+}
+// fade the right edge of the side button row while more buttons are hidden off screen
+export function watchSide(el) {
+  if (!el) return;
+  const m = () => el.classList.toggle('more', el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  if (!el.dataset.sw) { el.dataset.sw = '1'; el.addEventListener('scroll', m, { passive: true }); }
+  m(); requestAnimationFrame(m);
+}

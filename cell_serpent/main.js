@@ -15,7 +15,7 @@ import { setupPeeks, titleInfoHTML } from './title_fx.js';
 import { luckHTML, refreshPips, buildHTML } from './cards_ui.js';
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
-import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag } from './battle_ui.js';
+import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide } from './battle_ui.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
@@ -147,7 +147,7 @@ function renderBattle() {
   const chips = $('stChips'); chips.innerHTML = '';
   for (let n = 1; n <= Math.min(MAX_STAGE, save.cleared + 4); n++) {
     const c = document.createElement('button'); c.className = 'chip' + (n === sel ? ' sel' : '') + (n > save.cleared + 1 ? ' lock' : '') + (n <= save.cleared ? ' done' : '') + (n === save.cleared + 1 ? ' nxt' : '');
-    { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : ''); }
+    { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st${n > save.cleared ? ' no' : ''}">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : '') + chipReward(n, save.cleared, save.hardCleared); }
     c.onclick = () => { audio.play('click'); sel = n; renderBattle(); };
     chips.appendChild(c);
   }
@@ -164,7 +164,7 @@ function renderBattle() {
   $('btHint').textContent = !save.cleared && !save.runs ? 'Slide left and right, shoot up, keep the snake off the pink line!' : (playable && save.energy && tickEnergy(save, Date.now()) < ENERGY_COST ? 'Out of Voice! Tap + up top, or rest a bit.' : '');
   loadoutRow($('battleLoad'), true);
   { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; $('stProg').innerHTML = `<div class="pgl">Best <b>${pr}%</b></div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
-  hub2.renderSide();
+  hub2.renderSide(); watchSide($('battleSide'));
   renderPig();
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
   renderGoals();
@@ -286,15 +286,18 @@ function renderPets() {
 }
 function renderGoals() {
   const list = $('goalList'); list.innerHTML = '';
-  const day = dayKey();
-  for (const goal of dailyGoals(day)) {
+  const day = dayKey(), goals = dailyGoals(day);
+  let n = 0;
+  for (const goal of goals) {
     const prog = goalProgress(save, day, goal), done = prog >= goal.target, claimed = !!(save.daily && save.daily.day === day && save.daily.claimed[goal.id]);
     const rw = goal.reward.beats ? `${goal.reward.beats} ${curImg('beats')}` : `${goal.reward.sparkles} ${curImg('sparkles')}`;
-    const card = tile({ cls: 't-gold one', ic: '🎯', name: goal.text, desc: '', bar: Math.round(Math.min(1, prog / goal.target) * 100), barText: prog + ' / ' + goal.target, btn: claimed ? 'CLAIMED' : done ? 'CLAIM ' + rw : rw, gold: true, disabled: !(done && !claimed),
-      onclick: () => { if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); renderHub(); } } });
-    card.querySelector('.ds').remove();
-    list.appendChild(card);
+    const state = claimed ? 'claimed' : done ? 'ready' : 'wait';
+    const row = document.createElement('div'); row.className = 'gl-row ' + state; row.innerHTML = goalRowHTML(goal.text, prog, goal.target, rw, state);
+    if (state === 'ready') row.querySelector('button').onclick = () => { if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); renderHub(); } };
+    if (claimed) n++;
+    list.appendChild(row);
   }
+  const hd = $('glCount'); if (hd) hd.textContent = n + '/' + goals.length;
 }
 function renderSkills() {
   const list = $('skillList'); list.innerHTML = '';
