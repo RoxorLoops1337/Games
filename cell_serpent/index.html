@@ -1253,6 +1253,21 @@
   @media (prefers-reduced-motion:reduce){.evm.ready .evi{animation:none}}
 .tiles .tile.deal.wide{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:16px;row-gap:4px;padding:14px 16px 12px 34px}
   .tile.deal.wide .top{grid-row:1/4;grid-column:1;padding:0;flex-direction:column} .tile.deal.wide .nm{text-align:center;margin-top:8px;font-size:15px} .tile.deal.wide .ds{grid-column:2;text-align:left} .tile.deal.wide .btn{grid-column:2;width:100%}
+  /* round 7: stacked chest and exchange tiles (name width no longer depends on text size), Epic+ foil on loot cards */
+  .tile.chestcard .top,.tile.xch .top{flex-direction:column;align-items:center;text-align:center;gap:6px}
+  .tile.chestcard .nm,.tile.xch .nm{width:100%;font-size:15px;overflow-wrap:normal;hyphens:none;word-break:normal;text-wrap:balance}
+  .tile.chestcard .ds{text-align:center}
+  .tile.xch .ic{width:64px;height:64px;border-radius:18px;background:radial-gradient(circle at 50% 35%,rgba(255,255,255,.2),rgba(0,0,0,.22));border:2px solid rgba(255,208,100,.4)} .tile.xch .ic img{width:52px;height:52px} .tile.xch .ic{font-size:32px}
+  .tile.ward .ic{width:68px;height:68px} .tile.ward .ds{font-weight:800;color:#ffe3a8;font-size:12.5px;text-align:center} .tile.ward .lv{margin-top:2px}
+  .tile.ward.locked .ic{filter:grayscale(.55) brightness(.8)} .tile.ward.locked{opacity:.8}
+  .tile.ward.worn{border-color:#9dff6d;background:linear-gradient(180deg,#355a1c,#1f3a10)}
+  .wbadge{position:absolute;top:-9px;right:10px;padding:2px 9px;border-radius:99px;font-style:normal;font-size:10.5px;font-weight:900;letter-spacing:.8px;background:#3a200a;color:#ffd9a0;border:2px solid #ffb04d} .wbadge.on{background:#9dff6d;color:#10331a;border-color:#fff;box-shadow:0 0 10px rgba(157,255,109,.6)}
+  .lootx .it.rar2::before,.lootx .it.rar3::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:1;opacity:.3;mix-blend-mode:screen;background-size:240% 240%;animation:foilmove 3.2s ease-in-out .5s infinite alternate}
+  .lootx .it.rar2::before{background-image:repeating-linear-gradient(125deg,rgba(176,108,255,0) 0 9px,rgba(190,130,255,.55) 9px 13px,rgba(120,190,255,.4) 13px 17px,rgba(176,108,255,0) 17px 26px)}
+  .lootx .it.rar3::before{opacity:.38;background-image:repeating-linear-gradient(125deg,rgba(255,176,77,0) 0 7px,rgba(255,226,120,.6) 7px 10px,rgba(255,120,190,.45) 10px 13px,rgba(120,230,255,.45) 13px 16px,rgba(255,176,77,0) 16px 22px)}
+  @keyframes foilmove{from{background-position:0 0}to{background-position:100% 100%}}
+  .lootx .it.rar2>*,.lootx .it.rar3>*{position:relative;z-index:2} .lootx .it .shn,.lootx .it .knew{position:absolute}
+  @media (prefers-reduced-motion:reduce){.lootx .it.rar2::before,.lootx .it.rar3::before{animation:none}}
   /* end @css:10-shop-gear-stats */
   /* @css:16-addiction */
   .nextrew{flex:none;width:100%;display:flex;align-items:center;gap:10px;padding:7px 14px;background:rgba(20,14,56,.92);border-bottom:2px solid var(--line);cursor:pointer;min-height:44px}

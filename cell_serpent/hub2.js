@@ -349,8 +349,10 @@ export function createHub2(c) {
       const grid = document.createElement('div'); grid.className = 'tiles';
       for (const o of OUTFITS) {
         const own = s.outfits.owned[o.id], av = outfitAvailable(o, day), wn = s.outfits.worn === o.id, wname = WEAPONS.find(w => w.id === o.weapon).name;
-        grid.appendChild(tile({ cls: 't-gold' + (wn ? ' on-loadout' : ''), ic: iconURL('hat_' + o.id) ? ico('hat_' + o.id, 42) : `<span class="kemo">${o.hat}</span>`, name: o.name, chip: o.event ? EVENT_THEMES_NAME(o.event) : '', desc: `${wname} +${Math.round((o.mul - 1) * 100)}%`, btn: own ? (wn ? 'TAKE OFF' : 'WEAR') : av ? rib(o.price) : 'Event only', gold: !own && av, disabled: !own && (!av || s.ribbons < o.price),
-          onclick: () => { const sv = save(); if (own) wearOutfit(sv, wn ? '' : o.id); else if (!buyOutfit(sv, o.id, day)) return; c.persist(); audio.play('buy'); openWardrobe(); } }));
+        const wt = tile({ cls: 't-gold xch ward' + (wn ? ' on-loadout worn' : '') + (!own && !av ? ' locked' : ''), ic: iconURL('hat_' + o.id) ? ico('hat_' + o.id, 42) : `<span class="kemo">${o.hat}</span>`, name: o.name, chip: o.event ? EVENT_THEMES_NAME(o.event) : '', desc: `${wname} +${Math.round((o.mul - 1) * 100)}%`, btn: own ? (wn ? 'TAKE OFF' : 'WEAR') : av ? rib(o.price) : 'Event only', gold: !own && av, disabled: !own && (!av || s.ribbons < o.price),
+          onclick: () => { const sv = save(); if (own) wearOutfit(sv, wn ? '' : o.id); else if (!buyOutfit(sv, o.id, day)) return; c.persist(); audio.play('buy'); openWardrobe(); } });
+        if (wn || own) { const bd = document.createElement('i'); bd.className = 'wbadge' + (wn ? ' on' : ''); bd.textContent = wn ? 'WORN' : 'OWNED'; wt.appendChild(bd); }
+        grid.appendChild(wt);
       }
       body.appendChild(grid);
     });
@@ -377,7 +379,7 @@ export function createHub2(c) {
       });
       body.appendChild(track);
       const grid = document.createElement('div'); grid.className = 'tiles';
-      for (const it of EXCHANGE_ITEMS) grid.appendChild(tile({ cls: 't-gold', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('buy'); c.refreshCur(); openEvent(); } } }));
+      for (const it of EXCHANGE_ITEMS) grid.appendChild(tile({ cls: 't-gold xch', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('buy'); c.refreshCur(); openEvent(); } } }));
       body.appendChild(grid);
     });
   }
@@ -424,7 +426,7 @@ export function createHub2(c) {
     sec(list, 'Limit Shop');
     for (const it of LIMIT_ITEMS) { const left = it.limit - (bought[it.id] || 0); list.appendChild(tile({ cls: 't-weapon', ic: it.id === 'egg' ? icon('egg') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, chip: left + ' left this week', desc: '', btn: it.price + ' ' + curImg('beats'), disabled: left < 1 || s.beats < it.price, onclick: () => { if (buyLimit(save(), it.id, day)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } })); }
     sec(list, 'Exchange Shop');
-    for (const it of EXCHANGE_ITEMS) list.appendChild(tile({ cls: 't-gold', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } }));
+    for (const it of EXCHANGE_ITEMS) list.appendChild(tile({ cls: 't-gold xch', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } }));
     sec(list, 'Pass');
     list.appendChild(tile({ cls: 't-gold one', ic: '🎫', name: 'Fan Club Pass', desc: '30 days of daily gifts', btn: 'LOOK', gold: true, onclick: () => { audio.play('click'); openPass(); } }));
   }
