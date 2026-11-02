@@ -301,6 +301,8 @@ export const PASSIVES = [
   { id: 'hbk', name: 'Heart Mender', skin: 'love', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Heart pulses heal ' + v + '% less', desc: 'Heart pulses heal 25% less', apply: () => {} },
   { id: 'oil', name: 'Oil Can', skin: 'rust', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Creaky lurches are ' + v + '% gentler', desc: 'Creaky lurches are 25% gentler', apply: () => {} },
   { id: 'swt', name: 'Sweet Tooth', skin: 'sour', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Pop rushes are ' + v + '% weaker', desc: 'Pop rushes are 25% weaker', apply: () => {} },
+  { id: 'hwd', name: 'Heart Ward', skin: 'love', max: 4, w: 0.6, min: 1, minStage: 41, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Sweetheart wards last ' + v + '% shorter', desc: 'Sweetheart wards last 25% shorter', apply: () => {} },
+  { id: 'hny', name: 'Honey Jar', skin: 'mighty', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Iron Hide shrugs off slows ' + v + '% less', desc: 'Iron Hide shrugs off slows 25% less', apply: () => {} },
   { id: 'tis', name: 'Tissue Box', skin: 'sneezy', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Sneeze jolts are ' + v + '% shorter', desc: 'Sneeze jolts are 25% shorter', apply: () => {} },
   { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, minStage: 4, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
@@ -966,7 +968,7 @@ export const traitOf = (g, sn) => (g.mode === '' && !sn.boss && g.stage >= TRAIT
 export const LATE_TRAIT_FROM = 41, LOVE_WARD_TIME = 2.5, CREAK_STALL_L = 1.2, CREAK_JERK_L = 1.0, CREAK_PUSH_L = 0.8, SNEEZE_AFTER = 0.6, SNEEZE_AFTER_MUL = 0.5, GRUMPY_LATE = 0.55;
 export const DISCO_SWING_L = 0.3, SOUR_RUSH_L = 1.3, SOUR_MUL_L = 1.2, MIGHTY_SLOW_L = 0.92;
 export const lateTrait = (g, sn) => (g.stage >= LATE_TRAIT_FROM ? traitOf(g, sn) : '');
-const mightySlow = g => (g.stage >= LATE_TRAIT_FROM ? MIGHTY_SLOW_L : MIGHTY_SLOW);
+const mightySlow = g => { const m = g.stage >= LATE_TRAIT_FROM ? MIGHTY_SLOW_L : MIGHTY_SLOW; return m - (m - 0.55) * Math.min(1, uv(g, 'hny') / 100); };   // Honey Jar: the slow bites again
 function traitSpeed(g, sn) {
   const k = traitOf(g, sn), late = g.stage >= LATE_TRAIT_FROM;
   if (k === 'disco') return 1 + (late ? DISCO_SWING_L : DISCO_SWING) * Math.cos(6.2832 * beatPhase(g));
@@ -984,7 +986,7 @@ function traitTick(g, sn, dt) {
   if (k === 'love') {
     sn.loveT = (sn.loveT === undefined ? LOVE_EVERY : sn.loveT) - dt;
     if (sn.loveT <= 0) { sn.loveT = LOVE_EVERY; let n = 0; for (let i = 1; i < segs.length && n < LOVE_CELLS; i++) if (segs[i].hp > 0) { segs[i].hp = Math.min(segs[i].max, segs[i].hp + segs[i].max * LOVE_HEAL * (1 - Math.min(1, uv(g, 'hbk') / 100))); n++; } g.events.push({ t: 'trait', k, x: h.x, y: h.y, late: g.stage >= LATE_TRAIT_FROM }); if (g.stage >= LATE_TRAIT_FROM) sn.cue = g.t; }
-    if (g.stage >= LATE_TRAIT_FROM && sn.cue > 0 && g.t - sn.cue < LOVE_WARD_TIME) for (let i = 1; i < 3 && i < segs.length; i++) if (segs[i].hp > 0) segs[i].warded = true;
+    if (g.stage >= LATE_TRAIT_FROM && sn.cue > 0 && g.t - sn.cue < LOVE_WARD_TIME * (1 - Math.min(1, uv(g, 'hwd') / 100))) for (let i = 1; i < 3 && i < segs.length; i++) if (segs[i].hp > 0) segs[i].warded = true;
   } else if (k === 'rust') {
     const ph = g.t % CREAK_EVERY, on = ph < (g.stage >= LATE_TRAIT_FROM ? CREAK_STALL_L : CREAK_STALL);
     if (on && !sn.creak) g.events.push({ t: 'trait', k, x: h.x, y: h.y, late: g.stage >= LATE_TRAIT_FROM });
