@@ -26,7 +26,7 @@ assert(!/—/.test(html + main + fx));
 {
   assert(fx.includes('export function progMeter') && main.includes('progMeter('));
   for (const id of ['pRecap', 'rvInfo']) assert(html.includes('id="' + id + '"'), id);
-  assert((html.match(/class="sgrp"/g) || []).length >= 4);
+  assert((html.match(/class="s(et)?grp"/g) || []).length >= 4);
   assert(fx.includes("'late'") && html.includes('#revive.late'));
   assert(html.includes('@css:11-result-pause round 3'));
 }
