@@ -1215,6 +1215,25 @@
   .chest3.hold2 img{filter:drop-shadow(0 0 4px var(--fc)) drop-shadow(0 0 9px var(--fc))} .chest3[data-ft="3"].hold2::before{inset:-60%}
   @keyframes chhold{0%{transform:none}100%{transform:scale(1.14) rotate(2deg)}} @keyframes chhold2{0%{transform:scale(1.16) translateX(-2px) rotate(-3deg)}50%{transform:scale(1.2) translateX(2px) rotate(3deg)}100%{transform:scale(1.16) translateX(-2px) rotate(-3deg)}} @keyframes chpulse{to{transform:scale(1.18);opacity:.75}}
   @media (prefers-reduced-motion:reduce){.chest3.hold,.chest3.hold2,.chest3.hold::before,.chest3.hold2::before{animation:none}}
+.radar .rbb{fill:rgba(255,225,74,.18);stroke:#ffe14a;stroke-width:1.6;transform-box:fill-box;transform-origin:center;animation:rbbp 1.5s ease-in-out infinite;pointer-events:none}
+@keyframes rbbp{0%,100%{transform:scale(.85);opacity:.9}50%{transform:scale(1.3);opacity:.35}}
+@media (prefers-reduced-motion:reduce){.radar .rbb{animation:none}}
+.loot .it .knew.lnew{top:5px;right:auto;left:5px;font-size:10px;z-index:3}
+  .lnewstar{position:fixed;width:28px;height:28px;background:center/contain no-repeat;z-index:99999;pointer-events:none;filter:drop-shadow(0 0 6px #ffe14a)}
+  nav button.lnewhit,[data-tab].lnewhit{animation:lnh .45s ease-out} @keyframes lnh{40%{transform:scale(1.25);filter:brightness(1.6)}}
+  @media (prefers-reduced-motion:reduce){.lnewstar{display:none}}
+.evtrack{width:min(520px,100%);margin:20px auto 14px}
+  .evbar{height:12px;border-radius:99px;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.25);overflow:hidden;margin:0 12.5%} .evbar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ffb04d,#ffe14a);box-shadow:0 0 8px #ffb04d}
+  .evms{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:-34px}
+  .evm{all:unset;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:default}
+  .evm .evi{position:relative;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:24px;background:#2c2150;border:3px solid rgba(255,255,255,.28);opacity:.75} .evm .evi img{width:30px;height:30px;object-fit:contain}
+  .evm .evi b{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);padding:0 6px;border-radius:99px;background:#1a1240;border:2px solid rgba(255,255,255,.5);font-size:11px;font-weight:900;color:#fff}
+  .evm .evi em{position:absolute;top:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:#9dff6d;color:#10331a;font-style:normal;font-size:12px;font-weight:900;display:grid;place-items:center;border:2px solid #fff}
+  .evm .evlab{font-size:12px;font-weight:900;color:var(--dim)} .evm.got .evi{opacity:1;border-color:#9dff6d} .evm.next .evi{opacity:1;border-color:#ffe14a}
+  .evm.ready{cursor:pointer;-webkit-tap-highlight-color:transparent} .evm.ready .evi{opacity:1;border-color:#ffe14a;background:#5a3a10;animation:evrdy 1s ease-in-out infinite alternate} .evm.ready .evlab{color:#ffe14a} @keyframes evrdy{to{transform:scale(1.12);box-shadow:0 0 16px #ffe14a}}
+  @media (prefers-reduced-motion:reduce){.evm.ready .evi{animation:none}}
+.tiles .tile.deal.wide{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:16px;row-gap:4px;padding:14px 16px 12px 34px}
+  .tile.deal.wide .top{grid-row:1/4;grid-column:1;padding:0;flex-direction:column} .tile.deal.wide .nm{text-align:center;margin-top:8px;font-size:15px} .tile.deal.wide .ds{grid-column:2;text-align:left} .tile.deal.wide .btn{grid-column:2;width:100%}
   /* end @css:10-shop-gear-stats */
   /* @css:16-addiction */
   .nextrew{flex:none;width:100%;display:flex;align-items:center;gap:10px;padding:7px 14px;background:rgba(20,14,56,.92);border-bottom:2px solid var(--line);cursor:pointer;min-height:44px}
