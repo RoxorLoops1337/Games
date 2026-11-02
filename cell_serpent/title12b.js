@@ -40,7 +40,7 @@ export function welcomeBack(save, now, hours) {
   if (save.streak && save.streak.n > 1) bits.push(`\u{1F525} ${save.streak.n} day streak`);
   const tip = away && save.idle ? idleAmount(save, now) : 0;
   if (tip >= 50) bits.unshift(`\u{1F9FA} +${tip} Beats`);
-  if ((save.cleared || 0) < 3 && save.runs >= 2) bits.push('\u{1F4A1} Pop yellow cells to upgrade');   // a nudge for the harsh early stages, no numbers changed
+  if ((save.cleared || 0) === 2 && save.runs >= 3) bits.push('\u{1F4A1} Pop yellow cells to upgrade');   // a nudge for the harsh early stages, no numbers changed
   return { head: away ? 'Welcome back!' : 'Ready for more?', sub: `Stage ${next} is waiting` + (away ? ` · ${away}` : ''), bits };
 }
 export function welcomeHTML(w) {
