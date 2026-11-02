@@ -673,11 +673,13 @@ export function computeRunSetup(p) {
 // ------------------------------------------------------------------------------------------------ daily: login, quests, challenge
 // add to today's quest counter of a stat (quests read p.daily.prog[stat]); used by the hooks outside a run (crates, gear merges, the wheel)
 function dailyAdd(p, stat, n) { if (!isObj(p.daily)) return; if (!isObj(p.daily.prog)) p.daily.prog = {}; p.daily.prog[stat] = (p.daily.prog[stat] || 0) + n; }
+// quests a player cannot work on yet are never dealt (Endless unlocks with the first stage clear)
+export const questAvailable = (p, q) => !(q.stat === 'endlessWave' && !endlessUnlocked(p));
 export function ensureDaily(p, now, rng) {
   const day = dayOf(now);
   if (p.daily.day === day && p.daily.quests.length) return false;
   const r = rng || makeRng(hashSeed('quests' + day));
-  const pool = r.shuffle(QUESTS);
+  const pool = r.shuffle(QUESTS.filter((q) => questAvailable(p, q)));
   const picked = []; const stats = new Set();
   for (const q of pool) { if (stats.has(q.stat)) continue; stats.add(q.stat); picked.push({ id: q.id, claimed: false }); if (picked.length >= 3) break; }
   p.daily.day = day; p.daily.quests = picked; p.daily.rerolled = false; p.daily.prog = {};
@@ -694,7 +696,7 @@ export function rerollQuest(p, id, rng) {
   if (p.daily.rerolled) return { ok: false, reason: 'used' };
   const slot = p.daily.quests.find((x) => x.id === id); if (!slot || slot.claimed) return { ok: false };
   const have = new Set(p.daily.quests.map((x) => questDef(x.id).stat));
-  const opts = QUESTS.filter((q) => !have.has(q.stat));
+  const opts = QUESTS.filter((q) => !have.has(q.stat) && questAvailable(p, q));
   if (!opts.length) return { ok: false };
   slot.id = rng.pick(opts).id; p.daily.rerolled = true; return { ok: true };
 }

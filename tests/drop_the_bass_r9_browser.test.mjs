@@ -62,6 +62,7 @@ try {
   });
   const act = () => page.evaluate(() => document.activeElement && document.activeElement.id);
   await tap(15); need(await act() === 'gb', 'right goes to the next button in the row (' + await act() + ')');
+  need(await page.evaluate(() => { const l = document.getElementById('dtb-live'); return !!l && /Gamepad connected/.test(l.textContent); }), 'the first pad use in the menus says Gamepad connected once');
   await tap(13); need(await act() === 'gd', 'down goes to the button below (' + await act() + ')');
   await tap(14); need(await act() === 'gc', 'left goes back along the row (' + await act() + ')');
   await tap(12); need(await act() === 'ga', 'up goes to the button above (' + await act() + ')');

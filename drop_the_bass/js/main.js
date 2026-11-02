@@ -24,7 +24,7 @@ import { installDiag } from './diag.js';
 try { installDiag(window, localStorage, () => ({ lang: I18N.getLang(), screen: app.screen })); } catch (e) { /* no storage */ }
 const canvas = document.getElementById('game');
 const ui = document.getElementById('ui');
-const menuPad = new MenuPad();
+const menuPad = new MenuPad({ onUse: () => toast(t('battle.pad.connected', 'Gamepad connected')) });
 const ctx = canvas.getContext('2d');
 setRoot(ui);
 initDomA11y(ui);

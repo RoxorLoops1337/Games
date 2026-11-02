@@ -14,4 +14,13 @@ const o1 = M.applyRunResult(p, res, null, NOW);
 ok(o1.seasonNew === 1, 'a run that finishes a season goal reports it (' + o1.seasonNew + ')');
 const o2 = M.applyRunResult(p, res, null, NOW);
 ok(o2.seasonNew === 0, 'an already finished goal is not reported again');
+// ---- a new player is never dealt the Endless quest (Endless is locked until the first stage clear)
+{
+  let seen = 0;
+  for (let d = 0; d < 200; d++) { const q = M.newProfile(0); M.ensureDaily(q, Date.UTC(2026, 0, 1) + d * 86400000); if (q.daily.quests.some((x) => x.id === 'q_endless')) seen++; }
+  ok(seen === 0, 'q_endless is never dealt before the first clear');
+  let later = 0;
+  for (let d = 0; d < 200; d++) { const q = M.newProfile(0); q.prog.garage.cleared = true; M.ensureDaily(q, Date.UTC(2026, 0, 1) + d * 86400000); if (q.daily.quests.some((x) => x.id === 'q_endless')) later++; }
+  ok(later > 0, 'q_endless is dealt once Endless is open');
+}
 console.log('drop_the_bass r9: ' + n + ' checks passed');
