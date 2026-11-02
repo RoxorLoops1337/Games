@@ -12,7 +12,9 @@ import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
 import { nextGoal, closeCall, renderGoal } from './result_goal.js';
 import { flyPick } from './pickfly.js';
+import { edgeMap } from './follow_b13c.js';
 import { newAim, aimDown, aimMove, aimUp, aimTick, aimAssisted } from './aim_b12f.js';
+import { levelUpJuice } from './juice_b13b.js';
 import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint, progMeter } from './result_fx.js';
 import { applyCbPalette, paintCbStrip, applyCbRarity } from './cb_palette.js';
 import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.js';
@@ -97,6 +99,7 @@ const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
 const fol = { on: false, id: -1, x: 0, ptT: 0, keyT: 0 };   // b12s: follow-finger control (lane stages): the first finger owns movement, the duo chases its x
 const MOVE_KEYS = new Set(['a', 'd', 'arrowleft', 'arrowright']);
 const followMode = () => !!g && !g.ring && save.settings.controlStyle !== 'joystick';
+const folX = x => g && g.p ? edgeMap(x, g.p.zone.x0, g.p.zone.x1, !!save.settings.leftHand) : x;   // b13c: the outer strip of the screen reaches the lane wall
 const keys = {};
   const aimS = newAim();   // b11: circle stages aim all round: the finger or mouse sets the target angle, the sim gets an eased angle
   const aimTk = {};
@@ -301,7 +304,7 @@ $('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });
 $('gapFix').onclick = () => { const t = $('gapFix').dataset.tab; if (!t) return; audio.play('click'); hubTab = t; hubTabSwitch(); };
 $('wStrip').onclick = e => { const b = e.target.closest('.wact'); if (!b) return; const r = actTarget(+b.dataset.act, save.cleared, Math.min(MAX_STAGE, save.cleared + 4)); if (!r) return; if (r.locked) { audio.play('deny'); toast('Clear stage ' + Math.max(1, r.need) + ' to open this world'); return; } audio.play('click'); sel = r.stage; renderBattle(); };
-$('stOverview').onclick = () => { audio.play('click'); openOverview({ save: () => save, max: MAX_STAGE, isBoss: isBossStage, kindOf: stageKind, reach: () => Math.min(MAX_STAGE, save.cleared + 4), sel: () => sel, audio, pick: n => { sel = n; renderBattle(); } }); };
+$('stOverview').onclick = () => { audio.play('click'); openOverview({ save: () => save, max: MAX_STAGE, isBoss: isBossStage, kindOf: stageKind, reach: () => Math.min(MAX_STAGE, save.cleared + 4), sel: () => sel, audio, info: stageInfo, mine: () => power(save), rec: n => recPower(n, false), kit: () => kit, pick: n => { sel = n; renderBattle(); } }); };
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
 $('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
 $('stGo').onclick = () => { audio.unlock(); audio.play('click'); const b = $('stGo'); b.classList.remove('go-hit'); void b.offsetWidth; b.classList.add('go-hit'); beginStage(sel); };
@@ -614,7 +617,7 @@ canvas.addEventListener('pointerdown', e => {
   if (!g.ring && save.settings.thumbZone && !inThumbZone(e.clientY, innerHeight)) return;   // thumb zone: only the bottom third steers
   if (followMode()) {   // b12s: the duo chases the finger x at once (no dead zone, no joystick base)
     if (fol.on) return;
-    fol.on = true; fol.id = e.pointerId; fol.x = gp.x; fol.ptT = performance.now();
+    fol.on = true; fol.id = e.pointerId; fol.x = folX(gp.x); fol.ptT = performance.now();
     canvas.setPointerCapture(e.pointerId); return;
   }
   if (joy.on) return;
@@ -624,7 +627,7 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('pointermove', e => {
   if (mode === 'play' && g.ring && (e.pointerType === 'mouse' || (joy.on && e.pointerId === joy.id))) { if (e.pointerType === 'mouse' && !aimS.mode) aimS.mode = 1; aimAt(e, false); return; }   // b11: drag (or hover with a mouse) to sweep the aim
-  if (fol.on) { if (e.pointerId === fol.id) { fol.x = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; fol.ptT = performance.now(); } return; }
+  if (fol.on) { if (e.pointerId === fol.id) { fol.x = folX(R.toGame(e.clientX * (canvas.width / innerWidth), 0).x); fol.ptT = performance.now(); } return; }
   if (!joy.on || e.pointerId !== joy.id) return;
   if (joy.tz != null) { joy.tz = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; return; }   // thumb zone: the duo follows the finger
   const L = R.layout(), dpr = canvas.width / innerWidth, rad = 70 * L.s / dpr;
@@ -634,7 +637,7 @@ canvas.addEventListener('pointermove', e => {
   joy.dx = dx; joy.dy = 0;
 });
 const endJoy = e => { if (e.pointerId === aimS.id) aimUp(aimS); if (e.pointerId === fol.id) fol.on = false; if (e.pointerId === joy.id) { joy.tz = null; joy.on = false; joy.dx = joy.dy = 0; } };
-canvas.addEventListener('pointerup', endJoy); canvas.addEventListener('pointercancel', endJoy);
+canvas.addEventListener('pointerup', endJoy); canvas.addEventListener('pointercancel', endJoy); canvas.addEventListener('lostpointercapture', endJoy);   // b13c: a lost capture never leaves a ghost finger
 addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true; if (MOVE_KEYS.has(e.key.toLowerCase())) fol.keyT = performance.now();
   if (e.key === 'Escape') goBack(false);
@@ -761,7 +764,7 @@ function showResult() {
     else for (const id of fk) rows.push(`<div class="r">${icon(id)}${cu(out.frags[id])} ${WEAPONS.find(w => w.id === id).name} fragment</div>`); }
   $('rList').innerHTML = rows.join('');
   $('rTitle').textContent = r.mode === 'inv' ? (r.won ? 'THE GIANT SERPENT BOWS!' : 'THE GIANT SERPENT WON') : r.mode === 'pig' ? (r.won ? 'PIGGY BANKS CRACKED!' : 'THE PIGGIES ESCAPED') : r.won ? 'STAGE CLEAR!' : r.name.toUpperCase() + ' WINS';
-  $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.') : `You popped ${r.kills} ${r.kills === 1 ? 'cell' : 'cells'}. Spend your Beats in the hub and try again.`;
+  $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.') : `You popped ${r.kills} ${r.kills === 1 ? 'cell' : 'cells'}. ${isUnlocked('stats', save) ? 'Spend your Beats in the hub and try again.' : 'Every pop counts. Try again!'}`;
   $('result').classList.toggle('won', !!r.won); { const cc = closeCall(r); $('result').classList.toggle('close', !!cc); if (cc) { $('rTitle').textContent = cc.title; $('rSub').textContent = cc.sub; } }
   announce((r.won ? 'Stage clear. ' : 'Game over. ') + $('rTitle').textContent + '. ' + r.kills + (r.kills === 1 ? ' cell' : ' cells') + ' popped, ' + out.beats + ' beats earned.');
   if (r.hard) hard = true;
@@ -769,6 +772,7 @@ function showResult() {
   if (out.levelUps) rows.push(`<div class="r">⭐ Level ${levelInfo(save.xp).lv}!</div>`);
   const li1 = levelInfo(save.xp), reduce = save.settings.reduceMotion;
   levelBar(li0, li1, reduce);
+  if (out.levelUps && !reduce) setTimeout(() => { if (mode === 'over' && $('result').classList.contains('on')) levelUpJuice($('rLv'), li1.lv, audio); }, 1100);   // b13b: the badge pops once the bar has filled
   { const pct = Math.floor((r.progress || 0) * 100), best = out.first || out.starsGained > 0 || (!r.won && !r.mode && !r.hard && pct > out.prevPct && out.prevPct > 0);
     $('rRibbon').textContent = best ? (out.first ? 'FIRST CLEAR!' : out.starsGained > 0 ? 'NEW BEST STARS!' : 'NEW BEST ' + pct + '%') : ''; $('rRibbon').classList.toggle('on', !!best); celebrateBest($('rRibbon'), { reduce, delta: best && !out.first && !(out.starsGained > 0) ? pct - out.prevPct : 0, play: () => audio.play('star3') }); }
   if (r.cp50) rows.push(`<div class="r">⚡ +10 Voice back</div>`);
@@ -813,7 +817,7 @@ document.addEventListener('click', e => {
 const SFX = { lull: 'levelup', surgewarn: 'swarm', surge: 'roar', phase2: 'roar', won: 'clear', chestdrop: 'power', chest: 'levelup', upgradecell: 'cell', groove: 'groovehit', leak: 'leak', swab: 'meow', needles: 'squeak', dragon: 'coo', maw: 'bark', strike: 'hoot', bubble: 'quack', pulse: 'moo' };
 const PETSND = { kitten: 'meow', puppy: 'bark', lamb: 'baa', turtle: 'boop', piglet: 'oink', hamster: 'squeak' };
 const BUZZ = { dead: [80, 40, 90], revive: 40, boom: 24, upgradecell: 16, levelup: [14, 24, 20, 24, 40], chest: [10, 30, 14, 30, 36], danger: 28, leak: 60 };
-const FX_SOUND = new Set(['shoot', 'hit', 'kill', 'boom', 'coin', 'hurt', 'block', 'power', 'levelup', 'clear', 'stage', 'revive', 'dead', 'swarm', 'roar', 'surgewarn', 'surge', 'phase2', 'won', 'chestdrop', 'chest', 'swab', 'needles', 'dragon', 'maw', 'strike', 'bubble', 'pulse', 'danger', 'mend', 'lull', 'skip', 'upgradecell', 'groove', 'leak', 'beatshot', 'encore', 'encoreready', 'goldpop', 'goldfade', 'quartet', 'quartetstart', 'quartetfail', 'clutch', 'checkpoint']);
+const FX_SOUND = new Set(['shoot', 'hit', 'kill', 'boom', 'coin', 'hurt', 'block', 'power', 'levelup', 'clear', 'stage', 'revive', 'dead', 'swarm', 'roar', 'surgewarn', 'surge', 'phase2', 'won', 'chestdrop', 'chest', 'swab', 'needles', 'dragon', 'maw', 'strike', 'bubble', 'pulse', 'danger', 'mend', 'lull', 'skip', 'upgradecell', 'groove', 'leak', 'beatshot', 'encore', 'encoreready', 'goldpop', 'goldfade', 'quartet', 'quartetstart', 'quartetfail', 'clutch', 'checkpoint', 'gloom', 'nap', 'pillow', 'shell', 'metro', 'soundcheck']);
 let hitSrc = '', hitAt = 0;
 const now8 = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 function drain(game, sound) {
@@ -861,7 +865,7 @@ function frame(now) {
     clk.feed(dt, R.timeScale());   // slow motion on the last cell / boss face
     while (clk.take()) { step(g, 1 / 60, readInput()); if (g.phase === 'levelup' || g.phase === 'dead' || g.phase === 'won') { clk.drop(); break; } }   // never bank time while the sim waits (cards, game over)
     if (g.phase === 'levelup' && cardsFor !== g.choices) showCards();
-    if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5) && !(g.phase === 'won' && R.clearBusy())) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked) showRevive(); else if (!reviveAsked) showResult(); } }
+    if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5) && !(g.phase === 'won' && R.clearBusy())) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked && !(!isUnlocked('sparkles', save) && save.sparkles < reviveCost(g.revivesUsed))) showRevive();   /* b13a: a fresh account with no Sparkles skips the revive card it cannot use */ else if (!reviveAsked) showResult(); } }
     if (watchGroove(g.groove) < 0) audio.play('groovelost');
     watchStreak(audio.beatStreak); if (g.phase === 'play') audio.chainWatch();
     audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0); audio.mix({ stage: g.stage, boss: isBossStage(g.stage), groove: g.groove / 20, danger: g.danger, skin: cues.skin(g), bphase: cues.tick(g), combo: g.t - g.lastKill < 2.2 ? g.combo : 0 });

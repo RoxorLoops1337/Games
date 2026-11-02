@@ -14,6 +14,8 @@ import { registerB10 as registerS10 } from './screen_b10.js';
 import { registerA10, keyLift, createAmbient } from './audio_b10b.js';
 import { registerA11, twistOf } from './audio_b11b.js';
 import { registerB12i } from './audio_b12i.js';
+import { registerB13h, progShift, fillOf } from './audio_b13h.js';
+import { registerB13b } from './juice_b13b.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
@@ -410,7 +412,7 @@ export function createAudio() {
         const V = varOf(m.skin), bp = boss ? m.bphase : 0, ts = (s & 1) ? t + V.sw * sp : t;
         const sc = boss ? SCALES.phryg : (tier % 3 === 2 || V.minor ? SCALES.minor : SCALES.major);
         const root = 36 + ROOTS[tier] + (boss ? 5 + keyLift(bp) : 0);
-        const prog = (boss ? BPROG : PROG)[sec % 4], deg = prog[bar];
+        const prog = (boss ? BPROG : PROG)[(sec + (boss ? 0 : progShift(m.stage))) % 4], deg = prog[bar];
         const bassM = note(sc, deg, root), c0 = note(sc, deg, root + 24), c1 = note(sc, deg + 2, root + 24), c2 = note(sc, deg + 4, root + 24);
         // drums
         if (s % 4 === 0) kick(t, boss ? 0.32 : 0.26 + lvl * 0.04);
@@ -456,6 +458,7 @@ export function createAudio() {
         if (beatTick && s % 4 === 0) tone(s === 0 && bar === 0 ? 1319 : 988, 0.05, 'triangle', s === 0 && bar === 0 ? 0.2 : 0.15, 0, t, 'm');
         // (danger ticking now lives in sfx.dangerbeat: it follows the red heartbeat instead of the music grid)
         // section ends: riser into a crash
+        { const fl = !boss ? fillOf(sec, bar, s, lvl) : null; if (fl) { if (fl.k === 'snare') snare(t, fl.v); else tone(fl.hz, sp * 1.5, 'sine', fl.v, -60, t, 'm'); } }   // b13: section fill
         if (bar === 3 && s === 12 && lvl > 0.35) noise(sp * 4, 0.06, 800, 9000, 'bandpass', t, 'm');
         if (bar === 0 && s === 0 && step > 0 && lvl > 0.35) noise(0.5, 0.05, 7000, 3000, 'highpass', t, 'm');
       }
@@ -501,7 +504,9 @@ export function createAudio() {
   sfx.resumetick = e => { const n = Math.max(1, Math.min(3, (e && e.n) || 3)); tone(560 + (3 - n) * 140, 0.06, 'triangle', 0.08, -60); tone(1400 + (3 - n) * 300, 0.03, 'sine', 0.03); };
   registerB11(sfx, tone, noise, gate);   // batch 11: mirror glance, beat run, boss twists (audio_b11.js)
   registerA11(sfx, tone, noise, duck, gate);   // round 11: book sting, pet glance, pounce, tab ping, curtain (audio_b11.js)
+  registerB13b(sfx, tone, noise, duck, gate);   // batch 13: unlock fanfare, stat buy ladder, level-up lift (juice_b13b.js)
   registerB12i(sfx, tone, noise, duck, gate, now);   // batch 12: aim tick, crown clink, milestone, burst thinning (audio_b12i.js)
+  registerB13h(sfx, tone, noise, duck, gate);   // batch 13: shot figure and sounds for gloom, nap, pillow, shell, metro, soundcheck (audio_b13h.js)
   registerA10(sfx, tone, noise, duck, gate);   // round 10: boss fill, bring pack, sticker book, pet calls (audio_b10b.js)
   return {
     unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } hubSync(); ambSync(); },

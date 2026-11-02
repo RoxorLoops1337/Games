@@ -1,6 +1,7 @@
 // Battle tab, round 11 (agent 08): named worlds on the stage strip, the one-tap power gap shortcut, claim counts on the
 // side chips and the stage list overview sheet. Pure helpers first, then the small DOM part.
 import { worldStrip } from './battle_ui.js';
+import { wirePreview } from './stagemap_b13f.js';
 
 // ---- five named worlds of ten stages (names fit the show: warm-up to encore)
 export const ACTS = [
@@ -69,9 +70,9 @@ export function openOverview(c) {
   const bg = document.createElement('div'), sh = document.createElement('div'); bg.className = 'dsheet-bg ovbg'; sh.className = 'dsheet ovsheet'; bg.appendChild(sh);
   sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'All stages');
   const close = () => { bg.classList.remove('on'); setTimeout(() => bg.remove(), 180); };
-  sh.innerHTML = '<button class="dsx" type="button" aria-label="Close">✕</button><div class="ovhd"><b>ALL STAGES</b><small>Tap a stage to jump there</small></div><div class="ovbody">' + overviewHTML(s, max, isBoss, kindOf, reach(), sel()) + '</div>';
+  sh.innerHTML = '<button class="dsx" type="button" aria-label="Close">✕</button><div class="ovhd"><b>ALL STAGES</b><small>Tap a stage to preview it, GO to jump</small></div><div class="ovbody">' + overviewHTML(s, max, isBoss, kindOf, reach(), sel()) + '</div>';
   sh.querySelector('.dsx').onclick = () => { audio.play('click'); close(); };
   bg.addEventListener('click', e => { if (e.target === bg) { audio.play('click'); close(); } });
-  sh.querySelector('.ovbody').addEventListener('click', e => { const b = e.target.closest('.ovc'); if (!b || b.disabled) return; close(); pick(+b.dataset.n); });
+  if (!wirePreview(sh, c, close)) sh.querySelector('.ovbody').addEventListener('click', e => { const b = e.target.closest('.ovc'); if (!b || b.disabled) return; close(); pick(+b.dataset.n); });   // b13f: with the preview card a tap selects, GO jumps
   document.body.appendChild(bg); requestAnimationFrame(() => { bg.classList.add('on'); const cur = sh.querySelector('.ovc.sel'); if (cur) cur.scrollIntoView({ block: 'center' }); });
 }

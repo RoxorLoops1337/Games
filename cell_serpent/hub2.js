@@ -1,4 +1,5 @@
 import { platCard } from './plat_b12d.js';
+import { wallCard } from './wall_b13d.js';
 // Cell Serpent hub, part two: the shop, the keepsake collection, the character page, and the little panels
 // (sign in, fan fund, fragment swap). It gets everything it needs from main.js through `c`.
 import {
@@ -22,6 +23,7 @@ import { seeded, newSeed, armChest, wasHeld, keepDetailHTML, keepCeremony } from
 import { renderStickerBook } from './sticker_b9.js';
 import { foldTab } from './fold_b12r.js';
 import { recordsHTML, setStripState, setStripHTML, treatLine } from './hub_b10.js';
+import { statBuyJuice } from './juice_b13b.js';
 import { readRuns, runLogHTML, decorateBundles, sparkleFlight, treatPips } from './hub_b11.js';
 const STATICON = { atk: 'speaker', crt: 'note', cdn: 'clock', vit: 'heart', for: 'star', rev: 'mic' };
 // a six-axis radar of the core stats, drawn as inline svg
@@ -207,11 +209,12 @@ export function createHub2(c) {
       const lvl = s.meta[d.id] || 0, maxed = lvl >= d.max, cost = metaCost(d, lvl);
       const card = document.createElement('div'); card.className = 'sc' + (maxed ? ' maxed' : ''); card.dataset.id = d.id;
       card.innerHTML = `<div class="sct">${maxed ? 'Max Level' : d.max === 1 ? (lvl ? 'Owned' : 'Not owned') : 'Level ' + lvl + ' \u2192 ' + (lvl + 1)}</div><div class="sci">${ico(STATICON[d.id], 40) || ''}</div><div class="spips">${d.max <= 15 && d.max > 1 ? Array.from({ length: d.max }, (_, q) => `<i class="${q < lvl ? 'on' : ''}"></i>`).join('') : ''}</div><div class="scn">${d.name}</div><div class="scd">${d.desc(Math.max(1, maxed ? lvl : lvl + 1))}</div><button class="btn small go${!maxed && !metaBuyable(s, d) ? ' capped' : ''}" ${maxed || !metaBuyable(s, d) || s.beats < cost ? 'disabled' : ''}${!maxed && !metaBuyable(s, d) ? ' style="white-space:normal;min-height:44px;height:auto;line-height:1.15;font-size:12px"' : ''}>${maxed ? '✔' : !metaBuyable(s, d) ? 'Clear stage ' + statCapStage(lvl + 1) + ' to go beyond Lv ' + lvl : cost + ' ' + curImg('beats')}</button>`;
-      card.querySelector('button').onclick = () => { if (buyMeta(save(), d.id)) { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); } };
+      card.querySelector('button').onclick = () => { if (buyMeta(save(), d.id)) { c.persist(); audio.unlock(); c.renderHub(); const nl = save().meta[d.id] || 0; statBuyJuice($('statList'), d.id, nl, nl >= d.max, audio); } };
       core.appendChild(card);
     });
     bestBuy(core, s);
     { const pc = platCard(s, () => { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); }); if (pc) list.appendChild(pc); }   // b12d Gold Records
+    { const wc = wallCard(s, () => { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); }); if (wc) list.appendChild(wc); }   // b13d Gold Wall
     { const rc = document.createElement('div'); rc.className = 'recbox'; rc.innerHTML = recordsHTML(s); list.appendChild(rc); }
     { const rl = runLogHTML(readRuns()); if (rl) { const rb = document.createElement('div'); rb.className = 'runbox'; rb.innerHTML = rl; list.appendChild(rb); } }
     { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t), (n, from) => { save().sparkles += n; c.persist(); audio.play('bookdone'); sparkleFlight(from, calmMotion(), () => c.refreshCur(), { src: iconURL('sparkles') }); }); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }

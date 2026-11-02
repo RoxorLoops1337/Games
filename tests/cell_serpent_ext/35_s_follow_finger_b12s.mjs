@@ -90,24 +90,28 @@ if (chromium) {
         const gx = cssX => p.evaluate(x => window.CS.R.toGame(x * (document.querySelector('canvas').width / innerWidth), 0).x, cssX);
         const px = () => p.evaluate(() => window.CS.g.p.x);
         const start = async stage => { await p.evaluate(s => window.CS.startRun(s), stage); await p.waitForFunction(() => window.CS.g && window.CS.g.phase === 'play', null, { timeout: 8000 }); await p.waitForTimeout(300); await p.evaluate(() => { window.CS.g.snakes.forEach(s => { s.speed = 0.001; }); }); };
+        // b13i: wait for the duo to reach a target (frames slow down on a loaded machine) instead of a fixed sleep; a miss falls through to the assert
+        const near = (want, tol, ms = 9000) => p.waitForFunction(([x, t]) => Math.abs(window.CS.g.p.x - x) < t, [want, tol], { timeout: ms, polling: 50 }).catch(() => {});
+        const still = (ms = 6000) => p.evaluate(ms => new Promise(res => { let last = window.CS.g.p.x, calm = 0; const t0 = performance.now(); const id = setInterval(() => { const x = window.CS.g.p.x; calm = Math.abs(x - last) < 0.2 ? calm + 1 : 0; last = x; if (calm >= 4 || performance.now() - t0 > ms) { clearInterval(id); res(); } }, 60); }), ms);
         const tag = `${w}x${h}`, Y = Math.round(h * 0.82);
         const chk = (c, m) => { if (!c) fails.push(`${tag}: ${m}`); };
         await start(3);
         for (const f of [0.15, 0.8, 0.5, 0.25]) {
           const cx = Math.round(w * f), want = await gx(cx);
-          await touch('touchStart', [[cx, Y]]); await p.waitForTimeout(1300);
+          await touch('touchStart', [[cx, Y]]); await near(want, 3); await still();
           const got = await px(); chk(Math.abs(got - want) < 6, `touch at ${f}: duo ${got.toFixed(0)} vs finger ${want.toFixed(0)}`);
-          await touch('touchEnd', []); await p.waitForTimeout(300);
+          await touch('touchEnd', []); await still();
           const later = await px(); chk(Math.abs(later - got) < 1, `lifting leaves the duo (${got.toFixed(1)} -> ${later.toFixed(1)})`);
         }
         // moving the finger moves the duo
-        await touch('touchStart', [[Math.round(w * 0.2), Y]]); await p.waitForTimeout(900);
-        const a1 = await px(); await touch('touchMove', [[Math.round(w * 0.7), Y]]); await p.waitForTimeout(1300); const a2 = await px();
+        const a0w = await gx(Math.round(w * 0.2)), a2w = await gx(Math.round(w * 0.7));
+        await touch('touchStart', [[Math.round(w * 0.2), Y]]); await near(a0w, 3);
+        const a1 = await px(); await touch('touchMove', [[Math.round(w * 0.7), Y]]); await near(a2w, 3); const a2 = await px();
         chk(a2 > a1 + 150, `moving the finger moves the duo (${a1.toFixed(0)} -> ${a2.toFixed(0)})`);
         // a fast flick does not teleport
         await touch('touchMove', [[Math.round(w * 0.05), Y]]); await p.waitForTimeout(120); const a3 = await px();
         chk(a3 > a2 - 120, `a flick is capped (${a2.toFixed(0)} -> ${a3.toFixed(0)} in 120ms)`);
-        await p.waitForTimeout(1500);
+        await still();
         // a second finger is ignored for movement
         const keep = await px(); await touch('touchStart', [[Math.round(w * 0.05), Y, 0], [Math.round(w * 0.9), Y, 1]]); await touch('touchMove', [[Math.round(w * 0.05), Y, 0], [Math.round(w * 0.95), Y, 1]]); await p.waitForTimeout(700);
         const sec = await px(); chk(Math.abs(sec - keep) < 8, `second finger ignored (${keep.toFixed(0)} -> ${sec.toFixed(0)})`);

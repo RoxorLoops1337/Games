@@ -109,6 +109,8 @@ if (chromium) {
       for (const [k, v] of Object.entries(opt.set || {})) g[k] = v;
       const ui = { hints: false, aimHint: !!g.ring, joy: { on: false } };
       S.trauma = 0; S.flash = 0;
+      // b13: the HUD rows ghost while cells pass under them (hud_b13e); the audit wants the full HUD
+      g.noGhost = true;
       S.textLog = []; R.draw(g, ui, 0); const log = S.textLog; S.textLog = null;
       const A = ctx.getImageData(0, 0, cv.width, cv.height);
       S.textHide = true; R.draw(g, ui, 0); S.textHide = false;
