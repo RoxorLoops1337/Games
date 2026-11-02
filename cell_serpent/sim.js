@@ -1908,6 +1908,7 @@ export function nudgeFor(save, r, prevPct = 0) {
   if (r.won) {
     if ((r.stars || 0) < 2) return 'Next star: win without using a revive';
     if (r.stars < 3) return 'Next star: keep the snake face far from the line';
+    if (r.stage >= MAX_STAGE) return 'Three stars! The whole show is yours';   // b12a: nothing waits after the finale
     return 'Three stars! Stage ' + Math.min(MAX_STAGE, r.stage + 1) + ' is waiting';
   }
   const pct = Math.floor((r.progress || 0) * 100), len = stageInfo(r.stage).length;
