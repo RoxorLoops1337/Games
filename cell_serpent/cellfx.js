@@ -36,6 +36,13 @@ export function drawQuartetLinks(ctx, sn, t) {
     px = s.x; py = s.y; n++;
   }
   ctx.setLineDash([]);
+  // r6: a bead of light runs down every ribbon link (faster once it is hot), so the four read as one linked chord
+  { let qx = 0, qy = 0, m = 0, u = 0; ctx.lineWidth = 2.5; ctx.strokeStyle = INKC;
+    for (const s of sn.segs) {
+      if (!s.quartet || s.hp <= 0) continue;
+      if (m && Math.hypot(s.x - qx, s.y - qy) < 400) { const f = (t * (hot ? 1.6 : 0.6) + u * 0.37) % 1, bx = qx + (s.x - qx) * f, by = qy + (s.y - qy) * f, bs = hot ? 6.5 : 5; ctx.globalAlpha = 1; ctx.fillStyle = hot ? '#fff6a8' : '#e8fff8'; ctx.beginPath(); ctx.moveTo(bx, by - bs); ctx.lineTo(bx + bs, by); ctx.lineTo(bx, by + bs); ctx.lineTo(bx - bs, by); ctx.closePath(); ctx.fill(); ctx.stroke(); u++; }
+      qx = s.x; qy = s.y; m++;
+    } }
   if (hot) for (const s of sn.segs) if (s.quartet && s.hp > 0) { ctx.globalAlpha = 0.95; ctx.lineWidth = 6; ctx.strokeStyle = k < 0.35 ? '#ff6a8a' : '#fff6a8'; ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 1.22, -Math.PI / 2, -Math.PI / 2 + TAU * k); ctx.stroke(); }
   ctx.restore();
 }
@@ -78,4 +85,27 @@ export function drawStreak(ctx, g, t) {
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - 44, y - 15, 88, 30, 15) : ctx.rect(x - 44, y - 15, 88, 30); ctx.fill(); ctx.stroke();
   ctx.fillStyle = '#9bffe0'; ctx.font = '900 20px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('x' + n + (n >= 5 ? ' MAX' : ''), x, y + 1); ctx.restore();
+}
+// Choir links (agent 01, round 6): a soft pink tether runs from a choir cell to every neighbour it heals, with a little note bead drifting out
+// along it, so the healing reach is readable at a glance. Called once per snake, behind the cells. Strokes only, no gradients.
+export function drawChoirLinks(ctx, sn, t, reach = 2) {
+  const segs = sn.segs; let any = false;
+  for (let i = 1; i < segs.length; i++) {
+    const c = segs[i]; if (!c.choir || !(c.hp > 0)) continue;
+    if (!any) { ctx.save(); ctx.lineCap = 'round'; any = true; }
+    for (let j = Math.max(1, i - reach); j <= Math.min(segs.length - 1, i + reach); j++) {
+      const q = segs[j]; if (j === i || !(q.hp > 0)) continue;
+      const dx = q.x - c.x, dy = q.y - c.y, d = Math.hypot(dx, dy); if (d > 300 || d < 1) continue;
+      const hurt = q.hp < q.max, nx = -dy / d, ny = dx / d, bend = Math.sin(t * 2.2 + i) * d * 0.12;
+      ctx.globalAlpha = hurt ? 0.6 : 0.3; ctx.strokeStyle = '#ffb4dd'; ctx.lineWidth = hurt ? 5 : 3.5;
+      ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.quadraticCurveTo((c.x + q.x) / 2 + nx * bend, (c.y + q.y) / 2 + ny * bend, q.x, q.y); ctx.stroke();
+      if (hurt) { ctx.globalAlpha = 0.5 + Math.sin(t * 5 + j) * 0.2; ctx.strokeStyle = '#ffc8e6'; ctx.lineWidth = 4.5; ctx.setLineDash([q.r * 0.45, q.r * 0.3]); ctx.lineDashOffset = t * 14; ctx.beginPath(); ctx.arc(q.x, q.y, q.r * 1.2, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+      if (hurt) {   // only a hurt neighbour gets the drifting beat: the tether is carrying health to it
+        const f = (t * 0.9 + j * 0.31) % 1, om = 1 - f, bx = om * om * c.x + 2 * om * f * ((c.x + q.x) / 2 + nx * bend) + f * f * q.x, by = om * om * c.y + 2 * om * f * ((c.y + q.y) / 2 + ny * bend) + f * f * q.y;
+        ctx.globalAlpha = 1; ctx.fillStyle = '#fff0f8'; ctx.strokeStyle = INKC; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(bx, by, 5, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx + 5, by); ctx.lineTo(bx + 5, by - 11); ctx.stroke();
+      }
+    }
+  }
+  if (any) ctx.restore();
 }

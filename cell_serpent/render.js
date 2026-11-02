@@ -9,7 +9,7 @@ import { createScreenFx } from './screenfx.js';
 import { drawFar } from './bg_far.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
-import { drawCellFlags, drawCellBadge, drawQuartetLinks, drawDashLane, drawStreak } from './cellfx.js';
+import { drawCellFlags, drawCellBadge, drawQuartetLinks, drawDashLane, drawStreak, drawChoirLinks } from './cellfx.js';
 import { bakeHat } from './hats.js';
 import { createCheer, HAT_FX, hatPose, EMOTE, heart, drawEmote } from './cheer.js';
 import { createBoltLayer, boltPose, paintBolt } from './bolts_fx.js';
@@ -265,6 +265,7 @@ export function createRenderer(canvas, art, kit) {
   function drawSnake(g, sn) {
     const segs = sn.segs, p = g.p;
     if (sn.lane) drawDashLane(ctx, sn.path || g.path, pointAt, sn, S.t);
+    drawChoirLinks(ctx, sn, S.t);
     for (let i = segs.length - 1; i >= 0; i--) {   // tail first so the head sits on top
       const s = segs[i], r = s.r;
       if (s.y < -r * 3 || s.y > H + r * 3) continue;   // not on screen: skip the drawing
