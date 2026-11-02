@@ -651,6 +651,51 @@
   @media (prefers-reduced-motion:reduce){.card.pick .foil,.card.pick .foil::before,.card.pick .foil::after,.card.pick .nm .nt,.card.pick .ds,#levelup .bi.tick,#levelup .bi.tick b{animation:none!important}}
   @media (max-height:700px){.card.pick .foil.f3::before,.card.pick .foil.f5::before{animation-duration:16s}}
   /* end @css:07-cards round 6 */
+  /* @css:07-cards round 7 */
+  /* card-wide foil for Epic and up: a holo band drifting across the whole card, behind the text */
+  .card.pick .cfoil{position:absolute;inset:0;overflow:hidden;border-radius:15px;pointer-events:none;z-index:0;mix-blend-mode:screen;opacity:.55}
+  .card.pick .cfoil::before{content:'';position:absolute;top:-30%;bottom:-30%;left:-60%;width:60%;transform:translateX(0) skewX(-20deg);background:linear-gradient(90deg,transparent,#7ff6,#f8f8,#ffe87a99,transparent);animation:cfsweep 3.2s ease-in-out calc(var(--d,0s) + 1.1s) infinite}
+  .card.pick .cfoil::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(125deg,transparent 0 5px,color-mix(in srgb,var(--rc) 22%,transparent) 5px 6px)}
+  @keyframes cfsweep{0%{transform:translateX(0) skewX(-20deg)}55%,100%{transform:translateX(420%) skewX(-20deg)}}
+  .card.pick .cfoil.cf3{opacity:.7}
+  .card.pick .cfoil.cf3::before{background:linear-gradient(90deg,transparent,#fff3b0aa,#ffb04dbb,#fff3b0aa,transparent)}
+  .card.pick .cfoil.cf3::after{background:repeating-linear-gradient(125deg,transparent 0 4px,#ffd27a30 4px 5px),radial-gradient(circle at 88% 22%,#fff8 0 1.5px,transparent 2.5px),radial-gradient(circle at 62% 78%,#fff8 0 1.2px,transparent 2px),radial-gradient(circle at 30% 30%,#fff8 0 1.2px,transparent 2px)}
+  .card.pick .cfoil.cf4{opacity:.8}
+  .card.pick .cfoil.cf4::before{width:45%;animation-duration:2.4s}
+  .card.pick .cfoil.cf5{opacity:.9}
+  .card.pick .cfoil.cf5::before{width:50%;background:linear-gradient(90deg,transparent,#ff7ad0cc,#ffe14add,#6fe3ffcc,#9dff6dbb,transparent);animation-duration:2.1s}
+  .card.pick .cfoil.cf5::after{background:repeating-linear-gradient(125deg,transparent 0 4px,#fff3 4px 5px),conic-gradient(from 200deg at 15% 50%,#ff7ad022,#ffe14a22,#6fe3ff22,#ff7ad022)}
+  /* luck meter: tier ticks, shimmering fill with a bright tip, grows from its last value; chips glow when their odds went up */
+  #levelup .lkt{position:relative;height:8px;box-shadow:inset 0 1px 3px #000a}
+  #levelup .lkt u{position:absolute;top:0;bottom:0;width:1px;background:#fff3;pointer-events:none}
+  #levelup .lkf{position:relative;display:block;height:100%;border-radius:4px}
+  #levelup .lkf.grow{animation:lkgrow .9s cubic-bezier(.2,.9,.3,1) .45s both}
+  @keyframes lkgrow{from{width:var(--from)}}
+  #levelup .lkf s{position:absolute;right:-1px;top:-2px;bottom:-2px;width:7px;border-radius:50%;background:radial-gradient(circle,#fff 0,#fff8 40%,transparent 72%);animation:lktip 1.2s ease-in-out infinite alternate}
+  #levelup .lkf::after{content:'';position:absolute;inset:0;border-radius:4px;background:linear-gradient(100deg,transparent 30%,#fff7 50%,transparent 70%) 0 0/250% 100%;animation:lkshim 2.6s linear infinite}
+  @keyframes lktip{from{opacity:.45;transform:scale(.8)}to{opacity:1;transform:scale(1.25)}}
+  @keyframes lkshim{from{background-position:150% 0}to{background-position:-100% 0}}
+  #levelup .lkbar em{animation:lkem 1.4s ease-in-out infinite alternate}
+  @keyframes lkem{to{transform:translateX(2px);text-shadow:0 0 8px #9dff6d}}
+  #levelup .lk.up{animation:lkup .8s ease-out .5s both}
+  #levelup .lk.up b::after{content:' \25B2';font-size:8px}
+  @keyframes lkup{0%{transform:scale(1)}35%{transform:scale(1.18);box-shadow:0 0 12px var(--rc);background:color-mix(in srgb,var(--rc) 35%,#000)}100%{transform:none}}
+  /* reroll feel: the cards flip like a shuffled deck, the arrow spins and the spent pip breaks */
+  #levelup .cards.rrx{animation:rrflip .42s cubic-bezier(.2,.9,.3,1) both;transform-origin:50% 0}
+  @keyframes rrflip{0%{transform:rotateX(-55deg) scaleY(.9);opacity:.2;filter:brightness(2)}60%{transform:rotateX(6deg);opacity:1}100%{transform:none;filter:none}}
+  #levelup #refreshBtn.rr .rl::before{animation:rrspin .6s cubic-bezier(.3,1.3,.5,1) 1 !important}
+  #levelup #refreshBtn.rr{animation:rrpress .45s ease-out}
+  @keyframes rrspin{from{transform:rotate(0)}to{transform:rotate(720deg)}}
+  @keyframes rrpress{0%{transform:scale(.93)}50%{transform:scale(1.04);box-shadow:0 0 18px #6fe3ffaa}100%{transform:none}}
+  #refreshLeft .rp i.used{background:#ffd86b;border-color:#fff;animation:pipbreak .6s ease-out both}
+  @keyframes pipbreak{0%{transform:scale(1.9,2.4);box-shadow:0 0 10px #ffd86b}60%{transform:scale(1.1,1.4) rotate(12deg);opacity:.8}100%{transform:scale(1);opacity:1;background:#fff2;border-color:#fff3;box-shadow:none}}
+  /* band strip: the i button pulses and the two chain members glow when a synergy chain completes */
+  #levelup .bmore.chain{animation:chpulse 1.5s ease-out 2;background:#9dff6d33;border-color:#9dff6d;color:#fff}
+  @keyframes chpulse{0%{transform:scale(1);box-shadow:0 0 0 0 #9dff6dcc}30%{transform:scale(1.6)}100%{transform:scale(1);box-shadow:0 0 0 14px #9dff6d00}}
+  #levelup .bi.link{border-color:#9dff6d;animation:bilink 1.1s ease-in-out 3}
+  @keyframes bilink{50%{box-shadow:0 0 12px #9dff6d;transform:translateY(-2px)}}
+  @media (prefers-reduced-motion:reduce){.card.pick .cfoil::before,#levelup .lkf,#levelup .lkf s,#levelup .lkf::after,#levelup .lkbar em,#levelup .lk.up,#levelup .cards.rrx,#levelup #refreshBtn.rr,#levelup #refreshBtn.rr .rl::before,#refreshLeft .rp i.used,#levelup .bmore.chain,#levelup .bi.link{animation:none!important}}
+  /* end @css:07-cards round 7 */
   /* end @css:07-cards */
   /* @css:18-access */
   :focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #ff5cb8}
