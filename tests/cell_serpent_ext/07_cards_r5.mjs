@@ -1,0 +1,20 @@
+// 07-cards round 5: ghost bar on the delta row, level ring on skill cards, two-line skip button
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import assert from 'node:assert/strict';
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cell_serpent');
+const html = readFileSync(join(root, 'index.html'), 'utf8'), main = readFileSync(join(root, 'main.js'), 'utf8');
+const ui = await import('../../cell_serpent/cards_ui.js');
+assert.ok(html.includes('/* @css:07-cards round 5 */') && html.includes('/* end @css:07-cards round 5 */'));
+assert.ok(main.includes('ghostBarHTML(mt)') && main.includes('levelRingHTML(mt)') && main.includes('skipHTML(bonus)'));
+const g = { ups: { crit: 2 }, val: { crit: 6 }, weap: {} };
+const w = ui.cardMeter(g, { kind: 'weapon', lvl: 2, gain: 1, max: 5 });
+assert.ok(Math.abs(w.a - 0.4) < 1e-9 && Math.abs(w.b - 0.2) < 1e-9 && !w.full);
+assert.ok(ui.cardMeter(g, { kind: 'weapon', lvl: 4, gain: 3, max: 5 }).full, 'clamped to the cap');
+assert.equal(ui.cardMeter(g, { kind: 'passive', id: 'x', gain: 1 }), null);
+assert.ok(ui.ghostBarHTML(w).includes('width:40.0%') && ui.ghostBarHTML(w).includes('width:20.0%'));
+assert.equal(ui.ghostBarHTML(null), '');
+assert.ok(ui.levelRingHTML(w).includes('--a:144deg') && ui.levelRingHTML(w).includes('--b:216deg'));
+assert.ok(ui.skipHTML(52).includes('+52 BEATS') && ui.skipHTML(52).includes('SKIP'));
+assert.ok(!(html + main + ui.skipHTML(1)).includes('—'), 'no em dash');
