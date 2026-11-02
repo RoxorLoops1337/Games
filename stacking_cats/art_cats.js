@@ -708,7 +708,7 @@ export function drawCat(ctx, d, variant = 'open', opts = {}) {
     ctx.restore();
     ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 1.1; ctx.stroke(bodyPath);
     // feet
-    for (const x of [46, 74]) cel(ctx, ell(ctx, x, 105.4, 8.5, 4.6), fur, { shade: false });
+    if (!opts.noFeet) for (const x of [46, 74]) cel(ctx, ell(ctx, x, 105.4, 8.5, 4.6), fur, { shade: false });   // noFeet: the walking rig draws the two hind feet live
   }
   // front paws: toe bumps, toe lines and a small pad
   if (wantTorso) for (const x of [49, 71]) {
