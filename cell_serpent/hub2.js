@@ -206,7 +206,7 @@ export function createHub2(c) {
       core.appendChild(card);
     });
     bestBuy(core, s);
-    { const bk = document.createElement('div'); list.appendChild(bk); renderStickerBook(bk, s, () => audio.play('click')); }
+    { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t)); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }
   }
   // the cheapest upgrade you can afford right now wears a "BEST BUY" ribbon (a nudge, never a rule)
   function bestBuy(core, s) {

@@ -318,7 +318,7 @@ function bindBring(box, info, sp) {
   const bg = box.querySelector('.ff-bringgo'); if (!bg) return;
   bg.onclick = e => {
     e.stopPropagation(); const nb = bestBuild(save, info.skin); if (!nb) return;
-    save.loadout = nb; persist(); audio.play('upgrade');
+    save.loadout = nb; persist(); audio.play('bringpack');
     const old = box.querySelector('.ff-bring'), tmp = document.createElement('div'); tmp.innerHTML = bringHTML(bringFor(info.skin));
     const nw = tmp.firstElementChild; if (old && nw) { nw.classList.add('packed'); old.replaceWith(nw); }
     loadoutRow($('battleLoad'), true); toast('Packed for ' + (sp ? sp.name : 'this serpent'));
@@ -786,7 +786,7 @@ loadArt('assets/').then(a => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
   setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); setupTune($('title'), audio, () => { save.sparkles += 3; persist(); refreshCur(); toast('Sticker! +3 Sparkles'); }); setupSecrets($('title'), audio); $('title').addEventListener('snakepoke', e => (e.detail && e.detail.hit ? audio.play('snakesqueak', e.detail) : audio.play('click'))); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
-  R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready'), onMilestone: n => audio.play('streakmile', { n }), beatStreak: () => audio.beatStreak }); applySettings(); resize(); refreshTitle();
+  R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready'), onMilestone: n => audio.play('streakmile', { n }), onPetCall: id => audio.play('petcall', { id }), beatStreak: () => audio.beatStreak }); applySettings(); resize(); refreshTitle();
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();
   if (qs.get('stage')) { startRun(Math.max(1, +qs.get('stage'))); }   // dev shortcut: ?stage=N

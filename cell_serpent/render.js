@@ -428,7 +428,8 @@ export function createRenderer(canvas, art, kit) {
       const ch = OPT.reduceMotion ? null : CH.pet(i, i ? 1 : -1, id);
       const s2 = i ? 1 : -1, ph = S.t * 6 + i * 2, idle = Math.abs(Math.sin(ph)) * (scared ? 3 : 8) * (ch ? 0.3 : 1), hopY = Math.sin(st.hop * Math.PI) * 14 + (ch ? ch.y : 0) + bop - slumpK() * 9;
       const lf = st.leash || (st.leash = newLeash()), px = OPT.reduceMotion ? p.x + s2 * 92 : petFollow(lf, p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6, S.t).x, base = p.y + 8;   // r9: the pets trot after the duo on a springy leash
-      if (scareEdge(st, scared, S.t) && !OPT.reduceMotion) { st.hop = 1; addFloat(px, base - 62, SCARE_CALL[id] || '!', SCARE_COL[id] || '#fff', 20, -34); }   // r9: each pet calls out when a head gets close
+      const calls = scareEdge(st, scared, S.t); if (calls && OPT.onPetCall) OPT.onPetCall(id);   // r10: the pet's own voice
+      if (calls && !OPT.reduceMotion) { st.hop = 1; addFloat(px, base - 62, SCARE_CALL[id] || '!', SCARE_COL[id] || '#fff', 20, -34); }   // r9: each pet calls out when a head gets close
       const blink = (S.t * 0.8 + i * 1.7) % 3.1 < 0.13;
       const sl = slumpK(), tk = OPT.reduceMotion || ch || scared || sl > 0.05 || st.hop > 0.1 ? null : petTrick(id, i), mood = sl > 0.2 || tuckMood(id, scared) >= 0 ? 7 : st.hop > 0.35 || ch ? 3 : tk && tk.mood >= 0 ? tk.mood : scared ? 2 : blink ? 1 : 0;   // slump: eyes shut
       const k = Math.abs(Math.sin(ph));
