@@ -24,15 +24,15 @@ const tick = g => { g.events.length = 0; sim.step(g, 1 / 60, sim.botInput(g)); i
 
 // 2. bullets are recycled: a long run makes far fewer bullet objects than it fires, and the hit list is empty on reuse
 {
-  const g = mk(12), gone = new Set(); let live = new Set(), reused = 0;
+  const g = mk(12), gone = new Set(); let live = new Set(), reused = 0, poolSeen = 0;
   for (let i = 0; i < 1500; i++) {
-    tick(g); const now = new Set(g.bullets);
+    tick(g); const now = new Set(g.bullets); poolSeen = Math.max(poolSeen, g.bpool ? g.bpool.length : 0);
     for (const b of live) if (!now.has(b)) gone.add(b);
     for (const b of now) if (!live.has(b) && gone.has(b)) { reused++; gone.delete(b); assert.equal(b.hit.length, 0, 'a recycled bullet starts with no hits'); }
     live = now;
   }
   assert.ok(reused > 20, reused + ' bullets were recycled');
-  assert.ok(g.bpool && g.bpool.length > 0 && g.bpool.length <= 96, 'pool is bounded');
+  assert.ok(g.bpool && poolSeen > 0 && g.bpool.length <= 96, 'pool is bounded (b12d: the pool can be empty at the final frame, so use the peak): ' + poolSeen);
   for (const b of g.bpool) assert.ok(Array.isArray(b.hit), 'pooled bullets keep their hit list');
   // a fresh bullet taken from the pool carries no old hits, kind or damage
   for (const b of g.bullets) for (const h of b.hit) assert.ok(typeof h === 'object', 'hits are cells');
