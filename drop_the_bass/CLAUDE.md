@@ -232,3 +232,7 @@ Ideas next (round 10): a real device pass for pad focus visuals on the gear grid
 
 Round 10 result: 2 small items shipped. The loop is near diminishing returns on the pad and meta side; the remaining value is in real-device feedback.
 Ideas next (round 11): ask for real player feedback on the pad and tablet layout; share card with tactics; rumble strength setting; leaderboard seasons need a server field; tutorial coverage for upgrade paths and synergies; trim the monkey test runtime; more outfits to chase (art needed); a gear screen pad pass on a real device.
+
+### Round 11
+Bug hunt only: the monkey test with seeds 2024, 777 and 31337 (30 s per language, `DTB_MONKEY_SEED`, `DTB_MONKEY_SECS`) found nothing in en, da, nl and de. Shipped: the `DTB_MONKEY_SEED` switch so anyone can hunt with new seeds. No game change this round.
+Ideas next: unchanged from round 10 (real-device feedback on pad and tablet, share card with tactics, rumble strength, tutorial coverage for upgrade paths and synergies).
