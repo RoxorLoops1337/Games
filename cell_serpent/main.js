@@ -1,4 +1,5 @@
 import { upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
+import { recordAddictRun } from './sim.js';
 import { createHub2 } from './hub2.js';
 import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
@@ -88,7 +89,7 @@ function openHub(tab = hubTab) {
   if (dayLogin(save, dayKey())) persist();
   refreshCur();
   sel = Math.max(1, Math.min(sel, MAX_STAGE, save.cleared + 4));
-  renderHub(); show('hub');
+  renderHub(); show('hub'); hub2.addict.maybeComeback();
 }
 function badgeTabs() {
   const day = dayKey(), s = save, out = new Set();
@@ -103,6 +104,7 @@ function badgeTabs() {
 function renderHub() {
   refreshCur();
   { const bd = badgeTabs(); for (const b of document.querySelectorAll('.tabs button')) { const has = b.querySelector('.dot'); if (bd.has(b.dataset.tab) && !has) { const d = document.createElement('i'); d.className = 'dot'; b.appendChild(d); } else if (!bd.has(b.dataset.tab) && has) has.remove(); } }
+  hub2.addict.renderNext();
   for (const t of TABS) { $('tab' + t).classList.toggle('on', t === hubTab); }
   for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === hubTab);
   if (hubTab === 'Battle') renderBattle(); else if (hubTab === 'Skills') renderSkills(); else if (hubTab === 'Pets') renderPets(); else if (hubTab === 'Stats') hub2.renderStats(); else if (hubTab === 'Gear') hub2.renderGear(); else hub2.renderShop();
@@ -407,7 +409,7 @@ function statsPanel(onClose) {
 }
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
-  const li0 = levelInfo(save.xp), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); persist(); audio.music(false);
+  const li0 = levelInfo(save.xp), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); persist(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
   stopFx(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
   if (out.ribbons) rows.push(`<div class="r">🎀 ${cu(out.ribbons)} Ribbons</div>`);

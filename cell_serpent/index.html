@@ -504,6 +504,30 @@
   .sc.maxed{border-color:#ffd84d;box-shadow:0 0 12px rgba(255,216,77,.4)}
   @media (prefers-reduced-motion:reduce){.chest3 .cl,.featban .fbray,.kcard.t3,.kcard.max,.loot .it.rar2,.loot .it.rar3,.loot .it.rar3::after{animation:none}}
   /* end @css:10-shop-gear-stats */
+  /* @css:16-addiction */
+  .nextrew{flex:none;width:100%;display:flex;align-items:center;gap:10px;padding:7px 14px;background:rgba(20,14,56,.92);border-bottom:2px solid var(--line);cursor:pointer;min-height:44px}
+  .nextrew:empty{display:none}
+  .nextrew .nri{font-size:22px;flex:none} .nextrew .nrm{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--ink)}
+  .nextrew .nrm b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .nextrew em{font-style:normal;color:var(--gold);font-size:12px;font-weight:800}
+  .nextrew .nrb{display:block;height:8px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden} .nextrew .nrb i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--cyan),var(--lime))}
+  .nextrew small{flex:none;color:var(--dim);font-size:12px;font-weight:700}
+  .nextrew.ready{background:linear-gradient(90deg,rgba(255,210,74,.28),rgba(20,14,56,.92));animation:nrpulse 1.6s ease-in-out infinite} @keyframes nrpulse{50%{filter:brightness(1.25)}}
+  .spinbox{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+  .wheelwrap{position:relative;width:230px;height:230px;margin:6px 0} .wptr{position:absolute;left:50%;top:-12px;transform:translateX(-50%);z-index:2;color:var(--gold);font-style:normal;font-size:28px;text-shadow:0 2px 0 #000}
+  .wheel{position:absolute;inset:0;border-radius:50%;border:5px solid var(--gold);box-shadow:0 5px 0 #8a6a10;background:conic-gradient(from -22.5deg,#ff7eb6 0 45deg,#ffe3f4 0 90deg,#6fe0a8 0 135deg,#c4f5dc 0 180deg,#4fd8f0 0 225deg,#cdeffa 0 270deg,#ffd24a 0 315deg,#fff1b8 0 360deg)}
+  .wseg{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;display:flex;align-items:center;justify-content:center} .wseg b{font-size:30px;line-height:1;transition:transform .3s} .wseg.win b{transform:scale(1.5) !important}
+  .spinmsg{text-align:center;font-weight:800;font-size:14px;color:var(--ink);min-height:36px;max-width:300px}
+  .bookcat{width:100%;background:rgba(255,255,255,.06);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;align-items:stretch}
+  .bch{display:flex;justify-content:space-between;font-weight:900;font-size:15px} .bch span{color:var(--dim)}
+  .bcg{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:6px}
+  .bk{display:flex;flex-direction:column;align-items:center;padding:6px 2px;border-radius:10px;background:rgba(0,0,0,.35);opacity:.55} .bk.got{opacity:1;background:rgba(111,224,138,.18)}
+  .bk b{font-size:24px;line-height:1.1} .bk small{font-size:10px;color:var(--dim);text-align:center;overflow:hidden;text-overflow:ellipsis;max-width:100%;white-space:nowrap}
+  .comeback{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:10px;max-width:320px}
+  .cbi{font-size:44px} .cbt{font-weight:900;font-size:24px;color:var(--gold)} .cbs{color:var(--dim);font-size:14px} .cbr{font-weight:900;font-size:17px;color:var(--lime)}
+  .rnudge{width:min(320px,86vw);text-align:center;display:flex;flex-direction:column;gap:3px;margin-top:6px} .rnudge:empty{display:none}
+  .rnudge .nudge{font-weight:900;font-size:15px;color:var(--gold)} .rnudge .nudge2{font-size:12px;color:var(--dim)}
+  @media (prefers-reduced-motion:reduce){.nextrew.ready{animation:none}}
+  /* end @css:16-addiction */
 </style>
 </head>
 <body>
@@ -528,6 +552,7 @@
 
 <section class="scr hub" id="hub">
   <div class="hubtop"><button class="gear" id="setBtnH" aria-label="Settings" style="position:static;flex:none;width:38px;height:38px;font-size:19px">⚙</button><div class="cur e"><b>⚡</b><b id="hEnergy">0</b><button class="plus" id="enPlus">+</button></div><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div><div id="hPower"></div>
+  <div class="nextrew" id="nextRew"></div>
   <div class="hubbody">
     <div class="tab" id="tabBattle">
       <div class="stagebox bt">
@@ -620,6 +645,7 @@
   <div class="rlevel" id="rLevel"><span class="lv" id="rLv">1</span><div class="lbar"><i id="rLbar"></i></div><small id="rLtxt"></small></div>
   <div class="result-list" id="rList"></div>
   <div class="rextra" id="rExtra"></div>
+  <div class="rnudge" id="rNudge"></div>
   <button class="btn" id="rNext">NEXT STAGE</button>
   <div class="row"><button class="btn alt" id="rRetry">RETRY</button><button class="btn dim" id="rHub">MENU</button></div>
 </section>

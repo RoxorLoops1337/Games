@@ -315,7 +315,7 @@ export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
   const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0 };
-  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false };
+  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -353,6 +353,7 @@ export function sanitizeSave(raw) {
   if (raw.shop && typeof raw.shop === 'object') { const sh = raw.shop; s.shop = { welcome: sh.welcome ? 1 : 0, day: num(sh.day), refresh: num(sh.refresh), free: num(sh.free), xp: num(sh.xp), gold: num(sh.gold), bought: {}, limit: { week: num(sh.limit && sh.limit.week), bought: {} } }; if (sh.limit && sh.limit.bought) for (const k of Object.keys(sh.limit.bought)) s.shop.limit.bought[k] = num(sh.limit.bought[k]); for (const k of Object.keys(sh.bought || {})) if (sh.bought[k]) s.shop.bought[k] = 1; }
   if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^h?\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
   if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
+  s.addict = sanitizeAddict(raw.addict);
   const lo = Array.isArray(raw.loadout) ? raw.loadout.filter((id, i, a) => WEAPON[id] && s.skills[id].lv > 0 && a.indexOf(id) === i).slice(0, LOADOUT_SIZE) : [];
   if (lo.length) s.loadout = lo; else if (Array.isArray(raw.loadout)) s.loadout = [...WEAPON_STARTERS].filter(id => s.skills[id].lv > 0).slice(0, LOADOUT_SIZE);
   return s;
@@ -1335,4 +1336,173 @@ export function botInput(g) {
   }
   if (tgt) ax += clamp((tgt.x - p.x) / 120, -1, 1) * 0.9;
   return { mx: clamp(ax, -1, 1), my: 0, encore: g.encore >= 1 && !!tgt && Math.abs(tgt.x - p.x) < tgt.r };
+}
+
+// ---------------------------------------------------------------- retention loops (all optional gifts, nothing here gates progress)
+// save.addict: sp (kills per snake species), sk (damage points per skill), claimed (mastery + collection rewards),
+// spin (last lucky spin day), week (weekly challenge), seen (last visit, ms) for the comeback gift.
+export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0 });
+export function sanitizeAddict(raw) {
+  const a = addictDefault(), num = (v, d = 0) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : d);
+  for (const k of SKINS) a.sp[k] = num(raw && raw.sp && raw.sp[k]);
+  for (const w of WEAPONS) a.sk[w.id] = num(raw && raw.sk && raw.sk[w.id]);
+  if (!raw || typeof raw !== 'object') return a;
+  if (raw.claimed && typeof raw.claimed === 'object') for (const k of Object.keys(raw.claimed)) if (raw.claimed[k] && /^[a-z0-9:_]{1,40}$/.test(k)) a.claimed[k] = 1;
+  if (raw.spin && typeof raw.spin === 'object') a.spin = { day: num(raw.spin.day), prize: Math.min(SPIN_PRIZES.length - 1, num(raw.spin.prize, -1)) };
+  if (raw.week && typeof raw.week === 'object') a.week = { key: num(raw.week.key), prog: num(raw.week.prog), claimed: raw.week.claimed ? 1 : 0 };
+  a.seen = num(raw.seen);
+  return a;
+}
+export function grantReward(save, rw) {
+  save.beats += rw.beats || 0; save.sparkles += rw.sparkles || 0; save.eggs += rw.eggs || 0;
+  if (rw.energy) addEnergy(save, rw.energy);
+  if (rw.frag) for (const id of Object.keys(rw.frag)) if (save.pets[id]) save.pets[id].frag += rw.frag[id];
+}
+export function rewardText(rw) {
+  const t = [];
+  if (rw.beats) t.push(rw.beats + ' Beats');
+  if (rw.sparkles) t.push(rw.sparkles + ' Sparkles');
+  if (rw.eggs) t.push(rw.eggs + (rw.eggs > 1 ? ' Eggs' : ' Egg'));
+  if (rw.energy) t.push(rw.energy + ' Voice');
+  if (rw.frag) for (const id of Object.keys(rw.frag)) t.push(rw.frag[id] + ' ' + PET[id].name + ' fragments');
+  return t.join(' + ');
+}
+// ---- mastery: pop cells of a snake species, deal damage with a skill
+export const SPECIES_MILES = [{ at: 40, reward: { beats: 60 } }, { at: 150, reward: { sparkles: 6 } }, { at: 500, reward: { eggs: 1 } }, { at: 1500, reward: { sparkles: 25 } }];
+export const SKILL_MILES = [{ at: 50, reward: { beats: 60 } }, { at: 400, reward: { sparkles: 6 } }, { at: 2500, reward: { eggs: 1 } }, { at: 12000, reward: { sparkles: 25 } }, { at: 60000, reward: { sparkles: 60 } }];
+export const speciesName = skin => (SKIN_NAMES[SKINS.indexOf(skin)] || skin).split(' ')[0];
+export function masteryList(save) {
+  const a = save.addict, out = [];
+  for (const k of SKINS) out.push({ key: 'sp:' + k, kind: 'sp', id: k, name: speciesName(k) + ' snakes', unit: 'cells popped', val: a.sp[k] || 0, miles: SPECIES_MILES });
+  for (const w of WEAPONS) out.push({ key: 'sk:' + w.id, kind: 'sk', id: w.id, name: w.name, unit: 'mastery', val: a.sk[w.id] || 0, miles: SKILL_MILES });
+  for (const m of out) { m.done = m.miles.filter(x => m.val >= x.at).length; m.ready = m.miles.findIndex((x, i) => m.val >= x.at && !a.claimed[m.key + ':' + i]); m.next = m.miles.find(x => m.val < x.at) || null; }
+  return out;
+}
+export function claimMastery(save, key, i) {
+  const m = masteryList(save).find(x => x.key === key), ms = m && m.miles[i], id = key + ':' + i;
+  if (!ms || m.val < ms.at || save.addict.claimed[id]) return false;
+  save.addict.claimed[id] = 1; grantReward(save, ms.reward); return true;
+}
+export function claimAllMastery(save) { let n = 0; for (const m of masteryList(save)) m.miles.forEach((_x, i) => { if (claimMastery(save, m.key, i)) n++; }); return n; }
+// ---- weekly challenge: the same for everyone that week, a bigger reward
+export const weekKey = day => Math.floor(((day | 0) + 3) / 7);   // weeks start on Monday
+export const WEEK_DEFS = [
+  { id: 'cells', text: n => `Pop ${n} cells this week`, stat: 'kills', target: 400 },
+  { id: 'runs', text: n => `Play ${n} runs this week`, stat: 'runs', target: 12 },
+  { id: 'bombs', text: n => `Pop ${n} bombs this week`, stat: 'bombs', target: 25 },
+  { id: 'chests', text: n => `Open ${n} chests this week`, stat: 'chests', target: 20 },
+  { id: 'picks', text: n => `Pick ${n} upgrades this week`, stat: 'picks', target: 60 },
+  { id: 'wins', text: n => `Clear ${n} stages this week`, stat: 'wins', target: 6 },
+];
+export const WEEK_REWARD = { sparkles: 40, eggs: 1, energy: 10 };
+export function weekChallenge(day) {
+  const k = weekKey(day), R = rng((Math.imul(k, 2246822519) >>> 0) || 7), d = WEEK_DEFS[Math.floor(R() * WEEK_DEFS.length)];
+  return { id: d.id, key: k, stat: d.stat, target: d.target, text: d.text(d.target), reward: WEEK_REWARD };
+}
+export function ensureWeek(save, day) { const k = weekKey(day); if (save.addict.week.key !== k) save.addict.week = { key: k, prog: 0, claimed: 0 }; return save.addict.week; }
+export const weekReady = (save, day) => { const w = ensureWeek(save, day); return !w.claimed && w.prog >= weekChallenge(day).target; };
+export function claimWeek(save, day) { if (!weekReady(save, day)) return false; save.addict.week.claimed = 1; grantReward(save, WEEK_REWARD); return true; }
+// Called once per finished run, after applyResult.
+export function recordAddictRun(save, day, r) {
+  const a = save.addict;
+  if (r.mode !== 'pig' && r.mode !== 'inv' && r.stage) { const sk = skinFor(r.stage); a.sp[sk] = (a.sp[sk] || 0) + (r.kills || 0); }
+  for (const id of Object.keys(r.dmgBy || {})) if (WEAPON[id]) a.sk[id] = (a.sk[id] || 0) + Math.floor((r.dmgBy[id] || 0) / 100);
+  const w = ensureWeek(save, day), c = weekChallenge(day);
+  const add = { kills: r.kills || 0, runs: 1, bombs: r.bombs || 0, chests: r.chests || 0, picks: r.picks || 0, wins: r.won && !r.mode ? 1 : 0 };
+  w.prog = Math.min(c.target, w.prog + (add[c.stat] || 0));
+}
+// ---- lucky spin: one free spin a day, the prize is decided by the date alone
+export const SPIN_PRIZES = [
+  { icon: '🐱', w: 3, reward: { frag: { kitten: 2 } } }, { icon: '🎵', w: 3, reward: { beats: 150 } },
+  { icon: '🐶', w: 3, reward: { frag: { puppy: 2 } } }, { icon: '🥚', w: 1.2, reward: { eggs: 1 } },
+  { icon: '✨', w: 2, reward: { sparkles: 8 } }, { icon: '🐷', w: 3, reward: { frag: { piglet: 2 } } },
+  { icon: '⚡', w: 3, reward: { energy: 8 } }, { icon: '🐑', w: 3, reward: { frag: { lamb: 2 } } },
+];
+export function spinPrize(day) {
+  const R = rng((Math.imul((day | 0) + 11, 2654435761) >>> 0) || 5), tot = SPIN_PRIZES.reduce((a, p) => a + p.w, 0);
+  let r = R() * tot, i = 0;
+  for (; i < SPIN_PRIZES.length - 1; i++) { r -= SPIN_PRIZES[i].w; if (r <= 0) break; }
+  return i;
+}
+export const spinReady = (save, day) => save.addict.spin.day !== day;
+export function doSpin(save, day) {
+  if (!spinReady(save, day)) return null;
+  const i = spinPrize(day); save.addict.spin = { day, prize: i }; grantReward(save, SPIN_PRIZES[i].reward);
+  return { index: i, prize: SPIN_PRIZES[i] };
+}
+// ---- comeback gift: three days away or more, never expires, never nags
+export const COMEBACK_DAYS = 3;
+export function comebackGift(save, now) {
+  const seen = save.addict.seen; if (!seen) return null;
+  const days = Math.floor((now - seen) / 86400000); if (days < COMEBACK_DAYS) return null;
+  const reward = days >= 14 ? { sparkles: 30, energy: 32, eggs: 2, beats: 800 } : days >= 7 ? { beats: 400, energy: 20, eggs: 1 } : { beats: 150, energy: 10 };
+  return { days, reward };
+}
+export function claimComeback(save, now) { const g = comebackGift(save, now); if (!g) return null; grantReward(save, g.reward); save.addict.seen = now; return g; }
+export function touchSeen(save, now) { if (!comebackGift(save, now)) save.addict.seen = now; }
+// ---- collection book: every snake species, pet, keepsake and outfit
+export const BOOK_CATS = [
+  { id: 'species', name: 'Snakes', reward: { sparkles: 30 } }, { id: 'pets', name: 'Pets', reward: { eggs: 2 } },
+  { id: 'keeps', name: 'Keepsakes', reward: { sparkles: 50 } }, { id: 'outfits', name: 'Outfits', reward: { sparkles: 40 } },
+];
+export const BOOK_ALL = [{ at: 0.5, reward: { sparkles: 25 } }, { at: 1, reward: { sparkles: 100, eggs: 3 } }];
+export function bookEntries(save) {
+  return {
+    species: SKINS.map((k, i) => ({ id: k, name: speciesName(k), icon: '🐍', got: save.cleared >= i + 1 })),
+    pets: PETS.map(p => ({ id: p.id, name: p.name, icon: '🐾', got: save.pets[p.id].star > 0 })),
+    keeps: KEEPSAKES.map(k => ({ id: k.id, name: k.name, icon: k.icon, got: save.keeps[k.id].lv > 0 })),
+    outfits: OUTFITS.map(o => ({ id: o.id, name: o.name, icon: o.hat, got: !!save.outfits.owned[o.id] })),
+  };
+}
+export function bookStatus(save) {
+  const e = bookEntries(save), a = save.addict.claimed;
+  const cats = BOOK_CATS.map(c => { const l = e[c.id], got = l.filter(x => x.got).length; return { ...c, list: l, got, total: l.length, ready: got === l.length && !a['book:' + c.id] }; });
+  const got = cats.reduce((s, c) => s + c.got, 0), total = cats.reduce((s, c) => s + c.total, 0);
+  const all = BOOK_ALL.map((m, i) => ({ ...m, i, ready: got / total >= m.at && !a['book:all' + i] }));
+  return { cats, got, total, all };
+}
+export function claimBook(save, key) {
+  const b = bookStatus(save), a = save.addict.claimed;
+  let rw = null, id = '';
+  const c = b.cats.find(x => x.id === key); if (c && c.ready) { rw = c.reward; id = 'book:' + c.id; }
+  const m = /^all\d$/.test(key) && b.all[+key.slice(3)]; if (m && m.ready) { rw = m.reward; id = 'book:all' + m.i; }
+  if (!rw) return false;
+  a[id] = 1; grantReward(save, rw); return true;
+}
+// ---- one more run: a near-miss line for the result screen (prevPct = best progress before this run)
+export function nudgeFor(save, r, prevPct = 0) {
+  if (!r || r.mode || r.hard || !r.stage) return null;
+  if (r.won) {
+    if ((r.stars || 0) < 2) return 'Next star: win without using a revive';
+    if (r.stars < 3) return 'Next star: keep the snake face far from the line';
+    return 'Three stars! Stage ' + Math.min(MAX_STAGE, r.stage + 1) + ' is waiting';
+  }
+  const pct = Math.floor((r.progress || 0) * 100), len = stageInfo(r.stage).length;
+  const cellsTo = t => Math.max(1, Math.ceil((t - pct) / 100 * len));
+  const cells = t => cellsTo(t) + ' cell' + (cellsTo(t) > 1 ? 's' : '');
+  const t = [25, 50].find(x => x > pct);
+  if (t && t - pct <= 8) return cells(t) + ' from the ' + t + '% chest';
+  if (pct > prevPct && prevPct > 0) return 'New best: ' + pct + '%! Beat it again?';
+  if (prevPct > pct && prevPct - pct <= 15) return cells(prevPct + 1) + ' from a new best';
+  if (t) return 'Next chest at ' + t + '%';
+  return null;
+}
+// ---- the always-visible "Next Reward" bar: something ready to collect wins, else the closest goal
+export function nextReward(save, day, now = Date.now()) {
+  const ready = [];
+  if (spinReady(save, day)) ready.push({ label: 'Lucky Spin is ready', icon: '🎡' });
+  if (weekReady(save, day)) ready.push({ label: 'Weekly challenge done', icon: '🏅' });
+  if (comebackGift(save, now)) ready.push({ label: 'A welcome back gift', icon: '🎁' });
+  if (masteryList(save).some(m => m.ready >= 0)) ready.push({ label: 'Mastery reward ready', icon: '🎖️' });
+  const bs = bookStatus(save); if (bs.cats.some(c => c.ready) || bs.all.some(m => m.ready)) ready.push({ label: 'Collection reward ready', icon: '📖' });
+  if (TROPHIES.some(t => trophyReady(save, t))) ready.push({ label: 'Trophy ready', icon: '🏆' });
+  if (ready.length) return { ready: true, frac: 1, text: '', ...ready[0], more: ready.length - 1 };
+  const c = [], li = levelInfo(save.xp);
+  c.push({ label: 'Level ' + (li.lv + 1), icon: '⭐', frac: li.cur / li.need, text: li.cur + ' / ' + li.need + ' XP' });
+  for (const t of TROPHIES) if (!save.trophies[t.id]) c.push({ label: t.name, icon: '🏆', frac: Math.min(1, t.get(save) / t.at), text: Math.min(t.at, t.get(save)) + ' / ' + t.at });
+  for (const f of FUND) if (!save.fund[f.stage]) { c.push({ label: 'Fan Fund: stage ' + f.stage, icon: '🎀', frac: Math.min(1, save.cleared / f.stage), text: save.cleared + ' / ' + f.stage }); break; }
+  for (const m of masteryList(save)) if (m.next) c.push({ label: m.name + ' mastery', icon: '🎖️', frac: m.val / m.next.at, text: m.val + ' / ' + m.next.at });
+  const wc = weekChallenge(day), wp = ensureWeek(save, day).prog; if (!save.addict.week.claimed) c.push({ label: wc.text, icon: '🏅', frac: wp / wc.target, text: wp + ' / ' + wc.target });
+  c.sort((x, y) => y.frac - x.frac);
+  return { ready: false, more: 0, ...c[0] };
 }

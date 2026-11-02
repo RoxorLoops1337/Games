@@ -8,6 +8,8 @@ import {
   upgradeAllKeeps, claimAllFund, claimAllTrophies, exchangeFrags, OUTFITS, outfitAvailable, buyOutfit, wearOutfit, eventInfo, EVENT_MILES, claimEventMile, ensureEvent, EXCHANGE_ITEMS, buyExchange, LIMIT_ITEMS, buyLimit,
   CARD_PRICE, buyCard, cardActive, claimCard, TROPHIES, trophyReady, claimTrophy, weaponExchange, WEAPON_EXCHANGE_PRICE, SKINS, SKIN_NAMES,
 } from './sim.js';
+import { createAddictUI } from './addict_ui.js';
+import { nextReward } from './sim.js';
 
 import { ico, iconURL } from './icons.js';
 const STATICON = { atk: 'speaker', crt: 'note', cdn: 'clock', vit: 'heart', for: 'star', rev: 'mic' };
@@ -62,6 +64,7 @@ export function createHub2(c) {
     mk('🏆', 'Trophies', TROPHIES.some(t => trophyReady(s, t)), openTrophies);
     mk('📖', 'Preview', false, openBestiary);
     mk('🎫', 'Pass', cardActive(s, day) && s.card.last !== day, openPass);
+    mk('🎡', 'Goals', nextReward(s, day).ready, () => addict.openGoals());
     mk('🔀', 'Swap', false, openSwap);
   }
   function openSign() {
@@ -310,5 +313,6 @@ export function createHub2(c) {
     sec(list, 'Pass');
     list.appendChild(tile({ cls: 't-gold one', ic: '🎫', name: 'Fan Club Pass', desc: '30 days of daily gifts', btn: 'LOOK', gold: true, onclick: () => { audio.play('click'); openPass(); } }));
   }
-  return { eventTile, shopExtras, renderSide, renderStats, renderGear, renderShop, openPanel, openPanelStats: null, setGearFilter: f => { gearFilter = f; }, lootModal };
+  const addict = createAddictUI(c, openPanel, sec);
+  return { addict, eventTile, shopExtras, renderSide, renderStats, renderGear, renderShop, openPanel, openPanelStats: null, setGearFilter: f => { gearFilter = f; }, lootModal };
 }
