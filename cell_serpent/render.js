@@ -2,7 +2,7 @@
 // where they exist and draws procedural stand-ins otherwise.
 import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt } from './sim.js';
 import { INK, mix } from './art_draw.js';
-import { deathMotion } from './head_death.js';
+import { deathMotion, crownMotion } from './head_death.js';
 import { createHud, hudZone } from './hud.js';
 import { createHitJuice } from './hitjuice.js';
 import { createDigitAtlas } from './digits.js';
@@ -158,7 +158,7 @@ export function createRenderer(canvas, art, kit) {
         if (e.carry === 'chest' && !OPT.reduceMotion) S.props.push({ k: 'chest', x: e.x, y: e.y, vx: (Math.random() - 0.5) * 80, vy: -300, rot: 0, life: 0.9, max: 0.9, size: e.r * 2.6 });
         if (e.carry === 'chest') { ring(e.x, e.y, 150, '#ffd84d', 0.5); shaped(e.x, e.y, 8, 's', ['#ffd84d', '#fff', '#ff7eb6'], 330, 0.7, 10, 200); }
         if (e.head && S.bgfx && !OPT.reduceMotion) S.bgfx.headKill(S.t, e.x, e.y);   // 03-backgrounds b8: squall or petal storm
-        if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); if (kit && !OPT.reduceMotion && S.props.length < 8) S.props.push({ k: 'dazed', skin: e.skin, boss: !!e.boss, x: e.x, y: e.y, vx: 0, vy: -90, rot: 0, life: 1.5, max: 1.5, size: e.r * 3.9 }); }   // 01-enemy-art r7: a dazed face floats up with its halo
+        if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); if (kit && !OPT.reduceMotion && S.props.length < 8) S.props.push({ k: 'dazed', skin: e.skin, boss: !!e.boss, x: e.x, y: e.y, vx: 0, vy: -90, rot: 0, life: 1.5, max: 1.5, size: e.r * 3.9 }); if (e.boss && kit && !OPT.reduceMotion && S.props.length < 9) S.props.push({ k: 'crown', skin: e.skin, x: e.x, y: e.y - e.r * 0.8, vx: 0, vy: 0, rot: 0, life: 2.2, max: 2.2, size: e.r * 1.9, side: e.x < W / 2 ? 1 : -1, hit: 0 }); }   // 01-enemy-art r7: a dazed face floats up with its halo
         break;
       }
       case 'boom': ring(e.x, e.y, e.r, '#ff6a3d', 0.5); ring(e.x, e.y, e.r * 0.6, '#ffd24a', 0.35); burst(e.x, e.y, 30, ['#ff6a3d', '#ffd24a', '#fff'], 420, 0.6, 7); S.trauma = Math.min(1, S.trauma + 0.55); break;
@@ -598,6 +598,7 @@ export function createRenderer(canvas, art, kit) {
   function drawProps(dt) {
     for (let i = S.props.length - 1; i >= 0; i--) {   // chest cell pop: the chest hops out and flips its lid
       const p = S.props[i]; p.life -= dt; if (p.life <= 0) { S.props.splice(i, 1); continue; }
+      if (p.k === 'crown') { const sp = kit && kit.SPR.crown(p.skin); if (sp) { const cm = crownMotion(1 - p.life / p.max, p.size * 1.6, p.side); ctx.save(); ctx.globalAlpha = cm.a; kit.blit(ctx, sp, p.x + cm.dx, p.y + cm.dy, p.size * cm.sc, cm.rot); ctx.restore(); if (cm.hit && !p.hit) { p.hit = 1; ring(p.x + cm.dx, p.y + cm.dy + p.size * 0.2, 60, '#ffe9a0', 0.3); sparkleAt(p.x + cm.dx, p.y + cm.dy, p.size * 0.4); } else if (!cm.hit) p.hit = 0; } continue; }   // 01-enemy-art r10: the boss crown rolls away
       if (p.k === 'dazed') { const u = 1 - p.life / p.max, sp = kit && kit.SPR.dazed(p.skin, p.boss); p.y += p.vy * dt; p.vy *= 1 - Math.min(1, dt * 2.2); if (sp) { const dm = deathMotion(p.skin, u, p.size, p.x < W / 2 ? 1 : -1), px = p.x + dm.dx, py = p.y + dm.dy; ctx.save(); ctx.globalAlpha = Math.min(1, p.life / 0.4) * dm.a; const sc = (0.7 + Math.min(1, u * 5) * 0.3 + Math.sin(u * 9) * 0.04) * dm.sc; kit.blit(ctx, sp, px, py, p.size * sc, dm.rot); for (let q = 0; q < 3; q++) { const a = S.t * 5 + q * 2.094; sparkleAt(px + Math.cos(a) * p.size * 0.5 * dm.sc, py - p.size * 0.46 * dm.sc + Math.sin(a) * p.size * 0.1, p.size * 0.16 * dm.sc); } ctx.restore(); } continue; }   // 01-enemy-art r9: leaves in its species style
       p.vy += 700 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += dt * 9;
       const cs = Math.cos(p.rot);

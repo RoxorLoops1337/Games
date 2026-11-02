@@ -72,8 +72,14 @@ export function drawDashLane(ctx, path, pointAt, sn, t) {
 // badge drawn over the cell, under the number: a shield for the ward cell, a crescent moon for the lullaby cell
 export function drawCellBadge(ctx, s, r, t, i, kit) {
   if (!s.ward && !s.lull && !s.drum && !s.choir && !s.quartet && !s.bell && !s.metro && !s.pillow) return;
-  const bs = (s.ward || s.lull) && !s.quartet && !s.choir && kit && kit.SPR.badge && kit.SPR.badge(s.ward ? 'ward' : 'lull');
-  if (bs) { kit.blit(ctx, bs, s.x - r * 0.62, s.y - r * 0.7 + Math.sin(t * 3 + i) * 2, r * 1.0, s.lull ? Math.sin(t * 1.5 + i) * 0.14 : 0); return; }
+  const bk = s.ward ? 'ward' : s.lull ? 'lull' : s.metro ? 'metro' : s.pillow ? 'pillow' : '';
+  const bs = bk && !s.quartet && !s.choir && kit && kit.SPR.badge && kit.SPR.badge(bk);
+  if (bs) {
+    const bx = s.x - r * 0.62, by = s.y - r * 0.7 + Math.sin(t * 3 + i) * 2, bz = r * (s.metro || s.pillow ? 1.15 : 1.0);
+    kit.blit(ctx, bs, bx, by, bz, s.lull ? Math.sin(t * 1.5 + i) * 0.14 : s.pillow ? Math.sin(t * 2 + i) * 0.08 : 0);
+    if (s.metro) { const sw = Math.cos(beat * 3.1416) * 0.55, L = bz * 0.34; ctx.save(); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(bx, by + L * 0.9); ctx.lineTo(bx + Math.sin(sw) * L * 0.9, by - L * 1.15); ctx.strokeStyle = INKC; ctx.lineWidth = 4.4; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.4; ctx.stroke(); ctx.beginPath(); ctx.arc(bx + Math.sin(sw) * L * 0.55, by - L * 0.45, L * 0.17, 0, TAU); ctx.fillStyle = '#ffd84d'; ctx.fill(); ctx.restore(); }
+    return;
+  }
   const q = r * 0.42, x = s.x - r * 0.5, y = s.y - r * 0.78 + Math.sin(t * 3 + i) * 2;
   ctx.save(); ctx.lineWidth = 3; ctx.strokeStyle = INKC; ctx.lineJoin = 'round';
   if (s.ward) { shield(ctx, x, y, q); ctx.fillStyle = '#8fe3ff'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - q * 0.45, y); ctx.lineTo(x - q * 0.1, y + q * 0.4); ctx.lineTo(x + q * 0.5, y - q * 0.35); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.4; ctx.stroke(); }
