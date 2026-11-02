@@ -1,5 +1,5 @@
 import { keyAim, sliderAim, watchAim, resetAimSr, setFieldLabel } from './a11y_b12k.js';
-import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
+import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, RING_SCALE, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { skinFor, recordAddictRun, eventInfo, ensureEvent } from './sim.js';
 import { deathCauseOf } from './screen_b11.js';
 import { createHub2 } from './hub2.js';
@@ -11,6 +11,7 @@ import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
 import { nextGoal, closeCall, renderGoal } from './result_goal.js';
 import { flyPick } from './pickfly.js';
+import { newAim, aimDown, aimMove, aimUp, aimTick, aimAssisted } from './aim_b12f.js';
 import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint, progMeter } from './result_fx.js';
 import { applyCbPalette, paintCbStrip, applyCbRarity } from './cb_palette.js';
 import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.js';
@@ -88,16 +89,17 @@ const clk = createClock();   // 05-screen-feel: fixed-step clock fed with dt * s
 let reviveAsked = false, hard = false, mode = 'title', g = null, demo = null, acc = 0, last = 0, endT = 0, cardsFor = null, hubTab = 'Battle', sel = 1, ranResult = false;
 const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
 const keys = {};
-const aimS = { now: -Math.PI / 2, tgt: -Math.PI / 2 };   // b11: circle stages aim all round: the finger or mouse sets the target angle, the sim gets an eased angle
-const aimTk = {};
+  const aimS = newAim();   // b11: circle stages aim all round: the finger or mouse sets the target angle, the sim gets an eased angle
+  const aimTk = {};
 const AIM_HINT_KEY = 'cell_serpent_aimhint_b11';
 const aimHintLeft = () => { try { return +(localStorage.getItem(AIM_HINT_KEY) || 0) < 3; } catch (e) { return true; } };
 const aimHintBump = () => { try { localStorage.setItem(AIM_HINT_KEY, String(+(localStorage.getItem(AIM_HINT_KEY) || 0) + 1)); } catch (e) { /* ignore */ } };
 let aimHint = false;
-function aimAt(clientX, clientY) {   // the finger relative to the duo; a touch right on the duo keeps the old aim
+function aimAt(e, down) {   // b12f: a touch at the arena aims at it, a touch anywhere else (thumb zone) is a floating stick (aim_b12f.js)
   if (!g || !g.ring) return;
-  const dpr = canvas.width / innerWidth, gp = R.toGame(clientX * dpr, clientY * dpr), dx = gp.x - g.p.x, dy = gp.y - g.p.y;
-  if (dx * dx + dy * dy > 26 * 26) aimS.tgt = Math.atan2(dy, dx);
+  const dpr = canvas.width / innerWidth, gp = R.toGame(e.clientX * dpr, e.clientY * dpr), mouse = e.pointerType === 'mouse';
+  if (down) { aimHint = false; if (aimS.mode && !mouse) return; aimDown(aimS, gp.x, gp.y, g.p.x, g.p.y, RING.R, e.pointerId); if (mouse) aimS.mode = 1; }
+  else { aimMove(aimS, gp.x, gp.y, g.p.x, g.p.y); if (aimS.mode === 2) { joy.x = aimS.ax; joy.y = aimS.ay; joy.dx = (gp.x - aimS.ax) / 120; joy.dy = (gp.y - aimS.ay) / 120; } }
 }
 sel = Math.max(1, save.last.stage); hard = save.last.hard;
 
@@ -236,7 +238,7 @@ function renderBattle() {
   { const hero = $('btHero'); hero.style.setProperty('--hc', sp ? sp.base : '#6a5cc0'); hero.style.setProperty('--hg', sp ? sp.sh + 'aa' : '#3a2d80'); }
   $('stTitle').textContent = info.name;
   $('stSub').textContent = `Stage ${sel}  ·  ${info.path}`;
-  $('stBadges').innerHTML = (info.boss ? '<i class="boss">👑 BOSS</i>' : '') + (info.kind === 'ring' ? '<i class="ring">🌀 RING</i>' : '') + (info.kind === 'double' ? '<i class="dbl">🐍🐍 DOUBLE</i>' : '') + (hard ? '<i>HARD</i>' : '');
+  $('stBadges').innerHTML = (info.boss ? '<i class="boss">👑 BOSS</i>' : '') + (info.kind === 'ring' ? '<i class="ring">🌀 CIRCLE</i><i class="ring aim">DRAG TO AIM</i>' : '') + (info.kind === 'double' ? '<i class="dbl">🐍🐍 DOUBLE</i>' : '') + (hard ? '<i>HARD</i>' : '');
   $('stPrev').disabled = sel <= 1; $('stNext').disabled = sel >= Math.min(MAX_STAGE, save.cleared + 4);
   const chips = $('stChips'), chipTop = Math.min(MAX_STAGE, save.cleared + 4);
   let ckey = save.cleared + '|' + chipTop + '|' + (save.hardCleared || 0); for (let n = 1; n <= chipTop; n++) ckey += (save.stars[n] || 0);
@@ -319,7 +321,7 @@ function drawPreview(t) {
   c.save(); c.translate(ox, oy); c.scale(k, k);
   c.lineJoin = 'round'; c.lineCap = 'round'; c.beginPath(); pvPath.pts.forEach((q, i) => (i % 3 === 0 ? (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)) : 0));
   c.lineWidth = 90; c.strokeStyle = 'rgba(255,255,255,.07)'; c.stroke(); c.lineWidth = 8; c.strokeStyle = 'rgba(255,255,255,.2)'; c.setLineDash([22, 30]); c.lineDashOffset = -t * 60; c.stroke(); c.setLineDash([]);
-  if (info.kind === 'ring') { c.strokeStyle = 'rgba(255,150,190,.85)'; c.lineWidth = 12; c.beginPath(); c.arc(RING.cx, RING.cy, RING.R, 0, Math.PI * 2); c.stroke(); } else { c.strokeStyle = 'rgba(255,150,190,.8)'; c.lineWidth = 12; c.beginPath(); c.moveTo(0, 1055); c.lineTo(720, 1055); c.stroke(); }
+  if (info.kind === 'ring') { c.strokeStyle = 'rgba(255,150,190,.85)'; c.lineWidth = 12; c.beginPath(); c.arc(RING.cx, RING.cy, RING.R, 0, Math.PI * 2); c.stroke(); ringPreviewAim(c, t); } else { c.strokeStyle = 'rgba(255,150,190,.8)'; c.lineWidth = 12; c.beginPath(); c.moveTo(0, 1055); c.lineTo(720, 1055); c.stroke(); }
   const slideIn = Math.max(0, 1 - (t - pvT0) / 0.45), head = 700 + Math.sin(t * 1.2) * 60 - slideIn * slideIn * 520, n = Math.min(info.length, 16);
   for (let i = n - 1; i >= 1; i--) {
     const ps = head - i * 47, a = pointAt(pvPath, ps), b = pointAt(pvPath, ps + 10), kind = info.boss ? true : false;
@@ -329,7 +331,7 @@ function drawPreview(t) {
   if (bestPct > 0 && bestPct < 100) { const bk = sel + '|' + bestPct; if (pvBestKey !== bk) { pvBestKey = bk; const cu = pvPath.cum; let e = cu[cu.length - 1]; if (info.kind !== 'ring') for (let i = 0; i < pvPath.pts.length; i++) if (pvPath.pts[i].y >= 1055) { e = cu[i]; break; } pvBestS = e * bestPct / 100; } const bp = pointAt(pvPath, pvBestS); drawBestMark(c, bp.x, bp.y, bestPct, t); }
   const hp = pointAt(pvPath, head), hp2 = pointAt(pvPath, head + 10);
   kit.drawHead(c, hp.x, hp.y, 38 * (info.boss ? 1.3 : 1) * 1.14, Math.atan2(hp2.y - hp.y, hp2.x - hp.x), { skin: info.skin, boss: info.boss, t, look: [0, 1] });
-  const duo = art && art.get('duo_idle'); if (duo) { const dh = 190, dw = dh * duo.width / duo.height; c.drawImage(duo, 360 - dw / 2, (info.kind === 'ring' ? RING.cy - 20 : 1150) - dh * 0.75, dw, dh); }
+  const duo = art && art.get('duo_idle'); if (duo) { const dh = info.kind === 'ring' ? 190 * RING_SCALE : 190, dw = dh * duo.width / duo.height; c.drawImage(duo, 360 - dw / 2, (info.kind === 'ring' ? RING.cy - 20 + (190 - dh) * 0.5 : 1150) - 190 * 0.75, dw, dh); }
   c.restore();
   drawPortrait(t, info);
 }
@@ -361,6 +363,12 @@ function drawPortrait(t, info) {
 
 // live countdown on the event banner (one cheap timer, only touches the DOM while the Battle tab is showing)
 setInterval(() => { if (mode !== 'hub' || hubTab !== 'Battle') return; const e = document.getElementById('evCd'); if (e) e.textContent = countdownText(monthEndMs(dayKey()) - Date.now()); }, 1000);
+// b12f: the stage preview of a circle stage shows the idea: the duo stands in the middle and a dotted aim line sweeps round it
+function ringPreviewAim(c, t) {
+  const a = -Math.PI / 2 + Math.sin(t * 1.1) * 2.2, ca = Math.cos(a), sa = Math.sin(a), r0 = 70, r1 = RING.R - 16;
+  c.save(); c.setLineDash([2, 22]); c.lineDashOffset = -t * 40; c.strokeStyle = '#ffe36b'; c.lineWidth = 12; c.beginPath(); c.moveTo(RING.cx + ca * r0, RING.cy + sa * r0); c.lineTo(RING.cx + ca * r1, RING.cy + sa * r1); c.stroke(); c.setLineDash([]);
+  c.translate(RING.cx + ca * (r1 + 6), RING.cy + sa * (r1 + 6)); c.rotate(a); c.fillStyle = '#ffe36b'; c.beginPath(); c.moveTo(30, 0); c.lineTo(-14, -24); c.lineTo(-4, 0); c.lineTo(-14, 24); c.closePath(); c.fill(); c.restore();
+}
 // the Bring line: the best build for this species, marked with what is already in the loadout
 function bringFor(skin) {
   const r = recFor(skin); return { can: !!bestBuild(save, skin), why: r.why, items: r.ids.map(id => ({ name: (WEAPONS.find(w => w.id === id) || { name: id }).name, ic: icon(id), eq: save.loadout.includes(id), own: !!(save.skills[id] && save.skills[id].lv > 0) })) };
@@ -583,15 +591,15 @@ canvas.addEventListener('pointerdown', e => {
   if (zone === 'pause') { if (pauseAllowed(save.settings.pauseGuard)) pause(); else toast('Tap again to pause'); return; }
   if (zone === 'stats') { showStats(); return; }
   if (g.encore >= 1 && Math.hypot(gp.x - g.p.x, gp.y - g.p.y) < 110) encoreTap = true;   // tap the duo for the Encore blast
-  if (g.ring) aimAt(e.clientX, e.clientY);   // b11: a touch anywhere on the playfield aims at it
+  if (g.ring) aimAt(e, true);   // b11: a touch anywhere aims (b12f: arena touch aims at it, elsewhere a floating stick)
   if (!g.ring && save.settings.thumbZone && !inThumbZone(e.clientY, innerHeight)) return;   // thumb zone: only the bottom third steers
   if (joy.on) return;
   joy.on = true; joy.id = e.pointerId; joy.sx = e.clientX; joy.sy = e.clientY; joy.dx = joy.dy = 0;
-  joy.x = gp.x; joy.y = gp.y; joy.tz = save.settings.thumbZone ? gp.x : null;
-  canvas.setPointerCapture(e.pointerId);
+  joy.x = gp.x; joy.y = gp.y; joy.tz = save.settings.thumbZone ? gp.x : null; joy.hide = !!g.ring && aimS.mode === 1;   // b12f: no stick ring when the finger aims at the arena
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or lost pointer */ }
 });
 canvas.addEventListener('pointermove', e => {
-  if (mode === 'play' && g.ring && (e.pointerType === 'mouse' || (joy.on && e.pointerId === joy.id))) { aimAt(e.clientX, e.clientY); return; }   // b11: drag (or hover with a mouse) to sweep the aim
+  if (mode === 'play' && g.ring && (e.pointerType === 'mouse' || (joy.on && e.pointerId === joy.id))) { if (e.pointerType === 'mouse' && !aimS.mode) aimS.mode = 1; aimAt(e, false); return; }   // b11: drag (or hover with a mouse) to sweep the aim
   if (!joy.on || e.pointerId !== joy.id) return;
   if (joy.tz != null) { joy.tz = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; return; }   // thumb zone: the duo follows the finger
   const L = R.layout(), dpr = canvas.width / innerWidth, rad = 70 * L.s / dpr;
@@ -600,7 +608,7 @@ canvas.addEventListener('pointermove', e => {
   const gp = R.toGame(joy.sx * dpr, joy.sy * dpr); joy.x = gp.x;
   joy.dx = dx; joy.dy = 0;
 });
-const endJoy = e => { if (e.pointerId === joy.id) { joy.tz = null; joy.on = false; joy.dx = joy.dy = 0; } };
+const endJoy = e => { if (e.pointerId === aimS.id) aimUp(aimS); if (e.pointerId === joy.id) { joy.tz = null; joy.on = false; joy.dx = joy.dy = 0; } };
 canvas.addEventListener('pointerup', endJoy); canvas.addEventListener('pointercancel', endJoy);
 addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
@@ -617,13 +625,12 @@ let encoreTap = false;
 function readInput() {
   if (g.ring) {   // b11: circle stages: the duo is fixed, left/right (or A/D) turn the aim, the sim gets an eased angle
     if (keys.a || keys.arrowleft) aimS.tgt -= 2.8 / 60; if (keys.d || keys.arrowright) aimS.tgt += 2.8 / 60;
-    { const ka = keyAim(keys); if (ka !== null) aimS.tgt = ka; }   // b12k: up, down and the diagonals snap (left or right alone still turn)
-    if (joy.sdx) aimS.tgt = sliderAim(aimS.tgt, joy.sdx, 1 / 60);   // b12k: the slide bar (either hand) turns the aim in circle stages
-    let da = (aimS.tgt - aimS.now) % (Math.PI * 2); if (da > Math.PI) da -= Math.PI * 2; else if (da < -Math.PI) da += Math.PI * 2;
-    aimS.now += da * 0.35; if (aimS.now > Math.PI) aimS.now -= Math.PI * 2; else if (aimS.now < -Math.PI) aimS.now += Math.PI * 2;
-    if (sweepTick(aimTk, aimS.now, now8())) audio.play('aimtick');   // b12: a quiet tick per 15 degrees of aim sweep
-    const enc2 = encoreTap || !!keys[' ']; encoreTap = false; watchAim(aimS.now);
-    return { mx: 0, my: 0, aim: aimS.now, encore: enc2 };
+      { const ka = keyAim(keys); if (ka !== null) aimS.tgt = ka; }   // b12k: up, down and the diagonals snap (left or right alone still turn)
+      if (joy.sdx) aimS.tgt = sliderAim(aimS.tgt, joy.sdx, 1 / 60);   // b12k: the slide bar (either hand) turns the aim in circle stages
+      aimTick(aimS, 1 / 60);   // b12f: frame rate independent smoothing
+      if (sweepTick(aimTk, aimS.now, now8())) audio.play('aimtick');   // b12: a quiet tick per 15 degrees of aim sweep
+      const enc2 = encoreTap || !!keys[' ']; encoreTap = false; watchAim(aimS.now);
+      return { mx: 0, my: 0, aim: aimAssisted(aimS, g, 1 / 60, !!save.settings.aimAssist), encore: enc2 };
   }
   let mx = joy.dx + (joy.sdx || 0);
   if (joy.on && joy.tz != null) mx += zoneSteer(joy.tz, g.p.x);

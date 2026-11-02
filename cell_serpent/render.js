@@ -533,7 +533,7 @@ export function createRenderer(canvas, art, kit) {
   function drawPlayerR(g) {
     if (g.ring && !ringScaled) {   // b11: the duo and pets are smaller inside the circle, then the aim line is drawn at full size
       ringScaled = true; ctx.save(); ctx.translate(g.p.x, g.p.y); ctx.scale(RING_SCALE, RING_SCALE); ctx.translate(-g.p.x, -g.p.y); drawPlayerR(g); ctx.restore(); ringScaled = false;
-      if (!S.ko) drawAimLine(g); return;
+      if (!S.ko) drawAimHint(g); return;
     }
     const p = g.p, ko = S.ko && R10.koT > -1 ? koPose(S.t - R10.koT, OPT.reduceMotion) : null, rv = ko || OPT.reduceMotion ? null : revivePose(S.t - R10.rvT);
     if (!ko && !(rv && rv.u >= 0)) { drawPlayer(g); return; }
@@ -612,16 +612,39 @@ export function createRenderer(canvas, art, kit) {
   }
 
   // b11: circle stages, a dotted line from the duo out to the circle shows where the notes will fly, with a chevron on the circle
-  let ringScaled = false; const AIM_DASH = [1, 12], NO_DASH = [];
+  let ringScaled = false; const TAU2 = Math.PI * 2, AIM_DASH = [1, 12], NO_DASH = [];
+  // b12f: the aim line is drawn UNDER the snake (cells cover it, so it never hides one): fading dots from the muzzle to the circle,
+  // a small chevron just inside the circle, and a short bright cone at the muzzle for a moment after every shot.
+  const AIM_A = [0.95, 0.7, 0.42];
   function drawAimLine(g) {
-    const p = g.p, a = p.aim, c = Math.cos(a), s = Math.sin(a), r0 = 70, r1 = g.ring.R - 6;
-    ctx.save(); ctx.lineCap = 'round'; ctx.setLineDash(AIM_DASH); ctx.lineDashOffset = OPT.reduceMotion ? 0 : -S.t * 26;
-    ctx.globalAlpha = 0.4; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(p.x + c * r0, p.y + s * r0); ctx.lineTo(p.x + c * r1, p.y + s * r1); ctx.stroke();
-    ctx.globalAlpha = 0.95; ctx.strokeStyle = '#ffe36b'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(p.x + c * r0, p.y + s * r0); ctx.lineTo(p.x + c * r1, p.y + s * r1); ctx.stroke();
-    ctx.setLineDash(NO_DASH); ctx.translate(p.x + c * (r1 + 2), p.y + s * (r1 + 2)); ctx.rotate(a);
-    ctx.globalAlpha = 0.95; ctx.fillStyle = '#ffe36b'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -9); ctx.lineTo(-2, 0); ctx.lineTo(-6, 9); ctx.closePath(); ctx.stroke(); ctx.fill();
+    const p = g.p, a = p.aim, c = Math.cos(a), s = Math.sin(a), r0 = 70, r1 = g.ring.R - 14, seg = (r1 - r0) / 3;
+    const kick = Math.max(0, 1 - (S.t - S.lastShot) / 0.14), moving = OPT.reduceMotion ? 0 : 1;
+    ctx.save(); ctx.lineCap = 'round'; ctx.setLineDash(AIM_DASH); ctx.lineDashOffset = -S.t * 26 * moving;
+    for (let i = 0; i < 3; i++) {
+      const x0 = p.x + c * (r0 + seg * i), y0 = p.y + s * (r0 + seg * i), x1 = p.x + c * (r0 + seg * (i + 1)), y1 = p.y + s * (r0 + seg * (i + 1));
+      ctx.globalAlpha = AIM_A[i] * 0.55; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      ctx.globalAlpha = AIM_A[i]; ctx.strokeStyle = '#ffe36b'; ctx.lineWidth = 4.5 + kick * 2; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    }
+    ctx.setLineDash(NO_DASH); ctx.translate(p.x + c * (r1 + 4 - kick * 5), p.y + s * (r1 + 4 - kick * 5)); ctx.rotate(a);
+    ctx.globalAlpha = 0.9; ctx.fillStyle = '#ffe36b'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-7, -12); ctx.lineTo(-2, 0); ctx.lineTo(-7, 12); ctx.closePath(); ctx.stroke(); ctx.fill();
     ctx.restore();
-    if (S.aimHint && g.t < 7 && g.phase === 'play') { const k = Math.min(1, g.t * 2, (7 - g.t) * 1.5); ctx.save(); ctx.globalAlpha = k; text('DRAG TO AIM', p.x, p.y + g.ring.R + 46, 28, '#ffffff', '#0b1020'); ctx.restore(); }   // b11: shown on the first circle stages only
+    if (kick > 0 && !OPT.reduceFlash) {   // muzzle cone along the shot
+      ctx.save(); ctx.translate(p.x + c * 30, p.y + s * 30); ctx.rotate(a); ctx.globalAlpha = kick * 0.9; ctx.fillStyle = '#fff6c8'; ctx.strokeStyle = '#ffb347'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(10, -9); ctx.lineTo(46 * (1.15 - kick * 0.3), 0); ctx.lineTo(10, 9); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+    }
+  }
+  // b12f: the first circle stages explain themselves: a pill with a finger that sweeps round the duo. Gone at the first touch.
+  function drawAimHint(g) {
+    if (!(S.aimHint && g.t < 9 && g.phase === 'play')) return;
+    const p = g.p, k = Math.min(1, g.t * 2, (9 - g.t) * 1.5), R0 = g.ring.R, sw = OPT.reduceMotion ? 0.4 : Math.sin(S.t * 1.8), fa = -Math.PI / 2 + sw * 1.6;
+    ctx.save(); ctx.globalAlpha = k;
+    const fx = p.x + Math.cos(fa) * (R0 - 38), fy = p.y + Math.sin(fa) * (R0 - 38);   // the ghost finger, with a short trail behind it
+    if (!OPT.reduceMotion) for (let i = 3; i >= 1; i--) { const ta = fa - Math.sign(Math.cos(S.t * 1.8)) * i * 0.16; ctx.globalAlpha = k * (0.35 - i * 0.08); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(p.x + Math.cos(ta) * (R0 - 38), p.y + Math.sin(ta) * (R0 - 38), 13 - i * 2, 0, TAU2); ctx.fill(); }
+    ctx.globalAlpha = k * 0.9; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0b1020'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(fx, fy, 14, 0, TAU2); ctx.fill(); ctx.stroke();
+    ctx.globalAlpha = k; const py = p.y + R0 + 40;
+    ctx.fillStyle = 'rgba(8,12,28,.82)'; ctx.strokeStyle = '#ffe36b'; ctx.lineWidth = 3; { const x0 = p.x - 150, y0 = py - 34, x1 = p.x + 150, y1 = py + 34, rr = 22; ctx.beginPath(); ctx.moveTo(x0 + rr, y0); ctx.arcTo(x1, y0, x1, y1, rr); ctx.arcTo(x1, y1, x0, y1, rr); ctx.arcTo(x0, y1, x0, y0, rr); ctx.arcTo(x0, y0, x1, y0, rr); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    text('DRAG TO AIM', p.x, py - 9, 28, '#ffffff', '#0b1020'); text('notes fly where you point', p.x, py + 20, 19, '#ffe9a0', '#0b1020');
+    ctx.restore();
   }
 
   function noteTrail(b, col) {
@@ -679,17 +702,18 @@ export function createRenderer(canvas, art, kit) {
     if (pf > 0.5) glow(x, y, 46, '#ffd9a0', (pf - 0.5) * 0.6);
     blit(kit && kit.SPR.weapon('hog', (pf > 0.25 ? 4 : wMood(7)) + wT(g, 'needles')), x, y, 96 * (1 + pf * 0.3), Math.sin(S.t * 3) * 0.04 + (pf > 0.25 ? Math.sin(S.t * 60) * 0.06 : 0));
   }
+  const wRS = g => (g.ring ? 0.72 : 1);   // b12f: circle stages draw the orbit and ground weapons smaller, like the duo (hit areas are the sim's)
   function drawWeapons(g) {
     { wScared = false; for (const sn of g.snakes) { const h = sn.segs[0]; if (h && Math.hypot(h.x - g.p.x, h.y - g.p.y) < 330) { wScared = true; break; } } }
     for (const t of g.towers) {   // Speaker Stacks thump
-      ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(t.x, t.y + 38, 32, 9, 0, 0, TAU); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(t.x, t.y + 38 * wRS(g), 32 * wRS(g), 9 * wRS(g), 0, 0, TAU); ctx.fill(); ctx.restore();
       const mk = Math.max(0, t.pulse) / 0.5;   // 02-animal-art: the cow moos on every pulse, speaker rings roll out
       if (mk > 0) { for (let j = 0; j < 3; j++) { const u = Math.min(1, (1 - mk) + j * 0.0); const rr = 40 + (1 - mk) * 50 + j * 16; ctx.save(); ctx.globalAlpha = Math.max(0, mk - j * 0.18) * 0.7; ctx.strokeStyle = j ? '#6fe3ff' : '#fff'; ctx.lineWidth = 4 - j; for (const sd of [-1, 1]) { ctx.beginPath(); ctx.arc(t.x, t.y - 4, rr, sd > 0 ? -0.7 : Math.PI - 0.7 + 0.0, sd > 0 ? 0.7 : Math.PI + 0.7); ctx.stroke(); } ctx.restore(); } }
-      blit(kit && kit.SPR.weapon('tower', (mk > 0.1 ? 4 : wMood(t.x)) + wT(g, 'tower')), t.x, t.y, 160 * (1 + 0.14 * Math.max(0, t.pulse)), Math.sin(S.t * 3 + t.x) * 0.03 + (mk > 0.1 ? Math.sin(S.t * 50) * 0.05 : 0));
+      blit(kit && kit.SPR.weapon('tower', (mk > 0.1 ? 4 : wMood(t.x)) + wT(g, 'tower')), t.x, t.y, 160 * wRS(g) * (1 + 0.14 * Math.max(0, t.pulse)), Math.sin(S.t * 3 + t.x) * 0.03 + (mk > 0.1 ? Math.sin(S.t * 50) * 0.05 : 0));
     }
     const dl = g.weap.daggers ? g.weap.daggers.lv : 0;   // Spinning Vinyl
     for (let i = 0; i < (dl ? 1 + dl : 0); i++) { const d = daggerPos(g, i, DP_R); const dy = d.y + Math.sin(S.t * 8 + i) * 4; for (let j = 1; j <= 3; j++) { const a = S.t * 7 + i * 2 - j * 0.28; ctx.save(); ctx.globalAlpha = 0.22 / j; ctx.fillStyle = '#ffe14a'; ctx.beginPath(); ctx.arc(d.x - Math.cos(a + 1.57) * j * 9, dy - Math.sin(a + 1.57) * j * 9 + 6, 22 - j * 4, 0, TAU); ctx.fill(); ctx.restore(); }   // chick circle: a yellow trail
-      blit(kit && kit.SPR.weapon('dagger', wMood(i * 53) + wT(g, 'daggers')), d.x, dy, 150, Math.sin(S.t * 7 + i) * 0.2); }
+      blit(kit && kit.SPR.weapon('dagger', wMood(i * 53) + wT(g, 'daggers')), d.x, dy, 150 * wRS(g), Math.sin(S.t * 7 + i) * 0.2); }
     if (g.weap.stick) for (let k = 0; k < (g.weap.stick.lv >= 4 ? 2 : 1); k++) {   // Drumsticks
       const sg = stickSeg(g, k, SG_R), sc = sg.len / 144, mid = 80 * sc;
       blit(kit && kit.SPR.weapon('stick'), sg.x0 + Math.cos(sg.a) * mid, sg.y0 + Math.sin(sg.a) * mid, 184 * sc, sg.a);
@@ -800,7 +824,7 @@ export function createRenderer(canvas, art, kit) {
     if (ui && ui.hints && !g.ring) drawHints(ctx, g, S, { glow, text });   // first-run guide (hints.js)
     hud.combo(g);
     // joystick
-    if (ui && ui.joy && ui.joy.on) {
+    if (ui && ui.joy && ui.joy.on && !ui.joy.hide) {
       const j = ui.joy; ctx.save(); ctx.globalAlpha = 0.45; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(j.x, j.y, 70, 0, TAU); ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(j.x + j.dx * 70, j.y + j.dy * 70, 28, 0, TAU); ctx.fill(); ctx.restore();
     }
@@ -830,6 +854,7 @@ export function createRenderer(canvas, art, kit) {
     for (const pk of g.pickups) drawPickup(pk);
     drawZones(g);
     HJ.under(g);
+    if (g.ring && g.phase !== 'dead') drawAimLine(g);   // b12f: under the snake
     for (const sn of g.snakes) drawSnake(g, sn);
     drawWeapons(g);
     S.ko = g.phase === 'dead'; drawPlayerR(g);   // r10: the duo stays on screen, dizzy, while the revive prompt waits
