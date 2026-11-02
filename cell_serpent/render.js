@@ -135,8 +135,9 @@ export function createRenderer(canvas, art, kit) {
       case 'kill': {
         S.killT = S.t;
         const sp = kit && kit.SPECIES[e.skin];
-        const sk = e.kind === 'upgrade' ? ['#ffd84d', '#fff1a8', '#fff'] : sp ? [sp.lite, sp.base, '#fff'] : ['#ff9ad6', '#e0489d', '#fff'];
+        const sk = e.kind === 'upgrade' ? ['#ffd84d', '#fff1a8', '#fff'] : sp ? [sp.lite, sp.base, e.head ? sp.acc : '#fff', '#fff'] : ['#ff9ad6', '#e0489d', '#fff'];
         burst(e.x, e.y, e.head ? 40 : 14, sk, e.head ? 360 : 240, 0.7, 6);
+        if (e.head && sp) { ring(e.x, e.y, e.r * 3.2, sp.acc, 0.5); ring(e.x, e.y, e.r * 2.1, sp.lite, 0.35); }   // 01-enemy-art r8: the head pop rings in its own species colours
         { const sh = POPSHAPE[e.skin] || 'c';
           shaped(e.x, e.y, e.head ? 14 : 7, sh, sp ? [sp.lite, sp.base, '#fff', sp.acc] : ['#ff9ad6', '#fff'], e.head ? 340 : 250, 0.9, e.head ? 11 : 8, 380); }
         { const ch = S.chain; ch.n = S.t - ch.t < 0.9 ? ch.n + 1 : 1; ch.t = S.t;
