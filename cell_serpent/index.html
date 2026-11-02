@@ -984,6 +984,19 @@
   .radar{max-width:200px} .radar .rlv circle{fill:#2a1658;stroke:#9dff6d;stroke-width:1.2} .radar .rlv.mx circle{fill:#ffe14a;stroke:#fff} .radar .rlv text{fill:#fff;font:900 8px system-ui,sans-serif;pointer-events:none} .radar .rlv.mx text{fill:#3a200a}
   @media (max-width:400px){#gearFilters .ttl{flex:1 0 100%} #gearFilters button{flex:1} #gearFilters{flex-wrap:wrap}}
   @media (prefers-reduced-motion:reduce){.tile.deal.hot,.knew,.chest3.charge,.chest3.charge::before,.chest3 .chburst{animation:none}}
+  /* round 5: keepsake detail strip, hold-to-charge chests */
+  .kpips{display:flex;justify-content:center;gap:4px;margin:6px 0 2px} .kpips i{width:14px;height:6px;border-radius:3px;background:rgba(255,255,255,.14)} .kpips i.on{background:var(--tc);box-shadow:0 0 6px var(--tc)}
+  .kdelta{display:inline-flex;align-items:baseline;gap:6px;margin:6px 0 2px;padding:3px 12px;border-radius:99px;background:rgba(111,224,138,.16);border:2px solid #6fe08a;color:#b6ffc4;font-weight:900;font-size:14px} .kdelta small{font-size:10.5px;color:#9fd8aa;font-weight:800;letter-spacing:.3px}
+  .kdelta.first{background:rgba(255,216,77,.16);border-color:#ffd84d;color:#ffe9a0} .kdelta.first small{color:#e8cf80} .kdelta.maxed{background:rgba(255,216,77,.2);border-color:#ffd84d;color:#ffd84d}
+  .kstrip{margin:10px 0 4px;padding:8px 10px;border-radius:14px;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.12)} .kstrip.full{border-color:#ffd84d;background:rgba(255,216,77,.1)}
+  .kstrip .ksn{display:flex;justify-content:space-between;font-size:12px;font-weight:900;color:#ffe14a;letter-spacing:.3px} .kstrip .ksn span{color:var(--dim)}
+  .kstrip .ksm{display:flex;justify-content:center;gap:8px;margin:6px 0 4px} .kstrip .ksm span{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;font-size:22px;background:rgba(255,255,255,.07);filter:grayscale(1) brightness(.55);border:2px solid transparent} .kstrip .ksm span.own{filter:none;border-color:rgba(255,255,255,.28)} .kstrip .ksm span.me{border-color:var(--tc);box-shadow:0 0 8px var(--tc)}
+  .kstrip .ksb{font-size:11.5px;font-weight:800;color:var(--dim)} .kstrip.full .ksb{color:#ffe14a}
+  .chest3.hold{animation:chhold .65s ease-in forwards} .chest3.hold::before,.chest3.charge::before{content:"";position:absolute;inset:-45%;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--fc,#ffe278) 90%,transparent),transparent 70%);opacity:0;z-index:1;mix-blend-mode:screen;pointer-events:none;animation:chglow .65s ease-in forwards}
+  .chest3.hold2{animation:chhold2 .16s linear infinite} .chest3.hold2::before{opacity:1;animation:chpulse .5s ease-in-out infinite alternate}
+  .chest3.hold2 img{filter:drop-shadow(0 0 4px var(--fc)) drop-shadow(0 0 9px var(--fc))} .chest3[data-ft="3"].hold2::before{inset:-60%}
+  @keyframes chhold{0%{transform:none}100%{transform:scale(1.14) rotate(2deg)}} @keyframes chhold2{0%{transform:scale(1.16) translateX(-2px) rotate(-3deg)}50%{transform:scale(1.2) translateX(2px) rotate(3deg)}100%{transform:scale(1.16) translateX(-2px) rotate(-3deg)}} @keyframes chpulse{to{transform:scale(1.18);opacity:.75}}
+  @media (prefers-reduced-motion:reduce){.chest3.hold,.chest3.hold2,.chest3.hold::before,.chest3.hold2::before{animation:none}}
   /* end @css:10-shop-gear-stats */
   /* @css:16-addiction */
   .nextrew{flex:none;width:100%;display:flex;align-items:center;gap:10px;padding:7px 14px;background:rgba(20,14,56,.92);border-bottom:2px solid var(--line);cursor:pointer;min-height:44px}
