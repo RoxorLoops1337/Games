@@ -28,12 +28,12 @@ import { paintSettingIcons } from './icons_b8.js';
 import { flashDone } from './btn_state.js';
 import { watchSideIcons } from './side_icons.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
-import { renderRecStrip } from './build_rec.js';
+import { renderRecStrip, recFor } from './build_rec.js';
 import { petLabel } from './pet_names.js';
 import { emptyCard as emptyCardUx } from './empty_ux.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
-import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide } from './battle_ui.js';
 import { momentLine } from './hit_juice8.js';
+import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide, starsHTML, claimInfo, eventReadyCount } from './battle_ui.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
@@ -203,12 +203,12 @@ function renderBattle() {
   for (const b of $('diffRow').querySelectorAll('.dbtn')) b.onclick = () => { audio.play('click'); hard = b.dataset.h === '1'; renderBattle(); };
   $('stMod').innerHTML = twistHTML(info.mod); $('btFact').hidden = true; $('btHero').classList.remove('fact');
   { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; syncRwFilter(chips, cb); cb.textContent = 'CONTINUE ▶ ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
-  const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : `<span><b>Cleared ✓</b></span>${sel > (save.hardCleared || 0) ? `<span class="hardpay">Hard pays <b>${curImg('sparkles')} ${Math.round(clearReward(sel).sparkles * 1.5)}</b></span>` : ''}`;
+  const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : `<span><b>Cleared ✓</b> ${starsHTML(save.stars[sel] || 0)}</span>${sel > (save.hardCleared || 0) ? `<span class="hardpay">Hard pays <b>${curImg('sparkles')} ${Math.round(clearReward(sel).sparkles * 1.5)}</b></span>` : ''}`;
   $('stInfo').innerHTML = `<span>Cells <b>${info.length}</b>  ·  HP <b>${(h => (h >= 1000 ? (h / 1000).toFixed(1) + 'k' : h))(Math.round(info.hp * (hard ? HARD_HP : 1)))}</b></span>${first}`;
   const go = $('stGo'); go.disabled = !playable; go.textContent = playable ? 'START  ⚡' + ENERGY_COST : `CLEAR STAGE ${save.cleared + 1} FIRST`;
   $('btHint').textContent = !save.cleared && !save.runs ? 'Slide left and right, shoot up, keep the snake off the pink line!' : (playable && save.energy && tickEnergy(save, Date.now()) < ENERGY_COST ? 'Out of Voice! Tap + up top, or rest a bit.' : '');
   loadoutRow($('battleLoad'), true);
-  { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; $('stProg').innerHTML = `<div class="pgl">Best <b>${pr}%</b></div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
+  { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; bestPct = pr; $('stProg').innerHTML = `<div class="pgl${pr ? ' has' : ''}">Best <b>${pr}%</b></div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
   hub2.renderSide(); watchSideIcons($('battleSide')); watchSide($('battleSide'));
   renderPig();
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
@@ -225,6 +225,7 @@ function syncRwFilter(chips, cb) {
   f.innerHTML = rwMode === 2 ? '<i class="rwh">H</i> Hard <b>' + nh + '</b>' : '\u2726 Rewards <b>' + n + '</b>';
   chips.classList.toggle('rwonly', rwMode === 1); chips.classList.toggle('rwhard', rwMode === 2); row.style.display = n || cb.style.display !== 'none' ? '' : 'none';
 }
+$('btClaim').onclick = () => { if ($('btClaim').dataset.k === 'event') { audio.play('click'); hub2.eventTile().querySelector('button').click(); } else $('claimGigs').onclick(); };
 $('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) gigFlies(fl.map(([b, g]) => ({ snap: b, kind: g && g.reward.beats ? 'beats' : 'sparkles', amt: g ? g.reward.beats || g.reward.sparkles || 0 : 0 }))); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
@@ -240,7 +241,7 @@ function beginStage(stage) {
 // the stage picture: the lane for this stage with the serpent on it
 const stCtx = $('stCanvas').getContext('2d');
 const W_ = 720;
-let pvT0 = -9, pvKey = -1, pvPath = null, pvBg = null, pvBgKey = '', pvLast = -1;
+let bestPct = 0, pvBestKey = '', pvBestS = 0, pvT0 = -9, pvKey = -1, pvPath = null, pvBg = null, pvBgKey = '', pvLast = -1;
 function drawPreview(t) {
   if (!kit) return;
   if (pvKey === sel && t - pvLast < 0.032 && t >= pvLast) return; pvLast = t;   // a stage change always repaints at once (no frame of the old stage)
@@ -265,11 +266,21 @@ function drawPreview(t) {
     const spr = kit.SPR.body(info.skin, kind, ''); if (spr) kit.blit(c, spr, a.x, a.y, 30 * 3.9 * (i > n - 4 ? 0.8 : 1), Math.atan2(b.y - a.y, b.x - a.x));
   }
   if (info.kind === 'double') { for (let i = 9; i >= 1; i--) { const ps = head - 520 - i * 47, a = pointAt(pvPath, ps), b = pointAt(pvPath, ps + 10), spr = kit.SPR.body(info.skin, false, ''); if (spr) kit.blit(c, spr, W_ - a.x, a.y, 30 * 3.9, -Math.atan2(b.y - a.y, b.x - a.x) + Math.PI); } }
+  if (bestPct > 0 && bestPct < 100) { const bk = sel + '|' + bestPct; if (pvBestKey !== bk) { pvBestKey = bk; const cu = pvPath.cum; let e = cu[cu.length - 1]; if (info.kind !== 'ring') for (let i = 0; i < pvPath.pts.length; i++) if (pvPath.pts[i].y >= 1055) { e = cu[i]; break; } pvBestS = e * bestPct / 100; } const bp = pointAt(pvPath, pvBestS); drawBestMark(c, bp.x, bp.y, bestPct, t); }
   const hp = pointAt(pvPath, head), hp2 = pointAt(pvPath, head + 10);
   kit.drawHead(c, hp.x, hp.y, 38 * (info.boss ? 1.3 : 1) * 1.14, Math.atan2(hp2.y - hp.y, hp2.x - hp.x), { skin: info.skin, boss: info.boss, t, look: [0, 1] });
   const duo = art && art.get('duo_idle'); if (duo) { const dh = 190, dw = dh * duo.width / duo.height; c.drawImage(duo, 360 - dw / 2, (info.kind === 'ring' ? RING.cy - 20 : 1150) - dh * 0.75, dw, dh); }
   c.restore();
   drawPortrait(t, info);
+}
+// a small gold flag on the lane where your best run got to (drawn in lane units, so it is big enough to read on the small picture)
+function drawBestMark(c, x, y, pct, t) {
+  const pulse = 1 + Math.sin(t * 4) * 0.08;
+  c.save(); c.translate(x, y); c.fillStyle = 'rgba(255,225,74,.28)'; c.beginPath(); c.arc(0, 0, 58 * pulse, 0, 6.2832); c.fill();
+  c.fillStyle = '#ffe14a'; c.strokeStyle = '#fff'; c.lineWidth = 10; c.beginPath(); c.arc(0, 0, 26, 0, 6.2832); c.fill(); c.stroke();
+  c.font = '900 76px system-ui,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; const lab = pct + '%', w = c.measureText(lab).width + 44;
+  c.fillStyle = '#2b1608'; c.strokeStyle = '#ffe14a'; c.lineWidth = 8; c.beginPath(); c.roundRect(-w / 2, -150, w, 90, 45); c.fill(); c.stroke();
+  c.fillStyle = '#ffe14a'; c.fillText(lab, 0, -104); c.restore();
 }
 // the species portrait next to the lane: a big face with a soft glow that bobs and looks around
 const ptCtx = $('stPortrait').getContext('2d');
@@ -289,11 +300,15 @@ function drawPortrait(t, info) {
 
 // live countdown on the event banner (one cheap timer, only touches the DOM while the Battle tab is showing)
 setInterval(() => { if (mode !== 'hub' || hubTab !== 'Battle') return; const e = document.getElementById('evCd'); if (e) e.textContent = countdownText(monthEndMs(dayKey()) - Date.now()); }, 1000);
+// the Bring line: the best build for this species, marked with what is already in the loadout
+function bringFor(skin) {
+  const r = recFor(skin); return { why: r.why, items: r.ids.map(id => ({ name: (WEAPONS.find(w => w.id === id) || { name: id }).name, ic: icon(id), eq: save.loadout.includes(id), own: !!(save.skills[id] && save.skills[id].lv > 0) })) };
+}
 // tap the portrait: species fun fact plus what the stage pays
 $('stPortrait').onclick = () => {
   const box = $('btFact'), hero = $('btHero'); if (!box.hidden) { box.hidden = true; hero.classList.remove('fact'); return; }
   audio.play('click'); const info = stageInfo(sel), sp = (kit && kit.SPECIES && kit.SPECIES[info.skin]) || null;
-  box.innerHTML = factHTML({ info, sp, hard, done: sel <= save.cleared, sparkleIcon: curImg('sparkles') }); box.hidden = false; hero.classList.add('fact'); try { hero.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* ignore */ }
+  box.innerHTML = factHTML({ info, sp, hard, done: sel <= save.cleared, sparkleIcon: curImg('sparkles'), bring: bringFor(info.skin) }); box.hidden = false; hero.classList.add('fact'); try { hero.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* ignore */ }
   box.querySelector('.ff-x').onclick = e => { e.stopPropagation(); audio.play('click'); box.hidden = true; hero.classList.remove('fact'); };
 };
 $('loadEdit').onclick = () => { audio.play('click'); hubTab = 'Skills'; renderHub(); };
@@ -365,6 +380,8 @@ function renderGoals() {
   }
   const hd = $('glCount'), rdy = list.querySelectorAll('.gl-row.ready').length; if (hd) { hd.textContent = rdy ? rdy + ' READY' : n + '/' + goals.length; hd.classList.toggle('rdy', rdy > 0); }
   { const cg = $('claimGigs'), rd = list.querySelectorAll('.gl-row.ready').length; if (cg) { cg.textContent = rd ? 'CLAIM ALL (' + rd + ')' : n === goals.length ? 'ALL DONE \u2713' : 'CLAIM ALL'; cg.classList.toggle('rdy', rd > 0); cg.classList.toggle('alld', !rd && n === goals.length); } }
+  { const rows = list.querySelectorAll('.gl-row.ready'), ci = claimInfo(rows.length, rows.length ? rows[0].querySelector('.gl-tx b').textContent : '', eventReadyCount(save.event.earned, save.event.claimed)), cb = $('btClaim');
+    if (cb) { cb.hidden = !ci; if (ci) { cb.dataset.k = ci.kind; cb.innerHTML = `<span class="bc-ic">${ci.ic}</span><span class="bc-tx">${ci.html}</span><span class="bc-go">${ci.go}</span>`; cb.setAttribute('aria-label', ci.kind === 'gig' ? 'Claim finished gigs' : 'Open the event rewards'); } syncDock(); } }
 }
 function renderSkills() {
   const list = $('skillList'); list.innerHTML = '';
