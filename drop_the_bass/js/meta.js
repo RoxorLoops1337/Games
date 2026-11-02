@@ -673,11 +673,13 @@ export function computeRunSetup(p) {
 // ------------------------------------------------------------------------------------------------ daily: login, quests, challenge
 // add to today's quest counter of a stat (quests read p.daily.prog[stat]); used by the hooks outside a run (crates, gear merges, the wheel)
 function dailyAdd(p, stat, n) { if (!isObj(p.daily)) return; if (!isObj(p.daily.prog)) p.daily.prog = {}; p.daily.prog[stat] = (p.daily.prog[stat] || 0) + n; }
+// quests a player cannot work on yet are never dealt (Endless unlocks with the first stage clear)
+export const questAvailable = (p, q) => !(q.stat === 'endlessWave' && !endlessUnlocked(p));
 export function ensureDaily(p, now, rng) {
   const day = dayOf(now);
   if (p.daily.day === day && p.daily.quests.length) return false;
   const r = rng || makeRng(hashSeed('quests' + day));
-  const pool = r.shuffle(QUESTS);
+  const pool = r.shuffle(QUESTS.filter((q) => questAvailable(p, q)));
   const picked = []; const stats = new Set();
   for (const q of pool) { if (stats.has(q.stat)) continue; stats.add(q.stat); picked.push({ id: q.id, claimed: false }); if (picked.length >= 3) break; }
   p.daily.day = day; p.daily.quests = picked; p.daily.rerolled = false; p.daily.prog = {};
@@ -694,7 +696,7 @@ export function rerollQuest(p, id, rng) {
   if (p.daily.rerolled) return { ok: false, reason: 'used' };
   const slot = p.daily.quests.find((x) => x.id === id); if (!slot || slot.claimed) return { ok: false };
   const have = new Set(p.daily.quests.map((x) => questDef(x.id).stat));
-  const opts = QUESTS.filter((q) => !have.has(q.stat));
+  const opts = QUESTS.filter((q) => !have.has(q.stat) && questAvailable(p, q));
   if (!opts.length) return { ok: false };
   slot.id = rng.pick(opts).id; p.daily.rerolled = true; return { ok: true };
 }
@@ -1007,7 +1009,7 @@ export function runRewards(result) {
   return { records, fans };
 }
 export function applyRunResult(p, result, rng, now = 0) {
-  const out = { records: 0, fans: 0, diamonds: 0, loot: [], levelUps: [], newStars: 0, firstClear: false, unlockedWorld: null, firstBosses: [], questsDone: [], challenge: null, newBestEndless: false, modifiers: [], modMul: null, milestones: [], newOutfits: [] };
+  const out = { records: 0, fans: 0, diamonds: 0, loot: [], levelUps: [], newStars: 0, firstClear: false, unlockedWorld: null, firstBosses: [], questsDone: [], seasonNew: 0, challenge: null, newBestEndless: false, modifiers: [], modMul: null, milestones: [], newOutfits: [] };
   const w = WORLD_BY_ID[result.world];
   out.bests = recordBests(p, result);
   const rw = runRewards(result);
@@ -1021,7 +1023,9 @@ export function applyRunResult(p, result, rng, now = 0) {
   syncNextSteps(p);
   S.bestCombo = Math.max(S.bestCombo, result.bestCombo); S.maxLevel = Math.max(S.maxLevel, result.maxLevel || 0);
   S.coins += result.coinsEarned || 0;
+  const seasonReadyBefore = seasonReady(p, now || Date.now());
   addSeasonProgress(p, result, now || Date.now());
+  out.seasonNew = Math.max(0, seasonReady(p, now || Date.now()) - seasonReadyBefore);   // season goals this run finished (claimed in Goals)
   // daily quest progress
   const dp = p.daily.prog;
   const questsDoneIds = () => (p.daily.quests || []).filter((q) => { const d = questDef(q.id); return d && questProgress(p, d) >= d.goal; }).map((q) => q.id);

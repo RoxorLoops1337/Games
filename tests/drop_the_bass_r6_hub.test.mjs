@@ -201,7 +201,7 @@ const eq = (a, b, m) => { assert.deepStrictEqual(a, b, m); n++; };
   const seen = new Set();
   for (let d = 0; d < 365; d++) {
     const now = Date.UTC(2026, 0, 1) + d * 86400000 + 3600000;
-    const a = M.newProfile(now), b = M.newProfile(now);
+    const a = M.newProfile(now), b = M.newProfile(now); a.prog.garage.cleared = true; b.prog.garage.cleared = true;   // Endless open, so its quest can be dealt
     M.ensureDaily(a, now); M.ensureDaily(b, now);
     eq(a.daily.quests.map((x) => x.id), b.daily.quests.map((x) => x.id), 'same day, same quests');
     eq(a.daily.quests.length, 3, 'three quests a day');

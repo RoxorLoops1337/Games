@@ -215,3 +215,24 @@ Ideas next (round 8): the pad cannot yet drive hub screens (only battle menus); 
 
 Round 8 result: 8 items shipped (smaller than ten; the pad work was the biggest gap left from round 6).
 Ideas next (round 9): pad cursor for the shop and gear screens (focus order is reading order, grids are awkward); quest toast during a run; leaderboard season label; tutorial coverage for upgrade paths and synergies; a settings toggle for rumble strength; share card with tactics; sound mix on phones (needs a device); trim the monkey test runtime; balance pass on Endless past wave 40.
+
+### Round 9 (improvements, in order)
+1. Menu pad uses spatial navigation (nearest control in the pressed direction, wraps to the far end) instead of reading order, so grids in the shop and gear screens work.
+2. A toast during the run when a daily quest goal is reached (`Battle.questWatch`, once per quest, not in the tutorial or practice).
+3. Results: a line when the run finished a monthly season goal (`out.seasonNew`).
+4. Tests: `drop_the_bass_r9.test.mjs` (season goals) and `drop_the_bass_r9_browser.test.mjs` (spatial nav on a 2x2 grid, quest toast once).
+
+Round 9 result: 4 items shipped (small round, the loop is in polish territory).
+Ideas next (round 10): a real device pass for pad focus visuals on the gear grid; share card with tactics; rumble strength setting; leaderboard seasons need a server field; balance pass on Endless past wave 40 with the bot; tutorial coverage for upgrade paths and synergies; trim the monkey test runtime; review of the 29 older quests for duplicates of the new stats.
+
+### Round 10 (improvements, in order)
+1. Daily quests the player cannot work on are never dealt or re-rolled into (`questAvailable`: the Endless quest needs the first stage clear).
+2. The menu gamepad says "Gamepad connected" once on its first use (hub and title, like the battle does).
+3. Checks, no change needed: Endless bot (level 0 reaches about wave 16, a level 20 studio about wave 70 to 80 in 4000 s of play), wide and portrait battle screenshots in da and de look right.
+
+Round 10 result: 2 small items shipped. The loop is near diminishing returns on the pad and meta side; the remaining value is in real-device feedback.
+Ideas next (round 11): ask for real player feedback on the pad and tablet layout; share card with tactics; rumble strength setting; leaderboard seasons need a server field; tutorial coverage for upgrade paths and synergies; trim the monkey test runtime; more outfits to chase (art needed); a gear screen pad pass on a real device.
+
+### Round 11
+Bug hunt only: the monkey test with seeds 2024, 777 and 31337 (30 s per language, `DTB_MONKEY_SEED`, `DTB_MONKEY_SECS`) found nothing in en, da, nl and de. Shipped: the `DTB_MONKEY_SEED` switch so anyone can hunt with new seeds. No game change this round.
+Ideas next: unchanged from round 10 (real-device feedback on pad and tablet, share card with tactics, rumble strength, tutorial coverage for upgrade paths and synergies).

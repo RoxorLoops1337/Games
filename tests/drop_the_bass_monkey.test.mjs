@@ -52,7 +52,7 @@ const HOOK = `(() => {
 })()`;
 
 async function play(lang, idx) {
-  const rnd = mkRng(1000 + idx * 7919);
+  const rnd = mkRng((+process.env.DTB_MONKEY_SEED || 1000) + idx * 7919);
   const pick = (a) => a[Math.floor(rnd() * a.length)];
   const tag = '[' + lang + '] ';
   const fail = (m) => errs.push(tag + m);
