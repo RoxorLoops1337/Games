@@ -760,9 +760,9 @@ export function segRadius(boss, i, len) {
 const spacing = (a, b) => (a.r + b.r) * 0.78;
 
 // Every snake cell is created with ALL its fields in one fixed order (also the ones set later in the run), so the engine keeps one hidden class and step is not de-optimised. Tests: 29_perf_r8.
-export const CELL_KEYS = ['ps', 'x', 'y', 'ang', 'r', 'hp', 'max', 'kind', 'flash', 'orbCd', 'i', 'carry', 'shield', 'isHead', 'tp', 'vx', 'vy', 'wave', 'warded', 'gloom', 'frost', 'gold', 'goldT', 'ward', 'lull', 'drum', 'choir', 'bell', 'quartet', 'qPopped', 'metro', 'pillow', 'snack'];
+export const CELL_KEYS = ['ps', 'x', 'y', 'ang', 'r', 'hp', 'max', 'kind', 'flash', 'orbCd', 'i', 'carry', 'shield', 'isHead', 'tp', 'vx', 'vy', 'wave', 'warded', 'gloom', 'frost', 'gold', 'goldT', 'ward', 'lull', 'drum', 'choir', 'bell', 'quartet', 'qPopped', 'metro', 'pillow', 'snack', 'mirror'];
 function newCell(ps, x, y, r, hp, kind, i) {
-  return { ps, x, y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0, tp: ps, vx: 0, vy: 0, wave: false, warded: false, gloom: false, frost: false, gold: false, goldT: 0, ward: false, lull: false, drum: false, choir: false, bell: false, quartet: false, qPopped: false, metro: false, pillow: false, snack: false };
+  return { ps, x, y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0, tp: ps, vx: 0, vy: 0, wave: false, warded: false, gloom: false, frost: false, gold: false, goldT: 0, ward: false, lull: false, drum: false, choir: false, bell: false, quartet: false, qPopped: false, metro: false, pillow: false, snack: false, mirror: false };
 }
 export const SNAKE_KEYS = ['id', 'path', 'segs', 'tail', 'breach', 'breachT', 'speed', 'slow', 'boss', 'skin', 'name', 'surge', 'surgeT', 'healT', 'drum', 'lane', 'napT', 'gloomW', 'rushT', 'loveT', 'creak', 'snzT', 'snzW', 'frostW', 'qT', 'qDone', 'qWin', 'qNeed', 'p2', 'p2T', 'cue', 'skipT'];
 function spawnSnake(g, n, o = {}) {
@@ -837,6 +837,7 @@ function markSpecials(g, n, segs, len) {
   if (n >= METRO_FROM && len >= 20 && !isBossStage(n)) putFresh(segs, len, 0.28, 'metro');
   if (n >= PILLOW_FROM && len >= 26 && !isBossStage(n)) putFresh(segs, len, 0.58, 'pillow');
   if (n >= SNACK_FROM && len >= 24 && !isBossStage(n)) putFresh(segs, len, 0.42, 'snack');
+  if (n >= MIRROR_FROM && len >= 26 && !isBossStage(n)) putFresh(segs, len, 0.66, 'mirror');
 }
 // Metronome cell (stage 16+, regular snakes): pop it right on the beat for a Beats burst and a burst of Groove; off the beat it is a plain cell.
 // Pillow cell (stage 26+, regular snakes): pop it and the whole snake is shoved back PILLOW_PUSH px. Both are placed without random numbers.
@@ -859,6 +860,17 @@ function snackStep(g, pk, dt) {
     g.events.push({ t: 'snackget', x: pk.x, y: pk.y }); return true;
   }
   return false;
+}
+// Mirror cell (batch 11, stage 36+, regular snakes): shots that land on it glance off sideways. It keeps only 60% of every hit and
+// the cell on each side takes 20%, so the total damage is unchanged: the question is whether to chew the mirror down to wear the
+// neighbours (armour, a yellow cell, a ward) or to slide away and hit them head on. Placed without random numbers.
+export const MIRROR_FROM = 36, MIRROR_SIDE = 0.2;
+let splashing = false;   // the glance does not glance again
+function mirrorSplash(g, s, full) {
+  let sn = null; for (const o of g.snakes) if (o.segs.indexOf(s) >= 0) { sn = o; break; }
+  if (!sn) return;
+  const segs = sn.segs, k = segs.indexOf(s);
+  for (let d = -1; d <= 1; d += 2) { const q = segs[k + d]; if (q && q.hp > 0 && q.i > 0) { splashing = true; damageSeg(g, q, full * MIRROR_SIDE, false, q.x, q.y); splashing = false; } }
 }
 // Quartet cell (stage 22+): four linked cells. Pop the first and the other three must follow within QUARTET_TIME
 // seconds, or the survivors regrow to full health. Pop them all in time for a Beats burst and a slow crawl.
@@ -915,6 +927,27 @@ function gloomTick(g, sn) {
     const a = 1 + ((w * 7 + 3 + n * (segs.length >> 1)) % (segs.length - GLOOM_SIZE - 1));
     if (n === 0 && sn.gloomW !== w) { sn.gloomW = w; const c = segs[Math.min(segs.length - 1, a + 1)]; g.events.push({ t: 'gloom', x: c.x, y: c.y }); }
     for (let j = a; j < a + GLOOM_SIZE && j < segs.length; j++) if (segs[j].hp > 0) { segs[j].gloom = true; segs[j].warded = true; }
+  }
+}
+// Boss phase 2 twists (batch 11, stages 10 to 30; 35 and up already have the startle): each boss gets its own second act. No random numbers.
+// drop: on the first beat of every bar the whole boss lurches DROP_JOLT px forward (a warning ring one beat before). hold: every HOLD_EVERY seconds the three cells behind the face
+// are warded for HOLD_TIME (save your shots). regrow: every REGROW_EVERY seconds the cells nearest the face heal REGROW_HEAL of their health.
+export const DROP_JOLT = 16, HOLD_EVERY = 9, HOLD_TIME = 1.2, HOLD_CELLS = 3, REGROW_EVERY = 4, REGROW_HEAL = 0.05, REGROW_CELLS = 3;
+export const bossTwistOf = n => (isBossStage(n) && n >= 10 && n <= 30 ? ['drop', 'hold', 'regrow', 'drop', 'hold'][n / 5 - 2] : '');
+function bossTwist(g, sn, dt) {
+  if (!sn.boss || !sn.p2 || g.mode !== '' || g.phase !== 'play') return;
+  const k = bossTwistOf(g.stage); if (!k) return;
+  const pt = g.t - sn.p2T, segs = sn.segs, h = segs[0];
+  if (k === 'drop') {
+    const bp = beatPeriod(g), P = bp * 4;
+    if (Math.floor((pt + bp * 0.9) / P) > Math.floor((pt - dt + bp * 0.9) / P)) g.events.push({ t: 'btwist', k, warn: true, x: h.x, y: h.y });
+    if (Math.floor(pt / P) > Math.floor((pt - dt) / P)) { sn.tail += DROP_JOLT * (1 - Math.min(1, uv(g, 'tis') / 100)); g.events.push({ t: 'btwist', k, x: h.x, y: h.y }); }
+  } else if (k === 'hold') {
+    const ph = pt % HOLD_EVERY;
+    if (ph < HOLD_TIME) { for (let i = 1; i <= HOLD_CELLS && i < segs.length; i++) if (segs[i].hp > 0) segs[i].warded = true; if (ph - dt < 1e-6) g.events.push({ t: 'btwist', k, x: h.x, y: h.y }); }
+  } else if (Math.floor(pt / REGROW_EVERY) > Math.floor((pt - dt) / REGROW_EVERY)) {
+    let n = 0; for (let i = 1; i < segs.length && n < REGROW_CELLS; i++) if (segs[i].hp > 0) { segs[i].hp = Math.min(segs[i].max, segs[i].hp + segs[i].max * REGROW_HEAL * (1 - Math.min(1, uv(g, 'hbk') / 100))); n++; }
+    g.events.push({ t: 'btwist', k, x: h.x, y: h.y });
   }
 }
 // Late species traits (agent 14 round 7): from stage 21 the non-boss snakes of the other eight species behave in their own way.
@@ -984,7 +1017,8 @@ function ringSkip(g, sn, dt) {
 export const BELL_FROM = 34, BELL_DMG = 0.25, BELL_REACH = 3;
 function bellRing(g, s, sn) {
   const segs = sn.segs, k = BELL_DMG * (1 + uv(g, 'brg') / 100);
-  for (let j = Math.max(1, s.i - BELL_REACH); j <= Math.min(segs.length - 1, s.i + BELL_REACH); j++) { const q = segs[j]; if (q !== s && q.hp > 0) damageSegAs('bell', g, q, q.max * k, false, q.x, q.y); }
+  const k0 = segs.indexOf(s);   // the current place in the chain: s.i is only the index it was born with and drifts once cells ahead of it pop
+  for (let j = Math.max(1, k0 - BELL_REACH); j <= Math.min(segs.length - 1, k0 + BELL_REACH); j++) { const q = segs[j]; if (q !== s && q.hp > 0) damageSegAs('bell', g, q, q.max * k, false, q.x, q.y); }
   if (uv(g, 'fan') > 0 && uv(g, 'brg') > 0) for (let n = 0; n < 3; n++) bumpGroove(g);
   g.events.push({ t: 'bell', x: s.x, y: s.y });
 }
@@ -1037,7 +1071,7 @@ export function createGame(opts = {}) {
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
     groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, faceMax: 0, bombsPopped: 0, dangerT: 0, danger: 0, mod: null, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
     encore: 0, encoreUsed: 0, beam: null, goldPopped: 0, snacks: 0, clutches: 0, qStreak: 0, qBest: 0,
-    skin: '', ring: null, beatShots: 0, bpool: [], cp: null, encoreReady: false, quartets: 0,
+    skin: '', ring: null, beatShots: 0, beatN: 0, beatLast: -1, bpool: [], cp: null, encoreReady: false, quartets: 0,
   };
   startStage(g, opts.stage || 1);
   return g;
@@ -1050,6 +1084,14 @@ export const beatBpm = stage => (stage % 5 === 0 ? 138 : 104 + 3 * (Math.floor(M
 export const beatPeriod = g => 60 / beatBpm(g.stage || 1);
 export const beatPhase = g => { const T = beatPeriod(g); return (g.t % T) / T; };
 export const onBeat = g => { const T = beatPeriod(g), d = g.t % T; return Math.min(d, T - d) < BEAT_WIN; };
+// Beat Run (batch 11): a volley inside the beat window on BEATRUN_LEN beats in a row pays a burst of Groove. Misses just restart the count. No random numbers.
+export const BEATRUN_FROM = 8, BEATRUN_LEN = 3, BEATRUN_GROOVE = 4;
+function beatRun(g) {
+  const idx = Math.round(g.t / beatPeriod(g));
+  if (idx === g.beatLast) return;
+  g.beatN = idx === g.beatLast + 1 ? g.beatN + 1 : 1; g.beatLast = idx;
+  if (g.beatN >= BEATRUN_LEN) { g.beatN = 0; for (let n = 0; n < BEATRUN_GROOVE; n++) bumpGroove(g); g.events.push({ t: 'beatrun', x: g.p.x, y: g.p.y - 60 }); }
+}
 const visible = s => s.y > 8 && s.y < H - 8 && s.x > 8 && s.x < W - 8;
 // accumulated effect of a run upgrade: summed rarity values, or the common value per pick if set directly
 const UPV = Object.fromEntries([...CAPSULE_UPS, ...PASSIVES].map(u => [u.id, u]));
@@ -1097,8 +1139,11 @@ function damageSeg(g, s, dmg, crit, x, y) {
   if (s.hp <= 0 || s.shield || s.wave) return;
   const srcId = g.src || 'capsule'; g.dmgBy[srcId] = (g.dmgBy[srcId] || 0) + Math.min(dmg, s.hp);
   if (s.warded) dmg *= WARD_CUT + (1 - WARD_CUT) * (uv(g, 'fork') + (s.frost ? uv(g, 'brk') : 0)) / 100;
+  const full = dmg, glance = s.mirror && !splashing, fresh = s.flash <= 0;
+  if (glance) dmg *= 1 - 2 * MIRROR_SIDE;
   s.hp -= dmg; s.flash = 0.12;
   g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s, src: srcId });
+  if (glance) { mirrorSplash(g, s, full); if (fresh) g.events.push({ t: 'mirror', x: s.x, y: s.y }); }
 }
 function dropPickup(g, kind, x, y, v) {
   const a = g.rand() * TAU, sp = 90 + g.rand() * 170;
@@ -1139,6 +1184,7 @@ function onKill(g, s, sn) {
   if (s.bell) bellRing(g, s, sn);
   if (s.metro) { const hit = onBeat(g); if (hit) { const v = coinV * METRO_MUL * (1 + uv(g, 'gear') / 200); g.coins += v * g.p.coinMul * (g.coinK || 1); for (let n = 0; n < 4; n++) bumpGroove(g); g.events.push({ t: 'metro', x: s.x, y: s.y, hit, v: Math.round(v * g.p.coinMul * (g.coinK || 1)) }); } else g.events.push({ t: 'metro', x: s.x, y: s.y, hit }); }
   if (s.snack) snackDrop(g, s);
+  if (s.mirror) g.events.push({ t: 'mirror', x: s.x, y: s.y, brk: true });
   if (s.pillow) { knockBack(g, PILLOW_PUSH); g.events.push({ t: 'pillow', x: s.x, y: s.y }); }
   if (traitOf(g, sn) === 'sour') { if (!(sn.rushT > 0)) g.events.push({ t: 'trait', k: 'sour', x: sn.segs[0].x, y: sn.segs[0].y, late: g.stage >= LATE_TRAIT_FROM }); sn.rushT = g.stage >= LATE_TRAIT_FROM ? SOUR_RUSH_L : SOUR_RUSH; }
   if ((s.ward || s.lull || s.drum || s.bell) && uv(g, 'chk') > 0) { addEncore(g, uv(g, 'chk') / 100); g.events.push({ t: 'soundcheck', x: s.x, y: s.y }); }
@@ -1334,7 +1380,7 @@ function shootCapsule(g, dt) {
     g.vq.splice(i, 1);
     const n = 1 + Math.round(up('notes'));
     const ob = onBeat(g);
-    if (ob) { g.beatShots = (g.beatShots || 0) + 1; g.events.push({ t: 'beatshot' }); }
+    if (ob) { g.beatShots = (g.beatShots || 0) + 1; g.events.push({ t: 'beatshot' }); if (g.stage >= BEATRUN_FROM) beatRun(g); }
     for (let k = 0; k < n; k++) {
       const crit = g.rand() < p.crit + (ob ? BEAT_CRIT : 0);
       fire(g, { x: p.x + (k - (n - 1) / 2) * 42, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1) * (ob ? 1 + up('dbeat') / 100 : 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
@@ -1538,7 +1584,7 @@ export function step(g, dt, input) {
     const wavePos = sn.boss ? ((sn.p2 ? sn.p2T * 4.5 + (g.t - sn.p2T) * P2_WAVE : g.t * 4.5)) % (segs.length + 8) : -99;
     const wave2 = sn.boss && g.stage >= ECHO_WAVE_FROM ? (segs.length + 8) - ((g.t * 3.2 + 7) % (segs.length + 8)) : -99;   // late bosses: a second wave runs back up the chain
     for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
-    wardTick(sn); gloomTick(g, sn); traitTick(g, sn, dt); ringSkip(g, sn, dt); choirTick(sn, dt); if (g.phase === 'play') quartetTick(g, sn, dt);
+    wardTick(sn); gloomTick(g, sn); bossTwist(g, sn, dt); traitTick(g, sn, dt); ringSkip(g, sn, dt); choirTick(sn, dt); if (g.phase === 'play') quartetTick(g, sn, dt);
     if (sn.breach && g.phase === 'play') { g.leaks++; g.events.push({ t: 'leak', x: segs[0].x, y: LINE_Y }); loseRun(g); }
     stageHp += moveSegs(g, segs, path, dt);
   }

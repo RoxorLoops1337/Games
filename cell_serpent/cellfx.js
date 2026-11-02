@@ -26,7 +26,17 @@ export function drawCellFlags(ctx, s, r, t, i, glow) {
   if (s.quartet) glow(s.x, s.y, r * 1.7, '#6fffd2', 0.28 + Math.abs(Math.sin(t * 5 + i)) * 0.2);
   if (s.metro) { const k = Math.pow(Math.max(0, 1 - Math.min(beat, 1 - beat) * 7), 2); glow(s.x, s.y, r * (1.6 + k * 0.4), '#9bffe0', 0.25 + k * 0.4); }
   if (s.pillow) glow(s.x, s.y, r * 1.8, '#ffc8e6', 0.3 + Math.sin(t * 2 + i) * 0.1);
-  if (s.snack) glow(s.x, s.y, r * 1.7, '#ffcf70', 0.3 + Math.abs(Math.sin(t * 2.6 + i)) * 0.18);
+  if (s.snack) {   // QA b11: seen live the cookie badge was lost in a busy chain, so the cell also wears a warm dashed ring
+    glow(s.x, s.y, r * 1.7, '#ffcf70', 0.3 + Math.abs(Math.sin(t * 2.6 + i)) * 0.18);
+    ctx.save(); ctx.globalAlpha = 0.7 + Math.sin(t * 5 + i) * 0.2; ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 4; ctx.setLineDash([r * 0.45, r * 0.3]); ctx.lineDashOffset = t * 20;
+    ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.2, 0, TAU); ctx.stroke(); ctx.restore();
+  }
+  if (s.mirror) {   // silver glints and two side arrows: the hit splits left and right along the chain
+    glow(s.x, s.y, r * 1.6, '#cfe6ff', 0.28 + Math.abs(Math.sin(t * 2.2 + i)) * 0.16);
+    ctx.save(); ctx.globalAlpha = 0.8; ctx.strokeStyle = '#e6f2ff'; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const d of [-1, 1]) { const x0 = s.x + d * r * 1.25, k = Math.sin(t * 4 + i) * 3; ctx.beginPath(); ctx.moveTo(x0 + d * (4 + k), s.y - 8); ctx.lineTo(x0 + d * (14 + k), s.y); ctx.lineTo(x0 + d * (4 + k), s.y + 8); ctx.stroke(); }
+    ctx.restore();
+  }
 }
 // the sim beat phase (0..1), pushed in by render.js once a frame so the Metronome cell pulses exactly when the pop pays
 let beat = 0;
@@ -72,7 +82,7 @@ export function drawDashLane(ctx, path, pointAt, sn, t) {
 
 // badge drawn over the cell, under the number: a shield for the ward cell, a crescent moon for the lullaby cell
 export function drawCellBadge(ctx, s, r, t, i, kit) {
-  if (!s.ward && !s.lull && !s.drum && !s.choir && !s.quartet && !s.bell && !s.metro && !s.pillow && !s.snack) return;
+  if (!s.ward && !s.lull && !s.drum && !s.choir && !s.quartet && !s.bell && !s.metro && !s.pillow && !s.snack && !s.mirror) return;
   const bk = s.ward ? 'ward' : s.lull ? 'lull' : s.metro ? 'metro' : s.pillow ? 'pillow' : '';
   const bs = bk && !s.quartet && !s.choir && kit && kit.SPR.badge && kit.SPR.badge(bk);
   if (bs) {
@@ -81,13 +91,14 @@ export function drawCellBadge(ctx, s, r, t, i, kit) {
     if (s.metro) { const sw = Math.cos(beat * 3.1416) * 0.55, L = bz * 0.34; ctx.save(); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(bx, by + L * 0.9); ctx.lineTo(bx + Math.sin(sw) * L * 0.9, by - L * 1.15); ctx.strokeStyle = INKC; ctx.lineWidth = 4.4; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.4; ctx.stroke(); ctx.beginPath(); ctx.arc(bx + Math.sin(sw) * L * 0.55, by - L * 0.45, L * 0.17, 0, TAU); ctx.fillStyle = '#ffd84d'; ctx.fill(); ctx.restore(); }
     return;
   }
-  const q = r * 0.42, x = s.x - r * 0.5, y = s.y - r * 0.78 + Math.sin(t * 3 + i) * 2;
+  const q = r * (s.snack ? 0.6 : 0.42), x = s.x - r * 0.5, y = s.y - r * 0.78 + Math.sin(t * 3 + i) * 2;
   ctx.save(); ctx.lineWidth = 3; ctx.strokeStyle = INKC; ctx.lineJoin = 'round';
   if (s.ward) { shield(ctx, x, y, q); ctx.fillStyle = '#8fe3ff'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - q * 0.45, y); ctx.lineTo(x - q * 0.1, y + q * 0.4); ctx.lineTo(x + q * 0.5, y - q * 0.35); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.4; ctx.stroke(); }
   else if (s.drum) { const k = 1 + Math.max(0, Math.sin(t * 6 + i)) * 0.15; ctx.beginPath(); ctx.ellipse(x, y, q * 1.1 * k, q * 0.8 * k, 0, 0, TAU); ctx.fillStyle = '#ffb27a'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - q * 0.9, y - q * 1.3); ctx.lineTo(x + q * 0.2, y - q * 0.1); ctx.moveTo(x + q * 0.9, y - q * 1.3); ctx.lineTo(x - q * 0.2, y - q * 0.1); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.4; ctx.stroke(); }
   else if (s.quartet) { const o = q * 0.55; ctx.fillStyle = '#6fffd2'; for (const [dx, dy] of [[-o, 0], [o, 0], [0, -o], [0, o]]) { ctx.beginPath(); ctx.arc(x + dx, y + dy, q * 0.5, 0, TAU); ctx.fill(); ctx.stroke(); } }
   else if (s.bell) { const sw = Math.sin(t * 7 + i) * 0.28; ctx.save(); ctx.translate(x, y - q * 0.9); ctx.rotate(sw); ctx.beginPath(); ctx.moveTo(-q * 1.05, q * 1.5); ctx.quadraticCurveTo(-q * 1.0, -q * 0.2, 0, -q * 1.0); ctx.quadraticCurveTo(q * 1.0, -q * 0.2, q * 1.05, q * 1.5); ctx.closePath(); ctx.fillStyle = '#ffd04a'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(0, q * 1.6, q * 0.38, 0, TAU); ctx.fillStyle = '#b8801c'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-q * 0.5, q * 0.1); ctx.lineTo(-q * 0.35, q * 1.0); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.2; ctx.stroke(); ctx.restore(); }
   else if (s.metro) { const sw = Math.cos(beat * 3.1416) * 0.5; ctx.beginPath(); ctx.moveTo(x - q * 0.9, y + q * 1.1); ctx.lineTo(x - q * 0.35, y - q * 1.1); ctx.lineTo(x + q * 0.35, y - q * 1.1); ctx.lineTo(x + q * 0.9, y + q * 1.1); ctx.closePath(); ctx.fillStyle = '#9bffe0'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y + q * 0.8); ctx.lineTo(x + Math.sin(sw) * q * 1.1, y - q * 0.9); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.6; ctx.stroke(); }
+  else if (s.mirror) { ctx.beginPath(); ctx.ellipse(x, y, q * 0.85, q * 1.15, 0.3, 0, TAU); ctx.fillStyle = '#dcecff'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - q * 0.35, y - q * 0.4); ctx.lineTo(x - q * 0.05, y - q * 0.7); ctx.moveTo(x - q * 0.45, y + q * 0.1); ctx.lineTo(x + q * 0.05, y - q * 0.45); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.6; ctx.stroke(); }
   else if (s.snack) { ctx.beginPath(); ctx.arc(x, y, q * 1.15, 0.45, TAU - 0.05); ctx.lineTo(x + q * 0.2, y + q * 0.1); ctx.closePath(); ctx.fillStyle = '#e8b25c'; ctx.fill(); ctx.stroke(); ctx.fillStyle = '#7a4a22'; for (const [dx, dy] of [[-0.45, -0.3], [0.1, -0.65], [-0.2, 0.4], [0.55, 0.15]]) { ctx.beginPath(); ctx.arc(x + dx * q, y + dy * q, q * 0.17, 0, TAU); ctx.fill(); } }
   else if (s.pillow) { ctx.beginPath(); ctx.ellipse(x, y + q * 0.1, q * 1.15, q * 0.8, -0.2, 0, TAU); ctx.fillStyle = '#ffc8e6'; ctx.fill(); ctx.stroke(); for (const dx of [-0.8, 0.8]) { ctx.beginPath(); ctx.arc(x + dx * q, y + q * 0.1 - dx * q * 0.2, q * 0.16, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill(); } }
   else if (s.choir) { ctx.beginPath(); ctx.ellipse(x - q * 0.3, y + q * 0.55, q * 0.55, q * 0.4, -0.4, 0, TAU); ctx.fillStyle = '#ffd0ec'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x + q * 0.12, y + q * 0.4); ctx.lineTo(x + q * 0.12, y - q * 1.1); ctx.lineTo(x + q * 0.75, y - q * 0.5); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.6; ctx.stroke(); }
