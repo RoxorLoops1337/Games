@@ -83,9 +83,15 @@ export function createAddictUI(c, openPanel, sec) {
     // weekly challenge
     sec(body, 'Weekly Challenge', '#ffd24a');
     const wc = weekChallenge(day), wk = ensureWeek(s, day), wdone = weekReady(s, day), wclaimed = !!wk.claimed;
-    const wg = grid(body);
-    wg.appendChild(tile({ cls: 't-gold one', ic: '🏅', name: wc.text, desc: 'Bonus: ' + rewardText(WEEK_REWARD), bar: Math.round(wk.prog / wc.target * 100), barText: wk.prog + ' / ' + wc.target + '  (new one every Monday)', btn: wclaimed ? 'CLAIMED' : wdone ? 'CLAIM' : 'KEEP GOING', gold: true, disabled: !wdone,
-      onclick: () => { if (claimWeek(save(), day)) { after(); audio.play('levelup'); rebuild(); renderNext(); } } }));
+    { const di = ((day | 0) + 3) % 7, left = 6 - di, pct = Math.min(100, Math.round(wk.prog / wc.target * 100)), per = Math.ceil((wc.target - wk.prog) / (left + 1));
+      const pips = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((l, i) => `<i class="${i < di ? 'past' : i === di ? 'now' : ''}">${l}</i>`).join('');
+      const rc = [WEEK_REWARD.sparkles ? `✨ ${WEEK_REWARD.sparkles}` : '', WEEK_REWARD.eggs ? `🥚 ${WEEK_REWARD.eggs}` : '', WEEK_REWARD.energy ? `⚡ ${WEEK_REWARD.energy}` : ''].filter(Boolean).map(x => `<b>${x}</b>`).join('');
+      const hint = wclaimed ? 'Claimed, see you on Monday!' : wdone ? 'Done! Come and get it' : per <= 0 ? '' : left === 0 ? 'Last day, you can do it!' : `About ${per} a day gets you there`;
+      const card = document.createElement('div'); card.className = 'wkcard' + (wclaimed ? ' claimed' : wdone ? ' ready' : '');
+      card.innerHTML = `<div class="wkt"><span class="wki">🏅</span><b>${esc(wc.text)}</b></div><div class="wkdays">${pips}<em>${left ? left + (left === 1 ? ' day left' : ' days left') : 'Last day'}</em></div><div class="wkbar"><i style="width:${pct}%"></i><span>${wk.prog} / ${wc.target}</span></div><div class="wkh">${esc(hint)}</div><div class="wkr">${rc}</div>`;
+      const wb = document.createElement('button'); wb.className = 'btn small go gold'; wb.disabled = !wdone; wb.textContent = wclaimed ? 'CLAIMED' : wdone ? 'CLAIM' : 'KEEP GOING';
+      wb.onclick = () => { if (claimWeek(save(), day)) { after(); audio.play('levelup'); rebuild(); renderNext(); } };
+      card.appendChild(wb); body.appendChild(card); }
     // mastery
     sec(body, 'Mastery', '#4fd8f0');
     // closest to the next rank first: ready ones on top, finished ones last, so the list always shows what to chase
@@ -128,18 +134,20 @@ export function createAddictUI(c, openPanel, sec) {
     const lines = comebackLines(s, c.dayKey(), now);
     openPanel('WELCOME BACK!', body => {
       const d = document.createElement('div'); d.className = 'comeback';
-      d.innerHTML = `<div class="cbi"><span>🐱</span><button class="cbbox" id="cbBox" aria-label="Open your gift">🎁</button><span>🐶</span></div><div class="cbt">We missed you!</div><div class="cbs">${esc(lines[0] || '')} ${g.days} days away, so here is a little gift from the whole band. Tap the box!</div><div class="cbr" id="cbR"></div><ul class="cbl">${lines.slice(1).map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
-      const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'OPEN MY GIFT'; const later = document.createElement('button'); later.className = 'btn small alt'; later.textContent = 'LATER'; later.onclick = () => c.openHub();
+      const wait = lines.slice(1, -1).map(x => { const m = /^(\S+)\s+(.*)$/.exec(x); return m && m[1].charCodeAt(0) > 255 ? { ic: m[1], tx: m[2] } : { ic: '🐾', tx: x }; });
+      const chips = rw => [rw.beats ? ['🪙', rw.beats, 'Beats'] : 0, rw.sparkles ? ['✨', rw.sparkles, 'Sparkles'] : 0, rw.energy ? ['⚡', rw.energy, 'Energy'] : 0, rw.eggs ? ['🥚', rw.eggs, rw.eggs > 1 ? 'Eggs' : 'Egg'] : 0].filter(Boolean).map(x => `<i class="cbchip"><b>${x[0]}</b>+${x[1]}<small>${x[2]}</small></i>`).join('');
+      d.innerHTML = `<div class="cbi"><span class="cbpet">🐱</span><button class="cbbox" id="cbBox" aria-label="Open your gift">🎁</button><span class="cbpet b">🐶</span></div><div class="cbt">We missed you!</div><div class="cbs">${esc(lines[0] || '')} ${g.days} days away, so here is a little gift from the whole band. Tap the box!</div><div class="cbr" id="cbR"></div><div class="cbwait"><em>Waiting for you</em>${wait.map(x => `<span><b>${x.ic}</b>${esc(x.tx)}</span>`).join('')}</div><div class="cbkind">${esc(lines[lines.length - 1] || '')}</div>`;
+      const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'OPEN MY GIFT'; const later = { remove() {} };
       let opened = false;
       const open = () => {
         if (opened) { c.openHub(); return; }
         opened = true; if (claimComeback(save(), Date.now())) { after(); audio.play('levelup'); }
-        const box = d.querySelector('#cbBox'); box.classList.add('open'); box.textContent = '🎉'; d.querySelector('#cbR').textContent = rewardText(g.reward);
+        const box = d.querySelector('#cbBox'); box.classList.add('open'); box.textContent = '🎉'; d.querySelector('#cbR').innerHTML = chips(g.reward); d.classList.add('opened');
         if (!reduce()) burst(d.querySelector('.cbi'), 30, '#ffd24a');
         b.textContent = "LET'S PLAY!"; later.remove();
       };
       d.querySelector('#cbBox').onclick = open; b.onclick = open;
-      d.appendChild(b); d.appendChild(later); body.appendChild(d);
+      d.appendChild(b); body.appendChild(d);
     }, () => { c.openHub(); });
     return true;
   }

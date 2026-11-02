@@ -17,7 +17,9 @@ export const farKind = skin => FAR_KIND[skin] || 'fair';
 // where the animated bits live (sprite coordinates, x already includes the margin)
 const WHEEL = { x: M + 470, y: FAR_HY - 78, r: 62 }, MILL = { x: M + 150, y: FAR_HY - 118, len: 52 };
 
-function win(c, x, y, w, h, on) { const f = c.fillStyle; c.fillStyle = `rgba(255,233,168,${on})`; c.fillRect(x, y, w, h); c.fillStyle = f; }
+let REC = null;   // while baking: every window rectangle, so kills can light them up later
+const WINS = new Map();
+function win(c, x, y, w, h, on) { if (REC) REC.push(x, y, w, h); const f = c.fillStyle; c.fillStyle = `rgba(255,233,168,${on})`; c.fillRect(x, y, w, h); c.fillStyle = f; }
 function tower(c, x, w, h, hy, roof) {
   c.fillRect(x, hy - h, w, h + 2);
   if (roof === 'tri') { c.beginPath(); c.moveTo(x - 4, hy - h); c.lineTo(x + w / 2, hy - h - w * 0.9); c.lineTo(x + w + 4, hy - h); c.fill(); }
@@ -127,7 +129,8 @@ function paintKind(c, kind, X) {
 }
 
 // bake the static sprite for one world; the cache key carries the sky grade so night stages get darker silhouettes
-export function bakeFar(b, skin, boss, stage) {
+export function bakeFar(b, skin, boss, stage, key) {
+  REC = key ? [] : null;
   const w = WORLDS[skin] || WORLDS.love, gr = skyGrade(stage), kind = farKind(skin);
   let col = mix(mix(w.far, w.bot, 0.3), '#050212', Math.min(0.7, gr.k * 0.5));
   if (boss) col = mix(col, '#12020c', 0.5);
@@ -143,15 +146,25 @@ export function bakeFar(b, skin, boss, stage) {
   b.save(); b.translate(FAR_W / 2, hy); b.scale(FAR_SC, FAR_SC); b.translate(-FAR_W / 2, -hy);
   paintKind(b, kind, { hy, col, lite, on, r });
   b.restore();
+  if (key) { WINS.set(key, REC); REC = null; }
 }
 
 // per frame: the sprite slid against the duo, plus the animated landmarks
 export function drawFar(c, kit, o) {
-  const { skin, boss, stage, t, px, reduce, low } = o, kind = farKind(skin), gr = skyGrade(stage), k = Math.round(gr.k * 4);
-  const spr = kit && kit.bake(`far|${skin}|${boss ? 1 : 0}|${k}|${stage % 7}`, FAR_W, FAR_H, b => bakeFar(b, skin, boss, stage), 1);
+  const { skin, boss, stage, t, px, reduce, low, lit = 0, pop = 9 } = o, kind = farKind(skin), gr = skyGrade(stage), k = Math.round(gr.k * 4);
+  const fkey = `far|${skin}|${boss ? 1 : 0}|${k}|${stage % 7}`, spr = kit && kit.bake(fkey, FAR_W, FAR_H, b => bakeFar(b, skin, boss, stage, fkey), 1);
   if (!spr) return;
   const dx = reduce ? 0 : -((px - W / 2) / W) * FAR_MARGIN * 1.6, x0 = -FAR_MARGIN + dx;
   c.save(); c.globalAlpha = boss ? 0.85 : 0.96; c.drawImage(spr.c, x0, FAR_TOP, FAR_W, FAR_H); c.globalAlpha = 1;
+  const wl = WINS.get(fkey);
+  if (wl && wl.length && lit > 0) {   // the skyline wakes up as the serpent is cleared: windows light in a scattered order, the newest one flashes
+    const n = wl.length >> 2, cnt = Math.min(n, Math.round(lit * n)), step = n % 7 ? 7 : 5, glow = pop < 0.5 ? 1 - pop * 2 : 0;
+    c.save(); c.translate(x0, FAR_TOP); c.translate(FAR_W / 2, FAR_HY); c.scale(FAR_SC, FAR_SC); c.translate(-FAR_W / 2, -FAR_HY);
+    c.globalCompositeOperation = 'lighter'; c.fillStyle = boss ? 'rgba(255,150,130,.8)' : 'rgba(255,226,150,.85)';
+    for (let i = 0; i < cnt; i++) { const j = ((i * step) % n) * 4; c.fillRect(wl[j], wl[j + 1], wl[j + 2], wl[j + 3]); }
+    if (cnt && glow > 0 && !low) { const j = (((cnt - 1) * step) % n) * 4; c.globalAlpha = glow * 0.6; c.fillStyle = '#ffe9a8'; c.fillRect(wl[j] - 4, wl[j + 1] - 4, wl[j + 2] + 8, wl[j + 3] + 8); }
+    c.restore();
+  }
   if (!reduce) {
     const col = mix(mix((WORLDS[skin] || WORLDS.love).far, (WORLDS[skin] || WORLDS.love).bot, 0.3), boss ? '#12020c' : '#050212', Math.min(0.7, gr.k * 0.5) + (boss ? 0.3 : 0));
     c.translate(x0, FAR_TOP); c.translate(FAR_W / 2, FAR_HY); c.scale(FAR_SC, FAR_SC); c.translate(-FAR_W / 2, -FAR_HY);

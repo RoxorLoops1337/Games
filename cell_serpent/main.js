@@ -13,19 +13,24 @@ import { applyCbPalette, paintCbStrip } from './cb_palette.js';
 import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.js';
 import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed, announce, watchGroove, watchStreak, resetGroove, showZone, inThumbZone, zoneSteer, initKeyboard, RARITY_WORDS } from './access.js';
 import { createMotion } from './motion.js';
+import { celebrateBest, stopBest } from './best_fx.js';
 import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
-import { luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML } from './cards_ui.js';
+import { firstGoalHTML, welcomeBack, welcomeHTML, hoursAway, stampVisit } from './title12b.js';
+import { luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand } from './cards_ui.js';
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { paintTabIcons, bindHubSwipe } from './tabs_ui.js';
+import { watchSideIcons } from './side_icons.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
 import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide } from './battle_ui.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
+import { rewardSnaps, flyRewards, lossLine, holdConfirm, trackModality } from './result_ux.js';
 import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
 import { dressDuo, wornOutfit } from './duo_pose.js';
+import { PUMP_LEVELS, pumpLevel } from './audio_pump.js';
 import { createCues, wantsMuffle, sheetSound } from './audio_cues.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
@@ -40,7 +45,7 @@ audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.se
 let stagKey = '';   // which hub tab already played its entrance
 const motion = createMotion({ $, buzz: p => buzz(p), getReduced: () => !!(save && save.settings && save.settings.reduceMotion) }); motion.init();
 const buzz = p => { try { if (save.settings.vibrate && navigator.vibrate) navigator.vibrate(p); } catch (e) { /* ignore */ } };
-function applySettings() { motion.applyReduced(); audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.setVolume(save.settings.volume); audio.setBeatTick(save.settings.beatTick); if (R) R.setOptions({ reduceMotion: save.settings.reduceMotion || systemReduceMotion(), lowQuality: save.settings.lowQuality, bigNumbers: save.settings.bigNumbers, colorBlind: save.settings.colorBlind, highContrast: save.settings.highContrast, textScale: textScaleOf(save.settings) }); applyPageSettings(save.settings); applyCbPalette(kit, !!save.settings.colorBlind); showSlider(save.settings.slider && mode === 'play' && !document.querySelector('.scr.on')); showZone(save.settings.thumbZone && mode === 'play' && !document.querySelector('.scr.on')); dprCap = save.settings.lowQuality ? 1 : Math.max(dprCap, 2); }
+function applySettings() { motion.applyReduced(); audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.setVolume(save.settings.volume); audio.setBeatTick(save.settings.beatTick); audio.setPump(save.settings.pump); if (R) R.setOptions({ reduceFlash: !!save.settings.reduceFlash, reduceMotion: save.settings.reduceMotion || systemReduceMotion(), lowQuality: save.settings.lowQuality, bigNumbers: save.settings.bigNumbers, colorBlind: save.settings.colorBlind, highContrast: save.settings.highContrast, textScale: textScaleOf(save.settings) }); applyPageSettings(save.settings); applyCbPalette(kit, !!save.settings.colorBlind); showSlider(save.settings.slider && mode === 'play' && !document.querySelector('.scr.on')); showZone(save.settings.thumbZone && mode === 'play' && !document.querySelector('.scr.on')); dprCap = save.settings.lowQuality ? 1 : Math.max(dprCap, 2); }
 let art = null, R = null, kit = null;
 const dayKey = () => Math.floor(Date.now() / 86400000);
 let slowFrames = 0, fastFrames = 0;
@@ -60,7 +65,17 @@ initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap
 
 let shownId = '';
 function show(id) { { const ss = sheetSound(shownId, id); shownId = id; if (ss) audio.play(ss); } if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id); }
-function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) motion.num($(id), v); const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } { const ht = document.querySelector('.hubtop'), big = Math.max(save.beats, save.sparkles); if (ht) { ht.classList.toggle('big', big >= 10000); ht.classList.toggle('huge', big >= 100000); } }   // long numbers shrink the header pills on narrow phones
+// the gig claim holds the pill at its old value until the flying rewards land (then it counts up with a +N)
+const curHold = {};
+function gigFlies(list) {
+  const reduce = !!(save.settings.reduceMotion || systemReduceMotion()), left = { beats: 0, sparkles: 0 }, sum = { beats: 0, sparkles: 0 };
+  for (const it of list) { left[it.kind]++; sum[it.kind] += it.amt; }
+  for (const k of ['beats', 'sparkles']) if (left[k]) curHold[k] = Math.max(0, save[k] - sum[k]);
+  const rel = () => { delete curHold.beats; delete curHold.sparkles; refreshCur(); };
+  list.forEach((it, i) => setTimeout(() => collectFly(it.snap, it.kind, { reduce, onLand: () => { if (curHold[it.kind] === undefined) return; curHold[it.kind] += it.amt; if (!--left[it.kind]) delete curHold[it.kind]; refreshCur(); } }), i * 160));
+  setTimeout(rel, 700 + list.length * 160 + 1200);   // safety: never leave a pill stuck
+}
+function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) { const hv = curHold[id.endsWith('Beats') ? 'beats' : 'sparkles']; motion.num($(id), hv === undefined ? v : hv); } const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } { const ht = document.querySelector('.hubtop'), big = Math.max(save.beats, save.sparkles); if (ht) { ht.classList.toggle('big', big >= 10000); ht.classList.toggle('huge', big >= 100000); } }   // long numbers shrink the header pills on narrow phones
   const en = $('hEnergy'); if (en) en.textContent = tickEnergy(save, Date.now()) + '/' + ENERGY_MAX; }
 
 // ---------------------------------------------------------------- icons (all drawn by the art kit)
@@ -158,13 +173,13 @@ function renderBattle() {
   $('stBadges').innerHTML = (info.boss ? '<i class="boss">👑 BOSS</i>' : '') + (info.kind === 'ring' ? '<i class="ring">🌀 RING</i>' : '') + (info.kind === 'double' ? '<i class="dbl">🐍🐍 DOUBLE</i>' : '') + (hard ? '<i>HARD</i>' : '');
   $('stPrev').disabled = sel <= 1; $('stNext').disabled = sel >= Math.min(MAX_STAGE, save.cleared + 4);
   const chips = $('stChips'), chipTop = Math.min(MAX_STAGE, save.cleared + 4);
-  let ckey = save.cleared + '|' + chipTop; for (let n = 1; n <= chipTop; n++) ckey += (save.stars[n] || 0);
+  let ckey = save.cleared + '|' + chipTop + '|' + (save.hardCleared || 0); for (let n = 1; n <= chipTop; n++) ckey += (save.stars[n] || 0);
   const chipsSame = chips.dataset.k === ckey && chips.children.length === chipTop;   // 17-perf: the 54 chips are rebuilt only when stars or progress changed
   if (chipsSame) for (let n = 1; n <= chipTop; n++) chips.children[n - 1].classList.toggle('sel', n === sel);
   else { chips.innerHTML = ''; chips.dataset.k = ckey; }
   for (let n = 1; n <= chipTop && !chipsSame; n++) {
     const c = document.createElement('button'); c.className = 'chip' + (n === sel ? ' sel' : '') + (n > save.cleared + 1 ? ' lock' : '') + (n <= save.cleared ? ' done' : '') + (n === save.cleared + 1 ? ' nxt' : '');
-    { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st${n > save.cleared ? ' no' : ''}">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : '') + chipReward(n, save.cleared, save.hardCleared); if (n === save.cleared + 1 || hardLevel(n, save.cleared, save.hardCleared) !== 'none') c.classList.add('hasrw'); }
+    { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st${n > save.cleared ? ' no' : ''}">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : '') + chipReward(n, save.cleared, save.hardCleared); if (n === save.cleared + 1 || hardLevel(n, save.cleared, save.hardCleared) !== 'none') c.classList.add('hasrw'); if (hardLevel(n, save.cleared, save.hardCleared) !== 'none') c.classList.add('hasH'); }
     c.onclick = () => { audio.play('click'); sel = n; renderBattle(); };
     chips.appendChild(c);
   }
@@ -181,22 +196,23 @@ function renderBattle() {
   $('btHint').textContent = !save.cleared && !save.runs ? 'Slide left and right, shoot up, keep the snake off the pink line!' : (playable && save.energy && tickEnergy(save, Date.now()) < ENERGY_COST ? 'Out of Voice! Tap + up top, or rest a bit.' : '');
   loadoutRow($('battleLoad'), true);
   { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; $('stProg').innerHTML = `<div class="pgl">Best <b>${pr}%</b></div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
-  hub2.renderSide(); watchSide($('battleSide'));
+  hub2.renderSide(); watchSideIcons($('battleSide')); watchSide($('battleSide'));
   renderPig();
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
   renderGoals();
   if (chips.dataset.sc !== sel + '|' + ckey) { chips.dataset.sc = sel + '|' + ckey; requestAnimationFrame(() => { const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } } }); }   // 17-perf: read layout after paint, and only when the stage changed
 }
 // chip filter: only the stages that still pay something (next first clear, unpaid Hard clear)
-let rwOnly = false;
+let rwMode = 0;   // 0 all stages, 1 stages that still pay, 2 only the unpaid Hard clears
 function syncRwFilter(chips, cb) {
-  const row = $('btRowH'), n = chips.querySelectorAll('.chip.hasrw').length; let f = $('rwFilter');
-  if (!f) { f = document.createElement('button'); f.id = 'rwFilter'; f.className = 'pill rwf'; f.onclick = () => { audio.play('click'); rwOnly = !rwOnly; renderBattle(); }; row.insertBefore(f, cb); }
-  if (!n) rwOnly = false;
-  f.hidden = !n; f.classList.toggle('on', rwOnly); f.setAttribute('aria-pressed', rwOnly ? 'true' : 'false'); f.innerHTML = '\u2726 Rewards <b>' + n + '</b>';
-  chips.classList.toggle('rwonly', rwOnly); row.style.display = n || cb.style.display !== 'none' ? '' : 'none';
+  const row = $('btRowH'), n = chips.querySelectorAll('.chip.hasrw').length, nh = chips.querySelectorAll('.chip.hasH').length; let f = $('rwFilter');
+  if (!f) { f = document.createElement('button'); f.id = 'rwFilter'; f.className = 'pill rwf'; f.onclick = () => { audio.play('click'); const hn = $('stChips').querySelectorAll('.chip.hasH').length; rwMode = rwMode === 0 ? 1 : rwMode === 1 && hn ? 2 : 0; renderBattle(); }; row.insertBefore(f, cb); }
+  if (!n) rwMode = 0; if (rwMode === 2 && !nh) rwMode = 0;
+  f.hidden = !n; f.classList.toggle('on', rwMode > 0); f.classList.toggle('hard', rwMode === 2); f.setAttribute('aria-pressed', rwMode ? 'true' : 'false');
+  f.innerHTML = rwMode === 2 ? '<i class="rwh">H</i> Hard <b>' + nh + '</b>' : '\u2726 Rewards <b>' + n + '</b>';
+  chips.classList.toggle('rwonly', rwMode === 1); chips.classList.toggle('rwhard', rwMode === 2); row.style.display = n || cb.style.display !== 'none' ? '' : 'none';
 }
-$('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) fl.forEach(([b, g, i]) => setTimeout(() => collectFly(b, g && g.reward.beats ? 'beats' : 'sparkles', { reduce: !!(save.settings.reduceMotion || systemReduceMotion()) }), i * 160)); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
+$('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) gigFlies(fl.map(([b, g]) => ({ snap: b, kind: g && g.reward.beats ? 'beats' : 'sparkles', amt: g ? g.reward.beats || g.reward.sparkles || 0 : 0 }))); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
 $('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
@@ -300,7 +316,9 @@ function renderPets() {
   eggNudge(egg, save); list.appendChild(egg);
   { const rdy = PETS.filter(p => petCanUp(save, p.id)).length; if (save.eggs > 1 || rdy) { const row = document.createElement('div'); row.className = 'refrow'; row.style.justifyContent = 'center'; row.style.gap = '10px'; if (save.eggs > 1) { const b = document.createElement('button'); b.className = 'btn small alt'; b.textContent = 'HATCH ALL (' + save.eggs + ')'; b.onclick = () => { const res = hatchAll(save); if (res.length) { persist(); audio.play('levelup'); refreshCur(); toast(res.length + ' eggs hatched'); renderHub(); } }; row.appendChild(b); } if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'STAR UP ALL (' + rdy + ')'; b.onclick = () => { if (upgradePetsAll(save)) { persist(); audio.play('upgrade'); renderHub(); } }; row.appendChild(b); } list.appendChild(row); } }
   list.appendChild(chipRow(['All', 'Owned', 'Ready'], petFilter, o => { petFilter = o; audio.play('click'); renderPets(); }, { Ready: PETS.filter(p => petCanUp(save, p.id)).length }));
-  for (const p of PETS) {
+  { const row = list.lastElementChild; const sb = document.createElement('button'); sb.className = 'fchip'; sb.textContent = 'Sort: ' + petSort; sb.onclick = () => { petSort = petSort === 'Order' ? 'Stars' : petSort === 'Stars' ? 'Joy' : petSort === 'Joy' ? 'Rarity' : 'Order'; audio.play('click'); renderPets(); }; if (row && row.classList.contains('fchips')) row.appendChild(sb); }
+  const petKey = p => { const k = save.pets[p.id]; return petSort === 'Stars' ? -k.star : petSort === 'Joy' ? -(k.joy || 0) : petSort === 'Rarity' ? -(PET_RARITY[p.id] || 0) : 0; };
+  for (const p of (petSort === 'Order' ? PETS : PETS.slice().sort((a, b) => petKey(a) - petKey(b)))) {
     if (petFilter === 'Owned' && save.pets[p.id].star < 1) continue; if (petFilter === 'Ready' && !petCanUp(save, p.id)) continue;
     const k = save.pets[p.id], owned = k.star > 0, maxed = k.star >= PET_MAX_STAR, need = maxed ? 0 : petCost(k.star), eq = save.petEquip.includes(p.id);
     const stars = '★ ' + k.star + '/' + PET_MAX_STAR;
@@ -325,12 +343,13 @@ function renderGoals() {
     const prog = goalProgress(save, day, goal), done = prog >= goal.target, claimed = !!(save.daily && save.daily.day === day && save.daily.claimed[goal.id]);
     const rw = goal.reward.beats ? `${goal.reward.beats} ${curImg('beats')}` : `${goal.reward.sparkles} ${curImg('sparkles')}`;
     const state = claimed ? 'claimed' : done ? 'ready' : 'wait';
-    const row = document.createElement('div'); row.className = 'gl-row ' + state; row.innerHTML = goalRowHTML(goal.text, prog, goal.target, rw, state);
-    if (state === 'ready') row.querySelector('button').onclick = () => { { const btn = snap(row.querySelector('button')); if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); collectFly(btn, goal.reward.beats ? 'beats' : 'sparkles', { reduce: !!(save.settings.reduceMotion || systemReduceMotion()) }); renderHub(); } } };
+    const row = document.createElement('div'); row.className = 'gl-row ' + state; row.innerHTML = goalRowHTML(goal.text, prog, goal.target, rw, state, goal.id);
+    if (state === 'ready') row.querySelector('button').onclick = () => { { const btn = snap(row.querySelector('button')); if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); gigFlies([{ snap: btn, kind: goal.reward.beats ? 'beats' : 'sparkles', amt: goal.reward.beats || goal.reward.sparkles || 0 }]); renderHub(); } } };
     if (claimed) n++;
     list.appendChild(row);
   }
   const hd = $('glCount'); if (hd) hd.textContent = n + '/' + goals.length;
+  { const cg = $('claimGigs'), rd = list.querySelectorAll('.gl-row.ready').length; if (cg) { cg.textContent = rd ? 'CLAIM ALL (' + rd + ')' : n === goals.length ? 'ALL DONE \u2713' : 'CLAIM ALL'; cg.classList.toggle('rdy', rd > 0); cg.classList.toggle('alld', !rd && n === goals.length); } }
 }
 function renderSkills() {
   const list = $('skillList'); list.innerHTML = '';
@@ -338,7 +357,7 @@ function renderSkills() {
   { const rdy = WEAPONS.filter(w => save.skills[w.id].lv > 0 && save.skills[w.id].lv < SKILL_MAX_LV && save.skills[w.id].frag >= skillUpgradeCost(save.skills[w.id].lv).frag).length; if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold sec'; b.style.cssText = 'grid-column:1/-1;margin:2px auto'; b.textContent = 'LEVEL UP ALL READY (' + rdy + ')'; b.onclick = () => { if (upgradeAllSkills(save)) { persist(); audio.play('upgrade'); renderHub(); } }; list.appendChild(b); } }
   const isRdy = w => { const k = save.skills[w.id]; return k.lv > 0 ? k.lv < SKILL_MAX_LV && k.frag >= skillUpgradeCost(k.lv).frag : k.frag >= w.frag && (save.cleared || 0) >= (w.stage || 0); };
   { const row = chipRow(['All', 'Owned', 'Ready'], skFilter, o => { skFilter = o; audio.play('click'); renderSkills(); }, { Ready: WEAPONS.filter(isRdy).length });
-    const sb = document.createElement('button'); sb.className = 'fchip'; sb.textContent = 'Sort: ' + skSort; sb.onclick = () => { skSort = skSort === 'Tier' ? 'Level' : skSort === 'Level' ? 'Rank' : 'Tier'; audio.play('click'); renderSkills(); }; row.appendChild(sb); list.appendChild(row); }
+    const sb = document.createElement('button'); sb.className = 'fchip'; sb.textContent = 'Sort: ' + skSort; sb.onclick = () => { skSort = skSort === 'Tier' ? 'Level' : skSort === 'Level' ? 'Rank' : skSort === 'Rank' ? 'Closest' : 'Tier'; audio.play('click'); renderSkills(); }; row.appendChild(sb); list.appendChild(row); }
   const groups = [[], [], []], keyOf = new Map();
   for (const w of WEAPONS) {
     const k = save.skills[w.id], owned = k.lv > 0, eq = save.loadout.includes(w.id);
@@ -359,7 +378,7 @@ function renderSkills() {
       e.onclick = () => { if (full) { audio.play('click'); swapSheet({ save: () => save, persist: () => persist(), audio, icon, rerender: () => renderHub() }, w.id); return; } if (toggleLoadout(save, w.id)) { persist(); audio.play('click'); renderHub(); } };
       t.appendChild(e);
     }
-    if (owned) { const rk = skillRank(save, w.id); t.querySelector('.ds').insertAdjacentHTML('beforebegin', `<em class="rk r${rk.rank}" title="Mastery rank">🎖 ${rk.name}</em>`); keyOf.set(t, skSort === 'Level' ? -k.lv : skSort === 'Rank' ? -rk.val : (w.tier || 0)); } else keyOf.set(t, skSort === 'Tier' ? (w.tier || 0) : 0);
+    if (owned) { const rk = skillRank(save, w.id); t.querySelector('.ds').insertAdjacentHTML('beforebegin', `<em class="rk r${rk.rank}" title="Mastery rank">🎖 ${rk.name}</em>`); keyOf.set(t, skSort === 'Level' ? -k.lv : skSort === 'Rank' ? -rk.val : skSort === 'Closest' ? -(need ? k.frag / need : 0) : (w.tier || 0)); } else keyOf.set(t, skSort === 'Tier' ? (w.tier || 0) : skSort === 'Closest' ? -(need ? k.frag / need : 0) : 0);
     if (isNewItem(save, 's', w.id)) t.insertAdjacentHTML('afterbegin', newRibbonHTML);
     t.tabIndex = 0; t.onclick = e => { if (!e.target.closest('button')) { audio.play('click'); sheets.skillSheet(w.id); } };
     groups[eq ? 0 : owned ? 1 : 2].push(t);
@@ -372,7 +391,7 @@ function renderSkills() {
     for (const t of groups[i]) list.appendChild(t);
   });
 }
-let skFilter = 'All', skSort = 'Tier', petFilter = 'All';
+let skFilter = 'All', skSort = 'Tier', petFilter = 'All', petSort = 'Order';
 const sheets = createSheets({ save: () => save, persist: () => persist(), audio, icon, rerender: () => renderHub() });
 const defaultBoxOk = () => { audio.play('click'); openHub('Shop'); };
 $('bOk').onclick = defaultBoxOk;
@@ -386,14 +405,16 @@ function newDemo() {
 }
 function startRun(stage, mode2 = '') {
   if (!mode2) save.last = { stage, hard: !!(hard && stage <= save.cleared) };
-  audio.unlock(); audio.music(true);
+  audio.unlock(); audio.music(true, stage === 1 && !mode2);
   sel = stage; ranResult = false; endT = 0;
   g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
+  g.petJoy = save.petEquip.map(id => (save.pets[id].joy || 0) >= 100);   // round 6: an overjoyed pet shows off in the run (cosmetic)
   mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove();
   announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + 'Slide to move, the duo shoots up on its own.');
   window.CS.g = g;
 }
-function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)); try { dressDuo(document.querySelector('.stage12 .hero'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ } }
+let awayH = hoursAway(Date.now()); addEventListener('pagehide', () => stampVisit(Date.now()));
+function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)) || firstGoalHTML(save); { const w = welcomeBack(save, Date.now(), awayH), el = $('wb12'); el.innerHTML = welcomeHTML(w); el.hidden = !w; $('title').classList.toggle('ret12', !!w); awayH = 0; stampVisit(Date.now()); } try { dressDuo(document.querySelector('.stage12 .hero'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ } }
 function toTitle() { refreshTitle(); mode = 'title'; audio.music(false); refreshCur(); newDemo(); show('title'); }
 
 // ---------------------------------------------------------------- upgrade cards
@@ -411,7 +432,7 @@ function showCards() {
     const stat = dm ? `<div class="delta"><span class="dl">${dm[1]}</span><span class="dv"><i>${dm[2]}</i><em>→</em><b>${dm[3]}</b></span>${ghostBarHTML(mt)}</div>` : c.stat ? `<div class="delta"><span class="dv"><b>${c.stat}</b></span>${ghostBarHTML(mt)}</div>` : '';
     const syn = synergyHint(g, c);
     const fx = rn >= 4 ? '<span class="rays"></span>' + Array.from({ length: rn === 5 ? 8 : 5 }, (_, k) => `<span class="pt" style="--x:${(8 + k * (84 / (rn === 5 ? 7 : 4))).toFixed(0)}%;--t:${(1.6 + (k * 0.37) % 1.2).toFixed(2)}s;--w:${((k * 0.29) % 1.5).toFixed(2)}s"></span>`).join('') : '';
-    b.innerHTML = `${fx}<span class="key">${i + 1}</span><div class="ic">${c.kind === 'weapon' ? levelRingHTML(mt) : ''}${icon(c.id)}<span class="kd">${kindLabel(c)}</span></div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}${syn ? `<div class="syn">${syn}</div>` : ''}<div class="pips">${pips}</div></div><span class="shine"></span>`;
+    b.innerHTML = `${fx}<span class="key">${i + 1}</span><div class="ic">${foilHTML(rn)}${c.kind === 'weapon' ? levelRingHTML(mt) : ''}${icon(c.id)}<span class="kd">${kindLabel(c)}</span></div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}${syn ? `<div class="syn">${syn}</div>` : ''}<div class="pips">${pips}</div></div><span class="shine"></span>`;
     b.setAttribute('aria-label', `Option ${i + 1}: ${c.name}, ${RARITY_WORDS[rn]} rarity${c.isNew ? ', new' : ''}. ${c.desc}${c.stat ? '. ' + c.stat : ''}`);
     b.onclick = () => pick(i);
     wrap.appendChild(b);
@@ -429,8 +450,8 @@ function pick(i) {
   audio.play('upgrade'); { const pr = (g.choices[i] && g.choices[i].rarity) | 0; audio.play('card' + pr); if (pr >= 4) audio.play('stinger'); }
   const cs = $('cards').children, el = cs[i];
   if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); return; }
-  pickLock = true; el.classList.add('chosen'); [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing'); flyPick(el, $('buildStrip'), 400);
-  setTimeout(() => { if (!pickLock) return; pickLock = false; if (mode !== 'play' || g.phase !== 'levelup') return; choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }, 420);
+  pickLock = true; el.classList.add('chosen'); [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing'); { const pc = g.choices[i]; flyPick(el, $('buildStrip'), 360, () => { if (pc) tickBand($('buildStrip'), pc.id, pc.kind === 'weapon' ? (pc.gain || 1) : 1, icon); }); }
+  setTimeout(() => { if (!pickLock) return; pickLock = false; if (mode !== 'play' || g.phase !== 'levelup') return; choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }, 580);
 }
 $('skipBtn').onclick = () => { if (mode === 'play' && skipPick(g)) { audio.play('skip'); cardsFor = null; if (g.phase === 'levelup') showCards(); else show(''); } };
 $('refreshBtn').onclick = () => { if (mode === 'play' && reroll(g)) { audio.play('click'); showCards(); } };
@@ -480,7 +501,7 @@ function readInput() {
   const enc = encoreTap || !!keys[' ']; encoreTap = false;
   return { mx, my: 0, encore: enc };
 }
-function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; pauseRecap(); show('pause'); }
+function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; pauseRecap(); quitHold.reset(); show('pause'); }
 // Escape and the Android back button share this: close what is open, pause a run, resume a pause, leave the end screen.
 // The back button also walks the hub up to the title; Escape stays put there.
 function goBack(fromBtn) {
@@ -500,12 +521,12 @@ addEventListener('popstate', () => { backArmed = false; if (mode === 'title') re
 function resume() { mode = 'play'; show(''); last = performance.now(); }
 function openSettings(back) {
   const paint = () => {
-    for (const b of document.querySelectorAll('#settings .tgl')) { const k = b.dataset.k, on = k === 'sound' ? !save.muted : save.settings[k]; b.classList.toggle('on', !!on); b.querySelector('b').textContent = on ? 'ON' : 'OFF'; }
+    for (const b of document.querySelectorAll('#settings .tgl')) { const k = b.dataset.k, on = k === 'sound' ? !save.muted : save.settings[k]; b.classList.toggle('on', !!on); b.querySelector('b').textContent = k === 'pump' ? PUMP_LEVELS[pumpLevel(on)] : on ? 'ON' : 'OFF'; b.classList.toggle('on', k === 'pump' ? pumpLevel(on) > 0 : !!on); }
     $('bkCode').value = exportSave(save); paintCbStrip($('cbStrip'), kit, !!save.settings.colorBlind);
   };
   for (const b of document.querySelectorAll('#settings .tgl')) b.onclick = () => {
     const k = b.dataset.k; audio.unlock();
-    if (k === 'sound') save.muted = !save.muted; else save.settings[k] = !save.settings[k];
+    if (k === 'sound') save.muted = !save.muted; else if (k === 'pump') save.settings.pump = (pumpLevel(save.settings.pump) + 1) % 3; else save.settings[k] = !save.settings[k];
     applySettings(); resize(); persist(); audio.play('click'); $('muteBtn').textContent = save.muted ? '🔇' : '🔊'; paint();
   };
   { const vs = $('volRange'); if (vs) { vs.value = Math.round(save.settings.volume * 100); vs.oninput = () => { save.settings.volume = vs.value / 100; audio.setVolume(save.settings.volume); audio.unlock(); audio.play('slide', { f: save.settings.volume }); }; vs.onchange = () => { persist(); audio.unlock(); audio.play('tap'); }; } }
@@ -535,6 +556,7 @@ function showRevive() {
 function pauseRecap() {
   const pc = Math.floor((g.progress || 0) * 100), t = Math.floor(g.t || 0), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   $('pRecap').innerHTML = `<div><i>🚩</i>Stage<b>${g.stage}</b></div><div><i>⏱</i>Time<b>${mm}:${ss}</b></div><div><i>🎯</i>Popped<b>${g.kills}</b></div><div class="pbar"><i style="width:${pc}%"></i><em>${pc}% of the way</em></div>`;
+  { const ll = lossLine(g); $('quitBtn').title = 'Ends the run: ' + ll.text; $('quitBtn').setAttribute('aria-label', 'Hold to give up. You would lose ' + ll.text); $('pLose').innerHTML = `<b>Giving up ends this run</b>${ll.text}`; }
   $('pBuild').innerHTML = (save.loadout || []).map(id => { const w = WEAPONS.find(x => x.id === id), k = save.skills[id]; return w ? `<span>${icon(id)}LV ${k ? k.lv : 1}</span>` : ''; }).join('');
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
@@ -552,7 +574,7 @@ function statsPanel(onClose) {
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
   const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
-  stopFx(); const cu = n => `+<span data-to="${n}">${n}</span>`;
+  stopFx(); stopBest(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
   if (out.ribbons) rows.push(`<div class="r">🎀 ${cu(out.ribbons)} Ribbons</div>`);
   if (out.pet) rows.push(`<div class="r">${icon(out.pet.id)}${cu(out.pet.n)} ${PETS.find(p => p.id === out.pet.id).name} fragments</div>`);
@@ -570,7 +592,7 @@ function showResult() {
   const li1 = levelInfo(save.xp), reduce = save.settings.reduceMotion;
   levelBar(li0, li1, reduce);
   { const pct = Math.floor((r.progress || 0) * 100), best = out.first || out.starsGained > 0 || (!r.won && !r.mode && !r.hard && pct > out.prevPct && out.prevPct > 0);
-    $('rRibbon').textContent = best ? (out.first ? 'FIRST CLEAR!' : out.starsGained > 0 ? 'NEW BEST STARS!' : 'NEW BEST ' + pct + '%') : ''; $('rRibbon').classList.toggle('on', !!best); }
+    $('rRibbon').textContent = best ? (out.first ? 'FIRST CLEAR!' : out.starsGained > 0 ? 'NEW BEST STARS!' : 'NEW BEST ' + pct + '%') : ''; $('rRibbon').classList.toggle('on', !!best); celebrateBest($('rRibbon'), { reduce, delta: best && !out.first && !(out.starsGained > 0) ? pct - out.prevPct : 0, play: () => audio.play('star3') }); }
   if (r.cp50) rows.push(`<div class="r">⚡ +10 Voice back</div>`);
   $('rList').innerHTML = rows.join(''); countUp($('rList'), reduce, () => audio.play('countend'), f => audio.play('count', { f }));
   for (const el of $('rList').children) el.classList.add('got');
@@ -582,17 +604,17 @@ function showResult() {
   { const gl = nextGoal(save); renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
   $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); beginStage(r.stage); };
-  $('rHub').onclick = () => { audio.play('click'); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; openHub('Battle'); };
+  $('rHub').onclick = () => { audio.play('click'); const fl = rewardSnaps($('rList')); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; openHub('Battle'); flyRewards(fl, !!(save.settings.reduceMotion || systemReduceMotion())); };
   { const st = r.stars || 0; $('rStars').innerHTML = r.won && !r.mode && !r.hard ? [1, 2, 3].map(i => `<span class="${i <= st ? '' : 'off'}">★</span>`).join('') : '';
     if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + Math.min(3, i + 1)); if (i === 2 && st === 3 && !reduce) confetti($('result'), 30); }, reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
     const top = Object.entries(r.dmgBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => (id === 'capsule' ? 'Singing' : id === 'encore' ? 'Encore' : (WEAPONS.find(w => w.id === id) || { name: id }).name)).join(', ') || '-';
-    $('rExtra').innerHTML = `<span><i>⏱</i>Time <b>${mm}:${ss}</b></span><span><i>🎯</i>Cells <b>${r.kills}</b></span><span><i>🎵</i>Best groove <b>${Math.round(r.groove || 0)}</b></span><span><i>💣</i>Bombs <b>${r.bombs || 0}</b></span><span class="rtop"><i>🏆</i>Top <b>${top}</b></span>`;
+    $('rExtra').innerHTML = `<span><i>⏱</i>Time <b>${mm}:${ss}</b></span><span><i>🎯</i>Cells <b>${r.kills}</b></span><span><i>🎵</i>Best groove <b>${Math.round(r.groove || 0)}</b></span>${(r.qBest | 0) >= 1 && !(r.bombs | 0) ? `<span><i>🎶</i>Quartets <b>${r.quartets | 0}${r.qBest >= 2 ? ' (x' + r.qBest + ')' : ''}</b></span>` : `<span><i>💣</i>Bombs <b>${r.bombs || 0}</b></span>`}<span class="rtop"><i>🏆</i>Top <b>${top}</b></span>`;
 
     // no toast here: it used to cover the title on the result screen, and the ribbon plus the Sparkles row already say it
   }
   if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
-  try { dressDuo($('rImg'), { outfit: wornOutfit(save), pets: save.petEquip, kit, mood: r.won ? 'win' : 'lose' }); } catch (e) { /* ignore */ }
+  try { dressDuo($('rImg'), { outfit: wornOutfit(save), pets: save.petEquip, kit, mood: r.won ? 'win' : 'lose', joy: Object.fromEntries(save.petEquip.map(id => [id, save.pets[id].joy || 0])) }); } catch (e) { /* ignore */ }
   show('result'); mode = 'over';
 }
 
@@ -606,15 +628,16 @@ document.addEventListener('click', e => {
 }, true);
 
 // ---------------------------------------------------------------- loop
-const SFX = { quartet: 'levelup', quartetfail: 'mend', lull: 'levelup', surgewarn: 'swarm', surge: 'roar', phase2: 'roar', won: 'clear', chestdrop: 'power', chest: 'levelup', upgradecell: 'cell', groove: 'groovehit', leak: 'leak', swab: 'meow', needles: 'squeak', dragon: 'coo', maw: 'bark', strike: 'hoot', bubble: 'quack', pulse: 'moo' };
+const SFX = { lull: 'levelup', surgewarn: 'swarm', surge: 'roar', phase2: 'roar', won: 'clear', chestdrop: 'power', chest: 'levelup', upgradecell: 'cell', groove: 'groovehit', leak: 'leak', swab: 'meow', needles: 'squeak', dragon: 'coo', maw: 'bark', strike: 'hoot', bubble: 'quack', pulse: 'moo' };
 const PETSND = { kitten: 'meow', puppy: 'bark', lamb: 'baa', turtle: 'boop', piglet: 'oink', hamster: 'squeak' };
 const BUZZ = { dead: [80, 40, 90], revive: 40, boom: 24, upgradecell: 16, levelup: 14, chest: 12, danger: 28, leak: 60 };
-const FX_SOUND = new Set(['shoot', 'hit', 'kill', 'boom', 'coin', 'hurt', 'block', 'power', 'levelup', 'clear', 'stage', 'revive', 'dead', 'swarm', 'roar', 'surgewarn', 'surge', 'phase2', 'won', 'chestdrop', 'chest', 'swab', 'needles', 'dragon', 'maw', 'strike', 'bubble', 'pulse', 'danger', 'mend', 'lull', 'skip', 'upgradecell', 'groove', 'leak', 'beatshot', 'encore', 'encoreready', 'goldpop', 'goldfade', 'quartet', 'quartetfail', 'clutch', 'checkpoint']);
+const FX_SOUND = new Set(['shoot', 'hit', 'kill', 'boom', 'coin', 'hurt', 'block', 'power', 'levelup', 'clear', 'stage', 'revive', 'dead', 'swarm', 'roar', 'surgewarn', 'surge', 'phase2', 'won', 'chestdrop', 'chest', 'swab', 'needles', 'dragon', 'maw', 'strike', 'bubble', 'pulse', 'danger', 'mend', 'lull', 'skip', 'upgradecell', 'groove', 'leak', 'beatshot', 'encore', 'encoreready', 'goldpop', 'goldfade', 'quartet', 'quartetstart', 'quartetfail', 'clutch', 'checkpoint']);
 function drain(game, sound) {
   const evs = game.events.splice(0);
   for (const e of evs) {
     R.onEvent(e, game);
     if (sound && e.t === 'kill' && game === g && needsFirstPop(save)) firstPop(audio, buzz);
+    if (sound && e.t === 'kill' && e.choir) audio.play('choirpop');
     if (!sound) continue;
     if (FX_SOUND.has(e.t)) audio.play(SFX[e.t] || e.t, e); else if (e.t === 'pet') audio.play(PETSND[e.id] || 'chirp');
     if (BUZZ[e.t] !== undefined) buzz(BUZZ[e.t]);
@@ -646,7 +669,7 @@ function frame(now) {
     if (g.phase === 'levelup' && cardsFor !== g.choices) showCards();
     if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5) && !(g.phase === 'won' && R.clearBusy())) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked) showRevive(); else if (!reviveAsked) showResult(); } }
     if (watchGroove(g.groove) < 0) audio.play('groovelost');
-    watchStreak(audio.beatStreak);
+    watchStreak(audio.beatStreak); if (g.phase === 'play') audio.chainWatch();
     audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0); audio.mix({ stage: g.stage, boss: isBossStage(g.stage), groove: g.groove / 20, danger: g.danger, skin: cues.skin(g), bphase: cues.tick(g) });
     if (g.phase === 'play') audio.sync(beatPhase(g));
   }
@@ -660,18 +683,21 @@ $('playBtn').onclick = () => { audio.unlock(); audio.play('click'); playBurst($(
 $('resumeBtn').onclick = () => resume();
 $('pStats').onclick = () => { audio.play('click'); showStatsFromPause(); };
 $('pSet').onclick = () => { audio.play('click'); openSettings(() => show('pause')); };
-$('quitBtn').onclick = () => {
+const quitNow = () => {
   g.p.hp = 0; g.phase = 'dead';
   g.result = quitResult(g);
   showResult();
 };
+trackModality();
+const quitHold = holdConfirm($('quitBtn'), { ms: 900, onConfirm: () => { audio.play('click'); buzz([40, 30, 40]); quitNow(); }, onHint: k => toast(k === 'again' ? 'Press again to give up' : 'Hold to give up') });
+
 $('setBtnT').onclick = () => { audio.unlock(); audio.play('click'); openSettings(() => toTitle()); };
 $('setBtnH').onclick = () => { audio.unlock(); audio.play('click'); openSettings(() => openHub()); };
 $('muteBtn').onclick = toggleMute;
 for (const [id, label] of [['muteBtn', 'Mute'], ['enPlus', 'Buy Voice'], ['stPrev', 'Previous stage'], ['stNext', 'Next stage']]) $(id).setAttribute('aria-label', label);
 addEventListener('error', () => { toast('Something glitched. Your save is safe.'); if (mode === 'play') pause(); }); $('muteBtn').textContent = save.muted ? '🔇' : '🔊';
 
-window.CS = { motion, g: null, save: () => save, mode: () => mode, openHub, startRun,
+window.CS = { motion, g: null, get hub2() { return hub2; }, save: () => save, mode: () => mode, openHub, startRun,
   // QA hook (batch 5): jump the live run to its end the way the sim does ('dead' | 'won'), then the normal flow (revive prompt, result) takes over
   force: kind => { if (mode !== 'play' || !g || g.phase === 'dead' || g.phase === 'won') return false; if (kind === 'dead') { g.p.hp = 0; g.p.revive = 0; g.phase = 'dead'; g.result = quitResult(g); g.events.push({ t: 'dead' }); return true; } if (kind === 'won') { g.snakes = []; g.phase = 'won'; g.result = { ...quitResult(g), won: true, stars: g.mode || g.hard ? 0 : 3 }; g.events.push({ t: 'won' }); return true; } return false; } };
 loadArt('assets/').then(a => {
@@ -681,7 +707,7 @@ loadArt('assets/').then(a => {
   [['love', 'deco1'], ['grumpy', 'deco2'], ['sneezy', 'deco3'], ['sleepy', 'deco4']].forEach(([skin, el], i) => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
-  setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
+  setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); $('title').addEventListener('snakepoke', e => audio.play(e.detail && e.detail.hit ? 'boop' : 'click')); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
   R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready'), onMilestone: n => audio.play('streakmile', { n }), beatStreak: () => audio.beatStreak }); applySettings(); resize(); refreshTitle();
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();

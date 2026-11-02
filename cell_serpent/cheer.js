@@ -28,13 +28,20 @@ export function createCheer() {
     // how far through the cheer (0 start .. 1 end), for a pet that starts `delay` seconds late
     u(delay) { return t > 0 ? Math.min(1, Math.max(0, 1 - t - delay / 1.5)) : 1; },
     // extra hop height (px), a rotation for the flip and the happy flag for one pet
-    pet(i, s2) {
+    pet(i, s2, id) {
       if (t <= 0) return null;
       const u = this.u(i * 0.12); if (u >= 1 || u <= 0) return null;
       const amp = 20 + tier * 6, n = 3 + (tier > 2 ? 1 : 0);
-      const y = Math.abs(Math.sin(u * Math.PI * n)) * amp * (1 - u * 0.5);
-      const flip = tier >= 2 ? s2 * TAU * Math.min(1, u * 2.2) : 0;
-      return { y, flip, sq: 1 + Math.sin(u * Math.PI * n * 2) * 0.05 };
+      let y = Math.abs(Math.sin(u * Math.PI * n)) * amp * (1 - u * 0.5);
+      let flip = tier >= 2 ? s2 * TAU * Math.min(1, u * 2.2) : 0, sx = 1, sq = 1 + Math.sin(u * Math.PI * n * 2) * 0.05;
+      // 02-animal-art r6: every pet has its own cheer move
+      if (id === 'puppy') { y = Math.sin(Math.min(1, u * 1.6) * Math.PI) * (amp * 1.5) + Math.abs(Math.sin(u * Math.PI * n)) * amp * 0.25 * u; flip = -s2 * TAU * Math.min(1, u * 1.7); }   // a proper backflip
+      else if (id === 'turtle') { y = Math.abs(Math.sin(u * Math.PI * 2)) * amp * 0.45; flip = 0; sx = Math.cos(u * TAU * (2 + tier * 0.5)); if (Math.abs(sx) < 0.12) sx = sx < 0 ? -0.12 : 0.12; sq = 1; }   // spins on its shell like a top
+      else if (id === 'kitten') { flip = Math.sin(u * Math.PI * n * 2) * 0.22; sq = 1 + Math.sin(u * Math.PI * n * 2 + 1.5) * 0.1; }   // stretches and wiggles
+      else if (id === 'piglet') { flip = Math.sin(u * Math.PI * n * 4) * 0.3; y *= 0.7; }   // happy wiggle
+      else if (id === 'lamb') { y *= 1.35; flip = 0; sq = 1 + Math.sin(u * Math.PI * n * 2) * 0.1; }   // boing boing
+      else if (id === 'hamster') { flip = s2 * TAU * 2 * Math.min(1, u * 1.4); y *= 0.8; }   // a double spin
+      return { y, flip, sq, sx };
     },
     burst(x, y, tierN, petId) {
       const n = 5 + tierN * 2, sig = EMOTE[petId];   // 02-animal-art r5: every pet cheers with its own emote
@@ -97,6 +104,7 @@ const EMOTE_DRAW = {
   },
 };
 
+export function drawEmote(ctx, x, y, r, rot, kind) { const f = EMOTE_DRAW[kind]; if (f) f(ctx, x, y, r, rot); }
 export function heart(ctx, x, y, k, col) {
   ctx.save(); ctx.translate(x, y); ctx.fillStyle = col; ctx.strokeStyle = '#4a1a33'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
   ctx.beginPath(); ctx.moveTo(0, k); ctx.bezierCurveTo(-k * 2, -k * 0.6, -k * 0.8, -k * 1.8, 0, -k * 0.6); ctx.bezierCurveTo(k * 0.8, -k * 1.8, k * 2, -k * 0.6, 0, k); ctx.fill(); ctx.stroke();

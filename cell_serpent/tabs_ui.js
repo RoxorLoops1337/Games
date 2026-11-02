@@ -29,17 +29,44 @@ export function rubber(dx, hasTarget) {
   return s * 34 * (1 - Math.exp(-a / 90));
 }
 
+// pure: where the tab bar indicator sits (in tab slots) while a swipe is dragged: it slides toward the next tab,
+// reaching it at a 110px drag, and only nudges (a tenth of a slot) at the first or last tab
+export function indicatorPos(idx, dx, has) {
+  const k = Math.min(1, Math.abs(dx) / 110), s = dx < 0 ? 1 : -1;
+  return idx + s * k * (has ? 1 : 0.1);
+}
+
+// the sliding bar on the tab bar; sync() follows the .on button, drag() follows the finger
+function makeIndicator(nav) {
+  if (!nav) return null;
+  let ind = nav.querySelector('.tabind');
+  if (!ind) { ind = document.createElement('i'); ind.className = 'tabind'; ind.setAttribute('aria-hidden', 'true'); nav.appendChild(ind); }
+  const btns = () => [...nav.querySelectorAll('button[data-tab]')];
+  nav.style.setProperty('--n', String(btns().length || 6));
+  const idx = () => Math.max(0, btns().findIndex(b => b.classList.contains('on')));
+  const sync = () => { if (nav.classList.contains('tdrag')) nav.classList.remove('tdrag'); nav.style.setProperty('--i', String(idx())); };
+  sync();
+  if (typeof MutationObserver === 'function') new MutationObserver(ms => { if (ms.some(m => m.target !== nav)) sync(); }).observe(nav, { attributes: true, attributeFilter: ['class'], subtree: true });
+  return { sync, idx, drag: (dx, has) => { if (!nav.classList.contains('tdrag')) nav.classList.add('tdrag'); nav.style.setProperty('--i', indicatorPos(idx(), dx, has).toFixed(3)); } };
+}
+
 // opts: { order, cur(): tab, go(tab): switch, hub: element, pane?(): the active tab element (it follows the finger), bump?(): edge haptic }
 export function bindHubSwipe({ order, cur, go, hub, pane, bump }) {
-  let sx = 0, sy = 0, st = 0, live = false, drag = false, armed = false, bumped = false, el = null;
+  let sx = 0, sy = 0, st = 0, row0 = 0, live = false, drag = false, armed = false, bumped = false, el = null;
   const calm = () => document.documentElement.classList.contains('rm');
+  const ind = makeIndicator(hub.querySelector('.tabs'));
+  let row = null;
+  // the hero and sliders keep their own swipe; a scrollable chip row is remembered so a swipe that starts on it
+  // scrolls the row while it still has room that way, and changes tab once the row is at its edge
   const hscroll = el => {
+    row = null;
     for (let e = el; e && e !== hub; e = e.parentElement) {
-      if (e.scrollWidth > e.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(e).overflowX)) return true;
+      if (e.scrollWidth > e.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(e).overflowX)) { if (!row) row = e; continue; }
       if ((e.classList && e.classList.contains('bt-hero')) || e.tagName === 'INPUT') return true;
     }
     return false;
   };
+  const rowHasRoom = dx => !!row && (dx < 0 ? row.scrollLeft + row.clientWidth < row.scrollWidth - 2 : row.scrollLeft > 2);
   const free = (spring) => {   // let go of the pane: spring back (or snap when we are leaving the tab)
     const p = el; el = null; drag = false; armed = false; bumped = false;
     if (!p) return;
@@ -51,7 +78,7 @@ export function bindHubSwipe({ order, cur, go, hub, pane, bump }) {
   hub.addEventListener('touchstart', e => {
     free(false);
     live = e.touches.length === 1 && !!e.target.closest && !e.target.closest('.tabs') && !hscroll(e.target);
-    if (live) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = performance.now(); }
+    if (live) { row0 = row ? row.scrollLeft : 0; sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = performance.now(); }
   }, { passive: true });
   hub.addEventListener('touchmove', e => {
     if (!live || !pane || calm()) return;
@@ -59,12 +86,14 @@ export function bindHubSwipe({ order, cur, go, hub, pane, bump }) {
     const dx = t.clientX - sx, dy = t.clientY - sy;
     if (!drag) {
       if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+      if (rowHasRoom(dx) || (row && row.scrollLeft !== row0)) { live = false; return; }
       el = pane(); if (!el) return;
       drag = true; el.classList.remove('rb-back'); el.classList.add('rb-drag');
     }
     const i = order.indexOf(cur()) + (dx < 0 ? 1 : -1), has = i >= 0 && i < order.length;
     el.style.translate = rubber(dx, has) + 'px 0';
     el.style.opacity = has ? String(Math.max(0.55, 1 - Math.abs(dx) / 420)) : '';
+    if (ind) ind.drag(dx, has);
     if (!has && !bumped && Math.abs(dx) > 40) { bumped = true; if (bump) bump(); }
     const ready = has && Math.abs(dx) >= 56;
     if (ready !== armed) { armed = ready; el.classList.toggle('rb-armed', ready); }
@@ -75,6 +104,7 @@ export function bindHubSwipe({ order, cur, go, hub, pane, bump }) {
     const to = swipeTarget(order, cur(), t.clientX - sx, t.clientY - sy, performance.now() - st);
     if (el) el.classList.remove('rb-armed');
     if (to) { free(false); go(to); } else free(true);
+    if (ind) ind.sync();
   }, { passive: true });
-  hub.addEventListener('touchcancel', () => { live = false; free(true); }, { passive: true });
+  hub.addEventListener('touchcancel', () => { live = false; free(true); if (ind) ind.sync(); }, { passive: true });
 }

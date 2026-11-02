@@ -5,6 +5,7 @@ const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const easeOut = t => 1 - (1 - t) * (1 - t) * (1 - t);
 const backOut = t => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+import { createFeel6 } from './feel6.js';
 const CONFETTI = ['#ff7eb6', '#ffd84d', '#6fe3ff', '#9dff6d', '#c9a0ff', '#ffffff'];
 
 export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst }) {
@@ -22,6 +23,8 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     mile: null, go: null, mileDone: 0, lastBoss: false, ph: '', cc: null, p2: null, p2Done: false, perf: 0,   // milestone ribbon, GO! pop, stage progress milestones already shown
   };
   const calm = () => OPT.reduceMotion;
+  let F6 = null;   // round 6 screen feel (feel6.js), built lazily because it needs edges/vignette/confetti below
+  const feel6 = () => F6 || (F6 = createFeel6({ ctx, W, H, kit, S, OPT, ring, burst, text, glow, edges, vignette, slow: (k, d) => { F.slow = { t: d, dur: d, k }; }, confetti, sounds: F.sounds }));
 
   // a baked frame-shaped glow: transparent in the middle, the colour at the screen edges
   function edge(col) {
@@ -57,6 +60,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   }
 
   function onEvent(e, g) {
+    feel6().onEvent(e, g);
     switch (e.t) {
       case 'stage': {
         const boss = !!e.boss;
@@ -226,6 +230,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
 
   function update(dt, g) {
     if (F.clutchT > 0) F.clutchT = Math.max(0, F.clutchT - dt);
+    feel6().update(dt, g);
     updateClear(dt);
     if (F.stop > 0) F.stop = Math.max(0, F.stop - dt);   // the slow-mo clock waits while frozen
     else if (F.slow.t > 0) F.slow.t = Math.max(0, F.slow.t - dt);
@@ -284,6 +289,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       if (b) { const k = Math.pow(1 - b.phase, 3), dg = g.danger || 0; edges(dg > 0.5 ? '#ff4d7a' : '#6f8cff', (0.05 + 0.08 * Math.min(1, gv / 10) + 0.1 * dg) * k); }
       if (F.clutchT > 0) { const k = clamp(F.clutchT / 0.55, 0, 1) * (calm() ? 0.3 : 1); edges('#ff9a3d', k); edges('#ff4d7a', k * 0.8); }   // close call
     }
+    feel6().draw(g);
     const c = F.card;
     if (c && c.boss) vignette(Math.min(1, c.t / 0.35, (c.dur - c.t) / 0.5) * 0.85, '20,0,12');
     if (F.warnT > 0) {   // surge coming: red edges pulse, a hard flicker on the beat

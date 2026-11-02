@@ -48,4 +48,10 @@ assert.ok(first5 >= 2 * sim.EGG_PRICE, 'the first five clears buy at least two e
 assert.ok(sim.reviveCost(0) <= sim.clearReward(1).sparkles, 'the first revive costs less than the first clear pays');
 assert.ok(sim.KEEP_PRICE <= 6 * sim.clearReward(3).sparkles, 'a keepsake draw costs about three early clears');
 
+// round 3: late-game easing is monotonic and the Beats sink (extra meta levels) keeps old saves valid
+for (let n = 15; n < 50; n++) assert.ok(sim.hpBase(n + 1) > sim.hpBase(n), 'cell HP still rises every stage: ' + n);
+assert.ok(sim.hpBase(3) === 12 * (12.5 * Math.pow(1.2, 2) + 1.5), 'early cell HP untouched');
+assert.ok(sim.META.filter(m => m.max > 1).every(m => m.max >= 12 && m.max <= 15), 'meta levels stay within the 15 pips the Stats card draws');
+const old = sim.sanitizeSave({ meta: { atk: 12, crt: 10, cdn: 10, vit: 10, for: 10, rev: 1 } });
+assert.equal(old.meta.atk, 12); assert.equal(old.meta.for, 10); assert.ok(sim.buyMeta({ ...old, beats: 1e6 }, 'atk'), 'a maxed-out old account can buy the new levels');
 console.log('15_balance ok');

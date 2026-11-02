@@ -2,6 +2,8 @@
 // a few cheap animated pieces (swinging spotlights, drifting motes, pulsing ring circle).
 import { W, H, LINE_Y } from './sim.js';
 import { mix } from './art_draw.js';
+import { bakeFloor, ringSurface, hasVinyl, rimOf } from './bg_floor.js';
+import { drawFloorFx, drawRain, drawBossCracks } from './floor_fx.js';
 import { bakeStageExtras, drawClouds, drawFootlights, drawBossFx, drawCrowdLights, paintGrooves } from './bg_stage.js';
 
 const TAU = Math.PI * 2;
@@ -166,6 +168,26 @@ function nightSky(c, gr, stage) {
   }
 }
 
+// the sun climbs down the sky through the first stages and sets in the sunset stages, then a moon rises and climbs for the night
+function celestial(c, gr, boss, skin) {
+  const dim = boss ? 0.45 : 1;
+  if (gr.k < 0.62) {
+    const u = gr.k / 0.62, x = W * (0.2 + 0.6 * u), y = 470 + u * u * 330, rr = 46 + u * 22;
+    const g = c.createRadialGradient(x, y, rr * 0.4, x, y, rr * 4.2);
+    g.addColorStop(0, `rgba(255,${Math.round(240 - u * 90)},${Math.round(190 - u * 110)},${0.5 * dim})`); g.addColorStop(1, 'rgba(255,170,90,0)');
+    c.fillStyle = g; c.fillRect(x - rr * 4.2, y - rr * 4.2, rr * 8.4, rr * 8.4);
+    c.globalAlpha = dim; c.fillStyle = mix('#fff6d0', '#ff8a4a', u); c.beginPath(); c.arc(x, y, rr, 0, TAU); c.fill(); c.globalAlpha = 1;
+  }
+  if (gr.k > 0.55 && skin !== 'sleepy') {
+    const u = Math.min(1, (gr.k - 0.55) / 0.45), x = W * (0.82 - 0.55 * u), y = 760 - u * 440, rr = 30 + u * 6, a = Math.min(1, (gr.k - 0.55) * 5) * dim;
+    const g = c.createRadialGradient(x, y, rr * 0.6, x, y, rr * 4); g.addColorStop(0, `rgba(190,210,255,${0.3 * a})`); g.addColorStop(1, 'rgba(190,210,255,0)');
+    c.fillStyle = g; c.fillRect(x - rr * 4, y - rr * 4, rr * 8, rr * 8);
+    c.globalAlpha = a; c.fillStyle = '#eef2ff'; c.beginPath(); c.arc(x, y, rr, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(150,165,210,.45)'; for (const [dx, dy, dr] of [[-0.3, -0.2, 0.2], [0.25, 0.25, 0.26], [0.1, -0.45, 0.12]]) { c.beginPath(); c.arc(x + dx * rr, y + dy * rr, dr * rr, 0, TAU); c.fill(); }
+    c.globalAlpha = 1;
+  }
+}
+
 // everything static for a stage; c is a context already scaled to the W x H space
 // part 0: everything; part 1: only the sky; part 2: only what stands in front of the far skyline (scenery, floor, frame)
 export function bakeWorld(c, skin, boss, ring, th, stage = 1, part = 0) {
@@ -175,6 +197,7 @@ export function bakeWorld(c, skin, boss, ring, th, stage = 1, part = 0) {
     sky.addColorStop(0, mix(mix(w.top, gr.topT, gr.topA), '#05030f', dim)); sky.addColorStop(1, mix(mix(w.bot, gr.botT, gr.botA), '#1a0820', dim * 1.2));
     c.fillStyle = sky; c.fillRect(0, 0, W, H);
     nightSky(c, gr, stage);
+    celestial(c, gr, boss, skin);
     if (boss) { const rg = c.createRadialGradient(W / 2, 260, 20, W / 2, 260, 520); rg.addColorStop(0, 'rgba(255,60,90,.22)'); rg.addColorStop(1, 'rgba(255,60,90,0)'); c.fillStyle = rg; c.fillRect(0, 0, W, LINE_Y); }
     if (part === 1) return;
   }
@@ -186,6 +209,7 @@ export function bakeWorld(c, skin, boss, ring, th, stage = 1, part = 0) {
   const fl = c.createLinearGradient(0, LINE_Y, 0, H);
   fl.addColorStop(0, mix(w.near, th.base, 0.22)); fl.addColorStop(0.5, '#1a1038'); fl.addColorStop(1, '#07040f');
   c.fillStyle = fl; c.fillRect(0, LINE_Y, W, H - LINE_Y);
+  bakeFloor(c, skin);
   c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = 2;
   for (let i = 1; i < 9; i++) { c.beginPath(); c.moveTo(W / 2 + (i - 4.5) * 14, LINE_Y); c.lineTo(W / 2 + (i - 4.5) * 120, H); c.stroke(); }
   const pool = c.createRadialGradient(W / 2, H - 100, 10, W / 2, H - 100, 340); pool.addColorStop(0, 'rgba(255,225,170,.28)'); pool.addColorStop(1, 'rgba(255,225,170,0)');
@@ -246,17 +270,18 @@ export function beatPulse(t, stage, boss) {
   const bpm = boss ? 138 : 104 + (Math.floor(Math.max(0, stage - 1) / 5) % 6) * 3, ph = (t * bpm / 60) % 1;
   return Math.exp(-ph * 5.5);
 }
-export function drawRing(c, ring, t, boss, pulse, kit) {
-  const { cx, cy, R } = ring, beat = pulse === undefined ? 0.5 + 0.5 * Math.sin(t * 4.2) : pulse, hue = boss ? '255,50,90' : '255,90,140';
+export function drawRing(c, ring, t, boss, pulse, kit, skin = 'love') {
+  const { cx, cy, R } = ring, beat = pulse === undefined ? 0.5 + 0.5 * Math.sin(t * 4.2) : pulse, hue = rimOf(skin, boss);
   // a dark disc so the circle reads over any skyline, then the warm floor light on top of it; baked once, the beat is an alpha swing
   const paint = (b, x, y, bt) => {
     const dk = b.createRadialGradient(x, y, 10, x, y, R); dk.addColorStop(0, 'rgba(8,3,26,.5)'); dk.addColorStop(0.8, 'rgba(8,3,26,.58)'); dk.addColorStop(1, 'rgba(8,3,26,.7)');
     b.fillStyle = dk; b.beginPath(); b.arc(x, y, R, 0, TAU); b.fill();
     const fl = b.createRadialGradient(x, y, 20, x, y, R); fl.addColorStop(0, `rgba(255,225,170,${0.2 + bt * 0.1})`); fl.addColorStop(0.6, `rgba(${hue},.16)`); fl.addColorStop(1, `rgba(${hue},${0.36 + bt * 0.14})`);
     b.fillStyle = fl; b.beginPath(); b.arc(x, y, R, 0, TAU); b.fill();
-    paintGrooves(b, x, y, R, boss);
+    ringSurface(b, x, y, R, skin, boss);
+    if (hasVinyl(skin)) paintGrooves(b, x, y, R, boss);
   };
-  const disc = kit && kit.bake ? kit.bake('ringfloor3|' + boss + '|' + R, R * 2, R * 2, bb => paint(bb, 0, 0, 0.5), 1) : null;
+  const disc = kit && kit.bake ? kit.bake('ringfloor4|' + skin + '|' + boss + '|' + R, R * 2, R * 2, bb => paint(bb, 0, 0, 0.5), 1) : null;
   if (disc) { c.save(); c.globalAlpha = 0.85 + beat * 0.3 > 1 ? 1 : 0.85 + beat * 0.3; c.drawImage(disc.c, cx - R, cy - R); c.restore(); }
   else paint(c, cx, cy, beat);
   const ga = c.globalAlpha;
@@ -268,7 +293,7 @@ export function drawRing(c, ring, t, boss, pulse, kit) {
   c.restore();
   c.beginPath(); c.arc(cx, cy, R, 0, TAU);
   c.lineWidth = 11; c.strokeStyle = 'rgba(8,3,26,.55)'; c.stroke();
-  c.lineWidth = 5.5; c.strokeStyle = 'rgba(255,170,205,.95)'; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
+  c.lineWidth = 5.5; c.strokeStyle = `rgba(${hue},.95)`; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
   c.lineWidth = 1.5; c.strokeStyle = `rgba(255,255,255,${0.45 + beat * 0.3})`; c.beginPath(); c.arc(cx, cy, R - 6, 0, TAU); c.stroke();
   const lit = Math.floor(t * 6) % 3;   // the 24 bulbs: lit ones and dim ones are each one path and one fill
   for (let pass = 0; pass < 2; pass++) {
@@ -333,15 +358,7 @@ export function drawBossPhase(c, kit, t, ph, pulse, flash, reduce, low) {
     b.fillStyle = g; b.fillRect(-W / 4, -H / 4, W / 2, H / 2);
   }, 1);
   if (vig) { c.globalAlpha = ph * (0.7 + beat * 0.3); c.drawImage(vig.c, 0, 0, W, H); }
-  const cr = kit && kit.bake('bosscracks', W, H - LINE_Y, b => {
-    const r = rnd(41); b.translate(-W / 2, -(H - LINE_Y) / 2); b.lineCap = 'round'; b.lineJoin = 'round';
-    for (let i = 0; i < 9; i++) {
-      let x = 40 + i * 80 + r() * 30, y = 4; const pts = [[x, y]];
-      while (y < H - LINE_Y - 20) { y += 14 + r() * 18; x += (r() - 0.5) * 38; pts.push([x, y]); }
-      for (const [lw, col] of [[9, 'rgba(255,70,40,.25)'], [3.2, 'rgba(255,170,70,.95)'], [1.2, 'rgba(255,245,200,1)']]) { b.lineWidth = lw; b.strokeStyle = col; b.beginPath(); pts.forEach(([px, py], j) => j ? b.lineTo(px, py) : b.moveTo(px, py)); b.stroke(); }
-    }
-  }, 1);
-  if (cr) { c.globalCompositeOperation = 'lighter'; c.globalAlpha = ph * (0.3 + beat * 0.5); c.drawImage(cr.c, 0, LINE_Y); }
+  drawBossCracks(c, kit, t, ph, beat);   // floor_fx.js: forked cracks that run down from the rail as the phase builds
   if (flash > 0) { c.globalCompositeOperation = 'lighter'; c.globalAlpha = 1; c.fillStyle = `rgba(255,60,90,${0.5 * flash})`; c.fillRect(0, 0, W, H); const rg = c.createRadialGradient(W / 2, LINE_Y, 10, W / 2, LINE_Y, 640); rg.addColorStop(0, `rgba(255,220,200,${0.5 * flash})`); rg.addColorStop(1, 'rgba(255,60,90,0)'); c.fillStyle = rg; c.fillRect(0, 0, W, H); }
   c.restore();
 }
@@ -354,9 +371,11 @@ export function createBgFx() {
     const wk = weatherFor(o.skin, o.stage);
     if (!o.reduce) drawClouds(c, kit, o.skin, mix(worldOf(o.skin).bot, '#ffffff', 0.6), skyGrade(o.stage).k, t, boss, o.low);
     if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26);
-    if (boss && !o.reduce) lightning(c, bg, t, o.phase || 0);
+    if (boss && !o.reduce && !o.noFlash) lightning(c, bg, t, o.phase || 0);
     if (boss && o.phase > 0.01) drawBossPhase(c, kit, t, o.phase, pulse, o.flash || 0, o.reduce, o.low);
     if (!o.reduce) { if (boss) drawBossFx(c, t, pulse, o.low, kit); drawFootlights(c, t, pulse, th, boss); }
+    drawFloorFx(c, { kit, skin: o.skin, stage: o.stage, boss, t, pulse, reduce: o.reduce, low: o.low });
+    drawRain(c, t, { skin: o.skin, reduce: o.reduce, low: o.low });
     // speaker cones thump on the kick
     if (!o.reduce) {
       c.save();

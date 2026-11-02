@@ -266,6 +266,25 @@
   #settings>*{flex:none} #settings #setClose{position:sticky;bottom:8px;margin-top:12px;z-index:3;width:min(420px,92vw);padding:13px;box-shadow:0 -10px 14px 6px rgba(8,5,30,.9),0 4px 0 rgba(0,0,0,.4);background:linear-gradient(180deg,#5b6b82,#3b4658);color:#fff}
   @media (max-height:600px){#pause{gap:10px}#pause .pbig{padding:14px 24px;font-size:24px}#pause .pbtn{padding:11px 20px}.rvinfo small{display:none}}
   /* end @css:11-result-pause round 3 */
+  /* @css:11-result-pause round 6 */
+  #pause .rpmark{width:min(352px,94vw);flex-wrap:nowrap;gap:3px;justify-content:center} #pause .rpmark span{padding:2px 5px 2px 2px;font-size:10px;gap:1px;flex:0 1 auto;min-width:0} #pause .rpmark img{width:20px;height:20px}
+  .plose{width:min(320px,84vw);margin-top:6px;text-align:center;font-size:11px;font-weight:800;line-height:1.3;color:var(--dim)} .plose b{display:block;color:#ffb3bd;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:1px}
+  #quitBtn{position:relative;overflow:hidden;--hold:0;--holdms:900ms;-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-touch-callout:none}
+  #quitBtn .hlab{position:relative;z-index:1}
+  #quitBtn .hfill{position:absolute;inset:0;background:linear-gradient(90deg,#ff5c6c,#ff9a5c);transform:scaleX(0);transform-origin:left;transition:transform .22s ease-out}
+  #quitBtn.holding .hfill{transform:scaleX(1);transition:transform var(--holdms) linear}
+  #quitBtn.holding{box-shadow:0 0 0 3px rgba(255,92,108,.55),0 0 22px rgba(255,92,108,.55);color:#fff;animation:quitShake .12s linear infinite}
+  #quitBtn.done .hfill{transform:scaleX(1)}
+  @keyframes quitShake{0%,100%{translate:0 0}25%{translate:1px 0}75%{translate:-1px 0}}
+  html.rm #quitBtn.holding{animation:none}
+  @media (max-height:700px){.plose b{display:none}.plose{margin-top:0}}
+  /* the pink focus ring is for keyboard users: a tap on a toggle or the first row must not leave it behind */
+  html:not(.kbd) .scr :focus-visible{outline:0;box-shadow:none}
+  /* sticky CLOSE: a solid band so list rows never show through it */
+  #settings #setClose{box-shadow:0 0 0 10px rgba(8,5,30,.98),0 -14px 14px 8px rgba(8,5,30,.92),0 4px 0 10px rgba(0,0,0,.35)}
+  /* flying reward chips land softly */
+  .gfx-bump{animation-duration:.45s}
+  /* end @css:11-result-pause round 6 */
   /* end @css:11-result-pause */
   /* @css:09-skills-pets */
   .tile.tier0{--tc:#9dff6d} .tile.tier1{--tc:#4fb8ff} .tile.tier2{--tc:#b06cff} .tile.tier3{--tc:#ffb04d} .tile.tier4{--tc:#ff4d7a} .tile.pet{--tc:#ffd24a}
@@ -402,6 +421,18 @@
   @keyframes whrt{0%{transform:translateY(0) scale(.6);opacity:0}20%{opacity:1}100%{transform:translateY(-34px) scale(1.2);opacity:0}}
   @media (prefers-reduced-motion:reduce){.joy.full .jbar i,.joy.full .jh,.dswalk .whrt{animation:none}}
   /* end @css:09-skills-pets round 5 */
+  /* @css:09-skills-pets round 6 */
+  .prcell{position:relative}
+  .prren{position:absolute;top:0;right:0;width:36px;height:36px;border:0;background:none;color:rgba(255,255,255,.55);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .prren:active{color:#ffe14a}
+  .prinp{width:92%;min-width:0;height:26px;border-radius:8px;border:2px solid #ffe14a;background:rgba(0,0,0,.45);color:#fff;font:900 14px/1 inherit;text-align:center;outline:0;padding:0 2px}
+  .prmain b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 18px}
+  .prsave.warn{background:rgba(255,120,60,.3);color:#ffd9b8;animation:prwarn .5s ease-in-out infinite alternate}
+  @keyframes prwarn{to{background:rgba(255,120,60,.5)}}
+  .prauto{align-self:center;min-height:26px;padding:0 12px;border-radius:13px;border:1.5px solid #9dff6d;background:rgba(157,255,109,.14);color:#c8ffa8;font:900 11px/1 inherit;letter-spacing:.1em;cursor:pointer}
+  .prauto:active{background:rgba(157,255,109,.35)}
+  @media (prefers-reduced-motion:reduce){.prsave.warn{animation:none}}
+  /* end @css:09-skills-pets round 6 */
   /* end @css:09-skills-pets */
   /* @css:07-cards */
   #levelup{gap:8px;justify-content:center}
@@ -575,6 +606,51 @@
   @media (max-width:340px){.card.pick{gap:9px;padding:8px 9px}.card.pick .dl{font-size:10px}.card.pick .nm{font-size:15px}.card.pick .rar{font-size:9px;padding:0 6px}#levelup .lvrow{gap:7px}#levelup #skipBtn .sk1{font-size:13px}#levelup #refreshBtn .rl{font-size:13px}}
   @media (prefers-reduced-motion:reduce){.card.pick .gb u,.card.pick .lvring,#levelup #refreshBtn .rl::before{animation:none!important}}
   /* end @css:07-cards round 5 */
+  /* @css:07-cards round 6 */
+  /* foil plate behind every card icon: spotlight (Common, Rare), then holo, sunburst, lattice and prism foils */
+  .card.pick .foil{position:absolute;inset:0;border-radius:13px;overflow:hidden;z-index:0;pointer-events:none;animation:foilin .55s ease-out calc(var(--d,0s) + .4s) both}
+  @keyframes foilin{from{clip-path:circle(0% at 50% 50%)}to{clip-path:circle(80% at 50% 50%)}}
+  .card.pick .foil::before,.card.pick .foil::after{content:'';position:absolute;pointer-events:none}
+  .card.pick .foil.f0,.card.pick .foil.f1{background:radial-gradient(circle at 50% 38%,#fff5 0,#fff0 60%),radial-gradient(circle,color-mix(in srgb,var(--rc) 45%,transparent) 1.1px,transparent 1.6px) 0 0/8px 8px}
+  .card.pick .foil.f1::before{inset:5px;border-radius:50%;border:1px solid color-mix(in srgb,var(--rc) 55%,transparent);box-shadow:inset 0 0 10px color-mix(in srgb,var(--rc) 35%,transparent)}
+  /* Epic: holographic pinstripes with a sheen that sweeps across */
+  .card.pick .foil.f2{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--rc) 55%,transparent) 0 1.5px,transparent 1.5px 6px),radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--rc) 55%,#fff) 0,transparent 70%)}
+  .card.pick .foil.f2::after{inset:0;background:linear-gradient(115deg,transparent 32%,#fff6 45%,#7ff5 52%,#f8f6 58%,transparent 70%) 0 0/260% 100%;animation:foilsweep 2.6s ease-in-out calc(var(--d,0s) + .9s) infinite}
+  @keyframes foilsweep{0%{background-position:120% 0}60%,100%{background-position:-60% 0}}
+  /* Legendary: slow golden sunburst plus glints */
+  .card.pick .foil.f3{background:radial-gradient(circle at 50% 50%,#9a6522 0,#6b4012 55%,#ffb04d66 100%)}
+  .card.pick .foil.f3::before{inset:-70%;background:repeating-conic-gradient(from 0deg,#ffd27a88 0 7deg,transparent 7deg 20deg);-webkit-mask:radial-gradient(circle,#000 10%,transparent 62%);mask:radial-gradient(circle,#000 10%,transparent 62%);animation:rayspin 11s linear infinite}
+  .card.pick .foil.f3::after,.card.pick .foil.f4::after,.card.pick .foil.f5::after{inset:0;background:radial-gradient(circle,#fff 0 1.4px,transparent 2px) 14% 20%/auto no-repeat,radial-gradient(circle,#fff 0 1px,transparent 1.6px) 80% 28%/auto no-repeat,radial-gradient(circle,#fff 0 1.2px,transparent 1.8px) 66% 82%/auto no-repeat,radial-gradient(circle,#fff 0 1px,transparent 1.6px) 22% 76%/auto no-repeat;animation:glint 1.7s ease-in-out infinite alternate}
+  @keyframes glint{from{opacity:.15}to{opacity:1}}
+  /* Mythic: crimson diamond lattice with a heartbeat glow */
+  .card.pick .foil.f4{background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--rc) 42%,transparent) 0 1px,transparent 1px 9px),repeating-linear-gradient(-45deg,color-mix(in srgb,var(--rc) 42%,transparent) 0 1px,transparent 1px 9px)}
+  .card.pick .foil.f4::before{inset:0;background:radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--rc) 75%,#fff) 0,transparent 66%);animation:foilbeat 1.1s ease-in-out infinite alternate}
+  @keyframes foilbeat{from{opacity:.35;transform:scale(.85)}to{opacity:.95;transform:scale(1.1)}}
+  /* Godlike: rainbow prism that turns over a gold lattice */
+  .card.pick .foil.f5{background:repeating-linear-gradient(45deg,#fff4 0 1px,transparent 1px 9px),repeating-linear-gradient(-45deg,#fff4 0 1px,transparent 1px 9px),#5a4600}
+  .card.pick .foil.f5::before{inset:-70%;background:conic-gradient(from 0deg,#ffe14a,#ff7ad0,#6fe3ff,#9dff6d,#ffe14a);opacity:.6;-webkit-mask:radial-gradient(circle,#000 8%,transparent 64%);mask:radial-gradient(circle,#000 8%,transparent 64%);animation:rayspin 5s linear infinite}
+  /* skill, boost and shot art no longer floats on a flat dark tile: a little lift and a shadow under the icon */
+  .card.pick .ic>img{filter:drop-shadow(0 2px 2px #000a) drop-shadow(0 0 5px color-mix(in srgb,var(--rc) 55%,transparent))}
+  /* entrance: the card flips in from the deck, overshoots, settles with a thud and a one-off light wipe */
+  @keyframes dealin{0%{opacity:0;transform:translate(130%,-90px) rotate(18deg) scale(.55) rotateY(80deg)}45%{opacity:1;transform:translate(-2%,6px) rotate(-2.5deg) scale(1.06) rotateY(-10deg)}68%{transform:translate(0,-3px) rotate(.8deg) scale(.985) rotateY(3deg)}84%{transform:translate(0,1px) scale(1.008)}100%{opacity:1;transform:none}}
+  .card.pick.r0 .shine,.card.pick.r1 .shine{display:block;position:absolute;top:0;bottom:0;left:0;width:34%;background:linear-gradient(100deg,transparent,#fff5 50%,transparent);transform:translateX(-160%) skewX(-18deg);animation:shine1 .8s ease-out calc(var(--d,0s) + .55s) 1 both}
+  @keyframes shine1{from{transform:translateX(-160%) skewX(-18deg)}to{transform:translateX(480%) skewX(-18deg)}}
+  .card.pick .nm .nt{animation:ntin .4s ease-out calc(var(--d,0s) + .35s) both}
+  @keyframes ntin{from{opacity:0;letter-spacing:.2em;transform:translateX(-8px)}to{opacity:1;letter-spacing:normal;transform:none}}
+  .card.pick .ds{animation:ntin .45s ease-out calc(var(--d,0s) + .45s) both}
+  /* build strip: a pill that ticks when you pick */
+  #levelup .buildstrip{padding:3px 8px;border-radius:14px;background:linear-gradient(#0009,#0005);border:1px solid #6fe3ff2e}
+  #levelup .bi{min-height:20px;background:linear-gradient(#1b1650,#0c0828);border-color:#fff3;box-shadow:0 1px 0 #0008}
+  #levelup .bi.sk{background:linear-gradient(#123a52,#0a1d2e)}
+  #levelup .bi b{min-width:8px;text-align:center;font-size:11px}
+  #levelup .bi.tick{animation:bitick .5s cubic-bezier(.2,1.6,.4,1)}
+  #levelup .bi.tick b{animation:bitickb .5s ease-out}
+  #levelup .bi.fresh{border-color:#9dff6d;box-shadow:0 0 10px #9dff6daa}
+  @keyframes bitick{0%{transform:scale(1)}30%{transform:scale(1.5) rotate(-5deg);box-shadow:0 0 14px #9dff6d}100%{transform:scale(1)}}
+  @keyframes bitickb{0%{color:#fff;transform:translateY(8px)}40%{color:#fff;transform:translateY(-3px)}100%{color:#9dff6d;transform:none}}
+  @media (prefers-reduced-motion:reduce){.card.pick .foil,.card.pick .foil::before,.card.pick .foil::after,.card.pick .nm .nt,.card.pick .ds,#levelup .bi.tick,#levelup .bi.tick b{animation:none!important}}
+  @media (max-height:700px){.card.pick .foil.f3::before,.card.pick .foil.f5::before{animation-duration:16s}}
+  /* end @css:07-cards round 6 */
   /* end @css:07-cards */
   /* @css:18-access */
   :focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #ff5cb8}
@@ -649,6 +725,22 @@
   html.hc .tsprev,html.hc #settings .tsrow{border-color:#fff}
   html.hc .chip .st,html.hc .stars .off{color:#d6e2f2}
   /* end @css:18-access round 5 */
+  /* @css:18-access round 6 */
+  /* reduce flashing (separate from reduce motion): the full-screen DOM flashes go dark, movement stays */
+  html.rf .lvflash,html.rf .legflash{display:none!important}
+  html.rf .eggstage.crack{animation:none!important} html.rf .sc.flash{animation:none!important}
+  /* true 44px targets at 360px: loadout slots on the Battle tab, build SAVE buttons, the Rewards filter */
+  .bt-load .loadout .slot{min-width:44px;min-height:44px;flex:0 0 44px;width:44px;height:44px;max-width:44px}
+  .prsave{min-height:44px}
+  #tabBattle #loadEdit{min-height:44px;min-width:44px}
+  #rwFilter{position:relative} #rwFilter::before{content:"";position:absolute;left:0;right:0;top:50%;height:max(100%,44px);transform:translateY(-50%)}
+  @media (max-width:380px){
+    #tabBattle .bt-load{padding:2px 4px;gap:4px} #tabBattle .bt-load>.loadout{gap:3px;flex:0 1 auto;min-width:0}
+    #tabBattle #loadEdit{font-size:0;width:44px;min-width:44px;height:44px;padding:0;margin-left:auto;display:grid;place-items:center} #loadEdit::after{content:"\270E";font-size:19px;line-height:1}
+  }
+  @media (max-width:340px){#tabBattle .bt-load{flex-wrap:wrap;justify-content:center} #tabBattle .bt-load>.loadout{flex:1 1 100%;justify-content:center} #tabBattle #loadEdit{margin:0 auto}}
+  html.hc .bt-load .slot{border-color:#fff}
+  /* end @css:18-access round 6 */
   /* end @css:18-access */
   /* @css:08-battle-tab */
   #tabBattle{gap:10px} #tabBattle .stagebox{gap:8px}
@@ -772,6 +864,15 @@
   .cur.gfx-bump{animation:gfxbump .42s ease-out} @keyframes gfxbump{30%{transform:scale(1.18);box-shadow:0 0 18px #ffd24acc}}
   .bt-hero .info .hardpay{color:#e3c2ff;font-size:12px;font-weight:800} .bt-hero .info .hardpay b{color:#ffe14a} .bt-hero .info .hardpay img{width:16px!important;height:16px!important}
   @media(prefers-reduced-motion:reduce){#hub .chip .hk.hot,.cur.gfx-bump{animation:none}}
+  #stChips.rwhard .chip:not(.hasH):not(.sel){display:none}
+  #stChips.rwhard .chip .hk.dim{width:17px;height:17px;top:-6px;left:-4px;font-size:10px;opacity:1;background:linear-gradient(180deg,#a67be0,#6f3fb8);border-width:2px}
+  .bt-rowh .rwf.hard{background:linear-gradient(180deg,#8a4bd8,#5b2ea6);box-shadow:0 0 12px #8a4bd8cc} .bt-rowh .rwf .rwh{font-style:normal;display:inline-grid;place-items:center;width:15px;height:15px;margin-right:3px;border-radius:50%;background:#fff;color:#6f3fb8;font-size:10px;font-weight:900;line-height:1;vertical-align:1px}
+  .gl-btn.claimed{letter-spacing:.06em}
+  #claimGigs.rdy{background:linear-gradient(180deg,#ffe14a,#ffa31a);color:#4a2a00;border-color:#fff;animation:rdyp 1.4s ease-in-out infinite} @keyframes rdyp{50%{box-shadow:0 0 16px #ffe14acc}} #claimGigs.alld{opacity:.6;color:#9dff6d}
+  @media(prefers-reduced-motion:reduce){#claimGigs.rdy{animation:none}}
+  #hub .chip.sel{animation:chpop .34s cubic-bezier(.3,1.6,.5,1)} @keyframes chpop{0%{transform:scale(.88)}55%{transform:scale(1.28);box-shadow:0 0 26px #ff9ad0}100%{transform:scale(1.14)}}
+  #hub .chip.sel:active{transform:scale(1.04)}
+  @media(prefers-reduced-motion:reduce){#hub .chip.sel{animation:none}}
   /* end @css:08-battle-tab */
 /* @css:19-transitions */
   /* screens: fade + scale in, fade out (transform and opacity only) */
@@ -999,6 +1100,34 @@
   .fpop5 span{position:absolute;left:50%;top:50%;font-weight:900;text-shadow:0 2px 0 #0007;opacity:0;animation:fpspark5 1.2s cubic-bezier(.2,.8,.3,1) var(--del) both}
   @keyframes fpspark5{0%{opacity:1;transform:translate(-50%,-50%) scale(.4)}100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1.3) rotate(var(--rot))}}
   @media (prefers-reduced-motion:reduce){.tut12.shot5 .tnote,.tut12.shot5 .tring,.tut12.shot5 .tspk,.tut12.shot5 .tpop{animation:none!important;opacity:0}.fpop5 .fp-card{animation:none}}
+  /* round 6: tutorial step 3 face pop, first goal chip, welcome back greeting */
+  .s3 .tface .fring{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px;border-radius:50%;border:5px solid #ffe14a;opacity:0;pointer-events:none;animation:fring6 3.4s ease-out infinite}
+  .s3 .tface .fring.r2{border-color:#fff;border-width:3px;animation-delay:.1s} .s3 .tface .fring.r3{border-color:#ff8fcf;border-width:3px;animation-delay:.2s}
+  @keyframes fring6{0%,58%{opacity:0;transform:scale(.3)}61%{opacity:1}84%,100%{opacity:0;transform:scale(3.4)}}
+  .s3 .tface .fspk{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px;opacity:0;pointer-events:none;filter:brightness(1.3) drop-shadow(0 0 6px #ffe14a);animation:fspk6 3.4s ease-out infinite}
+  .fspk.f0{--a:0deg}.fspk.f1{--a:45deg}.fspk.f2{--a:90deg}.fspk.f3{--a:135deg}.fspk.f4{--a:180deg}.fspk.f5{--a:225deg}.fspk.f6{--a:270deg}.fspk.f7{--a:315deg}
+  .fspk:nth-of-type(even){width:18px;height:18px;margin:-9px;animation-name:fspk6b}
+  @keyframes fspk6{0%,58%{opacity:0;transform:rotate(var(--a)) translateY(0) scale(.2)}62%{opacity:1}90%,100%{opacity:0;transform:rotate(var(--a)) translateY(-70px) scale(1.15)}}
+  @keyframes fspk6b{0%,58%{opacity:0;transform:rotate(var(--a)) translateY(0) scale(.2)}62%{opacity:1}90%,100%{opacity:0;transform:rotate(var(--a)) translateY(-46px) scale(1.1)}}
+  .s3 .tface .fpopt{position:absolute;left:50%;top:50%;margin:-18px 0 0 -46px;width:92px;text-align:center;font-size:28px;font-weight:900;letter-spacing:.04em;color:#fff7b0;text-shadow:3px 0 #7a2a00,-3px 0 #7a2a00,0 3px #7a2a00,0 -3px #7a2a00,2px 2px #7a2a00,-2px -2px #7a2a00,2px -2px #7a2a00,-2px 2px #7a2a00,0 6px 0 #7a2a00;opacity:0;pointer-events:none;z-index:2;animation:fpopt6 3.4s ease-out infinite}
+  @keyframes fpopt6{0%,60%{opacity:0;transform:translateY(0) scale(.3) rotate(-8deg)}66%{opacity:1;transform:translateY(-10px) scale(1.25) rotate(-4deg)}76%{transform:translateY(-16px) scale(1) rotate(-4deg)}92%,100%{opacity:0;transform:translateY(-36px) scale(1) rotate(-4deg)}}
+  .art12 .s3 .thead{animation:headpop6 3.4s ease-in-out infinite}
+  @keyframes headpop6{0%,46%{transform:translateY(0) rotate(0) scale(1)}51%{transform:translateY(3px) rotate(-3deg) scale(1)}57%{transform:scale(1.28) rotate(4deg);opacity:1;filter:brightness(1.4)}63%{transform:scale(.2) rotate(30deg);opacity:0}93%{transform:scale(.2);opacity:0}100%{transform:scale(1);opacity:1;filter:none}}
+  .art12 .s3 .tshield{animation:shield6 3.4s ease-in-out infinite}
+  @keyframes shield6{0%,38%{opacity:1;transform:scale(1)}42%{transform:scale(1.04) rotate(2deg)}46%{transform:scale(.98) rotate(-2deg)}50%{transform:scale(1.04) rotate(2deg);opacity:1}56%{transform:scale(1.3);opacity:.8}64%,92%{transform:scale(1.9);opacity:0}100%{transform:scale(1);opacity:1}}
+  .goal12{display:inline-flex;gap:6px;align-items:center;padding:6px 14px;border-radius:99px;background:linear-gradient(180deg,rgba(255,216,77,.3),rgba(255,162,28,.16));border:2px solid #ffd84d;color:#fff3b8;font-weight:900;font-size:14px;text-shadow:0 1px 0 #000a;animation:goal6 2.2s ease-in-out infinite;animation-delay:var(--d,0s)}
+  .goal12 i{font-style:normal;color:#ffd84d}
+  @keyframes goal6{50%{transform:translateY(-3px);box-shadow:0 0 16px rgba(255,216,77,.55)}}
+  .wb12{text-align:center;line-height:1.15;margin-top:2px;animation:wb6 .6s .5s cubic-bezier(.2,1.4,.4,1) backwards}
+  .wb12[hidden]{display:none}
+  .wb12-t{font-weight:900;font-size:22px;color:#fff;text-shadow:0 3px 0 #3a0e30,0 0 14px rgba(255,92,184,.7)}
+  .wb12-s{font-weight:800;font-size:14px;color:#ffd8ee;text-shadow:0 2px 0 #3a0e30;margin-top:2px}
+  .wb12-b{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:6px}
+  .wb12-b span{padding:3px 10px;border-radius:99px;font-size:12px;font-weight:900;color:#ffe9a0;background:rgba(0,0,0,.32);border:1px solid rgba(255,230,140,.55)}
+  #title.ret12 .tagline{display:none}
+  @keyframes wb6{from{opacity:0;transform:translateY(12px) scale(.9)}}
+  @media (max-height:700px){.wb12-t{font-size:19px}.wb12-s{font-size:12px}.wb12-b{display:none}}
+  @media (prefers-reduced-motion:reduce){.goal12,.wb12{animation:none!important}}
   /* end @css:12-title-onboarding */
 
   /* @css:10-shop-gear-stats */
@@ -1105,6 +1234,25 @@
   .chest3.hold2 img{filter:drop-shadow(0 0 4px var(--fc)) drop-shadow(0 0 9px var(--fc))} .chest3[data-ft="3"].hold2::before{inset:-60%}
   @keyframes chhold{0%{transform:none}100%{transform:scale(1.14) rotate(2deg)}} @keyframes chhold2{0%{transform:scale(1.16) translateX(-2px) rotate(-3deg)}50%{transform:scale(1.2) translateX(2px) rotate(3deg)}100%{transform:scale(1.16) translateX(-2px) rotate(-3deg)}} @keyframes chpulse{to{transform:scale(1.18);opacity:.75}}
   @media (prefers-reduced-motion:reduce){.chest3.hold,.chest3.hold2,.chest3.hold::before,.chest3.hold2::before{animation:none}}
+.radar .rbb{fill:rgba(255,225,74,.18);stroke:#ffe14a;stroke-width:1.6;transform-box:fill-box;transform-origin:center;animation:rbbp 1.5s ease-in-out infinite;pointer-events:none}
+@keyframes rbbp{0%,100%{transform:scale(.85);opacity:.9}50%{transform:scale(1.3);opacity:.35}}
+@media (prefers-reduced-motion:reduce){.radar .rbb{animation:none}}
+.loot .it .knew.lnew{top:5px;right:auto;left:5px;font-size:10px;z-index:3}
+  .lnewstar{position:fixed;width:28px;height:28px;background:center/contain no-repeat;z-index:99999;pointer-events:none;filter:drop-shadow(0 0 6px #ffe14a)}
+  nav button.lnewhit,[data-tab].lnewhit{animation:lnh .45s ease-out} @keyframes lnh{40%{transform:scale(1.25);filter:brightness(1.6)}}
+  @media (prefers-reduced-motion:reduce){.lnewstar{display:none}}
+.evtrack{width:min(520px,100%);margin:20px auto 14px}
+  .evbar{height:12px;border-radius:99px;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.25);overflow:hidden;margin:0 12.5%} .evbar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ffb04d,#ffe14a);box-shadow:0 0 8px #ffb04d}
+  .evms{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:-34px}
+  .evm{all:unset;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:default}
+  .evm .evi{position:relative;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:24px;background:#2c2150;border:3px solid rgba(255,255,255,.28);opacity:.75} .evm .evi img{width:30px;height:30px;object-fit:contain}
+  .evm .evi b{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);padding:0 6px;border-radius:99px;background:#1a1240;border:2px solid rgba(255,255,255,.5);font-size:11px;font-weight:900;color:#fff}
+  .evm .evi em{position:absolute;top:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:#9dff6d;color:#10331a;font-style:normal;font-size:12px;font-weight:900;display:grid;place-items:center;border:2px solid #fff}
+  .evm .evlab{font-size:12px;font-weight:900;color:var(--dim)} .evm.got .evi{opacity:1;border-color:#9dff6d} .evm.next .evi{opacity:1;border-color:#ffe14a}
+  .evm.ready{cursor:pointer;-webkit-tap-highlight-color:transparent} .evm.ready .evi{opacity:1;border-color:#ffe14a;background:#5a3a10;animation:evrdy 1s ease-in-out infinite alternate} .evm.ready .evlab{color:#ffe14a} @keyframes evrdy{to{transform:scale(1.12);box-shadow:0 0 16px #ffe14a}}
+  @media (prefers-reduced-motion:reduce){.evm.ready .evi{animation:none}}
+.tiles .tile.deal.wide{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:16px;row-gap:4px;padding:14px 16px 12px 34px}
+  .tile.deal.wide .top{grid-row:1/4;grid-column:1;padding:0;flex-direction:column} .tile.deal.wide .nm{text-align:center;margin-top:8px;font-size:15px} .tile.deal.wide .ds{grid-column:2;text-align:left} .tile.deal.wide .btn{grid-column:2;width:100%}
   /* end @css:10-shop-gear-stats */
   /* @css:16-addiction */
   .nextrew{flex:none;width:100%;display:flex;align-items:center;gap:10px;padding:7px 14px;background:rgba(20,14,56,.92);border-bottom:2px solid var(--line);cursor:pointer;min-height:44px}
@@ -1205,6 +1353,33 @@
   .cfp.sq{width:8px;height:13px;border-radius:1px} .bcbar.full i{background:linear-gradient(90deg,#6fe08a,#ffd24a,#ff7eb6,#4fd8f0);background-size:200% 100%;animation:kshine 2s linear infinite} @keyframes kshine{to{background-position:-200% 0}}
   @media (prefers-reduced-motion:reduce){.kperch.hov,.bkdone::after,.bcbar.full i,.shieldrow.pop i{animation:none}}
   /* end @css:16-addiction round 5 */
+  /* @css:16-addiction round 6 */
+  #achToast{border-radius:20px;padding:8px 12px 8px 8px;gap:10px;pointer-events:auto;cursor:pointer;width:min(360px,94vw);top:max(8px,env(safe-area-inset-top));background:linear-gradient(135deg,rgba(44,26,96,.98),rgba(20,12,52,.98));--ac:#d9955a;--ac2:#8a4e22;border:2px solid var(--ac);box-shadow:0 8px 26px rgba(0,0,0,.5),0 0 22px color-mix(in srgb,var(--ac) 55%,transparent);transform:translate(-50%,-140px);position:fixed}
+  #achToast.t-silver{--ac:#e3ebf7;--ac2:#8ea0bd} #achToast.t-gold{--ac:#ffd24a;--ac2:#b8801a}
+  #achToast.on{transform:translate(-50%,0)} #achToast.on .acmed{animation:acpop .7s cubic-bezier(.2,1.6,.4,1) .15s both}
+  #achToast .acmed{position:relative;flex:0 0 auto;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#fff6,transparent 45%),linear-gradient(160deg,var(--ac),var(--ac2));box-shadow:inset 0 -3px 0 #0003,0 0 0 3px rgba(0,0,0,.25)} #achToast .acmed b{position:relative;font-size:28px;line-height:1;filter:drop-shadow(0 2px 0 #0004)}
+  #achToast .acrays{position:absolute;inset:-9px;border-radius:50%;background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--ac) 55%,transparent) 0 9deg,transparent 9deg 30deg);-webkit-mask:radial-gradient(circle,transparent 24px,#000 25px,#000 31px,transparent 32px);mask:radial-gradient(circle,transparent 24px,#000 25px,#000 31px,transparent 32px)} #achToast.on .acrays{animation:acspin 9s linear infinite}
+  #achToast .acmid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;line-height:1.1} #achToast .acmid small{font-size:9.5px;letter-spacing:.12em;font-weight:900;color:var(--ac)} #achToast .acmid strong{font-size:15px;font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #achToast .acbar{display:block;height:6px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden;margin-top:3px} #achToast .acbar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--ac2),var(--ac))} #achToast .accnt{font-size:10px;font-weight:700;color:var(--dim)}
+  #achToast .acrw{margin:0;align-self:center;text-align:right;font-size:12px;white-space:nowrap} #achToast .acrw small{display:block;font-size:9px;color:var(--dim)}
+  #achToast .acshare{flex:0 0 auto;min-width:44px;min-height:44px;margin:-6px -6px -6px -4px;border-radius:50%;border:0;background:rgba(255,255,255,.1);color:var(--ink);font-size:18px;font-weight:900;cursor:pointer}
+  @keyframes acpop{0%{transform:scale(.3) rotate(-30deg)}100%{transform:none}} @keyframes acspin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){#achToast.on .acmed,#achToast.on .acrays{animation:none}}
+  .qpill .qshield{display:inline-grid;vertical-align:middle;margin-left:5px;width:20px;height:20px;border-radius:50%;place-items:center;font-style:normal;font-size:11px;line-height:1;background:#10304a;border:2px solid #7fe8ff;box-shadow:0 0 8px rgba(127,232,255,.7);animation:qshpulse 2.4s ease-in-out infinite} @keyframes qshpulse{50%{box-shadow:0 0 14px rgba(127,232,255,1)}}
+  @media (prefers-reduced-motion:reduce){.qpill .qshield{animation:none}}
+  .cbpet{display:inline-block;animation:cbbob 2.2s ease-in-out infinite} .cbpet.b{animation-delay:-1.1s} @keyframes cbbob{50%{transform:translateY(-6px) rotate(6deg)}}
+  .cbbox{border-radius:50%;outline:none} .cbbox:focus-visible{box-shadow:0 0 0 3px #ffd24a;border-radius:50%} .cbbox.open{filter:drop-shadow(0 0 14px #ffd24a)}
+  .cbr{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;min-height:0} .cbchip{display:flex;flex-direction:column;align-items:center;font-style:normal;font-weight:900;font-size:16px;color:var(--lime);padding:5px 12px;border-radius:14px;background:rgba(111,224,138,.14);border:2px solid rgba(111,224,138,.5);animation:cbchip .5s cubic-bezier(.2,1.6,.4,1) both} .cbchip b{font-size:20px;line-height:1} .cbchip small{font-size:10px;font-weight:800;color:var(--dim)} .cbchip:nth-child(2){animation-delay:.1s} .cbchip:nth-child(3){animation-delay:.2s} .cbchip:nth-child(4){animation-delay:.3s} @keyframes cbchip{from{transform:scale(.3);opacity:0}}
+  .cbwait{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%} .cbwait em{grid-column:1/-1;font-style:normal;font-size:10.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)} .cbwait span{display:flex;align-items:center;gap:6px;text-align:left;font-size:12px;font-weight:700;line-height:1.2;padding:7px 8px;border-radius:12px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.14)} .cbwait span b{font-size:18px;line-height:1;flex:0 0 auto} .cbwait span:last-child:nth-child(even){grid-column:1/-1}
+  .cbkind{font-size:12.5px;font-weight:800;color:#bff0cf} .comeback.opened .cbs,.comeback.opened .cbkind{display:none} .comeback.opened .cbwait{opacity:.85}
+  @media (prefers-reduced-motion:reduce){.cbpet,.cbchip{animation:none}}
+  .wkcard{display:flex;flex-direction:column;gap:7px;padding:12px;border-radius:20px;border:2px solid #c98a3a;background:linear-gradient(150deg,#5e3a12,#2c1a08);box-shadow:inset 0 1px 0 rgba(255,255,255,.18)} .wkcard.ready{border-color:var(--gold);box-shadow:0 0 16px rgba(255,210,74,.5)} .wkcard.claimed{opacity:.7;border-color:#5f8f4a}
+  .wkt{display:flex;align-items:center;gap:10px} .wkt b{font-size:15px;font-weight:900;line-height:1.2;text-align:left} .wki{flex:0 0 auto;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:24px;background:rgba(0,0,0,.3)}
+  .wkdays{display:flex;align-items:center;gap:4px} .wkdays i{font-style:normal;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:900;background:rgba(0,0,0,.3);color:var(--dim)} .wkdays i.past{background:#8a5a1e;color:#ffe9b0} .wkdays i.now{background:var(--gold);color:#3a2300;box-shadow:0 0 8px rgba(255,210,74,.8)} .wkdays em{margin-left:auto;font-style:normal;font-size:11.5px;font-weight:800;color:#ffd9a0}
+  .wkbar{position:relative;height:20px;border-radius:99px;background:rgba(0,0,0,.4);overflow:hidden} .wkbar i{position:absolute;inset:0 auto 0 0;border-radius:99px;background:linear-gradient(90deg,#e08a2c,#ffd24a);transition:width .5s} .wkbar span{position:relative;display:block;text-align:center;font-size:11.5px;font-weight:900;line-height:20px;text-shadow:0 1px 0 #0008}
+  .wkh{font-size:12px;font-weight:700;color:#ffe9b0;min-height:14px} .wkh:empty{display:none} .wkr{display:flex;gap:6px;flex-wrap:wrap} .wkr b{font-size:12px;font-weight:900;padding:3px 9px;border-radius:99px;background:rgba(111,224,138,.16);border:1.5px solid rgba(111,224,138,.5);color:var(--lime)}
+  .gl-row.wait .gl-bar i{background:linear-gradient(90deg,#e08a2c,#ffd24a)} .gl-row.ready .gl-ic{animation:glic 1.3s ease-in-out infinite;background:#ffe14a33} @keyframes glic{50%{transform:scale(1.18) rotate(-8deg)}} @media (prefers-reduced-motion:reduce){.gl-row.ready .gl-ic{animation:none}}
+  /* end @css:16-addiction round 6 */
   /* end @css:16-addiction */
   /* @css:20-qa */
   .scr > :first-child{margin-top:auto} .scr > :last-child{margin-bottom:auto}   /* old browsers without 'safe center': still centred, never clipped above the top */
@@ -1229,6 +1404,8 @@
   @media (max-height:900px){.rkeep .kchip.soon{display:none} #result .hero{height:clamp(64px,10vh,100px)}}
   @media (max-height:700px){#rNudge{display:none} .rkeep .kchip small{display:none}}   /* very short phones: the tip line and chip captions give way so RETRY and MENU stay on screen */
   @media (max-height:600px){.rkeep{display:none} #result .hero{height:48px}}
+  #setBtnH{position:relative!important}   /* the inline position:static left its 44px hit pad (::before) stretching over the whole hub */
+  .tile.mast .nm{min-width:0} @media (max-width:380px){.tile.mast .nm{font-size:11.5px;overflow-wrap:anywhere}}
   /* end @css:20-qa */
   /* @css:17-perf */
   .hub-skel .tab.on>*{opacity:.35;pointer-events:none;transition:opacity .12s}
@@ -1253,6 +1430,33 @@
   @keyframes d19Pop{from{opacity:0;scale:.84;translate:0 14px}to{opacity:1;scale:1;translate:0 0}}
   @keyframes d19Out{to{opacity:0;transform:scale(.94) translateY(8px)}}
 /* end @css:19-buttons round 5 */
+/* @css:19-buttons round 6 */
+  /* resume button: the pause bars morph into a play triangle when the pause screen opens */
+  .pzg{display:inline-block;position:relative;width:.92em;height:.92em;vertical-align:-.1em;margin-right:.1em}
+  .pzg s{position:absolute;inset:0;background:currentColor;text-decoration:none;--l:polygon(14% 8%,38% 8%,38% 92%,14% 92%);--r:polygon(62% 8%,86% 8%,86% 92%,62% 92%);clip-path:var(--l)}
+  .pzg s+s{clip-path:var(--r)}
+  #pause.on .pzg s{animation:d19PzL .5s cubic-bezier(.5,0,.2,1.3) .45s both}
+  #pause.on .pzg s+s{animation-name:d19PzR}
+  @keyframes d19PzL{from{clip-path:polygon(14% 8%,38% 8%,38% 92%,14% 92%)}to{clip-path:polygon(18% 8%,52.5% 29%,52.5% 71%,18% 92%)}}
+  @keyframes d19PzR{from{clip-path:polygon(62% 8%,86% 8%,86% 92%,62% 92%)}to{clip-path:polygon(51% 28%,88% 50%,88% 50%,51% 72%)}}
+  html.rm #pause.on .pzg s{animation:none}
+  html.rm #pause .pzg s{clip-path:polygon(18% 8%,52.5% 29%,52.5% 71%,18% 92%)} html.rm #pause .pzg s+s{clip-path:polygon(51% 28%,88% 50%,88% 50%,51% 72%)}
+  /* tab bar: one pink bar slides under the tabs (and follows the swipe) */
+  .tabs{isolation:isolate}
+  .tabs .tabind{position:absolute;top:-3px;left:0;height:3px;width:calc(100% / var(--n,6));z-index:2;pointer-events:none;transform:translateX(calc(var(--i,2) * 100%));transition:transform .42s cubic-bezier(.3,1.5,.5,1)}
+  .tabs .tabind::before{content:"";position:absolute;left:18%;right:18%;top:0;bottom:0;border-radius:0 0 4px 4px;background:linear-gradient(90deg,#ff8ad0,#ff5cb8);box-shadow:0 0 12px 1px rgba(255,92,184,.8)}
+  .tabs .tabind::after{content:"";position:absolute;left:8%;right:8%;top:3px;height:34px;background:radial-gradient(ellipse at 50% 0,rgba(255,92,184,.28),transparent 70%)}
+  .tabs.tdrag .tabind{transition:none}
+  html.rm .tabs .tabind{transition:none}
+  /* side buttons: baked icons and a real press (the edge sinks, the icon squashes) */
+  .sidebtn{box-shadow:0 3px 0 rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.14)}
+  .sidebtn b{display:flex;align-items:center;justify-content:center;height:30px;margin-bottom:1px}
+  .sidebtn .sico{width:30px;height:30px;object-fit:contain;pointer-events:none;filter:drop-shadow(0 1px 0 rgba(0,0,0,.35));transition:transform .22s cubic-bezier(.3,1.7,.5,1)}
+  #tabBattle .sidebtn b{height:25px} #tabBattle .sidebtn .sico{width:25px;height:25px}
+  .sidebtn:active{box-shadow:0 1px 0 rgba(0,0,0,.38);translate:0 2px;filter:brightness(1.22);border-color:rgba(255,255,255,.4)}
+  .sidebtn:active .sico{transform:scale(.88,.8) translateY(2px)}
+  @media (hover:hover){.sidebtn:hover .sico{transform:translateY(-2px) rotate(-6deg) scale(1.08)}}
+/* end @css:19-buttons round 6 */
   /* @css:11-result-goal */
   .rgoal{display:none;align-items:center;gap:10px;width:min(320px,86vw);padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);cursor:pointer;text-align:left;animation:rpIn .45s .9s both}
   .rgoal.on{display:flex}
@@ -1320,9 +1524,31 @@
   .dwrap.tap{animation:dTap .55s ease-out} #result .dwrap.tap{animation:dTap .55s ease-out} @keyframes dTap{30%{transform:translateY(-16px) scale(.96,1.06)}60%{transform:translateY(0) scale(1.05,.95)}100%{transform:none}}
   .dnote{position:absolute;z-index:4;font-style:normal;font-weight:900;font-size:20px;line-height:1;pointer-events:none;-webkit-text-stroke:1px #2a1040;text-shadow:0 2px 0 #2a1040;animation:dNote .9s ease-out both} @keyframes dNote{0%{opacity:0;transform:translateY(8px) scale(.5)}20%{opacity:1}100%{opacity:0;transform:translate(var(--dx),-70px) rotate(var(--r)) scale(1.1)}}
   .stage .dwrap{display:block;z-index:2;width:min(150px,38vw)} .stage .dwrap .duo{width:100%}
-  @media (max-height:700px){.dpet{display:none}}
-  @media (prefers-reduced-motion:reduce){.dwrap,.dhat,.dpet,.dnote{animation:none!important}}
+  .dp-puppy{animation:dpFlip 1.3s var(--d,0s) ease-in-out infinite} .dp-turtle{animation:dpSpin 1.5s var(--d,0s) ease-in-out infinite} .dp-kitten,.dp-piglet{animation:dpWig .5s var(--d,0s) ease-in-out infinite} .dp-lamb{animation:dpBoing .8s var(--d,0s) cubic-bezier(.3,0,.4,1) infinite}
+  @keyframes dpFlip{0%,55%,100%{transform:translateY(0) rotate(0)}22%{transform:translateY(-26px) rotate(-180deg)}44%{transform:translateY(0) rotate(-360deg) scale(1.06,.92)}}
+  @keyframes dpSpin{0%,20%,100%{transform:translateY(0) rotateY(0)}60%{transform:translateY(-8px) rotateY(720deg)}}
+  @keyframes dpWig{0%,100%{transform:translateY(0) rotate(-7deg) scale(1.04,.94)}50%{transform:translateY(-14px) rotate(7deg) scale(.96,1.04)}}
+  @keyframes dpBoing{0%,100%{transform:translateY(0) scale(1.1,.86)}45%{transform:translateY(-30px) scale(.94,1.1)}}
+  .dheart{position:absolute;bottom:34%;z-index:4;font-style:normal;font-weight:900;font-size:17px;line-height:1;color:#ff5a8a;-webkit-text-stroke:1px #4a1a33;pointer-events:none;opacity:0;animation:dHeart 1.8s var(--d,0s) ease-out infinite} .dheart.l{left:-20%;margin-left:var(--x)} .dheart.r{right:-20%;margin-right:var(--x)}
+  @keyframes dHeart{0%{opacity:0;transform:translateY(0) scale(.4)}20%{opacity:1}100%{opacity:0;transform:translateY(-64px) scale(1.1) rotate(12deg)}}
+  @media (max-height:700px){.dpet,.dheart{display:none}}
+  @media (prefers-reduced-motion:reduce){.dwrap,.dhat,.dpet,.dnote,.dheart{animation:none!important} .dheart{opacity:.9}}
   /* end @css:02-animal-art */
+  /* @css:05-screen-feel */
+  .rribbon.fx6{position:relative;font-size:16px;padding:6px 26px;overflow:visible;filter:drop-shadow(0 0 10px rgba(255,200,61,.6));animation:rpIn .5s .5s cubic-bezier(.2,1.6,.4,1) both,rb6Glow 1.6s 1s ease-in-out 2}
+  .rribbon.fx6::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 35%,rgba(255,255,255,.85) 50%,transparent 65%);transform:translateX(-120%);animation:rb6Sweep 1.1s 1.1s ease-out 2 both;pointer-events:none}
+  .rribbon .rb6d{margin-left:8px;padding:1px 7px;border-radius:9px;background:#1b0a24;color:#ffe27a;font-size:12px;letter-spacing:.04em;vertical-align:1px}
+  @keyframes rb6Glow{50%{filter:drop-shadow(0 0 18px rgba(255,216,77,.95))}}
+  @keyframes rb6Sweep{to{transform:translateX(120%)}}
+  .rb6fx{position:fixed;z-index:30;width:0;height:0;pointer-events:none}
+  .rb6fx s{position:absolute;left:-8px;top:-8px;width:16px;height:16px;filter:drop-shadow(0 0 4px var(--c));background:var(--c);clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);opacity:0;animation:rb6Spark 1.1s cubic-bezier(.15,.8,.3,1) both}
+  .rb6ring{position:absolute;left:-70px;top:-24px;width:140px;height:48px;border-radius:50%;border:3px solid #ffd84d;opacity:0;animation:rb6Ring .8s ease-out both}
+  .rb6ring.b{border-color:#ff9ad6;animation-delay:.14s}
+  @keyframes rb6Spark{0%{opacity:1;transform:translate(0,0) scale(.4) rotate(0)}60%{opacity:1}100%{opacity:0;transform:translate(var(--dx),calc(var(--dy) + 26px)) scale(1.5) rotate(160deg)}}
+  @keyframes rb6Ring{0%{opacity:.9;transform:scale(.3)}100%{opacity:0;transform:scale(2.6)}}
+  @media (prefers-reduced-motion:reduce){.rribbon.fx6,.rribbon.fx6::after{animation:none!important}.rb6fx{display:none}}
+  @media (max-height:700px){.rribbon.fx6{font-size:14px;padding:4px 22px}}
+  /* end @css:05-screen-feel */
 </style>
 </head>
 <body>
@@ -1340,6 +1566,7 @@
   <h1 class="logo" aria-label="Cell Serpent"><span data-t="CELL">CELL</span><span data-t="SERPENT">SERPENT</span></h1>
   <div class="stage12"><img class="hero" src="assets/duo_sing.png" alt="RoxorLoops and Jasmin"></div>
   <div class="sub tagline">RoxorLoops &amp; Jasmin vs the Serpent.</div>
+  <div class="wb12" id="wb12" hidden></div>
   <button class="btn" id="playBtn"><span>PLAY</span></button>
   <div class="sub" id="titleInfo"></div>
   <button class="gear" id="setBtnT" aria-label="Settings">⚙</button>
@@ -1405,9 +1632,11 @@
   <button class="tgl" data-k="sound"><i class="ti">🔊</i><span>Sound effects</span><b>ON</b></button>
   <button class="tgl" data-k="music"><i class="ti">🎵</i><span>Music</span><b>ON</b></button>
   <button class="tgl" data-k="beatTick"><i class="ti">🥁</i><span>Beat tick (a click on every beat, with music)</span><b>OFF</b></button>
+  <button class="tgl" data-k="pump"><i class="ti">🎚️</i><span>Music pump (tap to change)</span><b>Full</b></button>
   <button class="tgl" data-k="vibrate"><i class="ti">📳</i><span>Vibration</span><b>ON</b></button>
   <h3 class="setgrp">SEEING THE GAME</h3>
-  <button class="tgl" data-k="reduceMotion"><i class="ti">🌀</i><span>Reduce motion (no shake or flashes)</span><b>OFF</b></button>
+  <button class="tgl" data-k="reduceMotion"><i class="ti">🌀</i><span>Reduce motion (no shake, calm movement)</span><b>OFF</b></button>
+  <button class="tgl" data-k="reduceFlash"><i class="ti">💡</i><span>Reduce flashing (no screen flashes or lightning)</span><b>OFF</b></button>
   <button class="tgl" data-k="lowQuality"><i class="ti">⚡</i><span>Low quality (fewer sparkles, faster)</span><b>OFF</b></button>
   <div class="sgrp">Readability</div>
   <button class="tgl" data-k="bigNumbers"><i class="ti">🔢</i><span>Bigger numbers on cells</span><b>OFF</b></button>
@@ -1445,9 +1674,10 @@
   <div class="sub pnote">Take a breath. The snake waits.</div>
   <div class="precap" id="pRecap"></div>
   <div class="rpmark" id="pBuild"></div>
-  <button class="btn pbig" id="resumeBtn">&#9654; RESUME</button>
+  <button class="btn pbig" id="resumeBtn"><i class="pzg" aria-hidden="true"><s></s><s></s></i> RESUME</button>
   <button class="btn alt pbtn" id="pStats">&#128202; WHO DID WHAT</button>
   <button class="btn alt pbtn" id="pSet">&#9881; SETTINGS</button>
+  <div class="plose" id="pLose"></div>
   <button class="btn dim" id="quitBtn">GIVE UP</button>
 </section>
 

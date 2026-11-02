@@ -162,7 +162,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     }
   }
   // per-species baked pattern layer: clipped to the cell, drawn under the gloss and the number pad
-  const PAT = { love: 'hearts', rust: 'stripes', sneezy: 'spots', grumpy: 'scales', sleepy: 'waves', disco: 'checks', sour: 'stripes', mighty: 'cracks', frosty: 'frost', piggy: 'spots', gloomy: 'scales' };
+  const PAT = { love: 'hearts', rust: 'rivets', sneezy: 'spots', grumpy: 'scales', sleepy: 'waves', disco: 'checks', sour: 'wedges', mighty: 'cracks', frosty: 'frost', piggy: 'coins', gloomy: 'rain' };
   function pattern(g, P, species, r) {
     const kind = PAT[species]; if (!kind) return;
     const dk = P.sh, lt = P.lite;
@@ -188,6 +188,20 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       g.globalAlpha = 0.7; g.strokeStyle = '#ffffff'; g.lineWidth = r * 0.06;
       for (const [x, y] of [[-0.6, -0.4], [0.62, 0.35], [0.1, -0.75], [-0.35, 0.65]]) for (let k = 0; k < 3; k++) { const an = k * Math.PI / 3 + x; g.beginPath(); g.moveTo(x * r - Math.cos(an) * r * 0.2, y * r - Math.sin(an) * r * 0.2); g.lineTo(x * r + Math.cos(an) * r * 0.2, y * r + Math.sin(an) * r * 0.2); g.stroke(); }
       g.globalAlpha = 0.45; g.strokeStyle = dk; g.lineWidth = r * 0.05; g.beginPath(); g.moveTo(-r * 0.9, r * 0.1); g.lineTo(-r * 0.4, -r * 0.1); g.lineTo(-r * 0.3, -r * 0.5); g.moveTo(r * 0.9, -r * 0.2); g.lineTo(r * 0.4, 0); g.lineTo(r * 0.35, r * 0.4); g.stroke();
+    } else if (kind === 'rivets') {   // r6: riveted plates, a seam cross with a bolt in every corner
+      g.globalAlpha = 0.55; g.strokeStyle = dk; g.lineWidth = r * 0.08; g.beginPath(); g.moveTo(-r, 0); g.lineTo(r, 0); g.moveTo(0, -r); g.lineTo(0, r); g.stroke();
+      g.globalAlpha = 0.9; g.lineWidth = r * 0.035;
+      for (const [x, y] of [[-0.46, -0.46], [0.46, -0.46], [-0.46, 0.46], [0.46, 0.46], [0, 0.8], [0, -0.8], [0.8, 0], [-0.8, 0]]) { g.fillStyle = lt; g.strokeStyle = dk; circ(x * r, y * r, r * 0.07)(g); g.fill(); g.stroke(); g.fillStyle = dk; circ(x * r + r * 0.012, y * r + r * 0.016, r * 0.025)(g); g.fill(); }
+    } else if (kind === 'wedges') {   // r6: a sliced sour fruit, light pith lines fanning out from the centre
+      g.globalAlpha = 0.55; g.strokeStyle = lt; g.lineWidth = r * 0.09;
+      for (let i = 0; i < 8; i++) { const an = i / 8 * TAU + 0.2; g.beginPath(); g.moveTo(Math.cos(an) * r * 0.2, Math.sin(an) * r * 0.2); g.lineTo(Math.cos(an) * r, Math.sin(an) * r); g.stroke(); }
+      g.globalAlpha = 0.5; g.strokeStyle = dk; g.lineWidth = r * 0.05; g.beginPath(); g.arc(0, 0, r * 0.62, 0, TAU); g.stroke();
+    } else if (kind === 'coins') {   // r6: a piggy bank is full of coins
+      for (const [x, y, s] of [[-0.5, -0.4, 0.17], [0.52, -0.28, 0.14], [-0.5, 0.45, 0.14], [0.42, 0.55, 0.18], [0.02, -0.8, 0.1], [0, 0.82, 0.09]]) { g.globalAlpha = 0.8; g.fillStyle = '#ffd84d'; circ(x * r, y * r, s * r)(g); g.fill(); g.strokeStyle = '#b9760f'; g.lineWidth = r * 0.035; g.stroke(); g.globalAlpha = 0.9; g.strokeStyle = '#fff1a8'; g.lineWidth = r * 0.025; g.beginPath(); g.arc(x * r, y * r, s * r * 0.55, 0, TAU); g.stroke(); }
+    } else if (kind === 'rain') {   // r6: a gloomy cell lives under its own little rain cloud
+      g.globalAlpha = 0.6; g.strokeStyle = '#9fd8ff'; g.lineWidth = r * 0.055;
+      for (const [x, y] of [[-0.62, -0.45], [-0.25, -0.1], [0.2, -0.55], [0.58, -0.15], [-0.5, 0.4], [0.05, 0.3], [0.45, 0.55], [-0.12, 0.78], [0.75, 0.3]]) { g.beginPath(); g.moveTo(x * r, y * r); g.lineTo(x * r - r * 0.09, y * r + r * 0.2); g.stroke(); }
+      g.globalAlpha = 0.45; g.strokeStyle = dk; g.lineWidth = r * 0.07; g.beginPath(); g.arc(-0.1 * r, 0.1 * r, r * 0.9, 0.3, 0.9); g.stroke();
     } else if (kind === 'hearts') {
       for (const [x, y, s] of [[-0.55, -0.4, 0.15], [0.55, -0.3, 0.12], [-0.5, 0.45, 0.12], [0.45, 0.55, 0.16], [0.05, -0.8, 0.1]]) { g.globalAlpha = 0.6; g.fillStyle = P.sh; heartPath(x * r, y * r, s * r)(g); g.fill(); }
     }
@@ -394,8 +408,18 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       if (MOOD >= 3) cel(g, '#7a1633', ell(0, r * 0.62, r * 0.26, r * (MOOD === 4 ? 0.2 : 0.12)), { r: r * 0.2, hi: false, lw: r * 0.06, shadow: '#7a1633' });   // MOO
     } else if (k === 'dove') {
       const wf = MOOD === 5 ? [-1.5, -0.5] : MOOD === 6 ? [0.15, 0.45] : [-1.0, -0.1];   // 02-animal-art r3: wing-up / wing-down frames for a real flap
-      for (const s of [-1, 1]) cel(g, '#ffffff', poly([[s * r * 0.3, -r * 0.1], [s * r * 1.5, r * wf[0]], [s * r * 1.35, r * wf[1]], [s * r * 1.05, r * 0.3], [s * r * 0.4, r * 0.35]]), { r: r * 0.9, hi: false, lw: r * 0.1, shadow: '#bfd0ee' });
+      // 02-animal-art r6: feathered wings (three fanned feathers each, blue-grey tips) instead of one flat blade, plus a tail fan and a head tuft
+      const wy = (wf[0] + wf[1]) / 2;
+      for (const s of [-1, 1]) {
+        const base = Math.atan2(wy * r * 1.1, r * 1.1);   // wing direction: up when wy < 0
+        [[0.5, '#cfdcf5', 1.15], [0.2, '#e4ecfb', 1.0], [-0.12, '#ffffff', 0.82]].forEach(([off, col, len]) => {
+          const ang = s > 0 ? base + off * 0.8 * Math.sign(wy || 1) : Math.PI - base - off * 0.8 * Math.sign(wy || 1), L = r * len * 0.62, cx = s * r * 0.42 + Math.cos(ang) * L, cy = r * 0.05 + Math.sin(ang) * L;
+          cel(g, col, ell(cx, cy, L * 1.05, r * 0.3, ang), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#a9bde4' });
+        });
+      }
+      cel(g, '#dfe8fa', poly([[-r * 0.3, r * 0.5], [-r * 0.5, r * 0.98], [-r * 0.12, r * 0.82], [0, r * 1.05], [r * 0.12, r * 0.82], [r * 0.5, r * 0.98], [r * 0.3, r * 0.5]]), { r: r * 0.5, hi: false, lw: r * 0.08, shadow: '#a9bde4' });
       cel(g, '#ffffff', circ(0, r * 0.05, r * 0.72), { r, shadow: '#c9d8f2' });
+      for (const a of [-0.28, 0.12]) cel(g, '#ffffff', ell(Math.sin(a) * r * 0.2, -r * 0.8, r * 0.1, r * 0.26, a), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#c9d8f2' });   // head tuft
       eyes2(g, r * 0.26, -r * 0.05, r * 0.11);
       cel(g, '#ff9a2e', poly([[-r * 0.14, r * 0.12], [r * 0.14, r * 0.12], [0, r * 0.36]]), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#d6601a' });
       blush(g, -r * 0.45, r * 0.2, r * 0.12); blush(g, r * 0.45, r * 0.2, r * 0.12);
@@ -611,6 +635,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     let sq = 0; if (o.flash > 0) sq = -Math.min(1, o.flash / 0.12) * 0.16; if (o.sg === 'go') sq += 0.15; else if (o.sg === 'warn') sq -= 0.05 + Math.sin(t * 40) * 0.04;
     if (sq) { g.rotate(ang); g.scale(1 + sq, 1 - sq * 0.8); g.rotate(-ang); }
     if (boss && o.p2) p2Halo(g, R, t);
+    if (o.sg === 'go' || (o.sg === 'warn' && boss && o.p2)) dashSpikes(g, R, ang, t, boss && !!o.p2, o.sg === 'warn');
     // the body never animates, only its heading: baked once per species at heading 0 and blitted rotated (cellShape + pattern cost ~15 clips and ~100 paths a head)
     const bodySpr = bake('headbody|' + (SPECIES[o.skin] ? o.skin : 'love'), B * 3.4, B * 3.4, gg => { cellShape(gg, P, R, { decor: false }); pattern(gg, P, o.skin, R); }, 3);
     if (bodySpr) { g.save(); g.rotate(ang); g.drawImage(bodySpr.c, -bodySpr.w / 2, -bodySpr.h / 2, bodySpr.w, bodySpr.h); g.restore(); }
@@ -641,7 +666,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     g.translate(Math.cos(ang) * R * 0.18 + (o.look ? o.look[0] * R * 0.1 : 0), Math.sin(ang) * R * 0.18 - R * 0.04 + (o.look ? o.look[1] * R * 0.06 : 0));
     const hurt = o.flash > 0.02, open = (hurt || (t % 3.7) > 3.55 || (t % 9.1) > 8.78 && (t % 9.1) < 8.9) ? 0.1 : 1, look = o.look || [Math.sin(t * 0.8) * 0.5, Math.cos(t * 0.55) * 0.3],
       tongue = (t % 7) > 5.2 && (t % 7) < 5.9, sneezing = (t % 6) > 5.1, iris = boss ? '#ff3d5a' : P.eye;
-    const E = (ex, ey, rx, ry) => eye(g, ex, ey, rx, ry, { iris, look, open });
+    const eo = o.sg === 'warn' ? open * 0.72 : o.sg === 'go' ? Math.min(1.12, open * 1.12) : open;
+    const E = (ex, ey, rx, ry) => eye(g, ex, ey, rx, ry, { iris, look, open: eo });
     const squint = (ex, dir) => line(g, [[ex - dir * R * 0.2, -R * 0.26], [ex + dir * R * 0.12, -R * 0.1], [ex - dir * R * 0.2, R * 0.06]], R * 0.1);
     const f = P.face;
     if (f === 'love') {
@@ -709,6 +735,28 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     if (o.slow > 0) { g.fillStyle = 'rgba(140,225,255,.32)'; circ(0, 0, R * 1.0)(g); g.fill(); g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = R * 0.07; g.stroke(); for (const k of [-0.5, 0, 0.5]) cel(g, '#e6f8ff', poly([[k * R - R * 0.1, R * 0.88], [k * R + R * 0.1, R * 0.88], [k * R, R * (1.2 + (k ? 0 : 0.15))]]), { r: R * 0.25, hi: false, lw: 1.8, shadow: '#7fc8ee' }); }
     if (o.flash > 0) { g.fillStyle = `rgba(255,255,255,${Math.min(0.7, o.flash * 5)})`; circ(0, 0, R * 1.05)(g); g.fill(); }
     g.restore();
+  }
+  // 01-enemy-art r6: a surging head grows a fan of hot spikes along its heading (boss phase 2: seven big ones with a white core and a
+  // speed-line wake; every other surge: three short streaks). Baked once, drawn rotated and stretched, so a dash costs two drawImage calls.
+  function dashSpikes(g, R, ang, t, big, warn) {
+    const key = big ? 'dashspk|big' : 'dashspk|min', sz = R * 4.6;
+    const spr = bake(key, sz, sz, c => {
+      if (big) {
+        for (const dy of [-0.55, 0, 0.55]) line(c, [[-R * 1.4, R * dy], [-R * 2.2 - (dy ? 0 : R * 0.1), R * dy]], R * (dy ? 0.07 : 0.1), 'rgba(255,200,120,.75)');
+        for (let i = -3; i <= 3; i++) {
+          const a = i * 0.34, L = R * (1.0 + (3 - Math.abs(i)) * 0.16), x0 = Math.cos(a) * R * 0.8, y0 = Math.sin(a) * R * 0.8, w = R * 0.19;
+          const nx = -Math.sin(a), ny = Math.cos(a);
+          cel(c, '#ff7a2a', poly([[x0 + nx * w, y0 + ny * w], [Math.cos(a) * (R * 0.8 + L) , Math.sin(a) * (R * 0.8 + L)], [x0 - nx * w, y0 - ny * w]]), { r: R * 0.5, hi: false, lw: 2.4, shadow: '#c42a2a' });
+          line(c, [[x0, y0], [Math.cos(a) * (R * 0.8 + L * 0.7), Math.sin(a) * (R * 0.8 + L * 0.7)]], R * 0.05, '#fff1a8');
+        }
+      } else {
+        for (const dy of [-0.45, 0, 0.45]) line(c, [[-R * 1.2, R * dy], [-R * (1.8 + (dy ? 0 : 0.35)), R * dy]], R * 0.07, 'rgba(255,255,255,.6)');
+      }
+    }, 2);
+    if (!spr) return;
+    const k = warn ? 0.4 + Math.sin(t * 40) * 0.06 : 1 + Math.sin(t * 36) * 0.06;
+    g.save(); g.rotate(ang); g.scale(k, 1); if (warn) g.globalAlpha *= 0.8;
+    g.drawImage(spr.c, -sz / 2, -sz / 2, sz, sz); g.restore();
   }
   // 01-enemy-art r5: boss phase 2 (below 40% hp) gets its own silhouette: a spinning crest of flames behind the body and a glowing crack across it
   function p2Halo(g, R, t) {
