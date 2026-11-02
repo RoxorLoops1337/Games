@@ -20,6 +20,7 @@ import { firstGoalHTML, welcomeBack, welcomeHTML, hoursAway, stampVisit } from '
 import { luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand } from './cards_ui.js';
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { paintTabIcons, bindHubSwipe } from './tabs_ui.js';
+import { paintButtonGlyphs, RECAP, emptyCard } from './btn_glyphs.js';
 import { watchSideIcons } from './side_icons.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
@@ -151,7 +152,7 @@ function renderHub() {
   if (stagKey !== hubTab) { stagKey = hubTab; if (hubTab !== 'Battle') motion.stagger($('tab' + hubTab)); }
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { audio.unlock(); audio.play('click'); hubTab = b.dataset.tab; hubTabSwitch(); };
-paintTabIcons();
+paintTabIcons(); paintButtonGlyphs();
 bindHubSwipe({ order: TABS, cur: () => hubTab, hub: $('hub'), pane: () => $('tab' + hubTab), bump: () => buzz(10), go: t => { if (mode !== 'hub') return; audio.unlock(); audio.play('click'); buzz(6); hubTab = t; hubTabSwitch(); } });
 // 17-perf: a tab tap paints the new pane at once (old content dimmed as a light skeleton) and builds it on the next frame, so the tap never freezes
 let hubSwitchTok = 0;
@@ -384,7 +385,7 @@ function renderSkills() {
     groups[eq ? 0 : owned ? 1 : 2].push(t);
   }
   for (const g of groups) g.sort((a, b) => keyOf.get(a) - keyOf.get(b));
-  if (!groups.some(g => g.length)) list.insertAdjacentHTML('beforeend', '<div class="sec"><span style="background:#8a7aa8">Nothing here yet</span></div>');
+  if (!groups.some(g => g.length)) list.appendChild(emptyCard(skFilter === 'Ready' ? 'Nothing to upgrade yet' : 'Nothing here yet', skFilter === 'Ready' ? 'Pop cells to earn fragments, then come back.' : 'Win stages to unlock skills.', 'SHOW ALL', () => { skFilter = 'All'; audio.play('click'); renderSkills(); }));
   [['Equipped', '#6fe08a'], ['Owned', '#4fd8f0'], ['Not Owned', '#8a7aa8']].forEach(([name, col], i) => {
     if (!groups[i].length) return;
     const h = document.createElement('div'); h.className = 'sec'; h.innerHTML = `<span style="background:${col}">${name}</span>`; list.appendChild(h);
@@ -555,7 +556,7 @@ function showRevive() {
 }
 function pauseRecap() {
   const pc = Math.floor((g.progress || 0) * 100), t = Math.floor(g.t || 0), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
-  $('pRecap').innerHTML = `<div><i>🚩</i>Stage<b>${g.stage}</b></div><div><i>⏱</i>Time<b>${mm}:${ss}</b></div><div><i>🎯</i>Popped<b>${g.kills}</b></div><div class="pbar"><i style="width:${pc}%"></i><em>${pc}% of the way</em></div>`;
+  $('pRecap').innerHTML = `<div><i>${RECAP.flag}</i>Stage<b>${g.stage}</b></div><div><i>${RECAP.clock}</i>Time<b>${mm}:${ss}</b></div><div><i>${RECAP.target}</i>Popped<b>${g.kills}</b></div><div class="pbar"><i style="width:${pc}%"></i><em>${pc}% of the way</em></div>`;
   { const ll = lossLine(g); $('quitBtn').title = 'Ends the run: ' + ll.text; $('quitBtn').setAttribute('aria-label', 'Hold to give up. You would lose ' + ll.text); $('pLose').innerHTML = `<b>Giving up ends this run</b>${ll.text}`; }
   $('pBuild').innerHTML = (save.loadout || []).map(id => { const w = WEAPONS.find(x => x.id === id), k = save.skills[id]; return w ? `<span>${icon(id)}LV ${k ? k.lv : 1}</span>` : ''; }).join('');
 }
