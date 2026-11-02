@@ -43,7 +43,7 @@ if (chromium) {
         await p.goto(`http://localhost:${srv.address().port}/cell_serpent/`); await p.waitForFunction(() => window.CS && window.CS.R, null, { timeout: 10000 });
         await p.waitForTimeout(800);
         await p.evaluate(() => window.CS.openHub('Battle')); await p.waitForTimeout(500);
-        const hs = await p.evaluate(() => ['qSeason', 'qAch'].map(i => document.getElementById(i).getBoundingClientRect().height));
+        const hs = await p.evaluate(() => ['qSeason', 'qAch'].map(i => document.getElementById(i).offsetHeight));
         for (const x of hs) assert.ok(x >= 43.5, `${w}: pill is 44px tall, got ${x}`);
         await p.evaluate(() => window.CS.openHub('Gear')); await p.waitForTimeout(500);
         const gf = await p.evaluate(() => { const f = document.getElementById('gearFilters'); return [f.getAttribute('role'), [...f.querySelectorAll('button')].every(b => b.hasAttribute('aria-pressed')), f.querySelectorAll('button[aria-pressed="true"]').length]; });
