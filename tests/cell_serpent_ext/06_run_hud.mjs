@@ -93,3 +93,19 @@ assert.ok(!readFileSync(join(root, 'hud.js'), 'utf8').includes('—'), 'no em da
   assert.ok(readFileSync(join(root, 'audio.js'), 'utf8').includes('streakmile'), 'audio has the streak milestone cue');
   assert.ok(!src.includes('—'), 'no em dash in hud.js (b5)');
 }
+
+// ---- round 6: tile level badge + pulse, 30+ streak frame and boss bar ghost draw without throwing
+{
+  const kit = createArtDraw((w, h) => ({ width: w, height: h, getContext: stubCtx }), 2);
+  const R = createRenderer(canvas, null, kit);
+  R.setOptions({ beatStreak: () => 35 });
+  const g = sim.createGame({ seed: 6, stage: 10, meta: { rev: 1 } });
+  g.weap.swab = { lv: 1, cd: 0 };
+  R.draw(g, null, 1 / 30);
+  g.weap.swab.lv = 2; g.weap.daggers = { lv: 1, cd: 0 };   // a level up and a brand new skill
+  R.draw(g, null, 1 / 30);
+  for (const sn of g.snakes) for (const q of sn.segs) if (q.i > 0) q.hp = 1;   // low boss bar
+  for (let i = 0; i < 5; i++) R.draw(g, null, 1 / 30);
+  R.setOptions({ reduceMotion: true }); R.draw(g, null, 1 / 30);
+  assert.ok(!readFileSync(join(root, 'hud.js'), 'utf8').includes('—'));
+}
