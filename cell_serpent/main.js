@@ -14,6 +14,7 @@ import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.j
 import { initA11y7 } from './a11y7.js';
 import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed, announce, watchGroove, watchStreak, resetGroove, showZone, inThumbZone, zoneSteer, initKeyboard, RARITY_WORDS } from './access.js';
 import { createMotion } from './motion.js';
+import { curtainOpen } from './curtain_ui.js';
 import { celebrateBest, stopBest } from './best_fx.js';
 import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
@@ -23,7 +24,7 @@ import { firstGoalHTML, welcomeBack, welcomeHTML, hoursAway, stampVisit } from '
 import { bakeCardArt } from './card_bake.js';
 import { partnerIds, markPartners, betterRoll, luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand, cardFoilHTML, markReroll, chainPulse } from './cards_ui.js';
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
-import { paintTabIcons, bindHubSwipe } from './tabs_ui.js';
+import { paintTabIcons, bindHubSwipe, setTabCount } from './tabs_ui.js';
 import { paintButtonGlyphs, RECAP, emptyCard } from './btn_glyphs.js';
 import { paintSettingIcons } from './icons_b8.js';
 import { watchGlyphs } from './glyph_sweep.js';
@@ -159,9 +160,20 @@ function badgeTabs() {
   if (KEEPSAKES.some(k => keepCanUp(s, k.id))) out.add('Gear');
   return out;
 }
+// round 10: how many things are ready per tab (the tab badge shows the number)
+function badgeCounts() {
+  const day = dayKey(), s = save, m = new Map(), put = (t, n) => { if (n > 0) m.set(t, n); };
+  put('Shop', (welcomeReady(s) ? 1 : 0) + dealsFor(s, day).filter((d, i) => !s.shop.bought[i] && d.price === 0).length + (s.shop.gold !== day ? 1 : 0));
+  put('Stats', META.filter(d => (s.meta[d.id] || 0) < d.max && s.beats >= metaCost(d, s.meta[d.id] || 0)).length);
+  put('Battle', (s.sign.day !== day ? 1 : 0) + FUND.filter(f => fundReady(s, f)).length + TROPHIES.filter(t => trophyReady(s, t)).length + dailyGoals(day).filter(gl => goalProgress(s, day, gl) >= gl.target && !(s.daily.day === day && s.daily.claimed[gl.id])).length);
+  put('Skills', WEAPONS.filter(w => { const k = s.skills[w.id]; return k.lv > 0 ? k.lv < SKILL_MAX_LV && k.frag >= skillUpgradeCost(k.lv).frag : k.frag >= w.frag && (s.cleared || 0) >= (w.stage || 0); }).length);
+  put('Pets', (s.eggs > 0 ? 1 : 0) + PETS.filter(p => petCanUp(s, p.id)).length);
+  put('Gear', KEEPSAKES.filter(k => keepCanUp(s, k.id)).length);
+  return m;
+}
 function renderHub() {
   refreshCur(); try { dressDuo(document.querySelector('.herobox .duo'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ }
-  { const bd = badgeTabs(); for (const b of document.querySelectorAll('.tabs button')) { const has = b.querySelector('.dot'); if (bd.has(b.dataset.tab) && !has) { const d = document.createElement('i'); d.className = 'dot'; b.appendChild(d); } else if (!bd.has(b.dataset.tab) && has) has.remove(); } }
+  { const bd = badgeTabs(), bc = badgeCounts(); for (const b of document.querySelectorAll('.tabs button')) { const has = b.querySelector('.dot'); if (bd.has(b.dataset.tab) && !has) { const d = document.createElement('i'); d.className = 'dot'; b.appendChild(d); } else if (!bd.has(b.dataset.tab) && has) has.remove(); setTabCount(b, bc.get(b.dataset.tab) || 0); } }
   hub2.addict.renderNext(); hub2.retain.renderStrip(); petHint(document.querySelector('.tabs'), hubTab, save);
   motion.tabDir(TABS, hubTab);
   for (const t of TABS) { $('tab' + t).classList.toggle('on', t === hubTab); }
@@ -461,12 +473,13 @@ function newDemo() {
   richDemo(demo);
 }
 function startRun(stage, mode2 = '') {
+  const fromHub = shownId === 'hub';
   if (!mode2) save.last = { stage, hard: !!(hard && stage <= save.cleared) };
   audio.unlock(); audio.music(true, stage === 1 && !mode2);
   sel = stage; ranResult = false; endT = 0;
   g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
   g.petJoy = save.petEquip.map(id => (save.pets[id].joy || 0) >= 100);   // round 6: an overjoyed pet shows off in the run (cosmetic)
-  mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove();
+  mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove(); if (fromHub) curtainOpen(document.documentElement.classList.contains('rm'));
   announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + 'Slide to move, the duo shoots up on its own.');
   window.CS.g = g;
 }

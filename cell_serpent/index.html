@@ -2134,6 +2134,20 @@
   .tabs .dot::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:2px solid #ff3d5a;opacity:0;animation:tbPing 2.8s ease-out 1s infinite;pointer-events:none}
   @keyframes tbPop{from{scale:0}60%{scale:1.35}to{scale:1}}
   @keyframes tbPing{0%{transform:scale(1);opacity:.8}60%,100%{transform:scale(2.3);opacity:0}}
+  /* round 10: tab badges carry the number of ready claims */
+  .tabs .dot{display:flex;align-items:center;justify-content:center;min-width:17px;height:17px;width:auto;padding:0 4px;box-sizing:border-box;border-radius:99px;font:900 11px/1 system-ui,sans-serif;color:#fff;font-style:normal;text-shadow:0 1px 0 rgba(0,0,0,.45);top:3px;right:calc(50% - 26px)}
+  .tabs .dot{background:radial-gradient(circle at 35% 30%,#b3122b,#970c22 70%)}
+  .tabs .dot.wide{padding:0 5px}
+  .tabs .dot.bump{animation:tbBump .4s cubic-bezier(.3,2,.5,1)}
+  @keyframes tbBump{0%{scale:1}40%{scale:1.5}100%{scale:1}}
+  html.rm .tabs .dot.bump{animation:none}
+  /* round 10: stage curtain that parts when a run starts from the hub */
+  #curtain10{position:fixed;inset:0;z-index:9000;pointer-events:none;overflow:hidden}
+  #curtain10 .cu{position:absolute;top:0;bottom:0;width:51%;will-change:transform;box-shadow:0 0 28px rgba(0,0,0,.6);
+    background:repeating-linear-gradient(90deg,rgba(0,0,0,.28) 0 6px,rgba(255,255,255,.07) 6px 12px,rgba(0,0,0,0) 12px 26px),linear-gradient(180deg,#8d1636,#5a0c27 70%,#3a0618)}
+  #curtain10 .cu::after{content:"";position:absolute;left:0;right:0;bottom:0;height:12px;background:repeating-linear-gradient(90deg,#ffd84d 0 5px,#c8921a 5px 8px);opacity:.9}
+  #curtain10 .cu.l{left:0;border-right:3px solid #ffd84d}
+  #curtain10 .cu.r{right:0;border-left:3px solid #ffd84d}
 /* end @css:19-buttons round 9 */
 </style>
 </head>

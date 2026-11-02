@@ -21,6 +21,14 @@ export function paintTabIcons(root = document) {
   }
 }
 
+// round 10: the tab badge shows how many things are ready (1 to 9, then 9+)
+export const badgeLabel = n => (n > 0 ? (n > 9 ? '9+' : String(Math.floor(n))) : '');
+export function setTabCount(btn, n) {
+  const d = btn && btn.querySelector('.dot'); if (!d) return;
+  const t = badgeLabel(n);
+  if (d.textContent !== t) { d.textContent = t; d.classList.toggle('wide', t.length > 1); if (d.dataset.n !== undefined) { d.classList.remove('bump'); void d.offsetWidth; d.classList.add('bump'); } d.dataset.n = t; }
+}
+
 // pure: how far the pane follows the finger. With a tab to go to it follows at about half speed (soft cap),
 // with no tab that way (the first or last one) it stiffens fast into a short rubber-band bump.
 export function rubber(dx, hasTarget) {
