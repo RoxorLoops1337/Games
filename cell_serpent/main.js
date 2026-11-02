@@ -93,7 +93,7 @@ function openHub(tab = hubTab) {
   if (dayLogin(save, dayKey())) persist();
   refreshCur();
   sel = Math.max(1, Math.min(sel, MAX_STAGE, save.cleared + 4));
-  renderHub(); show('hub'); hub2.addict.maybeComeback();
+  renderHub(); show('hub'); if (!hub2.addict.maybeComeback()) hub2.retain.checkAch();
 }
 function badgeTabs() {
   const day = dayKey(), s = save, out = new Set();
@@ -108,7 +108,7 @@ function badgeTabs() {
 function renderHub() {
   refreshCur();
   { const bd = badgeTabs(); for (const b of document.querySelectorAll('.tabs button')) { const has = b.querySelector('.dot'); if (bd.has(b.dataset.tab) && !has) { const d = document.createElement('i'); d.className = 'dot'; b.appendChild(d); } else if (!bd.has(b.dataset.tab) && has) has.remove(); } }
-  hub2.addict.renderNext(); petHint(document.querySelector('.tabs'), hubTab, save);
+  hub2.addict.renderNext(); hub2.retain.renderStrip(); petHint(document.querySelector('.tabs'), hubTab, save);
   for (const t of TABS) { $('tab' + t).classList.toggle('on', t === hubTab); }
   for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === hubTab);
   if (hubTab === 'Battle') renderBattle(); else if (hubTab === 'Skills') renderSkills(); else if (hubTab === 'Pets') renderPets(); else if (hubTab === 'Stats') hub2.renderStats(); else if (hubTab === 'Gear') hub2.renderGear(); else hub2.renderShop();
@@ -280,7 +280,7 @@ function renderSkills() {
 const defaultBoxOk = () => { audio.play('click'); openHub('Shop'); };
 $('bOk').onclick = defaultBoxOk;
 const toast = msg => { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200); };
-const hub2 = createHub2({ $, tile, icon, curImg, audio, save: () => save, persist, show, openHub: t => openHub(t), renderHub: () => renderHub(), refreshCur: () => refreshCur(), dayKey, resetBoxOk: () => { $('bOk').onclick = defaultBoxOk; }, bodyURL: skin => { if (!kit) return ''; if (!(('b|' + skin) in iconCache)) { const spr = kit.SPR.body(skin, false, ''); iconCache['b|' + skin] = spr && spr.c.toDataURL ? spr.c.toDataURL() : ''; } return iconCache['b|' + skin]; } });
+const hub2 = createHub2({ $, toast, tile, icon, curImg, audio, save: () => save, persist, show, openHub: t => openHub(t), renderHub: () => renderHub(), refreshCur: () => refreshCur(), dayKey, resetBoxOk: () => { $('bOk').onclick = defaultBoxOk; }, bodyURL: skin => { if (!kit) return ''; if (!(('b|' + skin) in iconCache)) { const spr = kit.SPR.body(skin, false, ''); iconCache['b|' + skin] = spr && spr.c.toDataURL ? spr.c.toDataURL() : ''; } return iconCache['b|' + skin]; } });
 
 // ---------------------------------------------------------------- runs
 function newDemo() {
@@ -415,7 +415,7 @@ function statsPanel(onClose) {
 }
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
-  const li0 = levelInfo(save.xp), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); persist(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
+  const li0 = levelInfo(save.xp), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
   stopFx(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
   if (out.ribbons) rows.push(`<div class="r">🎀 ${cu(out.ribbons)} Ribbons</div>`);
