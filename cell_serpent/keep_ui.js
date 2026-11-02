@@ -76,7 +76,7 @@ export function bookCell(x, cat, c, s, nextId) {
   if (cat === 'species') { const u = c.bodyURL && c.bodyURL(x.id); if (u) art = `<img class="bkart" src="${u}" alt="">`; }
   else if (cat === 'pets') art = `<span class="bkart">${c.icon(x.id)}</span>`;
   const next = !x.got && x.id === nextId;
-  const hint = next && cat === 'species' ? 'Stage ' + (SKINS.indexOf(x.id) + 1) : '';
-  return `<span class="bk ${x.got ? 'got' : 'lock'}${next ? ' next' : ''}" title="${esc(x.got || cat !== 'species' ? x.name : hint)}">${art}<small>${x.got ? esc(x.name) : hint || '???'}</small></span>`;
+  const hint = next ? (cat === 'species' ? 'Stage ' + (SKINS.indexOf(x.id) + 1) : cat === 'pets' ? 'Hatch an egg' : '') : '';
+  return `<span class="bk ${x.got ? 'got' : 'lock'}${next ? ' next' : ''}" title="${esc(x.got ? x.name : hint || '???')}">${art}<small>${x.got ? esc(x.name) : hint || '???'}</small></span>`;
 }
 export function nextUnmet(list) { const x = list.find(q => !q.got); return x ? x.id : ''; }
