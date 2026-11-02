@@ -172,6 +172,7 @@ export const BT = {
   }[id] || (() => ''))(),
 
   // ---- gamepad
+  questGoal: (name) => t('battle.quest_goal', 'Quest goal reached: {name}', { name }),
   padSellAgain: () => t('battle.pad.sell_again', 'Press R3 again to sell'),
   padConnected: () => t('battle.pad.connected', 'Gamepad connected'),
   padHelp: (id) => ({
