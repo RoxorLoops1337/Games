@@ -1,6 +1,6 @@
 // Cell Serpent: skill and pet detail sheets, mastery rank, hatch confetti and the sort/filter chips.
 // Pure helpers read the formulas in sim.js (never change them); the DOM parts are small and self contained.
-import { WEAPONS, PETS, PET_MAX_STAR, SKILL_MAX_LV, SKILL_MILES, skillMul, skillUpgradeCost, petCost, petCanUp, petUp, togglePet, toggleLoadout, levelSkill, unlockSkill, RARITIES, LOADOUT_SIZE } from './sim.js';
+import { WEAPONS, PETS, PET_MAX_STAR, SKILL_MAX_LV, SKILL_MILES, skillMul, skillUpgradeCost, petCost, petCanUp, petUp, togglePet, toggleLoadout, levelSkill, unlockSkill, RARITIES, LOADOUT_SIZE, masteryList, claimMastery, rewardText } from './sim.js';
 
 // what a skill does at the level a run starts with (weapon level 1), scaled by the permanent skill level
 const BASE = {
@@ -44,6 +44,32 @@ const PET_STAT = { atk: v => pc(v) + ' hit power', vit: v => '+' + v + ' stage h
 export const petBonusText = (p, star) => (PET_STAT[p.stat] || (() => ''))(+(p.per * star).toFixed(4));
 export const petRarity = id => RARITIES[PET_RARITY[id] || 0];
 
+
+// ---- NEW ribbons: what the player has already looked at lives in this browser only (not in the save)
+const SEEN_KEY = 'cs_seen_new_v1';
+function seenLoad(save) {
+  try { const r = JSON.parse(localStorage.getItem(SEEN_KEY)); if (r && Array.isArray(r.s) && Array.isArray(r.p)) return r; } catch (e) { /* private mode */ }
+  const r = { s: WEAPONS.filter(w => save.skills[w.id].lv > 0).map(w => w.id), p: PETS.filter(p => save.pets[p.id].star > 0).map(p => p.id) };   // first visit: everything owned counts as seen
+  seenSave(r); return r;
+}
+function seenSave(r) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(r)); } catch (e) { /* ignore */ } }
+export function isNewItem(save, kind, id) {
+  const owned = kind === 's' ? save.skills[id].lv > 0 : save.pets[id].star > 0;
+  return owned && !seenLoad(save)[kind].includes(id);
+}
+export function markSeen(save, kind, id) { const r = seenLoad(save); if (!r[kind].includes(id)) { r[kind].push(id); seenSave(r); } }
+export const newRibbonHTML = '<i class="newrib">NEW</i>';
+
+// ---- sparkline: damage multiplier per skill level, the current level glows
+export function sparkHTML(lv) {
+  const W = 300, H = 54, pad = 8, n = SKILL_MAX_LV, lo = skillMul(1), hi = skillMul(n);
+  const x = i => pad + (W - 2 * pad) * (i - 1) / (n - 1), y = i => H - pad - (H - 2 * pad) * (skillMul(i) - lo) / (hi - lo);
+  const pts = Array.from({ length: n }, (_, k) => x(k + 1).toFixed(1) + ',' + y(k + 1).toFixed(1));
+  const cur = Math.max(1, Math.min(n, lv)), reach = pts.slice(0, cur).join(' ');
+  const dots = Array.from({ length: n }, (_, k) => `<circle cx="${x(k + 1).toFixed(1)}" cy="${y(k + 1).toFixed(1)}" r="${k + 1 === cur ? 5.5 : 2.4}" class="${k + 1 === cur ? 'now' : k + 1 < cur ? 'past' : ''}"/>`).join('');
+  return `<div class="dsspark"><div class="sphd"><span>DAMAGE BY LEVEL</span><b>x${skillMul(cur).toFixed(2)}${cur < n ? ' → x' + skillMul(cur + 1).toFixed(2) : ' max'}</b></div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Damage multiplier from level 1 to ${n}, now level ${cur}"><polyline class="all" points="${pts.join(' ')}"/><polyline class="got" points="${reach}"/>${dots}</svg></div>`;
+}
+
 // ---- DOM
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
 export function createSheets(c) {
@@ -73,6 +99,16 @@ export function createSheets(c) {
       tb.appendChild(el('div', 'dshd', `<span></span><span>${owned ? 'NOW' : 'AT START'}</span><span>${showNext ? 'NEXT' : ''}</span>`));
       for (const r of pv.rows) tb.appendChild(el('div', 'dsrow', `<span>${r.k}</span><b>${r.a}</b><b class="${showNext && r.gain ? 'up' : ''}">${showNext ? (r.gain ? '▲ ' : '') + r.b : ''}</b>`));
       sh.appendChild(tb); sh.appendChild(el('div', 'dsnote', pv.note + (showNext ? ` · next level +${pv.bonusPct}% damage` : '')));
+      if (owned) {
+        markSeen(s, 's', id);
+        sh.appendChild(el('div', '', sparkHTML(k.lv)));
+        const ms = masteryList(s).find(x => x.key === 'sk:' + id), rdy = ms && ms.ready >= 0, tgt = ms && (rdy ? ms.miles[ms.ready] : ms.next);
+        if (ms) {
+          const box = el('div', 'dsmast' + (rdy ? ' rdy' : ''), `<div class="mhd"><span>MASTERY</span><b>${tgt ? rewardText(tgt.reward) : 'all done'}</b></div><div class="bar"><i style="width:${tgt ? Math.min(100, Math.round(ms.val / tgt.at * 100)) : 100}%"></i></div><small>${rdy ? ms.val + ' damage mastery, goal reached' : ms.val + (tgt ? ' / ' + tgt.at : '') + ' damage mastery'}</small>`);
+          if (rdy) { const cb = el('button', 'btn gold dsclaim', 'CLAIM ' + rewardText(tgt.reward)); cb.onclick = () => { if (claimMastery(s, ms.key, ms.ready)) { persist(); audio.unlock(); audio.play('levelup'); rerender(); skillSheet(id); } }; box.appendChild(cb); }
+          sh.appendChild(box);
+        }
+      }
       let need = 0, can = false, label = '', act = () => false;
       if (!owned) { need = w.frag; can = k.frag >= need && !gated; label = gated ? 'CLEAR STAGE ' + w.stage : 'UNLOCK'; act = () => unlockSkill(s, id); }
       else if (!maxed) { need = skillUpgradeCost(k.lv).frag; can = k.frag >= need; label = can ? 'UPGRADE TO LV ' + (k.lv + 1) : 'UPGRADE'; act = () => levelSkill(s, id); }
@@ -100,6 +136,8 @@ export function createSheets(c) {
       sh.appendChild(el('p', 'dsdesc', PET_ABILITY[id] || p.flavor));
       sh.appendChild(el('div', 'dsstars', Array.from({ length: PET_MAX_STAR }, (_, n) => `<i class="star${n < k.star ? ' on' : ''}">★</i>`).join('')));
       sh.appendChild(el('div', 'dsrows', `<div class="dsrow one"><span>Star bonus</span><b>${owned ? petBonusText(p, k.star) : 'none yet'}</b></div>` + (maxed ? '' : `<div class="dsrow one"><span>Next star</span><b class="up">▲ ${petBonusText(p, k.star + 1)}</b></div>`)));
+      if (owned) markSeen(s, 'p', id);
+      sh.appendChild(el('div', 'dsladder', Array.from({ length: PET_MAX_STAR }, (_, n) => `<span class="${n < k.star ? 'on' : n === k.star ? 'nx' : ''}"><i>${n + 1}★</i><b>${petBonusText(p, n + 1).split(' ')[0]}</b></span>`).join('')));
       sh.appendChild(el('div', 'dsnote', 'Stars count even when the pet stays home.'));
       if (need) sh.insertAdjacentHTML('beforeend', barHTML(k.frag, need));
       const can = petCanUp(s, id), up = el('button', 'btn dsbig' + (can ? ' gold' : ''), maxed ? 'FULL STARS' : owned ? 'MORE STARS' : 'WELCOME HOME'); up.disabled = !can;

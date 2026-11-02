@@ -302,6 +302,18 @@
   @keyframes hbfly{0%{opacity:1;transform:translate(0,0) rotate(0) scale(.4)}60%{opacity:1}100%{opacity:0;transform:translate(var(--dx),calc(var(--dy) + 90px)) rotate(var(--r)) scale(1)}}
   #bLoot.reveal .it.rar1{border-color:#4fb8ff;box-shadow:0 0 40px #4fb8ffaa} #bLoot.reveal .it.rar2{border-color:#b06cff;box-shadow:0 0 50px #b06cffcc;animation:revpop .7s cubic-bezier(.2,1.6,.4,1) both,rarglow 1.4s ease-in-out .8s infinite alternate}
   #bLoot.reveal .it small{font-size:12px;font-weight:900;letter-spacing:.06em;color:var(--rc,#ffe14a)} #bLoot.reveal{position:relative}
+  .newrib{position:absolute;top:8px;left:6px;z-index:3;font-style:normal;font-weight:900;font-size:11px;letter-spacing:.06em;padding:2px 9px 2px 8px;color:#fff;background:linear-gradient(180deg,#ff6a8a,#e0204e);border-radius:4px 8px 8px 4px;box-shadow:0 2px 0 #8c0f2c,0 0 12px #ff3d5a99;animation:newpulse 1.2s ease-in-out infinite alternate;pointer-events:none}
+  @keyframes newpulse{to{transform:scale(1.08);box-shadow:0 2px 0 #8c0f2c,0 0 20px #ff7a96}}
+  .dsspark{padding:8px 10px 4px;border-radius:16px;background:rgba(0,0,0,.28)} .dsspark .sphd{display:flex;justify-content:space-between;font-size:11px;font-weight:900;letter-spacing:.06em;color:var(--dim)} .dsspark .sphd b{color:#9dff6d;letter-spacing:0}
+  .dsspark svg{display:block;width:100%;height:54px;overflow:visible} .dsspark polyline{fill:none;stroke-linecap:round;stroke-linejoin:round} .dsspark .all{stroke:rgba(255,255,255,.22);stroke-width:2;stroke-dasharray:3 4} .dsspark .got{stroke:var(--tc);stroke-width:3.5;filter:drop-shadow(0 0 4px var(--tc))}
+  .dsspark circle{fill:rgba(255,255,255,.3)} .dsspark circle.past{fill:var(--tc)} .dsspark circle.now{fill:#fff;stroke:var(--tc);stroke-width:3}
+  .dsmast{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:16px;background:rgba(0,0,0,.28);border:2px solid transparent} .dsmast .mhd{display:flex;justify-content:space-between;font-size:11px;font-weight:900;letter-spacing:.06em;color:var(--dim)} .dsmast .mhd b{color:#bff6ff;letter-spacing:0;font-size:12px}
+  .dsmast .bar{height:10px;border-radius:5px;background:rgba(0,0,0,.4)} .dsmast .bar i{background:linear-gradient(90deg,#4fd8f0,#fff);border-radius:5px} .dsmast small{text-align:center;font-size:12px;font-weight:800}
+  .dsmast.rdy{border-color:#ffd24a;box-shadow:0 0 16px #ffd24a66;animation:rdyglow 1.3s ease-in-out infinite alternate} .dsmast.rdy .bar i{background:linear-gradient(90deg,#ffd24a,#fff)} .dsclaim{min-height:48px;width:100%;box-sizing:border-box;font-size:17px;margin-top:2px}
+  .dsladder{display:grid;grid-template-columns:repeat(5,1fr);gap:5px} .dsladder span{display:flex;flex-direction:column;align-items:center;gap:1px;padding:5px 0;border-radius:12px;background:rgba(0,0,0,.28);border:2px solid transparent;opacity:.6} .dsladder i{font-style:normal;font-size:11px;font-weight:900;color:var(--dim)} .dsladder b{font-size:13px}
+  .dsladder span.on{opacity:1;border-color:var(--tc);background:color-mix(in srgb,var(--tc) 22%,rgba(0,0,0,.28))} .dsladder span.on i{color:#ffd24a} .dsladder span.nx{opacity:1;border-color:#9dff6d88;border-style:dashed} .dsladder span.nx b{color:#9dff6d}
+  .tile.pet .go.alt{font-size:14px;white-space:nowrap} .tile.coll.pet{border-color:color-mix(in srgb,var(--rc,#ffd24a) 70%,transparent)}
+  #bLoot.reveal .it small.hfrag{display:block;margin-top:2px;font-size:11px;letter-spacing:0;color:#fff;opacity:.85}
   /* end @css:09-skills-pets */
   /* @css:07-cards */
   #levelup{gap:8px;justify-content:center}

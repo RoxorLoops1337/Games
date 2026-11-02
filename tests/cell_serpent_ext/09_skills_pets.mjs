@@ -30,3 +30,15 @@ for (const sel of ['.dsheet', '.fchip', '.hburst', '.rk']) assert.ok(css.include
 assert.ok(/min-height:44px/.test(css) && /\.dsx\{[^}]*width:44px/.test(css), '44px targets');
 assert.ok(!/—/.test(sheetSrc), 'no em dash in sheet module');
 console.log('09 skills/pets round 2 ok');
+// round 3: sparkline, NEW ribbons, claim from sheet
+import { sparkHTML, newRibbonHTML } from '../../cell_serpent/skill_sheet.js';
+{
+  const h1 = sparkHTML(1), h5 = sparkHTML(5), h10 = sparkHTML(SKILL_MAX_LV);
+  assert.equal((h5.match(/<circle/g) || []).length, SKILL_MAX_LV, 'one dot per level');
+  assert.ok(h5.includes('r="5.5"') && h5.includes('class="now"'), 'current level dot');
+  assert.ok(h10.includes('max') && !h1.includes('max'), 'max label only at max');
+  assert.ok(sheetSrc.includes('claimMastery') && sheetSrc.includes('dsclaim'), 'mastery claim lives in the sheet');
+  assert.ok(newRibbonHTML.includes('newrib') && css.includes('.newrib') && css.includes('.dsladder') && css.includes('.dsspark'), 'round 3 css');
+  assert.ok(main.includes('isNewItem(save'), 'main shows NEW ribbons');
+}
+console.log('09 skills/pets round 3 ok');
