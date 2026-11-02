@@ -54,6 +54,7 @@ import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collect
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
 import { pauseBuild, buildChipHTML, buildLine, pauseSub } from './result_b9.js';
+import { bindSettingsFind, hubStickerPop, markStickersSeen, reviveInfoHTML, shareText, shareResult } from './result_b11.js';
 import { bindBuildChips, chipStatsText, stickerIds, newStickers, showStickerPop, clearStickerPop, bumpStatsTab, shineStars } from './result_b10.js';
 import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
 import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
@@ -165,6 +166,7 @@ function openHub(tab = hubTab) {
   refreshCur();
   sel = Math.max(1, Math.min(sel, MAX_STAGE, save.cleared + 4));
   renderHub(); show('hub'); if (!hub2.addict.maybeComeback()) { if (!hub2.retain.checkAch()) hubNudge(); }
+  try { hubStickerPop(save, { reduce: !!(save.settings.reduceMotion || systemReduceMotion()), valid: () => mode === 'hub' }); } catch (e) { /* cosmetic */ }
 }
 function badgeTabs() {
   const day = dayKey(), s = save, out = new Set();
@@ -634,7 +636,7 @@ function openSettings(back) {
   $('bkCopy').onclick = async () => { const t = $('bkCode').value; try { await navigator.clipboard.writeText(t); toast('Code copied'); flashDone($('bkCopy'), 'COPIED'); } catch (e) { $('bkCode').select(); toast('Select and copy the code'); } };
   $('bkLoad').onclick = () => { const s2 = importSave($('bkCode').value); if (!s2) { toast('That code does not work'); return; } save = s2; persist(); applySettings(); refreshCur(); toast('Game loaded'); paint(); };
   $('setClose').onclick = () => { audio.play('click'); (back || (() => (mode === 'hub' ? openHub() : toTitle())))(); };
-  paint(); show('settings');
+  paint(); bindSettingsFind($('settings')); show('settings');
 }
 function toggleMute() { save.muted = !save.muted; audio.setMuted(save.muted); $('muteBtn').textContent = save.muted ? '🔇' : '🔊'; persist(); }
 
@@ -643,7 +645,7 @@ function showRevive() {
   reviveAsked = true; const cost = reviveCost(g.revivesUsed);
   $('rvLeft').textContent = 'Remaining ×' + g.revivesLeft; $('rvGo').innerHTML = 'REVIVE  ' + cost + ' ' + curImg('sparkles'); $('rvGo').disabled = save.sparkles < cost;
   { const pc = Math.round((g.progress || 0) * 100), w = $('rvWipe'); if (w) { w.innerHTML = `<b>WIPEOUT!</b><span>${pc > 0 ? pc + '% of the serpent popped' : 'the serpent got through'}</span>${(dc => dc ? `<em>${dc.head}</em><small>${dc.sub}</small>` : '')(deathCauseOf(g))}<i><u style="width:${pc}%"></u></i>`; w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); } }
-  { const pc = Math.floor((g.progress || 0) * 100); $('rvInfo').innerHTML = `Stage ${g.stage}: ${pc}% cleared<small>${save.sparkles} sparkles in your pocket</small>`; }
+  $('rvInfo').innerHTML = reviveInfoHTML(g.stage, g.progress, save.sparkles, cost);
   let stopRing = () => {};
   $('rvGo').onclick = () => { if (save.sparkles < cost) return; stopRing(); stopFx(); save.sparkles -= cost; persist(); reviveGame(g); reviveAsked = false; endT = 0; audio.play('levelup'); show(''); };
   const giveUp = () => { stopRing(); stopFx(); g.revivesLeft = 0; reviveAsked = false; show(''); };
@@ -714,6 +716,7 @@ function showResult() {
   $('rNext').onclick = () => { audio.play('click'); clearStickerPop(); beginStage(r.stage + 1); };
   $('rRetry').innerHTML = 'RETRY <span class="rcost">⚡' + ENERGY_COST + '</span>';
   { const gl = nextGoal(save); renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
+  $('rShare').onclick = () => { audio.play('click'); shareResult(shareText(r, r.mode ? '' : stageInfo(r.stage).name, location.origin + location.pathname), toast); };
   $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); clearStickerPop(); try { retryFly($('rRetry'), rewardSnaps($('rList')), !!(save.settings.reduceMotion || systemReduceMotion())); } catch (e) { /* cosmetic */ } beginStage(r.stage); };
   $('rHub').onclick = () => { audio.play('click'); curtainClose(document.documentElement.classList.contains('rm'), () => { clearStickerPop(); const fl = rewardSnaps($('rList')); flyRibbonsHome(fl.length); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; gigFlies(fl.map(it => ({ snap: it.s, kind: it.kind, amt: it.n })), 420); openHub('Battle'); }); };   // the hub pills wait at their old totals and count up as each chip lands (batch 7)
@@ -727,7 +730,7 @@ function showResult() {
     // no toast here: it used to cover the title on the result screen, and the ribbon plus the Sparkles row already say it
   }
   { const rd = !!(save.settings.reduceMotion || systemReduceMotion()); setTimeout(() => shineStars($('rStars'), out.starsGained, rd), 900 + (r.stars || 0) * 260);
-    showStickerPop(newStickers(stk0, stickerIds(save)), { reduce: rd, valid: () => mode === 'over' && $('result').classList.contains('on'), onLand: bumpStatsTab }); }
+    markStickersSeen(save); showStickerPop(newStickers(stk0, stickerIds(save)), { reduce: rd, valid: () => mode === 'over' && $('result').classList.contains('on'), onLand: bumpStatsTab }); }
   if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
   try { dressDuo($('rImg'), { outfit: wornOutfit(save), pets: save.petEquip, kit, mood: r.won ? 'win' : 'lose', joy: Object.fromEntries(save.petEquip.map(id => [id, save.pets[id].joy || 0])) }); } catch (e) { /* ignore */ }
   show('result'); mode = 'over';
