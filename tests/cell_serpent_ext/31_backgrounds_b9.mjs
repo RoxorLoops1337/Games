@@ -27,13 +27,14 @@ assert.ok(b.lamps && b.lampSkin === 'love');
 
 // sky creatures: a creature per themed world, none on the others, and they launch and finish
 for (const k of ['love', 'piggy', 'sneezy', 'sour', 'gloomy', 'rust', 'mighty', 'sleepy']) assert.ok(b9.flyerFor(k), k);
-for (const k of ['disco', 'grumpy', 'frosty']) assert.equal(b9.flyerFor(k), '');
+for (const k of ['disco', 'grumpy', 'frosty']) assert.ok(b9.flyerFor(k), k + ' has a creature since batch 10');
+for (const k of ['nothing', '']) assert.equal(b9.flyerFor(k), '');
 for (const k of ['sour', 'gloomy', 'sleepy', 'love', 'rust']) {
   const s = b9.makeB9(); let seen = 0, t = 0;
   for (let i = 0; i < 4000; i++) { t += 0.05; b9.stepFlyers(s, t, k); if (s.fl[0].t0 >= 0) seen++; if (i % 50 === 0) b9.drawFlyers(ctx, s, k, th, t); }
   assert.ok(seen > 10 && seen < 3900, k + ' appears now and then');
 }
-const idle = b9.makeB9(); b9.stepFlyers(idle, 50, 'disco'); assert.ok(idle.fl.every(f => f.t0 < 0));
+const idle = b9.makeB9(); b9.stepFlyers(idle, 50, 'nothing'); assert.ok(idle.fl.every(f => f.t0 < 0));
 
 // beam: petals are sucked up along it, squall leans away, mist banks are shoved aside and thin out
 const w = b8.makeB8(); w.skin = 'love'; w.lt = 1;

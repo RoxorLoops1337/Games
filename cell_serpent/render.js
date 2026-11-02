@@ -200,7 +200,7 @@ export function createRenderer(canvas, art, kit) {
       case 'phase2': S.banner = { text: 'FINAL CHORUS', sub: 'The boss picks up the pace', t: 0, dur: 1.8 }; S.trauma = Math.min(1, S.trauma + 0.7); S.flash = 0.35; S.flashCol = '#ff9a4a'; ring(g.p.x, g.p.y, 360, '#ff9a4a', 0.8); break;
       case 'mend': ring(e.x, e.y, 46, '#6fe08a', 0.3); break;
       case 'stage': if (e.boss) S.trauma = 0.6; break;   // the title card is drawn by screenfx.js
-      case 'clear': S.banner = { text: 'STAGE CLEAR', sub: '+' + e.bonus + ' Beats', t: 0, dur: 2.2, clear: true }; break;
+      case 'clear': S.banner = { text: 'STAGE CLEAR', sub: '+' + e.bonus + ' Beats', t: 0, dur: 2.2, clear: true }; if (S.bgfx && !OPT.reduceMotion) S.bgfx.clear(S.t, g.skin, g.p.x, g.p.y); break;   // 03-backgrounds b10
       case 'surgewarn': S.warn = 0.7; break;
       case 'surge': S.warn = 0; S.trauma = Math.min(1, S.trauma + 0.3); break;
       case 'revive': S.flash = 0.6; S.flashCol = '#fff'; ring(g.p.x, g.p.y, 300, '#fff', 0.8); break;
