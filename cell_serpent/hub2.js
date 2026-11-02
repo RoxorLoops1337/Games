@@ -9,6 +9,7 @@ import {
   CARD_PRICE, buyCard, cardActive, claimCard, TROPHIES, trophyReady, claimTrophy, weaponExchange, WEAPON_EXCHANGE_PRICE, SKINS, SKIN_NAMES,
 } from './sim.js';
 import { createAddictUI } from './addict_ui.js';
+import { trophyOrder, shelfHeadHTML, trophyTier, flyReward } from './goals_polish.js';
 import { createRetainUI } from './retain_ui.js';
 import { nextReward } from './sim.js';
 
@@ -386,11 +387,12 @@ export function createHub2(c) {
   function openTrophies() {
     const s = save();
     openPanel('TROPHY SHELF', body => {
-      { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'CLAIM ALL'; b.onclick = () => { if (claimAllTrophies(save())) { c.persist(); audio.play('levelup'); c.refreshCur(); openTrophies(); } }; body.appendChild(b); }
+      { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'CLAIM ALL'; b.disabled = !TROPHIES.some(t => trophyReady(s, t)); b.onclick = () => { const sum = { sparkles: 0, eggs: 0 }; for (const t of TROPHIES) if (trophyReady(save(), t)) { sum.sparkles += t.reward.sparkles || 0; sum.eggs += t.reward.eggs || 0; } if (claimAllTrophies(save())) { flyReward(b, sum, !!save().settings.reduceMotion); c.persist(); audio.play('levelup'); c.refreshCur(); openTrophies(); } }; body.appendChild(b); }
+      { const hd = document.createElement('div'); hd.innerHTML = shelfHeadHTML(s, TROPHIES, t => trophyReady(s, t)); body.insertBefore(hd.firstChild, body.firstChild); }
       const grid = document.createElement('div'); grid.className = 'tiles';
-      for (const t of TROPHIES) {
+      for (const t of trophyOrder(s, TROPHIES)) {
         const got = s.trophies[t.id], ready = trophyReady(s, t), cur = Math.min(t.at, t.get(s)), r = t.reward;
-        grid.appendChild(tile({ cls: 't-gold one', ic: got ? '🏆' : '🥉', name: t.name, desc: '', bar: Math.round(cur / t.at * 100), barText: cur + ' / ' + t.at, btn: got ? 'GOT IT' : ready ? 'CLAIM ' + (r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : icon('egg') + ' ×' + r.eggs) : (r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : icon('egg') + ' ×' + r.eggs), gold: ready, disabled: !ready, onclick: () => { if (claimTrophy(save(), t.id)) { c.persist(); audio.play('levelup'); c.refreshCur(); openTrophies(); } } }));
+        grid.appendChild(tile({ cls: 't-gold one trph tt-' + trophyTier(r) + (got ? ' got' : ready ? ' rdy' : ''), ic: got ? '🏆' : { gold: '🥇', silver: '🥈', bronze: '🥉' }[trophyTier(r)], name: t.name, desc: '', bar: Math.round(cur / t.at * 100), barText: cur + ' / ' + t.at, btn: got ? 'GOT IT' : ready ? 'CLAIM ' + (r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : icon('egg') + ' ×' + r.eggs) : (r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : icon('egg') + ' ×' + r.eggs), gold: ready, disabled: !ready, onclick: ev => { const fb = ev && ev.currentTarget; if (claimTrophy(save(), t.id)) { flyReward(fb, r, !!save().settings.reduceMotion); c.persist(); audio.play('levelup'); c.refreshCur(); openTrophies(); } } }));
       }
       body.appendChild(grid);
     });

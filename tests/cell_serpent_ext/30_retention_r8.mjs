@@ -1,0 +1,31 @@
+// Round 8 retention: ready chips live in the Today strip, rewards fly, the trophy shelf is ordered and kind.
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { readFileSync } from 'node:fs';
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cell_serpent');
+const sim = await import(join(root, 'sim.js'));
+globalThis.Element = globalThis.Element || { prototype: {} };
+const gp = await import(join(root, 'goals_polish.js'));
+const day = 20000, s = sim.defaultSave();
+const none = gp.todayHTML(s, day, []);
+assert.ok(none.includes('class="tdy') && !none.includes('tdgo'), 'no chips when nothing is ready');
+const h = gp.todayHTML(s, day, [{ go: 'Lucky Spin', text: 'Spin' }, { go: 'Mastery', text: '2 ranks' }]);
+assert.ok(h.includes('hasrd') && (h.match(/class="tdgo"/g) || []).length === 2 && h.includes('data-go="Mastery"'));
+assert.ok(!gp.todayRhythm(s, day, 8).line.includes(String.fromCharCode(0x2014)));
+assert.ok(gp.todayRhythm(s, day, 8).line.startsWith('Good morning'));
+assert.equal(gp.flyReward(null, { sparkles: 3 }, false), 0);
+assert.equal(gp.flyReward({}, { sparkles: 3 }, true), 0);
+// trophy shelf: ready first, finished last, tiers by reward
+const list = sim.TROPHIES; s.kills = 1200; s.trophies.r10 = 1;
+const ord = gp.trophyOrder(s, list);
+assert.equal(ord.length, list.length);
+assert.ok(sim.trophyReady(s, ord[0]), 'a ready trophy leads');
+assert.equal(ord[ord.length - 1].id, 'r10', 'claimed ones sit last');
+assert.equal(gp.trophyTier({ sparkles: 80 }), 'gold');
+assert.equal(gp.trophyTier({ eggs: 1 }), 'silver');
+assert.equal(gp.trophyTier({ sparkles: 5 }), 'bronze');
+const head = gp.shelfHeadHTML(s, list, t => sim.trophyReady(s, t));
+assert.ok(head.includes('shelfhead') && head.includes('of ' + list.length));
+const css = readFileSync(join(root, 'index.html'), 'utf8');
+assert.ok(css.includes('@css:16-retention') && css.includes('end @css:16-retention'));
