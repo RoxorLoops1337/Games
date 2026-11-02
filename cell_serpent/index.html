@@ -999,6 +999,34 @@
   .fpop5 span{position:absolute;left:50%;top:50%;font-weight:900;text-shadow:0 2px 0 #0007;opacity:0;animation:fpspark5 1.2s cubic-bezier(.2,.8,.3,1) var(--del) both}
   @keyframes fpspark5{0%{opacity:1;transform:translate(-50%,-50%) scale(.4)}100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1.3) rotate(var(--rot))}}
   @media (prefers-reduced-motion:reduce){.tut12.shot5 .tnote,.tut12.shot5 .tring,.tut12.shot5 .tspk,.tut12.shot5 .tpop{animation:none!important;opacity:0}.fpop5 .fp-card{animation:none}}
+  /* round 6: tutorial step 3 face pop, first goal chip, welcome back greeting */
+  .s3 .tface .fring{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px;border-radius:50%;border:5px solid #ffe14a;opacity:0;pointer-events:none;animation:fring6 3.4s ease-out infinite}
+  .s3 .tface .fring.r2{border-color:#fff;border-width:3px;animation-delay:.1s} .s3 .tface .fring.r3{border-color:#ff8fcf;border-width:3px;animation-delay:.2s}
+  @keyframes fring6{0%,58%{opacity:0;transform:scale(.3)}61%{opacity:1}84%,100%{opacity:0;transform:scale(3.4)}}
+  .s3 .tface .fspk{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px;opacity:0;pointer-events:none;filter:brightness(1.3) drop-shadow(0 0 6px #ffe14a);animation:fspk6 3.4s ease-out infinite}
+  .fspk.f0{--a:0deg}.fspk.f1{--a:45deg}.fspk.f2{--a:90deg}.fspk.f3{--a:135deg}.fspk.f4{--a:180deg}.fspk.f5{--a:225deg}.fspk.f6{--a:270deg}.fspk.f7{--a:315deg}
+  .fspk:nth-of-type(even){width:18px;height:18px;margin:-9px;animation-name:fspk6b}
+  @keyframes fspk6{0%,58%{opacity:0;transform:rotate(var(--a)) translateY(0) scale(.2)}62%{opacity:1}90%,100%{opacity:0;transform:rotate(var(--a)) translateY(-70px) scale(1.15)}}
+  @keyframes fspk6b{0%,58%{opacity:0;transform:rotate(var(--a)) translateY(0) scale(.2)}62%{opacity:1}90%,100%{opacity:0;transform:rotate(var(--a)) translateY(-46px) scale(1.1)}}
+  .s3 .tface .fpopt{position:absolute;left:50%;top:50%;margin:-18px 0 0 -46px;width:92px;text-align:center;font-size:28px;font-weight:900;letter-spacing:.04em;color:#fff7b0;text-shadow:3px 0 #7a2a00,-3px 0 #7a2a00,0 3px #7a2a00,0 -3px #7a2a00,2px 2px #7a2a00,-2px -2px #7a2a00,2px -2px #7a2a00,-2px 2px #7a2a00,0 6px 0 #7a2a00;opacity:0;pointer-events:none;z-index:2;animation:fpopt6 3.4s ease-out infinite}
+  @keyframes fpopt6{0%,60%{opacity:0;transform:translateY(0) scale(.3) rotate(-8deg)}66%{opacity:1;transform:translateY(-10px) scale(1.25) rotate(-4deg)}76%{transform:translateY(-16px) scale(1) rotate(-4deg)}92%,100%{opacity:0;transform:translateY(-36px) scale(1) rotate(-4deg)}}
+  .art12 .s3 .thead{animation:headpop6 3.4s ease-in-out infinite}
+  @keyframes headpop6{0%,46%{transform:translateY(0) rotate(0) scale(1)}51%{transform:translateY(3px) rotate(-3deg) scale(1)}57%{transform:scale(1.28) rotate(4deg);opacity:1;filter:brightness(1.4)}63%{transform:scale(.2) rotate(30deg);opacity:0}93%{transform:scale(.2);opacity:0}100%{transform:scale(1);opacity:1;filter:none}}
+  .art12 .s3 .tshield{animation:shield6 3.4s ease-in-out infinite}
+  @keyframes shield6{0%,38%{opacity:1;transform:scale(1)}42%{transform:scale(1.04) rotate(2deg)}46%{transform:scale(.98) rotate(-2deg)}50%{transform:scale(1.04) rotate(2deg);opacity:1}56%{transform:scale(1.3);opacity:.8}64%,92%{transform:scale(1.9);opacity:0}100%{transform:scale(1);opacity:1}}
+  .goal12{display:inline-flex;gap:6px;align-items:center;padding:6px 14px;border-radius:99px;background:linear-gradient(180deg,rgba(255,216,77,.3),rgba(255,162,28,.16));border:2px solid #ffd84d;color:#fff3b8;font-weight:900;font-size:14px;text-shadow:0 1px 0 #000a;animation:goal6 2.2s ease-in-out infinite;animation-delay:var(--d,0s)}
+  .goal12 i{font-style:normal;color:#ffd84d}
+  @keyframes goal6{50%{transform:translateY(-3px);box-shadow:0 0 16px rgba(255,216,77,.55)}}
+  .wb12{text-align:center;line-height:1.15;margin-top:2px;animation:wb6 .6s .5s cubic-bezier(.2,1.4,.4,1) backwards}
+  .wb12[hidden]{display:none}
+  .wb12-t{font-weight:900;font-size:22px;color:#fff;text-shadow:0 3px 0 #3a0e30,0 0 14px rgba(255,92,184,.7)}
+  .wb12-s{font-weight:800;font-size:14px;color:#ffd8ee;text-shadow:0 2px 0 #3a0e30;margin-top:2px}
+  .wb12-b{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:6px}
+  .wb12-b span{padding:3px 10px;border-radius:99px;font-size:12px;font-weight:900;color:#ffe9a0;background:rgba(0,0,0,.32);border:1px solid rgba(255,230,140,.55)}
+  #title.ret12 .tagline{display:none}
+  @keyframes wb6{from{opacity:0;transform:translateY(12px) scale(.9)}}
+  @media (max-height:700px){.wb12-t{font-size:19px}.wb12-s{font-size:12px}.wb12-b{display:none}}
+  @media (prefers-reduced-motion:reduce){.goal12,.wb12{animation:none!important}}
   /* end @css:12-title-onboarding */
 
   /* @css:10-shop-gear-stats */
@@ -1340,6 +1368,7 @@
   <h1 class="logo" aria-label="Cell Serpent"><span data-t="CELL">CELL</span><span data-t="SERPENT">SERPENT</span></h1>
   <div class="stage12"><img class="hero" src="assets/duo_sing.png" alt="RoxorLoops and Jasmin"></div>
   <div class="sub tagline">RoxorLoops &amp; Jasmin vs the Serpent.</div>
+  <div class="wb12" id="wb12" hidden></div>
   <button class="btn" id="playBtn"><span>PLAY</span></button>
   <div class="sub" id="titleInfo"></div>
   <button class="gear" id="setBtnT" aria-label="Settings">⚙</button>
