@@ -28,12 +28,12 @@ import { paintSettingIcons } from './icons_b8.js';
 import { flashDone } from './btn_state.js';
 import { watchSideIcons } from './side_icons.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
-import { renderRecStrip, recFor } from './build_rec.js';
+import { renderRecStrip, recFor, bestBuild } from './build_rec.js';
 import { petLabel } from './pet_names.js';
 import { emptyCard as emptyCardUx } from './empty_ux.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
 import { momentLine } from './hit_juice8.js';
-import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide, starsHTML, claimInfo, eventReadyCount } from './battle_ui.js';
+import { bringHTML, twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide, starsHTML, claimInfo, eventReadyCount, claimChips, fanRects } from './battle_ui.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
@@ -194,7 +194,7 @@ function renderBattle() {
   else { chips.innerHTML = ''; chips.dataset.k = ckey; }
   for (let n = 1; n <= chipTop && !chipsSame; n++) {
     const c = document.createElement('button'); c.className = 'chip' + (n === sel ? ' sel' : '') + (n > save.cleared + 1 ? ' lock' : '') + (n <= save.cleared ? ' done' : '') + (n === save.cleared + 1 ? ' nxt' : '');
-    { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st${n > save.cleared ? ' no' : ''}">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : '') + chipReward(n, save.cleared, save.hardCleared); if (n === save.cleared + 1 || hardLevel(n, save.cleared, save.hardCleared) !== 'none') c.classList.add('hasrw'); if (hardLevel(n, save.cleared, save.hardCleared) !== 'none') c.classList.add('hasH'); }
+    { const stN = save.stars[n] || 0, kd = stageKind(n); if (stN >= 3 && n <= save.cleared) c.classList.add('perfect'); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st${n > save.cleared ? ' no' : ''}">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : '') + chipReward(n, save.cleared, save.hardCleared); if (n === save.cleared + 1 || hardLevel(n, save.cleared, save.hardCleared) !== 'none') c.classList.add('hasrw'); if (hardLevel(n, save.cleared, save.hardCleared) !== 'none') c.classList.add('hasH'); }
     c.onclick = () => { audio.play('click'); sel = n; renderBattle(); };
     chips.appendChild(c);
   }
@@ -227,8 +227,9 @@ function syncRwFilter(chips, cb) {
   f.innerHTML = rwMode === 2 ? '<i class="rwh">H</i> Hard <b>' + nh + '</b>' : '\u2726 Rewards <b>' + n + '</b>';
   chips.classList.toggle('rwonly', rwMode === 1); chips.classList.toggle('rwhard', rwMode === 2); row.style.display = n || cb.style.display !== 'none' ? '' : 'none';
 }
-$('btClaim').onclick = () => { if ($('btClaim').dataset.k === 'event') { audio.play('click'); hub2.eventTile().querySelector('button').click(); } else $('claimGigs').onclick(); };
-$('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) gigFlies(fl.map(([b, g]) => ({ snap: b, kind: g && g.reward.beats ? 'beats' : 'sparkles', amt: g ? g.reward.beats || g.reward.sparkles || 0 : 0 }))); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
+$('btClaim').onclick = () => { if ($('btClaim').dataset.k === 'event') { audio.play('click'); hub2.eventTile().querySelector('button').click(); } else { claimFrom = snap($('btClaim')); $('claimGigs').onclick(); claimFrom = null; } };
+let claimFrom = null;   // batch 9: the claim row is where the reward chips fly from
+$('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) gigFlies(fl.map(([b, g], i) => ({ snap: claimFrom && claimFrom.rect ? { rect: fanRects(claimFrom.rect, fl.length)[i], src: (b && b.src) || iconURL(g && g.reward.beats ? 'beats' : 'sparkles') } : b && !b.src ? { rect: b.rect, src: iconURL(g && g.reward.beats ? 'beats' : 'sparkles') } : b, kind: g && g.reward.beats ? 'beats' : 'sparkles', amt: g ? g.reward.beats || g.reward.sparkles || 0 : 0 }))); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
 $('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
@@ -304,13 +305,25 @@ function drawPortrait(t, info) {
 setInterval(() => { if (mode !== 'hub' || hubTab !== 'Battle') return; const e = document.getElementById('evCd'); if (e) e.textContent = countdownText(monthEndMs(dayKey()) - Date.now()); }, 1000);
 // the Bring line: the best build for this species, marked with what is already in the loadout
 function bringFor(skin) {
-  const r = recFor(skin); return { why: r.why, items: r.ids.map(id => ({ name: (WEAPONS.find(w => w.id === id) || { name: id }).name, ic: icon(id), eq: save.loadout.includes(id), own: !!(save.skills[id] && save.skills[id].lv > 0) })) };
+  const r = recFor(skin); return { can: !!bestBuild(save, skin), why: r.why, items: r.ids.map(id => ({ name: (WEAPONS.find(w => w.id === id) || { name: id }).name, ic: icon(id), eq: save.loadout.includes(id), own: !!(save.skills[id] && save.skills[id].lv > 0) })) };
+}
+// BRING THEM (batch 9): one tap packs the missing owned picks into the loadout, then the Bring line shows all packed
+function bindBring(box, info, sp) {
+  const bg = box.querySelector('.ff-bringgo'); if (!bg) return;
+  bg.onclick = e => {
+    e.stopPropagation(); const nb = bestBuild(save, info.skin); if (!nb) return;
+    save.loadout = nb; persist(); audio.play('upgrade');
+    const old = box.querySelector('.ff-bring'), tmp = document.createElement('div'); tmp.innerHTML = bringHTML(bringFor(info.skin));
+    const nw = tmp.firstElementChild; if (old && nw) { nw.classList.add('packed'); old.replaceWith(nw); }
+    loadoutRow($('battleLoad'), true); toast('Packed for ' + (sp ? sp.name : 'this serpent'));
+  };
 }
 // tap the portrait: species fun fact plus what the stage pays
 $('stPortrait').onclick = () => {
   const box = $('btFact'), hero = $('btHero'); if (!box.hidden) { box.hidden = true; hero.classList.remove('fact'); return; }
   audio.play('click'); const info = stageInfo(sel), sp = (kit && kit.SPECIES && kit.SPECIES[info.skin]) || null;
   box.innerHTML = factHTML({ info, sp, hard, done: sel <= save.cleared, sparkleIcon: curImg('sparkles'), bring: bringFor(info.skin) }); box.hidden = false; hero.classList.add('fact'); try { hero.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* ignore */ }
+  bindBring(box, info, sp);
   box.querySelector('.ff-x').onclick = e => { e.stopPropagation(); audio.play('click'); box.hidden = true; hero.classList.remove('fact'); };
 };
 $('loadEdit').onclick = () => { audio.play('click'); hubTab = 'Skills'; renderHub(); };
@@ -383,7 +396,7 @@ function renderGoals() {
   const hd = $('glCount'), rdy = list.querySelectorAll('.gl-row.ready').length; if (hd) { hd.textContent = rdy ? rdy + ' READY' : n + '/' + goals.length; hd.classList.toggle('rdy', rdy > 0); }
   { const cg = $('claimGigs'), rd = list.querySelectorAll('.gl-row.ready').length; if (cg) { cg.textContent = rd ? 'CLAIM ALL (' + rd + ')' : n === goals.length ? 'ALL DONE \u2713' : 'CLAIM ALL'; cg.classList.toggle('rdy', rd > 0); cg.classList.toggle('alld', !rd && n === goals.length); } }
   { const rows = list.querySelectorAll('.gl-row.ready'), ci = claimInfo(rows.length, rows.length ? rows[0].querySelector('.gl-tx b').textContent : '', eventReadyCount(save.event.earned, save.event.claimed)), cb = $('btClaim');
-    if (cb) { cb.hidden = !ci; if (ci) { cb.dataset.k = ci.kind; cb.innerHTML = `<span class="bc-ic">${ci.ic}</span><span class="bc-tx">${ci.html}</span><span class="bc-go">${ci.go}</span>`; cb.setAttribute('aria-label', ci.kind === 'gig' ? 'Claim finished gigs' : 'Open the event rewards'); } syncDock(); } }
+    if (cb) { cb.hidden = !ci; if (ci) { cb.dataset.k = ci.kind; cb.innerHTML = `<span class="bc-ic">${ci.ic}</span><span class="bc-tx">${ci.html}</span>${ci.kind === 'gig' ? claimChips([...rows].map(r => { const g = goals[[...list.children].indexOf(r)]; return g ? { kind: g.reward.beats ? 'beats' : 'sparkles', amt: g.reward.beats || g.reward.sparkles || 0 } : null; }), { beats: curImg('beats'), sparkles: curImg('sparkles') }) : ''}<span class="bc-go">${ci.go}</span>`; cb.setAttribute('aria-label', ci.kind === 'gig' ? 'Claim finished gigs' : 'Open the event rewards'); } syncDock(); } }
 }
 function renderSkills() {
   const list = $('skillList'); list.innerHTML = '';
