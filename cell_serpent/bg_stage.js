@@ -48,14 +48,15 @@ export function drawClouds(c, kit, skin, tint, k, t, boss, low) {
   c.restore();
 }
 
+const EMBER = ['rgb(255,120,80)', 'rgb(255,160,80)', 'rgb(255,200,80)'];
 // ---- footlights: a bulb every 36px, a lit one chases along the rail and all of them kick on the beat
 export function drawFootlights(c, t, pulse, th, boss) {
   c.save(); c.globalCompositeOperation = 'lighter';
-  const n = 19, hot = Math.floor(t * 7) % n, col = boss ? '255,90,120' : '255,225,160', col2 = boss ? '255,150,90' : '140,230,255';
+  const n = 19, hot = Math.floor(t * 7) % n, col = boss ? 'rgb(255,90,120)' : 'rgb(255,225,160)', col2 = boss ? 'rgb(255,150,90)' : 'rgb(140,230,255)';   // constant colours + globalAlpha: no per-bulb colour string to build and parse
   for (let i = 0; i < n; i++) {
     const x = 28 + i * ((W - 56) / (n - 1)), d = Math.min(Math.abs(i - hot), n - Math.abs(i - hot)), on = d === 0 ? 1 : d === 1 ? 0.5 : 0, a = 0.35 + pulse * 0.25 + on * 0.4;
-    c.fillStyle = `rgba(${i % 2 ? col : col2},${Math.min(1, a)})`; c.beginPath(); c.arc(x, LINE_Y + 20, 3.4 + on * 1.2, 0, TAU); c.fill();
-    if (on || pulse > 0.5) { c.fillStyle = `rgba(${col},${0.08 + on * 0.08})`; c.beginPath(); c.arc(x, LINE_Y + 20, 14, 0, TAU); c.fill(); }
+    c.globalAlpha = Math.min(1, a); c.fillStyle = i % 2 ? col : col2; c.beginPath(); c.arc(x, LINE_Y + 20, 3.4 + on * 1.2, 0, TAU); c.fill();
+    if (on || pulse > 0.5) { c.globalAlpha = 0.08 + on * 0.08; c.fillStyle = col; c.beginPath(); c.arc(x, LINE_Y + 20, 14, 0, TAU); c.fill(); }
   }
   c.restore();
 }
@@ -72,7 +73,7 @@ export function drawBossFx(c, t, pulse, low, kit) {
   const n = low ? 8 : 18;
   for (let i = 0; i < n; i++) {
     const ph = (t * (0.12 + (i % 5) * 0.03) + i * 0.173) % 1, x = (i * 97.3 + Math.sin(t + i) * 18) % W, y = H - 40 - ph * 520;
-    c.fillStyle = `rgba(255,${120 + (i % 3) * 40},80,${0.6 * (1 - ph)})`; c.beginPath(); c.arc(x, y, 2.4 + (i % 3), 0, TAU); c.fill();
+    c.globalAlpha = 0.6 * (1 - ph); c.fillStyle = EMBER[i % 3]; c.beginPath(); c.arc(x, y, 2.4 + (i % 3), 0, TAU); c.fill();
   }
   c.restore();
 }
@@ -83,9 +84,9 @@ export function drawCrowdLights(c, t, th, boss, cheer, low) {
   const n = low ? 6 : 14;
   for (let i = 0; i < n; i++) {
     const x = 20 + ((i * 53.7) % (W - 40)), y = H - 48 - (i % 3) * 9, b = 0.35 + 0.65 * Math.max(0, Math.sin(t * (1.1 + (i % 4) * 0.3) + i * 2.1)) + cheer * 0.3;
-    c.fillStyle = `rgba(${i % 3 === 0 ? '255,240,180' : i % 3 === 1 ? '150,235,255' : '255,160,220'},${Math.min(0.9, 0.5 * b)})`;
+    c.globalAlpha = Math.min(0.9, 0.5 * b); c.fillStyle = i % 3 === 0 ? 'rgb(255,240,180)' : i % 3 === 1 ? 'rgb(150,235,255)' : 'rgb(255,160,220)';
     if (i % 2) { c.fillRect(x - 2, y - 7, 4, 12); } else { c.beginPath(); c.arc(x, y, 3.4, 0, TAU); c.fill(); }
-    c.fillStyle = `rgba(255,255,255,${0.07 * b})`; c.beginPath(); c.arc(x, y, 13, 0, TAU); c.fill();
+    c.globalAlpha = 0.07 * b; c.fillStyle = '#fff'; c.beginPath(); c.arc(x, y, 13, 0, TAU); c.fill();
   }
   c.restore();
 }
