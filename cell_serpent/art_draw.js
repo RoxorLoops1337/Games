@@ -370,6 +370,9 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       cel(g, '#ff5a7e', path, { r, shadow: '#c42a54', hy: -r * 0.2 }); g.fillStyle = '#fff8ec'; g.fillRect(-r * 0.1, -r * 0.3, r * 0.2, r * 0.6); g.fillRect(-r * 0.3, -r * 0.1, r * 0.6, r * 0.2); },
     shield: g => { const r = B * 0.85, path = gg => { gg.beginPath(); gg.moveTo(-r * 0.8, -r * 0.7); gg.quadraticCurveTo(0, -r * 1.05, r * 0.8, -r * 0.7); gg.lineTo(r * 0.8, -r * 0.05); gg.quadraticCurveTo(r * 0.7, r * 0.7, 0, r); gg.quadraticCurveTo(-r * 0.7, r * 0.7, -r * 0.8, -r * 0.05); gg.closePath(); };
       cel(g, '#4fb8ff', path, { r, shadow: '#2a78d6', hy: -r * 0.2 }); cel(g, '#bfe6ff', star(5, r * 0.34, r * 0.15, -Math.PI / 2), { r: r * 0.3, hi: false, lw: 1.6, shadow: '#7fc8ff' }); },
+    // Snack: an oat cookie with seed chips and a bite out of it
+    snack: g => { const r = B * 0.85; cel(g, '#e8b25c', circ(0, 0, r), { r, shadow: '#b9803a', lw: 3 }); g.fillStyle = '#fff4dc'; circ(r * 0.62, -r * 0.5, r * 0.34)(g); g.fill(); ink(g, r * 0.08); g.stroke();
+      for (const [x, y, k] of [[-0.4, -0.3, 0.16], [0.05, -0.55, 0.13], [-0.25, 0.35, 0.15], [0.35, 0.22, 0.14], [-0.6, 0.1, 0.1]]) { g.fillStyle = '#7a4a22'; circ(r * x, r * y, r * k)(g); g.fill(); } sparkle(g, -r * 0.7, -r * 0.8, r * 0.25); },
     rage: g => { const r = B * 0.85; cel(g, '#ff9a2e', star(8, r, r * 0.62, 0.2), { r, shadow: '#d6601a', lw: 3 }); cel(g, '#ffe14a', circ(0, 0, r * 0.45), { r: r * 0.45, shadow: '#e0a82a', hi: false, lw: 2 });
       g.fillStyle = '#c42a54'; poly([[-r * 0.1, -r * 0.32], [r * 0.2, -r * 0.05], [0, -r * 0.02], [r * 0.12, r * 0.32], [-r * 0.2, 0], [0, 0]])(g); g.fill(); },
   };

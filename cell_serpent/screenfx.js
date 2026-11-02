@@ -7,7 +7,7 @@ const easeOut = t => 1 - (1 - t) * (1 - t) * (1 - t);
 const backOut = t => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
 import { createFeel6 } from './feel6.js';
 import { cardPose, cardFlair } from './card_flair.js';
-import { hasTrait, drawTraitIcon, TRAIT_LABEL } from './trait_ui.js';
+import { hasTrait, drawTraitIcon, traitLabel } from './trait_ui.js';
 const CONFETTI = ['#ff7eb6', '#ffd84d', '#6fe3ff', '#9dff6d', '#c9a0ff', '#ffffff'];
 
 export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst }) {
@@ -458,7 +458,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       if (c.trait) {   // batch 8: this species' late trait, icon plus name, top right of the band
         const rk = calm() ? 1 : backOut(clamp((t - 0.45) / 0.35, 0, 1));
         ctx.save(); ctx.globalAlpha *= clamp(rk, 0, 1); drawTraitIcon(ctx, c.trait, W - 52, cy - 70, 22 * rk, col, t);
-        text(TRAIT_LABEL[c.trait], W - 82, cy - 68, 20, '#e8ecff', '#0b1020', 'right'); ctx.restore();
+        text(traitLabel(c.trait, c.n), W - 82, cy - 68, 20, '#e8ecff', '#0b1020', 'right'); ctx.restore();
       }
       if (c.mod) { const mk = calm() ? 1 : clamp((t - 0.5) / 0.3, 0, 1); ctx.globalAlpha *= mk; text(c.mod, tx, cy + 64, 30, '#ffd24a', '#0b1020', 'left'); }
       ctx.restore();

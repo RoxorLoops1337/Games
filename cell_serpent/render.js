@@ -1,5 +1,7 @@
 // Canvas renderer. Reads the sim state, never changes it. Uses sprites from art.js
 // where they exist and draws procedural stand-ins otherwise.
+import { SNACK_LIFE } from './sim.js';
+import { LATE_CUE } from './trait_ui.js';
 import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt } from './sim.js';
 import { INK, mix } from './art_draw.js';
 import { deathMotion } from './head_death.js';
@@ -170,8 +172,13 @@ export function createRenderer(canvas, art, kit) {
       case 'quartetstart': addFloat(e.x, e.y - 30, 'HARMONY! ' + e.n + ' to go', '#fff6a8', 24, -50); break;
       case 'quartetfail': ring(e.x, e.y, 70, '#ff6a8a', 0.4); if (e.lost >= 2) addFloat(e.x, e.y - 30, 'STREAK LOST', '#ff9aae', 22, -50); break;
       case 'nap': addFloat(e.x, e.y - 40, 'Zzz...', '#b9c8ff', 30, -60); ring(e.x, e.y, 90, '#b9c8ff', 0.5); break;
-      case 'trait': { const spc = kit && kit.SPECIES && kit.SPECIES[e.k], T = { love: ['HEART PULSE', '#ff8fb8'], rust: ['CREAK', '#e0a060'], sneezy: [e.warn ? 'a-a-a...' : 'ACHOO!', '#9dffc0'], frosty: ['FROST', '#bfe9ff'], grumpy: ['GRRR!', '#ff9a6a'], disco: ['SWING', '#ff9ad6'], sour: ['ZOOM!', '#d8ff6a'], mighty: ['STURDY', '#b9c8ff'] }[e.k]; if (T) { if (spc && spc.lite) T[1] = spc.lite; addFloat(e.x, e.y - 40, T[0], T[1], e.warn ? 22 : 26, -50); if (!e.warn) ring(e.x, e.y, 100, T[1], 0.5); if (e.k === 'sneezy' && !e.warn) S.trauma = Math.min(1, S.trauma + 0.3); } break; }
+      case 'trait': { const spc = kit && kit.SPECIES && kit.SPECIES[e.k], T = { love: ['HEART PULSE', '#ff8fb8'], rust: ['CREAK', '#e0a060'], sneezy: [e.warn ? 'a-a-a...' : 'ACHOO!', '#9dffc0'], frosty: ['FROST', '#bfe9ff'], grumpy: ['GRRR!', '#ff9a6a'], disco: ['SWING', '#ff9ad6'], sour: ['ZOOM!', '#d8ff6a'], mighty: ['STURDY', '#b9c8ff'] }[e.k]; if (T) { if (e.late && LATE_CUE[e.k] && !e.warn) T[0] = LATE_CUE[e.k]; if (spc && spc.lite) T[1] = spc.lite; addFloat(e.x, e.y - 40, T[0], T[1], e.warn ? 22 : 26, -50); if (!e.warn) ring(e.x, e.y, 100, T[1], 0.5); if (e.k === 'sneezy' && !e.warn) S.trauma = Math.min(1, S.trauma + 0.3); } break; }
       case 'metro': if (e.hit) { ring(e.x, e.y, 130, '#9bffe0', 0.55); burst(e.x, e.y, 20, ['#9bffe0', '#fff', '#ffe36b'], 400, 0.7, 5); addFloat(e.x, e.y - 40, 'ON BEAT +' + e.v, '#b8ffe8', 26, -70); } else addFloat(e.x, e.y - 24, 'off beat', '#8fb5aa', 16, -36); break;
+      case 'snack': ring(e.x, e.y, 90, '#ffcf70', 0.5); burst(e.x, e.y, 10, ['#ffcf70', '#fff', '#e8b25c'], 200, 0.6, 5); addFloat(e.x, e.y - 36, 'SNACK!', '#ffe0a0', 24, -50); break;
+      case 'snackget': ring(e.x, e.y, 120, '#ffe08a', 0.6); burst(e.x, e.y, 22, ['#ffcf70', '#fff', '#ffe36b'], 420, 0.8, 6); addFloat(g.p.x, g.p.y - 70, 'YUM! RAGE', '#ffe36b', 30, -70); break;
+      case 'snackgone': burst(e.x, e.y, 6, ['#c9a46a', '#fff'], 90, 0.5, 4); break;
+      case 'startle': ring(e.x, e.y, 130, '#c9b6ff', 0.55); addFloat(e.x, e.y - 40, 'STARTLED!', '#d9ccff', 26, -60); S.trauma = Math.min(1, S.trauma + 0.35); break;
+      case 'ringskip': ring(g.ring.cx, g.ring.cy, e.warn ? 150 : 260, e.warn ? '#ffd0a0' : '#ff9a6a', 0.55); addFloat(g.ring.cx, g.ring.cy - 120, e.warn ? 'scratch...' : 'SKIP!', '#ffb98a', e.warn ? 22 : 30, -50); if (!e.warn) S.trauma = Math.min(1, S.trauma + 0.4); break;
       case 'pillow': ring(e.x, e.y, 120, '#ffd0ec', 0.5); burst(e.x, e.y, 12, ['#ffd0ec', '#fff', '#ffb0d8'], 220, 0.6, 5); addFloat(e.x, e.y - 36, 'FLUFF!', '#ffd0ec', 24, -50); break;
       case 'bell': ring(e.x, e.y, 150, '#ffd9a0', 0.55); ring(e.x, e.y, 90, '#fff', 0.35); burst(e.x, e.y, 18, ['#ffd9a0', '#fff', '#ffb05a'], 380, 0.7, 5); addFloat(e.x, e.y - 36, 'DING!', '#ffe0a8', 28, -60); S.trauma = Math.min(1, S.trauma + 0.25); break;
       case 'gloom': addFloat(e.x, e.y - 40, 'GLOOM', '#b79bff', 26, -50); ring(e.x, e.y, 110, '#6a3fd0', 0.6); break;
@@ -309,7 +316,7 @@ export function createRenderer(canvas, art, kit) {
         ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.3, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
       }
       if (s.gold) { const live = s.goldT > 0; glow(s.x, s.y, r * (live ? 2.3 : 1.5), '#ffd24a', live ? 0.55 + Math.sin(S.t * 9 + i) * 0.2 : 0.15); if (live) { ctx.save(); ctx.strokeStyle = s.goldT > 2.5 ? '#fff1a8' : (Math.sin(S.t * 22) > 0 ? '#ff9a6a' : '#fff1a8'); ctx.lineWidth = s.goldT > 2.5 ? 5 : 5 + (2.5 - s.goldT) * 1.2; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.18, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0, s.goldT / 9)); ctx.stroke(); ctx.restore(); } }
-      if (s.ward || s.warded || s.lull || s.drum || s.choir || s.quartet || s.bell || s.frost || s.metro || s.pillow) drawCellFlags(ctx, s, r, S.t, i, glow);
+      if (s.ward || s.warded || s.lull || s.drum || s.choir || s.quartet || s.bell || s.frost || s.metro || s.pillow || s.snack) drawCellFlags(ctx, s, r, S.t, i, glow);
       if (s.kind === 'bomb') { const pulse = 0.5 + Math.sin(S.t * 9 + i) * 0.5; glow(s.x, s.y, r * 1.8, '#ff3b5c', 0.15 + pulse * 0.25); }
       if (s.kind === 'mender') glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12);
       if (s.kind === 'upgrade') glow(s.x, s.y, r * 2.1, '#ffd24a', 0.45 + Math.sin(S.t * 6 + i) * 0.15);
@@ -333,7 +340,7 @@ export function createRenderer(canvas, art, kit) {
       if (OPT.highContrast) { ctx.save(); ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.02, 0, TAU); ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.restore(); }
       if (OPT.highContrast) { ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.62)'; ctx.beginPath(); ctx.arc(s.x, s.y + r * 0.05, r * 0.62 * (OPT.bigNumbers ? 1.15 : 1), 0, TAU); ctx.fill(); ctx.restore(); }
       if (s.gold && kit) { const live = s.goldT > 0; blit(kit.SPR.badge(live ? 'coin' : 'coinx'), s.x - r * 0.62 + (live && s.goldT < 2.5 ? Math.sin(S.t * 50 + i) * r * 0.06 : 0), s.y - r * 0.7 + Math.sin(S.t * 3 + i) * 2, r * 1.0, live && s.goldT < 2.5 ? Math.sin(S.t * 30 + i) * 0.22 : Math.sin(S.t * 2 + i) * 0.12, false, live ? 1 : 0.75); if (live && Math.sin(S.t * 4 + i * 2) > 0.8) sparkleAt(s.x + r * 0.5, s.y + r * 0.5, r * 0.26); }
-      if (s.ward || s.lull || s.drum || s.choir || s.quartet || s.bell || s.metro || s.pillow) drawCellBadge(ctx, s, r, S.t, i, kit);
+      if (s.ward || s.lull || s.drum || s.choir || s.quartet || s.bell || s.metro || s.pillow || s.snack) drawCellBadge(ctx, s, r, S.t, i, kit);
       { const hs = Math.max(20, r * 0.85) * (OPT.bigNumbers ? 1.2 : 1), hc = OPT.highContrast ? '#000' : INK; if (!DG || !DG.draw(ctx, num(s.hp), s.x, s.y + r * 0.05, hs, '#fff', hc)) text(num(s.hp), s.x, s.y + r * 0.05, hs, '#fff', hc); }
       if (OPT.colorBlind && (s.kind !== 'normal' || s.carry === 'chest')) kindMark(s.carry === 'chest' && s.kind === 'normal' ? 'chest' : s.kind, s.x, s.y - r * 1.02, r * 0.36);
       if (s.kind === 'mender') { glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12); ctx.save(); ctx.fillStyle = '#6fe08a'; ctx.strokeStyle = INK; ctx.lineWidth = 3; const q = r * 0.34; for (const [px, py, w2, h2] of [[-q * 0.35, -q, q * 0.7, q * 2], [-q, -q * 0.35, q * 2, q * 0.7]]) { ctx.fillRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); ctx.strokeRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); } ctx.restore(); }
@@ -358,6 +365,7 @@ export function createRenderer(canvas, art, kit) {
     if (k === 'gem') { glow(pk.x, pk.y, 22, '#39f0ff', 0.5); blit(kit && kit.SPR.pickup('gem'), pk.x, pk.y + bob, 64, Math.sin(S.t * 3 + pk.x) * 0.25); }
     else if (k === 'coin') { if ((S.t * 1.6 + pk.x * 0.1) % 1 < 0.4) sparkleAt(pk.x + 10, pk.y - 12, 8 * Math.sin(((S.t * 1.6 + pk.x * 0.1) % 1) * 2.5 * Math.PI / 1)); const sq = Math.max(0.3, Math.abs(Math.cos(S.t * 7 + pk.x))); ctx.save(); ctx.translate(pk.x, pk.y + bob); ctx.scale(sq, 1); blit(kit && kit.SPR.pickup('coin'), 0, 0, 58); ctx.restore(); }
     else if (k === 'chest') { if ((S.t * 1.3 + pk.x) % 1 < 0.5) sparkleAt(pk.x + 30, pk.y - 34, 11 * Math.sin(((S.t * 1.3 + pk.x) % 1) * 2 * Math.PI)); glow(pk.x, pk.y, 60, '#ffd84d', 0.55 + Math.sin(S.t * 5) * 0.2); blit(kit && kit.SPR.pickup('chest'), pk.x, pk.y + bob * 2, 104, Math.sin(S.t * 4) * 0.1); }
+    else if (k === 'snack') { const left = SNACK_LIFE - pk.age, fade = left < 2 ? (Math.sin(S.t * 18) > 0 ? 1 : 0.35) : 1; ctx.save(); ctx.globalAlpha = fade; glow(pk.x, pk.y, 44, '#ffcf70', 0.55); blit(kit && kit.SPR.pickup('snack'), pk.x, pk.y + bob * 2, 84, Math.sin(S.t * 4) * 0.14); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,224,138,.85)'; ctx.beginPath(); ctx.arc(pk.x, pk.y + bob * 2, 34, -Math.PI / 2, -Math.PI / 2 + 6.2832 * Math.max(0, left / SNACK_LIFE)); ctx.stroke(); ctx.restore(); }
     else { if (k === 'heal' && (S.t * 1.2 + pk.x) % 1 < 0.4) sparkleAt(pk.x + 22, pk.y - 26, 9 * Math.sin(((S.t * 1.2 + pk.x) % 1) * 2.5 * Math.PI)); const col = k === 'heal' ? '#ff6a8a' : k === 'shield' ? '#39d0ff' : '#ffb020'; glow(pk.x, pk.y, 38, col, 0.6); blit(kit && kit.SPR.pickup(k), pk.x, pk.y + bob * 2, 92, Math.sin(S.t * 4) * 0.12); }
   }
 
