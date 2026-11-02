@@ -13,6 +13,8 @@ export function createScreenFx({ ctx, W, H, kit, text, glow, S, OPT, ring, burst
     slow: { t: 0, dur: 0, k: 1 },     // slow motion: real seconds left, length, sim speed at the deepest point
     zoom: { t: 0, dur: 0.4, amp: 0, x: W / 2, y: H / 2 },
     conf: [],
+    stop: 0, stopAt: -9,              // hit-stop: real seconds of sim freeze left (render time keeps running)
+    flour: null,                      // kill-chain flourish at x10 and x25
     deadT: 0, warnT: 0,
   };
   const calm = () => OPT.reduceMotion;
@@ -58,7 +60,14 @@ export function createScreenFx({ ctx, W, H, kit, text, glow, S, OPT, ring, burst
         F.deadT = 0;
         break;
       }
+      case 'hit':   // boss face taken a hit: a tiny freeze, at most 4 times a second
+        if (!calm() && e.s && e.s.isHead && g.snakes.some(sn => sn.boss) && S.t - F.stopAt > 0.25) { F.stop = Math.max(F.stop, 0.03); F.stopAt = S.t; }
+        break;
+      case 'chain':
+        if (!calm() && (e.n === 10 || e.n === 25)) F.flour = { n: e.n, t: 0, dur: e.n === 25 ? 1.5 : 1.2 };
+        break;
       case 'kill':
+        if (e.head && !calm()) { F.stop = Math.max(F.stop, e.boss ? 0.09 : 0.055); F.stopAt = S.t; }
         if (e.head) punch(e.x, e.y, e.boss ? 0.09 : 0.05, e.boss ? 0.28 : 0.4, e.boss ? 0.55 : 0.32);
         break;
       case 'clear': confetti(e.boss ? 110 : 70); S.flash = Math.max(S.flash, 0.25); S.flashCol = '#ffe9a8'; break;
@@ -70,13 +79,17 @@ export function createScreenFx({ ctx, W, H, kit, text, glow, S, OPT, ring, burst
 
   // sim speed multiplier (1 = normal). main.js multiplies the fixed step clock by this.
   function timeScale() {
-    if (calm() || F.slow.t <= 0) return 1;
+    if (calm()) return 1;
+    if (F.stop > 0) return 0.02;   // hit-stop: the sim holds still for a few frames
+    if (F.slow.t <= 0) return 1;
     const k = F.slow.t / F.slow.dur;   // 1 -> 0, hold the low point then ease back out
     return 1 - (1 - F.slow.k) * Math.min(1, k * 3);
   }
 
   function update(dt, g) {
-    if (F.slow.t > 0) F.slow.t = Math.max(0, F.slow.t - dt);
+    if (F.stop > 0) F.stop = Math.max(0, F.stop - dt);   // the slow-mo clock waits while frozen
+    else if (F.slow.t > 0) F.slow.t = Math.max(0, F.slow.t - dt);
+    if (F.flour) { F.flour.t += dt; if (F.flour.t > F.flour.dur) F.flour = null; }
     if (F.zoom.t > 0) F.zoom.t = Math.max(0, F.zoom.t - dt); else F.zoom.amp = 0;
     if (F.warnT > 0) F.warnT -= dt;
     if (g && g.phase === 'dead' && F.deadT > 0) F.deadT += dt; else if (!g || g.phase !== 'dead') F.deadT = 0;
@@ -126,6 +139,16 @@ export function createScreenFx({ ctx, W, H, kit, text, glow, S, OPT, ring, burst
         ctx.save(); ctx.globalAlpha = Math.min(1, p.life * 1.5); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.scale(1, Math.abs(Math.cos(p.rot * 1.7)) * 0.9 + 0.1);
         ctx.fillStyle = p.col; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
       }
+    }
+    if (F.flour) {   // kill chain flourish: a banner slams in over the lane, gold edges, confetti already fired
+      const f = F.flour, big = f.n >= 25, k = f.t / f.dur, inn = easeOut(clamp(f.t / 0.22, 0, 1)), out = clamp((1 - k) / 0.3, 0, 1);
+      edges(big ? '#ffd84d' : '#6fe3ff', 0.5 * out);
+      const sc = calm() ? 1 : (1.9 - 0.9 * inn) * (1 + 0.05 * Math.sin(f.t * 14)), cy = H * 0.5;
+      ctx.save(); ctx.globalAlpha = out * inn; ctx.translate(W / 2, cy); ctx.rotate(-0.06); ctx.scale(sc, sc);
+      glow(0, 0, big ? 330 : 260, big ? '#ffd84d' : '#6fe3ff', 0.4);
+      text(big ? 'BEAT STORM!' : 'NICE GROOVE!', 0, 0, big ? 84 : 70, big ? '#ffd84d' : '#9ff0ff', '#1a0a2e');
+      text('x' + f.n + ' CHAIN', 0, 62, 36, '#fff', '#1a0a2e');
+      ctx.restore();
     }
     if (F.deadT > 0) {   // game over: the room goes dark and red
       const k = clamp(F.deadT / 1.0, 0, 1), e = easeOut(k);
@@ -191,5 +214,5 @@ export function createScreenFx({ ctx, W, H, kit, text, glow, S, OPT, ring, burst
     void k; void g;
   }
 
-  return { onEvent, update, timeScale, rumble, zoomIn, aura, drawScreen, drawCard, state: F };
+  return { confetti, onEvent, update, timeScale, rumble, zoomIn, aura, drawScreen, drawCard, state: F };
 }

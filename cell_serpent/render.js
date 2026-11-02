@@ -3,6 +3,7 @@
 import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv } from './sim.js';
 import { INK, mix } from './art_draw.js';
 import { createHud } from './hud.js';
+import { createHitJuice } from './hitjuice.js';
 import { createScreenFx } from './screenfx.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing } from './bg_world.js';
 import { drawHints } from './hints.js';
@@ -94,9 +95,12 @@ export function createRenderer(canvas, art, kit) {
     const size = crit ? 30 : Math.min(24, 14 + Math.log2(e.d + 1) * 1.6);
     S.floats.push({ x: e.x + (Math.random() - 0.5) * 24, y: e.y - 14, str: num(e.d), acc: e.d, key, col: crit ? '#ffe14a' : '#ffffff', size, vy: crit ? -85 : -60, life: crit ? 0.8 : 0.6, max: crit ? 0.8 : 0.6, pop: 1 });
   }
+  let HJ = null;   // 04-hit-juice: orbs, smoke, muzzle flash, note trails (hitjuice.js)
+  let lastDt = 0.016;
   let FX = null;   // whole-screen feedback (screenfx.js), created after the helpers below exist
   function onEvent(e, g) {
     if (FX) FX.onEvent(e, g);
+    if (HJ) HJ.event(e, g);
     switch (e.t) {
       case 'hit':
         S.popped++;
@@ -112,6 +116,7 @@ export function createRenderer(canvas, art, kit) {
           shaped(e.x, e.y, e.head ? 14 : 7, sh, sp ? [sp.lite, sp.base, '#fff', sp.acc] : ['#ff9ad6', '#fff'], e.head ? 340 : 250, 0.9, e.head ? 11 : 8, 380); }
         { const ch = S.chain; ch.n = S.t - ch.t < 0.9 ? ch.n + 1 : 1; ch.t = S.t;
           const col = CHAIN_COL[Math.min(5, ch.n >> 1)];
+          if (ch.n === 10 || ch.n === 25) { FX.onEvent({ t: 'chain', n: ch.n }, g); FX.confetti(ch.n === 25 ? 60 : 30); }
           ring(e.x, e.y, e.r * (2.4 + Math.min(ch.n, 10) * 0.12), col, 0.35);
           if (ch.n >= 3) { for (let i = 0; i < S.floats.length; i++) if (S.floats[i].key === 'chain') { S.floats.splice(i, 1); break; }
             S.floats.push({ x: e.x, y: e.y - e.r - 14, str: 'x' + ch.n, acc: 0, key: 'chain', col, size: Math.min(34, 18 + ch.n), vy: -50, life: 0.7, max: 0.7, pop: 1 });
@@ -313,6 +318,7 @@ export function createRenderer(canvas, art, kit) {
   }
 
   function drawBullets(g) {
+    if (HJ) HJ.bullets(g.bullets, lastDt);
     for (const b of g.bullets) {
       if (b.kind === 'needle') { blit(kit && kit.SPR.weapon('needle'), b.x, b.y, 112, Math.atan2(b.vy, b.vx)); continue; }
       if (b.kind === 'snot') {   // doves leave drifting feathers and flap
@@ -393,7 +399,7 @@ export function createRenderer(canvas, art, kit) {
     }
     for (let i = S.coins.length - 1; i >= 0; i--) {   // coins arc to the coin counter
       const c = S.coins[i]; c.t += dt; const k = Math.min(1, c.t / c.dur);
-      if (k >= 1) { S.coins.splice(i, 1); if (S.coins.length < 12) glow(CX, CY, 38, '#ffd24a', 0.5); continue; }
+      if (k >= 1) { S.coins.splice(i, 1); S.land.coin = S.t; if (S.coins.length < 12) glow(CX, CY, 38, '#ffd24a', 0.5); continue; }
       const u = k * k * (3 - 2 * k), m = 1 - u;
       const x = m * m * c.x0 + 2 * m * u * c.cx + u * u * CX, y = m * m * c.y0 + 2 * m * u * c.cy + u * u * CY;
       ctx.save(); ctx.translate(x, y); ctx.scale(Math.max(0.3, Math.abs(Math.cos(c.t * 14))), 1); blit(kit && kit.SPR.pickup('coin'), 0, 0, 40 - 14 * k); ctx.restore();
@@ -415,6 +421,7 @@ export function createRenderer(canvas, art, kit) {
     }
     ctx.globalAlpha = 1;
     drawProps(dt);
+    HJ.draw(dt);
     for (let i = S.floats.length - 1; i >= 0; i--) {
       const f = S.floats[i]; f.life -= dt; if (f.life <= 0) { S.floats.splice(i, 1); continue; }
       f.y += f.vy * dt; ctx.globalAlpha = Math.min(1, f.life / 0.3);
@@ -453,7 +460,7 @@ export function createRenderer(canvas, art, kit) {
 
   function draw(g, ui, dt) {
     const L = layout();
-    S.t += dt; if (S.banner) { S.banner.t += dt; if (S.banner.t > S.banner.dur) S.banner = null; }
+    lastDt = dt; S.t += dt; if (S.banner) { S.banner.t += dt; if (S.banner.t > S.banner.dur) S.banner = null; }
     if (FX) FX.update(dt, g);
     S.trauma = Math.max(0, S.trauma - dt * 1.6); S.flash = Math.max(0, S.flash - dt * 1.5);
     if (OPT.reduceMotion) { S.trauma = 0; S.flash = 0; }
@@ -476,7 +483,8 @@ export function createRenderer(canvas, art, kit) {
     if (ui) FX.drawCard(g);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
+  HJ = createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped });
   FX = createScreenFx({ ctx, W, H, kit, text, glow, S, OPT, ring, burst });
 
-  return { timeScale: () => (FX ? FX.timeScale() : 1), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
+  return { hj: HJ, timeScale:() => (FX ? FX.timeScale() : 1), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
 }
