@@ -16,7 +16,7 @@ const bad = sanitizeSave({ settings: { colorBlind: 'yes', slider: 1, bigText: tr
 assert.equal(bad.settings.colorBlind, false); assert.equal(bad.settings.slider, false); assert.equal(bad.settings.bigText, true);
 const imp = importSave(exportSave(s)); assert.ok(imp && KEYS.every(k => imp.settings[k] === true), 'backup code keeps them');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
-for (const k of KEYS) assert.ok(html.includes(`data-k="${k}"`), 'toggle in settings: ' + k);
+for (const k of KEYS.filter(k => k !== 'bigText')) assert.ok(html.includes(`data-k="${k}"`), 'toggle in settings: ' + k);   // bigText became the text size slider (#tsRange)
 assert.ok(html.includes('@css:18-access') && html.includes('prefers-reduced-motion') && html.includes(':focus-visible'));
 assert.ok(!html.includes('—') && !readFileSync(join(root, 'access.js'), 'utf8').includes('—'));
 const acc = await import(join(root, 'access.js'));

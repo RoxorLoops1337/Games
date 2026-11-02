@@ -153,7 +153,12 @@ export function createAudio() {
     bossintro: () => { tone(60, 1.0, 'sawtooth', 0.22, -22); tone(185, 0.6, 'square', 0.07, -60, 0.1); tone(131, 0.7, 'square', 0.07, -40, 0.35); noise(0.9, 0.12, 400, 60); duck(0.6, 1.0); },
     win: () => sfx.clear(),
     // groove milestone (every 5): a small rising blip
-    groovehit: e => { if (!gate('groovehit', 200)) return; const k = Math.min(4, ((e && e.n) || 5) / 5 | 0); tone(pentHz(k + 2, 72), 0.14, 'triangle', 0.07); tone(pentHz(k + 4, 72), 0.2, 'sine', 0.05, 0, 0.06); },
+    groovehit: e => { if (!gate('groovehit', 200)) return; const k = Math.min(4, ((e && e.n) || 5) / 5 | 0); tone(pentHz(k + 2, 72), 0.14, 'triangle', 0.07); tone(pentHz(k + 4, 72), 0.2, 'sine', 0.05, 0, 0.06);
+      // the tier is also countable by ear: tier 2 and up add one more pulse each (a rising run), tier 4 ends in a bright chord
+      for (let i = 1; i < k; i++) tone(pentHz(k + 2 + i, 72), 0.1, 'triangle', 0.06, 0, 0.1 + i * 0.07);
+      if (k >= 4) for (const d of [0, 2, 4]) tone(pentHz(9 + d, 72), 0.34, 'sine', 0.05, 0, 0.36); },
+    // groove fell apart: a short falling two-note sigh (only after a good streak), so it is audible that the bonus is gone
+    groovelost: () => { if (!gate('groovelost', 400)) return; tone(pentHz(6, 72), 0.12, 'triangle', 0.05, -40); tone(pentHz(3, 72), 0.2, 'sine', 0.05, -60, 0.08); },
     // snake reached the line: sharp alarm
     leak: () => { if (!gate('leak', 250)) return; tone(220, 0.25, 'sawtooth', 0.15, -110); tone(165, 0.3, 'square', 0.08, -60, 0.05); noise(0.3, 0.15, 1200, 100); duck(0.5, 0.4); },
     // on-beat shot: a crisp tick, climbing a pentatonic ladder while the player keeps hitting every beat

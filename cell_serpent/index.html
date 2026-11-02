@@ -483,6 +483,19 @@
   #hub .chip .st{color:#a79ee8} #hub .chip.sel .st{color:#4a0a2c} .stars .off{color:#8ea0b8} .card.pick .key{opacity:.9}
   @media (forced-colors:active){:focus-visible{outline:3px solid Highlight}}
   /* end @css:18-access round 2 */
+  /* @css:18-access round 3 */
+  .setgrp{width:min(420px,92vw);margin:12px 0 2px;font-size:12px;letter-spacing:.22em;color:#bda8ff;font-weight:900;display:flex;align-items:center;gap:10px}
+  .setgrp::after{content:"";flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,rgba(189,168,255,.55),transparent)}
+  #settings .tsrow{display:flex;align-items:center;gap:10px;width:min(420px,92vw);padding:11px 14px;margin:4px 0;border-radius:14px;border:2px solid rgba(255,255,255,.18);background:var(--glass);font-weight:800;font-size:15px;flex-wrap:wrap}
+  #settings .tsrow .ti{font-style:normal;font-size:20px;width:26px;text-align:center;font-weight:900}
+  #settings .tsrow span{flex:1} #settings .tsrow output{min-width:48px;text-align:center;padding:3px 8px;border-radius:99px;background:#46576a;font-size:13px}
+  #settings .tsrow input{width:100%;height:32px;accent-color:#ff5cb8}
+  html.ts .scr:not(#hub){zoom:var(--ts)} html.ts #hub .hubbody{zoom:var(--ts)} html.ts #hub #tabBattle .bt-hero{zoom:calc(1 / var(--ts))}
+  html.ts #hub .tabs button{font-size:calc(13px * min(var(--ts), 1.15))} html.ts #hub .tile,html.ts #hub .tiles{font-size:1.06em}
+  html.ts #settings.scr{zoom:1} html.ts #settings .setgrp,html.ts #settings .tgl,html.ts #settings .tsrow,html.ts #settings .volrow{zoom:var(--ts);width:min(calc(420px / var(--ts)),calc(92vw / var(--ts)))}
+  #stChips .chip,#stChips button{scroll-margin:12px}
+  #tabBattle [data-nav]:focus-visible{outline-offset:-4px}
+  /* end @css:18-access round 3 */
   /* end @css:18-access */
   /* @css:08-battle-tab */
   #tabBattle{gap:10px} #tabBattle .stagebox{gap:8px}
@@ -992,23 +1005,23 @@
 
 <section class="scr" id="settings">
   <h2>SETTINGS</h2>
-  <div class="sgrp">Sound and feel</div>
+  <h3 class="setgrp">SOUND AND FEEL</h3>
   <button class="tgl" data-k="sound"><i class="ti">🔊</i><span>Sound effects</span><b>ON</b></button>
   <button class="tgl" data-k="music"><i class="ti">🎵</i><span>Music</span><b>ON</b></button>
   <button class="tgl" data-k="vibrate"><i class="ti">📳</i><span>Vibration</span><b>ON</b></button>
-  <div class="sgrp">Performance</div>
+  <h3 class="setgrp">SEEING THE GAME</h3>
   <button class="tgl" data-k="reduceMotion"><i class="ti">🌀</i><span>Reduce motion (no shake or flashes)</span><b>OFF</b></button>
   <button class="tgl" data-k="lowQuality"><i class="ti">⚡</i><span>Low quality (fewer sparkles, faster)</span><b>OFF</b></button>
   <div class="sgrp">Readability</div>
   <button class="tgl" data-k="bigNumbers"><i class="ti">🔢</i><span>Bigger numbers on cells</span><b>OFF</b></button>
-  <button class="tgl" data-k="colorBlind"><span>Colour-blind shapes on special cells</span><b>OFF</b></button>
-  <button class="tgl" data-k="highContrast"><span>High-contrast numbers</span><b>OFF</b></button>
-  <button class="tgl" data-k="bigText"><span>Bigger menu text</span><b>OFF</b></button>
-  <div class="sgrp">Controls</div>
-  <button class="tgl" data-k="slider"><span>On-screen slide bar (thumb at the bottom)</span><b>OFF</b></button>
-  <button class="tgl" data-k="leftHand"><span>Left-handed slide bar</span><b>OFF</b></button>
-  <button class="tgl" data-k="thumbZone"><span>Thumb zone: steer from the bottom third only</span><b>OFF</b></button>
-  <button class="tgl" data-k="pauseGuard"><span>Pause button needs two taps</span><b>OFF</b></button>
+  <button class="tgl" data-k="colorBlind"><i class="ti">🎨</i><span>Colour-blind mode (shapes, safer colours)</span><b>OFF</b></button>
+  <button class="tgl" data-k="highContrast"><i class="ti">🌗</i><span>High-contrast numbers</span><b>OFF</b></button>
+  <label class="volrow tsrow"><i class="ti">Aa</i><span>Menu text size</span><output id="tsOut">100%</output><input id="tsRange" type="range" min="100" max="140" step="5" value="100" aria-label="Menu text size"></label>
+  <h3 class="setgrp">ONE HAND AND THUMBS</h3>
+  <button class="tgl" data-k="slider"><i class="ti">↔</i><span>On-screen slide bar (thumb at the bottom)</span><b>OFF</b></button>
+  <button class="tgl" data-k="leftHand"><i class="ti">🤚</i><span>Left-handed slide bar</span><b>OFF</b></button>
+  <button class="tgl" data-k="thumbZone"><i class="ti">👍</i><span>Thumb zone: steer from the bottom third only</span><b>OFF</b></button>
+  <button class="tgl" data-k="pauseGuard"><i class="ti">⏸</i><span>Pause button needs two taps</span><b>OFF</b></button>
   <label class="volrow" style="display:flex;align-items:center;gap:10px;width:min(420px,92vw);padding:11px 14px;margin:4px 0;border-radius:14px;border:2px solid rgba(255,255,255,.18);background:var(--glass);font-weight:800;font-size:15px"><i class="ti" style="font-style:normal;font-size:20px;width:26px;text-align:center">🔈</i><span style="flex:1">Volume</span><input id="volRange" type="range" min="0" max="100" step="5" value="100" style="width:42%" aria-label="Master volume"></label>
   <div class="sgrp">Save data</div>
   <div class="box"><b style="color:#fff">Backup</b><br>Copy this code somewhere safe. Paste it back to restore your game on any phone.<textarea id="bkCode" spellcheck="false"></textarea></div>
