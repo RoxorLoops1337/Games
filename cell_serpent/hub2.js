@@ -13,6 +13,7 @@ import { createRetainUI } from './retain_ui.js';
 import { nextReward } from './sim.js';
 
 import { ico, iconURL } from './icons.js';
+import { seeded, newSeed, armChest, wasHeld, keepDetailHTML } from './gear_fx.js';
 const STATICON = { atk: 'speaker', crt: 'note', cdn: 'clock', vit: 'heart', for: 'star', rev: 'mic' };
 // a six-axis radar of the core stats, drawn as inline svg
 function radar(s) {
@@ -33,16 +34,22 @@ const SEEN_KEY = 'cell_serpent_keepseen_v1';
 function keepSeen(owned) { try { const raw = localStorage.getItem(SEEN_KEY); if (raw) return new Set(JSON.parse(raw)); const st = new Set(owned); localStorage.setItem(SEEN_KEY, JSON.stringify([...st])); return st; } catch (e) { return new Set(owned); } }
 function markSeen(id) { try { const st = keepSeen([]); st.add(id); localStorage.setItem(SEEN_KEY, JSON.stringify([...st])); } catch (e) { /* private mode */ } }
 // chest drama: it charges up and rattles with a glow, then the lid flies and the next step runs
-function chestGo(ch, fn) { if (!ch) { setTimeout(fn, 0); return; } if (ch.classList.contains('charge') || ch.classList.contains('open')) return; ch.classList.add('charge'); setTimeout(() => { ch.classList.remove('charge'); ch.classList.add('open'); const ring = document.createElement('i'); ring.className = 'chburst'; ch.appendChild(ring); setTimeout(() => { ring.remove(); fn(); }, 460); }, 720); }
+function chestGo(ch, fn, fast) { if (!ch) { setTimeout(fn, 0); return; } if (ch.classList.contains('charge') || ch.classList.contains('open')) return; ch.classList.add('charge'); setTimeout(() => { ch.classList.remove('charge'); ch.classList.add('open'); const ring = document.createElement('i'); ring.className = 'chburst'; ch.appendChild(ring); setTimeout(() => { ring.remove(); fn(); }, 460); }, fast ? 260 : 720); }
 const kicon = id => `<span class="kemo">${KEEPSAKES.find(k => k.id === id).icon}</span>`;
 
 const fragRar = n => (n >= 12 ? 3 : n >= 5 ? 2 : n >= 2 ? 1 : 0), RAR_COL = ['#9fb4d8', '#4fd8f0', '#b06cff', '#ffb04d'];
 // a chest with a separate lid so CSS can lift it
 const chestArt = (hue) => `<span class="chest3" style="--hue:${hue || 0}deg"><img class="cb" src="${iconURL('chestBody')}" alt=""><img class="cl" src="${iconURL('chestLid')}" alt=""></span>`;
 
+// each chest tile keeps a seeded roll: the hold glow forecasts it and the open uses the very same roll
+const rolls = new WeakMap(), rollOf = el => { let r = rolls.get(el); if (r == null) { r = newSeed(); rolls.set(el, r); } return r; };
+const keepTier = (seed, n) => { const sv = { sparkles: 1e9, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])) }; const got = openKeepChest(sv, n, seeded(seed)); return got ? got.reduce((m, x) => Math.max(m, KEEPSAKES.find(k => k.id === x.id).tier), 0) : 0; };
+const boxTier = (save, id, seed) => { try { const sv = structuredClone(save), b = BOXES.find(q => q.id === id); sv[b.cur] = 1e9; const got = openBox(sv, id, seeded(seed)); return got ? got.reduce((m, x) => Math.max(m, fragRar(x.n)), 0) : 0; } catch (e) { return 0; } };
+
 export function createHub2(c) {
   const { $, tile, icon, curImg, audio } = c;
   const save = () => c.save();
+  const armT = (t, tierOf, cols) => { armChest(t, () => { const tier = tierOf(rollOf(t)); return { tier, color: cols && cols[tier] }; }, () => calmMotion()); return t; };
   const now = () => Date.now();
   let gearFilter = 'All';
 
@@ -232,8 +239,8 @@ export function createHub2(c) {
     const row = document.createElement('div'); row.className = 'tiles'; box.appendChild(row);
     for (const n of [1, 10]) {
       const price = n === 10 ? KEEP_PRICE * 9 : KEEP_PRICE;
-      row.appendChild(tile({ cls: 'chestcard t-gold', ic: n === 10 ? ico('gift', 46) : chestArt(30), name: n === 10 ? 'Ten Chests' : 'Keepsake Chest', desc: n === 10 ? 'With a star prize' : 'Backstage finds', btn: price + ' ' + curImg('sparkles'), gold: true, disabled: save().sparkles < price,
-        onclick: ev => { const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); chestGo(ch, () => { const got = openKeepChest(save(), n); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color, rname: KEEP_TIERS[kk.tier].name.toUpperCase() }; }), 'Gear'); }); } }));
+      row.appendChild(armT(tile({ cls: 'chestcard t-gold', ic: n === 10 ? ico('gift', 46) : chestArt(30), name: n === 10 ? 'Ten Chests' : 'Keepsake Chest', desc: n === 10 ? 'With a star prize' : 'Backstage finds', btn: price + ' ' + curImg('sparkles'), gold: true, disabled: save().sparkles < price,
+        onclick: ev => { const tt = ev.currentTarget.closest('.tile'), ch = tt.querySelector('.chest3'), fast = wasHeld(ev.currentTarget), sd = rollOf(tt); chestGo(ch, () => { rolls.delete(tt); const got = openKeepChest(save(), n, seeded(sd)); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color, rname: KEEP_TIERS[kk.tier].name.toUpperCase() }; }), 'Gear'); }, fast); } }), sd => keepTier(sd, n), KEEP_TIERS.map(q => q.color)));
     }
   }
   function openKeep(k) {
@@ -243,8 +250,7 @@ export function createHub2(c) {
       const d = document.createElement('div'); d.className = 'kdetail'; d.style.setProperty('--tc', T.color);
       const cost = a.lv >= max ? 0 : keepCost(k, a.lv);
       d.innerHTML = `<div class="kbig">${k.icon}</div><div class="ktier">${T.name}</div><div class="klv">${a.lv ? 'Level ' + a.lv + ' / ' + max : 'Not collected yet'}</div>` +
-        `<div class="kst">${STAT_TEXT[k.stat](k.per * Math.max(1, a.lv))}${a.lv && a.lv < max ? ` <small>next: ${STAT_TEXT[k.stat](k.per * (a.lv + 1))}</small>` : ''}</div>` +
-        (k.set ? `<div class="kset">${KEEP_SETS.find(x => x.id === k.set).name} set</div>` : '') +
+        keepDetailHTML(k, a, max, STAT_TEXT, KEEPSAKES, KEEP_SETS, Object.fromEntries(KEEPSAKES.map(q => [q.id, s.keeps[q.id].lv]))) +
         `<div class="bar"><i style="width:${cost ? Math.min(100, Math.round((a.frag / cost) * 100)) : 100}%"></i></div><div class="sm">${cost ? a.frag + ' / ' + cost : 'Fully polished'}</div>`;
       const b = document.createElement('button'); b.className = 'btn go gold'; b.textContent = a.lv >= max ? 'MAX LEVEL' : a.lv ? 'LEVEL UP' : 'COLLECT'; b.disabled = !keepCanUp(s, k.id);
       b.onclick = () => { if (keepUp(save(), k.id)) { c.persist(); audio.play('upgrade'); openKeep(k); } };
@@ -261,13 +267,14 @@ export function createHub2(c) {
       const can = wel || s[top.cur] >= top.price;
       ban.innerHTML = `<div class="fbray"></div>${chestArt(wel ? 0 : 200)}<div class="fbtx"><em>${wel ? 'ONCE ONLY' : 'FEATURED'}</em><b>${wel ? 'Welcome Chest' : top.name}</b><span>${wel ? `${icon('egg')} ×4 ${curImg('sparkles')} 100 ${curImg('beats')} 3000` : 'A star prize inside'}</span></div><button class="btn go gold" ${can ? '' : 'disabled'}>${wel ? 'OPEN' : top.price + ' ' + curImg(top.cur)}</button>`;
       ban.querySelector('button').onclick = () => {
-        audio.unlock(); const ch = ban.querySelector('.chest3');
-        chestGo(ch, () => {
+        audio.unlock(); const ch = ban.querySelector('.chest3'), fast = wasHeld(ban.querySelector('button')), sd = rollOf(ban);
+        chestGo(ch, () => { rolls.delete(ban);
           if (wel) { if (claimWelcome(save())) { c.persist(); audio.play('levelup'); c.refreshCur(); renderShop(); } return; }
-          const got = openBox(save(), top.id); if (!got) { ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur();
+          const got = openBox(save(), top.id, seeded(sd)); if (!got) { ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur();
           lootModal(top.name.toUpperCase() + ' OPENED!', got.map(x => ({ html: icon(x.id), n: x.n, name: WEAPONS.find(w => w.id === x.id).name, rar: fragRar(x.n), color: RAR_COL[fragRar(x.n)] })), 'Shop');
-        });
+        }, fast);
       };
+      armT(ban, sd => (wel ? 2 : boxTier(save(), top.id, sd)), RAR_COL);
       list.appendChild(ban);
     }
     sec(list, "Today's Treats", '#e0457a', 'tag');
@@ -292,8 +299,8 @@ export function createHub2(c) {
     const lv = document.createElement('div'); lv.className = 'shoplv'; lv.innerHTML = `<span class="lvbadge s">LV.${sl.lv}</span><div class="bar"><i style="width:${Math.round((sl.cur / sl.need) * 100)}%"></i></div><small>${sl.cur}/${sl.need}</small>`; list.appendChild(lv);
     for (const b of BOXES) {
       const can = s[b.cur] >= b.price;
-      list.appendChild(tile({ cls: 'chestcard ' + (b.cur === 'sparkles' ? 't-gold' : 't-weapon') + (b.id === 'spark10' ? ' one' : ''), ic: chestArt(b.cur === 'sparkles' ? 300 : 0), name: b.name, desc: b.desc, btn: b.price + ' ' + curImg(b.cur), gold: b.cur === 'sparkles', disabled: !can,
-        onclick: ev => { audio.unlock(); const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); chestGo(ch, () => { const got = openBox(save(), b.id); if (!got) { ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal(b.name.toUpperCase() + ' OPENED!', got.map(x => ({ html: icon(x.id), n: x.n, name: WEAPONS.find(w => w.id === x.id).name, rar: fragRar(x.n), color: RAR_COL[fragRar(x.n)] })), 'Shop'); }); } }));
+      list.appendChild(armT(tile({ cls: 'chestcard ' + (b.cur === 'sparkles' ? 't-gold' : 't-weapon') + (b.id === 'spark10' ? ' one' : ''), ic: chestArt(b.cur === 'sparkles' ? 300 : 0), name: b.name, desc: b.desc, btn: b.price + ' ' + curImg(b.cur), gold: b.cur === 'sparkles', disabled: !can,
+        onclick: ev => { audio.unlock(); const tt = ev.currentTarget.closest('.tile'), ch = tt.querySelector('.chest3'), fast = wasHeld(ev.currentTarget), sd = rollOf(tt); chestGo(ch, () => { rolls.delete(tt); const got = openBox(save(), b.id, seeded(sd)); if (!got) { ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal(b.name.toUpperCase() + ' OPENED!', got.map(x => ({ html: icon(x.id), n: x.n, name: WEAPONS.find(w => w.id === x.id).name, rar: fragRar(x.n), color: RAR_COL[fragRar(x.n)] })), 'Shop'); }, fast); } }), sd => boxTier(save(), b.id, sd), RAR_COL));
     }
     list.appendChild(tile({ cls: 't-gold', ic: icon('egg'), name: 'Pet Egg', desc: 'Warm and wiggly.', btn: EGG_PRICE + ' ' + curImg('sparkles'), gold: true, disabled: s.sparkles < EGG_PRICE, onclick: () => { if (buyEgg(save())) { c.persist(); audio.play('buy'); c.refreshCur(); renderShop(); } } }));
     list.appendChild(tile({ cls: 't-gold', ic: ico('bolt', 44), name: 'Voice ×10', desc: 'A big gulp of tea.', btn: '10 ' + curImg('sparkles'), gold: true, disabled: s.sparkles < 10, onclick: () => { if (buyEnergy(save(), now())) { c.persist(); audio.play('buy'); c.refreshCur(); renderShop(); } } }));

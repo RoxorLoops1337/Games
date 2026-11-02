@@ -72,3 +72,25 @@ export function revealHTML(top) {
   if (top < 2) return '';
   return `<div class="rvl t${top}" style="--rc:${RARITIES[top].color}" aria-hidden="true"><span class="rvb"></span><span class="rvw">${STAMP[top]}</span></div>`;
 }
+
+// ---- round 5: ghost bar on the delta row, level ring on skill cards, two-line skip label
+// Fractions (0..1) of how full the stat is now and how much of the bar this card adds (the ghost part).
+export function cardMeter(g, c) {
+  let cur = 0, gain = 0, max = 0;
+  if (c.kind === 'weapon') { cur = c.lvl || 0; gain = c.gain || 0; max = c.max || 0; }
+  else if (c.u && c.u.cap > 0) { cur = uv(g, c.id); gain = c.gain || 0; max = c.u.cap; }
+  if (!(max > 0)) return null;
+  const a = Math.min(1, Math.max(0, cur / max)), b = Math.min(1 - a, Math.max(0, gain / max));
+  return { a, b, full: a + b >= 0.999 };
+}
+const pc = x => (x * 100).toFixed(1);
+export function ghostBarHTML(m) {
+  if (!m) return '';
+  return `<span class="gb${m.full ? ' full' : ''}" aria-hidden="true"><i style="width:${pc(m.a)}%"></i><u style="left:${pc(m.a)}%;width:${pc(m.b)}%"></u></span>`;
+}
+// Ring around a skill icon: solid arc for the current level, pulsing ghost arc for the level(s) this card adds.
+export function levelRingHTML(m) {
+  if (!m) return '';
+  return `<span class="lvring${m.full ? ' full' : ''}" style="--a:${(m.a * 360).toFixed(0)}deg;--b:${((m.a + m.b) * 360).toFixed(0)}deg" aria-hidden="true"></span>`;
+}
+export function skipHTML(bonus) { return `<span class="sk1">SKIP</span><span class="sk2">+${bonus} BEATS</span>`; }

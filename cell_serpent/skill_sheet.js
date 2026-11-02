@@ -2,6 +2,8 @@
 // Pure helpers read the formulas in sim.js (never change them); the DOM parts are small and self contained.
 import { WEAPONS, PETS, PET_MAX_STAR, SKILL_MAX_LV, SKILL_MILES, skillMul, skillUpgradeCost, petCost, petCanUp, petUp, togglePet, toggleLoadout, levelSkill, unlockSkill, RARITIES, LOADOUT_SIZE, masteryList, claimMastery, rewardText } from './sim.js';
 import { swapSheet, compareHTML, walkHTML } from './loadout_ux.js';
+import { joyHTML } from './presets_ux.js';
+import { PET_JOY_MAX } from './sim.js';
 
 // what a skill does at the level a run starts with (weapon level 1), scaled by the permanent skill level
 const BASE = {
@@ -138,7 +140,8 @@ export function createSheets(c) {
       sh.className = 'dsheet pet'; sh.style.setProperty('--rc', rar.color); sh.appendChild(closeBtn());
       sh.appendChild(el('div', 'dshead', `<div class="dsic">${icon(id)}</div><div class="dsnm"><b>${p.name}</b><span style="color:${rar.color}">${rar.name} friend · ${owned ? (eq ? 'walking with you' : 'at home') : 'not met yet'}</span></div>`));
       sh.appendChild(el('p', 'dsdesc', PET_ABILITY[id] || p.flavor));
-      if (owned) sh.appendChild(el('div', '', walkHTML(icon(id), eq, rar.color)));
+      if (owned) { const wk = el('div', '', walkHTML(icon(id), eq, rar.color)); if (eq && (k.joy || 0) >= PET_JOY_MAX) wk.firstChild.insertAdjacentHTML('beforeend', '<span class="whrt h1">♥</span><span class="whrt h2">♥</span><span class="whrt h3">♥</span>'); sh.appendChild(wk); }
+      if (owned) sh.appendChild(el('div', 'dsjoy', joyHTML(k)));
       sh.appendChild(el('div', 'dsstars', Array.from({ length: PET_MAX_STAR }, (_, n) => `<i class="star${n < k.star ? ' on' : ''}">★</i>`).join('')));
       sh.appendChild(el('div', 'dsrows', `<div class="dsrow one"><span>Star bonus</span><b>${owned ? petBonusText(p, k.star) : 'none yet'}</b></div>` + (maxed ? '' : `<div class="dsrow one"><span>Next star</span><b class="up">▲ ${petBonusText(p, k.star + 1)}</b></div>`)));
       if (owned) markSeen(s, 'p', id);

@@ -19,17 +19,52 @@ export function drawCellFlags(ctx, s, r, t, i, glow) {
   }
   if (s.drum) glow(s.x, s.y, r * 1.8, '#ff7a3d', 0.3 + Math.abs(Math.sin(t * 6 + i)) * 0.2);
   if (s.lull) glow(s.x, s.y, r * 1.8, '#b79bff', 0.3 + Math.sin(t * 3 + i) * 0.12);
+  if (s.choir) glow(s.x, s.y, r * 1.9, '#ffd0ec', 0.3 + Math.sin(t * 2.4 + i) * 0.12);
+  if (s.quartet) glow(s.x, s.y, r * 1.7, '#6fffd2', 0.28 + Math.abs(Math.sin(t * 5 + i)) * 0.2);
+}
+
+// Quartet links (agent 14, round 5): a dashed ribbon joins the four linked cells; once the first one pops the
+// ribbon turns hot and every survivor wears a countdown ring. Called once per snake, behind the cells.
+export function drawQuartetLinks(ctx, sn, t) {
+  let px = 0, py = 0, n = 0;
+  const hot = sn.qT > 0, k = hot ? Math.max(0, sn.qT / (sn.qWin || 2)) : 1;
+  ctx.save(); ctx.lineCap = 'round';
+  for (const s of sn.segs) {
+    if (!s.quartet || s.hp <= 0) continue;
+    if (n && Math.hypot(s.x - px, s.y - py) < 400) { ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(s.x, s.y); ctx.lineWidth = hot ? 7 : 4; ctx.strokeStyle = hot ? (k < 0.35 ? '#ff6a8a' : '#fff6a8') : '#6fffd2'; ctx.globalAlpha = hot ? 0.9 : 0.55; ctx.setLineDash([10, 9]); ctx.lineDashOffset = -t * (hot ? 90 : 26); ctx.stroke(); }
+    px = s.x; py = s.y; n++;
+  }
+  ctx.setLineDash([]);
+  if (hot) for (const s of sn.segs) if (s.quartet && s.hp > 0) { ctx.globalAlpha = 0.95; ctx.lineWidth = 6; ctx.strokeStyle = k < 0.35 ? '#ff6a8a' : '#fff6a8'; ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 1.22, -Math.PI / 2, -Math.PI / 2 + TAU * k); ctx.stroke(); }
+  ctx.restore();
+}
+
+// Boss phase 2 dash lane: the stretch of the path the head is about to rush down glows and ticks, then fades as it dashes.
+export function drawDashLane(ctx, path, pointAt, sn, t) {
+  const L = sn.lane; if (!L || (sn.surge !== 'warn' && sn.surge !== 'go')) return;
+  const warn = sn.surge === 'warn', k = warn ? Math.max(0, 1 - sn.surgeT / L.w) : Math.max(0, 1 - sn.surgeT / 1.1);
+  const a = Math.max(0, Math.min(path.len, warn ? L.a : sn.segs[0].ps)), b = Math.min(path.len, L.b), N = 16;
+  if (b - a < 8) return;
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const trace = () => { ctx.beginPath(); for (let j = 0; j <= N; j++) { const q = pointAt(path, a + (b - a) * j / N); j ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); } };
+  const pulse = warn ? 0.55 + 0.45 * Math.sin(t * (10 + k * 22)) : 0.5 * (1 - k);
+  trace(); ctx.globalAlpha = (warn ? 0.14 + k * 0.2 : 0.2 * (1 - k)); ctx.lineWidth = 64; ctx.strokeStyle = '#ff7a3d'; ctx.stroke();
+  ctx.globalAlpha = Math.max(0, pulse) * (warn ? 0.4 + k * 0.5 : 1); ctx.lineWidth = 6; ctx.strokeStyle = '#ffe2c2'; ctx.setLineDash([16, 14]); ctx.lineDashOffset = -t * 120; trace(); ctx.stroke(); ctx.setLineDash([]);
+  if (warn) { const q = pointAt(path, b), q2 = pointAt(path, b - 14), ang = Math.atan2(q.y - q2.y, q.x - q2.x); ctx.globalAlpha = 0.5 + k * 0.5; ctx.fillStyle = '#ff7a3d'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.translate(q.x, q.y); ctx.rotate(ang); ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(-14, -22); ctx.lineTo(-14, 22); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  ctx.restore();
 }
 
 // badge drawn over the cell, under the number: a shield for the ward cell, a crescent moon for the lullaby cell
 export function drawCellBadge(ctx, s, r, t, i, kit) {
-  if (!s.ward && !s.lull && !s.drum) return;
-  const bs = (s.ward || s.lull) && kit && kit.SPR.badge && kit.SPR.badge(s.ward ? 'ward' : 'lull');
+  if (!s.ward && !s.lull && !s.drum && !s.choir && !s.quartet) return;
+  const bs = (s.ward || s.lull) && !s.quartet && !s.choir && kit && kit.SPR.badge && kit.SPR.badge(s.ward ? 'ward' : 'lull');
   if (bs) { kit.blit(ctx, bs, s.x - r * 0.62, s.y - r * 0.7 + Math.sin(t * 3 + i) * 2, r * 1.0, s.lull ? Math.sin(t * 1.5 + i) * 0.14 : 0); return; }
   const q = r * 0.42, x = s.x - r * 0.5, y = s.y - r * 0.78 + Math.sin(t * 3 + i) * 2;
   ctx.save(); ctx.lineWidth = 3; ctx.strokeStyle = INKC; ctx.lineJoin = 'round';
   if (s.ward) { shield(ctx, x, y, q); ctx.fillStyle = '#8fe3ff'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - q * 0.45, y); ctx.lineTo(x - q * 0.1, y + q * 0.4); ctx.lineTo(x + q * 0.5, y - q * 0.35); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.4; ctx.stroke(); }
   else if (s.drum) { const k = 1 + Math.max(0, Math.sin(t * 6 + i)) * 0.15; ctx.beginPath(); ctx.ellipse(x, y, q * 1.1 * k, q * 0.8 * k, 0, 0, TAU); ctx.fillStyle = '#ffb27a'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - q * 0.9, y - q * 1.3); ctx.lineTo(x + q * 0.2, y - q * 0.1); ctx.moveTo(x + q * 0.9, y - q * 1.3); ctx.lineTo(x - q * 0.2, y - q * 0.1); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.4; ctx.stroke(); }
+  else if (s.quartet) { const o = q * 0.55; ctx.fillStyle = '#6fffd2'; for (const [dx, dy] of [[-o, 0], [o, 0], [0, -o], [0, o]]) { ctx.beginPath(); ctx.arc(x + dx, y + dy, q * 0.5, 0, TAU); ctx.fill(); ctx.stroke(); } }
+  else if (s.choir) { ctx.beginPath(); ctx.ellipse(x - q * 0.3, y + q * 0.55, q * 0.55, q * 0.4, -0.4, 0, TAU); ctx.fillStyle = '#ffd0ec'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x + q * 0.12, y + q * 0.4); ctx.lineTo(x + q * 0.12, y - q * 1.1); ctx.lineTo(x + q * 0.75, y - q * 0.5); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.6; ctx.stroke(); }
   else { ctx.beginPath(); ctx.arc(x, y, q * 1.05, 0.5, TAU - 0.5); ctx.arc(x + q * 0.55, y - q * 0.1, q * 0.85, TAU - 0.9, 0.9, true); ctx.closePath(); ctx.fillStyle = '#d9c8ff'; ctx.fill(); ctx.stroke(); }
   ctx.restore();
 }

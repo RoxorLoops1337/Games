@@ -54,6 +54,8 @@ export const PETS = [
   { id: 'turtle', name: 'Turtle', stat: 'cdn', per: 0.03, flavor: 'Slow and steady.' },
 ];
 const PET = Object.fromEntries(PETS.map(p => [p.id, p]));
+export const PET_JOY_MAX = 100;   // happiness: fills while a pet walks with you (cosmetic, no stats)
+export const petJoyGain = r => 6 + Math.min(10, Math.floor((r.stage || 1) / 4)) + (r.won ? 6 : 0);
 export const petCost = star => (star === 0 ? 5 : 4 + 4 * star);   // fragments to own it, then for each star
 // Keepsakes: little treasures from backstage. Each level adds a permanent bonus; owning a whole set adds one more.
 export const KEEP_TIERS = [
@@ -290,6 +292,7 @@ export const PASSIVES = [
   { id: 'dbeat', name: 'Downbeat', max: 4, w: 0.6, min: 1, minStage: 5, vals: [20, 30, 45, 65, 90, 120], cap: 300, fmt: v => 'Notes fired on the beat hit ' + v + '% harder', desc: 'Notes fired on the beat hit 25% harder', apply: () => {} },
   { id: 'fork', name: 'Tuning Fork', max: 4, w: 0.55, min: 1, minStage: 10, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Ward cells shield ' + v + '% less and lullabies last ' + v + '% longer', desc: 'Ward cells shield 25% less, lullabies last 25% longer', apply: () => {} },
   { id: 'gear', name: 'Golden Ear', max: 4, w: 0.55, min: 1, minStage: 6, vals: [30, 60, 100, 150], cap: 150, fmt: v => 'Gold cells stay ' + v + '% longer and pay ' + Math.round(v / 2) + '% more', desc: 'Gold cells stay 30% longer and pay 15% more', apply: () => {} },
+  { id: 'harm', name: 'Four-Part Harmony', max: 4, w: 0.55, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Quartet cells stay linked ' + Math.round(v / 2) + '% longer and pay ' + v + '% more', desc: 'Quartet cells stay linked 12% longer and pay 25% more', apply: () => {} },
   { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, minStage: 4, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
@@ -319,8 +322,8 @@ export const BOXES = [
 export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
-  const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0 };
-  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, reviveTimer: true, volume: 1, thumbZone: false, textScale: 1, beatTick: false }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
+  const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0, joy: 0 };
+  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, reviveTimer: true, volume: 1, thumbZone: false, textScale: 1, beatTick: false }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -336,7 +339,7 @@ export function sanitizeSave(raw) {
     if (r) { s.skills[w.id].lv = Math.min(SKILL_MAX_LV, num(r.lv, s.skills[w.id].lv)); s.skills[w.id].frag = num(r.frag); }
     if (!w.frag) s.skills[w.id].lv = Math.max(1, s.skills[w.id].lv);
   }
-  for (const p of PETS) { const r = raw.pets && raw.pets[p.id]; if (r) { s.pets[p.id].star = Math.min(PET_MAX_STAR, num(r.star)); s.pets[p.id].frag = num(r.frag); } }
+  for (const p of PETS) { const r = raw.pets && raw.pets[p.id]; if (r) { s.pets[p.id].star = Math.min(PET_MAX_STAR, num(r.star)); s.pets[p.id].frag = num(r.frag); s.pets[p.id].joy = Math.min(PET_JOY_MAX, num(r.joy)); } }
   if (Array.isArray(raw.petEquip)) s.petEquip = raw.petEquip.filter((id, i, a) => PET[id] && s.pets[id].star > 0 && a.indexOf(id) === i).slice(0, PET_SLOTS);
   if (raw.eggs !== undefined) s.eggs = num(raw.eggs); else if (raw.runs) s.eggs = 1;
   s.ribbons = num(raw.ribbons);
@@ -359,6 +362,7 @@ export function sanitizeSave(raw) {
   if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^h?\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
   if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
   s.addict = sanitizeAddict(raw.addict);
+  if (Array.isArray(raw.presets)) s.presets = [0, 1, 2].map(i => Array.isArray(raw.presets[i]) ? raw.presets[i].filter((id, j, a) => WEAPON[id] && a.indexOf(id) === j).slice(0, LOADOUT_SIZE) : []);
   const lo = Array.isArray(raw.loadout) ? raw.loadout.filter((id, i, a) => WEAPON[id] && s.skills[id].lv > 0 && a.indexOf(id) === i).slice(0, LOADOUT_SIZE) : [];
   if (lo.length) s.loadout = lo; else if (Array.isArray(raw.loadout)) s.loadout = [...WEAPON_STARTERS].filter(id => s.skills[id].lv > 0).slice(0, LOADOUT_SIZE);
   return s;
@@ -569,6 +573,7 @@ export function applyResult(save, r) {
   if (r.won && !r.mode && !r.hard && r.stars) { const old = save.stars[r.stage] || 0; if (r.stars > old) { const before = totalStars(save); save.stars[r.stage] = r.stars; out.starsGained = r.stars - old; const ms = Math.floor((before + out.starsGained) / 10) - Math.floor(before / 10); if (ms > 0) { save.sparkles += 10 * ms; out.sparkles += 10 * ms; out.starBonus = 10 * ms; } } }
   if (r.won && r.mode !== 'pig' && r.mode !== 'inv') { const rb = (3 + Math.floor((r.stage || 1) / 3)) * (r.hard ? 2 : 1); addRibbons(save, rb); out.ribbons = rb; }
   save.beats += r.coins; save.runs++; save.kills += r.kills;
+  out.joy = {}; for (const id of save.petEquip) { const k = save.pets[id]; if (k) { const j0 = k.joy || 0; k.joy = Math.min(PET_JOY_MAX, j0 + petJoyGain(r)); out.joy[id] = [j0, k.joy]; } }
   for (const id of Object.keys(out.frags)) save.skills[id].frag += out.frags[id];
   if (r.won && r.mode === 'inv') { addRibbons(save, 15); out.ribbons = 15; save.eggs++; out.egg = true; save.inv.best = Math.max(save.inv.best, r.stage); const ids = PETS.map(p => p.id), pid = ids[(save.runs + r.stage) % ids.length]; save.pets[pid].frag += 3; out.pet = { id: pid, n: 3 }; return out; }
   if (r.mode === 'inv') return out;
@@ -769,6 +774,7 @@ function spawnSnake(g, n, o = {}) {
 // Gold cell: from stage 4 one plain cell per snake glitters. Pop it within GOLD_TIME seconds of it
 // showing on screen for a big Beats burst. No random numbers are drawn, so existing runs do not change.
 export const ECHO_WAVE_FROM = 20;
+export const P2_WARN = 0.9, P2_DASH = 3.1;   // boss phase 2: the dash lane glows for 0.9s, then the head dashes down it at 3.1x speed
 export const P2_HP = 0.4, P2_WAVE = 6.2;   // boss phase 2: below 40% hp the shield wave runs faster and the surges come sooner
 export const GOLD_TIME = 9, GOLD_MUL = 12, GOLD_FROM = 4;
 function markGold(g, n, segs, len) {
@@ -782,11 +788,52 @@ export const DRUM_FROM = 18, DRUM_SPEED = 1.12;   // Drummer cell (stage 18+): w
 export const WARD_FROM = 10, LULL_FROM = 12, LULL_TIME = 2.5, WARD_CUT = 0.5, WARD_REACH = 2;
 function markSpecials(g, n, segs, len) {
   if (g.mode !== '' || len < 14) return;
-  const put = (frac, flag) => { for (let j = Math.round(len * frac); j < len; j++) if (segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull && !segs[j].drum) { segs[j][flag] = true; return; } };
+  const put = (frac, flag) => { for (let j = Math.round(len * frac); j < len; j++) if (segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull && !segs[j].drum && !segs[j].choir) { segs[j][flag] = true; return; } };
   if (n >= WARD_FROM) put(0.35, 'ward');
   if (n >= 25 && len >= 24) put(0.78, 'ward');
   if (n >= LULL_FROM) put(0.45, 'lull');
   if (n >= DRUM_FROM && len >= 16) put(0.62, 'drum');
+  if (n >= CHOIR_FROM && len >= 24) put(0.7, 'choir');
+  if (n >= QUARTET_FROM && len >= 22 && !isBossStage(n)) {   // four cells, every second one from 40% down the chain, linked
+    const free = j => segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull && !segs[j].drum && !segs[j].choir && !segs[j].quartet;
+    let j = Math.round(len * 0.4), k = 0;
+    while (j < len && k < 4) { if (free(j)) { segs[j].quartet = true; k++; j += 2; } else j++; }
+    if (k < 4) for (const q of segs) if (q.quartet) q.quartet = false;
+  }
+}
+// Quartet cell (stage 22+): four linked cells. Pop the first and the other three must follow within QUARTET_TIME
+// seconds, or the survivors regrow to full health. Pop them all in time for a Beats burst and a slow crawl.
+// Choir cell (stage 28+): while it lives the cells around it slowly regrow whenever they are not being hit.
+export const QUARTET_FROM = 22, QUARTET_TIME = 2, QUARTET_MUL = 7, CHOIR_FROM = 28, CHOIR_REGEN = 0.06, CHOIR_REACH = 2;
+const quartetWin = g => QUARTET_TIME * (1 + uv(g, 'harm') / 200);
+function quartetKill(g, s, sn, coinV) {
+  if (!s.quartet) return;
+  s.qPopped = true;
+  if (!(sn.qT > 0)) {
+    let others = 0; for (const q of sn.segs) if (q !== s && q.quartet && !q.qPopped) others++;
+    sn.qNeed = 1 + others; sn.qDone = 0; sn.qT = sn.qWin = quartetWin(g);
+    if (others) g.events.push({ t: 'quartetstart', x: s.x, y: s.y, n: others });
+  }
+  sn.qDone++;
+  if (sn.qDone >= sn.qNeed) {
+    const v = coinV * QUARTET_MUL * (sn.qNeed / 4) * (1 + uv(g, 'harm') / 100);
+    g.coins += v * g.p.coinMul * (g.coinK || 1); sn.slow = Math.max(sn.slow, 2.2); sn.qT = 0; sn.qDone = 0; g.quartets = (g.quartets || 0) + 1;
+    g.events.push({ t: 'quartet', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)), n: sn.qNeed });
+  }
+}
+function quartetTick(g, sn, dt) {
+  if (!(sn.qT > 0)) return;
+  sn.qT -= dt;
+  if (sn.qT <= 0) {
+    sn.qT = 0; sn.qDone = 0;
+    for (const q of sn.segs) if (q.quartet && q.hp > 0) { q.hp = q.max; g.events.push({ t: 'quartetfail', x: q.x, y: q.y }); }
+  }
+}
+function choirTick(sn, dt) {
+  const segs = sn.segs;
+  for (let i = 1; i < segs.length; i++) if (segs[i].choir && segs[i].hp > 0) {
+    for (let j = Math.max(1, i - CHOIR_REACH); j <= Math.min(segs.length - 1, i + CHOIR_REACH); j++) { const q = segs[j]; if (j !== i && q.hp > 0 && !(q.flash > 0)) q.hp = Math.min(q.max, q.hp + q.max * CHOIR_REGEN * dt); }
+  }
 }
 function wardTick(sn) {
   const segs = sn.segs;
@@ -920,6 +967,7 @@ function onKill(g, s, sn) {
   if (s.gold && s.goldT > 0) { g.goldPopped++; const v = coinV * GOLD_MUL * (1 + uv(g, 'gear') / 200); g.coins += v * g.p.coinMul * (g.coinK || 1); g.events.push({ t: 'goldpop', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)) }); }
   if (!s.isHead && s.y > LINE_Y - CLUTCH_DIST) { g.clutches++; addEncore(g, ENCORE_CLUTCH); g.events.push({ t: 'clutch', x: s.x, y: s.y }); }
   g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin, carry: s.carry });
+  quartetKill(g, s, sn, coinV);
   if (s.lull) { for (const o of g.snakes) o.slow = Math.max(o.slow, LULL_TIME * (1 + uv(g, 'fork') / 100)); g.events.push({ t: 'lull', x: s.x, y: s.y }); }
   if (s.kind === 'bomb') {
     g.bombsPopped++;
@@ -1256,11 +1304,11 @@ export function step(g, dt, input) {
     // now and then it surges for a second (with a warning beforehand)
     if (g.phase === 'play') {
       sn.surgeT -= dt;
-      if (sn.surge === 'idle' && sn.surgeT <= 0) { sn.surge = 'warn'; sn.surgeT = 0.6; g.events.push({ t: 'surgewarn' }); }
+      if (sn.surge === 'idle' && sn.surgeT <= 0) { sn.surge = 'warn'; sn.surgeT = sn.p2 ? P2_WARN : 0.6; if (sn.p2) { const a = sn.segs[0].ps; sn.lane = { a, b: a + sn.speed * (1 - g.p.slow) * P2_DASH * 1.1, w: P2_WARN }; } g.events.push({ t: 'surgewarn', lane: !!sn.lane }); }
       else if (sn.surge === 'warn' && sn.surgeT <= 0) { sn.surge = 'go'; sn.surgeT = 1.1; g.events.push({ t: 'surge' }); }
-      else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.surgeT = ((sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5)) * (sn.p2 ? 0.6 : 1); }
+      else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.lane = null; sn.surgeT = ((sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5)) * (sn.p2 ? 0.6 : 1); }
     }
-    const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? 0.55 : 1) * (sn.surge === 'go' ? 2.6 : 1) * (sn.drum ? DRUM_SPEED : 1) * (g.phase === 'clear' ? 0 : 1);
+    const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? 0.55 : 1) * (sn.surge === 'go' ? (sn.p2 ? P2_DASH : 2.6) : 1) * (sn.drum ? DRUM_SPEED : 1) * (g.phase === 'clear' ? 0 : 1);
     const segs = sn.segs, last = segs.length - 1;
     let total = 0;
     for (let i = 0; i < last; i++) total += spacing(segs[i], segs[i + 1]);
@@ -1281,7 +1329,7 @@ export function step(g, dt, input) {
     const wavePos = sn.boss ? ((sn.p2 ? sn.p2T * 4.5 + (g.t - sn.p2T) * P2_WAVE : g.t * 4.5)) % (segs.length + 8) : -99;
     const wave2 = sn.boss && g.stage >= ECHO_WAVE_FROM ? (segs.length + 8) - ((g.t * 3.2 + 7) % (segs.length + 8)) : -99;   // late bosses: a second wave runs back up the chain
     for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
-    wardTick(sn);
+    wardTick(sn); choirTick(sn, dt); if (g.phase === 'play') quartetTick(g, sn, dt);
     if (sn.breach && g.phase === 'play') { g.leaks++; g.events.push({ t: 'leak', x: segs[0].x, y: LINE_Y }); loseRun(g); }
     for (const s of segs) {
       const ox = s.x, oy = s.y;
@@ -1389,14 +1437,14 @@ export function botInput(g) {
 // ---------------------------------------------------------------- retention loops (all optional gifts, nothing here gates progress)
 // save.addict: sp (kills per snake species), sk (damage points per skill), claimed (mastery + collection rewards),
 // spin (last lucky spin day), week (weekly challenge), seen (last visit, ms) for the comeback gift.
-export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1, n: 0 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0, q: { day: 0, p: [0, 0, 0], chest: 0 }, season: { key: 0, n: 0, last: 0, claimed: {}, note: '' }, ann: {}, annInit: 0 });
+export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1, n: 0, shield: 0 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0, q: { day: 0, p: [0, 0, 0], chest: 0 }, season: { key: 0, n: 0, last: 0, claimed: {}, note: '' }, ann: {}, annInit: 0 });
 export function sanitizeAddict(raw) {
   const a = addictDefault(), num = (v, d = 0) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : d);
   for (const k of SKINS) a.sp[k] = num(raw && raw.sp && raw.sp[k]);
   for (const w of WEAPONS) a.sk[w.id] = num(raw && raw.sk && raw.sk[w.id]);
   if (!raw || typeof raw !== 'object') return a;
   if (raw.claimed && typeof raw.claimed === 'object') for (const k of Object.keys(raw.claimed)) if (raw.claimed[k] && /^[a-z0-9:_]{1,40}$/.test(k)) a.claimed[k] = 1;
-  if (raw.spin && typeof raw.spin === 'object') a.spin = { day: num(raw.spin.day), prize: Math.min(SPIN_PRIZES.length - 1, num(raw.spin.prize, -1)), n: Math.min(9999, num(raw.spin.n)) };
+  if (raw.spin && typeof raw.spin === 'object') a.spin = { day: num(raw.spin.day), prize: Math.min(SPIN_PRIZES.length - 1, num(raw.spin.prize, -1)), n: Math.min(9999, num(raw.spin.n)), shield: raw.spin.shield ? 1 : 0 };
   if (raw.week && typeof raw.week === 'object') a.week = { key: num(raw.week.key), prog: num(raw.week.prog), claimed: raw.week.claimed ? 1 : 0 };
   a.seen = num(raw.seen);
   if (raw.q && typeof raw.q === 'object') a.q = { day: num(raw.q.day), p: [0, 1, 2].map(i => Math.min(9999, num(Array.isArray(raw.q.p) ? raw.q.p[i] : 0))), chest: raw.q.chest ? 1 : 0 };
@@ -1477,11 +1525,15 @@ export function spinPrize(day) {
   for (; i < SPIN_PRIZES.length - 1; i++) { r -= SPIN_PRIZES[i].w; if (r <= 0) break; }
   return i;
 }
+export const SHIELD_AT = [7, 14];   // spin days that gift a streak shield (one forgiven missed day)
 export const spinReady = (save, day) => save.addict.spin.day !== day;
 export function doSpin(save, day) {
   if (!spinReady(save, day)) return null;
-  const i = spinPrize(day), sp = save.addict.spin, n = sp.day === day - 1 ? (sp.n || 0) + 1 : 1; save.addict.spin = { day, prize: i, n }; grantReward(save, SPIN_PRIZES[i].reward);
-  return { index: i, prize: SPIN_PRIZES[i] };
+  const i = spinPrize(day), sp = save.addict.spin, kept = sp.day === day - 2 && sp.shield && (sp.n || 0) > 0;   // a streak shield forgives one missed day
+  const n = sp.day === day - 1 || kept ? (sp.n || 0) + 1 : 1; let shield = kept ? 0 : sp.shield ? 1 : 0, gift = false;
+  if (SHIELD_AT.includes(n) && !shield) { shield = 1; gift = true; }
+  save.addict.spin = { day, prize: i, n, shield }; grantReward(save, SPIN_PRIZES[i].reward);
+  return { index: i, prize: SPIN_PRIZES[i], gift, saved: kept };
 }
 // ---- comeback gift: three days away or more, never expires, never nags
 export const COMEBACK_DAYS = 3;
@@ -1580,7 +1632,8 @@ export const SPIN_FRAMES = [
   { at: 14, name: 'Golden wheel', color: '#ffe26a', glow: 22, ptr: '🎵', burst: 28 },
   { at: 30, name: 'Rainbow wheel', color: '#ff7eb6', glow: 30, ptr: '🌈', burst: 40 },
 ];
-export function spinStreak(save, day) { const sp = save.addict.spin; return sp.day === day || sp.day === day - 1 ? sp.n || 0 : 0; }
+export function spinStreak(save, day) { const sp = save.addict.spin; return sp.day === day || sp.day === day - 1 || (sp.day === day - 2 && sp.shield) ? sp.n || 0 : 0; }
+export const hasShield = save => !!save.addict.spin.shield;
 export function spinFrame(n) { let f = SPIN_FRAMES[0]; for (const x of SPIN_FRAMES) if (n >= x.at) f = x; const nx = SPIN_FRAMES.find(x => x.at > n) || null; return { ...f, next: nx ? nx.at : 0, nextName: nx ? nx.name : '' }; }
 // Daily Quests: three short quests that rotate each day; finish all three to open the chest. No energy, no timers.
 export const QUEST_DEFS = [
@@ -1649,6 +1702,7 @@ export function comebackLines(save, day, now) {
   const g = comebackGift(save, now); if (!g) return [];
   const out = [g.days >= 14 ? 'The whole band missed you!' : g.days >= 7 ? 'It has been a while, welcome home!' : 'Good to see you again!'];
   if (spinReady(save, day)) out.push('🎡 A free spin is waiting');
+  if (save.addict.spin.shield) out.push('🛡️ Your Streak Shield is still saved');
   if (!questState(save, day).chestOpened) out.push('🎁 Three easy quests are ready');
   out.push('🌟 Season day ' + seasonStatus(save, day).dayNo + ' of ' + SEASON_DAYS);
   out.push('Take your time. Nothing is lost.');
