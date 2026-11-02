@@ -1,6 +1,7 @@
 // In-run HUD (canvas, 720x1280 game units). Glass chips, a title plate, a progress bar with
 // chest markers, an equalizer groove meter and round skill tiles with cooldown rings.
 // The renderer hands in its helpers; this file never touches the sim state.
+import { landBounce } from './hitjuice.js';
 import { W, H, WEAPONS, uv, isBossStage, virusName } from './sim.js';
 
 const TAU = Math.PI * 2;
@@ -61,7 +62,7 @@ export function createHud(env) {
     glass(16, 14, 124, 52, 26, 'rgba(255,216,77,.55)');
     ctx.beginPath(); ctx.arc(42, cy, 17, 0, TAU); ctx.fillStyle = '#ffd84d'; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.stroke();
     sparkleAt(42, cy, 13);
-    const su = pop('up', uvl); scaled(66, cy + 2, su, () => text('x ' + uvl, 0, 0, 26, '#ffd84d', '#0b1020', 'left'));
+    const su = Math.max(pop('up', uvl), landBounce(S, 'up')); scaled(66, cy + 2, su, () => text('x ' + uvl, 0, 0, 26, '#ffd84d', '#0b1020', 'left'));
     // chests carried by the snake
     let ch = 0; for (const sn of g.snakes) for (const q of sn.segs) if (q.carry === 'chest' && q.hp > 0) ch++;
     if (ch) {
@@ -77,7 +78,7 @@ export function createHud(env) {
     text(nm, W / 2, 58, fs, '#ffd0e6');
     if (g.hard) { glass(px + 168, -2, 66, 26, 13, 'rgba(201,160,255,.8)', 'rgba(60,20,110,.85)'); text('HARD', px + 201, 11, 14, '#e2caff', '#0b1020'); }
     // coins, bouncing when they grow
-    const coins = Math.floor(g.coins), sc = pop('coin', coins);
+    const coins = Math.floor(g.coins), sc = Math.max(pop('coin', coins), landBounce(S, 'coin'));
     glass(484, 14, 142, 52, 26, 'rgba(255,210,74,.55)');
     scaled(514, cy, sc, () => blit(kit && kit.SPR.pickup('coin'), 0, 0, 52));
     scaled(542, cy + 2, sc, () => text(String(coins), 0, 0, 26, '#ffd24a', '#0b1020', 'left'));
