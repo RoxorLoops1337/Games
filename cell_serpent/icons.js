@@ -119,6 +119,36 @@ const DRAW = {
     g.strokeStyle = 'rgba(160,200,230,.9)'; g.lineWidth = 2; for (let x = 14; x < 54; x += 8) { g.beginPath(); g.moveTo(x, 16); g.lineTo(x - 2, 36); g.stroke(); }
     g.beginPath(); g.arc(32, 9, 7, 0, 7); fillStroke(g, '#ffffff', 2.5);
   },
+  // hub tab bar set (batch 4): one chunky style, one outline, one light direction
+  tab_shop: g => {   // a shopping bag with a handle and a heart
+    g.strokeStyle = OUT; g.lineWidth = 5; g.beginPath(); g.moveTo(22, 22); g.quadraticCurveTo(22, 6, 32, 6); g.quadraticCurveTo(42, 6, 42, 22); g.stroke();
+    g.beginPath(); g.moveTo(10, 22); g.lineTo(54, 22); g.lineTo(51, 57); g.quadraticCurveTo(51, 59, 49, 59); g.lineTo(15, 59); g.quadraticCurveTo(13, 59, 13, 57); g.closePath(); fillStroke(g, grad(g, 22, 59, '#ff9ac0', '#d83a7a'));
+    g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(15, 25, 5, 28);
+    g.beginPath(); g.moveTo(32, 50); g.bezierCurveTo(16, 40, 22, 30, 32, 37); g.bezierCurveTo(42, 30, 48, 40, 32, 50); g.closePath(); fillStroke(g, '#fff', 2.5);
+  },
+  tab_stats: g => { DRAW.heart(g); g.fillStyle = 'rgba(255,255,255,.4)'; g.beginPath(); g.ellipse(21, 22, 5, 3, -0.7, 0, 7); g.fill(); },
+  tab_battle: g => {   // two crossed swords
+    for (const k of [-1, 1]) {
+      g.save(); g.translate(32, 32); g.rotate(k * 0.785); g.translate(-32, -32);
+      g.beginPath(); g.moveTo(32, 2); g.lineTo(38, 12); g.lineTo(38, 40); g.lineTo(26, 40); g.lineTo(26, 12); g.closePath(); fillStroke(g, grad(g, 2, 40, '#ffffff', '#a8b8d8'), 3);
+      g.fillStyle = 'rgba(70,90,130,.35)'; g.fillRect(31, 8, 2, 30);
+      rr(g, 17, 40, 30, 7, 3); fillStroke(g, grad(g, 40, 47, '#ffe98a', '#e0a020'), 2.5);
+      rr(g, 28, 47, 8, 11, 3); fillStroke(g, '#c0481c', 2.5);
+      g.restore();
+    }
+  },
+  tab_skills: g => { star(g, 32, 32, 29, 8, 4); fillStroke(g, grad(g, 3, 61, '#e6d4ff', '#8a5cf0')); star(g, 50, 13, 9, 3, 4); fillStroke(g, '#fff', 2); star(g, 14, 50, 7, 2.4, 4); fillStroke(g, '#fff', 2); },
+  tab_pets: g => {   // a paw print
+    for (const [x, y, rx, ry, r] of [[13, 30, 6, 8, -0.4], [25, 17, 6.5, 9, -0.12], [39, 17, 6.5, 9, 0.12], [51, 30, 6, 8, 0.4]]) { g.beginPath(); g.ellipse(x, y, rx, ry, r, 0, 7); fillStroke(g, grad(g, y - ry, y + ry, '#ffd08a', '#e08a3a'), 3); }
+    g.beginPath(); g.moveTo(32, 30); g.bezierCurveTo(46, 30, 56, 46, 50, 54); g.bezierCurveTo(44, 62, 38, 54, 32, 54); g.bezierCurveTo(26, 54, 20, 62, 14, 54); g.bezierCurveTo(8, 46, 18, 30, 32, 30); g.closePath(); fillStroke(g, grad(g, 30, 60, '#ffd08a', '#e08a3a'), 3);
+  },
+  tab_gear: g => {   // a little backpack
+    rr(g, 12, 14, 40, 46, 14); fillStroke(g, grad(g, 14, 60, '#ff8a6a', '#c8381c'));
+    g.strokeStyle = OUT; g.lineWidth = 4; g.beginPath(); g.moveTo(24, 16); g.quadraticCurveTo(24, 4, 32, 4); g.quadraticCurveTo(40, 4, 40, 16); g.stroke();
+    rr(g, 19, 36, 26, 18, 6); fillStroke(g, grad(g, 36, 54, '#ffb08a', '#e0602c'), 2.5);
+    g.fillStyle = '#ffd84d'; g.fillRect(29, 33, 6, 5); g.strokeRect(29, 33, 6, 5);
+    g.fillStyle = 'rgba(255,255,255,.3)'; g.fillRect(16, 20, 4, 12);
+  },
 };
 
 export function iconURL(name) {

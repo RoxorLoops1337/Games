@@ -974,6 +974,12 @@
   .hub-skel .tab.on>*{opacity:.35;pointer-events:none;transition:opacity .12s}
   .hub-skel .tab.on{animation:none}
   /* end @css:17-perf */
+/* @css:19-buttons */
+  .tabs button b{height:30px;display:flex;align-items:center;justify-content:center}
+  .tabs .tico{width:30px;height:30px;object-fit:contain;filter:grayscale(.35) brightness(.88);opacity:.9;transition:filter .2s,opacity .2s,transform .25s cubic-bezier(.3,1.7,.5,1);pointer-events:none}
+  .tabs button.on .tico{filter:drop-shadow(0 2px 5px rgba(255,92,184,.6));opacity:1;transform:translateY(-1px) scale(1.1)}
+  .tabs button:active .tico{transform:scale(.88)}
+/* end @css:19-buttons */
 </style>
 </head>
 <body>
