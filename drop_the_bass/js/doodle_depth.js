@@ -132,6 +132,13 @@ export function emblem(ctx, x, y, r, glyph, col) {
   ctx.beginPath(); ctx.arc(x, y, r - 3.5, 0, TAU); ctx.fillStyle = col; ctx.globalAlpha = 0.35; ctx.fill(); ctx.globalAlpha = 1;
   AE.drawGlyph(ctx, glyph, x, y, r * 1.35, col); ctx.restore();
 }
+// A turret list icon (paper tile plus the instrument) baked once per type and size and replayed with one drawImage; art_entities.drawTurretIconFlat
+// redraws about fifteen paths every call, and the pool strip alone shows a dozen of them every frame.
+export function flatIcon(ctx, type, x, y, size) {
+  const sz = Math.round(size * 2) / 2, box = Math.ceil(sz * 1.2) + 4;
+  const e = K.sprite('dd:ico:' + type + ':' + sz, box, box, (pen, c) => AE.drawTurretIconFlat(c, type, 0, 0, sz), { frames: 1 });
+  K.blit(ctx, e, x, y, 0);
+}
 const fitText = (ctx, str, maxW, size) => {
   ctx.save(); ctx.font = 'bold ' + size + 'px ' + DH.FONT; let out = String(str);
   if (ctx.measureText(out).width > maxW) { while (out.length > 4 && ctx.measureText(out + '...').width > maxW) out = out.slice(0, -1); out += '...'; }
@@ -275,7 +282,7 @@ export function drawBossMarks(b, ctx, e, t) {
 export function phaseTicks(b, boss) {
   const run = b.run; if (!run.bossPhaseList) return null;
   const list = run.bossPhaseList(boss) || [];
-  const at = list.map((p) => p.at).filter((v) => v > 0 && v < 1);
+  const at = [...new Set(list.map((p) => p.at).filter((v) => v > 0 && v < 1))];   // several effects can share one threshold (Dr. Dead Air has three at 0.33): one notch
   return at.length ? at : null;
 }
 // the notches drawn on the boss bar (the Mr. Playback fallback when the sim lists no phases)
@@ -293,14 +300,22 @@ function drawPhaseNumbers(b, ctx, boss, bx, by, bw, phase) {
   });
   ctx.restore();
 }
+// "PHASE n/m" counts the distinct health thresholds (the notches on the bar), not every effect: sim.js lists seven effects for Dr. Dead Air but only four steps
+export function phaseState(b, boss, info) {
+  const ticks = bossTicks(b, boss);
+  if (!ticks) return { phase: Math.min(info.phase || 1, info.phases || 1), phases: info.phases || 1 };
+  const f = info.hpFrac == null ? boss.hp / boss.maxHp : info.hpFrac;
+  return { phase: 1 + ticks.filter((at) => f <= at + 1e-9).length, phases: ticks.length + 1 };
+}
 // the shield strip and "PHASE n/m" tag on the boss bar
 export function drawBossHud(b, ctx, boss, bx, by, bw, t) {
   const info = b.run.bossInfo ? b.run.bossInfo(boss.id) : null; if (!info) return;
-  if (cbOn(b)) drawPhaseNumbers(b, ctx, boss, bx, by, bw, info.phase || 1);
+  if (cbOn(b)) drawPhaseNumbers(b, ctx, boss, bx, by, bw, phaseState(b, boss, info).phase);
   if (info.shieldFrac > 0) {
     ctx.save(); ctx.fillStyle = INK; ctx.fillRect(bx, by + 19.5, bw, 5.5); ctx.fillStyle = C.sky; ctx.fillRect(bx + 1, by + 20.5, (bw - 2) * info.shieldFrac, 3.5); ctx.restore();
   }
-  if (info.phases > 1) DH.text(ctx, BT.phaseOf(Math.min(info.phase, info.phases), info.phases), bx + bw - 6, by + 10, 11, '#fff', 'right', 900, { maxW: 90 });
+  const ps = phaseState(b, boss, info);
+  if (ps.phases > 1) DH.text(ctx, BT.phaseOf(ps.phase, ps.phases), bx + bw - 6, by + 10, 11, '#fff', 'right', 900, { maxW: 90 });
 }
 
 // ================================================================================================ 3. hero abilities
@@ -378,7 +393,7 @@ export function drawPoolCard(b, ctx) {
   ctx.save(); ctx.globalAlpha = 0.4 * k; ctx.fillStyle = INK; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = k;
   const P = sheet(ctx, h, def.color, k, 828), x = P.x + 18;
   let y = P.y;
-  AE.drawTurretIconFlat(ctx, pc.type, P.x + 44, y + 38, 54);
+  flatIcon(ctx, pc.type, P.x + 44, y + 38, 54);
   DH.text(ctx, def.name, P.x + 82, y + 26, 22, INK, 'left', 900, { maxW: 240 });
   DH.text(ctx, pct > 0 ? BT.dropChance(pct) : BT.notInPool(), P.x + 82, y + 48, 14, '#d6358a', 'left', 900, { maxW: P.w - 100 });
   DH.text(ctx, def.kind === 'aura_rate' || def.kind === 'aura_dmg' ? BT.support() : BT.attacker(), P.x + P.w - 18, y + 26, 13, DIM, 'right', 900, { maxW: 110 });
@@ -389,7 +404,7 @@ export function drawPoolCard(b, ctx) {
   y += 4;
   DH.text(ctx, BT.worksWithSide(), x, y + 6, 13, C.purple, 'left', 900, { maxW: P.w - 36 }); y += 22;
   for (const pp of partners) {
-    AE.drawTurretIconFlat(ctx, pp.partner, x + 14, y + 6, 24);
+    flatIcon(ctx, pp.partner, x + 14, y + 6, 24);
     const sy = SYNERGY_BY_ID[pp.id];
     DH.text(ctx, fitText(ctx, BT.partnerLine(TURRETS[pp.partner] ? TURRETS[pp.partner].name : pp.partner, pp.name || (sy && sy.name) || '', pp.desc || ''), P.w - 70, 12), x + 34, y + 6, 12, INK, 'left'); y += 24;
   }

@@ -42,6 +42,14 @@ const BOSS_TIPS = {
   lowpass: 'The Low-Pass Tide shrugs off weak shots: bring big hits like Kick Cannon and Cowbell Sniper.',
   silence: 'Dr. Dead Air mutes and steals turrets: keep spares and save your heroes for the end.',
 };
+// the fixed recap sentences, by tip id (ids: the ENEMY_TIPS and BOSS_TIPS keys, these, plus 'lane' and 'pair' which carry vars)
+const FIXED_TIPS = {
+  no_merge: 'You never merged: drag two turrets of the same level together to double their power.',
+  low_merge: 'You never merged past level 3: merge pairs to double power.',
+  spare_coins: 'You ended with spare coins: turn them into turrets before the wave.',
+  no_hero: 'Roxor and Jasmin never played: tap a hero when the stage fills up.',
+  clean: 'Clean run! Try Hard difficulty or a higher Encore.',
+};
 const RUSH_BOSSES = ['compressor', 'noisegate', 'reverb', 'djglitch', 'playback', 'lowpass', 'silence'];
 const ENDLESS_BOSSES = RUSH_BOSSES;
 
@@ -1622,7 +1630,8 @@ export class Run {
 
   // ---------------------------------------------------------------- recap (live and in result.recap)
   // { leaksByLane:[n], leakTypes:[{type,count}], worstWave:number|null, topKillers:[{type,count}] (count = stage damage dealt),
-  //   bossFinisher: bossId|null (the boss whose leak ended the run), turretUse:[{type,deployed,bestLevel}], tips:[up to 3 strings] }
+  //   bossFinisher: bossId|null (the boss whose leak ended the run), turretUse:[{type,deployed,bestLevel}], tips:[up to 3 English strings],
+  //   tipIds:[{id,vars}] the same tips as ids for the UI dictionary }
   recap() {
     const sortRows = (obj) => Object.keys(obj).map((type) => ({ type, count: obj[type] })).sort((a, b) => b.count - a.count || (a.type < b.type ? -1 : 1));
     let worstWave = null, wl = 0;
@@ -1630,33 +1639,37 @@ export class Run {
     const turretUse = Object.keys(this.deployedByType).map((type) => ({ type, deployed: this.deployedByType[type], bestLevel: this.bestLvlByType[type] || 1 }))
       .sort((a, b) => b.deployed - a.deployed || (a.type < b.type ? -1 : 1));
     const base = { leaksByLane: this.leaksByLane.slice(), leakTypes: sortRows(this.leakTypeCount), worstWave, topKillers: sortRows(this.stageDmgByType), bossFinisher: this.bossFinisher, turretUse };
-    return Object.assign(base, { tips: this.recapTips(base) });
+    const ent = this.recapTipEntries(base);
+    return Object.assign(base, { tips: ent.map((e) => e.text), tipIds: ent.map((e) => ({ id: e.id, vars: e.vars })) });
   }
-  recapTips(r) {
-    const tips = [];
+  recapTips(r) { return this.recapTipEntries(r).map((e) => e.text).slice(0, 3); }
+  // the same tips as { id, vars, text }: the UI looks the id up in its dictionary (text is the English fallback)
+  recapTipEntries(r) {
+    const out = [];
+    const add = (id, text, vars) => out.push({ id, vars: vars || {}, text });
     const nl = r.leaksByLane.length, total = r.leaksByLane.reduce((a, b) => a + b, 0);
-    if (r.bossFinisher && BOSS_TIPS[r.bossFinisher]) tips.push(BOSS_TIPS[r.bossFinisher]);
+    if (r.bossFinisher && BOSS_TIPS[r.bossFinisher]) add(r.bossFinisher, BOSS_TIPS[r.bossFinisher]);
     if (nl > 1 && total >= 3) {
       let bi = 0; r.leaksByLane.forEach((v, i) => { if (v > r.leaksByLane[bi]) bi = i; });
       if (r.leaksByLane[bi] / total >= 0.5) {
         const names = nl === 2 ? ['left', 'right'] : nl === 3 ? ['left', 'right', 'middle'] : null;
-        tips.push('Most leaks came from the ' + (names ? names[bi] : 'number ' + (bi + 1)) + ' lane: build there.');
+        add('lane', 'Most leaks came from the ' + (names ? names[bi] : 'number ' + (bi + 1)) + ' lane: build there.', names ? { lane: names[bi] } : { n: bi + 1 });
       }
     }
     const lt = r.leakTypes.find((x) => ENEMY_TIPS[x.type] && x.count >= 2) || r.leakTypes.find((x) => ENEMY_TIPS[x.type]);
-    if (lt) tips.push(ENEMY_TIPS[lt.type]);
-    if (this.merges === 0 && this.deploys >= 4) tips.push('You never merged: drag two turrets of the same level together to double their power.');
-    else if (this.maxLevelSeen <= 3 && this.deploys >= 8) tips.push('You never merged past level 3: merge pairs to double power.');
-    if (this.phase === 'lost' && this.coins >= 3 * this.deployCost(false, true)) tips.push('You ended with spare coins: turn them into turrets before the wave.');
-    if (this.heroUses === 0 && this.wave >= 3) tips.push('Roxor and Jasmin never played: tap a hero when the stage fills up.');
+    if (lt) add(lt.type, ENEMY_TIPS[lt.type]);
+    if (this.merges === 0 && this.deploys >= 4) add('no_merge', FIXED_TIPS.no_merge);
+    else if (this.maxLevelSeen <= 3 && this.deploys >= 8) add('low_merge', FIXED_TIPS.low_merge);
+    if (this.phase === 'lost' && this.coins >= 3 * this.deployCost(false, true)) add('spare_coins', FIXED_TIPS.spare_coins);
+    if (this.heroUses === 0 && this.wave >= 3) add('no_hero', FIXED_TIPS.no_hero);
     if (!this.synEver) {
       const have = Object.keys(this.deployedByType);
       let pair = SYNERGIES.find((s) => have.includes(s.a) && have.includes(s.b));
       if (!pair && have.length) { const p = TURRET_PARTNERS[have[0]][0]; if (p) pair = SYNERGIES.find((s) => s.id === p.id); }
-      if (pair) tips.push('Try pairing ' + TURRETS[pair.a].name + ' with ' + TURRETS[pair.b].name + ' for a synergy bonus.');
+      if (pair) add('pair', 'Try pairing ' + TURRETS[pair.a].name + ' with ' + TURRETS[pair.b].name + ' for a synergy bonus.', { a: pair.a, b: pair.b });
     }
-    if (!tips.length && this.phase === 'won') tips.push('Clean run! Try Hard difficulty or a higher Encore.');
-    return tips.slice(0, 3);
+    if (!out.length && this.phase === 'won') add('clean', FIXED_TIPS.clean);
+    return out.slice(0, 3);
   }
 
   // ---------------------------------------------------------------- bot helpers (also used by the tutorial and tests)
@@ -1675,4 +1688,4 @@ export class Run {
   }
 }
 
-export { REMIX, RELICS, WAVE_MODS, ENEMY_TIPS, BOSS_TIPS };
+export { REMIX, RELICS, WAVE_MODS, ENEMY_TIPS, BOSS_TIPS, FIXED_TIPS };

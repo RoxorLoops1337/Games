@@ -1,7 +1,7 @@
 // ui_core.js: tiny DOM helpers shared by all menu screens: element builder, canvas icons, live (animated) canvases, modals, toasts.
 import * as AE from './art_entities.js';
 import * as AW from './art_world.js';
-import { TURRETS, RARITY, COL } from './data_core.js';
+import { RARITY } from './data_core.js';
 import { GEAR } from './data_meta.js';
 import { HINTS } from './data_story.js';
 
@@ -102,27 +102,34 @@ export function actionToast(msg, label, fn, ms = 9000) {
   return el;
 }
 // First-time hints in the hub flows. Each id lives in HINTS (data_hints_extra.js) and is shown once per profile (profile.tutorial.hints[id]).
-// Hints queue, so two that trigger together show one after the other. Returns true when the hint will be shown.
-const hintQ = [];
-let hintBusy = false, hintActive = false;
+// Rules: at most one hint at a time, at least HINT_GAP_MS between two hints in a session, never over the Setlist sheet except hint_setlist
+// itself, and hint_skin_buy only once the first stage is cleared. A hint that may not show now is NOT marked as seen and not kept: the screen
+// that asks for it asks again the next time it is shown, so the rest "queue" on later screens. Returns true when the hint will be shown.
+export const HINT_GAP_MS = 20000;
+let hintNowFn = () => Date.now();
+let lastHintEnd = -Infinity, hintBusy = false, hintActive = false;
+export function setHintClock(fn) { hintNowFn = fn || (() => Date.now()); }
+export function resetHintState() { lastHintEnd = -Infinity; hintBusy = false; hintActive = false; }
+const setlistOpen = () => typeof document !== 'undefined' && !!document.querySelector && !!document.querySelector('.setlist');
+const firstStageCleared = (p) => !!p.prog && Object.values(p.prog).some((w) => w && w.cleared);
 export function hubHint(app, id, done) {
   const p = app.profile;
-  if (!HINTS[id] || !p.tutorial.done || p.tutorial.hints[id] || hintQ.some((q) => q.id === id)) { return false; }
+  if (!HINTS[id] || !p.tutorial.done || p.tutorial.hints[id]) return false;
+  if (id === 'hint_skin_buy' && !firstStageCleared(p)) return false;
+  if (id !== 'hint_setlist' && setlistOpen()) return false;
+  // a hint card that was torn down without closing (screen rebuilt) must not block the hints for good
+  if (hintBusy && hintActive && typeof document !== 'undefined' && !document.querySelector('.hint-card')) { hintBusy = false; hintActive = false; lastHintEnd = hintNowFn(); }
+  if (hintBusy || hintNowFn() - lastHintEnd < HINT_GAP_MS) return false;
+  hintBusy = true;
   p.tutorial.hints[id] = true; app.save();
-  hintQ.push({ id, done });
-  // a hint card that was torn down without closing (screen rebuilt) must not block the queue for good
-  if (hintBusy && hintActive && typeof document !== 'undefined' && !document.querySelector('.hint-card')) { hintBusy = false; hintActive = false; }
-  if (!hintBusy) { hintBusy = true; setTimeout(() => nextHint(app), 450); }
+  setTimeout(() => {
+    if (id !== 'hint_setlist' && setlistOpen()) { delete p.tutorial.hints[id]; hintBusy = false; app.save(); if (done) done(); return; }
+    hintActive = true;
+    const fin = () => { hintActive = false; hintBusy = false; lastHintEnd = hintNowFn(); if (done) done(); };
+    if (app.hooks && app.hooks.onHint) app.hooks.onHint(id, fin); else fin();
+  }, 450);
   return true;
 }
-function nextHint(app) {
-  const q = hintQ.shift();
-  if (!q) { hintBusy = false; return; }
-  hintBusy = true; hintActive = true;
-  const fin = () => { hintActive = false; if (q.done) q.done(); setTimeout(() => nextHint(app), 250); };
-  if (app.hooks && app.hooks.onHint) app.hooks.onHint(q.id, fin); else fin();
-}
-export const hintsPending = () => hintQ.length + (hintBusy ? 1 : 0);
 export const rarClass = (r) => 'rar-' + r;
 export const rarName = (r) => RARITY[r].name;
 export function currencyChip(kind, n) { return h('span', { class: 'chip' }, currencyIcon(kind, 18), String(n)); }

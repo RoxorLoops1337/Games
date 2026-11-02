@@ -1,7 +1,7 @@
 // ui_setlist.js: the pre-run "Setlist" sheet. Hero move picker, run modifiers with a risk and reward readout, difficulty and the Start button.
 // Opened by app.requestRun(cfg) from every Play button. A remembered "skip this screen" toggle (settings.skipSetlist) goes straight to the run.
 import { WORLD_BY_ID } from './data_core.js';
-import { HERO_ABILITIES, RUN_MODIFIERS, RUN_MODIFIER_BY_ID, MAX_RUN_MODIFIERS } from './data_depth.js';
+import { RUN_MODIFIERS, RUN_MODIFIER_BY_ID, MAX_RUN_MODIFIERS } from './data_depth.js';
 import * as M from './meta.js';
 import { t, tn } from './i18n.js';
 import { h, canvasOf, icon, modal, toast, btn, AW, hubHint } from './ui_core.js';
