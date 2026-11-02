@@ -1,6 +1,7 @@
 // Battle tab markup and CSS marker checks (agent 08)
 import assert from 'node:assert';
 import fs from 'node:fs';
+import { chipReward, goalRowHTML } from '../../cell_serpent/battle_ui.js';
 const html = fs.readFileSync(new URL('../../cell_serpent/index.html', import.meta.url), 'utf8');
 const main = fs.readFileSync(new URL('../../cell_serpent/main.js', import.meta.url), 'utf8');
 for (const id of ['btHero', 'stCanvas', 'stPortrait', 'stBadges', 'stChips', 'diffRow', 'stGo', 'contBtn', 'battleLoad', 'pigBox', 'goalList']) assert.ok(html.includes(`id="${id}"`), id);
@@ -35,3 +36,10 @@ assert.ok(typeof ui.syncDock === 'function' && typeof ui.fitTitle === 'function'
   const b = mk(); ui.goTag(b, 5, 100, false); assert.equal(b.dataset.tag, undefined, 'locked stage has no tag');
   delete globalThis.document; }
 console.log('08_battle_tab ok');
+// round 4: chip reward markers, compact goals strip, side scroll fade
+assert.ok(/class="rw"[^>]*>\+\d+/.test(chipReward(15, 14, 0)), "next stage chip shows its first clear reward");
+assert.ok(chipReward(3, 14, 0).includes("class=\"hk\""), "cleared stage without a Hard clear gets the H marker");
+assert.strictEqual(chipReward(3, 14, 5), "", "no marker once Hard first clear is done");
+assert.strictEqual(chipReward(17, 14, 0), "", "far stages show nothing");
+assert.ok(goalRowHTML("Pop", 1, 3, "50", "ready").includes("gl-btn ready") && goalRowHTML("x", 3, 3, "5", "claimed").includes("DONE"), "goal row states");
+assert.ok(main.includes("chipReward(n, save.cleared") && main.includes("watchSide") && html.includes("id=\"glCount\""), "wired");

@@ -19,7 +19,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     clear: null,
     sounds: [],
     beatFn: null,
-    mile: null, go: null, mileDone: 0, lastBoss: false,   // milestone ribbon, GO! pop, stage progress milestones already shown
+    mile: null, go: null, mileDone: 0, lastBoss: false, ph: '', cc: null, p2: null, p2Done: false, perf: 0,   // milestone ribbon, GO! pop, stage progress milestones already shown
   };
   const calm = () => OPT.reduceMotion;
 
@@ -60,7 +60,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     switch (e.t) {
       case 'stage': {
         const boss = !!e.boss;
-        F.mileDone = 0; F.mile = null; F.go = null; F.lastBoss = boss;
+        F.mileDone = 0; F.mile = null; F.go = null; F.lastBoss = boss; F.p2 = null; F.p2Done = false; F.cc = null; F.perf = 0;
         F.card = { n: e.n, boss, name: e.name || '', mod: e.mod || '', skin: g.skin, t: 0, dur: boss ? 2.9 : 2.3, slammed: false };
         F.deadT = 0;
         break;
@@ -75,12 +75,13 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
         if (e.head && !calm()) { F.stop = Math.max(F.stop, e.boss ? 0.09 : 0.055); F.stopAt = S.t; }
         if (e.head) punch(e.x, e.y, e.boss ? 0.09 : 0.05, e.boss ? 0.28 : 0.4, e.boss ? 0.55 : 0.32);
         break;
-      case 'clutch': F.clutchT = 0.55; if (!calm()) S.trauma = Math.min(1, S.trauma + 0.3); break;   // close call: a cell died right at the line
+      case 'clutch': F.clutchT = 0.55; if (!calm()) { S.trauma = Math.min(1, S.trauma + 0.3); if (!F.cc || F.cc.t > 0.35) { punch(e.x, e.y, 0.06, 0.45, 0.4); F.cc = { t: 0, dur: 1, x: clamp(e.x, 380, W - 380) }; } } break;   // close call: a cell died right at the line
       case 'won': startClear(g); break;
       case 'clear': confetti(e.boss ? 110 : 70); S.flash = Math.max(S.flash, 0.25); S.flashCol = '#ffe9a8'; break;
       case 'dead': punch(g.p.x, g.p.y, 0.07, 0.3, 0.6); F.deadT = 0.0001; break;
       case 'revive': F.deadT = 0; break;
       case 'checkpoint': showMile(e.k === 2 ? 50 : 25, g); break;
+      case 'levelup': if (!calm()) { S.flash = Math.max(S.flash, 0.35); S.flashCol = '#fff3b8'; ring(g.p.x, g.p.y - 20, 260, '#ffd84d', 0.5); ring(g.p.x, g.p.y - 20, 150, '#fff', 0.4); } break;   // the song pauses for the cards: a gold flash
       case 'surgewarn': F.warnT = 0.7; break;
     }
   }
@@ -114,7 +115,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       c.shown = i + 1;
       if (i < c.stars) {
         F.sounds.push('star' + (i + 1));
-        if (!calm()) { const x = W / 2 + (i - 1) * 190, y = H * 0.47; ring(x, y, 150 + i * 30, '#ffd84d', 0.5); burst(x, y, 14 + i * 6, ['#ffd84d', '#fff', '#ff9ad6'], 420, 0.7, 6); if (i === 2 && c.stars === 3) { confetti(80); S.trauma = Math.min(1, S.trauma + 0.45); } }
+        if (!calm()) { const x = W / 2 + (i - 1) * 190, y = H * 0.47; ring(x, y, 150 + i * 30, '#ffd84d', 0.5); burst(x, y, 14 + i * 6, ['#ffd84d', '#fff', '#ff9ad6'], 420, 0.7, 6); if (i === 2 && c.stars === 3) { confetti(80); S.trauma = Math.min(1, S.trauma + 0.45); F.perf = 0.0001; S.flash = Math.max(S.flash, 0.4); S.flashCol = '#fff3b8'; ring(W / 2, H * 0.47, 420, '#fff', 0.6); } }
       }
     }
     if (c.t > c.dur) F.clear = null;
@@ -123,6 +124,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     const c = F.clear; if (!c) return;
     const t = c.t, out = clamp((c.dur - t) / 0.35, 0, 1), inn = calm() ? 1 : easeOut(clamp(t / 0.3, 0, 1)), cy = H * 0.4;
     ctx.save(); ctx.globalAlpha = out;
+    if (F.perf > 0) perfectBehind(cy + 80);
     const bh = 420 * inn;
     const gr = ctx.createLinearGradient(0, 0, W, 0); gr.addColorStop(0, 'rgba(8,6,24,0)'); gr.addColorStop(0.1, 'rgba(8,6,24,.8)'); gr.addColorStop(0.9, 'rgba(8,6,24,.8)'); gr.addColorStop(1, 'rgba(8,6,24,0)');
     ctx.fillStyle = gr; ctx.fillRect(0, cy - bh / 2, W, bh);
@@ -144,6 +146,47 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       starPath(0, -4, 36 * big); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fill();
       ctx.restore();
     }
+    if (F.perf > 0) perfectBanner(cy + 300);
+    ctx.restore();
+  }
+  // 3 stars: a slow gold sunburst behind the stars and a PERFECT! ribbon under them
+  function perfectBehind(y) {
+    const k = clamp(F.perf / 0.5, 0, 1), spin = calm() ? 0 : F.perf * 0.35;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(W / 2, y); ctx.rotate(spin);
+    ctx.fillStyle = '#ffd84d'; ctx.globalAlpha *= 0.16 * k;
+    for (let i = 0; i < 12; i++) { ctx.rotate(TAU / 12); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W * 0.9, -52); ctx.lineTo(W * 0.9, 52); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+  }
+  function perfectBanner(y) {
+    const a = F.perf, inn = calm() ? 1 : backOut(clamp(a / 0.4, 0, 1)), sh = calm() ? 0 : clamp(1 - (a - 0.35) / 0.9, 0, 1);
+    ctx.save(); ctx.translate(W / 2, y); ctx.scale(inn, inn); ctx.rotate(-0.04);
+    glow(0, 0, 280, '#ffd84d', 0.3);
+    text('PERFECT!', 0, 0, 96, '#fff6c9', '#7a3a00');
+    if (sh > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = sh * 0.5; text('PERFECT!', 0, 0, 96 + 10 * sh, '#ffd84d'); }
+    ctx.restore();
+  }
+
+  // ---- boss second verse: halfway down the boss, the music changes and the boss gets a spotlight moment
+  function startP2(g) {
+    if (F.p2Done) return; F.p2Done = true; F.p2 = { t: 0, dur: 2.1 };
+    F.sounds.push('bossintro');
+    if (calm()) return;
+    S.flash = Math.max(S.flash, 0.5); S.flashCol = '#ffb0c8'; S.trauma = Math.min(1, S.trauma + 0.7);
+    let head = null; for (const sn of g.snakes) if (sn.boss) for (const q of sn.segs) if (q.isHead && (!head || q.y > head.y)) head = q;
+    const hx = head ? head.x : W / 2, hy = head ? head.y : H * 0.3;
+    punch(hx, hy, 0.08, 0.35, 0.7);
+    ring(hx, hy, 300, '#ff4d7a', 0.6); ring(hx, hy, 180, '#ffd84d', 0.5); burst(hx, hy, 20, ['#ff4d7a', '#ffd84d', '#fff'], 480, 0.7, 7);
+  }
+  function drawP2() {
+    const o = F.p2; if (!o) return;
+    const t = o.t, inn = calm() ? 1 : backOut(clamp(t / 0.35, 0, 1)), out = clamp((o.dur - t) / 0.4, 0, 1), cy = H * 0.27;
+    ctx.save(); ctx.globalAlpha = out;
+    ctx.fillStyle = 'rgba(24,2,16,.8)'; ctx.fillRect(0, cy - 90 * Math.min(1, inn), W, 180 * Math.min(1, inn));
+    ctx.fillStyle = '#ff4d7a'; ctx.fillRect(0, cy - 94 * Math.min(1, inn), W, 5); ctx.fillRect(0, cy + 89 * Math.min(1, inn), W, 5);
+    ctx.translate(W / 2, cy - 10); ctx.scale(inn, inn); ctx.rotate(-0.03);
+    glow(0, 0, 300, '#ff2850', 0.3);
+    text('SECOND VERSE!', 0, 0, 76, '#ffd84d', '#2a0310');
+    text('the boss means it now', 0, 62, 32, '#ffc2dc', '#2a0310');
     ctx.restore();
   }
 
@@ -151,6 +194,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   const MILE = { 25: ['QUARTER DOWN!', 'keep the beat going'], 50: ['HALFWAY!', 'chest incoming'], 75: ['ALMOST THERE!', 'finish the song'] };
   function showMile(pct, g) {
     if (F.mileDone >= pct) return;
+    if (F.lastBoss && pct === 50) { F.mileDone = 50; startP2(g); return; }
     F.mileDone = pct; const m = MILE[pct];
     F.mile = { pct, txt: m[0], sub: m[1], t: 0, dur: 1.7 };
     F.sounds.push(pct === 75 ? 'star3' : 'star2');
@@ -189,7 +233,14 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     if (F.zoom.t > 0) F.zoom.t = Math.max(0, F.zoom.t - dt); else F.zoom.amp = 0;
     if (F.warnT > 0) F.warnT -= dt;
     if (F.mile) { F.mile.t += dt; if (F.mile.t > F.mile.dur) F.mile = null; }
-    if (F.go) { F.go.t += dt; if (F.go.t > F.go.dur) F.go = null; }
+    if (F.go) { const o = F.go; o.t += dt; if (o.ready && !o.fired && o.t >= o.ready) { o.fired = true; if (!calm()) { ring(W / 2, H * 0.4, 260, '#9dff6d', 0.5); burst(W / 2, H * 0.4, 16, ['#9dff6d', '#fff', '#ffd84d'], 460, 0.6, 6); } F.sounds.push('star2'); } if (o.t > o.dur) F.go = null; }
+    if (g) {   // back from the cards: the song eases back in instead of snapping to full speed
+      if (F.ph === 'levelup' && g.phase !== 'levelup' && g.phase !== 'dead' && !calm()) { F.slow = { t: 0.55, dur: 0.55, k: 0.3 }; ring(g.p.x, g.p.y - 20, 200, '#9dff6d', 0.45); }
+      F.ph = g.phase;
+    }
+    if (F.cc) { F.cc.t += dt; if (F.cc.t > F.cc.dur) F.cc = null; }
+    if (F.p2) { F.p2.t += dt; if (F.p2.t > F.p2.dur) F.p2 = null; }
+    if (F.perf > 0) F.perf += dt;
     if (g && g.phase === 'play' && g.progress >= 0.75 && F.mileDone < 75 && !g.mode) showMile(75, g);
     if (g && g.phase === 'dead' && F.deadT > 0) F.deadT += dt; else if (!g || g.phase !== 'dead') F.deadT = 0;
     const c = F.card;
@@ -199,7 +250,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
         c.slammed = true;
         if (!calm()) { S.flash = Math.max(S.flash, 0.55); S.flashCol = '#ffd0e0'; S.trauma = Math.min(1, S.trauma + 0.85); ring(W / 2, H * 0.36, 280, '#ffd84d', 0.6); ring(W / 2, H * 0.36, 170, '#ff4d7a', 0.45); burst(W / 2, H * 0.36, 26, ['#ffd84d', '#ff4d7a', '#fff'], 520, 0.7, 7); }
       }
-      if (c.t > c.dur) { F.card = null; if (!calm() && g && g.phase === 'play') F.go = { t: 0, dur: 0.7, boss: c.boss }; }
+      if (c.t > c.dur) { F.card = null; if (!calm() && g && g.phase === 'play') F.go = c.n === 1 && !c.boss ? { t: 0, dur: 1.35, ready: 0.6, boss: false } : { t: 0, dur: 0.7, boss: c.boss }; }
     }
     for (let i = F.conf.length - 1; i >= 0; i--) {
       const p = F.conf[i]; p.life -= dt;
@@ -386,12 +437,24 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
 
   function drawGo() {
     const o = F.go; if (!o) return;
-    const k = o.t / o.dur, pop = easeOut(clamp(o.t / 0.16, 0, 1)), sc = 1.9 - 0.9 * pop + 0.1 * k, a = clamp((1 - k) / 0.4, 0, 1) * pop;
+    if (o.ready && o.t < o.ready) {   // first stage only: READY? holds for a beat, then GO! pops
+      const pop = easeOut(clamp(o.t / 0.18, 0, 1)), a = pop * clamp((o.ready - o.t) / 0.12, 0, 1), sc = 1.5 - 0.5 * pop + (calm() ? 0 : 0.04 * Math.sin(o.t * 22));
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(W / 2, H * 0.4); ctx.scale(sc, sc); ctx.rotate(0.04);
+      glow(0, 0, 240, '#ffd84d', 0.3); text('READY?', 0, 0, 110, '#ffe27a', '#3a1c00'); ctx.restore(); return;
+    }
+    const k = (o.t - (o.ready || 0)) / (o.dur - (o.ready || 0)), pop = easeOut(clamp((o.t - (o.ready || 0)) / 0.16, 0, 1)), sc = 1.9 - 0.9 * pop + 0.1 * k, a = clamp((1 - k) / 0.4, 0, 1) * pop;
     ctx.save(); ctx.globalAlpha = a; ctx.translate(W / 2, H * 0.4); ctx.scale(sc, sc); ctx.rotate(-0.05);
     glow(0, 0, 260, o.boss ? '#ff2850' : '#9dff6d', 0.35);
     text(o.boss ? 'FIGHT!' : 'GO!', 0, 0, 130, o.boss ? '#ff4d7a' : '#9dff6d', o.boss ? '#1a0210' : '#0b2a10');
     ctx.restore();
   }
-  function drawCardAll(g) { drawCard(g); drawMile(); drawGo(); drawClear(); }
+  function drawCC() {
+    const o = F.cc; if (!o) return;
+    const inn = backOut(clamp(o.t / 0.2, 0, 1)), out = clamp((o.dur - o.t) / 0.3, 0, 1), y = H * 0.62 - 30 * easeOut(clamp(o.t / o.dur, 0, 1));
+    ctx.save(); ctx.globalAlpha = out; ctx.translate(o.x, y); ctx.scale(inn, inn); ctx.rotate(-0.07);
+    glow(0, 0, 200, '#ff9a3d', 0.3); text('CLOSE CALL!', 0, 0, 74, '#ffb454', '#2a0a00');
+    ctx.restore();
+  }
+  function drawCardAll(g) { drawCard(g); drawMile(); drawGo(); drawClear(); drawCC(); drawP2(); }
   return { confetti, onEvent, update, timeScale, rumble, zoomIn, aura, drawScreen, drawCard: drawCardAll, state: F, setBeat(fn) { F.beatFn = fn; }, clearBusy: () => !!F.clear, takeSounds() { return F.sounds.splice(0); } };
 }

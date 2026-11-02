@@ -94,5 +94,16 @@ if (seg) { seg.hp = 1; sim.hitCell && sim.hitCell(g2, seg, 5); }
   for (let i = 0; i < 900 && !g3.events.some(e => e.t === 'hit'); i++) sim.step(g3, 1 / 60, { mx: 0 });
   const h = g3.events.find(e => e.t === 'hit');
   if (h) assert.equal(typeof h.src, 'string', 'hit events carry their source');
+  // round 4: chain links and notes, crit badge flag, upgrade pop, lane dim
+  const R4 = createRenderer({ width: 420, height: 860, getContext: stubCtx }, null, null), g4 = sim.createGame({ seed: 5, stage: 3 });
+  for (let i = 0; i < 4; i++) R4.onEvent({ t: 'kill', x: 100 + i * 30, y: 300, r: 26, kind: 'normal', skin: 'love' }, g4);
+  const pools = R4.hj.pools;
+  assert.ok(pools.marks.some(m => m.k === 'link') && pools.marks.some(m => m.k === 'note'), 'a kill chain draws links and climbing notes');
+  R4.onEvent({ t: 'hit', x: 100, y: 300, d: 99, crit: true, s: 7, src: 'swab' }, g4);
+  assert.ok(R4.state.floats.some(f => f.crit === true), 'crit numbers carry the crit flag for the badge style');
+  R4.onEvent({ t: 'kill', x: 100, y: 300, r: 26, kind: 'upgrade', skin: 'love' }, g4);
+  assert.ok(R4.state.floats.some(f => f.key === 'badge'), 'an upgrade cell pops an UPGRADE badge');
+  g4.snakes[0].surge = 'warn'; g4.snakes[0].surgeT = 0.3;
+  for (let i = 0; i < 4; i++) R4.draw(g4, null, 1 / 60);
 }
 console.log('04_hit_juice ok');

@@ -1,6 +1,7 @@
 // Cell Serpent: skill and pet detail sheets, mastery rank, hatch confetti and the sort/filter chips.
 // Pure helpers read the formulas in sim.js (never change them); the DOM parts are small and self contained.
 import { WEAPONS, PETS, PET_MAX_STAR, SKILL_MAX_LV, SKILL_MILES, skillMul, skillUpgradeCost, petCost, petCanUp, petUp, togglePet, toggleLoadout, levelSkill, unlockSkill, RARITIES, LOADOUT_SIZE, masteryList, claimMastery, rewardText } from './sim.js';
+import { swapSheet, compareHTML, walkHTML } from './loadout_ux.js';
 
 // what a skill does at the level a run starts with (weapon level 1), scaled by the permanent skill level
 const BASE = {
@@ -23,6 +24,8 @@ export function skillPreview(id, lv) {
   if (b.area) rows.push({ k: 'Area', a: String(Math.round(b.area)), b: String(Math.round(b.area)), gain: false });
   return { rows, note: b.note, bonusPct: Math.round((skillMul(nxt) - skillMul(now)) * 100) };
 }
+// rough power per second at a level (damage over cooldown), to compare skills against each other
+export function skillPower(id, lv) { const b = BASE[id]; return b ? b.dmg * skillMul(Math.max(1, lv)) / (b.cd || 1.2) : 0; }
 export const RANK_NAMES = ['Rookie', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Star'];
 export function skillRank(save, id) {
   const v = (save.addict && save.addict.sk && save.addict.sk[id]) || 0, r = SKILL_MILES.filter(m => v >= m.at).length;
@@ -102,6 +105,7 @@ export function createSheets(c) {
       if (owned) {
         markSeen(s, 's', id);
         sh.appendChild(el('div', '', sparkHTML(k.lv)));
+        sh.appendChild(el('div', '', compareHTML(s, id)));
         const ms = masteryList(s).find(x => x.key === 'sk:' + id), rdy = ms && ms.ready >= 0, tgt = ms && (rdy ? ms.miles[ms.ready] : ms.next);
         if (ms) {
           const box = el('div', 'dsmast' + (rdy ? ' rdy' : ''), `<div class="mhd"><span>MASTERY</span><b>${tgt ? rewardText(tgt.reward) : 'all done'}</b></div><div class="bar"><i style="width:${tgt ? Math.min(100, Math.round(ms.val / tgt.at * 100)) : 100}%"></i></div><small>${rdy ? ms.val + ' damage mastery, goal reached' : ms.val + (tgt ? ' / ' + tgt.at : '') + ' damage mastery'}</small>`);
@@ -119,9 +123,9 @@ export function createSheets(c) {
       sh.appendChild(up);
       if (owned) {
         const e = el('button', 'btn dseq alt', eq ? 'EQUIPPED, tap to remove' : 'EQUIP');
-        e.disabled = eq ? s.loadout.length <= 1 : s.loadout.length >= LOADOUT_SIZE;
-        if (!eq && e.disabled) e.textContent = 'LOADOUT FULL (' + LOADOUT_SIZE + ')';
-        e.onclick = () => { if (toggleLoadout(s, id)) { persist(); audio.play('click'); rerender(); skillSheet(id); } };
+        e.disabled = eq && s.loadout.length <= 1;
+        if (!eq && s.loadout.length >= LOADOUT_SIZE) e.textContent = 'SWAP INTO LOADOUT';
+        e.onclick = () => { if (!eq && s.loadout.length >= LOADOUT_SIZE) { audio.play('click'); close(true); swapSheet({ save, persist, audio, icon, rerender }, id); return; } if (toggleLoadout(s, id)) { persist(); audio.play('click'); rerender(); skillSheet(id); } };
         sh.appendChild(e);
       }
     });
@@ -134,6 +138,7 @@ export function createSheets(c) {
       sh.className = 'dsheet pet'; sh.style.setProperty('--rc', rar.color); sh.appendChild(closeBtn());
       sh.appendChild(el('div', 'dshead', `<div class="dsic">${icon(id)}</div><div class="dsnm"><b>${p.name}</b><span style="color:${rar.color}">${rar.name} friend · ${owned ? (eq ? 'walking with you' : 'at home') : 'not met yet'}</span></div>`));
       sh.appendChild(el('p', 'dsdesc', PET_ABILITY[id] || p.flavor));
+      if (owned) sh.appendChild(el('div', '', walkHTML(icon(id), eq, rar.color)));
       sh.appendChild(el('div', 'dsstars', Array.from({ length: PET_MAX_STAR }, (_, n) => `<i class="star${n < k.star ? ' on' : ''}">★</i>`).join('')));
       sh.appendChild(el('div', 'dsrows', `<div class="dsrow one"><span>Star bonus</span><b>${owned ? petBonusText(p, k.star) : 'none yet'}</b></div>` + (maxed ? '' : `<div class="dsrow one"><span>Next star</span><b class="up">▲ ${petBonusText(p, k.star + 1)}</b></div>`)));
       if (owned) markSeen(s, 'p', id);

@@ -117,3 +117,8 @@ Round 2 of the 20 specialists, merged:
 - Audio: UI sounds everywhere, per-species bell motifs, new mix, volume slider.
 - Gameplay: rhythm beat clock (on-beat shots crit more), Standing Ovation passive, brighter Encore beam.
 - Accessibility: thumb zone, keyboard nav, live region announcements, stronger high contrast and colour-blind badges.
+
+## Dev team batch 3 and 4
+
+Batch 3: boss collars and head moods, drawn hats, clouds and stage footlights, per-weapon hit marks and dash telegraph, milestone ribbons and GO pop, new card icons and synergy lines, Battle tab dock with swipe, skill and pet sheets, ward and lullaby cells, beat-synced audio, retention panels, compact currency numbers, text size slider.
+Batch 4: baked HUD chrome and beat streak chip, far parallax skylines per species and boss phase 2 look, pets cheer on kill streaks and animated hats, gold cell and boss ornaments, kill chain visuals, close call, perfect clear and READY/GO moments, card stat deltas and band sheet, result next-goal teaser and close-call titles, loadout swap sheet, shop chest drama, tab icons and hub swipe, colour-blind preview and beat tick, audio muffle and boss phase stingers, Final Chorus boss phase, Drummer cell, Collection Book with real art, Season stamp fly, balance harness (boss HP ramp, ring speed).

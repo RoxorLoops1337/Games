@@ -5,6 +5,7 @@ import {
   masteryList, claimMastery, claimAllMastery, bookStatus, claimBook, rewardText, comebackGift, claimComeback, touchSeen,
   nextReward, nudgeFor, spinStreak, spinFrame, comebackLines,
 } from './sim.js';
+import { riskHTML, bookCell, nextUnmet } from './keep_ui.js';
 
 export function createAddictUI(c, openPanel, sec) {
   const { $, tile, audio } = c;
@@ -21,6 +22,7 @@ export function createAddictUI(c, openPanel, sec) {
     el.className = 'nextrew' + (n.ready ? ' ready' : '');
     el.innerHTML = `<span class="nri">${n.icon}</span><span class="nrm"><b>${esc(n.label)}${n.more ? ` +${n.more}` : ''}</b>` +
       (n.ready ? '<em>Tap to collect</em>' : `<span class="nrb"><i style="width:${Math.round(n.frac * 100)}%"></i></span>`) + `</span>` + (n.ready ? '' : `<small>${esc(n.text)}</small>`);
+    el.insertAdjacentHTML('beforeend', riskHTML(save(), c.dayKey()));
     el.onclick = () => { audio.unlock(); audio.play('click'); openGoals(); };
   }
 
@@ -87,7 +89,7 @@ export function createAddictUI(c, openPanel, sec) {
     sec(body, `Collection Book ${bk.got}/${bk.total}`, '#6fe08a');
     for (const cat of bk.cats) {
       const box = document.createElement('div'); box.className = 'bookcat';
-      box.innerHTML = `<div class="bch"><b>${esc(cat.name)}</b><span>${cat.got}/${cat.total}</span></div><div class="bcg">${cat.list.map(x => `<span class="bk ${x.got ? 'got' : ''}" title="${esc(x.name)}"><b>${x.got ? x.icon : '?'}</b><small>${x.got ? esc(x.name) : '???'}</small></span>`).join('')}</div>`;
+      box.innerHTML = `<div class="bch"><b>${esc(cat.name)}</b><span>${cat.got}/${cat.total}</span></div><div class="bcg">${cat.list.map(x => bookCell(x, cat.id, c, s, nextUnmet(cat.list))).join('')}</div><div class="bcbar"><i style="width:${Math.round(cat.got / cat.total * 100)}%"></i></div>`;
       const b = document.createElement('button'); b.className = 'btn small go gold'; b.disabled = !cat.ready;
       b.textContent = s.addict.claimed['book:' + cat.id] ? 'COMPLETE' : cat.ready ? 'CLAIM ' + rewardText(cat.reward) : 'Complete for ' + rewardText(cat.reward);
       b.onclick = () => { if (claimBook(save(), cat.id)) { after(); audio.play('levelup'); rebuild(); renderNext(); } };

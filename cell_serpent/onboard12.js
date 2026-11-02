@@ -35,12 +35,27 @@ export function setupTapAnimals(host, audio) {
 export function tagPets(host, names) { [...host.querySelectorAll('img')].forEach((im, i) => { im.dataset.pet = names[i]; im.setAttribute('role', 'button'); im.setAttribute('aria-label', 'Pet ' + names[i]); }); }
 
 // ---- first-run tutorial: slide, pop yellow cells, the face is shielded. Wordless, skippable, shown once.
-export function showTutorial(onDone, audio) {
+// real art from the drawing kit (the same sprites as the run), baked once into small data URLs
+function artURL(kit, w, h, fn) { try { const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); return c.toDataURL(); } catch (e) { return ''; } }
+export function tutorialArt(kit, art) {
+  if (!kit || !kit.SPR) return null;
+  const body = (kind, size) => artURL(kit, size, size, (g, w, h) => kit.blit(g, kit.SPR.body('love', false, kind), w / 2, h / 2, size));
+  const duo = art && art.get && art.get('duo_idle');
+  return {
+    cell: body('', 92), gold: body('upgrade', 104),
+    head: artURL(kit, 120, 120, (g) => kit.drawHead(g, 60, 60, 40, Math.PI / 2, { skin: 'love', t: 1, look: [0, 1] })),
+    duo: duo ? artURL(kit, Math.round(120 * duo.width / duo.height), 120, (g, w, h) => g.drawImage(duo, 0, 0, w, h)) : '',
+  };
+}
+export function showTutorial(onDone, audio, kit, art) {
   const el = document.createElement('div'); el.className = 'tut12'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'How to play');
+  const A = tutorialArt(kit, art || (window.CS && window.CS.art)), im = (u, c) => u ? `<img class="${c}" alt="" src="${u}">` : '';
+  const duo = A && A.duo ? im(A.duo, 'tduo') : '<i class="tcell"></i>';
+  el.classList.toggle('art12', !!A);
   el.innerHTML = `<div class="tbox">
-    <div class="tstep s1 on"><div class="tcap">SLIDE<small>\u{1F449}</small></div><div class="tbar"><i class="tcell"></i><b class="tfinger">\u{1F446}</b></div><div class="tarrows"><em>◀</em><em>▶</em></div></div>
-    <div class="tstep s2"><div class="tcap">SHOOT<small>\u{2B50}</small></div><div class="tgold"><i class="tyel">★</i><i class="tshot"></i><i class="tburst"></i></div><div class="tbar"><i class="tcell"></i></div></div>
-    <div class="tstep s3"><div class="tcap">POP THE FACE<small>\u{1F4A5}</small></div><div class="tchain"><i></i><i></i><i></i><div class="tface"><span class="tshield"></span><b>\u{1F40D}</b></div></div><div class="tbar"><i class="tcell"></i></div></div>
+    <div class="tstep s1 on"><div class="tcap">SLIDE</div><div class="tbar">${duo}<b class="tfinger">\u{1F446}</b></div><div class="tarrows"><em>◀</em><em>▶</em></div></div>
+    <div class="tstep s2"><div class="tcap">SHOOT</div><div class="tgold">${A ? im(A.gold, 'tyelimg') : '<i class="tyel">★</i>'}<i class="tshot"></i><i class="tburst"></i></div><div class="tbar">${duo}</div></div>
+    <div class="tstep s3"><div class="tcap">POP THE FACE</div><div class="tchain">${A ? im(A.cell, 'tseg') + im(A.cell, 'tseg') + im(A.cell, 'tseg') : '<i></i><i></i><i></i>'}<div class="tface"><span class="tshield"></span>${A ? im(A.head, 'thead') : '<b>\u{1F40D}</b>'}</div></div><div class="tbar">${duo}</div></div>
     <div class="tdots"><i class="on"></i><i></i><i></i></div>
     <div class="tbtns"><button class="tskip" type="button">SKIP</button><button class="tnext" type="button" aria-label="Next">▶</button></div></div>`;
   document.body.appendChild(el);

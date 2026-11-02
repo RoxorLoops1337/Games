@@ -67,11 +67,13 @@ export function eventBannerHTML(ev, earned, claimed, nowMs, day) {
 
 // ---- round 3: dock measuring, title fit, swipe and arrow keys on the stage hero
 // (--tabh was 0 on the first open, so the START dock covered the tab bar: measure after layout, and again on resize)
+let dockPend = false;
 export function syncDock() {
   const hb = document.getElementById('hub'), dk = document.getElementById('btDock'), tb = document.querySelector('.tabs');
   if (!hb || !dk || !tb) return;
   const m = () => { const t = tb.offsetHeight, d = dk.offsetHeight; if (t) hb.style.setProperty('--tabh', t + 'px'); if (d) hb.style.setProperty('--dockh', d + 'px'); };
-  m(); requestAnimationFrame(m);
+  if (dockPend) return; dockPend = true;   // 17-perf: measure once per frame, after layout (no forced reflow while the pane is still being built)
+  requestAnimationFrame(() => { dockPend = false; m(); });
 }
 let dockWatch = false;
 export function watchDock() {
@@ -91,7 +93,7 @@ export function fitTitle(el) {
   if (!el) return;
   el.style.fontSize = ''; el.title = el.textContent;
   const run = () => { let fs = parseFloat(getComputedStyle(el).fontSize) || 21; for (let i = 0; i < 8 && el.scrollWidth > el.clientWidth + 1 && fs > 14; i++) { fs -= 1.5; el.style.fontSize = fs + 'px'; } };
-  run(); requestAnimationFrame(run);
+  if (el._fitPend) return; el._fitPend = true; requestAnimationFrame(() => { el._fitPend = false; run(); });   // 17-perf: one read pass per frame instead of a forced reflow per render
 }
 // swipe the hero or press the arrow keys to change stage; step(dir) returns true when the stage changed
 export function bindStageNav(hero, tabOn, step) {
@@ -101,4 +103,25 @@ export function bindStageNav(hero, tabOn, step) {
   hero.addEventListener('pointerup', e => { if (!live) return; live = false; const dx = e.clientX - sx, dy = e.clientY - sy; if (Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.6) go(dx < 0 ? 1 : -1); });
   hero.addEventListener('pointercancel', () => { live = false; });
   addEventListener('keydown', e => { if (!tabOn() || e.ctrlKey || e.metaKey || e.altKey) return; if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1); });
+}
+
+// ---- round 4: first-clear reward markers on the stage chips, compact daily goals strip, scroll hint on the side buttons
+// the next stage shows what its first clear pays; cleared stages whose first Hard clear is still unclaimed get a purple H
+export function chipReward(n, cleared, hardCleared) {
+  if (n === cleared + 1) return `<span class="rw" title="First clear pays ${clearReward(n).sparkles} Sparkles and an egg">+${clearReward(n).sparkles}</span>`;
+  if (n <= cleared && n > (hardCleared || 0)) return `<span class="hk" title="First Hard clear still pays ${Math.round(clearReward(n).sparkles * 1.5)} Sparkles and an egg">H</span>`;
+  return '';
+}
+// one compact row per daily goal: text, mini bar, reward or CLAIM
+export function goalRowHTML(text, prog, target, rewardHTML, state) {
+  const pct = Math.round(Math.min(1, prog / target) * 100);
+  return `<span class="gl-ic">${state === 'claimed' ? '✓' : '🎯'}</span><span class="gl-tx"><b>${text}</b><span class="gl-bar"><i style="width:${pct}%"></i></span></span><span class="gl-n">${Math.min(prog, target)}/${target}</span>` +
+    `<button class="gl-btn ${state}" ${state === 'ready' ? '' : 'disabled'}>${state === 'claimed' ? 'DONE' : state === 'ready' ? 'CLAIM' : ''}${state === 'ready' ? '' : rewardHTML}</button>`;
+}
+// fade the right edge of the side button row while more buttons are hidden off screen
+export function watchSide(el) {
+  if (!el) return;
+  const m = () => el.classList.toggle('more', el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  if (!el.dataset.sw) { el.dataset.sw = '1'; el.addEventListener('scroll', m, { passive: true }); }
+  m(); requestAnimationFrame(m);
 }

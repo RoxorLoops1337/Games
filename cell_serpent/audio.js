@@ -2,11 +2,11 @@
 // Buses: sfx and music (with a duck gain) -> master -> limiter -> out. Music is a sectioned 16-step groove:
 // key and tempo change every 5 stages, bosses get their own tense track, and the layers follow
 // mix({ stage, boss, groove (0..1), danger (0..1) }).
-import { beatBpm as simBpm } from './sim.js';
+import { beatBpm as simBpm, SKINS, skinFor } from './sim.js';
 export function createAudio() {
-  let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, muted = false, musicAllowed = true, noiseBuf = null;
+  let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false;
   let musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
-  let mixS = { stage: 1, boss: false, groove: 0, danger: 0 };
+  let mixS = { stage: 1, boss: false, groove: 0, danger: 0, skin: 'love', bphase: 0 };
   let live = 0, chain = 0, chainT = 0, vol = 1, uiT = 0, bstreak = 0, lastBeatShot = 0, beatNow = 0, fresh = false;
   const last = {};
   function ensure() {
@@ -21,12 +21,14 @@ export function createAudio() {
       master.connect(lim); lim.connect(ac.destination);
       sfxBus = ac.createGain(); sfxBus.gain.value = 0.72; sfxBus.connect(master);
       duckG = ac.createGain(); duckG.gain.value = 1; duckG.connect(master);
-      musBus = ac.createGain(); musBus.gain.value = 0.62; musBus.connect(duckG);
+      mlp = ac.createBiquadFilter(); mlp.type = 'lowpass'; mlp.frequency.value = muffled ? MUF_SHUT : MUF_OPEN; mlp.connect(duckG);   // music only: closes under cards and pause
+      musBus = ac.createGain(); musBus.gain.value = muffled ? MUS_MUFFLED : MUS_GAIN; musBus.connect(mlp);
       noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     } catch (e) { ac = null; return null; }
     return ac;
   }
+  const MUF_OPEN = 20000, MUF_SHUT = 650, MUS_GAIN = 0.62, MUS_MUFFLED = 0.5;
   const bus = b => (b === 'm' ? musBus : sfxBus);
   function tone(f, dur, type = 'square', vol = 0.15, slide = 0, delay = 0, b = 's') {
     if (!ac || muted || live > 40) return;
@@ -60,6 +62,7 @@ export function createAudio() {
   const pentHz = (i, base = 72) => hz(base + PENT[i % 5] + 12 * Math.floor(i / 5));
   function chainPitch() { const n = now(); chain = n - chainT < 650 ? Math.min(chain + 1, 14) : 0; chainT = n; return chain; }
 
+  const card0f = n => (n >= 2 ? 233 : 185);
   const sfx = {
     shoot: () => gate('shoot', 70) && tone(520 + Math.random() * 60, 0.07, 'square', 0.04, -200),
     // hit: the timbre follows the weapon that landed it (e.src), a crit adds a bright ping
@@ -92,11 +95,11 @@ export function createAudio() {
     split: () => tone(660, 0.12, 'square', 0.06, 300),
     gem: () => gate('gem', 45) && tone(880 + (now() % 7) * 40, 0.08, 'sine', 0.07, 400),
     // coin: a bright two-note ding with a little sparkle on top
-    coin: () => { if (!gate('coin', 45)) return; const j = (chain % 4) * 30; tone(1319 + j, 0.07, 'square', 0.04); tone(1976 + j, 0.16, 'triangle', 0.07, 0, 0.05); tone(3951, 0.1, 'sine', 0.025, 0, 0.06); },
+    coin: () => { if (!gate('coin', 45)) return; const j = (chain % 4) * 30; tone(1319 + j, 0.07, 'square', 0.055); tone(1976 + j, 0.16, 'triangle', 0.1, 0, 0.05); tone(3951, 0.1, 'sine', 0.025, 0, 0.06); },
     hurt: () => { noise(0.3, 0.28, 900, 100); tone(140, 0.3, 'sawtooth', 0.18, -80); duck(0.5, 0.3); },
     block: () => tone(900, 0.1, 'triangle', 0.09, -300),
     power: () => { [523, 659, 784].forEach((f, i) => tone(f, 0.14, 'triangle', 0.09, 0, i * 0.06)); tone(1568, 0.3, 'sine', 0.04, 0, 0.18); },
-    levelup: () => { [440, 554, 659, 880].forEach((f, i) => tone(f, 0.18, 'square', 0.07, 0, i * 0.07)); tone(1760, 0.35, 'sine', 0.05, 0, 0.28); duck(0.35, 0.4); },
+    levelup: () => { [440, 554, 659, 880].forEach((f, i) => tone(f, 0.18, 'square', 0.1, 0, i * 0.07)); tone(1760, 0.35, 'sine', 0.05, 0, 0.28); duck(0.35, 0.4); },
     upgrade: () => { tone(700, 0.12, 'triangle', 0.09, 300); tone(1400, 0.2, 'sine', 0.04, 0, 0.08); },
     spit: () => gate('spit', 60) && tone(200, 0.15, 'sawtooth', 0.05, 160),
     roar: () => { tone(70, 0.7, 'sawtooth', 0.2, -25); noise(0.6, 0.16, 600, 80); duck(0.5, 0.6); },
@@ -159,6 +162,19 @@ export function createAudio() {
       if (k >= 4) for (const d of [0, 2, 4]) tone(pentHz(9 + d, 72), 0.34, 'sine', 0.05, 0, 0.36); },
     // groove fell apart: a short falling two-note sigh (only after a good streak), so it is audible that the bonus is gone
     groovelost: () => { if (!gate('groovelost', 400)) return; tone(pentHz(6, 72), 0.12, 'triangle', 0.05, -40); tone(pentHz(3, 72), 0.2, 'sine', 0.05, -60, 0.08); },
+    // perfect clear (three stars): a bright fanfare that rides on top of the normal clear jingle
+    perfect: () => {
+      [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.16, 'triangle', 0.07, 0, 0.5 + i * 0.07));
+      [1047, 1319, 1568, 2093].forEach(f => tone(f, 0.9, 'sine', 0.045, 0, 0.84));
+      tone(3136, 0.5, 'sine', 0.02, 0, 0.9); noise(0.7, 0.04, 5000, 11000, 'bandpass', 0.8); duck(0.75, 1.7);
+    },
+    // boss phase change (e.n = 1 or 2): a low hit, a falling tritone and a rising siren, harder the second time
+    bossphase: e => {
+      const n = e && e.n >= 2 ? 2 : 1;
+      tone(55, 0.7, 'sawtooth', 0.12 + n * 0.015, -18); tone(card0f(n), 0.5, 'square', 0.045, -70, 0.05); noise(0.6, 0.07, 300, 2500, 'bandpass'); tone(300, 0.7, 'sawtooth', 0.025, 500 * n, 0.1);
+      if (n === 2) { tone(card0f(n) * 0.707, 0.5, 'square', 0.045, -50, 0.3); noise(0.5, 0.08, 2500, 90, 'lowpass', 0.3); }
+      duck(0.55, 0.8);
+    },
     // snake reached the line: sharp alarm
     leak: () => { if (!gate('leak', 250)) return; tone(220, 0.25, 'sawtooth', 0.15, -110); tone(165, 0.3, 'square', 0.08, -60, 0.05); noise(0.3, 0.15, 1200, 100); duck(0.5, 0.4); },
     // on-beat shot: a crisp tick, climbing a pentatonic ladder while the player keeps hitting every beat
@@ -204,6 +220,21 @@ export function createAudio() {
   const PROG = [[0, 5, 3, 4], [5, 3, 0, 4], [3, 4, 2, 5], [0, 4, 5, 3]];   // 4 bars per section, sections cycle
   const BPROG = [[0, 0, 1, 0], [0, 5, 1, 4], [0, 0, 1, 6], [0, 1, 0, 4]];
   const note = (scale, deg, rootMidi) => rootMidi + scale[((deg % 7) + 7) % 7] + 12 * Math.floor(deg / 7);
+  // one groove flavour per snake species (index = SKINS order). sw: swing on odd 16ths (fraction of a step), arp/lead/bass: waveforms,
+  // hats: 0 offbeat, 1 straight eighths, 2 none, 3 open offbeats, kx: extra kick steps, ad: arp step divisor, ao: arp octave, minor: force the minor scale
+  const VARS = [
+    { sw: 0, arp: 'square', lead: 'triangle', bass: 'triangle', hats: 0, kx: [], ad: 1, ao: 0, pad: 'sine' },
+    { sw: 0.2, arp: 'sawtooth', lead: 'square', bass: 'triangle', hats: 0, kx: [7], ad: 1, ao: 0, pad: 'sine' },
+    { sw: 0, arp: 'triangle', lead: 'square', bass: 'triangle', hats: 1, kx: [], ad: 1, ao: 0, pad: 'triangle' },
+    { sw: 0, arp: 'square', lead: 'sawtooth', bass: 'sawtooth', hats: 0, kx: [10, 14], ad: 1, ao: -12, pad: 'sine' },
+    { sw: 0.1, arp: 'sine', lead: 'sine', bass: 'sine', hats: 2, kx: [], ad: 2, ao: 0, pad: 'triangle' },
+    { sw: 0, arp: 'square', lead: 'triangle', bass: 'triangle', hats: 3, kx: [], ad: 1, ao: 0, pad: 'sine' },
+    { sw: 0.32, arp: 'square', lead: 'sawtooth', bass: 'triangle', hats: 1, kx: [3], ad: 1, ao: 12, pad: 'sine' },
+    { sw: 0, arp: 'sawtooth', lead: 'sawtooth', bass: 'sawtooth', hats: 2, kx: [6, 10], ad: 1, ao: -12, pad: 'sawtooth' },
+    { sw: 0.05, arp: 'sine', lead: 'sine', bass: 'sine', hats: 3, kx: [], ad: 1, ao: 12, pad: 'triangle' },
+    { sw: 0.15, arp: 'triangle', lead: 'triangle', bass: 'sine', hats: 2, kx: [11], ad: 2, ao: 0, pad: 'sine', minor: true },
+  ];
+  const varOf = skin => VARS[Math.max(0, SKINS.indexOf(skin)) % VARS.length];
   const LEAD = [0, 2, 4, 2, 1, 4, 2, 0], LEADB = [0, 1, 0, 3, 0, 1, 4, 3];
   function kick(t, v = 0.3) { tone(150, 0.16, 'sine', v, -110, t, 'm'); noise(0.02, 0.05, 4000, 800, 'lowpass', t, 'm'); }
   function snare(t, v = 0.1) { noise(0.13, v, 3000, 1200, 'bandpass', t, 'm'); tone(190, 0.09, 'triangle', v * 0.7, -70, t, 'm'); }
@@ -220,7 +251,8 @@ export function createAudio() {
       const s = step % 16, bar = (step >> 4) % 4, sec = (step >> 6), t = Math.max(0, nextT - ac.currentTime);
       if (s % 4 === 0) { beatAt = nextT; beatBpm = bpm; beatNow = bpm; }   // for the screen edge pulse (see beat())
       if (!muted) {
-        const sc = boss ? SCALES.phryg : (tier % 3 === 2 ? SCALES.minor : SCALES.major);
+        const V = varOf(m.skin), bp = boss ? m.bphase : 0, ts = (s & 1) ? t + V.sw * sp : t;
+        const sc = boss ? SCALES.phryg : (tier % 3 === 2 || V.minor ? SCALES.minor : SCALES.major);
         const root = 36 + ROOTS[tier] + (boss ? 5 : 0);
         const prog = (boss ? BPROG : PROG)[sec % 4], deg = prog[bar];
         const bassM = note(sc, deg, root), c0 = note(sc, deg, root + 24), c1 = note(sc, deg + 2, root + 24), c2 = note(sc, deg + 4, root + 24);
@@ -228,18 +260,25 @@ export function createAudio() {
         if (s % 4 === 0) kick(t, boss ? 0.32 : 0.26 + lvl * 0.04);
         else if (boss && (s === 6 || s === 14)) kick(t, 0.2);
         else if (lvl > 0.5 && s === 10) kick(t, 0.16);
+        else if (!boss && lvl > 0.35 && V.kx.includes(s)) kick(t, 0.13);
+        else if (bp >= 1 && (s === 10 || (bp >= 2 && s === 3))) kick(t, 0.17);
         if ((s === 4 || s === 12) && (lvl > 0.2 || boss)) snare(t, boss ? 0.13 : 0.09);
-        if (lvl > 0.1 || boss) { if (s % 4 === 2) hat(t, 0.035, s === 14); else if (lvl > 0.65 && s % 2 === 1) hat(t, 0.018); }
+        if (lvl > 0.1 || boss) {
+          const hm = boss ? 0 : V.hats;
+          if (hm === 1) { if (s % 2 === 0) hat(t, s % 4 === 0 ? 0.02 : 0.03, s === 14); }
+          else if (hm === 3) { if (s % 4 === 2) hat(t, 0.04, true); else if (lvl > 0.65 && s % 4 === 0) hat(t, 0.015); }
+          else if (hm !== 2) { if (s % 4 === 2) hat(t, 0.035, s === 14); else if ((lvl > 0.65 || bp >= 1) && s % 2 === 1) hat(ts, 0.018); }
+        }
         // bass: eighths, octave jump to keep it moving
-        if (s % 2 === 0) tone(hz(bassM + (s % 8 === 6 ? 12 : 0)), sp * 1.9, boss ? 'sawtooth' : 'triangle', boss ? 0.1 : 0.14, 0, t, 'm');
+        if (s % 2 === 0) tone(hz(bassM + (s % 8 === 6 ? 12 : 0)), sp * 1.9, boss ? 'sawtooth' : V.bass, boss ? 0.1 : V.bass === 'sawtooth' ? 0.1 : 0.14, 0, t, 'm');
         // pad on the bar line
-        if (s === 0 && (lvl > 0.15 || boss)) { [c0, c1, c2].forEach(n => tone(hz(n - 12), sp * 15, boss ? 'sawtooth' : 'sine', boss ? 0.02 : 0.03, 0, t, 'm')); }
+        if (s === 0 && (lvl > 0.15 || boss)) { [c0, c1, c2].forEach(n => tone(hz(n - 12), sp * 15, boss || bp >= 2 ? 'sawtooth' : V.pad, boss ? 0.02 + bp * 0.004 : 0.03, 0, t, 'm')); }
         // arp over the chord
-        if (lvl > 0.3 || boss) { const q = [c0, c1, c2, c1][(s >> (boss ? 0 : 1)) % 4]; if (boss ? s % 2 === 0 : s % 2 === 0) tone(hz(q + (sec % 2 && s >= 8 ? 12 : 0)), sp * 1.6, boss ? 'square' : 'square', boss ? 0.026 : 0.022, 0, t, 'm'); }
+        if (lvl > 0.3 || boss) { const q = [c0, c1, c2, c1][(s >> (boss ? 0 : 1)) % 4]; if (s % (boss ? 2 : 2 * V.ad) === 0) tone(hz(q + (sec % 2 && s >= 8 ? 12 : 0) + (boss ? (bp >= 1 && s % 4 === 2 ? 12 : 0) : V.ao)), sp * 1.6, boss ? 'square' : V.arp, boss ? 0.026 : 0.022, 0, ts, 'm'); }
         // lead melody from high groove
-        if ((lvl > 0.62 || (boss && lvl > 0.4)) && (s % 4 === 0 || s === 6 || s === 11 || s === 14)) {
+        if ((lvl > 0.62 || (boss && (lvl > 0.4 || bp >= 1))) && (s % 4 === 0 || s === 6 || s === 11 || s === 14)) {
           const li = (bar * 4 + (s >> 2) + (s === 14 ? 1 : 0)) % 8, ld = deg + (boss ? LEADB : LEAD)[li];
-          tone(hz(note(sc, ld, root + 36)), sp * 2.6, boss ? 'sawtooth' : 'triangle', boss ? 0.03 : 0.05, 0, t, 'm');
+          tone(hz(note(sc, ld, root + 36) + (bp >= 2 ? 12 : 0)), sp * 2.6, boss ? 'sawtooth' : V.lead, boss ? 0.03 : V.lead === 'sawtooth' || V.lead === 'square' ? 0.032 : 0.05, 0, t, 'm');
         }
         // species motif: 4 notes spread over the second and fourth bar
         if ((bar & 1) === 1 && s % 4 === 0 && !boss && lvl > 0.05) tone(hz(note(sc, motifOf(m.stage)[s >> 2], root + 36)), sp * 3, 'sine', 0.032, 0, t, 'm');
@@ -250,6 +289,8 @@ export function createAudio() {
           if (bar === 3 && s === 8) tone(330, sp * 8, 'sawtooth', 0.018, 520, t, 'm');
           if (bar === 3 && s >= 12) snare(t, 0.05 + (s - 12) * 0.03);
         }
+        // accessibility: an optional woodblock click on every beat (higher on the bar line), so the rhythm can be felt without the mix
+        if (beatTick && s % 4 === 0) tone(s === 0 && bar === 0 ? 1319 : 988, 0.05, 'triangle', s === 0 && bar === 0 ? 0.2 : 0.15, 0, t, 'm');
         // danger: a ticking clock when the snake is close to the line
         if (m.danger > 0.55 && s % 4 === 0) tone(1760, 0.03, 'square', 0.025 + m.danger * 0.02, 0, t, 'm');
         // section ends: riser into a crash
@@ -275,11 +316,20 @@ export function createAudio() {
       clearInterval(timer);
       if (musicOn && ensure()) { step = 0; fresh = true; nextT = ac.currentTime + 0.05; timer = setInterval(pump, 80); }
     },
+    setBeatTick(b) { beatTick = !!b; },
     setMusicAllowed(b) { musicAllowed = b; if (!b) { musicOn = false; clearInterval(timer); } },
     get musicAllowed() { return musicAllowed; },
     intensity(v) { intensity = v; },
     // groove 0..1, danger 0..1 (how close the face is to the line), stage number, boss flag
-    mix(o) { if (o) mixS = { stage: o.stage || 1, boss: !!o.boss, groove: Math.max(0, Math.min(1, o.groove || 0)), danger: Math.max(0, Math.min(1, o.danger || 0)) }; },
+    mix(o) { if (o) mixS = { stage: o.stage || 1, boss: !!o.boss, groove: Math.max(0, Math.min(1, o.groove || 0)), danger: Math.max(0, Math.min(1, o.danger || 0)), skin: o.skin || skinFor(o.stage || 1), bphase: Math.max(0, Math.min(2, o.bphase | 0)) }; },
+    // close the music behind a lowpass (cards, pause) and open it again; call every frame, only changes act
+    muffle(on) {
+      on = !!on; if (on === muffled) return; muffled = on;
+      if (!ac || !mlp) return;
+      const t = ac.currentTime;
+      try { mlp.frequency.cancelScheduledValues(t); mlp.frequency.setTargetAtTime(on ? MUF_SHUT : MUF_OPEN, t, on ? 0.05 : 0.14); musBus.gain.setTargetAtTime(on ? MUS_MUFFLED : MUS_GAIN, t, 0.08); } catch (e) { /* ignore */ }
+    },
+    get muffled() { return muffled; },
     duck,
     get beatStreak() { return bstreak && now() - lastBeatShot < 60 / (beatNow || 120) * 1600 ? bstreak : 0; },
     // align the music grid to the sim beat clock: simPhase 0..1 is the sim's beat phase now (see beatPhase in sim.js)

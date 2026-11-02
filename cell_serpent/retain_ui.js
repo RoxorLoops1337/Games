@@ -4,6 +4,7 @@ import {
   questState, claimQuestChest, seasonStatus, claimSeason, ensureSeason, clearSeasonNote, SEASON_DAYS,
   achievementCount, popAchievements, rewardText, spinStreak, spinFrame,
 } from './sim.js';
+import { landStamp } from './keep_ui.js';
 
 export function createRetainUI(c, openPanel, sec, openTrophies) {
   const { $, tile, audio } = c;
@@ -24,6 +25,7 @@ export function createRetainUI(c, openPanel, sec, openTrophies) {
     $('qOpen').onclick = () => { audio.unlock(); audio.play('click'); openQuests(); };
     $('qSeason').onclick = () => { audio.unlock(); audio.play('click'); openSeason(); };
     $('qAch').onclick = () => { audio.unlock(); audio.play('click'); if (openTrophies) openTrophies(); };
+    landStamp($('qSeason'), reduce());
   }
   function ensureSeasonSafe(s, day) { if (s.addict.season.key !== Math.floor(day / SEASON_DAYS)) { ensureSeason(s, day); c.persist(); } }
 

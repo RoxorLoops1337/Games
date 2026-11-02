@@ -1,0 +1,23 @@
+// screen feel moments: close call, boss second verse, perfect clear, READY on stage 1, return from cards
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+const { createScreenFx } = await import(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cell_serpent', 'screenfx.js'));
+const noop = () => {};
+const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : noop), set: (t, k, v) => { t[k] = v; return true; } });
+const S = { t: 0, trauma: 0, flash: 0 };
+const fx = createScreenFx({ ctx, W: 1080, H: 2340, kit: null, art: null, text: noop, glow: noop, S, OPT: {}, ring: noop, burst: noop });
+const g = { p: { x: 540, y: 2000 }, snakes: [{ boss: true, segs: [{ isHead: true, x: 500, y: 300 }] }], phase: 'play', groove: 0, stage: 10, progress: 0.5 };
+fx.onEvent({ t: 'stage', n: 10, boss: true, name: 'X' }, g);
+fx.onEvent({ t: 'checkpoint', k: 2 }, g);
+assert.ok(fx.state.p2 && fx.state.p2Done, 'boss halfway starts the second verse');
+fx.onEvent({ t: 'checkpoint', k: 2 }, g);
+fx.onEvent({ t: 'clutch', x: 100, y: 1900 }, g);
+assert.ok(fx.state.cc && fx.state.cc.x >= 380, 'close call banner stays on screen');
+assert.ok(fx.timeScale() < 1, 'close call slows the song');
+fx.onEvent({ t: 'stage', n: 1, boss: false, name: 'Y' }, g);
+assert.ok(!fx.state.p2 && !fx.state.cc, 'a new stage clears the moments');
+for (let i = 0; i < 200; i++) fx.update(0.016, g);
+g.phase = 'levelup'; fx.update(0.016, g); g.phase = 'play'; fx.update(0.016, g);
+assert.ok(fx.timeScale() < 1, 'returning from the cards eases the song back in');
+fx.drawCard(g); fx.drawScreen(g);
