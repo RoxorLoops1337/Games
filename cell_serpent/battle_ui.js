@@ -109,7 +109,7 @@ export function bindStageNav(hero, tabOn, step) {
 // the next stage shows what its first clear pays; cleared stages whose first Hard clear is still unclaimed get a purple H
 export function chipReward(n, cleared, hardCleared) {
   if (n === cleared + 1) return `<span class="rw" title="First clear pays ${clearReward(n).sparkles} Sparkles and an egg">+${clearReward(n).sparkles}</span>`;
-  if (n <= cleared && n > (hardCleared || 0)) return `<span class="hk" title="First Hard clear still pays ${Math.round(clearReward(n).sparkles * 1.5)} Sparkles and an egg">H</span>`;
+  if (n <= cleared && n > (hardCleared || 0)) return `<span class="hk ${n === (hardCleared || 0) + 1 ? 'hot' : 'dim'}" title="First Hard clear still pays ${Math.round(clearReward(n).sparkles * 1.5)} Sparkles and an egg">H</span>`;
   return '';
 }
 // one compact row per daily goal: text, mini bar, reward or CLAIM

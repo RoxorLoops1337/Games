@@ -21,6 +21,7 @@ import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTut
 import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide } from './battle_ui.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
+import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { createCues, wantsMuffle } from './audio_cues.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
@@ -158,7 +159,7 @@ function renderBattle() {
   else { chips.innerHTML = ''; chips.dataset.k = ckey; }
   for (let n = 1; n <= chipTop && !chipsSame; n++) {
     const c = document.createElement('button'); c.className = 'chip' + (n === sel ? ' sel' : '') + (n > save.cleared + 1 ? ' lock' : '') + (n <= save.cleared ? ' done' : '') + (n === save.cleared + 1 ? ' nxt' : '');
-    { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st${n > save.cleared ? ' no' : ''}">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : '') + chipReward(n, save.cleared, save.hardCleared); }
+    { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st${n > save.cleared ? ' no' : ''}">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : '') + chipReward(n, save.cleared, save.hardCleared); if (n === save.cleared + 1 || hardLevel(n, save.cleared, save.hardCleared) !== 'none') c.classList.add('hasrw'); }
     c.onclick = () => { audio.play('click'); sel = n; renderBattle(); };
     chips.appendChild(c);
   }
@@ -168,8 +169,8 @@ function renderBattle() {
     $('diffRow').innerHTML = `<div class="seg ${hard ? 'h' : ''}"><i></i><button class="dbtn ${hard ? '' : 'on'}" data-h="0">Normal</button><button class="dbtn hard ${hard ? 'on' : ''}" data-h="1" ${hardOk ? '' : 'disabled'}>${hardOk ? 'Hard' : '🔒 Hard'}</button></div><span class="rec ${mine < rp ? 'low' : ''}">Power <b>${mine}</b> / ${rp}</span>`; }
   for (const b of $('diffRow').querySelectorAll('.dbtn')) b.onclick = () => { audio.play('click'); hard = b.dataset.h === '1'; renderBattle(); };
   $('stMod').innerHTML = twistHTML(info.mod); $('btFact').hidden = true; $('btHero').classList.remove('fact');
-  { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; $('btRowH').style.display = cb.style.display; cb.textContent = 'CONTINUE ▶ ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
-  const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : '<span><b>Cleared ✓</b></span>';
+  { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; syncRwFilter(chips, cb); cb.textContent = 'CONTINUE ▶ ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
+  const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : `<span><b>Cleared ✓</b></span>${sel > (save.hardCleared || 0) ? `<span class="hardpay">Hard pays <b>${curImg('sparkles')} ${Math.round(clearReward(sel).sparkles * 1.5)}</b></span>` : ''}`;
   $('stInfo').innerHTML = `<span>Cells <b>${info.length}</b>  ·  HP <b>${(h => (h >= 1000 ? (h / 1000).toFixed(1) + 'k' : h))(Math.round(info.hp * (hard ? HARD_HP : 1)))}</b></span>${first}`;
   const go = $('stGo'); go.disabled = !playable; go.textContent = playable ? 'START  ⚡' + ENERGY_COST : `CLEAR STAGE ${save.cleared + 1} FIRST`;
   $('btHint').textContent = !save.cleared && !save.runs ? 'Slide left and right, shoot up, keep the snake off the pink line!' : (playable && save.energy && tickEnergy(save, Date.now()) < ENERGY_COST ? 'Out of Voice! Tap + up top, or rest a bit.' : '');
@@ -181,7 +182,16 @@ function renderBattle() {
   renderGoals();
   if (chips.dataset.sc !== sel + '|' + ckey) { chips.dataset.sc = sel + '|' + ckey; requestAnimationFrame(() => { const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } } }); }   // 17-perf: read layout after paint, and only when the stage changed
 }
-$('claimGigs').onclick = () => { audio.play('click'); const n = claimAllGoals(save, dayKey()); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
+// chip filter: only the stages that still pay something (next first clear, unpaid Hard clear)
+let rwOnly = false;
+function syncRwFilter(chips, cb) {
+  const row = $('btRowH'), n = chips.querySelectorAll('.chip.hasrw').length; let f = $('rwFilter');
+  if (!f) { f = document.createElement('button'); f.id = 'rwFilter'; f.className = 'pill rwf'; f.onclick = () => { audio.play('click'); rwOnly = !rwOnly; renderBattle(); }; row.insertBefore(f, cb); }
+  if (!n) rwOnly = false;
+  f.hidden = !n; f.classList.toggle('on', rwOnly); f.setAttribute('aria-pressed', rwOnly ? 'true' : 'false'); f.innerHTML = '\u2726 Rewards <b>' + n + '</b>';
+  chips.classList.toggle('rwonly', rwOnly); row.style.display = n || cb.style.display !== 'none' ? '' : 'none';
+}
+$('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) fl.forEach(([b, g, i]) => setTimeout(() => collectFly(b, g && g.reward.beats ? 'beats' : 'sparkles', { reduce: !!(save.settings.reduceMotion || systemReduceMotion()) }), i * 160)); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
 $('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
@@ -209,6 +219,7 @@ function drawPreview(t) {
     const sp = kit.SPECIES && kit.SPECIES[info.skin], gl = b.createRadialGradient(w / 2, h * 0.3, 10, w / 2, h * 0.3, w * 0.8); gl.addColorStop(0, (sp ? sp.base : '#8a7aff') + '55'); gl.addColorStop(1, 'rgba(0,0,0,0)'); b.fillStyle = gl; b.fillRect(0, 0, w, h);
   }
   c.drawImage(pvBg, 0, 0);
+  { const sp = kit.SPECIES && kit.SPECIES[info.skin]; c.save(); c.globalAlpha = 0.09; c.fillStyle = sp ? sp.lite : '#fff'; c.font = '900 210px system-ui,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(sel), w / 2, h * 0.5); c.restore(); }   // round 5: the stage number as a soft watermark
   const k = Math.min((w - 20) / 720, (h - 24) / 1280), ox = (w - 720 * k) / 2, oy = 12;
   c.save(); c.translate(ox, oy); c.scale(k, k);
   c.lineJoin = 'round'; c.lineCap = 'round'; c.beginPath(); pvPath.pts.forEach((q, i) => (i % 3 === 0 ? (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)) : 0));
@@ -304,7 +315,7 @@ function renderGoals() {
     const rw = goal.reward.beats ? `${goal.reward.beats} ${curImg('beats')}` : `${goal.reward.sparkles} ${curImg('sparkles')}`;
     const state = claimed ? 'claimed' : done ? 'ready' : 'wait';
     const row = document.createElement('div'); row.className = 'gl-row ' + state; row.innerHTML = goalRowHTML(goal.text, prog, goal.target, rw, state);
-    if (state === 'ready') row.querySelector('button').onclick = () => { if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); renderHub(); } };
+    if (state === 'ready') row.querySelector('button').onclick = () => { { const btn = snap(row.querySelector('button')); if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); collectFly(btn, goal.reward.beats ? 'beats' : 'sparkles', { reduce: !!(save.settings.reduceMotion || systemReduceMotion()) }); renderHub(); } } };
     if (claimed) n++;
     list.appendChild(row);
   }

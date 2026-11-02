@@ -686,6 +686,17 @@
     .bt-hero .stprog{margin-top:6px}
   }
   @media(prefers-reduced-motion:reduce){.gl-btn.ready{animation:none}}
+  /* battle round 5: dim H badges, rewards chip filter, gig collect fly, hero polish */
+  #hub .chip .hk.dim{width:11px;height:11px;top:-3px;left:-2px;font-size:0;border-width:1.5px;opacity:.5;background:#5b3d96;box-shadow:none}
+  #hub .chip .hk.hot{width:19px;height:19px;font-size:11px;animation:hkpulse 1.6s ease-in-out infinite;box-shadow:0 0 10px #c98bff}
+  @keyframes hkpulse{50%{transform:scale(1.18);box-shadow:0 0 16px #e3c2ff}}
+  .bt-rowh .rwf{margin-left:auto;margin-right:8px;border-color:#c98bff;background:rgba(201,139,255,.14);color:#f1e2ff;white-space:nowrap} .bt-rowh .rwf b{color:#ffe14a;margin-left:2px} .bt-rowh .rwf.on{background:linear-gradient(180deg,#c98bff,#8a4bd8);color:#fff;box-shadow:0 0 12px #c98bffaa} .bt-rowh .rwf[hidden]{display:none}
+  #stChips.rwonly .chip:not(.hasrw):not(.sel){display:none}
+  .gfx-host{position:fixed;left:0;top:0;width:0;height:0;z-index:99999;pointer-events:none}
+  .gfx-fly{position:fixed;width:22px;height:22px;display:grid;place-items:center;background:center/contain no-repeat;color:#ffe14a;font-style:normal;font-size:18px;filter:drop-shadow(0 0 6px #ffd24a);will-change:transform,opacity;opacity:0}
+  .cur.gfx-bump{animation:gfxbump .42s ease-out} @keyframes gfxbump{30%{transform:scale(1.18);box-shadow:0 0 18px #ffd24acc}}
+  .bt-hero .info .hardpay{color:#e3c2ff;font-size:12px;font-weight:800} .bt-hero .info .hardpay b{color:#ffe14a} .bt-hero .info .hardpay img{width:16px!important;height:16px!important}
+  @media(prefers-reduced-motion:reduce){#hub .chip .hk.hot,.cur.gfx-bump{animation:none}}
   /* end @css:08-battle-tab */
 /* @css:19-transitions */
   /* screens: fade + scale in, fade out (transform and opacity only) */
