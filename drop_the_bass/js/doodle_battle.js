@@ -26,16 +26,41 @@ const AFFIX_GLYPH = { golden: 'coin', swift: 'bolt', armored: 'shield', regen: '
 const frame = (t) => Math.floor(t * K.BOIL_FPS) % 3;
 
 // a live wobbly crayon ring (cheap: one ink pass, one colour pass). dash optional.
+// The wobble only depends on the radius, the boil frame (3 of them) and the seed, so the outline is built once per (radius rounded to half a pixel,
+// frame, seed mod 16) as a Path2D and replayed at the ring's centre: a ring costs two strokes instead of ~60 lineTo calls a frame. Node (no Path2D) builds it live.
+const RING_CACHE = new Map();
+function ringGeom(r, seed, fr) {
+  const n = clamp(Math.round(r / 3), 12, 30), sd = seed || 0, pts = [];
+  for (let i = 0; i <= n; i++) { const a = i / n * TAU, q = r * (1 + (hh((i % n) * 5.3 + fr * 9.1 + sd) - 0.5) * 0.07); pts.push(Math.cos(a) * q, Math.sin(a) * q); }
+  return pts;
+}
+function ringPath2D(r, seed, fr) {
+  const rr = Math.max(1, Math.round(r * 2) / 2), sd = ((seed || 0) % 16 + 16) % 16, key = rr + '|' + sd + '|' + fr;
+  let p = RING_CACHE.get(key);
+  if (!p) {
+    const pts = ringGeom(rr, sd, fr); p = new Path2D(); p.moveTo(pts[0], pts[1]);
+    for (let i = 2; i < pts.length; i += 2) p.lineTo(pts[i], pts[i + 1]);
+    if (RING_CACHE.size > 600) RING_CACHE.clear();
+    RING_CACHE.set(key, p);
+  }
+  return p;
+}
+const HAS_P2D = typeof Path2D !== 'undefined';
 function ring(ctx, x, y, r, col, w, t, o = {}) {
-  const fr = frame(t), n = clamp(Math.round(r / 3), 12, 30), seed = o.seed || 0;
-  const path = (rad) => {
-    ctx.beginPath();
-    for (let i = 0; i <= n; i++) { const a = i / n * TAU, q = rad * (1 + (hh((i % n) * 5.3 + fr * 9.1 + seed) - 0.5) * 0.07); const px = x + Math.cos(a) * q, py = y + Math.sin(a) * q; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
-  };
+  const fr = frame(t), seed = o.seed || 0;
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   if (o.dash) { ctx.setLineDash(o.dash); ctx.lineDashOffset = -(o.march || 0); }
-  if (o.ink !== false) { path(r); ctx.globalAlpha = (o.alpha == null ? 1 : o.alpha) * 0.85; ctx.strokeStyle = INK; ctx.lineWidth = w + 3; ctx.stroke(); }
-  path(r); ctx.globalAlpha = o.alpha == null ? 1 : o.alpha; ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke();
+  const al = o.alpha == null ? 1 : o.alpha;
+  if (HAS_P2D) {
+    const p = ringPath2D(r, seed, fr);
+    ctx.translate(x, y);
+    if (o.ink !== false) { ctx.globalAlpha = al * 0.85; ctx.strokeStyle = INK; ctx.lineWidth = w + 3; ctx.stroke(p); }
+    ctx.globalAlpha = al; ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(p);
+  } else {
+    const pts = ringGeom(r, seed, fr), path = () => { ctx.beginPath(); ctx.moveTo(x + pts[0], y + pts[1]); for (let i = 2; i < pts.length; i += 2) ctx.lineTo(x + pts[i], y + pts[i + 1]); };
+    if (o.ink !== false) { path(); ctx.globalAlpha = al * 0.85; ctx.strokeStyle = INK; ctx.lineWidth = w + 3; ctx.stroke(); }
+    path(); ctx.globalAlpha = al; ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke();
+  }
   ctx.restore();
 }
 function rrectStroke(ctx, x, y, w, h, r, col, lw, alpha, dash, march) {
@@ -140,7 +165,8 @@ export function drawBoard(b, ctx, t, beat) {
 // crayon-ish projectile ribbon colours: darker than the classic neon so they read on paper
 const PROJ_COL = { kick: '#ff9226', snare: '#ffb81c', hat: '#2fc4b2', scratch: '#7b4fd0', cowbell: '#e8a21c', vocal: '#ff5fb0', orb: '#ff5fb0' };
 
-function heartPath(ctx, cx, cy, sz) { const p = K.heart(cx, cy, sz); ctx.beginPath(); ctx.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]); ctx.closePath(); }
+const HEART_U = K.heart(0, 0, 16);   // the unit heart, scaled per call (no array per heart per frame)
+function heartPath(ctx, cx, cy, sz) { const k = sz / 16; ctx.beginPath(); ctx.moveTo(cx + HEART_U[0] * k, cy + HEART_U[1] * k); for (let i = 2; i < HEART_U.length; i += 2) ctx.lineTo(cx + HEART_U[i] * k, cy + HEART_U[i + 1] * k); ctx.closePath(); }
 const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 // empty tiles (and the partner turrets next to them) where a synergy partner of turret `src` would link. Cached per frame-ish by turret count and selection.
 function synHints(b, src) {
@@ -253,7 +279,7 @@ export function drawPanel(b, ctx, tu) {
   const box = { x: PANEL_X, y: top ? BOARD_Y + 6 : BOARD_Y + BOARD_H - BH - 6, w: PANEL_W, h: BH };
   ctx.save();
   DH.glass(ctx, box.x, box.y, box.w, box.h, 16, { edge: def.color });
-  AE.drawTurretIconFlat(ctx, tu.type, box.x + 38, box.y + 36, 54);
+  DD.flatIcon(ctx, tu.type, box.x + 38, box.y + 36, 54);
   DH.text(ctx, def.name, box.x + 76, box.y + 18, 19, INK, 'left', 900, { maxW: 200 });
   for (let i = 0; i < MAX_LEVEL; i++) {   // level pips: inked dots
     ctx.beginPath(); ctx.arc(box.x + 78 + i * 13, box.y + 36, 4.4, 0, TAU);
@@ -280,7 +306,7 @@ export function drawPanel(b, ctx, tu) {
   const ps = TURRET_PARTNERS[tu.type] || [], linked = new Set(act.map((a) => a.withType));
   ps.forEach((pp, i) => {
     const px = box.x + 14 + labW + 14 + i * 44, py = box.y + yWork - 1;
-    AE.drawTurretIconFlat(ctx, pp.partner, px, py, 26);
+    DD.flatIcon(ctx, pp.partner, px, py, 26);
     if (linked.has(pp.partner)) { ctx.save(); ctx.fillStyle = C.pink; ctx.strokeStyle = INK; ctx.lineWidth = 1.6; heartPath(ctx, px + 12, py - 10, 6); ctx.fill(); ctx.stroke(); ctx.restore(); }
   });
   const br = DD.branchOf(tu);
@@ -461,7 +487,7 @@ function drawPool(b, ctx, t) {
     const x = x0 + i * pitch, nx = o.type === run.nextType;
     ctx.save(); ctx.globalAlpha = nx ? 1 : o.p > 0 ? 0.75 : 0.25;
     if (nx) { ring(ctx, x, cy - 1, 17, TURRETS[o.type].color, 3.5, t, { seed: i, alpha: 1 }); }
-    AE.drawTurretIconFlat(ctx, o.type, x, cy - 1 - (nx ? 2 + Math.sin(t * 7) : 0), nx ? 31 : 25);
+    DD.flatIcon(ctx, o.type, x, cy - 1 - (nx ? 2 + Math.sin(t * 7) : 0), nx ? 31 : 25);
     ctx.restore();
   });
   const pct = Math.max(p.next > 0 ? 1 : 0, Math.round(p.next * 100));
@@ -495,7 +521,7 @@ export function drawDeploy(b, ctx, t, beat) {
   const sx = d.x + 33, sy = d.y + d.h / 2;
   ctx.beginPath(); ctx.arc(sx, sy, 24, 0, TAU); ctx.fillStyle = C.paper; ctx.fill();
   ring(ctx, sx, sy, 24, nextDef.color, 3.5, t, { seed: 11 });
-  ctx.save(); ctx.translate(sx, sy); ctx.rotate(b.rerollSpin * TAU); AE.drawTurretIconFlat(ctx, run.nextType, 0, 0, 42); ctx.restore();
+  ctx.save(); ctx.translate(sx, sy); ctx.rotate(b.rerollSpin * TAU); DD.flatIcon(ctx, run.nextType, 0, 0, 42); ctx.restore();
   // the chance of this drop, as a paper sticker on the socket
   const pct = Math.max(b.pool.next > 0 ? 1 : 0, Math.round(b.pool.next * 100));
   DH.glass(ctx, d.x + 1, d.y - 1, 36, 17, 8, { edge: C.pink });
