@@ -125,7 +125,7 @@ const skillLevels = () => Object.fromEntries(Object.entries(save.skills).map(([i
 // ---------------------------------------------------------------- hub
 const TABS = ['Shop', 'Stats', 'Battle', 'Skills', 'Pets', 'Gear'];
 function openHub(tab = hubTab) {
-  mode = 'hub'; hubTab = tab; audio.music(false);
+  mode = 'hub'; hubTab = tab; audio.music(false); audio.hub(true);
   if (dayLogin(save, dayKey())) persist();
   refreshCur();
   sel = Math.max(1, Math.min(sel, MAX_STAGE, save.cleared + 4));
@@ -417,7 +417,7 @@ function startRun(stage, mode2 = '') {
 }
 let awayH = hoursAway(Date.now()); addEventListener('pagehide', () => stampVisit(Date.now()));
 function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)) || firstGoalHTML(save); { const w = welcomeBack(save, Date.now(), awayH), el = $('wb12'); el.innerHTML = welcomeHTML(w); el.hidden = !w; $('title').classList.toggle('ret12', !!w); awayH = 0; stampVisit(Date.now()); } try { dressDuo(document.querySelector('.stage12 .hero'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ } }
-function toTitle() { refreshTitle(); mode = 'title'; audio.music(false); refreshCur(); newDemo(); show('title'); }
+function toTitle() { refreshTitle(); mode = 'title'; audio.music(false); audio.hub(false); refreshCur(); newDemo(); show('title'); }
 
 // ---------------------------------------------------------------- upgrade cards
 function showCards() {
@@ -710,7 +710,7 @@ loadArt('assets/').then(a => {
   [['love', 'deco1'], ['grumpy', 'deco2'], ['sneezy', 'deco3'], ['sleepy', 'deco4']].forEach(([skin, el], i) => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
-  setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); $('title').addEventListener('snakepoke', e => audio.play(e.detail && e.detail.hit ? 'boop' : 'click')); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
+  setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); $('title').addEventListener('snakepoke', e => (e.detail && e.detail.hit ? audio.play('snakesqueak', e.detail) : audio.play('click'))); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
   R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready'), onMilestone: n => audio.play('streakmile', { n }), beatStreak: () => audio.beatStreak }); applySettings(); resize(); refreshTitle();
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();
