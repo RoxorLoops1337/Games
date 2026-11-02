@@ -16,7 +16,7 @@ assert.equal(swipeTarget(T, 'Shop', -120, 0, 1500), null, 'too slow');
 for (const n of ['tab_shop', 'tab_stats', 'tab_battle', 'tab_skills', 'tab_pets', 'tab_gear']) assert.ok(ICON_NAMES.includes(n), 'icon ' + n);
 
 const hud = fs.readFileSync(new URL('../../cell_serpent/hud.js', import.meta.url), 'utf8');
-assert.ok(/press: z =>/.test(hud) && /function pressK/.test(hud), 'hud exposes the press pulse');
+assert.ok(/press: id =>/.test(hud) && /pressAt/.test(hud), 'hud exposes the press pulse');
 const main = fs.readFileSync(new URL('../../cell_serpent/main.js', import.meta.url), 'utf8');
 assert.ok(/R\.hudPress\(zone\)/.test(main), 'a press on pause or stats pulses the button');
 assert.ok(/bindHubSwipe\(/.test(main), 'the hub swipe is wired');
