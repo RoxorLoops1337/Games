@@ -49,7 +49,7 @@ const PROBE = () => {
   const name0 = e => (e.id ? '#' + e.id : '') + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 3).join('.') : '') || e.tagName;
   const name = e => (!e.id && !(typeof e.className === 'string' && e.className.trim()) && e.parentElement ? name0(e.parentElement) + '>' : '') + name0(e);
   const out = { small: [], text: [], ovf: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) > innerWidth + 1 };
-  const on = [...document.querySelectorAll('.scr.on')]; const root = on[on.length - 1]; if (!root) return out;
+  const on = [...document.querySelectorAll('.scr.on')]; const root = (window.__probeRoot && document.querySelector(window.__probeRoot)) || on[on.length - 1]; if (!root) return out;   // b12r: a sheet overlay can be probed on its own
   for (const hb of root.querySelectorAll('.hubbody,.panelbody')) if (hb.scrollWidth > hb.clientWidth + 1) { out.ovf = true; out.ovfWhy = name0(hb) + ' ' + hb.scrollWidth + '>' + hb.clientWidth + ' ' + [...hb.querySelectorAll('*')].filter(x => x.getBoundingClientRect().right > hb.getBoundingClientRect().right + 1 && !x.closest('.side,.chips,.wstrip,[style*="overflow"]')).slice(0, 3).map(name).join(' | '); }
   const seen = new Set();
   for (const e of root.querySelectorAll(sel)) {
@@ -85,7 +85,7 @@ if (chromium) {
   if (browser) {
     const SAVE = { v: 8, beats: 5000, sparkles: 300, cleared: 14, best: 14, runs: 30, eggs: 3, ribbons: 80, xp: 1500, energy: { n: 40, t: 0 }, stars: { 1: 3, 2: 2, 3: 3 } };
     const VPS = [[360, 740], [390, 844], [412, 915], [430, 932], [320, 568], [360, 640]];
-    const STATES = ['title', 'Battle', 'Skills', 'Pets', 'Gear', 'Shop', 'Stats', 'settings', 'side0', 'side1', 'side2', 'side3', 'side4', 'qSeason', 'qAch', 'skillSheet', 'petSheet', 'box'];
+    const STATES = ['title', 'Battle', 'Skills', 'Pets', 'Gear', 'Shop', 'Stats', 'settings', 'side0', 'side1', 'side2', 'side3', 'side4', 'qSeason', 'qAch', 'skillSheet', 'petSheet', 'box', 'Battle+', 'Skills+', 'Pets+', 'Gear+', 'Shop+', 'Stats+', 'settings+', 'skillSheet+', 'petSheet+'];   // b12r: the '+' states run with every collapsible section open
     const hitFails = new Set(), textFails = new Set(), ovfFails = [], errs = [];
     let measured = 0, sicoMin = 99;
     try {
@@ -96,7 +96,17 @@ if (chromium) {
         await p.addInitScript(s => { if (!localStorage.getItem('seeded')) { localStorage.setItem('cell_serpent_save_v1', s); localStorage.setItem('seeded', '1'); } }, JSON.stringify(SAVE));
         await p.goto(`http://localhost:${srv.address().port}/cell_serpent/`); await p.waitForFunction(() => window.CS && window.CS.R, null, { timeout: 15000 }); await p.waitForTimeout(700);
         for (const st of STATES) {
-          if (['Battle', 'Skills', 'Pets', 'Gear', 'Shop', 'Stats'].includes(st)) { await p.evaluate(t => window.CS.openHub(t), st); await p.waitForTimeout(600); }
+          if (st.endsWith('+')) {   // b12r: everything expanded, the secondary parts must also keep 44 px targets and 12 px text
+            const base = st.slice(0, -1);
+            await p.evaluate(() => window.CS.fold.openAll(true));
+            if (['Battle', 'Skills', 'Pets', 'Gear', 'Shop', 'Stats'].includes(base)) { await p.evaluate(t => window.CS.openHub(t), base); await p.waitForTimeout(600); }
+            else {
+              await p.evaluate(() => window.CS.openHub('Battle')); await p.waitForTimeout(300);
+              const ok2 = await p.evaluate(async base => { const wait = ms => new Promise(r => setTimeout(r, ms)); if (base === 'settings') { document.querySelector('#setBtnH').click(); return true; } if (base === 'skillSheet') { window.CS.openHub('Skills'); await wait(400); const e = document.querySelector('#skillList .tile'); if (e) e.click(); return !!e; } window.CS.openHub('Pets'); await wait(400); const e = document.querySelector('#petList .tile.pet'); if (e) e.click(); return !!e; }, base);
+              if (!ok2) { hitFails.add(`${w}x${h} ${st}: could not open this state`); continue; }
+              await p.waitForTimeout(700); await p.evaluate(base => { window.CS.fold.openAll(true); window.__probeRoot = /Sheet$/.test(base) ? '.dsheet' : null; }, base); await p.waitForTimeout(300);
+            }
+          } else if (['Battle', 'Skills', 'Pets', 'Gear', 'Shop', 'Stats'].includes(st)) { await p.evaluate(t => window.CS.openHub(t), st); await p.waitForTimeout(600); }
           else if (st !== 'title') {
             await p.evaluate(() => window.CS.openHub('Battle')); await p.waitForTimeout(300);
             const opened = await p.evaluate(async st => {

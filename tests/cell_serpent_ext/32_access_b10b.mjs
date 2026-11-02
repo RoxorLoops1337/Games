@@ -130,7 +130,8 @@ if (chromium) {
       }
       {   // the sticker book from the keyboard only
         const { p, errs } = await open();
-        await p.evaluate(() => window.CS.openHub('Stats')); await p.waitForSelector('.stkgrid button', { timeout: 8000 }); await p.waitForTimeout(500);
+        await p.evaluate(() => window.CS.openHub('Stats')); await p.evaluate(() => window.CS.fold.openAll()); await p.waitForSelector('.stkgrid button', { timeout: 8000 });   // b12r: the Sticker book fold
+        await p.waitForTimeout(500);
         const info = await p.evaluate(() => { const bs = [...document.querySelectorAll('.stkgrid button')]; return { n: bs.length, stops: bs.filter(b => b.tabIndex === 0).length, grp: document.querySelector('.stkgrid').getAttribute('role'), described: bs.filter(b => b.classList.contains('got')).every(b => b.getAttribute('aria-description')), got: bs.filter(b => b.classList.contains('got')).length }; });
         assert.ok(info.n >= 12, 'the book has its stickers'); assert.equal(info.stops, 1, 'one Tab stop for the whole grid'); assert.equal(info.grp, 'group'); assert.ok(info.got > 0 && info.described, 'each sticker you own says what it was for');
         await p.evaluate(() => { const b = document.querySelector('.stkgrid button[tabindex="0"]'); b.scrollIntoView({ block: 'center' }); b.focus(); });
