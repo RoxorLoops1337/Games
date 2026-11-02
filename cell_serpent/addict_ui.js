@@ -5,7 +5,7 @@ import {
   masteryList, claimMastery, claimAllMastery, bookStatus, claimBook, rewardText, comebackGift, claimComeback, touchSeen,
   nextReward, nudgeFor, spinStreak, spinFrame, comebackLines, hasShield, SHIELD_AT, idleAmount, claimIdle,
 } from './sim.js';
-import { todayHTML, flyChips } from './goals_polish.js';
+import { todayHTML, flyChips, flyReward } from './goals_polish.js';
 import { riskHTML, bookCell, nextUnmet } from './keep_ui.js';
 
 export function createAddictUI(c, openPanel, sec) {
@@ -63,11 +63,11 @@ export function createAddictUI(c, openPanel, sec) {
   function grid(body) { const g = document.createElement('div'); g.className = 'tiles'; body.appendChild(g); return g; }
   function build(body) {
     const s = save(), day = c.dayKey();
-    { const td = document.createElement('div'); td.innerHTML = todayHTML(s, day); body.appendChild(td.firstChild); }   // round 7: the friendly daily rhythm
-    // a "ready to collect" banner so nothing waits unseen further down the page
+    // (the old readybar banner is folded into the Today strip as tappable chips)
     { const wk0 = ensureWeek(s, day), nm = masteryList(s).filter(m => m.ready >= 0).length, nb = bookStatus(s).cats.filter(k => k.ready && !s.addict.claimed['book:' + k.id]).length;
-      const bits = []; if (spinReady(s, day)) bits.push('🎡 Spin'); if (!wk0.claimed && weekReady(s, day)) bits.push('🏅 Weekly'); if (nm) bits.push('🐍 ' + nm + ' rank' + (nm > 1 ? 's' : '')); if (nb) bits.push('📖 Book');
-      if (bits.length) { const rb = document.createElement('div'); rb.className = 'readybar'; rb.innerHTML = '<b>Ready to collect</b><span>' + bits.map(t => '<i>' + t + '</i>').join('') + '</span>'; body.appendChild(rb); } }
+      const bits = []; if (spinReady(s, day)) bits.push({ go: 'Lucky Spin', text: '🎡 Spin' }); if (!wk0.claimed && weekReady(s, day)) bits.push({ go: 'Weekly Challenge', text: '🏅 Weekly' }); if (nm) bits.push({ go: 'Mastery', text: '🐍 ' + nm + ' rank' + (nm > 1 ? 's' : '') }); if (nb) bits.push({ go: 'Collection Book', text: '📖 Book' });
+      const td = document.createElement('div'); td.innerHTML = todayHTML(s, day, bits); const tdy = td.firstChild; body.appendChild(tdy);   // round 7 rhythm strip, round 8 holds the ready chips
+      tdy.querySelectorAll('.tdgo').forEach(bt => { bt.onclick = () => { audio.play('click'); const h = [...body.querySelectorAll('.sec span')].find(x => x.textContent.trim().indexOf(bt.dataset.go) === 0); if (h) h.scrollIntoView({ block: 'start', behavior: reduce() ? 'auto' : 'smooth' }); }; }); }
     // lucky spin
     sec(body, 'Lucky Spin', '#ff7eb6');
     const w = document.createElement('div'); w.className = 'spinbox';
@@ -80,7 +80,7 @@ export function createAddictUI(c, openPanel, sec) {
       audio.unlock(); const r = doSpin(save(), day); if (!r) return; after(); audio.play('click');
       const wheel = w.querySelector('#wheel'), btn = w.querySelector('#spinGo'); btn.disabled = true; btn.textContent = 'SPINNING...';
       wheel.style.transition = reduce() ? 'none' : 'transform 3s cubic-bezier(.15,.7,.2,1)'; wheel.style.transform = `rotate(${360 * 4 - r.index * 45}deg)`;
-      setTimeout(() => { audio.play('levelup'); w.querySelector('#spinMsg').textContent = 'You won ' + rewardText(r.prize.reward) + '!' + (r.gift ? ' And a Streak Shield!' : '') + (r.saved ? ' Your shield saved the streak!' : ''); if (r.gift || r.saved) { const sh = w.querySelector('.shieldrow'); if (sh) sh.outerHTML = shieldLine(save(), save().addict.spin.n, r.gift); } btn.textContent = 'SEE YOU TOMORROW'; w.querySelector('.wseg:nth-child(' + (r.index + 1) + ')').classList.add('win'); renderNext(); if (!reduce()) burst(w.querySelector('.wheelwrap'), fr.burst + 8, fr.color); }, reduce() ? 0 : 3100);
+      setTimeout(() => { audio.play('levelup'); w.querySelector('#spinMsg').textContent = 'You won ' + rewardText(r.prize.reward) + '!' + (r.gift ? ' And a Streak Shield!' : '') + (r.saved ? ' Your shield saved the streak!' : ''); if (r.gift || r.saved) { const sh = w.querySelector('.shieldrow'); if (sh) sh.outerHTML = shieldLine(save(), save().addict.spin.n, r.gift); } btn.textContent = 'SEE YOU TOMORROW'; w.querySelector('.wseg:nth-child(' + (r.index + 1) + ')').classList.add('win'); renderNext(); if (!reduce()) { burst(w.querySelector('.wheelwrap'), fr.burst + 8, fr.color); flyReward(w.querySelector('.wheelwrap'), r.prize.reward, false); } }, reduce() ? 0 : 3100);
     };
     // weekly challenge
     sec(body, 'Weekly Challenge', '#ffd24a');
@@ -109,7 +109,7 @@ export function createAddictUI(c, openPanel, sec) {
       const pips = m.miles.map((_x, i) => `<i class="${i < m.done ? 'on' : ''}"></i>`).join('');
       mg.appendChild(tile({ cls: 't-weapon mast', ic: m.kind === 'sk' ? c.icon(m.id) : (c.bodyURL && c.bodyURL(m.id) ? `<img src="${c.bodyURL(m.id)}" alt="">` : '🐍'), name: esc(m.name), chip: 'Rank ' + m.done + '/' + m.miles.length, desc: full ? 'Master!' : 'Reward: ' + rewardText(target.reward),
         bar: full ? 100 : Math.round(Math.min(1, m.val / target.at) * 100), barText: full ? m.val + ' ' + m.unit : m.val + ' / ' + target.at + ' ' + m.unit, pips,
-        btn: rdy ? 'CLAIM' : full ? 'DONE' : 'KEEP GOING', gold: rdy, disabled: !rdy, onclick: () => { if (claimMastery(save(), m.key, m.ready)) { after(); audio.play('levelup'); rebuild(); renderNext(); } } }));
+        btn: rdy ? 'CLAIM' : full ? 'DONE' : 'KEEP GOING', gold: rdy, disabled: !rdy, onclick: ev => { const rwm = rdy && target.reward, fb = ev && ev.currentTarget; if (claimMastery(save(), m.key, m.ready)) { flyReward(fb, rwm, reduce()); after(); audio.play('levelup'); rebuild(); renderNext(); } } }));
     }
     // collection book
     const bk = bookStatus(s);
@@ -119,12 +119,12 @@ export function createAddictUI(c, openPanel, sec) {
       box.classList.toggle('pagefull', cat.got >= cat.total); box.innerHTML = `<div class="bch"><b><i class="bci">${{ species: '🐍', pets: '🐾', keeps: '🎁', outfits: '👗' }[cat.id] || '📖'}</i>${esc(cat.name)}</b><span>${cat.got}/${cat.total}</span><em class="bcp">${Math.round(cat.got / cat.total * 100)}%</em></div><div class="bcg">${cat.list.map(x => bookCell(x, cat.id, c, s, nextUnmet(cat.list))).join('')}</div><div class="bcbar${cat.got >= cat.total ? ' full' : ''}"><i style="width:${Math.round(cat.got / cat.total * 100)}%"></i></div>`;
       const b = document.createElement('button'); b.className = 'btn small go gold'; b.disabled = !cat.ready;
       b.textContent = s.addict.claimed['book:' + cat.id] ? 'COMPLETE' : cat.ready ? 'CLAIM ' + rewardText(cat.reward) : 'Complete for ' + rewardText(cat.reward);
-      b.onclick = () => { if (claimBook(save(), cat.id)) { after(); audio.play('levelup'); rebuild(); renderNext(); pageDone(cat.id); } };
+      b.onclick = () => { const rwb = cat.reward; if (claimBook(save(), cat.id)) { flyReward(b, rwb, reduce()); after(); audio.play('levelup'); rebuild(); renderNext(); pageDone(cat.id); } };
       box.appendChild(b); body.appendChild(box);
     }
     const ag = grid(body);
     bk.all.forEach(m => ag.appendChild(tile({ cls: 't-gold one', ic: '📖', name: `Book ${Math.round(m.at * 100)}% full`, desc: rewardText(m.reward), btn: s.addict.claimed['book:all' + m.i] ? 'CLAIMED' : m.ready ? 'CLAIM' : Math.round(bk.got / bk.total * 100) + '%', gold: true, disabled: !m.ready,
-      onclick: () => { if (claimBook(save(), 'all' + m.i)) { after(); audio.play('levelup'); rebuild(); renderNext(); } } })));
+      onclick: ev => { const fb = ev && ev.currentTarget; if (claimBook(save(), 'all' + m.i)) { flyReward(fb, m.reward, reduce()); after(); audio.play('levelup'); rebuild(); renderNext(); } } })));
   }
 
   // the tip jar chip on the welcome card: only when a fair amount has piled up
