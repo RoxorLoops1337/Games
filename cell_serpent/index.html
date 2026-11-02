@@ -1374,6 +1374,33 @@
   @keyframes d19Pop{from{opacity:0;scale:.84;translate:0 14px}to{opacity:1;scale:1;translate:0 0}}
   @keyframes d19Out{to{opacity:0;transform:scale(.94) translateY(8px)}}
 /* end @css:19-buttons round 5 */
+/* @css:19-buttons round 6 */
+  /* resume button: the pause bars morph into a play triangle when the pause screen opens */
+  .pzg{display:inline-block;position:relative;width:.92em;height:.92em;vertical-align:-.1em;margin-right:.1em}
+  .pzg s{position:absolute;inset:0;background:currentColor;text-decoration:none;--l:polygon(14% 8%,38% 8%,38% 92%,14% 92%);--r:polygon(62% 8%,86% 8%,86% 92%,62% 92%);clip-path:var(--l)}
+  .pzg s+s{clip-path:var(--r)}
+  #pause.on .pzg s{animation:d19PzL .5s cubic-bezier(.5,0,.2,1.3) .45s both}
+  #pause.on .pzg s+s{animation-name:d19PzR}
+  @keyframes d19PzL{from{clip-path:polygon(14% 8%,38% 8%,38% 92%,14% 92%)}to{clip-path:polygon(18% 8%,52.5% 29%,52.5% 71%,18% 92%)}}
+  @keyframes d19PzR{from{clip-path:polygon(62% 8%,86% 8%,86% 92%,62% 92%)}to{clip-path:polygon(51% 28%,88% 50%,88% 50%,51% 72%)}}
+  html.rm #pause.on .pzg s{animation:none}
+  html.rm #pause .pzg s{clip-path:polygon(18% 8%,52.5% 29%,52.5% 71%,18% 92%)} html.rm #pause .pzg s+s{clip-path:polygon(51% 28%,88% 50%,88% 50%,51% 72%)}
+  /* tab bar: one pink bar slides under the tabs (and follows the swipe) */
+  .tabs{isolation:isolate}
+  .tabs .tabind{position:absolute;top:-3px;left:0;height:3px;width:calc(100% / var(--n,6));z-index:2;pointer-events:none;transform:translateX(calc(var(--i,2) * 100%));transition:transform .42s cubic-bezier(.3,1.5,.5,1)}
+  .tabs .tabind::before{content:"";position:absolute;left:18%;right:18%;top:0;bottom:0;border-radius:0 0 4px 4px;background:linear-gradient(90deg,#ff8ad0,#ff5cb8);box-shadow:0 0 12px 1px rgba(255,92,184,.8)}
+  .tabs .tabind::after{content:"";position:absolute;left:8%;right:8%;top:3px;height:34px;background:radial-gradient(ellipse at 50% 0,rgba(255,92,184,.28),transparent 70%)}
+  .tabs.tdrag .tabind{transition:none}
+  html.rm .tabs .tabind{transition:none}
+  /* side buttons: baked icons and a real press (the edge sinks, the icon squashes) */
+  .sidebtn{box-shadow:0 3px 0 rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.14)}
+  .sidebtn b{display:flex;align-items:center;justify-content:center;height:30px;margin-bottom:1px}
+  .sidebtn .sico{width:30px;height:30px;object-fit:contain;pointer-events:none;filter:drop-shadow(0 1px 0 rgba(0,0,0,.35));transition:transform .22s cubic-bezier(.3,1.7,.5,1)}
+  #tabBattle .sidebtn b{height:25px} #tabBattle .sidebtn .sico{width:25px;height:25px}
+  .sidebtn:active{box-shadow:0 1px 0 rgba(0,0,0,.38);translate:0 2px;filter:brightness(1.22);border-color:rgba(255,255,255,.4)}
+  .sidebtn:active .sico{transform:scale(.88,.8) translateY(2px)}
+  @media (hover:hover){.sidebtn:hover .sico{transform:translateY(-2px) rotate(-6deg) scale(1.08)}}
+/* end @css:19-buttons round 6 */
   /* @css:11-result-goal */
   .rgoal{display:none;align-items:center;gap:10px;width:min(320px,86vw);padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);cursor:pointer;text-align:left;animation:rpIn .45s .9s both}
   .rgoal.on{display:flex}
@@ -1575,7 +1602,7 @@
   <div class="sub pnote">Take a breath. The snake waits.</div>
   <div class="precap" id="pRecap"></div>
   <div class="rpmark" id="pBuild"></div>
-  <button class="btn pbig" id="resumeBtn">&#9654; RESUME</button>
+  <button class="btn pbig" id="resumeBtn"><i class="pzg" aria-hidden="true"><s></s><s></s></i> RESUME</button>
   <button class="btn alt pbtn" id="pStats">&#128202; WHO DID WHAT</button>
   <button class="btn alt pbtn" id="pSet">&#9881; SETTINGS</button>
   <button class="btn dim" id="quitBtn">GIVE UP</button>
