@@ -2,6 +2,7 @@
 // where they exist and draws procedural stand-ins otherwise.
 import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv } from './sim.js';
 import { INK, mix } from './art_draw.js';
+import { createHud } from './hud.js';
 
 const TAU = Math.PI * 2;
 const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
@@ -304,58 +305,19 @@ export function createRenderer(canvas, art, kit) {
     ctx.globalAlpha = 1;
   }
 
+  let hud = null;   // the widgets live in hud.js
   function drawHud(g, ui) {
     const p = g.p, pad = 22;
-    // yellow upgrade cells still on the snake
-    ctx.save(); ctx.translate(pad + 14, 44); ctx.fillStyle = '#ffd84d'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 18, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
-    sparkleAt(pad + 14, 44, 13);
-    text('x ' + (g.upgradeLeft || 0), pad + 40, 46, 24, '#ffd84d', '#0b1020', 'left');
-    text('UPGRADE CELLS', pad, 78, 12, '#fff1a8', '#0b1020', 'left');
-    { let ch = 0; for (const sn of g.snakes) for (const q of sn.segs) if (q.carry === 'chest' && q.hp > 0) ch++; if (ch) { blit(kit && kit.SPR.pickup('chest'), pad + 98, 44, 40); text('x ' + ch, pad + 122, 46, 20, '#ffe9a8', '#0b1020', 'left'); } }
+    if (!hud) hud = createHud({ ctx, text, blit, kit, S, INK, glow, sparkleAt, WCOL, WSPR });
+    hud.draw(g);
     if ((g.danger || 0) > 0.05 && g.phase === 'play') { const a = Math.min(0.5, g.danger * 0.45) * (0.65 + 0.35 * Math.sin(S.t * 14)); const rg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75); rg.addColorStop(0, 'rgba(255,40,80,0)'); rg.addColorStop(1, `rgba(255,40,80,${a})`); ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H); }
     for (const sn of g.snakes) if (sn.surge === 'warn') { const h = sn.segs[0]; text('!', h.x, h.y - h.r - 34 + Math.sin(S.t * 20) * 4, 40, '#ff3d5a', '#0b1020'); }
-    // what the capsule does right now
-    const up = id => Math.round(uv(g, id));
-    const gv = g.groove || 0, gw = 230, gx = pad + 4, gy = H - 30;
-    ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(gx - 3, gy - 3, gw + 6, 18);
-    const gg = ctx.createLinearGradient(gx, 0, gx + gw, 0); gg.addColorStop(0, '#ff7eb6'); gg.addColorStop(1, gv >= 15 ? '#ffd84d' : '#6fe3ff');
-    ctx.fillStyle = gg; ctx.fillRect(gx, gy, gw * Math.min(1, gv / 20), 12);
-    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.strokeRect(gx - 3, gy - 3, gw + 6, 18);
-    text(gv >= 20 ? 'GROOVE: ON FIRE' : 'GROOVE ' + Math.floor(gv) + '  (+' + Math.floor(gv * 1.5) + '% dmg)', gx + gw / 2, gy - 14, 14, gv >= 15 ? '#ffd84d' : '#ffc2dc', '#0b1020');
     if (ui && ui.hints) {   // short hints for the first runs
       const sn = g.snakes[0], alone = sn && sn.segs.length <= 3 && sn.segs[0].shield;
       const hint = g.t < 7 ? 'SLIDE LEFT AND RIGHT: YOUR NOTES FLY STRAIGHT UP' : (g.upgradeLeft > 0 && g.pending === 0 && g.kills < 4) ? 'POP THE YELLOW CELLS FOR UPGRADES' : alone ? 'THE FACE POPS WHEN IT IS ALONE' : '';
       if (hint) { ctx.save(); ctx.globalAlpha = 0.75 + Math.sin(S.t * 4) * 0.2; text(hint, W / 2, H * 0.5, 24, '#ffffff', '#0b1020'); ctx.restore(); }
     }
-    text(`NOTES ${1 + up('notes')}  BURSTS ${1 + up('burst')}  SPEED +${up('aspd')}%  DMG +${up('cdmg')}%`, W / 2, 166, 13, '#bfe9ff', '#0b1020');
-    // chapter, virus name, and progress with chests at 25% / 50% / 100%
-    const boss = isBossStage(g.stage);
-    text(boss ? 'BOSS  ' + g.stage : 'STAGE ' + g.stage, W / 2, 34, 26, boss ? '#ff7a9a' : '#fff');
-    text(g.mode === 'pig' ? 'Piggy Bank Parade' : virusName(g.stage), W / 2, 62, 17, '#ffd0e6');
-    const bw = 400, bx = W / 2 - bw / 2, by = 84;
-    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(bx - 3, by - 3, bw + 6, 20);
-    ctx.fillStyle = boss ? '#ff3d6e' : '#ff7eb6'; ctx.fillRect(bx, by, bw * (g.progress || 0), 14);
-    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.strokeRect(bx - 3, by - 3, bw + 6, 20);
-    for (const th of [0.25, 0.5, 1]) { const done = (g.progress || 0) >= th - 1e-6; ctx.save(); ctx.globalAlpha = done ? 0.45 : 1; blit(kit && kit.SPR.pickup('chest'), bx + bw * th - (th === 1 ? 4 : 0), by + 7, th === 1 ? 46 : 34); ctx.restore(); }
-    text('Progress: ' + Math.floor((g.progress || 0) * 100) + '%', W / 2, 116, 15, '#ffd0e6', '#0b1020');
-    if (g.hard) text('HARD', W / 2 + 104, 62, 15, '#c9a0ff', '#0b1020');
-    { const sn = g.snakes[0], mult = sn ? (sn.surge === 'go' ? 2.6 : sn.slow > 0 ? 0.6 : 1) : 1;   // how fast the snake is going right now
-      blit(kit && kit.SPR.body(g.skin, false, ''), pad + 28, 140, 64, 0); text('SPEED x' + mult.toFixed(1), pad, 178, 13, mult > 1 ? '#ff8a8a' : '#cfe', '#0b1020', 'left'); }
-    ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(W - 40, 112, 24, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; for (const [i, hgt] of [[0, 12], [1, 20], [2, 28]]) ctx.fillRect(W - 54 + i * 10, 124 - hgt, 7, hgt);
-    // coins
-    blit(kit && kit.SPR.pickup('coin'), W - pad - 172, 38, 52); text(String(Math.floor(g.coins)), W - pad - 152, 38, 24, '#ffd24a', '#0b1020', 'left');
-    ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(W - 40, 38, 24, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(W - 48, 28, 6, 20); ctx.fillRect(W - 36, 28, 6, 20);
-    if (p.shield > 0) text('SHIELD ' + p.shield.toFixed(0), W - pad, H - 78, 18, '#7fe8ff', '#0b1020', 'right');
-    if (p.rage > 0) text('RAGE ' + p.rage.toFixed(0), W - pad, H - 50, 18, '#ffd24a', '#0b1020', 'right');
-    if (g.combo > 2 && g.t - g.lastKill < 2.2) text('COMBO x' + g.combo, W / 2, 136, 24 + Math.min(10, g.combo * 0.3), '#ffe14a');
-    // owned weapons
-    let wx = W - pad - 24; const wy = H - 36;
-    for (const id of Object.keys(g.weap)) {
-      ctx.save(); ctx.translate(wx, wy); ctx.fillStyle = WCOL[id] || '#fff'; ctx.strokeStyle = INK; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-22, -22, 44, 44, 10) : ctx.rect(-22, -22, 44, 44); ctx.fill(); ctx.stroke(); ctx.restore();
-      blit(kit && kit.SPR.weapon(WSPR[id] || id), wx, wy - 6, 100); text('Lv' + g.weap[id].lv, wx, wy + 14, 11, '#fff', INK);
-      wx -= 52;
-    }
+    if (g.combo > 2 && g.t - g.lastKill < 2.2) text('COMBO x' + g.combo, W / 2, 196, 24 + Math.min(10, g.combo * 0.3), '#ffe14a');
     // joystick
     if (ui && ui.joy && ui.joy.on) {
       const j = ui.joy; ctx.save(); ctx.globalAlpha = 0.45; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(j.x, j.y, 70, 0, TAU); ctx.stroke();
