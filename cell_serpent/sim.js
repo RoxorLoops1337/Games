@@ -1,7 +1,7 @@
 // Cell Serpent: pure simulation (no DOM, no canvas). The browser and the headless test suite
 // run this same file. All randomness comes from one seeded generator.
 //
-// One run is ONE snake (one stage). A long segmented virus crawls down a winding lane toward
+// One run is ONE snake (one stage). A long segmented serpent crawls down a winding lane toward
 // the bottom of the screen as one connected chain. Your cell slides left and right along the
 // bottom row and fires notes straight up, so where you stand is your aim. Every cell takes
 // 10 to 20 shots. Upgrades come only from the yellow upgrade cells on the snake. Its face is shielded
@@ -127,6 +127,7 @@ export function tickEnergy(save, now) {
   return e.n;
 }
 export function spendEnergy(save, now, cost = ENERGY_COST) { if (tickEnergy(save, now) < cost) return false; if (save.energy.n >= ENERGY_MAX) save.energy.t = now; save.energy.n -= cost; return true; }
+export const ENERGY_OVER_MAX = 99;   // rewards may push Voice past the cap; a loaded or imported save may not hold more than this
 export const addEnergy = (save, n) => { save.energy.n += n; };   // rewards may push it past the cap
 export function buyEnergy(save, now) { if (save.sparkles < 10) return false; save.sparkles -= 10; addEnergy(save, 10); return true; }
 // Stage difficulty: Hard has much tougher cells and pays double.
@@ -345,7 +346,7 @@ export function sanitizeSave(raw) {
   if (raw.card && typeof raw.card === 'object') s.card = { until: num(raw.card.until), last: num(raw.card.last) };
   if (raw.trophies && typeof raw.trophies === 'object') for (const t of TROPHIES) if (raw.trophies[t.id]) s.trophies[t.id] = 1;
   s.login = num(raw.login); s.hardCleared = Math.min(s.cleared, num(raw.hardCleared)); s.xp = num(raw.xp);
-  if (raw.energy && typeof raw.energy === 'object') s.energy = { n: Math.min(999, num(raw.energy.n, ENERGY_MAX)), t: num(raw.energy.t) };
+  if (raw.energy && typeof raw.energy === 'object') s.energy = { n: Math.max(0, Math.min(ENERGY_OVER_MAX, num(raw.energy.n, ENERGY_MAX))), t: num(raw.energy.t) };
   for (const k of KEEPSAKES) { const r = raw.keeps && raw.keeps[k.id]; if (r) { s.keeps[k.id].lv = Math.min(keepMax(k), num(r.lv)); s.keeps[k.id].frag = num(r.frag); } }
   if (raw.sign && typeof raw.sign === 'object') s.sign = { day: num(raw.sign.day), n: num(raw.sign.n) };
   if (raw.idle && typeof raw.idle === 'object') s.idle = { t: num(raw.idle.t) };
@@ -588,9 +589,9 @@ export const arrivalTime = n => 0.74 * Math.max(80, 112 - 0.9 * n + 2.2 * (snake
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
 export const SKINS = ['love', 'rust', 'sneezy', 'grumpy', 'sleepy', 'disco', 'sour', 'mighty', 'frosty', 'gloomy'];
 export const skinFor = n => SKINS[(n - 1) % SKINS.length];
-const NAMES = ['Love-Struck Virus', 'Rustic Virus', 'Sneezy Virus', 'Grumpy Flu', 'Sleepy Spore', 'Disco Germ', 'Sour Strain', 'Mighty Mold', 'Frosty Fever', 'Gloomy Gunk'];
+const NAMES = ['Love-Struck Serpent', 'Rustic Serpent', 'Sneezy Serpent', 'Grumpy Python', 'Sleepy Cobra', 'Disco Viper', 'Sour Adder', 'Mighty Mamba', 'Frosty Boa', 'Gloomy Asp'];
 export const SKIN_NAMES = NAMES;
-export const virusName = n => NAMES[(n - 1) % NAMES.length] + (n > NAMES.length ? ' ' + 'I'.repeat(1 + Math.floor((n - 1) / NAMES.length)) : '');
+export const virusName = n => NAMES[(n - 1) % NAMES.length] + (n > NAMES.length ? ' ' + ['', 'II', 'III', 'IV', 'V'][Math.floor((n - 1) / NAMES.length)] : '');
 export const PATH_KINDS = ['Gentle waves', 'Tall hairpins', 'Big lobes', 'Castle steps', 'Tight waves', 'Sharp zigzag', 'Wide S', 'Hairpin lanes', 'Wild lanes'];
 const PATH_ORDER = [0, 1, 3, 2, 6, 4, 7, 5, 8];   // which shape each stage gets
 export const pathKind = n => PATH_ORDER[(n - 1) % PATH_ORDER.length];
@@ -887,7 +888,7 @@ function onKill(g, s, sn) {
   }
 }
 
-// Remove dead cells. The virus stays one connected chain: the cells in front of a gap slide back to
+// Remove dead cells. The serpent stays one connected chain: the cells in front of a gap slide back to
 // close it (see the chain update in step), so it just gets shorter. The face pops once it is alone.
 function reap(g) {
   for (let pass = 0; pass < 8; pass++) {
@@ -1203,7 +1204,7 @@ export function step(g, dt, input) {
   if (input && input.encore) fireEncore(g);
   g.grooveT += dt; if (g.grooveT > 1.2 && g.groove > 0) g.groove = Math.max(0, g.groove - 8 * dt);   // the groove fades when the hits stop
 
-  // the virus rides the track as one connected chain driven by its tail. Cells in front of a gap
+  // the serpent rides the track as one connected chain driven by its tail. Cells in front of a gap
   // slide back to close it, so every kill also pushes the face away from the membrane.
   let stageHp = 0;
   g.danger *= 0.97;

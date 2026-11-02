@@ -22,14 +22,16 @@ export function applyPageSettings(st) {
 export const systemReduceMotion = () => { try { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } };
 
 // on-screen slide bar: acts like the drag joystick (thumb offset from the middle = speed), springs back on release
-export function initSlider(joy, isPlaying) {
+export function initSlider(joy, isPlaying, onTap) {
   const el = document.getElementById('accSlider'), th = document.getElementById('accThumb'); if (!el) return;
   let id = null;
   const set = dx => { th.style.transform = `translateX(${dx * (el.clientWidth / 2 - 34)}px)`; el.setAttribute('aria-valuenow', dx.toFixed(2)); };
   const move = e => { const r = el.getBoundingClientRect(); const dx = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 2 - 34))); joy.sdx = dx; set(dx); };
   el.addEventListener('pointerdown', e => { if (!isPlaying()) return; id = e.pointerId; el.setPointerCapture(id); move(e); e.preventDefault(); });
   el.addEventListener('pointermove', e => { if (e.pointerId === id) move(e); });
-  const end = e => { if (e.pointerId === id) { id = null; joy.sdx = 0; set(0); } };
+  let t0 = 0, moved = 0;   // a quick tap on the bar (no real slide) is the Encore tap, since the bar can sit over the duo on short phones
+  let sx = 0; el.addEventListener('pointerdown', e => { t0 = Date.now(); moved = 0; sx = e.clientX; }); el.addEventListener('pointermove', e => { moved = Math.max(moved, Math.abs(e.clientX - sx)); });
+  const end = e => { if (e.pointerId === id) { id = null; if (e.type === 'pointerup' && onTap && Date.now() - t0 < 260 && moved < 14 && isPlaying()) onTap(); joy.sdx = 0; set(0); } };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
   set(0);
 }

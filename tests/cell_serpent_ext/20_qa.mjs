@@ -33,6 +33,39 @@ ok('quitResult: a pause-menu give up keeps mode, hard flag, progress and damage'
   assert.ok(Object.values(save.prog).every(Number.isFinite));
 });
 
+// ---- a backup code cannot mint unlimited Voice
+ok('importing a save with Voice far above the cap is clamped, rewards can still pass the cap', () => {
+  for (const n of [999, 5000, 1e9]) {
+    const sv = sim.sanitizeSave({ ...sim.defaultSave(), energy: { n, t: 0 } });
+    assert.equal(sv.energy.n, sim.ENERGY_OVER_MAX); assert.ok(sv.energy.n > sim.ENERGY_MAX);
+    assert.equal(sim.importSave(sim.exportSave(sv)).energy.n, sim.ENERGY_OVER_MAX);
+  }
+  for (const n of [-5, 'x', null, NaN]) { const e = sim.sanitizeSave({ ...sim.defaultSave(), energy: { n, t: 0 } }).energy.n; assert.ok(Number.isFinite(e) && e >= 0 && e <= sim.ENERGY_OVER_MAX, String(n)); }
+  const sv = sim.defaultSave(); sim.addEnergy(sv, 20); assert.ok(sv.energy.n > sim.ENERGY_MAX);
+});
+
+// ---- snakes only: no 'Virus' wording anywhere the player can read it
+ok('stage and species names use Serpent or Snake wording, with short roman suffixes', () => {
+  for (let i = 1; i <= 50; i++) { const nm = sim.virusName(i); assert.ok(!/virus|flu\b|germ|fever|gunk/i.test(nm), nm); assert.ok(nm.length <= 24, 'fits the banner: ' + nm); }
+  assert.equal(sim.virusName(1), 'Love-Struck Serpent');
+  assert.equal(sim.virusName(11), 'Love-Struck Serpent II'); assert.equal(sim.virusName(41), 'Love-Struck Serpent V');
+  assert.ok(sim.SKIN_NAMES.every(n => !/virus/i.test(n)));
+});
+{
+  const mainSrc = fs.readFileSync(path.join(ROOT, 'cell_serpent', 'main.js'), 'utf8'), htmlSrc = fs.readFileSync(path.join(ROOT, 'cell_serpent', 'index.html'), 'utf8');
+  ok('no visible Virus text in the page or the screens main.js writes', () => {
+    assert.ok(!/virus/i.test(htmlSrc.replace(/<style[\s\S]*?<\/style>/g, '')), 'index.html');
+    assert.ok(!/['"`][^'"`\n]*virus[^'"`\n]*['"`]/i.test(mainSrc), 'main.js strings');
+  });
+  ok('the result screen no longer drops a toast over its own title', () => {
+    assert.ok(!mainSrc.includes("toast('+' + out.starsGained"));
+  });
+  ok('Escape and the Android back button share goBack and a spare history entry', () => {
+    assert.ok(mainSrc.includes("addEventListener('popstate'") && mainSrc.includes('function goBack('));
+    assert.ok(!mainSrc.includes('initKeys(() =>'), 'the second Escape handler is gone');
+  });
+}
+
 // ---- source guards for the UI fixes (the browser part below proves them for real when Chromium exists)
 const main = fs.readFileSync(path.join(ROOT, 'cell_serpent', 'main.js'), 'utf8');
 const html = fs.readFileSync(path.join(ROOT, 'cell_serpent', 'index.html'), 'utf8');
@@ -75,6 +108,19 @@ if (chromium) {
       assert.ok(st[0] === 'levelup' || st[2] !== 'levelup', 'cards still on screen or resolved, never a blank screen on the levelup phase: ' + st);
       await p.click('#cards .card >> nth=0'); await p.waitForTimeout(800);
       assert.notEqual((await state(p))[2], 'levelup', 'picking a card moves the run on');
+      // Android back (history.back) and Escape: pause, resume, close settings back to the pause menu, never leave the page
+      await p.evaluate(() => window.CS.startRun(3)); await p.waitForTimeout(400);
+      await p.evaluate(() => history.back()); await p.waitForTimeout(300);
+      assert.equal((await state(p))[1], 'pause', 'back pauses a run');
+      await p.evaluate(() => history.back()); await p.waitForTimeout(300);
+      assert.equal((await state(p))[1], 'play', 'back again resumes it');
+      await p.keyboard.press('Escape'); await p.waitForTimeout(250); await p.click('#pSet', { force: true }); await p.waitForTimeout(300);
+      assert.equal((await state(p))[0], 'settings');
+      await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+      st = await state(p); assert.deepEqual([st[0], st[1]], ['pause', 'pause'], 'Escape in settings returns to the pause menu and the run stays paused');
+      await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+      assert.equal((await state(p))[1], 'play');
+      assert.ok(await p.evaluate(() => location.pathname.includes('cell_serpent')), 'still on the game page');
       // give up in a pig run is a pig result and keeps the save sane
       await p.evaluate(() => window.CS.startRun(2, 'pig')); await p.waitForTimeout(400);
       await p.keyboard.press('Escape'); await p.click('#quitBtn'); await p.waitForTimeout(300);
@@ -84,6 +130,13 @@ if (chromium) {
       await p.close();
       // 320x568: nothing clipped above the top, upgrade cards stay inside the screen, hub header fits
       p = await open(320, 568);
+      // slide bar on a short phone: it must not hide the duo, and a quick tap on it is the Encore tap
+      await p.evaluate(() => { window.CS.save().settings.slider = true; window.CS.startRun(3); }); await p.waitForTimeout(500);
+      const bar = await p.evaluate(() => { const r = document.getElementById('accSlider').getBoundingClientRect(), L = window.CS.R.layout(), cv = document.querySelector('canvas'), g = window.CS.g, d = cv.width / innerWidth; g.encore = 1; g.encoreReady = true; return { top: r.top, h: r.height, x: (L.ox + g.p.x * L.s) / d, y: (L.oy + g.p.y * L.s) / d }; });
+      assert.ok(bar.h <= 48, 'slim slide bar on a 568px phone: ' + bar.h);
+      await p.mouse.click(bar.x, bar.y); await p.waitForTimeout(250);
+      assert.equal(await p.evaluate(() => window.CS.g.encoreUsed), 1, 'tapping the duo through the slide bar fires the Encore');
+      await p.evaluate(() => { window.CS.save().settings.slider = false; });
       await p.evaluate(() => { window.CS.startRun(12); window.CS.g.pending = 1; }); await p.waitForTimeout(500);
       const cards = await p.evaluate(() => [...document.querySelectorAll('#cards .card')].map(c => Math.round(c.scrollWidth - c.clientWidth)));
       assert.ok(cards.every(d => d <= 1), 'card content fits its card: ' + cards);
@@ -92,6 +145,9 @@ if (chromium) {
       await p.evaluate(() => window.CS.openHub('Battle')); await p.waitForTimeout(200);
       const over = await p.evaluate(() => { const t = document.querySelector('.hubtop'); return t.scrollWidth - t.clientWidth; });
       assert.ok(over <= 1, 'hub header fits 320px: ' + over);
+      await p.evaluate(() => { const sv = window.CS.save(); sv.beats = 987654; sv.sparkles = 99999; window.CS.openHub('Battle'); }); await p.waitForTimeout(700);
+      const pills = await p.evaluate(() => [...document.querySelectorAll('.hubtop .cur')].map(c => Math.round(c.scrollWidth - c.clientWidth)));
+      assert.ok(pills.every(d => d <= 1), 'big currency numbers stay inside their header pills at 320px: ' + pills);
       await p.click('#setBtnH'); await p.waitForTimeout(150);
       const sTop = await p.evaluate(() => { const e = document.querySelector('#settings'); e.scrollTop = 0; return document.querySelector('#settings h2').getBoundingClientRect().top; });
       assert.ok(sTop >= -1, 'settings title reachable by scrolling up: ' + sTop);

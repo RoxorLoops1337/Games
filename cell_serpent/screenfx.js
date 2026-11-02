@@ -183,7 +183,8 @@ export function createScreenFx({ ctx, W, H, kit, text, glow, S, OPT, ring, burst
       const tk = calm() ? 1 : easeOut(clamp((t - 0.22) / 0.4, 0, 1)), tx = 250 + (calm() ? 0 : (1 - tk) * 90);
       ctx.save(); ctx.globalAlpha *= tk;
       text('STAGE ' + c.n, tx, cy - 62, 36, '#9fb4ff', '#0b1020', 'left');
-      text(c.name, tx, cy - 8, c.name.length > 11 ? 56 : 68, '#ffffff', '#0b1020', 'left');
+      { let fs = c.name.length > 11 ? 56 : 68; ctx.font = `800 ${fs}px system-ui, -apple-system, "Segoe UI", sans-serif`; const room = W - 24 - 250, wide = ctx.measureText(c.name).width; if (wide > room) fs = Math.max(30, Math.floor(fs * room / wide));   // long serpent names shrink to fit the band
+        text(c.name, tx, cy - 8, fs, '#ffffff', '#0b1020', 'left'); }
       if (c.mod) { const mk = calm() ? 1 : clamp((t - 0.5) / 0.3, 0, 1); ctx.globalAlpha *= mk; text(c.mod, tx, cy + 64, 30, '#ffd24a', '#0b1020', 'left'); }
       ctx.restore();
     }

@@ -4,7 +4,7 @@ A Cell Survivor - Shoot Defense style game, with RoxorLoops & Jasmin as the cell
 
 ## How a run works
 
-- One run is one **stage**: one long virus snake crawls down a winding lane toward the membrane at the bottom. Each
+- One run is one **stage**: one long serpent crawls down a winding lane toward the membrane at the bottom. Each
   stage has its own lane shape (`PATH_KINDS`) and now and then the snake **surges** for a second (with a warning).
 - The cell only **slides left and right** along its row. It fires notes **straight up**, so where you stand is your aim.
   Every cell takes about 10 to 20 shots at the start (numbers are shown x10 so they read big).
@@ -84,7 +84,7 @@ itself when frames run slow, then raises it again when it runs fast.
 - **Seasonal event** (Blossom Bash, Sunny Fair, Harvest Hootenanny, Snowy Sing-Along, by month): ribbon milestones, an exclusive outfit, and the Exchange Shop.
 - **Giant Serpent Gig**: a boss instance, two tries a day, pays Ribbons, an egg and pet fragments (the solo stand-in for the co-op boss mode).
 - **Fan Club Pass**, **Limit Shop** (weekly stock, Beats), **Exchange Shop** (Ribbons), **Weapon Exchange** (Sparkles skip the fragment grind, stage gate still applies).
-- **Preview** shows every virus species; **Trophy Shelf** holds one-time rewards for milestones.
+- **Preview** shows every serpent species; **Trophy Shelf** holds one-time rewards for milestones.
 
 - Dance Shoes became **Sharp Notes** (your notes pierce more cells); moving faster was never worth a card. The Hamster and Wheel Speaker now add singing speed.
 - Cells grow toward the tail (the tougher cells are the biggest) and the numbers are bigger, so they stay readable. The snake crawls faster from the start.
