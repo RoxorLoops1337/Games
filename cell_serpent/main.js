@@ -55,6 +55,7 @@ import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
 import { dressDuo, wornOutfit } from './duo_pose.js';
 import { PUMP_LEVELS, pumpLevel } from './audio_pump.js';
 import { createCues, wantsMuffle, sheetSound } from './audio_cues.js';
+import { logRun } from './hub_b11.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
@@ -667,7 +668,7 @@ function flyRibbonsHome(nFly) {   // the result's Ribbons chip flies to the hub 
 }
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
-  const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), stk0 = stickerIds(save), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
+  const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), stk0 = stickerIds(save), out = applyResult(save, r); logRun(r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
   stopFx(); stopBest(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
   if (out.ribbons) rows.push(`<div class="r">${BOW} ${cu(out.ribbons)} Ribbons</div>`);
