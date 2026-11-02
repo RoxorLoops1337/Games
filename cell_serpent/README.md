@@ -105,3 +105,15 @@ UI and tech: red-dot badges on tabs; stars and stage-kind icons on the stage chi
 
 Enemy art (stitched mender pillows, sunburst upgrade cells, steel armor, curly fuse bombs, jeweled boss crowns, head idle variety); animal art (pet moods, accessories, hop and squash, duo breathing, paw trails, dove feathers); a themed world per species with a concert floor and crowd (`bg_world.js`); hit juice (shaped pops, merged damage numbers, kill chains, coin arcs); screen feel (stage and boss title cards, surge pulses, slow-mo punch, confetti, game-over fade; `screenfx.js`); a new in-run HUD (`hud.js`); a dramatic card pick screen; a redesigned Battle tab, Skills and Pets tabs, Shop, Gear and Stats (`icons.js`); a one-screen result screen with revive countdown (`result_fx.js`); a new title screen and first-run guide (`title_fx.js`, `hints.js`); a rewritten audio engine (limiter, sectioned music that follows groove and danger, boss track); three new mechanics (Encore beam, gold cell, close call); balance harness; retention (Goals panel, lucky spin, weekly challenge, mastery, collection book, comeback gift; `addict_ui.js`); accessibility (`access.js`: colour-blind marks, high contrast, slide bar, left-handed, pause guard); motion and button feel (`motion.js`); and a QA pass (soft-lock on Escape over cards, give-up result, 320px layouts).
 Extra tests live in `tests/cell_serpent_ext/` and run as part of `npm run test:serpent`.
+
+## Dev team batch 2
+
+Round 2 of the 20 specialists, merged:
+- Art: sharper enemy and animal sprites, richer weather, crowd and lightning backgrounds (`bg_world.js`).
+- Juice: hit-stop, kill-chain flourish, upgrade orbs, muzzle flash, note trails (`hitjuice.js`); stage clear star card, beat edge pulse, close call flash (`screenfx.js`, `clock.js`).
+- HUD and cards: new card UI with luck box and build strip (`cards_ui.js`), notch-safe HUD zones.
+- Hub: Battle tab dock with START outside the scroll area, fun fact card, twist badge and event banner (`battle_ui.js`); skill and pet bottom sheets with filters (`skill_sheet.js`); shop deal bursts, loot reveal, set bonus panel, wardrobe hats; staggered list entrances and currency combo flash (`motion.js`).
+- Retention and onboarding: `retain_ui.js`, `onboard12.js`, revive timer setting.
+- Audio: UI sounds everywhere, per-species bell motifs, new mix, volume slider.
+- Gameplay: rhythm beat clock (on-beat shots crit more), Standing Ovation passive, brighter Encore beam.
+- Accessibility: thumb zone, keyboard nav, live region announcements, stronger high contrast and colour-blind badges.
