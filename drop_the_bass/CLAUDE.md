@@ -159,3 +159,6 @@ Ideas next (round 4): cheaper backdrop and board floor in Low graphics; per-boss
 8. Keyboard shortcut list in How to Play on desktop.
 9. Endless: a themed wave every 10 waves announced with a banner.
 10. Canvas aria-label and page title follow the language.
+
+Round 4 result: all ten shipped (backdrop and board baked at device scale: about 4x cheaper, Low graphics skips live bits; per-boss hint cards; Practice a boss from the codex; Next steps card; Welcome back sheet; What's new card with GAME.version 2 and data_changelog.js; streak rewards at 7/14/30 days; desktop shortcuts in How to Play; language-aware page title and canvas label; themed endless waves from wave 15).
+Ideas next (round 5): lane chevrons still stroked live (about 0.5 ms); tablet and landscape layout; a short interactive tutorial step for the preview and reroll; a boss codex page with phase diagrams; leaderboard friends invite by link; sound mix check on phones; seasonal event (a limited-time stage skin and outfit); gamepad support; first-run onboarding polish (skip tutorial for returning players on a new device via save code).

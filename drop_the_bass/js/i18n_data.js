@@ -80,7 +80,7 @@ export const NON_TEXT_FIELDS = new Set([
   'id', 'hero', 'kind', 'color', 'accent', 'ground', 'sky', 'glyph', 'rarity', 'stat', 'slot', 'set', 'main', 'sub', 'turret', 'map',
   'mod', 'world', 'boss', 'boss10', 'pool', 'loadout', 'fx', 'mods', 'extra', 'music', 'who', 'scene', 'wait', 'spot', 'lock', 'special',
   'a', 'b', 'partner', 'reward', 'crate', 'cosmetic', 'fmt', 'guarantee', 'price', 'mul', 'wm', 'odds', 'unlock', 'paths', 'blocked',
-  'saveKey', 'title_id', 'defaults',
+  'saveKey', 'title_id', 'defaults', 'types', 'support',
 ]);
 // exact `Export.field` exceptions where the field name is text elsewhere (HINTS.title) but not here
 export const NON_TEXT_EXACT = new Set(['GAME.title']);

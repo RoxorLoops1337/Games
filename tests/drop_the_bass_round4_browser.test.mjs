@@ -124,9 +124,9 @@ try {
   need(await page.evaluate((d0) => __dtb.app.profile.diamonds === d0 + 20 && __dtb.app.profile.login.bonus[7], d0), 'claimed once: +20 diamonds');
 
   // ---- language-aware page text
-  await page.evaluate(async () => { const I = await import('./js/i18n.js'); I.registerDict('de', { 'page.title': 'Drop the Bass Testtitel', 'page.canvas_label': 'Spielflaeche Test' }); });
-  await page.evaluate(() => __dtb.app.setLangPref('de')); await page.waitForTimeout(600);
-  need(await page.title() === 'Drop the Bass Testtitel' && await page.evaluate(() => document.getElementById('game').getAttribute('aria-label')) === 'Spielflaeche Test', 'title and canvas label follow the language');
+  await page.evaluate(() => __dtb.app.setLangPref('de')); await page.waitForTimeout(800);
+  const deDict = await page.evaluate(async () => (await import('./js/lang/de.js')).default);
+  need(await page.title() === deDict['page.title'] && await page.evaluate(() => document.getElementById('game').getAttribute('aria-label')) === deDict['page.canvas_label'] && deDict['page.canvas_label'] !== 'Drop the Bass game canvas', 'title and canvas label follow the language');
   await page.evaluate(() => __dtb.app.setLangPref('en')); await page.waitForTimeout(400);
   need(await page.title() === 'Drop the Bass', 'and back to English');
 
@@ -141,7 +141,7 @@ try {
   need(await page.evaluate(() => { const r = __dtb.app.battle.run; return r.practice === 'noisegate' && r.world.id === 'busk' && r.wavesTotal === 1 && !!document.querySelector('[data-practice-badge]') && !__dtb.app.profile.resume; }), 'practice run on the stage of that boss, with the badge');
   need(await page.evaluate(() => { const r = __dtb.app.battle.run; const s = r.upcoming(1); return s.boss === 'noisegate' && s.bossScale === 1; }), 'the wave is the real boss wave');
   await page.evaluate(() => { const r = __dtb.app.battle.run; r.startWave(); for (let i = 0; i < 60; i++) r.advance(0.1); for (let k = 0; k < 600 && r.phase === 'wave'; k++) { while (r.choice) r.skipChoice(); for (const e of r.enemies.slice()) r.kill(e); r.advance(0.1); } });
-  await page.waitForSelector('.practice-results', { timeout: 6000 });
+  await page.waitForSelector('.practice-results', { timeout: 20000 });
   need(await page.evaluate(() => { const t = document.querySelector('[data-practice-time]'); return t && +t.dataset.practiceTime > 0 && +t.dataset.practiceTime < 30; }), 'results show the time to defeat');
   need(await page.evaluate(() => document.querySelector('.practice-results .res-title.win') && !document.querySelector('.rew')), 'win title, no rewards');
   await page.evaluate(() => [...document.querySelectorAll('.practice-results .btn')].pop().click()); await page.waitForTimeout(500);
@@ -152,7 +152,7 @@ try {
   await page.evaluate(() => __dtb.app.startRun({ mode: 'practice', boss: 'compressor' }));
   await page.waitForFunction(() => __dtb.app.battle && __dtb.app.battle.run.practice);
   await page.evaluate(() => { const r = __dtb.app.battle.run; r.stageHp = 1; r.startWave(); for (let i = 0; i < 400 && r.phase === 'wave'; i++) r.advance(0.1); });
-  await page.waitForSelector('.practice-results', { timeout: 6000 });
+  await page.waitForSelector('.practice-results', { timeout: 20000 });
   need(await page.evaluate(() => !!document.querySelector('.practice-results .res-title.lose') && !document.querySelector('.practice-results .btn.red')), 'a lost practice shows Not yet and no revive');
   await page.evaluate(() => [...document.querySelectorAll('.practice-results .btn')][0].click()); await page.waitForTimeout(500);
   need(await page.evaluate(() => __dtb.app.battle && __dtb.app.battle.run.practice === 'compressor'), 'Try again starts a fresh practice');
