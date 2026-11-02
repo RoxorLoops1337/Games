@@ -4,6 +4,7 @@ import { W, H, LINE_Y } from './sim.js';
 import { mix } from './art_draw.js';
 import { bakeFloor, ringSurface, hasVinyl, rimOf } from './bg_floor.js';
 import { drawFloorFx, drawRain, drawBossCracks } from './floor_fx.js';
+import { makeBanks, drawMist, makeWind, stepWind, drawGust, dashState } from './bg_mist.js';
 import { bakeStageExtras, drawClouds, drawFootlights, drawBossFx, drawCrowdLights, paintGrooves } from './bg_stage.js';
 
 const TAU = Math.PI * 2;
@@ -243,11 +244,11 @@ function mote(c, kind, th, x, y, s, t, p, alt) {
 }
 // rising kinds go up, the rest fall (stars stay put and twinkle)
 const RISE = { ember: 1, bubble: 1, wisp: 1, note: 1, pollen: 1 };
-export function drawMotes(c, skin, th, motes, t) {
+export function drawMotes(c, skin, th, motes, t, wx = 0) {
   const kind = worldOf(skin).mote, dir = RISE[kind] ? -1 : 1, speed = kind === 'star' ? 0 : kind === 'drop' ? 150 : 28, span = H + 120;
   c.save(); c.globalAlpha = kind === 'star' ? 0.9 : 0.7;
   for (const m of motes) {
-    const y = (((m.y + dir * t * speed * m.v) % span) + span) % span - 60, x = m.x + Math.sin(t * 0.8 * m.v + m.p) * (kind === 'drop' ? 3 : 26);
+    const y = (((m.y + dir * t * speed * m.v) % span) + span) % span - 60, x0 = m.x + Math.sin(t * 0.8 * m.v + m.p) * (kind === 'drop' ? 3 : 26), x = wx && kind !== 'star' && kind !== 'drop' ? ((x0 + wx * m.v) % (W + 80) + W + 80) % (W + 80) - 40 : x0;   // gusts blow the light stuff sideways
     c.globalAlpha = kind === 'star' ? 0.9 : 0.7; mote(c, kind, th, x, kind === 'star' ? m.y * 0.75 : y, m.s, t, m.p, m.k);
   }
   c.restore();
@@ -270,7 +271,7 @@ export function beatPulse(t, stage, boss) {
   const bpm = boss ? 138 : 104 + (Math.floor(Math.max(0, stage - 1) / 5) % 6) * 3, ph = (t * bpm / 60) % 1;
   return Math.exp(-ph * 5.5);
 }
-export function drawRing(c, ring, t, boss, pulse, kit, skin = 'love') {
+export function drawRing(c, ring, t, boss, pulse, kit, skin = 'love', danger = 0) {
   const { cx, cy, R } = ring, beat = pulse === undefined ? 0.5 + 0.5 * Math.sin(t * 4.2) : pulse, hue = rimOf(skin, boss);
   // a dark disc so the circle reads over any skyline, then the warm floor light on top of it; baked once, the beat is an alpha swing
   const paint = (b, x, y, bt) => {
@@ -295,6 +296,11 @@ export function drawRing(c, ring, t, boss, pulse, kit, skin = 'love') {
   c.lineWidth = 11; c.strokeStyle = 'rgba(8,3,26,.55)'; c.stroke();
   c.lineWidth = 5.5; c.strokeStyle = `rgba(${hue},.95)`; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
   c.lineWidth = 1.5; c.strokeStyle = `rgba(255,255,255,${0.45 + beat * 0.3})`; c.beginPath(); c.arc(cx, cy, R - 6, 0, TAU); c.stroke();
+  if (danger > 0.02) {   // a head is closing in: the rim heats up and flickers red, brighter the closer it is
+    const fl = 0.55 + 0.45 * Math.sin(t * (9 + danger * 12)); c.save(); c.globalCompositeOperation = 'lighter';
+    c.lineWidth = 16; c.strokeStyle = `rgba(255,40,70,${danger * 0.18 * fl})`; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke();
+    c.lineWidth = 5.5; c.strokeStyle = `rgba(255,110,130,${danger * (0.35 + 0.4 * fl)})`; c.stroke(); c.restore();
+  }
   const lit = Math.floor(t * 6) % 3;   // the 24 bulbs: lit ones and dim ones are each one path and one fill
   for (let pass = 0; pass < 2; pass++) {
     c.fillStyle = pass ? '#fff3c4' : 'rgba(255,200,220,.5)'; c.beginPath();
@@ -316,7 +322,7 @@ export function makeWeather(n = 26) {
   for (let i = 0; i < n; i++) a.push({ x: r() * W, y: r() * H, z: [0.55, 0.85, 1.25][i % 3], p: r() * TAU, v: 0.7 + r() * 0.6 });
   return a;
 }
-function drawWeather(c, kind, th, list, t, n) {
+function drawWeather(c, kind, th, list, t, n, wx = 0, wv = 0) {
   c.save();
   for (let i = 0; i < n && i < list.length; i++) {
     const m = list[i], z = m.z;
@@ -325,9 +331,9 @@ function drawWeather(c, kind, th, list, t, n) {
       c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.16 * b * z; c.fillStyle = 'rgb(210,255,120)'; c.beginPath(); c.arc(x, y, 9 * z, 0, TAU); c.fill();
       c.globalAlpha = 0.9 * b; c.fillStyle = 'rgb(255,255,190)'; c.beginPath(); c.arc(x, y, 2 * z, 0, TAU); c.fill();
     } else {
-      const sp = (kind === 'snow' ? 26 : 38) * z * m.v, span = H + 80, y = ((m.y + t * sp) % span) - 40, x = ((m.x + Math.sin(t * 0.6 * m.v + m.p) * 22 * z + t * (kind === 'petals' ? 14 : 4) * z) % (W + 60) + W + 60) % (W + 60) - 30;
-      if (kind === 'snow') { c.globalAlpha = 0.35 + 0.2 * z; c.fillStyle = '#fff'; c.beginPath(); c.arc(x, y, 2.2 * z, 0, TAU); c.fill(); }
-      else { c.save(); c.translate(x, y); c.rotate(t * m.v + m.p); c.scale(1, 0.55 + 0.45 * Math.abs(Math.sin(t * 1.6 + m.p))); c.fillStyle = (i & 1 ? th.lite : '#ffd7e8'); c.globalAlpha = 0.5 + 0.2 * z; c.beginPath(); c.ellipse(0, 0, 6 * z, 3.4 * z, 0, 0, TAU); c.fill(); c.restore(); }
+      const sp = (kind === 'snow' ? 26 : 38) * z * m.v, span = H + 80, y = ((m.y + t * sp) % span) - 40, x = ((m.x + Math.sin(t * 0.6 * m.v + m.p) * 22 * z + t * (kind === 'petals' ? 14 : 4) * z + wx * z) % (W + 60) + W + 60) % (W + 60) - 30;
+      if (kind === 'snow') { c.globalAlpha = 0.35 + 0.2 * z; c.fillStyle = '#fff'; c.beginPath(); if (wv > 25 || wv < -25) c.ellipse(x, y, 2.2 * z + Math.abs(wv) * 0.035 * z, 2.2 * z, 0, 0, TAU); else c.arc(x, y, 2.2 * z, 0, TAU); c.fill(); }   // flakes smear in a gust
+      else { c.save(); c.translate(x, y); c.rotate(t * m.v + m.p + wv * 0.004 * z); c.scale(1, 0.55 + 0.45 * Math.abs(Math.sin(t * 1.6 + m.p))); c.fillStyle = (i & 1 ? th.lite : '#ffd7e8'); c.globalAlpha = 0.5 + 0.2 * z; c.beginPath(); c.ellipse(0, 0, 6 * z, 3.4 * z, 0, 0, TAU); c.fill(); c.restore(); }
     }
   }
   c.restore();
@@ -363,18 +369,26 @@ export function drawBossPhase(c, kit, t, ph, pulse, flash, reduce, low) {
   c.restore();
 }
 export function createBgFx() {
-  const bg = { weather: makeWeather(), nextBolt: 3, boltT: -9, boltX: 300, dbl: false, r: rnd(77) };
+  const bg = { weather: makeWeather(), banks: makeBanks(), wind: makeWind(), flare: 0, dashK: 0, goT: -9, goX: W / 2, nextBolt: 3, boltT: -9, boltX: 300, dbl: false, r: rnd(77) };
   // o: { kit, skin, stage, boss, th, t, reduce, low, kick (seconds since the last kill) }
   bg.draw = (c, o) => {
     const { t, th, boss } = o, kit = o.kit, cheer = Math.max(0, 1 - o.kick / 1.3);
     const pulse = o.reduce ? 0 : beatPulse(t, o.stage, boss);
-    const wk = weatherFor(o.skin, o.stage);
+    const wk = weatherFor(o.skin, o.stage), wd = bg.wind;
+    stepWind(wd, t, o.kick, o.reduce); bg.wx = wd.wx;
+    if (o.snakes) {   // a snake winding up or dashing: the stone floor rumbles and its cracks flare
+      const ds = dashState(o.snakes), dt = Math.min(0.1, Math.max(0, t - (bg.ft === undefined ? t : bg.ft))); bg.ft = t;
+      if (ds.k === 2 && bg.dashK !== 2) { bg.goT = t; bg.goX = ds.x; }
+      bg.dashK = ds.k; const tg = ds.k === 2 ? 1 : ds.k === 1 ? 0.4 : 0; bg.flare += (tg - bg.flare) * Math.min(1, dt * (tg > bg.flare ? 14 : 2.2));
+    }
     if (!o.reduce) drawClouds(c, kit, o.skin, mix(worldOf(o.skin).bot, '#ffffff', 0.6), skyGrade(o.stage).k, t, boss, o.low);
-    if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26);
+    if (!o.reduce) drawMist(c, kit, o.skin, bg.banks, t, wd.wx, boss, o.low);
+    if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26, wd.wx, wd.wv);
+    if (!o.reduce) drawGust(c, wd, t, o.low);
     if (boss && !o.reduce && !o.noFlash) lightning(c, bg, t, o.phase || 0);
     if (boss && o.phase > 0.01) drawBossPhase(c, kit, t, o.phase, pulse, o.flash || 0, o.reduce, o.low);
     if (!o.reduce) { if (boss) drawBossFx(c, t, pulse, o.low, kit); drawFootlights(c, t, pulse, th, boss); }
-    drawFloorFx(c, { kit, skin: o.skin, stage: o.stage, boss, t, pulse, reduce: o.reduce, low: o.low });
+    drawFloorFx(c, { kit, skin: o.skin, stage: o.stage, boss, t, pulse, reduce: o.reduce, low: o.low, flare: bg.flare, goT: bg.goT, goX: bg.goX });
     drawRain(c, t, { skin: o.skin, reduce: o.reduce, low: o.low });
     // speaker cones thump on the kick
     if (!o.reduce) {
