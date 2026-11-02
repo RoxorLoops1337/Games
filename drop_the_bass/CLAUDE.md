@@ -162,3 +162,15 @@ Ideas next (round 4): cheaper backdrop and board floor in Low graphics; per-boss
 
 Round 4 result: all ten shipped (backdrop and board baked at device scale: about 4x cheaper, Low graphics skips live bits; per-boss hint cards; Practice a boss from the codex; Next steps card; Welcome back sheet; What's new card with GAME.version 2 and data_changelog.js; streak rewards at 7/14/30 days; desktop shortcuts in How to Play; language-aware page title and canvas label; themed endless waves from wave 15).
 Ideas next (round 5): lane chevrons still stroked live (about 0.5 ms); tablet and landscape layout; a short interactive tutorial step for the preview and reroll; a boss codex page with phase diagrams; leaderboard friends invite by link; sound mix check on phones; seasonal event (a limited-time stage skin and outfit); gamepad support; first-run onboarding polish (skip tutorial for returning players on a new device via save code).
+
+### Round 5 (ten improvements, in order)
+1. Title screen: the language picker overlaps the DROP THE BASS logo (bug); move it.
+2. Wide screens and landscape: the world sign on the battle backdrop is clipped by the board ('GAR  AYS'); only draw it when it is visible.
+3. Lane chevrons on the board are stroked live every frame: bake them.
+4. Codex Bosses: show each boss's phases (thresholds, effect names) as a small diagram.
+5. Friend invite link: ?friend=Name adds a friend after a confirm; 'Copy invite link' in the leaderboard.
+6. 'Already played? Import your save' on the title menu for returning players on a new device.
+7. Offline ready toast and a small offline indicator (PWA).
+8. Quick mute toggle on the title screen and in the pause menu.
+9. Default Reduce motion on for fresh profiles when the system prefers reduced motion.
+10. Tablet and landscape check: no clipped HUD, sensible centring (verified with screenshots at 1280x720, 820x1180, 844x390).
