@@ -1229,6 +1229,24 @@
   @keyframes pkring{from{transform:scale(.5);opacity:1}to{transform:scale(4.2);opacity:0}}
   @media (prefers-reduced-motion:reduce){.pickring{animation:none;opacity:0}}
 /* end @css:05-screenfeel */
+  /* @css:02-animal-art */
+  .dwrap{position:relative;display:inline-block;line-height:0;vertical-align:bottom} .stage12 .dwrap{display:block;animation:bob 2.4s ease-in-out infinite} .stage12 .dwrap .hero{animation:none}
+  #result .dwrap{animation:rpHop .9s ease-out both} #result .dwrap .hero{animation:none}
+  #result .dwrap[data-mood=win]{animation:rpHop .9s ease-out both,dCheer .5s .9s ease-in-out 4}
+  #result .dwrap[data-mood=lose]{filter:saturate(.8)} #result .dwrap[data-mood=lose] .dhat{animation:dhatSad 3s ease-in-out infinite}
+  .dhat{position:absolute;z-index:3;transform:translateX(-50%);pointer-events:none;filter:drop-shadow(0 3px 3px rgba(0,0,0,.45));animation:dhatB 2.4s var(--d,0s) ease-in-out infinite}
+  .dwrap[data-mood=win] .dhat{animation:dhatB .5s var(--d,0s) ease-in-out 5}
+  .dpet{position:absolute;bottom:-2%;width:46%;z-index:3;pointer-events:none;filter:drop-shadow(0 4px 4px rgba(0,0,0,.4));animation:dPet .55s var(--d,0s) ease-in-out infinite} .dpet.l{left:-40%} .dpet.r{right:-40%}
+  @keyframes dCheer{50%{transform:translateY(-14px) scale(1.04,.98)}}
+  @keyframes dhatB{0%,100%{transform:translateX(-50%) translateY(0) rotate(0)}50%{transform:translateX(-50%) translateY(-3px) rotate(3deg)}}
+  @keyframes dhatSad{0%,100%{transform:translateX(-50%) translateY(2px) rotate(-6deg)}50%{transform:translateX(-50%) translateY(3px) rotate(-3deg)}}
+  @keyframes dPet{0%,100%{transform:translateY(0) scale(1.04,.94)}50%{transform:translateY(-18px) scale(.96,1.04) rotate(6deg)}}
+  .dwrap.tap{animation:dTap .55s ease-out} #result .dwrap.tap{animation:dTap .55s ease-out} @keyframes dTap{30%{transform:translateY(-16px) scale(.96,1.06)}60%{transform:translateY(0) scale(1.05,.95)}100%{transform:none}}
+  .dnote{position:absolute;z-index:4;font-style:normal;font-weight:900;font-size:20px;line-height:1;pointer-events:none;-webkit-text-stroke:1px #2a1040;text-shadow:0 2px 0 #2a1040;animation:dNote .9s ease-out both} @keyframes dNote{0%{opacity:0;transform:translateY(8px) scale(.5)}20%{opacity:1}100%{opacity:0;transform:translate(var(--dx),-70px) rotate(var(--r)) scale(1.1)}}
+  .stage .dwrap{display:block;z-index:2;width:min(150px,38vw)} .stage .dwrap .duo{width:100%}
+  @media (max-height:700px){.dpet{display:none}}
+  @media (prefers-reduced-motion:reduce){.dwrap,.dhat,.dpet,.dnote{animation:none!important}}
+  /* end @css:02-animal-art */
 </style>
 </head>
 <body>

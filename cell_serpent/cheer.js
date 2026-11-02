@@ -36,9 +36,16 @@ export function createCheer() {
       const flip = tier >= 2 ? s2 * TAU * Math.min(1, u * 2.2) : 0;
       return { y, flip, sq: 1 + Math.sin(u * Math.PI * n * 2) * 0.05 };
     },
-    burst(x, y, tierN) {
-      const n = 5 + tierN * 2;
-      for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4; spawn(x, y, (i + tierN) % 3, Math.cos(a) * (70 + Math.random() * 110), Math.sin(a) * (110 + Math.random() * 120), 6 + Math.random() * 4); }
+    burst(x, y, tierN, petId) {
+      const n = 5 + tierN * 2, sig = EMOTE[petId];   // 02-animal-art r5: every pet cheers with its own emote
+      for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4; spawn(x, y, sig && i % 2 === 0 ? sig : (i + tierN) % 3, Math.cos(a) * (70 + Math.random() * 110), Math.sin(a) * (110 + Math.random() * 120), 6 + Math.random() * 4); }
+    },
+    // the duo itself hops with its arms up on a streak: extra lift (px), a little sway and a squash
+    duo(tm) {
+      if (t <= 0) return null;
+      const u = this.u(0.05); if (u >= 1 || u <= 0) return null;
+      const n = 2 + (tier > 1 ? 1 : 0), w = Math.abs(Math.sin(u * Math.PI * n)) * (1 - u * 0.4);
+      return { y: w * (12 + tier * 3), rot: Math.sin(u * Math.PI * n * 2) * 0.05, sq: 1 + w * 0.05 };
     },
     draw(ctx, dt, kit, sparkleAt, blit) {
       for (const q of pool) {
@@ -49,12 +56,46 @@ export function createCheer() {
         ctx.save(); ctx.globalAlpha *= a;
         if (q.kind === 0) heart(ctx, q.x, q.y, q.r * (0.8 + 0.3 * f), '#ff7eb6');
         else if (q.kind === 1) { const nt = kit && kit.SPR.note(false); if (nt) blit(nt, q.x, q.y, 34, Math.sin(q.rot) * 0.4); }
-        else sparkleAt(q.x, q.y, q.r * 1.5);
+        else if (q.kind === 2) sparkleAt(q.x, q.y, q.r * 1.5);
+        else EMOTE_DRAW[q.kind](ctx, q.x, q.y, q.r, q.rot);
         ctx.restore();
       }
     },
   };
 }
+
+// pet signature emotes (particle kinds 3..8): kitten paw print, puppy bone, piglet nose heart, lamb cloud, hamster seed, turtle star
+export const EMOTE = { kitten: 3, puppy: 4, piglet: 5, lamb: 6, hamster: 7, turtle: 8 };
+const INKC = '#3a1d33';
+const EMOTE_DRAW = {
+  3(ctx, x, y, r, rot) {   // paw print
+    ctx.translate(x, y); ctx.rotate(Math.sin(rot) * 0.4); ctx.fillStyle = '#ffb04d'; ctx.strokeStyle = INKC; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.ellipse(0, 3, r * 0.9, r * 0.75, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    for (const [dx, dy] of [[-1.1, -0.8], [-0.4, -1.5], [0.4, -1.5], [1.1, -0.8]]) { ctx.beginPath(); ctx.ellipse(dx * r * 0.8, dy * r * 0.8 - 1, r * 0.32, r * 0.4, 0, 0, TAU); ctx.fill(); ctx.stroke(); }
+  },
+  4(ctx, x, y, r, rot) {   // bone
+    ctx.translate(x, y); ctx.rotate(Math.sin(rot) * 0.8); ctx.fillStyle = '#fff4dc'; ctx.strokeStyle = INKC; ctx.lineWidth = 1.8; const L = r * 1.1, k = r * 0.5;
+    ctx.beginPath(); ctx.rect(-L, -k * 0.45, L * 2, k * 0.9); ctx.fill();
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) { ctx.beginPath(); ctx.arc(sx * L, sy * k * 0.6, k * 0.62, 0, TAU); ctx.fill(); ctx.stroke(); }
+    ctx.beginPath(); ctx.rect(-L, -k * 0.45, L * 2, k * 0.9); ctx.fillStyle = '#fff4dc'; ctx.fill();
+  },
+  5(ctx, x, y, r) { heart(ctx, x, y, r * 0.9, '#ff5a8a'); },
+  6(ctx, x, y, r) {   // fluffy cloud
+    ctx.translate(x, y); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#8aa0d0'; ctx.lineWidth = 1.8;
+    ctx.beginPath(); for (const [dx, dy, rr] of [[-0.9, 0.3, 0.7], [0, -0.3, 0.95], [0.95, 0.3, 0.7]]) { ctx.moveTo(dx * r + rr * r, dy * r); ctx.arc(dx * r, dy * r, rr * r, 0, TAU); } ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, r * 0.2, r * 0.62, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill();
+  },
+  7(ctx, x, y, r, rot) {   // sunflower seed
+    ctx.translate(x, y); ctx.rotate(rot); ctx.fillStyle = '#e9e2cf'; ctx.strokeStyle = INKC; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.55, r * 0.95, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#6a5a4a'; ctx.beginPath(); ctx.moveTo(0, -r * 0.7); ctx.lineTo(0, r * 0.7); ctx.stroke();
+  },
+  8(ctx, x, y, r, rot) {   // little green star
+    ctx.translate(x, y); ctx.rotate(rot * 0.5); ctx.fillStyle = '#9dff6d'; ctx.strokeStyle = INKC; ctx.lineWidth = 1.8; ctx.beginPath();
+    for (let i = 0; i < 10; i++) { const a = i / 10 * TAU - Math.PI / 2, rr = i % 2 ? r * 0.5 : r * 1.1; i ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  },
+};
 
 export function heart(ctx, x, y, k, col) {
   ctx.save(); ctx.translate(x, y); ctx.fillStyle = col; ctx.strokeStyle = '#4a1a33'; ctx.lineWidth = 2; ctx.lineJoin = 'round';

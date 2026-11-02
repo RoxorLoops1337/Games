@@ -24,6 +24,7 @@ import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, is
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
+import { dressDuo, wornOutfit } from './duo_pose.js';
 import { createCues, wantsMuffle } from './audio_cues.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
@@ -122,7 +123,7 @@ function badgeTabs() {
   return out;
 }
 function renderHub() {
-  refreshCur();
+  refreshCur(); try { dressDuo(document.querySelector('.herobox .duo'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ }
   { const bd = badgeTabs(); for (const b of document.querySelectorAll('.tabs button')) { const has = b.querySelector('.dot'); if (bd.has(b.dataset.tab) && !has) { const d = document.createElement('i'); d.className = 'dot'; b.appendChild(d); } else if (!bd.has(b.dataset.tab) && has) has.remove(); } }
   hub2.addict.renderNext(); hub2.retain.renderStrip(); petHint(document.querySelector('.tabs'), hubTab, save);
   motion.tabDir(TABS, hubTab);
@@ -385,7 +386,7 @@ function startRun(stage, mode2 = '') {
   announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + 'Slide to move, the duo shoots up on its own.');
   window.CS.g = g;
 }
-function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)); }
+function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)); try { dressDuo(document.querySelector('.stage12 .hero'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ } }
 function toTitle() { refreshTitle(); mode = 'title'; audio.music(false); refreshCur(); newDemo(); show('title'); }
 
 // ---------------------------------------------------------------- upgrade cards
@@ -584,6 +585,7 @@ function showResult() {
     // no toast here: it used to cover the title on the result screen, and the ribbon plus the Sparkles row already say it
   }
   if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
+  try { dressDuo($('rImg'), { outfit: wornOutfit(save), pets: save.petEquip, kit, mood: r.won ? 'win' : 'lose' }); } catch (e) { /* ignore */ }
   show('result'); mode = 'over';
 }
 
