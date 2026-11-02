@@ -1,5 +1,5 @@
 import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
-import { recordAddictRun, eventInfo, ensureEvent } from './sim.js';
+import { skinFor, recordAddictRun, eventInfo, ensureEvent } from './sim.js';
 import { createHub2 } from './hub2.js';
 import { keepSnap, keepResult } from './keep_ui.js';
 import { loadArt } from './art.js';
@@ -128,7 +128,7 @@ const skillLevels = () => Object.fromEntries(Object.entries(save.skills).map(([i
 // ---------------------------------------------------------------- hub
 const TABS = ['Shop', 'Stats', 'Battle', 'Skills', 'Pets', 'Gear'];
 function openHub(tab = hubTab) {
-  mode = 'hub'; hubTab = tab; audio.music(false); audio.hub(true);
+  mode = 'hub'; hubTab = tab; audio.hubWorld(skinFor(sel)); audio.music(false); audio.hub(true);
   if (dayLogin(save, dayKey())) persist();
   refreshCur();
   sel = Math.max(1, Math.min(sel, MAX_STAGE, save.cleared + 4));
@@ -639,6 +639,8 @@ const SFX = { lull: 'levelup', surgewarn: 'swarm', surge: 'roar', phase2: 'roar'
 const PETSND = { kitten: 'meow', puppy: 'bark', lamb: 'baa', turtle: 'boop', piglet: 'oink', hamster: 'squeak' };
 const BUZZ = { dead: [80, 40, 90], revive: 40, boom: 24, upgradecell: 16, levelup: 14, chest: 12, danger: 28, leak: 60 };
 const FX_SOUND = new Set(['shoot', 'hit', 'kill', 'boom', 'coin', 'hurt', 'block', 'power', 'levelup', 'clear', 'stage', 'revive', 'dead', 'swarm', 'roar', 'surgewarn', 'surge', 'phase2', 'won', 'chestdrop', 'chest', 'swab', 'needles', 'dragon', 'maw', 'strike', 'bubble', 'pulse', 'danger', 'mend', 'lull', 'skip', 'upgradecell', 'groove', 'leak', 'beatshot', 'encore', 'encoreready', 'goldpop', 'goldfade', 'quartet', 'quartetstart', 'quartetfail', 'clutch', 'checkpoint']);
+let hitSrc = '', hitAt = 0;
+const now8 = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 function drain(game, sound) {
   const evs = game.events;   // read in place and truncate at the end: no new array every frame (events pushed meanwhile are still handled)
   try { for (let ei = 0; ei < evs.length; ei++) {
@@ -646,6 +648,9 @@ function drain(game, sound) {
     R.onEvent(e, game);
     if (sound && e.t === 'kill' && game === g && needsFirstPop(save)) firstPop(audio, buzz);
     if (sound && e.t === 'kill' && e.choir) audio.play('choirpop');
+    if (sound && e.t === 'hit') { hitSrc = e.src || ''; hitAt = now8(); }   // audio round 8: remember the weapon that landed the last hit
+    if (sound && e.t === 'kill' && e.head && !e.boss) audio.play('finishblow', { src: now8() - hitAt < 250 ? hitSrc : '' });
+    if (sound && e.t === 'stage' && game.skin) e.skin = game.skin;   // the stage card sting is per species
     if (sound && (e.t === 'bell' || (e.t === 'trait' && !e.warn))) audio.play(e.t === 'bell' ? 'bellring' : 'traitcue', e);
     if (!sound) continue;
     if (FX_SOUND.has(e.t)) audio.play(SFX[e.t] || e.t, e); else if (e.t === 'pet') audio.play(PETSND[e.id] || 'chirp');
@@ -665,7 +670,7 @@ function frame(now) {
     else if (slowFrames > 90 && dprCap <= 1 && !save.settings.lowQuality) { save.settings.lowQuality = true; R.setOptions({ lowQuality: true }); toast('Low quality turned on to keep it smooth'); persist(); }
     else if (fastFrames > 600 && dprCap < 2) { dprCap = Math.min(2, dprCap + 0.5); fastFrames = 0; resize(); }
   }
-  if (mode === 'hub') { if (hubTab === 'Battle') drawPreview(now / 1000); return; }   // the hub covers the game: draw only the stage picture
+  if (mode === 'hub') { audio.hubWorld(skinFor(sel)); if (hubTab === 'Battle') drawPreview(now / 1000); return; }   // the hub covers the game: draw only the stage picture
   if (mode === 'title') {
     acc += dt; while (acc >= 1 / 60) { acc -= 1 / 60; step(demo, 1 / 60, botInput(demo)); if (demo.phase === 'levelup') choose(demo, 0); }
     if (demo.phase === 'dead' || demo.phase === 'won') newDemo();

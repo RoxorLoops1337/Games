@@ -4,6 +4,7 @@
 // mix({ stage, boss, groove (0..1), danger (0..1) }).
 import { beatBpm as simBpm, SKINS, skinFor } from './sim.js';
 import { humOf, squeakHz, HUB_CHORD, HUB_TWINKLE, HUB_GAIN } from './audio_b7.js';
+import { cardOf, deathOf, finishOf, rungSparkle, panicHz, bedOf } from './audio_b8.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
@@ -111,7 +112,8 @@ export function createAudio() {
       if (!gate('kill', 30)) return;
       const c = chainPitch(), f = pentHz(c, 69);
       tone(f, 0.11, 'sine', 0.13, f * 0.35); tone(f * 2, 0.05, 'triangle', 0.05, 0, 0.01); noise(0.07, 0.07, 3500, 500);
-      if (e && e.head) { tone(120, 0.45, 'sawtooth', 0.14, -70); noise(0.2, 0.15, 1800, 150); duck(0.4, 0.3); }
+      { const rs = rungSparkle(c); if (rs) { tone(pentHz(c + 5, 81), 0.18, 'sine', 0.03 + 0.01 * rs, 0, 0.03); tone(pentHz(c + 9, 81), 0.22, 'triangle', 0.02 * rs, 0, 0.07); } }   // an octave rung of the kill chain sparkles
+      if (e && e.head) { sfx.headdeath(e); noise(0.2, 0.15, 1800, 150); duck(0.4, 0.3); }
     },
     boom: () => { noise(0.55, 0.3, 1500, 80); tone(90, 0.4, 'sawtooth', 0.18, -60); tone(55, 0.5, 'sine', 0.25, -20); duck(0.55, 0.4); },
     split: () => tone(660, 0.12, 'square', 0.06, 300),
@@ -126,7 +128,7 @@ export function createAudio() {
     spit: () => gate('spit', 60) && tone(200, 0.15, 'sawtooth', 0.05, 160),
     roar: () => { tone(70, 0.7, 'sawtooth', 0.2, -25); noise(0.6, 0.16, 600, 80); duck(0.5, 0.6); },
     clear: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.24, 'triangle', 0.1, 0, i * 0.09)); [1047, 1319, 1568].forEach(f => tone(f, 0.6, 'sine', 0.05, 0, 0.45)); duck(0.7, 1.2); },
-    stage: e => { if (e && e.boss) sfx.bossintro(); else { sfx.riser(); tone(330, 0.12, 'square', 0.07, 80, 0.5); tone(494, 0.14, 'triangle', 0.05, 0, 0.6); } },
+    stage: e => { if (e && e.boss) sfx.bossintro(); else if (e && e.skin) { sfx.riser(); sfx.stagecard(e); } else { sfx.riser(); tone(330, 0.12, 'square', 0.07, 80, 0.5); tone(494, 0.14, 'triangle', 0.05, 0, 0.6); } },
     // stage start: a short rising sweep into the first notes
     riser: () => { if (!gate('riser', 400)) return; noise(0.5, 0.05, 500, 7000, 'bandpass'); tone(220, 0.5, 'triangle', 0.04, 440); },
     swarm: () => tone(180, 0.25, 'square', 0.06, 120),
@@ -296,6 +298,44 @@ export function createAudio() {
   };
   // tutorial step 3: the shielded face pops (matches the burst in the slide)
   sfx.tutpop = () => { if (!gate('tutpop', 400)) return; tone(520, 0.1, 'sine', 0.11, 700); noise(0.12, 0.09, 4000, 900, 'bandpass'); tone(1046, 0.16, 'triangle', 0.06, 0, 0.07); tone(1568, 0.22, 'sine', 0.04, 0, 0.12); };
+  // round 8: stage card sting per species (see audio_b8.js CARD), lands with the card slam half a second after the riser
+  sfx.stagecard = e => {
+    if (!gate('stagecard', 500)) return;
+    const c = cardOf(e && e.skin);
+    c.n.forEach((m, i) => tone(hz(m), c.dur, c.w, c.v, 0, 0.5 + i * c.gap));
+    if (c.tail === 'ice') noise(0.4, 0.02, 7000, 3000, 'highpass', 0.5);
+  };
+  // round 8: the head dies in its own voice per species (a sweep plus a colour), under the generic pop
+  sfx.headdeath = e => {
+    const d = deathOf(e && e.skin);
+    tone(d.f, d.dur, d.w, d.v, d.f2 - d.f);
+    switch (d.x) {
+      case 'heart': tone(hz(91), 0.3, 'sine', 0.04, 0, 0.1); tone(hz(95), 0.3, 'sine', 0.03, 0, 0.18); break;
+      case 'clank': noise(0.12, 0.12, 5000, 1200, 'bandpass'); tone(1400, 0.08, 'square', 0.03, -600); break;
+      case 'sneeze': noise(0.14, 0.1, 4500, 1800, 'bandpass'); break;
+      case 'grumble': tone(78, 0.5, 'square', 0.05, -20, 0.05); break;
+      case 'yawn': tone(330, 0.5, 'sine', 0.04, -150, 0.25); break;
+      case 'scratch': noise(0.2, 0.08, 6000, 800, 'bandpass'); break;
+      case 'pucker': tone(300, 0.2, 'sine', 0.05, 500, 0.2); break;
+      case 'crash': noise(0.5, 0.2, 900, 60); tone(55, 0.5, 'sine', 0.18, -15); break;
+      case 'shatter': noise(0.35, 0.09, 9000, 2500, 'highpass'); [3136, 3951, 4699].forEach((f, i) => tone(f, 0.12, 'sine', 0.025, 0, 0.04 * i)); break;
+      case 'sigh': noise(0.7, 0.04, 1200, 200, 'lowpass', 0.1); break;
+    }
+  };
+  // round 8: the finishing blow adds the killing weapon's own chime (only when the shot that killed the head is known)
+  sfx.finishblow = e => {
+    if (!gate('finishblow', 300)) return;
+    const f = finishOf(e && e.src);
+    f.c.forEach((m, i) => tone(hz(m), 0.3, f.w, 0.045, 0, 0.12 + i * 0.06));
+    tone(hz(f.c[f.c.length - 1] + 12), 0.5, 'sine', 0.02, 0, 0.3);
+  };
+  // round 8: a panicking face squeals on each lub of the red heartbeat: its pitch is the species and rises with danger
+  sfx.panic = () => {
+    if (mixS.boss || !gate('panic', 160)) return;
+    const d = Math.max(0, Math.min(1, mixS.danger)), f = panicHz(mixS.skin, d);
+    tone(f, 0.11, 'triangle', 0.025 + 0.02 * d, f * 0.18);
+    tone(f * 1.5, 0.09, 'sine', 0.012 + 0.01 * d, -f * 0.1, 0.07);
+  };
   sfx.star1 = () => sfx.star({ n: 1 }); sfx.star2 = () => sfx.star({ n: 2 }); sfx.star3 = () => sfx.star({ n: 3 });
 
   // ---------------------------------------------------------------- music
@@ -399,28 +439,30 @@ export function createAudio() {
   const motifOf = stage => MOTIFS[(Math.max(1, stage | 0) - 1) % MOTIFS.length];
   // ambient hub bed (round 7): a slow, quiet major seventh pad with a breathing level and a rare twinkle, on the music bus
   // (so it follows the Music setting, the volume and the muffle). Starts when the hub opens, stops when a run's music starts.
-  let wantHub = false, hubN = null;
+  let wantHub = false, hubN = null, hubSkin = 'love';
   function hubStop() {
     const n = hubN; if (!n) return; hubN = null; clearTimeout(n.timer);
     try { const t = ac.currentTime; n.out.gain.cancelScheduledValues && n.out.gain.cancelScheduledValues(t); n.out.gain.setValueAtTime(Math.max(0.0001, n.out.gain.value || HUB_GAIN), t); n.out.gain.linearRampToValueAtTime(0.0001, t + 0.5); n.oscs.forEach(o => o.stop(t + 0.6)); } catch (e) { /* ignore */ }
   }
   function hubStart() {
-    const t = ac.currentTime, out = ac.createGain(), lp = ac.createBiquadFilter(), lfo = ac.createOscillator(), lg = ac.createGain();
-    lp.type = 'lowpass'; lp.frequency.value = 900; out.gain.setValueAtTime(0.0001, t); out.gain.linearRampToValueAtTime(HUB_GAIN, t + 2.5);
+    const bed = bedOf(hubSkin), t = ac.currentTime, out = ac.createGain(), lp = ac.createBiquadFilter(), lfo = ac.createOscillator(), lg = ac.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = bed.lp; out.gain.setValueAtTime(0.0001, t); out.gain.linearRampToValueAtTime(HUB_GAIN, t + 2.5);
     lp.connect(out); out.connect(musBus);
-    const oscs = HUB_CHORD.map((f, i) => { const o = ac.createOscillator(), vg = ac.createGain(); o.type = i < 2 ? 'sine' : 'triangle'; o.frequency.setValueAtTime(f * (1 + 0.0015 * i), t); vg.gain.value = 0.5 * [1, 0.8, 0.6, 0.4][i]; o.connect(vg); vg.connect(lp); o.start(t); return o; });
+    const oscs = bed.chord.map((f, i) => { const o = ac.createOscillator(), vg = ac.createGain(); o.type = i < 2 ? 'sine' : bed.wave; o.frequency.setValueAtTime(f * (1 + 0.0015 * i), t); vg.gain.value = 0.5 * [1, 0.8, 0.6, 0.4][i]; o.connect(vg); vg.connect(lp); o.start(t); return o; });
     lfo.type = 'sine'; lfo.frequency.setValueAtTime(0.07, t); lg.gain.value = HUB_GAIN * 0.25; lfo.connect(lg); lg.connect(out.gain); lfo.start(t); oscs.push(lfo);
-    const n = hubN = { out, oscs, timer: 0 };
-    const twinkle = () => { if (hubN !== n) return; swell(hz(HUB_TWINKLE[Math.floor(Math.random() * HUB_TWINKLE.length)]), 1.8, 'sine', 0.02, 0, 'm'); n.timer = setTimeout(twinkle, 3000 + Math.random() * 5000); };
+    const n = hubN = { out, oscs, timer: 0, skin: hubSkin };
+    const twinkle = () => { if (hubN !== n) return; swell(hz(bed.tw[Math.floor(Math.random() * bed.tw.length)]), 1.8, 'sine', 0.02, 0, 'm'); n.timer = setTimeout(twinkle, 3000 + Math.random() * 5000); };
     n.timer = setTimeout(twinkle, 2500);
   }
   function hubSync() {
     const want = wantHub && musicAllowed && !muted && !wantMusic && !!ac && !!musBus;
+    if (want && hubN && hubN.skin !== hubSkin) hubStop();   // the selected world changed: the old bed fades out, the new one comes in
     if (want && !hubN) { try { hubStart(); } catch (e) { hubN = null; } } else if (!want && hubN) hubStop();
   }
   return {
     unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } hubSync(); },
-    hub(on) { wantHub = !!on; hubSync(); },
+    hub(on, skin) { wantHub = !!on; if (skin) hubSkin = skin; hubSync(); },
+    hubWorld(skin) { if (skin && skin !== hubSkin) { hubSkin = skin; if (wantHub) hubSync(); } },
     get hubOn() { return !!hubN; },
     play(name, e) { if (ac && sfx[name]) { try { sfx[name](e); } catch (err) { /* never break the game over a sound */ } } },
     setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5 * vol; hubSync(); },
