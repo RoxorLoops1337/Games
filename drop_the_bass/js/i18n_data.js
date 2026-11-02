@@ -86,7 +86,7 @@ export const NON_TEXT_FIELDS = new Set([
 export const NON_TEXT_EXACT = new Set(['GAME.title']);
 // exported values that hold only ids / numbers / derived copies: never audited for text
 export const EXCLUDED_EXPORTS = new Set([
-  'TURRET_IDS', 'STARTER_TURRETS', 'ENEMY_IDS', 'BOSS_IDS', 'STUDIO_IDS', 'GEAR_IDS', 'CRATE_IDS', 'REMIX_IDS', 'RELIC_IDS', 'WAVE_MOD_IDS',
+  'TURRET_IDS', 'STARTER_TURRETS', 'ENEMY_IDS', 'BOSS_IDS', 'STUDIO_IDS', 'GEAR_IDS', 'CRATE_IDS', 'REMIX_IDS', 'RELIC_IDS', 'WAVE_MOD_IDS', 'ENDLESS_THEME_IDS',
   'DAILY_MOD_IDS', 'SKIN_IDS', 'BOOSTER_IDS', 'DIFFICULTY_IDS', 'RARITY_ORDER', 'WORLD_ORDER', 'BOSS_PHASE_EFFECT_IDS', 'NEW_SCENE_IDS',
   'SYN_FLAT', 'BRANCH_FX_KEYS', 'SLOTS', 'SKIN_DEFAULT', 'CREDITS_FINAL', 'EPILOGUES', 'HERO_ABILITY_DEFAULT', 'COL', 'MAPS',
   // copies or indexes of registered tables (checked by the test: same objects, or synced by afterApply)
