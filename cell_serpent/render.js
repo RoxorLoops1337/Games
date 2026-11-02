@@ -387,6 +387,22 @@ export function createRenderer(canvas, art, kit) {
   // the streak broke (hitjuice sets S.slump): the pets sink, squash and tilt for a second, eyes shut, with a blue sweat drop
   function slumpK() { const u = S.slump ? (S.t - S.slump.t) / 1.1 : 1; return OPT.reduceMotion || u < 0 || u >= 1 ? 0 : (u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85); }
   function slumpDrop(x, y, k) { ctx.save(); ctx.globalAlpha = Math.min(1, k * 1.6); ctx.translate(x, y + (1 - k) * 16); ctx.fillStyle = '#7fd8ff'; ctx.strokeStyle = '#1b4a72'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, -11); ctx.bezierCurveTo(9, 0, 8, 9, 0, 9); ctx.bezierCurveTo(-8, 9, -9, 0, 0, -11); ctx.fill(); ctx.stroke(); ctx.restore(); }
+  // 02-animal-art r8: every few seconds each pet does its own little idle trick (kitten stretches and yawns, puppy tilts its head, piglet snuffles,
+  // lamb rocks side to side, hamster runs on the spot, turtle tucks in). One shared result object, nothing allocated per frame.
+  const TRK = { rot: 0, sx: 1, sy: 1, dy: 0, mood: -1, u: -1 }, TRK_T = { kitten: 7.3, puppy: 8.1, piglet: 6.4, lamb: 9.2, hamster: 5.6, turtle: 10.5 }, TRK_D = { kitten: 1.5, puppy: 1.4, piglet: 1.1, lamb: 1.6, hamster: 1.2, turtle: 1.5 };
+  function petTrick(id, i) {
+    TRK.rot = 0; TRK.sx = 1; TRK.sy = 1; TRK.dy = 0; TRK.mood = -1; TRK.u = -1;
+    const T = TRK_T[id]; if (!T) return TRK;
+    const u = ((S.t + i * 3.1 + id.length * 0.9) % T) / TRK_D[id]; if (u >= 1) return TRK;
+    TRK.u = u; const e = Math.sin(u * Math.PI), t = S.t;
+    if (id === 'kitten') { TRK.sy = 1 + e * 0.13; TRK.sx = 1 - e * 0.07; TRK.dy = -e * 3; if (u > 0.25 && u < 0.8) TRK.mood = 3; }
+    else if (id === 'puppy') { TRK.rot = e * 0.3 * (i ? -1 : 1); TRK.dy = e * 2; }
+    else if (id === 'piglet') { const n = Math.abs(Math.sin(u * Math.PI * 3)); TRK.dy = n * 5; TRK.sy = 1 - n * 0.07; TRK.sx = 1 + n * 0.05; }
+    else if (id === 'lamb') { TRK.rot = Math.sin(u * Math.PI * 2) * 0.3 * e * 1.3; TRK.dy = Math.abs(Math.sin(u * Math.PI * 2)) * 4; }
+    else if (id === 'hamster') { const b = Math.abs(Math.sin(t * 22)); TRK.dy = b * 5 * e; TRK.sy = 1 - b * 0.06 * e; TRK.sx = 1 + b * 0.06 * e; TRK.rot = Math.sin(t * 22) * 0.07 * e; }
+    else if (id === 'turtle') { if (u > 0.15 && u < 0.85) TRK.mood = 7; TRK.sy = 1 - e * 0.05; }
+    return TRK;
+  }
   function petsDraw(g, p, singing) {
     const ps = g.pets || [];
     let near = 1e9; for (const sn of g.snakes) { const h = sn.segs[0]; if (h) { const d = Math.hypot(h.x - p.x, h.y - p.y); if (d < near) near = d; } }
@@ -401,13 +417,17 @@ export function createRenderer(canvas, art, kit) {
       const s2 = i ? 1 : -1, ph = S.t * 6 + i * 2, idle = Math.abs(Math.sin(ph)) * (scared ? 3 : 8) * (ch ? 0.3 : 1), hopY = Math.sin(st.hop * Math.PI) * 14 + (ch ? ch.y : 0) + bop - slumpK() * 9;
       const px = p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6, base = p.y + 8;
       const blink = (S.t * 0.8 + i * 1.7) % 3.1 < 0.13;
-      const sl = slumpK(), mood = sl > 0.2 ? 7 : st.hop > 0.35 || ch ? 3 : scared ? 2 : blink ? 1 : 0;   // slump: eyes shut
+      const sl = slumpK(), tk = OPT.reduceMotion || ch || scared || sl > 0.05 || st.hop > 0.1 ? null : petTrick(id, i), mood = sl > 0.2 ? 7 : st.hop > 0.35 || ch ? 3 : tk && tk.mood >= 0 ? tk.mood : scared ? 2 : blink ? 1 : 0;   // slump: eyes shut
       const k = Math.abs(Math.sin(ph));
       ctx.save(); ctx.globalAlpha *= 0.3 * (1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, 24 - (idle + hopY) * 0.3, 7, 0, 0, TAU); ctx.fill(); ctx.restore();
-      const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = 1 + (1 - k) * 0.05 + st.hop * 0.05 + sl * 0.1, sy = 1 - (1 - k) * 0.05 - st.hop * 0.03 - sl * 0.12;
+      const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = (1 + (1 - k) * 0.05 + st.hop * 0.05 + sl * 0.1) * (tk ? tk.sx : 1), sy = (1 - (1 - k) * 0.05 - st.hop * 0.03 - sl * 0.12) * (tk ? tk.sy : 1);
       if (cheerHit && !OPT.reduceMotion) CH.burst(px, base - 40, Math.max(0, CH.tier), id);
-      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq * ch.sx : 1), sy / (ch ? ch.sq : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px, base - idle - hopY, sz, s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0) - s2 * sl * 0.2); ctx.restore(); }
+      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq * ch.sx : 1), sy / (ch ? ch.sq : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px, base - idle - hopY - (tk ? tk.dy : 0), sz, (tk ? tk.rot : 0) + s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0) - s2 * sl * 0.2); ctx.restore(); }
       if (st.hop > 0.6) sparkleAt(px + s2 * 28, base - idle - hopY - 36, 7 + st.hop * 3);
+      if (tk && tk.u >= 0) {   // trick extras: a question mark over the tilting puppy, dust under the running hamster
+        if (id === 'puppy') { ctx.save(); ctx.globalAlpha = Math.sin(tk.u * Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2d1a14'; ctx.lineWidth = 3; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.strokeText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.fillText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.restore(); }
+        else if (id === 'hamster') { const f = (S.t * 5) % 1; ctx.save(); ctx.globalAlpha = (1 - f) * 0.5; ctx.fillStyle = '#e8d8b8'; ctx.beginPath(); ctx.arc(px - s2 * (20 + f * 14), p.y + 38 - f * 8, 3 + f * 4, 0, TAU); ctx.fill(); ctx.restore(); }
+      }
       petExtras(id, st, px, base - idle - hopY, s2, i);
       if (g.petJoy && g.petJoy[i] && !OPT.reduceMotion) joyEmote(px, base - idle - hopY, p.y + 40, s2, i, id);
       if (sl > 0.15) slumpDrop(px + s2 * 30, base - idle - hopY - 34, sl);
@@ -436,7 +456,7 @@ export function createRenderer(canvas, art, kit) {
     const moving = Math.hypot(p.mx, p.my) > 0.1, hop = S.t - S.lastShot < 0.12 ? 1 - (S.t - S.lastShot) / 0.12 : 0;
     const sq = 1 + Math.sin(S.t * (moving ? 9 : 2.6)) * (moving ? 0.05 : 0.018) + hop * 0.03;
     const im = art && art.get(key), dch = OPT.reduceMotion ? null : CH.duo(S.t), dY = dch ? dch.y : 0;   // 02-animal-art r5: the duo hops on a streak
-    const cf = dch && im ? cheerFrame(art.get('duo_idle')) : null;   // r7: arms up while the cheer lasts
+    const cf = dch && im ? cheerFrame(art.get(key), singing) : null;   // r7: arms up while the cheer lasts; r8: the singing picture has its own arms-up frame
     if (cf) { const h = 170, w = h * im.width / im.height, dq = dch.sq; ctx.save(); ctx.translate(p.x, p.y - 26 - hop * 4 - dY); ctx.rotate(p.mx * 0.05 + dch.rot); const ww = w / sq / dq, hh = h * sq * dq; ctx.drawImage(cf, -ww / 2, -hh / 2, ww, hh); ctx.restore(); idleSparkles(p, singing); }
     else if (im && !OPT.reduceMotion && im.width === 520) {   // r7: R and J sway on their own phases, heads nod on the beat
       const h = 170, w = h * im.width / im.height, dq = dch ? dch.sq : 1, ww = w / sq / dq, hh = h * sq * dq, nod = g.phase === 'play' ? Math.pow(1 - beatPhase(g), 5) * ((g.groove || 0) >= 6 ? 1 : 0.5) : 0.3;
@@ -501,6 +521,7 @@ export function createRenderer(canvas, art, kit) {
   // 02-animal-art: weapon animals share the pet moods: 1 blink, 2 alert when a head is close, 0 calm
   let wScared = false;
   function wMood(seed) { return wScared ? 2 : (S.t * 0.8 + seed * 0.37) % 3.3 < 0.13 ? 1 : 0; }
+  function wT(g, id) { const w = g.weap[id], l = w ? w.lv : 0; return l >= 10 ? 48 : l >= 7 ? 32 : l >= 4 ? 16 : 0; }   // r8: the animals dress up with the skill level (tier in the mood bits)
   const hog = { n: 0, puff: 0 };
   function drawHog(g) {   // the hedgehog sits at the duo's feet and puffs its quills on every volley
     if (!g.weap.needles) return;
@@ -509,7 +530,7 @@ export function createRenderer(canvas, art, kit) {
     const p = g.p, pf = hog.puff, tx = p.x < W / 2 ? p.x + 150 : p.x - 150; hog.x = hog.x == null ? tx : hog.x + (tx - hog.x) * 0.08; const x = hog.x, y = p.y + 8 - Math.sin(pf * Math.PI) * 8;
     ctx.save(); ctx.globalAlpha *= 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(x, p.y + 44, 26, 6, 0, 0, TAU); ctx.fill(); ctx.restore();
     if (pf > 0.5) glow(x, y, 46, '#ffd9a0', (pf - 0.5) * 0.6);
-    blit(kit && kit.SPR.weapon('hog', pf > 0.25 ? 4 : wMood(7)), x, y, 96 * (1 + pf * 0.3), Math.sin(S.t * 3) * 0.04 + (pf > 0.25 ? Math.sin(S.t * 60) * 0.06 : 0));
+    blit(kit && kit.SPR.weapon('hog', (pf > 0.25 ? 4 : wMood(7)) + wT(g, 'needles')), x, y, 96 * (1 + pf * 0.3), Math.sin(S.t * 3) * 0.04 + (pf > 0.25 ? Math.sin(S.t * 60) * 0.06 : 0));
   }
   function drawWeapons(g) {
     { wScared = false; for (const sn of g.snakes) { const h = sn.segs[0]; if (h && Math.hypot(h.x - g.p.x, h.y - g.p.y) < 330) { wScared = true; break; } } }
@@ -517,11 +538,11 @@ export function createRenderer(canvas, art, kit) {
       ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(t.x, t.y + 38, 32, 9, 0, 0, TAU); ctx.fill(); ctx.restore();
       const mk = Math.max(0, t.pulse) / 0.5;   // 02-animal-art: the cow moos on every pulse, speaker rings roll out
       if (mk > 0) { for (let j = 0; j < 3; j++) { const u = Math.min(1, (1 - mk) + j * 0.0); const rr = 40 + (1 - mk) * 50 + j * 16; ctx.save(); ctx.globalAlpha = Math.max(0, mk - j * 0.18) * 0.7; ctx.strokeStyle = j ? '#6fe3ff' : '#fff'; ctx.lineWidth = 4 - j; for (const sd of [-1, 1]) { ctx.beginPath(); ctx.arc(t.x, t.y - 4, rr, sd > 0 ? -0.7 : Math.PI - 0.7 + 0.0, sd > 0 ? 0.7 : Math.PI + 0.7); ctx.stroke(); } ctx.restore(); } }
-      blit(kit && kit.SPR.weapon('tower', mk > 0.1 ? 4 : wMood(t.x)), t.x, t.y, 160 * (1 + 0.14 * Math.max(0, t.pulse)), Math.sin(S.t * 3 + t.x) * 0.03 + (mk > 0.1 ? Math.sin(S.t * 50) * 0.05 : 0));
+      blit(kit && kit.SPR.weapon('tower', (mk > 0.1 ? 4 : wMood(t.x)) + wT(g, 'tower')), t.x, t.y, 160 * (1 + 0.14 * Math.max(0, t.pulse)), Math.sin(S.t * 3 + t.x) * 0.03 + (mk > 0.1 ? Math.sin(S.t * 50) * 0.05 : 0));
     }
     const dl = g.weap.daggers ? g.weap.daggers.lv : 0;   // Spinning Vinyl
     for (let i = 0; i < (dl ? 1 + dl : 0); i++) { const d = daggerPos(g, i); const dy = d.y + Math.sin(S.t * 8 + i) * 4; for (let j = 1; j <= 3; j++) { const q = daggerPos(g, i), a = S.t * 7 + i * 2 - j * 0.28; ctx.save(); ctx.globalAlpha = 0.22 / j; ctx.fillStyle = '#ffe14a'; ctx.beginPath(); ctx.arc(d.x - Math.cos(a + 1.57) * j * 9, dy - Math.sin(a + 1.57) * j * 9 + 6, 22 - j * 4, 0, TAU); ctx.fill(); ctx.restore(); }   // chick circle: a yellow trail
-      blit(kit && kit.SPR.weapon('dagger', wMood(i * 53)), d.x, dy, 150, Math.sin(S.t * 7 + i) * 0.2); }
+      blit(kit && kit.SPR.weapon('dagger', wMood(i * 53) + wT(g, 'daggers')), d.x, dy, 150, Math.sin(S.t * 7 + i) * 0.2); }
     if (g.weap.stick) for (let k = 0; k < (g.weap.stick.lv >= 4 ? 2 : 1); k++) {   // Drumsticks
       const sg = stickSeg(g, k), sc = sg.len / 144, mid = 80 * sc;
       blit(kit && kit.SPR.weapon('stick'), sg.x0 + Math.cos(sg.a) * mid, sg.y0 + Math.sin(sg.a) * mid, 184 * sc, sg.a);
@@ -530,7 +551,7 @@ export function createRenderer(canvas, art, kit) {
       const k = Math.min(1, m.life * 3, (m.max - m.life) * 4) || 0, ph = (S.t * 2) % 1;
       ctx.save(); ctx.globalAlpha = 0.92 * k; const ch = Math.sin(S.t * 13 + m.x) > 0;   // the bulldog chomps: jaw open and shut with teeth
       for (let j = 0; j < 3; j++) { const a = S.t * 4 + j * 2.09; ctx.strokeStyle = 'rgba(255,126,182,.55)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, m.r * 0.9, a, a + 0.8); ctx.stroke(); }
-      blit(kit && kit.SPR.weapon('maw', ch ? 4 : wMood(m.x)), m.x, m.y + (ch ? 3 : 0), m.r * 3.4 * (ch ? 1.05 : 1 + 0.06 * Math.sin(S.t * 14)), Math.sin(S.t * 9) * 0.1); ctx.restore();
+      blit(kit && kit.SPR.weapon('maw', (ch ? 4 : wMood(m.x)) + wT(g, 'maw')), m.x, m.y + (ch ? 3 : 0), m.r * 3.4 * (ch ? 1.05 : 1 + 0.06 * Math.sin(S.t * 14)), Math.sin(S.t * 9) * 0.1); ctx.restore();
       ctx.save(); ctx.globalAlpha = (1 - ph) * 0.8 * k; ctx.strokeStyle = '#ff7eb6'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(m.x, m.y, m.r * (0.2 + 0.8 * ph), 0, TAU); ctx.stroke(); ctx.restore();
     }
     for (let i = S.bolts.length - 1; i >= 0; i--) { const b = S.bolts[i]; b.life -= 0.016; if (b.life <= 0) S.bolts.splice(i, 1); }   // Spotlight Storm: a beam from the rig above
@@ -541,7 +562,7 @@ export function createRenderer(canvas, art, kit) {
         if (!layered) {   // owl perches up top, its beam sweeps onto the target
           ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = '#fff1a8'; paintBolt(ctx, b, p); ctx.restore();
         }
-        blit(kit && kit.SPR.weapon('perch', p.age > 0.8 ? 1 : p.age < 0.3 ? 2 : 0), p.ox, p.oy, 96, Math.sin(p.age * 9 + b.seed) * 0.12, false, Math.min(1, p.a * 2.2));
+        blit(kit && kit.SPR.weapon('perch', (p.age > 0.8 ? 1 : p.age < 0.3 ? 2 : 0) + wT(g, 'satellite')), p.ox, p.oy, 96, Math.sin(p.age * 9 + b.seed) * 0.12, false, Math.min(1, p.a * 2.2));
       }
     }
   }
