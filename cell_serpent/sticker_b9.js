@@ -27,13 +27,19 @@ export const STICKERS = [
 export const stickerState = (s, ctx = {}) => STICKERS.map(t => ({ ...t, got: !!t.ok(s, ctx) }));
 
 const rdSeen = () => { try { return new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (e) { return new Set(); } };
+// Round 10: finishing the whole book pays Sparkles once (own key, the save is untouched)
+export const STICKER_PRIZE = 25;
+const PKEY = 'cell_serpent_stk9_prize';
+export const prizeClaimed = () => { try { return localStorage.getItem(PKEY) === '1'; } catch (e) { return false; } };
+const markPrize = () => { try { localStorage.setItem(PKEY, '1'); } catch (e) { /* ignore */ } };
+export const bookDone = list => list.length > 0 && list.every(t => t.got);
 const wrSeen = set => { try { localStorage.setItem(KEY, JSON.stringify([...set])); } catch (e) { /* ignore */ } };
 
 // Draws the book into `host` (replaces its content). `click` plays the tap sound.
-export function renderStickerBook(host, s, click) {
+export function renderStickerBook(host, s, click, onPrize) {
   const list = stickerState(s, { tune: hasSticker() }), seen = rdSeen(), have = list.filter(t => t.got).length;
   host.className = 'stkbook';
-  host.innerHTML = `<div class="sec"><span style="background:#e0457a">Sticker Book ${have}/${list.length}</span></div><div class="stkgrid"></div><div class="stkcap" role="status" aria-live="polite">Tap a sticker</div>`;
+  host.innerHTML = `<div class="sec"><span style="background:#e0457a">Sticker Book ${have}/${list.length}</span></div><div class="stkprog" aria-hidden="true"><i style="width:${Math.round(have / list.length * 100)}%"></i></div><div class="stkgrid"></div><div class="stkcap" role="status" aria-live="polite">Tap a sticker</div>`;
   const grid = host.querySelector('.stkgrid'), cap = host.querySelector('.stkcap');
   let fresh = 0;
   for (const t of list) {
@@ -47,6 +53,14 @@ export function renderStickerBook(host, s, click) {
     if (isNew) { b.style.animationDelay = (fresh++ * 0.12) + 's'; seen.add(t.id); }
     grid.appendChild(b);
   }
+  const done = bookDone(list);
+  if (done) {
+    const claimed = prizeClaimed(), pz = document.createElement('button'); pz.type = 'button'; pz.className = 'stkprize' + (claimed ? ' got' : '');
+    pz.innerHTML = claimed ? '<b>BOOK COMPLETE</b><small>Every sticker found</small>' : `<b>BOOK COMPLETE!</b><small>Tap to claim ${STICKER_PRIZE} Sparkles</small>`;
+    pz.disabled = claimed;
+    pz.onclick = () => { if (prizeClaimed()) return; markPrize(); if (onPrize) onPrize(STICKER_PRIZE); pz.disabled = true; pz.classList.add('got', 'pop'); pz.innerHTML = '<b>BOOK COMPLETE</b><small>+' + STICKER_PRIZE + ' Sparkles claimed</small>'; };
+    host.insertBefore(pz, cap);
+  }
   if (fresh) { wrSeen(seen); cap.innerHTML = `<b>${fresh} new sticker${fresh > 1 ? 's' : ''}!</b> Tap to look`; }
-  return { have, total: list.length, fresh };
+  return { have, total: list.length, fresh, done };
 }

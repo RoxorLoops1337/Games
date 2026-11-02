@@ -2135,6 +2135,25 @@
   @keyframes tbPop{from{scale:0}60%{scale:1.35}to{scale:1}}
   @keyframes tbPing{0%{transform:scale(1);opacity:.8}60%,100%{transform:scale(2.3);opacity:0}}
 /* end @css:19-buttons round 9 */
+/* @css:10-hub round 10 */
+  .recgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:min(520px,100%);margin:0 auto 6px}
+  .recbox{width:min(520px,100%);margin:6px auto 4px} .recbox .sec{margin:12px 0 8px}
+  .rec{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:58px;padding:6px 2px;border-radius:12px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03));border:2px solid color-mix(in srgb,var(--rc) 55%,transparent);box-shadow:inset 0 -3px 0 color-mix(in srgb,var(--rc) 30%,transparent)}
+  .rec b{font-size:19px;line-height:1;color:var(--rc);text-shadow:0 1px 0 rgba(0,0,0,.4)} .rec small{font-size:9.5px;line-height:1.1;color:var(--dim);text-align:center;font-weight:700}
+  .rec.zero{opacity:.55} .rec.zero b{color:var(--dim)}
+  .stkprog{height:8px;border-radius:99px;background:rgba(0,0,0,.35);overflow:hidden;margin:0 6px 8px;border:1.5px solid #b06cff66} .stkprog i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#e0457a,#ffd84d);transition:width .6s ease-out}
+  .stkprize{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;margin-top:10px;padding:10px;border-radius:14px;border:3px solid #fff;background:linear-gradient(180deg,#ffe36a,#ffb02e);color:#3a1d00;font:inherit;cursor:pointer;box-shadow:0 4px 0 #b36a00,0 0 16px rgba(255,210,74,.7);animation:stkprz 1.4s ease-in-out infinite}
+  .stkprize b{font-size:16px;letter-spacing:.5px} .stkprize small{font-size:12px;font-weight:800}
+  .stkprize.got{animation:none;background:rgba(255,255,255,.1);color:var(--ink);border-color:#ffd84d88;box-shadow:none;cursor:default} .stkprize.pop{animation:stkpop .5s ease-out}
+  @keyframes stkprz{50%{transform:scale(1.03)}}
+  .setstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:0 0 12px}
+  .sbchip{font:inherit;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:4px;padding:7px 4px 6px;border-radius:12px;border:2px solid rgba(255,255,255,.18);background:rgba(0,0,0,.28);min-width:0;min-height:44px;cursor:pointer}
+  .sbn{font-size:10.5px;font-weight:900;line-height:1.1;text-align:center} .sbp{display:flex;gap:3px} .sbp i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.3)} .sbp i.on{background:#7be0a0;border-color:#fff}
+  .sbv{font-size:10px;font-weight:800;color:var(--dim);line-height:1.1;text-align:center}
+  .sbchip.on{border-color:#ffe14a;background:rgba(255,225,74,.14);box-shadow:0 0 12px rgba(255,225,74,.45)} .sbchip.on .sbv{color:#9dff6d} .sbchip.on .sbp i.on{background:#ffe14a}
+  .treatline{text-align:center;font-size:12px;font-weight:800;color:#ffe3a8;margin:6px 0 2px}
+  @media (max-height:660px){.rec{min-height:50px}}
+/* end @css:10-hub round 10 */
 </style>
 </head>
 <body>
