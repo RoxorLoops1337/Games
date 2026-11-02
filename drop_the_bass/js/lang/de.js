@@ -446,6 +446,7 @@ export default {
   'run.keys.title': 'Tastenkürzel am Computer',
   'run.keys.wave': 'Nächste Welle rufen',
   'run.keys.wave_k': 'N',
+  'run.pad.title': 'Gamepad',
   'run.pause.howto': 'Anleitung',
   'run.pause.keep': 'Weiterspielen',
   'run.pause.quit': 'Run beenden',

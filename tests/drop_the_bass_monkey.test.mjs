@@ -170,14 +170,15 @@ async function play(lang, idx) {
     if (!(st1.t > st0.t + 0.3)) fail('the battle clock stopped (' + st0.t + ' to ' + st1.t + ')');
     if (!st1.paused && !st1.choice && !st1.hint && !(st1.runT > st0.runT)) fail('the run clock stopped');
     // DROP still works: a tap on the real button deploys (or merges when the board is full)
+    await page.evaluate(() => { const b = __dtb.app.battle, r = b.run; let g = 0; while (r.choice && g++ < 6) r.pick(0); if (b.pv) b.pv.open = false; b.selected = null; b.popover = null; b.hintQueue.length = 0; });
     const before = await page.evaluate(() => { const r = __dtb.app.battle.run; return { d: r.deploys, n: r.turrets.length }; });
     for (let i = 0; i < 4; i++) {
-      const pt = await page.evaluate(() => { const v = __dtb.app.view; return [v.ox + (153 + 84) * v.s, v.oy + 929 * v.s]; });
+      const pt = await page.evaluate(async () => { const v = __dtb.app.view, H = (await import('./js/battle.js')).HIT.deploy; return [v.ox + (H.x + H.w / 2) * v.s, v.oy + (H.y + H.h / 2) * v.s]; });
       await page.mouse.click(pt[0], pt[1]); await page.waitForTimeout(150);
-      await page.evaluate(() => document.querySelectorAll('.modal-bg').forEach((e) => e.remove()));
+      await page.evaluate(() => { document.querySelectorAll('.modal-bg').forEach((e) => e.remove()); const b = __dtb.app.battle; b.hintQueue.length = 0; b.popover = null; });
     }
-    const after = await page.evaluate(() => { const r = __dtb.app.battle.run; return { d: r.deploys, n: r.turrets.length, full: r.emptySlots().length === 0 }; });
-    if (!(after.d > before.d) && !after.full) fail('DROP no longer deploys (' + before.d + ' to ' + after.d + ')');
+    const after = await page.evaluate(() => { const b = __dtb.app.battle, r = b.run; return { d: r.deploys, n: r.turrets.length, full: r.emptySlots().length === 0, why: JSON.stringify({ choice: !!r.choice, paused: !!b.paused, hold: !!b.hold, phase: r.phase, coins: r.coins, cost: r.deployCost(), can: r.canDeploy(), pv: !!(b.pv && b.pv.open), sel: b.selected, tut: !!b.tut, vw: innerWidth + 'x' + innerHeight, top: (() => { const v = __dtb.app.view; const e = document.elementFromPoint(v.ox + 237 * v.s, v.oy + 929 * v.s); return e ? e.tagName + '.' + e.className + '#' + e.id : null; })(), keys: Object.keys(b).filter((k) => /card|pop|sheet|hint|open/i.test(k) && b[k]).join(), drag: b.drag ? 'drag' : null, target: b.targetSlot, ptr: b.ptr ? Object.keys(b.ptr).join() : null, pad: !!b.padCursor, branch: !!(b.branchSheet || b.sheet), panel: !!b.panel, side: !!b.sideHit, lastErr: window.__lastErr || null }) }; });
+    if (!(after.d > before.d) && !after.full) fail('DROP no longer deploys (' + before.d + ' to ' + after.d + ') ' + after.why);
     // turrets are still drawn: compare the board with the turrets in place against the same frame without them
     await page.evaluate(() => { const b = __dtb.app.battle; b.hold = true; b.run.prepT = 9999; b.selected = null; });
     const pos = await page.evaluate(() => { const a = __dtb.app, v = a.view; return a.battle.run.turrets.slice(0, 8).map((t) => [v.ox + t.x * v.s, v.oy + t.y * v.s]); });

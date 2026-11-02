@@ -446,6 +446,7 @@ export default {
   'run.keys.title': 'Sneltoetsen',
   'run.keys.wave': 'De volgende golf oproepen',
   'run.keys.wave_k': 'N',
+  'run.pad.title': 'Controller',
   'run.pause.howto': 'Hoe te spelen',
   'run.pause.keep': 'Verder spelen',
   'run.pause.quit': 'Stop run',

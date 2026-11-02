@@ -446,6 +446,7 @@ export default {
   'run.keys.title': 'Genveje på computer',
   'run.keys.wave': 'Kald næste bølge',
   'run.keys.wave_k': 'N',
+  'run.pad.title': 'Controller',
   'run.pause.howto': 'Sådan spiller du',
   'run.pause.keep': 'Spil videre',
   'run.pause.quit': 'Afslut runde',

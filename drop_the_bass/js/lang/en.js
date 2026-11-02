@@ -446,6 +446,7 @@ export default {
   'run.keys.title': 'Desktop shortcuts',
   'run.keys.wave': 'Call the next wave',
   'run.keys.wave_k': 'N',
+  'run.pad.title': 'Gamepad',
   'run.pause.howto': 'How to play',
   'run.pause.keep': 'Keep playing',
   'run.pause.quit': 'Quit run',
