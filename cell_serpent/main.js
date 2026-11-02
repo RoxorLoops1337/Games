@@ -7,6 +7,7 @@ import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
 import { nextGoal, closeCall, renderGoal } from './result_goal.js';
+import { flyPick } from './pickfly.js';
 import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint, progMeter } from './result_fx.js';
 import { applyCbPalette, paintCbStrip } from './cb_palette.js';
 import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.js';
@@ -418,8 +419,8 @@ function pick(i) {
   audio.play('upgrade'); { const pr = (g.choices[i] && g.choices[i].rarity) | 0; audio.play('card' + pr); if (pr >= 4) audio.play('stinger'); }
   const cs = $('cards').children, el = cs[i];
   if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); return; }
-  pickLock = true; el.classList.add('chosen'); [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing');
-  setTimeout(() => { if (!pickLock) return; pickLock = false; if (mode !== 'play' || g.phase !== 'levelup') return; choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }, 340);
+  pickLock = true; el.classList.add('chosen'); [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing'); flyPick(el, $('buildStrip'), 400);
+  setTimeout(() => { if (!pickLock) return; pickLock = false; if (mode !== 'play' || g.phase !== 'levelup') return; choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }, 420);
 }
 $('skipBtn').onclick = () => { if (mode === 'play' && skipPick(g)) { audio.play('skip'); cardsFor = null; if (g.phase === 'levelup') showCards(); else show(''); } };
 $('refreshBtn').onclick = () => { if (mode === 'play' && reroll(g)) { audio.play('click'); showCards(); } };
