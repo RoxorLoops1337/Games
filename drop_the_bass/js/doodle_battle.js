@@ -4,6 +4,7 @@
 // No glow, no additive blend, no gradients: paper bands, taped panels, fat crayon buttons, dashed crayon rings. Static art is baked via the HUD kit.
 import { W, H, COLS, ROWS, TURRETS, ENEMIES, BOSSES, COL, ECON, MAX_LEVEL, fmt, BOARD_X, BOARD_Y, BOARD_W, BOARD_H, TURRET_PARTNERS, SYNERGY_BY_ID } from './data_core.js';
 import { WAVE_MODS } from './data_run.js';
+import { RUN_MODIFIER_BY_ID } from './data_depth.js';
 import { TUTORIAL } from './data_story.js';
 import * as AE from './art_entities.js';
 import * as AW from './art_world.js';
@@ -623,7 +624,7 @@ export function drawTutorial(b, ctx) {
   // Loopy and a paper speech bubble with a tail, bobbing a little
   const atTop = spot && spot.y > 400 ? true : (spot ? spot.y < 400 ? false : true : false);
   const bob = Math.sin(b.t * 2.2) * 3;
-  const by = (atTop ? 140 : 560) + bob, bw = 470, bh = 150, bx = 60;
+  const by = (b.pv.open ? 650 : atTop ? 140 : 560) + bob, bw = 470, bh = 150, bx = 60;
   DH.glass(ctx, bx - 30, by, bw, bh, 22, { edge: C.yellow });
   ctx.beginPath(); ctx.moveTo(bx - 8, by + bh - 6); ctx.lineTo(bx - 38, by + bh + 28); ctx.lineTo(bx + 24, by + bh - 6); ctx.closePath();
   ctx.fillStyle = K.C.paper; ctx.fill(); ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.stroke();
@@ -688,4 +689,136 @@ export function drawPreview(b, ctx) {
   });
   DH.text(ctx, BT.closeHint(), W / 2, y + h - 16, 12, DIM, 'center', 900, { maxW: CW - 40 });
   ctx.restore();
+}
+
+// ---------------------------------------------------------------------------------------------------- wide screen side panels
+// On a viewport clearly wider than the 540 column the margins hold two taped paper panels: LEFT run stats (wave, kills, best combo, coins, time, stage
+// health, hype, wave twist, run modifiers), RIGHT the drop pool legend (every turret in the pool with its drop chance, the queued one marked with a
+// triangle and a dashed ring, so it never relies on colour) plus the keyboard shortcuts when the height allows. Never over the column (panel width is
+// capped by the margin), skipped on phones and portrait. Each panel is painted into an offscreen canvas and only repainted when a shown value changes
+// (at most 5 times a second); a frame is two drawImage calls. Low graphics and Reduce motion keep the marching dashes still.
+export const SIDE = { PW: 232, MIN_MARGIN: 160, PAD: 10, MIN_SCALE: 0.62, MAX_SCALE: 1.4, ROW: 26, KEYROW: 17 };
+const KEYS = [['SPACE', 'drop'], ['M', 'merge'], ['R', 'reroll'], ['G', 'rerollG'], ['Q', 'roxor'], ['W', 'jasmin'], ['N', 'call'], ['F', 'speed'], ['V', 'preview'], ['P', 'pause'], ['S', 'sell'], ['1 2', 'branch']];
+const sideH = (b) => {
+  const n = (b.pool && b.pool.odds ? b.pool.odds.length : 12), mods = (b.run.modifiers || []).length;
+  const left = 62 + 7 * 30 + 24 + 30 + 24 + Math.max(1, mods) * 24 + 12;
+  const pool = 46 + n * SIDE.ROW + 10, keys = 34 + KEYS.length * SIDE.KEYROW + 12;
+  return { left, pool, full: pool + keys + 6 };
+};
+// where the panels go, in CSS pixels, or null when there is no room. view: { cw, ch, s, ox }
+export function sideLayout(b, view) {
+  const mw = view.ox;
+  if (!(mw >= SIDE.MIN_MARGIN) || !(view.ch >= 260)) return null;
+  const h = sideH(b), wfit = (mw - 2 * SIDE.PAD) / SIDE.PW, avail = view.ch - 2 * SIDE.PAD;
+  let withKeys = true, p = Math.min(wfit, SIDE.MAX_SCALE, avail / Math.max(h.left, h.full));
+  if (p < 0.8) { withKeys = false; p = Math.min(wfit, SIDE.MAX_SCALE, avail / Math.max(h.left, h.pool)); }
+  if (p < SIDE.MIN_SCALE) return null;
+  const pw = SIDE.PW * p, xl = (mw - pw) / 2, xr = view.cw - mw + (mw - pw) / 2;
+  const hl = h.left * p, hr = (withKeys ? h.full : h.pool) * p;
+  return { p, withKeys, h, left: { x: xl, y: (view.ch - hl) / 2, w: pw, h: hl }, right: { x: xr, y: (view.ch - hr) / 2, w: pw, h: hr } };
+}
+const mmss = (t) => { const s = Math.max(0, Math.floor(t || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+function bar(ctx, x, y, w, h, f, col) {
+  f = clamp(f, 0, 1);
+  DH.rrect(ctx, x, y, w, h, h / 2); ctx.fillStyle = 'rgba(43,39,51,0.12)'; ctx.fill();
+  if (f > 0.01) { DH.rrect(ctx, x, y, Math.max(h, w * f), h, h / 2); ctx.fillStyle = col; ctx.fill(); }
+  DH.rrect(ctx, x, y, w, h, h / 2); ctx.lineWidth = 2.2; ctx.strokeStyle = INK; ctx.stroke();
+}
+function statRow(ctx, y, glyph, gcol, label, value, PW) {
+  AE.drawGlyph(ctx, glyph, 26, y, 18, gcol);
+  DH.text(ctx, label, 42, y, 13, DIM, 'left', 900, { maxW: 100 });
+  DH.text(ctx, value, PW - 16, y, 17, INK, 'right', 900, { maxW: 84 });
+}
+function paintLeft(b, ctx, S, still) {
+  const run = b.run, world = run.world, PW = SIDE.PW, H_ = S.h.left;
+  DH.glass(ctx, 0, 0, PW, H_, 16, { edge: world.accent });
+  DH.text(ctx, world.name, PW / 2, 24, 19, INK, 'center', 900, { maxW: PW - 30 });
+  let y = 62;
+  const total = run.endless ? 0 : run.wavesTotal;
+  statRow(ctx, y, 'wave', C.purple, BT.sideWave(), BT.sideWaveVal(Math.max(1, run.wave), total), PW); y += 30;
+  statRow(ctx, y, 'skull', DIM, BT.sideKills(), fmt(run.kills), PW); y += 30;
+  statRow(ctx, y, 'fire', C.orange, BT.sideCombo(), String(run.bestCombo || 0), PW); y += 30;
+  statRow(ctx, y, 'coin', '#b8780a', BT.sideCoins(), fmt(Math.floor(run.coins)), PW); y += 30;
+  statRow(ctx, y, 'clock', C.blue, BT.sideTime(), mmss(run.t), PW); y += 30;
+  statRow(ctx, y, 'heart', C.red, BT.sideStage(), Math.max(0, Math.ceil(run.stageHp)) + '/' + run.stageMax, PW);
+  bar(ctx, 16, y + 14, PW - 32, 9, run.stageFrac, run.stageFrac < 0.35 ? C.red : C.green); y += 42;
+  statRow(ctx, y, 'bolt', C.pink, BT.sideHype(), BT.sideHypeLv(run.level), PW);
+  bar(ctx, 16, y + 14, PW - 32, 9, run.hype / Math.max(1, run.hypeNeed), C.pink); y += 42;
+  // wave twist
+  const info = (b.pv && (b.pv.cur || b.pv.next)) || null, mod = info && info.mod;
+  DH.text(ctx, BT.sideTwist(), 16, y, 13, C.purple, 'left', 900, { maxW: 100 });
+  DH.text(ctx, mod ? mod.name : BT.sideTwistNone(), PW - 16, y, 14, mod ? '#d6358a' : DIM, 'right', 900, { maxW: 112 }); y += 30;
+  DH.text(ctx, BT.sideMods(), 16, y, 13, C.purple, 'left', 900, { maxW: PW - 32 }); y += 24;
+  const mods = (run.modifiers || []).map((id) => RUN_MODIFIER_BY_ID[id]).filter(Boolean);
+  if (!mods.length) DH.text(ctx, BT.sideModsNone(), 26, y, 13, DIM, 'left', 900, { maxW: PW - 40 });
+  for (const m of mods) { AE.drawGlyph(ctx, m.glyph, 28, y, 16, '#d4620a'); DH.text(ctx, m.name, 44, y, 14, INK, 'left', 900, { maxW: PW - 60 }); y += 24; }
+}
+function paintRight(b, ctx, S, still, t) {
+  const PW = SIDE.PW, odds = b.pool.odds, nextT = b.run.nextType, R_ = SIDE.ROW;
+  DH.glass(ctx, 0, 0, PW, S.right.h / S.p, 16, { edge: C.pink });
+  DH.text(ctx, BT.sidePool(), PW / 2, 24, 19, INK, 'center', 900, { maxW: PW - 30 });
+  let y = 46;
+  odds.forEach((o, i) => {
+    const def = TURRETS[o.type]; if (!def) return;
+    const cy = y + R_ / 2, isNext = o.type === nextT;
+    if (isNext) {
+      ctx.save(); ctx.setLineDash(still ? [10, 6] : [10, 6]); ctx.lineDashOffset = still ? 0 : -t * 22; DH.rrect(ctx, 8, y - 1, PW - 16, R_ + 1, 9);
+      ctx.fillStyle = 'rgba(255,214,10,0.28)'; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(12, cy - 5); ctx.lineTo(12, cy + 5); ctx.lineTo(19, cy); ctx.closePath(); ctx.fillStyle = INK; ctx.fill();
+    }
+    DD.flatIcon(ctx, o.type, 34, cy, 22);
+    DH.text(ctx, def.name, 52, cy, isNext ? 14 : 13, INK, 'left', 900, { maxW: 92 });
+    bar(ctx, 150, cy - 4, 36, 8, o.p * 3.5, def.color);
+    DH.text(ctx, Math.round(o.p * 100) + '%', PW - 14, cy, 13, DIM, 'right', 900, { maxW: 36 });
+    y += R_;
+  });
+  if (S.withKeys) {
+    y += 10;
+    DH.text(ctx, BT.sideKeys(), PW / 2, y + 6, 15, C.purple, 'center', 900, { maxW: PW - 30 }); y += 22;
+    for (const [k, id] of KEYS) {
+      const cy = y + SIDE.KEYROW / 2, kw = k.length > 2 ? 48 : 30;
+      DH.rrect(ctx, 14, cy - 7, kw, 14, 5); ctx.fillStyle = C.paper2; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
+      DH.text(ctx, k, 14 + kw / 2, cy + 0.5, 10, INK, 'center', 900, { maxW: kw - 4 });
+      DH.text(ctx, BT.sideKey(id), 14 + kw + 8, cy, 12, INK, 'left', 900, { maxW: PW - kw - 36 });
+      y += SIDE.KEYROW;
+    }
+  }
+}
+const SIDE_CACHE = { l: null, r: null };
+export function sideKey(b, S, which) {
+  const run = b.run, st = b.prof.settings, base = [S.p.toFixed(3), S.withKeys ? 1 : 0, A11Y.textScale(), st.colorblind ? 1 : 0, st.lowfx ? 1 : 0, st.reduce ? 1 : 0, run.world.id].join('|');
+  if (which === 'l') {
+    const info = b.pv && (b.pv.cur || b.pv.next);
+    return [base, run.wave, run.kills, run.bestCombo, Math.floor(run.coins), Math.floor(run.t), Math.ceil(run.stageHp), run.level, Math.round(run.hype / Math.max(1, run.hypeNeed) * 50), info && info.mod ? info.mod.id : '', (run.modifiers || []).join(',')].join('|');
+  }
+  return [base, run.nextType, b.pool.odds.map((o) => o.type + Math.round(o.p * 100)).join(',')].join('|');
+}
+export function drawSide(b, ctx, view) {
+  const S = sideLayout(b, view); b.sideHit.length = 0;
+  if (!S || !b.pool.odds.length) return false;
+  DH.setHudTime(b.t);
+  const still = !!(b.prof.settings.lowfx || b.prof.settings.reduce || b.autoLow), dpr = view.dpr;
+  const panels = [['l', S.left, paintLeft], ['r', S.right, paintRight]];
+  for (const [which, box, paint] of panels) {
+    const key = sideKey(b, S, which) + '|' + (which === 'r' && !still ? Math.floor(b.t * 6) : 0);
+    let c = SIDE_CACHE[which];
+    const wpx = Math.ceil(box.w * dpr), hpx = Math.ceil(box.h * dpr);
+    if (!c || c.cv.width !== wpx || c.cv.height !== hpx) { const canvas = AE.makeCanvas(wpx, hpx); c = SIDE_CACHE[which] = canvas ? { cv: canvas, key: '', at: -9 } : null; }
+    if (c) {
+      if (c.key !== key && b.t - c.at > 0.2) {
+        const g = c.cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.cv.width, c.cv.height);
+        g.setTransform(dpr * S.p, 0, 0, dpr * S.p, 0, 0); paint(b, g, S, still, b.t); c.key = key; c.at = b.t;
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(c.cv, Math.round(box.x * dpr), Math.round(box.y * dpr));
+    } else {   // node: draw straight
+      ctx.save(); ctx.setTransform(dpr * S.p, 0, 0, dpr * S.p, dpr * box.x, dpr * box.y); paint(b, ctx, S, still, b.t); ctx.restore();
+    }
+  }
+  // tappable pool rows (logical units, outside the column)
+  const rx = S.right.x, ry = S.right.y;
+  b.pool.odds.forEach((o, i) => {
+    const y0 = ry + (46 + i * SIDE.ROW) * S.p;
+    b.sideHit.push({ type: o.type, x: (rx - view.ox) / view.s, y: (y0 - view.oy) / view.s, w: S.right.w / view.s, h: SIDE.ROW * S.p / view.s });
+  });
+  return true;
 }

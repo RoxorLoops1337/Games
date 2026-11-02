@@ -1,6 +1,6 @@
 // ui_hub.js: the DOM hub shown between runs. Tabs: Tour (stages), Studio (upgrades), Band (heroes and gear), Shop (crates), Goals (daily).
 import { WORLDS, TURRETS, TURRET_IDS, ENEMIES, ENEMY_IDS, BOSSES, BOSS_IDS, RARITY, RARITY_ORDER, ENCORE_MAX, fmt, GAME, SYNERGIES } from './data_core.js';
-import { STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, LOGIN_REWARDS, STREAK_MILESTONES, ACHIEVEMENTS, STAR_MILESTONES, AUTOMERGE_PRICE, fameReward, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE, GEAR_MAX_LEVEL, GEAR_SELL, fameTitle, WEEKLY_REWARD } from './data_meta.js';
+import { STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, LOGIN_REWARDS, STREAK_MILESTONES, ACHIEVEMENTS, STAR_MILESTONES, AUTOMERGE_PRICE, fameReward, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE, GEAR_MAX_LEVEL, GEAR_SELL, fameTitle, WEEKLY_REWARD, SEASON_KEEPSAKE_BONUS } from './data_meta.js';
 import { REMIX, RELICS, DAILY_MODS } from './data_run.js';
 import { TURRET_BRANCHES, BOSS_PHASES, BOSS_PHASE_EFFECTS } from './data_depth.js';
 import * as M from './meta.js';
@@ -8,13 +8,14 @@ import { fetchBoard, boardRows, cleanName, FRIENDS_MAX, inviteLink } from './lb.
 import { drawStudioScene, studioProps } from './doodle_env.js';
 import { t, tn, LANGS, getLangPref } from './i18n.js';
 import { CHANGELOG } from './data_changelog.js';
-import { resetText } from './countdown.js';
+import { resetText, durationText } from './countdown.js';
+import { readDiag, clearDiag, diagReport } from './diag.js';
 import { setlistSheet } from './ui_setlist.js';
 import { wardrobeSection, skinsSection, skinThumb } from './ui_wardrobe.js';
 import { canInstall, promptInstall, onInstallChange, isInstalled, isOnline, onOnlineChange } from './pwa.js';
 export { setlistSheet };
 import {
-  h, canvasOf, icon, turretIcon, turretLive, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW, hubHint,
+  h, canvasOf, icon, turretIcon, turretLive, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW, hubHint, keepFocus,
 } from './ui_core.js';
 
 const TABS = [['tour', () => t('hub.tab.tour', 'Tour'), 'play'], ['studio', () => t('hub.tab.studio', 'Studio'), 'gear'], ['band', () => t('hub.tab.band', 'Band'), 'mic'], ['shop', () => t('hub.tab.crates', 'Crates'), 'gift'], ['goals', () => t('hub.tab.goals', 'Goals'), 'star']];
@@ -25,7 +26,8 @@ export function buildHub(app, startTab) {
   const el = h('div', { class: 'screen' });
   const top = h('div', { class: 'hub-top' });
   const main = h('div', { class: 'hub-main' });
-  const tabs = h('div', { class: 'tabs' });
+  const tabs = h('div', { class: 'tabs', role: 'tablist', 'aria-label': t('a11y.hub_tabs', 'Menu') });
+  main.setAttribute('role', 'tabpanel'); main.id = 'hubmain';
   el.append(top, main, tabs);
 
   const renderTop = () => {
@@ -50,18 +52,29 @@ export function buildHub(app, startTab) {
     const b = M.readyBadges(p, app.now());
     for (const [id, name, glyph] of TABS) {
       const badge = id === 'goals' ? b.goals : id === 'shop' ? (p.pendingCrates ? p.pendingCrates.length : 0) : id === 'band' ? M.mergeableGear(p).length : 0;
-      tabs.append(h('button', { class: 'tab' + (state.tab === id ? ' on' : ''), onclick: () => { state.tab = id; app.hubTab = id; app.audio.play('ui_tab'); render(); main.scrollTop = 0; } },
+      tabs.append(h('button', { class: 'tab' + (state.tab === id ? ' on' : ''), role: 'tab', id: 'hubtab-' + id, 'aria-selected': state.tab === id ? 'true' : 'false', 'aria-controls': 'hubmain', onclick: () => { state.tab = id; app.hubTab = id; app.audio.play('ui_tab'); render(); main.scrollTop = 0; } },
         icon(glyph, 34), name(), badge ? h('span', { class: 'badge' }, badge) : null));
     }
   };
   const render = () => {
     const sc = main.scrollTop;
-    renderTop(); renderTabs();
-    main.replaceChildren(TAB_FN[state.tab](app, state, render));
+    keepFocus(el, () => {
+      renderTop(); renderTabs();
+      main.setAttribute('aria-labelledby', 'hubtab-' + state.tab);
+      main.replaceChildren(TAB_FN[state.tab](app, state, render));
+    });
     main.scrollTop = sc;
     app.save();
   };
   state.render = render;
+  // arrow keys move between the tabs (Home and End jump), as a tablist should
+  tabs.addEventListener('keydown', (e) => {
+    const i = TABS.findIndex(([id]) => id === state.tab), n = TABS.length;
+    const j = e.key === 'ArrowRight' ? (i + 1) % n : e.key === 'ArrowLeft' ? (i + n - 1) % n : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : -1;
+    if (j < 0) return;
+    e.preventDefault(); state.tab = TABS[j][0]; app.hubTab = state.tab; app.audio.play('ui_tab'); render(); main.scrollTop = 0;
+    const nb = tabs.querySelector('#hubtab-' + state.tab); if (nb) nb.focus();
+  });
   render();
   // Daily and Weekly countdowns: refresh the text every 20 s while this hub is on screen; a new day rebuilds the cards
   state.day = M.dayOf(app.now());
@@ -70,7 +83,7 @@ export function buildHub(app, startTab) {
     el.__seen = true;
     const now = app.now();
     if (M.dayOf(now) !== state.day) { state.day = M.dayOf(now); M.ensureDaily(p, now); render(); return; }
-    for (const n of el.querySelectorAll('[data-cd]')) { const txt = resetText(n.dataset.cd === 'weekly' ? M.weeklyResetMs(now) : M.dailyResetMs(now)); if (n.textContent !== txt) n.textContent = txt; }
+    for (const n of el.querySelectorAll('[data-cd]')) { const txt = n.dataset.cd === 'season' ? t('season.ends', 'Ends in {time}', { time: durationText(M.seasonMsLeft(now)) }) : resetText(n.dataset.cd === 'weekly' ? M.weeklyResetMs(now) : M.dailyResetMs(now)); if (n.textContent !== txt) n.textContent = txt; }
   };
   const cdTimer = setInterval(tickCd, 20000);
   state.tickCd = tickCd;
@@ -489,6 +502,36 @@ export function streakChip(app, rerender) {
     h('div', { class: 'grow sub', style: 'font-size:14px' }, tn('streak.next', nb.left, 'Next streak bonus: day {days}, {n} day to go', 'Next streak bonus: day {days}, {n} days to go', { days: nb.days })), rewardChips(nb.reward));
 }
 
+// ---- the monthly Season card (SEASONS in data_meta.js): theme, countdown to the end of the month, three goals, the keepsake cosmetic
+const seasonGoalText = (g) => g.id === 'kills' ? t('season.goal_kills', 'Defeat {n} Static', { n: fmt(g.goal) }) : g.id === 'merges' ? t('season.goal_merges', 'Merge {n} times', { n: fmt(g.goal) }) : t('season.goal_wins', 'Win {n} runs', { n: fmt(g.goal) });
+function seasonCard(app, rerender) {
+  const p = app.profile, now = app.now();
+  M.ensureSeason(p, now);
+  const st = M.seasonState(p, now), S = st.season, k = st.keepsake;
+  const kName = M.keepsakeName(k);
+  const card = h('div', { class: 'card season-card', 'data-season': S.id, style: 'border-color:' + S.accent + ';box-shadow:3px 4px 0 ' + S.accent },
+    h('div', { class: 'row', style: 'gap:10px' }, icon(S.theme, 44, S.accent), h('div', { class: 'grow' },
+      h('div', { style: 'font-size:12px;letter-spacing:.06em;color:#6b6477' }, t('season.label', 'This month\'s season')),
+      h('h3', { style: 'margin:0;text-align:left' }, S.name), h('div', { class: 'sub', style: 'font-size:14px' }, S.desc))),
+    h('div', { class: 'sub cd season-cd', 'data-cd': 'season', style: 'margin:4px 0 6px' }, t('season.ends', 'Ends in {time}', { time: durationText(st.msLeft) })));
+  for (const g of st.goals) {
+    card.append(h('div', { class: 'row season-goal', 'data-season-goal': g.id, style: 'margin:6px 0;gap:8px' },
+      h('div', { class: 'grow' }, h('div', { style: 'font-weight:900;font-size:16px' }, seasonGoalText(g)), h('div', { class: 'pbar', style: 'height:12px' }, h('i', { style: 'width:' + g.value / g.goal * 100 + '%;background:' + S.accent })), h('div', { class: 'sub', style: 'font-size:12px' }, fmt(g.value) + ' / ' + fmt(g.goal))),
+      rewardChips(g.reward),
+      g.claimed ? h('span', { class: 'pill' }, t('goals.done_caps', 'DONE')) : btn(t('goals.claim', 'Claim'), () => {
+        const r = M.claimSeasonGoal(p, g.id, app.now(), app.rng());
+        if (!r.ok) return;
+        app.audio.play('diamond'); app.save();
+        if (r.keepsake) { app.audio.play('achievement'); toast(r.keepsake.bonus ? t('season.keepsake_dupe', 'Season complete! You own {name} already: +{n} diamonds.', { name: kName, n: SEASON_KEEPSAKE_BONUS.diamonds }) : t('season.keepsake_got', 'Season complete! You got {name}.', { name: kName }), 4600); }
+        rerender();
+      }, g.done ? 'gold small' : 'dark small off', { 'data-season-claim': g.id })));
+  }
+  const owned = M.keepsakeOwned(p, k);
+  card.append(h('div', { class: 'row season-keepsake', 'data-season-keepsake': st.keepsakeGot ? 'got' : 'open', style: 'margin-top:6px;gap:8px;align-items:center' }, icon(k.kind === 'skin' ? 'sparkle' : 'hat', 28, S.accent),
+    h('div', { class: 'grow sub', style: 'font-size:14px' }, st.keepsakeGot ? t('season.keepsake_done', 'Keepsake collected: {name}', { name: kName }) : owned ? t('season.keepsake_owned', 'Finish all three goals for the keepsake: {name} (you own it, so +{n} diamonds)', { name: kName, n: SEASON_KEEPSAKE_BONUS.diamonds }) : t('season.keepsake_goal', 'Finish all three goals to keep {name}', { name: kName }))));
+  return card;
+}
+
 function goalsTab(app, st, rerender) {
   const p = app.profile, now = app.now();
   M.ensureDaily(p, now);
@@ -496,6 +539,7 @@ function goalsTab(app, st, rerender) {
   const off = M.offlineRecords(p, now);
   if (off >= 10) wrap.append(h('div', { class: 'card', style: 'border-color:var(--record)' }, h('div', { class: 'row' }, icon('note', 40), h('div', { class: 'grow' }, h('b', null, t('goals.royalties', 'Streaming Royalties')), h('div', { class: 'sub' }, t('goals.royalties_desc', 'Your songs kept playing while you were away: {n} Records ({rate}/hour, max {hours} hours).', { n: off, rate: M.offlineRate(p), hours: M.offlineCapHours(p) }))),
     btn(t('goals.claim', 'Claim'), () => { M.claimOffline(p, now); app.audio.play('record'); rerender(); }, 'green small'))));
+  wrap.append(seasonCard(app, rerender));
   // lucky wheel
   wrap.append(h('h2', null, t('goals.wheel', 'Lucky Wheel')));
   wrap.append(wheelCard(app, rerender));
@@ -557,6 +601,7 @@ export function welcomeSheet(app, sum, done) {
   rows.push(row('ticket', sum.weekly.done ? t('welcome.weekly_done', 'Weekly Gig done (best {best}/{total}). {time}', { best: sum.weekly.best, total: sum.weekly.waves, time: resetText(sum.weekly.msLeft) })
     : sum.weekly.fresh ? t('welcome.weekly_new', 'A new Weekly Gig has started. {time}', { time: resetText(sum.weekly.msLeft) }) : t('welcome.weekly_open', 'Weekly Gig is open. {time}', { time: resetText(sum.weekly.msLeft) }), 'weekly'));
   if (sum.ready > 0) rows.push(row('star', tn('welcome.ready', sum.ready, '{n} reward is waiting on the Goals tab.', '{n} rewards are waiting on the Goals tab.'), 'ready'));
+  if (sum.season) rows.push(row('star', tn('season.welcome_ready', sum.season.ready, '{name}: {n} season reward is ready to claim.', '{name}: {n} season rewards are ready to claim.', { name: sum.season.name }), 'season'));
   const goal = sum.goal.id === 'stage' ? t('welcome.goal_stage', 'Next goal: clear {stage}.', { stage: sum.goal.stage }) : sum.goal.id === 'daily' ? t('welcome.goal_daily', 'Next goal: win today\'s Daily Challenge.')
     : sum.goal.id === 'weekly' ? t('welcome.goal_weekly', 'Next goal: play this week\'s Weekly Gig.') : t('welcome.goal_endless', 'Next goal: beat your best Endless wave.');
   const collect = sum.royalties > 0 || sum.login.claimable;
@@ -698,7 +743,7 @@ export function settingsModal(app) {
   const m = modal(body);
   const draw = () => {
     body.replaceChildren(h('h2', null, t('settings.title', 'Settings')));
-    const slider = (label, key, apply) => h('div', { class: 'rangeRow' }, h('span', { style: 'width:80px' }, label), h('input', { type: 'range', min: 0, max: 100, value: Math.round(s[key] * 100), oninput: (e) => { s[key] = e.target.value / 100; apply(); app.save(); }, onchange: () => app.audio.play('ui_click') }));
+    const slider = (label, key, apply) => h('div', { class: 'rangeRow' }, h('span', { style: 'width:80px' }, label), h('input', { type: 'range', 'aria-label': label, min: 0, max: 100, value: Math.round(s[key] * 100), oninput: (e) => { s[key] = e.target.value / 100; apply(); app.save(); }, onchange: () => app.audio.play('ui_click') }));
     // Install the app: hidden once installed; Safari on iOS has no prompt, so it gets a how-to hint instead
     const installRow = () => {
       if (isInstalled()) return null;
@@ -733,11 +778,38 @@ export function settingsModal(app) {
       btn(t('settings.import_code', 'Import code'), () => importModal(app), 'dark small')));
     body.append(h('div', { class: 'btnrow' }, btn(t('settings.how_to', 'How to play'), () => { m.close(); app.showHowTo(); }, 'dark small'), btn(t('codex.title', 'Codex'), () => { m.close(); codexModal(app); }, 'dark small')));
     body.append(h('div', { class: 'btnrow' }, btn(t('whatsnew.title', 'What\'s new'), () => { m.close(); whatsNewModal(app); }, 'dark small', { 'data-whatsnew': '' })));
+    body.append(h('div', { class: 'btnrow' }, btn(t('diag.open', 'Report a problem'), () => reportModal(app), 'dark small', { 'data-report': '' })));
     body.append(h('div', { class: 'btnrow' }, btn(t('settings.replay_intro', 'Replay intro'), () => { m.close(); app.playCutscene('intro', () => app.openHub()); }, 'dark small'), btn(t('settings.reset', 'Reset game'), () => resetModal(app), 'red small')));
     body.append(h('div', { class: 'credit', style: 'text-align:center;margin-top:10px;font-size:12px;color:var(--dim)' }, t('settings.credit', '{title} by RoxorLoops & Jasmin. Keyboard: Space drop, M merge all, Q/W heroes, N next wave, F speed, Esc pause.', { title: GAME.title })));
     body.append(h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'green')));
   };
   draw();
+}
+// ---- Report a problem: a compact text the player can copy and send (nothing is sent by the game). js/diag.js builds it.
+export function diagEnv(app) {
+  const p = app.profile;
+  let saveBytes = 0; try { saveBytes = (localStorage.getItem(M.SAVE_KEY) || '').length; } catch (e) { /* no storage */ }
+  const v = app.view || {};
+  return { version: GAME.version, lang: app.langNow(), langPref: getLangPref(), screen: app.screen, width: typeof window !== 'undefined' ? window.innerWidth : 0, height: typeof window !== 'undefined' ? window.innerHeight : 0,
+    dpr: Math.round(((typeof window !== 'undefined' && window.devicePixelRatio) || v.dpr || 1) * 100) / 100, ua: typeof navigator !== 'undefined' ? navigator.userAgent : '', online: isOnline(), saveBytes,
+    fame: p.fame, fameTitle: fameTitle(p.fame), heroLv: p.heroLv, errors: (() => { try { return readDiag(localStorage); } catch (e) { return []; } })() };
+}
+export function reportModal(app) {
+  const body = h('div', { class: 'report-box' });
+  const m = modal(body);
+  const draw = () => {
+    const text = diagReport(diagEnv(app));
+    const ta = h('textarea', { class: 'code report-text', readonly: true, rows: 12, 'aria-label': t('diag.text_label', 'Problem report text'), style: 'font-size:12px;line-height:1.2;height:210px' }, text);
+    const copied = () => toast(t('settings.copied', 'Copied!'));
+    const byHand = () => { try { window.prompt(t('diag.prompt', 'Copy this report and send it to the developers:'), text); } catch (e) { toast(t('settings.copy_by_hand', 'Select the code and copy it by hand.')); } };
+    body.replaceChildren(h('h2', null, t('diag.title', 'Report a problem')), h('div', { class: 'sub', style: 'font-size:14px;text-align:center' }, t('diag.hint', 'Copy this and send it with a short note. The game sends nothing by itself. It holds no name or save contents.')), ta,
+      h('div', { class: 'btnrow' },
+        btn(t('diag.copy', 'Copy'), () => { try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(copied, byHand); else byHand(); } catch (e) { byHand(); } }, 'blue small', { 'data-report-copy': '' }),
+        btn(t('diag.clear', 'Clear errors'), () => { clearDiag(localStorage); draw(); toast(t('diag.cleared', 'Error list cleared.')); }, 'dark small', { 'data-report-clear': '' })),
+      h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'green')));
+  };
+  draw();
+  return m;
 }
 function tog2(label, on, fn) { return h('div', { class: 'toggle' }, label, btn(on ? t('common.on', 'ON') : t('common.off', 'OFF'), fn, on ? 'green small' : 'dark small')); }
 export function importModal(app) {
@@ -808,9 +880,9 @@ export function copyInviteLink(app) {
   return true;
 }
 // Someone opened a friend link (?friend=Name, see main.js): ask once, never add by itself. name is already cleaned by lb.friendFromSearch.
-export function friendInviteModal(app, name) {
+export function friendInviteModal(app, name, done) {
   const n = cleanName(name);
-  if (!n) return null;
+  if (!n) { if (done) done(); return null; }
   const m = modal(h('div', { class: 'friend-invite', 'data-friend-invite': n }, h('h2', null, t('friend.invite_title', 'Friend invite')),
     h('div', { class: 'sub', style: 'text-align:center;font-size:20px' }, t('friend.invite_ask', 'Add {name} as a friend?', { name: n })),
     h('div', { class: 'sub', style: 'text-align:center;font-size:13px;margin-top:4px' }, t('friend.invite_hint', 'You will see their scores pinned on the leaderboards.')),
@@ -819,7 +891,7 @@ export function friendInviteModal(app, name) {
       m.close(); app.save();
       if (r.ok) { app.audio.play('ui_click'); toast(t('board.added', 'Added {name} to your friends.', { name: r.name })); }
       else toast(({ empty: t('board.err_empty', 'Type a name first.'), self: t('board.err_self', 'That is you!'), dup: t('board.err_dup', 'Already a friend.'), full: t('board.err_full', 'Your friend list is full ({max}).', { max: FRIENDS_MAX }) })[r.reason]);
-    }, 'green', { 'data-friend-yes': '' }), btn(t('friend.invite_no', 'No thanks'), () => m.close(), 'dark', { 'data-friend-no': '' }))), { sticky: true });
+    }, 'green', { 'data-friend-yes': '' }), btn(t('friend.invite_no', 'No thanks'), () => m.close(), 'dark', { 'data-friend-no': '' }))), { sticky: true, onClose: () => { if (done) done(); } });
   return m;
 }
 

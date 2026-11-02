@@ -8,7 +8,7 @@ import { Battle, battleIdle } from './battle.js';
 import { Cutscene } from './cutscene.js';
 import { buildHub, settingsModal, setlistSheet, langPicker, welcomeSheet, dailyGigModal, royaltiesModal, whatsNewModal, importModal, friendInviteModal } from './ui_hub.js';
 import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo, showPracticeResults } from './ui_run.js';
-import { setRoot, h, btn, modal, toast, actionToast, tickLive, muteButton, AE, AW } from './ui_core.js';
+import { setRoot, h, btn, modal, toast, actionToast, tickLive, muteButton, AE, AW, queueModal, setModalEnv, MODAL_PRIO } from './ui_core.js';
 import { submitScore, rankOf, friendFromSearch, withoutFriendParam } from './lb.js';
 import { setStyle } from './style.js';
 import { initPwa } from './pwa.js';
@@ -16,12 +16,16 @@ import * as Stats from './stats.js';
 import * as I18N from './i18n.js';
 import { initDataLang } from './i18n_data.js';
 import { t, tn } from './i18n.js';
-import { applyA11y, langOffer } from './a11y.js';
+import { applyA11y, langOffer, initDomA11y } from './a11y.js';
+import { installDiag } from './diag.js';
 
+// error ring buffer for Settings > Report a problem (js/diag.js): the last 20 page errors in drop_the_bass_diag, nothing is sent anywhere
+try { installDiag(window, localStorage, () => ({ lang: I18N.getLang(), screen: app.screen })); } catch (e) { /* no storage */ }
 const canvas = document.getElementById('game');
 const ui = document.getElementById('ui');
 const ctx = canvas.getContext('2d');
 setRoot(ui);
+initDomA11y(ui);
 
 // ------------------------------------------------------------------------------------------------ profile
 // loadSave: the main save, else the last good backup (recovered), else a new profile. Never throws.
@@ -192,25 +196,30 @@ function openHub(tab) {
   ui.replaceChildren(app.hub.el);
   app.audio.musicStart('hub');
   app.save();
+  // Everything below that wants a blocking modal goes through the modal queue (ui_core.js): one at a time, in priority order, never during a
+  // battle or cutscene. Friend invite and Welcome back first, then the Daily Gig, What's new, the language offer and first-time hints.
   // one-time offer to switch to the device language (a Dansk, Nederlands or Deutsch device that is showing English)
   const offer = langOffer(p, typeof navigator !== 'undefined' ? (navigator.languages && navigator.languages.length ? navigator.languages : navigator.language) : 'en', I18N.getLang());
   if (offer) {
     p.tutorial.hints.lang_offer = true; app.save();
-    setTimeout(() => { if (app.screen === 'hub') actionToast(t('toast.lang_offer', 'Switch to {lang}?', { lang: I18N.langName(offer) }), t('toast.lang_switch', 'Switch'), () => app.setLangPref(offer), 9000); }, 1400);
+    queueModal('lang_offer', MODAL_PRIO.lang, (done) => {
+      const el = actionToast(t('toast.lang_offer', 'Switch to {lang}?', { lang: I18N.langName(offer) }), t('toast.lang_switch', 'Switch'), () => app.setLangPref(offer), 9000);
+      const poll = () => { if (el.isConnected && app.screen === 'hub') setTimeout(poll, 500); else done(); };
+      setTimeout(poll, 500);
+    }, { modal: false, delay: 1400 });
   }
   // welcome-back bits: after 12 hours away the summary sheet, else the Daily Gig or the royalties sheet. What's new follows once per game version.
   const now = app.now();
   if (!app.sessionGreeted && p.tutorial.done) {
     app.sessionGreeted = true;
-    const afterGreet = () => { if (app.screen === 'hub' && M.whatsNewDue(p)) setTimeout(() => { if (app.screen === 'hub' && M.whatsNewDue(p)) whatsNewModal(app); }, 250); };
     const sum = M.welcomeSummary(p, now, app.awayFrom);
     app.awayFrom = null;
     const off = M.offlineRecords(p, now);
     const ls = M.loginStatus(p, now);
-    if (sum) welcomeSheet(app, sum, afterGreet);
-    else if (ls.claimable) dailyGigModal(app, ls, afterGreet);
-    else if (off >= 30) royaltiesModal(app, off, afterGreet);
-    else afterGreet();
+    if (sum) queueModal('welcome', MODAL_PRIO.welcome, (done) => welcomeSheet(app, sum, done));
+    else if (off >= 30 && !ls.claimable) queueModal('royalties', MODAL_PRIO.royalties, (done) => royaltiesModal(app, off, done));
+    if (ls.claimable) queueModal('daily', MODAL_PRIO.daily, (done) => { const l2 = M.loginStatus(p, app.now()); if (l2.claimable) dailyGigModal(app, l2, done); else done(); });
+    if (M.whatsNewDue(p)) queueModal('whatsnew', MODAL_PRIO.whatsnew, (done) => { if (M.whatsNewDue(p)) whatsNewModal(app, done); else done(); });
   }
 }
 
@@ -486,6 +495,7 @@ function rerender() {
   }
 }
 app.rerender = rerender;
+setModalEnv({ screen: () => app.screen });
 I18N.onLang(() => { applyPageText(); app.rerender(); });
 
 // ------------------------------------------------------------------------------------------------ friend invite (?friend=Name)
@@ -495,7 +505,7 @@ function checkFriendInvite() {
   try { name = friendFromSearch(location.search); } catch (e) { return; }
   if (!/[?&]friend=/.test(location.search || '')) return;
   try { history.replaceState(history.state, '', withoutFriendParam(location.pathname, location.search, location.hash)); } catch (e) { /* the address stays, the question is still asked once */ }
-  if (name) setTimeout(() => friendInviteModal(app, name), 500);
+  if (name) queueModal('friend_invite', MODAL_PRIO.invite, (done) => friendInviteModal(app, name, done), { screens: ['title', 'hub'], delay: 500 });
 }
 
 // ------------------------------------------------------------------------------------------------ boot

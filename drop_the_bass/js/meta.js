@@ -11,10 +11,11 @@ import { HERO_ABILITIES, HERO_ABILITY_DEFAULT, RUN_MODIFIER_BY_ID, MAX_RUN_MODIF
 import { DAILY_MOD_IDS } from './data_run.js';
 import { makeRng, hashSeed } from './rng.js';
 import * as CORE from './data_core.js';
-import { WEEKLY_GIGS, WEEKLY_WAVES, WEEKLY_REWARD } from './data_meta.js';
+import { WEEKLY_GIGS, WEEKLY_WAVES, WEEKLY_REWARD, SEASONS, SEASON_GOALS, SEASON_KEEPSAKE_BONUS } from './data_meta.js';
 import { cleanName, cleanFriends, addFriend as lbAddFriend, removeFriend as lbRemoveFriend, FRIENDS_MAX } from './lb.js';
 
 const DAY = 86400000;
+const emptySeason = () => ({ id: '', month: '', progress: { kills: 0, merges: 0, wins: 0 }, claimed: {} });
 export const dayOf = (now) => Math.floor((now - new Date(now).getTimezoneOffset() * 60000) / DAY);
 
 // ------------------------------------------------------------------------------------------------ profile
@@ -26,7 +27,7 @@ export function newProfile(now = 0) {
   return {
     v: GAME.version, poolV: 2, created: now, lastSeen: now, lastActive: 0, whatsNewSeen: GAME.version, nextSteps: { done: {}, dismissed: false, open: true },
     records: 250, diamonds: 30, fans: 0, fame: 1, name: '', resume: null, boosters: {}, wheel: null, friends: [], weekly: { id: '', done: false, best: 0 }, bests: {},
-    studio: {}, heroLv: { roxor: 1, jasmin: 1 },
+    studio: {}, heroLv: { roxor: 1, jasmin: 1 }, season: emptySeason(),
     turretsUnlocked, loadout: STARTER_TURRETS.slice(),
     prog, bossesSeen: {}, encoreCleared: {},
     gear: { items: [], equipped: { head: null, mic: null, body: null, chain: null, feet: null }, uid: 1 },
@@ -125,6 +126,7 @@ export function migrate(p, now = 0) {
     if (isObj(p.milestones.claimed)) for (const m of ENDLESS_MILESTONES) if (p.milestones.claimed[m.id]) out.milestones.claimed[m.id] = true;
     if (Array.isArray(p.milestones.cosmetics)) out.milestones.cosmetics = p.milestones.cosmetics.filter((c, i, a) => typeof c === 'string' && a.indexOf(c) === i).slice(0, 20);
   }
+  out.season = cleanSeason(p.season);
   out.bests = cleanBests(p.bests, out);
   out.weekly = { id: typeof out.weekly.id === 'string' ? out.weekly.id : '', done: !!out.weekly.done, best: int(out.weekly.best, 0) };
   out.daily.day = num(out.daily.day, -1, -1); out.daily.challengeDay = num(out.daily.challengeDay, -1, -1); out.daily.challengeBest = int(out.daily.challengeBest, 0);
@@ -545,7 +547,7 @@ export function mergeGear(p, uids) {
   const ng = makeGear(p, gs[0].tpl, RARITY_ORDER[rarIdx(gs[0].rarity) + 1]);
   ng.lvl = Math.max(1, best - 2);
   if (wasEquipped) p.gear.equipped[GEAR[ng.tpl].slot] = ng.uid;
-  p.stats.gearMerges++;
+  p.stats.gearMerges++; dailyAdd(p, 'gearMerges', 1);
   if (ng.rarity === 'legendary' || ng.rarity === 'mythic') p.stats.legendary++;
   return { ok: true, item: ng };
 }
@@ -620,7 +622,7 @@ export function openCrateFree(p, tier, rng) {
     const min = c.guarantee && i === c.items - 1 && !items.some((g) => rarIdx(g.rarity) >= rarIdx(c.guarantee)) ? c.guarantee : null;
     items.push(rollGearItem(p, c.odds, rng, { min }));
   }
-  p.stats.crates++;
+  p.stats.crates++; dailyAdd(p, 'crates', 1);
   return items;
 }
 export function crateOddsTable(tier) {
@@ -669,6 +671,8 @@ export function computeRunSetup(p) {
 }
 
 // ------------------------------------------------------------------------------------------------ daily: login, quests, challenge
+// add to today's quest counter of a stat (quests read p.daily.prog[stat]); used by the hooks outside a run (crates, gear merges, the wheel)
+function dailyAdd(p, stat, n) { if (!isObj(p.daily)) return; if (!isObj(p.daily.prog)) p.daily.prog = {}; p.daily.prog[stat] = (p.daily.prog[stat] || 0) + n; }
 export function ensureDaily(p, now, rng) {
   const day = dayOf(now);
   if (p.daily.day === day && p.daily.quests.length) return false;
@@ -763,6 +767,72 @@ export function nextStreakBonus(p, now) {
   return { days: m.days, left: Math.max(0, m.days - streak), reward: { diamonds: m.diamonds, crate: m.crate || null }, ready: p.login.streak >= m.days, today: ls.claimable && streak >= m.days };
 }
 
+// ---- Seasons (round 6). profile.season = { id, month: 'YYYY-MM', progress: { kills, merges, wins }, claimed: { <goal id>: true, keepsake: true } }.
+// It belongs to ONE calendar month (local time) and resets when the month changes (ensureSeason). Old saves have no season: they start empty.
+export const seasonMonthKey = (now) => { const d = new Date(now); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
+export const seasonOf = (now) => SEASONS[new Date(now).getMonth() + 1];
+export const seasonMsLeft = (now) => { const d = new Date(now); return Math.max(0, new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() - now); };
+function cleanSeason(raw) {
+  const out = emptySeason();
+  if (!isObj(raw)) return out;
+  out.id = typeof raw.id === 'string' && /^[a-z0-9_]{0,40}$/.test(raw.id) ? raw.id : '';
+  out.month = typeof raw.month === 'string' && /^\d{4}-\d{2}$/.test(raw.month) ? raw.month : '';
+  for (const g of SEASON_GOALS) { out.progress[g.stat] = int(isObj(raw.progress) ? raw.progress[g.stat] : 0, 0, 0, 100000000); if (isObj(raw.claimed) && raw.claimed[g.id]) out.claimed[g.id] = true; }
+  if (isObj(raw.claimed) && raw.claimed.keepsake) out.claimed.keepsake = true;
+  if (!out.id || !out.month) return emptySeason();
+  return out;
+}
+// roll the profile into the current month's season; a new month starts at zero. Returns true when it reset. Safe to call any time.
+export function ensureSeason(p, now) {
+  const s = seasonOf(now), mk = seasonMonthKey(now);
+  if (isObj(p.season) && p.season.month === mk && p.season.id === s.id && isObj(p.season.progress) && isObj(p.season.claimed)) return false;
+  p.season = { id: s.id, month: mk, progress: { kills: 0, merges: 0, wins: 0 }, claimed: {} };
+  return true;
+}
+export function addSeasonProgress(p, result, now) {
+  ensureSeason(p, now);
+  const pr = p.season.progress;
+  pr.kills = (pr.kills || 0) + Math.max(0, int(result.kills, 0)); pr.merges = (pr.merges || 0) + Math.max(0, int(result.merges, 0)); if (result.won) pr.wins = (pr.wins || 0) + 1;
+}
+// what the Goals card shows: the season, time left, each goal with value and state, the keepsake and whether all three goals are claimed
+export function seasonState(p, now) {
+  const season = seasonOf(now), live = isObj(p.season) && p.season.month === seasonMonthKey(now) && p.season.id === season.id;
+  const pr = live ? p.season.progress : {}, cl = live ? p.season.claimed : {};
+  const goals = SEASON_GOALS.map((g) => { const v = Math.min(g.goal, int(pr[g.stat], 0)); return Object.assign({}, g, { value: v, done: v >= g.goal, claimed: !!cl[g.id] }); });
+  const allClaimed = goals.every((g) => g.claimed);
+  return { season, msLeft: seasonMsLeft(now), goals, keepsake: season.keepsake, keepsakeGot: !!cl.keepsake, allClaimed, ready: goals.filter((g) => g.done && !g.claimed).length };
+}
+export const seasonReady = (p, now) => seasonState(p, now).ready;
+// does the player own the keepsake already? (outfit: both heroes; skin: owned)
+export function keepsakeOwned(p, k) {
+  if (k.kind === 'skin') return !!(p.skins && p.skins.owned.includes(k.id));
+  return HEROES.every((who) => p.outfits && p.outfits.owned && p.outfits.owned[who] && p.outfits.owned[who].includes(k.id));
+}
+export function keepsakeName(k) {
+  if (k.kind === 'skin') return (SKIN_FALLBACK[k.id] || {}).name || k.id;
+  return (OUTFITS.roxor[k.id] || {}).name || k.id;
+}
+// claim one finished goal; when it was the last of the three the keepsake is granted once (or its bonus when it is already owned)
+export function claimSeasonGoal(p, goalId, now, rng) {
+  ensureSeason(p, now);
+  const st = seasonState(p, now), g = st.goals.find((x) => x.id === goalId);
+  if (!g || !g.done || g.claimed) return { ok: false };
+  p.season.claimed[goalId] = true;
+  const gr = grant(p, g.reward, rng);
+  const out = { ok: true, reward: g.reward, loot: gr.loot, keepsake: null };
+  if (SEASON_GOALS.every((x) => p.season.claimed[x.id]) && !p.season.claimed.keepsake) {
+    p.season.claimed.keepsake = true;
+    const k = st.keepsake, owned = keepsakeOwned(p, k);
+    if (owned) { grant(p, SEASON_KEEPSAKE_BONUS, rng); out.keepsake = { kind: k.kind, id: k.id, bonus: SEASON_KEEPSAKE_BONUS }; }
+    else {
+      if (k.kind === 'skin') p.skins.owned.push(k.id);
+      else for (const who of HEROES) if (!p.outfits.owned[who].includes(k.id)) p.outfits.owned[who].push(k.id);
+      out.keepsake = { kind: k.kind, id: k.id, bonus: null };
+    }
+  }
+  return out;
+}
+
 // ---- Welcome back: shown once when the hub opens after WELCOME_MIN_HOURS away. `awayFrom` is the last activity (ms) before this session.
 export const WELCOME_MIN_HOURS = 12;
 export function awayHours(p, now, awayFrom) {
@@ -787,7 +857,8 @@ export function welcomeSummary(p, now, awayFrom) {
     login: { claimable: ls.claimable, day: ls.reward.day, streak: ls.streak, state: streakState },
     streakBonus: nextStreakBonus(p, now),
     daily: { done: dc.done, resetMs: dailyResetMs(now) }, weekly: { done: wg.done, best: wg.best, waves: wg.waves, msLeft: wg.msLeft, fresh: !!p.weekly.id && p.weekly.id !== wg.id },
-    ready: badges.goals - (ls.claimable ? 1 : 0), goal,
+    ready: badges.goals - (ls.claimable ? 1 : 0) - badges.season, goal,
+    season: badges.season > 0 ? { name: seasonOf(now).name, ready: badges.season, msLeft: seasonMsLeft(now) } : null,
   };
 }
 
@@ -883,7 +954,8 @@ export function readyBadges(p, now) {
   const quests = p.daily.quests.filter((s) => !s.claimed && questProgress(p, questDef(s.id)) >= questDef(s.id).goal).length;
   const ach = claimableAchievements(p).length;
   const stars = STAR_MILESTONES.filter((m) => !p.starClaimed[m.stars] && totalStars(p) >= m.stars).length;
-  return { login: login.claimable ? 1 : 0, quests, ach, stars, goals: (login.claimable ? 1 : 0) + quests + ach + stars };
+  const season = seasonReady(p, now);
+  return { login: login.claimable ? 1 : 0, quests, ach, stars, season, goals: (login.claimable ? 1 : 0) + quests + ach + stars + season };
 }
 
 // ------------------------------------------------------------------------------------------------ personal bests
@@ -949,12 +1021,19 @@ export function applyRunResult(p, result, rng, now = 0) {
   syncNextSteps(p);
   S.bestCombo = Math.max(S.bestCombo, result.bestCombo); S.maxLevel = Math.max(S.maxLevel, result.maxLevel || 0);
   S.coins += result.coinsEarned || 0;
+  addSeasonProgress(p, result, now || Date.now());
   // daily quest progress
   const dp = p.daily.prog;
   const add = (k, v) => { dp[k] = (dp[k] || 0) + v; };
   add('kills', result.kills); add('merges', result.merges); add('deploys', result.deploys); add('runs', 1); add('waves', result.cleared);
   add('bosses', result.bossKills); add('heroUses', result.heroUses || 0); add('perfects', result.perfects || 0); add('remixes', result.remixes || 0);
   if (result.won) add('wins', 1);
+  // round 6 quest stats (all read from the run result, so no sim change is needed)
+  add('duets', result.duets || 0); add('relics', (result.relics || []).length); add('coins', result.coinsEarned || 0);
+  if (result.won && result.leaks === 0) add('flawless', 1);
+  if (result.won && Array.isArray(result.modifiers) && result.modifiers.length) add('modWins', 1);
+  if (result.mode === 'daily') add('dailies', 1);
+  if (result.mode === 'endless') dp.endlessWave = Math.max(dp.endlessWave || 0, result.cleared || 0);
   dp.bestCombo = Math.max(dp.bestCombo || 0, result.bestCombo); dp.maxLevel = Math.max(dp.maxLevel || 0, result.maxLevel || 0);
   // bosses seen for the first time
   for (const b of result.bossTypes || []) if (!p.bossesSeen[b]) { p.bossesSeen[b] = true; out.firstBosses.push(b); out.diamonds += 8; }
@@ -1062,7 +1141,7 @@ export function spinWheel(p, now, rng) {
   const seg = rng.weighted(WHEEL, (w) => w.weight);
   const index = WHEEL.indexOf(seg);
   const g = grant(p, seg.reward, rng);
-  p.stats.spins = (p.stats.spins || 0) + 1;
+  p.stats.spins = (p.stats.spins || 0) + 1; dailyAdd(p, 'spins', 1);
   return { ok: true, index, seg, loot: g.loot };
 }
 
