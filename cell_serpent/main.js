@@ -15,6 +15,7 @@ import { flyPick } from './pickfly.js';
 import { edgeMap } from './follow_b13c.js';
 import { newAim, aimDown, aimMove, aimUp, aimTick, aimAssisted } from './aim_b12f.js';
 import { levelUpJuice } from './juice_b13b.js';
+import { bindMomentHaptics } from './audio_b14e.js';
 import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint, progMeter } from './result_fx.js';
 import { applyCbPalette, paintCbStrip, applyCbRarity } from './cb_palette.js';
 import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.js';
@@ -85,6 +86,7 @@ try { save = sanitizeSave(JSON.parse(localStorage.getItem(SAVE_KEY))); } catch (
 const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } };
 
 const audio = createAudio(), cues = createCues(audio);
+bindMomentHaptics(audio, () => save && save.settings);   // b14e: unlock, stat buy, level-up and result motif also buzz
 audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.setVolume(save.settings.volume);
 let stagKey = '';   // which hub tab already played its entrance
 const motion = createMotion({ $, buzz: p => buzz(p), getReduced: () => !!(save && save.settings && save.settings.reduceMotion) }); motion.init();
@@ -800,6 +802,7 @@ function showResult() {
   { const rd = !!(save.settings.reduceMotion || systemReduceMotion()); setTimeout(() => shineStars($('rStars'), out.starsGained, rd), 900 + (r.stars || 0) * 260);
     markStickersSeen(save); showStickerPop(newStickers(stk0, stickerIds(save)), { reduce: rd, valid: () => mode === 'over' && $('result').classList.contains('on'), onLand: bumpStatsTab }); }
   if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
+  if (!r.mode) { const wsk = stageInfo(r.stage).skin, wn = !!r.won; setTimeout(() => { if (mode === 'over' && $('result').classList.contains('on')) audio.play('worldmotif', { skin: wsk, won: wn }); }, wn ? 900 : 450); }   // b14e: a short motif per world
   try { dressDuo($('rImg'), { outfit: wornOutfit(save), pets: save.petEquip, kit, mood: r.won ? 'win' : 'lose', joy: Object.fromEntries(save.petEquip.map(id => [id, save.pets[id].joy || 0])) }); } catch (e) { /* ignore */ }
   show('result'); mode = 'over';
 }
