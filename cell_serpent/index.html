@@ -507,6 +507,24 @@
   /* toast: springs down from the top and tucks away */
   #toast{transform:translate(-50%,-30px) scale(.92);transition:transform .34s cubic-bezier(.3,1.5,.5,1),opacity .2s;box-shadow:0 8px 20px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.18)}
   #toast.on{transform:translate(-50%,0) scale(1)}
+  /* currency pills: combo flash ring and floating +N (transform and opacity only) */
+  .cur{position:relative}
+  .mo-glow{position:absolute;inset:-3px;border-radius:999px;pointer-events:none;opacity:0;box-shadow:0 0 0 2px #fff6b0,0 0 16px 3px #ffd24a;will-change:transform,opacity}
+  .cur.s .mo-glow{box-shadow:0 0 0 2px #ffd6f0,0 0 16px 3px #ff5cb8}
+  .mo-glow.hot{box-shadow:0 0 0 3px #fff,0 0 22px 6px #ffb020}
+  .cur.s .mo-glow.hot{box-shadow:0 0 0 3px #fff,0 0 22px 6px #ff3fa8}
+  .mo-gain{position:absolute;left:50%;top:100%;z-index:7;pointer-events:none;white-space:nowrap;font-size:13px;font-weight:900;color:#fff6b0;text-shadow:0 1px 0 #5a3410,0 0 8px rgba(0,0,0,.7);opacity:0;will-change:transform,opacity}
+  .cur.s .mo-gain{color:#ffd6f0;text-shadow:0 1px 0 #6a1346,0 0 8px rgba(0,0,0,.7)}
+  .mo-gain.hot{font-size:15px;color:#fff}
+  /* staggered list entrance: motion.js tags the first cards of a freshly opened tab, delay is --si * 34ms (max 12 cards) */
+  .tab .mo-st.mo-st{animation:moItemIn .34s cubic-bezier(.2,.85,.25,1) both;animation-delay:calc(var(--si,0) * 34ms)}
+  @keyframes moItemIn{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:none}}
+  /* icon buttons (gear, sound): one glass style, same as the pause button in a run */
+  .gear,#muteBtn.on{display:grid}
+  .gear,#muteBtn{place-items:center;padding:0;line-height:1;border:1.5px solid rgba(255,255,255,.34);background:linear-gradient(180deg,rgba(255,255,255,.28) 0%,rgba(255,255,255,.07) 48%,rgba(8,5,30,.55) 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -2px 0 rgba(0,0,0,.25),0 3px 8px rgba(0,0,0,.4);transition:transform .18s cubic-bezier(.3,1.6,.5,1),filter .15s}
+  .gear:active,#muteBtn:active{transform:scale(.9);filter:brightness(1.25)}
+  /* top bar on narrow phones: use the full width (the screen padding ate 24px) so big Beats and Sparkles never clip */
+  @media (max-width:399px){.hubtop{width:calc(100% + 36px);margin-left:-18px;margin-right:-18px;padding-left:8px;padding-right:8px} .hubtop .cur{flex:0 1 auto;overflow:hidden;text-overflow:clip}}
   /* Reduce Motion (settings or OS): nothing loops, nothing moves */
   html.rm *,html.rm *::before,html.rm *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;animation-delay:0s!important;transition-duration:.01ms!important}
   html.rm .mo-coin,html.rm .mo-spk{display:none}
