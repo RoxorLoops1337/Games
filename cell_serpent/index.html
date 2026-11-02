@@ -1205,6 +1205,21 @@
   .ff-bring .ff-bringgo{flex:none;margin-left:auto;font:inherit;font-size:12px;font-weight:900;letter-spacing:.05em;padding:7px 11px;border:0;border-radius:10px;color:#10331a;background:linear-gradient(180deg,#d6ff9c,#8ce24a);box-shadow:0 2px 0 #3f8a1d;cursor:pointer;animation:qgp 1.4s ease-in-out infinite} .ff-bring .ff-bringgo:active{transform:translateY(2px);box-shadow:none}
   .ff-bring.packed{animation:ffpack .5s ease-out} @keyframes ffpack{0%{box-shadow:0 0 0 0 rgba(157,255,109,.9)}100%{box-shadow:0 0 0 14px rgba(157,255,109,0)}}
   @media(prefers-reduced-motion:reduce){.ff-bring .ff-bringgo,.ff-bring.packed{animation:none}}
+  /* round 10: power gap, world strip, hard best tags */
+  #tabBattle .diffrow{flex-wrap:wrap;row-gap:2px}
+  #tabBattle .rec{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px 6px;max-width:170px}
+  .rec .pgap{display:block;flex:1 0 100%;height:4px;border-radius:2px;background:rgba(255,255,255,.16);overflow:hidden} .rec .pgap u{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,#9dff6d,#39f0ff);text-decoration:none}
+  .rec.low .pgap u{background:linear-gradient(90deg,#ffb04d,#ff7a5c)}
+  .rec .pneed{font:900 10px/1 inherit;font-style:normal;letter-spacing:.05em;color:#ffb04d} .rec .pneed.ok{color:#9dff6d}
+  .rec.hardrec.low .pneed{color:#fff;background:#b3341f;border-radius:8px;padding:2px 6px;animation:pneedp 1.6s ease-in-out infinite}
+  @keyframes pneedp{50%{filter:brightness(1.3)}}
+  .stprog .pgh{display:inline-block;font:900 10px/1 inherit;font-style:normal;letter-spacing:.08em;margin-left:6px;padding:3px 6px;border-radius:8px;background:#8a4bd8;color:#fff;vertical-align:1px} .stprog .pgh.gap{background:#b3341f;margin-left:4px;padding:3px 5px;letter-spacing:.04em}
+  @media (max-width:400px){.bt-hero .stprog:has(.pgh.gap){flex-wrap:wrap;row-gap:16px} .bt-hero .stprog:has(.pgh.gap) .pgr{flex:1 1 100%;margin:0 14px 0 0}}
+  .wstrip{display:flex;gap:1px;width:100%;padding:0 4px;height:10px;align-items:flex-end;margin:-2px 0 4px}
+  .wstrip i{flex:1;min-width:0;height:5px;border-radius:2px;background:rgba(255,255,255,.14)}
+  .wstrip i.d{background:#9dff6d} .wstrip i.x{background:#ffe14a;box-shadow:0 0 6px #ffe14a;height:8px} .wstrip i.b{height:9px;border-radius:2px 2px 0 0} .wstrip i.b.l{background:rgba(255,225,74,.3)}
+  .wstrip i.s{outline:1.5px solid #fff;outline-offset:1px}
+  @media (prefers-reduced-motion:reduce){.rec.hardrec.low .pneed{animation:none}}
   /* end @css:08-battle-tab */
 /* @css:19-transitions */
   /* screens: fade + scale in, fade out (transform and opacity only) */
@@ -2261,6 +2276,7 @@
           <div class="stprog" id="stProg"></div>
         </div>
         <div class="bt-rowh" id="btRowH"><b>STAGES</b><button class="pill" id="contBtn">CONTINUE</button></div>
+        <div class="wstrip" id="wStrip" aria-hidden="true"></div>
 
         <div class="diffrow" id="diffRow"></div>
         <div class="bt-hint" id="btHint"></div>

@@ -38,7 +38,7 @@ import { petLabel } from './pet_names.js';
 import { emptyCard as emptyCardUx } from './empty_ux.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
 import { momentLine } from './hit_juice8.js';
-import { bringHTML, twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide, starsHTML, claimInfo, eventReadyCount, claimChips, fanRects } from './battle_ui.js';
+import { bringHTML, twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide, starsHTML, claimInfo, eventReadyCount, claimChips, fanRects, powerHTML, powerGap, bestTag, worldStrip, portraitSpring } from './battle_ui.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
@@ -209,7 +209,7 @@ function renderBattle() {
   if (sel > save.cleared) hard = false;
   const hardOk = sel <= save.cleared;
   { const rp = recPower(sel, hard), mine = power(save);
-    $('diffRow').innerHTML = `<div class="seg ${hard ? 'h' : ''}"><i></i><button class="dbtn ${hard ? '' : 'on'}" data-h="0">Normal</button><button class="dbtn hard ${hard ? 'on' : ''}" data-h="1" ${hardOk ? '' : 'disabled'}>${hardOk ? 'Hard' : '🔒 Hard'}</button></div><span class="rec ${mine < rp ? 'low' : ''}">Power <b>${mine}</b> / ${rp}</span>`; }
+    $('diffRow').innerHTML = `<div class="seg ${hard ? 'h' : ''}"><i></i><button class="dbtn ${hard ? '' : 'on'}" data-h="0">Normal</button><button class="dbtn hard ${hard ? 'on' : ''}" data-h="1" ${hardOk ? '' : 'disabled'}>${hardOk ? 'Hard' : '🔒 Hard'}</button></div>${powerHTML(mine, rp, hard)}`; }
   for (const b of $('diffRow').querySelectorAll('.dbtn')) b.onclick = () => { audio.play('click'); hard = b.dataset.h === '1'; renderBattle(); };
   $('stMod').innerHTML = twistHTML(info.mod); $('btFact').hidden = true; $('btHero').classList.remove('fact');
   { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; syncRwFilter(chips, cb); cb.textContent = 'CONTINUE ▶ ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
@@ -218,7 +218,8 @@ function renderBattle() {
   const go = $('stGo'); go.disabled = !playable; go.textContent = playable ? 'START  ⚡' + ENERGY_COST : `CLEAR STAGE ${save.cleared + 1} FIRST`;
   $('btHint').textContent = !save.cleared && !save.runs ? 'Slide left and right, shoot up, keep the snake off the pink line!' : (playable && save.energy && tickEnergy(save, Date.now()) < ENERGY_COST ? 'Out of Voice! Tap + up top, or rest a bit.' : '');
   loadoutRow($('battleLoad'), true);
-  { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; bestPct = pr; $('stProg').innerHTML = `<div class="pgl${pr ? ' has' : ''}">Best <b>${pr}%</b></div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
+  { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; bestPct = pr; $('stProg').innerHTML = `<div class="pgl${pr ? ' has' : ''}">Best <b>${pr}%</b>${bestTag(hard, powerGap(power(save), recPower(sel, hard)).gap)}</div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
+  { const ws = $('wStrip'), wk = save.cleared + '|' + sel; if (ws && ws.dataset.k !== wk) { ws.dataset.k = wk; ws.innerHTML = worldStrip(save.cleared, sel, MAX_STAGE, isBossStage); } }   // r10: 50 ticks, boss crowns taller
   hub2.renderSide(); watchSideIcons($('battleSide')); watchSide($('battleSide'));
   renderPig();
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
@@ -306,7 +307,8 @@ function drawPortrait(t, info) {
     b.fillStyle = gl; b.fillRect(0, 0, S, S);
   }
   c.drawImage(ptGlow, 0, 0);
-  const bob = Math.sin(t * 2.2) * 5, sc = 1 + Math.sin(t * 2.2 + 1) * 0.03;
+  const bob = Math.sin(t * 2.2) * 5, sc = (1 + Math.sin(t * 2.2 + 1) * 0.03) * portraitSpring(t - pvT0);   // r10: the face springs in when the species changes
+  if (hard) { c.save(); c.strokeStyle = 'rgba(190,110,255,' + (0.35 + 0.15 * Math.sin(t * 5)) + ')'; c.lineWidth = 5; c.beginPath(); c.arc(S / 2, S / 2, S * 0.43, 0, 6.2832); c.stroke(); c.restore(); }   // r10: Hard wears a purple ring
   kit.drawHead(c, S / 2, S / 2 + bob, 78 * (info.boss ? 1.12 : 1) * sc, Math.PI / 2 + Math.sin(t * 0.9) * 0.15, { skin: info.skin, boss: info.boss, t, look: [Math.sin(t * 1.3) * 0.6, 0.8] });
 }
 
