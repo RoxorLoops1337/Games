@@ -619,11 +619,13 @@ export function createHud(env) {
     const y = 183 + T.ins.t + (isBossStage(g.stage) ? BOSS_DY : 0) + 24, sc = pop('combo', g.combo), left = Math.max(0, Math.min(1, 1 - (g.t - g.lastKill) / 2.2));
     const col = g.combo >= 20 ? '#ff7ad9' : g.combo >= 10 ? '#ff9a4a' : '#ffe14a', n = g.combo >= 20 ? 3 : g.combo >= 10 ? 2 : 1;
     ctx.save(); ctx.globalAlpha = left < 0.25 ? 0.4 + left * 2.4 : 1;
-    scaled(W / 2, y, sc, () => {
+    const hp = reduce() ? 0 : Math.max(0, 1 - (S.t - (S.hitPulse || -9)) / 0.16);   // 04-hit-juice b11: every landed hit makes the plate tick and the timer flash
+    scaled(W / 2, y, sc * (1 + 0.045 * hp), () => {
       glass(-112, -26, 224, 52, 26, col + 'aa', 'rgba(14,9,48,.5)');
       text('COMBO x' + g.combo, 0, -4, 24 + Math.min(10, g.combo * 0.3), col, '#0b1020');
       ctx.fillStyle = 'rgba(255,255,255,.18)'; rr(-84, 14, 168, 7, 3.5); ctx.fill();
       ctx.fillStyle = left < 0.3 && !reduce() && Math.sin(S.t * 24) > 0 ? '#ff6a7a' : col; rr(-84, 14, Math.max(5, 168 * left), 7, 3.5); ctx.fill();   // b9: a thicker timer that flashes red when the combo is about to drop
+      if (hp > 0) { ctx.fillStyle = `rgba(255,255,255,${0.75 * hp})`; rr(-84, 14, Math.max(5, 168 * left), 7, 3.5); ctx.fill(); glow(-84 + Math.max(5, 168 * left), 17.5, 16 + 10 * hp, '#ffffff', 0.55 * hp); }
       const tn = comboTier(g.combo);
       if (tn) {   // 06-hud b10: a small tier tag riding the top rim of the plate (NICE, GROOVY, SUPER, MEGA); it hops when the tier changes
         const tk = pop('ctier', g.combo >= 40 ? 4 : g.combo >= 20 ? 3 : g.combo >= 10 ? 2 : 1), tw = tn.length * 11 + 26;
