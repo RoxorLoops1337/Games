@@ -138,7 +138,17 @@ export function createHud(env) {
       const gr = ctx.createLinearGradient(bx, 0, bx + bw, 0); gr.addColorStop(0, boss ? '#ff8a5a' : '#ff9ac6'); gr.addColorStop(1, boss ? '#ff2f6a' : '#ff5aa0');
       ctx.fillStyle = gr; ctx.fillRect(bx, by, Math.max(bh, bw * pr), bh);
       ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fillRect(bx, by, bw * pr, bh * 0.42);
+      if (!reduce()) {   // a soft band of light travels along the fill
+        const fw = Math.max(bh, bw * pr), sx = bx + ((S.t * 90) % (fw + 120)) - 60;
+        const sh = ctx.createLinearGradient(sx - 30, 0, sx + 30, 0); sh.addColorStop(0, 'rgba(255,255,255,0)'); sh.addColorStop(0.5, 'rgba(255,255,255,.38)'); sh.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = sh; ctx.fillRect(Math.max(bx, sx - 30), by, Math.min(60, bx + fw - Math.max(bx, sx - 30)), bh);
+      }
       ctx.restore();
+      if (pr < 1) {   // glowing tip at the front of the fill
+        const tx = bx + Math.max(bh, bw * pr) - 2;
+        glow(tx, cy, 20, boss ? '#ff8a8a' : '#ffc2dc', 0.35 + (reduce() ? 0 : 0.15 * Math.sin(S.t * 6)));
+        ctx.beginPath(); ctx.arc(tx, cy, 5, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill();
+      }
     }
     text(Math.floor(pr * 100) + '%', bx + 30, cy + 1, 17, '#ffffff', '#5a1038', 'center');
     for (const th of [0.25, 0.5, 1]) {
@@ -176,22 +186,35 @@ export function createHud(env) {
   // groove: a 20 bar equalizer that lights from the left and dances with the beat
   function groove(g) {
     const gv = Math.max(0, g.groove || 0), x = 18, y = H - 78 - T.ins.b, w = 226, h = 64, fire = gv >= 20;
-    glass(x, y, w, h, 18, fire ? 'rgba(255,216,77,.9)' : gv >= 15 ? 'rgba(255,216,77,.5)' : 'rgba(255,255,255,.3)');
+    const rim = fire ? 'rgba(255,216,77,.9)' : gv >= 15 ? 'rgba(255,216,77,.5)' : 'rgba(255,255,255,.3)';
+    // change flash: gold when the groove grows a whole bar, red when it breaks
+    const gi = Math.floor(gv);
+    if (T.gLast === undefined) T.gLast = gi;
+    if (gi > T.gLast) { T.gUp = S.t; } else if (gi < T.gLast) { T.gDn = S.t; }
+    T.gLast = gi;
+    const ku = Math.max(0, 1 - (S.t - (T.gUp === undefined ? -9 : T.gUp)) / 0.35), kd = Math.max(0, 1 - (S.t - (T.gDn === undefined ? -9 : T.gDn)) / 0.5);
+    glass(x, y, w, h, 18, kd > 0 ? 'rgba(255,90,110,.95)' : ku > 0 ? 'rgba(255,255,255,.95)' : rim);
+    if (kd > 0) { ctx.save(); ctx.globalAlpha = 0.3 * kd; rr(x, y, w, h, 18); ctx.fillStyle = '#ff3d5a'; ctx.fill(); ctx.restore(); }
     if (fire) glow(x + w / 2, y + h / 2, 150, '#ffd84d', 0.18 + 0.1 * Math.sin(S.t * 10));
-    text(fire ? 'GROOVE ON FIRE' : 'GROOVE', x + 14, y + 14, 14, fire ? '#ffd84d' : '#ffc2dc', '#0b1020', 'left');
+    text(fire ? 'GROOVE ON FIRE' : 'GROOVE', x + 14, y + 14, 15, fire ? '#ffd84d' : '#ffc2dc', '#0b1020', 'left');
     if (gv >= 1) text('+' + Math.floor(gv * 1.5) + '% dmg', x + w - 12, y + 14, 14, gv >= 15 ? '#ffd84d' : '#bfe9ff', '#0b1020', 'right');
     const base = y + h - 10, bw = 7.2, step = 10.4, x0 = x + 14;
+    // tier ticks: bar 15 starts the gold glow, bar 20 is the fire
+    for (const t of [15, 20]) { const tx = x0 + (t - 1) * step + bw / 2; ctx.fillStyle = gv >= t ? '#ffd84d' : 'rgba(255,216,77,.45)'; ctx.beginPath(); ctx.moveTo(tx - 3.5, y + h - 3); ctx.lineTo(tx + 3.5, y + h - 3); ctx.lineTo(tx, y + h - 8.5); ctx.closePath(); ctx.fill(); }
     for (let i = 0; i < 20; i++) {
       const lit = Math.max(0, Math.min(1, gv - i));
       const bob = lit > 0 ? Math.sin(S.t * (fire ? 14 : 8) + i * 0.9) * (fire ? 4 : 2.5) * lit : 0;
       const hh = 8 + i * 0.95 + bob;
       ctx.fillStyle = 'rgba(255,255,255,.14)'; rr(x0 + i * step, base - (8 + i * 0.95), bw, 8 + i * 0.95, 3); ctx.fill();
-      if (lit > 0) { ctx.globalAlpha = 0.45 + 0.55 * lit; ctx.fillStyle = fire ? '#ffd84d' : BAR_COL[i]; rr(x0 + i * step, base - hh, bw, hh, 3); ctx.fill(); ctx.globalAlpha = 1; }
+      if (lit > 0) {
+        ctx.globalAlpha = 0.45 + 0.55 * lit; ctx.fillStyle = fire ? '#ffd84d' : BAR_COL[i]; rr(x0 + i * step, base - hh, bw, hh, 3); ctx.fill(); ctx.globalAlpha = 1;
+        if (ku > 0 && i === gi - 1) { ctx.fillStyle = `rgba(255,255,255,${0.9 * ku})`; rr(x0 + i * step - 1, base - hh - 1, bw + 2, hh + 2, 3); ctx.fill(); }
+      }
     }
   }
 
   function skills(g) {
-    const r = 21, pitch = 50, cy = H - 56 - T.ins.b;
+    const r = 25, pitch = 58, cy = H - 60 - T.ins.b;
     let x = W - 22 - r;
     for (const id of Object.keys(g.weap)) {
       const w = g.weap[id], col = env.WCOL[id] || '#fff', max = WMAX[id] || 5;
@@ -207,12 +230,14 @@ export function createHud(env) {
       const frac = w.cd > 0 ? Math.max(0, Math.min(1, 1 - w.cd / T.cdMax[id])) : 1, ready = frac >= 0.999;
       ctx.beginPath(); ctx.arc(x, cy, r, 0, TAU); ctx.fillStyle = 'rgba(14,9,48,.62)'; ctx.fill();
       ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, cy, r - 2, 0, TAU); ctx.fill(); ctx.restore();
-      blit(kit && kit.SPR.weapon(env.WSPR[id] || id), x, cy - 1, 66);
+      blit(kit && kit.SPR.weapon(env.WSPR[id] || id), x, cy - 1, 78);
+      if (frac < 0.999) { ctx.save(); ctx.beginPath(); ctx.moveTo(x, cy); ctx.arc(x, cy, r - 1, -Math.PI / 2 + TAU * frac, Math.PI * 1.5); ctx.closePath(); ctx.fillStyle = 'rgba(8,5,30,.55)'; ctx.fill(); ctx.restore(); }
       ctx.lineCap = 'round';
       ctx.beginPath(); ctx.arc(x, cy, r + 1.5, 0, TAU); ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 4; ctx.stroke();
       if (frac > 0.01) { ctx.beginPath(); ctx.arc(x, cy, r + 1.5, -Math.PI / 2, -Math.PI / 2 + TAU * frac); ctx.strokeStyle = ready ? col : '#ffffff'; ctx.lineWidth = 4; ctx.stroke(); }
       if (ready) glow(x, cy, r * 2.1, col, 0.18 + 0.1 * Math.sin(S.t * 6 + x));
       ctx.lineCap = 'butt';
+      if (w.cd > 0.95 && frac < 0.999) text(Math.ceil(w.cd) + '', x, cy + 1, 22, '#ffffff', '#0b1020');
       const fk = Math.max(0, 1 - (S.t - (T.readyAt[id] === undefined ? -9 : T.readyAt[id])) / 0.55);
       if (fk > 0) {   // ready flash: white wash, a ring that opens, and a little star
         ctx.save(); ctx.globalAlpha = fk * 0.7; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, cy, r + 1 + (reduce() ? 0 : 4 * fk), 0, TAU); ctx.fill();
@@ -220,7 +245,7 @@ export function createHud(env) {
         ctx.restore();
       }
       // level pips
-      const pw = 7, px0 = x - ((max - 1) * pw) / 2, py = cy + r + 11;
+      const pw = 7, px0 = x - ((max - 1) * pw) / 2, py = cy + r + 10;
       for (let i = 0; i < max; i++) { ctx.beginPath(); ctx.arc(px0 + i * pw, py, 2.6, 0, TAU); ctx.fillStyle = i < w.lv ? (w.lv >= max ? '#ffd84d' : '#ffffff') : 'rgba(255,255,255,.22)'; ctx.fill(); }
       x -= pitch;
     }
@@ -268,7 +293,7 @@ export function createHud(env) {
     const full = e >= 1;
     if (full && T.encFull < 0) T.encFull = S.t; else if (!full) T.encFull = -9;
     const k = full ? Math.max(0, 1 - (S.t - T.encFull) / 0.5) : 0, pul = 0.5 + 0.5 * Math.sin(S.t * 10);
-    const w = 190, h = 18, ex = 18 + 14 + w / 2, ey = H - 118 - T.ins.b;   // docked above the groove meter
+    const w = 196, h = 24, ex = 18 + 30 + w / 2, ey = H - 124 - T.ins.b;   // docked above the groove meter
     if (full) {   // ring around the tap zone and a glow under the capsule
       glow(g.p.x, g.p.y, 130 + 30 * k, '#ffe36b', 0.16 + 0.08 * pul);
       ctx.save(); ctx.globalAlpha = 0.5 + 0.4 * pul; ctx.strokeStyle = '#ffe36b'; ctx.lineWidth = 4; ctx.setLineDash([16, 12]); ctx.lineDashOffset = -S.t * 50;
@@ -282,17 +307,26 @@ export function createHud(env) {
     ctx.fillStyle = 'rgba(11,16,32,.45)'; for (let i = 1; i < 4; i++) ctx.fillRect(ex - w / 2 + (w * i) / 4 - 1, ey, 2, h);
     if (full) { ctx.fillStyle = `rgba(255,255,255,${0.5 * k + 0.12 * pul})`; ctx.fillRect(ex - w / 2, ey, w, h); }
     ctx.restore();
-    star(ex - w / 2 - 6, ey + h / 2, 0.95 + 0.25 * k, full ? '#ffe36b' : '#ff9ad6');
+    star(ex - w / 2 - 10, ey + h / 2, 1.15 + 0.25 * k, full ? '#ffe36b' : '#ff9ad6');
     if (full) {
       ctx.save(); const sc = 1 + 0.08 * pul + 0.3 * k; ctx.translate(Math.max(110, Math.min(W - 110, g.p.x)), g.p.y - 118); ctx.scale(sc, sc); text('TAP THE DUO!', 0, 0, 20, '#ffe36b', '#0b1020'); ctx.restore();
-      text('ENCORE READY', ex, ey + h / 2 + 1, 12, '#4a3600', '#fff3a0');
-    } else text('ENCORE', ex, ey + h / 2 + 1, 12, '#ffffff', '#4a1038');
+      text('ENCORE READY', ex, ey + h / 2 + 1, 15, '#4a3600', '#fff3a0');
+    } else { text('ENCORE', ex, ey + h / 2 + 1, 15, '#ffffff', '#4a1038'); text(Math.floor(T.encV * 100) + '%', ex + w / 2 + 12, ey + h / 2 + 1, 13, '#ffc2dc', '#0b1020', 'left'); }
   }
 
   function combo(g) {
     if (!(g.combo > 2 && g.t - g.lastKill < 2.2)) return;
-    const y = 183 + T.ins.t + (isBossStage(g.stage) ? BOSS_DY : 0) + 24, sc = pop('combo', g.combo);
-    scaled(W / 2, y, sc, () => text('COMBO x' + g.combo, 0, 0, 24 + Math.min(10, g.combo * 0.3), '#ffe14a', '#0b1020'));
+    const y = 183 + T.ins.t + (isBossStage(g.stage) ? BOSS_DY : 0) + 24, sc = pop('combo', g.combo), left = Math.max(0, Math.min(1, 1 - (g.t - g.lastKill) / 2.2));
+    const col = g.combo >= 20 ? '#ff7ad9' : g.combo >= 10 ? '#ff9a4a' : '#ffe14a', n = g.combo >= 20 ? 3 : g.combo >= 10 ? 2 : 1;
+    ctx.save(); ctx.globalAlpha = left < 0.25 ? 0.4 + left * 2.4 : 1;
+    scaled(W / 2, y, sc, () => {
+      glass(-112, -26, 224, 52, 26, col + 'aa', 'rgba(14,9,48,.5)');
+      text('COMBO x' + g.combo, 0, -4, 24 + Math.min(10, g.combo * 0.3), col, '#0b1020');
+      ctx.fillStyle = 'rgba(255,255,255,.18)'; rr(-84, 15, 168, 5, 2.5); ctx.fill();
+      ctx.fillStyle = col; rr(-84, 15, Math.max(5, 168 * left), 5, 2.5); ctx.fill();
+      for (let i = 1; i < n; i++) for (const sg of [-1, 1]) star(sg * (112 + 4 + i * 20), 0, 0.55 + 0.1 * i, col);
+    });
+    ctx.restore();
   }
 
   // y offset that everything below the HUD rows should add (notch plus the boss bar)
