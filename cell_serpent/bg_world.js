@@ -117,6 +117,16 @@ function speaker(c, x, y, w, h) {
 // a crowd of cute animal silhouettes (kitten, puppy, chick, bunny) with raised paws
 // each row is baked on its own so the animation can bob them separately
 export const CROWD_Y = H - 84, CROWD_H = 96;
+// the crowd rows are remembered by value (skin, boss, row) so a steady frame builds no key string or closure; dropped when the kit drops its sprites
+const CROWD = new Map(); let crowdGen = -1;
+function crowdSpr(kit, skin, boss, row, th) {
+  if (crowdGen !== kit.gen) { CROWD.clear(); crowdGen = kit.gen; }
+  let a = CROWD.get(kit); if (!a) CROWD.set(kit, a = new Map());
+  let b = a.get(skin); if (!b) a.set(skin, b = [undefined, undefined, undefined, undefined]);
+  const k = (boss ? 2 : 0) + row;
+  if (b[k] === undefined) b[k] = kit.bake(`crowd|${skin}|${boss ? 1 : 0}|${row}`, W, CROWD_H, bb => bakeCrowdRow(bb, th, boss, row), 1);
+  return b[k];
+}
 export function bakeCrowdRow(c, th, boss, row) { c.translate(-W / 2, -CROWD_Y - CROWD_H / 2); crowd(c, th, boss, row); }
 function crowd(c, th, boss, only) {
   const r = rnd(99 + (only || 0) * 7), y = H - 4, col = boss ? '#0a0618' : '#140c2e', rim = boss ? '#ff6a8a' : mix(th.lite, '#ffffff', 0.2);
@@ -390,7 +400,7 @@ export function createBgFx() {
     // the crowd bobs on the beat; on a kill it jumps and waves paws
     if (kit) {
       for (let row = 0; row < 2; row++) {
-        const spr = kit.bake(`crowd|${o.skin}|${boss ? 1 : 0}|${row}`, W, CROWD_H, b => bakeCrowdRow(b, th, boss, row), 1);
+        const spr = crowdSpr(kit, o.skin, boss, row, th);
         if (!spr) continue;
         const bob = o.reduce ? 0 : (Math.sin(t * 6 + row * 1.7) * 1.5 + pulse * 3 + cheer * Math.abs(Math.sin(t * 9 + row * 2)) * 7) * (row ? 0.8 : 1);
         c.drawImage(spr.c, 0, CROWD_Y - bob, W, CROWD_H);

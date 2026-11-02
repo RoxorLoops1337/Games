@@ -11,7 +11,9 @@ export const INK = '#2d170f';
 const TAU = Math.PI * 2;
 
 const rgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-export const mix = (a, b, t) => { const x = rgb(a), y = rgb(b); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+const MIXC = new Map();
+export const mix = (a, b, t) => { let m = MIXC.get(a); if (!m) { if (MIXC.size > 300) return mixRaw(a, b, t); MIXC.set(a, m = new Map()); } let n = m.get(b); if (!n) m.set(b, n = new Map()); let v = n.get(t); if (v === undefined) { v = mixRaw(a, b, t); if (n.size < 64) n.set(t, v); } return v; };
+const mixRaw = (a, b, t) => { const x = rgb(a), y = rgb(b); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
 export const shade = (h, k = 0.28) => mix(h, '#4a1a30', k);
 export const tint = (h, k = 0.35) => mix(h, '#ffffff', k);
 
@@ -618,6 +620,24 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     feather: () => bake('feather', B * 1.4, B * 1.4, featherFn, 1),
     weapon: (id, mood = 0) => mood ? bake('wpn|' + id + '|' + mood, B * 4.6, B * 3.4, g => { MOOD = mood; (WPN[id] || WPN.dagger)(g); MOOD = 0; }, 1) : bake('wpn|' + id, B * 4.6, B * 3.4, WPN[id] || WPN.dagger, 1),
   };
+  // steady frames look sprites up by value: the key string and the bake closure are only built the first time (cache.clear drops these too)
+  const memo = new Map();
+  let gen = 0;   // bumps whenever the baked sprites are dropped, so callers that remember a sprite know to look it up again
+  { const clr = cache.clear.bind(cache); cache.clear = () => { clr(); memo.clear(); gen++; }; }
+  const sprMemo = (tag, a, b, fn, x, y, z) => {
+    let m = memo.get(tag); if (!m) memo.set(tag, m = new Map());
+    let n = m.get(a); if (!n) m.set(a, n = new Map());
+    let v = n.get(b); if (v === undefined) { v = fn(x, y, z); n.set(b, v === undefined ? null : v); }
+    return v;
+  };
+  { const body = SPR.body, minion = SPR.minion, pickup = SPR.pickup, note = SPR.note, pet = SPR.pet, weapon = SPR.weapon;
+    SPR.body = (skin, boss, kind) => sprMemo(boss ? 'bodyB' : 'body', skin, kind || '', body, skin, boss, kind);
+    SPR.minion = id => sprMemo('min', id, 0, minion, id);
+    SPR.pickup = k => sprMemo('pk', k, 0, pickup, k);
+    SPR.note = crit => sprMemo('note', !!crit, 0, note, crit);
+    SPR.pet = (id, mood = 0) => sprMemo('pet', id, mood, pet, id, mood);
+    SPR.weapon = (id, mood = 0) => sprMemo('wpn', id, mood, weapon, id, mood);
+  }
 
   // blit a baked sprite centred at (x, y), `size` wide, optional rotation / flip
   function blit(g, spr, x, y, size, rot = 0, flip = false, alpha = 1) {
@@ -628,6 +648,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   }
 
   // live head: body and feelers rotate with the snake, the FACE stays upright and looks at the player.
+  const headBody = (skin, P, R) => bake('headbody|' + (SPECIES[skin] ? skin : 'love'), B * 3.4, B * 3.4, gg => { cellShape(gg, P, R, { decor: false }); pattern(gg, P, skin, R); }, 3);
   function drawHead(g, x, y, r, ang, o = {}) {
     const P = SPECIES[o.skin] || SPECIES.love, boss = !!o.boss, t = o.t || 0, R = B;
     g.save(); g.translate(x, y); g.scale(r / B, r / B);
@@ -637,7 +658,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     if (boss && o.p2) p2Halo(g, R, t);
     if (o.sg === 'go' || (o.sg === 'warn' && boss && o.p2)) dashSpikes(g, R, ang, t, boss && !!o.p2, o.sg === 'warn');
     // the body never animates, only its heading: baked once per species at heading 0 and blitted rotated (cellShape + pattern cost ~15 clips and ~100 paths a head)
-    const bodySpr = bake('headbody|' + (SPECIES[o.skin] ? o.skin : 'love'), B * 3.4, B * 3.4, gg => { cellShape(gg, P, R, { decor: false }); pattern(gg, P, o.skin, R); }, 3);
+    const bodySpr = sprMemo('headbody', SPECIES[o.skin] ? o.skin : 'love', 0, headBody, o.skin, P, R);
     if (bodySpr) { g.save(); g.rotate(ang); g.drawImage(bodySpr.c, -bodySpr.w / 2, -bodySpr.h / 2, bodySpr.w, bodySpr.h); g.restore(); }
     else { g.save(); g.rotate(ang); cellShape(g, P, R, { decor: false }); pattern(g, P, o.skin, R); g.restore(); }
     glossDot(g, R, 0.46, -0.5);
@@ -837,5 +858,5 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   function text2(g, ch, x, y, size) { g.font = `900 ${size}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = size * 0.25; g.strokeStyle = INK; g.strokeText(ch, x, y); g.fillStyle = '#fff'; g.fillText(ch, x, y); }
 
   // flat colour fallback shapes are not needed: the kit always draws. Expose helpers for UI art too.
-  return { SPR, blit, drawHead, cel, eye, sparkle, SPECIES, MINION_IDS: Object.keys(MIN), cache, B, bake, layer, layer2, makeCanvas, dpr };
+  return { SPR, blit, drawHead, cel, eye, sparkle, SPECIES, MINION_IDS: Object.keys(MIN), cache, B, bake, layer, layer2, makeCanvas, dpr, get gen() { return gen; } };
 }

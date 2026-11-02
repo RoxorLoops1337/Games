@@ -197,13 +197,20 @@ export function createRenderer(canvas, art, kit) {
   // -------------------------------------------------- world pieces
   // the static background (gradient tinted by the species, vignette, lane, borders) is drawn once per stage
   function themeOf(g) { return (kit && kit.SPECIES[g.skin]) || { base: '#ff7eb6', lite: '#ffc2dc', cell: 'round' }; }
+  // the layer key only changes with the stage, the scale or the colour-blind palette: build the string when one of those moves, not every frame
+  const LK = { skin: '', stage: -1, s: -1, cb: -1, key: '' };
+  function layerKey(g, k) {
+    const cb = OPT.colorBlind ? 1 : 0;
+    if (LK.skin !== g.skin || LK.stage !== g.stage || LK.s !== k || LK.cb !== cb) { LK.skin = g.skin; LK.stage = g.stage; LK.s = k; LK.cb = cb; LK.key = `${g.skin}|${g.stage}|${k.toFixed(1)}|${cb}`; }
+    return LK.key;
+  }
   function bgLayer(g, L) {
     const th = themeOf(g), k = Math.max(0.5, Math.min(1.5, L.s));
-    return kit && kit.layer(`${g.skin}|${g.stage}|${k.toFixed(1)}|${OPT.colorBlind ? 1 : 0}`, W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th, g.stage, 1));
+    return kit && kit.layer(layerKey(g, k), W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th, g.stage, 1));
   }
   function fgLayer(g, L) {   // everything in front of the far skyline
     const th = themeOf(g), k = Math.max(0.5, Math.min(1.5, L.s));
-    return kit && kit.layer2 && kit.layer2(`${g.skin}|${g.stage}|${k.toFixed(1)}|${OPT.colorBlind ? 1 : 0}`, W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th, g.stage, 2));
+    return kit && kit.layer2 && kit.layer2(layerKey(g, k), W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th, g.stage, 2));
   }
   // boss phase 2: under 40% of the serpent left the arena heats up (bg_world.js drawBossPhase); eases in, one flash and shake when it starts
   function bossPhase(g) {
