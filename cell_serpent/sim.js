@@ -697,15 +697,18 @@ export function buildPath(n) {
   for (let i = poly.length - 1; i > 0; i--) if (poly[i].y >= LINE_Y) last = i; else break;
   return { pts: poly, cum, len: cum[last], kind: k };
 }
-export function pointAt(path, s) {
+// pointInto writes the point into `out` (no allocation, used by the sim step); pointAt returns a fresh object for everyone else
+export function pointInto(path, s, out) {
   const { pts, cum } = path;
-  if (s <= 0) { const a = pts[0], b = pts[1], d = Math.hypot(b.x - a.x, b.y - a.y) || 1; return { x: a.x + ((b.x - a.x) / d) * s, y: a.y + ((b.y - a.y) / d) * s }; }
-  if (s >= cum[cum.length - 1]) { const p = pts[pts.length - 1]; return { x: p.x, y: p.y + (s - cum[cum.length - 1]) }; }
+  if (s <= 0) { const a = pts[0], b = pts[1], d = Math.hypot(b.x - a.x, b.y - a.y) || 1; out.x = a.x + ((b.x - a.x) / d) * s; out.y = a.y + ((b.y - a.y) / d) * s; return out; }
+  if (s >= cum[cum.length - 1]) { const p = pts[pts.length - 1]; out.x = p.x; out.y = p.y + (s - cum[cum.length - 1]); return out; }
   let lo = 0, hi = cum.length - 1;
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }
   const t = (s - cum[lo]) / (cum[hi] - cum[lo] || 1);
-  return { x: pts[lo].x + (pts[hi].x - pts[lo].x) * t, y: pts[lo].y + (pts[hi].y - pts[lo].y) * t };
+  out.x = pts[lo].x + (pts[hi].x - pts[lo].x) * t; out.y = pts[lo].y + (pts[hi].y - pts[lo].y) * t; return out;
 }
+export const pointAt = (path, s) => pointInto(path, s, { x: 0, y: 0 });
+const SC_POS = { x: 0, y: 0 }, SC_A = { x: 0, y: 0 }, SC_B = { x: 0, y: 0 };
 
 // ---------------------------------------------------------------- player
 const mergeBonus = (a, b) => { const o = { ...a }; for (const k of Object.keys(b)) o[k] = (o[k] || 0) + b[k]; return o; };
@@ -752,7 +755,9 @@ function spawnSnake(g, n, o = {}) {
     let hp = hpB * ramp(i) * KIND[kind].hp * bossMul(i) *(0.9 + g.rand() * 0.2);
     hp = i === 0 ? 1 : Math.max(1, Math.round(hp));   // the face has no real HP: it is shielded until it is alone
     const pos = pointAt(path, ps);
-    segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0 });
+    segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0,
+      // every field a cell ever gets is declared here in a fixed order, so all cells share one hidden class and the step stays optimised
+      tp: ps, vx: 0, vy: 0, wave: false, gloom: false, warded: false, gold: false, goldT: 0, ward: false, lull: false, drum: false, choir: false, quartet: false, qPopped: false });
     ps -= (r + segRadius(boss, i + 1, len)) * 0.78;
   }
   // yellow upgrade cells: pop one to choose an upgrade. About one per 7 cells (at least 3), spread along the snake.
@@ -773,7 +778,7 @@ function spawnSnake(g, n, o = {}) {
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
   const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED * (n >= 18 && !isBossStage(n) ? RING_LATE : 1) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
   segs.hpMax = segs.reduce((a, s) => a + s.max, 0);
-  g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
+  g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3, healT: undefined, drum: false, lane: null, gloomW: undefined, napT: 0 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
 }
 
@@ -910,6 +915,7 @@ export function createGame(opts = {}) {
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
     groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, faceMax: 0, bombsPopped: 0, dangerT: 0, danger: 0, mod: null, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
     encore: 0, encoreUsed: 0, beam: null, goldPopped: 0, clutches: 0, qStreak: 0, qBest: 0,
+    encoreReady: false, cp: null, beatShots: 0,   // declared up front so the game object keeps one hidden class
   };
   startStage(g, opts.stage || 1);
   return g;
@@ -941,11 +947,12 @@ function eachTarget(g, fn) {
 }
 function nearestTarget(g, x, y, maxD = 1e9) {
   let best = null, bd = maxD;
-  eachTarget(g, s => {
-    if (!visible(s)) return;
+  for (let ni = 0; ni < g.snakes.length; ni++) { const sg = g.snakes[ni].segs; for (let si = 0; si < sg.length; si++) {
+    const s = sg[si];
+    if (s.hp <= 0 || s.shield || s.wave || !visible(s)) continue;
     const d = Math.hypot(s.x - x, s.y - y) - s.r;
     if (d < bd) { bd = d; best = s; }
-  });
+  } }
   return best;
 }
 const frontSegs = g => g.snakes.map(sn => sn.segs[0]).filter(s => s && visible(s));
@@ -1245,7 +1252,8 @@ function updateWeapons(g, dt, canFire) {
     p.orbAng += dt * (3.2 + 0.2 * dl);
     for (let i = 0; i < 1 + dl; i++) {
       const pos = daggerPos(g, i);
-      eachTarget(g, s => { if (s.orbCd <= 0 && Math.hypot(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } });
+      for (let ni = 0; ni < g.snakes.length; ni++) { const sg = g.snakes[ni].segs; for (let si = 0; si < sg.length; si++) { const s = sg[si];
+        if (s.hp > 0 && !s.shield && !s.wave && s.orbCd <= 0 && Math.hypot(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } } }
     }
   }
   // massage stick (sweeping bar)
@@ -1253,27 +1261,30 @@ function updateWeapons(g, dt, canFire) {
   if (sl) {
     for (let k = 0; k < (sl >= 4 ? 2 : 1); k++) {
       const sg = stickSeg(g, k);
-      eachTarget(g, s => {
-        if (s.orbCd > 0) return;
+      for (let ni = 0; ni < g.snakes.length; ni++) { const sq = g.snakes[ni].segs; for (let si = 0; si < sq.length; si++) { const s = sq[si];
+        if (s.hp <= 0 || s.shield || s.wave || s.orbCd > 0) continue;
         if (distToSeg(s.x, s.y, sg.x0, sg.y0, sg.x1, sg.y1) < s.r + 12) { s.orbCd = 0.35; damageSegAs('stick', g, s, 1.8 * (1 + 0.35 * sl) * dm('stick'), false, s.x, s.y); }
-      });
+      } }
     }
   }
   // medical towers pulse
   const tl = lv(g, 'tower');
-  for (const t of g.towers) {
+  for (let ti = 0; ti < g.towers.length; ti++) {
+    const t = g.towers[ti];
     t.cd -= dt; if (t.pulse > 0) t.pulse -= dt;
     if (t.cd <= 0 && canFire) {
       t.cd = (2.4 - 0.15 * tl) * cm; t.pulse = 0.5;
       const R = 170 + 18 * tl;
       g.events.push({ t: 'pulse', x: t.x, y: t.y, r: R });
-      eachTarget(g, s => { if (Math.hypot(s.x - t.x, s.y - t.y) < R + s.r) damageSegAs('tower', g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); });
+      for (let ni = 0; ni < g.snakes.length; ni++) { const sg = g.snakes[ni].segs; for (let si = 0; si < sg.length; si++) { const s = sg[si];
+        if (s.hp > 0 && !s.shield && !s.wave && Math.hypot(s.x - t.x, s.y - t.y) < R + s.r) damageSegAs('tower', g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); } }
     }
   }
   // swab zones tick
   for (let i = g.zones.length - 1; i >= 0; i--) {
     const z = g.zones[i]; z.life -= dt; z.tick -= dt;
-    if (z.tick <= 0) { z.tick = 0.3; eachTarget(g, s => { if (Math.hypot(s.x - z.x, s.y - z.y) < z.r + s.r) damageSegAs('swab', g, s, z.dmg, false, s.x, s.y); }); }
+    if (z.tick <= 0) { z.tick = 0.3; for (let ni = 0; ni < g.snakes.length; ni++) { const sg = g.snakes[ni].segs; for (let si = 0; si < sg.length; si++) { const s = sg[si];
+      if (s.hp > 0 && !s.shield && !s.wave && Math.hypot(s.x - z.x, s.y - z.y) < z.r + s.r) damageSegAs('swab', g, s, z.dmg, false, s.x, s.y); } } }
     if (z.life <= 0) g.zones.splice(i, 1);
   }
   // maws execute
@@ -1281,10 +1292,10 @@ function updateWeapons(g, dt, canFire) {
     const m = g.maws[i]; m.life -= dt; m.tick -= dt;
     if (m.tick <= 0) {
       m.tick = 0.2;
-      eachTarget(g, s => {
-        if (Math.hypot(s.x - m.x, s.y - m.y) >= m.r + s.r) return;
+      for (let ni = 0; ni < g.snakes.length; ni++) { const sg = g.snakes[ni].segs; for (let si = 0; si < sg.length; si++) { const s = sg[si];
+        if (s.hp <= 0 || s.shield || s.wave || Math.hypot(s.x - m.x, s.y - m.y) >= m.r + s.r) continue;
         if (s.hp <= s.max * m.exec) damageSegAs('maw', g, s, s.hp + 1, false, s.x, s.y); else damageSegAs('maw', g, s, m.dmg, false, s.x, s.y);
-      });
+      } }
     }
     if (m.life <= 0) g.maws.splice(i, 1);
   }
@@ -1305,6 +1316,7 @@ function distToSeg(px, py, x0, y0, x1, y1) {
 }
 
 // ---------------------------------------------------------------- step
+const BULLET_SRC = { needle: 'needles', snot: 'dragon', bubble: 'bubble' };
 export function step(g, dt, input) {
   if (g.phase !== 'play' && g.phase !== 'clear') return;
   g.t += dt;
@@ -1358,10 +1370,10 @@ export function step(g, dt, input) {
     for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
     wardTick(sn); gloomTick(g, sn); choirTick(sn, dt); if (g.phase === 'play') quartetTick(g, sn, dt);
     if (sn.breach && g.phase === 'play') { g.leaks++; g.events.push({ t: 'leak', x: segs[0].x, y: LINE_Y }); loseRun(g); }
-    for (const s of segs) {
-      const ox = s.x, oy = s.y;
+    for (let si = 0; si < segs.length; si++) {
+      const s = segs[si], ox = s.x, oy = s.y;
       s.ps = s.tp >= s.ps ? s.tp : Math.max(s.tp, s.ps - 320 * dt);
-      const pos = pointAt(path, s.ps), pa = pointAt(path, s.ps - 8), pb = pointAt(path, s.ps + 8);
+      const pos = pointInto(path, s.ps, SC_POS), pa = pointInto(path, s.ps - 8, SC_A), pb = pointInto(path, s.ps + 8, SC_B);
       s.x = pos.x; s.y = pos.y; s.ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
       s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
       stageHp += Math.max(0, s.hp);
@@ -1395,18 +1407,21 @@ export function step(g, dt, input) {
     b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
     let dead = b.life <= 0 || b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30;
     if (!dead) {
-      for (const sn of g.snakes) for (const s of sn.segs) {
-        if (dead || s.hp <= 0 || s.shield || s.wave || b.hit.includes(s) || Math.hypot(s.x - b.x, s.y - b.y) >= s.r + b.r) continue;
+      for (let ni = 0; ni < g.snakes.length; ni++) { const sn = g.snakes[ni], sg = sn.segs; for (let si = 0; si < sg.length; si++) { const s = sg[si];
+        if (dead || s.hp <= 0 || s.shield || s.wave) continue;
+        const ddx = s.x - b.x, ddy = s.y - b.y, rr = s.r + b.r;
+        if (ddx * ddx + ddy * ddy >= rr * rr || b.hit.includes(s)) continue;
         b.hit.push(s);
-        damageSegAs(({ needle: 'needles', snot: 'dragon', bubble: 'bubble' })[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g); if (b.beat && g.groove < GROOVE_MAX) g.groove += 0.5;
+        damageSegAs(BULLET_SRC[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g); if (b.beat && g.groove < GROOVE_MAX) g.groove += 0.5;
         if (b.slow) sn.slow = Math.max(sn.slow, b.slow);
         if (b.splash > 0) {
           const sd = b.dmg * (b.kind === 'bubble' ? 2.2 : 0.5);
-          eachTarget(g, (q, qs) => { if (q !== s && Math.hypot(q.x - s.x, q.y - s.y) < b.splash + q.r) { damageSeg(g, q, sd, false, q.x, q.y); if (b.slow) qs.slow = Math.max(qs.slow, b.slow); } });
+          for (let nj = 0; nj < g.snakes.length; nj++) { const qs = g.snakes[nj], qg = qs.segs; for (let qi = 0; qi < qg.length; qi++) { const q = qg[qi];
+            if (q.hp > 0 && !q.shield && !q.wave && q !== s && Math.hypot(q.x - s.x, q.y - s.y) < b.splash + q.r) { damageSeg(g, q, sd, false, q.x, q.y); if (b.slow) qs.slow = Math.max(qs.slow, b.slow); } } }
           g.events.push({ t: b.kind === 'bubble' ? 'burst' : 'splash', x: s.x, y: s.y, r: b.splash });
         }
         if (b.pierce-- <= 0) dead = true;
-      }
+      } }
     }
     if (dead) g.bullets.splice(bi, 1);
   }

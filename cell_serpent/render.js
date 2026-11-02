@@ -42,8 +42,11 @@ export function createRenderer(canvas, art, kit) {
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; blit(spr, x, y, size, rot, false, Math.min(0.8, a)); ctx.restore();
   }
   // glows and text are baked once and blitted: gradients and stroked text are the expensive part of a frame
+  const glowMemo = new Map(); let glowKit = null;
   function glow(x, y, r, col, a = 0.6) {
-    const spr = kit && kit.bake('glow|' + col, 64, 64, g => { const gr = g.createRadialGradient(0, 0, 0, 0, 0, 32); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(-32, -32, 64, 64); });
+    if (glowKit !== kit) { glowKit = kit; glowMemo.clear(); }   // one Map lookup per glow instead of a new 'glow|' string and a cache lookup
+    let spr = glowMemo.get(col);
+    if (spr === undefined) { spr = kit && kit.bake('glow|' + col, 64, 64, g => { const gr = g.createRadialGradient(0, 0, 0, 0, 0, 32); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(-32, -32, 64, 64); }); if (spr) glowMemo.set(col, spr); }
     ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = 'lighter';
     if (spr) ctx.drawImage(spr.c, x - r, y - r, r * 2, r * 2);
     else { const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
