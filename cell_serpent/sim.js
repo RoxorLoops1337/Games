@@ -299,11 +299,11 @@ const CAP_UP = Object.fromEntries(CAPSULE_UPS.map(u => [u.id, u]));
 // Beats (gold music-note coins) come from cells and clears. Sparkles (pink star gems) come from
 // clearing a stage for the first time. Fragments come from chest cells and loot boxes.
 export const META = [
-  { id: 'atk', name: 'Volume', max: 12, base: 30, grow: 1.45, desc: l => `+${10 * l}% damage` },
-  { id: 'crt', name: 'Pitch', max: 10, base: 30, grow: 1.45, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
-  { id: 'cdn', name: 'Tempo', max: 10, base: 30, grow: 1.45, desc: l => `-${5 * l}% cooldowns` },
-  { id: 'vit', name: 'Stamina', max: 10, base: 25, grow: 1.45, desc: l => `The snake crawls ${2 * l}% slower` },
-  { id: 'for', name: 'Fame', max: 10, base: 40, grow: 1.5, desc: l => `+${10 * l}% Beats` },
+  { id: 'atk', name: 'Volume', max: 15, base: 30, grow: 1.45, desc: l => `+${10 * l}% damage` },
+  { id: 'crt', name: 'Pitch', max: 13, base: 30, grow: 1.45, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
+  { id: 'cdn', name: 'Tempo', max: 12, base: 30, grow: 1.45, desc: l => `-${5 * l}% cooldowns` },
+  { id: 'vit', name: 'Stamina', max: 13, base: 25, grow: 1.45, desc: l => `The snake crawls ${2 * l}% slower` },
+  { id: 'for', name: 'Fame', max: 13, base: 40, grow: 1.5, desc: l => `+${10 * l}% Beats` },
   { id: 'rev', name: 'Encore', max: 1, base: 400, grow: 1, desc: () => 'Get back up once per run' },
 ];
 export const metaCost = (def, lvl) => Math.round(def.base * Math.pow(def.grow, lvl));
@@ -587,9 +587,9 @@ export function applyResult(save, r) {
 export const isBossStage = n => n % 5 === 0;
 // Every stage the snakes crawl a little faster.
 export const speedMul = n => Math.min(2.6, 1 + 0.035 * (n - 1));
-export const hpBase = n => 12 * (12.5 * Math.pow(1.2, Math.min(n - 1, 13)) * Math.pow(1.055, Math.max(0, n - 14)) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
+export const hpBase = n => 12 * (12.5 * Math.pow(1.2, Math.min(n - 1, 13)) * Math.pow(1.047, Math.max(0, n - 14)) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
 export const snakeLength = n => Math.min(150, 32 + 4 * (n - 1) + (isBossStage(n) ? 12 : 0));
-export const arrivalTime = n => 0.74 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) * (isBossStage(n) ? 0.9 : 1);   // bosses crawl a bit faster too   // seconds for the face to reach the membrane if you do nothing
+export const arrivalTime = n => 0.74 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) * (isBossStage(n) ? (n >= 20 ? 1 : 0.9) : 1);   // bosses crawl a bit faster too   // seconds for the face to reach the membrane if you do nothing
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
 export const SKINS = ['love', 'rust', 'sneezy', 'grumpy', 'sleepy', 'disco', 'sour', 'mighty', 'frosty', 'gloomy'];
 export const skinFor = n => SKINS[(n - 1) % SKINS.length];
@@ -618,6 +618,8 @@ export const stageKind = n => (n % 6 === 0 ? 'ring' : (n % 7 === 0 || n % 10 ===
 export const KIND_LABEL = { lane: '', double: 'Two snakes', ring: 'Circle' };
 export const RING = { cx: W / 2, cy: 720, R: 175 };
 export const BOSS_HP = [0.8, 2.4, 0.5];   // boss cell HP multiplier at the face and at the tail (a flat 2.4 left the first yellow cell out of reach: typical players got 4 to 9 percent of the boss)
+export const RING_LATE = 0.9;   // from stage 18 the spiral crawls a little slower still (circle stages 18, 42 and 48 were walls)
+export const HAIRPIN_LATE = 0.9;   // the tall-hairpin lanes (stages 20, 29, 38, 47) were walls from stage 20 on: the snake crawls a little slower there
 export const RING_SPEED = 0.8;   // the spiral is long and most of it is out of reach of the straight shot, so the snake crawls slower in circle stages
 export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: stageKind(n) === 'ring' ? 'Spiral' : PATH_KINDS[pathKind(n)], kind: stageKind(n), mod: stageMod(n), hp: Math.round(hpBase(n)) });
 
@@ -759,7 +761,7 @@ function spawnSnake(g, n, o = {}) {
   markGold(g, n, segs, len);
   markSpecials(g, n, segs, len);
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
-  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED : 1);
+  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED * (n >= 18 && !isBossStage(n) ? RING_LATE : 1) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
   segs.hpMax = segs.reduce((a, s) => a + s.max, 0);
   g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);

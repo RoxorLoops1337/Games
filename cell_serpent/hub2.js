@@ -172,7 +172,7 @@ export function createHub2(c) {
     META.forEach((d, i) => {
       const lvl = s.meta[d.id] || 0, maxed = lvl >= d.max, cost = metaCost(d, lvl);
       const card = document.createElement('div'); card.className = 'sc' + (maxed ? ' maxed' : ''); card.dataset.id = d.id;
-      card.innerHTML = `<div class="sct">${maxed ? 'Max Level' : d.max === 1 ? (lvl ? 'Owned' : 'Not owned') : 'Level ' + lvl}</div><div class="sci">${ico(STATICON[d.id], 40) || ''}</div><div class="spips">${d.max <= 12 && d.max > 1 ? Array.from({ length: d.max }, (_, q) => `<i class="${q < lvl ? 'on' : ''}"></i>`).join('') : ''}</div><div class="scn">${d.name}</div><div class="scd">${d.desc(Math.max(1, maxed ? lvl : lvl + 1))}</div><button class="btn small go" ${maxed || s.beats < cost ? 'disabled' : ''}>${maxed ? '✔' : cost + ' ' + curImg('beats')}</button>`;
+      card.innerHTML = `<div class="sct">${maxed ? 'Max Level' : d.max === 1 ? (lvl ? 'Owned' : 'Not owned') : 'Level ' + lvl}</div><div class="sci">${ico(STATICON[d.id], 40) || ''}</div><div class="spips">${d.max <= 15 && d.max > 1 ? Array.from({ length: d.max }, (_, q) => `<i class="${q < lvl ? 'on' : ''}"></i>`).join('') : ''}</div><div class="scn">${d.name}</div><div class="scd">${d.desc(Math.max(1, maxed ? lvl : lvl + 1))}</div><button class="btn small go" ${maxed || s.beats < cost ? 'disabled' : ''}>${maxed ? '✔' : cost + ' ' + curImg('beats')}</button>`;
       card.querySelector('button').onclick = () => { if (buyMeta(save(), d.id)) { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); } };
       core.appendChild(card);
     });
