@@ -2700,6 +2700,23 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 #revive #rvGo{font-size:24px;padding:12px 28px;min-width:240px}
 @media (max-height:780px){#revive .rvwipe{display:none}}
 /* end @css:35-t-cards */
+/* @css:36-g-polish */
+  /* pets and gear screens: one header style, one chip style, centred card grids, chips that fit a 360 px phone */
+  #tabGear .filters{flex-wrap:wrap;justify-content:center;gap:8px;margin-bottom:10px}
+  #tabGear .filters .ttl{flex:1 0 100%;text-align:center;font-size:28px;font-weight:900;letter-spacing:.04em;margin:0 0 2px}
+  #tabGear .filters button{flex:0 1 auto;min-width:56px;padding:0 14px;min-height:44px;border-radius:99px;font-size:13px;border:2px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:var(--ink)}
+  #tabGear .filters button.on{background:linear-gradient(180deg,#d9fbff,#4fd8f0);color:#10131c;border-color:#fff}
+  #tabGear .kgrid{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+  #tabGear .kgrid>.kcard{flex:0 0 calc((100% - 24px)/4);min-width:0}
+  #tabGear .kcard .kname{overflow-wrap:normal;word-break:normal;hyphens:none;font-size:12px;letter-spacing:-.02em;line-height:1.1;padding:0 1px}
+  #tabGear .kcard{padding-left:2px;padding-right:2px}
+  #tabPets h2{margin-top:2px} #tabPets .sub{margin-bottom:6px}
+  @media (max-width:400px){
+    #tabGear .filters{gap:6px} #tabGear .filters button{flex:1 1 0;padding:0 6px;min-width:44px}
+    #petList .fchips{flex-wrap:nowrap;gap:5px} #petList .fchips .fchip{padding:0 8px;font-size:12px;flex:0 1 auto}
+    .colhead{gap:10px;padding:8px 10px} .colhead .colt span{display:block;font-size:12px;line-height:1.2}
+  }
+/* end @css:36-g-polish */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -2811,7 +2828,7 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
     <div class="tab" id="tabSkills"><h2>SKILLS</h2><div class="sub">Pick your five.</div><div class="loadout" id="loadoutRow"></div><div class="presets" id="presetRow"></div><div class="tiles" id="skillList"></div></div>
     <div class="tab" id="tabPets"><h2>PETS</h2><div class="sub">Little friends.</div><div class="tiles" id="petList"></div></div>
     <div class="tab" id="tabStats"><div class="herobox"><div class="stage"><i class="spot"></i><img class="duo" src="assets/duo_idle.png" alt=""><i class="ped"></i></div><div id="heroBox"></div></div><div class="lvbar" id="lvBar"></div><div id="statList"></div></div>
-    <div class="tab" id="tabGear"><div class="filters" id="gearFilters"><b class="ttl">Collection</b><button data-f="All">All</button><button data-f="Owned">Owned</button><button data-f="Set">Set</button><button data-f="Upgrade">Ready</button></div><div id="gearBody"></div></div>
+    <div class="tab" id="tabGear"><div class="filters" id="gearFilters"><b class="ttl">GEAR</b><button data-f="All">All</button><button data-f="Owned">Owned</button><button data-f="Set">Set</button><button data-f="Upgrade">Ready</button></div><div id="gearBody"></div></div>
     <div class="tab" id="tabShop"><h2>SHOP</h2><div class="sub">Treats and surprises.</div><div class="tiles" id="boxList"></div></div>
   </div>
   <div class="bt-dock" id="btDock"><button class="bt-claim" id="btClaim" type="button" hidden></button><div class="chips" id="stChips"></div><button class="btn" id="stGo">START THE BATTLE</button></div>
