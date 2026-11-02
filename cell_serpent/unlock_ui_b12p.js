@@ -4,6 +4,7 @@
 import {
   TABS, UNLOCKS, TAB_UNLOCK, isUnlocked, isLegacy, visibleTabs, nextLockedTab, pendingHints, inTabHint, markSeen, isSeen, tabLayout, unlockAllOn,
 } from './unlock_b12p.js';
+import { tabUnlockJuice } from './juice_b13b.js';
 
 const SEL_TAB = tab => `.tabs button[data-tab="${tab}"]`;
 // where a Battle element hint points (data-uk is set on the side chips by hub2.renderSide)
@@ -20,6 +21,7 @@ const SEL_IN = {
 };
 const visible = el => { if (!el || !el.getBoundingClientRect) return false; const r = el.getBoundingClientRect(); if (r.width < 4 || r.height < 4) return false; for (let a = el; a && a !== document.body; a = a.parentElement) { if (a.hidden) return false; const cs = getComputedStyle(a); if (cs.display === 'none' || cs.visibility === 'hidden') return false; } return true; };
 
+const TABS_LABEL = { Skills: 'Skills', Stats: 'Stats', Pets: 'Pets', Shop: 'Shop', Gear: 'Gear', Battle: 'Battle' };
 export function createUnlockUI(c) {
   const doc = document, root = doc.documentElement, order = c.order;   // order: the live array of open tabs (bindHubSwipe and tabDir read it)
   let prev = null, card = null, cardFor = null, teaser = null, pumpT = 0, scrollBound = false;
@@ -51,7 +53,7 @@ export function createUnlockUI(c) {
     const n = vis.length + (tz ? 1 : 0), L = tabLayout(n, nav.clientWidth || innerWidth);
     nav.style.setProperty('--n', String(n)); nav.classList.toggle('few', L.few);
     if (L.few) nav.style.setProperty('--fw', L.w + 'px'); else nav.style.removeProperty('--fw');
-    for (const b of fresh) { b.classList.remove('arrive'); void b.offsetWidth; b.classList.add('arrive'); if (c.audio) c.audio.play('levelup'); setTimeout(() => b.classList.remove('arrive'), 1400); }
+    for (const b of fresh) { b.classList.remove('arrive'); void b.offsetWidth; b.classList.add('arrive'); if (c.audio) c.audio.play('unlockfan'); setTimeout(() => b.classList.remove('arrive'), 1400); tabUnlockJuice(b, null, (TABS_LABEL[b.dataset.tab] || b.dataset.tab)); }
     prev = vis.slice();
   }
 

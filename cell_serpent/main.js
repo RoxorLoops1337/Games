@@ -13,6 +13,7 @@ import { createAudio } from './audio.js';
 import { nextGoal, closeCall, renderGoal } from './result_goal.js';
 import { flyPick } from './pickfly.js';
 import { newAim, aimDown, aimMove, aimUp, aimTick, aimAssisted } from './aim_b12f.js';
+import { levelUpJuice } from './juice_b13b.js';
 import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint, progMeter } from './result_fx.js';
 import { applyCbPalette, paintCbStrip, applyCbRarity } from './cb_palette.js';
 import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.js';
@@ -769,6 +770,7 @@ function showResult() {
   if (out.levelUps) rows.push(`<div class="r">⭐ Level ${levelInfo(save.xp).lv}!</div>`);
   const li1 = levelInfo(save.xp), reduce = save.settings.reduceMotion;
   levelBar(li0, li1, reduce);
+  if (out.levelUps && !reduce) setTimeout(() => { if (mode === 'over' && $('result').classList.contains('on')) levelUpJuice($('rLv'), li1.lv, audio); }, 1100);   // b13b: the badge pops once the bar has filled
   { const pct = Math.floor((r.progress || 0) * 100), best = out.first || out.starsGained > 0 || (!r.won && !r.mode && !r.hard && pct > out.prevPct && out.prevPct > 0);
     $('rRibbon').textContent = best ? (out.first ? 'FIRST CLEAR!' : out.starsGained > 0 ? 'NEW BEST STARS!' : 'NEW BEST ' + pct + '%') : ''; $('rRibbon').classList.toggle('on', !!best); celebrateBest($('rRibbon'), { reduce, delta: best && !out.first && !(out.starsGained > 0) ? pct - out.prevPct : 0, play: () => audio.play('star3') }); }
   if (r.cp50) rows.push(`<div class="r">⚡ +10 Voice back</div>`);

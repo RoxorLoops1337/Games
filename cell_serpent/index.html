@@ -2700,6 +2700,15 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 #revive #rvGo{font-size:24px;padding:12px 28px;min-width:240px}
 @media (max-height:780px){#revive .rvwipe{display:none}}
 /* end @css:35-t-cards */
+/* @css:36-b-juice */
+  .jb13-layer{position:fixed;inset:0;z-index:90;pointer-events:none;overflow:hidden}
+  .jb13-sp{position:absolute;border-radius:50%;box-shadow:0 0 6px currentColor;will-change:transform,opacity}
+  .jb13-ring{position:absolute;width:44px;height:44px;border:3px solid #ffd84d;border-radius:50%;box-sizing:border-box;will-change:transform,opacity}
+  .jb13-txt{position:absolute;font-weight:900;font-size:20px;letter-spacing:.03em;white-space:nowrap;text-shadow:0 2px 0 #1a1040,0 0 10px #1a1040;will-change:transform,opacity}
+  .sc.jb13-bought{animation:jb13Buy .8s cubic-bezier(.3,1.5,.5,1)}
+  @keyframes jb13Buy{0%{transform:scale(1);box-shadow:0 0 0 0 #9dff6d}30%{transform:scale(1.06);box-shadow:0 0 22px 4px #9dff6dcc}100%{transform:scale(1);box-shadow:0 0 0 0 #9dff6d00}}
+  html.rm .sc.jb13-bought{animation:none}
+/* end @css:36-b-juice */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
