@@ -127,10 +127,11 @@ if (chromium) {
             if (await p.evaluate(() => document.getElementById('revive').classList.contains('on'))) { await p.waitForTimeout(700); await audit('revive'); await p.evaluate(() => document.getElementById('rvNo').click()); }
             if (await p.evaluate(() => document.getElementById('result').classList.contains('on'))) break;
           }
+          await p.waitForFunction(() => document.getElementById('result').classList.contains('on'), null, { timeout: 25000 }).catch(() => { fails.push(`${tag} result-${kind}: the result screen never opened`); });   // under load the result can come late
           await p.waitForTimeout(2000); await audit('result-' + kind);
           const pos = await p.evaluate(() => ['rRetry', 'rHub'].map(id => { const r = document.getElementById(id).getBoundingClientRect(); return { top: r.top / innerHeight, bottom: r.bottom }; }));
           n++; for (const q of pos) { if (q.top < 0.5) fails.push(`${tag} result-${kind}: RETRY/MENU in the upper half`); if (q.bottom > h) fails.push(`${tag} result-${kind}: RETRY/MENU off screen`); }
-          await p.evaluate(() => document.getElementById('rHub').click()); await p.waitForTimeout(450);
+          await p.evaluate(() => document.getElementById('rHub').click()); await p.waitForFunction(() => window.CS.mode() === 'hub', null, { timeout: 8000 }).catch(() => {}); await p.waitForTimeout(500);   // the close curtain swaps to the hub after its slide
         }
         if (errs.length) fails.push(`${tag}: ${errs.join(' | ')}`);
         await ctx.close();
