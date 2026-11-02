@@ -30,7 +30,7 @@ import { setupTitle11 } from './title_b11.js';
 import { deathCoach } from './coach_b11.js';
 import { firstGoalHTML, welcomeBack, welcomeHTML, hoursAway, stampVisit } from './title12b.js';
 import { bakeCardArt } from './card_bake.js';
-import { partnerIds, markPartners, betterRoll, luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand, cardFoilHTML, markReroll, chainPulse } from './cards_ui.js';
+import { partnerIds, markPartners, betterRoll, luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand, cardFoilHTML, markReroll, chainPulse, hudBottomPx, guardAllows, trackPress, armCards } from './cards_ui.js';
 import { offeredLinks, markLinks, lockState, lockHTML, toggleLock, keepLocked, dealChipHTML, pickBurst, lockKey } from './cards_b10.js';
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { paintTabIcons, bindHubSwipe, setTabCount, onTabUp } from './tabs_ui.js';
@@ -559,7 +559,7 @@ function showCards() {
   bakeCardArt();
   if (!lockState.keep) lockState.i = -1; lockState.keep = false;
   const wrap = $('cards'); wrap.innerHTML = ''; pickLock = false; $('levelup').classList.remove('flashing');
-  const top = Math.max(0, ...g.choices.map(c => c.rarity || 0)); $('levelup').dataset.top = top; { const bn = $('levelup').querySelector('.banner'); if (bn) bn.dataset.lv = g.level | 0; } $('bandSheet').classList.remove('on');
+  const top = Math.max(0, ...g.choices.map(c => c.rarity || 0)); $('levelup').dataset.top = top; { const bn = $('levelup').querySelector('.banner'); if (bn) bn.dataset.lv = g.level | 0; } $('bandSheet').classList.remove('on'); wrap.dataset.n = g.choices.length; try { $('levelup').style.setProperty('--lvtop', hudBottomPx(R && R.layout(), innerWidth) + 'px'); } catch (e) { /* css fallback */ }
   for (const c of g.choices) if (c.kind === 'passive' && !c.stat) c.stat = passiveStat(g, c);
   { const old = document.querySelector('.rvl'); if (old) old.remove(); const rv = revealHTML(top); if (rv) { document.body.insertAdjacentHTML('beforeend', rv); setTimeout(() => { const e = document.querySelector('.rvl'); if (e) e.remove(); }, 1900); } }
   g.choices.forEach((c, i) => {
@@ -571,19 +571,21 @@ function showCards() {
     const stat = dm ? `<div class="delta"><span class="dl">${dm[1]}</span><span class="dv"><i>${dm[2]}</i><em>→</em><b>${dm[3]}</b></span>${ghostBarHTML(mt)}</div>` : c.stat ? `<div class="delta"><span class="dv"><b>${c.stat}</b></span>${ghostBarHTML(mt)}</div>` : '';
     const syn = synergyHint(g, c);
     const fx = rn >= 4 ? '<span class="rays"></span>' + Array.from({ length: rn === 5 ? 8 : 5 }, (_, k) => `<span class="pt" style="--x:${(8 + k * (84 / (rn === 5 ? 7 : 4))).toFixed(0)}%;--t:${(1.6 + (k * 0.37) % 1.2).toFixed(2)}s;--w:${((k * 0.29) % 1.5).toFixed(2)}s"></span>`).join('') : '';
-    b.innerHTML = `${fx}${cardFoilHTML(rn)}<span class="key">${i + 1}</span>${g.rerolls > 0 ? lockHTML(i) : ''}<div class="ic">${foilHTML(rn)}${c.kind === 'weapon' ? levelRingHTML(mt) : ''}${icon(c.id)}<span class="kd">${kindLabel(c)}</span>${c.isNew ? '<span class="newtag">NEW</span>' : ''}</div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}${syn ? `<div class="syn">${syn}</div>` : ''}<div class="pips">${pips}</div></div><span class="shine"></span>`;
+    b.innerHTML = `${fx}${cardFoilHTML(rn)}<span class="key">${i + 1}</span>${g.rerolls > 0 ? lockHTML(i) : ''}<div class="ic">${foilHTML(rn)}${c.kind === 'weapon' ? levelRingHTML(mt) : ''}${icon(c.id)}<span class="kd">${kindLabel(c)}</span>${c.isNew ? '<span class="newtag">NEW</span>' : ''}</div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}${syn ? `<div class="syn">${syn}</div>` : ''}<div class="pips">${pips}</div></div><span class="shine"></span><span class="rdy" aria-hidden="true"></span>`;
     b.setAttribute('aria-label', `Option ${i + 1}: ${c.name}, ${RARITY_WORDS[rn]} rarity${c.isNew ? ', new' : ''}. ${c.desc}${c.stat ? '. ' + c.stat : ''}`);
-    b.onclick = e => { if (e.target.closest && e.target.closest('.lockb')) { toggleLock(wrap, i); audio.play('click'); return; } pick(i); };
+    b.onclick = e => { if (e.target.closest && e.target.closest('.lockb')) { toggleLock(wrap, i); audio.play('click'); return; } if (!guardAllows(lvGuard, i, e.detail > 0, performance.now())) return; pick(i); };
     if (lockState.i === i && g.rerolls > 0) b.classList.add('kept');
     wrap.appendChild(b);
   });
-  markLinks(wrap, offeredLinks(g, g.choices));
+  markLinks(wrap, offeredLinks(g, g.choices)); armCards(wrap, lvGuard, performance.now());
   { const bonus = Math.round((20 + 4 * g.stage) * g.p.coinMul); $('skipBtn').innerHTML = skipHTML(bonus); $('skipBtn').setAttribute('aria-label', 'Skip for ' + bonus + ' beats'); }
   $('refreshBtn').disabled = g.rerolls <= 0; $('refreshLeft').innerHTML = '<span class="rp">' + refreshPips(g) + '</span>'; $('refreshBtn').classList.toggle('empty', g.rerolls <= 0); $('luckBox').innerHTML = luckHTML(g) + (rrChip ? dealChipHTML(g, g.choices) : ''); rrChip = false; $('buildStrip').innerHTML = buildHTML(g, icon); markPartners($('buildStrip'), partnerIds(g, g.choices));
   cardsFor = g.choices; { let mr = 0; for (const c of g.choices) mr = Math.max(mr, c.rarity || 0); audio.play('card' + mr); if (mr >= 3) setTimeout(() => { if (mode === 'play' && g.phase === 'levelup') audio.play('stinger'); }, 220); } show('levelup');
   announce('Choose an upgrade. ' + g.choices.map((c, i) => `${i + 1}: ${c.name}, ${RARITY_WORDS[c.rarity || 0]}`).join('. ') + '. Press 1, 2 or 3, or Tab to a card and press Enter.' + (g.rerolls > 0 ? ' Press L then a number to lock a card for the refresh.' : ''));
 }
 let pickLock = false, rrChip = false;
+// 35-t: pointer taps are ignored for 450 ms after the cards appear and must press and release on the same card; keys and screen readers are never guarded
+const lvGuard = { at: 0, down: -1, moved: false }; trackPress($('cards'), lvGuard);
 { const bs = $('buildStrip'), sh = $('bandSheet'); const tog = () => { if (!bs.innerHTML) return; if (!sh.classList.contains('on')) { sh.innerHTML = bandSheetHTML(g, icon); sh.classList.add('on'); } else sh.classList.remove('on'); }; bs.onclick = tog; sh.onclick = () => sh.classList.remove('on'); bs.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tog(); } }; }
 function pick(i) {
   if (mode !== 'play' || g.phase !== 'levelup' || pickLock) return;

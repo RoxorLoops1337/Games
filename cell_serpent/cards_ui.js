@@ -182,3 +182,33 @@ export function betterRoll(cards, prevTop) {
     return n;
   } catch (e) { return 0; }
 }
+
+// 35-t cards layout: the upgrade UI sits in the upper part of the screen (the lower part is where the thumb steers) and a pointer tap
+// only picks a card once the guard is ready AND the press and the release land on the same card.
+// Keyboard (1, 2, 3, Enter, Space) and screen reader activations carry no pointer (click detail 0), so the guard never delays them.
+export const PICK_GUARD_MS = 450;
+export const HUD_UNITS = 170;   // game units under the top of the stage taken by the HUD plates and chips (hud.js lays them out in about the first 150)
+// CSS px from the top of the screen to the bottom of the HUD plates, from the renderer layout { cw, s, oy } (canvas px)
+export function hudBottomPx(L, innerW) {
+  if (!L || !(L.s > 0) || !(L.cw > 0) || !(innerW > 0)) return 170;
+  return Math.round((L.oy + HUD_UNITS * L.s) / (L.cw / innerW));
+}
+// pure: should this click pick card i? ptr is a pointer click (mouse or touch), not a keyboard or screen reader activation
+export function guardAllows(st, i, ptr, now) {
+  if (!ptr) return true;
+  if (now - st.at < PICK_GUARD_MS) return false;
+  return st.down === i && !st.moved;
+}
+// wires press tracking once on the cards wrapper; st = { at, down, moved }
+export function trackPress(wrap, st) {
+  const idxOf = (x, y) => { const el = document.elementFromPoint(x, y), b = el && el.closest ? el.closest('.card') : null; return b && b.parentNode === wrap ? [...wrap.children].indexOf(b) : -1; };
+  wrap.addEventListener('pointerdown', e => { st.down = idxOf(e.clientX, e.clientY); st.moved = false; });
+  wrap.addEventListener('pointerup', e => { if (st.down >= 0 && idxOf(e.clientX, e.clientY) !== st.down) st.moved = true; });
+  wrap.addEventListener('pointercancel', () => { st.moved = true; });
+}
+// arms the guard for a freshly dealt row: the shimmer bar fills over the guard time, then the cards are ready
+export function armCards(wrap, st, now) {
+  st.at = now; st.down = -1; st.moved = false;
+  const cs = [...wrap.children]; for (const c of cs) c.classList.add('arm');
+  setTimeout(() => { for (const c of cs) c.classList.remove('arm'); }, PICK_GUARD_MS);
+}
