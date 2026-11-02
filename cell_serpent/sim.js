@@ -690,6 +690,17 @@ export function buildPath(n) {
   for (let i = poly.length - 1; i > 0; i--) if (poly[i].y >= LINE_Y) last = i; else break;
   return { pts: poly, cum, len: cum[last], kind: k };
 }
+// allocation free twin of pointAt: writes into [o] (the per-frame hot loop reuses three scratch points)
+export function pointInto(path, s, o) {
+  const pts = path.pts, cum = path.cum;
+  if (s <= 0) { const a = pts[0], b = pts[1], d = hyp(b.x - a.x, b.y - a.y) || 1; o.x = a.x + ((b.x - a.x) / d) * s; o.y = a.y + ((b.y - a.y) / d) * s; return o; }
+  if (s >= cum[cum.length - 1]) { const p = pts[pts.length - 1]; o.x = p.x; o.y = p.y + (s - cum[cum.length - 1]); return o; }
+  let lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }
+  const t = (s - cum[lo]) / (cum[hi] - cum[lo] || 1);
+  o.x = pts[lo].x + (pts[hi].x - pts[lo].x) * t; o.y = pts[lo].y + (pts[hi].y - pts[lo].y) * t; return o;
+}
+const PT_A = { x: 0, y: 0 }, PT_B = { x: 0, y: 0 }, PT_C = { x: 0, y: 0 };
 export function pointAt(path, s) {
   const { pts, cum } = path;
   if (s <= 0) { const a = pts[0], b = pts[1], d = Math.hypot(b.x - a.x, b.y - a.y) || 1; return { x: a.x + ((b.x - a.x) / d) * s, y: a.y + ((b.y - a.y) / d) * s }; }
@@ -917,7 +928,7 @@ function nearestTarget(g, x, y, maxD = 1e9) {
   let best = null, bd = maxD;
   eachTarget(g, s => {
     if (!visible(s)) return;
-    const d = Math.hypot(s.x - x, s.y - y) - s.r;
+    const d = hyp(s.x - x, s.y - y) - s.r;
     if (d < bd) { bd = d; best = s; }
   });
   return best;
@@ -973,25 +984,26 @@ function onKill(g, s, sn) {
     g.bombsPopped++;
     const R = 150;
     g.events.push({ t: 'boom', x: s.x, y: s.y, r: R });
-    for (const o of g.snakes) for (const q of o.segs) if (q !== s && q.hp > 0 && Math.hypot(q.x - s.x, q.y - s.y) < R + q.r) damageSeg(g, q, Math.max(2, s.max * 0.9), false, q.x, q.y);
+    for (const o of g.snakes) for (const q of o.segs) if (q !== s && q.hp > 0 && hyp(q.x - s.x, q.y - s.y) < R + q.r) damageSeg(g, q, Math.max(2, s.max * 0.9), false, q.x, q.y);
   }
 }
 
 // Remove dead cells. The serpent stays one connected chain: the cells in front of a gap slide back to
 // close it (see the chain update in step), so it just gets shorter. The face pops once it is alone.
+const isDead = q => q.hp <= 0, isUncounted = q => q.hp <= 0 && !q.counted, isAlive = q => q.hp > 0, isEmptySn = sn => sn.segs.length === 0;
 function reap(g) {
   for (let pass = 0; pass < 8; pass++) {
     let any = false;
     for (const sn of g.snakes) {
       if (sn.segs.length === 1 && sn.segs[0].hp > 0) { sn.segs[0].shield = false; sn.segs[0].hp = 0; }
-      if (!sn.segs.some(q => q.hp <= 0)) continue;
+      if (!sn.segs.some(isDead)) continue;
       any = true;
       // a bomb blast inside onKill can kill cells we already walked past (in front of the bomb): keep going until every dead cell has been counted
-      for (let guard = 0; guard < 30 && sn.segs.some(q => q.hp <= 0 && !q.counted); guard++) for (const q of sn.segs.slice()) if (q.hp <= 0 && !q.counted) { q.counted = true; onKill(g, q, sn); }
-      sn.segs = sn.segs.filter(q => q.hp > 0);
+      for (let guard = 0; guard < 30 && sn.segs.some(isUncounted); guard++) for (const q of sn.segs.slice()) if (q.hp <= 0 && !q.counted) { q.counted = true; onKill(g, q, sn); }
+      sn.segs = sn.segs.filter(isAlive);
       g.events.push({ t: 'close' });
     }
-    g.snakes = g.snakes.filter(sn => sn.segs.length > 0);
+    if (g.snakes.some(isEmptySn)) g.snakes = g.snakes.filter(sn => sn.segs.length > 0);
     if (!any) break;
   }
 }
@@ -1131,7 +1143,16 @@ function collect(g, pk) {
 }
 
 // ---------------------------------------------------------------- shooting and skills
+const hyp = (x, y) => Math.sqrt(x * x + y * y);   // Math.hypot allocates a number per call on V8; the sim only needs short distances
+const BULLET_POOL_MAX = 96;
+const BULLET_SRC = { needle: 'needles', snot: 'dragon', bubble: 'bubble' };
 function fire(g, o) {
+  const free = g.bpool, b = free && free.length ? free.pop() : null;
+  if (b) {   // reuse a spent bullet: same shape, no new object and no new hit list
+    b.x = o.x; b.y = o.y; b.vx = Math.cos(o.a) * o.sp; b.vy = Math.sin(o.a) * o.sp; b.dmg = o.dmg; b.crit = !!o.crit; b.pierce = o.pierce || 0; b.r = o.r || 6; b.life = o.life || 1.4;
+    b.hit.length = 0; b.beat = !!o.beat; b.kind = o.kind || 'pill'; b.home = o.home || 0; b.splash = o.splash || 0; b.slow = o.slow || 0;
+    g.bullets.push(b); return;
+  }
   g.bullets.push({ x: o.x, y: o.y, vx: Math.cos(o.a) * o.sp, vy: Math.sin(o.a) * o.sp, dmg: o.dmg, crit: !!o.crit, pierce: o.pierce || 0, r: o.r || 6, life: o.life || 1.4, hit: [], beat: !!o.beat, kind: o.kind || 'pill', home: o.home || 0, splash: o.splash || 0, slow: o.slow || 0 });
 }
 // the capsule: straight up, [1 + extra notes] side by side, [1 + extra bursts] volleys per shot
@@ -1164,7 +1185,7 @@ function updateWeapons(g, dt, canFire) {
   const wantTowers = lv(g, 'tower') ? 1 + (lv(g, 'tower') >= 3 ? 1 : 0) + (lv(g, 'tower') >= 5 ? 1 : 0) : 0;
   if (g.towers.length !== wantTowers) rebuildTowers(g);
   const aim = -Math.PI / 2;   // nothing auto-aims except the Snot Dragon's homing
-  for (const id of Object.keys(g.weap)) {
+  for (const id in g.weap) {
     const w = g.weap[id], L = w.lv;
     if (id === 'daggers' || id === 'stick' || id === 'tower') continue;   // continuous / own timers below
     w.cd -= dt;
@@ -1218,7 +1239,7 @@ function updateWeapons(g, dt, canFire) {
     p.orbAng += dt * (3.2 + 0.2 * dl);
     for (let i = 0; i < 1 + dl; i++) {
       const pos = daggerPos(g, i);
-      eachTarget(g, s => { if (s.orbCd <= 0 && Math.hypot(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } });
+      eachTarget(g, s => { if (s.orbCd <= 0 && hyp(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } });
     }
   }
   // massage stick (sweeping bar)
@@ -1240,13 +1261,13 @@ function updateWeapons(g, dt, canFire) {
       t.cd = (2.4 - 0.15 * tl) * cm; t.pulse = 0.5;
       const R = 170 + 18 * tl;
       g.events.push({ t: 'pulse', x: t.x, y: t.y, r: R });
-      eachTarget(g, s => { if (Math.hypot(s.x - t.x, s.y - t.y) < R + s.r) damageSegAs('tower', g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); });
+      eachTarget(g, s => { if (hyp(s.x - t.x, s.y - t.y) < R + s.r) damageSegAs('tower', g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); });
     }
   }
   // swab zones tick
   for (let i = g.zones.length - 1; i >= 0; i--) {
     const z = g.zones[i]; z.life -= dt; z.tick -= dt;
-    if (z.tick <= 0) { z.tick = 0.3; eachTarget(g, s => { if (Math.hypot(s.x - z.x, s.y - z.y) < z.r + s.r) damageSegAs('swab', g, s, z.dmg, false, s.x, s.y); }); }
+    if (z.tick <= 0) { z.tick = 0.3; eachTarget(g, s => { if (hyp(s.x - z.x, s.y - z.y) < z.r + s.r) damageSegAs('swab', g, s, z.dmg, false, s.x, s.y); }); }
     if (z.life <= 0) g.zones.splice(i, 1);
   }
   // maws execute
@@ -1255,7 +1276,7 @@ function updateWeapons(g, dt, canFire) {
     if (m.tick <= 0) {
       m.tick = 0.2;
       eachTarget(g, s => {
-        if (Math.hypot(s.x - m.x, s.y - m.y) >= m.r + s.r) return;
+        if (hyp(s.x - m.x, s.y - m.y) >= m.r + s.r) return;
         if (s.hp <= s.max * m.exec) damageSegAs('maw', g, s, s.hp + 1, false, s.x, s.y); else damageSegAs('maw', g, s, m.dmg, false, s.x, s.y);
       });
     }
@@ -1274,10 +1295,27 @@ export function stickSeg(g, k = 0) {
 function distToSeg(px, py, x0, y0, x1, y1) {
   const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy || 1;
   const t = clamp(((px - x0) * dx + (py - y0) * dy) / l2, 0, 1);
-  return Math.hypot(px - (x0 + dx * t), py - (y0 + dy * t));
+  return hyp(px - (x0 + dx * t), py - (y0 + dy * t));
 }
 
 // ---------------------------------------------------------------- step
+// the per-cell glide along the path: its own small function so the JIT keeps the numbers unboxed (inside the huge step it did not). Returns the HP left in the chain.
+function moveSegs(g, segs, path, dt) {
+  let hp = 0;
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i], ox = s.x, oy = s.y;
+    s.ps = s.tp >= s.ps ? s.tp : Math.max(s.tp, s.ps - 320 * dt);
+    const pos = pointInto(path, s.ps, PT_A), pa = pointInto(path, s.ps - 8, PT_B), pb = pointInto(path, s.ps + 8, PT_C);
+    s.x = pos.x; s.y = pos.y; s.ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
+    s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
+    hp += s.hp > 0 ? s.hp : 0;
+    if (s.flash > 0) s.flash -= dt;
+    if (s.gold && s.goldT > 0 && visible(s)) { s.goldT -= dt / (1 + uv(g, 'gear') / 100); if (s.goldT <= 0) g.events.push({ t: 'goldfade', x: s.x, y: s.y }); }
+    if (s.orbCd > 0) s.orbCd -= dt;
+  }
+  return hp;
+}
+const CHEST_CP = [[0.25, 1], [0.5, 2]];
 export function step(g, dt, input) {
   if (g.phase !== 'play' && g.phase !== 'clear') return;
   g.t += dt;
@@ -1311,13 +1349,13 @@ export function step(g, dt, input) {
     const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? 0.55 : 1) * (sn.surge === 'go' ? (sn.p2 ? P2_DASH : 2.6) : 1) * (sn.drum ? DRUM_SPEED : 1) * (g.phase === 'clear' ? 0 : 1);
     const segs = sn.segs, last = segs.length - 1;
     let total = 0;
-    for (let i = 0; i < last; i++) total += spacing(segs[i], segs[i + 1]);
+    for (let i = 0; i < last; i++) total += (segs[i].r + segs[i + 1].r) * 0.78;
     const path = sn.path || g.path, maxTail = path.len - total;
     sn.tail = Math.min(sn.tail + v * dt, maxTail);
     sn.breach = sn.tail >= maxTail - 0.5;
     let target = sn.tail;
     for (let i = last; i >= 0; i--) {
-      if (i < last) target += spacing(segs[i], segs[i + 1]);
+      if (i < last) target += (segs[i].r + segs[i + 1].r) * 0.78;
       segs[i].tp = target;
     }
     segs[0].shield = segs.length > 1;
@@ -1331,22 +1369,12 @@ export function step(g, dt, input) {
     for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
     wardTick(sn); choirTick(sn, dt); if (g.phase === 'play') quartetTick(g, sn, dt);
     if (sn.breach && g.phase === 'play') { g.leaks++; g.events.push({ t: 'leak', x: segs[0].x, y: LINE_Y }); loseRun(g); }
-    for (const s of segs) {
-      const ox = s.x, oy = s.y;
-      s.ps = s.tp >= s.ps ? s.tp : Math.max(s.tp, s.ps - 320 * dt);
-      const pos = pointAt(path, s.ps), pa = pointAt(path, s.ps - 8), pb = pointAt(path, s.ps + 8);
-      s.x = pos.x; s.y = pos.y; s.ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
-      s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
-      stageHp += Math.max(0, s.hp);
-      if (s.flash > 0) s.flash -= dt;
-      if (s.gold && s.goldT > 0 && visible(s)) { s.goldT -= dt / (1 + uv(g, 'gear') / 100); if (s.goldT <= 0) g.events.push({ t: 'goldfade', x: s.x, y: s.y }); }
-      if (s.orbCd > 0) s.orbCd -= dt;
-    }
+    stageHp += moveSegs(g, segs, path, dt);
   }
   g.stageHp = stageHp;
   g.progress = g.stageHpMax ? clamp(1 - stageHp / g.stageHpMax, 0, 1) : 0;
   // chests at a quarter and half way: even a lost run pays for how far it got
-  for (const [th, k] of [[0.25, 1], [0.5, 2]]) if (g.phase === 'play' && g.progress >= th && !(g.cp || (g.cp = {}))[th]) { g.cp[th] = 1; g.pickups.push({ kind: 'chest', x: W / 2, y: 320, vx: 0, vy: 0, v: 1, cp: k, age: 0, vac: false }); g.events.push({ t: 'checkpoint', k }); }
+  for (const [th, k] of CHEST_CP) if (g.phase === 'play' && g.progress >= th && !(g.cp || (g.cp = {}))[th]) { g.cp[th] = 1; g.pickups.push({ kind: 'chest', x: W / 2, y: 320, vx: 0, vy: 0, v: 1, cp: k, age: 0, vac: false }); g.events.push({ t: 'checkpoint', k }); }
   if (g.phase === 'play') petTick(g, dt);
 
   // the capsule never aims: it fires straight up, so you aim by sliding
@@ -1360,7 +1388,7 @@ export function step(g, dt, input) {
     if (b.home > 0) {
       const t = nearestTarget(g, b.x, b.y, 320);
       if (t) {
-        const sp = Math.hypot(b.vx, b.vy), cur = Math.atan2(b.vy, b.vx);
+        const sp = hyp(b.vx, b.vy), cur = Math.atan2(b.vy, b.vx);
         const na = cur + clamp(angDiff(Math.atan2(t.y - b.y, t.x - b.x), cur), -b.home * dt, b.home * dt);
         b.vx = Math.cos(na) * sp; b.vy = Math.sin(na) * sp;
       }
@@ -1369,19 +1397,19 @@ export function step(g, dt, input) {
     let dead = b.life <= 0 || b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30;
     if (!dead) {
       for (const sn of g.snakes) for (const s of sn.segs) {
-        if (dead || s.hp <= 0 || s.shield || s.wave || b.hit.includes(s) || Math.hypot(s.x - b.x, s.y - b.y) >= s.r + b.r) continue;
+        if (dead || s.hp <= 0 || s.shield || s.wave || b.hit.includes(s) || hyp(s.x - b.x, s.y - b.y) >= s.r + b.r) continue;
         b.hit.push(s);
-        damageSegAs(({ needle: 'needles', snot: 'dragon', bubble: 'bubble' })[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g); if (b.beat && g.groove < GROOVE_MAX) g.groove += 0.5;
+        damageSegAs(BULLET_SRC[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g); if (b.beat && g.groove < GROOVE_MAX) g.groove += 0.5;
         if (b.slow) sn.slow = Math.max(sn.slow, b.slow);
         if (b.splash > 0) {
           const sd = b.dmg * (b.kind === 'bubble' ? 2.2 : 0.5);
-          eachTarget(g, (q, qs) => { if (q !== s && Math.hypot(q.x - s.x, q.y - s.y) < b.splash + q.r) { damageSeg(g, q, sd, false, q.x, q.y); if (b.slow) qs.slow = Math.max(qs.slow, b.slow); } });
+          eachTarget(g, (q, qs) => { if (q !== s && hyp(q.x - s.x, q.y - s.y) < b.splash + q.r) { damageSeg(g, q, sd, false, q.x, q.y); if (b.slow) qs.slow = Math.max(qs.slow, b.slow); } });
           g.events.push({ t: b.kind === 'bubble' ? 'burst' : 'splash', x: s.x, y: s.y, r: b.splash });
         }
         if (b.pierce-- <= 0) dead = true;
       }
     }
-    if (dead) g.bullets.splice(bi, 1);
+    if (dead) { g.bullets.splice(bi, 1); const bp = g.bpool || (g.bpool = []); if (bp.length < BULLET_POOL_MAX) bp.push(b); }
   }
 
   reap(g);
@@ -1390,7 +1418,7 @@ export function step(g, dt, input) {
   for (let i = g.pickups.length - 1; i >= 0; i--) {
     const pk = g.pickups[i];
     pk.age += dt;
-    const d = Math.hypot(p.x - pk.x, p.y - pk.y);
+    const d = hyp(p.x - pk.x, p.y - pk.y);
     if (pk.age > 0.5 || g.phase === 'clear') pk.vac = true;
     if (pk.vac) {
       const sp = (pk.kind === 'chest' ? 300 : 460) + pk.age * 90, a = Math.atan2(p.y - pk.y, p.x - pk.x);
@@ -1421,7 +1449,7 @@ export function botInput(g) {
   const p = g.p;
   let ax = 0;
   for (const sn of g.snakes) for (const s of sn.segs) {
-    const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1, reach = 170 + s.r;
+    const dx = p.x - s.x, dy = p.y - s.y, d = hyp(dx, dy) || 1, reach = 170 + s.r;
     if (d < reach) ax += (dx >= 0 ? 1 : -1) * ((reach - d) / reach) * 2.6;
   }
   // aim: chest cells first, otherwise the cell closest to the membrane

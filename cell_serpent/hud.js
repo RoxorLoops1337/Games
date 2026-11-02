@@ -60,8 +60,18 @@ export function createHud(env) {
     path(); c.strokeStyle = rim; c.lineWidth = 2; c.stroke();
   }
   // panels are static, so each size/colour is baked once and blitted (a clip + 3 paths per panel per frame otherwise)
+  // remembered by value (rim, tint, size) so a steady frame builds no key string and no closure per panel; dropped when the kit drops its sprites
+  const GM = new Map(); let gmGen = -1;
+  function glassSpr(w, h, r, rim, tint) {
+    if (gmGen !== kit.gen) { GM.clear(); gmGen = kit.gen; }
+    let a = GM.get(rim); if (!a) GM.set(rim, a = new Map());
+    let b = a.get(tint); if (!b) a.set(tint, b = new Map());
+    const k = (w * 4096 + h) * 64 + r;
+    let v = b.get(k); if (v === undefined) { v = kit.bake(`glass|${w}|${h}|${r}|${rim}|${tint}`, w + 8, h + 8, c => glassPaint(c, -w / 2, -h / 2, w, h, r, rim, tint)); if (Number.isInteger(w) && Number.isInteger(h) && Number.isInteger(r) && b.size < 200) b.set(k, v); }
+    return v;
+  }
   function glass(x, y, w, h, r, rim = 'rgba(255,255,255,.32)', tint = 'rgba(14,9,48,.52)') {
-    const spr = kit && kit.bake ? kit.bake(`glass|${w}|${h}|${r}|${rim}|${tint}`, w + 8, h + 8, c => glassPaint(c, -w / 2, -h / 2, w, h, r, rim, tint)) : null;
+    const spr = kit && kit.bake ? glassSpr(w, h, r, rim, tint) : null;
     if (spr) ctx.drawImage(spr.c, x - 4, y - 4, w + 8, h + 8); else glassPaint(ctx, x, y, w, h, r, rim, tint);
   }
   function glassCirclePaint(ctx, x, y, r) {
@@ -320,7 +330,7 @@ export function createHud(env) {
   function skills(g) {
     const r = 26, pitch = 58, cy = H - 60 - T.ins.b;
     let x = W - 22 - r;
-    for (const id of Object.keys(g.weap)) {
+    for (const id in g.weap) {
       const w = g.weap[id], col = env.WCOL[id] || '#fff', max = WMAX[id] || 5;
       // remember the longest cooldown seen so the ring can show progress
       const last = T.cdLast[id] === undefined ? 0 : T.cdLast[id];
