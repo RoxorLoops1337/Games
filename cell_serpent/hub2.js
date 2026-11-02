@@ -24,9 +24,16 @@ function radar(s) {
   const axes = META.map((_, i) => { const p = pt(i, 1); return `<line x1="${cx}" y1="${cy}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}"/>`; }).join('');
   const labs = META.map((d, i) => { const p = pt(i, 1.32); return `<image href="${iconURL(STATICON[d.id])}" x="${(p[0] - 9).toFixed(1)}" y="${(p[1] - 9).toFixed(1)}" width="18" height="18"/>`; }).join('');
   const hits = META.map((d, i) => { const p = pt(i, 1.32); return `<circle class="rhit" data-id="${d.id}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="15"/>`; }).join('');
-  return `<svg class="radar" viewBox="0 0 160 156" role="group" aria-label="Stats, tap an icon to upgrade it"><g class="rg"><polygon points="${ring(1)}"/><polygon points="${ring(0.66)}"/><polygon points="${ring(0.33)}"/>${axes}</g><polygon class="rgh" points="${ghost}"/><polygon class="rv" points="${val}"/>${dots}${labs}${hits}</svg>`;
+  const lvb = META.map((d, i) => { const p = pt(i, 1.32), l = s.meta[d.id] || 0, mx = l >= d.max; return `<g class="rlv${mx ? ' mx' : ''}"><circle cx="${(p[0] + 9).toFixed(1)}" cy="${(p[1] + 8).toFixed(1)}" r="6.5"/><text x="${(p[0] + 9).toFixed(1)}" y="${(p[1] + 11.2).toFixed(1)}" text-anchor="middle">${mx ? '\u2605' : l}</text></g>`; }).join('');
+  return `<svg class="radar" viewBox="-8 0 176 170" role="group" aria-label="Stats, tap an icon to upgrade it"><g class="rg"><polygon points="${ring(1)}"/><polygon points="${ring(0.66)}"/><polygon points="${ring(0.33)}"/>${axes}</g><polygon class="rgh" points="${ghost}"/><polygon class="rv" points="${val}"/>${dots}${labs}${lvb}${hits}</svg>`;
 }
 const STAT_TEXT = { atk: v => `+${Math.round(v * 100)}% Volume`, crit: v => `+${(v * 100).toFixed(1)}% Pitch`, vit: v => `snake ${Math.round(v / 12 * 2)}% slower`, coin: v => `+${Math.round(v * 100)}% Beats`, guard: v => `snake ${Math.round(v * 50)}% slower`, cdn: v => `${(v * 100).toFixed(1)}% quicker Tempo`, speed: v => `+${Math.round(v * 100)}% singing speed` };
+// keepsakes the player has already looked at (a separate key, so saves stay untouched); the first visit marks what is owned as seen
+const SEEN_KEY = 'cell_serpent_keepseen_v1';
+function keepSeen(owned) { try { const raw = localStorage.getItem(SEEN_KEY); if (raw) return new Set(JSON.parse(raw)); const st = new Set(owned); localStorage.setItem(SEEN_KEY, JSON.stringify([...st])); return st; } catch (e) { return new Set(owned); } }
+function markSeen(id) { try { const st = keepSeen([]); st.add(id); localStorage.setItem(SEEN_KEY, JSON.stringify([...st])); } catch (e) { /* private mode */ } }
+// chest drama: it charges up and rattles with a glow, then the lid flies and the next step runs
+function chestGo(ch, fn) { if (!ch) { setTimeout(fn, 0); return; } if (ch.classList.contains('charge') || ch.classList.contains('open')) return; ch.classList.add('charge'); setTimeout(() => { ch.classList.remove('charge'); ch.classList.add('open'); const ring = document.createElement('i'); ring.className = 'chburst'; ch.appendChild(ring); setTimeout(() => { ring.remove(); fn(); }, 460); }, 720); }
 const kicon = id => `<span class="kemo">${KEEPSAKES.find(k => k.id === id).icon}</span>`;
 
 const fragRar = n => (n >= 12 ? 3 : n >= 5 ? 2 : n >= 2 ? 1 : 0), RAR_COL = ['#9fb4d8', '#4fd8f0', '#b06cff', '#ffb04d'];
@@ -184,6 +191,7 @@ export function createHub2(c) {
     const s = save(), box = $('gearBody'); box.innerHTML = '';
     for (const b of document.querySelectorAll('#gearFilters button')) b.classList.toggle('on', b.dataset.f === gearFilter);
     const lvl = k => s.keeps[k.id].lv, frag = k => s.keeps[k.id].frag;
+    const seen = keepSeen(KEEPSAKES.filter(k => s.keeps[k.id].lv > 0).map(k => k.id));
     {   // collection summary: how many keepsakes, total levels, sets finished
       const own = KEEPSAKES.filter(k => lvl(k) > 0).length, tot = KEEPSAKES.length, C = 2 * Math.PI * 22, setsDone = KEEP_SETS.filter(st => KEEPSAKES.filter(k => k.set === st.id).every(k => lvl(k) > 0)).length;
       const hd = document.createElement('div'); hd.className = 'colhead';
@@ -212,7 +220,7 @@ export function createHub2(c) {
         for (const k of items) {
           const cost = lvl(k) >= keepMax(k) ? 0 : keepCost(k, lvl(k)), pct = cost ? Math.min(100, Math.round((frag(k) / cost) * 100)) : 100;
           const b = document.createElement('button'); b.className = 'kcard t' + t + (lvl(k) ? '' : ' off') + (lvl(k) >= keepMax(k) ? ' max' : ''); b.style.setProperty('--tc', T.color);
-          b.innerHTML = `${lvl(k) ? `<i class="kstar${lvl(k) > 9 ? ' w' : ''}" style="background-image:url(${iconURL('star')})"><b>${lvl(k)}</b></i>` : ''}<div class="kic">${k.icon}</div><div class="kbar"><i style="width:${pct}%"></i><span>${frag(k)}/${cost || 'max'}</span></div><div class="kname">${k.name}</div>${keepCanUp(s, k.id) ? '<em class="kup">▲</em>' : ''}`;
+          b.innerHTML = `${lvl(k) ? `<i class="kstar${lvl(k) > 9 ? ' w' : ''}" style="background-image:url(${iconURL('star')})"><b>${lvl(k)}</b></i>` : ''}<div class="kic">${k.icon}</div><div class="kbar"><i style="width:${pct}%"></i><span>${frag(k)}/${cost || 'max'}</span></div><div class="kname">${k.name}</div>${keepCanUp(s, k.id) ? '<em class="kup">▲</em>' : ''}${lvl(k) && !seen.has(k.id) ? '<i class="knew">NEW</i>' : ''}`;
           b.onclick = () => { audio.play('click'); openKeep(k); };
           grid.appendChild(b);
         }
@@ -225,10 +233,11 @@ export function createHub2(c) {
     for (const n of [1, 10]) {
       const price = n === 10 ? KEEP_PRICE * 9 : KEEP_PRICE;
       row.appendChild(tile({ cls: 'chestcard t-gold', ic: n === 10 ? ico('gift', 46) : chestArt(30), name: n === 10 ? 'Ten Chests' : 'Keepsake Chest', desc: n === 10 ? 'With a star prize' : 'Backstage finds', btn: price + ' ' + curImg('sparkles'), gold: true, disabled: save().sparkles < price,
-        onclick: ev => { const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); if (ch) ch.classList.add('open'); setTimeout(() => { const got = openKeepChest(save(), n); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color, rname: KEEP_TIERS[kk.tier].name.toUpperCase() }; }), 'Gear'); }, ch ? 420 : 0); } }));
+        onclick: ev => { const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); chestGo(ch, () => { const got = openKeepChest(save(), n); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color, rname: KEEP_TIERS[kk.tier].name.toUpperCase() }; }), 'Gear'); }); } }));
     }
   }
   function openKeep(k) {
+    markSeen(k.id);
     const s = save(), a = s.keeps[k.id], T = KEEP_TIERS[k.tier], max = keepMax(k);
     openPanel(k.name.toUpperCase(), body => {
       const d = document.createElement('div'); d.className = 'kdetail'; d.style.setProperty('--tc', T.color);
@@ -252,17 +261,18 @@ export function createHub2(c) {
       const can = wel || s[top.cur] >= top.price;
       ban.innerHTML = `<div class="fbray"></div>${chestArt(wel ? 0 : 200)}<div class="fbtx"><em>${wel ? 'ONCE ONLY' : 'FEATURED'}</em><b>${wel ? 'Welcome Chest' : top.name}</b><span>${wel ? `${icon('egg')} ×4 ${curImg('sparkles')} 100 ${curImg('beats')} 3000` : 'A star prize inside'}</span></div><button class="btn go gold" ${can ? '' : 'disabled'}>${wel ? 'OPEN' : top.price + ' ' + curImg(top.cur)}</button>`;
       ban.querySelector('button').onclick = () => {
-        audio.unlock(); const ch = ban.querySelector('.chest3'); ch.classList.add('open');
-        setTimeout(() => {
+        audio.unlock(); const ch = ban.querySelector('.chest3');
+        chestGo(ch, () => {
           if (wel) { if (claimWelcome(save())) { c.persist(); audio.play('levelup'); c.refreshCur(); renderShop(); } return; }
           const got = openBox(save(), top.id); if (!got) { ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur();
           lootModal(top.name.toUpperCase() + ' OPENED!', got.map(x => ({ html: icon(x.id), n: x.n, name: WEAPONS.find(w => w.id === x.id).name, rar: fragRar(x.n), color: RAR_COL[fragRar(x.n)] })), 'Shop');
-        }, 420);
+        });
       };
       list.appendChild(ban);
     }
     sec(list, "Today's Treats", '#e0457a', 'tag');
-    dealsFor(s, day).forEach((d, i) => {
+    const deals = dealsFor(s, day), hotI = deals.reduce((m, d, i) => (!s.shop.bought[i] && d.price && d.off < 100 && (m < 0 || d.off > deals[m].off) ? i : m), -1);
+    deals.forEach((d, i) => {
       const bought = s.shop.bought[i];
       const name = d.kind === 'frag' ? WEAPONS.find(w => w.id === d.ref).name : d.kind === 'keep' ? KEEPSAKES.find(k => k.id === d.ref).name : d.kind === 'egg' ? 'Pet Egg' : d.kind === 'energy' ? 'Voice' : d.kind === 'sparkles' ? 'Sparkles' : 'Beats';
       const ic = d.kind === 'frag' ? icon(d.ref) : d.kind === 'keep' ? kicon(d.ref) : d.kind === 'egg' ? icon('egg') : d.kind === 'energy' ? '⚡' : d.kind === 'sparkles' ? curImg('sparkles') : curImg('beats');
@@ -270,7 +280,9 @@ export function createHub2(c) {
       if (d.off < 100) { const bd = document.createElement('i'); bd.className = 'dealrib'; bd.innerHTML = `<b>-${d.off}%</b>`; t.appendChild(bd); }
       else { const bd = document.createElement('i'); bd.className = 'dealrib free'; bd.innerHTML = '<b>FREE</b>'; t.appendChild(bd); }
       const ds = t.querySelector('.ds'); if (d.base && !bought) ds.innerHTML = `<s>${d.base}</s> ${curImg('sparkles')}`; else ds.innerHTML = '&nbsp;';
-      if (bought) t.classList.add('done'); list.appendChild(t);
+      if (i === hotI) { t.classList.add('hot'); const hb = document.createElement('i'); hb.className = 'hotbadge'; hb.textContent = 'BEST DEAL'; t.appendChild(hb); }
+      if (bought) { t.classList.add('done'); const ob = document.createElement('i'); ob.className = 'obt'; ob.textContent = 'GOT IT'; t.appendChild(ob); }
+      list.appendChild(t);
     });
     const rr = document.createElement('div'); rr.className = 'refrow'; rr.innerHTML = `<span>New treats in ${countdown()}</span><button class="btn small alt">${s.shop.free ? '5 ' + curImg('sparkles') : 'FREE'} REFRESH</button>`;
     rr.querySelector('button').onclick = () => { if (refreshDeals(save())) { c.persist(); audio.play('click'); c.refreshCur(); renderShop(); } };
@@ -281,7 +293,7 @@ export function createHub2(c) {
     for (const b of BOXES) {
       const can = s[b.cur] >= b.price;
       list.appendChild(tile({ cls: 'chestcard ' + (b.cur === 'sparkles' ? 't-gold' : 't-weapon') + (b.id === 'spark10' ? ' one' : ''), ic: chestArt(b.cur === 'sparkles' ? 300 : 0), name: b.name, desc: b.desc, btn: b.price + ' ' + curImg(b.cur), gold: b.cur === 'sparkles', disabled: !can,
-        onclick: ev => { audio.unlock(); const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); ch.classList.add('open'); setTimeout(() => { const got = openBox(save(), b.id); if (!got) { ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal(b.name.toUpperCase() + ' OPENED!', got.map(x => ({ html: icon(x.id), n: x.n, name: WEAPONS.find(w => w.id === x.id).name, rar: fragRar(x.n), color: RAR_COL[fragRar(x.n)] })), 'Shop'); }, 420); } }));
+        onclick: ev => { audio.unlock(); const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); chestGo(ch, () => { const got = openBox(save(), b.id); if (!got) { ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal(b.name.toUpperCase() + ' OPENED!', got.map(x => ({ html: icon(x.id), n: x.n, name: WEAPONS.find(w => w.id === x.id).name, rar: fragRar(x.n), color: RAR_COL[fragRar(x.n)] })), 'Shop'); }); } }));
     }
     list.appendChild(tile({ cls: 't-gold', ic: icon('egg'), name: 'Pet Egg', desc: 'Warm and wiggly.', btn: EGG_PRICE + ' ' + curImg('sparkles'), gold: true, disabled: s.sparkles < EGG_PRICE, onclick: () => { if (buyEgg(save())) { c.persist(); audio.play('buy'); c.refreshCur(); renderShop(); } } }));
     list.appendChild(tile({ cls: 't-gold', ic: ico('bolt', 44), name: 'Voice ×10', desc: 'A big gulp of tea.', btn: '10 ' + curImg('sparkles'), gold: true, disabled: s.sparkles < 10, onclick: () => { if (buyEnergy(save(), now())) { c.persist(); audio.play('buy'); c.refreshCur(); renderShop(); } } }));
