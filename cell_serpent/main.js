@@ -22,6 +22,7 @@ import { setupSecrets } from './title_b9.js';
 import { firstGoalHTML, welcomeBack, welcomeHTML, hoursAway, stampVisit } from './title12b.js';
 import { bakeCardArt } from './card_bake.js';
 import { partnerIds, markPartners, betterRoll, luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand, cardFoilHTML, markReroll, chainPulse } from './cards_ui.js';
+import { offeredLinks, markLinks, lockState, lockHTML, toggleLock, keepLocked, dealChipHTML, pickBurst } from './cards_b10.js';
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { paintTabIcons, bindHubSwipe } from './tabs_ui.js';
 import { paintButtonGlyphs, RECAP, emptyCard } from './btn_glyphs.js';
@@ -477,6 +478,7 @@ function toTitle() { refreshTitle(); mode = 'title'; audio.music(false); audio.h
 // ---------------------------------------------------------------- upgrade cards
 function showCards() {
   bakeCardArt();
+  if (!lockState.keep) lockState.i = -1; lockState.keep = false;
   const wrap = $('cards'); wrap.innerHTML = ''; pickLock = false; $('levelup').classList.remove('flashing');
   const top = Math.max(0, ...g.choices.map(c => c.rarity || 0)); $('levelup').dataset.top = top; $('bandSheet').classList.remove('on');
   for (const c of g.choices) if (c.kind === 'passive' && !c.stat) c.stat = passiveStat(g, c);
@@ -490,17 +492,19 @@ function showCards() {
     const stat = dm ? `<div class="delta"><span class="dl">${dm[1]}</span><span class="dv"><i>${dm[2]}</i><em>→</em><b>${dm[3]}</b></span>${ghostBarHTML(mt)}</div>` : c.stat ? `<div class="delta"><span class="dv"><b>${c.stat}</b></span>${ghostBarHTML(mt)}</div>` : '';
     const syn = synergyHint(g, c);
     const fx = rn >= 4 ? '<span class="rays"></span>' + Array.from({ length: rn === 5 ? 8 : 5 }, (_, k) => `<span class="pt" style="--x:${(8 + k * (84 / (rn === 5 ? 7 : 4))).toFixed(0)}%;--t:${(1.6 + (k * 0.37) % 1.2).toFixed(2)}s;--w:${((k * 0.29) % 1.5).toFixed(2)}s"></span>`).join('') : '';
-    b.innerHTML = `${fx}${cardFoilHTML(rn)}<span class="key">${i + 1}</span><div class="ic">${foilHTML(rn)}${c.kind === 'weapon' ? levelRingHTML(mt) : ''}${icon(c.id)}<span class="kd">${kindLabel(c)}</span>${c.isNew ? '<span class="newtag">NEW</span>' : ''}</div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}${syn ? `<div class="syn">${syn}</div>` : ''}<div class="pips">${pips}</div></div><span class="shine"></span>`;
+    b.innerHTML = `${fx}${cardFoilHTML(rn)}<span class="key">${i + 1}</span>${g.rerolls > 0 ? lockHTML(i) : ''}<div class="ic">${foilHTML(rn)}${c.kind === 'weapon' ? levelRingHTML(mt) : ''}${icon(c.id)}<span class="kd">${kindLabel(c)}</span>${c.isNew ? '<span class="newtag">NEW</span>' : ''}</div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}${syn ? `<div class="syn">${syn}</div>` : ''}<div class="pips">${pips}</div></div><span class="shine"></span>`;
     b.setAttribute('aria-label', `Option ${i + 1}: ${c.name}, ${RARITY_WORDS[rn]} rarity${c.isNew ? ', new' : ''}. ${c.desc}${c.stat ? '. ' + c.stat : ''}`);
-    b.onclick = () => pick(i);
+    b.onclick = e => { if (e.target.closest && e.target.closest('.lockb')) { toggleLock(wrap, i); audio.play('click'); return; } pick(i); };
+    if (lockState.i === i && g.rerolls > 0) b.classList.add('kept');
     wrap.appendChild(b);
   });
+  markLinks(wrap, offeredLinks(g, g.choices));
   { const bonus = Math.round((20 + 4 * g.stage) * g.p.coinMul); $('skipBtn').innerHTML = skipHTML(bonus); $('skipBtn').setAttribute('aria-label', 'Skip for ' + bonus + ' beats'); }
-  $('refreshBtn').disabled = g.rerolls <= 0; $('refreshLeft').innerHTML = '<span class="rp">' + refreshPips(g) + '</span>'; $('refreshBtn').classList.toggle('empty', g.rerolls <= 0); $('luckBox').innerHTML = luckHTML(g); $('buildStrip').innerHTML = buildHTML(g, icon); markPartners($('buildStrip'), partnerIds(g, g.choices));
+  $('refreshBtn').disabled = g.rerolls <= 0; $('refreshLeft').innerHTML = '<span class="rp">' + refreshPips(g) + '</span>'; $('refreshBtn').classList.toggle('empty', g.rerolls <= 0); $('luckBox').innerHTML = luckHTML(g) + (rrChip ? dealChipHTML(g, g.choices) : ''); rrChip = false; $('buildStrip').innerHTML = buildHTML(g, icon); markPartners($('buildStrip'), partnerIds(g, g.choices));
   cardsFor = g.choices; { let mr = 0; for (const c of g.choices) mr = Math.max(mr, c.rarity || 0); audio.play('card' + mr); if (mr >= 3) setTimeout(() => { if (mode === 'play' && g.phase === 'levelup') audio.play('stinger'); }, 220); } show('levelup');
   announce('Choose an upgrade. ' + g.choices.map((c, i) => `${i + 1}: ${c.name}, ${RARITY_WORDS[c.rarity || 0]}`).join('. ') + '. Press 1, 2 or 3, or Tab to a card and press Enter.');
 }
-let pickLock = false;
+let pickLock = false, rrChip = false;
 { const bs = $('buildStrip'), sh = $('bandSheet'); const tog = () => { if (!bs.innerHTML) return; if (!sh.classList.contains('on')) { sh.innerHTML = bandSheetHTML(g, icon); sh.classList.add('on'); } else sh.classList.remove('on'); }; bs.onclick = tog; sh.onclick = () => sh.classList.remove('on'); bs.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tog(); } }; }
 function pick(i) {
   if (mode !== 'play' || g.phase !== 'levelup' || pickLock) return;
@@ -508,11 +512,11 @@ function pick(i) {
   audio.play('upgrade'); { const pr = (g.choices[i] && g.choices[i].rarity) | 0; audio.play('card' + pr); if (pr >= 4) audio.play('stinger'); }
   const cs = $('cards').children, el = cs[i];
   if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); return; }
-  pickLock = true; el.classList.add('chosen'); [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing'); { const pc = g.choices[i]; flyPick(el, $('buildStrip'), 360, () => { if (pc) { tickBand($('buildStrip'), pc.id, pc.kind === 'weapon' ? (pc.gain || 1) : 1, icon, RARITIES[pc.rarity | 0].color); if (pc.kind !== 'weapon' && chainPulse($('buildStrip'), g, pc.id, pc.isNew)) audio.play('click'); } }); }
+  pickLock = true; el.classList.add('chosen'); { const pr = (g.choices[i] && g.choices[i].rarity) | 0; pickBurst(el, RARITIES[pr].color, pr); } [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing'); { const pc = g.choices[i]; flyPick(el, $('buildStrip'), 360, () => { if (pc) { tickBand($('buildStrip'), pc.id, pc.kind === 'weapon' ? (pc.gain || 1) : 1, icon, RARITIES[pc.rarity | 0].color); if (pc.kind !== 'weapon' && chainPulse($('buildStrip'), g, pc.id, pc.isNew)) audio.play('click'); } }); }
   setTimeout(() => { if (!pickLock) return; pickLock = false; if (mode !== 'play' || g.phase !== 'levelup') return; choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }, 580);
 }
 $('skipBtn').onclick = () => { if (mode === 'play' && skipPick(g)) { audio.play('skip'); cardsFor = null; if (g.phase === 'levelup') showCards(); else show(''); } };
-$('refreshBtn').onclick = () => { const pt = g.choices ? Math.max(0, ...g.choices.map(c => c.rarity || 0)) : 0; if (mode === 'play' && reroll(g)) { audio.play('click'); markReroll(); showCards(); betterRoll($('cards'), pt); { const rb = $('refreshBtn'), cw = $('cards'); rb.classList.remove('rr'); cw.classList.remove('rrx'); void rb.offsetWidth; rb.classList.add('rr'); cw.classList.add('rrx'); setTimeout(() => { rb.classList.remove('rr'); cw.classList.remove('rrx'); }, 650); } } };
+$('refreshBtn').onclick = () => { const pt = g.choices ? Math.max(0, ...g.choices.map(c => c.rarity || 0)) : 0; const prevC = g.choices; if (mode === 'play' && reroll(g)) { audio.play('click'); markReroll(); keepLocked(g.choices, prevC); rrChip = true; showCards(); betterRoll($('cards'), pt); { const rb = $('refreshBtn'), cw = $('cards'); rb.classList.remove('rr'); cw.classList.remove('rrx'); void rb.offsetWidth; rb.classList.add('rr'); cw.classList.add('rrx'); setTimeout(() => { rb.classList.remove('rr'); cw.classList.remove('rrx'); }, 650); } } };
 
 // ---------------------------------------------------------------- input
 canvas.addEventListener('pointerdown', e => {
