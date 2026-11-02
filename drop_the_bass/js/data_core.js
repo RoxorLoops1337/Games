@@ -7,7 +7,7 @@ export const GAME = {
   subtitle: 'Turret Defense',
   tagline: 'Merge your gear. Hold the stage. Keep the music live.',
   saveKey: 'drop_the_bass_save_v1',
-  version: 2,
+  version: 3,
 };
 
 // ---------------------------------------------------------------- board geometry (logical pixels, the canvas is 540 x 960)

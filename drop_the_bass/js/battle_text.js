@@ -172,6 +172,7 @@ export const BT = {
   }[id] || (() => ''))(),
 
   // ---- gamepad
+  padSellAgain: () => t('battle.pad.sell_again', 'Press R3 again to sell'),
   padConnected: () => t('battle.pad.connected', 'Gamepad connected'),
   padHelp: (id) => ({
     move: () => t('battle.pad.help_move', 'Move the cursor over the tiles'),
@@ -184,6 +185,6 @@ export const BT = {
     start: () => t('battle.pad.help_start', 'Pause'),
     back: () => t('battle.pad.help_back', 'Wave preview'),
     triggers: () => t('battle.pad.help_triggers', 'Speed down and up'),
-    stick: () => t('battle.pad.help_stick', 'Call the next wave'),
+    stick: () => t('battle.pad.help_stick2', 'L3 calls the next wave. R3 twice sells the selected turret'),
   }[id] || (() => ''))(),
 };
