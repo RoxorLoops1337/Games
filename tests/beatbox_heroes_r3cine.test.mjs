@@ -43,17 +43,20 @@ try {
       { do: 'beat', who: 'hero', pattern: 'B t K', bpm: 300, wait: true }, { do: 'fx', kind: 'sparks', at: 'hero:top' }, { do: 'cone', id: 'k', at: [0, 4, 0], to: 'hero' }, { do: 'stamp', text: 'TUE 17:12|REC' },
       { do: 'call', fn: () => log.push('call') }, { do: 'wait', s: 0.2 }, { do: 'cone', id: 'k', v: 0 } ] };
     const c = M.createCine(w, reel, { audio, onCue: (e) => fired.push(e.do) }), res = await c.play();
-    const after = [p.x, p.z], layer = !!document.querySelector('.cin'), spawned = w.scene.children.filter((o) => o.isObject3D && o.userData && o.userData.cineSpawn).length;
+    // when the hero is NOT back on its mark (seen once in a parallel run: 0.177 m, never reproduced alone, under a saturated CPU or a 6x CPU throttle), say where it is,
+    // what the controller thinks and who stands nearby, so the next occurrence explains itself
+    const diag = () => { try { const nr = (w.npcs || []).map((n) => { const o = n.object || n.o || n.group; return o ? { id: n.id, d: +Math.hypot(o.position.x - p.x, o.position.z - p.z).toFixed(2) } : null; }).filter(Boolean).sort((a, b) => a.d - b.d).slice(0, 3); return JSON.stringify({ ctl: w.controls.state(), obj: [+p.x.toFixed(3), +p.z.toFixed(3)], mark: [+p0[0].toFixed(3), +p0[1].toFixed(3)], near: nr }); } catch (e) { return 'no diagnostics: ' + e.message; } };
+    const after = [p.x, p.z], diagNow = diag(), layer = !!document.querySelector('.cin'), spawned = w.scene.children.filter((o) => o.isObject3D && o.userData && o.userData.cineSpawn).length;
     // skip: a long reel ends at once
     const c2 = M.createCine(w, { id: 'long', events: [{ do: 'shot', on: 'hero', w: 2 }, { do: 'wait', s: 99 }] }, { audio }); const t0 = performance.now(); const sk = () => (c2.state().fired >= 2 ? c2.skip() : setTimeout(sk, 50)); setTimeout(sk, 300); const r2 = await c2.play();   // skip once the reel is running (its first frame can take seconds on a loaded machine)
     // watchdog: a reel blocked on a tap that never comes
     const c3 = M.createCine(w, { id: 'stuck', max: 0.6, events: [{ do: 'wait', tap: true }] }, { audio }); const r3 = await c3.play();
-    return { fired, want: reel.events.map((e) => e.do), log, res, moved: Math.hypot(after[0] - p0[0], after[1] - p0[1]), layer, spawned, skip: r2, skipMs: performance.now() - t0, stuck: r3 };
+    return { fired, want: reel.events.map((e) => e.do), log, res, moved: Math.hypot(after[0] - p0[0], after[1] - p0[1]), diag: diagNow, layer, spawned, skip: r2, skipMs: performance.now() - t0, stuck: r3 };
   });
   ok(JSON.stringify(unit.fired) === JSON.stringify(unit.want), 'engine: every cue fires, in order (' + unit.fired.join(',') + ')');
   ok(unit.res && !unit.res.skipped && unit.res.errors === 0 && unit.res.fired === unit.want.length, 'engine: the reel plays to its end with no cue errors (' + JSON.stringify(unit.res) + ')');
   ok(['sfx:click', 'drum:B', 'call'].every((k) => unit.log.indexOf(k) >= 0) && unit.log.filter((k) => /^drum:/.test(k)).length >= 4, 'engine: sound, drum, beat and call cues reach the audio adapter (' + unit.log.join(',') + ')');
-  ok(unit.moved < 0.01, 'engine: the hero moved by the reel is back on its mark (' + unit.moved.toFixed(3) + ' m)');
+  ok(unit.moved < 0.01, 'engine: the hero moved by the reel is back on its mark (' + unit.moved.toFixed(3) + ' m) ' + unit.diag);
   ok(!unit.layer && unit.spawned === 0, 'engine: the screen layer and the spawned actor are gone afterwards');
   ok(unit.skip.skipped && unit.skip.t < 30 && unit.skip.fired === 2, 'engine: skip() ends a 99 s reel at once (' + Math.round(unit.skipMs) + ' ms, reel clock ' + unit.skip.t + ' s)');
   ok(unit.stuck.skipped, 'engine: the watchdog ends a reel that waits forever');
