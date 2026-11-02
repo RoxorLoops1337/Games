@@ -12,7 +12,7 @@ import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSl
 import { createMotion } from './motion.js';
 import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
-import { luckHTML, refreshPips, buildHTML } from './cards_ui.js';
+import { luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML } from './cards_ui.js';
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
 import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag } from './battle_ui.js';
@@ -362,7 +362,9 @@ function toTitle() { refreshTitle(); mode = 'title'; audio.music(false); refresh
 // ---------------------------------------------------------------- upgrade cards
 function showCards() {
   const wrap = $('cards'); wrap.innerHTML = ''; pickLock = false; $('levelup').classList.remove('flashing');
-  const top = Math.max(0, ...g.choices.map(c => c.rarity || 0)); $('levelup').dataset.top = top;
+  const top = Math.max(0, ...g.choices.map(c => c.rarity || 0)); $('levelup').dataset.top = top; $('bandSheet').classList.remove('on');
+  for (const c of g.choices) if (c.kind === 'passive' && !c.stat) c.stat = passiveStat(g, c);
+  { const old = document.querySelector('.rvl'); if (old) old.remove(); const rv = revealHTML(top); if (rv) { document.body.insertAdjacentHTML('beforeend', rv); setTimeout(() => { const e = document.querySelector('.rvl'); if (e) e.remove(); }, 1900); } }
   g.choices.forEach((c, i) => {
     const rn = c.rarity || 0, rar = RARITIES[rn], b = document.createElement('button'); b.className = 'card pick c-' + c.kind + ' r' + rn; b.style.setProperty('--d', (i * 0.11 + 0.05).toFixed(2) + 's');
     const have = c.lvl + (c.gain && c.kind === 'weapon' ? c.gain : 1);
@@ -383,6 +385,7 @@ function showCards() {
   announce('Choose an upgrade. ' + g.choices.map((c, i) => `${i + 1}: ${c.name}, ${RARITY_WORDS[c.rarity || 0]}`).join('. ') + '. Press 1, 2 or 3, or Tab to a card and press Enter.');
 }
 let pickLock = false;
+{ const bs = $('buildStrip'), sh = $('bandSheet'); const tog = () => { if (!bs.innerHTML) return; if (!sh.classList.contains('on')) { sh.innerHTML = bandSheetHTML(g, icon); sh.classList.add('on'); } else sh.classList.remove('on'); }; bs.onclick = tog; sh.onclick = () => sh.classList.remove('on'); bs.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tog(); } }; }
 function pick(i) {
   if (mode !== 'play' || g.phase !== 'levelup' || pickLock) return;
   { const c = g.choices[i]; if (c) announce('Picked ' + c.name + ', ' + RARITY_WORDS[c.rarity || 0] + '. ' + (c.stat || '')); }
