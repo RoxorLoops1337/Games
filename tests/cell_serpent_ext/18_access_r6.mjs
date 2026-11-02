@@ -88,7 +88,7 @@ if (chromium) {
 
       // 3. reduce flashing: html.rf follows the switch and it is independent of reduce motion
       { const p = await open(390, 844); await p.evaluate(() => window.CS.openHub('Battle')); await p.waitForTimeout(300);
-        await p.evaluate(() => document.getElementById('setBtnH').click()); await p.waitForTimeout(400);
+        await p.evaluate(() => document.getElementById('setBtnH').click()); await p.waitForTimeout(400); await p.evaluate(() => window.CS.fold.openAll()); await p.waitForTimeout(100);   // b12r: settings groups open
         await p.click('#settings .tgl[data-k="reduceFlash"]', { force: true }); await p.waitForTimeout(250);
         let st = await p.evaluate(() => [document.documentElement.classList.contains('rf'), document.documentElement.classList.contains('rm'), window.CS.save().settings.reduceFlash, window.CS.save().settings.reduceMotion]);
         assert.deepEqual(st, [true, false, true, false], 'flashing is calmed while motion stays on');
@@ -115,7 +115,7 @@ if (chromium) {
 
       // 5. builds row: grouped, named by its skills, pressed state, empty slots say so, SAVE is 44px tall
       { const p = await open(390, 844, { presets: [['swab', 'daggers'], [], []], loadout: ['swab', 'daggers'] });
-        await p.evaluate(() => window.CS.openHub('Skills')); await p.waitForTimeout(700);
+        await p.evaluate(() => window.CS.openHub('Skills')); await p.waitForTimeout(700); await p.evaluate(() => window.CS.fold.openAll()); await p.waitForTimeout(200);   // b12r: the Builds fold
         const b = await p.evaluate(() => [...document.querySelectorAll('.prcell')].map(c => [c.getAttribute('role'), c.getAttribute('aria-label'), c.querySelector('.prmain').getAttribute('aria-label'), c.querySelector('.prmain').getAttribute('aria-pressed'), c.querySelector('.prsave').offsetHeight]));
         assert.equal(b.length, 3); assert.deepEqual(b[0].slice(0, 2), ['group', 'Build A']);
         assert.match(b[0][2], /^Build A is equipped: .+, .+$/); assert.equal(b[0][3], 'true'); assert.match(b[1][2], /^Build B is empty$/);

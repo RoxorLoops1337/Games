@@ -7,6 +7,7 @@
 // 10 to 20 shots. Upgrades come only from the yellow upgrade cells on the snake. Its face is shielded
 // until every other cell is gone. If the face reaches the membrane it drains your HP.
 // Between runs you spend Beats and Sparkles on stats, loot boxes and skill levels (meta section).
+import { defaultUnlocked, sanitizeUnlocked } from './unlock_b12p.js';
 export const W = 720;
 export const H = 1280;
 export const LINE_Y = 1055;   // the membrane at the bottom
@@ -316,14 +317,19 @@ const CAP_UP = Object.fromEntries(CAPSULE_UPS.map(u => [u.id, u]));
 // Beats (gold music-note coins) come from cells and clears. Sparkles (pink star gems) come from
 // clearing a stage for the first time. Fragments come from chest cells and loot boxes.
 export const META = [
-  { id: 'atk', name: 'Volume', max: 15, base: 30, grow: 1.45, desc: l => `+${10 * l}% damage` },
-  { id: 'crt', name: 'Pitch', max: 13, base: 30, grow: 1.45, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
-  { id: 'cdn', name: 'Tempo', max: 12, base: 30, grow: 1.45, desc: l => `-${5 * l}% cooldowns` },
-  { id: 'vit', name: 'Stamina', max: 13, base: 25, grow: 1.45, desc: l => `The snake crawls ${2 * l}% slower` },
-  { id: 'for', name: 'Fame', max: 13, base: 40, grow: 1.5, desc: l => `+${10 * l}% Beats` },
+  { id: 'atk', name: 'Volume', max: 15, base: 80, grow: 1.66, desc: l => `+${10 * l}% damage` },
+  { id: 'crt', name: 'Pitch', max: 13, base: 80, grow: 1.66, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
+  { id: 'cdn', name: 'Tempo', max: 12, base: 80, grow: 1.66, desc: l => `-${5 * l}% cooldowns` },
+  { id: 'vit', name: 'Stamina', max: 13, base: 70, grow: 1.66, desc: l => `The snake crawls ${2 * l}% slower` },
+  { id: 'for', name: 'Fame', max: 13, base: 110, grow: 1.69, desc: l => `+${10 * l}% Beats` },
   { id: 'rev', name: 'Encore', max: 1, base: 400, grow: 1, desc: () => 'Get back up once per run' },
 ];
 export const metaCost = (def, lvl) => Math.round(def.base * Math.pow(def.grow, lvl));
+// b12q: stat levels are gated by progress: cap = 2 + cleared stages / 2 (the single level Encore is not gated).
+// The cap only blocks further buying: a save above it keeps every level it owns.
+export const statCap = save => 2 + Math.floor(((save && save.cleared) || 0) / 2);
+export const statCapStage = lvl => Math.max(0, (lvl - 2) * 2);   // stages to clear before level `lvl` can be owned
+export const metaBuyable = (save, d) => { const l = (save.meta && save.meta[d.id]) || 0; return l < d.max && (d.max === 1 || l < statCap(save)); };
 export const SKILL_MAX_LV = 10;
 export const skillMul = lv => 1 + 0.12 * (Math.max(1, lv) - 1);          // permanent skill level -> damage
 export const skillUpgradeCost = lv => ({ frag: 4 + 3 * lv, beats: 0 });   // lv -> lv + 1, fragments only
@@ -337,7 +343,7 @@ export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
   const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0, joy: 0 };
-  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, bigTap: false, reviveTimer: true, volume: 1, thumbZone: false, aimAssist: false, textScale: 1, beatTick: false, pump: 2, fullscreen: true }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, gift: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, plat: { atk: 0, crt: 0, vit: 0, for: 0 }, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
+  return { v: 8, unlocked: defaultUnlocked(), loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, bigTap: false, reviveTimer: true, volume: 1, thumbZone: false, aimAssist: false, textScale: 1, beatTick: false, pump: 2, fullscreen: true, controlStyle: 'follow' }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, gift: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, plat: { atk: 0, crt: 0, vit: 0, for: 0 }, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -361,7 +367,7 @@ export function sanitizeSave(raw) {
   if (raw.stars && typeof raw.stars === 'object') for (const k of Object.keys(raw.stars)) if (/^\d+$/.test(k)) s.stars[k] = Math.min(3, num(raw.stars[k]));
   if (raw.streak && typeof raw.streak === 'object') s.streak = { last: num(raw.streak.last), n: num(raw.streak.n) };
   if (raw.last && typeof raw.last === 'object') s.last = { stage: Math.max(1, Math.min(50, num(raw.last.stage, 1))), hard: !!raw.last.hard };
-  if (raw.settings && typeof raw.settings === 'object') for (const k of Object.keys(s.settings)) if (k === 'textScale') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.textScale = Math.max(1, Math.min(1.4, raw.settings[k])); } else if (k === 'pump') { if (raw.settings[k] === 0 || raw.settings[k] === 1 || raw.settings[k] === 2) s.settings.pump = raw.settings[k]; } else if (k === 'volume') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.volume = Math.max(0, Math.min(1, raw.settings[k])); } else if (typeof raw.settings[k] === 'boolean') s.settings[k] = raw.settings[k];
+  if (raw.settings && typeof raw.settings === 'object') for (const k of Object.keys(s.settings)) if (k === 'textScale') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.textScale = Math.max(1, Math.min(1.4, raw.settings[k])); } else if (k === 'pump') { if (raw.settings[k] === 0 || raw.settings[k] === 1 || raw.settings[k] === 2) s.settings.pump = raw.settings[k]; } else if (k === 'controlStyle') { if (raw.settings[k] === 'follow' || raw.settings[k] === 'joystick') s.settings.controlStyle = raw.settings[k]; } else if (k === 'volume') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.volume = Math.max(0, Math.min(1, raw.settings[k])); } else if (typeof raw.settings[k] === 'boolean') s.settings[k] = raw.settings[k];
   if (raw.outfits && typeof raw.outfits === 'object') { for (const o of OUTFITS) if (raw.outfits.owned && raw.outfits.owned[o.id]) s.outfits.owned[o.id] = 1; if (OUTFIT[raw.outfits.worn] && s.outfits.owned[raw.outfits.worn]) s.outfits.worn = raw.outfits.worn; }
   if (raw.event && typeof raw.event === 'object') { s.event = { key: num(raw.event.key), earned: num(raw.event.earned), claimed: {} }; for (const k of Object.keys(raw.event.claimed || {})) if (raw.event.claimed[k]) s.event.claimed[k] = 1; }
   if (raw.inv && typeof raw.inv === 'object') s.inv = { day: num(raw.inv.day), left: Math.min(2, num(raw.inv.left, 2)), best: num(raw.inv.best) };
@@ -377,6 +383,7 @@ export function sanitizeSave(raw) {
   if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^h?\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
   if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
   s.addict = sanitizeAddict(raw.addict);
+  s.unlocked = sanitizeUnlocked(raw.unlocked);   // b12p: a save without the field is an old account and keeps every tab
   if (raw.treats && typeof raw.treats === 'object' && !Array.isArray(raw.treats)) { const tn = {}; for (const p of PETS) tn[p.id] = Math.min(9, num(raw.treats.n && raw.treats.n[p.id])); s.treats = { day: num(raw.treats.day), n: tn }; }   // round 10: treats given today, see pets_b10.js
   if (raw.petNames && typeof raw.petNames === 'object' && !Array.isArray(raw.petNames)) { const pn = {}; for (const p of PETS) { const v = raw.petNames[p.id]; const n = typeof v === 'string' ? v.replace(/[^\w \-!+&.]/g, '').trim().slice(0, 10) : ''; if (n) pn[p.id] = n; } s.petNames = pn; }
   if (Array.isArray(raw.presetNames)) s.presetNames = [0, 1, 2].map(i => typeof raw.presetNames[i] === 'string' ? raw.presetNames[i].replace(/[^\w \-!+&.]/g, '').trim().slice(0, 8) : '');
@@ -395,6 +402,7 @@ export function buyMeta(save, id) {
   if (!d) return false;
   const lvl = save.meta[id] || 0;
   if (lvl >= d.max) return false;
+  if (!metaBuyable(save, d)) return false;
   const c = metaCost(d, lvl);
   if (save.beats < c) return false;
   save.beats -= c; save.meta[id] = lvl + 1;
@@ -1638,6 +1646,16 @@ function markWave(segs, boss, wavePos, wave2) {
   for (let i = 0; i < segs.length; i++) segs[i].wave = boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
 }
 const CHEST_CP = [[0.25, 1], [0.5, 2]];
+// b12s: follow-finger chase. The duo glides toward the target x: eased (never overshoots) and speed capped
+// (a fast flick cannot teleport it). Returns the new x. Pure, so tests can pin it.
+export const CHASE_MUL = 2.6, CHASE_EASE = 14;
+export function chaseX(x, tx, dt, speed) {
+  if (!Number.isFinite(tx) || !Number.isFinite(x)) return x;
+  const d = tx - x; if (Math.abs(d) < 0.4) return tx;
+  const cap = (speed > 0 ? speed : 300) * CHASE_MUL * dt;
+  let st = d * (1 - Math.exp(-CHASE_EASE * dt)); if (st > cap) st = cap; else if (st < -cap) st = -cap;
+  return Math.abs(st) >= Math.abs(d) ? tx : x + st;
+}
 export function step(g, dt, input) {
   if (g.phase !== 'play' && g.phase !== 'clear') return;
   g.t += dt;
@@ -1645,6 +1663,10 @@ export function step(g, dt, input) {
 
   // the cell slides left and right along its row
   p.mx = input ? clamp(input.mx || 0, -1, 1) : 0;
+  if (!g.ring && input && Number.isFinite(input.tx) && dt > 0) {   // b12s: follow finger (lane stages): input.tx is the target x, mx is ignored
+    const nx = chaseX(p.x, clamp(input.tx, p.zone.x0, p.zone.x1), dt, p.speed);
+    p.mx = clamp((nx - p.x) / (dt * p.speed), -1, 1); p.x = nx + p.kx * dt;
+  } else
   p.x += (p.mx * p.speed + p.kx) * dt;
   p.kx *= Math.exp(-9 * dt);
   p.x = clamp(p.x, p.zone.x0, p.zone.x1); p.y = g.ring ? g.ring.cy : ROW_Y;

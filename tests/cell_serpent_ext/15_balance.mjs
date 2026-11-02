@@ -41,7 +41,7 @@ assert.ok(strong.prog >= bare.prog, 'skills, pets, keepsakes and the outfit neve
 // economy: a stage 1 win pays enough Beats that the first Volume levels come within a handful of runs
 assert.ok(fresh1.coins >= 60, 'stage 1 pays a steady drip of Beats: ' + fresh1.coins);
 const firstThree = [0, 1, 2].reduce((a, l) => a + sim.metaCost(sim.META[0], l), 0);
-assert.ok(firstThree / Math.max(1, fresh1.coins) <= 4, 'three Volume levels cost about four stage 1 runs');
+assert.ok(firstThree / Math.max(1, fresh1.coins) <= 9, 'b12q: three Volume levels cost under nine stage 1 runs (stats are slower on purpose)');
 // Sparkles: first clears are the faucet (about 25 per stage early); prices must stay within a few clears
 let first5 = 0; for (let n = 1; n <= 5; n++) first5 += sim.clearReward(n).sparkles;
 assert.ok(first5 >= 2 * sim.EGG_PRICE, 'the first five clears buy at least two eggs: ' + first5);
@@ -53,5 +53,5 @@ for (let n = 15; n < 50; n++) assert.ok(sim.hpBase(n + 1) > sim.hpBase(n), 'cell
 assert.ok(sim.hpBase(3) === 12 * (12.5 * Math.pow(1.2, 2) + 1.5), 'early cell HP untouched');
 assert.ok(sim.META.filter(m => m.max > 1).every(m => m.max >= 12 && m.max <= 15), 'meta levels stay within the 15 pips the Stats card draws');
 const old = sim.sanitizeSave({ meta: { atk: 12, crt: 10, cdn: 10, vit: 10, for: 10, rev: 1 } });
-assert.equal(old.meta.atk, 12); assert.equal(old.meta.for, 10); assert.ok(sim.buyMeta({ ...old, beats: 1e6 }, 'atk'), 'a maxed-out old account can buy the new levels');
+assert.equal(old.meta.atk, 12); assert.equal(old.meta.for, 10); assert.ok(sim.buyMeta({ ...old, beats: 1e6, cleared: 40 }, 'atk'), 'a maxed-out old account can buy the new levels');
 console.log('15_balance ok');

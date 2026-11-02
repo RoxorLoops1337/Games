@@ -1,5 +1,5 @@
 import { keyAim, sliderAim, watchAim, resetAimSr, setFieldLabel } from './a11y_b12k.js';
-import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, RING_SCALE, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
+import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, RING_SCALE, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, metaBuyable, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { platMeta } from './plat_b12d.js';
 import { skinFor, recordAddictRun, eventInfo, ensureEvent } from './sim.js';
 import { deathCauseOf } from './screen_b11.js';
@@ -30,7 +30,7 @@ import { setupTitle11 } from './title_b11.js';
 import { deathCoach } from './coach_b11.js';
 import { firstGoalHTML, welcomeBack, welcomeHTML, hoursAway, stampVisit } from './title12b.js';
 import { bakeCardArt } from './card_bake.js';
-import { partnerIds, markPartners, betterRoll, luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand, cardFoilHTML, markReroll, chainPulse } from './cards_ui.js';
+import { partnerIds, markPartners, betterRoll, luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand, cardFoilHTML, markReroll, chainPulse, hudBottomPx, guardAllows, trackPress, armCards } from './cards_ui.js';
 import { offeredLinks, markLinks, lockState, lockHTML, toggleLock, keepLocked, dealChipHTML, pickBurst, lockKey } from './cards_b10.js';
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { paintTabIcons, bindHubSwipe, setTabCount, onTabUp } from './tabs_ui.js';
@@ -59,6 +59,7 @@ import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collect
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
 import { pauseBuild, buildChipHTML, buildLine, pauseSub } from './result_b9.js';
+import { foldTab, foldSettings, hook as foldHook } from './fold_b12r.js';
 import { bindSettingsFind, hubStickerPop, markStickersSeen, reviveInfoHTML, shareText, shareResult } from './result_b11.js';
 import { bindBuildChips, chipStatsText, stickerIds, newStickers, showStickerPop, clearStickerPop, bumpStatsTab, shineStars } from './result_b10.js';
 import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
@@ -70,7 +71,10 @@ import { panOf, sweepTick, isMilestone } from './audio_b12i.js';
 import { logRun } from './hub_b11.js';
 import { initFullscreen, fsOnRun } from './fullscreen_fs.js';
 import { initInstall } from './install_b12n.js';
+import { isUnlocked, isTabUnlocked, setUnlockAll, unlockAllOn } from './unlock_b12p.js';
+import { createUnlockUI, trimGoalsPanel } from './unlock_ui_b12p.js';
 
+try { if (/[?&]unlock=all\b/.test(location.search)) setUnlockAll(true); } catch (e) { /* ignore */ }   // b12p: test/debug only, opens every tab and panel
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
 const canvas = $('c');
@@ -90,6 +94,9 @@ let slowFrames = 0, fastFrames = 0;
 const clk = createClock();   // 05-screen-feel: fixed-step clock fed with dt * slow-motion scale
 let reviveAsked = false, hard = false, mode = 'title', g = null, demo = null, acc = 0, last = 0, endT = 0, cardsFor = null, hubTab = 'Battle', sel = 1, ranResult = false;
 const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
+const fol = { on: false, id: -1, x: 0, ptT: 0, keyT: 0 };   // b12s: follow-finger control (lane stages): the first finger owns movement, the duo chases its x
+const MOVE_KEYS = new Set(['a', 'd', 'arrowleft', 'arrowright']);
+const followMode = () => !!g && !g.ring && save.settings.controlStyle !== 'joystick';
 const keys = {};
   const aimS = newAim();   // b11: circle stages aim all round: the finger or mouse sets the target angle, the sim gets an eased angle
   const aimTk = {};
@@ -114,7 +121,7 @@ addEventListener('resize', resize); resize(); initFullscreen(() => save.settings
 initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap = true; }); initKeyboard(); initSrPass(); initA11y7(); initGridNav(document.getElementById('tabBattle')); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
 
 let shownId = '';
-function show(id) { { const ss = sheetSound(shownId, id); shownId = id; if (ss) audio.play(ss); } if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id && !(g && g.ring)); }
+function show(id) { if (id !== 'hub') unlockUI.dropCard(); { const ss = sheetSound(shownId, id); shownId = id; if (ss) audio.play(ss); } if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id && !(g && g.ring)); }
 // the gig claim holds the pill at its old value until the flying rewards land (then it counts up with a +N)
 const curHold = {};
 function gigFlies(list, d0 = 0) {
@@ -175,13 +182,15 @@ const skillLevels = () => Object.fromEntries(Object.entries(save.skills).map(([i
 
 // ---------------------------------------------------------------- hub
 const TABS = ['Shop', 'Stats', 'Battle', 'Skills', 'Pets', 'Gear'];
+const OPEN_TABS = [...TABS];   // b12p: the tabs that are open right now (unlock_ui keeps it in step with save.cleared)
+const unlockUI = createUnlockUI({ order: OPEN_TABS, save: () => save, persist: () => persist(), audio, toast: m => toast(m), mode: () => mode, shown: () => shownId, tab: () => hubTab });
 // round 11: one kind line when a reward is waiting, once per thing per visit (never over a panel or the welcome gift)
 const nudged = new Set();
 function hubNudge() {
-  try { const n = readyNudge(save, dayKey(), Date.now(), nudged); if (!n) return; nudged.add(n.key); setTimeout(() => { const nr = document.getElementById('nextRew'); if (nr && nr.classList.contains('ready')) return; /* the Next Reward banner already says it, and the toast would cover the currency pills */ if (mode === 'hub' && shownId === 'hub') toast(n.icon + ' ' + n.text + '!'); }, 900); } catch (e) { /* ignore */ }
+  try { if (!isUnlocked('nextreward', save)) return; const n = readyNudge(save, dayKey(), Date.now(), nudged); if (!n) return; nudged.add(n.key); setTimeout(() => { const nr = document.getElementById('nextRew'); if (nr && nr.classList.contains('ready')) return; /* the Next Reward banner already says it, and the toast would cover the currency pills */ if (mode === 'hub' && shownId === 'hub') toast(n.icon + ' ' + n.text + '!'); }, 900); } catch (e) { /* ignore */ }
 }
 function openHub(tab = hubTab) {
-  mode = 'hub'; hubTab = tab; audio.hubWorld(skinFor(sel)); audio.music(false); audio.hub(true);
+  mode = 'hub'; hubTab = isTabUnlocked(tab, save) ? tab : 'Battle'; audio.hubWorld(skinFor(sel)); audio.music(false); audio.hub(true);
   if (dayLogin(save, dayKey())) persist();
   refreshCur();
   sel = Math.max(1, Math.min(sel, MAX_STAGE, save.cleared + 4));
@@ -191,8 +200,8 @@ function openHub(tab = hubTab) {
 function badgeTabs() {
   const day = dayKey(), s = save, out = new Set();
   if (welcomeReady(s) || dealsFor(s, day).some((d, i) => !s.shop.bought[i] && d.price === 0) || s.shop.gold !== day) out.add('Shop');
-  if (META.some(d => (s.meta[d.id] || 0) < d.max && s.beats >= metaCost(d, s.meta[d.id] || 0))) out.add('Stats');
-  if (s.sign.day !== day || FUND.some(f => fundReady(s, f)) || TROPHIES.some(t => trophyReady(s, t)) || dailyGoals(day).some(gl => goalProgress(s, day, gl) >= gl.target && !(s.daily.day === day && s.daily.claimed[gl.id]))) out.add('Battle');
+  if (META.some(d => metaBuyable(s, d) && s.beats >= metaCost(d, s.meta[d.id] || 0))) out.add('Stats');
+  if ((isUnlocked('sign', s) && s.sign.day !== day) || (isUnlocked('fund', s) && FUND.some(f => fundReady(s, f))) || (isUnlocked('trophies', s) && TROPHIES.some(t => trophyReady(s, t))) || (isUnlocked('gigs', s) && dailyGoals(day).some(gl => goalProgress(s, day, gl) >= gl.target && !(s.daily.day === day && s.daily.claimed[gl.id])))) out.add('Battle');
   if (WEAPONS.some(w => { const k = s.skills[w.id]; return k.lv > 0 ? k.lv < SKILL_MAX_LV && k.frag >= skillUpgradeCost(k.lv).frag : k.frag >= w.frag && (s.cleared || 0) >= (w.stage || 0); })) out.add('Skills');
   if (s.eggs > 0 || PETS.some(p => petCanUp(s, p.id))) out.add('Pets');
   if (KEEPSAKES.some(k => keepCanUp(s, k.id))) out.add('Gear');
@@ -202,27 +211,29 @@ function badgeTabs() {
 function badgeCounts() {
   const day = dayKey(), s = save, m = new Map(), put = (t, n) => { if (n > 0) m.set(t, n); };
   put('Shop', (welcomeReady(s) ? 1 : 0) + dealsFor(s, day).filter((d, i) => !s.shop.bought[i] && d.price === 0).length + (s.shop.gold !== day ? 1 : 0));
-  put('Stats', META.filter(d => (s.meta[d.id] || 0) < d.max && s.beats >= metaCost(d, s.meta[d.id] || 0)).length);
-  put('Battle', (s.sign.day !== day ? 1 : 0) + FUND.filter(f => fundReady(s, f)).length + TROPHIES.filter(t => trophyReady(s, t)).length + dailyGoals(day).filter(gl => goalProgress(s, day, gl) >= gl.target && !(s.daily.day === day && s.daily.claimed[gl.id])).length);
+  put('Stats', META.filter(d => metaBuyable(s, d) && s.beats >= metaCost(d, s.meta[d.id] || 0)).length);
+  put('Battle', (isUnlocked('sign', s) && s.sign.day !== day ? 1 : 0) + (isUnlocked('fund', s) ? FUND.filter(f => fundReady(s, f)).length : 0) + (isUnlocked('trophies', s) ? TROPHIES.filter(t => trophyReady(s, t)).length : 0) + (!isUnlocked('gigs', s) ? [] : dailyGoals(day)).filter(gl => goalProgress(s, day, gl) >= gl.target && !(s.daily.day === day && s.daily.claimed[gl.id])).length);
   put('Skills', WEAPONS.filter(w => { const k = s.skills[w.id]; return k.lv > 0 ? k.lv < SKILL_MAX_LV && k.frag >= skillUpgradeCost(k.lv).frag : k.frag >= w.frag && (s.cleared || 0) >= (w.stage || 0); }).length);
   put('Pets', (s.eggs > 0 ? 1 : 0) + PETS.filter(p => petCanUp(s, p.id)).length);
   put('Gear', KEEPSAKES.filter(k => keepCanUp(s, k.id)).length);
   return m;
 }
 function renderHub() {
+  if (!isTabUnlocked(hubTab, save)) hubTab = 'Battle';
   refreshCur(); try { dressDuo(document.querySelector('.herobox .duo'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ }
   { const bd = badgeTabs(), bc = badgeCounts(); for (const b of document.querySelectorAll('.tabs button')) { const has = b.querySelector('.dot'); if (bd.has(b.dataset.tab) && !has) { const d = document.createElement('i'); d.className = 'dot'; b.appendChild(d); } else if (!bd.has(b.dataset.tab) && has) has.remove(); setTabCount(b, bc.get(b.dataset.tab) || 0); } }
   hub2.addict.renderNext(); hub2.retain.renderStrip(); petHint(document.querySelector('.tabs'), hubTab, save);
-  motion.tabDir(TABS, hubTab);
+  motion.tabDir(OPEN_TABS, hubTab);
   for (const t of TABS) { $('tab' + t).classList.toggle('on', t === hubTab); }
   for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === hubTab);
   $('hub').classList.toggle('bt-on', hubTab === 'Battle');
   if (hubTab === 'Battle') renderBattle(); else if (hubTab === 'Skills') renderSkills(); else if (hubTab === 'Pets') renderPets(); else if (hubTab === 'Stats') hub2.renderStats(); else if (hubTab === 'Gear') hub2.renderGear(); else hub2.renderShop();
   if (stagKey !== hubTab) { stagKey = hubTab; if (hubTab !== 'Battle') motion.stagger($('tab' + hubTab)); }
+  unlockUI.apply(save);   // b12p: hide what is still locked, lay out the tab bar, run the hint queue
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { audio.unlock(); audio.play('click'); hubTab = b.dataset.tab; hubTabSwitch(); };
 paintTabIcons(); paintButtonGlyphs(); paintSettingIcons(); watchGlyphs(document.body);
-bindHubSwipe({ order: TABS, cur: () => hubTab, hub: $('hub'), pane: () => $('tab' + hubTab), bump: () => buzz(10), go: t => { if (mode !== 'hub') return; audio.unlock(); audio.play('click'); buzz(6); hubTab = t; hubTabSwitch(); } });
+bindHubSwipe({ order: OPEN_TABS, cur: () => hubTab, hub: $('hub'), pane: () => $('tab' + hubTab), bump: () => buzz(10), go: t => { if (mode !== 'hub') return; audio.unlock(); audio.play('click'); buzz(6); hubTab = t; hubTabSwitch(); } });
 // 17-perf: a tab tap paints the new pane at once (old content dimmed as a light skeleton) and builds it on the next frame, so the tap never freezes
 let hubSwitchTok = 0;
 function hubTabSwitch() {
@@ -258,7 +269,7 @@ function renderBattle() {
   { const rp = recPower(sel, hard), mine = power(save);
     $('diffRow').innerHTML = `<div class="seg ${hard ? 'h' : ''}"><i></i><button class="dbtn ${hard ? '' : 'on'}" data-h="0">Normal</button><button class="dbtn hard ${hard ? 'on' : ''}" data-h="1" ${hardOk ? '' : 'disabled'}>${hardOk ? 'Hard' : '🔒 Hard'}</button></div>${powerHTML(mine, rp, hard)}`; }
   for (const b of $('diffRow').querySelectorAll('.dbtn')) b.onclick = () => { audio.play('click'); hard = b.dataset.h === '1'; renderBattle(); };
-  { const gf = $('gapFix'), gap = powerGap(power(save), recPower(sel, hard)).gap, fx = gapFix(gap, badgeCounts()); gf.hidden = !fx; gf.dataset.tab = fx ? fx.tab : ''; gf.innerHTML = gapFixHTML(fx, gap); }   // b11: one tap to what closes the power gap
+  { const gf = $('gapFix'), gap = powerGap(power(save), recPower(sel, hard)).gap, fx = (f0 => (f0 && isTabUnlocked(f0.tab, save) ? f0 : null))(gapFix(gap, badgeCounts())); gf.hidden = !fx; gf.dataset.tab = fx ? fx.tab : ''; gf.innerHTML = gapFixHTML(fx, gap); }   // b11: one tap to what closes the power gap
   $('stMod').innerHTML = twistHTML(info.mod); $('btFact').hidden = true; $('btHero').classList.remove('fact');
   { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; syncRwFilter(chips, cb); cb.textContent = 'CONTINUE ▶ ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
   const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : `<span><b>Cleared ✓</b> ${starsHTML(save.stars[sel] || 0)}</span>${sel > (save.hardCleared || 0) ? `<span class="hardpay">Hard pays <b>${curImg('sparkles')} ${Math.round(clearReward(sel).sparkles * 1.5)}</b></span>` : ''}`;
@@ -271,7 +282,7 @@ function renderBattle() {
   hub2.renderSide(); watchSideIcons($('battleSide')); watchSide($('battleSide'));
   renderPig();
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
-  renderGoals();
+  renderGoals(); foldTab('Battle');
   if (chips.dataset.sc !== sel + '|' + ckey) { chips.dataset.sc = sel + '|' + ckey; requestAnimationFrame(() => { const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } } }); }   // 17-perf: read layout after paint, and only when the stage changed
 }
 // chip filter: only the stages that still pay something (next first clear, unpaid Hard clear)
@@ -388,6 +399,7 @@ function bindBring(box, info, sp) {
 }
 // tap the portrait: species fun fact plus what the stage pays
 $('stPortrait').onclick = () => {
+  if (!isUnlocked('funfact', save)) return;   // b12p: the fun fact opens at stage 7
   const box = $('btFact'), hero = $('btHero'); if (!box.hidden) { box.hidden = true; hero.classList.remove('fact'); return; }
   audio.play('click'); const info = stageInfo(sel), sp = (kit && kit.SPECIES && kit.SPECIES[info.skin]) || null;
   box.innerHTML = factHTML({ info, sp, hard, done: sel <= save.cleared, sparkleIcon: curImg('sparkles'), bring: bringFor(info.skin) }); box.hidden = false; hero.classList.add('fact'); try { hero.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* ignore */ }
@@ -449,6 +461,7 @@ function renderPets() {
     list.appendChild(t);
   }
   if (!list.querySelector('.tile')) list.appendChild(emptyCardUx('pets', petFilter, () => { petFilter = 'All'; audio.play('click'); renderPets(); }));
+  foldTab('Pets');
 }
 function renderGoals() {
   const list = $('goalList'); list.innerHTML = '';
@@ -509,13 +522,15 @@ function renderSkills() {
     const h = document.createElement('div'); h.className = 'sec'; h.innerHTML = `<span style="background:${col}">${name}</span>`; list.appendChild(h);
     for (const t of groups[i]) list.appendChild(t);
   });
+  foldTab('Skills');
 }
 let skFilter = 'All', skSort = 'Tier', petFilter = 'All', petSort = 'Order';
 const sheets = createSheets({ save: () => save, persist: () => persist(), audio, icon, rerender: () => renderHub() });
 const defaultBoxOk = () => { audio.play('click'); openHub('Shop'); };
 $('bOk').onclick = defaultBoxOk;
 const toast = msg => { if (/^(Not enough|Nothing to claim|Out of Voice|That code does not)/.test(msg)) audio.play('deny'); const t = $('toast'); t.textContent = msg; { const tn = dressToast(t, msg); if (TONE_HAPTIC[tn]) haptic(TONE_HAPTIC[tn], save && save.settings); } t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200); };
-const hub2 = createHub2({ $, toast, tile, icon, curImg, audio, save: () => save, persist, show, openHub: t => openHub(t), renderHub: () => renderHub(), refreshCur: () => refreshCur(), dayKey, resetBoxOk: () => { $('bOk').onclick = defaultBoxOk; }, bodyURL: skin => { if (!kit) return ''; if (!(('b|' + skin) in iconCache)) { const spr = kit.SPR.body(skin, false, ''); iconCache['b|' + skin] = spr && spr.c.toDataURL ? spr.c.toDataURL() : ''; } return iconCache['b|' + skin]; } });
+const hub2 = createHub2({ unlocked: id => isUnlocked(id, save), $, toast, tile, icon, curImg, audio, save: () => save, persist, show, openHub: t => openHub(t), renderHub: () => renderHub(), refreshCur: () => refreshCur(), dayKey, resetBoxOk: () => { $('bOk').onclick = defaultBoxOk; }, bodyURL: skin => { if (!kit) return ''; if (!(('b|' + skin) in iconCache)) { const spr = kit.SPR.body(skin, false, ''); iconCache['b|' + skin] = spr && spr.c.toDataURL ? spr.c.toDataURL() : ''; } return iconCache['b|' + skin]; } });
+try { const pb = $('pBody'); if (pb && typeof MutationObserver === 'function') new MutationObserver(() => { if ($('pTitle').textContent === 'GOALS') trimGoalsPanel(pb, save); }).observe(pb, { childList: true }); } catch (e) { /* cosmetic */ }   // b12p: the long Goals page keeps out sections that are not open yet
 
 // ---------------------------------------------------------------- runs
 function newDemo() {
@@ -544,7 +559,7 @@ function showCards() {
   bakeCardArt();
   if (!lockState.keep) lockState.i = -1; lockState.keep = false;
   const wrap = $('cards'); wrap.innerHTML = ''; pickLock = false; $('levelup').classList.remove('flashing');
-  const top = Math.max(0, ...g.choices.map(c => c.rarity || 0)); $('levelup').dataset.top = top; { const bn = $('levelup').querySelector('.banner'); if (bn) bn.dataset.lv = g.level | 0; } $('bandSheet').classList.remove('on');
+  const top = Math.max(0, ...g.choices.map(c => c.rarity || 0)); $('levelup').dataset.top = top; { const bn = $('levelup').querySelector('.banner'); if (bn) bn.dataset.lv = g.level | 0; } $('bandSheet').classList.remove('on'); wrap.dataset.n = g.choices.length; try { $('levelup').style.setProperty('--lvtop', hudBottomPx(R && R.layout(), innerWidth) + 'px'); } catch (e) { /* css fallback */ }
   for (const c of g.choices) if (c.kind === 'passive' && !c.stat) c.stat = passiveStat(g, c);
   { const old = document.querySelector('.rvl'); if (old) old.remove(); const rv = revealHTML(top); if (rv) { document.body.insertAdjacentHTML('beforeend', rv); setTimeout(() => { const e = document.querySelector('.rvl'); if (e) e.remove(); }, 1900); } }
   g.choices.forEach((c, i) => {
@@ -556,19 +571,21 @@ function showCards() {
     const stat = dm ? `<div class="delta"><span class="dl">${dm[1]}</span><span class="dv"><i>${dm[2]}</i><em>→</em><b>${dm[3]}</b></span>${ghostBarHTML(mt)}</div>` : c.stat ? `<div class="delta"><span class="dv"><b>${c.stat}</b></span>${ghostBarHTML(mt)}</div>` : '';
     const syn = synergyHint(g, c);
     const fx = rn >= 4 ? '<span class="rays"></span>' + Array.from({ length: rn === 5 ? 8 : 5 }, (_, k) => `<span class="pt" style="--x:${(8 + k * (84 / (rn === 5 ? 7 : 4))).toFixed(0)}%;--t:${(1.6 + (k * 0.37) % 1.2).toFixed(2)}s;--w:${((k * 0.29) % 1.5).toFixed(2)}s"></span>`).join('') : '';
-    b.innerHTML = `${fx}${cardFoilHTML(rn)}<span class="key">${i + 1}</span>${g.rerolls > 0 ? lockHTML(i) : ''}<div class="ic">${foilHTML(rn)}${c.kind === 'weapon' ? levelRingHTML(mt) : ''}${icon(c.id)}<span class="kd">${kindLabel(c)}</span>${c.isNew ? '<span class="newtag">NEW</span>' : ''}</div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}${syn ? `<div class="syn">${syn}</div>` : ''}<div class="pips">${pips}</div></div><span class="shine"></span>`;
+    b.innerHTML = `${fx}${cardFoilHTML(rn)}<span class="key">${i + 1}</span>${g.rerolls > 0 ? lockHTML(i) : ''}<div class="ic">${foilHTML(rn)}${c.kind === 'weapon' ? levelRingHTML(mt) : ''}${icon(c.id)}<span class="kd">${kindLabel(c)}</span>${c.isNew ? '<span class="newtag">NEW</span>' : ''}</div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}${syn ? `<div class="syn">${syn}</div>` : ''}<div class="pips">${pips}</div></div><span class="shine"></span><span class="rdy" aria-hidden="true"></span>`;
     b.setAttribute('aria-label', `Option ${i + 1}: ${c.name}, ${RARITY_WORDS[rn]} rarity${c.isNew ? ', new' : ''}. ${c.desc}${c.stat ? '. ' + c.stat : ''}`);
-    b.onclick = e => { if (e.target.closest && e.target.closest('.lockb')) { toggleLock(wrap, i); audio.play('click'); return; } pick(i); };
+    b.onclick = e => { if (e.target.closest && e.target.closest('.lockb')) { toggleLock(wrap, i); audio.play('click'); return; } if (!guardAllows(lvGuard, i, e.detail > 0, performance.now())) return; pick(i); };
     if (lockState.i === i && g.rerolls > 0) b.classList.add('kept');
     wrap.appendChild(b);
   });
-  markLinks(wrap, offeredLinks(g, g.choices));
+  markLinks(wrap, offeredLinks(g, g.choices)); armCards(wrap, lvGuard, performance.now());
   { const bonus = Math.round((20 + 4 * g.stage) * g.p.coinMul); $('skipBtn').innerHTML = skipHTML(bonus); $('skipBtn').setAttribute('aria-label', 'Skip for ' + bonus + ' beats'); }
   $('refreshBtn').disabled = g.rerolls <= 0; $('refreshLeft').innerHTML = '<span class="rp">' + refreshPips(g) + '</span>'; $('refreshBtn').classList.toggle('empty', g.rerolls <= 0); $('luckBox').innerHTML = luckHTML(g) + (rrChip ? dealChipHTML(g, g.choices) : ''); rrChip = false; $('buildStrip').innerHTML = buildHTML(g, icon); markPartners($('buildStrip'), partnerIds(g, g.choices));
   cardsFor = g.choices; { let mr = 0; for (const c of g.choices) mr = Math.max(mr, c.rarity || 0); audio.play('card' + mr); if (mr >= 3) setTimeout(() => { if (mode === 'play' && g.phase === 'levelup') audio.play('stinger'); }, 220); } show('levelup');
   announce('Choose an upgrade. ' + g.choices.map((c, i) => `${i + 1}: ${c.name}, ${RARITY_WORDS[c.rarity || 0]}`).join('. ') + '. Press 1, 2 or 3, or Tab to a card and press Enter.' + (g.rerolls > 0 ? ' Press L then a number to lock a card for the refresh.' : ''));
 }
 let pickLock = false, rrChip = false;
+// 35-t: pointer taps are ignored for 450 ms after the cards appear and must press and release on the same card; keys and screen readers are never guarded
+const lvGuard = { at: 0, down: -1, moved: false }; trackPress($('cards'), lvGuard);
 { const bs = $('buildStrip'), sh = $('bandSheet'); const tog = () => { if (!bs.innerHTML) return; if (!sh.classList.contains('on')) { sh.innerHTML = bandSheetHTML(g, icon); sh.classList.add('on'); } else sh.classList.remove('on'); }; bs.onclick = tog; sh.onclick = () => sh.classList.remove('on'); bs.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tog(); } }; }
 function pick(i) {
   if (mode !== 'play' || g.phase !== 'levelup' || pickLock) return;
@@ -595,6 +612,11 @@ canvas.addEventListener('pointerdown', e => {
   if (g.encore >= 1 && Math.hypot(gp.x - g.p.x, gp.y - g.p.y) < 110) encoreTap = true;   // tap the duo for the Encore blast
   if (g.ring) aimAt(e, true);   // b11: a touch anywhere aims (b12f: arena touch aims at it, elsewhere a floating stick)
   if (!g.ring && save.settings.thumbZone && !inThumbZone(e.clientY, innerHeight)) return;   // thumb zone: only the bottom third steers
+  if (followMode()) {   // b12s: the duo chases the finger x at once (no dead zone, no joystick base)
+    if (fol.on) return;
+    fol.on = true; fol.id = e.pointerId; fol.x = gp.x; fol.ptT = performance.now();
+    canvas.setPointerCapture(e.pointerId); return;
+  }
   if (joy.on) return;
   joy.on = true; joy.id = e.pointerId; joy.sx = e.clientX; joy.sy = e.clientY; joy.dx = joy.dy = 0;
   joy.x = gp.x; joy.y = gp.y; joy.tz = save.settings.thumbZone ? gp.x : null; joy.hide = !!g.ring && aimS.mode === 1;   // b12f: no stick ring when the finger aims at the arena
@@ -602,6 +624,7 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('pointermove', e => {
   if (mode === 'play' && g.ring && (e.pointerType === 'mouse' || (joy.on && e.pointerId === joy.id))) { if (e.pointerType === 'mouse' && !aimS.mode) aimS.mode = 1; aimAt(e, false); return; }   // b11: drag (or hover with a mouse) to sweep the aim
+  if (fol.on) { if (e.pointerId === fol.id) { fol.x = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; fol.ptT = performance.now(); } return; }
   if (!joy.on || e.pointerId !== joy.id) return;
   if (joy.tz != null) { joy.tz = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; return; }   // thumb zone: the duo follows the finger
   const L = R.layout(), dpr = canvas.width / innerWidth, rad = 70 * L.s / dpr;
@@ -610,10 +633,10 @@ canvas.addEventListener('pointermove', e => {
   const gp = R.toGame(joy.sx * dpr, joy.sy * dpr); joy.x = gp.x;
   joy.dx = dx; joy.dy = 0;
 });
-const endJoy = e => { if (e.pointerId === aimS.id) aimUp(aimS); if (e.pointerId === joy.id) { joy.tz = null; joy.on = false; joy.dx = joy.dy = 0; } };
+const endJoy = e => { if (e.pointerId === aimS.id) aimUp(aimS); if (e.pointerId === fol.id) fol.on = false; if (e.pointerId === joy.id) { joy.tz = null; joy.on = false; joy.dx = joy.dy = 0; } };
 canvas.addEventListener('pointerup', endJoy); canvas.addEventListener('pointercancel', endJoy);
 addEventListener('keydown', e => {
-  keys[e.key.toLowerCase()] = true;
+  keys[e.key.toLowerCase()] = true; if (MOVE_KEYS.has(e.key.toLowerCase())) fol.keyT = performance.now();
   if (e.key === 'Escape') goBack(false);
   else if (e.key.toLowerCase() === 'p') { mode === 'play' ? pause() : mode === 'pause' && !$('settings').classList.contains('on') && !$('panel').classList.contains('on') ? resume() : 0; }
   if (mode === 'play' && g.phase === 'levelup' && !pickLock) { const lk = lockKey(e, $('cards'), g.rerolls); if (lk) { if (lk.i >= 0) { e.preventDefault(); const on = toggleLock($('cards'), lk.i) === lk.i; audio.play('click'); announce(on ? 'Card ' + (lk.i + 1) + ' locked. A reroll keeps it.' : 'Lock removed.'); } else if (lk.armed) announce('Lock: press 1, 2 or 3.'); else if (e.key.toLowerCase() === 'l') announce('Nothing to lock, no refreshes left.'); return; } }
@@ -638,9 +661,10 @@ function readInput() {
   if (joy.on && joy.tz != null) mx += zoneSteer(joy.tz, g.p.x);
   if (keys.a || keys.arrowleft) mx -= 1; if (keys.d || keys.arrowright) mx += 1;
   const enc = encoreTap || !!keys[' ']; encoreTap = false;
+  if (fol.on && followMode() && (mx === 0 || fol.ptT > fol.keyT) && !joy.sdx) return { mx: 0, my: 0, tx: fol.x, encore: enc };   // b12s: follow finger; the latest of finger and keys wins
   return { mx, my: 0, encore: enc };
 }
-function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; pauseRecap(); quitHold.reset(); show('pause'); }
+function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; fol.on = false; joy.dx = joy.dy = 0; pauseRecap(); quitHold.reset(); show('pause'); }
 // Escape and the Android back button share this: close what is open, pause a run, resume a pause, leave the end screen.
 // The back button also walks the hub up to the title; Escape stays put there.
 function goBack(fromBtn) {
@@ -661,13 +685,14 @@ function resume() { mode = 'play'; show(''); last = performance.now(); if (R && 
 // r8: the walking pets answer BACK ON! (the resume count-in is 3 x 0.27 s)
 function petsCall() { const ps = g && g.pets ? g.pets.slice() : []; if (ps.length && !systemReduceMotion()) setTimeout(() => { if (mode === 'play') ps.forEach((id, i) => setTimeout(() => audio.play(PETSND[id] || 'chirp'), i * 90)); }, 830); }
 function openSettings(back) {
+  foldSettings($('settings'));
   const paint = () => {
-    for (const b of document.querySelectorAll('#settings .tgl')) { const k = b.dataset.k, on = k === 'sound' ? !save.muted : save.settings[k]; b.classList.toggle('on', !!on); b.querySelector('b').textContent = k === 'pump' ? PUMP_LEVELS[pumpLevel(on)] : on ? 'ON' : 'OFF'; b.classList.toggle('on', k === 'pump' ? pumpLevel(on) > 0 : !!on); }
+    for (const b of document.querySelectorAll('#settings .tgl')) { const k = b.dataset.k, on = k === 'sound' ? !save.muted : k === 'controlStyle' ? save.settings.controlStyle !== 'joystick' : save.settings[k]; b.classList.toggle('on', !!on); if (k === 'controlStyle') { const f = save.settings.controlStyle !== 'joystick'; b.querySelector('span').textContent = 'Control style: ' + (f ? 'Follow finger' : 'Joystick'); } b.querySelector('b').textContent = k === 'pump' ? PUMP_LEVELS[pumpLevel(on)] : on ? 'ON' : 'OFF'; b.classList.toggle('on', k === 'pump' ? pumpLevel(on) > 0 : !!on); }
     $('bkCode').value = exportSave(save); paintCbStrip($('cbStrip'), kit, !!save.settings.colorBlind);
   };
   for (const b of document.querySelectorAll('#settings .tgl')) b.onclick = () => {
     const k = b.dataset.k; audio.unlock();
-    if (k === 'sound') save.muted = !save.muted; else if (k === 'pump') save.settings.pump = (pumpLevel(save.settings.pump) + 1) % 3; else save.settings[k] = !save.settings[k];
+    if (k === 'controlStyle') { save.settings.controlStyle = save.settings.controlStyle === 'joystick' ? 'follow' : 'joystick'; fol.on = false; joy.on = false; joy.dx = 0; } else if (k === 'sound') save.muted = !save.muted; else if (k === 'pump') save.settings.pump = (pumpLevel(save.settings.pump) + 1) % 3; else save.settings[k] = !save.settings[k];
     applySettings(); resize(); persist(); audio.play('click'); $('muteBtn').textContent = save.muted ? '🔇' : '🔊'; paint();
   };
   { const vs = $('volRange'); if (vs) { vs.value = Math.round(save.settings.volume * 100); vs.oninput = () => { save.settings.volume = vs.value / 100; audio.setVolume(save.settings.volume); audio.unlock(); audio.play('slide', { f: save.settings.volume }); }; vs.onchange = () => { persist(); audio.unlock(); audio.play('tap'); }; } }
@@ -704,7 +729,7 @@ function pauseRecap() {
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
 function showStats() {
-  if (mode !== 'play') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0;
+  if (mode !== 'play') return; mode = 'pause'; joy.on = false; fol.on = false; joy.dx = joy.dy = 0;
   statsPanel(() => { mode = 'play'; show(''); last = performance.now(); if (R && R.resumeFx) R.resumeFx(g); petsCall(); });
 }
 function statsPanel(onClose) {
@@ -754,7 +779,7 @@ function showResult() {
   $('rNext').style.display = nextOk ? '' : 'none'; $('rNext').classList.toggle('pulse', nextOk);
   $('rNext').onclick = () => { audio.play('click'); clearStickerPop(); beginStage(r.stage + 1); };
   $('rRetry').innerHTML = 'RETRY <span class="rcost">⚡' + ENERGY_COST + '</span>';
-  { const gl = nextGoal(save); renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
+  { let gl = nextGoal(save); if (gl && !isTabUnlocked(gl.tab, save)) gl = null; renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
   $('rShare').onclick = () => { audio.play('click'); shareResult(shareText(r, r.mode ? '' : stageInfo(r.stage).name, location.origin + location.pathname), toast); };
   $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); clearStickerPop(); try { retryFly($('rRetry'), rewardSnaps($('rList')), !!(save.settings.reduceMotion || systemReduceMotion())); } catch (e) { /* cosmetic */ } beginStage(r.stage); };
@@ -843,7 +868,7 @@ function frame(now) {
     if (g.phase === 'play') audio.sync(beatPhase(g));
   }
   if (mode === 'pause') { if (pauseN > 2 && pauseW === canvas.width && pauseH === canvas.height) return; pauseN++; pauseW = canvas.width; pauseH = canvas.height; } else pauseN = 0;   // a paused picture is frozen: draw it a few times (and again after a resize), then leave the canvas alone
-  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2, aimHint }, mode === 'pause' ? 0 : dt);
+  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, fol: fol.on && followMode() ? fol : null, hints: save.runs < 2, aimHint }, mode === 'pause' ? 0 : dt);
     if (mode === 'play') for (const n of R.takeSounds()) audio.play(n); else R.takeSounds(); }
 }
 
@@ -866,7 +891,7 @@ $('muteBtn').onclick = toggleMute;
 for (const [id, label] of [['muteBtn', 'Mute'], ['enPlus', 'Buy Voice'], ['stPrev', 'Previous stage'], ['stNext', 'Next stage']]) $(id).setAttribute('aria-label', label);
 addEventListener('error', () => { toast('Something glitched. Your save is safe.'); if (mode === 'play') pause(); }); $('muteBtn').textContent = save.muted ? '🔇' : '🔊';
 
-window.CS = { motion, momentEvent, g: null, get hub2() { return hub2; }, save: () => save, mode: () => mode, openHub, startRun,
+window.CS = { unlockAll: (v = true) => { setUnlockAll(v); if (mode === 'hub') renderHub(); }, unlockUI, fold: foldHook, motion, momentEvent, g: null, get hub2() { return hub2; }, save: () => save, mode: () => mode, openHub, startRun,
   // QA hook (batch 5): jump the live run to its end the way the sim does ('dead' | 'won'), then the normal flow (revive prompt, result) takes over
   force: kind => { if (mode !== 'play' || !g || g.phase === 'dead' || g.phase === 'won') return false; if (kind === 'dead') { g.p.hp = 0; g.p.revive = 0; g.phase = 'dead'; g.result = quitResult(g); g.events.push({ t: 'dead' }); return true; } if (kind === 'won') { g.snakes = []; g.phase = 'won'; g.result = { ...quitResult(g), won: true, stars: g.mode || g.hard ? 0 : 3 }; g.events.push({ t: 'won' }); return true; } return false; } };
 loadArt('assets/').then(a => {

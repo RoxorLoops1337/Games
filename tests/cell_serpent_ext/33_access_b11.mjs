@@ -118,7 +118,7 @@ if (chromium) {
       {   // bigger buttons: a real setting, saved, bigger targets
         const { p, errs } = await open({ width: 360, height: 640 });
         const key = '#settings .tgl[data-k="bigTap"]', h = () => p.evaluate(k => document.querySelector(k).getBoundingClientRect().height, key);
-        await p.evaluate(() => document.getElementById('setBtnT').click()); await p.waitForTimeout(700);
+        await p.evaluate(() => document.getElementById('setBtnT').click()); await p.waitForTimeout(700); await p.evaluate(() => window.CS.fold.openAll()); await p.waitForTimeout(100);   // b12r: settings groups open
         assert.ok(await h() > 0, 'the row exists');
         await p.evaluate(k => document.querySelector(k).click(), key); await p.waitForTimeout(300);
         assert.equal(await p.evaluate(() => document.documentElement.classList.contains('bigtap')), true);

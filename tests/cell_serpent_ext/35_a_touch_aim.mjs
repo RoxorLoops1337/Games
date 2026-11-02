@@ -110,6 +110,8 @@ if (chromium) {
         // ---- lane stage: a touch drag still slides the duo, the aim stays up
         await p.evaluate(() => window.CS.startRun(3)); await p.waitForTimeout(900);
         assert.ok(await p.evaluate(() => !window.CS.g.ring), tag + ' stage 3 is a lane stage');
+        // b12s: follow-the-finger is the default now; this block checks the older joystick-style slide
+        await p.evaluate(() => { window.CS.save().settings.controlStyle = 'joystick'; });
         await calm();
         {
           const x0 = await p.evaluate(() => window.CS.g.p.x), y0 = Math.round(h * 0.8);

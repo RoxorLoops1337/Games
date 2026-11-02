@@ -48,7 +48,7 @@ if (chromium) {
         await p.evaluate(() => window.CS.openHub('Gear')); await p.waitForTimeout(500);
         const gf = await p.evaluate(() => { const f = document.getElementById('gearFilters'); return [f.getAttribute('role'), [...f.querySelectorAll('button')].every(b => b.hasAttribute('aria-pressed')), f.querySelectorAll('button[aria-pressed="true"]').length]; });
         assert.deepEqual(gf, ['group', true, 1], `${w}: filter chips are toggle buttons`);
-        await p.evaluate(() => (document.getElementById('setBtnH') || document.getElementById('setBtnT')).click()); await p.waitForTimeout(500);
+        await p.evaluate(() => (document.getElementById('setBtnH') || document.getElementById('setBtnT')).click()); await p.waitForTimeout(500); await p.evaluate(() => window.CS.fold.openAll()); await p.waitForTimeout(100);   // b12r: settings groups open
         assert.equal(await p.evaluate(() => document.getElementById('settings').getAttribute('aria-modal')), 'true', `${w}: settings is modal`);
         assert.ok(await p.evaluate(() => !!document.getElementById('rfPrev')), `${w}: flash preview exists`);
         // the trap: Shift+Tab from the first control wraps to CLOSE, Tab from CLOSE wraps to the first control

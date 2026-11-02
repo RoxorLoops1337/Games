@@ -3,7 +3,7 @@ import { platCard } from './plat_b12d.js';
 // (sign in, fan fund, fragment swap). It gets everything it needs from main.js through `c`.
 import {
   KEEPSAKES, KEEP_TIERS, KEEP_SETS, keepMax, keepCost, keepUp, keepCanUp, keepBonus, KEEP_PRICE, openKeepChest,
-  META, metaCost, buyMeta, levelInfo, levelReward, power,
+  META, metaCost, metaBuyable, statCapStage, buyMeta, levelInfo, levelReward, power,
   SIGN_DAYS, claimSign, FUND, fundReady, claimFund, idleAmount, claimIdle, idleRate, ENERGY_MAX, buyEnergy, tickEnergy,
   BOXES, WEAPONS, PETS, openBox, shopLevel, dealsFor, buyDeal, refreshDeals, refreshCost, welcomeReady, claimWelcome, GOLD_PACKS, buyGold, EGG_PRICE, buyEgg,
   upgradeAllKeeps, claimAllFund, claimAllTrophies, exchangeFrags, OUTFITS, outfitAvailable, buyOutfit, wearOutfit, eventInfo, EVENT_MILES, claimEventMile, ensureEvent, EXCHANGE_ITEMS, buyExchange, LIMIT_ITEMS, buyLimit,
@@ -20,6 +20,7 @@ import { ribIcon, ribHTML, dressIcon, setTint, wardTry, tickTreats, SNACK_DESC }
 import { emptyCard as emptyCardB8 } from './empty_ux.js';
 import { seeded, newSeed, armChest, wasHeld, keepDetailHTML, keepCeremony } from './gear_fx.js';
 import { renderStickerBook } from './sticker_b9.js';
+import { foldTab } from './fold_b12r.js';
 import { recordsHTML, setStripState, setStripHTML, treatLine } from './hub_b10.js';
 import { readRuns, runLogHTML, decorateBundles, sparkleFlight, treatPips } from './hub_b11.js';
 const STATICON = { atk: 'speaker', crt: 'note', cdn: 'clock', vit: 'heart', for: 'star', rev: 'mic' };
@@ -33,7 +34,7 @@ function radar(s) {
   const axes = META.map((_, i) => { const p = pt(i, 1); return `<line x1="${cx}" y1="${cy}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}"/>`; }).join('');
   const labs = META.map((d, i) => { const p = pt(i, 1.32); return `<image href="${iconURL(STATICON[d.id])}" x="${(p[0] - 9).toFixed(1)}" y="${(p[1] - 9).toFixed(1)}" width="18" height="18"/>`; }).join('');
   const hits = META.map((d, i) => { const p = pt(i, 1.32); return `<circle class="rhit" data-id="${d.id}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="15"/>`; }).join('');
-  let bb = null, bc = 1e9; for (const d of META) { const l = s.meta[d.id] || 0; if (l >= d.max) continue; const cst = metaCost(d, l); if (cst <= s.beats && cst < bc) { bc = cst; bb = d.id; } }
+  let bb = null, bc = 1e9; for (const d of META) { const l = s.meta[d.id] || 0; if (l >= d.max || !metaBuyable(s, d)) continue; const cst = metaCost(d, l); if (cst <= s.beats && cst < bc) { bc = cst; bb = d.id; } }
   const bbp = bb && pt(META.findIndex(d => d.id === bb), 1.32), pulse = bbp ? `<circle class="rbb" cx="${bbp[0].toFixed(1)}" cy="${bbp[1].toFixed(1)}" r="11"/>` : '';
   const lvb = META.map((d, i) => { const p = pt(i, 1.32), l = s.meta[d.id] || 0, mx = l >= d.max; if (!l) return ''; return `<g class="rlv${mx ? ' mx' : ''}"><circle cx="${(p[0] + 9).toFixed(1)}" cy="${(p[1] + 8).toFixed(1)}" r="6.5"/><text x="${(p[0] + 9).toFixed(1)}" y="${(p[1] + 11.2).toFixed(1)}" text-anchor="middle">${mx ? '\u2605' : l}</text></g>`; }).join('');
   return `<svg class="radar" viewBox="-8 0 176 170" role="group" aria-label="Stats, tap an icon to upgrade it"><g class="rg"><polygon points="${ring(1)}"/><polygon points="${ring(0.66)}"/><polygon points="${ring(0.33)}"/>${axes}</g><polygon class="rgh" points="${ghost}"/><polygon class="rv" points="${val}"/>${dots}${pulse}${labs}${lvb}${hits}</svg>`;
@@ -133,17 +134,17 @@ export function createHub2(c) {
     const el = $('battleSide'); el.innerHTML = '';
     const s = save(), day = c.dayKey();
     const signReady = s.sign.day !== day, fundReadyAny = FUND.some(f => fundReady(s, f));
-    const mk = (emo, name, alert, fn) => { const b = document.createElement('button'); b.className = 'sidebtn'; b.innerHTML = `${hasAlert(alert) ? `<i class="alert${typeof alert === 'number' && alert > 1 ? ' num' : ''}">${alertLabel(alert)}</i>` : ''}<b>${emo}</b>${name}`; b.onclick = () => { audio.unlock(); audio.play('click'); fn(); }; el.appendChild(b); };
-    mk('📅', 'Sign in', signReady ? 1 : 0, openSign);
-    mk('🎀', 'Fan Fund', FUND.filter(f => fundReady(s, f)).length, openFund);
-    mk('🧺', 'Backstage', idleAmount(s, now()) >= 50, openIdle);
-    mk('🎪', eventInfo(day).name.split(' ')[0], s.event.earned > 0 && EVENT_MILES.filter((m, i) => !s.event.claimed[i] && s.event.earned >= m.at).length, openEvent);
-    mk('👗', 'Wardrobe', false, openWardrobe);
-    mk('🏆', 'Trophies', TROPHIES.filter(t => trophyReady(s, t)).length, openTrophies);
-    mk('📖', 'Preview', false, openBestiary);
-    mk('🎫', 'Pass', cardActive(s, day) && s.card.last !== day, openPass);
-    mk('🎡', 'Goals', nextReward(s, day).ready, () => addict.openGoals());
-    mk('🔀', 'Swap', false, openSwap);
+    const mk = (emo, name, alert, fn, uk) => { if (uk && c.unlocked && !c.unlocked(uk)) return; const b = document.createElement('button'); b.className = 'sidebtn'; if (uk) b.dataset.uk = uk; b.innerHTML = `${hasAlert(alert) ? `<i class="alert${typeof alert === 'number' && alert > 1 ? ' num' : ''}">${alertLabel(alert)}</i>` : ''}<b>${emo}</b>${name}`; b.onclick = () => { audio.unlock(); audio.play('click'); fn(); }; el.appendChild(b); };
+    mk('📅', 'Sign in', signReady ? 1 : 0, openSign, 'sign');
+    mk('🎀', 'Fan Fund', FUND.filter(f => fundReady(s, f)).length, openFund, 'fund');
+    mk('🧺', 'Backstage', idleAmount(s, now()) >= 50, openIdle, 'backstage');
+    mk('🎪', eventInfo(day).name.split(' ')[0], s.event.earned > 0 && EVENT_MILES.filter((m, i) => !s.event.claimed[i] && s.event.earned >= m.at).length, openEvent, 'event');
+    mk('👗', 'Wardrobe', false, openWardrobe, 'wardrobe');
+    mk('🏆', 'Trophies', TROPHIES.filter(t => trophyReady(s, t)).length, openTrophies, 'trophies');
+    mk('📖', 'Preview', false, openBestiary, 'bestiary');
+    mk('🎫', 'Pass', cardActive(s, day) && s.card.last !== day, openPass, 'pass');
+    mk('🎡', 'Goals', nextReward(s, day).ready, () => addict.openGoals(), 'wheel');
+    mk('🔀', 'Swap', false, openSwap, 'swap');
   }
   function openSign() {
     const s = save(), day = c.dayKey();
@@ -205,7 +206,7 @@ export function createHub2(c) {
     META.forEach((d, i) => {
       const lvl = s.meta[d.id] || 0, maxed = lvl >= d.max, cost = metaCost(d, lvl);
       const card = document.createElement('div'); card.className = 'sc' + (maxed ? ' maxed' : ''); card.dataset.id = d.id;
-      card.innerHTML = `<div class="sct">${maxed ? 'Max Level' : d.max === 1 ? (lvl ? 'Owned' : 'Not owned') : 'Level ' + lvl + ' \u2192 ' + (lvl + 1)}</div><div class="sci">${ico(STATICON[d.id], 40) || ''}</div><div class="spips">${d.max <= 15 && d.max > 1 ? Array.from({ length: d.max }, (_, q) => `<i class="${q < lvl ? 'on' : ''}"></i>`).join('') : ''}</div><div class="scn">${d.name}</div><div class="scd">${d.desc(Math.max(1, maxed ? lvl : lvl + 1))}</div><button class="btn small go" ${maxed || s.beats < cost ? 'disabled' : ''}>${maxed ? '✔' : cost + ' ' + curImg('beats')}</button>`;
+      card.innerHTML = `<div class="sct">${maxed ? 'Max Level' : d.max === 1 ? (lvl ? 'Owned' : 'Not owned') : 'Level ' + lvl + ' \u2192 ' + (lvl + 1)}</div><div class="sci">${ico(STATICON[d.id], 40) || ''}</div><div class="spips">${d.max <= 15 && d.max > 1 ? Array.from({ length: d.max }, (_, q) => `<i class="${q < lvl ? 'on' : ''}"></i>`).join('') : ''}</div><div class="scn">${d.name}</div><div class="scd">${d.desc(Math.max(1, maxed ? lvl : lvl + 1))}</div><button class="btn small go${!maxed && !metaBuyable(s, d) ? ' capped' : ''}" ${maxed || !metaBuyable(s, d) || s.beats < cost ? 'disabled' : ''}${!maxed && !metaBuyable(s, d) ? ' style="white-space:normal;min-height:44px;height:auto;line-height:1.15;font-size:12px"' : ''}>${maxed ? '✔' : !metaBuyable(s, d) ? 'Clear stage ' + statCapStage(lvl + 1) + ' to go beyond Lv ' + lvl : cost + ' ' + curImg('beats')}</button>`;
       card.querySelector('button').onclick = () => { if (buyMeta(save(), d.id)) { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); } };
       core.appendChild(card);
     });
@@ -214,11 +215,12 @@ export function createHub2(c) {
     { const rc = document.createElement('div'); rc.className = 'recbox'; rc.innerHTML = recordsHTML(s); list.appendChild(rc); }
     { const rl = runLogHTML(readRuns()); if (rl) { const rb = document.createElement('div'); rb.className = 'runbox'; rb.innerHTML = rl; list.appendChild(rb); } }
     { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t), (n, from) => { save().sparkles += n; c.persist(); audio.play('bookdone'); sparkleFlight(from, calmMotion(), () => c.refreshCur(), { src: iconURL('sparkles') }); }); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }
+    foldTab('Stats');
   }
   // the cheapest upgrade you can afford right now wears a "BEST BUY" ribbon (a nudge, never a rule)
   function bestBuy(core, s) {
     let pick = null, pc = 1e9;
-    for (const d of META) { const l = s.meta[d.id] || 0; if (l >= d.max) continue; const cst = metaCost(d, l); if (cst <= s.beats && cst < pc) { pc = cst; pick = d; } }
+    for (const d of META) { const l = s.meta[d.id] || 0; if (l >= d.max || !metaBuyable(s, d)) continue; const cst = metaCost(d, l); if (cst <= s.beats && cst < pc) { pc = cst; pick = d; } }
     const el = pick && core.querySelector(`.sc[data-id="${pick.id}"]`); if (!el) return;
     el.classList.add('best'); const r = document.createElement('i'); r.className = 'bestrib'; r.textContent = 'BEST BUY'; el.appendChild(r);
   }
@@ -280,6 +282,7 @@ export function createHub2(c) {
       row.appendChild(armT(tile({ cls: 'chestcard t-gold', ic: n === 10 ? ico('gift', 46) : chestArt(30), name: n === 10 ? 'Ten Chests' : 'Keepsake Chest', desc: n === 10 ? 'With a star prize' : 'Backstage finds', btn: price + ' ' + curImg('sparkles'), gold: true, disabled: save().sparkles < price,
         onclick: ev => { const tt = ev.currentTarget.closest('.tile'), ch = tt.querySelector('.chest3'), fast = wasHeld(ev.currentTarget), sd = rollOf(tt); chestGo(ch, () => { rolls.delete(tt); const fresh = new Set(KEEPSAKES.filter(k => !save().keeps[k.id].lv && !save().keeps[k.id].frag).map(k => k.id)); const got = openKeepChest(save(), n, seeded(sd)); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color, rname: KEEP_TIERS[kk.tier].name.toUpperCase(), isNew: fresh.has(x.id) }; }), 'Gear'); }, fast); } }), sd => keepTier(sd, n), KEEP_TIERS.map(q => q.color)));
     }
+    foldTab('Gear');
   }
   function openKeep(k) {
     markSeen(k.id);
@@ -352,6 +355,7 @@ export function createHub2(c) {
     }
     decorateBundles(list, BOXES, GOLD_PACKS);
     shopExtras(list);
+    foldTab('Shop');
   }
 
   // ---------------------------------------------------------------- extra panels

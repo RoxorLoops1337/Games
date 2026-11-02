@@ -1,11 +1,11 @@
 // Result screen helpers: the next-goal teaser (cheapest upgrade you can afford now, or the closest one) and the close-call lines.
-import { META, metaCost, WEAPONS, skillUpgradeCost, SKILL_MAX_LV } from './sim.js';
+import { META, metaCost, metaBuyable, WEAPONS, skillUpgradeCost, SKILL_MAX_LV } from './sim.js';
 
 // -> { ready, text, sub, tab } or null. Call AFTER the result was applied to the save.
 export function nextGoal(save) {
   const opts = [];
   for (const d of META) {
-    const lv = save.meta[d.id] || 0; if (lv >= d.max) continue;
+    const lv = save.meta[d.id] || 0; if (lv >= d.max || !metaBuyable(save, d)) continue;
     const c = metaCost(d, lv);
     opts.push({ cost: c, short: Math.max(0, c - save.beats), name: d.name + ' LV ' + (lv + 1), tab: 'Stats', cur: 'Beats' });
   }

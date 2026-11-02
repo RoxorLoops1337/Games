@@ -2573,6 +2573,133 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 /* end @css:35-n-title */
 /* title info chips: a darker chip behind the label keeps 4.5:1 over the animated title background */
 #title #titleInfo b{background:rgba(12,9,36,.74);text-shadow:0 1px 2px rgba(0,0,0,.6)}
+/* @css:35-r-fold */
+  .fold{width:min(520px,100%);margin:8px auto;box-sizing:border-box;grid-column:1/-1}
+  .fold-h{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;box-sizing:border-box;padding:6px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.22);background:#2b2060;color:#fff;font:inherit;font-size:13px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;text-align:left;cursor:pointer}
+  .fold-t{flex:1;min-width:0}
+  .fold-n{font-size:12px;font-weight:800;color:#d9cdf7;letter-spacing:0;text-transform:none}
+  .fold-n:empty{display:none}
+  .fold-dot{display:none;width:10px;height:10px;border-radius:50%;background:#ff4d6d;box-shadow:0 0 0 2px #2b2060}
+  .fold:not(.open).has-dot .fold-dot,.fold-h:focus-visible .fold-dot.on{display:block}
+  .fold-c{width:9px;height:9px;border-right:3px solid #fff;border-bottom:3px solid #fff;transform:rotate(45deg) translate(-2px,-2px);transition:transform .2s;flex:none;margin:0 4px 0 2px}
+  .fold.open>.fold-h>.fold-c,.setgrp.open .fold-c{transform:rotate(-135deg) translate(-2px,-2px)}
+  .fold-h:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+  .fold.open>.fold-h{border-color:rgba(255,255,255,.4)}
+  .fold-b{margin-top:8px}
+  .fold-b[hidden]{display:none!important}
+  .tiles>.fold>.fold-b:not([hidden]){display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .fold-b>.stagebox{margin:0 auto}
+  .fold-b>.sec{display:none}
+  html.rm .fold-b,html.rm .fold-c{transition:none!important}
+  /* settings groups: the heading is the toggle, the rows after it hide */
+  #settings .setgrp.fold-sd{margin:10px 0 0}
+  #settings .setgrp{margin-bottom:6px} #settings .setgrp .fold-g{width:min(420px,92vw)}
+  #settings .fg-shut{display:none!important}
+  #settings.fold-searching .fg-shut{display:revert!important}
+  /* sheet small print reaches the 12 px phone floor (the sheets are probed expanded by 34_phone_hub_ph) */
+  .dsheet .dshd span,.dsheet .mhd span,.dsheet .mhd b,.dsheet .mp i,.dsheet .mp small,.dsheet .rkn,.dsheet .sphd b,.dsheet .sphd span,.dsheet .dsladder i,.dsheet .dsrk .rkn{font-size:12px}
+  .dsheet .dsrk .rkn{letter-spacing:-.04em}
+  .dsheet .mp{padding-left:2px;padding-right:2px} .dsheet .mp small{letter-spacing:-.04em;overflow-wrap:normal;word-break:normal}
+/* end @css:35-r-fold */
+/* @css:35-p-unlock */
+  /* b12p: progressive hub. Locked things are hidden with html.lk-<id> (unlock_ui_b12p.js); the tab bar shows only the open tabs */
+  .tabs button[hidden]{display:none!important}
+  .tabs.few{justify-content:center}
+  .tabs.few button{flex:0 0 var(--fw,112px);min-width:44px}
+  .tabs.few .tabind{left:calc(50% - var(--n,1) * var(--fw,112px) / 2);width:var(--fw,112px)}
+  .tabs button{min-width:44px}
+  .tabs .lockt{color:#c4bde8;opacity:1}
+  .tabs .lockt b{opacity:.6;filter:grayscale(1)}
+  .tabs .lockt span{display:block;font-size:12px;letter-spacing:.02em}
+  .tabs .newb{position:absolute;top:0;left:50%;translate:-50% 0;padding:1px 5px;border-radius:9px;background:#d81b60;color:#fff;font-size:12px;font-weight:900;letter-spacing:.04em;line-height:1.25;pointer-events:none;animation:ukNew 1.1s ease-in-out infinite}
+  @keyframes ukNew{50%{transform:scale(1.12)}}
+  .tabs button.arrive{animation:ukArrive .75s cubic-bezier(.3,1.7,.5,1) both}
+  .tabs button.arrive b{filter:drop-shadow(0 0 8px #ffd84d)}
+  @keyframes ukArrive{0%{transform:scale(.2);opacity:0}55%{transform:scale(1.22);opacity:1}100%{transform:scale(1)}}
+  html.rm .tabs button.arrive,html.rm .tabs .newb{animation:none}
+  html.lk-sparkles #hub .hubtop .cur.s,html.lk-sparkles #title .row .cur.s,html.lk-energyplus #enPlus,html.lk-ribbons #hRibChip,html.lk-power .hpwrow8,html.lk-power #diffRow .rec,html.lk-bestbar #stProg,html.lk-loadout #tabBattle .bt-load,html.lk-overview #stOverview,html.lk-gapfix #gapFix,html.lk-rewardfilter #rwFilter,html.lk-worldstrip #wStrip,html.lk-funfact .tapme,html.lk-hard #diffRow .seg,html.lk-gigs #btClaim,html.lk-gigs #tabBattle .gl-box,html.lk-quests #qStrip,html.lk-season #qSeason,html.lk-achievements #qAch,html.lk-nextreward #nextRew,html.lk-records #statList .recbox,html.lk-runlog #statList .runbox,html.lk-stickers #statList .stkbook,html.lk-presets #presetRow,html.lk-recstrip #recStrip,html.lk-event #pigBox .evbanner,html.lk-invasion #pigBox .bn-inv,html.lk-pig #pigBox>.tile:not(.bn-inv),html.lk-streak .qfire,html.lk-badges .wbrow{display:none!important}
+  /* the hint card: one at a time, tap to dismiss, never over a panel */
+  .ukh{position:fixed;z-index:60;box-sizing:border-box;min-height:44px;display:flex;align-items:center;margin:0;padding:10px 14px;border:2px solid #ffd84d;border-radius:16px;background:#2a1c6e;color:#fff;font:inherit;font-weight:800;font-size:14px;line-height:1.3;text-align:left;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.45);opacity:0;transform:translateY(8px) scale(.96);transition:opacity .22s,transform .26s cubic-bezier(.3,1.5,.5,1)}
+  .ukh.in{opacity:1;transform:none} .ukh.off{opacity:0!important;pointer-events:none}
+  .ukh .ukh-t{display:block}
+  .ukh .ukh-a{position:absolute;left:var(--ax,50%);width:14px;height:14px;margin-left:-7px;background:#2a1c6e;border:2px solid #ffd84d;border-top:0;border-left:0;pointer-events:none}
+  .ukh.up .ukh-a{bottom:-9px;transform:rotate(45deg);animation:ukBobD 1s ease-in-out infinite}
+  .ukh.down .ukh-a{top:-9px;transform:rotate(225deg);animation:ukBobU 1s ease-in-out infinite}
+  @keyframes ukBobD{50%{translate:0 4px}} @keyframes ukBobU{50%{translate:0 -4px}}
+  html.rm .ukh,html.rm .ukh .ukh-a{transition:none;animation:none}
+  #hub.ukh-tab.bt-on .bt-dock{bottom:calc(var(--tabh,70px) + var(--ukh,0px));transition:bottom .25s}
+  #hub.ukh-tab.bt-on .hubbody{padding-bottom:calc(var(--tabh,70px) + var(--dockh,84px) + 14px + var(--ukh,0px))}
+/* end @css:35-p-unlock */
+/* @css:35-t-cards */
+/* in-run upgrade cards: the whole UI sits in the upper part of the screen, under the HUD (--lvtop is set from the renderer layout in showCards),
+   the lower part is where the thumb steers: nothing there is tappable and the game stays visible (the section lets taps through) */
+#levelup{--tint:#0000;justify-content:flex-start;gap:8px;overflow:visible;backdrop-filter:none;-webkit-backdrop-filter:none;pointer-events:none;
+  padding:calc(var(--lvtop,170px) + 6px) 14px 0;
+  background:radial-gradient(ellipse at 50% 30%,var(--tint),#0000 70%),linear-gradient(180deg,rgba(8,5,30,.5),rgba(8,5,30,.84) calc(var(--lvtop,170px) + 4px),rgba(8,5,30,.84) 62%,rgba(8,5,30,0) 72%)}
+#levelup[data-top="4"]{--tint:rgba(255,77,122,.26)} #levelup[data-top="5"]{--tint:rgba(255,225,74,.3)}
+#levelup > *{pointer-events:auto} #levelup > .lvflash{pointer-events:none}
+#levelup > :first-child{margin-top:0} #levelup > :last-child{margin-bottom:0}
+#levelup .banner{font-size:14px;line-height:18px;margin:0;animation:none}
+#levelup h2{display:none}
+#levelup .luckbox{max-width:400px;gap:3px}
+#levelup .cards{width:100%;max-width:400px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;perspective:none}
+#levelup .cards[data-n="2"],#levelup .cards[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+#levelup .cards .card.pick{flex-direction:column;align-items:stretch;gap:3px;padding:6px 7px 7px;border-radius:14px;border-width:2px;min-width:0;min-height:44px}
+#levelup .cards .card.pick .ic{width:46px;height:46px;border-radius:12px;border-width:2px}
+#levelup .cards .card.pick .ic img{width:38px;height:38px}
+#levelup .cards .card.pick .bd{flex:none;width:100%;min-width:0}
+#levelup .cards .card.pick .nm{font-size:14px;line-height:1.15;padding-right:0;gap:3px;flex-direction:column;align-items:flex-start}
+#levelup .cards .card.pick .nm .nt{overflow-wrap:anywhere}
+#levelup .cards .card.pick .ic{margin-bottom:7px}
+#levelup .cards .card.pick .rar{font-size:12px;padding:0 6px;line-height:16px;white-space:nowrap;align-self:flex-start;max-width:100%;overflow:hidden;letter-spacing:0}
+#levelup .cards .card.pick .nm .nt{min-width:0;max-width:100%;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#levelup .cards .card.pick .ds{font-size:12px;line-height:1.2;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#levelup .cards .card.pick .delta{margin-top:3px;padding:2px 5px 6px;gap:4px;flex-wrap:wrap;justify-content:flex-start}
+#levelup .cards .card.pick .dl{display:none}
+#levelup .cards .card.pick .dv{margin-left:0;gap:2px 3px;flex-wrap:wrap;white-space:normal;max-width:100%;min-width:0}
+#levelup .cards .card.pick .delta{min-width:0;max-width:100%}
+#levelup .cards .card.pick .dv i,#levelup .cards .card.pick .dv em{font-size:12px}
+#levelup .cards .card.pick .dv b{font-size:14px}
+#levelup .cards .card.pick .pips{display:none}
+#levelup .cards .card.pick .syn{display:block;max-width:100%;font-size:12px;line-height:1.2;margin-top:3px}
+#levelup .cards .card.pick .lnk,#levelup .cards .card.pick .bet{position:static;display:block;margin-top:3px;max-width:100%;font-size:12px;line-height:16px}
+#levelup .cards .card.pick .lnk{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#levelup .cards .card.pick .ic .kd{font-size:12px;line-height:15px;bottom:-6px}
+#levelup .cards .card.pick .lockb{top:0;right:0}
+#levelup .cards .card.pick .rdy{position:absolute;left:0;right:0;top:0;height:3px;background:var(--rc);transform-origin:left center;animation:t35fill .45s linear both;pointer-events:none;z-index:5}
+#levelup .cards .card.pick:not(.arm) .rdy{display:none}
+/* the shine sweep stays inside the card (a wider sweep counts as horizontal overflow of the card) */
+@keyframes t35shine{0%{transform:translateX(-160%) skewX(-18deg)}45%,100%{transform:translateX(240%) skewX(-18deg)}}
+#levelup .cards .card.pick.r2 .shine,#levelup .cards .card.pick.r3 .shine,#levelup .cards .card.pick.r4 .shine,#levelup .cards .card.pick.r5 .shine{animation-name:t35shine}
+@keyframes t35fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media (prefers-reduced-motion:reduce){#levelup .cards .card.pick .rdy{display:none}}
+/* four offers: two by two, each card is a row */
+#levelup .cards[data-n="4"] .card.pick{flex-direction:row;align-items:center;gap:8px;padding:6px 8px}
+#levelup .cards[data-n="4"] .card.pick .ic{margin-bottom:0}
+#levelup .cards[data-n="4"] .card.pick .nm{flex-direction:row;flex-wrap:wrap}
+#levelup .cards[data-n="4"] .card.pick .bd{flex:1;width:auto}
+#levelup .cards[data-n="4"] .card.pick .nm{padding-right:30px}
+#levelup .cards[data-n="4"] .card.pick .ds,#levelup .cards[data-n="4"] .card.pick .syn,#levelup .cards[data-n="4"] .card.pick .lnk,#levelup .cards[data-n="4"] .card.pick .bet{display:none}
+#levelup .lvrow{max-width:400px;gap:8px}
+#levelup .lvrow .btn{min-height:48px;padding:6px 8px}
+#levelup .buildstrip{margin-top:0}
+@media (max-width:340px){#levelup .cards .card.pick .rar{padding:0 3px;letter-spacing:-.03em;text-overflow:ellipsis}#levelup{padding-left:10px;padding-right:10px}#levelup .cards{gap:8px}#levelup .cards .card.pick{padding:5px 5px 6px}#levelup .cards .card.pick .ic{width:40px;height:40px}#levelup .cards .card.pick .ic img{width:32px;height:32px}#levelup .cards .card.pick .nm .nt{font-size:12px}#levelup .cards[data-n="4"] .card.pick .ic{width:36px;height:36px}}
+@media (max-height:800px){#levelup .cards .card.pick .ds{display:none}}
+@media (min-height:801px){#levelup .cards .card.pick .ds{-webkit-line-clamp:1}}
+@media (max-height:600px){#levelup .luckbox{display:none}#levelup{gap:8px}}
+@media (max-height:760px){#levelup .cards[data-n="4"] .card.pick .dv i,#levelup .cards[data-n="4"] .card.pick .dv em{display:none}#levelup .cards[data-n="4"] .card.pick{padding-top:3px;padding-bottom:3px}}
+#levelup .cards .card.pick:has(.lnk) .syn{display:none}
+@media (max-height:760px){#levelup:has(.cards[data-n="4"]) .luckbox{display:none}#levelup .cards[data-n="4"] .card.pick{padding-top:4px;padding-bottom:4px}}
+@media (max-height:740px){#levelup .syn,#levelup .cards .card.pick .syn,#levelup .cards .card.pick .lnk{display:none}#levelup .lkrow{display:none}}
+/* revive prompt: REVIVE and Give up sit in the upper two thirds, not under the steering thumb */
+#revive{justify-content:flex-start;gap:8px;padding-top:calc(10px + env(safe-area-inset-top))}
+#revive > :first-child{margin-top:0}
+#revive h2{font-size:30px;margin:0;line-height:1.1}
+#revive .rvring{width:min(150px,38vw,19vh)}
+#revive .rvring + .sub{display:none}
+#revive #rvGo{font-size:24px;padding:12px 28px;min-width:240px}
+@media (max-height:780px){#revive .rvwipe{display:none}}
+/* end @css:35-t-cards */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -2729,6 +2856,7 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   <button class="tgl" data-k="highContrast"><i class="ti">🌗</i><span>High-contrast numbers</span><b>OFF</b></button>
   <label class="volrow tsrow"><i class="ti">Aa</i><span>Menu text size</span><output id="tsOut">100%</output><input id="tsRange" type="range" min="100" max="140" step="5" value="100" aria-label="Menu text size"><span class="tsprev" aria-hidden="true"><b>Stage 3</b><i>Kitten Choir</i><u>1,250 Beats</u></span></label>
   <h3 class="setgrp">ONE HAND AND THUMBS</h3>
+  <button class="tgl" data-k="controlStyle"><i class="ti">☝</i><span>Control style: Follow finger</span><b>ON</b></button>
   <button class="tgl" data-k="slider"><i class="ti">↔</i><span>On-screen slide bar (thumb at the bottom)</span><b>OFF</b></button>
   <button class="tgl" data-k="leftHand"><i class="ti">🤚</i><span>Left-handed slide bar</span><b>OFF</b></button>
   <button class="tgl" data-k="thumbZone"><i class="ti">👍</i><span>Thumb zone: steer from the bottom third only</span><b>OFF</b></button>

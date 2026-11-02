@@ -62,12 +62,12 @@ function makeIndicator(nav) {
   if (!nav) return null;
   let ind = nav.querySelector('.tabind');
   if (!ind) { ind = document.createElement('i'); ind.className = 'tabind'; ind.setAttribute('aria-hidden', 'true'); nav.appendChild(ind); }
-  const btns = () => [...nav.querySelectorAll('button[data-tab]')];
+  const btns = () => [...nav.querySelectorAll('button[data-tab]:not([hidden])')];   // b12p: locked tabs are hidden
   nav.style.setProperty('--n', String(btns().length || 6));
   const idx = () => Math.max(0, btns().findIndex(b => b.classList.contains('on')));
   const sync = () => { if (nav.classList.contains('tdrag')) nav.classList.remove('tdrag'); nav.style.setProperty('--i', String(idx())); };
   sync();
-  if (typeof MutationObserver === 'function') new MutationObserver(ms => { if (ms.some(m => m.target !== nav)) sync(); }).observe(nav, { attributes: true, attributeFilter: ['class'], subtree: true });
+  if (typeof MutationObserver === 'function') new MutationObserver(ms => { if (ms.some(m => m.target !== nav)) sync(); }).observe(nav, { attributes: true, attributeFilter: ['class', 'hidden'], subtree: true });
   return { sync, idx, drag: (dx, has) => { if (!nav.classList.contains('tdrag')) nav.classList.add('tdrag'); nav.style.setProperty('--i', indicatorPos(idx(), dx, has).toFixed(3)); } };
 }
 

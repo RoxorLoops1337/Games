@@ -97,7 +97,7 @@ if (chromium) {
       for (const tab of (!ONLY || ONLY === 'hub') ? ['Battle', 'Skills', 'Pets', 'Gear', 'Shop', 'Stats'] : []) jobs.push(async () => {   // every hub tab, from the top to the very bottom, each on its own page
         const { p, errs } = await open();
         {
-          await p.evaluate(t => window.CS.openHub(t), tab); await quiet(p, '#hub'); await p.waitForTimeout(400);
+          await p.evaluate(t => window.CS.openHub(t), tab); await quiet(p, '#hub'); await p.waitForTimeout(400); await p.evaluate(() => window.CS.fold.openAll()); await p.waitForTimeout(300);   // b12r: audit the text inside the collapsible sections too
           const clear = await p.evaluate(() => { const h = document.querySelector('#hub .hubbody'); let lim = innerHeight; for (const s of ['#hub .tabs', '#hub .bt-dock #stGo']) { const e = document.querySelector(s); if (e && e.getClientRects().length) lim = Math.min(lim, e.getBoundingClientRect().top); } return { sh: h.scrollHeight, top: h.getBoundingClientRect().top, ch: Math.max(120, lim - h.getBoundingClientRect().top - 70) }; });
           let steps = 0, total = 0;
           for (let t = 0; steps < 30; t += Math.floor(clear.ch * (FAST ? 0.85 : 0.7)), steps++) {
@@ -112,7 +112,7 @@ if (chromium) {
       if (!ONLY || ONLY === 'first') jobs.push(async () => {   // the first screens: title, settings
         const { p, errs } = await open();
         assert.ok(await audit(p, 'title', '#title') > 5, 'title text found');
-        await p.evaluate(() => document.getElementById('setBtnT').click()); await p.waitForTimeout(700); await quiet(p, '#settings');
+        await p.evaluate(() => document.getElementById('setBtnT').click()); await p.waitForTimeout(700); await quiet(p, '#settings'); await p.evaluate(() => window.CS.fold.openAll()); await p.waitForTimeout(300);
         assert.ok(await audit(p, 'settings', '#settings') > 8, 'settings text found');
         assert.deepEqual(errs, []); await p.close(); n += 3;
       });
