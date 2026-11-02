@@ -178,7 +178,7 @@ export function createRenderer(canvas, art, kit) {
       case 'maw': ring(e.x, e.y, 130, '#8a4fe0', 0.7); break;
       case 'groove': ring(g.p.x, g.p.y, 110 + e.n * 4, '#ff7eb6', 0.5); addFloat(g.p.x, g.p.y - 90, e.n >= 20 ? 'ON FIRE!' : 'GROOVE ' + e.n, '#ff9ad6', 26, -70); break;
       case 'chestdrop': S.banner = { text: 'CHEST!', sub: 'Nice aim', t: 0, dur: 1.2, clear: true }; ring(e.x, e.y, 90, '#ffd84d', 0.5); break;
-      case 'chest': ring(e.x, e.y, 100, '#ffd84d', 0.6); burst(e.x, e.y, 28, ['#ffd84d', '#fff', '#ff7eb6'], 380, 0.8, 6); break;
+      case 'chest': getHud().reward(e, g); ring(e.x, e.y, 100, '#ffd84d', 0.6); burst(e.x, e.y, 28, ['#ffd84d', '#fff', '#ff7eb6'], 380, 0.8, 6); break;
       case 'hurt': S.trauma = Math.min(1, S.trauma + 0.6); S.flash = 0.35; S.flashCol = '#ff2a4d'; burst(e.x, e.y, 16, ['#ff2a4d', '#ff8aa0'], 300, 0.5, 5); addFloat(e.x, e.y - 30, '-' + Math.ceil(e.d), '#ff5a78', 28, -90); break;
       case 'block': ring(e.x, e.y, 46, '#39d0ff', 0.3); break;
       case 'power': ring(e.x, e.y, 60, e.kind === 'heal' ? '#ff6a8a' : e.kind === 'shield' ? '#39d0ff' : '#ffd24a', 0.5); addFloat(g.p.x, g.p.y - 60, e.kind === 'heal' ? 'HEAL' : e.kind === 'shield' ? 'SHIELD' : 'RAGE', '#fff', 26, -60); break;

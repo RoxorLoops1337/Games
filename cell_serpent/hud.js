@@ -45,6 +45,7 @@ const BOSS_DY = 24;   // the boss HP bar pushes the stat row down
 export function createHud(env) {
   const { ctx, text, blit, kit, S, INK, glow, sparkleAt } = env;
   const T = { g: null, pop: {}, pressAt: {}, gv: 0, bsLast: 0, bsAt: -9, bsHi: 0, cdMax: {}, cdLast: {}, chestAt: {}, lastProg: 0, readyAt: {}, lastSnd: -9, bossTot: 0, bossV: 1, bossHitAt: -9, encV: 0, encFull: -9, ins: { t: 0, b: 0 }, msAt: -9, msN: 0, lvLast: {}, lvAt: {}, t0: 0, bossGhost: 1, newAt: {}, coinV: -1, coinPrev: -1, coinAt: -9, coinT: 0, flashAt: -9 };
+  const B8 = { fl: [], landAt: -9, gainN: 0, gainAt: -9, raw: -1, ch: 0, encPrev: 0, encGainAt: -9 };   // 06-hud b8: chest flights, the +N chip, encore gain pulse
   const reduce = () => !!(env.OPT && env.OPT.reduceMotion);
   // menu text size slider also lifts the small in-run labels (capped so the fixed glass plates still fit)
   const fz = n => Math.round(n * Math.min(1.3, (env.OPT && env.OPT.textScale) || 1));
@@ -143,6 +144,7 @@ export function createHud(env) {
     const su = Math.max(pop('up', uvl), landBounce(S, 'up')); scaled(66, cy + 2, su, () => text('x ' + uvl, 0, 0, 26, '#ffd84d', '#0b1020', 'left'));
     // chests carried by the snake
     let ch = 0; for (const sn of g.snakes) for (const q of sn.segs) if (q.carry === 'chest' && q.hp > 0) ch++;
+    B8.ch = ch;
     if (ch) {
       glass(146, 14, 92, 52, 26, 'rgba(255,233,168,.5)');
       blit(kit && kit.SPR.pickup('chest'), 176, cy, 44);
@@ -422,6 +424,11 @@ export function createHud(env) {
       if (ready) glow(x, cy, r * 2.1, col, 0.18 + 0.1 * Math.sin(S.t * 6 + x));
       ctx.lineCap = 'butt';
       if (w.cd > 0.95 && frac < 0.999) text(Math.ceil(w.cd) + '', x, cy + 1, 24, '#ffffff', '#0b1020');
+      else if (w.cd > 0.04 && frac < 0.999 && T.cdMax[id] >= 1.2) {   // 06-hud b8: the last second counts in tenths, the sweep has a bright leading edge and the tile throbs just before it is ready
+        text(w.cd.toFixed(1), x, cy + 1, 19, '#ffe9a8', '#0b1020');
+        if (!reduce()) glow(x, cy, r * 1.7, col, 0.1 + 0.16 * (0.5 + 0.5 * Math.sin(S.t * 22)));
+      }
+      if (frac > 0.02 && frac < 0.999) { const ea = -Math.PI / 2 + TAU * frac; ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x + Math.cos(ea) * (r * 0.4), cy + Math.sin(ea) * (r * 0.4)); ctx.lineTo(x + Math.cos(ea) * (r - 2), cy + Math.sin(ea) * (r - 2)); ctx.stroke(); ctx.restore(); }
       const fk = Math.max(0, 1 - (S.t - (T.readyAt[id] === undefined ? -9 : T.readyAt[id])) / 0.55);
       if (fk > 0) {   // ready flash: white wash, a ring that opens, and a little star
         ctx.save(); ctx.globalAlpha = fk * 0.7; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, cy, r + 1 + (reduce() ? 0 : 4 * fk), 0, TAU); ctx.fill();
@@ -494,11 +501,65 @@ export function createHud(env) {
     ctx.fillStyle = urgent ? '#ff6a6a' : '#ffd24a'; rr(x + 42, cy + 7, Math.max(6, (w - 56) * fr), 6, 3); ctx.fill();
   }
 
+  // 06-hud b8: a chest opened in the field flies up to the chest chip, the chip pulses, three coins hop to the coin plate and a +N chip
+  // reports what the chest paid. Pooled (max 4 in flight): no allocation after the first few chests.
+  const FT = 0.6, CHX = 176;
+  function reward8start(e, g) {
+    const n = B8.raw >= 0 ? Math.max(0, Math.round(g.coins - B8.raw)) : 0;
+    if (reduce()) { B8.landAt = S.t; if (n > 0) { B8.gainN = (S.t - B8.gainAt < 1.2 ? B8.gainN : 0) + n; B8.gainAt = S.t; } return; }
+    let f = null; for (let i = 0; i < B8.fl.length; i++) if (!B8.fl[i].on) { f = B8.fl[i]; break; }
+    if (!f) { if (B8.fl.length >= 4) return; B8.fl.push(f = { on: false, x: 0, y: 0, t0: 0, n: 0 }); }
+    f.on = true; f.x = e.x; f.y = e.y; f.t0 = S.t; f.n = n;
+  }
+  function reward8(g) {
+    B8.raw = g.coins;
+    const ty = 40 + T.ins.t, lk = Math.max(0, 1 - (S.t - B8.landAt) / 0.5);
+    let fly = false; for (let i = 0; i < B8.fl.length; i++) if (B8.fl[i].on) { fly = true; break; }
+    if (B8.ch === 0 && (fly || lk > 0)) {   // no chest is riding the snake: show the chip as an opened tally while the reward arrives
+      glass(146, ty - 26, 92, 52, 26, 'rgba(255,233,168,.5)'); blit(kit && kit.SPR.pickup('chest'), CHX, ty, 44);
+      text('x ' + (g.chestsOpened || 0), 200, ty - 5, 22, '#ffe9a8', '#0b1020', 'left'); text('OPENED', 200, ty + 14, 10, '#ffd0e6', '#0b1020', 'left');
+    }
+    for (let i = 0; i < B8.fl.length; i++) {
+      const f = B8.fl[i]; if (!f.on) continue;
+      const u = Math.min(1, (S.t - f.t0) / FT), e = u * u * (3 - 2 * u);
+      for (let k = 3; k >= 0; k--) {   // a short comet trail of fading chests
+        const uu = Math.max(0, u - k * 0.05), ee = uu * uu * (3 - 2 * uu);
+        const px = f.x + (CHX - f.x) * ee, py = f.y + (ty - f.y) * ee - 110 * Math.sin(Math.PI * ee);
+        ctx.save(); ctx.globalAlpha = k ? 0.22 : 1; if (!k) glow(px, py, 42, '#ffd84d', 0.5); blit(kit && kit.SPR.pickup('chest'), px, py, (k ? 40 : 54) * (1.25 - 0.45 * ee), k ? 0 : Math.sin(u * 14) * 0.2); ctx.restore();
+      }
+      if (u >= 1) {
+        f.on = false; B8.landAt = S.t; sparkleAt(CHX + 12, ty - 14, 12);
+        if (f.n > 0) { B8.gainN = (S.t - B8.gainAt < 1.2 ? B8.gainN : 0) + f.n; B8.gainAt = S.t; }
+        if (env.onChestLand) env.onChestLand(f.n);
+      }
+    }
+    if (lk > 0) {   // the chip is hit: a ring and a glow
+      glow(CHX, ty, 40 + 20 * lk, '#ffd84d', 0.45 * lk);
+      ctx.save(); ctx.globalAlpha = lk; ctx.strokeStyle = '#ffe9a8'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(CHX, ty, 16 + 26 * (1 - lk), 0, TAU); ctx.stroke(); ctx.restore();
+    }
+    const sinceL = S.t - B8.landAt;
+    if (sinceL < 0.8 && !reduce() && B8.gainN > 0) for (let i = 0; i < 3; i++) {   // three coins hop from the chip to the coin plate
+      const v = (sinceL - i * 0.08) / 0.4; if (v <= 0 || v >= 1) continue;
+      const ev = v * v * (3 - 2 * v), px = CHX + (514 - CHX) * ev, py = ty - 38 * Math.sin(Math.PI * ev);
+      blit(kit && kit.SPR.pickup('coin'), px, py, 30);
+    }
+    const gs = S.t - B8.gainAt;
+    if (B8.gainN > 0 && gs < 1.7) {   // +N chip under the coin plate: pops in, hangs, fades
+      const a = gs > 1.3 ? Math.max(0, 1 - (gs - 1.3) / 0.4) : 1, pk = Math.max(0, 1 - gs / 0.25), sc = 1 + 0.35 * pk;
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(556, ty + 37); ctx.scale(sc, sc);
+      glass(-40, -9, 80, 18, 9, 'rgba(255,210,74,.85)', 'rgba(60,40,6,.82)');
+      text('+' + B8.gainN, 0, 1, 14, '#ffe36b', '#0b1020');
+      ctx.restore();
+    }
+  }
+
   // Encore meter by the duo: capsule with quarter marks, brightens and calls for a tap when full
   function encore(g) {
     const e = Math.max(0, Math.min(1, g.encore || 0));
     if (g.phase !== 'play' || e <= 0) { T.encV = 0; return; }
     T.encV += (e - T.encV) * 0.3;
+    if (e > B8.encPrev + 0.004 && S.t - B8.encGainAt > 0.12) B8.encGainAt = S.t;
+    B8.encPrev = e;
     const full = e >= 1;
     if (full && T.encFull < 0) T.encFull = S.t; else if (!full) T.encFull = -9;
     const k = full ? Math.max(0, 1 - (S.t - T.encFull) / 0.5) : 0, pul = 0.5 + 0.5 * Math.sin(S.t * 10);
@@ -510,12 +571,18 @@ export function createHud(env) {
     }
     glass(ex - w / 2 - 3, ey - 3, w + 6, h + 6, (h + 6) / 2, full ? 'rgba(255,227,107,.95)' : 'rgba(255,154,214,.7)', 'rgba(14,9,48,.7)');
     ctx.save(); rr(ex - w / 2, ey, w, h, h / 2); ctx.clip();
-    const gr = ctx.createLinearGradient(ex - w / 2, 0, ex + w / 2, 0); gr.addColorStop(0, full ? '#ffd84d' : '#ff7eb6'); gr.addColorStop(1, full ? '#fff3a0' : '#ffc2dc');
-    ctx.fillStyle = gr; ctx.fillRect(ex - w / 2, ey, Math.max(h * 0.6, w * T.encV), h);
+    const fw = Math.max(h * 0.6, w * T.encV);
+    const fb = kit && kit.bake ? kit.bake('encfill08|' + (full ? 1 : 0), w, h, c => {   // 06-hud b8: the gradient is baked once (a live gradient per frame was the only one left in the meter)
+      const gr = c.createLinearGradient(-w / 2, 0, w / 2, 0); gr.addColorStop(0, full ? '#ffd84d' : '#ff7eb6'); gr.addColorStop(1, full ? '#fff3a0' : '#ffc2dc'); c.fillStyle = gr; c.fillRect(-w / 2, -h / 2, w, h);
+    }) : null;
+    if (fb) { ctx.save(); ctx.beginPath(); ctx.rect(ex - w / 2, ey, fw, h); ctx.clip(); ctx.drawImage(fb.c, ex - w / 2, ey, w, h); ctx.restore(); }
+    else { ctx.fillStyle = full ? '#ffe36b' : '#ff9ad6'; ctx.fillRect(ex - w / 2, ey, fw, h); }
     ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(ex - w / 2, ey, w * T.encV, h * 0.4);
-    ctx.fillStyle = 'rgba(11,16,32,.45)'; for (let i = 1; i < 4; i++) ctx.fillRect(ex - w / 2 + (w * i) / 4 - 1, ey, 2, h);
+    for (let i = 1; i < 4; i++) { ctx.fillStyle = T.encV >= i / 4 ? 'rgba(255,255,255,.7)' : 'rgba(11,16,32,.45)'; ctx.fillRect(ex - w / 2 + (w * i) / 4 - 1, ey, 2, h); }   // a quarter mark lights once the fill passes it
+    { const gk = Math.max(0, 1 - (S.t - B8.encGainAt) / 0.35); if (gk > 0 && !full) { ctx.fillStyle = `rgba(255,255,255,${0.35 * gk})`; ctx.fillRect(ex - w / 2, ey, fw, h); } }   // the fill flashes on every gain
     if (full) { ctx.fillStyle = `rgba(255,255,255,${0.5 * k + 0.12 * pul})`; ctx.fillRect(ex - w / 2, ey, w, h); }
     ctx.restore();
+    if (!full && T.encV > 0.02) { const gk = Math.max(0, 1 - (S.t - B8.encGainAt) / 0.35); glow(ex - w / 2 + fw, ey + h / 2, 16 + 14 * gk, '#ffffff', 0.25 + 0.4 * gk); if (gk > 0.4 && !reduce()) sparkleAt(ex - w / 2 + fw, ey + h / 2 - 8, 8 * gk + 2); }   // a bright cap rides the fill edge
     star(ex - w / 2 - 10, ey + h / 2, 1.15 + 0.25 * k, full ? '#ffe36b' : '#ff9ad6');
     if (full) {
       ctx.save(); const sc = 1 + 0.08 * pul + 0.3 * k; ctx.translate(Math.max(110, Math.min(W - 110, g.p.x)), g.p.y - 118); ctx.scale(sc, sc); text('TAP THE DUO!', 0, 0, 20, '#ffe36b', '#0b1020'); ctx.restore();
@@ -550,7 +617,7 @@ export function createHud(env) {
   function dy(g) { return T.ins.t + (g && isBossStage(g.stage) ? BOSS_DY : 0); }
 
   function draw(g, L) {
-    if (T.g !== g) { T.g = g; T.pop = {}; T.cdMax = {}; T.cdLast = {}; T.chestAt = {}; T.lastProg = g.progress || 0; T.gv = g.progress || 0; T.bsLast = 0; T.bsAt = -9; T.bsHi = 0; T.readyAt = {}; T.bossTot = 0; T.bossV = 1; T.encV = 0; T.encFull = -9; T.lvLast = {}; T.lvAt = {}; T.t0 = S.t; T.bossGhost = 1; T.newAt = {}; T.coinV = -1; T.coinPrev = -1; T.coinAt = -9; T.flashAt = -9; }
+    if (T.g !== g) { T.g = g; T.pop = {}; T.cdMax = {}; T.cdLast = {}; T.chestAt = {}; T.lastProg = g.progress || 0; T.gv = g.progress || 0; T.bsLast = 0; T.bsAt = -9; T.bsHi = 0; T.readyAt = {}; T.bossTot = 0; T.bossV = 1; T.encV = 0; T.encFull = -9; T.lvLast = {}; T.lvAt = {}; T.t0 = S.t; T.bossGhost = 1; T.newAt = {}; T.coinV = -1; T.coinPrev = -1; T.coinAt = -9; T.flashAt = -9; B8.fl.length = 0; B8.landAt = -9; B8.gainAt = -9; B8.raw = g.coins; B8.encPrev = g.encore || 0; B8.encGainAt = -9; }
     T.ins = safeUnits(L);
     const boss = isBossStage(g.stage);
     scrim();
@@ -558,11 +625,12 @@ export function createHud(env) {
     top(g); progress(g); if (boss) bossBar(g); stats(g);
     goldPill(g, 146 + (boss ? BOSS_DY : 0));
     ctx.restore();
+    reward8(g);
     groove(g); beatStreak(g); skills(g);
     const p = g.p, b = T.ins.b;
     S.chipB = b;   // hitjuice: where the power-up icons fly to
     if (p.shield > 0) { const k = landBounce(S, 'shield'); ctx.save(); ctx.translate(W - 100, H - 113 - b); ctx.scale(k, k); ctx.translate(-(W - 100), -(H - 113 - b)); glass(W - 180, H - 130 - b, 160, 34, 17, 'rgba(127,232,255,.7)'); text('SHIELD ' + p.shield.toFixed(0), W - 100, H - 112 - b, fz(18), '#7fe8ff'); ctx.restore(); }
     if (p.rage > 0) { const k = landBounce(S, 'rage'); ctx.save(); ctx.translate(W - 100, H - 153 - b); ctx.scale(k, k); ctx.translate(-(W - 100), -(H - 153 - b)); glass(W - 180, H - 170 - b, 160, 34, 17, 'rgba(255,210,74,.7)'); text('RAGE ' + p.rage.toFixed(0), W - 100, H - 152 - b, fz(18), '#ffd24a'); ctx.restore(); }
   }
-  return { press: id => { T.pressAt[id] = S.t; }, draw, encore, combo, dy, top: () => T.ins.t };
+  return { press: id => { T.pressAt[id] = S.t; }, reward: (e, g) => reward8start(e, g), draw, encore, combo, dy, top: () => T.ins.t };
 }
