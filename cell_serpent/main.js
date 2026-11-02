@@ -17,6 +17,7 @@ import { createMotion } from './motion.js';
 import { celebrateBest, stopBest } from './best_fx.js';
 import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
+import { setupTune, wantsHand } from './title_b8.js';
 import { firstGoalHTML, welcomeBack, welcomeHTML, hoursAway, stampVisit } from './title12b.js';
 import { bakeCardArt } from './card_bake.js';
 import { luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand, cardFoilHTML, markReroll, chainPulse } from './cards_ui.js';
@@ -429,7 +430,7 @@ function startRun(stage, mode2 = '') {
   window.CS.g = g;
 }
 let awayH = hoursAway(Date.now()); addEventListener('pagehide', () => stampVisit(Date.now()));
-function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)) || firstGoalHTML(save); { const w = welcomeBack(save, Date.now(), awayH), el = $('wb12'); el.innerHTML = welcomeHTML(w); el.hidden = !w; $('title').classList.toggle('ret12', !!w); awayH = 0; stampVisit(Date.now()); } try { dressDuo(document.querySelector('.stage12 .hero'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ } }
+function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)) || firstGoalHTML(save); { const w = welcomeBack(save, Date.now(), awayH), el = $('wb12'); el.innerHTML = welcomeHTML(w); el.hidden = !w; $('title').classList.toggle('ret12', !!w); $('title').classList.toggle('hand13', !!w && wantsHand(save)); awayH = 0; stampVisit(Date.now()); } try { dressDuo(document.querySelector('.stage12 .hero'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ } }
 function toTitle() { refreshTitle(); mode = 'title'; audio.music(false); audio.hub(false); refreshCur(); newDemo(); show('title'); }
 
 // ---------------------------------------------------------------- upgrade cards
@@ -733,7 +734,7 @@ loadArt('assets/').then(a => {
   [['love', 'deco1'], ['grumpy', 'deco2'], ['sneezy', 'deco3'], ['sleepy', 'deco4']].forEach(([skin, el], i) => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
-  setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); $('title').addEventListener('snakepoke', e => (e.detail && e.detail.hit ? audio.play('snakesqueak', e.detail) : audio.play('click'))); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
+  setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); setupTune($('title'), audio, () => { save.sparkles += 3; persist(); refreshCur(); toast('Sticker! +3 Sparkles'); }); $('title').addEventListener('snakepoke', e => (e.detail && e.detail.hit ? audio.play('snakesqueak', e.detail) : audio.play('click'))); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
   R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready'), onMilestone: n => audio.play('streakmile', { n }), beatStreak: () => audio.beatStreak }); applySettings(); resize(); refreshTitle();
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();
