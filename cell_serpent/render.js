@@ -184,13 +184,13 @@ export function createRenderer(canvas, art, kit) {
     else { ctx.fillStyle = '#1a1445'; ctx.fillRect(0, 0, W, H); }
     // drifting bokeh lights and themed motes (petals, snow, droplets, notes, stars, bubbles)
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0, nb = OPT.lowQuality ? 3 : 6; i < nb; i++) {   // low quality: fewer big translucent discs
       const sp = S.specks[i], y = (sp.y + S.t * sp.v) % (H + 120) - 60, x = sp.x + Math.sin(S.t * 0.3 + sp.a) * 16, hue = sp.i % 3;
       ctx.globalAlpha = 0.06 + 0.03 * Math.sin(S.t + sp.a); ctx.fillStyle = hue === 0 ? th.base : hue === 1 ? '#6fe3ff' : th.lite;
       ctx.beginPath(); ctx.arc(x, y, sp.r, 0, TAU); ctx.fill();
     }
     ctx.restore();
-    if (!OPT.reduceMotion) { if (!S.motes) S.motes = makeMotes(); drawBeams(ctx, S.t, isBossStage(g.stage), th, kit); drawMotes(ctx, g.skin, th, S.motes, S.t); }
+    if (!OPT.reduceMotion) { if (!S.motes) S.motes = makeMotes(); if (!OPT.lowQuality) drawBeams(ctx, S.t, isBossStage(g.stage), th, kit); drawMotes(ctx, g.skin, th, OPT.lowQuality ? (S.motesLow || (S.motesLow = S.motes.filter((m, i) => i % 2 === 0))) : S.motes, S.t); }
     // weather, speaker thump, crowd and lightning (bg_world.js)
     const bgp = (S.bgfx || (S.bgfx = createBgFx())).draw(ctx, { kit, skin: g.skin, stage: g.stage, boss: isBossStage(g.stage), th, t: S.t, reduce: OPT.reduceMotion, low: OPT.lowQuality, kick: S.t - (S.killT === undefined ? -9 : S.killT) });
     // the stage floor below the line, where the duo stands; if the snake touches the line it is over
@@ -491,7 +491,7 @@ export function createRenderer(canvas, art, kit) {
   function drawHud(g, ui) {
     const p = g.p, pad = 22;
     getHud().draw(g, layout());
-    if ((g.danger || 0) > 0.05 && g.phase === 'play') { const a = Math.min(0.5, g.danger * 0.45) * (0.65 + 0.35 * Math.sin(S.t * 14)); const rg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75); rg.addColorStop(0, 'rgba(255,40,80,0)'); rg.addColorStop(1, `rgba(255,40,80,${a})`); ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H); }
+
     for (const sn of g.snakes) if (sn.surge === 'warn') { const h = sn.segs[0]; text('!', h.x, h.y - h.r - 34 + Math.sin(S.t * 20) * 4, 40, '#ff3d5a', '#0b1020'); }
     // Encore blast: the beam, the meter by the duo, and the tap hint
     if (g.beam) { const bw = (g.beam.w || 36), a = Math.min(1, g.beam.t * 3), x = g.beam.x; ctx.save(); ctx.globalCompositeOperation = 'lighter'; const bg = ctx.createLinearGradient(x - bw * 1.7, 0, x + bw * 1.7, 0); bg.addColorStop(0, 'rgba(255,200,60,0)'); bg.addColorStop(0.35, `rgba(255,210,90,${0.55 * a})`); bg.addColorStop(0.5, `rgba(255,255,230,${a})`); bg.addColorStop(0.65, `rgba(255,210,90,${0.55 * a})`); bg.addColorStop(1, 'rgba(255,200,60,0)'); ctx.fillStyle = bg; ctx.fillRect(x - bw * 1.7, 0, bw * 3.4, g.p.y); ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fillRect(x - bw * 0.18, 0, bw * 0.36, g.p.y); ctx.restore(); }
