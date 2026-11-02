@@ -64,3 +64,41 @@ export function eventBannerHTML(ev, earned, claimed, nowMs, day) {
     `<div class="ev-bar"><div class="ev-fill" style="width:${pct}%"></div>${nodes}</div>` +
     `<div class="ev-foot"><span>🎀 <b>${earned}</b> gathered${ready ? ' · rewards ready' : next ? ' · next at ' + next.at : ' · all done'}</span><button class="btn small go gold ev-go">${ready ? 'CLAIM ' + ready : 'OPEN'}</button></div>`;
 }
+
+// ---- round 3: dock measuring, title fit, swipe and arrow keys on the stage hero
+// (--tabh was 0 on the first open, so the START dock covered the tab bar: measure after layout, and again on resize)
+export function syncDock() {
+  const hb = document.getElementById('hub'), dk = document.getElementById('btDock'), tb = document.querySelector('.tabs');
+  if (!hb || !dk || !tb) return;
+  const m = () => { const t = tb.offsetHeight, d = dk.offsetHeight; if (t) hb.style.setProperty('--tabh', t + 'px'); if (d) hb.style.setProperty('--dockh', d + 'px'); };
+  m(); requestAnimationFrame(m);
+}
+let dockWatch = false;
+export function watchDock() {
+  if (dockWatch) return; dockWatch = true;
+  addEventListener('resize', syncDock);
+  try { const ro = new ResizeObserver(syncDock); ro.observe(document.querySelector('.tabs')); ro.observe(document.getElementById('btDock')); } catch (e) { /* ignore */ }
+}
+// a small tag on the START button: how your power compares with the recommended one
+export function goTag(btn, mine, rec, playable) {
+  if (!btn) return;
+  const r = rec ? mine / rec : 2, tag = !playable ? '' : r < 0.85 ? 'RISKY' : r >= 1.6 ? 'EASY' : r >= 1 ? 'READY' : 'CLOSE';
+  for (const o of btn.querySelectorAll('.gt')) o.remove();
+  if (tag) { btn.dataset.tag = tag; const i = document.createElement('i'); i.className = 'gt'; i.textContent = tag; btn.appendChild(i); } else delete btn.dataset.tag;
+}
+// shrink the stage title until it fits (no more "Love-Struck Ser...")
+export function fitTitle(el) {
+  if (!el) return;
+  el.style.fontSize = ''; el.title = el.textContent;
+  const run = () => { let fs = parseFloat(getComputedStyle(el).fontSize) || 21; for (let i = 0; i < 8 && el.scrollWidth > el.clientWidth + 1 && fs > 14; i++) { fs -= 1.5; el.style.fontSize = fs + 'px'; } };
+  run(); requestAnimationFrame(run);
+}
+// swipe the hero or press the arrow keys to change stage; step(dir) returns true when the stage changed
+export function bindStageNav(hero, tabOn, step) {
+  let sx = 0, sy = 0, st = 0, live = false;
+  const go = dir => { const ok = step(dir), c = ok ? (dir > 0 ? 'bt-sl' : 'bt-sr') : 'bt-bump'; hero.classList.remove('bt-sl', 'bt-sr', 'bt-bump'); void hero.offsetWidth; hero.classList.add(c); };
+  hero.addEventListener('pointerdown', e => { if (e.target.closest('button,#stPortrait')) { live = false; return; } live = true; sx = e.clientX; sy = e.clientY; st = performance.now(); });
+  hero.addEventListener('pointerup', e => { if (!live) return; live = false; const dx = e.clientX - sx, dy = e.clientY - sy; if (Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.6) go(dx < 0 ? 1 : -1); });
+  hero.addEventListener('pointercancel', () => { live = false; });
+  addEventListener('keydown', e => { if (!tabOn() || e.ctrlKey || e.metaKey || e.altKey) return; if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1); });
+}

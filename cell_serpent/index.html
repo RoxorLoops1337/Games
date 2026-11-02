@@ -409,7 +409,7 @@
   html.hc .sub,html.hc .tile .sm,html.hc .scd,html.hc .dl,html.hc .loot .it small{color:#fff}
   html.hc .tile,html.hc .chip,html.hc .card,html.hc .tgl,html.hc .cur{border-color:#fff!important}
   html.hc .card.pick .key{opacity:1}
-  #tabBattle .chip .st{color:#a79ee8} #tabBattle .chip.sel .st{color:#4a0a2c} .stars .off{color:#8ea0b8} .card.pick .key{opacity:.9}
+  #hub .chip .st{color:#a79ee8} #hub .chip.sel .st{color:#4a0a2c} .stars .off{color:#8ea0b8} .card.pick .key{opacity:.9}
   @media (forced-colors:active){:focus-visible{outline:3px solid Highlight}}
   /* end @css:18-access round 2 */
   /* end @css:18-access */
@@ -429,14 +429,14 @@
   .bt-hero .stprog{width:100%;margin:14px 0 0;display:flex;align-items:center;gap:8px} .bt-hero .stprog .pgl{font-size:11px;margin:0;white-space:nowrap} .bt-hero .stprog .pgr{flex:1;margin:0 14px 0 0}
   .bt-rowh{display:flex;justify-content:space-between;align-items:center;width:100%;padding:0 4px;font-size:12px;letter-spacing:.1em;color:var(--dim)}
   .pill{appearance:none;border:2px solid #4fd8f0;background:rgba(79,216,240,.14);color:#d9fbff;font:inherit;font-weight:900;font-size:12px;letter-spacing:.04em;border-radius:99px;padding:5px 12px;cursor:pointer}
-  #tabBattle .chips{scroll-snap-type:x proximity;scroll-padding:0 40%;padding:10px 6px 8px;gap:8px;scrollbar-width:none} #tabBattle .chips::-webkit-scrollbar{display:none}
-  #tabBattle .chip{min-width:54px;height:62px;border-radius:15px;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:20px;line-height:1;transition:transform .15s;background:linear-gradient(180deg,#2d2270,#1c1548)}
-  #tabBattle .chip .st{font-size:11px;letter-spacing:1px;color:#46406e;display:block} #tabBattle .chip .st u{text-decoration:none;color:#ffd24a;text-shadow:0 0 6px #ffb04d}
-  #tabBattle .chip .kk{top:-8px;right:-5px;font-size:14px;filter:drop-shadow(0 1px 1px #000)}
-  #tabBattle .chip.sel{transform:scale(1.14);background:linear-gradient(180deg,#ff9ad0,#ff5aa8);box-shadow:0 0 16px #ff5aa8aa;border-color:#fff} #tabBattle .chip.sel .st{color:#7a1d52}
-  #tabBattle .chip.nxt:not(.sel){animation:btnxt 1.4s ease-in-out infinite;border-color:#ffe14a}
+  #hub .chips{scroll-snap-type:x proximity;scroll-padding:0 40%;padding:10px 6px 8px;gap:8px;scrollbar-width:none} #hub .chips::-webkit-scrollbar{display:none}
+  #hub .chip{min-width:54px;height:62px;border-radius:15px;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:20px;line-height:1;transition:transform .15s;background:linear-gradient(180deg,#2d2270,#1c1548)}
+  #hub .chip .st{font-size:11px;letter-spacing:1px;color:#46406e;display:block} #hub .chip .st u{text-decoration:none;color:#ffd24a;text-shadow:0 0 6px #ffb04d}
+  #hub .chip .kk{top:-8px;right:-5px;font-size:14px;filter:drop-shadow(0 1px 1px #000)}
+  #hub .chip.sel{transform:scale(1.14);background:linear-gradient(180deg,#ff9ad0,#ff5aa8);box-shadow:0 0 16px #ff5aa8aa;border-color:#fff} #hub .chip.sel .st{color:#7a1d52}
+  #hub .chip.nxt:not(.sel){animation:btnxt 1.4s ease-in-out infinite;border-color:#ffe14a}
   @keyframes btnxt{50%{box-shadow:0 0 14px #ffe14a;transform:translateY(-3px)}}
-  #tabBattle .chip.lock{opacity:.4;font-size:18px}
+  #hub .chip.lock{opacity:.4;font-size:18px}
   .seg{position:relative;display:flex;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.2);border-radius:14px;padding:3px;width:210px}
   .seg i{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:11px;background:#9dff6d;transition:transform .2s,background .2s} .seg.h i{transform:translateX(100%);background:#b06cff}
   .seg .dbtn{position:relative;flex:1;border:0;background:none;border-radius:11px;padding:8px 0;font-size:14px} .seg .dbtn.on,.seg .dbtn.hard.on{background:none;color:#10131c} .seg.h .dbtn.on{color:#fff}
@@ -453,10 +453,10 @@
   #pigBox .tile .top{grid-column:1;grid-row:1} #pigBox .tile .ds{grid-column:1;grid-row:2;font-size:12px} #pigBox .tile>.btn{grid-column:2;grid-row:1/3;align-self:center;padding:10px 12px;font-size:13px;min-width:92px}
   #pigBox .tile .ic{width:46px;height:46px;font-size:28px} #pigBox .tile.bn-inv{--bn1:#4a1f52;--bn2:#240f2e;border-color:#c06cff88} #pigBox .tile.bn-ev{--bn1:#124a5a;--bn2:#0a2630;border-color:#4fd8f088}
   #goalList .tile{grid-template-columns:auto 1fr auto} #goalList .tile .top{grid-column:1/3} #goalList .tile>.btn{grid-column:3;grid-row:1/3;min-width:70px;padding:8px 10px;font-size:13px} #goalList .tile .bar{grid-column:1/3} #goalList .tile .sm{grid-column:1/3}
-  @media(max-height:700px){.bt-hero #stCanvas{width:38%} #stPortrait{width:84px;height:84px} #tabBattle .chip{height:56px} #stGo{padding:12px 16px}}
-  @media(prefers-reduced-motion:reduce){#stGo,#tabBattle .chip.nxt,#pigBox .tile::after{animation:none}}
+  @media(max-height:700px){.bt-hero #stCanvas{width:38%} #stPortrait{width:84px;height:84px} #hub .chip{height:56px} #stGo{padding:12px 16px}}
+  @media(prefers-reduced-motion:reduce){#stGo,#hub .chip.nxt,#pigBox .tile::after{animation:none}}
   #tabBattle .side{margin-bottom:0;padding:4px 4px 2px} #tabBattle .sidebtn{padding:3px 8px;min-width:64px;font-size:10px;border-radius:12px} #tabBattle .sidebtn b{font-size:19px}
-  #tabBattle .chips{padding-left:14px;padding-right:14px}
+  #hub .chips{padding-left:14px;padding-right:14px}
   .bt-load{padding:4px 10px} #tabBattle .bt-hero{padding-bottom:6px}
   /* battle round 2: START is a dock above the tab bar (never over the content), twist badge, fun fact card, event banner */
   .bt-dock{display:none;position:absolute;left:0;right:0;bottom:var(--tabh,70px);z-index:4;padding:18px 14px 8px;background:linear-gradient(180deg,rgba(13,9,36,0),rgba(13,9,36,.92) 38%);pointer-events:none}
@@ -485,6 +485,20 @@
   @media(max-height:700px){.bt-dock{padding-top:10px;padding-bottom:6px} #stGo{font-size:19px;padding:10px 16px}}
   @media(max-width:400px){.bt-lt{display:none}} @media(max-width:340px){.bt-hero .stagetitle{font-size:18px} .ev-tx small{display:none}}
   @media(prefers-reduced-motion:reduce){.bt-fact{animation:none} .evn.rd em{animation:none}}
+  /* battle round 3: swipe slide, sticky stage rail above the dock, tighter header on short screens */
+  .bt-hero.bt-sl{animation:btsl .26s cubic-bezier(.2,.85,.25,1)} .bt-hero.bt-sr{animation:btsr .26s cubic-bezier(.2,.85,.25,1)} .bt-hero.bt-bump{animation:btbump .25s ease-out}
+  @keyframes btsl{from{transform:translateX(34px);opacity:.35}} @keyframes btsr{from{transform:translateX(-34px);opacity:.35}} @keyframes btbump{35%{transform:translateX(-7px)}70%{transform:translateX(5px)}}
+  .bt-hero{touch-action:pan-y}
+  .bt-dock{padding-top:6px;background:linear-gradient(180deg,rgba(13,9,36,0),rgba(13,9,36,.98) 14px)}
+  #stGo .gt{font-style:normal;vertical-align:middle;margin-left:10px;font-size:10px;font-weight:900;letter-spacing:.08em;padding:3px 8px;border-radius:99px;color:#10331a;background:#9dff6d;border:2px solid #fff;box-shadow:0 2px 0 rgba(0,0,0,.3)}
+  #stGo[data-tag=RISKY] .gt{background:#ff8a6a;color:#3a0c00} #stGo[data-tag=CLOSE] .gt{background:#ffd24a;color:#3a2a00} #stGo[data-tag=EASY] .gt{background:#4fd8f0;color:#082a30} .bt-dock .chips{pointer-events:auto;max-width:520px;margin:0 auto 4px;padding-top:12px;padding-bottom:6px;box-sizing:border-box} .bt-dock #stGo{margin-top:2px}
+  @media(max-height:760px){
+    #tabBattle{gap:6px} #tabBattle .qstrip{margin-bottom:2px;gap:4px} #tabBattle .qmain{min-height:42px;padding:4px 10px} #tabBattle .qpill{min-height:30px}
+    #tabBattle .side{padding:0} #tabBattle .sidebtn{padding:2px 8px}
+    .bt-hero{padding:6px 8px} .bt-body{margin-top:2px} .bt-side .tapme{display:none} #stPortrait{width:72px;height:72px} .bt-hero .stprog{margin-top:8px}
+    .bt-hero #stCanvas{width:26%} #stPortrait{width:64px;height:64px} .bt-dock .chips{padding-top:8px;padding-bottom:4px} #hub .chip{height:50px;font-size:18px} #hub .chip .st{font-size:9px}
+  }
+  @media(prefers-reduced-motion:reduce){.bt-hero.bt-sl,.bt-hero.bt-sr,.bt-hero.bt-bump{animation:none}}
   /* end @css:08-battle-tab */
 /* @css:19-transitions */
   /* screens: fade + scale in, fade out (transform and opacity only) */
@@ -795,7 +809,7 @@
           <div class="stprog" id="stProg"></div>
         </div>
         <div class="bt-rowh" id="btRowH"><b>STAGES</b><button class="pill" id="contBtn">CONTINUE</button></div>
-        <div class="chips" id="stChips"></div>
+
         <div class="diffrow" id="diffRow"></div>
         <div class="bt-hint" id="btHint"></div>
         <div class="bt-load"><b class="bt-lt">LOADOUT</b><div class="loadout" id="battleLoad"></div><button class="pill" id="loadEdit">EDIT</button></div>
@@ -809,7 +823,7 @@
     <div class="tab" id="tabGear"><div class="filters" id="gearFilters"><b class="ttl">Collection</b><button data-f="All">All</button><button data-f="Owned">Owned</button><button data-f="Set">Set</button><button data-f="Upgrade">Ready</button></div><div id="gearBody"></div></div>
     <div class="tab" id="tabShop"><h2>SHOP</h2><div class="sub">Treats and surprises.</div><div class="tiles" id="boxList"></div></div>
   </div>
-  <div class="bt-dock" id="btDock"><button class="btn" id="stGo">START THE BATTLE</button></div>
+  <div class="bt-dock" id="btDock"><div class="chips" id="stChips"></div><button class="btn" id="stGo">START THE BATTLE</button></div>
   <nav class="tabs">
     <button data-tab="Shop"><b>🛍️</b>Shop</button><button data-tab="Stats"><b>♥</b>Stats</button><button data-tab="Battle"><b>⚔</b>Battle</button><button data-tab="Skills"><b>✦</b>Skills</button><button data-tab="Pets"><b>🐾</b>Pets</button><button data-tab="Gear"><b>🎒</b>Gear</button>
   </nav>
