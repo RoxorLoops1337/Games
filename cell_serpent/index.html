@@ -266,6 +266,25 @@
   #settings>*{flex:none} #settings #setClose{position:sticky;bottom:8px;margin-top:12px;z-index:3;width:min(420px,92vw);padding:13px;box-shadow:0 -10px 14px 6px rgba(8,5,30,.9),0 4px 0 rgba(0,0,0,.4);background:linear-gradient(180deg,#5b6b82,#3b4658);color:#fff}
   @media (max-height:600px){#pause{gap:10px}#pause .pbig{padding:14px 24px;font-size:24px}#pause .pbtn{padding:11px 20px}.rvinfo small{display:none}}
   /* end @css:11-result-pause round 3 */
+  /* @css:11-result-pause round 6 */
+  #pause .rpmark{width:min(352px,94vw);flex-wrap:nowrap;gap:3px;justify-content:center} #pause .rpmark span{padding:2px 5px 2px 2px;font-size:10px;gap:1px;flex:0 1 auto;min-width:0} #pause .rpmark img{width:20px;height:20px}
+  .plose{width:min(320px,84vw);margin-top:6px;text-align:center;font-size:11px;font-weight:800;line-height:1.3;color:var(--dim)} .plose b{display:block;color:#ffb3bd;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:1px}
+  #quitBtn{position:relative;overflow:hidden;--hold:0;--holdms:900ms;-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-touch-callout:none}
+  #quitBtn .hlab{position:relative;z-index:1}
+  #quitBtn .hfill{position:absolute;inset:0;background:linear-gradient(90deg,#ff5c6c,#ff9a5c);transform:scaleX(0);transform-origin:left;transition:transform .22s ease-out}
+  #quitBtn.holding .hfill{transform:scaleX(1);transition:transform var(--holdms) linear}
+  #quitBtn.holding{box-shadow:0 0 0 3px rgba(255,92,108,.55),0 0 22px rgba(255,92,108,.55);color:#fff;animation:quitShake .12s linear infinite}
+  #quitBtn.done .hfill{transform:scaleX(1)}
+  @keyframes quitShake{0%,100%{translate:0 0}25%{translate:1px 0}75%{translate:-1px 0}}
+  html.rm #quitBtn.holding{animation:none}
+  @media (max-height:700px){.plose b{display:none}.plose{margin-top:0}}
+  /* the pink focus ring is for keyboard users: a tap on a toggle or the first row must not leave it behind */
+  html:not(.kbd) .scr :focus-visible{outline:0;box-shadow:none}
+  /* sticky CLOSE: a solid band so list rows never show through it */
+  #settings #setClose{box-shadow:0 0 0 10px rgba(8,5,30,.98),0 -14px 14px 8px rgba(8,5,30,.92),0 4px 0 10px rgba(0,0,0,.35)}
+  /* flying reward chips land softly */
+  .gfx-bump{animation-duration:.45s}
+  /* end @css:11-result-pause round 6 */
   /* end @css:11-result-pause */
   /* @css:09-skills-pets */
   .tile.tier0{--tc:#9dff6d} .tile.tier1{--tc:#4fb8ff} .tile.tier2{--tc:#b06cff} .tile.tier3{--tc:#ffb04d} .tile.tier4{--tc:#ff4d7a} .tile.pet{--tc:#ffd24a}
@@ -1448,6 +1467,7 @@
   <button class="btn pbig" id="resumeBtn">&#9654; RESUME</button>
   <button class="btn alt pbtn" id="pStats">&#128202; WHO DID WHAT</button>
   <button class="btn alt pbtn" id="pSet">&#9881; SETTINGS</button>
+  <div class="plose" id="pLose"></div>
   <button class="btn dim" id="quitBtn">GIVE UP</button>
 </section>
 

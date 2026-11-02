@@ -24,6 +24,7 @@ import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDo
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
+import { rewardSnaps, flyRewards, lossLine, holdConfirm, trackModality } from './result_ux.js';
 import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
 import { dressDuo, wornOutfit } from './duo_pose.js';
 import { createCues, wantsMuffle, sheetSound } from './audio_cues.js';
@@ -480,7 +481,7 @@ function readInput() {
   const enc = encoreTap || !!keys[' ']; encoreTap = false;
   return { mx, my: 0, encore: enc };
 }
-function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; pauseRecap(); show('pause'); }
+function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; pauseRecap(); quitHold.reset(); show('pause'); }
 // Escape and the Android back button share this: close what is open, pause a run, resume a pause, leave the end screen.
 // The back button also walks the hub up to the title; Escape stays put there.
 function goBack(fromBtn) {
@@ -535,6 +536,7 @@ function showRevive() {
 function pauseRecap() {
   const pc = Math.floor((g.progress || 0) * 100), t = Math.floor(g.t || 0), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   $('pRecap').innerHTML = `<div><i>🚩</i>Stage<b>${g.stage}</b></div><div><i>⏱</i>Time<b>${mm}:${ss}</b></div><div><i>🎯</i>Popped<b>${g.kills}</b></div><div class="pbar"><i style="width:${pc}%"></i><em>${pc}% of the way</em></div>`;
+  { const ll = lossLine(g); $('quitBtn').title = 'Ends the run: ' + ll.text; $('quitBtn').setAttribute('aria-label', 'Hold to give up. You would lose ' + ll.text); $('pLose').innerHTML = `<b>Giving up ends this run</b>${ll.text}`; }
   $('pBuild').innerHTML = (save.loadout || []).map(id => { const w = WEAPONS.find(x => x.id === id), k = save.skills[id]; return w ? `<span>${icon(id)}LV ${k ? k.lv : 1}</span>` : ''; }).join('');
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
@@ -582,7 +584,7 @@ function showResult() {
   { const gl = nextGoal(save); renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
   $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); beginStage(r.stage); };
-  $('rHub').onclick = () => { audio.play('click'); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; openHub('Battle'); };
+  $('rHub').onclick = () => { audio.play('click'); const fl = rewardSnaps($('rList')); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; openHub('Battle'); flyRewards(fl, !!(save.settings.reduceMotion || systemReduceMotion())); };
   { const st = r.stars || 0; $('rStars').innerHTML = r.won && !r.mode && !r.hard ? [1, 2, 3].map(i => `<span class="${i <= st ? '' : 'off'}">★</span>`).join('') : '';
     if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + Math.min(3, i + 1)); if (i === 2 && st === 3 && !reduce) confetti($('result'), 30); }, reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
@@ -660,11 +662,14 @@ $('playBtn').onclick = () => { audio.unlock(); audio.play('click'); playBurst($(
 $('resumeBtn').onclick = () => resume();
 $('pStats').onclick = () => { audio.play('click'); showStatsFromPause(); };
 $('pSet').onclick = () => { audio.play('click'); openSettings(() => show('pause')); };
-$('quitBtn').onclick = () => {
+const quitNow = () => {
   g.p.hp = 0; g.phase = 'dead';
   g.result = quitResult(g);
   showResult();
 };
+trackModality();
+const quitHold = holdConfirm($('quitBtn'), { ms: 900, onConfirm: () => { audio.play('click'); buzz([40, 30, 40]); quitNow(); }, onHint: k => toast(k === 'again' ? 'Press again to give up' : 'Hold to give up') });
+
 $('setBtnT').onclick = () => { audio.unlock(); audio.play('click'); openSettings(() => toTitle()); };
 $('setBtnH').onclick = () => { audio.unlock(); audio.play('click'); openSettings(() => openHub()); };
 $('muteBtn').onclick = toggleMute;
