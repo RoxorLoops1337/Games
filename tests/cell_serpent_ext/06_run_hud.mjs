@@ -78,3 +78,18 @@ assert.ok(!readFileSync(join(root, 'hud.js'), 'utf8').includes('—'), 'no em da
   assert.ok(src.includes('beatStreak') && src.includes('chrome06'), 'hud has the beat streak chip and baked chrome layer');
   assert.ok(!src.includes('—'), 'no em dash in hud.js (b4)');
 }
+
+// ---- batch 5 (06-hud): baked stats plates and groove frame, streak milestones 10/20/30 with a sound, scrims, tile polish
+{
+  const { createRenderer: mk } = await import(join(root, 'render.js'));
+  const R = mk(canvas, null, null);
+  const g = sim.createGame({ seed: 9, stage: 10, meta: { rev: 1 } });
+  let streak = 0; const got = [];
+  R.setOptions({ beatStreak: () => streak, onMilestone: n => got.push(n) });
+  for (const st of [0, 4, 9, 10, 11, 19, 20, 21, 31, 2, 0, 12]) { streak = st; for (const gv of [3, 15, 20]) { g.groove = gv; R.draw(g, { joy: { on: false } }, 1 / 30); } }
+  assert.deepEqual(got, [10, 20, 30, 10], 'a milestone fires once each time the streak crosses 10, 20, 30');
+  const src = readFileSync(join(root, 'hud.js'), 'utf8');
+  assert.ok(src.includes('stats06') && src.includes('groove06') && src.includes('scrim06'), 'stats plates, groove frame and scrims are baked');
+  assert.ok(readFileSync(join(root, 'audio.js'), 'utf8').includes('streakmile'), 'audio has the streak milestone cue');
+  assert.ok(!src.includes('—'), 'no em dash in hud.js (b5)');
+}

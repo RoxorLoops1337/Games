@@ -544,7 +544,7 @@ export function createRenderer(canvas, art, kit) {
   }
 
   let hud = null;   // the widgets live in hud.js
-  function getHud() { return hud || (hud = createHud({ ctx, text, blit, kit, S, INK, glow, sparkleAt, WCOL, WSPR, OPT, onReady: id => { if (OPT.onReady) OPT.onReady(id); } })); }
+  function getHud() { return hud || (hud = createHud({ ctx, text, blit, kit, S, INK, glow, sparkleAt, WCOL, WSPR, OPT, onReady: id => { if (OPT.onReady) OPT.onReady(id); }, onMilestone: n => { if (OPT.onMilestone) OPT.onMilestone(n); } })); }
   function drawHud(g, ui) {
     const p = g.p, pad = 22;
     getHud().draw(g, layout());
