@@ -10,3 +10,14 @@ assert(html.includes('@css:11-result-pause') && html.includes('end @css:11-resul
 assert.ok((html.match(/class="tgl"/g) || []).length >= 6);
 for (const f of ['revealStars', 'countUp', 'levelBar', 'reviveRing']) { assert(fx.includes('export function ' + f)); assert(main.includes(f)); }
 assert(!/—/.test(html + main + fx));
+// round 2: star sounds, confetti, heartbeat, gentle revive, loss hint
+{
+  const au = readFileSync(join(root, 'audio.js'), 'utf8');
+  assert(main.includes("audio.play('star' + (i + 1))") && main.includes('confetti(') && au.includes('sfx.heartbeat'));
+  assert(fx.includes('holdEls') && fx.includes('onBeat') && html.includes('id="rvTimer"') && html.includes('id="rHint"'));
+  const { lossHint } = await import('../../cell_serpent/result_fx.js');
+  const names = { daggers: 'Chick Circle', swab: 'Kitty Paws' };
+  assert.equal(lossHint({ won: false, progress: 0.8 }, ['swab'], names), 'The snake got past at 80%: try the Chick Circle');
+  assert.equal(lossHint({ won: true }, [], names), '');
+  assert.equal(lossHint({ won: false, progress: 0.1 }, [], names), 'Grab the yellow upgrade cells early');
+}

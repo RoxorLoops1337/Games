@@ -5,7 +5,7 @@ import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
-import { revealStars, countUp, levelBar, reviveRing, stopFx } from './result_fx.js';
+import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint } from './result_fx.js';
 import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed } from './access.js';
 import { createMotion } from './motion.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
@@ -393,7 +393,9 @@ function showRevive() {
   $('rvGo').onclick = () => { if (save.sparkles < cost) return; stopRing(); stopFx(); save.sparkles -= cost; persist(); reviveGame(g); reviveAsked = false; endT = 0; audio.play('levelup'); show(''); };
   const giveUp = () => { stopRing(); stopFx(); g.revivesLeft = 0; reviveAsked = false; show(''); };
   $('rvNo').onclick = () => { audio.play('click'); giveUp(); };
-  show('revive'); stopRing = reviveRing(10, giveUp);
+  const timed = save.settings.reviveTimer !== false; $('rvTimer').textContent = timed ? 'Timer: ON' : 'Timer: OFF (take your time)';
+  $('rvTimer').onclick = () => { audio.play('toggle'); save.settings.reviveTimer = !timed; persist(); stopRing(); stopFx(); showRevive(); };
+  show('revive'); stopRing = reviveRing(timed ? 10 : 0, giveUp, { holdEls: [$('rvGo')], onBeat: () => { audio.play('heartbeat'); buzz([30, 70, 22]); } });
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
 function showStats() {
@@ -421,6 +423,7 @@ function showResult() {
   $('rTitle').textContent = r.mode === 'inv' ? (r.won ? 'THE GIANT SERPENT BOWS!' : 'THE GIANT SERPENT WON') : r.mode === 'pig' ? (r.won ? 'PIGGY BANKS CRACKED!' : 'THE PIGGIES ESCAPED') : r.won ? 'STAGE CLEAR!' : r.name.toUpperCase() + ' WINS';
   $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.') : `You popped ${r.kills} cells. Spend your Beats in the hub and try again.`;
   if (r.hard) hard = true;
+  { const nmz = {}; for (const w of WEAPONS) nmz[w.id] = w.name; $('rHint').textContent = lossHint(r, save.loadout, nmz); }
   if (out.levelUps) rows.push(`<div class="r">⭐ Level ${levelInfo(save.xp).lv}!</div>`);
   const li1 = levelInfo(save.xp), reduce = save.settings.reduceMotion;
   levelBar(li0, li1, reduce);
@@ -435,7 +438,7 @@ function showResult() {
   $('rRetry').onclick = () => { audio.play('click'); beginStage(r.stage); };
   $('rHub').onclick = () => { audio.play('click'); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; openHub('Battle'); };
   { const st = r.stars || 0; $('rStars').innerHTML = r.won && !r.mode && !r.hard ? [1, 2, 3].map(i => `<span class="${i <= st ? '' : 'off'}">★</span>`).join('') : '';
-    if ($('rStars').children.length) revealStars($('rStars'), st, i => audio.play('coin', { i }), reduce);
+    if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + (i + 1)); if (i === 2 && st === 3 && !reduce) confetti($('result'), 30); }, reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
     const top = Object.entries(r.dmgBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => (id === 'capsule' ? 'Singing' : (WEAPONS.find(w => w.id === id) || { name: id }).name)).join(', ') || '-';
     $('rExtra').innerHTML = `<span>Time <b>${mm}:${ss}</b></span><span>Cells <b>${r.kills}</b></span><span>Best groove <b>${r.groove || 0}</b></span><span>Bombs <b>${r.bombs || 0}</b></span><span style="grid-column:1/-1">Top: <b>${top}</b></span>`;
