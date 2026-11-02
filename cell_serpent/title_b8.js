@@ -57,12 +57,12 @@ export function setupTune(title, audio, onDone) {
     if (res === 'done') {
       paint(TUNE.length); setTimeout(() => paint(0), 1400);
       const first = !rd(); wr();
-      try { audio.play('levelup'); } catch (er) { /* ignore */ }
+      try { audio.play('stickerget'); } catch (er) { /* ignore */ }
       if (!reduced()) for (let j = 0; j < 9; j++) glyph(x + (j - 4) * 14, y - 10, ['♪', '♫', '★', '♡'][j % 4], 'big d' + (j % 3));
       stk.hidden = false; stk.classList.remove('land'); void stk.offsetWidth; stk.classList.add('land');
       if (first && onDone) onDone();
     }
   });
-  stk.addEventListener('click', () => { audio.play('click'); play(); });
+  stk.addEventListener('click', () => { audio.play('tunestick'); play(); });
   return { play };
 }
