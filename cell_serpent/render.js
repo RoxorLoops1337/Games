@@ -5,6 +5,7 @@ import { INK, mix } from './art_draw.js';
 import { createHud, hudZone } from './hud.js';
 import { createHitJuice } from './hitjuice.js';
 import { createScreenFx } from './screenfx.js';
+import { drawFar } from './bg_far.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
 import { drawCellFlags, drawCellBadge } from './cellfx.js';
@@ -177,14 +178,34 @@ export function createRenderer(canvas, art, kit) {
   function themeOf(g) { return (kit && kit.SPECIES[g.skin]) || { base: '#ff7eb6', lite: '#ffc2dc', cell: 'round' }; }
   function bgLayer(g, L) {
     const th = themeOf(g), k = Math.max(0.5, Math.min(1.5, L.s));
-    return kit && kit.layer(`${g.skin}|${g.stage}|${k.toFixed(1)}|${OPT.colorBlind ? 1 : 0}`, W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th, g.stage));
+    return kit && kit.layer(`${g.skin}|${g.stage}|${k.toFixed(1)}|${OPT.colorBlind ? 1 : 0}`, W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th, g.stage, 1));
+  }
+  function fgLayer(g, L) {   // everything in front of the far skyline
+    const th = themeOf(g), k = Math.max(0.5, Math.min(1.5, L.s));
+    return kit && kit.layer2 && kit.layer2(`${g.skin}|${g.stage}|${k.toFixed(1)}|${OPT.colorBlind ? 1 : 0}`, W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th, g.stage, 2));
+  }
+  // boss phase 2: under 40% of the serpent left the arena heats up (bg_world.js drawBossPhase); eases in, one flash and shake when it starts
+  function bossPhase(g) {
+    if (!isBossStage(g.stage)) return 0;
+    if (S.bpG !== g) { S.bpG = g; S.bpTot = 0; S.bph = 0; S.bpFlash = -9; S.bpOn = false; }
+    let cur = 0, tot = 0;
+    for (const sn of g.snakes) for (const q of sn.segs) if (q.i > 0 && q.hp > 0) { cur += q.hp; tot += q.max || q.hp; }
+    if (!S.bpTot) S.bpTot = Math.max(1, tot);
+    const on = cur > 0 && cur / S.bpTot < 0.4;
+    if (on && !S.bpOn) { S.bpOn = true; S.bpFlash = S.t; if (!OPT.reduceMotion) S.trauma = Math.max(S.trauma || 0, 0.55); }
+    S.bph += ((on ? 1 : 0) - S.bph) * 0.05;
+    return S.bph;
   }
   function drawBg(g, L) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#0d0924'; ctx.fillRect(0, 0, L.cw, L.ch);
     ctx.setTransform(L.s, 0, 0, L.s, L.ox, L.oy);
     const lay = bgLayer(g, L), th = themeOf(g);
-    if (lay) ctx.drawImage(lay.c, 0, 0, W, H);
+    if (lay) {   // sky, then the far skyline sliding against the duo (bg_far.js), then the hills, floor and frame
+      ctx.drawImage(lay.c, 0, 0, W, H);
+      drawFar(ctx, kit, { skin: g.skin, boss: isBossStage(g.stage), stage: g.stage, t: S.t, px: g.p.x, reduce: OPT.reduceMotion, low: OPT.lowQuality });
+      const fg = fgLayer(g, L); if (fg) ctx.drawImage(fg.c, 0, 0, W, H);
+    }
     else { ctx.fillStyle = '#1a1445'; ctx.fillRect(0, 0, W, H); }
     // drifting bokeh lights and themed motes (petals, snow, droplets, notes, stars, bubbles)
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -196,7 +217,8 @@ export function createRenderer(canvas, art, kit) {
     ctx.restore();
     if (!OPT.reduceMotion) { if (!S.motes) S.motes = makeMotes(); if (!OPT.lowQuality) drawBeams(ctx, S.t, isBossStage(g.stage), th, kit); drawMotes(ctx, g.skin, th, OPT.lowQuality ? (S.motesLow || (S.motesLow = S.motes.filter((m, i) => i % 2 === 0))) : S.motes, S.t); }
     // weather, speaker thump, crowd and lightning (bg_world.js)
-    const bgp = (S.bgfx || (S.bgfx = createBgFx())).draw(ctx, { kit, skin: g.skin, stage: g.stage, boss: isBossStage(g.stage), th, t: S.t, reduce: OPT.reduceMotion, low: OPT.lowQuality, kick: S.t - (S.killT === undefined ? -9 : S.killT) });
+    const bph = bossPhase(g);
+    const bgp = (S.bgfx || (S.bgfx = createBgFx())).draw(ctx, { kit, skin: g.skin, phase: bph, flash: Math.max(0, 1 - (S.t - S.bpFlash) / 0.55), stage: g.stage, boss: isBossStage(g.stage), th, t: S.t, reduce: OPT.reduceMotion, low: OPT.lowQuality, kick: S.t - (S.killT === undefined ? -9 : S.killT) });
     // the stage floor below the line, where the duo stands; if the snake touches the line it is over
     if (g.ring) { drawRing(ctx, g.ring, S.t, isBossStage(g.stage), OPT.reduceMotion ? 0.4 : bgp, kit); if (OPT.highContrast) hcLine(g.ring); return; }   // a circle around the duo in the middle
     ctx.save(); ctx.beginPath();

@@ -37,3 +37,18 @@ console.log('03_backgrounds ok');
   assert.equal(st.CLOUDS.length, 5, 'five clouds');
   console.log('03_backgrounds stage extras ok');
 }
+{
+  const far = await import('../../cell_serpent/bg_far.js');
+  const { drawBossPhase, bakeWorld: bw } = await import('../../cell_serpent/bg_world.js');
+  const px = () => new Proxy(function () {}, { get: (t, k) => (k === 'globalAlpha' ? 1 : k === 'addColorStop' ? () => {} : px()), set: () => true, apply: () => px() });
+  const th3 = { base: '#ff7eb6', lite: '#ffc2dc' }, kit = { bake: () => ({ c: {} }) };
+  for (const s of SKINS.concat('piggy')) {
+    assert.ok(far.FAR_KIND[s], 'far skyline for ' + s);
+    for (const st of [1, 10, 30, 50]) { far.bakeFar(px(), s, st % 5 === 0, st); for (const reduce of [false, true]) far.drawFar(px(), kit, { skin: s, boss: st % 5 === 0, stage: st, t: 3.3, px: 100, reduce, low: !reduce }); }
+  }
+  assert.equal(new Set(SKINS.map(s => far.farKind(s))).size, SKINS.length, 'each species has its own landmarks');
+  far.drawFar(px(), null, { skin: 'love', boss: false, stage: 1, t: 0, px: 360 });
+  for (const part of [0, 1, 2]) bw(px(), 'frosty', false, false, th3, 20, part);
+  for (const f of [0, 1]) drawBossPhase(px(), kit, 2, 0.8, 0.5, f, false, false);
+  console.log('03_backgrounds far skyline + boss phase ok');
+}
