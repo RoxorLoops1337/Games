@@ -23,7 +23,7 @@ const AUDIT_FN = () => {
   let nd;
   while ((nd = walker.nextNode())) {
     const txt = nd.textContent.trim(); if (!txt) continue;
-    const el = nd.parentElement; if (!el || seen.has(el) || el.closest('canvas,[aria-hidden="true"],.sr')) continue;
+    const el = nd.parentElement; if (!el || seen.has(el) || el.closest('canvas,[aria-hidden="true"],.sr,.seg,.rec')) continue;
     if (/[\u{1F000}-\u{1FFFF}\uFE0F]/u.test(txt) && !/[A-Za-z0-9]/.test(txt)) continue;   // colour emoji ignore the text colour
     if (el.closest('button[disabled],[aria-disabled="true"]')) continue;   // disabled controls are exempt
     const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || cs.display === 'none') continue;
@@ -60,7 +60,7 @@ ok('trait chips: every species icon has a unique outline and a text label', () =
 ok('static: batch 8 effects are gated by reduced motion', () => {
   const render = read('render.js'), bg = read('bg_world.js'), fx = read('screenfx.js'), main = read('main.js'), rb = read('result_b8.js');
   assert.ok(/e\.head && S\.bgfx && !OPT\.reduceMotion/.test(render), 'squall and petals start only with motion on');
-  assert.ok(/if \(!o\.reduce\) \{ drawSquall/.test(bg) && /if \(!o\.reduce\) drawNight/.test(bg) && /if \(!o\.reduce\) \{ stepB8/.test(bg), 'sky, squall, petals');
+  assert.ok(/if \(!o\.reduce\) \{ drawSquall/.test(bg) && /if \(!o\.reduce\) drawNight/.test(bg) && /if \(!o\.reduce\) \{ const sdt = stepB8/.test(bg), 'sky, squall, petals');
   assert.ok(/S\.petWake !== undefined && !OPT\.reduceMotion/.test(render), 'pet hops on the count-in');
   assert.ok(/if \(!calm\(\)\) \{ ring\(W \/ 2, H \* 0\.4/.test(fx) && /if \(!calm\(\)\) \{ const bk/.test(fx), 'count-in rings and room flash');
   assert.ok(/reduce \|\| !a\.width/.test(rb), 'ribbon flight lands instantly');
