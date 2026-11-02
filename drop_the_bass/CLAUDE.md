@@ -189,3 +189,6 @@ Ideas next (round 6): a real landscape layout (side panels with turret list and 
 8. Modifier balance review with the bot matrix (reward vs difficulty).
 9. Monkey test: seeded random input fuzz in all four languages, no page errors.
 10. Diagnostics: an error ring buffer and a 'Report a problem' button in Settings that copies version, language, device and recent errors.
+
+Round 6 result: all ten shipped (modal queue with priorities; wide-screen side panels; gamepad support with a How to Play card; tutorial steps for preview and reroll; a11y focus management; monthly seasons with goals; ten more quests; modifier reward multipliers rebalanced; seeded monkey fuzz test in four languages; diagnostics ring buffer with a Report a problem button). Test lessons: when a test removes a hint modal from the DOM it must also clear `battle.hintQueue`, or the game keeps ignoring taps; measure layout only after finite CSS animations end (d-pop scales cards for 0.3 s).
+Ideas next (round 7): pad support for DOM modals (pause, choice, hint); selling and moving turrets by pad; quest counters that need sim hooks (hero moves, synergies, rerolls, flawless waves); tutorial coverage review; sound mix on phones; leaderboard seasons; a changelog entry per version bump; trim the monkey test runtime.

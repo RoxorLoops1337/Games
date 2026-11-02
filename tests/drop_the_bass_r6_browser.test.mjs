@@ -202,7 +202,7 @@ try {
 
   // ---- German: the new menus fit at 390 wide, nothing overflows
   const c2 = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, locale: 'de-DE' });
-  const p2 = await boot(c2); await hubSetup(p2, 'goals'); await p2.waitForTimeout(500);
+  const p2 = await boot(c2); await hubSetup(p2, 'goals'); await p2.waitForTimeout(500); await p2.evaluate(() => Promise.all(document.getAnimations().filter((a) => isFinite(a.effect.getComputedTiming().endTime)).map((a) => a.finished.catch(() => {})))); await p2.waitForTimeout(100);
   need(await p2.evaluate(() => { const c = document.querySelector('.season-card').getBoundingClientRect(); return c.left >= 0 && c.right <= window.innerWidth && document.documentElement.scrollWidth <= window.innerWidth; }), 'de: the season card fits the screen');
   await c2.close();
 } finally { await browser.close(); srv.close(); }
