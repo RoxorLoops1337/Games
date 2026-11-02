@@ -8,4 +8,9 @@ for (const sp of Object.keys(kit.SPECIES)) for (const k of ['', 'upgrade', 'armo
   assert(kit.SPR.body(sp, true, k), `boss body ${sp} ${k}`);
 }
 for (const sp of Object.keys(kit.SPECIES)) for (const boss of [false, true]) for (const t of [0, 3.6, 5.3, 5.5, 8.8]) kit.drawHead(ctx(), 0, 0, 30, 1, { skin: sp, boss, t });
+// round 2: frost sprite, squash/stretch/slow/look head states
+assert(kit.SPR.frost(), 'frost sprite');
+for (const sp of Object.keys(kit.SPECIES)) for (const o of [{ flash: 0.1 }, { sg: 'go' }, { sg: 'warn' }, { slow: 2, look: [0.5, 0.8] }]) kit.drawHead(ctx(), 0, 0, 30, 1, { skin: sp, t: 1, ...o });
+// round 3: moods (alone/sweat, fury vein, hurt) on every species, boss and not
+for (const sp of Object.keys(kit.SPECIES)) for (const boss of [false, true]) for (const o of [{ alone: true }, { fury: 1 }, { fury: 0.6, alone: true }, { flash: 0.1 }]) kit.drawHead(ctx(), 0, 0, 30, 1, { skin: sp, boss, t: 2.2, ...o });
 console.log('01_enemy_art ok');

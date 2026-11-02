@@ -8,6 +8,16 @@ export const countAt = (a, b, t) => t >= 1 ? b : t <= 0 ? a : Math.round(a + (b 
 // how many coins to fly for a gain: a few for small, capped for big (keeps phones smooth)
 export const coinCount = d => d <= 0 ? 0 : Math.min(8, 2 + Math.floor(Math.log10(d + 1) * 2));
 
+// compact currency for the hub pills: 9999 stays whole, then 12.3k, 123k, 1.23M, 12.3M (never rounds up into the next unit)
+export function fmtCur(v) {
+  v = Math.round(v);
+  if (v < 10000) return String(v);
+  const u = v < 1e6 ? [1e3, 'k'] : v < 1e9 ? [1e6, 'M'] : [1e9, 'B'];
+  const x = Math.floor(v / u[0] * 100) / 100, d = x >= 100 ? 0 : x >= 10 ? 1 : 2;
+  return (Math.floor(x * 10 ** d) / 10 ** d).toString().replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '') + u[1];
+}
+
+const COMBO_MS = 1400, STAG = '.tiles>*,.kcard,.loadout>*', STAG_MAX = 12, STAG_STEP = 34;
 const PRESS = '.btn,.arrow,.chip,.tabs button,.sidebtn,.dbtn,.plus';
 
 export function createMotion({ $, buzz, getReduced }) {
@@ -30,26 +40,65 @@ export function createMotion({ $, buzz, getReduced }) {
     }
   }
 
-  // count-up numbers
+  // count-up numbers (currency pills show the compact form, the full value stays in the title)
   const live = new Set();
+  const show = (el, v) => { const c = el.closest && el.closest('.cur'); if (c && !c.classList.contains('e')) { el.textContent = fmtCur(v); el.title = v >= 10000 ? String(v) : ''; } else el.textContent = v; };
   function num(el, v) {
     if (!el) return;
     v = Math.round(v);
     const prev = el._v;
     el._v = v;
-    if (prev === undefined || prev === v || reduced() || !el.getClientRects().length) { live.delete(el); el.textContent = v; return; }
+    if (prev === undefined || prev === v || reduced() || !el.getClientRects().length) { live.delete(el); show(el, v); return; }
     el._anim = now(); el._from = (el._shown !== undefined && live.has(el)) ? el._shown : prev; el._to = v; live.add(el);
     if (live.size === 1) raf(tick);
     const pill = el.closest && el.closest('.cur');
     if (pill && pill.animate) pill.animate([{ transform: 'scale(1)' }, { transform: 'scale(' + (v > prev ? 1.16 : 0.94) + ')', offset: 0.3 }, { transform: 'scale(1)' }], { duration: 420, easing: 'ease-out' });
-    if (v > prev) coinFly(el, v - prev);
+    if (v > prev) { coinFly(el, v - prev); if (pill) flash(pill, v - prev); }
+  }
+
+  // combo flash: a glow ring plus a floating +N on the pill; gains within 1.4s stack into a streak (x2, x3...)
+  function flash(pill, gain) {
+    if (reduced() || !pill.animate) return;
+    const t = now(), n = (t - (pill._ct || -1e9) < COMBO_MS) ? (pill._cb || 1) + 1 : 1;
+    pill._cb = n; pill._ct = t;
+    const k = Math.min(n, 5);
+    for (const o of pill.querySelectorAll('.mo-glow,.mo-gain')) o.remove();
+    const g = document.createElement('i'); g.className = 'mo-glow' + (n > 1 ? ' hot' : '');
+    pill.appendChild(g);
+    const ga = g.animate([{ opacity: 0, transform: 'scale(.9)' }, { opacity: 0.55 + k * 0.09, transform: 'scale(1.04)', offset: 0.25 }, { opacity: 0, transform: 'scale(1.12)' }], { duration: 560 + k * 60, easing: 'ease-out' });
+    ga.onfinish = () => g.remove();
+    const l = document.createElement('b'); l.className = 'mo-gain' + (n > 1 ? ' hot' : '');
+    l.textContent = '+' + fmtCur(gain) + (n > 1 ? ' x' + n : '');
+    pill.appendChild(l);
+    const la = l.animate([{ opacity: 0, transform: 'translate(-50%,-4px) scale(.6)' }, { opacity: 1, transform: 'translate(-50%,10px) scale(' + (1 + k * 0.06) + ')', offset: 0.22 }, { opacity: 1, transform: 'translate(-50%,16px) scale(1)', offset: 0.7 }, { opacity: 0, transform: 'translate(-50%,26px) scale(.95)' }], { duration: 900, easing: 'ease-out' });
+    la.onfinish = () => l.remove();
+  }
+
+  // staggered entrance for the cards of a freshly opened list tab (transform and opacity only, total capped)
+  function stagger(root) {
+    if (!root || reduced() || !root.animate) return;
+    const items = root.querySelectorAll(STAG);
+    let i = 0;
+    for (const it of items) {
+      if (i >= STAG_MAX) break;
+      it.style.setProperty('--si', i++);
+      it.classList.add('mo-st');
+      clearTimeout(it._ms); it._ms = setTimeout(() => { it.classList.remove('mo-st'); it.style.removeProperty('--si'); }, STAG_STEP * i + 420);
+    }
+  }
+  // directional tab slide: tabs to the right of the old one enter from the right, to the left from the left
+  let prevTab = null;
+  function tabDir(order, tab) {
+    const d = prevTab === null ? 0 : Math.sign(order.indexOf(tab) - order.indexOf(prevTab));
+    prevTab = tab;
+    document.documentElement.style.setProperty('--tdx', (reduced() ? 0 : d * 46) + 'px');
   }
   function tick() {
     const t = now();
     for (const el of live) {
       const k = (t - el._anim) / Math.min(900, 380 + Math.abs(el._to - el._from) * 0.4);
       el._shown = countAt(el._from, el._to, k);
-      el.textContent = el._shown;
+      show(el, el._shown);
       if (k >= 1) live.delete(el);
     }
     if (live.size) raf(tick);
@@ -82,6 +131,11 @@ export function createMotion({ $, buzz, getReduced }) {
   function onDown(e) {
     lx = e.clientX; ly = e.clientY; lt = now();
     const b = e.target.closest && e.target.closest(PRESS);
+    if (b && b.disabled && b.classList.contains('btn') && b.animate && !reduced()) {   // a locked button wobbles
+      b.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-7px)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(2px)' }, { transform: 'translateX(0)' }], { duration: 320, easing: 'ease-out' });
+      if (buzz) buzz(14);
+      return;
+    }
     if (!b || b.disabled) return;
     if (buzz) buzz(b.classList.contains('btn') && !b.classList.contains('dim') ? 9 : 5);
     if (reduced() || !b.classList.contains('btn')) return;
@@ -104,5 +158,5 @@ export function createMotion({ $, buzz, getReduced }) {
     document.addEventListener('pointerdown', onDown, { passive: true, capture: true });
     if (mq && mq.addEventListener) mq.addEventListener('change', applyReduced);
   }
-  return { init, screen, num, applyReduced, reduced, coinFly };
+  return { init, screen, num, tabDir, flash, stagger, applyReduced, reduced, coinFly };
 }

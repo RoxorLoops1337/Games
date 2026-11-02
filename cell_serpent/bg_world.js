@@ -2,6 +2,7 @@
 // a few cheap animated pieces (swinging spotlights, drifting motes, pulsing ring circle).
 import { W, H, LINE_Y } from './sim.js';
 import { mix } from './art_draw.js';
+import { bakeStageExtras, drawClouds, drawFootlights, drawBossFx, drawCrowdLights, paintGrooves } from './bg_stage.js';
 
 const TAU = Math.PI * 2;
 // per species: sky top, sky bottom, far and near silhouette colours, scenery kind, mote kind
@@ -112,10 +113,14 @@ function speaker(c, x, y, w, h) {
 }
 
 // a crowd of cute animal silhouettes (kitten, puppy, chick, bunny) with raised paws
-function crowd(c, th, boss) {
-  const r = rnd(99), y = H - 4, col = boss ? '#0a0618' : '#140c2e';
+// each row is baked on its own so the animation can bob them separately
+export const CROWD_Y = H - 84, CROWD_H = 96;
+export function bakeCrowdRow(c, th, boss, row) { c.translate(-W / 2, -CROWD_Y - CROWD_H / 2); crowd(c, th, boss, row); }
+function crowd(c, th, boss, only) {
+  const r = rnd(99 + (only || 0) * 7), y = H - 4, col = boss ? '#0a0618' : '#140c2e';
   c.lineCap = 'round';
   for (let row = 0; row < 2; row++) {
+    if (only !== undefined && row !== only) continue;
     c.fillStyle = row ? col : mix(col, th.base, 0.1);
     for (let x = -10 + row * 28; x < W + 20; x += 56 + r() * 18) {
       const s = 17 + r() * 8 - row * 2, yy = y + row * 8 - r() * 8, k = Math.floor(r() * 4);
@@ -129,14 +134,42 @@ function crowd(c, th, boss) {
   }
 }
 
+// day to night across the 50 stages: bright morning, a sunset in the middle, deep night with aurora at the end
+const GRADE = [[0, '#8fc8ff', 0.14, '#ffe6b0', 0.22], [0.35, '#4a1a5e', 0.3, '#ff7040', 0.3], [0.7, '#0a0626', 0.5, '#4a1a7a', 0.4], [1, '#010008', 0.72, '#241058', 0.55]];
+export function skyGrade(stage) {
+  const k = Math.max(0, Math.min(1, ((stage || 1) - 1) / 49));
+  let i = 0; while (i < GRADE.length - 2 && k > GRADE[i + 1][0]) i++;
+  const a = GRADE[i], b = GRADE[i + 1], u = (k - a[0]) / (b[0] - a[0]);
+  return { k, topT: mix(a[1], b[1], u), topA: a[2] + (b[2] - a[2]) * u, botT: mix(a[3], b[3], u), botA: a[4] + (b[4] - a[4]) * u };
+}
+function nightSky(c, gr, stage) {
+  const r = rnd(stage * 13 + 5);
+  if (gr.k > 0.45) {   // stars come out
+    const n = Math.round(30 + gr.k * 90); c.fillStyle = '#fff';
+    for (let i = 0; i < n; i++) { c.globalAlpha = (0.2 + r() * 0.6) * Math.min(1, (gr.k - 0.4) * 3); c.beginPath(); c.arc(r() * W, r() * (LINE_Y - 260), 0.7 + r() * 1.5, 0, TAU); c.fill(); }
+    c.globalAlpha = 1;
+  }
+  if (gr.k > 0.78) {   // aurora ribbons for the last stages
+    for (let b = 0; b < 3; b++) {
+      const y0 = 150 + b * 70, col = b === 1 ? '120,255,190' : b ? '190,120,255' : '90,230,255', a = Math.min(1, (gr.k - 0.78) * 4) * 0.2;
+      const g = c.createLinearGradient(0, y0 - 90, 0, y0 + 60); g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(0.55, `rgba(${col},${a})`); g.addColorStop(1, `rgba(${col},0)`);
+      c.fillStyle = g; c.beginPath(); c.moveTo(0, y0 + 60);
+      for (let x = 0; x <= W; x += 30) c.lineTo(x, y0 + Math.sin(x * 0.011 + b * 2) * 38 + Math.sin(x * 0.027 + b) * 14);
+      c.lineTo(W, y0 + 60); c.closePath(); c.fill();
+    }
+  }
+}
+
 // everything static for a stage; c is a context already scaled to the W x H space
-export function bakeWorld(c, skin, boss, ring, th) {
-  const w = worldOf(skin), dim = boss ? 0.45 : 0;
+export function bakeWorld(c, skin, boss, ring, th, stage = 1) {
+  const w = worldOf(skin), dim = boss ? 0.45 : 0, gr = skyGrade(stage);
   const sky = c.createLinearGradient(0, 0, 0, LINE_Y);
-  sky.addColorStop(0, mix(w.top, '#05030f', dim)); sky.addColorStop(1, mix(w.bot, '#1a0820', dim * 1.2));
+  sky.addColorStop(0, mix(mix(w.top, gr.topT, gr.topA), '#05030f', dim)); sky.addColorStop(1, mix(mix(w.bot, gr.botT, gr.botA), '#1a0820', dim * 1.2));
   c.fillStyle = sky; c.fillRect(0, 0, W, H);
+  nightSky(c, gr, stage);
   if (boss) { const rg = c.createRadialGradient(W / 2, 260, 20, W / 2, 260, 520); rg.addColorStop(0, 'rgba(255,60,90,.22)'); rg.addColorStop(1, 'rgba(255,60,90,0)'); c.fillStyle = rg; c.fillRect(0, 0, W, LINE_Y); }
   scenery(c, w, boss);
+  if (gr.k > 0.3) { c.fillStyle = `rgba(3,0,16,${(gr.k - 0.3) * 0.4})`; c.fillRect(0, LINE_Y - 340, W, 340); }   // silhouettes sink into the night
   const v = c.createLinearGradient(0, 0, 0, H); v.addColorStop(0, 'rgba(0,0,0,.4)'); v.addColorStop(0.22, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.3)');
   c.fillStyle = v; c.fillRect(0, 0, W, H);
   // the concert stage under the duo
@@ -149,7 +182,7 @@ export function bakeWorld(c, skin, boss, ring, th) {
   c.fillStyle = pool; c.fillRect(0, LINE_Y, W, H - LINE_Y);
   speaker(c, 6, LINE_Y - 8, 74, 120); speaker(c, 12, LINE_Y - 108, 62, 100);
   speaker(c, W - 80, LINE_Y - 8, 74, 120); speaker(c, W - 74, LINE_Y - 108, 62, 100);
-  crowd(c, th, boss);
+  bakeStageExtras(c, th, boss);
   c.lineWidth = 8; c.strokeStyle = mix(th.base, '#ffffff', 0.15) + '8c'; c.strokeRect(4, 4, W - 8, H - 8);
   c.lineWidth = 2; c.strokeStyle = 'rgba(111,227,255,.6)'; c.strokeRect(10, 10, W - 20, H - 20);
 }
@@ -198,13 +231,123 @@ export function drawBeams(c, t, boss, th, kit) {
   }
   c.restore();
 }
-export function drawRing(c, ring, t, boss) {
-  const { cx, cy, R } = ring, beat = 0.5 + 0.5 * Math.sin(t * 4.2), hue = boss ? '255,50,90' : '255,90,140';
-  const fl = c.createRadialGradient(cx, cy, 20, cx, cy, R); fl.addColorStop(0, `rgba(255,225,170,${0.16 + beat * 0.08})`); fl.addColorStop(0.6, `rgba(${hue},.14)`); fl.addColorStop(1, `rgba(${hue},${0.3 + beat * 0.12})`);
-  c.fillStyle = fl; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill();
+// the kick of the music: same tempo family as audio.js (104 bpm plus a little per tier, 138 on bosses), 1 on the beat, falling fast
+export function beatPulse(t, stage, boss) {
+  const bpm = boss ? 138 : 104 + (Math.floor(Math.max(0, stage - 1) / 5) % 6) * 3, ph = (t * bpm / 60) % 1;
+  return Math.exp(-ph * 5.5);
+}
+export function drawRing(c, ring, t, boss, pulse, kit) {
+  const { cx, cy, R } = ring, beat = pulse === undefined ? 0.5 + 0.5 * Math.sin(t * 4.2) : pulse, hue = boss ? '255,50,90' : '255,90,140';
+  // a dark disc so the circle reads over any skyline, then the warm floor light on top of it; baked once, the beat is an alpha swing
+  const paint = (b, x, y, bt) => {
+    const dk = b.createRadialGradient(x, y, 10, x, y, R); dk.addColorStop(0, 'rgba(8,3,26,.5)'); dk.addColorStop(0.8, 'rgba(8,3,26,.58)'); dk.addColorStop(1, 'rgba(8,3,26,.7)');
+    b.fillStyle = dk; b.beginPath(); b.arc(x, y, R, 0, TAU); b.fill();
+    const fl = b.createRadialGradient(x, y, 20, x, y, R); fl.addColorStop(0, `rgba(255,225,170,${0.2 + bt * 0.1})`); fl.addColorStop(0.6, `rgba(${hue},.16)`); fl.addColorStop(1, `rgba(${hue},${0.36 + bt * 0.14})`);
+    b.fillStyle = fl; b.beginPath(); b.arc(x, y, R, 0, TAU); b.fill();
+    paintGrooves(b, x, y, R, boss);
+  };
+  const disc = kit && kit.bake ? kit.bake('ringfloor3|' + boss + '|' + R, R * 2, R * 2, bb => paint(bb, 0, 0, 0.5), 1) : null;
+  if (disc) { c.save(); c.globalAlpha = 0.85 + beat * 0.3 > 1 ? 1 : 0.85 + beat * 0.3; c.drawImage(disc.c, cx - R, cy - R); c.restore(); }
+  else paint(c, cx, cy, beat);
   for (let i = 1; i <= 2; i++) { const ph = (t * 0.7 + i * 0.5) % 1; c.strokeStyle = `rgba(255,200,230,${0.25 * (1 - ph)})`; c.lineWidth = 3; c.beginPath(); c.arc(cx, cy, R * (0.3 + ph * 0.7), 0, TAU); c.stroke(); }
+  // glow: stacked wide strokes, outside and inside the rim (no shadowBlur, cheap on phones)
+  c.save(); c.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 4; i++) { c.lineWidth = 56 - i * 13 + beat * 10; c.strokeStyle = `rgba(${hue},${0.05 + i * 0.035 + beat * 0.03})`; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke(); }
+  c.restore();
   c.beginPath(); c.arc(cx, cy, R, 0, TAU);
-  c.lineWidth = 16 + beat * 6; c.strokeStyle = `rgba(${hue},.2)`; c.stroke();
-  c.lineWidth = 5; c.strokeStyle = 'rgba(255,150,190,.85)'; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
-  for (let i = 0; i < 24; i++) { const a = i / 24 * TAU, on = ((i + Math.floor(t * 6)) % 3) === 0; c.fillStyle = on ? '#fff3c4' : 'rgba(255,200,220,.35)'; c.beginPath(); c.arc(cx + Math.cos(a) * (R + 14), cy + Math.sin(a) * (R + 14), on ? 4 : 2.6, 0, TAU); c.fill(); }
+  c.lineWidth = 11; c.strokeStyle = 'rgba(8,3,26,.55)'; c.stroke();
+  c.lineWidth = 5.5; c.strokeStyle = 'rgba(255,170,205,.95)'; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
+  c.lineWidth = 1.5; c.strokeStyle = `rgba(255,255,255,${0.45 + beat * 0.3})`; c.beginPath(); c.arc(cx, cy, R - 6, 0, TAU); c.stroke();
+  for (let i = 0; i < 24; i++) { const a = i / 24 * TAU, on = ((i + Math.floor(t * 6)) % 3) === 0; c.fillStyle = on ? '#fff3c4' : 'rgba(255,200,220,.5)'; c.beginPath(); c.arc(cx + Math.cos(a) * (R + 14), cy + Math.sin(a) * (R + 14), on ? 4 : 2.8, 0, TAU); c.fill(); }
+}
+
+// ---- stage life: weather with parallax, speaker pulse, bobbing crowd, cheering paws, boss lightning
+const SPEAKERS = [[6, LINE_Y - 8, 74, 120], [12, LINE_Y - 108, 62, 100], [W - 80, LINE_Y - 8, 74, 120], [W - 74, LINE_Y - 108, 62, 100]];
+// extra weather on top of the species motes: snow drift, fireflies, petals (rain already belongs to grumpy)
+export function weatherFor(skin, stage) {
+  const k = { sneezy: 'petals', sour: 'petals', love: 'petals', piggy: 'petals', rust: 'fireflies', sleepy: 'fireflies', gloomy: 'fireflies', mighty: 'snow', frosty: 'snow' }[skin];
+  if (k) return k;
+  return stage >= 30 && stage % 5 === 2 ? 'snow' : '';
+}
+export function makeWeather(n = 26) {
+  const a = [], r = rnd(11);
+  for (let i = 0; i < n; i++) a.push({ x: r() * W, y: r() * H, z: [0.55, 0.85, 1.25][i % 3], p: r() * TAU, v: 0.7 + r() * 0.6 });
+  return a;
+}
+function drawWeather(c, kind, th, list, t, n) {
+  c.save();
+  for (let i = 0; i < n && i < list.length; i++) {
+    const m = list[i], z = m.z;
+    if (kind === 'fireflies') {   // wander near their spot and blink
+      const x = m.x + Math.sin(t * 0.5 * m.v + m.p) * 40 * z, y = LINE_Y - 60 - ((m.y * 0.6 + Math.cos(t * 0.4 * m.v + m.p) * 30) % 520), b = Math.max(0, Math.sin(t * 1.7 * m.v + m.p));
+      c.globalCompositeOperation = 'lighter'; c.fillStyle = `rgba(210,255,120,${0.16 * b * z})`; c.beginPath(); c.arc(x, y, 9 * z, 0, TAU); c.fill();
+      c.fillStyle = `rgba(255,255,190,${0.9 * b})`; c.beginPath(); c.arc(x, y, 2 * z, 0, TAU); c.fill();
+    } else {
+      const sp = (kind === 'snow' ? 26 : 38) * z * m.v, span = H + 80, y = ((m.y + t * sp) % span) - 40, x = ((m.x + Math.sin(t * 0.6 * m.v + m.p) * 22 * z + t * (kind === 'petals' ? 14 : 4) * z) % (W + 60) + W + 60) % (W + 60) - 30;
+      if (kind === 'snow') { c.fillStyle = `rgba(255,255,255,${0.35 + 0.2 * z})`; c.beginPath(); c.arc(x, y, 2.2 * z, 0, TAU); c.fill(); }
+      else { c.save(); c.translate(x, y); c.rotate(t * m.v + m.p); c.scale(1, 0.55 + 0.45 * Math.abs(Math.sin(t * 1.6 + m.p))); c.fillStyle = (i & 1 ? th.lite : '#ffd7e8'); c.globalAlpha = 0.5 + 0.2 * z; c.beginPath(); c.ellipse(0, 0, 6 * z, 3.4 * z, 0, 0, TAU); c.fill(); c.restore(); }
+    }
+  }
+  c.restore();
+}
+// lightning on boss stages: a timed flash over the sky and a jagged bolt
+function lightning(c, bg, t) {
+  if (t >= bg.nextBolt) { bg.boltT = t; bg.nextBolt = t + 4 + bg.r() * 5; bg.boltX = 90 + bg.r() * (W - 180); bg.dbl = bg.r() < 0.5; }
+  const dt = t - bg.boltT; if (dt < 0 || dt > 0.6) return;
+  const f = dt < 0.1 ? 1 - dt * 3 : bg.dbl && dt > 0.18 && dt < 0.4 ? 0.8 * (1 - (dt - 0.18) / 0.22) : Math.max(0, 0.5 - dt) * 0.5;
+  if (f <= 0) return;
+  c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = `rgba(190,170,255,${0.32 * f})`; c.fillRect(0, 0, W, LINE_Y);
+  if (dt < 0.3) {
+    const r = rnd(Math.floor(bg.boltT * 10)); let x = bg.boltX, y = -10;
+    c.beginPath(); c.moveTo(x, y);
+    while (y < LINE_Y - 260) { y += 40 + r() * 40; x += (r() - 0.5) * 70; c.lineTo(x, y); }
+    c.strokeStyle = `rgba(230,220,255,${f})`; c.lineWidth = 9; c.globalAlpha = 0.35; c.stroke(); c.globalAlpha = 1; c.lineWidth = 3; c.strokeStyle = `rgba(255,255,255,${f})`; c.stroke();
+  }
+  c.restore();
+}
+export function createBgFx() {
+  const bg = { weather: makeWeather(), nextBolt: 3, boltT: -9, boltX: 300, dbl: false, r: rnd(77) };
+  // o: { kit, skin, stage, boss, th, t, reduce, low, kick (seconds since the last kill) }
+  bg.draw = (c, o) => {
+    const { t, th, boss } = o, kit = o.kit, cheer = Math.max(0, 1 - o.kick / 1.3);
+    const pulse = o.reduce ? 0 : beatPulse(t, o.stage, boss);
+    const wk = weatherFor(o.skin, o.stage);
+    if (!o.reduce) drawClouds(c, kit, o.skin, mix(worldOf(o.skin).bot, '#ffffff', 0.6), skyGrade(o.stage).k, t, boss, o.low);
+    if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26);
+    if (boss && !o.reduce) lightning(c, bg, t);
+    if (!o.reduce) { if (boss) drawBossFx(c, t, pulse, o.low, kit); drawFootlights(c, t, pulse, th, boss); }
+    // speaker cones thump on the kick
+    if (!o.reduce) {
+      c.save();
+      for (const [x, y, w, h] of SPEAKERS) for (let i = 0; i < 2; i++) {
+        const cy = y + h * (0.3 + i * 0.4), rr = w * (i ? 0.3 : 0.2), k = 1 + pulse * 0.16 + cheer * 0.05;
+        c.fillStyle = '#0a0716'; c.beginPath(); c.arc(x + w / 2, cy, rr * 0.99, 0, TAU); c.fill();
+        c.fillStyle = `rgb(${44 + pulse * 70 | 0},${35 + pulse * 40 | 0},${80 + pulse * 70 | 0})`; c.beginPath(); c.arc(x + w / 2, cy, rr * 0.46 * k, 0, TAU); c.fill();
+        c.strokeStyle = `rgba(${boss ? '255,110,140' : '140,230,255'},${0.15 + pulse * 0.5})`; c.lineWidth = 3; c.beginPath(); c.arc(x + w / 2, cy, rr * (0.75 + pulse * 0.25), 0, TAU); c.stroke();
+      }
+      c.restore();
+    }
+    // the crowd bobs on the beat; on a kill it jumps and waves paws
+    if (kit) {
+      for (let row = 0; row < 2; row++) {
+        const spr = kit.bake(`crowd|${o.skin}|${boss ? 1 : 0}|${row}`, W, CROWD_H, b => bakeCrowdRow(b, th, boss, row), 1);
+        if (!spr) continue;
+        const bob = o.reduce ? 0 : (Math.sin(t * 6 + row * 1.7) * 1.5 + pulse * 3 + cheer * Math.abs(Math.sin(t * 9 + row * 2)) * 7) * (row ? 0.8 : 1);
+        c.drawImage(spr.c, 0, CROWD_Y - bob, W, CROWD_H);
+      }
+    }
+    if (!o.reduce) drawCrowdLights(c, t, th, boss, cheer, o.low);
+    if (cheer > 0.02 && !o.reduce) {
+      c.save(); c.lineCap = 'round'; c.strokeStyle = boss ? '#0a0618' : '#1c1240'; c.fillStyle = th.lite;
+      const n = o.low ? 6 : 11;
+      for (let i = 0; i < n; i++) {
+        const x = 24 + i * ((W - 48) / (n - 1)), y = H - 26 - (i & 1) * 6, a = Math.sin(t * 10 + i * 1.3) * 0.5, len = 24 + 22 * cheer, ex = x + Math.sin(a) * len, ey = y - Math.cos(a) * len;
+        c.lineWidth = 7; c.beginPath(); c.moveTo(x, y); c.lineTo(ex, ey); c.stroke();
+        c.globalAlpha = Math.min(1, cheer * 1.5); c.beginPath(); c.arc(ex, ey, 5.5, 0, TAU); c.fill(); c.globalAlpha = 1;
+      }
+      c.restore();
+    }
+    return pulse;
+  };
+  return bg;
 }

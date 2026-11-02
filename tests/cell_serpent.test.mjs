@@ -76,7 +76,7 @@ ok('50 stages: some have two snakes, some a circle around the duo, and the circl
 
 ok('stages: names, five skins, boss every 5th, longer snakes and more HP per cell as you go', () => {
   assert.ok(!sim.isBossStage(4) && sim.isBossStage(5) && sim.isBossStage(10));
-  assert.equal(sim.virusName(1), 'Love-Struck Virus'); assert.equal(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(sim.skinFor)).size, 10, 'ten different species');
+  assert.equal(sim.virusName(1), 'Love-Struck Serpent'); assert.equal(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(sim.skinFor)).size, 10, 'ten different species');
   assert.ok(sim.snakeLength(1) >= 30 && sim.snakeLength(10) > sim.snakeLength(1) && sim.snakeLength(5) > sim.snakeLength(4));
   assert.ok(sim.hpBase(1) >= 100, 'numbers are big');
   assert.ok(sim.hpBase(10) > sim.hpBase(1) * 1.5);

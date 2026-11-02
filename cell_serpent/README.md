@@ -4,7 +4,7 @@ A Cell Survivor - Shoot Defense style game, with RoxorLoops & Jasmin as the cell
 
 ## How a run works
 
-- One run is one **stage**: one long virus snake crawls down a winding lane toward the membrane at the bottom. Each
+- One run is one **stage**: one long serpent crawls down a winding lane toward the membrane at the bottom. Each
   stage has its own lane shape (`PATH_KINDS`) and now and then the snake **surges** for a second (with a warning).
 - The cell only **slides left and right** along its row. It fires notes **straight up**, so where you stand is your aim.
   Every cell takes about 10 to 20 shots at the start (numbers are shown x10 so they read big).
@@ -84,7 +84,7 @@ itself when frames run slow, then raises it again when it runs fast.
 - **Seasonal event** (Blossom Bash, Sunny Fair, Harvest Hootenanny, Snowy Sing-Along, by month): ribbon milestones, an exclusive outfit, and the Exchange Shop.
 - **Giant Serpent Gig**: a boss instance, two tries a day, pays Ribbons, an egg and pet fragments (the solo stand-in for the co-op boss mode).
 - **Fan Club Pass**, **Limit Shop** (weekly stock, Beats), **Exchange Shop** (Ribbons), **Weapon Exchange** (Sparkles skip the fragment grind, stage gate still applies).
-- **Preview** shows every virus species; **Trophy Shelf** holds one-time rewards for milestones.
+- **Preview** shows every serpent species; **Trophy Shelf** holds one-time rewards for milestones.
 
 - Dance Shoes became **Sharp Notes** (your notes pierce more cells); moving faster was never worth a card. The Hamster and Wheel Speaker now add singing speed.
 - Cells grow toward the tail (the tougher cells are the biggest) and the numbers are bigger, so they stay readable. The snake crawls faster from the start.
@@ -105,3 +105,15 @@ UI and tech: red-dot badges on tabs; stars and stage-kind icons on the stage chi
 
 Enemy art (stitched mender pillows, sunburst upgrade cells, steel armor, curly fuse bombs, jeweled boss crowns, head idle variety); animal art (pet moods, accessories, hop and squash, duo breathing, paw trails, dove feathers); a themed world per species with a concert floor and crowd (`bg_world.js`); hit juice (shaped pops, merged damage numbers, kill chains, coin arcs); screen feel (stage and boss title cards, surge pulses, slow-mo punch, confetti, game-over fade; `screenfx.js`); a new in-run HUD (`hud.js`); a dramatic card pick screen; a redesigned Battle tab, Skills and Pets tabs, Shop, Gear and Stats (`icons.js`); a one-screen result screen with revive countdown (`result_fx.js`); a new title screen and first-run guide (`title_fx.js`, `hints.js`); a rewritten audio engine (limiter, sectioned music that follows groove and danger, boss track); three new mechanics (Encore beam, gold cell, close call); balance harness; retention (Goals panel, lucky spin, weekly challenge, mastery, collection book, comeback gift; `addict_ui.js`); accessibility (`access.js`: colour-blind marks, high contrast, slide bar, left-handed, pause guard); motion and button feel (`motion.js`); and a QA pass (soft-lock on Escape over cards, give-up result, 320px layouts).
 Extra tests live in `tests/cell_serpent_ext/` and run as part of `npm run test:serpent`.
+
+## Dev team batch 2
+
+Round 2 of the 20 specialists, merged:
+- Art: sharper enemy and animal sprites, richer weather, crowd and lightning backgrounds (`bg_world.js`).
+- Juice: hit-stop, kill-chain flourish, upgrade orbs, muzzle flash, note trails (`hitjuice.js`); stage clear star card, beat edge pulse, close call flash (`screenfx.js`, `clock.js`).
+- HUD and cards: new card UI with luck box and build strip (`cards_ui.js`), notch-safe HUD zones.
+- Hub: Battle tab dock with START outside the scroll area, fun fact card, twist badge and event banner (`battle_ui.js`); skill and pet bottom sheets with filters (`skill_sheet.js`); shop deal bursts, loot reveal, set bonus panel, wardrobe hats; staggered list entrances and currency combo flash (`motion.js`).
+- Retention and onboarding: `retain_ui.js`, `onboard12.js`, revive timer setting.
+- Audio: UI sounds everywhere, per-species bell motifs, new mix, volume slider.
+- Gameplay: rhythm beat clock (on-beat shots crit more), Standing Ovation passive, brighter Encore beam.
+- Accessibility: thumb zone, keyboard nav, live region announcements, stronger high contrast and colour-blind badges.

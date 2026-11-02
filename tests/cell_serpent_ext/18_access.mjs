@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import assert from 'node:assert/strict';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cell_serpent');
 const { defaultSave, sanitizeSave, exportSave, importSave } = await import(join(root, 'sim.js'));
-const KEYS = ['colorBlind', 'highContrast', 'bigText', 'slider', 'leftHand', 'pauseGuard'];
+const KEYS = ['colorBlind', 'highContrast', 'bigText', 'slider', 'leftHand', 'pauseGuard', 'thumbZone'];
 const d = defaultSave();
 for (const k of KEYS) assert.equal(d.settings[k], false, 'default off: ' + k);
 const s = defaultSave(); for (const k of KEYS) s.settings[k] = true; s.settings.music = false;
@@ -16,10 +16,28 @@ const bad = sanitizeSave({ settings: { colorBlind: 'yes', slider: 1, bigText: tr
 assert.equal(bad.settings.colorBlind, false); assert.equal(bad.settings.slider, false); assert.equal(bad.settings.bigText, true);
 const imp = importSave(exportSave(s)); assert.ok(imp && KEYS.every(k => imp.settings[k] === true), 'backup code keeps them');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
-for (const k of KEYS) assert.ok(html.includes(`data-k="${k}"`), 'toggle in settings: ' + k);
+for (const k of KEYS.filter(k => k !== 'bigText')) assert.ok(html.includes(`data-k="${k}"`), 'toggle in settings: ' + k);   // bigText became the text size slider (#tsRange)
 assert.ok(html.includes('@css:18-access') && html.includes('prefers-reduced-motion') && html.includes(':focus-visible'));
 assert.ok(!html.includes('—') && !readFileSync(join(root, 'access.js'), 'utf8').includes('—'));
 const acc = await import(join(root, 'access.js'));
 assert.equal(acc.pauseAllowed(false), true);
 assert.equal(acc.pauseAllowed(true, 1000), false); assert.equal(acc.pauseAllowed(true, 1500), true); assert.equal(acc.pauseAllowed(true, 9000), false);
+// round 2: thumb zone, live region helpers, groove text, rarity words, contrast of key text
+assert.equal(acc.inThumbZone(700, 844), true); assert.equal(acc.inThumbZone(400, 844), false); assert.equal(acc.inThumbZone(844 * 2 / 3, 844), true);
+assert.equal(acc.zoneSteer(500, 360), 1); assert.equal(acc.zoneSteer(300, 360), -1); assert.equal(acc.zoneSteer(360, 360), 0); assert.ok(Math.abs(acc.zoneSteer(380, 360)) < 1);
+assert.equal(acc.RARITY_WORDS.length, 6); assert.equal(acc.RARITY_WORDS[0], 'common');
+assert.equal(acc.grooveText(0), 'Groove 0 of 20'); assert.match(acc.grooveText(10), /plus 15 percent damage/); assert.match(acc.grooveText(20), /on fire/);
+assert.ok(html.includes('id="accZone"') && html.includes('.sr{position:absolute') && html.includes('html.bigtext #hub .hubbody'));
+for (const f of ['main.js', 'render.js', 'access.js']) assert.ok(!readFileSync(join(root, f), 'utf8').includes('\u2014'), 'no em dash in ' + f);
+const mainSrc = readFileSync(join(root, 'main.js'), 'utf8');
+for (const k of ['announce(\'Stage ', 'announce(\'Choose an upgrade', 'announce(\'Picked ', 'announce((r.won', 'announce(\'Game over. The snake', 'watchGroove(g.groove)', 'inThumbZone(e.clientY']) assert.ok(mainSrc.includes(k), 'main.js hook: ' + k);
+const renderSrc = readFileSync(join(root, 'render.js'), 'utf8');
+assert.ok(renderSrc.includes('function hcLine') && renderSrc.includes('OPT.highContrast) hcLine'), 'high contrast line and circle');
+// contrast ratios (WCAG) of the key text colours against the page background
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const L = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+const cr = (a, b) => { const x = L(hex(a)), y = L(hex(b)); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+const v = n => new RegExp('--' + n + ':(#[0-9a-f]{6})', 'i').exec(html)[1];
+for (const n of ['ink', 'dim', 'pink', 'cyan', 'lime', 'gold']) assert.ok(cr(v(n), v('bg')) >= 4.5, 'contrast ' + n + ' on bg: ' + cr(v(n), v('bg')).toFixed(2));
+assert.ok(cr('#a79ee8', '#2d2270') >= 4.5, 'chip star text'); assert.ok(cr('#4a0a2c', '#ff7ec0') >= 4.5, 'selected chip star text');
 console.log('18_access ok');
