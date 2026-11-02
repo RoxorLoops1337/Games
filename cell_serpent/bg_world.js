@@ -8,6 +8,7 @@ import { makeBanks, drawMist, makeWind, stepWind, drawGust, dashState } from './
 import { makeB8, headKill, drawNight, stepB8, drawSquall, drawPetalStorm, readHeads, drawBossLights, stepBeam } from './bg_b8.js';
 import { makeB9, stepFlyers, drawFlyers, drawLamps } from './bg_b9.js';
 import { makeB10, scare, clearFlourish, stepB10, drawScatter, drawClear } from './bg_b10.js';
+import { makeB11, weather11For, drawLayer2, drawTwinkle, drawFinale } from './bg_b11.js';
 import { bakeStageExtras, drawClouds, drawFootlights, drawBossFx, drawCrowdLights, paintGrooves } from './bg_stage.js';
 
 const TAU = Math.PI * 2;
@@ -335,13 +336,13 @@ export function makeWeather(n = 26) {
   for (let i = 0; i < n; i++) a.push({ x: r() * W, y: r() * H, z: [0.55, 0.85, 1.25][i % 3], p: r() * TAU, v: 0.7 + r() * 0.6 });
   return a;
 }
-function drawWeather(c, kind, th, list, t, n, wx = 0, wv = 0) {
+function drawWeather(c, kind, th, list, t, n, wx = 0, wv = 0, pulse = 0) {
   c.save();
   for (let i = 0; i < n && i < list.length; i++) {
     const m = list[i], z = m.z;
     if (kind === 'fireflies') {   // wander near their spot and blink
       const x = m.x + Math.sin(t * 0.5 * m.v + m.p) * 40 * z, y = LINE_Y - 60 - ((m.y * 0.6 + Math.cos(t * 0.4 * m.v + m.p) * 30) % 520), b = Math.max(0, Math.sin(t * 1.7 * m.v + m.p));
-      c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.16 * b * z; c.fillStyle = 'rgb(210,255,120)'; c.beginPath(); c.arc(x, y, 9 * z, 0, TAU); c.fill();
+      c.globalCompositeOperation = 'lighter'; c.globalAlpha = (0.16 + pulse * 0.16) * b * z; c.fillStyle = 'rgb(210,255,120)'; c.beginPath(); c.arc(x, y, 9 * z, 0, TAU); c.fill();
       c.globalAlpha = 0.9 * b; c.fillStyle = 'rgb(255,255,190)'; c.beginPath(); c.arc(x, y, 2 * z, 0, TAU); c.fill();
     } else {
       const sp = (kind === 'snow' ? 26 : 38) * z * m.v, span = H + 80, y = ((m.y + t * sp) % span) - 40, x = ((m.x + Math.sin(t * 0.6 * m.v + m.p) * 22 * z + t * (kind === 'petals' ? 14 : 4) * z + wx * z) % (W + 60) + W + 60) % (W + 60) - 30;
@@ -382,7 +383,7 @@ export function drawBossPhase(c, kit, t, ph, pulse, flash, reduce, low) {
   c.restore();
 }
 export function createBgFx() {
-  const bg = { weather: makeWeather(), banks: makeBanks(), wind: makeWind(), b8: makeB8(), b9: makeB9(), b10: makeB10(), flare: 0, dashK: 0, goT: -9, goX: W / 2, nextBolt: 3, boltT: -9, boltX: 300, dbl: false, r: rnd(77) };
+  const bg = { weather: makeWeather(), banks: makeBanks(), wind: makeWind(), b8: makeB8(), b9: makeB9(), b10: makeB10(), b11: makeB11(), flare: 0, dashK: 0, goT: -9, goX: W / 2, nextBolt: 3, boltT: -9, boltX: 300, dbl: false, r: rnd(77) };
   // o: { kit, skin, stage, boss, th, t, reduce, low, kick (seconds since the last kill) }
   bg.headKill = (t, x, y) => { headKill(bg.b8, t, x, y); scare(bg.b10, bg.b8.skin, t, x, y); };   // batch 10: the world's creature scatters from a dead head
   bg.clear = (t, skin, x, y) => { clearFlourish(bg.b10, skin, t, x, y); if (skin === 'sleepy') bg.b8.shoot.next = t; };   // batch 10: a flourish per world on a stage clear
@@ -401,7 +402,8 @@ export function createBgFx() {
     if (!o.reduce) drawNight(c, b8, t, skyGrade(o.stage).k, boss ? 0.6 : 1, o.low);
     if (!o.reduce) { drawFlyers(c, bg.b9, o.skin, th, t); drawLamps(c, kit, bg.b9, o.skin, th, o.gt, o.low); drawLamps(c, kit, bg.b9, o.skin, th, t - bg.b10.lampT, o.low); drawScatter(c, bg.b10, t, th, o.low); drawClear(c, bg.b10, t, th, o.low); }   // 03-backgrounds b9: sky creature, stage-intro lamps
     if (!o.reduce) drawMist(c, kit, o.skin, bg.banks, t, wd.wx, boss, o.low, o.snakes ? readHeads(b8, o.snakes) : null);
-    if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26, wd.wx, wd.wv);
+    if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26, wd.wx, wd.wv, pulse);
+    if (!o.reduce) { drawTwinkle(c, kit, bg.b11, skyGrade(o.stage).k, t, pulse, o.low); drawLayer2(c, kit, weather11For(o.skin), bg.b11, t, pulse, wd.wx, wd.wv, o.low); drawFinale(c, kit, bg.b11, o.stage, boss, t, pulse, o.low); }   // batch 11
     if (!o.reduce) drawGust(c, wd, t, o.low);
     if (!o.reduce) { drawSquall(c, b8, t, o.low); drawPetalStorm(c, b8, t, th, o.low); if (boss) drawBossLights(c, kit, b8, t, pulse, o.phase || 0, o.snakes, o.low); }
     if (boss && !o.reduce && !o.noFlash) lightning(c, bg, t, o.phase || 0);
