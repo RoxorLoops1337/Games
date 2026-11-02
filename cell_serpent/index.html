@@ -2310,6 +2310,20 @@
   .treatline{text-align:center;font-size:12px;font-weight:800;color:#ffe3a8;margin:6px 0 2px}
   @media (max-height:660px){.rec{min-height:50px}}
 /* end @css:10-hub round 10 */
+  /* @css:33-result-settings */
+  #settings [hidden]{display:none!important}
+  #settings .setfind11{width:min(420px,92vw);box-sizing:border-box;margin:0 0 6px;padding:11px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.28);background:#150f38;color:#fff;font:800 15px system-ui,sans-serif}
+  #settings .setfind11::placeholder{color:#c9c2f0;opacity:1}
+  #settings .setfind11:focus{outline:none;border-color:#ffd84d;box-shadow:0 0 0 3px rgba(255,216,77,.28)}
+  #settings #setClose{bottom:0;padding-bottom:calc(13px + env(safe-area-inset-bottom))}
+  #settings{justify-content:flex-start!important}
+  #settings #setClose{box-shadow:0 0 0 8px #08051e,0 -16px 14px 8px rgba(8,5,30,.92),0 120px 0 0 #08051e,0 4px 0 8px rgba(0,0,0,.35)}
+  .rvbar11{display:block;width:min(220px,60vw);height:8px;margin:5px auto 3px;border-radius:99px;background:rgba(255,255,255,.16);overflow:hidden}
+  .rvbar11 u{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ff9d4a,#ffd84d)}
+  .rvneed11{display:block;font-style:normal;font-size:12px;font-weight:900;color:#ffb3b3;margin-top:2px}
+  .rshare11{align-self:center;flex:none;margin:2px 0 0;padding:8px 18px;min-height:40px;border-radius:99px;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);color:#fff;font:900 13px system-ui,sans-serif;letter-spacing:.08em}
+  @media (max-height:760px){.rshare11{display:none}}
+  /* end @css:33-result-settings */
 </style>
 </head>
 <body>
@@ -2390,6 +2404,8 @@
 
 <section class="scr" id="settings">
   <h2>SETTINGS</h2>
+  <input id="setFind11" class="setfind11" type="search" placeholder="Find a setting" aria-label="Find a setting" autocomplete="off" enterkeyhint="search">
+  <div class="box" id="setNone11" hidden>No setting matches that.</div>
   <h3 class="setgrp">SOUND AND FEEL</h3>
   <button class="tgl" data-k="sound"><i class="ti">🔊</i><span>Sound effects</span><b>ON</b></button>
   <button class="tgl" data-k="music"><i class="ti">🎵</i><span>Music</span><b>ON</b></button>
@@ -2460,6 +2476,7 @@
   <div class="rkeep" id="rKeep"></div>
   <button class="btn" id="rNext">NEXT STAGE</button>
   <div class="row"><button class="btn alt" id="rRetry">RETRY</button><button class="btn dim" id="rHub">MENU</button></div>
+  <button class="rshare11" id="rShare" type="button">&#10150; SHARE</button>
 </section>
 
 <section class="scr" id="boxModal">
