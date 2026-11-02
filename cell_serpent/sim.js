@@ -898,6 +898,7 @@ export function reviveGame(g) {
   g.events.push({ t: 'revive' });
   return true;
 }
+export const quitResult = g => makeResult(g, false);   // GIVE UP from the pause menu: the same result a loss gives (mode, hard, progress, damage)
 function makeResult(g, won) {
   return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, bombs: g.bombsPopped, stars: won && !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0, mod: g.mod ? g.mod.id : '', hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
 }
