@@ -215,3 +215,12 @@ Ideas next (round 8): the pad cannot yet drive hub screens (only battle menus); 
 
 Round 8 result: 8 items shipped (smaller than ten; the pad work was the biggest gap left from round 6).
 Ideas next (round 9): pad cursor for the shop and gear screens (focus order is reading order, grids are awkward); quest toast during a run; leaderboard season label; tutorial coverage for upgrade paths and synergies; a settings toggle for rumble strength; share card with tactics; sound mix on phones (needs a device); trim the monkey test runtime; balance pass on Endless past wave 40.
+
+### Round 9 (improvements, in order)
+1. Menu pad uses spatial navigation (nearest control in the pressed direction, wraps to the far end) instead of reading order, so grids in the shop and gear screens work.
+2. A toast during the run when a daily quest goal is reached (`Battle.questWatch`, once per quest, not in the tutorial or practice).
+3. Results: a line when the run finished a monthly season goal (`out.seasonNew`).
+4. Tests: `drop_the_bass_r9.test.mjs` (season goals) and `drop_the_bass_r9_browser.test.mjs` (spatial nav on a 2x2 grid, quest toast once).
+
+Round 9 result: 4 items shipped (small round, the loop is in polish territory).
+Ideas next (round 10): a real device pass for pad focus visuals on the gear grid; share card with tactics; rumble strength setting; leaderboard seasons need a server field; balance pass on Endless past wave 40 with the bot; tutorial coverage for upgrade paths and synergies; trim the monkey test runtime; review of the 29 older quests for duplicates of the new stats.

@@ -304,10 +304,24 @@ export class MenuPad {
     return [...box.querySelectorAll(MENU_FOCUS)].filter(shown);
   }
   focusAt(el) { try { el.focus({ preventScroll: true, focusVisible: true }); } catch (e) { try { el.focus(); } catch (e2) { /* ignore */ } } try { el.scrollIntoView({ block: 'nearest' }); } catch (e) { /* ignore */ } }
+  // the nearest visible control in the pressed direction (centres compared, off-axis distance counts double); nothing that way: reading order wraps
   step(dir, root) {
     const l = this.list(root); if (!l.length) return false;
-    const i = l.indexOf(document.activeElement), fwd = dir === 'down' || dir === 'right';
-    this.focusAt(l[i < 0 ? (fwd ? 0 : l.length - 1) : (i + (fwd ? 1 : l.length - 1)) % l.length]); return true;
+    const cur = document.activeElement, i = l.indexOf(cur), fwd = dir === 'down' || dir === 'right';
+    if (i >= 0 && cur.getBoundingClientRect) {
+      const c = cur.getBoundingClientRect(), cx = c.left + c.width / 2, cy = c.top + c.height / 2, vert = dir === 'up' || dir === 'down';
+      let best = null, bs = Infinity;
+      for (const el of l) {
+        if (el === cur) continue;
+        const r = el.getBoundingClientRect(), dx = r.left + r.width / 2 - cx, dy = r.top + r.height / 2 - cy;
+        const along = vert ? (dir === 'down' ? dy : -dy) : (dir === 'right' ? dx : -dx), perp = Math.abs(vert ? dx : dy);
+        if (along <= 2) continue;
+        const sc = along + 2 * perp; if (sc < bs) { bs = sc; best = el; }
+      }
+      if (best) { this.focusAt(best); return true; }
+    }
+    const wrap = fwd ? l[0] : l[l.length - 1];   // nothing further that way: wrap to the far end
+    this.focusAt(wrap === cur && l.length > 1 ? l[fwd ? 1 : l.length - 2] : wrap); return true;
   }
   tab(d) {
     const tabs = [...document.querySelectorAll('.tabs [role=tab], .tabs button')].filter(shown); if (tabs.length < 2) return false;

@@ -1007,7 +1007,7 @@ export function runRewards(result) {
   return { records, fans };
 }
 export function applyRunResult(p, result, rng, now = 0) {
-  const out = { records: 0, fans: 0, diamonds: 0, loot: [], levelUps: [], newStars: 0, firstClear: false, unlockedWorld: null, firstBosses: [], questsDone: [], challenge: null, newBestEndless: false, modifiers: [], modMul: null, milestones: [], newOutfits: [] };
+  const out = { records: 0, fans: 0, diamonds: 0, loot: [], levelUps: [], newStars: 0, firstClear: false, unlockedWorld: null, firstBosses: [], questsDone: [], seasonNew: 0, challenge: null, newBestEndless: false, modifiers: [], modMul: null, milestones: [], newOutfits: [] };
   const w = WORLD_BY_ID[result.world];
   out.bests = recordBests(p, result);
   const rw = runRewards(result);
@@ -1021,7 +1021,9 @@ export function applyRunResult(p, result, rng, now = 0) {
   syncNextSteps(p);
   S.bestCombo = Math.max(S.bestCombo, result.bestCombo); S.maxLevel = Math.max(S.maxLevel, result.maxLevel || 0);
   S.coins += result.coinsEarned || 0;
+  const seasonReadyBefore = seasonReady(p, now || Date.now());
   addSeasonProgress(p, result, now || Date.now());
+  out.seasonNew = Math.max(0, seasonReady(p, now || Date.now()) - seasonReadyBefore);   // season goals this run finished (claimed in Goals)
   // daily quest progress
   const dp = p.daily.prog;
   const questsDoneIds = () => (p.daily.quests || []).filter((q) => { const d = questDef(q.id); return d && questProgress(p, d) >= d.goal; }).map((q) => q.id);

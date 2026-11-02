@@ -20,6 +20,7 @@ import * as DD from './doodle_depth.js';
 import { HINTS_EXTRA } from './data_hints_extra.js';
 import { BT } from './battle_text.js';
 import { PadControl } from './gamepad.js';
+import { QUESTS } from './data_meta.js';
 
 // coach marks for the depth systems: ids that data_story.js HINTS does not define yet are filled in from data_hints_extra.js
 for (const k of Object.keys(HINTS_EXTRA || {})) if (!HINTS[k]) HINTS[k] = HINTS_EXTRA[k];
@@ -496,6 +497,7 @@ export class Battle {
             fx.addShake(5); fx.doFlash(mod.good ? '#7dff9a' : '#ffd23c', 0.25);
           } else this.queueBanner(BT.waveBanner(e.w, e.total), mod ? BT.waveMod(mod.name, mod.desc) : '', mod ? (mod.good ? COL.green : COL.orange) : COL.bone, mod ? 2.6 : 1.4);
           this.sfx('wave_start');
+          this.questWatch();
           if (mod) this.hint('mod');
           break;
         }
@@ -580,6 +582,20 @@ export class Battle {
     }
   }
   // pri: 0 light, 1 normal, 2 heavy. Never under Reduce motion, never faster than HAPTIC.gap (heavy pulses may cut in after gapHeavy).
+  // a daily quest goal reached during the run: one toast per quest (the reward is claimed in Goals after the run)
+  questWatch() {
+    const run = this.run, d = this.prof && this.prof.daily;
+    if (!d || !Array.isArray(d.quests) || run.practice || (this.tut && !this.tut.done)) return;
+    const live = { kills: run.kills, merges: run.merges, deploys: run.deploys, heroUses: run.heroUses, dropRerolls: run.dropRerolls, branches: run.branchCount, moves: run.moves, sells: run.sells, perfects: run.perfects, remixes: run.remixCount, waves: run.cleared, coins: run.coinsEarned, duets: run.duets, bosses: run.bossKills };
+    const maxed = { bestCombo: run.bestCombo, maxLevel: run.maxLevelSeen, synergies: run.bestSyn };
+    this.questSaid = this.questSaid || new Set();
+    for (const slot of d.quests) {
+      const q = QUESTS.find((x) => x.id === slot.id); if (!q || slot.claimed || this.questSaid.has(q.id)) continue;
+      const base = (d.prog && d.prog[q.stat]) || 0;
+      const val = q.stat in maxed ? Math.max(base, maxed[q.stat] || 0) : q.stat in live ? base + (live[q.stat] || 0) : 0;
+      if (val >= q.goal) { this.questSaid.add(q.id); this.app.hooks.toast(BT.questGoal(q.text)); this.sfx('achievement'); }
+    }
+  }
   vibrate(pat, pri = 1) {
     const set = this.prof.settings;
     if (!set.vibrate || set.reduce) return false;
