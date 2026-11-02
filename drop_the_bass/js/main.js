@@ -154,9 +154,9 @@ function showTitle() {
   wrap.append(tap);
   ui.append(wrap);
   // first title screen: a small text row to pick the language (stays visible under the menu)
-  // It sits in the clear band between the logo (ends near y 370) and the heroes' hair (starts near y 470) of the 540x960 title art, which is centred on the screen: 50% of the UI height is art y 480, so the band starts 82 px above it. The title
+  // It sits in the clear band between the logo (ends near y 370) and the heroes' hair (starts near y 470) of the 540x960 title art, which is centred on the screen: 50% of the UI height is art y 480, so the band starts 100 px above it (art y 380). The title
   // art and this DOM share one scale and centre, so the band is the same on every screen shape (tests/drop_the_bass_r5_browser.test.mjs checks it).
-  const langRow = h('div', { class: 'lang-row', style: 'position:absolute;left:0;right:0;top:calc(50% - 82px);display:flex;justify-content:center;z-index:5;transform:scale(.8);transform-origin:top center' }, langPicker(app, false));
+  const langRow = h('div', { class: 'lang-row', style: 'position:absolute;left:0;right:0;top:calc(50% - 100px);display:flex;justify-content:center;z-index:5;transform:scale(.8);transform-origin:top center' }, langPicker(app, false));
   langRow.addEventListener('pointerdown', (e) => e.stopPropagation());
   wrap.append(langRow);
   // quick mute in the top right corner (44 px tap target, state in profile.settings.muted)

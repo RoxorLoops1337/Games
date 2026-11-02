@@ -665,8 +665,7 @@ export function codexModal(app) {
         const b = BOSSES[id], seen = p.seen.bosses[id] || p.bossesSeen[id];
         g.append(h('div', { class: 'cdx cdx-boss' + (seen ? '' : ' unk'), 'data-boss': id },
           h('div', { class: 'bossHead' }, enemyIcon(id, 80, true), h('div', { class: 'bossTxt' }, h('div', { class: 'nm' }, seen ? b.name : '???'), h('div', { class: 'ds' }, seen ? b.trick : t('codex.not_met', 'Not met yet')))),
-          seen ? bossPhasesDiagram(id) : null,
-          seen ? btn(t('codex.practice', 'Practice'), () => { m.close(); app.startRun({ mode: 'practice', boss: id }); }, 'green small', { 'data-practice': id }) : null));
+          seen ? bossPhasesDiagram(id, btn(t('codex.practice', 'Practice'), () => { m.close(); app.startRun({ mode: 'practice', boss: id }); }, 'green small', { 'data-practice': id })) : null));
       }
     }
     if (sec === 'remix') for (const c of Object.values(REMIX)) g.append(h('div', { class: 'cdx' }, icon(c.glyph, 44, RARITY[c.rarity].color), h('div', { class: 'nm ' + rarClass(c.rarity) }, c.name), h('div', { class: 'ds' }, c.desc)));
@@ -679,9 +678,9 @@ export function codexModal(app) {
 
 // The phases of one boss: a health bar (full on the right) with a notch at every distinct threshold and its percent under the notch, then one line
 // per effect that fires there (name and a one line description, both translated data).
-function bossPhasesDiagram(id) {
+function bossPhasesDiagram(id, action) {
   const groups = M.bossPhaseGroups(id);
-  if (!groups.length) return null;
+  if (!groups.length) return action;
   const bar = h('div', { class: 'bp-bar' }, h('i', { class: 'bp-fill' }));
   const marks = h('div', { class: 'bp-marks' });
   groups.forEach((gr, i) => {
@@ -690,7 +689,7 @@ function bossPhasesDiagram(id) {
   });
   const list = h('div', { class: 'bp-list' }, groups.map((gr) => gr.entries.map((e) => h('div', { class: 'bp-row', 'data-phase': e.id },
     h('span', { class: 'bp-tag' }, gr.pct + '%'), h('div', { class: 'bp-txt' }, h('b', null, e.name), ' ', e.desc)))));
-  return h('div', { class: 'bossphases', 'data-phases': id }, h('div', { class: 'bp-title' }, t('codex.phases', 'Phases (boss health)')), bar, marks, list);
+  return h('div', { class: 'bossphases', 'data-phases': id }, h('div', { class: 'bp-head' }, h('div', { class: 'bp-title' }, t('codex.phases', 'Phases (boss health)')), action), bar, marks, list);
 }
 
 export function settingsModal(app) {
