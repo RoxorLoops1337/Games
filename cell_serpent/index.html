@@ -2573,6 +2573,34 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 /* end @css:35-n-title */
 /* title info chips: a darker chip behind the label keeps 4.5:1 over the animated title background */
 #title #titleInfo b{background:rgba(12,9,36,.74);text-shadow:0 1px 2px rgba(0,0,0,.6)}
+/* @css:35-r-fold */
+  .fold{width:min(520px,100%);margin:8px auto;box-sizing:border-box;grid-column:1/-1}
+  .fold-h{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;box-sizing:border-box;padding:6px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.22);background:#2b2060;color:#fff;font:inherit;font-size:13px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;text-align:left;cursor:pointer}
+  .fold-t{flex:1;min-width:0}
+  .fold-n{font-size:12px;font-weight:800;color:#d9cdf7;letter-spacing:0;text-transform:none}
+  .fold-n:empty{display:none}
+  .fold-dot{display:none;width:10px;height:10px;border-radius:50%;background:#ff4d6d;box-shadow:0 0 0 2px #2b2060}
+  .fold:not(.open).has-dot .fold-dot,.fold-h:focus-visible .fold-dot.on{display:block}
+  .fold-c{width:9px;height:9px;border-right:3px solid #fff;border-bottom:3px solid #fff;transform:rotate(45deg) translate(-2px,-2px);transition:transform .2s;flex:none;margin:0 4px 0 2px}
+  .fold.open>.fold-h>.fold-c,.setgrp.open .fold-c{transform:rotate(-135deg) translate(-2px,-2px)}
+  .fold-h:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+  .fold.open>.fold-h{border-color:rgba(255,255,255,.4)}
+  .fold-b{margin-top:8px}
+  .fold-b[hidden]{display:none!important}
+  .tiles>.fold>.fold-b:not([hidden]){display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .fold-b>.stagebox{margin:0 auto}
+  .fold-b>.sec{display:none}
+  html.rm .fold-b,html.rm .fold-c{transition:none!important}
+  /* settings groups: the heading is the toggle, the rows after it hide */
+  #settings .setgrp.fold-sd{margin:10px 0 0}
+  #settings .setgrp{margin-bottom:6px} #settings .setgrp .fold-g{width:min(420px,92vw)}
+  #settings .fg-shut{display:none!important}
+  #settings.fold-searching .fg-shut{display:revert!important}
+  /* sheet small print reaches the 12 px phone floor (the sheets are probed expanded by 34_phone_hub_ph) */
+  .dsheet .dshd span,.dsheet .mhd span,.dsheet .mhd b,.dsheet .mp i,.dsheet .mp small,.dsheet .rkn,.dsheet .sphd b,.dsheet .sphd span,.dsheet .dsladder i,.dsheet .dsrk .rkn{font-size:12px}
+  .dsheet .dsrk .rkn{letter-spacing:-.04em}
+  .dsheet .mp{padding-left:2px;padding-right:2px} .dsheet .mp small{letter-spacing:-.04em;overflow-wrap:normal;word-break:normal}
+/* end @css:35-r-fold */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}

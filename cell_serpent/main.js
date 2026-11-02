@@ -59,6 +59,7 @@ import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collect
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
 import { pauseBuild, buildChipHTML, buildLine, pauseSub } from './result_b9.js';
+import { foldTab, foldSettings, hook as foldHook } from './fold_b12r.js';
 import { bindSettingsFind, hubStickerPop, markStickersSeen, reviveInfoHTML, shareText, shareResult } from './result_b11.js';
 import { bindBuildChips, chipStatsText, stickerIds, newStickers, showStickerPop, clearStickerPop, bumpStatsTab, shineStars } from './result_b10.js';
 import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
@@ -271,7 +272,7 @@ function renderBattle() {
   hub2.renderSide(); watchSideIcons($('battleSide')); watchSide($('battleSide'));
   renderPig();
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
-  renderGoals();
+  renderGoals(); foldTab('Battle');
   if (chips.dataset.sc !== sel + '|' + ckey) { chips.dataset.sc = sel + '|' + ckey; requestAnimationFrame(() => { const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } } }); }   // 17-perf: read layout after paint, and only when the stage changed
 }
 // chip filter: only the stages that still pay something (next first clear, unpaid Hard clear)
@@ -449,6 +450,7 @@ function renderPets() {
     list.appendChild(t);
   }
   if (!list.querySelector('.tile')) list.appendChild(emptyCardUx('pets', petFilter, () => { petFilter = 'All'; audio.play('click'); renderPets(); }));
+  foldTab('Pets');
 }
 function renderGoals() {
   const list = $('goalList'); list.innerHTML = '';
@@ -509,6 +511,7 @@ function renderSkills() {
     const h = document.createElement('div'); h.className = 'sec'; h.innerHTML = `<span style="background:${col}">${name}</span>`; list.appendChild(h);
     for (const t of groups[i]) list.appendChild(t);
   });
+  foldTab('Skills');
 }
 let skFilter = 'All', skSort = 'Tier', petFilter = 'All', petSort = 'Order';
 const sheets = createSheets({ save: () => save, persist: () => persist(), audio, icon, rerender: () => renderHub() });
@@ -661,6 +664,7 @@ function resume() { mode = 'play'; show(''); last = performance.now(); if (R && 
 // r8: the walking pets answer BACK ON! (the resume count-in is 3 x 0.27 s)
 function petsCall() { const ps = g && g.pets ? g.pets.slice() : []; if (ps.length && !systemReduceMotion()) setTimeout(() => { if (mode === 'play') ps.forEach((id, i) => setTimeout(() => audio.play(PETSND[id] || 'chirp'), i * 90)); }, 830); }
 function openSettings(back) {
+  foldSettings($('settings'));
   const paint = () => {
     for (const b of document.querySelectorAll('#settings .tgl')) { const k = b.dataset.k, on = k === 'sound' ? !save.muted : save.settings[k]; b.classList.toggle('on', !!on); b.querySelector('b').textContent = k === 'pump' ? PUMP_LEVELS[pumpLevel(on)] : on ? 'ON' : 'OFF'; b.classList.toggle('on', k === 'pump' ? pumpLevel(on) > 0 : !!on); }
     $('bkCode').value = exportSave(save); paintCbStrip($('cbStrip'), kit, !!save.settings.colorBlind);
@@ -866,7 +870,7 @@ $('muteBtn').onclick = toggleMute;
 for (const [id, label] of [['muteBtn', 'Mute'], ['enPlus', 'Buy Voice'], ['stPrev', 'Previous stage'], ['stNext', 'Next stage']]) $(id).setAttribute('aria-label', label);
 addEventListener('error', () => { toast('Something glitched. Your save is safe.'); if (mode === 'play') pause(); }); $('muteBtn').textContent = save.muted ? '🔇' : '🔊';
 
-window.CS = { motion, momentEvent, g: null, get hub2() { return hub2; }, save: () => save, mode: () => mode, openHub, startRun,
+window.CS = { fold: foldHook, motion, momentEvent, g: null, get hub2() { return hub2; }, save: () => save, mode: () => mode, openHub, startRun,
   // QA hook (batch 5): jump the live run to its end the way the sim does ('dead' | 'won'), then the normal flow (revive prompt, result) takes over
   force: kind => { if (mode !== 'play' || !g || g.phase === 'dead' || g.phase === 'won') return false; if (kind === 'dead') { g.p.hp = 0; g.p.revive = 0; g.phase = 'dead'; g.result = quitResult(g); g.events.push({ t: 'dead' }); return true; } if (kind === 'won') { g.snakes = []; g.phase = 'won'; g.result = { ...quitResult(g), won: true, stars: g.mode || g.hard ? 0 : 3 }; g.events.push({ t: 'won' }); return true; } return false; } };
 loadArt('assets/').then(a => {

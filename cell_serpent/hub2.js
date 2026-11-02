@@ -20,6 +20,7 @@ import { ribIcon, ribHTML, dressIcon, setTint, wardTry, tickTreats, SNACK_DESC }
 import { emptyCard as emptyCardB8 } from './empty_ux.js';
 import { seeded, newSeed, armChest, wasHeld, keepDetailHTML, keepCeremony } from './gear_fx.js';
 import { renderStickerBook } from './sticker_b9.js';
+import { foldTab } from './fold_b12r.js';
 import { recordsHTML, setStripState, setStripHTML, treatLine } from './hub_b10.js';
 import { readRuns, runLogHTML, decorateBundles, sparkleFlight, treatPips } from './hub_b11.js';
 const STATICON = { atk: 'speaker', crt: 'note', cdn: 'clock', vit: 'heart', for: 'star', rev: 'mic' };
@@ -214,6 +215,7 @@ export function createHub2(c) {
     { const rc = document.createElement('div'); rc.className = 'recbox'; rc.innerHTML = recordsHTML(s); list.appendChild(rc); }
     { const rl = runLogHTML(readRuns()); if (rl) { const rb = document.createElement('div'); rb.className = 'runbox'; rb.innerHTML = rl; list.appendChild(rb); } }
     { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t), (n, from) => { save().sparkles += n; c.persist(); audio.play('bookdone'); sparkleFlight(from, calmMotion(), () => c.refreshCur(), { src: iconURL('sparkles') }); }); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }
+    foldTab('Stats');
   }
   // the cheapest upgrade you can afford right now wears a "BEST BUY" ribbon (a nudge, never a rule)
   function bestBuy(core, s) {
@@ -280,6 +282,7 @@ export function createHub2(c) {
       row.appendChild(armT(tile({ cls: 'chestcard t-gold', ic: n === 10 ? ico('gift', 46) : chestArt(30), name: n === 10 ? 'Ten Chests' : 'Keepsake Chest', desc: n === 10 ? 'With a star prize' : 'Backstage finds', btn: price + ' ' + curImg('sparkles'), gold: true, disabled: save().sparkles < price,
         onclick: ev => { const tt = ev.currentTarget.closest('.tile'), ch = tt.querySelector('.chest3'), fast = wasHeld(ev.currentTarget), sd = rollOf(tt); chestGo(ch, () => { rolls.delete(tt); const fresh = new Set(KEEPSAKES.filter(k => !save().keeps[k.id].lv && !save().keeps[k.id].frag).map(k => k.id)); const got = openKeepChest(save(), n, seeded(sd)); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color, rname: KEEP_TIERS[kk.tier].name.toUpperCase(), isNew: fresh.has(x.id) }; }), 'Gear'); }, fast); } }), sd => keepTier(sd, n), KEEP_TIERS.map(q => q.color)));
     }
+    foldTab('Gear');
   }
   function openKeep(k) {
     markSeen(k.id);
@@ -352,6 +355,7 @@ export function createHub2(c) {
     }
     decorateBundles(list, BOXES, GOLD_PACKS);
     shopExtras(list);
+    foldTab('Shop');
   }
 
   // ---------------------------------------------------------------- extra panels
