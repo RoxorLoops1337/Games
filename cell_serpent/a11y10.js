@@ -20,7 +20,8 @@ export function setupTitleKeys(title) {
   title._keys10 = true;
   const N = 13, lane = document.createElement('button'); lane.type = 'button'; lane.className = 'snkey'; lane.setAttribute('aria-label', LANE_LABEL);
   const mark = document.createElement('i'); mark.className = 'snkmark'; mark.setAttribute('aria-hidden', 'true');
-  const keep = title.querySelector('.row'); title.insertBefore(lane, keep); title.insertBefore(mark, keep);
+  const frame = document.createElement('i'); frame.className = 'snkframe'; frame.setAttribute('aria-hidden', 'true');   // the lane itself is a 2px invisible stop (so it never covers a tap target); the frame and marker show the focus
+  const keep = title.querySelector('.row'); title.insertBefore(lane, keep); title.insertBefore(frame, keep); title.insertBefore(mark, keep);
   let cur = 1, raf = 0;
   const cellAt = i => (cv._cell ? cv._cell(i) : null);
   const seen = i => { const p = cellAt(i); return !!p && p.x > 8 && p.x < p.W - 8; };
@@ -30,8 +31,8 @@ export function setupTitleKeys(title) {
     mark.style.left = (r.left - t.left + p.x) + 'px'; mark.style.top = (r.top - t.top + p.y) + 'px'; mark.classList.toggle('on', seen(cur));
   };
   const loop = () => { place(); raf = requestAnimationFrame(loop); };
-  lane.addEventListener('focus', () => { if (!seen(cur)) for (let i = 1; i < N; i++) if (seen(i)) { cur = i; break; } cancelAnimationFrame(raf); loop(); });
-  lane.addEventListener('blur', () => { cancelAnimationFrame(raf); mark.classList.remove('on'); });
+  lane.addEventListener('focus', () => { if (!seen(cur)) for (let i = 1; i < N; i++) if (seen(i)) { cur = i; break; } frame.classList.add('on'); cancelAnimationFrame(raf); loop(); });
+  lane.addEventListener('blur', () => { frame.classList.remove('on'); cancelAnimationFrame(raf); mark.classList.remove('on'); });
   lane.addEventListener('keydown', e => {
     const k = e.key;
     if (k === 'ArrowLeft' || k === 'ArrowRight') {
