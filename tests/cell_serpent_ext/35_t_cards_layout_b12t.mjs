@@ -22,7 +22,7 @@ const ok = (cond, msg) => { assert.ok(cond, msg); n++; };
   ok(html.indexOf('/* end @css:35-t-cards */') < html.indexOf('/* @css:34-phone-hub */'), 'the block sits before the phone hub block');
   ok(html.indexOf('/* end @css:34-phone-hub */') < html.lastIndexOf('</style>') && !html.slice(html.indexOf('/* end @css:34-phone-hub */') + 30, html.lastIndexOf('</style>')).includes('@css:'), 'the phone hub block stays last');
   ok(/#levelup\{[^}]*pointer-events:none/.test(html), 'the level-up section lets taps through to the game');
-  ok(!(html + main + read('cards_ui.js')).includes('—'), 'no em dash');
+  ok(!(html + main + read('cards_ui.js')).includes(String.fromCharCode(0x2014)), 'no em dash');
   ok(/guardAllows\(lvGuard, i, e\.detail > 0, performance\.now\(\)\)/.test(main) && /armCards\(wrap, lvGuard/.test(main) && /trackPress\(\$\('cards'\), lvGuard\)/.test(main), 'main.js wires the pick guard');
   const ui = await import(path.join(ROOT, 'cell_serpent', 'cards_ui.js'));
   assert.equal(ui.PICK_GUARD_MS, 450); n++;
