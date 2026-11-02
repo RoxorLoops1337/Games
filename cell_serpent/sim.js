@@ -581,9 +581,9 @@ export function applyResult(save, r) {
 export const isBossStage = n => n % 5 === 0;
 // Every stage the snakes crawl a little faster.
 export const speedMul = n => Math.min(2.6, 1 + 0.035 * (n - 1));
-export const hpBase = n => 12 * (12.5 * Math.pow(1.17, Math.min(n - 1, 13)) * Math.pow(1.055, Math.max(0, n - 14)) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
+export const hpBase = n => 12 * (12.5 * Math.pow(1.2, Math.min(n - 1, 13)) * Math.pow(1.055, Math.max(0, n - 14)) + 0.5 * n);   // ~14 capsule shots per cell in stage 1
 export const snakeLength = n => Math.min(150, 32 + 4 * (n - 1) + (isBossStage(n) ? 12 : 0));
-export const arrivalTime = n => 0.80 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) * (isBossStage(n) ? 0.9 : 1);   // bosses crawl a bit faster too   // seconds for the face to reach the membrane if you do nothing
+export const arrivalTime = n => 0.74 * Math.max(80, 112 - 0.9 * n + 2.2 * (snakeLength(n) - 32)) * (isBossStage(n) ? 0.9 : 1);   // bosses crawl a bit faster too   // seconds for the face to reach the membrane if you do nothing
 // Ten species, one per stage (then they repeat): own colour, cell style, face and headgear. No yellow: yellow means upgrade cell.
 export const SKINS = ['love', 'rust', 'sneezy', 'grumpy', 'sleepy', 'disco', 'sour', 'mighty', 'frosty', 'gloomy'];
 export const skinFor = n => SKINS[(n - 1) % SKINS.length];
