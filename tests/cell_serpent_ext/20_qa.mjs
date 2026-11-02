@@ -145,7 +145,9 @@ if (chromium) {
       await p.evaluate(() => window.CS.openHub('Battle')); await p.waitForTimeout(200);
       const over = await p.evaluate(() => { const t = document.querySelector('.hubtop'); return t.scrollWidth - t.clientWidth; });
       assert.ok(over <= 1, 'hub header fits 320px: ' + over);
-      await p.evaluate(() => { const sv = window.CS.save(); sv.beats = 987654; sv.sparkles = 99999; window.CS.openHub('Battle'); }); await p.waitForTimeout(700);
+      await p.evaluate(() => { const sv = window.CS.save(); sv.beats = 987654; sv.sparkles = 99999; window.CS.openHub('Battle'); });
+      await p.waitForFunction(() => { const t = [...document.querySelectorAll('.hubtop .cur')].map(c => c.textContent); return t.some(x => x.includes('987k')) && t.some(x => x.includes('99.9k')) && !document.querySelector('.hubtop .mo-gain'); }, null, { timeout: 5000 });   // the count-up squeezes the pill mid-flight (up to 3px); measure the settled state, not a race
+      await p.waitForTimeout(300);
       const pills = await p.evaluate(() => [...document.querySelectorAll('.hubtop .cur')].map(c => Math.round(c.scrollWidth - c.clientWidth)));
       assert.ok(pills.every(d => d <= 1), 'big currency numbers stay inside their header pills at 320px: ' + pills);
       await p.click('#setBtnH'); await p.waitForTimeout(150);

@@ -923,6 +923,10 @@
   /* short phones: the slide bar is thinner and see-through so it does not hide the duo (and the Encore tap on it) */
   @media (max-height:700px){#accSlider{height:44px;bottom:calc(6px + env(safe-area-inset-bottom));border-width:2px;background:rgba(10,8,30,.42)}#accThumb{top:2px;left:calc(50% - 19px);width:36px;height:36px}#accSlider::before{font-size:13px;padding:0 14px}}
   @media (max-width:399px){.hubtop.big .cur{font-size:12px;padding:3px 5px 3px 3px;gap:2px}.hubtop.big .cur img{width:18px;height:18px}.hubtop.huge .cur{font-size:10px;padding-right:3px}.hubtop.big .plus{width:20px;height:20px;min-width:20px;min-height:20px}}
+  .rvtimer{min-height:36px;padding:9px 14px}   /* round 4: the Timer link was a 27px tap target */
+  /* round 4: the win result on short phones. It used to clip the title and squash NEXT STAGE; now it compacts, and scrolls if still too tall */
+  #result{overflow-x:hidden;overflow-y:auto;justify-content:safe center} #result > *{flex-shrink:0}
+  @media (max-height:700px){#result{gap:5px;padding-top:calc(6px + env(safe-area-inset-top));padding-bottom:calc(8px + env(safe-area-inset-bottom))} #result .hero{height:clamp(56px,11vh,84px)} #result .stars{font-size:clamp(26px,5vh,34px)} #result .result-list{gap:3px 6px} #result .result-list .r{padding:2px 9px;font-size:13px} #result .result-list img{width:18px;height:18px} #result .btn{padding:9px 20px} #result #rNext{padding:10px 20px;font-size:20px} #result .row .btn{padding:8px}}
   /* end @css:20-qa */
   /* @css:17-perf */
   .hub-skel .tab.on>*{opacity:.35;pointer-events:none;transition:opacity .12s}
