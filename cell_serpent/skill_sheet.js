@@ -88,11 +88,12 @@ export function createSheets(c) {
   const { save, persist, audio, icon, rerender } = c;
   let host = null;
   function close(quick) { if (!host) return; const h = host; host = null; if (quick) h.remove(); else { h.classList.remove('on'); setTimeout(() => h.remove(), 180); } }
-  function open(build) {
+  function open(build, key) {
+    const again = !!(host && key && host.dataset.key === key), keep = again ? host.firstChild.scrollTop : 0;   // an in-place rebuild (upgrade, claim, treat) keeps its place
     close(true);
-    host = el('div', 'dsheet-bg'); const sh = el('div', 'dsheet'); host.appendChild(sh);
+    host = el('div', 'dsheet-bg' + (again ? ' on' : '')); if (key) host.dataset.key = key; const sh = el('div', 'dsheet'); host.appendChild(sh);
     host.addEventListener('click', e => { if (e.target === host) { audio.play('click'); close(); } });
-    document.body.appendChild(host); build(sh); requestAnimationFrame(() => host && host.classList.add('on'));
+    document.body.appendChild(host); build(sh); if (again) sh.scrollTop = keep; else requestAnimationFrame(() => host && host.classList.add('on'));
   }
   const closeBtn = () => { const b = el('button', 'dsx', '✕'); b.setAttribute('aria-label', 'Close'); b.onclick = () => { audio.play('click'); close(); }; return b; };
   const barHTML = (f, need) => `<div class="dsbar"><div class="bar"><i style="width:${Math.min(100, Math.round(f / need * 100))}%"></i></div><small>Fragments ${f} / ${need}</small></div>`;
@@ -121,6 +122,7 @@ export function createSheets(c) {
           const box = el('div', 'dsmast' + (rdy ? ' rdy' : ''), `<div class="mhd"><span>MASTERY</span><b>${tgt ? rewardText(tgt.reward) : 'all done'}</b></div><div class="bar"><i style="width:${tgt ? Math.min(100, Math.round(ms.val / tgt.at * 100)) : 100}%"></i></div><small>${rdy ? ms.val + ' damage mastery, goal reached' : ms.val + (tgt ? ' / ' + tgt.at : '') + ' damage mastery'}</small>`);
           if (rdy) { const cb = el('button', 'btn gold dsclaim', 'CLAIM ' + rewardText(tgt.reward)); cb.onclick = () => { if (claimMastery(s, ms.key, ms.ready)) { persist(); audio.unlock(); audio.play('levelup'); rerender(); skillSheet(id); } }; box.appendChild(cb); }
           sh.appendChild(box); box.insertAdjacentHTML('beforeend', masteryPathHTML(s, id));
+          box.querySelectorAll('button.mp.ready').forEach(mb => { mb.onclick = () => { if (claimMastery(s, ms.key, +mb.dataset.i)) { persist(); audio.unlock(); audio.play('levelup'); rerender(); skillSheet(id); } else audio.play('deny'); }; });
         }
       }
       let need = 0, can = false, label = '', act = () => false;
@@ -138,7 +140,7 @@ export function createSheets(c) {
         e.onclick = () => { if (!eq && s.loadout.length >= LOADOUT_SIZE) { audio.play('click'); close(true); swapSheet({ save, persist, audio, icon, rerender }, id); return; } if (toggleLoadout(s, id)) { persist(); audio.play('click'); rerender(); skillSheet(id); } };
         sh.appendChild(e);
       }
-    });
+    }, 'sk:' + id);
   }
 
   // give the pet a name: type one or roll the dice for a cute idea
@@ -189,7 +191,7 @@ export function createSheets(c) {
       up.onclick = () => { if (petUp(s, id)) { persist(); audio.unlock(); audio.play('upgrade'); rerender(); petSheet(id); } };
       sh.appendChild(up);
       if (owned) { const e = el('button', 'btn dseq alt', eq ? 'BENCH' : 'WALK WITH ME'); e.onclick = () => { if (togglePet(s, id)) { persist(); audio.play('click'); rerender(); petSheet(id); } }; sh.appendChild(e); }
-    });
+    }, 'pet:' + id);
   }
   return { skillSheet, petSheet, close };
 }

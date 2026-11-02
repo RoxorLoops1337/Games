@@ -45,7 +45,7 @@ import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, is
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
 import { hatchTag } from './pets_b10.js';
-import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collectionCelebrate } from './pets_b9.js';
+import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collectionCelebrate, joyBadge } from './pets_b9.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
 import { pauseBuild, buildChipHTML, buildLine, pauseSub } from './result_b9.js';
@@ -402,7 +402,7 @@ function renderPets() {
     if (isNewItem(save, 'p', p.id)) t.insertAdjacentHTML('afterbegin', newRibbonHTML);
     if (owned) t.querySelector('.ds').insertAdjacentHTML('afterend', joyHTML(k, true));
     t.onclick = e => { if (!e.target.closest('button')) { audio.play('click'); sheets.petSheet(p.id); } };
-    tileA11y(t, petTileLabel(save, p, k, eq, petCanUp(save, p.id)), () => t.onclick({ target: t })); if (owned) petOnTile(t, p.id, audio, systemReduceMotion());
+    tileA11y(t, petTileLabel(save, p, k, eq, petCanUp(save, p.id)), () => t.onclick({ target: t })); if (owned) { petOnTile(t, p.id, audio, systemReduceMotion()); joyBadge(t, k.joy || 0); }
     list.appendChild(t);
   }
   if (!list.querySelector('.tile')) list.appendChild(emptyCardUx('pets', petFilter, () => { petFilter = 'All'; audio.play('click'); renderPets(); }));
