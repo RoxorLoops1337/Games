@@ -38,15 +38,15 @@ export function tagPets(host, names) { [...host.querySelectorAll('img')].forEach
 export function showTutorial(onDone, audio) {
   const el = document.createElement('div'); el.className = 'tut12'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'How to play');
   el.innerHTML = `<div class="tbox">
-    <div class="tstep s1 on"><div class="tbar"><i class="tcell"></i><b class="tfinger">\u{1F446}</b></div><div class="tarrows"><em>◀</em><em>▶</em></div></div>
-    <div class="tstep s2"><div class="tgold"><i class="tyel">★</i><i class="tshot"></i><i class="tburst"></i></div><div class="tbar"><i class="tcell"></i></div></div>
-    <div class="tstep s3"><div class="tchain"><i></i><i></i><i></i><div class="tface"><span class="tshield"></span><b>\u{1F40D}</b></div></div><div class="tbar"><i class="tcell"></i></div></div>
+    <div class="tstep s1 on"><div class="tcap">SLIDE<small>\u{1F449}</small></div><div class="tbar"><i class="tcell"></i><b class="tfinger">\u{1F446}</b></div><div class="tarrows"><em>◀</em><em>▶</em></div></div>
+    <div class="tstep s2"><div class="tcap">SHOOT<small>\u{2B50}</small></div><div class="tgold"><i class="tyel">★</i><i class="tshot"></i><i class="tburst"></i></div><div class="tbar"><i class="tcell"></i></div></div>
+    <div class="tstep s3"><div class="tcap">POP THE FACE<small>\u{1F4A5}</small></div><div class="tchain"><i></i><i></i><i></i><div class="tface"><span class="tshield"></span><b>\u{1F40D}</b></div></div><div class="tbar"><i class="tcell"></i></div></div>
     <div class="tdots"><i class="on"></i><i></i><i></i></div>
     <div class="tbtns"><button class="tskip" type="button">SKIP</button><button class="tnext" type="button" aria-label="Next">▶</button></div></div>`;
   document.body.appendChild(el);
   let n = 0, done = false, timer = 0;
   const steps = el.querySelectorAll('.tstep'), dots = el.querySelectorAll('.tdots i');
-  const go = k => { n = k; steps.forEach((s, i) => { s.classList.toggle('on', i === k); if (i === k) { s.style.animation = 'none'; void s.offsetWidth; s.style.animation = ''; } }); dots.forEach((d, i) => d.classList.toggle('on', i === k)); clearTimeout(timer); timer = setTimeout(next, 3400); };
+  const go = k => { n = k; steps.forEach((s, i) => { s.classList.toggle('on', i === k); if (i === k) { s.style.animation = 'none'; void s.offsetWidth; s.style.animation = ''; } }); dots.forEach((d, i) => d.classList.toggle('on', i === k)); const nb = el.querySelector('.tnext'); nb.classList.toggle('go', k === 2); nb.textContent = k === 2 ? 'GO!' : '\u25B6'; clearTimeout(timer); timer = setTimeout(next, 3400); };
   const finish = () => { if (done) return; done = true; clearTimeout(timer); setFlag(KEY_TUT); el.classList.add('out'); setTimeout(() => el.remove(), 220); onDone(); };
   const next = () => { audio.play('click'); if (n >= 2) finish(); else go(n + 1); };
   el.querySelector('.tnext').onclick = next;
@@ -64,3 +64,31 @@ export function petHint(tabsRoot, hubTab, save) {
   const h = document.createElement('i'); h.className = 'pethint12'; h.textContent = '\u{1F446}'; h.setAttribute('aria-hidden', 'true'); b.appendChild(h);
 }
 export function eggNudge(egg, save) { if (egg && save.eggs > 0) egg.classList.add('nudge12'); }
+
+// ---- title extras: rising music notes, a tagline that cycles, a sparkle burst when PLAY is tapped
+const TAGS = ['RoxorLoops & Jasmin vs the Serpent.', 'Slide. Shoot. Sing.', 'Pop the face, save the beat.', 'Every cell has a groove.'];
+export function setupTitleLife(notesHost, tagEl) {
+  if (notesHost && !notesHost.childNodes.length) {
+    const G = ['\u266A', '\u266B', '\u2661', '\u266A', '\u266B', '\u2736', '\u266A'];
+    G.forEach((ch, i) => { const n = document.createElement('i'); n.textContent = ch; n.style.cssText = `left:${22 + i * 9}%;--d:${-i * 0.75}s;--dx:${(i % 2 ? 1 : -1) * (14 + i * 4)}px;font-size:${18 + (i % 3) * 5}px`; notesHost.appendChild(n); });
+  }
+  if (tagEl && !tagEl._cycle12) {
+    let k = 0;
+    tagEl._cycle12 = setInterval(() => {
+      if (!tagEl.offsetParent) return;
+      tagEl.classList.add('swap12');
+      setTimeout(() => { k = (k + 1) % TAGS.length; tagEl.textContent = TAGS[k]; tagEl.classList.remove('swap12'); }, 360);
+    }, 4200);
+  }
+}
+export function playBurst(btn) {
+  if (!btn || !btn.animate || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+  const r = btn.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, G = ['\u266A', '\u266B', '\u2605', '\u2661', '\u2736'], C = ['#ffd84d', '#ff8fcf', '#7fe6ff', '#fff'];
+  for (let i = 0; i < 16; i++) {
+    const s = document.createElement('span'); s.className = 'spark12'; s.textContent = G[i % G.length]; s.style.color = C[i % C.length];
+    s.style.left = cx + (Math.random() - 0.5) * r.width * 0.7 + 'px'; s.style.top = cy + 'px'; document.body.appendChild(s);
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, d = 70 + Math.random() * 110;
+    s.animate([{ transform: 'translate(-50%,-50%) scale(.4)', opacity: 1 }, { transform: `translate(calc(-50% + ${Math.cos(a) * d}px),calc(-50% + ${Math.sin(a) * d}px)) scale(1.3) rotate(${(Math.random() - 0.5) * 90}deg)`, opacity: 0 }], { duration: 650 + Math.random() * 250, easing: 'cubic-bezier(.2,.8,.3,1)' }).onfinish = () => s.remove();
+  }
+  btn.animate([{ scale: '1' }, { scale: '1.12 .9' }, { scale: '.97' }], { duration: 260, easing: 'ease-out' });
+}

@@ -631,6 +631,27 @@
   .tut12 .tskip{background:none;border:0;color:#fffa;font-size:14px;letter-spacing:.08em;padding:0 12px}
   .tut12 .tnext{min-width:64px;border-radius:22px;border:0;color:#5a1a08;font-size:20px;background:linear-gradient(180deg,#fff7c2,#ffd84d 50%,#ffa21c);box-shadow:0 4px 0 #a8420a}
   @media (prefers-reduced-motion:reduce){.tut12 *{animation:none!important}.pethint12,.eggstage.nudge12 .eggpic{animation:none!important}}
+  /* round 3: title entrance, rising notes, tagline cycle, play burst, richer tutorial */
+  #title.on h1.logo span{animation:drop12 .7s cubic-bezier(.3,1.5,.5,1) backwards} #title.on h1.logo span:nth-child(2){animation-delay:.14s}
+  @keyframes drop12{from{translate:0 -120px;scale:1.5 .6;opacity:0}}
+  #title.on .stage12{animation:rise12 .6s .25s cubic-bezier(.2,1.3,.4,1) backwards}
+  @keyframes rise12{from{translate:0 80px;scale:.8;opacity:0}}
+  #title.on #playBtn{animation:play12 1.6s ease-in-out infinite,pop12 .55s .6s cubic-bezier(.3,1.7,.5,1) backwards}
+  @keyframes pop12{from{translate:0 30px;scale:.4;opacity:0}}
+  #title .tagline{transition:opacity .35s,translate .35s} #title .tagline.swap12{opacity:0;translate:0 6px}
+  .notes12{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+  .notes12 i{position:absolute;bottom:34%;font-style:normal;font-size:22px;color:#ffd8ee;text-shadow:0 0 10px #ff5cb8,0 2px 0 #3a0e30;opacity:0;animation:note12 5s ease-out infinite;animation-delay:var(--d,0s)}
+  @keyframes note12{0%{opacity:0;transform:translate(0,0) rotate(-10deg) scale(.6)}12%{opacity:.95}60%{transform:translate(var(--dx,20px),-190px) rotate(12deg) scale(1)}100%{opacity:0;transform:translate(calc(var(--dx,20px) * -.4),-300px) rotate(-8deg) scale(1.1)}}
+  .spark12{position:fixed;z-index:80;pointer-events:none;font-size:22px;line-height:1;text-shadow:0 0 8px #fff8;transform:translate(-50%,-50%)}
+  .tut12 .tcap{position:absolute;top:22px;left:0;right:0;text-align:center;font-weight:900;font-size:26px;letter-spacing:.06em;color:#fff;text-shadow:0 3px 0 #0a0630;pointer-events:none}
+  .tut12 .tcap small{display:block;margin-top:2px;font-size:44px;letter-spacing:0;text-shadow:none}
+  .tut12 .tnext.go{min-width:92px;font-size:22px;letter-spacing:.06em;animation:gopulse12 .9s ease-in-out infinite}
+  @keyframes gopulse12{50%{transform:scale(1.08)}}
+  .tut12 .tstep.on .tcap{animation:capin12 .4s cubic-bezier(.3,1.5,.5,1) backwards}
+  @keyframes capin12{from{translate:0 -16px;scale:.7;opacity:0}}
+  .s3 .tchain{padding-top:50px!important} .s3 .tcap small{display:none}
+  @media (max-height:700px){.tut12 .tcap small{display:none}}
+  @media (prefers-reduced-motion:reduce){.notes12,.spark12{display:none}}
   /* end @css:12-title-onboarding */
 
   /* @css:10-shop-gear-stats */
@@ -767,6 +788,7 @@
   <img class="deco" id="deco4" style="right:4vw;bottom:11vh;animation-delay:-.5s" alt="">
   <div class="spots" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="peeks" id="peeks" aria-hidden="true"></div>
+  <div class="notes12" id="notes12" aria-hidden="true"></div>
   <h1 class="logo" aria-label="Cell Serpent"><span data-t="CELL">CELL</span><span data-t="SERPENT">SERPENT</span></h1>
   <div class="stage12"><img class="hero" src="assets/duo_sing.png" alt="RoxorLoops and Jasmin"></div>
   <div class="sub tagline">RoxorLoops &amp; Jasmin vs the Serpent.</div>
