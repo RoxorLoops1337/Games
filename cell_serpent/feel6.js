@@ -15,6 +15,9 @@ export function heartbeat(t, rate) {
   return clamp(a + b, 0, 1);
 }
 
+// heartbeats per second at a danger strength d (0..1); the danger tick sound in audio.js follows the same pulse
+export const dangerRate = d => 1.3 + d * 1.9;
+
 export function createFeel6({ ctx, W, H, kit, S, OPT, ring, burst, text, glow, edges, vignette, slow, confetti, sounds }) {
   const calm = () => OPT.reduceMotion;
   const st = { rev: null, blasts: [], bossT: 0, lastBeat: 0 };
@@ -78,7 +81,8 @@ export function createFeel6({ ctx, W, H, kit, S, OPT, ring, burst, text, glow, e
 
   function drawDanger(g) {
     const d = dangerK(g); if (d <= 0) return;
-    const rate = 1.3 + d * 1.9, hb = calm() ? 0.55 : heartbeat(S.t, rate);
+    const rate = dangerRate(d), raw = heartbeat(S.t, rate), hb = calm() ? 0.55 : raw;
+    if (raw > 0.65 && st.hbHot !== true) { st.hbHot = true; if (sounds) sounds.push('dangerbeat'); } else if (raw < 0.4) st.hbHot = false;   // the lub of the heartbeat is also a sound
     edges('#ff2850', (0.06 + 0.5 * d) * (0.35 + 0.65 * hb));
     if (d > 0.45) vignette((d - 0.45) * 0.9 * (0.5 + 0.5 * hb), '90,0,20');
     if (!g.ring) {   // the line itself runs hot
