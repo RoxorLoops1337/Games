@@ -78,7 +78,17 @@ export function watchGroove(gv) {
   if (tier !== lastTier) { ret = tier === 0 && peakTier >= 2 ? -1 : 0; if (tier === 0) peakTier = 0; lastTier = tier; if (tier) announce(grooveText(gv)); }
   return ret;   // -1: a real streak (tier 2 or more) just ran out, the game plays a soft sigh
 }
-export function resetGroove() { lastGv = -1; lastTier = 0; peakTier = 0; }
+// beat streak milestones (10, 20, 30...) are spoken once each; a broken streak re-arms them. Returns the milestone just reached, or 0
+let lastMile = 0;
+export const streakText = n => 'Beat streak ' + n + (n >= 20 ? ', on the beat' : '');
+export function watchStreak(n) {
+  n = Math.max(0, n | 0);
+  if (n < 10) { lastMile = 0; return 0; }
+  const m = Math.floor(n / 10) * 10; if (m <= lastMile) return 0;
+  lastMile = m; announce(streakText(m)); return m;
+}
+export function resetStreak() { lastMile = 0; }
+export function resetGroove() { lastMile = 0; lastGv = -1; lastTier = 0; peakTier = 0; }
 export const RARITY_WORDS = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
 
 // thumb zone: the bottom third of the screen is the only place that steers; a faint hint shows where

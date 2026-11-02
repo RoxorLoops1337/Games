@@ -1,0 +1,20 @@
+// Accessibility round 5: beat streak milestones for screen readers, text size preview, tap target hit areas, reduced motion safety net.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import assert from 'node:assert/strict';
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cell_serpent');
+const { watchStreak, resetStreak, streakText } = await import(join(root, 'access.js'));
+resetStreak();
+assert.equal(watchStreak(0), 0); assert.equal(watchStreak(9), 0);
+assert.equal(watchStreak(10), 10); assert.equal(watchStreak(11), 0, 'each milestone is spoken once');
+assert.equal(watchStreak(20), 20); assert.equal(watchStreak(35), 30);
+assert.equal(watchStreak(2), 0); assert.equal(watchStreak(10), 10, 'a broken streak re-arms the milestones');
+assert.equal(streakText(10), 'Beat streak 10'); assert.ok(streakText(20).includes('on the beat'));
+const html = readFileSync(join(root, 'index.html'), 'utf8'), main = readFileSync(join(root, 'main.js'), 'utf8');
+assert.ok(main.includes('watchStreak(audio.beatStreak)'), 'the run loop feeds the streak to the live region');
+assert.match(html, /id="tsRange"[^>]*><span class="tsprev" aria-hidden="true">/, 'text size slider has a preview line');
+assert.match(html, /@css:18-access round 5/);
+for (const id of ['setBtnH', 'enPlus', 'qSeason', 'qAch', 'contBtn', 'loadEdit', 'claimGigs']) assert.ok(html.includes('#' + id + ',') || html.includes('#' + id + ')'), id + ' has an enlarged hit area');
+assert.match(html, /html\.rm \*,html\.rm \*::before/, 'reduced motion switch silences every animation');
+console.log('18_access_r5 ok');
