@@ -2552,6 +2552,13 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   .tfinger .gs9{width:38px;height:38px;transform:rotate(-8deg)}
   .empty7 .gs9,.empty .gs9{width:44px;height:44px}
 /* end @css:35-ui-b12l */
+/* @css:35-j-screen */
+  /* r12 level-up entrance: a gold LEVEL N chip stamps in above ENHANCE, then the cards deal */
+  #levelup .banner[data-lv]::before{content:"LEVEL " attr(data-lv);display:block;width:max-content;margin:0 auto 5px;padding:2px 13px;border-radius:99px;font-size:12px;font-weight:900;letter-spacing:.12em;color:#1d1300;background:linear-gradient(90deg,#ffe27a,#ffd84d);box-shadow:0 0 14px rgba(255,216,77,.55);animation:jLvChip .55s .08s cubic-bezier(.2,1.8,.4,1) both}
+  @keyframes jLvChip{0%{opacity:0;transform:translateY(-16px) scale(.5) rotate(-8deg)}100%{opacity:1;transform:none}}
+  @media (max-height:660px){#levelup .banner[data-lv]::before{display:none}}
+  @media (prefers-reduced-motion:reduce){#levelup .banner[data-lv]::before{animation:none}}
+  /* end @css:35-j-screen */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -2606,13 +2613,6 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   #stOverview.ovb{min-height:44px;min-width:44px}
   #result .sub{color:#e4def6} #result .gt small{color:#e4def6}
 /* end @css:34-phone-hub */
-/* @css:35-j-screen */
-  /* r12 level-up entrance: a gold LEVEL N chip stamps in above ENHANCE, then the cards deal */
-  #levelup .banner[data-lv]::before{content:"LEVEL " attr(data-lv);display:block;width:max-content;margin:0 auto 5px;padding:2px 13px;border-radius:99px;font-size:12px;font-weight:900;letter-spacing:.12em;color:#1d1300;background:linear-gradient(90deg,#ffe27a,#ffd84d);box-shadow:0 0 14px rgba(255,216,77,.55);animation:jLvChip .55s .08s cubic-bezier(.2,1.8,.4,1) both}
-  @keyframes jLvChip{0%{opacity:0;transform:translateY(-16px) scale(.5) rotate(-8deg)}100%{opacity:1;transform:none}}
-  @media (max-height:660px){#levelup .banner[data-lv]::before{display:none}}
-  @media (prefers-reduced-motion:reduce){#levelup .banner[data-lv]::before{animation:none}}
-  /* end @css:35-j-screen */
 </style>
 </head>
 <body>
