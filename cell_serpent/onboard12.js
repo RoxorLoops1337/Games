@@ -85,7 +85,7 @@ export function petHint(tabsRoot, hubTab, save) {
 export function eggNudge(egg, save) { if (egg && save.eggs > 0) egg.classList.add('nudge12'); }
 
 // ---- title extras: rising music notes, a tagline that cycles, a sparkle burst when PLAY is tapped
-const TAGS = ['RoxorLoops & Jasmin vs the Serpent.', 'Slide. Shoot. Sing.', 'Pop the face, save the beat.', 'Every cell has a groove.'];
+const TAGS = ['RoxorLoops & Jasmin vs the Serpent.', 'Slide. Shoot. Sing.', 'Pop the face, save the beat.', 'Every cell has a groove.', 'Psst: the snake knows a song.'];
 export function setupTitleLife(notesHost, tagEl) {
   if (notesHost && !notesHost.childNodes.length) {
     const G = ['\u266A', '\u266B', '\u2661', '\u266A', '\u266B', '\u2736', '\u266A'];
