@@ -529,6 +529,28 @@
   .rnudge{width:min(320px,86vw);text-align:center;display:flex;flex-direction:column;gap:3px;margin-top:6px} .rnudge:empty{display:none}
   .rnudge .nudge{font-weight:900;font-size:15px;color:var(--gold)} .rnudge .nudge2{font-size:12px;color:var(--dim)}
   @media (prefers-reduced-motion:reduce){.nextrew.ready{animation:none}}
+  .qstrip{width:100%;display:flex;flex-direction:column;gap:6px;margin:0 0 8px}
+  .qmain{display:flex;align-items:center;gap:8px;width:100%;min-height:50px;padding:6px 10px;border-radius:14px;border:2px solid var(--line);background:rgba(20,14,56,.92);color:var(--ink);font:inherit;cursor:pointer;text-align:left}
+  .qmain.ready{border-color:var(--gold);background:linear-gradient(90deg,rgba(255,210,74,.26),rgba(20,14,56,.92));animation:nrpulse 1.6s ease-in-out infinite}
+  .qt{display:flex;flex-direction:column;flex:none;min-width:84px} .qt b{font-size:13px;font-weight:900} .qt small{font-size:11px;color:var(--dim);font-weight:700}
+  .qsegs{flex:1;min-width:0;display:flex;gap:6px} .qseg{flex:1;min-width:0;display:flex;align-items:center;gap:4px;font-size:14px} .qseg b{font-size:15px;line-height:1;flex:none}
+  .qsb{flex:1;min-width:14px;height:7px;border-radius:99px;background:rgba(255,255,255,.16);overflow:hidden} .qsb i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--cyan),var(--lime))} .qseg.done .qsb i{background:var(--lime)}
+  .qchest{font-size:26px;flex:none;line-height:1} .qchest.pop{animation:qpop 1s ease-in-out infinite} @keyframes qpop{50%{transform:scale(1.2) rotate(-6deg)}}
+  .qpills{display:flex;gap:6px} .qpill{flex:1;min-height:36px;border-radius:99px;border:2px solid var(--line);background:rgba(255,255,255,.07);color:var(--ink);font:inherit;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap} .qpill b{color:var(--gold)} .qpill.ready{border-color:var(--gold)}
+  .seahead{display:flex;flex-direction:column;gap:6px;width:100%;margin-bottom:10px} .sealine{display:flex;justify-content:space-between;font-size:15px;color:var(--ink)} .sealine span{color:var(--dim);font-size:13px}
+  .seabar{height:12px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden} .seabar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--gold),var(--lime))}
+  .seasub{font-size:12px;color:var(--dim)} .seanote{font-size:13px;font-weight:800;color:var(--lime)}
+  .seagrid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;width:100%}
+  .sday{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:42px;border-radius:9px;background:rgba(0,0,0,.35);border:2px solid transparent;color:var(--dim)} .sday small{font-size:10px;line-height:1} .sday b{font-size:16px;line-height:1.1;min-height:18px}
+  .sday.on{background:rgba(255,210,74,.2)} .sday.ms{border-color:rgba(255,210,74,.5)} .sday.today{border-color:var(--cyan);color:var(--ink)}
+  #achToast{position:fixed;left:50%;top:max(10px,env(safe-area-inset-top));transform:translate(-50%,-90px);z-index:90;display:flex;align-items:center;gap:8px;padding:6px 14px 6px 10px;border-radius:99px;background:rgba(20,14,56,.96);border:2px solid var(--gold);color:var(--ink);font-size:12px;font-weight:800;pointer-events:none;transition:transform .35s cubic-bezier(.2,1.4,.4,1);max-width:92vw}
+  #achToast.on{transform:translate(-50%,0)} #achToast b{font-size:20px} #achToast span{display:flex;flex-direction:column;line-height:1.15} #achToast em{font-style:normal;color:var(--gold)}
+  .spinstreak{display:flex;flex-direction:column;align-items:center;gap:1px;text-align:center} .spinstreak b{font-size:15px;color:var(--gold)} .spinstreak small{font-size:11px;color:var(--dim)}
+  .cfp{position:absolute;left:50%;top:50%;width:8px;height:8px;border-radius:2px;pointer-events:none;animation:cfly 1.1s ease-out forwards} @keyframes cfly{to{transform:translate(var(--dx),calc(var(--dy) + 90px)) rotate(540deg);opacity:0}}
+  .wheelwrap,.cbi{position:relative}
+  .cbi{display:flex;align-items:center;gap:10px} .cbi span{font-size:40px} .cbbox{font-size:64px;line-height:1;background:none;border:0;cursor:pointer;animation:qpop 1.3s ease-in-out infinite;min-width:72px;min-height:72px} .cbbox.open{animation:none;transform:scale(1.2)}
+  .cbl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--ink)}
+  @media (prefers-reduced-motion:reduce){.qmain.ready,.qchest.pop,.cbbox{animation:none} .cfp{display:none}}
   /* end @css:16-addiction */
   /* @css:20-qa */
   .scr > :first-child{margin-top:auto} .scr > :last-child{margin-bottom:auto}   /* old browsers without 'safe center': still centred, never clipped above the top */
@@ -563,6 +585,7 @@
   <div class="nextrew" id="nextRew"></div>
   <div class="hubbody">
     <div class="tab" id="tabBattle">
+      <div class="qstrip" id="qStrip"></div>
       <div class="stagebox bt">
         <div class="side" id="battleSide"></div>
         <div class="bt-hero" id="btHero">

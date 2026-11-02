@@ -1342,16 +1342,20 @@ export function botInput(g) {
 // ---------------------------------------------------------------- retention loops (all optional gifts, nothing here gates progress)
 // save.addict: sp (kills per snake species), sk (damage points per skill), claimed (mastery + collection rewards),
 // spin (last lucky spin day), week (weekly challenge), seen (last visit, ms) for the comeback gift.
-export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0 });
+export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1, n: 0 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0, q: { day: 0, p: [0, 0, 0], chest: 0 }, season: { key: 0, n: 0, last: 0, claimed: {}, note: '' }, ann: {}, annInit: 0 });
 export function sanitizeAddict(raw) {
   const a = addictDefault(), num = (v, d = 0) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : d);
   for (const k of SKINS) a.sp[k] = num(raw && raw.sp && raw.sp[k]);
   for (const w of WEAPONS) a.sk[w.id] = num(raw && raw.sk && raw.sk[w.id]);
   if (!raw || typeof raw !== 'object') return a;
   if (raw.claimed && typeof raw.claimed === 'object') for (const k of Object.keys(raw.claimed)) if (raw.claimed[k] && /^[a-z0-9:_]{1,40}$/.test(k)) a.claimed[k] = 1;
-  if (raw.spin && typeof raw.spin === 'object') a.spin = { day: num(raw.spin.day), prize: Math.min(SPIN_PRIZES.length - 1, num(raw.spin.prize, -1)) };
+  if (raw.spin && typeof raw.spin === 'object') a.spin = { day: num(raw.spin.day), prize: Math.min(SPIN_PRIZES.length - 1, num(raw.spin.prize, -1)), n: Math.min(9999, num(raw.spin.n)) };
   if (raw.week && typeof raw.week === 'object') a.week = { key: num(raw.week.key), prog: num(raw.week.prog), claimed: raw.week.claimed ? 1 : 0 };
   a.seen = num(raw.seen);
+  if (raw.q && typeof raw.q === 'object') a.q = { day: num(raw.q.day), p: [0, 1, 2].map(i => Math.min(9999, num(Array.isArray(raw.q.p) ? raw.q.p[i] : 0))), chest: raw.q.chest ? 1 : 0 };
+  if (raw.season && typeof raw.season === 'object') { const r = raw.season; a.season = { key: num(r.key), n: Math.min(SEASON_DAYS, num(r.n)), last: num(r.last), claimed: {}, note: typeof r.note === 'string' ? r.note.replace(/[^A-Za-z0-9 +,.!:]/g, '').slice(0, 80) : '' }; for (let i = 0; i < SEASON_MILES.length; i++) if (r.claimed && r.claimed[i]) a.season.claimed[i] = 1; }
+  if (raw.ann && typeof raw.ann === 'object') for (const t of TROPHIES) if (raw.ann[t.id]) a.ann[t.id] = 1;
+  a.annInit = raw.annInit ? 1 : 0;
   return a;
 }
 export function grantReward(save, rw) {
@@ -1411,6 +1415,7 @@ export function recordAddictRun(save, day, r) {
   const w = ensureWeek(save, day), c = weekChallenge(day);
   const add = { kills: r.kills || 0, runs: 1, bombs: r.bombs || 0, chests: r.chests || 0, picks: r.picks || 0, wins: r.won && !r.mode ? 1 : 0 };
   w.prog = Math.min(c.target, w.prog + (add[c.stat] || 0));
+  addQuestProgress(save, day, r); stampSeason(save, day);
 }
 // ---- lucky spin: one free spin a day, the prize is decided by the date alone
 export const SPIN_PRIZES = [
@@ -1428,7 +1433,7 @@ export function spinPrize(day) {
 export const spinReady = (save, day) => save.addict.spin.day !== day;
 export function doSpin(save, day) {
   if (!spinReady(save, day)) return null;
-  const i = spinPrize(day); save.addict.spin = { day, prize: i }; grantReward(save, SPIN_PRIZES[i].reward);
+  const i = spinPrize(day), sp = save.addict.spin, n = sp.day === day - 1 ? (sp.n || 0) + 1 : 1; save.addict.spin = { day, prize: i, n }; grantReward(save, SPIN_PRIZES[i].reward);
   return { index: i, prize: SPIN_PRIZES[i] };
 }
 // ---- comeback gift: three days away or more, never expires, never nags
@@ -1439,7 +1444,7 @@ export function comebackGift(save, now) {
   const reward = days >= 14 ? { sparkles: 30, energy: 32, eggs: 2, beats: 800 } : days >= 7 ? { beats: 400, energy: 20, eggs: 1 } : { beats: 150, energy: 10 };
   return { days, reward };
 }
-export function claimComeback(save, now) { const g = comebackGift(save, now); if (!g) return null; grantReward(save, g.reward); save.addict.seen = now; return g; }
+export function claimComeback(save, now) { const g = comebackGift(save, now); if (!g) return null; grantReward(save, g.reward); save.addict.seen = now; if (save.streak.n < 2) save.streak = { last: save.streak.last, n: 2 }; return g; }
 export function touchSeen(save, now) { if (!comebackGift(save, now)) save.addict.seen = now; }
 // ---- collection book: every snake species, pet, keepsake and outfit
 export const BOOK_CATS = [
@@ -1494,6 +1499,8 @@ export function nextReward(save, day, now = Date.now()) {
   if (spinReady(save, day)) ready.push({ label: 'Lucky Spin is ready', icon: '🎡' });
   if (weekReady(save, day)) ready.push({ label: 'Weekly challenge done', icon: '🏅' });
   if (comebackGift(save, now)) ready.push({ label: 'A welcome back gift', icon: '🎁' });
+  if (questState(save, day).chestReady) ready.push({ label: 'Quest chest is ready', icon: '🎁' });
+  if (seasonStatus(save, day).ready) ready.push({ label: 'Season reward ready', icon: '🌟' });
   if (masteryList(save).some(m => m.ready >= 0)) ready.push({ label: 'Mastery reward ready', icon: '🎖️' });
   const bs = bookStatus(save); if (bs.cats.some(c => c.ready) || bs.all.some(m => m.ready)) ready.push({ label: 'Collection reward ready', icon: '📖' });
   if (TROPHIES.some(t => trophyReady(save, t))) ready.push({ label: 'Trophy ready', icon: '🏆' });
@@ -1506,4 +1513,97 @@ export function nextReward(save, day, now = Date.now()) {
   const wc = weekChallenge(day), wp = ensureWeek(save, day).prog; if (!save.addict.week.claimed) c.push({ label: wc.text, icon: '🏅', frac: wp / wc.target, text: wp + ' / ' + wc.target });
   c.sort((x, y) => y.frac - x.frac);
   return { ready: false, more: 0, ...c[0] };
+}
+
+// ---------------------------------------------------------------- round 2 retention: mastery rank, streak wheel, quests, season, achievements, comeback
+// Mastery rank badge for a skill (for the skills tab): masteryRank(save, skillId) -> { rank 0..5, max 5, name, color, val, next (next milestone or null), frac 0..1 toward next }.
+export const RANK_NAMES = ['Rookie', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Legend'];
+export const RANK_COLORS = ['#9aa3c7', '#c98a4b', '#cfd8e8', '#ffd24a', '#7fe8ff', '#ff7eb6'];
+export function masteryRank(save, skillId) {
+  const m = masteryList(save).find(x => x.key === 'sk:' + skillId);
+  if (!m) return { rank: 0, max: SKILL_MILES.length, name: RANK_NAMES[0], color: RANK_COLORS[0], val: 0, next: null, frac: 0 };
+  const prev = m.done ? m.miles[m.done - 1].at : 0, frac = m.next ? Math.min(1, (m.val - prev) / (m.next.at - prev)) : 1;
+  return { rank: m.done, max: m.miles.length, name: RANK_NAMES[m.done], color: RANK_COLORS[m.done], val: m.val, next: m.next ? m.next.at : null, frac };
+}
+// Lucky spin streak: consecutive days with a spin. Only the wheel's looks change (nothing to buy, nothing lost).
+export const SPIN_FRAMES = [
+  { at: 0, name: 'Plain wheel', color: '#ffd24a', glow: 0, ptr: '▼', burst: 0 },
+  { at: 3, name: 'Bronze wheel', color: '#d9955a', glow: 8, ptr: '🔻', burst: 10 },
+  { at: 7, name: 'Silver wheel', color: '#e3ebf7', glow: 14, ptr: '⭐', burst: 18 },
+  { at: 14, name: 'Golden wheel', color: '#ffe26a', glow: 22, ptr: '🎵', burst: 28 },
+  { at: 30, name: 'Rainbow wheel', color: '#ff7eb6', glow: 30, ptr: '🌈', burst: 40 },
+];
+export function spinStreak(save, day) { const sp = save.addict.spin; return sp.day === day || sp.day === day - 1 ? sp.n || 0 : 0; }
+export function spinFrame(n) { let f = SPIN_FRAMES[0]; for (const x of SPIN_FRAMES) if (n >= x.at) f = x; const nx = SPIN_FRAMES.find(x => x.at > n) || null; return { ...f, next: nx ? nx.at : 0, nextName: nx ? nx.name : '' }; }
+// Daily Quests: three short quests that rotate each day; finish all three to open the chest. No energy, no timers.
+export const QUEST_DEFS = [
+  { id: 'pop', icon: '🫧', text: n => `Pop ${n} cells`, targets: [15, 25, 40], stat: 'kills' },
+  { id: 'run', icon: '🎵', text: n => (n > 1 ? `Play ${n} runs` : 'Play a run'), targets: [1, 2, 3], stat: 'runs' },
+  { id: 'bomb', icon: '💣', text: n => `Pop ${n} bomb${n > 1 ? 's' : ''}`, targets: [1, 2, 3], stat: 'bombs' },
+  { id: 'chest', icon: '🎁', text: n => `Open ${n} chest${n > 1 ? 's' : ''}`, targets: [1, 2, 3], stat: 'chests' },
+  { id: 'pick', icon: '🟡', text: n => `Pick ${n} upgrade${n > 1 ? 's' : ''}`, targets: [2, 3, 5], stat: 'picks' },
+  { id: 'win', icon: '🏁', text: n => (n > 1 ? `Clear ${n} stages` : 'Clear a stage'), targets: [1, 1, 2], stat: 'wins' },
+  { id: 'groove', icon: '🔥', text: n => `Reach groove ${n}`, targets: [4, 6, 9], stat: 'groove', max: true },
+];
+export const QUEST_CHESTS = [{ beats: 220 }, { beats: 120, sparkles: 4 }, { eggs: 1 }, { sparkles: 8 }, { beats: 150, energy: 5 }];
+export function dailyQuests(day) {
+  const R = rng((Math.imul((day | 0) + 77, 2246822519) >>> 0) || 9), pool = QUEST_DEFS.slice(), out = [];
+  for (let i = 0; i < 3; i++) { const d = pool.splice(Math.floor(R() * pool.length), 1)[0], t = d.targets[Math.min(2, Math.floor(R() * 2.4))]; out.push({ id: d.id, icon: d.icon, text: d.text(t), target: t, stat: d.stat, max: !!d.max }); }
+  return out;
+}
+export const questChest = day => QUEST_CHESTS[Math.floor(rng((Math.imul((day | 0) + 5, 2654435761) >>> 0) || 3)() * QUEST_CHESTS.length)];
+function ensureQuests(save, day) { const q = save.addict.q; if (q.day !== day) save.addict.q = { day, p: [0, 0, 0], chest: 0 }; return save.addict.q; }
+export function addQuestProgress(save, day, r) {
+  const q = ensureQuests(save, day), add = { kills: r.kills || 0, runs: 1, bombs: r.bombs || 0, chests: r.chests || 0, picks: r.picks || 0, wins: r.won && !r.mode ? 1 : 0, groove: r.groove || 0 };
+  dailyQuests(day).forEach((d, i) => { q.p[i] = Math.min(d.target, d.max ? Math.max(q.p[i], add[d.stat] || 0) : q.p[i] + (add[d.stat] || 0)); });
+}
+export function questState(save, day) {
+  const q = save.addict.q.day === day ? save.addict.q : { p: [0, 0, 0], chest: 0 };
+  const quests = dailyQuests(day).map((d, i) => ({ ...d, prog: Math.min(d.target, q.p[i] || 0), done: (q.p[i] || 0) >= d.target }));
+  const doneCount = quests.filter(x => x.done).length, total = quests.reduce((a, x) => a + x.target, 0), got = quests.reduce((a, x) => a + x.prog, 0);
+  return { quests, doneCount, frac: total ? got / total : 0, chest: questChest(day), chestOpened: !!q.chest, chestReady: doneCount === 3 && !q.chest };
+}
+export function claimQuestChest(save, day) { const st = questState(save, day); if (!st.chestReady) return null; ensureQuests(save, day).chest = 1; grantReward(save, st.chest); return st.chest; }
+// Season: 30 calendar days, one stamp for every day you finish a run, free gifts at milestones. Leftover gifts are paid out when a season ends.
+export const SEASON_DAYS = 30;
+export const SEASON_MILES = [{ at: 3, reward: { beats: 150 } }, { at: 7, reward: { eggs: 1 } }, { at: 12, reward: { sparkles: 10 } }, { at: 18, reward: { beats: 500, eggs: 1 } }, { at: 24, reward: { sparkles: 25 } }, { at: 28, reward: { sparkles: 50, eggs: 2 } }];
+export const seasonKey = day => Math.floor((day | 0) / SEASON_DAYS);
+export function ensureSeason(save, day) {
+  const k = seasonKey(day), s = save.addict.season;
+  if (s.key === k) return s;
+  const left = { beats: 0, sparkles: 0, eggs: 0 };
+  if (s.key) SEASON_MILES.forEach((m, i) => { if (s.n >= m.at && !s.claimed[i]) { grantReward(save, m.reward); for (const q of Object.keys(left)) left[q] += m.reward[q] || 0; } });
+  const note = left.beats || left.sparkles || left.eggs ? 'Last season gifts: ' + rewardText(left) : '';
+  save.addict.season = { key: k, n: 0, last: 0, claimed: {}, note };
+  return save.addict.season;
+}
+export function stampSeason(save, day) { const s = ensureSeason(save, day); if (s.last !== day && s.n < SEASON_DAYS) { s.n++; s.last = day; return true; } return false; }
+export function seasonStatus(save, day) {
+  const cur = save.addict.season.key === seasonKey(day), s = cur ? save.addict.season : { n: 0, last: 0, claimed: {} };
+  const miles = SEASON_MILES.map((m, i) => ({ ...m, i, got: s.n >= m.at, claimed: !!s.claimed[i], ready: s.n >= m.at && !s.claimed[i] }));
+  return { dayNo: (day | 0) % SEASON_DAYS + 1, daysLeft: SEASON_DAYS - ((day | 0) % SEASON_DAYS) - 1, stamps: s.n, stampedToday: s.last === day, miles, ready: miles.some(m => m.ready), note: save.addict.season.note || '' };
+}
+export function claimSeason(save, day, i) {
+  ensureSeason(save, day); const s = save.addict.season, m = SEASON_MILES[i];
+  if (!m || s.n < m.at || s.claimed[i]) return false;
+  s.claimed[i] = 1; grantReward(save, m.reward); return true;
+}
+export function clearSeasonNote(save) { save.addict.season.note = ''; }
+// Achievements reuse TROPHIES: earned = reached the goal (claimed or not). popAchievements returns the ones that just popped, once.
+export const achievementCount = save => ({ got: TROPHIES.filter(t => save.trophies[t.id] || t.get(save) >= t.at).length, total: TROPHIES.length });
+export function popAchievements(save) {
+  const a = save.addict, fresh = [];
+  for (const t of TROPHIES) if ((save.trophies[t.id] || t.get(save) >= t.at) && !a.ann[t.id]) { a.ann[t.id] = 1; fresh.push(t); }
+  if (!a.annInit) { a.annInit = 1; return []; }
+  return fresh;
+}
+// A friendlier comeback: no pressure, a few warm lines about what is waiting, the gift never expires.
+export function comebackLines(save, day, now) {
+  const g = comebackGift(save, now); if (!g) return [];
+  const out = [g.days >= 14 ? 'The whole band missed you!' : g.days >= 7 ? 'It has been a while, welcome home!' : 'Good to see you again!'];
+  if (spinReady(save, day)) out.push('🎡 A free spin is waiting');
+  if (!questState(save, day).chestOpened) out.push('🎁 Three easy quests are ready');
+  out.push('🌟 Season day ' + seasonStatus(save, day).dayNo + ' of ' + SEASON_DAYS);
+  out.push('Take your time. Nothing is lost.');
+  return out;
 }

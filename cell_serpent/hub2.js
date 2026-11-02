@@ -9,6 +9,7 @@ import {
   CARD_PRICE, buyCard, cardActive, claimCard, TROPHIES, trophyReady, claimTrophy, weaponExchange, WEAPON_EXCHANGE_PRICE, SKINS, SKIN_NAMES,
 } from './sim.js';
 import { createAddictUI } from './addict_ui.js';
+import { createRetainUI } from './retain_ui.js';
 import { nextReward } from './sim.js';
 
 import { ico, iconURL } from './icons.js';
@@ -314,5 +315,6 @@ export function createHub2(c) {
     list.appendChild(tile({ cls: 't-gold one', ic: '🎫', name: 'Fan Club Pass', desc: '30 days of daily gifts', btn: 'LOOK', gold: true, onclick: () => { audio.play('click'); openPass(); } }));
   }
   const addict = createAddictUI(c, openPanel, sec);
-  return { addict, eventTile, shopExtras, renderSide, renderStats, renderGear, renderShop, openPanel, openPanelStats: null, setGearFilter: f => { gearFilter = f; }, lootModal };
+  const retain = createRetainUI({ ...c, renderNext: () => addict.renderNext() }, openPanel, sec, () => openTrophies());
+  return { addict, retain, eventTile, shopExtras, renderSide, renderStats, renderGear, renderShop, openPanel, openPanelStats: null, setGearFilter: f => { gearFilter = f; }, lootModal };
 }
