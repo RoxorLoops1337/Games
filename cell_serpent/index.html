@@ -2310,6 +2310,62 @@
   .treatline{text-align:center;font-size:12px;font-weight:800;color:#ffe3a8;margin:6px 0 2px}
   @media (max-height:660px){.rec{min-height:50px}}
 /* end @css:10-hub round 10 */
+/* @css:34-phone-run */
+/* phone pass for the in-run overlays: 44px tap targets with 8px gaps, 12px text floor, no tap delay, pressed feedback, safe areas */
+.scr button,.scr [role=button],.card,.tgl,.lockb{touch-action:manipulation}
+.scr button:not(.btn):not(.card):not(.chip):active,.pb9[data-w]:active,#levelup .buildstrip:active,#rGoal:active{transform:scale(.96);filter:brightness(1.25);transition:transform .05s}
+/* result: RETRY and MENU are 48px tall, side by side with 10px between */
+#result .row{gap:10px}
+#result .row .btn,#result #rRetry,#result #rHub{min-height:48px;padding:11px 8px;font-size:16px}
+#result .rhint,#result .rmoment8,#result .rlevel small,#result .rcost{font-size:12px}
+/* pause: primary RESUME sits in the thumb zone (lower half), every control 44px+ */
+#pause #resumeBtn{margin-top:auto}
+#pause .pbtn,#pause #resumeBtn{min-height:48px}
+#pause #quitBtn{min-height:44px}
+#pause #pBuild.rpmark{gap:8px;row-gap:8px}
+#pause #pBuild.rpmark span.pb9[data-w]{min-width:44px;min-height:44px;justify-content:center;font-size:12px;padding:2px 6px 2px 4px}
+#pause #pBuild.rpmark span.pb9[data-w] img{width:26px;height:26px}
+#pause .precap div,#pause .pb9n,#pause .pb9n.cap10,#pause .plose{font-size:12px}
+#pause .precap .pbar em{font-size:12px;line-height:16px}
+.sgrp{font-size:12px}
+#settings{padding-bottom:calc(30px + env(safe-area-inset-bottom))}
+#settings #setClose,#panel #pClose,#boxModal #bOk{min-height:48px}
+#settings .tgl{min-height:56px;margin:4px 0}
+#settings #setClose{bottom:calc(8px + env(safe-area-inset-bottom))}
+#result>.row{margin-top:3px}
+#result .rgoal{margin-bottom:3px}
+/* revive: the Timer link and Give up reach 44px */
+#revive .rvtimer{min-height:44px;padding:12px 18px;font-size:13px}
+#revive #rvNo{min-height:48px}
+#revive{gap:10px}
+/* level-up cards: 8px between cards and buttons on every height, a 44px lock target, 12px text */
+#levelup{gap:8px}
+#levelup .cards{gap:8px}
+#levelup .lvrow{gap:8px}
+#levelup .lvrow .btn{min-height:48px}
+#levelup #skipBtn{font-size:13px}
+#levelup .lk,#levelup .lkl,#levelup .lk b{font-size:12px}
+.card.pick .nm{padding-right:30px}
+.card.pick .rar{font-size:11px;padding:1px 8px}
+.card.pick .ds{font-size:12px}
+.card.pick .dl{font-size:12px}
+.card.pick .key{display:none}
+.card.pick .ic .kd{font-size:10px;line-height:15px;padding:0 6px}
+.card.pick .ic .newtag{font-size:10px;line-height:15px}
+.card.pick .lockb{top:0;right:2px;width:44px;height:44px;opacity:.85}
+.card.pick .lockb svg{width:20px;height:20px}
+@media (max-width:340px){.card.pick .dl,.card.pick .ds{font-size:12px}.card.pick .rar{font-size:12px;padding:0 6px}.card.pick .nm{font-size:16px}}
+@media (max-height:700px){#levelup{gap:8px}#levelup .cards{gap:8px}.card.pick{padding:6px 9px}}
+#pause .plose,#pause .plose b{font-size:12px}
+#result :is(.rhint,.rextra,.rgoal,.rlevel,.rnudge,.rkeep,.rmoment8,.rribbon,.sub) :is(span,small,i,em,u,s,b,div){font-size:max(12px,1em)}
+#levelup #skipBtn .sk2{font-size:12px}
+.card.pick .rar{font-size:12px}
+.card.pick .ic .kd,.card.pick .ic .newtag{font-size:12px;line-height:16px}
+#result .rprog small{font-size:12px}
+#result .rgoal,#result #rGoal{min-height:44px}
+#result{gap:6px}
+@media (max-height:700px){#result{gap:6px}#result .row .btn,#result #rRetry,#result #rHub{min-height:44px;padding:8px}#result .hero{height:clamp(40px,7vh,56px)}#result .stars{font-size:clamp(22px,4.2vh,30px)}}
+/* end @css:34-phone-run */
 </style>
 </head>
 <body>

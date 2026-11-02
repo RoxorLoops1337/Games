@@ -36,8 +36,10 @@ export function safeUnits(L) {
   return { t: Math.min(140, Math.max(0, c.t * dpr - L.oy) / L.s), b: Math.min(140, Math.max(0, c.b * dpr - L.oy) / L.s) };
 }
 // pause and stats round buttons, top right; t is the top inset in game units (main.js hit test uses this too)
-export function hudZone(gp, t = 0) {
-  if (gp.x > W - 76) { if (gp.y < t + 76) return 'pause'; if (gp.y < t + 150) return 'stats'; }
+// u is the CSS pixels per game unit (0 = unknown): the zones grow so the pause button is at least 44 CSS px square on a phone (34-phone-run)
+export function hudZone(gp, t = 0, u = 0) {
+  const m = u > 0 ? Math.min(160, 45 / u) : 0, pe = Math.max(76, 40 + m / 2, m + 1), se = Math.max(150, pe + m);
+  if (gp.x > W - Math.max(76, m)) { if (gp.y < t + pe) return 'pause'; if (gp.y < t + se) return 'stats'; }
   return '';
 }
 // 06-hud b10: skill tile layout. Tiles are about 10 percent bigger up to 4 skills, and a 9 skill row squeezes to
