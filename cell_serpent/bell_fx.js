@@ -28,3 +28,17 @@ export function drawBellLinks(ctx, sn, t, reach = 3) {
   }
   ctx.restore();
 }
+// QA round 10: the tethers sit under the cell sprites and the cells overlap, so they were nearly hidden in a live chain.
+// These small gold rings go on top (after the cells) around every cell the bell will hit, fading with distance.
+export function drawBellRings(ctx, sn, t, reach = 3) {
+  const segs = sn.segs;
+  for (let i = 1; i < segs.length; i++) {
+    const c = segs[i]; if (!c.bell || !(c.hp > 0)) continue;
+    ctx.save(); ctx.strokeStyle = '#ffd04a'; ctx.lineWidth = 3.5; ctx.setLineDash([7, 6]); ctx.lineDashOffset = -t * 30;
+    for (let j = Math.max(1, i - reach); j <= Math.min(segs.length - 1, i + reach); j++) {
+      const q = segs[j]; if (j === i || !(q.hp > 0) || Math.hypot(q.x - c.x, q.y - c.y) > 320) continue;
+      ctx.globalAlpha = 0.3 + 0.35 * (1 - (Math.abs(j - i) - 1) / (reach + 1)); ctx.beginPath(); ctx.arc(q.x, q.y, q.r * 1.12, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
