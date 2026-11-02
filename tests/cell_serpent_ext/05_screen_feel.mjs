@@ -98,4 +98,22 @@ const { createClock, STEP } = await import(join(root, 'clock.js'));
   const { createAudio } = await import(join(root, 'audio.js'));
   const a = createAudio(); assert.equal(typeof a.beat, 'function'); assert.equal(a.beat(), null, 'no beat before the music plays');
 }
+// ---- round 3: milestone ribbons, GO pop, boss down card, wipeout banner
+{
+  const M = mk(), g3 = sim.createGame({ seed: 9, stage: 10 });
+  for (const e of g3.events.splice(0)) M.onEvent(e, g3);
+  M.onEvent({ t: 'checkpoint', k: 2 }, g3);
+  assert.ok(M.takeSounds().length >= 1, 'a milestone plays a sound');
+  for (let i = 0; i < 30; i++) M.draw(g3, ui, 0.05);
+  M.onEvent({ t: 'checkpoint', k: 2 }, g3);
+  assert.equal(M.takeSounds().length, 0, 'the same milestone is not repeated');
+  g3.progress = 0.8; g3.phase = 'play';
+  for (let i = 0; i < 100; i++) M.draw(g3, ui, 0.05);
+  g3.phase = 'won'; M.onEvent({ t: 'won' }, g3);
+  for (let i = 0; i < 60; i++) M.draw(g3, ui, 0.05);
+  g3.phase = 'dead'; g3.progress = 0.42; M.onEvent({ t: 'dead' }, g3);
+  for (let i = 0; i < 40; i++) M.draw(g3, ui, 0.05);
+  const Q3 = mk(); Q3.setOptions({ reduceMotion: true });
+  Q3.onEvent({ t: 'checkpoint', k: 1 }, g3); for (let i = 0; i < 40; i++) Q3.draw(g3, ui, 0.05);
+}
 console.log('cell_serpent ext 05_screen_feel ok');

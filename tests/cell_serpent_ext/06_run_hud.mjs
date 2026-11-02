@@ -49,3 +49,15 @@ assert.ok(!readFileSync(join(root, 'hud.js'), 'utf8').includes('—'), 'no em da
   }
   assert.ok(ready >= 1, 'sound hook fires when a long cooldown completes');
 }
+
+// ---- batch 3: bigger skill tiles with cooldown numbers, groove flash, combo tiers, progress shine
+{
+  const { createRenderer: mk } = await import(join(root, 'render.js'));
+  const R = mk(canvas, null, null);
+  const g = sim.createGame({ seed: 9, stage: 10, meta: { rev: 1 } });
+  g.combo = 25; g.lastKill = g.t; g.encore = 0.5; g.progress = 0.5;
+  for (const w of sim.WEAPONS) g.weap[w.id] = { lv: 3, cd: 2.4 };
+  for (const gv of [0, 4, 9, 2, 15, 20, 3]) { g.groove = gv; R.draw(g, { joy: { on: false } }, 1 / 30); }
+  g.encore = 1; R.draw(g, null, 1 / 30);
+  assert.ok(!readFileSync(join(root, 'hud.js'), 'utf8').includes('—'), 'no em dash in hud.js (b3)');
+}

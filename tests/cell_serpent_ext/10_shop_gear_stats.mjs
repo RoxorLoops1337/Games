@@ -16,3 +16,11 @@ for (const id of ['overalls', 'jacket', 'wig', 'tux', 'bloom', 'sun', 'pumpkin',
 for (const k of ['rhit', 'dealCheer', 'lootx', 'setring', 'hatsOn', 'wardhero2']) assert.ok(hub.includes(k) || html.includes(k), k);
 assert.ok(html.includes('.kstar.w'));
 console.log('ok 10_shop_gear_stats round 2');
+// round 3: collection header, deal quantity badge, best buy, radar ghost, loot tick sounds and legendary flash
+{
+  const aud = fs.readFileSync(new URL('../../cell_serpent/audio.js', import.meta.url), 'utf8');
+  for (const k of ['colhead', 'dqty', 'bestBuy', 'rgh', 'legflash', "'counttick'", "'legend'"]) assert.ok(hub.includes(k) || html.includes(k), k);
+  assert.ok(aud.includes('counttick:') && aud.includes('legend:') && !aud.includes('—'));
+  assert.ok(html.includes('.bestrib') && html.includes('.legflash') && !html.includes('—'));
+  console.log('ok 10_shop_gear_stats round 3');
+}
