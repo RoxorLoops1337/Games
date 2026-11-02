@@ -124,7 +124,7 @@ export default {
   'battle.pad.help_move': 'Flyt markøren over felterne',
   'battle.pad.help_rb': 'Jasmins heltekraft',
   'battle.pad.help_start': 'Pause',
-  'battle.pad.help_stick2': 'L3 kalder næste bølge. R3 to gange sælger den valgte turret',
+  'battle.pad.help_stick2': 'L3 kalder næste bølge. R3 to gange sælger det valgte tårn',
   'battle.pad.help_triggers': 'Langsommere og hurtigere',
   'battle.pad.help_x': 'Flet alle par',
   'battle.pad.help_y': 'Træk næste drop om',

@@ -124,7 +124,7 @@ export default {
   'battle.pad.help_move': 'Beweeg de cursor over de tegels',
   'battle.pad.help_rb': 'Heldenmove van Jasmin',
   'battle.pad.help_start': 'Pauze',
-  'battle.pad.help_stick2': 'L3 roept de volgende golf op. Twee keer R3 verkoopt de gekozen turret',
+  'battle.pad.help_stick2': 'L3 roept de volgende golf op. Twee keer R3 verkoopt de gekozeen toren',
   'battle.pad.help_triggers': 'Tempo lager en hoger',
   'battle.pad.help_x': 'Alle paren samenvoegen',
   'battle.pad.help_y': 'Volgende drop rerollen',
