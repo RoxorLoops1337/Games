@@ -13,13 +13,14 @@ import { registerB11 } from './audio_b11.js';
 import { registerB10 as registerS10 } from './screen_b10.js';
 import { registerA10, keyLift, createAmbient } from './audio_b10b.js';
 import { registerA11, twistOf } from './audio_b11b.js';
+import { registerB12i } from './audio_b12i.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
   let musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
   let mixS = { stage: 1, boss: false, groove: 0, danger: 0, skin: 'love', bphase: 0, ctier: 0 };
   let pumpSet = 2, countSteps = 0;
-  let live = 0, chain = 0, chainT = 0, vol = 1, uiT = 0, bstreak = 0, lastBeatShot = 0, beatNow = 0, fresh = false;
+  let curPan = 0, live = 0, chain = 0, chainT = 0, vol = 1, uiT = 0, bstreak = 0, lastBeatShot = 0, beatNow = 0, fresh = false;
   const last = {};
   function ensure() {
     if (ac) return ac;
@@ -49,9 +50,10 @@ export function createAudio() {
     o.type = type; o.frequency.setValueAtTime(f, t);
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + dur);
     g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-    o.connect(g); g.connect(bus(b)); o.start(t); o.stop(t + dur + 0.02);
+    o.connect(g); g.connect(curPan && b === 's' && ac.createStereoPanner ? panTo(g) : bus(b)); o.start(t); o.stop(t + dur + 0.02);
     live++; o.onended = () => { live--; };
   }
+  function panTo(g) { try { const pn = ac.createStereoPanner(); pn.pan.value = curPan; pn.connect(sfxBus); return pn; } catch (e) { return sfxBus; } }   // b12: per voice pan (ring shots)
   function noise(dur, vol = 0.2, f0 = 2000, f1 = 300, type = 'lowpass', delay = 0, b = 's') {
     if (!ac || muted || live > 40) return;
     const t = ac.currentTime + delay;
@@ -400,7 +402,7 @@ export function createAudio() {
     const sp = 60 / bpm / 4;
     while (nextT < ac.currentTime + 0.25) {
       const s = step % 16, bar = (step >> 4) % 4, sec = (step >> 6), t = Math.max(0, nextT - ac.currentTime);
-      if (s % 4 === 0) { beatAt = nextT; beatBpm = bpm; beatNow = bpm; }   // for the screen edge pulse (see beat())
+      if (s % 4 === 0) { beatAt = nextT; beatBpm = bpm; beatNow = bpm; if (amb) amb.dip(nextT, 60 / bpm); }   // for the screen edge pulse (see beat())
       if (!muted && (tickOn || countSteps > 0)) {   // music off with the tick on, or the count-in before stage 1: the metronome alone
         if (s % 4 === 0) tone(s === 0 && bar === 0 ? 1319 : 988, 0.05, 'triangle', s === 0 && bar === 0 ? 0.2 : 0.15, 0, t, 'm');
       }
@@ -499,13 +501,14 @@ export function createAudio() {
   sfx.resumetick = e => { const n = Math.max(1, Math.min(3, (e && e.n) || 3)); tone(560 + (3 - n) * 140, 0.06, 'triangle', 0.08, -60); tone(1400 + (3 - n) * 300, 0.03, 'sine', 0.03); };
   registerB11(sfx, tone, noise, gate);   // batch 11: mirror glance, beat run, boss twists (audio_b11.js)
   registerA11(sfx, tone, noise, duck, gate);   // round 11: book sting, pet glance, pounce, tab ping, curtain (audio_b11.js)
+  registerB12i(sfx, tone, noise, duck, gate, now);   // batch 12: aim tick, crown clink, milestone, burst thinning (audio_b12i.js)
   registerA10(sfx, tone, noise, duck, gate);   // round 10: boss fill, bring pack, sticker book, pet calls (audio_b10b.js)
   return {
     unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } hubSync(); ambSync(); },
     hub(on, skin) { wantHub = !!on; if (skin) hubSkin = skin; hubSync(); ambSync(); },
     hubWorld(skin) { if (skin && skin !== hubSkin) { hubSkin = skin; if (wantHub) hubSync(); } },
     get hubOn() { return !!hubN; },
-    play(name, e) { if (ac && sfx[name] && admit(name, live)) { try { sfx[name](e); } catch (err) { /* never break the game over a sound */ } } },
+    play(name, e) { if (ac && sfx[name] && admit(name, live)) { curPan = e && Number.isFinite(e.pan) ? e.pan : 0; try { sfx[name](e); } catch (err) { /* never break the game over a sound */ } curPan = 0; } },
     setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5 * vol; hubSync(); ambSync(); },
     setVolume(v) { vol = Math.max(0, Math.min(1, +v)); if (!(vol >= 0)) vol = 1; if (master && !muted) master.gain.value = 0.5 * vol; },
     get volume() { return vol; },

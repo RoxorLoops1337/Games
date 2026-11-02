@@ -62,6 +62,7 @@ import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
 import { dressDuo, wornOutfit } from './duo_pose.js';
 import { PUMP_LEVELS, pumpLevel } from './audio_pump.js';
 import { createCues, wantsMuffle, sheetSound } from './audio_cues.js';
+import { panOf, sweepTick, isMilestone } from './audio_b12i.js';
 import { logRun } from './hub_b11.js';
 import { initFullscreen, fsOnRun } from './fullscreen_fs.js';
 
@@ -86,6 +87,7 @@ let reviveAsked = false, hard = false, mode = 'title', g = null, demo = null, ac
 const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
 const keys = {};
 const aimS = { now: -Math.PI / 2, tgt: -Math.PI / 2 };   // b11: circle stages aim all round: the finger or mouse sets the target angle, the sim gets an eased angle
+const aimTk = {};
 const AIM_HINT_KEY = 'cell_serpent_aimhint_b11';
 const aimHintLeft = () => { try { return +(localStorage.getItem(AIM_HINT_KEY) || 0) < 3; } catch (e) { return true; } };
 const aimHintBump = () => { try { localStorage.setItem(AIM_HINT_KEY, String(+(localStorage.getItem(AIM_HINT_KEY) || 0) + 1)); } catch (e) { /* ignore */ } };
@@ -615,6 +617,7 @@ function readInput() {
     if (keys.arrowup || keys.w) aimS.tgt = -Math.PI / 2; if (keys.arrowdown || keys.s) aimS.tgt = Math.PI / 2;
     let da = (aimS.tgt - aimS.now) % (Math.PI * 2); if (da > Math.PI) da -= Math.PI * 2; else if (da < -Math.PI) da += Math.PI * 2;
     aimS.now += da * 0.35; if (aimS.now > Math.PI) aimS.now -= Math.PI * 2; else if (aimS.now < -Math.PI) aimS.now += Math.PI * 2;
+    if (sweepTick(aimTk, aimS.now, now8())) audio.play('aimtick');   // b12: a quiet tick per 15 degrees of aim sweep
     const enc2 = encoreTap || !!keys[' ']; encoreTap = false;
     return { mx: 0, my: 0, aim: aimS.now, encore: enc2 };
   }
@@ -782,6 +785,9 @@ function drain(game, sound) {
     R.onEvent(e, game); if (game === g) momentEvent(e, game);
     if (sound && e.t === 'kill' && game === g && needsFirstPop(save)) firstPop(audio, buzz);
     if (sound && e.t === 'kill' && e.choir) audio.play('choirpop');
+    if (sound && e.t === 'shoot' && game.ring) e.pan = panOf(game.p.aim);   // b12: ring shots pan with the aim
+    if (sound && e.t === 'kill' && e.head && e.boss) audio.play('bosscrown');
+    if (sound && e.t === 'won' && game === g && isMilestone(game.stage)) audio.play('milestone');
     if (sound && e.t === 'hit') { hitSrc = e.src || ''; hitAt = now8(); }   // audio round 8: remember the weapon that landed the last hit
     if (sound && e.t === 'kill' && e.head && !e.boss) audio.play('finishblow', { src: now8() - hitAt < 250 ? hitSrc : '' });
     if (sound && e.t === 'stage' && game.skin) e.skin = game.skin;   // the stage card sting is per species
