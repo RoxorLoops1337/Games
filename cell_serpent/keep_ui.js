@@ -40,6 +40,8 @@ export function keepResult(snap, save, day, r, host, reduce) {
   const pageDone = Object.keys(e).filter(k => e[k].length && e[k].every(x => x.got) && e[k].some(x => !snap.got.has(k + ':' + x.id)));
   if (fresh.length && pageDone.length) chips.push(`<span class="kchip book done"><i class="kst">🎉</i><b>Book page complete!</b><small>Claim your gift in Goals</small></span>`);
   else if (fresh.length) chips.push(`<span class="kchip book"><i class="kst">📖</i><b>New in your book</b><small>${esc(fresh.slice(0, 2).map(x => x.name).join(', '))}${fresh.length > 2 ? ' +' + (fresh.length - 2) : ''}</small></span>`);
+  const sn = spinStreak(save, day);   // a spin streak that ends if today passes without a spin
+  if (sn >= 2 && spinReady(save, day) && save.addict.spin.day === day - 1 && !(r && (r.mode === 'pig' || r.mode === 'inv'))) chips.push(`<span class="kchip risk"><i class="kst">🔥</i><b>${sn} day spin streak</b><small>spin today to keep it (Goals tab)</small></span>`);
   const tom = tomorrowLine(save, day, r);
   if (tom) chips.push(`<span class="kchip soon"><i class="kst">${tom.icon}</i><b>${esc(tom.text)}</b></span>`);
   host.innerHTML = chips.join('');
