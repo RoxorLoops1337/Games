@@ -227,6 +227,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       if (kind === 'bomb') {   // a bomb cell: glossy red, steel cap, curly fuse with a spark
         cel(g, KIND.bomb, circ(0, 0, r * 0.92), { r, shadow: '#a8203f' });
         glossDot(g, r, 0.42, -0.46);
+        EF.spine(g, r, P, species, { ridge: false });   // r9: the species belly stripe on a bomb
         cel(g, '#7b86a0', poly([[-r * 0.3, -r * 0.84], [r * 0.3, -r * 0.84], [r * 0.24, -r * 1.02], [-r * 0.24, -r * 1.02]]), { r: r * 0.3, shadow: '#4b5470', hi: false, lw: 2.4 });
         g.beginPath(); g.moveTo(0, -r * 1.0); g.bezierCurveTo(r * 0.05, -r * 1.25, r * 0.5, -r * 1.12, r * 0.42, -r * 1.34); ink(g, r * 0.17); g.stroke(); ink(g, r * 0.08, '#f1d9a0'); g.stroke();
         sparkle(g, r * 0.45, -r * 1.38, r * 0.28, '#ffd84d');
@@ -251,6 +252,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
         for (const [x, y] of [[0, -0.74], [0, 0.74], [-0.74, 0], [0.74, 0]]) { cel(g, '#fff8ec', circ(x * r, y * r, r * 0.09), { r: r * 0.09, hi: false, lw: 1.6, shadow: '#cfeccf' }); }
         glossDot(g, r, 0.2, -0.76);
         hpPad(g, r, 0.62, 0.4);
+        EF.spine(g, r, P, species, { clip: plusPath(r * 0.96, r * 0.45) });   // r9: a species stripe along the lower arm and the back ridge on the top arm
         return;
       }
       cellShape(g, P, r);
@@ -258,6 +260,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
         const pl = poly(Array.from({ length: 8 }, (_, i) => [Math.cos(i / 8 * TAU + 0.39) * r * 0.96, Math.sin(i / 8 * TAU + 0.39) * r * 0.96]));
         cel(g, '#9fb0d4', pl, { r, shadow: '#5b6b8e', hr: r * 0.9, lw: r * 0.12 });
         g.save(); pl(g); g.clip(); g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = r * 0.1; g.beginPath(); g.moveTo(-r, -r * 0.1); g.lineTo(-r * 0.1, -r); g.stroke(); g.restore();
+        EF.spine(g, r, P, species);   // r9: species belly stripe and back ridge on the plate
         cel(g, '#6b7b9e', circ(0, 0, r * 0.58), { r: r * 0.58, shadow: '#47557a', hi: false, lw: 2.4 });
         hpPad(g, r, 0.55, 0.3);
         for (let i = 0; i < 8; i++) { const an = i / 8 * TAU + 0.39; cel(g, '#eef3ff', circ(Math.cos(an) * r * 0.76, Math.sin(an) * r * 0.76, r * 0.07), { r: r * 0.08, hi: false, lw: 1.5, shadow: '#9aa8c8' }); }
