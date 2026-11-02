@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0d0924">
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-180_fs.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cell Serpent">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Cell Serpent</title>
@@ -2310,6 +2313,30 @@
   .treatline{text-align:center;font-size:12px;font-weight:800;color:#ffe3a8;margin:6px 0 2px}
   @media (max-height:660px){.rec{min-height:50px}}
 /* end @css:10-hub round 10 */
+/* @css:34-fullscreen */
+html,body{height:100%;height:100dvh;overscroll-behavior:none;-webkit-touch-callout:none;-webkit-text-size-adjust:100%}
+canvas#c{touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+button,.btn{touch-action:manipulation;-webkit-touch-callout:none}
+img{-webkit-touch-callout:none;-webkit-user-drag:none}
+#title>#fsBtn{right:calc(64px + env(safe-area-inset-right))}
+#fsBtn[hidden]{display:none}
+#fsBtn.on{background:rgba(57,240,255,.3)}
+#a2hsFs{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99990;width:min(340px,calc(100vw - 24px));display:flex;align-items:center;gap:10px;padding:10px 10px 10px 14px;border-radius:16px;background:#1c1548;border:2px solid #39f0ff;color:#eaf8ff;box-shadow:0 8px 24px rgba(0,0,0,.5);animation:a2in34 .4s ease-out}
+#a2hsFs .a2t{display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:1.3;flex:1;min-width:0}
+#a2hsFs .a2t b{font-size:14px;color:#ffd24a}
+#a2hsFs .a2t u{text-decoration:none;font-weight:700;color:#39f0ff}
+#a2hsFs .a2x{border:0;border-radius:12px;background:#ff5cb8;color:#1a0b2e;font-weight:800;font-size:14px;padding:10px 16px;min-height:44px;cursor:pointer}
+#a2hsFs .a2arrow{position:absolute;left:50%;bottom:-11px;width:18px;height:18px;margin-left:-9px;background:#1c1548;border-right:2px solid #39f0ff;border-bottom:2px solid #39f0ff;transform:rotate(45deg)}
+@keyframes a2in34{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
+#rotateFs{display:none;position:fixed;inset:0;z-index:100000;background:#0d0924;color:#eaf8ff;align-items:center;justify-content:center;text-align:center;font-family:inherit}
+#rotateFs>div{display:flex;flex-direction:column;align-items:center;gap:6px}
+#rotateFs i{width:34px;height:56px;border:4px solid #39f0ff;border-radius:8px;animation:rot34 2s ease-in-out infinite}
+#rotateFs b{font-size:18px;color:#ffd24a}
+#rotateFs span{font-size:13px;color:#cdd8ee}
+@keyframes rot34{0%,30%{transform:rotate(-90deg)}70%,100%{transform:rotate(0)}}
+@media (pointer:coarse) and (orientation:landscape) and (max-height:520px){#rotateFs{display:flex}}
+@media (prefers-reduced-motion:reduce){#a2hsFs,#rotateFs i{animation:none}}
+/* end @css:34-fullscreen */
 </style>
 </head>
 <body>
@@ -2331,6 +2358,7 @@
   <button class="btn" id="playBtn"><span>PLAY</span></button>
   <div class="sub" id="titleInfo"></div>
   <button class="gear" id="setBtnT" aria-label="Settings">⚙</button>
+  <button class="gear" id="fsBtn" aria-label="Full screen" hidden>⛶</button>
   <div class="row"><div class="cur b"><img data-cur="beats" alt=""><b id="tBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="tSpark">0</b></div></div>
 </section>
 
@@ -2395,6 +2423,7 @@
   <button class="tgl" data-k="music"><i class="ti">🎵</i><span>Music</span><b>ON</b></button>
   <button class="tgl" data-k="beatTick"><i class="ti">🥁</i><span>Beat tick (a click on every beat, with music)</span><b>OFF</b></button>
   <button class="tgl" data-k="pump"><i class="ti">🎚️</i><span>Music pump (tap to change)</span><b>Full</b></button>
+  <button class="tgl" data-k="fullscreen"><i class="ti">⛶</i><span>Full screen (tap PLAY to go full screen)</span><b>ON</b></button>
   <button class="tgl" data-k="vibrate"><i class="ti">📳</i><span>Vibration</span><b>ON</b></button>
   <h3 class="setgrp">SEEING THE GAME</h3>
   <button class="tgl" data-k="reduceMotion"><i class="ti">🌀</i><span>Reduce motion (no shake, calm movement)</span><b>OFF</b></button>
