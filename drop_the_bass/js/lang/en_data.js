@@ -928,7 +928,7 @@ export default {
   "TUTORIAL.hype.say": "Kills fill the HYPE bar. When it is full you pick a REMIX upgrade. Try it!",
   "TUTORIAL.merge.say": "Two matching turrets of the same level can MERGE. Drag one onto the other (or tap one, then the other).",
   "TUTORIAL.merged.say": "Level 2! Every level doubles the power. Merging is how you win.",
-  "TUTORIAL.preview.say": "Psst, want a peek at what is coming? Tap the WAVE box at the top to see the next wave.",
+  "TUTORIAL.preview.say": "Psst, want a peek at what is coming? Tap the WAVE box at the top to see the next wave, then tap anywhere to close the card.",
   "TUTORIAL.reroll.say": "Not happy with the next turret? Tap the round arrows to re-roll it. This one is free today!",
   "TUTORIAL.startwave.say": "Ready? Tap the wave button to call the first wave. Calling early earns bonus coins.",
   "WAVE_MODS.armored_parade.desc": "Every Static is a Brickwall. Small hits bounce off, so bring big hitters.",

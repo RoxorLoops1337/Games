@@ -818,7 +818,7 @@ export class Battle {
     if (s.id === 'hero') this.run.heroCd.roxor = 0;
     if (s.id === 'hero2') this.run.heroCd.jasmin = 0;
     if (s.id === 'reroll' && this.run.rerolls < 1 && !tut.flags.rerolled) this.run.rerolls = 1;   // one coin re-roll is free in the tutorial
-    if (s.id === 'preview' && this.pv.open && !tut.flags.pvOpened) { tut.flags.pvOpened = true; if (s.say2) this.tutBubble = { text: s.say2, t: 0 }; }
+    if (s.id === 'preview' && this.pv.open && !tut.flags.pvOpened) { tut.flags.pvOpened = true; }
     // skip safety: a step that cannot be done (no wave left to preview, a re-roll that is locked) or is simply ignored moves on by itself
     const stuck = (s.skip && tut.t > s.skip) || (s.id === 'preview' && !this.pv.next && !this.pv.open) || this.run.phase === 'won' || this.run.phase === 'lost';
     if (stuck) { if (this.pv.open) this.togglePreview(); this.tutNext(); return; }

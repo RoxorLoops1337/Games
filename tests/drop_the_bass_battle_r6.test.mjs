@@ -176,7 +176,7 @@ await setLang('en');
   b.tut.i = pi; b.tut.t = 0; b.tutBubble = { text: TUTORIAL[pi].say, t: 0 };
   ok(b.tutSpot().x < 300 && b.tutSpot().y < 20, 'preview step spotlights the WAVE box'); b.pv.next = r.run.nextWavePreview();
   b.pointerDown(HIT.wave.x + 5, HIT.wave.y + 5); b.update(1 / 60); ok(b.pv.open && b.tut.flags.pvOpened, 'tapping the WAVE box opens the card in the tutorial');
-  ok(b.tutBubble.text === TUTORIAL[pi].say2, 'the bubble tells the player to close it');
+  ok(/close/i.test(TUTORIAL[pi].say), 'the text tells the player to close the card');
   for (let i = 0; i < 20; i++) b.update(1 / 60); ok(b.tut.i === pi, 'does not advance while the card is open');
   b.pointerDown(270, 500); for (let i = 0; i < 60; i++) b.update(1 / 60); ok(b.tut.i === ri, 'closing the card advances to the re-roll step');
   const spot = b.tutSpot(); ok(spot.y > 850, 're-roll step spotlights the round arrows');
