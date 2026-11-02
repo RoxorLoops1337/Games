@@ -877,7 +877,7 @@ function onKill(g, s, sn) {
   addEncore(g, ENCORE_KILL);
   if (s.gold && s.goldT > 0) { g.goldPopped++; const v = coinV * GOLD_MUL; g.coins += v * g.p.coinMul * (g.coinK || 1); g.events.push({ t: 'goldpop', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)) }); }
   if (!s.isHead && s.y > LINE_Y - CLUTCH_DIST) { g.clutches++; addEncore(g, ENCORE_CLUTCH); g.events.push({ t: 'clutch', x: s.x, y: s.y }); }
-  g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin });
+  g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin, carry: s.carry });
   if (s.kind === 'bomb') {
     g.bombsPopped++;
     const R = 150;
