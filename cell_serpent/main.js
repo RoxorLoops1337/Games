@@ -603,7 +603,7 @@ function showResult() {
     if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + Math.min(3, i + 1)); if (i === 2 && st === 3 && !reduce) confetti($('result'), 30); }, reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
     const top = Object.entries(r.dmgBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => (id === 'capsule' ? 'Singing' : id === 'encore' ? 'Encore' : (WEAPONS.find(w => w.id === id) || { name: id }).name)).join(', ') || '-';
-    $('rExtra').innerHTML = `<span><i>⏱</i>Time <b>${mm}:${ss}</b></span><span><i>🎯</i>Cells <b>${r.kills}</b></span><span><i>🎵</i>Best groove <b>${Math.round(r.groove || 0)}</b></span><span><i>💣</i>Bombs <b>${r.bombs || 0}</b></span><span class="rtop"><i>🏆</i>Top <b>${top}</b></span>`;
+    $('rExtra').innerHTML = `<span><i>⏱</i>Time <b>${mm}:${ss}</b></span><span><i>🎯</i>Cells <b>${r.kills}</b></span><span><i>🎵</i>Best groove <b>${Math.round(r.groove || 0)}</b></span>${(r.qBest | 0) >= 1 && !(r.bombs | 0) ? `<span><i>🎶</i>Quartets <b>${r.quartets | 0}${r.qBest >= 2 ? ' (x' + r.qBest + ')' : ''}</b></span>` : `<span><i>💣</i>Bombs <b>${r.bombs || 0}</b></span>`}<span class="rtop"><i>🏆</i>Top <b>${top}</b></span>`;
 
     // no toast here: it used to cover the title on the result screen, and the ribbon plus the Sparkles row already say it
   }

@@ -17,6 +17,7 @@ export function drawCellFlags(ctx, s, r, t, i, glow) {
     const k = 0.5 + Math.sin(t * 4 + i) * 0.5;
     ctx.save(); ctx.globalAlpha = 0.35 + k * 0.3; ctx.strokeStyle = '#bff3ff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(s.x, s.y, r * (1.45 + k * 0.22), 0, TAU); ctx.stroke(); ctx.restore();
   }
+  if (s.gloom) glow(s.x, s.y, r * 1.9, '#6a3fd0', 0.42 + Math.sin(t * 5 + i) * 0.12);   // gloomy boss: a storm cloud sits on these cells
   if (s.drum) glow(s.x, s.y, r * 1.8, '#ff7a3d', 0.3 + Math.abs(Math.sin(t * 6 + i)) * 0.2);
   if (s.lull) glow(s.x, s.y, r * 1.8, '#b79bff', 0.3 + Math.sin(t * 3 + i) * 0.12);
   if (s.choir) glow(s.x, s.y, r * 1.9, '#ffd0ec', 0.3 + Math.sin(t * 2.4 + i) * 0.12);
@@ -67,4 +68,14 @@ export function drawCellBadge(ctx, s, r, t, i, kit) {
   else if (s.choir) { ctx.beginPath(); ctx.ellipse(x - q * 0.3, y + q * 0.55, q * 0.55, q * 0.4, -0.4, 0, TAU); ctx.fillStyle = '#ffd0ec'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x + q * 0.12, y + q * 0.4); ctx.lineTo(x + q * 0.12, y - q * 1.1); ctx.lineTo(x + q * 0.75, y - q * 0.5); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.6; ctx.stroke(); }
   else { ctx.beginPath(); ctx.arc(x, y, q * 1.05, 0.5, TAU - 0.5); ctx.arc(x + q * 0.55, y - q * 0.1, q * 0.85, TAU - 0.9, 0.9, true); ctx.closePath(); ctx.fillStyle = '#d9c8ff'; ctx.fill(); ctx.stroke(); }
   ctx.restore();
+}
+
+// Quartet streak counter (round 6): a small pill under the duo while two or more Quartets in a row are alive.
+export function drawStreak(ctx, g, t) {
+  const n = g.qStreak | 0; if (n < 2) return;
+  const p = g.p, x = p.x, y = p.y + 62;
+  ctx.save(); ctx.globalAlpha = 0.92; ctx.fillStyle = 'rgba(20,40,60,.78)'; ctx.strokeStyle = '#6fffd2'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - 44, y - 15, 88, 30, 15) : ctx.rect(x - 44, y - 15, 88, 30); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#9bffe0'; ctx.font = '900 20px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('x' + n + (n >= 5 ? ' MAX' : ''), x, y + 1); ctx.restore();
 }
