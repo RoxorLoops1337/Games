@@ -6,6 +6,7 @@ import { paintPauseGlyph, paintStatsGlyph } from './glyphs_ui.js';
 import { W, H, WEAPONS, uv, isBossStage, virusName, GOLD_TIME } from './sim.js';
 import { heartbeat } from './feel6.js';
 import { createTileMemo, createBuffChips, levelSparkle } from './hud_b11.js';
+import { cellsUnderBand, fadeStep, CLEAR_TOP, CLEAR_BOTTOM, FADE_MIN, FADE_TOP_MIN } from './hud_b13e.js';
 
 const TAU = Math.PI * 2;
 const WMAX = Object.fromEntries(WEAPONS.map(w => [w.id, w.max]));
@@ -669,8 +670,13 @@ export function createHud(env) {
     const boss = isBossStage(g.stage);
     scrim();
     ctx.save(); ctx.translate(0, T.ins.t);
-    top(g); progress(g); if (boss) bossBar(g); stats(g);
-    goldPill(g, 146 + (boss ? BOSS_DY : 0));
+    // 36-e: ghost the HUD rows while snake cells pass under them (the cells' HP numbers stay readable)
+    const fdt = Math.min(0.1, Math.max(0, S.t - (T.fadeT === undefined ? S.t : T.fadeT))); T.fadeT = S.t;
+    const under = g.phase === 'play' && cellsUnderBand(g, CLEAR_TOP + T.ins.t, CLEAR_BOTTOM + (boss ? BOSS_DY : 0) + T.ins.t);
+    T.fade = fadeStep(T.fade === undefined ? 1 : T.fade, under ? 0 : 1, fdt);
+    const fk = reduce() ? (under ? FADE_MIN : 1) : FADE_MIN + (1 - FADE_MIN) * T.fade, fkt = FADE_TOP_MIN + (1 - FADE_TOP_MIN) * (reduce() ? (under ? 0 : 1) : T.fade);
+    ctx.globalAlpha = fkt; top(g); ctx.globalAlpha = fk; progress(g); if (boss) { ctx.globalAlpha = Math.max(fk, 0.62); bossBar(g); ctx.globalAlpha = fk; } stats(g);
+    goldPill(g, 146 + (boss ? BOSS_DY : 0)); ctx.globalAlpha = 1;
     ctx.restore();
     reward8(g);
     groove(g); beatStreak(g); skills(g);
