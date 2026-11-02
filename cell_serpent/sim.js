@@ -297,6 +297,8 @@ export const PASSIVES = [
   { id: 'cres', name: 'Crescendo', max: 4, w: 0.5, min: 1, minStage: 26, vals: [4, 6, 8, 10], cap: 10, fmt: v => 'Each Quartet in a row makes your notes hit ' + v + '% harder (up to 5 in a row)', desc: 'Each Quartet in a row makes your notes hit 4% harder, up to 5 in a row', apply: () => {} },
   { id: 'fan', name: 'Fan Club', max: 4, w: 0.5, min: 1, minStage: 20, vals: [20, 35, 50, 75], cap: 75, fmt: v => 'Groove is worth ' + v + '% more damage per point', desc: 'Groove is worth 20% more damage per point', apply: () => {} },
   { id: 'brg', name: 'Bridge', max: 4, w: 0.5, min: 1, minStage: 34, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Bell cells ring ' + v + '% harder and each ring adds 3 Groove with Fan Club', desc: 'Bell cells ring 25% harder', apply: () => {} },
+  { id: 'brk', name: 'Ice Breaker', skin: 'frosty', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Frost patches shield ' + v + '% less', desc: 'Frost patches shield 25% less', apply: () => {} },
+  { id: 'hbk', name: 'Heart Mender', skin: 'love', max: 4, w: 0.6, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Heart pulses heal ' + v + '% less', desc: 'Heart pulses heal 25% less', apply: () => {} },
   { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, minStage: 4, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
@@ -897,7 +899,7 @@ function traitTick(g, sn, dt) {
   const segs = sn.segs, h = segs[0];
   if (k === 'love') {
     sn.loveT = (sn.loveT === undefined ? LOVE_EVERY : sn.loveT) - dt;
-    if (sn.loveT <= 0) { sn.loveT = LOVE_EVERY; let n = 0; for (let i = 1; i < segs.length && n < LOVE_CELLS; i++) if (segs[i].hp > 0) { segs[i].hp = Math.min(segs[i].max, segs[i].hp + segs[i].max * LOVE_HEAL); n++; } g.events.push({ t: 'trait', k, x: h.x, y: h.y }); }
+    if (sn.loveT <= 0) { sn.loveT = LOVE_EVERY; let n = 0; for (let i = 1; i < segs.length && n < LOVE_CELLS; i++) if (segs[i].hp > 0) { segs[i].hp = Math.min(segs[i].max, segs[i].hp + segs[i].max * LOVE_HEAL * (1 - Math.min(1, uv(g, 'hbk') / 100))); n++; } g.events.push({ t: 'trait', k, x: h.x, y: h.y }); }
   } else if (k === 'rust') {
     const ph = g.t % CREAK_EVERY, on = ph < CREAK_STALL;
     if (on && !sn.creak) g.events.push({ t: 'trait', k, x: h.x, y: h.y });
@@ -1017,7 +1019,7 @@ const damageSegAs = (src, g, ...a) => { g.src = src; damageSeg(g, ...a); g.src =
 function damageSeg(g, s, dmg, crit, x, y) {
   if (s.hp <= 0 || s.shield || s.wave) return;
   const srcId = g.src || 'capsule'; g.dmgBy[srcId] = (g.dmgBy[srcId] || 0) + Math.min(dmg, s.hp);
-  if (s.warded) dmg *= WARD_CUT + (1 - WARD_CUT) * uv(g, 'fork') / 100;
+  if (s.warded) dmg *= WARD_CUT + (1 - WARD_CUT) * (uv(g, 'fork') + (s.frost ? uv(g, 'brk') : 0)) / 100;
   s.hp -= dmg; s.flash = 0.12;
   g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s, src: srcId });
 }
@@ -1136,7 +1138,7 @@ function rollChoices(g) {
     }
   }
   if (!early || stg < 3) {   // the first two picks are the capsule's, except in the first stages where only a few kinds exist yet
-    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max && uv(g, u.id) < u.cap && !(u.minStage && stg < u.minStage)) pool.push({ id: u.id, kind: 'passive', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w }); }
+    for (const u of PASSIVES) { const l = g.ups[u.id] || 0; if (l < u.max && uv(g, u.id) < u.cap && !(u.minStage && stg < u.minStage) && !(u.skin && !l && u.skin !== g.skin)) pool.push({ id: u.id, kind: 'passive', name: u.name, u, lvl: l, max: u.max, isNew: !l, w: u.w }); }
   }
   const out = [];
   while (out.length < 3 && pool.length) {

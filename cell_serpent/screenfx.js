@@ -7,6 +7,7 @@ const easeOut = t => 1 - (1 - t) * (1 - t) * (1 - t);
 const backOut = t => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
 import { createFeel6 } from './feel6.js';
 import { cardPose, cardFlair } from './card_flair.js';
+import { hasTrait, drawTraitIcon, TRAIT_LABEL } from './trait_ui.js';
 const CONFETTI = ['#ff7eb6', '#ffd84d', '#6fe3ff', '#9dff6d', '#c9a0ff', '#ffffff'];
 
 export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst }) {
@@ -66,7 +67,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       case 'stage': {
         const boss = !!e.boss;
         F.mileDone = 0; F.mile = null; F.go = null; F.lastBoss = boss; F.p2 = null; F.p2Done = false; F.cc = null; F.perf = 0;
-        F.card = { n: e.n, boss, name: e.name || '', mod: e.mod || '', skin: g.skin, t: 0, dur: boss ? 2.9 : 2.3, slammed: false };
+        F.card = { n: e.n, boss, name: e.name || '', mod: e.mod || '', skin: g.skin, t: 0, dur: boss ? 2.9 : 2.3, slammed: false, trait: hasTrait(g.skin, e.n, boss, g.mode) ? g.skin : '' };
         F.deadT = 0;
         break;
       }
@@ -449,6 +450,11 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       text('STAGE ' + c.n, tx, cy - 62, 36, '#9fb4ff', '#0b1020', 'left');
       { let fs = c.name.length > 11 ? 56 : 68; ctx.font = `800 ${fs}px system-ui, -apple-system, "Segoe UI", sans-serif`; const room = W - 24 - 250, wide = ctx.measureText(c.name).width; if (wide > room) fs = Math.max(30, Math.floor(fs * room / wide));   // long serpent names shrink to fit the band
         text(c.name, tx, cy - 8, fs, '#ffffff', '#0b1020', 'left'); }
+      if (c.trait) {   // batch 8: this species' late trait, icon plus name, top right of the band
+        const rk = calm() ? 1 : backOut(clamp((t - 0.45) / 0.35, 0, 1));
+        ctx.save(); ctx.globalAlpha *= clamp(rk, 0, 1); drawTraitIcon(ctx, c.trait, W - 52, cy - 70, 22 * rk, col, t);
+        text(TRAIT_LABEL[c.trait], W - 82, cy - 68, 20, '#e8ecff', '#0b1020', 'right'); ctx.restore();
+      }
       if (c.mod) { const mk = calm() ? 1 : clamp((t - 0.5) / 0.3, 0, 1); ctx.globalAlpha *= mk; text(c.mod, tx, cy + 64, 30, '#ffd24a', '#0b1020', 'left'); }
       ctx.restore();
     }
