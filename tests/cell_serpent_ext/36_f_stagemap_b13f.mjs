@@ -50,8 +50,9 @@ if (chromium) {
       ok(await p.evaluate(() => !!document.querySelector('.ovpv .pvface') && document.querySelector('.ovpv').textContent.includes('STAGE 1')), `${w}: the sheet opens with the current stage previewed`);
       await p.evaluate(() => document.querySelector('.ovc[data-n="6"]').click());
       ok(await p.evaluate(() => document.querySelector('.ovpv').textContent.includes('STAGE 6') && document.querySelector('.ovc.sel').dataset.n === '6' && !!document.querySelector('.ovbg')), `${w}: a tap previews without jumping`);
+      await p.waitForFunction(h => { const r = document.querySelector('.ovpv .pvgo').getBoundingClientRect(); return r.bottom <= h; }, h, { timeout: 4000 }).catch(() => {});   // the sheet is still sliding in right after the open
       const box = await p.evaluate(() => { const r = document.querySelector('.ovpv .pvgo').getBoundingClientRect(); return { w: r.width, h: r.height, bottom: r.bottom }; });
-      ok(box.w >= 44 && box.h >= 44 && box.bottom <= h, `${w}: GO is a big tap target and on screen`);
+      ok(box.w >= 44 && box.h >= 44 && box.bottom <= h, `${w}: GO is a big tap target and on screen ${JSON.stringify(box)}`);
       await p.evaluate(() => document.querySelector('.ovc.lock') && document.querySelector('.ovc.lock').click());
       ok(await p.evaluate(() => document.querySelector('.ovc.sel').dataset.n === '6'), `${w}: a locked stage does not select`);
       await p.evaluate(() => document.querySelector('.ovpv .pvgo').click());
