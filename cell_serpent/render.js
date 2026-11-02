@@ -95,7 +95,7 @@ export function createRenderer(canvas, art, kit) {
     if (dn >= (OPT.lowQuality ? 8 : 14) && !crit) return;   // cap: busy fights show fewer numbers, crits always show
     if (S.floats.length >= 60) return;
     const size = crit ? 30 : Math.min(24, 14 + Math.log2(e.d + 1) * 1.6);
-    S.floats.push({ x: e.x + (Math.random() - 0.5) * 24, y: e.y - 14, str: num(e.d), acc: e.d, key, col: crit ? '#ffe14a' : '#ffffff', size, vy: crit ? -85 : -60, life: crit ? 0.8 : 0.6, max: crit ? 0.8 : 0.6, pop: 1 });
+    S.floats.push({ x: e.x + (Math.random() - 0.5) * 24, y: e.y - 14, str: num(e.d), acc: e.d, key, col: crit ? '#ffe14a' : (HJ && HJ.tint(e.src)) || '#ffffff', size, vy: crit ? -85 : -60, life: crit ? 0.8 : 0.6, max: crit ? 0.8 : 0.6, pop: 1 });
   }
   let HJ = null;   // 04-hit-juice: orbs, smoke, muzzle flash, note trails (hitjuice.js)
   let lastDt = 0.016;
@@ -467,7 +467,7 @@ export function createRenderer(canvas, art, kit) {
       ctx.save(); ctx.translate(x, y); ctx.scale(Math.max(0.3, Math.abs(Math.cos(c.t * 14))), 1); blit(kit && kit.SPR.pickup('coin'), 0, 0, 40 - 14 * k); ctx.restore();
     }
   }
-  function drawFx(dt) {
+  function drawFx(dt, g) {
     for (let i = S.rings.length - 1; i >= 0; i--) {
       const r = S.rings[i]; r.life -= dt; if (r.life <= 0) { S.rings.splice(i, 1); continue; }
       const k = 1 - r.life / r.max;
@@ -483,7 +483,7 @@ export function createRenderer(canvas, art, kit) {
     }
     ctx.globalAlpha = 1;
     drawProps(dt);
-    HJ.draw(dt);
+    HJ.draw(dt, g);
     for (let i = S.floats.length - 1; i >= 0; i--) {
       const f = S.floats[i]; f.life -= dt; if (f.life <= 0) { S.floats.splice(i, 1); continue; }
       f.y += f.vy * dt; ctx.globalAlpha = Math.min(1, f.life / 0.3);
@@ -547,7 +547,7 @@ export function createRenderer(canvas, art, kit) {
     drawWeapons(g);
     if (g.phase !== 'dead') drawPlayer(g);
     drawBullets(g);
-    drawFx(dt);
+    drawFx(dt, g);
     ctx.restore();
     if (S.warn > 0) { S.warn -= dt; text('SURGE!', W / 2, 170 + (hud ? hud.dy(g) : 0) + (OPT.reduceMotion ? 0 : Math.sin(S.t * 40) * 4), 54 + (OPT.reduceMotion ? 0 : Math.sin(S.t * 30) * 4), '#ff5a78'); }
     FX.drawScreen(g);

@@ -79,4 +79,20 @@ if (seg) { seg.hp = 1; sim.hitCell && sim.hitCell(g2, seg, 5); }
   Rb.onEvent({ t: 'kill', x: 100, y: 300, r: 30, kind: 'normal', head: true, boss: true, skin: 'love' }, gb);
   assert.equal(Rb.timeScale(), 1, 'reduce motion: no hit-stop');
 }
+// round 3: per-weapon impact marks, kill starbursts, damage tints, the dash telegraph
+{
+  const R2 = createRenderer({ width: 420, height: 860, getContext: stubCtx }, null, null);
+  const g2 = sim.createGame({ seed: 9, stage: 3 });
+  for (const src of ['capsule', 'swab', 'daggers', 'tower', 'stick', 'needles', 'satellite', 'maw']) R2.onEvent({ t: 'hit', x: 100, y: 300, d: 5, crit: false, s: {}, src }, g2);
+  R2.onEvent({ t: 'kill', x: 100, y: 300, r: 30, kind: 'normal', skin: 'love', head: true }, g2);
+  assert.ok(R2.state.floats.some(f => f.col === '#ffd0ea'), 'swab damage numbers are tinted pink');
+  const sn = g2.snakes[0]; sn.surge = 'warn'; sn.surgeT = 0.3; sn.segs[0].y = 200;
+  for (let i = 0; i < 4; i++) R2.draw(g2, null, 1 / 60);
+  sn.surge = 'go';
+  for (let i = 0; i < 4; i++) R2.draw(g2, null, 1 / 60);
+  const g3 = sim.createGame({ seed: 3, stage: 1 });
+  for (let i = 0; i < 900 && !g3.events.some(e => e.t === 'hit'); i++) sim.step(g3, 1 / 60, { mx: 0 });
+  const h = g3.events.find(e => e.t === 'hit');
+  if (h) assert.equal(typeof h.src, 'string', 'hit events carry their source');
+}
 console.log('04_hit_juice ok');
