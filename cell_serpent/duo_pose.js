@@ -15,22 +15,25 @@ function wrapOf(im) {
 export function hatPlacements(outfit) { return outfit ? (outfit.id === 'sun' ? EYES : HEADS) : []; }
 
 // kit: the art kit (pet sprites), hatURL(id): data url of the hat icon, mood: 'win' | 'idle' | 'lose'
-export function dressDuo(im, { outfit, hatURL = hatIcon, pets, kit, mood = 'idle' }) {
+export function dressDuo(im, { outfit, hatURL = hatIcon, pets, kit, mood = 'idle', joy }) {
   if (!im || !im.parentNode) return null;
   const w = wrapOf(im);
   if (!w.dataset.tap) { w.dataset.tap = '1'; w.addEventListener('pointerdown', () => tapCheer(w)); }
-  for (const el of [...w.querySelectorAll('.dhat,.dpet')]) el.remove();
+  for (const el of [...w.querySelectorAll('.dhat,.dpet,.dheart')]) el.remove();
   w.dataset.mood = mood;
   const u = outfit && hatURL ? hatURL('hat_' + outfit.id) : '';
   if (u) hatPlacements(outfit).forEach((h, i) => { const e = document.createElement('img'); e.className = 'dhat'; e.alt = ''; e.src = u; e.style.cssText = `left:${h.x}%;top:${h.y}%;width:${h.w}%;--d:${i * 0.18}s`; w.appendChild(e); });
   if (mood === 'win' && kit) {
     (pets || []).slice(0, 2).forEach((id, i) => {
       const spr = kit.SPR.pet(id, 3); if (!spr || !spr.c || !spr.c.toDataURL) return;
-      const e = document.createElement('img'); e.className = 'dpet ' + (i ? 'r' : 'l'); e.alt = ''; e.src = spr.c.toDataURL(); e.style.setProperty('--d', i * 0.2 + 's'); w.appendChild(e);
+      const e = document.createElement('img'); e.className = 'dpet ' + (i ? 'r' : 'l') + ' dp-' + id; e.alt = ''; e.src = spr.c.toDataURL(); e.style.setProperty('--d', i * 0.2 + 's'); w.appendChild(e);
+      for (let h = 0; h < joyHearts(joy && joy[id]); h++) { const hh = document.createElement('i'); hh.className = 'dheart ' + (i ? 'r' : 'l'); hh.textContent = '\u2665'; hh.style.cssText = `--d:${h * 0.45 + i * 0.2}s;--x:${(h - 1) * 9}px`; w.appendChild(hh); }   // joy hearts float off a happy pet
     });
   }
   return w;
 }
+// how many hearts a pet sends up on the result screen: none while shy, 1 content, 2 happy, 3 overjoyed
+export const joyHearts = j => j >= 100 ? 3 : j >= 66 ? 2 : j >= 33 ? 1 : 0;
 export const wornOutfit = save => OUTFITS.find(o => o.id === (save.outfits && save.outfits.worn)) || null;
 
 // tapping the duo makes them hop and sends a few notes flying
