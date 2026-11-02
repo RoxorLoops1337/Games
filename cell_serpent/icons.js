@@ -2,10 +2,13 @@
 // In a headless environment without a document every icon is an empty string.
 const cache = {};
 const S = 64;
+// baked at the screen density (1 to 3) so icons stay crisp on 3x phones; the art is drawn in a 64 unit box
+const dprK = () => Math.min(3, Math.max(1, Math.ceil((typeof window !== 'undefined' && window.devicePixelRatio) || 1)));
 function mk(draw) {
   if (typeof document === 'undefined') return '';
-  const c = document.createElement('canvas'); c.width = c.height = S;
+  const k = dprK(), c = document.createElement('canvas'); c.width = c.height = S * k;
   const g = c.getContext('2d'); if (!g) return '';
+  g.scale(k, k);
   g.lineJoin = 'round'; g.lineCap = 'round';
   draw(g); return c.toDataURL();
 }
