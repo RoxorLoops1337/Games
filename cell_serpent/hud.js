@@ -672,8 +672,8 @@ export function createHud(env) {
     ctx.save(); ctx.translate(0, T.ins.t);
     // 36-e: ghost the HUD rows while snake cells pass under them (the cells' HP numbers stay readable)
     const fdt = Math.min(0.1, Math.max(0, S.t - (T.fadeT === undefined ? S.t : T.fadeT))); T.fadeT = S.t;
-    const under = g.phase === 'play' && cellsUnderBand(g, CLEAR_TOP + T.ins.t, CLEAR_BOTTOM + (boss ? BOSS_DY : 0) + T.ins.t);
-    T.fade = fadeStep(T.fade === undefined ? 1 : T.fade, under ? 0 : 1, fdt);
+    const under = g.phase === 'play' && !g.noGhost && cellsUnderBand(g, CLEAR_TOP + T.ins.t, CLEAR_BOTTOM + (boss ? BOSS_DY : 0) + T.ins.t);
+    T.fade = g.noGhost ? 1 : fadeStep(T.fade === undefined ? 1 : T.fade, under ? 0 : 1, fdt);   // g.noGhost: test hook, the audits want the full HUD
     const fk = reduce() ? (under ? FADE_MIN : 1) : FADE_MIN + (1 - FADE_MIN) * T.fade, fkt = FADE_TOP_MIN + (1 - FADE_TOP_MIN) * (reduce() ? (under ? 0 : 1) : T.fade);
     ctx.globalAlpha = fkt; top(g); ctx.globalAlpha = fk; progress(g); if (boss) { ctx.globalAlpha = Math.max(fk, 0.62); bossBar(g); ctx.globalAlpha = fk; } stats(g);
     goldPill(g, 146 + (boss ? BOSS_DY : 0)); ctx.globalAlpha = 1;
