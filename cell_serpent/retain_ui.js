@@ -5,6 +5,7 @@ import {
   achievementCount, popAchievements, rewardText, spinStreak, spinFrame, hasShield, dailyGoals, goalProgress,
 } from './sim.js';
 import { landStamp } from './keep_ui.js';
+import { tokenRowHTML } from './keep10.js';
 import { questStreak, questStreakLine } from './chase.js';
 
 export function createRetainUI(c, openPanel, sec, openTrophies) {
@@ -73,7 +74,7 @@ export function createRetainUI(c, openPanel, sec, openTrophies) {
     const nxt = se.miles.find(m => !m.got), left = nxt ? nxt.at - se.stamps : 0;
     const flags = se.miles.map(m => `<i class="sflag${m.got ? ' got' : ''}" style="left:${Math.round(m.at / SEASON_DAYS * 100)}%">${m.claimed ? '✔' : '🎁'}</i>`).join('');
     head.innerHTML = `<div class="sealine"><b>Day ${se.dayNo} of ${SEASON_DAYS}</b><span>${se.daysLeft ? se.daysLeft + ' days left' : 'Last day!'}</span></div><div class="searail"><div class="seabar"><i style="width:${Math.round(se.stamps / SEASON_DAYS * 100)}%"></i></div>${flags}</div>` +
-      `<div class="seastat"><span class="${se.stampedToday ? 'ok' : 'todo'}">${se.stampedToday ? '⭐ Today\'s stamp is yours' : '🐾 Play a run to stamp today'}</span><span>${nxt ? 'Next gift in ' + left + (left === 1 ? ' stamp' : ' stamps') : 'Every gift unlocked!'}</span></div>` + (se.note ? `<div class="seanote">${esc(se.note)}</div>` : '');
+      `<div class="seastat"><span class="${se.stampedToday ? 'ok' : 'todo'}">${se.stampedToday ? '⭐ Today\'s stamp is yours' : '🐾 Play a run to stamp today'}</span><span>${nxt ? 'Next gift in ' + left + (left === 1 ? ' stamp' : ' stamps') : 'Every gift unlocked!'}</span></div>` + tokenRowHTML(s) + (se.note ? `<div class="seanote">${esc(se.note)}</div>` : '');
     body.appendChild(head);
     if (se.note) { clearSeasonNote(s); c.persist(); }
     const grid = document.createElement('div'); grid.className = 'seagrid';

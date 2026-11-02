@@ -1590,7 +1590,7 @@ export function botInput(g) {
 // ---------------------------------------------------------------- retention loops (all optional gifts, nothing here gates progress)
 // save.addict: sp (kills per snake species), sk (damage points per skill), claimed (mastery + collection rewards),
 // spin (last lucky spin day), week (weekly challenge), seen (last visit, ms) for the comeback gift.
-export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1, n: 0, shield: 0 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0, q: { day: 0, p: [0, 0, 0], chest: 0 }, season: { key: 0, n: 0, last: 0, claimed: {}, note: '' }, ann: {}, annInit: 0, qs: { last: 0, n: 0, b: 0 } });
+export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1, n: 0, shield: 0 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0, q: { day: 0, p: [0, 0, 0], chest: 0 }, season: { key: 0, n: 0, last: 0, claimed: {}, note: '' }, ann: {}, annInit: 0, qs: { last: 0, n: 0, b: 0 }, tok: 0, wb: {} });
 export function sanitizeAddict(raw) {
   const a = addictDefault(), num = (v, d = 0) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : d);
   for (const k of SKINS) a.sp[k] = num(raw && raw.sp && raw.sp[k]);
@@ -1604,11 +1604,14 @@ export function sanitizeAddict(raw) {
   if (raw.season && typeof raw.season === 'object') { const r = raw.season; a.season = { key: num(r.key), n: Math.min(SEASON_DAYS, num(r.n)), last: num(r.last), claimed: {}, note: typeof r.note === 'string' ? r.note.replace(/[^A-Za-z0-9 +,.!:]/g, '').slice(0, 80) : '' }; for (let i = 0; i < SEASON_MILES.length; i++) if (r.claimed && r.claimed[i]) a.season.claimed[i] = 1; }
   if (raw.ann && typeof raw.ann === 'object') for (const t of TROPHIES) if (raw.ann[t.id]) a.ann[t.id] = 1;
   a.annInit = raw.annInit ? 1 : 0;
+  a.tok = Math.min(TOKEN_MAX, num(raw.tok));
+  if (raw.wb && typeof raw.wb === 'object') for (const d of WEEK_DEFS) { const n = Math.min(99, num(raw.wb[d.id])); if (n) a.wb[d.id] = n; }
   if (raw.qs && typeof raw.qs === 'object') a.qs = { last: num(raw.qs.last), n: Math.min(9999, num(raw.qs.n)), b: Math.min(9, num(raw.qs.b)) };
   return a;
 }
 export function grantReward(save, rw) {
   save.beats += rw.beats || 0; save.sparkles += rw.sparkles || 0; save.eggs += rw.eggs || 0;
+  if (rw.tok) save.addict.tok = Math.min(TOKEN_MAX, (save.addict.tok || 0) + rw.tok);
   if (rw.energy) addEnergy(save, rw.energy);
   if (rw.frag) for (const id of Object.keys(rw.frag)) if (save.pets[id]) save.pets[id].frag += rw.frag[id];
 }
@@ -1618,6 +1621,7 @@ export function rewardText(rw) {
   if (rw.sparkles) t.push(rw.sparkles + ' Sparkles');
   if (rw.eggs) t.push(rw.eggs + (rw.eggs > 1 ? ' Eggs' : ' Egg'));
   if (rw.energy) t.push(rw.energy + ' Voice');
+  if (rw.tok) t.push(rw.tok + ' Streak Token');
   if (rw.frag) for (const id of Object.keys(rw.frag)) t.push(rw.frag[id] + ' ' + PET[id].name + ' fragments');
   return t.join(' + ');
 }
@@ -1655,7 +1659,14 @@ export function weekChallenge(day) {
 }
 export function ensureWeek(save, day) { const k = weekKey(day); if (save.addict.week.key !== k) save.addict.week = { key: k, prog: 0, claimed: 0 }; return save.addict.week; }
 export const weekReady = (save, day) => { const w = ensureWeek(save, day); return !w.claimed && w.prog >= weekChallenge(day).target; };
-export function claimWeek(save, day) { if (!weekReady(save, day)) return false; save.addict.week.claimed = 1; grantReward(save, WEEK_REWARD); return true; }
+export function claimWeek(save, day) { if (!weekReady(save, day)) return false; save.addict.week.claimed = 1; grantReward(save, WEEK_REWARD); collectWeekBadge(save, weekChallenge(day).id); return true; }
+// the weekly challenge also pays a collectible badge (one kind per challenge, counted); all six together pay a one-time bonus
+export const WEEK_ALL_BONUS = { sparkles: 30, eggs: 1 };
+export function collectWeekBadge(save, id) {
+  const a = save.addict; a.wb[id] = Math.min(99, (a.wb[id] || 0) + 1);
+  if (!a.claimed['wb:all'] && WEEK_DEFS.every(d => a.wb[d.id] > 0)) { a.claimed['wb:all'] = 1; grantReward(save, WEEK_ALL_BONUS); return true; }
+  return false;
+}
 // Called once per finished run, after applyResult.
 export function recordAddictRun(save, day, r) {
   const a = save.addict;
@@ -1679,22 +1690,24 @@ export function spinPrize(day) {
   for (; i < SPIN_PRIZES.length - 1; i++) { r -= SPIN_PRIZES[i].w; if (r <= 0) break; }
   return i;
 }
+export const TOKEN_MAX = 3;   // Streak Tokens (from Season gifts and long comebacks): each forgives one missed day for the spin and chest streaks
 export const SHIELD_AT = [7, 14];   // spin days that gift a streak shield (one forgiven missed day)
 export const spinReady = (save, day) => save.addict.spin.day !== day;
 export function doSpin(save, day) {
   if (!spinReady(save, day)) return null;
-  const i = spinPrize(day), sp = save.addict.spin, kept = sp.day === day - 2 && sp.shield && (sp.n || 0) > 0;   // a streak shield forgives one missed day
-  const n = sp.day === day - 1 || kept ? (sp.n || 0) + 1 : 1; let shield = kept ? 0 : sp.shield ? 1 : 0, gift = false;
+  const i = spinPrize(day), sp = save.addict.spin, miss = sp.day === day - 2 && (sp.n || 0) > 0, useSh = miss && !!sp.shield, useTok = miss && !sp.shield && save.addict.tok > 0, kept = useSh || useTok;   // a streak shield (else a Streak Token) forgives one missed day
+  if (useTok) save.addict.tok--;
+  const n = sp.day === day - 1 || kept ? (sp.n || 0) + 1 : 1; let shield = useSh ? 0 : sp.shield ? 1 : 0, gift = false;
   if (SHIELD_AT.includes(n) && !shield) { shield = 1; gift = true; }
   save.addict.spin = { day, prize: i, n, shield }; grantReward(save, SPIN_PRIZES[i].reward);
-  return { index: i, prize: SPIN_PRIZES[i], gift, saved: kept };
+  return { index: i, prize: SPIN_PRIZES[i], gift, saved: kept, byToken: useTok };
 }
 // ---- comeback gift: three days away or more, never expires, never nags
 export const COMEBACK_DAYS = 3;
 export function comebackGift(save, now) {
   const seen = save.addict.seen; if (!seen) return null;
   const days = Math.floor((now - seen) / 86400000); if (days < COMEBACK_DAYS) return null;
-  const reward = days >= 14 ? { sparkles: 30, energy: 32, eggs: 2, beats: 800 } : days >= 7 ? { beats: 400, energy: 20, eggs: 1 } : { beats: 150, energy: 10 };
+  const reward = days >= 14 ? { sparkles: 30, energy: 32, eggs: 2, beats: 800, tok: 1 } : days >= 7 ? { beats: 400, energy: 20, eggs: 1, tok: 1 } : { beats: 150, energy: 10 };
   return { days, reward };
 }
 export function claimComeback(save, now) { const g = comebackGift(save, now); if (!g) return null; grantReward(save, g.reward); save.addict.seen = now; if (save.streak.n < 2) save.streak = { last: save.streak.last, n: 2 }; return g; }
@@ -1786,7 +1799,7 @@ export const SPIN_FRAMES = [
   { at: 14, name: 'Golden wheel', color: '#ffe26a', glow: 22, ptr: '🎵', burst: 28 },
   { at: 30, name: 'Rainbow wheel', color: '#ff7eb6', glow: 30, ptr: '🌈', burst: 40 },
 ];
-export function spinStreak(save, day) { const sp = save.addict.spin; return sp.day === day || sp.day === day - 1 || (sp.day === day - 2 && sp.shield) ? sp.n || 0 : 0; }
+export function spinStreak(save, day) { const sp = save.addict.spin; return sp.day === day || sp.day === day - 1 || (sp.day === day - 2 && (sp.shield || save.addict.tok > 0)) ? sp.n || 0 : 0; }
 export const hasShield = save => !!save.addict.spin.shield;
 export function spinFrame(n) { let f = SPIN_FRAMES[0]; for (const x of SPIN_FRAMES) if (n >= x.at) f = x; const nx = SPIN_FRAMES.find(x => x.at > n) || null; return { ...f, next: nx ? nx.at : 0, nextName: nx ? nx.name : '' }; }
 // Daily Quests: three short quests that rotate each day; finish all three to open the chest. No energy, no timers.
@@ -1821,12 +1834,13 @@ export function claimQuestChest(save, day) { const st = questState(save, day); i
 // Chest streak: open the daily quest chest on consecutive days for small extra gifts. A missed day only means a fresh start.
 export const QS_BONUS = [{ at: 3, reward: { beats: 100 } }, { at: 7, reward: { sparkles: 5 } }, { at: 14, reward: { eggs: 1 } }, { at: 30, reward: { sparkles: 20 } }];
 function bumpQuestStreak(save, day) {
-  const q = save.addict.qs; q.n = q.last === day ? q.n : q.last === day - 1 ? q.n + 1 : 1; q.last = day; q.b = 0;
+  const q = save.addict.qs, tokOk = q.last === day - 2 && q.n > 0 && save.addict.tok > 0; if (tokOk) save.addict.tok--;   // a Streak Token forgives one missed day
+  q.n = q.last === day ? q.n : q.last === day - 1 || tokOk ? q.n + 1 : 1; q.last = day; q.b = 0;
   const i = QS_BONUS.findIndex(m => m.at === q.n); if (i >= 0) { grantReward(save, QS_BONUS[i].reward); q.b = i + 1; }
 }
 // Season: 30 calendar days, one stamp for every day you finish a run, free gifts at milestones. Leftover gifts are paid out when a season ends.
 export const SEASON_DAYS = 30;
-export const SEASON_MILES = [{ at: 3, reward: { beats: 150 } }, { at: 7, reward: { eggs: 1 } }, { at: 12, reward: { sparkles: 10 } }, { at: 18, reward: { beats: 500, eggs: 1 } }, { at: 24, reward: { sparkles: 25 } }, { at: 28, reward: { sparkles: 50, eggs: 2 } }];
+export const SEASON_MILES = [{ at: 3, reward: { beats: 150 } }, { at: 7, reward: { eggs: 1 } }, { at: 12, reward: { sparkles: 10, tok: 1 } }, { at: 18, reward: { beats: 500, eggs: 1 } }, { at: 24, reward: { sparkles: 25, tok: 1 } }, { at: 28, reward: { sparkles: 50, eggs: 2 } }];
 export const seasonKey = day => Math.floor((day | 0) / SEASON_DAYS);
 export function ensureSeason(save, day) {
   const k = seasonKey(day), s = save.addict.season;
