@@ -24,6 +24,7 @@ import { drawDuoLife } from './duo_idle.js';
 import { glanceEdge } from './audio_b11b.js';
 import { createReact, reactEvent, barkDue, barkU, barkDraw, koPose, starAt, revivePose, glance, pouncePose, clawDraw } from './duo_react10.js';
 import { createB11, b11Event, pickPose, ringStar, weaponPose, lookUp, WEAPON_SPR, BOSS_TIER } from './duo_b11.js';
+import { createAim, aimPose, petSlot, eyeCode, lookMood, bakeMic, MIC_SIZE, micArcs } from './duo_aim_b12h.js';
 import { newLeash, petFollow, scareEdge, tuckMood, SCARE_CALL, SCARE_COL, createDust, dustStep, dustDraw } from './duo_life9.js';
 import { createBoltLayer, boltPose, paintBolt } from './bolts_fx.js';
 
@@ -417,7 +418,7 @@ export function createRenderer(canvas, art, kit) {
   }
 
   // 02-animal-art: pets bob, blink, hop when the duo sings and look alert when a snake head is near
-  const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }], duoDust = createDust(), R10 = createReact(), B11 = createB11(), RING11 = { x: 0, y: 0, s: 1, a: 1 }, DUO11 = { y: 0, rot: 0, sq: 1, arms: false }, STAR10 = { x: 0, y: 0, front: false, s: 1 };   // r9: springy pets and dust; r10: run end, revive, glance, pounce, bark
+  const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }], duoDust = createDust(), R10 = createReact(), B11 = createB11(), RING11 = { x: 0, y: 0, s: 1, a: 1 }, DUO11 = { y: 0, rot: 0, sq: 1, arms: false }, STAR10 = { x: 0, y: 0, front: false, s: 1 }, AIM12 = createAim(), SLOT12 = { x: 0, y: 0 };   // r9: springy pets and dust; r10: run end, revive, glance, pounce, bark
   const CH = createCheer(); let cheerHit = false;   // 02-animal-art r4: pets cheer on kill streaks
   // 02-animal-art: fire reactions (kitten swats a paw, puppy wags its tail) and idle emotes (turtle Zzz, lamb hums, piglet hearts)
   function petExtras(id, st, px, py, s2, i) {
@@ -484,7 +485,10 @@ export function createRenderer(canvas, art, kit) {
       const bop = !OPT.reduceMotion && g.phase === 'play' && (g.groove || 0) >= 6 ? Math.pow(1 - beatPhase(g), 4) * (g.groove >= 10 ? 9 : 5) : 0;   // groove: the pets bop on the beat
       const ch = OPT.reduceMotion ? null : CH.pet(i, i ? 1 : -1, id);
       const s2 = i ? 1 : -1, ph = S.t * 6 + i * 2, idle = Math.abs(Math.sin(ph)) * (scared ? 3 : 8) * (ch ? 0.3 : 1), hopY = Math.sin(st.hop * Math.PI) * 14 + (ch ? ch.y : 0) + bop - slumpK() * 9;
-      const lf = st.leash || (st.leash = newLeash()), px = OPT.reduceMotion ? p.x + s2 * 92 : petFollow(lf, p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6, S.t).x, base = p.y + 8;   // r9: the pets trot after the duo on a springy leash
+      const lf = st.leash || (st.leash = newLeash());
+      let tx = p.x + s2 * 92 + (OPT.reduceMotion ? 0 : Math.sin(S.t * 1.7 + i) * 6), oy = 0;   // b12h: in circle stages the pets keep to their side but slide off the aim line
+      if (g.ring) { const sl = petSlot(SLOT12, s2, p.aim, OPT.reduceMotion ? 0 : S.t, i); tx = p.x + sl.x; oy = sl.y - 8; if (!OPT.reduceMotion) oy = petFollow(st.ly || (st.ly = newLeash()), oy, S.t).x; }
+      const px = OPT.reduceMotion ? tx : petFollow(lf, tx, S.t).x, base = p.y + 8 + oy;   // r9: the pets trot after the duo on a springy leash
       const calls = scareEdge(st, scared, S.t); if (calls && OPT.onPetCall) OPT.onPetCall(id);   // r10: the pet's own voice
       if (calls && !OPT.reduceMotion) { st.hop = 1; addFloat(px, base - 62, SCARE_CALL[id] || '!', SCARE_COL[id] || '#fff', 20, -34); }   // r9: each pet calls out when a head gets close
       const gl = OPT.reduceMotion || S.ko ? 0 : glance(st, px, nearX, near, lastDt); if (glanceEdge(st, gl) && OPT.onPetGlance) OPT.onPetGlance(id);   // r11
@@ -493,19 +497,19 @@ export function createRenderer(canvas, art, kit) {
       const blink = (S.t * 0.8 + i * 1.7) % 3.1 < 0.13;
       const sl = slumpK(), tk = OPT.reduceMotion || ch || scared || sl > 0.05 || st.hop > 0.1 ? null : petTrick(id, i), mood = sl > 0.2 || tuckMood(id, scared) >= 0 ? 7 : st.hop > 0.35 || ch ? 3 : tk && tk.mood >= 0 ? tk.mood : scared ? 2 : blink ? 1 : 0;   // slump: eyes shut
       const k = Math.abs(Math.sin(ph));
-      ctx.save(); ctx.globalAlpha *= 0.3 * Math.max(0, 1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, Math.max(4, 24 - (idle + hopY) * 0.3), 7, 0, 0, TAU); ctx.fill(); ctx.restore();
-      const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = (1 + (1 - k) * 0.05 + st.hop * 0.05 + sl * 0.1 + (OPT.reduceMotion ? 0 : lf.stretch * 0.08)) * (tk ? tk.sx : 1), sy = (1 - (1 - k) * 0.05 - st.hop * 0.03 - sl * 0.12) * (tk ? tk.sy : 1);
+      ctx.save(); ctx.globalAlpha *= 0.3 * Math.max(0, 1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40 + oy, Math.max(4, 24 - (idle + hopY) * 0.3), 7, 0, 0, TAU); ctx.fill(); ctx.restore();
+      st.lk = OPT.reduceMotion ? 0 : eyeCode(st.lk || 0, nearX - px, near); const spr = kit && kit.SPR.pet(id, lookMood(mood, st.lk)), sz = 92, sx = (1 + (1 - k) * 0.05 + st.hop * 0.05 + sl * 0.1 + (OPT.reduceMotion ? 0 : lf.stretch * 0.08)) * (tk ? tk.sx : 1), sy = (1 - (1 - k) * 0.05 - st.hop * 0.03 - sl * 0.12) * (tk ? tk.sy : 1);
       if (cheerHit && !OPT.reduceMotion) CH.burst(px, base - 40, Math.max(0, CH.tier), id);
       if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq * ch.sx : 1) * (pk ? pk.sx : 1), sy / (ch ? ch.sq : 1) * (pk ? pk.sy : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px + (pk ? pk.dx : 0), base - idle - hopY - (tk ? tk.dy : 0) - (pk ? pk.dy : 0), sz, gl + (pk ? pk.rot : 0) + (tk ? tk.rot : 0) + s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0) - s2 * sl * 0.2 - (OPT.reduceMotion ? 0 : s2 * 0.14 * lookUp(S.t - B11.wT)) + (OPT.reduceMotion ? 0 : lf.lean)); ctx.restore(); }
       if (st.hop > 0.6) sparkleAt(px + s2 * 28, base - idle - hopY - 36, 7 + st.hop * 3);
       if (tk && tk.u >= 0) {   // trick extras: a question mark over the tilting puppy, dust under the running hamster
         if (id === 'puppy') { ctx.save(); ctx.globalAlpha = Math.sin(tk.u * Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2d1a14'; ctx.lineWidth = 3; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.strokeText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.fillText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.restore(); }
-        else if (id === 'hamster') { const f = (S.t * 5) % 1; ctx.save(); ctx.globalAlpha = (1 - f) * 0.5; ctx.fillStyle = '#e8d8b8'; ctx.beginPath(); ctx.arc(px - s2 * (20 + f * 14), p.y + 38 - f * 8, 3 + f * 4, 0, TAU); ctx.fill(); ctx.restore(); }
+        else if (id === 'hamster') { const f = (S.t * 5) % 1; ctx.save(); ctx.globalAlpha = (1 - f) * 0.5; ctx.fillStyle = '#e8d8b8'; ctx.beginPath(); ctx.arc(px - s2 * (20 + f * 14), p.y + 38 + oy - f * 8, 3 + f * 4, 0, TAU); ctx.fill(); ctx.restore(); }
       }
       if (pk && pk.claws) clawDraw(ctx, px + pk.dx + s2 * 0 + R10.pDir * 30, base - idle - hopY - pk.dy - 6, R10.pDir);
       if (id === 'puppy' && bu >= 0) barkDraw(ctx, px, base - idle - hopY, nearX === nearX && nearX < px ? -1 : 1, bu);
       petExtras(id, st, px, base - idle - hopY, s2, i);
-      if (g.petJoy && g.petJoy[i] && !OPT.reduceMotion) joyEmote(px, base - idle - hopY, p.y + 40, s2, i, id);
+      if (g.petJoy && g.petJoy[i] && !OPT.reduceMotion) joyEmote(px, base - idle - hopY, p.y + 40 + oy, s2, i, id);
       if (sl > 0.15) slumpDrop(px + s2 * 30, base - idle - hopY - 34, sl);
     });
     cheerHit = false;
@@ -560,7 +564,7 @@ export function createRenderer(canvas, art, kit) {
     if (g.phase === 'play' && !OPT.reduceMotion) { const ph = beatPhase(g), a = Math.pow(1 - ph, 3) * 0.28; if (a > 0.02) { ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#9ff3ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 46 + ph * 26, 0, TAU); ctx.stroke(); ctx.restore(); } }
     FX.aura(g); drawStreak(ctx, g, S.t);
     // aim tick
-    if (!S.ko) { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.aim); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6fe3ff';
+    if (!S.ko && !g.ring) { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.aim); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6fe3ff';
     ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(22, -6); ctx.lineTo(22, 6); ctx.fill(); ctx.restore(); }
     const singing = S.t - S.lastShot < 0.22;
     const key = singing ? 'duo_sing' : 'duo_idle';
@@ -568,19 +572,25 @@ export function createRenderer(canvas, art, kit) {
     const sq = 1 + Math.sin(S.t * (moving ? 9 : 2.6)) * (moving ? 0.05 : 0.018) + hop * 0.03;
     const im = art && art.get(key), dch = OPT.reduceMotion ? null : CH.duo(S.t) || duo11(), dY = dch ? dch.y : 0;   // 02-animal-art r5: the duo hops on a streak
     const cf = dch && dch.arms !== false && im ? cheerFrame(art.get(key), singing) : null;   // r7: arms up while the cheer lasts; r8: the singing picture has its own arms-up frame
+    const A = g.ring && !S.ko ? aimPose(AIM12, p.aim, S.t - S.lastShot, lastDt, OPT.reduceMotion) : null;   // b12h: the duo turns toward its aim and kicks back on every volley
+    if (A) { ctx.save(); ctx.translate(p.x + A.dx, p.y + 30 + A.dy); ctx.rotate(A.tilt); ctx.translate(-p.x, -p.y - 30); }
     if (cf) { const h = 170, w = h * im.width / im.height, dq = dch.sq; ctx.save(); ctx.translate(p.x, p.y - 26 - hop * 4 - dY); ctx.rotate(p.mx * 0.05 + dch.rot); const ww = w / sq / dq, hh = h * sq * dq; ctx.drawImage(cf, -ww / 2, -hh / 2, ww, hh); ctx.restore(); idleSparkles(p, singing); }
     else if (im && !OPT.reduceMotion && im.width === 520) {   // r7: R and J sway on their own phases, heads nod on the beat
       const h = 170, w = h * im.width / im.height, dq = dch ? dch.sq : 1, ww = w / sq / dq, hh = h * sq * dq, nod = g.phase === 'play' ? Math.pow(1 - beatPhase(g), 5) * ((g.groove || 0) >= 6 ? 1 : 0.5) : 0.3;
-      ctx.save(); ctx.translate(p.x, p.y - 26 - hop * 4 - dY); ctx.rotate(p.mx * 0.05 + (dch ? dch.rot : 0)); drawDuoLife(ctx, im, ww, hh, S.t, nod, moving ? 0.35 : 1); ctx.restore(); idleSparkles(p, singing);
+      ctx.save(); ctx.translate(p.x, p.y - 26 - hop * 4 - dY); ctx.rotate(p.mx * 0.05 + (dch ? dch.rot : 0)); drawDuoLife(ctx, im, ww, hh, S.t, nod, moving ? 0.35 : 1, A ? A.turn : 0); ctx.restore(); idleSparkles(p, singing);
     }
     else if (im) { const h = 170, w = h * im.width / im.height, dq = dch ? dch.sq : 1; img(key, p.x, p.y - 26 - hop * 4 - dY, w / sq / dq, h * sq * dq, p.mx * 0.05 + (moving ? 0 : Math.sin(S.t * 1.3) * 0.012) + (dch ? dch.rot : 0)); idleSparkles(p, singing); }
     else { glow(p.x, p.y, 40, '#39f0ff', 0.7); ctx.fillStyle = '#39f0ff'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 22, 0, TAU); ctx.fill(); ctx.stroke(); }
+    if (A) {   // b12h: the shared microphone with its gloved hand points where the notes will fly
+      ctx.restore();
+      const ms = bakeMic(kit); if (ms) { ctx.save(); ctx.translate(p.x + A.mx + A.dx, p.y + A.my + A.dy); ctx.rotate(A.rot); ctx.drawImage(ms.c, -MIC_SIZE.w * 0.65, -MIC_SIZE.h * 0.65, MIC_SIZE.w * 1.3, MIC_SIZE.h * 1.3); ctx.restore(); micArcs(ctx, p.x + A.tx + A.dx, p.y + A.ty + A.dy, A.rot, A.kick); }
+    }
     if (!OPT.reduceMotion) celebrate11(p);
     if (!OPT.reduceMotion && g.phase === 'play') { dustStep(duoDust, p.x, p.y + 38, p.mx, Math.min(0.05, lastDt)); dustDraw(ctx, duoDust); }   // r9: dust kicks up under the duo's feet
     petsDraw(g, p, singing);
     drawHog(g);
     if (g.outfit) { glow(p.x, p.y - 20, 70, g.outfit.color, 0.22); const hs = bakeHat(kit, g.outfit.hat), hb = Math.sin(S.t * 4) * 3;
-      if (hs) { const hp = hatPose(g.outfit.hat, OPT.reduceMotion ? 0 : CH.t, S.t), fxk = OPT.reduceMotion ? null : HAT_FX[g.outfit.hat]; ctx.save(); ctx.translate(p.x - 4, p.y - 108 + hb + hp.dy - dY); ctx.rotate(Math.sin(S.t * 2.4) * 0.05 + p.mx * 0.08 + hp.rot); ctx.scale(hp.sx, hp.sx); ctx.drawImage(hs.c, -48, -48, 96, 96); if (fxk) fxk(ctx, S.t, CH.t); ctx.restore(); if (!OPT.reduceMotion) { const f = (S.t * 0.9) % 1; sparkleAt(p.x - 4 + Math.cos(S.t * 3) * 30, p.y - 122 + hb - f * 22, 5 * Math.sin(f * Math.PI)); } }
+      if (hs) { const hp = hatPose(g.outfit.hat, OPT.reduceMotion ? 0 : CH.t, S.t), fxk = OPT.reduceMotion ? null : HAT_FX[g.outfit.hat]; ctx.save(); ctx.translate(p.x - 4 + (A ? A.hx : 0), p.y - 108 + hb + hp.dy - dY); ctx.rotate(Math.sin(S.t * 2.4) * 0.05 + p.mx * 0.08 + hp.rot + (A ? A.tilt : 0)); ctx.scale(hp.sx, hp.sx); ctx.drawImage(hs.c, -48, -48, 96, 96); if (fxk) fxk(ctx, S.t, CH.t); ctx.restore(); if (!OPT.reduceMotion) { const f = (S.t * 0.9) % 1; sparkleAt(p.x - 4 + Math.cos(S.t * 3) * 30, p.y - 122 + hb - f * 22, 5 * Math.sin(f * Math.PI)); } }
       else { ctx.save(); ctx.font = '44px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g.outfit.hat, p.x - 4, p.y - 124 + hb); ctx.restore(); } }
     // hitbox core: the part that actually gets hurt
     if (S.ko) { ctx.globalAlpha = 1; return; }
@@ -594,7 +604,7 @@ export function createRenderer(canvas, art, kit) {
   // b11: circle stages, a dotted line from the duo out to the circle shows where the notes will fly, with a chevron on the circle
   let ringScaled = false; const AIM_DASH = [1, 12], NO_DASH = [];
   function drawAimLine(g) {
-    const p = g.p, a = p.aim, c = Math.cos(a), s = Math.sin(a), r0 = 30, r1 = g.ring.R - 6;
+    const p = g.p, a = p.aim, c = Math.cos(a), s = Math.sin(a), r0 = 70, r1 = g.ring.R - 6;
     ctx.save(); ctx.lineCap = 'round'; ctx.setLineDash(AIM_DASH); ctx.lineDashOffset = OPT.reduceMotion ? 0 : -S.t * 26;
     ctx.globalAlpha = 0.4; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(p.x + c * r0, p.y + s * r0); ctx.lineTo(p.x + c * r1, p.y + s * r1); ctx.stroke();
     ctx.globalAlpha = 0.95; ctx.strokeStyle = '#ffe36b'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(p.x + c * r0, p.y + s * r0); ctx.lineTo(p.x + c * r1, p.y + s * r1); ctx.stroke();

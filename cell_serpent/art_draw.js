@@ -393,12 +393,12 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   const dot = (g, x, y, r) => { g.fillStyle = INK; circ(x, y, r)(g); g.fill(); };
   const smile = (g, x, y, w) => { line(g, [[x - w, y - w * 0.2], [x - w * 0.4, y + w * 0.35], [x, y], [x + w * 0.4, y + w * 0.35], [x + w, y - w * 0.2]], Math.max(2, w * 0.28)); };
   // 02-animal-art: MOOD is read while a critter is baked: 0 normal, 1 blink, 2 alert (wide eyes), 3 happy (^ ^ eyes + open mouth)
-  let MOOD = 0;
+  let MOOD = 0, LOOKX = 0;   // b12h: LOOKX shifts the pupils sideways (pet mood + 20 = looks left, + 40 = looks right)
   const eyes2 = (g, dx, y, rr, iris = '#2d170f') => {
     if (MOOD === 3) { for (const s of [-1, 1]) { g.beginPath(); g.arc(s * dx, y + rr * 0.5, rr * 0.9, Math.PI * 1.1, Math.PI * 1.9); ink(g, Math.max(2.2, rr * 0.36)); g.stroke(); } return; }
     if (MOOD === 7) { for (const s of [-1, 1]) { g.beginPath(); g.arc(s * dx, y - rr * 0.1, rr * 0.9, Math.PI * 0.12, Math.PI * 0.88); ink(g, Math.max(2.2, rr * 0.36)); g.stroke(); line(g, [[s * (dx + rr * 1.2), y - rr * 1.4], [s * (dx - rr * 1.0), y - rr * 2.3]], Math.max(2, rr * 0.3)); } return; }   // 02-animal-art r7: slump face, shut sad eyes under worried brows
     const o = MOOD === 1 ? 0.05 : 1, k = MOOD >= 2 ? 1.22 : 1;
-    eye(g, -dx, y, rr * k, rr * 1.15 * k, { iris, open: o, look: [0, MOOD >= 2 ? -0.6 : 0] }); eye(g, dx, y, rr * k, rr * 1.15 * k, { iris, open: o, look: [0, MOOD >= 2 ? -0.6 : 0] });
+    eye(g, -dx, y, rr * k, rr * 1.15 * k, { iris, open: o, look: [LOOKX, MOOD >= 2 ? -0.6 : 0] }); eye(g, dx, y, rr * k, rr * 1.15 * k, { iris, open: o, look: [LOOKX, MOOD >= 2 ? -0.6 : 0] });
   };
   // little extra mouth for the alert / happy faces, drawn on top of the face
   function moodMouth(g, r, y) {
@@ -645,7 +645,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     crown: (skin) => { const k = SPECIES[skin] ? skin : 'love', cm = BOSS_METAL[k] || ['#ffd84d', '#d98f1a']; return bake('crownprop|' + k, B * 1.7, B * 1.4, g => { g.translate(0, B * 0.2); crownPaint(g, B, 0, cm); }, 3); },   // 01-enemy-art r7: the face that pops out of a killed head (r8: a boss keeps a crooked crown)
     tail: skin => { const k = SPECIES[skin] ? skin : 'love'; return EF.tailSpr(k, SPECIES[k], B); },
     acid: () => bake('acid', B * 1.6, B * 1.6, acidFn),
-    pet: (id, mood = 0) => bake('pet|' + id + '|' + mood, B * 3, B * 3, g => { MOOD = mood; critter(g, PETSPR[id] || 'kitten', B * 0.9); petMood(g, PETSPR[id] || 'kitten', B * 0.9); petAcc(g, PETSPR[id] || 'kitten', B * 0.9); MOOD = 0; }, 1),
+    pet: (id, mood = 0) => bake('pet|' + id + '|' + mood, B * 3, B * 3, g => { MOOD = mood % 20; LOOKX = mood < 20 ? 0 : mood < 40 ? -1.7 : 1.7; critter(g, PETSPR[id] || 'kitten', B * 0.9); petMood(g, PETSPR[id] || 'kitten', B * 0.9); petAcc(g, PETSPR[id] || 'kitten', B * 0.9); MOOD = 0; LOOKX = 0; }, 1),
     // round discs that read on any cell colour: coin (gold cell), shield (ward cell), moon (lullaby cell)
     badge: k => bake('badge|' + k, B * 1.5, B * 1.5, g => {
       const r = B * 0.6, disc = (col, sh) => { cel(g, '#fff8ec', circ(0, 0, r), { r, hi: false, lw: 2.6, shadow: '#e6d6c8' }); cel(g, col, circ(0, 0, r * 0.84), { r: r * 0.84, hi: false, lw: 2.2, shadow: sh }); };
