@@ -381,6 +381,7 @@ function bindBring(box, info, sp) {
 }
 // tap the portrait: species fun fact plus what the stage pays
 $('stPortrait').onclick = () => {
+  if (!isUnlocked('funfact', save)) return;   // b12p: the fun fact opens at stage 7
   const box = $('btFact'), hero = $('btHero'); if (!box.hidden) { box.hidden = true; hero.classList.remove('fact'); return; }
   audio.play('click'); const info = stageInfo(sel), sp = (kit && kit.SPECIES && kit.SPECIES[info.skin]) || null;
   box.innerHTML = factHTML({ info, sp, hard, done: sel <= save.cleared, sparkleIcon: curImg('sparkles'), bring: bringFor(info.skin) }); box.hidden = false; hero.classList.add('fact'); try { hero.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* ignore */ }
