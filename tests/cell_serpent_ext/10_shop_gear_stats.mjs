@@ -24,3 +24,9 @@ console.log('ok 10_shop_gear_stats round 2');
   assert.ok(html.includes('.bestrib') && html.includes('.legflash') && !html.includes('—'));
   console.log('ok 10_shop_gear_stats round 3');
 }
+// round 4: NEW keepsake ribbons, chest charge drama, hot deal, radar level badges, narrow gear chips
+{
+  for (const k of ['knew', 'cell_serpent_keepseen_v1', 'chestGo', 'hotbadge', 'rlv', 'obt']) assert.ok(hub.includes(k) || html.includes(k), k);
+  assert.ok(html.includes('.chest3.charge') && html.includes('#gearFilters .ttl') && !html.includes('\u2014') && !hub.includes('\u2014'));
+  console.log('ok 10_shop_gear_stats round 4');
+}
