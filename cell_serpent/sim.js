@@ -1389,14 +1389,14 @@ export function botInput(g) {
 // ---------------------------------------------------------------- retention loops (all optional gifts, nothing here gates progress)
 // save.addict: sp (kills per snake species), sk (damage points per skill), claimed (mastery + collection rewards),
 // spin (last lucky spin day), week (weekly challenge), seen (last visit, ms) for the comeback gift.
-export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1, n: 0 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0, q: { day: 0, p: [0, 0, 0], chest: 0 }, season: { key: 0, n: 0, last: 0, claimed: {}, note: '' }, ann: {}, annInit: 0 });
+export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1, n: 0, shield: 0 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0, q: { day: 0, p: [0, 0, 0], chest: 0 }, season: { key: 0, n: 0, last: 0, claimed: {}, note: '' }, ann: {}, annInit: 0 });
 export function sanitizeAddict(raw) {
   const a = addictDefault(), num = (v, d = 0) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : d);
   for (const k of SKINS) a.sp[k] = num(raw && raw.sp && raw.sp[k]);
   for (const w of WEAPONS) a.sk[w.id] = num(raw && raw.sk && raw.sk[w.id]);
   if (!raw || typeof raw !== 'object') return a;
   if (raw.claimed && typeof raw.claimed === 'object') for (const k of Object.keys(raw.claimed)) if (raw.claimed[k] && /^[a-z0-9:_]{1,40}$/.test(k)) a.claimed[k] = 1;
-  if (raw.spin && typeof raw.spin === 'object') a.spin = { day: num(raw.spin.day), prize: Math.min(SPIN_PRIZES.length - 1, num(raw.spin.prize, -1)), n: Math.min(9999, num(raw.spin.n)) };
+  if (raw.spin && typeof raw.spin === 'object') a.spin = { day: num(raw.spin.day), prize: Math.min(SPIN_PRIZES.length - 1, num(raw.spin.prize, -1)), n: Math.min(9999, num(raw.spin.n)), shield: raw.spin.shield ? 1 : 0 };
   if (raw.week && typeof raw.week === 'object') a.week = { key: num(raw.week.key), prog: num(raw.week.prog), claimed: raw.week.claimed ? 1 : 0 };
   a.seen = num(raw.seen);
   if (raw.q && typeof raw.q === 'object') a.q = { day: num(raw.q.day), p: [0, 1, 2].map(i => Math.min(9999, num(Array.isArray(raw.q.p) ? raw.q.p[i] : 0))), chest: raw.q.chest ? 1 : 0 };
@@ -1477,11 +1477,15 @@ export function spinPrize(day) {
   for (; i < SPIN_PRIZES.length - 1; i++) { r -= SPIN_PRIZES[i].w; if (r <= 0) break; }
   return i;
 }
+export const SHIELD_AT = [7, 14];   // spin days that gift a streak shield (one forgiven missed day)
 export const spinReady = (save, day) => save.addict.spin.day !== day;
 export function doSpin(save, day) {
   if (!spinReady(save, day)) return null;
-  const i = spinPrize(day), sp = save.addict.spin, n = sp.day === day - 1 ? (sp.n || 0) + 1 : 1; save.addict.spin = { day, prize: i, n }; grantReward(save, SPIN_PRIZES[i].reward);
-  return { index: i, prize: SPIN_PRIZES[i] };
+  const i = spinPrize(day), sp = save.addict.spin, kept = sp.day === day - 2 && sp.shield && (sp.n || 0) > 0;   // a streak shield forgives one missed day
+  const n = sp.day === day - 1 || kept ? (sp.n || 0) + 1 : 1; let shield = kept ? 0 : sp.shield ? 1 : 0, gift = false;
+  if (SHIELD_AT.includes(n) && !shield) { shield = 1; gift = true; }
+  save.addict.spin = { day, prize: i, n, shield }; grantReward(save, SPIN_PRIZES[i].reward);
+  return { index: i, prize: SPIN_PRIZES[i], gift, saved: kept };
 }
 // ---- comeback gift: three days away or more, never expires, never nags
 export const COMEBACK_DAYS = 3;
@@ -1580,7 +1584,8 @@ export const SPIN_FRAMES = [
   { at: 14, name: 'Golden wheel', color: '#ffe26a', glow: 22, ptr: '🎵', burst: 28 },
   { at: 30, name: 'Rainbow wheel', color: '#ff7eb6', glow: 30, ptr: '🌈', burst: 40 },
 ];
-export function spinStreak(save, day) { const sp = save.addict.spin; return sp.day === day || sp.day === day - 1 ? sp.n || 0 : 0; }
+export function spinStreak(save, day) { const sp = save.addict.spin; return sp.day === day || sp.day === day - 1 || (sp.day === day - 2 && sp.shield) ? sp.n || 0 : 0; }
+export const hasShield = save => !!save.addict.spin.shield;
 export function spinFrame(n) { let f = SPIN_FRAMES[0]; for (const x of SPIN_FRAMES) if (n >= x.at) f = x; const nx = SPIN_FRAMES.find(x => x.at > n) || null; return { ...f, next: nx ? nx.at : 0, nextName: nx ? nx.name : '' }; }
 // Daily Quests: three short quests that rotate each day; finish all three to open the chest. No energy, no timers.
 export const QUEST_DEFS = [
@@ -1649,6 +1654,7 @@ export function comebackLines(save, day, now) {
   const g = comebackGift(save, now); if (!g) return [];
   const out = [g.days >= 14 ? 'The whole band missed you!' : g.days >= 7 ? 'It has been a while, welcome home!' : 'Good to see you again!'];
   if (spinReady(save, day)) out.push('🎡 A free spin is waiting');
+  if (save.addict.spin.shield) out.push('🛡️ Your Streak Shield is still saved');
   if (!questState(save, day).chestOpened) out.push('🎁 Three easy quests are ready');
   out.push('🌟 Season day ' + seasonStatus(save, day).dayNo + ' of ' + SEASON_DAYS);
   out.push('Take your time. Nothing is lost.');

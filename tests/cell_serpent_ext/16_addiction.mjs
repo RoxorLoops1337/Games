@@ -101,7 +101,7 @@ console.log('16_addiction ok');
 {   // spin streak: consecutive days build looks, a gap resets, saved + sanitised
   const s = fresh();
   for (let d = 0; d < 7; d++) S.doSpin(s, day + d);
-  assert.equal(s.addict.spin.n, 7); assert.equal(S.spinStreak(s, day + 6), 7); assert.equal(S.spinStreak(s, day + 7), 7); assert.equal(S.spinStreak(s, day + 8), 0);
+  assert.equal(s.addict.spin.n, 7); assert.equal(S.spinStreak(s, day + 6), 7); assert.equal(S.spinStreak(s, day + 7), 7); assert.equal(S.spinStreak(s, day + 8), 7, "the day-7 shield forgives one missed day"); assert.equal(S.spinStreak(s, day + 9), 0);
   assert.equal(S.spinFrame(7).name, 'Silver wheel'); assert.equal(S.spinFrame(2).at, 0); assert.equal(S.spinFrame(99).next, 0); assert.equal(S.spinFrame(3).next, 7);
   S.doSpin(s, day + 9); assert.equal(s.addict.spin.n, 1);
   assert.equal(S.sanitizeSave(JSON.parse(JSON.stringify(s))).addict.spin.n, 1);

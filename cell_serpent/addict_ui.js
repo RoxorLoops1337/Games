@@ -3,7 +3,7 @@
 import {
   SPIN_PRIZES, spinReady, doSpin, spinPrize, weekChallenge, ensureWeek, weekReady, claimWeek, WEEK_REWARD,
   masteryList, claimMastery, claimAllMastery, bookStatus, claimBook, rewardText, comebackGift, claimComeback, touchSeen,
-  nextReward, nudgeFor, spinStreak, spinFrame, comebackLines,
+  nextReward, nudgeFor, spinStreak, spinFrame, comebackLines, hasShield, SHIELD_AT,
 } from './sim.js';
 import { riskHTML, bookCell, nextUnmet } from './keep_ui.js';
 
@@ -26,6 +26,25 @@ export function createAddictUI(c, openPanel, sec) {
     el.onclick = () => { audio.unlock(); audio.play('click'); openGoals(); };
   }
 
+  // streak shield: gifted at 7 and 14 spin days, forgives one missed day, used up when it saves the streak
+  function shieldLine(sv, streak, pop) {
+    if (hasShield(sv)) return `<span class="shieldrow on${pop ? ' pop' : ''}"><i>🛡️</i>Streak Shield ready: it forgives one missed day</span>`;
+    const nx = SHIELD_AT.find(a => a > streak);
+    return nx ? `<span class="shieldrow"><i>🛡️</i>Streak Shield at ${nx} days</span>` : '';
+  }
+  // a finished book page: confetti rains over the page, a COMPLETE! ribbon pops, the bar shines
+  function pageDone(id) {
+    const box = document.querySelector('.bookcat[data-cat="' + id + '"]'); if (!box) return;
+    box.scrollIntoView({ block: 'center', behavior: reduce() ? 'auto' : 'smooth' });
+    box.classList.add('bkdone'); setTimeout(() => box.classList.remove('bkdone'), 2300);
+    if (reduce()) return;
+    const cols = ['#6fe08a', '#ffd24a', '#ff7eb6', '#4fd8f0', '#fff'];
+    for (let i = 0; i < 46; i++) {
+      const p = document.createElement('i'); p.className = 'cfp sq'; const x = (Math.random() - 0.5) * 100;
+      p.style.cssText = `left:${50 + x * 0.9}%;top:-4px;background:${cols[i % cols.length]};--dx:${x * 0.8}px;--dy:${70 + Math.random() * 110}px;animation-delay:${Math.random() * 0.35}s`;
+      box.appendChild(p); setTimeout(() => p.remove(), 1700);
+    }
+  }
   // little confetti for the lucky spin, more of it on a longer streak (cosmetic only)
   function burst(host, n, color) {
     const cols = [color, '#ff7eb6', '#4fd8f0', '#9dff6d', '#ffd24a'];
@@ -51,7 +70,7 @@ export function createAddictUI(c, openPanel, sec) {
     sec(body, 'Lucky Spin', '#ff7eb6');
     const w = document.createElement('div'); w.className = 'spinbox';
     const ready = spinReady(s, day), streak = spinStreak(s, day) + (ready ? 1 : 0), fr = spinFrame(streak);
-    w.innerHTML = `<div class="spinstreak"><b>${streak > 1 ? '🔥 ' + streak + ' day streak' : 'Spin daily to build a streak'}</b><small>${esc(fr.name)}${fr.next ? '. Next look at ' + fr.next + ' days' : '. Top look!'}</small></div><div class="wheelwrap"><i class="wptr">${fr.ptr}</i><div class="wheel" id="wheel" style="border-color:${fr.color};box-shadow:0 5px 0 #8a6a10${fr.glow ? `,0 0 ${fr.glow}px ${fr.color}` : ''}">${SPIN_PRIZES.map((p, i) => `<span class="wseg" style="transform:rotate(${i * 45}deg) translateY(-82px)"><b style="transform:rotate(${-i * 45}deg)">${p.icon}</b></span>`).join('')}</div></div>` +
+    w.innerHTML = `<div class="spinstreak"><b>${streak > 1 ? '🔥 ' + streak + ' day streak' : 'Spin daily to build a streak'}</b><small>${esc(fr.name)}${fr.next ? '. Next look at ' + fr.next + ' days' : '. Top look!'}</small>${shieldLine(s, streak)}</div><div class="wheelwrap"><i class="wptr">${fr.ptr}</i><div class="wheel" id="wheel" style="border-color:${fr.color};box-shadow:0 5px 0 #8a6a10${fr.glow ? `,0 0 ${fr.glow}px ${fr.color}` : ''}">${SPIN_PRIZES.map((p, i) => `<span class="wseg" style="transform:rotate(${i * 45}deg) translateY(-82px)"><b style="transform:rotate(${-i * 45}deg)">${p.icon}</b></span>`).join('')}</div></div>` +
       `<div class="spinmsg" id="spinMsg">${ready ? 'One free spin every day. Just for fun!' : 'Today you won ' + esc(rewardText(SPIN_PRIZES[s.addict.spin.prize >= 0 ? s.addict.spin.prize : spinPrize(day)].reward)) + '. Come back tomorrow!'}</div>` +
       `<button class="btn small go gold" id="spinGo" ${ready ? '' : 'disabled'}>${ready ? 'SPIN' : 'SEE YOU TOMORROW'}</button>`;
     body.appendChild(w);
@@ -59,7 +78,7 @@ export function createAddictUI(c, openPanel, sec) {
       audio.unlock(); const r = doSpin(save(), day); if (!r) return; after(); audio.play('click');
       const wheel = w.querySelector('#wheel'), btn = w.querySelector('#spinGo'); btn.disabled = true; btn.textContent = 'SPINNING...';
       wheel.style.transition = reduce() ? 'none' : 'transform 3s cubic-bezier(.15,.7,.2,1)'; wheel.style.transform = `rotate(${360 * 4 - r.index * 45}deg)`;
-      setTimeout(() => { audio.play('levelup'); w.querySelector('#spinMsg').textContent = 'You won ' + rewardText(r.prize.reward) + '!'; btn.textContent = 'SEE YOU TOMORROW'; w.querySelector('.wseg:nth-child(' + (r.index + 1) + ')').classList.add('win'); renderNext(); if (!reduce()) burst(w.querySelector('.wheelwrap'), fr.burst + 8, fr.color); }, reduce() ? 0 : 3100);
+      setTimeout(() => { audio.play('levelup'); w.querySelector('#spinMsg').textContent = 'You won ' + rewardText(r.prize.reward) + '!' + (r.gift ? ' And a Streak Shield!' : '') + (r.saved ? ' Your shield saved the streak!' : ''); if (r.gift || r.saved) { const sh = w.querySelector('.shieldrow'); if (sh) sh.outerHTML = shieldLine(save(), save().addict.spin.n, r.gift); } btn.textContent = 'SEE YOU TOMORROW'; w.querySelector('.wseg:nth-child(' + (r.index + 1) + ')').classList.add('win'); renderNext(); if (!reduce()) burst(w.querySelector('.wheelwrap'), fr.burst + 8, fr.color); }, reduce() ? 0 : 3100);
     };
     // weekly challenge
     sec(body, 'Weekly Challenge', '#ffd24a');
@@ -88,11 +107,11 @@ export function createAddictUI(c, openPanel, sec) {
     const bk = bookStatus(s);
     sec(body, `Collection Book ${bk.got}/${bk.total}`, '#6fe08a');
     for (const cat of bk.cats) {
-      const box = document.createElement('div'); box.className = 'bookcat';
-      box.innerHTML = `<div class="bch"><b>${esc(cat.name)}</b><span>${cat.got}/${cat.total}</span></div><div class="bcg">${cat.list.map(x => bookCell(x, cat.id, c, s, nextUnmet(cat.list))).join('')}</div><div class="bcbar"><i style="width:${Math.round(cat.got / cat.total * 100)}%"></i></div>`;
+      const box = document.createElement('div'); box.className = 'bookcat'; box.dataset.cat = cat.id;
+      box.innerHTML = `<div class="bch"><b>${esc(cat.name)}</b><span>${cat.got}/${cat.total}</span></div><div class="bcg">${cat.list.map(x => bookCell(x, cat.id, c, s, nextUnmet(cat.list))).join('')}</div><div class="bcbar${cat.got >= cat.total ? ' full' : ''}"><i style="width:${Math.round(cat.got / cat.total * 100)}%"></i></div>`;
       const b = document.createElement('button'); b.className = 'btn small go gold'; b.disabled = !cat.ready;
       b.textContent = s.addict.claimed['book:' + cat.id] ? 'COMPLETE' : cat.ready ? 'CLAIM ' + rewardText(cat.reward) : 'Complete for ' + rewardText(cat.reward);
-      b.onclick = () => { if (claimBook(save(), cat.id)) { after(); audio.play('levelup'); rebuild(); renderNext(); } };
+      b.onclick = () => { if (claimBook(save(), cat.id)) { after(); audio.play('levelup'); rebuild(); renderNext(); pageDone(cat.id); } };
       box.appendChild(b); body.appendChild(box);
     }
     const ag = grid(body);
