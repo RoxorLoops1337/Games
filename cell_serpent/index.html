@@ -1205,6 +1205,21 @@
   .cfp.sq{width:8px;height:13px;border-radius:1px} .bcbar.full i{background:linear-gradient(90deg,#6fe08a,#ffd24a,#ff7eb6,#4fd8f0);background-size:200% 100%;animation:kshine 2s linear infinite} @keyframes kshine{to{background-position:-200% 0}}
   @media (prefers-reduced-motion:reduce){.kperch.hov,.bkdone::after,.bcbar.full i,.shieldrow.pop i{animation:none}}
   /* end @css:16-addiction round 5 */
+  /* @css:16-addiction round 6 */
+  #achToast{border-radius:20px;padding:8px 12px 8px 8px;gap:10px;pointer-events:auto;cursor:pointer;width:min(360px,94vw);top:max(8px,env(safe-area-inset-top));background:linear-gradient(135deg,rgba(44,26,96,.98),rgba(20,12,52,.98));--ac:#d9955a;--ac2:#8a4e22;border:2px solid var(--ac);box-shadow:0 8px 26px rgba(0,0,0,.5),0 0 22px color-mix(in srgb,var(--ac) 55%,transparent);transform:translate(-50%,-140px);position:fixed}
+  #achToast.t-silver{--ac:#e3ebf7;--ac2:#8ea0bd} #achToast.t-gold{--ac:#ffd24a;--ac2:#b8801a}
+  #achToast.on{transform:translate(-50%,0)} #achToast.on .acmed{animation:acpop .7s cubic-bezier(.2,1.6,.4,1) .15s both}
+  #achToast .acmed{position:relative;flex:0 0 auto;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#fff6,transparent 45%),linear-gradient(160deg,var(--ac),var(--ac2));box-shadow:inset 0 -3px 0 #0003,0 0 0 3px rgba(0,0,0,.25)} #achToast .acmed b{position:relative;font-size:28px;line-height:1;filter:drop-shadow(0 2px 0 #0004)}
+  #achToast .acrays{position:absolute;inset:-9px;border-radius:50%;background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--ac) 55%,transparent) 0 9deg,transparent 9deg 30deg);-webkit-mask:radial-gradient(circle,transparent 24px,#000 25px,#000 31px,transparent 32px);mask:radial-gradient(circle,transparent 24px,#000 25px,#000 31px,transparent 32px)} #achToast.on .acrays{animation:acspin 9s linear infinite}
+  #achToast .acmid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;line-height:1.1} #achToast .acmid small{font-size:9.5px;letter-spacing:.12em;font-weight:900;color:var(--ac)} #achToast .acmid strong{font-size:15px;font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #achToast .acbar{display:block;height:6px;border-radius:99px;background:rgba(255,255,255,.14);overflow:hidden;margin-top:3px} #achToast .acbar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--ac2),var(--ac))} #achToast .accnt{font-size:10px;font-weight:700;color:var(--dim)}
+  #achToast .acrw{margin:0;align-self:center;text-align:right;font-size:12px;white-space:nowrap} #achToast .acrw small{display:block;font-size:9px;color:var(--dim)}
+  #achToast .acshare{flex:0 0 auto;min-width:44px;min-height:44px;margin:-6px -6px -6px -4px;border-radius:50%;border:0;background:rgba(255,255,255,.1);color:var(--ink);font-size:18px;font-weight:900;cursor:pointer}
+  @keyframes acpop{0%{transform:scale(.3) rotate(-30deg)}100%{transform:none}} @keyframes acspin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){#achToast.on .acmed,#achToast.on .acrays{animation:none}}
+  .qpill .qshield{display:inline-grid;vertical-align:middle;margin-left:5px;width:20px;height:20px;border-radius:50%;place-items:center;font-style:normal;font-size:11px;line-height:1;background:#10304a;border:2px solid #7fe8ff;box-shadow:0 0 8px rgba(127,232,255,.7);animation:qshpulse 2.4s ease-in-out infinite} @keyframes qshpulse{50%{box-shadow:0 0 14px rgba(127,232,255,1)}}
+  @media (prefers-reduced-motion:reduce){.qpill .qshield{animation:none}}
+  /* end @css:16-addiction round 6 */
   /* end @css:16-addiction */
   /* @css:20-qa */
   .scr > :first-child{margin-top:auto} .scr > :last-child{margin-bottom:auto}   /* old browsers without 'safe center': still centred, never clipped above the top */
