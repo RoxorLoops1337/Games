@@ -18,7 +18,7 @@ export const textScaleLabel = v => Math.round(v * 100) + '%';
 export function applyPageSettings(st) {
   const ts = textScaleOf(st), de = document.documentElement;   // text size slider (the old "bigger text" switch counts as 112%)
   de.classList.toggle('ts', ts > 1); de.style.setProperty('--ts', String(ts));
-  document.documentElement.classList.toggle('hc', !!st.highContrast); de.classList.toggle('cbm', !!st.colorBlind); de.classList.toggle('rf', !!st.reduceFlash);
+  document.documentElement.classList.toggle('hc', !!st.highContrast); de.classList.toggle('cbm', !!st.colorBlind); de.classList.toggle('rf', !!st.reduceFlash); de.classList.toggle('bigtap', !!st.bigTap);
   const sl = document.getElementById('accSlider');
   if (sl) { sl.classList.toggle('lf', !!st.leftHand); sl.classList.toggle('rt', !st.leftHand); }
 }

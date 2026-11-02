@@ -18,6 +18,8 @@ const req = createRequire(import.meta.url);
 let chromium = null;
 for (const p of [path.join(ROOT, 'node_modules', 'playwright-core'), '/opt/node22/lib/node_modules/playwright', 'playwright-core', 'playwright']) { try { chromium = req(p).chromium; break; } catch (e) { /* next */ } }
 const ONLY = process.env.A18_ONLY || '';
+const FAST = !!process.env.A18_FAST;   // same checks on every run of text; only the scroll overlap and the settle waits get shorter (about 25 percent)
+const JOBS = Math.max(1, +process.env.A18_JOBS || 4);   // pages audited at the same time: every screen and every tab has its own page
 const exe = process.env.CHROMIUM_PATH || (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
 
 // runs inside the page: every visible text run under `rootSel` with colour, size and box. `lim` is the lowest y that is not under the
@@ -90,32 +92,31 @@ if (chromium) {
       await p.waitForTimeout(900); return { p, errs };
     };
     const quiet = (p, sel) => p.waitForFunction(s => document.getAnimations().filter(a => a.playState === 'running' && a.effect.getComputedTiming().iterations !== Infinity && a.effect.target.closest && a.effect.target.closest(s)).length === 0, sel, { timeout: 8000 }).catch(() => {});
+    const seen = {}, jobs = [];
     try {
-      if (!ONLY || ONLY === 'hub') {   // every hub tab, from the top to the very bottom
+      for (const tab of (!ONLY || ONLY === 'hub') ? ['Battle', 'Skills', 'Pets', 'Gear', 'Shop', 'Stats'] : []) jobs.push(async () => {   // every hub tab, from the top to the very bottom, each on its own page
         const { p, errs } = await open();
-        const seen = {};
-        for (const tab of ['Battle', 'Skills', 'Pets', 'Gear', 'Shop', 'Stats']) {
+        {
           await p.evaluate(t => window.CS.openHub(t), tab); await quiet(p, '#hub'); await p.waitForTimeout(400);
           const clear = await p.evaluate(() => { const h = document.querySelector('#hub .hubbody'); let lim = innerHeight; for (const s of ['#hub .tabs', '#hub .bt-dock #stGo']) { const e = document.querySelector(s); if (e && e.getClientRects().length) lim = Math.min(lim, e.getBoundingClientRect().top); } return { sh: h.scrollHeight, top: h.getBoundingClientRect().top, ch: Math.max(120, lim - h.getBoundingClientRect().top - 70) }; });
           let steps = 0, total = 0;
-          for (let t = 0; steps < 30; t += Math.floor(clear.ch * 0.7), steps++) {
+          for (let t = 0; steps < 30; t += Math.floor(clear.ch * (FAST ? 0.85 : 0.7)), steps++) {
             await p.evaluate(t2 => { document.querySelector('#hub .hubbody').scrollTop = t2; }, t); await p.waitForTimeout(100);
             total += await audit(p, `${tab}@${steps}`, '#hub');
             if (t + clear.ch >= clear.sh) break;
           }
           seen[tab] = total; assert.ok(total > 15, `${tab}: text was found (${total})`); assert.ok(steps >= 1 || clear.sh < clear.ch * 1.2, `${tab}: scrolled`);
         }
-        assert.ok(seen.Shop > seen.Battle * 0.6, 'the long tabs were walked to the end');
-        assert.deepEqual(errs, []); await p.close(); n += 8;
-      }
-      if (!ONLY || ONLY === 'first') {   // the first screens: title, settings
+        assert.deepEqual(errs, []); await p.close(); n += 1;
+      });
+      if (!ONLY || ONLY === 'first') jobs.push(async () => {   // the first screens: title, settings
         const { p, errs } = await open();
         assert.ok(await audit(p, 'title', '#title') > 5, 'title text found');
         await p.evaluate(() => document.getElementById('setBtnT').click()); await p.waitForTimeout(700); await quiet(p, '#settings');
         assert.ok(await audit(p, 'settings', '#settings') > 8, 'settings text found');
         assert.deepEqual(errs, []); await p.close(); n += 3;
-      }
-      if (!ONLY || ONLY === 'run') {   // in a run: pause, the upgrade pick, the encore prompt and the result
+      });
+      if (!ONLY || ONLY === 'run') jobs.push(async () => {   // in a run: pause, the upgrade pick, the encore prompt and the result
         const { p, errs } = await open();
         await p.evaluate(() => window.CS.startRun(3)); await p.waitForTimeout(4200);
         await p.evaluate(() => { window.CS.g.pending = 1; }); await p.waitForFunction(() => document.querySelector('#levelup.on'), null, { timeout: 6000 });
@@ -130,7 +131,12 @@ if (chromium) {
         await p.evaluate(() => document.getElementById('rvNo').click()); await p.waitForFunction(() => { if (!document.querySelector('#result.on') && document.querySelector('#revive.on')) document.getElementById('rvNo').click(); return document.querySelector('#result.on'); }, null, { timeout: 20000 }).catch(async e => { console.log('STATE', await p.evaluate(() => [window.CS.mode(), [...document.querySelectorAll('.scr.on')].map(s => s.id), window.CS.g && window.CS.g.phase].join())); throw e; }); await p.waitForTimeout(2500); await quiet(p, '#result');
         assert.ok(await audit(p, 'result', '#result') > 6, 'result text found');
         assert.deepEqual(errs, []); await p.close(); n += 6;
-      }
+      });
+      // the six tabs and the first screens run JOBS at a time (long tabs first); the run screens depend on real time (the encore prompt), so they run alone afterwards
+      const runJob = (!ONLY || ONLY === 'run') ? jobs.pop() : null, queue = [jobs[4], jobs[3], ...jobs.slice(0, 3), jobs[5], ...jobs.slice(6)].filter(Boolean);
+      await Promise.all(Array.from({ length: Math.min(JOBS, queue.length) }, async () => { while (queue.length) await queue.shift()(); }));
+      if (runJob) await runJob();
+      if (!ONLY || ONLY === 'hub') assert.ok(seen.Shop > seen.Battle * 0.6, 'the long tabs were walked to the end');
     } finally { await browser.close(); srv.close(); }
     if (fails.size) console.log('contrast fails:\n' + [...fails].join('\n'));
     assert.deepEqual([...fails], [], 'contrast audit of every screen');

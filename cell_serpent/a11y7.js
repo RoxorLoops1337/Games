@@ -3,6 +3,7 @@
 import { announce, wrapTab } from './access.js';
 import { initClaimA11y } from './a11y9.js';
 import { initA11y10 } from './a11y10.js';
+import { initA11yB11 } from './a11y_b11.js';
 import { STICKERS } from './sticker_b9.js';
 
 const DLG = 'section.scr.on:not(#hub):not(#title)';
@@ -93,4 +94,4 @@ export function initInertFocus() {
   new MutationObserver(ms => { for (const m of ms) for (const n of m.removedNodes) if (n.nodeType === 1 && n.classList && n.classList.contains('dsheet-bg')) later(); }).observe(document.body, { childList: true });
 }
 
-export function initA11y7() { try { initTrap(); initFlashPreview(); syncFilters(); initChestSr(); initInertFocus(); initClaimA11y(); initA11y10(() => STICKERS); } catch (e) { /* never block the game */ } }
+export function initA11y7() { try { initTrap(); initFlashPreview(); syncFilters(); initChestSr(); initInertFocus(); initClaimA11y(); initA11y10(() => STICKERS); initA11yB11(); } catch (e) { /* never block the game */ } }

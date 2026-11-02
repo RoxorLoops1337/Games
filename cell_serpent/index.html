@@ -1057,6 +1057,16 @@
   @media (max-width:340px){#tabBattle .bt-load{flex-wrap:wrap;justify-content:center} #tabBattle .bt-load>.loadout{flex:1 1 100%;justify-content:center} #tabBattle #loadEdit{margin:0 auto}}
   html.hc .bt-load .slot{border-color:#fff}
   /* end @css:18-access round 6 */
+  /* @css:18-access round 11 */
+  /* Bigger buttons (settings > one hand and thumbs): 52px targets and a little more air between neighbours; layouts keep their width */
+  html.bigtap .tgl,html.bigtap .arrow,html.bigtap .filters button,html.bigtap .btn.small,html.bigtap .kcard,html.bigtap .chip,html.bigtap .gl-btn,html.bigtap .dsx,html.bigtap #setClose,html.bigtap #pClose,html.bigtap .btn{min-height:52px}
+  html.bigtap .arrow,html.bigtap .gear,html.bigtap #muteBtn,html.bigtap .dsx{min-width:52px}
+  html.bigtap #setBtnH,html.bigtap #setBtnT{min-height:48px;min-width:48px}
+  html.bigtap .tabs button{min-height:56px}
+  html.bigtap #settings .tgl{margin:6px 0}
+  html.bigtap .card.pick .lockb{width:44px;height:44px;right:10px}
+  html.bigtap .tgl[data-k="bigTap"] .ti{font-size:20px}
+  /* end @css:18-access round 11 */
   /* end @css:18-access */
   /* @css:08-battle-tab */
   #tabBattle{gap:10px} #tabBattle .stagebox{gap:8px}
@@ -2411,6 +2421,7 @@
   <button class="tgl" data-k="leftHand"><i class="ti">🤚</i><span>Left-handed slide bar</span><b>OFF</b></button>
   <button class="tgl" data-k="thumbZone"><i class="ti">👍</i><span>Thumb zone: steer from the bottom third only</span><b>OFF</b></button>
   <button class="tgl" data-k="pauseGuard"><i class="ti">⏸</i><span>Pause button needs two taps</span><b>OFF</b></button>
+  <button class="tgl" data-k="bigTap"><i class="ti">👆</i><span>Bigger buttons (larger touch targets, more space)</span><b>OFF</b></button>
   <label class="volrow" style="display:flex;align-items:center;gap:10px;width:min(420px,92vw);padding:11px 14px;margin:4px 0;border-radius:14px;border:2px solid rgba(255,255,255,.18);background:var(--glass);font-weight:800;font-size:15px"><i class="ti" style="font-style:normal;font-size:20px;width:26px;text-align:center">🔈</i><span style="flex:1">Volume</span><input id="volRange" type="range" min="0" max="100" step="5" value="100" style="width:42%" aria-label="Master volume"></label>
   <div class="sgrp">Save data</div>
   <div class="box"><b style="color:#fff">Backup</b><br>Copy this code somewhere safe. Paste it back to restore your game on any phone.<textarea id="bkCode" spellcheck="false"></textarea></div>
