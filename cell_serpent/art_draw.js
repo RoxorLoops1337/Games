@@ -375,7 +375,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       cel(g, '#ffb3c7', ell(0, r * 0.42, r * 0.58, r * 0.4), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#e88aa6' }); dot(g, -r * 0.2, r * 0.42, r * 0.06); dot(g, r * 0.2, r * 0.42, r * 0.06);
       if (MOOD >= 3) cel(g, '#7a1633', ell(0, r * 0.62, r * 0.26, r * (MOOD === 4 ? 0.2 : 0.12)), { r: r * 0.2, hi: false, lw: r * 0.06, shadow: '#7a1633' });   // MOO
     } else if (k === 'dove') {
-      for (const s of [-1, 1]) cel(g, '#ffffff', poly([[s * r * 0.3, -r * 0.1], [s * r * 1.5, -r * 1.0], [s * r * 1.35, -r * 0.1], [s * r * 1.05, r * 0.3], [s * r * 0.4, r * 0.35]]), { r: r * 0.9, hi: false, lw: r * 0.1, shadow: '#bfd0ee' });
+      const wf = MOOD === 5 ? [-1.5, -0.5] : MOOD === 6 ? [0.15, 0.45] : [-1.0, -0.1];   // 02-animal-art r3: wing-up / wing-down frames for a real flap
+      for (const s of [-1, 1]) cel(g, '#ffffff', poly([[s * r * 0.3, -r * 0.1], [s * r * 1.5, r * wf[0]], [s * r * 1.35, r * wf[1]], [s * r * 1.05, r * 0.3], [s * r * 0.4, r * 0.35]]), { r: r * 0.9, hi: false, lw: r * 0.1, shadow: '#bfd0ee' });
       cel(g, '#ffffff', circ(0, r * 0.05, r * 0.72), { r, shadow: '#c9d8f2' });
       eyes2(g, r * 0.26, -r * 0.05, r * 0.11);
       cel(g, '#ff9a2e', poly([[-r * 0.14, r * 0.12], [r * 0.14, r * 0.12], [0, r * 0.36]]), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#d6601a' });
@@ -461,16 +462,22 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       for (const [k, col] of [[0.98, '#ff9ac6'], [0.76, '#ffc2dc']]) { g.strokeStyle = col; g.lineWidth = r * 0.06; circ(0, 0, r * k)(g); g.stroke(); }
       pawPrint(g, r * 0.72, '#ffe3f0', '#ff9ac6'); },
     dagger: g => { critter(g, 'chick', B * 0.8); },
-    needle: g => { const r = B;
-      cel(g, '#7a5236', poly([[r * 1.25, 0], [-r * 0.5, -r * 0.16], [-r * 0.5, r * 0.16]]), { r: r * 0.6, hi: false, lw: 2.4, shadow: '#4a301c' });
-      cel(g, '#f1cfa0', poly([[r * 1.25, 0], [r * 0.75, -r * 0.08], [r * 0.75, r * 0.08]]), { r: r * 0.2, hi: false, lw: 1.5 });
-      cel(g, '#ff7eb6', poly([[-r * 0.95, -r * 0.08], [-r * 0.6, -r * 0.3], [-r * 0.6, r * 0.08]]), { r: r * 0.25, hi: false, lw: 1.5, shadow: '#c93a8f' }); },
+    needle: g => { const r = B;   // 02-animal-art r3: a silver sewing needle, gold eye, a pink thread that curls behind it (+x is the tip)
+      line(g, [[-r * 0.9, 0], [-r * 1.25, r * 0.28], [-r * 1.7, -r * 0.12], [-r * 2.05, r * 0.2]], r * 0.34, INK); line(g, [[-r * 0.9, 0], [-r * 1.25, r * 0.28], [-r * 1.7, -r * 0.12], [-r * 2.05, r * 0.2]], r * 0.16, '#ff7eb6');
+      cel(g, '#e9eefc', poly([[r * 1.55, 0], [r * 1.0, -r * 0.2], [-r * 1.0, -r * 0.22], [-r * 1.0, r * 0.22], [r * 1.0, r * 0.2]]), { r: r * 0.7, hi: false, lw: 2.6, shadow: '#9fb0d8' });
+      g.save(); g.globalAlpha = 0.85; line(g, [[-r * 0.1, -r * 0.1], [r * 1.0, -r * 0.1]], r * 0.07, '#fff'); g.restore();
+      cel(g, '#ffd84d', ell(-r * 0.78, 0, r * 0.2, r * 0.12), { r: r * 0.2, hi: false, lw: 1.8, shadow: '#d49a1e' });
+      g.fillStyle = '#7a4a2a'; ell(-r * 0.78, 0, r * 0.1, r * 0.05)(g); g.fill();
+      sparkle(g, r * 1.5, -r * 0.12, r * 0.3); },
     stick: g => { const r = B;   // a fluffy bunny leg ending in a big foot with toe beans (+x)
       line(g, [[-r * 2, 0], [r * 1.0, 0]], r * 0.6); line(g, [[-r * 2, 0], [r * 1.0, 0]], r * 0.42, '#fffaf0');
       cel(g, '#fffaf0', ell(r * 1.4, 0, r * 0.7, r * 0.5), { r: r * 0.6, hi: false, lw: 3, shadow: '#d8ccd8' });
       for (const y of [-0.22, 0, 0.22]) cel(g, '#ffb3cf', circ(r * 1.75, y * r, r * 0.12), { r: r * 0.12, hi: false, lw: 1.6 });
       cel(g, '#ffb3cf', ell(r * 1.3, 0, r * 0.24, r * 0.3), { r: r * 0.24, hi: false, lw: 1.8 }); },
-    tower: g => { critter(g, 'cow', B * 0.95); },
+    tower: g => { const r = B * 0.95; critter(g, 'cow', r);   // 02-animal-art r3: a ribbon and a golden bell, it is a stage cow after all
+      cel(g, '#ff7eb6', poly([[-r * 0.62, r * 0.78], [r * 0.62, r * 0.78], [r * 0.5, r * 0.98], [-r * 0.5, r * 0.98]]), { r: r * 0.3, hi: false, lw: r * 0.08, shadow: '#c93a8f' });
+      cel(g, '#ffd84d', circ(0, r * 1.1, r * 0.2), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#d49a1e' });
+      g.strokeStyle = '#8a5a12'; g.lineWidth = r * 0.05; g.beginPath(); g.moveTo(-r * 0.15, r * 1.12); g.lineTo(r * 0.15, r * 1.12); g.stroke(); },
     dragon: g => { critter(g, 'dove', B * 0.7); },
     bubble: g => { const r = B * 0.95; critter(g, 'duck', r * 0.55);   // a soap bubble with a rainbow rim and a shine
       const bg = g.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r); bg.addColorStop(0, 'rgba(255,255,255,.35)'); bg.addColorStop(0.7, 'rgba(190,235,255,.22)'); bg.addColorStop(1, 'rgba(255,170,230,.38)');
@@ -481,7 +488,11 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     hog: g => { critter(g, 'hedgehog', B * 0.8); },
     perch: g => { critter(g, 'owl', B * 0.95); },
     satellite: g => { const r = B * 0.9;
-      g.fillStyle = 'rgba(255,240,170,.5)'; g.beginPath(); g.moveTo(r * 0.3, -r * 0.2); g.lineTo(r * 1.6, -r * 1.0); g.lineTo(r * 1.6, r * 1.0); g.lineTo(r * 0.3, r * 0.2); g.closePath(); g.fill();
+      { const cg = g.createLinearGradient(r * 0.3, 0, r * 1.7, 0); cg.addColorStop(0, 'rgba(255,246,170,.95)'); cg.addColorStop(0.6, 'rgba(255,226,110,.55)'); cg.addColorStop(1, 'rgba(255,200,90,.12)');   // 02-animal-art r3: a warm beam, a lamp, a glint
+        g.fillStyle = cg; g.beginPath(); g.moveTo(r * 0.3, -r * 0.22); g.lineTo(r * 1.7, -r * 1.05); g.lineTo(r * 1.7, r * 1.05); g.lineTo(r * 0.3, r * 0.22); g.closePath(); g.fill();
+        g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 2; g.beginPath(); g.moveTo(r * 0.4, -r * 0.2); g.lineTo(r * 1.6, -r * 0.95); g.stroke();
+        cel(g, '#59607f', poly([[r * 0.15, -r * 0.3], [r * 0.5, -r * 0.4], [r * 0.5, r * 0.4], [r * 0.15, r * 0.3]]), { r: r * 0.3, hi: false, lw: 2, shadow: '#363b55' });
+        cel(g, '#fff6c0', ell(r * 0.5, 0, r * 0.07, r * 0.36), { r: r * 0.2, hi: false, lw: 1.4, shadow: '#ffe14a' }); sparkle(g, r * 1.35, -r * 0.55, r * 0.22, '#fffbe0'); }
       g.save(); g.translate(-r * 0.35, 0); critter(g, 'owl', r * 0.75); g.restore(); },
     maw: g => { critter(g, 'bulldog', B * 1.0); },
   };
