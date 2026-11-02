@@ -40,8 +40,8 @@ export function numMotion(src, age, t, out) {
 }
 
 // ---- new marks
-export const KINDS11 = ['clank', 'plates', 'blast', 'goldburst'];
-export const isKind11 = k => k === 'clank' || k === 'plates' || k === 'blast' || k === 'goldburst';
+export const KINDS11 = ['clank', 'plates', 'blast', 'goldburst', 'volley'];
+export const isKind11 = k => k === 'clank' || k === 'plates' || k === 'blast' || k === 'goldburst' || k === 'volley';
 const STEEL = ['#e4ebf5', '#aab6c8', '#7d8aa0'];
 
 function star4(c, r) { c.beginPath(); c.moveTo(0, -r); c.quadraticCurveTo(r * 0.14, -r * 0.14, r, 0); c.quadraticCurveTo(r * 0.14, r * 0.14, 0, r); c.quadraticCurveTo(-r * 0.14, r * 0.14, -r, 0); c.quadraticCurveTo(-r * 0.14, -r * 0.14, 0, -r); c.closePath(); }
@@ -83,6 +83,19 @@ export function drawMark11(c, m, k, a, glow) {
       c.strokeStyle = '#ffd24a'; c.lineWidth = 3 * a + 1; c.beginPath();
       for (let i = 0; i < 9; i++) { const an = i / 9 * TAU + m.seed, r0 = R * 0.35, r1 = R * (0.62 + 0.3 * ((i * 7) % 5) / 5), j = 0.16 * (i & 1 ? 1 : -1);
         c.moveTo(Math.cos(an) * r0, Math.sin(an) * r0); c.lineTo(Math.cos(an + j) * (r0 + r1) * 0.5, Math.sin(an + j) * (r0 + r1) * 0.5); c.lineTo(Math.cos(an) * r1, Math.sin(an) * r1); }
+      c.stroke();
+      break;
+    }
+    case 'volley': {   // b12: an aimed volley in a circle stage: three chevron arcs race out along the aim, with thin spokes between them
+      c.rotate(m.rot); c.lineCap = 'round'; c.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 3; i++) {
+        const kk = Math.max(0, Math.min(1, k * 1.5 - i * 0.18)); if (kk <= 0 || kk >= 1) continue;
+        const r = 26 + m.r * kk * (0.55 + i * 0.22), w = 0.5 - 0.22 * kk;
+        c.globalAlpha = (1 - kk) * 0.75; c.strokeStyle = i === 0 ? '#ffffff' : '#7fe9ff'; c.lineWidth = 4.5 * (1 - kk) + 1;
+        c.beginPath(); c.arc(0, 0, r, -w, w); c.stroke();
+      }
+      c.globalAlpha = a * 0.6; c.strokeStyle = '#bff6ff'; c.lineWidth = 2; c.beginPath();
+      for (let i = -2; i <= 2; i++) { const an = i * 0.16, r0 = 30 + 40 * k, r1 = r0 + 34 * a + 6; c.moveTo(Math.cos(an) * r0, Math.sin(an) * r0); c.lineTo(Math.cos(an) * r1, Math.sin(an) * r1); }
       c.stroke();
       break;
     }

@@ -1,6 +1,6 @@
 // 04-hit-juice (round 2): golden upgrade orbs that fly to the upgrade counter, bomb debris and smoke,
 // capsule muzzle flash and note trails. Own small pools with hard caps. Render-only: never touches the sim.
-import { pointAt, pointInto, W } from './sim.js';
+import { pointAt, pointInto, W, RING_SCALE } from './sim.js';
 const PT1 = { x: 0, y: 0 }, PT2 = { x: 0, y: 0 };   // perf r10: scratch points for the dash telegraph (no object per path lookup per frame)
 import { drawMark9, isNewKind, CHIP_COL } from './hit_juice9.js';
 import { CRIT_FEEL, FINISH_FEEL, CRIT_GAP, CLASS_CAP, classOf, sparkCol, CASCADE_DUR, drawCascade } from './hit_juice10.js';
@@ -59,9 +59,11 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
       if (sound) { sound('fin_' + src); sound('death_' + (e.skin || 'love')); }
     }
   }
+  let IMP = -Math.PI / 2, RNG = false;   // b12: the direction shots travel at the moment of an impact (outward from the duo in circle stages, up in lanes)
   function event(e, g) {
     sounds(e, g);
     if (calm()) return;
+    RNG = !!(g && g.ring && g.p); IMP = RNG && e.x !== undefined ? Math.atan2(e.y - g.p.y, e.x - g.p.x) : -Math.PI / 2;
     cls = e.t === 'kill' ? 'pop' : e.t === 'hit' ? 'hit' : '';
     if (e.t === 'clear') { casc.t = 0; casc.seed = (S.t * 13) | 0; casc.col = e.boss ? '#ff9ad6' : '#ffe14a'; }
     switch (e.t) {
@@ -112,10 +114,17 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         S.rings.push({ x, y, r: R * 1.3, life: 0.4, max: 0.4, col: '#ffb347', glow: true });
         break;
       }
-      case 'swab': case 'dragon': case 'needles': case 'bubble': { const m = M('muz', g.p.x, g.p.y - 44, 0, e.t === 'needles' ? 0.2 : 0.34); m.wk = e.t; break; }   // a muzzle flash in the weapon's own look
+      case 'swab': case 'dragon': case 'needles': case 'bubble': { const rg = g.ring && g.p, m = rg ? M('muz', g.p.x + Math.cos(g.p.aim) * 44 * RING_SCALE, g.p.y + Math.sin(g.p.aim) * 44 * RING_SCALE, 0, e.t === 'needles' ? 0.2 : 0.34) : M('muz', g.p.x, g.p.y - 44, 0, e.t === 'needles' ? 0.2 : 0.34); m.wk = e.t; if (rg) { m.rot = g.p.aim + Math.PI / 2; m.r = RING_SCALE; } break; }   // a muzzle flash in the weapon's own look
       case 'shoot': {
         const p = g.p;
-        if (flashes.length < 4) flashes.push({ x: p.x, y: p.y - 40, t: 0, dur: 0.12 });
+        if (g.ring) {   // b12: circle stages: the flash, the sparks and a radial fan all follow the aim
+          const ca = Math.cos(p.aim), sa = Math.sin(p.aim), d0 = 40 * RING_SCALE;
+          if (flashes.length < 4) flashes.push({ x: p.x + ca * d0, y: p.y + sa * d0, t: 0, dur: 0.12, a: p.aim + Math.PI / 2 });
+          for (let i = 0; i < 3; i++) { const j = (Math.random() - 0.5) * 120, v = 60 + Math.random() * 80; tpush(p.x + ca * 44 * RING_SCALE - sa * (Math.random() - 0.5) * 30, p.y + sa * 44 * RING_SCALE + ca * (Math.random() - 0.5) * 30, ca * v - sa * j, sa * v + ca * j, 0.35, 3 + Math.random() * 2, false); }
+          { const m = M('volley', p.x, p.y, 120, 0.26); m.rot = p.aim; }
+          break;
+        }
+        if (flashes.length < 4) flashes.push({ x: p.x, y: p.y - 40, t: 0, dur: 0.12, a: 0 });
         for (let i = 0; i < 3; i++) tpush(p.x + (Math.random() - 0.5) * 30, p.y - 44, (Math.random() - 0.5) * 120, -60 - Math.random() * 80, 0.35, 3 + Math.random() * 2, false);
         break;
       }
@@ -180,14 +189,14 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
     lastSrc[src] = S.t;
     const x = e.x, y = e.y, big = e.crit ? 1.5 : 1;
     switch (src) {
-      case 'swab': for (let i = 0; i < 4; i++) { const m = P('puff', x + (Math.random() - 0.5) * 26, y + (Math.random() - 0.5) * 20, 9 * big, 0.38, i & 1 ? '#fff' : '#ffc4e4'); m.vx = (Math.random() - 0.5) * 60; m.vy = -30 - Math.random() * 30; } break;
-      case 'daggers': P('slash', x, y, 40 * big, 0.17, '#eaf6ff', -0.9 + (Math.random() - 0.5) * 0.5); break;
+      case 'swab': for (let i = 0; i < 4; i++) { const m = P('puff', x + (Math.random() - 0.5) * 26, y + (Math.random() - 0.5) * 20, 9 * big, 0.38, i & 1 ? '#fff' : '#ffc4e4'); { const sp = 30 + Math.random() * 30, jx = (Math.random() - 0.5) * 60; m.vx = Math.cos(IMP) * sp - Math.sin(IMP) * jx; m.vy = Math.sin(IMP) * sp + Math.cos(IMP) * jx; } } break;
+      case 'daggers': P('slash', x, y, 40 * big, 0.17, '#eaf6ff', IMP + 0.67 + (Math.random() - 0.5) * 0.5); break;
       case 'tower': P('ring', x, y, 54 * big, 0.26, '#ffb15a'); M('flash', x, y, 26 * big, 0.14); break;
       case 'stick': P('zap', x, y, 34 * big, 0.16, '#fff08a', Math.random() * TAU).seed = Math.random() * 9; break;
-      case 'needles': for (let i = 0; i < 3; i++) P('ping', x, y, 22 * big, 0.18, '#a8f0ff', -Math.PI / 2 + (i - 1) * 0.7); break;
+      case 'needles': for (let i = 0; i < 3; i++) P('ping', x, y, 22 * big, 0.18, '#a8f0ff', RNG ? IMP + Math.PI / 2 + (i - 1) * 0.7 : -Math.PI / 2 + (i - 1) * 0.7); break;
       case 'satellite': P('ring', x, y, 38 * big, 0.24, '#9db4ff'); break;
       case 'maw': P('ring', x, y, 46 * big, 0.3, '#c79bff'); break;
-      case 'dragon': for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + (i - 1) * 0.9 + (Math.random() - 0.5) * 0.4, m = P('feather', x, y, 13 * big, 0.6, '#fff', a); m.vx = Math.cos(a) * 70; m.vy = Math.sin(a) * 60; m.seed = Math.random() * 6; } break;
+      case 'dragon': for (let i = 0; i < 3; i++) { const a = IMP + (i - 1) * 0.9 + (Math.random() - 0.5) * 0.4, m = P('feather', x, y, 13 * big, 0.6, '#fff', a); m.vx = Math.cos(a) * 70; m.vy = Math.sin(a) * 60; m.seed = Math.random() * 6; } break;
       case 'bubble': P('bpop', x, y, 48 * big, 0.34, '#fff').seed = Math.random() * 6; break;
       case 'puppy': P('paw', x, y, 30 * big, 0.55, '#ffe0b0', (Math.random() - 0.5) * 0.8); break;
       case 'bell': P('ding', x, y, 58 * big, 0.38, '#ffd9a0'); break;
@@ -259,7 +268,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         case 'zap': { ctx.rotate(m.rot); ctx.strokeStyle = m.col; ctx.lineWidth = 2.6; ctx.lineJoin = 'round'; ctx.beginPath(); const n = 5; for (let j = 0; j <= n; j++) { const xx = -m.r + (j / n) * m.r * 2, yy = j === 0 || j === n ? 0 : Math.sin(m.seed * 3 + j * 2.1 + Math.floor(m.t * 40)) * 9; j ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); break; }
         case 'finish': drawFinish(m, k, a); break;
         case 'sdeath': ctx.scale(1.4, 1.4); drawSpeciesDeath(ctx, m.wk, k, m.seed, text); break;
-        case 'muz': drawMuzzle(ctx, m.wk, k, m.seed); break;
+        case 'muz': if (m.rot) { ctx.rotate(m.rot); ctx.scale(m.r, m.r); } drawMuzzle(ctx, m.wk, k, m.seed); break;
         case 'beam': { ctx.globalCompositeOperation = 'lighter'; const w = m.r * (0.5 + 0.5 * a) * (k < 0.15 ? k / 0.15 : 1), h = 260 * (0.4 + k); ctx.globalAlpha = a * 0.55; ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.moveTo(-w * 0.35, 0); ctx.lineTo(-w, -h); ctx.lineTo(w, -h); ctx.lineTo(w * 0.35, 0); ctx.closePath(); ctx.fill(); ctx.globalAlpha = a * 0.8; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(-w * 0.15, 0); ctx.lineTo(-w * 0.3, -h * 0.8); ctx.lineTo(w * 0.3, -h * 0.8); ctx.lineTo(w * 0.15, 0); ctx.closePath(); ctx.fill(); break; }
         case 'chunk': { const tx = m.vx * m.t, ty = m.vy * m.t + m.seed * m.t * m.t; ctx.translate(tx, ty);
           if (m.gold) { ctx.fillStyle = m.col; ctx.strokeStyle = '#8a5a00'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, m.r * (0.4 + 0.6 * Math.abs(Math.cos(m.t * 16))), m.r, 0, 0, TAU); ctx.fill(); ctx.stroke(); }
@@ -325,16 +334,20 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
   // trails per weapon: needles leave thin streaks, dragon snot a green puff wake, bubbles shed tiny rising bubbles
   function weaponTrail(b, dt) {
     if (trail.length >= cap(56)) return;
-    if (b.kind === 'needle') { if (Math.random() < dt * 40) tpush(b.x, b.y + 22, 0, 90, 0.16, 5, 'streak', b.crit ? '#ffe14a' : '#dff8ff'); }
-    else if (b.kind === 'snot') { if (Math.random() < dt * 22) tpush(b.x + (Math.random() - 0.5) * 10, b.y + 10, (Math.random() - 0.5) * 30, 30, 0.45, 8, false, Math.random() < 0.5 ? '#9dff6d' : '#d6ffb0'); }
-    else if (b.kind === 'bubble') { if (Math.random() < dt * 9) tpush(b.x + (Math.random() - 0.5) * b.r * 1.4, b.y + b.r * 0.5, (Math.random() - 0.5) * 20, -26, 0.7, 4 + Math.random() * 3, 'ring', '#d6f2ff'); }
+    const sp = Math.hypot(b.vx, b.vy) || 1, ux = -b.vx / sp, uy = -b.vy / sp;   // b12: unit vector pointing BEHIND the bullet (down for a lane shot, any way in a circle stage)
+    if (b.kind === 'needle') { if (Math.random() < dt * 40) tpush(b.x + ux * 22, b.y + uy * 22, ux * 90, uy * 90, 0.16, 5, 'streak', b.crit ? '#ffe14a' : '#dff8ff'); }
+    else if (b.kind === 'snot') { if (Math.random() < dt * 22) { const j = Math.random() - 0.5; tpush(b.x + ux * 10 - uy * j * 10, b.y + uy * 10 + ux * j * 10, ux * 30 - uy * j * 30, uy * 30 + ux * j * 30, 0.45, 8, false, Math.random() < 0.5 ? '#9dff6d' : '#d6ffb0'); } }
+    else if (b.kind === 'bubble') { if (Math.random() < dt * 9) tpush(b.x + ux * b.r * 0.5 + (Math.random() - 0.5) * b.r * 1.4, b.y + uy * b.r * 0.5, (Math.random() - 0.5) * 20, -26, 0.7, 4 + Math.random() * 3, 'ring', '#d6f2ff'); }
   }
   function bullets(list, dt) {
     if (calm()) return;
     for (let i = 0; i < list.length && trail.length < cap(56); i++) {
       const b = list[i];
       if (b.kind && b.kind !== 'pill') { weaponTrail(b, dt); continue; }
-      if (Math.random() < dt * (b.crit ? 26 : 12)) tpush(b.x + (Math.random() - 0.5) * 10, b.y + 18, (Math.random() - 0.5) * 40, 30 + Math.random() * 30, b.crit ? 0.55 : 0.4, b.crit ? 7 : 5, Math.random() < 0.35, b.crit ? '#ffe14a' : '#9fefff');
+      if (Math.random() < dt * (b.crit ? 26 : 12)) {
+        const sp = Math.hypot(b.vx, b.vy) || 1, ux = -b.vx / sp, uy = -b.vy / sp, j = (Math.random() - 0.5) * 10, jv = (Math.random() - 0.5) * 40, v = 30 + Math.random() * 30;   // b12: the sparks drop off BEHIND the note
+        tpush(b.x + ux * 18 - uy * j, b.y + uy * 18 + ux * j, ux * v - uy * jv, uy * v + ux * jv, b.crit ? 0.55 : 0.4, b.crit ? 7 : 5, Math.random() < 0.35, b.crit ? '#ffe14a' : '#9fefff');
+      }
     }
   }
 
@@ -397,26 +410,25 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
       ctx.globalAlpha = 0.95 * fade; ctx.fillStyle = cs[1]; critPath(f.src, R * 0.8, 1); ctx.fill();
       if (f.src === 'satellite' || f.src === 'tower') { ctx.globalAlpha = 0.6 * fade; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; critPath(f.src, R * 0.9, 1); ctx.stroke(); }
       if (f.src === 'daggers') ctx.rotate(0.5);
-      ctx.globalAlpha = fade; text(f.str, 0, 0, Math.round(f.size * k / 4) * 4, '#fff', '#a8330a');
+      ctx.globalAlpha = fade; ctx.save(); ctx.scale(k, k); text(f.str, 0, 0, Math.round(f.size / 4) * 4, '#fff', '#a8330a'); ctx.restore();   // b12: baked at the base rung, the pop is a scale
       if (tier) text(tier >= 3 ? 'MEGA!' : tier >= 2 ? 'SUPER!' : 'CRIT!', 0, -R * 1.05 - 6, 16 + tier * 2, tier >= 3 ? '#ff9ad6' : '#fff2a8', '#7a2a08');
       ctx.restore(); return true;
     }
     if (f.key === 'chain') {
-      const sz = Math.round(f.size * k / 4) * 4, w = sz * (String(f.str).length * 0.62 + 1.3), h = sz * 1.15;
+      const sz0 = Math.round(f.size / 4) * 4, sz = sz0 * k, w = sz * (String(f.str).length * 0.62 + 1.3), h = sz * 1.15;
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(Math.sin(f.life * 12) * 0.05);
       ctx.fillStyle = 'rgba(16,19,28,.82)'; ctx.strokeStyle = f.col; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-w / 2, -h / 2, w, h, h / 2) : ctx.rect(-w / 2, -h / 2, w, h); ctx.fill(); ctx.stroke();
-      text(f.str, 0, 1, sz, f.col); ctx.restore(); return true;
+      ctx.scale(k, k); text(f.str, 0, 1, sz0, f.col); ctx.restore(); return true;
     }
     if (f.key === 'badge') {
-      const sz = Math.round(f.size * k / 4) * 4;
-      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(-0.06); text(f.str, 0, 0, sz, '#fff3a0', '#8a5a00'); ctx.restore(); return true;
+            ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(-0.06); ctx.scale(k, k); text(f.str, 0, 0, Math.round(f.size / 4) * 4, '#fff3a0', '#8a5a00'); ctx.restore(); return true;
     }
     if (f.key && f.size >= 20) {
-      if (calm()) { text(f.str, f.x, f.y, Math.round(f.size * k / 4) * 4, f.col, DARK[f.src] || '#10131c'); return true; }
+      if (calm()) { ctx.save(); ctx.translate(f.x, f.y); ctx.scale(k, k); text(f.str, 0, 0, Math.round(f.size / 4) * 4, f.col, DARK[f.src] || '#10131c'); ctx.restore(); return true; }
       const mo = numMotion(f.src, f.max - f.life, S.t, NUMM);   // round 11: the number moves like the weapon that hit
-      ctx.save(); ctx.translate(f.x + mo.dx, f.y + mo.dy); ctx.rotate(mo.rot); if (mo.sc !== 1) ctx.scale(mo.sc, mo.sc);
-      text(f.str, 0, 0, Math.round(f.size * k / 4) * 4, f.col, DARK[f.src] || '#10131c'); ctx.restore(); return true;
+      ctx.save(); ctx.translate(f.x + mo.dx, f.y + mo.dy); ctx.rotate(mo.rot); ctx.scale(mo.sc * k, mo.sc * k);
+      text(f.str, 0, 0, Math.round(f.size / 4) * 4, f.col, DARK[f.src] || '#10131c'); ctx.restore(); return true;
     }
     return false;
   }
@@ -447,7 +459,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
       const q = trail[i]; q.life -= dt; if (q.life <= 0) { trail[i] = trail[trail.length - 1]; trail.pop(); tfree.push(q); continue; }
       q.x += q.vx * dt; q.y += q.vy * dt; const a = q.life / q.max;
       ctx.globalAlpha = a * 0.8; ctx.fillStyle = q.col || '#9fefff';
-      if (q.n === 'streak') { ctx.strokeStyle = q.col; ctx.lineCap = 'round'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x, q.y + 26 * a + 4); ctx.stroke(); }
+      if (q.n === 'streak') { ctx.strokeStyle = q.col; ctx.lineCap = 'round'; ctx.lineWidth = 2.4; ctx.beginPath(); const sl = (26 * a + 4) / (Math.hypot(q.vx, q.vy) || 1); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x + q.vx * sl, q.y + q.vy * sl); ctx.stroke(); }   // b12: the streak lies along the drift, so it trails behind any shot
       else if (q.n === 'ring') { ctx.strokeStyle = q.col; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(q.x, q.y, q.s * (1.4 - a * 0.4), 0, TAU); ctx.stroke(); }
       else if (q.n) { const s = q.s; ctx.beginPath(); ctx.ellipse(q.x, q.y, s * 0.7, s * 0.5, -0.4, 0, TAU); ctx.fill(); ctx.fillRect(q.x + s * 0.4, q.y - s * 1.6, 1.8, s * 1.7); }
       else { ctx.beginPath(); ctx.arc(q.x, q.y, q.s * a, 0, TAU); ctx.fill(); }
@@ -455,7 +467,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
     for (let i = flashes.length - 1; i >= 0; i--) {
       const f = flashes[i]; f.t += dt; if (f.t >= f.dur) { flashes.splice(i, 1); continue; }
       const k = f.t / f.dur; glow(f.x, f.y, 62 * (1 - k * 0.4), '#bff6ff', 0.85 * (1 - k));
-      ctx.save(); ctx.globalAlpha = 1 - k; ctx.fillStyle = '#fff'; ctx.translate(f.x, f.y); ctx.beginPath(); ctx.moveTo(0, -34 * (1 - k)); ctx.lineTo(7, 0); ctx.lineTo(0, 8); ctx.lineTo(-7, 0); ctx.closePath(); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.globalAlpha = 1 - k; ctx.fillStyle = '#fff'; ctx.translate(f.x, f.y); if (f.a) ctx.rotate(f.a); ctx.beginPath(); ctx.moveTo(0, -34 * (1 - k)); ctx.lineTo(7, 0); ctx.lineTo(0, 8); ctx.lineTo(-7, 0); ctx.closePath(); ctx.fill(); ctx.restore();
     }
     for (let i = powers.length - 1; i >= 0; i--) {
       const o = powers[i]; o.t += dt; const k = Math.min(1, o.t / o.dur), e = k * k * (3 - 2 * k), tx = o.p.x, ty = o.p.y - 52;
