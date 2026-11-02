@@ -259,7 +259,9 @@ export function drawRing(c, ring, t, boss, pulse, kit) {
   const disc = kit && kit.bake ? kit.bake('ringfloor3|' + boss + '|' + R, R * 2, R * 2, bb => paint(bb, 0, 0, 0.5), 1) : null;
   if (disc) { c.save(); c.globalAlpha = 0.85 + beat * 0.3 > 1 ? 1 : 0.85 + beat * 0.3; c.drawImage(disc.c, cx - R, cy - R); c.restore(); }
   else paint(c, cx, cy, beat);
-  for (let i = 1; i <= 2; i++) { const ph = (t * 0.7 + i * 0.5) % 1; c.strokeStyle = `rgba(255,200,230,${0.25 * (1 - ph)})`; c.lineWidth = 3; c.beginPath(); c.arc(cx, cy, R * (0.3 + ph * 0.7), 0, TAU); c.stroke(); }
+  const ga = c.globalAlpha;
+  for (let i = 1; i <= 2; i++) { const ph = (t * 0.7 + i * 0.5) % 1; c.globalAlpha = ga * 0.25 * (1 - ph); c.strokeStyle = 'rgb(255,200,230)'; c.lineWidth = 3; c.beginPath(); c.arc(cx, cy, R * (0.3 + ph * 0.7), 0, TAU); c.stroke(); }
+  c.globalAlpha = ga;
   // glow: stacked wide strokes, outside and inside the rim (no shadowBlur, cheap on phones)
   c.save(); c.globalCompositeOperation = 'lighter';
   for (let i = 0; i < 4; i++) { c.lineWidth = 56 - i * 13 + beat * 10; c.strokeStyle = `rgba(${hue},${0.05 + i * 0.035 + beat * 0.03})`; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.stroke(); }
@@ -268,7 +270,12 @@ export function drawRing(c, ring, t, boss, pulse, kit) {
   c.lineWidth = 11; c.strokeStyle = 'rgba(8,3,26,.55)'; c.stroke();
   c.lineWidth = 5.5; c.strokeStyle = 'rgba(255,170,205,.95)'; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
   c.lineWidth = 1.5; c.strokeStyle = `rgba(255,255,255,${0.45 + beat * 0.3})`; c.beginPath(); c.arc(cx, cy, R - 6, 0, TAU); c.stroke();
-  for (let i = 0; i < 24; i++) { const a = i / 24 * TAU, on = ((i + Math.floor(t * 6)) % 3) === 0; c.fillStyle = on ? '#fff3c4' : 'rgba(255,200,220,.5)'; c.beginPath(); c.arc(cx + Math.cos(a) * (R + 14), cy + Math.sin(a) * (R + 14), on ? 4 : 2.8, 0, TAU); c.fill(); }
+  const lit = Math.floor(t * 6) % 3;   // the 24 bulbs: lit ones and dim ones are each one path and one fill
+  for (let pass = 0; pass < 2; pass++) {
+    c.fillStyle = pass ? '#fff3c4' : 'rgba(255,200,220,.5)'; c.beginPath();
+    for (let i = 0; i < 24; i++) { if (((i + lit) % 3 === 0) !== (pass === 1)) continue; const a = i / 24 * TAU, bx = cx + Math.cos(a) * (R + 14), by = cy + Math.sin(a) * (R + 14), br = pass ? 4 : 2.8; c.moveTo(bx + br, by); c.arc(bx, by, br, 0, TAU); }
+    c.fill();
+  }
 }
 
 // ---- stage life: weather with parallax, speaker pulse, bobbing crowd, cheering paws, boss lightning
@@ -290,11 +297,11 @@ function drawWeather(c, kind, th, list, t, n) {
     const m = list[i], z = m.z;
     if (kind === 'fireflies') {   // wander near their spot and blink
       const x = m.x + Math.sin(t * 0.5 * m.v + m.p) * 40 * z, y = LINE_Y - 60 - ((m.y * 0.6 + Math.cos(t * 0.4 * m.v + m.p) * 30) % 520), b = Math.max(0, Math.sin(t * 1.7 * m.v + m.p));
-      c.globalCompositeOperation = 'lighter'; c.fillStyle = `rgba(210,255,120,${0.16 * b * z})`; c.beginPath(); c.arc(x, y, 9 * z, 0, TAU); c.fill();
-      c.fillStyle = `rgba(255,255,190,${0.9 * b})`; c.beginPath(); c.arc(x, y, 2 * z, 0, TAU); c.fill();
+      c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.16 * b * z; c.fillStyle = 'rgb(210,255,120)'; c.beginPath(); c.arc(x, y, 9 * z, 0, TAU); c.fill();
+      c.globalAlpha = 0.9 * b; c.fillStyle = 'rgb(255,255,190)'; c.beginPath(); c.arc(x, y, 2 * z, 0, TAU); c.fill();
     } else {
       const sp = (kind === 'snow' ? 26 : 38) * z * m.v, span = H + 80, y = ((m.y + t * sp) % span) - 40, x = ((m.x + Math.sin(t * 0.6 * m.v + m.p) * 22 * z + t * (kind === 'petals' ? 14 : 4) * z) % (W + 60) + W + 60) % (W + 60) - 30;
-      if (kind === 'snow') { c.fillStyle = `rgba(255,255,255,${0.35 + 0.2 * z})`; c.beginPath(); c.arc(x, y, 2.2 * z, 0, TAU); c.fill(); }
+      if (kind === 'snow') { c.globalAlpha = 0.35 + 0.2 * z; c.fillStyle = '#fff'; c.beginPath(); c.arc(x, y, 2.2 * z, 0, TAU); c.fill(); }
       else { c.save(); c.translate(x, y); c.rotate(t * m.v + m.p); c.scale(1, 0.55 + 0.45 * Math.abs(Math.sin(t * 1.6 + m.p))); c.fillStyle = (i & 1 ? th.lite : '#ffd7e8'); c.globalAlpha = 0.5 + 0.2 * z; c.beginPath(); c.ellipse(0, 0, 6 * z, 3.4 * z, 0, 0, TAU); c.fill(); c.restore(); }
     }
   }
@@ -357,7 +364,7 @@ export function createBgFx() {
         const cy = y + h * (0.3 + i * 0.4), rr = w * (i ? 0.3 : 0.2), k = 1 + pulse * 0.16 + cheer * 0.05;
         c.fillStyle = '#0a0716'; c.beginPath(); c.arc(x + w / 2, cy, rr * 0.99, 0, TAU); c.fill();
         c.fillStyle = `rgb(${44 + pulse * 70 | 0},${35 + pulse * 40 | 0},${80 + pulse * 70 | 0})`; c.beginPath(); c.arc(x + w / 2, cy, rr * 0.46 * k, 0, TAU); c.fill();
-        c.strokeStyle = `rgba(${boss ? '255,110,140' : '140,230,255'},${0.15 + pulse * 0.5})`; c.lineWidth = 3; c.beginPath(); c.arc(x + w / 2, cy, rr * (0.75 + pulse * 0.25), 0, TAU); c.stroke();
+        c.globalAlpha = 0.15 + pulse * 0.5; c.strokeStyle = boss ? 'rgb(255,110,140)' : 'rgb(140,230,255)'; c.lineWidth = 3; c.beginPath(); c.arc(x + w / 2, cy, rr * (0.75 + pulse * 0.25), 0, TAU); c.stroke();
       }
       c.restore();
     }

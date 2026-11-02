@@ -14,7 +14,8 @@ import { createCheer, HAT_FX, hatPose } from './cheer.js';
 import { createBoltLayer, boltPose, paintBolt } from './bolts_fx.js';
 
 const TAU = Math.PI * 2;
-const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
+const NUMS = [];
+const num = v => { v = Math.ceil(v); if (v >= 0 && v < 1000) return NUMS[v] || (NUMS[v] = String(v)); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
 
 export function createRenderer(canvas, art, kit) {
   const ctx = canvas.getContext('2d');
@@ -47,23 +48,32 @@ export function createRenderer(canvas, art, kit) {
     else { const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
     ctx.restore();
   }
-  const tcache = new Map();
+  // text strips are looked up through nested maps (fill, stroke, size, string) so a hit allocates nothing: no key string, no font string
+  const tcache = new Map(), tq = []; let tn = 0;
+  function textSprite(str, size, fill, stroke) {
+    let a = tcache.get(fill); if (!a) tcache.set(fill, a = new Map());
+    let b = a.get(stroke); if (!b) a.set(stroke, b = new Map());
+    let c = b.get(size); if (!c) b.set(size, c = new Map());
+    let t = c.get(str);
+    if (t === undefined) {
+      const font = `800 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+      ctx.font = font; const pad = Math.ceil(size * 0.3), w = Math.ceil(ctx.measureText(str).width) + pad * 2, h = Math.ceil(size * 1.5), d = kit.dpr;
+      const cv = kit.makeCanvas(w * d, h * d);
+      if (cv) { const g = cv.getContext('2d'); g.scale(d, d); g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * 0.2); g.strokeStyle = stroke; g.strokeText(str, w / 2, h / 2); g.fillStyle = fill; g.fillText(str, w / 2, h / 2); }
+      t = { c: cv, w, h, pad };
+      if (tn >= 500) { for (let n = 0; n < 160 && tq.length; n++) { const o = tq.shift(); o[0].delete(o[1]); tn--; } }
+      c.set(str, t); tq.push([c, str]); tn++;
+    }
+    return t;
+  }
   function text(str, x, y, size, fill = '#fff', stroke = '#10131c', align = 'center') {
-    str = String(str);
+    if (typeof str !== 'string') str = String(str);
     size = size >= 20 ? Math.round(size) : Math.round(size * 2) / 2;   // 17-perf: pulsing sizes share a few baked strips instead of baking one per frame
-    const font = `800 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
     if (kit && kit.makeCanvas) {
-      const key = str + '|' + size + '|' + fill + '|' + stroke;
-      let t = tcache.get(key);
-      if (!t) {
-        ctx.font = font; const pad = Math.ceil(size * 0.3), w = Math.ceil(ctx.measureText(str).width) + pad * 2, h = Math.ceil(size * 1.5), d = kit.dpr;
-        const c = kit.makeCanvas(w * d, h * d);
-        if (c) { const g = c.getContext('2d'); g.scale(d, d); g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * 0.2); g.strokeStyle = stroke; g.strokeText(str, w / 2, h / 2); g.fillStyle = fill; g.fillText(str, w / 2, h / 2); }
-        t = { c, w, h, pad }; if (tcache.size > 500) { let n = 0; for (const k of tcache.keys()) { tcache.delete(k); if (++n >= 160) break; } } tcache.set(key, t);
-      }
+      const t = textSprite(str, size, fill, stroke);
       if (t.c) { ctx.drawImage(t.c, align === 'left' ? x - t.pad : align === 'right' ? x - t.w + t.pad : x - t.w / 2, y - t.h / 2, t.w, t.h); return; }
     }
-    ctx.font = font; ctx.textAlign = align; ctx.textBaseline = 'middle';
+    ctx.font = `800 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2, size * 0.2); ctx.strokeStyle = stroke; ctx.strokeText(str, x, y);
     ctx.fillStyle = fill; ctx.fillText(str, x, y);
   }

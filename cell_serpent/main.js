@@ -228,11 +228,16 @@ function drawPreview(t) {
 }
 // the species portrait next to the lane: a big face with a soft glow that bobs and looks around
 const ptCtx = $('stPortrait').getContext('2d');
+let ptKey = '', ptGlow = null;
 function drawPortrait(t, info) {
   const c = ptCtx, S = 240, sp = kit.SPECIES && kit.SPECIES[info.skin];
   c.clearRect(0, 0, S, S);
-  const gl = c.createRadialGradient(S / 2, S / 2, 6, S / 2, S / 2, S * 0.5); gl.addColorStop(0, (sp ? sp.lite : '#fff') + 'aa'); gl.addColorStop(0.5, (sp ? sp.base : '#8a7aff') + '44'); gl.addColorStop(1, 'rgba(0,0,0,0)');
-  c.fillStyle = gl; c.fillRect(0, 0, S, S);
+  if (ptKey !== info.skin || !ptGlow) {   // the soft glow is the same every frame: painted once per species
+    ptKey = info.skin; ptGlow = ptGlow || document.createElement('canvas'); ptGlow.width = ptGlow.height = S; const b = ptGlow.getContext('2d');
+    const gl = b.createRadialGradient(S / 2, S / 2, 6, S / 2, S / 2, S * 0.5); gl.addColorStop(0, (sp ? sp.lite : '#fff') + 'aa'); gl.addColorStop(0.5, (sp ? sp.base : '#8a7aff') + '44'); gl.addColorStop(1, 'rgba(0,0,0,0)');
+    b.fillStyle = gl; b.fillRect(0, 0, S, S);
+  }
+  c.drawImage(ptGlow, 0, 0);
   const bob = Math.sin(t * 2.2) * 5, sc = 1 + Math.sin(t * 2.2 + 1) * 0.03;
   kit.drawHead(c, S / 2, S / 2 + bob, 78 * (info.boss ? 1.12 : 1) * sc, Math.PI / 2 + Math.sin(t * 0.9) * 0.15, { skin: info.skin, boss: info.boss, t, look: [Math.sin(t * 1.3) * 0.6, 0.8] });
 }
@@ -596,6 +601,7 @@ function drain(game, sound) {
     if (BUZZ[e.t] !== undefined) buzz(BUZZ[e.t]);
   }
 }
+let pauseN = 0, pauseW = 0, pauseH = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000 || 0); last = now;
@@ -624,6 +630,7 @@ function frame(now) {
     audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0); audio.mix({ stage: g.stage, boss: isBossStage(g.stage), groove: g.groove / 20, danger: g.danger, skin: cues.skin(g), bphase: cues.tick(g) });
     if (g.phase === 'play') audio.sync(beatPhase(g));
   }
+  if (mode === 'pause') { if (pauseN > 2 && pauseW === canvas.width && pauseH === canvas.height) return; pauseN++; pauseW = canvas.width; pauseH = canvas.height; } else pauseN = 0;   // a paused picture is frozen: draw it a few times (and again after a resize), then leave the canvas alone
   if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2 }, mode === 'pause' ? 0 : dt);
     if (mode === 'play') for (const n of R.takeSounds()) audio.play(n); else R.takeSounds(); }
 }
