@@ -157,3 +157,13 @@ console.log('16_addiction ok');
 }
 console.log('16_addiction round 2 ok');
 
+
+// batch 3: retention UI source stays wired (quest rows, season rail, ready banner, mastery order, toast reward)
+{
+  const { readFileSync } = await import('node:fs');
+  const r = readFileSync(join(root, 'retain_ui.js'), 'utf8'), a = readFileSync(join(root, 'addict_ui.js'), 'utf8'), h = readFileSync(join(root, 'index.html'), 'utf8');
+  assert.ok(r.includes('qrow') && r.includes('qhero') && r.includes('searail') && r.includes('seastat'));
+  assert.ok(a.includes('readybar') && a.includes('mfrac'));
+  for (const c of ['.qrow', '.qhero', '.searail', '.readybar', '.tile.mast']) assert.ok(h.includes(c), 'css ' + c);
+  assert.ok(!/—/.test(r + a), 'no em dash');
+}
