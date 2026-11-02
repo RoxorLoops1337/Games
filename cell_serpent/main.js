@@ -23,6 +23,8 @@ import { luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTM
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { paintTabIcons, bindHubSwipe } from './tabs_ui.js';
 import { paintButtonGlyphs, RECAP, emptyCard } from './btn_glyphs.js';
+import { paintSettingIcons } from './icons_b8.js';
+import { flashDone } from './btn_state.js';
 import { watchSideIcons } from './side_icons.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
 import { renderRecStrip } from './build_rec.js';
@@ -160,7 +162,7 @@ function renderHub() {
   if (stagKey !== hubTab) { stagKey = hubTab; if (hubTab !== 'Battle') motion.stagger($('tab' + hubTab)); }
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { audio.unlock(); audio.play('click'); hubTab = b.dataset.tab; hubTabSwitch(); };
-paintTabIcons(); paintButtonGlyphs();
+paintTabIcons(); paintButtonGlyphs(); paintSettingIcons();
 bindHubSwipe({ order: TABS, cur: () => hubTab, hub: $('hub'), pane: () => $('tab' + hubTab), bump: () => buzz(10), go: t => { if (mode !== 'hub') return; audio.unlock(); audio.play('click'); buzz(6); hubTab = t; hubTabSwitch(); } });
 // 17-perf: a tab tap paints the new pane at once (old content dimmed as a light skeleton) and builds it on the next frame, so the tap never freezes
 let hubSwitchTok = 0;
@@ -546,7 +548,7 @@ function openSettings(back) {
   };
   { const vs = $('volRange'); if (vs) { vs.value = Math.round(save.settings.volume * 100); vs.oninput = () => { save.settings.volume = vs.value / 100; audio.setVolume(save.settings.volume); audio.unlock(); audio.play('slide', { f: save.settings.volume }); }; vs.onchange = () => { persist(); audio.unlock(); audio.play('tap'); }; } }
   { const ts = $('tsRange'), out = $('tsOut'); if (ts) { const cur = textScaleOf(save.settings); ts.value = Math.round(cur * 100); out.textContent = textScaleLabel(cur); ts.oninput = () => { const v = ts.value / 100; save.settings.textScale = v; save.settings.bigText = false; out.textContent = textScaleLabel(v); applyPageSettings(save.settings); if (R) R.setOptions({ textScale: v }); }; ts.onchange = () => { persist(); audio.unlock(); audio.play('tap'); }; } }
-  $('bkCopy').onclick = async () => { const t = $('bkCode').value; try { await navigator.clipboard.writeText(t); toast('Code copied'); } catch (e) { $('bkCode').select(); toast('Select and copy the code'); } };
+  $('bkCopy').onclick = async () => { const t = $('bkCode').value; try { await navigator.clipboard.writeText(t); toast('Code copied'); flashDone($('bkCopy'), 'COPIED'); } catch (e) { $('bkCode').select(); toast('Select and copy the code'); } };
   $('bkLoad').onclick = () => { const s2 = importSave($('bkCode').value); if (!s2) { toast('That code does not work'); return; } save = s2; persist(); applySettings(); refreshCur(); toast('Game loaded'); paint(); };
   $('setClose').onclick = () => { audio.play('click'); (back || (() => (mode === 'hub' ? openHub() : toTitle())))(); };
   paint(); show('settings');

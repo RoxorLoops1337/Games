@@ -1724,6 +1724,24 @@
   .empty7 b{font-size:17px;color:#fff} .empty7 span{font-size:13px;font-weight:700;color:var(--dim);margin-bottom:6px}
   .empty7 .e7i{animation:d19Float 2.6s ease-in-out infinite} @keyframes d19Float{50%{transform:translateY(-5px) rotate(6deg)}} html.rm .empty7 .e7i{animation:none}
 /* end @css:19-buttons round 7 b */
+/* @css:19-buttons round 8 */
+  #settings .tgl .ti.t8,#settings .volrow .ti.t8{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:10px;font-size:0;color:#10131c;background:linear-gradient(160deg,color-mix(in srgb,var(--tc) 60%,#fff),var(--tc));box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 2px 4px rgba(0,0,0,.35);transition:filter .25s,transform .25s cubic-bezier(.3,1.6,.5,1)}
+  #settings .tgl .ti.t8 .si8,#settings .volrow .ti.t8 .si8{width:19px;height:19px;display:block}
+  #settings .tgl:not(.on) .ti.t8{filter:saturate(.4) brightness(.8)}
+  #settings .tgl.on .ti.t8{transform:scale(1.06) rotate(-4deg)}
+  html.rm #settings .tgl.on .ti.t8{transform:none}
+  .emptycard .em-ic{display:block;font-size:0} .emptycard .em-svg{display:block;margin:0 auto;filter:drop-shadow(0 3px 5px rgba(0,0,0,.35))}
+  .btn.done8{background:linear-gradient(180deg,#b6ff8f,#5fd63a)!important;color:#10131c!important;pointer-events:none;animation:bs8Pop .4s cubic-bezier(.3,1.7,.5,1)}
+  .btn.done8 .bs8{vertical-align:-.12em;margin-right:.15em}
+  @keyframes bs8Pop{from{transform:scale(.9)}to{transform:scale(1)}}
+  .btn.busy8{position:relative;color:transparent!important;pointer-events:none}
+  .btn.busy8::before{content:"";position:absolute;left:50%;top:50%;width:1.1em;height:1.1em;margin:-.55em 0 0 -.55em;border-radius:50%;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;animation:bs8Spin .7s linear infinite}
+  @keyframes bs8Spin{to{transform:rotate(360deg)}}
+  html.rm .btn.busy8::before{animation:none;border-top-color:rgba(255,255,255,.35);border-right-color:#fff}
+  html.rm .btn.done8{animation:none}
+  #settings .tgl:active b::after{width:30px;transition:width .1s}
+  #settings .tgl.on:active b::after{transform:translateX(16px)}
+/* end @css:19-buttons round 8 */
   /* @css:11-result-goal */
   .rgoal{display:none;align-items:center;gap:10px;width:min(320px,86vw);padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);cursor:pointer;text-align:left;animation:rpIn .45s .9s both}
   .rgoal.on{display:flex}
