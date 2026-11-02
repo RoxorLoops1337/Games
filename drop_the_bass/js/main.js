@@ -1,13 +1,13 @@
 // main.js: the app shell. Loads the save, owns the canvas and the DOM root, runs the loop, routes between title, hub, cutscenes and battle.
-import { W, H } from './data_core.js';
-import { Run } from './sim.js';
+import { W, H, GAME, WORLDS, BOSSES } from './data_core.js';
+import { Run, genWave } from './sim.js';
 import { AudioFx } from './audio.js';
 import * as M from './meta.js';
 import { makeRng } from './rng.js';
 import { Battle, battleIdle } from './battle.js';
 import { Cutscene } from './cutscene.js';
-import { buildHub, settingsModal, setlistSheet, langPicker } from './ui_hub.js';
-import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo } from './ui_run.js';
+import { buildHub, settingsModal, setlistSheet, langPicker, welcomeSheet, dailyGigModal, royaltiesModal, whatsNewModal } from './ui_hub.js';
+import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo, showPracticeResults } from './ui_run.js';
 import { setRoot, h, btn, modal, toast, actionToast, tickLive, AE, AW } from './ui_core.js';
 import { submitScore, rankOf } from './lb.js';
 import { setStyle } from './style.js';
@@ -33,10 +33,25 @@ initDataLang();   // names and descriptions of the data tables follow the langua
 await I18N.initLang({ profile: profile.settings.lang });
 profile.settings.lang = I18N.getLangPref();
 const hadSave = loaded.hadSave;
+// the page itself follows the language: tab title, search description and the canvas label for screen readers
+function applyPageText() {
+  try {
+    document.title = t('page.title', 'Drop the Bass');
+    canvas.setAttribute('aria-label', t('page.canvas_label', 'Drop the Bass game canvas'));
+    const d = document.querySelector('meta[name="description"]');
+    if (d) d.setAttribute('content', t('page.description', 'Turret defense with RoxorLoops and Jasmin. Merge your gear into speaker turrets, remix, loot and keep the music live.'));
+    const a = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (a) a.setAttribute('content', t('page.title', 'Drop the Bass'));
+  } catch (e) { /* never block the boot */ }
+}
+applyPageText();
 let saveT = 0, saveFailT = 0;
+// the last moment the player was active before this session started (Welcome back compares it with the clock)
+const awayFrom = Math.max(+profile.lastSeen || 0, +profile.lastActive || 0);
 // validate-then-commit (meta.commitSave): a profile that does not survive serialise + parse back never overwrites the last good save
 function writeSave(opts) {
   let r;
+  if (app.screen !== 'boot') app.profile.lastActive = Date.now();
   try { r = M.commitSave(localStorage, app.profile, opts && opts.force ? opts : undefined); } catch (e) { r = { ok: false, reason: 'storage' }; }
   if (!r.ok && r.reason !== 'storage' && r.reason !== 'verify') {
     try { M.repairProfile(app.profile, Date.now()); r = M.commitSave(localStorage, app.profile, opts && opts.force ? opts : undefined); } catch (e) { /* give up below */ }
@@ -48,8 +63,8 @@ function writeSave(opts) {
 let rngCounter = 1;
 const app = {
   profile, audio: AudioFx, ui, view: { cw: 540, ch: 960, dpr: 1, s: 1, ox: 0, oy: 0 },
-  screen: 'boot', battle: null, cut: null, hub: null, hubTab: 'tour', hadSave,
-  now: () => Date.now(),
+  screen: 'boot', battle: null, practice: null, cut: null, hub: null, hubTab: 'tour', hadSave,
+  now: () => Date.now(), awayFrom,
   rng: () => makeRng((Date.now() ^ Math.imul(rngCounter++, 2654435761)) >>> 0),
   save() { clearTimeout(saveT); saveT = setTimeout(writeSave, 150); },
   saveNow: writeSave,
@@ -76,7 +91,7 @@ const app = {
     app.screen = 'cut';
     app.cut = new Cutscene(app, id, () => { app.cut = null; if (done) done(); });
   },
-  showTitle, openHub, startRun, requestRun, quitRun, afterResults, resumeRun, submitBoard,
+  showTitle, openHub, startRun, requestRun, quitRun, afterResults, resumeRun, submitBoard, endPractice,
   hooks: {
     toast: (m) => toast(m),
     spendDiamonds: (n) => app.spendDiamonds(n),
@@ -87,7 +102,7 @@ const app = {
     onEnd: (run, b) => onRunEnd(run, b),
     bossIntro: (type, b) => {
       const p = app.profile;
-      if (p.story.worlds['boss_' + type]) return;
+      if (p.story.worlds['boss_' + type] || (b.run && b.run.practice)) return;
       p.story.worlds['boss_' + type] = true; app.save();
       b.hold = true;
       const keep = ui.innerHTML;
@@ -169,19 +184,19 @@ function openHub(tab) {
     p.tutorial.hints.lang_offer = true; app.save();
     setTimeout(() => { if (app.screen === 'hub') actionToast(t('toast.lang_offer', 'Switch to {lang}?', { lang: I18N.langName(offer) }), t('toast.lang_switch', 'Switch'), () => app.setLangPref(offer), 9000); }, 1400);
   }
-  // welcome-back bits
+  // welcome-back bits: after 12 hours away the summary sheet, else the Daily Gig or the royalties sheet. What's new follows once per game version.
   const now = app.now();
   if (!app.sessionGreeted && p.tutorial.done) {
     app.sessionGreeted = true;
+    const afterGreet = () => { if (app.screen === 'hub' && M.whatsNewDue(p)) setTimeout(() => { if (app.screen === 'hub' && M.whatsNewDue(p)) whatsNewModal(app); }, 250); };
+    const sum = M.welcomeSummary(p, now, app.awayFrom);
+    app.awayFrom = null;
     const off = M.offlineRecords(p, now);
     const ls = M.loginStatus(p, now);
-    if (ls.claimable) {
-      const m = modal(h('div', null, h('h2', null, t('welcome.daily_gig', 'Daily Gig!')), h('div', { class: 'sub', style: 'text-align:center' }, t('welcome.daily_info', 'Day {day} of your tour. Streak: {streak}', { day: ls.reward.day, streak: ls.streak })),
-        h('div', { class: 'btnrow' }, btn(t('welcome.claim', 'Claim reward'), () => { const r = M.claimLogin(p, now, app.rng()); m.close(); app.audio.play('chest'); toast(t('welcome.claimed', 'Claimed!')); app.hub.render(); }, 'gold'))));
-    } else if (off >= 30) {
-      const m = modal(h('div', null, h('h2', null, t('welcome.back', 'Welcome back!')), h('div', { class: 'sub', style: 'text-align:center' }, t('welcome.streaming', 'Your songs kept streaming while you were away: {n} Records.', { n: off })),
-        h('div', { class: 'btnrow' }, btn(t('welcome.collect', 'Collect'), () => { M.claimOffline(p, now); m.close(); app.audio.play('record'); app.hub.render(); }, 'green'))));
-    }
+    if (sum) welcomeSheet(app, sum, afterGreet);
+    else if (ls.claimable) dailyGigModal(app, ls, afterGreet);
+    else if (off >= 30) royaltiesModal(app, off, afterGreet);
+    else afterGreet();
   }
 }
 
@@ -206,6 +221,7 @@ function requestRun(cfg) {
 function startRun(cfg) {
   const p = app.profile;
   if (!p.tutorial.done) { startTutorial(); return; }
+  if (cfg.mode === 'practice') { startPractice(cfg); return; }
   if (p.resume && !cfg.confirmed) {
     const m = modal(h('div', null, h('h2', null, t('newrun.title', 'Start a new run?')), h('div', { class: 'sub', style: 'text-align:center' }, t('newrun.hint', 'You have a run in progress. Starting a new one drops it.')),
       h('div', { class: 'btnrow' }, btn(t('newrun.start', 'Start new'), () => { m.close(); p.resume = null; startRun(Object.assign({}, cfg, { confirmed: true })); }, 'red'), btn(t('common.back', 'Back'), () => m.close(), 'green'))));
@@ -226,6 +242,7 @@ function startRun(cfg) {
   });
   run.cfg = { mode: cfg.mode, world: cfg.world, encore: cfg.encore || 0, seed: run.seed, daily: cfg.daily, wavesTotal: cfg.wavesTotal, difficulty, heroAbility, modifiers, weekly: !!cfg.weekly, weekId: cfg.weekId, extraFx: cfg.extraFx };
   if (b.hype) { run.hype = run.hypeNeed; run.checkHype(); }
+  if (run.modifiers.length && M.markStep(p, 'modifier')) app.save();
   app.save();
   const go = () => beginBattle(run, false);
   if (cfg.mode === 'story' && !p.story.worlds[cfg.world]) { p.story.worlds[cfg.world] = true; app.save(); app.playCutscene('world_' + cfg.world, go); }
@@ -268,13 +285,82 @@ async function submitBoard(run) {
   const top = await submitScore(id, p.name, r.cleared);
   return rankOf(top, p.name);
 }
+// ------------------------------------------------------------------------------------------------ practice a boss (codex)
+// A normal Run on the stage that features the boss, cut down to ONE wave: the boss at full strength with a few escorts, a long first prep and
+// a coin head start so the board can be built. Built on the public Run options only (sim.js is untouched): the subclass swaps the wave list.
+// No rewards, no Stats, no applyRunResult; the whole profile is restored when practice ends, whatever the battle touched (hints, gem re-rolls).
+class PracticeRun extends Run {
+  constructor(opts) {
+    super(opts);
+    this.practice = opts.practiceBoss; this.practiceWave = opts.practiceWave; this.practiceStart = null; this.practiceDefeat = null;
+  }
+  baseUpcoming() { const s = genWave(this.world, this.practiceWave, this.seed, { wavesTotal: this.world.wavesTotal }); s.w = this.wave + 1; return s; }
+  baseHp() { return super.baseHp(this.practiceWave); }
+  startWave(early) { const ok = super.startWave(early); if (ok && this.practiceStart == null) this.practiceStart = this.t + 1.2; return ok; }   // the boss walks in 1.2 s after the wave starts
+  queueChoice(kind, ...rest) { if (kind === 'boss' || kind === 'remix_rare' || kind === 'chest') return undefined; return super.queueChoice(kind, ...rest); }   // no loot to pick in practice
+  emit(e) { if (e && e.k === 'bossdie' && this.practiceDefeat == null) this.practiceDefeat = this.t; super.emit(e); }
+  finish(won) {
+    super.finish(won);
+    if (this.result) {
+      const t1 = this.practiceDefeat != null ? this.practiceDefeat : (won ? this.t : null);
+      this.result.practice = { boss: this.practice, won, time: t1 != null && this.practiceStart != null ? Math.max(0, Math.round((t1 - this.practiceStart) * 10) / 10) : null };
+    }
+  }
+}
+export const practiceWorld = (boss) => WORLDS.find((w) => w.boss === boss) || WORLDS.find((w) => w.boss10 === boss) || null;
+function startPractice(cfg) {
+  const p = app.profile, def = BOSSES[cfg.boss], world = practiceWorld(cfg.boss);
+  if (!def || !world) { toast(t('practice.unknown', 'That boss cannot be practised yet.')); return; }
+  if (app.practice) restorePractice();
+  const setup = M.computeRunSetup(p);
+  const run = new PracticeRun({
+    world: world.id, mode: 'story', encore: 0, seed: cfg.seed != null ? cfg.seed : (Date.now() & 0x7fffffff), wavesTotal: 1,
+    loadout: setup.loadout, baseFx: setup.baseFx.concat([['startCoins', 'add', 1100]]), heroLv: setup.heroLv, autoMerge: setup.autoMerge, autoMergeOn: setup.autoMergeOn,
+    heroAbility: M.heroAbilitySetup(p), modifiers: [], difficulty: setup.difficulty, firstPrep: 45, extraRerolls: 3,
+    practiceBoss: cfg.boss, practiceWave: world.boss === cfg.boss ? world.wavesTotal : 10,
+  });
+  app.practice = { snap: JSON.stringify(p), boss: cfg.boss };
+  beginBattle(run, false);
+}
+function restorePractice() {
+  const pr = app.practice;
+  if (!pr) return;
+  app.practice = null;
+  try {
+    const old = JSON.parse(pr.snap), p = app.profile;
+    for (const k of Object.keys(p)) delete p[k];
+    Object.assign(p, old);
+  } catch (e) { /* the snapshot came from this profile, so this cannot fail */ }
+  app.save();
+}
+function endPractice(o) {
+  const boss = app.practice && app.practice.boss;
+  restorePractice();
+  app.battle = null;
+  if (o && o.retry && boss) startRun({ mode: 'practice', boss });
+  else openHub(app.hubTab);
+}
+// the next-steps card ticks from the events the battle already emits (a re-roll, a synergy, an upgrade path, a hero move)
+function watchRun(run) {
+  if (run.practice || run.mode === 'tutorial') return;
+  const orig = run.emit;
+  run.emit = function (e) {
+    const id = e && (e.k === 'reroll' && !this.choice ? 'reroll' : e.k === 'synergy' ? 'synergy' : e.k === 'branch' ? 'branch' : e.k === 'hero' ? 'hero' : null);
+    if (id && M.markStep(app.profile, id)) app.save();
+    return orig.call(this, e);
+  };
+}
+
 function beginBattle(run, tutorial) {
   ui.replaceChildren();
   app.screen = 'battle';
+  watchRun(run);
   app.battle = new Battle(app, { run, tutorial });
+  if (run.practice) ui.append(h('div', { class: 'practice-badge', 'data-practice-badge': '' }, t('practice.badge', 'PRACTICE')));
   app.applySettings();
 }
 function onRunEnd(run, battle) {
+  if (run.practice) { if (!run.result) run.finish(false); app.screen = 'battle'; showPracticeResults(app, run); return; }
   if (run.phase === 'lost' && run.mode !== 'tutorial') showDefeat(app, run, battle, () => finalize(run, battle));
   else if (run.phase === 'lost' && run.mode === 'tutorial') { toast(t('toast.practice_again', 'Let us try that practice again.')); startTutorial(); }
   else finalize(run, battle);
@@ -305,6 +391,7 @@ function quitRun(battle) {
   const run = battle.run;
   if (!run.result) run.finish(false);
   battle.ended = true;
+  if (run.practice) { showPracticeResults(app, run); return; }
   finalize(run, battle);
 }
 function afterResults(run, out, opt) {
@@ -357,7 +444,7 @@ function frame(now) {
   try {
     if (!(app.screen === 'battle' && app.battle)) battleIdle(AudioFx);
     if (app.cut && app.screen === 'cut') { app.cut.update(dt); app.cut.draw(ctx, v); }
-    else if (app.screen === 'battle' && app.battle) { app.battle.update(dt); app.battle.draw(ctx, v); }
+    else if (app.screen === 'battle' && app.battle) { if (app.battle.pv && app.battle.pv.open && !app.battle.tut && !app.battle.run.practice && M.markStep(app.profile, 'preview')) app.save(); app.battle.update(dt); app.battle.draw(ctx, v); }
     else if (app.screen === 'title') {
       ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
       const bi = AudioFx.beatInfo && AudioFx.beatInfo();
@@ -385,7 +472,7 @@ function rerender() {
   }
 }
 app.rerender = rerender;
-I18N.onLang(() => app.rerender());
+I18N.onLang(() => { applyPageText(); app.rerender(); });
 
 // ------------------------------------------------------------------------------------------------ boot
 resize();

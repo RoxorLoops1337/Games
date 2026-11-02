@@ -22,12 +22,29 @@
 <canvas id="game" tabindex="0" aria-label="Drop the Bass game canvas"></canvas>
 <div id="ui"></div>
 <div id="boot" role="status"><b>DROP THE BASS</b><i></i><small id="bootmsg">Tuning the speakers...</small></div>
-<noscript><div class="noscript">Drop the Bass needs JavaScript. Loopy is very sorry.</div></noscript>
+<noscript><div class="noscript">Drop the Bass needs JavaScript. Loopy is very sorry.<br><span lang="da">Drop the Bass kr&aelig;ver JavaScript. Loopy er rigtig ked af det.</span><br><span lang="nl">Drop the Bass heeft JavaScript nodig. Loopy vindt het heel erg.</span><br><span lang="de">Drop the Bass braucht JavaScript. Loopy tut es sehr leid.</span></div></noscript>
 <script>
+  // boot messages before the game code (and its language files) have loaded: a tiny table in the four languages, picked the same way as js/i18n.js
+  // (the explicit choice stored by the game, else the browser language; Norwegian reads as Danish, anything else is English)
+  var BOOT = {
+    en: ['Tuning the speakers...', 'Still loading. If nothing happens, your browser may be too old. Try a recent Chrome, Safari or Firefox.', 'Something went wrong starting the game. Reload the page. Your save is safe.'],
+    da: ['Stemmer h\u00f8jttalerne...', 'Indl\u00e6ser stadig. Sker der ikke noget, er din browser m\u00e5ske for gammel. Pr\u00f8v en nyere Chrome, Safari eller Firefox.', 'Noget gik galt under start. Genindl\u00e6s siden. Dit gem er sikkert.'],
+    nl: ['De speakers stemmen...', 'Nog aan het laden. Gebeurt er niets, dan is je browser misschien te oud. Probeer een recente Chrome, Safari of Firefox.', 'Er ging iets mis bij het starten. Laad de pagina opnieuw. Je save is veilig.'],
+    de: ['Lautsprecher werden gestimmt...', 'L\u00e4dt noch. Passiert nichts, ist dein Browser vielleicht zu alt. Probiere ein aktuelles Chrome, Safari oder Firefox.', 'Beim Start ging etwas schief. Lade die Seite neu. Dein Spielstand ist sicher.']
+  };
+  var L = 'en';
+  try {
+    var pick = function (c) { c = String(c || '').toLowerCase().slice(0, 2); return c === 'nb' || c === 'nn' || c === 'no' ? 'da' : (BOOT[c] ? c : null); };
+    var saved = null; try { saved = localStorage.getItem('drop_the_bass_lang'); } catch (e) {}
+    L = pick(saved) || 'en';
+    if (!saved) { var nl = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]; for (var i = 0; i < nl.length; i++) { var c = pick(nl[i]); if (c && c !== 'en') { L = c; break; } } }
+    document.documentElement.lang = L;
+    var bm = document.getElementById('bootmsg'); if (bm) bm.textContent = BOOT[L][0];
+  } catch (e) {}
   setTimeout(function () {
     if (window.__dtbReady) return;
     var m = document.getElementById('bootmsg');
-    if (m) m.textContent = window.__dtbError ? 'Something went wrong starting the game. Reload the page. Your save is safe.' : 'Still loading. If nothing happens, your browser may be too old. Try a recent Chrome, Safari or Firefox.';
+    if (m) m.textContent = window.__dtbError ? BOOT[L][2] : BOOT[L][1];
   }, 6000);
 </script>
 <script type="module" src="js/main.js"></script>

@@ -30,7 +30,7 @@ const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) 
 const hn = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };   // deterministic 0..1 noise from an integer
 
 const bgCache = new Map(), boardCache = new Map(), stageCache = new Map(), heroFrames = new Map();
-export function setArtScale(n) { setScale(n); bgCache.clear(); boardCache.clear(); stageCache.clear(); heroFrames.clear(); creepCache.clear(); extraCache.clear(); sceneCache.clear(); }
+export function setArtScale(n) { setScale(n); boardHint = 0; boardMiss = 0; bgCache.clear(); boardCache.clear(); stageCache.clear(); heroFrames.clear(); creepCache.clear(); extraCache.clear(); sceneCache.clear(); }
 
 // ------------------------------------------------------------------------------------------------ baking
 // draw(pen, c, f) paints in logical units with (0,0) at the top-left of a w x h box; the pen strokes are logical px wide (sc 1).
@@ -49,9 +49,30 @@ function bake(key, w, h, frames, scale, draw) {
 function put(ctx, e, x, y, t, fps, alpha) {
   if (!e) return;
   if (e.direct) { ctx.save(); ctx.translate(x, y); e.draw(new Pen(ctx, hashStr(e.key), 1), ctx, 0); ctx.restore(); return; }
-  const f = Math.floor(t * fps) % e.frames.length;
-  if (alpha != null && alpha < 1) { const a = ctx.globalAlpha; ctx.globalAlpha = a * alpha; ctx.drawImage(e.frames[f < 0 ? 0 : f], x, y, e.w, e.h); ctx.globalAlpha = a; }
-  else ctx.drawImage(e.frames[f < 0 ? 0 : f], x, y, e.w, e.h);
+  const f = Math.floor(t * fps) % e.frames.length, cv = e.frames[f < 0 ? 0 : f];
+  if (!e.exact) {   // small sprites: the plain scaled draw
+    if (alpha != null && alpha < 1) { const a = ctx.globalAlpha; ctx.globalAlpha = a * alpha; ctx.drawImage(cv, x, y, e.w, e.h); ctx.globalAlpha = a; }
+    else ctx.drawImage(cv, x, y, e.w, e.h);
+    return;
+  }
+  const a0 = ctx.globalAlpha; if (alpha != null && alpha < 1) ctx.globalAlpha = a0 * alpha;
+  const m = xform(ctx);
+  if (m && Math.abs(m.a - e.scale) < 0.0015) {   // baked at this very device scale: a 1:1 integer blit (a scaled blit is 5 to 10 times dearer in a software raster)
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(cv, Math.round(m.e + x * m.a), Math.round(m.f + y * m.a)); ctx.restore();
+  } else ctx.drawImage(cv, x, y, cv.width / e.scale, cv.height / e.scale);
+  ctx.globalAlpha = a0;
+}
+// The current transform when it is a plain scale plus translation (what battle and hub use), else null. Mock contexts without getTransform give null.
+function xform(ctx) {
+  try { const m = ctx.getTransform(); if (m && typeof m.a === 'number' && m.a > 0 && Math.abs(m.b) < 1e-6 && Math.abs(m.c) < 1e-6 && Math.abs(m.d - m.a) < 1e-6) return m; } catch (e) { /* mock context */ }
+  return null;
+}
+let boardHint = 0, boardMiss = 0;   // the settled device scale of the board layer (dpr times the letterbox scale); the punch-in zoom must not rebake the floor every frame
+function boardDev(ctx) {
+  const m = xform(ctx); if (!m) return 0;
+  if (!boardHint) boardHint = m.a;
+  else if (Math.abs(m.a - boardHint) > 0.002 * boardHint) { if (++boardMiss > 90) { boardHint = m.a; boardMiss = 0; } } else boardMiss = 0;
+  return boardHint;
 }
 const lruSet = (map, key, val, max) => { if (map.size >= max) map.delete(map.keys().next().value); map.set(key, val); return val; };
 
@@ -307,7 +328,8 @@ const PAINT = {
     if (!BAKE_THUMB) p.txt(wt('moon'), w * 0.5, h * 0.268, Math.min(42, w * 0.085) * wf('moon'), C.cyan, { align: 'c', out: INK, ow: 5 });
   },
 };
-function bgScale(w, h) { return clamp(Math.min(getScale(), Math.sqrt(1.4e6 / Math.max(1, w * h))), 0.6, 2); }
+// The backdrop is baked at the DEVICE scale of the context it is drawn into (so every frame is a 1:1 blit), within a pixel budget (Low graphics: a smaller one).
+function bgScale(w, h, dev, lite) { return Math.round(clamp(Math.min(dev || getScale(), Math.sqrt((lite ? 1.5e6 : 3.2e6) / Math.max(1, w * h))), 0.6, 4) * 1000) / 1000; }
 // washi tape: a translucent striped strip; sticker: a die-cut shape with a white border
 function washi(p, x, y, w, h, rot, col, col2) {
   const c = p.ctx; c.save(); c.translate(x, y); c.rotate(rot); c.globalAlpha = 0.88; c.fillStyle = col; c.fillRect(-w / 2, -h / 2, w, h);
@@ -334,13 +356,14 @@ function skinOver(p, c, w, h, skin, o) {   // decor and palette veil drawn on to
     for (let i = 0; i < 12; i++) { const left = i % 2 === 0, x = left ? 14 + hn(i * 3 + 5) * w * 0.05 : w - 14 - hn(i * 3 + 6) * w * 0.05, y = h * (0.1 + i * 0.075); if (i % 3 === 2) sticker(p, heart(x, y, 26), C.pink); else sticker(p, star(x, y, 15, 0.46, hn(i) - 0.5), cols[i % 5]); }
   }
 }
-function bakeBg(id, w, h, skin) {
-  const sk = SKIN[skin], st = sk ? Object.assign({}, STAGES[id], { paper: sk.paper, line: sk.line, margin: sk.margin, grain: sk.grain }) : STAGES[id], s = bgScale(w, h);
-  return bake('bg|' + id + '|' + Math.round(w) + 'x' + Math.round(h) + skinTag(skin), Math.round(w), Math.round(h), 2, s, inked(sk ? sk.ink : C.ink, (p, c) => {
+function bakeBg(id, w, h, skin, s) {
+  const sk = SKIN[skin], st = sk ? Object.assign({}, STAGES[id], { paper: sk.paper, line: sk.line, margin: sk.margin, grain: sk.grain }) : STAGES[id];
+  const e = bake('bg|' + id + '|' + Math.round(w) + 'x' + Math.round(h) + skinTag(skin), Math.round(w), Math.round(h), 2, s, inked(sk ? sk.ink : C.ink, (p, c) => {
     ruled(c, w, h, st);
     PAINT[id](p, c, w, h);
     if (sk) skinOver(p, c, w, h, skin);
   }));
+  e.exact = true; return e;
 }
 const twinkle = (c, w, h, t, n, col, ymax) => { c.strokeStyle = col; c.lineWidth = 2; c.lineCap = 'round'; c.beginPath(); for (let i = 0; i < n; i++) { const k = Math.sin(t * (1.5 + hn(i) * 2.2) + i * 5); if (k < 0.2) continue; const x = hn(i * 3 + 7) * w, y = hn(i * 5 + 3) * h * ymax, r = 3 + k * 5; c.moveTo(x - r, y); c.lineTo(x + r, y); c.moveTo(x, y - r); c.lineTo(x, y + r); } c.stroke(); };
 function floatNotes(c, w, h, t, n, cols, amax = 0.9) {
@@ -406,41 +429,60 @@ DYN.moon = function (c, w, h, t, beat) {
   if (beat > 0.05) { const mr = 80 * Math.min(w / 540, h / 960) + 14; c.strokeStyle = C.cyan; c.lineWidth = 3; c.globalAlpha = beat * 0.55; c.beginPath(); c.arc(w * 0.78, h * 0.072, mr + 22 + (1 - beat) * 16, 0, TAU); c.stroke(); c.globalAlpha = 1; }
 };
 const creepCache = new Map();
-function bakeCreep(w, h) {
-  const s = clamp(Math.min(getScale(), Math.sqrt(0.8e6 / Math.max(1, w * h))), 0.5, 1);
-  return bake('creep|' + Math.round(w) + 'x' + Math.round(h), Math.round(w), Math.round(h), 2, s, (p, c) => {
+function creepScale(w, h, dev) { return Math.round(clamp(Math.min(dev || getScale(), Math.sqrt(2.2e6 / Math.max(1, w * h))), 0.5, 3) * 1000) / 1000; }
+function bakeCreep(w, h, s) {
+  const reach = { top: 0, bottom: 0, left: 0, right: 0 };   // how far the fuzz reaches in from each edge (logical px): only these strips are ever drawn
+  const e = bake('creep|' + Math.round(w) + 'x' + Math.round(h), Math.round(w), Math.round(h), 2, s, (p, c) => {
     const n = Math.round((w + h) / 14);
+    reach.top = reach.bottom = reach.left = reach.right = 0;
     for (let i = 0; i < n; i++) {
       const edge = Math.floor(hn(i * 3 + 1) * 4), u = hn(i * 7 + 2), depth = Math.pow(hn(i * 5 + 3), 1.7) * 0.2;
       const x = edge === 0 ? u * w : edge === 1 ? w * (1 - depth) : edge === 2 ? u * w : w * depth, y = edge === 0 ? h * depth : edge === 1 ? u * h : edge === 2 ? h * (1 - depth) : u * h;
-      const r = 16 + hn(i + 9) * 26;
+      const r = 16 + hn(i + 9) * 26, R = r * 1.25 + 8;   // the spikes, the glitch offsets and the line width all sit inside this radius
+      if (edge === 0) reach.top = Math.max(reach.top, y + R); else if (edge === 2) reach.bottom = Math.max(reach.bottom, h - y + R); else if (edge === 3) reach.left = Math.max(reach.left, x + R); else reach.right = Math.max(reach.right, w - x + R);
       p.ln(p.spiky(r, r * 0.9, 9, 0.2, x, y), i % 2 ? '#8e8aa0' : '#6d6a80', 3, true, 1.4);
       if (i % 3 === 0) { p.ln(p.spiky(r, r * 0.9, 9, 0.2, x + 4, y + 3), C.cyan, 1.6, true, 1); p.ln(p.spiky(r, r * 0.9, 9, 0.2, x - 4, y - 3), C.mag, 1.6, true, 1); }
       p.hatch(p.spiky(r * 0.8, r * 0.7, 9, 0.15, x, y), '#c9c4d6', 7, 0.5, 0.7);
       if (r > 28) { p.eye(x - r * 0.28, y - 3, r * 0.2, 0.6); p.eye(x + r * 0.28, y - 3, r * 0.2, 0.6); }
     }
   });
+  e.exact = true; e.reach = reach; return e;
 }
-function staticCreep(ctx, w, h, t, amt) {
+// The fuzz creeps in from the edges: four strips (top and bottom full width, left and right between them) slide in as the static falls, each a 1:1 device blit.
+function staticCreep(ctx, w, h, t, amt, m) {
   if (!(amt > 0.02)) return;
-  const key = Math.round(w) + 'x' + Math.round(h) + '|' + getScale();
-  let e = creepCache.get(key); if (!e) e = lruSet(creepCache, key, bakeCreep(w, h), 6);
-  // the fuzz creeps in from the edges: draw the layer a little larger when calm, full size at full static
-  const k = 1 + (1 - clamp(amt, 0, 1)) * 0.3, a = clamp(amt * 0.95, 0, 0.85);
-  ctx.save(); ctx.translate(w / 2, h / 2); ctx.scale(k, k); ctx.translate(-w / 2, -h / 2);
-  put(ctx, e, 0, 0, t, 3, a);
-  ctx.restore();
+  const bs = creepScale(w, h, m && m.a), key = Math.round(w) + 'x' + Math.round(h) + '|' + bs;
+  let e = creepCache.get(key); if (!e) e = lruSet(creepCache, key, bakeCreep(w, h, bs), 4);
+  const k = (1 - clamp(amt, 0, 1)) * 0.3, a = clamp(amt * 0.95, 0, 0.85);
+  if (e.direct) { ctx.save(); ctx.translate(w / 2, h / 2); ctx.scale(1 + k, 1 + k); ctx.translate(-w / 2, -h / 2); put(ctx, e, 0, 0, t, 3, a); ctx.restore(); return; }
+  const cv = e.frames[Math.floor(t * 3) % e.frames.length], S = e.scale, R = e.reach, a0 = ctx.globalAlpha;
+  const rt = Math.min(R.top, h / 2), rb = Math.min(R.bottom, h / 2), rl = Math.min(R.left, w / 2), rr = Math.min(R.right, w / 2);
+  const dv = k * (h / 2 - rt / 2), dh = k * (w / 2 - rl / 2);   // how far each strip is pushed outward (the old whole-layer zoom, as a slide)
+  const one = m && Math.abs(m.a - S) < 0.0015;
+  ctx.globalAlpha = a0 * a; if (one) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); }
+  // [source x, y, w, h (logical), slide x, y]
+  const strips = [[0, 0, w, rt, 0, -dv], [0, h - rb, w, rb, 0, dv], [0, rt, rl, h - rt - rb, -dh, 0], [w - rr, rt, rr, h - rt - rb, dh, 0]];
+  for (const [sx, sy, sw, sh, ox, oy] of strips) {
+    if (sw <= 0 || sh <= 0) continue;
+    const x0 = Math.floor(sx * S), y0 = Math.floor(sy * S), x1 = Math.min(cv.width, Math.ceil((sx + sw) * S)), y1 = Math.min(cv.height, Math.ceil((sy + sh) * S));
+    if (x1 <= x0 || y1 <= y0) continue;
+    if (one) ctx.drawImage(cv, x0, y0, x1 - x0, y1 - y0, Math.round(m.e + ox * m.a) + x0, Math.round(m.f + oy * m.a) + y0, x1 - x0, y1 - y0);
+    else ctx.drawImage(cv, x0, y0, x1 - x0, y1 - y0, ox + x0 / S, oy + y0 / S, (x1 - x0) / S, (y1 - y0) / S);
+  }
+  if (one) ctx.restore();
+  ctx.globalAlpha = a0;
 }
 let BAKE_THUMB = false;
 export function drawBackdrop(ctx, id, w, h, t, o) {
   o = o || {}; t = t || 0; id = STAGES[id] ? id : 'title';
   const beat = clamp(o.beat || 0, 0, 1), skin = skinOf(o);
-  const key = id + '|' + Math.round(w) + 'x' + Math.round(h) + '|' + getScale() + (o.thumb ? '|t' : '') + skinTag(skin) + '|' + getLang();
-  let e = bgCache.get(key); if (!e) { BAKE_THUMB = !!o.thumb; e = lruSet(bgCache, key, bakeBg(id, w, h, skin), 10); BAKE_THUMB = false; }
+  const m = xform(ctx), lite = !!o.lite, bs = bgScale(w, h, m && m.a, lite);
+  const key = id + '|' + Math.round(w) + 'x' + Math.round(h) + '|' + bs + (o.thumb ? '|t' : '') + skinTag(skin) + '|' + getLang();   // the world sign is drawn text: a language change is a new key
+  let e = bgCache.get(key); if (!e) { BAKE_THUMB = !!o.thumb; e = lruSet(bgCache, key, bakeBg(id, w, h, skin, bs), 6); BAKE_THUMB = false; }
   ctx.save();
   put(ctx, e, 0, 0, t, 2.5);
-  DYN[id](ctx, w, h, t, beat);
-  staticCreep(ctx, w, h, t, o.staticAmt || 0);
+  if (!lite) DYN[id](ctx, w, h, t, beat);   // Low graphics: the twinkles, flames, bubbles and the beat pulse are skipped, the baked page is all there is
+  staticCreep(ctx, w, h, t, o.staticAmt || 0, m);
   ctx.restore();
 }
 
@@ -548,12 +590,13 @@ function paintBoard(p, c, mapId, worldId, skin) {
   }
   c.restore();
 }
-function boardEntry(mapId, worldId, skin) {
-  const key = mapId + '|' + worldId + '|' + getScale() + skinTag(skin);
+function boardEntry(mapId, worldId, skin, dev) {
+  const bs = Math.round(clamp(dev || getScale(), 0.6, 3.5) * 1000) / 1000, key = mapId + '|' + worldId + '|' + bs + skinTag(skin);
   let e = boardCache.get(key);
   if (!e) {
     const th = themeFor(worldId, skin);
-    e = lruSet(boardCache, key, bake('board|' + mapId + '|' + worldId + skinTag(skin), BOARD_W + PAD * 2, BOARD_H + PAD * 2, 2, getScale(), inked(th.ink, (p, c) => paintBoard(p, c, mapId, worldId, skin))), 12);
+    e = lruSet(boardCache, key, bake('board|' + mapId + '|' + worldId + skinTag(skin), BOARD_W + PAD * 2, BOARD_H + PAD * 2, 2, bs, inked(th.ink, (p, c) => paintBoard(p, c, mapId, worldId, skin))), 8);
+    e.exact = true;
   }
   return e;
 }
@@ -576,13 +619,15 @@ function brackets(c, x, y, half, bounce, col) {
 export function drawBoard(ctx, mapId, worldId, t, o) {
   o = o || {}; t = t || 0;
   const skin = skinOf(o), m = buildMap(mapId), th = themeFor(worldId, skin), wd = WORLD_BY_ID[worldId] || { accent: C.pink };
-  const beat = clamp(o.beat || 0, 0, 1), e = boardEntry(mapId, worldId, skin);
+  const beat = clamp(o.beat || 0, 0, 1), lite = !!o.lite, e = boardEntry(mapId, worldId, skin, boardDev(ctx));
   ctx.save();
   if (e.direct) { ctx.save(); e.draw(new Pen(ctx, hashStr(e.key), 1), ctx, 0); ctx.restore(); } else put(ctx, e, BOARD_X - PAD, BOARD_Y - PAD, t, 3.5);
   // flowing chevrons along every lane (pencil ticks marching to the stage)
   ctx.save(); ctx.beginPath(); ctx.rect(BOARD_X, BOARD_Y, BOARD_W, BOARD_H); ctx.clip();
-  if (th.fire) flames(ctx, tileCx(th.fire[0]), tileCy(th.fire[1]) + 8, 54, t, beat);   // the bonfire in the middle of the fork
-  if (worldId === 'moon') floaties(ctx, t);
+  if (!lite) {   // Low graphics keeps the baked floor and the lane chevrons (they show the way), and drops the flames, bubbles, gate sparks and the beat frame
+    if (th.fire) flames(ctx, tileCx(th.fire[0]), tileCy(th.fire[1]) + 8, 54, t, beat);   // the bonfire in the middle of the fork
+    if (worldId === 'moon') floaties(ctx, t);
+  }
   ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 3.2; ctx.strokeStyle = th.chev || 'rgba(43,39,51,0.5)';
   for (const lane of m.lanes) {
     const sp = 58, off = (t * 30) % sp; ctx.beginPath();
@@ -591,7 +636,7 @@ export function drawBoard(ctx, mapId, worldId, t, o) {
   }
   ctx.restore();
   // gate sparks: a few grey scribble flecks flicking out of each hole
-  for (const lane of m.lanes) {
+  if (!lite) for (const lane of m.lanes) {
     const g = gatePos(lane); ctx.save(); ctx.translate(g.gx, g.gy); ctx.rotate(g.ang); ctx.lineCap = 'round'; ctx.lineWidth = 2.4;
     for (let i = 0; i < 4; i++) { const k = (t * 1.3 + i * 0.27) % 1; ctx.strokeStyle = i % 2 ? '#9a94b8' : C.mag; ctx.globalAlpha = 1 - k; ctx.beginPath(); ctx.moveTo(8 + k * 24, -10 + i * 7 + Math.sin(t * 6 + i) * 3); ctx.lineTo(13 + k * 24, -8 + i * 7 + Math.sin(t * 6 + i) * 3); ctx.stroke(); }
     ctx.restore();
@@ -606,7 +651,7 @@ export function drawBoard(ctx, mapId, worldId, t, o) {
     for (const pass of [[INK, 7.5], [a, 4]]) { ctx.strokeStyle = pass[0]; ctx.lineWidth = pass[1]; ctx.beginPath(); ctx.ellipse(x, y, 25 + bounce, 24 + bounce * 0.8, t * 0.4, 0.2, TAU - 0.35); ctx.stroke(); }
     const ay = y - 42 - bounce * 1.6; ctx.fillStyle = a; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x - 10, ay - 8); ctx.lineTo(x + 10, ay - 8); ctx.lineTo(x, ay + 8); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
-  if (beat > 0.03) { ctx.strokeStyle = wd.accent || th.accent; ctx.globalAlpha = 0.5 * beat; ctx.lineWidth = 4 + beat * 3; ctx.strokeRect(BOARD_X - 7, BOARD_Y - 7, BOARD_W + 14, BOARD_H + 14); ctx.globalAlpha = 1; }
+  if (!lite && beat > 0.03) { ctx.strokeStyle = wd.accent || th.accent; ctx.globalAlpha = 0.5 * beat; ctx.lineWidth = 4 + beat * 3; ctx.strokeRect(BOARD_X - 7, BOARD_Y - 7, BOARD_W + 14, BOARD_H + 14); ctx.globalAlpha = 1; }
   ctx.restore();
 }
 

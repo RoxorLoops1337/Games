@@ -403,3 +403,16 @@ body.doodle .nr-confetti span{position:absolute;top:-8px;width:8px;height:12px;b
 body.doodle.reduce .nr-confetti,body.doodle.reduce .nr-sticker{animation:none}
 body.doodle.reduce .nr-confetti{display:none}
 @media (prefers-reduced-motion:reduce){body.doodle .nr-confetti{display:none}body.doodle .nr-sticker{animation:none}}
+
+/* round 4: next steps card, desktop shortcuts, practice badge, welcome rows */
+body.doodle .nextsteps .step{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:18px;line-height:1.1}
+body.doodle .nextsteps .step-tick{flex:none;width:26px;height:26px;border:3px solid #2b2733;border-radius:8px 6px 9px 6px;background:#fffdf3;display:inline-flex;align-items:center;justify-content:center}
+body.doodle .nextsteps .step.done{opacity:.6}
+body.doodle .nextsteps .step.done .step-nm{text-decoration:line-through}
+body.doodle .shortcuts .keys{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center}
+body.doodle .shortcuts .keyrow{display:contents}
+body.doodle .shortcuts kbd{font:400 16px var(--hand,sans-serif);background:#fffdf3;border:2.5px solid #2b2733;border-radius:7px;box-shadow:0 2px 0 #2b2733;padding:2px 8px;white-space:nowrap;text-align:center}
+body.doodle .shortcuts .keyrow span{font-size:16px;line-height:1.1;color:#4b4455}
+body.doodle .practice-badge{position:absolute;left:50%;top:70px;transform:translateX(-50%) rotate(-2deg);z-index:6;pointer-events:none;background:#ffd95a;color:#2b2733;border:3px solid #2b2733;border-radius:10px 7px 11px 7px;box-shadow:2px 3px 0 #2b2733;padding:1px 12px;font:400 17px var(--hand,sans-serif);letter-spacing:1px}
+body.doodle .welcome-sheet .wb-row canvas{flex:none}
+body.doodle .whatsnew .wn-list{color:#2b2733}

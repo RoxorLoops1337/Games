@@ -3,7 +3,7 @@
 import { GAME, WORLDS, WORLD_BY_ID, ENEMIES, BOSSES, TURRETS, STARTER_TURRETS, RARITY, RARITY_ORDER, ENCORE_MAX, encoreReward } from './data_core.js';
 import {
   STUDIO, STUDIO_IDS, HERO_MAX, heroCost, LOADOUT_BASE, AUTOMERGE_PRICE, SLOTS, STATS, SETS, GEAR, GEAR_IDS, GEAR_MAX_LEVEL,
-  gearUpgradeCost, GEAR_SELL, CRATES, PITY, fansForLevel, FAME_MAX, fameReward, OUTFITS, LOGIN_REWARDS, QUESTS, ACHIEVEMENTS, STAR_MILESTONES, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE,
+  gearUpgradeCost, GEAR_SELL, CRATES, PITY, fansForLevel, FAME_MAX, fameReward, OUTFITS, LOGIN_REWARDS, STREAK_MILESTONES, QUESTS, ACHIEVEMENTS, STAR_MILESTONES, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE,
   SKIN_DEFAULT, SKIN_PRICES, SKIN_IDS, SKIN_FALLBACK,
 } from './data_meta.js';
 import { EPILOGUES, CREDITS_FINAL } from './data_story.js';
@@ -24,7 +24,7 @@ export function newProfile(now = 0) {
   const turretsUnlocked = {};
   for (const t of STARTER_TURRETS) turretsUnlocked[t] = true;
   return {
-    v: GAME.version, poolV: 2, created: now, lastSeen: now,
+    v: GAME.version, poolV: 2, created: now, lastSeen: now, lastActive: 0, whatsNewSeen: GAME.version, nextSteps: { done: {}, dismissed: false, open: true },
     records: 250, diamonds: 30, fans: 0, fame: 1, name: '', resume: null, boosters: {}, wheel: null, friends: [], weekly: { id: '', done: false, best: 0 }, bests: {},
     studio: {}, heroLv: { roxor: 1, jasmin: 1 },
     turretsUnlocked, loadout: STARTER_TURRETS.slice(),
@@ -35,7 +35,7 @@ export function newProfile(now = 0) {
              crates: 0, spins: 0, rushBest: 0, legendary: 0, gearMerges: 0, endless: 0, relics: 0, dailies: 0, duets: 0, flawless: 0, streak: 0, coins: 0, weeklies: 0 },
     achClaimed: {}, starClaimed: {},
     daily: { day: -1, quests: [], rerolled: false, prog: {}, challengeDay: -1, challengeBest: 0 },
-    login: { lastDay: -1, streak: 0, claimedDay: -1 },
+    login: { lastDay: -1, streak: 0, claimedDay: -1, bonus: {} },
     crate: { sinceEpic: 0, sinceLegend: 0 },
     tutorial: { done: false, hints: {} },
     story: { intro: false, worlds: {}, ending: false, epilogues: {} },
@@ -150,6 +150,16 @@ export function migrate(p, now = 0) {
     out.outfits.worn[who] = own.includes(wn) ? wn : 'default';
   }
   syncOutfits(out);
+  // round 4: streak bonuses already paid, last activity, the What's new version seen, the Next steps card
+  out.login.bonus = {};
+  if (isObj(p.login) && isObj(p.login.bonus)) for (const m of STREAK_MILESTONES) if (p.login.bonus[m.days]) out.login.bonus[m.days] = true;
+  out.login.streak = int(out.login.streak, 0); out.login.lastDay = num(out.login.lastDay, -1, -1); out.login.claimedDay = num(out.login.claimedDay, -1, -1);
+  out.lastActive = num(p.lastActive, 0);
+  out.whatsNewSeen = int(p.whatsNewSeen, 0);
+  const ns = isObj(p.nextSteps) ? p.nextSteps : {};
+  out.nextSteps = { done: {}, dismissed: !!ns.dismissed, open: ns.open === undefined ? true : !!ns.open };
+  if (isObj(ns.done)) for (const id of NEXT_STEP_IDS) if (ns.done[id]) out.nextSteps.done[id] = true;
+  syncNextSteps(out);   // old saves: features their stats already prove are ticked
   out.v = GAME.version;
   return out;
 }
@@ -671,6 +681,94 @@ export function grant(p, reward, rng) {
   else if (reward.crate) p.pendingCrates = (p.pendingCrates || []).concat([reward.crate]);
   return out;
 }
+// ---- Next steps card (Tour tab): features the player has not tried yet. profile.nextSteps = { done: {id: true}, dismissed, open }.
+// Ticks come from battle events (main.js watches the run events), from run results (modifiers) and from what the profile already proves.
+export const NEXT_STEP_IDS = ['preview', 'reroll', 'synergy', 'branch', 'hero', 'modifier', 'outfit'];
+function stepsOf(p) {
+  if (!isObj(p.nextSteps)) p.nextSteps = { done: {}, dismissed: false, open: true };
+  if (!isObj(p.nextSteps.done)) p.nextSteps.done = {};
+  return p.nextSteps;
+}
+export function markStep(p, id) {
+  if (!NEXT_STEP_IDS.includes(id)) return false;
+  const ns = stepsOf(p);
+  if (ns.done[id]) return false;
+  ns.done[id] = true; return true;
+}
+// tick whatever the profile already proves (hero uses, hints that only fire on the event, a worn outfit, pinned modifiers). Returns the number of new ticks.
+export function syncNextSteps(p) {
+  let n = 0;
+  const hints = (p.tutorial && p.tutorial.hints) || {};
+  if (((p.stats && p.stats.heroUses) || 0) > 0 && markStep(p, 'hero')) n++;
+  if (hints.hint_synergy && markStep(p, 'synergy')) n++;
+  if (hints.hint_branch && markStep(p, 'branch')) n++;
+  if (p.modPin && Array.isArray(p.modifiers) && p.modifiers.length && markStep(p, 'modifier')) n++;
+  const worn = isObj(p.outfits) && isObj(p.outfits.worn) ? p.outfits.worn : {};
+  if (HEROES.some((who) => worn[who] && worn[who] !== 'default') && markStep(p, 'outfit')) n++;
+  return n;
+}
+export function nextStepsState(p) {
+  const ns = stepsOf(p);
+  const items = NEXT_STEP_IDS.map((id) => ({ id, done: !!ns.done[id] }));
+  const done = items.filter((i) => i.done).length;
+  return { items, done, total: items.length, dismissed: !!ns.dismissed, open: ns.open !== false, visible: !!(p.tutorial && p.tutorial.done) && !ns.dismissed && done < items.length };
+}
+export function setNextStepsOpen(p, open) { stepsOf(p).open = !!open; }
+export function dismissNextSteps(p) { stepsOf(p).dismissed = true; }
+
+// ---- What's new: the player has seen the card for this game version (new players start up to date: the card is for people who played before)
+export const whatsNewDue = (p) => !!p.tutorial.done && (p.whatsNewSeen || 0) < GAME.version;
+export function markWhatsNewSeen(p) { p.whatsNewSeen = GAME.version; }
+
+// ---- Streak bonuses (7, 14 and 30 days in a row), each paid once per profile. The streak that already exists counts.
+export function streakBonusReady(p) { return STREAK_MILESTONES.filter((m) => !p.login.bonus[m.days] && p.login.streak >= m.days); }
+export function claimStreakBonuses(p, rng) {
+  const out = [];
+  for (const m of streakBonusReady(p)) {
+    p.login.bonus[m.days] = true;
+    const reward = { diamonds: m.diamonds, crate: m.crate };
+    const g = grant(p, reward, rng);
+    out.push({ days: m.days, reward, loot: g.loot });
+  }
+  return out;
+}
+// the next unpaid streak bonus: { days, left, reward, ready } or null when all three are paid. `left` counts today when today's login is still to claim.
+export function nextStreakBonus(p, now) {
+  const ls = loginStatus(p, now);
+  const m = STREAK_MILESTONES.find((x) => !p.login.bonus[x.days]);
+  if (!m) return null;
+  const streak = ls.claimable ? ls.streak : p.login.streak;
+  return { days: m.days, left: Math.max(0, m.days - streak), reward: { diamonds: m.diamonds, crate: m.crate || null }, ready: p.login.streak >= m.days, today: ls.claimable && streak >= m.days };
+}
+
+// ---- Welcome back: shown once when the hub opens after WELCOME_MIN_HOURS away. `awayFrom` is the last activity (ms) before this session.
+export const WELCOME_MIN_HOURS = 12;
+export function awayHours(p, now, awayFrom) {
+  const ref = awayFrom != null ? awayFrom : Math.max(+p.lastSeen || 0, +p.lastActive || 0);
+  return ref > 0 ? Math.max(0, (now - ref) / 3600000) : 0;
+}
+export function welcomeSummary(p, now, awayFrom) {
+  if (!p.tutorial.done) return null;
+  const hours = awayHours(p, now, awayFrom);
+  if (hours < WELCOME_MIN_HOURS) return null;
+  const ls = loginStatus(p, now), dc = dailyChallenge(p, now), wg = weeklyGig(p, now);
+  const streakState = p.login.streak <= 0 ? 'new' : (p.login.lastDay >= ls.day - 1 ? 'alive' : 'broken');
+  const nextWorld = WORLDS.find((w) => worldUnlocked(p, w.id) && !p.prog[w.id].cleared);
+  const badges = readyBadges(p, now);
+  let goal;
+  if (nextWorld) goal = { id: 'stage', stage: nextWorld.name };
+  else if (!dc.done) goal = { id: 'daily' };
+  else if (!wg.done) goal = { id: 'weekly' };
+  else goal = { id: 'endless' };
+  return {
+    hours, days: Math.floor(hours / 24), royalties: offlineRecords(p, now),
+    login: { claimable: ls.claimable, day: ls.reward.day, streak: ls.streak, state: streakState },
+    streakBonus: nextStreakBonus(p, now),
+    daily: { done: dc.done, resetMs: dailyResetMs(now) }, weekly: { done: wg.done, best: wg.best, waves: wg.waves, msLeft: wg.msLeft, fresh: !!p.weekly.id && p.weekly.id !== wg.id },
+    ready: badges.goals - (ls.claimable ? 1 : 0), goal,
+  };
+}
+
 export function loginStatus(p, now) {
   const day = dayOf(now);
   const claimable = p.login.claimedDay !== day;
@@ -685,7 +783,8 @@ export function claimLogin(p, now, rng) {
   p.login.lastDay = st.day; p.login.claimedDay = st.day; p.login.streak = st.streak;
   p.stats.streak = Math.max(p.stats.streak, st.streak);
   const g = grant(p, st.reward, rng);
-  return { ok: true, streak: st.streak, reward: st.reward, loot: g.loot };
+  const bonuses = claimStreakBonuses(p, rng);
+  return { ok: true, streak: st.streak, reward: st.reward, loot: g.loot, bonuses };
 }
 export function dailyChallenge(p, now) {
   const day = dayOf(now);
@@ -824,6 +923,8 @@ export function applyRunResult(p, result, rng, now = 0) {
   S.runs++; S.kills += result.kills; S.merges += result.merges; S.deploys += result.deploys; S.waves += result.cleared;
   S.bosses += result.bossKills; S.heroUses += result.heroUses || 0; S.perfects += result.perfects || 0; S.remixes += result.remixes || 0;
   S.duets += result.duets || 0; S.relics += (result.relics || []).length;
+  if (Array.isArray(result.modifiers) && result.modifiers.length) markStep(p, 'modifier');
+  syncNextSteps(p);
   S.bestCombo = Math.max(S.bestCombo, result.bestCombo); S.maxLevel = Math.max(S.maxLevel, result.maxLevel || 0);
   S.coins += result.coinsEarned || 0;
   // daily quest progress

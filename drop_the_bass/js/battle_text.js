@@ -81,6 +81,7 @@ export const BT = {
   phaseN: (n) => t('battle.banner.phase_n', 'PHASE {n}', { n }),
   playbackSerious: () => t('battle.banner.playback_serious', 'Mr. Playback gets serious'),
   waveBanner: (n, total) => (total ? t('battle.banner.wave_of', 'WAVE {n} / {total}', { n, total }) : t('battle.banner.wave', 'WAVE {n}', { n })),
+  theme: (name) => t('battle.banner.theme', 'THEME WAVE: {name}', { name }),
   waveMod: (name, desc) => t('battle.banner.wave_mod', '{name}: {desc}', { name, desc }),
   waveClear: () => t('battle.banner.wave_clear', 'WAVE CLEAR'),
   waveClearSub: (n) => t('battle.banner.wave_clear_sub', '+{n} coins', { n }),
