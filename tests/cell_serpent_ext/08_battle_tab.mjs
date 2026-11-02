@@ -38,7 +38,7 @@ assert.ok(typeof ui.syncDock === 'function' && typeof ui.fitTitle === 'function'
 console.log('08_battle_tab ok');
 // round 4: chip reward markers, compact goals strip, side scroll fade
 assert.ok(/class="rw"[^>]*>\+\d+/.test(chipReward(15, 14, 0)), "next stage chip shows its first clear reward");
-assert.ok(chipReward(3, 14, 0).includes("class=\"hk\""), "cleared stage without a Hard clear gets the H marker");
+assert.ok(chipReward(3, 14, 0).includes("class=\"hk "), "cleared stage without a Hard clear gets the H marker");
 assert.strictEqual(chipReward(3, 14, 5), "", "no marker once Hard first clear is done");
 assert.strictEqual(chipReward(17, 14, 0), "", "far stages show nothing");
 assert.ok(goalRowHTML("Pop", 1, 3, "50", "ready").includes("gl-btn ready") && goalRowHTML("x", 3, 3, "5", "claimed").includes("DONE"), "goal row states");
