@@ -167,5 +167,7 @@ await import('./stacking_cats_enemies.test.mjs');   // the Rat Gang's newcomers
 await import('./stacking_cats_walk.test.mjs');   // Whiskerton Walk sim, layout and village life
 await import('./stacking_cats_gait.test.mjs');   // gait of the walking cat
 await import('./stacking_cats_world.test.mjs');   // Whiskerton Walk renderer
+await import('./stacking_cats_air.test.mjs');   // Whiskerton Walk air and transition animation
 await import('./stacking_cats_tail.test.mjs');   // Whiskerton Walk tail physics
+await import('./stacking_cats_idle.test.mjs');   // Whiskerton Walk idle behaviours
 console.log(n + ' tests passed');

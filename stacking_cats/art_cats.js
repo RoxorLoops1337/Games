@@ -639,7 +639,9 @@ export function drawCat(ctx, d, variant = 'open', opts = {}) {
   // opts.part: 'full' (default, unchanged), 'body' (everything but the tail) or 'tail' (only the tail); the walking cat swings its tail on its own layer
   // additive: 'torso' (back art, mane, body, feet, paws, no ears or head) and 'head' (ears, head, face, front art) so a walking cat can bob its head on its own
   const part = opts.part || 'full';
-  const wantTorso = part !== 'tail' && part !== 'head';
+  const wantTorso = part !== 'tail' && part !== 'head' && part !== 'ears';   // 'ears' is the two ears alone (they twitch on their own layer)
+  // opts.tailShape 'straight' draws the tail as a straight line along +x (longer, for a canvas 150 wide) that a rig bends joint by joint
+  const straight = opts.tailShape === 'straight';
   const A = d.art, id = d.id, acc = ACC[id] || {}, B = acc.body || {};
   const fur = A.fur, belly = A.belly;
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -656,9 +658,9 @@ export function drawCat(ctx, d, variant = 'open', opts = {}) {
   }
 
   // tail: tapered from a thick root to a slim tip, with a lighter tip and breed bands
-  const tailFur = id === 'boo' || (part !== 'full' && part !== 'tail') ? null : fur;
+  const tailFur = id === 'boo' || (part !== 'full' && part !== 'tail') ? null : fur;   // only the tail layers draw a tail
   if (tailFur) {
-    const P = [[76, 102], [102, 106], [112, 88], [102, 64]], L = [], R = [], N = 14;
+    const P = straight ? [[74, 101], [96, 101], [118, 101], [138, 101]] : [[76, 102], [102, 106], [112, 88], [102, 64]], L = [], R = [], N = 14;
     const at = (u) => { const m = 1 - u; return [0, 1].map((k) => m * m * m * P[0][k] + 3 * m * m * u * P[1][k] + 3 * m * u * u * P[2][k] + u * u * u * P[3][k]); };
     for (let i = 0; i <= N; i++) {
       const u = i / N, c = at(u), c2 = at(Math.min(1, u + 0.02)), c1 = at(Math.max(0, u - 0.02));
@@ -729,7 +731,7 @@ export function drawCat(ctx, d, variant = 'open', opts = {}) {
   const earOuter = new Path2D('M31 52 Q24 22 35 14 Q48 20 57 31 Z');
   const earInner = new Path2D('M34 46 Q30 27 36 20 Q45 25 51 32 Z');
   const earTx = (fn) => { fn(); mirror(ctx, 120, fn); };
-  earTx(() => { cel(ctx, earOuter, fur, { shade: false }); ctx.fillStyle = A.pat === 'tux' ? '#3b3548' : '#ffb3c8'; ctx.fill(earInner);
+  if (part !== 'head') earTx(() => { cel(ctx, earOuter, fur, { shade: false }); ctx.fillStyle = A.pat === 'tux' ? '#3b3548' : '#ffb3c8'; ctx.fill(earInner);
     ctx.save(); ctx.clip(earInner); ctx.fillStyle = A.pat === 'tux' ? '#2a2536' : '#e88aa8'; ctx.beginPath(); ctx.ellipse(40, 44, 9, 9, 0, 0, TAU); ctx.fill();
     ctx.strokeStyle = shade(fur, 0.55); ctx.lineWidth = 0.8; ctx.globalAlpha = 0.45;
     for (const [x, y, ex, ey] of [[48, 33, 42, 30], [47, 38, 40, 35], [44, 43, 38, 40]]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke(); }
@@ -737,6 +739,7 @@ export function drawCat(ctx, d, variant = 'open', opts = {}) {
     ctx.strokeStyle = lineOf(fur); ctx.lineWidth = 0.7; ctx.stroke(earInner);
     ctx.strokeStyle = shade(fur, -0.22); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(34.6, 15.6); ctx.lineTo(35.4, 19.6); ctx.stroke(); });
 
+  if (part === 'ears') { ctx.globalAlpha = 1; return; }
   // head
   const head = new Path2D('M60 27 C81 27 94 40 94 57 C94 71 81 81 60 81 C39 81 26 71 26 57 C26 40 39 27 60 27 Z');
   cel(ctx, head, fur, { box: [26, 27, 94, 81] });

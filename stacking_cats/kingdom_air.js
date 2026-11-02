@@ -52,7 +52,7 @@ const LAND_W = 18, LAND_Z = 0.55, TURN_W = 30, TURN_Z = 0.6;
 export function airState(seed) {
   return {
     rng: seedOf(seed),
-    sy: sp(), sx: sp(), tilt: sp(), bob: sp(),   // followers of the pose target
+    sy: { x: 1, v: 0 }, sx: { x: 1, v: 0 }, tilt: sp(), bob: sp(),   // followers of the pose target
     land: sp(), turn: sp(),                       // impact and turn springs (deviation from rest)
     landAge: 9, turnAge: 9, pounceAge: 9, liftT: 0,
     prevGrounded: true, prevTurned: false, prevRun: false, prevStop: false, prevInteract: false,

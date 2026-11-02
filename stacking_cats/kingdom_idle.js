@@ -40,7 +40,7 @@ const ease = (cur, target, k, dt) => cur + (target - cur) * (1 - Math.exp(-k * d
 export const IDLE = {
   sitAt: [5.2, 7], sleepAt: [22, 28], preYawn: 1.7,
   blinkGap: [2.2, 6.5], blinkDur: 0.18, doubleBlink: 0.12,
-  twitchGap: [1.5, 6], twitchDur: 0.32,
+  twitchGap: [1.5, 6], twitchDur: 0.4,
   eventGap: [3, 7.5], wakeGap: [2, 5],
   zzzPeriod: 2.4, maxDt: 0.25, sub: 0.05,
 };
@@ -124,7 +124,7 @@ function sub(s, h, inp, look) {
   // posture
   if (!awake) {
     if (s.base !== 'sleep' && s.idleT >= s.sleepAt) { s.base = 'sleep'; s.ev = null; }
-    else if (s.base === 'idle' && s.idleT >= s.sitAt) { s.base = 'sit'; s.ev = null; }
+    else if (s.base === 'idle' && s.idleT >= s.sitAt) { s.base = 'sit'; s.ev = null; s.evGap = rr(s, 1.2, IDLE.eventGap[1]); }
     if (s.base === 'sit' && !s.preYawned && s.idleT >= s.sleepAt - IDLE.preYawn) { s.preYawned = true; startEvent(s, 'yawn', look); s.ev.dur = IDLE.preYawn; }
     if (s.ev) { s.ev.t += h; if (s.ev.t >= s.ev.dur) { s.ev = null; s.evGap = range(s, IDLE.eventGap); } }
     else if (s.base !== 'sleep') { s.evGap -= h; if (s.evGap <= 0) pickEvent(s, look); }
@@ -187,7 +187,7 @@ function sub(s, h, inp, look) {
     s.tw.t += h;
     const u = s.tw.t / IDLE.twitchDur;
     if (u >= 1) { s.tw = null; s.twIn = range(s, IDLE.twitchGap); }
-    else { const p = Math.sin(u * TAU) * (1 - u) * 1.4 * s.tw.a * s.tw.dir; pl = p * s.tw.l; pr = p * s.tw.r; }
+    else { const p = Math.sin(u * TAU) * (1 - u) * 1.1 * s.tw.a * s.tw.dir; pl = p * s.tw.l; pr = p * s.tw.r; }
   }
   const earBase = 0.35 * (inp.nearTarget ? 1 : 0) * (1 - s.sleep) - 0.45 * s.sleep + stl * 1.0 + (kind === 'yawn' ? -0.4 * env : 0) + (kind === 'groom' ? -0.2 * env : 0);
   s.earL = ease(s.earL, earBase, 8, h);
