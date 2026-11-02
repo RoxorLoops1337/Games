@@ -570,6 +570,35 @@
   @keyframes pawhop{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
   @media (prefers-reduced-motion:reduce){.tile.mr5 .mdl,.pcoll.done .paws i,.ic.pet-bounce,.ic .bnw,.ic .bnh{animation:none!important}}
   /* end @css:09-skills-pets round 9 */
+  /* @css:09-skills-pets round 10 */
+  .dsheet{position:relative}
+  .dstreat{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:6px 0 2px;padding:10px 12px;min-height:44px;font-size:13px;font-weight:900;letter-spacing:.03em;border-radius:14px;color:#3a1500;background:linear-gradient(180deg,#ffd9a0,#ffa94a);border:2px solid #ffe2b8;box-shadow:0 3px 0 #b8691a}
+  .dstreat .tr-ic{font-size:18px} .dstreat.off{filter:saturate(.35);opacity:.75;box-shadow:none}
+  .dstreat.shake{animation:trshake .35s}
+  @keyframes trshake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  .dsic{position:relative} .dsic.uppop{animation:uppop .6s cubic-bezier(.3,1.6,.5,1)}
+  @keyframes uppop{0%{transform:scale(.8)}50%{transform:scale(1.25) rotate(-5deg)}100%{transform:none}}
+  .dsic .treath{position:absolute;bottom:60%;color:#ff6b9a;font-size:15px;opacity:0;pointer-events:none;animation:rxheart 1.1s ease-out forwards}
+  .upcer{position:absolute;left:50%;top:26%;transform:translateX(-50%);z-index:6;pointer-events:none;text-align:center;padding:8px 22px;border-radius:16px;background:linear-gradient(180deg,#fff7c4,#ffd24a);color:#4a2a00;box-shadow:0 0 28px rgba(255,210,74,.8);animation:upcer 1.45s ease-out forwards}
+  .upcer b{display:block;font-size:22px;font-weight:900;letter-spacing:.08em;white-space:nowrap} .upcer small{font-size:12px;font-weight:800}
+  @keyframes upcer{0%{opacity:0;transform:translateX(-50%) scale(.4)}18%{opacity:1;transform:translateX(-50%) scale(1.15)}30%{transform:translateX(-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-18px) scale(1)}}
+  .upring{position:absolute;left:50%;top:calc(26% - 20px);width:0;height:0;z-index:5;pointer-events:none}
+  .upring i{position:absolute;width:8px;height:8px;margin:-4px;border-radius:50%;animation:upsp .9s ease-out forwards}
+  @keyframes upsp{from{transform:translate(0,0) scale(1);opacity:1}to{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+  .mpath{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:8px}
+  .mpath .mp{position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;padding:5px 2px 4px;border-radius:10px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.12);text-align:center;min-width:0}
+  .mpath .mp i{font-style:normal;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:900;background:rgba(255,255,255,.18);color:#fff}
+  .mpath .mp b{font-size:12px;font-weight:900;color:#fff} .mpath .mp small{font-size:10px;line-height:1.1;color:var(--dim);font-weight:700;overflow-wrap:anywhere}
+  .mpath .mp.done{border-color:#6fe08a;background:rgba(111,224,138,.14)} .mpath .mp.done i{background:#6fe08a;color:#0c3a1a}
+  .mpath .mp.ready{border-color:#ffd24a;background:rgba(255,210,74,.2);animation:mpready 1.2s ease-in-out infinite alternate} .mpath .mp.ready i{background:#ffd24a;color:#4a2a00}
+  .mpath .mp.next{border-color:#7fe8ff;box-shadow:0 0 8px rgba(127,232,255,.45)} .mpath .mp.next i{background:#7fe8ff;color:#06303a}
+  .mpath .mp.todo{opacity:.6}
+  @keyframes mpready{to{box-shadow:0 0 12px rgba(255,210,74,.8)}}
+  #bLoot.reveal .it small.htag{display:block;margin-top:1px;font-size:11px;letter-spacing:.08em;color:#fff;opacity:.9}
+  #bLoot.reveal .it small.htag.new{padding:2px 8px;border-radius:9px;background:var(--rc,#ffe14a);color:#1a1033;opacity:1;animation:htagpop .6s .5s cubic-bezier(.3,1.7,.5,1) both}
+  @keyframes htagpop{from{transform:scale(0)}to{transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){.dstreat.shake,.dsic.uppop,.dsic .treath,.upcer,.upring i,.mpath .mp.ready,.htag.new{animation:none!important}}
+  /* end @css:09-skills-pets round 10 */
   /* end @css:09-skills-pets */
   /* @css:07-cards */
   #levelup{gap:8px;justify-content:center}
