@@ -4,6 +4,7 @@ import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
+import { revealStars, countUp, levelBar, reviveRing, stopFx } from './result_fx.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
@@ -340,9 +341,11 @@ function toggleMute() { save.muted = !save.muted; audio.setMuted(save.muted); $(
 function showRevive() {
   reviveAsked = true; const cost = reviveCost(g.revivesUsed);
   $('rvLeft').textContent = 'Remaining ×' + g.revivesLeft; $('rvGo').innerHTML = 'REVIVE  ' + cost + ' ' + curImg('sparkles'); $('rvGo').disabled = save.sparkles < cost;
-  $('rvGo').onclick = () => { if (save.sparkles < cost) return; save.sparkles -= cost; persist(); reviveGame(g); reviveAsked = false; endT = 0; audio.play('levelup'); show(''); };
-  $('rvNo').onclick = () => { audio.play('click'); g.revivesLeft = 0; reviveAsked = false; show(''); };
-  show('revive');
+  let stopRing = () => {};
+  $('rvGo').onclick = () => { if (save.sparkles < cost) return; stopRing(); stopFx(); save.sparkles -= cost; persist(); reviveGame(g); reviveAsked = false; endT = 0; audio.play('levelup'); show(''); };
+  const giveUp = () => { stopRing(); stopFx(); g.revivesLeft = 0; reviveAsked = false; show(''); };
+  $('rvNo').onclick = () => { audio.play('click'); giveUp(); };
+  show('revive'); stopRing = reviveRing(10, giveUp);
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
 function showStats() {
@@ -358,27 +361,33 @@ function statsPanel(onClose) {
 }
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
-  const out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); persist(); audio.music(false);
-  const rows = [`<div class="r">${curImg('beats')}+${out.beats} Beats</div>`];
-  if (out.ribbons) rows.push(`<div class="r">🎀 +${out.ribbons} Ribbons</div>`);
-  if (out.pet) rows.push(`<div class="r">${icon(out.pet.id)}+${out.pet.n} ${PETS.find(p => p.id === out.pet.id).name} fragments</div>`);
+  const li0 = levelInfo(save.xp), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); persist(); audio.music(false);
+  stopFx(); const cu = n => `+<span data-to="${n}">${n}</span>`;
+  const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
+  if (out.ribbons) rows.push(`<div class="r">🎀 ${cu(out.ribbons)} Ribbons</div>`);
+  if (out.pet) rows.push(`<div class="r">${icon(out.pet.id)}${cu(out.pet.n)} ${PETS.find(p => p.id === out.pet.id).name} fragments</div>`);
   if (out.egg) rows.push(`<div class="r">${icon('egg')}+1 Egg</div>`);
-  if (out.sparkles) rows.push(`<div class="r">${curImg('sparkles')}+${out.sparkles} Sparkles</div>`);
-  for (const id of Object.keys(out.frags)) rows.push(`<div class="r">${icon(id)}+${out.frags[id]} ${WEAPONS.find(w => w.id === id).name} fragment</div>`);
+  if (out.sparkles) rows.push(`<div class="r">${curImg('sparkles')}${cu(out.sparkles)} Sparkles</div>`);
+  for (const id of Object.keys(out.frags)) rows.push(`<div class="r">${icon(id)}${cu(out.frags[id])} ${WEAPONS.find(w => w.id === id).name} fragment</div>`);
   $('rList').innerHTML = rows.join('');
   $('rTitle').textContent = r.mode === 'inv' ? (r.won ? 'THE GIANT SERPENT BOWS!' : 'THE GIANT SERPENT WON') : r.mode === 'pig' ? (r.won ? 'PIGGY BANKS CRACKED!' : 'THE PIGGIES ESCAPED') : r.won ? 'STAGE CLEAR!' : r.name.toUpperCase() + ' WINS';
   $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.') : `You popped ${r.kills} cells. Spend your Beats in the hub and try again.`;
   if (r.hard) hard = true;
   if (out.levelUps) rows.push(`<div class="r">⭐ Level ${levelInfo(save.xp).lv}!</div>`);
+  const li1 = levelInfo(save.xp), reduce = save.settings.reduceMotion;
+  levelBar(li0, li1, reduce);
+  { const pct = Math.floor((r.progress || 0) * 100), best = out.first || out.starsGained > 0 || (!r.won && !r.mode && !r.hard && pct > out.prevPct && out.prevPct > 0);
+    $('rRibbon').textContent = best ? (out.first ? 'FIRST CLEAR!' : out.starsGained > 0 ? 'NEW BEST STARS!' : 'NEW BEST ' + pct + '%') : ''; $('rRibbon').classList.toggle('on', !!best); }
   if (r.cp50) rows.push(`<div class="r">⚡ +10 Voice back</div>`);
-  $('rList').innerHTML = rows.join('');
+  $('rList').innerHTML = rows.join(''); countUp($('rList'), reduce, null);
   const pigRun = r.mode === 'pig' || r.mode === 'inv', nextOk = !pigRun && r.won && canPlay(save, r.stage + 1);
-  $('rNext').style.display = nextOk ? '' : 'none';
+  $('rNext').style.display = nextOk ? '' : 'none'; $('rNext').classList.toggle('pulse', nextOk);
   $('rNext').onclick = () => { audio.play('click'); beginStage(r.stage + 1); };
   $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); beginStage(r.stage); };
   $('rHub').onclick = () => { audio.play('click'); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; openHub('Battle'); };
   { const st = r.stars || 0; $('rStars').innerHTML = r.won && !r.mode && !r.hard ? [1, 2, 3].map(i => `<span class="${i <= st ? '' : 'off'}">★</span>`).join('') : '';
+    if ($('rStars').children.length) revealStars($('rStars'), st, i => audio.play('coin', { i }), reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
     const top = Object.entries(r.dmgBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => (id === 'capsule' ? 'Singing' : (WEAPONS.find(w => w.id === id) || { name: id }).name)).join(', ') || '-';
     $('rExtra').innerHTML = `<span>Time <b>${mm}:${ss}</b></span><span>Cells <b>${r.kills}</b></span><span>Best groove <b>${r.groove || 0}</b></span><span>Bombs <b>${r.bombs || 0}</b></span><span style="grid-column:1/-1">Top: <b>${top}</b></span>`;
