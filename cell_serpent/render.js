@@ -9,7 +9,7 @@ import { createScreenFx } from './screenfx.js';
 import { drawFar } from './bg_far.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
-import { drawCellFlags, drawCellBadge, drawQuartetLinks, drawDashLane } from './cellfx.js';
+import { drawCellFlags, drawCellBadge, drawQuartetLinks, drawDashLane, drawStreak } from './cellfx.js';
 import { bakeHat } from './hats.js';
 import { createCheer, HAT_FX, hatPose } from './cheer.js';
 import { createBoltLayer, boltPose, paintBolt } from './bolts_fx.js';
@@ -155,9 +155,12 @@ export function createRenderer(canvas, art, kit) {
       case 'encoreready': addFloat(g.p.x, g.p.y - 110, 'ENCORE READY: TAP!', '#ffe36b', 26, -50); ring(g.p.x, g.p.y, 120, '#ffe36b', 0.5); break;
       case 'encore': S.trauma = Math.min(1, S.trauma + 0.6); S.flash = 0.25; S.flashCol = '#fff6c2'; ring(e.x, g.p.y, 130, '#ffe36b', 0.5); burst(e.x, g.p.y - 40, 26, ['#ffe36b', '#fff', '#ff9ad6'], 520, 0.7, 6); break;
       case 'goldpop': ring(e.x, e.y, 110, '#ffd24a', 0.6); burst(e.x, e.y, 30, ['#ffd24a', '#fff6c2', '#fff'], 460, 0.8, 6); addFloat(e.x, e.y - 40, 'GOLD +' + e.v, '#ffe36b', 30, -80); break;
-      case 'quartet': ring(e.x, e.y, 150, '#6fffd2', 0.6); burst(e.x, e.y, 28, ['#6fffd2', '#fff', '#fff6a8'], 440, 0.8, 6); addFloat(e.x, e.y - 40, (e.n >= 4 ? 'QUARTET +' : 'DUET +') + e.v, '#9bffe0', 30, -80); S.trauma = Math.min(1, S.trauma + 0.25); break;
+      case 'quartet': ring(e.x, e.y, 150, '#6fffd2', 0.6); burst(e.x, e.y, 28, ['#6fffd2', '#fff', '#fff6a8'], 440, 0.8, 6); addFloat(e.x, e.y - 40, (e.n >= 4 ? 'QUARTET ' + (e.streak >= 2 ? 'x' + e.streak + ' ' : '') + '+' : 'DUET +') + e.v, '#9bffe0', 30, -80); S.trauma = Math.min(1, S.trauma + 0.25); break;
       case 'quartetstart': addFloat(e.x, e.y - 30, 'HARMONY! ' + e.n + ' to go', '#fff6a8', 24, -50); break;
-      case 'quartetfail': ring(e.x, e.y, 70, '#ff6a8a', 0.4); break;
+      case 'quartetfail': ring(e.x, e.y, 70, '#ff6a8a', 0.4); if (e.lost >= 2) addFloat(e.x, e.y - 30, 'STREAK LOST', '#ff9aae', 22, -50); break;
+      case 'nap': addFloat(e.x, e.y - 40, 'Zzz...', '#b9c8ff', 30, -60); ring(e.x, e.y, 90, '#b9c8ff', 0.5); break;
+      case 'gloom': addFloat(e.x, e.y - 40, 'GLOOM', '#b79bff', 26, -50); ring(e.x, e.y, 110, '#6a3fd0', 0.6); break;
+      case 'soundcheck': ring(e.x, e.y, 80, '#ffd24a', 0.4); addFloat(e.x, e.y - 30, 'SOUNDCHECK', '#ffe36b', 20, -50); break;
       case 'goldfade': addFloat(e.x, e.y, 'gold lost', '#c9b36a', 18, -40); burst(e.x, e.y, 12, ['#c9b36a', '#8a7f5a', '#fff1a8'], 150, 0.8, 4); break;
       case 'clutch': addFloat(e.x, e.y - 30, 'CLOSE CALL!', '#ff9ad6', 30, -70); ring(e.x, e.y, 80, '#ff9ad6', 0.4); break;
       case 'burst': ring(e.x, e.y, e.r, '#bfe9ff', 0.4); burst(e.x, e.y, 16, ['#bfe9ff', '#fff'], 260, 0.5, 5); break;
@@ -390,7 +393,7 @@ export function createRenderer(canvas, art, kit) {
       ctx.save(); ctx.globalAlpha *= 0.22; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 40, 66 * br, 17, 0, 0, TAU); ctx.fill(); ctx.globalAlpha *= 1.1; ctx.beginPath(); ctx.ellipse(p.x, p.y + 40, 44 * br, 10, 0, 0, TAU); ctx.fill(); ctx.restore(); }
     if ((g.groove || 0) >= 10) glow(p.x, p.y - 20, 100 + (g.groove - 10) * 3, '#ff7eb6', 0.18 + 0.1 * Math.sin(S.t * 8));
     if (g.phase === 'play' && !OPT.reduceMotion) { const ph = beatPhase(g), a = Math.pow(1 - ph, 3) * 0.28; if (a > 0.02) { ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#9ff3ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 46 + ph * 26, 0, TAU); ctx.stroke(); ctx.restore(); } }
-    FX.aura(g);
+    FX.aura(g); drawStreak(ctx, g, S.t);
     // aim tick
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.aim); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6fe3ff';
     ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(22, -6); ctx.lineTo(22, 6); ctx.fill(); ctx.restore();
