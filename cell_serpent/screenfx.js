@@ -219,7 +219,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     ctx.beginPath(); ctx.arc(px, cy, pr, 0, TAU); ctx.lineWidth = 7; ctx.strokeStyle = '#fff3b8'; ctx.stroke();
     const pop = calm() ? 1 : 1 + 0.12 * Math.max(0, 1 - (t - 0.2) * 4);
     ctx.save(); ctx.translate(250, cy - 14); ctx.scale(pop, pop);
-    text(m.txt, 0, 0, m.txt.length > 12 ? 62 : 74, '#fff6c9', '#3a1c00', 'left'); ctx.restore();
+    text(m.txt, 0, 0, Math.min(m.txt.length > 12 ? 62 : 74, (W - 250 - 16) / (m.txt.length * 0.7)), '#fff6c9', '#3a1c00', 'left'); ctx.restore();
     text(m.sub, 250, cy + 44, 30, '#ffc2dc', '#1a0a2e', 'left');
     ctx.restore();
   }
