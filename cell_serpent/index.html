@@ -1108,6 +1108,19 @@
   .tabs button.on .tico{filter:drop-shadow(0 2px 5px rgba(255,92,184,.6));opacity:1;transform:translateY(-1px) scale(1.1)}
   .tabs button:active .tico{transform:scale(.88)}
 /* end @css:19-buttons */
+/* @css:19-buttons round 5 */
+  /* rubber-band tab swipe: the pane follows the finger (translate, so the entrance animation keeps working), springs back with an overshoot */
+  .tab.rb-drag{transition:none;will-change:translate,opacity}
+  .tab.rb-back{transition:translate .42s cubic-bezier(.3,1.9,.5,1),opacity .2s}
+  .tab.rb-armed{filter:brightness(1.08)}
+  /* modal open/close: the dialog screens settle in with a spring (individual scale property, so no animation clash) and shrink away on close */
+  :is(#panel,#boxModal,#settings,#pause).on>h2{animation:d19Pop .46s cubic-bezier(.3,1.7,.5,1) both}
+  :is(#panel,#boxModal,#settings,#pause).on>:is(.panelbody,.loot,.setgrp:first-of-type){animation:d19Pop .46s cubic-bezier(.3,1.5,.5,1) .06s both}
+  :is(#panel,#boxModal,#settings,#pause).on>:is(#pClose,.dim){animation:d19Pop .46s cubic-bezier(.3,1.5,.5,1) .12s both}
+  :is(#panel,#boxModal,#settings,#pause).out{animation:d19Out .17s ease-in both}
+  @keyframes d19Pop{from{opacity:0;scale:.84;translate:0 14px}to{opacity:1;scale:1;translate:0 0}}
+  @keyframes d19Out{to{opacity:0;transform:scale(.94) translateY(8px)}}
+/* end @css:19-buttons round 5 */
   /* @css:11-result-goal */
   .rgoal{display:none;align-items:center;gap:10px;width:min(320px,86vw);padding:8px 12px;border-radius:14px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);cursor:pointer;text-align:left;animation:rpIn .45s .9s both}
   .rgoal.on{display:flex}
