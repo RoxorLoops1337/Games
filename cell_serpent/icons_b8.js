@@ -17,6 +17,7 @@ export const SET_ICONS = {
   colorBlind: ['#c084fc', sv(`<path ${F} d="M12 2.5C6.5 2.5 2.5 6.4 2.5 11.3c0 3.4 2.3 5 4.6 5 1.4 0 2.1.7 2.1 1.6 0 1 .3 3.6 2.8 3.6 5.6 0 9.5-4.1 9.5-9.6 0-5.1-4-9.4-9.5-9.4z"/><circle cx="7.6" cy="10.4" r="1.7" fill="#2b1a5e"/><circle cx="11" cy="6.8" r="1.7" fill="#2b1a5e"/><circle cx="16" cy="8" r="1.7" fill="#2b1a5e"/>`)],
   highContrast: ['#e5e7eb', sv(`<circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="2.2"/><path ${F} d="M12 3.4a8.6 8.6 0 0 1 0 17.2z"/>`)],
   fullscreen: ['#38bdf8', sv(`<path ${S} d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>`)],
+  controlStyle: ['#f472b6', sv(`<path ${S} d="M9 11V5.5a1.6 1.6 0 0 1 3.2 0V11M12.2 10.2a1.6 1.6 0 0 1 3.2 0V12a1.6 1.6 0 0 1 3.1 0v3.5c0 3.2-2.2 5.5-5.2 5.5h-1.2c-2 0-3.300-.9-4.400-2.400L5 14.200a1.500 1.500 0 0 1 2.300-1.800L9 14"/>`)],
   slider: ['#4ade80', sv(`<path ${S} d="M7.5 7.5L3 12l4.5 4.5M16.5 7.5L21 12l-4.5 4.5M4 12h16"/>`)],
   leftHand: ['#fb923c', sv(`<path ${F} d="M7 21c-2.2-2-3-4.6-3-7l.2-3.4a1.4 1.4 0 0 1 2.8 0V13h.8V5a1.5 1.5 0 0 1 3 0v6h.8V4a1.5 1.5 0 0 1 3 0v7h.8V6a1.5 1.5 0 0 1 3 0v9.2c0 3.2-1.6 5.8-4.4 5.8z"/>`)],
   thumbZone: ['#60a5fa', sv(`<rect x="5.5" y="2.5" width="13" height="19" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path ${F} d="M6.5 15h11v3.2a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z"/>`)],

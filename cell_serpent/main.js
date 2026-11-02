@@ -84,6 +84,9 @@ let slowFrames = 0, fastFrames = 0;
 const clk = createClock();   // 05-screen-feel: fixed-step clock fed with dt * slow-motion scale
 let reviveAsked = false, hard = false, mode = 'title', g = null, demo = null, acc = 0, last = 0, endT = 0, cardsFor = null, hubTab = 'Battle', sel = 1, ranResult = false;
 const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
+const fol = { on: false, id: -1, x: 0, ptT: 0, keyT: 0 };   // b12s: follow-finger control (lane stages): the first finger owns movement, the duo chases its x
+const MOVE_KEYS = new Set(['a', 'd', 'arrowleft', 'arrowright']);
+const followMode = () => !!g && !g.ring && save.settings.controlStyle !== 'joystick';
 const keys = {};
 const aimS = { now: -Math.PI / 2, tgt: -Math.PI / 2 };   // b11: circle stages aim all round: the finger or mouse sets the target angle, the sim gets an eased angle
 const AIM_HINT_KEY = 'cell_serpent_aimhint_b11';
@@ -580,6 +583,11 @@ canvas.addEventListener('pointerdown', e => {
   if (g.encore >= 1 && Math.hypot(gp.x - g.p.x, gp.y - g.p.y) < 110) encoreTap = true;   // tap the duo for the Encore blast
   if (g.ring) aimAt(e.clientX, e.clientY);   // b11: a touch anywhere on the playfield aims at it
   if (!g.ring && save.settings.thumbZone && !inThumbZone(e.clientY, innerHeight)) return;   // thumb zone: only the bottom third steers
+  if (followMode()) {   // b12s: the duo chases the finger x at once (no dead zone, no joystick base)
+    if (fol.on) return;
+    fol.on = true; fol.id = e.pointerId; fol.x = gp.x; fol.ptT = performance.now();
+    canvas.setPointerCapture(e.pointerId); return;
+  }
   if (joy.on) return;
   joy.on = true; joy.id = e.pointerId; joy.sx = e.clientX; joy.sy = e.clientY; joy.dx = joy.dy = 0;
   joy.x = gp.x; joy.y = gp.y; joy.tz = save.settings.thumbZone ? gp.x : null;
@@ -587,6 +595,7 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('pointermove', e => {
   if (mode === 'play' && g.ring && (e.pointerType === 'mouse' || (joy.on && e.pointerId === joy.id))) { aimAt(e.clientX, e.clientY); return; }   // b11: drag (or hover with a mouse) to sweep the aim
+  if (fol.on) { if (e.pointerId === fol.id) { fol.x = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; fol.ptT = performance.now(); } return; }
   if (!joy.on || e.pointerId !== joy.id) return;
   if (joy.tz != null) { joy.tz = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; return; }   // thumb zone: the duo follows the finger
   const L = R.layout(), dpr = canvas.width / innerWidth, rad = 70 * L.s / dpr;
@@ -595,10 +604,10 @@ canvas.addEventListener('pointermove', e => {
   const gp = R.toGame(joy.sx * dpr, joy.sy * dpr); joy.x = gp.x;
   joy.dx = dx; joy.dy = 0;
 });
-const endJoy = e => { if (e.pointerId === joy.id) { joy.tz = null; joy.on = false; joy.dx = joy.dy = 0; } };
+const endJoy = e => { if (e.pointerId === fol.id) fol.on = false; if (e.pointerId === joy.id) { joy.tz = null; joy.on = false; joy.dx = joy.dy = 0; } };
 canvas.addEventListener('pointerup', endJoy); canvas.addEventListener('pointercancel', endJoy);
 addEventListener('keydown', e => {
-  keys[e.key.toLowerCase()] = true;
+  keys[e.key.toLowerCase()] = true; if (MOVE_KEYS.has(e.key.toLowerCase())) fol.keyT = performance.now();
   if (e.key === 'Escape') goBack(false);
   else if (e.key.toLowerCase() === 'p') { mode === 'play' ? pause() : mode === 'pause' && !$('settings').classList.contains('on') && !$('panel').classList.contains('on') ? resume() : 0; }
   if (mode === 'play' && g.phase === 'levelup' && !pickLock) { const lk = lockKey(e, $('cards'), g.rerolls); if (lk) { if (lk.i >= 0) { e.preventDefault(); const on = toggleLock($('cards'), lk.i) === lk.i; audio.play('click'); announce(on ? 'Card ' + (lk.i + 1) + ' locked. A reroll keeps it.' : 'Lock removed.'); } else if (lk.armed) announce('Lock: press 1, 2 or 3.'); else if (e.key.toLowerCase() === 'l') announce('Nothing to lock, no refreshes left.'); return; } }
@@ -622,9 +631,10 @@ function readInput() {
   if (joy.on && joy.tz != null) mx += zoneSteer(joy.tz, g.p.x);
   if (keys.a || keys.arrowleft) mx -= 1; if (keys.d || keys.arrowright) mx += 1;
   const enc = encoreTap || !!keys[' ']; encoreTap = false;
+  if (fol.on && followMode() && (mx === 0 || fol.ptT > fol.keyT) && !joy.sdx) return { mx: 0, my: 0, tx: fol.x, encore: enc };   // b12s: follow finger; the latest of finger and keys wins
   return { mx, my: 0, encore: enc };
 }
-function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; pauseRecap(); quitHold.reset(); show('pause'); }
+function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; fol.on = false; joy.dx = joy.dy = 0; pauseRecap(); quitHold.reset(); show('pause'); }
 // Escape and the Android back button share this: close what is open, pause a run, resume a pause, leave the end screen.
 // The back button also walks the hub up to the title; Escape stays put there.
 function goBack(fromBtn) {
@@ -646,12 +656,12 @@ function resume() { mode = 'play'; show(''); last = performance.now(); if (R && 
 function petsCall() { const ps = g && g.pets ? g.pets.slice() : []; if (ps.length && !systemReduceMotion()) setTimeout(() => { if (mode === 'play') ps.forEach((id, i) => setTimeout(() => audio.play(PETSND[id] || 'chirp'), i * 90)); }, 830); }
 function openSettings(back) {
   const paint = () => {
-    for (const b of document.querySelectorAll('#settings .tgl')) { const k = b.dataset.k, on = k === 'sound' ? !save.muted : save.settings[k]; b.classList.toggle('on', !!on); b.querySelector('b').textContent = k === 'pump' ? PUMP_LEVELS[pumpLevel(on)] : on ? 'ON' : 'OFF'; b.classList.toggle('on', k === 'pump' ? pumpLevel(on) > 0 : !!on); }
+    for (const b of document.querySelectorAll('#settings .tgl')) { const k = b.dataset.k, on = k === 'sound' ? !save.muted : k === 'controlStyle' ? save.settings.controlStyle !== 'joystick' : save.settings[k]; b.classList.toggle('on', !!on); if (k === 'controlStyle') { const f = save.settings.controlStyle !== 'joystick'; b.querySelector('span').textContent = 'Control style: ' + (f ? 'Follow finger' : 'Joystick'); } b.querySelector('b').textContent = k === 'pump' ? PUMP_LEVELS[pumpLevel(on)] : on ? 'ON' : 'OFF'; b.classList.toggle('on', k === 'pump' ? pumpLevel(on) > 0 : !!on); }
     $('bkCode').value = exportSave(save); paintCbStrip($('cbStrip'), kit, !!save.settings.colorBlind);
   };
   for (const b of document.querySelectorAll('#settings .tgl')) b.onclick = () => {
     const k = b.dataset.k; audio.unlock();
-    if (k === 'sound') save.muted = !save.muted; else if (k === 'pump') save.settings.pump = (pumpLevel(save.settings.pump) + 1) % 3; else save.settings[k] = !save.settings[k];
+    if (k === 'controlStyle') { save.settings.controlStyle = save.settings.controlStyle === 'joystick' ? 'follow' : 'joystick'; fol.on = false; joy.on = false; joy.dx = 0; } else if (k === 'sound') save.muted = !save.muted; else if (k === 'pump') save.settings.pump = (pumpLevel(save.settings.pump) + 1) % 3; else save.settings[k] = !save.settings[k];
     applySettings(); resize(); persist(); audio.play('click'); $('muteBtn').textContent = save.muted ? '🔇' : '🔊'; paint();
   };
   { const vs = $('volRange'); if (vs) { vs.value = Math.round(save.settings.volume * 100); vs.oninput = () => { save.settings.volume = vs.value / 100; audio.setVolume(save.settings.volume); audio.unlock(); audio.play('slide', { f: save.settings.volume }); }; vs.onchange = () => { persist(); audio.unlock(); audio.play('tap'); }; } }
@@ -688,7 +698,7 @@ function pauseRecap() {
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
 function showStats() {
-  if (mode !== 'play') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0;
+  if (mode !== 'play') return; mode = 'pause'; joy.on = false; fol.on = false; joy.dx = joy.dy = 0;
   statsPanel(() => { mode = 'play'; show(''); last = performance.now(); if (R && R.resumeFx) R.resumeFx(g); petsCall(); });
 }
 function statsPanel(onClose) {
@@ -824,7 +834,7 @@ function frame(now) {
     if (g.phase === 'play') audio.sync(beatPhase(g));
   }
   if (mode === 'pause') { if (pauseN > 2 && pauseW === canvas.width && pauseH === canvas.height) return; pauseN++; pauseW = canvas.width; pauseH = canvas.height; } else pauseN = 0;   // a paused picture is frozen: draw it a few times (and again after a resize), then leave the canvas alone
-  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2, aimHint }, mode === 'pause' ? 0 : dt);
+  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, fol: fol.on && followMode() ? fol : null, hints: save.runs < 2, aimHint }, mode === 'pause' ? 0 : dt);
     if (mode === 'play') for (const n of R.takeSounds()) audio.play(n); else R.takeSounds(); }
 }
 

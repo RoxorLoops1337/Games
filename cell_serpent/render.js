@@ -779,6 +779,14 @@ export function createRenderer(canvas, art, kit) {
     hud.encore(g);   // the meter lives in hud.js
     if (ui && ui.hints && !g.ring) drawHints(ctx, g, S, { glow, text });   // first-run guide (hints.js)
     hud.combo(g);
+    // b12s: follow-finger marker: a thin ring and a short guide at the finger x on the floor line (strokes only)
+    if (ui && ui.fol && ui.fol.on && !g.ring) {
+      const fx = Math.max(g.p.zone.x0, Math.min(g.p.zone.x1, ui.fol.x)), fy = g.p.y + 58, pr = OPT.reduceMotion ? 0 : Math.sin(S.t * 8) * 2;
+      ctx.save(); ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(16,19,28,.55)'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(fx, fy, 22 + pr, 0, TAU); ctx.moveTo(fx, fy - 30); ctx.lineTo(fx, fy - 78); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 4; ctx.stroke();
+      ctx.restore();
+    }
     // joystick
     if (ui && ui.joy && ui.joy.on) {
       const j = ui.joy; ctx.save(); ctx.globalAlpha = 0.45; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(j.x, j.y, 70, 0, TAU); ctx.stroke();

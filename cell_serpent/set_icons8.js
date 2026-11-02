@@ -17,6 +17,7 @@ export const SET_ICON = {
   highContrast: ['#e8e8ff', S('#e8e8ff', `<circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="2.2"/><path ${F} d="M12 3.4a8.6 8.6 0 0 1 0 17.2z"/>`)],
   fullscreen: ['#7ae8f8', S('#7ae8f8', `<path ${K} d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>`)],
   bigTap: ['#6ee7b7', S('#6ee7b7', `<rect x="3" y="3" width="18" height="18" rx="4.6" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="7.4" y="7.4" width="9.2" height="9.2" rx="2.4" ${F}/>`)],
+  controlStyle: ['#f9a8d4', S('#f9a8d4', `<path ${K} d="M9 11V5.5a1.6 1.6 0 0 1 3.2 0V11M12.2 10.2a1.6 1.6 0 0 1 3.2 0V12a1.6 1.6 0 0 1 3.1 0v3.5c0 3.2-2.2 5.5-5.2 5.5h-1.2c-2 0-3.3-.9-4.4-2.4L5 14.2a1.5 1.5 0 0 1 2.300-1.800L9 14"/>`)],
   slider: ['#7ae8f8', S('#7ae8f8', `<path ${K} d="M3 12h18M6.5 8.5 3 12l3.5 3.5M17.5 8.5 21 12l-3.5 3.5"/>`)],
   leftHand: ['#ffb454', S('#ffb454', `<path ${F} d="M14 21c-3.4 0-6-2.4-6-6V9a1.4 1.4 0 0 1 2.8 0v3h.5V5a1.4 1.4 0 0 1 2.8 0v6h.5V6a1.4 1.4 0 0 1 2.8 0v6h.4V8.5a1.4 1.4 0 0 1 2.8 0V15c0 3.4-2.8 6-6.6 6z"/>`)],
   thumbZone: ['#9dff6d', S('#9dff6d', `<rect x="3" y="2.5" width="18" height="19" rx="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path ${F} d="M3.2 15h17.6v3.3a3 3 0 0 1-3 3H6.2a3 3 0 0 1-3-3z"/>`)],
