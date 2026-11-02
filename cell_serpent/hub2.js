@@ -8,6 +8,8 @@ import {
   upgradeAllKeeps, claimAllFund, claimAllTrophies, exchangeFrags, OUTFITS, outfitAvailable, buyOutfit, wearOutfit, eventInfo, EVENT_MILES, claimEventMile, ensureEvent, EXCHANGE_ITEMS, buyExchange, LIMIT_ITEMS, buyLimit,
   CARD_PRICE, buyCard, cardActive, claimCard, TROPHIES, trophyReady, claimTrophy, weaponExchange, WEAPON_EXCHANGE_PRICE, SKINS, SKIN_NAMES,
 } from './sim.js';
+import { createAddictUI } from './addict_ui.js';
+import { nextReward } from './sim.js';
 
 const STATICON = { atk: '🔊', crt: '🎵', cdn: '⏱️', vit: '❤️', for: '⭐', rev: '🎤' };
 const STAT_TEXT = { atk: v => `+${Math.round(v * 100)}% Volume`, crit: v => `+${(v * 100).toFixed(1)}% Pitch`, vit: v => `snake ${Math.round(v / 12 * 2)}% slower`, coin: v => `+${Math.round(v * 100)}% Beats`, guard: v => `snake ${Math.round(v * 50)}% slower`, cdn: v => `${(v * 100).toFixed(1)}% quicker Tempo`, speed: v => `+${Math.round(v * 100)}% singing speed` };
@@ -48,6 +50,7 @@ export function createHub2(c) {
     mk('🏆', 'Trophies', TROPHIES.some(t => trophyReady(s, t)), openTrophies);
     mk('📖', 'Preview', false, openBestiary);
     mk('🎫', 'Pass', cardActive(s, day) && s.card.last !== day, openPass);
+    mk('🎡', 'Goals', nextReward(s, day).ready, () => addict.openGoals());
     mk('🔀', 'Swap', false, openSwap);
   }
   function openSign() {
@@ -283,5 +286,6 @@ export function createHub2(c) {
     sec(list, 'Pass');
     list.appendChild(tile({ cls: 't-gold one', ic: '🎫', name: 'Fan Club Pass', desc: '30 days of daily gifts', btn: 'LOOK', gold: true, onclick: () => { audio.play('click'); openPass(); } }));
   }
-  return { eventTile, shopExtras, renderSide, renderStats, renderGear, renderShop, openPanel, openPanelStats: null, setGearFilter: f => { gearFilter = f; }, lootModal };
+  const addict = createAddictUI(c, openPanel, sec);
+  return { addict, eventTile, shopExtras, renderSide, renderStats, renderGear, renderShop, openPanel, openPanelStats: null, setGearFilter: f => { gearFilter = f; }, lootModal };
 }
