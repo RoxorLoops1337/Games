@@ -48,6 +48,7 @@ export function createRenderer(canvas, art, kit) {
   const tcache = new Map();
   function text(str, x, y, size, fill = '#fff', stroke = '#10131c', align = 'center') {
     str = String(str);
+    size = size >= 20 ? Math.round(size) : Math.round(size * 2) / 2;   // 17-perf: pulsing sizes share a few baked strips instead of baking one per frame
     const font = `800 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
     if (kit && kit.makeCanvas) {
       const key = str + '|' + size + '|' + fill + '|' + stroke;
@@ -56,7 +57,7 @@ export function createRenderer(canvas, art, kit) {
         ctx.font = font; const pad = Math.ceil(size * 0.3), w = Math.ceil(ctx.measureText(str).width) + pad * 2, h = Math.ceil(size * 1.5), d = kit.dpr;
         const c = kit.makeCanvas(w * d, h * d);
         if (c) { const g = c.getContext('2d'); g.scale(d, d); g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * 0.2); g.strokeStyle = stroke; g.strokeText(str, w / 2, h / 2); g.fillStyle = fill; g.fillText(str, w / 2, h / 2); }
-        t = { c, w, h, pad }; if (tcache.size > 500) tcache.clear(); tcache.set(key, t);
+        t = { c, w, h, pad }; if (tcache.size > 500) { let n = 0; for (const k of tcache.keys()) { tcache.delete(k); if (++n >= 160) break; } } tcache.set(key, t);
       }
       if (t.c) { ctx.drawImage(t.c, align === 'left' ? x - t.pad : align === 'right' ? x - t.w + t.pad : x - t.w / 2, y - t.h / 2, t.w, t.h); return; }
     }
