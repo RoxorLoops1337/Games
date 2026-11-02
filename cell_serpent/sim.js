@@ -853,7 +853,7 @@ function onKill(g, s, sn) {
   if (s.kind === 'upgrade') { for (let k = 0; k < 3; k++) dropPickup(g, 'coin', s.x, s.y, coinV); if (g.rand() < 0.3) dropPickup(g, ['heal', 'shield', 'rage'][Math.floor(g.rand() * 3)], s.x, s.y, 1); }
   else dropPickup(g, 'coin', s.x, s.y, coinV);
   if (s.carry === 'chest') { g.pickups.push({ kind: 'chest', x: s.x, y: s.y, vx: 0, vy: 40, v: 1, age: 0, vac: false }); g.events.push({ t: 'chestdrop', x: s.x, y: s.y }); }
-  g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin });
+  g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin, carry: s.carry });
   if (s.kind === 'bomb') {
     g.bombsPopped++;
     const R = 150;

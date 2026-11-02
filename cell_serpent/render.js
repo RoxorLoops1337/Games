@@ -8,7 +8,7 @@ const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) +
 
 export function createRenderer(canvas, art, kit) {
   const ctx = canvas.getContext('2d');
-  const S = { particles: [], floats: [], rings: [], trauma: 0, flash: 0, flashCol: '#fff', banner: null, t: 0, specks: [], hurtT: 0, popped: 0, lastShot: -9, bolts: [], warn: 0 };
+  const S = { particles: [], floats: [], rings: [], trauma: 0, flash: 0, flashCol: '#fff', banner: null, t: 0, specks: [], hurtT: 0, popped: 0, lastShot: -9, bolts: [], warn: 0, props: [], coins: [], chain: { n: 0, t: -9 } };
   for (let i = 0; i < 12; i++) S.specks.push({ i, x: Math.random() * W, y: Math.random() * H, r: 26 + Math.random() * 70, v: 4 + Math.random() * 10, a: Math.random() * TAU });
   S.petals = [];
   for (let i = 0; i < 16; i++) S.petals.push({ x: Math.random() * W, y: Math.random() * H, s: 6 + Math.random() * 7, v: 18 + Math.random() * 26, a: Math.random() * TAU, rot: 0.4 + Math.random(), k: i % 3 === 0 });
@@ -69,18 +69,54 @@ export function createRenderer(canvas, art, kit) {
   const ring = (x, y, r, col, life = 0.4) => S.rings.push({ x, y, r, life, max: life, col });
   const addFloat = (x, y, str, col, size, vy = -70) => { if (S.floats.length < 60) S.floats.push({ x, y, str, col, size, vy, life: 0.7, max: 0.7 }); };
 
+  // ---- hit juice: shaped pop particles, merged damage numbers, kill chains, flying coins ----
+  const POPSHAPE = { love: 'h', piggy: 'h', frosty: 'f', grumpy: 'f', sneezy: 'd', sour: 'd', disco: 'n', sleepy: 'n', rust: 'c', mighty: 'c', gloomy: 'c' };
+  const CHAIN_COL = ['#ffffff', '#9dff6d', '#6fe3ff', '#ffd84d', '#ff9ad6', '#ff6a3d'];
+  function shaped(x, y, n, sh, cols, sp, life, size, grav = 0) {
+    if (OPT.lowQuality) n = Math.ceil(n * 0.5);
+    for (let i = 0; i < n && S.particles.length < (OPT.lowQuality ? 140 : 420); i++) {
+      const a = Math.random() * TAU, v = sp * (0.3 + Math.random() * 0.8);
+      S.particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - sp * 0.25, life, max: life, size: size * (0.7 + Math.random() * 0.6), col: cols[(Math.random() * cols.length) | 0], sh, g: grav, rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 8 });
+    }
+  }
+  function dmgFloat(e) {
+    const crit = e.crit, key = e.s;
+    let f = null;
+    for (let i = 0; i < S.floats.length; i++) if (S.floats[i].key === key && S.floats[i].life > 0.3) { f = S.floats[i]; break; }
+    if (f) { f.acc += e.d; f.str = num(f.acc); f.life = f.max = crit ? 0.8 : 0.6; f.pop = 1; f.vy = -60; if (crit) { f.col = '#ffe14a'; f.size = Math.max(f.size, 28); } return; }
+    let dn = 0; for (let i = 0; i < S.floats.length; i++) if (S.floats[i].key) dn++;
+    if (dn >= (OPT.lowQuality ? 8 : 14) && !crit) return;   // cap: busy fights show fewer numbers, crits always show
+    if (S.floats.length >= 60) return;
+    const size = crit ? 30 : Math.min(24, 14 + Math.log2(e.d + 1) * 1.6);
+    S.floats.push({ x: e.x + (Math.random() - 0.5) * 24, y: e.y - 14, str: num(e.d), acc: e.d, key, col: crit ? '#ffe14a' : '#ffffff', size, vy: crit ? -85 : -60, life: crit ? 0.8 : 0.6, max: crit ? 0.8 : 0.6, pop: 1 });
+  }
   function onEvent(e, g) {
     switch (e.t) {
       case 'hit':
         S.popped++;
-        addFloat(e.x + (Math.random() - 0.5) * 20, e.y - 10, num(e.d), e.crit ? '#ffe14a' : '#ffffff', e.crit ? 26 : 17);
+        dmgFloat(e);
+        if (e.crit) { ring(e.x, e.y, 70, '#ffe14a', 0.3); shaped(e.x, e.y, OPT.lowQuality ? 4 : 8, 's', ['#ffe14a', '#fff'], 300, 0.45, 9); }
         burst(e.x, e.y, e.crit ? 5 : 2, e.crit ? ['#ffe14a', '#fff'] : ['#fff', '#b9f3ff'], 160, 0.3, 3);
         break;
       case 'kill': {
         const sp = kit && kit.SPECIES[e.skin];
         const sk = e.kind === 'upgrade' ? ['#ffd84d', '#fff1a8', '#fff'] : sp ? [sp.lite, sp.base, '#fff'] : ['#ff9ad6', '#e0489d', '#fff'];
         burst(e.x, e.y, e.head ? 40 : 14, sk, e.head ? 360 : 240, 0.7, 6);
-        ring(e.x, e.y, e.r * 2.4, '#fff', 0.35);
+        { const sh = POPSHAPE[e.skin] || 'c';
+          shaped(e.x, e.y, e.head ? 14 : 7, sh, sp ? [sp.lite, sp.base, '#fff', sp.acc] : ['#ff9ad6', '#fff'], e.head ? 340 : 250, 0.9, e.head ? 11 : 8, 380); }
+        { const ch = S.chain; ch.n = S.t - ch.t < 0.9 ? ch.n + 1 : 1; ch.t = S.t;
+          const col = CHAIN_COL[Math.min(5, ch.n >> 1)];
+          ring(e.x, e.y, e.r * (2.4 + Math.min(ch.n, 10) * 0.12), col, 0.35);
+          if (ch.n >= 3) { for (let i = 0; i < S.floats.length; i++) if (S.floats[i].key === 'chain') { S.floats.splice(i, 1); break; }
+            S.floats.push({ x: e.x, y: e.y - e.r - 14, str: 'x' + ch.n, acc: 0, key: 'chain', col, size: Math.min(34, 18 + ch.n), vy: -50, life: 0.7, max: 0.7, pop: 1 });
+            if (ch.n % 5 === 0) shaped(e.x, e.y, 6, 's', [col, '#fff'], 280, 0.5, 9); } }
+        if (e.kind === 'upgrade') {   // golden shockwave
+          ring(e.x, e.y, 260, '#ffd84d', 0.6); ring(e.x, e.y, 170, '#fff1a8', 0.45); ring(e.x, e.y, 120, '#ffffff', 0.3);
+          S.rings.push({ x: e.x, y: e.y, r: 200, life: 0.5, max: 0.5, col: '#ffd24a', glow: true });
+          shaped(e.x, e.y, 10, 's', ['#ffd84d', '#fff1a8', '#fff'], 380, 0.8, 12); S.flash = Math.max(S.flash, 0.22); S.flashCol = '#ffe9a0'; S.trauma = Math.min(1, S.trauma + 0.25);
+        }
+        if (e.carry === 'chest' && !OPT.reduceMotion) S.props.push({ k: 'chest', x: e.x, y: e.y, vx: (Math.random() - 0.5) * 80, vy: -300, rot: 0, life: 0.9, max: 0.9, size: e.r * 2.6 });
+        if (e.carry === 'chest') { ring(e.x, e.y, 150, '#ffd84d', 0.5); shaped(e.x, e.y, 8, 's', ['#ffd84d', '#fff', '#ff7eb6'], 330, 0.7, 10, 200); }
         if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); }
         break;
       }
@@ -97,7 +133,10 @@ export function createRenderer(canvas, art, kit) {
       case 'hurt': S.trauma = Math.min(1, S.trauma + 0.6); S.flash = 0.35; S.flashCol = '#ff2a4d'; burst(e.x, e.y, 16, ['#ff2a4d', '#ff8aa0'], 300, 0.5, 5); addFloat(e.x, e.y - 30, '-' + Math.ceil(e.d), '#ff5a78', 28, -90); break;
       case 'block': ring(e.x, e.y, 46, '#39d0ff', 0.3); break;
       case 'power': ring(e.x, e.y, 60, e.kind === 'heal' ? '#ff6a8a' : e.kind === 'shield' ? '#39d0ff' : '#ffd24a', 0.5); addFloat(g.p.x, g.p.y - 60, e.kind === 'heal' ? 'HEAL' : e.kind === 'shield' ? 'SHIELD' : 'RAGE', '#fff', 26, -60); break;
-      case 'coin': if (S.floats.length < 40) addFloat(g.p.x + 20, g.p.y - 40, '+' + Math.max(1, Math.round(e.v * g.p.coinMul)), '#ffd24a', 15, -50); break;
+      case 'coin':
+        if (S.floats.length < 40) addFloat(g.p.x + 20, g.p.y - 40, '+' + Math.max(1, Math.round(e.v * g.p.coinMul)), '#ffd24a', 15, -50);
+        if (S.coins.length < (OPT.lowQuality ? 8 : 20)) S.coins.push({ x0: e.x, y0: e.y, t: 0, dur: 0.55 + Math.random() * 0.2, cx: e.x + (Math.random() - 0.5) * 160, cy: Math.min(e.y, 300) - 80 });
+        break;
       case 'levelup': S.flash = 0.4; S.flashCol = '#9dff6d'; ring(g.p.x, g.p.y, 220, '#9dff6d', 0.6); break;
       case 'pet': addFloat(g.p.x, g.p.y - 150, ({ kitten: 'Meow!', puppy: 'Woof!', lamb: 'Baa!', turtle: 'Slow down!', piglet: 'Oink!', hamster: 'Squeak!' })[e.id] || '!', '#ffe14a', 22, -40); break;
       case 'skip': addFloat(g.p.x, g.p.y - 120, 'Beats!', '#ffd24a', 20, -50); break;
@@ -191,8 +230,14 @@ export function createRenderer(canvas, art, kit) {
       const spr = kit && kit.SPR.body(sn.skin, sn.boss, s.kind === 'normal' ? '' : s.kind);
       if (spr) {
         const size = r * 3.9 * bob * (1 + Math.min(0.16, s.flash * 1.3));
-        blit(spr, s.x, s.y, size, upright ? 0 : ang);
-        if (s.flash > 0) flashBlit(spr, s.x, s.y, size, upright ? 0 : ang, s.flash * 5);
+        if (s.flash > 0 && !OPT.reduceMotion) {   // squash and recoil on hit
+          const k = Math.min(1, s.flash / 0.12);
+          ctx.save(); ctx.translate(s.x, s.y - k * 5); ctx.scale(1 + k * 0.13, 1 - k * 0.13);
+          blit(spr, 0, 0, size, upright ? 0 : ang); flashBlit(spr, 0, 0, size, upright ? 0 : ang, s.flash * 5); ctx.restore();
+        } else {
+          blit(spr, s.x, s.y, size, upright ? 0 : ang);
+          if (s.flash > 0) flashBlit(spr, s.x, s.y, size, upright ? 0 : ang, s.flash * 5);
+        }
         if (s.kind === 'bomb') { const f = 0.6 + Math.sin(S.t * 18 + i) * 0.4; sparkleAt(s.x + r * 0.1, s.y - r * 1.2, r * 0.3 * f); }
         if (s.kind === 'upgrade') sparkleAt(s.x + r * 0.55 + Math.sin(S.t * 4 + i) * 4, s.y - r * 0.55, r * 0.3);
       } else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
@@ -285,21 +330,58 @@ export function createRenderer(canvas, art, kit) {
       ctx.globalAlpha = 0.8 * a; ctx.beginPath(); ctx.ellipse(b.x, b.y, 58, 22, 0, 0, TAU); ctx.fill(); ctx.restore();
     }
   }
+  const CX = W - 22 - 172, CY = 38;   // the coin counter in the HUD
+  function drawShape(q) {
+    const a = q.life / q.max, s = q.size * (0.5 + 0.5 * a);
+    ctx.globalAlpha = Math.min(1, a * 1.6); ctx.fillStyle = q.col; ctx.strokeStyle = q.col;
+    ctx.save(); ctx.translate(q.x, q.y);
+    switch (q.sh) {
+      case 'h': ctx.rotate(Math.sin(q.rot) * 0.4); ctx.beginPath(); ctx.moveTo(0, s * 0.9); ctx.bezierCurveTo(-s * 1.5, -s * 0.1, -s * 0.8, -s * 1.1, 0, -s * 0.4); ctx.bezierCurveTo(s * 0.8, -s * 1.1, s * 1.5, -s * 0.1, 0, s * 0.9); ctx.fill(); break;
+      case 'f': ctx.rotate(q.rot); ctx.lineWidth = Math.max(1.5, s * 0.22); ctx.beginPath(); for (let i = 0; i < 3; i++) { const an = i * Math.PI / 3; ctx.moveTo(Math.cos(an) * s, Math.sin(an) * s); ctx.lineTo(-Math.cos(an) * s, -Math.sin(an) * s); } ctx.stroke(); break;
+      case 'd': ctx.beginPath(); ctx.moveTo(0, -s * 1.2); ctx.quadraticCurveTo(s * 0.9, s * 0.2, 0, s * 0.8); ctx.quadraticCurveTo(-s * 0.9, s * 0.2, 0, -s * 1.2); ctx.fill(); break;
+      case 'n': ctx.rotate(Math.sin(q.rot) * 0.3); ctx.beginPath(); ctx.ellipse(-s * 0.3, s * 0.6, s * 0.55, s * 0.4, -0.4, 0, TAU); ctx.fill(); ctx.fillRect(s * 0.1, -s * 1.0, s * 0.2, s * 1.6); ctx.fillRect(s * 0.1, -s * 1.0, s * 0.7, s * 0.3); break;
+      case 's': ctx.rotate(q.rot); ctx.beginPath(); for (let i = 0; i < 8; i++) { const rr = i & 1 ? s * 0.35 : s * 1.1, an = i * Math.PI / 4; ctx.lineTo(Math.cos(an) * rr, Math.sin(an) * rr); } ctx.closePath(); ctx.fill(); break;
+      default: ctx.rotate(q.rot); ctx.fillRect(-s * 0.6, -s * 0.3, s * 1.2, s * 0.6);   // confetti
+    }
+    ctx.restore();
+  }
+  function drawProps(dt) {
+    for (let i = S.props.length - 1; i >= 0; i--) {   // chest cell pop: the chest hops out and flips its lid
+      const p = S.props[i]; p.life -= dt; if (p.life <= 0) { S.props.splice(i, 1); continue; }
+      p.vy += 700 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += dt * 9;
+      const cs = Math.cos(p.rot);
+      ctx.save(); ctx.globalAlpha = Math.min(1, p.life / 0.25); ctx.translate(p.x, p.y); ctx.scale(1, cs * 0.8 + (cs < 0 ? -0.2 : 0.2));
+      blit(kit && kit.SPR.pickup('chest'), 0, 0, p.size); ctx.restore();
+    }
+    for (let i = S.coins.length - 1; i >= 0; i--) {   // coins arc to the coin counter
+      const c = S.coins[i]; c.t += dt; const k = Math.min(1, c.t / c.dur);
+      if (k >= 1) { S.coins.splice(i, 1); if (S.coins.length < 12) glow(CX, CY, 38, '#ffd24a', 0.5); continue; }
+      const u = k * k * (3 - 2 * k), m = 1 - u;
+      const x = m * m * c.x0 + 2 * m * u * c.cx + u * u * CX, y = m * m * c.y0 + 2 * m * u * c.cy + u * u * CY;
+      ctx.save(); ctx.translate(x, y); ctx.scale(Math.max(0.3, Math.abs(Math.cos(c.t * 14))), 1); blit(kit && kit.SPR.pickup('coin'), 0, 0, 40 - 14 * k); ctx.restore();
+    }
+  }
   function drawFx(dt) {
     for (let i = S.rings.length - 1; i >= 0; i--) {
       const r = S.rings[i]; r.life -= dt; if (r.life <= 0) { S.rings.splice(i, 1); continue; }
-      const k = 1 - r.life / r.max; ctx.save(); ctx.globalAlpha = (1 - k) * 0.8; ctx.strokeStyle = r.col; ctx.lineWidth = 6 * (1 - k) + 1;
+      const k = 1 - r.life / r.max;
+      if (r.glow) { glow(r.x, r.y, r.r * (0.3 + 0.7 * k), '#ffd24a', (1 - k) * 0.7); continue; }
+      ctx.save(); ctx.globalAlpha = (1 - k) * 0.8; ctx.strokeStyle = r.col; ctx.lineWidth = 6 * (1 - k) + 1;
       ctx.beginPath(); ctx.arc(r.x, r.y, r.r * (0.25 + 0.75 * k), 0, TAU); ctx.stroke(); ctx.restore();
     }
     for (let i = S.particles.length - 1; i >= 0; i--) {
       const q = S.particles[i]; q.life -= dt; if (q.life <= 0) { S.particles.splice(i, 1); continue; }
       q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.94; q.vy *= 0.94;
+      if (q.sh) { q.vy += q.g * dt; q.rot += q.vr * dt; drawShape(q); continue; }
       ctx.globalAlpha = q.life / q.max; ctx.fillStyle = q.col; ctx.beginPath(); ctx.arc(q.x, q.y, q.size * (0.4 + 0.6 * q.life / q.max), 0, TAU); ctx.fill();
     }
     ctx.globalAlpha = 1;
+    drawProps(dt);
     for (let i = S.floats.length - 1; i >= 0; i--) {
       const f = S.floats[i]; f.life -= dt; if (f.life <= 0) { S.floats.splice(i, 1); continue; }
-      f.y += f.vy * dt; ctx.globalAlpha = Math.min(1, f.life / 0.3); text(f.str, f.x, f.y, f.size, f.col);
+      f.y += f.vy * dt; ctx.globalAlpha = Math.min(1, f.life / 0.3);
+      if (f.pop > 0) { f.pop = Math.max(0, f.pop - dt * 8); text(f.str, f.x, f.y, Math.round(f.size * (1 + 0.3 * f.pop) / 2) * 2, f.col); }
+      else text(f.str, f.x, f.y, f.size, f.col);
     }
     ctx.globalAlpha = 1;
   }
