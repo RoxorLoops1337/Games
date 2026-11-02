@@ -384,7 +384,11 @@ export function createHud(env) {
     if (!reduce() && age < 0.4) sparkleAt(cx + (age * 40 - 20) % 60 - 30, py - 20, 8 * (1 - age / 0.4) + 3);
   }
 
+  // perf r10: a tile's four baked sprites only change with its colour, ready state, level and max, so each one is looked up once per change
+  // (no key string and no bake closure per tile per frame); the memo is dropped whenever the kit drops its baked sprites (kit.gen)
+  const SM = new Map(); let smGen;
   function skills(g) {
+    if (kit && smGen !== kit.gen) { SM.clear(); smGen = kit.gen; }
     const r = 26, pitch = 58, cy = H - 60 - T.ins.b;
     let x = W - 22 - r, nCap = 0;
     for (const id in g.weap) {
@@ -403,13 +407,15 @@ export function createHud(env) {
       const ll = T.lvLast[id]; if (w.lv > (ll === undefined ? (S.t - T.t0 > 1 ? 0 : w.lv) : ll)) { T.lvAt[id] = S.t; if (!ll && S.t - T.t0 > 1) T.newAt[id] = S.t; } T.lvLast[id] = w.lv;
       const lk = Math.max(0, 1 - (S.t - (T.lvAt[id] === undefined ? -9 : T.lvAt[id])) / 0.7), lsc = lk > 0 && !reduce() ? 1 + 0.32 * Math.sin(lk * Math.PI) * lk : 1;
       ctx.save(); if (lsc !== 1) { ctx.translate(x, cy); ctx.scale(lsc, lsc); ctx.translate(-x, -cy); }
-      const tb = kit && kit.bake ? kit.bake('tile06|' + col, r * 2 + 8, r * 2 + 8, c => {   // dark glass disc, a colour wash lit from the top, a gloss arc and a thin coloured rim
+      let sm = SM.get(id); if (!sm) SM.set(id, sm = { col: null, rk: null, bmax: -1, bcol: null, pl: -1, pm: -1, tb: null, rb: null, bb: null, pb: null });
+      const tb = sm.col === col ? sm.tb : kit && kit.bake ? kit.bake('tile06|' + col, r * 2 + 8, r * 2 + 8, c => {   // dark glass disc, a colour wash lit from the top, a gloss arc and a thin coloured rim
         c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = 'rgba(14,9,48,.78)'; c.fill();
         const rg = c.createRadialGradient(0, -r * 0.5, 2, 0, 0, r); rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)');
         c.globalAlpha = 0.5; c.fillStyle = rg; c.beginPath(); c.arc(0, 0, r - 1, 0, TAU); c.fill(); c.globalAlpha = 1;
         c.beginPath(); c.arc(0, -r * 0.2, r * 0.78, Math.PI * 1.12, Math.PI * 1.88); c.strokeStyle = 'rgba(255,255,255,.3)'; c.lineWidth = 3; c.lineCap = 'round'; c.stroke();
         c.beginPath(); c.arc(0, 0, r, 0, TAU); c.strokeStyle = col; c.globalAlpha = 0.7; c.lineWidth = 1.5; c.stroke();
       }) : null;
+      if (sm.col !== col) { sm.col = col; sm.tb = tb; }
       if (tb) ctx.drawImage(tb.c, x - r - 4, cy - r - 4, r * 2 + 8, r * 2 + 8);
       else { ctx.beginPath(); ctx.arc(x, cy, r, 0, TAU); ctx.fillStyle = 'rgba(14,9,48,.62)'; ctx.fill();
         ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, cy, r - 2, 0, TAU); ctx.fill(); ctx.restore(); }
@@ -417,7 +423,8 @@ export function createHud(env) {
       if (frac < 0.999) { ctx.save(); ctx.beginPath(); ctx.moveTo(x, cy); ctx.arc(x, cy, r - 1, -Math.PI / 2 + TAU * frac, Math.PI * 1.5); ctx.closePath(); ctx.fillStyle = 'rgba(8,5,30,.55)'; ctx.fill(); ctx.restore(); }
       ctx.lineCap = 'round';
       // 06-hud b7: the resting ring (track, or the full ready ring in the skill colour) is one baked blit; only the filling arc is drawn live
-      const RS = (r + 6) * 2, rb = kit && kit.bake ? kit.bake('ring07|' + (ready ? col : 'trk'), RS, RS, c => { c.beginPath(); c.arc(0, 0, r + 1.5, 0, TAU); c.strokeStyle = ready ? col : 'rgba(255,255,255,.22)'; c.lineWidth = 4; c.stroke(); }) : null;
+      const RS = (r + 6) * 2, rk = ready ? col : 'trk', rb = sm.rk === rk ? sm.rb : kit && kit.bake ? kit.bake('ring07|' + rk, RS, RS, c => { c.beginPath(); c.arc(0, 0, r + 1.5, 0, TAU); c.strokeStyle = ready ? col : 'rgba(255,255,255,.22)'; c.lineWidth = 4; c.stroke(); }) : null;
+      if (sm.rk !== rk) { sm.rk = rk; sm.rb = rb; }
       if (rb) { ctx.drawImage(rb.c, x - RS / 2, cy - RS / 2, RS, RS); if (!ready && frac > 0.01) { ctx.beginPath(); ctx.arc(x, cy, r + 1.5, -Math.PI / 2, -Math.PI / 2 + TAU * frac); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.stroke(); } }
       else {
         ctx.beginPath(); ctx.arc(x, cy, r + 1.5, 0, TAU); ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 4; ctx.stroke();
@@ -440,19 +447,21 @@ export function createHud(env) {
       // level pips
       const pw = 9, px0 = x - ((max - 1) * pw) / 2, py = cy + r + 10;
       if (w.lv > 0) {   // level numeral badge, top right of the tile (b9: bigger, MAX is a gold pill)
-        const maxed = w.lv >= max, bw2 = maxed ? 46 : 28, bx = maxed ? x + 6 : x + r - 1, by = cy - r + 1, bb = kit && kit.bake ? kit.bake('lvb09|' + col + '|' + (maxed ? 1 : 0), bw2 + 8, 36, c => {
+        const maxed = w.lv >= max, bw2 = maxed ? 46 : 28, bx = maxed ? x + 6 : x + r - 1, by = cy - r + 1, bk = maxed ? 1 : 0, bb = sm.bcol === col && sm.bmax === bk ? sm.bb : kit && kit.bake ? kit.bake('lvb09|' + col + '|' + bk, bw2 + 8, 36, c => {
           c.beginPath(); if (c.roundRect) c.roundRect(-bw2 / 2, -14, bw2, 28, 14); else c.rect(-bw2 / 2, -14, bw2, 28); c.fillStyle = maxed ? '#ffd84d' : 'rgba(14,9,48,.96)'; c.fill();
           c.lineWidth = 2.5; c.strokeStyle = maxed ? '#fff3a0' : col; c.stroke();
         }) : null;
+        if (sm.bcol !== col || sm.bmax !== bk) { sm.bcol = col; sm.bmax = bk; sm.bb = bb; }
         if (bb) ctx.drawImage(bb.c, bx - (bw2 + 8) / 2, by - 18, bw2 + 8, 36);
         text(maxed ? 'MAX' : w.lv + '', bx, by + 1, maxed ? 18 : 21, maxed ? '#4a3600' : '#ffffff', maxed ? '#fff3a0' : '#0b1020');
       }
       if (lk > 0 && !reduce()) { ctx.save(); ctx.globalAlpha = lk * 0.9; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3 * lk + 1; ctx.beginPath(); ctx.arc(x, cy, r + 4 + 24 * (1 - lk), 0, TAU); ctx.stroke(); ctx.restore(); }
-      const PW = pw * (max - 1) + 14, lvc = Math.min(w.lv, max), pb = kit && kit.bake ? kit.bake('pips07|' + lvc + '|' + max, PW, 12, c => {   // one baked row per level: lit pips white (gold when maxed), empty ones faint
+      const PW = pw * (max - 1) + 14, lvc = Math.min(w.lv, max), pb = sm.pl === lvc && sm.pm === max ? sm.pb : kit && kit.bake ? kit.bake('pips07|' + lvc + '|' + max, PW, 12, c => {   // one baked row per level: lit pips white (gold when maxed), empty ones faint
         c.translate(-((max - 1) * pw) / 2, 0);
         c.beginPath(); for (let i = lvc; i < max; i++) { c.moveTo(i * pw + 3.4, 0); c.arc(i * pw, 0, 3.4, 0, TAU); } c.fillStyle = 'rgba(255,255,255,.3)'; c.fill();
         if (lvc > 0) { c.beginPath(); for (let i = 0; i < lvc; i++) { c.moveTo(i * pw + 3.4, 0); c.arc(i * pw, 0, 3.4, 0, TAU); } c.fillStyle = lvc >= max ? '#ffd84d' : '#ffffff'; c.fill(); }
       }) : null;
+      if (sm.pl !== lvc || sm.pm !== max) { sm.pl = lvc; sm.pm = max; sm.pb = pb; }
       if (pb) ctx.drawImage(pb.c, x - PW / 2, py - 6, PW, 12);
       else {
         ctx.beginPath(); for (let i = w.lv; i < max; i++) { ctx.moveTo(px0 + i * pw + 3.4, py); ctx.arc(px0 + i * pw, py, 3.4, 0, TAU); } ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fill();

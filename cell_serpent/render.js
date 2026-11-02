@@ -1,6 +1,6 @@
 // Canvas renderer. Reads the sim state, never changes it. Uses sprites from art.js
 // where they exist and draws procedural stand-ins otherwise.
-import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt } from './sim.js';
+import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointInto } from './sim.js';
 import { INK, mix } from './art_draw.js';
 import { deathMotion } from './head_death.js';
 import { createHud, hudZone } from './hud.js';
@@ -24,6 +24,10 @@ const TAU = Math.PI * 2;
 const NUMS = [];
 const num = v => { v = Math.ceil(v); if (v >= 0 && v < 1000) return NUMS[v] || (NUMS[v] = String(v)); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
 
+// perf r10: two alternating scratch points, so a lookup returns a point without allocating one (callers hold at most two at once)
+const DP_R = { x: 0, y: 0, a: 0 }, SG_R = { x0: 0, y0: 0, x1: 0, y1: 0, a: 0, len: 0 };
+const PS2 = [{ x: 0, y: 0 }, { x: 0, y: 0 }]; let ps2i = 0;
+const pointAtS = (path, s) => pointInto(path, s, PS2[ps2i ^= 1]);
 export function createRenderer(canvas, art, kit) {
   const ctx = canvas.getContext('2d');
   const S = { particles: [], floats: [], rings: [], trauma: 0, flash: 0, flashCol: '#fff', banner: null, t: 0, specks: [], hurtT: 0, popped: 0, lastShot: -9, bolts: [], warn: 0, props: [], coins: [], chain: { n: 0, t: -9 } };
@@ -286,7 +290,7 @@ export function createRenderer(canvas, art, kit) {
 
   function drawSnake(g, sn) {
     const segs = sn.segs, p = g.p;
-    if (sn.lane) drawDashLane(ctx, sn.path || g.path, pointAt, sn, S.t);
+    if (sn.lane) drawDashLane(ctx, sn.path || g.path, pointAtS, sn, S.t);
     drawChoirLinks(ctx, sn, S.t);
     drawBellLinks(ctx, sn, S.t); setBeatPhase(beatPhase(g));
     for (let i = segs.length - 1; i >= 0; i--) {   // tail first so the head sits on top
@@ -555,10 +559,10 @@ export function createRenderer(canvas, art, kit) {
       blit(kit && kit.SPR.weapon('tower', (mk > 0.1 ? 4 : wMood(t.x)) + wT(g, 'tower')), t.x, t.y, 160 * (1 + 0.14 * Math.max(0, t.pulse)), Math.sin(S.t * 3 + t.x) * 0.03 + (mk > 0.1 ? Math.sin(S.t * 50) * 0.05 : 0));
     }
     const dl = g.weap.daggers ? g.weap.daggers.lv : 0;   // Spinning Vinyl
-    for (let i = 0; i < (dl ? 1 + dl : 0); i++) { const d = daggerPos(g, i); const dy = d.y + Math.sin(S.t * 8 + i) * 4; for (let j = 1; j <= 3; j++) { const q = daggerPos(g, i), a = S.t * 7 + i * 2 - j * 0.28; ctx.save(); ctx.globalAlpha = 0.22 / j; ctx.fillStyle = '#ffe14a'; ctx.beginPath(); ctx.arc(d.x - Math.cos(a + 1.57) * j * 9, dy - Math.sin(a + 1.57) * j * 9 + 6, 22 - j * 4, 0, TAU); ctx.fill(); ctx.restore(); }   // chick circle: a yellow trail
+    for (let i = 0; i < (dl ? 1 + dl : 0); i++) { const d = daggerPos(g, i, DP_R); const dy = d.y + Math.sin(S.t * 8 + i) * 4; for (let j = 1; j <= 3; j++) { const a = S.t * 7 + i * 2 - j * 0.28; ctx.save(); ctx.globalAlpha = 0.22 / j; ctx.fillStyle = '#ffe14a'; ctx.beginPath(); ctx.arc(d.x - Math.cos(a + 1.57) * j * 9, dy - Math.sin(a + 1.57) * j * 9 + 6, 22 - j * 4, 0, TAU); ctx.fill(); ctx.restore(); }   // chick circle: a yellow trail
       blit(kit && kit.SPR.weapon('dagger', wMood(i * 53) + wT(g, 'daggers')), d.x, dy, 150, Math.sin(S.t * 7 + i) * 0.2); }
     if (g.weap.stick) for (let k = 0; k < (g.weap.stick.lv >= 4 ? 2 : 1); k++) {   // Drumsticks
-      const sg = stickSeg(g, k), sc = sg.len / 144, mid = 80 * sc;
+      const sg = stickSeg(g, k, SG_R), sc = sg.len / 144, mid = 80 * sc;
       blit(kit && kit.SPR.weapon('stick'), sg.x0 + Math.cos(sg.a) * mid, sg.y0 + Math.sin(sg.a) * mid, 184 * sc, sg.a);
     }
     for (const m of g.maws) {   // Bass Drop: a sub-bass vortex with a thump
