@@ -144,3 +144,6 @@ scratchpad, LOOK at it (Read the png), fix, repeat. Lab pages live in `drop_the_
 8. Results screen shows personal bests and a New Record celebration (endless, daily, weekly).
 9. Browser test that scans visible hub and battle text in da, nl and de for untranslated English.
 10. Save export and import covers every profile field added since round 1 (language, accessibility, skins, milestones, friends), with tests.
+
+Round 3 result: all ten shipped. Notes: HUD canvas text honours Larger text (a11y.textScale); ring and icon caching cut canvas ops about 14 percent; the backdrop (about 4.7 ms) and the board floor (about 3.4 ms) in doodle_env.js are now the biggest frame costs (Low graphics barely helps there). Hint icons for synergy, branch, preview, reroll, boss phase and hero ready were added.
+Ideas next (round 4): cheaper backdrop and board floor in Low graphics; per-boss first-time hint cards; tutorial step for the preview and reroll; sound mix check on phones; daily streak rewards and a friendly welcome-back summary; tablet and landscape layout; more outfits and skins to chase; an in-game changelog card; endless mode variety (themed waves every 10); a 'practice a boss' mode from the codex.

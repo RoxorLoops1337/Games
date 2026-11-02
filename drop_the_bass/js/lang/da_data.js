@@ -533,7 +533,7 @@ export default {
   "REMIX.bass_boost.desc": "Alle tårne gør +12 % skade.",
   "REMIX.bass_boost.name": "Bas-boost",
   "REMIX.bass_drop.desc": "Hvert 18. sekund rammer en chokbølge alle fjender med stor skade.",
-  "REMIX.bass_drop.name": "The Drop",
+  "REMIX.bass_drop.name": "Dropet",
   "REMIX.big_hits.desc": "Kritiske slag gør +40 % mere.",
   "REMIX.big_hits.name": "Store slag",
   "REMIX.boss_hunter.desc": "+30 % skade på bosser.",

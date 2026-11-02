@@ -80,7 +80,7 @@ export function showPause(app, battle) {
 
 // ------------------------------------------------------------------------------------------------ hints
 // glyph per coach mark (hub hints included); anything unlisted shows the lock
-const HINT_ICON = { boss: 'crown', chest: 'gift', mod: 'bolt', hint_setlist: 'mic', hint_wardrobe: 'sparkle', hint_skin_buy: 'diamond', hint_studio_scene: 'speaker', hint_weekly: 'ticket' };
+const HINT_ICON = { boss: 'crown', chest: 'gift', mod: 'bolt', hint_setlist: 'mic', hint_wardrobe: 'sparkle', hint_skin_buy: 'diamond', hint_studio_scene: 'speaker', hint_weekly: 'ticket', hint_synergy: 'heart', hint_branch: 'merge', hint_preview: 'eye', hint_reroll: 'reroll', hint_bossphase: 'crown', hint_hero_ready: 'sparkle' };
 export function showHint(app, id, done) {
   const hint = HINTS[id];
   const isEnemy = !!ENEMIES[id];
