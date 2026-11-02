@@ -530,7 +530,7 @@ export function createRenderer(canvas, art, kit) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
   HJ = createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped });
-  FX = createScreenFx({ ctx, W, H, kit, text, glow, S, OPT, ring, burst });
+  FX = createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst });
 
-  return { hj: HJ, timeScale:() => (FX ? FX.timeScale() : 1), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
+  return { hj: HJ, timeScale: () => (FX ? FX.timeScale() : 1), setBeat: fn => FX.setBeat(fn), clearBusy: () => FX.clearBusy(), takeSounds: () => FX.takeSounds(), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
 }

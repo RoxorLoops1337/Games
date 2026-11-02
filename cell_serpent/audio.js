@@ -154,6 +154,7 @@ export function createAudio() {
   function kick(t, v = 0.3) { tone(150, 0.16, 'sine', v, -110, t, 'm'); noise(0.02, 0.05, 4000, 800, 'lowpass', t, 'm'); }
   function snare(t, v = 0.1) { noise(0.13, v, 3000, 1200, 'bandpass', t, 'm'); tone(190, 0.09, 'triangle', v * 0.7, -70, t, 'm'); }
   function hat(t, v = 0.03, open) { noise(open ? 0.14 : 0.03, v, 9000, 6000, 'highpass', t, 'm'); }
+  let beatAt = 0, beatBpm = 0;
   function pump() {
     if (!musicOn || !ac) return;
     const m = mixS, boss = m.boss, tier = Math.floor(Math.max(0, m.stage - 1) / 5) % ROOTS.length;
@@ -163,6 +164,7 @@ export function createAudio() {
     const sp = 60 / bpm / 4;
     while (nextT < ac.currentTime + 0.25) {
       const s = step % 16, bar = (step >> 4) % 4, sec = (step >> 6), t = Math.max(0, nextT - ac.currentTime);
+      if (s % 4 === 0) { beatAt = nextT; beatBpm = bpm; }   // for the screen edge pulse (see beat())
       if (!muted) {
         const sc = boss ? SCALES.phryg : (tier % 3 === 2 ? SCALES.minor : SCALES.major);
         const root = 36 + ROOTS[tier] + (boss ? 5 : 0);
@@ -210,6 +212,12 @@ export function createAudio() {
     // groove 0..1, danger 0..1 (how close the face is to the line), stage number, boss flag
     mix(o) { if (o) mixS = { stage: o.stage || 1, boss: !!o.boss, groove: Math.max(0, Math.min(1, o.groove || 0)), danger: Math.max(0, Math.min(1, o.danger || 0)) }; },
     duck,
+    // where we are in the beat: { bpm, phase 0..1 since the last kick }, or null when the music is not playing
+    beat() {
+      if (!musicOn || !ac || !beatBpm) return null;
+      const spb = 60 / beatBpm; let ph = ((ac.currentTime - beatAt) / spb) % 1; if (ph < 0) ph += 1;
+      return { bpm: beatBpm, phase: ph };
+    },
     names: () => Object.keys(sfx),
   };
 }
