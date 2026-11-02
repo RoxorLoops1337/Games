@@ -62,5 +62,20 @@ try {
   fs.rmSync(FLAKY_MARK, { force: true });
   r = run('--jobs', '3'); ok(r.code === 1 && /5\/8 suites green, 1 flaky/.test(r.out.split('flaky suites passed')[0].trim().split('\n').pop()), 'running three at a time gives the same verdict');
   eq(fs.readdirSync(tmp).filter((f) => /\.test\.mjs$/.test(f)).length, 8, 'the fake suites are untouched');
+
+  /* ---------------------------------------------------------------- browser suites one at a time by default, light suites alongside */
+  const tmp2 = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'heroes_runner2_')), TRACE = path.join(tmp2, 'trace.txt');
+  try {
+    const timed = (name, browser) => fs.writeFileSync(path.join(tmp2, `beatbox_heroes_${name}.test.mjs`), `${browser ? '// uses r3env\n' : ''}import fs from 'node:fs'; const t0 = Date.now(); await new Promise((r) => setTimeout(r, 1500)); fs.appendFileSync(process.env.TRACE, '${name} ' + t0 + ' ' + Date.now() + '\\n'); console.log('beatbox_heroes_${name}: 1 passed, 0 failed');`);
+    timed('p_browser_a', true); timed('q_browser_b', true); timed('r_plain', false);
+    const spans = () => Object.fromEntries(fs.readFileSync(TRACE, 'utf8').trim().split('\n').map((l) => { const [n, a, b] = l.split(' '); return [n, [+a, +b]]; }));
+    const overlap = (x, y) => x[0] < y[1] && y[0] < x[1];
+    const go = (...a) => { fs.rmSync(TRACE, { force: true }); const r = spawnSync(process.execPath, [RUNNER, '--dir', tmp2, ...a], { encoding: 'utf8', env: { ...process.env, TRACE } }); return { code: r.status, out: r.stdout, sp: spans() }; };
+    let g = go('--jobs', '3');
+    ok(g.code === 0 && !overlap(g.sp.p_browser_a, g.sp.q_browser_b), 'by default two browser suites never run at the same time');
+    ok(overlap(g.sp.p_browser_a, g.sp.r_plain) || overlap(g.sp.q_browser_b, g.sp.r_plain), 'a light suite runs alongside a browser suite');
+    g = go('--jobs', '3', '--browser-jobs', '2');
+    ok(g.code === 0 && overlap(g.sp.p_browser_a, g.sp.q_browser_b), '--browser-jobs 2 lets two browser suites overlap');
+  } finally { fs.rmSync(tmp2, { recursive: true, force: true }); }
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 done();

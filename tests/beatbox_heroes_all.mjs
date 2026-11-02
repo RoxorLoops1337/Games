@@ -4,7 +4,7 @@
 //   node tests/beatbox_heroes_all.mjs r3vig mic       only suites whose file name contains "r3vig" or "mic"
 //   node tests/beatbox_heroes_all.mjs --list          print the suite names (and which ones need a browser) and exit
 //   node tests/beatbox_heroes_all.mjs --jobs 2        at most 2 suites at a time (default 3)
-//   node tests/beatbox_heroes_all.mjs --browser-jobs 1  at most 1 browser suite at a time (default 2: each starts its own Chromium)
+//   node tests/beatbox_heroes_all.mjs --browser-jobs 2  at most 2 browser suites at a time (default 1, see below)
 //   node tests/beatbox_heroes_all.mjs --no-retry      do not re-run failed suites
 //   node tests/beatbox_heroes_all.mjs --verbose       print the full output of every suite, not just failures
 //   node tests/beatbox_heroes_all.mjs --bail          stop starting new suites after the first failure
@@ -15,6 +15,11 @@
 // (a flaky suite cost a whole run, then the rest had to be run by hand). Now every suite runs even when another fails, a few at a time, and the summary
 // names every failure. A suite that fails is re-run once on its own, on a quiet machine (the repo rule: re-run a suite by itself before believing a red run):
 // green on the retry counts as passed but is reported as FLAKY so it stays visible and gets fixed instead of hidden; red again is a real failure.
+//
+// BROWSER SUITES RUN ONE AT A TIME BY DEFAULT. Measured on 4 cores: with 2 to 3 browser suites at once every one of them ran 2 to 3 times slower (software-rendered
+// Chromium already uses all the cores), so the wall time barely improved (55 min against about an hour) and the load made timing-sensitive checks flaky (r3tape,
+// r3cine, r3vig_town each failed once). One browser suite at a time plus the light suites alongside gives the same speed with fewer false alarms; --browser-jobs 2
+// is there for machines with more cores.
 //
 // A suite passes when it exits 0 AND its last output line is "<name>: N passed, 0 failed" (a suite that forgot done() is a failure, not silently green).
 // Suites that start their own Chromium (r3env, playwright) are limited to --browser-jobs at a time. The two suites that run `node build.js` (they rewrite dist/
@@ -42,7 +47,7 @@ if (!suites.length) { console.log(`beatbox_heroes: no suite matches ${JSON.strin
 
 const cpus = os.cpus().length || 1;
 const jobs = Math.max(1, Math.min(+opt('jobs', Math.min(3, cpus)), suites.length));
-const browserJobs = Math.max(1, Math.min(+opt('browser-jobs', 2), jobs));
+const browserJobs = Math.max(1, Math.min(+opt('browser-jobs', 1), jobs));
 const timeoutMs = 1000 * +opt('timeout', 1500);
 const verbose = flag('verbose'), bail = flag('bail'), retry = !flag('no-retry');
 
