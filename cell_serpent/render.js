@@ -4,6 +4,7 @@ import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv } from '.
 import { INK, mix } from './art_draw.js';
 import { createHud } from './hud.js';
 import { createScreenFx } from './screenfx.js';
+import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing } from './bg_world.js';
 
 const TAU = Math.PI * 2;
 const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
@@ -165,16 +166,7 @@ export function createRenderer(canvas, art, kit) {
   function themeOf(g) { return (kit && kit.SPECIES[g.skin]) || { base: '#ff7eb6', lite: '#ffc2dc', cell: 'round' }; }
   function bgLayer(g, L) {
     const th = themeOf(g), k = Math.max(0.5, Math.min(1.5, L.s));
-    return kit && kit.layer(`${g.skin}|${g.stage}|${k.toFixed(1)}`, W, H, k, c => {
-      const gr = c.createRadialGradient(W / 2, H * 0.42, 60, W / 2, H * 0.5, H * 0.78);
-      gr.addColorStop(0, mix(th.base, '#0d0924', 0.72)); gr.addColorStop(0.55, mix(th.base, '#0d0924', 0.86)); gr.addColorStop(1, '#0d0924');
-      c.fillStyle = gr; c.fillRect(0, 0, W, H);
-      const v = c.createLinearGradient(0, 0, 0, H); v.addColorStop(0, 'rgba(0,0,0,.35)'); v.addColorStop(0.2, 'rgba(0,0,0,0)'); v.addColorStop(0.85, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.35)');
-      c.fillStyle = v; c.fillRect(0, 0, W, H);
-      // no lane is drawn: you cannot see where the snake is going to go
-      c.lineWidth = 8; c.strokeStyle = mix(th.base, '#ffffff', 0.15) + '8c'; c.strokeRect(4, 4, W - 8, H - 8);
-      c.lineWidth = 2; c.strokeStyle = 'rgba(111,227,255,.6)'; c.strokeRect(10, 10, W - 20, H - 20);
-    });
+    return kit && kit.layer(`${g.skin}|${g.stage}|${k.toFixed(1)}`, W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th));
   }
   function drawBg(g, L) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -183,31 +175,17 @@ export function createRenderer(canvas, art, kit) {
     const lay = bgLayer(g, L), th = themeOf(g);
     if (lay) ctx.drawImage(lay.c, 0, 0, W, H);
     else { ctx.fillStyle = '#1a1445'; ctx.fillRect(0, 0, W, H); }
-    // drifting bokeh lights and themed motes (petals, snow, droplets, sparkles)
+    // drifting bokeh lights and themed motes (petals, snow, droplets, notes, stars, bubbles)
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    for (const sp of S.specks) {
-      const y = (sp.y + S.t * sp.v) % (H + 120) - 60, x = sp.x + Math.sin(S.t * 0.3 + sp.a) * 16, hue = sp.i % 3;
-      ctx.globalAlpha = 0.07 + 0.03 * Math.sin(S.t + sp.a); ctx.fillStyle = hue === 0 ? th.base : hue === 1 ? '#6fe3ff' : th.lite;
+    for (let i = 0; i < 6; i++) {
+      const sp = S.specks[i], y = (sp.y + S.t * sp.v) % (H + 120) - 60, x = sp.x + Math.sin(S.t * 0.3 + sp.a) * 16, hue = sp.i % 3;
+      ctx.globalAlpha = 0.06 + 0.03 * Math.sin(S.t + sp.a); ctx.fillStyle = hue === 0 ? th.base : hue === 1 ? '#6fe3ff' : th.lite;
       ctx.beginPath(); ctx.arc(x, y, sp.r, 0, TAU); ctx.fill();
     }
     ctx.restore();
-    ctx.globalAlpha = 0.5;
-    for (const p of S.petals) {
-      const y = (p.y + S.t * p.v) % (H + 80) - 40, x = p.x + Math.sin(S.t * 0.8 + p.a) * 30;
-      ctx.fillStyle = p.k ? th.lite : th.base;
-      if (th.cell === 'snow' || th.cell === 'fuzzy') { ctx.beginPath(); ctx.arc(x, y, p.s * 0.5, 0, TAU); ctx.fill(); }
-      else if (th.cell === 'disco' || th.cell === 'hex' || th.cell === 'stone') { ctx.save(); ctx.translate(x, y); ctx.rotate(S.t * p.rot + p.a); ctx.fillRect(-p.s * 0.4, -p.s * 0.4, p.s * 0.8, p.s * 0.8); ctx.restore(); }
-      else { ctx.save(); ctx.translate(x, y); ctx.rotate(S.t * p.rot + p.a); ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, TAU); ctx.fill(); ctx.restore(); }
-    }
-    ctx.globalAlpha = 1;
+    if (!OPT.reduceMotion) { if (!S.motes) S.motes = makeMotes(); drawBeams(ctx, S.t, isBossStage(g.stage), th, kit); drawMotes(ctx, g.skin, th, S.motes, S.t); }
     // the stage floor below the line, where the duo stands; if the snake touches the line it is over
-    if (g.ring) {   // a circle around the duo in the middle: if the snake reaches it, it is over
-      const { cx, cy, R } = g.ring, fl = ctx.createRadialGradient(cx, cy, 20, cx, cy, R); fl.addColorStop(0, 'rgba(255,90,140,.12)'); fl.addColorStop(1, 'rgba(255,90,140,.34)');
-      ctx.fillStyle = fl; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
-      ctx.lineWidth = 16; ctx.strokeStyle = 'rgba(255,90,140,.18)'; ctx.stroke(); ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,150,190,.8)'; ctx.setLineDash([22, 12]); ctx.lineDashOffset = -S.t * 20; ctx.stroke(); ctx.setLineDash([]);
-      return;
-    }
-    { const fl = ctx.createLinearGradient(0, LINE_Y, 0, H); fl.addColorStop(0, 'rgba(255,90,140,.22)'); fl.addColorStop(1, 'rgba(10,6,30,.75)'); ctx.fillStyle = fl; ctx.fillRect(0, LINE_Y, W, H - LINE_Y); }
+    if (g.ring) { drawRing(ctx, g.ring, S.t, isBossStage(g.stage)); return; }   // a circle around the duo in the middle
     ctx.save(); ctx.beginPath();
     for (let x = 0; x <= W; x += 20) { const y = LINE_Y + Math.sin(x * 0.05 + S.t * 2.2) * 5; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.lineWidth = 16; ctx.strokeStyle = 'rgba(255,90,140,.18)'; ctx.stroke(); ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,150,190,.75)'; ctx.stroke(); ctx.restore();
