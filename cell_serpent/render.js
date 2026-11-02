@@ -16,6 +16,7 @@ import { bakeHat } from './hats.js';
 import { createCheer, HAT_FX, hatPose, EMOTE, heart, drawEmote } from './cheer.js';
 import { cheerFrame } from './duo_cheer.js';
 import { drawDuoLife } from './duo_idle.js';
+import { newLeash, petFollow, scareEdge, tuckMood, SCARE_CALL, SCARE_COL, createDust, dustStep, dustDraw } from './duo_life9.js';
 import { createBoltLayer, boltPose, paintBolt } from './bolts_fx.js';
 
 const TAU = Math.PI * 2;
@@ -358,7 +359,7 @@ export function createRenderer(canvas, art, kit) {
   }
 
   // 02-animal-art: pets bob, blink, hop when the duo sings and look alert when a snake head is near
-  const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }];
+  const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }], duoDust = createDust();   // r9: springy pets and dust
   const CH = createCheer(); let cheerHit = false;   // 02-animal-art r4: pets cheer on kill streaks
   // 02-animal-art: fire reactions (kitten swats a paw, puppy wags its tail) and idle emotes (turtle Zzz, lamb hums, piglet hearts)
   function petExtras(id, st, px, py, s2, i) {
@@ -423,14 +424,15 @@ export function createRenderer(canvas, art, kit) {
       const bop = !OPT.reduceMotion && g.phase === 'play' && (g.groove || 0) >= 6 ? Math.pow(1 - beatPhase(g), 4) * (g.groove >= 10 ? 9 : 5) : 0;   // groove: the pets bop on the beat
       const ch = OPT.reduceMotion ? null : CH.pet(i, i ? 1 : -1, id);
       const s2 = i ? 1 : -1, ph = S.t * 6 + i * 2, idle = Math.abs(Math.sin(ph)) * (scared ? 3 : 8) * (ch ? 0.3 : 1), hopY = Math.sin(st.hop * Math.PI) * 14 + (ch ? ch.y : 0) + bop - slumpK() * 9;
-      const px = p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6, base = p.y + 8;
+      const lf = st.leash || (st.leash = newLeash()), px = OPT.reduceMotion ? p.x + s2 * 92 : petFollow(lf, p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6, S.t).x, base = p.y + 8;   // r9: the pets trot after the duo on a springy leash
+      if (scareEdge(st, scared, S.t) && !OPT.reduceMotion) { st.hop = 1; addFloat(px, base - 62, SCARE_CALL[id] || '!', SCARE_COL[id] || '#fff', 20, -34); }   // r9: each pet calls out when a head gets close
       const blink = (S.t * 0.8 + i * 1.7) % 3.1 < 0.13;
-      const sl = slumpK(), tk = OPT.reduceMotion || ch || scared || sl > 0.05 || st.hop > 0.1 ? null : petTrick(id, i), mood = sl > 0.2 ? 7 : st.hop > 0.35 || ch ? 3 : tk && tk.mood >= 0 ? tk.mood : scared ? 2 : blink ? 1 : 0;   // slump: eyes shut
+      const sl = slumpK(), tk = OPT.reduceMotion || ch || scared || sl > 0.05 || st.hop > 0.1 ? null : petTrick(id, i), mood = sl > 0.2 || tuckMood(id, scared) >= 0 ? 7 : st.hop > 0.35 || ch ? 3 : tk && tk.mood >= 0 ? tk.mood : scared ? 2 : blink ? 1 : 0;   // slump: eyes shut
       const k = Math.abs(Math.sin(ph));
       ctx.save(); ctx.globalAlpha *= 0.3 * (1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, 24 - (idle + hopY) * 0.3, 7, 0, 0, TAU); ctx.fill(); ctx.restore();
-      const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = (1 + (1 - k) * 0.05 + st.hop * 0.05 + sl * 0.1) * (tk ? tk.sx : 1), sy = (1 - (1 - k) * 0.05 - st.hop * 0.03 - sl * 0.12) * (tk ? tk.sy : 1);
+      const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = (1 + (1 - k) * 0.05 + st.hop * 0.05 + sl * 0.1 + (OPT.reduceMotion ? 0 : lf.stretch * 0.08)) * (tk ? tk.sx : 1), sy = (1 - (1 - k) * 0.05 - st.hop * 0.03 - sl * 0.12) * (tk ? tk.sy : 1);
       if (cheerHit && !OPT.reduceMotion) CH.burst(px, base - 40, Math.max(0, CH.tier), id);
-      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq * ch.sx : 1), sy / (ch ? ch.sq : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px, base - idle - hopY - (tk ? tk.dy : 0), sz, (tk ? tk.rot : 0) + s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0) - s2 * sl * 0.2); ctx.restore(); }
+      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq * ch.sx : 1), sy / (ch ? ch.sq : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px, base - idle - hopY - (tk ? tk.dy : 0), sz, (tk ? tk.rot : 0) + s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0) - s2 * sl * 0.2 + (OPT.reduceMotion ? 0 : lf.lean)); ctx.restore(); }
       if (st.hop > 0.6) sparkleAt(px + s2 * 28, base - idle - hopY - 36, 7 + st.hop * 3);
       if (tk && tk.u >= 0) {   // trick extras: a question mark over the tilting puppy, dust under the running hamster
         if (id === 'puppy') { ctx.save(); ctx.globalAlpha = Math.sin(tk.u * Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2d1a14'; ctx.lineWidth = 3; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.strokeText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.fillText('?', px + s2 * 30, base - idle - hopY - 46 - tk.u * 6); ctx.restore(); }
@@ -472,6 +474,7 @@ export function createRenderer(canvas, art, kit) {
     }
     else if (im) { const h = 170, w = h * im.width / im.height, dq = dch ? dch.sq : 1; img(key, p.x, p.y - 26 - hop * 4 - dY, w / sq / dq, h * sq * dq, p.mx * 0.05 + (moving ? 0 : Math.sin(S.t * 1.3) * 0.012) + (dch ? dch.rot : 0)); idleSparkles(p, singing); }
     else { glow(p.x, p.y, 40, '#39f0ff', 0.7); ctx.fillStyle = '#39f0ff'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 22, 0, TAU); ctx.fill(); ctx.stroke(); }
+    if (!OPT.reduceMotion && g.phase === 'play') { dustStep(duoDust, p.x, p.y + 38, p.mx, Math.min(0.05, lastDt)); dustDraw(ctx, duoDust); }   // r9: dust kicks up under the duo's feet
     petsDraw(g, p, singing);
     drawHog(g);
     if (g.outfit) { glow(p.x, p.y - 20, 70, g.outfit.color, 0.22); const hs = bakeHat(kit, g.outfit.hat), hb = Math.sin(S.t * 4) * 3;
