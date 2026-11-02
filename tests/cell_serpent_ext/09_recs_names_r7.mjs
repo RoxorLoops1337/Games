@@ -41,4 +41,4 @@ const a = pn.nextIdea(old, 'turtle'); pn.setPetNick(old, 'turtle', a); assert.no
 assert.ok(em.emptyCardHTML('pets', 'Ready').includes('Nobody needs stars'));
 assert.ok(em.emptyCardHTML('skills', 'Owned').length > 20);
 const main = readFileSync(join(base, 'main.js'), 'utf8');
-assert.ok(main.includes('renderRecStrip') && main.includes('petLabel') && main.includes('emptyCard('), 'wired into main.js');
+assert.ok(main.includes('renderRecStrip') && main.includes('petLabel') && (main.includes('emptyCard(') || main.includes('emptyCardUx(')), 'wired into main.js');
