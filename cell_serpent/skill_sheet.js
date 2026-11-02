@@ -4,6 +4,9 @@ import { WEAPONS, PETS, PET_MAX_STAR, SKILL_MAX_LV, SKILL_MILES, skillMul, skill
 import { swapSheet, compareHTML, walkHTML } from './loadout_ux.js';
 import { joyHTML } from './presets_ux.js';
 import { PET_JOY_MAX } from './sim.js';
+import { shinesVs } from './build_rec.js';
+import { SPECIES } from './art_draw.js';
+import { petLabel, petNick, setPetNick, nextIdea, NICK_MAX } from './pet_names.js';
 
 // what a skill does at the level a run starts with (weapon level 1), scaled by the permanent skill level
 const BASE = {
@@ -104,6 +107,7 @@ export function createSheets(c) {
       tb.appendChild(el('div', 'dshd', `<span></span><span>${owned ? 'NOW' : 'AT START'}</span><span>${showNext ? 'NEXT' : ''}</span>`));
       for (const r of pv.rows) tb.appendChild(el('div', 'dsrow', `<span>${r.k}</span><b>${r.a}</b><b class="${showNext && r.gain ? 'up' : ''}">${showNext ? (r.gain ? '▲ ' : '') + r.b : ''}</b>`));
       sh.appendChild(tb); sh.appendChild(el('div', 'dsnote', pv.note + (showNext ? ` · next level +${pv.bonusPct}% damage` : '')));
+      { const sv = shinesVs(id); if (sv.length) sh.appendChild(el('div', 'dsshine', '<span>SHINES VS</span>' + sv.map(k => `<i style="--c:${SPECIES[k] ? SPECIES[k].base : '#fff'}">${SPECIES[k] ? SPECIES[k].name : k}</i>`).join(''))); }
       if (owned) {
         markSeen(s, 's', id);
         sh.appendChild(el('div', '', sparkHTML(k.lv)));
@@ -133,12 +137,29 @@ export function createSheets(c) {
     });
   }
 
+  // give the pet a name: type one or roll the dice for a cute idea
+  function nickRow(sh, s, id, p) {
+    const row = el('div', 'dsnick'), cur = petNick(s, id);
+    const nm = el('button', 'nkname', cur ? '✎ Rename' : '✎ Name your ' + p.name.toLowerCase()); nm.setAttribute('aria-label', 'Rename ' + p.name);
+    const dice = el('button', 'nkdice', '🎲'); dice.setAttribute('aria-label', 'Suggest a name');
+    const save1 = v => { setPetNick(s, id, v); persist(); audio.play('click'); rerender(); petSheet(id); };
+    dice.onclick = () => save1(nextIdea(s, id));
+    nm.onclick = () => {
+      const inp = el('input', 'nkinp'); inp.maxLength = NICK_MAX; inp.value = cur; inp.placeholder = p.name; inp.setAttribute('aria-label', 'Pet name');
+      nm.replaceWith(inp); dice.remove(); inp.focus(); inp.select(); let done = false;
+      const fin = ok => { if (done) return; done = true; if (ok) save1(inp.value); else petSheet(id); };
+      inp.onkeydown = e => { if (e.key === 'Enter') fin(true); else if (e.key === 'Escape') fin(false); }; inp.onblur = () => fin(true);
+    };
+    row.append(nm, dice); sh.appendChild(row);
+  }
+
   function petSheet(id) {
     const p = PETS.find(x => x.id === id); if (!p) return;
     open(sh => {
       const s = save(), k = s.pets[id], owned = k.star > 0, maxed = k.star >= PET_MAX_STAR, eq = s.petEquip.includes(id), need = maxed ? 0 : petCost(k.star), rar = petRarity(id);
       sh.className = 'dsheet pet'; sh.style.setProperty('--rc', rar.color); sh.appendChild(closeBtn());
-      sh.appendChild(el('div', 'dshead', `<div class="dsic">${icon(id)}</div><div class="dsnm"><b>${p.name}</b><span style="color:${rar.color}">${rar.name} friend · ${owned ? (eq ? 'walking with you' : 'at home') : 'not met yet'}</span></div>`));
+      sh.appendChild(el('div', 'dshead', `<div class="dsic">${icon(id)}</div><div class="dsnm"><b>${petLabel(s, p).replace(/&/g, '&amp;')}</b><span style="color:${rar.color}">${petNick(s, id) ? p.name + ' · ' : ''}${rar.name} friend · ${owned ? (eq ? 'walking with you' : 'at home') : 'not met yet'}</span></div>`));
+      if (owned) nickRow(sh, s, id, p);
       sh.appendChild(el('p', 'dsdesc', PET_ABILITY[id] || p.flavor));
       if (owned) { const wk = el('div', '', walkHTML(icon(id), eq, rar.color)); if (eq && (k.joy || 0) >= PET_JOY_MAX) wk.firstChild.insertAdjacentHTML('beforeend', '<span class="whrt h1">♥</span><span class="whrt h2">♥</span><span class="whrt h3">♥</span>'); sh.appendChild(wk); }
       if (owned) sh.appendChild(el('div', 'dsjoy', joyHTML(k)));
