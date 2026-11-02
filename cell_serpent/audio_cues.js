@@ -15,6 +15,10 @@ export const perfectClear = g => !g.mode && !g.hard && g.revivesUsed === 0 && !g
 // The music should sit behind a lowpass while a card choice or the pause screen is up.
 export const wantsMuffle = (mode, g) => mode === 'pause' || (mode === 'play' && !!g && g.phase === 'levelup');
 
+// Which ui sound a screen change deserves: sheets that slide over the game open and close with a soft sweep.
+const SHEETS = new Set(['pause', 'settings', 'panel', 'boxModal']);
+export const sheetSound = (prev, next) => (next === prev ? null : SHEETS.has(next) ? 'open' : SHEETS.has(prev) && (next === '' || next === 'hub' || next === 'title') ? 'close' : null);
+
 export function createCues(audio) {
   let gRef = null, phase = 0, base = 0, cleared = false;
   return {

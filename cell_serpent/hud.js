@@ -284,7 +284,9 @@ export function createHud(env) {
     if (n > T.bsHi) T.bsHi = n;
     if (n < 3) { if (n === 0) T.bsHi = 0; T.bsLast = n; return; }
     T.bsLast = n;
-    const k = Math.max(0, 1 - (S.t - T.bsAt) / 0.3), hot = n >= 10, col = n >= 20 ? '#ff7ad9' : hot ? '#ffd84d' : '#6fe3ff';
+    const ms = Math.floor(n / 10); if (ms > (T.bsMs | 0)) { T.bsMs = ms; T.bsB = S.t; }   // milestone 10 / 20 / 30: ring burst (the sound is audio.js streakburst)
+    const bk = T.bsB === undefined ? 0 : Math.max(0, 1 - (S.t - T.bsB) / 0.6);
+    const k = Math.max(bk, Math.max(0, 1 - (S.t - T.bsAt) / 0.3)), hot = n >= 10, col = n >= 20 ? '#ff7ad9' : hot ? '#ffd84d' : '#6fe3ff';
     const x = 256, y = H - 70 - T.ins.b, w = 150, h = 40;
     scaled(x + w / 2, y + h / 2, 1 + 0.18 * k * k, () => {
       glass(-w / 2, -h / 2, w, h, 20, col + 'cc', 'rgba(14,9,48,.62)');
