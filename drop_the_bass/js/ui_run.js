@@ -2,6 +2,7 @@
 import { WORLD_BY_ID, BOSSES, ENEMIES, TURRETS, RARITY, RARITY_ORDER, COL, ECON, fmt } from './data_core.js';
 import { REMIX, RELICS, WAVE_MODS } from './data_run.js';
 import { OUTFITS } from './data_meta.js';
+import { gamepadHelp } from './gamepad.js';
 import { ENEMY_TIPS as ET, BOSS_TIPS as BT, FIXED_TIPS } from './sim.js';
 import { RUN_MODIFIER_BY_ID } from './data_depth.js';
 import * as M from './meta.js';
@@ -61,7 +62,7 @@ export function showPause(app, battle) {
   battle.setPause(true);
   const run = battle.run;
   const body = h('div');
-  const m = modal(body, { sticky: true, onClose: () => { battle.setPause(false); } });
+  const m = modal(body, { sticky: true, escClose: true, onClose: () => { battle.setPause(false); } });
   const wm = run.wmId ? WAVE_MODS[run.wmId] : null;
   body.append(h('h2', null, t('run.pause.title', 'Paused')),
     h('div', { class: 'statgrid' }, h('div', null, t('run.stat.stage', 'Stage'), h('b', null, run.world.name)), h('div', null, t('run.stat.wave', 'Wave'), h('b', null, run.wave + (run.endless ? '' : '/' + run.wavesTotal))),
@@ -381,6 +382,8 @@ export function showHowTo(app) {
     sec(t('run.howto.defeat.title', 'After a defeat'), t('run.howto.defeat.p1', 'The defeat screen shows what happened: which lane leaked most, which Static got through and a few tips. Press Share to save a picture of your board and show your friends.')),
     hasFinePointer() ? h('div', { class: 'card shortcuts', 'data-shortcuts': '' }, h('h3', null, t('run.keys.title', 'Desktop shortcuts')),
       h('div', { class: 'keys' }, shortcutRows().map(([k, d]) => h('div', { class: 'keyrow' }, h('kbd', null, k), h('span', null, d))))) : null,
+    h('div', { class: 'card shortcuts', 'data-gamepad': '' }, h('h3', null, t('run.pad.title', 'Gamepad')),
+      h('div', { class: 'keys' }, gamepadHelp().map((r) => h('div', { class: 'keyrow' }, h('kbd', null, r.pad), h('span', null, r.text))))),
     sec(t('run.howto.tips.title', 'Tips'), t('run.howto.tips.p1', 'Set turret targeting (First, Last, Strongest, Closest) by tapping a turret. Sell weak turrets late to make room. Save hero moves for bosses.')),
     h('div', { class: 'btnrow' }, btn(t('run.howto.ok', 'Got it'), () => m.close(), 'green'))), { wide: true });
 }

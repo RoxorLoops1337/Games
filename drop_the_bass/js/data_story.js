@@ -185,6 +185,8 @@ export const TUTORIAL = [
   { id: 'hype', say: 'Kills fill the HYPE bar. When it is full you pick a REMIX upgrade. Try it!', wait: 'remixopen', free: true, auto: true },
   { id: 'hero', say: 'Roxor and Jasmin have special moves. Tap Roxor for a Beatbox Blast!', wait: 'heroR', spot: 'heroR', free: true },
   { id: 'hero2', say: 'Jasmin sings a Siren Song that slows everything and heals the stage. Use both within 2 seconds for a DUET FINALE!', wait: 'heroJ', spot: 'heroJ', free: true },
+  { id: 'preview', say: 'Psst, want a peek at what is coming? Tap the WAVE box at the top to see the next wave, then tap anywhere to close the card.', wait: 'previewdone', spot: 'wavepill', free: true, skip: 30 },
+  { id: 'reroll', say: 'Not happy with the next turret? Tap the round arrows to re-roll it. This one is free today!', wait: 'rerolled', spot: 'reroll', free: true, skip: 30 },
   { id: 'finish', say: 'You are a natural. Clear the rest of this practice tour. Between runs you can upgrade in the Studio, open crates and wear new gear.', wait: 'tap', free: true },
 ];
 

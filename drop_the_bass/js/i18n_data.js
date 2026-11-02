@@ -39,6 +39,7 @@ export const TABLES = [
   T('CRATES', () => META.CRATES, '*.name', '*.blurb'),
   T('OUTFITS', () => META.OUTFITS, '*.*.name', '*.*.desc'),
   T('QUESTS', () => META.QUESTS, '*.text'),
+  T('SEASONS', () => META.SEASONS, '*.name', '*.desc'),
   T('ACHIEVEMENTS', () => META.ACHIEVEMENTS, '*.name', '*.text'),
   T('BOOSTERS', () => META.BOOSTERS, '*.name', '*.desc'),
   T('WHEEL', () => META.WHEEL, '*.label'),
@@ -80,7 +81,7 @@ export const NON_TEXT_FIELDS = new Set([
   'id', 'hero', 'kind', 'color', 'accent', 'ground', 'sky', 'glyph', 'rarity', 'stat', 'slot', 'set', 'main', 'sub', 'turret', 'map',
   'mod', 'world', 'boss', 'boss10', 'pool', 'loadout', 'fx', 'mods', 'extra', 'music', 'who', 'scene', 'wait', 'spot', 'lock', 'special',
   'a', 'b', 'partner', 'reward', 'crate', 'cosmetic', 'fmt', 'guarantee', 'price', 'mul', 'wm', 'odds', 'unlock', 'paths', 'blocked',
-  'saveKey', 'title_id', 'defaults', 'types', 'support',
+  'saveKey', 'title_id', 'defaults', 'types', 'support', 'theme', 'keepsake',
 ]);
 // exact `Export.field` exceptions where the field name is text elsewhere (HINTS.title) but not here
 export const NON_TEXT_EXACT = new Set(['GAME.title']);

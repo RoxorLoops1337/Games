@@ -199,6 +199,11 @@ body.doodle textarea.code{font:15px var(--hand)}
 
 /* focus: a dashed crayon ring */
 body.doodle button:focus-visible,body.doodle .tab:focus-visible,body.doodle .pick:focus-visible{outline:3px dashed #2f7de1;outline-offset:3px}
+/* round 6: every other control gets the same ring (links, inputs, sliders, textareas, clickable cards that became role=button, the dialog itself, the canvas) */
+body.doodle a:focus-visible,body.doodle input:focus-visible,body.doodle select:focus-visible,body.doodle textarea:focus-visible,body.doodle [role=button]:focus-visible,body.doodle [tabindex]:focus-visible,body.doodle .link-btn:focus-visible,body.doodle .seg button:focus-visible,body.doodle .iconbtn:focus-visible{outline:3px dashed #2f7de1;outline-offset:3px}
+body.doodle .modal:focus,body.doodle .modal:focus-visible{outline:none}
+body.doodle #game:focus-visible{outline:3px dashed #2f7de1;outline-offset:-6px}
+body.doodle .btn.green:focus-visible,body.doodle .btn.gold:focus-visible,body.doodle .btn.red:focus-visible,body.doodle .tab.on:focus-visible{outline-color:#1b4fa0;box-shadow:0 0 0 3px #fff,2px 3px 0 #2b2733}
 
 @media (prefers-reduced-motion:reduce){
   body.doodle .tab.on,body.doodle .btn.big,body.doodle .day.cur2,body.doodle .ms.ready,body.doodle .gitem .new,body.doodle .pick.rar-b-legendary,body.doodle .cut-box .nx{animation:none}

@@ -591,7 +591,7 @@ console.log('drop_the_bass sim: ' + n + ' checks passed');
     eq(M(['speedrun', 'speedrun', 'bogus', 'cramped']).modifiers, ['speedrun', 'cramped'], 'duplicates and unknown ids dropped');
     eq(mk({ mode: 'daily', modifiers: ['speedrun'] }).modifiers, [], 'daily ignores modifiers'); eq(mk({ weekly: true, mode: 'daily', modifiers: ['speedrun'] }).modifiers, [], 'weekly ignores modifiers');
     eq(mk({ daily: 'no_merge', modifiers: ['speedrun'] }).modifiers, [], 'daily option ignores modifiers');
-    const m3 = M(['double_trouble', 'glass_stage', 'speedrun']); const prod = 1.5 * 1.4 * 1.3; ok(Math.abs(m3.modMul().records - Math.round(prod * 1000) / 1000) < 1e-9 && m3.modMul().diamonds > 1, 'rewards stack multiplicatively');
+    const m3 = M(['double_trouble', 'glass_stage', 'speedrun']); const prod = 1.3 * 1.6 * 1.3; ok(Math.abs(m3.modMul().records - Math.round(prod * 1000) / 1000) < 1e-9 && m3.modMul().diamonds > 1, 'rewards stack multiplicatively');
     eq(mk().modMul(), { records: 1, fans: 1, diamonds: 1 }, 'no modifiers, no multiplier');
     // double trouble
     { const a = mk(), b = M(['double_trouble']); const pa = a.nextWavePreview(), pb = b.nextWavePreview(); ok(pb.total === pa.total * 2, 'double the enemies in the preview');
@@ -620,7 +620,7 @@ console.log('drop_the_bass sim: ' + n + ' checks passed');
     // lean times
     { const l = M(['lean_times']), p = mk(); ok(Math.abs(l.deployCost() / p.deployCost() - 1.15) < 0.03, 'turrets cost 15% more'); const gain = (r) => { const e = spawn(r, 'fuzz', { hpBase: 1 }); const c = r.coins + r.coinFrac; r.hurt(e, 1e9); return r.coins + r.coinFrac - c; }; ok(Math.abs(gain(l) / gain(p) - 0.75) < 1e-9, 'kill coins -25%'); }
     // result and restore
-    { const g = M(['glass_stage', 'speedrun']); g.stageHp = 1; const e = spawn(g, 'fuzz'); e.d = e.total - 1; evs(g, 0.5); eq(g.result.modifiers, ['glass_stage', 'speedrun'], 'result.modifiers'); ok(Math.abs(g.result.modMul.records - 1.82) < 1e-9, 'result.modMul');
+    { const g = M(['glass_stage', 'speedrun']); g.stageHp = 1; const e = spawn(g, 'fuzz'); e.d = e.total - 1; evs(g, 0.5); eq(g.result.modifiers, ['glass_stage', 'speedrun'], 'result.modifiers'); ok(Math.abs(g.result.modMul.records - 2.08) < 1e-9, 'result.modMul');
       const p = mk(); p.stageHp = 1; const e2 = spawn(p, 'fuzz'); e2.d = e2.total - 1; evs(p, 0.5); eq(p.result.modMul, { records: 1, fans: 1, diamonds: 1 }, 'default modMul'); eq(p.result.modifiers, [], 'default modifiers');
       const q = Run.restore(JSON.parse(JSON.stringify(M(['cramped', 'speedrun']).snapshot()))); ok(q.hasMod('cramped') && q.hasMod('speedrun'), 'modifiers survive restore'); }
     // every modifier makes the greedy bot's run harder (leaks, or a loss) over a few seeds

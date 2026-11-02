@@ -175,6 +175,17 @@ export const QUESTS = [
   { id: 'q_beat',    stat: 'perfects', goal: 10,  text: 'Make 10 on-beat deploys', reward: { records: 140 } },
   { id: 'q_remix',   stat: 'remixes',  goal: 8,   text: 'Pick 8 Remix cards', reward: { records: 140 } },
   { id: 'q_lvl5',    stat: 'maxLevel', goal: 5,   text: 'Merge a turret to level 5', reward: { diamonds: 6 }, max: true },
+  // round 6 (append only). Stats come from the run result (meta.applyRunResult) or the crate, gear merge and wheel hooks in meta.js.
+  { id: 'q_duet',    stat: 'duets',    goal: 2,   text: 'Trigger the Duet Finale 2 times', reward: { diamonds: 6 } },
+  { id: 'q_relics',  stat: 'relics',   goal: 4,   text: 'Pick up 4 Merch relics', reward: { records: 160 } },
+  { id: 'q_flaw',    stat: 'flawless', goal: 1,   text: 'Win a stage with no leaks', reward: { diamonds: 10 } },
+  { id: 'q_modwin',  stat: 'modWins',  goal: 1,   text: 'Win a run with a modifier on', reward: { diamonds: 8 } },
+  { id: 'q_crates',  stat: 'crates',   goal: 2,   text: 'Open 2 crates', reward: { records: 200 } },
+  { id: 'q_gearmrg', stat: 'gearMerges', goal: 2, text: 'Merge gear 2 times', reward: { records: 180 } },
+  { id: 'q_spin',    stat: 'spins',    goal: 1,   text: 'Spin the Lucky Wheel', reward: { records: 100 } },
+  { id: 'q_daily',   stat: 'dailies',  goal: 1,   text: 'Play the Daily Challenge', reward: { diamonds: 6 } },
+  { id: 'q_coins',   stat: 'coins',    goal: 3000, text: 'Earn 3,000 coins in your runs', reward: { records: 140 } },
+  { id: 'q_endless', stat: 'endlessWave', goal: 12, text: 'Reach wave 12 in Endless', reward: { diamonds: 6 }, max: true },
 ];
 
 // ---------------------------------------------------------------- Achievements ("Stickers"), claimed for diamonds
@@ -282,6 +293,33 @@ export const WEEKLY_GIGS = [
   { id: 'arena_duet',      name: 'Arena Duet',       mod: 'two_instruments', world: 'arena',    extra: [['enemyHp', 'mul', 1.35]] },
 ];
 export const WEEKLY_REWARD = { diamonds: 20, perWave: 1, winDiamonds: 25, records: 600, perWaveRecords: 60, fans: 120, crate: 'studio', crateMinWaves: 15 };
+
+// ---------------------------------------------------------------- Seasons (round 6): one theme per calendar month
+// SEASONS[month 1..12] = { id, name, desc, accent (card colour), theme (glyph name for the card art), keepsake }. The keepsake is a limited-time
+// cosmetic granted ONCE per season when all three season goals are claimed: { kind: 'outfit', id } (both heroes get it) or { kind: 'skin', id }.
+// There is no new art: every keepsake reuses an existing outfit or board skin id. If the player already owns it, the keepsake pays SEASON_KEEPSAKE_BONUS instead.
+// Season ids and goal ids are append-only (profile.season points at them). The English name and desc go through the data overlay (SEASONS.<month>.name).
+export const SEASONS = {
+  1:  { id: 'winter_gig',       name: 'Winter Gig',          desc: 'Snowed-in sessions. The Static freeze up and the crowd sings along.',   accent: '#6fb7ff', theme: 'snow',    keepsake: { kind: 'skin', id: 'skin_chalk' } },
+  2:  { id: 'heart_beat',       name: 'Heart Beat Month',    desc: 'Love songs only. Every merge makes the speakers blush.',                 accent: '#ff6f9f', theme: 'heart',   keepsake: { kind: 'outfit', id: 'stage' } },
+  3:  { id: 'spring_bloom',     name: 'Spring Bloom',        desc: 'Flowers on the amps and sunshine on the stage.',                         accent: '#7fd66b', theme: 'flower',  keepsake: { kind: 'skin', id: 'skin_sticker' } },
+  4:  { id: 'rainy_remix',      name: 'Rainy Day Remix',     desc: 'Puddles, umbrellas and a very wet bass drop.',                           accent: '#5aa7e8', theme: 'drop',    keepsake: { kind: 'outfit', id: 'onesie' } },
+  5:  { id: 'street_festival',  name: 'Street Festival',     desc: 'Banners up, buskers out. Play every corner of town.',                    accent: '#ff9f43', theme: 'horn',    keepsake: { kind: 'outfit', id: 'rocker' } },
+  6:  { id: 'beach_bash',       name: 'Summer Beach Bash',   desc: 'Sand, sun and subwoofers. The beach party never stops.',                 accent: '#ffc83d', theme: 'sparkle', keepsake: { kind: 'outfit', id: 'beach' } },
+  7:  { id: 'heatwave_rave',    name: 'Heatwave Rave',       desc: 'It is hot, it is loud, and the Static are melting.',                     accent: '#ff5a4f', theme: 'fire',    keepsake: { kind: 'skin', id: 'skin_midnight' } },
+  8:  { id: 'sunset_sessions',  name: 'Sunset Sessions',     desc: 'Golden hour jams on the rooftop.',                                       accent: '#ff8a5c', theme: 'star',    keepsake: { kind: 'outfit', id: 'moon' } },
+  9:  { id: 'back_to_beats',    name: 'Back to School Beats', desc: 'New term, new tempo. Show the class how it is done.',                   accent: '#b78af0', theme: 'note',    keepsake: { kind: 'outfit', id: 'stage' } },
+  10: { id: 'spooky_static',    name: 'Spooky Static',       desc: 'Things go buzz in the night. Be brave, keep the beat.',                  accent: '#ff7a1c', theme: 'skull',   keepsake: { kind: 'outfit', id: 'onesie' } },
+  11: { id: 'autumn_harvest',   name: 'Autumn Harvest Jam',  desc: 'Falling leaves, warm amps and a bumper crop of beats.',                  accent: '#c9822b', theme: 'clover',  keepsake: { kind: 'skin', id: 'skin_chalk' } },
+  12: { id: 'snowy_encore',     name: 'Snowy Encore',        desc: 'One last show of the year under the fairy lights.',                      accent: '#8fd3ff', theme: 'bell',    keepsake: { kind: 'skin', id: 'skin_midnight' } },
+};
+// The three goals of every season, counted from the first of the month (profile.season.progress). Rewards are paid on claim.
+export const SEASON_GOALS = [
+  { id: 'kills',  stat: 'kills',  goal: 2500, reward: { records: 900 } },
+  { id: 'merges', stat: 'merges', goal: 400,  reward: { diamonds: 20 } },
+  { id: 'wins',   stat: 'wins',   goal: 8,    reward: { diamonds: 30, records: 600 } },
+];
+export const SEASON_KEEPSAKE_BONUS = { diamonds: 25 };
 
 // ---------------------------------------------------------------- Board skins (cosmetic, bought with diamonds)
 // The art lives in doodle_env.js (BOARD_SKINS names and descriptions). Here only the shop side: ids (append-only) and prices.
