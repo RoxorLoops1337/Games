@@ -132,3 +132,15 @@ scratchpad, LOOK at it (Read the png), fix, repeat. Lab pages live in `drop_the_
 ## Backlog (improvement loop notes)
 - Round 1: added tests/drop_the_bass_recap_tips.test.mjs, which fails if any recap tip sentence from sim.js has no da, nl or de translation (the UI matches the English sentence; moving to tip ids is still a good cleanup).
 - Ideas next: boss hint card and codex art for lowpass and silence; per-modifier balance review with the bot matrix; colour-blind cues (shapes plus colour on lanes, ally and enemy rings); a Larger text setting; more first-time hints (hero abilities pick, skins); recap tips as ids; a mid-run "what changed" summary after boss phases; stats.html review once real data arrives; check the 25 wave stages with real play.
+
+### Round 3 (ten improvements, in order)
+1. Larger text setting also scales the battle canvas HUD text (it only reached the DOM menus).
+2. Selected turret panel: lines no longer collide, panel never covers the selected turret.
+3. Boss intro, hint card and codex art for lowpass and silence verified and fixed.
+4. Performance pass on 25-wave stages with 25+ turrets and a boss (frame budget test).
+5. Hint pile-up: at most one first-time hint at a time, spaced out; the skin hint only after the first stage clear.
+6. Recap tips carry ids (sim.js) instead of the UI matching English sentences.
+7. Dead code and unused translation keys removed (a11y.makePerfWatch, toast.autolow).
+8. Results screen shows personal bests and a New Record celebration (endless, daily, weekly).
+9. Browser test that scans visible hub and battle text in da, nl and de for untranslated English.
+10. Save export and import covers every profile field added since round 1 (language, accessibility, skins, milestones, friends), with tests.
