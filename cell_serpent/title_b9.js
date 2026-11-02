@@ -9,15 +9,15 @@ export const DUET = ['L', 'R', 'L', 'R'], DUET_GAP = 1500;
 // pure tracker for "n taps inside a time window"
 export function makeBurst(n = LOGO_TAPS, win = LOGO_WINDOW) {
   const ts = [];
-  return { tap(now) { ts.push(now); while (ts.length && now - ts[0] > win) ts.shift(); if (ts.length >= n) { ts.length = 0; return true; } return false; } };
+  return { tap(now, slow) { ts.push(now); while (!slow && ts.length && now - ts[0] > win) ts.shift(); if (ts.length >= n) { ts.length = 0; return true; } return false; } };
 }
 // pure tracker for the boots-and-cats call and answer. Feed 'L' or 'R'; returns 'ok', 'done' or 'miss'
 export function makeDuet(seq = DUET, gap = DUET_GAP) {
   let k = 0, last = -1e9;
   return {
     get step() { return k; },
-    tap(side, now) {
-      if (now - last > gap) k = 0;
+    tap(side, now, slow) {   // slow: keyboard presses, no time limit
+      if (!slow && now - last > gap) k = 0;
       last = now;
       if (side === seq[k]) { k++; if (k === seq.length) { k = 0; return 'done'; } return 'ok'; }
       k = side === seq[0] ? 1 : 0; return k ? 'ok' : 'miss';
@@ -39,7 +39,7 @@ export function setupSecrets(title, audio) {
   if (logo) {
     logo.addEventListener('pointerdown', e => {
       play('snakesqueak', { i: 4 + Math.floor(Math.random() * 6) });
-      if (!burst.tap(performance.now())) return;
+      if (!burst.tap(performance.now(), logo._kb)) return;
       play('streakmile', { n: 3 }); title.dispatchEvent(new CustomEvent('secretfound', { detail: { id: 'logo' } }));
       const p = at(logo, e), r = logo.getBoundingClientRect(), tr = title.getBoundingClientRect();
       if (!reduced() && logo.querySelectorAll) [...logo.querySelectorAll('span')].forEach((sp, j) => sp.animate && sp.animate([{ translate: '0 0' }, { translate: '0 -16px', scale: '1.06', offset: 0.4 }, { translate: '0 0' }], { duration: 520, delay: j * 140, easing: 'cubic-bezier(.3,1.6,.5,1)' }));
@@ -52,7 +52,7 @@ export function setupSecrets(title, audio) {
     hero.addEventListener('pointerdown', e => {
       const r = hero.getBoundingClientRect(), side = sideOf(e.clientX, r.left, r.width), p = at(hero, e);
       play(side === 'L' ? 'tutpop' : 'snakesqueak', { i: side === 'L' ? 0 : 9 });
-      const res = duet.tap(side, performance.now());
+      const res = duet.tap(side, performance.now(), hero._kb);
       glyph(p.x, p.y - 20, side === 'L' ? '' : '', 'say', side === 'L' ? 'BOOTS' : 'CATS');
       hero.animate && !reduced() && hero.animate([{ rotate: '0deg' }, { rotate: (side === 'L' ? -2.5 : 2.5) + 'deg', offset: 0.35 }, { rotate: '0deg' }], { duration: 280, easing: 'ease-out' });
       if (res === 'done') {

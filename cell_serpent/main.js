@@ -23,6 +23,8 @@ import { setupPeeks, titleInfoHTML } from './title_fx.js';
 import { setupTune, wantsHand } from './title_b8.js';
 import { setupSecrets } from './title_b9.js';
 import { setupTitle10 } from './title_b10.js';
+import { setupTitle11 } from './title_b11.js';
+import { deathCoach } from './coach_b11.js';
 import { firstGoalHTML, welcomeBack, welcomeHTML, hoursAway, stampVisit } from './title12b.js';
 import { bakeCardArt } from './card_bake.js';
 import { partnerIds, markPartners, betterRoll, luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand, cardFoilHTML, markReroll, chainPulse } from './cards_ui.js';
@@ -685,7 +687,7 @@ function showResult() {
   $('result').classList.toggle('won', !!r.won); { const cc = closeCall(r); $('result').classList.toggle('close', !!cc); if (cc) { $('rTitle').textContent = cc.title; $('rSub').textContent = cc.sub; } }
   announce((r.won ? 'Stage clear. ' : 'Game over. ') + $('rTitle').textContent + '. ' + r.kills + (r.kills === 1 ? ' cell' : ' cells') + ' popped, ' + out.beats + ' beats earned.');
   if (r.hard) hard = true;
-  { const nmz = {}; for (const w of WEAPONS) nmz[w.id] = w.name; $('rHint').textContent = lossHint(r, save.loadout, nmz); }
+  { const nmz = {}; for (const w of WEAPONS) nmz[w.id] = w.name; $('rHint').textContent = deathCoach(r, save) || lossHint(r, save.loadout, nmz); }
   if (out.levelUps) rows.push(`<div class="r">⭐ Level ${levelInfo(save.xp).lv}!</div>`);
   const li1 = levelInfo(save.xp), reduce = save.settings.reduceMotion;
   levelBar(li0, li1, reduce);
@@ -817,7 +819,7 @@ loadArt('assets/').then(a => {
   [['love', 'deco1'], ['grumpy', 'deco2'], ['sneezy', 'deco3'], ['sleepy', 'deco4']].forEach(([skin, el], i) => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
-  setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); setupTune($('title'), audio, () => { save.sparkles += 3; persist(); refreshCur(); toast('Sticker! +3 Sparkles'); }); setupSecrets($('title'), audio); setupTitle10($('title'), audio); $('title').addEventListener('snakepoke', e => (e.detail && e.detail.hit ? audio.play('snakesqueak', e.detail) : audio.play('click'))); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
+  setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); setupTune($('title'), audio, () => { save.sparkles += 3; persist(); refreshCur(); toast('Sticker! +3 Sparkles'); }); setupSecrets($('title'), audio); setupTitle10($('title'), audio); setupTitle11($('title')); $('title').addEventListener('snakepoke', e => (e.detail && e.detail.hit ? audio.play('snakesqueak', e.detail) : audio.play('click'))); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
   R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready'), onMilestone: n => audio.play('streakmile', { n }), onPetCall: id => audio.play('petcall', { id }), beatStreak: () => audio.beatStreak }); applySettings(); resize(); refreshTitle();
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();
