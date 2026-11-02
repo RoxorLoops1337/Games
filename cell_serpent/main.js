@@ -54,9 +54,9 @@ function iconURL(id) {
 const PICON = { power: '🎤', haste: '⏱️', crit: '🎯', vital: '❤️', guard: '🎧', speed: '👟' };
 const icon = id => (PICON[id] ? PICON[id] : PETS.some(p => p.id === id) ? (iconURL(id) ? `<img src="${iconURL(id)}" alt="">` : '🐾') : id === 'egg' ? (iconURL('egg') ? `<img src="${iconURL('egg')}" alt="">` : '🥚') : iconURL(id) ? `<img ${WEAPONS.some(w => w.id === id) || id === 'maw' ? 'class="zoom" ' : ''}src="${iconURL(id)}" alt="">` : (id[0] || '?').toUpperCase());
 const STATICON = { atk: '🔊', crt: '🎵', cdn: '⏱️', vit: '❤️', for: '⭐', rev: '🎤' };
-function tile({ cls = '', ic, name, chip, chipCls = '', desc, bar, barText, pips, btn, gold, disabled, onclick, one }) {
+function tile({ cls = '', ic, name, chip, chipCls = '', desc, bar, barText, pips, btn, gold, disabled, onclick, one, lock }) {
   const t = document.createElement('div'); t.className = 'tile ' + cls + (one ? ' one' : '');
-  t.innerHTML = `<div class="top"><div class="ic">${ic}</div><div style="min-width:0"><div class="nm">${name}</div>${chip ? `<span class="lv ${chipCls}">${chip}</span>` : ''}</div></div>` +
+  t.innerHTML = `<div class="top"><div class="ic">${ic}${lock ? `<b class="lk">🔒${lock === true ? '' : `<small>${lock}</small>`}</b>` : ''}</div><div style="min-width:0"><div class="nm">${name}</div>${chip ? `<span class="lv ${chipCls}">${chip}</span>` : ''}</div></div>` +
     `<div class="ds">${desc}</div>` + (bar !== undefined ? `<div class="bar"><i style="width:${bar}%"></i></div><div class="sm">${barText || ''}</div>` : '') + (pips ? `<div class="pips">${pips}</div>` : '') +
     (btn ? `<button class="btn small go ${gold ? 'gold' : ''}" ${disabled ? 'disabled' : ''}>${btn}</button>` : '');
   const b = t.querySelector('button'); if (b && onclick) b.onclick = onclick;
@@ -65,8 +65,8 @@ function tile({ cls = '', ic, name, chip, chipCls = '', desc, bar, barText, pips
 function loadoutRow(el, link) {
   el.innerHTML = '';
   for (let i = 0; i < LOADOUT_SIZE; i++) {
-    const id = save.loadout[i], b = document.createElement('button'); b.className = 'slot' + (id ? ' full' : '');
-    b.innerHTML = id ? icon(id) : '+';
+    const id = save.loadout[i], w = id && WEAPONS.find(x => x.id === id), b = document.createElement('button'); b.className = 'slot' + (id ? ' full tier' + (w ? w.tier || 0 : 0) : '');
+    b.innerHTML = id ? icon(id) + (w && save.skills[id] ? `<em class="slv">${save.skills[id].lv}</em>` : '') : '+';
     if (id && !link) b.title = 'Tap to remove';
     b.onclick = () => { audio.play('click'); if (link) { hubTab = 'Skills'; renderHub(); } else if (id && toggleLoadout(save, id)) { persist(); renderHub(); } };
     el.appendChild(b);
@@ -180,17 +180,25 @@ function renderPig() {
 }
 function renderPets() {
   const list = $('petList'); list.innerHTML = '';
-  const egg = tile({ cls: 't-gold one', ic: icon('egg'), name: 'Eggs', chip: '× ' + save.eggs, desc: 'Something is wiggling inside.', btn: 'HATCH', gold: true, disabled: save.eggs < 1,
-    onclick: () => { audio.unlock(); const h = hatchEgg(save); if (!h) return; persist(); audio.play('levelup'); refreshCur();
+  const egg = document.createElement('button'); egg.className = 'eggstage' + (save.eggs > 0 ? ' has' : ''); egg.disabled = save.eggs < 1;
+  egg.innerHTML = `<span class="eggpic">${icon('egg')}</span><span class="eggtx"><b>${save.eggs > 0 ? 'TAP THE EGG' : 'NO EGGS YET'}</b><small>${save.eggs > 0 ? 'Something is wiggling inside.' : 'Win stages to find more.'}</small></span><i class="eggn">× ${save.eggs}</i>`;
+  egg.onclick = () => {
+    if (egg.classList.contains('crack')) return; audio.unlock(); audio.play('click'); egg.classList.add('crack');
+    setTimeout(() => {
+      const h = hatchEgg(save); if (!h) { egg.classList.remove('crack'); return; } persist(); audio.play('levelup'); refreshCur();
       $('bTitle').textContent = h.beats ? 'JUST SOME SNACKS' : (PETS.find(p => p.id === h.id).name.toUpperCase() + '!');
+      $('bLoot').className = 'loot reveal';
       $('bLoot').innerHTML = h.beats ? `<div class="it">${curImg('beats')}<span>+${h.beats}</span></div>` : `<div class="it">${icon(h.id)}<span>+${h.n}</span></div>`;
-      $('bOk').onclick = () => { audio.play('click'); $('bOk').onclick = defaultBoxOk; openHub('Pets'); }; show('boxModal'); } });
+      $('bOk').onclick = () => { audio.play('click'); $('bLoot').className = 'loot'; $('bOk').onclick = defaultBoxOk; openHub('Pets'); }; show('boxModal');
+    }, 650);
+  };
   list.appendChild(egg);
   { const rdy = PETS.filter(p => petCanUp(save, p.id)).length; if (save.eggs > 1 || rdy) { const row = document.createElement('div'); row.className = 'refrow'; row.style.justifyContent = 'center'; row.style.gap = '10px'; if (save.eggs > 1) { const b = document.createElement('button'); b.className = 'btn small alt'; b.textContent = 'HATCH ALL (' + save.eggs + ')'; b.onclick = () => { const res = hatchAll(save); if (res.length) { persist(); audio.play('levelup'); refreshCur(); toast(res.length + ' eggs hatched'); renderHub(); } }; row.appendChild(b); } if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'STAR UP ALL (' + rdy + ')'; b.onclick = () => { if (upgradePetsAll(save)) { persist(); audio.play('upgrade'); renderHub(); } }; row.appendChild(b); } list.appendChild(row); } }
   for (const p of PETS) {
     const k = save.pets[p.id], owned = k.star > 0, maxed = k.star >= PET_MAX_STAR, need = maxed ? 0 : petCost(k.star), eq = save.petEquip.includes(p.id);
     const stars = '★ ' + k.star + '/' + PET_MAX_STAR;
-    const t = tile({ cls: 't-weapon' + (eq ? ' on-loadout' : ''), ic: icon(p.id), name: p.name, chip: owned ? stars : 'NEW', chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: p.flavor,
+    const starH = Array.from({ length: PET_MAX_STAR }, (_, n) => `<i class="star${n < k.star ? ' on' : ''}">★</i>`).join('');
+    const t = tile({ cls: 'coll pet t-weapon' + (eq ? ' on-loadout' : '') + (owned ? '' : ' unowned') + (petCanUp(save, p.id) ? ' ready' : ''), ic: icon(p.id), lock: !owned, name: p.name, chip: owned ? (eq ? 'WALKING' : 'AT HOME') : 'NEW', chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: p.flavor, pips: starH,
       bar: need ? Math.min(100, Math.round((k.frag / need) * 100)) : 100, barText: need ? k.frag + ' / ' + need : '', btn: maxed ? 'FULL STARS' : owned ? 'MORE STARS' : 'WELCOME HOME', disabled: !petCanUp(save, p.id),
       onclick: () => { if (petUp(save, p.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } } });
     if (owned) { const e = document.createElement('button'); e.className = 'btn small go alt'; e.textContent = eq ? 'BENCH' : 'WALK WITH ME'; e.onclick = () => { if (togglePet(save, p.id)) { persist(); audio.play('click'); renderHub(); } }; t.appendChild(e); }
@@ -220,8 +228,10 @@ function renderSkills() {
     const gated = !owned && (save.cleared || 0) < (w.stage || 0);
     if (!owned) { need = w.frag; can = k.frag >= need && !gated; label = gated ? 'CLEAR STAGE ' + w.stage : 'UNLOCK'; act = () => unlockSkill(save, w.id); }
     else if (k.lv >= SKILL_MAX_LV) label = 'MAX LEVEL';
-    else { const c = skillUpgradeCost(k.lv); need = c.frag; can = k.frag >= c.frag; label = 'UPGRADE'; act = () => levelSkill(save, w.id); }
-    const t = tile({ cls: 't-weapon tier' + (w.tier || 0) + (eq ? ' on-loadout' : '') + (owned ? '' : ' unowned'), ic: icon(w.id), name: w.name, chip: owned ? ('Lv ' + k.lv + (eq ? ' ✓' : '')) : 'LOCKED', chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: w.desc,
+    else { const c = skillUpgradeCost(k.lv); need = c.frag; can = k.frag >= c.frag; label = can ? 'UPGRADE READY' : 'UPGRADE'; act = () => levelSkill(save, w.id); }
+    const ready = can && (!owned || k.lv < SKILL_MAX_LV);
+    const pipH = owned ? Array.from({ length: SKILL_MAX_LV }, (_, n) => `<i class="pip${n < k.lv ? ' on' : ''}"></i>`).join('') : '';
+    const t = tile({ cls: 'coll t-weapon tier' + (w.tier || 0) + (eq ? ' on-loadout' : '') + (owned ? '' : ' unowned') + (ready ? ' ready' : ''), ic: icon(w.id), lock: !owned && (gated ? 'Stage ' + w.stage : true), name: w.name, chip: owned ? ('Lv ' + k.lv + (eq ? ' ✓' : '')) : (gated ? 'STAGE ' + w.stage : 'LOCKED'), chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: w.desc, pips: pipH,
       bar: need ? Math.min(100, Math.round((k.frag / need) * 100)) : 100, barText: need ? 'Fragments ' + k.frag + ' / ' + need : 'Fully upgraded', btn: label, disabled: !can, onclick: () => { if (act()) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } } });
     if (owned) {
       const e = document.createElement('button'); e.className = 'btn small go alt'; e.textContent = eq ? 'REMOVE FROM LOADOUT' : 'EQUIP';
