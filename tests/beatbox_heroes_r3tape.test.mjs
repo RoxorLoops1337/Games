@@ -96,7 +96,9 @@ try {
     await drive(page, () => !BBH.R3.world.controls.inSpot, null, 20);
     const k = await page.evaluate(() => BBH.G.ch.flags.tapeNext), Rk = await ref(page);
     ok(await openCouch(page), how + ': COUCH');
-    await page.evaluate(() => { BBH.Tape.speed = 2; }); await rowClick(page, '^WATCH A BEATBOX TAPE');
+    // half speed: these tests need the tape to still be playing when the skip arrives. At double speed the whole tape lasted ~15 s, so a browser command stalled
+    // by a loaded machine let the last card go by first ("skipped after 5 card(s)"): reproduced with an 18 s stall, now it takes a 60 s stall.
+    await page.evaluate(() => { BBH.Tape.speed = 0.5; }); await rowClick(page, '^WATCH A BEATBOX TAPE');
     ok(await until(page, () => BBH.Tape.ctrl && BBH.Tape.ctrl.phase === 'card', null, 90000), how + ': the first card is up');
     if (how === 'button') await page.evaluate(() => document.querySelector('#tape .tp-skip').click());
     else { const b = await page.evaluate(() => { const r = document.getElementById('tape').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * 0.3 }; }); await page.mouse.move(b.x, b.y); await page.mouse.down(); await sleep(1200); await page.mouse.up(); }
