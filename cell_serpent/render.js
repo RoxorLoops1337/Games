@@ -4,7 +4,7 @@ import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv } from '.
 import { INK, mix } from './art_draw.js';
 import { createHud } from './hud.js';
 import { createScreenFx } from './screenfx.js';
-import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing } from './bg_world.js';
+import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
 
 const TAU = Math.PI * 2;
@@ -105,6 +105,7 @@ export function createRenderer(canvas, art, kit) {
         burst(e.x, e.y, e.crit ? 5 : 2, e.crit ? ['#ffe14a', '#fff'] : ['#fff', '#b9f3ff'], 160, 0.3, 3);
         break;
       case 'kill': {
+        S.killT = S.t;
         const sp = kit && kit.SPECIES[e.skin];
         const sk = e.kind === 'upgrade' ? ['#ffd84d', '#fff1a8', '#fff'] : sp ? [sp.lite, sp.base, '#fff'] : ['#ff9ad6', '#e0489d', '#fff'];
         burst(e.x, e.y, e.head ? 40 : 14, sk, e.head ? 360 : 240, 0.7, 6);
@@ -167,7 +168,7 @@ export function createRenderer(canvas, art, kit) {
   function themeOf(g) { return (kit && kit.SPECIES[g.skin]) || { base: '#ff7eb6', lite: '#ffc2dc', cell: 'round' }; }
   function bgLayer(g, L) {
     const th = themeOf(g), k = Math.max(0.5, Math.min(1.5, L.s));
-    return kit && kit.layer(`${g.skin}|${g.stage}|${k.toFixed(1)}`, W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th));
+    return kit && kit.layer(`${g.skin}|${g.stage}|${k.toFixed(1)}`, W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th, g.stage));
   }
   function drawBg(g, L) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -185,8 +186,10 @@ export function createRenderer(canvas, art, kit) {
     }
     ctx.restore();
     if (!OPT.reduceMotion) { if (!S.motes) S.motes = makeMotes(); drawBeams(ctx, S.t, isBossStage(g.stage), th, kit); drawMotes(ctx, g.skin, th, S.motes, S.t); }
+    // weather, speaker thump, crowd and lightning (bg_world.js)
+    const bgp = (S.bgfx || (S.bgfx = createBgFx())).draw(ctx, { kit, skin: g.skin, stage: g.stage, boss: isBossStage(g.stage), th, t: S.t, reduce: OPT.reduceMotion, low: OPT.lowQuality, kick: S.t - (S.killT === undefined ? -9 : S.killT) });
     // the stage floor below the line, where the duo stands; if the snake touches the line it is over
-    if (g.ring) { drawRing(ctx, g.ring, S.t, isBossStage(g.stage)); return; }   // a circle around the duo in the middle
+    if (g.ring) { drawRing(ctx, g.ring, S.t, isBossStage(g.stage), OPT.reduceMotion ? 0.4 : bgp); return; }   // a circle around the duo in the middle
     ctx.save(); ctx.beginPath();
     for (let x = 0; x <= W; x += 20) { const y = LINE_Y + Math.sin(x * 0.05 + S.t * 2.2) * 5; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.lineWidth = 16; ctx.strokeStyle = 'rgba(255,90,140,.18)'; ctx.stroke(); ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,150,190,.75)'; ctx.stroke(); ctx.restore();
