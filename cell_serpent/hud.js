@@ -42,7 +42,7 @@ const BOSS_DY = 24;   // the boss HP bar pushes the stat row down
 
 export function createHud(env) {
   const { ctx, text, blit, kit, S, INK, glow, sparkleAt } = env;
-  const T = { g: null, pop: {}, pressAt: {}, gv: 0, bsLast: 0, bsAt: -9, bsHi: 0, cdMax: {}, cdLast: {}, chestAt: {}, lastProg: 0, readyAt: {}, lastSnd: -9, bossTot: 0, bossV: 1, bossHitAt: -9, encV: 0, encFull: -9, ins: { t: 0, b: 0 }, msAt: -9, msN: 0 };
+  const T = { g: null, pop: {}, pressAt: {}, gv: 0, bsLast: 0, bsAt: -9, bsHi: 0, cdMax: {}, cdLast: {}, chestAt: {}, lastProg: 0, readyAt: {}, lastSnd: -9, bossTot: 0, bossV: 1, bossHitAt: -9, encV: 0, encFull: -9, ins: { t: 0, b: 0 }, msAt: -9, msN: 0, lvLast: {}, lvAt: {}, t0: 0, bossGhost: 1 };
   const reduce = () => !!(env.OPT && env.OPT.reduceMotion);
   // menu text size slider also lifts the small in-run labels (capped so the fixed glass plates still fit)
   const fz = n => Math.round(n * Math.min(1.3, (env.OPT && env.OPT.textScale) || 1));
@@ -286,10 +286,17 @@ export function createHud(env) {
     T.bsLast = n;
     const ms = Math.floor(n / 10); if (ms > (T.bsMs | 0)) { T.bsMs = ms; T.bsB = S.t; }   // milestone 10 / 20 / 30: ring burst (the sound is audio.js streakburst)
     const bk = T.bsB === undefined ? 0 : Math.max(0, 1 - (S.t - T.bsB) / 0.6);
-    const k = Math.max(bk, Math.max(0, 1 - (S.t - T.bsAt) / 0.3)), hot = n >= 10, col = n >= 20 ? '#ff7ad9' : hot ? '#ffd84d' : '#6fe3ff';
+    const k = Math.max(bk, Math.max(0, 1 - (S.t - T.bsAt) / 0.3)), hot = n >= 10, leg = n >= 30, col = leg ? '#ffffff' : n >= 20 ? '#ff7ad9' : hot ? '#ffd84d' : '#6fe3ff';
     const x = 256, y = H - 70 - T.ins.b, w = 150, h = 40;
     scaled(x + w / 2, y + h / 2, 1 + 0.18 * k * k, () => {
-      glass(-w / 2, -h / 2, w, h, 20, col + 'cc', 'rgba(14,9,48,.62)');
+      glass(-w / 2, -h / 2, w, h, 20, leg ? 'rgba(255,255,255,.95)' : col + 'cc', leg ? 'rgba(60,24,90,.78)' : 'rgba(14,9,48,.62)');
+      if (leg) {   // 06-hud b6: legend frame at 30+, a gold and pink double rim with travelling glints
+        const ph = reduce() ? 0 : S.t * 1.4;
+        ctx.save(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#ffd84d'; rr(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 24); ctx.stroke();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#ff7ad9'; ctx.globalAlpha = 0.8; rr(-w / 2 - 7.5, -h / 2 - 7.5, w + 15, h + 15, 27); ctx.stroke(); ctx.restore();
+        for (let i = 0; i < 2; i++) { const u = (ph + i * 0.5) % 1, gx = -w / 2 + 10 + u * (w - 20); star(gx, -h / 2 - 4, 0.45 + 0.2 * Math.sin(u * Math.PI), '#ffffff'); }
+        star(-w / 2 - 6, 0, 0.6, '#ffd84d'); star(w / 2 + 6, 0, 0.6, '#ff7ad9');
+      }
       blit(kit && kit.SPR.note(false), -w / 2 + 22, 0, 34, 0);
       text('x' + n, -w / 2 + 44, 1, 24, col, '#0b1020', 'left');
       text('BEAT', w / 2 - 12, 2, 13, '#ffffff', '#0b1020', 'right');
@@ -332,6 +339,10 @@ export function createHud(env) {
       }
       T.cdLast[id] = w.cd;
       const frac = w.cd > 0 ? Math.max(0, Math.min(1, 1 - w.cd / T.cdMax[id])) : 1, ready = frac >= 0.999;
+      // 06-hud b6: a new skill or a level up pops the tile (spring scale, an opening ring) and its numeral badge
+      const ll = T.lvLast[id]; if (w.lv > (ll === undefined ? (S.t - T.t0 > 1 ? 0 : w.lv) : ll)) T.lvAt[id] = S.t; T.lvLast[id] = w.lv;
+      const lk = Math.max(0, 1 - (S.t - (T.lvAt[id] === undefined ? -9 : T.lvAt[id])) / 0.7), lsc = lk > 0 && !reduce() ? 1 + 0.32 * Math.sin(lk * Math.PI) * lk : 1;
+      ctx.save(); if (lsc !== 1) { ctx.translate(x, cy); ctx.scale(lsc, lsc); ctx.translate(-x, -cy); }
       const tb = kit && kit.bake ? kit.bake('tile06|' + col, r * 2 + 8, r * 2 + 8, c => {   // dark glass disc, a colour wash lit from the top, a gloss arc and a thin coloured rim
         c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = 'rgba(14,9,48,.78)'; c.fill();
         const rg = c.createRadialGradient(0, -r * 0.5, 2, 0, 0, r); rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)');
@@ -358,8 +369,18 @@ export function createHud(env) {
       }
       // level pips
       const pw = 7, px0 = x - ((max - 1) * pw) / 2, py = cy + r + 10;
+      if (w.lv > 0) {   // level numeral badge, top right of the tile
+        const bx = x + r - 3, by = cy - r + 3, maxed = w.lv >= max, bb = kit && kit.bake ? kit.bake('lvb06|' + col + '|' + (maxed ? 1 : 0), 26, 26, c => {
+          c.beginPath(); c.arc(0, 0, 10, 0, TAU); c.fillStyle = maxed ? '#ffd84d' : 'rgba(14,9,48,.95)'; c.fill();
+          c.lineWidth = 2; c.strokeStyle = maxed ? '#fff3a0' : col; c.stroke();
+        }) : null;
+        if (bb) ctx.drawImage(bb.c, bx - 13, by - 13, 26, 26);
+        text(maxed ? 'MAX' : w.lv + '', bx, by + 1, maxed ? 9 : 14, maxed ? '#4a3600' : '#ffffff', maxed ? '#fff3a0' : '#0b1020');
+      }
+      if (lk > 0 && !reduce()) { ctx.save(); ctx.globalAlpha = lk * 0.9; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3 * lk + 1; ctx.beginPath(); ctx.arc(x, cy, r + 4 + 24 * (1 - lk), 0, TAU); ctx.stroke(); ctx.restore(); }
       ctx.beginPath(); for (let i = w.lv; i < max; i++) { ctx.moveTo(px0 + i * pw + 2.6, py); ctx.arc(px0 + i * pw, py, 2.6, 0, TAU); } ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fill();
       if (w.lv > 0) { ctx.beginPath(); for (let i = 0; i < w.lv && i < max; i++) { ctx.moveTo(px0 + i * pw + 2.6, py); ctx.arc(px0 + i * pw, py, 2.6, 0, TAU); } ctx.fillStyle = w.lv >= max ? '#ffd84d' : '#ffffff'; ctx.fill(); }
+      ctx.restore();
       x -= pitch;
     }
   }
@@ -372,15 +393,20 @@ export function createHud(env) {
     const v = Math.max(0, Math.min(1, cur / T.bossTot));
     if (v < T.bossV - 0.0005) T.bossHitAt = S.t;
     T.bossV += (v - T.bossV) * 0.25;
-    const x = 26, w = 574, y = 128, h = 16, hit = Math.max(0, 1 - (S.t - T.bossHitAt) / 0.25);
-    glass(x - 4, y - 4, w + 8, h + 8, (h + 8) / 2, 'rgba(255,90,130,.75)', 'rgba(50,6,26,.7)');
+    T.bossGhost = Math.max(T.bossV, T.bossGhost - 0.004);   // pale chunk that lingers where the last hit took the bar from
+    const x = 26, w = 574, y = 128, h = 16, hit = Math.max(0, 1 - (S.t - T.bossHitAt) / 0.25), low = v > 0 && v < 0.25, lp = low && !reduce() ? 0.5 + 0.5 * Math.sin(S.t * 9) : 0;
+    glass(x - 4, y - 4, w + 8, h + 8, (h + 8) / 2, low ? `rgba(255,${70 + Math.round(lp * 60)},${90 + Math.round(lp * 40)},.95)` : 'rgba(255,90,130,.75)', 'rgba(50,6,26,.7)');
     ctx.save(); rr(x, y, w, h, h / 2); ctx.clip();
     const fw = Math.max(h, w * T.bossV), gr = ctx.createLinearGradient(x, 0, x + w, 0); gr.addColorStop(0, '#ff3d6e'); gr.addColorStop(1, '#ffb347');
+    if (T.bossGhost > T.bossV + 0.004) { ctx.fillStyle = 'rgba(255,235,240,.55)'; ctx.fillRect(x, y, w * T.bossGhost, h); }
     ctx.fillStyle = gr; ctx.fillRect(x, y, v > 0 ? fw : 0, h);
     ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(x, y, v > 0 ? fw : 0, h * 0.4);
     if (hit > 0) { ctx.fillStyle = `rgba(255,255,255,${0.55 * hit})`; ctx.fillRect(x, y, fw, h); }
+    if (low) { ctx.fillStyle = `rgba(255,255,255,${0.18 * lp})`; ctx.fillRect(x, y, fw, h); }
+    ctx.fillStyle = 'rgba(40,4,20,.5)'; for (let i = 1; i < 4; i++) ctx.fillRect(x + (w * i) / 4 - 1, y, 2, h);   // quarter marks
+    if (v > 0.02) { ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(x + fw - 2, y, 2, h); }   // bright leading edge
     ctx.restore();
-    text('SERPENT ' + Math.ceil(T.bossV * 100) + '%', x + w / 2, y + h / 2 + 1, 13, '#ffffff', '#4a0a24');
+    text('SERPENT ' + Math.ceil(T.bossV * 100) + '%', x + w / 2, y + h / 2 + 1, 14, low ? '#fff3a0' : '#ffffff', '#4a0a24');
   }
 
   // gold cell countdown: the soonest-to-fade live gold cell, in seconds, with a draining bar
@@ -454,7 +480,7 @@ export function createHud(env) {
   function dy(g) { return T.ins.t + (g && isBossStage(g.stage) ? BOSS_DY : 0); }
 
   function draw(g, L) {
-    if (T.g !== g) { T.g = g; T.pop = {}; T.cdMax = {}; T.cdLast = {}; T.chestAt = {}; T.lastProg = g.progress || 0; T.gv = g.progress || 0; T.bsLast = 0; T.bsAt = -9; T.bsHi = 0; T.readyAt = {}; T.bossTot = 0; T.bossV = 1; T.encV = 0; T.encFull = -9; }
+    if (T.g !== g) { T.g = g; T.pop = {}; T.cdMax = {}; T.cdLast = {}; T.chestAt = {}; T.lastProg = g.progress || 0; T.gv = g.progress || 0; T.bsLast = 0; T.bsAt = -9; T.bsHi = 0; T.readyAt = {}; T.bossTot = 0; T.bossV = 1; T.encV = 0; T.encFull = -9; T.lvLast = {}; T.lvAt = {}; T.t0 = S.t; T.bossGhost = 1; }
     T.ins = safeUnits(L);
     const boss = isBossStage(g.stage);
     scrim();
