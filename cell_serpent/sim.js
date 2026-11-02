@@ -612,6 +612,8 @@ export const stageMod = n => (n >= 4 && n % 5 !== 0 && n % 3 === 1 ? MODS[Math.f
 export const stageKind = n => (n % 6 === 0 ? 'ring' : (n % 7 === 0 || n % 10 === 8) ? 'double' : 'lane');
 export const KIND_LABEL = { lane: '', double: 'Two snakes', ring: 'Circle' };
 export const RING = { cx: W / 2, cy: 720, R: 175 };
+export const BOSS_HP = [0.8, 2.4, 0.5];   // boss cell HP multiplier at the face and at the tail (a flat 2.4 left the first yellow cell out of reach: typical players got 4 to 9 percent of the boss)
+export const RING_SPEED = 0.8;   // the spiral is long and most of it is out of reach of the straight shot, so the snake crawls slower in circle stages
 export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: stageKind(n) === 'ring' ? 'Spiral' : PATH_KINDS[pathKind(n)], kind: stageKind(n), mod: stageMod(n), hp: Math.round(hpBase(n)) });
 
 const KIND = { normal: { hp: 1 }, armor: { hp: 2.6 }, bomb: { hp: 1 }, upgrade: { hp: 1.6 }, mender: { hp: 1.3 } };
@@ -723,11 +725,12 @@ function spawnSnake(g, n, o = {}) {
   const path = o.mirror ? mirrorPath(g.path) : g.path;
   const hpB = (pig ? hpBase(1 + 2 * n) * 0.5 : inv ? hpBase(n) * 1.3 : hpBase(n)) * (g.hard ? HARD_HP : 1) * ((g.mod && g.mod.hp) || 1);
   const ramp = i => 0.4 + 1.35 * Math.pow(i / Math.max(1, len - 1), 1.3);   // the first cells are soft, then it gets tougher and tougher
+  const bossMul = i => (boss ? BOSS_HP[0] + (BOSS_HP[1] - BOSS_HP[0]) * Math.min(1, i / Math.max(1, BOSS_HP[2] * len)) : 1);   // bosses start soft so the first upgrade cells pop, and reach full 2.4x half way down
   let ps = o.startPs === undefined ? 240 : o.startPs;   // the face starts just inside the top edge
   for (let i = 0; i < len; i++) {
     let kind = pickKind(g, n, boss, i, len); if (kind === 'bomb' && segs.length && segs[segs.length - 1].kind === 'bomb') kind = 'normal';
     const r = segRadius(boss, i, len);
-    let hp = hpB * ramp(i) * KIND[kind].hp * (boss ? 2.4 : 1) * (0.9 + g.rand() * 0.2);
+    let hp = hpB * ramp(i) * KIND[kind].hp * bossMul(i) *(0.9 + g.rand() * 0.2);
     hp = i === 0 ? 1 : Math.max(1, Math.round(hp));   // the face has no real HP: it is shielded until it is alone
     const pos = pointAt(path, ps);
     segs.push({ ps, x: pos.x, y: pos.y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0 });
@@ -737,7 +740,7 @@ function spawnSnake(g, n, o = {}) {
   const ups = Math.max(4, Math.round(len / 7));
   for (let k = 0; k < ups; k++) {
     const c = segs[clamp(3 + Math.round(((len - 5) * (k + 0.5)) / ups), 1, len - 1)];
-    c.kind = 'upgrade'; c.max = c.hp = Math.max(1, Math.round(hpB * ramp(c.i) * KIND.upgrade.hp * (boss ? 2.4 : 1)));
+    c.kind = 'upgrade'; c.max = c.hp = Math.max(1, Math.round(hpB * ramp(c.i) * KIND.upgrade.hp * bossMul(c.i)));
   }
   // chest cells (a chest on the cell): aim for them first too
   const nch = Math.max(2, Math.round(len / 15));
@@ -748,7 +751,7 @@ function spawnSnake(g, n, o = {}) {
   }
   markGold(g, n, segs, len);
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
-  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1);
+  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED : 1);
   g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
 }
