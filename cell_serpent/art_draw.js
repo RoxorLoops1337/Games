@@ -602,7 +602,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   }
   function acidFn(g) { const r = B * 0.55; cel(g, '#8dff6a', circ(0, 0, r), { r, shadow: '#43b83a' }); fangsMouth(g, 0, r * 0.12, r * 0.28, 0.2, '#2f7a2a'); eye(g, -r * 0.3, -r * 0.3, r * 0.14, r * 0.18, { iris: '#2d170f' }); eye(g, r * 0.3, -r * 0.3, r * 0.14, r * 0.18, { iris: '#2d170f' }); }
 
-  const BODY_MEMO = Object.create(null);
+  let BODY_MEMO = Object.create(null);
   const SPR = {
     body: (skin, boss, kind) => {   // called for every cell every frame: remember the sprite per (skin, boss, kind) instead of building the key string
       const kk = kind || '', slot = boss ? 1 : 0;
@@ -644,7 +644,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   // steady frames look sprites up by value: the key string and the bake closure are only built the first time (cache.clear drops these too)
   const memo = new Map();
   let gen = 0;   // bumps whenever the baked sprites are dropped, so callers that remember a sprite know to look it up again
-  { const clr = cache.clear.bind(cache); cache.clear = () => { clr(); memo.clear(); gen++; }; }
+  { const clr = cache.clear.bind(cache); cache.clear = () => { clr(); memo.clear(); BODY_MEMO = Object.create(null); gen++; }; }
   const sprMemo = (tag, a, b, fn, x, y, z) => {
     let m = memo.get(tag); if (!m) memo.set(tag, m = new Map());
     let n = m.get(a); if (!n) m.set(a, n = new Map());
