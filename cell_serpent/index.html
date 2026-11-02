@@ -1604,6 +1604,18 @@
   @media (prefers-reduced-motion:reduce){.rribbon.fx6,.rribbon.fx6::after{animation:none!important}.rb6fx{display:none}}
   @media (max-height:700px){.rribbon.fx6{font-size:14px;padding:4px 22px}}
   /* end @css:05-screen-feel */
+/* @css:18-access round 7 */
+  .qpill{min-height:44px} #tabBattle .qpill{min-height:44px}
+  .prren{width:44px;height:44px}
+  .rfprev{width:min(420px,92vw);display:flex;align-items:center;gap:10px;margin:-2px 0 6px;padding:7px 14px;border-radius:12px;border:1.5px dashed rgba(255,255,255,.24);background:rgba(14,9,48,.55);box-sizing:border-box}
+  .rfprev i{flex:none;width:34px;height:20px;border-radius:6px;background:#fff6c8;border:2px solid #ffd84d}
+  .rfprev .rfb{background:radial-gradient(circle at 50% 50%,#fff,#9fd8ff);border-color:#7fe8ff}
+  .rfprev i{animation:rfblink 2.4s ease-in-out infinite} .rfprev .rfb{animation-delay:.6s}
+  @keyframes rfblink{0%,70%,100%{opacity:.28}78%{opacity:1}}
+  .rfprev .rft{font-size:12px;font-weight:800;color:#e8e4ff;flex:1} .rfprev .rft::after{content:"Samples blink softly"}
+  html.rf .rfprev i{animation:none;opacity:.55} html.rf .rfprev .rft::after{content:"Steady: no flashes or lightning"} html.rf .rfprev .rft{color:#9dff6d}
+  @media (prefers-reduced-motion:reduce){.rfprev i{animation:none;opacity:.55}}
+/* end @css:18-access round 7 */
 </style>
 </head>
 <body>

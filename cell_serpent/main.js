@@ -11,6 +11,7 @@ import { flyPick } from './pickfly.js';
 import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint, progMeter } from './result_fx.js';
 import { applyCbPalette, paintCbStrip } from './cb_palette.js';
 import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.js';
+import { initA11y7 } from './a11y7.js';
 import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed, announce, watchGroove, watchStreak, resetGroove, showZone, inThumbZone, zoneSteer, initKeyboard, RARITY_WORDS } from './access.js';
 import { createMotion } from './motion.js';
 import { celebrateBest, stopBest } from './best_fx.js';
@@ -61,7 +62,7 @@ function resize() {
   canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
 }
 addEventListener('resize', resize); resize();
-initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap = true; }); initKeyboard(); initSrPass(); initGridNav(document.getElementById('tabBattle')); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
+initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap = true; }); initKeyboard(); initSrPass(); initA11y7(); initGridNav(document.getElementById('tabBattle')); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
 
 let shownId = '';
 function show(id) { { const ss = sheetSound(shownId, id); shownId = id; if (ss) audio.play(ss); } if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id); }
