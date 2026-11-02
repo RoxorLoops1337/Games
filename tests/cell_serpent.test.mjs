@@ -724,4 +724,10 @@ ok('bombs are rare and never sit next to each other', () => {
   assert.ok(bombs / cells < 0.08, 'bombs are ' + (bombs / cells));
 });
 
+// Extra suites written by the team live in tests/cell_serpent_ext/*.mjs (each file runs its own asserts when imported).
+{
+  const { readdirSync } = await import('node:fs');
+  const extDir = join(dirname(fileURLToPath(import.meta.url)), 'cell_serpent_ext');
+  if (existsSync(extDir)) for (const f of readdirSync(extDir).filter(x => x.endsWith('.mjs')).sort()) { await import(join(extDir, f)); n++; }
+}
 console.log(`cell_serpent: ${n} groups passed`);
