@@ -12,3 +12,18 @@ export function pumpEnv(vol, dur, beat, depth) {
   pts.push([Math.max(dur, rel + 0.03), 0.0008]);
   return pts;
 }
+
+// Pump setting: 0 off, 1 soft (pad only, half as deep), 2 full (default: pad plus a light dip on arp and lead).
+export const PUMP_LEVELS = ['Off', 'Soft', 'Full'];
+export const pumpLevel = v => { v = Number(v); return v === 0 || v === 1 ? v : 2; };
+// Depth the pad uses at a pump level: off never dips, soft only goes half way down.
+export const padDepth = (lvl, boss, setting) => { const s = pumpLevel(setting), d = pumpDepth(lvl, boss); return s === 0 ? 1 : s === 1 ? 1 - (1 - d) * 0.5 : d; };
+// Volume multiplier for short arp and lead notes: the kick (step 0 of every beat) knocks them down a little, the next
+// 16th is half way back, then they are free. Lightly, so it reads as groove and not as stutter. Only at level 2.
+export function lightPump(step, lvl, boss, setting) {
+  if (pumpLevel(setting) < 2) return 1;
+  const k = step & 3, cut = (1 - pumpDepth(lvl, boss)) * 0.3;
+  return k === 0 ? 1 - cut : k === 1 ? 1 - cut * 0.4 : 1;
+}
+// Soft falling sigh when a long kill chain runs out: true once per chain, when it was at least 6 long and went quiet.
+export function chainBroke(chain, quietMs) { return chain >= 6 && quietMs > 900; }

@@ -3,11 +3,12 @@
 // key and tempo change every 5 stages, bosses get their own tense track, and the layers follow
 // mix({ stage, boss, groove (0..1), danger (0..1) }).
 import { beatBpm as simBpm, SKINS, skinFor } from './sim.js';
-import { pumpDepth, pumpEnv } from './audio_pump.js';
+import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
   let musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
   let mixS = { stage: 1, boss: false, groove: 0, danger: 0, skin: 'love', bphase: 0 };
+  let pumpSet = 2, countSteps = 0;
   let live = 0, chain = 0, chainT = 0, vol = 1, uiT = 0, bstreak = 0, lastBeatShot = 0, beatNow = 0, fresh = false;
   const last = {};
   function ensure() {
@@ -209,6 +210,20 @@ export function createAudio() {
       if (k >= 2) { tone(110, 0.3, 'sine', 0.14, -40); noise(0.08, 0.06, 900, 200); }
       duck(0.25 + 0.08 * k, 0.4);
     },
+    // a long kill chain ran out (e.n = its length): a soft falling sigh, deeper for longer chains, quiet enough to sit under the pops
+    chainsigh: e => { if (!gate('chainsigh', 1200)) return; const k = Math.min(1, ((e && e.n) || 6) / 14), f = pentHz(5 + Math.round(k * 3), 72);
+      tone(f, 0.28, 'sine', 0.05, -f * 0.28); tone(f * 0.75, 0.4, 'triangle', 0.035, -f * 0.2, 0.1); noise(0.3, 0.012, 2400, 500, 'lowpass', 0.02); },
+    // Four-Part Harmony: the first quartet cell popped (e.n = cells still to go): a held open chord that swells in, one voice per cell left
+    quartetstart: e => { const n = Math.max(1, Math.min(3, (e && e.n) || 3));
+      for (let i = 0; i <= n; i++) { const f = hz([60, 67, 72, 76][i]); tone(f, 0.55, 'sine', 0.045, 0, i * 0.03); tone(f * 2.003, 0.4, 'triangle', 0.012, 0, i * 0.03 + 0.04); } },
+    // all four (or both) linked cells popped in time (e.n = cells in the set): the chord resolves upward, one voice per cell, then a shimmer
+    quartet: e => { if (!gate('quartet', 150)) return; const n = Math.max(2, Math.min(4, (e && e.n) || 4)), ch = [72, 76, 79, 84];
+      for (let i = 0; i < n; i++) { tone(hz(ch[i]), 0.5, 'sine', 0.055, 0, i * 0.045); tone(hz(ch[i] + 12), 0.3, 'triangle', 0.02, 0, i * 0.045 + 0.02); }
+      if (n >= 4) { tone(hz(96), 0.7, 'sine', 0.03, 0, 0.22); noise(0.45, 0.025, 4000, 10000, 'bandpass', 0.12); } duck(0.2 + 0.05 * n, 0.4); },
+    // the window ran out and the linked cells healed: the chord goes flat and thins out
+    quartetfail: () => { if (!gate('quartetfail', 300)) return; [72, 76, 79].forEach((m, i) => tone(hz(m), 0.3, 'sine', 0.035, -hz(m) * 0.06, i * 0.03)); tone(hz(66), 0.35, 'triangle', 0.03, -20, 0.1); },
+    // a choir cell popped: a breathy three voice "ooh" that fades the way the choir stops regrowing the cells around it
+    choirpop: () => { if (!gate('choirpop', 200)) return; [64, 67, 71].forEach((m, i) => { const f = hz(m); tone(f, 0.5, 'triangle', 0.02, -f * 0.12, i * 0.02); tone(f * 1.004, 0.5, 'sine', 0.025, -f * 0.12, i * 0.02); }); noise(0.35, 0.02, 1500, 400, 'bandpass', 0.01); },
     // Encore beam fires / becomes ready
     encore: () => { noise(0.9, 0.12, 400, 6000, 'bandpass'); tone(110, 0.9, 'sawtooth', 0.12, 440); [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.5, 'triangle', 0.06, 0, 0.1 + i * 0.05)); duck(0.55, 0.9); },
     encoreready: () => { [784, 988, 1319].forEach((f, i) => tone(f, 0.12, 'sine', 0.07, 0, i * 0.07)); tone(1568, 0.5, 'triangle', 0.04, 0, 0.22); },
@@ -287,7 +302,9 @@ export function createAudio() {
     while (nextT < ac.currentTime + 0.25) {
       const s = step % 16, bar = (step >> 4) % 4, sec = (step >> 6), t = Math.max(0, nextT - ac.currentTime);
       if (s % 4 === 0) { beatAt = nextT; beatBpm = bpm; beatNow = bpm; }   // for the screen edge pulse (see beat())
-      if (!muted && tickOn) { if (s % 4 === 0) tone(s === 0 && bar === 0 ? 1319 : 988, 0.05, 'triangle', s === 0 && bar === 0 ? 0.2 : 0.15, 0, t, 'm'); }   // music off, beat tick on: the metronome alone
+      if (!muted && (tickOn || countSteps > 0)) {   // music off with the tick on, or the count-in before stage 1: the metronome alone
+        if (s % 4 === 0) tone(s === 0 && bar === 0 ? 1319 : 988, 0.05, 'triangle', s === 0 && bar === 0 ? 0.2 : 0.15, 0, t, 'm');
+      }
       else if (!muted) {
         const V = varOf(m.skin), bp = boss ? m.bphase : 0, ts = (s & 1) ? t + V.sw * sp : t;
         const sc = boss ? SCALES.phryg : (tier % 3 === 2 || V.minor ? SCALES.minor : SCALES.major);
@@ -310,19 +327,19 @@ export function createAudio() {
         // bass: eighths, octave jump to keep it moving
         if (s % 2 === 0) tone(hz(bassM + (s % 8 === 6 ? 12 : 0)), sp * 1.9, boss ? 'sawtooth' : V.bass, boss ? 0.1 : V.bass === 'sawtooth' ? 0.1 : 0.14, 0, t, 'm');
         // pad on the bar line
-        if (s === 0 && (lvl > 0.15 || boss)) { [c0, c1, c2].forEach(n => pumpTone(hz(n - 12), sp * 15, boss || bp >= 2 ? 'sawtooth' : V.pad, boss ? 0.02 + bp * 0.004 : 0.03, t, sp * 4, pumpDepth(lvl, boss))); }
+        if (s === 0 && (lvl > 0.15 || boss)) { [c0, c1, c2].forEach(n => pumpTone(hz(n - 12), sp * 15, boss || bp >= 2 ? 'sawtooth' : V.pad, boss ? 0.02 + bp * 0.004 : 0.03, t, sp * 4, padDepth(lvl, boss, pumpSet))); }
         // arp over the chord
-        if (lvl > 0.3 || boss) { const q = [c0, c1, c2, c1][(s >> (boss ? 0 : 1)) % 4]; if (s % (boss ? 2 : 2 * V.ad) === 0) tone(hz(q + (sec % 2 && s >= 8 ? 12 : 0) + (boss ? (bp >= 1 && s % 4 === 2 ? 12 : 0) : V.ao)), sp * 1.6, boss ? 'square' : V.arp, boss ? 0.026 : 0.022, 0, ts, 'm'); }
+        if (lvl > 0.3 || boss) { const q = [c0, c1, c2, c1][(s >> (boss ? 0 : 1)) % 4]; if (s % (boss ? 2 : 2 * V.ad) === 0) tone(hz(q + (sec % 2 && s >= 8 ? 12 : 0) + (boss ? (bp >= 1 && s % 4 === 2 ? 12 : 0) : V.ao)), sp * 1.6, boss ? 'square' : V.arp, (boss ? 0.026 : 0.022) * lightPump(s, lvl, boss, pumpSet), 0, ts, 'm'); }
         // lead melody from high groove
         if ((lvl > 0.62 || (boss && (lvl > 0.4 || bp >= 1))) && (s % 4 === 0 || s === 6 || s === 11 || s === 14)) {
           const li = (bar * 4 + (s >> 2) + (s === 14 ? 1 : 0)) % 8, ld = deg + (boss ? LEADB : LEAD)[li];
-          tone(hz(note(sc, ld, root + 36) + (bp >= 2 ? 12 : 0)), sp * 2.6, boss ? 'sawtooth' : V.lead, boss ? 0.03 : V.lead === 'sawtooth' || V.lead === 'square' ? 0.032 : 0.05, 0, t, 'm');
+          tone(hz(note(sc, ld, root + 36) + (bp >= 2 ? 12 : 0)), sp * 2.6, boss ? 'sawtooth' : V.lead, boss ? 0.03 : (V.lead === 'sawtooth' || V.lead === 'square' ? 0.032 : 0.05) * lightPump(s, lvl, boss, pumpSet), 0, t, 'm');
         }
         // species motif: 4 notes spread over the second and fourth bar
         if ((bar & 1) === 1 && s % 4 === 0 && !boss && lvl > 0.05) tone(hz(note(sc, motifOf(m.stage)[s >> 2], root + 36)), sp * 3, 'sine', 0.032, 0, t, 'm');
         // boss only: sub drone, off-beat sub pulses, a rising siren and a snare roll that lead into the next section
         if (boss) {
-          if (s === 0) pumpTone(hz(bassM - 12), sp * 15.5, 'sine', 0.1, t, sp * 4, pumpDepth(lvl, true));
+          if (s === 0) pumpTone(hz(bassM - 12), sp * 15.5, 'sine', 0.1, t, sp * 4, padDepth(lvl, true, pumpSet));
           if (s % 4 === 2) tone(hz(bassM - 12), sp * 1.6, 'sine', 0.12, -3, t, 'm');
           if (bar === 3 && s === 8) tone(330, sp * 8, 'sawtooth', 0.018, 520, t, 'm');
           if (bar === 3 && s >= 12) snare(t, 0.05 + (s - 12) * 0.03);
@@ -336,6 +353,7 @@ export function createAudio() {
         if (bar === 0 && s === 0 && step > 0 && lvl > 0.35) noise(0.5, 0.05, 7000, 3000, 'highpass', t, 'm');
       }
       nextT += sp; step++;
+      if (countSteps > 0 && --countSteps === 0) step = 0;   // the count-in is one bar: the song starts on its first bar
     }
   }
   // one short 4 note phrase per snake species (scale degrees), played softly as a bell over the groove
@@ -349,8 +367,17 @@ export function createAudio() {
     get volume() { return vol; },
     motif: motifOf,
     get muted() { return muted; },
-    music(on) {
-      wantMusic = !!on; restart();
+    // countIn: true plays one bar of ticks (the tick-only scheduler) before the song starts, used for the very first stages
+    music(on, countIn) {
+      wantMusic = !!on; restart(); countSteps = on && musicOn && countIn ? 16 : 0;
+    },
+    // pump depth setting: 0 off, 1 soft, 2 full (default)
+    setPump(v) { pumpSet = pumpLevel(v); },
+    get pump() { return pumpSet; },
+    // call every frame while playing: a long kill chain that goes quiet ends with a soft falling sigh (once per chain)
+    chainWatch() {
+      if (!ac) return;
+      if (chainBroke(chain, now() - chainT)) { const c = chain; chain = 0; sfx.chainsigh({ n: c }); }
     },
     // the beat tick is a metronome of its own: with the music switched off it still clicks on every beat
     setBeatTick(b) { beatTick = !!b; if ((wantMusic && !musicAllowed && beatTick) !== tickOn) restart(); },
