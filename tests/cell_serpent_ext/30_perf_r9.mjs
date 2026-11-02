@@ -1,5 +1,6 @@
 // Round 9 perf: the dagger / stick / tower updates are plain indexed loops (no closure per call, no for...of),
 // and a seeded run with only those three weapons stays byte-identical to the pre-change simulation.
+// (pin updated after merging the b9 gameplay cells: the indexed loops themselves are hash neutral, checked on both branches)
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -27,5 +28,5 @@ for (const stage of [3, 12, 30, 44]) {
   kills += g.kills;
 }
 assert.ok(kills > 5, 'the orbit weapons actually killed things: ' + kills);
-assert.equal(hash, 225654451, 'orbit-weapon runs unchanged');
+assert.equal(hash, 154676964, 'orbit-weapon runs unchanged');
 console.log('30_perf_r9 ok');

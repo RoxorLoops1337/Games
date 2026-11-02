@@ -24,13 +24,19 @@ const ART = {
   brk: `<path d="M-4 -15 L9 -11 L14 2 L6 14 L-8 13 L-15 1 L-12 -9 Z" fill="#9fe3ff" stroke="#2a6c99" stroke-width="2" stroke-linejoin="round"/><path d="M-4 -15 L-2 -3 L9 -11 M-2 -3 L-15 1 M-2 -3 L6 14" fill="none" stroke="#e8fbff" stroke-width="1.5" stroke-linejoin="round" opacity=".85"/><path d="M-1 -14 L2 -6 L-3 -1 L4 5 L0 15" fill="none" stroke="#17405f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 -15 l3 3 l-4 1 Z M-17 9 l4 -2 l1 4 Z" fill="#dff6ff" stroke="#2a6c99" stroke-width="1.1" stroke-linejoin="round"/>`,
   // Heart Mender: a heart with a plaster across it
   hbk: `<path d="M0 14 C-19 1 -14 -14 -5 -13 C-2 -12.5 0 -9 0 -9 C0 -9 2 -12.5 5 -13 C14 -14 19 1 0 14 Z" fill="#ff7fae" stroke="#7a1f45" stroke-width="2" stroke-linejoin="round"/><path d="M-9 -8 q-4 3 -3 8" fill="none" stroke="#ffd0e2" stroke-width="2.2" stroke-linecap="round"/><path d="M-17 2 H-8 L-5 -3 L-1 8 L2 2 H17" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><rect x="-10" y="-2" width="20" height="6.5" rx="3" fill="#ffe9c9" stroke="#7a4b00" stroke-width="1.4" transform="rotate(-38 0 1)"/><circle cx="-3" cy="1" r=".9" fill="#c79a5a"/><circle cx="3" cy="1" r=".9" fill="#c79a5a"/>`,
+  // Oil Can: a little oil can with a drop (rust creaks gentler)
+  oil: `<path d="M-12 12 V0 Q-12 -4 -8 -4 H6 Q10 -4 10 0 V12 Z" fill="#e0a060" stroke="#6a3a10" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 -1 L17 -9 H20" fill="none" stroke="#6a3a10" stroke-width="2.4" stroke-linecap="round"/><path d="M-6 -4 V-9 H2 V-4" fill="none" stroke="#6a3a10" stroke-width="2.2"/><path d="M19 -4 q3 5 0 7 q-3 -2 0 -7 Z" fill="#ffd04a" stroke="#7a4b00" stroke-width="1.2"/>`,
+  // Sweet Tooth: a wrapped candy (sour rush weaker)
+  swt: `<circle r="8.5" fill="#d8ff6a" stroke="#4a6a10" stroke-width="1.8"/><path d="M-8 -3 L-17 -9 V9 L-8 3 M8 -3 L17 -9 V9 L8 3" fill="#ffb0d8" stroke="#7a1f55" stroke-width="1.6" stroke-linejoin="round"/><path d="M-4 -3 Q0 -6 4 -3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>`,
+  // Tissue Box: a tissue box with a tissue sticking out (sneeze jolts shorter)
+  tis: `<rect x="-14" y="-2" width="28" height="15" rx="3" fill="#9dd7ff" stroke="#2a5a8a" stroke-width="1.8"/><path d="M-6 -2 Q-8 -10 -2 -14 Q2 -8 0 -2 M2 -2 Q4 -12 10 -13 Q10 -6 7 -2" fill="#fff" stroke="#2a5a8a" stroke-width="1.5" stroke-linejoin="round"/><circle cx="0" cy="7" r="2.4" fill="#fff"/>`,
 };
 const cache = {};
 export function capIconURL(id) { return ART[id] ? (cache[id] || (cache[id] = svgURL(ART[id]))) : ''; }
 
 const KIND = { weapon: 'SKILL', capsule: 'SHOT', passive: 'BOOST' };
 // batch 9: the two counter cards (Ice Breaker, Heart Mender) answer one snake trait, so they say so on the icon
-export const COUNTERS = { brk: { skin: 'frosty', what: 'Frosty', shield: 'Frost shield' }, hbk: { skin: 'love', what: 'Love-Struck', shield: 'Heart heal' } };
+export const COUNTERS = { brk: { skin: 'frosty', what: 'Frosty', shield: 'Frost shield' }, hbk: { skin: 'love', what: 'Love-Struck', shield: 'Heart heal' }, oil: { skin: 'rust', what: 'Rusty', shield: 'Creak lurch' }, swt: { skin: 'sour', what: 'Sour', shield: 'Pop rush' }, tis: { skin: 'sneezy', what: 'Sneezy', shield: 'Sneeze jolt' } };
 export const kindLabel = c => (COUNTERS[c.id] ? 'COUNTER' : KIND[c.kind] || '');
 
 // A short hint when this card works with what the player already has. Empty string when nothing special.
