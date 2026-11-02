@@ -46,6 +46,9 @@ export async function r3env(suite, extraArgs) {
       o = o || {}; const ctx = await browser.newContext({ viewport: o.viewport || { width: 360, height: 640 } }), page = await ctx.newPage(), errs = [];
       page.on('pageerror', (e) => errs.push('pageerror: ' + e.message)); page.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
       if (o.init) await page.addInitScript(o.init);
+      // BBH_CPU_THROTTLE=6 makes every page behave as on a machine six times slower: a deterministic stand-in for the load that makes timing-sensitive checks flaky
+      // (npm run test:heroes runs several browser suites at once). Used to reproduce flakes before fixing them; unset in normal runs.
+      if (+process.env.BBH_CPU_THROTTLE > 1) { try { const cdp = await ctx.newCDPSession(page); await cdp.send('Emulation.setCPUThrottlingRate', { rate: +process.env.BBH_CPU_THROTTLE }); } catch (e) { /* not Chromium */ } }
       return { page, errs, ctx };
     },
     async stop() { try { await browser.close(); } catch (e) { /* ignore */ } server.close(); },
