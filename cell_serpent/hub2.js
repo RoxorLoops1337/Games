@@ -13,6 +13,7 @@ import { createRetainUI } from './retain_ui.js';
 import { nextReward } from './sim.js';
 
 import { ico, iconURL } from './icons.js';
+import { ribIcon, ribHTML, dressIcon, setTint, wardTry } from './shop_b8.js';
 import { seeded, newSeed, armChest, wasHeld, keepDetailHTML } from './gear_fx.js';
 const STATICON = { atk: 'speaker', crt: 'note', cdn: 'clock', vit: 'heart', for: 'star', rev: 'mic' };
 // a six-axis radar of the core stats, drawn as inline svg
@@ -156,7 +157,7 @@ export function createHub2(c) {
       for (const f of FUND) {
         const got = save().fund[f.stage], ready = fundReady(save(), f), r = f.reward;
         const txt = r.sparkles ? `${r.sparkles} ${curImg('sparkles')}` : r.eggs ? `${icon('egg')} Egg` : `⚡ ${r.energy}`;
-        grid.appendChild(tile({ cls: 't-weapon one', ic: '🎀', name: 'Clear stage ' + f.stage, desc: '', btn: got ? 'GOT IT' : ready ? 'CLAIM ' + txt : txt, gold: ready, disabled: !ready, onclick: () => { if (claimFund(save(), f.stage)) { c.persist(); audio.play('levelup'); c.refreshCur(); openFund(); } } }));
+        grid.appendChild(tile({ cls: 't-weapon one', ic: ribIcon(40), name: 'Clear stage ' + f.stage, desc: '', btn: got ? 'GOT IT' : ready ? 'CLAIM ' + txt : txt, gold: ready, disabled: !ready, onclick: () => { if (claimFund(save(), f.stage)) { c.persist(); audio.play('levelup'); c.refreshCur(); openFund(); } } }));
       }
       body.appendChild(grid);
     });
@@ -197,7 +198,7 @@ export function createHub2(c) {
     META.forEach((d, i) => {
       const lvl = s.meta[d.id] || 0, maxed = lvl >= d.max, cost = metaCost(d, lvl);
       const card = document.createElement('div'); card.className = 'sc' + (maxed ? ' maxed' : ''); card.dataset.id = d.id;
-      card.innerHTML = `<div class="sct">${maxed ? 'Max Level' : d.max === 1 ? (lvl ? 'Owned' : 'Not owned') : 'Level ' + lvl}</div><div class="sci">${ico(STATICON[d.id], 40) || ''}</div><div class="spips">${d.max <= 15 && d.max > 1 ? Array.from({ length: d.max }, (_, q) => `<i class="${q < lvl ? 'on' : ''}"></i>`).join('') : ''}</div><div class="scn">${d.name}</div><div class="scd">${d.desc(Math.max(1, maxed ? lvl : lvl + 1))}</div><button class="btn small go" ${maxed || s.beats < cost ? 'disabled' : ''}>${maxed ? '✔' : cost + ' ' + curImg('beats')}</button>`;
+      card.innerHTML = `<div class="sct">${maxed ? 'Max Level' : d.max === 1 ? (lvl ? 'Owned' : 'Not owned') : 'Level ' + lvl + ' \u2192 ' + (lvl + 1)}</div><div class="sci">${ico(STATICON[d.id], 40) || ''}</div><div class="spips">${d.max <= 15 && d.max > 1 ? Array.from({ length: d.max }, (_, q) => `<i class="${q < lvl ? 'on' : ''}"></i>`).join('') : ''}</div><div class="scn">${d.name}</div><div class="scd">${d.desc(Math.max(1, maxed ? lvl : lvl + 1))}</div><button class="btn small go" ${maxed || s.beats < cost ? 'disabled' : ''}>${maxed ? '✔' : cost + ' ' + curImg('beats')}</button>`;
       card.querySelector('button').onclick = () => { if (buyMeta(save(), d.id)) { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); } };
       core.appendChild(card);
     });
@@ -244,8 +245,8 @@ export function createHub2(c) {
         const grid = document.createElement('div'); grid.className = 'kgrid'; box.appendChild(grid);
         for (const k of items) {
           const cost = lvl(k) >= keepMax(k) ? 0 : keepCost(k, lvl(k)), pct = cost ? Math.min(100, Math.round((frag(k) / cost) * 100)) : 100;
-          const b = document.createElement('button'); b.className = 'kcard t' + t + (lvl(k) ? '' : ' off') + (lvl(k) >= keepMax(k) ? ' max' : ''); b.style.setProperty('--tc', T.color);
-          b.innerHTML = `${lvl(k) ? `<i class="kstar${lvl(k) > 9 ? ' w' : ''}" style="background-image:url(${iconURL('star')})"><b>${lvl(k)}</b></i>` : ''}<div class="kic">${k.icon}</div><div class="kbar"><i style="width:${pct}%"></i><span>${frag(k)}/${cost || 'max'}</span></div><div class="kname">${k.name}</div>${keepCanUp(s, k.id) ? '<em class="kup">▲</em>' : ''}${lvl(k) && !seen.has(k.id) ? '<i class="knew">NEW</i>' : ''}`;
+          const b = document.createElement('button'); b.className = 'kcard t' + t + (lvl(k) ? '' : ' off') + (lvl(k) >= keepMax(k) ? ' max' : ''); b.style.setProperty('--tc', T.color); { const st = setTint(k); if (st) { b.classList.add('sett'); b.style.setProperty('--st', st); b.title = KEEP_SETS.find(q => q.id === k.set).name; } }
+          b.innerHTML = `${lvl(k) ? `<i class="kstar${lvl(k) > 9 ? ' w' : ''}" style="background-image:url(${iconURL('star')})"><b>${lvl(k)}</b></i>` : ''}<div class="kic">${k.icon}</div><div class="kbar"><i style="width:${pct}%"></i><span>${frag(k)}/${cost || 'max'}</span></div><div class="kname">${k.name}</div>${b.classList.contains('sett') ? '<i class="kset"></i>' : ''}${keepCanUp(s, k.id) ? '<em class="kup">▲</em>' : ''}${lvl(k) && !seen.has(k.id) ? '<i class="knew">NEW</i>' : ''}`;
           b.onclick = () => { audio.play('click'); openKeep(k); };
           grid.appendChild(b);
         }
@@ -338,20 +339,27 @@ export function createHub2(c) {
     const u = iconURL('hat_' + o.id); if (!u) return `<span class="wardhat">${o.hat}</span>`;
     return (o.id === 'sun' ? EYES : HEADS).map((h, i) => `<img class="what" src="${u}" alt="" style="left:${h.x}%;top:${h.y}%;width:${h.w}%;animation-delay:${i * 0.15}s">`).join('');
   }
-  const rib = n => `🎀 ${n}`;
+  const rib = n => ribHTML(n);
+  const xIcon = id => (id === 'egg' ? icon('egg') : id === 'sparkles' ? ico('sparkles', 44) : id === 'voice' ? ico('bolt', 44) : ico('chest', 44));
   function openWardrobe() {
     const s = save(), day = c.dayKey();
     openPanel('WARDROBE', body => {
       const top = document.createElement('div'); top.className = 'wardtop';
       const worn = OUTFITS.find(o => o.id === s.outfits.worn);
-      top.innerHTML = `<div class="wardhero2" style="--oc:${worn ? worn.color : '#ffd84d'}"><i class="wglow"></i><img class="wduo" src="assets/duo_idle.png" alt="">${worn ? hatsOn(worn) : ''}<i class="wped"></i></div><div class="wname">${worn ? worn.name : 'Everyday look'}</div><div class="sub">Ribbons ${rib(s.ribbons)}</div>`;
+      top.innerHTML = `<div class="wardhero2" style="--oc:${worn ? worn.color : '#ffd84d'}"><i class="wglow"></i><img class="wduo" src="assets/duo_idle.png" alt="">${worn ? hatsOn(worn) : ''}<i class="wped"></i></div><div class="wname">${worn ? worn.name : 'Everyday look'}</div><div class="wperk" hidden><span></span><button class="btn small gold" hidden></button></div><div class="sub">Ribbons ${rib(s.ribbons)}</div><div class="whint">Tap an outfit to try it on</div>`;
       body.appendChild(top);
       const grid = document.createElement('div'); grid.className = 'tiles';
+      const pw = top.querySelector('.wperk'), tstate = { id: '' };
+      const tctx = { grid, hero: top.querySelector('.wardhero2'), hatsOn, worn, label: top.querySelector('.wname'), perk: pw, act: pw.querySelector('button'),
+        perkOf: o => `${WEAPONS.find(w => w.id === o.weapon).name} +${Math.round((o.mul - 1) * 100)}%` };
       for (const o of OUTFITS) {
         const own = s.outfits.owned[o.id], av = outfitAvailable(o, day), wn = s.outfits.worn === o.id, wname = WEAPONS.find(w => w.id === o.weapon).name;
         const wt = tile({ cls: 't-gold xch ward' + (wn ? ' on-loadout worn' : '') + (!own && !av ? ' locked' : ''), ic: iconURL('hat_' + o.id) ? ico('hat_' + o.id, 42) : `<span class="kemo">${o.hat}</span>`, name: o.name, chip: o.event ? EVENT_THEMES_NAME(o.event) : '', desc: `${wname} +${Math.round((o.mul - 1) * 100)}%`, btn: own ? (wn ? 'TAKE OFF' : 'WEAR') : av ? rib(o.price) : 'Event only', gold: !own && av, disabled: !own && (!av || s.ribbons < o.price),
           onclick: () => { const sv = save(); if (own) wearOutfit(sv, wn ? '' : o.id); else if (!buyOutfit(sv, o.id, day)) return; c.persist(); audio.play('buy'); openWardrobe(); } });
         if (wn || own) { const bd = document.createElement('i'); bd.className = 'wbadge' + (wn ? ' on' : ''); bd.textContent = wn ? 'WORN' : 'OWNED'; wt.appendChild(bd); }
+        wt.tabIndex = 0; wt.setAttribute('aria-label', 'Try on ' + o.name);
+        const tryIt = ev => { if (ev && ev.target.closest && ev.target.closest('button')) return; audio.play('click'); wardTry(tctx, o, wt, tstate); };
+        wt.addEventListener('click', tryIt); wt.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target === wt) tryIt(); });
         grid.appendChild(wt);
       }
       body.appendChild(grid);
@@ -369,7 +377,7 @@ export function createHub2(c) {
       const row = track.querySelector('.evms');
       EVENT_MILES.forEach((m, i) => {
         const got = s.event.claimed[i], ready = !got && s.event.earned >= m.at, r = m.reward;
-        const ric = r.eggs ? icon('egg') : r.sparkles ? curImg('sparkles') : r.energy ? '\u26a1' : '\ud83d\udc57';
+        const ric = r.eggs ? icon('egg') : r.sparkles ? curImg('sparkles') : r.energy ? ico('bolt', 24) : dressIcon(24);
         const qty = r.eggs ? '' : r.sparkles ? r.sparkles : r.energy ? r.energy : '';
         const n = document.createElement('button'); n.className = 'evm' + (got ? ' got' : ready ? ' ready' : i === nxt ? ' next' : '');
         n.innerHTML = `<span class="evi">${ric}${qty ? `<b>${qty}</b>` : ''}${got ? '<em>\u2714</em>' : ''}</span><span class="evlab">${m.at}</span>`;
@@ -379,7 +387,7 @@ export function createHub2(c) {
       });
       body.appendChild(track);
       const grid = document.createElement('div'); grid.className = 'tiles';
-      for (const it of EXCHANGE_ITEMS) grid.appendChild(tile({ cls: 't-gold xch', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('buy'); c.refreshCur(); openEvent(); } } }));
+      for (const it of EXCHANGE_ITEMS) grid.appendChild(tile({ cls: 't-gold xch', ic: xIcon(it.id), name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('buy'); c.refreshCur(); openEvent(); } } }));
       body.appendChild(grid);
     });
   }
@@ -424,9 +432,9 @@ export function createHub2(c) {
   function shopExtras(list) {
     const s = save(), day = c.dayKey(), wk = Math.floor(day / 7), bought = s.shop.limit.week === wk ? s.shop.limit.bought : {};
     sec(list, 'Limit Shop');
-    for (const it of LIMIT_ITEMS) { const left = it.limit - (bought[it.id] || 0); list.appendChild(tile({ cls: 't-weapon', ic: it.id === 'egg' ? icon('egg') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, chip: left + ' left this week', desc: '', btn: it.price + ' ' + curImg('beats'), disabled: left < 1 || s.beats < it.price, onclick: () => { if (buyLimit(save(), it.id, day)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } })); }
+    for (const it of LIMIT_ITEMS) { const left = it.limit - (bought[it.id] || 0); list.appendChild(tile({ cls: 't-weapon', ic: xIcon(it.id), name: it.name, chip: left + ' left this week', desc: '', btn: it.price + ' ' + curImg('beats'), disabled: left < 1 || s.beats < it.price, onclick: () => { if (buyLimit(save(), it.id, day)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } })); }
     sec(list, 'Exchange Shop');
-    for (const it of EXCHANGE_ITEMS) list.appendChild(tile({ cls: 't-gold xch', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } }));
+    for (const it of EXCHANGE_ITEMS) list.appendChild(tile({ cls: 't-gold xch', ic: xIcon(it.id), name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('upgrade'); c.refreshCur(); c.renderHub(); } } }));
     sec(list, 'Pass');
     list.appendChild(tile({ cls: 't-gold one', ic: '🎫', name: 'Fan Club Pass', desc: '30 days of daily gifts', btn: 'LOOK', gold: true, onclick: () => { audio.play('click'); openPass(); } }));
   }
