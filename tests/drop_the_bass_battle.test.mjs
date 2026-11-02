@@ -98,9 +98,11 @@ for (const w of WORLDS) {
   const run = new Run({ world: 'garage', mode: 'tutorial', seed: 7, wavesTotal: 3, hypeNeed: 14, firstPrep: 999, baseFx: [['startCoins', 'add', 110]], forceDrops: ['kick', 'kick', 'snare', 'kick', 'snare', 'hat', 'kick', 'snare', 'sub', 'kick', 'snare', 'hat'], loadout: ['kick', 'snare', 'hat', 'sub'] });
   run.heroCd = { roxor: 99, jasmin: 99 };
   const b = new Battle(app, { run, tutorial: true }); const ctx = mockCtx();
-  let guard = 0;
+  let guard = 0; const stepsDone = {};
   while (!b.tut.done && guard++ < 60 * 400) {
     const s = TUTORIAL[b.tut.i]; if (!s) break;
+    if (s.id === 'preview' && b.tut.flags.pvOpened) stepsDone.preview = 'done';
+    if (s.id === 'reroll' && b.tut.flags.rerolled) stepsDone.reroll = 'done';
     b.update(1 / 60); if (guard % 3 === 0) b.draw(ctx, view);
     if (run.choice) run.pick(0);
     if (b.t > 0 && Math.floor(b.t * 60) % 30 === 0) {
@@ -111,11 +113,15 @@ for (const w of WORLDS) {
         case 'wavestarted': b.pointerDown(R.call.x + 5, R.call.y + 5); break;
         case 'heroR': b.pointerDown(R.heroR.x, R.heroR.y); break;
         case 'heroJ': b.pointerDown(R.heroJ.x, R.heroJ.y); break;
+        case 'previewdone': if (b.pv.open) b.pointerDown(270, 500); else b.pointerDown(HIT.wave.x + 10, HIT.wave.y + 10); break;
+        case 'rerolled': b.pointerDown(R.reroll.x + 5, R.reroll.y + 5); break;
         default: if (run.coins > run.deployCost()) run.deploy(); break;
       }
     }
   }
   ok(b.tut.done, 'tutorial completes (step ' + b.tut.i + ')');
+  ok(TUTORIAL.some((q) => q.id === 'preview') && TUTORIAL.some((q) => q.id === 'reroll'), 'tutorial teaches the preview and the re-roll');
+  ok(stepsDone.preview === 'done' && stepsDone.reroll === 'done', 'preview and re-roll steps were completed by the player, not skipped: ' + JSON.stringify(stepsDone));
   for (let i = 0; i < 60 * 300 && run.phase !== 'won' && run.phase !== 'lost'; i++) { b.update(1 / 60); if (run.choice) run.pick(0); if (i % 30 === 0) run.autoPlayStep({ early: true }); }
   ok(run.phase === 'won' && run.result.mode === 'tutorial', 'the practice run is winnable');
 }

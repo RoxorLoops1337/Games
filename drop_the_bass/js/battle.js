@@ -19,6 +19,7 @@ import * as DFX from './doodle_fx.js';
 import * as DD from './doodle_depth.js';
 import { HINTS_EXTRA } from './data_hints_extra.js';
 import { BT } from './battle_text.js';
+import { PadControl } from './gamepad.js';
 
 // coach marks for the depth systems: ids that data_story.js HINTS does not define yet are filled in from data_hints_extra.js
 for (const k of Object.keys(HINTS_EXTRA || {})) if (!HINTS[k]) HINTS[k] = HINTS_EXTRA[k];
@@ -117,6 +118,8 @@ export class Battle {
     this.popover = null;                                            // { kind: 'pool' | 'mods', type?, t } card over the board
     this.branchPress = null; this.lastHintT = -99;
     this.fx.noShake = !app.profile.settings.shake || !!app.profile.settings.reduce;
+    this.pad = new PadControl({ getPads: o.getGamepads });          // gamepad (zero cost until a pad shows up)
+    this.sideHit = [];                                              // tappable pool rows of the wide screen right panel (logical units, outside the column)
     this.clock = o.clock || null;                                   // frame clock in ms (tests pass a fake one), default performance.now
     this.perf = { last: null, acc: 0, n: 0 }; this.autoLow = false;
     this.vibT = -9; this.vibPri = 0; this.msFlash = 0;              // haptics rate limit, endless milestone chip flash
@@ -135,6 +138,7 @@ export class Battle {
     this.t += dt;
     const run = this.run;
     this.perfWatch();
+    if (this.pad.live()) this.pad.poll(dt, this);
     if (this.msFlash > 0) this.msFlash = Math.max(0, this.msFlash - dt * 0.7);
     this.fx.update(dt);
     if (this.hurtFlash > 0) this.hurtFlash -= dt * 2.2;
@@ -639,6 +643,8 @@ export class Battle {
       if (run.startWave(true) && wasPrep) this.sfx('countdown');
     }
   }
+  cycleSpeed(d) { this.speed = clamp(this.speed + d, 1, 3); this.prof.settings.speed = this.speed; this.sfx('ui_click'); }
+  tutStep() { return this.tut && !this.tut.done ? TUTORIAL[this.tut.i] || null : null; }
   toggleSpeed() { this.speed = this.speed >= 3 ? 1 : this.speed + 1; this.prof.settings.speed = this.speed; this.sfx('ui_click'); }
   setPause(v) { this.paused = v; this.sfx(v ? 'ui_open' : 'ui_back'); this.syncHeartbeat(); if (!v) this.pv.open = false; }
   togglePreview() {
@@ -677,10 +683,13 @@ export class Battle {
     if (name === 'deploy') return s.spot === 'deploy';
     if (name === 'turrets') return s.spot === 'turrets';
     if (name === 'wave') return s.spot === 'wave';
+    if (name === 'wavepill') return s.spot === 'wavepill';
+    if (name === 'reroll') return s.spot === 'reroll';
     return false;
   }
   pointerDown(x, y) {
     this.app.audio.resume();
+    if (this.pad) this.pad.hide();
     if (this.tut && this.tutPointer(x, y)) return;
     this.setPress(x, y);
     // the upgrade-path cards of the selected turret: a plain tap, allowed while a drag is not in flight (and while the pause flag is set)
@@ -696,6 +705,7 @@ export class Battle {
       this.closePopover(); return;
     }
     if (this.pv.open) { this.togglePreview(); return; }   // any tap closes the wave preview card
+    if ((x < 0 || x > W) && (!this.tut || this.tut.done)) { const sh = this.sideHit.find((q) => inR(q, x, y)); if (sh) { this.openPoolCard(sh.type); return; } }
     if (inR(HIT.pause, x, y)) { this.app.hooks.onPause(this); return; }
     if (!this.tut || this.tut.done) {
       const pi = DD.poolIndexAt(this, x, y);
@@ -704,7 +714,7 @@ export class Battle {
     }
     if (inR(HIT.speed, x, y)) { this.toggleSpeed(); return; }
     if (inR(HIT.call, x, y)) { if (this.tutAllows('wave')) this.doCall(); return; }
-    if (inR(HIT.wave, x, y)) { if (!this.tut || this.tut.done) this.togglePreview(); return; }
+    if (inR(HIT.wave, x, y)) { if (this.tutAllows('wavepill')) this.togglePreview(); return; }
     if (inR(HIT.deploy, x, y)) { if (this.tutAllows('deploy')) this.doDeploy(); return; }
     if (inR(HIT.merge, x, y)) { if (this.tutAllows('merge')) this.doMergeAll(); return; }
     if (inR(HIT.reroll, x, y)) { if (this.tutAllows('reroll')) this.doReroll('coins'); return; }
@@ -779,6 +789,7 @@ export class Battle {
   tutEvent(e) {
     const f = this.tut.flags;
     if (e.k === 'hero') f[e.who === 'roxor' ? 'heroR' : 'heroJ'] = true;
+    else if (e.k === 'rerollDrop' || e.k === 'reroll') f.rerolled = true;
   }
   tutCond(id) {
     const run = this.run, f = this.tut.flags;
@@ -792,6 +803,8 @@ export class Battle {
       case 'remixopen': return run.remixCount >= 1;
       case 'heroR': return !!f.heroR;
       case 'heroJ': return !!f.heroJ;
+      case 'previewdone': return !!f.pvOpened && !this.pv.open;
+      case 'rerolled': return !!f.rerolled;
       default: return false;
     }
   }
@@ -804,12 +817,17 @@ export class Battle {
     // prime the hero cooldowns when the hero steps arrive
     if (s.id === 'hero') this.run.heroCd.roxor = 0;
     if (s.id === 'hero2') this.run.heroCd.jasmin = 0;
+    if (s.id === 'reroll' && this.run.rerolls < 1 && !tut.flags.rerolled) this.run.rerolls = 1;   // one coin re-roll is free in the tutorial
+    if (s.id === 'preview' && this.pv.open && !tut.flags.pvOpened) { tut.flags.pvOpened = true; if (s.say2) this.tutBubble = { text: s.say2, t: 0 }; }
+    // skip safety: a step that cannot be done (no wave left to preview, a re-roll that is locked) or is simply ignored moves on by itself
+    const stuck = (s.skip && tut.t > s.skip) || (s.id === 'preview' && !this.pv.next && !this.pv.open) || this.run.phase === 'won' || this.run.phase === 'lost';
+    if (stuck) { if (this.pv.open) this.togglePreview(); this.tutNext(); return; }
     if (this.tutCond(s.wait) && tut.t > 0.6) this.tutNext();
     if (s.id === 'hype' && !this.run.choice && this.run.hype < this.run.hypeNeed * 0.9 && this.run.level === 1 && tut.t > 1) this.run.hype = this.run.hypeNeed;
   }
   tutNext() {
     const tut = this.tut;
-    tut.i++; tut.t = 0; tut.flags.tap = false;
+    tut.i++; tut.t = 0; tut.flags.tap = false; tut.flags.pvOpened = false; tut.flags.rerolled = false;
     const s = TUTORIAL[tut.i];
     if (!s) { tut.done = true; this.tutBubble = null; return; }
     this.tutBubble = { text: s.say, t: 0 };
@@ -830,6 +848,8 @@ export class Battle {
     switch (s.spot) {
       case 'deploy': return { x: R.deploy.x - 8, y: R.deploy.y - 8, w: R.deploy.w + 16, h: R.deploy.h + 16 };
       case 'coins': return { x: R.coins.x - 6, y: R.coins.y - 6, w: R.coins.w + 12, h: R.coins.h + 12 };
+      case 'wavepill': return { x: R.wave.x - 6, y: R.wave.y - 6, w: R.wave.w + 12, h: R.wave.h + 12 };
+      case 'reroll': return { x: R.reroll.x - 6, y: R.reroll.y - 6, w: R.reroll.w + 12, h: R.reroll.h + 12 };
       case 'wave': return { x: R.call.x - 6, y: R.call.y - 6, w: R.call.w + 12, h: R.call.h + 12 };
       case 'heroR': return { x: R.heroR.x - 48, y: R.heroR.y - 48, w: 96, h: 96, round: true };
       case 'heroJ': return { x: R.heroJ.x - 48, y: R.heroJ.y - 48, w: 96, h: 96, round: true };
@@ -860,6 +880,7 @@ export class Battle {
     // full-canvas backdrop in device space
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
     AW.drawBackdrop(ctx, world.id, view.cw, view.ch, t, { beat: beat * 0.6, staticAmt: clamp(1 - run.stageFrac, 0, 1) * 0.85, skin: this.skin, lite: this.lite, avoid: { x: view.ox, y: view.oy + 8 * view.s, w: W * view.s, h: (H - 8) * view.s } });   // the world sign is skipped when the HUD and board column would cover it
+    if (isDoodle() && (!this.tut || this.tut.done)) DB.drawSide(this, ctx, view); else this.sideHit.length = 0;   // wide screens: run stats and the drop pool in the margins
     // the board layer: shaken, and punched in a touch on big hits
     const [sx, sy] = fx.shakeOffset();
     const z = reduce ? 0 : fx.punch * 0.022, s = view.s * (1 + z);
@@ -875,6 +896,7 @@ export class Battle {
     ctx.setTransform(view.dpr * view.s, 0, 0, view.dpr * view.s, view.dpr * view.ox, view.dpr * view.oy);
     this.drawHud(ctx, t, beat);
     this.drawBanner(ctx);
+    if (this.pad.active) this.pad.draw(this, ctx);
     if (this.pv.open && isDoodle()) DB.drawPreview(this, ctx);
     if (this.popover && isDoodle()) { DD.drawPoolCard(this, ctx); DD.drawModCard(this, ctx); }
     if (this.tut && !this.tut.done) this.drawTutorial(ctx);

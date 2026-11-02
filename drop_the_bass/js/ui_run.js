@@ -61,7 +61,7 @@ export function showPause(app, battle) {
   battle.setPause(true);
   const run = battle.run;
   const body = h('div');
-  const m = modal(body, { sticky: true, onClose: () => { battle.setPause(false); } });
+  const m = modal(body, { sticky: true, escClose: true, onClose: () => { battle.setPause(false); } });
   const wm = run.wmId ? WAVE_MODS[run.wmId] : null;
   body.append(h('h2', null, t('run.pause.title', 'Paused')),
     h('div', { class: 'statgrid' }, h('div', null, t('run.stat.stage', 'Stage'), h('b', null, run.world.name)), h('div', null, t('run.stat.wave', 'Wave'), h('b', null, run.wave + (run.endless ? '' : '/' + run.wavesTotal))),

@@ -1,5 +1,5 @@
 {
- "version": "d5737159dc7b",
+ "version": "69c0da8d3e81",
  "files": [
   "fonts/PatrickHand-latin-ext.woff2",
   "fonts/PatrickHand-latin.woff2",
@@ -29,6 +29,7 @@
   "js/data_meta.js",
   "js/data_run.js",
   "js/data_story.js",
+  "js/diag.js",
   "js/doodle_battle.js",
   "js/doodle_depth.js",
   "js/doodle_enemies.js",
@@ -41,6 +42,7 @@
   "js/doodle_turrets.js",
   "js/doodle_ui.js",
   "js/fx.js",
+  "js/gamepad.js",
   "js/hud.js",
   "js/hudx.js",
   "js/i18n.js",
