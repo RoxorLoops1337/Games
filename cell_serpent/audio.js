@@ -174,6 +174,8 @@ export function createAudio() {
       if (k >= 4) for (const d of [0, 2, 4]) tone(pentHz(9 + d, 72), 0.34, 'sine', 0.05, 0, 0.36); },
     // groove fell apart: a short falling two-note sigh (only after a good streak), so it is audible that the bonus is gone
     groovelost: () => { if (!gate('groovelost', 400)) return; tone(pentHz(6, 72), 0.12, 'triangle', 0.05, -40); tone(pentHz(3, 72), 0.2, 'sine', 0.05, -60, 0.08); },
+    // a long kill streak (5+) stops: a small sad trombone, three sagging notes and a soft deflating hiss
+    sigh: () => { if (!gate('sigh', 900)) return; [[330, 0], [311, 0.2], [294, 0.4]].forEach(([f, d], i) => tone(f, i < 2 ? 0.2 : 0.55, 'sawtooth', 0.035, i < 2 ? -25 : -180, d)); tone(147, 0.9, 'triangle', 0.03, -120, 0.4); noise(0.5, 0.025, 1800, 300, 'lowpass', 0.45); },
     // perfect clear (three stars): a bright fanfare that rides on top of the normal clear jingle
     perfect: () => {
       [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.16, 'triangle', 0.07, 0, 0.5 + i * 0.07));

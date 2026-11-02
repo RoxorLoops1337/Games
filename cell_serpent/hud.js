@@ -493,8 +493,9 @@ export function createHud(env) {
     ctx.restore();
     groove(g); beatStreak(g); skills(g);
     const p = g.p, b = T.ins.b;
-    if (p.shield > 0) { glass(W - 180, H - 130 - b, 160, 34, 17, 'rgba(127,232,255,.7)'); text('SHIELD ' + p.shield.toFixed(0), W - 100, H - 112 - b, fz(18), '#7fe8ff'); }
-    if (p.rage > 0) { glass(W - 180, H - 170 - b, 160, 34, 17, 'rgba(255,210,74,.7)'); text('RAGE ' + p.rage.toFixed(0), W - 100, H - 152 - b, fz(18), '#ffd24a'); }
+    S.chipB = b;   // hitjuice: where the power-up icons fly to
+    if (p.shield > 0) { const k = landBounce(S, 'shield'); ctx.save(); ctx.translate(W - 100, H - 113 - b); ctx.scale(k, k); ctx.translate(-(W - 100), -(H - 113 - b)); glass(W - 180, H - 130 - b, 160, 34, 17, 'rgba(127,232,255,.7)'); text('SHIELD ' + p.shield.toFixed(0), W - 100, H - 112 - b, fz(18), '#7fe8ff'); ctx.restore(); }
+    if (p.rage > 0) { const k = landBounce(S, 'rage'); ctx.save(); ctx.translate(W - 100, H - 153 - b); ctx.scale(k, k); ctx.translate(-(W - 100), -(H - 153 - b)); glass(W - 180, H - 170 - b, 160, 34, 17, 'rgba(255,210,74,.7)'); text('RAGE ' + p.rage.toFixed(0), W - 100, H - 152 - b, fz(18), '#ffd24a'); ctx.restore(); }
   }
   return { press: id => { T.pressAt[id] = S.t; }, draw, encore, combo, dy, top: () => T.ins.t };
 }

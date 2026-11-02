@@ -2,11 +2,13 @@
 // capsule muzzle flash and note trails. Own small pools with hard caps. Render-only: never touches the sim.
 import { pointAt } from './sim.js';
 const TAU = Math.PI * 2;
-export const UP_X = 42, UP_Y = 40;   // the upgrade counter in the HUD (hud.js)
+export const UP_X = 42, UP_Y = 40, CHIP_X = 620;   // CHIP_X: the RAGE and SHIELD chips (hud.js) sit at the right edge
+const H = 1280;   // the upgrade counter in the HUD (hud.js)
 
-export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, blit, sprite }) {
-  const powers = [], orbs = [], smoke = [], trail = [], flashes = [], marks = [];
+export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, blit, sprite, sound }) {
+  const powers = [], chipfly = [], orbs = [], smoke = [], trail = [], flashes = [], marks = [];
   const lastKill = { x: 0, y: 0, t: -9, n: 0 };   // for the chain links
+  const lastHit = { x: 0, y: 0, t: -9, src: '' };   // the latest hit, so a kill can pop in the style of the weapon that landed it
   const lastSrc = {};   // per weapon: time of its last impact mark, so a busy fight does not drown in them
   const CHAIN_COL = ['#ffffff', '#9dff6d', '#6fe3ff', '#ffd84d', '#ff9ad6', '#ff6a3d'];
   const POW_COL = { heal: '#ff6a8a', shield: '#39d0ff', rage: '#ffb020' };
@@ -14,19 +16,20 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
   const TINT = { swab: '#ffd0ea', daggers: '#e8f4ff', tower: '#ffc98a', stick: '#fff08a', needles: '#a8f0ff', satellite: '#b6c8ff', maw: '#d9b2ff', puppy: '#ffe0b0', encore: '#fff2a0' };
   const tint = src => TINT[src] || null;
   function mark(m) { if (marks.length < cap(28)) marks.push(m); }
-  S.land = S.land || { coin: -9, up: -9 };
+  S.land = S.land || { coin: -9, up: -9 }; S.land.rage = S.land.rage || -9; S.land.shield = S.land.shield || -9;
   const calm = () => OPT.reduceMotion;
   const cap = n => (OPT.lowQuality ? n >> 1 : n);
 
   function event(e, g) {
     if (calm()) return;
     switch (e.t) {
-      case 'hit': impact(e); break;
+      case 'hit': lastHit.x = e.x; lastHit.y = e.y; lastHit.t = S.t; lastHit.src = e.src || ''; impact(e); break;
       case 'kill': {
         // a white flash disc and a starburst of rays where the cell was; heads get a bigger one
         const R = (e.r || 26) * (e.head ? 2.6 : 1.7);
         mark({ k: 'flash', x: e.x, y: e.y, r: R, t: 0, dur: e.head ? 0.3 : 0.2 });
         mark({ k: 'rays', x: e.x, y: e.y, r: R * 1.5, n: e.head ? 10 : 6, rot: Math.random() * TAU, t: 0, dur: e.head ? 0.34 : 0.24 });
+        if (S.t - lastHit.t < 0.12 && Math.abs(lastHit.x - e.x) < 90 && Math.abs(lastHit.y - e.y) < 90) killPop(lastHit.src, e.x, e.y, R);
         // kill chain: a glowing link from the previous kill and a note that climbs with the pitch ladder
         { const n = S.t - lastKill.t < 0.9 ? lastKill.n + 1 : 1, col = CHAIN_COL[Math.min(5, n >> 1)];
           if (n >= 2) { mark({ k: 'link', x: lastKill.x, y: lastKill.y, x1: e.x, y1: e.y, t: 0, dur: 0.3, col, w: 3 + Math.min(n, 12) * 0.4 });
@@ -68,6 +71,19 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
     }
   }
 
+  // kill pop variety: the weapon that landed the last hit also decides how the cell bursts
+  function killPop(src, x, y, R) {
+    switch (src) {
+      case 'swab': for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + Math.random(); mark({ k: 'puff', x, y, r: 13, t: 0, dur: 0.5, col: i & 1 ? '#fff' : '#ffc4e4', vx: Math.cos(a) * 120, vy: Math.sin(a) * 120 - 20 }); } break;
+      case 'daggers': { const a = -0.8 + (Math.random() - 0.5) * 0.4; mark({ k: 'slash', x, y, r: R * 1.3, rot: a, t: 0, dur: 0.22, col: '#eaf6ff' }); mark({ k: 'slash', x, y, r: R * 1.3, rot: a + 1.6, t: 0, dur: 0.22, col: '#eaf6ff' }); break; }
+      case 'tower': mark({ k: 'ring', x, y, r: R * 1.5, t: 0, dur: 0.34, col: '#ffb15a' }); mark({ k: 'ring', x, y, r: R * 0.95, t: 0, dur: 0.26, col: '#fff2c8' }); break;
+      case 'stick': for (let i = 0; i < 3; i++) mark({ k: 'zap', x, y, r: R * 0.9, rot: i * 1.05 + Math.random() * 0.5, t: 0, dur: 0.2, col: i & 1 ? '#fff' : '#fff08a', seed: Math.random() * 9 }); break;
+      case 'needles': for (let i = 0; i < 8; i++) mark({ k: 'ping', x, y, r: 30, rot: i / 8 * TAU, t: 0, dur: 0.24, col: '#a8f0ff' }); break;
+      case 'satellite': mark({ k: 'ring', x, y, r: R * 1.4, t: 0, dur: 0.3, col: '#9db4ff' }); mark({ k: 'ring', x, y, r: R * 0.8, t: 0, dur: 0.38, col: '#fff' }); break;
+      case 'maw': mark({ k: 'ring', x, y, r: R * 1.7, t: 0, dur: 0.38, col: '#c79bff', inv: 1 }); mark({ k: 'ring', x, y, r: R * 1.1, t: 0, dur: 0.3, col: '#e8d4ff', inv: 1 }); break;
+    }
+  }
+
   // a small mark per weapon where it lands: cotton puffs, slash lines, zaps, pings, rings
   function impact(e) {
     const src = e.src || 'capsule';
@@ -103,7 +119,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
           ctx.beginPath(); for (let j = 0; j < m.n * 2; j++) { const rr = j & 1 ? r0 : r1, aa = (j / (m.n * 2)) * TAU; ctx.lineTo(Math.cos(aa) * rr, Math.sin(aa) * rr); } ctx.closePath(); ctx.fill(); break; }
         case 'puff': ctx.translate((m.vx || 0) * m.t, (m.vy || 0) * m.t); ctx.fillStyle = m.col; ctx.beginPath(); ctx.arc(0, 0, m.r * (0.8 + k * 0.9), 0, TAU); ctx.fill(); break;
         case 'slash': { ctx.rotate(m.rot); const L = m.r * (0.6 + k * 0.6); ctx.strokeStyle = m.col; ctx.lineCap = 'round'; ctx.lineWidth = 4 * a + 1; ctx.beginPath(); ctx.moveTo(-L, 0); ctx.lineTo(L, 0); ctx.stroke(); ctx.lineWidth = 1.5; ctx.globalAlpha = a * 0.7; ctx.beginPath(); ctx.moveTo(-L * 0.6, 7); ctx.lineTo(L * 0.7, 7); ctx.stroke(); break; }
-        case 'ring': ctx.strokeStyle = m.col; ctx.lineWidth = 4 * a + 1; ctx.beginPath(); ctx.arc(0, 0, m.r * (0.3 + k * 0.7), 0, TAU); ctx.stroke(); break;
+        case 'ring': ctx.strokeStyle = m.col; ctx.lineWidth = 4 * a + 1; ctx.beginPath(); ctx.arc(0, 0, m.r * (m.inv ? 1 - k * 0.75 : 0.3 + k * 0.7), 0, TAU); ctx.stroke(); break;
         case 'zap': { ctx.rotate(m.rot); ctx.strokeStyle = m.col; ctx.lineWidth = 2.6; ctx.lineJoin = 'round'; ctx.beginPath(); const n = 5; for (let j = 0; j <= n; j++) { const xx = -m.r + (j / n) * m.r * 2, yy = j === 0 || j === n ? 0 : Math.sin(m.seed * 3 + j * 2.1 + Math.floor(m.t * 40)) * 9; j ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); break; }
         case 'sigh': { // a broken chain: two links part and sink, a grey "x7" droops under them
           ctx.translate(-m.x, -m.y); ctx.lineCap = 'round'; ctx.strokeStyle = '#10131c'; const d = 10 + k * 30, fall = k * k * 56, tw = k * 0.5;
@@ -237,8 +253,11 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
   // the streak ends: a run of 5+ kills that stops for a beat leaves a sad broken chain where the last cell fell
   let sighFor = -1;
   function sighCheck() {
-    const ch = S.chain; if (!ch || calm() || ch.n < 5 || ch.t === sighFor || S.t - ch.t < 0.95 || S.t - ch.t > 2) return;
-    sighFor = ch.t; mark({ k: 'sigh', x: lastKill.x, y: lastKill.y, n: ch.n, t: 0, dur: 0.95 });
+    const ch = S.chain; if (!ch || ch.n < 5 || ch.t === sighFor || S.t - ch.t < 0.95 || S.t - ch.t > 2) return;
+    sighFor = ch.t; if (sound) sound('sigh');
+    if (calm()) return;
+    mark({ k: 'sigh', x: lastKill.x, y: lastKill.y, n: ch.n, t: 0, dur: 0.95 });
+    S.slump = { t: S.t, n: ch.n };   // the pets droop and a small sad trombone answers
   }
 
   function draw(dt, g) {
@@ -271,6 +290,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         if (o.kind === 'heal') shaped(tx, ty, 6, 'h', ['#ff6a8a', '#ffc4d2', '#fff'], 230, 0.8, 9, -120);
         else if (o.kind === 'rage') { burst(tx, ty, 14, ['#ffb020', '#ff6a3d', '#fff2a0'], 320, 0.5, 5); S.flash = Math.max(S.flash, 0.12); S.flashCol = '#ffb020'; }
         else burst(tx, ty, 12, ['#39d0ff', '#bff6ff', '#fff'], 260, 0.5, 4);
+        if ((o.kind === 'rage' || o.kind === 'shield') && chipfly.length < 3) chipfly.push({ x0: tx, y0: ty, kind: o.kind, t: 0, dur: 0.55, lastTrail: 0 });   // the power-up's icon then flies on to its timer chip
         continue;
       }
       const x = o.x0 + (tx - o.x0) * e, y = o.y0 + (ty - o.y0) * e - Math.sin(k * Math.PI) * 70;
@@ -278,6 +298,16 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
       if (o.lastTrail > 0.025 && trail.length < cap(56)) { o.lastTrail = 0; trail.push({ x: x + (Math.random() - 0.5) * 8, y: y + (Math.random() - 0.5) * 8, vx: 0, vy: 0, life: 0.32, max: 0.32, s: 8, n: false, col }); }
       glow(x, y, 54 * (1 - k * 0.3), col, 0.8); ctx.globalAlpha = 1;
       blit(sprite(o.kind), x, y, 92 * (1 + 0.35 * Math.sin(k * Math.PI)) * (1 - k * 0.55), k * 6.28 * 0.5);
+    }
+    for (let i = chipfly.length - 1; i >= 0; i--) {
+      const o = chipfly[i]; o.t += dt; const k = Math.min(1, o.t / o.dur), e = k * k * (3 - 2 * k), col = POW_COL[o.kind];
+      const tx = CHIP_X, ty = H - (o.kind === 'rage' ? 153 : 113) - (S.chipB || 0);
+      if (k >= 1) { chipfly.splice(i, 1); S.land[o.kind] = S.t; ring(tx, ty, 70, col, 0.4); burst(tx, ty, 10, [col, '#fff2a0', '#fff'], 200, 0.4, 4); continue; }
+      const x = o.x0 + (tx - o.x0) * e + Math.sin(k * Math.PI) * -50, y = o.y0 + (ty - o.y0) * e - Math.sin(k * Math.PI) * 60;
+      o.lastTrail += dt;
+      if (o.lastTrail > 0.03 && trail.length < cap(56)) { o.lastTrail = 0; trail.push({ x, y, vx: 0, vy: 0, life: 0.3, max: 0.3, s: 7, n: false, col }); }
+      glow(x, y, 40, col, 0.8); ctx.globalAlpha = 1;
+      if (sprite) blit(sprite(o.kind), x, y, 64 * (1 - k * 0.45), k * 6.28);
     }
     for (let i = orbs.length - 1; i >= 0; i--) {
       const o = orbs[i]; o.t += dt; const k = Math.min(1, o.t / o.dur), e = k * k * (3 - 2 * k), m = 1 - e;
@@ -291,7 +321,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
     ctx.globalAlpha = 1;
   }
 
-  return { event, bullets, draw, tint, under, float, coinSpark, coinLand, pools: { powers, orbs, smoke, trail, flashes, marks } };
+  return { event, bullets, draw, tint, under, float, coinSpark, coinLand, pools: { chipfly, powers, orbs, smoke, trail, flashes, marks } };
 }
 
 // 1 at rest; right after a landing it pops and settles over 0.38s: the HUD takes the max with its own bounce
