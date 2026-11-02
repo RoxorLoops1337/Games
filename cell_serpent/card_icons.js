@@ -24,6 +24,12 @@ const ART = {
   brk: `<path d="M0 -14 V14 M-12 -7 L12 7 M-12 7 L12 -7" stroke="#bfe9ff" stroke-width="3" stroke-linecap="round"/><circle cx="0" cy="0" r="4" fill="#fff" stroke="#3a7fa8" stroke-width="1.6"/><path d="M-3 -16 L2 -6 L-3 0 L3 8 L-1 16" fill="none" stroke="#2a4a66" stroke-width="2" stroke-linejoin="round"/>`,
   // Heart Mender: a heart with a plaster across it
   hbk: `<path d="M0 13 C-18 1 -13 -13 -5 -12 C-2 -11.5 0 -8 0 -8 C0 -8 2 -11.5 5 -12 C13 -13 18 1 0 13 Z" fill="#ff8fb8" stroke="#7a1f45" stroke-width="1.8" stroke-linejoin="round"/><rect x="-11" y="-3" width="22" height="7" rx="3" fill="#ffe9c9" stroke="#7a4b00" stroke-width="1.4" transform="rotate(-35)"/>`,
+  // Oil Can: a little oil can with a drop (rust creaks gentler)
+  oil: `<path d="M-12 12 V0 Q-12 -4 -8 -4 H6 Q10 -4 10 0 V12 Z" fill="#e0a060" stroke="#6a3a10" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 -1 L17 -9 H20" fill="none" stroke="#6a3a10" stroke-width="2.4" stroke-linecap="round"/><path d="M-6 -4 V-9 H2 V-4" fill="none" stroke="#6a3a10" stroke-width="2.2"/><path d="M19 -4 q3 5 0 7 q-3 -2 0 -7 Z" fill="#ffd04a" stroke="#7a4b00" stroke-width="1.2"/>`,
+  // Sweet Tooth: a wrapped candy (sour rush weaker)
+  swt: `<circle r="8.5" fill="#d8ff6a" stroke="#4a6a10" stroke-width="1.8"/><path d="M-8 -3 L-17 -9 V9 L-8 3 M8 -3 L17 -9 V9 L8 3" fill="#ffb0d8" stroke="#7a1f55" stroke-width="1.6" stroke-linejoin="round"/><path d="M-4 -3 Q0 -6 4 -3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>`,
+  // Tissue Box: a tissue box with a tissue sticking out (sneeze jolts shorter)
+  tis: `<rect x="-14" y="-2" width="28" height="15" rx="3" fill="#9dd7ff" stroke="#2a5a8a" stroke-width="1.8"/><path d="M-6 -2 Q-8 -10 -2 -14 Q2 -8 0 -2 M2 -2 Q4 -12 10 -13 Q10 -6 7 -2" fill="#fff" stroke="#2a5a8a" stroke-width="1.5" stroke-linejoin="round"/><circle cx="0" cy="7" r="2.4" fill="#fff"/>`,
 };
 const cache = {};
 export function capIconURL(id) { return ART[id] ? (cache[id] || (cache[id] = svgURL(ART[id]))) : ''; }
@@ -44,7 +50,7 @@ export function synergyHint(g, c) {
   if (c.id === 'fan' && (ups.brg | 0) > 0) return 'Bell rings add Groove';
   if (c.id === 'brg' && (ups.fan | 0) > 0) return 'Bell rings add Groove';
   if (c.id === 'brg' && (ups.chk | 0) > 0) return 'Soundcheck loves bells';
-  if (c.id === 'brk' || c.id === 'hbk') return 'Counters this stage';
+  if (c.id === 'brk' || c.id === 'hbk' || c.id === 'oil' || c.id === 'swt' || c.id === 'tis') return 'Counters this stage';
   if (c.id === 'chk' && (ups.brg | 0) > 0) return 'Bells count too';
   if (c.kind === 'weapon' && !c.isNew && ((ups.power | 0) > 0 || (ups.haste | 0) > 0)) return (ups.power ? 'Loud Vocals' : 'Tempo Up') + ' helps it';
   if (c.kind === 'weapon' && c.isNew && (ups.haste | 0) > 0) return 'Tempo Up recharges it';
