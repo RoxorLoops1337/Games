@@ -28,3 +28,12 @@ console.log('03_backgrounds ok');
   assert.ok(beatPulse(0, 1, false) > beatPulse(0.3, 1, false), 'pulse peaks on the beat');
   assert.equal(weatherFor('frosty', 1), 'snow'); assert.equal(weatherFor('disco', 1), ''); assert.equal(makeWeather().length, 26);
 }
+{
+  const st = await import('../../cell_serpent/bg_stage.js');
+  const px = () => new Proxy(function () {}, { get: (t, k) => (k === 'globalAlpha' ? 1 : k === 'addColorStop' ? () => {} : px()), set: () => true, apply: () => px() });
+  const th2 = { base: '#ff7eb6', lite: '#ffc2dc' }, kit = { bake: () => ({ c: {} }) };
+  for (const boss of [false, true]) { st.bakeStageExtras(px(), th2, boss); st.drawFootlights(px(), 1.3, 0.5, th2, boss); st.drawCrowdLights(px(), 2, th2, boss, 0.4, false); st.drawBossFx(px(), 2, 0.6, boss); st.paintGrooves(px(), 0, 0, 200, boss); }
+  st.drawClouds(px(), kit, 'love', '#ffffff', 0.5, 9, false, false); st.drawClouds(px(), null, 'love', '#fff', 0, 1, false, true);
+  assert.equal(st.CLOUDS.length, 5, 'five clouds');
+  console.log('03_backgrounds stage extras ok');
+}

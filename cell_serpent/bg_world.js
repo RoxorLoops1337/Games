@@ -2,6 +2,7 @@
 // a few cheap animated pieces (swinging spotlights, drifting motes, pulsing ring circle).
 import { W, H, LINE_Y } from './sim.js';
 import { mix } from './art_draw.js';
+import { bakeStageExtras, drawClouds, drawFootlights, drawBossFx, drawCrowdLights, paintGrooves } from './bg_stage.js';
 
 const TAU = Math.PI * 2;
 // per species: sky top, sky bottom, far and near silhouette colours, scenery kind, mote kind
@@ -181,6 +182,7 @@ export function bakeWorld(c, skin, boss, ring, th, stage = 1) {
   c.fillStyle = pool; c.fillRect(0, LINE_Y, W, H - LINE_Y);
   speaker(c, 6, LINE_Y - 8, 74, 120); speaker(c, 12, LINE_Y - 108, 62, 100);
   speaker(c, W - 80, LINE_Y - 8, 74, 120); speaker(c, W - 74, LINE_Y - 108, 62, 100);
+  bakeStageExtras(c, th, boss);
   c.lineWidth = 8; c.strokeStyle = mix(th.base, '#ffffff', 0.15) + '8c'; c.strokeRect(4, 4, W - 8, H - 8);
   c.lineWidth = 2; c.strokeStyle = 'rgba(111,227,255,.6)'; c.strokeRect(10, 10, W - 20, H - 20);
 }
@@ -242,8 +244,9 @@ export function drawRing(c, ring, t, boss, pulse, kit) {
     b.fillStyle = dk; b.beginPath(); b.arc(x, y, R, 0, TAU); b.fill();
     const fl = b.createRadialGradient(x, y, 20, x, y, R); fl.addColorStop(0, `rgba(255,225,170,${0.2 + bt * 0.1})`); fl.addColorStop(0.6, `rgba(${hue},.16)`); fl.addColorStop(1, `rgba(${hue},${0.36 + bt * 0.14})`);
     b.fillStyle = fl; b.beginPath(); b.arc(x, y, R, 0, TAU); b.fill();
+    paintGrooves(b, x, y, R, boss);
   };
-  const disc = kit && kit.bake ? kit.bake('ringfloor2|' + boss + '|' + R, R * 2, R * 2, bb => paint(bb, 0, 0, 0.5), 1) : null;
+  const disc = kit && kit.bake ? kit.bake('ringfloor3|' + boss + '|' + R, R * 2, R * 2, bb => paint(bb, 0, 0, 0.5), 1) : null;
   if (disc) { c.save(); c.globalAlpha = 0.85 + beat * 0.3 > 1 ? 1 : 0.85 + beat * 0.3; c.drawImage(disc.c, cx - R, cy - R); c.restore(); }
   else paint(c, cx, cy, beat);
   for (let i = 1; i <= 2; i++) { const ph = (t * 0.7 + i * 0.5) % 1; c.strokeStyle = `rgba(255,200,230,${0.25 * (1 - ph)})`; c.lineWidth = 3; c.beginPath(); c.arc(cx, cy, R * (0.3 + ph * 0.7), 0, TAU); c.stroke(); }
@@ -309,8 +312,10 @@ export function createBgFx() {
     const { t, th, boss } = o, kit = o.kit, cheer = Math.max(0, 1 - o.kick / 1.3);
     const pulse = o.reduce ? 0 : beatPulse(t, o.stage, boss);
     const wk = weatherFor(o.skin, o.stage);
+    if (!o.reduce) drawClouds(c, kit, o.skin, mix(worldOf(o.skin).bot, '#ffffff', 0.6), skyGrade(o.stage).k, t, boss, o.low);
     if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26);
     if (boss && !o.reduce) lightning(c, bg, t);
+    if (!o.reduce) { if (boss) drawBossFx(c, t, pulse, o.low, kit); drawFootlights(c, t, pulse, th, boss); }
     // speaker cones thump on the kick
     if (!o.reduce) {
       c.save();
@@ -331,6 +336,7 @@ export function createBgFx() {
         c.drawImage(spr.c, 0, CROWD_Y - bob, W, CROWD_H);
       }
     }
+    if (!o.reduce) drawCrowdLights(c, t, th, boss, cheer, o.low);
     if (cheer > 0.02 && !o.reduce) {
       c.save(); c.lineCap = 'round'; c.strokeStyle = boss ? '#0a0618' : '#1c1240'; c.fillStyle = th.lite;
       const n = o.low ? 6 : 11;
