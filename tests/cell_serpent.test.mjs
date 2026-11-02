@@ -341,7 +341,9 @@ ok('shop: stats cost Beats; skills unlock and level up with fragments; loot boxe
   const s = sim.defaultSave(); s.beats = 1e7; s.sparkles = 1000;
   assert.ok(['atk', 'crt', 'cdn'].every(id => sim.META.some(m => m.id === id)));
   assert.ok(sim.buyMeta(s, 'atk')); assert.equal(s.meta.atk, 1); assert.ok(sim.metaCost(sim.META[0], 3) > sim.metaCost(sim.META[0], 1));
+  const c0 = s.cleared; s.cleared = 40;   // b12q: stat levels are capped by cleared stages
   for (let i = 0; i < 50; i++) sim.buyMeta(s, 'atk'); assert.equal(s.meta.atk, sim.META[0].max);
+  s.cleared = c0;
   // skills: the first five are owned, the rest need fragments
   assert.ok(sim.WEAPON_STARTERS.every(id => s.skills[id].lv === 1) && s.skills.maw.lv === 0);
   assert.ok(!sim.unlockSkill(s, 'maw'), 'not enough fragments');

@@ -313,14 +313,19 @@ const CAP_UP = Object.fromEntries(CAPSULE_UPS.map(u => [u.id, u]));
 // Beats (gold music-note coins) come from cells and clears. Sparkles (pink star gems) come from
 // clearing a stage for the first time. Fragments come from chest cells and loot boxes.
 export const META = [
-  { id: 'atk', name: 'Volume', max: 15, base: 30, grow: 1.45, desc: l => `+${10 * l}% damage` },
-  { id: 'crt', name: 'Pitch', max: 13, base: 30, grow: 1.45, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
-  { id: 'cdn', name: 'Tempo', max: 12, base: 30, grow: 1.45, desc: l => `-${5 * l}% cooldowns` },
-  { id: 'vit', name: 'Stamina', max: 13, base: 25, grow: 1.45, desc: l => `The snake crawls ${2 * l}% slower` },
-  { id: 'for', name: 'Fame', max: 13, base: 40, grow: 1.5, desc: l => `+${10 * l}% Beats` },
+  { id: 'atk', name: 'Volume', max: 15, base: 80, grow: 1.66, desc: l => `+${10 * l}% damage` },
+  { id: 'crt', name: 'Pitch', max: 13, base: 80, grow: 1.66, desc: l => `+${2 * l}% crit chance, +${8 * l}% crit damage` },
+  { id: 'cdn', name: 'Tempo', max: 12, base: 80, grow: 1.66, desc: l => `-${5 * l}% cooldowns` },
+  { id: 'vit', name: 'Stamina', max: 13, base: 70, grow: 1.66, desc: l => `The snake crawls ${2 * l}% slower` },
+  { id: 'for', name: 'Fame', max: 13, base: 110, grow: 1.69, desc: l => `+${10 * l}% Beats` },
   { id: 'rev', name: 'Encore', max: 1, base: 400, grow: 1, desc: () => 'Get back up once per run' },
 ];
 export const metaCost = (def, lvl) => Math.round(def.base * Math.pow(def.grow, lvl));
+// b12q: stat levels are gated by progress: cap = 2 + cleared stages / 2 (the single level Encore is not gated).
+// The cap only blocks further buying: a save above it keeps every level it owns.
+export const statCap = save => 2 + Math.floor(((save && save.cleared) || 0) / 2);
+export const statCapStage = lvl => Math.max(0, (lvl - 2) * 2);   // stages to clear before level `lvl` can be owned
+export const metaBuyable = (save, d) => { const l = (save.meta && save.meta[d.id]) || 0; return l < d.max && (d.max === 1 || l < statCap(save)); };
 export const SKILL_MAX_LV = 10;
 export const skillMul = lv => 1 + 0.12 * (Math.max(1, lv) - 1);          // permanent skill level -> damage
 export const skillUpgradeCost = lv => ({ frag: 4 + 3 * lv, beats: 0 });   // lv -> lv + 1, fragments only
@@ -391,6 +396,7 @@ export function buyMeta(save, id) {
   if (!d) return false;
   const lvl = save.meta[id] || 0;
   if (lvl >= d.max) return false;
+  if (!metaBuyable(save, d)) return false;
   const c = metaCost(d, lvl);
   if (save.beats < c) return false;
   save.beats -= c; save.meta[id] = lvl + 1;

@@ -1,4 +1,4 @@
-import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
+import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, metaBuyable, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { skinFor, recordAddictRun, eventInfo, ensureEvent } from './sim.js';
 import { deathCauseOf } from './screen_b11.js';
 import { createHub2 } from './hub2.js';
@@ -183,7 +183,7 @@ function openHub(tab = hubTab) {
 function badgeTabs() {
   const day = dayKey(), s = save, out = new Set();
   if (welcomeReady(s) || dealsFor(s, day).some((d, i) => !s.shop.bought[i] && d.price === 0) || s.shop.gold !== day) out.add('Shop');
-  if (META.some(d => (s.meta[d.id] || 0) < d.max && s.beats >= metaCost(d, s.meta[d.id] || 0))) out.add('Stats');
+  if (META.some(d => metaBuyable(s, d) && s.beats >= metaCost(d, s.meta[d.id] || 0))) out.add('Stats');
   if (s.sign.day !== day || FUND.some(f => fundReady(s, f)) || TROPHIES.some(t => trophyReady(s, t)) || dailyGoals(day).some(gl => goalProgress(s, day, gl) >= gl.target && !(s.daily.day === day && s.daily.claimed[gl.id]))) out.add('Battle');
   if (WEAPONS.some(w => { const k = s.skills[w.id]; return k.lv > 0 ? k.lv < SKILL_MAX_LV && k.frag >= skillUpgradeCost(k.lv).frag : k.frag >= w.frag && (s.cleared || 0) >= (w.stage || 0); })) out.add('Skills');
   if (s.eggs > 0 || PETS.some(p => petCanUp(s, p.id))) out.add('Pets');
@@ -194,7 +194,7 @@ function badgeTabs() {
 function badgeCounts() {
   const day = dayKey(), s = save, m = new Map(), put = (t, n) => { if (n > 0) m.set(t, n); };
   put('Shop', (welcomeReady(s) ? 1 : 0) + dealsFor(s, day).filter((d, i) => !s.shop.bought[i] && d.price === 0).length + (s.shop.gold !== day ? 1 : 0));
-  put('Stats', META.filter(d => (s.meta[d.id] || 0) < d.max && s.beats >= metaCost(d, s.meta[d.id] || 0)).length);
+  put('Stats', META.filter(d => metaBuyable(s, d) && s.beats >= metaCost(d, s.meta[d.id] || 0)).length);
   put('Battle', (s.sign.day !== day ? 1 : 0) + FUND.filter(f => fundReady(s, f)).length + TROPHIES.filter(t => trophyReady(s, t)).length + dailyGoals(day).filter(gl => goalProgress(s, day, gl) >= gl.target && !(s.daily.day === day && s.daily.claimed[gl.id])).length);
   put('Skills', WEAPONS.filter(w => { const k = s.skills[w.id]; return k.lv > 0 ? k.lv < SKILL_MAX_LV && k.frag >= skillUpgradeCost(k.lv).frag : k.frag >= w.frag && (s.cleared || 0) >= (w.stage || 0); }).length);
   put('Pets', (s.eggs > 0 ? 1 : 0) + PETS.filter(p => petCanUp(s, p.id)).length);
