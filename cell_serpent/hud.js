@@ -49,6 +49,8 @@ export function createHud(env) {
   const reduce = () => !!(env.OPT && env.OPT.reduceMotion);
   // menu text size slider also lifts the small in-run labels (capped so the fixed glass plates still fit)
   const fz = n => Math.round(n * Math.min(1.3, (env.OPT && env.OPT.textScale) || 1));
+  // 06-hud b9: phone legibility floor, the small labels are about 11px on a 390 wide screen (text size slider lifts them a little, capped to keep the plates intact)
+  const fzp = n => Math.round(n * Math.min(1.12, (env.OPT && env.OPT.textScale) || 1));
   const bigT = () => ((env.OPT && env.OPT.textScale) || 1) > 1.1;
 
   function rr(x, y, w, h, r) {
@@ -153,7 +155,7 @@ export function createHud(env) {
     // title plate
     const px = W / 2 - 110, rim = boss ? 'rgba(255,90,130,.8)' : 'rgba(255,255,255,.4)';
     text(boss ? 'BOSS ' + g.stage : 'STAGE ' + g.stage, W / 2, 30, 28, boss ? '#ff7a9a' : '#ffffff');
-    const nm = g.mode === 'pig' ? 'Piggy Bank Parade' : virusName(g.stage), fs = nm.length > 15 ? 14 : fz(17);
+    const nm = g.mode === 'pig' ? 'Piggy Bank Parade' : virusName(g.stage), fs = nm.length > 15 ? fzp(16) : fzp(20);
     text(nm, W / 2, 58, fs, '#ffd0e6');
     if (g.hard) { text('HARD', px + 201, 11, fz(14), '#e2caff', '#0b1020'); }
     // coins, bouncing when they grow
@@ -214,7 +216,7 @@ export function createHud(env) {
         ctx.beginPath(); ctx.arc(tx, cy, 5, 0, TAU); ctx.fillStyle = '#fff'; ctx.fill();
       }
     }
-    text(Math.floor(pr * 100) + '%', bx + 30, cy + 1, 17, '#ffffff', '#5a1038', 'center');
+    text(Math.floor(pr * 100) + '%', bx + 30, cy + 1, 20, '#ffffff', '#5a1038', 'center');
     // 06-hud b7: the track rim throbs red on the same lub-dub as the screen edge when the face nears the line
     const dg = g.phase === 'play' ? Math.max(0, Math.min(1, ((g.danger || 0) - 0.12) / 0.88)) : 0;
     if (dg > 0.1) {
@@ -260,14 +262,14 @@ export function createHud(env) {
     const hot = mult > 1, col = hot ? '#ff8a8a' : mult < 1 ? '#8ff0ff' : '#d9f7e6';
     statsPlates(cy, hot);
     blit(kit && kit.SPR.body(g.skin, false, ''), 46, cy, 40, 0);
-    text('x' + mult.toFixed(1), 100, cy + 1, fz(19), col, '#0b1020');
+    text('x' + mult.toFixed(1), 100, cy + 1, fzp(22), col, '#0b1020');
     const items = [['n', '' + (1 + up('notes'))], ['b', '' + (1 + up('burst'))], ['s', '+' + up('aspd') + '%'], ['d', '+' + up('cdmg') + '%']];
     const wid = [66, 66, 92, 92];
     let x = 154;
     items.forEach(([k, v], i) => {
       const ix = x + 14;
       if (k === 'n') blit(kit && kit.SPR.note(false), ix, cy, 36, 0); else if (k === 'b') burstIcon(ix, cy, 0.85); else if (k === 's') bolt(ix, cy, 0.95, '#6fe3ff'); else star(ix, cy, 0.85, '#ffd84d');
-      text(v, ix + 20, cy + 1, fz(17), '#e6f6ff', '#0b1020', 'left');
+      text(v, ix + 20, cy + 1, fzp(v.length > 3 ? 18 : 21), '#e6f6ff', '#0b1020', 'left');
       x += wid[i];
     });
   }
@@ -292,8 +294,8 @@ export function createHud(env) {
     if (fspr) ctx.drawImage(fspr.c, x - 4, y - 4, w + 8, h + 8); else glass(x, y, w, h, 18, kd > 0 ? 'rgba(255,90,110,.95)' : ku > 0 ? 'rgba(255,255,255,.95)' : rim);
     if (kd > 0) { ctx.save(); ctx.globalAlpha = 0.3 * kd; rr(x, y, w, h, 18); ctx.fillStyle = '#ff3d5a'; ctx.fill(); ctx.restore(); }
     if (fire) glow(x + w / 2, y + h / 2, 150, '#ffd84d', 0.18 + 0.1 * Math.sin(S.t * 10));
-    text(fire ? (bigT() ? 'ON FIRE' : 'GROOVE ON FIRE') : 'GROOVE', x + 14, y + 14, fz(15), fire ? '#ffd84d' : '#ffc2dc', '#0b1020', 'left');
-    if (gv >= 1) text('+' + Math.floor(gv * 1.5) + '% dmg', x + w - 12, y + 14, fz(14), gv >= 15 ? '#ffd84d' : '#bfe9ff', '#0b1020', 'right');
+    text(fire ? (bigT() ? 'ON FIRE' : 'GROOVE ON FIRE') : 'GROOVE', x + 14, y + 14, fzp(18), fire ? '#ffd84d' : '#ffc2dc', '#0b1020', 'left');
+    if (gv >= 1) text('+' + Math.floor(gv * 1.5) + '% dmg', x + w - 12, y + 14, fzp(17), gv >= 15 ? '#ffd84d' : '#bfe9ff', '#0b1020', 'right');
     const base = y + h - 10, bw = 7.2, step = 10.4, x0 = x + 14;
     // tier ticks: bar 15 starts the gold glow, bar 20 is the fire
     if (!fspr) for (const t of [15, 20]) { const tx = x0 + (t - 1) * step + bw / 2; ctx.fillStyle = gv >= t ? '#ffd84d' : 'rgba(255,216,77,.45)'; ctx.beginPath(); ctx.moveTo(tx - 3.5, y + h - 3); ctx.lineTo(tx + 3.5, y + h - 3); ctx.lineTo(tx, y + h - 8.5); ctx.closePath(); ctx.fill(); }
@@ -367,11 +369,11 @@ export function createHud(env) {
   }
 
   // 06-hud b7: a freshly gained skill shows a NEW SKILL tag with its name above the tile for about 1.4 seconds
-  function newCaption(id, x, cy, r, col) {
+  function newCaption(id, x, cy, r, col, lift) {
     const age = S.t - T.newAt[id], DUR = 1.5;
     if (age > DUR) { delete T.newAt[id]; return; }
     const inK = reduce() ? 1 : Math.min(1, age / 0.28), back = 1 + 2.2 * Math.pow(inK - 1, 3) + 1.2 * Math.pow(inK - 1, 2), out = Math.max(0, Math.min(1, (DUR - age) / 0.3));
-    const pw = 168, ph = 52, cx = Math.max(pw / 2 + 10, Math.min(W - pw / 2 - 10, x)), py = cy - r - 54 - (reduce() ? 0 : 8 * Math.min(1, age / 0.5));
+    const pw = 168, ph = 52, cx = Math.max(pw / 2 + 10, Math.min(W - pw / 2 - 10, x)), py = cy - r - 54 - (lift || 0) - (reduce() ? 0 : 8 * Math.min(1, age / 0.5));
     ctx.save(); ctx.globalAlpha = out; ctx.translate(cx, py); ctx.scale(back, back);
     glass(-pw / 2, -ph / 2, pw, ph, 18, col + 'cc', 'rgba(14,9,48,.82)');
     const tx = Math.max(-pw / 2 + 14, Math.min(pw / 2 - 14, x - cx));   // pointer toward the tile
@@ -384,7 +386,7 @@ export function createHud(env) {
 
   function skills(g) {
     const r = 26, pitch = 58, cy = H - 60 - T.ins.b;
-    let x = W - 22 - r;
+    let x = W - 22 - r, nCap = 0;
     for (const id in g.weap) {
       const w = g.weap[id], col = env.WCOL[id] || '#fff', max = WMAX[id] || 5;
       // remember the longest cooldown seen so the ring can show progress
@@ -436,28 +438,28 @@ export function createHud(env) {
         ctx.restore();
       }
       // level pips
-      const pw = 7, px0 = x - ((max - 1) * pw) / 2, py = cy + r + 10;
-      if (w.lv > 0) {   // level numeral badge, top right of the tile
-        const bx = x + r - 3, by = cy - r + 3, maxed = w.lv >= max, bb = kit && kit.bake ? kit.bake('lvb06|' + col + '|' + (maxed ? 1 : 0), 26, 26, c => {
-          c.beginPath(); c.arc(0, 0, 10, 0, TAU); c.fillStyle = maxed ? '#ffd84d' : 'rgba(14,9,48,.95)'; c.fill();
-          c.lineWidth = 2; c.strokeStyle = maxed ? '#fff3a0' : col; c.stroke();
+      const pw = 9, px0 = x - ((max - 1) * pw) / 2, py = cy + r + 10;
+      if (w.lv > 0) {   // level numeral badge, top right of the tile (b9: bigger, MAX is a gold pill)
+        const maxed = w.lv >= max, bw2 = maxed ? 46 : 28, bx = maxed ? x + 6 : x + r - 1, by = cy - r + 1, bb = kit && kit.bake ? kit.bake('lvb09|' + col + '|' + (maxed ? 1 : 0), bw2 + 8, 36, c => {
+          c.beginPath(); if (c.roundRect) c.roundRect(-bw2 / 2, -14, bw2, 28, 14); else c.rect(-bw2 / 2, -14, bw2, 28); c.fillStyle = maxed ? '#ffd84d' : 'rgba(14,9,48,.96)'; c.fill();
+          c.lineWidth = 2.5; c.strokeStyle = maxed ? '#fff3a0' : col; c.stroke();
         }) : null;
-        if (bb) ctx.drawImage(bb.c, bx - 13, by - 13, 26, 26);
-        text(maxed ? 'MAX' : w.lv + '', bx, by + 1, maxed ? 9 : 14, maxed ? '#4a3600' : '#ffffff', maxed ? '#fff3a0' : '#0b1020');
+        if (bb) ctx.drawImage(bb.c, bx - (bw2 + 8) / 2, by - 18, bw2 + 8, 36);
+        text(maxed ? 'MAX' : w.lv + '', bx, by + 1, maxed ? 18 : 21, maxed ? '#4a3600' : '#ffffff', maxed ? '#fff3a0' : '#0b1020');
       }
       if (lk > 0 && !reduce()) { ctx.save(); ctx.globalAlpha = lk * 0.9; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3 * lk + 1; ctx.beginPath(); ctx.arc(x, cy, r + 4 + 24 * (1 - lk), 0, TAU); ctx.stroke(); ctx.restore(); }
-      const PW = pw * (max - 1) + 12, lvc = Math.min(w.lv, max), pb = kit && kit.bake ? kit.bake('pips07|' + lvc + '|' + max, PW, 12, c => {   // one baked row per level: lit pips white (gold when maxed), empty ones faint
+      const PW = pw * (max - 1) + 14, lvc = Math.min(w.lv, max), pb = kit && kit.bake ? kit.bake('pips07|' + lvc + '|' + max, PW, 12, c => {   // one baked row per level: lit pips white (gold when maxed), empty ones faint
         c.translate(-((max - 1) * pw) / 2, 0);
-        c.beginPath(); for (let i = lvc; i < max; i++) { c.moveTo(i * pw + 2.6, 0); c.arc(i * pw, 0, 2.6, 0, TAU); } c.fillStyle = 'rgba(255,255,255,.22)'; c.fill();
-        if (lvc > 0) { c.beginPath(); for (let i = 0; i < lvc; i++) { c.moveTo(i * pw + 2.6, 0); c.arc(i * pw, 0, 2.6, 0, TAU); } c.fillStyle = lvc >= max ? '#ffd84d' : '#ffffff'; c.fill(); }
+        c.beginPath(); for (let i = lvc; i < max; i++) { c.moveTo(i * pw + 3.4, 0); c.arc(i * pw, 0, 3.4, 0, TAU); } c.fillStyle = 'rgba(255,255,255,.3)'; c.fill();
+        if (lvc > 0) { c.beginPath(); for (let i = 0; i < lvc; i++) { c.moveTo(i * pw + 3.4, 0); c.arc(i * pw, 0, 3.4, 0, TAU); } c.fillStyle = lvc >= max ? '#ffd84d' : '#ffffff'; c.fill(); }
       }) : null;
       if (pb) ctx.drawImage(pb.c, x - PW / 2, py - 6, PW, 12);
       else {
-        ctx.beginPath(); for (let i = w.lv; i < max; i++) { ctx.moveTo(px0 + i * pw + 2.6, py); ctx.arc(px0 + i * pw, py, 2.6, 0, TAU); } ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fill();
-        if (w.lv > 0) { ctx.beginPath(); for (let i = 0; i < w.lv && i < max; i++) { ctx.moveTo(px0 + i * pw + 2.6, py); ctx.arc(px0 + i * pw, py, 2.6, 0, TAU); } ctx.fillStyle = w.lv >= max ? '#ffd84d' : '#ffffff'; ctx.fill(); }
+        ctx.beginPath(); for (let i = w.lv; i < max; i++) { ctx.moveTo(px0 + i * pw + 3.4, py); ctx.arc(px0 + i * pw, py, 3.4, 0, TAU); } ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fill();
+        if (w.lv > 0) { ctx.beginPath(); for (let i = 0; i < w.lv && i < max; i++) { ctx.moveTo(px0 + i * pw + 3.4, py); ctx.arc(px0 + i * pw, py, 3.4, 0, TAU); } ctx.fillStyle = w.lv >= max ? '#ffd84d' : '#ffffff'; ctx.fill(); }
       }
       ctx.restore();
-      if (T.newAt[id] !== undefined) newCaption(id, x, cy, r, col);
+      if (T.newAt[id] !== undefined) newCaption(id, x, cy, r, col, 60 * (nCap++));   // b9: several fresh skills stack their tags instead of printing over each other
       x -= pitch;
     }
   }
@@ -598,8 +600,8 @@ export function createHud(env) {
     scaled(W / 2, y, sc, () => {
       glass(-112, -26, 224, 52, 26, col + 'aa', 'rgba(14,9,48,.5)');
       text('COMBO x' + g.combo, 0, -4, 24 + Math.min(10, g.combo * 0.3), col, '#0b1020');
-      ctx.fillStyle = 'rgba(255,255,255,.18)'; rr(-84, 15, 168, 5, 2.5); ctx.fill();
-      ctx.fillStyle = col; rr(-84, 15, Math.max(5, 168 * left), 5, 2.5); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.18)'; rr(-84, 14, 168, 7, 3.5); ctx.fill();
+      ctx.fillStyle = left < 0.3 && !reduce() && Math.sin(S.t * 24) > 0 ? '#ff6a7a' : col; rr(-84, 14, Math.max(5, 168 * left), 7, 3.5); ctx.fill();   // b9: a thicker timer that flashes red when the combo is about to drop
       for (let i = 1; i < n; i++) for (const sg of [-1, 1]) star(sg * (112 + 4 + i * 20), 0, 0.55 + 0.1 * i, col);
     });
     ctx.restore();
