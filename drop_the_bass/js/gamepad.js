@@ -295,7 +295,7 @@ function ring(ctx, x, y, w, h, r, lw, t) {
 const MENU_FOCUS = 'button:not([disabled]),[role=button],[role=tab],a[href],input:not([disabled]),select:not([disabled])';
 const shown = (el) => !el.hidden && el.offsetParent !== null && !el.closest('[hidden]') && !el.closest('[aria-hidden="true"]');
 export class MenuPad {
-  constructor(o = {}) { this.getPads = o.getPads || null; this.prev = {}; this.dir = null; this.hold = 0; this.rep = false; this.acts = 0; if (!this.getPads) listen(); }
+  constructor(o = {}) { this.getPads = o.getPads || null; this.onUse = o.onUse || null; this.used = false; this.prev = {}; this.dir = null; this.hold = 0; this.rep = false; this.acts = 0; if (!this.getPads) listen(); }
   live() { return !!this.getPads || seen; }
   pad() { const list = this.getPads ? this.getPads() : systemPads(); if (!list) return null; for (let i = 0; i < list.length; i++) if (list[i] && list[i].connected !== false) return list[i]; return null; }
   list(root) {
@@ -347,6 +347,7 @@ export class MenuPad {
       if (s.dir !== this.dir) { this.dir = s.dir; this.hold = 0; this.rep = false; n += this.step(s.dir, root) ? 1 : 0; }
       else { this.hold += dt; if (this.hold >= (this.rep ? PAD_TUNING.rate : PAD_TUNING.delay)) { this.hold = 0; this.rep = true; n += this.step(s.dir, root) ? 1 : 0; } }
     } else { this.dir = null; this.hold = 0; this.rep = false; }
+    if (n > 0 && !this.used) { this.used = true; if (this.onUse) { try { this.onUse(); } catch (e) { /* no toast */ } } }   // the first use says hello once
     this.acts += n; return n;
   }
 }

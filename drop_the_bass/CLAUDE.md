@@ -224,3 +224,11 @@ Ideas next (round 9): pad cursor for the shop and gear screens (focus order is r
 
 Round 9 result: 4 items shipped (small round, the loop is in polish territory).
 Ideas next (round 10): a real device pass for pad focus visuals on the gear grid; share card with tactics; rumble strength setting; leaderboard seasons need a server field; balance pass on Endless past wave 40 with the bot; tutorial coverage for upgrade paths and synergies; trim the monkey test runtime; review of the 29 older quests for duplicates of the new stats.
+
+### Round 10 (improvements, in order)
+1. Daily quests the player cannot work on are never dealt or re-rolled into (`questAvailable`: the Endless quest needs the first stage clear).
+2. The menu gamepad says "Gamepad connected" once on its first use (hub and title, like the battle does).
+3. Checks, no change needed: Endless bot (level 0 reaches about wave 16, a level 20 studio about wave 70 to 80 in 4000 s of play), wide and portrait battle screenshots in da and de look right.
+
+Round 10 result: 2 small items shipped. The loop is near diminishing returns on the pad and meta side; the remaining value is in real-device feedback.
+Ideas next (round 11): ask for real player feedback on the pad and tablet layout; share card with tactics; rumble strength setting; leaderboard seasons need a server field; tutorial coverage for upgrade paths and synergies; trim the monkey test runtime; more outfits to chase (art needed); a gear screen pad pass on a real device.
