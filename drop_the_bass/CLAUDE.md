@@ -202,3 +202,16 @@ Ideas next (round 7): pad support for DOM modals (pause, choice, hint); selling 
 
 Round 7 result: a smaller round (5 items). Balance bot check (bal.mjs, level 0) looks sane: Garage is winnable by a merging bot, later stages punish idle and no-merge play.
 Ideas next (round 8): the pad cannot yet drive hub screens (only battle menus); quest toast when a goal completes mid-run; a leaderboard season label; tutorial coverage for branches and synergies; sound mix on real phones (needs a device); trim the monkey test runtime; run-level stat cards on the recap for the new counters.
+
+### Round 8 (improvements, in order)
+1. The pad drives the title and hub screens (`MenuPad` in gamepad.js, polled from main.js): D-pad moves focus, A presses, B closes a modal.
+2. LB and RB switch the hub tab.
+3. A starts the TAP TO START title.
+4. Pad rumble on the same events as the phone haptics (`PadControl.rumble`, follows the Vibrate and Reduce motion settings).
+5. Results: a tactics line (Re-rolls, Sold, Moved, Paths) shown only when used.
+6. Results: today's quests the run completed are listed (`out.questsDone` from `applyRunResult`).
+7. How to Play gamepad card lists the menu controls.
+8. Tests: `drop_the_bass_r8.test.mjs` (quests done, rumble) and `drop_the_bass_r8_browser.test.mjs` (hub pad, title start, rumble, seeded pad fuzz).
+
+Round 8 result: 8 items shipped (smaller than ten; the pad work was the biggest gap left from round 6).
+Ideas next (round 9): pad cursor for the shop and gear screens (focus order is reading order, grids are awkward); quest toast during a run; leaderboard season label; tutorial coverage for upgrade paths and synergies; a settings toggle for rumble strength; share card with tactics; sound mix on phones (needs a device); trim the monkey test runtime; balance pass on Endless past wave 40.
