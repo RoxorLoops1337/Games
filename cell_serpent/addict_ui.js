@@ -5,6 +5,7 @@ import {
   masteryList, claimMastery, claimAllMastery, bookStatus, claimBook, rewardText, comebackGift, claimComeback, touchSeen,
   nextReward, nudgeFor, spinStreak, spinFrame, comebackLines, hasShield, SHIELD_AT, idleAmount, claimIdle,
 } from './sim.js';
+import { isUnlocked } from './unlock_b12p.js';
 import { todayHTML, flyChips, flyReward } from './goals_polish.js';
 import { readyMasteryReward, hasReward } from './result_b9.js';
 import { riskHTML, bookCell, nextUnmet } from './keep_ui.js';
@@ -183,8 +184,8 @@ export function createAddictUI(c, openPanel, sec) {
   function renderResultNudge(r, prevPct) {
     const el = $('rNudge'); if (!el) return;
     const line = nudgeFor(save(), r, prevPct), n = nextReward(save(), c.dayKey()), qn = questNear(save(), c.dayKey());
-    el.innerHTML = (line ? `<div class="nudge">${esc(line)}</div>` : '') +
-      (qn && !n.ready ? `<div class="nudge2 qnear">${qn.icon} ${esc(qn.text)}</div>` : `<div class="nudge2">${n.icon} ${esc(n.label)}${n.ready ? ' (collect it in Goals)' : ' ' + esc(n.text)}</div>`);
+    el.innerHTML = (line ? `<div class="nudge">${esc(line)}</div>` : '') + (!isUnlocked('nextreward', save()) ? '' :   // b13a: nothing about locked goals on a fresh account
+      (qn && !n.ready ? `<div class="nudge2 qnear">${qn.icon} ${esc(qn.text)}</div>` : `<div class="nudge2">${n.icon} ${esc(n.label)}${n.ready ? ' (collect it in Goals)' : ' ' + esc(n.text)}</div>`));
   }
   return { renderNext, openGoals, maybeComeback, renderResultNudge };
 }

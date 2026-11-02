@@ -64,6 +64,8 @@ export function createUnlockUI(c) {
     if (pbox) pbox.hidden = !(isUnlocked('event', save) || isUnlocked('pig', save) || isUnlocked('invasion', save));
     const gl = doc.querySelector('#tabBattle .gl-box'); if (gl) gl.hidden = !isUnlocked('gigs', save);
     const side = doc.getElementById('battleSide'); if (side) side.hidden = !side.children.length;
+    // b13a: a fold whose whole content is still locked must not show its header either (fresh hub: no empty MORE / PARADE bars)
+    for (const f of doc.querySelectorAll('#tabBattle .fold')) { const b = f.querySelector(':scope > .fold-b'); f.hidden = !!b && [...b.children].every(x => x.hidden); if (f.hidden) f.style.display = 'none'; else f.style.removeProperty('display'); }
   }
 
   // ---- the hint card
@@ -120,6 +122,8 @@ export function createUnlockUI(c) {
       let ch = false; if (markSeen(save, 'vis_' + tid)) ch = true; if (markSeen(save, 'h_' + tid)) ch = true;
       if (ch) { c.persist(); const b = doc.querySelector(SEL_TAB(tab) + ' .newb'); if (b) b.remove(); if (cardFor && cardFor.h.id === tid && cardFor.kind === 'tab') dropCard(); }
     }
+    // b13a: a tab arrow card for ANOTHER tab must not cover the cards of the tab you just opened: its own first-visit line wins
+    if (card && cardFor && cardFor.kind === 'tab' && cardFor.h.tab !== tab && tab !== 'Battle') { const i2 = inTabHint(save, tab); if (i2 && firstIn(tab)) { show(i2); return; } }
     if (card) { place(); return; }
     const inn = inTabHint(save, tab);
     if (inn && firstIn(tab)) return show(inn);

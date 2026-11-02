@@ -16,7 +16,7 @@ const day = 20400;
   assert.ok(!K.riskHTML(s, day).includes(String.fromCharCode(8212)));
 }
 { // snapshot then record: the stamp and a new book page show as chips
-  const s = S.defaultSave(), snap = K.keepSnap(s, day); assert.equal(snap.stamped, false);
+  const s = S.defaultSave(); s.unlocked.legacy = 1; const snap = K.keepSnap(s, day); assert.equal(snap.stamped, false);
   s.cleared = 1; S.recordAddictRun(s, day, { stage: 1, kills: 5, won: true });
   const host = { innerHTML: '', classList: { toggle() {} } };
   K.keepResult(snap, s, day, { stage: 1, won: true }, host, true);

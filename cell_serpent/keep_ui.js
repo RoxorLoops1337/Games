@@ -3,6 +3,7 @@
 // and the collection book art helpers. Nothing here takes anything away, a missed day only means a fresh start.
 import { hasShield, spinReady, spinStreak, seasonStatus, bookEntries, SEASON_DAYS, SKINS } from './sim.js';
 
+import { isUnlocked } from './unlock_b12p.js';
 import { tomorrowPeek } from './chase.js';
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
@@ -33,17 +34,19 @@ export function keepResult(snap, save, day, r, host, reduce) {
   const se = seasonStatus(save, day), chips = [], fresh = [];
   const e = bookEntries(save);
   for (const k of Object.keys(e)) for (const x of e[k]) if (x.got && !snap.got.has(k + ':' + x.id)) fresh.push(x);
-  if (!snap.stamped && se.stampedToday) {
+  const uSeason = isUnlocked('season', save);   // b13a: chips about locked features stay out of a fresh account's result
+  if (uSeason && !snap.stamped && se.stampedToday) {
     const nxt = se.miles.find(m => !m.got), left = nxt ? nxt.at - se.stamps : 0;
     chips.push(`<span class="kchip stamp"><i class="kst">⭐</i><b>Season stamp ${se.stamps}/${SEASON_DAYS}</b><small>${nxt ? left + (left === 1 ? ' stamp' : ' stamps') + ' to the next gift' : 'every gift unlocked'}</small></span>`);
     pendingStamp = se.stamps;
   }
   const pageDone = Object.keys(e).filter(k => e[k].length && e[k].every(x => x.got) && e[k].some(x => !snap.got.has(k + ':' + x.id)));
+  if (!isUnlocked('book', save)) fresh.length = 0;
   if (fresh.length && pageDone.length) chips.push(`<span class="kchip book done"><i class="kst">🎉</i><b>Book page complete!</b><small>Claim your gift in Goals</small></span>`);
   else if (fresh.length) chips.push(`<span class="kchip book"><i class="kst">📖</i><b>New in your book</b><small>${esc(fresh.slice(0, 2).map(x => x.name).join(', '))}${fresh.length > 2 ? ' +' + (fresh.length - 2) : ''}</small></span>`);
   const sn = spinStreak(save, day);   // a spin streak that ends if today passes without a spin
-  if (sn >= 2 && spinReady(save, day) && save.addict.spin.day === day - 1 && !(r && (r.mode === 'pig' || r.mode === 'inv'))) chips.push(`<span class="kchip risk"><i class="kst">🔥</i><b>${sn} day spin streak</b><small>spin today to keep it (Goals tab)</small></span>`);
-  const tom = tomorrowLine(save, day, r);
+  if (uSeason && sn >= 2 && spinReady(save, day) && save.addict.spin.day === day - 1 && !(r && (r.mode === 'pig' || r.mode === 'inv'))) chips.push(`<span class="kchip risk"><i class="kst">🔥</i><b>${sn} day spin streak</b><small>spin today to keep it (Goals tab)</small></span>`);
+  const tom = uSeason ? tomorrowLine(save, day, r) : null;
   if (tom) chips.push(`<span class="kchip soon"><i class="kst">${tom.icon}</i><b>${esc(tom.text)}</b></span>`);
   host.innerHTML = chips.join('');
   host.classList.toggle('calm', !!reduce);
