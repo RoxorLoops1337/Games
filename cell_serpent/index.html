@@ -1679,6 +1679,14 @@
   @media (max-height:780px){.rkeep .kchip.risk{display:none}}
   @media (max-height:700px){#result .rextra{gap:3px} #result .rextra span{padding:3px 8px} #result .rextra .rtop{display:none} #result .rextra b{font-size:13px} #pause .precap div i{display:none}}
   @media (prefers-reduced-motion:reduce){#result .rextra span,#pause>*,#result .result-list .r.got::after,#result .result-list .r.got img,.kchip.risk,.kchip.risk .kst{animation:none}}
+  /* batch 7 (agent 11): win sunburst behind the duo, RETRY / hub chip flights */
+  #result.won{isolation:isolate}
+  #result.won::before{content:"";position:fixed;z-index:-1;left:50%;top:clamp(96px,20vh,200px);width:min(640px,150vw);aspect-ratio:1;margin:calc(min(640px,150vw) / -2) 0 0 calc(min(640px,150vw) / -2);border-radius:50%;pointer-events:none;
+    background:repeating-conic-gradient(from 0deg,rgba(255,226,120,.2) 0 7deg,rgba(255,226,120,0) 7deg 22deg);-webkit-mask-image:radial-gradient(circle,#000 6%,transparent 56%);mask-image:radial-gradient(circle,#000 6%,transparent 56%);animation:r7Rays 26s linear infinite,r7RaysIn .9s ease-out both;will-change:transform}
+  #result.won.close::before{background:repeating-conic-gradient(from 0deg,rgba(157,255,109,.3) 0 7deg,rgba(57,240,255,0) 7deg 22deg)}
+  @keyframes r7Rays{to{transform:rotate(360deg)}} @keyframes r7RaysIn{from{opacity:0;scale:.4}to{opacity:1;scale:1}}
+  @media (max-height:600px){#result.won::before{top:84px}}
+  @media (prefers-reduced-motion:reduce){#result.won::before{animation:none}}
   /* end @css:11-result-goal */
 /* @css:05-screenfeel */
   .pickfly{position:fixed;z-index:60;pointer-events:none;display:flex;align-items:center;justify-content:center;border-radius:50%;filter:drop-shadow(0 0 10px var(--pc,#ffd84d)) drop-shadow(0 0 18px var(--pc,#ffd84d));will-change:transform}

@@ -32,7 +32,7 @@ import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDo
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
-import { rewardSnaps, flyRewards, lossLine, holdConfirm, trackModality } from './result_ux.js';
+import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
 import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
 import { dressDuo, wornOutfit } from './duo_pose.js';
 import { PUMP_LEVELS, pumpLevel } from './audio_pump.js';
@@ -72,13 +72,13 @@ let shownId = '';
 function show(id) { { const ss = sheetSound(shownId, id); shownId = id; if (ss) audio.play(ss); } if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id); }
 // the gig claim holds the pill at its old value until the flying rewards land (then it counts up with a +N)
 const curHold = {};
-function gigFlies(list) {
+function gigFlies(list, d0 = 0) {
   const reduce = !!(save.settings.reduceMotion || systemReduceMotion()), left = { beats: 0, sparkles: 0 }, sum = { beats: 0, sparkles: 0 };
   for (const it of list) { left[it.kind]++; sum[it.kind] += it.amt; }
   for (const k of ['beats', 'sparkles']) if (left[k]) curHold[k] = Math.max(0, save[k] - sum[k]);
   const rel = () => { delete curHold.beats; delete curHold.sparkles; refreshCur(); };
-  list.forEach((it, i) => setTimeout(() => collectFly(it.snap, it.kind, { reduce, onLand: () => { if (curHold[it.kind] === undefined) return; curHold[it.kind] += it.amt; if (!--left[it.kind]) delete curHold[it.kind]; refreshCur(); } }), i * 160));
-  setTimeout(rel, 700 + list.length * 160 + 1200);   // safety: never leave a pill stuck
+  list.forEach((it, i) => setTimeout(() => collectFly(it.snap, it.kind, { reduce, onLand: () => { if (curHold[it.kind] === undefined) return; curHold[it.kind] += it.amt; if (!--left[it.kind]) delete curHold[it.kind]; refreshCur(); } }), d0 + i * 160));
+  setTimeout(rel, d0 + 700 + list.length * 160 + 1200);   // safety: never leave a pill stuck
 }
 function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) { const hv = curHold[id.endsWith('Beats') ? 'beats' : 'sparkles']; motion.num($(id), hv === undefined ? v : hv); } const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } { const ht = document.querySelector('.hubtop'), big = Math.max(save.beats, save.sparkles); if (ht) { ht.classList.toggle('big', big >= 10000); ht.classList.toggle('huge', big >= 100000); } }   // long numbers shrink the header pills on narrow phones
   const en = $('hEnergy'); if (en) en.textContent = tickEnergy(save, Date.now()) + '/' + ENERGY_MAX; }
@@ -591,7 +591,7 @@ function showResult() {
   $('rList').innerHTML = rows.join('');
   $('rTitle').textContent = r.mode === 'inv' ? (r.won ? 'THE GIANT SERPENT BOWS!' : 'THE GIANT SERPENT WON') : r.mode === 'pig' ? (r.won ? 'PIGGY BANKS CRACKED!' : 'THE PIGGIES ESCAPED') : r.won ? 'STAGE CLEAR!' : r.name.toUpperCase() + ' WINS';
   $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.') : `You popped ${r.kills} ${r.kills === 1 ? 'cell' : 'cells'}. Spend your Beats in the hub and try again.`;
-  { const cc = closeCall(r); $('result').classList.toggle('close', !!cc); if (cc) { $('rTitle').textContent = cc.title; $('rSub').textContent = cc.sub; } }
+  $('result').classList.toggle('won', !!r.won); { const cc = closeCall(r); $('result').classList.toggle('close', !!cc); if (cc) { $('rTitle').textContent = cc.title; $('rSub').textContent = cc.sub; } }
   announce((r.won ? 'Stage clear. ' : 'Game over. ') + $('rTitle').textContent + '. ' + r.kills + (r.kills === 1 ? ' cell' : ' cells') + ' popped, ' + out.beats + ' beats earned.');
   if (r.hard) hard = true;
   { const nmz = {}; for (const w of WEAPONS) nmz[w.id] = w.name; $('rHint').textContent = lossHint(r, save.loadout, nmz); }
@@ -610,10 +610,10 @@ function showResult() {
   $('rRetry').innerHTML = 'RETRY <span class="rcost">⚡' + ENERGY_COST + '</span>';
   { const gl = nextGoal(save); renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
   $('rRetry').style.display = pigRun ? 'none' : '';
-  $('rRetry').onclick = () => { audio.play('click'); beginStage(r.stage); };
-  $('rHub').onclick = () => { audio.play('click'); const fl = rewardSnaps($('rList')); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; openHub('Battle'); flyRewards(fl, !!(save.settings.reduceMotion || systemReduceMotion())); };
+  $('rRetry').onclick = () => { audio.play('click'); try { retryFly($('rRetry'), rewardSnaps($('rList')), !!(save.settings.reduceMotion || systemReduceMotion())); } catch (e) { /* cosmetic */ } beginStage(r.stage); };
+  $('rHub').onclick = () => { audio.play('click'); const fl = rewardSnaps($('rList')); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; gigFlies(fl.map(it => ({ snap: it.s, kind: it.kind, amt: it.n })), 420); openHub('Battle'); };   // the hub pills wait at their old totals and count up as each chip lands (batch 7)
   { const st = r.stars || 0; $('rStars').innerHTML = r.won && !r.mode && !r.hard ? [1, 2, 3].map(i => `<span class="${i <= st ? '' : 'off'}">★</span>`).join('') : '';
-    if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + Math.min(3, i + 1)); if (i === 2 && st === 3 && !reduce) confetti($('result'), 30); }, reduce);
+    if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + Math.min(3, i + 1)); if (i === st - 1 && !reduce) confetti($('result'), st === 3 ? 30 : st === 2 ? 18 : 10); }, reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
     const top = Object.entries(r.dmgBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => (id === 'capsule' ? 'Singing' : id === 'encore' ? 'Encore' : (WEAPONS.find(w => w.id === id) || { name: id }).name)).join(', ') || '-';
     $('rExtra').innerHTML = `<span><i>⏱</i>Time <b>${mm}:${ss}</b></span><span><i>🎯</i>Cells <b>${r.kills}</b></span><span><i>🎵</i>Best groove <b>${Math.round(r.groove || 0)}</b></span>${(r.qBest | 0) >= 1 && !(r.bombs | 0) ? `<span><i>🎶</i>Quartets <b>${r.quartets | 0}${r.qBest >= 2 ? ' (x' + r.qBest + ')' : ''}</b></span>` : `<span><i>💣</i>Bombs <b>${r.bombs || 0}</b></span>`}<span class="rtop"><i>🏆</i>Top <b>${top}</b></span>`;
