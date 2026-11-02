@@ -1122,6 +1122,8 @@
   .evm .evlab{font-size:12px;font-weight:900;color:var(--dim)} .evm.got .evi{opacity:1;border-color:#9dff6d} .evm.next .evi{opacity:1;border-color:#ffe14a}
   .evm.ready{cursor:pointer;-webkit-tap-highlight-color:transparent} .evm.ready .evi{opacity:1;border-color:#ffe14a;background:#5a3a10;animation:evrdy 1s ease-in-out infinite alternate} .evm.ready .evlab{color:#ffe14a} @keyframes evrdy{to{transform:scale(1.12);box-shadow:0 0 16px #ffe14a}}
   @media (prefers-reduced-motion:reduce){.evm.ready .evi{animation:none}}
+.tiles .tile.deal.wide{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:16px;row-gap:4px;padding:14px 16px 12px 34px}
+  .tile.deal.wide .top{grid-row:1/4;grid-column:1;padding:0;flex-direction:column} .tile.deal.wide .nm{text-align:center;margin-top:8px;font-size:15px} .tile.deal.wide .ds{grid-column:2;text-align:left} .tile.deal.wide .btn{grid-column:2;width:100%}
   /* end @css:10-shop-gear-stats */
   /* @css:16-addiction */
   .nextrew{flex:none;width:100%;display:flex;align-items:center;gap:10px;padding:7px 14px;background:rgba(20,14,56,.92);border-bottom:2px solid var(--line);cursor:pointer;min-height:44px}

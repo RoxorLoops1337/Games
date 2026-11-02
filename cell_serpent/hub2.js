@@ -307,6 +307,7 @@ export function createHub2(c) {
       const ds = t.querySelector('.ds'); if (d.base && !bought) ds.innerHTML = `<s>${d.base}</s> ${curImg('sparkles')}`; else ds.innerHTML = '&nbsp;';
       if (i === hotI) { t.classList.add('hot'); const hb = document.createElement('i'); hb.className = 'hotbadge'; hb.textContent = 'BEST DEAL'; t.appendChild(hb); }
       if (bought) { t.classList.add('done'); const ob = document.createElement('i'); ob.className = 'obt'; ob.textContent = 'GOT IT'; t.appendChild(ob); }
+      if (deals.length % 2 && i === deals.length - 1) t.classList.add('wide');   // an odd last deal spans the row instead of sitting alone
       list.appendChild(t);
     });
     const rr = document.createElement('div'); rr.className = 'refrow'; rr.innerHTML = `<span>New treats in ${countdown()}</span><button class="btn small alt">${s.shop.free ? '5 ' + curImg('sparkles') : 'FREE'} REFRESH</button>`;
