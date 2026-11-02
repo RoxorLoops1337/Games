@@ -41,6 +41,16 @@ export function drawHints(ctx, g, S, h) {
       ctx.save(); ctx.globalAlpha = a; ctx.font = '40px ' + EMO; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('\u{1F381}', s.x, s.y - s.r * 2.3 + Math.sin(S.t * 6) * 6); ctx.restore();
     }
   }
+  // 5. the goal, said once in the first run of stage 1: a pill with a live count of cells left
+  if (g.stage === 1 && g.phase === 'play' && g.t > 1.2 && g.t < 14) {
+    const sn0 = g.snakes[0];
+    if (sn0 && sn0.segs.length > 3) {
+      const a = Math.min(1, (g.t - 1.2) * 2) * Math.min(1, (14 - g.t) / 1.5), left = sn0.segs.length - 1, y = 232 + Math.sin(S.t * 3) * 3;
+      ctx.save(); ctx.globalAlpha = a * 0.9; ctx.fillStyle = 'rgba(16,10,50,.72)'; ctx.strokeStyle = '#ffd84d'; ctx.lineWidth = 4;
+      ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(120, y - 40, 480, 80, 40); else ctx.rect(120, y - 40, 480, 80); ctx.fill(); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.globalAlpha = a; h.text('CLEAR THE CHAIN', 360, y - 12, 32, '#fff', '#0b1020'); h.text(left + ' CELLS LEFT, THEN POP THE FACE', 360, y + 22, 21, '#ffe36b', '#0b1020'); ctx.restore();
+    }
+  }
   // 4. the face pops when alone: a short hint, 4 s at most
   const sn = g.snakes[0];
   if (sn && sn.segs.length <= 3 && sn.segs[0].shield && st.alone < 4) { st.alone += dt; const hd = sn.segs[0]; h.glow(hd.x, hd.y, hd.r * 3, '#bfe9ff', 0.5); h.text('ALONE = POP!', hd.x, hd.y + hd.r * 2.2, 26, '#fff', '#0b1020'); }
