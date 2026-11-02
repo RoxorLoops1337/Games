@@ -1341,9 +1341,11 @@ function updateWeapons(g, dt, canFire) {
   const dl = lv(g, 'daggers');
   if (dl) {
     p.orbAng += dt * (3.2 + 0.2 * dl);
+    const sns = g.snakes;
     for (let i = 0; i < 1 + dl; i++) {
       const pos = daggerPos(g, i);
-      eachTarget(g, s => { if (s.orbCd <= 0 && hyp(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } });
+      for (let a = 0; a < sns.length; a++) { const segs = sns[a].segs; for (let j = 0; j < segs.length; j++) { const s = segs[j];   // indexed, no closure (same order as eachTarget)
+        if (s.hp > 0 && !s.shield && !s.wave && s.orbCd <= 0 && hyp(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } } }
     }
   }
   // massage stick (sweeping bar)
@@ -1351,21 +1353,23 @@ function updateWeapons(g, dt, canFire) {
   if (sl) {
     for (let k = 0; k < (sl >= 4 ? 2 : 1); k++) {
       const sg = stickSeg(g, k);
-      eachTarget(g, s => {
-        if (s.orbCd > 0) return;
-        if (distToSeg(s.x, s.y, sg.x0, sg.y0, sg.x1, sg.y1) < s.r + 12) { s.orbCd = 0.35; damageSegAs('stick', g, s, 1.8 * (1 + 0.35 * sl) * dm('stick'), false, s.x, s.y); }
-      });
+      const sns = g.snakes;
+      for (let a = 0; a < sns.length; a++) { const segs = sns[a].segs; for (let j = 0; j < segs.length; j++) { const s = segs[j];
+        if (!(s.hp > 0 && !s.shield && !s.wave) || s.orbCd > 0) continue;
+        if (distToSeg(s.x, s.y, sg.x0, sg.y0, sg.x1, sg.y1) < s.r + 12) { s.orbCd = 0.35; damageSegAs('stick', g, s, 1.8 * (1 + 0.35 * sl) * dm('stick'), false, s.x, s.y); } } }
     }
   }
   // medical towers pulse
   const tl = lv(g, 'tower');
-  for (const t of g.towers) {
-    t.cd -= dt; if (t.pulse > 0) t.pulse -= dt;
+  for (let ti = 0; ti < g.towers.length; ti++) {
+    const t = g.towers[ti]; t.cd -= dt; if (t.pulse > 0) t.pulse -= dt;
     if (t.cd <= 0 && canFire) {
       t.cd = (2.4 - 0.15 * tl) * cm; t.pulse = 0.5;
       const R = 170 + 18 * tl;
       g.events.push({ t: 'pulse', x: t.x, y: t.y, r: R });
-      eachTarget(g, s => { if (hyp(s.x - t.x, s.y - t.y) < R + s.r) damageSegAs('tower', g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); });
+      const sns = g.snakes;
+      for (let a = 0; a < sns.length; a++) { const segs = sns[a].segs; for (let j = 0; j < segs.length; j++) { const s = segs[j];
+        if (s.hp > 0 && !s.shield && !s.wave && hyp(s.x - t.x, s.y - t.y) < R + s.r) damageSegAs('tower', g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); } }
     }
   }
   // swab zones tick
