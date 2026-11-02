@@ -25,3 +25,23 @@ console.log('02_animal_art ok');
   assert.ok(kit.SPR.weapon('needle'), 'needle');
   console.log('02_animal_art r3 ok');
 }
+// round 4: kill-streak cheer and hat idle animations
+{
+  const { createCheer, HAT_FX, hatPose, STREAKS } = await import(join(root, 'cheer.js'));
+  const { OUTFITS } = await import(join(root, 'sim.js'));
+  for (const o of OUTFITS) assert.equal(typeof HAT_FX[o.hat], 'function', 'idle animation for ' + o.id);
+  const ch = createCheer(), g = { t: 10, combo: 1, lastKill: 10 };
+  assert.equal(ch.step(g, 0.016), false, 'no cheer at combo 1');
+  g.t = 10.5; g.combo = STREAKS[0]; g.lastKill = g.t;
+  assert.equal(ch.step(g, 0.016), true, 'cheer at the first streak');
+  assert.ok(ch.t > 0.9 && ch.tier === 0, 'cheer starts strong');
+  g.t = 10.6; assert.equal(ch.step(g, 0.016), false, 'one cheer per milestone');
+  assert.ok(ch.pet(0, -1) === null || ch.pet(0, -1).y >= 0, 'pet hop is non-negative');
+  g.t = 11; g.combo = 25; g.lastKill = g.t; assert.equal(ch.step(g, 0.016), true, 'skipping to 25 cheers once at the biggest milestone');
+  assert.equal(ch.tier, 2, 'tier follows the highest milestone crossed');
+  for (let i = 0; i < 200; i++) { g.t += 0.016; ch.step(g, 0.016); }
+  assert.equal(ch.t, 0, 'the cheer ends');
+  assert.equal(hatPose('🎩', 0).dy, 0, 'no pose at rest');
+  assert.ok(hatPose('🎩', 0.5).dy < -10, 'the top hat is doffed');
+  console.log('02_animal_art r4 ok');
+}

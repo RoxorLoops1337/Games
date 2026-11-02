@@ -310,8 +310,9 @@ export function createRenderer(canvas, art, kit) {
       const st = petState[i] || (petState[i] = { hop: 0, last: 0 });
       if (S.lastShot !== st.last) { st.last = S.lastShot; st.hop = 1; }
       st.hop = Math.max(0, st.hop - 0.016 * 4.5);
+      const bop = !OPT.reduceMotion && g.phase === 'play' && (g.groove || 0) >= 6 ? Math.pow(1 - beatPhase(g), 4) * (g.groove >= 10 ? 9 : 5) : 0;   // groove: the pets bop on the beat
       const ch = OPT.reduceMotion ? null : CH.pet(i, i ? 1 : -1);
-      const s2 = i ? 1 : -1, ph = S.t * 6 + i * 2, idle = Math.abs(Math.sin(ph)) * (scared ? 3 : 8) * (ch ? 0.3 : 1), hopY = Math.sin(st.hop * Math.PI) * 14 + (ch ? ch.y : 0);
+      const s2 = i ? 1 : -1, ph = S.t * 6 + i * 2, idle = Math.abs(Math.sin(ph)) * (scared ? 3 : 8) * (ch ? 0.3 : 1), hopY = Math.sin(st.hop * Math.PI) * 14 + (ch ? ch.y : 0) + bop;
       const px = p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6, base = p.y + 8;
       const blink = (S.t * 0.8 + i * 1.7) % 3.1 < 0.13;
       const mood = st.hop > 0.35 || ch ? 3 : scared ? 2 : blink ? 1 : 0;
@@ -362,6 +363,13 @@ export function createRenderer(canvas, art, kit) {
     ctx.globalAlpha = 1;
   }
 
+  function noteTrail(b, col) {
+    const sp = Math.hypot(b.vx, b.vy) || 1, ux = b.vx / sp, uy = b.vy / sp, L = b.crit ? 66 : 46, w = b.crit ? 8 : 5.5;
+    ctx.save(); ctx.lineCap = 'round';
+    for (let j = 0; j < 3; j++) { ctx.globalAlpha *= 0.5; ctx.strokeStyle = j === 2 ? '#fff' : col; ctx.lineWidth = w * (1 - j * 0.3); ctx.beginPath(); ctx.moveTo(b.x - ux * 12, b.y - uy * 12); ctx.lineTo(b.x - ux * L * (1 - j * 0.28), b.y - uy * L * (1 - j * 0.28)); ctx.stroke(); }
+    ctx.restore();
+    if (b.crit) { const f = (S.t * 5 + b.x * 0.03) % 1; ctx.save(); ctx.globalAlpha *= 1 - f; sparkleAt(b.x - ux * (20 + f * 44) + Math.sin(S.t * 9 + b.x) * 8, b.y - uy * (20 + f * 44), 7 * (1 - f * 0.5)); ctx.restore(); }
+  }
   function drawBullets(g) {
     if (HJ) HJ.bullets(g.bullets, lastDt);
     for (const b of g.bullets) {
@@ -374,6 +382,7 @@ export function createRenderer(canvas, art, kit) {
       if (b.kind === 'bubble') { blit(kit && kit.SPR.weapon('bubble'), b.x, b.y, b.r * 4.84, Math.sin(S.t * 3 + b.x) * 0.2); continue; }
       const col = b.crit ? '#ffd84d' : '#6fe3ff';
       if (b.crit) glow(b.x, b.y, 30, col, 0.55);
+      if (!OPT.lowQuality) noteTrail(b, col);   // 02-animal-art r4: notes leave a short comet tail, crits add glints
       const spr = kit && kit.SPR.note(b.crit);
       if (spr) blit(spr, b.x, b.y, b.crit ? 100 : 66, S.t * 6 + b.x * 0.05);
       else { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, TAU); ctx.fill(); }
