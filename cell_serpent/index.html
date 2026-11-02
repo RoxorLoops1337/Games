@@ -231,6 +231,41 @@
   .rvtimer{background:none;border:0;color:var(--dim);font:inherit;font-size:12px;text-decoration:underline;padding:6px}
   #revive.hold .rvring b{background:#9dff6d} #revive.hold #rvLeft::after{content:" (timer paused)"}
   @media (max-height:600px){.rhint{font-size:12px;padding:3px 10px}}
+  /* @css:11-result-pause round 3 */
+  #result>.row{margin-bottom:0}
+  #result h2{margin-top:0}
+  .rprog{width:min(320px,86vw);display:flex;flex-direction:column;gap:3px;animation:rpIn .45s .25s both}
+  .rprog .rpt{position:relative;height:14px;border-radius:8px;background:rgba(255,255,255,.14);box-shadow:inset 0 1px 3px rgba(0,0,0,.5);overflow:hidden}
+  .rprog .rpt i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:8px;background:linear-gradient(90deg,#ff5c6c,#ffc83d);transition:width 1s .5s cubic-bezier(.2,.8,.2,1)}
+  .rprog .rpt u{position:absolute;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 6px #fff;opacity:.85}
+  .rprog .rpt s{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,.45)}
+  .rprog small{display:flex;justify-content:space-between;font-size:11px;font-weight:800;color:var(--dim)} .rprog small b{color:#fff}
+  .rprog.new small b.n{color:#ffd24a}
+  #result .result-list .r.got{animation:rpIn .4s both,rpGlow .7s .5s ease-out 1}
+  @keyframes rpGlow{0%{box-shadow:0 0 0 rgba(255,210,74,0)}40%{box-shadow:0 0 16px rgba(255,210,74,.9)}100%{box-shadow:0 0 0 rgba(255,210,74,0)}}
+  /* revive drama */
+  .rvring{border-radius:50%;box-shadow:0 0 28px rgba(255,200,61,.25);transition:box-shadow .3s} .rvring .fg{filter:none!important} .rvring .hero{border-radius:50%;background:radial-gradient(circle at 50% 40%,rgba(255,255,255,.1),rgba(8,5,30,.7));mix-blend-mode:normal;box-shadow:0 0 0 6px rgba(8,5,30,.7)}
+  .rvinfo{font-size:13px;font-weight:900;color:#ffd24a;text-align:center;line-height:1.3;max-width:90vw} .rvinfo small{display:block;font-size:12px;color:var(--dim);font-weight:700}
+  #revive::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 50%,transparent 45%,rgba(255,40,70,.55) 100%)}
+  #revive.late::after{animation:rvBeat 1s ease-in-out infinite}
+  #revive.late .rvring .fg{stroke:#ff4a5e} #revive.late .rvring{box-shadow:0 0 34px rgba(255,74,94,.55)}
+  #revive.late .rvring .hero{animation:rvShake .35s linear infinite}
+  #revive.late.hold::after{animation:none;opacity:0}
+  #revive.late #rvSec{transform:scale(1.25)} #rvSec{transition:transform .2s}
+  @keyframes rvBeat{0%,100%{opacity:0}18%{opacity:1}36%{opacity:.25}54%{opacity:.8}}
+  @keyframes rvShake{0%{transform:translate(0,0)}25%{transform:translate(2px,-1px)}50%{transform:translate(-2px,1px)}75%{transform:translate(1px,2px)}100%{transform:translate(0,0)}}
+  /* pause recap */
+  .precap{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:min(320px,84vw)}
+  .precap div{padding:7px 4px;border-radius:12px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);text-align:center;font-size:11px;color:var(--dim);font-weight:800;line-height:1.2}
+  .precap b{display:block;font-size:17px;color:#fff}
+  .precap .pbar{grid-column:1/-1;height:10px;padding:0;border-radius:6px;overflow:hidden;position:relative;border:0;background:rgba(255,255,255,.14)} .precap .pbar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#39f0ff,#9dff6d);border-radius:6px}
+  #pause .pbig{animation:rpPulse 1.6s ease-in-out infinite}
+  /* settings groups and sticky close */
+  .sgrp{width:min(420px,92vw);margin:12px 0 2px;padding-left:4px;font-size:11px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#ffd24a;display:flex;align-items:center;gap:8px} .sgrp::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(255,210,74,.5),transparent)}
+  #settings .tgl{margin:3px 0}
+  #settings>*{flex:none} #settings #setClose{position:sticky;bottom:8px;margin-top:12px;z-index:3;width:min(420px,92vw);padding:13px;box-shadow:0 -10px 14px 6px rgba(8,5,30,.9),0 4px 0 rgba(0,0,0,.4);background:linear-gradient(180deg,#5b6b82,#3b4658);color:#fff}
+  @media (max-height:600px){#pause{gap:10px}#pause .pbig{padding:14px 24px;font-size:24px}#pause .pbtn{padding:11px 20px}.rvinfo small{display:none}}
+  /* end @css:11-result-pause round 3 */
   /* end @css:11-result-pause */
   /* @css:09-skills-pets */
   .tile.tier0{--tc:#9dff6d} .tile.tier1{--tc:#4fb8ff} .tile.tier2{--tc:#b06cff} .tile.tier3{--tc:#ffb04d} .tile.tier4{--tc:#ff4d7a} .tile.pet{--tc:#ffd24a}
@@ -829,20 +864,25 @@
 
 <section class="scr" id="settings">
   <h2>SETTINGS</h2>
+  <div class="sgrp">Sound and feel</div>
   <button class="tgl" data-k="sound"><i class="ti">🔊</i><span>Sound effects</span><b>ON</b></button>
   <button class="tgl" data-k="music"><i class="ti">🎵</i><span>Music</span><b>ON</b></button>
   <button class="tgl" data-k="vibrate"><i class="ti">📳</i><span>Vibration</span><b>ON</b></button>
+  <div class="sgrp">Performance</div>
   <button class="tgl" data-k="reduceMotion"><i class="ti">🌀</i><span>Reduce motion (no shake or flashes)</span><b>OFF</b></button>
   <button class="tgl" data-k="lowQuality"><i class="ti">⚡</i><span>Low quality (fewer sparkles, faster)</span><b>OFF</b></button>
+  <div class="sgrp">Readability</div>
   <button class="tgl" data-k="bigNumbers"><i class="ti">🔢</i><span>Bigger numbers on cells</span><b>OFF</b></button>
   <button class="tgl" data-k="colorBlind"><span>Colour-blind shapes on special cells</span><b>OFF</b></button>
   <button class="tgl" data-k="highContrast"><span>High-contrast numbers</span><b>OFF</b></button>
   <button class="tgl" data-k="bigText"><span>Bigger menu text</span><b>OFF</b></button>
+  <div class="sgrp">Controls</div>
   <button class="tgl" data-k="slider"><span>On-screen slide bar (thumb at the bottom)</span><b>OFF</b></button>
   <button class="tgl" data-k="leftHand"><span>Left-handed slide bar</span><b>OFF</b></button>
   <button class="tgl" data-k="thumbZone"><span>Thumb zone: steer from the bottom third only</span><b>OFF</b></button>
   <button class="tgl" data-k="pauseGuard"><span>Pause button needs two taps</span><b>OFF</b></button>
   <label class="volrow" style="display:flex;align-items:center;gap:10px;width:min(420px,92vw);padding:11px 14px;margin:4px 0;border-radius:14px;border:2px solid rgba(255,255,255,.18);background:var(--glass);font-weight:800;font-size:15px"><i class="ti" style="font-style:normal;font-size:20px;width:26px;text-align:center">🔈</i><span style="flex:1">Volume</span><input id="volRange" type="range" min="0" max="100" step="5" value="100" style="width:42%" aria-label="Master volume"></label>
+  <div class="sgrp">Save data</div>
   <div class="box"><b style="color:#fff">Backup</b><br>Copy this code somewhere safe. Paste it back to restore your game on any phone.<textarea id="bkCode" spellcheck="false"></textarea></div>
   <div class="row"><button class="btn small alt" id="bkCopy">COPY CODE</button><button class="btn small gold" id="bkLoad">LOAD CODE</button></div>
   <div class="box">Keys: A / D or arrows slide, P pauses, M mutes, 1 2 3 pick a card.<br>Cell Serpent, by RoxorLoops &amp; Jasmin. Version 2.0.</div>
@@ -855,6 +895,7 @@
   <h2>ENCORE?</h2>
   <div class="rvring"><svg viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" id="rvArc" cx="60" cy="60" r="52"/></svg><img class="hero" src="assets/duo_idle.png" alt=""><b id="rvSec">10</b></div>
   <div class="sub">The crowd wants one more song. The snake gets knocked back.</div>
+  <div class="rvinfo" id="rvInfo"></div>
   <button class="btn gold" id="rvGo">REVIVE</button><div class="sub" id="rvLeft"></div>
   <button class="btn dim" id="rvNo">Give up</button>
   <button class="rvtimer" id="rvTimer"></button>
@@ -863,6 +904,7 @@
 <section class="scr" id="pause">
   <h2>PAUSED</h2>
   <div class="sub pnote">Take a breath. The snake waits.</div>
+  <div class="precap" id="pRecap"></div>
   <button class="btn pbig" id="resumeBtn">&#9654; RESUME</button>
   <button class="btn alt pbtn" id="pStats">&#128202; WHO DID WHAT</button>
   <button class="btn alt pbtn" id="pSet">&#9881; SETTINGS</button>

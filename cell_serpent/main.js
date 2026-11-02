@@ -5,7 +5,7 @@ import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
-import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint } from './result_fx.js';
+import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint, progMeter } from './result_fx.js';
 import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed, announce, watchGroove, resetGroove, showZone, inThumbZone, zoneSteer, initKeyboard, RARITY_WORDS } from './access.js';
 import { createMotion } from './motion.js';
 import { createClock } from './clock.js';
@@ -413,7 +413,7 @@ function readInput() {
   const enc = encoreTap || !!keys[' ']; encoreTap = false;
   return { mx, my: 0, encore: enc };
 }
-function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; show('pause'); }
+function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; pauseRecap(); show('pause'); }
 // Escape and the Android back button share this: close what is open, pause a run, resume a pause, leave the end screen.
 // The back button also walks the hub up to the title; Escape stays put there.
 function goBack(fromBtn) {
@@ -453,6 +453,7 @@ function toggleMute() { save.muted = !save.muted; audio.setMuted(save.muted); $(
 function showRevive() {
   reviveAsked = true; const cost = reviveCost(g.revivesUsed);
   $('rvLeft').textContent = 'Remaining ×' + g.revivesLeft; $('rvGo').innerHTML = 'REVIVE  ' + cost + ' ' + curImg('sparkles'); $('rvGo').disabled = save.sparkles < cost;
+  { const pc = Math.floor((g.progress || 0) * 100); $('rvInfo').innerHTML = `Stage ${g.stage}: ${pc}% cleared<small>${save.sparkles} sparkles in your pocket</small>`; }
   let stopRing = () => {};
   $('rvGo').onclick = () => { if (save.sparkles < cost) return; stopRing(); stopFx(); save.sparkles -= cost; persist(); reviveGame(g); reviveAsked = false; endT = 0; audio.play('levelup'); show(''); };
   const giveUp = () => { stopRing(); stopFx(); g.revivesLeft = 0; reviveAsked = false; show(''); };
@@ -461,6 +462,10 @@ function showRevive() {
   $('rvTimer').onclick = () => { audio.play('toggle'); save.settings.reviveTimer = !timed; persist(); stopRing(); stopFx(); showRevive(); };
   show('revive'); stopRing = reviveRing(timed ? 10 : 0, giveUp, { holdEls: [$('rvGo')], onBeat: () => { audio.play('heartbeat'); buzz([30, 70, 22]); } });
   announce('Game over. The snake reached the line. Revive with ' + cost + ' sparkles, or give up. You have 10 seconds.');
+}
+function pauseRecap() {
+  const pc = Math.floor((g.progress || 0) * 100), t = Math.floor(g.t || 0), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
+  $('pRecap').innerHTML = `<div>Stage<b>${g.stage}</b></div><div>Time<b>${mm}:${ss}</b></div><div>Popped<b>${g.kills}</b></div><div class="pbar"><i style="width:${pc}%"></i></div>`;
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
 function showStats() {
@@ -496,7 +501,8 @@ function showResult() {
   { const pct = Math.floor((r.progress || 0) * 100), best = out.first || out.starsGained > 0 || (!r.won && !r.mode && !r.hard && pct > out.prevPct && out.prevPct > 0);
     $('rRibbon').textContent = best ? (out.first ? 'FIRST CLEAR!' : out.starsGained > 0 ? 'NEW BEST STARS!' : 'NEW BEST ' + pct + '%') : ''; $('rRibbon').classList.toggle('on', !!best); }
   if (r.cp50) rows.push(`<div class="r">⚡ +10 Voice back</div>`);
-  $('rList').innerHTML = rows.join(''); countUp($('rList'), reduce, null);
+  $('rList').innerHTML = rows.join(''); countUp($('rList'), reduce, () => audio.play('coin')); for (const el of $('rList').children) el.classList.add('got');
+  progMeter($('rLevel'), !r.won && !r.mode && !r.hard ? Math.floor((r.progress || 0) * 100) : null, out.prevPct || 0, reduce);
   const pigRun = r.mode === 'pig' || r.mode === 'inv', nextOk = !pigRun && r.won && canPlay(save, r.stage + 1);
   $('rNext').style.display = nextOk ? '' : 'none'; $('rNext').classList.toggle('pulse', nextOk);
   $('rNext').onclick = () => { audio.play('click'); beginStage(r.stage + 1); };

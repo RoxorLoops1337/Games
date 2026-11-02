@@ -21,3 +21,12 @@ assert(!/—/.test(html + main + fx));
   assert.equal(lossHint({ won: true }, [], names), '');
   assert.equal(lossHint({ won: false, progress: 0.1 }, [], names), 'Grab the yellow upgrade cells early');
 }
+
+// round 3: progress meter, pause recap, revive drama, settings groups
+{
+  assert(fx.includes('export function progMeter') && main.includes('progMeter('));
+  for (const id of ['pRecap', 'rvInfo']) assert(html.includes('id="' + id + '"'), id);
+  assert((html.match(/class="sgrp"/g) || []).length >= 4);
+  assert(fx.includes("'late'") && html.includes('#revive.late'));
+  assert(html.includes('@css:11-result-pause round 3'));
+}
