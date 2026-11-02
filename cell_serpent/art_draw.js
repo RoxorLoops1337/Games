@@ -375,7 +375,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       cel(g, '#ffb3c7', ell(0, r * 0.42, r * 0.58, r * 0.4), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#e88aa6' }); dot(g, -r * 0.2, r * 0.42, r * 0.06); dot(g, r * 0.2, r * 0.42, r * 0.06);
       if (MOOD >= 3) cel(g, '#7a1633', ell(0, r * 0.62, r * 0.26, r * (MOOD === 4 ? 0.2 : 0.12)), { r: r * 0.2, hi: false, lw: r * 0.06, shadow: '#7a1633' });   // MOO
     } else if (k === 'dove') {
-      for (const s of [-1, 1]) cel(g, '#ffffff', poly([[s * r * 0.3, -r * 0.1], [s * r * 1.5, -r * 1.0], [s * r * 1.35, -r * 0.1], [s * r * 1.05, r * 0.3], [s * r * 0.4, r * 0.35]]), { r: r * 0.9, hi: false, lw: r * 0.1, shadow: '#bfd0ee' });
+      const wf = MOOD === 5 ? [-1.5, -0.5] : MOOD === 6 ? [0.15, 0.45] : [-1.0, -0.1];   // 02-animal-art r3: wing-up / wing-down frames for a real flap
+      for (const s of [-1, 1]) cel(g, '#ffffff', poly([[s * r * 0.3, -r * 0.1], [s * r * 1.5, r * wf[0]], [s * r * 1.35, r * wf[1]], [s * r * 1.05, r * 0.3], [s * r * 0.4, r * 0.35]]), { r: r * 0.9, hi: false, lw: r * 0.1, shadow: '#bfd0ee' });
       cel(g, '#ffffff', circ(0, r * 0.05, r * 0.72), { r, shadow: '#c9d8f2' });
       eyes2(g, r * 0.26, -r * 0.05, r * 0.11);
       cel(g, '#ff9a2e', poly([[-r * 0.14, r * 0.12], [r * 0.14, r * 0.12], [0, r * 0.36]]), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#d6601a' });
@@ -461,10 +462,13 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       for (const [k, col] of [[0.98, '#ff9ac6'], [0.76, '#ffc2dc']]) { g.strokeStyle = col; g.lineWidth = r * 0.06; circ(0, 0, r * k)(g); g.stroke(); }
       pawPrint(g, r * 0.72, '#ffe3f0', '#ff9ac6'); },
     dagger: g => { critter(g, 'chick', B * 0.8); },
-    needle: g => { const r = B;
-      cel(g, '#7a5236', poly([[r * 1.25, 0], [-r * 0.5, -r * 0.16], [-r * 0.5, r * 0.16]]), { r: r * 0.6, hi: false, lw: 2.4, shadow: '#4a301c' });
-      cel(g, '#f1cfa0', poly([[r * 1.25, 0], [r * 0.75, -r * 0.08], [r * 0.75, r * 0.08]]), { r: r * 0.2, hi: false, lw: 1.5 });
-      cel(g, '#ff7eb6', poly([[-r * 0.95, -r * 0.08], [-r * 0.6, -r * 0.3], [-r * 0.6, r * 0.08]]), { r: r * 0.25, hi: false, lw: 1.5, shadow: '#c93a8f' }); },
+    needle: g => { const r = B;   // 02-animal-art r3: a silver sewing needle, gold eye, a pink thread that curls behind it (+x is the tip)
+      line(g, [[-r * 0.9, 0], [-r * 1.25, r * 0.28], [-r * 1.7, -r * 0.12], [-r * 2.05, r * 0.2]], r * 0.34, INK); line(g, [[-r * 0.9, 0], [-r * 1.25, r * 0.28], [-r * 1.7, -r * 0.12], [-r * 2.05, r * 0.2]], r * 0.16, '#ff7eb6');
+      cel(g, '#e9eefc', poly([[r * 1.55, 0], [r * 1.0, -r * 0.2], [-r * 1.0, -r * 0.22], [-r * 1.0, r * 0.22], [r * 1.0, r * 0.2]]), { r: r * 0.7, hi: false, lw: 2.6, shadow: '#9fb0d8' });
+      g.save(); g.globalAlpha = 0.85; line(g, [[-r * 0.1, -r * 0.1], [r * 1.0, -r * 0.1]], r * 0.07, '#fff'); g.restore();
+      cel(g, '#ffd84d', ell(-r * 0.78, 0, r * 0.2, r * 0.12), { r: r * 0.2, hi: false, lw: 1.8, shadow: '#d49a1e' });
+      g.fillStyle = '#7a4a2a'; ell(-r * 0.78, 0, r * 0.1, r * 0.05)(g); g.fill();
+      sparkle(g, r * 1.5, -r * 0.12, r * 0.3); },
     stick: g => { const r = B;   // a fluffy bunny leg ending in a big foot with toe beans (+x)
       line(g, [[-r * 2, 0], [r * 1.0, 0]], r * 0.6); line(g, [[-r * 2, 0], [r * 1.0, 0]], r * 0.42, '#fffaf0');
       cel(g, '#fffaf0', ell(r * 1.4, 0, r * 0.7, r * 0.5), { r: r * 0.6, hi: false, lw: 3, shadow: '#d8ccd8' });

@@ -7,6 +7,7 @@ import { createHitJuice } from './hitjuice.js';
 import { createScreenFx } from './screenfx.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
+import { bakeHat } from './hats.js';
 
 const TAU = Math.PI * 2;
 const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
@@ -340,7 +341,9 @@ export function createRenderer(canvas, art, kit) {
     else { glow(p.x, p.y, 40, '#39f0ff', 0.7); ctx.fillStyle = '#39f0ff'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 22, 0, TAU); ctx.fill(); ctx.stroke(); }
     petsDraw(g, p, singing);
     drawHog(g);
-    if (g.outfit) { glow(p.x, p.y - 20, 70, g.outfit.color, 0.22); ctx.save(); ctx.font = '44px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g.outfit.hat, p.x - 4, p.y - 124 + Math.sin(S.t * 4) * 3); ctx.restore(); }
+    if (g.outfit) { glow(p.x, p.y - 20, 70, g.outfit.color, 0.22); const hs = bakeHat(kit, g.outfit.hat), hb = Math.sin(S.t * 4) * 3;
+      if (hs) { ctx.save(); ctx.translate(p.x - 4, p.y - 108 + hb); ctx.rotate(Math.sin(S.t * 2.4) * 0.05 + p.mx * 0.08); ctx.drawImage(hs.c, -48, -48, 96, 96); ctx.restore(); if (!OPT.reduceMotion) { const f = (S.t * 0.9) % 1; sparkleAt(p.x - 4 + Math.cos(S.t * 3) * 30, p.y - 122 + hb - f * 22, 5 * Math.sin(f * Math.PI)); } }
+      else { ctx.save(); ctx.font = '44px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g.outfit.hat, p.x - 4, p.y - 124 + hb); ctx.restore(); } }
     // hitbox core: the part that actually gets hurt
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 9, 0, TAU); ctx.stroke();
     ctx.fillStyle = '#ff5a78'; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 3.5, 0, TAU); ctx.fill();
@@ -352,11 +355,11 @@ export function createRenderer(canvas, art, kit) {
   function drawBullets(g) {
     if (HJ) HJ.bullets(g.bullets, lastDt);
     for (const b of g.bullets) {
-      if (b.kind === 'needle') { blit(kit && kit.SPR.weapon('needle'), b.x, b.y, 112, Math.atan2(b.vy, b.vx)); continue; }
+      if (b.kind === 'needle') { const na = Math.atan2(b.vy, b.vx); ctx.save(); ctx.globalAlpha *= 0.28; ctx.strokeStyle = '#ff9ac6'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(b.x - Math.cos(na) * 34, b.y - Math.sin(na) * 34); ctx.lineTo(b.x - Math.cos(na) * 96, b.y - Math.sin(na) * 96); ctx.stroke(); ctx.restore(); blit(kit && kit.SPR.weapon('needle'), b.x, b.y, 140, na); continue; }
       if (b.kind === 'snot') {   // doves leave drifting feathers and flap
         const fe = kit && kit.SPR.feather(), sp = Math.hypot(b.vx, b.vy) || 1;
         for (let j = 1; j <= 3; j++) { const f = (S.t * 3 + j * 0.33 + b.x * 0.01) % 1, d = 20 + f * 60; ctx.save(); ctx.globalAlpha *= (1 - f) * 0.8; blit(fe, b.x - b.vx / sp * d + Math.sin(S.t * 5 + j) * 14 * f * (j % 2 ? 1 : -1), b.y - b.vy / sp * d + f * 14, 30 * (1 - f * 0.4), S.t * 3 + j * 2); ctx.restore(); }
-        ctx.save(); ctx.translate(b.x, b.y); ctx.scale(1 + Math.sin(S.t * 22 + b.x) * 0.1, 1 - Math.sin(S.t * 22 + b.x) * 0.06); blit(kit && kit.SPR.weapon('dragon'), 0, 0, 118, Math.sin(S.t * 10 + b.x) * 0.25); ctx.restore(); continue;
+        ctx.save(); ctx.translate(b.x, b.y); ctx.scale(1 + Math.sin(S.t * 22 + b.x) * 0.04, 1 - Math.sin(S.t * 22 + b.x) * 0.04); blit(kit && kit.SPR.weapon('dragon', Math.sin(S.t * 22 + b.x) > 0 ? 5 : 6), 0, 0, 132, Math.sin(S.t * 10 + b.x) * 0.25); ctx.restore(); continue;
       }
       if (b.kind === 'bubble') { blit(kit && kit.SPR.weapon('bubble'), b.x, b.y, b.r * 4.84, Math.sin(S.t * 3 + b.x) * 0.2); continue; }
       const col = b.crit ? '#ffd84d' : '#6fe3ff';
