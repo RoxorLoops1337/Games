@@ -134,7 +134,7 @@ function renderHub() {
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { audio.unlock(); audio.play('click'); hubTab = b.dataset.tab; hubTabSwitch(); };
 paintTabIcons();
-bindHubSwipe({ order: TABS, cur: () => hubTab, hub: $('hub'), go: t => { if (mode !== 'hub') return; audio.unlock(); audio.play('click'); buzz(6); hubTab = t; hubTabSwitch(); } });
+bindHubSwipe({ order: TABS, cur: () => hubTab, hub: $('hub'), pane: () => $('tab' + hubTab), bump: () => buzz(10), go: t => { if (mode !== 'hub') return; audio.unlock(); audio.play('click'); buzz(6); hubTab = t; hubTabSwitch(); } });
 // 17-perf: a tab tap paints the new pane at once (old content dimmed as a light skeleton) and builds it on the next frame, so the tap never freezes
 let hubSwitchTok = 0;
 function hubTabSwitch() {

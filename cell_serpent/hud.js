@@ -2,6 +2,7 @@
 // chest markers, an equalizer groove meter and round skill tiles with cooldown rings.
 // The renderer hands in its helpers; this file never touches the sim state.
 import { landBounce } from './hitjuice.js';
+import { paintPauseGlyph, paintStatsGlyph } from './glyphs_ui.js';
 import { W, H, WEAPONS, uv, isBossStage, virusName, GOLD_TIME } from './sim.js';
 
 const TAU = Math.PI * 2;
@@ -80,10 +81,8 @@ export function createHud(env) {
     gp(484, 14, 142, 52, 26, 'rgba(255,210,74,.55)');
     gp(22, 86, 582, 32, 16, 'rgba(255,255,255,.4)', 'rgba(8,5,30,.62)');
     const bx = W - 38;
-    glassCirclePaint(c, bx, 40, 26); c.fillStyle = '#fff';
-    for (const dx of [-11, 4]) { c.beginPath(); if (c.roundRect) c.roundRect(bx + dx, 29, 7, 22, 3); else c.rect(bx + dx, 29, 7, 22); c.fill(); }
-    glassCirclePaint(c, bx, 112, 26); c.fillStyle = '#fff';
-    for (const [i, hgt] of [[0, 12], [1, 20], [2, 28]]) { c.beginPath(); if (c.roundRect) c.roundRect(bx - 15 + i * 11, 126 - hgt, 8, hgt, 3); else c.rect(bx - 15 + i * 11, 126 - hgt, 8, hgt); c.fill(); }
+    glassCirclePaint(c, bx, 40, 26); paintPauseGlyph(c, bx, 40);
+    glassCirclePaint(c, bx, 112, 26); paintStatsGlyph(c, bx, 112);
   }
   function chrome(boss, hard) {
     const spr = kit && kit.bake ? kit.bake(`chrome06|${boss ? 1 : 0}|${hard ? 1 : 0}`, CH_W, CH_H, c => chromePaint(c, boss, hard)) : null;
