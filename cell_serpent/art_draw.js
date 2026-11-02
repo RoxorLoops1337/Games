@@ -104,6 +104,15 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     if (c) { const g = c.getContext('2d'); g.scale(scale, scale); fn(g); layerSpr = { c, w, h }; }
     return layerSpr;
   }
+  // a second static layer slot (the foreground of the background, so a far parallax layer can sit between the two)
+  let layerKey2 = null, layerSpr2 = null;
+  function layer2(key, w, h, scale, fn) {
+    if (layerKey2 === key) return layerSpr2;
+    const c = makeCanvas && makeCanvas(Math.ceil(w * scale), Math.ceil(h * scale));
+    layerKey2 = key; layerSpr2 = null;
+    if (c) { const g = c.getContext('2d'); g.scale(scale, scale); fn(g); layerSpr2 = { c, w, h }; }
+    return layerSpr2;
+  }
 
   // ---- snake cells ----
   // One drawing per cell style; the species picks the style. Faces are only ever on the head.
@@ -688,5 +697,5 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   function text2(g, ch, x, y, size) { g.font = `900 ${size}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = size * 0.25; g.strokeStyle = INK; g.strokeText(ch, x, y); g.fillStyle = '#fff'; g.fillText(ch, x, y); }
 
   // flat colour fallback shapes are not needed: the kit always draws. Expose helpers for UI art too.
-  return { SPR, blit, drawHead, cel, eye, sparkle, SPECIES, MINION_IDS: Object.keys(MIN), cache, B, bake, layer, makeCanvas, dpr };
+  return { SPR, blit, drawHead, cel, eye, sparkle, SPECIES, MINION_IDS: Object.keys(MIN), cache, B, bake, layer, layer2, makeCanvas, dpr };
 }

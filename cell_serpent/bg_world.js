@@ -161,13 +161,17 @@ function nightSky(c, gr, stage) {
 }
 
 // everything static for a stage; c is a context already scaled to the W x H space
-export function bakeWorld(c, skin, boss, ring, th, stage = 1) {
+// part 0: everything; part 1: only the sky; part 2: only what stands in front of the far skyline (scenery, floor, frame)
+export function bakeWorld(c, skin, boss, ring, th, stage = 1, part = 0) {
   const w = worldOf(skin), dim = boss ? 0.45 : 0, gr = skyGrade(stage);
-  const sky = c.createLinearGradient(0, 0, 0, LINE_Y);
-  sky.addColorStop(0, mix(mix(w.top, gr.topT, gr.topA), '#05030f', dim)); sky.addColorStop(1, mix(mix(w.bot, gr.botT, gr.botA), '#1a0820', dim * 1.2));
-  c.fillStyle = sky; c.fillRect(0, 0, W, H);
-  nightSky(c, gr, stage);
-  if (boss) { const rg = c.createRadialGradient(W / 2, 260, 20, W / 2, 260, 520); rg.addColorStop(0, 'rgba(255,60,90,.22)'); rg.addColorStop(1, 'rgba(255,60,90,0)'); c.fillStyle = rg; c.fillRect(0, 0, W, LINE_Y); }
+  if (part !== 2) {
+    const sky = c.createLinearGradient(0, 0, 0, LINE_Y);
+    sky.addColorStop(0, mix(mix(w.top, gr.topT, gr.topA), '#05030f', dim)); sky.addColorStop(1, mix(mix(w.bot, gr.botT, gr.botA), '#1a0820', dim * 1.2));
+    c.fillStyle = sky; c.fillRect(0, 0, W, H);
+    nightSky(c, gr, stage);
+    if (boss) { const rg = c.createRadialGradient(W / 2, 260, 20, W / 2, 260, 520); rg.addColorStop(0, 'rgba(255,60,90,.22)'); rg.addColorStop(1, 'rgba(255,60,90,0)'); c.fillStyle = rg; c.fillRect(0, 0, W, LINE_Y); }
+    if (part === 1) return;
+  }
   scenery(c, w, boss);
   if (gr.k > 0.3) { c.fillStyle = `rgba(3,0,16,${(gr.k - 0.3) * 0.4})`; c.fillRect(0, LINE_Y - 340, W, 340); }   // silhouettes sink into the night
   const v = c.createLinearGradient(0, 0, 0, H); v.addColorStop(0, 'rgba(0,0,0,.4)'); v.addColorStop(0.22, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.3)');

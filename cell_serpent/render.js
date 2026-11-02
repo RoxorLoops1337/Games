@@ -5,6 +5,7 @@ import { INK, mix } from './art_draw.js';
 import { createHud, hudZone } from './hud.js';
 import { createHitJuice } from './hitjuice.js';
 import { createScreenFx } from './screenfx.js';
+import { drawFar } from './bg_far.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
 import { drawCellFlags, drawCellBadge } from './cellfx.js';
@@ -176,14 +177,22 @@ export function createRenderer(canvas, art, kit) {
   function themeOf(g) { return (kit && kit.SPECIES[g.skin]) || { base: '#ff7eb6', lite: '#ffc2dc', cell: 'round' }; }
   function bgLayer(g, L) {
     const th = themeOf(g), k = Math.max(0.5, Math.min(1.5, L.s));
-    return kit && kit.layer(`${g.skin}|${g.stage}|${k.toFixed(1)}|${OPT.colorBlind ? 1 : 0}`, W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th, g.stage));
+    return kit && kit.layer(`${g.skin}|${g.stage}|${k.toFixed(1)}|${OPT.colorBlind ? 1 : 0}`, W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th, g.stage, 1));
+  }
+  function fgLayer(g, L) {   // everything in front of the far skyline
+    const th = themeOf(g), k = Math.max(0.5, Math.min(1.5, L.s));
+    return kit && kit.layer2 && kit.layer2(`${g.skin}|${g.stage}|${k.toFixed(1)}|${OPT.colorBlind ? 1 : 0}`, W, H, k, c => bakeWorld(c, g.skin, isBossStage(g.stage), !!g.ring, th, g.stage, 2));
   }
   function drawBg(g, L) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#0d0924'; ctx.fillRect(0, 0, L.cw, L.ch);
     ctx.setTransform(L.s, 0, 0, L.s, L.ox, L.oy);
     const lay = bgLayer(g, L), th = themeOf(g);
-    if (lay) ctx.drawImage(lay.c, 0, 0, W, H);
+    if (lay) {   // sky, then the far skyline sliding against the duo (bg_far.js), then the hills, floor and frame
+      ctx.drawImage(lay.c, 0, 0, W, H);
+      drawFar(ctx, kit, { skin: g.skin, boss: isBossStage(g.stage), stage: g.stage, t: S.t, px: g.p.x, reduce: OPT.reduceMotion, low: OPT.lowQuality });
+      const fg = fgLayer(g, L); if (fg) ctx.drawImage(fg.c, 0, 0, W, H);
+    }
     else { ctx.fillStyle = '#1a1445'; ctx.fillRect(0, 0, W, H); }
     // drifting bokeh lights and themed motes (petals, snow, droplets, notes, stars, bubbles)
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
