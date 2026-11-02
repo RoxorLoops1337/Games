@@ -24,3 +24,16 @@ const gg = { level: 5, stage: 4, ups: { aspd: 2 }, weap: { swab: { lv: 2 } }, re
 assert.ok(ui.buildHTML(gg, id => id).includes('2'), 'build strip');
 assert.ok(ui.luckHTML(gg).includes('Rare+'), 'luck html');
 assert.ok(html.includes('id="buildStrip"') && html.includes('id="luckBox"'), 'markup');
+
+// round 3: distinct capsule icons, kind label, synergy hints, compact button row
+const ci = await import('../../cell_serpent/card_icons.js');
+const urls = ['aspd', 'notes', 'burst', 'cdmg'].map(ci.capIconURL);
+assert.ok(urls.every(u => u.startsWith('data:image/svg+xml')) && new Set(urls).size === 4, 'four distinct capsule icons');
+assert.equal(ci.capIconURL('swab'), '', 'other ids untouched');
+assert.equal(ci.kindLabel({ kind: 'weapon' }), 'SKILL');
+const sg = { ups: { power: 1, notes: 1 }, weap: { swab: { lv: 1 }, daggers: { lv: 1 } } };
+assert.ok(ci.synergyHint(sg, { kind: 'passive', id: 'power', lvl: 0, max: 8 }).includes('2'), 'boost hint');
+assert.ok(ci.synergyHint(sg, { kind: 'capsule', id: 'burst', lvl: 0, max: 3 }).includes('Harmony'), 'echo hint');
+assert.equal(ci.synergyHint(sg, { kind: 'capsule', id: 'aspd', lvl: 11, max: 12 }), 'LAST LEVEL');
+assert.ok(html.includes('class="lvrow"') && html.includes('@css:07-cards round 3'), 'button row');
+assert.ok(main.includes('synergyHint(g, c)'), 'synergy wired');
