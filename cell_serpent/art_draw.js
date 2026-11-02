@@ -770,6 +770,14 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       const k = (t * 1.6) % 1; g.fillStyle = '#bfe9ff';
       for (const [dx, ph] of [[0.78, 0], [-0.82, 0.5]]) { const q = (k + ph) % 1; g.save(); g.globalAlpha = 1 - q * q; g.translate(dx * R, -R * 0.42 + q * R * 0.5); g.beginPath(); g.moveTo(0, -R * 0.18); g.quadraticCurveTo(R * 0.15, R * 0.02, 0, R * 0.1); g.quadraticCurveTo(-R * 0.15, R * 0.02, 0, -R * 0.18); g.fill(); ink(g, R * 0.05); g.stroke(); g.restore(); }
     }
+    if (o.panic > 0 && !hurt && !boss) {   // 05 round 7: a face about to reach the line goes wide-eyed and screams, shaking (it is panicking, the duo is about to be wiped out)
+      const sh = Math.sin(t * 46) * R * 0.025 * o.panic;
+      g.save(); g.translate(sh, 0);
+      for (const s of [-1, 1]) { g.fillStyle = '#fff'; ell(s * R * 0.36, -R * 0.1, R * 0.27, R * 0.32)(g); g.fill(); ink(g, R * 0.08); g.stroke(); g.fillStyle = '#2d170f'; circ(s * R * 0.36 + (o.look ? o.look[0] * R * 0.07 : 0), -R * 0.08, R * 0.07)(g); g.fill(); }
+      g.fillStyle = '#7a1633'; ell(0, R * 0.46, R * 0.22, R * (0.2 + 0.07 * Math.abs(Math.sin(t * 18)))) (g); g.fill(); ink(g, R * 0.07); g.stroke();
+      g.fillStyle = '#ff7a9a'; ell(0, R * 0.56, R * 0.12, R * 0.07)(g); g.fill();
+      g.restore();
+    }
     if (o.fury > 0 && !hurt) {   // the manga anger mark pops on the brow
       const k = 1 + Math.sin(t * 14) * 0.12 * o.fury; g.save(); g.translate(R * 0.7, -R * 0.66); g.scale(k, k); g.lineCap = 'round';
       for (const [w, c] of [[R * 0.15, INK], [R * 0.08, '#ff3d5a']]) { g.lineWidth = w; g.strokeStyle = c; for (const s of [-1, 1]) for (const d of [-1, 1]) { g.beginPath(); g.moveTo(s * R * 0.06, d * R * 0.24); g.quadraticCurveTo(s * R * 0.24, d * R * 0.24, s * R * 0.24, d * R * 0.06); g.stroke(); } }

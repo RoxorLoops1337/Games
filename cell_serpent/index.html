@@ -1682,6 +1682,17 @@
   @keyframes rb6Ring{0%{opacity:.9;transform:scale(.3)}100%{opacity:0;transform:scale(2.6)}}
   @media (prefers-reduced-motion:reduce){.rribbon.fx6,.rribbon.fx6::after{animation:none!important}.rb6fx{display:none}}
   @media (max-height:700px){.rribbon.fx6{font-size:14px;padding:4px 22px}}
+  /* wipeout bridge: the banner from the canvas lands here as a chip over the revive title */
+  .rvwipe{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 18px 8px;border-radius:16px;background:linear-gradient(180deg,rgba(255,106,134,.28),rgba(26,2,16,.7));border:2px solid rgba(255,106,134,.7);box-shadow:0 0 22px rgba(255,60,90,.35)}
+  .rvwipe:empty{display:none}
+  .rvwipe b{font-size:25px;letter-spacing:.06em;color:#ff6a86;text-shadow:0 2px 0 #1a0210,0 0 14px rgba(255,60,90,.7);transform:rotate(-2deg)}
+  .rvwipe span{font-size:12px;font-weight:900;color:#ffd9e6}
+  .rvwipe i{display:block;width:150px;height:7px;border-radius:5px;background:rgba(255,255,255,.18);overflow:hidden} .rvwipe i u{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#ff7eb6,#ffd84d)}
+  .rvwipe.go{animation:rvDrop .55s cubic-bezier(.2,1.5,.4,1) both} .rvwipe.go i u{animation:rvFill .7s .25s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes rvDrop{from{opacity:0;transform:translateY(-70px) scale(1.5)}to{opacity:1;transform:none}}
+  @keyframes rvFill{from{transform-origin:left;transform:scaleX(0)}to{transform:scaleX(1)}}
+  @media (max-height:700px){.rvwipe{display:none}}
+  @media (prefers-reduced-motion:reduce){.rvwipe.go,.rvwipe.go i u{animation:none}}
   /* end @css:05-screen-feel */
 /* @css:18-access round 7 */
   .qpill{min-height:44px} #tabBattle .qpill{min-height:44px}
@@ -1806,6 +1817,7 @@
 <section class="scr" id="panel"><h2 id="pTitle"></h2><div class="panelbody" id="pBody"></div><button class="btn dim" id="pClose">CLOSE</button></section>
 
 <section class="scr" id="revive">
+  <div class="rvwipe" id="rvWipe"></div>
   <h2>ENCORE?</h2>
   <div class="rvring"><svg viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" id="rvArc" cx="60" cy="60" r="52"/></svg><img class="hero" src="assets/duo_idle.png" alt=""><b id="rvSec">10</b></div>
   <div class="sub">The crowd wants one more song. The snake gets knocked back.</div>
