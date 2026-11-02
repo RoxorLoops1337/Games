@@ -21,15 +21,17 @@ const ART = {
   // bridge: a golden bell with ring lines
   brg: `<path d="M-11 9 Q-10 -9 0 -12 Q10 -9 11 9 Z" fill="#ffd04a" stroke="#7a4b00" stroke-width="1.8" stroke-linejoin="round"/><circle cx="0" cy="11" r="3.2" fill="#b8801c" stroke="#7a4b00" stroke-width="1.5"/><path d="M-16 -4 q-3 4 0 8 M16 -4 q3 4 0 8" fill="none" stroke="#fff2b0" stroke-width="2" stroke-linecap="round"/>`,
   // Ice Breaker: a snowflake with a crack through it
-  brk: `<path d="M0 -14 V14 M-12 -7 L12 7 M-12 7 L12 -7" stroke="#bfe9ff" stroke-width="3" stroke-linecap="round"/><circle cx="0" cy="0" r="4" fill="#fff" stroke="#3a7fa8" stroke-width="1.6"/><path d="M-3 -16 L2 -6 L-3 0 L3 8 L-1 16" fill="none" stroke="#2a4a66" stroke-width="2" stroke-linejoin="round"/>`,
+  brk: `<path d="M-4 -15 L9 -11 L14 2 L6 14 L-8 13 L-15 1 L-12 -9 Z" fill="#9fe3ff" stroke="#2a6c99" stroke-width="2" stroke-linejoin="round"/><path d="M-4 -15 L-2 -3 L9 -11 M-2 -3 L-15 1 M-2 -3 L6 14" fill="none" stroke="#e8fbff" stroke-width="1.5" stroke-linejoin="round" opacity=".85"/><path d="M-1 -14 L2 -6 L-3 -1 L4 5 L0 15" fill="none" stroke="#17405f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 -15 l3 3 l-4 1 Z M-17 9 l4 -2 l1 4 Z" fill="#dff6ff" stroke="#2a6c99" stroke-width="1.1" stroke-linejoin="round"/>`,
   // Heart Mender: a heart with a plaster across it
-  hbk: `<path d="M0 13 C-18 1 -13 -13 -5 -12 C-2 -11.5 0 -8 0 -8 C0 -8 2 -11.5 5 -12 C13 -13 18 1 0 13 Z" fill="#ff8fb8" stroke="#7a1f45" stroke-width="1.8" stroke-linejoin="round"/><rect x="-11" y="-3" width="22" height="7" rx="3" fill="#ffe9c9" stroke="#7a4b00" stroke-width="1.4" transform="rotate(-35)"/>`,
+  hbk: `<path d="M0 14 C-19 1 -14 -14 -5 -13 C-2 -12.5 0 -9 0 -9 C0 -9 2 -12.5 5 -13 C14 -14 19 1 0 14 Z" fill="#ff7fae" stroke="#7a1f45" stroke-width="2" stroke-linejoin="round"/><path d="M-9 -8 q-4 3 -3 8" fill="none" stroke="#ffd0e2" stroke-width="2.2" stroke-linecap="round"/><path d="M-17 2 H-8 L-5 -3 L-1 8 L2 2 H17" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><rect x="-10" y="-2" width="20" height="6.5" rx="3" fill="#ffe9c9" stroke="#7a4b00" stroke-width="1.4" transform="rotate(-38 0 1)"/><circle cx="-3" cy="1" r=".9" fill="#c79a5a"/><circle cx="3" cy="1" r=".9" fill="#c79a5a"/>`,
 };
 const cache = {};
 export function capIconURL(id) { return ART[id] ? (cache[id] || (cache[id] = svgURL(ART[id]))) : ''; }
 
 const KIND = { weapon: 'SKILL', capsule: 'SHOT', passive: 'BOOST' };
-export const kindLabel = c => KIND[c.kind] || '';
+// batch 9: the two counter cards (Ice Breaker, Heart Mender) answer one snake trait, so they say so on the icon
+export const COUNTERS = { brk: { skin: 'frosty', what: 'Frosty', shield: 'Frost shield' }, hbk: { skin: 'love', what: 'Love-Struck', shield: 'Heart heal' } };
+export const kindLabel = c => (COUNTERS[c.id] ? 'COUNTER' : KIND[c.kind] || '');
 
 // A short hint when this card works with what the player already has. Empty string when nothing special.
 export function synergyHint(g, c) {
@@ -44,7 +46,7 @@ export function synergyHint(g, c) {
   if (c.id === 'fan' && (ups.brg | 0) > 0) return 'Bell rings add Groove';
   if (c.id === 'brg' && (ups.fan | 0) > 0) return 'Bell rings add Groove';
   if (c.id === 'brg' && (ups.chk | 0) > 0) return 'Soundcheck loves bells';
-  if (c.id === 'brk' || c.id === 'hbk') return 'Counters this stage';
+  if (COUNTERS[c.id]) return 'Beats the ' + COUNTERS[c.id].what + ' snake here';
   if (c.id === 'chk' && (ups.brg | 0) > 0) return 'Bells count too';
   if (c.kind === 'weapon' && !c.isNew && ((ups.power | 0) > 0 || (ups.haste | 0) > 0)) return (ups.power ? 'Loud Vocals' : 'Tempo Up') + ' helps it';
   if (c.kind === 'weapon' && c.isNew && (ups.haste | 0) > 0) return 'Tempo Up recharges it';

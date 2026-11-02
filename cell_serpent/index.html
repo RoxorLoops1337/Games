@@ -848,6 +848,18 @@
   @media (max-width:340px){.card.pick .dv b{font-size:17px}.card.pick .dv b:only-child{font-size:13px}.card.pick .delta{gap:5px;padding-left:6px;padding-right:6px}}
   @media (prefers-reduced-motion:reduce){html.cb .card.pick .foil.f2::after,html.cb #levelup .lkw i,#levelup .bi .plus,.chtoast{animation:none!important}.chtoast{opacity:1;transform:translate(-50%,-100%)}}
   /* end @css:07-cards round 8 */
+  /* @css:07-cards round 9 */
+  /* NEW rides the icon corner (it used to wrap under long names), counter cards say COUNTER, partners glow on the band strip, a better reroll is marked */
+  .card.pick .ic .newtag{position:absolute;left:-7px;top:-7px;z-index:3;padding:0 6px;border-radius:7px;background:#9dff6d;color:#0e2a06;font-size:8.5px;line-height:13px;letter-spacing:.08em;box-shadow:0 1px 4px #000a;animation:none;transform:rotate(-8deg)}
+  .card.pick .ic .kd{white-space:nowrap}
+  .card.pick.c-passive .ic .kd{max-width:96px}
+  #levelup .bi.par{border-color:#9dff6d;box-shadow:0 0 9px #9dff6d88;animation:bipar 1.2s ease-in-out infinite}
+  #levelup .bi.par::after{content:'';position:absolute;right:-3px;top:-3px;width:7px;height:7px;border-radius:50%;background:#9dff6d;box-shadow:0 0 6px #9dff6d}
+  @keyframes bipar{50%{box-shadow:0 0 15px #9dff6dcc;transform:translateY(-2px)}}
+  .card.pick .bet{position:absolute;right:12px;bottom:6px;z-index:3;padding:0 7px;border-radius:8px;background:var(--rc);color:#10082a;font-size:9px;font-weight:900;letter-spacing:.07em;line-height:14px;box-shadow:0 1px 5px #000b;animation:betin .5s cubic-bezier(.3,1.6,.5,1) .35s both}
+  @keyframes betin{from{transform:translateY(8px) scale(.4);opacity:0}to{transform:none;opacity:1}}
+  @media (prefers-reduced-motion:reduce){#levelup .bi.par,.card.pick .bet{animation:none!important}}
+  /* end @css:07-cards round 9 */
   /* end @css:07-cards */
   /* @css:18-access */
   :focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #ff5cb8}
