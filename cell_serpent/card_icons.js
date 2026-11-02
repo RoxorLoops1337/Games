@@ -30,13 +30,17 @@ const ART = {
   swt: `<circle r="8.5" fill="#d8ff6a" stroke="#4a6a10" stroke-width="1.8"/><path d="M-8 -3 L-17 -9 V9 L-8 3 M8 -3 L17 -9 V9 L8 3" fill="#ffb0d8" stroke="#7a1f55" stroke-width="1.6" stroke-linejoin="round"/><path d="M-4 -3 Q0 -6 4 -3" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>`,
   // Tissue Box: a tissue box with a tissue sticking out (sneeze jolts shorter)
   tis: `<path d="M-4 0 Q-9 -8 -3 -12 Q0 -15 2 -10 Q6 -16 10 -9 Q12 -4 6 0 Z" fill="#fff" stroke="#2a5a8a" stroke-width="1.5" stroke-linejoin="round"/><path d="M0 -3 Q2 -8 4 -6" fill="none" stroke="#bcd8f0" stroke-width="1.2" stroke-linecap="round"/><path d="M-14 0 H14 L12 13 Q12 15 10 15 H-10 Q-12 15 -12 13 Z" fill="#9dd7ff" stroke="#2a5a8a" stroke-width="1.8" stroke-linejoin="round"/><path d="M-7 5.5 Q0 8.5 7 5.5" fill="none" stroke="#2a5a8a" stroke-width="2" stroke-linecap="round"/><circle cx="-9" cy="11" r="1.2" fill="#fff"/><circle cx="9" cy="11" r="1.2" fill="#fff"/>`,
+  // Heart Ward (batch 11): a heart with a gold shield on it (Sweetheart's ward wears off sooner)
+  hwd: `<path d="M0 12 C-17 0 -13 -13 -5 -12 C-2 -11.5 0 -8 0 -8 C0 -8 2 -11.5 5 -12 C13 -13 17 0 0 12 Z" fill="#ff7fae" stroke="#7a1f45" stroke-width="1.8" stroke-linejoin="round"/><path d="M-9 -7 q-3 3 -2 7" fill="none" stroke="#ffd0e2" stroke-width="2" stroke-linecap="round"/><path d="M0 -6 L9 -3 V4 Q9 10 0 15 Q-9 10 -9 4 V-3 Z" fill="#ffd86b" stroke="#7a4b00" stroke-width="1.7" stroke-linejoin="round"/><path d="M-4.5 4 L-1 7.5 L5 0" fill="none" stroke="#7a4b00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+  // Honey Jar (batch 11): a honey jar with a drip (sticky slows bite the Iron Hide snake again)
+  hny: `<rect x="-11" y="-12" width="22" height="5" rx="2" fill="#c98a3a" stroke="#6a3a10" stroke-width="1.6"/><path d="M-12 -7 H12 L13 8 Q13 14 7 14 H-7 Q-13 14 -13 8 Z" fill="#ffc83a" stroke="#6a3a10" stroke-width="1.8" stroke-linejoin="round"/><path d="M-9 -3 V6" stroke="#fff2b0" stroke-width="2.2" stroke-linecap="round" opacity=".8"/><rect x="-7" y="-1" width="14" height="9" rx="3" fill="#fff4cf" stroke="#6a3a10" stroke-width="1.2"/><path d="M-2.5 3.5 q2.5 -2.5 5 0" fill="none" stroke="#c98a3a" stroke-width="1.6" stroke-linecap="round"/><path d="M5 -7 q0 7 3 7 q3 0 1 -7" fill="#ffc83a" stroke="#6a3a10" stroke-width="1.2"/>`,
 };
 const cache = {};
 export function capIconURL(id) { return ART[id] ? (cache[id] || (cache[id] = svgURL(ART[id]))) : ''; }
 
 const KIND = { weapon: 'SKILL', capsule: 'SHOT', passive: 'BOOST' };
 // batch 9: the two counter cards (Ice Breaker, Heart Mender) answer one snake trait, so they say so on the icon
-export const COUNTERS = { brk: { skin: 'frosty', what: 'Frosty', shield: 'Frost shield' }, hbk: { skin: 'love', what: 'Love-Struck', shield: 'Heart heal' }, oil: { skin: 'rust', what: 'Rusty', shield: 'Creak lurch' }, swt: { skin: 'sour', what: 'Sour', shield: 'Pop rush' }, tis: { skin: 'sneezy', what: 'Sneezy', shield: 'Sneeze jolt' } };
+export const COUNTERS = { brk: { skin: 'frosty', what: 'Frosty', shield: 'Frost shield' }, hbk: { skin: 'love', what: 'Love-Struck', shield: 'Heart heal' }, oil: { skin: 'rust', what: 'Rusty', shield: 'Creak lurch' }, swt: { skin: 'sour', what: 'Sour', shield: 'Pop rush' }, tis: { skin: 'sneezy', what: 'Sneezy', shield: 'Sneeze jolt' }, hwd: { skin: 'love', what: 'Sweetheart', shield: 'Heart ward' }, hny: { skin: 'mighty', what: 'Iron Hide', shield: 'Iron shrug' } };
 export const kindLabel = c => (COUNTERS[c.id] ? 'COUNTER' : KIND[c.kind] || '');
 
 // A short hint when this card works with what the player already has. Empty string when nothing special.

@@ -967,6 +967,28 @@
   @media (max-height:700px){#levelup .dealchip{display:none}}
   @media (prefers-reduced-motion:reduce){.card.pick .ic.ant,.card.pick .lnk,#levelup .dealchip,.pbur u,.pbur s{animation:none!important}.pbur{display:none}}
   /* end @css:07-cards round 10 */
+  /* @css:07-cards round 11 */
+  /* keyboard lock (L then a number), a focus ring on the lock, one name line on short phones so card 3 clears Refresh */
+  .card.pick .lockb{border-radius:9px}
+  .card.pick .lockb:focus-visible{outline:2px solid #ffe14a;outline-offset:1px;opacity:1}
+  .card.pick.kept .shine{display:block;position:absolute;top:0;bottom:0;left:0;width:34%;background:linear-gradient(100deg,transparent,#ffe14a99 50%,transparent);transform:translateX(-160%) skewX(-18deg);animation:shine1 .8s ease-out .05s 1 both}
+  #levelup .cards.lockarm .lockb{opacity:1;color:#ffe14a;background:#ffe14a22;box-shadow:0 0 0 1px #ffe14a88;animation:lockarm .5s ease-in-out infinite alternate}
+  @keyframes lockarm{from{transform:scale(1)}to{transform:scale(1.18)}}
+  .card.pick .nm .nt{min-width:0}
+  @media (max-height:700px){
+    .card.pick .nm{flex-wrap:nowrap;font-size:15px}
+    .card.pick .nm .nt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .card.pick .rar{flex:none;font-size:9px;padding:0 6px}
+    .card.pick .lnk{bottom:4px;right:10px;font-size:8px;line-height:11px;padding:0 6px;max-width:44%}
+    .card.pick.linked .pips{max-width:52%;overflow:hidden}
+    .card.pick .pips{flex-wrap:nowrap} .card.pick .pip{flex:0 1 12px;min-width:3px}
+    #levelup .lvrow{margin-top:8px}
+    .card.pick .bet{top:1px;bottom:auto;right:52px;font-size:0;line-height:11px;padding:0 5px}
+    .card.pick .bet::before{content:'\25B2';font-size:9px}
+    .card.pick .lnk:has(~ .bet){left:auto;right:10px}
+  }
+  @media (prefers-reduced-motion:reduce){#levelup .cards.lockarm .lockb,.card.pick.kept .shine{animation:none!important}}
+  /* end @css:07-cards round 11 */
   /* end @css:07-cards */
   /* @css:18-access */
   :focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #ff5cb8}
