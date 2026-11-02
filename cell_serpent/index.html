@@ -649,6 +649,22 @@
   html.hc .tsprev,html.hc #settings .tsrow{border-color:#fff}
   html.hc .chip .st,html.hc .stars .off{color:#d6e2f2}
   /* end @css:18-access round 5 */
+  /* @css:18-access round 6 */
+  /* reduce flashing (separate from reduce motion): the full-screen DOM flashes go dark, movement stays */
+  html.rf .lvflash,html.rf .legflash{display:none!important}
+  html.rf .eggstage.crack{animation:none!important} html.rf .sc.flash{animation:none!important}
+  /* true 44px targets at 360px: loadout slots on the Battle tab, build SAVE buttons, the Rewards filter */
+  .bt-load .loadout .slot{min-width:44px;min-height:44px;flex:0 0 44px;width:44px;height:44px;max-width:44px}
+  .prsave{min-height:44px}
+  #tabBattle #loadEdit{min-height:44px;min-width:44px}
+  #rwFilter{position:relative} #rwFilter::before{content:"";position:absolute;left:0;right:0;top:50%;height:max(100%,44px);transform:translateY(-50%)}
+  @media (max-width:380px){
+    #tabBattle .bt-load{padding:2px 4px;gap:4px} #tabBattle .bt-load>.loadout{gap:3px;flex:0 1 auto;min-width:0}
+    #tabBattle #loadEdit{font-size:0;width:44px;min-width:44px;height:44px;padding:0;margin-left:auto;display:grid;place-items:center} #loadEdit::after{content:"\270E";font-size:19px;line-height:1}
+  }
+  @media (max-width:340px){#tabBattle .bt-load{flex-wrap:wrap;justify-content:center} #tabBattle .bt-load>.loadout{flex:1 1 100%;justify-content:center} #tabBattle #loadEdit{margin:0 auto}}
+  html.hc .bt-load .slot{border-color:#fff}
+  /* end @css:18-access round 6 */
   /* end @css:18-access */
   /* @css:08-battle-tab */
   #tabBattle{gap:10px} #tabBattle .stagebox{gap:8px}
@@ -1407,7 +1423,8 @@
   <button class="tgl" data-k="beatTick"><i class="ti">🥁</i><span>Beat tick (a click on every beat, with music)</span><b>OFF</b></button>
   <button class="tgl" data-k="vibrate"><i class="ti">📳</i><span>Vibration</span><b>ON</b></button>
   <h3 class="setgrp">SEEING THE GAME</h3>
-  <button class="tgl" data-k="reduceMotion"><i class="ti">🌀</i><span>Reduce motion (no shake or flashes)</span><b>OFF</b></button>
+  <button class="tgl" data-k="reduceMotion"><i class="ti">🌀</i><span>Reduce motion (no shake, calm movement)</span><b>OFF</b></button>
+  <button class="tgl" data-k="reduceFlash"><i class="ti">💡</i><span>Reduce flashing (no screen flashes or lightning)</span><b>OFF</b></button>
   <button class="tgl" data-k="lowQuality"><i class="ti">⚡</i><span>Low quality (fewer sparkles, faster)</span><b>OFF</b></button>
   <div class="sgrp">Readability</div>
   <button class="tgl" data-k="bigNumbers"><i class="ti">🔢</i><span>Bigger numbers on cells</span><b>OFF</b></button>

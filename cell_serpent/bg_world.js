@@ -354,7 +354,7 @@ export function createBgFx() {
     const wk = weatherFor(o.skin, o.stage);
     if (!o.reduce) drawClouds(c, kit, o.skin, mix(worldOf(o.skin).bot, '#ffffff', 0.6), skyGrade(o.stage).k, t, boss, o.low);
     if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26);
-    if (boss && !o.reduce) lightning(c, bg, t, o.phase || 0);
+    if (boss && !o.reduce && !o.noFlash) lightning(c, bg, t, o.phase || 0);
     if (boss && o.phase > 0.01) drawBossPhase(c, kit, t, o.phase, pulse, o.flash || 0, o.reduce, o.low);
     if (!o.reduce) { if (boss) drawBossFx(c, t, pulse, o.low, kit); drawFootlights(c, t, pulse, th, boss); }
     // speaker cones thump on the kick
