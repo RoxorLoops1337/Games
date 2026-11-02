@@ -10,6 +10,7 @@ import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from
 import { drawHints } from './hints.js';
 import { drawCellFlags, drawCellBadge } from './cellfx.js';
 import { bakeHat } from './hats.js';
+import { createCheer, HAT_FX, hatPose } from './cheer.js';
 
 const TAU = Math.PI * 2;
 const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
@@ -307,6 +308,7 @@ export function createRenderer(canvas, art, kit) {
 
   // 02-animal-art: pets bob, blink, hop when the duo sings and look alert when a snake head is near
   const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }];
+  const CH = createCheer(); let cheerHit = false;   // 02-animal-art r4: pets cheer on kill streaks
   // 02-animal-art: fire reactions (kitten swats a paw, puppy wags its tail) and idle emotes (turtle Zzz, lamb hums, piglet hearts)
   function petExtras(id, st, px, py, s2, i) {
     const h = st.hop;
@@ -332,17 +334,22 @@ export function createRenderer(canvas, art, kit) {
       const st = petState[i] || (petState[i] = { hop: 0, last: 0 });
       if (S.lastShot !== st.last) { st.last = S.lastShot; st.hop = 1; }
       st.hop = Math.max(0, st.hop - 0.016 * 4.5);
-      const s2 = i ? 1 : -1, ph = S.t * 6 + i * 2, idle = Math.abs(Math.sin(ph)) * (scared ? 3 : 8), hopY = Math.sin(st.hop * Math.PI) * 14;
+      const bop = !OPT.reduceMotion && g.phase === 'play' && (g.groove || 0) >= 6 ? Math.pow(1 - beatPhase(g), 4) * (g.groove >= 10 ? 9 : 5) : 0;   // groove: the pets bop on the beat
+      const ch = OPT.reduceMotion ? null : CH.pet(i, i ? 1 : -1);
+      const s2 = i ? 1 : -1, ph = S.t * 6 + i * 2, idle = Math.abs(Math.sin(ph)) * (scared ? 3 : 8) * (ch ? 0.3 : 1), hopY = Math.sin(st.hop * Math.PI) * 14 + (ch ? ch.y : 0) + bop;
       const px = p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6, base = p.y + 8;
       const blink = (S.t * 0.8 + i * 1.7) % 3.1 < 0.13;
-      const mood = st.hop > 0.35 ? 3 : scared ? 2 : blink ? 1 : 0;
+      const mood = st.hop > 0.35 || ch ? 3 : scared ? 2 : blink ? 1 : 0;
       const k = Math.abs(Math.sin(ph));
       ctx.save(); ctx.globalAlpha *= 0.3 * (1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, 24 - (idle + hopY) * 0.3, 7, 0, 0, TAU); ctx.fill(); ctx.restore();
       const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = 1 + (1 - k) * 0.05 + st.hop * 0.05, sy = 1 - (1 - k) * 0.05 - st.hop * 0.03;
-      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx, sy); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px, base - idle - hopY, sz, s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0)); ctx.restore(); }
+      if (cheerHit && !OPT.reduceMotion) CH.burst(px, base - 40, Math.max(0, CH.tier));
+      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx * (ch ? ch.sq : 1), sy / (ch ? ch.sq : 1)); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px, base - idle - hopY, sz, s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0) + (ch ? ch.flip : 0)); ctx.restore(); }
       if (st.hop > 0.6) sparkleAt(px + s2 * 28, base - idle - hopY - 36, 7 + st.hop * 3);
       petExtras(id, st, px, base - idle - hopY, s2, i);
     });
+    cheerHit = false;
+    if (!OPT.reduceMotion) CH.draw(ctx, lastDt, kit, sparkleAt, blit);
   }
   function idleSparkles(p, singing) {
     const n = singing ? 3 : 1;
@@ -370,7 +377,7 @@ export function createRenderer(canvas, art, kit) {
     petsDraw(g, p, singing);
     drawHog(g);
     if (g.outfit) { glow(p.x, p.y - 20, 70, g.outfit.color, 0.22); const hs = bakeHat(kit, g.outfit.hat), hb = Math.sin(S.t * 4) * 3;
-      if (hs) { ctx.save(); ctx.translate(p.x - 4, p.y - 108 + hb); ctx.rotate(Math.sin(S.t * 2.4) * 0.05 + p.mx * 0.08); ctx.drawImage(hs.c, -48, -48, 96, 96); ctx.restore(); if (!OPT.reduceMotion) { const f = (S.t * 0.9) % 1; sparkleAt(p.x - 4 + Math.cos(S.t * 3) * 30, p.y - 122 + hb - f * 22, 5 * Math.sin(f * Math.PI)); } }
+      if (hs) { const hp = hatPose(g.outfit.hat, OPT.reduceMotion ? 0 : CH.t, S.t), fxk = OPT.reduceMotion ? null : HAT_FX[g.outfit.hat]; ctx.save(); ctx.translate(p.x - 4, p.y - 108 + hb + hp.dy); ctx.rotate(Math.sin(S.t * 2.4) * 0.05 + p.mx * 0.08 + hp.rot); ctx.scale(hp.sx, hp.sx); ctx.drawImage(hs.c, -48, -48, 96, 96); if (fxk) fxk(ctx, S.t, CH.t); ctx.restore(); if (!OPT.reduceMotion) { const f = (S.t * 0.9) % 1; sparkleAt(p.x - 4 + Math.cos(S.t * 3) * 30, p.y - 122 + hb - f * 22, 5 * Math.sin(f * Math.PI)); } }
       else { ctx.save(); ctx.font = '44px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g.outfit.hat, p.x - 4, p.y - 124 + hb); ctx.restore(); } }
     // hitbox core: the part that actually gets hurt
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 9, 0, TAU); ctx.stroke();
@@ -380,6 +387,13 @@ export function createRenderer(canvas, art, kit) {
     ctx.globalAlpha = 1;
   }
 
+  function noteTrail(b, col) {
+    const sp = Math.hypot(b.vx, b.vy) || 1, ux = b.vx / sp, uy = b.vy / sp, L = b.crit ? 66 : 46, w = b.crit ? 8 : 5.5;
+    ctx.save(); ctx.lineCap = 'round';
+    for (let j = 0; j < 3; j++) { ctx.globalAlpha *= 0.5; ctx.strokeStyle = j === 2 ? '#fff' : col; ctx.lineWidth = w * (1 - j * 0.3); ctx.beginPath(); ctx.moveTo(b.x - ux * 12, b.y - uy * 12); ctx.lineTo(b.x - ux * L * (1 - j * 0.28), b.y - uy * L * (1 - j * 0.28)); ctx.stroke(); }
+    ctx.restore();
+    if (b.crit) { const f = (S.t * 5 + b.x * 0.03) % 1; ctx.save(); ctx.globalAlpha *= 1 - f; sparkleAt(b.x - ux * (20 + f * 44) + Math.sin(S.t * 9 + b.x) * 8, b.y - uy * (20 + f * 44), 7 * (1 - f * 0.5)); ctx.restore(); }
+  }
   function drawBullets(g) {
     if (HJ) HJ.bullets(g.bullets, lastDt);
     for (const b of g.bullets) {
@@ -392,6 +406,7 @@ export function createRenderer(canvas, art, kit) {
       if (b.kind === 'bubble') { blit(kit && kit.SPR.weapon('bubble'), b.x, b.y, b.r * 4.84, Math.sin(S.t * 3 + b.x) * 0.2); continue; }
       const col = b.crit ? '#ffd84d' : '#6fe3ff';
       if (b.crit) glow(b.x, b.y, 30, col, 0.55);
+      if (!OPT.lowQuality) noteTrail(b, col);   // 02-animal-art r4: notes leave a short comet tail, crits add glints
       const spr = kit && kit.SPR.note(b.crit);
       if (spr) blit(spr, b.x, b.y, b.crit ? 100 : 66, S.t * 6 + b.x * 0.05);
       else { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, TAU); ctx.fill(); }
@@ -560,6 +575,7 @@ export function createRenderer(canvas, art, kit) {
     const L = layout();
     lastDt = dt; S.t += dt; if (S.banner) { S.banner.t += dt; if (S.banner.t > S.banner.dur) S.banner = null; }
     if (FX) FX.update(dt, g);
+    if (g && g.phase === 'play' && CH.step(g, dt)) { cheerHit = true; if (!OPT.reduceMotion) S.flash = Math.max(S.flash, 0.12), S.flashCol = '#ffe9a8'; }
     S.trauma = Math.max(0, S.trauma - dt * 1.6); S.flash = Math.max(0, S.flash - dt * 1.5);
     if (OPT.reduceMotion) { S.trauma = 0; S.flash = 0; }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
