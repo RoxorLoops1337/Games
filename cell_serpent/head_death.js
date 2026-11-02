@@ -42,7 +42,7 @@ export function crownMotion(u, size, side) {
   else if (k < B3) { const f = (k - B2) / (B3 - B2); y = G - 0.09 * 4 * f * (1 - f); }
   else y = G;
   const roll = 1 - Math.pow(1 - k, 1.7);   // fast at first, slowing to a stop
-  o.dx = side * size * 4.6 * roll;
+  o.dx = side * size * 3.2 * roll;
   o.dy = y * size * 1.15;
   o.rot = side * (roll * 11 * 2.1 + (k > B3 ? Math.sin((k - B3) * 38) * 0.35 * (1 - k) * (1 - k) * 4 : 0));
   o.sc = 1 - Math.max(0, k - 0.9) * 2;

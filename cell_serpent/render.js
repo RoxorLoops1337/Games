@@ -5,6 +5,8 @@ import { LATE_CUE } from './trait_ui.js';
 import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt, pointInto } from './sim.js';
 import { INK, mix } from './art_draw.js';
 import { deathMotion, crownMotion } from './head_death.js';
+import { SIB_TIME } from './sibling_b11.js';
+import { armorWearLevel } from './armor_b11.js';
 import { createHud, hudZone } from './hud.js';
 import { createHitJuice } from './hitjuice.js';
 import { createDigitAtlas } from './digits.js';
@@ -142,6 +144,7 @@ export function createRenderer(canvas, art, kit) {
         dmgFloat(e);
         if (e.crit) { ring(e.x, e.y, 70, '#ffe14a', 0.3); shaped(e.x, e.y, OPT.lowQuality ? 4 : 8, 's', ['#ffe14a', '#fff'], 300, 0.45, 9); }
         burst(e.x, e.y, e.crit ? 5 : 2, e.crit ? ['#ffe14a', '#fff'] : ['#fff', '#b9f3ff'], 160, 0.3, 3);
+        if (e.s && e.s.kind === 'armor' && e.s.hp > 0 && armorWearLevel(e.s.hp + e.d, e.s.max) < armorWearLevel(e.s.hp, e.s.max)) { ring(e.s.x, e.s.y, 54, '#dfe8ff', 0.3); shaped(e.s.x, e.s.y, OPT.lowQuality ? 3 : 6, 's', ['#dfe8ff', '#9fb0d4', '#fff'], 260, 0.55, 7); }   // 01-enemy-art b11: a plate chip flies off when the armour cracks
         break;
       case 'kill': {
         S.killT = S.t;
@@ -165,8 +168,9 @@ export function createRenderer(canvas, art, kit) {
         }
         if (e.carry === 'chest' && !OPT.reduceMotion) S.props.push({ k: 'chest', x: e.x, y: e.y, vx: (Math.random() - 0.5) * 80, vy: -300, rot: 0, life: 0.9, max: 0.9, size: e.r * 2.6 });
         if (e.carry === 'chest') { ring(e.x, e.y, 150, '#ffd84d', 0.5); shaped(e.x, e.y, 8, 's', ['#ffd84d', '#fff', '#ff7eb6'], 330, 0.7, 10, 200); }
+        if (e.head && g.snakes.length > 1 && !OPT.reduceMotion) S.sibT = S.t;   // 01-enemy-art b11: the surviving heads react
         if (e.head && S.bgfx && !OPT.reduceMotion) S.bgfx.headKill(S.t, e.x, e.y);   // 03-backgrounds b8: squall or petal storm
-        if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); if (kit && !OPT.reduceMotion && S.props.length < 8) S.props.push({ k: 'dazed', skin: e.skin, boss: !!e.boss, x: e.x, y: e.y, vx: 0, vy: -90, rot: 0, life: 1.5, max: 1.5, size: e.r * 3.9 }); if (e.boss && kit && !OPT.reduceMotion && S.props.length < 9) S.props.push({ k: 'crown', skin: e.skin, x: e.x, y: e.y - e.r * 0.8, vx: 0, vy: 0, rot: 0, life: 2.2, max: 2.2, size: e.r * 1.9, side: e.x < W / 2 ? 1 : -1, hit: 0 }); }   // 01-enemy-art r7: a dazed face floats up with its halo
+        if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); if (kit && !OPT.reduceMotion && S.props.length < 8) S.props.push({ k: 'dazed', skin: e.skin, boss: !!e.boss, x: e.x, y: e.y, vx: 0, vy: -90, rot: 0, life: 1.5, max: 1.5, size: e.r * 3.9 }); if (e.boss && kit && !OPT.reduceMotion && S.props.length < 9) S.props.push({ k: 'crown', skin: e.skin, x: e.x, y: e.y - e.r * 0.8, vx: 0, vy: 0, rot: 0, life: 2.2, max: 2.2, size: e.r * 1.9, side: e.x < W / 2 ? 1 : -1, hit: 0, tr: 0 }); }   // 01-enemy-art r7: a dazed face floats up with its halo
         break;
       }
       case 'boom': ring(e.x, e.y, e.r, '#ff6a3d', 0.5); ring(e.x, e.y, e.r * 0.6, '#ffd24a', 0.35); burst(e.x, e.y, 30, ['#ff6a3d', '#ffd24a', '#fff'], 420, 0.6, 7); S.trauma = Math.min(1, S.trauma + 0.55); break;
@@ -211,7 +215,7 @@ export function createRenderer(canvas, art, kit) {
       case 'skip': addFloat(g.p.x, g.p.y - 120, 'Beats!', '#ffd24a', 20, -50); break;
       case 'lull': ring(e.x, e.y, 160, '#b79bff', 0.6); burst(e.x, e.y, 14, ['#d9c8ff', '#fff', '#b79bff'], 220, 0.7, 5); addFloat(e.x, e.y - 40, 'Lullaby', '#d9c8ff', 22, -40); break;
       case 'phase2': S.banner = { text: 'FINAL CHORUS', sub: 'The boss picks up the pace', t: 0, dur: 1.8 }; S.trauma = Math.min(1, S.trauma + 0.7); S.flash = 0.35; S.flashCol = '#ff9a4a'; ring(g.p.x, g.p.y, 360, '#ff9a4a', 0.8); break;
-      case 'mend': ring(e.x, e.y, 46, '#6fe08a', 0.3); break;
+      case 'mend': ring(e.x, e.y, 46, '#6fe08a', 0.3); if (!OPT.reduceMotion) shaped(e.x, e.y - 6, 3, 'p', ['#86e8a2', '#e6ffee', '#6fe08a'], 90, 0.8, 8, -180); break;   // 01-enemy-art b11: little plusses drift up from a healing mender
       case 'stage': if (e.boss) S.trauma = 0.6; break;   // the title card is drawn by screenfx.js
       case 'clear': S.banner = { text: 'STAGE CLEAR', sub: '+' + e.bonus + ' Beats', t: 0, dur: 2.2, clear: true }; if (S.bgfx && !OPT.reduceMotion) S.bgfx.clear(S.t, g.skin, g.p.x, g.p.y); break;   // 03-backgrounds b10
       case 'surgewarn': S.warn = 0.7; break;
@@ -307,7 +311,7 @@ export function createRenderer(canvas, art, kit) {
       if (s.y < -r * 3 || s.y > H + r * 3) continue;   // not on screen: skip the drawing
       const ang = s.ang;
       if (i === 0) {
-        if (kit) { const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1; kit.drawHead(ctx, s.x, s.y, r * 1.14, ang, { skin: sn.skin, boss: sn.boss, t: S.t + sn.id, look: [dx / d, dy / d], flash: s.flash, sg: OPT.reduceMotion ? '' : sn.surge, slow: sn.slow, p2: sn.p2, alone: !s.shield, panic: !sn.boss && sn.surge === 'idle' && g.danger > 0.55 && sn.segs[0].y > H * 0.5 && !g.ring ? Math.min(1, (g.danger - 0.55) / 0.3) : 0, fury: sn.surge !== 'idle' ? 1 : (g.danger > 0.5 && sn.segs[0].y > H * 0.5 ? 0.6 : 0) }); }
+        if (kit) { const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1; kit.drawHead(ctx, s.x, s.y, r * 1.14, ang, { skin: sn.skin, boss: sn.boss, t: S.t + sn.id, look: [dx / d, dy / d], flash: s.flash, sg: OPT.reduceMotion ? '' : sn.surge, slow: sn.slow, p2: sn.p2, alone: !s.shield, sib: S.sibT !== undefined && S.t - S.sibT < SIB_TIME ? (S.t - S.sibT) / SIB_TIME : 0, panic: !sn.boss && sn.surge === 'idle' && g.danger > 0.55 && sn.segs[0].y > H * 0.5 && !g.ring ? Math.min(1, (g.danger - 0.55) / 0.3) : 0, fury: sn.surge !== 'idle' ? 1 : (g.danger > 0.5 && sn.segs[0].y > H * 0.5 ? 0.6 : 0) }); }
         else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
         if (s.shield) {   // the face cannot be hit until it is alone
           ctx.save(); ctx.globalAlpha = 0.5 + Math.sin(S.t * 5) * 0.15; ctx.strokeStyle = '#bfe9ff'; ctx.fillStyle = 'rgba(190,235,255,.16)'; ctx.lineWidth = 4;
@@ -339,6 +343,7 @@ export function createRenderer(canvas, art, kit) {
           if (s.flash > 0) flashBlit(spr, s.x, s.y, size, upright ? 0 : ang, s.flash * 5);
         }
         if (sn.slow > 0) blit(kit.SPR.frost(), s.x, s.y, r * 2.7, 0, false, Math.min(1, sn.slow * 2));
+        if (s.kind === 'armor') { const wl = armorWearLevel(s.hp, s.max); if (wl) blit(kit.SPR.armorWear(wl), s.x, s.y, size, 0); }   // 01-enemy-art b11: the plate shows its wear
         if (s.kind === 'bomb') { const f = 0.6 + Math.sin(S.t * 18 + i) * 0.4; sparkleAt(s.x + r * 0.1, s.y - r * 1.2, r * 0.3 * f); }
         if (s.kind === 'upgrade') sparkleAt(s.x + r * 0.55 + Math.sin(S.t * 4 + i) * 4, s.y - r * 0.55, r * 0.3);
       } else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
@@ -627,6 +632,7 @@ export function createRenderer(canvas, art, kit) {
       case 'd': ctx.beginPath(); ctx.moveTo(0, -s * 1.2); ctx.quadraticCurveTo(s * 0.9, s * 0.2, 0, s * 0.8); ctx.quadraticCurveTo(-s * 0.9, s * 0.2, 0, -s * 1.2); ctx.fill(); break;
       case 'n': ctx.rotate(Math.sin(q.rot) * 0.3); ctx.beginPath(); ctx.ellipse(-s * 0.3, s * 0.6, s * 0.55, s * 0.4, -0.4, 0, TAU); ctx.fill(); ctx.fillRect(s * 0.1, -s * 1.0, s * 0.2, s * 1.6); ctx.fillRect(s * 0.1, -s * 1.0, s * 0.7, s * 0.3); break;
       case 's': ctx.rotate(q.rot); ctx.beginPath(); for (let i = 0; i < 8; i++) { const rr = i & 1 ? s * 0.35 : s * 1.1, an = i * Math.PI / 4; ctx.lineTo(Math.cos(an) * rr, Math.sin(an) * rr); } ctx.closePath(); ctx.fill(); break;
+      case 'p': { const w = s * 0.34; ctx.beginPath(); ctx.rect(-w, -s, w * 2, s * 2); ctx.rect(-s, -w, s * 2, w * 2); ctx.fill(); break; }   // a plus (mender)
       default: ctx.rotate(q.rot); ctx.fillRect(-s * 0.6, -s * 0.3, s * 1.2, s * 0.6);   // confetti
     }
     ctx.restore();
@@ -634,7 +640,7 @@ export function createRenderer(canvas, art, kit) {
   function drawProps(dt) {
     for (let i = S.props.length - 1; i >= 0; i--) {   // chest cell pop: the chest hops out and flips its lid
       const p = S.props[i]; p.life -= dt; if (p.life <= 0) { S.props.splice(i, 1); continue; }
-      if (p.k === 'crown') { const sp = kit && kit.SPR.crown(p.skin); if (sp) { const cm = crownMotion(1 - p.life / p.max, p.size * 1.6, p.side); ctx.save(); ctx.globalAlpha = cm.a; kit.blit(ctx, sp, p.x + cm.dx, p.y + cm.dy, p.size * cm.sc, cm.rot); ctx.restore(); if (cm.hit && !p.hit) { p.hit = 1; ring(p.x + cm.dx, p.y + cm.dy + p.size * 0.2, 60, '#ffe9a0', 0.3); sparkleAt(p.x + cm.dx, p.y + cm.dy, p.size * 0.4); } else if (!cm.hit) p.hit = 0; } continue; }   // 01-enemy-art r10: the boss crown rolls away
+      if (p.k === 'crown') { const sp = kit && kit.SPR.crown(p.skin); if (sp) { const cm = crownMotion(1 - p.life / p.max, p.size * 1.6, p.side); ctx.save(); ctx.globalAlpha = cm.a; kit.blit(ctx, sp, p.x + cm.dx, p.y + cm.dy, p.size * cm.sc * 1.25, cm.rot); ctx.restore(); p.tr = (p.tr || 0) - dt; if (p.tr <= 0 && cm.a > 0.5 && !OPT.lowQuality) { p.tr = 0.09; sparkleAt(p.x + cm.dx - p.side * p.size * 0.5, p.y + cm.dy - p.size * 0.1, p.size * 0.2); } if (cm.hit && !p.hit) { p.hit = 1; ring(p.x + cm.dx, p.y + cm.dy + p.size * 0.2, 60, '#ffe9a0', 0.3); sparkleAt(p.x + cm.dx, p.y + cm.dy, p.size * 0.4); } else if (!cm.hit) p.hit = 0; } continue; }   // 01-enemy-art r10: the boss crown rolls away
       if (p.k === 'dazed') { const u = 1 - p.life / p.max, sp = kit && kit.SPR.dazed(p.skin, p.boss); p.y += p.vy * dt; p.vy *= 1 - Math.min(1, dt * 2.2); if (sp) { const dm = deathMotion(p.skin, u, p.size, p.x < W / 2 ? 1 : -1), px = p.x + dm.dx, py = p.y + dm.dy; ctx.save(); ctx.globalAlpha = Math.min(1, p.life / 0.4) * dm.a; const sc = (0.7 + Math.min(1, u * 5) * 0.3 + Math.sin(u * 9) * 0.04) * dm.sc; kit.blit(ctx, sp, px, py, p.size * sc, dm.rot); for (let q = 0; q < 3; q++) { const a = S.t * 5 + q * 2.094; sparkleAt(px + Math.cos(a) * p.size * 0.5 * dm.sc, py - p.size * 0.46 * dm.sc + Math.sin(a) * p.size * 0.1, p.size * 0.16 * dm.sc); } ctx.restore(); } continue; }   // 01-enemy-art r9: leaves in its species style
       p.vy += 700 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += dt * 9;
       const cs = Math.cos(p.rot);

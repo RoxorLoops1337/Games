@@ -8,6 +8,8 @@
 // sprites are cached once and blitted. Anything that must move its face (heads) is drawn
 // live with drawHead().
 import { createEnemyFaces } from './enemy_faces.js';
+import { drawSiblingReact, drawBossRage } from './sibling_b11.js';
+import { paintArmorWear } from './armor_b11.js';
 export const INK = '#2d170f';
 const TAU = Math.PI * 2;
 
@@ -635,6 +637,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       if (sp === undefined) { sp = bake(`body|${skin}|${slot}|${kk}`, B * 3.2, B * 3.2, bodyFn(skin, boss, kind)); if (sp) bs[slot][kk] = sp; }
       return sp;
     },
+    armorWear: lv => bake('armorwear|' + lv, B * 3.2, B * 3.2, g => paintArmorWear(g, B, lv)),   // 01-enemy-art b11: cracks and a split plate over the armour body
     minion: id => bake('min|' + id, B * 3.4, B * 3.4, MIN[id] || MIN.green),
     pickup: k => bake('pk|' + k, B * 2.4, B * 2.4, PICK[k] || PICK.gem),
     note: crit => bake('note|' + (crit ? 1 : 0), B * 2.4, B * 2.4, noteFn(crit ? '#ffd84d' : '#6fe3ff', crit), 1),
@@ -823,6 +826,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       g.restore();
     }
     if (tongue && (f === 'goggles' || f === 'shades' || f === 'grumpy' || f === 'shy')) cel(g, '#ff7a9a', ell(R * 0.1, R * (f === 'goggles' ? 0.62 : f === 'shades' ? 0.62 : f === 'grumpy' ? 0.72 : 0.56), R * 0.1, R * 0.13), { r: R * 0.13, hi: false, lw: 2, shadow: '#d9486a' });
+    if (boss && o.p2 && !hurt && !(o.sib > 0)) drawBossRage(g, R, t);   // 01-enemy-art b11: phase 2 boss faces are furious
+    if (o.sib > 0 && o.sib < 1 && !hurt) drawSiblingReact(g, R, o.skin, o.sib, t);   // 01-enemy-art b11: a sibling head just popped
     if (o.slow > 0) { g.fillStyle = 'rgba(140,225,255,.32)'; circ(0, 0, R * 1.0)(g); g.fill(); g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = R * 0.07; g.stroke(); for (const k of [-0.5, 0, 0.5]) cel(g, '#e6f8ff', poly([[k * R - R * 0.1, R * 0.88], [k * R + R * 0.1, R * 0.88], [k * R, R * (1.2 + (k ? 0 : 0.15))]]), { r: R * 0.25, hi: false, lw: 1.8, shadow: '#7fc8ee' }); }
     if (o.flash > 0) { g.fillStyle = `rgba(255,255,255,${Math.min(0.7, o.flash * 5)})`; circ(0, 0, R * 1.05)(g); g.fill(); }
     g.restore();
