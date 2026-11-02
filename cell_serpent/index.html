@@ -698,6 +698,19 @@
   .wardhero2 .what{position:absolute;z-index:3;transform:translateX(-50%);filter:drop-shadow(0 3px 3px rgba(0,0,0,.45));animation:what 2.4s ease-in-out infinite} @keyframes what{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-3px) rotate(2deg)}}
   .wname{font-weight:900;font-size:17px;color:#ffe98a} .tile .ic .cico{margin:0}
   @media (prefers-reduced-motion:reduce){.sc.flash,.dealpet,.dcoin,.lootx .lrays,.lootx .shn,.wardhero2 .what{animation:none}}
+  /* round 3: deal quantity badge, chest names, collection header, radar ghost, best buy, legendary flash */
+  .tile.deal .ic{position:relative;overflow:visible} .dqty{position:absolute;right:-8px;bottom:-6px;padding:1px 6px;border-radius:99px;background:#2a1658;border:2px solid #ffd84d;color:#ffe98a;font-size:12px;font-weight:900;line-height:1.2;box-shadow:0 2px 4px rgba(0,0,0,.5)}
+  .tile.deal .nm{font-size:14px;overflow-wrap:normal;hyphens:none;word-break:normal} .tile.chestcard .nm{overflow-wrap:normal;hyphens:none;font-size:15px}  .tile.chestcard .top{gap:8px}
+  .colhead{display:flex;align-items:center;gap:12px;margin:2px 0 8px;padding:8px 12px;border-radius:18px;border:2px solid rgba(255,255,255,.16);background:linear-gradient(100deg,rgba(255,216,77,.14),rgba(255,255,255,.05))}
+  .colhead .cr{width:54px;height:54px} .colhead .cr svg{width:54px;height:54px} .colhead .cr b{font-size:17px}
+  .colt{flex:1;min-width:0;display:flex;flex-direction:column} .colt b{font-size:16px} .colt span{font-size:12.5px;color:var(--dim);font-weight:700}
+  .colp{text-align:center} .colp small{display:block;font-size:9px;letter-spacing:1.2px;color:#ffcf9a;font-weight:900} .colp b{font-size:22px;color:#ffe98a;line-height:1}
+  .radar .rgh{fill:none;stroke:#ffe14a;stroke-width:1.6;stroke-dasharray:3 3;opacity:.75;stroke-linejoin:round}
+  .radar .rdot{fill:#fff;stroke:#9dff6d;stroke-width:1.5} .radar .rdot.mx{fill:#ffe14a;stroke:#fff} .radar .rv{animation:rvpulse 2.6s ease-in-out infinite} @keyframes rvpulse{50%{fill:rgba(157,255,109,.5)}}
+  .sc{position:relative} .sc.best{border-color:#ffe14a;box-shadow:0 0 14px rgba(255,225,74,.45)}
+  .bestrib{position:absolute;top:-9px;left:50%;transform:translateX(-50%);padding:1px 8px;border-radius:99px;background:linear-gradient(180deg,#ffe14a,#f0a01c);color:#3a200a;font-style:normal;font-size:10px;font-weight:900;letter-spacing:.8px;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,.45)}
+  .legflash{position:fixed;inset:0;z-index:10000;pointer-events:none;background:radial-gradient(circle at 50% 45%,#fff 0,color-mix(in srgb,var(--rc) 70%,#fff) 35%,transparent 75%);animation:legfl .8s ease-out forwards} @keyframes legfl{0%{opacity:.95}100%{opacity:0}}
+  @media (prefers-reduced-motion:reduce){.radar .rv,.legflash{animation:none}.legflash{display:none}}
   /* end @css:10-shop-gear-stats */
   /* @css:16-addiction */
   .nextrew{flex:none;width:100%;display:flex;align-items:center;gap:10px;padding:7px 14px;background:rgba(20,14,56,.92);border-bottom:2px solid var(--line);cursor:pointer;min-height:44px}
