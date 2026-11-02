@@ -1,0 +1,110 @@
+// Cell Serpent: the "Goals" panel (lucky spin, weekly challenge, mastery, collection book), the always-visible
+// Next Reward bar, the comeback gift and the one-more-run line on the result screen. Everything here is a gift.
+import {
+  SPIN_PRIZES, spinReady, doSpin, spinPrize, weekChallenge, ensureWeek, weekReady, claimWeek, WEEK_REWARD,
+  masteryList, claimMastery, claimAllMastery, bookStatus, claimBook, rewardText, comebackGift, claimComeback, touchSeen,
+  nextReward, nudgeFor,
+} from './sim.js';
+
+export function createAddictUI(c, openPanel, sec) {
+  const { $, tile, audio } = c;
+  const save = () => c.save();
+  let comebackShown = false;
+  const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const reduce = () => !!save().settings.reduceMotion;
+  const after = () => { c.persist(); c.refreshCur(); };
+
+  // ---- the bar that is always on the hub: the closest thing to unlock
+  function renderNext() {
+    const el = $('nextRew'); if (!el) return;
+    const n = nextReward(save(), c.dayKey());
+    el.className = 'nextrew' + (n.ready ? ' ready' : '');
+    el.innerHTML = `<span class="nri">${n.icon}</span><span class="nrm"><b>${esc(n.label)}${n.more ? ` +${n.more}` : ''}</b>` +
+      (n.ready ? '<em>Tap to collect</em>' : `<span class="nrb"><i style="width:${Math.round(n.frac * 100)}%"></i></span>`) + `</span>` + (n.ready ? '' : `<small>${esc(n.text)}</small>`);
+    el.onclick = () => { audio.unlock(); audio.play('click'); openGoals(); };
+  }
+
+  // ---- the goals panel
+  function openGoals() {
+    openPanel('GOALS', body => build(body), () => { c.openHub(); });
+  }
+  function rebuild() { const body = $('pBody'), top = body.scrollTop; body.innerHTML = ''; build(body); body.scrollTop = top; }
+  function grid(body) { const g = document.createElement('div'); g.className = 'tiles'; body.appendChild(g); return g; }
+  function build(body) {
+    const s = save(), day = c.dayKey();
+    // lucky spin
+    sec(body, 'Lucky Spin', '#ff7eb6');
+    const w = document.createElement('div'); w.className = 'spinbox';
+    const ready = spinReady(s, day);
+    w.innerHTML = `<div class="wheelwrap"><i class="wptr">▼</i><div class="wheel" id="wheel">${SPIN_PRIZES.map((p, i) => `<span class="wseg" style="transform:rotate(${i * 45}deg) translateY(-82px)"><b style="transform:rotate(${-i * 45}deg)">${p.icon}</b></span>`).join('')}</div></div>` +
+      `<div class="spinmsg" id="spinMsg">${ready ? 'One free spin every day. Just for fun!' : 'Today you won ' + esc(rewardText(SPIN_PRIZES[s.addict.spin.prize >= 0 ? s.addict.spin.prize : spinPrize(day)].reward)) + '. Come back tomorrow!'}</div>` +
+      `<button class="btn small go gold" id="spinGo" ${ready ? '' : 'disabled'}>${ready ? 'SPIN' : 'SEE YOU TOMORROW'}</button>`;
+    body.appendChild(w);
+    w.querySelector('#spinGo').onclick = () => {
+      audio.unlock(); const r = doSpin(save(), day); if (!r) return; after(); audio.play('click');
+      const wheel = w.querySelector('#wheel'), btn = w.querySelector('#spinGo'); btn.disabled = true; btn.textContent = 'SPINNING...';
+      wheel.style.transition = reduce() ? 'none' : 'transform 3s cubic-bezier(.15,.7,.2,1)'; wheel.style.transform = `rotate(${360 * 4 - r.index * 45}deg)`;
+      setTimeout(() => { audio.play('levelup'); w.querySelector('#spinMsg').textContent = 'You won ' + rewardText(r.prize.reward) + '!'; btn.textContent = 'SEE YOU TOMORROW'; w.querySelector('.wseg:nth-child(' + (r.index + 1) + ')').classList.add('win'); renderNext(); }, reduce() ? 0 : 3100);
+    };
+    // weekly challenge
+    sec(body, 'Weekly Challenge', '#ffd24a');
+    const wc = weekChallenge(day), wk = ensureWeek(s, day), wdone = weekReady(s, day), wclaimed = !!wk.claimed;
+    const wg = grid(body);
+    wg.appendChild(tile({ cls: 't-gold one', ic: '🏅', name: wc.text, desc: 'Bonus: ' + rewardText(WEEK_REWARD), bar: Math.round(wk.prog / wc.target * 100), barText: wk.prog + ' / ' + wc.target + '  (new one every Monday)', btn: wclaimed ? 'CLAIMED' : wdone ? 'CLAIM' : 'KEEP GOING', gold: true, disabled: !wdone,
+      onclick: () => { if (claimWeek(save(), day)) { after(); audio.play('levelup'); rebuild(); renderNext(); } } }));
+    // mastery
+    sec(body, 'Mastery', '#4fd8f0');
+    const ms = masteryList(s);
+    const claimAll = document.createElement('button'); claimAll.className = 'btn small alt'; claimAll.style.marginBottom = '6px';
+    claimAll.textContent = 'CLAIM ALL'; claimAll.disabled = !ms.some(m => m.ready >= 0);
+    claimAll.onclick = () => { const n = claimAllMastery(save()); if (n) { after(); audio.play('levelup'); c.toast && c.toast(n + ' mastery reward' + (n > 1 ? 's' : '')); rebuild(); renderNext(); } };
+    body.appendChild(claimAll);
+    const mg = grid(body);
+    for (const m of ms) {
+      const rdy = m.ready >= 0, target = rdy ? m.miles[m.ready] : m.next, full = !rdy && !m.next;
+      const pips = m.miles.map((_x, i) => `<i class="${i < m.done ? 'on' : ''}"></i>`).join('');
+      mg.appendChild(tile({ cls: 't-weapon', ic: m.kind === 'sk' ? c.icon(m.id) : '🐍', name: esc(m.name), chip: 'Rank ' + m.done + '/' + m.miles.length, desc: full ? 'Master!' : 'Reward: ' + rewardText(target.reward),
+        bar: full ? 100 : Math.round(Math.min(1, m.val / target.at) * 100), barText: full ? m.val + ' ' + m.unit : m.val + ' / ' + target.at + ' ' + m.unit, pips,
+        btn: rdy ? 'CLAIM' : full ? 'DONE' : 'KEEP GOING', gold: rdy, disabled: !rdy, onclick: () => { if (claimMastery(save(), m.key, m.ready)) { after(); audio.play('levelup'); rebuild(); renderNext(); } } }));
+    }
+    // collection book
+    const bk = bookStatus(s);
+    sec(body, `Collection Book ${bk.got}/${bk.total}`, '#6fe08a');
+    for (const cat of bk.cats) {
+      const box = document.createElement('div'); box.className = 'bookcat';
+      box.innerHTML = `<div class="bch"><b>${esc(cat.name)}</b><span>${cat.got}/${cat.total}</span></div><div class="bcg">${cat.list.map(x => `<span class="bk ${x.got ? 'got' : ''}" title="${esc(x.name)}"><b>${x.got ? x.icon : '?'}</b><small>${x.got ? esc(x.name) : '???'}</small></span>`).join('')}</div>`;
+      const b = document.createElement('button'); b.className = 'btn small go gold'; b.disabled = !cat.ready;
+      b.textContent = s.addict.claimed['book:' + cat.id] ? 'COMPLETE' : cat.ready ? 'CLAIM ' + rewardText(cat.reward) : 'Complete for ' + rewardText(cat.reward);
+      b.onclick = () => { if (claimBook(save(), cat.id)) { after(); audio.play('levelup'); rebuild(); renderNext(); } };
+      box.appendChild(b); body.appendChild(box);
+    }
+    const ag = grid(body);
+    bk.all.forEach(m => ag.appendChild(tile({ cls: 't-gold one', ic: '📖', name: `Book ${Math.round(m.at * 100)}% full`, desc: rewardText(m.reward), btn: s.addict.claimed['book:all' + m.i] ? 'CLAIMED' : m.ready ? 'CLAIM' : Math.round(bk.got / bk.total * 100) + '%', gold: true, disabled: !m.ready,
+      onclick: () => { if (claimBook(save(), 'all' + m.i)) { after(); audio.play('levelup'); rebuild(); renderNext(); } } })));
+  }
+
+  // ---- welcome back: a friendly gift after a break, shown once per visit, never expires
+  function maybeComeback() {
+    const s = save(), now = Date.now(), g = comebackGift(s, now);
+    if (!g) { touchSeen(s, now); c.persist(); return false; }
+    if (comebackShown) return false;
+    comebackShown = true;
+    openPanel('WELCOME BACK!', body => {
+      const d = document.createElement('div'); d.className = 'comeback';
+      d.innerHTML = `<div class="cbi">🎁🐱🐶</div><div class="cbt">We missed you!</div><div class="cbs">${g.days} days is a long time. Here is a little gift from the whole band.</div><div class="cbr">${esc(rewardText(g.reward))}</div>`;
+      const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'THANK YOU!';
+      b.onclick = () => { if (claimComeback(save(), Date.now())) { after(); audio.play('levelup'); } c.openHub(); };
+      d.appendChild(b); body.appendChild(d);
+    }, () => { c.openHub(); });
+    return true;
+  }
+
+  // ---- one more run: a near miss and the next reward on the result screen
+  function renderResultNudge(r, prevPct) {
+    const el = $('rNudge'); if (!el) return;
+    const line = nudgeFor(save(), r, prevPct), n = nextReward(save(), c.dayKey());
+    el.innerHTML = (line ? `<div class="nudge">${esc(line)}</div>` : '') +
+      `<div class="nudge2">${n.icon} ${esc(n.label)}${n.ready ? ' (collect it in Goals)' : ' ' + esc(n.text)}</div>`;
+  }
+  return { renderNext, openGoals, maybeComeback, renderResultNudge };
+}
