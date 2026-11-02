@@ -4,6 +4,7 @@ import * as AW from './art_world.js';
 import { RARITY } from './data_core.js';
 import { GEAR } from './data_meta.js';
 import { HINTS } from './data_story.js';
+import { t } from './i18n.js';
 
 // Element.append / replaceChildren turn null and false into the text "null": drop them instead, so conditional children are safe.
 if (typeof Element !== 'undefined' && !Element.prototype.__dtbPatched) {
@@ -135,3 +136,39 @@ export const rarName = (r) => RARITY[r].name;
 export function currencyChip(kind, n) { return h('span', { class: 'chip' }, currencyIcon(kind, 18), String(n)); }
 export function btn(label, onClick, cls = '', attrs = {}) { return h('button', Object.assign({ class: 'btn ' + cls, onclick: onClick }, attrs), label); }
 export { AE, AW };
+
+// ---- quick mute: one speaker button for the title screen and the pause menu. State lives in profile.settings.muted (applied by app.applySettings
+// through AudioFx.mute). The icon shows the state (waves = sound on, a red cross = muted); aria-label and aria-pressed follow it.
+export function speakerIcon(muted, px = 30) {
+  return canvasOf(px, px, (ctx) => {
+    const k = px / 30;
+    ctx.save(); ctx.scale(k, k); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = '#2b2733'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(4, 11); ctx.lineTo(10, 11); ctx.lineTo(17, 5); ctx.lineTo(17, 25); ctx.lineTo(10, 19); ctx.lineTo(4, 19); ctx.closePath();
+    ctx.fillStyle = muted ? '#b9b2c8' : '#ffc83d'; ctx.fill(); ctx.stroke();
+    if (muted) {
+      ctx.strokeStyle = '#e8403f'; ctx.lineWidth = 3.6;
+      ctx.beginPath(); ctx.moveTo(21, 10); ctx.lineTo(29, 20); ctx.moveTo(29, 10); ctx.lineTo(21, 20); ctx.stroke();
+    } else {
+      ctx.lineWidth = 2.8;
+      ctx.beginPath(); ctx.arc(17, 15, 6, -0.9, 0.9); ctx.stroke();
+      ctx.beginPath(); ctx.arc(17, 15, 11, -0.9, 0.9); ctx.stroke();
+    }
+    ctx.restore();
+  });
+}
+export function muteButton(app, extra) {
+  const s = app.profile.settings;
+  const b = h('button', { class: 'iconbtn mute-btn', type: 'button', 'data-mute': '' });
+  const paint = () => {
+    const on = !!s.muted;
+    b.replaceChildren(speakerIcon(on, 30));
+    b.setAttribute('aria-label', on ? t('audio.unmute', 'Unmute sound') : t('audio.mute', 'Mute sound'));
+    b.setAttribute('title', on ? t('audio.unmute', 'Unmute sound') : t('audio.mute', 'Mute sound'));
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.classList.toggle('is-muted', on);
+  };
+  b.addEventListener('click', () => { s.muted = !s.muted; app.applySettings(); app.save(); paint(); if (!s.muted) app.audio.play('ui_click'); if (extra) extra(); });
+  b.addEventListener('pointerdown', (e) => e.stopPropagation());   // on the title screen a tap on this button must not count as TAP TO START
+  paint();
+  return b;
+}

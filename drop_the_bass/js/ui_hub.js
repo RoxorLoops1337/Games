@@ -2,16 +2,16 @@
 import { WORLDS, TURRETS, TURRET_IDS, ENEMIES, ENEMY_IDS, BOSSES, BOSS_IDS, RARITY, RARITY_ORDER, ENCORE_MAX, fmt, GAME, SYNERGIES } from './data_core.js';
 import { STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, LOGIN_REWARDS, STREAK_MILESTONES, ACHIEVEMENTS, STAR_MILESTONES, AUTOMERGE_PRICE, fameReward, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE, GEAR_MAX_LEVEL, GEAR_SELL, fameTitle, WEEKLY_REWARD } from './data_meta.js';
 import { REMIX, RELICS, DAILY_MODS } from './data_run.js';
-import { TURRET_BRANCHES } from './data_depth.js';
+import { TURRET_BRANCHES, BOSS_PHASES, BOSS_PHASE_EFFECTS } from './data_depth.js';
 import * as M from './meta.js';
-import { fetchBoard, boardRows, cleanName, FRIENDS_MAX } from './lb.js';
+import { fetchBoard, boardRows, cleanName, FRIENDS_MAX, inviteLink } from './lb.js';
 import { drawStudioScene, studioProps } from './doodle_env.js';
 import { t, tn, LANGS, getLangPref } from './i18n.js';
 import { CHANGELOG } from './data_changelog.js';
 import { resetText } from './countdown.js';
 import { setlistSheet } from './ui_setlist.js';
 import { wardrobeSection, skinsSection, skinThumb } from './ui_wardrobe.js';
-import { canInstall, promptInstall, onInstallChange, isInstalled } from './pwa.js';
+import { canInstall, promptInstall, onInstallChange, isInstalled, isOnline, onOnlineChange } from './pwa.js';
 export { setlistSheet };
 import {
   h, canvasOf, icon, turretIcon, turretLive, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW, hubHint,
@@ -39,8 +39,12 @@ export function buildHub(app, startTab) {
       h('div', { class: 'cur', title: t('hub.records', 'Records') }, icon('record', 26), fmt(p.records)),
       h('div', { class: 'cur', title: t('hub.diamonds', 'Diamonds') }, icon('diamond', 26), fmt(p.diamonds)),
       h('button', { class: 'iconbtn', onclick: () => { app.audio.play('ui_open'); settingsModal(app); }, 'aria-label': t('hub.settings', 'Settings') }, icon('gear', 28)),
+      offlineChip(),
     );
   };
+  // small 'Offline' chip on the header while the device has no connection (the leaderboard and stats calls already fail quietly)
+  const offlineChip = () => h('div', { class: 'offline-chip', 'data-offline': '', role: 'status', hidden: isOnline() ? '' : null }, t('hub.offline', 'Offline'));
+  const offNet = onOnlineChange(() => { if (!el.isConnected) { offNet(); return; } const c = top.querySelector('.offline-chip'); if (c) c.hidden = isOnline(); });
   const renderTabs = () => {
     tabs.replaceChildren();
     const b = M.readyBadges(p, app.now());
@@ -655,14 +659,37 @@ export function codexModal(app) {
     if (sec === 'turrets') for (const id of TURRET_IDS) { const tu = TURRETS[id]; const own = p.turretsUnlocked[id]; g.append(h('div', { class: 'cdx' + (own ? '' : ' unk') }, turretLive(id, 4, 72), h('div', { class: 'nm' }, own ? tu.name : '???'), h('div', { class: 'ds' }, own ? tu.blurb : t('studio.need_fame', 'Fame {n}', { n: tu.unlock.fame })))); }
     if (sec === 'enemies') for (const id of ENEMY_IDS) { const e = ENEMIES[id]; if (e.hidden) continue; const seen = p.seen.enemies[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 70), h('div', { class: 'nm' }, seen ? e.name : '???'), h('div', { class: 'ds' }, seen ? e.blurb : t('codex.not_met', 'Not met yet')))); }
     if (sec === 'bosses') body.append(h('div', { class: 'sub', style: 'text-align:center;margin-bottom:6px' }, t('codex.practice_hint', 'Practice fights one boss with no rewards and no changes to your save.')));
-    if (sec === 'bosses') for (const id of BOSS_IDS) { const b = BOSSES[id]; const seen = p.seen.bosses[id] || p.bossesSeen[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 80, true), h('div', { class: 'nm' }, seen ? b.name : '???'), h('div', { class: 'ds' }, seen ? b.trick : t('codex.not_met', 'Not met yet')),
-      seen ? btn(t('codex.practice', 'Practice'), () => { m.close(); app.startRun({ mode: 'practice', boss: id }); }, 'green small', { 'data-practice': id }) : null)); }
+    if (sec === 'bosses') {
+      g.classList.add('cdx-list');
+      for (const id of BOSS_IDS) {
+        const b = BOSSES[id], seen = p.seen.bosses[id] || p.bossesSeen[id];
+        g.append(h('div', { class: 'cdx cdx-boss' + (seen ? '' : ' unk'), 'data-boss': id },
+          h('div', { class: 'bossHead' }, enemyIcon(id, 80, true), h('div', { class: 'bossTxt' }, h('div', { class: 'nm' }, seen ? b.name : '???'), h('div', { class: 'ds' }, seen ? b.trick : t('codex.not_met', 'Not met yet')))),
+          seen ? bossPhasesDiagram(id, btn(t('codex.practice', 'Practice'), () => { m.close(); app.startRun({ mode: 'practice', boss: id }); }, 'green small', { 'data-practice': id })) : null));
+      }
+    }
     if (sec === 'remix') for (const c of Object.values(REMIX)) g.append(h('div', { class: 'cdx' }, icon(c.glyph, 44, RARITY[c.rarity].color), h('div', { class: 'nm ' + rarClass(c.rarity) }, c.name), h('div', { class: 'ds' }, c.desc)));
     if (sec === 'relics') for (const c of Object.values(RELICS)) g.append(h('div', { class: 'cdx' }, icon(c.glyph, 44, RARITY[c.rarity].color), h('div', { class: 'nm ' + rarClass(c.rarity) }, c.name), h('div', { class: 'ds' }, c.desc)));
     if (g.children.length) body.append(g);
     body.append(h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'dark')));
   };
   draw();
+}
+
+// The phases of one boss: a health bar (full on the right) with a notch at every distinct threshold and its percent under the notch, then one line
+// per effect that fires there (name and a one line description, both translated data).
+function bossPhasesDiagram(id, action) {
+  const groups = M.bossPhaseGroups(id);
+  if (!groups.length) return action;
+  const bar = h('div', { class: 'bp-bar' }, h('i', { class: 'bp-fill' }));
+  const marks = h('div', { class: 'bp-marks' });
+  groups.forEach((gr, i) => {
+    bar.append(h('i', { class: 'bp-notch', style: 'left:' + gr.pct + '%', 'data-at': gr.pct }));
+    marks.append(h('span', { class: 'bp-pct' + (gr.pct >= 90 ? ' r' : gr.pct <= 10 ? ' l' : ''), style: 'left:' + gr.pct + '%' }, gr.pct + '%'));
+  });
+  const list = h('div', { class: 'bp-list' }, groups.map((gr) => gr.entries.map((e) => h('div', { class: 'bp-row', 'data-phase': e.id },
+    h('span', { class: 'bp-tag' }, gr.pct + '%'), h('div', { class: 'bp-txt' }, h('b', null, e.name), ' ', e.desc)))));
+  return h('div', { class: 'bossphases', 'data-phases': id }, h('div', { class: 'bp-head' }, h('div', { class: 'bp-title' }, t('codex.phases', 'Phases (boss health)')), action), bar, marks, list);
 }
 
 export function settingsModal(app) {
@@ -713,7 +740,7 @@ export function settingsModal(app) {
   draw();
 }
 function tog2(label, on, fn) { return h('div', { class: 'toggle' }, label, btn(on ? t('common.on', 'ON') : t('common.off', 'OFF'), fn, on ? 'green small' : 'dark small')); }
-function importModal(app) {
+export function importModal(app) {
   const ta = h('textarea', { class: 'code', placeholder: t('import.placeholder', 'Paste your save code here (it starts with DTB1.)') });
   const body = h('div');
   const m = modal(body);
@@ -728,7 +755,7 @@ function importModal(app) {
 }
 function resetModal(app) {
   const m = modal(h('div', null, h('h2', null, t('reset.title', 'Reset everything?')), h('div', { class: 'sub', style: 'text-align:center' }, t('reset.hint', 'This deletes all progress on this device. It cannot be undone.')),
-    h('div', { class: 'btnrow' }, btn(t('reset.delete', 'Delete it all'), () => { app.replaceProfile(M.newProfile(app.now())); m.close(); app.showTitle(); }, 'red'), btn(t('reset.keep', 'Keep playing'), () => m.close(), 'green'))));
+    h('div', { class: 'btnrow' }, btn(t('reset.delete', 'Delete it all'), () => { app.replaceProfile(app.freshProfile ? app.freshProfile() : M.newProfile(app.now())); m.close(); app.showTitle(); }, 'red'), btn(t('reset.keep', 'Keep playing'), () => m.close(), 'green'))));
 }
 
 // ================================================================================================ lucky wheel and leaderboard
@@ -769,6 +796,33 @@ function wheelCard(app, rerender) {
   return h('div', { class: 'card', style: 'text-align:center' }, cv, label, h('div', { style: 'margin-top:8px' }, spin));
 }
 
+// 'Copy invite link': <origin>/drop_the_bass/?friend=<name>. Clipboard API first; when it is missing or refuses, a prompt shows the link to copy by hand.
+export function copyInviteLink(app) {
+  const link = inviteLink(typeof location !== 'undefined' ? location.origin : '', app.profile.name);
+  if (!link) return false;
+  const byHand = () => { try { window.prompt(t('board.invite_prompt', 'Copy this link and send it to your friend:'), link); } catch (e) { toast(link, 6000); } };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(() => toast(t('board.invite_copied', 'Invite link copied!')), byHand);
+    else byHand();
+  } catch (e) { byHand(); }
+  return true;
+}
+// Someone opened a friend link (?friend=Name, see main.js): ask once, never add by itself. name is already cleaned by lb.friendFromSearch.
+export function friendInviteModal(app, name) {
+  const n = cleanName(name);
+  if (!n) return null;
+  const m = modal(h('div', { class: 'friend-invite', 'data-friend-invite': n }, h('h2', null, t('friend.invite_title', 'Friend invite')),
+    h('div', { class: 'sub', style: 'text-align:center;font-size:20px' }, t('friend.invite_ask', 'Add {name} as a friend?', { name: n })),
+    h('div', { class: 'sub', style: 'text-align:center;font-size:13px;margin-top:4px' }, t('friend.invite_hint', 'You will see their scores pinned on the leaderboards.')),
+    h('div', { class: 'btnrow' }, btn(t('friend.invite_add', 'Add friend'), () => {
+      const r = M.addFriend(app.profile, n);
+      m.close(); app.save();
+      if (r.ok) { app.audio.play('ui_click'); toast(t('board.added', 'Added {name} to your friends.', { name: r.name })); }
+      else toast(({ empty: t('board.err_empty', 'Type a name first.'), self: t('board.err_self', 'That is you!'), dup: t('board.err_dup', 'Already a friend.'), full: t('board.err_full', 'Your friend list is full ({max}).', { max: FRIENDS_MAX }) })[r.reason]);
+    }, 'green', { 'data-friend-yes': '' }), btn(t('friend.invite_no', 'No thanks'), () => m.close(), 'dark', { 'data-friend-no': '' }))), { sticky: true });
+  return m;
+}
+
 export function boardModal(app, id, title) {
   const p = app.profile;
   const state = { tab: 'all', top: undefined, msg: '' };
@@ -804,6 +858,7 @@ export function boardModal(app, id, title) {
     const inp = h('input', { type: 'text', maxlength: 16, placeholder: t('board.add_ph', 'Add a friend by name'), class: 'lb-input', 'aria-label': t('board.friend_name', 'Friend name'), onkeydown: (ev) => { if (ev.key === 'Enter') addFriend(inp.value); } });
     body.append(h('div', { class: 'row lb-addrow' }, inp, btn(t('board.add', 'Add'), () => addFriend(cleanName(inp.value)), 'blue small')));
     if (state.msg) body.append(h('div', { class: 'sub', style: 'font-size:13px;text-align:center' }, state.msg));
+    if (p.name) body.append(h('div', { class: 'btnrow', style: 'margin-top:6px' }, btn([icon('heart', 20), t('board.copy_invite', 'Copy invite link')], () => copyInviteLink(app), 'dark small', { 'data-copy-invite': '' })));
     body.append(h('div', { class: 'sub', style: 'font-size:12px;text-align:center;margin-top:8px' }, p.name ? t('board.you_appear', 'You appear as {name}.', { name: p.name }) : t('board.set_name', 'Set your name in Settings to join the board.')), h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'green')));
   };
   draw();

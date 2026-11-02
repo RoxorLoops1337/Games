@@ -7,7 +7,7 @@ import {
   SKIN_DEFAULT, SKIN_PRICES, SKIN_IDS, SKIN_FALLBACK,
 } from './data_meta.js';
 import { EPILOGUES, CREDITS_FINAL } from './data_story.js';
-import { HERO_ABILITIES, HERO_ABILITY_DEFAULT, RUN_MODIFIER_BY_ID, MAX_RUN_MODIFIERS, ENDLESS_MILESTONES } from './data_depth.js';
+import { HERO_ABILITIES, HERO_ABILITY_DEFAULT, RUN_MODIFIER_BY_ID, MAX_RUN_MODIFIERS, ENDLESS_MILESTONES, BOSS_PHASES, BOSS_PHASE_EFFECTS } from './data_depth.js';
 import { DAILY_MOD_IDS } from './data_run.js';
 import { makeRng, hashSeed } from './rng.js';
 import * as CORE from './data_core.js';
@@ -43,7 +43,7 @@ export function newProfile(now = 0) {
     skins: { owned: [SKIN_DEFAULT] }, milestones: { claimed: {}, cosmetics: [] },
     seen: { turrets: {}, enemies: {}, bosses: {}, relics: {} },
     autoMerge: false, autoMergeOn: true,
-    settings: { style: 'doodle', lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1, difficulty: 'normal', skin: SKIN_DEFAULT, analytics: true, skipSetlist: false, lang: 'auto', colorblind: false, autolow: true, bigtext: false },
+    settings: { style: 'doodle', lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1, difficulty: 'normal', skin: SKIN_DEFAULT, analytics: true, skipSetlist: false, lang: 'auto', colorblind: false, autolow: true, bigtext: false, muted: false },
   };
 }
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -108,6 +108,7 @@ export function migrate(p, now = 0) {
   s.difficulty = DIFFICULTY_IDS.includes(s.difficulty) ? s.difficulty : 'normal';
   s.analytics = s.analytics === undefined ? true : !!s.analytics;
   s.skipSetlist = !!s.skipSetlist;
+  s.muted = !!s.muted;   // the quick mute button (title screen and pause menu); old saves have none, so false
   s.colorblind = !!s.colorblind; s.bigtext = !!s.bigtext; s.autolow = s.autolow === undefined ? true : !!s.autolow;   // accessibility (js/a11y.js); autolow: drop to low graphics when the frame rate stays low
   s.lang = ['en', 'da', 'nl', 'de'].includes(s.lang) ? s.lang : 'auto';   // 'auto' follows the device language
   // second tour fields: ability picks, pinned modifiers, epilogues seen, board skins, claimed Endless milestones
@@ -213,6 +214,27 @@ export function commitSave(store, p, opts = {}) {
   if (!safeSet(store, SAVE_KEY, str)) return { ok: false, reason: 'storage' };
   if (safeGet(store, SAVE_KEY) !== str) return { ok: false, reason: 'verify' };
   return { ok: true, bytes: str.length, keptBackup: keepBak };
+}
+// The phases of a boss for the codex diagram: one group per DISTINCT health threshold, highest first. pct is the whole percent the boss health
+// drops to (66 means 'at 66% health or below'); entries are the effects that fire there (names and descriptions are translated data).
+// A boss with no phases, and an effect id the table does not know, are skipped safely.
+export function bossPhaseGroups(bossId) {
+  const list = Array.isArray(BOSS_PHASES[bossId]) ? BOSS_PHASES[bossId] : [];
+  const groups = [];
+  for (const ph of list.slice().sort((a, b) => b.at - a.at)) {
+    const fx = BOSS_PHASE_EFFECTS[ph.id];
+    if (!fx || !(ph.at >= 0 && ph.at <= 1)) continue;
+    let g = groups.find((x) => x.at === ph.at);
+    if (!g) { g = { at: ph.at, pct: Math.round(ph.at * 100), entries: [] }; groups.push(g); }
+    g.entries.push({ id: ph.id, name: fx.name, desc: fx.desc });
+  }
+  return groups;
+}
+// A brand new profile (no save on this device) starts with Reduce motion on when the system asks for it. A stored choice is never touched:
+// call this only for a profile that was just created. mm is matchMedia (or a fake); anything that throws or is missing changes nothing.
+export function applyFreshDefaults(p, mm) {
+  try { if (p && p.settings && typeof mm === 'function' && mm('(prefers-reduced-motion: reduce)').matches) p.settings.reduce = true; } catch (e) { /* no media query support */ }
+  return p;
 }
 // Load: the main save, else the backup (recovered:true), else a new profile. A corrupt main save is kept under SAVE_CORRUPT_KEY.
 export function loadSave(store, now = 0) {
