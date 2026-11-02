@@ -1132,7 +1132,7 @@ function nearestTarget(g, x, y, maxD = 1e9) {
     for (let i = 0; i < segs.length; i++) {
       const s = segs[i];
       if (s.hp <= 0 || s.shield || s.wave || !visible(s)) continue;
-      const d = hyp(s.x - x, s.y - y) - s.r;
+      const dx = s.x - x, dy = s.y - y, d = Math.sqrt(dx * dx + dy * dy) - s.r;
       if (d < bd) { bd = d; best = s; }
     }
   }
@@ -1140,7 +1140,7 @@ function nearestTarget(g, x, y, maxD = 1e9) {
 }
 const frontSegs = g => g.snakes.map(sn => sn.segs[0]).filter(s => s && visible(s));
 
-const damageSegAs = (src, g, ...a) => { g.src = src; damageSeg(g, ...a); g.src = ''; };
+const damageSegAs = (src, g, s, dmg, crit, x, y) => { g.src = src; damageSeg(g, s, dmg, crit, x, y); g.src = ''; };   // b12 perf: fixed arguments, no rest array and spread per hit
 function damageSeg(g, s, dmg, crit, x, y) {
   if (s.hp <= 0 || s.shield || s.wave) return;
   const srcId = g.src || 'capsule'; g.dmgBy[srcId] = (g.dmgBy[srcId] || 0) + Math.min(dmg, s.hp);
@@ -1397,6 +1397,8 @@ function shootCapsule(g, dt) {
     g.shots++; g.events.push({ t: 'shoot' });
   }
 }
+// b12 perf: distance test as a tiny function taking the cell (a monomorphic read of s.x and s.y), so no number is boxed to call it; same value as hyp() < r
+function near(s, x, y, r) { const dx = s.x - x, dy = s.y - y; return Math.sqrt(dx * dx + dy * dy) < r; }
 function updateWeapons(g, dt, canFire) {
   const p = g.p, cm = cdMul(g);
   const dm = id => dmgMul(g) * skillMul(g.skillLv[id] || 1) * (g.perk && g.perk.id === id ? g.perk.mul : 1);   // permanent skill level scales that skill's damage
@@ -1459,7 +1461,7 @@ function updateWeapons(g, dt, canFire) {
     for (let i = 0; i < 1 + dl; i++) {
       const pos = daggerPos(g, i, DP_SCRATCH);
       for (let a = 0; a < sns.length; a++) { const segs = sns[a].segs; for (let j = 0; j < segs.length; j++) { const s = segs[j];   // indexed, no closure (same order as eachTarget)
-        if (s.hp > 0 && !s.shield && !s.wave && s.orbCd <= 0 && hyp(s.x - pos.x, s.y - pos.y) < s.r + 12) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } } }
+        if (s.hp > 0 && !s.shield && !s.wave && s.orbCd <= 0 && near(s, pos.x, pos.y, s.r + 12)) { s.orbCd = 0.3; damageSegAs('daggers', g, s, 1.2 * (1 + 0.3 * dl) * dm('daggers'), false, pos.x, pos.y); } } }
     }
   }
   // massage stick (sweeping bar)
@@ -1483,7 +1485,7 @@ function updateWeapons(g, dt, canFire) {
       g.events.push({ t: 'pulse', x: t.x, y: t.y, r: R });
       const sns = g.snakes;
       for (let a = 0; a < sns.length; a++) { const segs = sns[a].segs; for (let j = 0; j < segs.length; j++) { const s = segs[j];
-        if (s.hp > 0 && !s.shield && !s.wave && hyp(s.x - t.x, s.y - t.y) < R + s.r) damageSegAs('tower', g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); } }
+        if (s.hp > 0 && !s.shield && !s.wave && near(s, t.x, t.y, R + s.r)) damageSegAs('tower', g, s, 1.5 * (1 + 0.35 * tl) * dm('tower'), false, s.x, s.y); } }
     }
   }
   // swab zones tick
@@ -1541,6 +1543,62 @@ function moveSegs(g, segs, path, dt) {
   }
   return hp;
 }
+// b12 perf: the projectile pass lives outside the huge step(): there the per-cell distance tests boxed three numbers per bullet and cell (58 KB of garbage per step with needles).
+// Same maths in the same order (Math.sqrt of the same sum), no hyp() call, no closure per splash hit.
+function moveBullets(g, dt) {
+  const bullets = g.bullets, sns = g.snakes;
+  for (let bi = bullets.length - 1; bi >= 0; bi--) {
+    const b = bullets[bi];
+    if (b.home > 0) {
+      const t = nearestTarget(g, b.x, b.y, 320);
+      if (t) {
+        const sp = hyp(b.vx, b.vy), cur = Math.atan2(b.vy, b.vx);
+        const na = cur + clamp(angDiff(Math.atan2(t.y - b.y, t.x - b.x), cur), -b.home * dt, b.home * dt);
+        b.vx = Math.cos(na) * sp; b.vy = Math.sin(na) * sp;
+      }
+    }
+    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+    let dead = b.life <= 0 || b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30;
+    if (!dead) {
+      const bx = b.x, by = b.y, br = b.r;
+      for (let a = 0; a < sns.length && !dead; a++) { const sn = sns[a], segs = sn.segs; for (let i = 0; i < segs.length && !dead; i++) { const s = segs[i];
+        if (s.hp <= 0 || s.shield || s.wave) continue;
+        const dx = s.x - bx, dy = s.y - by;
+        if (Math.sqrt(dx * dx + dy * dy) >= s.r + br || b.hit.includes(s)) continue;
+        b.hit.push(s);
+        damageSegAs(BULLET_SRC[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g); if (b.beat && g.groove < GROOVE_MAX) g.groove += 0.5;
+        if (b.slow) sn.slow = Math.max(sn.slow, b.slow);
+        if (b.splash > 0) {
+          const sd = b.dmg * (b.kind === 'bubble' ? 2.2 : 0.5), sx = s.x, sy = s.y, reach = b.splash;
+          for (let a2 = 0; a2 < sns.length; a2++) { const qs = sns[a2], qsegs = qs.segs; for (let j = 0; j < qsegs.length; j++) { const q = qsegs[j];
+            if (!(q.hp > 0 && !q.shield && !q.wave) || q === s) continue;
+            const ex = q.x - sx, ey = q.y - sy;
+            if (Math.sqrt(ex * ex + ey * ey) < reach + q.r) { damageSeg(g, q, sd, false, q.x, q.y); if (b.slow) qs.slow = Math.max(qs.slow, b.slow); } } }
+          g.events.push({ t: b.kind === 'bubble' ? 'burst' : 'splash', x: s.x, y: s.y, r: b.splash });
+        }
+        if (b.pierce-- <= 0) dead = true;
+      } }
+    }
+    if (dead) { bullets.splice(bi, 1); const bp = g.bpool || (g.bpool = []); if (bp.length < BULLET_POOL_MAX) bp.push(b); }
+  }
+}
+// b12 perf: the two per-cell passes of the chain update, out of the huge step() so the numbers stay unboxed (same maths, same order)
+function chainTargets(sn, segs, pathLen, v, dt) {
+  const last = segs.length - 1;
+  let total = 0;
+  for (let i = 0; i < last; i++) total += (segs[i].r + segs[i + 1].r) * 0.78;
+  const maxTail = pathLen - total;
+  sn.tail = Math.min(sn.tail + v * dt, maxTail);
+  sn.breach = sn.tail >= maxTail - 0.5;
+  let target = sn.tail;
+  for (let i = last; i >= 0; i--) {
+    if (i < last) target += (segs[i].r + segs[i + 1].r) * 0.78;
+    segs[i].tp = target;
+  }
+}
+function markWave(segs, boss, wavePos, wave2) {
+  for (let i = 0; i < segs.length; i++) segs[i].wave = boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
+}
 const CHEST_CP = [[0.25, 1], [0.5, 2]];
 export function step(g, dt, input) {
   if (g.phase !== 'play' && g.phase !== 'clear') return;
@@ -1574,17 +1632,8 @@ export function step(g, dt, input) {
       else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.lane = null; if (napBoss(g, sn)) { sn.napT = NAP_TIME; g.events.push({ t: 'nap', x: sn.segs[0].x, y: sn.segs[0].y }); if (sn.p2 && g.stage >= STARTLE_FROM) { sn.tail += STARTLE_JOLT; g.events.push({ t: 'startle', x: sn.segs[0].x, y: sn.segs[0].y }); } } sn.surgeT = ((sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5)) * (sn.p2 ? 0.6 : 1) * (traitOf(g, sn) === 'grumpy' ? (g.stage >= LATE_TRAIT_FROM ? GRUMPY_LATE : GRUMPY_SURGE) : 1); }
     }
     const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? (traitOf(g, sn) === 'mighty' ? mightySlow(g) : 0.55) : 1) * traitSpeed(g, sn) * (sn.surge === 'go' ? (sn.p2 ? P2_DASH : 2.6) : 1) * (sn.drum ? DRUM_SPEED : 1) * (sn.napT > 0 ? NAP_SPEED : 1) * (g.phase === 'clear' ? 0 : 1);
-    const segs = sn.segs, last = segs.length - 1;
-    let total = 0;
-    for (let i = 0; i < last; i++) total += (segs[i].r + segs[i + 1].r) * 0.78;
-    const path = sn.path || g.path, maxTail = path.len - total;
-    sn.tail = Math.min(sn.tail + v * dt, maxTail);
-    sn.breach = sn.tail >= maxTail - 0.5;
-    let target = sn.tail;
-    for (let i = last; i >= 0; i--) {
-      if (i < last) target += (segs[i].r + segs[i + 1].r) * 0.78;
-      segs[i].tp = target;
-    }
+    const segs = sn.segs, path = sn.path || g.path;
+    chainTargets(sn, segs, path.len, v, dt);
     segs[0].shield = segs.length > 1;
     sn.healT = (sn.healT === undefined ? 1.2 : sn.healT) - dt;
     if (sn.healT <= 0 && g.phase === 'play') { sn.healT = 1.2; for (let i = 1; i < segs.length; i++) if (segs[i].kind === 'mender' && segs[i].hp > 0) { for (let j = Math.max(1, i - 2); j <= Math.min(segs.length - 1, i + 2); j++) if (j !== i && segs[j].hp > 0 && segs[j].hp < segs[j].max) segs[j].hp = Math.min(segs[j].max, segs[j].hp + segs[j].max * 0.06); g.events.push({ t: 'mend', x: segs[i].x, y: segs[i].y }); } }
@@ -1593,7 +1642,7 @@ export function step(g, dt, input) {
     if (sn.boss && !sn.p2 && g.phase === 'play') { let left = 0; for (const q of segs) left += Math.max(0, q.hp); if (left < segs.hpMax * P2_HP) { sn.p2 = true; sn.p2T = g.t; sn.surgeT = Math.min(sn.surgeT, 1.2); g.events.push({ t: 'phase2' }); } }
     const wavePos = sn.boss ? ((sn.p2 ? sn.p2T * 4.5 + (g.t - sn.p2T) * P2_WAVE : g.t * 4.5)) % (segs.length + 8) : -99;
     const wave2 = sn.boss && g.stage >= ECHO_WAVE_FROM ? (segs.length + 8) - ((g.t * 3.2 + 7) % (segs.length + 8)) : -99;   // late bosses: a second wave runs back up the chain
-    for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
+    markWave(segs, sn.boss, wavePos, wave2);
     wardTick(sn); gloomTick(g, sn); bossTwist(g, sn, dt); traitTick(g, sn, dt); ringSkip(g, sn, dt); choirTick(sn, dt); if (g.phase === 'play') quartetTick(g, sn, dt);
     if (sn.breach && g.phase === 'play') { g.leaks++; g.events.push({ t: 'leak', x: segs[0].x, y: LINE_Y }); loseRun(g); }
     stageHp += moveSegs(g, segs, path, dt);
@@ -1609,36 +1658,7 @@ export function step(g, dt, input) {
   if (canFire) shootCapsule(g, dt);
   updateWeapons(g, dt, canFire);
 
-  // projectiles
-  for (let bi = g.bullets.length - 1; bi >= 0; bi--) {
-    const b = g.bullets[bi];
-    if (b.home > 0) {
-      const t = nearestTarget(g, b.x, b.y, 320);
-      if (t) {
-        const sp = hyp(b.vx, b.vy), cur = Math.atan2(b.vy, b.vx);
-        const na = cur + clamp(angDiff(Math.atan2(t.y - b.y, t.x - b.x), cur), -b.home * dt, b.home * dt);
-        b.vx = Math.cos(na) * sp; b.vy = Math.sin(na) * sp;
-      }
-    }
-    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
-    let dead = b.life <= 0 || b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30;
-    if (!dead) {
-      const sns = g.snakes;
-      for (let a = 0; a < sns.length && !dead; a++) { const sn = sns[a], segs = sn.segs; for (let i = 0; i < segs.length && !dead; i++) { const s = segs[i];
-        if (s.hp <= 0 || s.shield || s.wave || hyp(s.x - b.x, s.y - b.y) >= s.r + b.r || b.hit.includes(s)) continue;
-        b.hit.push(s);
-        damageSegAs(BULLET_SRC[b.kind] || 'capsule', g, s, b.dmg, b.crit, b.x, b.y); bumpGroove(g); if (b.beat && g.groove < GROOVE_MAX) g.groove += 0.5;
-        if (b.slow) sn.slow = Math.max(sn.slow, b.slow);
-        if (b.splash > 0) {
-          const sd = b.dmg * (b.kind === 'bubble' ? 2.2 : 0.5);
-          eachTarget(g, (q, qs) => { if (q !== s && hyp(q.x - s.x, q.y - s.y) < b.splash + q.r) { damageSeg(g, q, sd, false, q.x, q.y); if (b.slow) qs.slow = Math.max(qs.slow, b.slow); } });
-          g.events.push({ t: b.kind === 'bubble' ? 'burst' : 'splash', x: s.x, y: s.y, r: b.splash });
-        }
-        if (b.pierce-- <= 0) dead = true;
-      } }
-    }
-    if (dead) { g.bullets.splice(bi, 1); const bp = g.bpool || (g.bpool = []); if (bp.length < BULLET_POOL_MAX) bp.push(b); }
-  }
+  moveBullets(g, dt);   // b12 perf: its own small function so the JIT keeps the distance maths unboxed
 
   reap(g);
 
