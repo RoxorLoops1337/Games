@@ -2,6 +2,7 @@
 // sounds (page, tap, new sticker), a voice for every pet when a snake head gets close, and a quiet ambient bed per world
 // that sits under the music while you play. Tables and helpers are pure (checked offline); one registrar adds the sfx.
 // Everything new lives at the end of the sfx table. Midi notes where noted, otherwise Hz.
+import { breathOf } from './audio_b11.js';
 
 // Key lift: semitones added to the boss root per phase (0 = unchanged). Phase 1 a whole step, phase 2 a minor third.
 export const KEY_LIFT = [0, 2, 3];
@@ -48,6 +49,7 @@ export function createAmbient(ac, bus, buf) {
   let cur = null;
   const stop = () => {
     const n = cur; if (!n) return; cur = null;
+    try { n.lfo && n.lfo.stop(ac.currentTime + 0.7); } catch (e) { /* ignore */ }
     try { const t = ac.currentTime; n.out.gain.cancelScheduledValues && n.out.gain.cancelScheduledValues(t); n.out.gain.setValueAtTime(Math.max(0.0001, n.v), t); n.out.gain.linearRampToValueAtTime(0.0001, t + 0.6); n.src.stop(t + 0.7); } catch (e) { /* ignore */ }
   };
   const start = skin => {
@@ -58,7 +60,9 @@ export function createAmbient(ac, bus, buf) {
       src.buffer = buf; src.loop = true; fl.type = a.t; fl.frequency.value = a.f; if (fl.Q) fl.Q.value = a.q;
       out.gain.setValueAtTime(0.0001, t); out.gain.linearRampToValueAtTime(a.v, t + 2);
       src.connect(fl); fl.connect(out); out.connect(bus); src.start(t);
-      cur = { skin, src, out, v: a.v };
+      let lfo = null;   // r11: the bed breathes, a slow sine adds to its level (rate per world)
+      try { const br = breathOf(skin), lg = ac.createGain(); lfo = ac.createOscillator(); lfo.frequency.value = br.hz; lg.gain.value = a.v * br.depth; lfo.connect(lg); lg.connect(out.gain); lfo.start(t); } catch (e) { lfo = null; }
+      cur = { skin, src, out, v: a.v, lfo };
     } catch (e) { cur = null; }
   };
   return { start, stop, get skin() { return cur ? cur.skin : null; } };

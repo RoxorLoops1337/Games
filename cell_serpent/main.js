@@ -15,7 +15,7 @@ import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.j
 import { initA11y7 } from './a11y7.js';
 import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed, announce, watchGroove, watchStreak, resetGroove, showZone, inThumbZone, zoneSteer, initKeyboard, RARITY_WORDS } from './access.js';
 import { createMotion } from './motion.js';
-import { curtainOpen } from './curtain_ui.js';
+import { curtainOpen, onCurtain } from './curtain_ui.js';
 import { celebrateBest, stopBest } from './best_fx.js';
 import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
@@ -27,7 +27,7 @@ import { bakeCardArt } from './card_bake.js';
 import { partnerIds, markPartners, betterRoll, luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTML, cardMeter, ghostBarHTML, levelRingHTML, skipHTML, foilHTML, tickBand, cardFoilHTML, markReroll, chainPulse } from './cards_ui.js';
 import { offeredLinks, markLinks, lockState, lockHTML, toggleLock, keepLocked, dealChipHTML, pickBurst } from './cards_b10.js';
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
-import { paintTabIcons, bindHubSwipe, setTabCount } from './tabs_ui.js';
+import { paintTabIcons, bindHubSwipe, setTabCount, onTabUp } from './tabs_ui.js';
 import { paintButtonGlyphs, RECAP, emptyCard } from './btn_glyphs.js';
 import { paintSettingIcons } from './icons_b8.js';
 import { watchGlyphs } from './glyph_sweep.js';
@@ -815,7 +815,7 @@ loadArt('assets/').then(a => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
   setupPeeks($('peeks'), kit); setupTitleSnake($('title'), kit); setupTune($('title'), audio, () => { save.sparkles += 3; persist(); refreshCur(); toast('Sticker! +3 Sparkles'); }); setupSecrets($('title'), audio); setupTitle10($('title'), audio); $('title').addEventListener('snakepoke', e => (e.detail && e.detail.hit ? audio.play('snakesqueak', e.detail) : audio.play('click'))); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
-  R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready'), onMilestone: n => audio.play('streakmile', { n }), onPetCall: id => audio.play('petcall', { id }), beatStreak: () => audio.beatStreak }); applySettings(); resize(); refreshTitle();
+  onTabUp(() => audio.play('tabping')); onCurtain(() => audio.play('curtain')); R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready'), onMilestone: n => audio.play('streakmile', { n }), onPetCall: id => audio.play('petcall', { id }), onPetGlance: () => audio.play('petglance'), onPounce: () => audio.play('pounce'), beatStreak: () => audio.beatStreak }); applySettings(); resize(); refreshTitle();
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();
   if (qs.get('stage')) { startRun(Math.max(1, +qs.get('stage'))); }   // dev shortcut: ?stage=N

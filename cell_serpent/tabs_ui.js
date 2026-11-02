@@ -23,10 +23,12 @@ export function paintTabIcons(root = document) {
 
 // round 10: the tab badge shows how many things are ready (1 to 9, then 9+)
 export const badgeLabel = n => (n > 0 ? (n > 9 ? '9+' : String(Math.floor(n))) : '');
+let tabUp = null;
+export const onTabUp = f => { tabUp = f; };   // r11: called when a badge number goes up (main plays the ping)
 export function setTabCount(btn, n) {
   const d = btn && btn.querySelector('.dot'); if (!d) return;
   const t = badgeLabel(n);
-  if (d.textContent !== t) { d.textContent = t; d.classList.toggle('wide', t.length > 1); if (d.dataset.n !== undefined) { d.classList.remove('bump'); void d.offsetWidth; d.classList.add('bump'); } d.dataset.n = t; }
+  if (d.textContent !== t) { d.textContent = t; d.classList.toggle('wide', t.length > 1); if (d.dataset.n !== undefined) { d.classList.remove('bump'); void d.offsetWidth; d.classList.add('bump'); if (tabUp && t && (+d.dataset.n || 0) < (n > 9 ? 10 : n)) tabUp(); } d.dataset.n = t; }
 }
 
 // pure: how far the pane follows the finger. With a tab to go to it follows at about half speed (soft cap),

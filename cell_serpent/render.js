@@ -19,6 +19,7 @@ import { bakeHat } from './hats.js';
 import { createCheer, HAT_FX, hatPose, EMOTE, heart, drawEmote } from './cheer.js';
 import { cheerFrame } from './duo_cheer.js';
 import { drawDuoLife } from './duo_idle.js';
+import { glanceEdge } from './audio_b11.js';
 import { createReact, reactEvent, barkDue, barkU, barkDraw, koPose, starAt, revivePose, glance, pouncePose, clawDraw } from './duo_react10.js';
 import { newLeash, petFollow, scareEdge, tuckMood, SCARE_CALL, SCARE_COL, createDust, dustStep, dustDraw } from './duo_life9.js';
 import { createBoltLayer, boltPose, paintBolt } from './bolts_fx.js';
@@ -430,6 +431,7 @@ export function createRenderer(canvas, art, kit) {
     const ps = g.pets || [];
     let near = 1e9, nearX = NaN; for (const sn of g.snakes) { const h = sn.segs[0]; if (h) { const d = Math.hypot(h.x - p.x, h.y - p.y); if (d < near) { near = d; nearX = h.x; } } }
     const barkNow = !OPT.reduceMotion && g.phase === 'play' && barkDue(R10, S.t), bu = OPT.reduceMotion ? -1 : barkU(R10, S.t), pn = OPT.reduceMotion ? null : pouncePose(S.t - R10.pT, R10.pDir);   // r10
+    if (pn && pn.u >= 0 && R10.pHeard !== R10.pT) { R10.pHeard = R10.pT; if (OPT.onPounce) OPT.onPounce(); }   // r11: the pounce sound once per crit
     const scared = near < 330;
     ps.forEach((id, i) => {
       const st = petState[i] || (petState[i] = { hop: 0, last: 0 });
@@ -446,7 +448,8 @@ export function createRenderer(canvas, art, kit) {
       const lf = st.leash || (st.leash = newLeash()), px = OPT.reduceMotion ? p.x + s2 * 92 : petFollow(lf, p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6, S.t).x, base = p.y + 8;   // r9: the pets trot after the duo on a springy leash
       const calls = scareEdge(st, scared, S.t); if (calls && OPT.onPetCall) OPT.onPetCall(id);   // r10: the pet's own voice
       if (calls && !OPT.reduceMotion) { st.hop = 1; addFloat(px, base - 62, SCARE_CALL[id] || '!', SCARE_COL[id] || '#fff', 20, -34); }   // r9: each pet calls out when a head gets close
-      const gl = OPT.reduceMotion || S.ko ? 0 : glance(st, px, nearX, near, lastDt), pk = id === 'kitten' && pn && pn.u >= 0 ? pn : null;   // r10: lean toward the nearest head; the kitten pounces on crits
+      const gl = OPT.reduceMotion || S.ko ? 0 : glance(st, px, nearX, near, lastDt); if (glanceEdge(st, gl) && OPT.onPetGlance) OPT.onPetGlance(id);   // r11
+      const pk = id === 'kitten' && pn && pn.u >= 0 ? pn : null;   // r10: lean toward the nearest head; the kitten pounces on crits
       if (barkNow && id === 'puppy') { st.hop = 1; addFloat(px, base - 78, 'WOOF!', '#ffd24a', 28, -30); }
       const blink = (S.t * 0.8 + i * 1.7) % 3.1 < 0.13;
       const sl = slumpK(), tk = OPT.reduceMotion || ch || scared || sl > 0.05 || st.hop > 0.1 ? null : petTrick(id, i), mood = sl > 0.2 || tuckMood(id, scared) >= 0 ? 7 : st.hop > 0.35 || ch ? 3 : tk && tk.mood >= 0 ? tk.mood : scared ? 2 : blink ? 1 : 0;   // slump: eyes shut
