@@ -1,5 +1,6 @@
 import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { skinFor, recordAddictRun, eventInfo, ensureEvent } from './sim.js';
+import { deathCauseOf } from './screen_b11.js';
 import { createHub2 } from './hub2.js';
 import { keepSnap, keepResult } from './keep_ui.js';
 import { teaseGoal, hideTease } from './keep10.js';
@@ -626,7 +627,7 @@ function toggleMute() { save.muted = !save.muted; audio.setMuted(save.muted); $(
 function showRevive() {
   reviveAsked = true; const cost = reviveCost(g.revivesUsed);
   $('rvLeft').textContent = 'Remaining ×' + g.revivesLeft; $('rvGo').innerHTML = 'REVIVE  ' + cost + ' ' + curImg('sparkles'); $('rvGo').disabled = save.sparkles < cost;
-  { const pc = Math.round((g.progress || 0) * 100), w = $('rvWipe'); if (w) { w.innerHTML = `<b>WIPEOUT!</b><span>${pc > 0 ? pc + '% of the serpent popped' : 'the serpent got through'}</span><i><u style="width:${pc}%"></u></i>`; w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); } }
+  { const pc = Math.round((g.progress || 0) * 100), w = $('rvWipe'); if (w) { w.innerHTML = `<b>WIPEOUT!</b><span>${pc > 0 ? pc + '% of the serpent popped' : 'the serpent got through'}</span>${(dc => dc ? `<em>${dc.head}</em><small>${dc.sub}</small>` : '')(deathCauseOf(g))}<i><u style="width:${pc}%"></u></i>`; w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); } }
   { const pc = Math.floor((g.progress || 0) * 100); $('rvInfo').innerHTML = `Stage ${g.stage}: ${pc}% cleared<small>${save.sparkles} sparkles in your pocket</small>`; }
   let stopRing = () => {};
   $('rvGo').onclick = () => { if (save.sparkles < cost) return; stopRing(); stopFx(); save.sparkles -= cost; persist(); reviveGame(g); reviveAsked = false; endT = 0; audio.play('levelup'); show(''); };
