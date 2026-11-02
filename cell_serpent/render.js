@@ -213,26 +213,54 @@ export function createRenderer(canvas, art, kit) {
   function drawPickup(pk) {
     const k = pk.kind, bob = Math.sin(S.t * 6 + pk.x) * 2;
     if (k === 'gem') { glow(pk.x, pk.y, 22, '#39f0ff', 0.5); blit(kit && kit.SPR.pickup('gem'), pk.x, pk.y + bob, 64, Math.sin(S.t * 3 + pk.x) * 0.25); }
-    else if (k === 'coin') { const sq = Math.max(0.3, Math.abs(Math.cos(S.t * 7 + pk.x))); ctx.save(); ctx.translate(pk.x, pk.y + bob); ctx.scale(sq, 1); blit(kit && kit.SPR.pickup('coin'), 0, 0, 58); ctx.restore(); }
-    else if (k === 'chest') { glow(pk.x, pk.y, 60, '#ffd84d', 0.55 + Math.sin(S.t * 5) * 0.2); blit(kit && kit.SPR.pickup('chest'), pk.x, pk.y + bob * 2, 104, Math.sin(S.t * 4) * 0.1); }
-    else { const col = k === 'heal' ? '#ff6a8a' : k === 'shield' ? '#39d0ff' : '#ffb020'; glow(pk.x, pk.y, 38, col, 0.6); blit(kit && kit.SPR.pickup(k), pk.x, pk.y + bob * 2, 92, Math.sin(S.t * 4) * 0.12); }
+    else if (k === 'coin') { if ((S.t * 1.6 + pk.x * 0.1) % 1 < 0.4) sparkleAt(pk.x + 10, pk.y - 12, 8 * Math.sin(((S.t * 1.6 + pk.x * 0.1) % 1) * 2.5 * Math.PI / 1)); const sq = Math.max(0.3, Math.abs(Math.cos(S.t * 7 + pk.x))); ctx.save(); ctx.translate(pk.x, pk.y + bob); ctx.scale(sq, 1); blit(kit && kit.SPR.pickup('coin'), 0, 0, 58); ctx.restore(); }
+    else if (k === 'chest') { if ((S.t * 1.3 + pk.x) % 1 < 0.5) sparkleAt(pk.x + 30, pk.y - 34, 11 * Math.sin(((S.t * 1.3 + pk.x) % 1) * 2 * Math.PI)); glow(pk.x, pk.y, 60, '#ffd84d', 0.55 + Math.sin(S.t * 5) * 0.2); blit(kit && kit.SPR.pickup('chest'), pk.x, pk.y + bob * 2, 104, Math.sin(S.t * 4) * 0.1); }
+    else { if (k === 'heal' && (S.t * 1.2 + pk.x) % 1 < 0.4) sparkleAt(pk.x + 22, pk.y - 26, 9 * Math.sin(((S.t * 1.2 + pk.x) % 1) * 2.5 * Math.PI)); const col = k === 'heal' ? '#ff6a8a' : k === 'shield' ? '#39d0ff' : '#ffb020'; glow(pk.x, pk.y, 38, col, 0.6); blit(kit && kit.SPR.pickup(k), pk.x, pk.y + bob * 2, 92, Math.sin(S.t * 4) * 0.12); }
+  }
+
+  // 02-animal-art: pets bob, blink, hop when the duo sings and look alert when a snake head is near
+  const petState = [{ hop: 0, last: 0 }, { hop: 0, last: 0 }];
+  function petsDraw(g, p, singing) {
+    const ps = g.pets || [];
+    let near = 1e9; for (const sn of g.snakes) { const h = sn.segs[0]; if (h) { const d = Math.hypot(h.x - p.x, h.y - p.y); if (d < near) near = d; } }
+    const scared = near < 330;
+    ps.forEach((id, i) => {
+      const st = petState[i] || (petState[i] = { hop: 0, last: 0 });
+      if (S.lastShot !== st.last) { st.last = S.lastShot; st.hop = 1; }
+      st.hop = Math.max(0, st.hop - 0.016 * 4.5);
+      const s2 = i ? 1 : -1, ph = S.t * 6 + i * 2, idle = Math.abs(Math.sin(ph)) * (scared ? 3 : 8), hopY = Math.sin(st.hop * Math.PI) * 14;
+      const px = p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6, base = p.y + 8;
+      const blink = (S.t * 0.8 + i * 1.7) % 3.1 < 0.13;
+      const mood = st.hop > 0.35 ? 3 : scared ? 2 : blink ? 1 : 0;
+      const k = Math.abs(Math.sin(ph));
+      ctx.save(); ctx.globalAlpha *= 0.3 * (1 - (idle + hopY) / 40); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, 24 - (idle + hopY) * 0.3, 7, 0, 0, TAU); ctx.fill(); ctx.restore();
+      const spr = kit && kit.SPR.pet(id, mood), sz = 92, sx = 1 + (1 - k) * 0.05 + st.hop * 0.05, sy = 1 - (1 - k) * 0.05 - st.hop * 0.03;
+      if (spr) { ctx.save(); ctx.translate(px, base - idle - hopY + 30); ctx.scale(sx, sy); ctx.translate(-px, -(base - idle - hopY + 30)); blit(spr, px, base - idle - hopY, sz, s2 * Math.sin(ph) * 0.08 + (scared ? Math.sin(S.t * 30) * 0.04 : 0)); ctx.restore(); }
+      if (st.hop > 0.6) sparkleAt(px + s2 * 28, base - idle - hopY - 36, 7 + st.hop * 3);
+    });
+  }
+  function idleSparkles(p, singing) {
+    const n = singing ? 3 : 1;
+    for (let i = 0; i < n; i++) { const a = S.t * 1.4 + i * 2.1, f = (S.t * 0.7 + i * 0.37) % 1; sparkleAt(p.x + Math.cos(a) * 60, p.y - 70 + Math.sin(a * 1.3) * 30 - f * 20, 5 * Math.sin(f * Math.PI)); }
   }
 
   function drawPlayer(g) {
     const p = g.p;
     if (p.iframes > 0 && Math.floor(S.t * 20) % 2 === 0 && !(p.shield > 0)) ctx.globalAlpha = 0.45;
-    ctx.save(); ctx.globalAlpha *= 0.35; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 40, 56, 14, 0, 0, TAU); ctx.fill(); ctx.restore();
+    { const br = 1 + Math.sin(S.t * 2.2) * 0.04;   // 02-animal-art: soft two-layer shadow that breathes with the duo
+      ctx.save(); ctx.globalAlpha *= 0.22; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 40, 66 * br, 17, 0, 0, TAU); ctx.fill(); ctx.globalAlpha *= 1.1; ctx.beginPath(); ctx.ellipse(p.x, p.y + 40, 44 * br, 10, 0, 0, TAU); ctx.fill(); ctx.restore(); }
     if ((g.groove || 0) >= 10) glow(p.x, p.y - 20, 100 + (g.groove - 10) * 3, '#ff7eb6', 0.18 + 0.1 * Math.sin(S.t * 8));
     // aim tick
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.aim); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6fe3ff';
     ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(22, -6); ctx.lineTo(22, 6); ctx.fill(); ctx.restore();
     const singing = S.t - S.lastShot < 0.22;
     const key = singing ? 'duo_sing' : 'duo_idle';
-    const sq = 1 + Math.sin(S.t * 9) * 0.025 * (Math.hypot(p.mx, p.my) > 0.1 ? 2 : 1);
+    const moving = Math.hypot(p.mx, p.my) > 0.1, hop = S.t - S.lastShot < 0.12 ? 1 - (S.t - S.lastShot) / 0.12 : 0;
+    const sq = 1 + Math.sin(S.t * (moving ? 9 : 2.6)) * (moving ? 0.05 : 0.018) + hop * 0.03;
     const im = art && art.get(key);
-    if (im) { const h = 170, w = h * im.width / im.height; img(key, p.x, p.y - 26, w / sq, h * sq, p.mx * 0.05); }
+    if (im) { const h = 170, w = h * im.width / im.height; img(key, p.x, p.y - 26 - hop * 4, w / sq, h * sq, p.mx * 0.05 + (moving ? 0 : Math.sin(S.t * 1.3) * 0.012)); idleSparkles(p, singing); }
     else { glow(p.x, p.y, 40, '#39f0ff', 0.7); ctx.fillStyle = '#39f0ff'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 22, 0, TAU); ctx.fill(); ctx.stroke(); }
-    (g.pets || []).forEach((id, i) => { const s2 = i ? 1 : -1, bob = Math.abs(Math.sin(S.t * 6 + i * 2)) * 8, px = p.x + s2 * 92 + Math.sin(S.t * 1.7 + i) * 6; ctx.save(); ctx.globalAlpha *= 0.3; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(px, p.y + 40, 22, 7, 0, 0, TAU); ctx.fill(); ctx.restore(); blit(kit && kit.SPR.pet(id), px, p.y + 8 - bob, 92, s2 * Math.sin(S.t * 6 + i * 2) * 0.08); });
+    petsDraw(g, p, singing);
     if (g.outfit) { glow(p.x, p.y - 20, 70, g.outfit.color, 0.22); ctx.save(); ctx.font = '44px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(g.outfit.hat, p.x - 4, p.y - 124 + Math.sin(S.t * 4) * 3); ctx.restore(); }
     // hitbox core: the part that actually gets hurt
     ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y + 10, 9, 0, TAU); ctx.stroke();
@@ -245,7 +273,11 @@ export function createRenderer(canvas, art, kit) {
   function drawBullets(g) {
     for (const b of g.bullets) {
       if (b.kind === 'needle') { blit(kit && kit.SPR.weapon('needle'), b.x, b.y, 112, Math.atan2(b.vy, b.vx)); continue; }
-      if (b.kind === 'snot') { blit(kit && kit.SPR.weapon('dragon'), b.x, b.y, 118, Math.sin(S.t * 10 + b.x) * 0.25); continue; }
+      if (b.kind === 'snot') {   // doves leave drifting feathers and flap
+        const fe = kit && kit.SPR.feather(), sp = Math.hypot(b.vx, b.vy) || 1;
+        for (let j = 1; j <= 3; j++) { const f = (S.t * 3 + j * 0.33 + b.x * 0.01) % 1, d = 20 + f * 60; ctx.save(); ctx.globalAlpha *= (1 - f) * 0.8; blit(fe, b.x - b.vx / sp * d + Math.sin(S.t * 5 + j) * 14 * f * (j % 2 ? 1 : -1), b.y - b.vy / sp * d + f * 14, 30 * (1 - f * 0.4), S.t * 3 + j * 2); ctx.restore(); }
+        ctx.save(); ctx.translate(b.x, b.y); ctx.scale(1 + Math.sin(S.t * 22 + b.x) * 0.1, 1 - Math.sin(S.t * 22 + b.x) * 0.06); blit(kit && kit.SPR.weapon('dragon'), 0, 0, 118, Math.sin(S.t * 10 + b.x) * 0.25); ctx.restore(); continue;
+      }
       if (b.kind === 'bubble') { blit(kit && kit.SPR.weapon('bubble'), b.x, b.y, b.r * 4.84, Math.sin(S.t * 3 + b.x) * 0.2); continue; }
       const col = b.crit ? '#ffd84d' : '#6fe3ff';
       if (b.crit) glow(b.x, b.y, 30, col, 0.55);
@@ -264,6 +296,9 @@ export function createRenderer(canvas, art, kit) {
     for (const z of g.zones) {
       const fade = Math.min(1, z.life * 2), ph = 1 - Math.max(0, Math.min(1, z.tick / 0.3));
       ctx.save(); ctx.globalAlpha = 0.9 * fade; blit(pad, z.x, z.y, z.r * 3.4 * (1 + 0.05 * (1 - ph)), 0); ctx.restore();
+      { const pw = kit && kit.SPR.paw(), z0 = (z.x * 0.013) % 1;   // a paw print trail walks round the pad
+        for (let j = 0; j < 6; j++) { const u = (S.t * 0.55 + j / 6 + z0) % 1, a = u * TAU, rr = z.r * 0.62, side = j % 2 ? 1 : -1;
+          ctx.save(); ctx.globalAlpha = Math.min(1, Math.sin(u * Math.PI) * 1.6) * fade; blit(pw, z.x + Math.cos(a) * rr + Math.cos(a + 1.57) * side * 5, z.y + Math.sin(a) * rr * 0.8 + Math.sin(a + 1.57) * side * 5, 34, a + 1.57); ctx.restore(); } }
       ctx.save(); ctx.globalAlpha = (1 - ph) * 0.8 * fade; ctx.strokeStyle = '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(z.x, z.y, z.r * (0.45 + 0.55 * ph), 0, TAU); ctx.stroke(); ctx.restore();
     }
   }
