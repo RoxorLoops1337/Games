@@ -785,6 +785,9 @@
   .art12 .s3 .tshield{inset:-4px}
   @keyframes headbob12{50%{transform:translateY(3px) rotate(-3deg)}}
   @media (max-height:700px){.tut12 .tcap{top:16px;font-size:24px}.art12 .s3 .tchain{padding-top:46px!important}.tut12 .tseg{width:48px;height:48px;margin:-8px 0}.tut12 .tbox{height:min(400px,72vh)}}
+  /* round 4: short phones, the hamster peek no longer sits on the currency pills; mute reads over any backdrop */
+  @media (max-height:700px){#title .peeks img:nth-child(5){bottom:13%!important}}
+  #muteBtn,#setBtnT{backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);background-color:rgba(10,6,36,.6)}
   /* end @css:12-title-onboarding */
 
   /* @css:10-shop-gear-stats */

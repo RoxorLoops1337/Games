@@ -59,3 +59,17 @@ console.log('12_title_onboarding ok');
   assert.ok(html.includes('id="notes12"') && html.includes('drop12') && html.includes('pop12'));
   assert.ok(!/—/.test(ob), 'no em dash in onboard12');
 }
+// round 4: tutorial with real art, goal line, short-phone title
+{
+  const ob4 = await import(join(root, 'onboard12.js'));
+  assert.equal(ob4.tutorialArt(null, null), null, 'no kit: emoji fallback');
+  const hintsSrc = readFileSync(join(root, 'hints.js'), 'utf8');
+  assert.ok(hintsSrc.includes('CLEAR THE CHAIN') && hintsSrc.includes('CELLS LEFT'), 'first-run goal line');
+  assert.ok(readFileSync(join(root, 'main.js'), 'utf8').includes('showTutorial(() => startRun(1), audio, kit, art)'));
+  assert.ok(html.includes('tyelimg') && html.includes('slidedu12') && html.includes('peeks img:nth-child(5)'));
+  for (const stage of [1, 2]) {
+    const gg = sim.createGame({ seed: 9, stage }), SS = { t: 0 }; let goal = 0;
+    for (let i = 0; i < 60 * 4; i++) { sim.step(gg, 1 / 60, { x: 0 }); SS.t += 1 / 60; drawHints(ctx, gg, SS, { glow: noop, text: s => { if (s === 'CLEAR THE CHAIN') goal++; } }); if (gg.phase === 'levelup') sim.choose(gg, 0); }
+    assert.equal(goal > 0, stage === 1, 'goal line only on stage 1, stage ' + stage);
+  }
+}
