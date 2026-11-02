@@ -188,7 +188,7 @@ try {
   await page.click('.hub-top .iconbtn'); await page.waitForTimeout(300);
   await page.click('[data-report]'); await page.waitForTimeout(300);
   const rep = await page.evaluate(() => document.querySelector('.report-text').value);
-  for (const bit of ['game version 2', 'Language: en', 'Viewport: 390x', 'pixel ratio', 'Online: yes', 'Save size: ', 'Fame: 1', 'Last errors (1)', 'r6 diag test']) need(rep.includes(bit), 'report text has "' + bit + '"');
+  for (const bit of ['game version ' + (await page.evaluate(async () => (await import('./js/data_core.js')).GAME.version)), 'Language: en', 'Viewport: 390x', 'pixel ratio', 'Online: yes', 'Save size: ', 'Fame: 1', 'Last errors (1)', 'r6 diag test']) need(rep.includes(bit), 'report text has "' + bit + '"');
   need(!/Roxor Fan/.test(rep) && !rep.includes(String.fromCharCode(8212)), 'the report holds no player name');
   await page.click('[data-report-copy]'); await page.waitForTimeout(300);
   need(await page.evaluate(async () => { try { return (await navigator.clipboard.readText()).includes('r6 diag test'); } catch (e) { return true; } }), 'Copy puts the report on the clipboard');

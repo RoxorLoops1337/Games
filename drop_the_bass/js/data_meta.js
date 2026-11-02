@@ -186,6 +186,12 @@ export const QUESTS = [
   { id: 'q_daily',   stat: 'dailies',  goal: 1,   text: 'Play the Daily Challenge', reward: { diamonds: 6 } },
   { id: 'q_coins',   stat: 'coins',    goal: 3000, text: 'Earn 3,000 coins in your runs', reward: { records: 140 } },
   { id: 'q_endless', stat: 'endlessWave', goal: 12, text: 'Reach wave 12 in Endless', reward: { diamonds: 6 }, max: true },
+  // round 7 (append only). Stats come from the run result (sim counters dropRerolls, sells, moves, branches, synergies).
+  { id: 'q_reroll',  stat: 'dropRerolls', goal: 6, text: 'Re-roll the next drop 6 times', reward: { records: 120 } },
+  { id: 'q_branch',  stat: 'branches', goal: 2,   text: 'Pick 2 turret upgrade paths', reward: { diamonds: 6 } },
+  { id: 'q_move',    stat: 'moves',    goal: 8,   text: 'Move turrets 8 times', reward: { records: 110 } },
+  { id: 'q_sell',    stat: 'sells',    goal: 4,   text: 'Sell 4 turrets', reward: { records: 100 } },
+  { id: 'q_syn',     stat: 'synergies', goal: 3,  text: 'Have 3 synergy pairs active at once', reward: { diamonds: 6 }, max: true },
 ];
 
 // ---------------------------------------------------------------- Achievements ("Stickers"), claimed for diamonds

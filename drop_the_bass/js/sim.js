@@ -215,7 +215,7 @@ export class Run {
     this.autoMergeOwned = !!opts.autoMerge;
     this.forceDrops = (opts.forceDrops || []).slice();
     // drop pool state: the last dropped types (anti-streak), reroll stats
-    this.dropHist = []; this.dropRerolls = 0; this.gemsSpent = 0;
+    this.dropHist = []; this.dropRerolls = 0; this.gemsSpent = 0; this.sells = 0; this.moves = 0; this.branchCount = 0; this.bestSyn = 0;
     // synergies: keys of the pairs that are active right now ("id:lowTurretId-highTurretId"), so an activation is announced once
     this.synKeys = []; this.synEver = false;
     // recap tracking
@@ -452,6 +452,7 @@ export class Run {
     this.removeTurret(t);
     this.addCoins(v, t.x, t.y, true);
     this.recalcAuras();
+    this.sells++;
     this.emit({ k: 'sell', x: t.x, y: t.y, v, type: t.type });
     return { ok: true, value: v };
   }
@@ -467,6 +468,7 @@ export class Run {
     } else this.grid.delete(t.slot);
     this.grid.set(slotIdx, t); t.slot = slotIdx; t.c = slot.c; t.r = slot.r; t.x = slot.x; t.y = slot.y;
     this.recalcAuras();
+    this.moves++;
     this.emit({ k: 'move', id: t.id, x: t.x, y: t.y });
     return { ok: true };
   }
@@ -498,6 +500,7 @@ export class Run {
     if (BRANCH_TURRET[branchId] !== t.type) return { ok: false, reason: 'branch' };
     t.branch = branchId;
     this.recalcAuras();
+    this.branchCount++;
     this.emit({ k: 'branch', id: t.id, branch: branchId, x: t.x, y: t.y });
     return { ok: true, reason: null };
   }
@@ -681,6 +684,7 @@ export class Run {
     if (early && this.phase === 'prep') this.addCoins(Math.round(Math.min(ECON.prepSeconds, Math.max(0, this.prepT)) * ECON.earlyBonusPerSec), null, null, true);
     else if (early && this.phase === 'wave') this.addCoins(8 + this.wave * 2, null, null, true);
     this.wave++;
+    { let sy = 0; for (const tu of this.turrets) sy += this.findSynergies(tu).length; this.bestSyn = Math.max(this.bestSyn, Math.round(sy / 2)); }   // quest stat: most synergy pairs active at a wave start
     const spec = this.upcoming(this.wave);
     this.curSpec = spec;
     this.wmId = spec.mod; this.wm = spec.mod ? WAVE_MODS[spec.mod].wm : NONE_WM;
@@ -1074,7 +1078,7 @@ export class Run {
       won, wave: this.wave, cleared: this.cleared, kills: this.kills, leaks, merges: this.merges, bossKills: this.bossKills,
       bestCombo: this.bestCombo, coinsEarned: this.coinsEarned, gems: this.runGems, deploys: this.deploys, time: this.t,
       stars: won ? (leaks <= 2 ? 3 : leaks <= 7 ? 2 : 1) : 0, level: this.level, relics: this.relics.slice(), world: this.world.id,
-      encore: this.encore, mode: this.mode, heroUses: this.heroUses, perfects: this.perfects, duets: this.duets, remixes: this.remixCount, maxLevel: this.maxLevelSeen, bossTypes: this.bossTypes.slice(), endless: this.endless, hpLeft: this.stageHp, stageMax: this.stageMax,
+      encore: this.encore, mode: this.mode, dropRerolls: this.dropRerolls, sells: this.sells, moves: this.moves, branches: this.branchCount, synergies: this.bestSyn, heroUses: this.heroUses, perfects: this.perfects, duets: this.duets, remixes: this.remixCount, maxLevel: this.maxLevelSeen, bossTypes: this.bossTypes.slice(), endless: this.endless, hpLeft: this.stageHp, stageMax: this.stageMax,
       difficulty: this.difficulty, rewardMul: { records: this.diff.recordsMul, fans: this.diff.fansMul },
       recap: this.recap(),
       modifiers: this.modifiers.slice(), modMul: this.modMul(), milestones: this.milestones.slice(),

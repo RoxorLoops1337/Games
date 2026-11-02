@@ -192,3 +192,13 @@ Ideas next (round 6): a real landscape layout (side panels with turret list and 
 
 Round 6 result: all ten shipped (modal queue with priorities; wide-screen side panels; gamepad support with a How to Play card; tutorial steps for preview and reroll; a11y focus management; monthly seasons with goals; ten more quests; modifier reward multipliers rebalanced; seeded monkey fuzz test in four languages; diagnostics ring buffer with a Report a problem button). Test lessons: when a test removes a hint modal from the DOM it must also clear `battle.hintQueue`, or the game keeps ignoring taps; measure layout only after finite CSS animations end (d-pop scales cards for 0.3 s).
 Ideas next (round 7): pad support for DOM modals (pause, choice, hint); selling and moving turrets by pad; quest counters that need sim hooks (hero moves, synergies, rerolls, flawless waves); tutorial coverage review; sound mix on phones; leaderboard seasons; a changelog entry per version bump; trim the monkey test runtime.
+
+### Round 7 (improvements, in order)
+1. Gamepad drives the DOM menus (pause, Remix pick, hints, results): d-pad moves focus, A presses, B closes (`domPadKey` in gamepad.js, keyboard path).
+2. Pad sell: R3 twice (within 2 s) sells the selected turret; the first press asks.
+3. Five new quests fed by new sim counters (`dropRerolls`, `branches`, `moves`, `sells`, `synergies` in the run result): re-roll, upgrade paths, moves, sells, synergy pairs.
+4. GAME.version 3 with a What's new entry (Seasons and gamepads) in four languages.
+5. Tests: `drop_the_bass_r7.test.mjs` (counters, quests, changelog, pad sell) and `drop_the_bass_r7_browser.test.mjs` (fake pad driving the pause menu in Chromium).
+
+Round 7 result: a smaller round (5 items). Balance bot check (bal.mjs, level 0) looks sane: Garage is winnable by a merging bot, later stages punish idle and no-merge play.
+Ideas next (round 8): the pad cannot yet drive hub screens (only battle menus); quest toast when a goal completes mid-run; a leaderboard season label; tutorial coverage for branches and synergies; sound mix on real phones (needs a device); trim the monkey test runtime; run-level stat cards on the recap for the new counters.
