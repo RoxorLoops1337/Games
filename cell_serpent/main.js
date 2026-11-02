@@ -71,7 +71,10 @@ import { panOf, sweepTick, isMilestone } from './audio_b12i.js';
 import { logRun } from './hub_b11.js';
 import { initFullscreen, fsOnRun } from './fullscreen_fs.js';
 import { initInstall } from './install_b12n.js';
+import { isUnlocked, isTabUnlocked, setUnlockAll, unlockAllOn } from './unlock_b12p.js';
+import { createUnlockUI, trimGoalsPanel } from './unlock_ui_b12p.js';
 
+try { if (/[?&]unlock=all\b/.test(location.search)) setUnlockAll(true); } catch (e) { /* ignore */ }   // b12p: test/debug only, opens every tab and panel
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
 const canvas = $('c');
@@ -115,7 +118,7 @@ addEventListener('resize', resize); resize(); initFullscreen(() => save.settings
 initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap = true; }); initKeyboard(); initSrPass(); initA11y7(); initGridNav(document.getElementById('tabBattle')); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
 
 let shownId = '';
-function show(id) { { const ss = sheetSound(shownId, id); shownId = id; if (ss) audio.play(ss); } if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id && !(g && g.ring)); }
+function show(id) { if (id !== 'hub') unlockUI.dropCard(); { const ss = sheetSound(shownId, id); shownId = id; if (ss) audio.play(ss); } if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id && !(g && g.ring)); }
 // the gig claim holds the pill at its old value until the flying rewards land (then it counts up with a +N)
 const curHold = {};
 function gigFlies(list, d0 = 0) {
@@ -176,13 +179,15 @@ const skillLevels = () => Object.fromEntries(Object.entries(save.skills).map(([i
 
 // ---------------------------------------------------------------- hub
 const TABS = ['Shop', 'Stats', 'Battle', 'Skills', 'Pets', 'Gear'];
+const OPEN_TABS = [...TABS];   // b12p: the tabs that are open right now (unlock_ui keeps it in step with save.cleared)
+const unlockUI = createUnlockUI({ order: OPEN_TABS, save: () => save, persist: () => persist(), audio, toast: m => toast(m), mode: () => mode, shown: () => shownId, tab: () => hubTab });
 // round 11: one kind line when a reward is waiting, once per thing per visit (never over a panel or the welcome gift)
 const nudged = new Set();
 function hubNudge() {
-  try { const n = readyNudge(save, dayKey(), Date.now(), nudged); if (!n) return; nudged.add(n.key); setTimeout(() => { const nr = document.getElementById('nextRew'); if (nr && nr.classList.contains('ready')) return; /* the Next Reward banner already says it, and the toast would cover the currency pills */ if (mode === 'hub' && shownId === 'hub') toast(n.icon + ' ' + n.text + '!'); }, 900); } catch (e) { /* ignore */ }
+  try { if (!isUnlocked('nextreward', save)) return; const n = readyNudge(save, dayKey(), Date.now(), nudged); if (!n) return; nudged.add(n.key); setTimeout(() => { const nr = document.getElementById('nextRew'); if (nr && nr.classList.contains('ready')) return; /* the Next Reward banner already says it, and the toast would cover the currency pills */ if (mode === 'hub' && shownId === 'hub') toast(n.icon + ' ' + n.text + '!'); }, 900); } catch (e) { /* ignore */ }
 }
 function openHub(tab = hubTab) {
-  mode = 'hub'; hubTab = tab; audio.hubWorld(skinFor(sel)); audio.music(false); audio.hub(true);
+  mode = 'hub'; hubTab = isTabUnlocked(tab, save) ? tab : 'Battle'; audio.hubWorld(skinFor(sel)); audio.music(false); audio.hub(true);
   if (dayLogin(save, dayKey())) persist();
   refreshCur();
   sel = Math.max(1, Math.min(sel, MAX_STAGE, save.cleared + 4));
@@ -193,7 +198,7 @@ function badgeTabs() {
   const day = dayKey(), s = save, out = new Set();
   if (welcomeReady(s) || dealsFor(s, day).some((d, i) => !s.shop.bought[i] && d.price === 0) || s.shop.gold !== day) out.add('Shop');
   if (META.some(d => metaBuyable(s, d) && s.beats >= metaCost(d, s.meta[d.id] || 0))) out.add('Stats');
-  if (s.sign.day !== day || FUND.some(f => fundReady(s, f)) || TROPHIES.some(t => trophyReady(s, t)) || dailyGoals(day).some(gl => goalProgress(s, day, gl) >= gl.target && !(s.daily.day === day && s.daily.claimed[gl.id]))) out.add('Battle');
+  if ((isUnlocked('sign', s) && s.sign.day !== day) || (isUnlocked('fund', s) && FUND.some(f => fundReady(s, f))) || (isUnlocked('trophies', s) && TROPHIES.some(t => trophyReady(s, t))) || (isUnlocked('gigs', s) && dailyGoals(day).some(gl => goalProgress(s, day, gl) >= gl.target && !(s.daily.day === day && s.daily.claimed[gl.id])))) out.add('Battle');
   if (WEAPONS.some(w => { const k = s.skills[w.id]; return k.lv > 0 ? k.lv < SKILL_MAX_LV && k.frag >= skillUpgradeCost(k.lv).frag : k.frag >= w.frag && (s.cleared || 0) >= (w.stage || 0); })) out.add('Skills');
   if (s.eggs > 0 || PETS.some(p => petCanUp(s, p.id))) out.add('Pets');
   if (KEEPSAKES.some(k => keepCanUp(s, k.id))) out.add('Gear');
@@ -204,26 +209,28 @@ function badgeCounts() {
   const day = dayKey(), s = save, m = new Map(), put = (t, n) => { if (n > 0) m.set(t, n); };
   put('Shop', (welcomeReady(s) ? 1 : 0) + dealsFor(s, day).filter((d, i) => !s.shop.bought[i] && d.price === 0).length + (s.shop.gold !== day ? 1 : 0));
   put('Stats', META.filter(d => metaBuyable(s, d) && s.beats >= metaCost(d, s.meta[d.id] || 0)).length);
-  put('Battle', (s.sign.day !== day ? 1 : 0) + FUND.filter(f => fundReady(s, f)).length + TROPHIES.filter(t => trophyReady(s, t)).length + dailyGoals(day).filter(gl => goalProgress(s, day, gl) >= gl.target && !(s.daily.day === day && s.daily.claimed[gl.id])).length);
+  put('Battle', (isUnlocked('sign', s) && s.sign.day !== day ? 1 : 0) + (isUnlocked('fund', s) ? FUND.filter(f => fundReady(s, f)).length : 0) + (isUnlocked('trophies', s) ? TROPHIES.filter(t => trophyReady(s, t)).length : 0) + (!isUnlocked('gigs', s) ? [] : dailyGoals(day)).filter(gl => goalProgress(s, day, gl) >= gl.target && !(s.daily.day === day && s.daily.claimed[gl.id])).length);
   put('Skills', WEAPONS.filter(w => { const k = s.skills[w.id]; return k.lv > 0 ? k.lv < SKILL_MAX_LV && k.frag >= skillUpgradeCost(k.lv).frag : k.frag >= w.frag && (s.cleared || 0) >= (w.stage || 0); }).length);
   put('Pets', (s.eggs > 0 ? 1 : 0) + PETS.filter(p => petCanUp(s, p.id)).length);
   put('Gear', KEEPSAKES.filter(k => keepCanUp(s, k.id)).length);
   return m;
 }
 function renderHub() {
+  if (!isTabUnlocked(hubTab, save)) hubTab = 'Battle';
   refreshCur(); try { dressDuo(document.querySelector('.herobox .duo'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ }
   { const bd = badgeTabs(), bc = badgeCounts(); for (const b of document.querySelectorAll('.tabs button')) { const has = b.querySelector('.dot'); if (bd.has(b.dataset.tab) && !has) { const d = document.createElement('i'); d.className = 'dot'; b.appendChild(d); } else if (!bd.has(b.dataset.tab) && has) has.remove(); setTabCount(b, bc.get(b.dataset.tab) || 0); } }
   hub2.addict.renderNext(); hub2.retain.renderStrip(); petHint(document.querySelector('.tabs'), hubTab, save);
-  motion.tabDir(TABS, hubTab);
+  motion.tabDir(OPEN_TABS, hubTab);
   for (const t of TABS) { $('tab' + t).classList.toggle('on', t === hubTab); }
   for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === hubTab);
   $('hub').classList.toggle('bt-on', hubTab === 'Battle');
   if (hubTab === 'Battle') renderBattle(); else if (hubTab === 'Skills') renderSkills(); else if (hubTab === 'Pets') renderPets(); else if (hubTab === 'Stats') hub2.renderStats(); else if (hubTab === 'Gear') hub2.renderGear(); else hub2.renderShop();
   if (stagKey !== hubTab) { stagKey = hubTab; if (hubTab !== 'Battle') motion.stagger($('tab' + hubTab)); }
+  unlockUI.apply(save);   // b12p: hide what is still locked, lay out the tab bar, run the hint queue
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { audio.unlock(); audio.play('click'); hubTab = b.dataset.tab; hubTabSwitch(); };
 paintTabIcons(); paintButtonGlyphs(); paintSettingIcons(); watchGlyphs(document.body);
-bindHubSwipe({ order: TABS, cur: () => hubTab, hub: $('hub'), pane: () => $('tab' + hubTab), bump: () => buzz(10), go: t => { if (mode !== 'hub') return; audio.unlock(); audio.play('click'); buzz(6); hubTab = t; hubTabSwitch(); } });
+bindHubSwipe({ order: OPEN_TABS, cur: () => hubTab, hub: $('hub'), pane: () => $('tab' + hubTab), bump: () => buzz(10), go: t => { if (mode !== 'hub') return; audio.unlock(); audio.play('click'); buzz(6); hubTab = t; hubTabSwitch(); } });
 // 17-perf: a tab tap paints the new pane at once (old content dimmed as a light skeleton) and builds it on the next frame, so the tap never freezes
 let hubSwitchTok = 0;
 function hubTabSwitch() {
@@ -259,7 +266,7 @@ function renderBattle() {
   { const rp = recPower(sel, hard), mine = power(save);
     $('diffRow').innerHTML = `<div class="seg ${hard ? 'h' : ''}"><i></i><button class="dbtn ${hard ? '' : 'on'}" data-h="0">Normal</button><button class="dbtn hard ${hard ? 'on' : ''}" data-h="1" ${hardOk ? '' : 'disabled'}>${hardOk ? 'Hard' : '🔒 Hard'}</button></div>${powerHTML(mine, rp, hard)}`; }
   for (const b of $('diffRow').querySelectorAll('.dbtn')) b.onclick = () => { audio.play('click'); hard = b.dataset.h === '1'; renderBattle(); };
-  { const gf = $('gapFix'), gap = powerGap(power(save), recPower(sel, hard)).gap, fx = gapFix(gap, badgeCounts()); gf.hidden = !fx; gf.dataset.tab = fx ? fx.tab : ''; gf.innerHTML = gapFixHTML(fx, gap); }   // b11: one tap to what closes the power gap
+  { const gf = $('gapFix'), gap = powerGap(power(save), recPower(sel, hard)).gap, fx = (f0 => (f0 && isTabUnlocked(f0.tab, save) ? f0 : null))(gapFix(gap, badgeCounts())); gf.hidden = !fx; gf.dataset.tab = fx ? fx.tab : ''; gf.innerHTML = gapFixHTML(fx, gap); }   // b11: one tap to what closes the power gap
   $('stMod').innerHTML = twistHTML(info.mod); $('btFact').hidden = true; $('btHero').classList.remove('fact');
   { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; syncRwFilter(chips, cb); cb.textContent = 'CONTINUE ▶ ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
   const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : `<span><b>Cleared ✓</b> ${starsHTML(save.stars[sel] || 0)}</span>${sel > (save.hardCleared || 0) ? `<span class="hardpay">Hard pays <b>${curImg('sparkles')} ${Math.round(clearReward(sel).sparkles * 1.5)}</b></span>` : ''}`;
@@ -389,6 +396,7 @@ function bindBring(box, info, sp) {
 }
 // tap the portrait: species fun fact plus what the stage pays
 $('stPortrait').onclick = () => {
+  if (!isUnlocked('funfact', save)) return;   // b12p: the fun fact opens at stage 7
   const box = $('btFact'), hero = $('btHero'); if (!box.hidden) { box.hidden = true; hero.classList.remove('fact'); return; }
   audio.play('click'); const info = stageInfo(sel), sp = (kit && kit.SPECIES && kit.SPECIES[info.skin]) || null;
   box.innerHTML = factHTML({ info, sp, hard, done: sel <= save.cleared, sparkleIcon: curImg('sparkles'), bring: bringFor(info.skin) }); box.hidden = false; hero.classList.add('fact'); try { hero.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* ignore */ }
@@ -518,7 +526,8 @@ const sheets = createSheets({ save: () => save, persist: () => persist(), audio,
 const defaultBoxOk = () => { audio.play('click'); openHub('Shop'); };
 $('bOk').onclick = defaultBoxOk;
 const toast = msg => { if (/^(Not enough|Nothing to claim|Out of Voice|That code does not)/.test(msg)) audio.play('deny'); const t = $('toast'); t.textContent = msg; { const tn = dressToast(t, msg); if (TONE_HAPTIC[tn]) haptic(TONE_HAPTIC[tn], save && save.settings); } t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200); };
-const hub2 = createHub2({ $, toast, tile, icon, curImg, audio, save: () => save, persist, show, openHub: t => openHub(t), renderHub: () => renderHub(), refreshCur: () => refreshCur(), dayKey, resetBoxOk: () => { $('bOk').onclick = defaultBoxOk; }, bodyURL: skin => { if (!kit) return ''; if (!(('b|' + skin) in iconCache)) { const spr = kit.SPR.body(skin, false, ''); iconCache['b|' + skin] = spr && spr.c.toDataURL ? spr.c.toDataURL() : ''; } return iconCache['b|' + skin]; } });
+const hub2 = createHub2({ unlocked: id => isUnlocked(id, save), $, toast, tile, icon, curImg, audio, save: () => save, persist, show, openHub: t => openHub(t), renderHub: () => renderHub(), refreshCur: () => refreshCur(), dayKey, resetBoxOk: () => { $('bOk').onclick = defaultBoxOk; }, bodyURL: skin => { if (!kit) return ''; if (!(('b|' + skin) in iconCache)) { const spr = kit.SPR.body(skin, false, ''); iconCache['b|' + skin] = spr && spr.c.toDataURL ? spr.c.toDataURL() : ''; } return iconCache['b|' + skin]; } });
+try { const pb = $('pBody'); if (pb && typeof MutationObserver === 'function') new MutationObserver(() => { if ($('pTitle').textContent === 'GOALS') trimGoalsPanel(pb, save); }).observe(pb, { childList: true }); } catch (e) { /* cosmetic */ }   // b12p: the long Goals page keeps out sections that are not open yet
 
 // ---------------------------------------------------------------- runs
 function newDemo() {
@@ -758,7 +767,7 @@ function showResult() {
   $('rNext').style.display = nextOk ? '' : 'none'; $('rNext').classList.toggle('pulse', nextOk);
   $('rNext').onclick = () => { audio.play('click'); clearStickerPop(); beginStage(r.stage + 1); };
   $('rRetry').innerHTML = 'RETRY <span class="rcost">⚡' + ENERGY_COST + '</span>';
-  { const gl = nextGoal(save); renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
+  { let gl = nextGoal(save); if (gl && !isTabUnlocked(gl.tab, save)) gl = null; renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
   $('rShare').onclick = () => { audio.play('click'); shareResult(shareText(r, r.mode ? '' : stageInfo(r.stage).name, location.origin + location.pathname), toast); };
   $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); clearStickerPop(); try { retryFly($('rRetry'), rewardSnaps($('rList')), !!(save.settings.reduceMotion || systemReduceMotion())); } catch (e) { /* cosmetic */ } beginStage(r.stage); };
@@ -870,7 +879,7 @@ $('muteBtn').onclick = toggleMute;
 for (const [id, label] of [['muteBtn', 'Mute'], ['enPlus', 'Buy Voice'], ['stPrev', 'Previous stage'], ['stNext', 'Next stage']]) $(id).setAttribute('aria-label', label);
 addEventListener('error', () => { toast('Something glitched. Your save is safe.'); if (mode === 'play') pause(); }); $('muteBtn').textContent = save.muted ? '🔇' : '🔊';
 
-window.CS = { fold: foldHook, motion, momentEvent, g: null, get hub2() { return hub2; }, save: () => save, mode: () => mode, openHub, startRun,
+window.CS = { unlockAll: (v = true) => { setUnlockAll(v); if (mode === 'hub') renderHub(); }, unlockUI, fold: foldHook, motion, momentEvent, g: null, get hub2() { return hub2; }, save: () => save, mode: () => mode, openHub, startRun,
   // QA hook (batch 5): jump the live run to its end the way the sim does ('dead' | 'won'), then the normal flow (revive prompt, result) takes over
   force: kind => { if (mode !== 'play' || !g || g.phase === 'dead' || g.phase === 'won') return false; if (kind === 'dead') { g.p.hp = 0; g.p.revive = 0; g.phase = 'dead'; g.result = quitResult(g); g.events.push({ t: 'dead' }); return true; } if (kind === 'won') { g.snakes = []; g.phase = 'won'; g.result = { ...quitResult(g), won: true, stars: g.mode || g.hard ? 0 : 3 }; g.events.push({ t: 'won' }); return true; } return false; } };
 loadArt('assets/').then(a => {
