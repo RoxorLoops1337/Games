@@ -87,9 +87,9 @@ export function stepAir(a, dt, inp) {
 
   if (!reduced) {
     if (landed && a.landAge > 0.1) {
-      a.land.v += kick(LAND_W, LAND_Z, landDepth(impact)); a.landAge = 0;
+      a.land.v += kick(LAND_W, LAND_Z, -landDepth(impact)); a.landAge = 0;
     }
-    if (turnEdge && a.turnAge > 0.06) { a.turn.v += kick(TURN_W, TURN_Z, 0.18); a.turnAge = 0; }
+    if (turnEdge && a.turnAge > 0.06) { a.turn.v += kick(TURN_W, TURN_Z, -0.18); a.turnAge = 0; }
     if (popEdge && a.pounceAge > AIR.pounceT) a.pounceAge = 0;
   }
   if (landed && impact >= AIR.landMin && !reduced) {      // landing dust to both sides, more when harder

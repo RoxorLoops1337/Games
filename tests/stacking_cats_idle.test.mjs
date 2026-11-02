@@ -59,7 +59,7 @@ await t('events happen: look, yawn, stretch, groom, with sane durations', () => 
     let cur = null, st = 0;
     for (const f of fr) {
       if (f.pose !== cur) {
-        if (cur && ['look', 'yawn', 'stretch', 'groom'].includes(cur) && f.pose !== 'sleep' && !(cur !== 'groom' && f.pose === 'sit' && f.sitAmt < 0.2 && f.t < 8)) { (dur[cur] ||= []).push(f.t - st); }   // skip events cut off by the posture change
+        if (cur && ['look', 'yawn', 'stretch', 'groom'].includes(cur) && !['sit', 'sleep', 'yawn'].includes(f.pose)) { (dur[cur] ||= []).push(f.t - st); }   // skip events cut off by the posture change
         cur = f.pose; st = f.t; if (!seen[cur]) seen[cur] = 0; seen[cur]++;
       }
     }

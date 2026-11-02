@@ -101,9 +101,9 @@ t('dust particles are finite and do not teleport', () => {
   const list = pushDust([], run(full(1100)).flatMap((o) => o.dust));
   assert.ok(list.length > 0);
   for (let i = 0; i < 30; i++) {
-    const before = list.map((p) => [p.x, p.y]);
+    const before = new Map(list.map((p) => [p, [p.x, p.y]]));
     stepDust(list, DT);
-    list.forEach((p, k) => { assert.ok(Number.isFinite(p.x + p.y + p.size)); assert.ok(Math.hypot(p.x - before[k][0], p.y - before[k][1]) < 3); });
+    for (const p of list) { const b = before.get(p); assert.ok(Number.isFinite(p.x + p.y + p.size)); assert.ok(Math.hypot(p.x - b[0], p.y - b[1]) < 3); }
   }
 });
 
