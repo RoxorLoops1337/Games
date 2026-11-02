@@ -108,8 +108,8 @@ const src = (f) => fs.readFileSync(new URL('../drop_the_bass/' + f, import.meta.
   ok(all.every((x) => typeof x === 'string' && x.length > 3 && !(x.includes(DASH) || x.includes(EN))), 'changelog text: strings, no em or en dash');
   const ids = CHANGELOG.map((e) => e.id); ok(new Set(ids).size === ids.length && ids.every((i) => /^v\d+$/.test(i)), 'unique ids');
   ok(CHANGELOG.every((e, i) => i === 0 || e.version < CHANGELOG[i - 1].version), 'newest first');
-  const txt = CHANGELOG[0].items.join(' ').toLowerCase();
-  for (const k of ['second tour', 'upgrade path', 'hero move', 'modifier', 'outfit', 'language', 'text']) ok(txt.includes(k), 'latest entry mentions ' + k);
+  const txt = (CHANGELOG.find((e) => e.id === 'v2')).items.join(' ').toLowerCase();
+  for (const k of ['second tour', 'upgrade path', 'hero move', 'modifier', 'outfit', 'language', 'text']) ok(txt.includes(k), 'the v2 entry mentions ' + k);
   ok(TABLES.some((tb) => tb.name === 'CHANGELOG'), 'changelog is in the data overlay registry');
   const p = M.newProfile(NOW); p.tutorial.done = true;
   ok(!M.whatsNewDue(p), 'a new player starts up to date');
