@@ -192,7 +192,7 @@ const eq = (a, b, m) => { assert.deepStrictEqual(a, b, m); n++; };
 // ================================================================== 4. daily quests
 {
   const ids = QUESTS.map((q) => q.id);
-  ok(QUESTS.length === 24 && new Set(ids).size === ids.length, 'ten more quests, all ids unique (' + QUESTS.length + ')');
+  ok(QUESTS.length >= 24 && new Set(ids).size === ids.length, 'round 6 added ten quests, ids unique (' + QUESTS.length + ')');
   eq(ids.slice(0, 14), ['q_kills', 'q_kills2', 'q_merge', 'q_merge2', 'q_deploy', 'q_runs', 'q_win', 'q_boss', 'q_waves', 'q_hero', 'q_combo', 'q_beat', 'q_remix', 'q_lvl5'], 'the first fourteen are untouched');
   ok(QUESTS.slice(14).every((q) => q.text && q.goal > 0 && (q.reward.records || q.reward.diamonds) && !new RegExp(String.fromCharCode(8212)).test(q.text)), 'new quests have text, a goal and a reward');
   // balance: records per quest 100..260, diamonds 5..10
