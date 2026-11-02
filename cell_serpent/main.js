@@ -11,6 +11,7 @@ import { createMotion } from './motion.js';
 import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
 import { luckHTML, refreshPips, buildHTML } from './cards_ui.js';
+import { richDemo, setupTapAnimals, tagPets, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
@@ -107,7 +108,7 @@ function badgeTabs() {
 function renderHub() {
   refreshCur();
   { const bd = badgeTabs(); for (const b of document.querySelectorAll('.tabs button')) { const has = b.querySelector('.dot'); if (bd.has(b.dataset.tab) && !has) { const d = document.createElement('i'); d.className = 'dot'; b.appendChild(d); } else if (!bd.has(b.dataset.tab) && has) has.remove(); } }
-  hub2.addict.renderNext();
+  hub2.addict.renderNext(); petHint(document.querySelector('.tabs'), hubTab, save);
   for (const t of TABS) { $('tab' + t).classList.toggle('on', t === hubTab); }
   for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === hubTab);
   if (hubTab === 'Battle') renderBattle(); else if (hubTab === 'Skills') renderSkills(); else if (hubTab === 'Pets') renderPets(); else if (hubTab === 'Stats') hub2.renderStats(); else if (hubTab === 'Gear') hub2.renderGear(); else hub2.renderShop();
@@ -221,7 +222,7 @@ function renderPets() {
       $('bOk').onclick = () => { audio.play('click'); $('bLoot').className = 'loot'; $('bOk').onclick = defaultBoxOk; openHub('Pets'); }; show('boxModal');
     }, 650);
   };
-  list.appendChild(egg);
+  eggNudge(egg, save); list.appendChild(egg);
   { const rdy = PETS.filter(p => petCanUp(save, p.id)).length; if (save.eggs > 1 || rdy) { const row = document.createElement('div'); row.className = 'refrow'; row.style.justifyContent = 'center'; row.style.gap = '10px'; if (save.eggs > 1) { const b = document.createElement('button'); b.className = 'btn small alt'; b.textContent = 'HATCH ALL (' + save.eggs + ')'; b.onclick = () => { const res = hatchAll(save); if (res.length) { persist(); audio.play('levelup'); refreshCur(); toast(res.length + ' eggs hatched'); renderHub(); } }; row.appendChild(b); } if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'STAR UP ALL (' + rdy + ')'; b.onclick = () => { if (upgradePetsAll(save)) { persist(); audio.play('upgrade'); renderHub(); } }; row.appendChild(b); } list.appendChild(row); } }
   for (const p of PETS) {
     const k = save.pets[p.id], owned = k.star > 0, maxed = k.star >= PET_MAX_STAR, need = maxed ? 0 : petCost(k.star), eq = save.petEquip.includes(p.id);
@@ -284,8 +285,7 @@ const hub2 = createHub2({ $, tile, icon, curImg, audio, save: () => save, persis
 // ---------------------------------------------------------------- runs
 function newDemo() {
   demo = createGame({ seed: (Math.random() * 1e9) | 0, bot: true, stage: 1 + ((Math.random() * 3) | 0) });
-  demo.p.hp = demo.p.maxHp = 9999;
-  demo.weap = { swab: { lv: 2, cd: 0 }, daggers: { lv: 2, cd: 0 }, dragon: { lv: 1, cd: 0 } }; demo.ups = { notes: 1, aspd: 2 };
+  richDemo(demo);
 }
 function startRun(stage, mode2 = '') {
   if (!mode2) save.last = { stage, hard: !!(hard && stage <= save.cleared) };
@@ -495,7 +495,7 @@ function frame(now) {
 }
 
 // ---------------------------------------------------------------- wiring
-$('playBtn').onclick = () => { audio.unlock(); audio.play('click'); if (save.runs === 0) startRun(1); else openHub('Battle'); };
+$('playBtn').onclick = () => { audio.unlock(); audio.play('click'); if (save.runs === 0) { if (needsTutorial(save)) showTutorial(() => startRun(1), audio); else startRun(1); } else openHub('Battle'); };
 $('resumeBtn').onclick = () => resume();
 $('pStats').onclick = () => { audio.play('click'); showStatsFromPause(); };
 $('pSet').onclick = () => { audio.play('click'); openSettings(() => show('pause')); };
@@ -518,7 +518,7 @@ loadArt('assets/').then(a => {
   [['love', 'deco1'], ['grumpy', 'deco2'], ['sneezy', 'deco3'], ['sleepy', 'deco4']].forEach(([skin, el], i) => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
-  setupPeeks($('peeks'), kit);
+  setupPeeks($('peeks'), kit); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio);
   R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready') }); applySettings(); resize(); refreshTitle();
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();
