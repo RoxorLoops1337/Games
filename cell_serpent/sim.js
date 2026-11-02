@@ -287,6 +287,7 @@ export const PASSIVES = [
   { id: 'vital', name: 'Calm Down', max: 8, w: 0.7, vals: [20, 30, 45, 70, 100, 150], cap: 200, fmt: v => 'The snake crawls ' + Math.round(v / 4) + '% slower', desc: 'The snake crawls 5% slower', apply: (p, v) => { p.slow = Math.min(0.5, p.slow + v / 400); } },
   { id: 'guard', name: 'Door Stopper', max: 6, w: 0.6, vals: [15, 22, 30, 40, 50, 60], cap: 600, fmt: v => 'Pushes the snake back ' + v * 6 + ' px', desc: 'Pushes the snake back 90 px', apply: (p, v, g) => { if (g) knockBack(g, v * 6); } },
   { id: 'enc', name: 'Standing Ovation', max: 4, w: 0.6, min: 1, minStage: 4, vals: [12, 16, 22, 30, 40, 50], cap: 120, fmt: v => 'Encore charges ' + v + '% faster and its beam is ' + Math.round(v / 2) + '% wider', desc: 'The Encore charges 15% faster, with a wider beam', apply: () => {} },
+  { id: 'dbeat', name: 'Downbeat', max: 4, w: 0.6, min: 1, minStage: 5, vals: [20, 30, 45, 65, 90, 120], cap: 300, fmt: v => 'Notes fired on the beat hit ' + v + '% harder', desc: 'Notes fired on the beat hit 25% harder', apply: () => {} },
   { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, minStage: 4, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
@@ -749,6 +750,7 @@ function spawnSnake(g, n, o = {}) {
     segs[j].carry = 'chest';
   }
   markGold(g, n, segs, len);
+  markSpecials(g, n, segs, len);
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
   const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1);
   g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3 });
@@ -758,10 +760,27 @@ function spawnSnake(g, n, o = {}) {
 // ---------------------------------------------------------------- gameplay extras (agent 14)
 // Gold cell: from stage 4 one plain cell per snake glitters. Pop it within GOLD_TIME seconds of it
 // showing on screen for a big Beats burst. No random numbers are drawn, so existing runs do not change.
+export const ECHO_WAVE_FROM = 20;
 export const GOLD_TIME = 9, GOLD_MUL = 12, GOLD_FROM = 4;
 function markGold(g, n, segs, len) {
   if (g.mode !== '' || n < GOLD_FROM || len < 12) return;
   for (let j = Math.round(len * 0.55); j < len; j++) if (segs[j].kind === 'normal' && !segs[j].carry) { segs[j].gold = true; segs[j].goldT = GOLD_TIME; return; }
+}
+// Ward cell (stage 10+): while it lives, the two cells either side of it take half damage.
+// Lullaby cell (stage 12+): pop it and the whole snake crawls slowly for LULL_TIME seconds.
+// Both are plain cells with a flag and are placed without random numbers, so existing runs do not change.
+export const WARD_FROM = 10, LULL_FROM = 12, LULL_TIME = 2.5, WARD_CUT = 0.5, WARD_REACH = 2;
+function markSpecials(g, n, segs, len) {
+  if (g.mode !== '' || len < 14) return;
+  const put = (frac, flag) => { for (let j = Math.round(len * frac); j < len; j++) if (segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull) { segs[j][flag] = true; return; } };
+  if (n >= WARD_FROM) put(0.35, 'ward');
+  if (n >= 25 && len >= 24) put(0.78, 'ward');
+  if (n >= LULL_FROM) put(0.45, 'lull');
+}
+function wardTick(sn) {
+  const segs = sn.segs;
+  for (let i = 0; i < segs.length; i++) segs[i].warded = false;
+  for (let i = 1; i < segs.length; i++) if (segs[i].ward && segs[i].hp > 0) for (let j = Math.max(1, i - WARD_REACH); j <= Math.min(segs.length - 1, i + WARD_REACH); j++) if (j !== i) segs[j].warded = true;
 }
 // Encore blast: hits and kills fill the meter, tap the duo (or the button) to fire a beam straight up.
 export const ENCORE_HIT = 0.007, ENCORE_KILL = 0.012, ENCORE_CLUTCH = 0.08, ENCORE_DMG = 8, ENCORE_W = 36, CLUTCH_DIST = 200;
@@ -850,6 +869,7 @@ const damageSegAs = (src, g, ...a) => { g.src = src; damageSeg(g, ...a); g.src =
 function damageSeg(g, s, dmg, crit, x, y) {
   if (s.hp <= 0 || s.shield || s.wave) return;
   const srcId = g.src || 'capsule'; g.dmgBy[srcId] = (g.dmgBy[srcId] || 0) + Math.min(dmg, s.hp);
+  if (s.warded) dmg *= WARD_CUT;
   s.hp -= dmg; s.flash = 0.12;
   g.events.push({ t: 'hit', x: x ?? s.x, y: y ?? s.y, d: dmg, crit: !!crit, s });
 }
@@ -888,6 +908,7 @@ function onKill(g, s, sn) {
   if (s.gold && s.goldT > 0) { g.goldPopped++; const v = coinV * GOLD_MUL; g.coins += v * g.p.coinMul * (g.coinK || 1); g.events.push({ t: 'goldpop', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)) }); }
   if (!s.isHead && s.y > LINE_Y - CLUTCH_DIST) { g.clutches++; addEncore(g, ENCORE_CLUTCH); g.events.push({ t: 'clutch', x: s.x, y: s.y }); }
   g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin, carry: s.carry });
+  if (s.lull) { for (const o of g.snakes) o.slow = Math.max(o.slow, LULL_TIME); g.events.push({ t: 'lull', x: s.x, y: s.y }); }
   if (s.kind === 'bomb') {
     g.bombsPopped++;
     const R = 150;
@@ -1072,7 +1093,7 @@ function shootCapsule(g, dt) {
     if (ob) { g.beatShots = (g.beatShots || 0) + 1; g.events.push({ t: 'beatshot' }); }
     for (let k = 0; k < n; k++) {
       const crit = g.rand() < p.crit + (ob ? BEAT_CRIT : 0);
-      fire(g, { x: p.x + (k - (n - 1) / 2) * 42, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
+      fire(g, { x: p.x + (k - (n - 1) / 2) * 42, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1) * (ob ? 1 + up('dbeat') / 100 : 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
     }
     g.shots++; g.events.push({ t: 'shoot' });
   }
@@ -1245,7 +1266,9 @@ export function step(g, dt, input) {
     { const left = path.len - segs[0].ps, close = clamp(1 - left / 300, 0, 1); g.faceMax = Math.max(g.faceMax, segs[0].ps / path.len); if (g.phase === 'play' && close > 0) { g.danger = Math.max(g.danger * 0.9, close); g.dangerT -= dt; if (g.dangerT <= 0) { g.dangerT = 0.8; g.events.push({ t: 'danger', k: close }); } } }
     // boss: a wave of shields rolls down the chain like a beat. Cells inside it cannot be hit, so time your shots.
     const wavePos = sn.boss ? (g.t * 4.5) % (segs.length + 8) : -99;
-    for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && Math.abs(i - wavePos) < 1.6;
+    const wave2 = sn.boss && g.stage >= ECHO_WAVE_FROM ? (segs.length + 8) - ((g.t * 3.2 + 7) % (segs.length + 8)) : -99;   // late bosses: a second wave runs back up the chain
+    for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
+    wardTick(sn);
     if (sn.breach && g.phase === 'play') { g.leaks++; g.events.push({ t: 'leak', x: segs[0].x, y: LINE_Y }); loseRun(g); }
     for (const s of segs) {
       const ox = s.x, oy = s.y;
