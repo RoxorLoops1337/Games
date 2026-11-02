@@ -512,7 +512,7 @@ function showRevive() {
 }
 function pauseRecap() {
   const pc = Math.floor((g.progress || 0) * 100), t = Math.floor(g.t || 0), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
-  $('pRecap').innerHTML = `<div>Stage<b>${g.stage}</b></div><div>Time<b>${mm}:${ss}</b></div><div>Popped<b>${g.kills}</b></div><div class="pbar"><i style="width:${pc}%"></i></div>`;
+  $('pRecap').innerHTML = `<div><i>🚩</i>Stage<b>${g.stage}</b></div><div><i>⏱</i>Time<b>${mm}:${ss}</b></div><div><i>🎯</i>Popped<b>${g.kills}</b></div><div class="pbar"><i style="width:${pc}%"></i><em>${pc}% of the way</em></div>`;
   $('pBuild').innerHTML = (save.loadout || []).map(id => { const w = WEAPONS.find(x => x.id === id), k = save.skills[id]; return w ? `<span>${icon(id)}LV ${k ? k.lv : 1}</span>` : ''; }).join('');
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
@@ -565,7 +565,7 @@ function showResult() {
     if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + Math.min(3, i + 1)); if (i === 2 && st === 3 && !reduce) confetti($('result'), 30); }, reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
     const top = Object.entries(r.dmgBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => (id === 'capsule' ? 'Singing' : id === 'encore' ? 'Encore' : (WEAPONS.find(w => w.id === id) || { name: id }).name)).join(', ') || '-';
-    $('rExtra').innerHTML = `<span>Time <b>${mm}:${ss}</b></span><span>Cells <b>${r.kills}</b></span><span>Best groove <b>${Math.round(r.groove || 0)}</b></span><span>Bombs <b>${r.bombs || 0}</b></span><span style="grid-column:1/-1">Top: <b>${top}</b></span>`;
+    $('rExtra').innerHTML = `<span><i>⏱</i>Time <b>${mm}:${ss}</b></span><span><i>🎯</i>Cells <b>${r.kills}</b></span><span><i>🎵</i>Best groove <b>${Math.round(r.groove || 0)}</b></span><span><i>💣</i>Bombs <b>${r.bombs || 0}</b></span><span class="rtop"><i>🏆</i>Top <b>${top}</b></span>`;
 
     // no toast here: it used to cover the title on the result screen, and the ribbon plus the Sparkles row already say it
   }

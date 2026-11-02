@@ -1125,6 +1125,32 @@
   .rpmark img{width:22px;height:22px;object-fit:contain}
   @media (prefers-reduced-motion:reduce){.rgoal,.rgoal.ready{animation:none}}
   @media (max-height:700px){.rgoal{padding:5px 10px}.rgoal .gt small{display:none}}
+  /* batch 5: extras as a 2x2 card grid, reward chip reveal, streak-at-risk chip, pause recap icons */
+  #result .rextra{display:grid;grid-template-columns:1fr 1fr;gap:5px;width:min(320px,86vw);max-width:none;font-size:12px;color:var(--dim);font-weight:800}
+  #result .rextra span{display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:11px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13);text-align:left;white-space:nowrap;animation:rpIn .4s both}
+  #result .rextra span:nth-child(2){animation-delay:.08s} #result .rextra span:nth-child(3){animation-delay:.16s} #result .rextra span:nth-child(4){animation-delay:.24s} #result .rextra span:nth-child(5){animation-delay:.32s}
+  #result .rextra i{font-style:normal;font-size:15px;line-height:1} #result .rextra b{margin-left:auto;color:#fff;font-size:14px;font-weight:900}
+  #result .rextra .rtop{grid-column:1/-1;white-space:normal} #result .rextra .rtop b{margin-left:0;font-size:12.5px}
+  #result .result-list .r{position:relative;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.06));transform-origin:50% 60%}
+  #result .result-list .r:first-child{border-color:rgba(255,210,74,.7);background:linear-gradient(180deg,rgba(255,210,74,.3),rgba(255,255,255,.06))}
+  #result .result-list .r.got::after{content:"";position:absolute;top:0;bottom:0;left:-40%;width:30%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);transform:skewX(-20deg);animation:rpShine .8s .7s ease-out 1 both;pointer-events:none}
+  #result .result-list .r:nth-child(2)::after{animation-delay:.85s} #result .result-list .r:nth-child(3)::after{animation-delay:1s} #result .result-list .r:nth-child(n+4)::after{animation-delay:1.15s}
+  #result .result-list .r.got img{animation:rpCoin .6s .45s cubic-bezier(.2,1.8,.4,1) both}
+  @keyframes rpShine{from{left:-40%}to{left:130%}}
+  @keyframes rpCoin{0%{transform:scale(.4) rotate(-30deg)}60%{transform:scale(1.35) rotate(8deg)}100%{transform:scale(1) rotate(0)}}
+  .kchip.risk{border-color:#ff9a3d;background:linear-gradient(90deg,rgba(255,120,40,.26),rgba(255,255,255,.05));animation:kin .5s .05s cubic-bezier(.2,1.4,.4,1) both,rgRisk 1.6s 1s ease-in-out infinite} .kchip.risk .kst{animation:rpPulse 1.2s ease-in-out infinite}
+  @keyframes rgRisk{50%{box-shadow:0 0 14px rgba(255,140,50,.6)}}
+  .rkeep.calm .kchip.risk{animation:none}
+  .precap div i{display:block;font-style:normal;font-size:16px;line-height:1;margin-bottom:2px}
+  .precap .pbar{height:18px;display:flex;align-items:center;justify-content:center} .precap .pbar em{position:relative;font-style:normal;font-size:10px;font-weight:900;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.7);letter-spacing:.04em}
+  .precap .pbar i{position:absolute;inset:0 auto 0 0;margin:0;display:block}
+  #pause .rpmark span{font-size:10px;padding:3px 7px 3px 3px;white-space:nowrap;gap:2px} #pause .rpmark img{width:22px;height:22px}
+  #pause .pnote{opacity:.85}
+  #pause>*{animation:rpIn .35s both} #pause>*:nth-child(n+4){animation-delay:.08s} #pause>*:nth-child(n+6){animation-delay:.16s}
+  @media (max-height:900px){#result .rextra{gap:3px} #result .rextra span{padding:3px 9px} #result .rextra .rtop{display:none}}
+  @media (max-height:780px){.rkeep .kchip.risk{display:none}}
+  @media (max-height:700px){#result .rextra{gap:3px} #result .rextra span{padding:3px 8px} #result .rextra .rtop{display:none} #result .rextra b{font-size:13px} #pause .precap div i{display:none}}
+  @media (prefers-reduced-motion:reduce){#result .rextra span,#pause>*,#result .result-list .r.got::after,#result .result-list .r.got img,.kchip.risk,.kchip.risk .kst{animation:none}}
   /* end @css:11-result-goal */
 </style>
 </head>

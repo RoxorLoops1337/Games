@@ -37,6 +37,8 @@ export function keepResult(snap, save, day, r, host, reduce) {
     pendingStamp = se.stamps;
   }
   if (fresh.length) chips.push(`<span class="kchip book"><i class="kst">📖</i><b>New in your book</b><small>${esc(fresh.slice(0, 2).map(x => x.name).join(', '))}${fresh.length > 2 ? ' +' + (fresh.length - 2) : ''}</small></span>`);
+  const sn = spinStreak(save, day);   // a spin streak that ends if today passes without a spin
+  if (sn >= 2 && spinReady(save, day) && save.addict.spin.day === day - 1 && !(r && (r.mode === 'pig' || r.mode === 'inv'))) chips.push(`<span class="kchip risk"><i class="kst">🔥</i><b>${sn} day spin streak</b><small>spin today to keep it (Goals tab)</small></span>`);
   const tom = tomorrowLine(save, day, r);
   if (tom) chips.push(`<span class="kchip soon"><i class="kst">${tom.icon}</i><b>${esc(tom.text)}</b></span>`);
   host.innerHTML = chips.join('');
