@@ -7,6 +7,7 @@
 // canvas (the browser passes document.createElement, the tests pass a stub), so baked
 // sprites are cached once and blitted. Anything that must move its face (heads) is drawn
 // live with drawHead().
+import { createEnemyFaces } from './enemy_faces.js';
 export const INK = '#2d170f';
 const TAU = Math.PI * 2;
 
@@ -97,6 +98,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   }
   const FAR_KEEP = 6;
   const B = 40;   // bake radius
+  const EF = createEnemyFaces({ bake, cel, poly, circ, ell, line, heartPath, sparkle, shade, INK, mix });   // 01-enemy-art r7
   // layer(key, w, h, scale, fn): ONE big static layer (the background); a new key replaces the old one.
   let layerKey = null, layerSpr = null;
   function layer(key, w, h, scale, fn) {
@@ -593,6 +595,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     minion: id => bake('min|' + id, B * 3.4, B * 3.4, MIN[id] || MIN.green),
     pickup: k => bake('pk|' + k, B * 2.4, B * 2.4, PICK[k] || PICK.gem),
     note: crit => bake('note|' + (crit ? 1 : 0), B * 2.4, B * 2.4, noteFn(crit ? '#ffd84d' : '#6fe3ff', crit), 1),
+    dazed: skin => { const k = SPECIES[skin] ? skin : 'love', P = SPECIES[k]; return bake('dazed|' + k, B * 3.4, B * 3.4, g => { cellShape(g, P, B, { decor: false }); pattern(g, P, k, B); EF.dazed(g, B, P); }, 2); },   // 01-enemy-art r7: the face that pops out of a killed head
+    tail: skin => { const k = SPECIES[skin] ? skin : 'love'; return EF.tailSpr(k, SPECIES[k], B); },
     acid: () => bake('acid', B * 1.6, B * 1.6, acidFn),
     pet: (id, mood = 0) => bake('pet|' + id + '|' + mood, B * 3, B * 3, g => { MOOD = mood; critter(g, PETSPR[id] || 'kitten', B * 0.9); petMood(g, PETSPR[id] || 'kitten', B * 0.9); petAcc(g, PETSPR[id] || 'kitten', B * 0.9); MOOD = 0; }, 1),
     // round discs that read on any cell colour: coin (gold cell), shield (ward cell), moon (lullaby cell)
@@ -635,7 +639,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     let sq = 0; if (o.flash > 0) sq = -Math.min(1, o.flash / 0.12) * 0.16; if (o.sg === 'go') sq += 0.15; else if (o.sg === 'warn') sq -= 0.05 + Math.sin(t * 40) * 0.04;
     if (sq) { g.rotate(ang); g.scale(1 + sq, 1 - sq * 0.8); g.rotate(-ang); }
     if (boss && o.p2) p2Halo(g, R, t);
-    if (o.sg === 'go' || (o.sg === 'warn' && boss && o.p2)) dashSpikes(g, R, ang, t, boss && !!o.p2, o.sg === 'warn');
+    if (o.sg === 'go' || (o.sg === 'warn' && boss && o.p2)) dashSpikes(g, R, ang, t, boss && !!o.p2, o.sg === 'warn', o.skin);
+    if (!boss && (o.sg === 'go' || o.sg === 'warn')) EF.surgeRing(g, R, P, t, o.sg === 'warn');   // 01-enemy-art r7: the surge ring wears the species colours
     // the body never animates, only its heading: baked once per species at heading 0 and blitted rotated (cellShape + pattern cost ~15 clips and ~100 paths a head)
     const bodySpr = bake('headbody|' + (SPECIES[o.skin] ? o.skin : 'love'), B * 3.4, B * 3.4, gg => { cellShape(gg, P, R, { decor: false }); pattern(gg, P, o.skin, R); }, 3);
     if (bodySpr) { g.save(); g.rotate(ang); g.drawImage(bodySpr.c, -bodySpr.w / 2, -bodySpr.h / 2, bodySpr.w, bodySpr.h); g.restore(); }
@@ -720,6 +725,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     } else {
       E(-R * 0.36, -R * 0.1, R * 0.28, R * 0.34); E(R * 0.36, -R * 0.1, R * 0.28, R * 0.34); fangsMouth(g, 0, R * 0.34, R * 0.3, 0.6);
     }
+    if (o.sg === 'go' && !hurt) EF.yell(g, R, P, t); else if (hurt) EF.wail(g, R, P, t);   // 01-enemy-art r7
     if (boss && f !== 'grumpy' && f !== 'sad' && f !== 'cyclops' && f !== 'shades') { brow(g, -R * 0.66, -R * 0.6, -R * 0.1, -R * 0.4, R * 0.13); brow(g, R * 0.66, -R * 0.6, R * 0.1, -R * 0.4, R * 0.13); }
     if (hurt) for (const s of [-1, 1]) sparkle(g, s * R * 0.86, -R * 0.3, R * 0.2, '#ffd84d');
     else if (o.alone && f !== 'sad') {   // the shield is gone: it sweats and trembles
@@ -738,8 +744,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   }
   // 01-enemy-art r6: a surging head grows a fan of hot spikes along its heading (boss phase 2: seven big ones with a white core and a
   // speed-line wake; every other surge: three short streaks). Baked once, drawn rotated and stretched, so a dash costs two drawImage calls.
-  function dashSpikes(g, R, ang, t, big, warn) {
-    const key = big ? 'dashspk|big' : 'dashspk|min', sz = R * 4.6;
+  function dashSpikes(g, R, ang, t, big, warn, skin) {
+    const SP = SPECIES[skin], key = big ? 'dashspk|big' : 'dashspk|min|' + (SP ? skin : ''), sz = R * 4.6;
     const spr = bake(key, sz, sz, c => {
       if (big) {
         for (const dy of [-0.55, 0, 0.55]) line(c, [[-R * 1.4, R * dy], [-R * 2.2 - (dy ? 0 : R * 0.1), R * dy]], R * (dy ? 0.07 : 0.1), 'rgba(255,200,120,.75)');
@@ -750,7 +756,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
           line(c, [[x0, y0], [Math.cos(a) * (R * 0.8 + L * 0.7), Math.sin(a) * (R * 0.8 + L * 0.7)]], R * 0.05, '#fff1a8');
         }
       } else {
-        for (const dy of [-0.45, 0, 0.45]) line(c, [[-R * 1.2, R * dy], [-R * (1.8 + (dy ? 0 : 0.35)), R * dy]], R * 0.07, 'rgba(255,255,255,.6)');
+        if (SP) EF.streaks(c, R, SP); else for (const dy of [-0.45, 0, 0.45]) line(c, [[-R * 1.2, R * dy], [-R * (1.8 + (dy ? 0 : 0.35)), R * dy]], R * 0.07, 'rgba(255,255,255,.6)');
       }
     }, 2);
     if (!spr) return;
