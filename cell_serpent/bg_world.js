@@ -117,19 +117,25 @@ function speaker(c, x, y, w, h) {
 export const CROWD_Y = H - 84, CROWD_H = 96;
 export function bakeCrowdRow(c, th, boss, row) { c.translate(-W / 2, -CROWD_Y - CROWD_H / 2); crowd(c, th, boss, row); }
 function crowd(c, th, boss, only) {
-  const r = rnd(99 + (only || 0) * 7), y = H - 4, col = boss ? '#0a0618' : '#140c2e';
+  const r = rnd(99 + (only || 0) * 7), y = H - 4, col = boss ? '#0a0618' : '#140c2e', rim = boss ? '#ff6a8a' : mix(th.lite, '#ffffff', 0.2);
   c.lineCap = 'round';
   for (let row = 0; row < 2; row++) {
     if (only !== undefined && row !== only) continue;
-    c.fillStyle = row ? col : mix(col, th.base, 0.1);
+    const body = mix(col, th.base, row ? 0 : 0.1);
     for (let x = -10 + row * 28; x < W + 20; x += 56 + r() * 18) {
-      const s = 17 + r() * 8 - row * 2, yy = y + row * 8 - r() * 8, k = Math.floor(r() * 4);
-      c.beginPath(); c.arc(x, yy, s, 0, TAU); c.fill();
-      if (k === 0) { for (const d of [-1, 1]) { c.beginPath(); c.moveTo(x + d * s * 0.9, yy - s * 0.3); c.lineTo(x + d * s * 0.55, yy - s * 1.45); c.lineTo(x + d * s * 0.1, yy - s * 0.85); c.fill(); } }
-      else if (k === 1) { for (const d of [-1, 1]) { c.beginPath(); c.ellipse(x + d * s * 0.95, yy - s * 0.3, s * 0.3, s * 0.65, d * 0.2, 0, TAU); c.fill(); } }
-      else if (k === 2) { c.beginPath(); c.moveTo(x - s * 0.2, yy - s * 0.9); c.lineTo(x, yy - s * 1.6); c.lineTo(x + s * 0.3, yy - s * 0.9); c.fill(); }
-      else { for (const d of [-1, 1]) { c.beginPath(); c.ellipse(x + d * s * 0.4, yy - s * 1.3, s * 0.2, s * 0.7, d * 0.1, 0, TAU); c.fill(); } }
-      if (r() < 0.45) { c.lineWidth = 5; c.strokeStyle = c.fillStyle; c.beginPath(); c.moveTo(x + s * 0.5, yy - s * 0.4); c.lineTo(x + s * 0.9, yy - s * 1.5); c.stroke(); }
+      const s = 17 + r() * 8 - row * 2, yy = y + row * 8 - r() * 8, k = Math.floor(r() * 4), paw = r() < 0.45;
+      // drawn twice: first a lighter copy nudged up (the stage lights catch the top edge), then the dark body over it
+      for (let pass = 0; pass < 2; pass++) {
+        const o = pass ? 0 : -2.4, cc = pass ? body : rim;
+        c.globalAlpha = pass ? 1 : (row ? 0.34 : 0.5); c.fillStyle = cc;
+        c.beginPath(); c.arc(x, yy + o, s, 0, TAU); c.fill();
+        if (k === 0) { for (const d of [-1, 1]) { c.beginPath(); c.moveTo(x + d * s * 0.9, yy - s * 0.3 + o); c.lineTo(x + d * s * 0.55, yy - s * 1.45 + o); c.lineTo(x + d * s * 0.1, yy - s * 0.85 + o); c.fill(); } }
+        else if (k === 1) { for (const d of [-1, 1]) { c.beginPath(); c.ellipse(x + d * s * 0.95, yy - s * 0.3 + o, s * 0.3, s * 0.65, d * 0.2, 0, TAU); c.fill(); } }
+        else if (k === 2) { c.beginPath(); c.moveTo(x - s * 0.2, yy - s * 0.9 + o); c.lineTo(x, yy - s * 1.6 + o); c.lineTo(x + s * 0.3, yy - s * 0.9 + o); c.fill(); }
+        else { for (const d of [-1, 1]) { c.beginPath(); c.ellipse(x + d * s * 0.4, yy - s * 1.3 + o, s * 0.2, s * 0.7, d * 0.1, 0, TAU); c.fill(); } }
+        if (paw) { c.lineWidth = 5; c.strokeStyle = cc; c.beginPath(); c.moveTo(x + s * 0.5, yy - s * 0.4 + o); c.lineTo(x + s * 0.9, yy - s * 1.5 + o); c.stroke(); }
+      }
+      c.globalAlpha = 1;
     }
   }
 }
@@ -295,8 +301,8 @@ function drawWeather(c, kind, th, list, t, n) {
   c.restore();
 }
 // lightning on boss stages: a timed flash over the sky and a jagged bolt
-function lightning(c, bg, t) {
-  if (t >= bg.nextBolt) { bg.boltT = t; bg.nextBolt = t + 4 + bg.r() * 5; bg.boltX = 90 + bg.r() * (W - 180); bg.dbl = bg.r() < 0.5; }
+function lightning(c, bg, t, ph = 0) {
+  if (t >= bg.nextBolt) { bg.boltT = t; bg.nextBolt = t + (4 + bg.r() * 5) * (1 - 0.65 * ph); bg.boltX = 90 + bg.r() * (W - 180); bg.dbl = bg.r() < 0.5; }
   const dt = t - bg.boltT; if (dt < 0 || dt > 0.6) return;
   const f = dt < 0.1 ? 1 - dt * 3 : bg.dbl && dt > 0.18 && dt < 0.4 ? 0.8 * (1 - (dt - 0.18) / 0.22) : Math.max(0, 0.5 - dt) * 0.5;
   if (f <= 0) return;
@@ -309,6 +315,29 @@ function lightning(c, bg, t) {
   }
   c.restore();
 }
+// boss phase 2 (under 40% of the serpent left): the arena heats up. A red wash breathes on the kick, the floor cracks glow,
+// the edges burn in a vignette and (see lightning) the storm gets busier. ph eases 0..1; flash is 1 right when it begins.
+export function drawBossPhase(c, kit, t, ph, pulse, flash, reduce, low) {
+  const beat = reduce ? 0.4 : pulse;
+  c.save();
+  c.fillStyle = `rgba(255,24,64,${ph * (0.04 + beat * 0.07)})`; c.fillRect(0, 0, W, LINE_Y);
+  const vig = kit && kit.bake('bossvig', W / 2, H / 2, b => {
+    const g = b.createRadialGradient(0, 0, 90, 0, 0, 330); g.addColorStop(0, 'rgba(255,30,70,0)'); g.addColorStop(0.6, 'rgba(255,30,70,.10)'); g.addColorStop(1, 'rgba(255,30,70,.42)');
+    b.fillStyle = g; b.fillRect(-W / 4, -H / 4, W / 2, H / 2);
+  }, 1);
+  if (vig) { c.globalAlpha = ph * (0.7 + beat * 0.3); c.drawImage(vig.c, 0, 0, W, H); }
+  const cr = kit && kit.bake('bosscracks', W, H - LINE_Y, b => {
+    const r = rnd(41); b.translate(-W / 2, -(H - LINE_Y) / 2); b.lineCap = 'round'; b.lineJoin = 'round';
+    for (let i = 0; i < 9; i++) {
+      let x = 40 + i * 80 + r() * 30, y = 4; const pts = [[x, y]];
+      while (y < H - LINE_Y - 20) { y += 14 + r() * 18; x += (r() - 0.5) * 38; pts.push([x, y]); }
+      for (const [lw, col] of [[9, 'rgba(255,70,40,.25)'], [3.2, 'rgba(255,170,70,.95)'], [1.2, 'rgba(255,245,200,1)']]) { b.lineWidth = lw; b.strokeStyle = col; b.beginPath(); pts.forEach(([px, py], j) => j ? b.lineTo(px, py) : b.moveTo(px, py)); b.stroke(); }
+    }
+  }, 1);
+  if (cr) { c.globalCompositeOperation = 'lighter'; c.globalAlpha = ph * (0.3 + beat * 0.5); c.drawImage(cr.c, 0, LINE_Y); }
+  if (flash > 0) { c.globalCompositeOperation = 'lighter'; c.globalAlpha = 1; c.fillStyle = `rgba(255,60,90,${0.5 * flash})`; c.fillRect(0, 0, W, H); const rg = c.createRadialGradient(W / 2, LINE_Y, 10, W / 2, LINE_Y, 640); rg.addColorStop(0, `rgba(255,220,200,${0.5 * flash})`); rg.addColorStop(1, 'rgba(255,60,90,0)'); c.fillStyle = rg; c.fillRect(0, 0, W, H); }
+  c.restore();
+}
 export function createBgFx() {
   const bg = { weather: makeWeather(), nextBolt: 3, boltT: -9, boltX: 300, dbl: false, r: rnd(77) };
   // o: { kit, skin, stage, boss, th, t, reduce, low, kick (seconds since the last kill) }
@@ -318,7 +347,8 @@ export function createBgFx() {
     const wk = weatherFor(o.skin, o.stage);
     if (!o.reduce) drawClouds(c, kit, o.skin, mix(worldOf(o.skin).bot, '#ffffff', 0.6), skyGrade(o.stage).k, t, boss, o.low);
     if (wk && !o.reduce) drawWeather(c, wk, th, bg.weather, t, o.low ? 10 : 26);
-    if (boss && !o.reduce) lightning(c, bg, t);
+    if (boss && !o.reduce) lightning(c, bg, t, o.phase || 0);
+    if (boss && o.phase > 0.01) drawBossPhase(c, kit, t, o.phase, pulse, o.flash || 0, o.reduce, o.low);
     if (!o.reduce) { if (boss) drawBossFx(c, t, pulse, o.low, kit); drawFootlights(c, t, pulse, th, boss); }
     // speaker cones thump on the kick
     if (!o.reduce) {
