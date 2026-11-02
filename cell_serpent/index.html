@@ -430,6 +430,40 @@
   html.rm *,html.rm *::before,html.rm *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;animation-delay:0s!important;transition-duration:.01ms!important}
   html.rm .mo-coin,html.rm .mo-spk{display:none}
 /* end @css:19-transitions */
+  /* @css:12-title-onboarding */
+  #title{background:linear-gradient(180deg,rgba(8,5,30,.72) 0%,rgba(8,5,30,.18) 38%,rgba(8,5,30,.2) 62%,rgba(8,5,30,.78) 100%);backdrop-filter:none;overflow:hidden;gap:8px;justify-content:center}
+  #title .deco{display:none}
+  #title>*{position:relative;z-index:2}
+  #title .spots,#title .peeks{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+  .spots i{position:absolute;top:-4%;width:58vw;max-width:360px;height:74%;background:linear-gradient(180deg,rgba(255,244,200,.5),rgba(255,214,240,.12) 70%,transparent);clip-path:polygon(44% 0,56% 0,100% 100%,0 100%);transform-origin:50% 0;mix-blend-mode:screen;animation:spot12 6s ease-in-out infinite}
+  .spots i:nth-child(1){left:-6vw;--a:-14deg;transform:rotate(-14deg)} .spots i:nth-child(2){right:-6vw;--a:14deg;transform:rotate(14deg);animation-delay:-3s;background:linear-gradient(180deg,rgba(150,235,255,.5),rgba(150,200,255,.12) 70%,transparent)} .spots i:nth-child(3){left:50%;margin-left:-22vw;width:44vw;--a:0deg;animation-delay:-1.5s;opacity:.7}
+  @keyframes spot12{0%,100%{transform:rotate(calc(var(--a) - 6deg))}50%{transform:rotate(calc(var(--a) + 6deg))}}
+  #title h1.logo{display:flex;flex-direction:column;align-items:center;gap:0;isolation:isolate;background:none;color:#fff;filter:drop-shadow(0 0 20px rgba(255,92,184,.55));line-height:.88;font-size:clamp(46px,15vw,84px);animation:logo12 3.4s ease-in-out infinite}
+  @keyframes logo12{50%{transform:translateY(-4px) scale(1.015)}}
+  .logo span{position:relative;display:block;letter-spacing:.03em;background:linear-gradient(180deg,#fff 0,#ffe3f4 30%,#ff8fcf 49%,#e0409a 51%,#b01c78 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:2px #fff7}
+  .logo span::before{content:attr(data-t);position:absolute;inset:0;z-index:-1;color:#4a0f3a;-webkit-text-stroke:12px #4a0f3a;transform:translateY(5px);text-shadow:0 8px 0 #2a0620,0 12px 18px #0008}
+  .logo span::after{content:attr(data-t);position:absolute;inset:0;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.95) 50%,transparent 60%) -150% 0/250% 100% no-repeat;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine12 4s ease-in-out infinite}
+  .logo span:nth-child(2){font-size:.8em;margin-top:2px} .logo span:nth-child(2)::after{animation-delay:.25s}
+  @keyframes shine12{0%,55%{background-position:-150% 0}100%{background-position:250% 0}}
+  #title .tagline{font-weight:800;color:#ffd8ee;text-shadow:0 2px 0 #3a0e30;margin-top:4px}
+  .stage12{position:relative;width:min(300px,64vw);margin-top:2px}
+  .stage12::before{content:"";position:absolute;left:-14%;right:-14%;bottom:-10px;height:34px;border-radius:50%;background:radial-gradient(ellipse at 50% 40%,#fff6c8 0,#ffb0e0 28%,#7a3fd0 60%,#2a1060 100%);box-shadow:0 0 34px 6px rgba(255,160,230,.55),0 10px 0 #1a0a40;z-index:0}
+  .stage12::after{content:"";position:absolute;left:8%;right:8%;bottom:-2px;height:50%;background:radial-gradient(ellipse at 50% 100%,rgba(255,240,200,.5),transparent 70%);z-index:0}
+  .stage12 .hero{position:relative;z-index:1;width:100%;display:block}
+  #title .peeks img{position:absolute;width:clamp(74px,22vw,110px);filter:drop-shadow(0 4px 6px rgba(0,0,0,.5));animation:peek12 7s ease-in-out infinite;animation-delay:var(--d,0s)}
+  @keyframes peek12{0%,12%{transform:translate(var(--hx),var(--hy)) rotate(var(--r))}22%,48%{transform:translate(0,0) rotate(var(--r))}30%{transform:translate(0,0) rotate(calc(var(--r) + 8deg))}40%{transform:translate(0,0) rotate(calc(var(--r) - 8deg))}60%,100%{transform:translate(var(--hx),var(--hy)) rotate(var(--r))}}
+  #title #playBtn{position:relative;overflow:hidden;font-size:clamp(32px,9vw,40px);padding:16px 60px;min-width:min(78vw,300px);border-radius:26px;margin-top:10px;background:linear-gradient(180deg,#fff7c2 0,#ffd84d 45%,#ffa21c 52%,#ff7a1c 100%);color:#5a1a08;text-shadow:0 2px 0 #fff8;box-shadow:0 7px 0 #a8420a,0 0 0 4px #fff8 inset,0 12px 30px rgba(255,140,40,.55);animation:play12 1.6s ease-in-out infinite}
+  #title #playBtn:active{transform:translateY(4px) scale(.98);animation:none;box-shadow:0 3px 0 #a8420a,0 0 0 4px #fff8 inset}
+  #playBtn::before{content:"";position:absolute;left:10%;right:10%;top:5px;height:38%;border-radius:20px;background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,0))}
+  #playBtn::after{content:"";position:absolute;top:0;bottom:0;width:36%;left:-50%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.75),transparent);transform:skewX(-20deg);animation:sweep12 3s ease-in-out infinite}
+  @keyframes play12{50%{transform:scale(1.06)}} @keyframes sweep12{0%,50%{left:-50%}100%{left:130%}}
+  #titleInfo{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;min-height:30px;margin-top:6px} #titleInfo:empty{display:none}
+  #titleInfo b{position:relative;padding:5px 12px;border-radius:99px;background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.06));border:2px solid rgba(255,230,140,.7);color:#ffe9a0;font-weight:900;font-size:14px;text-shadow:0 1px 0 #000a;animation:twinkle12 2.4s ease-in-out infinite;animation-delay:var(--d,0s)}
+  #titleInfo b.hot{border-color:#ff9a5c;color:#ffc08a}
+  @keyframes twinkle12{50%{box-shadow:0 0 14px 2px rgba(255,226,120,.6)}}
+  @media (max-height:700px){#title h1.logo{font-size:clamp(40px,12vw,60px)} .stage12{width:min(220px,50vw)} #title #playBtn{padding:12px 48px;margin-top:4px} #title .tagline{display:none}}
+  @media (prefers-reduced-motion:reduce){#title *{animation:none!important}}
+  /* end @css:12-title-onboarding */
 </style>
 </head>
 <body>
@@ -441,11 +475,13 @@
   <img class="deco" id="deco2" style="right:3vw;top:14vh;animation-delay:-1s" alt="">
   <img class="deco" id="deco3" style="left:5vw;bottom:9vh;animation-delay:-2s" alt="">
   <img class="deco" id="deco4" style="right:4vw;bottom:11vh;animation-delay:-.5s" alt="">
-  <h1>CELL<br>SERPENT</h1>
-  <img class="hero" src="assets/duo_sing.png" alt="RoxorLoops and Jasmin">
-  <div class="sub">RoxorLoops &amp; Jasmin vs the Serpent.</div>
-  <button class="btn" id="playBtn">PLAY</button>
-  <div class="sub" id="titleInfo" style="margin-top:6px"></div>
+  <div class="spots" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="peeks" id="peeks" aria-hidden="true"></div>
+  <h1 class="logo" aria-label="Cell Serpent"><span data-t="CELL">CELL</span><span data-t="SERPENT">SERPENT</span></h1>
+  <div class="stage12"><img class="hero" src="assets/duo_sing.png" alt="RoxorLoops and Jasmin"></div>
+  <div class="sub tagline">RoxorLoops &amp; Jasmin vs the Serpent.</div>
+  <button class="btn" id="playBtn"><span>PLAY</span></button>
+  <div class="sub" id="titleInfo"></div>
   <button class="gear" id="setBtnT" aria-label="Settings">⚙</button>
   <div class="row"><div class="cur b"><img data-cur="beats" alt=""><b id="tBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="tSpark">0</b></div></div>
 </section>

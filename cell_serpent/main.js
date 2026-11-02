@@ -7,6 +7,7 @@ import { createAudio } from './audio.js';
 import { revealStars, countUp, levelBar, reviveRing, stopFx } from './result_fx.js';
 import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed } from './access.js';
 import { createMotion } from './motion.js';
+import { setupPeeks, titleInfoHTML } from './title_fx.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
@@ -289,7 +290,7 @@ function startRun(stage, mode2 = '') {
   mode = 'play'; acc = 0; cardsFor = null; reviveAsked = false; show('');
   window.CS.g = g;
 }
-function refreshTitle() { $('titleInfo').textContent = save.runs ? `Best stage ${save.best || 0}  ·  ★ ${totalStars(save)}  ·  🔥 ${save.streak.n} day${save.streak.n === 1 ? '' : 's'}` : ''; }
+function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)); }
 function toTitle() { refreshTitle(); mode = 'title'; audio.music(false); refreshCur(); newDemo(); show('title'); }
 
 // ---------------------------------------------------------------- upgrade cards
@@ -507,6 +508,7 @@ loadArt('assets/').then(a => {
   [['love', 'deco1'], ['grumpy', 'deco2'], ['sneezy', 'deco3'], ['sleepy', 'deco4']].forEach(([skin, el], i) => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
+  setupPeeks($('peeks'), kit);
   R = createRenderer(canvas, art, kit); window.CS.art = art; window.CS.R = R; applySettings(); resize(); refreshTitle();
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();

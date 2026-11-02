@@ -5,6 +5,7 @@ import { INK, mix } from './art_draw.js';
 import { createHud } from './hud.js';
 import { createScreenFx } from './screenfx.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing } from './bg_world.js';
+import { drawHints } from './hints.js';
 
 const TAU = Math.PI * 2;
 const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
@@ -433,11 +434,7 @@ export function createRenderer(canvas, art, kit) {
     // Encore blast: the beam, the meter by the duo, and the tap hint
     if (g.beam) { const a = Math.min(1, g.beam.t * 3); ctx.save(); const bg = ctx.createLinearGradient(g.beam.x - 60, 0, g.beam.x + 60, 0); bg.addColorStop(0, 'rgba(255,227,107,0)'); bg.addColorStop(0.5, `rgba(255,250,210,${a})`); bg.addColorStop(1, 'rgba(255,227,107,0)'); ctx.fillStyle = bg; ctx.fillRect(g.beam.x - 60, 0, 120, g.p.y); ctx.restore(); }
     if (g.phase === 'play' && (g.encore || 0) > 0) { const ex = g.p.x, ey = g.p.y + 52, ew = 90, full = g.encore >= 1; ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(ex - ew / 2 - 2, ey - 2, ew + 4, 11); ctx.fillStyle = full ? '#ffe36b' : '#ff9ad6'; ctx.fillRect(ex - ew / 2, ey, ew * g.encore, 7); ctx.restore(); if (full) { ctx.save(); ctx.globalAlpha = 0.7 + 0.3 * Math.sin(S.t * 10); text('TAP = ENCORE', ex, ey + 26, 16, '#ffe36b', '#0b1020'); ctx.restore(); } }
-    if (ui && ui.hints) {   // short hints for the first runs
-      const sn = g.snakes[0], alone = sn && sn.segs.length <= 3 && sn.segs[0].shield;
-      const hint = g.t < 7 ? 'SLIDE LEFT AND RIGHT: YOUR NOTES FLY STRAIGHT UP' : (g.upgradeLeft > 0 && g.pending === 0 && g.kills < 4) ? 'POP THE YELLOW CELLS FOR UPGRADES' : alone ? 'THE FACE POPS WHEN IT IS ALONE' : '';
-      if (hint) { ctx.save(); ctx.globalAlpha = 0.75 + Math.sin(S.t * 4) * 0.2; text(hint, W / 2, H * 0.5, 24, '#ffffff', '#0b1020'); ctx.restore(); }
-    }
+    if (ui && ui.hints) drawHints(ctx, g, S, { glow, text });   // first-run guide (hints.js)
     if (g.combo > 2 && g.t - g.lastKill < 2.2) text('COMBO x' + g.combo, W / 2, 196, 24 + Math.min(10, g.combo * 0.3), '#ffe14a');
     // joystick
     if (ui && ui.joy && ui.joy.on) {
