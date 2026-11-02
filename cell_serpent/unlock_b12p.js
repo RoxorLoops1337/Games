@@ -23,7 +23,7 @@ export const UNLOCKS = [
   { id: 'loadout', step: 1, kind: 'panel', label: 'Loadout row and EDIT' },
   { id: 'sparkles', step: 1, kind: 'misc', label: 'Sparkles pill' },
   // ---- stage 2: stats
-  { id: 'stats', step: 2, kind: 'tab', tab: 'Stats', label: 'Stats', hint: 'New: Stats! Here you can upgrade your stats: pay Beats to get stronger.', inTab: 'Tap UPGRADE' },
+  { id: 'stats', step: 2, kind: 'tab', tab: 'Stats', label: 'Stats', hint: 'New: Stats! Here you can upgrade your stats: pay Beats to get stronger.', inTab: 'Tap a price to get stronger' },
   { id: 'power', step: 2, kind: 'panel', label: 'Level and Power line, power check' },
   { id: 'bestbar', step: 2, kind: 'panel', label: 'Best progress bar' },
   // ---- stage 3: pets

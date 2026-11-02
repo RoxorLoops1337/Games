@@ -1,6 +1,7 @@
 // Cell Serpent: round 10 retention. Streak Tokens (earned from Season gifts), weekly badges to collect, the in-run "next goal" teaser
 // and friendlier comeback copy. Pure helpers plus tiny HTML/DOM builders. Everything is a gift: nothing here ever takes anything away.
 import { WEEK_DEFS, WEEK_ALL_BONUS, TOKEN_MAX, questState, weekChallenge, ensureWeek, seasonStatus, SEASON_DAYS, rewardText, hasShield } from './sim.js';
+import { isUnlocked } from './unlock_b12p.js';
 
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
@@ -37,14 +38,14 @@ export function weekBadgesHTML(save, thisWeekId) {
 
 // ---- in-run teaser: one small, kind line about the closest goal. Never blocks anything, fades by itself.
 export function nextGoalTeaser(save, day) {
-  const st = questState(save, day);
+  const st = questState(save, day), qOpen = isUnlocked('quests', save), seOpen = isUnlocked('season', save), wkOpen = isUnlocked('badges', save);   // b13a: never tease what is still locked
   let near = null;
-  for (const q of st.quests) { if (q.done) continue; const f = q.prog / q.target; if (!near || f > near.f) near = { f, q }; }
+  for (const q of qOpen ? st.quests : []) { if (q.done) continue; const f = q.prog / q.target; if (!near || f > near.f) near = { f, q }; }
   if (near && near.f >= 0.5) return { kind: 'quest', icon: near.q.icon, text: `${near.q.target - near.q.prog} more: ${near.q.text}`, f: near.f };
   const se = seasonStatus(save, day);
-  if (!se.stampedToday && se.stamps < SEASON_DAYS) { const nx = se.miles.find(m => !m.got), left = nx ? nx.at - se.stamps : 0; return { kind: 'stamp', icon: '⭐', text: nx ? `Finish a run for today's Season stamp` : 'Finish this run for a Season stamp', f: 0.4 }; }
+  if (seOpen && !se.stampedToday && se.stamps < SEASON_DAYS) { const nx = se.miles.find(m => !m.got), left = nx ? nx.at - se.stamps : 0; return { kind: 'stamp', icon: '⭐', text: nx ? `Finish a run for today's Season stamp` : 'Finish this run for a Season stamp', f: 0.4 }; }
   const wk = ensureWeek(save, day), wc = weekChallenge(day);
-  if (!wk.claimed && wk.prog < wc.target && wk.prog / wc.target >= 0.3) return { kind: 'week', icon: '🏅', text: `${wc.target - wk.prog} to go: ${wc.text}`, f: wk.prog / wc.target };
+  if (wkOpen && !wk.claimed && wk.prog < wc.target && wk.prog / wc.target >= 0.3) return { kind: 'week', icon: '🏅', text: `${wc.target - wk.prog} to go: ${wc.text}`, f: wk.prog / wc.target };
   if (near) return { kind: 'quest', icon: near.q.icon, text: `Quest: ${near.q.text}`, f: near.f };
   return null;
 }

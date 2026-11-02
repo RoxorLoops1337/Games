@@ -71,7 +71,7 @@ for (const key of Object.keys(k.WEEK_BADGES)) assert.ok(sim.WEEK_DEFS.some(d => 
 assert.equal(Object.keys(k.WEEK_BADGES).length, sim.WEEK_DEFS.length);
 
 // ---- in-run teaser
-const tz = sim.defaultSave(); const td = 20400;
+const tz = sim.defaultSave(); tz.unlocked.legacy = 1; const td = 20400;
 let t = k.nextGoalTeaser(tz, td); assert.equal(t.kind, 'stamp', 'fresh day: the stamp');
 const qd = sim.dailyQuests(td), big = qd.findIndex(q => q.target === Math.max(...qd.map(x => x.target)));
 tz.addict.q = { day: td, p: qd.map((q, i) => i === big ? q.target - 1 : 0), chest: 0 };

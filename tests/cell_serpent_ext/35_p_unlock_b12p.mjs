@@ -94,7 +94,7 @@ ok('hints: one queue in unlock order, each shows once, tabs and panels, never fo
   const q7 = U.pendingHints(fresh(7)).map(h => h.id); assert.deepEqual(q7, ['skills', 'stats', 'pets', 'sign', 'shop', 'gigs', 'fund'].filter(x => q7.includes(x)));
   assert.ok(q7.includes('sign') && q7.includes('gigs') && q7.includes('fund'));
   const tb = U.pendingHints(fresh(15)).find(h => h.id === 'stickers'); assert.equal(tb.tab, 'Stats');
-  const inn = U.inTabHint(fresh(2), 'Stats'); assert.equal(inn.text, 'Tap UPGRADE'); assert.equal(U.inTabHint(fresh(1), 'Stats'), null, 'locked tab: no hint');
+  const inn = U.inTabHint(fresh(2), 'Stats'); assert.equal(inn.text, 'Tap a price to get stronger'); assert.equal(U.inTabHint(fresh(1), 'Stats'), null, 'locked tab: no hint');
   const s2 = fresh(2); U.markSeen(s2, inn.key); assert.equal(U.inTabHint(s2, 'Stats'), null);
   assert.equal(U.inTabHint(fresh(0), 'Battle'), null);
 });

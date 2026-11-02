@@ -2700,6 +2700,10 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 #revive #rvGo{font-size:24px;padding:12px 28px;min-width:240px}
 @media (max-height:780px){#revive .rvwipe{display:none}}
 /* end @css:35-t-cards */
+/* @css:36-a-firstsession */
+  .tabs button:has(.newb) .pethint12{display:none}
+  .fold[hidden]{display:none!important}
+/* end @css:36-a-firstsession */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
