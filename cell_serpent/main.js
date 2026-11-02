@@ -12,6 +12,7 @@ import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
 import { nextGoal, closeCall, renderGoal } from './result_goal.js';
 import { flyPick } from './pickfly.js';
+import { edgeMap } from './follow_b13c.js';
 import { newAim, aimDown, aimMove, aimUp, aimTick, aimAssisted } from './aim_b12f.js';
 import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint, progMeter } from './result_fx.js';
 import { applyCbPalette, paintCbStrip, applyCbRarity } from './cb_palette.js';
@@ -97,6 +98,7 @@ const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
 const fol = { on: false, id: -1, x: 0, ptT: 0, keyT: 0 };   // b12s: follow-finger control (lane stages): the first finger owns movement, the duo chases its x
 const MOVE_KEYS = new Set(['a', 'd', 'arrowleft', 'arrowright']);
 const followMode = () => !!g && !g.ring && save.settings.controlStyle !== 'joystick';
+const folX = x => g && g.p ? edgeMap(x, g.p.zone.x0, g.p.zone.x1, !!save.settings.leftHand) : x;   // b13c: the outer strip of the screen reaches the lane wall
 const keys = {};
   const aimS = newAim();   // b11: circle stages aim all round: the finger or mouse sets the target angle, the sim gets an eased angle
   const aimTk = {};
@@ -614,7 +616,7 @@ canvas.addEventListener('pointerdown', e => {
   if (!g.ring && save.settings.thumbZone && !inThumbZone(e.clientY, innerHeight)) return;   // thumb zone: only the bottom third steers
   if (followMode()) {   // b12s: the duo chases the finger x at once (no dead zone, no joystick base)
     if (fol.on) return;
-    fol.on = true; fol.id = e.pointerId; fol.x = gp.x; fol.ptT = performance.now();
+    fol.on = true; fol.id = e.pointerId; fol.x = folX(gp.x); fol.ptT = performance.now();
     canvas.setPointerCapture(e.pointerId); return;
   }
   if (joy.on) return;
@@ -624,7 +626,7 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('pointermove', e => {
   if (mode === 'play' && g.ring && (e.pointerType === 'mouse' || (joy.on && e.pointerId === joy.id))) { if (e.pointerType === 'mouse' && !aimS.mode) aimS.mode = 1; aimAt(e, false); return; }   // b11: drag (or hover with a mouse) to sweep the aim
-  if (fol.on) { if (e.pointerId === fol.id) { fol.x = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; fol.ptT = performance.now(); } return; }
+  if (fol.on) { if (e.pointerId === fol.id) { fol.x = folX(R.toGame(e.clientX * (canvas.width / innerWidth), 0).x); fol.ptT = performance.now(); } return; }
   if (!joy.on || e.pointerId !== joy.id) return;
   if (joy.tz != null) { joy.tz = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; return; }   // thumb zone: the duo follows the finger
   const L = R.layout(), dpr = canvas.width / innerWidth, rad = 70 * L.s / dpr;
@@ -634,7 +636,7 @@ canvas.addEventListener('pointermove', e => {
   joy.dx = dx; joy.dy = 0;
 });
 const endJoy = e => { if (e.pointerId === aimS.id) aimUp(aimS); if (e.pointerId === fol.id) fol.on = false; if (e.pointerId === joy.id) { joy.tz = null; joy.on = false; joy.dx = joy.dy = 0; } };
-canvas.addEventListener('pointerup', endJoy); canvas.addEventListener('pointercancel', endJoy);
+canvas.addEventListener('pointerup', endJoy); canvas.addEventListener('pointercancel', endJoy); canvas.addEventListener('lostpointercapture', endJoy);   // b13c: a lost capture never leaves a ghost finger
 addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true; if (MOVE_KEYS.has(e.key.toLowerCase())) fol.keyT = performance.now();
   if (e.key === 'Escape') goBack(false);
