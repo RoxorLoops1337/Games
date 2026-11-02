@@ -53,7 +53,10 @@ export function createHud(env) {
     if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
   }
   // frosted glass: dark tint, hairline rim and a soft top gloss
+  const hcOn = () => !!(env.OPT && env.OPT.highContrast);
+  const hcRim = rim => /^rgba\(255,255,255/.test(rim) ? '#ffffff' : rim.replace(/,[\d.]+\)$/, ',1)');
   function glassPaint(c, x, y, w, h, r, rim, tint) {
+    if (hcOn()) { rim = hcRim(rim); tint = tint === PLATE_BOSS_TINT ? 'rgba(48,4,24,.95)' : 'rgba(6,4,24,.93)'; }   // high contrast: near-solid panels and opaque rims, so numbers never sit on the art
     const path = () => { c.beginPath(); if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); };
     path(); c.fillStyle = tint; c.fill();
     c.save(); path(); c.clip(); c.fillStyle = 'rgba(255,255,255,.10)'; c.fillRect(x, y, w, h * 0.45); c.restore();
@@ -61,11 +64,11 @@ export function createHud(env) {
   }
   // panels are static, so each size/colour is baked once and blitted (a clip + 3 paths per panel per frame otherwise)
   function glass(x, y, w, h, r, rim = 'rgba(255,255,255,.32)', tint = 'rgba(14,9,48,.52)') {
-    const spr = kit && kit.bake ? kit.bake(`glass|${w}|${h}|${r}|${rim}|${tint}`, w + 8, h + 8, c => glassPaint(c, -w / 2, -h / 2, w, h, r, rim, tint)) : null;
+    const spr = kit && kit.bake ? kit.bake(`glass|${w}|${h}|${r}|${rim}|${tint}|${hcOn() ? 1 : 0}`, w + 8, h + 8, c => glassPaint(c, -w / 2, -h / 2, w, h, r, rim, tint)) : null;
     if (spr) ctx.drawImage(spr.c, x - 4, y - 4, w + 8, h + 8); else glassPaint(ctx, x, y, w, h, r, rim, tint);
   }
   function glassCirclePaint(ctx, x, y, r) {
-    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = 'rgba(14,9,48,.52)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = hcOn() ? 'rgba(6,4,24,.93)' : 'rgba(14,9,48,.52)'; ctx.fill();
     ctx.beginPath(); ctx.arc(x, y - r * 0.28, r * 0.72, Math.PI * 1.1, Math.PI * 1.9); ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 3; ctx.stroke();
     ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 2; ctx.stroke();
   }
@@ -85,12 +88,12 @@ export function createHud(env) {
     glassCirclePaint(c, bx, 112, 26); paintStatsGlyph(c, bx, 112);
   }
   function chrome(boss, hard) {
-    const spr = kit && kit.bake ? kit.bake(`chrome06|${boss ? 1 : 0}|${hard ? 1 : 0}`, CH_W, CH_H, c => chromePaint(c, boss, hard)) : null;
+    const spr = kit && kit.bake ? kit.bake(`chrome06|${boss ? 1 : 0}|${hard ? 1 : 0}|${hcOn() ? 1 : 0}`, CH_W, CH_H, c => chromePaint(c, boss, hard)) : null;
     if (spr) ctx.drawImage(spr.c, 0, 0, CH_W, CH_H); else { ctx.save(); ctx.translate(CH_W / 2, CH_H / 2); chromePaint(ctx, boss, hard); ctx.restore(); }
   }
   // static, so baked once per radius: 3 paths per round button per frame become one drawImage
   function glassCircle(x, y, r) {
-    const spr = kit && kit.bake ? kit.bake('gcirc|' + r, r * 2 + 8, r * 2 + 8, c => glassCirclePaint(c, 0, 0, r)) : null;
+    const spr = kit && kit.bake ? kit.bake('gcirc|' + r + '|' + (hcOn() ? 1 : 0), r * 2 + 8, r * 2 + 8, c => glassCirclePaint(c, 0, 0, r)) : null;
     if (spr) ctx.drawImage(spr.c, x - r - 4, y - r - 4, r * 2 + 8, r * 2 + 8); else glassCirclePaint(ctx, x, y, r);
   }
   // a value that bounces for a moment when it changes

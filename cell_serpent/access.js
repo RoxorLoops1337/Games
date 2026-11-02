@@ -18,7 +18,7 @@ export const textScaleLabel = v => Math.round(v * 100) + '%';
 export function applyPageSettings(st) {
   const ts = textScaleOf(st), de = document.documentElement;   // text size slider (the old "bigger text" switch counts as 112%)
   de.classList.toggle('ts', ts > 1); de.style.setProperty('--ts', String(ts));
-  document.documentElement.classList.toggle('hc', !!st.highContrast);
+  document.documentElement.classList.toggle('hc', !!st.highContrast); de.classList.toggle('rf', !!st.reduceFlash);
   const sl = document.getElementById('accSlider');
   if (sl) { sl.classList.toggle('lf', !!st.leftHand); sl.classList.toggle('rt', !st.leftHand); }
 }
@@ -140,6 +140,7 @@ export function srPass(root = document) {
 }
 export function initSrPass() {
   if (typeof document === 'undefined') return;
+  watchSheets();
   const toast = document.getElementById('toast'); if (toast) { toast.setAttribute('role', 'status'); toast.setAttribute('aria-live', 'polite'); }
   for (const s of document.querySelectorAll('section.scr')) {
     if (s.id === 'title' || s.id === 'hub') continue;
@@ -193,4 +194,34 @@ export function initGridNav(root) {
   root.addEventListener('keyup', e => {
     if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('chip')) setTimeout(() => { const s = root.querySelector('#stChips .chip.sel'); if (s) s.focus({ preventScroll: true }); }, 30);
   });
+}
+
+// ---- round 6: bottom sheets (swap sheet, skill sheet) behave like real dialogs for keyboard and screen reader users.
+// A sheet gets role=dialog + a name, focus moves into it, Tab stays inside, Escape closes it, and focus goes back to the opener.
+export const sheetName = sh => { const t = sh && sh.querySelector && sh.querySelector('.swtx b, h2, h3, b'); return ((t && t.textContent) || 'Details').replace(/\s+/g, ' ').trim().slice(0, 40); };
+export function sheetFocusables(sh) { return [...sh.querySelectorAll('button:not([disabled]),[tabindex="0"]')].filter(b => b.getClientRects().length); }
+export function wrapTab(list, cur, back) { if (!list.length) return -1; const i = list.indexOf(cur); return back ? (i <= 0 ? list.length - 1 : i - 1) : (i < 0 || i >= list.length - 1 ? 0 : i + 1); }
+export function watchSheets() {
+  if (typeof document === 'undefined') return;
+  let opener = null;
+  const arm = bg => {
+    const sh = bg.querySelector('.dsheet'); if (!sh || bg.dataset.a11y) return; bg.dataset.a11y = '1';
+    sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-modal', 'true'); if (!sh.getAttribute('aria-label')) sh.setAttribute('aria-label', sheetName(sh));
+    opener = document.activeElement && document.activeElement !== document.body ? document.activeElement : opener;
+    const x = sh.querySelector('.dsx'); if (x && !x.getAttribute('aria-label')) x.setAttribute('aria-label', 'Close');
+    setTimeout(() => { const l = sheetFocusables(sh), f = l.find(b => !b.classList.contains('dsx')) || l[0]; if (f) { try { f.focus({ preventScroll: true }); } catch (e) { /* ignore */ } } }, 80);
+  };
+  new MutationObserver(ms => {
+    for (const m of ms) {
+      for (const n of m.addedNodes) if (n.nodeType === 1 && n.classList.contains('dsheet-bg')) arm(n);
+      for (const n of m.removedNodes) if (n.nodeType === 1 && n.classList.contains('dsheet-bg') && opener) { const o = opener; opener = null; setTimeout(() => { if (o.isConnected && !document.querySelector('.dsheet-bg') && (!document.activeElement || document.activeElement === document.body)) { try { o.focus({ preventScroll: true }); } catch (e) { /* ignore */ } } }, 40); }
+    }
+  }).observe(document.body, { childList: true });
+  addEventListener('keydown', e => {
+    const bgs = document.querySelectorAll('.dsheet-bg'), bg = bgs[bgs.length - 1], sh = bg && bg.querySelector('.dsheet'); if (!sh) return;
+    if (e.key === 'Escape') { const x = sh.querySelector('.dsx'); if (x) { x.click(); e.preventDefault(); e.stopPropagation(); } return; }
+    if (e.key !== 'Tab') return;
+    const list = sheetFocusables(sh), i = list.indexOf(document.activeElement), to = wrapTab(list, document.activeElement, e.shiftKey); if (to < 0) return;
+    if (i < 0 || (e.shiftKey ? i === 0 : i === list.length - 1)) { list[to].focus(); e.preventDefault(); }
+  }, true);
 }

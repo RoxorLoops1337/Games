@@ -80,7 +80,7 @@ export function createRenderer(canvas, art, kit) {
   }
 
   // -------------------------------------------------- events -> particles
-  const OPT = { reduceMotion: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false };
+  const OPT = { reduceFlash: false, reduceMotion: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false };
   function burst(x, y, n, cols, sp = 220, life = 0.6, size = 5) {
     if (OPT.lowQuality) n = Math.ceil(n * 0.4);
     for (let i = 0; i < n && S.particles.length < (OPT.lowQuality ? 140 : 420); i++) {
@@ -247,7 +247,7 @@ export function createRenderer(canvas, art, kit) {
     if (!OPT.reduceMotion) { if (!S.motes) S.motes = makeMotes(); if (!OPT.lowQuality) drawBeams(ctx, S.t, isBossStage(g.stage), th, kit); drawMotes(ctx, g.skin, th, OPT.lowQuality ? (S.motesLow || (S.motesLow = S.motes.filter((m, i) => i % 2 === 0))) : S.motes, S.t); }
     // weather, speaker thump, crowd and lightning (bg_world.js)
     const bph = bossPhase(g);
-    const bgp = (S.bgfx || (S.bgfx = createBgFx())).draw(ctx, { kit, skin: g.skin, phase: bph, flash: Math.max(0, 1 - (S.t - S.bpFlash) / 0.55), stage: g.stage, boss: isBossStage(g.stage), th, t: S.t, reduce: OPT.reduceMotion, low: OPT.lowQuality, kick: S.t - (S.killT === undefined ? -9 : S.killT) });
+    const bgp = (S.bgfx || (S.bgfx = createBgFx())).draw(ctx, { kit, skin: g.skin, phase: bph, flash: OPT.reduceFlash ? 0 : Math.max(0, 1 - (S.t - S.bpFlash) / 0.55), noFlash: OPT.reduceFlash, stage: g.stage, boss: isBossStage(g.stage), th, t: S.t, reduce: OPT.reduceMotion, low: OPT.lowQuality, kick: S.t - (S.killT === undefined ? -9 : S.killT) });
     // the stage floor below the line, where the duo stands; if the snake touches the line it is over
     if (g.ring) { drawRing(ctx, g.ring, S.t, isBossStage(g.stage), OPT.reduceMotion ? 0.4 : bgp, kit, g.skin); if (OPT.highContrast) hcLine(g.ring); return; }   // a circle around the duo in the middle
     ctx.save(); ctx.beginPath();
@@ -620,7 +620,7 @@ export function createRenderer(canvas, art, kit) {
     if (FX) FX.update(dt, g);
     if (g && g.phase === 'play' && CH.step(g, dt)) { cheerHit = true; if (!OPT.reduceMotion) S.flash = Math.max(S.flash, 0.12), S.flashCol = '#ffe9a8'; }
     S.trauma = Math.max(0, S.trauma - dt * 1.6); S.flash = Math.max(0, S.flash - dt * 1.5);
-    if (OPT.reduceMotion) { S.trauma = 0; S.flash = 0; }
+    if (OPT.reduceMotion) { S.trauma = 0; S.flash = 0; } else if (OPT.reduceFlash) S.flash = 0;   // reduce flashing alone keeps the shake and the motion
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawBg(g, L);
     const sh = S.trauma * S.trauma * 22 + FX.rumble(), boxed = L.ox > 0.5 || L.oy > 0.5;

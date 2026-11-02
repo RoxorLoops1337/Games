@@ -1,6 +1,10 @@
 // Cell Serpent: loadout presets (3 saved builds), drag to reorder the loadout row, pet happiness meter.
 // Rules stay tiny and live here; the save fields (save.presets, pets[id].joy) are sanitized in sim.js.
 import { LOADOUT_SIZE, PET_JOY_MAX, WEAPONS } from './sim.js';
+import { announce } from './access.js';
+// a rebuild drops keyboard focus: put it back on the same build (the SAVE button just turned into SAVED and is disabled)
+const refocus = (host, i, cls) => setTimeout(() => { const b = host.querySelectorAll('.prcell')[i]; const t = b && b.querySelector('.' + cls + ':not([disabled])'); if (t && (!document.activeElement || document.activeElement === document.body)) t.focus({ preventScroll: true }); }, 30);
+const wn = id => (WEAPONS.find(w => w.id === id) || { name: id }).name;
 
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
 const NAMES = ['A', 'B', 'C'];
@@ -45,12 +49,13 @@ export function renderPresets(host, c) {
     const cell = el('div', 'prcell' + (has ? ' has' : '') + (on ? ' on' : '') + (has && !ok ? ' bad' : ''));
     const nm = buildName(s, i), main = el('button', 'prmain', `<b>${nm.replace(/&/g, '&amp;')}</b>` + (has ? `<span class="prics">${ids.map(id => `<i>${icon(id)}</i>`).join('')}</span>` : '<span class="prem">empty</span>'));
     main.setAttribute('aria-label', has ? `Load build ${nm}` : `Build ${nm} is empty`);
+    if (has) main.setAttribute('aria-pressed', on ? 'true' : 'false'); cell.setAttribute('role', 'group'); cell.setAttribute('aria-label', 'Build ' + nm);
     main.disabled = !has;
-    main.onclick = () => { if (loadPreset(s, i)) { persist(); audio.play('upgrade'); rerender(); } else audio.play('click'); };
+    main.onclick = () => { if (loadPreset(s, i)) { announce(`Build ${nm} loaded: ${ids.map(wn).join(', ')}`); persist(); audio.play('upgrade'); rerender(); refocus(host, i, 'prmain'); } else audio.play('click'); };
     const arm = armed === i && Date.now() < armT, sv = el('button', 'prsave' + (arm ? ' warn' : ''), on ? 'SAVED' : arm ? 'OVERWRITE?' : 'SAVE'); sv.setAttribute('aria-label', `Save current loadout as build ${nm}`); sv.disabled = on;
     sv.onclick = () => {
       if (has && !on && !arm) { armed = i; armT = Date.now() + 2600; audio.play('click'); rerender(); setTimeout(() => { if (armed === i && Date.now() >= armT) { armed = -1; if (host.isConnected) rerender(); } }, 2700); return; }
-      armed = -1; savePreset(s, i); persist(); audio.play('click'); rerender();
+      armed = -1; savePreset(s, i); announce(`Build ${nm} saved`); persist(); audio.play('click'); rerender(); refocus(host, i, 'prmain');
     };
     if (has) {
       const rn = el('button', 'prren', '✎'); rn.setAttribute('aria-label', `Rename build ${nm}`); cell.appendChild(rn);

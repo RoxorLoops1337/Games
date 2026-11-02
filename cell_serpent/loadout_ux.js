@@ -2,6 +2,7 @@
 // Pure HTML builders plus one small bottom sheet; the rules stay in sim.js (toggleLoadout).
 import { WEAPONS, toggleLoadout } from './sim.js';
 import { skillPower } from './skill_sheet.js';
+import { announce } from './access.js';
 
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
 const wname = id => (WEAPONS.find(w => w.id === id) || { name: id }).name;
@@ -10,7 +11,7 @@ const wname = id => (WEAPONS.find(w => w.id === id) || { name: id }).name;
 export function swapSheet(c, newId) {
   const { save, persist, audio, icon, rerender } = c, s = save();
   document.querySelectorAll('.swapbg').forEach(n => n.remove());
-  const bg = el('div', 'dsheet-bg swapbg'), sh = el('div', 'dsheet lswap'); bg.appendChild(sh);
+  const bg = el('div', 'dsheet-bg swapbg'), sh = el('div', 'dsheet lswap'); bg.appendChild(sh); sh.setAttribute('aria-label', `Swap in ${wname(newId)}. Pick who steps out`);
   const close = () => { bg.classList.remove('on'); setTimeout(() => bg.remove(), 180); };
   bg.addEventListener('click', e => { if (e.target === bg) { audio.play('click'); close(); } });
   const x = el('button', 'dsx', '✕'); x.setAttribute('aria-label', 'Close'); x.onclick = () => { audio.play('click'); close(); }; sh.appendChild(x);
@@ -20,9 +21,11 @@ export function swapSheet(c, newId) {
   for (const id of s.loadout) {
     const lv = s.skills[id].lv, p = skillPower(id, lv), d = pNew - p;
     const b = el('button', 'swopt', `${icon(id)}<b>${wname(id)}</b><small>Lv ${lv}</small><i class="${d > 0.005 ? 'up' : d < -0.005 ? 'dn' : ''}">${d > 0.005 ? '▲ stronger' : d < -0.005 ? '▼ weaker' : 'same'}</i>`);
-    b.onclick = () => { if (toggleLoadout(s, id) && toggleLoadout(s, newId)) { persist(); audio.play('upgrade'); close(); rerender(); } };
+    b.setAttribute('aria-label', `Swap out ${wname(id)}, level ${lv}, the new skill is ${d > 0.005 ? 'stronger' : d < -0.005 ? 'weaker' : 'about the same'}`);
+    b.onclick = () => { if (toggleLoadout(s, id) && toggleLoadout(s, newId)) { announce(`${wname(newId)} swapped in for ${wname(id)}`); persist(); audio.play('upgrade'); close(); rerender(); } };
     row.appendChild(b);
   }
+  row.setAttribute('role', 'group'); row.setAttribute('aria-label', 'Equipped skills');
   sh.appendChild(row);
   document.body.appendChild(bg); requestAnimationFrame(() => bg.classList.add('on'));
 }
