@@ -14,9 +14,10 @@ import { createRetainUI } from './retain_ui.js';
 import { nextReward } from './sim.js';
 
 import { ico, iconURL } from './icons.js';
-import { ribIcon, ribHTML, dressIcon, setTint, wardTry } from './shop_b8.js';
+import { ribIcon, ribHTML, dressIcon, setTint, wardTry, tickTreats, SNACK_DESC } from './shop_b8.js';
 import { emptyCard as emptyCardB8 } from './empty_ux.js';
-import { seeded, newSeed, armChest, wasHeld, keepDetailHTML } from './gear_fx.js';
+import { seeded, newSeed, armChest, wasHeld, keepDetailHTML, keepCeremony } from './gear_fx.js';
+import { renderStickerBook } from './sticker_b9.js';
 const STATICON = { atk: 'speaker', crt: 'note', cdn: 'clock', vit: 'heart', for: 'star', rev: 'mic' };
 // a six-axis radar of the core stats, drawn as inline svg
 function radar(s) {
@@ -205,6 +206,7 @@ export function createHub2(c) {
       core.appendChild(card);
     });
     bestBuy(core, s);
+    { const bk = document.createElement('div'); list.appendChild(bk); renderStickerBook(bk, s, () => audio.play('click')); }
   }
   // the cheapest upgrade you can afford right now wears a "BEST BUY" ribbon (a nudge, never a rule)
   function bestBuy(core, s) {
@@ -277,7 +279,7 @@ export function createHub2(c) {
         keepDetailHTML(k, a, max, STAT_TEXT, KEEPSAKES, KEEP_SETS, Object.fromEntries(KEEPSAKES.map(q => [q.id, s.keeps[q.id].lv]))) +
         `<div class="bar"><i style="width:${cost ? Math.min(100, Math.round((a.frag / cost) * 100)) : 100}%"></i></div><div class="sm">${cost ? a.frag + ' / ' + cost : 'Fully polished'}</div>`;
       const b = document.createElement('button'); b.className = 'btn go gold'; b.textContent = a.lv >= max ? 'MAX LEVEL' : a.lv ? 'LEVEL UP' : 'COLLECT'; b.disabled = !keepCanUp(s, k.id);
-      b.onclick = () => { if (keepUp(save(), k.id)) { c.persist(); audio.play('upgrade'); openKeep(k); } };
+      b.onclick = () => { const first = !save().keeps[k.id].lv; if (keepUp(save(), k.id)) { c.persist(); audio.play(first || save().keeps[k.id].lv >= max ? 'levelup' : 'upgrade'); openKeep(k); keepCeremony($('pBody').querySelector('.kdetail'), save().keeps[k.id].lv, max, first, calmMotion()); } };
       d.appendChild(b); body.appendChild(d);
     }, () => c.openHub('Gear'));
   }
@@ -310,6 +312,7 @@ export function createHub2(c) {
       const t = tile({ cls: 't-gold deal', ic: `${ic}<b class="dqty">×${d.n}</b>`, name, desc: '', btn: bought ? 'OBTAINED' : d.price ? d.price + ' ' + curImg('sparkles') : 'FREE', gold: !bought, disabled: bought || s.sparkles < d.price, onclick: ev => { const r = ev.currentTarget.getBoundingClientRect(); if (buyDeal(save(), day, i)) { c.persist(); audio.play('buy'); c.refreshCur(); renderShop(); dealCheer(r); } } });
       if (d.off < 100) { const bd = document.createElement('i'); bd.className = 'dealrib'; bd.innerHTML = `<b>-${d.off}%</b>`; t.appendChild(bd); }
       else { const bd = document.createElement('i'); bd.className = 'dealrib free'; bd.innerHTML = '<b>FREE</b>'; t.appendChild(bd); }
+      if (SNACK_DESC[d.kind]) t.querySelector('.nm').insertAdjacentHTML('afterend', `<small class="snk">${SNACK_DESC[d.kind]}</small>`);
       const ds = t.querySelector('.ds'); if (d.base && !bought) ds.innerHTML = `<s>${d.base}</s> ${curImg('sparkles')}`; else ds.innerHTML = '&nbsp;';
       if (i === hotI) { t.classList.add('hot'); const hb = document.createElement('i'); hb.className = 'hotbadge'; hb.textContent = 'BEST DEAL'; t.appendChild(hb); }
       if (bought) { t.classList.add('done'); const ob = document.createElement('i'); ob.className = 'obt'; ob.textContent = 'GOT IT'; t.appendChild(ob); }
@@ -318,7 +321,7 @@ export function createHub2(c) {
     });
     const rr = document.createElement('div'); rr.className = 'refrow'; rr.innerHTML = `<span>New treats in ${countdown()}</span><button class="btn small alt">${s.shop.free ? '5 ' + curImg('sparkles') : 'FREE'} REFRESH</button>`;
     rr.querySelector('button').onclick = () => { if (refreshDeals(save())) { c.persist(); audio.play('click'); c.refreshCur(); renderShop(); } };
-    list.appendChild(rr);
+    list.appendChild(rr); tickTreats(rr);
     // chests with a shop level
     const sl = shopLevel(s.shop.xp); sec(list, 'Chests', '#c8843a', 'chest');
     const lv = document.createElement('div'); lv.className = 'shoplv'; lv.innerHTML = `<span class="lvbadge s">LV.${sl.lv}</span><div class="bar"><i style="width:${Math.round((sl.cur / sl.need) * 100)}%"></i></div><small>${sl.cur}/${sl.need}</small>`; list.appendChild(lv);
