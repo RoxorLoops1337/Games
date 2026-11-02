@@ -19,6 +19,7 @@ import { nextReward } from './sim.js';
 import { ico, iconURL } from './icons.js';
 import { ribIcon, ribHTML, dressIcon, setTint, wardTry, tickTreats, SNACK_DESC } from './shop_b8.js';
 import { emptyCard as emptyCardB8 } from './empty_ux.js';
+import { gearBarHTML } from './pet_detail_b14d.js';
 import { seeded, newSeed, armChest, wasHeld, keepDetailHTML, keepCeremony } from './gear_fx.js';
 import { renderStickerBook } from './sticker_b9.js';
 import { foldTab } from './fold_b12r.js';
@@ -276,7 +277,7 @@ export function createHub2(c) {
       }
     }
     if (gearFilter !== 'Set' && gearFilter !== 'All' && !box.querySelector('.kgrid')) box.appendChild(emptyCardB8('gear', gearFilter, () => { gearFilter = 'All'; audio.play('click'); renderGear(); }));
-    { const ready = KEEPSAKES.filter(k => keepCanUp(s, k.id)).length; if (ready) { const b = document.createElement('button'); b.className = 'btn small gold'; b.style.margin = '10px auto'; b.style.display = 'block'; b.textContent = 'LEVEL UP ALL READY (' + ready + ')'; b.onclick = () => { const n = upgradeAllKeeps(save()); if (n) { c.persist(); audio.play('upgrade'); c.renderHub(); } }; box.appendChild(b); } }
+    { const ready = KEEPSAKES.filter(k => keepCanUp(s, k.id)).length; if (ready) { const bar = document.createElement('div'); bar.className = 'gearbar'; bar.innerHTML = gearBarHTML(ready); bar.querySelector('.gbgo').onclick = () => { const n = upgradeAllKeeps(save()); if (n) { c.persist(); audio.play('upgrade'); c.renderHub(); } }; box.appendChild(bar); } }   // batch 14: sticky bar above the tab bar
     // chests
     sec(box, 'Keepsake Chest', '#c8843a', 'chest');
     const row = document.createElement('div'); row.className = 'tiles'; box.appendChild(row);
