@@ -13,6 +13,7 @@ import { createRetainUI } from './retain_ui.js';
 import { nextReward } from './sim.js';
 
 import { ico, iconURL } from './icons.js';
+import { emptyCard as emptyCardB8 } from './empty_ux.js';
 import { seeded, newSeed, armChest, wasHeld, keepDetailHTML } from './gear_fx.js';
 const STATICON = { atk: 'speaker', crt: 'note', cdn: 'clock', vit: 'heart', for: 'star', rev: 'mic' };
 // a six-axis radar of the core stats, drawn as inline svg
@@ -235,11 +236,13 @@ export function createHub2(c) {
         box.appendChild(d);
       }
     } else {
+      let shownB8 = 0;
       for (let t = 3; t >= 0; t--) {
         let items = KEEPSAKES.filter(k => k.tier === t);
         if (gearFilter === 'Owned') items = items.filter(k => lvl(k) > 0);
         if (gearFilter === 'Upgrade') items = items.filter(k => keepCanUp(s, k.id));
         if (!items.length) continue;
+        shownB8 += items.length;
         const T = KEEP_TIERS[t]; sec(box, T.name, T.color);
         const grid = document.createElement('div'); grid.className = 'kgrid'; box.appendChild(grid);
         for (const k of items) {
@@ -251,6 +254,7 @@ export function createHub2(c) {
         }
       }
     }
+    if (gearFilter !== 'Set' && gearFilter !== 'All' && !box.querySelector('.kgrid')) box.appendChild(emptyCardB8('gear', gearFilter, () => { gearFilter = 'All'; audio.play('click'); renderGear(); }));
     { const ready = KEEPSAKES.filter(k => keepCanUp(s, k.id)).length; if (ready) { const b = document.createElement('button'); b.className = 'btn small gold'; b.style.margin = '10px auto'; b.style.display = 'block'; b.textContent = 'LEVEL UP ALL READY (' + ready + ')'; b.onclick = () => { const n = upgradeAllKeeps(save()); if (n) { c.persist(); audio.play('upgrade'); c.renderHub(); } }; box.appendChild(b); } }
     // chests
     sec(box, 'Keepsake Chest', '#c8843a', 'chest');
