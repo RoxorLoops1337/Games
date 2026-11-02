@@ -343,7 +343,7 @@ export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
   const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0, joy: 0 };
-  return { v: 8, unlocked: defaultUnlocked(), loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, bigTap: false, reviveTimer: true, volume: 1, thumbZone: false, aimAssist: false, textScale: 1, beatTick: false, pump: 2, fullscreen: true }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, gift: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, plat: { atk: 0, crt: 0, vit: 0, for: 0 }, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
+  return { v: 8, unlocked: defaultUnlocked(), loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, bigTap: false, reviveTimer: true, volume: 1, thumbZone: false, aimAssist: false, textScale: 1, beatTick: false, pump: 2, fullscreen: true, controlStyle: 'follow' }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, gift: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, plat: { atk: 0, crt: 0, vit: 0, for: 0 }, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -367,7 +367,7 @@ export function sanitizeSave(raw) {
   if (raw.stars && typeof raw.stars === 'object') for (const k of Object.keys(raw.stars)) if (/^\d+$/.test(k)) s.stars[k] = Math.min(3, num(raw.stars[k]));
   if (raw.streak && typeof raw.streak === 'object') s.streak = { last: num(raw.streak.last), n: num(raw.streak.n) };
   if (raw.last && typeof raw.last === 'object') s.last = { stage: Math.max(1, Math.min(50, num(raw.last.stage, 1))), hard: !!raw.last.hard };
-  if (raw.settings && typeof raw.settings === 'object') for (const k of Object.keys(s.settings)) if (k === 'textScale') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.textScale = Math.max(1, Math.min(1.4, raw.settings[k])); } else if (k === 'pump') { if (raw.settings[k] === 0 || raw.settings[k] === 1 || raw.settings[k] === 2) s.settings.pump = raw.settings[k]; } else if (k === 'volume') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.volume = Math.max(0, Math.min(1, raw.settings[k])); } else if (typeof raw.settings[k] === 'boolean') s.settings[k] = raw.settings[k];
+  if (raw.settings && typeof raw.settings === 'object') for (const k of Object.keys(s.settings)) if (k === 'textScale') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.textScale = Math.max(1, Math.min(1.4, raw.settings[k])); } else if (k === 'pump') { if (raw.settings[k] === 0 || raw.settings[k] === 1 || raw.settings[k] === 2) s.settings.pump = raw.settings[k]; } else if (k === 'controlStyle') { if (raw.settings[k] === 'follow' || raw.settings[k] === 'joystick') s.settings.controlStyle = raw.settings[k]; } else if (k === 'volume') { if (typeof raw.settings[k] === 'number' && isFinite(raw.settings[k])) s.settings.volume = Math.max(0, Math.min(1, raw.settings[k])); } else if (typeof raw.settings[k] === 'boolean') s.settings[k] = raw.settings[k];
   if (raw.outfits && typeof raw.outfits === 'object') { for (const o of OUTFITS) if (raw.outfits.owned && raw.outfits.owned[o.id]) s.outfits.owned[o.id] = 1; if (OUTFIT[raw.outfits.worn] && s.outfits.owned[raw.outfits.worn]) s.outfits.worn = raw.outfits.worn; }
   if (raw.event && typeof raw.event === 'object') { s.event = { key: num(raw.event.key), earned: num(raw.event.earned), claimed: {} }; for (const k of Object.keys(raw.event.claimed || {})) if (raw.event.claimed[k]) s.event.claimed[k] = 1; }
   if (raw.inv && typeof raw.inv === 'object') s.inv = { day: num(raw.inv.day), left: Math.min(2, num(raw.inv.left, 2)), best: num(raw.inv.best) };
@@ -1646,6 +1646,16 @@ function markWave(segs, boss, wavePos, wave2) {
   for (let i = 0; i < segs.length; i++) segs[i].wave = boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
 }
 const CHEST_CP = [[0.25, 1], [0.5, 2]];
+// b12s: follow-finger chase. The duo glides toward the target x: eased (never overshoots) and speed capped
+// (a fast flick cannot teleport it). Returns the new x. Pure, so tests can pin it.
+export const CHASE_MUL = 2.6, CHASE_EASE = 14;
+export function chaseX(x, tx, dt, speed) {
+  if (!Number.isFinite(tx) || !Number.isFinite(x)) return x;
+  const d = tx - x; if (Math.abs(d) < 0.4) return tx;
+  const cap = (speed > 0 ? speed : 300) * CHASE_MUL * dt;
+  let st = d * (1 - Math.exp(-CHASE_EASE * dt)); if (st > cap) st = cap; else if (st < -cap) st = -cap;
+  return Math.abs(st) >= Math.abs(d) ? tx : x + st;
+}
 export function step(g, dt, input) {
   if (g.phase !== 'play' && g.phase !== 'clear') return;
   g.t += dt;
@@ -1653,6 +1663,10 @@ export function step(g, dt, input) {
 
   // the cell slides left and right along its row
   p.mx = input ? clamp(input.mx || 0, -1, 1) : 0;
+  if (!g.ring && input && Number.isFinite(input.tx) && dt > 0) {   // b12s: follow finger (lane stages): input.tx is the target x, mx is ignored
+    const nx = chaseX(p.x, clamp(input.tx, p.zone.x0, p.zone.x1), dt, p.speed);
+    p.mx = clamp((nx - p.x) / (dt * p.speed), -1, 1); p.x = nx + p.kx * dt;
+  } else
   p.x += (p.mx * p.speed + p.kx) * dt;
   p.kx *= Math.exp(-9 * dt);
   p.x = clamp(p.x, p.zone.x0, p.zone.x1); p.y = g.ring ? g.ring.cy : ROW_Y;
