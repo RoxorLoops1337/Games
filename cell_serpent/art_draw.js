@@ -385,6 +385,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   let MOOD = 0;
   const eyes2 = (g, dx, y, rr, iris = '#2d170f') => {
     if (MOOD === 3) { for (const s of [-1, 1]) { g.beginPath(); g.arc(s * dx, y + rr * 0.5, rr * 0.9, Math.PI * 1.1, Math.PI * 1.9); ink(g, Math.max(2.2, rr * 0.36)); g.stroke(); } return; }
+    if (MOOD === 7) { for (const s of [-1, 1]) { g.beginPath(); g.arc(s * dx, y - rr * 0.1, rr * 0.9, Math.PI * 0.12, Math.PI * 0.88); ink(g, Math.max(2.2, rr * 0.36)); g.stroke(); line(g, [[s * (dx + rr * 1.2), y - rr * 1.4], [s * (dx - rr * 1.0), y - rr * 2.3]], Math.max(2, rr * 0.3)); } return; }   // 02-animal-art r7: slump face, shut sad eyes under worried brows
     const o = MOOD === 1 ? 0.05 : 1, k = MOOD >= 2 ? 1.22 : 1;
     eye(g, -dx, y, rr * k, rr * 1.15 * k, { iris, open: o, look: [0, MOOD >= 2 ? -0.6 : 0] }); eye(g, dx, y, rr * k, rr * 1.15 * k, { iris, open: o, look: [0, MOOD >= 2 ? -0.6 : 0] });
   };
@@ -455,7 +456,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       }
       for (const s of [-1, 1]) cel(g, '#fffaf0', poly([[s * r * 0.3, r * 0.55], [s * r * 0.4, r * 0.3], [s * r * 0.2, r * 0.42]]), { r: r * 0.2, hi: false, lw: r * 0.06 });
     } else if (k === 'kitten') {
-      for (const s of [-1, 1]) { cel(g, '#ffb56a', poly([[s * r * 0.35, -r * 0.7], [s * r * 0.95, -r * 1.2], [s * r * 0.95, -r * 0.25]]), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#d88a3a' }); cel(g, '#ffc2dc', poly([[s * r * 0.55, -r * 0.7], [s * r * 0.8, -r * 0.95], [s * r * 0.8, -r * 0.45]]), { r: r * 0.2, hi: false, lw: 0.1 }); }
+      if (MOOD === 7) for (const s of [-1, 1]) cel(g, '#ffb56a', poly([[s * r * 0.35, -r * 0.8], [s * r * 1.35, -r * 0.62], [s * r * 0.95, -r * 0.2]]), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#d88a3a' });   // r7: ears flat
+      else for (const s of [-1, 1]) { cel(g, '#ffb56a', poly([[s * r * 0.35, -r * 0.7], [s * r * 0.95, -r * 1.2], [s * r * 0.95, -r * 0.25]]), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#d88a3a' }); cel(g, '#ffc2dc', poly([[s * r * 0.55, -r * 0.7], [s * r * 0.8, -r * 0.95], [s * r * 0.8, -r * 0.45]]), { r: r * 0.2, hi: false, lw: 0.1 }); }
       cel(g, '#ffb56a', circ(0, 0, r), { r, shadow: '#d88a3a' });
       for (const x of [-0.18, 0, 0.18]) line(g, [[x * r, -r * 0.92], [x * r * 1.2, -r * 0.62]], r * 0.07, '#d88a3a');
       eyes2(g, r * 0.38, -r * 0.08, r * 0.16, '#3a8a4a');
@@ -463,11 +465,12 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       smile(g, 0, r * 0.42, r * 0.14); for (const s of [-1, 1]) for (const dy of [0, 0.12]) line(g, [[s * r * 0.5, r * (0.3 + dy)], [s * r * 1.05, r * (0.22 + dy * 2)]], r * 0.04);
       blush(g, -r * 0.62, r * 0.28, r * 0.15); blush(g, r * 0.62, r * 0.28, r * 0.15);
     } else if (k === 'puppy') {
-      for (const s of [-1, 1]) cel(g, '#8a5a3a', ell(s * r * 0.92, r * 0.05, r * 0.32, r * 0.6, s * 0.15), { r: r * 0.5, hi: false, lw: r * 0.1, shadow: '#5a3822' });
+      for (const s of [-1, 1]) cel(g, '#8a5a3a', MOOD === 7 ? ell(s * r * 0.97, r * 0.42, r * 0.3, r * 0.74, s * 0.08) : ell(s * r * 0.92, r * 0.05, r * 0.32, r * 0.6, s * 0.15), { r: r * 0.5, hi: false, lw: r * 0.1, shadow: '#5a3822' });   // r7: ears hang when slumped
       cel(g, '#f6e2c4', circ(0, 0, r), { r, shadow: '#d3b88c' });
       g.save(); circ(0, 0, r)(g); g.clip(); g.fillStyle = '#8a5a3a'; ell(r * 0.55, -r * 0.5, r * 0.4, r * 0.34, 0.4)(g); g.fill(); g.restore();
       eyes2(g, r * 0.36, -r * 0.1, r * 0.15); cel(g, '#2d1a14', ell(0, r * 0.2, r * 0.2, r * 0.15), { r: r * 0.2, hi: false, lw: r * 0.06 });
-      smile(g, 0, r * 0.42, r * 0.2); cel(g, '#ff7e9a', ell(0, r * 0.6, r * 0.12, r * 0.18), { r: r * 0.15, hi: false, lw: r * 0.06 });
+      if (MOOD === 7) line(g, [[-r * 0.2, r * 0.52], [-r * 0.08, r * 0.42], [r * 0.08, r * 0.42], [r * 0.2, r * 0.52]], r * 0.06);
+      else { smile(g, 0, r * 0.42, r * 0.2); cel(g, '#ff7e9a', ell(0, r * 0.6, r * 0.12, r * 0.18), { r: r * 0.15, hi: false, lw: r * 0.06 }); }
       blush(g, -r * 0.62, r * 0.25, r * 0.14); blush(g, r * 0.62, r * 0.25, r * 0.14);
     } else if (k === 'piglet') {
       for (const s of [-1, 1]) cel(g, '#ff9ac0', poly([[s * r * 0.35, -r * 0.75], [s * r * 1.0, -r * 1.0], [s * r * 0.95, -r * 0.3]]), { r: r * 0.45, hi: false, lw: r * 0.09, shadow: '#d9648f' });
@@ -488,6 +491,12 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       cel(g, '#fff4e0', ell(0, r * 0.35, r * 0.7, r * 0.5), { r: r * 0.6, hi: false, lw: r * 0.08, shadow: '#e6d3b0' });
       eyes2(g, r * 0.38, -r * 0.15, r * 0.13); cel(g, '#ff9ab0', poly([[-r * 0.09, r * 0.12], [r * 0.09, r * 0.12], [0, r * 0.22]]), { r: r * 0.1, hi: false, lw: r * 0.05 }); smile(g, 0, r * 0.38, r * 0.14);
       blush(g, -r * 0.7, r * 0.2, r * 0.17); blush(g, r * 0.7, r * 0.2, r * 0.17);
+    } else if (k === 'turtle' && MOOD === 7) {   // r7: it pulls its head and feet into the shell, only two eyes glint in the dark gap
+      cel(g, '#4a9a42', ell(0, r * 0.62, r * 0.62, r * 0.2), { r: r * 0.3, hi: false, lw: r * 0.07, shadow: '#2f6e2c' });
+      cel(g, '#2a2036', ell(0, r * 0.52, r * 0.5, r * 0.2), { r: r * 0.3, hi: false, lw: r * 0.07, shadow: '#1a1224' });
+      for (const s of [-1, 1]) { g.fillStyle = '#fff'; g.beginPath(); g.ellipse(s * r * 0.2, r * 0.5, r * 0.07, r * 0.09, 0, 0, TAU); g.fill(); g.fillStyle = INK; g.beginPath(); g.arc(s * r * 0.2, r * 0.52, r * 0.04, 0, TAU); g.fill(); }
+      cel(g, '#6fbf5a', ell(0, -r * 0.12, r * 1.0, r * 0.82), { r, shadow: '#3f8a3a' });
+      for (const [x, y] of [[0, -0.5], [-0.5, -0.12], [0.5, -0.12], [-0.25, 0.28], [0.25, 0.28]]) cel(g, '#8fd878', circ(x * r, (y - 0.15) * r, r * 0.2), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#5ab04a' });
     } else if (k === 'turtle') {
       cel(g, '#6fbf5a', circ(0, -r * 0.1, r * 0.95), { r, shadow: '#3f8a3a' });
       for (const [x, y] of [[0, -0.5], [-0.5, -0.1], [0.5, -0.1], [-0.25, 0.3], [0.25, 0.3]]) cel(g, '#8fd878', circ(x * r, (y - 0.15) * r, r * 0.22), { r: r * 0.22, hi: false, lw: r * 0.07, shadow: '#5ab04a' });
