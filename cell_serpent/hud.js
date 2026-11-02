@@ -19,10 +19,16 @@ export function createHud(env) {
     if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
   }
   // frosted glass: dark tint, hairline rim and a soft top gloss
+  function glassPaint(c, x, y, w, h, r, rim, tint) {
+    const path = () => { c.beginPath(); if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); };
+    path(); c.fillStyle = tint; c.fill();
+    c.save(); path(); c.clip(); c.fillStyle = 'rgba(255,255,255,.10)'; c.fillRect(x, y, w, h * 0.45); c.restore();
+    path(); c.strokeStyle = rim; c.lineWidth = 2; c.stroke();
+  }
+  // panels are static, so each size/colour is baked once and blitted (a clip + 3 paths per panel per frame otherwise)
   function glass(x, y, w, h, r, rim = 'rgba(255,255,255,.32)', tint = 'rgba(14,9,48,.52)') {
-    rr(x, y, w, h, r); ctx.fillStyle = tint; ctx.fill();
-    ctx.save(); rr(x, y, w, h, r); ctx.clip(); ctx.fillStyle = 'rgba(255,255,255,.10)'; ctx.fillRect(x, y, w, h * 0.45); ctx.restore();
-    rr(x, y, w, h, r); ctx.strokeStyle = rim; ctx.lineWidth = 2; ctx.stroke();
+    const spr = kit && kit.bake ? kit.bake(`glass|${w}|${h}|${r}|${rim}|${tint}`, w + 8, h + 8, c => glassPaint(c, -w / 2, -h / 2, w, h, r, rim, tint)) : null;
+    if (spr) ctx.drawImage(spr.c, x - 4, y - 4, w + 8, h + 8); else glassPaint(ctx, x, y, w, h, r, rim, tint);
   }
   function glassCircle(x, y, r) {
     ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = 'rgba(14,9,48,.52)'; ctx.fill();

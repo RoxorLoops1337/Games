@@ -517,7 +517,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   function drawHead(g, x, y, r, ang, o = {}) {
     const P = SPECIES[o.skin] || SPECIES.love, boss = !!o.boss, t = o.t || 0, R = B;
     g.save(); g.translate(x, y); g.scale(r / B, r / B);
-    g.save(); g.rotate(ang); cellShape(g, P, R, { decor: false }); g.restore();
+    { const hb = bake('headbody|' + (o.skin || 'love'), R * 5, R * 5, bg => cellShape(bg, P, R, { decor: false }), 2);   // the rotating body is baked once per species
+      g.save(); g.rotate(ang); if (hb) g.drawImage(hb.c, -hb.w / 2, -hb.h / 2, hb.w, hb.h); else cellShape(g, P, R, { decor: false }); g.restore(); }
     glossDot(g, R, 0.46, -0.5);
     // headgear (upright, on top of the head)
     const top = -R * 0.92, sw = Math.sin(t * 5) * R * 0.1;

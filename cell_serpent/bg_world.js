@@ -198,10 +198,18 @@ export function drawBeams(c, t, boss, th, kit) {
   }
   c.restore();
 }
-export function drawRing(c, ring, t, boss) {
+export function drawRing(c, ring, t, boss, kit) {
   const { cx, cy, R } = ring, beat = 0.5 + 0.5 * Math.sin(t * 4.2), hue = boss ? '255,50,90' : '255,90,140';
-  const fl = c.createRadialGradient(cx, cy, 20, cx, cy, R); fl.addColorStop(0, `rgba(255,225,170,${0.16 + beat * 0.08})`); fl.addColorStop(0.6, `rgba(${hue},.14)`); fl.addColorStop(1, `rgba(${hue},${0.3 + beat * 0.12})`);
-  c.fillStyle = fl; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill();
+  // the floor disc is baked once (at the middle of the pulse); the pulse is a light alpha swing
+  const disc = kit && kit.bake ? kit.bake('ringfloor|' + boss + '|' + R, R * 2, R * 2, b => {
+    const fl = b.createRadialGradient(0, 0, 20, 0, 0, R); fl.addColorStop(0, 'rgba(255,225,170,.2)'); fl.addColorStop(0.6, `rgba(${hue},.14)`); fl.addColorStop(1, `rgba(${hue},.36)`);
+    b.fillStyle = fl; b.beginPath(); b.arc(0, 0, R, 0, TAU); b.fill();
+  }, 1) : null;
+  if (disc) { c.save(); c.globalAlpha = 0.8 + beat * 0.4; c.drawImage(disc.c, cx - R, cy - R); c.restore(); }
+  else {
+    const fl = c.createRadialGradient(cx, cy, 20, cx, cy, R); fl.addColorStop(0, `rgba(255,225,170,${0.16 + beat * 0.08})`); fl.addColorStop(0.6, `rgba(${hue},.14)`); fl.addColorStop(1, `rgba(${hue},${0.3 + beat * 0.12})`);
+    c.fillStyle = fl; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill();
+  }
   for (let i = 1; i <= 2; i++) { const ph = (t * 0.7 + i * 0.5) % 1; c.strokeStyle = `rgba(255,200,230,${0.25 * (1 - ph)})`; c.lineWidth = 3; c.beginPath(); c.arc(cx, cy, R * (0.3 + ph * 0.7), 0, TAU); c.stroke(); }
   c.beginPath(); c.arc(cx, cy, R, 0, TAU);
   c.lineWidth = 16 + beat * 6; c.strokeStyle = `rgba(${hue},.2)`; c.stroke();
