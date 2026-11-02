@@ -77,6 +77,12 @@ ok('scr screens never clip their top when taller than the phone', () => {
   assert.ok(/\.scr\{[^}]*justify-content:safe center/.test(html));
 });
 
+ok('letterbox: the world is clipped to the frame so snakes never draw on the bars', () => {
+  const rsrc = fs.readFileSync(path.join(ROOT, 'cell_serpent', 'render.js'), 'utf8');
+  assert.match(rsrc, /boxed = L\.ox > 0\.5 \|\| L\.oy > 0\.5/); assert.match(rsrc, /ctx\.rect\(0, 0, W, H\); ctx\.clip\(\)/);
+  assert.ok(/\.tile\.deal \.top\{flex-direction:column/.test(html) && /\.chestcard \.top\{flex-direction:column/.test(html), 'narrow phones stack icon over name in shop deals and gear chests');
+});
+
 // ---- real browser
 const req = createRequire(import.meta.url);
 let chromium = null;
@@ -153,7 +159,24 @@ if (chromium) {
       assert.ok(sTop >= -1, 'settings title reachable by scrolling up: ' + sTop);
       assert.deepEqual(p.errs, []);
       await p.close();
-      n += 2;
+      // 390x844 is taller than the 9:16 game frame: the top and bottom bars must stay empty (no snake cells on them)
+      p = await open(390, 844);
+      await p.evaluate(() => window.CS.startRun(12)); await p.waitForTimeout(3500);
+      const bars = await p.evaluate(() => { const cv = document.querySelector('canvas'), L = window.CS.R.layout(), c = cv.getContext('2d'), bh = Math.floor(L.oy) - 2; const odd = r => { const d = c.getImageData(0, r, cv.width, 1).data; let k = 0; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - 13) + Math.abs(d[i + 1] - 9) + Math.abs(d[i + 2] - 36) > 6) k++; return k; }; let top = 0, bot = 0; for (let y = 0; y < bh - 8; y += 3) { top += odd(y); bot += odd(cv.height - 1 - y); } return { bh, top, bot }; });
+      assert.ok(bars.bh > 20, 'a letterbox exists at 390x844: ' + bars.bh);
+      assert.equal(bars.top + bars.bot, 0, 'nothing drawn on the letterbox bars: ' + JSON.stringify(bars));
+      await p.close();
+      // 320px: Today's Treats and the Gear chests keep readable names
+      p = await open(320, 568);
+      await p.evaluate(() => window.CS.openHub('Shop')); await p.waitForTimeout(800);
+      let nmw = await p.evaluate(() => [...document.querySelectorAll('.tile.deal .nm')].map(e => Math.round(e.getBoundingClientRect().width)));
+      assert.ok(nmw.length > 0 && nmw.every(w => w >= 80), 'deal names are not squeezed: ' + nmw);
+      await p.evaluate(() => window.CS.openHub('Gear')); await p.waitForTimeout(800);
+      nmw = await p.evaluate(() => [...document.querySelectorAll('.chestcard .nm')].map(e => Math.round(e.getBoundingClientRect().width)).filter(w => w > 0));
+      assert.ok(nmw.length > 0 && nmw.every(w => w >= 80), 'chest names are not squeezed: ' + nmw);
+      assert.deepEqual(p.errs, []);
+      await p.close();
+      n += 3;
     } finally { await browser.close(); srv.close(); }
   } else srv.close();
 }

@@ -521,7 +521,8 @@ export function createRenderer(canvas, art, kit) {
     if (OPT.reduceMotion) { S.trauma = 0; S.flash = 0; }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawBg(g, L);
-    const sh = S.trauma * S.trauma * 22 + FX.rumble();
+    const sh = S.trauma * S.trauma * 22 + FX.rumble(), boxed = L.ox > 0.5 || L.oy > 0.5;
+    if (boxed) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip(); }   // letterbox: snakes entering from above or the sides never draw on the bars
     ctx.save(); ctx.translate((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh); FX.zoomIn();
     for (const pk of g.pickups) drawPickup(pk);
     drawZones(g);
@@ -531,6 +532,7 @@ export function createRenderer(canvas, art, kit) {
     drawBullets(g);
     drawFx(dt);
     ctx.restore();
+    if (boxed) ctx.restore();
     if (S.warn > 0) { S.warn -= dt; text('SURGE!', W / 2, 170 + (hud ? hud.dy(g) : 0) + (OPT.reduceMotion ? 0 : Math.sin(S.t * 40) * 4), 54 + (OPT.reduceMotion ? 0 : Math.sin(S.t * 30) * 4), '#ff5a78'); }
     FX.drawScreen(g);
     if (S.flash > 0) { ctx.save(); ctx.globalAlpha = S.flash * 0.5; ctx.fillStyle = S.flashCol; ctx.fillRect(0, 0, W, H); ctx.restore(); }
