@@ -569,6 +569,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     if (sq) { g.rotate(ang); g.scale(1 + sq, 1 - sq * 0.8); g.rotate(-ang); }
     g.save(); g.rotate(ang); cellShape(g, P, R, { decor: false }); pattern(g, P, o.skin, R); g.restore();
     glossDot(g, R, 0.46, -0.5);
+    if (boss) bossRing(g, R, t);
     // headgear (upright, on top of the head)
     const top = -R * 0.92, sw = Math.sin(t * 5) * R * 0.1;
     if (boss) {   // a cute little crown with jewels, tip pearls and a shine
@@ -594,7 +595,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     }
     // the face stays upright and looks at the player
     g.translate(Math.cos(ang) * R * 0.18 + (o.look ? o.look[0] * R * 0.1 : 0), Math.sin(ang) * R * 0.18 - R * 0.04 + (o.look ? o.look[1] * R * 0.06 : 0));
-    const open = ((t % 3.7) > 3.55 || (t % 9.1) > 8.78 && (t % 9.1) < 8.9) ? 0.1 : 1, look = o.look || [Math.sin(t * 0.8) * 0.5, Math.cos(t * 0.55) * 0.3],
+    const hurt = o.flash > 0.02, open = (hurt || (t % 3.7) > 3.55 || (t % 9.1) > 8.78 && (t % 9.1) < 8.9) ? 0.1 : 1, look = o.look || [Math.sin(t * 0.8) * 0.5, Math.cos(t * 0.55) * 0.3],
       tongue = (t % 7) > 5.2 && (t % 7) < 5.9, sneezing = (t % 6) > 5.1, iris = boss ? '#ff3d5a' : P.eye;
     const E = (ex, ey, rx, ry) => eye(g, ex, ey, rx, ry, { iris, look, open });
     const squint = (ex, dir) => line(g, [[ex - dir * R * 0.2, -R * 0.26], [ex + dir * R * 0.12, -R * 0.1], [ex - dir * R * 0.2, R * 0.06]], R * 0.1);
@@ -617,6 +618,9 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       brow(g, -R * 0.7, -R * 0.42, -R * 0.08, -R * 0.2, R * 0.14); brow(g, R * 0.7, -R * 0.42, R * 0.08, -R * 0.2, R * 0.14);
       g.beginPath(); g.arc(0, R * 0.62, R * 0.24, Math.PI + 0.3, TAU - 0.3); ink(g, R * 0.09); g.stroke();
       cel(g, '#ff5a78', circ(0, R * 0.2, R * 0.1), { r: R * 0.1, hi: false, lw: 2 });
+    } else if (f === 'sleepy' && boss) {   // a boss never naps: wide awake, scowling, with a little fang
+      E(-R * 0.36, -R * 0.1, R * 0.2, R * 0.24); E(R * 0.36, -R * 0.1, R * 0.2, R * 0.24);
+      fangsMouth(g, 0, R * 0.4, R * 0.24, 0.4);
     } else if (f === 'sleepy') {
       for (const s of [-1, 1]) { g.beginPath(); g.arc(s * R * 0.36, -R * 0.12, R * 0.2, 0.15, Math.PI - 0.15); ink(g, R * 0.09); g.stroke(); }
       g.fillStyle = '#7a1633'; ell(0, R * 0.4, R * 0.1, R * 0.12)(g); g.fill(); ink(g, R * 0.06); g.stroke();
@@ -646,9 +650,28 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     } else {
       E(-R * 0.36, -R * 0.1, R * 0.28, R * 0.34); E(R * 0.36, -R * 0.1, R * 0.28, R * 0.34); fangsMouth(g, 0, R * 0.34, R * 0.3, 0.6);
     }
+    if (boss && f !== 'grumpy' && f !== 'sad' && f !== 'cyclops' && f !== 'shades') { brow(g, -R * 0.66, -R * 0.6, -R * 0.1, -R * 0.4, R * 0.13); brow(g, R * 0.66, -R * 0.6, R * 0.1, -R * 0.4, R * 0.13); }
+    if (hurt) for (const s of [-1, 1]) sparkle(g, s * R * 0.86, -R * 0.3, R * 0.2, '#ffd84d');
+    else if (o.alone && f !== 'sad') {   // the shield is gone: it sweats and trembles
+      const k = (t * 1.6) % 1; g.fillStyle = '#bfe9ff';
+      for (const [dx, ph] of [[0.78, 0], [-0.82, 0.5]]) { const q = (k + ph) % 1; g.save(); g.globalAlpha = 1 - q * q; g.translate(dx * R, -R * 0.42 + q * R * 0.5); g.beginPath(); g.moveTo(0, -R * 0.18); g.quadraticCurveTo(R * 0.15, R * 0.02, 0, R * 0.1); g.quadraticCurveTo(-R * 0.15, R * 0.02, 0, -R * 0.18); g.fill(); ink(g, R * 0.05); g.stroke(); g.restore(); }
+    }
+    if (o.fury > 0 && !hurt) {   // the manga anger mark pops on the brow
+      const k = 1 + Math.sin(t * 14) * 0.12 * o.fury; g.save(); g.translate(R * 0.7, -R * 0.66); g.scale(k, k); g.lineCap = 'round';
+      for (const [w, c] of [[R * 0.15, INK], [R * 0.08, '#ff3d5a']]) { g.lineWidth = w; g.strokeStyle = c; for (const s of [-1, 1]) for (const d of [-1, 1]) { g.beginPath(); g.moveTo(s * R * 0.06, d * R * 0.24); g.quadraticCurveTo(s * R * 0.24, d * R * 0.24, s * R * 0.24, d * R * 0.06); g.stroke(); } }
+      g.restore();
+    }
     if (tongue && (f === 'goggles' || f === 'shades' || f === 'grumpy' || f === 'shy')) cel(g, '#ff7a9a', ell(R * 0.1, R * (f === 'goggles' ? 0.62 : f === 'shades' ? 0.62 : f === 'grumpy' ? 0.72 : 0.56), R * 0.1, R * 0.13), { r: R * 0.13, hi: false, lw: 2, shadow: '#d9486a' });
     if (o.slow > 0) { g.fillStyle = 'rgba(140,225,255,.32)'; circ(0, 0, R * 1.0)(g); g.fill(); g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = R * 0.07; g.stroke(); for (const k of [-0.5, 0, 0.5]) cel(g, '#e6f8ff', poly([[k * R - R * 0.1, R * 0.88], [k * R + R * 0.1, R * 0.88], [k * R, R * (1.2 + (k ? 0 : 0.15))]]), { r: R * 0.25, hi: false, lw: 1.8, shadow: '#7fc8ee' }); }
     if (o.flash > 0) { g.fillStyle = `rgba(255,255,255,${Math.min(0.7, o.flash * 5)})`; circ(0, 0, R * 1.05)(g); g.fill(); }
+    g.restore();
+  }
+  // boss heads wear a gold collar of jewels around the body, so they read as royalty even without the crown
+  function bossRing(g, R, t) {
+    g.save(); g.lineCap = 'round';
+    for (const [w, c] of [[R * 0.2, INK], [R * 0.11, '#ffd84d']]) { g.lineWidth = w; g.strokeStyle = c; g.beginPath(); g.arc(0, 0, R * 1.03, 0, TAU); g.stroke(); }
+    g.lineWidth = R * 0.04; g.strokeStyle = '#fff1a8'; g.beginPath(); g.arc(0, 0, R * 1.03, -2.6, -1.7); g.stroke();
+    for (let i = 0; i < 6; i++) { const an = i / 6 * TAU + 0.5, c = i % 2 ? '#6fe3ff' : '#ff5a8a'; cel(g, c, circ(Math.cos(an) * R * 1.03, Math.sin(an) * R * 1.03, R * 0.1), { r: R * 0.1, hi: false, lw: 2 }); }
     g.restore();
   }
   function text2(g, ch, x, y, size) { g.font = `900 ${size}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = size * 0.25; g.strokeStyle = INK; g.strokeText(ch, x, y); g.fillStyle = '#fff'; g.fillText(ch, x, y); }
