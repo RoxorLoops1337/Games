@@ -40,6 +40,7 @@ import { bringHTML, twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownT
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
+import { hatchTag } from './pets_b10.js';
 import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collectionCelebrate } from './pets_b9.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
@@ -357,7 +358,7 @@ function renderPets() {
       $('bTitle').textContent = h.beats ? 'JUST SOME SNACKS' : (PETS.find(p => p.id === h.id).name.toUpperCase() + '!');
       $('bLoot').className = 'loot reveal';
       const rar = h.beats ? null : petRarity(h.id), tier = h.beats ? 0 : (PET_RARITY[h.id] || 0) + 1;
-      $('bLoot').innerHTML = h.beats ? `<div class="it">${curImg('beats')}<span>+${h.beats}</span></div>` : `<div class="it rar${PET_RARITY[h.id] || 0}" style="--rc:${rar.color}">${icon(h.id)}<span>+${h.n}</span><small>${rar.name.toUpperCase()}</small><small class="hfrag">${petCanUp(save, h.id) ? 'READY: tap ' + (save.pets[h.id].star ? 'MORE STARS' : 'WELCOME HOME') : 'Fragments ' + save.pets[h.id].frag + ' / ' + petCost(save.pets[h.id].star)}</small></div>`;
+      $('bLoot').innerHTML = h.beats ? `<div class="it">${curImg('beats')}<span>+${h.beats}</span></div>` : `<div class="it rar${PET_RARITY[h.id] || 0}" style="--rc:${rar.color}">${icon(h.id)}<span>+${h.n}</span><small>${rar.name.toUpperCase()}</small><small class="htag${save.pets[h.id].star === 0 && save.pets[h.id].frag === h.n ? " new" : ""}">${hatchTag(save.pets[h.id].star === 0 && save.pets[h.id].frag === h.n, h.n)}</small><small class="hfrag">${petCanUp(save, h.id) ? 'READY: tap ' + (save.pets[h.id].star ? 'MORE STARS' : 'WELCOME HOME') : 'Fragments ' + save.pets[h.id].frag + ' / ' + petCost(save.pets[h.id].star)}</small></div>`;
       hatchBurst($('bLoot'), rar ? rar.color : '#ffe14a', tier, !!(save.settings.reduceMotion || systemReduceMotion()));
       hatchRays($('bLoot'), rar ? rar.color : '#ffe14a', tier, !!(save.settings.reduceMotion || systemReduceMotion()));
       $('bOk').onclick = () => { audio.play('click'); $('bLoot').className = 'loot'; $('bOk').onclick = defaultBoxOk; openHub('Pets'); }; show('boxModal');

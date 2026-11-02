@@ -2,13 +2,14 @@
 // Pure helpers read the formulas in sim.js (never change them); the DOM parts are small and self contained.
 import { WEAPONS, PETS, PET_MAX_STAR, SKILL_MAX_LV, SKILL_MILES, skillMul, skillUpgradeCost, petCost, petCanUp, petUp, togglePet, toggleLoadout, levelSkill, unlockSkill, RARITIES, LOADOUT_SIZE, masteryList, claimMastery, rewardText } from './sim.js';
 import { swapSheet, compareHTML, walkHTML } from './loadout_ux.js';
-import { joyHTML } from './presets_ux.js';
+import { joyHTML, joyLabel } from './presets_ux.js';
 import { PET_JOY_MAX } from './sim.js';
 import { shinesVs } from './build_rec.js';
 import { SPECIES } from './art_draw.js';
 import { rankLadderHTML, petReact } from './skillpets8.js';
 import { systemReduceMotion } from './access.js';
 import { bondNote } from './pets_b9.js';
+import { masteryPathHTML, upgradeCeremony, feedPet, treatLabel, treatBlock, dayNow } from './pets_b10.js';
 import { petLabel, petNick, setPetNick, nextIdea, NICK_MAX } from './pet_names.js';
 
 // what a skill does at the level a run starts with (weapon level 1), scaled by the permanent skill level
@@ -119,7 +120,7 @@ export function createSheets(c) {
         if (ms) {
           const box = el('div', 'dsmast' + (rdy ? ' rdy' : ''), `<div class="mhd"><span>MASTERY</span><b>${tgt ? rewardText(tgt.reward) : 'all done'}</b></div><div class="bar"><i style="width:${tgt ? Math.min(100, Math.round(ms.val / tgt.at * 100)) : 100}%"></i></div><small>${rdy ? ms.val + ' damage mastery, goal reached' : ms.val + (tgt ? ' / ' + tgt.at : '') + ' damage mastery'}</small>`);
           if (rdy) { const cb = el('button', 'btn gold dsclaim', 'CLAIM ' + rewardText(tgt.reward)); cb.onclick = () => { if (claimMastery(s, ms.key, ms.ready)) { persist(); audio.unlock(); audio.play('levelup'); rerender(); skillSheet(id); } }; box.appendChild(cb); }
-          sh.appendChild(box);
+          sh.appendChild(box); box.insertAdjacentHTML('beforeend', masteryPathHTML(s, id));
         }
       }
       let need = 0, can = false, label = '', act = () => false;
@@ -128,7 +129,7 @@ export function createSheets(c) {
       else label = 'MAX LEVEL';
       if (need) sh.insertAdjacentHTML('beforeend', barHTML(k.frag, need));
       const up = el('button', 'btn dsbig' + (can ? ' gold' : ''), label); up.disabled = !can;
-      up.onclick = () => { if (act()) { persist(); audio.unlock(); audio.play('upgrade'); rerender(); skillSheet(id); } };
+      up.onclick = () => { if (act()) { const wasOwned = owned; persist(); audio.unlock(); audio.play('upgrade'); rerender(); skillSheet(id); upgradeCeremony(host && host.firstChild, save().skills[id].lv, null, systemReduceMotion()); if (!wasOwned) audio.play('levelup'); } };
       sh.appendChild(up);
       if (owned) {
         const e = el('button', 'btn dseq alt', eq ? 'EQUIPPED, tap to remove' : 'EQUIP');
@@ -166,6 +167,18 @@ export function createSheets(c) {
       sh.appendChild(el('p', 'dsdesc', PET_ABILITY[id] || p.flavor));
       if (owned) { const wk = el('div', '', walkHTML(icon(id), eq, rar.color)); if (eq && (k.joy || 0) >= PET_JOY_MAX) wk.firstChild.insertAdjacentHTML('beforeend', '<span class="whrt h1">♥</span><span class="whrt h2">♥</span><span class="whrt h3">♥</span>'); wk.firstChild.classList.add('tap'); wk.firstChild.removeAttribute('aria-hidden'); wk.firstChild.setAttribute('role', 'button'); wk.firstChild.setAttribute('aria-label', 'Pet the ' + p.name.toLowerCase()); wk.firstChild.tabIndex = 0; wk.firstChild.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); wk.firstChild.click(); } }; wk.firstChild.onclick = () => petReact(wk.firstChild, id, audio, !!(save().settings.reduceMotion || systemReduceMotion())); sh.appendChild(wk); }
       if (owned) sh.appendChild(el('div', 'dsjoy', joyHTML(k) + bondNote(k)));
+      if (owned) {
+        const day = dayNow(), why = treatBlock(s, id, day), tb = el('button', 'btn dstreat' + (why ? ' off' : ''), '<span class="tr-ic" aria-hidden="true">🥕</span>' + treatLabel(s, id, day));
+        tb.setAttribute('aria-disabled', why && why !== 'poor' ? 'true' : 'false');
+        tb.onclick = () => {
+          const res = feedPet(s, id, day);
+          if (!res) { audio.play('deny'); tb.classList.remove('shake'); void tb.offsetWidth; tb.classList.add('shake'); return; }
+          persist(); audio.unlock(); audio.play(res.tierUp ? 'levelup' : 'pickup'); rerender(); petSheet(id);
+          const ns = host && host.firstChild; if (ns && !systemReduceMotion()) { const ic = ns.querySelector('.dsic'); if (ic) { ic.classList.add('uppop'); for (let i = 0; i < 4; i++) { const h = el('span', 'treath', '♥'); h.style.cssText = `left:${20 + i * 20}%;animation-delay:${i * 0.09}s`; ic.appendChild(h); } } }
+          if (res.tierUp) upgradeCeremony(host && host.firstChild, 0, '#ff9ad6', true, joyLabel(res.to).toUpperCase() + '!', 'so happy');
+        };
+        sh.appendChild(tb);
+      }
       sh.appendChild(el('div', 'dsstars', Array.from({ length: PET_MAX_STAR }, (_, n) => `<i class="star${n < k.star ? ' on' : ''}">★</i>`).join('')));
       sh.appendChild(el('div', 'dsrows', `<div class="dsrow one"><span>Star bonus</span><b>${owned ? petBonusText(p, k.star) : 'none yet'}</b></div>` + (maxed ? '' : `<div class="dsrow one"><span>Next star</span><b class="up">▲ ${petBonusText(p, k.star + 1)}</b></div>`)));
       if (owned) markSeen(s, 'p', id);
