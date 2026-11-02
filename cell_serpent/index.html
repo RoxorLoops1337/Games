@@ -465,6 +465,57 @@
   @keyframes twinkle12{50%{box-shadow:0 0 14px 2px rgba(255,226,120,.6)}}
   @media (max-height:700px){#title h1.logo{font-size:clamp(40px,12vw,60px)} .stage12{width:min(220px,50vw)} #title #playBtn{padding:12px 48px;margin-top:4px} #title .tagline{display:none}}
   @media (prefers-reduced-motion:reduce){#title *{animation:none!important}}
+  /* settings gear, candy look */
+  #title .gear,.hubtop .gear{border:2px solid #fff8;background:radial-gradient(circle at 35% 28%,#9a7cff 0,#5a3fd0 55%,#2f1c86 100%);box-shadow:0 3px 0 #170d52,0 0 0 2px #1a0e5a,inset 0 2px 0 #fff6;color:#fff;text-shadow:0 2px 0 #170d52;line-height:1;padding:0;display:grid;place-items:center;transition:transform .15s}
+  #title>.gear{position:absolute;top:calc(10px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));z-index:6}
+  #title .gear:active,.hubtop .gear:active{transform:translateY(2px) rotate(60deg);box-shadow:0 1px 0 #170d52,0 0 0 2px #1a0e5a,inset 0 2px 0 #fff6}
+  /* tap the animals */
+  #title .peeks img{pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  .heart12{position:fixed;z-index:70;pointer-events:none;color:#ff5cb8;font-size:26px;text-shadow:0 2px 0 #fff,0 0 10px #ff9ad6;transform:translate(-50%,0);animation:heart12 .9s ease-out forwards}
+  @keyframes heart12{to{transform:translate(-50%,-70px) scale(1.4);opacity:0}}
+  /* hub: tap a pet hint, and the egg wiggle */
+  .pethint12{position:absolute;top:-10px;left:calc(50% - 4px);font-size:28px;font-style:normal;pointer-events:none;filter:drop-shadow(0 2px 3px #000a);animation:hand12 1.1s ease-in-out infinite}
+  @keyframes hand12{50%{transform:translateY(-9px)}}
+  .eggstage.nudge12 .eggpic{animation:egg12 1.6s ease-in-out infinite}
+  @keyframes egg12{0%,60%,100%{transform:rotate(0)}68%{transform:rotate(-9deg)}76%{transform:rotate(8deg)}84%{transform:rotate(-5deg)}92%{transform:rotate(3deg)}}
+  /* first-run tutorial: wordless, 3 steps */
+  .tut12{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(8,5,30,.82);animation:tin12 .25s ease-out}
+  .tut12.out{opacity:0;transition:opacity .2s}
+  @keyframes tin12{from{opacity:0}}
+  .tut12 .tbox{position:relative;width:min(320px,86vw);height:min(380px,60vh);border-radius:28px;border:3px solid #ffd84d;background:linear-gradient(180deg,#2c1a74,#170d52);box-shadow:0 10px 0 #0a0630,0 0 40px rgba(255,92,184,.4);overflow:hidden}
+  .tut12 .tstep{position:absolute;inset:0 0 74px;display:none;flex-direction:column;justify-content:flex-end;align-items:center;padding:0 0 18px}
+  .tut12 .tstep.on{display:flex}
+  .tut12 .tbar{position:relative;width:84%;height:56px;border-radius:30px;background:rgba(255,255,255,.1);border:2px dashed #fff5}
+  .tut12 .tcell{position:absolute;left:50%;top:8px;width:38px;height:38px;margin-left:-19px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0,#7fe6ff 40%,#2a8ad8 100%);border:3px solid #fff;box-shadow:0 0 14px #6fe3ff}
+  .s1 .tcell{animation:slide12 2.2s ease-in-out infinite}
+  .s1 .tfinger{position:absolute;left:50%;top:20px;width:50px;margin-left:-25px;font-size:44px;line-height:1;animation:slide12 2.2s ease-in-out infinite;filter:drop-shadow(0 3px 3px #0008)}
+  @keyframes slide12{0%,100%{transform:translateX(-92px)}50%{transform:translateX(92px)}}
+  .s1 .tarrows{position:absolute;top:80px;left:0;right:0;display:flex;justify-content:space-between;padding:0 30px;color:#ffd84d;font-size:34px}
+  .s1 .tarrows em{font-style:normal;animation:blink12 1.1s ease-in-out infinite} .s1 .tarrows em:last-child{animation-delay:.55s}
+  @keyframes blink12{50%{opacity:.3}}
+  .tut12 .tgold,.tut12 .tchain{position:relative;flex:1;width:100%;margin-bottom:8px}
+  .s2 .tyel{position:absolute;left:50%;top:30px;width:58px;height:58px;margin-left:-29px;border-radius:50%;font-style:normal;display:grid;place-items:center;font-size:30px;color:#7a4a00;background:radial-gradient(circle at 35% 30%,#fffbd0 0,#ffe14a 45%,#f5a01c 100%);border:4px solid #fff;box-shadow:0 0 22px #ffe14a;animation:yel12 3s ease-in infinite}
+  @keyframes yel12{0%,55%{transform:scale(1);opacity:1}62%{transform:scale(1.3)}70%,100%{transform:scale(0);opacity:0}}
+  .s2 .tshot{position:absolute;left:50%;margin-left:-5px;width:10px;height:26px;border-radius:6px;background:linear-gradient(#fff,#7fe6ff);box-shadow:0 0 10px #6fe3ff;bottom:0;animation:shot12 3s linear infinite}
+  @keyframes shot12{0%{transform:translateY(0);opacity:0}8%{opacity:1}55%{transform:translateY(-220px);opacity:1}56%,100%{opacity:0}}
+  .s2 .tburst{position:absolute;left:50%;top:59px;width:12px;height:12px;margin:-6px;border-radius:50%;box-shadow:0 0 0 0 #ffe14a;opacity:0;animation:burst12 3s ease-out infinite}
+  @keyframes burst12{0%,56%{opacity:0;box-shadow:0 0 0 0 #ffe14a}58%{opacity:1}100%{opacity:0;box-shadow:0 0 0 60px #ffe14a00,0 0 0 4px #ffe14a,0 0 0 40px #fff0}}
+  .s2 .tcell{animation:none}
+  .s3 .tchain{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:6px;padding-top:12px}
+  .s3 .tchain>i{display:block;width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0,#ff9ad6 45%,#c0408c 100%);border:3px solid #fff;animation:seg12 3.4s ease-in infinite}
+  .s3 .tchain>i:nth-of-type(3){animation-delay:.0s} .s3 .tchain>i:nth-of-type(2){animation-delay:.35s} .s3 .tchain>i:nth-of-type(1){animation-delay:.7s}
+  @keyframes seg12{0%,30%{transform:scale(1);opacity:1}38%{transform:scale(1.25)}46%,100%{transform:scale(0);opacity:0}}
+  .s3 .tface{position:relative;width:60px;height:60px;display:grid;place-items:center;font-size:40px;order:-1}
+  .s3 .tchain>i{order:0}
+  .s3 .tshield{position:absolute;inset:-8px;border-radius:50%;border:4px solid #bfe9ff;background:radial-gradient(circle,rgba(191,233,255,.08),rgba(191,233,255,.5));box-shadow:0 0 18px #bfe9ff;animation:shield12 3.4s ease-in-out infinite}
+  @keyframes shield12{0%,45%{opacity:1;transform:scale(1)}55%{transform:scale(1.18);opacity:1}66%,100%{transform:scale(1.8);opacity:0}}
+  .tut12 .tdots{position:absolute;left:0;right:0;bottom:62px;display:flex;justify-content:center;gap:8px}
+  .tut12 .tdots i{width:10px;height:10px;border-radius:50%;background:#fff4} .tut12 .tdots i.on{background:#ffd84d;box-shadow:0 0 8px #ffd84d}
+  .tut12 .tbtns{position:absolute;left:14px;right:14px;bottom:10px;display:flex;justify-content:space-between;align-items:center}
+  .tut12 button{appearance:none;font:inherit;font-weight:900;cursor:pointer;min-height:44px}
+  .tut12 .tskip{background:none;border:0;color:#fffa;font-size:14px;letter-spacing:.08em;padding:0 12px}
+  .tut12 .tnext{min-width:64px;border-radius:22px;border:0;color:#5a1a08;font-size:20px;background:linear-gradient(180deg,#fff7c2,#ffd84d 50%,#ffa21c);box-shadow:0 4px 0 #a8420a}
+  @media (prefers-reduced-motion:reduce){.tut12 *{animation:none!important}.pethint12,.eggstage.nudge12 .eggpic{animation:none!important}}
   /* end @css:12-title-onboarding */
 
   /* @css:10-shop-gear-stats */

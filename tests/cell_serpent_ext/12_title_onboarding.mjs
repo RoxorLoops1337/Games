@@ -36,4 +36,19 @@ const html = readFileSync(join(root, 'index.html'), 'utf8');
 for (const id of ['playBtn', 'titleInfo', 'peeks']) assert.ok(html.includes(`id="${id}"`), id);
 assert.ok(html.includes('/* @css:12-title-onboarding */') && html.includes('/* end @css:12-title-onboarding */'));
 assert.ok(!/—/.test(readFileSync(join(root, 'hints.js'), 'utf8') + readFileSync(join(root, 'title_fx.js'), 'utf8')), 'no em dash');
+// round 2: onboarding module (pure parts)
+{
+  const ob = await import(join(root, 'onboard12.js'));
+  const audioSrc = readFileSync(join(root, 'audio.js'), 'utf8');
+  for (const [pet, snd] of Object.entries(ob.ANIMAL_SOUND)) assert.ok(new RegExp('\\b' + snd + ':').test(audioSrc), 'audio has ' + snd + ' for ' + pet);
+  assert.equal(Object.keys(ob.ANIMAL_SOUND).length, 6);
+  const d = sim.createGame({ seed: 2, stage: 1, bot: true }); ob.richDemo(d);
+  assert.ok(Object.keys(d.weap).length >= 6);
+  for (let i = 0; i < 600; i++) { sim.step(d, 1 / 60, sim.botInput(d)); if (d.phase === 'levelup') sim.choose(d, 0); }
+  assert.equal(ob.needsTutorial({ runs: 0 }), true); assert.equal(ob.needsTutorial({ runs: 3 }), false);
+  assert.equal(ob.needsPetHint({ eggs: 1 }), true); assert.equal(ob.needsPetHint({ eggs: 0 }), false);
+  const main = readFileSync(join(root, 'main.js'), 'utf8');
+  for (const s of ['showTutorial', 'setupTapAnimals', 'petHint', 'richDemo']) assert.ok(main.includes(s), s);
+  assert.ok(!/—/.test(readFileSync(join(root, 'onboard12.js'), 'utf8')), 'no em dash');
+}
 console.log('12_title_onboarding ok');
