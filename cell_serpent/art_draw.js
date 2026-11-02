@@ -285,7 +285,18 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   // stick = Bunny Thump, bubble = Duckling Splash, satellite = Owl Spotlight, maw = Bulldog Chomp.
   const dot = (g, x, y, r) => { g.fillStyle = INK; circ(x, y, r)(g); g.fill(); };
   const smile = (g, x, y, w) => { line(g, [[x - w, y - w * 0.2], [x - w * 0.4, y + w * 0.35], [x, y], [x + w * 0.4, y + w * 0.35], [x + w, y - w * 0.2]], Math.max(2, w * 0.28)); };
-  const eyes2 = (g, dx, y, rr, iris = '#2d170f') => { eye(g, -dx, y, rr, rr * 1.15, { iris }); eye(g, dx, y, rr, rr * 1.15, { iris }); };
+  // 02-animal-art: MOOD is read while a critter is baked: 0 normal, 1 blink, 2 alert (wide eyes), 3 happy (^ ^ eyes + open mouth)
+  let MOOD = 0;
+  const eyes2 = (g, dx, y, rr, iris = '#2d170f') => {
+    if (MOOD === 3) { for (const s of [-1, 1]) { g.beginPath(); g.arc(s * dx, y + rr * 0.5, rr * 0.9, Math.PI * 1.1, Math.PI * 1.9); ink(g, Math.max(2.2, rr * 0.36)); g.stroke(); } return; }
+    const o = MOOD === 1 ? 0.05 : 1, k = MOOD === 2 ? 1.22 : 1;
+    eye(g, -dx, y, rr * k, rr * 1.15 * k, { iris, open: o, look: [0, MOOD === 2 ? -0.6 : 0] }); eye(g, dx, y, rr * k, rr * 1.15 * k, { iris, open: o, look: [0, MOOD === 2 ? -0.6 : 0] });
+  };
+  // little extra mouth for the alert / happy faces, drawn on top of the face
+  function moodMouth(g, r, y) {
+    if (MOOD === 3) { cel(g, '#c93a5a', ell(0, y, r * 0.17, r * 0.13), { r: r * 0.15, hi: false, lw: r * 0.06, shadow: '#7a1633' }); }
+    else if (MOOD === 2) { cel(g, '#7a1633', ell(0, y, r * 0.07, r * 0.09), { r: r * 0.07, hi: false, lw: r * 0.05, shadow: '#7a1633' }); }
+  }
   function critter(g, k, r) {
     if (k === 'chick') {
       for (const s of [-1, 1]) cel(g, '#ffd23a', ell(s * r * 0.98, r * 0.15, r * 0.3, r * 0.46, s * 0.4), { r: r * 0.4, hi: false, lw: r * 0.1, shadow: '#e0a82a' });
@@ -321,7 +332,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       for (const s of [-1, 1]) cel(g, '#8a6240', poly([[s * r * 0.3, -r * 0.8], [s * r * 0.95, -r * 1.2], [s * r * 0.85, -r * 0.35]]), { r: r * 0.4, hi: false, lw: r * 0.09, shadow: '#5a3a22' });
       cel(g, '#a8774c', circ(0, 0, r), { r, shadow: '#6e4a2c' });
       cel(g, '#e8cfa6', ell(0, r * 0.42, r * 0.55, r * 0.48), { r: r * 0.5, hi: false, lw: r * 0.08, shadow: '#c9a878' });
-      for (const s of [-1, 1]) { cel(g, '#fff6dc', circ(s * r * 0.4, -r * 0.1, r * 0.34), { r: r * 0.34, hi: false, lw: r * 0.09, shadow: '#e6d3a0' }); eye(g, s * r * 0.4, -r * 0.1, r * 0.2, r * 0.22, { iris: '#2d170f' }); }
+      for (const s of [-1, 1]) { cel(g, '#fff6dc', circ(s * r * 0.4, -r * 0.1, r * 0.34), { r: r * 0.34, hi: false, lw: r * 0.09, shadow: '#e6d3a0' }); eye(g, s * r * 0.4, -r * 0.1, r * 0.2, r * 0.22, { iris: '#2d170f', open: MOOD === 1 ? 0.05 : 1 }); }
       cel(g, '#ff9a2e', poly([[-r * 0.12, r * 0.08], [r * 0.12, r * 0.08], [0, r * 0.34]]), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#d6601a' });
     } else if (k === 'bulldog') {
       for (const s of [-1, 1]) cel(g, '#6b4430', ell(s * r * 0.92, -r * 0.2, r * 0.3, r * 0.55, s * 0.3), { r: r * 0.5, hi: false, lw: r * 0.1, shadow: '#3f261a' });
@@ -393,12 +404,50 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       cel(g, '#ffb3cf', ell(r * 1.3, 0, r * 0.24, r * 0.3), { r: r * 0.24, hi: false, lw: 1.8 }); },
     tower: g => { critter(g, 'cow', B * 0.95); },
     dragon: g => { critter(g, 'dove', B * 0.7); },
-    bubble: g => { const r = B * 0.95; critter(g, 'duck', r * 0.55); g.fillStyle = 'rgba(190,235,255,.3)'; circ(0, 0, r)(g); g.fill(); ink(g, 4); g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.arc(0, 0, r * 0.8, -2.5, -1.2); g.stroke(); },
+    bubble: g => { const r = B * 0.95; critter(g, 'duck', r * 0.55);   // a soap bubble with a rainbow rim and a shine
+      const bg = g.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r); bg.addColorStop(0, 'rgba(255,255,255,.35)'); bg.addColorStop(0.7, 'rgba(190,235,255,.22)'); bg.addColorStop(1, 'rgba(255,170,230,.38)');
+      g.fillStyle = bg; circ(0, 0, r)(g); g.fill(); ink(g, 4); g.stroke();
+      g.strokeStyle = 'rgba(255,150,220,.7)'; g.lineWidth = 3; g.beginPath(); g.arc(0, 0, r * 0.9, 0.3, 1.5); g.stroke(); g.strokeStyle = 'rgba(120,230,255,.8)'; g.beginPath(); g.arc(0, 0, r * 0.9, 2.6, 3.7); g.stroke();
+      g.strokeStyle = '#fff'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.arc(0, 0, r * 0.8, -2.5, -1.2); g.stroke();
+      g.fillStyle = '#fff'; circ(r * 0.5, -r * 0.5, r * 0.07)(g); g.fill(); circ(r * 0.62, -r * 0.34, r * 0.04)(g); g.fill(); },
     satellite: g => { const r = B * 0.9;
       g.fillStyle = 'rgba(255,240,170,.5)'; g.beginPath(); g.moveTo(r * 0.3, -r * 0.2); g.lineTo(r * 1.6, -r * 1.0); g.lineTo(r * 1.6, r * 1.0); g.lineTo(r * 0.3, r * 0.2); g.closePath(); g.fill();
       g.save(); g.translate(-r * 0.35, 0); critter(g, 'owl', r * 0.75); g.restore(); },
     maw: g => { critter(g, 'bulldog', B * 1.0); },
   };
+  // happy / alert mouths sit where each face has room; petAcc adds a tiny accessory per pet
+  function petMood(g, k, r) {
+    if (MOOD < 2) return;
+    const y = { kitten: 0.46, puppy: 0.5, piglet: 0.55, lamb: 0.5, hamster: 0.5, turtle: 0.74 }[k] || 0.5;
+    if (k === 'puppy') return;   // the puppy already has a tongue
+    moodMouth(g, r, r * y);
+  }
+  function petAcc(g, k, r) {
+    if (k === 'kitten') {   // a pink bow on one ear
+      g.save(); g.translate(-r * 0.78, -r * 0.82); g.rotate(-0.4);
+      for (const s of [-1, 1]) cel(g, '#ff7eb6', poly([[0, 0], [s * r * 0.42, -r * 0.26], [s * r * 0.42, r * 0.26]]), { r: r * 0.3, hi: false, lw: r * 0.06, shadow: '#c93a8f' });
+      cel(g, '#ffc2dc', circ(0, 0, r * 0.12), { r: r * 0.12, hi: false, lw: r * 0.05, shadow: '#ff9ac6' }); g.restore();
+    } else if (k === 'puppy') {   // a collar with a golden bell
+      g.save(); g.beginPath(); g.arc(0, r * 0.2, r * 1.0, 0.95, Math.PI - 0.95); ink(g, r * 0.22); g.stroke(); ink(g, r * 0.12, '#6fe3ff'); g.stroke(); g.restore();
+      cel(g, '#ffd84d', circ(0, r * 1.12, r * 0.15), { r: r * 0.15, lw: r * 0.05, shadow: '#d49a1e' });
+    } else if (k === 'lamb') {   // a daisy
+      g.save(); g.translate(r * 0.55, -r * 0.62);
+      for (let i = 0; i < 5; i++) { g.save(); g.rotate(i / 5 * TAU); cel(g, '#fffaf0', ell(0, -r * 0.17, r * 0.1, r * 0.16), { r: r * 0.12, hi: false, lw: r * 0.04, shadow: '#e0d4e0' }); g.restore(); }
+      cel(g, '#ffd84d', circ(0, 0, r * 0.1), { r: r * 0.1, hi: false, lw: r * 0.04, shadow: '#d49a1e' }); g.restore();
+    } else if (k === 'piglet') {   // a tiny curly tail-bow on the ear: a heart
+      g.save(); g.translate(r * 0.72, -r * 0.7); g.scale(r * 0.012, r * 0.012);
+      g.beginPath(); g.moveTo(0, 10); g.bezierCurveTo(-20, -6, -8, -18, 0, -6); g.bezierCurveTo(8, -18, 20, -6, 0, 10); g.closePath(); g.fillStyle = '#ff5a7e'; g.fill(); ink(g, 3.4); g.stroke(); g.restore();
+    } else if (k === 'hamster') {   // a sunflower seed in the cheek
+      cel(g, '#3a2d3a', ell(r * 0.5, r * 0.62, r * 0.14, r * 0.07, -0.5), { r: r * 0.1, hi: false, lw: r * 0.04, shadow: '#1a141c' });
+    } else if (k === 'turtle') {   // a leaf hat
+      g.save(); g.translate(0, -r * 1.02); g.rotate(-0.3); cel(g, '#8fd878', ell(0, 0, r * 0.3, r * 0.14), { r: r * 0.2, lw: r * 0.05, shadow: '#3f8a3a' }); g.restore();
+    }
+  }
+  function featherFn(g) {
+    const r = B * 0.5; g.rotate(-0.6);
+    cel(g, '#ffffff', ell(0, 0, r * 0.3, r * 0.9), { r: r * 0.5, hi: false, lw: 2, shadow: '#c9d8f2' });
+    line(g, [[0, -r * 0.8], [0, r * 0.8]], 1.6, '#9fb4dc');
+  }
   const PETSPR = { kitten: 'kitten', puppy: 'puppy', piglet: 'piglet', lamb: 'lamb', hamster: 'hamster', turtle: 'turtle' };
 
   // ---- shots: music notes (sound is the currency of this world) ----
@@ -420,7 +469,9 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     pickup: k => bake('pk|' + k, B * 2.4, B * 2.4, PICK[k] || PICK.gem),
     note: crit => bake('note|' + (crit ? 1 : 0), B * 2.4, B * 2.4, noteFn(crit ? '#ffd84d' : '#6fe3ff', crit), 1),
     acid: () => bake('acid', B * 1.6, B * 1.6, acidFn),
-    pet: id => bake('pet|' + id, B * 3, B * 3, g => critter(g, PETSPR[id] || 'kitten', B * 0.9), 1),
+    pet: (id, mood = 0) => bake('pet|' + id + '|' + mood, B * 3, B * 3, g => { MOOD = mood; critter(g, PETSPR[id] || 'kitten', B * 0.9); petMood(g, PETSPR[id] || 'kitten', B * 0.9); petAcc(g, PETSPR[id] || 'kitten', B * 0.9); MOOD = 0; }, 1),
+    paw: () => bake('paw', B * 1.2, B * 1.2, g => { g.globalAlpha = 0.9; pawPrint(g, B * 0.42, '#ffffff', '#ffb3d6'); }, 1),
+    feather: () => bake('feather', B * 1.4, B * 1.4, featherFn, 1),
     weapon: id => bake('wpn|' + id, B * 4.6, B * 3.4, WPN[id] || WPN.dagger, 1),
   };
 
