@@ -2,6 +2,7 @@
 // Buses: sfx and music (with a duck gain) -> master -> limiter -> out. Music is a sectioned 16-step groove:
 // key and tempo change every 5 stages, bosses get their own tense track, and the layers follow
 // mix({ stage, boss, groove (0..1), danger (0..1) }).
+import { registerHj8 } from './hit_juice8.js';
 import { beatBpm as simBpm, SKINS, skinFor } from './sim.js';
 import { humOf, squeakHz, HUB_CHORD, HUB_TWINKLE, HUB_GAIN } from './audio_b7.js';
 import { cardOf, deathOf, finishOf, rungSparkle, panicHz, bedOf } from './audio_b8.js';
@@ -299,6 +300,7 @@ export function createAudio() {
   };
   // tutorial step 3: the shielded face pops (matches the burst in the slide)
   sfx.tutpop = () => { if (!gate('tutpop', 400)) return; tone(520, 0.1, 'sine', 0.11, 700); noise(0.12, 0.09, 4000, 900, 'bandpass'); tone(1046, 0.16, 'triangle', 0.06, 0, 0.07); tone(1568, 0.22, 'sine', 0.04, 0, 0.12); };
+  registerHj8(sfx, tone, noise, duck, gate);   // finishing blow per weapon, head death per species, ladder rungs (hit_juice8.js)
   // round 8: stage card sting per species (see audio_b8.js CARD), lands with the card slam half a second after the riser
   sfx.stagecard = e => {
     if (!gate('stagecard', 500)) return;
