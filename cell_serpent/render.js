@@ -18,6 +18,8 @@ import { ringDanger } from './bg_mist.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
 import { drawBellLinks, drawBellRings } from './bell_fx.js';
+import { hpSizeB12m, hpDropB12m } from './cells_b12m.js';
+import { bossTierB12m } from './boss_tier_b12m.js';
 import { drawCellFlags,drawCellBadge, drawQuartetLinks, drawDashLane, drawStreak, drawChoirLinks, setBeatPhase } from './cellfx.js';
 import { bakeHat } from './hats.js';
 import { createCheer, HAT_FX, hatPose, EMOTE, heart, drawEmote } from './cheer.js';
@@ -366,7 +368,7 @@ export function createRenderer(canvas, art, kit) {
       if (s.y < -r * 3 || s.y > H + r * 3) continue;   // not on screen: skip the drawing
       const ang = s.ang;
       if (i === 0) {
-        if (kit) { const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1; kit.drawHead(ctx, s.x, s.y, r * 1.14, ang, { skin: sn.skin, boss: sn.boss, t: S.t + sn.id, look: [dx / d, dy / d], flash: s.flash, sg: OPT.reduceMotion ? '' : sn.surge, slow: sn.slow, p2: sn.p2, alone: !s.shield, sib: S.sibT !== undefined && S.t - S.sibT < SIB_TIME ? (S.t - S.sibT) / SIB_TIME : 0, panic: !sn.boss && sn.surge === 'idle' && g.danger > 0.55 && sn.segs[0].y > H * 0.5 && !g.ring ? Math.min(1, (g.danger - 0.55) / 0.3) : 0, fury: sn.surge !== 'idle' ? 1 : (g.danger > 0.5 && sn.segs[0].y > H * 0.5 ? 0.6 : 0) }); }
+        if (kit) { const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1; kit.drawHead(ctx, s.x, s.y, r * 1.14, ang, { skin: sn.skin, boss: sn.boss, t: S.t + sn.id, look: [dx / d, dy / d], ring: !!g.ring, bt: sn.boss ? bossTierB12m(g.stage) : -1, flash: s.flash, sg: OPT.reduceMotion ? '' : sn.surge, slow: sn.slow, p2: sn.p2, alone: !s.shield, sib: S.sibT !== undefined && S.t - S.sibT < SIB_TIME ? (S.t - S.sibT) / SIB_TIME : 0, panic: !sn.boss && sn.surge === 'idle' && g.danger > 0.55 && sn.segs[0].y > H * 0.5 && !g.ring ? Math.min(1, (g.danger - 0.55) / 0.3) : 0, fury: sn.surge !== 'idle' ? 1 : (g.danger > 0.5 && sn.segs[0].y > H * 0.5 ? 0.6 : 0) }); }
         else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
         if (s.shield) {   // the face cannot be hit until it is alone
           ctx.save(); ctx.globalAlpha = 0.5 + Math.sin(S.t * 5) * 0.15; ctx.strokeStyle = '#bfe9ff'; ctx.fillStyle = 'rgba(190,235,255,.16)'; ctx.lineWidth = 4;
@@ -406,9 +408,13 @@ export function createRenderer(canvas, art, kit) {
       if (OPT.highContrast) { ctx.save(); ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.02, 0, TAU); ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.restore(); }
       if (OPT.highContrast) { ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.62)'; ctx.beginPath(); ctx.arc(s.x, s.y + r * 0.05, r * 0.62 * (OPT.bigNumbers ? 1.15 : 1), 0, TAU); ctx.fill(); ctx.restore(); }
       if (s.gold && kit) { const live = s.goldT > 0; blit(kit.SPR.badge(live ? 'coin' : 'coinx'), s.x - r * 0.62 + (live && s.goldT < 2.5 ? Math.sin(S.t * 50 + i) * r * 0.06 : 0), s.y - r * 0.7 + Math.sin(S.t * 3 + i) * 2, r * 1.0, live && s.goldT < 2.5 ? Math.sin(S.t * 30 + i) * 0.22 : Math.sin(S.t * 2 + i) * 0.12, false, live ? 1 : 0.75); if (live && Math.sin(S.t * 4 + i * 2) > 0.8) sparkleAt(s.x + r * 0.5, s.y + r * 0.5, r * 0.26); }
-      { const hs = Math.max(20, r * 0.85) * (OPT.bigNumbers ? 1.2 : 1), hc = OPT.highContrast ? '#000' : INK; if (!DG || !DG.draw(ctx, num(s.hp), s.x, s.y + r * 0.05, hs, '#fff', hc)) text(num(s.hp), s.x, s.y + r * 0.05, hs, '#fff', hc); }
       if (OPT.colorBlind && (s.kind !== 'normal' || s.carry === 'chest')) kindMark(s.carry === 'chest' && s.kind === 'normal' ? 'chest' : s.kind, s.x, s.y - r * 1.02, r * 0.36);
       if (s.kind === 'mender') { glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12); ctx.save(); ctx.fillStyle = '#6fe08a'; ctx.strokeStyle = INK; ctx.lineWidth = 3; const q = r * 0.34; for (const [px, py, w2, h2] of [[-q * 0.35, -q, q * 0.7, q * 2], [-q, -q * 0.35, q * 2, q * 0.7]]) { ctx.fillRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); ctx.strokeRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); } ctx.restore(); }
+    }
+    for (let i = segs.length - 1; i > 0; i--) {   // 12m: every HP number in a pass of its own, above all the bodies (a neighbour toward the head no longer covers it on a tight spiral)
+      const s = segs[i], r = s.r; if (s.y < -r * 3 || s.y > H + r * 3) continue;
+      const hs = Math.max(20, r * 0.85) * (OPT.bigNumbers ? 1.2 : 1) * hpSizeB12m(segs, i, r), hc = OPT.highContrast ? '#000' : INK, ny = s.y + r * hpDropB12m(s);
+      if (!DG || !DG.draw(ctx, num(s.hp), s.x, ny, hs, '#fff', hc)) text(num(s.hp), s.x, ny, hs, '#fff', hc);
     }
     for (let i = segs.length - 1; i > 0; i--) { const s = segs[i]; if ((s.ward || s.lull || s.drum || s.choir || s.quartet || s.bell || s.metro || s.pillow || s.snack || s.mirror) && s.y > -s.r * 3 && s.y < H + s.r * 3) drawCellBadge(ctx, s, s.r, ft, i, kit); }   // QA r10: badges in a pass of their own, so the neighbour toward the head no longer hides them
     drawBellRings(ctx, sn, ft);

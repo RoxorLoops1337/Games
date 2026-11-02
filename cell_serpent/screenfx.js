@@ -5,6 +5,8 @@ const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const easeOut = t => 1 - (1 - t) * (1 - t) * (1 - t);
 const backOut = t => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+import { drawModChipB12m } from './modchip_b12m.js';
+import { bossTierB12m } from './boss_tier_b12m.js';
 import { createFeel6 } from './feel6.js';
 import { cardPose, cardFlair } from './card_flair.js';
 import { hasTrait, drawTraitIcon, traitLabel } from './trait_ui.js';
@@ -498,7 +500,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       const slam = clamp((t - 0.15) / 0.35, 0, 1), sc = calm() ? 1 : 3 - 2 * easeOut(slam);
       ctx.save(); ctx.globalAlpha *= calm() ? 1 : slam; ctx.translate(W / 2, cy - 18); ctx.scale(sc, sc);
       if (c.slammed || calm()) glow(0, 0, 340, '#ff2850', 0.35);
-      if (kit && kit.drawHead) { const bob = calm() ? 0 : Math.sin(t * 6) * 4; kit.drawHead(ctx, 0, -116 + bob - (calm() ? 0 : (1 - slam) * 160), 56, Math.PI / 2, { skin: c.skin, boss: true, t: S.t }); }
+      if (kit && kit.drawHead) { const bob = calm() ? 0 : Math.sin(t * 6) * 4; kit.drawHead(ctx, 0, -116 + bob - (calm() ? 0 : (1 - slam) * 160), 56, Math.PI / 2, { skin: c.skin, boss: true, t: S.t, bt: bossTierB12m(c.n) }); }
       if (!calm() && c.t < 1.1) { const gx = 9 * Math.max(0, 1 - (t - 0.4) * 1.6) * (c.slammed ? 1 : 0); if (gx > 0.4) { ctx.save(); ctx.globalAlpha *= 0.55; ctx.globalCompositeOperation = 'lighter'; text('BOSS', -gx, 28, 150, '#00e5ff'); text('BOSS', gx, 28, 150, '#ff2850'); ctx.restore(); } }
       text('BOSS', 0, 28, 150, '#ff4d7a', '#1a0210');
       if (!calm() && slam > 0.6) { const sp = kit && kit.SPECIES && kit.SPECIES[c.skin]; cardFlair(ctx, c.skin, t, 0, -116, 62, sp ? sp.base : '#ff4d7a'); }   // r8: each boss arrives with its own species air (hearts, snow, coins...)
@@ -540,7 +542,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
         ctx.save(); ctx.globalAlpha *= clamp(rk, 0, 1); drawTraitIcon(ctx, c.trait, W - 52, cy - 70, 22 * rk, col, t);
         text(traitLabel(c.trait, c.n), W - 82, cy - 68, 30, '#e8ecff', '#0b1020', 'right'); ctx.restore();
       }
-      if (c.mod) { const mk = calm() ? 1 : clamp((t - 0.5) / 0.3, 0, 1); ctx.globalAlpha *= mk; text(c.mod, tx, cy + 64, 30, '#ffd24a', '#0b1020', 'left'); }
+      if (c.mod) drawModChipB12m(ctx, c.mod, tx, cy + 70, calm() ? 1 : clamp((t - 0.5) / 0.3, 0, 1));   // 12m: a chip with an icon, not faint text
       ctx.restore();
     }
     ctx.restore();

@@ -10,6 +10,7 @@
 import { createEnemyFaces } from './enemy_faces.js';
 import { drawSiblingReact, drawBossRage } from './sibling_b11.js';
 import { paintArmorWear } from './armor_b11.js';
+import { paintAuraB12m, paintCrownB12m } from './boss_tier_b12m.js';
 export const INK = '#2d170f';
 const TAU = Math.PI * 2;
 
@@ -711,12 +712,14 @@ export function createArtDraw(makeCanvas, dpr = 2) {
 
   // live head: body and feelers rotate with the snake, the FACE stays upright and looks at the player.
   const headBody = (skin, P, R) => bake('headbody|' + (SPECIES[skin] ? skin : 'love'), B * 3.4, B * 3.4, gg => { cellShape(gg, P, R, { decor: false }); pattern(gg, P, skin, R); }, 3);
+  const GZ12m = [0, 0], gazeB12m = l => { GZ12m[0] = l[0] * 1.7; GZ12m[1] = l[1] * 1.7; return GZ12m; };   // 12m: a stronger eye turn (the iris is clipped to the eye)
   function drawHead(g, x, y, r, ang, o = {}) {
     const P = SPECIES[o.skin] || SPECIES.love, boss = !!o.boss, t = o.t || 0, R = B;
     g.save(); g.translate(x, y); g.scale(r / B, r / B);
     // squash when hit, stretch when it surges (along its heading), tremble before the surge
     let sq = 0; if (o.flash > 0) sq = -Math.min(1, o.flash / 0.12) * 0.16; if (o.sg === 'go') sq += 0.15; else if (o.sg === 'warn') sq -= 0.05 + Math.sin(t * 40) * 0.04;
     if (sq) { g.rotate(ang); g.scale(1 + sq, 1 - sq * 0.8); g.rotate(-ang); }
+    if (boss && o.bt >= 0) { const AU = bake('bauraB12m|' + o.bt, R * 5, R * 5, c => paintAuraB12m(c, R, o.bt), 2); if (AU) { g.save(); g.rotate(t * 0.35); g.drawImage(AU.c, -R * 2.5, -R * 2.5, R * 5, R * 5); g.restore(); } }   // 12m: each boss stage has its own aura
     if (boss && o.p2) p2Halo(g, R, t);
     if (o.sg === 'go' || (o.sg === 'warn' && boss && o.p2)) dashSpikes(g, R, ang, t, boss && !!o.p2, o.sg === 'warn', o.skin);
     if (!boss && (o.sg === 'go' || o.sg === 'warn')) EF.surgeRing(g, R, P, t, o.sg === 'warn');   // 01-enemy-art r7: the surge ring wears the species colours
@@ -726,12 +729,13 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     else { g.save(); g.rotate(ang); cellShape(g, P, R, { decor: false }); pattern(g, P, o.skin, R); g.restore(); }
     glossDot(g, R, 0.46, -0.5);
     if (boss && o.p2) blit(g, bake('p2crack', B * 2.6, B * 2.6, p2CrackPaint), 0, 0, B * 2.6, 0, false, 0.75 + Math.sin(t * 9) * 0.25);
-    if (boss) { bossRing(g, R, t, BOSS_METAL[o.skin]); blit(g, bake('bossorn|' + o.skin, B * 5, B * 5, gg => bossOrn(gg, B, o.skin, -1, P)), 0, 0, B * 5); bossLive(g, R, t, o.skin, !!o.p2); }
+    if (boss) { bossRing(g, R, t, BOSS_METAL[o.skin]); { const os = o.bt >= 0 && o.skin === 'sleepy' ? 'none' : o.skin; blit(g, bake('bossorn|' + os, B * 5, B * 5, gg => bossOrn(gg, B, os, -1, P)), 0, 0, B * 5); }  bossLive(g, R, t, o.skin, !!o.p2); }
     // headgear (upright, on top of the head)
     const top = -R * 0.92, sw = Math.sin(t * 5) * R * 0.1;
     if (boss) {   // a cute little crown with jewels, tip pearls and a shine (static shape: baked once per species, only the bob moves)
       const bob = Math.sin(t * 3) * R * 0.02, cm = BOSS_METAL[o.skin] || ['#ffd84d', '#d98f1a'];
-      hatSprite(g, 'crown|' + R + '|' + cm[0], R, c => crownPaint(c, R, top + R * 0.05, cm), 0, bob);
+      if (o.bt >= 0) hatSprite(g, 'crownB12m|' + R + '|' + o.bt, R, c => paintCrownB12m(c, R, top + R * 0.05, o.bt), 0, bob);   // 12m: a crown per boss stage
+      else hatSprite(g, 'crown|' + R + '|' + cm[0], R, c => crownPaint(c, R, top + R * 0.05, cm), 0, bob);
     } else if (P.hat === 'antenna' || P.hat === 'hearts') {
       for (const s of [-1, 1]) {
         line(g, [[s * R * 0.35, top + R * 0.1], [s * R * 0.6, top - R * 0.4 + sw * s], [s * R * 0.75, top - R * 0.7 + sw * s]], R * 0.14); line(g, [[s * R * 0.35, top + R * 0.1], [s * R * 0.6, top - R * 0.4 + sw * s], [s * R * 0.75, top - R * 0.7 + sw * s]], R * 0.07, P.base);
@@ -747,8 +751,9 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       hatSprite(g, 'spikes|' + R + P.acc, R, c => { for (let i = -2; i <= 2; i++) cel(c, P.acc, poly([[i * R * 0.28 - R * 0.13, top + R * 0.25 - Math.abs(i) * R * 0.05], [i * R * 0.28 + R * 0.13, top + R * 0.25 - Math.abs(i) * R * 0.05], [i * R * 0.3, top - R * (0.35 - Math.abs(i) * 0.06)]]), { r: R * 0.3, hi: false, lw: 2.2, shadow: shade(P.acc) }); });
     }
     // the face stays upright and looks at the player
-    g.translate(Math.cos(ang) * R * 0.18 + (o.look ? o.look[0] * R * 0.1 : 0), Math.sin(ang) * R * 0.18 - R * 0.04 + (o.look ? o.look[1] * R * 0.06 : 0));
-    const hurt = o.flash > 0.02, open = (hurt || (t % 3.7) > 3.55 || (t % 9.1) > 8.78 && (t % 9.1) < 8.9) ? 0.1 : 1, look = o.look || [Math.sin(t * 0.8) * 0.5, Math.cos(t * 0.55) * 0.3],
+    if (o.ring && o.look) g.translate(Math.cos(ang) * R * 0.07 + o.look[0] * R * 0.2, Math.sin(ang) * R * 0.07 - R * 0.04 + o.look[1] * R * 0.14);   // 12m: on the spiral the face turns toward the duo in the middle, not along the heading
+    else g.translate(Math.cos(ang) * R * 0.18 + (o.look ? o.look[0] * R * 0.1 : 0), Math.sin(ang) * R * 0.18 - R * 0.04 + (o.look ? o.look[1] * R * 0.06 : 0));
+    const hurt = o.flash > 0.02, open = (hurt || (t % 3.7) > 3.55 || (t % 9.1) > 8.78 && (t % 9.1) < 8.9) ? 0.1 : 1, look = o.look ? (o.ring ? gazeB12m(o.look) : o.look) : [Math.sin(t * 0.8) * 0.5, Math.cos(t * 0.55) * 0.3],
       tongue = (t % 7) > 5.2 && (t % 7) < 5.9, sneezing = (t % 6) > 5.1, iris = boss ? '#ff3d5a' : P.eye;
     const eo = o.sg === 'warn' ? open * 0.72 : o.sg === 'go' ? Math.min(1.12, open * 1.12) : open;
     const E = (ex, ey, rx, ry) => eye(g, ex, ey, rx, ry, { iris, look, open: eo });
