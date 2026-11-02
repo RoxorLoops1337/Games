@@ -341,6 +341,52 @@
   @media (prefers-reduced-motion:reduce){ .hero,.deco{animation:none} *{transition-duration:.01ms!important} }
   @media (prefers-contrast:more){ .sub,.filters button{color:#fff} }
   /* end @css:18-access */
+  /* @css:08-battle-tab */
+  #tabBattle{gap:10px} #tabBattle .stagebox{gap:8px}
+  .bt-hero{position:relative;width:100%;border-radius:22px;border:3px solid var(--hc,#6a5cc0);background:radial-gradient(120% 90% at 70% 40%,var(--hg,#3a2d80),#150f38 70%);box-shadow:0 0 22px var(--hg,#3a2d80),0 8px 20px rgba(0,0,0,.45);padding:8px 10px 8px;overflow:hidden}
+  .bt-head{display:flex;align-items:center;gap:6px} .bt-ttl{flex:1;min-width:0;text-align:center} .bt-hero .stagetitle{font-size:21px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .bt-hero .stagesub{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .bt-hero .arrow{width:38px;height:44px;font-size:18px;border-radius:12px;flex:none}
+  .bt-body{display:flex;gap:10px;align-items:center;margin-top:6px}
+  .bt-hero #stCanvas{width:38%;max-width:150px;height:auto;aspect-ratio:400/560;border-radius:16px;border:2px solid rgba(255,255,255,.22);background:#150f38;flex:none}
+  .bt-side{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+  #stPortrait{width:100px;height:100px;filter:drop-shadow(0 0 14px var(--hg,#8a7aff))}
+  .bt-badges{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;min-height:22px} .bt-badges i{font-style:normal;font-size:11px;font-weight:900;letter-spacing:.04em;padding:2px 8px;border-radius:99px;background:rgba(0,0,0,.4);border:1.5px solid rgba(255,255,255,.3);color:#fff}
+  .bt-badges i.boss{background:#ffb04d;color:#2b1608;border-color:#fff3b0} .bt-badges i.ring{background:#ff7eb6;color:#2b0a1c;border-color:#ffd6e8} .bt-badges i.dbl{background:#4fd8f0;color:#082a30;border-color:#d9fbff}
+  .bt-hero .info{flex-direction:column;gap:2px;align-items:center;font-size:13px}
+  .bt-hero .modline{min-height:0;font-size:12px;margin-top:4px} .bt-hero .modline:empty{display:none}
+  .bt-hero .stprog{width:100%;margin:4px 0 0;display:flex;align-items:center;gap:8px} .bt-hero .stprog .pgl{font-size:11px;margin:0;white-space:nowrap} .bt-hero .stprog .pgr{flex:1;margin:0 14px 0 0}
+  .bt-rowh{display:flex;justify-content:space-between;align-items:center;width:100%;padding:0 4px;font-size:12px;letter-spacing:.1em;color:var(--dim)}
+  .pill{appearance:none;border:2px solid #4fd8f0;background:rgba(79,216,240,.14);color:#d9fbff;font:inherit;font-weight:900;font-size:12px;letter-spacing:.04em;border-radius:99px;padding:5px 12px;cursor:pointer}
+  #tabBattle .chips{scroll-snap-type:x proximity;scroll-padding:0 40%;padding:10px 6px 8px;gap:8px;scrollbar-width:none} #tabBattle .chips::-webkit-scrollbar{display:none}
+  #tabBattle .chip{min-width:54px;height:62px;border-radius:15px;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:20px;line-height:1;transition:transform .15s;background:linear-gradient(180deg,#2d2270,#1c1548)}
+  #tabBattle .chip .st{font-size:11px;letter-spacing:1px;color:#46406e;display:block} #tabBattle .chip .st u{text-decoration:none;color:#ffd24a;text-shadow:0 0 6px #ffb04d}
+  #tabBattle .chip .kk{top:-8px;right:-5px;font-size:14px;filter:drop-shadow(0 1px 1px #000)}
+  #tabBattle .chip.sel{transform:scale(1.14);background:linear-gradient(180deg,#ff9ad0,#ff5aa8);box-shadow:0 0 16px #ff5aa8aa;border-color:#fff} #tabBattle .chip.sel .st{color:#7a1d52}
+  #tabBattle .chip.nxt:not(.sel){animation:btnxt 1.4s ease-in-out infinite;border-color:#ffe14a}
+  @keyframes btnxt{50%{box-shadow:0 0 14px #ffe14a;transform:translateY(-3px)}}
+  #tabBattle .chip.lock{opacity:.4;font-size:18px}
+  .seg{position:relative;display:flex;background:rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.2);border-radius:14px;padding:3px;width:210px}
+  .seg i{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:11px;background:#9dff6d;transition:transform .2s,background .2s} .seg.h i{transform:translateX(100%);background:#b06cff}
+  .seg .dbtn{position:relative;flex:1;border:0;background:none;border-radius:11px;padding:8px 0;font-size:14px} .seg .dbtn.on,.seg .dbtn.hard.on{background:none;color:#10131c} .seg.h .dbtn.on{color:#fff}
+  #tabBattle .diffrow{gap:12px;margin:0} #tabBattle .rec{font-size:12px} #tabBattle .rec b{color:#9dff6d} #tabBattle .rec.low b{color:#ffb04d}
+  .bt-hint{width:100%;text-align:center;font-size:13px;font-weight:800;color:#ffe14a;min-height:0} .bt-hint:empty{display:none}
+  .bt-load{display:flex;align-items:center;gap:10px;width:100%;padding:6px 10px;border-radius:16px;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.12)} .bt-load>span{display:none}
+  .bt-load .loadout{margin:0;gap:6px;flex:1;width:auto} .bt-load .slot{max-width:48px;border-radius:12px;border-width:2px;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)} .bt-load .slot.full{box-shadow:inset 0 2px 6px rgba(0,0,0,.35),0 0 8px #9dff6d66}
+  #stGo{position:sticky;bottom:10px;z-index:3;width:100%;font-size:22px;padding:16px 20px;border-radius:18px;background:linear-gradient(180deg,#fff3b0,#ffc83d 55%,#ff9d2e);box-shadow:0 6px 0 #a8530a,0 12px 26px rgba(0,0,0,.45);animation:btgo 1.5s ease-in-out infinite}
+  #stGo:active{animation:none;transform:translateY(4px);box-shadow:0 2px 0 #a8530a} #stGo[disabled]{animation:none;background:linear-gradient(180deg,#8a8a98,#5a5a68);box-shadow:0 5px 0 #2c2c36}
+  @keyframes btgo{50%{transform:scale(1.035);box-shadow:0 6px 0 #a8530a,0 0 28px #ffc83dcc}}
+  #pigBox .tile,#goalList .tile{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:10px;row-gap:4px;padding:10px 12px;border-radius:18px;background:linear-gradient(100deg,var(--bn1,#5a3410),var(--bn2,#2e1a08));overflow:hidden}
+  #pigBox .tile::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 40%,rgba(255,255,255,.1) 50%,transparent 60%);transform:translateX(-120%);animation:bnshine 4.5s ease-in-out infinite;pointer-events:none}
+  @keyframes bnshine{60%,100%{transform:translateX(120%)}}
+  #pigBox .tile .top{grid-column:1;grid-row:1} #pigBox .tile .ds{grid-column:1;grid-row:2;font-size:12px} #pigBox .tile>.btn{grid-column:2;grid-row:1/3;align-self:center;padding:10px 12px;font-size:13px;min-width:92px}
+  #pigBox .tile .ic{width:46px;height:46px;font-size:28px} #pigBox .tile.bn-inv{--bn1:#4a1f52;--bn2:#240f2e;border-color:#c06cff88} #pigBox .tile.bn-ev{--bn1:#124a5a;--bn2:#0a2630;border-color:#4fd8f088}
+  #goalList .tile{grid-template-columns:auto 1fr auto} #goalList .tile .top{grid-column:1/3} #goalList .tile>.btn{grid-column:3;grid-row:1/3;min-width:70px;padding:8px 10px;font-size:13px} #goalList .tile .bar{grid-column:1/3} #goalList .tile .sm{grid-column:1/3}
+  @media(max-height:700px){.bt-hero #stCanvas{width:38%} #stPortrait{width:84px;height:84px} #tabBattle .chip{height:56px} #stGo{padding:12px 16px}}
+  @media(prefers-reduced-motion:reduce){#stGo,#tabBattle .chip.nxt,#pigBox .tile::after{animation:none}}
+  #tabBattle .side{margin-bottom:0;padding:4px 4px 2px} #tabBattle .sidebtn{padding:3px 8px;min-width:64px;font-size:10px;border-radius:12px} #tabBattle .sidebtn b{font-size:19px}
+  #tabBattle .chips{padding-left:14px;padding-right:14px}
+  .bt-load{padding:4px 10px} #tabBattle .bt-hero{padding-bottom:6px}
+  /* end @css:08-battle-tab */
 </style>
 </head>
 <body>
@@ -365,19 +411,23 @@
   <div class="hubtop"><button class="gear" id="setBtnH" aria-label="Settings" style="position:static;flex:none;width:38px;height:38px;font-size:19px">⚙</button><div class="cur e"><b>⚡</b><b id="hEnergy">0</b><button class="plus" id="enPlus">+</button></div><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div><div id="hPower"></div>
   <div class="hubbody">
     <div class="tab" id="tabBattle">
-      <div class="stagebox">
+      <div class="stagebox bt">
         <div class="side" id="battleSide"></div>
-        <div class="stagetitle" id="stTitle"></div>
-        <div class="stagesub" id="stSub"></div>
-        <div class="stagepick"><button class="arrow" id="stPrev">◀</button><canvas id="stCanvas" width="660" height="620"></canvas><button class="arrow" id="stNext">▶</button></div>
+        <div class="bt-hero" id="btHero">
+          <div class="bt-head"><button class="arrow" id="stPrev" aria-label="Previous stage">◀</button><div class="bt-ttl"><div class="stagesub" id="stSub"></div><div class="stagetitle" id="stTitle"></div></div><button class="arrow" id="stNext" aria-label="Next stage">▶</button></div>
+          <div class="bt-body">
+            <canvas id="stCanvas" width="400" height="560"></canvas>
+            <div class="bt-side"><canvas id="stPortrait" width="240" height="240"></canvas><div class="bt-badges" id="stBadges"></div><div class="info" id="stInfo"></div></div>
+          </div>
+          <div class="modline" id="stMod"></div>
+          <div class="stprog" id="stProg"></div>
+        </div>
+        <div class="bt-rowh" id="btRowH"><b>STAGES</b><button class="pill" id="contBtn">CONTINUE</button></div>
         <div class="chips" id="stChips"></div>
         <div class="diffrow" id="diffRow"></div>
-        <div class="modline" id="stMod"></div>
-        <div class="info" id="stInfo"></div>
-        <div class="stprog" id="stProg"></div>
-        <div class="loadout" id="battleLoad"></div>
+        <div class="bt-hint" id="btHint"></div>
+        <div class="bt-load"><span>LOADOUT</span><div class="loadout" id="battleLoad"></div></div>
         <button class="btn" id="stGo">START THE BATTLE</button>
-        <button class="btn alt" id="contBtn" style="margin-top:8px;font-size:15px;padding:10px 20px">CONTINUE</button>
       </div>
       <div class="stagebox"><div class="tiles" id="pigBox"></div></div>
       <div class="stagebox"><h2 style="font-size:20px">DAILY GIGS</h2><button class="btn small alt" id="claimGigs" style="margin-bottom:6px">CLAIM ALL</button><div class="tiles" id="goalList"></div></div>

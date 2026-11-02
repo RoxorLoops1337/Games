@@ -108,31 +108,36 @@ for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { a
 
 function renderBattle() {
   const info = stageInfo(sel), playable = canPlay(save, sel), done = sel <= save.cleared;
-  $('stTitle').textContent = `Stage ${sel}: ${info.name}`;
-  $('stSub').textContent = `${info.path}${KIND_LABEL[info.kind] ? '  ·  ' + KIND_LABEL[info.kind] : ''}${info.boss ? '  ·  BOSS' : ''}`;
+  const sp = (kit && kit.SPECIES && kit.SPECIES[info.skin]) || null;
+  { const hero = $('btHero'); hero.style.setProperty('--hc', sp ? sp.base : '#6a5cc0'); hero.style.setProperty('--hg', sp ? sp.sh + 'aa' : '#3a2d80'); }
+  $('stTitle').textContent = info.name;
+  $('stSub').textContent = `Stage ${sel}  ·  ${info.path}`;
+  $('stBadges').innerHTML = (info.boss ? '<i class="boss">👑 BOSS</i>' : '') + (info.kind === 'ring' ? '<i class="ring">🌀 RING</i>' : '') + (info.kind === 'double' ? '<i class="dbl">🐍🐍 DOUBLE</i>' : '') + (hard ? '<i>HARD</i>' : '');
   $('stPrev').disabled = sel <= 1; $('stNext').disabled = sel >= Math.min(MAX_STAGE, save.cleared + 4);
   const chips = $('stChips'); chips.innerHTML = '';
   for (let n = 1; n <= Math.min(MAX_STAGE, save.cleared + 4); n++) {
-    const c = document.createElement('button'); c.className = 'chip' + (n === sel ? ' sel' : '') + (n > save.cleared + 1 ? ' lock' : '') + (n <= save.cleared ? ' done' : '');
-    { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st">${stN ? '★'.repeat(stN) : '&nbsp;'}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : ''); }
+    const c = document.createElement('button'); c.className = 'chip' + (n === sel ? ' sel' : '') + (n > save.cleared + 1 ? ' lock' : '') + (n <= save.cleared ? ' done' : '') + (n === save.cleared + 1 ? ' nxt' : '');
+    { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : ''); }
     c.onclick = () => { audio.play('click'); sel = n; renderBattle(); };
     chips.appendChild(c);
   }
   if (sel > save.cleared) hard = false;
   const hardOk = sel <= save.cleared;
-  $('diffRow').innerHTML = `<button class="dbtn ${hard ? '' : 'on'}" data-h="0">Normal</button><button class="dbtn hard ${hard ? 'on' : ''}" data-h="1" ${hardOk ? '' : 'disabled'}>${hardOk ? 'Hard' : '🔒 Hard'}</button><span class="rec">Recommended ${recPower(sel, hard)}</span>`;
+  { const rp = recPower(sel, hard), mine = power(save);
+    $('diffRow').innerHTML = `<div class="seg ${hard ? 'h' : ''}"><i></i><button class="dbtn ${hard ? '' : 'on'}" data-h="0">Normal</button><button class="dbtn hard ${hard ? 'on' : ''}" data-h="1" ${hardOk ? '' : 'disabled'}>${hardOk ? 'Hard' : '🔒 Hard'}</button></div><span class="rec ${mine < rp ? 'low' : ''}">Power <b>${mine}</b> / ${rp}</span>`; }
   for (const b of $('diffRow').querySelectorAll('.dbtn')) b.onclick = () => { audio.play('click'); hard = b.dataset.h === '1'; renderBattle(); };
   $('stMod').textContent = info.mod ? '✦ ' + info.mod.name + ': ' + info.mod.blurb : '';
-  { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; cb.textContent = 'CONTINUE ▶ STAGE ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
+  { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; $('btRowH').style.display = cb.style.display; cb.textContent = 'CONTINUE ▶ ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
   const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : '<span><b>Cleared ✓</b></span>';
-  $('stInfo').innerHTML = `<span>Cells <b>${info.length}</b></span><span>Cell HP <b>${(h => (h >= 1000 ? (h / 1000).toFixed(1) + 'k' : h))(Math.round(info.hp * (hard ? HARD_HP : 1)))}</b></span>${first}`;
-  const go = $('stGo'); go.disabled = !playable; go.textContent = playable ? 'START THE BATTLE  ⚡' + ENERGY_COST : `CLEAR STAGE ${save.cleared + 1} FIRST`;
+  $('stInfo').innerHTML = `<span>Cells <b>${info.length}</b>  ·  HP <b>${(h => (h >= 1000 ? (h / 1000).toFixed(1) + 'k' : h))(Math.round(info.hp * (hard ? HARD_HP : 1)))}</b></span>${first}`;
+  const go = $('stGo'); go.disabled = !playable; go.textContent = playable ? 'START  ⚡' + ENERGY_COST : `CLEAR STAGE ${save.cleared + 1} FIRST`;
+  $('btHint').textContent = !save.cleared && !save.runs ? 'Slide left and right, shoot up, keep the snake off the pink line!' : (playable && save.energy && tickEnergy(save, Date.now()) < ENERGY_COST ? 'Out of Voice! Tap + up top, or rest a bit.' : '');
   loadoutRow($('battleLoad'), true);
-  { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; $('stProg').innerHTML = `<div class="pgl">Highest progress <b>${pr}%</b></div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}<em>${t}%</em></span>`).join('')}</div>`; }
+  { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; $('stProg').innerHTML = `<div class="pgl">Best <b>${pr}%</b></div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
   hub2.renderSide();
   renderPig();
   renderGoals();
-  const chip = chips.querySelector('.sel'); if (chip && chip.scrollIntoView) { try { chips.scrollTo({ left: chip.offsetLeft - 120 }); } catch (e) { /* ignore */ } }
+  const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } }
 }
 $('claimGigs').onclick = () => { audio.play('click'); const n = claimAllGoals(save, dayKey()); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
 $('stPrev').onclick = () => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
@@ -151,10 +156,11 @@ const W_ = 720;
 let pvKey = -1, pvPath = null;
 function drawPreview(t) {
   if (!kit) return;
-  const c = stCtx, w = 660, h = 620, info = stageInfo(sel);
+  const c = stCtx, w = 400, h = 560, info = stageInfo(sel);
   if (pvKey !== sel) { pvKey = sel; pvPath = buildPath(sel); }
   const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#2b2260'); gr.addColorStop(1, '#150f38'); c.fillStyle = gr; c.fillRect(0, 0, w, h);
-  const k = Math.min((w - 60) / 720, (h - 50) / 1280) * 1.0, ox = (w - 720 * k) / 2, oy = 24;
+  { const sp = kit.SPECIES && kit.SPECIES[info.skin], gl = c.createRadialGradient(w / 2, h * 0.3, 10, w / 2, h * 0.3, w * 0.8); gl.addColorStop(0, (sp ? sp.base : '#8a7aff') + '55'); gl.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gl; c.fillRect(0, 0, w, h); }
+  const k = Math.min((w - 20) / 720, (h - 24) / 1280), ox = (w - 720 * k) / 2, oy = 12;
   c.save(); c.translate(ox, oy); c.scale(k, k);
   c.lineJoin = 'round'; c.lineCap = 'round'; c.beginPath(); pvPath.pts.forEach((q, i) => (i % 3 === 0 ? (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)) : 0));
   c.lineWidth = 90; c.strokeStyle = 'rgba(255,255,255,.07)'; c.stroke(); c.lineWidth = 8; c.strokeStyle = 'rgba(255,255,255,.2)'; c.setLineDash([22, 30]); c.lineDashOffset = -t * 60; c.stroke(); c.setLineDash([]);
@@ -169,16 +175,28 @@ function drawPreview(t) {
   kit.drawHead(c, hp.x, hp.y, 38 * (info.boss ? 1.3 : 1) * 1.14, Math.atan2(hp2.y - hp.y, hp2.x - hp.x), { skin: info.skin, boss: info.boss, t, look: [0, 1] });
   const duo = art && art.get('duo_idle'); if (duo) { const dh = 190, dw = dh * duo.width / duo.height; c.drawImage(duo, 360 - dw / 2, (info.kind === 'ring' ? RING.cy - 20 : 1150) - dh * 0.75, dw, dh); }
   c.restore();
+  drawPortrait(t, info);
+}
+// the species portrait next to the lane: a big face with a soft glow that bobs and looks around
+const ptCtx = $('stPortrait').getContext('2d');
+function drawPortrait(t, info) {
+  const c = ptCtx, S = 240, sp = kit.SPECIES && kit.SPECIES[info.skin];
+  c.clearRect(0, 0, S, S);
+  const gl = c.createRadialGradient(S / 2, S / 2, 6, S / 2, S / 2, S * 0.5); gl.addColorStop(0, (sp ? sp.lite : '#fff') + 'aa'); gl.addColorStop(0.5, (sp ? sp.base : '#8a7aff') + '44'); gl.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = gl; c.fillRect(0, 0, S, S);
+  const bob = Math.sin(t * 2.2) * 5, sc = 1 + Math.sin(t * 2.2 + 1) * 0.03;
+  kit.drawHead(c, S / 2, S / 2 + bob, 78 * (info.boss ? 1.12 : 1) * sc, Math.PI / 2 + Math.sin(t * 0.9) * 0.15, { skin: info.skin, boss: info.boss, t, look: [Math.sin(t * 1.3) * 0.6, 0.8] });
 }
 
+const resetIn = () => { const ms = 86400000 - (Date.now() % 86400000), h = Math.floor(ms / 3600000); return h ? h + 'h ' + Math.floor(ms % 3600000 / 60000) + 'm' : Math.floor(ms / 60000) + 'm'; };
 function renderPig() {
   const el = $('pigBox'); el.innerHTML = '';
   const left = save.pig.left, tier = pigTier(save);
-  el.appendChild(hub2.eventTile());
+  { const ev = hub2.eventTile(); ev.classList.add('bn-ev'); el.appendChild(ev); }
   const gig = save.inv.left;
-  el.appendChild(tile({ cls: 't-weapon one', ic: '🐍', name: INV_NAME, chip: 'Stage ' + invStage(save) + '  ·  ' + gig + '/2 today', desc: 'A giant serpent crashes the show. Beat it for ribbons and a little friend.', btn: gig ? 'TAKE THE STAGE' : 'COME BACK TOMORROW', disabled: !gig,
+  el.appendChild(tile({ cls: 't-weapon one bn-inv', ic: '🐍', name: INV_NAME, chip: 'Stage ' + invStage(save) + '  ·  ' + gig + '/2  ·  ⏱ ' + resetIn(), desc: 'A giant serpent crashes the show. Beat it for ribbons and a little friend.', btn: gig ? 'TAKE THE STAGE' : 'COME BACK TOMORROW', disabled: !gig,
     onclick: () => { audio.unlock(); audio.play('click'); if (!useInvAttempt(save, dayKey())) return; if (!spendEnergy(save, Date.now())) { save.inv.left++; toast('Out of Voice!'); return; } persist(); startRun(invStage(save), 'inv'); } }));
-  el.appendChild(tile({ cls: 't-gold one', ic: '🐷', name: PIG_NAME, chip: 'Tier ' + tier + '  ·  ' + left + '/3 today', desc: 'A parade of piggy banks. Shake them hard.', btn: left ? 'JOIN THE PARADE' : 'COME BACK TOMORROW', gold: true, disabled: !left,
+  el.appendChild(tile({ cls: 't-gold one', ic: '🐷', name: PIG_NAME, chip: 'Tier ' + tier + '  ·  ' + left + '/3  ·  ⏱ ' + resetIn(), desc: 'A parade of piggy banks. Shake them hard.', btn: left ? 'JOIN THE PARADE' : 'COME BACK TOMORROW', gold: true, disabled: !left,
     onclick: () => { audio.unlock(); audio.play('click'); if (usePigAttempt(save, dayKey())) { persist(); startRun(tier, 'pig'); } } }));
 }
 function renderPets() {
