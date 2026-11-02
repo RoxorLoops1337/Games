@@ -263,7 +263,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
         for (let i = 0; i < 8; i++) { const an = i / 8 * TAU + 0.39; cel(g, '#eef3ff', circ(Math.cos(an) * r * 0.76, Math.sin(an) * r * 0.76, r * 0.07), { r: r * 0.08, hi: false, lw: 1.5, shadow: '#9aa8c8' }); }
         return;
       }
-      pattern(g, P, species, r);
+      pattern(g, P, species, r); EF.spine(g, r, P, species);   // 01-enemy-art r8
       if (kind === 'gold' || kind === 'gold2') {   // gold leaf (gold2: the last seconds, the leaf is flaking off so it is thinner) over the species body: only the painted pixels are tinted (source-atop), the shape stays readable
         g.save(); g.globalCompositeOperation = 'source-atop';
         g.fillStyle = kind === 'gold2' ? 'rgba(255,184,32,.3)' : 'rgba(255,184,32,.66)'; g.fillRect(-r * 1.6, -r * 1.6, r * 3.2, r * 3.2);
@@ -632,7 +632,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     minion: id => bake('min|' + id, B * 3.4, B * 3.4, MIN[id] || MIN.green),
     pickup: k => bake('pk|' + k, B * 2.4, B * 2.4, PICK[k] || PICK.gem),
     note: crit => bake('note|' + (crit ? 1 : 0), B * 2.4, B * 2.4, noteFn(crit ? '#ffd84d' : '#6fe3ff', crit), 1),
-    dazed: skin => { const k = SPECIES[skin] ? skin : 'love', P = SPECIES[k]; return bake('dazed|' + k, B * 3.4, B * 3.4, g => { cellShape(g, P, B, { decor: false }); pattern(g, P, k, B); EF.dazed(g, B, P); }, 2); },   // 01-enemy-art r7: the face that pops out of a killed head
+    dazed: (skin, boss) => { const k = SPECIES[skin] ? skin : 'love', P = SPECIES[k], b = boss ? 1 : 0; return bake('dazed|' + k + (b ? '|b' : ''), B * 3.4, B * 3.4, g => { cellShape(g, P, B, { decor: false }); pattern(g, P, k, B); EF.dazed(g, B, P, b); if (b) { const cm = BOSS_METAL[k] || ['#ffd84d', '#d98f1a']; EF.dazedCrown(g, B, c => crownPaint(c, B, 0, cm)); } }, 2); },   // 01-enemy-art r7: the face that pops out of a killed head (r8: a boss keeps a crooked crown)
     tail: skin => { const k = SPECIES[skin] ? skin : 'love'; return EF.tailSpr(k, SPECIES[k], B); },
     acid: () => bake('acid', B * 1.6, B * 1.6, acidFn),
     pet: (id, mood = 0) => bake('pet|' + id + '|' + mood, B * 3, B * 3, g => { MOOD = mood; critter(g, PETSPR[id] || 'kitten', B * 0.9); petMood(g, PETSPR[id] || 'kitten', B * 0.9); petAcc(g, PETSPR[id] || 'kitten', B * 0.9); MOOD = 0; }, 1),

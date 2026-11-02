@@ -136,8 +136,9 @@ export function createRenderer(canvas, art, kit) {
       case 'kill': {
         S.killT = S.t;
         const sp = kit && kit.SPECIES[e.skin];
-        const sk = e.kind === 'upgrade' ? ['#ffd84d', '#fff1a8', '#fff'] : sp ? [sp.lite, sp.base, '#fff'] : ['#ff9ad6', '#e0489d', '#fff'];
+        const sk = e.kind === 'upgrade' ? ['#ffd84d', '#fff1a8', '#fff'] : sp ? [sp.lite, sp.base, e.head ? sp.acc : '#fff', '#fff'] : ['#ff9ad6', '#e0489d', '#fff'];
         burst(e.x, e.y, e.head ? 40 : 14, sk, e.head ? 360 : 240, 0.7, 6);
+        if (e.head && sp) { ring(e.x, e.y, e.r * 3.2, sp.acc, 0.5); ring(e.x, e.y, e.r * 2.1, sp.lite, 0.35); }   // 01-enemy-art r8: the head pop rings in its own species colours
         { const sh = POPSHAPE[e.skin] || 'c';
           shaped(e.x, e.y, e.head ? 14 : 7, sh, sp ? [sp.lite, sp.base, '#fff', sp.acc] : ['#ff9ad6', '#fff'], e.head ? 340 : 250, 0.9, e.head ? 11 : 8, 380); }
         { const ch = S.chain; ch.n = S.t - ch.t < 0.9 ? ch.n + 1 : 1; ch.t = S.t;
@@ -155,7 +156,7 @@ export function createRenderer(canvas, art, kit) {
         if (e.carry === 'chest' && !OPT.reduceMotion) S.props.push({ k: 'chest', x: e.x, y: e.y, vx: (Math.random() - 0.5) * 80, vy: -300, rot: 0, life: 0.9, max: 0.9, size: e.r * 2.6 });
         if (e.carry === 'chest') { ring(e.x, e.y, 150, '#ffd84d', 0.5); shaped(e.x, e.y, 8, 's', ['#ffd84d', '#fff', '#ff7eb6'], 330, 0.7, 10, 200); }
         if (e.head && S.bgfx && !OPT.reduceMotion) S.bgfx.headKill(S.t, e.x, e.y);   // 03-backgrounds b8: squall or petal storm
-        if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); if (kit && !OPT.reduceMotion && S.props.length < 8) S.props.push({ k: 'dazed', skin: e.skin, x: e.x, y: e.y, vx: 0, vy: -90, rot: 0, life: 1.15, max: 1.15, size: e.r * 3.9 }); }   // 01-enemy-art r7: a dazed face floats up with its halo
+        if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); if (kit && !OPT.reduceMotion && S.props.length < 8) S.props.push({ k: 'dazed', skin: e.skin, boss: !!e.boss, x: e.x, y: e.y, vx: 0, vy: -90, rot: 0, life: 1.15, max: 1.15, size: e.r * 3.9 }); }   // 01-enemy-art r7: a dazed face floats up with its halo
         break;
       }
       case 'boom': ring(e.x, e.y, e.r, '#ff6a3d', 0.5); ring(e.x, e.y, e.r * 0.6, '#ffd24a', 0.35); burst(e.x, e.y, 30, ['#ff6a3d', '#ffd24a', '#fff'], 420, 0.6, 7); S.trauma = Math.min(1, S.trauma + 0.55); break;
@@ -591,7 +592,7 @@ export function createRenderer(canvas, art, kit) {
   function drawProps(dt) {
     for (let i = S.props.length - 1; i >= 0; i--) {   // chest cell pop: the chest hops out and flips its lid
       const p = S.props[i]; p.life -= dt; if (p.life <= 0) { S.props.splice(i, 1); continue; }
-      if (p.k === 'dazed') { const u = 1 - p.life / p.max, sp = kit && kit.SPR.dazed(p.skin); p.y += p.vy * dt; p.vy *= 1 - Math.min(1, dt * 2.2); if (sp) { ctx.save(); ctx.globalAlpha = Math.min(1, p.life / 0.4); const sc = 0.7 + Math.min(1, u * 5) * 0.3 + Math.sin(u * 9) * 0.04; kit.blit(ctx, sp, p.x, p.y, p.size * sc, Math.sin(u * 7) * 0.22); for (let q = 0; q < 3; q++) { const a = S.t * 5 + q * 2.094; sparkleAt(p.x + Math.cos(a) * p.size * 0.5, p.y - p.size * 0.46 + Math.sin(a) * p.size * 0.1, p.size * 0.16); } ctx.restore(); } continue; }
+      if (p.k === 'dazed') { const u = 1 - p.life / p.max, sp = kit && kit.SPR.dazed(p.skin, p.boss); p.y += p.vy * dt; p.vy *= 1 - Math.min(1, dt * 2.2); if (sp) { ctx.save(); ctx.globalAlpha = Math.min(1, p.life / 0.4); const sc = 0.7 + Math.min(1, u * 5) * 0.3 + Math.sin(u * 9) * 0.04; kit.blit(ctx, sp, p.x, p.y, p.size * sc, Math.sin(u * 7) * 0.22); for (let q = 0; q < 3; q++) { const a = S.t * 5 + q * 2.094; sparkleAt(p.x + Math.cos(a) * p.size * 0.5, p.y - p.size * 0.46 + Math.sin(a) * p.size * 0.1, p.size * 0.16); } ctx.restore(); } continue; }
       p.vy += 700 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += dt * 9;
       const cs = Math.cos(p.rot);
       ctx.save(); ctx.globalAlpha = Math.min(1, p.life / 0.25); ctx.translate(p.x, p.y); ctx.scale(1, cs * 0.8 + (cs < 0 ? -0.2 : 0.2));
