@@ -923,6 +923,13 @@
   /* short phones: the slide bar is thinner and see-through so it does not hide the duo (and the Encore tap on it) */
   @media (max-height:700px){#accSlider{height:44px;bottom:calc(6px + env(safe-area-inset-bottom));border-width:2px;background:rgba(10,8,30,.42)}#accThumb{top:2px;left:calc(50% - 19px);width:36px;height:36px}#accSlider::before{font-size:13px;padding:0 14px}}
   @media (max-width:399px){.hubtop.big .cur{font-size:12px;padding:3px 5px 3px 3px;gap:2px}.hubtop.big .cur img{width:18px;height:18px}.hubtop.huge .cur{font-size:10px;padding-right:3px}.hubtop.big .plus{width:20px;height:20px;min-width:20px;min-height:20px}}
+  /* short phones: the Battle tab header is slimmer so the stage chips come up above the START dock */
+  @media (max-height:700px){#hPower{font-size:13px;padding-bottom:1px} .nextrew{min-height:34px;padding:3px 12px;gap:8px} .nextrew .nri{font-size:18px} .nextrew .nrm{gap:1px;font-size:12px} .nextrew .nrb{height:5px} .qstrip{gap:4px;margin-bottom:4px} #tabBattle{gap:6px} #tabBattle .chips{padding-top:6px;padding-bottom:4px} .bt-hero #stCanvas{width:30%} #stPortrait{width:68px;height:68px} .bt-hero .stprog{margin-top:6px} .bt-body{margin-top:3px}}
+  @media (max-width:399px){.card.pick .dl{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.1;min-width:0;flex:1}}   /* 'Attack speed' and 'Capsule damage' wrap instead of ending in an ellipsis on narrow phones */
+  .fbtx span{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px}   /* the Welcome Chest prizes wrap whole (icon plus number), never a lone number on its own line */
+  @media (max-width:360px){.fbtx span{font-size:11.5px;gap:2px 5px} .fbtx img{width:15px;height:15px}}
+  @media (max-width:370px){.tile.deal .top{flex-direction:column;align-items:center;text-align:center;gap:2px} .tile.deal .nm{font-size:14px;width:100%}}   /* Today's Treats on 320px phones: icon above the name, so 'Sparkles x10' is no longer broken letter by letter */
+  @media (max-width:370px){.chestcard .top{flex-direction:column;align-items:center;text-align:center;gap:2px} .chestcard .nm{width:100%;font-size:15px}}   /* Gear chests: the name no longer wraps one letter per line */
   /* end @css:20-qa */
   /* @css:17-perf */
   .hub-skel .tab.on>*{opacity:.35;pointer-events:none;transition:opacity .12s}
