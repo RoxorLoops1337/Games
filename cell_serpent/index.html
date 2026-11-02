@@ -2307,6 +2307,16 @@
   #curtain10 .cu.l{left:0;border-right:3px solid #ffd84d}
   #curtain10 .cu.r{right:0;border-left:3px solid #ffd84d}
 /* end @css:19-buttons round 9 */
+/* @css:19-buttons round 11 */
+  .tabs .dot.flyin{animation:tbFly .55s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes tbFly{0%{translate:0 -26px;scale:.3;opacity:0}55%{translate:0 2px;scale:1.45;opacity:1}100%{translate:0 0;scale:1}}
+  .tabs .dot.sink{animation:tbSink .4s ease-out}
+  @keyframes tbSink{0%{scale:1.35;filter:brightness(1.6)}100%{scale:1;filter:none}}
+  html.rm .tabs .dot.flyin,html.rm .tabs .dot.sink{animation:none}
+  /* one pressed state for the tappable rows and chips that had none: a small squash and a brighter face (individual scale, so it composes with their own transforms) */
+  :is(.qmain,.qpill,.pill,.slot,.stk,.prmain,.prsave,.sbchip,.kcard,.eggstage,.nextrew.ready,.gl-btn:not(.wait)):not([disabled]):active{scale:.96;filter:brightness(1.12);transition:scale .06s,filter .06s}
+  html.rm :is(.qmain,.qpill,.pill,.slot,.stk,.prmain,.prsave,.sbchip,.kcard,.eggstage,.nextrew.ready,.gl-btn):active{scale:1}
+/* end @css:19-buttons round 11 */
 /* @css:10-hub round 10 */
   .recgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:min(520px,100%);margin:0 auto 6px}
   .recbox{width:min(520px,100%);margin:6px auto 4px} .recbox .sec{margin:12px 0 8px}
