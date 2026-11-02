@@ -123,6 +123,9 @@ export function createAudio() {
     danger: () => gate('danger', 300) && (tone(150, 0.1, 'square', 0.1), tone(150, 0.1, 'square', 0.1, 0, 0.16)),
     mend: () => gate('mend', 300) && tone(880, 0.12, 'sine', 0.05, 520),
     skip: () => tone(420, 0.1, 'triangle', 0.07, -120),
+    // loot count-up: a tiny rising pentatonic tick (e.n = 0..1 progress), and a big flash chord for a legendary find
+    counttick: e => { if (!gate('counttick', 55)) return; const k = Math.max(0, Math.min(1, (e && e.n) || 0)); tone(pentHz(Math.round(k * 9), 79), 0.05, 'triangle', 0.045); },
+    legend: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.5, 'triangle', 0.07, 0, i * 0.05)); tone(2093, 0.9, 'sine', 0.05, 0, 0.3); noise(0.6, 0.05, 4000, 9000, 'bandpass', 0.05); duck(0.5, 0.8); },
 
     // ---- new sounds (see the report for which events should call them)
     pop: e => sfx.kill(e),
