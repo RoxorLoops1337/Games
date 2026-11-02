@@ -243,9 +243,9 @@ export function createArtDraw(makeCanvas, dpr = 2) {
         return;
       }
       pattern(g, P, species, r);
-      if (kind === 'gold') {   // gold leaf over the species body: only the painted pixels are tinted (source-atop), the shape stays readable
+      if (kind === 'gold' || kind === 'gold2') {   // gold leaf (gold2: the last seconds, the leaf is flaking off so it is thinner) over the species body: only the painted pixels are tinted (source-atop), the shape stays readable
         g.save(); g.globalCompositeOperation = 'source-atop';
-        g.fillStyle = 'rgba(255,184,32,.66)'; g.fillRect(-r * 1.6, -r * 1.6, r * 3.2, r * 3.2);
+        g.fillStyle = kind === 'gold2' ? 'rgba(255,184,32,.3)' : 'rgba(255,184,32,.66)'; g.fillRect(-r * 1.6, -r * 1.6, r * 3.2, r * 3.2);
         g.fillStyle = 'rgba(255,246,190,.34)'; g.beginPath(); g.moveTo(-r * 1.3, r * 0.2); g.lineTo(-r * 1.0, r * 0.6); g.lineTo(r * 1.3, -r * 0.2); g.lineTo(r * 1.0, -r * 0.6); g.closePath(); g.fill();
         g.restore(); g.save(); g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = r * 0.07; g.lineCap = 'round'; g.beginPath(); g.moveTo(-r * 0.2, r * 0.68); g.lineTo(r * 0.42, r * 0.28); g.stroke(); g.restore();
       }
@@ -573,6 +573,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     badge: k => bake('badge|' + k, B * 1.5, B * 1.5, g => {
       const r = B * 0.6, disc = (col, sh) => { cel(g, '#fff8ec', circ(0, 0, r), { r, hi: false, lw: 2.6, shadow: '#e6d6c8' }); cel(g, col, circ(0, 0, r * 0.84), { r: r * 0.84, hi: false, lw: 2.2, shadow: sh }); };
       if (k === 'coin') { disc('#ffd84d', '#d49a1e'); g.save(); g.scale(0.58, 0.58); PICK.coin(g); g.restore(); return; }
+      if (k === 'coinx') { disc('#b9ad82', '#8a7f5a'); g.save(); g.scale(0.58, 0.58); PICK.coin(g); g.restore(); g.fillStyle = 'rgba(120,110,80,.55)'; circ(0, 0, r * 0.84)(g); g.fill(); line(g, [[-r * 0.05, -r * 0.8], [r * 0.18, -r * 0.2], [-r * 0.12, r * 0.1], [r * 0.14, r * 0.8]], r * 0.1, '#3a2f1c'); return; }   // 01-enemy-art r5: the gold has run out, a dull coin with a crack
       if (k === 'ward') {
         disc('#2b3f78', '#1b2a55'); const q = r * 0.44;
         cel(g, '#8fe3ff', poly([[-q, -q * 0.8], [q, -q * 0.8], [q, q * 0.1], [q * 0.8, q * 0.7], [0, q * 1.2], [-q * 0.8, q * 0.7], [-q, q * 0.1]]), { r: q * 1.2, hi: false, lw: 2, shadow: '#3fa8d8' });
@@ -607,9 +608,11 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     // squash when hit, stretch when it surges (along its heading), tremble before the surge
     let sq = 0; if (o.flash > 0) sq = -Math.min(1, o.flash / 0.12) * 0.16; if (o.sg === 'go') sq += 0.15; else if (o.sg === 'warn') sq -= 0.05 + Math.sin(t * 40) * 0.04;
     if (sq) { g.rotate(ang); g.scale(1 + sq, 1 - sq * 0.8); g.rotate(-ang); }
+    if (boss && o.p2) p2Halo(g, R, t);
     g.save(); g.rotate(ang); cellShape(g, P, R, { decor: false }); pattern(g, P, o.skin, R); g.restore();
     glossDot(g, R, 0.46, -0.5);
-    if (boss) { bossRing(g, R, t, BOSS_METAL[o.skin]); blit(g, bake('bossorn|' + o.skin, B * 5, B * 5, gg => bossOrn(gg, B, o.skin, 0, P)), 0, 0, B * 5); }
+    if (boss && o.p2) blit(g, bake('p2crack', B * 2.6, B * 2.6, p2CrackPaint), 0, 0, B * 2.6, 0, false, 0.75 + Math.sin(t * 9) * 0.25);
+    if (boss) { bossRing(g, R, t, BOSS_METAL[o.skin]); blit(g, bake('bossorn|' + o.skin, B * 5, B * 5, gg => bossOrn(gg, B, o.skin, -1, P)), 0, 0, B * 5); bossLive(g, R, t, o.skin, !!o.p2); }
     // headgear (upright, on top of the head)
     const top = -R * 0.92, sw = Math.sin(t * 5) * R * 0.1;
     if (boss) {   // a cute little crown with jewels, tip pearls and a shine (static shape: baked once per species, only the bob moves)
@@ -702,12 +705,47 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     if (o.flash > 0) { g.fillStyle = `rgba(255,255,255,${Math.min(0.7, o.flash * 5)})`; circ(0, 0, R * 1.05)(g); g.fill(); }
     g.restore();
   }
+  // 01-enemy-art r5: boss phase 2 (below 40% hp) gets its own silhouette: a spinning crest of flames behind the body and a glowing crack across it
+  function p2Halo(g, R, t) {
+    const sz = R * 4.4, spr = bake('p2halo', sz, sz, c => {
+      for (let i = 0; i < 10; i++) {
+        const a = i / 10 * TAU, L = i % 2 ? 1.62 : 1.98, w = 0.2;
+        c.save(); c.rotate(a);
+        cel(c, '#ff5a2a', poly([[R * 0.8, -R * w], [R * 1.1, -R * w * 1.5], [R * L, 0], [R * 1.1, R * w * 0.4], [R * 0.8, R * w]]), { r: R * 1.2, hi: false, lw: 3, shadow: '#b8280f' });
+        cel(c, '#ffd24a', poly([[R * 0.95, -R * 0.06], [R * (L - 0.3), 0], [R * 0.95, R * 0.08]]), { r: R * 0.5, hi: false, lw: 1.4 });
+        c.restore();
+      }
+    }, 2);
+    if (!spr) return;
+    g.save(); g.rotate(t * 0.9); const k = 1 + Math.sin(t * 11) * 0.05; g.scale(k, k); g.drawImage(spr.c, -sz / 2, -sz / 2, sz, sz); g.restore();
+  }
+  function p2CrackPaint(g) {
+    const R = B, pts = [[-0.62, -0.62], [-0.38, -0.3], [-0.5, -0.05], [-0.2, 0.2], [-0.3, 0.5], [0.02, 0.78]].map(p => [p[0] * R, p[1] * R]);
+    for (const [w, c] of [[R * 0.13, INK], [R * 0.07, '#ff7a2a'], [R * 0.025, '#fff1a8']]) line(g, pts, w, c);
+  }
+  // cheap live layer for the boss ornaments: pieces that move are baked once and only drawn rotated, scaled or faded (a few drawImage calls, no paths)
+  function bossLive(g, R, t, skin, p2) {
+    const tw = bake('tw|spark', R * 0.8, R * 0.8, c => sparkle(c, 0, 0, R * 0.3, '#fffbe0'), 2);
+    if (tw) for (const [x, y, ph] of [[-0.66, -1.34, 0], [0, -1.5, 2.1], [0.66, -1.34, 4.2]]) { const k = Math.max(0, Math.sin(t * 2.6 + ph)); if (k > 0.05) g.drawImage(tw.c, R * x - R * 0.4 * k, R * y - R * 0.4 * k, R * 0.8 * k, R * 0.8 * k); }
+    if (skin === 'rust') {
+      for (const [x, y, k, sp] of [[1.12, -0.05, 0.3, 1], [1.0, 0.38, 0.2, -1.6]]) {
+        const rr = R * k, gs = bake('gear|' + k, rr * 3, rr * 3, c => { cel(c, '#c98a4a', poly(Array.from({ length: 16 }, (_, i) => { const a = i / 16 * TAU, q = i % 2 ? rr * 0.78 : rr * 1.12; return [Math.cos(a) * q, Math.sin(a) * q]; })), { r: rr, hi: false, lw: 2, shadow: '#8a4f22' }); cel(c, '#3a2a8a', circ(0, 0, rr * 0.32), { r: rr * 0.3, hi: false, lw: 1.6 }); }, 2);
+        if (!gs) continue;
+        for (const s of [-1, 1]) { g.save(); g.translate(s * R * x, R * y); g.rotate(t * sp * (p2 ? 2.2 : 1) * s); g.drawImage(gs.c, -rr * 1.5, -rr * 1.5, rr * 3, rr * 3); g.restore(); }
+      }
+    } else if (skin === 'love' || skin === 'sleepy') {   // little hearts / z's float up off the head and fade
+      const sp = bake(skin === 'love' ? 'rise|heart' : 'rise|z', R * 0.7, R * 0.7, c => { if (skin === 'love') cel(c, '#ff9ac6', heartPath(0, -R * 0.03, R * 0.2), { r: R * 0.2, hi: false, lw: 2, shadow: '#d9488f' }); else text2(c, 'z', 0, 0, R * 0.4); }, 2);
+      if (sp) for (let i = 0; i < 2; i++) { const q = (t * 0.45 + i * 0.5) % 1; g.save(); g.globalAlpha = Math.min(1, q * 5) * (1 - q * q); g.drawImage(sp.c, (i ? 0.72 : -0.78) * R + Math.sin(q * 6 + i) * R * 0.08 - R * 0.35, -R * 0.9 - q * R * 1.0 - R * 0.35, R * 0.7, R * 0.7); g.restore(); }
+    } else if (skin === 'disco' && tw) {   // the mirror ball throws a glint
+      const k = 0.5 + (0.5 + Math.sin(t * 5) * 0.5) * 0.9; g.drawImage(tw.c, R * 0.1 - R * 0.4 * k, -R * 1.64 - R * 0.4 * k, R * 0.8 * k, R * 0.8 * k);
+    }
+  }
   // each boss wears its own crown metal and a signature ornament, so a boss reads from its silhouette alone
   const BOSS_METAL = { rust: ['#d08a4a', '#8a4f22'], sleepy: ['#e6dcff', '#a58be0'], mighty: ['#c9d3e8', '#7a8aae'], frosty: ['#e4f6ff', '#8cc4e6'], gloomy: ['#9a6af0', '#4a2a90'], disco: ['#ff9ac6', '#d9488f'], sour: ['#b7f0a8', '#5fb85f'] };
   function bossOrn(g, R, skin, t, P) {
     const bob = Math.sin(t * 3) * R * 0.03, fy = -R * 1.58 + bob, side = (fn) => { for (const s of [-1, 1]) { g.save(); g.scale(s, 1); fn(s); g.restore(); } };
     if (skin === 'love') { cel(g, '#ff3d7a', heartPath(0, fy - R * 0.08, R * 0.3), { r: R * 0.3, hi: false, lw: 2.4, shadow: '#c42a54' }); side(() => cel(g, '#ff9ac6', heartPath(R * 1.12, -R * 0.2 + bob, R * 0.2), { r: R * 0.2, hi: false, lw: 2, shadow: '#d9488f' })); }
-    else if (skin === 'rust') side(() => { for (const [x, y, k] of [[1.12, -0.05, 0.3], [1.0, 0.38, 0.2]]) { const rr = R * k, an = t * (k > 0.25 ? 1 : -1.6); g.save(); g.translate(R * x, R * y); g.rotate(an); cel(g, '#c98a4a', poly(Array.from({ length: 16 }, (_, i) => { const a = i / 16 * TAU, q = i % 2 ? rr * 0.78 : rr * 1.12; return [Math.cos(a) * q, Math.sin(a) * q]; })), { r: rr, hi: false, lw: 2, shadow: '#8a4f22' }); cel(g, '#3a2a8a', circ(0, 0, rr * 0.32), { r: rr * 0.3, hi: false, lw: 1.6 }); g.restore(); } });
+    else if (skin === 'rust') { if (t >= 0) side(() => { for (const [x, y, k] of [[1.12, -0.05, 0.3], [1.0, 0.38, 0.2]]) { const rr = R * k, an = t * (k > 0.25 ? 1 : -1.6); g.save(); g.translate(R * x, R * y); g.rotate(an); cel(g, '#c98a4a', poly(Array.from({ length: 16 }, (_, i) => { const a = i / 16 * TAU, q = i % 2 ? rr * 0.78 : rr * 1.12; return [Math.cos(a) * q, Math.sin(a) * q]; })), { r: rr, hi: false, lw: 2, shadow: '#8a4f22' }); cel(g, '#3a2a8a', circ(0, 0, rr * 0.32), { r: rr * 0.3, hi: false, lw: 1.6 }); g.restore(); } }); }
     else if (skin === 'sneezy') side(() => { for (const [a, k] of [[-0.9, 0.5], [-0.3, 0.62], [0.3, 0.5]]) { const x = Math.cos(a) * R * 1.02, y = Math.sin(a) * R * 1.02; cel(g, '#c4f5dc', poly([[x - R * 0.1, y + R * 0.1], [x + R * 0.1, y - R * 0.1], [x + Math.cos(a) * R * k, y + Math.sin(a) * R * k]]), { r: R * 0.3, hi: false, lw: 2, shadow: '#6fe0a8' }); } });
     else if (skin === 'grumpy') side(() => cel(g, '#ff5a78', poly([[R * 0.55, -R * 0.95], [R * 1.25, -R * 1.65], [R * 1.12, -R * 0.62], [R * 0.9, -R * 0.55]]), { r: R * 0.7, hi: false, lw: 2.8, shadow: '#c42a54' }));
     else if (skin === 'sleepy') { g.save(); g.translate(0, fy - R * 0.08); g.beginPath(); g.arc(0, 0, R * 0.28, 0.6, TAU - 0.6); g.arc(R * 0.14, -R * 0.04, R * 0.22, TAU - 0.9, 0.9, true); g.closePath(); g.fillStyle = '#fff1a8'; g.fill(); ink(g, 2.4); g.stroke(); g.restore(); sparkle(g, R * 0.4, fy + R * 0.05, R * 0.14, '#fff8ec'); }
