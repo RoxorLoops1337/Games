@@ -308,6 +308,14 @@ export function createAudio() {
     c.n.forEach((m, i) => tone(hz(m), c.dur, c.w, c.v, 0, 0.5 + i * c.gap));
     if (c.tail === 'ice') noise(0.4, 0.02, 7000, 3000, 'highpass', 0.5);
   };
+  // round 9: the hub stage preview answers a new species with its own sting (no riser, no half second wait; quieter than the card)
+  sfx.stageprev = e => {
+    if (!gate('stageprev', 600)) return;
+    const v = stageVoice(e && e.skin, !!(e && e.boss)); if (!v) return;
+    const base = Math.min(...v.n.map(m => m[5]), ...(v.z || []).map(m => m[5]));
+    v.n.forEach(m => tone(m[0], m[1], m[2], m[3] * 0.7, m[4], m[5] - base + 0.02));
+    (v.z || []).forEach(m => noise(m[0], m[1] * 0.7, m[2], m[3], m[4], m[5] - base + 0.02));
+  };
   // round 8: the head dies in its own voice per species (a sweep plus a colour), under the generic pop
   sfx.headdeath = e => {
     const d = deathOf(e && e.skin);

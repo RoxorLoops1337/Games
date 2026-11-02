@@ -243,12 +243,13 @@ function beginStage(stage) {
 // the stage picture: the lane for this stage with the serpent on it
 const stCtx = $('stCanvas').getContext('2d');
 const W_ = 720;
+let pvSting = '';
 let bestPct = 0, pvBestKey = '', pvBestS = 0, pvT0 = -9, pvKey = -1, pvPath = null, pvBg = null, pvBgKey = '', pvLast = -1;
 function drawPreview(t) {
   if (!kit) return;
   if (pvKey === sel && t - pvLast < 0.032 && t >= pvLast) return; pvLast = t;   // a stage change always repaints at once (no frame of the old stage)
   const c = stCtx, w = 400, h = 560, info = stageInfo(sel);
-  if (pvKey !== sel) { pvKey = sel; pvPath = buildPath(sel); pvT0 = t; }
+  if (pvKey !== sel) { const had = pvKey > 0; pvKey = sel; pvPath = buildPath(sel); pvT0 = t; const sk = info.skin + (info.boss ? '!' : ''); if (had && sk !== pvSting) audio.play('stageprev', { skin: info.skin, boss: info.boss }); pvSting = sk; }   // r9: a new species (or a boss) on the preview answers with its own sting
   // 17-perf: the backdrop (two gradients) is painted once per skin into a cached layer, then blitted; the picture itself runs at 30 fps
   if (pvBgKey !== info.skin || !pvBg) {
     pvBgKey = info.skin; pvBg = pvBg || document.createElement('canvas'); pvBg.width = w; pvBg.height = h; const b = pvBg.getContext('2d');
