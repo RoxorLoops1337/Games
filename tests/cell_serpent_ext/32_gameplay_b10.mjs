@@ -41,7 +41,7 @@ assert.ok(sim.CELL_KEYS.includes('snack') && sim.SNACK_FROM > 30, 'late game onl
 
 // ---- Late traits (stage 41+): every species has its own name and its own twist
 for (const k of sim.TRAIT_SKINS) { assert.ok(LATE_LABEL[k] && LATE_CUE[k] && LATE_LABEL[k] !== TRAIT_LABEL[k]); assert.equal(traitLabel(k, 41), LATE_LABEL[k]); assert.equal(traitLabel(k, 40), TRAIT_LABEL[k]); }
-assert.ok(![...Object.values(LATE_LABEL), ...Object.values(LATE_CUE)].join('').includes('—'), 'no em dash');
+assert.ok(![...Object.values(LATE_LABEL), ...Object.values(LATE_CUE)].join('').includes(String.fromCharCode(8212)), 'no em dash');
 const mk = (skin, min = 41, seed = 4) => { const n = skinStage(skin, min); const g = sim.createGame({ seed, stage: n }); assert.equal(g.snakes[0].skin, skin); assert.ok(sim.lateTrait(g, g.snakes[0]) === skin); return g; };
 assert.equal(sim.lateTrait(sim.createGame({ seed: 4, stage: skinStage('love', 21) }), { skin: 'love', boss: false }), '', 'not before stage 41');
 {   // love: the cells behind the face are warded after a pulse
