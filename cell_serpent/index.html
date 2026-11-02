@@ -763,6 +763,28 @@
   .s3 .tchain{padding-top:50px!important} .s3 .tcap small{display:none}
   @media (max-height:700px){.tut12 .tcap small{display:none}}
   @media (prefers-reduced-motion:reduce){.notes12,.spark12{display:none}}
+  /* round 4: tutorial with the real run art, roomier layout (dots and shield no longer collide) */
+  .tut12 .tbox{height:min(400px,68vh)}
+  .tut12 .tstep{inset:0 0 100px;padding:0 0 6px}
+  .tut12 .tdots{bottom:68px}
+  .tut12 .tbar{height:50px;margin-top:6px}
+  .tut12 .tduo{position:absolute;left:50%;bottom:2px;height:66px;width:auto;transform:translateX(-50%);filter:drop-shadow(0 4px 4px #0006)}
+  .s1 .tduo{animation:slidedu12 2.2s ease-in-out infinite}
+  @keyframes slidedu12{0%,100%{transform:translateX(calc(-50% - 92px))}50%{transform:translateX(calc(-50% + 92px))}}
+  .art12 .s1 .tfinger{top:30px;margin-left:-4px}
+  .art12 .s1 .tarrows{top:78px}
+  .tut12 .tyelimg{position:absolute;left:50%;top:34px;width:92px;height:92px;margin-left:-46px;filter:drop-shadow(0 0 14px #ffe14a);animation:yel12 3s ease-in infinite}
+  .art12 .s2 .tburst{top:80px}
+  .art12 .s2 .tshot{animation-name:shotart12}
+  @keyframes shotart12{0%{transform:translateY(0);opacity:0}8%{opacity:1}55%{transform:translateY(calc(-100% + 40px));opacity:1}56%,100%{opacity:0}}
+  .tut12 .tseg{width:56px;height:56px;margin:-9px 0;animation:seg12 3.4s ease-in infinite}
+  .tut12 .tseg:nth-of-type(3){animation-delay:0s} .tut12 .tseg:nth-of-type(2){animation-delay:.35s} .tut12 .tseg:nth-of-type(1){animation-delay:.7s}
+  .art12 .s3 .tchain{padding-top:58px!important;gap:0}
+  .art12 .s3 .tface{width:72px;height:72px;margin-bottom:4px}
+  .tut12 .thead{width:72px;height:72px;position:relative;z-index:1;animation:headbob12 1.4s ease-in-out infinite}
+  .art12 .s3 .tshield{inset:-4px}
+  @keyframes headbob12{50%{transform:translateY(3px) rotate(-3deg)}}
+  @media (max-height:700px){.tut12 .tcap{top:16px;font-size:24px}.art12 .s3 .tchain{padding-top:46px!important}.tut12 .tseg{width:48px;height:48px;margin:-8px 0}.tut12 .tbox{height:min(400px,72vh)}}
   /* end @css:12-title-onboarding */
 
   /* @css:10-shop-gear-stats */

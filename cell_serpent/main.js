@@ -605,7 +605,7 @@ function frame(now) {
 }
 
 // ---------------------------------------------------------------- wiring
-$('playBtn').onclick = () => { audio.unlock(); audio.play('click'); playBurst($('playBtn')); if (save.runs === 0) { if (needsTutorial(save)) showTutorial(() => startRun(1), audio); else startRun(1); } else openHub('Battle'); };
+$('playBtn').onclick = () => { audio.unlock(); audio.play('click'); playBurst($('playBtn')); if (save.runs === 0) { if (needsTutorial(save)) showTutorial(() => startRun(1), audio, kit, art); else startRun(1); } else openHub('Battle'); };
 $('resumeBtn').onclick = () => resume();
 $('pStats').onclick = () => { audio.play('click'); showStatsFromPause(); };
 $('pSet').onclick = () => { audio.play('click'); openSettings(() => show('pause')); };
