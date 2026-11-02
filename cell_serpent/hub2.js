@@ -20,7 +20,8 @@ function radar(s) {
   const val = META.map((d, i) => pt(i, Math.max(0.1, Math.min(1, (s.meta[d.id] || 0) / d.max))).map(v => v.toFixed(1)).join(',')).join(' ');
   const axes = META.map((_, i) => { const p = pt(i, 1); return `<line x1="${cx}" y1="${cy}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}"/>`; }).join('');
   const labs = META.map((d, i) => { const p = pt(i, 1.32); return `<image href="${iconURL(STATICON[d.id])}" x="${(p[0] - 9).toFixed(1)}" y="${(p[1] - 9).toFixed(1)}" width="18" height="18"/>`; }).join('');
-  return `<svg class="radar" viewBox="0 0 160 156" aria-hidden="true"><g class="rg"><polygon points="${ring(1)}"/><polygon points="${ring(0.66)}"/><polygon points="${ring(0.33)}"/>${axes}</g><polygon class="rv" points="${val}"/>${labs}</svg>`;
+  const hits = META.map((d, i) => { const p = pt(i, 1.32); return `<circle class="rhit" data-id="${d.id}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="15"/>`; }).join('');
+  return `<svg class="radar" viewBox="0 0 160 156" role="group" aria-label="Stats, tap an icon to upgrade it"><g class="rg"><polygon points="${ring(1)}"/><polygon points="${ring(0.66)}"/><polygon points="${ring(0.33)}"/>${axes}</g><polygon class="rv" points="${val}"/>${labs}${hits}</svg>`;
 }
 const STAT_TEXT = { atk: v => `+${Math.round(v * 100)}% Volume`, crit: v => `+${(v * 100).toFixed(1)}% Pitch`, vit: v => `snake ${Math.round(v / 12 * 2)}% slower`, coin: v => `+${Math.round(v * 100)}% Beats`, guard: v => `snake ${Math.round(v * 50)}% slower`, cdn: v => `${(v * 100).toFixed(1)}% quicker Tempo`, speed: v => `+${Math.round(v * 100)}% singing speed` };
 const kicon = id => `<span class="kemo">${KEEPSAKES.find(k => k.id === id).icon}</span>`;
@@ -43,10 +44,40 @@ export function createHub2(c) {
     c.show('panel');
   }
   const sec = (list, text, color, icn) => { const h = document.createElement('div'); h.className = 'sec'; h.innerHTML = `<span style="${color ? `background:${color}` : ''}">${icn ? ico(icn, 22) : ''}${text}</span>`; list.appendChild(h); };
+  const calmMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches || !!save().settings.reduceMotion; } catch (e) { return false; } };
+  // a deal was bought: coins burst out of the button and the equipped pet cheers with hearts
+  function dealCheer(r) {
+    if (!r || calmMotion()) return;
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2, root = document.createElement('div'); root.className = 'dealfx'; document.body.appendChild(root);
+    const cu = curImg('sparkles');
+    for (let i = 0; i < 14; i++) {
+      const p = document.createElement('i'); p.className = 'dcoin'; p.innerHTML = i % 3 ? curImg('beats') : cu;
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, d = 70 + Math.random() * 110;
+      p.style.cssText = `left:${cx}px;top:${cy}px;--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d}px;--fall:${60 + Math.random() * 50}px;animation-delay:${i * 18}ms`;
+      root.appendChild(p);
+    }
+    const pet = save().petEquip[0];
+    if (pet) {
+      const w = document.createElement('div'); w.className = 'dealpet'; w.style.left = Math.min(window.innerWidth - 70, Math.max(10, cx - 30)) + 'px'; w.style.top = Math.max(60, cy - 90) + 'px';
+      w.innerHTML = `${icon(pet)}<b>♥</b><b>♥</b><b>♥</b>`; root.appendChild(w);
+    }
+    setTimeout(() => root.remove(), 1800);
+  }
+  // loot reveal: rarity glow and shine per item, rays behind the best find, numbers that count up
+  const RNAME = ['COMMON', 'RARE', 'EPIC', 'LEGENDARY'];
   const lootModal = (title, items, back) => {
     $('bTitle').textContent = title;
-    $('bLoot').innerHTML = items.map((x, i) => `<div class="it rar${x.rar || 0}" style="animation-delay:${i * 0.12}s;${x.color ? `--rc:${x.color}` : ''}">${x.html}<span>+${x.n}</span><small>${x.name}</small></div>`).join('');
-    $('bOk').onclick = () => { audio.play('click'); c.resetBoxOk(); c.openHub(back); };
+    const top = items.reduce((m, x) => Math.max(m, x.rar || 0), 0), topItem = items.find(x => (x.rar || 0) === top), calm = calmMotion();
+    const grand = items.length > 6 || items.reduce((m, x) => m + x.n, 0) >= 100;
+    $('bLoot').className = 'loot lootx' + (grand ? ' grand' : '');
+    $('bLoot').innerHTML = (top >= 1 ? `<i class="lrays r${top}" style="--rc:${topItem.color || '#ffd84d'}"></i>` : '') +
+      (top >= 1 ? `<div class="lbanner r${top}" style="--rc:${topItem.color || '#ffd84d'}">${topItem.rname || RNAME[top]}!</div>` : '') +
+      items.map((x, i) => `<div class="it rar${x.rar || 0}" style="animation-delay:${0.25 + i * 0.14}s;${x.color ? `--rc:${x.color}` : ''}">${x.html}<span class="cnt" data-n="${x.n}">+${calm ? x.n : 0}</span><small>${x.name}</small><u class="shn"></u></div>`).join('');
+    if (!calm) $('bLoot').querySelectorAll(".it .cnt").forEach((el, i) => {   // count-up, each item after its pop
+      const n = +el.dataset.n, t0 = performance.now() + 300 + i * 140, dur = 650 + Math.min(500, n * 4);
+      const step = t => { const k = Math.max(0, Math.min(1, (t - t0) / dur)); el.textContent = '+' + Math.round(n * (1 - Math.pow(1 - k, 3))); if (k < 1 && el.isConnected) requestAnimationFrame(step); }; requestAnimationFrame(step);
+    });
+    $('bOk').onclick = () => { audio.play('click'); $('bLoot').className = 'loot'; c.resetBoxOk(); c.openHub(back); };
     c.show('boxModal');
   };
 
@@ -120,9 +151,13 @@ export function createHub2(c) {
     $('heroBox').innerHTML = `<div class="heroname">RoxorLoops &amp; Jasmin</div><div class="heropow"><span class="pwi">${ico('fist', 30)}</span><small>POWER</small><b>${power(s)}</b></div>${radar(s)}`;
     $('lvBar').innerHTML = `<div class="lvrow"><span class="lvbadge">${li.lv}</span><div class="bar"><i style="width:${Math.round((li.cur / li.need) * 100)}%"></i></div></div>` + (nextR ? `<div class="lvnext">Level ${nextR.lv}: ${nextR.r.sparkles} ${curImg('sparkles')}</div>` : '');
     const core = document.createElement('div'); core.className = 'stat3'; list.appendChild(core);
+    $('heroBox').querySelector('.radar').addEventListener('click', ev => {   // tap an axis to jump to its upgrade card
+      const id = ev.target.dataset && ev.target.dataset.id, cardEl = id && core.querySelector(`.sc[data-id="${id}"]`); if (!cardEl) return;
+      audio.play('click'); cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); cardEl.classList.remove('flash'); void cardEl.offsetWidth; cardEl.classList.add('flash');
+    });
     META.forEach((d, i) => {
       const lvl = s.meta[d.id] || 0, maxed = lvl >= d.max, cost = metaCost(d, lvl);
-      const card = document.createElement('div'); card.className = 'sc' + (maxed ? ' maxed' : '');
+      const card = document.createElement('div'); card.className = 'sc' + (maxed ? ' maxed' : ''); card.dataset.id = d.id;
       card.innerHTML = `<div class="sct">${maxed ? 'Max Level' : d.max === 1 ? (lvl ? 'Owned' : 'Not owned') : 'Level ' + lvl}</div><div class="sci">${ico(STATICON[d.id], 40) || ''}</div><div class="spips">${d.max <= 12 && d.max > 1 ? Array.from({ length: d.max }, (_, q) => `<i class="${q < lvl ? 'on' : ''}"></i>`).join('') : ''}</div><div class="scn">${d.name}</div><div class="scd">${d.desc(Math.max(1, maxed ? lvl : lvl + 1))}</div><button class="btn small go" ${maxed || s.beats < cost ? 'disabled' : ''}>${maxed ? '✔' : cost + ' ' + curImg('beats')}</button>`;
       card.querySelector('button').onclick = () => { if (buyMeta(save(), d.id)) { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); } };
       core.appendChild(card);
@@ -137,8 +172,12 @@ export function createHub2(c) {
     if (gearFilter === 'Set') {
       for (const set of KEEP_SETS) {
         const members = KEEPSAKES.filter(k => k.set === set.id), have = members.filter(k => lvl(k) > 0).length, full = have === members.length;
-        const d = document.createElement('div'); d.className = 'setbox' + (full ? ' full' : '');
-        d.innerHTML = `<div class="setn">${set.name} <small>${have}/${members.length}</small></div><div class="setm">${members.map(k => `<span class="${lvl(k) ? '' : 'off'}">${k.icon}</span>`).join('')}</div><div class="setb">${STAT_TEXT[set.stat](set.val)}</div>`;
+        const C = 2 * Math.PI * 30, off = C * (1 - have / members.length);
+        const d = document.createElement('div'); d.className = 'setbox setx' + (full ? ' full' : '');
+        d.innerHTML = `<div class="setring"><svg viewBox="0 0 72 72" aria-hidden="true"><circle class="bg" cx="36" cy="36" r="30"/><circle class="fg" cx="36" cy="36" r="30" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/></svg><b>${have}<small>/${members.length}</small></b></div>` +
+          `<div class="setinfo"><div class="setn">${set.name}</div><div class="setm">${members.map(k => `<span class="${lvl(k) ? '' : 'off'}" title="${k.name}">${k.icon}<i>${lvl(k) ? '✔' : ''}</i></span>`).join('')}</div>` +
+          `<div class="setb ${full ? 'on' : ''}">${full ? 'ACTIVE: ' : 'Collect all: '}${STAT_TEXT[set.stat](set.val)}</div></div>`;
+        d.onclick = () => { audio.play('click'); const first = members.find(k => !lvl(k)) || members[0]; openKeep(first); };
         box.appendChild(d);
       }
     } else {
@@ -152,7 +191,7 @@ export function createHub2(c) {
         for (const k of items) {
           const cost = lvl(k) >= keepMax(k) ? 0 : keepCost(k, lvl(k)), pct = cost ? Math.min(100, Math.round((frag(k) / cost) * 100)) : 100;
           const b = document.createElement('button'); b.className = 'kcard t' + t + (lvl(k) ? '' : ' off') + (lvl(k) >= keepMax(k) ? ' max' : ''); b.style.setProperty('--tc', T.color);
-          b.innerHTML = `${lvl(k) ? `<i class="kstar" style="background-image:url(${iconURL('star')})"><b>${lvl(k)}</b></i>` : ''}<div class="kic">${k.icon}</div><div class="kbar"><i style="width:${pct}%"></i><span>${frag(k)}/${cost || 'max'}</span></div><div class="kname">${k.name}</div>${keepCanUp(s, k.id) ? '<em class="kup">▲</em>' : ''}`;
+          b.innerHTML = `${lvl(k) ? `<i class="kstar${lvl(k) > 9 ? ' w' : ''}" style="background-image:url(${iconURL('star')})"><b>${lvl(k)}</b></i>` : ''}<div class="kic">${k.icon}</div><div class="kbar"><i style="width:${pct}%"></i><span>${frag(k)}/${cost || 'max'}</span></div><div class="kname">${k.name}</div>${keepCanUp(s, k.id) ? '<em class="kup">▲</em>' : ''}`;
           b.onclick = () => { audio.play('click'); openKeep(k); };
           grid.appendChild(b);
         }
@@ -165,7 +204,7 @@ export function createHub2(c) {
     for (const n of [1, 10]) {
       const price = n === 10 ? KEEP_PRICE * 9 : KEEP_PRICE;
       row.appendChild(tile({ cls: 'chestcard t-gold', ic: n === 10 ? ico('gift', 46) : chestArt(30), name: n === 10 ? 'Ten Chests' : 'Keepsake Chest', desc: n === 10 ? 'With a star prize' : 'Backstage finds', btn: price + ' ' + curImg('sparkles'), gold: true, disabled: save().sparkles < price,
-        onclick: ev => { const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); if (ch) ch.classList.add('open'); setTimeout(() => { const got = openKeepChest(save(), n); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('levelup'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color }; }), 'Gear'); }, ch ? 420 : 0); } }));
+        onclick: ev => { const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); if (ch) ch.classList.add('open'); setTimeout(() => { const got = openKeepChest(save(), n); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('levelup'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color, rname: KEEP_TIERS[kk.tier].name.toUpperCase() }; }), 'Gear'); }, ch ? 420 : 0); } }));
     }
   }
   function openKeep(k) {
@@ -206,7 +245,7 @@ export function createHub2(c) {
       const bought = s.shop.bought[i];
       const name = d.kind === 'frag' ? WEAPONS.find(w => w.id === d.ref).name : d.kind === 'keep' ? KEEPSAKES.find(k => k.id === d.ref).name : d.kind === 'egg' ? 'Pet Egg' : d.kind === 'energy' ? 'Voice' : d.kind === 'sparkles' ? 'Sparkles' : 'Beats';
       const ic = d.kind === 'frag' ? icon(d.ref) : d.kind === 'keep' ? kicon(d.ref) : d.kind === 'egg' ? icon('egg') : d.kind === 'energy' ? '⚡' : d.kind === 'sparkles' ? curImg('sparkles') : curImg('beats');
-      const t = tile({ cls: 't-gold deal', ic, name: `${name} ×${d.n}`, desc: '', btn: bought ? 'OBTAINED' : d.price ? d.price + ' ' + curImg('sparkles') : 'FREE', gold: !bought, disabled: bought || s.sparkles < d.price, onclick: () => { if (buyDeal(save(), day, i)) { c.persist(); audio.play('upgrade'); c.refreshCur(); renderShop(); } } });
+      const t = tile({ cls: 't-gold deal', ic, name: `${name} ×${d.n}`, desc: '', btn: bought ? 'OBTAINED' : d.price ? d.price + ' ' + curImg('sparkles') : 'FREE', gold: !bought, disabled: bought || s.sparkles < d.price, onclick: ev => { const r = ev.currentTarget.getBoundingClientRect(); if (buyDeal(save(), day, i)) { c.persist(); audio.play('upgrade'); c.refreshCur(); renderShop(); dealCheer(r); } } });
       if (d.off < 100) { const bd = document.createElement('i'); bd.className = 'dealrib'; bd.innerHTML = `<b>-${d.off}%</b>`; t.appendChild(bd); }
       else { const bd = document.createElement('i'); bd.className = 'dealrib free'; bd.innerHTML = '<b>FREE</b>'; t.appendChild(bd); }
       const ds = t.querySelector('.ds'); if (d.base && !bought) ds.innerHTML = `<s>${d.base}</s> ${curImg('sparkles')}`; else ds.innerHTML = '&nbsp;';
@@ -234,18 +273,24 @@ export function createHub2(c) {
   }
 
   // ---------------------------------------------------------------- extra panels
+  // the duo wears the outfit: a hat drawn on canvas (icons.js) placed on each head of the picture; shades sit on the eyes
+  const HEADS = [{ x: 26, y: -10, w: 27 }, { x: 71, y: -9, w: 25 }], EYES = [{ x: 28.5, y: 23, w: 24 }, { x: 68, y: 24, w: 21 }];
+  function hatsOn(o) {
+    const u = iconURL('hat_' + o.id); if (!u) return `<span class="wardhat">${o.hat}</span>`;
+    return (o.id === 'sun' ? EYES : HEADS).map((h, i) => `<img class="what" src="${u}" alt="" style="left:${h.x}%;top:${h.y}%;width:${h.w}%;animation-delay:${i * 0.15}s">`).join('');
+  }
   const rib = n => `🎀 ${n}`;
   function openWardrobe() {
     const s = save(), day = c.dayKey();
     openPanel('WARDROBE', body => {
       const top = document.createElement('div'); top.className = 'wardtop';
       const worn = OUTFITS.find(o => o.id === s.outfits.worn);
-      top.innerHTML = `<div class="wardhero"><img src="assets/duo_idle.png" alt=""><span class="wardhat">${worn ? worn.hat : ''}</span></div><div class="sub">Ribbons ${rib(s.ribbons)}</div>`;
+      top.innerHTML = `<div class="wardhero2" style="--oc:${worn ? worn.color : '#ffd84d'}"><i class="wglow"></i><img class="wduo" src="assets/duo_idle.png" alt="">${worn ? hatsOn(worn) : ''}<i class="wped"></i></div><div class="wname">${worn ? worn.name : 'Everyday look'}</div><div class="sub">Ribbons ${rib(s.ribbons)}</div>`;
       body.appendChild(top);
       const grid = document.createElement('div'); grid.className = 'tiles';
       for (const o of OUTFITS) {
         const own = s.outfits.owned[o.id], av = outfitAvailable(o, day), wn = s.outfits.worn === o.id, wname = WEAPONS.find(w => w.id === o.weapon).name;
-        grid.appendChild(tile({ cls: 't-gold' + (wn ? ' on-loadout' : ''), ic: `<span class="kemo">${o.hat}</span>`, name: o.name, chip: o.event ? EVENT_THEMES_NAME(o.event) : '', desc: `${wname} +${Math.round((o.mul - 1) * 100)}%`, btn: own ? (wn ? 'TAKE OFF' : 'WEAR') : av ? rib(o.price) : 'Event only', gold: !own && av, disabled: !own && (!av || s.ribbons < o.price),
+        grid.appendChild(tile({ cls: 't-gold' + (wn ? ' on-loadout' : ''), ic: iconURL('hat_' + o.id) ? ico('hat_' + o.id, 42) : `<span class="kemo">${o.hat}</span>`, name: o.name, chip: o.event ? EVENT_THEMES_NAME(o.event) : '', desc: `${wname} +${Math.round((o.mul - 1) * 100)}%`, btn: own ? (wn ? 'TAKE OFF' : 'WEAR') : av ? rib(o.price) : 'Event only', gold: !own && av, disabled: !own && (!av || s.ribbons < o.price),
           onclick: () => { const sv = save(); if (own) wearOutfit(sv, wn ? '' : o.id); else if (!buyOutfit(sv, o.id, day)) return; c.persist(); audio.play('upgrade'); openWardrobe(); } }));
       }
       body.appendChild(grid);
@@ -314,5 +359,6 @@ export function createHub2(c) {
     list.appendChild(tile({ cls: 't-gold one', ic: '🎫', name: 'Fan Club Pass', desc: '30 days of daily gifts', btn: 'LOOK', gold: true, onclick: () => { audio.play('click'); openPass(); } }));
   }
   const addict = createAddictUI(c, openPanel, sec);
+  { const gf = $('gearFilters'); if (gf) gf.addEventListener('click', ev => { const b = ev.target.closest && ev.target.closest('button[data-f]'); if (!b) return; audio.play('click'); gearFilter = b.dataset.f; renderGear(); }); }   // the Collection filter chips
   return { addict, eventTile, shopExtras, renderSide, renderStats, renderGear, renderShop, openPanel, openPanelStats: null, setGearFilter: f => { gearFilter = f; }, lootModal };
 }
