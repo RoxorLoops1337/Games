@@ -1,6 +1,7 @@
 // 04-hit-juice (round 2): golden upgrade orbs that fly to the upgrade counter, bomb debris and smoke,
 // capsule muzzle flash and note trails. Own small pools with hard caps. Render-only: never touches the sim.
 import { pointAt } from './sim.js';
+import { createMoments, rungOf, drawSpeciesDeath, drawMuzzle, DEATH_DUR } from './hit_juice8.js';
 const TAU = Math.PI * 2;
 export const UP_X = 42, UP_Y = 40, CHIP_X = 620;   // CHIP_X: the RAGE and SHIELD chips (hud.js) sit at the right edge
 const H = 1280;   // the upgrade counter in the HUD (hud.js)
@@ -37,7 +38,21 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
   const calm = () => OPT.reduceMotion;
   const cap = n => (OPT.lowQuality ? n >> 1 : n);
 
+  // round 8: sounds and the best-moment tally run even with reduce motion on (they are not motion)
+  const MOM = createMoments(); let gRef = null, cN2 = 0, cT2 = -9, sndN = 0, sndT = -9, sndHit = '', sndHitT = -9;
+  function sounds(e, g) {
+    if (g !== gRef) { gRef = g; MOM.reset(); sndN = 0; sndT = -9; }
+    if (e.t === 'hit') { sndHit = e.src || ''; sndHitT = S.t; if (e.crit) { cN2 = S.t - cT2 < 1.6 ? cN2 + 1 : 1; cT2 = S.t; MOM.crit(cN2 - 1); } return; }
+    if (e.t !== 'kill') return;
+    const n = S.t - sndT < 0.9 ? sndN + 1 : 1; sndN = n; sndT = S.t; MOM.chain(n);
+    if (n >= 2 && sound) sound('rung' + rungOf(n));
+    if (e.head) {
+      const src = S.t - sndHitT < 0.12 && sndHit ? sndHit : 'capsule'; MOM.finished(src, S.t);
+      if (sound) { sound('fin_' + src); sound('death_' + (e.skin || 'love')); }
+    }
+  }
   function event(e, g) {
+    sounds(e, g);
     if (calm()) return;
     switch (e.t) {
       case 'hit': if (e.crit) { critN = S.t - critT < 1.6 ? critN + 1 : 1; critT = S.t; } lastHit.x = e.x; lastHit.y = e.y; lastHit.t = S.t; lastHit.src = e.src || ''; impact(e); break;
@@ -48,7 +63,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         { const m = M('rays', e.x, e.y, R * 1.5, e.head ? 0.34 : 0.24); m.n = e.head ? 10 : 6; m.rot = Math.random() * TAU; }
         const mine = S.t - lastHit.t < 0.12 && Math.abs(lastHit.x - e.x) < 90 && Math.abs(lastHit.y - e.y) < 90;
         if (mine) killPop(lastHit.src, e.x, e.y, R);
-        if (e.head) finish(mine ? lastHit.src : 'capsule', e);
+        if (e.head) { finish(mine ? lastHit.src : 'capsule', e); { const m = M('sdeath', e.x, e.y, 0, DEATH_DUR, true); m.wk = e.skin || 'love'; m.seed = Math.random() * 6; } }
         // kill chain: a glowing link from the previous kill and a note that climbs with the pitch ladder
         { const n = S.t - lastKill.t < 0.9 ? lastKill.n + 1 : 1, col = CHAIN_COL[Math.min(5, n >> 1)];
           if (n >= 2) { const l = M('link', lastKill.x, lastKill.y, 0, 0.3); l.x1 = e.x; l.y1 = e.y; l.col = col; l.w = 3 + Math.min(n, 12) * 0.4;
@@ -83,6 +98,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         S.rings.push({ x, y, r: R * 1.3, life: 0.4, max: 0.4, col: '#ffb347', glow: true });
         break;
       }
+      case 'swab': case 'dragon': case 'needles': case 'bubble': { const m = M('muz', g.p.x, g.p.y - 44, 0, e.t === 'needles' ? 0.2 : 0.34); m.wk = e.t; break; }   // a muzzle flash in the weapon's own look
       case 'shoot': {
         const p = g.p;
         if (flashes.length < 4) flashes.push({ x: p.x, y: p.y - 40, t: 0, dur: 0.12 });
@@ -202,6 +218,8 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         case 'ring': ctx.strokeStyle = m.col; ctx.lineWidth = 4 * a + 1; ctx.beginPath(); ctx.arc(0, 0, m.r * (m.inv ? 1 - k * 0.75 : 0.3 + k * 0.7), 0, TAU); ctx.stroke(); break;
         case 'zap': { ctx.rotate(m.rot); ctx.strokeStyle = m.col; ctx.lineWidth = 2.6; ctx.lineJoin = 'round'; ctx.beginPath(); const n = 5; for (let j = 0; j <= n; j++) { const xx = -m.r + (j / n) * m.r * 2, yy = j === 0 || j === n ? 0 : Math.sin(m.seed * 3 + j * 2.1 + Math.floor(m.t * 40)) * 9; j ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); break; }
         case 'finish': drawFinish(m, k, a); break;
+        case 'sdeath': ctx.scale(1.4, 1.4); drawSpeciesDeath(ctx, m.wk, k, m.seed, text); break;
+        case 'muz': drawMuzzle(ctx, m.wk, k, m.seed); break;
         case 'beam': { ctx.globalCompositeOperation = 'lighter'; const w = m.r * (0.5 + 0.5 * a) * (k < 0.15 ? k / 0.15 : 1), h = 260 * (0.4 + k); ctx.globalAlpha = a * 0.55; ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.moveTo(-w * 0.35, 0); ctx.lineTo(-w, -h); ctx.lineTo(w, -h); ctx.lineTo(w * 0.35, 0); ctx.closePath(); ctx.fill(); ctx.globalAlpha = a * 0.8; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(-w * 0.15, 0); ctx.lineTo(-w * 0.3, -h * 0.8); ctx.lineTo(w * 0.3, -h * 0.8); ctx.lineTo(w * 0.15, 0); ctx.closePath(); ctx.fill(); break; }
         case 'chunk': { const tx = m.vx * m.t, ty = m.vy * m.t + m.seed * m.t * m.t; ctx.translate(tx, ty);
           if (m.gold) { ctx.fillStyle = m.col; ctx.strokeStyle = '#8a5a00'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, m.r * (0.4 + 0.6 * Math.abs(Math.cos(m.t * 16))), m.r, 0, 0, TAU); ctx.fill(); ctx.stroke(); }
@@ -264,10 +282,18 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
   }
 
   // note trails behind the flying capsules (called from drawBullets with the live bullet list)
+  // trails per weapon: needles leave thin streaks, dragon snot a green puff wake, bubbles shed tiny rising bubbles
+  function weaponTrail(b, dt) {
+    if (trail.length >= cap(56)) return;
+    if (b.kind === 'needle') { if (Math.random() < dt * 40) tpush(b.x, b.y + 22, 0, 90, 0.16, 5, 'streak', b.crit ? '#ffe14a' : '#dff8ff'); }
+    else if (b.kind === 'snot') { if (Math.random() < dt * 22) tpush(b.x + (Math.random() - 0.5) * 10, b.y + 10, (Math.random() - 0.5) * 30, 30, 0.45, 8, false, Math.random() < 0.5 ? '#9dff6d' : '#d6ffb0'); }
+    else if (b.kind === 'bubble') { if (Math.random() < dt * 9) tpush(b.x + (Math.random() - 0.5) * b.r * 1.4, b.y + b.r * 0.5, (Math.random() - 0.5) * 20, -26, 0.7, 4 + Math.random() * 3, 'ring', '#d6f2ff'); }
+  }
   function bullets(list, dt) {
     if (calm()) return;
     for (let i = 0; i < list.length && trail.length < cap(56); i++) {
-      const b = list[i]; if (b.kind && b.kind !== 'pill') continue;
+      const b = list[i];
+      if (b.kind && b.kind !== 'pill') { weaponTrail(b, dt); continue; }
       if (Math.random() < dt * (b.crit ? 26 : 12)) tpush(b.x + (Math.random() - 0.5) * 10, b.y + 18, (Math.random() - 0.5) * 40, 30 + Math.random() * 30, b.crit ? 0.55 : 0.4, b.crit ? 7 : 5, Math.random() < 0.35, b.crit ? '#ffe14a' : '#9fefff');
     }
   }
@@ -374,7 +400,9 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
       const q = trail[i]; q.life -= dt; if (q.life <= 0) { trail[i] = trail[trail.length - 1]; trail.pop(); tfree.push(q); continue; }
       q.x += q.vx * dt; q.y += q.vy * dt; const a = q.life / q.max;
       ctx.globalAlpha = a * 0.8; ctx.fillStyle = q.col || '#9fefff';
-      if (q.n) { const s = q.s; ctx.beginPath(); ctx.ellipse(q.x, q.y, s * 0.7, s * 0.5, -0.4, 0, TAU); ctx.fill(); ctx.fillRect(q.x + s * 0.4, q.y - s * 1.6, 1.8, s * 1.7); }
+      if (q.n === 'streak') { ctx.strokeStyle = q.col; ctx.lineCap = 'round'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x, q.y + 26 * a + 4); ctx.stroke(); }
+      else if (q.n === 'ring') { ctx.strokeStyle = q.col; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(q.x, q.y, q.s * (1.4 - a * 0.4), 0, TAU); ctx.stroke(); }
+      else if (q.n) { const s = q.s; ctx.beginPath(); ctx.ellipse(q.x, q.y, s * 0.7, s * 0.5, -0.4, 0, TAU); ctx.fill(); ctx.fillRect(q.x + s * 0.4, q.y - s * 1.6, 1.8, s * 1.7); }
       else { ctx.beginPath(); ctx.arc(q.x, q.y, q.s * a, 0, TAU); ctx.fill(); }
     }
     for (let i = flashes.length - 1; i >= 0; i--) {
@@ -421,7 +449,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
     ctx.globalAlpha = 1;
   }
 
-  return { event, bullets, draw, tint, under, float, coinSpark, coinLand, critTier, pools: { chipfly, powers, orbs, smoke, trail, flashes, marks } };
+  return { event, bullets, draw, moment: () => MOM.m, tint, under, float, coinSpark, coinLand, critTier, pools: { chipfly, powers, orbs, smoke, trail, flashes, marks } };
 }
 
 // 1 at rest; right after a landing it pops and settles over 0.38s: the HUD takes the max with its own bounce
