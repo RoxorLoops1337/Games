@@ -45,3 +45,6 @@ for (const raw of BAD) {
   drawBellRings(ctx, { segs: mk(4) }, 1); assert.equal(arcs, 6, 'three cells each side');
   arcs = 0; drawBellRings(ctx, { segs: mk(4, 0) }, 1); assert.equal(arcs, 0, 'a dead bell draws nothing');
 }
+// a huge xp used to hang levelInfo (one loop pass per level) at page load
+{ const t0 = Date.now(), s = sim.sanitizeSave({ xp: 1e30 }); const li = sim.levelInfo(s.xp); assert.ok(Date.now() - t0 < 2000 && li.lv > 1, 'huge xp loads fast'); assert.equal(sim.sanitizeSave({ xp: 4321 }).xp, 4321); }
+{ const s = sim.sanitizeSave({ beats: 1e300, sparkles: 1e21, cleared: 1e9, best: 1e9 }); assert.ok(s.beats <= 1e12 && s.sparkles <= 1e12 && s.cleared === 50 && s.best === 50, 'absurd currency and stage values are clamped'); }

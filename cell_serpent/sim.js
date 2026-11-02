@@ -338,8 +338,8 @@ export function sanitizeSave(raw) {
   const s = defaultSave();
   if (!raw || typeof raw !== 'object') return s;
   const num = (v, d = 0) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : d);
-  s.beats = num(raw.beats ?? raw.coins); s.sparkles = num(raw.sparkles);
-  s.cleared = num(raw.cleared); s.best = Math.max(s.cleared, num(raw.best)); s.runs = num(raw.runs); s.kills = num(raw.kills);
+  s.beats = Math.min(1e12, num(raw.beats ?? raw.coins)); s.sparkles = Math.min(1e12, num(raw.sparkles));   // QA r10: absurd values showed as 1e+300 in the pills
+  s.cleared = Math.min(MAX_STAGE, num(raw.cleared)); s.best = Math.min(MAX_STAGE, Math.max(s.cleared, num(raw.best))); s.runs = num(raw.runs); s.kills = num(raw.kills);
   s.muted = !!raw.muted;
   if (raw.daily && typeof raw.daily === 'object') { s.daily.day = num(raw.daily.day); for (const k of Object.keys(raw.daily.progress || {})) s.daily.progress[k] = num(raw.daily.progress[k]); for (const k of Object.keys(raw.daily.claimed || {})) if (raw.daily.claimed[k]) s.daily.claimed[k] = 1; }
   for (const d of META) s.meta[d.id] = Math.min(d.max, num(raw.meta && raw.meta[d.id]));
@@ -361,7 +361,7 @@ export function sanitizeSave(raw) {
   if (raw.inv && typeof raw.inv === 'object') s.inv = { day: num(raw.inv.day), left: Math.min(2, num(raw.inv.left, 2)), best: num(raw.inv.best) };
   if (raw.card && typeof raw.card === 'object') s.card = { until: num(raw.card.until), last: num(raw.card.last) };
   if (raw.trophies && typeof raw.trophies === 'object') for (const t of TROPHIES) if (raw.trophies[t.id]) s.trophies[t.id] = 1;
-  s.login = num(raw.login); s.hardCleared = Math.min(s.cleared, num(raw.hardCleared)); s.xp = num(raw.xp);
+  s.login = num(raw.login); s.hardCleared = Math.min(s.cleared, num(raw.hardCleared)); s.xp = Math.min(1e10, num(raw.xp));   // QA r10: levelInfo loops once per level, so a huge xp froze the page at load
   if (raw.energy && typeof raw.energy === 'object') s.energy = { n: Math.max(0, Math.min(ENERGY_OVER_MAX, num(raw.energy.n, ENERGY_MAX))), t: num(raw.energy.t) };
   for (const k of KEEPSAKES) { const r = raw.keeps && raw.keeps[k.id]; if (r) { s.keeps[k.id].lv = Math.min(keepMax(k), num(r.lv)); s.keeps[k.id].frag = num(r.frag); } }
   if (raw.sign && typeof raw.sign === 'object') s.sign = { day: num(raw.sign.day), n: num(raw.sign.n) };
