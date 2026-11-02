@@ -28,4 +28,13 @@ for (const k of css.matchAll(/@keyframes \w+\{([\s\S]*?)\}\}/g)) {
 }
 const main = fs.readFileSync(new URL('../../cell_serpent/main.js', import.meta.url), 'utf8');
 assert.ok(main.includes('motion.screen(id)') && main.includes('motion.num('), 'main.js hooks present');
+// round 2: combo flash, staggered list entrance, glass icon buttons, narrow top bar
+const mo = fs.readFileSync(new URL('../../cell_serpent/motion.js', import.meta.url), 'utf8');
+assert.ok(/function flash\(/.test(mo) && /COMBO_MS/.test(mo) && /function stagger\(/.test(mo), 'combo flash and stagger exist');
+assert.ok(/STAG_MAX = 12/.test(mo), 'stagger is capped at 12 cards');
+assert.ok(/if \(reduced\(\)[^)]*\)[^;]*return/.test(mo.slice(mo.indexOf('function flash('))), 'flash respects Reduce Motion');
+assert.ok(/\.mo-st\.mo-st\{animation:moItemIn/.test(css), 'stagger css');
+assert.ok(/\.gear,#muteBtn\.on\{display:grid\}/.test(css) && !/#muteBtn\{display/.test(css), 'glass icon buttons keep #muteBtn hidden by default');
+assert.ok(/\.hubtop\{width:calc\(100% \+ 36px\)/.test(css), 'narrow phone top bar uses full width');
+assert.ok(main.includes('motion.stagger('), 'main.js staggers the hub tab entrance');
 console.log('19_transitions ok');
