@@ -61,3 +61,20 @@ assert.ok(!readFileSync(join(root, 'hud.js'), 'utf8').includes('—'), 'no em da
   g.encore = 1; R.draw(g, null, 1 / 30);
   assert.ok(!readFileSync(join(root, 'hud.js'), 'utf8').includes('—'), 'no em dash in hud.js (b3)');
 }
+
+// ---- batch 4 (06-hud): baked chrome, beat streak chip, +1 bar popup, ghost trail, press feedback
+{
+  const { createRenderer: mk } = await import(join(root, 'render.js'));
+  const R = mk(canvas, null, null);
+  const g = sim.createGame({ seed: 9, stage: 10, meta: { rev: 1 } });
+  let streak = 0;
+  R.setOptions({ beatStreak: () => streak });
+  for (const [gv, st, pr] of [[3, 0, 0.1], [4, 3, 0.2], [5, 12, 0.5], [16, 25, 0.9], [2, 0, 1]]) {
+    g.groove = gv; streak = st; g.progress = pr;
+    R.draw(g, { joy: { on: false } }, 1 / 30);
+  }
+  R.hudPress('pause'); R.hudPress('stats'); R.draw(g, { joy: { on: false } }, 1 / 30);
+  const src = readFileSync(join(root, 'hud.js'), 'utf8');
+  assert.ok(src.includes('beatStreak') && src.includes('chrome06'), 'hud has the beat streak chip and baked chrome layer');
+  assert.ok(!src.includes('—'), 'no em dash in hud.js (b4)');
+}
