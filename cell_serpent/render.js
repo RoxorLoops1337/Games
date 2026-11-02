@@ -114,6 +114,8 @@ export function createRenderer(canvas, art, kit) {
   }
   function text(str, x, y, size, fill = '#fff', stroke = '#10131c', align = 'center') {
     if (typeof str !== 'string') str = String(str);
+    if (S.textLog) { const m = ctx.getTransform(); S.textLog.push({ str, x: m.a * x + m.c * y + m.e, y: m.b * x + m.d * y + m.f, size: size * Math.hypot(m.a, m.b), fill, stroke, align, alpha: ctx.globalAlpha }); }   // b12k: the contrast audit reads every text draw (position in canvas pixels, colours)
+    if (S.textHide) return;   // b12k: ...and a second frame without the text gives the real pixels behind it
     if (kit && kit.makeCanvas) {   // 11-perf: strips are baked at preset sizes only and scaled to the exact size, so a pulsing number never bakes a canvas
       const ps = presetSize(size), q = size / ps;
       if (str.length > 1 && NUMSTR.test(str)) { drawNumber(str, x, y, ps, q, fill, stroke, align); return; }
@@ -323,7 +325,9 @@ export function createRenderer(canvas, art, kit) {
     const bph = bossPhase(g);
     const bgp = (S.bgfx || (S.bgfx = createBgFx())).draw(ctx, { kit, skin: g.skin, phase: bph, flash: OPT.reduceFlash ? 0 : Math.max(0, 1 - (S.t - S.bpFlash) / 0.55), noFlash: OPT.reduceFlash, stage: g.stage, boss: isBossStage(g.stage), th, t: S.t, reduce: OPT.reduceMotion, low: OPT.lowQuality, kick: S.t - (S.killT === undefined ? -9 : S.killT), snakes: g.snakes, beam: g.beam, gt: g.t });
     // the stage floor below the line, where the duo stands; if the snake touches the line it is over
-    if (g.ring) { drawRing(ctx, g.ring, S.t, isBossStage(g.stage), OPT.reduceMotion ? 0.4 : bgp, kit, g.skin, OPT.reduceMotion ? 0 : ringDanger(g.snakes, g.ring)); if (OPT.highContrast) hcLine(g.ring); return; }   // a circle around the duo in the middle
+    if (g.ring) { const dng = ringDanger(g.snakes, g.ring); drawRing(ctx, g.ring, OPT.reduceMotion ? 0 : S.t, isBossStage(g.stage), OPT.reduceMotion ? 0.4 : bgp, kit, g.skin, dng); if (OPT.highContrast) hcLine(g.ring);
+      if (OPT.colorBlind && dng > 0.25) { const rg = g.ring; ctx.save(); ctx.setLineDash([7, 9]); ctx.lineWidth = 4; ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.arc(rg.cx, rg.cy, rg.R + 24, 0, TAU); ctx.stroke(); ctx.restore(); }   // b12k: danger is also a dashed white outer band, not only a red rim
+      return; }   // b12k: reduced motion freezes the ripples, bulbs and dash (t = 0) but keeps the danger heat as a steady red rim   // a circle around the duo in the middle
     ctx.save(); ctx.beginPath();
     for (let x = 0; x <= W; x += 20) { const y = LINE_Y + Math.sin(x * 0.05 + S.t * 2.2) * 5; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.lineWidth = 16; ctx.strokeStyle = 'rgba(255,90,140,.18)'; ctx.stroke(); ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,150,190,.75)'; ctx.stroke(); ctx.restore();

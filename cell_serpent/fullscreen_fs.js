@@ -50,6 +50,8 @@ function showA2hs() {
   const d = document.createElement('div'); d.id = 'a2hsFs'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Add to Home Screen for full screen');
   d.innerHTML = '<div class="a2t"><b>Full screen on iPhone</b><span>Tap <u>Share</u>, then <u>Add to Home Screen</u>. Open the game from its icon.</span></div><button type="button" class="a2x" aria-label="Close">OK</button><i class="a2arrow" aria-hidden="true"></i>';
   d.querySelector('.a2x').onclick = () => d.remove();
+  d.setAttribute('aria-live', 'polite'); d.querySelector('.a2x').setAttribute('aria-label', 'OK, close this hint');   // b12k
+  addEventListener('keydown', function esc(e) { if (!d.isConnected) return removeEventListener('keydown', esc); if (e.key === 'Escape') { d.remove(); removeEventListener('keydown', esc); } });
   document.body.appendChild(d); markSeen();
   setTimeout(() => document.addEventListener('pointerdown', () => d.remove(), { once: true, capture: true }), 600);   // any next tap clears it so it never sits over a run
   setTimeout(() => d.remove(), 14000);
@@ -61,7 +63,7 @@ export function initFullscreen(getOn) {
   const sup = fsSupported();
   document.documentElement.classList.toggle('fs-ok', sup);
   const btn = document.getElementById('fsBtn');
-  const paint = () => { if (btn) { btn.classList.toggle('on', !!fsEl()); btn.hidden = !sup; btn.setAttribute('aria-label', fsEl() ? 'Leave full screen' : 'Full screen'); } };
+  const paint = () => { if (btn) { btn.classList.toggle('on', !!fsEl()); btn.hidden = !sup; btn.setAttribute('aria-label', fsEl() ? 'Leave full screen' : 'Full screen'); btn.setAttribute('aria-pressed', fsEl() ? 'true' : 'false'); btn.title = fsEl() ? 'Leave full screen' : 'Full screen'; } };   // b12k: a labeled toggle
   paint();
   // an explicit tap on the fullscreen button always toggles; every other request is gated by the setting
   if (btn) btn.addEventListener('click', e => { e.stopPropagation(); if (fsEl()) exitFs(); else requestFs(true); });

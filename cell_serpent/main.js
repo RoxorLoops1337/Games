@@ -1,3 +1,4 @@
+import { keyAim, sliderAim, watchAim, resetAimSr, setFieldLabel } from './a11y_b12k.js';
 import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { skinFor, recordAddictRun, eventInfo, ensureEvent } from './sim.js';
 import { deathCauseOf } from './screen_b11.js';
@@ -106,7 +107,7 @@ addEventListener('resize', resize); resize(); initFullscreen(() => save.settings
 initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap = true; }); initKeyboard(); initSrPass(); initA11y7(); initGridNav(document.getElementById('tabBattle')); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
 
 let shownId = '';
-function show(id) { { const ss = sheetSound(shownId, id); shownId = id; if (ss) audio.play(ss); } if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id); }
+function show(id) { { const ss = sheetSound(shownId, id); shownId = id; if (ss) audio.play(ss); } if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id && !(g && g.ring)); }
 // the gig claim holds the pill at its old value until the flying rewards land (then it counts up with a +N)
 const curHold = {};
 function gigFlies(list, d0 = 0) {
@@ -516,9 +517,9 @@ function startRun(stage, mode2 = '') {
   g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
   g.petJoy = save.petEquip.map(id => (save.pets[id].joy || 0) >= 100);   // round 6: an overjoyed pet shows off in the run (cosmetic)
   mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove(); if (fromHub) curtainOpen(document.documentElement.classList.contains('rm'));
-  announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + (g.ring ? 'Drag to aim, the duo shoots on its own.' : 'Slide to move, the duo shoots up on its own.'));
+  announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + (g.ring ? 'Drag to aim, or use the arrow keys. The duo shoots on its own.' : 'Slide to move, the duo shoots up on its own.'));
   window.CS.g = g;
-  aimS.now = aimS.tgt = -Math.PI / 2; aimHint = !!g.ring && aimHintLeft(); if (g.ring) aimHintBump();
+  resetAimSr(); setFieldLabel(!!g.ring); aimS.now = aimS.tgt = -Math.PI / 2; aimHint = !!g.ring && aimHintLeft(); if (g.ring) aimHintBump();
   if (!mode2) teaseGoal(save, dayKey(), !!(save.settings.reduceMotion || systemReduceMotion())); else hideTease();
 }
 let awayH = hoursAway(Date.now()); addEventListener('pagehide', () => stampVisit(Date.now()));
@@ -612,10 +613,11 @@ let encoreTap = false;
 function readInput() {
   if (g.ring) {   // b11: circle stages: the duo is fixed, left/right (or A/D) turn the aim, the sim gets an eased angle
     if (keys.a || keys.arrowleft) aimS.tgt -= 2.8 / 60; if (keys.d || keys.arrowright) aimS.tgt += 2.8 / 60;
-    if (keys.arrowup || keys.w) aimS.tgt = -Math.PI / 2; if (keys.arrowdown || keys.s) aimS.tgt = Math.PI / 2;
+    { const ka = keyAim(keys); if (ka !== null) aimS.tgt = ka; }   // b12k: up, down and the diagonals snap (left or right alone still turn)
+    if (joy.sdx) aimS.tgt = sliderAim(aimS.tgt, joy.sdx, 1 / 60);   // b12k: the slide bar (either hand) turns the aim in circle stages
     let da = (aimS.tgt - aimS.now) % (Math.PI * 2); if (da > Math.PI) da -= Math.PI * 2; else if (da < -Math.PI) da += Math.PI * 2;
     aimS.now += da * 0.35; if (aimS.now > Math.PI) aimS.now -= Math.PI * 2; else if (aimS.now < -Math.PI) aimS.now += Math.PI * 2;
-    const enc2 = encoreTap || !!keys[' ']; encoreTap = false;
+    const enc2 = encoreTap || !!keys[' ']; encoreTap = false; watchAim(aimS.now);
     return { mx: 0, my: 0, aim: aimS.now, encore: enc2 };
   }
   let mx = joy.dx + (joy.sdx || 0);
