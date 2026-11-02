@@ -62,10 +62,10 @@ export function showTutorial(onDone, audio, kit, art) {
     <div class="tdots"><i class="on"></i><i></i><i></i></div>
     <div class="tbtns"><button class="tskip" type="button">SKIP</button><button class="tnext" type="button" aria-label="Next">▶</button></div></div>`;
   document.body.appendChild(el);
-  let n = 0, done = false, timer = 0;
+  let n = 0, done = false, timer = 0, popT = 0;
   const steps = el.querySelectorAll('.tstep'), dots = el.querySelectorAll('.tdots i');
-  const go = k => { n = k; steps.forEach((s, i) => { s.classList.toggle('on', i === k); if (i === k) { s.style.animation = 'none'; void s.offsetWidth; s.style.animation = ''; } }); dots.forEach((d, i) => d.classList.toggle('on', i === k)); const nb = el.querySelector('.tnext'); nb.classList.toggle('go', k === 2); nb.textContent = k === 2 ? 'GO!' : '\u25B6'; clearTimeout(timer); timer = setTimeout(next, 3400); };
-  const finish = () => { if (done) return; done = true; clearTimeout(timer); setFlag(KEY_TUT); el.classList.add('out'); setTimeout(() => el.remove(), 220); onDone(); };
+  const go = k => { n = k; steps.forEach((s, i) => { s.classList.toggle('on', i === k); if (i === k) { s.style.animation = 'none'; void s.offsetWidth; s.style.animation = ''; } }); dots.forEach((d, i) => d.classList.toggle('on', i === k)); const nb = el.querySelector('.tnext'); nb.classList.toggle('go', k === 2); nb.textContent = k === 2 ? 'GO!' : '\u25B6'; clearTimeout(timer); clearTimeout(popT); if (k === 2) popT = setTimeout(() => audio.play('pop', { head: true }), 2150); timer = setTimeout(next, 3400); };
+  const finish = () => { if (done) return; done = true; clearTimeout(timer); clearTimeout(popT); setFlag(KEY_TUT); el.classList.add('out'); setTimeout(() => el.remove(), 220); onDone(); };
   const next = () => { audio.play('click'); if (n >= 2) finish(); else go(n + 1); };
   el.querySelector('.tnext').onclick = next;
   el.querySelector('.tskip').onclick = () => { audio.play('click'); finish(); };

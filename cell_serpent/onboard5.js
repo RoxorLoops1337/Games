@@ -66,7 +66,8 @@ export function setupTitleSnake(title, kit) {
     const r = cv.getBoundingClientRect(); if (!r.width || !title.getClientRects().length) return;
     const x = e.clientX - r.left, y = e.clientY - r.top;
     pokeHit = y > -6 && y < H + 6; pokeT = nowT || performance.now() / 1000; pokeX = x; pokeY = y;
-    title.dispatchEvent(new CustomEvent('snakepoke', { detail: { hit: pokeHit, x, y } }));
+    const cell = Math.max(0, Math.min(N - 1, Math.round((head - x) / GAP)));   // 0 = the head, N-1 = the tail tip
+    title.dispatchEvent(new CustomEvent('snakepoke', { detail: { hit: pokeHit, x, y, cell, n: N } }));
   });
   cv._seek = x => { head = x; };   // for tests and screenshots
   return { stop() { cancelAnimationFrame(rafId); } };

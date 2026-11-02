@@ -134,6 +134,8 @@ export function createAudio() {
     squeak: () => gate('squeak', 80) && tone(2400, 0.05, 'square', 0.03, -900),
     baa: () => gate('baa', 200) && (tone(320, 0.4, 'sawtooth', 0.07, 45), tone(330, 0.4, 'sawtooth', 0.045, 40, 0.01)),
     oink: () => gate('oink', 200) && (tone(190, 0.1, 'sawtooth', 0.09, 60), tone(200, 0.1, 'sawtooth', 0.08, -40, 0.11)),
+    // the title snake: every cell squeaks a pentatonic step, the head low and the tail tip high, so a swipe along it plays a tune
+    cellsq: e => { if (!gate('cellsq', 70)) return; const c = Math.max(0, Math.min(12, (e && e.cell) | 0)), f = 392 * Math.pow(2, ([0, 2, 4, 7, 9][c % 5] + 12 * Math.floor(c / 5)) / 12); tone(f, 0.09, 'triangle', 0.09, f * 0.25); tone(f * 2, 0.05, 'sine', 0.035, 0, 0.01); },
     boop: () => gate('boop', 200) && tone(330, 0.2, 'sine', 0.09, -120),
     danger: () => gate('danger', 300) && (tone(150, 0.1, 'square', 0.1), tone(150, 0.1, 'square', 0.1, 0, 0.16)),
     mend: () => gate('mend', 300) && tone(880, 0.12, 'sine', 0.05, 520),
