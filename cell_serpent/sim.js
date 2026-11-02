@@ -364,6 +364,7 @@ export function sanitizeSave(raw) {
   if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^h?\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
   if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
   s.addict = sanitizeAddict(raw.addict);
+  if (raw.petNames && typeof raw.petNames === 'object' && !Array.isArray(raw.petNames)) { const pn = {}; for (const p of PETS) { const v = raw.petNames[p.id]; const n = typeof v === 'string' ? v.replace(/[^\w \-!+&.]/g, '').trim().slice(0, 10) : ''; if (n) pn[p.id] = n; } s.petNames = pn; }
   if (Array.isArray(raw.presetNames)) s.presetNames = [0, 1, 2].map(i => typeof raw.presetNames[i] === 'string' ? raw.presetNames[i].replace(/[^\w \-!+&.]/g, '').trim().slice(0, 8) : '');
   if (Array.isArray(raw.presets)) s.presets = [0, 1, 2].map(i => Array.isArray(raw.presets[i]) ? raw.presets[i].filter((id, j, a) => WEAPON[id] && a.indexOf(id) === j).slice(0, LOADOUT_SIZE) : []);
   const lo = Array.isArray(raw.loadout) ? raw.loadout.filter((id, i, a) => WEAPON[id] && s.skills[id].lv > 0 && a.indexOf(id) === i).slice(0, LOADOUT_SIZE) : [];

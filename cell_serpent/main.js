@@ -22,6 +22,9 @@ import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { paintTabIcons, bindHubSwipe } from './tabs_ui.js';
 import { watchSideIcons } from './side_icons.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
+import { renderRecStrip } from './build_rec.js';
+import { petLabel } from './pet_names.js';
+import { emptyCard } from './empty_ux.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
 import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide } from './battle_ui.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
@@ -323,7 +326,7 @@ function renderPets() {
     const k = save.pets[p.id], owned = k.star > 0, maxed = k.star >= PET_MAX_STAR, need = maxed ? 0 : petCost(k.star), eq = save.petEquip.includes(p.id);
     const stars = '★ ' + k.star + '/' + PET_MAX_STAR;
     const starH = Array.from({ length: PET_MAX_STAR }, (_, n) => `<i class="star${n < k.star ? ' on' : ''}">★</i>`).join('');
-    const t = tile({ cls: 'coll pet t-weapon' + (eq ? ' on-loadout' : '') + (owned ? '' : ' unowned') + (petCanUp(save, p.id) ? ' ready' : ''), ic: icon(p.id), lock: !owned, name: p.name, chip: owned ? (eq ? 'WALKING' : 'AT HOME') : 'NEW', chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: p.flavor, pips: starH,
+    const t = tile({ cls: 'coll pet t-weapon' + (eq ? ' on-loadout' : '') + (owned ? '' : ' unowned') + (petCanUp(save, p.id) ? ' ready' : ''), ic: icon(p.id), lock: !owned, name: petLabel(save, p), chip: owned ? (eq ? 'WALKING' : 'AT HOME') : 'NEW', chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: p.flavor, pips: starH,
       bar: need ? Math.min(100, Math.round((k.frag / need) * 100)) : 100, barText: need ? k.frag + ' / ' + need : '', btn: maxed ? 'FULL STARS' : owned ? 'MORE STARS' : 'WELCOME HOME', disabled: !petCanUp(save, p.id),
       onclick: () => { if (petUp(save, p.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } } });
     if (owned) { const e = document.createElement('button'); e.className = 'btn small go alt'; e.textContent = eq ? 'BENCH' : 'WALK WITH ME'; e.onclick = () => { if (togglePet(save, p.id)) { persist(); audio.play('click'); renderHub(); } }; t.appendChild(e); }
@@ -333,7 +336,7 @@ function renderPets() {
     t.tabIndex = 0; t.onclick = e => { if (!e.target.closest('button')) { audio.play('click'); sheets.petSheet(p.id); } };
     list.appendChild(t);
   }
-  if (!list.querySelector('.tile')) list.insertAdjacentHTML('beforeend', '<div class="sec"><span style="background:#8a7aa8">Nobody here yet</span></div>');
+  if (!list.querySelector('.tile')) list.appendChild(emptyCard('pets', petFilter, () => { petFilter = 'All'; audio.play('click'); renderPets(); }));
 }
 function renderGoals() {
   const list = $('goalList'); list.innerHTML = '';
@@ -354,6 +357,7 @@ function renderGoals() {
 function renderSkills() {
   const list = $('skillList'); list.innerHTML = '';
   loadoutRow($('loadoutRow'), false); enableDrag($('loadoutRow'), { save: () => save, persist: () => persist(), audio, rerender: () => renderHub() }); renderPresets($('presetRow'), { save: () => save, persist: () => persist(), audio, icon, rerender: () => renderHub() });
+  { let rs = $('recStrip'); if (!rs) { rs = document.createElement('div'); rs.id = 'recStrip'; $('presetRow').after(rs); } try { renderRecStrip(rs, { save: () => save, persist: () => persist(), audio, icon, rerender: () => renderHub(), species: kit && kit.SPECIES }); } catch (e) { /* ignore */ } }
   { const rdy = WEAPONS.filter(w => save.skills[w.id].lv > 0 && save.skills[w.id].lv < SKILL_MAX_LV && save.skills[w.id].frag >= skillUpgradeCost(save.skills[w.id].lv).frag).length; if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold sec'; b.style.cssText = 'grid-column:1/-1;margin:2px auto'; b.textContent = 'LEVEL UP ALL READY (' + rdy + ')'; b.onclick = () => { if (upgradeAllSkills(save)) { persist(); audio.play('upgrade'); renderHub(); } }; list.appendChild(b); } }
   const isRdy = w => { const k = save.skills[w.id]; return k.lv > 0 ? k.lv < SKILL_MAX_LV && k.frag >= skillUpgradeCost(k.lv).frag : k.frag >= w.frag && (save.cleared || 0) >= (w.stage || 0); };
   { const row = chipRow(['All', 'Owned', 'Ready'], skFilter, o => { skFilter = o; audio.play('click'); renderSkills(); }, { Ready: WEAPONS.filter(isRdy).length });
@@ -384,7 +388,7 @@ function renderSkills() {
     groups[eq ? 0 : owned ? 1 : 2].push(t);
   }
   for (const g of groups) g.sort((a, b) => keyOf.get(a) - keyOf.get(b));
-  if (!groups.some(g => g.length)) list.insertAdjacentHTML('beforeend', '<div class="sec"><span style="background:#8a7aa8">Nothing here yet</span></div>');
+  if (!groups.some(g => g.length)) list.appendChild(emptyCard('skills', skFilter, () => { skFilter = 'All'; audio.play('click'); renderSkills(); }));
   [['Equipped', '#6fe08a'], ['Owned', '#4fd8f0'], ['Not Owned', '#8a7aa8']].forEach(([name, col], i) => {
     if (!groups[i].length) return;
     const h = document.createElement('div'); h.className = 'sec'; h.innerHTML = `<span style="background:${col}">${name}</span>`; list.appendChild(h);
