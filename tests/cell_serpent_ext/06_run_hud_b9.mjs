@@ -11,10 +11,10 @@ const src = readFileSync(join(root, 'hud.js'), 'utf8');
 assert.ok(!src.includes('—'), 'no em dash in hud.js');
 
 // source-level floors: the small labels are lifted, badges and pips are bigger
-assert.ok(src.includes('fzp(22)') && src.includes('v.length > 3 ? 18 : 21'), 'stats values lifted');
-assert.ok(src.includes("'lvb09|'") && src.includes("'pips07|'"), 'new badge and pip bakes');
+assert.ok(src.includes('TXT_MIN, \'#e6f6ff\''), 'stats values lifted (batch 12: 24 units)');
+assert.ok(src.includes("'lvb12c|'") && src.includes("'pips07|'"), 'new badge and pip bakes');
 assert.ok(!/maxed \? 9 : 14/.test(src), 'old tiny badge text is gone');
-assert.ok(src.includes("rr(-84, 14, Math.max(5, 168 * left), 7, 3.5)"), 'thicker combo timer');
+assert.ok(src.includes("rr(-84, 19, Math.max(5, 168 * left), 7, 3.5)"), 'thicker combo timer');
 
 // record every text drawn, with its y, to prove several fresh skills do not print over each other
 const calls = [];
@@ -30,4 +30,4 @@ R.draw(g, { joy: { on: false } }, 1 / 30);
 assert.ok(calls.filter(c => c[0] === 'MAX').length >= 3, 'maxed tiles show a MAX pill');
 const tags = calls.filter(c => c[0] === 'NEW SKILL');
 assert.ok(tags.length >= 2, 'several NEW SKILL tags at once');
-assert.ok(src.includes('60 * (nCap++)') && src.includes('- (lift || 0)'), 'tags are lifted one above the other (verified in a screenshot)');
+assert.ok(src.includes('76 * (nCap++)') && src.includes('- (lift || 0)'), 'tags are lifted one above the other (verified in a screenshot)');

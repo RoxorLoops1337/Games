@@ -3,6 +3,7 @@
 import { SNACK_RAGE } from './sim.js';
 
 const TAU = Math.PI * 2;
+const TXT_MIN = 24;   // 12-hud-c: same floor as hud.js (24 units is 12 CSS px on a 360 wide phone)
 
 // ---- tile sprite memo: the baked glass disc depends only on colour, radius and the contrast mode. The renderer used to
 // build the string key 'tile06|col|r|hc' for every tile on every frame; this keeps a tiny list and compares the three
@@ -41,16 +42,16 @@ export function createBuffChips(h) {
   const sh = newBuffState(), rg = newBuffState();
   const cols = { shield: '#7fe8ff', rage: '#ffd24a' };
   function chip(info, x, cy, k) {
-    const w = 160, hh = 34, y = cy - hh / 2, col = cols[info.kind], blink = info.low && !reduce() ? 0.5 + 0.5 * Math.sin(S.t * 12) : 0;
+    const w = 212, hh = 42, y = cy - hh / 2, col = cols[info.kind], blink = info.low && !reduce() ? 0.5 + 0.5 * Math.sin(S.t * 12) : 0;
     ctx.save(); ctx.translate(x + w / 2, cy); ctx.scale(k, k); ctx.translate(-(x + w / 2), -cy);
     glass(x, y, w, hh, 17, info.low ? 'rgba(255,' + (150 + Math.round(blink * 60)) + ',120,.9)' : info.kind === 'rage' ? 'rgba(255,210,74,.7)' : 'rgba(127,232,255,.7)', 'rgba(14,9,48,.55)');
     const ik = info.snack ? 'snack' : info.kind;
-    blit(kit && kit.SPR.pickup(ik), x + 19, cy - 2, 30);
-    text(info.snack ? 'SNACK' : info.kind === 'rage' ? 'RAGE' : 'SHIELD', x + 38, cy - 4, fz(16), col, '#0b1020', 'left');
-    text(info.secs + 's', x + w - 14, cy - 4, fz(18), info.low ? '#ffd0c0' : '#ffffff', '#0b1020', 'right');
+    blit(kit && kit.SPR.pickup(ik), x + 23, cy - 3, 34);
+    text(info.snack ? 'SNACK' : info.kind === 'rage' ? 'RAGE' : 'SHIELD', x + 46, cy - 4, TXT_MIN, col, '#0b1020', 'left');
+    text(info.secs + 's', x + w - 16, cy - 4, TXT_MIN, info.low ? '#ffd0c0' : '#ffffff', '#0b1020', 'right');
     ctx.save(); rr(x, y, w, hh, 17); ctx.clip();   // the timer bar drains along the bottom edge, inside the pill
-    ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.fillRect(x + 12, y + hh - 8, w - 24, 4);
-    ctx.fillStyle = info.low ? '#ff9a7a' : col; ctx.fillRect(x + 12, y + hh - 8, Math.max(3, (w - 24) * info.frac), 4);
+    ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.fillRect(x + 14, y + hh - 8, w - 28, 4);
+    ctx.fillStyle = info.low ? '#ff9a7a' : col; ctx.fillRect(x + 14, y + hh - 8, Math.max(3, (w - 28) * info.frac), 4);
     ctx.restore();
     ctx.restore();
   }
@@ -58,8 +59,8 @@ export function createBuffChips(h) {
   return {
     draw(g, b, landBounce) {
       const p = g.p, a = buffUpdate(sh, 'shield', p.shield, undefined), r = buffUpdate(rg, 'rage', p.rage, g.snacks | 0);
-      if (a) chip(a, W - 180, H - 113 - b, landBounce(S, 'shield'));
-      if (r) chip(r, W - 180, H - 153 - b, landBounce(S, 'rage'));
+      if (a) chip(a, W - 226, H - 126 - b, landBounce(S, 'shield'));   // 12-hud-c: wider and taller chips for 24 unit text, lifted clear of the level badges
+      if (r) chip(r, W - 226, H - 176 - b, landBounce(S, 'rage'));
       return !!(a || r);
     },
     state: { sh, rg },
