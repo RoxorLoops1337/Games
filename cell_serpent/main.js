@@ -216,7 +216,7 @@ $('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
 $('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
-$('stGo').onclick = () => { audio.unlock(); audio.play('click'); beginStage(sel); };
+$('stGo').onclick = () => { audio.unlock(); audio.play('click'); const b = $('stGo'); b.classList.remove('go-hit'); void b.offsetWidth; b.classList.add('go-hit'); beginStage(sel); };
 $('enPlus').onclick = () => { audio.unlock(); if (buyEnergy(save, Date.now())) { persist(); audio.play('upgrade'); refreshCur(); toast('Voice +10'); } else toast('Not enough Sparkles'); };
 // a stage costs Voice; the Piggy Bank Parade is free
 function beginStage(stage) {
@@ -227,12 +227,12 @@ function beginStage(stage) {
 // the stage picture: the lane for this stage with the serpent on it
 const stCtx = $('stCanvas').getContext('2d');
 const W_ = 720;
-let pvKey = -1, pvPath = null, pvBg = null, pvBgKey = '', pvLast = -1;
+let pvT0 = -9, pvKey = -1, pvPath = null, pvBg = null, pvBgKey = '', pvLast = -1;
 function drawPreview(t) {
   if (!kit) return;
-  if (t - pvLast < 0.032 && t >= pvLast) return; pvLast = t;
+  if (pvKey === sel && t - pvLast < 0.032 && t >= pvLast) return; pvLast = t;   // a stage change always repaints at once (no frame of the old stage)
   const c = stCtx, w = 400, h = 560, info = stageInfo(sel);
-  if (pvKey !== sel) { pvKey = sel; pvPath = buildPath(sel); }
+  if (pvKey !== sel) { pvKey = sel; pvPath = buildPath(sel); pvT0 = t; }
   // 17-perf: the backdrop (two gradients) is painted once per skin into a cached layer, then blitted; the picture itself runs at 30 fps
   if (pvBgKey !== info.skin || !pvBg) {
     pvBgKey = info.skin; pvBg = pvBg || document.createElement('canvas'); pvBg.width = w; pvBg.height = h; const b = pvBg.getContext('2d');
@@ -240,13 +240,13 @@ function drawPreview(t) {
     const sp = kit.SPECIES && kit.SPECIES[info.skin], gl = b.createRadialGradient(w / 2, h * 0.3, 10, w / 2, h * 0.3, w * 0.8); gl.addColorStop(0, (sp ? sp.base : '#8a7aff') + '55'); gl.addColorStop(1, 'rgba(0,0,0,0)'); b.fillStyle = gl; b.fillRect(0, 0, w, h);
   }
   c.drawImage(pvBg, 0, 0);
-  { const sp = kit.SPECIES && kit.SPECIES[info.skin]; c.save(); c.globalAlpha = 0.09; c.fillStyle = sp ? sp.lite : '#fff'; c.font = '900 210px system-ui,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(sel), w / 2, h * 0.5); c.restore(); }   // round 5: the stage number as a soft watermark
+  { const sp = kit.SPECIES && kit.SPECIES[info.skin]; c.save(); const pk = Math.min(1, Math.max(0, (t - pvT0) / 0.32)), pe = 1 - (1 - pk) * (1 - pk); c.globalAlpha = 0.09 + 0.16 * (1 - pe); c.fillStyle = sp ? sp.lite : '#fff'; c.font = '900 210px system-ui,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.translate(w / 2, h * 0.5); c.scale(1 + 0.35 * (1 - pe), 1 + 0.35 * (1 - pe)); c.fillText(String(sel), 0, 0); c.restore(); }   // round 5: the stage number as a soft watermark
   const k = Math.min((w - 20) / 720, (h - 24) / 1280), ox = (w - 720 * k) / 2, oy = 12;
   c.save(); c.translate(ox, oy); c.scale(k, k);
   c.lineJoin = 'round'; c.lineCap = 'round'; c.beginPath(); pvPath.pts.forEach((q, i) => (i % 3 === 0 ? (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)) : 0));
   c.lineWidth = 90; c.strokeStyle = 'rgba(255,255,255,.07)'; c.stroke(); c.lineWidth = 8; c.strokeStyle = 'rgba(255,255,255,.2)'; c.setLineDash([22, 30]); c.lineDashOffset = -t * 60; c.stroke(); c.setLineDash([]);
   if (info.kind === 'ring') { c.strokeStyle = 'rgba(255,150,190,.85)'; c.lineWidth = 12; c.beginPath(); c.arc(RING.cx, RING.cy, RING.R, 0, Math.PI * 2); c.stroke(); } else { c.strokeStyle = 'rgba(255,150,190,.8)'; c.lineWidth = 12; c.beginPath(); c.moveTo(0, 1055); c.lineTo(720, 1055); c.stroke(); }
-  const head = 700 + Math.sin(t * 1.2) * 60, n = Math.min(info.length, 16);
+  const slideIn = Math.max(0, 1 - (t - pvT0) / 0.45), head = 700 + Math.sin(t * 1.2) * 60 - slideIn * slideIn * 520, n = Math.min(info.length, 16);
   for (let i = n - 1; i >= 1; i--) {
     const ps = head - i * 47, a = pointAt(pvPath, ps), b = pointAt(pvPath, ps + 10), kind = info.boss ? true : false;
     const spr = kit.SPR.body(info.skin, kind, ''); if (spr) kit.blit(c, spr, a.x, a.y, 30 * 3.9 * (i > n - 4 ? 0.8 : 1), Math.atan2(b.y - a.y, b.x - a.x));
@@ -348,7 +348,7 @@ function renderGoals() {
     if (claimed) n++;
     list.appendChild(row);
   }
-  const hd = $('glCount'); if (hd) hd.textContent = n + '/' + goals.length;
+  const hd = $('glCount'), rdy = list.querySelectorAll('.gl-row.ready').length; if (hd) { hd.textContent = rdy ? rdy + ' READY' : n + '/' + goals.length; hd.classList.toggle('rdy', rdy > 0); }
   { const cg = $('claimGigs'), rd = list.querySelectorAll('.gl-row.ready').length; if (cg) { cg.textContent = rd ? 'CLAIM ALL (' + rd + ')' : n === goals.length ? 'ALL DONE \u2713' : 'CLAIM ALL'; cg.classList.toggle('rdy', rd > 0); cg.classList.toggle('alld', !rd && n === goals.length); } }
 }
 function renderSkills() {

@@ -873,6 +873,16 @@
   #hub .chip.sel{animation:chpop .34s cubic-bezier(.3,1.6,.5,1)} @keyframes chpop{0%{transform:scale(.88)}55%{transform:scale(1.28);box-shadow:0 0 26px #ff9ad0}100%{transform:scale(1.14)}}
   #hub .chip.sel:active{transform:scale(1.04)}
   @media(prefers-reduced-motion:reduce){#hub .chip.sel{animation:none}}
+  /* battle round 7: ready-gigs chip and badge, START press flash */
+  .qt small{display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .qt .qg{font-style:normal;font-size:10px;font-weight:900;letter-spacing:.03em;padding:1px 7px;border-radius:99px;color:#2b1608;background:linear-gradient(180deg,#fff3b0,#ffc83d);box-shadow:0 1px 0 #a8530a;animation:qgp 1.4s ease-in-out infinite}
+  @keyframes qgp{50%{transform:scale(1.08);box-shadow:0 1px 0 #a8530a,0 0 10px #ffe14acc}}
+  .gl-head h2,.gl-head h2 em,.gl-head .pill{white-space:nowrap} .gl-head h2{gap:6px;font-size:16px} .gl-head .pill{padding-left:11px;padding-right:11px;font-size:12px}
+  .gl-head h2 em.rdy{background:linear-gradient(180deg,#fff3b0,#ffc83d);color:#2b1608;box-shadow:0 1px 0 #a8530a}
+  .gl-box.gl-flash{animation:glfl 1.2s ease-out} @keyframes glfl{0%,40%{box-shadow:0 0 0 3px #ffe14a,0 0 26px #ffe14acc}100%{box-shadow:none}}
+  #stGo.go-hit{animation:gohit .32s cubic-bezier(.2,.9,.3,1)!important}
+  @keyframes gohit{0%{transform:scale(.95);filter:brightness(1.5)}60%{transform:scale(1.05);box-shadow:0 6px 0 #a8530a,0 0 34px #fff3b0}100%{transform:scale(1)}}
+  @media(prefers-reduced-motion:reduce){.qt .qg,#stGo.go-hit,.gl-box.gl-flash{animation:none!important}}
   /* end @css:08-battle-tab */
 /* @css:19-transitions */
   /* screens: fade + scale in, fade out (transform and opacity only) */
