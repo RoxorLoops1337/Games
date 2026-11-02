@@ -148,6 +148,24 @@
   .rextra{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:13px;color:var(--dim);margin-top:6px;width:min(360px,90vw)} .rextra b{color:#fff}
   #muteBtn{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:5;width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:20px;cursor:pointer;display:none}
   #muteBtn.on{display:block}
+  /* @css:18-access */
+  :focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #ff5cb8}
+  .tgl,.arrow,.filters button,.btn.small,.tabs button,.plus,.kcard,.gear,#muteBtn{min-height:44px}
+  .arrow,.plus,.gear,#muteBtn{min-width:44px}
+  .plus{width:44px;height:44px}
+  .tgl b::before{content:"";}
+  .tgl.on b::before{content:"\2713 "}
+  .scr{padding-left:calc(18px + env(safe-area-inset-left));padding-right:calc(18px + env(safe-area-inset-right))}
+  .tabs{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  #muteBtn{left:calc(10px + env(safe-area-inset-left))} .gear{right:calc(10px + env(safe-area-inset-right))}
+  #accSlider{position:fixed;bottom:calc(14px + env(safe-area-inset-bottom));left:calc(14px + env(safe-area-inset-left));right:calc(14px + env(safe-area-inset-right));height:64px;border-radius:32px;background:rgba(10,8,30,.7);border:3px solid rgba(255,255,255,.55);z-index:4;display:none;touch-action:none}
+  #accSlider.on{display:block} #accSlider.rt{left:auto;width:min(300px,64vw)} #accSlider.lf{right:auto;width:min(300px,64vw)}
+  #accSlider::before{content:"\25C0   \25B6";position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:#fff;opacity:.6;font-size:18px;letter-spacing:.5em;pointer-events:none}
+  #accThumb{position:absolute;top:4px;left:calc(50% - 28px);width:56px;height:56px;border-radius:50%;background:linear-gradient(180deg,#ffe3f4,#ff7ac6);border:3px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.5)}
+  html.bigtext .scr:not(#hub){zoom:1.12} html.bigtext .tgl{width:min(420px,80vw)} html.bigtext #hub .sub,html.bigtext .tabs button{font-size:15px} html.bigtext .sub{font-size:16px}
+  @media (prefers-reduced-motion:reduce){ .hero,.deco{animation:none} *{transition-duration:.01ms!important} }
+  @media (prefers-contrast:more){ .sub,.filters button{color:#fff} }
+  /* end @css:18-access */
 </style>
 </head>
 <body>
@@ -217,6 +235,12 @@
   <button class="tgl" data-k="reduceMotion"><span>Reduce motion (no shake or flashes)</span><b>OFF</b></button>
   <button class="tgl" data-k="lowQuality"><span>Low quality (fewer sparkles, faster)</span><b>OFF</b></button>
   <button class="tgl" data-k="bigNumbers"><span>Bigger numbers on cells</span><b>OFF</b></button>
+  <button class="tgl" data-k="colorBlind"><span>Colour-blind shapes on special cells</span><b>OFF</b></button>
+  <button class="tgl" data-k="highContrast"><span>High-contrast numbers</span><b>OFF</b></button>
+  <button class="tgl" data-k="bigText"><span>Bigger menu text</span><b>OFF</b></button>
+  <button class="tgl" data-k="slider"><span>On-screen slide bar (thumb at the bottom)</span><b>OFF</b></button>
+  <button class="tgl" data-k="leftHand"><span>Left-handed slide bar</span><b>OFF</b></button>
+  <button class="tgl" data-k="pauseGuard"><span>Pause button needs two taps</span><b>OFF</b></button>
   <div class="box"><b style="color:#fff">Backup</b><br>Copy this code somewhere safe. Paste it back to restore your game on any phone.<textarea id="bkCode" spellcheck="false"></textarea></div>
   <div class="row"><button class="btn small alt" id="bkCopy">COPY CODE</button><button class="btn small gold" id="bkLoad">LOAD CODE</button></div>
   <div class="box">Keys: A / D or arrows slide, P pauses, M mutes, 1 2 3 pick a card.<br>Cell Serpent, by RoxorLoops &amp; Jasmin. Version 2.0.</div>
@@ -258,6 +282,7 @@
   <button class="btn" id="bOk">NICE</button>
 </section>
 
+<div id="accSlider" aria-label="Slide bar" role="slider" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0"><i id="accThumb"></i></div>
 <div id="toast"></div>
 <script type="module" src="main.js"></script>
 </body>

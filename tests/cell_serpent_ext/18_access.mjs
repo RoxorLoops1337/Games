@@ -1,0 +1,25 @@
+// Accessibility settings: defaults, sanitizeSave round trip, bad values dropped, markup present.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import assert from 'node:assert/strict';
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cell_serpent');
+const { defaultSave, sanitizeSave, exportSave, importSave } = await import(join(root, 'sim.js'));
+const KEYS = ['colorBlind', 'highContrast', 'bigText', 'slider', 'leftHand', 'pauseGuard'];
+const d = defaultSave();
+for (const k of KEYS) assert.equal(d.settings[k], false, 'default off: ' + k);
+const s = defaultSave(); for (const k of KEYS) s.settings[k] = true; s.settings.music = false;
+const back = sanitizeSave(JSON.parse(JSON.stringify(s)));
+for (const k of KEYS) assert.equal(back.settings[k], true, 'round trip: ' + k);
+assert.equal(back.settings.music, false);
+const bad = sanitizeSave({ settings: { colorBlind: 'yes', slider: 1, bigText: true } });
+assert.equal(bad.settings.colorBlind, false); assert.equal(bad.settings.slider, false); assert.equal(bad.settings.bigText, true);
+const imp = importSave(exportSave(s)); assert.ok(imp && KEYS.every(k => imp.settings[k] === true), 'backup code keeps them');
+const html = readFileSync(join(root, 'index.html'), 'utf8');
+for (const k of KEYS) assert.ok(html.includes(`data-k="${k}"`), 'toggle in settings: ' + k);
+assert.ok(html.includes('@css:18-access') && html.includes('prefers-reduced-motion') && html.includes(':focus-visible'));
+assert.ok(!html.includes('—') && !readFileSync(join(root, 'access.js'), 'utf8').includes('—'));
+const acc = await import(join(root, 'access.js'));
+assert.equal(acc.pauseAllowed(false), true);
+assert.equal(acc.pauseAllowed(true, 1000), false); assert.equal(acc.pauseAllowed(true, 1500), true); assert.equal(acc.pauseAllowed(true, 9000), false);
+console.log('18_access ok');
