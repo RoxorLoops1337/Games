@@ -41,6 +41,7 @@ import { emptyCard as emptyCardUx } from './empty_ux.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
 import { momentLine } from './hit_juice8.js';
 import { bringHTML, twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag, chipReward, goalRowHTML, watchSide, starsHTML, claimInfo, eventReadyCount, claimChips, fanRects, powerHTML, powerGap, bestTag, worldStrip, portraitSpring } from './battle_ui.js';
+import { actStripHTML, actTarget, gapFix, gapFixHTML, openOverview } from './battle_b11.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
@@ -225,6 +226,7 @@ function renderBattle() {
   { const rp = recPower(sel, hard), mine = power(save);
     $('diffRow').innerHTML = `<div class="seg ${hard ? 'h' : ''}"><i></i><button class="dbtn ${hard ? '' : 'on'}" data-h="0">Normal</button><button class="dbtn hard ${hard ? 'on' : ''}" data-h="1" ${hardOk ? '' : 'disabled'}>${hardOk ? 'Hard' : '🔒 Hard'}</button></div>${powerHTML(mine, rp, hard)}`; }
   for (const b of $('diffRow').querySelectorAll('.dbtn')) b.onclick = () => { audio.play('click'); hard = b.dataset.h === '1'; renderBattle(); };
+  { const gf = $('gapFix'), gap = powerGap(power(save), recPower(sel, hard)).gap, fx = gapFix(gap, badgeCounts()); gf.hidden = !fx; gf.dataset.tab = fx ? fx.tab : ''; gf.innerHTML = gapFixHTML(fx, gap); }   // b11: one tap to what closes the power gap
   $('stMod').innerHTML = twistHTML(info.mod); $('btFact').hidden = true; $('btHero').classList.remove('fact');
   { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; syncRwFilter(chips, cb); cb.textContent = 'CONTINUE ▶ ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
   const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : `<span><b>Cleared ✓</b> ${starsHTML(save.stars[sel] || 0)}</span>${sel > (save.hardCleared || 0) ? `<span class="hardpay">Hard pays <b>${curImg('sparkles')} ${Math.round(clearReward(sel).sparkles * 1.5)}</b></span>` : ''}`;
@@ -233,7 +235,7 @@ function renderBattle() {
   $('btHint').textContent = !save.cleared && !save.runs ? 'Slide left and right, shoot up, keep the snake off the pink line!' : (playable && save.energy && tickEnergy(save, Date.now()) < ENERGY_COST ? 'Out of Voice! Tap + up top, or rest a bit.' : '');
   loadoutRow($('battleLoad'), true);
   { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; bestPct = pr; $('stProg').innerHTML = `<div class="pgl${pr ? ' has' : ''}">Best <b>${pr}%</b>${bestTag(hard, powerGap(power(save), recPower(sel, hard)).gap)}</div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
-  { const ws = $('wStrip'), wk = save.cleared + '|' + sel; if (ws && ws.dataset.k !== wk) { ws.dataset.k = wk; ws.innerHTML = worldStrip(save.cleared, sel, MAX_STAGE, isBossStage); } }   // r10: 50 ticks, boss crowns taller
+  { const ws = $('wStrip'), wk = save.cleared + '|' + sel; if (ws && ws.dataset.k !== wk) { ws.dataset.k = wk; ws.innerHTML = actStripHTML(save.cleared, sel, MAX_STAGE, isBossStage, Math.min(MAX_STAGE, save.cleared + 4)); } }   // b11: five named worlds over the 50 ticks (worldStrip draws the ticks)   // r10: 50 ticks, boss crowns taller
   hub2.renderSide(); watchSideIcons($('battleSide')); watchSide($('battleSide'));
   renderPig();
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
@@ -254,6 +256,9 @@ $('btClaim').onclick = () => { if ($('btClaim').dataset.k === 'event') { audio.p
 let claimFrom = null;   // batch 9: the claim row is where the reward chips fly from
 $('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) gigFlies(fl.map(([b, g], i) => ({ snap: claimFrom && claimFrom.rect ? { rect: fanRects(claimFrom.rect, fl.length)[i], src: (b && b.src) || iconURL(g && g.reward.beats ? 'beats' : 'sparkles') } : b && !b.src ? { rect: b.rect, src: iconURL(g && g.reward.beats ? 'beats' : 'sparkles') } : b, kind: g && g.reward.beats ? 'beats' : 'sparkles', amt: g ? g.reward.beats || g.reward.sparkles || 0 : 0 }))); if (n) { persist(); audio.play('claimrow'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });
+$('gapFix').onclick = () => { const t = $('gapFix').dataset.tab; if (!t) return; audio.play('click'); hubTab = t; hubTabSwitch(); };
+$('wStrip').onclick = e => { const b = e.target.closest('.wact'); if (!b) return; const r = actTarget(+b.dataset.act, save.cleared, Math.min(MAX_STAGE, save.cleared + 4)); if (!r) return; if (r.locked) { audio.play('deny'); toast('Clear stage ' + Math.max(1, r.need) + ' to open this world'); return; } audio.play('click'); sel = r.stage; renderBattle(); };
+$('stOverview').onclick = () => { audio.play('click'); openOverview({ save: () => save, max: MAX_STAGE, isBoss: isBossStage, kindOf: stageKind, reach: () => Math.min(MAX_STAGE, save.cleared + 4), sel: () => sel, audio, pick: n => { sel = n; renderBattle(); } }); };
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
 $('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
 $('stGo').onclick = () => { audio.unlock(); audio.play('click'); const b = $('stGo'); b.classList.remove('go-hit'); void b.offsetWidth; b.classList.add('go-hit'); beginStage(sel); };

@@ -10,6 +10,7 @@ import {
 } from './sim.js';
 import { createAddictUI } from './addict_ui.js';
 import { trophyOrder, shelfHeadHTML, trophyTier, flyReward } from './goals_polish.js';
+import { alertLabel, hasAlert } from './battle_b11.js';
 import { createRetainUI } from './retain_ui.js';
 import { nextReward } from './sim.js';
 
@@ -130,13 +131,13 @@ export function createHub2(c) {
     const el = $('battleSide'); el.innerHTML = '';
     const s = save(), day = c.dayKey();
     const signReady = s.sign.day !== day, fundReadyAny = FUND.some(f => fundReady(s, f));
-    const mk = (emo, name, alert, fn) => { const b = document.createElement('button'); b.className = 'sidebtn'; b.innerHTML = `${alert ? '<i class="alert">!</i>' : ''}<b>${emo}</b>${name}`; b.onclick = () => { audio.unlock(); audio.play('click'); fn(); }; el.appendChild(b); };
-    mk('📅', 'Sign in', signReady, openSign);
-    mk('🎀', 'Fan Fund', fundReadyAny, openFund);
+    const mk = (emo, name, alert, fn) => { const b = document.createElement('button'); b.className = 'sidebtn'; b.innerHTML = `${hasAlert(alert) ? `<i class="alert${typeof alert === 'number' && alert > 1 ? ' num' : ''}">${alertLabel(alert)}</i>` : ''}<b>${emo}</b>${name}`; b.onclick = () => { audio.unlock(); audio.play('click'); fn(); }; el.appendChild(b); };
+    mk('📅', 'Sign in', signReady ? 1 : 0, openSign);
+    mk('🎀', 'Fan Fund', FUND.filter(f => fundReady(s, f)).length, openFund);
     mk('🧺', 'Backstage', idleAmount(s, now()) >= 50, openIdle);
-    mk('🎪', eventInfo(day).name.split(' ')[0], s.event.earned > 0 && EVENT_MILES.some((m, i) => !s.event.claimed[i] && s.event.earned >= m.at), openEvent);
+    mk('🎪', eventInfo(day).name.split(' ')[0], s.event.earned > 0 && EVENT_MILES.filter((m, i) => !s.event.claimed[i] && s.event.earned >= m.at).length, openEvent);
     mk('👗', 'Wardrobe', false, openWardrobe);
-    mk('🏆', 'Trophies', TROPHIES.some(t => trophyReady(s, t)), openTrophies);
+    mk('🏆', 'Trophies', TROPHIES.filter(t => trophyReady(s, t)).length, openTrophies);
     mk('📖', 'Preview', false, openBestiary);
     mk('🎫', 'Pass', cardActive(s, day) && s.card.last !== day, openPass);
     mk('🎡', 'Goals', nextReward(s, day).ready, () => addict.openGoals());
