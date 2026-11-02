@@ -334,7 +334,7 @@ export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
   const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0, joy: 0 };
-  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, bigTap: false, reviveTimer: true, volume: 1, thumbZone: false, textScale: 1, beatTick: false, pump: 2, fullscreen: true }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, gift: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
+  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, bigTap: false, reviveTimer: true, volume: 1, thumbZone: false, textScale: 1, beatTick: false, pump: 2, fullscreen: true }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, gift: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, plat: { atk: 0, crt: 0, vit: 0, for: 0 }, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -345,6 +345,7 @@ export function sanitizeSave(raw) {
   s.muted = !!raw.muted;
   if (raw.daily && typeof raw.daily === 'object') { s.daily.day = num(raw.daily.day); for (const k of Object.keys(raw.daily.progress || {})) s.daily.progress[k] = num(raw.daily.progress[k]); for (const k of Object.keys(raw.daily.claimed || {})) if (raw.daily.claimed[k]) s.daily.claimed[k] = 1; }
   for (const d of META) s.meta[d.id] = Math.min(d.max, num(raw.meta && raw.meta[d.id]));
+  for (const k of Object.keys(s.plat)) s.plat[k] = Math.min(10, num(raw.plat && raw.plat[k]));   // b12 Gold Records (plat_b12d.js): ranks beyond a maxed stat
   for (const w of WEAPONS) {
     const r = raw.skills && raw.skills[w.id];
     if (r) { s.skills[w.id].lv = Math.min(SKILL_MAX_LV, num(r.lv, s.skills[w.id].lv)); s.skills[w.id].frag = num(r.frag); }
@@ -642,6 +643,8 @@ export const RING_SCALE = 0.7;   // b11: in circle stages the duo (and pets, sha
 export const BOSS_HP = [0.8, 2.4, 0.5];   // boss cell HP multiplier at the face and at the tail (a flat 2.4 left the first yellow cell out of reach: typical players got 4 to 9 percent of the boss)
 export const RING_LATE = 0.9;   // from stage 18 the spiral crawls a little slower still (circle stages 18, 42 and 48 were walls)
 export const HAIRPIN_LATE = 0.9;   // the tall-hairpin lanes (stages 20, 29, 38, 47) were walls from stage 20 on: the snake crawls a little slower there
+export const RING_EARLY = 0.85, RING_END = 0.78;   // b12 balance: a thumb aims worse than the bot. Circle stages up to 12 and from 36 on crawl a bit slower still
+export const ringPace = n => (n >= 18 && !isBossStage(n) ? RING_LATE : 1) * (n <= 6 ? RING_EARLY : n <= 12 ? RING_EARLY * 0.88 : n >= 36 && !isBossStage(n) ? RING_END : 1);
 export const RING_SPEED = 1.7;   // the spiral is long and most of it is out of reach of the straight shot, so the snake crawls slower in circle stages
 export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: stageKind(n) === 'ring' ? 'Spiral' : PATH_KINDS[pathKind(n)], kind: stageKind(n), mod: stageMod(n), hp: Math.round(hpBase(n)) });
 
@@ -802,7 +805,7 @@ function spawnSnake(g, n, o = {}) {
   markGold(g, n, segs, len);
   markSpecials(g, n, segs, len);
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
-  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED * (n >= 18 && !isBossStage(n) ? RING_LATE : 1) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
+  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED * ringPace(n) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
   segs.hpMax = segs.reduce((a, s) => a + s.max, 0);
   g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3, healT: undefined, drum: false, lane: null, napT: 0, gloomW: undefined, rushT: 0, loveT: undefined, creak: false, snzT: undefined, snzW: false, frostW: undefined, qT: 0, qDone: 0, qWin: 0, qNeed: 0, p2: false, p2T: 0, cue: 0, skipT: RING_SKIP_EVERY });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
