@@ -11,7 +11,7 @@ import { createMotion } from './motion.js';
 import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
 import { luckHTML, refreshPips, buildHTML } from './cards_ui.js';
-import { richDemo, setupTapAnimals, tagPets, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
+import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
 import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText } from './battle_ui.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY } from './skill_sheet.js';
 
@@ -569,7 +569,7 @@ function frame(now) {
 }
 
 // ---------------------------------------------------------------- wiring
-$('playBtn').onclick = () => { audio.unlock(); audio.play('click'); if (save.runs === 0) { if (needsTutorial(save)) showTutorial(() => startRun(1), audio); else startRun(1); } else openHub('Battle'); };
+$('playBtn').onclick = () => { audio.unlock(); audio.play('click'); playBurst($('playBtn')); if (save.runs === 0) { if (needsTutorial(save)) showTutorial(() => startRun(1), audio); else startRun(1); } else openHub('Battle'); };
 $('resumeBtn').onclick = () => resume();
 $('pStats').onclick = () => { audio.play('click'); showStatsFromPause(); };
 $('pSet').onclick = () => { audio.play('click'); openSettings(() => show('pause')); };
@@ -592,7 +592,7 @@ loadArt('assets/').then(a => {
   [['love', 'deco1'], ['grumpy', 'deco2'], ['sneezy', 'deco3'], ['sleepy', 'deco4']].forEach(([skin, el], i) => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
-  setupPeeks($('peeks'), kit); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio);
+  setupPeeks($('peeks'), kit); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio); setupTitleLife($('notes12'), document.querySelector('#title .tagline'));
   R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready') }); applySettings(); resize(); refreshTitle();
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();

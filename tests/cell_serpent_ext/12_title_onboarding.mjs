@@ -52,3 +52,10 @@ assert.ok(!/—/.test(readFileSync(join(root, 'hints.js'), 'utf8') + readFileSyn
   assert.ok(!/—/.test(readFileSync(join(root, 'onboard12.js'), 'utf8')), 'no em dash');
 }
 console.log('12_title_onboarding ok');
+// round 3: title life + richer tutorial markup
+{
+  const ob = readFileSync(join(root, 'onboard12.js'), 'utf8');
+  for (const w of ['setupTitleLife', 'playBurst', 'tcap', 'GO!']) assert.ok(ob.includes(w), w);
+  assert.ok(html.includes('id="notes12"') && html.includes('drop12') && html.includes('pop12'));
+  assert.ok(!/—/.test(ob), 'no em dash in onboard12');
+}
