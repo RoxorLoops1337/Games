@@ -16,6 +16,10 @@ const ART = {
   chk: `<path d="M-2 14 H8 M3 14 V6" stroke="#3a2a14" stroke-width="2.4" stroke-linecap="round"/><rect x="-5" y="-15" width="16" height="19" rx="8" fill="#d9e2f2" stroke="#33406a" stroke-width="1.8"/><path d="M-5 -6 H11 M-5 -1 H11" stroke="#7f8fb8" stroke-width="1.4"/><path d="M-9 -2 q0 12 12 12 q12 0 12 -12" fill="none" stroke="#ffd86b" stroke-width="2" stroke-linecap="round" transform="translate(0 0) scale(.78) translate(1 0)"/><circle cx="11" cy="9" r="8" fill="#5ee08a" stroke="#0e5a2a" stroke-width="1.6"/><path d="M6.8 9.2 l3 3 l5 -6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`,
   // Crescendo: three rising bars with a swelling note on top (every Quartet in a row hits harder)
   cres: `<rect x="-16" y="6" width="7" height="8" rx="2" fill="#ffd86b" stroke="#7a4b00" stroke-width="1.4"/><rect x="-6" y="-1" width="7" height="15" rx="2" fill="#ffb04d" stroke="#7a3a00" stroke-width="1.4"/><rect x="4" y="-9" width="7" height="23" rx="2" fill="#ff7a4d" stroke="#7a1d00" stroke-width="1.4"/><g transform="translate(7 -8) scale(.55)"><path d="${NOTE}" fill="#fff2b0" stroke="#6a3300" stroke-width="2.4" stroke-linejoin="round"/></g><path d="M-16 -4 L-4 -12 M-4 -12 l-1 5 M-4 -12 l5 2" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity=".85"/>`,
+  // fan club: a star with cheering arcs
+  fan: `<path d="M0 -14 L4 -4 L15 -4 L6 3 L9 14 L0 7 L-9 14 L-6 3 L-15 -4 L-4 -4 Z" fill="#ff9ad6" stroke="#7a1f55" stroke-width="1.8" stroke-linejoin="round"/><path d="M-17 -12 q-4 6 0 12 M17 -12 q4 6 0 12" fill="none" stroke="#fff2b0" stroke-width="2" stroke-linecap="round"/>`,
+  // bridge: a golden bell with ring lines
+  brg: `<path d="M-11 9 Q-10 -9 0 -12 Q10 -9 11 9 Z" fill="#ffd04a" stroke="#7a4b00" stroke-width="1.8" stroke-linejoin="round"/><circle cx="0" cy="11" r="3.2" fill="#b8801c" stroke="#7a4b00" stroke-width="1.5"/><path d="M-16 -4 q-3 4 0 8 M16 -4 q3 4 0 8" fill="none" stroke="#fff2b0" stroke-width="2" stroke-linecap="round"/>`,
 };
 const cache = {};
 export function capIconURL(id) { return ART[id] ? (cache[id] || (cache[id] = svgURL(ART[id]))) : ''; }
@@ -33,6 +37,10 @@ export function synergyHint(g, c) {
   if (c.id === 'burst' && (ups.notes | 0) > 0) return 'Echoes your Harmony notes';
   if (c.id === 'notes' && (ups.burst | 0) > 0) return 'Echoed by your bursts';
   if (c.id === 'aspd' && (ups.notes | 0) + (ups.burst | 0) > 0) return 'More shots, faster';
+  if (c.id === 'fan' && (ups.brg | 0) > 0) return 'Bell rings add Groove';
+  if (c.id === 'brg' && (ups.fan | 0) > 0) return 'Bell rings add Groove';
+  if (c.id === 'brg' && (ups.chk | 0) > 0) return 'Soundcheck loves bells';
+  if (c.id === 'chk' && (ups.brg | 0) > 0) return 'Bells count too';
   if (c.kind === 'weapon' && !c.isNew && ((ups.power | 0) > 0 || (ups.haste | 0) > 0)) return (ups.power ? 'Loud Vocals' : 'Tempo Up') + ' helps it';
   if (c.kind === 'weapon' && c.isNew && (ups.haste | 0) > 0) return 'Tempo Up recharges it';
   return '';

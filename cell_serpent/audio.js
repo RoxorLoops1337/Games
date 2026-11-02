@@ -226,6 +226,8 @@ export function createAudio() {
     // the window ran out and the linked cells healed: the chord goes flat and thins out
     quartetfail: () => { if (!gate('quartetfail', 300)) return; [72, 76, 79].forEach((m, i) => tone(hz(m), 0.3, 'sine', 0.035, -hz(m) * 0.06, i * 0.03)); tone(hz(66), 0.35, 'triangle', 0.03, -20, 0.1); },
     // a choir cell popped: a breathy three voice "ooh" that fades the way the choir stops regrowing the cells around it
+    bellring: () => { if (!gate('bellring', 120)) return; [1319, 1976, 2637].forEach((f, i) => tone(f, 0.55 - i * 0.1, 'sine', 0.06 - i * 0.012, 0, i * 0.012)); noise(0.06, 0.04, 5000, 2500, 'bandpass'); },
+    traitcue: () => { if (!gate('traitcue', 300)) return; tone(330, 0.16, 'triangle', 0.06, 160); tone(495, 0.14, 'sine', 0.04, 100, 0.05); },
     choirpop: () => { if (!gate('choirpop', 200)) return; [64, 67, 71].forEach((m, i) => { const f = hz(m); tone(f, 0.5, 'triangle', 0.02, -f * 0.12, i * 0.02); tone(f * 1.004, 0.5, 'sine', 0.025, -f * 0.12, i * 0.02); }); noise(0.35, 0.02, 1500, 400, 'bandpass', 0.01); },
     // Encore beam fires / becomes ready
     encore: () => { noise(0.9, 0.12, 400, 6000, 'bandpass'); tone(110, 0.9, 'sawtooth', 0.12, 440); [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.5, 'triangle', 0.06, 0, 0.1 + i * 0.05)); duck(0.55, 0.9); },

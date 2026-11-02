@@ -640,6 +640,7 @@ function drain(game, sound) {
     R.onEvent(e, game);
     if (sound && e.t === 'kill' && game === g && needsFirstPop(save)) firstPop(audio, buzz);
     if (sound && e.t === 'kill' && e.choir) audio.play('choirpop');
+    if (sound && (e.t === 'bell' || (e.t === 'trait' && !e.warn))) audio.play(e.t === 'bell' ? 'bellring' : 'traitcue', e);
     if (!sound) continue;
     if (FX_SOUND.has(e.t)) audio.play(SFX[e.t] || e.t, e); else if (e.t === 'pet') audio.play(PETSND[e.id] || 'chirp');
     if (BUZZ[e.t] !== undefined) buzz(BUZZ[e.t]);
