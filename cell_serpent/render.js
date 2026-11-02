@@ -143,7 +143,7 @@ export function createRenderer(canvas, art, kit) {
       case 'encoreready': addFloat(g.p.x, g.p.y - 110, 'ENCORE READY: TAP!', '#ffe36b', 26, -50); ring(g.p.x, g.p.y, 120, '#ffe36b', 0.5); break;
       case 'encore': S.trauma = Math.min(1, S.trauma + 0.6); S.flash = 0.25; S.flashCol = '#fff6c2'; ring(e.x, g.p.y, 130, '#ffe36b', 0.5); burst(e.x, g.p.y - 40, 26, ['#ffe36b', '#fff', '#ff9ad6'], 520, 0.7, 6); break;
       case 'goldpop': ring(e.x, e.y, 110, '#ffd24a', 0.6); burst(e.x, e.y, 30, ['#ffd24a', '#fff6c2', '#fff'], 460, 0.8, 6); addFloat(e.x, e.y - 40, 'GOLD +' + e.v, '#ffe36b', 30, -80); break;
-      case 'goldfade': addFloat(e.x, e.y, 'gold lost', '#c9b36a', 18, -40); break;
+      case 'goldfade': addFloat(e.x, e.y, 'gold lost', '#c9b36a', 18, -40); burst(e.x, e.y, 12, ['#c9b36a', '#8a7f5a', '#fff1a8'], 150, 0.8, 4); break;
       case 'clutch': addFloat(e.x, e.y - 30, 'CLOSE CALL!', '#ff9ad6', 30, -70); ring(e.x, e.y, 80, '#ff9ad6', 0.4); break;
       case 'burst': ring(e.x, e.y, e.r, '#bfe9ff', 0.4); burst(e.x, e.y, 16, ['#bfe9ff', '#fff'], 260, 0.5, 5); break;
       case 'leak': S.trauma = Math.min(1, S.trauma + 0.55); S.flash = 0.4; S.flashCol = '#ff2a4d'; ring(e.x, LINE_Y, 120, '#ff2a4d', 0.5); burst(e.x, LINE_Y - 10, 22, ['#ff2a4d', '#ffd0e6', '#fff'], 360, 0.6, 6); addFloat(e.x, LINE_Y - 70, 'LEAK -' + Math.ceil(e.d), '#ff5a78', 26, -60); break;
@@ -251,7 +251,7 @@ export function createRenderer(canvas, art, kit) {
       if (s.y < -r * 3 || s.y > H + r * 3) continue;   // not on screen: skip the drawing
       const ang = s.ang;
       if (i === 0) {
-        if (kit) { const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1; kit.drawHead(ctx, s.x, s.y, r * 1.14, ang, { skin: sn.skin, boss: sn.boss, t: S.t + sn.id, look: [dx / d, dy / d], flash: s.flash, sg: OPT.reduceMotion ? '' : sn.surge, slow: sn.slow, alone: !s.shield, fury: sn.surge !== 'idle' ? 1 : (g.danger > 0.5 && sn.segs[0].y > H * 0.5 ? 0.6 : 0) }); }
+        if (kit) { const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1; kit.drawHead(ctx, s.x, s.y, r * 1.14, ang, { skin: sn.skin, boss: sn.boss, t: S.t + sn.id, look: [dx / d, dy / d], flash: s.flash, sg: OPT.reduceMotion ? '' : sn.surge, slow: sn.slow, p2: sn.p2, alone: !s.shield, fury: sn.surge !== 'idle' ? 1 : (g.danger > 0.5 && sn.segs[0].y > H * 0.5 ? 0.6 : 0) }); }
         else { ctx.fillStyle = '#ff7eb6'; ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill(); ctx.stroke(); }
         if (s.shield) {   // the face cannot be hit until it is alone
           ctx.save(); ctx.globalAlpha = 0.5 + Math.sin(S.t * 5) * 0.15; ctx.strokeStyle = '#bfe9ff'; ctx.fillStyle = 'rgba(190,235,255,.16)'; ctx.lineWidth = 4;
@@ -265,12 +265,12 @@ export function createRenderer(canvas, art, kit) {
         ctx.save(); ctx.globalAlpha = 0.55 + Math.sin(S.t * 14 + i) * 0.15; ctx.fillStyle = sn.p2 ? 'rgba(255,190,140,.22)' : 'rgba(190,235,255,.2)'; ctx.strokeStyle = sn.p2 ? '#ffd9b8' : '#e6f6ff'; ctx.lineWidth = 4;
         ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.3, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
       }
-      if (s.gold) { const live = s.goldT > 0; glow(s.x, s.y, r * (live ? 2.3 : 1.5), '#ffd24a', live ? 0.55 + Math.sin(S.t * 9 + i) * 0.2 : 0.15); if (live) { ctx.save(); ctx.strokeStyle = '#fff1a8'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.18, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0, s.goldT / 9)); ctx.stroke(); ctx.restore(); } }
+      if (s.gold) { const live = s.goldT > 0; glow(s.x, s.y, r * (live ? 2.3 : 1.5), '#ffd24a', live ? 0.55 + Math.sin(S.t * 9 + i) * 0.2 : 0.15); if (live) { ctx.save(); ctx.strokeStyle = s.goldT > 2.5 ? '#fff1a8' : (Math.sin(S.t * 22) > 0 ? '#ff9a6a' : '#fff1a8'); ctx.lineWidth = s.goldT > 2.5 ? 5 : 5 + (2.5 - s.goldT) * 1.2; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.18, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0, s.goldT / 9)); ctx.stroke(); ctx.restore(); } }
       if (s.ward || s.warded || s.lull || s.drum) drawCellFlags(ctx, s, r, S.t, i, glow);
       if (s.kind === 'bomb') { const pulse = 0.5 + Math.sin(S.t * 9 + i) * 0.5; glow(s.x, s.y, r * 1.8, '#ff3b5c', 0.15 + pulse * 0.25); }
       if (s.kind === 'mender') glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12);
       if (s.kind === 'upgrade') glow(s.x, s.y, r * 2.1, '#ffd24a', 0.45 + Math.sin(S.t * 6 + i) * 0.15);
-      const spr = kit && kit.SPR.body(sn.skin, sn.boss, s.kind === 'normal' ? (s.gold && s.goldT > 0 ? 'gold' : '') : s.kind);
+      const spr = kit && kit.SPR.body(sn.skin, sn.boss, s.kind === 'normal' ? (s.gold && s.goldT > 0 ? (s.goldT > 2.5 ? 'gold' : Math.sin(S.t * (30 - s.goldT * 8) + i) > 0 ? 'gold2' : 'gold') : '') : s.kind);   // the last 2.5s the leaf flickers off and on, faster and faster
       if (spr) {
         const size = r * 3.9 * bob * (1 + Math.min(0.16, s.flash * 1.3));
         if (s.flash > 0 && !OPT.reduceMotion) {   // squash and recoil on hit
@@ -288,7 +288,7 @@ export function createRenderer(canvas, art, kit) {
       if (s.carry === 'chest') { glow(s.x, s.y, r * 1.8, '#ffd84d', 0.5 + Math.sin(S.t * 6 + i) * 0.2); blit(kit && kit.SPR.pickup('chest'), s.x, s.y - r * 0.9, r * 2.2, Math.sin(S.t * 4 + i) * 0.1); }
       if (OPT.highContrast) { ctx.save(); ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.02, 0, TAU); ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.restore(); }
       if (OPT.highContrast) { ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.62)'; ctx.beginPath(); ctx.arc(s.x, s.y + r * 0.05, r * 0.62 * (OPT.bigNumbers ? 1.15 : 1), 0, TAU); ctx.fill(); ctx.restore(); }
-      if (s.gold && kit) { const live = s.goldT > 0; blit(kit.SPR.badge('coin'), s.x - r * 0.62, s.y - r * 0.7 + Math.sin(S.t * 3 + i) * 2, r * 1.0, Math.sin(S.t * 2 + i) * 0.12, false, live ? 1 : 0.4); if (live && Math.sin(S.t * 4 + i * 2) > 0.8) sparkleAt(s.x + r * 0.5, s.y + r * 0.5, r * 0.26); }
+      if (s.gold && kit) { const live = s.goldT > 0; blit(kit.SPR.badge(live ? 'coin' : 'coinx'), s.x - r * 0.62 + (live && s.goldT < 2.5 ? Math.sin(S.t * 50 + i) * r * 0.06 : 0), s.y - r * 0.7 + Math.sin(S.t * 3 + i) * 2, r * 1.0, live && s.goldT < 2.5 ? Math.sin(S.t * 30 + i) * 0.22 : Math.sin(S.t * 2 + i) * 0.12, false, live ? 1 : 0.75); if (live && Math.sin(S.t * 4 + i * 2) > 0.8) sparkleAt(s.x + r * 0.5, s.y + r * 0.5, r * 0.26); }
       if (s.ward || s.lull || s.drum) drawCellBadge(ctx, s, r, S.t, i, kit);
       text(num(s.hp), s.x, s.y + r * 0.05, Math.max(20, r * 0.85) * (OPT.bigNumbers ? 1.2 : 1), '#fff', OPT.highContrast ? '#000' : INK);
       if (OPT.colorBlind && (s.kind !== 'normal' || s.carry === 'chest')) kindMark(s.carry === 'chest' && s.kind === 'normal' ? 'chest' : s.kind, s.x, s.y - r * 1.02, r * 0.36);
