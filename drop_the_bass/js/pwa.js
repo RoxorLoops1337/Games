@@ -28,6 +28,15 @@ if (typeof window !== 'undefined' && window.addEventListener) {
   window.addEventListener('appinstalled', () => { installed = true; deferred = null; ping(); });
 }
 
+// ---- online state (the hub shows a small Offline chip). navigator.onLine can only be trusted when it says false.
+export function isOnline() { try { return typeof navigator === 'undefined' || navigator.onLine !== false; } catch (e) { return true; } }
+const netListeners = new Set();
+export function onOnlineChange(fn) { netListeners.add(fn); return () => netListeners.delete(fn); }
+if (typeof window !== 'undefined' && window.addEventListener) {
+  const pingNet = () => netListeners.forEach((fn) => { try { fn(isOnline()); } catch (e) { /* ignore */ } });
+  window.addEventListener('online', pingNet); window.addEventListener('offline', pingNet);
+}
+
 // the small update toast. text is the string to translate: 'New version ready, tap to refresh'
 export const UPDATE_TEXT = 'New version ready, tap to refresh';
 function showUpdateToast(onTap, text) {
@@ -40,7 +49,8 @@ function showUpdateToast(onTap, text) {
   document.body.appendChild(b);
 }
 
-// opts: { text } overrides the toast string (i18n). Returns a promise of the registration or null. Never throws.
+// opts: { text } overrides the toast string (i18n); { onOfflineReady } is called once per page load when the worker has precached the whole
+// app shell for the first time (install waits for the precache, so 'activated' on a first visit means everything is stored). Returns a promise of the registration or null. Never throws.
 export async function initPwa(opts) {
   try {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null;
@@ -55,8 +65,17 @@ export async function initPwa(opts) {
       const w = reg.installing; if (!w) return;
       w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w); });
     });
+    let readyFired = false;
+    const ready = () => { if (readyFired || had) return; readyFired = true; try { if (opts && typeof opts.onOfflineReady === 'function') opts.onOfflineReady(); } catch (e) { /* ignore */ } };
+    // first visit only (a page that already had a controller is an update or an old install, not "first time")
+    if (!had) {
+      if (reg.active && reg.active.state === 'activated') ready();
+      const first = reg.installing || reg.waiting;
+      if (first) first.addEventListener('statechange', () => { if (first.state === 'activated') ready(); });
+      reg.addEventListener('updatefound', () => { const w = reg.installing; if (w) w.addEventListener('statechange', () => { if (w.state === 'activated') ready(); }); });
+    }
     let reloading = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading || !had) return; reloading = true; location.reload(); });
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (!had) { ready(); return; } if (reloading) return; reloading = true; location.reload(); });
     // look for a new version when the app comes back to the foreground
     document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
     return reg;

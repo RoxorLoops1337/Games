@@ -416,3 +416,32 @@ body.doodle .shortcuts .keyrow span{font-size:16px;line-height:1.1;color:#4b4455
 body.doodle .practice-badge{position:absolute;left:50%;top:70px;transform:translateX(-50%) rotate(-2deg);z-index:6;pointer-events:none;background:#ffd95a;color:#2b2733;border:3px solid #2b2733;border-radius:10px 7px 11px 7px;box-shadow:2px 3px 0 #2b2733;padding:1px 12px;font:400 17px var(--hand,sans-serif);letter-spacing:1px}
 body.doodle .welcome-sheet .wb-row canvas{flex:none}
 body.doodle .whatsnew .wn-list{color:#2b2733}
+
+/* ---- round 5: quick mute, import link, offline chip, codex boss phases */
+body.doodle .mute-btn{padding:0}
+body.doodle .mute-btn canvas{width:calc(var(--tap,44px) * .62);height:calc(var(--tap,44px) * .62)}
+body.doodle .mute-btn.is-muted{background:#ece8f4}
+body.doodle .link-btn{align-self:center;background:none;border:0;padding:6px 10px;min-height:var(--tap);font:400 17px var(--hand);color:#2b2733;text-decoration:underline;text-underline-offset:3px;text-shadow:var(--haloW);cursor:pointer;text-align:center}
+body.doodle .link-btn:active{transform:translateY(2px)}
+body.doodle .hub-top{position:relative}
+body.doodle .offline-chip{position:absolute;right:14px;top:100%;margin-top:4px;z-index:3;padding:1px 10px;border:2px solid #2b2733;border-radius:12px;background:#ffd23c;color:#2b2733;font:400 14px/1.3 var(--hand);box-shadow:1px 2px 0 #2b2733;pointer-events:none}
+body.doodle .offline-chip[hidden]{display:none}
+body.doodle .cdx-boss{display:flex;flex-direction:column;align-items:stretch;gap:6px;text-align:left}
+body.doodle .cdx-boss .bossHead{display:flex;align-items:center;gap:10px}
+body.doodle .cdx-boss .bossHead canvas{flex:none;width:80px;height:80px}
+body.doodle .cdx-boss .bossTxt{min-width:0}
+body.doodle .cdx-boss>.btn{align-self:flex-end}
+body.doodle .bossphases{border-top:2px dashed rgba(43,39,51,.35);padding-top:6px}
+body.doodle .bp-title{font-size:13px;color:#6b6477;margin-bottom:5px}
+body.doodle .bp-bar{position:relative;height:16px;margin:0 6px;border:3px solid #2b2733;border-radius:9px;background:#e9e3f4;overflow:visible}
+body.doodle .bp-fill{position:absolute;inset:0;border-radius:6px;background:linear-gradient(90deg,#e8403f,#ffc83d 55%,#7ed957)}
+body.doodle .bp-notch{position:absolute;top:-6px;bottom:-6px;width:4px;margin-left:-2px;background:#2b2733;border-radius:2px}
+body.doodle .bp-marks{position:relative;height:18px;margin:0 6px}
+body.doodle .bp-pct{position:absolute;top:2px;transform:translateX(-50%);font-size:13px;line-height:1;color:#2b2733;white-space:nowrap}
+body.doodle .bp-pct.r{transform:translateX(-85%)}
+body.doodle .bp-pct.l{transform:translateX(-15%)}
+body.doodle .bp-list{display:flex;flex-direction:column;gap:3px}
+body.doodle .bp-row{display:flex;gap:6px;align-items:flex-start;font-size:14px;line-height:1.15;color:#2b2733}
+body.doodle .bp-row .bp-txt{min-width:0;overflow-wrap:anywhere}
+body.doodle .bp-row b{font-weight:400;font-size:16px}
+body.doodle .bp-tag{flex:none;min-width:38px;text-align:center;padding:0 4px;border:2px solid #2b2733;border-radius:8px;background:#ffd23c;font-size:13px;line-height:1.35}

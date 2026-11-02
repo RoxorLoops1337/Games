@@ -472,13 +472,26 @@ function staticCreep(ctx, w, h, t, amt, m) {
   if (one) ctx.restore();
   ctx.globalAlpha = a0;
 }
-let BAKE_THUMB = false;
+let BAKE_THUMB = false;   // true while a backdrop is baked without its world sign (hub cards, or a sign the battle layout would cover)
+// where each world's sign sits: [y as a fraction of the height, base font size, width fraction that caps the size]; mirrors the p.txt(wt(..)) calls in the stage painters
+const SIGN = { garage: [0.265, 46, 0.09], busk: [0.09, 44, 0.09], club: [0.27, 44, 0.09], festival: [0.27, 46, 0.095], arena: [0.078, 40, 0.08], beach: [0.268, 44, 0.09], moon: [0.268, 42, 0.085] };
+export function signBox(id, w, h) {   // the box the world sign covers on a w x h backdrop, or null when the world has none
+  const g = SIGN[id]; if (!g) return null;
+  const size = Math.min(g[1], w * g[2]) * wf(id), hw = wt(id).length * size * 0.5, cy = h * g[0];
+  return { x0: w * 0.5 - hw, x1: w * 0.5 + hw, y0: cy - size * 0.55, y1: cy + size * 0.55 };
+}
+// the sign is only worth drawing when it is fully visible: o.avoid is a rect {x, y, w, h} (the part of the canvas the battle layout covers); a sign that touches it is left out
+function signCovered(id, w, h, a) {
+  const b = a && signBox(id, w, h); if (!b) return false;
+  return b.x1 > a.x && b.x0 < a.x + a.w && b.y1 > a.y && b.y0 < a.y + a.h;
+}
 export function drawBackdrop(ctx, id, w, h, t, o) {
   o = o || {}; t = t || 0; id = STAGES[id] ? id : 'title';
   const beat = clamp(o.beat || 0, 0, 1), skin = skinOf(o);
   const m = xform(ctx), lite = !!o.lite, bs = bgScale(w, h, m && m.a, lite);
-  const key = id + '|' + Math.round(w) + 'x' + Math.round(h) + '|' + bs + (o.thumb ? '|t' : '') + skinTag(skin) + '|' + getLang();   // the world sign is drawn text: a language change is a new key
-  let e = bgCache.get(key); if (!e) { BAKE_THUMB = !!o.thumb; e = lruSet(bgCache, key, bakeBg(id, w, h, skin, bs), 6); BAKE_THUMB = false; }
+  const nosign = !!o.thumb || signCovered(id, w, h, o.avoid);
+  const key = id + '|' + Math.round(w) + 'x' + Math.round(h) + '|' + bs + (nosign ? '|t' : '') + skinTag(skin) + '|' + getLang();   // the world sign is drawn text: a language change is a new key
+  let e = bgCache.get(key); if (!e) { BAKE_THUMB = nosign; e = lruSet(bgCache, key, bakeBg(id, w, h, skin, bs), 6); BAKE_THUMB = false; }
   ctx.save();
   put(ctx, e, 0, 0, t, 2.5);
   if (!lite) DYN[id](ctx, w, h, t, beat);   // Low graphics: the twinkles, flames, bubbles and the beat pulse are skipped, the baked page is all there is
@@ -524,7 +537,19 @@ function paintPlatform(p, c, s, x0, y0, th, i) {   // a floating stage platform 
   p.ln([cx - 7, y0 + 33, cx + 7, y0 + 33], INK, 2.2, false, 0.5); p.ln([cx, y0 + 28, cx, y0 + 38], INK, 2.2, false, 0.5);
   if (i % 4 === 0) p.dot(x0 + 11 + (i % 3) * 20, y0 + 56 - (i % 2) * 6, 2.4, i % 8 === 0 ? C.cyan : C.mag);   // a tiny floating speck under the platform
 }
-function paintBoard(p, c, mapId, worldId, skin) {
+// lane chevrons (pencil ticks marching to the stage): one path builder shared by the baked floor (Low graphics: static, off 0), the cached Path2D replay (marching) and the node fallback
+const CHEV_SP = 58, CHEV_STEPS = 29, CHEV_CACHE = new Map();
+function chevInto(path, m, off) {
+  for (const lane of m.lanes) for (let d = off; d < lane.total; d += CHEV_SP) { const p = laneAt(lane, d), c = Math.cos(p.ang), s = Math.sin(p.ang); const bx = p.x - c * 5, by = p.y - s * 5; path.moveTo(bx - s * 8, by + c * 8); path.lineTo(p.x + c * 4, p.y + s * 4); path.lineTo(bx + s * 8, by - c * 8); }
+}
+function chevPath2D(mapId, m, t) {
+  const step = Math.floor(((t * 30) % CHEV_SP) / CHEV_SP * CHEV_STEPS), key = mapId + '|' + step;
+  let p = CHEV_CACHE.get(key);
+  if (!p) { p = new Path2D(); chevInto(p, m, step * CHEV_SP / CHEV_STEPS); if (CHEV_CACHE.size > 300) CHEV_CACHE.clear(); CHEV_CACHE.set(key, p); }
+  return p;
+}
+function strokeChev(c, th) { c.lineCap = 'round'; c.lineJoin = 'round'; c.lineWidth = 3.2; c.strokeStyle = th.chev || 'rgba(43,39,51,0.5)'; }
+function paintBoard(p, c, mapId, worldId, skin, chev) {
   const m = buildMap(mapId), th = themeFor(worldId, skin), pset = pathSet(m);
   c.translate(-BOARD_X + PAD, -BOARD_Y + PAD);
   // the page the board is drawn on: a slightly lighter sheet with faint ruled lines, an uneven double border and tape in the corners
@@ -588,14 +613,15 @@ function paintBoard(p, c, mapId, worldId, skin) {
     p.shp([6, -3, 11, 3, 15, -3], '#fff', INK, 1.6, { gap: 3 }); p.shp([6, 3, 11, -3, 15, 3], '#fff', INK, 1.6, { gap: 3 });
     c.restore();
   }
+  if (chev) { c.save(); strokeChev(c, th); c.beginPath(); chevInto(c, m, 0); c.stroke(); c.restore(); }   // Low graphics: the arrows are part of the cached floor
   c.restore();
 }
-function boardEntry(mapId, worldId, skin, dev) {
-  const bs = Math.round(clamp(dev || getScale(), 0.6, 3.5) * 1000) / 1000, key = mapId + '|' + worldId + '|' + bs + skinTag(skin);
+function boardEntry(mapId, worldId, skin, dev, chev) {
+  const bs = Math.round(clamp(dev || getScale(), 0.6, 3.5) * 1000) / 1000, key = mapId + '|' + worldId + '|' + bs + skinTag(skin) + (chev ? '|c' : '');
   let e = boardCache.get(key);
   if (!e) {
     const th = themeFor(worldId, skin);
-    e = lruSet(boardCache, key, bake('board|' + mapId + '|' + worldId + skinTag(skin), BOARD_W + PAD * 2, BOARD_H + PAD * 2, 2, bs, inked(th.ink, (p, c) => paintBoard(p, c, mapId, worldId, skin))), 8);
+    e = lruSet(boardCache, key, bake('board|' + mapId + '|' + worldId + skinTag(skin) + (chev ? '|c' : ''), BOARD_W + PAD * 2, BOARD_H + PAD * 2, 2, bs, inked(th.ink, (p, c) => paintBoard(p, c, mapId, worldId, skin, chev))), 8);
     e.exact = true;
   }
   return e;
@@ -619,7 +645,7 @@ function brackets(c, x, y, half, bounce, col) {
 export function drawBoard(ctx, mapId, worldId, t, o) {
   o = o || {}; t = t || 0;
   const skin = skinOf(o), m = buildMap(mapId), th = themeFor(worldId, skin), wd = WORLD_BY_ID[worldId] || { accent: C.pink };
-  const beat = clamp(o.beat || 0, 0, 1), lite = !!o.lite, e = boardEntry(mapId, worldId, skin, boardDev(ctx));
+  const beat = clamp(o.beat || 0, 0, 1), lite = !!o.lite, e = boardEntry(mapId, worldId, skin, boardDev(ctx), lite);
   ctx.save();
   if (e.direct) { ctx.save(); e.draw(new Pen(ctx, hashStr(e.key), 1), ctx, 0); ctx.restore(); } else put(ctx, e, BOARD_X - PAD, BOARD_Y - PAD, t, 3.5);
   // flowing chevrons along every lane (pencil ticks marching to the stage)
@@ -628,11 +654,10 @@ export function drawBoard(ctx, mapId, worldId, t, o) {
     if (th.fire) flames(ctx, tileCx(th.fire[0]), tileCy(th.fire[1]) + 8, 54, t, beat);   // the bonfire in the middle of the fork
     if (worldId === 'moon') floaties(ctx, t);
   }
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 3.2; ctx.strokeStyle = th.chev || 'rgba(43,39,51,0.5)';
-  for (const lane of m.lanes) {
-    const sp = 58, off = (t * 30) % sp; ctx.beginPath();
-    for (let d = off; d < lane.total; d += sp) { const p = laneAt(lane, d), c = Math.cos(p.ang), s = Math.sin(p.ang); const bx = p.x - c * 5, by = p.y - s * 5; ctx.moveTo(bx - s * 8, by + c * 8); ctx.lineTo(p.x + c * 4, p.y + s * 4); ctx.lineTo(bx + s * 8, by - c * 8); }
-    ctx.stroke();
+  if (!lite) {   // Low graphics: the chevrons are already in the baked floor
+    strokeChev(ctx, th);
+    if (typeof Path2D !== 'undefined') ctx.stroke(chevPath2D(mapId, m, t));   // marching: a cached Path2D per 2px step, one stroke a frame
+    else { ctx.beginPath(); chevInto(ctx, m, (t * 30) % CHEV_SP); ctx.stroke(); }
   }
   ctx.restore();
   // gate sparks: a few grey scribble flecks flicking out of each hole
