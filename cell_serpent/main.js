@@ -17,6 +17,7 @@ import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { richDemo, setupTapAnimals, tagPets, setupTitleLife, playBurst, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
 import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDock, watchDock, fitTitle, bindStageNav, goTag } from './battle_ui.js';
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
+import { createCues, wantsMuffle } from './audio_cues.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
@@ -25,7 +26,7 @@ let save = defaultSave();
 try { save = sanitizeSave(JSON.parse(localStorage.getItem(SAVE_KEY))); } catch (e) { /* private mode */ }
 const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } };
 
-const audio = createAudio();
+const audio = createAudio(), cues = createCues(audio);
 audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.setVolume(save.settings.volume);
 let stagKey = '';   // which hub tab already played its entrance
 const motion = createMotion({ $, buzz: p => buzz(p), getReduced: () => !!(save && save.settings && save.settings.reduceMotion) }); motion.init();
@@ -577,6 +578,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000 || 0); last = now;
   if (!R) return;
+  audio.muffle(wantsMuffle(mode, g));
   if (mode === 'play') {
     const ms = dt * 1000;
     if (ms > 26) { slowFrames++; fastFrames = 0; } else if (ms < 19) { fastFrames++; slowFrames = Math.max(0, slowFrames - 1); }
@@ -597,7 +599,7 @@ function frame(now) {
     if (g.phase === 'levelup' && cardsFor !== g.choices) showCards();
     if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5) && !(g.phase === 'won' && R.clearBusy())) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked) showRevive(); else if (!reviveAsked) showResult(); } }
     if (watchGroove(g.groove) < 0) audio.play('groovelost');
-    audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0); audio.mix({ stage: g.stage, boss: isBossStage(g.stage), groove: g.groove / 20, danger: g.danger });
+    audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0); audio.mix({ stage: g.stage, boss: isBossStage(g.stage), groove: g.groove / 20, danger: g.danger, skin: cues.skin(g), bphase: cues.tick(g) });
     if (g.phase === 'play') audio.sync(beatPhase(g));
   }
   if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2 }, mode === 'pause' ? 0 : dt);
