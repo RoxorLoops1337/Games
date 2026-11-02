@@ -108,5 +108,5 @@ export function enableDrag(rowEl, c) {
 export const joyLabel = j => j >= PET_JOY_MAX ? 'Overjoyed' : j >= 66 ? 'Happy' : j >= 33 ? 'Content' : j > 0 ? 'Curious' : 'Shy';
 export function joyHTML(k, compact) {
   const j = Math.max(0, Math.min(PET_JOY_MAX, (k && k.joy) || 0));
-  return `<div class="joy${j >= PET_JOY_MAX ? ' full' : ''}${compact ? ' sm' : ''}" title="Happiness grows while the pet walks with you"><span class="jh">♥</span><div class="jbar"><i style="width:${j}%"></i></div><b>${compact ? j + '%' : joyLabel(j)}</b></div>`;
+  return `<div class="joy${j >= PET_JOY_MAX ? ' full' : ''}${compact ? ' sm' : ''}" title="Happiness grows while the pet walks with you"><span class="jh">♥</span><div class="jbar"><i style="width:${j}%"></i><s class="jt${j >= 33 ? ' on' : ''}" style="left:33%"></s><s class="jt${j >= 66 ? ' on' : ''}" style="left:66%"></s></div><b>${compact ? j + '%' : joyLabel(j)}</b></div>`;
 }

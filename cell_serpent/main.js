@@ -37,6 +37,7 @@ import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDo
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
+import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collectionCelebrate } from './pets_b9.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
 import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
@@ -346,6 +347,7 @@ function renderPets() {
   };
   eggNudge(egg, save); list.appendChild(egg);
   list.insertAdjacentHTML('beforeend', collectionHTML(save));
+  collectionCelebrate(save, list.lastElementChild, (tier, el) => { audio.play('levelup'); toast(tier === 'perfect' ? 'Full house! Every friend shines' : 'Everyone is home!'); if (!systemReduceMotion()) hatchBurst(el, '#ffd24a', tier === 'perfect' ? 3 : 2, false); });
   { const rdy = PETS.filter(p => petCanUp(save, p.id)).length; if (save.eggs > 1 || rdy) { const row = document.createElement('div'); row.className = 'refrow'; row.style.justifyContent = 'center'; row.style.gap = '10px'; if (save.eggs > 1) { const b = document.createElement('button'); b.className = 'btn small alt'; b.textContent = 'HATCH ALL (' + save.eggs + ')'; b.onclick = () => { const res = hatchAll(save); if (res.length) { persist(); audio.play('levelup'); refreshCur(); toast(res.length + ' eggs hatched'); renderHub(); } }; row.appendChild(b); } if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'STAR UP ALL (' + rdy + ')'; b.onclick = () => { if (upgradePetsAll(save)) { persist(); audio.play('upgrade'); renderHub(); } }; row.appendChild(b); } list.appendChild(row); } }
   list.appendChild(chipRow(['All', 'Owned', 'Ready'], petFilter, o => { petFilter = o; audio.play('click'); renderPets(); }, { Ready: PETS.filter(p => petCanUp(save, p.id)).length }));
   { const row = list.lastElementChild; const sb = document.createElement('button'); sb.className = 'fchip'; sb.textContent = 'Sort: ' + petSort; sb.onclick = () => { petSort = petSort === 'Order' ? 'Stars' : petSort === 'Stars' ? 'Joy' : petSort === 'Joy' ? 'Rarity' : 'Order'; audio.play('click'); renderPets(); }; if (row && row.classList.contains('fchips')) row.appendChild(sb); }
@@ -362,7 +364,8 @@ function renderPets() {
     { const rr = petRarity(p.id), ri = PET_RARITY[p.id] || 0; t.style.setProperty('--rc', rr.color); t.classList.add('prar' + ri); t.querySelector('.ds').insertAdjacentHTML('beforebegin', rarityChip(rr, ri)); }
     if (isNewItem(save, 'p', p.id)) t.insertAdjacentHTML('afterbegin', newRibbonHTML);
     if (owned) t.querySelector('.ds').insertAdjacentHTML('afterend', joyHTML(k, true));
-    t.tabIndex = 0; t.onclick = e => { if (!e.target.closest('button')) { audio.play('click'); sheets.petSheet(p.id); } };
+    t.onclick = e => { if (!e.target.closest('button')) { audio.play('click'); sheets.petSheet(p.id); } };
+    tileA11y(t, petTileLabel(save, p, k, eq, petCanUp(save, p.id)), () => t.onclick({ target: t })); if (owned) petOnTile(t, p.id, audio, systemReduceMotion());
     list.appendChild(t);
   }
   if (!list.querySelector('.tile')) list.appendChild(emptyCardUx('pets', petFilter, () => { petFilter = 'All'; audio.play('click'); renderPets(); }));
@@ -415,7 +418,8 @@ function renderSkills() {
     }
     if (owned) { const rk = skillRank(save, w.id); t.querySelector('.ds').insertAdjacentHTML('beforebegin', `<em class="rk r${rk.rank}" title="Mastery rank">🎖 ${rk.name}</em>`); keyOf.set(t, skSort === 'Level' ? -k.lv : skSort === 'Rank' ? -rk.val : skSort === 'Closest' ? -(need ? k.frag / need : 0) : (w.tier || 0)); } else keyOf.set(t, skSort === 'Tier' ? (w.tier || 0) : skSort === 'Closest' ? -(need ? k.frag / need : 0) : 0);
     if (isNewItem(save, 's', w.id)) t.insertAdjacentHTML('afterbegin', newRibbonHTML);
-    t.tabIndex = 0; t.onclick = e => { if (!e.target.closest('button')) { audio.play('click'); sheets.skillSheet(w.id); } };
+    t.onclick = e => { if (!e.target.closest('button')) { audio.play('click'); sheets.skillSheet(w.id); } };
+    { const rk9 = owned ? skillRank(save, w.id) : null; if (rk9) masteryMark(t, rk9.rank); tileA11y(t, skillTileLabel(w, k, { gated, eq, ready, rank: rk9 && rk9.rank }), () => t.onclick({ target: t })); }
     groups[eq ? 0 : owned ? 1 : 2].push(t);
   }
   for (const g of groups) g.sort((a, b) => keyOf.get(a) - keyOf.get(b));
