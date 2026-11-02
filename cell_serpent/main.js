@@ -170,7 +170,7 @@ const TABS = ['Shop', 'Stats', 'Battle', 'Skills', 'Pets', 'Gear'];
 // round 11: one kind line when a reward is waiting, once per thing per visit (never over a panel or the welcome gift)
 const nudged = new Set();
 function hubNudge() {
-  try { const n = readyNudge(save, dayKey(), Date.now(), nudged); if (!n) return; nudged.add(n.key); setTimeout(() => { if (mode === 'hub' && shownId === 'hub') toast(n.icon + ' ' + n.text + '!'); }, 900); } catch (e) { /* ignore */ }
+  try { const n = readyNudge(save, dayKey(), Date.now(), nudged); if (!n) return; nudged.add(n.key); setTimeout(() => { const nr = document.getElementById('nextRew'); if (nr && nr.classList.contains('ready')) return; /* the Next Reward banner already says it, and the toast would cover the currency pills */ if (mode === 'hub' && shownId === 'hub') toast(n.icon + ' ' + n.text + '!'); }, 900); } catch (e) { /* ignore */ }
 }
 function openHub(tab = hubTab) {
   mode = 'hub'; hubTab = tab; audio.hubWorld(skinFor(sel)); audio.music(false); audio.hub(true);

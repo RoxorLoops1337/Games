@@ -2535,6 +2535,60 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 @media (max-height:700px){#result{gap:6px}#result .row .btn,#result #rRetry,#result #rHub{min-height:44px;padding:8px}#result .hero{height:clamp(40px,7vh,56px)}#result .stars{font-size:clamp(22px,4.2vh,30px)}}
   #rShare.rshare11{min-height:44px;min-width:44px} .rvwipe small{font-size:12px}
 /* end @css:34-phone-run */
+/* @css:34-phone-hub */
+  /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
+  :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  :where(button,[role=button]):not(:disabled):active{filter:brightness(1.14)}
+  :where(#skillList,#petList)>.tile:active{transform:scale(.985);transition:transform .08s}
+  :where(.tile .go,.sc .go,.btn):not(:disabled):active{transform:translateY(2px) scale(.985);transition:transform .06s}
+  /* 2 no sticky hover on touch screens */
+  @media (hover:none){.card:hover{transform:none;border-color:rgba(255,255,255,.2)} .card:active{transform:scale(1.02);border-color:var(--lime)} .radar .rhit:hover{fill:transparent}}
+  /* 3 tap targets: the look stays, the hit area grows (invisible ::before). Energy plus and the settings gear sit in a crowded top bar */
+  #hub .hubtop .cur.e{padding-right:12px;overflow:visible}   /* room for the 44 px wide invisible hit area of the plus */
+  #hub #enPlus{position:relative}
+  #hub #enPlus::before{width:max(100%,44px);height:max(100%,44px);left:50%;top:50%}
+  #hub #setBtnH::before{width:44px;height:44px;left:50%;top:50%;transform:translate(-60%,-50%)}
+  .filters button{min-width:44px}
+  .stk{position:relative} .stk::before{content:"";position:absolute;inset:-3px}
+  #panel #pClose,#boxModal #bOk,#settings .btn,#pause .btn{min-height:48px;flex:none}
+  .btn.small,.tile .go,.sc .go,#panel .go{min-height:44px;flex-shrink:0}
+  #settings input[type=range]{min-height:44px;margin:0;padding:0;touch-action:pan-y}
+  #settings .volrow{min-height:48px}
+  /* 4 text: readable text is never under 12 px, pure badges and counters keep 11 */
+  #hub #glCount,#hub .gl-n,#hub #stSub.stagesub,#hub .lv,#hub .bt-hero .stprog .pgl,#hub .pgl b,#hub .chip .rw,#hub .qt small,#hub .tile .sm,#hub .sm,#panel .sm,#hub .ev-tx small,#hub .evn small,#panel .evn small,#panel .sday small,#hub .sday small{font-size:12px}
+  #hub #tabBattle .sidebtn,#hub .bt-side .tapme,#hub .tapme{font-size:12px}
+  #tabBattle .side .sidebtn{min-width:72px}
+  #hub .colp small,#hub .kbar span,#hub .kname,#hub .sbn,#hub .sbv,#hub .heropow small,#hub .rec small,#hub .scd,#hub .snk,#hub .tile.deal .snk,#hub .fbtx em,#hub .tile .lk small,#hub .prem,#hub .prhd small,#hub .whint,#panel .whint,#panel .evi b,#hub .evi b,#settings .sgrp,#hub .lk small{font-size:12px}
+  #hub #pigBox .tile .lv,#hub .bt-lt,#hub .ev-cd small,#hub .fbtx span{font-size:12px}
+  #hub #setBtnH{position:relative!important;z-index:3}   /* the inline style makes it static: the invisible hit area needs a positioned parent above the pills */
+  #hub #enPlus{z-index:2}
+  #hub .bt-load>#battleLoad{min-width:max-content;flex-shrink:0}   /* the five 44 px slots used to spill under the EDIT pill on wide phones */
+  @media (max-width:440px){#hub .bt-lt{display:none}}
+  #hub #loadEdit::before{width:100%}   /* the 44 px wide hit area used to cover the last loadout slot */
+  #hub #loadoutRow{max-width:100%;align-items:flex-start} #hub #loadoutRow .slot{min-width:0;flex:1 1 0;min-height:44px;max-width:92px}   /* five slots always fit, even on 320 */
+  @media (max-width:340px){#hub #loadoutRow{gap:4px;padding-left:4px;padding-right:4px} #hub .bt-rowh{flex-wrap:wrap;gap:6px 4px}}
+  @media (max-width:340px){#hub .hubtop{justify-content:flex-start;gap:3px;padding-left:6px;padding-right:4px} #hub .hubtop .cur{font-size:13px;padding:2px 5px 2px 3px;gap:2px} #hub .hubtop .cur.e{padding-right:12px} #hub .hubtop .cur img{width:18px;height:18px}}   /* 320 wide: the gear was cut by the screen edge */
+  #hub .kname{min-height:28px}
+  #hub .rec small{line-height:1.15}
+  .hfrag,#bLoot.reveal .it small.hfrag,#bLoot.reveal .it small.htag{font-size:12px}
+  /* badges and counters: 11 px minimum */
+  #stGo .gt,.rchip,.hotbadge,.bestrib,.stk em,.tabs .dot,#hub .dot{font-size:11px}
+  .stk em{padding:1px 5px}
+  /* 5 cards and tiles: names wrap cleanly, no clipping */
+  .tile .nm,.kname{overflow-wrap:break-word;word-break:normal;hyphens:auto}
+  .tile .ds{font-size:13px}
+  /* 6 thumb zone: the big bottom dock and tab bar stay one-hand sized */
+  .tabs button{min-height:56px}
+  @media (pointer:coarse){.scr:not(.hub){backdrop-filter:none;background:rgba(8,5,30,.82)} .tile,.sc,.kcard,.card,.stagebox{box-shadow:0 3px 8px rgba(0,0,0,.35)}}
+  /* 7 scroll: momentum on every hub list, no sideways bounce */
+  .hubbody,.scr,.panelbody,.side,.chips{-webkit-overflow-scrolling:touch;overscroll-behavior-x:none}
+  @media (max-width:350px){#hub .wstrip{gap:1px;padding:0} #hub .wstrip .wact{padding:4px 1px} #hub .wstrip .wact .wn{letter-spacing:-.8px}}
+  #hub .bunx{font-size:12px} @media (max-width:350px){#hub .bt-rowh .pill{font-size:12px;padding:5px 6px;letter-spacing:0}}
+  @media (max-width:420px){#hub .bt-rowh .ovl{display:none} #hub .bt-rowh .ovb{font-size:20px;padding:8px 10px} #hub .wstrip{gap:2px} #hub .wstrip .wact{padding:4px 2px} #hub .wstrip .wact .wn{white-space:normal;overflow:visible;text-overflow:clip;font-weight:700;line-height:1.1;overflow-wrap:normal;letter-spacing:-.5px}}
+  #hub .wstrip .wact .wh{flex-wrap:wrap;row-gap:2px} #hub .wstrip .wact .wh em{order:1} #hub .wstrip .wact .wh u{order:1;font-size:12px} #hub .wstrip .wact .wn{order:2;flex:1 1 100%;font-size:12px;letter-spacing:0} #hub .alert.num{font-size:12px}
+  #stOverview.ovb{min-height:44px;min-width:44px}
+  #result .sub{color:#e4def6} #result .gt small{color:#e4def6}
+/* end @css:34-phone-hub */
 </style>
 </head>
 <body>
