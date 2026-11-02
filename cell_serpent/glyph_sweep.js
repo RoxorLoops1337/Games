@@ -4,6 +4,7 @@
 // baked icons. A MutationObserver swaps new emoji as screens redraw, before the next paint, and only looks at what
 // changed (cheap enough for the count-up numbers). Markup only: headless safe.
 import { GEAR_GLYPHS, GEAR_EMOJI } from './glyph_gear.js';
+import { B11_GLYPHS, B11_EMOJI } from './glyph_b11.js';
 const O = 'stroke="#3a1d0c" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"';
 const sv = b => `<svg class="gs9" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${b}</svg>`;
 const wedge = (c, i, pts) => `<path d="M12 12L${pts[i]}A8.5 8.5 0 0 1 ${pts[(i + 1) % 6]}z" fill="${c}"/>`;
@@ -27,16 +28,16 @@ export const GLYPHS = {
   mic: sv(`<rect x="8.2" y="2.5" width="7.6" height="12" rx="3.8" fill="#c9cfe0" ${O}/><path d="M5.6 11.5a6.4 6.4 0 0 0 12.8 0M12 18v3.4M8.6 21.4h6.8" fill="none" ${O} stroke-width="1.8"/><path d="M10 6.2h4M10 9h4" stroke="#3a1d0c" stroke-width="1.2" opacity=".5"/>`),
 };
 
-Object.assign(GLYPHS, GEAR_GLYPHS);
+Object.assign(GLYPHS, GEAR_GLYPHS, B11_GLYPHS);
 
 // emoji (as they appear in the game's strings) -> glyph name
 export const EMOJI_GLYPH = {
   '⚡': 'bolt', '🪙': 'coin', '🟡': 'coin', '✨': 'sparkle', '🌟': 'star', '🔒': 'lock', '🏆': 'trophy', '🎵': 'note',
   '🎁': 'gift', '📦': 'box', '🎡': 'wheel', '🎫': 'ticket', '⏱': 'clock', '🛡': 'shield', '🥚': 'egg', '🎤': 'mic',
 };
-Object.assign(EMOJI_GLYPH, GEAR_EMOJI);
+Object.assign(EMOJI_GLYPH, GEAR_EMOJI, B11_EMOJI);
 const RE = new RegExp('(' + Object.keys(EMOJI_GLYPH).join('|') + ')\\uFE0F?', 'gu');
-const QUICK = /[⚡🪙🟡✨🌟🔒🏆🎵🎁📦🎡🎫⏱🛡🥚🎤🔨📣💍🪘🧣🦺🎙🧤⏰🧼🥛🧋🫙🏅🎖🎀📖🔥⭐]/u;
+const QUICK = new RegExp(Object.keys(EMOJI_GLYPH).join('|'), 'u');
 
 // pure: split a string into text and glyph pieces ({t} or {g}); no emoji gives one text piece
 export function splitGlyphs(str) {
