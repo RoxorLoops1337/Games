@@ -11,3 +11,16 @@ for (let r = 0; r <= 5; r++) assert.ok(main.includes("' r' + rn"), 'rarity class
 assert.ok(main.includes("'123'.includes(e.key)"), 'keyboard 1-3 kept');
 assert.ok(main.includes('pickLock'), 'double pick guard');
 assert.ok(!(html + main).includes('—'), 'no em dash');
+
+// round 2: sounds, odds hint, refresh pips, build strip
+const ui = await import('../../cell_serpent/cards_ui.js');
+assert.ok(main.includes("audio.play('card' + mr)") && main.includes("audio.play('card' + pr)"), 'rarity sounds wired');
+assert.ok(main.includes("'stinger'"), 'stinger wired');
+const o0 = ui.oddsAtLeast(0), o1 = ui.oddsAtLeast(20);
+assert.ok(o1[0] > o0[0] && o1[2] > o0[2], 'luck raises odds');
+assert.ok(o0[0] > o0[1] && o0[1] > o0[2], 'odds fall by tier');
+assert.equal(ui.refreshPips({ rerolls: 3 }).split('class="on"').length - 1, 3, 'pips');
+const gg = { level: 5, stage: 4, ups: { aspd: 2 }, weap: { swab: { lv: 2 } }, rerolls: 4 };
+assert.ok(ui.buildHTML(gg, id => id).includes('2'), 'build strip');
+assert.ok(ui.luckHTML(gg).includes('Rare+'), 'luck html');
+assert.ok(html.includes('id="buildStrip"') && html.includes('id="luckBox"'), 'markup');

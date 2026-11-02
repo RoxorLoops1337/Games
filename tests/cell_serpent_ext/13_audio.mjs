@@ -47,4 +47,25 @@ assert.ok(nodes > t0, 'music scheduled notes');
 a.setMuted(true); a.play('kill'); a.music(true); a.music(false); a.setMuted(false);
 a.setMusicAllowed(false); a.music(true);
 assert.equal(a.musicAllowed, false);
+
+// 4) round 2: every new sfx is wired in main.js / hub2.js, volume setting, motifs
+{
+  const { readFileSync } = await import('node:fs');
+  const { defaultSave, sanitizeSave } = await import('../../cell_serpent/sim.js');
+  const rd = f => readFileSync(new URL('../../cell_serpent/' + f, import.meta.url), 'utf8');
+  const mainSrc = rd('main.js'), hubSrc = rd('hub2.js'), audSrc = rd('audio.js');
+  for (const n of ["'tab'", "'toggle'", "'back'", "'tap'", "'deny'", "'stinger'", "'win'", "'star' +"]) assert.ok(mainSrc.includes(n), 'main.js does not play ' + n);
+  assert.ok(hubSrc.includes("audio.play('buy')") && hubSrc.includes("audio.play('stinger')"), 'shop does not play buy/stinger');
+  assert.ok(audSrc.includes('sfx.riser()') && audSrc.includes('sfx.bossintro()'), 'stage start sounds');
+  assert.ok(mainSrc.includes('audio.setVolume') && rd('index.html').includes('volRange'), 'volume wired');
+  assert.equal(sanitizeSave({ settings: { volume: 0.4 } }).settings.volume, 0.4);
+  assert.equal(sanitizeSave({ settings: { volume: 9 } }).settings.volume, 1);
+  assert.equal(sanitizeSave({ settings: { volume: 'x' } }).settings.volume, 1);
+  assert.equal(sanitizeSave({}).settings.volume, 1);
+  assert.equal(defaultSave().settings.volume, 1);
+  const b = createAudio(); b.setVolume(0.3); assert.equal(b.volume, 0.3); b.setVolume(NaN); assert.equal(b.volume, 1);
+  assert.equal(new Set(Array.from({ length: 10 }, (_, i) => b.motif(i + 1).join())).size, 10, 'ten distinct motifs');
+  for (let i = 1; i <= 10; i++) assert.equal(b.motif(i).length, 4);
+  b.unlock(); b.play('tap'); b.play('click'); b.play('riser'); b.setVolume(0.5);
+}
 console.log('13_audio ok, sfx count', names.length);

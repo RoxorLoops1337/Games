@@ -89,3 +89,71 @@ const fresh = () => S.defaultSave();
   s.addict.spin.day = day; s.kills = 90; const k = S.nextReward(s, day, 0); assert.equal(k.label, 'Pop 100 cells');
 }
 console.log('16_addiction ok');
+// ---- round 2: mastery rank, streak wheel, daily quests, season, achievements, comeback flow
+{
+  const s = fresh();
+  let r = S.masteryRank(s, 'swab'); assert.equal(r.rank, 0); assert.equal(r.name, 'Rookie'); assert.equal(r.next, 50); assert.equal(r.frac, 0);
+  s.addict.sk.swab = 25; r = S.masteryRank(s, 'swab'); assert.equal(r.frac, 0.5);
+  s.addict.sk.swab = 400; r = S.masteryRank(s, 'swab'); assert.equal(r.rank, 2); assert.equal(r.name, 'Silver'); assert.equal(r.next, 2500);
+  s.addict.sk.swab = 99999999; r = S.masteryRank(s, 'swab'); assert.equal(r.rank, r.max); assert.equal(r.next, null); assert.equal(r.frac, 1);
+  assert.equal(S.masteryRank(s, 'nope').rank, 0);
+}
+{   // spin streak: consecutive days build looks, a gap resets, saved + sanitised
+  const s = fresh();
+  for (let d = 0; d < 7; d++) S.doSpin(s, day + d);
+  assert.equal(s.addict.spin.n, 7); assert.equal(S.spinStreak(s, day + 6), 7); assert.equal(S.spinStreak(s, day + 7), 7); assert.equal(S.spinStreak(s, day + 8), 0);
+  assert.equal(S.spinFrame(7).name, 'Silver wheel'); assert.equal(S.spinFrame(2).at, 0); assert.equal(S.spinFrame(99).next, 0); assert.equal(S.spinFrame(3).next, 7);
+  S.doSpin(s, day + 9); assert.equal(s.addict.spin.n, 1);
+  assert.equal(S.sanitizeSave(JSON.parse(JSON.stringify(s))).addict.spin.n, 1);
+  assert.equal(S.sanitizeAddict({ spin: { day: 1, prize: 0, n: -4 } }).spin.n, 0);
+}
+{   // daily quests: deterministic, three distinct, rotate, chest after all three, nothing needs energy
+  for (let d = 0; d < 200; d++) { const q = S.dailyQuests(day + d); assert.equal(q.length, 3); assert.equal(new Set(q.map(x => x.id)).size, 3); assert.deepEqual(q, S.dailyQuests(day + d)); }
+  assert.ok(new Set(Array.from({ length: 30 }, (_x, d) => S.dailyQuests(day + d).map(x => x.id).join())).size > 8);
+  const s = fresh(); let st = S.questState(s, day); assert.equal(st.doneCount, 0); assert.ok(!st.chestReady); assert.equal(S.claimQuestChest(s, day), null);
+  const run = { stage: 1, kills: 200, runs: 1, bombs: 9, chests: 9, picks: 20, groove: 30, won: true, dmgBy: {} };
+  S.recordAddictRun(s, day, run); st = S.questState(s, day);
+  assert.equal(st.doneCount, 3); assert.ok(st.chestReady); assert.ok(st.quests.every(x => x.prog === x.target));
+  const b = s.beats + s.sparkles + s.eggs * 100, rw = S.claimQuestChest(s, day); assert.ok(rw); assert.ok(s.beats + s.sparkles + s.eggs * 100 > b);
+  assert.equal(S.claimQuestChest(s, day), null); assert.ok(S.questState(s, day).chestOpened);
+  assert.equal(S.questState(s, day + 1).doneCount, 0);   // a new day starts fresh
+  S.recordAddictRun(s, day + 1, { stage: 1, kills: 1, dmgBy: {} }); assert.ok(!S.questState(s, day + 1).chestOpened);
+  const rt = S.sanitizeSave(JSON.parse(JSON.stringify(s))); assert.deepEqual(rt.addict.q, s.addict.q);
+  const junk = S.sanitizeAddict({ q: { day: 'x', p: 'no', chest: 5 } }); assert.deepEqual(junk.q.p, [0, 0, 0]); assert.equal(junk.q.chest, 1);
+}
+{   // season: one stamp per day, milestones claim once, leftovers are paid when the season ends
+  const s = fresh(), d0 = 30 * 700;   // first day of a season
+  assert.equal(S.seasonStatus(s, d0).dayNo, 1); assert.equal(S.seasonStatus(s, d0 + 29).daysLeft, 0);
+  for (let i = 0; i < 3; i++) S.recordAddictRun(s, d0 + i, { stage: 1, kills: 1, dmgBy: {} });
+  S.recordAddictRun(s, d0 + 2, { stage: 1, kills: 1, dmgBy: {} });   // same day again: no second stamp
+  let st = S.seasonStatus(s, d0 + 2); assert.equal(st.stamps, 3); assert.ok(st.stampedToday); assert.ok(st.miles[0].ready && !st.miles[1].ready);
+  const b = s.beats; assert.ok(S.claimSeason(s, d0 + 2, 0)); assert.equal(s.beats, b + 150); assert.ok(!S.claimSeason(s, d0 + 2, 0)); assert.ok(!S.claimSeason(s, d0 + 2, 1)); assert.ok(!S.claimSeason(s, d0 + 2, 99));
+  for (let i = 3; i < 7; i++) S.recordAddictRun(s, d0 + i, { stage: 1, kills: 1, dmgBy: {} });
+  assert.ok(S.seasonStatus(s, d0 + 6).miles[1].ready);
+  const eggs = s.eggs; S.ensureSeason(s, d0 + 30);   // the next season: the unclaimed 7 stamp egg is paid out, nothing is lost
+  assert.equal(s.eggs, eggs + 1); assert.equal(s.addict.season.n, 0); assert.match(S.seasonStatus(s, d0 + 30).note, /Last season gifts: 1 Egg/);
+  S.clearSeasonNote(s); assert.equal(S.seasonStatus(s, d0 + 30).note, '');
+  const full = fresh(); for (let i = 0; i < 40; i++) { S.recordAddictRun(full, d0 + (i % 30), { stage: 1, kills: 1, dmgBy: {} }); } assert.ok(full.addict.season.n <= S.SEASON_DAYS);
+  const rt = S.sanitizeSave(JSON.parse(JSON.stringify(s))); assert.deepEqual(rt.addict.season, s.addict.season);
+  assert.deepEqual(S.sanitizeAddict({ season: { key: 3, n: 999, claimed: { 0: 1, 77: 1 }, note: '<b>x</b>' } }).season, { key: 3, n: 30, last: 0, claimed: { 0: 1 }, note: 'bxb' });
+}
+{   // achievements reuse trophies; the toast fires once, old saves do not spam
+  const s = fresh(); assert.deepEqual(S.achievementCount(s), { got: 0, total: S.TROPHIES.length });
+  assert.deepEqual(S.popAchievements(s), []); assert.equal(s.addict.annInit, 1);
+  s.kills = 150; assert.equal(S.achievementCount(s).got, 1);
+  const p = S.popAchievements(s); assert.equal(p.length, 1); assert.equal(p[0].id, 'k100'); assert.deepEqual(S.popAchievements(s), []);
+  S.claimTrophy(s, 'k100'); assert.equal(S.achievementCount(s).got, 1);
+  const old = fresh(); old.cleared = 40; old.kills = 9999; old.runs = 99; assert.deepEqual(S.popAchievements(old), []);   // first look: silent
+  old.hardCleared = 5; old.hardCleared = Math.min(old.cleared, 5); assert.ok(S.popAchievements(old).some(t => t.id === 'h5'));
+  const rt = S.sanitizeSave(JSON.parse(JSON.stringify(old))); assert.deepEqual(rt.addict.ann, old.addict.ann);
+}
+{   // comeback: warm lines, never lost, streak is kept warm
+  const s = fresh(), t0 = 1.7e12, dk = Math.floor((t0 + 6 * DAY) / DAY);
+  S.touchSeen(s, t0); assert.deepEqual(S.comebackLines(s, dk, t0 + DAY), []);
+  const lines = S.comebackLines(s, dk, t0 + 6 * DAY); assert.ok(lines.length >= 3); assert.ok(lines.every(l => !l.includes(String.fromCharCode(8212))));
+  assert.match(lines[lines.length - 1], /Nothing is lost/);
+  s.streak = { last: 1, n: 1 }; S.claimComeback(s, t0 + 6 * DAY); assert.equal(s.streak.n, 2);
+  assert.ok(S.nextReward(fresh(), day, 0));
+}
+console.log('16_addiction round 2 ok');
+

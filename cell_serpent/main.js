@@ -1,14 +1,19 @@
 import { quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
-import { recordAddictRun } from './sim.js';
+import { recordAddictRun, eventInfo, ensureEvent } from './sim.js';
 import { createHub2 } from './hub2.js';
 import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
-import { revealStars, countUp, levelBar, reviveRing, stopFx } from './result_fx.js';
-import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed } from './access.js';
+import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint } from './result_fx.js';
+import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed, announce, watchGroove, resetGroove, showZone, inThumbZone, zoneSteer, initKeyboard, RARITY_WORDS } from './access.js';
 import { createMotion } from './motion.js';
+import { createClock } from './clock.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
+import { luckHTML, refreshPips, buildHTML } from './cards_ui.js';
+import { richDemo, setupTapAnimals, tagPets, needsTutorial, showTutorial, petHint, eggNudge } from './onboard12.js';
+import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText } from './battle_ui.js';
+import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY } from './skill_sheet.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
@@ -18,13 +23,15 @@ try { save = sanitizeSave(JSON.parse(localStorage.getItem(SAVE_KEY))); } catch (
 const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } };
 
 const audio = createAudio();
-audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music);
+audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.setVolume(save.settings.volume);
+let stagKey = '';   // which hub tab already played its entrance
 const motion = createMotion({ $, buzz: p => buzz(p), getReduced: () => !!(save && save.settings && save.settings.reduceMotion) }); motion.init();
 const buzz = p => { try { if (save.settings.vibrate && navigator.vibrate) navigator.vibrate(p); } catch (e) { /* ignore */ } };
-function applySettings() { motion.applyReduced(); audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); if (R) R.setOptions({ reduceMotion: save.settings.reduceMotion || systemReduceMotion(), lowQuality: save.settings.lowQuality, bigNumbers: save.settings.bigNumbers, colorBlind: save.settings.colorBlind, highContrast: save.settings.highContrast }); applyPageSettings(save.settings); showSlider(save.settings.slider && mode === 'play' && !document.querySelector('.scr.on')); dprCap = save.settings.lowQuality ? 1 : Math.max(dprCap, 2); }
+function applySettings() { motion.applyReduced(); audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.setVolume(save.settings.volume); if (R) R.setOptions({ reduceMotion: save.settings.reduceMotion || systemReduceMotion(), lowQuality: save.settings.lowQuality, bigNumbers: save.settings.bigNumbers, colorBlind: save.settings.colorBlind, highContrast: save.settings.highContrast }); applyPageSettings(save.settings); showSlider(save.settings.slider && mode === 'play' && !document.querySelector('.scr.on')); showZone(save.settings.thumbZone && mode === 'play' && !document.querySelector('.scr.on')); dprCap = save.settings.lowQuality ? 1 : Math.max(dprCap, 2); }
 let art = null, R = null, kit = null;
 const dayKey = () => Math.floor(Date.now() / 86400000);
 let slowFrames = 0, fastFrames = 0;
+const clk = createClock();   // 05-screen-feel: fixed-step clock fed with dt * slow-motion scale
 let reviveAsked = false, hard = false, mode = 'title', g = null, demo = null, acc = 0, last = 0, endT = 0, cardsFor = null, hubTab = 'Battle', sel = 1, ranResult = false;
 const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
 const keys = {};
@@ -36,10 +43,11 @@ function resize() {
   canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
 }
 addEventListener('resize', resize); resize();
-initSlider(joy, () => mode === 'play'); initKeys(() => mode !== 'play'); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
+initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap = true; }); initKeyboard(); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
 
-function show(id) { motion.screen(id); $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); }
-function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) motion.num($(id), v); const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } const en = $('hEnergy'); if (en) en.textContent = tickEnergy(save, Date.now()) + '/' + ENERGY_MAX; }
+function show(id) { if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id); }
+function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) motion.num($(id), v); const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } { const ht = document.querySelector('.hubtop'), big = Math.max(save.beats, save.sparkles); if (ht) { ht.classList.toggle('big', big >= 10000); ht.classList.toggle('huge', big >= 100000); } }   // long numbers shrink the header pills on narrow phones
+  const en = $('hEnergy'); if (en) en.textContent = tickEnergy(save, Date.now()) + '/' + ENERGY_MAX; }
 
 // ---------------------------------------------------------------- icons (all drawn by the art kit)
 const iconCache = {};
@@ -58,7 +66,7 @@ function iconURL(id) {
   }
   return (iconCache[id] = spr && spr.c.toDataURL ? spr.c.toDataURL() : '');
 }
-const PICON = { power: '🎤', haste: '⏱️', crit: '🎯', vital: '❤️', guard: '🎧', speed: '👟' };
+const PICON = { enc: '👏', power: '🎤', haste: '⏱️', crit: '🎯', vital: '❤️', guard: '🎧', speed: '👟' };
 const icon = id => (PICON[id] ? PICON[id] : PETS.some(p => p.id === id) ? (iconURL(id) ? `<img src="${iconURL(id)}" alt="">` : '🐾') : id === 'egg' ? (iconURL('egg') ? `<img src="${iconURL('egg')}" alt="">` : '🥚') : iconURL(id) ? `<img ${WEAPONS.some(w => w.id === id) || id === 'maw' ? 'class="zoom" ' : ''}src="${iconURL(id)}" alt="">` : (id[0] || '?').toUpperCase());
 const STATICON = { atk: '🔊', crt: '🎵', cdn: '⏱️', vit: '❤️', for: '⭐', rev: '🎤' };
 function tile({ cls = '', ic, name, chip, chipCls = '', desc, bar, barText, pips, btn, gold, disabled, onclick, one, lock }) {
@@ -89,7 +97,7 @@ function openHub(tab = hubTab) {
   if (dayLogin(save, dayKey())) persist();
   refreshCur();
   sel = Math.max(1, Math.min(sel, MAX_STAGE, save.cleared + 4));
-  renderHub(); show('hub'); hub2.addict.maybeComeback();
+  renderHub(); show('hub'); if (!hub2.addict.maybeComeback()) hub2.retain.checkAch();
 }
 function badgeTabs() {
   const day = dayKey(), s = save, out = new Set();
@@ -104,10 +112,12 @@ function badgeTabs() {
 function renderHub() {
   refreshCur();
   { const bd = badgeTabs(); for (const b of document.querySelectorAll('.tabs button')) { const has = b.querySelector('.dot'); if (bd.has(b.dataset.tab) && !has) { const d = document.createElement('i'); d.className = 'dot'; b.appendChild(d); } else if (!bd.has(b.dataset.tab) && has) has.remove(); } }
-  hub2.addict.renderNext();
+  hub2.addict.renderNext(); hub2.retain.renderStrip(); petHint(document.querySelector('.tabs'), hubTab, save);
   for (const t of TABS) { $('tab' + t).classList.toggle('on', t === hubTab); }
   for (const b of document.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.tab === hubTab);
+  $('hub').classList.toggle('bt-on', hubTab === 'Battle');
   if (hubTab === 'Battle') renderBattle(); else if (hubTab === 'Skills') renderSkills(); else if (hubTab === 'Pets') renderPets(); else if (hubTab === 'Stats') hub2.renderStats(); else if (hubTab === 'Gear') hub2.renderGear(); else hub2.renderShop();
+  if (stagKey !== hubTab) { stagKey = hubTab; if (hubTab !== 'Battle') motion.stagger($('tab' + hubTab)); }
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { audio.unlock(); audio.play('click'); hubTab = b.dataset.tab; renderHub(); };
 
@@ -131,7 +141,7 @@ function renderBattle() {
   { const rp = recPower(sel, hard), mine = power(save);
     $('diffRow').innerHTML = `<div class="seg ${hard ? 'h' : ''}"><i></i><button class="dbtn ${hard ? '' : 'on'}" data-h="0">Normal</button><button class="dbtn hard ${hard ? 'on' : ''}" data-h="1" ${hardOk ? '' : 'disabled'}>${hardOk ? 'Hard' : '🔒 Hard'}</button></div><span class="rec ${mine < rp ? 'low' : ''}">Power <b>${mine}</b> / ${rp}</span>`; }
   for (const b of $('diffRow').querySelectorAll('.dbtn')) b.onclick = () => { audio.play('click'); hard = b.dataset.h === '1'; renderBattle(); };
-  $('stMod').textContent = info.mod ? '✦ ' + info.mod.name + ': ' + info.mod.blurb : '';
+  $('stMod').innerHTML = twistHTML(info.mod); $('btFact').hidden = true; $('btHero').classList.remove('fact');
   { const nxt = Math.min(MAX_STAGE, save.cleared + 1), cb = $('contBtn'); cb.style.display = sel === nxt || save.cleared >= MAX_STAGE ? 'none' : ''; $('btRowH').style.display = cb.style.display; cb.textContent = 'CONTINUE ▶ ' + nxt; cb.onclick = () => { audio.play('click'); sel = nxt; hard = false; renderBattle(); }; }
   const first = !done ? `<span>First clear <b>${curImg('sparkles')} ${clearReward(sel).sparkles}</b></span>` : '<span><b>Cleared ✓</b></span>';
   $('stInfo').innerHTML = `<span>Cells <b>${info.length}</b>  ·  HP <b>${(h => (h >= 1000 ? (h / 1000).toFixed(1) + 'k' : h))(Math.round(info.hp * (hard ? HARD_HP : 1)))}</b></span>${first}`;
@@ -141,6 +151,7 @@ function renderBattle() {
   { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; $('stProg').innerHTML = `<div class="pgl">Best <b>${pr}%</b></div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
   hub2.renderSide();
   renderPig();
+  { const dk = $('btDock'), tb = document.querySelector('.tabs'), hb = $('hub'); if (dk && tb) { hb.style.setProperty('--tabh', tb.offsetHeight + 'px'); hb.style.setProperty('--dockh', dk.offsetHeight + 'px'); } }
   renderGoals();
   const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } }
 }
@@ -155,7 +166,7 @@ function beginStage(stage) {
   persist(); startRun(stage);
 }
 
-// the stage picture: the lane for this stage with the virus on it
+// the stage picture: the lane for this stage with the serpent on it
 const stCtx = $('stCanvas').getContext('2d');
 const W_ = 720;
 let pvKey = -1, pvPath = null;
@@ -193,11 +204,23 @@ function drawPortrait(t, info) {
   kit.drawHead(c, S / 2, S / 2 + bob, 78 * (info.boss ? 1.12 : 1) * sc, Math.PI / 2 + Math.sin(t * 0.9) * 0.15, { skin: info.skin, boss: info.boss, t, look: [Math.sin(t * 1.3) * 0.6, 0.8] });
 }
 
+// live countdown on the event banner (one cheap timer, only touches the DOM while the Battle tab is showing)
+setInterval(() => { if (mode !== 'hub' || hubTab !== 'Battle') return; const e = document.getElementById('evCd'); if (e) e.textContent = countdownText(monthEndMs(dayKey()) - Date.now()); }, 1000);
+// tap the portrait: species fun fact plus what the stage pays
+$('stPortrait').onclick = () => {
+  const box = $('btFact'), hero = $('btHero'); if (!box.hidden) { box.hidden = true; hero.classList.remove('fact'); return; }
+  audio.play('click'); const info = stageInfo(sel), sp = (kit && kit.SPECIES && kit.SPECIES[info.skin]) || null;
+  box.innerHTML = factHTML({ info, sp, hard, done: sel <= save.cleared, sparkleIcon: curImg('sparkles') }); box.hidden = false; hero.classList.add('fact'); try { hero.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* ignore */ }
+  box.querySelector('.ff-x').onclick = e => { e.stopPropagation(); audio.play('click'); box.hidden = true; hero.classList.remove('fact'); };
+};
+$('loadEdit').onclick = () => { audio.play('click'); hubTab = 'Skills'; renderHub(); };
 const resetIn = () => { const ms = 86400000 - (Date.now() % 86400000), h = Math.floor(ms / 3600000); return h ? h + 'h ' + Math.floor(ms % 3600000 / 60000) + 'm' : Math.floor(ms / 60000) + 'm'; };
 function renderPig() {
   const el = $('pigBox'); el.innerHTML = '';
   const left = save.pig.left, tier = pigTier(save);
-  { const ev = hub2.eventTile(); ev.classList.add('bn-ev'); el.appendChild(ev); }
+  { const day = dayKey(), evi = eventInfo(day); ensureEvent(save, day);
+    const ev = document.createElement('div'); ev.className = 'evbanner'; ev.innerHTML = eventBannerHTML(evi, save.event.earned, save.event.claimed, Date.now(), day);
+    ev.querySelector('.ev-go').onclick = () => { audio.play('click'); hub2.eventTile().querySelector('button').click(); }; el.appendChild(ev); }
   const gig = save.inv.left;
   el.appendChild(tile({ cls: 't-weapon one bn-inv', ic: '🐍', name: INV_NAME, chip: 'Stage ' + invStage(save) + '  ·  ' + gig + '/2  ·  ⏱ ' + resetIn(), desc: 'A giant serpent crashes the show. Beat it for ribbons and a little friend.', btn: gig ? 'TAKE THE STAGE' : 'COME BACK TOMORROW', disabled: !gig,
     onclick: () => { audio.unlock(); audio.play('click'); if (!useInvAttempt(save, dayKey())) return; if (!spendEnergy(save, Date.now())) { save.inv.left++; toast('Out of Voice!'); return; } persist(); startRun(invStage(save), 'inv'); } }));
@@ -214,13 +237,17 @@ function renderPets() {
       const h = hatchEgg(save); if (!h) { egg.classList.remove('crack'); return; } persist(); audio.play('levelup'); refreshCur();
       $('bTitle').textContent = h.beats ? 'JUST SOME SNACKS' : (PETS.find(p => p.id === h.id).name.toUpperCase() + '!');
       $('bLoot').className = 'loot reveal';
-      $('bLoot').innerHTML = h.beats ? `<div class="it">${curImg('beats')}<span>+${h.beats}</span></div>` : `<div class="it">${icon(h.id)}<span>+${h.n}</span></div>`;
+      const rar = h.beats ? null : petRarity(h.id), tier = h.beats ? 0 : (PET_RARITY[h.id] || 0) + 1;
+      $('bLoot').innerHTML = h.beats ? `<div class="it">${curImg('beats')}<span>+${h.beats}</span></div>` : `<div class="it rar${PET_RARITY[h.id] || 0}" style="--rc:${rar.color}">${icon(h.id)}<span>+${h.n}</span><small>${rar.name.toUpperCase()}</small></div>`;
+      hatchBurst($('bLoot'), rar ? rar.color : '#ffe14a', tier, !!(save.settings.reduceMotion || systemReduceMotion()));
       $('bOk').onclick = () => { audio.play('click'); $('bLoot').className = 'loot'; $('bOk').onclick = defaultBoxOk; openHub('Pets'); }; show('boxModal');
     }, 650);
   };
-  list.appendChild(egg);
+  eggNudge(egg, save); list.appendChild(egg);
   { const rdy = PETS.filter(p => petCanUp(save, p.id)).length; if (save.eggs > 1 || rdy) { const row = document.createElement('div'); row.className = 'refrow'; row.style.justifyContent = 'center'; row.style.gap = '10px'; if (save.eggs > 1) { const b = document.createElement('button'); b.className = 'btn small alt'; b.textContent = 'HATCH ALL (' + save.eggs + ')'; b.onclick = () => { const res = hatchAll(save); if (res.length) { persist(); audio.play('levelup'); refreshCur(); toast(res.length + ' eggs hatched'); renderHub(); } }; row.appendChild(b); } if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'STAR UP ALL (' + rdy + ')'; b.onclick = () => { if (upgradePetsAll(save)) { persist(); audio.play('upgrade'); renderHub(); } }; row.appendChild(b); } list.appendChild(row); } }
+  list.appendChild(chipRow(['All', 'Owned', 'Ready'], petFilter, o => { petFilter = o; audio.play('click'); renderPets(); }, { Ready: PETS.filter(p => petCanUp(save, p.id)).length }));
   for (const p of PETS) {
+    if (petFilter === 'Owned' && save.pets[p.id].star < 1) continue; if (petFilter === 'Ready' && !petCanUp(save, p.id)) continue;
     const k = save.pets[p.id], owned = k.star > 0, maxed = k.star >= PET_MAX_STAR, need = maxed ? 0 : petCost(k.star), eq = save.petEquip.includes(p.id);
     const stars = '★ ' + k.star + '/' + PET_MAX_STAR;
     const starH = Array.from({ length: PET_MAX_STAR }, (_, n) => `<i class="star${n < k.star ? ' on' : ''}">★</i>`).join('');
@@ -228,8 +255,10 @@ function renderPets() {
       bar: need ? Math.min(100, Math.round((k.frag / need) * 100)) : 100, barText: need ? k.frag + ' / ' + need : '', btn: maxed ? 'FULL STARS' : owned ? 'MORE STARS' : 'WELCOME HOME', disabled: !petCanUp(save, p.id),
       onclick: () => { if (petUp(save, p.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } } });
     if (owned) { const e = document.createElement('button'); e.className = 'btn small go alt'; e.textContent = eq ? 'BENCH' : 'WALK WITH ME'; e.onclick = () => { if (togglePet(save, p.id)) { persist(); audio.play('click'); renderHub(); } }; t.appendChild(e); }
+    t.tabIndex = 0; t.onclick = e => { if (!e.target.closest('button')) { audio.play('click'); sheets.petSheet(p.id); } };
     list.appendChild(t);
   }
+  if (!list.querySelector('.tile')) list.insertAdjacentHTML('beforeend', '<div class="sec"><span style="background:#8a7aa8">Nobody here yet</span></div>');
 }
 function renderGoals() {
   const list = $('goalList'); list.innerHTML = '';
@@ -247,9 +276,13 @@ function renderSkills() {
   const list = $('skillList'); list.innerHTML = '';
   loadoutRow($('loadoutRow'), false);
   { const rdy = WEAPONS.filter(w => save.skills[w.id].lv > 0 && save.skills[w.id].lv < SKILL_MAX_LV && save.skills[w.id].frag >= skillUpgradeCost(save.skills[w.id].lv).frag).length; if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold sec'; b.style.cssText = 'grid-column:1/-1;margin:2px auto'; b.textContent = 'LEVEL UP ALL READY (' + rdy + ')'; b.onclick = () => { if (upgradeAllSkills(save)) { persist(); audio.play('upgrade'); renderHub(); } }; list.appendChild(b); } }
-  const groups = [[], [], []];
+  const isRdy = w => { const k = save.skills[w.id]; return k.lv > 0 ? k.lv < SKILL_MAX_LV && k.frag >= skillUpgradeCost(k.lv).frag : k.frag >= w.frag && (save.cleared || 0) >= (w.stage || 0); };
+  { const row = chipRow(['All', 'Owned', 'Ready'], skFilter, o => { skFilter = o; audio.play('click'); renderSkills(); }, { Ready: WEAPONS.filter(isRdy).length });
+    const sb = document.createElement('button'); sb.className = 'fchip'; sb.textContent = 'Sort: ' + skSort; sb.onclick = () => { skSort = skSort === 'Tier' ? 'Level' : skSort === 'Level' ? 'Rank' : 'Tier'; audio.play('click'); renderSkills(); }; row.appendChild(sb); list.appendChild(row); }
+  const groups = [[], [], []], keyOf = new Map();
   for (const w of WEAPONS) {
     const k = save.skills[w.id], owned = k.lv > 0, eq = save.loadout.includes(w.id);
+    if (skFilter === 'Owned' && !owned) continue; if (skFilter === 'Ready' && !isRdy(w)) continue;
     let need = 0, can = false, label = '', act = () => false;
     const gated = !owned && (save.cleared || 0) < (w.stage || 0);
     if (!owned) { need = w.frag; can = k.frag >= need && !gated; label = gated ? 'CLEAR STAGE ' + w.stage : 'UNLOCK'; act = () => unlockSkill(save, w.id); }
@@ -265,31 +298,37 @@ function renderSkills() {
       e.onclick = () => { if (toggleLoadout(save, w.id)) { persist(); audio.play('click'); renderHub(); } };
       t.appendChild(e);
     }
+    if (owned) { const rk = skillRank(save, w.id); t.querySelector('.ds').insertAdjacentHTML('beforebegin', `<em class="rk r${rk.rank}" title="Mastery rank">🎖 ${rk.name}</em>`); keyOf.set(t, skSort === 'Level' ? -k.lv : skSort === 'Rank' ? -rk.val : (w.tier || 0)); } else keyOf.set(t, skSort === 'Tier' ? (w.tier || 0) : 0);
+    t.tabIndex = 0; t.onclick = e => { if (!e.target.closest('button')) { audio.play('click'); sheets.skillSheet(w.id); } };
     groups[eq ? 0 : owned ? 1 : 2].push(t);
   }
+  for (const g of groups) g.sort((a, b) => keyOf.get(a) - keyOf.get(b));
+  if (!groups.some(g => g.length)) list.insertAdjacentHTML('beforeend', '<div class="sec"><span style="background:#8a7aa8">Nothing here yet</span></div>');
   [['Equipped', '#6fe08a'], ['Owned', '#4fd8f0'], ['Not Owned', '#8a7aa8']].forEach(([name, col], i) => {
     if (!groups[i].length) return;
     const h = document.createElement('div'); h.className = 'sec'; h.innerHTML = `<span style="background:${col}">${name}</span>`; list.appendChild(h);
     for (const t of groups[i]) list.appendChild(t);
   });
 }
+let skFilter = 'All', skSort = 'Tier', petFilter = 'All';
+const sheets = createSheets({ save: () => save, persist: () => persist(), audio, icon, rerender: () => renderHub() });
 const defaultBoxOk = () => { audio.play('click'); openHub('Shop'); };
 $('bOk').onclick = defaultBoxOk;
-const toast = msg => { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200); };
-const hub2 = createHub2({ $, tile, icon, curImg, audio, save: () => save, persist, show, openHub: t => openHub(t), renderHub: () => renderHub(), refreshCur: () => refreshCur(), dayKey, resetBoxOk: () => { $('bOk').onclick = defaultBoxOk; }, bodyURL: skin => { if (!kit) return ''; if (!(('b|' + skin) in iconCache)) { const spr = kit.SPR.body(skin, false, ''); iconCache['b|' + skin] = spr && spr.c.toDataURL ? spr.c.toDataURL() : ''; } return iconCache['b|' + skin]; } });
+const toast = msg => { if (/^(Not enough|Nothing to claim|Out of Voice|That code does not)/.test(msg)) audio.play('deny'); const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200); };
+const hub2 = createHub2({ $, toast, tile, icon, curImg, audio, save: () => save, persist, show, openHub: t => openHub(t), renderHub: () => renderHub(), refreshCur: () => refreshCur(), dayKey, resetBoxOk: () => { $('bOk').onclick = defaultBoxOk; }, bodyURL: skin => { if (!kit) return ''; if (!(('b|' + skin) in iconCache)) { const spr = kit.SPR.body(skin, false, ''); iconCache['b|' + skin] = spr && spr.c.toDataURL ? spr.c.toDataURL() : ''; } return iconCache['b|' + skin]; } });
 
 // ---------------------------------------------------------------- runs
 function newDemo() {
   demo = createGame({ seed: (Math.random() * 1e9) | 0, bot: true, stage: 1 + ((Math.random() * 3) | 0) });
-  demo.p.hp = demo.p.maxHp = 9999;
-  demo.weap = { swab: { lv: 2, cd: 0 }, daggers: { lv: 2, cd: 0 }, dragon: { lv: 1, cd: 0 } }; demo.ups = { notes: 1, aspd: 2 };
+  richDemo(demo);
 }
 function startRun(stage, mode2 = '') {
   if (!mode2) save.last = { stage, hard: !!(hard && stage <= save.cleared) };
   audio.unlock(); audio.music(true);
   sel = stage; ranResult = false; endT = 0;
   g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
-  mode = 'play'; acc = 0; cardsFor = null; reviveAsked = false; show('');
+  mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove();
+  announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + 'Slide to move, the duo shoots up on its own.');
   window.CS.g = g;
 }
 function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)); }
@@ -308,17 +347,20 @@ function showCards() {
     const stat = dm ? `<div class="delta"><span class="dl">${dm[1]}</span><span class="dv"><i>${dm[2]}</i><em>→</em><b>${dm[3]}</b></span></div>` : c.stat ? `<div class="delta"><span class="dv"><b>${c.stat}</b></span></div>` : '';
     const fx = rn >= 4 ? '<span class="rays"></span>' + Array.from({ length: rn === 5 ? 8 : 5 }, (_, k) => `<span class="pt" style="--x:${(8 + k * (84 / (rn === 5 ? 7 : 4))).toFixed(0)}%;--t:${(1.6 + (k * 0.37) % 1.2).toFixed(2)}s;--w:${((k * 0.29) % 1.5).toFixed(2)}s"></span>`).join('') : '';
     b.innerHTML = `${fx}<span class="key">${i + 1}</span><div class="ic">${icon(c.id)}</div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}<div class="pips">${pips}</div></div><span class="shine"></span>`;
+    b.setAttribute('aria-label', `Option ${i + 1}: ${c.name}, ${RARITY_WORDS[rn]} rarity${c.isNew ? ', new' : ''}. ${c.desc}${c.stat ? '. ' + c.stat : ''}`);
     b.onclick = () => pick(i);
     wrap.appendChild(b);
   });
   { const bonus = Math.round((20 + 4 * g.stage) * g.p.coinMul); $('skipBtn').textContent = 'SKIP FOR ' + bonus + ' BEATS'; }
-  $('refreshBtn').disabled = g.rerolls <= 0; $('refreshLeft').textContent = `Remaining attempts: ${g.rerolls}/4`;
-  cardsFor = g.choices; { let mr = 0; for (const c of g.choices) mr = Math.max(mr, c.rarity || 0); audio.play('card', { rarity: mr }); } show('levelup');
+  $('refreshBtn').disabled = g.rerolls <= 0; $('refreshLeft').innerHTML = '<span class="rp">' + refreshPips(g) + '</span>'; $('luckBox').innerHTML = luckHTML(g); $('buildStrip').innerHTML = buildHTML(g, icon);
+  cardsFor = g.choices; { let mr = 0; for (const c of g.choices) mr = Math.max(mr, c.rarity || 0); audio.play('card' + mr); if (mr >= 3) setTimeout(() => { if (mode === 'play' && g.phase === 'levelup') audio.play('stinger'); }, 220); } show('levelup');
+  announce('Choose an upgrade. ' + g.choices.map((c, i) => `${i + 1}: ${c.name}, ${RARITY_WORDS[c.rarity || 0]}`).join('. ') + '. Press 1, 2 or 3, or Tab to a card and press Enter.');
 }
 let pickLock = false;
 function pick(i) {
   if (mode !== 'play' || g.phase !== 'levelup' || pickLock) return;
-  audio.play('upgrade');
+  { const c = g.choices[i]; if (c) announce('Picked ' + c.name + ', ' + RARITY_WORDS[c.rarity || 0] + '. ' + (c.stat || '')); }
+  audio.play('upgrade'); { const pr = (g.choices[i] && g.choices[i].rarity) | 0; audio.play('card' + pr); if (pr >= 4) audio.play('stinger'); }
   const cs = $('cards').children, el = cs[i];
   if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); return; }
   pickLock = true; el.classList.add('chosen'); [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing');
@@ -332,27 +374,31 @@ canvas.addEventListener('pointerdown', e => {
   audio.unlock();
   if (mode !== 'play' || g.phase === 'levelup') return;
   const gp = R.toGame(e.clientX * (canvas.width / innerWidth), e.clientY * (canvas.height / innerHeight));
-  if (gp.x > W - 76 && gp.y < 76) { if (pauseAllowed(save.settings.pauseGuard)) pause(); else toast('Tap again to pause'); return; }
-  if (gp.x > W - 76 && gp.y >= 76 && gp.y < 150) { showStats(); return; }
+  const zone = R.hudZone(gp);   // pause and stats buttons, shifted by the notch inset (hud.js)
+  if (zone === 'pause') { if (pauseAllowed(save.settings.pauseGuard)) pause(); else toast('Tap again to pause'); return; }
+  if (zone === 'stats') { showStats(); return; }
   if (g.encore >= 1 && Math.hypot(gp.x - g.p.x, gp.y - g.p.y) < 110) encoreTap = true;   // tap the duo for the Encore blast
+  if (save.settings.thumbZone && !inThumbZone(e.clientY, innerHeight)) return;   // thumb zone: only the bottom third steers
   if (joy.on) return;
   joy.on = true; joy.id = e.pointerId; joy.sx = e.clientX; joy.sy = e.clientY; joy.dx = joy.dy = 0;
-  joy.x = gp.x; joy.y = gp.y;
+  joy.x = gp.x; joy.y = gp.y; joy.tz = save.settings.thumbZone ? gp.x : null;
   canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove', e => {
   if (!joy.on || e.pointerId !== joy.id) return;
+  if (joy.tz != null) { joy.tz = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; return; }   // thumb zone: the duo follows the finger
   const L = R.layout(), dpr = canvas.width / innerWidth, rad = 70 * L.s / dpr;
   let dx = (e.clientX - joy.sx) / rad;   // the cell slides left and right only
   if (Math.abs(dx) > 1) { dx = Math.sign(dx); joy.sx = e.clientX - dx * rad; }   // anchor follows the finger
   const gp = R.toGame(joy.sx * dpr, joy.sy * dpr); joy.x = gp.x;
   joy.dx = dx; joy.dy = 0;
 });
-const endJoy = e => { if (e.pointerId === joy.id) { joy.on = false; joy.dx = joy.dy = 0; } };
+const endJoy = e => { if (e.pointerId === joy.id) { joy.tz = null; joy.on = false; joy.dx = joy.dy = 0; } };
 canvas.addEventListener('pointerup', endJoy); canvas.addEventListener('pointercancel', endJoy);
 addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
-  if (e.key === 'Escape' || e.key.toLowerCase() === 'p') { mode === 'play' ? pause() : mode === 'pause' ? resume() : 0; }
+  if (e.key === 'Escape') goBack(false);
+  else if (e.key.toLowerCase() === 'p') { mode === 'play' ? pause() : mode === 'pause' && !$('settings').classList.contains('on') && !$('panel').classList.contains('on') ? resume() : 0; }
   if (mode === 'play' && g.phase === 'levelup' && '123'.includes(e.key)) pick(+e.key - 1);
   if (e.key.toLowerCase() === 'm') toggleMute();
 });
@@ -362,11 +408,28 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && mod
 let encoreTap = false;
 function readInput() {
   let mx = joy.dx + (joy.sdx || 0);
+  if (joy.on && joy.tz != null) mx += zoneSteer(joy.tz, g.p.x);
   if (keys.a || keys.arrowleft) mx -= 1; if (keys.d || keys.arrowright) mx += 1;
   const enc = encoreTap || !!keys[' ']; encoreTap = false;
   return { mx, my: 0, encore: enc };
 }
 function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; show('pause'); }
+// Escape and the Android back button share this: close what is open, pause a run, resume a pause, leave the end screen.
+// The back button also walks the hub up to the title; Escape stays put there.
+function goBack(fromBtn) {
+  const sc = document.querySelector('.scr.on'), id = sc ? sc.id : '';
+  if (id === 'settings') $('setClose').click();
+  else if (id === 'panel') $('pClose').click();
+  else if (id === 'boxModal') $('bOk').click();
+  else if (mode === 'play') pause();
+  else if (id === 'pause') resume();
+  else if (id === 'result') $('rHub').click();
+  else if (id === 'hub' && fromBtn) toTitle();
+}
+// Android back: one spare history entry is kept while we are off the title, so back never throws the player out of a run
+let backArmed = false;
+function armBack() { if (!backArmed) { try { history.pushState({ cs: 1 }, ''); backArmed = true; } catch (e) { /* no history */ } } }
+addEventListener('popstate', () => { backArmed = false; if (mode === 'title') return; goBack(true); if (mode !== 'title') armBack(); });
 function resume() { mode = 'play'; show(''); last = performance.now(); }
 function openSettings(back) {
   const paint = () => {
@@ -378,8 +441,9 @@ function openSettings(back) {
     if (k === 'sound') save.muted = !save.muted; else save.settings[k] = !save.settings[k];
     applySettings(); resize(); persist(); audio.play('click'); $('muteBtn').textContent = save.muted ? '🔇' : '🔊'; paint();
   };
+  { const vs = $('volRange'); if (vs) { vs.value = Math.round(save.settings.volume * 100); vs.oninput = () => { save.settings.volume = vs.value / 100; audio.setVolume(save.settings.volume); }; vs.onchange = () => { persist(); audio.unlock(); audio.play('tap'); }; } }
   $('bkCopy').onclick = async () => { const t = $('bkCode').value; try { await navigator.clipboard.writeText(t); toast('Code copied'); } catch (e) { $('bkCode').select(); toast('Select and copy the code'); } };
-  $('bkLoad').onclick = () => { const s2 = importSave($('bkCode').value); if (!s2) { toast('That code does not work'); return; } save = s2; persist(); applySettings(); toast('Game loaded'); paint(); };
+  $('bkLoad').onclick = () => { const s2 = importSave($('bkCode').value); if (!s2) { toast('That code does not work'); return; } save = s2; persist(); applySettings(); refreshCur(); toast('Game loaded'); paint(); };
   $('setClose').onclick = () => { audio.play('click'); (back || (() => (mode === 'hub' ? openHub() : toTitle())))(); };
   paint(); show('settings');
 }
@@ -393,7 +457,10 @@ function showRevive() {
   $('rvGo').onclick = () => { if (save.sparkles < cost) return; stopRing(); stopFx(); save.sparkles -= cost; persist(); reviveGame(g); reviveAsked = false; endT = 0; audio.play('levelup'); show(''); };
   const giveUp = () => { stopRing(); stopFx(); g.revivesLeft = 0; reviveAsked = false; show(''); };
   $('rvNo').onclick = () => { audio.play('click'); giveUp(); };
-  show('revive'); stopRing = reviveRing(10, giveUp);
+  const timed = save.settings.reviveTimer !== false; $('rvTimer').textContent = timed ? 'Timer: ON' : 'Timer: OFF (take your time)';
+  $('rvTimer').onclick = () => { audio.play('toggle'); save.settings.reviveTimer = !timed; persist(); stopRing(); stopFx(); showRevive(); };
+  show('revive'); stopRing = reviveRing(timed ? 10 : 0, giveUp, { holdEls: [$('rvGo')], onBeat: () => { audio.play('heartbeat'); buzz([30, 70, 22]); } });
+  announce('Game over. The snake reached the line. Revive with ' + cost + ' sparkles, or give up. You have 10 seconds.');
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
 function showStats() {
@@ -409,7 +476,7 @@ function statsPanel(onClose) {
 }
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
-  const li0 = levelInfo(save.xp), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); persist(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
+  const li0 = levelInfo(save.xp), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
   stopFx(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
   if (out.ribbons) rows.push(`<div class="r">🎀 ${cu(out.ribbons)} Ribbons</div>`);
@@ -420,7 +487,9 @@ function showResult() {
   $('rList').innerHTML = rows.join('');
   $('rTitle').textContent = r.mode === 'inv' ? (r.won ? 'THE GIANT SERPENT BOWS!' : 'THE GIANT SERPENT WON') : r.mode === 'pig' ? (r.won ? 'PIGGY BANKS CRACKED!' : 'THE PIGGIES ESCAPED') : r.won ? 'STAGE CLEAR!' : r.name.toUpperCase() + ' WINS';
   $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.') : `You popped ${r.kills} cells. Spend your Beats in the hub and try again.`;
+  announce((r.won ? 'Stage clear. ' : 'Game over. ') + $('rTitle').textContent + '. ' + r.kills + ' cells popped, ' + out.beats + ' beats earned.');
   if (r.hard) hard = true;
+  { const nmz = {}; for (const w of WEAPONS) nmz[w.id] = w.name; $('rHint').textContent = lossHint(r, save.loadout, nmz); }
   if (out.levelUps) rows.push(`<div class="r">⭐ Level ${levelInfo(save.xp).lv}!</div>`);
   const li1 = levelInfo(save.xp), reduce = save.settings.reduceMotion;
   levelBar(li0, li1, reduce);
@@ -435,14 +504,25 @@ function showResult() {
   $('rRetry').onclick = () => { audio.play('click'); beginStage(r.stage); };
   $('rHub').onclick = () => { audio.play('click'); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; openHub('Battle'); };
   { const st = r.stars || 0; $('rStars').innerHTML = r.won && !r.mode && !r.hard ? [1, 2, 3].map(i => `<span class="${i <= st ? '' : 'off'}">★</span>`).join('') : '';
-    if ($('rStars').children.length) revealStars($('rStars'), st, i => audio.play('coin', { i }), reduce);
+    if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + Math.min(3, i + 1)); if (i === 2 && st === 3 && !reduce) confetti($('result'), 30); }, reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
     const top = Object.entries(r.dmgBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => (id === 'capsule' ? 'Singing' : (WEAPONS.find(w => w.id === id) || { name: id }).name)).join(', ') || '-';
     $('rExtra').innerHTML = `<span>Time <b>${mm}:${ss}</b></span><span>Cells <b>${r.kills}</b></span><span>Best groove <b>${r.groove || 0}</b></span><span>Bombs <b>${r.bombs || 0}</b></span><span style="grid-column:1/-1">Top: <b>${top}</b></span>`;
-    if (out.starsGained) toast('+' + out.starsGained + ' star' + (out.starsGained > 1 ? 's' : '') + '!' + (out.starBonus ? ' Bonus ' + out.starBonus + ' Sparkles' : ''));
-    else if (!r.won && !r.mode && !r.hard && Math.floor((r.progress || 0) * 100) > out.prevPct && out.prevPct > 0) toast('New best: ' + Math.floor(r.progress * 100) + '%'); }
+
+    // no toast here: it used to cover the title on the result screen, and the ribbon plus the Sparkles row already say it
+  }
+  if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
   show('result'); mode = 'over';
 }
+
+// one delegated listener picks the UI sound by element: tabs, back/close, toggles, plain taps; disabled buttons deny
+const BACKIDS = new Set(['setClose', 'pClose', 'rvNo', 'bOk', 'rHub', 'stPrev']);
+document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('button'); if (b && b.disabled && b.classList.contains('btn')) audio.play('deny'); }, true);
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('button'); if (!b || b.disabled) return;
+  audio.unlock();
+  audio.play(b.closest('.tabs') ? 'tab' : b.classList.contains('tgl') ? 'toggle' : BACKIDS.has(b.id) || b.dataset.sfx === 'back' ? 'back' : 'tap');
+}, true);
 
 // ---------------------------------------------------------------- loop
 const SFX = { surgewarn: 'swarm', surge: 'roar', won: 'clear', chestdrop: 'power', chest: 'levelup', upgradecell: 'cell', groove: 'groovehit', leak: 'leak', swab: 'meow', needles: 'squeak', dragon: 'coo', maw: 'bark', strike: 'hoot', bubble: 'quack', pulse: 'moo' };
@@ -477,17 +557,19 @@ function frame(now) {
     return;
   }
   if (mode === 'play') {
-    acc += dt * R.timeScale();   // slow motion on the last cell / boss face
-    while (acc >= 1 / 60) { acc -= 1 / 60; step(g, 1 / 60, readInput()); if (g.phase === 'levelup' || g.phase === 'dead' || g.phase === 'won') break; }
+    clk.feed(dt, R.timeScale());   // slow motion on the last cell / boss face
+    while (clk.take()) { step(g, 1 / 60, readInput()); if (g.phase === 'levelup' || g.phase === 'dead' || g.phase === 'won') { clk.drop(); break; } }   // never bank time while the sim waits (cards, game over)
     if (g.phase === 'levelup' && cardsFor !== g.choices) showCards();
-    if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5)) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked) showRevive(); else if (!reviveAsked) showResult(); } }
+    if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5) && !(g.phase === 'won' && R.clearBusy())) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked) showRevive(); else if (!reviveAsked) showResult(); } }
+    watchGroove(g.groove);
     audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0); audio.mix({ stage: g.stage, boss: isBossStage(g.stage), groove: g.groove / 20, danger: g.danger });
   }
-  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2 }, mode === 'pause' ? 0 : dt); }
+  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2 }, mode === 'pause' ? 0 : dt);
+    if (mode === 'play') for (const n of R.takeSounds()) audio.play(n); else R.takeSounds(); }
 }
 
 // ---------------------------------------------------------------- wiring
-$('playBtn').onclick = () => { audio.unlock(); audio.play('click'); if (save.runs === 0) startRun(1); else openHub('Battle'); };
+$('playBtn').onclick = () => { audio.unlock(); audio.play('click'); if (save.runs === 0) { if (needsTutorial(save)) showTutorial(() => startRun(1), audio); else startRun(1); } else openHub('Battle'); };
 $('resumeBtn').onclick = () => resume();
 $('pStats').onclick = () => { audio.play('click'); showStatsFromPause(); };
 $('pSet').onclick = () => { audio.play('click'); openSettings(() => show('pause')); };
@@ -510,8 +592,8 @@ loadArt('assets/').then(a => {
   [['love', 'deco1'], ['grumpy', 'deco2'], ['sneezy', 'deco3'], ['sleepy', 'deco4']].forEach(([skin, el], i) => {
     const c = document.createElement('canvas'); c.width = c.height = 220; kit.drawHead(c.getContext('2d'), 110, 110, 62, i % 2 ? Math.PI : 0, { skin, t: 1 + i, look: [0, 1] }); $(el).src = c.toDataURL();
   });
-  setupPeeks($('peeks'), kit);
-  R = createRenderer(canvas, art, kit); window.CS.art = art; window.CS.R = R; applySettings(); resize(); refreshTitle();
+  setupPeeks($('peeks'), kit); tagPets($('peeks'), ['kitten', 'puppy', 'piglet', 'lamb', 'hamster', 'turtle']); setupTapAnimals($('peeks'), audio);
+  R = createRenderer(canvas, art, kit); R.setBeat(() => audio.beat()); window.CS.art = art; window.CS.R = R; R.setOptions({ onReady: () => audio.play('ready') }); applySettings(); resize(); refreshTitle();
   const qs = new URLSearchParams(location.search);
   newDemo(); refreshCur();
   if (qs.get('stage')) { startRun(Math.max(1, +qs.get('stage'))); }   // dev shortcut: ?stage=N

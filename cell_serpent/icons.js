@@ -69,6 +69,56 @@ const DRAW = {
   egg: g => { g.beginPath(); g.moveTo(32, 4); g.bezierCurveTo(54, 4, 58, 56, 32, 58); g.bezierCurveTo(6, 56, 10, 4, 32, 4); fillStroke(g, grad(g, 4, 58, '#fff6dc', '#f0c88a')); g.fillStyle = '#ff9ad6'; g.beginPath(); g.arc(24, 36, 4, 0, 7); g.arc(38, 28, 3.5, 0, 7); g.arc(40, 44, 3, 0, 7); g.fill(); },
   coins: g => { for (const [x, y] of [[22, 44], [42, 44], [32, 28]]) { g.beginPath(); g.ellipse(x, y, 16, 10, 0, 0, 7); fillStroke(g, grad(g, y - 10, y + 10, '#ffe98a', '#e0a020'), 2.5); } },
   cart: g => { g.strokeStyle = OUT; g.lineWidth = 4; g.beginPath(); g.moveTo(4, 10); g.lineTo(14, 10); g.lineTo(20, 40); g.lineTo(50, 40); g.stroke(); g.beginPath(); g.moveTo(16, 18); g.lineTo(56, 18); g.lineTo(50, 36); g.lineTo(19, 36); g.closePath(); fillStroke(g, grad(g, 18, 36, '#9dff6d', '#4ab04a'), 3); for (const x of [24, 46]) { g.beginPath(); g.arc(x, 52, 5, 0, 7); fillStroke(g, '#fff', 2.5); } },
+
+  // hats and accessories for the wardrobe, drawn to sit on a head (anchor near the bottom centre; glasses sit on the eyes)
+  hat_overalls: g => {   // a straw hat with a wheat ear
+    g.beginPath(); g.ellipse(32, 44, 29, 9, 0, 0, 7); fillStroke(g, grad(g, 36, 52, '#f6d98a', '#d6a64a'));
+    g.beginPath(); g.moveTo(15, 42); g.quadraticCurveTo(14, 14, 32, 13); g.quadraticCurveTo(50, 14, 49, 42); g.closePath(); fillStroke(g, grad(g, 13, 42, '#ffe9a0', '#e2b552'));
+    g.fillStyle = '#c0392b'; g.fillRect(15, 33, 34, 6); g.strokeStyle = OUT; g.lineWidth = 2; g.strokeRect(15, 33, 34, 6);
+    g.strokeStyle = '#7a9a1c'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(46, 36); g.lineTo(54, 12); g.stroke();
+    for (const [x, y] of [[54, 12], [51, 19], [57, 18], [49, 26], [55, 25]]) { g.beginPath(); g.ellipse(x, y, 2.6, 4.2, 0.5, 0, 7); fillStroke(g, '#ffd84d', 1.4); }
+  },
+  hat_jacket: g => {   // a sparkle tiara
+    g.beginPath(); g.moveTo(6, 48); g.lineTo(10, 24); g.lineTo(21, 38); g.lineTo(32, 14); g.lineTo(43, 38); g.lineTo(54, 24); g.lineTo(58, 48); g.closePath(); fillStroke(g, grad(g, 14, 48, '#fff6a0', '#f0b020'));
+    g.fillStyle = '#ff7eb6'; g.beginPath(); g.arc(32, 38, 4.5, 0, 7); g.fill(); g.lineWidth = 2; g.stroke();
+    star(g, 32, 7, 6, 2.4, 4); g.fillStyle = '#fff'; g.fill(); star(g, 10, 16, 5, 2, 4); g.fill(); star(g, 54, 16, 5, 2, 4); g.fill();
+  },
+  hat_wig: g => {   // a rainbow wig: bands of colour over the top of the head
+    const cols = ['#ff5a78', '#ffb04d', '#ffe14a', '#6fe08a', '#4fb8ff', '#b06cff'];
+    for (let i = 0; i < cols.length; i++) { const r = 29 - i * 4; g.beginPath(); g.arc(32, 50, r, Math.PI, 0); g.closePath(); g.fillStyle = cols[i]; g.fill(); if (!i) { g.lineWidth = 3; g.strokeStyle = OUT; g.stroke(); } }
+    g.beginPath(); g.ellipse(7, 52, 5, 9, 0.1, 0, 7); fillStroke(g, '#ff5a78', 2.5); g.beginPath(); g.ellipse(57, 52, 5, 9, -0.1, 0, 7); fillStroke(g, '#b06cff', 2.5);
+  },
+  hat_tux: g => {   // a soft top hat
+    g.beginPath(); g.ellipse(32, 48, 28, 7, 0, 0, 7); fillStroke(g, grad(g, 42, 54, '#4a5270', '#232840'));
+    rr(g, 15, 8, 34, 40, 5); fillStroke(g, grad(g, 8, 48, '#4a5270', '#232840'));
+    g.fillStyle = '#ff4d6d'; g.fillRect(15, 34, 34, 7); g.strokeStyle = OUT; g.lineWidth = 2; g.strokeRect(15, 34, 34, 7);
+    g.fillStyle = 'rgba(255,255,255,.28)'; g.fillRect(20, 12, 4, 20);
+  },
+  hat_bloom: g => {   // a flower crown
+    g.strokeStyle = '#4a9a3a'; g.lineWidth = 5; g.beginPath(); g.moveTo(4, 44); g.quadraticCurveTo(32, 30, 60, 44); g.stroke();
+    for (const [x, y, c] of [[12, 42, '#ff9ac0'], [32, 32, '#ffd0e4'], [52, 42, '#ff9ac0'], [22, 35, '#fff3a0'], [42, 35, '#fff3a0']]) {
+      for (let k = 0; k < 5; k++) { const a = k * Math.PI * 2 / 5; g.beginPath(); g.arc(x + Math.cos(a) * 5, y + Math.sin(a) * 5, 4.4, 0, 7); fillStroke(g, c, 1.6); }
+      g.beginPath(); g.arc(x, y, 3.2, 0, 7); fillStroke(g, '#ffb020', 1.4);
+    }
+  },
+  hat_sun: g => {   // round sunny shades
+    g.strokeStyle = OUT; g.lineWidth = 4; g.beginPath(); g.moveTo(26, 30); g.quadraticCurveTo(32, 26, 38, 30); g.stroke();
+    g.beginPath(); g.arc(17, 34, 13, 0, 7); fillStroke(g, grad(g, 20, 48, '#ffb04d', '#c0481c')); g.beginPath(); g.arc(47, 34, 13, 0, 7); fillStroke(g, grad(g, 20, 48, '#ffb04d', '#c0481c'));
+    g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 3; g.beginPath(); g.arc(17, 34, 8, 3.6, 4.6); g.stroke(); g.beginPath(); g.arc(47, 34, 8, 3.6, 4.6); g.stroke();
+  },
+  hat_pumpkin: g => {   // a pumpkin hat with a leafy stem
+    for (const [x, w] of [[16, 15], [48, 15], [26, 18], [38, 18]]) { g.beginPath(); g.ellipse(x, 36, w * 0.6, 20, 0, 0, 7); fillStroke(g, grad(g, 16, 56, '#ffb04d', '#e0701c'), 2.5); }
+    g.beginPath(); g.ellipse(32, 36, 9, 20, 0, 0, 7); fillStroke(g, grad(g, 16, 56, '#ffc060', '#e8801c'), 2.5);
+    g.fillStyle = OUT; g.beginPath(); g.moveTo(22, 30); g.lineTo(28, 36); g.lineTo(16, 36); g.fill(); g.beginPath(); g.moveTo(42, 30); g.lineTo(48, 36); g.lineTo(36, 36); g.fill();
+    g.beginPath(); g.moveTo(20, 44); g.quadraticCurveTo(32, 54, 44, 44); g.lineWidth = 3.5; g.stroke();
+    rr(g, 28, 6, 8, 11, 3); fillStroke(g, '#6a8a2a', 2.5);
+  },
+  hat_snow: g => {   // a knitted snow beanie with a pompom
+    g.beginPath(); g.moveTo(8, 46); g.quadraticCurveTo(8, 12, 32, 12); g.quadraticCurveTo(56, 12, 56, 46); g.closePath(); fillStroke(g, grad(g, 12, 46, '#ffffff', '#bfe9ff'));
+    rr(g, 5, 38, 54, 13, 6); fillStroke(g, grad(g, 38, 51, '#ff5a78', '#c02a4a'));
+    g.strokeStyle = 'rgba(160,200,230,.9)'; g.lineWidth = 2; for (let x = 14; x < 54; x += 8) { g.beginPath(); g.moveTo(x, 16); g.lineTo(x - 2, 36); g.stroke(); }
+    g.beginPath(); g.arc(32, 9, 7, 0, 7); fillStroke(g, '#ffffff', 2.5);
+  },
 };
 
 export function iconURL(name) {

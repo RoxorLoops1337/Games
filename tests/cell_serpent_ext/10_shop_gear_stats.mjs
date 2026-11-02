@@ -11,3 +11,8 @@ assert.ok(html.includes('class="stage"'));
 const hub = fs.readFileSync(new URL('../../cell_serpent/hub2.js', import.meta.url), 'utf8');
 assert.ok(!hub.includes('—') && !html.includes('—'));
 console.log('ok 10_shop_gear_stats');
+// round 2: outfit hats are drawn icons, and the new hooks exist
+for (const id of ['overalls', 'jacket', 'wig', 'tux', 'bloom', 'sun', 'pumpkin', 'snow']) assert.ok(ICON_NAMES.includes('hat_' + id), 'hat icon ' + id);
+for (const k of ['rhit', 'dealCheer', 'lootx', 'setring', 'hatsOn', 'wardhero2']) assert.ok(hub.includes(k) || html.includes(k), k);
+assert.ok(html.includes('.kstar.w'));
+console.log('ok 10_shop_gear_stats round 2');
