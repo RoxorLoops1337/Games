@@ -10,6 +10,15 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // with the furthest-along cell that the straight shot can reach (chests first), like a player would.
 export function smartBot(g) {
   const p = g.p;
+  if (g.ring) {   // b11: circle stages: the duo stands still and aims at the furthest-along cell on screen (chests first)
+    let t = null, bs = -1;
+    for (const sn of g.snakes) for (const s of sn.segs) {
+      if (s.hp <= 0 || s.shield || s.wave || s.y <= 20 || s.y >= sim.H - 20 || s.x <= 20 || s.x >= sim.W - 20) continue;
+      const sc = (s.carry === 'chest' ? 1e6 : 0) + s.ps;
+      if (sc > bs) { bs = sc; t = s; }
+    }
+    return { mx: 0, my: 0, aim: t ? Math.atan2(t.y - p.y, t.x - p.x) : p.aim, encore: g.encore >= 1 && !!t && Math.hypot(t.x - p.x, t.y - p.y) < 140 };
+  }
   let tgt = null, best = -1;
   for (const sn of g.snakes) for (const s of sn.segs) {
     if (s.hp <= 0 || s.shield || s.wave || s.y <= 40 || s.y >= p.y - 60) continue;

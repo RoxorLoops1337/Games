@@ -2,7 +2,7 @@
 // where they exist and draws procedural stand-ins otherwise.
 import { SNACK_LIFE } from './sim.js';
 import { LATE_CUE } from './trait_ui.js';
-import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt, pointInto } from './sim.js';
+import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt, pointInto, RING_SCALE } from './sim.js';
 import { INK, mix } from './art_draw.js';
 import { deathMotion, crownMotion } from './head_death.js';
 import { SIB_TIME } from './sibling_b11.js';
@@ -518,6 +518,10 @@ export function createRenderer(canvas, art, kit) {
 
   // r10: run end sink with dizzy stars, revive hop
   function drawPlayerR(g) {
+    if (g.ring && !ringScaled) {   // b11: the duo and pets are smaller inside the circle, then the aim line is drawn at full size
+      ringScaled = true; ctx.save(); ctx.translate(g.p.x, g.p.y); ctx.scale(RING_SCALE, RING_SCALE); ctx.translate(-g.p.x, -g.p.y); drawPlayerR(g); ctx.restore(); ringScaled = false;
+      if (!S.ko) drawAimLine(g); return;
+    }
     const p = g.p, ko = S.ko && R10.koT > -1 ? koPose(S.t - R10.koT, OPT.reduceMotion) : null, rv = ko || OPT.reduceMotion ? null : revivePose(S.t - R10.rvT);
     if (!ko && !(rv && rv.u >= 0)) { drawPlayer(g); return; }
     ctx.save();
@@ -585,6 +589,19 @@ export function createRenderer(canvas, art, kit) {
     if (p.shield > 0) { ctx.strokeStyle = `rgba(80,210,255,${0.5 + Math.sin(S.t * 10) * 0.2})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, 54, 0, TAU); ctx.stroke(); glow(p.x, p.y, 60, '#39d0ff', 0.25); }
     if (p.rage > 0) glow(p.x, p.y, 70, '#ffb020', 0.3 + Math.sin(S.t * 14) * 0.1);
     ctx.globalAlpha = 1;
+  }
+
+  // b11: circle stages, a dotted line from the duo out to the circle shows where the notes will fly, with a chevron on the circle
+  let ringScaled = false; const AIM_DASH = [1, 12], NO_DASH = [];
+  function drawAimLine(g) {
+    const p = g.p, a = p.aim, c = Math.cos(a), s = Math.sin(a), r0 = 30, r1 = g.ring.R - 6;
+    ctx.save(); ctx.lineCap = 'round'; ctx.setLineDash(AIM_DASH); ctx.lineDashOffset = OPT.reduceMotion ? 0 : -S.t * 26;
+    ctx.globalAlpha = 0.4; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(p.x + c * r0, p.y + s * r0); ctx.lineTo(p.x + c * r1, p.y + s * r1); ctx.stroke();
+    ctx.globalAlpha = 0.95; ctx.strokeStyle = '#ffe36b'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(p.x + c * r0, p.y + s * r0); ctx.lineTo(p.x + c * r1, p.y + s * r1); ctx.stroke();
+    ctx.setLineDash(NO_DASH); ctx.translate(p.x + c * (r1 + 2), p.y + s * (r1 + 2)); ctx.rotate(a);
+    ctx.globalAlpha = 0.95; ctx.fillStyle = '#ffe36b'; ctx.strokeStyle = '#06323f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -9); ctx.lineTo(-2, 0); ctx.lineTo(-6, 9); ctx.closePath(); ctx.stroke(); ctx.fill();
+    ctx.restore();
+    if (S.aimHint && g.t < 7 && g.phase === 'play') { const k = Math.min(1, g.t * 2, (7 - g.t) * 1.5); ctx.save(); ctx.globalAlpha = k; text('DRAG TO AIM', p.x, p.y + g.ring.R + 46, 28, '#ffffff', '#0b1020'); ctx.restore(); }   // b11: shown on the first circle stages only
   }
 
   function noteTrail(b, col) {
@@ -753,12 +770,14 @@ export function createRenderer(canvas, art, kit) {
         q.fillStyle = bg; q.fillRect(-48, -2, 96, 4); q.fillStyle = '#fff'; q.fillRect(-48 * 0.106, -2, 96 * 0.106, 4);
       });
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a;
-      if (spr) ctx.drawImage(spr.c, x - ww / 2, 0, ww, g.p.y);
+      if (g.ring) { ctx.translate(x, g.p.y); ctx.rotate((g.beam.a === undefined ? -Math.PI / 2 : g.beam.a) + Math.PI / 2); }   // b11: the beam follows the aim in circle stages
+      if (g.ring) { if (spr) ctx.drawImage(spr.c, -ww / 2, -1500, ww, 1500); else { ctx.fillStyle = '#ffe9a0'; ctx.fillRect(-bw * 0.6, -1500, bw * 1.2, 1500); } }
+      else if (spr) ctx.drawImage(spr.c, x - ww / 2, 0, ww, g.p.y);
       else { ctx.fillStyle = '#ffe9a0'; ctx.fillRect(x - bw * 0.6, 0, bw * 1.2, g.p.y); }
       ctx.restore();
     }
     hud.encore(g);   // the meter lives in hud.js
-    if (ui && ui.hints) drawHints(ctx, g, S, { glow, text });   // first-run guide (hints.js)
+    if (ui && ui.hints && !g.ring) drawHints(ctx, g, S, { glow, text });   // first-run guide (hints.js)
     hud.combo(g);
     // joystick
     if (ui && ui.joy && ui.joy.on) {
@@ -777,6 +796,7 @@ export function createRenderer(canvas, art, kit) {
 
   function draw(g, ui, dt) {
     const L = layout();
+    S.aimHint = !!(ui && ui.aimHint);
     lastDt = dt; S.t += dt; if (S.banner) { S.banner.t += dt; if (S.banner.t > S.banner.dur) S.banner = null; }
     if (FX) FX.update(dt, g);
     if (g && g.phase === 'play' && CH.step(g, dt)) { cheerHit = true; if (!OPT.reduceMotion) S.flash = Math.max(S.flash, 0.12), S.flashCol = '#ffe9a8'; }

@@ -637,11 +637,12 @@ export const stageMod = n => (n >= 4 && n % 5 !== 0 && n % 3 === 1 ? MODS[Math.f
 // Most stages are one snake and a line at the bottom. Some stages have two snakes, and some put the duo in the middle with a circle around them.
 export const stageKind = n => (n % 6 === 0 ? 'ring' : (n % 7 === 0 || n % 10 === 8) ? 'double' : 'lane');
 export const KIND_LABEL = { lane: '', double: 'Two snakes', ring: 'Circle' };
-export const RING = { cx: W / 2, cy: 720, R: 175 };
+export const RING = { cx: W / 2, cy: 720, R: 135 };
+export const RING_SCALE = 0.7;   // b11: in circle stages the duo (and pets, shadow, hit area) is drawn this much smaller, and it stands fixed in the middle and aims all round
 export const BOSS_HP = [0.8, 2.4, 0.5];   // boss cell HP multiplier at the face and at the tail (a flat 2.4 left the first yellow cell out of reach: typical players got 4 to 9 percent of the boss)
 export const RING_LATE = 0.9;   // from stage 18 the spiral crawls a little slower still (circle stages 18, 42 and 48 were walls)
 export const HAIRPIN_LATE = 0.9;   // the tall-hairpin lanes (stages 20, 29, 38, 47) were walls from stage 20 on: the snake crawls a little slower there
-export const RING_SPEED = 0.8;   // the spiral is long and most of it is out of reach of the straight shot, so the snake crawls slower in circle stages
+export const RING_SPEED = 1.7;   // the spiral is long and most of it is out of reach of the straight shot, so the snake crawls slower in circle stages
 export const stageInfo = n => ({ n, name: virusName(n), skin: skinFor(n), boss: isBossStage(n), length: snakeLength(n), path: stageKind(n) === 'ring' ? 'Spiral' : PATH_KINDS[pathKind(n)], kind: stageKind(n), mod: stageMod(n), hp: Math.round(hpBase(n)) });
 
 const KIND = { normal: { hp: 1 }, armor: { hp: 2.6 }, bomb: { hp: 1 }, upgrade: { hp: 1.6 }, mender: { hp: 1.3 } };
@@ -1037,8 +1038,9 @@ export const ENCORE_HIT = 0.007, ENCORE_KILL = 0.012, ENCORE_CLUTCH = 0.08, ENCO
 const addEncore = (g, v) => { g.encore = Math.min(1, g.encore + v * (1 + uv(g, 'enc') / 100)); if (g.encore >= 1 && !g.encoreReady) { g.encoreReady = true; g.events.push({ t: 'encoreready' }); } };
 export function fireEncore(g) {
   if (g.phase !== 'play' || g.encore < 1) return false;
-  const p = g.p; g.encore = 0; g.encoreReady = false; g.encoreUsed++; const bw = ENCORE_W * (1 + uv(g, 'enc') / 200); g.beam = { x: p.x, t: 0.5, w: bw };
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && s.y < p.y && Math.abs(s.x - p.x) < s.r + bw) damageSegAs('encore', g, s, dmgMul(g) * ENCORE_DMG, true, s.x, s.y);
+  const p = g.p; g.encore = 0; g.encoreReady = false; g.encoreUsed++; const bw = ENCORE_W * (1 + uv(g, 'enc') / 200); g.beam = { x: p.x, t: 0.5, w: bw, a: g.ring ? p.aim : -Math.PI / 2 };
+  if (g.ring) { const ex = p.x + Math.cos(p.aim) * 1500, ey = p.y + Math.sin(p.aim) * 1500; for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && distToSeg(s.x, s.y, p.x, p.y, ex, ey) < s.r + bw) damageSegAs('encore', g, s, dmgMul(g) * ENCORE_DMG, true, s.x, s.y); }   // b11: a circle stage fires the beam along the aim
+  else for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && s.y < p.y && Math.abs(s.x - p.x) < s.r + bw) damageSegAs('encore', g, s, dmgMul(g) * ENCORE_DMG, true, s.x, s.y);
   g.events.push({ t: 'encore', x: p.x });
   return true;
 }
@@ -1051,7 +1053,7 @@ export function startStage(g, n) {
   g.mod = g.mode === '' ? stageMod(n) : null; if (g.mod && g.mod.coin) g.coinK *= g.mod.coin;
   g.ring = g.mode === '' && stageKind(n) === 'ring' ? RING : null;
   g.upgradeLeft = 0;
-  p.zone = g.ring ? { x0: RING.cx - 100, x1: RING.cx + 100 } : { x0: 40, x1: W - 40 }; p.x = W / 2; p.y = g.ring ? RING.cy : ROW_Y; p.kx = 0;
+  p.zone = g.ring ? { x0: RING.cx, x1: RING.cx } : { x0: 40, x1: W - 40 }; p.aim = -Math.PI / 2; p.x = W / 2; p.y = g.ring ? RING.cy : ROW_Y; p.kx = 0;
   if (g.mode === '' && stageKind(n) === 'double') { const L = snakeLength(n); spawnSnake(g, n, { len: Math.ceil(L * 0.6) }); spawnSnake(g, n, { len: Math.ceil(L * 0.55), mirror: true, startPs: -520 }); }
   else spawnSnake(g, n);
   rebuildTowers(g);
@@ -1322,7 +1324,7 @@ export function reroll(g) {
 }
 function rebuildTowers(g) {
   const L = lv(g, 'tower'), n = L ? 1 + (L >= 3 ? 1 : 0) + (L >= 5 ? 1 : 0) : 0;
-  const offs = [[-150, -190], [150, -190], [0, -300]], p = g.p;
+  const offs = g.ring ? [[-100, -50], [100, -50], [0, -90]] : [[-150, -190], [150, -190], [0, -300]], p = g.p;
   g.towers = Array.from({ length: n }, (_, i) => ({ x: p.x + offs[i][0], y: p.y + offs[i][1], cd: 0.8 + i * 0.4, pulse: 0 }));
 }
 export function choose(g, idx) {
@@ -1368,10 +1370,13 @@ function fire(g, o) {
   }
   g.bullets.push({ x: o.x, y: o.y, vx: Math.cos(o.a) * o.sp, vy: Math.sin(o.a) * o.sp, dmg: o.dmg, crit: !!o.crit, pierce: o.pierce || 0, r: o.r || 6, life: o.life || 1.4, hit: [], beat: !!o.beat, kind: o.kind || 'pill', home: o.home || 0, splash: o.splash || 0, slow: o.slow || 0 });
 }
+// b11: where a shot leaves the duo. Lanes: [side] px across and [up] px above the row. Circle stages: the muzzle sits 0.7x as far from the duo, along the aim, notes spread across it.
+const muzX = (g, side, up) => (g.ring ? g.p.x + Math.cos(g.p.aim) * up * RING_SCALE - Math.sin(g.p.aim) * side * RING_SCALE : g.p.x + side);
+const muzY = (g, side, up) => (g.ring ? g.p.y + Math.sin(g.p.aim) * up * RING_SCALE + Math.cos(g.p.aim) * side * RING_SCALE : g.p.y - up);
 // the capsule: straight up, [1 + extra notes] side by side, [1 + extra bursts] volleys per shot
 function shootCapsule(g, dt) {
   const p = g.p, up = id => uv(g, id);
-  p.aim = -Math.PI / 2;
+  if (!g.ring) p.aim = -Math.PI / 2;
   p.cd -= dt;
   while (p.cd <= 0) {
     p.cd += (1 / p.rate) * cdMul(g) / (1 + up('aspd') / 100) * (p.rage > 0 ? 0.77 : 1);
@@ -1387,7 +1392,7 @@ function shootCapsule(g, dt) {
     if (ob) { g.beatShots = (g.beatShots || 0) + 1; g.events.push({ t: 'beatshot' }); if (g.stage >= BEATRUN_FROM) beatRun(g); }
     for (let k = 0; k < n; k++) {
       const crit = g.rand() < p.crit + (ob ? BEAT_CRIT : 0);
-      fire(g, { x: p.x + (k - (n - 1) / 2) * 42, y: p.y - 30, a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1) * (ob ? 1 + up('dbeat') / 100 : 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
+      fire(g, { x: muzX(g, (k - (n - 1) / 2) * 42, 30), y: muzY(g, (k - (n - 1) / 2) * 42, 30), a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1) * (ob ? 1 + up('dbeat') / 100 : 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
     }
     g.shots++; g.events.push({ t: 'shoot' });
   }
@@ -1397,7 +1402,7 @@ function updateWeapons(g, dt, canFire) {
   const dm = id => dmgMul(g) * skillMul(g.skillLv[id] || 1) * (g.perk && g.perk.id === id ? g.perk.mul : 1);   // permanent skill level scales that skill's damage
   const wantTowers = lv(g, 'tower') ? 1 + (lv(g, 'tower') >= 3 ? 1 : 0) + (lv(g, 'tower') >= 5 ? 1 : 0) : 0;
   if (g.towers.length !== wantTowers) rebuildTowers(g);
-  const aim = -Math.PI / 2;   // nothing auto-aims except the Snot Dragon's homing
+  const aim = g.ring ? p.aim : -Math.PI / 2;   // nothing auto-aims except the Snot Dragon's homing
   for (const id in g.weap) {
     const w = g.weap[id], L = w.lv;
     if (id === 'daggers' || id === 'stick' || id === 'tower') continue;   // continuous / own timers below
@@ -1415,17 +1420,17 @@ function updateWeapons(g, dt, canFire) {
     } else if (id === 'dragon') {
       if (!nearestTarget(g, p.x, p.y, 1400)) { w.cd = 0.3; continue; }
       const n = 1 + Math.floor((L + 1) / 2);
-      for (let k = 0; k < n; k++) fire(g, { x: p.x, y: p.y - 20, a: -Math.PI / 2 + (k - (n - 1) / 2) * 0.7, sp: 440, dmg: 2.0 * (1 + 0.4 * L) * dm('dragon'), r: 11, life: 2.6, kind: 'snot', home: 7, splash: 46 });
+      for (let k = 0; k < n; k++) fire(g, { x: muzX(g, 0, 20), y: muzY(g, 0, 20), a: aim + (k - (n - 1) / 2) * 0.7, sp: 440, dmg: 2.0 * (1 + 0.4 * L) * dm('dragon'), r: 11, life: 2.6, kind: 'snot', home: 7, splash: 46 });
       g.events.push({ t: 'dragon' }); w.cd = (1.8 - 0.1 * L) * cm;
     } else if (id === 'needles') {
       const n = 3 + L;
       for (let k = 0; k < n; k++) {
         const crit = g.rand() < p.crit;
-        fire(g, { x: p.x, y: p.y - 10, a: aim + (k - (n - 1) / 2) * 0.09, sp: 1100, dmg: 0.8 * (1 + 0.3 * L) * dm('needles') * (crit ? p.critMul : 1), crit, pierce: 2 + L, r: 5, life: 1.2, kind: 'needle' });
+        fire(g, { x: muzX(g, 0, 10), y: muzY(g, 0, 10), a: aim + (k - (n - 1) / 2) * 0.09, sp: 1100, dmg: 0.8 * (1 + 0.3 * L) * dm('needles') * (crit ? p.critMul : 1), crit, pierce: 2 + L, r: 5, life: 1.2, kind: 'needle' });
       }
       g.events.push({ t: 'needles' }); w.cd = (1.8 - 0.12 * L) * cm;
     } else if (id === 'bubble') {
-      for (let k = 0; k < (L >= 4 ? 2 : 1); k++) fire(g, { x: p.x, y: p.y - 30, a: aim + (k ? 0.5 : 0), sp: 190, dmg: 1.2 * (1 + 0.3 * L) * dm('bubble'), r: 22 + 3 * L, life: 3.2, kind: 'bubble', splash: 70 + 10 * L, slow: 2 });
+      for (let k = 0; k < (L >= 4 ? 2 : 1); k++) fire(g, { x: muzX(g, 0, 30), y: muzY(g, 0, 30), a: aim + (k ? 0.5 : 0), sp: 190, dmg: 1.2 * (1 + 0.3 * L) * dm('bubble'), r: 22 + 3 * L, life: 3.2, kind: 'bubble', splash: 70 + 10 * L, slow: 2 });
       g.events.push({ t: 'bubble' }); w.cd = (3.4 - 0.2 * L) * cm;
     } else if (id === 'satellite') {
       const vis = visibleTargets(g);
@@ -1502,15 +1507,15 @@ function updateWeapons(g, dt, canFire) {
 }
 // [o] (optional) is a scratch object the answer is written into, so the per-step and per-frame callers allocate nothing
 export function daggerPos(g, i, o) {
-  const dl = lv(g, 'daggers'), p = g.p, a = p.orbAng + (i / Math.max(1, 1 + dl)) * TAU, R = 92 + 8 * dl;
-  if (o) { o.x = p.x + Math.cos(a) * R; o.y = p.y - 150 + Math.sin(a) * R; o.a = a; return o; }
-  return { x: p.x + Math.cos(a) * R, y: p.y - 150 + Math.sin(a) * R, a };   // they circle a post just above the line
+  const dl = lv(g, 'daggers'), p = g.p, a = p.orbAng + (i / Math.max(1, 1 + dl)) * TAU, R = g.ring ? 72 + 6 * dl : 92 + 8 * dl, oy = g.ring ? 0 : 150;   // b11: in a circle stage they orbit the duo itself
+  if (o) { o.x = p.x + Math.cos(a) * R; o.y = p.y - oy + Math.sin(a) * R; o.a = a; return o; }
+  return { x: p.x + Math.cos(a) * R, y: p.y - oy + Math.sin(a) * R, a };   // they circle a post just above the line
 }
 export function stickSeg(g, k = 0, o) {
-  const sl = lv(g, 'stick'), p = g.p, len = 190 + 14 * sl;
-  const a = -Math.PI / 2 + Math.sin(g.t * 2.2 + k * Math.PI) * 1.15;
-  if (o) { o.x0 = p.x; o.y0 = p.y - 80; o.x1 = p.x + Math.cos(a) * len; o.y1 = p.y - 80 + Math.sin(a) * len; o.a = a; o.len = len; return o; }
-  return { x0: p.x, y0: p.y - 80, x1: p.x + Math.cos(a) * len, y1: p.y - 80 + Math.sin(a) * len, a, len };
+  const sl = lv(g, 'stick'), p = g.p, len = g.ring ? 90 + 8 * sl : 190 + 14 * sl, oy = g.ring ? 0 : 80;   // b11: in a circle stage the bar spins all the way round the duo
+  const a = g.ring ? g.t * 1.9 + k * Math.PI : -Math.PI / 2 + Math.sin(g.t * 2.2 + k * Math.PI) * 1.15;
+  if (o) { o.x0 = p.x; o.y0 = p.y - oy; o.x1 = p.x + Math.cos(a) * len; o.y1 = p.y - oy + Math.sin(a) * len; o.a = a; o.len = len; return o; }
+  return { x0: p.x, y0: p.y - oy, x1: p.x + Math.cos(a) * len, y1: p.y - oy + Math.sin(a) * len, a, len };
 }
 const DP_SCRATCH = { x: 0, y: 0, a: 0 }, SG_SCRATCH = { x0: 0, y0: 0, x1: 0, y1: 0, a: 0, len: 0 };
 function distToSeg(px, py, x0, y0, x1, y1) {
@@ -1547,6 +1552,7 @@ export function step(g, dt, input) {
   p.x += (p.mx * p.speed + p.kx) * dt;
   p.kx *= Math.exp(-9 * dt);
   p.x = clamp(p.x, p.zone.x0, p.zone.x1); p.y = g.ring ? g.ring.cy : ROW_Y;
+  if (g.ring) p.aim = input && Number.isFinite(input.aim) ? input.aim : p.aim;   // b11: circle stages aim all round (input.aim, an angle in radians); lanes always shoot straight up
   if (p.iframes > 0) p.iframes -= dt;
   if (p.shield > 0) p.shield -= dt;
   if (p.rage > 0) p.rage -= dt;
@@ -1682,6 +1688,7 @@ export function botInput(g) {
     if (!tgt || s.ps > tgt.ps) tgt = s;
   }
   if (tgt) ax += clamp((tgt.x - p.x) / 120, -1, 1) * 0.9;
+  if (g.ring) { let t2 = null; for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && s.y > 20 && s.y < H - 20 && s.x > 20 && s.x < W - 20) { if (s.carry === 'chest') { t2 = s; break; } if (!t2 || s.ps > t2.ps) t2 = s; } return { mx: 0, my: 0, aim: t2 ? Math.atan2(t2.y - p.y, t2.x - p.x) : p.aim, encore: g.encore >= 1 && !!t2 && hyp(t2.x - p.x, t2.y - p.y) < 140 }; }   // b11: circle stages, the bot aims at the furthest-along cell
   return { mx: clamp(ax, -1, 1), my: 0, encore: g.encore >= 1 && !!tgt && Math.abs(tgt.x - p.x) < tgt.r };
 }
 
