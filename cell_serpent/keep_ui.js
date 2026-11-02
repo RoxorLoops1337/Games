@@ -3,6 +3,7 @@
 // and the collection book art helpers. Nothing here takes anything away, a missed day only means a fresh start.
 import { hasShield, spinReady, spinStreak, seasonStatus, bookEntries, SEASON_DAYS, SKINS } from './sim.js';
 
+import { tomorrowPeek } from './chase.js';
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
 // One friendly line for the Next Reward bar, or null. The spin streak comes first, then today's Season stamp.
@@ -74,7 +75,7 @@ export function tomorrowLine(save, day, r) {
     if (nx) return { icon: '🎁', text: 'Tomorrow your stamp unlocks a Season gift' };
     return { icon: '🌙', text: `Tomorrow: stamp ${se.stamps + 1} and a fresh spin` };
   }
-  return sp > 0 ? { icon: '🎡', text: 'A fresh spin is waiting tomorrow' } : null;
+  return sp > 0 ? { icon: '🎡', text: tomorrowPeek(day).line } : null;
 }
 
 // ---- the hub: when the pill appears after a run that earned a stamp, a star flies in and the counter ticks up

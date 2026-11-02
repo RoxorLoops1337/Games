@@ -1570,7 +1570,7 @@ export function botInput(g) {
 // ---------------------------------------------------------------- retention loops (all optional gifts, nothing here gates progress)
 // save.addict: sp (kills per snake species), sk (damage points per skill), claimed (mastery + collection rewards),
 // spin (last lucky spin day), week (weekly challenge), seen (last visit, ms) for the comeback gift.
-export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1, n: 0, shield: 0 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0, q: { day: 0, p: [0, 0, 0], chest: 0 }, season: { key: 0, n: 0, last: 0, claimed: {}, note: '' }, ann: {}, annInit: 0 });
+export const addictDefault = () => ({ sp: Object.fromEntries(SKINS.map(k => [k, 0])), sk: Object.fromEntries(WEAPONS.map(w => [w.id, 0])), claimed: {}, spin: { day: 0, prize: -1, n: 0, shield: 0 }, week: { key: 0, prog: 0, claimed: 0 }, seen: 0, q: { day: 0, p: [0, 0, 0], chest: 0 }, season: { key: 0, n: 0, last: 0, claimed: {}, note: '' }, ann: {}, annInit: 0, qs: { last: 0, n: 0, b: 0 } });
 export function sanitizeAddict(raw) {
   const a = addictDefault(), num = (v, d = 0) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : d);
   for (const k of SKINS) a.sp[k] = num(raw && raw.sp && raw.sp[k]);
@@ -1584,6 +1584,7 @@ export function sanitizeAddict(raw) {
   if (raw.season && typeof raw.season === 'object') { const r = raw.season; a.season = { key: num(r.key), n: Math.min(SEASON_DAYS, num(r.n)), last: num(r.last), claimed: {}, note: typeof r.note === 'string' ? r.note.replace(/[^A-Za-z0-9 +,.!:]/g, '').slice(0, 80) : '' }; for (let i = 0; i < SEASON_MILES.length; i++) if (r.claimed && r.claimed[i]) a.season.claimed[i] = 1; }
   if (raw.ann && typeof raw.ann === 'object') for (const t of TROPHIES) if (raw.ann[t.id]) a.ann[t.id] = 1;
   a.annInit = raw.annInit ? 1 : 0;
+  if (raw.qs && typeof raw.qs === 'object') a.qs = { last: num(raw.qs.last), n: Math.min(9999, num(raw.qs.n)), b: Math.min(9, num(raw.qs.b)) };
   return a;
 }
 export function grantReward(save, rw) {
@@ -1796,7 +1797,13 @@ export function questState(save, day) {
   const doneCount = quests.filter(x => x.done).length, total = quests.reduce((a, x) => a + x.target, 0), got = quests.reduce((a, x) => a + x.prog, 0);
   return { quests, doneCount, frac: total ? got / total : 0, chest: questChest(day), chestOpened: !!q.chest, chestReady: doneCount === 3 && !q.chest };
 }
-export function claimQuestChest(save, day) { const st = questState(save, day); if (!st.chestReady) return null; ensureQuests(save, day).chest = 1; grantReward(save, st.chest); return st.chest; }
+export function claimQuestChest(save, day) { const st = questState(save, day); if (!st.chestReady) return null; ensureQuests(save, day).chest = 1; grantReward(save, st.chest); bumpQuestStreak(save, day); return st.chest; }
+// Chest streak: open the daily quest chest on consecutive days for small extra gifts. A missed day only means a fresh start.
+export const QS_BONUS = [{ at: 3, reward: { beats: 100 } }, { at: 7, reward: { sparkles: 5 } }, { at: 14, reward: { eggs: 1 } }, { at: 30, reward: { sparkles: 20 } }];
+function bumpQuestStreak(save, day) {
+  const q = save.addict.qs; q.n = q.last === day ? q.n : q.last === day - 1 ? q.n + 1 : 1; q.last = day; q.b = 0;
+  const i = QS_BONUS.findIndex(m => m.at === q.n); if (i >= 0) { grantReward(save, QS_BONUS[i].reward); q.b = i + 1; }
+}
 // Season: 30 calendar days, one stamp for every day you finish a run, free gifts at milestones. Leftover gifts are paid out when a season ends.
 export const SEASON_DAYS = 30;
 export const SEASON_MILES = [{ at: 3, reward: { beats: 150 } }, { at: 7, reward: { eggs: 1 } }, { at: 12, reward: { sparkles: 10 } }, { at: 18, reward: { beats: 500, eggs: 1 } }, { at: 24, reward: { sparkles: 25 } }, { at: 28, reward: { sparkles: 50, eggs: 2 } }];

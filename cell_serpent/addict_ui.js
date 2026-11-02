@@ -7,6 +7,7 @@ import {
 } from './sim.js';
 import { todayHTML, flyChips, flyReward } from './goals_polish.js';
 import { riskHTML, bookCell, nextUnmet } from './keep_ui.js';
+import { tomorrowPeek, questNear, stickerAlbum, claimSticker, stickerHint, stickerGridHTML } from './chase.js';
 
 export function createAddictUI(c, openPanel, sec) {
   const { $, tile, audio } = c;
@@ -73,14 +74,14 @@ export function createAddictUI(c, openPanel, sec) {
     const w = document.createElement('div'); w.className = 'spinbox';
     const ready = spinReady(s, day), streak = spinStreak(s, day) + (ready ? 1 : 0), fr = spinFrame(streak);
     w.innerHTML = `<div class="spinstreak"><b>${streak > 1 ? '🔥 ' + streak + ' day streak' : 'Spin daily to build a streak'}</b><small>${esc(fr.name)}${fr.next ? '. Next look at ' + fr.next + ' days' : '. Top look!'}</small>${shieldLine(s, streak)}</div><div class="wheelwrap"><i class="wptr">${fr.ptr}</i><div class="wheel" id="wheel" style="border-color:${fr.color};box-shadow:0 5px 0 #8a6a10${fr.glow ? `,0 0 ${fr.glow}px ${fr.color}` : ''}">${SPIN_PRIZES.map((p, i) => `<span class="wseg" style="transform:rotate(${i * 45}deg) translateY(-82px)"><b style="transform:rotate(${-i * 45}deg)">${p.icon}</b></span>`).join('')}</div></div>` +
-      `<div class="spinmsg" id="spinMsg">${ready ? 'One free spin every day. Just for fun!' : 'Today you won ' + esc(rewardText(SPIN_PRIZES[s.addict.spin.prize >= 0 ? s.addict.spin.prize : spinPrize(day)].reward)) + '. Come back tomorrow!'}</div>` +
+      `<div class="spinmsg" id="spinMsg">${ready ? 'One free spin every day. Just for fun!' : 'Today you won ' + esc(rewardText(SPIN_PRIZES[s.addict.spin.prize >= 0 ? s.addict.spin.prize : spinPrize(day)].reward)) + '. Come back tomorrow!'}</div>` + (ready ? '' : `<div class="spinpeek" id="spinPeek">${esc(tomorrowPeek(day).line)}</div>`) +
       `<button class="btn small go gold" id="spinGo" ${ready ? '' : 'disabled'}>${ready ? 'SPIN' : 'SEE YOU TOMORROW'}</button>`;
     body.appendChild(w);
     w.querySelector('#spinGo').onclick = () => {
       audio.unlock(); const r = doSpin(save(), day); if (!r) return; after(); audio.play('click');
       const wheel = w.querySelector('#wheel'), btn = w.querySelector('#spinGo'); btn.disabled = true; btn.textContent = 'SPINNING...';
       wheel.style.transition = reduce() ? 'none' : 'transform 3s cubic-bezier(.15,.7,.2,1)'; wheel.style.transform = `rotate(${360 * 4 - r.index * 45}deg)`;
-      setTimeout(() => { audio.play('levelup'); w.querySelector('#spinMsg').textContent = 'You won ' + rewardText(r.prize.reward) + '!' + (r.gift ? ' And a Streak Shield!' : '') + (r.saved ? ' Your shield saved the streak!' : ''); if (r.gift || r.saved) { const sh = w.querySelector('.shieldrow'); if (sh) sh.outerHTML = shieldLine(save(), save().addict.spin.n, r.gift); } btn.textContent = 'SEE YOU TOMORROW'; w.querySelector('.wseg:nth-child(' + (r.index + 1) + ')').classList.add('win'); renderNext(); if (!reduce()) { burst(w.querySelector('.wheelwrap'), fr.burst + 8, fr.color); flyReward(w.querySelector('.wheelwrap'), r.prize.reward, false); } }, reduce() ? 0 : 3100);
+      setTimeout(() => { audio.play('levelup'); w.querySelector('#spinMsg').textContent = 'You won ' + rewardText(r.prize.reward) + '!' + (r.gift ? ' And a Streak Shield!' : '') + (r.saved ? ' Your shield saved the streak!' : ''); if (r.gift || r.saved) { const sh = w.querySelector('.shieldrow'); if (sh) sh.outerHTML = shieldLine(save(), save().addict.spin.n, r.gift); } btn.textContent = 'SEE YOU TOMORROW'; { const pk = document.createElement('div'); pk.className = 'spinpeek'; pk.id = 'spinPeek'; pk.textContent = tomorrowPeek(day).line; btn.before(pk); } w.querySelector('.wseg:nth-child(' + (r.index + 1) + ')').classList.add('win'); renderNext(); if (!reduce()) { burst(w.querySelector('.wheelwrap'), fr.burst + 8, fr.color); flyReward(w.querySelector('.wheelwrap'), r.prize.reward, false); } }, reduce() ? 0 : 3100);
     };
     // weekly challenge
     sec(body, 'Weekly Challenge', '#ffd24a');
@@ -125,6 +126,13 @@ export function createAddictUI(c, openPanel, sec) {
     const ag = grid(body);
     bk.all.forEach(m => ag.appendChild(tile({ cls: 't-gold one', ic: '📖', name: `Book ${Math.round(m.at * 100)}% full`, desc: rewardText(m.reward), btn: s.addict.claimed['book:all' + m.i] ? 'CLAIMED' : m.ready ? 'CLAIM' : Math.round(bk.got / bk.total * 100) + '%', gold: true, disabled: !m.ready,
       onclick: ev => { const fb = ev && ev.currentTarget; if (claimBook(save(), 'all' + m.i)) { flyReward(fb, m.reward, reduce()); after(); audio.play('levelup'); rebuild(); renderNext(); } } })));
+    // round 9: stage stickers
+    { const al = stickerAlbum(s);
+      sec(body, `Stage Stickers ${al.gold}/${al.cells.length}`, '#ffd24a');
+      const box = document.createElement('div'); box.className = 'stkbox';
+      box.innerHTML = `<div class="stkh">${esc(stickerHint(al))}</div>${stickerGridHTML(al)}<div class="stkm">${al.miles.map(m => `<button class="stkb${m.ready ? ' rdy' : ''}${m.claimed ? ' got' : ''}" data-at="${m.at}" ${m.ready ? '' : 'disabled'}><b>${m.claimed ? '✔' : '★ ' + m.at}</b><small>${esc(rewardText(m.reward))}</small></button>`).join('')}</div>`;
+      body.appendChild(box);
+      box.querySelectorAll('.stkb').forEach(bt => { bt.onclick = () => { const at = +bt.dataset.at, m = al.miles.find(x => x.at === at); if (claimSticker(save(), at)) { flyReward(bt, m.reward, reduce()); after(); audio.play('levelup'); rebuild(); renderNext(); } }; }); }
   }
 
   // the tip jar chip on the welcome card: only when a fair amount has piled up
@@ -164,9 +172,9 @@ export function createAddictUI(c, openPanel, sec) {
   // ---- one more run: a near miss and the next reward on the result screen
   function renderResultNudge(r, prevPct) {
     const el = $('rNudge'); if (!el) return;
-    const line = nudgeFor(save(), r, prevPct), n = nextReward(save(), c.dayKey());
+    const line = nudgeFor(save(), r, prevPct), n = nextReward(save(), c.dayKey()), qn = questNear(save(), c.dayKey());
     el.innerHTML = (line ? `<div class="nudge">${esc(line)}</div>` : '') +
-      `<div class="nudge2">${n.icon} ${esc(n.label)}${n.ready ? ' (collect it in Goals)' : ' ' + esc(n.text)}</div>`;
+      (qn && !n.ready ? `<div class="nudge2 qnear">${qn.icon} ${esc(qn.text)}</div>` : `<div class="nudge2">${n.icon} ${esc(n.label)}${n.ready ? ' (collect it in Goals)' : ' ' + esc(n.text)}</div>`);
   }
   return { renderNext, openGoals, maybeComeback, renderResultNudge };
 }
