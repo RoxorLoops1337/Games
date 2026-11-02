@@ -954,7 +954,7 @@ export function startStage(g, n) {
   else spawnSnake(g, n);
   rebuildTowers(g);
   g.phase = 'play'; g.clearT = 0; g.progress = 0;
-  g.events.push({ t: 'stage', n, boss: isBossStage(n), name: nameOf(g), mod: g.mod ? g.mod.name : '' });
+  g.events.push({ t: 'stage', n, boss: isBossStage(n), skin: g.skin, name: nameOf(g), mod: g.mod ? g.mod.name : '' });
 }
 
 // ---------------------------------------------------------------- game

@@ -4,6 +4,7 @@
 // mix({ stage, boss, groove (0..1), danger (0..1) }).
 import { beatBpm as simBpm, SKINS, skinFor } from './sim.js';
 import { humOf, squeakHz, HUB_CHORD, HUB_TWINKLE, HUB_GAIN } from './audio_b7.js';
+import { stageVoice } from './audio_stage.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
@@ -418,6 +419,12 @@ export function createAudio() {
     const want = wantHub && musicAllowed && !muted && !wantMusic && !!ac && !!musBus;
     if (want && !hubN) { try { hubStart(); } catch (e) { hubN = null; } } else if (!want && hubN) hubStop();
   }
+  // round 8 (05-screen-feel): the stage card sound follows the species (audio_stage.js); the old riser and boss drone stay underneath
+  { const baseStage = sfx.stage, play = v => { for (const n of v.n) tone(n[0], n[1], n[2], n[3], n[4], n[5]); if (v.z) for (const z of v.z) noise(z[0], z[1], z[2], z[3], z[4], z[5]); };
+    sfx.stage = e => { const v = e && stageVoice(e.skin, e.boss); if (!v) return baseStage(e); if (e.boss) sfx.bossintro(); else sfx.riser(); play(v); }; }
+  // resume count-in tick: a soft woodblock that climbs, e.n is 3, 2, 1
+  sfx.resumetick3 = () => sfx.resumetick({ n: 3 }); sfx.resumetick2 = () => sfx.resumetick({ n: 2 }); sfx.resumetick1 = () => sfx.resumetick({ n: 1 });
+  sfx.resumetick = e => { const n = Math.max(1, Math.min(3, (e && e.n) || 3)); tone(560 + (3 - n) * 140, 0.06, 'triangle', 0.08, -60); tone(1400 + (3 - n) * 300, 0.03, 'sine', 0.03); };
   return {
     unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } hubSync(); },
     hub(on) { wantHub = !!on; hubSync(); },

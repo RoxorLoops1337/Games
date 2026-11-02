@@ -1746,6 +1746,16 @@
   @keyframes rvFill{from{transform-origin:left;transform:scaleX(0)}to{transform:scaleX(1)}}
   @media (max-height:700px){.rvwipe{display:none}}
   @media (prefers-reduced-motion:reduce){.rvwipe.go,.rvwipe.go i u{animation:none}}
+  /* r8 level-up screen entrance: ENHANCE tightens its letters under a gold sweep line, a ring of light opens behind the cards, the luck bar rises last */
+  #levelup .banner{position:relative;animation:lvBan .55s cubic-bezier(.2,1.2,.4,1) both;text-shadow:0 0 14px rgba(157,255,109,.55)}
+  #levelup .banner::after{content:"";position:absolute;left:50%;bottom:-4px;width:150px;height:3px;margin-left:-75px;border-radius:2px;background:linear-gradient(90deg,transparent,#ffe27a,#fff,#ffe27a,transparent);transform:scaleX(0);animation:lvLine .7s .12s ease-out both}
+  #levelup::before{content:"";position:fixed;left:50%;top:44%;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:4px solid rgba(255,226,122,.85);box-shadow:0 0 26px rgba(255,216,77,.6),inset 0 0 26px rgba(255,216,77,.35);pointer-events:none;opacity:0;animation:lvRing .75s ease-out both}
+  #levelup .luckbox{animation:lvRise .45s .32s ease-out both}
+  @keyframes lvBan{0%{opacity:0;letter-spacing:.7em;transform:scale(1.5)}100%{opacity:1;letter-spacing:.16em;transform:none}}
+  @keyframes lvLine{0%{transform:scaleX(0);opacity:1}60%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1.25);opacity:0}}
+  @keyframes lvRing{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(7)}}
+  @keyframes lvRise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){#levelup .banner,#levelup .banner::after,#levelup::before,#levelup .luckbox{animation:none}}
   /* end @css:05-screen-feel */
 /* @css:18-access round 7 */
   .qpill{min-height:44px} #tabBattle .qpill{min-height:44px}
