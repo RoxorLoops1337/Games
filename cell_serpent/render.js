@@ -412,6 +412,10 @@ export function createRenderer(canvas, art, kit) {
       if (S.lastShot !== st.last) { st.last = S.lastShot; st.hop = 1; }
       if (kit && st.warm !== id) { st.warm = id; kit.SPR.pet(id, 7); }   // r7: bake the slump face ahead of time so the sigh never hitches
       st.hop = Math.max(0, st.hop - 0.016 * 4.5);
+      if (S.petWake !== undefined && !OPT.reduceMotion) {   // r8: the pets hop on every number of the resume count-in and call out on BACK ON!
+        const wu = S.t - S.petWake, tk = wu < 0 || wu > 1.3 ? -1 : Math.floor(wu / 0.27);
+        if (tk >= 0 && tk <= 3 && st.wk !== tk) { st.wk = tk; st.hop = 1; if (tk === 3) { addFloat(p.x + (i ? 92 : -92), p.y - 70, ({ kitten: 'Meow!', puppy: 'Woof!', lamb: 'Baa!', turtle: 'Ready!', piglet: 'Oink!', hamster: 'Squeak!' })[id] || '!', '#ffe14a', 22, -40); } }
+      }
       const bop = !OPT.reduceMotion && g.phase === 'play' && (g.groove || 0) >= 6 ? Math.pow(1 - beatPhase(g), 4) * (g.groove >= 10 ? 9 : 5) : 0;   // groove: the pets bop on the beat
       const ch = OPT.reduceMotion ? null : CH.pet(i, i ? 1 : -1, id);
       const s2 = i ? 1 : -1, ph = S.t * 6 + i * 2, idle = Math.abs(Math.sin(ph)) * (scared ? 3 : 8) * (ch ? 0.3 : 1), hopY = Math.sin(st.hop * Math.PI) * 14 + (ch ? ch.y : 0) + bop - slumpK() * 9;
@@ -696,5 +700,5 @@ export function createRenderer(canvas, art, kit) {
   HJ = createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, blit, sprite: k => kit && kit.SPR.pickup(k), sound: n => { if (FX) FX.state.sounds.push(n); } });
   FX = createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst });
 
-  return { hj: HJ, timeScale: () => (FX ? FX.timeScale() : 1), setBeat: fn => FX.setBeat(fn), clearBusy: () => FX.clearBusy(), resumeFx: g => FX.resumeFx(g), takeSounds: () => FX.takeSounds(), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, hudPress: z => getHud().press(z), safeTop: () => (hud ? hud.top() : 0), hudZone: gp => hudZone(gp, hud ? hud.top() : 0), toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
+  return { hj: HJ, timeScale: () => (FX ? FX.timeScale() : 1), setBeat: fn => FX.setBeat(fn), clearBusy: () => FX.clearBusy(), resumeFx: g => { if (g && g.phase === 'play' && !OPT.reduceMotion) S.petWake = S.t; FX.resumeFx(g); }, takeSounds: () => FX.takeSounds(), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, hudPress: z => getHud().press(z), safeTop: () => (hud ? hud.top() : 0), hudZone: gp => hudZone(gp, hud ? hud.top() : 0), toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
 }

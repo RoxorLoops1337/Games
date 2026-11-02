@@ -5,6 +5,7 @@
 import { beatBpm as simBpm, SKINS, skinFor } from './sim.js';
 import { humOf, squeakHz, HUB_CHORD, HUB_TWINKLE, HUB_GAIN } from './audio_b7.js';
 import { cardOf, deathOf, finishOf, rungSparkle, panicHz, bedOf } from './audio_b8.js';
+import { stageVoice } from './audio_stage.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
@@ -459,6 +460,9 @@ export function createAudio() {
     if (want && hubN && hubN.skin !== hubSkin) hubStop();   // the selected world changed: the old bed fades out, the new one comes in
     if (want && !hubN) { try { hubStart(); } catch (e) { hubN = null; } } else if (!want && hubN) hubStop();
   }
+  // resume count-in tick: a soft woodblock that climbs, e.n is 3, 2, 1
+  sfx.resumetick3 = () => sfx.resumetick({ n: 3 }); sfx.resumetick2 = () => sfx.resumetick({ n: 2 }); sfx.resumetick1 = () => sfx.resumetick({ n: 1 });
+  sfx.resumetick = e => { const n = Math.max(1, Math.min(3, (e && e.n) || 3)); tone(560 + (3 - n) * 140, 0.06, 'triangle', 0.08, -60); tone(1400 + (3 - n) * 300, 0.03, 'sine', 0.03); };
   return {
     unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } hubSync(); },
     hub(on, skin) { wantHub = !!on; if (skin) hubSkin = skin; hubSync(); },

@@ -524,7 +524,9 @@ function goBack(fromBtn) {
 let backArmed = false;
 function armBack() { if (!backArmed) { try { history.pushState({ cs: 1 }, ''); backArmed = true; } catch (e) { /* no history */ } } }
 addEventListener('popstate', () => { backArmed = false; if (mode === 'title') return; goBack(true); if (mode !== 'title') armBack(); });
-function resume() { mode = 'play'; show(''); last = performance.now(); if (R && R.resumeFx) R.resumeFx(g); }
+function resume() { mode = 'play'; show(''); last = performance.now(); if (R && R.resumeFx) R.resumeFx(g); petsCall(); }
+// r8: the walking pets answer BACK ON! (the resume count-in is 3 x 0.27 s)
+function petsCall() { const ps = g && g.pets ? g.pets.slice() : []; if (ps.length && !systemReduceMotion()) setTimeout(() => { if (mode === 'play') ps.forEach((id, i) => setTimeout(() => audio.play(PETSND[id] || 'chirp'), i * 90)); }, 830); }
 function openSettings(back) {
   const paint = () => {
     for (const b of document.querySelectorAll('#settings .tgl')) { const k = b.dataset.k, on = k === 'sound' ? !save.muted : save.settings[k]; b.classList.toggle('on', !!on); b.querySelector('b').textContent = k === 'pump' ? PUMP_LEVELS[pumpLevel(on)] : on ? 'ON' : 'OFF'; b.classList.toggle('on', k === 'pump' ? pumpLevel(on) > 0 : !!on); }
@@ -569,7 +571,7 @@ function pauseRecap() {
 function showStatsFromPause() { statsPanel(() => show('pause')); }
 function showStats() {
   if (mode !== 'play') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0;
-  statsPanel(() => { mode = 'play'; show(''); last = performance.now(); if (R && R.resumeFx) R.resumeFx(g); });
+  statsPanel(() => { mode = 'play'; show(''); last = performance.now(); if (R && R.resumeFx) R.resumeFx(g); petsCall(); });
 }
 function statsPanel(onClose) {
   const tot = Object.values(g.dmgBy).reduce((a, v) => a + v, 0) || 1, rows = Object.entries(g.dmgBy).sort((a, b) => b[1] - a[1]);
