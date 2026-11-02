@@ -859,7 +859,7 @@ export class Battle {
     const reduce = !!this.prof.settings.reduce;
     // full-canvas backdrop in device space
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    AW.drawBackdrop(ctx, world.id, view.cw, view.ch, t, { beat: beat * 0.6, staticAmt: clamp(1 - run.stageFrac, 0, 1) * 0.85, skin: this.skin, lite: this.lite });
+    AW.drawBackdrop(ctx, world.id, view.cw, view.ch, t, { beat: beat * 0.6, staticAmt: clamp(1 - run.stageFrac, 0, 1) * 0.85, skin: this.skin, lite: this.lite, avoid: { x: view.ox, y: view.oy + 8 * view.s, w: W * view.s, h: (H - 8) * view.s } });   // the world sign is skipped when the HUD and board column would cover it
     // the board layer: shaken, and punched in a touch on big hits
     const [sx, sy] = fx.shakeOffset();
     const z = reduce ? 0 : fx.punch * 0.022, s = view.s * (1 + z);

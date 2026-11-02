@@ -72,3 +72,21 @@ export function boardRows(top, friends, me, tab, limit = 20) {
   const pinned = rows.filter((r) => r.friend), rest = rows.filter((r) => !r.friend);
   return pinned.concat(rest.slice(0, limit));
 }
+
+// ---------------------------------------------------------------- friend invite links: <origin>/drop_the_bass/?friend=<name>
+// The name in a link is untrusted text: it goes through cleanName (same rule as the board and the friends list) before it is shown or stored.
+export const INVITE_PATH = '/drop_the_bass/';
+export function inviteLink(origin, name) {
+  const n = cleanName(name);
+  return n ? String(origin || '').replace(/\/+$/, '') + INVITE_PATH + '?friend=' + encodeURIComponent(n) : '';
+}
+// the cleaned name from a location.search string, or '' (no parameter, empty, or nothing left after cleaning)
+export function friendFromSearch(search) {
+  try { const v = new URLSearchParams(String(search || '')).get('friend'); return v == null ? '' : cleanName(v.slice(0, 200)); } catch (e) { return ''; }
+}
+// the same address without the friend parameter (path + remaining query + hash), for history.replaceState
+export function withoutFriendParam(pathname, search, hash) {
+  let q = '';
+  try { const u = new URLSearchParams(String(search || '')); u.delete('friend'); q = u.toString(); } catch (e) { q = ''; }
+  return String(pathname || '/') + (q ? '?' + q : '') + String(hash || '');
+}

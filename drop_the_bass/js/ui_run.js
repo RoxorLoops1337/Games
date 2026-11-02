@@ -6,7 +6,7 @@ import { ENEMY_TIPS as ET, BOSS_TIPS as BT, FIXED_TIPS } from './sim.js';
 import { RUN_MODIFIER_BY_ID } from './data_depth.js';
 import * as M from './meta.js';
 import { HINTS } from './data_story.js';
-import { h, canvasOf, icon, gearIcon, enemyIcon, turretIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW } from './ui_core.js';
+import { h, canvasOf, icon, gearIcon, enemyIcon, turretIcon, currencyChip, modal, toast, btn, muteButton, rarClass, rarName, AE, AW } from './ui_core.js';
 import { settingsModal } from './ui_hub.js';
 import { flames } from './ui_setlist.js';
 import { makeShareCard, shareCard, shareText } from './share.js';
@@ -71,7 +71,7 @@ export function showPause(app, battle) {
     Object.keys(run.remix).length ? h('div', { class: 'sub', style: 'font-size:13px;text-align:center' }, Object.entries(run.remix).map(([id, n]) => REMIX[id].name + (n > 1 ? ' x' + n : '')).join(', ')) : null,
     h('div', { class: 'pause-btns', style: 'margin-top:12px' },
       btn(t('run.pause.resume', 'Resume'), () => m.close(), 'green big'),
-      h('div', { class: 'btnrow', style: 'margin-top:0' }, btn(t('run.pause.settings', 'Settings'), () => settingsModal(app), 'dark small'), btn(t('run.pause.howto', 'How to play'), () => app.showHowTo(), 'dark small')),
+      h('div', { class: 'btnrow', style: 'margin-top:0' }, btn(t('run.pause.settings', 'Settings'), () => settingsModal(app), 'dark small'), btn(t('run.pause.howto', 'How to play'), () => app.showHowTo(), 'dark small'), muteButton(app)),
       btn(t('run.pause.quit', 'Quit run'), () => {
         const q = modal(h('div', null, h('h2', null, t('run.pause.quit_title', 'Quit this run?')), h('div', { class: 'sub', style: 'text-align:center' }, run.practice ? t('run.pause.quit_practice', 'Practice has no rewards, so nothing is lost.') : t('run.pause.quit_body', 'You keep the rewards for the waves you cleared. Stars and stage progress need a win.')),
           h('div', { class: 'btnrow' }, btn(t('run.pause.quit_yes', 'Quit'), () => { q.close(); m.close(); battle.setPause(false); app.quitRun(battle); }, 'red'), btn(t('run.pause.keep', 'Keep playing'), () => q.close(), 'green'))));

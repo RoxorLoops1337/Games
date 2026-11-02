@@ -6,10 +6,10 @@ import * as M from './meta.js';
 import { makeRng } from './rng.js';
 import { Battle, battleIdle } from './battle.js';
 import { Cutscene } from './cutscene.js';
-import { buildHub, settingsModal, setlistSheet, langPicker, welcomeSheet, dailyGigModal, royaltiesModal, whatsNewModal } from './ui_hub.js';
+import { buildHub, settingsModal, setlistSheet, langPicker, welcomeSheet, dailyGigModal, royaltiesModal, whatsNewModal, importModal, friendInviteModal } from './ui_hub.js';
 import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo, showPracticeResults } from './ui_run.js';
-import { setRoot, h, btn, modal, toast, actionToast, tickLive, AE, AW } from './ui_core.js';
-import { submitScore, rankOf } from './lb.js';
+import { setRoot, h, btn, modal, toast, actionToast, tickLive, muteButton, AE, AW } from './ui_core.js';
+import { submitScore, rankOf, friendFromSearch, withoutFriendParam } from './lb.js';
 import { setStyle } from './style.js';
 import { initPwa } from './pwa.js';
 import * as Stats from './stats.js';
@@ -28,6 +28,9 @@ setRoot(ui);
 let loaded;
 try { loaded = M.loadSave(localStorage, Date.now()); } catch (e) { loaded = { profile: M.newProfile(Date.now()), source: 'new', recovered: false, corrupt: false, hadSave: false }; }
 let profile = loaded.profile;
+// a brand new profile follows the system 'reduce motion' preference; a stored choice is never touched (meta.applyFreshDefaults)
+const freshDefaults = (p) => M.applyFreshDefaults(p, typeof matchMedia === 'function' ? matchMedia.bind(window) : null);
+if (!loaded.hadSave) freshDefaults(profile);
 // language before the first paint: the profile choice, else the one stored on this device, else the browser language (see I18N.md)
 initDataLang();   // names and descriptions of the data tables follow the language (before initLang so the first paint is already translated)
 await I18N.initLang({ profile: profile.settings.lang });
@@ -73,12 +76,14 @@ const app = {
     try { localStorage.setItem(M.SAVE_PREV_KEY, M.serialize(Object.assign({}, app.profile, { resume: null }))); } catch (e) { /* keep going */ }
     app.profile = np; profile = np; writeSave({ force: true }); app.applySettings(); app.openHub('tour');
   },
+  freshProfile: () => freshDefaults(M.newProfile(Date.now())),
   langNow: () => I18N.getLang(),
   setLangPref(pref) { app.profile.settings.lang = pref; app.save(); return I18N.setLangPref(pref); },
   applySettings() {
     const s = app.profile.settings;
     if (s.lang !== I18N.getLangPref()) I18N.setLangPref(s.lang);
     AudioFx.setVolume({ music: s.music, sfx: s.sfx });
+    AudioFx.mute(!!s.muted);
     document.body.classList.toggle('reduce', !!s.reduce);
     applyA11y(s);
     setStyle(); document.body.classList.add('doodle'); document.body.classList.remove('classic');
@@ -120,6 +125,7 @@ function resize() {
   const v = app.view;
   v.cw = cw; v.ch = ch; v.dpr = dpr; v.s = s; v.ox = (cw - W * s) / 2; v.oy = (ch - H * s) / 2;
   canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
+  ui.style.setProperty('--ox', v.ox / s + 'px');   // the blank space beside the 540 wide UI column, in UI px (screen corner widgets hang into it)
   ui.style.setProperty('--s', String(s));   // css px per ui px: menu tap targets are sized with it so they stay at least 44 css px
   ui.style.left = v.ox + 'px'; ui.style.height = ch / s + 'px'; ui.style.transform = 'scale(' + s + ')';
   const as = app.profile.settings.lowfx ? 1.25 : Math.max(1.5, Math.min(3, dpr * s));
@@ -148,17 +154,25 @@ function showTitle() {
   wrap.append(tap);
   ui.append(wrap);
   // first title screen: a small text row to pick the language (stays visible under the menu)
-  const langRow = h('div', { class: 'lang-row', style: 'position:absolute;left:0;right:0;top:385px;display:flex;justify-content:center;z-index:5;transform:scale(.8);transform-origin:top center' }, langPicker(app, false));
+  // It sits in the clear band between the logo (ends near y 370) and the heroes' hair (starts near y 470) of the 540x960 title art, which is centred on the screen: 50% of the UI height is art y 480, so the band starts 100 px above it (art y 380). The title
+  // art and this DOM share one scale and centre, so the band is the same on every screen shape (tests/drop_the_bass_r5_browser.test.mjs checks it).
+  const langRow = h('div', { class: 'lang-row', style: 'position:absolute;left:0;right:0;top:calc(50% - 100px);display:flex;justify-content:center;z-index:5;transform:scale(.8);transform-origin:top center' }, langPicker(app, false));
   langRow.addEventListener('pointerdown', (e) => e.stopPropagation());
   wrap.append(langRow);
+  // quick mute in the top right corner (44 px tap target, state in profile.settings.muted)
+  const mute = muteButton(app);
+  mute.style.cssText = 'position:absolute;right:calc(10px - var(--ox,0px) + env(safe-area-inset-right,0px));top:calc(10px + env(safe-area-inset-top,0px));z-index:6';
+  wrap.append(mute);
   const showMenu = () => {
     app.audio.init(); app.audio.resume(); app.applySettings(); app.audio.musicStart('title');
     tap.remove(); wrap.removeEventListener('pointerdown', showMenu);
     menu.replaceChildren(...[
       resume ? btn([h('span', { class: 'cr-t' }, t('title.continue_run', 'CONTINUE RUN')), h('span', { class: 'cr-s' }, resume.mode === 'endless' ? tn('tour.resume_info_endless', resume.turrets, '{stage}, wave {wave}, {n} turret (Endless)', '{stage}, wave {wave}, {n} turrets (Endless)', { stage: resume.stage, wave: resume.wave }) : tn('tour.resume_info', resume.turrets, '{stage}, wave {wave}, {n} turret', '{stage}, wave {wave}, {n} turrets', { stage: resume.stage, wave: resume.wave }))], () => resumeRun(), 'gold big cont-run') : null,
       started ? btn(resume ? t('title.to_hub', 'TO THE HUB') : t('title.continue', 'CONTINUE'), () => openHub(app.hubTab), resume ? 'green' : 'green big') : btn(t('title.play', 'PLAY'), () => newGame(), 'green big'),
-      started ? btn(t('title.new_game', 'New game'), () => { const m = modal(h('div', null, h('h2', null, t('title.start_over', 'Start over?')), h('div', { class: 'sub', style: 'text-align:center' }, t('title.start_over_hint', 'This deletes your current progress.')), h('div', { class: 'btnrow' }, btn(t('title.delete_start', 'Delete and start'), () => { m.close(); app.replaceProfile(M.newProfile(Date.now())); showTitle(); newGame(); }, 'red'), btn(t('common.cancel', 'Cancel'), () => m.close(), 'green')))); }, 'dark small') : null,
+      started ? btn(t('title.new_game', 'New game'), () => { const m = modal(h('div', null, h('h2', null, t('title.start_over', 'Start over?')), h('div', { class: 'sub', style: 'text-align:center' }, t('title.start_over_hint', 'This deletes your current progress.')), h('div', { class: 'btnrow' }, btn(t('title.delete_start', 'Delete and start'), () => { m.close(); app.replaceProfile(app.freshProfile()); showTitle(); newGame(); }, 'red'), btn(t('common.cancel', 'Cancel'), () => m.close(), 'green')))); }, 'dark small') : null,
       h('div', { class: 'btnrow', style: 'margin:0' }, btn(t('hub.settings', 'Settings'), () => settingsModal(app), 'dark small'), btn(t('settings.how_to', 'How to play'), () => showHowTo(app), 'dark small')),
+      // a returning player on a new device: only while this profile has never finished a run
+      !(p.stats && p.stats.runs > 0) ? h('button', { class: 'link-btn', type: 'button', 'data-title-import': '', onclick: () => importModal(app) }, t('title.import_save', 'Already played? Import your save')) : null,
     ].filter(Boolean));
     wrap.append(menu, h('div', { class: 'credit' }, t('title.credit', 'RoxorLoops & Jasmin  |  Keep the music live')));
     app.audio.play('ui_open');
@@ -474,6 +488,16 @@ function rerender() {
 app.rerender = rerender;
 I18N.onLang(() => { applyPageText(); app.rerender(); });
 
+// ------------------------------------------------------------------------------------------------ friend invite (?friend=Name)
+// Opening a friend link asks once. Nothing is added without a tap, and the parameter leaves the address bar as soon as the question is shown.
+function checkFriendInvite() {
+  let name = '';
+  try { name = friendFromSearch(location.search); } catch (e) { return; }
+  if (!/[?&]friend=/.test(location.search || '')) return;
+  try { history.replaceState(history.state, '', withoutFriendParam(location.pathname, location.search, location.hash)); } catch (e) { /* the address stays, the question is still asked once */ }
+  if (name) setTimeout(() => friendInviteModal(app, name), 500);
+}
+
 // ------------------------------------------------------------------------------------------------ boot
 resize();
 app.applySettings();
@@ -483,7 +507,13 @@ else if (loaded.corrupt) setTimeout(() => toast(t('toast.save_corrupt', 'Your sa
 document.getElementById('boot').remove();
 window.__dtbReady = true;
 Stats.init(() => app.profile.settings);
-initPwa();
+initPwa({ onOfflineReady: () => {
+  const hints = app.profile.tutorial && app.profile.tutorial.hints;
+  if (!hints || hints.offline_ready) return;
+  hints.offline_ready = true; app.save();
+  toast(t('pwa.offline_ready', 'Ready to play offline'), 3600);
+} });
+checkFriendInvite();
 requestAnimationFrame(frame);
 // autosave the run every few seconds so a reload, a discarded tab or a crash never loses turrets placed since the last wave
 setInterval(() => { try { saveResume(); } catch (e) { /* ignore */ } }, 4000);
