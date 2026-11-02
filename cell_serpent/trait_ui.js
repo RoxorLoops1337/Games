@@ -6,6 +6,10 @@ export const TRAIT_LABEL = {
   love: 'HEART PULSE', rust: 'CREAKY', grumpy: 'QUICK SURGES', disco: 'ON THE BEAT',
   sour: 'POP RUSH', mighty: 'HARD TO SLOW', frosty: 'ICE PATCH', sneezy: 'SNEEZE JOLT',
 };
+// stage 41+ (sim.js LATE_TRAIT_FROM): the same species one step meaner, with their own names
+export const LATE_LABEL = { love: 'SWEETHEART', rust: 'SEIZED UP', grumpy: 'SHORT FUSE', disco: 'BIG SWING', sour: 'SUGAR RUSH', mighty: 'IRON HIDE', frosty: 'DOUBLE FROST', sneezy: 'AFTERSHOCK' };
+export const LATE_CUE = { love: 'SWEETHEART', rust: 'SEIZED!', grumpy: 'SHORT FUSE!', disco: 'BIG SWING', sour: 'SUGAR RUSH!', mighty: 'IRON HIDE', frosty: 'DOUBLE FROST', sneezy: 'ACHOO x2' };
+export const traitLabel = (skin, stage) => (stage >= 41 && LATE_LABEL[skin]) || TRAIT_LABEL[skin] || '';
 export const hasTrait = (skin, stage, boss, mode) => !!TRAIT_LABEL[skin] && !boss && !mode && stage >= TRAIT_FROM;
 
 // icon centred on (x, y), radius r, ink on a round plate in the species colour
