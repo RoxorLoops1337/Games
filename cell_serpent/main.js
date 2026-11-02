@@ -119,7 +119,17 @@ function renderHub() {
   if (hubTab === 'Battle') renderBattle(); else if (hubTab === 'Skills') renderSkills(); else if (hubTab === 'Pets') renderPets(); else if (hubTab === 'Stats') hub2.renderStats(); else if (hubTab === 'Gear') hub2.renderGear(); else hub2.renderShop();
   if (stagKey !== hubTab) { stagKey = hubTab; if (hubTab !== 'Battle') motion.stagger($('tab' + hubTab)); }
 }
-for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { audio.unlock(); audio.play('click'); hubTab = b.dataset.tab; renderHub(); };
+for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { audio.unlock(); audio.play('click'); hubTab = b.dataset.tab; hubTabSwitch(); };
+// 17-perf: a tab tap paints the new pane at once (old content dimmed as a light skeleton) and builds it on the next frame, so the tap never freezes
+let hubSwitchTok = 0;
+function hubTabSwitch() {
+  const tok = ++hubSwitchTok, hb = $('hub');
+  for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x.dataset.tab === hubTab);
+  for (const t of TABS) $('tab' + t).classList.toggle('on', t === hubTab);
+  hb.classList.add('hub-skel');
+  const go = () => { if (tok !== hubSwitchTok) return; hb.classList.remove('hub-skel'); renderHub(); };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => setTimeout(go, 0)); else go();
+}
 
 function renderBattle() {
   const info = stageInfo(sel), playable = canPlay(save, sel), done = sel <= save.cleared;
@@ -169,13 +179,19 @@ function beginStage(stage) {
 // the stage picture: the lane for this stage with the serpent on it
 const stCtx = $('stCanvas').getContext('2d');
 const W_ = 720;
-let pvKey = -1, pvPath = null;
+let pvKey = -1, pvPath = null, pvBg = null, pvBgKey = '', pvLast = -1;
 function drawPreview(t) {
   if (!kit) return;
+  if (t - pvLast < 0.032 && t >= pvLast) return; pvLast = t;
   const c = stCtx, w = 400, h = 560, info = stageInfo(sel);
   if (pvKey !== sel) { pvKey = sel; pvPath = buildPath(sel); }
-  const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#2b2260'); gr.addColorStop(1, '#150f38'); c.fillStyle = gr; c.fillRect(0, 0, w, h);
-  { const sp = kit.SPECIES && kit.SPECIES[info.skin], gl = c.createRadialGradient(w / 2, h * 0.3, 10, w / 2, h * 0.3, w * 0.8); gl.addColorStop(0, (sp ? sp.base : '#8a7aff') + '55'); gl.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gl; c.fillRect(0, 0, w, h); }
+  // 17-perf: the backdrop (two gradients) is painted once per skin into a cached layer, then blitted; the picture itself runs at 30 fps
+  if (pvBgKey !== info.skin || !pvBg) {
+    pvBgKey = info.skin; pvBg = pvBg || document.createElement('canvas'); pvBg.width = w; pvBg.height = h; const b = pvBg.getContext('2d');
+    const gr = b.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#2b2260'); gr.addColorStop(1, '#150f38'); b.fillStyle = gr; b.fillRect(0, 0, w, h);
+    const sp = kit.SPECIES && kit.SPECIES[info.skin], gl = b.createRadialGradient(w / 2, h * 0.3, 10, w / 2, h * 0.3, w * 0.8); gl.addColorStop(0, (sp ? sp.base : '#8a7aff') + '55'); gl.addColorStop(1, 'rgba(0,0,0,0)'); b.fillStyle = gl; b.fillRect(0, 0, w, h);
+  }
+  c.drawImage(pvBg, 0, 0);
   const k = Math.min((w - 20) / 720, (h - 24) / 1280), ox = (w - 720 * k) / 2, oy = 12;
   c.save(); c.translate(ox, oy); c.scale(k, k);
   c.lineJoin = 'round'; c.lineCap = 'round'; c.beginPath(); pvPath.pts.forEach((q, i) => (i % 3 === 0 ? (i ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y)) : 0));

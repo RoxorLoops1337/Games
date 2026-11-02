@@ -754,6 +754,10 @@
   @media (max-height:700px){#accSlider{height:44px;bottom:calc(6px + env(safe-area-inset-bottom));border-width:2px;background:rgba(10,8,30,.42)}#accThumb{top:2px;left:calc(50% - 19px);width:36px;height:36px}#accSlider::before{font-size:13px;padding:0 14px}}
   @media (max-width:399px){.hubtop.big .cur{font-size:12px;padding:3px 5px 3px 3px;gap:2px}.hubtop.big .cur img{width:18px;height:18px}.hubtop.huge .cur{font-size:10px;padding-right:3px}.hubtop.big .plus{width:20px;height:20px;min-width:20px;min-height:20px}}
   /* end @css:20-qa */
+  /* @css:17-perf */
+  .hub-skel .tab.on>*{opacity:.35;pointer-events:none;transition:opacity .12s}
+  .hub-skel .tab.on{animation:none}
+  /* end @css:17-perf */
 </style>
 </head>
 <body>

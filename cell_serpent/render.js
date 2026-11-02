@@ -494,7 +494,18 @@ export function createRenderer(canvas, art, kit) {
 
     for (const sn of g.snakes) if (sn.surge === 'warn') { const h = sn.segs[0]; text('!', h.x, h.y - h.r - 34 + Math.sin(S.t * 20) * 4, 40, '#ff3d5a', '#0b1020'); }
     // Encore blast: the beam, the meter by the duo, and the tap hint
-    if (g.beam) { const bw = (g.beam.w || 36), a = Math.min(1, g.beam.t * 3), x = g.beam.x; ctx.save(); ctx.globalCompositeOperation = 'lighter'; const bg = ctx.createLinearGradient(x - bw * 1.7, 0, x + bw * 1.7, 0); bg.addColorStop(0, 'rgba(255,200,60,0)'); bg.addColorStop(0.35, `rgba(255,210,90,${0.55 * a})`); bg.addColorStop(0.5, `rgba(255,255,230,${a})`); bg.addColorStop(0.65, `rgba(255,210,90,${0.55 * a})`); bg.addColorStop(1, 'rgba(255,200,60,0)'); ctx.fillStyle = bg; ctx.fillRect(x - bw * 1.7, 0, bw * 3.4, g.p.y); ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fillRect(x - bw * 0.18, 0, bw * 0.36, g.p.y); ctx.restore(); }
+    if (g.beam) {   // 17-perf: the beam profile is baked once (a 1-row strip), stretched to the beam: no gradient per frame
+      const bw = (g.beam.w || 36), a = Math.min(1, g.beam.t * 3), x = g.beam.x, ww = bw * 3.4;
+      const spr = kit && kit.bake('beam|strip', 96, 4, q => {
+        q.globalCompositeOperation = 'lighter'; const bg = q.createLinearGradient(-48, 0, 48, 0);
+        bg.addColorStop(0, 'rgba(255,200,60,0)'); bg.addColorStop(0.35, 'rgba(255,210,90,.55)'); bg.addColorStop(0.5, 'rgba(255,255,230,1)'); bg.addColorStop(0.65, 'rgba(255,210,90,.55)'); bg.addColorStop(1, 'rgba(255,200,60,0)');
+        q.fillStyle = bg; q.fillRect(-48, -2, 96, 4); q.fillStyle = '#fff'; q.fillRect(-48 * 0.106, -2, 96 * 0.106, 4);
+      });
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a;
+      if (spr) ctx.drawImage(spr.c, x - ww / 2, 0, ww, g.p.y);
+      else { ctx.fillStyle = '#ffe9a0'; ctx.fillRect(x - bw * 0.6, 0, bw * 1.2, g.p.y); }
+      ctx.restore();
+    }
     hud.encore(g);   // the meter lives in hud.js
     if (ui && ui.hints) drawHints(ctx, g, S, { glow, text });   // first-run guide (hints.js)
     hud.combo(g);
