@@ -154,6 +154,7 @@ export function createRenderer(canvas, art, kit) {
         }
         if (e.carry === 'chest' && !OPT.reduceMotion) S.props.push({ k: 'chest', x: e.x, y: e.y, vx: (Math.random() - 0.5) * 80, vy: -300, rot: 0, life: 0.9, max: 0.9, size: e.r * 2.6 });
         if (e.carry === 'chest') { ring(e.x, e.y, 150, '#ffd84d', 0.5); shaped(e.x, e.y, 8, 's', ['#ffd84d', '#fff', '#ff7eb6'], 330, 0.7, 10, 200); }
+        if (e.head && S.bgfx && !OPT.reduceMotion) S.bgfx.headKill(S.t, e.x, e.y);   // 03-backgrounds b8: squall or petal storm
         if (e.head) { S.trauma = Math.min(1, S.trauma + 0.5); if (kit && !OPT.reduceMotion && S.props.length < 8) S.props.push({ k: 'dazed', skin: e.skin, x: e.x, y: e.y, vx: 0, vy: -90, rot: 0, life: 1.15, max: 1.15, size: e.r * 3.9 }); }   // 01-enemy-art r7: a dazed face floats up with its halo
         break;
       }
