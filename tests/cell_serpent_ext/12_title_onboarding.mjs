@@ -73,3 +73,16 @@ console.log('12_title_onboarding ok');
     assert.equal(goal > 0, stage === 1, 'goal line only on stage 1, stage ' + stage);
   }
 }
+// round 5: title snake, tutorial shot art, first-pop celebration
+{
+  const o5 = await import(join(root, 'onboard5.js'));
+  const src5 = readFileSync(join(root, 'onboard5.js'), 'utf8'), main5 = readFileSync(join(root, 'main.js'), 'utf8');
+  assert.equal(o5.setupTitleSnake(null, null), null, 'no host: no snake');
+  assert.equal(o5.tutorialShotArt(null), null, 'no kit: no shot art');
+  assert.equal(o5.tutorialShotHTML(null), '', 'no art: the old css shot is used');
+  assert.ok(o5.tutorialShotHTML({ shot: 'a', crit: 'b', spark: 'c' }).includes('tpop'), 'pop sticker markup');
+  assert.equal(o5.needsFirstPop({ runs: 0 }), true); assert.equal(o5.needsFirstPop({ runs: 1 }), false, 'only brand new accounts');
+  assert.ok(main5.includes("setupTitleSnake($('title'), kit)") && main5.includes('firstPop(audio, buzz)'), 'wired in main');
+  assert.ok(html.includes('.snake5') && html.includes('note5') && html.includes('fpcard5'), 'css present');
+  assert.ok(!/—/.test(src5), 'no em dash in onboard5');
+}

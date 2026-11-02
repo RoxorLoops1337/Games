@@ -1,6 +1,7 @@
 // Title and first-run onboarding: tap-the-animals easter egg, the one-time 3-step wordless tutorial before the
 // very first run, the one-time "tap a pet" hub hint, and a rich demo loadout for the title backdrop.
 // Flags live in their own localStorage keys so the save format never changes.
+import { tutorialShotArt, tutorialShotHTML } from './onboard5.js';
 const KEY_TUT = 'cell_serpent_tut12', KEY_PET = 'cell_serpent_pethint12';
 const getFlag = k => { try { return localStorage.getItem(k) === '1'; } catch (e) { return false; } };
 const setFlag = k => { try { localStorage.setItem(k, '1'); } catch (e) { /* ignore */ } };
@@ -50,11 +51,12 @@ export function tutorialArt(kit, art) {
 export function showTutorial(onDone, audio, kit, art) {
   const el = document.createElement('div'); el.className = 'tut12'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'How to play');
   const A = tutorialArt(kit, art || (window.CS && window.CS.art)), im = (u, c) => u ? `<img class="${c}" alt="" src="${u}">` : '';
+  const SH = A ? tutorialShotHTML(tutorialShotArt(kit)) : '';
   const duo = A && A.duo ? im(A.duo, 'tduo') : '<i class="tcell"></i>';
-  el.classList.toggle('art12', !!A);
+  el.classList.toggle('art12', !!A); el.classList.toggle('shot5', !!SH);
   el.innerHTML = `<div class="tbox">
     <div class="tstep s1 on"><div class="tcap">SLIDE</div><div class="tbar">${duo}<b class="tfinger">\u{1F446}</b></div><div class="tarrows"><em>◀</em><em>▶</em></div></div>
-    <div class="tstep s2"><div class="tcap">SHOOT</div><div class="tgold">${A ? im(A.gold, 'tyelimg') : '<i class="tyel">★</i>'}<i class="tshot"></i><i class="tburst"></i></div><div class="tbar">${duo}</div></div>
+    <div class="tstep s2"><div class="tcap">SHOOT</div><div class="tgold">${A ? im(A.gold, 'tyelimg') : '<i class="tyel">★</i>'}${SH || '<i class="tshot"></i><i class="tburst"></i>'}</div><div class="tbar">${duo}</div></div>
     <div class="tstep s3"><div class="tcap">POP THE FACE</div><div class="tchain">${A ? im(A.cell, 'tseg') + im(A.cell, 'tseg') + im(A.cell, 'tseg') : '<i></i><i></i><i></i>'}<div class="tface"><span class="tshield"></span>${A ? im(A.head, 'thead') : '<b>\u{1F40D}</b>'}</div></div><div class="tbar">${duo}</div></div>
     <div class="tdots"><i class="on"></i><i></i><i></i></div>
     <div class="tbtns"><button class="tskip" type="button">SKIP</button><button class="tnext" type="button" aria-label="Next">▶</button></div></div>`;
