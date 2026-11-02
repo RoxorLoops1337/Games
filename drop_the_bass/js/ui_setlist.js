@@ -4,14 +4,14 @@ import { WORLD_BY_ID } from './data_core.js';
 import { HERO_ABILITIES, RUN_MODIFIERS, RUN_MODIFIER_BY_ID, MAX_RUN_MODIFIERS } from './data_depth.js';
 import * as M from './meta.js';
 import { t, tn } from './i18n.js';
-import { h, canvasOf, icon, modal, toast, btn, AW } from './ui_core.js';
+import { h, canvasOf, icon, modal, toast, btn, AW, hubHint } from './ui_core.js';
 
 const WHO = [['roxor', 'RoxorLoops', 'var(--green)'], ['jasmin', 'Jasmin', 'var(--pink)']];
 const pct = (v) => (v > 1 ? '+' + Math.round((v - 1) * 100) + '%' : v < 1 ? '-' + Math.round((1 - v) * 100) + '%' : '0%');
 const times = (v) => 'x' + (Math.round(v * 100) / 100);
 export const modeLabel = (cfg) => (cfg.mode === 'daily' ? (cfg.weekly ? t('mode.weekly', 'Weekly Gig') : t('mode.daily', 'Daily Challenge')) : cfg.mode === 'endless' ? t('mode.endless', 'Endless') : cfg.mode === 'rush' ? t('mode.rush', 'Boss Rush') : cfg.encore ? t('mode.story_encore', 'Story, Encore {n}', { n: cfg.encore }) : t('mode.story', 'Story'));
 // flame icons for a number of flames (0 shows a calm dash)
-export function flames(n, px = 18) { return h('span', { class: 'flames', 'aria-label': tn('setlist.flames_aria', n, '{n} flame', '{n} flames') }, n > 0 ? Array.from({ length: Math.min(5, n) }, () => icon('fire', px, '#ff7a1a')) : h('span', { class: 'sub' }, '-')); }
+export function flames(n, px = 18) { return h('span', { class: 'flames', 'aria-label': tn('setlist.flames_aria', n, '{n} flame', '{n} flames') }, n > 0 ? [Array.from({ length: Math.min(5, n) }, () => icon('fire', px, '#ff7a1a')), h('span', { class: 'cb-n' }, 'x' + n)] : h('span', { class: 'sub' }, '-')); }
 export const riskName = (n) => (n <= 0 ? t('risk.none', 'No risk') : n <= 2 ? t('risk.spicy', 'Spicy') : n <= 4 ? t('risk.hot', 'Hot') : t('risk.inferno', 'Inferno'));
 
 export function setlistSheet(app, cfg) {
@@ -85,5 +85,6 @@ export function setlistSheet(app, cfg) {
   }
   draw();
   app.audio.play('ui_open');
+  hubHint(app, 'hint_setlist');
   return m;
 }

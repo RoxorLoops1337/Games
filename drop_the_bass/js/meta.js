@@ -45,7 +45,7 @@ export function newProfile(now = 0) {
     skins: { owned: [SKIN_DEFAULT] }, milestones: { claimed: {}, cosmetics: [] },
     seen: { turrets: {}, enemies: {}, bosses: {}, relics: {} },
     autoMerge: false, autoMergeOn: true,
-    settings: { style: 'doodle', lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1, difficulty: 'normal', skin: SKIN_DEFAULT, analytics: true, skipSetlist: false, lang: 'auto' },
+    settings: { style: 'doodle', lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1, difficulty: 'normal', skin: SKIN_DEFAULT, analytics: true, skipSetlist: false, lang: 'auto', colorblind: false, autolow: true, bigtext: false },
   };
 }
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -110,6 +110,7 @@ export function migrate(p, now = 0) {
   s.difficulty = DIFFICULTY_IDS.includes(s.difficulty) ? s.difficulty : 'normal';
   s.analytics = s.analytics === undefined ? true : !!s.analytics;
   s.skipSetlist = !!s.skipSetlist;
+  s.colorblind = !!s.colorblind; s.bigtext = !!s.bigtext; s.autolow = s.autolow === undefined ? true : !!s.autolow;   // accessibility (js/a11y.js); autolow: drop to low graphics when the frame rate stays low
   s.lang = ['en', 'da', 'nl', 'de'].includes(s.lang) ? s.lang : 'auto';   // 'auto' follows the device language
   // second tour fields: ability picks, pinned modifiers, epilogues seen, board skins, claimed Endless milestones
   out.story.epilogues = isObj(out.story.epilogues) ? Object.fromEntries(Object.entries(out.story.epilogues).filter(([k, v]) => WORLD_BY_ID[k] && v).map(([k]) => [k, true])) : {};
@@ -434,6 +435,11 @@ export function skinList(p, names) {
     return { id, name: n.name, desc: n.desc, price: SKIN_PRICES[id], owned, worn: p.settings.skin === id };
   });
 }
+// true when the player can pay for at least one stage skin or unlocked outfit they do not own yet (drives the one-time "something to buy" hint)
+export function cosmeticAffordable(p) {
+  if (SKIN_IDS.some((id) => SKIN_PRICES[id] > 0 && !p.skins.owned.includes(id) && p.diamonds >= SKIN_PRICES[id])) return true;
+  return ['roxor', 'jasmin'].some((who) => outfitList(p, who).some((o) => !o.owned && !o.locked && o.price > 0 && p.diamonds >= o.price));
+}
 export function buySkin(p, id) {
   if (SKIN_PRICES[id] === undefined) return { ok: false, reason: 'unknown' };
   if (p.skins.owned.includes(id)) return { ok: false, reason: 'owned' };
@@ -698,6 +704,9 @@ export function isoWeek(now) {
   const week = Math.floor((thu - Date.UTC(year, 0, 1)) / DAY / 7) + 1;
   return { year, week, id: year + '-W' + String(week).padStart(2, '0'), start: t - dow * DAY, end: t - dow * DAY + 7 * DAY };
 }
+// ms until the Daily Challenge changes (next local midnight, the same clock as dayOf) and until the next ISO week starts (Monday 00:00 UTC)
+export const dailyResetMs = (now) => Math.max(0, (dayOf(now) + 1) * DAY + new Date(now).getTimezoneOffset() * 60000 - now);
+export const weeklyResetMs = (now) => Math.max(0, isoWeek(now).end - now);
 export function weeklyGig(p, now) {
   const w = isoWeek(now);
   const gig = WEEKLY_GIGS[(w.year * 53 + w.week) % WEEKLY_GIGS.length];

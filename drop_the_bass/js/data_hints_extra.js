@@ -8,4 +8,10 @@ export const HINTS_EXTRA = {
   hint_reroll:     { title: 'Not the turret you wanted?', text: 'The two round arrows under the board re-roll the next drop. Coins first, or gems when you are short. Setlist rerolls are free.' },
   hint_bossphase:  { title: 'Boss phase!', text: 'Bosses change tricks as they lose health. Watch the notches on the boss bar: each one is a new phase. Stay flexible.' },
   hint_hero_ready: { title: 'Hero move ready', text: 'Roxor and Jasmin are charged up. Tap their portraits for the move shown under each one. Save it for a boss or a big wave.' },
+  // ---- hub flows (shown once per profile by hubHint in ui_core.js)
+  hint_setlist:     { title: 'Your Setlist', text: 'Before a run, pick a hero move for Roxor and Jasmin. Modifiers are optional: each one makes the run harder and pays more Records, Fans and diamonds. Tap a modifier to read it.' },
+  hint_wardrobe:    { title: 'The Wardrobe', text: 'Outfits and Stage skins are pure style. Tap one to wear it and swipe sideways for more. Some unlock by playing, some cost diamonds.' },
+  hint_skin_buy:    { title: 'Something to buy', text: 'You have enough diamonds for a new look. Tap the price to buy it. Outfits and skins change how things look, never how the game plays.' },
+  hint_studio_scene: { title: 'Backstage', text: 'This is your stage. Every Studio upgrade adds a prop here: amps, a riser, lights, even a tour van. Your hero level and outfits show up too.' },
+  hint_weekly:      { title: 'Weekly Gig', text: 'One special run each week, the same for everyone. The first try pays a big reward, replays pay half Records. The timer shows when it resets.' },
 };

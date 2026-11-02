@@ -78,10 +78,12 @@ export function showPause(app, battle) {
 }
 
 // ------------------------------------------------------------------------------------------------ hints
+// glyph per coach mark (hub hints included); anything unlisted shows the lock
+const HINT_ICON = { boss: 'crown', chest: 'gift', mod: 'bolt', hint_setlist: 'mic', hint_wardrobe: 'sparkle', hint_skin_buy: 'diamond', hint_studio_scene: 'speaker', hint_weekly: 'ticket' };
 export function showHint(app, id, done) {
   const hint = HINTS[id];
   const isEnemy = !!ENEMIES[id];
-  const ic = isEnemy ? enemyIcon(id, 90) : id === 'boss' ? icon('crown', 70) : id === 'chest' ? icon('gift', 70) : id === 'mod' ? icon('bolt', 70) : icon('lock', 70);
+  const ic = isEnemy ? enemyIcon(id, 90) : icon(HINT_ICON[id] || 'lock', 70);
   const m = modal(h('div', { class: 'hint-card' }, h('h2', null, isEnemy ? t('run.hint.new_static', 'New Static: {title}', { title: hint.title }) : hint.title), h('div', { style: 'text-align:center' }, ic), h('p', null, hint.text),
     h('div', { class: 'btnrow' }, btn(t('run.hint.got_it', 'Got it!'), () => m.close(), 'green'))), { sticky: true, onClose: done });
   app.audio.play('ui_open');

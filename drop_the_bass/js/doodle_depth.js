@@ -3,7 +3,7 @@
 // per-battle effect state in `b.dx` (freeze timer, dark lane band, coin rain, shield pings...). No Math.random, no Date: jitter comes from hashes
 // and the battle clock. Crayon look: no glow, no gradients. Every function leaves the ctx state as it found it (save/restore).
 import { W, H, COLS, TURRETS, BOSSES, COL, BOARD_X, BOARD_Y, BOARD_W, BOARD_H, TILE, TURRET_PARTNERS, SYNERGY_BY_ID } from './data_core.js';
-import { TURRET_BRANCHES, BRANCH_BY_ID, BOSS_PHASE_EFFECTS, RUN_MODIFIER_BY_ID, BRANCH_LEVEL } from './data_depth.js';
+import { TURRET_BRANCHES, BRANCH_BY_ID, BOSS_PHASE_EFFECTS, RUN_MODIFIER_BY_ID, BRANCH_LEVEL, ENDLESS_MILESTONES } from './data_depth.js';
 import * as AE from './art_entities.js';
 import * as K from './doodle_kit.js';
 import * as DH from './doodle_hud.js';
@@ -20,8 +20,9 @@ export const ABILITY_GLYPH = { blast: 'wave', freeze: 'snow', overclock: 'bolt',
 export const ABILITY_SHORT = { blast: 'Blast', freeze: 'Freeze', overclock: 'Overclock', song: 'Song', coinrain: 'Coin Rain', shield: 'Shield' };
 export const ABILITY_COLOR = { blast: C.lime, freeze: C.sky, overclock: C.orange, song: C.pink, coinrain: C.gold, shield: C.sky };
 
-// ---- hit rectangles (logical units). The pool strip cannot be taller: the board ends at y 840 and the DROP row starts at 872.
-export const POOL_HIT = { x: 90, y: 838, w: 360, h: 34 };
+// ---- hit rectangles (logical units). The board ends at y 840 and the DROP row hit starts at 901 (battle.js ROW_HIT): the pool strip gets the 61
+// units in between, which is 44 px on a 390 wide phone. The drawn strip (R.pool) is smaller, the icons sit in its middle.
+export const POOL_HIT = { x: 90, y: 840, w: 360, h: 61 };
 export function modsHit(b) { const n = (b.run.modifiers || []).length; return n ? { x: 496, y: 122, w: 44, h: 14 + 31 * n } : null; }
 const inR = (r, x, y) => r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 export function poolIndexAt(b, x, y) {
@@ -29,6 +30,40 @@ export function poolIndexAt(b, x, y) {
   const n = b.pool.odds.length; if (!n) return -1;
   const r = R.pool, pitch = Math.min(29, (r.w - 16) / n), x0 = r.x + r.w / 2 - (n - 1) * pitch / 2;
   return clamp(Math.round((x - x0) / pitch), 0, n - 1);
+}
+
+// ---- accessibility: the colour-blind cue switch (profile setting, default off). Every cue in this file and doodle_battle.js asks this one function.
+export const cbOn = (b) => !!(b && b.prof && b.prof.settings && b.prof.settings.colorblind === true);
+
+// ---- endless milestones: the next one not yet reached and how far the run is towards it (null outside endless or when all are reached)
+export function milestoneInfo(run) {
+  if (!run || !run.endless) return null;
+  const done = run.milestones || [];
+  let prev = 0;
+  for (const m of ENDLESS_MILESTONES) {
+    if (!done.includes(m.id)) return { id: m.id, wave: m.wave, name: m.name, prev, frac: clamp(((run.wave || 0) - prev) / Math.max(1, m.wave - prev), 0, 1) };
+    prev = m.wave;
+  }
+  return null;
+}
+// the chip hangs under the wave pill; it hides behind the boss bar (which sits at the same height) and flashes when a milestone is reached
+export const MS_CHIP = { x: 262, y: 108, w: 138, h: 23 };
+export function drawMilestoneChip(b, ctx, t) {
+  const mi = milestoneInfo(b.run); if (!mi) return;
+  if (b.run.enemies.some((e) => e.boss)) return;
+  const c = MS_CHIP, fl = b.msFlash || 0, pulse = fl > 0 ? 0.5 + 0.5 * Math.sin(t * 22) : 0;
+  DH.setHudTime(t);
+  ctx.save();
+  const sc = 1 + fl * 0.12; ctx.translate(c.x + c.w / 2, c.y + c.h / 2); ctx.scale(sc, sc); ctx.translate(-(c.x + c.w / 2), -(c.y + c.h / 2));
+  DH.glass(ctx, c.x, c.y, c.w, c.h, 8, { edge: fl > 0 ? C.gold : C.lav });
+  if (fl > 0) { ctx.globalAlpha = 0.35 + 0.4 * pulse; ctx.fillStyle = C.gold; DH.rrect(ctx, c.x, c.y, c.w, c.h, 8); ctx.fill(); ctx.globalAlpha = 1; }
+  AE.drawGlyph(ctx, 'star', c.x + 13, c.y + 9.5, 16, C.gold);
+  DH.text(ctx, BT.goalWave(mi.wave), c.x + 24 + (c.w - 30) / 2, c.y + 9, 13, INK, 'center', 900, { maxW: c.w - 34 });
+  // progress bar along the bottom edge of the chip
+  const bx = c.x + 9, bw = c.w - 18, by = c.y + c.h - 6;
+  ctx.fillStyle = INK; ctx.fillRect(bx - 1.5, by - 1.5, bw + 3, 6); ctx.fillStyle = '#fffdf4'; ctx.fillRect(bx, by, bw, 3);
+  ctx.fillStyle = fl > 0 ? C.gold : C.pink; ctx.fillRect(bx, by, bw * (fl > 0 ? 1 : mi.frac), 3);
+  ctx.restore();
 }
 
 // ---- state
@@ -125,6 +160,7 @@ export function drawBranchPanel(b, ctx, tu, box) {
     DH.glass(ctx, c.x, c.y + dy, c.w, c.h, 14, { edge: def.color, glow: i === 0 ? null : null });
     ctx.save(); ctx.globalAlpha = 0.5 + 0.4 * k; ctx.setLineDash([8, 7]); ctx.lineDashOffset = -t * 20; DH.rrect(ctx, c.x - 2, c.y + dy - 2, c.w + 4, c.h + 4, 16); ctx.strokeStyle = def.color; ctx.lineWidth = 3; ctx.stroke(); ctx.restore();
     emblem(ctx, c.x + 30, c.y + dy + 32, 20, c.glyph, def.color);
+    if (cbOn(b)) { ctx.save(); disc(ctx, c.x + 10, c.y + dy + 10, 9, i ? C.yellow : C.paper); ctx.restore(); DH.text(ctx, i ? 'B' : 'A', c.x + 10, c.y + dy + 10.5, 13, INK, 'center', 900, { maxW: 14 }); }
     DH.text(ctx, fitText(ctx, c.name, c.w - 66, 17), c.x + 58, c.y + dy + 20, 17, INK, 'left');
     DH.wrapText(ctx, c.desc, c.x + 58, c.y + dy + 42, c.w - 66, 12, 15, INK, 'left', 3);
     DH.text(ctx, BT.tap(), c.x + 30, c.y + dy + c.h - 14, 11, def.color === C.yellow ? '#b8780a' : def.color, 'center', 900, { maxW: 50 });
@@ -144,6 +180,10 @@ export function drawBranchBadge(b, ctx, tu, t) {
 export function drawBranchMark(b, ctx, tu) {
   const br = branchOf(tu); if (!br) return;
   emblem(ctx, tu.x + 24, tu.y + 22, 10, br.glyph, TURRETS[tu.type].color);
+  if (cbOn(b)) {   // which of the two paths: a letter on the corner of the emblem
+    const i = Math.max(0, (TURRET_BRANCHES[tu.type] || []).findIndex((q) => q.id === tu.branch));
+    ctx.save(); disc(ctx, tu.x + 33, tu.y + 31, 7, i ? C.yellow : C.paper); ctx.restore(); DH.text(ctx, i ? 'B' : 'A', tu.x + 33, tu.y + 31.5, 10, INK, 'center', 900, { maxW: 10 });
+  }
 }
 
 // ================================================================================================ 2. boss phases and turret marks
@@ -161,7 +201,14 @@ export function drawDarkLane(b, ctx, t) {
     dir = -dir;
   }
   ctx.stroke(); ctx.restore();
-  const cx = (x0 + x1) / 2;
+  const cx = (x0 + x1) / 2, cb = cbOn(b);
+  if (cb) {   // colour-blind cue: a second hatch the other way (a cross-hatch is never a normal tile) and a dashed border with a lock
+    ctx.save(); ctx.globalAlpha = a * 0.45; ctx.strokeStyle = '#3a3347'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath();
+    for (let y = y0 + 6; y < y1; y += 26) { ctx.moveTo(x0 + 4, y + 9); ctx.lineTo(x1 - 4, y); }
+    ctx.stroke(); ctx.globalAlpha = a; ctx.setLineDash([12, 8]); ctx.lineDashOffset = -t * 14; ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.strokeRect(x0 + 2, y0 + 2, x1 - x0 - 4, y1 - y0 - 4);
+    ctx.restore();
+    ctx.save(); ctx.globalAlpha = a; AE.drawGlyph(ctx, 'lock', cx - 70, y0 + 43, 22, INK); AE.drawGlyph(ctx, 'lock', cx + 70, y0 + 43, 22, INK); ctx.restore();
+  }
   ctx.save(); ctx.globalAlpha = a; DH.glass(ctx, cx - 58, y0 + 30, 116, 26, 9, { edge: C.purple }); DH.text(ctx, BT.darkLane(Math.ceil(Math.max(0, left))), cx, y0 + 43, 13, INK, 'center', 900, { maxW: 104 }); ctx.restore();
 }
 // a gray smudge on turrets that are jammed, in the dark or stolen
@@ -231,9 +278,25 @@ export function phaseTicks(b, boss) {
   const at = list.map((p) => p.at).filter((v) => v > 0 && v < 1);
   return at.length ? at : null;
 }
+// the notches drawn on the boss bar (the Mr. Playback fallback when the sim lists no phases)
+export function bossTicks(b, boss) { return phaseTicks(b, boss) || (boss.type === 'playback' ? [0.33, 0.66] : null); }
+// colour-blind cue: each notch carries the number of the phase it leads to (the highest threshold starts phase 2); phases already reached are filled
+function drawPhaseNumbers(b, ctx, boss, bx, by, bw, phase) {
+  const ticks = bossTicks(b, boss); if (!ticks) return;
+  const desc = ticks.slice().sort((a, c) => c - a);
+  ctx.save(); ctx.lineCap = 'round';
+  desc.forEach((at, i) => {
+    const x = bx + bw * at, y = by + 31, n = i + 2, reached = phase >= n;
+    ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, by + 18); ctx.lineTo(x, y - 6); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, 8, 0, TAU); ctx.fillStyle = reached ? C.red : C.paper; ctx.fill(); ctx.lineWidth = 2.6; ctx.stroke();
+    DH.text(ctx, String(n), x, y + 0.5, 12, reached ? '#fff' : INK, 'center', 900, { maxW: 12 });
+  });
+  ctx.restore();
+}
 // the shield strip and "PHASE n/m" tag on the boss bar
 export function drawBossHud(b, ctx, boss, bx, by, bw, t) {
   const info = b.run.bossInfo ? b.run.bossInfo(boss.id) : null; if (!info) return;
+  if (cbOn(b)) drawPhaseNumbers(b, ctx, boss, bx, by, bw, info.phase || 1);
   if (info.shieldFrac > 0) {
     ctx.save(); ctx.fillStyle = INK; ctx.fillRect(bx, by + 19.5, bw, 5.5); ctx.fillStyle = C.sky; ctx.fillRect(bx + 1, by + 20.5, (bw - 2) * info.shieldFrac, 3.5); ctx.restore();
   }
