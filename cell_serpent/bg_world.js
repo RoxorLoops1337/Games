@@ -2,6 +2,7 @@
 // a few cheap animated pieces (swinging spotlights, drifting motes, pulsing ring circle).
 import { W, H, LINE_Y } from './sim.js';
 import { mix } from './art_draw.js';
+import { bakeFloor, ringSurface, hasVinyl, rimOf } from './bg_floor.js';
 import { bakeStageExtras, drawClouds, drawFootlights, drawBossFx, drawCrowdLights, paintGrooves } from './bg_stage.js';
 
 const TAU = Math.PI * 2;
@@ -166,6 +167,26 @@ function nightSky(c, gr, stage) {
   }
 }
 
+// the sun climbs down the sky through the first stages and sets in the sunset stages, then a moon rises and climbs for the night
+function celestial(c, gr, boss, skin) {
+  const dim = boss ? 0.45 : 1;
+  if (gr.k < 0.62) {
+    const u = gr.k / 0.62, x = W * (0.2 + 0.6 * u), y = 470 + u * u * 330, rr = 46 + u * 22;
+    const g = c.createRadialGradient(x, y, rr * 0.4, x, y, rr * 4.2);
+    g.addColorStop(0, `rgba(255,${Math.round(240 - u * 90)},${Math.round(190 - u * 110)},${0.5 * dim})`); g.addColorStop(1, 'rgba(255,170,90,0)');
+    c.fillStyle = g; c.fillRect(x - rr * 4.2, y - rr * 4.2, rr * 8.4, rr * 8.4);
+    c.globalAlpha = dim; c.fillStyle = mix('#fff6d0', '#ff8a4a', u); c.beginPath(); c.arc(x, y, rr, 0, TAU); c.fill(); c.globalAlpha = 1;
+  }
+  if (gr.k > 0.55 && skin !== 'sleepy') {
+    const u = Math.min(1, (gr.k - 0.55) / 0.45), x = W * (0.82 - 0.55 * u), y = 760 - u * 440, rr = 30 + u * 6, a = Math.min(1, (gr.k - 0.55) * 5) * dim;
+    const g = c.createRadialGradient(x, y, rr * 0.6, x, y, rr * 4); g.addColorStop(0, `rgba(190,210,255,${0.3 * a})`); g.addColorStop(1, 'rgba(190,210,255,0)');
+    c.fillStyle = g; c.fillRect(x - rr * 4, y - rr * 4, rr * 8, rr * 8);
+    c.globalAlpha = a; c.fillStyle = '#eef2ff'; c.beginPath(); c.arc(x, y, rr, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(150,165,210,.45)'; for (const [dx, dy, dr] of [[-0.3, -0.2, 0.2], [0.25, 0.25, 0.26], [0.1, -0.45, 0.12]]) { c.beginPath(); c.arc(x + dx * rr, y + dy * rr, dr * rr, 0, TAU); c.fill(); }
+    c.globalAlpha = 1;
+  }
+}
+
 // everything static for a stage; c is a context already scaled to the W x H space
 // part 0: everything; part 1: only the sky; part 2: only what stands in front of the far skyline (scenery, floor, frame)
 export function bakeWorld(c, skin, boss, ring, th, stage = 1, part = 0) {
@@ -175,6 +196,7 @@ export function bakeWorld(c, skin, boss, ring, th, stage = 1, part = 0) {
     sky.addColorStop(0, mix(mix(w.top, gr.topT, gr.topA), '#05030f', dim)); sky.addColorStop(1, mix(mix(w.bot, gr.botT, gr.botA), '#1a0820', dim * 1.2));
     c.fillStyle = sky; c.fillRect(0, 0, W, H);
     nightSky(c, gr, stage);
+    celestial(c, gr, boss, skin);
     if (boss) { const rg = c.createRadialGradient(W / 2, 260, 20, W / 2, 260, 520); rg.addColorStop(0, 'rgba(255,60,90,.22)'); rg.addColorStop(1, 'rgba(255,60,90,0)'); c.fillStyle = rg; c.fillRect(0, 0, W, LINE_Y); }
     if (part === 1) return;
   }
@@ -186,6 +208,7 @@ export function bakeWorld(c, skin, boss, ring, th, stage = 1, part = 0) {
   const fl = c.createLinearGradient(0, LINE_Y, 0, H);
   fl.addColorStop(0, mix(w.near, th.base, 0.22)); fl.addColorStop(0.5, '#1a1038'); fl.addColorStop(1, '#07040f');
   c.fillStyle = fl; c.fillRect(0, LINE_Y, W, H - LINE_Y);
+  bakeFloor(c, skin);
   c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = 2;
   for (let i = 1; i < 9; i++) { c.beginPath(); c.moveTo(W / 2 + (i - 4.5) * 14, LINE_Y); c.lineTo(W / 2 + (i - 4.5) * 120, H); c.stroke(); }
   const pool = c.createRadialGradient(W / 2, H - 100, 10, W / 2, H - 100, 340); pool.addColorStop(0, 'rgba(255,225,170,.28)'); pool.addColorStop(1, 'rgba(255,225,170,0)');
@@ -246,17 +269,18 @@ export function beatPulse(t, stage, boss) {
   const bpm = boss ? 138 : 104 + (Math.floor(Math.max(0, stage - 1) / 5) % 6) * 3, ph = (t * bpm / 60) % 1;
   return Math.exp(-ph * 5.5);
 }
-export function drawRing(c, ring, t, boss, pulse, kit) {
-  const { cx, cy, R } = ring, beat = pulse === undefined ? 0.5 + 0.5 * Math.sin(t * 4.2) : pulse, hue = boss ? '255,50,90' : '255,90,140';
+export function drawRing(c, ring, t, boss, pulse, kit, skin = 'love') {
+  const { cx, cy, R } = ring, beat = pulse === undefined ? 0.5 + 0.5 * Math.sin(t * 4.2) : pulse, hue = rimOf(skin, boss);
   // a dark disc so the circle reads over any skyline, then the warm floor light on top of it; baked once, the beat is an alpha swing
   const paint = (b, x, y, bt) => {
     const dk = b.createRadialGradient(x, y, 10, x, y, R); dk.addColorStop(0, 'rgba(8,3,26,.5)'); dk.addColorStop(0.8, 'rgba(8,3,26,.58)'); dk.addColorStop(1, 'rgba(8,3,26,.7)');
     b.fillStyle = dk; b.beginPath(); b.arc(x, y, R, 0, TAU); b.fill();
     const fl = b.createRadialGradient(x, y, 20, x, y, R); fl.addColorStop(0, `rgba(255,225,170,${0.2 + bt * 0.1})`); fl.addColorStop(0.6, `rgba(${hue},.16)`); fl.addColorStop(1, `rgba(${hue},${0.36 + bt * 0.14})`);
     b.fillStyle = fl; b.beginPath(); b.arc(x, y, R, 0, TAU); b.fill();
-    paintGrooves(b, x, y, R, boss);
+    ringSurface(b, x, y, R, skin, boss);
+    if (hasVinyl(skin)) paintGrooves(b, x, y, R, boss);
   };
-  const disc = kit && kit.bake ? kit.bake('ringfloor3|' + boss + '|' + R, R * 2, R * 2, bb => paint(bb, 0, 0, 0.5), 1) : null;
+  const disc = kit && kit.bake ? kit.bake('ringfloor4|' + skin + '|' + boss + '|' + R, R * 2, R * 2, bb => paint(bb, 0, 0, 0.5), 1) : null;
   if (disc) { c.save(); c.globalAlpha = 0.85 + beat * 0.3 > 1 ? 1 : 0.85 + beat * 0.3; c.drawImage(disc.c, cx - R, cy - R); c.restore(); }
   else paint(c, cx, cy, beat);
   for (let i = 1; i <= 2; i++) { const ph = (t * 0.7 + i * 0.5) % 1; c.strokeStyle = `rgba(255,200,230,${0.25 * (1 - ph)})`; c.lineWidth = 3; c.beginPath(); c.arc(cx, cy, R * (0.3 + ph * 0.7), 0, TAU); c.stroke(); }
@@ -266,7 +290,7 @@ export function drawRing(c, ring, t, boss, pulse, kit) {
   c.restore();
   c.beginPath(); c.arc(cx, cy, R, 0, TAU);
   c.lineWidth = 11; c.strokeStyle = 'rgba(8,3,26,.55)'; c.stroke();
-  c.lineWidth = 5.5; c.strokeStyle = 'rgba(255,170,205,.95)'; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
+  c.lineWidth = 5.5; c.strokeStyle = `rgba(${hue},.95)`; c.setLineDash([22, 12]); c.lineDashOffset = -t * 20; c.stroke(); c.setLineDash([]);
   c.lineWidth = 1.5; c.strokeStyle = `rgba(255,255,255,${0.45 + beat * 0.3})`; c.beginPath(); c.arc(cx, cy, R - 6, 0, TAU); c.stroke();
   for (let i = 0; i < 24; i++) { const a = i / 24 * TAU, on = ((i + Math.floor(t * 6)) % 3) === 0; c.fillStyle = on ? '#fff3c4' : 'rgba(255,200,220,.5)'; c.beginPath(); c.arc(cx + Math.cos(a) * (R + 14), cy + Math.sin(a) * (R + 14), on ? 4 : 2.8, 0, TAU); c.fill(); }
 }
