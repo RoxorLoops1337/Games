@@ -9,6 +9,7 @@ import { createFeel6 } from './feel6.js';
 import { cardPose, cardFlair } from './card_flair.js';
 import { hasTrait, drawTraitIcon, traitLabel } from './trait_ui.js';
 import { actTitle, isActStart, isFinale, CREDITS, creditsHeight, deathCause } from './screen_b11.js';
+import { skipReady, FADE_OUT, RING_IN, RING_TAIL, ringProgress, ringEase, ringRadius, ringAlpha, gapFill } from './screen_b12j.js';
 import { recordTime, bestProg, recordProg, fmtSecs, nearMiss, mileSound } from './screen_b10.js';
 const CONFETTI = ['#ff7eb6', '#ffd84d', '#6fe3ff', '#9dff6d', '#c9a0ff', '#ffffff'];
 
@@ -24,7 +25,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     clear: null,
     sounds: [],
     beatFn: null,
-    mile: null, go: null, mileDone: 0, lastBoss: false, ph: '', cc: null, p2: null, p2Done: false, perf: 0, bestPrev: 0, deadBest: null, stName: '', cause: null,   // milestone ribbon, GO! pop, stage progress milestones already shown
+    mile: null, go: null, mileDone: 0, lastBoss: false, ph: '', cc: null, p2: null, p2Done: false, perf: 0, bestPrev: 0, deadBest: null, stName: '', cause: null, rf: null, nm: 0,   // milestone ribbon, GO! pop, stage progress milestones already shown
   };
   const calm = () => OPT.reduceMotion;
   let F6 = null;   // round 6 screen feel (feel6.js), built lazily because it needs edges/vignette/confetti below
@@ -69,7 +70,8 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       case 'stage': {
         const boss = !!e.boss;
         F.clear = null; F.mileDone = 0; F.mile = null; F.go = null; F.lastBoss = boss; F.p2 = null; F.p2Done = false; F.cc = null; F.perf = 0; F.deadBest = null; F.cause = null; F.stName = e.name || ''; F.bestPrev = g.mode ? 0 : bestProg(e.n, g.hard);
-        F.card = { n: e.n, boss, name: e.name || '', mod: e.mod || '', skin: g.skin, t: 0, dur: boss ? 2.9 : 2.3, slammed: false, trait: hasTrait(g.skin, e.n, boss, g.mode) ? g.skin : '', act: !boss && !g.mode && isActStart(e.n) ? actTitle(e.n) : '', actFx: false };
+        F.card = { n: e.n, boss, name: e.name || '', mod: e.mod || '', skin: g.skin, t: 0, dur: boss ? 2.9 : 2.3, slammed: false, trait: hasTrait(g.skin, e.n, boss, g.mode) ? g.skin : '', act: !boss && !g.mode && isActStart(e.n) ? actTitle(e.n) : '', actFx: false, ring: g.ring && !g.mode ? { x: g.ring.cx, y: g.ring.cy, r: g.ring.R } : null };
+        F.rf = null; F.nm = 0;
         F.deadT = 0;
         break;
       }
@@ -114,13 +116,14 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     F.deadBest = { prev, pct, isNew: prev > 0 && pct > prev }; F.cause = deathCause(g, F.stName);   // r11: what ended the run
     if (pct > prev) { recordProg(g.stage, g.hard, pct); F.bestPrev = pct; }
   }
-  const FIN_WIN = 230, FIN_LINE = 52, FIN_SPEED = 130, FIN_TRAVEL = creditsHeight(FIN_LINE) + FIN_WIN * 0.5;   // r11: stage 50 credits window, line height, scroll speed
+  const FIN_WIN = 250, FIN_LINE = 66, FIN_SPEED = 150, FIN_TRAVEL = creditsHeight(FIN_LINE) + FIN_WIN * 0.5;   // r11: stage 50 credits window, line height, scroll speed
   function startClear(g) {
     const stars = starsOf(g); if (!stars) return;
     F.clear = { boss: F.lastBoss, n: g.stage, stars, secs: Math.max(0, Math.floor(g.t || 0)), close: Math.round(clamp(g.faceMax || 0, 0, 1) * 100), skin: g.skin, fin: !g.mode && !g.hard && isFinale(g.stage, F.lastBoss), crown: false, best: false, phew: false, tagged: false, t: 0, shown: 0, dur: calm() ? 1.3 : STAR_T[2] + 0.95 };
     const c = F.clear; if (c.fin) c.dur = calm() ? 3.6 : STAR_T[2] + 0.5 + FIN_TRAVEL / FIN_SPEED + 1.4;
     if (!g.mode) { recordProg(g.stage, g.hard, 100); if (c.secs > 0) c.best = recordTime(g.stage, g.hard, c.secs).best; }
     c.phew = nearMiss(c.close);
+    if (c.phew && !c.best && !calm()) { F.nm = 0.0001; S.flash = Math.max(S.flash, 0.2); S.flashCol = '#ff8aa8'; }   // r12: the near miss, a held breath then relief
   }
   function starPath(x, y, r) {
     ctx.beginPath();
@@ -139,9 +142,10 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       }
     }
     if (c.boss && !c.crown && c.t >= 0.35) { c.crown = true; if (!calm()) { ring(130, H * 0.4 - 160, 200, '#ffd84d', 0.55); burst(130, H * 0.4 - 160, 18, ['#ffd84d', '#fff', '#ff9ad6'], 440, 0.7, 6); } }   // r11: the beaten boss head tumbles in
-    if (!c.tagged && (c.best || c.phew) && c.t >= (calm() ? 0.4 : STAR_T[2] + 0.1)) { c.tagged = true; F.sounds.push(c.best ? 'besttime' : 'phew'); if (!calm() && c.phew) S.trauma = Math.min(1, S.trauma + 0.2); }
+    if (!c.tagged && (c.best || c.phew) && c.t >= (calm() ? 0.4 : tagAt(c))) { c.tagged = true; F.sounds.push(c.best ? 'besttime' : 'phew'); if (!calm() && c.phew) S.trauma = Math.min(1, S.trauma + 0.2); }
     if (c.t > c.dur) F.clear = null;
   }
+  const tagAt = c => (c.phew && !c.best ? 0.45 : STAR_T[2] + 0.1);   // r12: PHEW lands right after the gasp, not after the stars
   // a pill under the clear card: NEW BEST TIME (gold) or PHEW (the face stopped a hair short of the line)
   function clearTag(c, y, ck) {
     const txt = c.best ? 'NEW BEST TIME' : 'PHEW!  ' + c.close + '% CLOSE', col = c.best ? '#ffd84d' : '#ff8aa8', pop = calm() ? 1 : backOut(clamp(ck, 0, 1));
@@ -150,6 +154,13 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     ctx.fillStyle = 'rgba(14,6,26,.88)'; ctx.beginPath(); ctx.roundRect(-w / 2, -30, w, 60, 30); ctx.fill();
     ctx.lineWidth = 5; ctx.strokeStyle = col; ctx.stroke();
     text(txt, 0, 0, 36, col, '#1a0a2e'); ctx.restore();
+    if (c.phew && !c.best && !c.fin) {   // r12: how little was left between the face and the line
+      const bw = 520, bx = W / 2 - bw / 2, by = y + 52, fk = gapFill(c.close, c.t - tagAt(c) - 0.2);
+      ctx.save(); ctx.fillStyle = 'rgba(14,6,26,.8)'; ctx.beginPath(); ctx.roundRect(bx - 4, by - 4, bw + 8, 28, 14); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.beginPath(); ctx.roundRect(bx, by, bw, 20, 10); ctx.fill();
+      if (fk > 0.02) { ctx.fillStyle = '#ff8aa8'; ctx.beginPath(); ctx.roundRect(bx, by, Math.max(14, bw * fk), 20, 10); ctx.fill(); }
+      ctx.fillStyle = '#ffd84d'; ctx.fillRect(bx + bw - 3, by - 8, 6, 36); ctx.restore();
+    }
   }
   const clearLine = c => Math.floor(c.secs / 60) + ':' + String(c.secs % 60).padStart(2, '0') + '  -  CLOSEST ' + c.close + '%';
   function drawClear() {
@@ -158,7 +169,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     ctx.save(); ctx.globalAlpha = out;
     if (F.perf > 0) perfectBehind(cy + 80);
     else if (c.fin) perfectBehind(cy + 80, t);
-    const bh = (c.fin ? 770 : 420) * inn, bt = cy - 210 * inn;
+    const bh = (c.fin ? 830 : 420) * inn, bt = cy - 210 * inn;
     const gr = ctx.createLinearGradient(0, 0, W, 0); gr.addColorStop(0, 'rgba(8,6,24,0)'); gr.addColorStop(0.1, 'rgba(8,6,24,.8)'); gr.addColorStop(0.9, 'rgba(8,6,24,.8)'); gr.addColorStop(1, 'rgba(8,6,24,0)');
     ctx.fillStyle = gr; ctx.fillRect(0, bt, W, bh);
     ctx.fillStyle = '#ffd84d'; ctx.fillRect(60, bt, W - 120, 4); ctx.fillRect(60, bt + bh - 4, W - 120, 4);
@@ -181,10 +192,10 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       ctx.restore();
     }
     { const ck = calm() ? clamp((t - 0.4) / 0.3, 0, 1) : clamp((t - STAR_T[2] + 0.25) / 0.35, 0, 1);   // r9: how long the song took and how close the serpent got
-      if (ck > 0 && c.secs > 0) { ctx.save(); ctx.globalAlpha *= ck; ctx.translate(0, (1 - ck) * 14); text(clearLine(c), W / 2, cy + 168, 30, '#cfd6ff', '#0b1020'); ctx.restore(); } }
-    if (c.best || c.phew) { const tk = calm() ? clamp((t - 0.4) / 0.2, 0, 1) : clamp((t - STAR_T[2] - 0.1) / 0.35, 0, 1); if (tk > 0) { ctx.save(); ctx.globalAlpha *= clamp(tk * 3, 0, 1); clearTag(c, cy + 238, tk); ctx.restore(); } }
+      if (ck > 0 && c.secs > 0) { ctx.save(); ctx.globalAlpha *= ck; ctx.translate(0, (1 - ck) * 14); text(clearLine(c), W / 2, cy + 168, 34, '#cfd6ff', '#0b1020'); ctx.restore(); } }
+    if (c.best || c.phew) { const tk = calm() ? clamp((t - 0.4) / 0.2, 0, 1) : clamp((t - tagAt(c)) / 0.35, 0, 1); if (tk > 0) { ctx.save(); ctx.globalAlpha *= clamp(tk * 3, 0, 1); clearTag(c, cy + 238, tk); ctx.restore(); } }
     if (c.boss) bossDown(c, cy - 165);
-    if (c.fin) credits(c, cy);
+    if (c.fin) { credits(c, cy); if (skipReady('fin', t) && !calm()) { ctx.save(); ctx.globalAlpha *= 0.55 + 0.25 * Math.sin(t * 4); text('TAP TO SKIP', W / 2, bt + bh - 34, 36, '#cfd6ff', '#0b1020'); ctx.restore(); } }
     if (F.perf > 0 && !c.fin) perfectBanner(cy + 300);
     ctx.restore();
   }
@@ -206,7 +217,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     ctx.save(); ctx.globalAlpha *= a; ctx.beginPath(); ctx.rect(0, top, W, FIN_WIN); ctx.clip();
     if (calm()) { text(CREDITS[0][1], W / 2, top + 70, 40, CREDITS[0][2], '#1a0a2e'); text(CREDITS[CREDITS.length - 1][1], W / 2, top + 150, 44, CREDITS[CREDITS.length - 1][2], '#1a0a2e'); ctx.restore(); return; }
     let y = top + FIN_WIN - Math.min(t * FIN_SPEED, FIN_TRAVEL);
-    for (const l of CREDITS) { if (!l[0]) { y += FIN_LINE * 0.6; continue; } if (y > top - 40 && y < top + FIN_WIN + 40) text(l[1], W / 2, y, l[0], l[2], '#1a0a2e'); y += FIN_LINE; }
+    for (const l of CREDITS) { if (!l[0]) { y += FIN_LINE * 0.6; continue; } if (y > top - 10 && y < top + FIN_WIN + 10) { const fa = clamp((y - top) / 60, 0, 1) * clamp((top + FIN_WIN - y) / 60, 0, 1); if (fa > 0.02) { ctx.save(); ctx.globalAlpha *= fa; text(l[1], W / 2, y, l[0], l[2], '#1a0a2e'); ctx.restore(); } } y += FIN_LINE; }   // r12: lines fade at the window edges instead of being cut
     ctx.restore();
   }
   // 3 stars: a slow gold sunburst behind the stars and a PERFECT! ribbon under them
@@ -246,7 +257,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     ctx.translate(W / 2, cy - 10); ctx.scale(inn, inn); ctx.rotate(-0.03);
     glow(0, 0, 300, '#ff2850', 0.3);
     text('SECOND VERSE!', 0, 0, 76, '#ffd84d', '#2a0310');
-    text('the boss means it now', 0, 62, 32, '#ffc2dc', '#2a0310');
+    text('the boss means it now', 0, 62, 38, '#ffc2dc', '#2a0310');
     ctx.restore();
   }
 
@@ -290,6 +301,8 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     if (F.clutchT > 0) F.clutchT = Math.max(0, F.clutchT - dt);
     feel6().update(dt, g);
     updateClear(dt);
+    if (F.rf) { const o = F.rf; o.t += dt; if (!o.hit && o.t >= RING_IN) { o.hit = true; F.sounds.push('star2'); ring(o.x, o.y, o.r * 1.7, '#6fe3ff', 0.5); ring(o.x, o.y, o.r * 1.15, '#ffd84d', 0.4); burst(o.x, o.y, 12, ['#6fe3ff', '#fff', '#ffd84d'], 380, 0.55, 5); S.trauma = Math.min(1, S.trauma + 0.12); } if (o.t > RING_IN + RING_TAIL) F.rf = null; }
+    if (F.nm > 0) { F.nm += dt; if (F.nm > 1.2) F.nm = 0; }
     if (F.stop > 0) F.stop = Math.max(0, F.stop - dt);   // the slow-mo clock waits while frozen
     else if (F.slow.t > 0) F.slow.t = Math.max(0, F.slow.t - dt);
     if (F.flour) { F.flour.t += dt; if (F.flour.t > F.flour.dur) F.flour = null; }
@@ -313,7 +326,8 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
         c.slammed = true;
         if (!calm()) { S.flash = Math.max(S.flash, 0.55); S.flashCol = '#ffd0e0'; S.trauma = Math.min(1, S.trauma + 0.85); ring(W / 2, H * 0.36, 280, '#ffd84d', 0.6); ring(W / 2, H * 0.36, 170, '#ff4d7a', 0.45); burst(W / 2, H * 0.36, 26, ['#ffd84d', '#ff4d7a', '#fff'], 520, 0.7, 7); }
       }
-      if (c.act && !c.actFx && c.t > 0.3) { c.actFx = true; F.sounds.push('star3'); if (!calm()) { ring(W / 2, H * 0.34 - 160, 220, '#ffd84d', 0.5); burst(W / 2, H * 0.34 - 160, 12, ['#ffd84d', '#fff', '#ff9ad6'], 380, 0.6, 5); } }
+      if (c.act && !c.actFx && c.t > 0.3) { c.actFx = true; F.sounds.push('star3'); if (!calm()) { ring(W / 2, H * 0.34 + 171, 220, '#ffd84d', 0.5); burst(W / 2, H * 0.34 + 171, 12, ['#ffd84d', '#fff', '#ff9ad6'], 380, 0.6, 5); } }
+      if (c.ring && !calm() && !F.rf && c.t > c.dur - RING_IN) F.rf = { t: Math.max(0, c.t - (c.dur - RING_IN)), x: c.ring.x, y: c.ring.y, r: c.ring.r, hit: false };   // r12: the circle closes in as the card leaves
       if (c.t > c.dur) { F.card = null; if (!calm() && g && g.phase === 'play') F.go = c.n === 1 && !c.boss ? countIn() : { t: 0, dur: 0.7, boss: c.boss }; }
     }
     for (let i = F.conf.length - 1; i >= 0; i--) {
@@ -396,7 +410,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     text('WIPEOUT!', 0, 0, 110, '#ff6a86', '#1a0210');
     ctx.rotate(calm() ? 0 : 0.04);
     text(pct > 0 ? pct + '% of the serpent popped' : 'the serpent got through', 0, 78, 36, '#ffd9e6', '#1a0210');
-    if (F.cause) { const ck = calm() ? 1 : easeOut(clamp((t - 0.7) / 0.3, 0, 1)); ctx.save(); ctx.globalAlpha *= ck; ctx.translate(0, (1 - ck) * 10); text(F.cause.head, 0, 214, 32, '#ff9ab8', '#1a0210'); text(F.cause.sub, 0, 252, 26, '#ffd9e6', '#1a0210'); ctx.restore(); }   // r11: what ended the run
+    if (F.cause) { const ck = calm() ? 1 : easeOut(clamp((t - 0.7) / 0.3, 0, 1)); ctx.save(); ctx.globalAlpha *= ck; ctx.translate(0, (1 - ck) * 10); text(F.cause.head, 0, 214, 36, '#ff9ab8', '#1a0210'); text(F.cause.sub, 0, 256, 32, '#ffd9e6', '#1a0210'); ctx.restore(); }   // r11: what ended the run
     {   // how far the song got: a bar that fills up to the spot where it ended
       const bw = 270, bh = 16, fk = calm() ? 1 : easeOut(clamp((t - 0.5) / 0.4, 0, 1)), fw = bw * clamp(g.progress || 0, 0, 1) * fk;
       ctx.fillStyle = 'rgba(10,4,18,.75)'; ctx.beginPath(); ctx.roundRect(-bw / 2 - 4, 112, bw + 8, bh + 8, 12); ctx.fill();
@@ -408,7 +422,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
         const bk = calm() ? 1 : easeOut(clamp((t - 0.9) / 0.3, 0, 1));
         ctx.save(); ctx.globalAlpha *= bk;
         if (db.isNew) text('NEW BEST!', 0, 166, 34, '#ffd84d', '#1a0210');
-        else { const fx = -bw / 2 + bw * clamp(db.prev / 100, 0, 1); ctx.fillStyle = '#ffd84d'; ctx.fillRect(fx - 2, 108, 4, bh + 16); ctx.beginPath(); ctx.moveTo(fx + 2, 108); ctx.lineTo(fx + 20, 114); ctx.lineTo(fx + 2, 120); ctx.fill(); text('BEST ' + db.prev + '%', 0, 166, 30, '#ffe9a8', '#1a0210'); }
+        else { const fx = -bw / 2 + bw * clamp(db.prev / 100, 0, 1); ctx.fillStyle = '#ffd84d'; ctx.fillRect(fx - 2, 108, 4, bh + 16); ctx.beginPath(); ctx.moveTo(fx + 2, 108); ctx.lineTo(fx + 20, 114); ctx.lineTo(fx + 2, 120); ctx.fill(); text('BEST ' + db.prev + '%', 0, 166, 34, '#ffe9a8', '#1a0210'); }
         ctx.restore();
       }
     }
@@ -477,7 +491,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     ctx.save(); ctx.globalAlpha = out;
     if (c.boss) {
       // dark stripe, red edges, giant crown word slammed in
-      const bandH = 300, hh = bandH * (calm() ? 1 : ease);
+      const bandH = 330, hh = bandH * (calm() ? 1 : ease);
       ctx.fillStyle = 'rgba(24,2,16,.82)'; ctx.fillRect(0, cy - hh / 2, W, hh);
       ctx.fillStyle = '#ff4d7a'; ctx.fillRect(0, cy - hh / 2 - 6, W, 6); ctx.fillRect(0, cy + hh / 2, W, 6);
       hazard(cy - hh / 2 - 22, 16, t); hazard(cy + hh / 2 + 6, 16, -t);
@@ -489,7 +503,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       text('BOSS', 0, 28, 150, '#ff4d7a', '#1a0210');
       if (!calm() && slam > 0.6) { const sp = kit && kit.SPECIES && kit.SPECIES[c.skin]; cardFlair(ctx, c.skin, t, 0, -116, 62, sp ? sp.base : '#ff4d7a'); }   // r8: each boss arrives with its own species air (hearts, snow, coins...)
       ctx.restore();
-      ctx.save(); ctx.globalAlpha *= clamp((t - 0.45) / 0.3, 0, 1); const tg = !c.mod && BOSS_TAG[c.skin]; text(c.name, W / 2, cy + (tg ? 98 : 112), 44, '#ffd84d'); if (c.mod) text(c.mod, W / 2, cy + 156, 28, '#ffc2dc'); else if (tg) text(tg, W / 2, cy + 134, 24, '#ffc2dc', '#2a0310'); ctx.restore();
+      ctx.save(); ctx.globalAlpha *= clamp((t - 0.45) / 0.3, 0, 1); const tg = !c.mod && BOSS_TAG[c.skin]; text(c.name, W / 2, cy + (tg ? 94 : 112), 46, '#ffd84d'); if (c.mod) text(c.mod, W / 2, cy + 146, 36, '#ffc2dc'); else if (tg) text(tg, W / 2, cy + 142, 36, '#ffc2dc', '#2a0310'); ctx.restore();
     } else {
       // a band sweeps in from the left, the species portrait pops, name and twist slide in
       const bandH = 230, sx = calm() ? 0 : (1 - ease) * -W;
@@ -504,10 +518,10 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
         ctx.moveTo(x, cy - bandH / 2); ctx.lineTo(x + 70, cy - bandH / 2); ctx.lineTo(x - 10, cy + bandH / 2); ctx.lineTo(x - 80, cy + bandH / 2); ctx.closePath(); ctx.fill(); ctx.restore();
       }
       if (c.act) {   // r11: a new act starts: a gold pill rides in above the band
-        const ak = calm() ? 1 : backOut(clamp((t - 0.15) / 0.4, 0, 1)), w = Math.min(W - 60, c.act.length * 23 + 80);
-        ctx.save(); ctx.translate(W / 2, cy - bandH / 2 - 44); ctx.scale(clamp(ak, 0, 1.1), clamp(ak, 0, 1.1)); ctx.globalAlpha *= clamp(ak, 0, 1);
-        ctx.fillStyle = 'rgba(40,24,6,.92)'; ctx.beginPath(); ctx.roundRect(-w / 2, -28, w, 56, 28); ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = '#ffd84d'; ctx.stroke();
-        text(c.act, 0, 0, 30, '#fff3b8', '#3a1c00'); ctx.restore();
+        const ak = calm() ? 1 : backOut(clamp((t - 0.15) / 0.4, 0, 1)), w = Math.min(W - 60, c.act.length * 27 + 90);
+        ctx.save(); ctx.translate(W / 2, cy + bandH / 2 + 56);   // r12: below the band (above it the season toast sat on the pill at 360 wide) ctx.scale(clamp(ak, 0, 1.1), clamp(ak, 0, 1.1)); ctx.globalAlpha *= clamp(ak, 0, 1);
+        ctx.fillStyle = 'rgba(40,24,6,.92)'; ctx.beginPath(); ctx.roundRect(-w / 2, -34, w, 68, 34); ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = '#ffd84d'; ctx.stroke();
+        text(c.act, 0, 0, 38, '#fff3b8', '#3a1c00'); ctx.restore();
       }
       // portrait
       const pk = calm() ? 1 : clamp((t - 0.12) / 0.4, 0, 1), ps = calm() ? 1 : backOut(pk);
@@ -524,7 +538,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       if (c.trait) {   // batch 8: this species' late trait, icon plus name, top right of the band
         const rk = calm() ? 1 : backOut(clamp((t - 0.45) / 0.35, 0, 1));
         ctx.save(); ctx.globalAlpha *= clamp(rk, 0, 1); drawTraitIcon(ctx, c.trait, W - 52, cy - 70, 22 * rk, col, t);
-        text(traitLabel(c.trait, c.n), W - 82, cy - 68, 20, '#e8ecff', '#0b1020', 'right'); ctx.restore();
+        text(traitLabel(c.trait, c.n), W - 82, cy - 68, 30, '#e8ecff', '#0b1020', 'right'); ctx.restore();
       }
       if (c.mod) { const mk = calm() ? 1 : clamp((t - 0.5) / 0.3, 0, 1); ctx.globalAlpha *= mk; text(c.mod, tx, cy + 64, 30, '#ffd24a', '#0b1020', 'left'); }
       ctx.restore();
@@ -593,6 +607,30 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     }
     ring(g.p.x, g.p.y - 20, 190, '#9ff0ff', 0.5); edges('#6fe3ff', 0.35);
   }
-  function drawCardAll(g) { drawCard(g); drawMile(); drawGo(); drawClear(); drawCC(); drawP2(); }
-  return { resumeFx, confetti, onEvent, update, timeScale, rumble, zoomIn, aura, drawScreen, drawCard: drawCardAll, state: F, setBeat(fn) { F.beatFn = fn; }, clearBusy: () => !!F.clear, takeSounds() { return F.sounds.splice(0); } };
+  // r12: ring stage intro, a bright circle closes in on the real circle (dots ride it, a gold echo follows)
+  function drawRingIn() {
+    const o = F.rf; if (!o) return;
+    const a = ringAlpha(o.t); if (a <= 0.01) return;
+    ctx.save(); ctx.translate(o.x, o.y); ctx.lineCap = 'round';
+    for (let k = 0; k < 2; k++) {
+      const t = o.t - k * 0.14; if (t <= 0) continue;
+      const r = ringRadius(o.r, t), e = ringEase(ringProgress(t));
+      ctx.globalAlpha = a * (k ? 0.55 : 0.95); ctx.strokeStyle = k ? '#ffd84d' : '#6fe3ff'; ctx.lineWidth = (k ? 8 : 14) * (1.3 - 0.4 * e);
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+      if (!k) { ctx.fillStyle = '#fff'; const spin = (1 - e) * 1.6; for (let i = 0; i < 16; i++) { const an = spin + i * TAU / 16; ctx.beginPath(); ctx.arc(Math.cos(an) * r, Math.sin(an) * r, 7, 0, TAU); ctx.fill(); } }
+    }
+    ctx.restore();
+  }
+  // r12: a tap skips the long cards once their main beat has landed (the stage card, boss intro, clear card, the finale credits)
+  function skip() {
+    const c = F.clear;
+    if (c) { if (skipReady(c.fin ? 'fin' : 'clear', c.t) && c.dur - c.t > FADE_OUT + 0.05) { c.dur = c.t + FADE_OUT; return true; } return false; }
+    const k = F.card;
+    if (k && skipReady(k.boss ? 'boss' : 'card', k.t) && k.dur - k.t > 0.45) { k.dur = k.t + 0.4; return true; }
+    return false;
+  }
+  // r12: the near miss, the screen edges go red while the held breath lets go
+  function drawNear() { if (F.nm > 0) edges('#ff4d7a', Math.max(0, 0.7 * (1 - F.nm / 1.2))); }
+  function drawCardAll(g) { drawRingIn(); drawNear(); drawCard(g); drawMile(); drawGo(); drawClear(); drawCC(); drawP2(); }
+  return { resumeFx, skip, confetti, onEvent, update, timeScale, rumble, zoomIn, aura, drawScreen, drawCard: drawCardAll, state: F, setBeat(fn) { F.beatFn = fn; }, clearBusy: () => !!F.clear, takeSounds() { return F.sounds.splice(0); } };
 }
