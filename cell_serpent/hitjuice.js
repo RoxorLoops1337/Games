@@ -7,7 +7,7 @@ import { CRIT_FEEL, FINISH_FEEL, CRIT_GAP, CLASS_CAP, classOf, sparkCol, CASCADE
 import { drawMark11, isKind11, numMotion } from './hit_fx_b11.js';
 import { createMoments, rungOf, drawSpeciesDeath, drawMuzzle, DEATH_DUR } from './hit_juice8.js';
 const TAU = Math.PI * 2;
-export const UP_X = 42, UP_Y = 40, CHIP_X = 620;   // CHIP_X: the RAGE and SHIELD chips (hud.js) sit at the right edge
+export const UP_X = 42, UP_Y = 40, CHIP_X = 600;   // CHIP_X: the RAGE and SHIELD chips (hud.js) sit at the right edge
 const H = 1280;   // the upgrade counter in the HUD (hud.js)
 
 export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, blit, sprite, sound, feel }) {
@@ -476,7 +476,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
     }
     for (let i = chipfly.length - 1; i >= 0; i--) {
       const o = chipfly[i]; o.t += dt; const k = Math.min(1, o.t / o.dur), e = k * k * (3 - 2 * k), col = POW_COL[o.kind];
-      const tx = CHIP_X, ty = H - (o.kind === 'rage' ? 153 : 113) - (S.chipB || 0);
+      const tx = CHIP_X, ty = H - (o.kind === 'rage' ? 176 : 126) - (S.chipB || 0);
       if (k >= 1) { chipfly.splice(i, 1); S.land[o.kind] = S.t; ring(tx, ty, 70, col, 0.4); burst(tx, ty, 10, [col, '#fff2a0', '#fff'], 200, 0.4, 4); continue; }
       const x = o.x0 + (tx - o.x0) * e + Math.sin(k * Math.PI) * -50, y = o.y0 + (ty - o.y0) * e - Math.sin(k * Math.PI) * 60;
       o.lastTrail += dt;
