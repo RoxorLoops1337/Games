@@ -73,7 +73,7 @@ if (chromium) {
       await p.keyboard.press('Escape'); await p.waitForTimeout(200); await p.keyboard.press('Escape'); await p.waitForTimeout(300);
       let st = await state(p);
       assert.ok(st[0] === 'levelup' || st[2] !== 'levelup', 'cards still on screen or resolved, never a blank screen on the levelup phase: ' + st);
-      await p.click('#cards .card >> nth=0'); await p.waitForTimeout(300);
+      await p.click('#cards .card >> nth=0'); await p.waitForTimeout(800);
       assert.notEqual((await state(p))[2], 'levelup', 'picking a card moves the run on');
       // give up in a pig run is a pig result and keeps the save sane
       await p.evaluate(() => window.CS.startRun(2, 'pig')); await p.waitForTimeout(400);

@@ -167,6 +167,8 @@
 
 
   /* ===== end team CSS ===== */
+  /* merge fix: the hub top bar must fit 320px wide screens even with the settings button */
+  @media (max-width:399px){.hubtop{gap:4px;padding-left:4px;padding-right:4px} .hubtop .cur{padding:3px 6px;gap:3px;font-size:13px} .hubtop .cur img{width:18px;height:18px} .hubtop .plus{width:24px;height:24px;min-width:24px;min-height:24px} .hubtop .gear{width:34px;height:34px;min-width:34px;min-height:34px;font-size:17px;flex:none}}
   #muteBtn{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:5;width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:20px;cursor:pointer;display:none}
   #muteBtn.on{display:block}
   /* @css:11-result-pause */
