@@ -135,5 +135,5 @@ ok(withoutFriendParam('/drop_the_bass/', '?friend=Jas', '') === '/drop_the_bass/
 }
 
 // ---- no em dashes in what this round added
-for (const f of ['js/main.js', 'js/ui_hub.js', 'js/ui_core.js', 'js/pwa.js', 'js/lb.js', 'js/meta.js', 'ui_doodle.css']) ok(!/—/.test(src(f)), f + ': no em dash');
+for (const f of ['js/main.js', 'js/ui_hub.js', 'js/ui_core.js', 'js/pwa.js', 'js/lb.js', 'js/meta.js', 'ui_doodle.css']) ok(!src(f).includes(String.fromCharCode(8212)), f + ': no em dash');
 console.log('drop_the_bass r5 hub: ' + n + ' checks passed');
