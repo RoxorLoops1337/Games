@@ -2,7 +2,7 @@
 // where they exist and draws procedural stand-ins otherwise.
 import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv } from './sim.js';
 import { INK, mix } from './art_draw.js';
-import { createHud } from './hud.js';
+import { createHud, hudZone } from './hud.js';
 import { createHitJuice } from './hitjuice.js';
 import { createScreenFx } from './screenfx.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
@@ -478,17 +478,17 @@ export function createRenderer(canvas, art, kit) {
   }
 
   let hud = null;   // the widgets live in hud.js
+  function getHud() { return hud || (hud = createHud({ ctx, text, blit, kit, S, INK, glow, sparkleAt, WCOL, WSPR, OPT, onReady: id => { if (OPT.onReady) OPT.onReady(id); } })); }
   function drawHud(g, ui) {
     const p = g.p, pad = 22;
-    if (!hud) hud = createHud({ ctx, text, blit, kit, S, INK, glow, sparkleAt, WCOL, WSPR });
-    hud.draw(g);
+    getHud().draw(g, layout());
     if ((g.danger || 0) > 0.05 && g.phase === 'play') { const a = Math.min(0.5, g.danger * 0.45) * (0.65 + 0.35 * Math.sin(S.t * 14)); const rg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75); rg.addColorStop(0, 'rgba(255,40,80,0)'); rg.addColorStop(1, `rgba(255,40,80,${a})`); ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H); }
     for (const sn of g.snakes) if (sn.surge === 'warn') { const h = sn.segs[0]; text('!', h.x, h.y - h.r - 34 + Math.sin(S.t * 20) * 4, 40, '#ff3d5a', '#0b1020'); }
     // Encore blast: the beam, the meter by the duo, and the tap hint
     if (g.beam) { const a = Math.min(1, g.beam.t * 3); ctx.save(); const bg = ctx.createLinearGradient(g.beam.x - 60, 0, g.beam.x + 60, 0); bg.addColorStop(0, 'rgba(255,227,107,0)'); bg.addColorStop(0.5, `rgba(255,250,210,${a})`); bg.addColorStop(1, 'rgba(255,227,107,0)'); ctx.fillStyle = bg; ctx.fillRect(g.beam.x - 60, 0, 120, g.p.y); ctx.restore(); }
-    if (g.phase === 'play' && (g.encore || 0) > 0) { const ex = g.p.x, ey = g.p.y + 52, ew = 90, full = g.encore >= 1; ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(ex - ew / 2 - 2, ey - 2, ew + 4, 11); ctx.fillStyle = full ? '#ffe36b' : '#ff9ad6'; ctx.fillRect(ex - ew / 2, ey, ew * g.encore, 7); ctx.restore(); if (full) { ctx.save(); ctx.globalAlpha = 0.7 + 0.3 * Math.sin(S.t * 10); text('TAP = ENCORE', ex, ey + 26, 16, '#ffe36b', '#0b1020'); ctx.restore(); } }
+    hud.encore(g);   // the meter lives in hud.js
     if (ui && ui.hints) drawHints(ctx, g, S, { glow, text });   // first-run guide (hints.js)
-    if (g.combo > 2 && g.t - g.lastKill < 2.2) text('COMBO x' + g.combo, W / 2, 196, 24 + Math.min(10, g.combo * 0.3), '#ffe14a');
+    hud.combo(g);
     // joystick
     if (ui && ui.joy && ui.joy.on) {
       const j = ui.joy; ctx.save(); ctx.globalAlpha = 0.45; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(j.x, j.y, 70, 0, TAU); ctx.stroke();
@@ -522,7 +522,7 @@ export function createRenderer(canvas, art, kit) {
     drawBullets(g);
     drawFx(dt);
     ctx.restore();
-    if (S.warn > 0) { S.warn -= dt; text('SURGE!', W / 2, 170 + (OPT.reduceMotion ? 0 : Math.sin(S.t * 40) * 4), 54 + (OPT.reduceMotion ? 0 : Math.sin(S.t * 30) * 4), '#ff5a78'); }
+    if (S.warn > 0) { S.warn -= dt; text('SURGE!', W / 2, 170 + (hud ? hud.dy(g) : 0) + (OPT.reduceMotion ? 0 : Math.sin(S.t * 40) * 4), 54 + (OPT.reduceMotion ? 0 : Math.sin(S.t * 30) * 4), '#ff5a78'); }
     FX.drawScreen(g);
     if (S.flash > 0) { ctx.save(); ctx.globalAlpha = S.flash * 0.5; ctx.fillStyle = S.flashCol; ctx.fillRect(0, 0, W, H); ctx.restore(); }
     if (ui) drawHud(g, ui);
@@ -532,5 +532,5 @@ export function createRenderer(canvas, art, kit) {
   HJ = createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped });
   FX = createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst });
 
-  return { hj: HJ, timeScale: () => (FX ? FX.timeScale() : 1), setBeat: fn => FX.setBeat(fn), clearBusy: () => FX.clearBusy(), takeSounds: () => FX.takeSounds(), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
+  return { hj: HJ, timeScale: () => (FX ? FX.timeScale() : 1), setBeat: fn => FX.setBeat(fn), clearBusy: () => FX.clearBusy(), takeSounds: () => FX.takeSounds(), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, safeTop: () => (hud ? hud.top() : 0), hudZone: gp => hudZone(gp, hud ? hud.top() : 0), toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
 }
