@@ -332,7 +332,7 @@ export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
   const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0, joy: 0 };
-  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, reviveTimer: true, volume: 1, thumbZone: false, textScale: 1, beatTick: false, pump: 2 }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
+  return { v: 8, loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, reviveTimer: true, volume: 1, thumbZone: false, textScale: 1, beatTick: false, pump: 2 }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, gift: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -367,7 +367,7 @@ export function sanitizeSave(raw) {
   if (raw.sign && typeof raw.sign === 'object') s.sign = { day: num(raw.sign.day), n: num(raw.sign.n) };
   if (raw.idle && typeof raw.idle === 'object') s.idle = { t: num(raw.idle.t) };
   if (raw.fund && typeof raw.fund === 'object') for (const f of FUND) if (raw.fund[f.stage]) s.fund[f.stage] = 1;
-  if (raw.shop && typeof raw.shop === 'object') { const sh = raw.shop; s.shop = { welcome: sh.welcome ? 1 : 0, day: num(sh.day), refresh: num(sh.refresh), free: num(sh.free), xp: num(sh.xp), gold: num(sh.gold), bought: {}, limit: { week: num(sh.limit && sh.limit.week), bought: {} } }; if (sh.limit && sh.limit.bought) for (const k of Object.keys(sh.limit.bought)) s.shop.limit.bought[k] = num(sh.limit.bought[k]); for (const k of Object.keys(sh.bought || {})) if (sh.bought[k]) s.shop.bought[k] = 1; }
+  if (raw.shop && typeof raw.shop === 'object') { const sh = raw.shop; s.shop = { welcome: sh.welcome ? 1 : 0, day: num(sh.day), refresh: num(sh.refresh), free: num(sh.free), gift: num(sh.gift), xp: num(sh.xp), gold: num(sh.gold), bought: {}, limit: { week: num(sh.limit && sh.limit.week), bought: {} } }; if (sh.limit && sh.limit.bought) for (const k of Object.keys(sh.limit.bought)) s.shop.limit.bought[k] = num(sh.limit.bought[k]); for (const k of Object.keys(sh.bought || {})) if (sh.bought[k]) s.shop.bought[k] = 1; }
   if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^h?\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
   if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
   s.addict = sanitizeAddict(raw.addict);
@@ -467,9 +467,10 @@ export function levelSkill(save, id) {
 export const shopLevel = xp => { let lv = 1, left = xp; while (left >= 300 * lv) { left -= 300 * lv; lv++; } return { lv, cur: left, need: 300 * lv }; };
 export function dealsFor(save, day) {
   const R = rng(day * 131 + (save.shop.refresh || 0) * 7 + 1), pick = a => a[Math.floor(R() * a.length)];
-  const out = [{ kind: 'sparkles', n: 10, off: 100, price: 0, cur: 'sparkles' }];
+  const giftSlot = !(save.shop.refresh > 0) || save.shop.gift !== day;   // round 11 balance: the free 10 Sparkles gift is once a day, a refresh no longer brings it back
+  const out = giftSlot ? [{ kind: 'sparkles', n: 10, off: 100, price: 0, cur: 'sparkles' }] : [];
   const offs = [90, 80, 70, 50];
-  for (let i = 1; i < 5; i++) {
+  for (let i = out.length; i < 5; i++) {
     const t = pick(['frag', 'frag', 'keep', 'egg', 'energy', 'beats']), off = pick(offs);
     let d;
     if (t === 'frag') { const w = pick(WEAPONS); d = { kind: 'frag', ref: w.id, n: 3, base: 24 }; }
@@ -485,12 +486,13 @@ export function buyDeal(save, day, i) {
   const d = dealsFor(save, day)[i];
   if (!d || save.shop.bought[i] || save.sparkles < d.price) return false;
   save.sparkles -= d.price; save.shop.bought[i] = 1;
-  if (d.kind === 'sparkles') save.sparkles += d.n; else if (d.kind === 'frag') save.skills[d.ref].frag += d.n; else if (d.kind === 'keep') save.keeps[d.ref].frag += d.n;
+  if (d.kind === 'sparkles') { save.sparkles += d.n; save.shop.gift = day; } else if (d.kind === 'frag') save.skills[d.ref].frag += d.n; else if (d.kind === 'keep') save.keeps[d.ref].frag += d.n;
   else if (d.kind === 'egg') save.eggs += d.n; else if (d.kind === 'energy') addEnergy(save, d.n); else save.beats += d.n;
   return true;
 }
+export const refreshCost = save => (save.shop.free ? Math.min(50, 5 * Math.max(1, save.shop.refresh || 0)) : 0);   // first refresh free, then 5, 10, 15 ... capped at 50 (was a flat 5: a loop that printed Sparkles)
 export function refreshDeals(save) {
-  const cost = save.shop.free ? 5 : 0;
+  const cost = refreshCost(save);
   if (save.sparkles < cost) return false;
   save.sparkles -= cost; save.shop.free = 1; save.shop.refresh++; save.shop.bought = {}; return true;
 }

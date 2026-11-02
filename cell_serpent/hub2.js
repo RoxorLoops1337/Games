@@ -4,7 +4,7 @@ import {
   KEEPSAKES, KEEP_TIERS, KEEP_SETS, keepMax, keepCost, keepUp, keepCanUp, keepBonus, KEEP_PRICE, openKeepChest,
   META, metaCost, buyMeta, levelInfo, levelReward, power,
   SIGN_DAYS, claimSign, FUND, fundReady, claimFund, idleAmount, claimIdle, idleRate, ENERGY_MAX, buyEnergy, tickEnergy,
-  BOXES, WEAPONS, PETS, openBox, shopLevel, dealsFor, buyDeal, refreshDeals, welcomeReady, claimWelcome, GOLD_PACKS, buyGold, EGG_PRICE, buyEgg,
+  BOXES, WEAPONS, PETS, openBox, shopLevel, dealsFor, buyDeal, refreshDeals, refreshCost, welcomeReady, claimWelcome, GOLD_PACKS, buyGold, EGG_PRICE, buyEgg,
   upgradeAllKeeps, claimAllFund, claimAllTrophies, exchangeFrags, OUTFITS, outfitAvailable, buyOutfit, wearOutfit, eventInfo, EVENT_MILES, claimEventMile, ensureEvent, EXCHANGE_ITEMS, buyExchange, LIMIT_ITEMS, buyLimit,
   CARD_PRICE, buyCard, cardActive, claimCard, TROPHIES, trophyReady, claimTrophy, weaponExchange, WEAPON_EXCHANGE_PRICE, SKINS, SKIN_NAMES,
 } from './sim.js';
@@ -327,7 +327,7 @@ export function createHub2(c) {
       list.appendChild(t);
     });
     { const tl = document.createElement('div'); tl.className = 'treatline'; tl.textContent = treatLine(deals, s.shop.bought); list.appendChild(tl); }
-    const rr = document.createElement('div'); rr.className = 'refrow'; rr.innerHTML = `<span>New treats in ${countdown()}</span><button class="btn small alt">${s.shop.free ? '5 ' + curImg('sparkles') : 'FREE'} REFRESH</button>`;
+    const rr = document.createElement('div'); rr.className = 'refrow'; rr.innerHTML = `<span>New treats in ${countdown()}</span><button class="btn small alt">${s.shop.free ? refreshCost(s) + ' ' + curImg('sparkles') : 'FREE'} REFRESH</button>`;
     rr.querySelector('button').onclick = () => { if (refreshDeals(save())) { c.persist(); audio.play('click'); c.refreshCur(); renderShop(); } };
     list.appendChild(rr); tickTreats(rr);
     // chests with a shop level
