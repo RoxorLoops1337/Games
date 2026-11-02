@@ -64,12 +64,16 @@
       // phone (portrait): 208 logical px across, drawn at about 1.9 css px per logical px on a 412 wide screen, so cats sit about 58 css px apart and pests 40 css px per size unit.
       // floorH is retuned by fit() to the free height (G.setFloor); pestMax is the pest lane width, beyond it a crowded floor squeezes its pests together.
       G = { mode: mode, W: 208, H: 270, roofH: 24, floorH: 80, feetOff: 58, x0: 3, x1: 205, catPitch: 31, catRight: 126, pestLeft: 129, pestUnit: 21, pestMax: 76, labelInline: false };
-      G.setFloor = function (fh) { G.floorH = fh; G.feetOff = fh - 18; G.H = G.roofH + 3 * fh + 6; };
+      // Empty floors shrink (portrait only): G.hs holds the CURRENT height of each floor (animated by stepHeights), floorH stays the full height.
+      G.hs = [80, 80, 80]; G.Hfull = 270; G.compactH = 48;
+      G.setFloor = function (fh, ch) { G.floorH = fh; G.compactH = Math.min(fh, ch || fh); G.Hfull = G.roofH + 3 * fh + 6; G.setHeights([fh, fh, fh]); };
+      G.setHeights = function (a) { G.hs = [a[0], a[1], a[2]]; G.H = G.roofH + a[0] + a[1] + a[2] + 6; };
     } else {
       G = wideLayout(o); G.mode = mode;
     }
-    G.top = function (f) { return G.roofH + (2 - f) * G.floorH; };
-    G.feet = function (f) { return G.top(f) + G.feetOff; };
+    G.fh = function (f) { return G.hs ? G.hs[f] : G.floorH; }; // current height of floor f
+    G.top = function (f) { var t = G.roofH; for (var g = 2; g > f; g--) t += G.fh(g); return t; };
+    G.feet = function (f) { return G.top(f) + (G.hs ? G.hs[f] - 18 : G.feetOff); };
     G.catX = function (start, size) { return G.catRight - (start + size / 2) * G.catPitch; };
     G.pestX = function (start, size, tot) { var u = G.pestUnit; if (G.pestMax && tot && tot * u > G.pestMax) u = G.pestMax / tot; return G.pestLeft + (start + size / 2) * u; };
     G.room = function (f, i) { return G.labelInline ? { x: G.x0 + 6 + i * 31, y: G.top(f) + 20, w: 29, h: 29 } : { x: 50 + i * 22, y: G.top(f) + 2, w: 20, h: 20 }; };
@@ -205,7 +209,9 @@
       }
       var lx = ix0 + iw - 46; R('#2a1d2a', lx, t + 6, 6, 9); R(f === 0 ? '#9ad0ff' : '#ffc766', lx + 1, t + 7, 4, 6); R('#fff1c9', lx + 2, t + 8, 2, 2);
     }
+    function bgKeyNow() { return mode + G.W + 'x' + (G.Hfull || G.H) + (G.key || ''); }
     function buildBg() {
+      var savedHs = G.hs; if (savedHs) G.setHeights([G.floorH, G.floorH, G.floorH]); // the cached art is always drawn at full floor height, draw() slices it
       var c = mkCanvas(G.W, G.H), x = c.getContext('2d'), W = G.W, H = G.H; bgCtx = x;
       x.imageSmoothingEnabled = false;
       function R(col, a, b, w2, h2) { x.fillStyle = col; x.fillRect(a, b, w2, h2); }
@@ -224,7 +230,7 @@
       // moon
       var mx = mode === 'phone' ? 18 : 10, my = 12; R('#fff1c9', mx, my, 7, 7); R('#ffe2a0', mx + 4, my + 3, 3, 3); R('#fff8e0', mx + 1, my + 1, 2, 2);
       // house shell
-      var hx0 = G.x0 - 4, hx1 = G.x1 + 4, houseTop = G.roofH, houseBot = G.top(0) + G.floorH;
+      var hx0 = G.x0 - 4, hx1 = G.x1 + 4, houseTop = G.roofH, houseBot = G.top(0) + G.fh(0);
       R('#4a2e3c', hx0, houseTop, hx1 - hx0, houseBot - houseTop);
       for (var f = 2; f >= 0; f--) {
         var t = G.top(f), fh = G.floorH, ix0 = G.x0, iw = G.x1 - G.x0;
@@ -267,15 +273,103 @@
       }
       // garden strip
       R('#1b2a3a', 0, H - 5, W, 5); for (var gx = 0; gx < W; gx += 5) R('#2f5a4a', gx, H - 6 - ((gx * 3) % 3), 2, 3);
-      bg = c; bgKey = mode + G.W + 'x' + G.H + (G.key || '');
+      bg = c; bgKey = bgKeyNow();
+      if (savedHs) G.setHeights(savedHs);
+    }
+
+    // ---------------- empty floors shrink (portrait phone only)
+    // Every floor has a full height (G.floorH) and a compact one (G.compactH). A floor is compact when nothing lives on it in the replayed view state (vm), nothing is
+    // still animating out of it and it has been empty for a moment. stepHeights() eases the current heights (G.hs) towards those targets in 220 ms; applyHeights() moves
+    // everything that hangs on the floors (stage, canvas, overlay buttons, units, hand area) in one go, so nothing is rebuilt per frame.
+    var HT = { init: false, cur: [80, 80, 80], from: [80, 80, 80], to: [80, 80, 80], t0: 0, on: false, empty: [0, 0, 0], base: 150, ms: 220 };
+    function floorOccupied(f) { var fl = vm.floors[f]; return !!(fl && ((fl.cats && fl.cats.length) || (fl.pests && fl.pests.length))); }
+    function bottomsOf() { var b = [], t = G.roofH; for (var f = 2; f >= 0; f--) { t += G.fh(f); b[f] = t; } return b; }
+    function floorAtY(y, b) { for (var f = 2; f > 0; f--) if (y < b[f]) return f; return 0; }
+    function shiftY(y, ob, nb) { if (y < G.roofH) return y; var f = floorAtY(y, ob); return y + (nb[f] - ob[f]); }
+    function floorBusy(f) { // a unit is still hopping, falling, fading or dying in this floor: keep it open
+      var b = bottomsOf(), busy = false;
+      V.units.forEach(function (v) {
+        if (busy || v.y == null || !(v.mv || v.dying || v.fall || v.alpha < 1)) return;
+        if (floorAtY(v.y, b) === f || (v.mv && (floorAtY(v.mv.y0, b) === f || floorAtY(v.mv.y1, b) === f))) busy = true;
+      });
+      return busy;
+    }
+    function heightTargets(real) {
+      var out = [];
+      for (var f = 0; f < 3; f++) {
+        if (floorOccupied(f)) { HT.empty[f] = 0; out[f] = G.floorH; continue; }
+        if (!HT.empty[f]) HT.empty[f] = real;
+        out[f] = (real - HT.empty[f] > 320 && !floorBusy(f)) ? G.compactH : HT.to[f];
+      }
+      return out;
+    }
+    function initHeights() {
+      var real = performance.now(), to = [];
+      for (var f = 0; f < 3; f++) { var occ = floorOccupied(f); to[f] = occ ? G.floorH : G.compactH; HT.empty[f] = occ ? 0 : real - 1000; }
+      G.setHeights(to); HT.cur = to.slice(); HT.from = to.slice(); HT.to = to.slice(); HT.on = false; HT.init = true;
+    }
+    // the height the board gave back goes to the hand area, and the cards grow into it (handSizeFor clamps them, the CSS transition smooths the change)
+    function publishHeights() {
+      var gave = Math.round((G.Hfull - G.H) * s);
+      rootEl.style.setProperty('--hand-h', (HT.base + gave) + 'px');
+      if (!HT.handW) return;
+      var h2 = handSizeFor(HT.base - 30 + gave, HT.handW);
+      if (h2.cw !== HT.cw) { HT.cw = h2.cw; el.hand.style.setProperty('--hand-cw', h2.cw + 'px'); rootEl.style.setProperty('--card-ar', (h2.cardH / h2.cw).toFixed(3)); }
+    }
+    function sizeStage() {
+      var cw = Math.round(G.W * s), chh = Math.round(G.H * s);
+      el.stage.style.width = cw + 'px'; el.stage.style.height = chh + 'px';
+      el.canvas.width = G.W; el.canvas.height = G.H; el.canvas.style.width = cw + 'px'; el.canvas.style.height = chh + 'px';
+    }
+    function placeFrame() { // (re)position everything that hangs on a floor from the current heights
+      for (var f = 0; f < 3; f++) {
+        var fb = frame.floors[f]; if (!fb) continue;
+        fb.style.top = px(G.top(f)); fb.style.height = px(G.fh(f) - 2);
+        frame.labels[f].style.top = px(G.label(f).y);
+        for (var i = 0; i < 2; i++) frame.rooms[f][i].style.top = px(G.room(f, i).y);
+        frame.inc[f].style.top = px(G.inc(f).y);
+      }
+    }
+    function applyHeights(hs) {
+      var ob = bottomsOf(); G.setHeights(hs); var nb = bottomsOf();
+      V.units.forEach(function (v) { // units keep their offset from the floor they stand on, so they ride the animation
+        if (v.y == null) return;
+        v.y = shiftY(v.y, ob, nb);
+        if (v.mv) { v.mv.y0 = shiftY(v.mv.y0, ob, nb); v.mv.y1 = shiftY(v.mv.y1, ob, nb); }
+      });
+      layoutUnits(false);
+      sizeStage(); placeFrame(); publishHeights();
+    }
+    function stepHeights(real) {
+      if (mode !== 'phone' || !HT.init || !G.hs) return;
+      var inst = ui.reduced() || !!drag; // reduced motion jumps; a drag in flight must not move under the finger (the 120 ms re-cache then sees the final rects)
+      var to = drag ? HT.to : heightTargets(real), chg = false, f;
+      for (f = 0; f < 3; f++) if (to[f] !== HT.to[f]) chg = true;
+      if (chg) { HT.from = HT.cur.slice(); HT.to = to; HT.t0 = real; HT.on = true; }
+      if (!HT.on) return;
+      var p = inst ? 1 : Math.min(1, (real - HT.t0) / HT.ms), e = 1 - Math.pow(1 - p, 3), nxt = [];
+      for (f = 0; f < 3; f++) nxt[f] = p >= 1 ? HT.to[f] : Math.round(HT.from[f] + (HT.to[f] - HT.from[f]) * e);
+      HT.cur = nxt; if (p >= 1) HT.on = false;
+      applyHeights(nxt);
+      if (p >= 1) { layoutHand(); refreshTargets(); }
     }
 
     // ---------------- sizing
-    var fitSig = '';
+    var fitSig = '', handAnimT = 0;
+    // portrait hand strip: card size from the free height under the board and the width of the strip. About 3 cards (2.7 to 3.3) are visible and the next one peeks in; cards are 100 to 150 wide and 1.4 to 1.55 times as tall.
+    function handSizeFor(freeHandH, handW) {
+      var gap = 8, usable = Math.max(0, freeHandH - 30); // 30: room above the cards for the lift of a playable or selected card
+      var cwMin = (handW + gap) / 3.3 - gap, cwMax = (handW + gap) / 2.7 - gap;
+      var cw = Math.max(100, Math.min(150, Math.max(cwMin, Math.min(cwMax, usable / 1.5))));
+      if (usable < cw * 1.4) cw = Math.max(88, usable / 1.4); // a very short screen: smaller cards rather than a clipped hand
+      var ratio = Math.max(1.4, Math.min(1.55, usable / cw));
+      return { cw: Math.round(cw), cardH: Math.round(cw * ratio) };
+    }
     function fit(force) {
       var L = ui.layout(); mode = L.mode;
       if (G.mode !== mode) { G = geometry(mode); bg = null; }
       rootEl.setAttribute('data-mode', mode);
+      el.hand.classList.toggle('row', mode === 'phone'); // portrait phone: the hand is a scroll strip (class "row"), otherwise the fan
       var availW = el.sceneCol.clientWidth, gardenH = el.garden.offsetHeight || 0;
       var availH = el.sceneCol.clientHeight - gardenH - 4;
       if (mode !== 'phone' && availW >= 50 && availH >= 50) { // landscape: the board shape follows the screen
@@ -286,27 +380,30 @@
       if (mode === 'phone') {
         // portrait phone: the house takes the full width, the hand takes the widest cards that still leave the floors tall enough, and every floor gets the height that is left
         var rcs = getComputedStyle(rootEl), safeB = (parseFloat(rcs.paddingBottom) || 0) + (parseFloat(rcs.paddingTop) || 0), sW = availW / G.W; // the safe-area insets (notch, rounded corners, gesture bar) are padding on the battle root
-        var fixedH = el.top.offsetHeight + Math.max(gardenH, 30) + 4 + (el.extras.offsetHeight + (parseFloat(rcs.getPropertyValue('--res-h')) || 50) + 6) + 10 + 8 + safeB, handW = el.bottom.clientWidth - 16, fh;
-        var cwTop = Math.max(76, Math.min(112, Math.floor(handW / 4.2))), cardH;
-        for (cwCard = cwTop; ; cwCard -= 4) {
-          fh = ((L.h - fixedH - Math.round(cwCard * 1.4) - 30) / sW - G.roofH - 6) / 3;
-          if (fh >= 70 || cwCard - 4 < 76) break;
+        var fixedH = el.top.offsetHeight + Math.max(gardenH, 30) + 4 + (el.extras.offsetHeight + (parseFloat(rcs.getPropertyValue('--res-h')) || 50) + 6) + 10 + 8 + safeB, handW = el.bottom.clientWidth - 8, fh; // 8: the strip's left padding (its right edge bleeds to the screen edge so the next card peeks in)
+        // the floors take their best height (80, down to 56 on a very short screen); what is left under the board is the free hand height
+        var freeH, hs;
+        for (fh = 80; ; fh--) {
+          freeH = L.h - fixedH - Math.round((G.roofH + 6 + 3 * fh) * sW);
+          if (freeH >= 170 || fh <= 56) break;
         }
-        cardH = cwCard * 1.4;
-        if (fh > 76) { cardH = Math.min(cwCard * 1.95, cardH + (fh - 76) * 3 * sW); fh = 76; } // a tall phone: spare height makes the cards taller (more room for rules text) instead of leaving a gap
-        fh = Math.max(64, Math.min(80, Math.floor(fh)));
-        if (G.setFloor) G.setFloor(fh);
+        hs = handSizeFor(freeH, handW); cwCard = hs.cw;
+        var cardH = hs.cardH, prevFh = G.floorH, prevHs = G.hs;
+        if (G.setFloor) G.setFloor(fh, Math.max(Math.round(fh * 0.58), Math.ceil(62 / Math.min(sW, (L.h - fixedH - Math.round(cardH) - 30) / (G.roofH + 3 * fh + 6))))); // compact floor: about 58 percent, never under 60 css px
+        if (HT.init && prevFh === fh && prevHs) G.setHeights(prevHs); else initHeights(); // same floor size: keep the animated heights, otherwise snap to the occupancy
         availH = L.h - fixedH - Math.round(cardH) - 30;
-        rootEl.style.setProperty('--hand-h', Math.round(cardH) + 30 + 'px');
-        rootEl.style.setProperty('--card-ar', (cardH / cwCard).toFixed(3));
+        HT.base = Math.round(cardH) + 30; // hand area height when every floor is full; publishHeights() adds what the empty floors give back
+        HT.handW = handW; HT.cw = hs.cw;
+        rootEl.style.setProperty('--hand-h', HT.base + 'px');
+        rootEl.style.setProperty('--card-ar', (cardH / hs.cw).toFixed(3));
+        if (!handAnimT) handAnimT = requestAnimationFrame(function () { rootEl.classList.add('hand-anim'); }); // size changes animate, but not the very first sizing
       }
       if (availW < 50 || availH < 50) return;
-      var sc = Math.min(availW / G.W, availH / G.H);
+      var sc = Math.min(availW / G.W, availH / (G.Hfull || G.H));
       if (mode === 'desktop' && sc >= 2.4) sc = Math.floor(sc * 4) / 4;
       s = Math.max(0.8, sc);
-      var cw = Math.round(G.W * s), chh = Math.round(G.H * s);
-      el.stage.style.width = cw + 'px'; el.stage.style.height = chh + 'px';
-      el.canvas.width = G.W; el.canvas.height = G.H; el.canvas.style.width = cw + 'px'; el.canvas.style.height = chh + 'px';
+      var cw = Math.round(G.W * s), chh = Math.round((G.Hfull || G.H) * s);
+      sizeStage();
       rootEl.style.setProperty('--u', s + 'px');
       var hudFont = mode === 'phone' ? Math.max(11, Math.min(13, 6 * s)) : Math.max(9, Math.min(13, 4.6 * s));
       rootEl.style.setProperty('--hud', hudFont + 'px');
@@ -316,10 +413,11 @@
         cwCard = Math.max(L.short ? 64 : 92, Math.min(L.short ? 150 : 172, Math.round(hh / 1.4 * 0.74)));
       }
       el.hand.style.setProperty('--hand-cw', cwCard + 'px');
-      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth, unitFont, G.key, el.extras.offsetHeight, rootEl.style.getPropertyValue('--hand-h')].join(',');
+      if (mode === 'phone') publishHeights();
+      var sig = [mode, cw, chh, cwCard, el.handWrap.clientWidth, unitFont, G.key, el.extras.offsetHeight, HT.base, G.floorH, G.compactH].join(',');
       if (sig === fitSig && !force) return;
       fitSig = sig;
-      if (!bg || bgKey !== mode + G.W + 'x' + G.H + (G.key || '')) buildBg();
+      if (!bg || bgKey !== bgKeyNow()) buildBg();
       buildBoardFrame();
       layoutUnits(true);
       renderHud();
@@ -332,7 +430,7 @@
     function px(v) { return Math.round(v * s) + 'px'; }
     function buildBoardFrame() {
       ui.clear(el.overlay);
-      frame = { floors: [], rooms: [], inc: [] };
+      frame = { floors: [], rooms: [], inc: [], labels: [] };
       // roof overlay
       var roof = h('div.b-roof', { style: { left: px(G.x0), width: px(G.x1 - G.x0), top: '0px', height: px(G.roofH) } });
       el.sun = h('div.b-sun', { 'data-tut': 'warmth', tabindex: '0', 'data-gl': 'warmth' },
@@ -347,11 +445,11 @@
         (function (f) {
           var top = G.top(f);
           var fb = h('button.b-floor', { 'data-floor': f, 'data-tut': 'floor-' + f, 'aria-label': FLOOR_NAMES[f] + ' floor', onclick: function () { onFloorTap(f); },
-            style: { left: px(G.x0), top: px(top), width: px(G.x1 - G.x0), height: px(G.floorH - 2) } });
+            style: { left: px(G.x0), top: px(top), width: px(G.x1 - G.x0), height: px(G.fh(f) - 2) } });
           el.overlay.appendChild(fb); frame.floors[f] = fb;
           var lb = G.label(f);
           var lab = h('span.b-flabel', { style: { left: px(lb.x), top: px(lb.y), height: px(lb.h) } }, FLOOR_NAMES[f]);
-          el.overlay.appendChild(lab);
+          el.overlay.appendChild(lab); frame.labels[f] = lab;
           frame.rooms[f] = [];
           for (var i = 0; i < 2; i++) {
             var r = G.room(f, i);
@@ -366,6 +464,7 @@
       // unit layers
       el.units = h('div.b-units'); el.overlay.appendChild(el.units);
       V.units.forEach(function (v) { v.hud = null; });
+      placeFrame();
       updateFloorMeta();
     }
 
@@ -689,6 +788,7 @@
     function renderHand() {
       var turnOk = vm.turn === 'player' && !playing && !ended;
       var seen = {};
+      if (!handEls.size && el.hand.scrollLeft) el.hand.scrollLeft = 0; // a fresh hand starts at its first card
       handOrder = [];
       (vm.hand || []).forEach(function (entry, i) {
         seen[entry.uid] = 1; handOrder.push(entry.uid);
@@ -751,9 +851,8 @@
     }
     // fan geometry for card i of n: writes SL.x / SL.y / SL.r (no allocation)
     function computeSlot(i, n, W, cwc) {
-      if (mode === 'phone') { // portrait: a shallow fan across the full width, 4 to 5 cards side by side with a little overlap, more cards squeeze closer
-        var pgap = Math.min(cwc * 1.02, (W - cwc - 24) / Math.max(1, n - 1)), ptotal = (n - 1) * pgap + cwc, pk = i - (n - 1) / 2;
-        SL.x = Math.round((W - ptotal) / 2 + i * pgap); SL.y = Math.round(pk * pk * (n > 6 ? 0.8 : 1.6)); SL.r = pk * (n > 6 ? 1.5 : 2.2);
+      if (mode === 'phone') { // portrait: a scroll strip, cards side by side without overlap (the CSS flex row places them; this mirrors it for slotTarget)
+        SL.x = Math.round(8 + i * (cwc + 8) - el.hand.scrollLeft); SL.y = 0; SL.r = 0;
         return;
       }
       var room = W - cwc * 1.5 - 28, gap = Math.min(cwc * 0.92, room / Math.max(1, n - 1)), total = (n - 1) * gap + cwc, x0 = (W - total) / 2 - 6; // 1.5: a hovered, rotated edge card grows ~50% wider and must not reach End Turn
@@ -763,6 +862,7 @@
     function layoutHand(skipUid) {
       var order = skipUid ? handOrder.filter(function (u) { return u !== skipUid; }) : handOrder;
       var n = order.length, W = el.hand.clientWidth, cwc = parseFloat(el.hand.style.getPropertyValue('--hand-cw')) || 110;
+      if (mode === 'phone') { layoutStrip(); return; }
       el.hand.classList.remove('row');
       order.forEach(function (uid, i) {
         var rec = handEls.get(uid); if (!rec) return; var c = rec.el;
@@ -774,6 +874,57 @@
         c.style.setProperty('--r', SL.r.toFixed(1) + 'deg');
       });
       applyHover();
+    }
+    // ---- portrait strip: the DOM order is the hand order (the CSS flex row does the placing); when cards come or go the others slide (FLIP) instead of jumping
+    var stripCw = 0;
+    function layoutStrip() {
+      var hand = el.hand, want = [], i, ref, node, rec, c;
+      hand.classList.add('row');
+      for (i = 0; i < handOrder.length; i++) {
+        rec = handEls.get(handOrder[i]); if (!rec) continue;
+        c = rec.el;
+        if (drag && DR.uid === handOrder[i] && DR.ph && DR.ph.parentNode) c = DR.ph; // the dragged card is fixed; its placeholder holds the place
+        else if (c.classList.contains('drag')) continue;
+        want.push(c);
+        c.style.removeProperty('--x'); c.style.removeProperty('--y'); c.style.removeProperty('--r'); c.style.removeProperty('--hx');
+        c.classList.remove('hov');
+      }
+      ref = hand.firstElementChild;
+      for (i = 0; i < want.length; i++) {
+        node = want[i];
+        while (ref && ref !== node && (ref.classList.contains('drag') || want.indexOf(ref) < 0)) ref = ref.nextElementSibling;
+        if (ref === node) ref = ref.nextElementSibling; else hand.insertBefore(node, ref);
+      }
+      var cwNow = parseFloat(hand.style.getPropertyValue('--hand-cw')) || 0, resized = cwNow !== stripCw; stripCw = cwNow;
+      var red = ui.reduced() || !hand.firstElementChild || !hand.firstElementChild.animate, moves = null;
+      for (i = 0; i < want.length; i++) { // one read pass, then the writes
+        node = want[i];
+        var ox = node.offsetLeft;
+        if (!resized && !red && node.__ox != null && Math.abs(node.__ox - ox) > 2) (moves = moves || []).push([node, node.__ox - ox]);
+        node.__ox = ox;
+      }
+      if (moves) moves.forEach(function (m) { m[0].animate([{ translate: m[1] + 'px 0' }, { translate: '0 0' }], { duration: 240, easing: 'cubic-bezier(.2,.8,.25,1)' }); });
+      stripFade();
+    }
+    // soft shadow at the edge(s) where more cards are scrolled out of view
+    var fadeRaf = 0, fadeSig = '';
+    function stripFade() {
+      var hand = el.hand, l = hand.scrollLeft > 6, r = hand.scrollLeft + hand.clientWidth < hand.scrollWidth - 6, sg = (l ? 'l' : '') + (r ? 'r' : '');
+      if (mode !== 'phone') { sg = ''; }
+      if (sg === fadeSig) return; fadeSig = sg;
+      el.handWrap.classList.toggle('more-l', l && mode === 'phone'); el.handWrap.classList.toggle('more-r', r && mode === 'phone');
+    }
+    el.hand.addEventListener('scroll', function () { if (fadeRaf) return; fadeRaf = requestAnimationFrame(function () { fadeRaf = 0; stripFade(); }); }, { passive: true });
+    el.hand.addEventListener('wheel', function (e) { if (mode !== 'phone' || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return; el.hand.scrollLeft += e.deltaY; e.preventDefault(); }, { passive: false });
+    // bring a card fully into view (smooth) when it is partly hidden by the strip edges or the fades
+    function revealCard(uid) {
+      if (mode !== 'phone') return;
+      var rec = handEls.get(uid); if (!rec) return;
+      var hand = el.hand, c = rec.el, left = c.offsetLeft, right = left + c.offsetWidth, vs = hand.scrollLeft, ve = vs + hand.clientWidth, to = vs;
+      if (left < vs + 8) to = left - 8; else if (right > ve - 8) to = right + 8 - hand.clientWidth;
+      to = Math.max(0, Math.min(hand.scrollWidth - hand.clientWidth, to));
+      if (Math.abs(to - vs) < 2) return;
+      hand.scrollTo({ left: to, behavior: ui.reduced() ? 'auto' : 'smooth' });
     }
     // ---- hover fan: hover intent with hysteresis, neighbours spread apart. Driven by the pointer x against the resting fan, never by :hover, so a card that rises under the pointer cannot flicker.
     function applyHover() {
@@ -813,7 +964,7 @@
       c.addEventListener('pointermove', function (e) {
         if (!down) return;
         var dx = e.clientX - down.x, dy = e.clientY - down.y;
-        if (!drag && (Math.abs(dy) > 10 || (mode !== 'phone' && Math.abs(dx) > 10)) && (mode !== 'phone' || dy < -7)) {
+        if (!drag && (Math.abs(dy) > 10 || (mode !== 'phone' && Math.abs(dx) > 10)) && (mode !== 'phone' || (dy < -7 && -dy > Math.abs(dx) * 0.9))) { // phone: only a mostly vertical swipe up lifts the card; a sideways swipe belongs to the strip's native scroll
           moved = true; clearTimeout(longT); startDrag(uid, c, e);
         }
         if (drag) moveDrag(e);
@@ -850,7 +1001,7 @@
       sel = { uid: uid, cp: cp }; tgtCursor = -1;
       hook('select', { uid: uid, cp: cp });
       sfx('ui_click');
-      refreshTargets(); renderHand();
+      refreshTargets(); renderHand(); revealCard(uid);
     }
     function clearSel() {
       sel = null; refreshTargets(); renderHand(); renderTray(); el.arrow.style.display = 'none';
@@ -1095,7 +1246,7 @@
       for (var j = 0; j < 3; j++) {
         var z = zs[j];
         if (zc > 1 && j < zc) {
-          z.setAttribute('data-l', names[j]); z.style.width = Math.round(bw) + 'px'; z.style.height = Math.round(G.floorH * k) + 'px';
+          z.setAttribute('data-l', names[j]); z.style.width = Math.round(bw) + 'px'; z.style.height = Math.round(G.fh(f) * k) + 'px';
           z.style.transform = 'translate3d(' + Math.round(D.zx[f * 3 + j] - bw / 2) + 'px,' + Math.round(D.fl[f * 4 + 1]) + 'px,0)'; z.classList.add('on');
         } else z.classList.remove('on', 'hot');
       }
@@ -1187,7 +1338,7 @@
       var wn = 26; D.K[0] = D.K[1] = wn * wn; D.C[0] = D.C[1] = 2 * wn;
       D.K[2] = D.K[4] = D.K[5] = 170; D.C[2] = D.C[4] = D.C[5] = 2 * Math.sqrt(170);
       D.K[3] = 260; D.C[3] = 2 * Math.sqrt(260) * 0.8;
-      if (rowMode) { D.ph = h('div.card-ph', { style: { width: w + 'px', height: hh + 'px', marginRight: '6px' } }); c.parentNode.insertBefore(D.ph, c); } else D.ph = null;
+      if (rowMode) { D.ph = h('div.card-ph', { style: { width: w + 'px', height: hh + 'px' } }); c.parentNode.insertBefore(D.ph, c); } else D.ph = null;
       c.style.setProperty('--dw', w + 'px'); c.style.transition = 'none';
       c.classList.add('drag'); c.style.transform = 'translate3d(' + (D.cx0 - w / 2) + 'px,' + (D.cy0 - hh / 2) + 'px,0) scale(' + D.S[3] + ')';
       c.setPointerCapture && tryf(function () { c.setPointerCapture(e.pointerId); });
@@ -2292,6 +2443,7 @@
         var p = Math.min(1, (tn - w.t0) / w.d); w.o[w.k] = w.a + (w.b - w.a) * w.e(p);
         if (p >= 1) { w.o[w.k] = w.b; w.done(); return false; } return true;
       });
+      stepHeights(real);
       // unit smoothing (and scripted moves: climb arc, deploy drop)
       V.units.forEach(function (v) {
         if (v.tx === undefined) return;
@@ -2327,11 +2479,23 @@
       }
       draw(tk, tn);
     }
+    // The cached art is full height. With compact floors, each floor shows its top 28 rows (label, window, rooms) and the rest from its bottom (feet, baseboard, slab).
+    function drawBg() {
+      if (!G.hs || (G.hs[0] === G.floorH && G.hs[1] === G.floorH && G.hs[2] === G.floorH)) { ctx.drawImage(bg, 0, 0); return; }
+      var W = G.W, fh = G.floorH, A = 28, f, h2, ft, dt;
+      ctx.drawImage(bg, 0, 0, W, G.roofH, 0, 0, W, G.roofH);
+      for (f = 2; f >= 0; f--) {
+        h2 = G.hs[f]; ft = G.roofH + (2 - f) * fh; dt = G.top(f);
+        if (h2 >= fh) ctx.drawImage(bg, 0, ft, W, fh, 0, dt, W, fh);
+        else { ctx.drawImage(bg, 0, ft, W, A, 0, dt, W, A); ctx.drawImage(bg, 0, ft + fh - (h2 - A), W, h2 - A, 0, dt + A, W, h2 - A); }
+      }
+      ctx.drawImage(bg, 0, bg.height - 6, W, 6, 0, G.H - 6, W, 6);
+    }
     function draw(tk, tn) {
       if (!bg) buildBg();
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, G.W, G.H);
-      ctx.drawImage(bg, 0, 0);
+      drawBg();
       var sb = vm.sunbeam || { warmth: 40, max: 40 }, pct = sb.warmth / (sb.max || 1);
       // stars
       for (var i = 0, ns = Math.round(14 * G.W / 384); i < ns; i++) {
@@ -2375,7 +2539,7 @@
       // loss: lights out floor by floor, top to bottom
       if (V.dark) {
         var prog = (tn - V.dark) / (200 / ui.speed());
-        for (var f2 = 2; f2 >= 0; f2--) { var idx = 2 - f2, a2 = Math.max(0, Math.min(1, prog - idx)); if (a2 > 0) { ctx.fillStyle = 'rgba(10,7,22,' + (0.72 * a2).toFixed(2) + ')'; ctx.fillRect(G.x0, G.top(f2), G.x1 - G.x0, G.floorH); } }
+        for (var f2 = 2; f2 >= 0; f2--) { var idx = 2 - f2, a2 = Math.max(0, Math.min(1, prog - idx)); if (a2 > 0) { ctx.fillStyle = 'rgba(10,7,22,' + (0.72 * a2).toFixed(2) + ')'; ctx.fillRect(G.x0, G.top(f2), G.x1 - G.x0, G.fh(f2)); } }
         if (prog > 0.5) { ctx.fillStyle = 'rgba(10,7,22,' + Math.min(0.7, (prog - 0.5) * 0.3).toFixed(2) + ')'; ctx.fillRect(0, 0, G.W, G.roofH); }
       }
     }
