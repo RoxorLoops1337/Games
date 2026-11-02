@@ -171,7 +171,7 @@ await setLang('en');
   const ids = TUTORIAL.map((s) => s.id), pi = ids.indexOf('preview'), ri = ids.indexOf('reroll');
   ok(pi > ids.indexOf('hero2') && ri === pi + 1 && ids.indexOf('finish') === ri + 1, 'preview and re-roll come near the end, before the finish');
   ok(new Set(ids).size === ids.length, 'tutorial ids are unique');
-  ok(TUTORIAL.every((s) => !/—/.test(JSON.stringify(s))), 'no em dash in the tutorial');
+  ok(TUTORIAL.every((s) => !JSON.stringify(s).includes(String.fromCharCode(8212))), 'no em dash in the tutorial');
   const r = rig({ tutorial: true }), b = r.b;
   b.tut.i = pi; b.tut.t = 0; b.tutBubble = { text: TUTORIAL[pi].say, t: 0 };
   ok(b.tutSpot().x < 300 && b.tutSpot().y < 20, 'preview step spotlights the WAVE box'); b.pv.next = r.run.nextWavePreview();
