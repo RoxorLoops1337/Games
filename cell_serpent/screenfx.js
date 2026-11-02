@@ -8,6 +8,7 @@ const backOut = t => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + 
 import { createFeel6 } from './feel6.js';
 import { cardPose, cardFlair } from './card_flair.js';
 import { hasTrait, drawTraitIcon, TRAIT_LABEL } from './trait_ui.js';
+import { recordTime, bestProg, recordProg, fmtSecs, nearMiss, mileSound } from './screen_b10.js';
 const CONFETTI = ['#ff7eb6', '#ffd84d', '#6fe3ff', '#9dff6d', '#c9a0ff', '#ffffff'];
 
 export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst }) {
@@ -22,7 +23,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     clear: null,
     sounds: [],
     beatFn: null,
-    mile: null, go: null, mileDone: 0, lastBoss: false, ph: '', cc: null, p2: null, p2Done: false, perf: 0,   // milestone ribbon, GO! pop, stage progress milestones already shown
+    mile: null, go: null, mileDone: 0, lastBoss: false, ph: '', cc: null, p2: null, p2Done: false, perf: 0, bestPrev: 0, deadBest: null,   // milestone ribbon, GO! pop, stage progress milestones already shown
   };
   const calm = () => OPT.reduceMotion;
   let F6 = null;   // round 6 screen feel (feel6.js), built lazily because it needs edges/vignette/confetti below
@@ -66,7 +67,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     switch (e.t) {
       case 'stage': {
         const boss = !!e.boss;
-        F.mileDone = 0; F.mile = null; F.go = null; F.lastBoss = boss; F.p2 = null; F.p2Done = false; F.cc = null; F.perf = 0;
+        F.mileDone = 0; F.mile = null; F.go = null; F.lastBoss = boss; F.p2 = null; F.p2Done = false; F.cc = null; F.perf = 0; F.deadBest = null; F.bestPrev = g.mode ? 0 : bestProg(e.n, g.hard);
         F.card = { n: e.n, boss, name: e.name || '', mod: e.mod || '', skin: g.skin, t: 0, dur: boss ? 2.9 : 2.3, slammed: false, trait: hasTrait(g.skin, e.n, boss, g.mode) ? g.skin : '' };
         F.deadT = 0;
         break;
@@ -84,7 +85,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       case 'clutch': F.clutchT = 0.55; if (!calm()) { S.trauma = Math.min(1, S.trauma + 0.3); if (!F.cc || F.cc.t > 0.35) { punch(e.x, e.y, 0.06, 0.45, 0.4); F.cc = { t: 0, dur: 1, x: clamp(e.x, 380, W - 380) }; } } break;   // close call: a cell died right at the line
       case 'won': startClear(g); break;
       case 'clear': confetti(e.boss ? 110 : 70); S.flash = Math.max(S.flash, 0.25); S.flashCol = '#ffe9a8'; break;
-      case 'dead': punch(g.p.x, g.p.y, 0.07, 0.3, 0.6); F.deadT = 0.0001; break;
+      case 'dead': punch(g.p.x, g.p.y, 0.07, 0.3, 0.6); F.deadT = 0.0001; markDead(g); break;
       case 'revive': F.deadT = 0; break;
       case 'checkpoint': showMile(e.k === 2 ? 50 : 25, g); break;
       case 'levelup': if (!calm()) { S.flash = Math.max(S.flash, 0.35); S.flashCol = '#fff3b8'; ring(g.p.x, g.p.y - 20, 260, '#ffd84d', 0.5); ring(g.p.x, g.p.y - 20, 150, '#fff', 0.4); } break;   // the song pauses for the cards: a gold flash
@@ -105,9 +106,19 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
   // ---- stage clear card: STAGE CLEAR under the confetti, the earned stars pop in one by one before the result screen
   const STAR_T = [0.55, 1.0, 1.45];
   function starsOf(g) { return !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0; }
+  // r10: the best percent on this stage (own storage key) shown as a ghost mark on the game over bar
+  function markDead(g) {
+    if (g.mode) return;
+    const pct = Math.round(clamp(g.progress || 0, 0, 1) * 100), prev = F.bestPrev;
+    F.deadBest = { prev, pct, isNew: prev > 0 && pct > prev };
+    if (pct > prev) { recordProg(g.stage, g.hard, pct); F.bestPrev = pct; }
+  }
   function startClear(g) {
     const stars = starsOf(g); if (!stars) return;
-    F.clear = { boss: F.lastBoss, n: g.stage, stars, secs: Math.max(0, Math.floor(g.t || 0)), close: Math.round(clamp(g.faceMax || 0, 0, 1) * 100), t: 0, shown: 0, dur: calm() ? 1.3 : STAR_T[2] + 0.95 };
+    F.clear = { boss: F.lastBoss, n: g.stage, stars, secs: Math.max(0, Math.floor(g.t || 0)), close: Math.round(clamp(g.faceMax || 0, 0, 1) * 100), best: false, phew: false, tagged: false, t: 0, shown: 0, dur: calm() ? 1.3 : STAR_T[2] + 0.95 };
+    const c = F.clear;
+    if (!g.mode) { recordProg(g.stage, g.hard, 100); if (c.secs > 0) c.best = recordTime(g.stage, g.hard, c.secs).best; }
+    c.phew = nearMiss(c.close);
   }
   function starPath(x, y, r) {
     ctx.beginPath();
@@ -125,7 +136,17 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
         if (!calm()) { const x = W / 2 + (i - 1) * 190, y = H * 0.47; ring(x, y, 150 + i * 30, '#ffd84d', 0.5); burst(x, y, 14 + i * 6, ['#ffd84d', '#fff', '#ff9ad6'], 420, 0.7, 6); if (i === 2 && c.stars === 3) { confetti(80); S.trauma = Math.min(1, S.trauma + 0.45); F.perf = 0.0001; S.flash = Math.max(S.flash, 0.4); S.flashCol = '#fff3b8'; ring(W / 2, H * 0.47, 420, '#fff', 0.6); } }
       }
     }
+    if (!c.tagged && (c.best || c.phew) && c.t >= (calm() ? 0.4 : STAR_T[2] + 0.1)) { c.tagged = true; F.sounds.push(c.best ? 'besttime' : 'phew'); if (!calm() && c.phew) S.trauma = Math.min(1, S.trauma + 0.2); }
     if (c.t > c.dur) F.clear = null;
+  }
+  // a pill under the clear card: NEW BEST TIME (gold) or PHEW (the face stopped a hair short of the line)
+  function clearTag(c, y, ck) {
+    const txt = c.best ? 'NEW BEST TIME' : 'PHEW!  ' + c.close + '% CLOSE', col = c.best ? '#ffd84d' : '#ff8aa8', pop = calm() ? 1 : backOut(clamp(ck, 0, 1));
+    ctx.save(); ctx.translate(W / 2, y); ctx.scale(pop, pop); ctx.rotate(calm() ? 0 : -0.035);
+    const w = txt.length * 24 + 70;
+    ctx.fillStyle = 'rgba(14,6,26,.88)'; ctx.beginPath(); ctx.roundRect(-w / 2, -30, w, 60, 30); ctx.fill();
+    ctx.lineWidth = 5; ctx.strokeStyle = col; ctx.stroke();
+    text(txt, 0, 0, 36, col, '#1a0a2e'); ctx.restore();
   }
   const clearLine = c => Math.floor(c.secs / 60) + ':' + String(c.secs % 60).padStart(2, '0') + '  -  CLOSEST ' + c.close + '%';
   function drawClear() {
@@ -156,6 +177,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     }
     { const ck = calm() ? clamp((t - 0.4) / 0.3, 0, 1) : clamp((t - STAR_T[2] + 0.25) / 0.35, 0, 1);   // r9: how long the song took and how close the serpent got
       if (ck > 0 && c.secs > 0) { ctx.save(); ctx.globalAlpha *= ck; ctx.translate(0, (1 - ck) * 14); text(clearLine(c), W / 2, cy + 168, 30, '#cfd6ff', '#0b1020'); ctx.restore(); } }
+    if (c.best || c.phew) { const tk = calm() ? clamp((t - 0.4) / 0.2, 0, 1) : clamp((t - STAR_T[2] - 0.1) / 0.35, 0, 1); if (tk > 0) { ctx.save(); ctx.globalAlpha *= clamp(tk * 3, 0, 1); clearTag(c, cy + 238, tk); ctx.restore(); } }
     if (F.perf > 0) perfectBanner(cy + 300);
     ctx.restore();
   }
@@ -209,7 +231,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
     if (F.lastBoss && pct === 50) { F.mileDone = 50; startP2(g); return; }
     F.mileDone = pct; const m = MILE[pct];
     F.mile = { pct, txt: m[0], sub: m[1], t: 0, dur: 1.7, col: mileCol(g) };
-    F.sounds.push(pct === 75 ? 'star3' : 'star2');
+    F.sounds.push(mileSound(g && g.skin, pct));   // r10: a chord in the key of the species on the lane
     if (!calm()) { ring(W / 2, H * 0.27, 240, '#ffd84d', 0.5); burst(W / 2, H * 0.27, 14, ['#ffd84d', '#fff', '#ff9ad6'], 420, 0.7, 6); if (pct === 75) confetti(24); }
     void g;
   }
@@ -351,6 +373,14 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
       ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.beginPath(); ctx.roundRect(-bw / 2, 116, bw, bh, 8); ctx.fill();
       if (fw > 1) { const gr = ctx.createLinearGradient(-bw / 2, 0, bw / 2, 0); gr.addColorStop(0, '#ff7eb6'); gr.addColorStop(1, '#ffd84d'); ctx.fillStyle = gr; ctx.beginPath(); ctx.roundRect(-bw / 2, 116, Math.max(fw, 12), bh, 8); ctx.fill(); }
       for (const m of [0.25, 0.5, 0.75]) { ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(-bw / 2 + bw * m - 1, 116, 2, bh); }
+      const db = F.deadBest;   // r10: the old best as a flag on the bar, or NEW BEST when this run passed it
+      if (db && db.pct > 0 && (db.isNew || db.prev > 0)) {
+        const bk = calm() ? 1 : easeOut(clamp((t - 0.9) / 0.3, 0, 1));
+        ctx.save(); ctx.globalAlpha *= bk;
+        if (db.isNew) text('NEW BEST!', 0, 166, 34, '#ffd84d', '#1a0210');
+        else { const fx = -bw / 2 + bw * clamp(db.prev / 100, 0, 1); ctx.fillStyle = '#ffd84d'; ctx.fillRect(fx - 2, 108, 4, bh + 16); ctx.beginPath(); ctx.moveTo(fx + 2, 108); ctx.lineTo(fx + 20, 114); ctx.lineTo(fx + 2, 120); ctx.fill(); text('BEST ' + db.prev + '%', 0, 166, 30, '#ffe9a8', '#1a0210'); }
+        ctx.restore();
+      }
     }
     ctx.restore();
   }
