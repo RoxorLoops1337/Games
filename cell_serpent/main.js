@@ -635,8 +635,9 @@ const PETSND = { kitten: 'meow', puppy: 'bark', lamb: 'baa', turtle: 'boop', pig
 const BUZZ = { dead: [80, 40, 90], revive: 40, boom: 24, upgradecell: 16, levelup: 14, chest: 12, danger: 28, leak: 60 };
 const FX_SOUND = new Set(['shoot', 'hit', 'kill', 'boom', 'coin', 'hurt', 'block', 'power', 'levelup', 'clear', 'stage', 'revive', 'dead', 'swarm', 'roar', 'surgewarn', 'surge', 'phase2', 'won', 'chestdrop', 'chest', 'swab', 'needles', 'dragon', 'maw', 'strike', 'bubble', 'pulse', 'danger', 'mend', 'lull', 'skip', 'upgradecell', 'groove', 'leak', 'beatshot', 'encore', 'encoreready', 'goldpop', 'goldfade', 'quartet', 'quartetstart', 'quartetfail', 'clutch', 'checkpoint']);
 function drain(game, sound) {
-  const evs = game.events.splice(0);
-  for (const e of evs) {
+  const evs = game.events;   // read in place and truncate at the end: no new array every frame (events pushed meanwhile are still handled)
+  try { for (let ei = 0; ei < evs.length; ei++) {
+    const e = evs[ei];
     R.onEvent(e, game);
     if (sound && e.t === 'kill' && game === g && needsFirstPop(save)) firstPop(audio, buzz);
     if (sound && e.t === 'kill' && e.choir) audio.play('choirpop');
@@ -644,7 +645,7 @@ function drain(game, sound) {
     if (!sound) continue;
     if (FX_SOUND.has(e.t)) audio.play(SFX[e.t] || e.t, e); else if (e.t === 'pet') audio.play(PETSND[e.id] || 'chirp');
     if (BUZZ[e.t] !== undefined) buzz(BUZZ[e.t]);
-  }
+  } } finally { evs.length = 0; }
 }
 let pauseN = 0, pauseW = 0, pauseH = 0;
 function frame(now) {

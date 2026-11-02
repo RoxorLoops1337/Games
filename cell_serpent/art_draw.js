@@ -91,7 +91,8 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   const cache = new Map();
   // bake(key, w, h, fn): fn draws around (0,0); the sprite is w x h logical units.
   function bake(key, w, h, fn, scale = dpr) {
-    if (cache.has(key)) { if (key.startsWith('far|')) { const v = cache.get(key); cache.delete(key); cache.set(key, v); } return cache.get(key); }   // far skylines (1.1 MB each) are kept most-recent-last
+    const hit = cache.get(key);
+    if (hit !== undefined) { if (key.charCodeAt(0) === 102 && key.startsWith('far|')) { cache.delete(key); cache.set(key, hit); } return hit; }   // cache hits are the per-frame path: one lookup, no startsWith unless it can be a far skyline   // far skylines (1.1 MB each) are kept most-recent-last
     if (key.startsWith('far|')) { let n = 0, first = null; for (const k of cache.keys()) if (k.startsWith('far|')) { n++; if (!first) first = k; } if (n >= FAR_KEEP) { const old = cache.get(first); if (old && old.c) old.c.width = 0; cache.delete(first); } }   // a long session visits all 50 skylines: drop the least recent
     let spr = null;
     const c = makeCanvas && makeCanvas(Math.ceil(w * scale), Math.ceil(h * scale));
@@ -601,8 +602,15 @@ export function createArtDraw(makeCanvas, dpr = 2) {
   }
   function acidFn(g) { const r = B * 0.55; cel(g, '#8dff6a', circ(0, 0, r), { r, shadow: '#43b83a' }); fangsMouth(g, 0, r * 0.12, r * 0.28, 0.2, '#2f7a2a'); eye(g, -r * 0.3, -r * 0.3, r * 0.14, r * 0.18, { iris: '#2d170f' }); eye(g, r * 0.3, -r * 0.3, r * 0.14, r * 0.18, { iris: '#2d170f' }); }
 
+  const BODY_MEMO = Object.create(null);
   const SPR = {
-    body: (skin, boss, kind) => bake(`body|${skin}|${boss ? 1 : 0}|${kind || ''}`, B * 3.2, B * 3.2, bodyFn(skin, boss, kind)),
+    body: (skin, boss, kind) => {   // called for every cell every frame: remember the sprite per (skin, boss, kind) instead of building the key string
+      const kk = kind || '', slot = boss ? 1 : 0;
+      let bs = BODY_MEMO[skin]; if (!bs) bs = BODY_MEMO[skin] = [{}, {}];
+      let sp = bs[slot][kk];
+      if (sp === undefined) { sp = bake(`body|${skin}|${slot}|${kk}`, B * 3.2, B * 3.2, bodyFn(skin, boss, kind)); if (sp) bs[slot][kk] = sp; }
+      return sp;
+    },
     minion: id => bake('min|' + id, B * 3.4, B * 3.4, MIN[id] || MIN.green),
     pickup: k => bake('pk|' + k, B * 2.4, B * 2.4, PICK[k] || PICK.gem),
     note: crit => bake('note|' + (crit ? 1 : 0), B * 2.4, B * 2.4, noteFn(crit ? '#ffd84d' : '#6fe3ff', crit), 1),
