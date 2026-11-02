@@ -585,6 +585,21 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       g.save(); g.translate(0, -r * 1.02); g.rotate(-0.3); cel(g, '#8fd878', ell(0, 0, r * 0.3, r * 0.14), { r: r * 0.2, lw: r * 0.05, shadow: '#3f8a3a' }); g.restore();
     }
   }
+  // 08-animal-art (round 8): the weapon animals dress up as the skill levels. tier 1 (lv 4-6) a pin star, tier 2 (lv 7-9) a silver crown,
+  // tier 3 (lv 10) a gold crown with a ruby plus the pin. Baked into the weapon sprite: mood = moodNumber + 16 * tier.
+  const WTOP = { dagger: [0.8, 0.95], tower: [0.95, 1.12], hog: [0.8, 1.4], maw: [1.0, 1.04], perch: [0.95, 1.08] };   // [critter radius / B, crown height / radius]
+  function crownAt(g, x, y, w, gold) {
+    const hgt = w * 0.78, main = gold ? '#ffd84d' : '#e4ecfb', dark = gold ? '#d49a1e' : '#98a8cc';
+    cel(g, main, poly([[x - w, y], [x - w, y - hgt * 0.7], [x - w * 0.5, y - hgt * 0.3], [x, y - hgt], [x + w * 0.5, y - hgt * 0.3], [x + w, y - hgt * 0.7], [x + w, y]]), { r: w, hi: false, lw: Math.max(2, w * 0.2), shadow: dark });
+    cel(g, gold ? '#ff5a7e' : '#8fd8ff', circ(x, y - hgt * 0.36, w * 0.2), { r: w * 0.2, hi: false, lw: Math.max(1.4, w * 0.1), shadow: gold ? '#b0224a' : '#3fa8d8' });
+    for (const s of [-1, 1]) cel(g, main, circ(x + s * w, y - hgt * 0.74, w * 0.16), { r: w * 0.16, hi: false, lw: Math.max(1.2, w * 0.08), shadow: dark });
+  }
+  function wpnTier(g, id, tier) {
+    const t = WTOP[id]; if (!t || !tier) return;
+    const r = B * t[0], top = -r * t[1];
+    if (tier >= 2) crownAt(g, 0, top + r * 0.16, r * 0.4, tier >= 3);
+    if (tier !== 2) sparkle(g, r * 0.78, -r * 0.62, r * 0.3, tier >= 3 ? '#fff3b0' : '#ffffff');
+  }
   function featherFn(g) {
     const r = B * 0.5; g.rotate(-0.6);
     cel(g, '#ffffff', ell(0, 0, r * 0.3, r * 0.9), { r: r * 0.5, hi: false, lw: 2, shadow: '#c9d8f2' });
@@ -642,7 +657,7 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     }, 1),
     paw: () => bake('paw', B * 1.2, B * 1.2, g => { g.globalAlpha = 0.9; pawPrint(g, B * 0.42, '#ffffff', '#ffb3d6'); }, 1),
     feather: () => bake('feather', B * 1.4, B * 1.4, featherFn, 1),
-    weapon: (id, mood = 0) => mood ? bake('wpn|' + id + '|' + mood, B * 4.6, B * 3.4, g => { MOOD = mood; (WPN[id] || WPN.dagger)(g); MOOD = 0; }, 1) : bake('wpn|' + id, B * 4.6, B * 3.4, WPN[id] || WPN.dagger, 1),
+    weapon: (id, mood = 0) => mood ? bake('wpn|' + id + '|' + mood, B * 4.6, B * 3.4, g => { MOOD = mood & 15; (WPN[id] || WPN.dagger)(g); MOOD = 0; if (mood >> 4) wpnTier(g, id, mood >> 4); }, 1) : bake('wpn|' + id, B * 4.6, B * 3.4, WPN[id] || WPN.dagger, 1),
   };
   // steady frames look sprites up by value: the key string and the bake closure are only built the first time (cache.clear drops these too)
   const memo = new Map();
