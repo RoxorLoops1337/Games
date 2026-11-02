@@ -72,3 +72,14 @@ export function collectionCelebrate(save, el, fx) {
   if (fx) fx(tier, el);
   return st;
 }
+
+// round 11: a heart badge on the pet tile whose colour and fill follow the joy tier (Shy, Curious, Content, Happy, Overjoyed)
+export const joyTierOf = j => j >= PET_JOY_MAX ? 4 : j >= 66 ? 3 : j >= 33 ? 2 : j > 0 ? 1 : 0;
+export function joyBadgeHTML(j) {
+  const t = joyTierOf(j);
+  return `<b class="jbdg jt${t}" aria-hidden="true" title="${joyLabel(j)}">${t === 0 ? '♡' : '♥'}${t >= 3 ? '<em>' + (t === 4 ? '★' : '+') + '</em>' : ''}</b>`;
+}
+export function joyBadge(t, j) {
+  const ic = t && t.querySelector('.ic'); if (!ic || ic.querySelector('.jbdg')) return;
+  ic.insertAdjacentHTML('beforeend', joyBadgeHTML(j));
+}
