@@ -22,6 +22,7 @@ import { luckHTML, refreshPips, buildHTML, passiveStat, bandSheetHTML, revealHTM
 import { capIconURL, kindLabel, synergyHint } from './card_icons.js';
 import { paintTabIcons, bindHubSwipe } from './tabs_ui.js';
 import { paintButtonGlyphs, RECAP, emptyCard } from './btn_glyphs.js';
+import { paintSettingIcons } from './set_icons8.js';
 import { watchSideIcons } from './side_icons.js';
 import { setupTitleSnake, needsFirstPop, firstPop } from './onboard5.js';
 import { renderRecStrip } from './build_rec.js';
@@ -32,6 +33,7 @@ import { twistHTML, factHTML, eventBannerHTML, monthEndMs, countdownText, syncDo
 import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, isNewItem, newRibbonHTML } from './skill_sheet.js';
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
+import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
 import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
 import { renderPresets, enableDrag, joyHTML } from './presets_ux.js';
 import { dressDuo, wornOutfit } from './duo_pose.js';
@@ -81,6 +83,7 @@ function gigFlies(list, d0 = 0) {
   setTimeout(rel, d0 + 700 + list.length * 160 + 1200);   // safety: never leave a pill stuck
 }
 function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) { const hv = curHold[id.endsWith('Beats') ? 'beats' : 'sparkles']; motion.num($(id), hv === undefined ? v : hv); } const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } { const ht = document.querySelector('.hubtop'), big = Math.max(save.beats, save.sparkles); if (ht) { ht.classList.toggle('big', big >= 10000); ht.classList.toggle('huge', big >= 100000); } }   // long numbers shrink the header pills on narrow phones
+  paintRibbonChip(save.ribbons);
   const en = $('hEnergy'); if (en) en.textContent = tickEnergy(save, Date.now()) + '/' + ENERGY_MAX; }
 
 // ---------------------------------------------------------------- icons (all drawn by the art kit)
@@ -156,7 +159,7 @@ function renderHub() {
   if (stagKey !== hubTab) { stagKey = hubTab; if (hubTab !== 'Battle') motion.stagger($('tab' + hubTab)); }
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => { audio.unlock(); audio.play('click'); hubTab = b.dataset.tab; hubTabSwitch(); };
-paintTabIcons(); paintButtonGlyphs();
+paintTabIcons(); paintButtonGlyphs(); paintSettingIcons();
 bindHubSwipe({ order: TABS, cur: () => hubTab, hub: $('hub'), pane: () => $('tab' + hubTab), bump: () => buzz(10), go: t => { if (mode !== 'hub') return; audio.unlock(); audio.play('click'); buzz(6); hubTab = t; hubTabSwitch(); } });
 // 17-perf: a tab tap paints the new pane at once (old content dimmed as a light skeleton) and builds it on the next frame, so the tap never freezes
 let hubSwitchTok = 0;
@@ -578,12 +581,20 @@ function statsPanel(onClose) {
     body.innerHTML = rows.length ? rows.map(([id, v]) => `<div class="dmgrow"><span class="dn">${id === 'capsule' ? '🎤' : icon(id)} ${nm(id)}</span><div class="bar"><i style="width:${Math.round(v / tot * 100)}%"></i></div><b>${Math.round(v / tot * 100)}%</b></div>`).join('') : '<div class="sub">Nothing popped yet.</div>';
   }, onClose);
 }
+function flyRibbonsHome(nFly) {   // the result's Ribbons chip flies to the hub chip, which waits at the old total until it lands (batch 8)
+  const rr = [...$('rList').children].find(c => /Ribbons/.test(c.textContent)), rn = rr ? +((rr.querySelector('[data-to]') || {}).dataset || {}).to || 0 : 0;
+  if (rn <= 0) return;
+  const rect = rr.getBoundingClientRect(), red = !!(save.settings.reduceMotion || systemReduceMotion());
+  holdRibbons(Math.max(0, save.ribbons - rn));
+  setTimeout(() => flyRibbons({ left: rect.left, top: rect.top, width: rect.width, height: rect.height }, rn, { reduce: red, onLand: () => { releaseRibbons(); refreshCur(); } }), 420 + 160 * nFly);
+  setTimeout(() => { releaseRibbons(); refreshCur(); }, 3500);
+}
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
   const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), out = applyResult(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
   stopFx(); stopBest(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
-  if (out.ribbons) rows.push(`<div class="r">🎀 ${cu(out.ribbons)} Ribbons</div>`);
+  if (out.ribbons) rows.push(`<div class="r">${BOW} ${cu(out.ribbons)} Ribbons</div>`);
   if (out.pet) rows.push(`<div class="r">${icon(out.pet.id)}${cu(out.pet.n)} ${PETS.find(p => p.id === out.pet.id).name} fragments</div>`);
   if (out.egg) rows.push(`<div class="r">${icon('egg')}+1 Egg</div>`);
   if (out.sparkles) rows.push(`<div class="r">${curImg('sparkles')}${cu(out.sparkles)} Sparkles</div>`);
@@ -611,13 +622,14 @@ function showResult() {
   { const gl = nextGoal(save); renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
   $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); try { retryFly($('rRetry'), rewardSnaps($('rList')), !!(save.settings.reduceMotion || systemReduceMotion())); } catch (e) { /* cosmetic */ } beginStage(r.stage); };
-  $('rHub').onclick = () => { audio.play('click'); const fl = rewardSnaps($('rList')); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; gigFlies(fl.map(it => ({ snap: it.s, kind: it.kind, amt: it.n })), 420); openHub('Battle'); };   // the hub pills wait at their old totals and count up as each chip lands (batch 7)
+  $('rHub').onclick = () => { audio.play('click'); const fl = rewardSnaps($('rList')); flyRibbonsHome(fl.length); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; gigFlies(fl.map(it => ({ snap: it.s, kind: it.kind, amt: it.n })), 420); openHub('Battle'); };   // the hub pills wait at their old totals and count up as each chip lands (batch 7)
   { const st = r.stars || 0; $('rStars').innerHTML = r.won && !r.mode && !r.hard ? [1, 2, 3].map(i => `<span class="${i <= st ? '' : 'off'}">★</span>`).join('') : '';
     if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + Math.min(3, i + 1)); if (i === st - 1 && !reduce) confetti($('result'), st === 3 ? 30 : st === 2 ? 18 : 10); }, reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
     const top = Object.entries(r.dmgBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => (id === 'capsule' ? 'Singing' : id === 'encore' ? 'Encore' : (WEAPONS.find(w => w.id === id) || { name: id }).name)).join(', ') || '-';
     $('rExtra').innerHTML = `<span><i>⏱</i>Time <b>${mm}:${ss}</b></span><span><i>🎯</i>Cells <b>${r.kills}</b></span><span><i>🎵</i>Best groove <b>${Math.round(r.groove || 0)}</b></span>${(r.qBest | 0) >= 1 && !(r.bombs | 0) ? `<span><i>🎶</i>Quartets <b>${r.quartets | 0}${r.qBest >= 2 ? ' (x' + r.qBest + ')' : ''}</b></span>` : `<span><i>💣</i>Bombs <b>${r.bombs || 0}</b></span>`}<span class="rtop"><i>🏆</i>Top <b>${top}</b></span>`;
 
+    { const bm = bestMoment(r), fi = bm && bm.kind === 'finish' && WEAPONS.some(w => w.id === bm.src) ? icon(bm.src) : ''; showMoment($('rMoment'), bm, fi); }
     // no toast here: it used to cover the title on the result screen, and the ribbon plus the Sparkles row already say it
   }
   if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
@@ -643,7 +655,7 @@ function drain(game, sound) {
   const evs = game.events;   // read in place and truncate at the end: no new array every frame (events pushed meanwhile are still handled)
   try { for (let ei = 0; ei < evs.length; ei++) {
     const e = evs[ei];
-    R.onEvent(e, game);
+    R.onEvent(e, game); if (game === g) momentEvent(e, game);
     if (sound && e.t === 'kill' && game === g && needsFirstPop(save)) firstPop(audio, buzz);
     if (sound && e.t === 'kill' && e.choir) audio.play('choirpop');
     if (sound && (e.t === 'bell' || (e.t === 'trait' && !e.warn))) audio.play(e.t === 'bell' ? 'bellring' : 'traitcue', e);
@@ -706,7 +718,7 @@ $('muteBtn').onclick = toggleMute;
 for (const [id, label] of [['muteBtn', 'Mute'], ['enPlus', 'Buy Voice'], ['stPrev', 'Previous stage'], ['stNext', 'Next stage']]) $(id).setAttribute('aria-label', label);
 addEventListener('error', () => { toast('Something glitched. Your save is safe.'); if (mode === 'play') pause(); }); $('muteBtn').textContent = save.muted ? '🔇' : '🔊';
 
-window.CS = { motion, g: null, get hub2() { return hub2; }, save: () => save, mode: () => mode, openHub, startRun,
+window.CS = { motion, momentEvent, g: null, get hub2() { return hub2; }, save: () => save, mode: () => mode, openHub, startRun,
   // QA hook (batch 5): jump the live run to its end the way the sim does ('dead' | 'won'), then the normal flow (revive prompt, result) takes over
   force: kind => { if (mode !== 'play' || !g || g.phase === 'dead' || g.phase === 'won') return false; if (kind === 'dead') { g.p.hp = 0; g.p.revive = 0; g.phase = 'dead'; g.result = quitResult(g); g.events.push({ t: 'dead' }); return true; } if (kind === 'won') { g.snakes = []; g.phase = 'won'; g.result = { ...quitResult(g), won: true, stars: g.mode || g.hard ? 0 : 3 }; g.events.push({ t: 'won' }); return true; } return false; } };
 loadArt('assets/').then(a => {

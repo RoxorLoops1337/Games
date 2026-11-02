@@ -285,6 +285,25 @@
   /* flying reward chips land softly */
   .gfx-bump{animation-duration:.45s}
   /* end @css:11-result-pause round 6 */
+  /* @css:11-result-pause round 8 */
+  .hpwrow8{display:flex;justify-content:center;align-items:center;gap:8px;max-width:100%;min-width:0}
+  .hrib8{display:inline-flex;align-items:center;gap:4px;padding:1px 9px 1px 6px;border-radius:99px;font-size:13px;font-weight:900;color:#ffd6ee;background:linear-gradient(180deg,rgba(255,92,184,.32),rgba(255,92,184,.12));border:1px solid rgba(255,143,208,.55);white-space:nowrap;line-height:1.5}
+  .hrib8[hidden]{display:none} .hrib8 b{font-variant-numeric:tabular-nums} .hrib8 .bow8{width:17px;height:17px}
+  .hrib8.gfx-bump8{animation:rb8Bump .5s ease-out} @keyframes rb8Bump{30%{transform:scale(1.25);box-shadow:0 0 16px #ff8fd0cc}}
+  .rib8f{background:none!important;filter:drop-shadow(0 0 6px #ff8fd0)} .rib8f .bow8{width:22px;height:22px}
+  #result .result-list .r .bow8{width:22px;height:22px;flex:none}
+  /* best moment chip on the result */
+  .rmoment8{display:none;align-items:center;gap:7px;padding:4px 12px 4px 7px;border-radius:99px;font-size:12.5px;font-weight:800;color:#fff;border:1px solid rgba(255,210,74,.55);background:linear-gradient(90deg,rgba(255,210,74,.26),rgba(255,92,184,.18));max-width:94vw;white-space:nowrap}
+  .rmoment8.on{display:flex;animation:rpIn .45s .9s both} .rmoment8 b{color:#ffd84d;font-weight:900}
+  .rmoment8 .mi8{font-style:normal;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.3);font-size:14px;line-height:1;flex:none} .rmoment8 .mi8 img{width:20px;height:20px;object-fit:contain}
+  .rmoment8.k-chain{border-color:rgba(57,240,255,.6);background:linear-gradient(90deg,rgba(57,240,255,.24),rgba(157,255,109,.14))} .rmoment8.k-chain b{color:#9dffe8}
+  @media (max-height:900px){.rmoment8{display:none!important}}
+  /* settings: every row icon is a flat glyph on a tinted tile */
+  #settings .tgl .ti8,#settings .volrow .ti8{display:grid;place-items:center;flex:none;width:32px;height:32px;border-radius:10px;font-size:0;background:color-mix(in srgb,var(--tc,#7ae8f8) 20%,rgba(0,0,0,.28));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tc,#7ae8f8) 38%,transparent)}
+  #settings .tgl.on .ti8{background:color-mix(in srgb,var(--tc,#7ae8f8) 34%,rgba(0,0,0,.22));box-shadow:inset 0 0 0 1px var(--tc,#7ae8f8),0 0 10px color-mix(in srgb,var(--tc,#7ae8f8) 40%,transparent)}
+  #settings .ti8 .si8{width:19px;height:19px}
+  @media (prefers-reduced-motion:reduce){.hrib8.gfx-bump8,.rmoment8.on{animation:none}}
+  /* end @css:11-result-pause round 8 */
   /* end @css:11-result-pause */
   /* @css:09-skills-pets */
   .tile.tier0{--tc:#9dff6d} .tile.tier1{--tc:#4fb8ff} .tile.tier2{--tc:#b06cff} .tile.tier3{--tc:#ffb04d} .tile.tier4{--tc:#ff4d7a} .tile.pet{--tc:#ffd24a}
@@ -1784,7 +1803,7 @@
 </section>
 
 <section class="scr hub" id="hub">
-  <div class="hubtop"><button class="gear" id="setBtnH" aria-label="Settings" style="position:static;flex:none;width:38px;height:38px;font-size:19px">⚙</button><div class="cur e"><b>⚡</b><b id="hEnergy">0</b><button class="plus" id="enPlus">+</button></div><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div><div id="hPower"></div>
+  <div class="hubtop"><button class="gear" id="setBtnH" aria-label="Settings" style="position:static;flex:none;width:38px;height:38px;font-size:19px">⚙</button><div class="cur e"><b>⚡</b><b id="hEnergy">0</b><button class="plus" id="enPlus">+</button></div><div class="cur b"><img data-cur="beats" alt=""><b id="hBeats">0</b></div><div class="cur s"><img data-cur="sparkles" alt=""><b id="hSpark">0</b></div></div><div class="hpwrow8"><div id="hPower"></div></div>
   <div class="nextrew" id="nextRew"></div>
   <div class="hubbody">
     <div class="tab" id="tabBattle">
@@ -1902,6 +1921,7 @@
   <div class="rlevel" id="rLevel"><span class="lv" id="rLv">1</span><div class="lbar"><i id="rLbar"></i></div><small id="rLtxt"></small></div>
   <div class="result-list" id="rList"></div>
   <div class="rextra" id="rExtra"></div>
+  <div class="rmoment8" id="rMoment"></div>
   <div class="rgoal" id="rGoal" role="button" tabindex="0"></div>
   <div class="rnudge" id="rNudge"></div>
   <div class="rkeep" id="rKeep"></div>
