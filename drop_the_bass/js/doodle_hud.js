@@ -147,9 +147,20 @@ export function measureStr(ctx, s, size) {
   ctx.save(); ctx.font = (size >= 15 ? 'bold ' : '') + size + 'px ' + FONT; const w = ctx.measureText(s).width; ctx.restore();
   return w;
 }
+// The HUD asks for the same few dozen fits every frame, and each one is a measureText: remember the answers (cleared when a web font finishes loading,
+// because widths measured before it arrived are wrong). The shared result objects are read only.
+const FIT = new Map();
+if (typeof document !== 'undefined' && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => FIT.clear());
 export function fitText(ctx, s, size, maxW, minScale = 0.6, measure = measureStr) {
   s = String(s);
   if (!(maxW > 0)) return { s, size };
+  if (measure !== measureStr) return fitCalc(ctx, s, size, maxW, minScale, measure);
+  const key = size + '|' + maxW + '|' + minScale + '|' + s;
+  let r = FIT.get(key);
+  if (!r) { r = fitCalc(ctx, s, size, maxW, minScale, measure); if (FIT.size > 600) FIT.clear(); FIT.set(key, r); }
+  return r;
+}
+function fitCalc(ctx, s, size, maxW, minScale, measure) {
   let w = measure(ctx, s, size);
   if (w <= maxW) return { s, size };
   const minSize = Math.max(8, size * minScale);

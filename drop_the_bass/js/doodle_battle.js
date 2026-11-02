@@ -70,6 +70,7 @@ function rrectStroke(ctx, x, y, w, h, r, col, lw, alpha, dash, march) {
 }
 
 // ---------------------------------------------------------------------------------------------------- board
+const SORT_T = [], SORT_E = [];
 export function drawBoard(b, ctx, t, beat) {
   const run = b.run, fx = b.fx, cb = DD.cbOn(b);
   AW.drawBoard(ctx, run.map.id, run.world.id, t, { beat, slotHint: b.slotHint, hoverSlot: b.hoverSlot ? [b.hoverSlot.c, b.hoverSlot.r] : null, dropSlot: b.targetSlot != null ? [b.targetSlot % COLS, Math.floor(b.targetSlot / COLS)] : null, skin: b.skin });
@@ -91,11 +92,17 @@ export function drawBoard(b, ctx, t, beat) {
     ctx.save(); ctx.globalAlpha = 0.75; ctx.fillStyle = C.pink; ctx.strokeStyle = INK; ctx.lineWidth = 1.8; heartPath(ctx, sl.x, sl.y + 20, 8); ctx.fill(); ctx.stroke(); ctx.restore();
   }
   // turrets: a scribbled ground shadow, a pop ring when new, and the merge invitation
-  const ts = run.turrets.slice().sort((a, c) => a.y - c.y);
+  const ts = SORT_T; ts.length = 0; for (const tu of run.turrets) ts.push(tu); ts.sort((a, c) => a.y - c.y);   // scratch arrays: no new array per frame
+  ctx.save(); ctx.fillStyle = INK;   // every ground shadow in one path and one fill (a dragged turret's shadow is fainter)
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.globalAlpha = pass ? 0.08 : 0.2; ctx.beginPath(); let any = false;
+    for (const tu of ts) { if (!!(b.drag && b.drag.moved && b.drag.id === tu.id) !== !!pass) continue; const rx = 25 + tu.level; ctx.moveTo(tu.x + rx, tu.y + 24); ctx.ellipse(tu.x, tu.y + 24, rx, 8, 0, 0, TAU); any = true; }
+    if (any) ctx.fill();
+  }
+  ctx.restore();
   for (const tu of ts) {
     const hidden = b.drag && b.drag.moved && b.drag.id === tu.id;
     const age = run.t - (tu.born || 0), def = TURRETS[tu.type];
-    ctx.save(); ctx.globalAlpha = hidden ? 0.08 : 0.2; ctx.fillStyle = INK; ctx.beginPath(); ctx.ellipse(tu.x, tu.y + 24, 25 + tu.level, 8, 0, 0, TAU); ctx.fill(); ctx.restore();
     if (age < 0.5) ring(ctx, tu.x, tu.y, 20 + age * 70, def.color, 3.5, t, { alpha: (0.5 - age) * 1.8, seed: tu.id });
     if (tu.fire > 0.5) ring(ctx, tu.x, tu.y, 38, def.color, 3, t, { alpha: (tu.fire - 0.5) * 1.2, ink: false, seed: tu.id });
     const canMerge = hintT && hintT !== tu && run.canMerge(hintT, tu);
@@ -119,7 +126,7 @@ export function drawBoard(b, ctx, t, beat) {
   DD.drawDarkLane(b, ctx, t);
   drawLinks(b, ctx, t);
   // enemies: bosses get a marching dashed threat ring, elites a coloured ring
-  const en = run.enemies.slice().sort((a, c) => (a.flying - c.flying) || (a.y - c.y));
+  const en = SORT_E; en.length = 0; for (const e of run.enemies) en.push(e); en.sort((a, c) => (a.flying - c.flying) || (a.y - c.y));
   for (const e of en) {
     if (e.boss) {
       const bc = BOSSES[e.type].color;
