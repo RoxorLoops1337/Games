@@ -73,6 +73,9 @@ export function createRenderer(canvas, art, kit) {
     ctx.restore();
   }
   // text strips are looked up through nested maps (fill, stroke, size, string) so a hit allocates nothing: no key string, no font string
+  // b12 perf: at most TEXT_BAKES text strips per frame (each is a canvas plus a font layout: 3 or more in one frame was a visible hitch on a throttled phone).
+  // A strip over the budget returns null: the caller draws that text live this frame and the next frame bakes it.
+  const TEXT_BAKES = 2; let textBakes = 0, tframe = 0;
   const tcache = new Map(), tq = []; let tn = 0;
   function textSprite(str, size, fill, stroke) {
     let a = tcache.get(fill); if (!a) tcache.set(fill, a = new Map());
@@ -80,17 +83,24 @@ export function createRenderer(canvas, art, kit) {
     let c = b.get(size); if (!c) b.set(size, c = new Map());
     let t = c.get(str);
     if (t === undefined) {
+      if (textBakes >= TEXT_BAKES) return null;
+      textBakes++;
       const font = `800 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
       ctx.font = font; const pad = Math.ceil(size * 0.3), w = Math.ceil(ctx.measureText(str).width) + pad * 2, h = Math.ceil(size * 1.5), d = kit.dpr;
       const cv = kit.makeCanvas(w * d, h * d);
       if (cv) { const g = cv.getContext('2d'); g.scale(d, d); g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * 0.2); g.strokeStyle = stroke; g.strokeText(str, w / 2, h / 2); g.fillStyle = fill; g.fillText(str, w / 2, h / 2); }
-      t = { c: cv, w, h, pad };
-      if (tn >= 500) { for (let n = 0; n < 160 && tq.length; n++) { const o = tq.shift(); o[0].delete(o[1]); tn--; } }
+      t = { c: cv, w, h, pad, u: tframe };
+      if (tn >= 700) {   // b12 perf: second chance. The old oldest-first sweep threw out the strips used every frame (one glyph set was re-baked 230 times in 900 frames at stage 50)
+        let ev = 0, guard = tq.length;
+        while (ev < 160 && tq.length && guard-- > 0) { const o = tq.shift(), e = o[0].get(o[1]); if (e && tframe - e.u < 600) { tq.push(o); continue; } o[0].delete(o[1]); tn--; ev++; }
+        if (ev === 0) for (let n = 0; n < 160 && tq.length; n++) { const o = tq.shift(); o[0].delete(o[1]); tn--; }
+      }
       c.set(str, t); tq.push([c, str]); tn++;
     }
+    t.u = tframe;
     return t;
   }
-  const SIZE_LADDER = [10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 40, 44, 48, 56, 64, 72, 80, 96, 112, 128];
+  const SIZE_LADDER = [10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 40, 48, 56, 64, 72, 80, 96, 112, 128];
   function presetSize(size) {   // the nearest rung of the ladder, so every size from 20 to 26 shares a handful of strips
     if (!(size > 10)) return 10;
     if (size >= 128) return Math.round(size / 16) * 16;
@@ -107,13 +117,15 @@ export function createRenderer(canvas, art, kit) {
   }
   function drawNumber(str, x, y, ps, q, fill, stroke, align) {
     if (S.numLog) S.numLog.push(str);   // tests set S.numLog to read which values were drawn (glyph strips hide the string)
+    for (let i = 0; i < str.length; i++) if (!textSprite(str[i], ps, fill, stroke)) return false;   // a glyph over the bake budget: the caller draws the whole number live this frame
     let tw = 0; for (let i = 0; i < str.length; i++) tw += advOf(ps, str[i]);
     let cx = align === 'left' ? x : align === 'right' ? x - tw * q : x - tw * q / 2;
     for (let i = 0; i < str.length; i++) {
       const ch = str[i], a = advOf(ps, ch) * q, t = textSprite(ch, ps, fill, stroke);
-      if (t.c) { const w = t.w * q, h = t.h * q; ctx.drawImage(t.c, cx + a / 2 - w / 2, y - h / 2, w, h); }
+      if (t && t.c) { const w = t.w * q, h = t.h * q; ctx.drawImage(t.c, cx + a / 2 - w / 2, y - h / 2, w, h); }
       cx += a;
     }
+    return true;
   }
   function text(str, x, y, size, fill = '#fff', stroke = '#10131c', align = 'center') {
     if (typeof str !== 'string') str = String(str);
@@ -121,9 +133,9 @@ export function createRenderer(canvas, art, kit) {
     if (S.textHide) return;   // b12k: ...and a second frame without the text gives the real pixels behind it
     if (kit && kit.makeCanvas) {   // 11-perf: strips are baked at preset sizes only and scaled to the exact size, so a pulsing number never bakes a canvas
       const ps = presetSize(size), q = size / ps;
-      if (str.length > 1 && NUMSTR.test(str)) { drawNumber(str, x, y, ps, q, fill, stroke, align); return; }
-      const t = textSprite(str, ps, fill, stroke), w = t.w * q, h = t.h * q, pad = t.pad * q;
-      if (t.c) { ctx.drawImage(t.c, align === 'left' ? x - pad : align === 'right' ? x - w + pad : x - w / 2, y - h / 2, w, h); return; }
+      if (str.length > 1 && NUMSTR.test(str)) { if (drawNumber(str, x, y, ps, q, fill, stroke, align)) return; }
+      const t = textSprite(str, ps, fill, stroke);
+      if (t && t.c) { const w = t.w * q, h = t.h * q, pad = t.pad * q; ctx.drawImage(t.c, align === 'left' ? x - pad : align === 'right' ? x - w + pad : x - w / 2, y - h / 2, w, h); return; }
     }
     size = size >= 20 ? Math.round(size) : Math.round(size * 2) / 2;
     ctx.font = `800 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle';
@@ -839,6 +851,7 @@ export function createRenderer(canvas, art, kit) {
   }
 
   function draw(g, ui, dt) {
+    textBakes = 0; tframe++;
     const L = layout();
     S.aimHint = !!(ui && ui.aimHint);
     lastDt = dt; S.t += dt; if (S.banner) { S.banner.t += dt; if (S.banner.t > S.banner.dur) S.banner = null; }
