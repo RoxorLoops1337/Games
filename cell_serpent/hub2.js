@@ -165,7 +165,7 @@ export function createHub2(c) {
     for (const n of [1, 10]) {
       const price = n === 10 ? KEEP_PRICE * 9 : KEEP_PRICE;
       row.appendChild(tile({ cls: 'chestcard t-gold', ic: n === 10 ? ico('gift', 46) : chestArt(30), name: n === 10 ? 'Ten Chests' : 'Keepsake Chest', desc: n === 10 ? 'With a star prize' : 'Backstage finds', btn: price + ' ' + curImg('sparkles'), gold: true, disabled: save().sparkles < price,
-        onclick: ev => { const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); if (ch) ch.classList.add('open'); setTimeout(() => { const got = openKeepChest(save(), n); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('levelup'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color }; }), 'Gear'); }, ch ? 420 : 0); } }));
+        onclick: ev => { const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); if (ch) ch.classList.add('open'); setTimeout(() => { const got = openKeepChest(save(), n); if (!got) { if (ch) ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal('KEEPSAKES!', got.map(x => { const kk = KEEPSAKES.find(k => k.id === x.id); return { html: kicon(x.id), n: x.n, name: kk.name, rar: kk.tier, color: KEEP_TIERS[kk.tier].color }; }), 'Gear'); }, ch ? 420 : 0); } }));
     }
   }
   function openKeep(k) {
@@ -195,7 +195,7 @@ export function createHub2(c) {
         audio.unlock(); const ch = ban.querySelector('.chest3'); ch.classList.add('open');
         setTimeout(() => {
           if (wel) { if (claimWelcome(save())) { c.persist(); audio.play('levelup'); c.refreshCur(); renderShop(); } return; }
-          const got = openBox(save(), top.id); if (!got) { ch.classList.remove('open'); return; } c.persist(); audio.play('levelup'); c.refreshCur();
+          const got = openBox(save(), top.id); if (!got) { ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur();
           lootModal(top.name.toUpperCase() + ' OPENED!', got.map(x => ({ html: icon(x.id), n: x.n, name: WEAPONS.find(w => w.id === x.id).name, rar: fragRar(x.n), color: RAR_COL[fragRar(x.n)] })), 'Shop');
         }, 420);
       };
@@ -206,7 +206,7 @@ export function createHub2(c) {
       const bought = s.shop.bought[i];
       const name = d.kind === 'frag' ? WEAPONS.find(w => w.id === d.ref).name : d.kind === 'keep' ? KEEPSAKES.find(k => k.id === d.ref).name : d.kind === 'egg' ? 'Pet Egg' : d.kind === 'energy' ? 'Voice' : d.kind === 'sparkles' ? 'Sparkles' : 'Beats';
       const ic = d.kind === 'frag' ? icon(d.ref) : d.kind === 'keep' ? kicon(d.ref) : d.kind === 'egg' ? icon('egg') : d.kind === 'energy' ? '⚡' : d.kind === 'sparkles' ? curImg('sparkles') : curImg('beats');
-      const t = tile({ cls: 't-gold deal', ic, name: `${name} ×${d.n}`, desc: '', btn: bought ? 'OBTAINED' : d.price ? d.price + ' ' + curImg('sparkles') : 'FREE', gold: !bought, disabled: bought || s.sparkles < d.price, onclick: () => { if (buyDeal(save(), day, i)) { c.persist(); audio.play('upgrade'); c.refreshCur(); renderShop(); } } });
+      const t = tile({ cls: 't-gold deal', ic, name: `${name} ×${d.n}`, desc: '', btn: bought ? 'OBTAINED' : d.price ? d.price + ' ' + curImg('sparkles') : 'FREE', gold: !bought, disabled: bought || s.sparkles < d.price, onclick: () => { if (buyDeal(save(), day, i)) { c.persist(); audio.play('buy'); c.refreshCur(); renderShop(); } } });
       if (d.off < 100) { const bd = document.createElement('i'); bd.className = 'dealrib'; bd.innerHTML = `<b>-${d.off}%</b>`; t.appendChild(bd); }
       else { const bd = document.createElement('i'); bd.className = 'dealrib free'; bd.innerHTML = '<b>FREE</b>'; t.appendChild(bd); }
       const ds = t.querySelector('.ds'); if (d.base && !bought) ds.innerHTML = `<s>${d.base}</s> ${curImg('sparkles')}`; else ds.innerHTML = '&nbsp;';
@@ -221,14 +221,14 @@ export function createHub2(c) {
     for (const b of BOXES) {
       const can = s[b.cur] >= b.price;
       list.appendChild(tile({ cls: 'chestcard ' + (b.cur === 'sparkles' ? 't-gold' : 't-weapon') + (b.id === 'spark10' ? ' one' : ''), ic: chestArt(b.cur === 'sparkles' ? 300 : 0), name: b.name, desc: b.desc, btn: b.price + ' ' + curImg(b.cur), gold: b.cur === 'sparkles', disabled: !can,
-        onclick: ev => { audio.unlock(); const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); ch.classList.add('open'); setTimeout(() => { const got = openBox(save(), b.id); if (!got) { ch.classList.remove('open'); return; } c.persist(); audio.play('levelup'); c.refreshCur(); lootModal(b.name.toUpperCase() + ' OPENED!', got.map(x => ({ html: icon(x.id), n: x.n, name: WEAPONS.find(w => w.id === x.id).name, rar: fragRar(x.n), color: RAR_COL[fragRar(x.n)] })), 'Shop'); }, 420); } }));
+        onclick: ev => { audio.unlock(); const ch = ev.currentTarget.closest('.tile').querySelector('.chest3'); ch.classList.add('open'); setTimeout(() => { const got = openBox(save(), b.id); if (!got) { ch.classList.remove('open'); return; } c.persist(); audio.play('stinger'); c.refreshCur(); lootModal(b.name.toUpperCase() + ' OPENED!', got.map(x => ({ html: icon(x.id), n: x.n, name: WEAPONS.find(w => w.id === x.id).name, rar: fragRar(x.n), color: RAR_COL[fragRar(x.n)] })), 'Shop'); }, 420); } }));
     }
-    list.appendChild(tile({ cls: 't-gold', ic: icon('egg'), name: 'Pet Egg', desc: 'Warm and wiggly.', btn: EGG_PRICE + ' ' + curImg('sparkles'), gold: true, disabled: s.sparkles < EGG_PRICE, onclick: () => { if (buyEgg(save())) { c.persist(); audio.play('upgrade'); c.refreshCur(); renderShop(); } } }));
-    list.appendChild(tile({ cls: 't-gold', ic: ico('bolt', 44), name: 'Voice ×10', desc: 'A big gulp of tea.', btn: '10 ' + curImg('sparkles'), gold: true, disabled: s.sparkles < 10, onclick: () => { if (buyEnergy(save(), now())) { c.persist(); audio.play('upgrade'); c.refreshCur(); renderShop(); } } }));
+    list.appendChild(tile({ cls: 't-gold', ic: icon('egg'), name: 'Pet Egg', desc: 'Warm and wiggly.', btn: EGG_PRICE + ' ' + curImg('sparkles'), gold: true, disabled: s.sparkles < EGG_PRICE, onclick: () => { if (buyEgg(save())) { c.persist(); audio.play('buy'); c.refreshCur(); renderShop(); } } }));
+    list.appendChild(tile({ cls: 't-gold', ic: ico('bolt', 44), name: 'Voice ×10', desc: 'A big gulp of tea.', btn: '10 ' + curImg('sparkles'), gold: true, disabled: s.sparkles < 10, onclick: () => { if (buyEnergy(save(), now())) { c.persist(); audio.play('buy'); c.refreshCur(); renderShop(); } } }));
     sec(list, 'Beats Store', '#d09a1c', 'coins');
     for (const p of GOLD_PACKS) {
       const free = !p.price, used = free && s.shop.gold === day;
-      list.appendChild(tile({ cls: 't-weapon', ic: curImg('beats'), name: p.name, desc: `${p.beats} Beats`, btn: used ? 'OBTAINED' : free ? 'FREE' : p.price + ' ' + curImg('sparkles'), disabled: used || (!free && s.sparkles < p.price), onclick: () => { if (buyGold(save(), p.id, day)) { c.persist(); audio.play('upgrade'); c.refreshCur(); renderShop(); } } }));
+      list.appendChild(tile({ cls: 't-weapon', ic: curImg('beats'), name: p.name, desc: `${p.beats} Beats`, btn: used ? 'OBTAINED' : free ? 'FREE' : p.price + ' ' + curImg('sparkles'), disabled: used || (!free && s.sparkles < p.price), onclick: () => { if (buyGold(save(), p.id, day)) { c.persist(); audio.play('buy'); c.refreshCur(); renderShop(); } } }));
     }
     shopExtras(list);
   }
@@ -246,7 +246,7 @@ export function createHub2(c) {
       for (const o of OUTFITS) {
         const own = s.outfits.owned[o.id], av = outfitAvailable(o, day), wn = s.outfits.worn === o.id, wname = WEAPONS.find(w => w.id === o.weapon).name;
         grid.appendChild(tile({ cls: 't-gold' + (wn ? ' on-loadout' : ''), ic: `<span class="kemo">${o.hat}</span>`, name: o.name, chip: o.event ? EVENT_THEMES_NAME(o.event) : '', desc: `${wname} +${Math.round((o.mul - 1) * 100)}%`, btn: own ? (wn ? 'TAKE OFF' : 'WEAR') : av ? rib(o.price) : 'Event only', gold: !own && av, disabled: !own && (!av || s.ribbons < o.price),
-          onclick: () => { const sv = save(); if (own) wearOutfit(sv, wn ? '' : o.id); else if (!buyOutfit(sv, o.id, day)) return; c.persist(); audio.play('upgrade'); openWardrobe(); } }));
+          onclick: () => { const sv = save(); if (own) wearOutfit(sv, wn ? '' : o.id); else if (!buyOutfit(sv, o.id, day)) return; c.persist(); audio.play('buy'); openWardrobe(); } }));
       }
       body.appendChild(grid);
     });
@@ -262,7 +262,7 @@ export function createHub2(c) {
         const txt = r.eggs ? icon('egg') + ' Egg' : r.sparkles ? r.sparkles + ' ' + curImg('sparkles') : r.energy ? '⚡ ' + r.energy : '👗 Outfit';
         grid.appendChild(tile({ cls: 't-weapon', ic: '🎪', name: m.at + ' ribbons', desc: '', btn: got ? 'GOT IT' : ready ? 'CLAIM ' + txt : txt, gold: ready, disabled: !ready, onclick: () => { if (claimEventMile(save(), i, day)) { c.persist(); audio.play('levelup'); c.refreshCur(); openEvent(); } } }));
       });
-      for (const it of EXCHANGE_ITEMS) grid.appendChild(tile({ cls: 't-gold', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('upgrade'); c.refreshCur(); openEvent(); } } }));
+      for (const it of EXCHANGE_ITEMS) grid.appendChild(tile({ cls: 't-gold', ic: it.id === 'egg' ? icon('egg') : it.id === 'sparkles' ? curImg('sparkles') : it.id === 'voice' ? '⚡' : '🎒', name: it.name, desc: '', btn: rib(it.price), gold: true, disabled: s.ribbons < it.price, onclick: () => { if (buyExchange(save(), it.id)) { c.persist(); audio.play('buy'); c.refreshCur(); openEvent(); } } }));
       body.appendChild(grid);
     });
   }

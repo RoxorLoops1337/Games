@@ -6,7 +6,7 @@ export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, muted = false, musicAllowed = true, noiseBuf = null;
   let musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
   let mixS = { stage: 1, boss: false, groove: 0, danger: 0 };
-  let live = 0, chain = 0, chainT = 0;
+  let live = 0, chain = 0, chainT = 0, vol = 1, uiT = 0;
   const last = {};
   function ensure() {
     if (ac) return ac;
@@ -14,13 +14,13 @@ export function createAudio() {
     if (!AC) return null;
     try {
       ac = new AC();
-      master = ac.createGain(); master.gain.value = muted ? 0 : 0.6;
+      master = ac.createGain(); master.gain.value = muted ? 0 : 0.5 * vol;
       const lim = ac.createDynamicsCompressor();   // brickwall-ish limiter so nothing clips
-      lim.threshold.value = -7; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.12;
+      lim.threshold.value = -10; lim.knee.value = 3; lim.ratio.value = 14; lim.attack.value = 0.003; lim.release.value = 0.16;
       master.connect(lim); lim.connect(ac.destination);
-      sfxBus = ac.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(master);
+      sfxBus = ac.createGain(); sfxBus.gain.value = 0.72; sfxBus.connect(master);
       duckG = ac.createGain(); duckG.gain.value = 1; duckG.connect(master);
-      musBus = ac.createGain(); musBus.gain.value = 0.55; musBus.connect(duckG);
+      musBus = ac.createGain(); musBus.gain.value = 0.62; musBus.connect(duckG);
       noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     } catch (e) { ac = null; return null; }
@@ -28,7 +28,7 @@ export function createAudio() {
   }
   const bus = b => (b === 'm' ? musBus : sfxBus);
   function tone(f, dur, type = 'square', vol = 0.15, slide = 0, delay = 0, b = 's') {
-    if (!ac || muted || live > 48) return;
+    if (!ac || muted || live > 40) return;
     const t = ac.currentTime + delay;
     const o = ac.createOscillator(), g = ac.createGain();
     o.type = type; o.frequency.setValueAtTime(f, t);
@@ -38,7 +38,7 @@ export function createAudio() {
     live++; o.onended = () => { live--; };
   }
   function noise(dur, vol = 0.2, f0 = 2000, f1 = 300, type = 'lowpass', delay = 0, b = 's') {
-    if (!ac || muted || live > 48) return;
+    if (!ac || muted || live > 40) return;
     const t = ac.currentTime + delay;
     const s = ac.createBufferSource(); s.buffer = noiseBuf;
     const fl = ac.createBiquadFilter(); fl.type = type; fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
@@ -82,11 +82,13 @@ export function createAudio() {
     spit: () => gate('spit', 60) && tone(200, 0.15, 'sawtooth', 0.05, 160),
     roar: () => { tone(70, 0.7, 'sawtooth', 0.2, -25); noise(0.6, 0.16, 600, 80); duck(0.5, 0.6); },
     clear: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.24, 'triangle', 0.1, 0, i * 0.09)); [1047, 1319, 1568].forEach(f => tone(f, 0.6, 'sine', 0.05, 0, 0.45)); duck(0.7, 1.2); },
-    stage: e => { if (e && e.boss) sfx.bossintro(); else { tone(330, 0.12, 'square', 0.07, 80); tone(494, 0.14, 'triangle', 0.05, 0, 0.1); } },
+    stage: e => { if (e && e.boss) sfx.bossintro(); else { sfx.riser(); tone(330, 0.12, 'square', 0.07, 80, 0.5); tone(494, 0.14, 'triangle', 0.05, 0, 0.6); } },
+    // stage start: a short rising sweep into the first notes
+    riser: () => { if (!gate('riser', 400)) return; noise(0.5, 0.05, 500, 7000, 'bandpass'); tone(220, 0.5, 'triangle', 0.04, 440); },
     swarm: () => tone(180, 0.25, 'square', 0.06, 120),
     revive: () => { [392, 523, 659, 784].forEach((f, i) => tone(f, 0.22, 'sine', 0.11, 0, i * 0.08)); tone(1568, 0.5, 'sine', 0.04, 0, 0.3); duck(0.5, 0.6); },
     dead: () => { [330, 262, 196, 131].forEach((f, i) => tone(f, 0.4, 'sawtooth', 0.12, -30, i * 0.18)); noise(0.8, 0.18, 800, 60); duck(0.9, 1.5); },
-    click: () => tone(640, 0.04, 'triangle', 0.06, -120),
+    click: () => { if (now() - uiT > 90) tone(640, 0.04, 'triangle', 0.06, -120); },
     // animal voices: every skill has a sound
     moo: () => gate('moo', 160) && (tone(115, 0.5, 'sawtooth', 0.09, -28), tone(230, 0.45, 'triangle', 0.05, -50)),
     meow: () => gate('meow', 140) && (tone(650, 0.16, 'triangle', 0.08, 350), tone(960, 0.22, 'triangle', 0.07, -480, 0.14)),
@@ -133,12 +135,12 @@ export function createAudio() {
     // snake reached the line: sharp alarm
     leak: () => { if (!gate('leak', 250)) return; tone(220, 0.25, 'sawtooth', 0.15, -110); tone(165, 0.3, 'square', 0.08, -60, 0.05); noise(0.3, 0.15, 1200, 100); duck(0.5, 0.4); },
     // soft UI set
-    tap: () => tone(760, 0.035, 'sine', 0.06, -150),
-    tab: () => { tone(520, 0.05, 'triangle', 0.05); tone(780, 0.06, 'sine', 0.04, 0, 0.03); },
-    back: () => tone(440, 0.07, 'triangle', 0.06, -150),
-    toggle: () => { tone(600, 0.05, 'triangle', 0.06); tone(900, 0.07, 'sine', 0.05, 0, 0.045); },
-    buy: () => { tone(1319, 0.06, 'square', 0.04); tone(1760, 0.12, 'triangle', 0.06, 0, 0.05); tone(2349, 0.12, 'sine', 0.03, 0, 0.1); },
-    deny: () => { tone(200, 0.09, 'square', 0.06, -30); tone(160, 0.12, 'square', 0.06, -30, 0.08); },
+    tap: () => { uiT = now(); tone(760, 0.035, 'sine', 0.06, -150); },
+    tab: () => { uiT = now(); tone(520, 0.05, 'triangle', 0.05); tone(780, 0.06, 'sine', 0.04, 0, 0.03); },
+    back: () => { uiT = now(); tone(440, 0.07, 'triangle', 0.06, -150); },
+    toggle: () => { uiT = now(); tone(600, 0.05, 'triangle', 0.06); tone(900, 0.07, 'sine', 0.05, 0, 0.045); },
+    buy: () => { uiT = now(); tone(1319, 0.06, 'square', 0.04); tone(1760, 0.12, 'triangle', 0.06, 0, 0.05); tone(2349, 0.12, 'sine', 0.03, 0, 0.1); },
+    deny: () => { uiT = now(); tone(200, 0.09, 'square', 0.06, -30); tone(160, 0.12, 'square', 0.06, -30, 0.08); },
   };
   sfx.card0 = () => sfx.card({ rarity: 0 }); sfx.card1 = () => sfx.card({ rarity: 1 }); sfx.card2 = () => sfx.card({ rarity: 2 });
   sfx.card3 = () => sfx.card({ rarity: 3 }); sfx.card4 = () => sfx.card({ rarity: 4 }); sfx.card5 = () => sfx.card({ rarity: 5 });
@@ -185,6 +187,8 @@ export function createAudio() {
           const li = (bar * 4 + (s >> 2) + (s === 14 ? 1 : 0)) % 8, ld = deg + (boss ? LEADB : LEAD)[li];
           tone(hz(note(sc, ld, root + 36)), sp * 2.6, boss ? 'sawtooth' : 'triangle', boss ? 0.03 : 0.05, 0, t, 'm');
         }
+        // species motif: 4 notes spread over the second and fourth bar
+        if ((bar & 1) === 1 && s % 4 === 0 && !boss && lvl > 0.05) tone(hz(note(sc, motifOf(m.stage)[s >> 2], root + 36)), sp * 3, 'sine', 0.032, 0, t, 'm');
         // danger: a ticking clock when the snake is close to the line
         if (m.danger > 0.55 && s % 4 === 0) tone(1760, 0.03, 'square', 0.025 + m.danger * 0.02, 0, t, 'm');
         // section ends: riser into a crash
@@ -194,10 +198,16 @@ export function createAudio() {
       nextT += sp; step++;
     }
   }
+  // one short 4 note phrase per snake species (scale degrees), played softly as a bell over the groove
+  const MOTIFS = [[0, 2, 4, 2], [0, 4, 2, 5], [4, 2, 0, 2], [0, 1, 4, 2], [2, 4, 5, 4], [0, 2, 1, 4], [4, 5, 4, 2], [0, 3, 2, 4], [5, 4, 2, 0], [2, 0, 2, 4]];
+  const motifOf = stage => MOTIFS[(Math.max(1, stage | 0) - 1) % MOTIFS.length];
   return {
     unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } },
     play(name, e) { if (ac && sfx[name]) { try { sfx[name](e); } catch (err) { /* never break the game over a sound */ } } },
-    setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.6; },
+    setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5 * vol; },
+    setVolume(v) { vol = Math.max(0, Math.min(1, +v)); if (!(vol >= 0)) vol = 1; if (master && !muted) master.gain.value = 0.5 * vol; },
+    get volume() { return vol; },
+    motif: motifOf,
     get muted() { return muted; },
     music(on) {
       musicOn = on && musicAllowed;

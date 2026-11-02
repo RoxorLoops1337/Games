@@ -18,10 +18,10 @@ try { save = sanitizeSave(JSON.parse(localStorage.getItem(SAVE_KEY))); } catch (
 const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } };
 
 const audio = createAudio();
-audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music);
+audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.setVolume(save.settings.volume);
 const motion = createMotion({ $, buzz: p => buzz(p), getReduced: () => !!(save && save.settings && save.settings.reduceMotion) }); motion.init();
 const buzz = p => { try { if (save.settings.vibrate && navigator.vibrate) navigator.vibrate(p); } catch (e) { /* ignore */ } };
-function applySettings() { motion.applyReduced(); audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); if (R) R.setOptions({ reduceMotion: save.settings.reduceMotion || systemReduceMotion(), lowQuality: save.settings.lowQuality, bigNumbers: save.settings.bigNumbers, colorBlind: save.settings.colorBlind, highContrast: save.settings.highContrast }); applyPageSettings(save.settings); showSlider(save.settings.slider && mode === 'play' && !document.querySelector('.scr.on')); dprCap = save.settings.lowQuality ? 1 : Math.max(dprCap, 2); }
+function applySettings() { motion.applyReduced(); audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.setVolume(save.settings.volume); if (R) R.setOptions({ reduceMotion: save.settings.reduceMotion || systemReduceMotion(), lowQuality: save.settings.lowQuality, bigNumbers: save.settings.bigNumbers, colorBlind: save.settings.colorBlind, highContrast: save.settings.highContrast }); applyPageSettings(save.settings); showSlider(save.settings.slider && mode === 'play' && !document.querySelector('.scr.on')); dprCap = save.settings.lowQuality ? 1 : Math.max(dprCap, 2); }
 let art = null, R = null, kit = null;
 const dayKey = () => Math.floor(Date.now() / 86400000);
 let slowFrames = 0, fastFrames = 0;
@@ -275,7 +275,7 @@ function renderSkills() {
 }
 const defaultBoxOk = () => { audio.play('click'); openHub('Shop'); };
 $('bOk').onclick = defaultBoxOk;
-const toast = msg => { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200); };
+const toast = msg => { if (/^(Not enough|Nothing to claim|Out of Voice|That code does not)/.test(msg)) audio.play('deny'); const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200); };
 const hub2 = createHub2({ $, tile, icon, curImg, audio, save: () => save, persist, show, openHub: t => openHub(t), renderHub: () => renderHub(), refreshCur: () => refreshCur(), dayKey, resetBoxOk: () => { $('bOk').onclick = defaultBoxOk; }, bodyURL: skin => { if (!kit) return ''; if (!(('b|' + skin) in iconCache)) { const spr = kit.SPR.body(skin, false, ''); iconCache['b|' + skin] = spr && spr.c.toDataURL ? spr.c.toDataURL() : ''; } return iconCache['b|' + skin]; } });
 
 // ---------------------------------------------------------------- runs
@@ -378,6 +378,7 @@ function openSettings(back) {
     if (k === 'sound') save.muted = !save.muted; else save.settings[k] = !save.settings[k];
     applySettings(); resize(); persist(); audio.play('click'); $('muteBtn').textContent = save.muted ? '🔇' : '🔊'; paint();
   };
+  { const vs = $('volRange'); if (vs) { vs.value = Math.round(save.settings.volume * 100); vs.oninput = () => { save.settings.volume = vs.value / 100; audio.setVolume(save.settings.volume); }; vs.onchange = () => { persist(); audio.unlock(); audio.play('tap'); }; } }
   $('bkCopy').onclick = async () => { const t = $('bkCode').value; try { await navigator.clipboard.writeText(t); toast('Code copied'); } catch (e) { $('bkCode').select(); toast('Select and copy the code'); } };
   $('bkLoad').onclick = () => { const s2 = importSave($('bkCode').value); if (!s2) { toast('That code does not work'); return; } save = s2; persist(); applySettings(); toast('Game loaded'); paint(); };
   $('setClose').onclick = () => { audio.play('click'); (back || (() => (mode === 'hub' ? openHub() : toTitle())))(); };
@@ -435,14 +436,24 @@ function showResult() {
   $('rRetry').onclick = () => { audio.play('click'); beginStage(r.stage); };
   $('rHub').onclick = () => { audio.play('click'); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; openHub('Battle'); };
   { const st = r.stars || 0; $('rStars').innerHTML = r.won && !r.mode && !r.hard ? [1, 2, 3].map(i => `<span class="${i <= st ? '' : 'off'}">★</span>`).join('') : '';
-    if ($('rStars').children.length) revealStars($('rStars'), st, i => audio.play('coin', { i }), reduce);
+    if ($('rStars').children.length) revealStars($('rStars'), st, i => audio.play('star' + Math.min(3, i + 1)), reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
     const top = Object.entries(r.dmgBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => (id === 'capsule' ? 'Singing' : (WEAPONS.find(w => w.id === id) || { name: id }).name)).join(', ') || '-';
     $('rExtra').innerHTML = `<span>Time <b>${mm}:${ss}</b></span><span>Cells <b>${r.kills}</b></span><span>Best groove <b>${r.groove || 0}</b></span><span>Bombs <b>${r.bombs || 0}</b></span><span style="grid-column:1/-1">Top: <b>${top}</b></span>`;
     if (out.starsGained) toast('+' + out.starsGained + ' star' + (out.starsGained > 1 ? 's' : '') + '!' + (out.starBonus ? ' Bonus ' + out.starBonus + ' Sparkles' : ''));
     else if (!r.won && !r.mode && !r.hard && Math.floor((r.progress || 0) * 100) > out.prevPct && out.prevPct > 0) toast('New best: ' + Math.floor(r.progress * 100) + '%'); }
+  if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
   show('result'); mode = 'over';
 }
+
+// one delegated listener picks the UI sound by element: tabs, back/close, toggles, plain taps; disabled buttons deny
+const BACKIDS = new Set(['setClose', 'pClose', 'rvNo', 'bOk', 'rHub', 'stPrev']);
+document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('button'); if (b && b.disabled && b.classList.contains('btn')) audio.play('deny'); }, true);
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('button'); if (!b || b.disabled) return;
+  audio.unlock();
+  audio.play(b.closest('.tabs') ? 'tab' : b.classList.contains('tgl') ? 'toggle' : BACKIDS.has(b.id) || b.dataset.sfx === 'back' ? 'back' : 'tap');
+}, true);
 
 // ---------------------------------------------------------------- loop
 const SFX = { surgewarn: 'swarm', surge: 'roar', won: 'clear', chestdrop: 'power', chest: 'levelup', upgradecell: 'cell', groove: 'groovehit', leak: 'leak', swab: 'meow', needles: 'squeak', dragon: 'coo', maw: 'bark', strike: 'hoot', bubble: 'quack', pulse: 'moo' };
