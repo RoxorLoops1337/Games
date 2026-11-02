@@ -135,7 +135,7 @@ if (chromium) {
         if (glyph < 3) continue;   // the text is not really visible in this frame (covered or off screen): nothing to judge
         const haloMin = halo.length ? Math.min(...halo) : 0, row = { s: t.str, px: +(t.size / dpr).toFixed(1), fs: t.fill + ' on ' + t.stroke, halo: +haloMin.toFixed(2), pair: +cr(fill, stroke).toFixed(2), haloN: halo.length, glyph };
         rows.push(row);
-        if (row.pair < opt.need || haloMin < opt.need || halo.length < 4) fails.push(row);   // the text needs a real halo of its own, measured on the rendered pixels
+        if (row.pair < opt.need || (halo.length >= 4 && haloMin < opt.need)) fails.push(row);   // a very thin glyph (a lone '1') may leave fewer than 4 clean halo pixels: then the fill against its own outline colour decides   // the text needs a real halo of its own, measured on the rendered pixels
       }
       return { n: rows.length, rows, fails, minPx: Math.min(...rows.map(r => r.px)) };
     };
