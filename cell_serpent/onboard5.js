@@ -69,6 +69,7 @@ export function setupTitleSnake(title, kit) {
     title.dispatchEvent(new CustomEvent('snakepoke', { detail: { hit: pokeHit, x, y, i: Math.max(0, Math.min(N - 1, Math.round((head - x) / GAP))) } }));
   });
   cv._seek = x => { head = x; };   // for tests and screenshots
+  cv._cell = i => { const x = head - i * GAP, wob = 1 + Math.sin(nowT * 2.2) * 0.1; return { x, y: H * 0.5 + (yAt(x) - H * 0.5) * wob, W }; };   // where body cell i is now (css px in the canvas), for the tune hint
   return { stop() { cancelAnimationFrame(rafId); } };
 }
 
