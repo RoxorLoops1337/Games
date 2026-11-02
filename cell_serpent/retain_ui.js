@@ -2,7 +2,7 @@
 // the 30 day Season panel and the tiny achievement toast. Everything here is a free gift, none of it is required.
 import {
   questState, claimQuestChest, seasonStatus, claimSeason, ensureSeason, clearSeasonNote, SEASON_DAYS,
-  achievementCount, popAchievements, rewardText, spinStreak, spinFrame,
+  achievementCount, popAchievements, rewardText, spinStreak, spinFrame, hasShield,
 } from './sim.js';
 import { landStamp } from './keep_ui.js';
 
@@ -21,7 +21,7 @@ export function createRetainUI(c, openPanel, sec, openTrophies) {
     const segs = q.quests.map(x => `<span class="qseg${x.done ? ' done' : ''}" title="${esc(x.text)}"><b>${x.done ? '✔' : x.icon}</b><span class="qsb"><i style="width:${Math.round(x.prog / x.target * 100)}%"></i></span></span>`).join('');
     const chest = q.chestOpened ? '📭' : q.chestReady ? '🎁' : '📦';
     el.innerHTML = `<button class="qmain${q.chestReady ? ' ready' : ''}" id="qOpen" aria-label="Daily Quests, ${q.doneCount} of 3 done"><span class="qt"><b>Daily Quests</b><small>${q.chestOpened ? 'All done, see you tomorrow' : q.chestReady ? 'Open your chest!' : q.doneCount + ' / 3'}</small></span><span class="qsegs">${segs}</span><span class="qchest${q.chestReady ? ' pop' : ''}">${chest}</span></button>` +
-      `<div class="qpills"><button class="qpill${se.ready ? ' ready' : ''}" id="qSeason">🌟 Season <b>${se.stamps}/${SEASON_DAYS}</b></button><button class="qpill" id="qAch">🏆 Achievements <b>${ac.got}/${ac.total}</b></button></div>`;
+      `<div class="qpills"><button class="qpill${se.ready ? ' ready' : ''}" id="qSeason"${hasShield(s) ? ' aria-label="Season, Streak Shield ready"' : ''}>🌟 Season <b>${se.stamps}/${SEASON_DAYS}</b>${hasShield(s) ? '<i class="qshield" title="Streak Shield ready">🛡️</i>' : ''}</button><button class="qpill" id="qAch">🏆 Achievements <b>${ac.got}/${ac.total}</b></button></div>`;
     $('qOpen').onclick = () => { audio.unlock(); audio.play('click'); openQuests(); };
     $('qSeason').onclick = () => { audio.unlock(); audio.play('click'); openSeason(); };
     $('qAch').onclick = () => { audio.unlock(); audio.play('click'); if (openTrophies) openTrophies(); };
@@ -79,17 +79,25 @@ export function createRetainUI(c, openPanel, sec, openTrophies) {
       onclick: () => { if (claimSeason(save(), day, m.i)) { after(); audio.play('levelup'); rebuild(buildSeason); renderStrip(); c.renderNext && c.renderNext(); } } }));
   }
 
-  // ---- tiny toast when an achievement pops (reuses the trophy shelf, claim it there)
+  // ---- the achievement card (round 6): a share-style card, tap it to open the shelf
   let achEl = null, achT = 0;
+  const tierOf = r => (r && r.sparkles >= 60 ? 'gold' : r && (r.sparkles >= 25 || r.eggs) ? 'silver' : 'bronze');
   function achToast(name, reward) {
     if (!achEl) { achEl = document.createElement('div'); achEl.id = 'achToast'; document.body.appendChild(achEl); }
-    achEl.innerHTML = `<b>🏆</b><span>Achievement!<em>${esc(name)}</em></span>` + (reward ? `<u>${esc(rewardText(reward))}<small>on the shelf</small></u>` : ''); achEl.classList.remove('on'); void achEl.offsetWidth; achEl.classList.add('on');
-    clearTimeout(achT); achT = setTimeout(() => achEl.classList.remove('on'), 2800);
+    const ac = achievementCount(save()), tier = tierOf(reward), pct = Math.round(ac.got / ac.total * 100);
+    const canShare = typeof navigator !== 'undefined' && !!navigator.share;
+    achEl.className = 't-' + tier;
+    achEl.innerHTML = `<div class="acmed"><i class="acrays"></i><b>🏆</b></div><div class="acmid"><small>ACHIEVEMENT UNLOCKED</small><strong>${esc(name)}</strong><span class="acbar"><i style="width:${pct}%"></i></span><span class="accnt">${ac.got} of ${ac.total} on the shelf</span></div>` +
+      (reward ? `<u class="acrw">${esc(rewardText(reward))}<small>tap to collect</small></u>` : '') + (canShare ? '<button class="acshare" aria-label="Share" type="button">⤴</button>' : '');
+    const open = () => { achEl.classList.remove('on'); audio.play('click'); if (openTrophies) openTrophies(); };
+    achEl.onclick = e => { if (e.target.closest && e.target.closest('.acshare')) { try { navigator.share({ title: 'Cell Serpent', text: `Achievement unlocked in Cell Serpent: ${name}! RoxorLoops & Jasmin vs the Serpent.` }).catch(() => {}); } catch (_) {} return; } open(); };
+    void achEl.offsetWidth; achEl.classList.add('on');
+    clearTimeout(achT); achT = setTimeout(() => achEl.classList.remove('on'), 3600);
   }
   function checkAch() {
     const fresh = popAchievements(save()); if (!fresh.length) return 0;
     c.persist(); audio.play('levelup');
-    fresh.slice(0, 3).forEach((t, i) => setTimeout(() => achToast(t.name, t.reward), i * 3000));
+    fresh.slice(0, 3).forEach((t, i) => setTimeout(() => achToast(t.name, t.reward), i * 3800));
     return fresh.length;
   }
   return { renderStrip, openQuests, openSeason, checkAch, achToast, spinInfo: (s, day) => spinFrame(spinStreak(s, day)) };
