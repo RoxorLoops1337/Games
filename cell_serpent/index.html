@@ -1501,6 +1501,17 @@
   .sc9.say::before{content:attr(data-w);display:block;padding:3px 12px;border-radius:99px;background:#fff;color:#4a0f3a;font-size:15px;letter-spacing:.04em;text-shadow:none;border:2px solid #ff5cb8;box-shadow:0 3px 0 #4a0f3a;white-space:nowrap}
   .sc9.say.big2::before{font-size:19px;background:#ffd84d;border-color:#fff}
   @media (prefers-reduced-motion:reduce){.hn13{animation:none}}
+  /* round 10: secrets chip, keyboard tune, coach line */
+  #title .sec10{position:absolute;left:12px;top:110px;z-index:6;display:flex;align-items:center;gap:4px;padding:2px 9px 2px 7px;border-radius:99px;font-size:12px;font-weight:900;color:#fff;background:rgba(74,15,58,.7);border:1.5px solid rgba(255,216,77,.7);box-shadow:0 2px 0 rgba(0,0,0,.35);pointer-events:none}
+  #title .sec10[hidden]{display:none} .sec10 i{font-style:normal;color:#ffd84d} .sec10.all{background:#ffd84d;color:#4a0f3a;border-color:#fff} .sec10.all i{color:#c9410f}
+  .sec10.pop{animation:sec10 .7s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes sec10{0%{scale:.3}60%{scale:1.3}100%{scale:1}}
+  #title .kb10{position:absolute;left:50%;bottom:6px;translate:-50% 0;z-index:7;padding:6px 14px;border-radius:99px;border:2px solid #fff;background:#4a0f3a;color:#fff;font:900 13px system-ui,sans-serif;opacity:0;pointer-events:none}
+  #title .kb10:focus-visible{opacity:1;pointer-events:auto;outline:3px solid #ffd84d;outline-offset:2px}
+  #title .kbl10{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .wb12-c{margin:6px auto 0;max-width:290px;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:800;line-height:1.25;color:#fff7c8;background:rgba(0,0,0,.32);border:1px solid rgba(255,230,140,.45)}
+  @media (max-height:700px){.wb12-c{margin-top:3px;font-size:11px;padding:2px 10px}}
+  @media (prefers-reduced-motion:reduce){.sec10.pop{animation:none}}
   /* end @css:12-title-onboarding */
 
   /* @css:10-shop-gear-stats */

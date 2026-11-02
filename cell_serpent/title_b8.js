@@ -25,8 +25,8 @@ export function makeTune(tune = TUNE, gap = TUNE_GAP) {
   let k = 0, last = -1e9;
   return {
     get step() { return k; },
-    tap(i, now) {
-      if (now - last > gap) k = 0;
+    tap(i, now, slow) {   // slow: keyboard and screen reader presses, no time limit
+      if (!slow && now - last > gap) k = 0;
       last = now;
       if (i === tune[k]) { k++; if (k === tune.length) { k = 0; return 'done'; } return 'ok'; }
       k = i === tune[0] ? 1 : 0;
@@ -75,7 +75,7 @@ export function setupTune(title, audio, onDone) {
   title.addEventListener('snakepoke', e => {
     const d = e.detail; if (!d || !d.hit || !cv) return;
     const r = cv.getBoundingClientRect(), tr0 = title.getBoundingClientRect(), x = r.left - tr0.left + d.x, y = r.top - tr0.top + d.y;
-    const res = tr.tap(d.i, performance.now());
+    const res = tr.tap(d.i, performance.now(), d.kb);
     if (res === 'miss' && !rd()) { const m = nextMiss(missCount(), false); setMiss(m.n); if (m.show) showHint(); }
     paint(tr.step);
     clearTimeout(hide); hide = setTimeout(() => paint(0), TUNE_GAP + 400);
