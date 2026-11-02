@@ -448,7 +448,7 @@ export function createHud(env) {
         text(maxed ? 'MAX' : w.lv + '', bx, by + 1, maxed ? 18 : 21, maxed ? '#4a3600' : '#ffffff', maxed ? '#fff3a0' : '#0b1020');
       }
       if (lk > 0 && !reduce()) { ctx.save(); ctx.globalAlpha = lk * 0.9; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3 * lk + 1; ctx.beginPath(); ctx.arc(x, cy, r + 4 + 24 * (1 - lk), 0, TAU); ctx.stroke(); ctx.restore(); }
-      const PW = pw * (max - 1) + 14, lvc = Math.min(w.lv, max), pb = kit && kit.bake ? kit.bake('pips09|' + lvc + '|' + max, PW, 12, c => {   // one baked row per level: lit pips white (gold when maxed), empty ones faint
+      const PW = pw * (max - 1) + 14, lvc = Math.min(w.lv, max), pb = kit && kit.bake ? kit.bake('pips07|' + lvc + '|' + max, PW, 12, c => {   // one baked row per level: lit pips white (gold when maxed), empty ones faint
         c.translate(-((max - 1) * pw) / 2, 0);
         c.beginPath(); for (let i = lvc; i < max; i++) { c.moveTo(i * pw + 3.4, 0); c.arc(i * pw, 0, 3.4, 0, TAU); } c.fillStyle = 'rgba(255,255,255,.3)'; c.fill();
         if (lvc > 0) { c.beginPath(); for (let i = 0; i < lvc; i++) { c.moveTo(i * pw + 3.4, 0); c.arc(i * pw, 0, 3.4, 0, TAU); } c.fillStyle = lvc >= max ? '#ffd84d' : '#ffffff'; c.fill(); }

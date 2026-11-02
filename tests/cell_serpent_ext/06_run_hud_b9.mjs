@@ -12,7 +12,7 @@ assert.ok(!src.includes('—'), 'no em dash in hud.js');
 
 // source-level floors: the small labels are lifted, badges and pips are bigger
 assert.ok(src.includes('fzp(22)') && src.includes('v.length > 3 ? 18 : 21'), 'stats values lifted');
-assert.ok(src.includes("'lvb09|'") && src.includes("'pips09|'"), 'new badge and pip bakes');
+assert.ok(src.includes("'lvb09|'") && src.includes("'pips07|'"), 'new badge and pip bakes');
 assert.ok(!/maxed \? 9 : 14/.test(src), 'old tiny badge text is gone');
 assert.ok(src.includes("rr(-84, 14, Math.max(5, 168 * left), 7, 3.5)"), 'thicker combo timer');
 
