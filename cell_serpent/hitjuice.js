@@ -112,9 +112,13 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         S.rings.push({ x, y, r: R * 1.3, life: 0.4, max: 0.4, col: '#ffb347', glow: true });
         break;
       }
-      case 'swab': case 'dragon': case 'needles': case 'bubble': { const m = M('muz', g.p.x, g.p.y - 44, 0, e.t === 'needles' ? 0.2 : 0.34); m.wk = e.t; break; }   // a muzzle flash in the weapon's own look
+      case 'swab': case 'dragon': case 'needles': case 'bubble': { const rg = g.ring ? g.p.aim : null, m = M('muz', rg === null ? g.p.x : g.p.x + Math.cos(rg) * 34, rg === null ? g.p.y - 44 : g.p.y + Math.sin(rg) * 34, 0, e.t === 'needles' ? 0.2 : 0.34); m.wk = e.t; if (rg !== null) m.rot = rg + Math.PI / 2; break; }   // a muzzle flash in the weapon's own look
       case 'shoot': {
         const p = g.p;
+        if (g.ring) { const ca = Math.cos(p.aim), sa = Math.sin(p.aim);   // b12f: circle stages, the flash and sparks leave along the aim
+          if (flashes.length < 4) flashes.push({ x: p.x + ca * 34, y: p.y + sa * 34, t: 0, dur: 0.12, rot: p.aim + Math.PI / 2 });
+          for (let i = 0; i < 3; i++) { const sp = 70 + Math.random() * 80, ja = p.aim + (Math.random() - 0.5) * 0.7; tpush(p.x + ca * 34, p.y + sa * 34, Math.cos(ja) * sp, Math.sin(ja) * sp, 0.35, 3 + Math.random() * 2, false); }
+          break; }
         if (flashes.length < 4) flashes.push({ x: p.x, y: p.y - 40, t: 0, dur: 0.12 });
         for (let i = 0; i < 3; i++) tpush(p.x + (Math.random() - 0.5) * 30, p.y - 44, (Math.random() - 0.5) * 120, -60 - Math.random() * 80, 0.35, 3 + Math.random() * 2, false);
         break;
@@ -259,7 +263,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
         case 'zap': { ctx.rotate(m.rot); ctx.strokeStyle = m.col; ctx.lineWidth = 2.6; ctx.lineJoin = 'round'; ctx.beginPath(); const n = 5; for (let j = 0; j <= n; j++) { const xx = -m.r + (j / n) * m.r * 2, yy = j === 0 || j === n ? 0 : Math.sin(m.seed * 3 + j * 2.1 + Math.floor(m.t * 40)) * 9; j ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); break; }
         case 'finish': drawFinish(m, k, a); break;
         case 'sdeath': ctx.scale(1.4, 1.4); drawSpeciesDeath(ctx, m.wk, k, m.seed, text); break;
-        case 'muz': drawMuzzle(ctx, m.wk, k, m.seed); break;
+        case 'muz': if (m.rot) ctx.rotate(m.rot); drawMuzzle(ctx, m.wk, k, m.seed); break;
         case 'beam': { ctx.globalCompositeOperation = 'lighter'; const w = m.r * (0.5 + 0.5 * a) * (k < 0.15 ? k / 0.15 : 1), h = 260 * (0.4 + k); ctx.globalAlpha = a * 0.55; ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.moveTo(-w * 0.35, 0); ctx.lineTo(-w, -h); ctx.lineTo(w, -h); ctx.lineTo(w * 0.35, 0); ctx.closePath(); ctx.fill(); ctx.globalAlpha = a * 0.8; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(-w * 0.15, 0); ctx.lineTo(-w * 0.3, -h * 0.8); ctx.lineTo(w * 0.3, -h * 0.8); ctx.lineTo(w * 0.15, 0); ctx.closePath(); ctx.fill(); break; }
         case 'chunk': { const tx = m.vx * m.t, ty = m.vy * m.t + m.seed * m.t * m.t; ctx.translate(tx, ty);
           if (m.gold) { ctx.fillStyle = m.col; ctx.strokeStyle = '#8a5a00'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, m.r * (0.4 + 0.6 * Math.abs(Math.cos(m.t * 16))), m.r, 0, 0, TAU); ctx.fill(); ctx.stroke(); }
@@ -455,7 +459,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, b
     for (let i = flashes.length - 1; i >= 0; i--) {
       const f = flashes[i]; f.t += dt; if (f.t >= f.dur) { flashes.splice(i, 1); continue; }
       const k = f.t / f.dur; glow(f.x, f.y, 62 * (1 - k * 0.4), '#bff6ff', 0.85 * (1 - k));
-      ctx.save(); ctx.globalAlpha = 1 - k; ctx.fillStyle = '#fff'; ctx.translate(f.x, f.y); ctx.beginPath(); ctx.moveTo(0, -34 * (1 - k)); ctx.lineTo(7, 0); ctx.lineTo(0, 8); ctx.lineTo(-7, 0); ctx.closePath(); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.globalAlpha = 1 - k; ctx.fillStyle = '#fff'; ctx.translate(f.x, f.y); if (f.rot) ctx.rotate(f.rot); ctx.beginPath(); ctx.moveTo(0, -34 * (1 - k)); ctx.lineTo(7, 0); ctx.lineTo(0, 8); ctx.lineTo(-7, 0); ctx.closePath(); ctx.fill(); ctx.restore();
     }
     for (let i = powers.length - 1; i >= 0; i--) {
       const o = powers[i]; o.t += dt; const k = Math.min(1, o.t / o.dur), e = k * k * (3 - 2 * k), tx = o.p.x, ty = o.p.y - 52;

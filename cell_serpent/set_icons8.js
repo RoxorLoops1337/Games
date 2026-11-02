@@ -20,6 +20,7 @@ export const SET_ICON = {
   slider: ['#7ae8f8', S('#7ae8f8', `<path ${K} d="M3 12h18M6.5 8.5 3 12l3.5 3.5M17.5 8.5 21 12l-3.5 3.5"/>`)],
   leftHand: ['#ffb454', S('#ffb454', `<path ${F} d="M14 21c-3.4 0-6-2.4-6-6V9a1.4 1.4 0 0 1 2.8 0v3h.5V5a1.4 1.4 0 0 1 2.8 0v6h.5V6a1.4 1.4 0 0 1 2.8 0v6h.4V8.5a1.4 1.4 0 0 1 2.8 0V15c0 3.4-2.8 6-6.6 6z"/>`)],
   thumbZone: ['#9dff6d', S('#9dff6d', `<rect x="3" y="2.5" width="18" height="19" rx="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path ${F} d="M3.2 15h17.6v3.3a3 3 0 0 1-3 3H6.2a3 3 0 0 1-3-3z"/>`)],
+  aimAssist: ['#ffd24a', S('#ffd24a', `<circle cx="12" cy="12" r="7.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2.2" ${F}/><path ${K} d="M12 1.8v4M12 18.2v4M1.8 12h4M18.2 12h4"/>`)],
   pauseGuard: ['#ff9ad6', S('#ff9ad6', `<rect x="5" y="3.5" width="5" height="17" rx="1.8" ${F}/><rect x="14" y="3.5" width="5" height="17" rx="1.8" ${F}/>`)],
   volume: ['#7ae8f8', S('#7ae8f8', `<path ${F} d="M3 9.5h3.6L11 5.6v12.8l-4.4-3.9H3z"/><path ${K} d="M14.5 9a4.4 4.4 0 0 1 0 6"/>`)],
 };
