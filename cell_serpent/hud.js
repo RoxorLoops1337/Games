@@ -63,10 +63,10 @@ export function createHud(env) {
     const spr = kit && kit.bake ? kit.bake(`glass|${w}|${h}|${r}|${rim}|${tint}`, w + 8, h + 8, c => glassPaint(c, -w / 2, -h / 2, w, h, r, rim, tint)) : null;
     if (spr) ctx.drawImage(spr.c, x - 4, y - 4, w + 8, h + 8); else glassPaint(ctx, x, y, w, h, r, rim, tint);
   }
-  function glassCircle(x, y, r, c = ctx) {
-    c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = 'rgba(14,9,48,.52)'; c.fill();
-    c.beginPath(); c.arc(x, y - r * 0.28, r * 0.72, Math.PI * 1.1, Math.PI * 1.9); c.strokeStyle = 'rgba(255,255,255,.28)'; c.lineWidth = 3; c.stroke();
-    c.beginPath(); c.arc(x, y, r, 0, TAU); c.strokeStyle = 'rgba(255,255,255,.45)'; c.lineWidth = 2; c.stroke();
+  function glassCirclePaint(ctx, x, y, r) {
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = 'rgba(14,9,48,.52)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y - r * 0.28, r * 0.72, Math.PI * 1.1, Math.PI * 1.9); ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 2; ctx.stroke();
   }
   // 06-hud: the static chrome (upgrade chip, title plate, coin plate, progress track, pause and stats buttons) is
   // painted once into one layer per boss/hard variant and blitted in a single drawImage per frame
@@ -80,14 +80,19 @@ export function createHud(env) {
     gp(484, 14, 142, 52, 26, 'rgba(255,210,74,.55)');
     gp(22, 86, 582, 32, 16, 'rgba(255,255,255,.4)', 'rgba(8,5,30,.62)');
     const bx = W - 38;
-    glassCircle(bx, 40, 26, c); c.fillStyle = '#fff';
+    glassCirclePaint(c, bx, 40, 26); c.fillStyle = '#fff';
     for (const dx of [-11, 4]) { c.beginPath(); if (c.roundRect) c.roundRect(bx + dx, 29, 7, 22, 3); else c.rect(bx + dx, 29, 7, 22); c.fill(); }
-    glassCircle(bx, 112, 26, c); c.fillStyle = '#fff';
+    glassCirclePaint(c, bx, 112, 26); c.fillStyle = '#fff';
     for (const [i, hgt] of [[0, 12], [1, 20], [2, 28]]) { c.beginPath(); if (c.roundRect) c.roundRect(bx - 15 + i * 11, 126 - hgt, 8, hgt, 3); else c.rect(bx - 15 + i * 11, 126 - hgt, 8, hgt); c.fill(); }
   }
   function chrome(boss, hard) {
     const spr = kit && kit.bake ? kit.bake(`chrome06|${boss ? 1 : 0}|${hard ? 1 : 0}`, CH_W, CH_H, c => chromePaint(c, boss, hard)) : null;
     if (spr) ctx.drawImage(spr.c, 0, 0, CH_W, CH_H); else { ctx.save(); ctx.translate(CH_W / 2, CH_H / 2); chromePaint(ctx, boss, hard); ctx.restore(); }
+  }
+  // static, so baked once per radius: 3 paths per round button per frame become one drawImage
+  function glassCircle(x, y, r) {
+    const spr = kit && kit.bake ? kit.bake('gcirc|' + r, r * 2 + 8, r * 2 + 8, c => glassCirclePaint(c, 0, 0, r)) : null;
+    if (spr) ctx.drawImage(spr.c, x - r - 4, y - r - 4, r * 2 + 8, r * 2 + 8); else glassCirclePaint(ctx, x, y, r);
   }
   // a value that bounces for a moment when it changes
   function pop(key, v) {
@@ -239,11 +244,14 @@ export function createHud(env) {
     if (pu >= 0 && pu < 1 && gi > 0 && !(env.OPT && env.OPT.reduceMotion)) {
       ctx.save(); ctx.globalAlpha = 1 - pu * pu; text('+1', x0 + (Math.min(20, gi) - 1) * step + bw / 2, y - 4 - 14 * pu, 20 + 6 * (1 - pu), gi >= 15 ? '#ffd84d' : BAR_COL[Math.min(19, gi - 1)], '#0b1020'); ctx.restore();
     }
+    // the 20 dim backing bars are static: one baked strip instead of 20 round rects per frame
+    const trk = kit && kit.bake ? kit.bake('groove-track', 226, 64, c => { c.fillStyle = 'rgba(255,255,255,.14)'; for (let i = 0; i < 20; i++) { c.beginPath(); if (c.roundRect) c.roundRect(14 - 113 + i * step, 64 - 10 - 8 - i * 0.95 - 32, bw, 8 + i * 0.95, 3); else c.rect(14 - 113 + i * step, 64 - 10 - 8 - i * 0.95 - 32, bw, 8 + i * 0.95); c.fill(); } }) : null;
+    if (trk) ctx.drawImage(trk.c, x, y, trk.w, trk.h);
     for (let i = 0; i < 20; i++) {
       const lit = Math.max(0, Math.min(1, gv - i));
       const bob = lit > 0 ? Math.sin(S.t * (fire ? 14 : 8) + i * 0.9) * (fire ? 4 : 2.5) * lit : 0;
       const hh = 8 + i * 0.95 + bob;
-      ctx.fillStyle = 'rgba(255,255,255,.14)'; rr(x0 + i * step, base - (8 + i * 0.95), bw, 8 + i * 0.95, 3); ctx.fill();
+      if (!trk) { ctx.fillStyle = 'rgba(255,255,255,.14)'; rr(x0 + i * step, base - (8 + i * 0.95), bw, 8 + i * 0.95, 3); ctx.fill(); }
       if (lit > 0) {
         ctx.globalAlpha = 0.45 + 0.55 * lit; ctx.fillStyle = fire ? '#ffd84d' : BAR_COL[i]; rr(x0 + i * step, base - hh, bw, hh, 3); ctx.fill(); ctx.globalAlpha = 1;
         if (ku > 0 && i === gi - 1) { ctx.fillStyle = `rgba(255,255,255,${0.9 * ku})`; rr(x0 + i * step - 1, base - hh - 1, bw + 2, hh + 2, 3); ctx.fill(); }
@@ -282,8 +290,10 @@ export function createHud(env) {
       }
       T.cdLast[id] = w.cd;
       const frac = w.cd > 0 ? Math.max(0, Math.min(1, 1 - w.cd / T.cdMax[id])) : 1, ready = frac >= 0.999;
-      ctx.beginPath(); ctx.arc(x, cy, r, 0, TAU); ctx.fillStyle = 'rgba(14,9,48,.62)'; ctx.fill();
-      ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, cy, r - 2, 0, TAU); ctx.fill(); ctx.restore();
+      const tb = kit && kit.bake ? kit.bake('tile|' + col, r * 2, r * 2, c => { c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = 'rgba(14,9,48,.62)'; c.fill(); c.globalAlpha = 0.28; c.fillStyle = col; c.beginPath(); c.arc(0, 0, r - 2, 0, TAU); c.fill(); }) : null;
+      if (tb) ctx.drawImage(tb.c, x - r, cy - r, r * 2, r * 2);
+      else { ctx.beginPath(); ctx.arc(x, cy, r, 0, TAU); ctx.fillStyle = 'rgba(14,9,48,.62)'; ctx.fill();
+        ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, cy, r - 2, 0, TAU); ctx.fill(); ctx.restore(); }
       blit(kit && kit.SPR.weapon(env.WSPR[id] || id), x, cy - 1, 78);
       if (frac < 0.999) { ctx.save(); ctx.beginPath(); ctx.moveTo(x, cy); ctx.arc(x, cy, r - 1, -Math.PI / 2 + TAU * frac, Math.PI * 1.5); ctx.closePath(); ctx.fillStyle = 'rgba(8,5,30,.55)'; ctx.fill(); ctx.restore(); }
       ctx.lineCap = 'round';
@@ -300,7 +310,8 @@ export function createHud(env) {
       }
       // level pips
       const pw = 7, px0 = x - ((max - 1) * pw) / 2, py = cy + r + 10;
-      for (let i = 0; i < max; i++) { ctx.beginPath(); ctx.arc(px0 + i * pw, py, 2.6, 0, TAU); ctx.fillStyle = i < w.lv ? (w.lv >= max ? '#ffd84d' : '#ffffff') : 'rgba(255,255,255,.22)'; ctx.fill(); }
+      ctx.beginPath(); for (let i = w.lv; i < max; i++) { ctx.moveTo(px0 + i * pw + 2.6, py); ctx.arc(px0 + i * pw, py, 2.6, 0, TAU); } ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fill();
+      if (w.lv > 0) { ctx.beginPath(); for (let i = 0; i < w.lv && i < max; i++) { ctx.moveTo(px0 + i * pw + 2.6, py); ctx.arc(px0 + i * pw, py, 2.6, 0, TAU); } ctx.fillStyle = w.lv >= max ? '#ffd84d' : '#ffffff'; ctx.fill(); }
       x -= pitch;
     }
   }

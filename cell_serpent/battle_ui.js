@@ -67,11 +67,13 @@ export function eventBannerHTML(ev, earned, claimed, nowMs, day) {
 
 // ---- round 3: dock measuring, title fit, swipe and arrow keys on the stage hero
 // (--tabh was 0 on the first open, so the START dock covered the tab bar: measure after layout, and again on resize)
+let dockPend = false;
 export function syncDock() {
   const hb = document.getElementById('hub'), dk = document.getElementById('btDock'), tb = document.querySelector('.tabs');
   if (!hb || !dk || !tb) return;
   const m = () => { const t = tb.offsetHeight, d = dk.offsetHeight; if (t) hb.style.setProperty('--tabh', t + 'px'); if (d) hb.style.setProperty('--dockh', d + 'px'); };
-  m(); requestAnimationFrame(m);
+  if (dockPend) return; dockPend = true;   // 17-perf: measure once per frame, after layout (no forced reflow while the pane is still being built)
+  requestAnimationFrame(() => { dockPend = false; m(); });
 }
 let dockWatch = false;
 export function watchDock() {
@@ -91,7 +93,7 @@ export function fitTitle(el) {
   if (!el) return;
   el.style.fontSize = ''; el.title = el.textContent;
   const run = () => { let fs = parseFloat(getComputedStyle(el).fontSize) || 21; for (let i = 0; i < 8 && el.scrollWidth > el.clientWidth + 1 && fs > 14; i++) { fs -= 1.5; el.style.fontSize = fs + 'px'; } };
-  run(); requestAnimationFrame(run);
+  if (el._fitPend) return; el._fitPend = true; requestAnimationFrame(() => { el._fitPend = false; run(); });   // 17-perf: one read pass per frame instead of a forced reflow per render
 }
 // swipe the hero or press the arrow keys to change stage; step(dir) returns true when the stage changed
 export function bindStageNav(hero, tabOn, step) {

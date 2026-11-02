@@ -151,8 +151,12 @@ function renderBattle() {
   $('stSub').textContent = `Stage ${sel}  ·  ${info.path}`;
   $('stBadges').innerHTML = (info.boss ? '<i class="boss">👑 BOSS</i>' : '') + (info.kind === 'ring' ? '<i class="ring">🌀 RING</i>' : '') + (info.kind === 'double' ? '<i class="dbl">🐍🐍 DOUBLE</i>' : '') + (hard ? '<i>HARD</i>' : '');
   $('stPrev').disabled = sel <= 1; $('stNext').disabled = sel >= Math.min(MAX_STAGE, save.cleared + 4);
-  const chips = $('stChips'); chips.innerHTML = '';
-  for (let n = 1; n <= Math.min(MAX_STAGE, save.cleared + 4); n++) {
+  const chips = $('stChips'), chipTop = Math.min(MAX_STAGE, save.cleared + 4);
+  let ckey = save.cleared + '|' + chipTop; for (let n = 1; n <= chipTop; n++) ckey += (save.stars[n] || 0);
+  const chipsSame = chips.dataset.k === ckey && chips.children.length === chipTop;   // 17-perf: the 54 chips are rebuilt only when stars or progress changed
+  if (chipsSame) for (let n = 1; n <= chipTop; n++) chips.children[n - 1].classList.toggle('sel', n === sel);
+  else { chips.innerHTML = ''; chips.dataset.k = ckey; }
+  for (let n = 1; n <= chipTop && !chipsSame; n++) {
     const c = document.createElement('button'); c.className = 'chip' + (n === sel ? ' sel' : '') + (n > save.cleared + 1 ? ' lock' : '') + (n <= save.cleared ? ' done' : '') + (n === save.cleared + 1 ? ' nxt' : '');
     { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st${n > save.cleared ? ' no' : ''}">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : '') + chipReward(n, save.cleared, save.hardCleared); }
     c.onclick = () => { audio.play('click'); sel = n; renderBattle(); };
@@ -175,7 +179,7 @@ function renderBattle() {
   renderPig();
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
   renderGoals();
-  const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } }
+  if (chips.dataset.sc !== sel + '|' + ckey) { chips.dataset.sc = sel + '|' + ckey; requestAnimationFrame(() => { const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } } }); }   // 17-perf: read layout after paint, and only when the stage changed
 }
 $('claimGigs').onclick = () => { audio.play('click'); const n = claimAllGoals(save, dayKey()); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });

@@ -11,6 +11,7 @@ import { drawHints } from './hints.js';
 import { drawCellFlags, drawCellBadge } from './cellfx.js';
 import { bakeHat } from './hats.js';
 import { createCheer, HAT_FX, hatPose } from './cheer.js';
+import { createBoltLayer, boltPose, paintBolt } from './bolts_fx.js';
 
 const TAU = Math.PI * 2;
 const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
@@ -49,6 +50,7 @@ export function createRenderer(canvas, art, kit) {
   const tcache = new Map();
   function text(str, x, y, size, fill = '#fff', stroke = '#10131c', align = 'center') {
     str = String(str);
+    size = size >= 20 ? Math.round(size) : Math.round(size * 2) / 2;   // 17-perf: pulsing sizes share a few baked strips instead of baking one per frame
     const font = `800 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
     if (kit && kit.makeCanvas) {
       const key = str + '|' + size + '|' + fill + '|' + stroke;
@@ -57,7 +59,7 @@ export function createRenderer(canvas, art, kit) {
         ctx.font = font; const pad = Math.ceil(size * 0.3), w = Math.ceil(ctx.measureText(str).width) + pad * 2, h = Math.ceil(size * 1.5), d = kit.dpr;
         const c = kit.makeCanvas(w * d, h * d);
         if (c) { const g = c.getContext('2d'); g.scale(d, d); g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, size * 0.2); g.strokeStyle = stroke; g.strokeText(str, w / 2, h / 2); g.fillStyle = fill; g.fillText(str, w / 2, h / 2); }
-        t = { c, w, h, pad }; if (tcache.size > 500) tcache.clear(); tcache.set(key, t);
+        t = { c, w, h, pad }; if (tcache.size > 500) { let n = 0; for (const k of tcache.keys()) { tcache.delete(k); if (++n >= 160) break; } } tcache.set(key, t);
       }
       if (t.c) { ctx.drawImage(t.c, align === 'left' ? x - t.pad : align === 'right' ? x - t.w + t.pad : x - t.w / 2, y - t.h / 2, t.w, t.h); return; }
     }
@@ -471,16 +473,16 @@ export function createRenderer(canvas, art, kit) {
       blit(kit && kit.SPR.weapon('maw', ch ? 4 : wMood(m.x)), m.x, m.y + (ch ? 3 : 0), m.r * 3.4 * (ch ? 1.05 : 1 + 0.06 * Math.sin(S.t * 14)), Math.sin(S.t * 9) * 0.1); ctx.restore();
       ctx.save(); ctx.globalAlpha = (1 - ph) * 0.8 * k; ctx.strokeStyle = '#ff7eb6'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(m.x, m.y, m.r * (0.2 + 0.8 * ph), 0, TAU); ctx.stroke(); ctx.restore();
     }
-    for (let i = S.bolts.length - 1; i >= 0; i--) {   // Spotlight Storm: a beam from the rig above
-      const b = S.bolts[i]; b.life -= 0.016; if (b.life <= 0) { S.bolts.splice(i, 1); continue; }
-      const a = Math.min(1, b.life * 5);
-      const age = 1 - b.life / 0.28, sw = Math.sin(age * 9 + b.seed) * 46 * (1 - age), ox = b.x + sw * 0.4, oy = 36 - Math.max(0, 1 - age * 6) * 60;
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.45 * a; ctx.fillStyle = '#fff1a8';   // 02-animal-art: an owl perches up top, its beam sweeps onto the target
-      ctx.beginPath(); ctx.moveTo(ox - 10, oy + 30); ctx.lineTo(ox + 10, oy + 30); ctx.lineTo(b.x + 62 + sw, b.y); ctx.lineTo(b.x - 62 + sw, b.y); ctx.closePath(); ctx.fill();
-      ctx.globalAlpha = 0.8 * a; ctx.beginPath(); ctx.ellipse(b.x + sw, b.y, 58, 22, 0, 0, TAU); ctx.fill();
-      for (let j = 0; j < 4; j++) { const f = (age * 2 + j / 4) % 1; ctx.globalAlpha = 0.6 * a * (1 - f); ctx.beginPath(); ctx.arc(b.x + sw + Math.sin(j * 4 + b.seed) * 40, b.y - f * 40, 3, 0, TAU); ctx.fill(); }
-      ctx.restore();
-      ctx.save(); ctx.globalAlpha = Math.min(1, a * 2.2); blit(kit && kit.SPR.weapon('perch', age > 0.8 ? 1 : age < 0.3 ? 2 : 0), ox, oy, 96, Math.sin(age * 9 + b.seed) * 0.12); ctx.restore();
+    for (let i = S.bolts.length - 1; i >= 0; i--) { const b = S.bolts[i]; b.life -= 0.016; if (b.life <= 0) S.bolts.splice(i, 1); }   // Spotlight Storm: a beam from the rig above
+    if (S.bolts.length) {
+      const layered = S.bolts.length >= 2 && (S.boltLayer || (S.boltLayer = createBoltLayer(kit))).draw(ctx, S.bolts);   // 2+ beams: one half-res additive layer
+      for (let i = 0; i < S.bolts.length; i++) {
+        const b = S.bolts[i], p = boltPose(b, S.boltPose || (S.boltPose = {}));
+        if (!layered) {   // owl perches up top, its beam sweeps onto the target
+          ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = '#fff1a8'; paintBolt(ctx, b, p); ctx.restore();
+        }
+        blit(kit && kit.SPR.weapon('perch', p.age > 0.8 ? 1 : p.age < 0.3 ? 2 : 0), p.ox, p.oy, 96, Math.sin(p.age * 9 + b.seed) * 0.12, false, Math.min(1, p.a * 2.2));
+      }
     }
   }
   const CX = W - 22 - 172, CY = 38;   // the coin counter in the HUD

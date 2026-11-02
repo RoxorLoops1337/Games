@@ -612,14 +612,9 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     if (boss) { bossRing(g, R, t, BOSS_METAL[o.skin]); blit(g, bake('bossorn|' + o.skin, B * 5, B * 5, gg => bossOrn(gg, B, o.skin, 0, P)), 0, 0, B * 5); }
     // headgear (upright, on top of the head)
     const top = -R * 0.92, sw = Math.sin(t * 5) * R * 0.1;
-    if (boss) {   // a cute little crown with jewels, tip pearls and a shine
-      const cy = top + R * 0.05 + Math.sin(t * 3) * R * 0.02;
-      const cm = BOSS_METAL[o.skin] || ['#ffd84d', '#d98f1a'];
-      cel(g, cm[0], poly([[-R * 0.62, cy + R * 0.14], [-R * 0.66, cy - R * 0.42], [-R * 0.33, cy - R * 0.14], [0, cy - R * 0.55], [R * 0.33, cy - R * 0.14], [R * 0.66, cy - R * 0.42], [R * 0.62, cy + R * 0.14]]), { r: R * 0.7, hi: false, lw: 3, shadow: cm[1] });
-      line(g, [[-R * 0.5, cy + R * 0.02], [R * 0.5, cy + R * 0.02]], R * 0.05, cm[1]);
-      for (const [x, y] of [[-0.66, -0.46], [0, -0.6], [0.66, -0.46]]) cel(g, '#fff8ec', circ(x * R, cy + (y + 0.04) * R, R * 0.085), { r: R * 0.09, hi: false, lw: 1.8, shadow: '#e6d6c8' });
-      for (const [x, c] of [[-0.3, '#ff5a8a'], [0, '#6fe3ff'], [0.3, '#ff5a8a']]) cel(g, c, circ(x * R, cy - R * 0.1, R * 0.075), { r: R * 0.08, hi: false, lw: 1.6 });
-      g.fillStyle = 'rgba(255,255,255,.7)'; ell(-R * 0.45, cy - R * 0.2, R * 0.04, R * 0.1, 0.5)(g); g.fill();
+    if (boss) {   // a cute little crown with jewels, tip pearls and a shine (static shape: baked once per species, only the bob moves)
+      const bob = Math.sin(t * 3) * R * 0.02, cm = BOSS_METAL[o.skin] || ['#ffd84d', '#d98f1a'];
+      hatSprite(g, 'crown|' + R + '|' + cm[0], R, c => crownPaint(c, R, top + R * 0.05, cm), 0, bob);
     } else if (P.hat === 'antenna' || P.hat === 'hearts') {
       for (const s of [-1, 1]) {
         line(g, [[s * R * 0.35, top + R * 0.1], [s * R * 0.6, top - R * 0.4 + sw * s], [s * R * 0.75, top - R * 0.7 + sw * s]], R * 0.14); line(g, [[s * R * 0.35, top + R * 0.1], [s * R * 0.6, top - R * 0.4 + sw * s], [s * R * 0.75, top - R * 0.7 + sw * s]], R * 0.07, P.base);
@@ -627,12 +622,12 @@ export function createArtDraw(makeCanvas, dpr = 2) {
         else cel(g, P.acc, circ(s * R * 0.78, top - R * 0.78 + sw * s, R * 0.17), { r: R * 0.17, hi: false, lw: 2.2, shadow: shade(P.acc) });
       }
     } else if (P.hat === 'horns') {
-      for (const s of [-1, 1]) cel(g, P.acc, poly([[s * R * 0.25, top + R * 0.15], [s * R * 0.75, top - R * 0.55], [s * R * 0.62, top + R * 0.3]]), { r: R * 0.5, hi: false, lw: 2.8, shadow: shade(P.acc) });
+      hatSprite(g, 'horns|' + R + P.acc, R, c => { for (const s of [-1, 1]) cel(c, P.acc, poly([[s * R * 0.25, top + R * 0.15], [s * R * 0.75, top - R * 0.55], [s * R * 0.62, top + R * 0.3]]), { r: R * 0.5, hi: false, lw: 2.8, shadow: shade(P.acc) }); });
     } else if (P.hat === 'cap') {   // a nightcap with a pompom
       cel(g, P.acc, poly([[-R * 0.6, top + R * 0.25], [R * 0.6, top + R * 0.25], [R * 0.3, top - R * 0.35], [R * 0.95, top - R * 0.2 + sw], [R * 0.1, top - R * 0.55]]), { r: R * 0.7, hi: false, lw: 3, shadow: shade(P.acc) });
       cel(g, '#fff8ec', circ(R * 0.95, top - R * 0.2 + sw, R * 0.16), { r: R * 0.16, hi: false, lw: 2, shadow: '#e6d6c8' });
     } else if (P.hat === 'spikes') {
-      for (let i = -2; i <= 2; i++) cel(g, P.acc, poly([[i * R * 0.28 - R * 0.13, top + R * 0.25 - Math.abs(i) * R * 0.05], [i * R * 0.28 + R * 0.13, top + R * 0.25 - Math.abs(i) * R * 0.05], [i * R * 0.3, top - R * (0.35 - Math.abs(i) * 0.06)]]), { r: R * 0.3, hi: false, lw: 2.2, shadow: shade(P.acc) });
+      hatSprite(g, 'spikes|' + R + P.acc, R, c => { for (let i = -2; i <= 2; i++) cel(c, P.acc, poly([[i * R * 0.28 - R * 0.13, top + R * 0.25 - Math.abs(i) * R * 0.05], [i * R * 0.28 + R * 0.13, top + R * 0.25 - Math.abs(i) * R * 0.05], [i * R * 0.3, top - R * (0.35 - Math.abs(i) * 0.06)]]), { r: R * 0.3, hi: false, lw: 2.2, shadow: shade(P.acc) }); });
     }
     // the face stays upright and looks at the player
     g.translate(Math.cos(ang) * R * 0.18 + (o.look ? o.look[0] * R * 0.1 : 0), Math.sin(ang) * R * 0.18 - R * 0.04 + (o.look ? o.look[1] * R * 0.06 : 0));
@@ -724,7 +719,24 @@ export function createArtDraw(makeCanvas, dpr = 2) {
     else if (skin === 'gloomy') { side(() => { for (const [x, y, h] of [[0.9, -0.6, 0.75], [1.1, -0.2, 0.6]]) cel(g, '#9dff6d', poly([[R * x - R * 0.12, R * y + R * 0.12], [R * x + R * 0.12, R * y - R * 0.12], [R * (x + 0.4), R * (y - h * 0.5)]]), { r: R * 0.3, hi: false, lw: 2, shadow: '#4fb02a' }); }); }
   }
   // boss heads wear a gold collar of jewels around the body, so they read as royalty even without the crown
+  // static headgear: baked once per size (each used to cost 2 to 6 clips a frame), then drawn as one image; the baked box is 2.4R x 1.6R centred 1R above the head centre
+  function hatSprite(g, key, R, paint, dx = 0, dy = 0) {
+    const w = R * 2.4, h = R * 1.6, spr = bake(key, w, h, c => { c.translate(0, R); paint(c); }, 3);
+    if (spr) g.drawImage(spr.c, -w / 2 + dx, -R - h / 2 + dy, w, h); else paint(g);
+  }
+  function crownPaint(c, R, cy, cm) {
+      cel(c, cm[0], poly([[-R * 0.62, cy + R * 0.14], [-R * 0.66, cy - R * 0.42], [-R * 0.33, cy - R * 0.14], [0, cy - R * 0.55], [R * 0.33, cy - R * 0.14], [R * 0.66, cy - R * 0.42], [R * 0.62, cy + R * 0.14]]), { r: R * 0.7, hi: false, lw: 3, shadow: cm[1] });
+      line(c, [[-R * 0.5, cy + R * 0.02], [R * 0.5, cy + R * 0.02]], R * 0.05, cm[1]);
+      for (const [x, y] of [[-0.66, -0.46], [0, -0.6], [0.66, -0.46]]) cel(c, '#fff8ec', circ(x * R, cy + (y + 0.04) * R, R * 0.085), { r: R * 0.09, hi: false, lw: 1.8, shadow: '#e6d6c8' });
+      for (const [x, col] of [[-0.3, '#ff5a8a'], [0, '#6fe3ff'], [0.3, '#ff5a8a']]) cel(c, col, circ(x * R, cy - R * 0.1, R * 0.075), { r: R * 0.08, hi: false, lw: 1.6 });
+      c.fillStyle = 'rgba(255,255,255,.7)'; ell(-R * 0.45, cy - R * 0.2, R * 0.04, R * 0.1, 0.5)(c); c.fill();
+  }
+  // the collar never animates, so it is baked once (a head used to run 6 clips and ~20 paths for it every frame)
   function bossRing(g, R, t, metal) {
+    const sz = R * 2.7, spr = bake('bossring|' + R + '|' + (metal ? metal[0] : ''), sz, sz, c => bossRingPaint(c, R, t, metal), 3);
+    if (spr) g.drawImage(spr.c, -sz / 2, -sz / 2, sz, sz); else bossRingPaint(g, R, t, metal);
+  }
+  function bossRingPaint(g, R, t, metal) {
     g.save(); g.lineCap = 'round';
     for (const [w, c] of [[R * 0.2, INK], [R * 0.11, metal ? metal[0] : '#ffd84d']]) { g.lineWidth = w; g.strokeStyle = c; g.beginPath(); g.arc(0, 0, R * 1.03, 0, TAU); g.stroke(); }
     g.lineWidth = R * 0.04; g.strokeStyle = '#fff1a8'; g.beginPath(); g.arc(0, 0, R * 1.03, -2.6, -1.7); g.stroke();
