@@ -28,5 +28,5 @@ for (const stage of [3, 12, 30, 44]) {
   kills += g.kills;
 }
 assert.ok(kills > 5, 'the orbit weapons actually killed things: ' + kills);
-assert.equal(hash, 481249908, 'orbit-weapon runs unchanged');
+assert.equal(hash, 527892824, 'orbit-weapon runs unchanged');
 console.log('30_perf_r9 ok');

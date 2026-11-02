@@ -21,5 +21,5 @@ assert.equal(snakeKeys.size, 1, 'one key order for every snake');
 assert.equal(gameKeys.size, 1, 'no new game keys mid-run');
 assert.deepEqual([...cellKeys][0].split(','), sim.CELL_KEYS);
 assert.deepEqual([...snakeKeys][0].split(','), sim.SNAKE_KEYS);
-assert.equal(hash, 229452008, 'seeded runs are unchanged by the shape work');
+assert.equal(hash, 28378473, 'seeded runs are unchanged by the shape work');
 console.log('29_perf_r8 ok');

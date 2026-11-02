@@ -76,6 +76,16 @@ const clk = createClock();   // 05-screen-feel: fixed-step clock fed with dt * s
 let reviveAsked = false, hard = false, mode = 'title', g = null, demo = null, acc = 0, last = 0, endT = 0, cardsFor = null, hubTab = 'Battle', sel = 1, ranResult = false;
 const joy = { on: false, id: -1, x: 0, y: 0, dx: 0, dy: 0 };
 const keys = {};
+const aimS = { now: -Math.PI / 2, tgt: -Math.PI / 2 };   // b11: circle stages aim all round: the finger or mouse sets the target angle, the sim gets an eased angle
+const AIM_HINT_KEY = 'cell_serpent_aimhint_b11';
+const aimHintLeft = () => { try { return +(localStorage.getItem(AIM_HINT_KEY) || 0) < 3; } catch (e) { return true; } };
+const aimHintBump = () => { try { localStorage.setItem(AIM_HINT_KEY, String(+(localStorage.getItem(AIM_HINT_KEY) || 0) + 1)); } catch (e) { /* ignore */ } };
+let aimHint = false;
+function aimAt(clientX, clientY) {   // the finger relative to the duo; a touch right on the duo keeps the old aim
+  if (!g || !g.ring) return;
+  const dpr = canvas.width / innerWidth, gp = R.toGame(clientX * dpr, clientY * dpr), dx = gp.x - g.p.x, dy = gp.y - g.p.y;
+  if (dx * dx + dy * dy > 26 * 26) aimS.tgt = Math.atan2(dy, dx);
+}
 sel = Math.max(1, save.last.stage); hard = save.last.hard;
 
 let dprCap = 2;   // lowered automatically on slow phones (dynamic resolution)
@@ -487,8 +497,9 @@ function startRun(stage, mode2 = '') {
   g = createGame({ seed: (Math.random() * 1e9) | 0, meta: save.meta, skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
   g.petJoy = save.petEquip.map(id => (save.pets[id].joy || 0) >= 100);   // round 6: an overjoyed pet shows off in the run (cosmetic)
   mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove(); if (fromHub) curtainOpen(document.documentElement.classList.contains('rm'));
-  announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + 'Slide to move, the duo shoots up on its own.');
+  announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + (g.ring ? 'Drag to aim, the duo shoots on its own.' : 'Slide to move, the duo shoots up on its own.'));
   window.CS.g = g;
+  aimS.now = aimS.tgt = -Math.PI / 2; aimHint = !!g.ring && aimHintLeft(); if (g.ring) aimHintBump();
   if (!mode2) teaseGoal(save, dayKey(), !!(save.settings.reduceMotion || systemReduceMotion())); else hideTease();
 }
 let awayH = hoursAway(Date.now()); addEventListener('pagehide', () => stampVisit(Date.now()));
@@ -548,13 +559,15 @@ canvas.addEventListener('pointerdown', e => {
   if (zone === 'pause') { if (pauseAllowed(save.settings.pauseGuard)) pause(); else toast('Tap again to pause'); return; }
   if (zone === 'stats') { showStats(); return; }
   if (g.encore >= 1 && Math.hypot(gp.x - g.p.x, gp.y - g.p.y) < 110) encoreTap = true;   // tap the duo for the Encore blast
-  if (save.settings.thumbZone && !inThumbZone(e.clientY, innerHeight)) return;   // thumb zone: only the bottom third steers
+  if (g.ring) aimAt(e.clientX, e.clientY);   // b11: a touch anywhere on the playfield aims at it
+  if (!g.ring && save.settings.thumbZone && !inThumbZone(e.clientY, innerHeight)) return;   // thumb zone: only the bottom third steers
   if (joy.on) return;
   joy.on = true; joy.id = e.pointerId; joy.sx = e.clientX; joy.sy = e.clientY; joy.dx = joy.dy = 0;
   joy.x = gp.x; joy.y = gp.y; joy.tz = save.settings.thumbZone ? gp.x : null;
   canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove', e => {
+  if (mode === 'play' && g.ring && (e.pointerType === 'mouse' || (joy.on && e.pointerId === joy.id))) { aimAt(e.clientX, e.clientY); return; }   // b11: drag (or hover with a mouse) to sweep the aim
   if (!joy.on || e.pointerId !== joy.id) return;
   if (joy.tz != null) { joy.tz = R.toGame(e.clientX * (canvas.width / innerWidth), 0).x; return; }   // thumb zone: the duo follows the finger
   const L = R.layout(), dpr = canvas.width / innerWidth, rad = 70 * L.s / dpr;
@@ -577,6 +590,14 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (mode
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'play' && g.phase !== 'levelup') pause(); });
 let encoreTap = false;
 function readInput() {
+  if (g.ring) {   // b11: circle stages: the duo is fixed, left/right (or A/D) turn the aim, the sim gets an eased angle
+    if (keys.a || keys.arrowleft) aimS.tgt -= 2.8 / 60; if (keys.d || keys.arrowright) aimS.tgt += 2.8 / 60;
+    if (keys.arrowup || keys.w) aimS.tgt = -Math.PI / 2; if (keys.arrowdown || keys.s) aimS.tgt = Math.PI / 2;
+    let da = (aimS.tgt - aimS.now) % (Math.PI * 2); if (da > Math.PI) da -= Math.PI * 2; else if (da < -Math.PI) da += Math.PI * 2;
+    aimS.now += da * 0.35; if (aimS.now > Math.PI) aimS.now -= Math.PI * 2; else if (aimS.now < -Math.PI) aimS.now += Math.PI * 2;
+    const enc2 = encoreTap || !!keys[' ']; encoreTap = false;
+    return { mx: 0, my: 0, aim: aimS.now, encore: enc2 };
+  }
   let mx = joy.dx + (joy.sdx || 0);
   if (joy.on && joy.tz != null) mx += zoneSteer(joy.tz, g.p.x);
   if (keys.a || keys.arrowleft) mx -= 1; if (keys.d || keys.arrowright) mx += 1;
@@ -781,7 +802,7 @@ function frame(now) {
     if (g.phase === 'play') audio.sync(beatPhase(g));
   }
   if (mode === 'pause') { if (pauseN > 2 && pauseW === canvas.width && pauseH === canvas.height) return; pauseN++; pauseW = canvas.width; pauseH = canvas.height; } else pauseN = 0;   // a paused picture is frozen: draw it a few times (and again after a resize), then leave the canvas alone
-  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2 }, mode === 'pause' ? 0 : dt);
+  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, hints: save.runs < 2, aimHint }, mode === 'pause' ? 0 : dt);
     if (mode === 'play') for (const n of R.takeSounds()) audio.play(n); else R.takeSounds(); }
 }
 
