@@ -92,11 +92,11 @@ export const HERO_ABILITY_NUMS = { freezeSec: 3, freezeBossSec: 1.2, overclockSe
 // Daily and the Weekly Gig ignore modifiers.
 export const MAX_RUN_MODIFIERS = 3;
 export const RUN_MODIFIERS = [
-  { id: 'double_trouble', name: 'Double Trouble', glyph: 'double', desc: 'Twice the Static, each at 60% health. Coins from kills are doubled overall.', mul: { records: 1.5, fans: 1.5, diamonds: 1.4 } },
+  { id: 'double_trouble', name: 'Double Trouble', glyph: 'double', desc: 'Twice the Static, each at 60% health. Coins from kills are doubled overall.', mul: { records: 1.3, fans: 1.3, diamonds: 1.2 } },
   { id: 'small_band', name: 'Small Band', glyph: 'mic', desc: 'Only 6 random turret types are in your drop pool.', mul: { records: 1.2, fans: 1.2, diamonds: 1.15 } },
-  { id: 'glass_stage', name: 'Glass Stage', glyph: 'shield', desc: 'The stage only has 6 health.', mul: { records: 1.4, fans: 1.4, diamonds: 1.3 } },
+  { id: 'glass_stage', name: 'Glass Stage', glyph: 'shield', desc: 'The stage only has 6 health.', mul: { records: 1.6, fans: 1.6, diamonds: 1.5 } },
   { id: 'speedrun', name: 'Speedrun', glyph: 'rocket', desc: 'Enemies move 25% faster.', mul: { records: 1.3, fans: 1.3, diamonds: 1.2 } },
-  { id: 'no_heroes', name: 'No Heroes', glyph: 'cross', desc: 'Roxor and Jasmin sit this one out: no hero moves.', mul: { records: 1.35, fans: 1.35, diamonds: 1.25 } },
+  { id: 'no_heroes', name: 'No Heroes', glyph: 'cross', desc: 'Roxor and Jasmin sit this one out: no hero moves.', mul: { records: 1.6, fans: 1.6, diamonds: 1.5 } },
   { id: 'fragile_merge', name: 'Fragile Merge', glyph: 'merge', desc: 'Every merge costs 20 coins.', mul: { records: 1.15, fans: 1.15, diamonds: 1.1 } },
   { id: 'brutal_bosses', name: 'Brutal Bosses', glyph: 'skull', desc: 'Bosses have 50% more health.', mul: { records: 1.25, fans: 1.25, diamonds: 1.2 } },
   { id: 'lone_lane', name: 'Lone Lane', glyph: 'arrow_up', desc: 'Every enemy marches down one lane and carries 25% more health.', mul: { records: 1.3, fans: 1.3, diamonds: 1.2 } },

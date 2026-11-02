@@ -352,9 +352,9 @@ const mockStore = (o = {}) => { const m = new Map(Object.entries(o)); return { g
   ok(M.toggleModifier(m, 'cramped').reason === 'full' && M.modifiersOf(m).length === 3, 'a fourth is refused');
   ok(M.toggleModifier(m, 'speedrun').on === false && M.modifiersOf(m).length === 2, 'toggle off');
   ok(M.toggleModifier(m, 'bogus').reason === 'unknown', 'unknown modifier');
-  const mul = M.modMulOf(['glass_stage', 'speedrun']); ok(Math.abs(mul.records - 1.4 * 1.3) < 0.001 && Math.abs(mul.diamonds - 1.3 * 1.2) < 0.001, 'payout multiplier is the product');
+  const mul = M.modMulOf(['glass_stage', 'speedrun']); ok(Math.abs(mul.records - 1.6 * 1.3) < 0.001 && Math.abs(mul.diamonds - 1.5 * 1.2) < 0.001, 'payout multiplier is the product');
   ok(M.modMulOf([]).records === 1 && M.modMulOf(['x']).fans === 1, 'no modifiers pay x1');
-  ok(M.modFlames('double_trouble') === 3 && M.modFlames('small_band') === 1 && M.modFlames('bogus') === 0, 'flames per modifier');
+  ok(M.modFlames('double_trouble') === 2 && M.modFlames('glass_stage') === 3 && M.modFlames('small_band') === 1 && M.modFlames('bogus') === 0, 'flames per modifier');
   const used = M.consumeModifiers(m); ok(used.length === 2 && M.modifiersOf(m).length === 0, 'consumed when the run starts');
   m.modPin = true; M.toggleModifier(m, 'speedrun'); ok(M.consumeModifiers(m).length === 1 && M.modifiersOf(m).length === 1, 'pinned modifiers stay');
 
@@ -363,8 +363,8 @@ const mockStore = (o = {}) => { const m = new Map(Object.entries(o)); return { g
   const a = fresh(), b = fresh();
   const oa = M.applyRunResult(a, Object.assign({}, base), makeRng(8), NOW);
   const ob = M.applyRunResult(b, Object.assign({}, base, { modifiers: ['glass_stage', 'speedrun'], modMul: M.modMulOf(['glass_stage', 'speedrun']) }), makeRng(8), NOW);
-  ok(ob.records === Math.round(oa.records * 1.82) && ob.fans === Math.round(oa.fans * 1.82) && ob.diamonds === Math.round(oa.diamonds * 1.56), 'modMul multiplies records, fans and diamonds');
-  ok(ob.modMul && ob.modMul.records === 1.82 && ob.modifiers.join() === 'glass_stage,speedrun' && oa.modMul === null && oa.modifiers.length === 0, 'out reports the multiplier and the modifiers');
+  ok(ob.records === Math.round(oa.records * 2.08) && ob.fans === Math.round(oa.fans * 2.08) && ob.diamonds === Math.round(oa.diamonds * 1.8), 'modMul multiplies records, fans and diamonds');
+  ok(ob.modMul && ob.modMul.records === 2.08 && ob.modifiers.join() === 'glass_stage,speedrun' && oa.modMul === null && oa.modifiers.length === 0, 'out reports the multiplier and the modifiers');
   const c = fresh(); const oc = M.applyRunResult(c, Object.assign({}, base, { modifiers: ['glass_stage'], modMul: { records: 1, fans: 1, diamonds: 1 } }), makeRng(8), NOW);
   ok(oc.records === oa.records, 'a sim modMul of 1 changes nothing');
   const dly = fresh(); const od = M.applyRunResult(dly, { won: true, world: 'garage', mode: 'daily', cleared: 15, wave: 15, kills: 100, leaks: 0, merges: 1, deploys: 1, bossKills: 0, bossTypes: [], bestCombo: 1, coinsEarned: 1, stars: 3, modifiers: ['glass_stage'], modMul: { records: 1.4, fans: 1.4, diamonds: 1.3 } }, makeRng(9), NOW);

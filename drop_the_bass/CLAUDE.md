@@ -177,3 +177,15 @@ Ideas next (round 5): lane chevrons still stroked live (about 0.5 ms); tablet an
 
 Round 5 result: items 1 to 9 shipped (title picker moved, sign hidden when covered on wide screens, baked chevrons, codex boss phase diagrams, friend invite links, import on the title menu, offline ready toast and Offline chip, quick mute, reduced motion default). Item 10: portrait tablet is fine; landscape phones and desktops show the 540x960 column scaled to height with decorative sides (a real landscape layout is a bigger design task).
 Ideas next (round 6): a real landscape layout (side panels with turret list and stats); gamepad support; tutorial step for preview and reroll; seasonal limited-time event; sound mix check on phones; daily quest variety; leaderboard seasons; share card in the player's outfits (done) plus animated GIF replay; accessibility audit with a screen reader (aria for DOM menus); balance review of modifiers with the bot matrix.
+
+### Round 6 (ten improvements, in order)
+1. One modal at a time: a modal queue at hub open (Welcome back, Daily Gig, What's new, hints) with a clear priority.
+2. Wide screens: side panels (run stats and turret legend) in the margins instead of empty decoration.
+3. Gamepad support (d-pad cursor, buttons for drop, merge, hero moves, pause).
+4. Tutorial teaches the wave preview and the re-roll.
+5. Screen reader and keyboard focus management for DOM menus (roles, live region, focus trap, Esc).
+6. Seasonal event: a monthly theme with event goals and a limited-time outfit or skin.
+7. Ten more daily quests for variety.
+8. Modifier balance review with the bot matrix (reward vs difficulty).
+9. Monkey test: seeded random input fuzz in all four languages, no page errors.
+10. Diagnostics: an error ring buffer and a 'Report a problem' button in Settings that copies version, language, device and recent errors.
