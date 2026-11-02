@@ -7,6 +7,7 @@ import { W, H, WEAPONS, uv, isBossStage, virusName, GOLD_TIME } from './sim.js';
 import { heartbeat } from './feel6.js';
 import { createTileMemo, createBuffChips, levelSparkle } from './hud_b11.js';
 import { cellsUnderBand, fadeStep, CLEAR_TOP, CLEAR_BOTTOM, FADE_MIN, FADE_TOP_MIN } from './hud_b13e.js';
+import { drawDangerChevron, drawStatsHint, markStatsHintSeen, hudZoneLeft } from './hud_b14c.js';
 
 const TAU = Math.PI * 2;
 const WMAX = Object.fromEntries(WEAPONS.map(w => [w.id, w.max]));
@@ -39,8 +40,9 @@ export function safeUnits(L) {
 }
 // pause and stats round buttons, top right; t is the top inset in game units (main.js hit test uses this too)
 // u is the CSS pixels per game unit (0 = unknown): the zones grow so the pause button is at least 44 CSS px square on a phone (34-phone-run)
-export function hudZone(gp, t = 0, u = 0) {
+export function hudZone(gp, t = 0, u = 0, left = false) {
   const m = u > 0 ? Math.min(160, 45 / u) : 0, pe = Math.max(76, 40 + m / 2, m + 1), se = Math.max(150, pe + m);
+  if (left) return hudZoneLeft(gp, t, pe, se, m);   // b14c: left-hand mode mirrors the two buttons to the left edge
   if (gp.x > W - Math.max(76, m)) { if (gp.y < t + pe) return 'pause'; if (gp.y < t + se) return 'stats'; }
   return '';
 }
@@ -63,7 +65,14 @@ export function hudStageName(nm) { return String(nm).replace(/ Serpent\b/, ''); 
 export function nameSqueeze(nm, maxW, size = TXT_MIN) { const est = nm.length * size * 0.56; return est > maxW ? Math.max(0.72, maxW / est) : 1; }
 
 export function createHud(env) {
-  const { ctx, text, blit, kit, S, INK, glow, sparkleAt } = env;
+  const { ctx, kit, S, INK, glow, sparkleAt } = env;
+  // b14c: left-hand mode mirrors the top rows (pause and stats go to the left edge): shapes flip with the canvas, text and sprites flip back
+  let MIR = false;
+  const text = (str, x, y, size, fill, stroke, align) => {
+    if (!MIR) return env.text(str, x, y, size, fill, stroke, align);
+    ctx.save(); ctx.translate(x, y); ctx.scale(-1, 1); env.text(str, 0, 0, size, fill, stroke, align === 'left' ? 'right' : align === 'right' ? 'left' : align); ctx.restore();
+  };
+  const blit = (spr, x, y, size, rot, flip, a) => env.blit(spr, x, y, size, rot, MIR ? !flip : flip, a);
   const T = { g: null, pop: {}, pressAt: {}, gv: 0, bsLast: 0, bsAt: -9, bsHi: 0, cdMax: {}, cdLast: {}, chestAt: {}, lastProg: 0, readyAt: {}, lastSnd: -9, bossTot: 0, bossV: 1, bossHitAt: -9, encV: 0, encFull: -9, ins: { t: 0, b: 0 }, msAt: -9, msN: 0, lvLast: {}, lvAt: {}, t0: 0, bossGhost: 1, newAt: {}, coinV: -1, coinPrev: -1, coinAt: -9, coinT: 0, flashAt: -9 };
   const B8 = { fl: [], landAt: -9, gainN: 0, gainAt: -9, raw: -1, ch: 0, encPrev: 0, encGainAt: -9 };   // 06-hud b8: chest flights, the +N chip, encore gain pulse
   const reduce = () => !!(env.OPT && env.OPT.reduceMotion);
@@ -675,14 +684,17 @@ export function createHud(env) {
     const under = g.phase === 'play' && !g.noGhost && cellsUnderBand(g, CLEAR_TOP + T.ins.t, CLEAR_BOTTOM + (boss ? BOSS_DY : 0) + T.ins.t);
     T.fade = g.noGhost ? 1 : fadeStep(T.fade === undefined ? 1 : T.fade, under ? 0 : 1, fdt);   // g.noGhost: test hook, the audits want the full HUD
     const fk = reduce() ? (under ? FADE_MIN : 1) : FADE_MIN + (1 - FADE_MIN) * T.fade, fkt = FADE_TOP_MIN + (1 - FADE_TOP_MIN) * (reduce() ? (under ? 0 : 1) : T.fade);
+    MIR = !!(env.OPT && env.OPT.leftHand); if (MIR) { ctx.translate(W, 0); ctx.scale(-1, 1); }   // b14c: left-hand mode mirrors the three top rows
     ctx.globalAlpha = fkt; top(g); ctx.globalAlpha = fk; progress(g); if (boss) { ctx.globalAlpha = Math.max(fk, 0.62); bossBar(g); ctx.globalAlpha = fk; } stats(g);
-    goldPill(g, 146 + (boss ? BOSS_DY : 0)); ctx.globalAlpha = 1;
+    goldPill(g, 146 + (boss ? BOSS_DY : 0)); ctx.globalAlpha = Math.max(fk, 0.8); drawStatsHint(g, 146 + (boss ? BOSS_DY : 0), S, { glass, text, ctx, reduce: reduce() }); ctx.globalAlpha = 1;
+    MIR = false;
     ctx.restore();
+    drawDangerChevron(ctx, kit, g, S, reduce(), glow);   // b14c: red chevrons under the face on the floor line when it is close
     reward8(g);
     groove(g); beatStreak(g); skills(g);
     const p = g.p, b = T.ins.b;
     S.chipB = b;   // hitjuice: where the power-up icons fly to
     (BCH || (BCH = createBuffChips(HB()))).draw(g, b, landBounce);   // b11: Shield, Rage and Snack chips with a draining timer bar
   }
-  return { press: id => { T.pressAt[id] = S.t; }, reward: (e, g) => reward8start(e, g), draw, encore, combo, dy, top: () => T.ins.t };
+  return { press: id => { T.pressAt[id] = S.t; if (id === 'stats') markStatsHintSeen(); }, reward: (e, g) => reward8start(e, g), draw, encore, combo, dy, top: () => T.ins.t };
 }

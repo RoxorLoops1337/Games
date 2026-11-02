@@ -15,6 +15,7 @@ import { registerA10, keyLift, createAmbient } from './audio_b10b.js';
 import { registerA11, twistOf } from './audio_b11b.js';
 import { registerB12i } from './audio_b12i.js';
 import { registerB13h, progShift, fillOf } from './audio_b13h.js';
+import { isBreakdown, isDrop, registerB14e } from './audio_b14e.js';
 import { registerB13b } from './juice_b13b.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
@@ -414,33 +415,35 @@ export function createAudio() {
         const root = 36 + ROOTS[tier] + (boss ? 5 + keyLift(bp) : 0);
         const prog = (boss ? BPROG : PROG)[(sec + (boss ? 0 : progShift(m.stage))) % 4], deg = prog[bar];
         const bassM = note(sc, deg, root), c0 = note(sc, deg, root + 24), c1 = note(sc, deg + 2, root + 24), c2 = note(sc, deg + 4, root + 24);
+        const bk = isBreakdown(sec, bar, boss, m.danger);   // b14: breakdown, only the pad plays
+        if (!boss && isDrop(sec, bar, s, boss)) { tone(110, 0.3, 'sine', 0.18, -70, t, 'm'); noise(0.7, 0.07, 8000, 3000, 'highpass', t, 'm'); }   // b14: the drop after it
         // drums
-        if (s % 4 === 0) kick(t, boss ? 0.32 : 0.26 + lvl * 0.04);
+        if (bk) { /* breakdown: no drums */ } else if (s % 4 === 0) kick(t, boss ? 0.32 : 0.26 + lvl * 0.04);
         else if (boss && (s === 6 || s === 14)) kick(t, 0.2);
         else if (lvl > 0.5 && s === 10) kick(t, 0.16);
         else if (!boss && lvl > 0.35 && V.kx.includes(s)) kick(t, 0.13);
         else if (bp >= 1 && (s === 10 || (bp >= 2 && s === 3))) kick(t, 0.17);
-        if ((s === 4 || s === 12) && (lvl > 0.2 || boss)) snare(t, boss ? 0.13 : 0.09);
-        if (lvl > 0.1 || boss) {
+        if (!bk && (s === 4 || s === 12) && (lvl > 0.2 || boss)) snare(t, boss ? 0.13 : 0.09);
+        if (!bk && (lvl > 0.1 || boss)) {
           const hm = boss ? 0 : V.hats;
           if (hm === 1) { if (s % 2 === 0) hat(t, s % 4 === 0 ? 0.02 : 0.03, s === 14); }
           else if (hm === 3) { if (s % 4 === 2) hat(t, 0.04, true); else if (lvl > 0.65 && s % 4 === 0) hat(t, 0.015); }
           else if (hm !== 2) { if (s % 4 === 2) hat(t, 0.035, s === 14); else if ((lvl > 0.65 || bp >= 1) && s % 2 === 1) hat(ts, 0.018); }
         }
         // bass: eighths, octave jump to keep it moving
-        if (s % 2 === 0) tone(hz(bassM + (s % 8 === 6 ? 12 : 0)), sp * 1.9, boss ? 'sawtooth' : V.bass, boss ? 0.1 : V.bass === 'sawtooth' ? 0.1 : 0.14, 0, t, 'm');
+        if (!bk && s % 2 === 0) tone(hz(bassM + (s % 8 === 6 ? 12 : 0)), sp * 1.9, boss ? 'sawtooth' : V.bass, boss ? 0.1 : V.bass === 'sawtooth' ? 0.1 : 0.14, 0, t, 'm');
         // pad on the bar line
-        if (s === 0 && (lvl > 0.15 || boss)) { [c0, c1, c2].forEach(n => pumpTone(hz(n - 12), sp * 15, boss || bp >= 2 ? 'sawtooth' : V.pad, boss ? 0.02 + bp * 0.004 : 0.03, t, sp * 4, padDepth(lvl, boss, pumpSet))); }
+        if (s === 0 && (lvl > 0.15 || boss || bk)) { [c0, c1, c2].forEach(n => pumpTone(hz(n - 12), sp * 15, boss || bp >= 2 ? 'sawtooth' : V.pad, boss ? 0.02 + bp * 0.004 : 0.03, t, sp * 4, padDepth(lvl, boss, pumpSet))); }
         // arp over the chord
-        if (lvl > 0.3 || boss) { const q = [c0, c1, c2, c1][(s >> (boss ? 0 : 1)) % 4]; if (s % (boss ? 2 : 2 * V.ad) === 0) tone(hz(q + (sec % 2 && s >= 8 ? 12 : 0) + (boss ? (bp >= 1 && s % 4 === 2 ? 12 : 0) : V.ao)), sp * 1.6, boss ? 'square' : V.arp, (boss ? 0.026 : 0.022) * lightPump(s, lvl, boss, pumpSet), 0, ts, 'm'); }
+        if (!bk && (lvl > 0.3 || boss)) { const q = [c0, c1, c2, c1][(s >> (boss ? 0 : 1)) % 4]; if (s % (boss ? 2 : 2 * V.ad) === 0) tone(hz(q + (sec % 2 && s >= 8 ? 12 : 0) + (boss ? (bp >= 1 && s % 4 === 2 ? 12 : 0) : V.ao)), sp * 1.6, boss ? 'square' : V.arp, (boss ? 0.026 : 0.022) * lightPump(s, lvl, boss, pumpSet), 0, ts, 'm'); }
         // lead melody from high groove
-        if ((lvl > 0.62 || (boss && (lvl > 0.4 || bp >= 1))) && (s % 4 === 0 || s === 6 || s === 11 || s === 14)) {
+        if (!bk && (lvl > 0.62 || (boss && (lvl > 0.4 || bp >= 1))) && (s % 4 === 0 || s === 6 || s === 11 || s === 14)) {
           const li = (bar * 4 + (s >> 2) + (s === 14 ? 1 : 0)) % 8, ld = deg + (boss ? LEADB : LEAD)[li];
           tone(hz(note(sc, ld, root + 36) + (bp >= 2 ? 12 : 0)), sp * 2.6, boss ? 'sawtooth' : V.lead, boss ? 0.03 : (V.lead === 'sawtooth' || V.lead === 'square' ? 0.032 : 0.05) * lightPump(s, lvl, boss, pumpSet), 0, t, 'm');
         }
         // round 9: combo layers (open offbeat hats, a shimmer on the 16ths, a bar line sparkle), boss phase drums, and the world colour bell
-        if (m.ctier >= 1 && s % 4 === 2 && !boss) hat(t, 0.02 + m.ctier * 0.006, true);
-        if (m.ctier >= 3 && !boss && s % 2 === 1) hat(ts, 0.012);
+        if (m.ctier >= 1 && s % 4 === 2 && !boss && !bk) hat(t, 0.02 + m.ctier * 0.006, true);
+        if (m.ctier >= 3 && !boss && !bk && s % 2 === 1) hat(ts, 0.012);
         if (m.ctier >= 2) { const sv = shimmerVol(m.ctier, s); if (sv) tone(hz([c1, c2, c0, c2][(s >> 1) % 4] + 12), sp * 1.2, 'sine', sv, 0, ts, 'm'); if (s === 0 && bar % 2 === 0) tone(hz(c2 + 12), sp * 6, 'sine', 0.014 * (m.ctier - 1), 0, t, 'm'); }
         if (boss) { const bx = bossExtra(bp, bar, s); if (bx) { if (bx[0] === 'hat') hat(ts, bx[1]); else tone(120 - (s - 13) * 20, 0.14, 'sine', bx[1], -50, t, 'm'); } }
         { const co = colourOf(m.skin); if (!boss && lvl > 0.2 && co.at.includes(s) && (bar & 1) === 0) tone(hz(note(sc, deg + co.off, root + co.oct)), sp * 3, co.w, co.v, 0, ts, 'm'); }
@@ -460,7 +463,7 @@ export function createAudio() {
         // section ends: riser into a crash
         { const fl = !boss ? fillOf(sec, bar, s, lvl) : null; if (fl) { if (fl.k === 'snare') snare(t, fl.v); else tone(fl.hz, sp * 1.5, 'sine', fl.v, -60, t, 'm'); } }   // b13: section fill
         if (bar === 3 && s === 12 && lvl > 0.35) noise(sp * 4, 0.06, 800, 9000, 'bandpass', t, 'm');
-        if (bar === 0 && s === 0 && step > 0 && lvl > 0.35) noise(0.5, 0.05, 7000, 3000, 'highpass', t, 'm');
+        if (bar === 0 && s === 0 && step > 0 && lvl > 0.35 && !bk) noise(0.5, 0.05, 7000, 3000, 'highpass', t, 'm');
       }
       nextT += sp; step++;
       if (countSteps > 0 && --countSteps === 0) step = 0;   // the count-in is one bar: the song starts on its first bar
@@ -506,6 +509,7 @@ export function createAudio() {
   registerA11(sfx, tone, noise, duck, gate);   // round 11: book sting, pet glance, pounce, tab ping, curtain (audio_b11.js)
   registerB13b(sfx, tone, noise, duck, gate);   // batch 13: unlock fanfare, stat buy ladder, level-up lift (juice_b13b.js)
   registerB12i(sfx, tone, noise, duck, gate, now);   // batch 12: aim tick, crown clink, milestone, burst thinning (audio_b12i.js)
+  registerB14e(sfx, tone, noise, duck, gate);   // batch 14: world win/lose motif (audio_b14e.js)
   registerB13h(sfx, tone, noise, duck, gate);   // batch 13: shot figure and sounds for gloom, nap, pillow, shell, metro, soundcheck (audio_b13h.js)
   registerA10(sfx, tone, noise, duck, gate);   // round 10: boss fill, bring pack, sticker book, pet calls (audio_b10b.js)
   return {

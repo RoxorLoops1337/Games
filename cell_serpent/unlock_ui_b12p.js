@@ -5,6 +5,7 @@ import {
   TABS, UNLOCKS, TAB_UNLOCK, isUnlocked, isLegacy, visibleTabs, nextLockedTab, pendingHints, inTabHint, markSeen, isSeen, tabLayout, unlockAllOn,
 } from './unlock_b12p.js';
 import { tabUnlockJuice } from './juice_b13b.js';
+import { glow as glowB14, unglow as unglowB14, lockedLabel } from './onboard_b14b.js';
 
 const SEL_TAB = tab => `.tabs button[data-tab="${tab}"]`;
 // where a Battle element hint points (data-uk is set on the side chips by hub2.renderSide)
@@ -45,7 +46,7 @@ export function createUnlockUI(c) {
     if (!teaser) { teaser = doc.createElement('button'); teaser.type = 'button'; teaser.className = 'lockt'; teaser.onclick = () => { if (c.audio) c.audio.play('deny'); c.toast('Clear stage ' + teaser.dataset.need + ' to open ' + teaser.dataset.label); }; }
     if (tz) {
       teaser.dataset.need = String(tz.need); teaser.dataset.label = tz.label;
-      teaser.innerHTML = `<b aria-hidden="true">\u{1F512}</b><span>Stage ${tz.need}</span>`;
+      teaser.innerHTML = `<b aria-hidden="true">\u{1F512}</b><span class="s">${lockedLabel(tz.need, false)}</span><span class="l">${lockedLabel(tz.need, true)}</span>`;
       teaser.setAttribute('aria-label', `${tz.label}, locked. Clear stage ${tz.need} to open it`);
       if (teaser.parentNode !== nav) nav.appendChild(teaser); else if (nav.lastElementChild !== teaser) nav.appendChild(teaser);
       teaser.hidden = false;
@@ -69,13 +70,13 @@ export function createUnlockUI(c) {
   }
 
   // ---- the hint card
-  function dropCard() { if (card) { card.remove(); card = null; cardFor = null; const hb = doc.getElementById('hub'); if (hb) { hb.classList.remove('ukh-tab'); hb.style.removeProperty('--ukh'); } } }
+  function dropCard() { unglowB14(); if (card) { card.remove(); card = null; cardFor = null; const hb = doc.getElementById('hub'); if (hb) { hb.classList.remove('ukh-tab'); hb.style.removeProperty('--ukh'); } } }
   function place() {
     if (!card || !cardFor) return;
     const t = cardFor.target(); if (!visible(t)) { card.classList.add('off'); return; }
     const hubBody = doc.querySelector('.hubbody'), hr = hubBody ? hubBody.getBoundingClientRect() : null, r = t.getBoundingClientRect();
     if (cardFor.kind !== 'tab' && hr && (r.bottom < hr.top + 8 || r.top > hr.bottom - 8)) { card.classList.add('off'); return; }
-    card.classList.remove('off');
+    card.classList.remove('off'); glowB14(t);
     const w = Math.min(300, innerWidth - 24); card.style.width = w + 'px';
     const cx = r.left + r.width / 2, left = Math.max(12, Math.min(innerWidth - w - 12, cx - w / 2));
     card.style.left = left + 'px'; card.style.setProperty('--ax', Math.max(18, Math.min(w - 18, cx - left)) + 'px');
