@@ -272,12 +272,17 @@ function toTitle() { refreshTitle(); mode = 'title'; audio.music(false); refresh
 
 // ---------------------------------------------------------------- upgrade cards
 function showCards() {
-  const wrap = $('cards'); wrap.innerHTML = '';
+  const wrap = $('cards'); wrap.innerHTML = ''; pickLock = false; $('levelup').classList.remove('flashing');
+  const top = Math.max(0, ...g.choices.map(c => c.rarity || 0)); $('levelup').dataset.top = top;
   g.choices.forEach((c, i) => {
-    const rar = RARITIES[c.rarity || 0], b = document.createElement('button'); b.className = 'card pick c-' + c.kind + ' r' + (c.rarity || 0);
-    const pips = Array.from({ length: Math.min(c.max, 12) }, (_, k) => `<span class="pip ${k < c.lvl + (c.gain && c.kind === 'weapon' ? c.gain : 1) ? 'on' : ''}"></span>`).join('');
-    const tag = `<span class="rar">${['●', '◆', '▲', '★', '✦', '✹'][c.rarity || 0]} ${rar.name.toUpperCase()}</span>` + (c.isNew ? '<span style="color:#9dff6d;font-size:13px"> NEW</span>' : '');
-    b.innerHTML = `<div class="ic">${icon(c.id)}</div><div><div class="nm">${c.name}${tag}</div><div class="ds">${c.desc}</div>${c.stat ? `<div class="ds" style="color:#bfe9ff;font-weight:800">${c.stat}</div>` : ''}<div class="pips">${pips}</div></div>`;
+    const rn = c.rarity || 0, rar = RARITIES[rn], b = document.createElement('button'); b.className = 'card pick c-' + c.kind + ' r' + rn; b.style.setProperty('--d', (i * 0.11 + 0.05).toFixed(2) + 's');
+    const have = c.lvl + (c.gain && c.kind === 'weapon' ? c.gain : 1);
+    const pips = Array.from({ length: Math.min(c.max, 12) }, (_, k) => `<span class="pip ${k < have ? 'on' : ''}"></span>`).join('');
+    const tag = `<span class="rar">${['●', '◆', '▲', '★', '✦', '✹'][rn]} ${rar.name.toUpperCase()}</span>` + (c.isNew ? '<span class="newtag">NEW</span>' : '');
+    const dm = c.isNew && c.kind === 'weapon' ? ['', 'New skill', 'Lv 0', 'Lv ' + c.gain] : c.stat && /^(.*?):?\s*([^:→]+?)\s*→\s*(.+)$/.exec(c.stat);
+    const stat = dm ? `<div class="delta"><span class="dl">${dm[1]}</span><span class="dv"><i>${dm[2]}</i><em>→</em><b>${dm[3]}</b></span></div>` : c.stat ? `<div class="delta"><span class="dv"><b>${c.stat}</b></span></div>` : '';
+    const fx = rn >= 4 ? '<span class="rays"></span>' + Array.from({ length: rn === 5 ? 8 : 5 }, (_, k) => `<span class="pt" style="--x:${(8 + k * (84 / (rn === 5 ? 7 : 4))).toFixed(0)}%;--t:${(1.6 + (k * 0.37) % 1.2).toFixed(2)}s;--w:${((k * 0.29) % 1.5).toFixed(2)}s"></span>`).join('') : '';
+    b.innerHTML = `${fx}<span class="key">${i + 1}</span><div class="ic">${icon(c.id)}</div><div class="bd"><div class="nm"><span class="nt">${c.name}</span>${tag}</div><div class="ds">${c.desc}</div>${stat}<div class="pips">${pips}</div></div><span class="shine"></span>`;
     b.onclick = () => pick(i);
     wrap.appendChild(b);
   });
@@ -285,7 +290,15 @@ function showCards() {
   $('refreshBtn').disabled = g.rerolls <= 0; $('refreshLeft').textContent = `Remaining attempts: ${g.rerolls}/4`;
   cardsFor = g.choices; { let mr = 0; for (const c of g.choices) mr = Math.max(mr, c.rarity || 0); audio.play('card', { rarity: mr }); } show('levelup');
 }
-function pick(i) { if (mode !== 'play' || g.phase !== 'levelup') return; audio.play('upgrade'); choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }
+let pickLock = false;
+function pick(i) {
+  if (mode !== 'play' || g.phase !== 'levelup' || pickLock) return;
+  audio.play('upgrade');
+  const cs = $('cards').children, el = cs[i];
+  if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); return; }
+  pickLock = true; el.classList.add('chosen'); [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing');
+  setTimeout(() => { if (!pickLock) return; pickLock = false; if (mode !== 'play' || g.phase !== 'levelup') return; choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }, 340);
+}
 $('skipBtn').onclick = () => { if (mode === 'play' && skipPick(g)) { audio.play('skip'); cardsFor = null; if (g.phase === 'levelup') showCards(); else show(''); } };
 $('refreshBtn').onclick = () => { if (mode === 'play' && reroll(g)) { audio.play('click'); showCards(); } };
 

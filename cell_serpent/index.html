@@ -329,6 +329,60 @@
   #bLoot.reveal .it img{width:104px;height:104px}
   @keyframes revpop{0%{transform:scale(.2) rotate(-12deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
   /* end @css:09-skills-pets */
+  /* @css:07-cards */
+  #levelup{gap:8px;justify-content:center}
+  #levelup h2{font-size:22px;margin:-2px 0 2px;animation:cdrop .45s cubic-bezier(.2,1.4,.4,1) both}
+  #levelup .banner{animation:cdrop .35s ease-out both}
+  #levelup .cards{gap:9px;perspective:900px}
+  @keyframes cdrop{from{opacity:0;transform:translateY(-14px) scale(.8)}to{opacity:1;transform:none}}
+  .card.pick{position:relative;overflow:hidden;gap:12px;padding:10px 12px;border-radius:18px;border-width:3px;background:linear-gradient(135deg,color-mix(in srgb,var(--rc) 22%,#120d34),#0f0a2c 70%);animation:dealin .62s cubic-bezier(.18,1.25,.4,1) var(--d,0s) both}
+  @keyframes dealin{0%{opacity:0;transform:translate(130%,-90px) rotate(18deg) scale(.55)}55%{opacity:1}100%{opacity:1;transform:none}}
+  .card.pick:active{transform:scale(.97)}
+  .card.pick .ic{position:relative;width:68px;height:68px;border-radius:16px;border:3px solid var(--rc);background:radial-gradient(circle at 50% 35%,color-mix(in srgb,var(--rc) 55%,#fff 0%),color-mix(in srgb,var(--rc) 22%,#0c0826));box-shadow:inset 0 0 14px #0008,0 0 12px color-mix(in srgb,var(--rc) 60%,transparent)}
+  .card.pick .ic img{width:58px;height:58px;filter:drop-shadow(0 2px 2px #0008)}
+  .card.pick .bd{flex:1;min-width:0}
+  .card.pick .nm{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;font-size:17px;line-height:1.15}
+  .card.pick .rar{margin-left:0;padding:1px 8px;font-size:10px;box-shadow:0 0 8px color-mix(in srgb,var(--rc) 70%,transparent)}
+  .card.pick .newtag{color:#9dff6d;font-size:11px;font-weight:900;letter-spacing:.06em;animation:newblink .8s infinite alternate}
+  @keyframes newblink{to{opacity:.45}}
+  .card.pick .ds{font-size:12px;margin-top:1px;line-height:1.2}
+  .card.pick .delta{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:4px;padding:3px 8px;border-radius:9px;background:#0007;border:1px solid color-mix(in srgb,var(--rc) 50%,transparent)}
+  .card.pick .dl{font-size:11px;color:var(--dim);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card.pick .dv{display:flex;align-items:baseline;gap:5px;margin-left:auto;white-space:nowrap;font-weight:900}
+  .card.pick .dv i{font-style:normal;font-size:13px;color:#cfd8e8;opacity:.8} .card.pick .dv em{font-style:normal;font-size:13px;color:var(--rc)} .card.pick .dv b{font-size:19px;color:#9dff6d;text-shadow:0 0 8px #9dff6d88;animation:nowpop .9s ease-out calc(var(--d,0s) + .55s) both}
+  @keyframes nowpop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.3);opacity:1}100%{transform:scale(1)}}
+  .card.pick .pips{margin-top:4px} .card.pick .pip{width:12px;height:5px}
+  .card.pick .key{position:absolute;top:5px;right:8px;font-size:10px;font-weight:900;color:var(--dim);opacity:.55}
+  .card.pick .shine,.card.pick .rays,.card.pick .pt{display:none;pointer-events:none}
+  .card.pick.r2 .shine,.card.pick.r3 .shine,.card.pick.r4 .shine,.card.pick.r5 .shine{display:block;position:absolute;top:0;bottom:0;left:0;width:38%;background:linear-gradient(100deg,transparent,#fff7 50%,transparent);transform:translateX(-160%) skewX(-18deg);animation:shine 2.6s ease-in-out calc(var(--d,0s) + .7s) infinite}
+  @keyframes shine{0%{transform:translateX(-160%) skewX(-18deg)}45%,100%{transform:translateX(420%) skewX(-18deg)}}
+  .card.pick.r1{box-shadow:0 0 14px #4fb8ff66}
+  .card.pick.r3{border-color:transparent;background:linear-gradient(135deg,#3a2208,#120d34 70%) padding-box,conic-gradient(from var(--ang,0deg),#ffb04d,#fff2b0,#ff7a1a,#ffb04d) border-box;animation:dealin .62s cubic-bezier(.18,1.25,.4,1) var(--d,0s) both,spinb 3s linear infinite}
+  @property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
+  @keyframes spinb{to{--ang:360deg}}
+  .card.pick.r4,.card.pick.r5{animation:dealin .62s cubic-bezier(.18,1.25,.4,1) var(--d,0s) both,gpulse 1.3s ease-in-out infinite alternate}
+  @keyframes gpulse{from{box-shadow:0 0 14px var(--rc)}to{box-shadow:0 0 34px var(--rc),0 0 6px #fff8}}
+  .card.pick.r5{background:linear-gradient(135deg,#4a3a05,#150f36 70%)}
+  .card.pick .rays{display:block;position:absolute;left:34px;top:50%;width:300px;height:300px;margin:-150px 0 0 -150px;background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--rc) 38%,transparent) 0 8deg,transparent 8deg 24deg);-webkit-mask:radial-gradient(circle,#000 8%,transparent 62%);mask:radial-gradient(circle,#000 8%,transparent 62%);animation:rayspin 9s linear infinite;opacity:.7}
+  .card.pick.r5 .rays{animation-duration:5s;opacity:.95}
+  @keyframes rayspin{to{transform:rotate(360deg)}}
+  .card.pick .pt{display:block;position:absolute;bottom:-6px;left:var(--x);width:5px;height:5px;border-radius:50%;background:var(--rc);box-shadow:0 0 6px var(--rc),0 0 2px #fff;opacity:0;animation:ptrise var(--t) ease-out var(--w) infinite}
+  @keyframes ptrise{0%{opacity:0;transform:translateY(0) scale(1)}15%{opacity:1}100%{opacity:0;transform:translateY(-90px) scale(.3)}}
+  .card.pick .ic,.card.pick .bd,.card.pick .key{z-index:1}
+  .card.pick.chosen{animation:cpop .34s ease-out both;z-index:3;border-color:#fff}
+  @keyframes cpop{0%{transform:scale(1)}40%{transform:scale(1.1);filter:brightness(1.8)}100%{transform:scale(1.04);filter:brightness(1.3)}}
+  .card.pick.gone{animation:cgone .3s ease-in both;pointer-events:none}
+  @keyframes cgone{to{opacity:0;transform:scale(.85) translateY(10px)}}
+  #levelup .lvflash{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,#fff,#fff0 70%)}
+  #levelup.flashing .lvflash{animation:lvf .34s ease-out}
+  @keyframes lvf{0%{opacity:.85}100%{opacity:0}}
+  #levelup[data-top="4"]{background:radial-gradient(circle at 50% 45%,rgba(255,77,122,.22),rgba(8,5,30,.66) 70%)}
+  #levelup[data-top="5"]{background:radial-gradient(circle at 50% 45%,rgba(255,225,74,.28),rgba(8,5,30,.66) 70%)}
+  #levelup .btn{margin-top:0}
+  #refreshLeft{margin-top:-2px}
+  @media (max-height:700px){#levelup{gap:5px;padding-top:calc(8px + env(safe-area-inset-top));padding-bottom:calc(8px + env(safe-area-inset-bottom))}#levelup .banner{font-size:12px}#levelup h2{font-size:18px}#levelup .cards{gap:6px}.card.pick{padding:7px 10px}.card.pick .ic{width:58px;height:58px}.card.pick .ic img{width:50px;height:50px}.card.pick .nm{font-size:15px}.card.pick .ds{font-size:11px}.card.pick .delta{margin-top:3px;padding:2px 7px}.card.pick .dv b{font-size:17px}#levelup .btn{padding:9px 18px;font-size:15px}}
+  @media (prefers-reduced-motion:reduce){.card.pick,.card.pick *{animation:none!important}}
+  /* end @css:07-cards */
 </style>
 </head>
 <body>
@@ -384,6 +438,7 @@
 <section class="scr" id="levelup">
   <div class="banner">ENHANCE</div>
   <h2>Choose an upgrade</h2>
+  <div class="lvflash"></div>
   <div class="cards" id="cards"></div>
   <button class="btn alt" id="refreshBtn">FREE REFRESH</button>
   <button class="btn dim" id="skipBtn" style="margin-top:8px;font-size:14px;padding:9px 18px">SKIP FOR BEATS</button>
