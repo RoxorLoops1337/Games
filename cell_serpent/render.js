@@ -2,6 +2,7 @@
 // where they exist and draws procedural stand-ins otherwise.
 import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv } from './sim.js';
 import { INK, mix } from './art_draw.js';
+import { createScreenFx } from './screenfx.js';
 
 const TAU = Math.PI * 2;
 const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
@@ -69,7 +70,9 @@ export function createRenderer(canvas, art, kit) {
   const ring = (x, y, r, col, life = 0.4) => S.rings.push({ x, y, r, life, max: life, col });
   const addFloat = (x, y, str, col, size, vy = -70) => { if (S.floats.length < 60) S.floats.push({ x, y, str, col, size, vy, life: 0.7, max: 0.7 }); };
 
+  let FX = null;   // whole-screen feedback (screenfx.js), created after the helpers below exist
   function onEvent(e, g) {
+    if (FX) FX.onEvent(e, g);
     switch (e.t) {
       case 'hit':
         S.popped++;
@@ -102,7 +105,7 @@ export function createRenderer(canvas, art, kit) {
       case 'pet': addFloat(g.p.x, g.p.y - 150, ({ kitten: 'Meow!', puppy: 'Woof!', lamb: 'Baa!', turtle: 'Slow down!', piglet: 'Oink!', hamster: 'Squeak!' })[e.id] || '!', '#ffe14a', 22, -40); break;
       case 'skip': addFloat(g.p.x, g.p.y - 120, 'Beats!', '#ffd24a', 20, -50); break;
       case 'mend': ring(e.x, e.y, 46, '#6fe08a', 0.3); break;
-      case 'stage': S.banner = { text: e.boss ? 'BOSS' : 'STAGE ' + e.n, sub: (e.name || '') + (e.mod ? '  ·  ' + e.mod : ''), t: 0, dur: 2.0, boss: e.boss }; if (e.boss) S.trauma = 0.6; break;
+      case 'stage': if (e.boss) S.trauma = 0.6; break;   // the title card is drawn by screenfx.js
       case 'clear': S.banner = { text: 'STAGE CLEAR', sub: '+' + e.bonus + ' Beats', t: 0, dur: 2.2, clear: true }; break;
       case 'surgewarn': S.warn = 0.7; break;
       case 'surge': S.warn = 0; S.trauma = Math.min(1, S.trauma + 0.3); break;
@@ -217,6 +220,7 @@ export function createRenderer(canvas, art, kit) {
     if (p.iframes > 0 && Math.floor(S.t * 20) % 2 === 0 && !(p.shield > 0)) ctx.globalAlpha = 0.45;
     ctx.save(); ctx.globalAlpha *= 0.35; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 40, 56, 14, 0, 0, TAU); ctx.fill(); ctx.restore();
     if ((g.groove || 0) >= 10) glow(p.x, p.y - 20, 100 + (g.groove - 10) * 3, '#ff7eb6', 0.18 + 0.1 * Math.sin(S.t * 8));
+    FX.aura(g);
     // aim tick
     ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.aim); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6fe3ff';
     ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(22, -6); ctx.lineTo(22, 6); ctx.fill(); ctx.restore();
@@ -374,12 +378,13 @@ export function createRenderer(canvas, art, kit) {
   function draw(g, ui, dt) {
     const L = layout();
     S.t += dt; if (S.banner) { S.banner.t += dt; if (S.banner.t > S.banner.dur) S.banner = null; }
+    if (FX) FX.update(dt, g);
     S.trauma = Math.max(0, S.trauma - dt * 1.6); S.flash = Math.max(0, S.flash - dt * 1.5);
     if (OPT.reduceMotion) { S.trauma = 0; S.flash = 0; }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawBg(g, L);
-    const sh = S.trauma * S.trauma * 22;
-    ctx.save(); ctx.translate((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh);
+    const sh = S.trauma * S.trauma * 22 + FX.rumble();
+    ctx.save(); ctx.translate((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh); FX.zoomIn();
     for (const pk of g.pickups) drawPickup(pk);
     drawZones(g);
     for (const sn of g.snakes) drawSnake(g, sn);
@@ -388,15 +393,14 @@ export function createRenderer(canvas, art, kit) {
     drawBullets(g);
     drawFx(dt);
     ctx.restore();
-    if (S.warn > 0) {   // the virus is about to surge
-      S.warn -= dt; const a = 0.25 + 0.2 * Math.sin(S.t * 30);
-      const gr = ctx.createLinearGradient(0, 0, 0, 260); gr.addColorStop(0, `rgba(255,40,80,${a})`); gr.addColorStop(1, 'rgba(255,40,80,0)');
-      ctx.fillStyle = gr; ctx.fillRect(0, 0, W, 260); text('SURGE!', W / 2, 170, 54, '#ff5a78');
-    }
+    if (S.warn > 0) { S.warn -= dt; text('SURGE!', W / 2, 170 + (OPT.reduceMotion ? 0 : Math.sin(S.t * 40) * 4), 54 + (OPT.reduceMotion ? 0 : Math.sin(S.t * 30) * 4), '#ff5a78'); }
+    FX.drawScreen(g);
     if (S.flash > 0) { ctx.save(); ctx.globalAlpha = S.flash * 0.5; ctx.fillStyle = S.flashCol; ctx.fillRect(0, 0, W, H); ctx.restore(); }
     if (ui) drawHud(g, ui);
+    if (ui) FX.drawCard(g);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
+  FX = createScreenFx({ ctx, W, H, kit, text, glow, S, OPT, ring, burst });
 
-  return { setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
+  return { timeScale: () => (FX ? FX.timeScale() : 1), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
 }
