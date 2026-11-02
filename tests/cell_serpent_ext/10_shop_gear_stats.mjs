@@ -30,3 +30,10 @@ console.log('ok 10_shop_gear_stats round 2');
   assert.ok(html.includes('.chest3.charge') && html.includes('#gearFilters .ttl') && !html.includes('\u2014') && !hub.includes('\u2014'));
   console.log('ok 10_shop_gear_stats round 4');
 }
+// round 6: radar badges only on levelled axes with a best-buy pulse, NEW + flying star in the keepsake reveal, event milestone track
+{
+  for (const k of ['rbb', 'lootStars', 'isNew', 'lnewstar', 'evtrack', 'evlab']) assert.ok(hub.includes(k) || html.includes(k), k);
+  assert.ok(hub.includes("if (!l) return ''"), 'zero-level badges are not drawn');
+  assert.ok(html.includes('.radar .rbb') && html.includes('.evm.ready') && !html.includes('\u2014') && !hub.includes('\u2014'));
+  console.log('ok 10_shop_gear_stats round 6');
+}
