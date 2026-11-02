@@ -28,12 +28,15 @@ export function badgeDir(prev, next) {
   const a = prev === undefined || prev === '' ? 0 : prev === '9+' ? 10 : +prev, b = next === '' ? 0 : next === '9+' ? 10 : +next;
   return b > a ? 1 : b < a ? -1 : 0;
 }
+let tabUp = null;
+export const onTabUp = f => { tabUp = f; };   // r11 audio: called when a badge number goes up (main plays the ping)
 export function setTabCount(btn, n) {
   const d = btn && btn.querySelector('.dot'); if (!d) return;
   const t = badgeLabel(n);
   if (d.textContent !== t) {
     const dir = badgeDir(d.dataset.n, t);
     d.textContent = t; d.classList.toggle('wide', t.length > 1);
+    if (dir > 0 && tabUp && d.dataset.n !== undefined) { try { tabUp(); } catch (e) { /* ignore */ } }   // r11 audio: the ping
     if (d.dataset.n !== undefined) { d.classList.remove('bump', 'flyin', 'sink'); void d.offsetWidth; d.classList.add(dir > 0 ? 'flyin' : dir < 0 ? 'sink' : 'bump'); }
     d.dataset.n = t;
   }

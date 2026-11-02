@@ -38,6 +38,7 @@ globalThis.window = { AudioContext: Ctx };
 const WF = { sine: 0.707, triangle: 0.577, square: 1, sawtooth: 0.577 };
 function describe(v) {
   let g = v.to; if (v.kind === 'src') { while (g && g.kind === 'filter') g = g.to; }
+  if (g && g.to && !g.to.gain) return { t0: v.t0, t1: v.t1 || v.t0, amp: 0, rms: 0, music: false };   // r11: an LFO modulates a gain param (the ambient breath), it makes no sound itself
   const bus = g && g.to; const busGain = bus ? bus.gain.value : 0;
   const peak = (g && g.gain.peak) || 0, wf = v.kind === 'src' ? 0.45 : WF[v.type] || 0.7;
   return { t0: v.t0, t1: v.t1, amp: peak * busGain * 0.5, rms: peak * busGain * 0.5 * wf * 0.45, music: Math.abs(busGain - 0.62) < 1e-9 };

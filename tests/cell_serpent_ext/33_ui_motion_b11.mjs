@@ -46,7 +46,7 @@ assert.equal(curtainClose(false, () => n++), false); assert.equal(n, 2);   // he
 
 // wiring and css
 const main = rd('main.js'), html = rd('index.html'), tabs = rd('tabs_ui.js'), sweep = rd('glyph_sweep.js');
-assert.ok(/import \{ curtainOpen, curtainClose \} from '\.\/curtain_ui\.js'/.test(main));
+assert.ok(/import \{ curtainOpen, curtainClose(?:, onCurtain)? \} from '\.\/curtain_ui\.js'/.test(main));
 assert.ok(/\$\('rHub'\)\.onclick = \(\) => \{ audio\.play\('click'\); curtainClose\(/.test(main) && /openHub\('Battle'\); \}\); \};/.test(main));
 assert.ok(/classList\.add\(dir > 0 \? 'flyin'/.test(tabs));
 assert.ok(/\.tabs \.dot\.flyin\{/.test(html) && /@keyframes tbFly/.test(html) && /\.tabs \.dot\.sink\{/.test(html));

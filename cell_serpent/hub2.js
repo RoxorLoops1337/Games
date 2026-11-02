@@ -211,7 +211,7 @@ export function createHub2(c) {
     bestBuy(core, s);
     { const rc = document.createElement('div'); rc.className = 'recbox'; rc.innerHTML = recordsHTML(s); list.appendChild(rc); }
     { const rl = runLogHTML(readRuns()); if (rl) { const rb = document.createElement('div'); rb.className = 'runbox'; rb.innerHTML = rl; list.appendChild(rb); } }
-    { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t), (n, from) => { save().sparkles += n; c.persist(); audio.play('levelup'); sparkleFlight(from, calmMotion(), () => c.refreshCur(), { src: iconURL('sparkles') }); }); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }
+    { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t), (n, from) => { save().sparkles += n; c.persist(); audio.play('bookdone'); sparkleFlight(from, calmMotion(), () => c.refreshCur(), { src: iconURL('sparkles') }); }); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }
   }
   // the cheapest upgrade you can afford right now wears a "BEST BUY" ribbon (a nudge, never a rule)
   function bestBuy(core, s) {

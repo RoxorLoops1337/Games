@@ -15,6 +15,8 @@ export function curtainFrames(side) {
   ];
 }
 
+let heard = null;
+export const onCurtain = f => { heard = f; };   // r11: main plays the swish when the curtain really opens
 export function curtainOpen(reduced) {
   if (reduced || typeof document === 'undefined' || !document.body || !document.body.animate) return false;
   const old = document.getElementById('curtain10'); if (old) old.remove();
@@ -27,6 +29,7 @@ export function curtainOpen(reduced) {
     a.onfinish = a.oncancel = () => { if (--left <= 0) root.remove(); };
   });
   setTimeout(() => root.remove(), CURTAIN_MS + 400);
+  if (heard) heard();
   return true;
 }
 

@@ -12,6 +12,7 @@ import { registerB10 } from './audio_b10.js';
 import { registerB11 } from './audio_b11.js';
 import { registerB10 as registerS10 } from './screen_b10.js';
 import { registerA10, keyLift, createAmbient } from './audio_b10b.js';
+import { registerA11, twistOf } from './audio_b11b.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
@@ -439,6 +440,7 @@ export function createAudio() {
         if (m.ctier >= 2) { const sv = shimmerVol(m.ctier, s); if (sv) tone(hz([c1, c2, c0, c2][(s >> 1) % 4] + 12), sp * 1.2, 'sine', sv, 0, ts, 'm'); if (s === 0 && bar % 2 === 0) tone(hz(c2 + 12), sp * 6, 'sine', 0.014 * (m.ctier - 1), 0, t, 'm'); }
         if (boss) { const bx = bossExtra(bp, bar, s); if (bx) { if (bx[0] === 'hat') hat(ts, bx[1]); else tone(120 - (s - 13) * 20, 0.14, 'sine', bx[1], -50, t, 'm'); } }
         { const co = colourOf(m.skin); if (!boss && lvl > 0.2 && co.at.includes(s) && (bar & 1) === 0) tone(hz(note(sc, deg + co.off, root + co.oct)), sp * 3, co.w, co.v, 0, ts, 'm'); }
+        { const tw = !boss && lvl > 0.25 ? twistOf(m.skin, sec, bar, s) : null; if (tw) tone(hz(note(sc, deg + tw.off, root + 36)), sp * 1.8, tw.w, tw.v, 0, ts, 'm'); }   // r11: a counter line per world section
         // species motif: 4 notes spread over the second and fourth bar
         if ((bar & 1) === 1 && s % 4 === 0 && !boss && lvl > 0.05) tone(hz(note(sc, motifOf(m.stage)[s >> 2], root + 36)), sp * 3, 'sine', 0.032, 0, t, 'm');
         // boss only: sub drone, off-beat sub pulses, a rising siren and a snare roll that lead into the next section
@@ -496,6 +498,7 @@ export function createAudio() {
   sfx.resumetick3 = () => sfx.resumetick({ n: 3 }); sfx.resumetick2 = () => sfx.resumetick({ n: 2 }); sfx.resumetick1 = () => sfx.resumetick({ n: 1 });
   sfx.resumetick = e => { const n = Math.max(1, Math.min(3, (e && e.n) || 3)); tone(560 + (3 - n) * 140, 0.06, 'triangle', 0.08, -60); tone(1400 + (3 - n) * 300, 0.03, 'sine', 0.03); };
   registerB11(sfx, tone, noise, gate);   // batch 11: mirror glance, beat run, boss twists (audio_b11.js)
+  registerA11(sfx, tone, noise, duck, gate);   // round 11: book sting, pet glance, pounce, tab ping, curtain (audio_b11.js)
   registerA10(sfx, tone, noise, duck, gate);   // round 10: boss fill, bring pack, sticker book, pet calls (audio_b10b.js)
   return {
     unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } hubSync(); ambSync(); },
