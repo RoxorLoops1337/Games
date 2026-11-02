@@ -37,7 +37,7 @@ const html = read('index.html');
   const swap = read('loadout_ux.js'), pre = read('presets_ux.js');
   assert.match(swap, /aria-label', `Swap out \$\{wname\(id\)\}, level \$\{lv\}/, 'each swap option says who steps out');
   assert.match(swap, /announce\(`\$\{wname\(newId\)\} swapped in for/);
-  assert.match(pre, /aria-pressed/); assert.match(pre, /Build \$\{NAMES\[i\]\} loaded/);
+  assert.match(pre, /aria-pressed/); assert.match(pre, /Build \$\{(NAMES\[i\]|nm)\} loaded/);
   assert.ok(!/—/.test(read('access.js') + swap + pre + html.slice(html.indexOf('@css:18-access round 6'))), 'no em dash');
 }
 
