@@ -4,9 +4,12 @@ import { pointAt } from './sim.js';
 const TAU = Math.PI * 2;
 export const UP_X = 42, UP_Y = 40;   // the upgrade counter in the HUD (hud.js)
 
-export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped }) {
+export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text }) {
   const orbs = [], smoke = [], trail = [], flashes = [], marks = [];
+  const lastKill = { x: 0, y: 0, t: -9, n: 0 };   // for the chain links
   const lastSrc = {};   // per weapon: time of its last impact mark, so a busy fight does not drown in them
+  const CHAIN_COL = ['#ffffff', '#9dff6d', '#6fe3ff', '#ffd84d', '#ff9ad6', '#ff6a3d'];
+  const DARK = { swab: '#8a2a62', daggers: '#2a4f78', tower: '#7a3a0c', stick: '#6a5a00', needles: '#0e5a6a', satellite: '#2a3a8a', maw: '#4a2a8a', puppy: '#7a4a10', encore: '#7a6a00' };
   const TINT = { swab: '#ffd0ea', daggers: '#e8f4ff', tower: '#ffc98a', stick: '#fff08a', needles: '#a8f0ff', satellite: '#b6c8ff', maw: '#d9b2ff', puppy: '#ffe0b0', encore: '#fff2a0' };
   const tint = src => TINT[src] || null;
   function mark(m) { if (marks.length < cap(28)) marks.push(m); }
@@ -23,6 +26,15 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped }) {
         const R = (e.r || 26) * (e.head ? 2.6 : 1.7);
         mark({ k: 'flash', x: e.x, y: e.y, r: R, t: 0, dur: e.head ? 0.3 : 0.2 });
         mark({ k: 'rays', x: e.x, y: e.y, r: R * 1.5, n: e.head ? 10 : 6, rot: Math.random() * TAU, t: 0, dur: e.head ? 0.34 : 0.24 });
+        // kill chain: a glowing link from the previous kill and a note that climbs with the pitch ladder
+        { const n = S.t - lastKill.t < 0.9 ? lastKill.n + 1 : 1, col = CHAIN_COL[Math.min(5, n >> 1)];
+          if (n >= 2) { mark({ k: 'link', x: lastKill.x, y: lastKill.y, x1: e.x, y1: e.y, t: 0, dur: 0.3, col, w: 3 + Math.min(n, 12) * 0.4 });
+            mark({ k: 'note', x: e.x + 20, y: e.y - 6, r: 11 + Math.min(n, 14), t: 0, dur: 0.55, col, vy: -70 - Math.min(n, 14) * 6, vx: (n & 1 ? 1 : -1) * 18 }); }
+          lastKill.x = e.x; lastKill.y = e.y; lastKill.t = S.t; lastKill.n = n; }
+        if (e.kind === 'upgrade') {   // the yellow cell pops hard: gold rays, a fat ring and a UP badge that rises
+          mark({ k: 'rays', x: e.x, y: e.y, r: 170, n: 12, rot: 0.2, t: 0, dur: 0.5, gold: 1 });
+          if (S.floats.length < 56) S.floats.push({ x: e.x, y: e.y - 36, str: 'UPGRADE!', acc: 0, key: 'badge', col: '#ffe14a', size: 26, vy: -46, life: 1.0, max: 1.0, pop: 1 });
+        }
         break;
       }
     }
@@ -77,7 +89,11 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped }) {
       ctx.save(); ctx.globalAlpha = a; ctx.translate(m.x, m.y);
       switch (m.k) {
         case 'flash': glow(0, 0, m.r * (0.7 + k * 0.6), '#fff', 0.9 * a); ctx.fillStyle = '#fff'; ctx.globalAlpha = a * a; ctx.beginPath(); ctx.arc(0, 0, m.r * 0.35 * (1 - k * 0.5), 0, TAU); ctx.fill(); break;
-        case 'rays': { ctx.rotate(m.rot); ctx.fillStyle = '#fff6c8'; const r0 = m.r * 0.25 + k * m.r * 0.35, r1 = m.r * (0.55 + k * 0.45);
+        case 'link': { ctx.translate(-m.x, -m.y); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.strokeStyle = m.col; ctx.lineWidth = m.w * (0.5 + a); ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(m.x1, m.y1); ctx.stroke(); ctx.globalAlpha = a * a; ctx.strokeStyle = '#fff'; ctx.lineWidth = m.w * 0.35; ctx.stroke(); break; }
+        case 'note': { ctx.translate((m.vx || 0) * m.t, (m.vy || 0) * m.t); ctx.rotate(Math.sin(m.t * 9) * 0.25); const s = m.r; ctx.fillStyle = '#10131c'; ctx.strokeStyle = '#10131c'; ctx.lineWidth = 3;
+          for (let pass = 0; pass < 2; pass++) { if (pass) { ctx.fillStyle = m.col; } ctx.beginPath(); ctx.ellipse(0, s * 0.5, s * 0.5, s * 0.36, -0.4, 0, TAU); if (!pass) ctx.stroke(); ctx.fill(); ctx.beginPath(); ctx.rect(s * 0.26, -s * 0.9, s * 0.2, s * 1.4); ctx.rect(s * 0.26, -s * 0.9, s * 0.7, s * 0.3); if (!pass) ctx.stroke(); ctx.fill(); }
+          break; }
+        case 'rays': { ctx.rotate(m.rot); ctx.fillStyle = m.gold ? '#ffe27a' : '#fff6c8'; const r0 = m.r * 0.25 + k * m.r * 0.35, r1 = m.r * (0.55 + k * 0.45);
           for (let j = 0; j < m.n; j++) { ctx.rotate(TAU / m.n); ctx.beginPath(); ctx.moveTo(r0, -2.4 * a - 0.6); ctx.lineTo(r1, 0); ctx.lineTo(r0, 2.4 * a + 0.6); ctx.closePath(); ctx.fill(); } break; }
         case 'pow': { ctx.rotate(m.rot); ctx.fillStyle = m.col; const r1 = m.r * (0.5 + k * 0.6), r0 = r1 * 0.3;
           ctx.beginPath(); for (let j = 0; j < m.n * 2; j++) { const rr = j & 1 ? r0 : r1, aa = (j / (m.n * 2)) * TAU; ctx.lineTo(Math.cos(aa) * rr, Math.sin(aa) * rr); } ctx.closePath(); ctx.fill(); break; }
@@ -139,6 +155,57 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped }) {
     }
   }
 
+  // the dash telegraph dims the field under the cells and lights the lane the snake is about to take
+  function under(g) {
+    if (!g || !g.snakes) return;
+    let k = 0, lead = null;
+    for (let si = 0; si < g.snakes.length; si++) { const sn = g.snakes[si]; if (sn.surge === 'warn') { const w = 1 - Math.max(0, sn.surgeT) / 0.6; if (w >= k) { k = w; lead = sn; } } else if (sn.surge === 'go' && k < 0.9) { k = 0.9; lead = sn; } }
+    if (!lead || !lead.path) return;
+    const h = lead.segs[0]; if (!h) return;
+    ctx.save(); ctx.globalAlpha = 0.34 * Math.min(1, k * 1.6); ctx.fillStyle = '#0a0414'; ctx.fillRect(-200, -200, 1400, 1900); ctx.restore();
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const w = h.r * 2 + 18; ctx.beginPath(); let n = 0;
+    for (let d = 0; d < 720 && n < 26; d += 30, n++) { const p = pointAt(lead.path, h.ps + d); if (n === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); }
+    ctx.globalAlpha = 0.16 * Math.min(1, k * 1.5); ctx.strokeStyle = '#ff2a4d'; ctx.lineWidth = w; ctx.stroke();
+    ctx.globalAlpha = 0.2 * Math.min(1, k * 1.5); ctx.strokeStyle = '#ff8aa0'; ctx.lineWidth = 3; ctx.setLineDash([14, 14]); ctx.lineDashOffset = calm() ? 0 : -S.t * 120; ctx.stroke();
+    ctx.restore();
+  }
+
+  // coins on their way to the counter leave a few sparkles (called by the renderer per flying coin)
+  function coinSpark(x, y, k) {
+    if (calm() || trail.length >= cap(56) || Math.random() > 0.5) return;
+    trail.push({ x: x + (Math.random() - 0.5) * 8, y: y + (Math.random() - 0.5) * 8, vx: 0, vy: 0, life: 0.28, max: 0.28, s: 5 - 2 * k, n: false, col: '#ffe27a' });
+  }
+  function coinLand(x, y) { if (calm()) return; ring(x, y, 34, '#ffd24a', 0.25); }
+
+  // styled floating numbers: crit = starburst badge and tilt, heavy hits = weapon coloured outline, chain = pill, badge = upgrade ribbon
+  function float(f) {
+    if (!text) return false;
+    const k = f.pop > 0 ? 1 + 0.3 * f.pop : 1;
+    if (f.crit) {
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(-0.1);
+      const R = f.size * 1.5 * k, fade = Math.min(1, f.life / 0.3);
+      ctx.globalAlpha = 0.9 * fade; ctx.fillStyle = '#ff8a1a'; ctx.beginPath();
+      for (let i = 0; i < 16; i++) { const rr = i & 1 ? R * 0.62 : R, a = (i / 16) * TAU; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr * 0.8); } ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 0.95 * fade; ctx.fillStyle = '#ffd23a'; ctx.beginPath();
+      for (let i = 0; i < 16; i++) { const rr = (i & 1 ? R * 0.62 : R) * 0.8, a = (i / 16) * TAU; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr * 0.8); } ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = fade; text(f.str, 0, 0, Math.round(f.size * k / 2) * 2, '#fff', '#a8330a'); ctx.restore(); return true;
+    }
+    if (f.key === 'chain') {
+      const sz = Math.round(f.size * k / 2) * 2, w = sz * (String(f.str).length * 0.62 + 1.3), h = sz * 1.15;
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(Math.sin(f.life * 12) * 0.05);
+      ctx.fillStyle = 'rgba(16,19,28,.82)'; ctx.strokeStyle = f.col; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-w / 2, -h / 2, w, h, h / 2) : ctx.rect(-w / 2, -h / 2, w, h); ctx.fill(); ctx.stroke();
+      text(f.str, 0, 1, sz, f.col); ctx.restore(); return true;
+    }
+    if (f.key === 'badge') {
+      const sz = Math.round(f.size * k / 2) * 2;
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(-0.06); text(f.str, 0, 0, sz, '#fff3a0', '#8a5a00'); ctx.restore(); return true;
+    }
+    if (f.key && f.size >= 20) { text(f.str, f.x, f.y, Math.round(f.size * k / 2) * 2, f.col, DARK[f.src] || '#10131c'); return true; }
+    return false;
+  }
+
   function draw(dt, g) {
     drawSurge(g);
     drawMarks(dt);
@@ -172,7 +239,7 @@ export function createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped }) {
     ctx.globalAlpha = 1;
   }
 
-  return { event, bullets, draw, tint, pools: { orbs, smoke, trail, flashes, marks } };
+  return { event, bullets, draw, tint, under, float, coinSpark, coinLand, pools: { orbs, smoke, trail, flashes, marks } };
 }
 
 // 1 at rest; right after a landing it pops and settles over 0.38s: the HUD takes the max with its own bounce
