@@ -2573,6 +2573,9 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 #levelup .cards .card.pick .lockb{top:0;right:0}
 #levelup .cards .card.pick .rdy{position:absolute;left:0;right:0;top:0;height:3px;background:var(--rc);transform-origin:left center;animation:t35fill .45s linear both;pointer-events:none;z-index:5}
 #levelup .cards .card.pick:not(.arm) .rdy{display:none}
+/* the shine sweep stays inside the card (a wider sweep counts as horizontal overflow of the card) */
+@keyframes t35shine{0%{transform:translateX(-160%) skewX(-18deg)}45%,100%{transform:translateX(240%) skewX(-18deg)}}
+#levelup .cards .card.pick.r2 .shine,#levelup .cards .card.pick.r3 .shine,#levelup .cards .card.pick.r4 .shine,#levelup .cards .card.pick.r5 .shine{animation-name:t35shine}
 @keyframes t35fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @media (prefers-reduced-motion:reduce){#levelup .cards .card.pick .rdy{display:none}}
 /* four offers: two by two, each card is a row */
@@ -2586,7 +2589,11 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 #levelup .lvrow .btn{min-height:48px;padding:6px 8px}
 #levelup .buildstrip{margin-top:0}
 @media (max-width:340px){#levelup{padding-left:10px;padding-right:10px}#levelup .cards{gap:8px}#levelup .cards .card.pick{padding:5px 5px 6px}#levelup .cards .card.pick .ic{width:40px;height:40px}#levelup .cards .card.pick .ic img{width:32px;height:32px}#levelup .cards .card.pick .nm{font-size:13px}#levelup .cards[data-n="4"] .card.pick .ic{width:36px;height:36px}}
-@media (max-height:700px){#levelup .cards .card.pick .ds{display:none}}
+@media (max-height:800px){#levelup .cards .card.pick .ds{display:none}}
+@media (min-height:801px){#levelup .cards .card.pick .ds{-webkit-line-clamp:1}}
+@media (max-height:600px){#levelup .luckbox{display:none}#levelup{gap:8px}}
+@media (max-height:760px){#levelup .cards[data-n="4"] .card.pick .dv i,#levelup .cards[data-n="4"] .card.pick .dv em{display:none}#levelup .cards[data-n="4"] .card.pick{padding-top:3px;padding-bottom:3px}}
+#levelup .cards .card.pick:has(.lnk) .syn{display:none}
 @media (max-height:760px){#levelup:has(.cards[data-n="4"]) .luckbox{display:none}#levelup .cards[data-n="4"] .card.pick{padding-top:4px;padding-bottom:4px}}
 @media (max-height:740px){#levelup .syn,#levelup .cards .card.pick .syn,#levelup .cards .card.pick .lnk{display:none}#levelup .lkrow{display:none}}
 /* revive prompt: REVIVE and Give up sit in the upper two thirds, not under the steering thumb */
