@@ -3,8 +3,9 @@
 // key and tempo change every 5 stages, bosses get their own tense track, and the layers follow
 // mix({ stage, boss, groove (0..1), danger (0..1) }).
 import { beatBpm as simBpm, SKINS, skinFor } from './sim.js';
+import { pumpDepth, pumpEnv } from './audio_pump.js';
 export function createAudio() {
-  let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false;
+  let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
   let musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
   let mixS = { stage: 1, boss: false, groove: 0, danger: 0, skin: 'love', bphase: 0 };
   let live = 0, chain = 0, chainT = 0, vol = 1, uiT = 0, bstreak = 0, lastBeatShot = 0, beatNow = 0, fresh = false;
@@ -48,6 +49,16 @@ export function createAudio() {
     const g = ac.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
     s.connect(fl); fl.connect(g); g.connect(bus(b)); s.start(t); s.stop(t + dur);
     live++; s.onended = () => { live--; };
+  }
+  // a held note that breathes with the kick: dips on t and on every beat (see audio_pump.js)
+  function pumpTone(f, dur, type, vol, delay, beat, depth) {
+    if (!ac || muted || live > 40) return;
+    const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    const pts = pumpEnv(vol, dur, beat, depth); g.gain.setValueAtTime(pts[0][1], t + pts[0][0]);
+    for (let i = 1; i < pts.length; i++) g.gain.linearRampToValueAtTime(pts[i][1], t + pts[i][0]);
+    o.connect(g); g.connect(bus('m')); o.start(t); o.stop(t + dur + 0.02);
+    live++; o.onended = () => { live--; };
   }
   // lower the music for a moment (big moments), then let it swell back
   function duck(amt = 0.5, hold = 0.35) {
@@ -185,6 +196,18 @@ export function createAudio() {
       const f = pentHz(Math.min(9, bstreak), 84);
       tone(f, 0.05, 'triangle', 0.05, 0); noise(0.02, 0.03, 8000, 4000, 'highpass');
       if (bstreak > 0 && bstreak % 8 === 0) { tone(f * 2, 0.22, 'sine', 0.05, 0, 0.03); tone(f * 3, 0.3, 'sine', 0.025, 0, 0.06); }
+      if (bstreak > 0 && bstreak % 10 === 0) sfx.streakburst({ n: bstreak });   // milestone: 10, 20, 30 ... (the HUD chip bursts on the same counts)
+    },
+    // streak milestone (10 / 20 / 30 on-beat shots in a row): a rising pentatonic run into a bright chord, a glitter sweep
+    // and, from 20, a low thump under it. Tier 1..3 gets bigger each time, the loudest stays well under the clear jingle.
+    streakburst: e => {
+      const k = Math.max(1, Math.min(3, Math.round(((e && e.n) || 10) / 10)));
+      for (let i = 0; i < 3 + k; i++) tone(pentHz(4 + i, 72), 0.12, 'triangle', 0.06, 0, 0.03 + i * 0.045);
+      const at = 0.05 + (3 + k) * 0.045;
+      for (const d of k >= 3 ? [0, 2, 4, 7] : [0, 2, 4]) tone(pentHz(9 + d, 72), 0.4 + 0.1 * k, 'sine', 0.045, 0, at);
+      noise(0.35 + 0.1 * k, 0.04, 3000, 11000, 'bandpass', 0.02);
+      if (k >= 2) { tone(110, 0.3, 'sine', 0.14, -40); noise(0.08, 0.06, 900, 200); }
+      duck(0.25 + 0.08 * k, 0.4);
     },
     // Encore beam fires / becomes ready
     encore: () => { noise(0.9, 0.12, 400, 6000, 'bandpass'); tone(110, 0.9, 'sawtooth', 0.12, 440); [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.5, 'triangle', 0.06, 0, 0.1 + i * 0.05)); duck(0.55, 0.9); },
@@ -206,6 +229,11 @@ export function createAudio() {
     back: () => { uiT = now(); tone(440, 0.07, 'triangle', 0.06, -150); },
     toggle: () => { uiT = now(); tone(600, 0.05, 'triangle', 0.06); tone(900, 0.07, 'sine', 0.05, 0, 0.045); },
     buy: () => { uiT = now(); tone(1319, 0.06, 'square', 0.04); tone(1760, 0.12, 'triangle', 0.06, 0, 0.05); tone(2349, 0.12, 'sine', 0.03, 0, 0.1); },
+    // a sheet (pause, settings, a panel) slides in or out: a soft airy sweep under the tap, rising to open and falling to close
+    open: () => { uiT = now(); noise(0.14, 0.03, 700, 3600, 'bandpass', 0.02); tone(520, 0.08, 'sine', 0.035, 260, 0.03); },
+    close: () => { uiT = now(); noise(0.12, 0.028, 3200, 600, 'bandpass', 0.02); tone(520, 0.08, 'sine', 0.03, -230, 0.02); },
+    // slider drag: a small tick whose pitch follows the value (e: { f: 0..1 }), so the volume can be judged by ear
+    slide: e => { if (!gate('slide', 55)) return; const f = Math.max(0, Math.min(1, (e && e.f) || 0)); tone(480 + 520 * f, 0.03, 'sine', 0.05, -60); },
     deny: () => { uiT = now(); tone(200, 0.09, 'square', 0.06, -30); tone(160, 0.12, 'square', 0.06, -30, 0.08); },
   };
   sfx.card0 = () => sfx.card({ rarity: 0 }); sfx.card1 = () => sfx.card({ rarity: 1 }); sfx.card2 = () => sfx.card({ rarity: 2 });
@@ -240,8 +268,15 @@ export function createAudio() {
   function snare(t, v = 0.1) { noise(0.13, v, 3000, 1200, 'bandpass', t, 'm'); tone(190, 0.09, 'triangle', v * 0.7, -70, t, 'm'); }
   function hat(t, v = 0.03, open) { noise(open ? 0.14 : 0.03, v, 9000, 6000, 'highpass', t, 'm'); }
   let beatAt = 0, beatBpm = 0;
+  // (re)start the scheduler for the current wish: full music, or only the metronome when music is off but the tick is on
+  function restart() {
+    musicOn = wantMusic && musicAllowed; tickOn = wantMusic && !musicAllowed && beatTick;
+    clearInterval(timer);
+    if ((musicOn || tickOn) && ensure()) { step = 0; fresh = true; nextT = ac.currentTime + 0.05; timer = setInterval(pump, 80); }
+    else { musicOn = tickOn = false; }
+  }
   function pump() {
-    if (!musicOn || !ac) return;
+    if (!(musicOn || tickOn) || !ac) return;
     const m = mixS, boss = m.boss, tier = Math.floor(Math.max(0, m.stage - 1) / 5) % ROOTS.length;
     // groove meter and snake closeness raise the layers
     const lvl = Math.min(1, m.groove * 0.75 + m.danger * 0.45 + intensity * 0.2);
@@ -250,7 +285,8 @@ export function createAudio() {
     while (nextT < ac.currentTime + 0.25) {
       const s = step % 16, bar = (step >> 4) % 4, sec = (step >> 6), t = Math.max(0, nextT - ac.currentTime);
       if (s % 4 === 0) { beatAt = nextT; beatBpm = bpm; beatNow = bpm; }   // for the screen edge pulse (see beat())
-      if (!muted) {
+      if (!muted && tickOn) { if (s % 4 === 0) tone(s === 0 && bar === 0 ? 1319 : 988, 0.05, 'triangle', s === 0 && bar === 0 ? 0.2 : 0.15, 0, t, 'm'); }   // music off, beat tick on: the metronome alone
+      else if (!muted) {
         const V = varOf(m.skin), bp = boss ? m.bphase : 0, ts = (s & 1) ? t + V.sw * sp : t;
         const sc = boss ? SCALES.phryg : (tier % 3 === 2 || V.minor ? SCALES.minor : SCALES.major);
         const root = 36 + ROOTS[tier] + (boss ? 5 : 0);
@@ -272,7 +308,7 @@ export function createAudio() {
         // bass: eighths, octave jump to keep it moving
         if (s % 2 === 0) tone(hz(bassM + (s % 8 === 6 ? 12 : 0)), sp * 1.9, boss ? 'sawtooth' : V.bass, boss ? 0.1 : V.bass === 'sawtooth' ? 0.1 : 0.14, 0, t, 'm');
         // pad on the bar line
-        if (s === 0 && (lvl > 0.15 || boss)) { [c0, c1, c2].forEach(n => tone(hz(n - 12), sp * 15, boss || bp >= 2 ? 'sawtooth' : V.pad, boss ? 0.02 + bp * 0.004 : 0.03, 0, t, 'm')); }
+        if (s === 0 && (lvl > 0.15 || boss)) { [c0, c1, c2].forEach(n => pumpTone(hz(n - 12), sp * 15, boss || bp >= 2 ? 'sawtooth' : V.pad, boss ? 0.02 + bp * 0.004 : 0.03, t, sp * 4, pumpDepth(lvl, boss))); }
         // arp over the chord
         if (lvl > 0.3 || boss) { const q = [c0, c1, c2, c1][(s >> (boss ? 0 : 1)) % 4]; if (s % (boss ? 2 : 2 * V.ad) === 0) tone(hz(q + (sec % 2 && s >= 8 ? 12 : 0) + (boss ? (bp >= 1 && s % 4 === 2 ? 12 : 0) : V.ao)), sp * 1.6, boss ? 'square' : V.arp, boss ? 0.026 : 0.022, 0, ts, 'm'); }
         // lead melody from high groove
@@ -284,7 +320,7 @@ export function createAudio() {
         if ((bar & 1) === 1 && s % 4 === 0 && !boss && lvl > 0.05) tone(hz(note(sc, motifOf(m.stage)[s >> 2], root + 36)), sp * 3, 'sine', 0.032, 0, t, 'm');
         // boss only: sub drone, off-beat sub pulses, a rising siren and a snare roll that lead into the next section
         if (boss) {
-          if (s === 0) tone(hz(bassM - 12), sp * 15.5, 'sine', 0.1, 0, t, 'm');
+          if (s === 0) pumpTone(hz(bassM - 12), sp * 15.5, 'sine', 0.1, t, sp * 4, pumpDepth(lvl, true));
           if (s % 4 === 2) tone(hz(bassM - 12), sp * 1.6, 'sine', 0.12, -3, t, 'm');
           if (bar === 3 && s === 8) tone(330, sp * 8, 'sawtooth', 0.018, 520, t, 'm');
           if (bar === 3 && s >= 12) snare(t, 0.05 + (s - 12) * 0.03);
@@ -312,12 +348,12 @@ export function createAudio() {
     motif: motifOf,
     get muted() { return muted; },
     music(on) {
-      musicOn = on && musicAllowed;
-      clearInterval(timer);
-      if (musicOn && ensure()) { step = 0; fresh = true; nextT = ac.currentTime + 0.05; timer = setInterval(pump, 80); }
+      wantMusic = !!on; restart();
     },
-    setBeatTick(b) { beatTick = !!b; },
-    setMusicAllowed(b) { musicAllowed = b; if (!b) { musicOn = false; clearInterval(timer); } },
+    // the beat tick is a metronome of its own: with the music switched off it still clicks on every beat
+    setBeatTick(b) { beatTick = !!b; if ((wantMusic && !musicAllowed && beatTick) !== tickOn) restart(); },
+    setMusicAllowed(b) { musicAllowed = b; if (!b || tickOn) restart(); },
+    get tickOnly() { return tickOn; },
     get musicAllowed() { return musicAllowed; },
     intensity(v) { intensity = v; },
     // groove 0..1, danger 0..1 (how close the face is to the line), stage number, boss flag
@@ -334,7 +370,7 @@ export function createAudio() {
     get beatStreak() { return bstreak && now() - lastBeatShot < 60 / (beatNow || 120) * 1600 ? bstreak : 0; },
     // align the music grid to the sim beat clock: simPhase 0..1 is the sim's beat phase now (see beatPhase in sim.js)
     sync(simPhase) {
-      if (!musicOn || !ac || !beatNow || !(simPhase >= 0)) return;
+      if (!(musicOn || tickOn) || !ac || !beatNow || !(simPhase >= 0)) return;
       const spb = 60 / beatNow, sp = spb / 4, Q = nextT + ((4 - (step & 3)) & 3) * sp;
       let ap = ((ac.currentTime - (ac.outputLatency || ac.baseLatency || 0) - Q) / spb) % 1; if (ap < 0) ap += 1;
       let e = simPhase - ap; e -= Math.round(e);   // -0.5..0.5 of a beat; positive: the sim is ahead, so the music must come sooner
@@ -346,7 +382,7 @@ export function createAudio() {
     },
     // where we are in the beat: { bpm, phase 0..1 since the last kick }, or null when the music is not playing
     beat() {
-      if (!musicOn || !ac || !beatBpm) return null;
+      if (!(musicOn || tickOn) || !ac || !beatBpm) return null;
       const spb = 60 / beatBpm; let ph = ((ac.currentTime - beatAt) / spb) % 1; if (ph < 0) ph += 1;
       return { bpm: beatBpm, phase: ph };
     },

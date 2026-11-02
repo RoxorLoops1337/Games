@@ -263,9 +263,11 @@ export function createHud(env) {
   function beatStreak(g) {
     const f = env.OPT && env.OPT.beatStreak, n = typeof f === 'function' ? f() | 0 : 0;
     if (n > T.bsLast) T.bsAt = S.t; if (n > T.bsHi) T.bsHi = n;
-    if (n < 3) { if (n === 0) T.bsHi = 0; T.bsLast = n; return; }
+    if (n < 3) { if (n === 0) T.bsHi = 0; T.bsMs = 0; T.bsLast = n; return; }
     T.bsLast = n;
-    const k = Math.max(0, 1 - (S.t - T.bsAt) / 0.3), hot = n >= 10, col = n >= 20 ? '#ff7ad9' : hot ? '#ffd84d' : '#6fe3ff';
+    const ms = Math.floor(n / 10); if (ms > (T.bsMs | 0)) { T.bsMs = ms; T.bsB = S.t; }   // milestone 10 / 20 / 30: ring burst (the sound is audio.js streakburst)
+    const bk = T.bsB === undefined ? 0 : Math.max(0, 1 - (S.t - T.bsB) / 0.6);
+    const k = Math.max(bk, Math.max(0, 1 - (S.t - T.bsAt) / 0.3)), hot = n >= 10, col = n >= 20 ? '#ff7ad9' : hot ? '#ffd84d' : '#6fe3ff';
     const x = 256, y = H - 70 - T.ins.b, w = 150, h = 40;
     scaled(x + w / 2, y + h / 2, 1 + 0.18 * k * k, () => {
       glass(-w / 2, -h / 2, w, h, 20, col + 'cc', 'rgba(14,9,48,.62)');
@@ -273,6 +275,7 @@ export function createHud(env) {
       text('x' + n, -w / 2 + 44, 1, 24, col, '#0b1020', 'left');
       text('BEAT', w / 2 - 12, 2, 13, '#ffffff', '#0b1020', 'right');
     });
+    if (bk > 0 && !reduce()) { ctx.save(); ctx.globalAlpha = bk; ctx.strokeStyle = col; ctx.lineWidth = 1 + 3 * bk; ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2, 26 + 52 * (1 - bk), 0, TAU); ctx.stroke(); ctx.restore(); }
   }
 
   function skills(g) {
