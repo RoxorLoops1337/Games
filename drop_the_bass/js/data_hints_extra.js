@@ -8,6 +8,14 @@ export const HINTS_EXTRA = {
   hint_reroll:     { title: 'Not the turret you wanted?', text: 'The two round arrows under the board re-roll the next drop. Coins first, or gems when you are short. Setlist rerolls are free.' },
   hint_bossphase:  { title: 'Boss phase!', text: 'Bosses change tricks as they lose health. Watch the notches on the boss bar: each one is a new phase. Stay flexible.' },
   hint_hero_ready: { title: 'Hero move ready', text: 'Roxor and Jasmin are charged up. Tap their portraits for the move shown under each one. Save it for a boss or a big wave.' },
+  // ---- one first-time card per boss (battle.js shows boss_<id> the first time that boss spawns, the generic 'boss' hint is the fallback)
+  boss_compressor: { title: 'The Compressor', text: 'It squashes big hits, so one huge shot barely hurts it. Use lots of fast, small hits instead, and watch for the shield it pops out.' },
+  boss_noisegate:  { title: 'Noise Gate', text: 'It slams shut every few seconds and nothing can hurt it, and it calls in Fuzz. Hold your hero moves until the gate opens again.' },
+  boss_reverb:     { title: 'Reverb Titan', text: 'It echoes itself and leaves Echo Minis behind as it walks. Splash turrets like Kick Cannon clean up the pieces fast.' },
+  boss_djglitch:   { title: 'DJ Glitch', text: 'It teleports along the path and jams your nearest turrets. Spread your turrets out so one scratch never stops the whole band.' },
+  boss_playback:   { title: 'Mr. Playback', text: 'He has three phases: he pauses your turrets, shields himself, then skips one of your tracks. Save your hero moves for his last phase.' },
+  boss_lowpass:    { title: 'The Low-Pass Tide', text: 'It washes over small hits, so fast weak shots barely scratch it. Bring big hitters like Kick Cannon and Cowbell Sniper.' },
+  boss_silence:    { title: 'Dr. Dead Air', text: 'It mutes your turrets in waves and can steal an instrument. Spread your turrets out so a mute never silences the whole band.' },
   // ---- hub flows (shown once per profile by hubHint in ui_core.js)
   hint_setlist:     { title: 'Your Setlist', text: 'Before a run, pick a hero move for Roxor and Jasmin. Modifiers are optional: each one makes the run harder and pays more Records, Fans and diamonds. Tap a modifier to read it.' },
   hint_wardrobe:    { title: 'The Wardrobe', text: 'Outfits and Stage skins are pure style. Tap one to wear it and swipe sideways for more. Some unlock by playing, some cost diamonds.' },

@@ -2,6 +2,7 @@
 // Pure data, no DOM, no Math.random, no Date. Ids are append-only lowercase_snake (saves and snapshots point at them).
 // House rule: never write an em dash. Implemented by sim.js; the API is described in GAMEPLAY_API.md.
 import { TURRETS } from './data_core.js';
+import { WAVE_MODS } from './data_run.js';
 
 // ---------------------------------------------------------------- 1. turret branches
 // A turret that reaches level 4 may take ONE branch (a choice of two). fx keys (all read by sim.js):
@@ -179,3 +180,21 @@ export const ENDLESS_MILESTONES = [
   { wave: 50, id: 'endless_50', name: 'Never Ending Set', reward: { diamonds: 25, cosmetic: 'milestone_50' } },
   { wave: 100, id: 'endless_100', name: 'Legend of the Loop', reward: { diamonds: 75, cosmetic: 'milestone_100' } },
 ];
+
+// ---------------------------------------------------------------- 6. endless themed waves
+// In endless mode every wave with w % 10 === 5 from wave 15 (15, 25, 35, ...) is a THEMED wave: one of these six, never a boss wave. The theme is the wave's
+// mod (spec.mod, nextWavePreview().mod, currentWaveInfo().mod, the wave event, run.wmId), so it rides the wave-mod mechanism: `wm` is read by the sim for that wave
+// only (count and hp as in WAVE_MODS, coin, echoSplit). genWave in sim.js reads the group shape: `types` forces the group types, `support` adds a group of that
+// type next to every group (supportFrac of its size). The themes are also registered in WAVE_MODS (same objects) so every place that looks a wave mod up by id
+// (banner, HUD badge, preview card) finds them; they are never picked as a random mod. Order is append-only. Which theme comes when: endlessThemeFor in sim.js.
+export const ENDLESS_THEME_FIRST = 15;
+export const ENDLESS_THEMES = {
+  swarm:          { id: 'swarm',          name: 'Swarm',          glyph: 'fans',    good: false, theme: true, desc: 'Three times as many Static, each with 40% of the health.', wm: { count: 3, hp: 0.4, coin: 0.6 } },
+  armored_parade: { id: 'armored_parade', name: 'Armored Parade', glyph: 'shield',  good: false, theme: true, desc: 'Every Static is a Brickwall. Small hits bounce off, so bring big hitters.', types: ['brick'], wm: { coin: 1.3 } },
+  zip_rush:       { id: 'zip_rush',       name: 'Zip Rush',       glyph: 'ff',      good: false, theme: true, desc: 'Nothing but fast Glitch Zips. Splash and slows save the day.', types: ['zip'], wm: { coin: 1.2 } },
+  echo_chamber:   { id: 'echo_chamber',   name: 'Echo Chamber',   glyph: 'wave',    good: false, theme: true, desc: 'Echoes split twice: every Echo Mini splits again when it dies.', types: ['echo'], wm: { echoSplit: 2 } },
+  heal_party:     { id: 'heal_party',     name: 'Heal Party',     glyph: 'heart',   good: false, theme: true, desc: 'Hum Healers join every group and keep the Static topped up.', support: 'leech', supportFrac: 0.3, wm: { coin: 1.1 } },
+  gold_rush:      { id: 'gold_rush',      name: 'Gold Rush',      glyph: 'coin',    good: true,  theme: true, desc: 'Fewer Static, but every kill pays double coins.', wm: { count: 0.55, coin: 2 } },
+};
+export const ENDLESS_THEME_IDS = Object.keys(ENDLESS_THEMES);
+for (const id of ENDLESS_THEME_IDS) if (!WAVE_MODS[id]) WAVE_MODS[id] = ENDLESS_THEMES[id];

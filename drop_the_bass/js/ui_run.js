@@ -73,7 +73,7 @@ export function showPause(app, battle) {
       btn(t('run.pause.resume', 'Resume'), () => m.close(), 'green big'),
       h('div', { class: 'btnrow', style: 'margin-top:0' }, btn(t('run.pause.settings', 'Settings'), () => settingsModal(app), 'dark small'), btn(t('run.pause.howto', 'How to play'), () => app.showHowTo(), 'dark small')),
       btn(t('run.pause.quit', 'Quit run'), () => {
-        const q = modal(h('div', null, h('h2', null, t('run.pause.quit_title', 'Quit this run?')), h('div', { class: 'sub', style: 'text-align:center' }, t('run.pause.quit_body', 'You keep the rewards for the waves you cleared. Stars and stage progress need a win.')),
+        const q = modal(h('div', null, h('h2', null, t('run.pause.quit_title', 'Quit this run?')), h('div', { class: 'sub', style: 'text-align:center' }, run.practice ? t('run.pause.quit_practice', 'Practice has no rewards, so nothing is lost.') : t('run.pause.quit_body', 'You keep the rewards for the waves you cleared. Stars and stage progress need a win.')),
           h('div', { class: 'btnrow' }, btn(t('run.pause.quit_yes', 'Quit'), () => { q.close(); m.close(); battle.setPause(false); app.quitRun(battle); }, 'red'), btn(t('run.pause.keep', 'Keep playing'), () => q.close(), 'green'))));
       }, 'red small')));
 }
@@ -83,9 +83,9 @@ export function showPause(app, battle) {
 const HINT_ICON = { boss: 'crown', chest: 'gift', mod: 'bolt', hint_setlist: 'mic', hint_wardrobe: 'sparkle', hint_skin_buy: 'diamond', hint_studio_scene: 'speaker', hint_weekly: 'ticket', hint_synergy: 'heart', hint_branch: 'merge', hint_preview: 'eye', hint_reroll: 'reroll', hint_bossphase: 'crown', hint_hero_ready: 'sparkle' };
 export function showHint(app, id, done) {
   const hint = HINTS[id];
-  const isEnemy = !!ENEMIES[id];
-  const ic = isEnemy ? enemyIcon(id, 90) : icon(HINT_ICON[id] || 'lock', 70);
-  const m = modal(h('div', { class: 'hint-card' }, h('h2', null, isEnemy ? t('run.hint.new_static', 'New Static: {title}', { title: hint.title }) : hint.title), h('div', { style: 'text-align:center' }, ic), h('p', null, hint.text),
+  const isEnemy = !!ENEMIES[id], bossId = /^boss_/.test(id) && BOSSES[id.slice(5)] ? id.slice(5) : null;   // boss_<id> cards show that boss
+  const ic = isEnemy ? enemyIcon(id, 90) : bossId ? enemyIcon(bossId, 96, true) : icon(HINT_ICON[id] || 'lock', 70);
+  const m = modal(h('div', { class: 'hint-card' }, h('h2', null, isEnemy ? t('run.hint.new_static', 'New Static: {title}', { title: hint.title }) : bossId ? t('run.hint.new_boss', 'Boss: {title}', { title: hint.title }) : hint.title), h('div', { style: 'text-align:center' }, ic), h('p', null, hint.text),
     h('div', { class: 'btnrow' }, btn(t('run.hint.got_it', 'Got it!'), () => m.close(), 'green'))), { sticky: true, onClose: done });
   app.audio.play('ui_open');
 }
@@ -205,6 +205,26 @@ export function showDefeat(app, run, battle, onGiveUp) {
       if (!canRevive) { toast(t('run.defeat.need_gems', 'You need {n} diamonds to revive.', { n: ECON.reviveDiamonds })); return; }
       app.spendDiamonds(ECON.reviveDiamonds); run.revive(); battle.ended = false; battle.endTimer = 0; battle.queueBanner(t('run.defeat.encore', 'ENCORE!'), t('run.defeat.encore_sub', 'Half the stage is back'), COL.green, 1.8); m.close();
     }, canRevive ? 'gold' : 'dark off'), shareBtn(app, run), btn(t('run.defeat.give_up', 'Give up'), () => { m.close(); onGiveUp(); }, 'dark')));
+}
+
+// Practice a boss (codex): no rewards, nothing saved. Shows the time to defeat the boss.
+export function showPracticeResults(app, run) {
+  const r = run.result || {}, pr = r.practice || {}, b = BOSSES[pr.boss];
+  const defeated = pr.time != null;
+  const body = h('div', { class: 'practice-results' });
+  const m = modal(body, { sticky: true });
+  app.audio.musicStart(defeated ? 'victory' : 'defeat');
+  body.append(h('div', { class: 'res-title ' + (defeated ? 'win' : 'lose') }, defeated ? t('practice.won', 'BOSS DOWN!') : t('practice.lost', 'NOT YET!')),
+    h('div', { class: 'sub', style: 'text-align:center;font-weight:900' }, t('practice.vs', 'Practice: {boss}', { boss: b ? b.name : '' })),
+    h('div', { style: 'text-align:center;margin:4px 0' }, b ? enemyIcon(pr.boss, 100, true) : null),
+    h('div', { class: 'statgrid' },
+      h('div', null, t('practice.time', 'Time to defeat'), h('b', { 'data-practice-time': defeated ? String(pr.time) : '' }, defeated ? clock(pr.time) : '-')),
+      h('div', null, t('run.stat.kills', 'Kills'), h('b', null, fmt(r.kills || 0))),
+      h('div', null, t('run.stat.merges', 'Merges'), h('b', null, r.merges || 0)),
+      h('div', null, t('practice.leaks', 'Leaks'), h('b', null, r.leaks || 0))),
+    h('div', { class: 'sub', style: 'text-align:center' }, t('practice.no_rewards', 'Practice gives no rewards and changes nothing in your save.')),
+    !defeated ? recapCard(r.recap) : null,
+    h('div', { class: 'btnrow' }, btn(t('practice.again', 'Try again'), () => { m.close(); app.endPractice({ retry: true }); }, 'green'), btn(t('practice.back', 'Back to the hub'), () => { m.close(); app.endPractice({}); }, 'dark')));
 }
 
 function milestoneLine(ms) {
@@ -328,6 +348,23 @@ export function showResults(app, run, out, opts = {}) {
 }
 
 // ------------------------------------------------------------------------------------------------ how to play
+// true when the device has a mouse or trackpad as its main pointer (a desktop), so a keyboard is likely
+export function hasFinePointer() {
+  try { return typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches && !matchMedia('(pointer: coarse)').matches; } catch (e) { return false; }
+}
+// the keys battle.js listens to (Battle.key), in the order players need them
+const shortcutRows = () => [
+  [t('run.keys.drop_k', 'Space / Enter'), t('run.keys.drop', 'Drop a turret')],
+  [t('run.keys.merge_k', 'M'), t('run.keys.merge', 'Merge every pair')],
+  [t('run.keys.heroes_k', 'Q / W'), t('run.keys.heroes', 'Roxor / Jasmin move')],
+  [t('run.keys.wave_k', 'N'), t('run.keys.wave', 'Call the next wave')],
+  [t('run.keys.speed_k', 'F'), t('run.keys.speed', 'Change the speed')],
+  [t('run.keys.reroll_k', 'R / G'), t('run.keys.reroll', 'Re-roll the next drop (coins / diamonds)')],
+  [t('run.keys.preview_k', 'V'), t('run.keys.preview', 'Wave preview')],
+  [t('run.keys.path_k', '1 / 2'), t('run.keys.path', 'Pick an upgrade path for the selected turret')],
+  [t('run.keys.sell_k', 'S'), t('run.keys.sell', 'Sell the selected turret')],
+  [t('run.keys.pause_k', 'Esc / P'), t('run.keys.pause', 'Pause')],
+];
 export function showHowTo(app) {
   const sec = (title, ...ps) => h('div', { class: 'card' }, h('h3', null, title), ps.map((p) => h('p', { class: 'sub', style: 'margin:4px 0;font-size:17px;color:#4b4455' }, p)));
   const m = modal(h('div', null, h('h2', null, t('run.howto.title', 'How to Play')),
@@ -342,6 +379,8 @@ export function showHowTo(app) {
     sec(t('run.howto.beat.title', 'The beat'), t('run.howto.beat.p1', 'The ring on the DROP button closes in with the music. Drop on the beat for a discount and to keep your streak. Kills in a row make a combo that boosts coins.')),
     sec(t('run.howto.between.title', 'Between runs'), t('run.howto.between.p1', 'Spend Records in the Studio for permanent upgrades and new turrets. Open crates for gear, equip it on the Band tab, upgrade it and merge duplicates into higher rarities. Do daily quests and the daily challenge for diamonds.')),
     sec(t('run.howto.defeat.title', 'After a defeat'), t('run.howto.defeat.p1', 'The defeat screen shows what happened: which lane leaked most, which Static got through and a few tips. Press Share to save a picture of your board and show your friends.')),
+    hasFinePointer() ? h('div', { class: 'card shortcuts', 'data-shortcuts': '' }, h('h3', null, t('run.keys.title', 'Desktop shortcuts')),
+      h('div', { class: 'keys' }, shortcutRows().map(([k, d]) => h('div', { class: 'keyrow' }, h('kbd', null, k), h('span', null, d))))) : null,
     sec(t('run.howto.tips.title', 'Tips'), t('run.howto.tips.p1', 'Set turret targeting (First, Last, Strongest, Closest) by tapping a turret. Sell weak turrets late to make room. Save hero moves for bosses.')),
     h('div', { class: 'btnrow' }, btn(t('run.howto.ok', 'Got it'), () => m.close(), 'green'))), { wide: true });
 }

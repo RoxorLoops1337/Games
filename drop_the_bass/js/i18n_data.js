@@ -12,6 +12,7 @@ import * as META from './data_meta.js';
 import * as STORY from './data_story.js';
 import * as DEPTH from './data_depth.js';
 import * as HX from './data_hints_extra.js';
+import * as CL from './data_changelog.js';
 import { getLang, onLang, getData } from './i18n.js';
 
 export const DATA_LANGS = ['da', 'nl', 'de'];   // languages that have (or may get) a js/lang/<code>_data.js
@@ -58,6 +59,7 @@ export const TABLES = [
   T('HINTS', () => STORY.HINTS, '*.title', '*.text'),
   T('HINTS_EXTRA', () => HX.HINTS_EXTRA, '*.title', '*.text'),   // path prefix HINTS: the same ids as HINTS (see ALIAS)
   T('LOOPY_TIPS', () => STORY.LOOPY_TIPS, '*'),
+  T('CHANGELOG', () => CL.CHANGELOG, '*.title', '*.items.*'),
 ];
 // tables whose path prefix is another table's (merged in at import time: the same object, or a copy of the same strings)
 const ALIAS = { HINTS_EXTRA: 'HINTS' };

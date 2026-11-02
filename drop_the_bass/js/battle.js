@@ -450,7 +450,7 @@ export class Battle {
           this.sfx('boss_warn'); fx.addShake(8); this.prof.seen.bosses[e.type] = true;
           this.bossId = e.id; this.bossType = e.type;
           if (!e.small) { this.app.audio.musicStart('boss'); this.musicBoss = true; if (this.app.hooks.bossIntro && !this.tut) this.app.hooks.bossIntro(e.type, this); }
-          this.hint('boss');
+          this.hint(HINTS['boss_' + e.type] ? 'boss_' + e.type : 'boss');   // a card per boss the first time it spawns, the generic one for a boss without its own
           break;
         }
         case 'bossdie': if (this.musicBoss) { this.app.audio.musicStart('world_' + this.world.id); this.musicBoss = false; } this.bossId = null; break;
@@ -487,7 +487,10 @@ export class Battle {
         case 'gate': this.sfx(e.on ? 'jam' : 'whoosh'); break;
         case 'wave': {
           const mod = e.mod ? WAVE_MODS[e.mod] : null;
-          this.queueBanner(BT.waveBanner(e.w, e.total), mod ? BT.waveMod(mod.name, mod.desc) : '', mod ? (mod.good ? COL.green : COL.orange) : COL.bone, mod ? 2.6 : 1.4);
+          if (mod && mod.theme) {   // an endless themed wave: the theme name is the headline, the wave number leads the line under it
+            this.queueBanner(BT.theme(mod.name.toUpperCase()), BT.waveMod(BT.waveBanner(e.w, e.total), mod.desc), mod.good ? COL.green : COL.gold, 3.2);
+            fx.addShake(5); fx.doFlash(mod.good ? '#7dff9a' : '#ffd23c', 0.25);
+          } else this.queueBanner(BT.waveBanner(e.w, e.total), mod ? BT.waveMod(mod.name, mod.desc) : '', mod ? (mod.good ? COL.green : COL.orange) : COL.bone, mod ? 2.6 : 1.4);
           this.sfx('wave_start');
           if (mod) this.hint('mod');
           break;
@@ -856,7 +859,7 @@ export class Battle {
     const reduce = !!this.prof.settings.reduce;
     // full-canvas backdrop in device space
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    AW.drawBackdrop(ctx, world.id, view.cw, view.ch, t, { beat: beat * 0.6, staticAmt: clamp(1 - run.stageFrac, 0, 1) * 0.85, skin: this.skin });
+    AW.drawBackdrop(ctx, world.id, view.cw, view.ch, t, { beat: beat * 0.6, staticAmt: clamp(1 - run.stageFrac, 0, 1) * 0.85, skin: this.skin, lite: this.lite });
     // the board layer: shaken, and punched in a touch on big hits
     const [sx, sy] = fx.shakeOffset();
     const z = reduce ? 0 : fx.punch * 0.022, s = view.s * (1 + z);

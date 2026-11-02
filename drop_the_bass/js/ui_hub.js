@@ -1,12 +1,13 @@
 // ui_hub.js: the DOM hub shown between runs. Tabs: Tour (stages), Studio (upgrades), Band (heroes and gear), Shop (crates), Goals (daily).
 import { WORLDS, TURRETS, TURRET_IDS, ENEMIES, ENEMY_IDS, BOSSES, BOSS_IDS, RARITY, RARITY_ORDER, ENCORE_MAX, fmt, GAME, SYNERGIES } from './data_core.js';
-import { STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, LOGIN_REWARDS, ACHIEVEMENTS, STAR_MILESTONES, AUTOMERGE_PRICE, fameReward, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE, GEAR_MAX_LEVEL, GEAR_SELL, fameTitle, WEEKLY_REWARD } from './data_meta.js';
+import { STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, LOGIN_REWARDS, STREAK_MILESTONES, ACHIEVEMENTS, STAR_MILESTONES, AUTOMERGE_PRICE, fameReward, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE, GEAR_MAX_LEVEL, GEAR_SELL, fameTitle, WEEKLY_REWARD } from './data_meta.js';
 import { REMIX, RELICS, DAILY_MODS } from './data_run.js';
 import { TURRET_BRANCHES } from './data_depth.js';
 import * as M from './meta.js';
 import { fetchBoard, boardRows, cleanName, FRIENDS_MAX } from './lb.js';
 import { drawStudioScene, studioProps } from './doodle_env.js';
 import { t, tn, LANGS, getLangPref } from './i18n.js';
+import { CHANGELOG } from './data_changelog.js';
 import { resetText } from './countdown.js';
 import { setlistSheet } from './ui_setlist.js';
 import { wardrobeSection, skinsSection, skinThumb } from './ui_wardrobe.js';
@@ -90,6 +91,7 @@ function tourTab(app, st, rerender) {
     h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, t('tour.pool_count', '{n}/{max} turrets in your drop pool.', { n: p.loadout.length, max: M.loadoutSize(p) })), btn(t('common.edit', 'Edit'), () => loadoutModal(app, rerender), 'dark small')));
   wrap.append(lo);
   if (p.tutorial.done) wrap.append(difficultyCard(app, rerender));
+  if (p.tutorial.done) { M.syncNextSteps(p); const ns = nextStepsCard(app, rerender); if (ns) wrap.append(ns); }
 
   // resume a saved run
   if (p.resume && !M.checkResume(p.resume).ok) { p.resume = null; app.save(); }
@@ -170,6 +172,33 @@ function tourTab(app, st, rerender) {
     wrap.append(card);
   });
   return wrap;
+}
+
+// ---- Next steps: a friendly checklist of the newer features, ticked as the player tries them (profile.nextSteps, see meta.js)
+const STEP_TEXT = {
+  preview: () => [t('steps.preview', 'Peek at the next wave'), t('steps.preview_how', 'Tap the WAVE box during a run.')],
+  reroll: () => [t('steps.reroll', 'Re-roll a drop'), t('steps.reroll_how', 'Tap the round arrows next to DROP.')],
+  synergy: () => [t('steps.synergy', 'Form a synergy'), t('steps.synergy_how', 'Put two partner turrets side by side.')],
+  branch: () => [t('steps.branch', 'Choose an upgrade path'), t('steps.branch_how', 'Tap a level 4 turret and pick a path.')],
+  hero: () => [t('steps.hero', 'Use a hero move'), t('steps.hero_how', 'Tap a hero portrait when it is charged.')],
+  modifier: () => [t('steps.modifier', 'Try a modifier'), t('steps.modifier_how', 'Add one in the Setlist before a run.')],
+  outfit: () => [t('steps.outfit', 'Wear a new outfit'), t('steps.outfit_how', 'Open the Wardrobe on the Band tab.')],
+};
+function nextStepsCard(app, rerender) {
+  const p = app.profile, st = M.nextStepsState(p);
+  if (!st.visible) return null;
+  const list = h('div', { class: 'steps-list' }, st.items.map((it) => {
+    const [name, how] = STEP_TEXT[it.id]();
+    return h('div', { class: 'step' + (it.done ? ' done' : ''), 'data-step': it.id },
+      h('span', { class: 'step-tick' }, it.done ? icon('check', 22, '#2f9e44') : null),
+      h('div', { class: 'grow' }, h('div', { class: 'step-nm' }, name), it.done ? null : h('div', { class: 'sub', style: 'font-size:13px' }, how)));
+  }));
+  return h('div', { class: 'card nextsteps', 'data-nextsteps': '' },
+    h('div', { class: 'row' }, icon('star', 32, '#ffc83d'),
+      h('div', { class: 'grow' }, h('h3', { style: 'margin:0' }, t('steps.title', 'Next steps')), h('div', { class: 'sub', style: 'font-size:13px' }, t('steps.progress', '{done} of {total} tried', { done: st.done, total: st.total }))),
+      btn(st.open ? t('steps.hide', 'Hide') : t('steps.show', 'Show'), () => { M.setNextStepsOpen(p, !st.open); app.save(); rerender(); }, 'dark small', { 'data-steps-toggle': '', 'aria-expanded': st.open ? 'true' : 'false' })),
+    st.open ? list : null,
+    st.open ? h('div', { class: 'row', style: 'justify-content:flex-end;margin-top:4px' }, btn(t('steps.dismiss', 'Got it, hide for good'), () => { M.dismissNextSteps(p); app.save(); rerender(); }, 'dark small', { 'data-steps-dismiss': '' })) : null);
 }
 
 function difficultyCard(app, rerender) {
@@ -426,6 +455,36 @@ export function crateOpening(app, tier, items, rerender) {
 function rewardChips(r) {
   return h('span', { class: 'row', style: 'gap:6px' }, r.records ? currencyChip('records', fmt(r.records)) : null, r.diamonds ? currencyChip('diamonds', r.diamonds) : null, r.crate ? h('span', { class: 'chip' }, icon('gift', 18), CRATES[r.crate].name.split(' ')[0]) : null);
 }
+// ---- daily login: claim the Daily Gig and any streak bonus it unlocks (7, 14 and 30 days in a row)
+export function claimDailyGig(app, rerender, done) {
+  const p = app.profile, now = app.now(), ls = M.loginStatus(p, now);
+  const r = M.claimLogin(p, now, app.rng());
+  if (!r.ok) return r;
+  app.audio.play('chest');
+  if (r.bonuses.length) announceStreakBonuses(app, r.bonuses, rerender);
+  if (r.loot.length) crateOpening(app, ls.reward.crate, r.loot, rerender);
+  else if (!r.bonuses.length) toast(t('goals.daily_claimed', 'Daily reward claimed!'));
+  if (done) done(r);
+  return r;
+}
+function announceStreakBonuses(app, list, rerender) {
+  for (const b of list) {
+    toast(t('streak.bonus_toast', '{days} days in a row! Streak bonus: +{n} diamonds', { days: b.days, n: b.reward.diamonds || 0 }), 4200);
+    if (b.loot && b.loot.length && b.reward.crate) crateOpening(app, b.reward.crate, b.loot, rerender);
+  }
+}
+// the next streak bonus as a small chip row (or a claim button when the streak already earned it)
+export function streakChip(app, rerender) {
+  const p = app.profile, nb = M.nextStreakBonus(p, app.now());
+  if (!nb) return h('div', { class: 'sub streak-chip', 'data-streak-chip': 'done', style: 'font-size:13px;margin-top:6px' }, t('streak.all_done', 'All streak bonuses collected. Legend!'));
+  if (nb.ready) {
+    return h('div', { class: 'row streak-chip', 'data-streak-chip': 'ready', style: 'margin-top:6px' }, h('div', { class: 'grow sub' }, t('streak.ready', '{days}-day streak bonus is ready!', { days: nb.days })),
+      rewardChips(nb.reward), btn(t('goals.claim', 'Claim'), () => { const got = M.claimStreakBonuses(p, app.rng()); app.audio.play('chest'); announceStreakBonuses(app, got, rerender); app.save(); rerender(); }, 'gold small'));
+  }
+  return h('div', { class: 'row streak-chip', 'data-streak-chip': 'next', style: 'margin-top:6px;flex-wrap:wrap;gap:6px' },
+    h('div', { class: 'grow sub', style: 'font-size:14px' }, tn('streak.next', nb.left, 'Next streak bonus: day {days}, {n} day to go', 'Next streak bonus: day {days}, {n} days to go', { days: nb.days })), rewardChips(nb.reward));
+}
+
 function goalsTab(app, st, rerender) {
   const p = app.profile, now = app.now();
   M.ensureDaily(p, now);
@@ -445,7 +504,8 @@ function goalsTab(app, st, rerender) {
     cal.append(h('div', { class: 'day' + (cur ? ' cur2' : '') + (done ? ' done' : '') }, t('goals.day', 'Day {n}', { n: r.day }), icon(r.crate ? 'gift' : r.diamonds ? 'diamond' : 'record', 30), h('span', { style: 'font-size:11px' }, r.diamonds ? r.diamonds : r.records)));
   });
   wrap.append(h('div', { class: 'card' }, cal, h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, tn('goals.streak', Math.max(p.login.streak, 0), 'Streak: {n} day', 'Streak: {n} days')),
-    btn(ls.claimable ? t('goals.claim_day', 'Claim Day {n}', { n: ls.reward.day }) : t('goals.come_back', 'Come back tomorrow'), () => { const r = M.claimLogin(p, now, app.rng()); if (r.ok) { app.audio.play('chest'); if (r.loot.length) crateOpening(app, ls.reward.crate, r.loot, rerender); else toast(t('goals.daily_claimed', 'Daily reward claimed!')); } rerender(); }, ls.claimable ? 'gold' : 'dark off'))));
+    btn(ls.claimable ? t('goals.claim_day', 'Claim Day {n}', { n: ls.reward.day }) : t('goals.come_back', 'Come back tomorrow'), () => { claimDailyGig(app, rerender); rerender(); }, ls.claimable ? 'gold' : 'dark off')),
+    streakChip(app, rerender)));
   // quests
   wrap.append(h('h2', null, t('goals.quests', 'Daily Quests')));
   p.daily.quests.forEach((slot) => {
@@ -472,6 +532,65 @@ function goalsTab(app, st, rerender) {
       s.claimed ? h('span', { class: 'pill' }, t('goals.got_caps', 'GOT')) : btn([icon('diamond', 20), a.diamonds], () => { if (M.claimAchievement(p, a.id).ok) app.audio.play('achievement'); rerender(); }, s.done ? 'gold small' : 'dark small off')));
   }
   return wrap;
+}
+
+// ================================================================================================ welcome back and what's new
+// The friendly summary after 12 or more hours away (M.welcomeSummary). `done` runs when the sheet closes.
+export function welcomeSheet(app, sum, done) {
+  const p = app.profile, now = app.now();
+  const row = (glyph, txt, key) => h('div', { class: 'row wb-row', 'data-wb': key, style: 'align-items:center;gap:10px;margin:6px 0' }, icon(glyph, 30), h('div', { class: 'grow', style: 'font-size:17px;line-height:1.15' }, txt));
+  const away = sum.hours >= 48 ? tn('welcome.away_days', sum.days, 'You were away for {n} day.', 'You were away for {n} days.') : tn('welcome.away_hours', Math.floor(sum.hours), 'You were away for {n} hour.', 'You were away for {n} hours.');
+  const rows = [];
+  if (sum.royalties > 0) rows.push(row('record', t('welcome.sheet_royalties', 'Streaming Royalties: {n} Records are waiting for you.', { n: fmt(sum.royalties) }), 'royalties'));
+  if (sum.login.claimable) {
+    rows.push(row('gift', t('welcome.sheet_daily', 'Daily Gig: the day {day} reward is ready.', { day: sum.login.day }), 'login'));
+    rows.push(row('fire', sum.login.state === 'alive' ? t('welcome.streak_alive', 'Your streak is alive. Claim today to make it {n} days.', { n: sum.login.streak })
+      : sum.login.state === 'broken' ? t('welcome.streak_broken', 'Your streak ended, but a new one starts today.') : t('welcome.streak_new', 'Log in every day to build a streak and earn bonuses.'), 'streak'));
+  } else rows.push(row('check', tn('welcome.streak_done', Math.max(p.login.streak, 0), 'Daily Gig claimed. Streak: {n} day.', 'Daily Gig claimed. Streak: {n} days.'), 'streak'));
+  if (sum.streakBonus) rows.push(row('diamond', sum.streakBonus.ready ? t('welcome.bonus_ready', 'A {days}-day streak bonus is ready on the Goals tab.', { days: sum.streakBonus.days })
+    : tn('welcome.bonus_next', sum.streakBonus.left, 'Next streak bonus at day {days}: {n} day to go.', 'Next streak bonus at day {days}: {n} days to go.', { days: sum.streakBonus.days }), 'bonus'));
+  rows.push(row('target', sum.daily.done ? t('welcome.daily_done', 'You already played today\'s Daily Challenge.') : t('welcome.daily_fresh', 'A fresh Daily Challenge is waiting.'), 'daily'));
+  rows.push(row('ticket', sum.weekly.done ? t('welcome.weekly_done', 'Weekly Gig done (best {best}/{total}). {time}', { best: sum.weekly.best, total: sum.weekly.waves, time: resetText(sum.weekly.msLeft) })
+    : sum.weekly.fresh ? t('welcome.weekly_new', 'A new Weekly Gig has started. {time}', { time: resetText(sum.weekly.msLeft) }) : t('welcome.weekly_open', 'Weekly Gig is open. {time}', { time: resetText(sum.weekly.msLeft) }), 'weekly'));
+  if (sum.ready > 0) rows.push(row('star', tn('welcome.ready', sum.ready, '{n} reward is waiting on the Goals tab.', '{n} rewards are waiting on the Goals tab.'), 'ready'));
+  const goal = sum.goal.id === 'stage' ? t('welcome.goal_stage', 'Next goal: clear {stage}.', { stage: sum.goal.stage }) : sum.goal.id === 'daily' ? t('welcome.goal_daily', 'Next goal: win today\'s Daily Challenge.')
+    : sum.goal.id === 'weekly' ? t('welcome.goal_weekly', 'Next goal: play this week\'s Weekly Gig.') : t('welcome.goal_endless', 'Next goal: beat your best Endless wave.');
+  const collect = sum.royalties > 0 || sum.login.claimable;
+  const m = modal(h('div', { class: 'welcome-sheet' }, h('h2', null, t('welcome.back', 'Welcome back!')), h('div', { class: 'sub', style: 'text-align:center' }, away), rows,
+    h('div', { class: 'card', style: 'border-color:var(--green);margin:8px 0 0;padding:8px 10px', 'data-wb': 'goal' }, h('b', null, goal)),
+    h('div', { class: 'btnrow' }, btn(collect ? t('welcome.collect_go', 'Collect and play') : t('welcome.lets_go', 'Let\'s go'), () => {
+      if (sum.royalties > 0) { M.claimOffline(p, now); app.audio.play('record'); }
+      if (sum.login.claimable) claimDailyGig(app, () => app.hub && app.hub.render());
+      m.close();
+    }, 'green'))), { onClose: () => { app.save(); if (app.hub && app.hub.render) app.hub.render(); if (done) done(); } });
+  return m;
+}
+// the plain Daily Gig sheet (a short absence): shows the streak bonus that is coming
+export function dailyGigModal(app, ls, done) {
+  const p = app.profile, nb = M.nextStreakBonus(p, app.now());
+  const m = modal(h('div', null, h('h2', null, t('welcome.daily_gig', 'Daily Gig!')), h('div', { class: 'sub', style: 'text-align:center' }, t('welcome.daily_info', 'Day {day} of your tour. Streak: {streak}', { day: ls.reward.day, streak: ls.streak })),
+    nb ? h('div', { class: 'row streak-next', 'data-streak-next': '', style: 'justify-content:center;flex-wrap:wrap;gap:6px;margin-top:6px' }, h('span', { class: 'sub' }, nb.today ? t('streak.today', 'Today you earn the {days}-day streak bonus!', { days: nb.days })
+      : tn('streak.next', nb.left, 'Next streak bonus: day {days}, {n} day to go', 'Next streak bonus: day {days}, {n} days to go', { days: nb.days })), rewardChips(nb.reward)) : null,
+    h('div', { class: 'btnrow' }, btn(t('welcome.claim', 'Claim reward'), () => { claimDailyGig(app, null); m.close(); }, 'gold'))), { onClose: () => { app.save(); if (app.hub && app.hub.render) app.hub.render(); if (done) done(); } });
+  return m;
+}
+// the royalties-only sheet (the old welcome back, a short absence)
+export function royaltiesModal(app, off, done) {
+  const p = app.profile, now = app.now();
+  const m = modal(h('div', null, h('h2', null, t('welcome.back', 'Welcome back!')), h('div', { class: 'sub', style: 'text-align:center' }, t('welcome.streaming', 'Your songs kept streaming while you were away: {n} Records.', { n: off })),
+    h('div', { class: 'btnrow' }, btn(t('welcome.collect', 'Collect'), () => { M.claimOffline(p, now); m.close(); app.audio.play('record'); }, 'green'))), { onClose: () => { app.save(); if (app.hub && app.hub.render) app.hub.render(); if (done) done(); } });
+  return m;
+}
+// What's new: the newest changelog entry in full, older ones as short lines. Opened once per game version and from Settings.
+export function whatsNewModal(app, done) {
+  const p = app.profile;
+  M.markWhatsNewSeen(p); app.save();
+  const latest = CHANGELOG[0];
+  const m = modal(h('div', { class: 'whatsnew' }, h('h2', null, t('whatsnew.title', 'What\'s new')), h('h3', { style: 'margin:2px 0 6px;text-align:center' }, latest.title),
+    h('ul', { class: 'wn-list', style: 'margin:0 0 6px;padding-left:20px;font-size:17px;line-height:1.2' }, latest.items.map((it) => h('li', { style: 'margin:4px 0' }, it))),
+    CHANGELOG.slice(1).map((e) => h('div', { class: 'sub wn-old', style: 'font-size:13px;margin-top:4px' }, h('b', null, e.title + ': '), e.items.join(' '))),
+    h('div', { class: 'btnrow' }, btn(t('whatsnew.ok', 'Nice!'), () => m.close(), 'green'))), { wide: false, onClose: () => { if (done) done(); } });
+  return m;
 }
 
 // ================================================================================================ extras: fame info, codex, settings
@@ -535,7 +654,9 @@ export function codexModal(app) {
     }
     if (sec === 'turrets') for (const id of TURRET_IDS) { const tu = TURRETS[id]; const own = p.turretsUnlocked[id]; g.append(h('div', { class: 'cdx' + (own ? '' : ' unk') }, turretLive(id, 4, 72), h('div', { class: 'nm' }, own ? tu.name : '???'), h('div', { class: 'ds' }, own ? tu.blurb : t('studio.need_fame', 'Fame {n}', { n: tu.unlock.fame })))); }
     if (sec === 'enemies') for (const id of ENEMY_IDS) { const e = ENEMIES[id]; if (e.hidden) continue; const seen = p.seen.enemies[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 70), h('div', { class: 'nm' }, seen ? e.name : '???'), h('div', { class: 'ds' }, seen ? e.blurb : t('codex.not_met', 'Not met yet')))); }
-    if (sec === 'bosses') for (const id of BOSS_IDS) { const b = BOSSES[id]; const seen = p.seen.bosses[id] || p.bossesSeen[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 80, true), h('div', { class: 'nm' }, seen ? b.name : '???'), h('div', { class: 'ds' }, seen ? b.trick : t('codex.not_met', 'Not met yet')))); }
+    if (sec === 'bosses') body.append(h('div', { class: 'sub', style: 'text-align:center;margin-bottom:6px' }, t('codex.practice_hint', 'Practice fights one boss with no rewards and no changes to your save.')));
+    if (sec === 'bosses') for (const id of BOSS_IDS) { const b = BOSSES[id]; const seen = p.seen.bosses[id] || p.bossesSeen[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 80, true), h('div', { class: 'nm' }, seen ? b.name : '???'), h('div', { class: 'ds' }, seen ? b.trick : t('codex.not_met', 'Not met yet')),
+      seen ? btn(t('codex.practice', 'Practice'), () => { m.close(); app.startRun({ mode: 'practice', boss: id }); }, 'green small', { 'data-practice': id }) : null)); }
     if (sec === 'remix') for (const c of Object.values(REMIX)) g.append(h('div', { class: 'cdx' }, icon(c.glyph, 44, RARITY[c.rarity].color), h('div', { class: 'nm ' + rarClass(c.rarity) }, c.name), h('div', { class: 'ds' }, c.desc)));
     if (sec === 'relics') for (const c of Object.values(RELICS)) g.append(h('div', { class: 'cdx' }, icon(c.glyph, 44, RARITY[c.rarity].color), h('div', { class: 'nm ' + rarClass(c.rarity) }, c.name), h('div', { class: 'ds' }, c.desc)));
     if (g.children.length) body.append(g);
@@ -584,6 +705,7 @@ export function settingsModal(app) {
     body.append(ta, h('div', { class: 'btnrow' }, btn(t('settings.copy_code', 'Copy code'), () => { ta.select(); const fb = () => { try { document.execCommand('copy'); toast(t('settings.copied', 'Copied!')); } catch (e) { toast(t('settings.copy_by_hand', 'Select the code and copy it by hand.')); } }; try { navigator.clipboard.writeText(ta.value).then(() => toast(t('settings.copied', 'Copied!')), fb); } catch (e) { fb(); } }, 'blue small'),
       btn(t('settings.import_code', 'Import code'), () => importModal(app), 'dark small')));
     body.append(h('div', { class: 'btnrow' }, btn(t('settings.how_to', 'How to play'), () => { m.close(); app.showHowTo(); }, 'dark small'), btn(t('codex.title', 'Codex'), () => { m.close(); codexModal(app); }, 'dark small')));
+    body.append(h('div', { class: 'btnrow' }, btn(t('whatsnew.title', 'What\'s new'), () => { m.close(); whatsNewModal(app); }, 'dark small', { 'data-whatsnew': '' })));
     body.append(h('div', { class: 'btnrow' }, btn(t('settings.replay_intro', 'Replay intro'), () => { m.close(); app.playCutscene('intro', () => app.openHub()); }, 'dark small'), btn(t('settings.reset', 'Reset game'), () => resetModal(app), 'red small')));
     body.append(h('div', { class: 'credit', style: 'text-align:center;margin-top:10px;font-size:12px;color:var(--dim)' }, t('settings.credit', '{title} by RoxorLoops & Jasmin. Keyboard: Space drop, M merge all, Q/W heroes, N next wave, F speed, Esc pause.', { title: GAME.title })));
     body.append(h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'green')));
