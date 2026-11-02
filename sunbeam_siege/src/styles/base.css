@@ -15,7 +15,7 @@
   --font-body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --font-num:"Arial Black",Impact,"Trebuchet MS",sans-serif;
   --font-mono:ui-monospace,"SFMono-Regular",Consolas,"Courier New",monospace;
-  --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t-raw:env(safe-area-inset-top,0px); --safe-t:var(--safe-t-raw); --safe-b:env(safe-area-inset-bottom,0px);
   --safe-l:env(safe-area-inset-left,0px); --safe-r:env(safe-area-inset-right,0px);
 }
 html.text-xs{--text-scale:.9} html.text-s{--text-scale:.9} html.text-m{--text-scale:1} html.text-l{--text-scale:1.2} html.text-xl{--text-scale:1.4}
