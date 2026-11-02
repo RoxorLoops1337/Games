@@ -41,7 +41,7 @@ const BOSS_DY = 24;   // the boss HP bar pushes the stat row down
 
 export function createHud(env) {
   const { ctx, text, blit, kit, S, INK, glow, sparkleAt } = env;
-  const T = { g: null, pop: {}, pressAt: {}, gv: 0, bsLast: 0, bsAt: -9, bsHi: 0, cdMax: {}, cdLast: {}, chestAt: {}, lastProg: 0, readyAt: {}, lastSnd: -9, bossTot: 0, bossV: 1, bossHitAt: -9, encV: 0, encFull: -9, ins: { t: 0, b: 0 } };
+  const T = { g: null, pop: {}, pressAt: {}, gv: 0, bsLast: 0, bsAt: -9, bsHi: 0, cdMax: {}, cdLast: {}, chestAt: {}, lastProg: 0, readyAt: {}, lastSnd: -9, bossTot: 0, bossV: 1, bossHitAt: -9, encV: 0, encFull: -9, ins: { t: 0, b: 0 }, msAt: -9, msN: 0 };
   const reduce = () => !!(env.OPT && env.OPT.reduceMotion);
   // menu text size slider also lifts the small in-run labels (capped so the fixed glass plates still fit)
   const fz = n => Math.round(n * Math.min(1.3, (env.OPT && env.OPT.textScale) || 1));
@@ -203,17 +203,26 @@ export function createHud(env) {
     }
   }
 
+  // 06-hud b5: both stats plates (speed, capsule stats) baked into one layer per hot/normal rim, one drawImage per frame
+  function statsPlates(cy, hot) {
+    const SW = 480, SH = 44, spr = kit && kit.bake ? kit.bake('stats06|' + (hot ? 1 : 0), SW, SH, c => {
+      c.translate(-SW / 2, -SH / 2);
+      glassPaint(c, 24, 5, 120, 34, 17, hot ? 'rgba(255,100,100,.7)' : 'rgba(255,255,255,.3)', 'rgba(14,9,48,.52)');
+      glassPaint(c, 148, 5, 316, 34, 17, 'rgba(255,255,255,.32)', 'rgba(14,9,48,.52)');
+    }) : null;
+    if (spr) ctx.drawImage(spr.c, 0, cy - 22, SW, SH);
+    else { glass(24, cy - 17, 120, 34, 17, hot ? 'rgba(255,100,100,.7)' : 'rgba(255,255,255,.3)'); glass(148, cy - 17, 316, 34, 17); }
+  }
   // speed + the capsule stats as small icons
   function stats(g) {
     const sn = g.snakes[0], mult = sn ? (sn.surge === 'go' ? 2.6 : sn.slow > 0 ? 0.6 : 1) : 1, cy = 146 + (isBossStage(g.stage) ? BOSS_DY : 0), up = id => Math.round(uv(g, id));
     const hot = mult > 1, col = hot ? '#ff8a8a' : mult < 1 ? '#8ff0ff' : '#d9f7e6';
-    glass(24, cy - 17, 120, 34, 17, hot ? 'rgba(255,100,100,.7)' : 'rgba(255,255,255,.3)');
+    statsPlates(cy, hot);
     blit(kit && kit.SPR.body(g.skin, false, ''), 46, cy, 40, 0);
     text('x' + mult.toFixed(1), 100, cy + 1, fz(19), col, '#0b1020');
     const items = [['n', '' + (1 + up('notes'))], ['b', '' + (1 + up('burst'))], ['s', '+' + up('aspd') + '%'], ['d', '+' + up('cdmg') + '%']];
     const wid = [66, 66, 92, 92];
     let x = 154;
-    glass(x - 6, cy - 17, wid[0] + wid[1] + wid[2] + wid[3] + 6, 34, 17);
     items.forEach(([k, v], i) => {
       const ix = x + 14;
       if (k === 'n') blit(kit && kit.SPR.note(false), ix, cy, 36, 0); else if (k === 'b') burstIcon(ix, cy, 0.85); else if (k === 's') bolt(ix, cy, 0.95, '#6fe3ff'); else star(ix, cy, 0.85, '#ffd84d');
@@ -232,26 +241,33 @@ export function createHud(env) {
     if (gi > T.gLast) { T.gUp = S.t; } else if (gi < T.gLast) { T.gDn = S.t; }
     T.gLast = gi;
     const ku = Math.max(0, 1 - (S.t - (T.gUp === undefined ? -9 : T.gUp)) / 0.35), kd = Math.max(0, 1 - (S.t - (T.gDn === undefined ? -9 : T.gDn)) / 0.5);
-    glass(x, y, w, h, 18, kd > 0 ? 'rgba(255,90,110,.95)' : ku > 0 ? 'rgba(255,255,255,.95)' : rim);
+    const tier = fire ? 2 : gv >= 15 ? 1 : 0, fl = kd > 0 ? 2 : ku > 0 ? 1 : 0;
+    const fspr = kit && kit.bake ? kit.bake(`groove06|${tier}|${fl}`, w + 8, h + 8, c => {   // plate, 20 dim backing bars and the two tier ticks, one layer
+      glassPaint(c, -w / 2, -h / 2, w, h, 18, fl === 2 ? 'rgba(255,90,110,.95)' : fl === 1 ? 'rgba(255,255,255,.95)' : rim, 'rgba(14,9,48,.52)');
+      c.fillStyle = 'rgba(255,255,255,.14)';
+      for (let i = 0; i < 20; i++) { c.beginPath(); if (c.roundRect) c.roundRect(14 - w / 2 + i * 10.4, h / 2 - 18 - i * 0.95, 7.2, 8 + i * 0.95, 3); else c.rect(14 - w / 2 + i * 10.4, h / 2 - 18 - i * 0.95, 7.2, 8 + i * 0.95); c.fill(); }
+      for (const t of [15, 20]) { const tx = 14 - w / 2 + (t - 1) * 10.4 + 3.6, on = (t === 15 && tier >= 1) || (t === 20 && tier >= 2); c.fillStyle = on ? '#ffd84d' : 'rgba(255,216,77,.45)'; c.beginPath(); c.moveTo(tx - 3.5, h / 2 - 3); c.lineTo(tx + 3.5, h / 2 - 3); c.lineTo(tx, h / 2 - 8.5); c.closePath(); c.fill(); }
+    }) : null;
+    if (fspr) ctx.drawImage(fspr.c, x - 4, y - 4, w + 8, h + 8); else glass(x, y, w, h, 18, kd > 0 ? 'rgba(255,90,110,.95)' : ku > 0 ? 'rgba(255,255,255,.95)' : rim);
     if (kd > 0) { ctx.save(); ctx.globalAlpha = 0.3 * kd; rr(x, y, w, h, 18); ctx.fillStyle = '#ff3d5a'; ctx.fill(); ctx.restore(); }
     if (fire) glow(x + w / 2, y + h / 2, 150, '#ffd84d', 0.18 + 0.1 * Math.sin(S.t * 10));
     text(fire ? (bigT() ? 'ON FIRE' : 'GROOVE ON FIRE') : 'GROOVE', x + 14, y + 14, fz(15), fire ? '#ffd84d' : '#ffc2dc', '#0b1020', 'left');
     if (gv >= 1) text('+' + Math.floor(gv * 1.5) + '% dmg', x + w - 12, y + 14, fz(14), gv >= 15 ? '#ffd84d' : '#bfe9ff', '#0b1020', 'right');
     const base = y + h - 10, bw = 7.2, step = 10.4, x0 = x + 14;
     // tier ticks: bar 15 starts the gold glow, bar 20 is the fire
-    for (const t of [15, 20]) { const tx = x0 + (t - 1) * step + bw / 2; ctx.fillStyle = gv >= t ? '#ffd84d' : 'rgba(255,216,77,.45)'; ctx.beginPath(); ctx.moveTo(tx - 3.5, y + h - 3); ctx.lineTo(tx + 3.5, y + h - 3); ctx.lineTo(tx, y + h - 8.5); ctx.closePath(); ctx.fill(); }
+    if (!fspr) for (const t of [15, 20]) { const tx = x0 + (t - 1) * step + bw / 2; ctx.fillStyle = gv >= t ? '#ffd84d' : 'rgba(255,216,77,.45)'; ctx.beginPath(); ctx.moveTo(tx - 3.5, y + h - 3); ctx.lineTo(tx + 3.5, y + h - 3); ctx.lineTo(tx, y + h - 8.5); ctx.closePath(); ctx.fill(); }
     const pu = (S.t - (T.gUp === undefined ? -9 : T.gUp)) / 0.8;   // +1 bar popup rises off the new bar
     if (pu >= 0 && pu < 1 && gi > 0 && !(env.OPT && env.OPT.reduceMotion)) {
       ctx.save(); ctx.globalAlpha = 1 - pu * pu; text('+1', x0 + (Math.min(20, gi) - 1) * step + bw / 2, y - 4 - 14 * pu, 20 + 6 * (1 - pu), gi >= 15 ? '#ffd84d' : BAR_COL[Math.min(19, gi - 1)], '#0b1020'); ctx.restore();
     }
     // the 20 dim backing bars are static: one baked strip instead of 20 round rects per frame
-    const trk = kit && kit.bake ? kit.bake('groove-track', 226, 64, c => { c.fillStyle = 'rgba(255,255,255,.14)'; for (let i = 0; i < 20; i++) { c.beginPath(); if (c.roundRect) c.roundRect(14 - 113 + i * step, 64 - 10 - 8 - i * 0.95 - 32, bw, 8 + i * 0.95, 3); else c.rect(14 - 113 + i * step, 64 - 10 - 8 - i * 0.95 - 32, bw, 8 + i * 0.95); c.fill(); } }) : null;
+    const trk = !fspr && kit && kit.bake ? kit.bake('groove-track', 226, 64, c => { c.fillStyle = 'rgba(255,255,255,.14)'; for (let i = 0; i < 20; i++) { c.beginPath(); if (c.roundRect) c.roundRect(14 - 113 + i * step, 64 - 10 - 8 - i * 0.95 - 32, bw, 8 + i * 0.95, 3); else c.rect(14 - 113 + i * step, 64 - 10 - 8 - i * 0.95 - 32, bw, 8 + i * 0.95); c.fill(); } }) : null;
     if (trk) ctx.drawImage(trk.c, x, y, trk.w, trk.h);
     for (let i = 0; i < 20; i++) {
       const lit = Math.max(0, Math.min(1, gv - i));
       const bob = lit > 0 ? Math.sin(S.t * (fire ? 14 : 8) + i * 0.9) * (fire ? 4 : 2.5) * lit : 0;
       const hh = 8 + i * 0.95 + bob;
-      if (!trk) { ctx.fillStyle = 'rgba(255,255,255,.14)'; rr(x0 + i * step, base - (8 + i * 0.95), bw, 8 + i * 0.95, 3); ctx.fill(); }
+      if (!trk && !fspr) { ctx.fillStyle = 'rgba(255,255,255,.14)'; rr(x0 + i * step, base - (8 + i * 0.95), bw, 8 + i * 0.95, 3); ctx.fill(); }
       if (lit > 0) {
         ctx.globalAlpha = 0.45 + 0.55 * lit; ctx.fillStyle = fire ? '#ffd84d' : BAR_COL[i]; rr(x0 + i * step, base - hh, bw, hh, 3); ctx.fill(); ctx.globalAlpha = 1;
         if (ku > 0 && i === gi - 1) { ctx.fillStyle = `rgba(255,255,255,${0.9 * ku})`; rr(x0 + i * step - 1, base - hh - 1, bw + 2, hh + 2, 3); ctx.fill(); }
@@ -262,7 +278,11 @@ export function createHud(env) {
   // beat streak: consecutive shots landed on the beat (audio.beatStreak), a chip beside the groove meter
   function beatStreak(g) {
     const f = env.OPT && env.OPT.beatStreak, n = typeof f === 'function' ? f() | 0 : 0;
-    if (n > T.bsLast) T.bsAt = S.t; if (n > T.bsHi) T.bsHi = n;
+    if (n > T.bsLast) {
+      T.bsAt = S.t;
+      for (const m of [10, 20, 30]) if (T.bsLast < m && n >= m) { T.msAt = S.t; T.msN = m; if (env.onMilestone) env.onMilestone(m); }
+    }
+    if (n > T.bsHi) T.bsHi = n;
     if (n < 3) { if (n === 0) T.bsHi = 0; T.bsLast = n; return; }
     T.bsLast = n;
     const k = Math.max(0, 1 - (S.t - T.bsAt) / 0.3), hot = n >= 10, col = n >= 20 ? '#ff7ad9' : hot ? '#ffd84d' : '#6fe3ff';
@@ -273,10 +293,31 @@ export function createHud(env) {
       text('x' + n, -w / 2 + 44, 1, 24, col, '#0b1020', 'left');
       text('BEAT', w / 2 - 12, 2, 13, '#ffffff', '#0b1020', 'right');
     });
+    milestone(x + w / 2, y + h / 2);
+  }
+  // a streak of 10, 20 or 30 on the beat: rings and stars burst off the chip and a banner rises (still banner when reduced motion)
+  function milestone(cx, cy) {
+    const k = (S.t - T.msAt) / 1.1;
+    if (k < 0 || k >= 1) return;
+    const col = T.msN >= 30 ? '#ffffff' : T.msN >= 20 ? '#ff7ad9' : '#ffd84d', e = 1 - (1 - k) * (1 - k), fade = k < 0.7 ? 1 : (1 - k) / 0.3;
+    ctx.save();
+    if (!reduce()) {
+      ctx.globalAlpha = (1 - k) * 0.9; ctx.strokeStyle = col; ctx.lineWidth = 6 * (1 - k) + 1;
+      ctx.beginPath(); ctx.arc(cx, cy, 30 + 120 * e, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = (1 - k) * 0.6; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, 20 + 80 * e, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 1 - k * k; const ns = 6 + (T.msN / 10 | 0) * 2;
+      for (let i = 0; i < ns; i++) { const a = i / ns * TAU + 0.3, d = 40 + 90 * e; star(cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.8, 0.5 * (1 - k) + 0.2, i % 2 ? col : '#6fe3ff'); }
+    }
+    ctx.globalAlpha = fade; const rise = reduce() ? 0 : 34 * e, sc = 1 + (reduce() ? 0 : 0.25 * Math.max(0, 1 - k * 5));
+    scaled(cx, cy - 46 - rise, sc, () => {
+      glass(-118, -20, 236, 40, 20, col + 'dd', 'rgba(14,9,48,.72)');
+      text(T.msN >= 30 ? 'BEAT LEGEND  x30' : T.msN >= 20 ? 'BEAT MACHINE  x20' : 'ON THE BEAT  x10', 0, 1, 20, col, '#0b1020');
+    });
+    ctx.restore();
   }
 
   function skills(g) {
-    const r = 25, pitch = 58, cy = H - 60 - T.ins.b;
+    const r = 26, pitch = 58, cy = H - 60 - T.ins.b;
     let x = W - 22 - r;
     for (const id of Object.keys(g.weap)) {
       const w = g.weap[id], col = env.WCOL[id] || '#fff', max = WMAX[id] || 5;
@@ -290,8 +331,14 @@ export function createHud(env) {
       }
       T.cdLast[id] = w.cd;
       const frac = w.cd > 0 ? Math.max(0, Math.min(1, 1 - w.cd / T.cdMax[id])) : 1, ready = frac >= 0.999;
-      const tb = kit && kit.bake ? kit.bake('tile|' + col, r * 2, r * 2, c => { c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = 'rgba(14,9,48,.62)'; c.fill(); c.globalAlpha = 0.28; c.fillStyle = col; c.beginPath(); c.arc(0, 0, r - 2, 0, TAU); c.fill(); }) : null;
-      if (tb) ctx.drawImage(tb.c, x - r, cy - r, r * 2, r * 2);
+      const tb = kit && kit.bake ? kit.bake('tile06|' + col, r * 2 + 8, r * 2 + 8, c => {   // dark glass disc, a colour wash lit from the top, a gloss arc and a thin coloured rim
+        c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = 'rgba(14,9,48,.78)'; c.fill();
+        const rg = c.createRadialGradient(0, -r * 0.5, 2, 0, 0, r); rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)');
+        c.globalAlpha = 0.5; c.fillStyle = rg; c.beginPath(); c.arc(0, 0, r - 1, 0, TAU); c.fill(); c.globalAlpha = 1;
+        c.beginPath(); c.arc(0, -r * 0.2, r * 0.78, Math.PI * 1.12, Math.PI * 1.88); c.strokeStyle = 'rgba(255,255,255,.3)'; c.lineWidth = 3; c.lineCap = 'round'; c.stroke();
+        c.beginPath(); c.arc(0, 0, r, 0, TAU); c.strokeStyle = col; c.globalAlpha = 0.7; c.lineWidth = 1.5; c.stroke();
+      }) : null;
+      if (tb) ctx.drawImage(tb.c, x - r - 4, cy - r - 4, r * 2 + 8, r * 2 + 8);
       else { ctx.beginPath(); ctx.arc(x, cy, r, 0, TAU); ctx.fillStyle = 'rgba(14,9,48,.62)'; ctx.fill();
         ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, cy, r - 2, 0, TAU); ctx.fill(); ctx.restore(); }
       blit(kit && kit.SPR.weapon(env.WSPR[id] || id), x, cy - 1, 78);
@@ -301,7 +348,7 @@ export function createHud(env) {
       if (frac > 0.01) { ctx.beginPath(); ctx.arc(x, cy, r + 1.5, -Math.PI / 2, -Math.PI / 2 + TAU * frac); ctx.strokeStyle = ready ? col : '#ffffff'; ctx.lineWidth = 4; ctx.stroke(); }
       if (ready) glow(x, cy, r * 2.1, col, 0.18 + 0.1 * Math.sin(S.t * 6 + x));
       ctx.lineCap = 'butt';
-      if (w.cd > 0.95 && frac < 0.999) text(Math.ceil(w.cd) + '', x, cy + 1, 22, '#ffffff', '#0b1020');
+      if (w.cd > 0.95 && frac < 0.999) text(Math.ceil(w.cd) + '', x, cy + 1, 24, '#ffffff', '#0b1020');
       const fk = Math.max(0, 1 - (S.t - (T.readyAt[id] === undefined ? -9 : T.readyAt[id])) / 0.55);
       if (fk > 0) {   // ready flash: white wash, a ring that opens, and a little star
         ctx.save(); ctx.globalAlpha = fk * 0.7; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, cy, r + 1 + (reduce() ? 0 : 4 * fk), 0, TAU); ctx.fill();
@@ -394,6 +441,14 @@ export function createHud(env) {
     ctx.restore();
   }
 
+  // 06-hud b5: soft dark bands behind the top rows and the bottom row so white text stays readable on pale or busy worlds
+  function scrim() {
+    const tb = kit && kit.bake ? kit.bake('scrim06|top', W, 210, c => { const gr = c.createLinearGradient(0, -105, 0, 105); gr.addColorStop(0, 'rgba(8,4,30,.42)'); gr.addColorStop(0.6, 'rgba(8,4,30,.18)'); gr.addColorStop(1, 'rgba(8,4,30,0)'); c.fillStyle = gr; c.fillRect(-W / 2, -105, W, 210); }) : null;
+    const bb = kit && kit.bake ? kit.bake('scrim06|bot', W, 190, c => { const gr = c.createLinearGradient(0, -95, 0, 95); gr.addColorStop(0, 'rgba(8,4,30,0)'); gr.addColorStop(0.5, 'rgba(8,4,30,.22)'); gr.addColorStop(1, 'rgba(8,4,30,.4)'); c.fillStyle = gr; c.fillRect(-W / 2, -95, W, 190); }) : null;
+    if (tb) ctx.drawImage(tb.c, 0, 0, W, 210);
+    if (bb) ctx.drawImage(bb.c, 0, H - 190 - T.ins.b, W, 190);
+  }
+
   // y offset that everything below the HUD rows should add (notch plus the boss bar)
   function dy(g) { return T.ins.t + (g && isBossStage(g.stage) ? BOSS_DY : 0); }
 
@@ -401,6 +456,7 @@ export function createHud(env) {
     if (T.g !== g) { T.g = g; T.pop = {}; T.cdMax = {}; T.cdLast = {}; T.chestAt = {}; T.lastProg = g.progress || 0; T.gv = g.progress || 0; T.bsLast = 0; T.bsAt = -9; T.bsHi = 0; T.readyAt = {}; T.bossTot = 0; T.bossV = 1; T.encV = 0; T.encFull = -9; }
     T.ins = safeUnits(L);
     const boss = isBossStage(g.stage);
+    scrim();
     ctx.save(); ctx.translate(0, T.ins.t);
     top(g); progress(g); if (boss) bossBar(g); stats(g);
     goldPill(g, 146 + (boss ? BOSS_DY : 0));

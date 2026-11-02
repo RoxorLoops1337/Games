@@ -201,6 +201,8 @@ export function createAudio() {
     countend: () => { tone(1568, 0.06, 'triangle', 0.05); tone(2093, 0.12, 'sine', 0.04, 0, 0.04); },
     // soft UI set
     ready: () => { tone(1320, 0.07, 'sine', 0.05); tone(1760, 0.09, 'sine', 0.045, 0, 0.05); },
+    // beat streak milestone (10 / 20 / 30): a rising arpeggio that climbs a step higher each time
+    streakmile: e => { const k = Math.max(0, Math.min(2, (((e && e.n) || 10) / 10 | 0) - 1)), r = [1, 1.26, 1.5][k]; [523, 659, 784, 1047].forEach((f, i) => tone(f * r, 0.11, 'triangle', 0.06, 0, i * 0.055)); tone(1568 * r, 0.4, 'sine', 0.035, 0, 0.2); },
     tap: () => { uiT = now(); tone(760, 0.035, 'sine', 0.06, -150); },
     tab: () => { uiT = now(); tone(520, 0.05, 'triangle', 0.05); tone(780, 0.06, 'sine', 0.04, 0, 0.03); },
     back: () => { uiT = now(); tone(440, 0.07, 'triangle', 0.06, -150); },
