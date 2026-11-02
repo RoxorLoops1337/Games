@@ -9,6 +9,7 @@ import { revealStars, countUp, levelBar, reviveRing, stopFx } from './result_fx.
 import { labelButtons, applyPageSettings, systemReduceMotion, initSlider, showSlider, initKeys, pauseAllowed } from './access.js';
 import { createMotion } from './motion.js';
 import { setupPeeks, titleInfoHTML } from './title_fx.js';
+import { luckHTML, refreshPips, buildHTML } from './cards_ui.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
@@ -312,13 +313,13 @@ function showCards() {
     wrap.appendChild(b);
   });
   { const bonus = Math.round((20 + 4 * g.stage) * g.p.coinMul); $('skipBtn').textContent = 'SKIP FOR ' + bonus + ' BEATS'; }
-  $('refreshBtn').disabled = g.rerolls <= 0; $('refreshLeft').textContent = `Remaining attempts: ${g.rerolls}/4`;
-  cardsFor = g.choices; { let mr = 0; for (const c of g.choices) mr = Math.max(mr, c.rarity || 0); audio.play('card', { rarity: mr }); } show('levelup');
+  $('refreshBtn').disabled = g.rerolls <= 0; $('refreshLeft').innerHTML = '<span class="rp">' + refreshPips(g) + '</span>'; $('luckBox').innerHTML = luckHTML(g); $('buildStrip').innerHTML = buildHTML(g, icon);
+  cardsFor = g.choices; { let mr = 0; for (const c of g.choices) mr = Math.max(mr, c.rarity || 0); audio.play('card' + mr); if (mr >= 3) setTimeout(() => { if (mode === 'play' && g.phase === 'levelup') audio.play('stinger'); }, 220); } show('levelup');
 }
 let pickLock = false;
 function pick(i) {
   if (mode !== 'play' || g.phase !== 'levelup' || pickLock) return;
-  audio.play('upgrade');
+  audio.play('upgrade'); { const pr = (g.choices[i] && g.choices[i].rarity) | 0; audio.play('card' + pr); if (pr >= 4) audio.play('stinger'); }
   const cs = $('cards').children, el = cs[i];
   if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) { choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); return; }
   pickLock = true; el.classList.add('chosen'); [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing');

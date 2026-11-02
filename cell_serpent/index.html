@@ -324,6 +324,26 @@
   #refreshLeft{margin-top:-2px}
   @media (max-height:700px){#levelup{gap:5px;padding-top:calc(8px + env(safe-area-inset-top));padding-bottom:calc(8px + env(safe-area-inset-bottom))}#levelup .banner{font-size:12px}#levelup h2{font-size:18px}#levelup .cards{gap:6px}.card.pick{padding:7px 10px}.card.pick .ic{width:58px;height:58px}.card.pick .ic img{width:50px;height:50px}.card.pick .nm{font-size:15px}.card.pick .ds{font-size:11px}.card.pick .delta{margin-top:3px;padding:2px 7px}.card.pick .dv b{font-size:17px}#levelup .btn{padding:9px 18px;font-size:15px}}
   @media (prefers-reduced-motion:reduce){.card.pick,.card.pick *{animation:none!important}}
+  #levelup .luckbox{width:100%;max-width:420px;display:flex;flex-direction:column;gap:3px;align-items:center}
+  #levelup .lkbar{display:flex;align-items:center;gap:7px;width:100%;font-size:10px;font-weight:900;letter-spacing:.08em;color:var(--dim)}
+  #levelup .lkt{flex:1;height:6px;border-radius:4px;background:#0009;border:1px solid #fff2;overflow:hidden}
+  #levelup .lkt span{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#4fb8ff,#b06cff,#ffb04d)}
+  #levelup .lkbar em{font-style:normal;color:#9dff6d;letter-spacing:0}
+  #levelup .lkrow{display:flex;gap:6px;justify-content:center}
+  #levelup .lk{display:flex;align-items:center;gap:4px;padding:1px 7px;border-radius:9px;background:#0007;border:1px solid color-mix(in srgb,var(--rc) 55%,transparent);font-size:10px;font-weight:800;color:#cfd8e8}
+  #levelup .lk i{width:6px;height:6px;border-radius:50%;background:var(--rc)} #levelup .lk b{color:var(--rc)}
+  #refreshLeft .rp{display:inline-flex;gap:5px;align-items:center;justify-content:center}
+  #refreshLeft .rp i{width:14px;height:6px;border-radius:3px;background:#fff2;border:1px solid #fff3}
+  #refreshLeft .rp i.on{background:#6fe3ff;border-color:#bff;box-shadow:0 0 6px #6fe3ff99}
+  #skipBtn{border-radius:22px;border:2px dashed #ffffff44;background:transparent;color:#ffd86b;letter-spacing:.05em;font-weight:900;box-shadow:none;transition:transform .12s,background .12s}
+  #skipBtn:active{transform:scale(.95);background:#ffd86b22}
+  #levelup .buildstrip{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;align-items:center;max-width:420px;margin-top:2px}
+  #levelup .bl{font-size:9px;font-weight:900;letter-spacing:.1em;color:var(--dim);margin-right:2px}
+  #levelup .bi{display:inline-flex;align-items:center;gap:2px;padding:1px 5px 1px 3px;border-radius:8px;background:#0008;border:1px solid #fff2;font-size:10px;font-weight:900;color:#fff}
+  #levelup .bi .g{display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;font-size:12px;line-height:1}
+  #levelup .bi .g img{width:16px;height:16px;object-fit:contain}
+  #levelup .bi.sk{border-color:#6fe3ff66} #levelup .bi b{color:#9dff6d}
+  @media (max-height:700px){#levelup .lkrow,#levelup .bl{display:none}#levelup .luckbox{gap:0}#levelup .buildstrip{gap:3px}}
   /* end @css:07-cards */
   /* @css:18-access */
   :focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #ff5cb8}
@@ -599,10 +619,12 @@
   <div class="banner">ENHANCE</div>
   <h2>Choose an upgrade</h2>
   <div class="lvflash"></div>
+  <div class="luckbox" id="luckBox"></div>
   <div class="cards" id="cards"></div>
   <button class="btn alt" id="refreshBtn">FREE REFRESH</button>
-  <button class="btn dim" id="skipBtn" style="margin-top:8px;font-size:14px;padding:9px 18px">SKIP FOR BEATS</button>
   <div class="sub" id="refreshLeft"></div>
+  <button class="btn dim" id="skipBtn" style="margin-top:8px;font-size:14px;padding:9px 18px">SKIP FOR BEATS</button>
+  <div class="buildstrip" id="buildStrip"></div>
 </section>
 
 <section class="scr" id="settings">
