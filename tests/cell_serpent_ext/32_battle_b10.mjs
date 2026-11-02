@@ -34,6 +34,6 @@ let mx = 0, last = 0; for (let a = 0; a < 0.6; a += 0.01) { const v = portraitSp
 assert.ok(mx > 1.0 && Math.abs(last - 1) < 0.03, 'a small overshoot, then rest');
 
 // wiring and css
-assert.ok(main.includes('powerHTML(mine, rp, hard)') && main.includes('bestTag(hard') && main.includes("worldStrip(save.cleared, sel, MAX_STAGE, isBossStage)") && main.includes('portraitSpring(t - pvT0)'), 'wired');
+assert.ok(main.includes('powerHTML(mine, rp, hard)') && main.includes('bestTag(hard') && main.includes("actStripHTML(save.cleared, sel, MAX_STAGE, isBossStage") && main.includes('portraitSpring(t - pvT0)'), 'wired');
 assert.ok(html.includes('id="wStrip"') && html.includes('.wstrip i.x') && html.includes('.rec .pneed') && html.includes('.pgh.gap') && html.includes('stprog:has(.pgh.gap)'), 'css and markup');
 assert.ok(!ui.includes('—') && !main.includes('—') && !html.includes('—'), 'no em dash');

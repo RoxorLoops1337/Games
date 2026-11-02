@@ -1260,6 +1260,33 @@
   .wstrip i.d{background:#9dff6d} .wstrip i.x{background:#ffe14a;box-shadow:0 0 6px #ffe14a;height:8px} .wstrip i.b{height:9px;border-radius:2px 2px 0 0} .wstrip i.b.l{background:rgba(255,225,74,.3)}
   .wstrip i.s{outline:1.5px solid #fff;outline-offset:1px}
   @media (prefers-reduced-motion:reduce){.rec.hardrec.low .pneed{animation:none}}
+  /* @css:33-battle-b11 */
+  .wstrip{height:auto;gap:4px;align-items:stretch;margin:0 0 4px;padding:0 2px}
+  .wact{appearance:none;flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:3px;padding:4px 3px 5px;border-radius:10px;border:1.5px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:#e6e1ff;font:inherit;cursor:pointer;min-height:44px;text-align:left}
+  .wact .wh{display:flex;align-items:center;justify-content:space-between;gap:2px;min-width:0;line-height:1} .wact .wh em{font-style:normal;font-size:12px;flex:none} .wact .wn{font-size:9px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.1;letter-spacing:-.2px} @media (max-width:350px){.wact{padding:4px 2px 5px} .wact .wn{font-size:8px;letter-spacing:-.35px} .wact .wh u{font-size:7.5px}}
+  .wact .wh u{text-decoration:none;font-size:8px;font-weight:800;color:#ffe14a;flex:none}
+  .wact .wt{display:flex;gap:1px;align-items:flex-end;height:10px;width:100%}
+  .wact.on{border-color:#ffe14a;background:rgba(255,225,74,.12)} .wact.full .wh u{color:#9dff6d} .wact.lock{opacity:.62} .wact.lock .wh u{color:#cfc8ff}
+  .wact:active{transform:scale(.96)} .wact:focus-visible{outline:2px solid #fff;outline-offset:1px}
+  .bt-rowh .ovb{appearance:none;border:0;background:none;font:inherit;font-weight:900;font-size:12px;letter-spacing:.1em;color:#e6e1ff;padding:8px 6px 8px 0;cursor:pointer;white-space:nowrap}
+  .bt-rowh .ovb:active{color:#ffe14a} .bt-rowh .pill{white-space:nowrap} @media (max-width:350px){.bt-rowh .ovl{display:none} .bt-rowh .ovb{font-size:18px;padding:8px 10px 8px 2px} .bt-rowh .pill{padding:5px 9px;font-size:11px}}
+  .gapfix{appearance:none;display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;min-height:44px;padding:5px 10px;border-radius:14px;border:2px solid #ffb04d;background:linear-gradient(180deg,rgba(255,176,77,.22),rgba(255,176,77,.08));color:#fff;font:inherit;text-align:left;cursor:pointer;margin-top:2px}
+  .gapfix[hidden]{display:none}
+  .gapfix .gfi{font-size:20px;flex:none;width:26px;text-align:center} .gapfix .gft{display:flex;flex-direction:column;min-width:0;flex:1;line-height:1.15} .gapfix .gft b{font-size:12px;color:#ffe3b8} .gapfix .gft small{font-size:11px;color:#f1e9ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gapfix .gfg{flex:none;padding:6px 12px;border-radius:99px;background:linear-gradient(180deg,#ffd24a,#ff9a2e);color:#2b1608;font-weight:900;font-size:12px}
+  .gapfix:active{transform:scale(.98)}
+  .alert.num{width:auto;min-width:18px;padding:0 4px;border-radius:9px;font-size:11px}
+  .ovsheet{gap:12px} .ovhd{display:flex;flex-direction:column;gap:2px;padding-right:48px} .ovhd b{font-size:16px;letter-spacing:.1em;color:#fff} .ovhd small{font-size:12px;color:#d9d3ff}
+  .ovw h3{display:flex;align-items:center;gap:6px;margin:0 0 6px;font-size:13px;color:#fff;letter-spacing:.04em} .ovw h3 em{font-style:normal;font-size:16px} .ovw h3 span{margin-left:auto;font-size:11px;font-weight:800;color:#ffe14a}
+  .ovw.lock h3{color:#cfc8ff}
+  .ovg{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .ovc{appearance:none;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:48px;padding:4px 2px;border-radius:12px;border:2px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#fff;font:inherit;cursor:pointer}
+  .ovc b{font-size:15px;line-height:1} .ovc .ovs{font-size:9px;line-height:1;color:#a79fd8;letter-spacing:-.5px} .ovc .ovs u{text-decoration:none;color:#ffd24a}
+  .ovc.done{border-color:#7fe05a;background:rgba(127,224,90,.12)} .ovc.perfect{border-color:#ffd24a;background:rgba(255,210,74,.16)} .ovc.nxt{border-color:#ffe14a;box-shadow:0 0 10px rgba(255,225,74,.6)} .ovc.sel{outline:2.5px solid #fff;outline-offset:1px}
+  .ovc.lock{opacity:.6;cursor:default} .ovc .ovk{position:absolute;top:-6px;right:-3px;font-style:normal;font-size:12px} .ovc .ovh{position:absolute;top:-5px;left:-3px;width:15px;height:15px;border-radius:50%;background:#8a4bd8;color:#fff;font-style:normal;font-size:9px;font-weight:900;display:grid;place-items:center}
+  .ovc:active{transform:scale(.94)} .ovc:focus-visible{outline:2px solid #fff}
+  @media (max-height:600px){.gapfix{min-height:40px;padding:3px 8px} .gapfix .gft small{font-size:10.5px}}
+  /* end @css:33-battle-b11 */
   /* end @css:08-battle-tab */
 /* @css:19-transitions */
   /* screens: fade + scale in, fade out (transform and opacity only) */
@@ -2412,10 +2439,11 @@
           <div class="bt-fact" id="btFact" hidden></div>
           <div class="stprog" id="stProg"></div>
         </div>
-        <div class="bt-rowh" id="btRowH"><b>STAGES</b><button class="pill" id="contBtn">CONTINUE</button></div>
-        <div class="wstrip" id="wStrip" aria-hidden="true"></div>
+        <div class="bt-rowh" id="btRowH"><button class="ovb" id="stOverview" type="button" aria-label="All stages">▦<span class="ovl"> STAGES</span></button><button class="pill" id="contBtn">CONTINUE</button></div>
+        <div class="wstrip" id="wStrip" role="group" aria-label="Worlds"></div>
 
         <div class="diffrow" id="diffRow"></div>
+        <button class="gapfix" id="gapFix" type="button" hidden></button>
         <div class="bt-hint" id="btHint"></div>
         <div class="bt-load"><b class="bt-lt">LOADOUT</b><div class="loadout" id="battleLoad"></div><button class="pill" id="loadEdit">EDIT</button></div>
       </div>
