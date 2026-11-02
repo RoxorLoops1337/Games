@@ -292,6 +292,7 @@ export const PASSIVES = [
   { id: 'dbeat', name: 'Downbeat', max: 4, w: 0.6, min: 1, minStage: 5, vals: [20, 30, 45, 65, 90, 120], cap: 300, fmt: v => 'Notes fired on the beat hit ' + v + '% harder', desc: 'Notes fired on the beat hit 25% harder', apply: () => {} },
   { id: 'fork', name: 'Tuning Fork', max: 4, w: 0.55, min: 1, minStage: 10, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Ward cells shield ' + v + '% less and lullabies last ' + v + '% longer', desc: 'Ward cells shield 25% less, lullabies last 25% longer', apply: () => {} },
   { id: 'gear', name: 'Golden Ear', max: 4, w: 0.55, min: 1, minStage: 6, vals: [30, 60, 100, 150], cap: 150, fmt: v => 'Gold cells stay ' + v + '% longer and pay ' + Math.round(v / 2) + '% more', desc: 'Gold cells stay 30% longer and pay 15% more', apply: () => {} },
+  { id: 'harm', name: 'Four-Part Harmony', max: 4, w: 0.55, min: 1, minStage: 22, vals: [25, 50, 75, 100], cap: 100, fmt: v => 'Quartet cells stay linked ' + Math.round(v / 2) + '% longer and pay ' + v + '% more', desc: 'Quartet cells stay linked 12% longer and pay 25% more', apply: () => {} },
   { id: 'speed', name: 'Sharp Notes', max: 4, w: 0.8, min: 1, minStage: 4, vals: [1, 1, 2, 2, 3, 3], cap: 5, fmt: v => 'Your notes pierce ' + v + ' more cell' + (v > 1 ? 's' : ''), desc: 'Your notes pierce 1 more cell', apply: () => {} },
 ];
 const PASSIVE = Object.fromEntries(PASSIVES.map(u => [u.id, u]));
@@ -773,6 +774,7 @@ function spawnSnake(g, n, o = {}) {
 // Gold cell: from stage 4 one plain cell per snake glitters. Pop it within GOLD_TIME seconds of it
 // showing on screen for a big Beats burst. No random numbers are drawn, so existing runs do not change.
 export const ECHO_WAVE_FROM = 20;
+export const P2_WARN = 0.9, P2_DASH = 3.1;   // boss phase 2: the dash lane glows for 0.9s, then the head dashes down it at 3.1x speed
 export const P2_HP = 0.4, P2_WAVE = 6.2;   // boss phase 2: below 40% hp the shield wave runs faster and the surges come sooner
 export const GOLD_TIME = 9, GOLD_MUL = 12, GOLD_FROM = 4;
 function markGold(g, n, segs, len) {
@@ -786,11 +788,52 @@ export const DRUM_FROM = 18, DRUM_SPEED = 1.12;   // Drummer cell (stage 18+): w
 export const WARD_FROM = 10, LULL_FROM = 12, LULL_TIME = 2.5, WARD_CUT = 0.5, WARD_REACH = 2;
 function markSpecials(g, n, segs, len) {
   if (g.mode !== '' || len < 14) return;
-  const put = (frac, flag) => { for (let j = Math.round(len * frac); j < len; j++) if (segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull && !segs[j].drum) { segs[j][flag] = true; return; } };
+  const put = (frac, flag) => { for (let j = Math.round(len * frac); j < len; j++) if (segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull && !segs[j].drum && !segs[j].choir) { segs[j][flag] = true; return; } };
   if (n >= WARD_FROM) put(0.35, 'ward');
   if (n >= 25 && len >= 24) put(0.78, 'ward');
   if (n >= LULL_FROM) put(0.45, 'lull');
   if (n >= DRUM_FROM && len >= 16) put(0.62, 'drum');
+  if (n >= CHOIR_FROM && len >= 24) put(0.7, 'choir');
+  if (n >= QUARTET_FROM && len >= 22 && !isBossStage(n)) {   // four cells, every second one from 40% down the chain, linked
+    const free = j => segs[j].kind === 'normal' && !segs[j].carry && !segs[j].gold && !segs[j].ward && !segs[j].lull && !segs[j].drum && !segs[j].choir && !segs[j].quartet;
+    let j = Math.round(len * 0.4), k = 0;
+    while (j < len && k < 4) { if (free(j)) { segs[j].quartet = true; k++; j += 2; } else j++; }
+    if (k < 4) for (const q of segs) if (q.quartet) q.quartet = false;
+  }
+}
+// Quartet cell (stage 22+): four linked cells. Pop the first and the other three must follow within QUARTET_TIME
+// seconds, or the survivors regrow to full health. Pop them all in time for a Beats burst and a slow crawl.
+// Choir cell (stage 28+): while it lives the cells around it slowly regrow whenever they are not being hit.
+export const QUARTET_FROM = 22, QUARTET_TIME = 2, QUARTET_MUL = 7, CHOIR_FROM = 28, CHOIR_REGEN = 0.06, CHOIR_REACH = 2;
+const quartetWin = g => QUARTET_TIME * (1 + uv(g, 'harm') / 200);
+function quartetKill(g, s, sn, coinV) {
+  if (!s.quartet) return;
+  s.qPopped = true;
+  if (!(sn.qT > 0)) {
+    let others = 0; for (const q of sn.segs) if (q !== s && q.quartet && !q.qPopped) others++;
+    sn.qNeed = 1 + others; sn.qDone = 0; sn.qT = sn.qWin = quartetWin(g);
+    if (others) g.events.push({ t: 'quartetstart', x: s.x, y: s.y, n: others });
+  }
+  sn.qDone++;
+  if (sn.qDone >= sn.qNeed) {
+    const v = coinV * QUARTET_MUL * (sn.qNeed / 4) * (1 + uv(g, 'harm') / 100);
+    g.coins += v * g.p.coinMul * (g.coinK || 1); sn.slow = Math.max(sn.slow, 2.2); sn.qT = 0; sn.qDone = 0; g.quartets = (g.quartets || 0) + 1;
+    g.events.push({ t: 'quartet', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)), n: sn.qNeed });
+  }
+}
+function quartetTick(g, sn, dt) {
+  if (!(sn.qT > 0)) return;
+  sn.qT -= dt;
+  if (sn.qT <= 0) {
+    sn.qT = 0; sn.qDone = 0;
+    for (const q of sn.segs) if (q.quartet && q.hp > 0) { q.hp = q.max; g.events.push({ t: 'quartetfail', x: q.x, y: q.y }); }
+  }
+}
+function choirTick(sn, dt) {
+  const segs = sn.segs;
+  for (let i = 1; i < segs.length; i++) if (segs[i].choir && segs[i].hp > 0) {
+    for (let j = Math.max(1, i - CHOIR_REACH); j <= Math.min(segs.length - 1, i + CHOIR_REACH); j++) { const q = segs[j]; if (j !== i && q.hp > 0 && !(q.flash > 0)) q.hp = Math.min(q.max, q.hp + q.max * CHOIR_REGEN * dt); }
+  }
 }
 function wardTick(sn) {
   const segs = sn.segs;
@@ -924,6 +967,7 @@ function onKill(g, s, sn) {
   if (s.gold && s.goldT > 0) { g.goldPopped++; const v = coinV * GOLD_MUL * (1 + uv(g, 'gear') / 200); g.coins += v * g.p.coinMul * (g.coinK || 1); g.events.push({ t: 'goldpop', x: s.x, y: s.y, v: Math.round(v * g.p.coinMul * (g.coinK || 1)) }); }
   if (!s.isHead && s.y > LINE_Y - CLUTCH_DIST) { g.clutches++; addEncore(g, ENCORE_CLUTCH); g.events.push({ t: 'clutch', x: s.x, y: s.y }); }
   g.events.push({ t: 'kill', x: s.x, y: s.y, r: s.r, kind: s.kind, head: s.isHead, boss: sn.boss, i: s.i, skin: sn.skin, carry: s.carry });
+  quartetKill(g, s, sn, coinV);
   if (s.lull) { for (const o of g.snakes) o.slow = Math.max(o.slow, LULL_TIME * (1 + uv(g, 'fork') / 100)); g.events.push({ t: 'lull', x: s.x, y: s.y }); }
   if (s.kind === 'bomb') {
     g.bombsPopped++;
@@ -1260,11 +1304,11 @@ export function step(g, dt, input) {
     // now and then it surges for a second (with a warning beforehand)
     if (g.phase === 'play') {
       sn.surgeT -= dt;
-      if (sn.surge === 'idle' && sn.surgeT <= 0) { sn.surge = 'warn'; sn.surgeT = 0.6; g.events.push({ t: 'surgewarn' }); }
+      if (sn.surge === 'idle' && sn.surgeT <= 0) { sn.surge = 'warn'; sn.surgeT = sn.p2 ? P2_WARN : 0.6; if (sn.p2) { const a = sn.segs[0].ps; sn.lane = { a, b: a + sn.speed * (1 - g.p.slow) * P2_DASH * 1.1, w: P2_WARN }; } g.events.push({ t: 'surgewarn', lane: !!sn.lane }); }
       else if (sn.surge === 'warn' && sn.surgeT <= 0) { sn.surge = 'go'; sn.surgeT = 1.1; g.events.push({ t: 'surge' }); }
-      else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.surgeT = ((sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5)) * (sn.p2 ? 0.6 : 1); }
+      else if (sn.surge === 'go' && sn.surgeT <= 0) { sn.surge = 'idle'; sn.lane = null; sn.surgeT = ((sn.boss ? 3.5 : 5.5) + g.rand() * (sn.boss ? 3 : 5)) * (sn.p2 ? 0.6 : 1); }
     }
-    const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? 0.55 : 1) * (sn.surge === 'go' ? 2.6 : 1) * (sn.drum ? DRUM_SPEED : 1) * (g.phase === 'clear' ? 0 : 1);
+    const v = sn.speed * (1 - g.p.slow) * (sn.slow > 0 ? 0.55 : 1) * (sn.surge === 'go' ? (sn.p2 ? P2_DASH : 2.6) : 1) * (sn.drum ? DRUM_SPEED : 1) * (g.phase === 'clear' ? 0 : 1);
     const segs = sn.segs, last = segs.length - 1;
     let total = 0;
     for (let i = 0; i < last; i++) total += spacing(segs[i], segs[i + 1]);
@@ -1285,7 +1329,7 @@ export function step(g, dt, input) {
     const wavePos = sn.boss ? ((sn.p2 ? sn.p2T * 4.5 + (g.t - sn.p2T) * P2_WAVE : g.t * 4.5)) % (segs.length + 8) : -99;
     const wave2 = sn.boss && g.stage >= ECHO_WAVE_FROM ? (segs.length + 8) - ((g.t * 3.2 + 7) % (segs.length + 8)) : -99;   // late bosses: a second wave runs back up the chain
     for (let i = 0; i < segs.length; i++) segs[i].wave = sn.boss && i > 0 && (Math.abs(i - wavePos) < 1.6 || Math.abs(i - wave2) < 1.3);
-    wardTick(sn);
+    wardTick(sn); choirTick(sn, dt); if (g.phase === 'play') quartetTick(g, sn, dt);
     if (sn.breach && g.phase === 'play') { g.leaks++; g.events.push({ t: 'leak', x: segs[0].x, y: LINE_Y }); loseRun(g); }
     for (const s of segs) {
       const ox = s.x, oy = s.y;
