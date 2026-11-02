@@ -17,7 +17,7 @@ export function heartbeat(t, rate) {
 
 export function createFeel6({ ctx, W, H, kit, S, OPT, ring, burst, text, glow, edges, vignette, slow, confetti, sounds }) {
   const calm = () => OPT.reduceMotion;
-  const st = { rev: null, blasts: [], bossT: 0, lastBeat: 0 };
+  const st = { rev: null, blasts: [], bossT: 0, lastBeat: 0, lastTick: 0 };
 
   function lineBand() {
     return kit && kit.bake ? kit.bake('d6line', W, 300, g => {
@@ -85,6 +85,7 @@ export function createFeel6({ ctx, W, H, kit, S, OPT, ring, burst, text, glow, e
       const spr = lineBand();
       if (spr) { ctx.save(); ctx.globalAlpha = clamp(d * (0.22 + 0.5 * hb), 0, 0.8); ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(spr.c, 0, LINE_Y - 150, W, 300); ctx.restore(); }
     }
+    if (d > 0.3 && sounds && heartbeat(S.t, rate) > 0.85 && S.t - st.lastTick > 0.28) { st.lastTick = S.t; sounds.push('dangertick'); }   // a dry tick on every lub, so the ear follows the screen pulse
     if (!calm() && hb > 0.85 && S.t - st.lastBeat > 0.25) { st.lastBeat = S.t; S.trauma = Math.min(1, S.trauma + 0.04 + 0.06 * d); }
   }
 

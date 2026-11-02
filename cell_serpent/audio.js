@@ -136,6 +136,7 @@ export function createAudio() {
     oink: () => gate('oink', 200) && (tone(190, 0.1, 'sawtooth', 0.09, 60), tone(200, 0.1, 'sawtooth', 0.08, -40, 0.11)),
     boop: () => gate('boop', 200) && tone(330, 0.2, 'sine', 0.09, -120),
     danger: () => gate('danger', 300) && (tone(150, 0.1, 'square', 0.1), tone(150, 0.1, 'square', 0.1, 0, 0.16)),
+    dangertick: () => gate('dangertick', 200) && (tone(1180, 0.035, 'square', 0.035, -200), tone(70, 0.1, 'sine', 0.12, -20)),
     mend: () => gate('mend', 300) && tone(880, 0.12, 'sine', 0.05, 520),
     skip: () => tone(420, 0.1, 'triangle', 0.07, -120),
     // loot count-up: a tiny rising pentatonic tick (e.n = 0..1 progress), and a big flash chord for a legendary find
