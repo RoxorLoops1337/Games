@@ -85,7 +85,7 @@ function gigFlies(list, d0 = 0) {
   for (const it of list) { left[it.kind]++; sum[it.kind] += it.amt; }
   for (const k of ['beats', 'sparkles']) if (left[k]) curHold[k] = Math.max(0, save[k] - sum[k]);
   const rel = () => { delete curHold.beats; delete curHold.sparkles; refreshCur(); };
-  list.forEach((it, i) => setTimeout(() => collectFly(it.snap, it.kind, { reduce, onLand: () => { if (curHold[it.kind] === undefined) return; curHold[it.kind] += it.amt; if (!--left[it.kind]) delete curHold[it.kind]; refreshCur(); } }), d0 + i * 160));
+  list.forEach((it, i) => setTimeout(() => { audio.play('ribbonfly', { i }); collectFly(it.snap, it.kind, { reduce, onLand: () => { audio.play('ribbonland', { i }); if (curHold[it.kind] === undefined) return; curHold[it.kind] += it.amt; if (!--left[it.kind]) delete curHold[it.kind]; refreshCur(); } }); }, d0 + i * 160));
   setTimeout(rel, d0 + 700 + list.length * 160 + 1200);   // safety: never leave a pill stuck
 }
 function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) { const hv = curHold[id.endsWith('Beats') ? 'beats' : 'sparkles']; motion.num($(id), hv === undefined ? v : hv); } const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } { const ht = document.querySelector('.hubtop'), big = Math.max(save.beats, save.sparkles); if (ht) { ht.classList.toggle('big', big >= 10000); ht.classList.toggle('huge', big >= 100000); } }   // long numbers shrink the header pills on narrow phones
@@ -229,7 +229,7 @@ function syncRwFilter(chips, cb) {
   chips.classList.toggle('rwonly', rwMode === 1); chips.classList.toggle('rwhard', rwMode === 2); row.style.display = n || cb.style.display !== 'none' ? '' : 'none';
 }
 $('btClaim').onclick = () => { if ($('btClaim').dataset.k === 'event') { audio.play('click'); hub2.eventTile().querySelector('button').click(); } else $('claimGigs').onclick(); };
-$('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) gigFlies(fl.map(([b, g]) => ({ snap: b, kind: g && g.reward.beats ? 'beats' : 'sparkles', amt: g ? g.reward.beats || g.reward.sparkles || 0 : 0 }))); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
+$('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) gigFlies(fl.map(([b, g]) => ({ snap: b, kind: g && g.reward.beats ? 'beats' : 'sparkles', amt: g ? g.reward.beats || g.reward.sparkles || 0 : 0 }))); if (n) { persist(); audio.play('claimrow'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
 $('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
@@ -380,7 +380,7 @@ function renderGoals() {
     const rw = goal.reward.beats ? `${goal.reward.beats} ${curImg('beats')}` : `${goal.reward.sparkles} ${curImg('sparkles')}`;
     const state = claimed ? 'claimed' : done ? 'ready' : 'wait';
     const row = document.createElement('div'); row.className = 'gl-row ' + state; row.innerHTML = goalRowHTML(goal.text, prog, goal.target, rw, state, goal.id);
-    if (state === 'ready') row.querySelector('button').onclick = () => { { const btn = snap(row.querySelector('button')); if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); gigFlies([{ snap: btn, kind: goal.reward.beats ? 'beats' : 'sparkles', amt: goal.reward.beats || goal.reward.sparkles || 0 }]); renderHub(); } } };
+    if (state === 'ready') row.querySelector('button').onclick = () => { { const btn = snap(row.querySelector('button')); if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('claimrow'); gigFlies([{ snap: btn, kind: goal.reward.beats ? 'beats' : 'sparkles', amt: goal.reward.beats || goal.reward.sparkles || 0 }]); renderHub(); } } };
     if (claimed) n++;
     list.appendChild(row);
   }
@@ -730,7 +730,7 @@ function frame(now) {
     if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5) && !(g.phase === 'won' && R.clearBusy())) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked) showRevive(); else if (!reviveAsked) showResult(); } }
     if (watchGroove(g.groove) < 0) audio.play('groovelost');
     watchStreak(audio.beatStreak); if (g.phase === 'play') audio.chainWatch();
-    audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0); audio.mix({ stage: g.stage, boss: isBossStage(g.stage), groove: g.groove / 20, danger: g.danger, skin: cues.skin(g), bphase: cues.tick(g) });
+    audio.intensity(g.snakes.length ? Math.min(1, g.stage / 12) : 0); audio.mix({ stage: g.stage, boss: isBossStage(g.stage), groove: g.groove / 20, danger: g.danger, skin: cues.skin(g), bphase: cues.tick(g), combo: g.t - g.lastKill < 2.2 ? g.combo : 0 });
     if (g.phase === 'play') audio.sync(beatPhase(g));
   }
   if (mode === 'pause') { if (pauseN > 2 && pauseW === canvas.width && pauseH === canvas.height) return; pauseN++; pauseW = canvas.width; pauseH = canvas.height; } else pauseN = 0;   // a paused picture is frozen: draw it a few times (and again after a resize), then leave the canvas alone
