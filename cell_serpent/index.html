@@ -750,6 +750,9 @@
   .card.pick > div:last-child{min-width:0} .card .pips{flex-wrap:wrap}   /* a long stat line or 12 pips no longer pushes a card past the screen */
   .hubtop .cur{min-width:0;white-space:nowrap}
   @media (max-width:399px){.hubtop{gap:5px;padding-left:6px;padding-right:6px} .hubtop .cur{font-size:15px;gap:4px;padding:3px 8px 3px 4px} .hubtop .cur img{width:22px;height:22px} .hubtop .gear{width:32px!important;height:32px!important;font-size:16px!important} .hubtop .plus{width:20px;height:20px}}   /* 320px phones: energy, beats and sparkles all fit, even with 5 digit totals */
+  /* short phones: the slide bar is thinner and see-through so it does not hide the duo (and the Encore tap on it) */
+  @media (max-height:700px){#accSlider{height:44px;bottom:calc(6px + env(safe-area-inset-bottom));border-width:2px;background:rgba(10,8,30,.42)}#accThumb{top:2px;left:calc(50% - 19px);width:36px;height:36px}#accSlider::before{font-size:13px;padding:0 14px}}
+  @media (max-width:399px){.hubtop.big .cur{font-size:12px;padding:3px 5px 3px 3px;gap:2px}.hubtop.big .cur img{width:18px;height:18px}.hubtop.huge .cur{font-size:10px;padding-right:3px}.hubtop.big .plus{width:20px;height:20px;min-width:20px;min-height:20px}}
   /* end @css:20-qa */
 </style>
 </head>
@@ -867,7 +870,7 @@
 </section>
 
 <section class="scr" id="result">
-  <h2 id="rTitle">THE VIRUS WINS</h2>
+  <h2 id="rTitle">THE SERPENT WINS</h2>
   <img class="hero" id="rImg" src="assets/duo_idle.png" alt="">
   <div class="sub" id="rSub"></div>
   <div class="rhint" id="rHint"></div>

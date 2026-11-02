@@ -43,10 +43,11 @@ function resize() {
   canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
 }
 addEventListener('resize', resize); resize();
-initSlider(joy, () => mode === 'play'); initKeys(() => mode !== 'play'); initKeyboard(); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
+initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap = true; }); initKeys(() => mode !== 'play'); initKeyboard(); labelButtons(); new MutationObserver(() => labelButtons()).observe(document.body, { childList: true, subtree: true });
 
-function show(id) { motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id); }
-function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) motion.num($(id), v); const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } const en = $('hEnergy'); if (en) en.textContent = tickEnergy(save, Date.now()) + '/' + ENERGY_MAX; }
+function show(id) { if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id); }
+function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) motion.num($(id), v); const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } { const ht = document.querySelector('.hubtop'), big = Math.max(save.beats, save.sparkles); if (ht) { ht.classList.toggle('big', big >= 10000); ht.classList.toggle('huge', big >= 100000); } }   // long numbers shrink the header pills on narrow phones
+  const en = $('hEnergy'); if (en) en.textContent = tickEnergy(save, Date.now()) + '/' + ENERGY_MAX; }
 
 // ---------------------------------------------------------------- icons (all drawn by the art kit)
 const iconCache = {};
@@ -165,7 +166,7 @@ function beginStage(stage) {
   persist(); startRun(stage);
 }
 
-// the stage picture: the lane for this stage with the virus on it
+// the stage picture: the lane for this stage with the serpent on it
 const stCtx = $('stCanvas').getContext('2d');
 const W_ = 720;
 let pvKey = -1, pvPath = null;
@@ -396,7 +397,8 @@ const endJoy = e => { if (e.pointerId === joy.id) { joy.tz = null; joy.on = fals
 canvas.addEventListener('pointerup', endJoy); canvas.addEventListener('pointercancel', endJoy);
 addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
-  if (e.key === 'Escape' || e.key.toLowerCase() === 'p') { mode === 'play' ? pause() : mode === 'pause' ? resume() : 0; }
+  if (e.key === 'Escape') goBack(false);
+  else if (e.key.toLowerCase() === 'p') { mode === 'play' ? pause() : mode === 'pause' && !$('settings').classList.contains('on') && !$('panel').classList.contains('on') ? resume() : 0; }
   if (mode === 'play' && g.phase === 'levelup' && '123'.includes(e.key)) pick(+e.key - 1);
   if (e.key.toLowerCase() === 'm') toggleMute();
 });
@@ -412,6 +414,22 @@ function readInput() {
   return { mx, my: 0, encore: enc };
 }
 function pause() { if (mode !== 'play' || g.phase === 'dead' || g.phase === 'won' || g.phase === 'levelup') return; mode = 'pause'; joy.on = false; joy.dx = joy.dy = 0; show('pause'); }
+// Escape and the Android back button share this: close what is open, pause a run, resume a pause, leave the end screen.
+// The back button also walks the hub up to the title; Escape stays put there.
+function goBack(fromBtn) {
+  const sc = document.querySelector('.scr.on'), id = sc ? sc.id : '';
+  if (id === 'settings') $('setClose').click();
+  else if (id === 'panel') $('pClose').click();
+  else if (id === 'boxModal') $('bOk').click();
+  else if (mode === 'play') pause();
+  else if (id === 'pause') resume();
+  else if (id === 'result') $('rHub').click();
+  else if (id === 'hub' && fromBtn) toTitle();
+}
+// Android back: one spare history entry is kept while we are off the title, so back never throws the player out of a run
+let backArmed = false;
+function armBack() { if (!backArmed) { try { history.pushState({ cs: 1 }, ''); backArmed = true; } catch (e) { /* no history */ } } }
+addEventListener('popstate', () => { backArmed = false; if (mode === 'title') return; goBack(true); if (mode !== 'title') armBack(); });
 function resume() { mode = 'play'; show(''); last = performance.now(); }
 function openSettings(back) {
   const paint = () => {
@@ -425,7 +443,7 @@ function openSettings(back) {
   };
   { const vs = $('volRange'); if (vs) { vs.value = Math.round(save.settings.volume * 100); vs.oninput = () => { save.settings.volume = vs.value / 100; audio.setVolume(save.settings.volume); }; vs.onchange = () => { persist(); audio.unlock(); audio.play('tap'); }; } }
   $('bkCopy').onclick = async () => { const t = $('bkCode').value; try { await navigator.clipboard.writeText(t); toast('Code copied'); } catch (e) { $('bkCode').select(); toast('Select and copy the code'); } };
-  $('bkLoad').onclick = () => { const s2 = importSave($('bkCode').value); if (!s2) { toast('That code does not work'); return; } save = s2; persist(); applySettings(); toast('Game loaded'); paint(); };
+  $('bkLoad').onclick = () => { const s2 = importSave($('bkCode').value); if (!s2) { toast('That code does not work'); return; } save = s2; persist(); applySettings(); refreshCur(); toast('Game loaded'); paint(); };
   $('setClose').onclick = () => { audio.play('click'); (back || (() => (mode === 'hub' ? openHub() : toTitle())))(); };
   paint(); show('settings');
 }
@@ -490,9 +508,9 @@ function showResult() {
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
     const top = Object.entries(r.dmgBy || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => (id === 'capsule' ? 'Singing' : (WEAPONS.find(w => w.id === id) || { name: id }).name)).join(', ') || '-';
     $('rExtra').innerHTML = `<span>Time <b>${mm}:${ss}</b></span><span>Cells <b>${r.kills}</b></span><span>Best groove <b>${r.groove || 0}</b></span><span>Bombs <b>${r.bombs || 0}</b></span><span style="grid-column:1/-1">Top: <b>${top}</b></span>`;
-    if (out.starsGained) toast('+' + out.starsGained + ' star' + (out.starsGained > 1 ? 's' : '') + '!' + (out.starBonus ? ' Bonus ' + out.starBonus + ' Sparkles' : ''));
-    else if (!r.won && !r.mode && !r.hard && Math.floor((r.progress || 0) * 100) > out.prevPct && out.prevPct > 0) toast('New best: ' + Math.floor(r.progress * 100) + '%'); }
-  if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
+
+    // no toast here: it used to cover the title on the result screen, and the ribbon plus the Sparkles row already say it
+  }
   show('result'); mode = 'over';
 }
 

@@ -29,7 +29,7 @@ for (let i = 0; i < 40; i++) R.draw(g, ui, 0.03);
 
 const Q = mk(); Q.setOptions({ reduceMotion: true });
 Q.onEvent({ t: 'kill', x: 300, y: 300, r: 40, head: true, boss: true, skin: g.skin }, g);
-Q.onEvent({ t: 'stage', n: 10, boss: true, name: 'Gloomy Gunk', mod: '' }, g);
+Q.onEvent({ t: 'stage', n: 10, boss: true, name: 'Gloomy Asp', mod: '' }, g);
 Q.onEvent({ t: 'clear', n: 10, bonus: 5, boss: true }, g);
 Q.draw(g, ui, 0.6);
 assert.equal(Q.timeScale(), 1, 'Reduce Motion: no slow motion');
