@@ -530,7 +530,7 @@ function showCards() {
   bakeCardArt();
   if (!lockState.keep) lockState.i = -1; lockState.keep = false;
   const wrap = $('cards'); wrap.innerHTML = ''; pickLock = false; $('levelup').classList.remove('flashing');
-  const top = Math.max(0, ...g.choices.map(c => c.rarity || 0)); $('levelup').dataset.top = top; $('bandSheet').classList.remove('on');
+  const top = Math.max(0, ...g.choices.map(c => c.rarity || 0)); $('levelup').dataset.top = top; { const bn = $('levelup').querySelector('.banner'); if (bn) bn.dataset.lv = g.level | 0; } $('bandSheet').classList.remove('on');
   for (const c of g.choices) if (c.kind === 'passive' && !c.stat) c.stat = passiveStat(g, c);
   { const old = document.querySelector('.rvl'); if (old) old.remove(); const rv = revealHTML(top); if (rv) { document.body.insertAdjacentHTML('beforeend', rv); setTimeout(() => { const e = document.querySelector('.rvl'); if (e) e.remove(); }, 1900); } }
   g.choices.forEach((c, i) => {
@@ -572,6 +572,7 @@ $('refreshBtn').onclick = () => { const pt = g.choices ? Math.max(0, ...g.choice
 canvas.addEventListener('pointerdown', e => {
   audio.unlock();
   if (mode !== 'play' || g.phase === 'levelup') return;
+  if (R.skipCard && R.skipCard() && g.phase === 'won') return;   // r12: a tap skips a long card (the clear card ends the song, so that tap is not a steer)
   const gp = R.toGame(e.clientX * (canvas.width / innerWidth), e.clientY * (canvas.height / innerHeight));
   const zone = R.hudZone(gp);   // pause and stats buttons, shifted by the notch inset (hud.js)
   if (zone) { R.hudPress(zone); audio.play('click'); buzz(8); }

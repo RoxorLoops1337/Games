@@ -10,10 +10,10 @@ export const FINALE_STAGE = 50;
 export const isFinale = (n, boss) => n === FINALE_STAGE && !!boss;
 // Credits scroll on the stage 50 clear card: [size, text, colour] per line, [0] is a gap.
 export const CREDITS = [
-  [34, 'THE SHOW IS OVER', '#ffd84d'], [0], [26, 'ROXORLOOPS', '#9fb4ff'], [34, 'beatbox and loops', '#ffffff'], [0],
-  [26, 'JASMIN', '#ff9ad6'], [34, 'voice and sparkle', '#ffffff'], [0],
-  [26, 'THE SNAKES', '#9dff6d'], [34, 'all 50 stages, every one', '#ffffff'], [0],
-  [26, 'YOU', '#6fe3ff'], [34, 'kept the beat going', '#ffffff'], [0], [38, 'THANK YOU FOR PLAYING', '#ffd84d'],
+  [50, 'THE SHOW IS OVER', '#ffd84d'], [0], [40, 'ROXORLOOPS', '#9fb4ff'], [50, 'beatbox and loops', '#ffffff'], [0],
+  [40, 'JASMIN', '#ff9ad6'], [50, 'voice and sparkle', '#ffffff'], [0],
+  [40, 'THE SNAKES', '#9dff6d'], [50, 'all 50 stages, every one', '#ffffff'], [0],
+  [40, 'YOU', '#6fe3ff'], [50, 'kept the beat going', '#ffffff'], [0], [44, 'THANK YOU FOR PLAYING', '#ffd84d'],
 ];
 export const creditsHeight = lineH => CREDITS.reduce((a, l) => a + (l[0] ? lineH : lineH * 0.6), 0);
 
