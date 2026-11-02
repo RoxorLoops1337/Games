@@ -116,7 +116,7 @@ export function chipReward(n, cleared, hardCleared) {
 export function goalRowHTML(text, prog, target, rewardHTML, state) {
   const pct = Math.round(Math.min(1, prog / target) * 100);
   return `<span class="gl-ic">${state === 'claimed' ? '✓' : '🎯'}</span><span class="gl-tx"><b>${text}</b><span class="gl-bar"><i style="width:${pct}%"></i></span></span><span class="gl-n">${Math.min(prog, target)}/${target}</span>` +
-    `<button class="gl-btn ${state}" ${state === 'ready' ? '' : 'disabled'}>${state === 'claimed' ? 'DONE' : state === 'ready' ? 'CLAIM' : ''}${state === 'ready' ? '' : rewardHTML}</button>`;
+    `<button class="gl-btn ${state}" ${state === 'ready' ? '' : 'disabled'}>${state === 'claimed' ? 'DONE \u2713' : state === 'ready' ? 'CLAIM' : ''}${state === 'wait' ? rewardHTML : ''}</button>`;
 }
 // fade the right edge of the side button row while more buttons are hidden off screen
 export function watchSide(el) {

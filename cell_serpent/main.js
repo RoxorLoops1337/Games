@@ -60,7 +60,17 @@ initSlider(joy, () => mode === 'play', () => { if (g && g.encore >= 1) encoreTap
 
 let shownId = '';
 function show(id) { { const ss = sheetSound(shownId, id); shownId = id; if (ss) audio.play(ss); } if (id !== 'title') armBack(); motion.screen(id); if (id !== 'hub') stagKey = ''; $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); showSlider(save.settings.slider && mode === 'play' && !id); showZone(save.settings.thumbZone && mode === 'play' && !id); }
-function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) motion.num($(id), v); const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } { const ht = document.querySelector('.hubtop'), big = Math.max(save.beats, save.sparkles); if (ht) { ht.classList.toggle('big', big >= 10000); ht.classList.toggle('huge', big >= 100000); } }   // long numbers shrink the header pills on narrow phones
+// the gig claim holds the pill at its old value until the flying rewards land (then it counts up with a +N)
+const curHold = {};
+function gigFlies(list) {
+  const reduce = !!(save.settings.reduceMotion || systemReduceMotion()), left = { beats: 0, sparkles: 0 }, sum = { beats: 0, sparkles: 0 };
+  for (const it of list) { left[it.kind]++; sum[it.kind] += it.amt; }
+  for (const k of ['beats', 'sparkles']) if (left[k]) curHold[k] = Math.max(0, save[k] - sum[k]);
+  const rel = () => { delete curHold.beats; delete curHold.sparkles; refreshCur(); };
+  list.forEach((it, i) => setTimeout(() => collectFly(it.snap, it.kind, { reduce, onLand: () => { if (curHold[it.kind] === undefined) return; curHold[it.kind] += it.amt; if (!--left[it.kind]) delete curHold[it.kind]; refreshCur(); } }), i * 160));
+  setTimeout(rel, 700 + list.length * 160 + 1200);   // safety: never leave a pill stuck
+}
+function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) { const hv = curHold[id.endsWith('Beats') ? 'beats' : 'sparkles']; motion.num($(id), hv === undefined ? v : hv); } const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } { const ht = document.querySelector('.hubtop'), big = Math.max(save.beats, save.sparkles); if (ht) { ht.classList.toggle('big', big >= 10000); ht.classList.toggle('huge', big >= 100000); } }   // long numbers shrink the header pills on narrow phones
   const en = $('hEnergy'); if (en) en.textContent = tickEnergy(save, Date.now()) + '/' + ENERGY_MAX; }
 
 // ---------------------------------------------------------------- icons (all drawn by the art kit)
@@ -158,13 +168,13 @@ function renderBattle() {
   $('stBadges').innerHTML = (info.boss ? '<i class="boss">👑 BOSS</i>' : '') + (info.kind === 'ring' ? '<i class="ring">🌀 RING</i>' : '') + (info.kind === 'double' ? '<i class="dbl">🐍🐍 DOUBLE</i>' : '') + (hard ? '<i>HARD</i>' : '');
   $('stPrev').disabled = sel <= 1; $('stNext').disabled = sel >= Math.min(MAX_STAGE, save.cleared + 4);
   const chips = $('stChips'), chipTop = Math.min(MAX_STAGE, save.cleared + 4);
-  let ckey = save.cleared + '|' + chipTop; for (let n = 1; n <= chipTop; n++) ckey += (save.stars[n] || 0);
+  let ckey = save.cleared + '|' + chipTop + '|' + (save.hardCleared || 0); for (let n = 1; n <= chipTop; n++) ckey += (save.stars[n] || 0);
   const chipsSame = chips.dataset.k === ckey && chips.children.length === chipTop;   // 17-perf: the 54 chips are rebuilt only when stars or progress changed
   if (chipsSame) for (let n = 1; n <= chipTop; n++) chips.children[n - 1].classList.toggle('sel', n === sel);
   else { chips.innerHTML = ''; chips.dataset.k = ckey; }
   for (let n = 1; n <= chipTop && !chipsSame; n++) {
     const c = document.createElement('button'); c.className = 'chip' + (n === sel ? ' sel' : '') + (n > save.cleared + 1 ? ' lock' : '') + (n <= save.cleared ? ' done' : '') + (n === save.cleared + 1 ? ' nxt' : '');
-    { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st${n > save.cleared ? ' no' : ''}">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : '') + chipReward(n, save.cleared, save.hardCleared); if (n === save.cleared + 1 || hardLevel(n, save.cleared, save.hardCleared) !== 'none') c.classList.add('hasrw'); }
+    { const stN = save.stars[n] || 0, kd = stageKind(n); c.innerHTML = n > save.cleared + 1 ? '🔒' : `${n}<span class="st${n > save.cleared ? ' no' : ''}">${[1, 2, 3].map(q => q <= stN ? '<u>★</u>' : '★').join('')}</span>` + (isBossStage(n) ? '<span class="kk">👑</span>' : kd === 'ring' ? '<span class="kk">🌀</span>' : kd === 'double' ? '<span class="kk">🐍</span>' : '') + chipReward(n, save.cleared, save.hardCleared); if (n === save.cleared + 1 || hardLevel(n, save.cleared, save.hardCleared) !== 'none') c.classList.add('hasrw'); if (hardLevel(n, save.cleared, save.hardCleared) !== 'none') c.classList.add('hasH'); }
     c.onclick = () => { audio.play('click'); sel = n; renderBattle(); };
     chips.appendChild(c);
   }
@@ -188,15 +198,16 @@ function renderBattle() {
   if (chips.dataset.sc !== sel + '|' + ckey) { chips.dataset.sc = sel + '|' + ckey; requestAnimationFrame(() => { const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } } }); }   // 17-perf: read layout after paint, and only when the stage changed
 }
 // chip filter: only the stages that still pay something (next first clear, unpaid Hard clear)
-let rwOnly = false;
+let rwMode = 0;   // 0 all stages, 1 stages that still pay, 2 only the unpaid Hard clears
 function syncRwFilter(chips, cb) {
-  const row = $('btRowH'), n = chips.querySelectorAll('.chip.hasrw').length; let f = $('rwFilter');
-  if (!f) { f = document.createElement('button'); f.id = 'rwFilter'; f.className = 'pill rwf'; f.onclick = () => { audio.play('click'); rwOnly = !rwOnly; renderBattle(); }; row.insertBefore(f, cb); }
-  if (!n) rwOnly = false;
-  f.hidden = !n; f.classList.toggle('on', rwOnly); f.setAttribute('aria-pressed', rwOnly ? 'true' : 'false'); f.innerHTML = '\u2726 Rewards <b>' + n + '</b>';
-  chips.classList.toggle('rwonly', rwOnly); row.style.display = n || cb.style.display !== 'none' ? '' : 'none';
+  const row = $('btRowH'), n = chips.querySelectorAll('.chip.hasrw').length, nh = chips.querySelectorAll('.chip.hasH').length; let f = $('rwFilter');
+  if (!f) { f = document.createElement('button'); f.id = 'rwFilter'; f.className = 'pill rwf'; f.onclick = () => { audio.play('click'); const hn = $('stChips').querySelectorAll('.chip.hasH').length; rwMode = rwMode === 0 ? 1 : rwMode === 1 && hn ? 2 : 0; renderBattle(); }; row.insertBefore(f, cb); }
+  if (!n) rwMode = 0; if (rwMode === 2 && !nh) rwMode = 0;
+  f.hidden = !n; f.classList.toggle('on', rwMode > 0); f.classList.toggle('hard', rwMode === 2); f.setAttribute('aria-pressed', rwMode ? 'true' : 'false');
+  f.innerHTML = rwMode === 2 ? '<i class="rwh">H</i> Hard <b>' + nh + '</b>' : '\u2726 Rewards <b>' + n + '</b>';
+  chips.classList.toggle('rwonly', rwMode === 1); chips.classList.toggle('rwhard', rwMode === 2); row.style.display = n || cb.style.display !== 'none' ? '' : 'none';
 }
-$('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) fl.forEach(([b, g, i]) => setTimeout(() => collectFly(b, g && g.reward.beats ? 'beats' : 'sparkles', { reduce: !!(save.settings.reduceMotion || systemReduceMotion()) }), i * 160)); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
+$('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList').querySelectorAll('.gl-row.ready')].map((r, i) => [snap(r.querySelector('button')), dailyGoals(dayKey())[[...$('goalList').children].indexOf(r)], i]); const n = claimAllGoals(save, dayKey()); if (n) gigFlies(fl.map(([b, g]) => ({ snap: b, kind: g && g.reward.beats ? 'beats' : 'sparkles', amt: g ? g.reward.beats || g.reward.sparkles || 0 : 0 }))); if (n) { persist(); audio.play('levelup'); refreshCur(); toast(n + ' reward' + (n > 1 ? 's' : '') + ' claimed'); renderHub(); } else toast('Nothing to claim yet'); };
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
 $('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
@@ -326,11 +337,12 @@ function renderGoals() {
     const rw = goal.reward.beats ? `${goal.reward.beats} ${curImg('beats')}` : `${goal.reward.sparkles} ${curImg('sparkles')}`;
     const state = claimed ? 'claimed' : done ? 'ready' : 'wait';
     const row = document.createElement('div'); row.className = 'gl-row ' + state; row.innerHTML = goalRowHTML(goal.text, prog, goal.target, rw, state);
-    if (state === 'ready') row.querySelector('button').onclick = () => { { const btn = snap(row.querySelector('button')); if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); collectFly(btn, goal.reward.beats ? 'beats' : 'sparkles', { reduce: !!(save.settings.reduceMotion || systemReduceMotion()) }); renderHub(); } } };
+    if (state === 'ready') row.querySelector('button').onclick = () => { { const btn = snap(row.querySelector('button')); if (claimGoal(save, day, goal.id)) { persist(); audio.unlock(); audio.play('levelup'); gigFlies([{ snap: btn, kind: goal.reward.beats ? 'beats' : 'sparkles', amt: goal.reward.beats || goal.reward.sparkles || 0 }]); renderHub(); } } };
     if (claimed) n++;
     list.appendChild(row);
   }
   const hd = $('glCount'); if (hd) hd.textContent = n + '/' + goals.length;
+  { const cg = $('claimGigs'), rd = list.querySelectorAll('.gl-row.ready').length; if (cg) { cg.textContent = rd ? 'CLAIM ALL (' + rd + ')' : n === goals.length ? 'ALL DONE \u2713' : 'CLAIM ALL'; cg.classList.toggle('rdy', rd > 0); cg.classList.toggle('alld', !rd && n === goals.length); } }
 }
 function renderSkills() {
   const list = $('skillList'); list.innerHTML = '';
