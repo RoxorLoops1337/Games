@@ -71,6 +71,23 @@ function systemPads() {
 }
 export const padSeen = () => seen;
 
+// ---- DOM menus (pause, remix pick, hints, results): the pad drives the same keyboard path as a keyboard (Tab focus, Enter on the focus, Escape)
+const domOpen = () => typeof document !== 'undefined' && !!document.querySelector && !!document.querySelector('.modal-bg');
+export function domPadKey(k) {   // k: 'next' | 'prev' | 'ok' | 'back'
+  if (!domOpen()) return false;
+  const fire = (key, shift) => { try { document.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey: !!shift, bubbles: true, cancelable: true })); } catch (e) { return false; } return true; };
+  if (k === 'back') return fire('Escape');
+  const bgs = document.querySelectorAll('.modal-bg'), box = bgs[bgs.length - 1];
+  const list = [...box.querySelectorAll('button:not([disabled]),[tabindex]:not([tabindex="-1"]),[role=button]')].filter((el) => !el.hidden && el.offsetParent !== null);
+  if (!list.length) return false;
+  const i = list.indexOf(document.activeElement);
+  if (k === 'ok') { const t = i >= 0 ? list[i] : list[0]; t.click(); return true; }
+  const j = i < 0 ? 0 : (i + (k === 'next' ? 1 : list.length - 1)) % list.length;
+  try { list[j].focus({ preventScroll: true }); } catch (e) { return false; }
+  return true;
+}
+
+const COL_WARN = '#ff9a3c';
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'BACK', 'START', 'L3', 'R3'];
 
@@ -84,6 +101,8 @@ export class PadControl {
     this.prev = {}; this.dir = null; this.hold = 0; this.rep = false;
     this.branchIdx = null;       // focus on an upgrade-path card (0 or 1) while the branch sheet is being driven by the pad
     this.acts = 0;               // actions taken (tests)
+    this.sellAsk = null;         // { id, t }: R3 pressed once on a selected turret
+    this.domPrev = {}; this.domDir = null;   // edge tracking while a DOM menu is open
     if (!this.getPads) listen();
   }
   live() { return !!this.getPads || seen; }
@@ -102,6 +121,16 @@ export class PadControl {
     const s = readPad(gp);
     const held = b.paused || b.hold || b.ended;   // a menu (DOM) is open or the run is over: track the buttons but do nothing
     let n = 0;
+    if (domOpen()) {   // a DOM menu is open: the d-pad moves its focus, A presses, B closes
+      for (const k of NAMES) this.prev[k] = s.b[k];   // a button held while the menu closes must not fire in the battle
+      const edge = (k) => { const now = s.b[k], was = !!this.domPrev[k]; this.domPrev[k] = now; return now && !was; };
+      const dirNow = s.dir, dirEdge = dirNow && dirNow !== this.domDir; this.domDir = dirNow;
+      if (edge('A')) n += domPadKey('ok') ? 1 : 0;
+      if (edge('B')) n += domPadKey('back') ? 1 : 0;
+      if (dirEdge) n += domPadKey(dirNow === 'down' || dirNow === 'right' ? 'next' : 'prev') ? 1 : 0;
+      this.acts += n; return n;
+    }
+    this.domPrev = { ...s.b }; this.domDir = s.dir;   // a button already held when a menu opens must not press in it
     for (const k of NAMES) {
       const now = s.b[k], was = !!this.prev[k]; this.prev[k] = now;
       if (now && !was && !held) { this.use(b); n += this.press(k, b) ? 1 : 0; }
@@ -172,9 +201,20 @@ export class PadControl {
       case 'BACK': if (!b.tutAllows('wavepill')) return false; b.togglePreview(); return true;
       case 'LT': b.cycleSpeed(-1); return true;
       case 'RT': b.cycleSpeed(1); return true;
-      case 'L3': case 'R3': if (!b.tutAllows('wave')) return false; b.doCall(); return true;
+      case 'R3': if (b.selected && b.tutAllows('sell')) return this.pressSell(b);   // a selected turret: R3 twice sells it
+      // falls through
+      case 'L3': if (!b.tutAllows('wave')) return false; b.doCall(); return true;
       default: return false;
     }
+  }
+  // R3 on a selected turret: the first press asks, a second one within 2 s sells it
+  pressSell(b) {
+    const now = b.t, id = b.selected;
+    if (this.sellAsk && this.sellAsk.id === id && now - this.sellAsk.t <= 2) { this.sellAsk = null; b.run.sell(id); b.selected = null; return true; }
+    this.sellAsk = { id, t: now };
+    const tu = b.run.turretById(id);
+    if (tu) b.fx.floater(tu.x, tu.y - 30, BT.padSellAgain(), COL_WARN, 16, { life: 1.6 });
+    b.sfx('ui_click'); return true;
   }
   pressA(b) {
     const run = b.run;

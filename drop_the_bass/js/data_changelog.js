@@ -3,6 +3,16 @@
 // To announce an update: bump GAME.version and put a new entry first (id 'v<version>'). Older entries stay short.
 export const CHANGELOG = [
   {
+    id: 'v3', version: 3, title: 'Seasons and gamepads',
+    items: [
+      'Plug in a gamepad: the pad now also drives the pause, Remix and hint menus, and R3 twice sells a turret.',
+      'Monthly seasons with their own goals, and five more daily quests.',
+      'Wide screens get side panels with your run stats and the turret list.',
+      'Report a problem in Settings copies a short summary you can send us.',
+      'A friendlier first run: the tutorial now teaches the wave preview and the re-roll.',
+    ],
+  },
+  {
     id: 'v2', version: 2, title: 'The big update',
     items: [
       'A second tour: two more stages, the bonfire cove and the Moon, with their own bosses.',

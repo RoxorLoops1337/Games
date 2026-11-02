@@ -1030,6 +1030,8 @@ export function applyRunResult(p, result, rng, now = 0) {
   if (result.won) add('wins', 1);
   // round 6 quest stats (all read from the run result, so no sim change is needed)
   add('duets', result.duets || 0); add('relics', (result.relics || []).length); add('coins', result.coinsEarned || 0);
+  add('dropRerolls', result.dropRerolls || 0); add('branches', result.branches || 0); add('moves', result.moves || 0); add('sells', result.sells || 0);
+  dp.synergies = Math.max(dp.synergies || 0, result.synergies || 0);
   if (result.won && result.leaks === 0) add('flawless', 1);
   if (result.won && Array.isArray(result.modifiers) && result.modifiers.length) add('modWins', 1);
   if (result.mode === 'daily') add('dailies', 1);
