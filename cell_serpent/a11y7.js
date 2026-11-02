@@ -2,6 +2,8 @@
 // preview in settings, screen reader names for the Collection filter, chest hold and loot results. DOM only, no game rules.
 import { announce, wrapTab } from './access.js';
 import { initClaimA11y } from './a11y9.js';
+import { initA11y10 } from './a11y10.js';
+import { STICKERS } from './sticker_b9.js';
 
 const DLG = 'section.scr.on:not(#hub):not(#title)';
 export const trapList = root => [...root.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),[tabindex="0"]')].filter(b => b.getClientRects().length && b.getAttribute('tabindex') !== '-1');
@@ -91,4 +93,4 @@ export function initInertFocus() {
   new MutationObserver(ms => { for (const m of ms) for (const n of m.removedNodes) if (n.nodeType === 1 && n.classList && n.classList.contains('dsheet-bg')) later(); }).observe(document.body, { childList: true });
 }
 
-export function initA11y7() { try { initTrap(); initFlashPreview(); syncFilters(); initChestSr(); initInertFocus(); initClaimA11y(); } catch (e) { /* never block the game */ } }
+export function initA11y7() { try { initTrap(); initFlashPreview(); syncFilters(); initChestSr(); initInertFocus(); initClaimA11y(); initA11y10(() => STICKERS); } catch (e) { /* never block the game */ } }
