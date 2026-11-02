@@ -1,16 +1,10 @@
 // ui_hub.js: the DOM hub shown between runs. Tabs: Tour (stages), Studio (upgrades), Band (heroes and gear), Shop (crates), Goals (daily).
-import {
-  WORLDS, TURRETS, TURRET_IDS, ENEMIES, ENEMY_IDS, BOSSES, BOSS_IDS, RARITY, RARITY_ORDER, COL, ENCORE_MAX, fmt, MAX_LEVEL, GAME, SYNERGIES,
-} from './data_core.js';
-import {
-  STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, OUTFITS, LOGIN_REWARDS, ACHIEVEMENTS,
-  STAR_MILESTONES, AUTOMERGE_PRICE, fansForLevel, fameReward, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE, GEAR_MAX_LEVEL, GEAR_SELL,
-  fameTitle, WEEKLY_REWARD,
-} from './data_meta.js';
+import { WORLDS, TURRETS, TURRET_IDS, ENEMIES, ENEMY_IDS, BOSSES, BOSS_IDS, RARITY, RARITY_ORDER, ENCORE_MAX, fmt, GAME, SYNERGIES } from './data_core.js';
+import { STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, LOGIN_REWARDS, ACHIEVEMENTS, STAR_MILESTONES, AUTOMERGE_PRICE, fameReward, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE, GEAR_MAX_LEVEL, GEAR_SELL, fameTitle, WEEKLY_REWARD } from './data_meta.js';
 import { REMIX, RELICS, DAILY_MODS } from './data_run.js';
 import { TURRET_BRANCHES } from './data_depth.js';
 import * as M from './meta.js';
-import { fetchBoard, rankOf, boardRows, cleanName, FRIENDS_MAX } from './lb.js';
+import { fetchBoard, boardRows, cleanName, FRIENDS_MAX } from './lb.js';
 import { drawStudioScene, studioProps } from './doodle_env.js';
 import { t, tn, LANGS, getLangPref } from './i18n.js';
 import { resetText } from './countdown.js';

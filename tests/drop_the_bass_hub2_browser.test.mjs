@@ -49,11 +49,19 @@ try {
   await page.click('.hint-card .btn');
   await page.click('.tab:has-text("Tour")'); await page.click('.tab:has-text("Studio")'); await page.waitForTimeout(1200);
   need(!(await page.$('.hint-card')), 'studio hint shows once');
-  // Band: wardrobe hint then the skin offer (900 diamonds)
-  await page.click('.tab:has-text("Band")');
+  // Band right after a hint: hints are 20 s apart, so nothing shows yet and nothing is marked as seen
+  await page.click('.tab:has-text("Band")'); await page.waitForTimeout(1000);
+  need(!(await page.$('.hint-card')), 'no second hint inside the 20 s gap');
+  need(await page.evaluate(() => !__dtb.app.profile.tutorial.hints.hint_wardrobe), 'the refused hint stays unseen');
+  // 25 s later (fake clock): the wardrobe hint, then, one gap later, the skin offer (900 diamonds, first stage cleared)
+  await page.evaluate(async () => { const c = await import('./js/ui_core.js'); const t0 = Date.now(); c.setHintClock(() => t0 + 25000); });
+  await page.click('.tab:has-text("Tour")'); await page.click('.tab:has-text("Band")');
   await page.waitForSelector('.hint-card', { timeout: 3000 });
   need(await page.evaluate(() => document.querySelector('.hint-card h2').textContent === 'The Wardrobe'), 'wardrobe hint');
-  await page.click('.hint-card .btn');
+  await page.click('.hint-card .btn'); await page.waitForTimeout(600);
+  need(!(await page.$('.hint-card')), 'skin offer does not stack on the wardrobe hint');
+  await page.evaluate(async () => { const c = await import('./js/ui_core.js'); const t0 = Date.now(); c.setHintClock(() => t0 + 60000); });
+  await page.click('.tab:has-text("Tour")'); await page.click('.tab:has-text("Band")');
   await page.waitForSelector('.hint-card', { timeout: 3000 });
   need(await page.evaluate(() => document.querySelector('.hint-card h2').textContent === 'Something to buy'), 'skin offer hint');
   await page.click('.hint-card .btn');
@@ -64,6 +72,31 @@ try {
   for (const l of ['Larger text', 'Colour-blind cues', 'Auto low graphics when slow']) need(labels.includes(l), 'setting ' + l);
   await page.evaluate(() => { for (const n of document.querySelectorAll('.modal .toggle')) if (['Larger text', 'Colour-blind cues'].includes(n.firstChild.textContent)) n.querySelector('button').click(); });
   need(await page.evaluate(() => document.body.classList.contains('bigtext') && document.body.classList.contains('colorblind') && __dtb.app.profile.settings.bigtext && __dtb.app.profile.settings.colorblind), 'body classes and profile follow the toggles');
+  // save import: a truncated or corrupt code shows the friendly toast and overwrites nothing; a good code (with settings and bests) replaces the save
+  await page.evaluate(() => document.querySelectorAll('.modal-bg').forEach((e) => e.remove()));
+  const imp = await page.evaluate(async () => {
+    const a = __dtb.app, M = __dtb.M, ui = await import('./js/ui_hub.js');
+    a.profile.records = 4321; a.saveNow();
+    const before = localStorage.getItem(M.SAVE_KEY), code = M.exportCode(a.profile), out = {};
+    const tryCode = async (c) => {
+      ui.settingsModal(a);
+      [...document.querySelectorAll('.modal .btn')].find((b) => b.textContent === 'Import code').click();
+      const ta = [...document.querySelectorAll('.modal textarea.code')].pop(); ta.value = c;
+      [...document.querySelectorAll('.modal .btn')].find((b) => b.textContent === 'Check code').click();
+      const toast = document.querySelector('.toast') ? document.querySelector('.toast').textContent : '', found = [...document.querySelectorAll('.modal h2')].some((x) => /Found a save/.test(x.textContent));
+      document.querySelectorAll('.modal-bg').forEach((e) => e.remove());
+      return { toast, found };
+    };
+    out.trunc = await tryCode(code.slice(0, code.length - 12));
+    out.junk = await tryCode('DTB1.' + 'A'.repeat(40) + '.zz');
+    out.same = localStorage.getItem(M.SAVE_KEY) === before && a.profile.records === 4321;
+    out.good = await tryCode(code);
+    return out;
+  });
+  need(/did not work/.test(imp.trunc.toast) && !imp.trunc.found, 'truncated code: friendly toast: ' + imp.trunc.toast);
+  need(/did not work/.test(imp.junk.toast) && !imp.junk.found, 'corrupt code: friendly toast');
+  need(imp.same, 'a rejected import overwrites nothing');
+  need(imp.good.found, 'a good code is accepted: ' + JSON.stringify(imp.good));
   // codex: Paths shows all 24 branches, Pairs all 13 synergies, Bosses has both new bosses drawn
   await page.evaluate(() => { document.querySelectorAll('.modal-bg').forEach((e) => e.remove()); __dtb.app.profile.seen.bosses = { lowpass: true, silence: true }; });
   await page.evaluate(async () => { const m = await import('./js/ui_hub.js'); m.codexModal(__dtb.app); });

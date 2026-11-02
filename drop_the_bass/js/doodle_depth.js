@@ -275,7 +275,7 @@ export function drawBossMarks(b, ctx, e, t) {
 export function phaseTicks(b, boss) {
   const run = b.run; if (!run.bossPhaseList) return null;
   const list = run.bossPhaseList(boss) || [];
-  const at = list.map((p) => p.at).filter((v) => v > 0 && v < 1);
+  const at = [...new Set(list.map((p) => p.at).filter((v) => v > 0 && v < 1))];   // several effects can share one threshold (Dr. Dead Air has three at 0.33): one notch
   return at.length ? at : null;
 }
 // the notches drawn on the boss bar (the Mr. Playback fallback when the sim lists no phases)
@@ -293,14 +293,22 @@ function drawPhaseNumbers(b, ctx, boss, bx, by, bw, phase) {
   });
   ctx.restore();
 }
+// "PHASE n/m" counts the distinct health thresholds (the notches on the bar), not every effect: sim.js lists seven effects for Dr. Dead Air but only four steps
+export function phaseState(b, boss, info) {
+  const ticks = bossTicks(b, boss);
+  if (!ticks) return { phase: Math.min(info.phase || 1, info.phases || 1), phases: info.phases || 1 };
+  const f = info.hpFrac == null ? boss.hp / boss.maxHp : info.hpFrac;
+  return { phase: 1 + ticks.filter((at) => f <= at + 1e-9).length, phases: ticks.length + 1 };
+}
 // the shield strip and "PHASE n/m" tag on the boss bar
 export function drawBossHud(b, ctx, boss, bx, by, bw, t) {
   const info = b.run.bossInfo ? b.run.bossInfo(boss.id) : null; if (!info) return;
-  if (cbOn(b)) drawPhaseNumbers(b, ctx, boss, bx, by, bw, info.phase || 1);
+  if (cbOn(b)) drawPhaseNumbers(b, ctx, boss, bx, by, bw, phaseState(b, boss, info).phase);
   if (info.shieldFrac > 0) {
     ctx.save(); ctx.fillStyle = INK; ctx.fillRect(bx, by + 19.5, bw, 5.5); ctx.fillStyle = C.sky; ctx.fillRect(bx + 1, by + 20.5, (bw - 2) * info.shieldFrac, 3.5); ctx.restore();
   }
-  if (info.phases > 1) DH.text(ctx, BT.phaseOf(Math.min(info.phase, info.phases), info.phases), bx + bw - 6, by + 10, 11, '#fff', 'right', 900, { maxW: 90 });
+  const ps = phaseState(b, boss, info);
+  if (ps.phases > 1) DH.text(ctx, BT.phaseOf(ps.phase, ps.phases), bx + bw - 6, by + 10, 11, '#fff', 'right', 900, { maxW: 90 });
 }
 
 // ================================================================================================ 3. hero abilities

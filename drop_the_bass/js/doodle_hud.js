@@ -4,6 +4,7 @@
 // per-frame cost is a drawImage. Without document (node tests) sprites draw straight onto the given context.
 import * as K from './doodle_kit.js';
 import { mix, lighten, darken, rgba } from './hud.js';
+import { textScale } from './a11y.js';
 
 export { mix, lighten, darken, rgba };
 export const FONT = '"Patrick Hand", "Gochi Hand", "Comic Sans MS", "Chalkboard SE", "Marker Felt", system-ui, sans-serif';
@@ -163,8 +164,11 @@ export function fitText(ctx, s, size, maxW, minScale = 0.6, measure = measureStr
 }
 export function text(ctx, s, x, y, size, color, align = 'left', weight = 900, o) {
   s = String(s);
+  // Larger text (a11y.textScale, 1 when off): every HUD string grows, but fit-to-width (maxW) still shrinks and cuts it to its box
+  const bigWord = size >= 26;   // the stroke font is chosen by the design size, so a 24 px coin count does not change style when scaled
+  if (!(o && o.raw)) size *= textScale();   // o.raw: the caller already sized it (wrapLines)
   if (o && o.maxW) { const f = fitText(ctx, s, size, o.maxW, o.minScale); s = f.s; size = f.size; }
-  if (size >= 26 && s.length <= 16 && textBaked < 140 && strokeOk(s) && isHex(color)) {
+  if (bigWord && size >= 26 && s.length <= 16 && textBaked < 140 && strokeOk(s) && isHex(color)) {
     // big words use the hand-made stroke font (baked once per string)
     const col = hex6(color), wTot = K.Pen.prototype.textWidth(s, size), pw = Math.ceil(wTot + size * 0.9), ph = Math.ceil(size * 1.9);
     const key = 'dh:txt:' + s + ':' + size + ':' + col;
@@ -191,10 +195,12 @@ export function text(ctx, s, x, y, size, color, align = 'left', weight = 900, o)
   ctx.restore();
 }
 // Wrapped text. maxLines (optional, default 5) keeps long translations inside their box: the font shrinks (down to 78%) until the text fits in maxLines,
-// then the last line is cut with an ellipsis.
-export function wrapText(ctx, s, x, y, maxW, size, lh, color, align = 'left', maxLines = 5) {
+// then the last line is cut with an ellipsis. The size and line height are multiplied by the Larger text scale. wrapLines does the layout without
+// drawing (so a panel can size itself first) and returns { lines, size, lh } with size/lh already scaled.
+export function wrapLines(ctx, s, maxW, size, lh, maxLines = 5) {
+  const k = textScale(); size *= k; lh *= k;
   const lay = (sz) => {
-    ctx.save(); ctx.font = sz + 'px ' + FONT;
+    ctx.save(); ctx.font = 'bold ' + sz + 'px ' + FONT;
     const words = String(s).split(' '); let line = ''; const lines = [];
     for (const w of words) { const test = line ? line + ' ' + w : w; if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test; }
     if (line) lines.push(line);
@@ -210,6 +216,10 @@ export function wrapText(ctx, s, x, y, maxW, size, lh, color, align = 'left', ma
     while (last.length > 1 && ctx.measureText(last + '\u2026').width > maxW) last = last.slice(0, -1);
     ctx.restore(); lines[cap - 1] = last.trimEnd() + '\u2026';
   }
-  const lh2 = lh * sz / size;
-  lines.forEach((l, i) => { ctx.save(); ctx.font = 'bold ' + sz + 'px ' + FONT; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillStyle = color; ctx.fillText(l, x, y + i * lh2); ctx.restore(); });
+  return { lines, size: sz, lh: lh * sz / size };
+}
+export function wrapText(ctx, s, x, y, maxW, size, lh, color, align = 'left', maxLines = 5) {
+  const L = wrapLines(ctx, s, maxW, size, lh, maxLines);
+  L.lines.forEach((l, i) => { ctx.save(); ctx.font = 'bold ' + L.size + 'px ' + FONT; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillStyle = color; ctx.fillText(l, x, y + i * L.lh); ctx.restore(); });
+  return L.lines.length;
 }

@@ -1,12 +1,12 @@
 // main.js: the app shell. Loads the save, owns the canvas and the DOM root, runs the loop, routes between title, hub, cutscenes and battle.
-import { GAME, W, H, WORLD_BY_ID, ECON } from './data_core.js';
+import { W, H } from './data_core.js';
 import { Run } from './sim.js';
 import { AudioFx } from './audio.js';
 import * as M from './meta.js';
 import { makeRng } from './rng.js';
 import { Battle, battleIdle } from './battle.js';
 import { Cutscene } from './cutscene.js';
-import { buildHub, settingsModal, codexModal, setlistSheet, langPicker } from './ui_hub.js';
+import { buildHub, settingsModal, setlistSheet, langPicker } from './ui_hub.js';
 import { showChoice, showPause, showHint, showDefeat, showResults, showHowTo } from './ui_run.js';
 import { setRoot, h, btn, modal, toast, actionToast, tickLive, AE, AW } from './ui_core.js';
 import { submitScore, rankOf } from './lb.js';

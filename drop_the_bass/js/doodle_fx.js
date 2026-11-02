@@ -4,6 +4,7 @@
 // overlay plus a red crayon border when the stage is low. Jitter comes from a hash of position and the boil frame (no unseeded randomness, no clock).
 // Safe in node with a mock ctx (text sprites fall back to live drawing when there is no document).
 import * as K from './doodle_kit.js';
+import { textScale } from './a11y.js';
 
 const C = K.C, INK = C.ink, TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -178,14 +179,15 @@ export function drawFloaters(f, ctx) {
     const a = k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1;
     let x = fl.x, y = fl.y;
     if (fl.crit && k < 0.3) { x += (fl.seed - 0.5) * 4 * (1 - k / 0.3); y += Math.sin(f.t * 60) * 1.5; }
-    const want = fl.size * 1.18, str = String(fl.text).toUpperCase();
+    const ts = textScale(), want = fl.size * 1.18 * ts, str = String(fl.text).toUpperCase();   // Larger text setting scales floaters too
     ctx.globalAlpha = a;
     if (coverable(str) && str.length <= 14) {
       const sz = clamp(Math.round(want / 2) * 2, 14, 44), e = bakeText(str, sz, fl.color, fl.crit), s = pop * want / sz;
+      if (ts > 1) x = clamp(x, e.w * s / 2 + 4, 536 - e.w * s / 2);   // a bigger number must not run off the screen edge
       if (e.cv) ctx.drawImage(e.cv, x - e.w * s / 2, y - e.h * s / 2, e.w * s, e.h * s);
       else { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); e.draw(new K.Pen(ctx, str.length * 31 + sz * 7, 1), ctx); ctx.restore(); }
     } else {   // characters the stroke font does not have: hand font with a halo
-      const size = Math.round(fl.size * pop);
+      const size = Math.round(fl.size * pop * ts);
       ctx.font = '700 ' + size + 'px ' + HAND; ctx.lineWidth = Math.max(4, size * 0.34); ctx.strokeStyle = '#fff'; ctx.strokeText(fl.text, x, y);
       ctx.lineWidth = Math.max(2, size * 0.14); ctx.strokeStyle = INK; ctx.strokeText(fl.text, x, y); ctx.fillStyle = fl.color; ctx.fillText(fl.text, x, y);
     }

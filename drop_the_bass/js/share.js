@@ -1,7 +1,7 @@
 // share.js: the crayon "brag card" of a finished run (1080 x 1350 PNG) and the share/download helper.
 // makeShareCard(run, result, profile) -> canvas. shareCard(canvas, text) -> Promise<'shared'|'downloaded'|'cancelled'|'failed'>.
 // Draws with the same art modules as the battle view (board floor, turret sprites at their levels, busts). Safe to call with partial data.
-import { W, H, COLS, TURRETS, BOARD_X, BOARD_Y, BOARD_W, BOARD_H, fmt } from './data_core.js';
+import { BOARD_X, BOARD_Y, BOARD_W, BOARD_H, fmt } from './data_core.js';
 import * as AE from './art_entities.js';
 import * as AW from './art_world.js';
 import * as K from './doodle_kit.js';

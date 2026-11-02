@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as M from '../drop_the_bass/js/meta.js';
-import { applyA11y, textScale, colorblind, BIGTEXT_SCALE, makePerfWatch, PERF, langOffer } from '../drop_the_bass/js/a11y.js';
+import { applyA11y, textScale, colorblind, BIGTEXT_SCALE, langOffer } from '../drop_the_bass/js/a11y.js';
 import { durationText, resetText } from '../drop_the_bass/js/countdown.js';
 import { HINTS } from '../drop_the_bass/js/data_story.js';
 import { HINTS_EXTRA } from '../drop_the_bass/js/data_hints_extra.js';
@@ -37,20 +37,10 @@ setLang('en');
   applyA11y(undefined); ok(textScale() === 1, 'undefined settings are fine');
 }
 
-// ---- perf watch: slow battle fires once, a fast one never, gaps and pauses are ignored
+// ---- the perf watch moved into the battle view (auto low graphics); a11y.js no longer carries a copy
 {
-  const slow = makePerfWatch(); let fired = 0;
-  for (let i = 0; i < 400; i++) if (slow.sample(40, true)) fired++;
-  ok(fired === 1, 'slow play fires exactly once');
-  const fast = makePerfWatch(); fired = 0;
-  for (let i = 0; i < 1000; i++) if (fast.sample(16.7, true)) fired++;
-  ok(fired === 0, 'smooth play never fires');
-  const gaps = makePerfWatch(); fired = 0;
-  for (let i = 0; i < 400; i++) if (gaps.sample(900, true)) fired++;
-  ok(fired === 0, 'long gaps (tab switch) are not slowness');
-  const paused = makePerfWatch(); fired = 0;
-  for (let i = 0; i < 400; i++) if (paused.sample(60, false)) fired++;
-  ok(fired === 0 && PERF.MIN_FPS > 20, 'paused or menus never fire');
+  const src = readFileSync(new URL('../drop_the_bass/js/a11y.js', import.meta.url), 'utf8');
+  ok(!/makePerfWatch|PERF\b/.test(src), 'a11y.js has no dead perf watch');
 }
 
 // ---- reset countdowns
@@ -82,6 +72,47 @@ setLang('en');
   ok(langOffer(p, ['nb-NO'], 'en') === 'da', 'Norwegian reads as Danish');
   p.tutorial.hints.lang_offer = true;
   ok(langOffer(p, ['de'], 'en') === null, 'only once');
+}
+
+// ---- hint pile-up: one at a time, 20 s apart, not over the Setlist, the skin hint only after the first clear
+{
+  const C = await import('../drop_the_bass/js/ui_core.js');
+  let clock = 1000000; C.setHintClock(() => clock); C.resetHintState();
+  const shown = []; let open = null;
+  const app = { profile: M.newProfile(NOW), save() {}, hooks: { onHint: (id, fin) => { shown.push(id); open = fin; } } };
+  app.profile.tutorial.done = true;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const close = () => { const f = open; open = null; if (f) f(); };
+  ok(C.hubHint(app, 'hint_wardrobe') === true, 'first hint is accepted');
+  ok(C.hubHint(app, 'hint_studio_scene') === false && !app.profile.tutorial.hints.hint_studio_scene, 'a second hint while one is pending is refused and not marked seen');
+  await wait(520); ok(shown.join() === 'hint_wardrobe', 'only the first one shows');
+  ok(C.hubHint(app, 'hint_studio_scene') === false, 'refused while the card is open');
+  close();
+  ok(C.hubHint(app, 'hint_studio_scene') === false, 'refused right after a hint (20 s gap)');
+  clock += 19000; ok(C.hubHint(app, 'hint_studio_scene') === false, 'still inside 20 s');
+  clock += 1500; ok(C.hubHint(app, 'hint_studio_scene') === true, 'accepted after 20 s');
+  await wait(520); ok(shown.join() === 'hint_wardrobe,hint_studio_scene', 'queued hint came on a later screen'); close();
+  ok(C.hubHint(app, 'hint_studio_scene') === false, 'a seen hint never repeats');
+  // the Setlist sheet: only hint_setlist may show over it
+  clock += 25000;
+  globalThis.document = { querySelector: (q) => (q === '.setlist' ? {} : null) };
+  ok(C.hubHint(app, 'hint_weekly') === false && !app.profile.tutorial.hints.hint_weekly, 'no other hint over the Setlist');
+  ok(C.hubHint(app, 'hint_setlist') === true, 'hint_setlist itself is fine'); await wait(520); close();
+  delete globalThis.document;
+  // skin offer needs a cleared stage
+  clock += 25000;
+  app.profile.diamonds = 100000;
+  ok(C.hubHint(app, 'hint_skin_buy') === false && !app.profile.tutorial.hints.hint_skin_buy, 'no skin offer before the first stage is cleared');
+  app.profile.prog.garage.cleared = true;
+  ok(C.hubHint(app, 'hint_skin_buy') === true, 'skin offer after the first clear'); await wait(520); close();
+  ok(shown.at(-1) === 'hint_skin_buy', 'skin offer shown');
+  // a hint that is dropped at the last moment still runs its done callback (the Weekly Gig start)
+  clock += 25000; let fired = 0;
+  globalThis.document = { querySelector: () => null };
+  ok(C.hubHint(app, 'hint_weekly', () => fired++) === true, 'weekly accepted');
+  globalThis.document = { querySelector: (q) => (q === '.setlist' ? {} : null) };
+  await wait(520); ok(fired === 1 && !app.profile.tutorial.hints.hint_weekly, 'dropped hint calls done and stays unseen');
+  delete globalThis.document; C.setHintClock(null); C.resetHintState();
 }
 
 // ---- cosmetics hint trigger
