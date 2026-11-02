@@ -7,6 +7,7 @@ import { createHitJuice } from './hitjuice.js';
 import { createScreenFx } from './screenfx.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
 import { drawHints } from './hints.js';
+import { drawCellFlags, drawCellBadge } from './cellfx.js';
 
 const TAU = Math.PI * 2;
 const num = v => { v = Math.ceil(v); return v >= 10000 ? (v / 1000).toFixed(0) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); };
@@ -157,6 +158,7 @@ export function createRenderer(canvas, art, kit) {
       case 'levelup': S.flash = 0.4; S.flashCol = '#9dff6d'; ring(g.p.x, g.p.y, 220, '#9dff6d', 0.6); break;
       case 'pet': addFloat(g.p.x, g.p.y - 150, ({ kitten: 'Meow!', puppy: 'Woof!', lamb: 'Baa!', turtle: 'Slow down!', piglet: 'Oink!', hamster: 'Squeak!' })[e.id] || '!', '#ffe14a', 22, -40); break;
       case 'skip': addFloat(g.p.x, g.p.y - 120, 'Beats!', '#ffd24a', 20, -50); break;
+      case 'lull': ring(e.x, e.y, 160, '#b79bff', 0.6); burst(e.x, e.y, 14, ['#d9c8ff', '#fff', '#b79bff'], 220, 0.7, 5); addFloat(e.x, e.y - 40, 'Lullaby', '#d9c8ff', 22, -40); break;
       case 'mend': ring(e.x, e.y, 46, '#6fe08a', 0.3); break;
       case 'stage': if (e.boss) S.trauma = 0.6; break;   // the title card is drawn by screenfx.js
       case 'clear': S.banner = { text: 'STAGE CLEAR', sub: '+' + e.bonus + ' Beats', t: 0, dur: 2.2, clear: true }; break;
@@ -229,6 +231,7 @@ export function createRenderer(canvas, art, kit) {
         ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.3, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
       }
       if (s.gold) { const live = s.goldT > 0; glow(s.x, s.y, r * (live ? 2.3 : 1.5), '#ffd24a', live ? 0.55 + Math.sin(S.t * 9 + i) * 0.2 : 0.15); if (live) { ctx.save(); ctx.strokeStyle = '#fff1a8'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.18, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0, s.goldT / 9)); ctx.stroke(); ctx.restore(); } }
+      if (s.ward || s.warded || s.lull) drawCellFlags(ctx, s, r, S.t, i, glow);
       if (s.kind === 'bomb') { const pulse = 0.5 + Math.sin(S.t * 9 + i) * 0.5; glow(s.x, s.y, r * 1.8, '#ff3b5c', 0.15 + pulse * 0.25); }
       if (s.kind === 'mender') glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12);
       if (s.kind === 'upgrade') glow(s.x, s.y, r * 2.1, '#ffd24a', 0.45 + Math.sin(S.t * 6 + i) * 0.15);
@@ -250,6 +253,7 @@ export function createRenderer(canvas, art, kit) {
       if (s.carry === 'chest') { glow(s.x, s.y, r * 1.8, '#ffd84d', 0.5 + Math.sin(S.t * 6 + i) * 0.2); blit(kit && kit.SPR.pickup('chest'), s.x, s.y - r * 0.9, r * 2.2, Math.sin(S.t * 4 + i) * 0.1); }
       if (OPT.highContrast) { ctx.save(); ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.beginPath(); ctx.arc(s.x, s.y, r * 1.02, 0, TAU); ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.restore(); }
       if (OPT.highContrast) { ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.62)'; ctx.beginPath(); ctx.arc(s.x, s.y + r * 0.05, r * 0.62 * (OPT.bigNumbers ? 1.15 : 1), 0, TAU); ctx.fill(); ctx.restore(); }
+      if (s.ward || s.lull) drawCellBadge(ctx, s, r, S.t, i);
       text(num(s.hp), s.x, s.y + r * 0.05, Math.max(20, r * 0.85) * (OPT.bigNumbers ? 1.2 : 1), '#fff', OPT.highContrast ? '#000' : INK);
       if (OPT.colorBlind && (s.kind !== 'normal' || s.carry === 'chest')) kindMark(s.carry === 'chest' && s.kind === 'normal' ? 'chest' : s.kind, s.x, s.y - r * 1.02, r * 0.36);
       if (s.kind === 'mender') { glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12); ctx.save(); ctx.fillStyle = '#6fe08a'; ctx.strokeStyle = INK; ctx.lineWidth = 3; const q = r * 0.34; for (const [px, py, w2, h2] of [[-q * 0.35, -q, q * 0.7, q * 2], [-q, -q * 0.35, q * 2, q * 0.7]]) { ctx.fillRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); ctx.strokeRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); } ctx.restore(); }
