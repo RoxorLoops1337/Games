@@ -43,6 +43,9 @@ export function createHud(env) {
   const { ctx, text, blit, kit, S, INK, glow, sparkleAt } = env;
   const T = { g: null, pop: {}, cdMax: {}, cdLast: {}, chestAt: {}, lastProg: 0, readyAt: {}, lastSnd: -9, bossTot: 0, bossV: 1, bossHitAt: -9, encV: 0, encFull: -9, ins: { t: 0, b: 0 } };
   const reduce = () => !!(env.OPT && env.OPT.reduceMotion);
+  // menu text size slider also lifts the small in-run labels (capped so the fixed glass plates still fit)
+  const fz = n => Math.round(n * Math.min(1.3, (env.OPT && env.OPT.textScale) || 1));
+  const bigT = () => ((env.OPT && env.OPT.textScale) || 1) > 1.1;
 
   function rr(x, y, w, h, r) {
     ctx.beginPath();
@@ -109,9 +112,9 @@ export function createHud(env) {
     const px = W / 2 - 110, rim = boss ? 'rgba(255,90,130,.8)' : 'rgba(255,255,255,.4)';
     glass(px, 8, 220, 68, 22, rim, boss ? 'rgba(70,8,36,.58)' : 'rgba(14,9,48,.56)');
     text(boss ? 'BOSS ' + g.stage : 'STAGE ' + g.stage, W / 2, 30, 28, boss ? '#ff7a9a' : '#ffffff');
-    const nm = g.mode === 'pig' ? 'Piggy Bank Parade' : virusName(g.stage), fs = nm.length > 15 ? 14 : 17;
+    const nm = g.mode === 'pig' ? 'Piggy Bank Parade' : virusName(g.stage), fs = nm.length > 15 ? 14 : fz(17);
     text(nm, W / 2, 58, fs, '#ffd0e6');
-    if (g.hard) { glass(px + 168, -2, 66, 26, 13, 'rgba(201,160,255,.8)', 'rgba(60,20,110,.85)'); text('HARD', px + 201, 11, 14, '#e2caff', '#0b1020'); }
+    if (g.hard) { glass(px + 168, -2, 66, 26, 13, 'rgba(201,160,255,.8)', 'rgba(60,20,110,.85)'); text('HARD', px + 201, 11, fz(14), '#e2caff', '#0b1020'); }
     // coins, bouncing when they grow
     const coins = Math.floor(g.coins), sc = Math.max(pop('coin', coins), landBounce(S, 'coin'));
     glass(484, 14, 142, 52, 26, 'rgba(255,210,74,.55)');
@@ -170,7 +173,7 @@ export function createHud(env) {
     const hot = mult > 1, col = hot ? '#ff8a8a' : mult < 1 ? '#8ff0ff' : '#d9f7e6';
     glass(24, cy - 17, 120, 34, 17, hot ? 'rgba(255,100,100,.7)' : 'rgba(255,255,255,.3)');
     blit(kit && kit.SPR.body(g.skin, false, ''), 46, cy, 40, 0);
-    text('x' + mult.toFixed(1), 100, cy + 1, 19, col, '#0b1020');
+    text('x' + mult.toFixed(1), 100, cy + 1, fz(19), col, '#0b1020');
     const items = [['n', '' + (1 + up('notes'))], ['b', '' + (1 + up('burst'))], ['s', '+' + up('aspd') + '%'], ['d', '+' + up('cdmg') + '%']];
     const wid = [66, 66, 92, 92];
     let x = 154;
@@ -178,7 +181,7 @@ export function createHud(env) {
     items.forEach(([k, v], i) => {
       const ix = x + 14;
       if (k === 'n') blit(kit && kit.SPR.note(false), ix, cy, 36, 0); else if (k === 'b') burstIcon(ix, cy, 0.85); else if (k === 's') bolt(ix, cy, 0.95, '#6fe3ff'); else star(ix, cy, 0.85, '#ffd84d');
-      text(v, ix + 20, cy + 1, 17, '#e6f6ff', '#0b1020', 'left');
+      text(v, ix + 20, cy + 1, fz(17), '#e6f6ff', '#0b1020', 'left');
       x += wid[i];
     });
   }
@@ -196,8 +199,8 @@ export function createHud(env) {
     glass(x, y, w, h, 18, kd > 0 ? 'rgba(255,90,110,.95)' : ku > 0 ? 'rgba(255,255,255,.95)' : rim);
     if (kd > 0) { ctx.save(); ctx.globalAlpha = 0.3 * kd; rr(x, y, w, h, 18); ctx.fillStyle = '#ff3d5a'; ctx.fill(); ctx.restore(); }
     if (fire) glow(x + w / 2, y + h / 2, 150, '#ffd84d', 0.18 + 0.1 * Math.sin(S.t * 10));
-    text(fire ? 'GROOVE ON FIRE' : 'GROOVE', x + 14, y + 14, 15, fire ? '#ffd84d' : '#ffc2dc', '#0b1020', 'left');
-    if (gv >= 1) text('+' + Math.floor(gv * 1.5) + '% dmg', x + w - 12, y + 14, 14, gv >= 15 ? '#ffd84d' : '#bfe9ff', '#0b1020', 'right');
+    text(fire ? (bigT() ? 'ON FIRE' : 'GROOVE ON FIRE') : 'GROOVE', x + 14, y + 14, fz(15), fire ? '#ffd84d' : '#ffc2dc', '#0b1020', 'left');
+    if (gv >= 1) text('+' + Math.floor(gv * 1.5) + '% dmg', x + w - 12, y + 14, fz(14), gv >= 15 ? '#ffd84d' : '#bfe9ff', '#0b1020', 'right');
     const base = y + h - 10, bw = 7.2, step = 10.4, x0 = x + 14;
     // tier ticks: bar 15 starts the gold glow, bar 20 is the fire
     for (const t of [15, 20]) { const tx = x0 + (t - 1) * step + bw / 2; ctx.fillStyle = gv >= t ? '#ffd84d' : 'rgba(255,216,77,.45)'; ctx.beginPath(); ctx.moveTo(tx - 3.5, y + h - 3); ctx.lineTo(tx + 3.5, y + h - 3); ctx.lineTo(tx, y + h - 8.5); ctx.closePath(); ctx.fill(); }
@@ -342,8 +345,8 @@ export function createHud(env) {
     ctx.restore();
     groove(g); skills(g);
     const p = g.p, b = T.ins.b;
-    if (p.shield > 0) { glass(W - 180, H - 130 - b, 160, 34, 17, 'rgba(127,232,255,.7)'); text('SHIELD ' + p.shield.toFixed(0), W - 100, H - 112 - b, 18, '#7fe8ff'); }
-    if (p.rage > 0) { glass(W - 180, H - 170 - b, 160, 34, 17, 'rgba(255,210,74,.7)'); text('RAGE ' + p.rage.toFixed(0), W - 100, H - 152 - b, 18, '#ffd24a'); }
+    if (p.shield > 0) { glass(W - 180, H - 130 - b, 160, 34, 17, 'rgba(127,232,255,.7)'); text('SHIELD ' + p.shield.toFixed(0), W - 100, H - 112 - b, fz(18), '#7fe8ff'); }
+    if (p.rage > 0) { glass(W - 180, H - 170 - b, 160, 34, 17, 'rgba(255,210,74,.7)'); text('RAGE ' + p.rage.toFixed(0), W - 100, H - 152 - b, fz(18), '#ffd24a'); }
   }
   return { draw, encore, combo, dy, top: () => T.ins.t };
 }

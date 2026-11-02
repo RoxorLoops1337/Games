@@ -4,7 +4,7 @@
 // mix({ stage, boss, groove (0..1), danger (0..1) }).
 import { beatBpm as simBpm } from './sim.js';
 export function createAudio() {
-  let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, muted = false, musicAllowed = true, noiseBuf = null;
+  let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false;
   let musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
   let mixS = { stage: 1, boss: false, groove: 0, danger: 0 };
   let live = 0, chain = 0, chainT = 0, vol = 1, uiT = 0, bstreak = 0, lastBeatShot = 0, beatNow = 0, fresh = false;
@@ -250,6 +250,8 @@ export function createAudio() {
           if (bar === 3 && s === 8) tone(330, sp * 8, 'sawtooth', 0.018, 520, t, 'm');
           if (bar === 3 && s >= 12) snare(t, 0.05 + (s - 12) * 0.03);
         }
+        // accessibility: an optional woodblock click on every beat (higher on the bar line), so the rhythm can be felt without the mix
+        if (beatTick && s % 4 === 0) tone(s === 0 && bar === 0 ? 1319 : 988, 0.05, 'triangle', s === 0 && bar === 0 ? 0.2 : 0.15, 0, t, 'm');
         // danger: a ticking clock when the snake is close to the line
         if (m.danger > 0.55 && s % 4 === 0) tone(1760, 0.03, 'square', 0.025 + m.danger * 0.02, 0, t, 'm');
         // section ends: riser into a crash
@@ -275,6 +277,7 @@ export function createAudio() {
       clearInterval(timer);
       if (musicOn && ensure()) { step = 0; fresh = true; nextT = ac.currentTime + 0.05; timer = setInterval(pump, 80); }
     },
+    setBeatTick(b) { beatTick = !!b; },
     setMusicAllowed(b) { musicAllowed = b; if (!b) { musicOn = false; clearInterval(timer); } },
     get musicAllowed() { return musicAllowed; },
     intensity(v) { intensity = v; },

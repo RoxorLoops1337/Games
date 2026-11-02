@@ -22,3 +22,32 @@ export function applyCbPalette(kit, on) {
   return true;
 }
 export const CB_IDS = Object.keys(CB);
+
+// ---- settings preview strip: every species colour in the default and the safer palette, plus how a red-green
+// colour-blind player sees each (deuteranopia matrix), so the choice can be judged before switching it on
+const DEUT = [[0.367, 0.861, -0.228], [0.280, 0.673, 0.047], [-0.012, 0.043, 0.969]];
+export function simDeut(hex) {
+  const n = parseInt(String(hex).replace('#', ''), 16), c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const o = DEUT.map(r => Math.max(0, Math.min(255, Math.round(r[0] * c[0] + r[1] * c[1] + r[2] * c[2]))));
+  return '#' + o.map(v => v.toString(16).padStart(2, '0')).join('');
+}
+export function cbPreview(kit) {
+  const S = (kit && kit.SPECIES) || {};
+  return CB_IDS.map(id => {
+    const sp = S[id], o = sp && orig.get(sp), normal = (o || sp || {}).base || '#888888', safe = CB[id].base;
+    return { id, name: (sp && sp.name) || id, normal, safe, normalSim: simDeut(normal), safeSim: simDeut(safe) };
+  });
+}
+export function paintCbStrip(el, kit, on) {
+  if (!el || typeof document === 'undefined') return;
+  const rows = [['Default', 'normal'], ['Red-green view', 'normalSim'], ['Safer, red-green view', 'safeSim']], pv = cbPreview(kit);
+  el.innerHTML = '';
+  rows.forEach(([lab, key], ri) => {
+    const r = document.createElement('div'); r.className = 'cbrow' + ((on ? ri === 2 : ri === 0) ? ' now' : '');
+    const l = document.createElement('span'); l.className = 'cbl'; l.textContent = lab; r.appendChild(l);
+    for (const p of pv) { const d = document.createElement('i'); d.style.background = p[key]; d.title = p.name; r.appendChild(d); }
+    el.appendChild(r);
+  });
+  const names = pv.map(p => p.name).join(', ');
+  el.setAttribute('role', 'img'); el.setAttribute('aria-label', 'Colour preview of the six snake species. Default colours, the same as seen with red-green colour blindness, and the safer palette as seen the same way. ' + (on ? 'Safer palette is on. ' : 'Safer palette is off. ') + names + '.');
+}

@@ -111,6 +111,47 @@ export function initKeyboard() {
   const cv = document.getElementById('c'); if (cv && !cv.getAttribute('aria-label')) { cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', 'Game field. The duo slides left and right and shoots up on its own. Keys: arrows or A and D to move, space for Encore, P to pause.'); }
 }
 
+// ---- screen reader pass for the hub panels (round 4): bars become progress bars, decorative pictures are hidden,
+// screens are named dialogs, toasts are spoken, and closing a panel puts focus back on the button that opened it
+export function barPercent(el) {
+  const i = el && el.querySelector && el.querySelector(':scope > i[style*="width"]'); if (!i) return -1;
+  const m = /width:\s*([\d.]+)%/.exec(i.getAttribute('style') || ''); return m ? Math.max(0, Math.min(100, Math.round(+m[1]))) : -1;
+}
+export function srPass(root = document) {
+  for (const b of root.querySelectorAll('.bar, .lbar')) {
+    const pc = barPercent(b); if (pc < 0) continue;
+    if (!b.getAttribute('role')) { b.setAttribute('role', 'progressbar'); b.setAttribute('aria-valuemin', '0'); b.setAttribute('aria-valuemax', '100'); }
+    b.setAttribute('aria-valuenow', String(pc));
+    const par = b.parentElement, txt = ((par && par.textContent) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    b.setAttribute('aria-label', txt || 'Progress');
+  }
+  for (const im of root.querySelectorAll('img:not([alt]):not([aria-hidden])')) im.setAttribute('aria-hidden', 'true');   // decorative art (an empty alt would change layout)
+  for (const sv of root.querySelectorAll('svg:not([aria-hidden]):not([role])')) if (!sv.closest('[role="img"]') && !sv.getAttribute('aria-label')) sv.setAttribute('aria-hidden', 'true');
+}
+export function initSrPass() {
+  if (typeof document === 'undefined') return;
+  const toast = document.getElementById('toast'); if (toast) { toast.setAttribute('role', 'status'); toast.setAttribute('aria-live', 'polite'); }
+  for (const s of document.querySelectorAll('section.scr')) {
+    if (s.id === 'title' || s.id === 'hub') continue;
+    const h = s.querySelector('h2'); s.setAttribute('role', 'dialog');
+    if (h) { if (!h.id) h.id = s.id + 'H'; s.setAttribute('aria-labelledby', h.id); } else s.setAttribute('aria-label', s.id);
+  }
+  let t = 0; const run = () => { clearTimeout(t); t = setTimeout(() => srPass(document), 120); };
+  run(); new MutationObserver(run).observe(document.body, { childList: true, subtree: true });
+  // focus return
+  let outside = null, opener = null; const seen = new WeakMap();
+  const inDialog = el => !!(el && el.closest && el.closest('section.scr.on:not(#hub):not(#title)'));
+  document.addEventListener('focusin', e => { if (!inDialog(e.target) && e.target !== document.body) outside = e.target; });
+  new MutationObserver(ms => {
+    for (const m of ms) {
+      const s = m.target; if (!s.matches || !s.matches('section.scr') || s.id === 'hub' || s.id === 'title') continue;
+      const on = s.classList.contains('on'), was = seen.get(s) || false; seen.set(s, on);
+      if (on && !was) opener = outside;
+      else if (!on && was && opener) { const o = opener; opener = null; setTimeout(() => { const ae = document.activeElement; if (o.isConnected && o.offsetParent !== null && (!ae || ae === document.body || s.contains(ae)) && !document.querySelector('section.scr.on:not(#hub):not(#title)')) { try { o.focus({ preventScroll: true }); } catch (x) { /* ignore */ } } }, 60); }
+    }
+  }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+}
+
 // ---- arrow-key grid navigation (Battle tab): the arrow keys jump to the nearest button in that direction
 // items: [{ x, y, w, h }] rects; returns the index of the best neighbour of items[from] in dir ('L','R','U','D'), or -1
 export function gridNext(items, from, dir) {
