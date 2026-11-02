@@ -4,6 +4,7 @@ import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhas
 import { INK, mix } from './art_draw.js';
 import { createHud, hudZone } from './hud.js';
 import { createHitJuice } from './hitjuice.js';
+import { createDigitAtlas } from './digits.js';
 import { createScreenFx } from './screenfx.js';
 import { drawFar } from './bg_far.js';
 import { bakeWorld, makeMotes, drawMotes, drawBeams, drawRing, createBgFx } from './bg_world.js';
@@ -101,6 +102,7 @@ export function createRenderer(canvas, art, kit) {
     const size = crit ? 30 : Math.min(24, 14 + Math.log2(e.d + 1) * 1.6);
     S.floats.push({ x: e.x + (Math.random() - 0.5) * 24, y: e.y - 14, str: num(e.d), acc: e.d, key, crit: !!crit, src: e.src, col: crit ? '#ffe14a' : (HJ && HJ.tint(e.src)) || '#ffffff', size, vy: crit ? -85 : -60, life: crit ? 0.8 : 0.6, max: crit ? 0.8 : 0.6, pop: 1 });
   }
+  let DG = null;   // digit atlas for the HP numbers (digits.js)
   let HJ = null;   // 04-hit-juice: orbs, smoke, muzzle flash, note trails (hitjuice.js)
   let lastDt = 0.016;
   let FX = null;   // whole-screen feedback (screenfx.js), created after the helpers below exist
@@ -290,7 +292,7 @@ export function createRenderer(canvas, art, kit) {
       if (OPT.highContrast) { ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.62)'; ctx.beginPath(); ctx.arc(s.x, s.y + r * 0.05, r * 0.62 * (OPT.bigNumbers ? 1.15 : 1), 0, TAU); ctx.fill(); ctx.restore(); }
       if (s.gold && kit) { const live = s.goldT > 0; blit(kit.SPR.badge('coin'), s.x - r * 0.62, s.y - r * 0.7 + Math.sin(S.t * 3 + i) * 2, r * 1.0, Math.sin(S.t * 2 + i) * 0.12, false, live ? 1 : 0.4); if (live && Math.sin(S.t * 4 + i * 2) > 0.8) sparkleAt(s.x + r * 0.5, s.y + r * 0.5, r * 0.26); }
       if (s.ward || s.lull || s.drum) drawCellBadge(ctx, s, r, S.t, i, kit);
-      text(num(s.hp), s.x, s.y + r * 0.05, Math.max(20, r * 0.85) * (OPT.bigNumbers ? 1.2 : 1), '#fff', OPT.highContrast ? '#000' : INK);
+      { const hs = Math.max(20, r * 0.85) * (OPT.bigNumbers ? 1.2 : 1), hc = OPT.highContrast ? '#000' : INK; if (!DG || !DG.draw(ctx, num(s.hp), s.x, s.y + r * 0.05, hs, '#fff', hc)) text(num(s.hp), s.x, s.y + r * 0.05, hs, '#fff', hc); }
       if (OPT.colorBlind && (s.kind !== 'normal' || s.carry === 'chest')) kindMark(s.carry === 'chest' && s.kind === 'normal' ? 'chest' : s.kind, s.x, s.y - r * 1.02, r * 0.36);
       if (s.kind === 'mender') { glow(s.x, s.y, r * 1.7, '#6fe08a', 0.35 + Math.sin(S.t * 5 + i) * 0.12); ctx.save(); ctx.fillStyle = '#6fe08a'; ctx.strokeStyle = INK; ctx.lineWidth = 3; const q = r * 0.34; for (const [px, py, w2, h2] of [[-q * 0.35, -q, q * 0.7, q * 2], [-q, -q * 0.35, q * 2, q * 0.7]]) { ctx.fillRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); ctx.strokeRect(s.x + px, s.y - r * 0.95 + py + q, w2, h2); } ctx.restore(); }
     }
@@ -610,7 +612,8 @@ export function createRenderer(canvas, art, kit) {
     if (ui) FX.drawCard(g);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
-  HJ = createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text });
+  DG = kit && kit.bake ? createDigitAtlas(kit) : null;
+  HJ = createHitJuice({ ctx, S, OPT, glow, ring, burst, shaped, text, blit, sprite: k => kit && kit.SPR.pickup(k) });
   FX = createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, burst });
 
   return { hj: HJ, timeScale: () => (FX ? FX.timeScale() : 1), setBeat: fn => FX.setBeat(fn), clearBusy: () => FX.clearBusy(), takeSounds: () => FX.takeSounds(), setOptions(o) { Object.assign(OPT, o); }, draw, onEvent, layout, state: S, hudPress: z => getHud().press(z), safeTop: () => (hud ? hud.top() : 0), hudZone: gp => hudZone(gp, hud ? hud.top() : 0), toGame(px, py) { const L = layout(); return { x: (px - L.ox) / L.s, y: (py - L.oy) / L.s }; } };
