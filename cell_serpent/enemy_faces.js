@@ -53,14 +53,14 @@ export function createEnemyFaces(H) {
   }
 
   // DAZED: what is left of a popped face: x eyes, tongue out, a halo (baked per species body)
-  function dazed(g, R, P) {
+  function dazed(g, R, P, boss) {
     const f = P.face;
     for (const s of [-1, 1]) { const x = s * R * 0.36, y = -R * 0.1, q = R * 0.17; line(g, [[x - q, y - q], [x + q, y + q]], R * 0.1); line(g, [[x - q, y + q], [x + q, y - q]], R * 0.1); }
     g.fillStyle = '#7a1633'; ell(0, R * 0.4, R * 0.2, R * 0.12)(g); g.fill(); ink(g, R * 0.07); g.stroke();
     cel(g, '#ff7a9a', ell(R * 0.06, R * 0.56, R * 0.11, R * 0.17), { r: R * 0.17, hi: false, lw: 2, shadow: '#d9486a' });
     if (f === 'love' || f === 'shy') for (const s of [-1, 1]) { g.globalAlpha = 0.55; g.fillStyle = '#ff6fa8'; ell(s * R * 0.62, R * 0.2, R * 0.16, R * 0.1)(g); g.fill(); g.globalAlpha = 1; }
     // the halo hovers above the head
-    g.save(); g.translate(0, -R * 1.08); ink(g, R * 0.2); ell(0, 0, R * 0.52, R * 0.17)(g); g.stroke(); ink(g, R * 0.1, '#ffe066'); g.stroke(); g.restore();
+    g.save(); g.translate(0, -R * (boss ? 1.5 : 1.08)); ink(g, R * 0.2); ell(0, 0, R * 0.52, R * 0.17)(g); g.stroke(); ink(g, R * 0.1, '#ffe066'); g.stroke(); g.restore();
   }
 
   // TAIL TIP: a little tapered tail with a species flourish, baked pointing along +x (backwards from the last cell is applied by the caller)
@@ -78,8 +78,39 @@ export function createEnemyFaces(H) {
     else cel(g, P.acc, poly([[L * 0.8, -R * 0.16], [tx + R * 0.34, 0], [L * 0.8, R * 0.16]]), { r: R * 0.3, hi: false, lw: R * 0.05, shadow: shade(P.acc) });   // grumpy, mighty, gloomy: a pointy devil tip
   }
 
+  // SPINE (r8): a mid-snake cell reads as one body: a belly stripe on the +y side and a species back ridge on the -y side. Cells
+  // rotate along the path, so these line up from cell to cell. Baked into the body sprite once per species.
+  const BELLY = { love: 'band', sneezy: 'band', sleepy: 'dots', disco: 'sequin', piggy: 'band', frosty: 'band', sour: 'band', rust: 'band', grumpy: 'band', mighty: 'band', gloomy: 'dots' };
+  const RIDGE = { love: 'hearts', rust: 'bolts', sneezy: 'fluff', grumpy: 'shards', sleepy: 'puffs', disco: 'gems', sour: 'fin', mighty: 'moss', frosty: 'ice', piggy: 'curl', gloomy: 'spikes' };
+  function spine(g, r, P, k) {
+    const kind = BELLY[k], bc = k === 'frosty' ? '#8cc4e6' : '#fff3dc';
+    if (kind) {
+      g.save(); circ(0, 0, r * 0.88)(g); g.clip(); g.lineCap = 'round';
+      if (kind === 'band') { g.globalAlpha = 0.88; g.fillStyle = bc; g.beginPath(); g.moveTo(-r, r * 0.4); g.quadraticCurveTo(0, r * 0.64, r, r * 0.4); g.lineTo(r, r * 1.1); g.lineTo(-r, r * 1.1); g.closePath(); g.fill(); g.globalAlpha = 0.65; g.strokeStyle = P.sh; g.lineWidth = r * 0.05; g.beginPath(); g.moveTo(-r, r * 0.4); g.quadraticCurveTo(0, r * 0.64, r, r * 0.4); g.stroke(); }
+      else if (kind === 'dots') { g.globalAlpha = 0.95; g.fillStyle = bc; for (let i = -2; i <= 2; i++) { circ(i * r * 0.34, r * 0.62 + (i & 1 ? 0 : r * 0.04), r * 0.075)(g); g.fill(); } }
+      else { for (let i = -3; i <= 3; i++) { g.globalAlpha = 0.9; g.fillStyle = i & 1 ? '#ff9ad6' : '#ffffff'; circ(i * r * 0.27, r * 0.64, r * 0.065)(g); g.fill(); } }
+      g.restore();
+    }
+    const q = RIDGE[k], sd = (fn) => { g.save(); fn(); g.restore(); };
+    const stud = (x, w, h, col, sh) => cel(g, col, poly([[x - w, -r * 0.8], [x + w, -r * 0.8], [x, -r * (0.8 + h)]]), { r: r * 0.3, hi: false, lw: 2, shadow: sh });
+    if (q === 'hearts') sd(() => cel(g, '#ff5a8a', heartPath(r * 0.02, -r * 0.92, r * 0.2), { r: r * 0.2, hi: false, lw: 1.8, shadow: '#c42a54' }));
+    else if (q === 'bolts') sd(() => cel(g, '#c98a4a', circ(r * 0.02, -r * 0.9, r * 0.15), { r: r * 0.15, hi: false, lw: 2, shadow: '#8a4f22' }));
+    else if (q === 'fluff') sd(() => { for (const dx of [-0.08, 0.1]) line(g, [[r * dx, -r * 0.86], [r * (dx * 1.8), -r * 1.08]], r * 0.07); });
+    else if (q === 'shards') stud(r * 0.02, r * 0.12, 0.34, '#ff5a78', '#c42a54');
+    else if (q === 'puffs') sd(() => cel(g, '#fff8ec', circ(r * 0.02, -r * 0.92, r * 0.13), { r: r * 0.13, hi: false, lw: 1.8, shadow: '#e6d6c8' }));
+    else if (q === 'gems') sd(() => { g.translate(r * 0.02, -r * 0.92); cel(g, '#ff9ac6', poly([[0, -r * 0.16], [r * 0.12, 0], [0, r * 0.16], [-r * 0.12, 0]]), { r: r * 0.16, hi: false, lw: 1.8, shadow: '#d9488f' }); });
+    else if (q === 'fin') stud(r * 0.02, r * 0.16, 0.3, '#2f7a3a', '#1f4f27');
+    else if (q === 'moss') sd(() => { cel(g, '#7ad04a', circ(r * 0.02, -r * 0.9, r * 0.13), { r: r * 0.13, hi: false, lw: 1.8, shadow: '#4a8f2a' }); });
+    else if (q === 'ice') sd(() => { g.translate(r * 0.02, -r * 0.95); sparkle(g, 0, 0, r * 0.2, '#ffffff'); });
+    else if (q === 'curl') sd(() => { cel(g, '#ffd84d', circ(r * 0.02, -r * 0.9, r * 0.13), { r: r * 0.13, hi: false, lw: 1.8, shadow: '#d98f1a' }); });
+    else if (q === 'spikes') stud(r * 0.02, r * 0.14, 0.36, '#9dff6d', '#4fb02a');
+  }
+
+  // BOSS DAZED (r8): a popped boss face keeps its crown, knocked askew, so the kill reads as a king falling
+  function dazedCrown(g, R, crownFn) { g.save(); g.translate(R * 0.2, -R * 0.78); g.rotate(0.38); crownFn(g); g.restore(); }
+
   return {
-    yell, wail, surgeRing, streaks, dazed,
+    yell, wail, surgeRing, streaks, dazed, spine, dazedCrown,
     tailSpr: (skin, P, R) => bake('tailtip|' + skin, R * 4.6, R * 1.6, g => { g.translate(R * 0.55, 0); tailTip(g, R, P, skin); }, 2),
   };
 }
