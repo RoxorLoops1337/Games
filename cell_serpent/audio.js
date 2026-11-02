@@ -15,6 +15,7 @@ import { registerA10, keyLift, createAmbient } from './audio_b10b.js';
 import { registerA11, twistOf } from './audio_b11b.js';
 import { registerB12i } from './audio_b12i.js';
 import { registerB13h, progShift, fillOf } from './audio_b13h.js';
+import { registerB13b } from './juice_b13b.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
@@ -503,6 +504,7 @@ export function createAudio() {
   sfx.resumetick = e => { const n = Math.max(1, Math.min(3, (e && e.n) || 3)); tone(560 + (3 - n) * 140, 0.06, 'triangle', 0.08, -60); tone(1400 + (3 - n) * 300, 0.03, 'sine', 0.03); };
   registerB11(sfx, tone, noise, gate);   // batch 11: mirror glance, beat run, boss twists (audio_b11.js)
   registerA11(sfx, tone, noise, duck, gate);   // round 11: book sting, pet glance, pounce, tab ping, curtain (audio_b11.js)
+  registerB13b(sfx, tone, noise, duck, gate);   // batch 13: unlock fanfare, stat buy ladder, level-up lift (juice_b13b.js)
   registerB12i(sfx, tone, noise, duck, gate, now);   // batch 12: aim tick, crown clink, milestone, burst thinning (audio_b12i.js)
   registerB13h(sfx, tone, noise, duck, gate);   // batch 13: shot figure and sounds for gloom, nap, pillow, shell, metro, soundcheck (audio_b13h.js)
   registerA10(sfx, tone, noise, duck, gate);   // round 10: boss fill, bring pack, sticker book, pet calls (audio_b10b.js)
