@@ -4,6 +4,7 @@ import { loadArt } from './art.js';
 import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
+import { createMotion } from './motion.js';
 
 const SAVE_KEY = 'cell_serpent_save_v1';   // never rename: it is the live save slot (the save itself is versioned inside)
 const $ = id => document.getElementById(id);
@@ -14,8 +15,9 @@ const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save
 
 const audio = createAudio();
 audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music);
+const motion = createMotion({ $, buzz: p => buzz(p), getReduced: () => !!(save && save.settings && save.settings.reduceMotion) }); motion.init();
 const buzz = p => { try { if (save.settings.vibrate && navigator.vibrate) navigator.vibrate(p); } catch (e) { /* ignore */ } };
-function applySettings() { audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); if (R) R.setOptions({ reduceMotion: save.settings.reduceMotion, lowQuality: save.settings.lowQuality, bigNumbers: save.settings.bigNumbers }); dprCap = save.settings.lowQuality ? 1 : Math.max(dprCap, 2); }
+function applySettings() { motion.applyReduced(); audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); if (R) R.setOptions({ reduceMotion: save.settings.reduceMotion, lowQuality: save.settings.lowQuality, bigNumbers: save.settings.bigNumbers }); dprCap = save.settings.lowQuality ? 1 : Math.max(dprCap, 2); }
 let art = null, R = null, kit = null;
 const dayKey = () => Math.floor(Date.now() / 86400000);
 let slowFrames = 0, fastFrames = 0;
@@ -31,8 +33,8 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
-function show(id) { for (const s of document.querySelectorAll('.scr')) s.classList.toggle('on', s.id === id); $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); }
-function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) $(id).textContent = v; const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } const en = $('hEnergy'); if (en) en.textContent = tickEnergy(save, Date.now()) + '/' + ENERGY_MAX; }
+function show(id) { motion.screen(id); $('muteBtn').classList.toggle('on', id === 'title' || id === 'pause'); }
+function refreshCur() { for (const [id, v] of [['tBeats', save.beats], ['hBeats', save.beats], ['tSpark', save.sparkles], ['hSpark', save.sparkles]]) motion.num($(id), v); const pw = $('hPower'); if (pw) { const li = levelInfo(save.xp); pw.textContent = 'Lv ' + li.lv + '  ·  Power ' + power(save) + (save.streak.n > 1 ? '  ·  🔥 ' + save.streak.n : ''); } const en = $('hEnergy'); if (en) en.textContent = tickEnergy(save, Date.now()) + '/' + ENERGY_MAX; }
 
 // ---------------------------------------------------------------- icons (all drawn by the art kit)
 const iconCache = {};
@@ -442,7 +444,7 @@ $('muteBtn').onclick = toggleMute;
 for (const [id, label] of [['muteBtn', 'Mute'], ['enPlus', 'Buy Voice'], ['stPrev', 'Previous stage'], ['stNext', 'Next stage']]) $(id).setAttribute('aria-label', label);
 addEventListener('error', () => { toast('Something glitched. Your save is safe.'); if (mode === 'play') pause(); }); $('muteBtn').textContent = save.muted ? '🔇' : '🔊';
 
-window.CS = { g: null, save: () => save, mode: () => mode, openHub, startRun };
+window.CS = { motion, g: null, save: () => save, mode: () => mode, openHub, startRun };
 loadArt('assets/').then(a => {
   art = a; kit = createArtDraw((w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }, 2);
   for (const im of document.querySelectorAll('img[data-cur]')) im.src = iconURL(im.dataset.cur);

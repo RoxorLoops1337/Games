@@ -148,6 +148,49 @@
   .rextra{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:13px;color:var(--dim);margin-top:6px;width:min(360px,90vw)} .rextra b{color:#fff}
   #muteBtn{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:5;width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:20px;cursor:pointer;display:none}
   #muteBtn.on{display:block}
+/* @css:19-transitions */
+  /* screens: fade + scale in, fade out (transform and opacity only) */
+  .scr.on{animation:moScrIn .3s cubic-bezier(.2,.85,.25,1) both}
+  .scr.out{display:flex;pointer-events:none;animation:moScrOut .17s ease-in both}
+  @keyframes moScrIn{from{opacity:0;transform:scale(.965) translateY(12px)}to{opacity:1;transform:none}}
+  @keyframes moScrOut{to{opacity:0;transform:scale(1.03)}}
+  .tab.on{animation:moTabIn .26s cubic-bezier(.2,.85,.25,1) both}
+  @keyframes moTabIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .tabs button.on b{animation:moTabPop .42s cubic-bezier(.3,1.7,.5,1) both}
+  @keyframes moTabPop{0%{transform:scale(.7) translateY(4px)}100%{transform:none}}
+  /* buttons: pink primary, cyan secondary, gold reward, dim cancel */
+  .btn{--sh:#8c2a66;--d:5px;position:relative;overflow:hidden;isolation:isolate;background:linear-gradient(180deg,#fff0f9 0%,#ff9bd6 38%,#ff5cb8 100%);box-shadow:inset 0 2px 0 rgba(255,255,255,.75),inset 0 -4px 0 rgba(120,20,80,.18),0 var(--d) 0 var(--sh),0 10px 24px rgba(0,0,0,.4);text-shadow:0 1px 0 rgba(255,255,255,.45);transition:transform .2s cubic-bezier(.3,1.6,.5,1),filter .2s}
+  .btn.alt{--sh:#17707f;background:linear-gradient(180deg,#eafeff 0%,#7ae8f8 40%,#2fc4e0 100%);box-shadow:inset 0 2px 0 rgba(255,255,255,.8),inset 0 -4px 0 rgba(0,70,90,.2),0 var(--d) 0 var(--sh),0 10px 24px rgba(0,0,0,.4)}
+  .btn.gold{--sh:#a8730a;background:linear-gradient(180deg,#fffbd0 0%,#ffe070 40%,#ffbb22 100%);box-shadow:inset 0 2px 0 rgba(255,255,255,.85),inset 0 -4px 0 rgba(140,80,0,.2),0 var(--d) 0 var(--sh),0 10px 24px rgba(0,0,0,.4)}
+  .btn.dim{--sh:#18212c;background:linear-gradient(180deg,#56697e 0%,#3a4a5c 55%,#2c3947 100%);text-shadow:0 1px 0 rgba(0,0,0,.4);box-shadow:inset 0 2px 0 rgba(255,255,255,.22),inset 0 -3px 0 rgba(0,0,0,.2),0 var(--d) 0 var(--sh),0 8px 18px rgba(0,0,0,.35)}
+  .btn.small{--d:3px;box-shadow:inset 0 2px 0 rgba(255,255,255,.7),inset 0 -3px 0 rgba(0,0,0,.14),0 var(--d) 0 var(--sh),0 6px 14px rgba(0,0,0,.35)}
+  .btn:active:not([disabled]){--d:1px;transform:translateY(4px) scale(.975,.94);transition-duration:.05s}
+  .btn::after{content:"";position:absolute;top:0;bottom:0;left:0;width:34%;z-index:-1;pointer-events:none;background:linear-gradient(100deg,transparent,rgba(255,255,255,.7),transparent);transform:translateX(-260%) skewX(-20deg)}
+  .btn:active:not([disabled])::after{animation:moShine .5s ease-out}
+  @keyframes moShine{from{transform:translateX(-260%) skewX(-20deg)}to{transform:translateX(420%) skewX(-20deg)}}
+  /* ready: the main call to action breathes and glints */
+  :is(#playBtn,#stGo,#rNext,#bOk,#rvGo,#resumeBtn,#contBtn):not([disabled]){animation:moBreathe 1.9s ease-in-out infinite}
+  :is(#playBtn,#stGo,#rNext,#bOk,#rvGo,#resumeBtn,#contBtn):not([disabled]):active{animation:none}
+  :is(#playBtn,#stGo,#rNext,#bOk,#rvGo,#resumeBtn,#contBtn):not([disabled])::after{animation:moGlint 3.6s ease-in-out infinite}
+  @keyframes moBreathe{50%{transform:scale(1.035)}}
+  @keyframes moGlint{0%,55%{transform:translateX(-260%) skewX(-20deg)}100%{transform:translateX(420%) skewX(-20deg)}}
+  .btn[disabled]{filter:grayscale(.9) brightness(.8);opacity:.5;--d:2px;animation:none;box-shadow:inset 0 2px 0 rgba(255,255,255,.25),0 var(--d) 0 #1b2330;text-shadow:none}
+  .btn[disabled]::after{display:none}
+  .mo-rip{position:absolute;z-index:-1;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(255,255,255,.85),rgba(255,255,255,0) 70%);transform:scale(0);opacity:.9;animation:moRip .55s ease-out forwards}
+  @keyframes moRip{to{transform:scale(1);opacity:0}}
+  .card:active,.arrow:active,.chip:active,.sidebtn:active,.dbtn:active,.plus:active{transform:scale(.95)}
+  .card,.arrow,.chip,.sidebtn,.dbtn,.plus{transition:transform .18s cubic-bezier(.3,1.6,.5,1),border-color .15s}
+  .mo-coin,.mo-spk{position:fixed;left:0;top:0;z-index:60;pointer-events:none;will-change:transform,opacity}
+  .mo-coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff7b8,#ffc83d 55%,#b87a08);border:2px solid #8a5a06}
+  .mo-coin.s{background:radial-gradient(circle at 35% 30%,#fff,#ff9ad6 55%,#c93a8f);border-color:#8c2a66}
+  .mo-spk{width:8px;height:8px;border-radius:2px;background:#fff6b0;box-shadow:0 0 6px #ffd24a;rotate:45deg}
+  /* toast: springs down from the top and tucks away */
+  #toast{transform:translate(-50%,-30px) scale(.92);transition:transform .34s cubic-bezier(.3,1.5,.5,1),opacity .2s;box-shadow:0 8px 20px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.18)}
+  #toast.on{transform:translate(-50%,0) scale(1)}
+  /* Reduce Motion (settings or OS): nothing loops, nothing moves */
+  html.rm *,html.rm *::before,html.rm *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;animation-delay:0s!important;transition-duration:.01ms!important}
+  html.rm .mo-coin,html.rm .mo-spk{display:none}
+/* end @css:19-transitions */
 </style>
 </head>
 <body>
