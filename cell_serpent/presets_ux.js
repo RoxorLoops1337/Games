@@ -48,7 +48,7 @@ export function renderPresets(host, c) {
     const ids = s.presets[i] || [], has = ids.length > 0, ok = has && presetUsable(s, ids), on = has && sameSet(ids, s.loadout);
     const cell = el('div', 'prcell' + (has ? ' has' : '') + (on ? ' on' : '') + (has && !ok ? ' bad' : ''));
     const nm = buildName(s, i), main = el('button', 'prmain', `<b>${nm.replace(/&/g, '&amp;')}</b>` + (has ? `<span class="prics">${ids.map(id => `<i>${icon(id)}</i>`).join('')}</span>` : '<span class="prem">empty</span>'));
-    main.setAttribute('aria-label', has ? `Load build ${nm}` : `Build ${nm} is empty`);
+    main.setAttribute('aria-label', has ? `${on ? 'Build ' + nm + ' is equipped' : ok ? 'Load build ' + nm : 'Build ' + nm + ' needs a skill you no longer own'}: ${ids.map(wn).join(', ')}` : `Build ${nm} is empty`);
     if (has) main.setAttribute('aria-pressed', on ? 'true' : 'false'); cell.setAttribute('role', 'group'); cell.setAttribute('aria-label', 'Build ' + nm);
     main.disabled = !has;
     main.onclick = () => { if (loadPreset(s, i)) { announce(`Build ${nm} loaded: ${ids.map(wn).join(', ')}`); persist(); audio.play('upgrade'); rerender(); refocus(host, i, 'prmain'); } else audio.play('click'); };
