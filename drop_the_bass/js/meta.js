@@ -1007,7 +1007,7 @@ export function runRewards(result) {
   return { records, fans };
 }
 export function applyRunResult(p, result, rng, now = 0) {
-  const out = { records: 0, fans: 0, diamonds: 0, loot: [], levelUps: [], newStars: 0, firstClear: false, unlockedWorld: null, firstBosses: [], challenge: null, newBestEndless: false, modifiers: [], modMul: null, milestones: [], newOutfits: [] };
+  const out = { records: 0, fans: 0, diamonds: 0, loot: [], levelUps: [], newStars: 0, firstClear: false, unlockedWorld: null, firstBosses: [], questsDone: [], challenge: null, newBestEndless: false, modifiers: [], modMul: null, milestones: [], newOutfits: [] };
   const w = WORLD_BY_ID[result.world];
   out.bests = recordBests(p, result);
   const rw = runRewards(result);
@@ -1024,6 +1024,8 @@ export function applyRunResult(p, result, rng, now = 0) {
   addSeasonProgress(p, result, now || Date.now());
   // daily quest progress
   const dp = p.daily.prog;
+  const questsDoneIds = () => (p.daily.quests || []).filter((q) => { const d = questDef(q.id); return d && questProgress(p, d) >= d.goal; }).map((q) => q.id);
+  const questsBefore = questsDoneIds();
   const add = (k, v) => { dp[k] = (dp[k] || 0) + v; };
   add('kills', result.kills); add('merges', result.merges); add('deploys', result.deploys); add('runs', 1); add('waves', result.cleared);
   add('bosses', result.bossKills); add('heroUses', result.heroUses || 0); add('perfects', result.perfects || 0); add('remixes', result.remixes || 0);
@@ -1037,6 +1039,7 @@ export function applyRunResult(p, result, rng, now = 0) {
   if (result.mode === 'daily') add('dailies', 1);
   if (result.mode === 'endless') dp.endlessWave = Math.max(dp.endlessWave || 0, result.cleared || 0);
   dp.bestCombo = Math.max(dp.bestCombo || 0, result.bestCombo); dp.maxLevel = Math.max(dp.maxLevel || 0, result.maxLevel || 0);
+  out.questsDone = questsDoneIds().filter((id) => !questsBefore.includes(id));   // today's quests this run completed (the results screen lists them)
   // bosses seen for the first time
   for (const b of result.bossTypes || []) if (!p.bossesSeen[b]) { p.bossesSeen[b] = true; out.firstBosses.push(b); out.diamonds += 8; }
   if (result.mode === 'story') {

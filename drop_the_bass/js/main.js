@@ -1,4 +1,5 @@
 // main.js: the app shell. Loads the save, owns the canvas and the DOM root, runs the loop, routes between title, hub, cutscenes and battle.
+import { MenuPad } from './gamepad.js';
 import { W, H, GAME, WORLDS, BOSSES } from './data_core.js';
 import { Run, genWave } from './sim.js';
 import { AudioFx } from './audio.js';
@@ -23,6 +24,7 @@ import { installDiag } from './diag.js';
 try { installDiag(window, localStorage, () => ({ lang: I18N.getLang(), screen: app.screen })); } catch (e) { /* no storage */ }
 const canvas = document.getElementById('game');
 const ui = document.getElementById('ui');
+const menuPad = new MenuPad();
 const ctx = canvas.getContext('2d');
 setRoot(ui);
 initDomA11y(ui);
@@ -465,7 +467,7 @@ function frame(now) {
   const dt = Math.min(0.05, rawMs / 1000); last = now; T += dt;
   const v = app.view;
   try {
-    if (!(app.screen === 'battle' && app.battle)) battleIdle(AudioFx);
+    if (!(app.screen === 'battle' && app.battle)) { battleIdle(AudioFx); if (app.screen === 'hub' || app.screen === 'title') menuPad.poll(dt, ui); }
     if (app.cut && app.screen === 'cut') { app.cut.update(dt); app.cut.draw(ctx, v); }
     else if (app.screen === 'battle' && app.battle) { if (app.battle.pv && app.battle.pv.open && !app.battle.tut && !app.battle.run.practice && M.markStep(app.profile, 'preview')) app.save(); app.battle.update(dt); app.battle.draw(ctx, v); }
     else if (app.screen === 'title') {
