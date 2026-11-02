@@ -1329,8 +1329,15 @@
   .dwrap.tap{animation:dTap .55s ease-out} #result .dwrap.tap{animation:dTap .55s ease-out} @keyframes dTap{30%{transform:translateY(-16px) scale(.96,1.06)}60%{transform:translateY(0) scale(1.05,.95)}100%{transform:none}}
   .dnote{position:absolute;z-index:4;font-style:normal;font-weight:900;font-size:20px;line-height:1;pointer-events:none;-webkit-text-stroke:1px #2a1040;text-shadow:0 2px 0 #2a1040;animation:dNote .9s ease-out both} @keyframes dNote{0%{opacity:0;transform:translateY(8px) scale(.5)}20%{opacity:1}100%{opacity:0;transform:translate(var(--dx),-70px) rotate(var(--r)) scale(1.1)}}
   .stage .dwrap{display:block;z-index:2;width:min(150px,38vw)} .stage .dwrap .duo{width:100%}
-  @media (max-height:700px){.dpet{display:none}}
-  @media (prefers-reduced-motion:reduce){.dwrap,.dhat,.dpet,.dnote{animation:none!important}}
+  .dp-puppy{animation:dpFlip 1.3s var(--d,0s) ease-in-out infinite} .dp-turtle{animation:dpSpin 1.5s var(--d,0s) ease-in-out infinite} .dp-kitten,.dp-piglet{animation:dpWig .5s var(--d,0s) ease-in-out infinite} .dp-lamb{animation:dpBoing .8s var(--d,0s) cubic-bezier(.3,0,.4,1) infinite}
+  @keyframes dpFlip{0%,55%,100%{transform:translateY(0) rotate(0)}22%{transform:translateY(-26px) rotate(-180deg)}44%{transform:translateY(0) rotate(-360deg) scale(1.06,.92)}}
+  @keyframes dpSpin{0%,20%,100%{transform:translateY(0) rotateY(0)}60%{transform:translateY(-8px) rotateY(720deg)}}
+  @keyframes dpWig{0%,100%{transform:translateY(0) rotate(-7deg) scale(1.04,.94)}50%{transform:translateY(-14px) rotate(7deg) scale(.96,1.04)}}
+  @keyframes dpBoing{0%,100%{transform:translateY(0) scale(1.1,.86)}45%{transform:translateY(-30px) scale(.94,1.1)}}
+  .dheart{position:absolute;bottom:34%;z-index:4;font-style:normal;font-weight:900;font-size:17px;line-height:1;color:#ff5a8a;-webkit-text-stroke:1px #4a1a33;pointer-events:none;opacity:0;animation:dHeart 1.8s var(--d,0s) ease-out infinite} .dheart.l{left:-20%;margin-left:var(--x)} .dheart.r{right:-20%;margin-right:var(--x)}
+  @keyframes dHeart{0%{opacity:0;transform:translateY(0) scale(.4)}20%{opacity:1}100%{opacity:0;transform:translateY(-64px) scale(1.1) rotate(12deg)}}
+  @media (max-height:700px){.dpet,.dheart{display:none}}
+  @media (prefers-reduced-motion:reduce){.dwrap,.dhat,.dpet,.dnote,.dheart{animation:none!important} .dheart{opacity:.9}}
   /* end @css:02-animal-art */
 </style>
 </head>

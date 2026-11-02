@@ -394,8 +394,18 @@ export function createArtDraw(makeCanvas, dpr = 2) {
       if (MOOD >= 3) cel(g, '#7a1633', ell(0, r * 0.62, r * 0.26, r * (MOOD === 4 ? 0.2 : 0.12)), { r: r * 0.2, hi: false, lw: r * 0.06, shadow: '#7a1633' });   // MOO
     } else if (k === 'dove') {
       const wf = MOOD === 5 ? [-1.5, -0.5] : MOOD === 6 ? [0.15, 0.45] : [-1.0, -0.1];   // 02-animal-art r3: wing-up / wing-down frames for a real flap
-      for (const s of [-1, 1]) cel(g, '#ffffff', poly([[s * r * 0.3, -r * 0.1], [s * r * 1.5, r * wf[0]], [s * r * 1.35, r * wf[1]], [s * r * 1.05, r * 0.3], [s * r * 0.4, r * 0.35]]), { r: r * 0.9, hi: false, lw: r * 0.1, shadow: '#bfd0ee' });
+      // 02-animal-art r6: feathered wings (three fanned feathers each, blue-grey tips) instead of one flat blade, plus a tail fan and a head tuft
+      const wy = (wf[0] + wf[1]) / 2;
+      for (const s of [-1, 1]) {
+        const base = Math.atan2(wy * r * 1.1, r * 1.1);   // wing direction: up when wy < 0
+        [[0.5, '#cfdcf5', 1.15], [0.2, '#e4ecfb', 1.0], [-0.12, '#ffffff', 0.82]].forEach(([off, col, len]) => {
+          const ang = s > 0 ? base + off * 0.8 * Math.sign(wy || 1) : Math.PI - base - off * 0.8 * Math.sign(wy || 1), L = r * len * 0.62, cx = s * r * 0.42 + Math.cos(ang) * L, cy = r * 0.05 + Math.sin(ang) * L;
+          cel(g, col, ell(cx, cy, L * 1.05, r * 0.3, ang), { r: r * 0.5, hi: false, lw: r * 0.09, shadow: '#a9bde4' });
+        });
+      }
+      cel(g, '#dfe8fa', poly([[-r * 0.3, r * 0.5], [-r * 0.5, r * 0.98], [-r * 0.12, r * 0.82], [0, r * 1.05], [r * 0.12, r * 0.82], [r * 0.5, r * 0.98], [r * 0.3, r * 0.5]]), { r: r * 0.5, hi: false, lw: r * 0.08, shadow: '#a9bde4' });
       cel(g, '#ffffff', circ(0, r * 0.05, r * 0.72), { r, shadow: '#c9d8f2' });
+      for (const a of [-0.28, 0.12]) cel(g, '#ffffff', ell(Math.sin(a) * r * 0.2, -r * 0.8, r * 0.1, r * 0.26, a), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#c9d8f2' });   // head tuft
       eyes2(g, r * 0.26, -r * 0.05, r * 0.11);
       cel(g, '#ff9a2e', poly([[-r * 0.14, r * 0.12], [r * 0.14, r * 0.12], [0, r * 0.36]]), { r: r * 0.2, hi: false, lw: r * 0.07, shadow: '#d6601a' });
       blush(g, -r * 0.45, r * 0.2, r * 0.12); blush(g, r * 0.45, r * 0.2, r * 0.12);
