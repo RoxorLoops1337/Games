@@ -290,11 +290,11 @@
         var cwTop = Math.max(76, Math.min(112, Math.floor(handW / 4.2))), cardH;
         for (cwCard = cwTop; ; cwCard -= 4) {
           fh = ((L.h - fixedH - Math.round(cwCard * 1.4) - 30) / sW - G.roofH - 6) / 3;
-          if (fh >= 78 || cwCard - 4 < 76) break;
+          if (fh >= 70 || cwCard - 4 < 76) break;
         }
         cardH = cwCard * 1.4;
-        if (fh > 94) { cardH = Math.min(cwCard * 1.62, cardH + (fh - 94) * 3 * sW); fh = 94; } // a tall phone: spare height makes the cards taller (more room for rules text) instead of leaving a gap
-        fh = Math.max(66, Math.min(100, Math.floor(fh)));
+        if (fh > 76) { cardH = Math.min(cwCard * 1.95, cardH + (fh - 76) * 3 * sW); fh = 76; } // a tall phone: spare height makes the cards taller (more room for rules text) instead of leaving a gap
+        fh = Math.max(64, Math.min(80, Math.floor(fh)));
         if (G.setFloor) G.setFloor(fh);
         availH = L.h - fixedH - Math.round(cardH) - 30;
         rootEl.style.setProperty('--hand-h', Math.round(cardH) + 30 + 'px');
@@ -512,8 +512,8 @@
       var ts = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--text-scale')) || 1;
       var pref = Math.max(12, Math.min(22, 8 * s)) * ts;
       var cap = G.catPitch * s / 3.7; // the widest cat plate (3.1em for two 2-digit stats, 3.4em with a 3-digit one) plus a small gap must fit one cat slot
-      var capV = (G.floorH - 27) * s / 5.7; // lives and nap above the head plus plate and chip row below the feet must fit one floor
-      var capB = (G.H - G.feet(0)) * s / 2.9; // the chip row of the bottom floor must stay on the canvas
+      var capV = (G.floorH - 27) * s / 6.2; // lives and nap above the head plus plate and chip row below the feet must fit one floor
+      var capB = (G.H - G.feet(0)) * s / 3.3; // the chip row of the bottom floor must stay on the canvas
       return Math.round(Math.max(9, Math.min(pref, cap, capV, capB)) * 10) / 10;
     }
     function pillEm(val) { var n = String(val).length; return Math.max(1.5, 0.5 + 0.62 * n); }

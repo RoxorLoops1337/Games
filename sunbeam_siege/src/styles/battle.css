@@ -113,7 +113,7 @@ html.reduce-motion .u-hit.tgt{animation:none}
 .u-acts{display:flex;align-items:center;justify-content:center;gap:.2em}
 .u-top>*,.u-chips>*,.u-acts>*{pointer-events:auto}
 /* stat pills: icon over number, ~1.5em wide each, so ATK (left, red) and HP (right, green) always fit one slot */
-.u-plate{top:-.55em;gap:.12em;align-items:flex-start}
+.u-plate{top:-.12em;gap:.12em;align-items:flex-start}
 .pl{--pl-a:#e8504c;--pl-b:#8c1f24;--pl-n:#fff;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;min-width:1.5em;padding:.1em .16em .14em;border-radius:.5em;line-height:1;color:#fff;
   background:linear-gradient(180deg,var(--pl-a),var(--pl-b));border:.09em solid rgba(8,4,18,.9);box-shadow:0 .14em 0 rgba(0,0,0,.55),inset 0 .08em 0 rgba(255,255,255,.28);transform-origin:50% 70%}
 .pl.atk{--pl-a:#f06a45;--pl-b:#a02a20}
@@ -508,3 +508,15 @@ html.reduce-motion .b-ring,html.reduce-motion .b-ghost,html.reduce-motion .b-zon
 
 /* while a card is being dragged the aim label above the card says where it lands, so the prompt bar must not cover the bottom floor */
 .b-dragging .b-prompt{opacity:0;pointer-events:none;transition:none}
+
+/* ---- review fixes ---- */
+/* the camera cutout only needs about 30px, not the whole status bar height (it left a 50px dead band above the top bar on Android) */
+.battle[data-mode=phone]{--safe-t:min(var(--safe-t-raw),30px)}
+/* top bar: the clock yields (and trims its text) before a relic icon ever gets covered */
+.battle[data-mode=phone] .b-relics{flex:0 0 auto;max-width:34%;min-width:0}
+.battle[data-mode=phone] .b-clock{flex:0 1 auto;min-width:0}
+.battle[data-mode=phone] .ck-main,.battle[data-mode=phone] .ck-sub{overflow:hidden}
+.battle[data-mode=phone] .ck-sub{text-overflow:ellipsis;white-space:nowrap}
+/* resource row: the DISCARD caption is wider than its pile, keep it off the End Turn pill */
+.battle[data-mode=phone] .b-pile.discard{margin-right:14px}
+.battle.lefty[data-mode=phone] .b-pile.discard{margin-right:0}
