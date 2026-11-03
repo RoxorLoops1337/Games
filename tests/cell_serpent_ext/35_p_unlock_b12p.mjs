@@ -34,11 +34,11 @@ ok('table: monotonic, once open it stays open as the cleared count grows (and th
 ok('fresh account: only the Battle tab, the stage preview, START, the Voice and Beats pills', () => {
   assert.deepEqual(U.unlockedIds(fresh(0)).sort(), ['battle', 'beats', 'energy', 'preview']);
   assert.deepEqual(U.visibleTabs(fresh(0)), ['Battle']);
-  assert.deepEqual(U.nextLockedTab(fresh(0)), { tab: 'Skills', need: 1, label: 'Skills' }, 'one teaser: the very next tab');
+  assert.deepEqual(U.nextLockedTab(fresh(0)), { tab: 'Stats', need: 1, label: 'Stats' }, 'one teaser: the very next tab');
 });
-ok('the tab curve: Skills 1, Stats 2, Pets 3, Shop 5 (or 4 with Sparkles), Gear 8', () => {
+ok('the tab curve: Stats 1, Skills 2, Pets 3, Shop 5 (or 4 with Sparkles), Gear 8', () => {
   const tabs = c => U.visibleTabs(fresh(c));
-  assert.deepEqual(tabs(1), ['Battle', 'Skills']);
+  assert.deepEqual(tabs(1), ['Stats', 'Battle']);
   assert.deepEqual(tabs(2), ['Stats', 'Battle', 'Skills']);
   assert.deepEqual(tabs(3), ['Stats', 'Battle', 'Skills', 'Pets']);
   assert.deepEqual(tabs(4), ['Stats', 'Battle', 'Skills', 'Pets'], 'no Sparkles to spend: no Shop yet');
@@ -52,7 +52,7 @@ ok('the tab curve: Skills 1, Stats 2, Pets 3, Shop 5 (or 4 with Sparkles), Gear 
 ok('what each cleared count opens (the unlock table)', () => {
   const at = c => U.UNLOCKS.filter(u => U.isUnlocked(u.id, fresh(c)) && !U.isUnlocked(u.id, fresh(c - 1))).map(u => u.id).sort();
   const want = {
-    1: ['loadout', 'skills', 'sparkles'], 2: ['bestbar', 'power', 'stats'], 3: ['gapfix', 'overview', 'pets'], 4: ['sign'],
+    1: ['bestbar', 'power', 'stats'], 2: ['loadout', 'skills', 'sparkles'], 3: ['gapfix', 'overview', 'pets'], 4: ['sign'],
     5: ['bestiary', 'energyplus', 'shop'], 6: ['gigs', 'rewardfilter'], 7: ['fatal'].slice(0, 0).concat(['fund', 'funfact', 'worldstrip']),
     8: ['gear', 'swap'], 9: ['event', 'presets'], 10: ['hard', 'pig', 'records'], 11: ['quests'], 12: ['nextreward', 'ribbons', 'runlog', 'wheel'],
     13: ['backstage', 'invasion', 'recstrip'], 14: ['achievements', 'trophies'], 15: ['stickers', 'wardrobe'], 16: ['pass'], 18: ['badges', 'season', 'streak'], 20: ['book'], 25: ['records_gold'],
@@ -86,16 +86,16 @@ ok('saves: round trip, junk is sanitised, no key was renamed', () => {
 });
 ok('hints: one queue in unlock order, each shows once, tabs and panels, never for old saves', () => {
   const s = fresh(3);
-  let q = U.pendingHints(s); assert.deepEqual(q.map(h => h.id), ['skills', 'stats', 'pets']);
-  assert.ok(/Skills/.test(q[0].text) && /equip your music skills/.test(q[0].text) && /upgrade your stats: pay Beats/.test(q[1].text));
+  let q = U.pendingHints(s); assert.deepEqual(q.map(h => h.id), ['stats', 'skills', 'pets']);
+  assert.ok(/Stats/.test(q[0].text) && /upgrade your stats: pay Beats/.test(q[0].text) && /equip your music skills/.test(q[1].text));
   for (const h of q) assert.ok(h.text.length <= 80 && !h.text.includes(String.fromCharCode(8212)), h.id);
   assert.equal(U.markSeen(s, q[0].key), true); assert.equal(U.markSeen(s, q[0].key), false, 'marking twice changes nothing');
-  assert.deepEqual(U.pendingHints(s).map(h => h.id), ['stats', 'pets']);
-  const q7 = U.pendingHints(fresh(7)).map(h => h.id); assert.deepEqual(q7, ['skills', 'stats', 'pets', 'sign', 'shop', 'gigs', 'fund'].filter(x => q7.includes(x)));
+  assert.deepEqual(U.pendingHints(s).map(h => h.id), ['skills', 'pets']);
+  const q7 = U.pendingHints(fresh(7)).map(h => h.id); assert.deepEqual(q7, ['stats', 'skills', 'pets', 'sign', 'shop', 'gigs', 'fund'].filter(x => q7.includes(x)));
   assert.ok(q7.includes('sign') && q7.includes('gigs') && q7.includes('fund'));
   const tb = U.pendingHints(fresh(15)).find(h => h.id === 'stickers'); assert.equal(tb.tab, 'Stats');
-  const inn = U.inTabHint(fresh(2), 'Stats'); assert.equal(inn.text, 'Tap a price to get stronger'); assert.equal(U.inTabHint(fresh(1), 'Stats'), null, 'locked tab: no hint');
-  const s2 = fresh(2); U.markSeen(s2, inn.key); assert.equal(U.inTabHint(s2, 'Stats'), null);
+  const inn = U.inTabHint(fresh(1), 'Stats'); assert.equal(inn.text, 'Tap a price to get stronger'); assert.equal(U.inTabHint(fresh(0), 'Stats'), null, 'locked tab: no hint');
+  const s2 = fresh(1); U.markSeen(s2, inn.key); assert.equal(U.inTabHint(s2, 'Stats'), null);
   assert.equal(U.inTabHint(fresh(0), 'Battle'), null);
 });
 ok('tab bar layout rule: 44 px targets and centred for one to three tabs, even slots beyond', () => {
@@ -184,28 +184,28 @@ if (chromium) {
       {
         const { p, ctx } = await open(390, 844, null);
         await p.evaluate(() => { const s = window.CS.save(); s.cleared = 1; s.best = 1; s.runs = 1; window.CS.openHub('Battle'); }); await p.waitForTimeout(1300);
-        const a = await p.evaluate(() => ({ tabs: [...document.querySelectorAll('.tabs button[data-tab]')].filter(b => !b.hidden).map(b => b.dataset.tab), newb: !!document.querySelector('.tabs [data-tab="Skills"] .newb'), arrive: document.querySelector('.tabs [data-tab="Skills"]').classList.contains('arrive') || true, card: [...document.querySelectorAll('.ukh')].map(e => e.textContent), lock: document.querySelector('.tabs .lockt') && document.querySelector('.tabs .lockt').getAttribute('aria-label') }));
+        const a = await p.evaluate(() => ({ tabs: [...document.querySelectorAll('.tabs button[data-tab]')].filter(b => !b.hidden).map(b => b.dataset.tab), newb: !!document.querySelector('.tabs [data-tab="Stats"] .newb'), arrive: document.querySelector('.tabs [data-tab="Stats"]').classList.contains('arrive') || true, card: [...document.querySelectorAll('.ukh')].map(e => e.textContent), lock: document.querySelector('.tabs .lockt') && document.querySelector('.tabs .lockt').getAttribute('aria-label') }));
         n++;
-        assert.deepEqual(a.tabs, ['Battle', 'Skills']); assert.equal(a.newb, true, 'NEW badge on the new tab');
-        assert.deepEqual(a.card, ['New: Skills! Here you can equip your music skills.'], 'exactly one hint, the tab one');
-        assert.ok(/Stats, locked. Clear stage 2/.test(a.lock), a.lock);
-        const geo = await p.evaluate(() => { const c = document.querySelector('.ukh').getBoundingClientRect(), g = document.querySelector('#stGo').getBoundingClientRect(), t = document.querySelector('.tabs [data-tab="Skills"]').getBoundingClientRect(); return { cb: c.bottom, ct: c.top, gb: g.bottom, tt: t.top, h: c.height }; });
+        assert.deepEqual(a.tabs, ['Stats', 'Battle']); assert.equal(a.newb, true, 'NEW badge on the new tab');
+        assert.deepEqual(a.card, ['New: Stats! Here you can upgrade your stats: pay Beats to get stronger.'], 'exactly one hint, the tab one');
+        assert.ok(/Skills, locked. Clear stage 2/.test(a.lock), a.lock);
+        const geo = await p.evaluate(() => { const c = document.querySelector('.ukh').getBoundingClientRect(), g = document.querySelector('#stGo').getBoundingClientRect(), t = document.querySelector('.tabs [data-tab="Stats"]').getBoundingClientRect(); return { cb: c.bottom, ct: c.top, gb: g.bottom, tt: t.top, h: c.height }; });
         assert.ok(geo.cb <= geo.tt + 1 && geo.h >= 44, 'the card sits above the tab it points at');
         assert.ok(geo.ct >= geo.gb - 2, `the card never covers START (card top ${geo.ct}, START bottom ${geo.gb})`);
         // it does not block play: START stays tappable
         assert.equal(await p.evaluate(() => { const r = document.querySelector('#stGo').getBoundingClientRect(), t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return t === document.querySelector('#stGo') || document.querySelector('#stGo').contains(t); }), true);
         await p.evaluate(() => document.querySelector('.ukh').click()); await p.waitForTimeout(900);
-        assert.equal(await p.evaluate(() => document.querySelectorAll('.ukh').length), 0, 'tap dismisses; nothing else queued at stage 1 (the Skills in-tab hint waits for the tab)');
-        assert.equal(await p.evaluate(() => window.CS.save().unlocked.seen.h_skills), 1, 'remembered in the save');
+        assert.equal(await p.evaluate(() => document.querySelectorAll('.ukh').length), 0, 'tap dismisses; nothing else queued at stage 1 (the Stats in-tab hint waits for the tab)');
+        assert.equal(await p.evaluate(() => window.CS.save().unlocked.seen.h_stats), 1, 'remembered in the save');
         // the first visit inside the tab has its own hint
-        await p.evaluate(() => document.querySelector('.tabs [data-tab="Skills"]').click()); await p.waitForTimeout(1600);
-        assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll('.ukh')].map(e => e.textContent)), ['Tap a skill to see what it does']);
-        assert.equal(await p.evaluate(() => !!document.querySelector('.tabs [data-tab="Skills"] .newb')), false, 'visiting clears the NEW badge');
+        await p.evaluate(() => document.querySelector('.tabs [data-tab="Stats"]').click()); await p.waitForTimeout(1600);
+        assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll('.ukh')].map(e => e.textContent)), ['Tap a price to get stronger']);
+        assert.equal(await p.evaluate(() => !!document.querySelector('.tabs [data-tab="Stats"] .newb')), false, 'visiting clears the NEW badge');
         await p.evaluate(() => document.querySelector('.ukh').click()); await p.waitForTimeout(700);
         // two stages at once: the hints queue, one at a time, in order
         await p.evaluate(() => { const s = window.CS.save(); s.cleared = 3; window.CS.openHub('Battle'); }); await p.waitForTimeout(1300);
         const q1 = await p.evaluate(() => [...document.querySelectorAll('.ukh')].map(e => e.textContent));
-        assert.deepEqual(q1, ['New: Stats! Here you can upgrade your stats: pay Beats to get stronger.']);
+        assert.deepEqual(q1, ['New: Skills! Here you can equip your music skills.']);
         await p.evaluate(() => document.querySelector('.ukh').click()); await p.waitForTimeout(1300);
         assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll('.ukh')].map(e => e.textContent)), ['New: Pets! Little friends who sing along.']);
         await p.evaluate(() => document.querySelector('.ukh').click()); await p.waitForTimeout(1300);

@@ -18,14 +18,14 @@ export const UNLOCKS = [
   { id: 'energy', step: 0, kind: 'misc', label: 'Voice pill' },
   { id: 'beats', step: 0, kind: 'misc', label: 'Beats pill' },
   { id: 'preview', step: 0, kind: 'misc', label: 'stage preview and START' },
-  // ---- stage 1: the music skills
-  { id: 'skills', step: 1, kind: 'tab', tab: 'Skills', label: 'Skills', hint: 'New: Skills! Here you can equip your music skills.', inTab: 'Tap a skill to see what it does' },
-  { id: 'loadout', step: 1, kind: 'panel', label: 'Loadout row and EDIT' },
-  { id: 'sparkles', step: 1, kind: 'misc', label: 'Sparkles pill' },
-  // ---- stage 2: stats
-  { id: 'stats', step: 2, kind: 'tab', tab: 'Stats', label: 'Stats', hint: 'New: Stats! Here you can upgrade your stats: pay Beats to get stronger.', inTab: 'Tap a price to get stronger' },
-  { id: 'power', step: 2, kind: 'panel', label: 'Level and Power line, power check' },
-  { id: 'bestbar', step: 2, kind: 'panel', label: 'Best progress bar' },
+  // ---- stage 1: stats come first (pay Beats to get stronger), then the music skills
+  { id: 'stats', step: 1, kind: 'tab', tab: 'Stats', label: 'Stats', hint: 'New: Stats! Here you can upgrade your stats: pay Beats to get stronger.', inTab: 'Tap a price to get stronger' },
+  { id: 'power', step: 1, kind: 'panel', label: 'Level and Power line, power check' },
+  { id: 'bestbar', step: 1, kind: 'panel', label: 'Best progress bar' },
+  // ---- stage 2: the music skills
+  { id: 'skills', step: 2, kind: 'tab', tab: 'Skills', label: 'Skills', hint: 'New: Skills! Here you can equip your music skills.', inTab: 'Tap a skill to see what it does' },
+  { id: 'loadout', step: 2, kind: 'panel', label: 'Loadout row and EDIT' },
+  { id: 'sparkles', step: 2, kind: 'misc', label: 'Sparkles pill' },
   // ---- stage 3: pets
   { id: 'pets', step: 3, kind: 'tab', tab: 'Pets', label: 'Pets', hint: 'New: Pets! Little friends who sing along.', inTab: 'Tap the egg' },
   { id: 'overview', step: 3, kind: 'panel', label: 'Stage overview' },
