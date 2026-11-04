@@ -671,7 +671,7 @@ ok('Sharp Notes make capsule notes pierce; every cell is the same size so number
 
 ok('snakes get faster and tougher every stage, and a boss is much tougher than its neighbours', () => {
   assert.ok(sim.speedMul(10) > sim.speedMul(1) * 1.3 && sim.speedMul(40) > sim.speedMul(10));
-  for (const n of [1, 4, 9]) { const g = sim.createGame({ seed: 7, stage: n }), sn = g.snakes[0]; assert.ok(Math.abs(sn.speed * sim.arrivalTime(n) / (sn.path.len - sn.segs[0].ps) - sim.speedMul(n)) < 1e-6, 'speed follows the stage'); }
+  for (const n of [1, 4, 9]) { const g = sim.createGame({ seed: 7, stage: n }), sn = g.snakes[0]; assert.ok(Math.abs(sn.speed * sim.arrivalTime(n) / (sn.path.len - sn.segs[0].ps) - sim.speedMul(n) * sim.gateSlow(g)) < 1e-6, 'speed follows the stage'); }
   const hp = n => sim.createGame({ seed: 7, stage: n }).stageHpMax / sim.createGame({ seed: 7, stage: n }).snakes[0].segs.length;
   assert.ok(hp(4) < hp(5) && hp(5) > hp(4) * 1.8, 'the stage 5 boss is far tougher per cell than stage 4');
   assert.ok(hp(10) > hp(5) * 1.3 && hp(30) > hp(10));

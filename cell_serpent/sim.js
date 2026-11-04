@@ -827,7 +827,7 @@ function spawnSnake(g, n, o = {}) {
   markGold(g, n, segs, len);
   markSpecials(g, n, segs, len);
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
-  const speed = ((path.len - Math.min(ps0, path.len - 400)) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED * ringPace(n) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
+  const speed = ((path.len - Math.min(ps0, path.len - 400)) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * gateSlow(g) * (g.ring ? RING_SPEED * ringPace(n) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
   segs.hpMax = segs.reduce((a, s) => a + s.max, 0);
   g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3, healT: undefined, drum: false, lane: null, napT: 0, gloomW: undefined, rushT: 0, loveT: undefined, creak: false, snzT: undefined, snzW: false, frostW: undefined, qT: 0, qDone: 0, qWin: 0, qNeed: 0, p2: false, p2T: 0, cue: 0, skipT: RING_SKIP_EVERY });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
@@ -1156,6 +1156,8 @@ function beatRun(g) {
 // b15: the snake comes in from UNDER the gate line below the HUD: cells above it are not drawn, not targeted and not hit
 let GATE = 182;
 export const gateY = g => (isBossStage(g.stage) ? 215 : 182);
+// the strip under the HUD is not shootable any more, so lane snakes crawl a little slower: a cell keeps the same time in the shootable part of the field (rings are unchanged)
+export const gateSlow = g => (g.ring ? 1 : (LINE_Y - gateY(g)) / (LINE_Y - 8));
 const visible = s => s.y > GATE && s.y < H - 8 && s.x > 8 && s.x < W - 8;
 // accumulated effect of a run upgrade: summed rarity values, or the common value per pick if set directly
 const UPV = Object.fromEntries([...CAPSULE_UPS, ...PASSIVES].map(u => [u.id, u]));
