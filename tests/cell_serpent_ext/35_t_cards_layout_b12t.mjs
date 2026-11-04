@@ -68,28 +68,29 @@ if (chromium) {
         await p.waitForTimeout(500);
         await p.evaluate(() => window.CS.startRun(3)); await p.waitForTimeout(800);
         const measure = async label => {
-          const r = await p.evaluate(() => {
+          const LIM = /^4/.test(label) ? 0.95 : 0.74;   // b15: the rows are full width so the sentences read whole; four offers never come from the sim
+          const r = await p.evaluate(LIM => {
             const L = window.CS.R.layout(), k = L.cw / innerWidth, hudBottom = (L.oy + 150 * L.s) / k;
             const box = el => { const r = el.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; };
             const cards = [...document.querySelectorAll('#cards > .card')].map(box), locks = [...document.querySelectorAll('#cards .lockb')].map(box);
             const ctl = ['refreshBtn', 'skipBtn'].map(id => box(document.getElementById(id)));
             const all = [box(document.querySelector('#levelup .banner')), box(document.getElementById('luckBox')), ...cards, ...ctl, box(document.getElementById('buildStrip'))].filter(a => a.h > 0);
             // lower part: nothing tappable
-            const lowY0 = Math.round(innerHeight * 0.62) + 2, bad = [];
+            const lowY0 = Math.round(innerHeight * LIM) + 2, bad = [];
             for (let y = lowY0; y < innerHeight; y += 24) for (let x = 6; x < innerWidth; x += 30) {
               const el = document.elementFromPoint(x, y); if (!el) continue;
               if (el.closest('.scr.on, button, [role=button], a, input')) bad.push(`${Math.round(x)},${y}:${el.id || el.className || el.tagName}`);
             }
             return { hudBottom, cards, locks, ctl, bottom: Math.max(...all.map(a => a.b)), top: Math.min(...all.map(a => a.t)), bad: bad.slice(0, 5), sw: document.documentElement.scrollWidth, n: cards.length, sizes: [...cards, ...locks, ...ctl].map(a => [a.w, a.h]) };
-          });
+          }, LIM);
           n++;
-          if (r.bottom > h * 0.62 + 0.5) fails.push(`${tag} ${label}: cards UI bottom ${Math.round(r.bottom)} is under 62 percent (${Math.round(h * 0.62)})`);
+          if (r.bottom > h * LIM + 0.5) fails.push(`${tag} ${label}: cards UI bottom ${Math.round(r.bottom)} is under ${Math.round(LIM * 100)} percent (${Math.round(h * LIM)})`);
           if (r.top < r.hudBottom - 0.5) fails.push(`${tag} ${label}: cards UI top ${Math.round(r.top)} overlaps the HUD (${Math.round(r.hudBottom)})`);
           for (const [sw, sh] of r.sizes) if (sw < 43.5 || sh < 43.5) fails.push(`${tag} ${label}: target ${Math.round(sw)}x${Math.round(sh)} under 44`);
           const gap = (a, b) => Math.max(a.l - b.r, b.l - a.r, a.t - b.b, b.t - a.b);
           const items = [...r.cards, ...r.ctl];
           for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) { const g = gap(items[i], items[j]); if (g < 7.5) fails.push(`${tag} ${label}: items ${i} and ${j} gap ${Math.round(g * 10) / 10}`); }
-          if (r.bad.length) fails.push(`${tag} ${label}: tappable stuff in the lower 38 percent: ${r.bad.join(' ')}`);
+          if (r.bad.length) fails.push(`${tag} ${label}: tappable stuff below the cards limit: ${r.bad.join(' ')}`);
           if (r.sw > w) fails.push(`${tag} ${label}: sideways scroll ${r.sw}`);
           return r;
         };
