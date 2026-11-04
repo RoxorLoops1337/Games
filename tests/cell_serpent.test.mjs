@@ -493,12 +493,13 @@ ok('index.html wires the module, the hub and every screen; the save key is kept;
 });
 
 
-ok('rarity: one of the three cards is always common, and luck makes better rarities likelier', () => {
+// b15: the tier shown follows the dps the card adds; the guaranteed safe pick is the common ROLL
+ok('rarity: one of the three cards is always a common roll, and luck makes better rarities likelier', () => {
   assert.equal(sim.RARITIES.length, 6);
   const w0 = sim.rarityWeights(0), w20 = sim.rarityWeights(20), share = w => 1 - w[0] / w.reduce((a, b) => a + b, 0);
   assert.ok(share(w20) > share(w0) * 1.5, 'luck lifts the chance of better rarities');
   assert.ok(w0[0] > w0[1] && w0[1] > w0[2] && w0[4] > w0[5], 'rare things are rarer at the start');
-  const mean = lvl => { let t = 0, n = 0; for (let i = 0; i < 150; i++) { const g = sim.createGame({ seed: 100 + i, stage: 10 }); g.level = lvl; g.pending = 1; sim.step(g, 1 / 60, {}); assert.ok(g.choices.some(c => c.rarity === 0), 'a common card'); for (const c of g.choices) { t += c.rarity; n++; } } return t / n; };
+  const mean = lvl => { let t = 0, n = 0; for (let i = 0; i < 150; i++) { const g = sim.createGame({ seed: 100 + i, stage: 10 }); g.level = lvl; g.pending = 1; sim.step(g, 1 / 60, {}); assert.ok(g.choices.some(c => c.roll === 0), 'a common roll'); for (const c of g.choices) { t += c.roll; n++; } } return t / n; };
   assert.ok(mean(25) > mean(3) + 0.4, 'later picks are better on average');
 });
 
@@ -654,8 +655,8 @@ ok('card kinds have their own rarity: speed and damage can be common, extra note
   const seen = {};
   for (let i = 0; i < 400; i++) {
     const g = sim.createGame({ seed: 300 + i, stage: 10 }); g.level = 1 + (i % 20); g.pending = 1; sim.step(g, 1 / 60, {});
-    assert.ok(g.choices.some(c => c.rarity === 0), 'one common card is always there');
-    for (const c of g.choices) { (seen[c.id] = seen[c.id] || new Set()).add(c.rarity); if (c.id === 'notes') assert.ok(c.rarity >= 1, 'notes are never common'); if (c.id === 'burst') assert.ok(c.rarity >= 2, 'bursts are never common'); }
+    assert.ok(g.choices.some(c => c.roll === 0), 'one common card is always there');
+    for (const c of g.choices) { (seen[c.id] = seen[c.id] || new Set()).add(c.roll); if (c.id === 'notes') assert.ok(c.roll >= 1, 'notes are never common'); if (c.id === 'burst') assert.ok(c.roll >= 2, 'bursts are never common'); }
   }
   assert.ok(seen.aspd.has(0) && seen.cdmg.has(0), 'speed and damage do show up as common');
   assert.ok(!seen.notes.has(0) && !seen.burst.has(0) && !seen.burst.has(1));

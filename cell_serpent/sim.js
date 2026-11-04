@@ -268,6 +268,10 @@ export const RARITIES = [
   { id: 'godlike', name: 'Godlike', color: '#ffe14a' },
 ];
 const RARITY_BASE = [100, 32, 11, 3.2, 1, 0.3];
+// b15: the rarity of an upgrade card tells how much flat DPS it adds (see dpsGain). The roll still decides the size of the bonus;
+// the flat DPS then names the tier. Faster Tempo is the yardstick: +8 common, +12 rare, +18 epic, +26 legendary, +38 mythic, +55 godlike.
+export const DPS_BANDS = [9.5, 15, 22, 32, 46];
+export const dpsRarity = d => { let r = 0; while (r < DPS_BANDS.length && d >= DPS_BANDS[r]) r++; return r; };
 export const LUCK_MAX = 30;
 export const rarityWeights = luck => RARITY_BASE.map((w, t) => w * Math.exp(0.03 * t * Math.min(LUCK_MAX, Math.max(0, luck))));
 export function rollRarity(rand, luck) {
@@ -1301,6 +1305,25 @@ function statText(id, cur, add) {
 // In the first stages the upgrade cards are weak; they grow to full strength by stage ten.
 const COUNT_UPS = new Set(['notes', 'burst', 'speed']);
 const earlyMul = stage => clamp(0.5 + 0.055 * (stage - 1), 0.5, 1);
+// Flat DPS of a card: how much damage per second it adds to the STARTING gun, whatever you already own, so a card is the same tier
+// in every run (1 DPS = 1% of the starting gun's damage per second). Skills count as a fixed slice of that gun's damage.
+// Returns null for cards that are not about damage (defence, utility): those keep their rolled tier.
+export function dpsGain(g, c) {
+  const v = c.gain; if (!(v > 0)) return null;
+  switch (c.id) {
+    case 'aspd': case 'cdmg': return v;
+    case 'notes': case 'burst': return 100 * v;
+    case 'power': return 1.2 * v;
+    case 'crit': return 1.4 * v;
+    case 'haste': return v / (1 - v / 100);
+    case 'dbeat': return 0.5 * v;
+    case 'fan': return 0.15 * v;
+    case 'speed': return 4 * v;
+    default:
+      if (c.kind === 'weapon') return c.lvl ? 6 * v : 12 * (1 + 0.3 * (v - 1));
+      return null;
+  }
+}
 function rollChoices(g) {
   const pool = [];
   const early = g.level < 3;   // the first two picks are capsule upgrades only
@@ -1347,6 +1370,8 @@ function rollChoices(g) {
       c.stat = c.kind === 'capsule' ? statText(c.id, cur, c.gain) : '';
     }
   });
+  // b15: name the tier by the DPS the card adds (defence and utility cards keep their rolled tier)
+  for (const c of out) { c.roll = c.rarity; const d = dpsGain(g, c); if (d !== null) { c.dps = d; c.rarity = dpsRarity(d); } }
   return out;
 }
 function maybeLevelUp(g) {

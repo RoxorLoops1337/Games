@@ -27,3 +27,8 @@ export function plainDesc(c) {
   if (f && c.gain > 0 && (c.kind === 'capsule' || c.kind === 'passive')) return f(c.gain);
   return (c && c.desc) || '';
 }
+// "+12 DPS": the flat damage per second the card adds (1 DPS = 1% of the starting gun), only for cards that are about damage
+export function dpsNote(c) {
+  if (!c || !(c.dps >= 1)) return '';
+  return 'Adds +' + (c.dps >= 100 ? Math.round(c.dps / 10) * 10 : Math.round(c.dps)) + ' DPS';
+}
