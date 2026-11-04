@@ -700,12 +700,18 @@ function ringPath(n = 6) {
   return (Math.floor(n / 6) - 1) % 2 === 0 ? path : mirrorPath(path);   // ring stages alternate the winding direction
 }
 const mirrorPath = p => ({ ...p, pts: p.pts.map(q => ({ x: W - q.x, y: q.y })) });
+const LANE_TOP = 220;   // the first lane row of the lane maps (just under the gate line, boss gate 215)
 export function buildPath(n) {
   if (stageKind(n) === 'ring') return ringPath(n);
   const R = rng(n * 7919 + 13), k = pathKind(n), end = LINE_Y + 40, cx = W / 2;
   let poly = [];
   const sine = (A, lam, ph, grow = 0) => { for (let y = -160; y <= end; y += 6) poly.push({ x: cx + (A + grow * (y / end)) * Math.sin((y / lam) * TAU + ph), y }); };
-  const lanes = (pts, smooth) => { poly = [{ x: cx, y: -160 }, ...pts.map(([x, y]) => ({ x, y })), { x: cx, y: end }]; poly = chaikin(poly, smooth); };
+  // b15: lanes never turn inside the strip under the HUD (cells there are hidden and cannot be shot): the lane map is squeezed down so its top row sits just under the gate
+  const lanes = (pts, smooth) => {
+    const inner = pts.filter(q => q[1] > -100), lo = Math.min(...inner.map(q => q[1])), hi = Math.max(...inner.map(q => q[1]));
+    if (lo < LANE_TOP && hi > LANE_TOP + 200) pts = pts.map(([x, y]) => (y > -100 ? [x, LANE_TOP + (y - lo) * (hi - LANE_TOP) / (hi - lo)] : [x, y]));
+    poly = [{ x: cx, y: -160 }, ...pts.map(([x, y]) => ({ x, y })), { x: cx, y: end }]; poly = chaikin(poly, smooth);
+  };
   if (k === 0) sine(230, 640, R() * TAU);
   else if (k === 1) lanes([[80, -160], [80, 590], [226, 590], [226, 70], [366, 70], [366, 615], [500, 615], [500, 80], [624, 80], [624, 745], [86, 745], [86, 930], [610, 930], [610, 1070], [150, 1070], [150, 1260]], 2);   // tall hairpins, then wide lanes
   else if (k === 2) { for (let y = -160; y <= end; y += 6) { const a = (y / 520) * TAU + R() * 0, sg = Math.sin(a); poly.push({ x: cx + 270 * Math.sign(sg) * Math.pow(Math.abs(sg), 0.55), y }); } poly = chaikin(poly, 1); }   // big rounded lobes
@@ -789,11 +795,12 @@ function newCell(ps, x, y, r, hp, kind, i) {
   return { ps, x, y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0, tp: ps, vx: 0, vy: 0, wave: false, warded: false, gloom: false, frost: false, gold: false, goldT: 0, ward: false, lull: false, drum: false, choir: false, bell: false, quartet: false, qPopped: false, metro: false, pillow: false, snack: false, mirror: false, shell: false };
 }
 export const SNAKE_KEYS = ['id', 'path', 'segs', 'tail', 'breach', 'breachT', 'speed', 'slow', 'boss', 'skin', 'name', 'surge', 'surgeT', 'healT', 'drum', 'lane', 'napT', 'gloomW', 'rushT', 'loveT', 'creak', 'snzT', 'snzW', 'frostW', 'qT', 'qDone', 'qWin', 'qNeed', 'p2', 'p2T', 'cue', 'skipT'];
-// distance along a path where it first reaches the gate line (the snake is drawn only below it)
-function gateDist(path, gy) {
+// distance along a path where it first reaches height gy (the snake is drawn only below the gate)
+function distAtY(path, gy) {
   const pts = path.pts; for (let i = 0; i < pts.length; i++) if (pts[i].y >= gy) return path.cum[i];
   return 240;
 }
+const gateDist = distAtY;
 function spawnSnake(g, n, o = {}) {
   const pig = g.mode === 'pig', inv = g.mode === 'inv', boss = isBossStage(n), len = o.len || (pig ? 40 : inv ? 70 : snakeLength(n)), segs = [];
   const path = o.mirror ? mirrorPath(g.path) : g.path;
@@ -827,7 +834,7 @@ function spawnSnake(g, n, o = {}) {
   markGold(g, n, segs, len);
   markSpecials(g, n, segs, len);
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
-  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * gateSlow(g) * (g.ring ? RING_SPEED * ringPace(n) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
+  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * gateSlow(g, path) * (g.ring ? RING_SPEED * ringPace(n) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
   segs.hpMax = segs.reduce((a, s) => a + s.max, 0);
   g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3, healT: undefined, drum: false, lane: null, napT: 0, gloomW: undefined, rushT: 0, loveT: undefined, creak: false, snzT: undefined, snzW: false, frostW: undefined, qT: 0, qDone: 0, qWin: 0, qNeed: 0, p2: false, p2T: 0, cue: 0, skipT: RING_SKIP_EVERY });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
@@ -1157,7 +1164,7 @@ function beatRun(g) {
 let GATE = 182;
 export const gateY = g => (isBossStage(g.stage) ? 215 : 182);
 // the strip under the HUD is not shootable any more, so lane snakes crawl a little slower: a cell keeps the same time in the shootable part of the field (rings are unchanged)
-export const gateSlow = g => (g.ring ? 1 : (LINE_Y - gateY(g)) / (LINE_Y - 8));
+export const gateSlow = (g, path) => { if (g.ring || !path) return 1; const d8 = distAtY(path, 8), dg = distAtY(path, gateY(g)); return Math.min(1, Math.max(0.5, (path.len - dg) / Math.max(200, path.len - d8))); };
 const visible = s => s.y > GATE && s.y < H - 8 && s.x > 8 && s.x < W - 8;
 // accumulated effect of a run upgrade: summed rarity values, or the common value per pick if set directly
 const UPV = Object.fromEntries([...CAPSULE_UPS, ...PASSIVES].map(u => [u.id, u]));
