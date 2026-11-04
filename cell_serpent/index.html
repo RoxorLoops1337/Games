@@ -2842,8 +2842,11 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 #levelup .cards .card.pick .delta .gb{display:none}
 #levelup .cards .card.pick .ds,#levelup .cards[data-n="4"] .card.pick .ds{grid-column:1 / -1;grid-row:2;display:block;-webkit-line-clamp:unset;overflow:visible;font-size:14px;line-height:1.25;margin:0;color:#fff;font-weight:700}
 #levelup .cards .card.pick .pips{display:none}
+#levelup .cards .card.pick .dpsn{grid-column:1 / -1;grid-row:3;font-size:12px;line-height:1.2;color:#cfe4ff;font-weight:700}
+@media (max-height:800px){#levelup .cards .card.pick .dpsn{display:none}}
 #levelup .cards .card.pick .syn{display:none}
-#levelup .cards .card.pick .lnk,#levelup .cards .card.pick .bet{position:static;order:9;flex:0 0 100%;margin:3px 0 0;font-size:12px;line-height:1.2;white-space:normal;overflow:visible;text-overflow:clip;max-width:none;display:block}
+/* the chain tags (Fast Fingers and friends) live in the YOUR BAND sheet; on the rows the DPS line is worth more than two stacked pills */
+#levelup .cards .card.pick .lnk,#levelup .cards .card.pick .bet{display:none}
 #levelup .cards .card.pick .lockb{top:50%;right:4px;transform:translateY(-50%)}
 #levelup .luckbox .lkrow{display:none}
 #levelup .banner::before{display:none}

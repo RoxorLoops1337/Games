@@ -27,3 +27,9 @@ export function plainDesc(c) {
   if (f && c.gain > 0 && (c.kind === 'capsule' || c.kind === 'passive')) return f(c.gain);
   return (c && c.desc) || '';
 }
+// "About +5% damage": what the card adds to your total damage per second right now (only cards that are about damage)
+export function dpsNote(c) {
+  if (!c || !(c.dps >= 0.01)) return '';
+  const pc = c.dps * 100, t = pc >= 100 ? Math.round(pc / 10) * 10 : pc >= 10 ? Math.round(pc) : Math.round(pc * 2) / 2;
+  return 'About +' + t + '% total damage';
+}

@@ -268,6 +268,11 @@ export const RARITIES = [
   { id: 'godlike', name: 'Godlike', color: '#ffe14a' },
 ];
 const RARITY_BASE = [100, 32, 11, 3.2, 1, 0.3];
+// b15: the rarity of an upgrade card tells how much damage per second it adds to YOUR build right now.
+// The roll still decides the size of the bonus; this estimate (a fraction of your current total DPS) then names the tier.
+// aspd at no stacks is the yardstick: +8% common, +12% rare, +18% epic, +26% legendary, +38% mythic, +55% godlike.
+export const DPS_BANDS = [0.095, 0.15, 0.22, 0.32, 0.46];
+export const dpsRarity = d => { let r = 0; while (r < DPS_BANDS.length && d >= DPS_BANDS[r]) r++; return r; };
 export const LUCK_MAX = 30;
 export const rarityWeights = luck => RARITY_BASE.map((w, t) => w * Math.exp(0.03 * t * Math.min(LUCK_MAX, Math.max(0, luck))));
 export function rollRarity(rand, luck) {
@@ -1301,6 +1306,37 @@ function statText(id, cur, add) {
 // In the first stages the upgrade cards are weak; they grow to full strength by stage ten.
 const COUNT_UPS = new Set(['notes', 'burst', 'speed']);
 const earlyMul = stage => clamp(0.5 + 0.055 * (stage - 1), 0.5, 1);
+// Share of the damage dealt so far that comes from the capsule (the rest is skills); a guess until there is enough data.
+function capShare(g) {
+  const by = g.dmgBy || {}; let tot = 0; for (const k in by) tot += by[k];
+  return tot < 800 ? 0.85 : Math.min(1, Math.max(0.1, (by.capsule || 0) / tot));
+}
+// Estimated gain of a card as a fraction of the current total DPS, or null when the card is not about damage (defence, utility).
+export function dpsGain(g, c) {
+  const v = c.gain, p = g.p; if (!(v > 0) || !p) return null;
+  const cs = capShare(g), up = id => uv(g, id);
+  const ratio = (cur, add) => (1 + (cur + add) / 100) / (1 + cur / 100) - 1;
+  switch (c.id) {
+    case 'aspd': return cs * ratio(up('aspd'), v);
+    case 'cdmg': return cs * ratio(up('cdmg'), v);
+    case 'notes': { const n = 1 + Math.round(up('notes')); return cs * (Math.round(up('notes') + v) + 1) / n - cs; }
+    case 'burst': { const n = 1 + Math.round(up('burst')); return cs * (Math.round(up('burst') + v) + 1) / n - cs; }
+    case 'power': return ratio(up('power'), v);
+    case 'crit': { const m = p.critMul - 1; return cs * ((1 + (p.crit + v / 100) * m) / (1 + p.crit * m) - 1); }
+    case 'haste': { const a = 1 - up('haste') / 100, b = Math.max(0.3, 1 - (up('haste') + v) / 100); return Math.max(0, a) / b - 1; }
+    case 'dbeat': return cs * 0.5 * (v / 100) / (1 + 0.5 * up('dbeat') / 100);
+    case 'fan': return 0.15 * v / 100;
+    case 'speed': return 0.04 * v;
+    default:
+      if (c.kind === 'weapon') {
+        if (!c.lvl) return 0.12 * (1 + 0.3 * (v - 1));
+        const by = g.dmgBy || {}; let tot = 0; for (const k in by) tot += by[k];
+        const share = tot < 800 ? (1 - cs) / Math.max(1, Object.keys(g.weap).length) : (by[c.id] || 0) / tot;
+        return share * ((1 + 0.3 * (c.lvl + v)) / (1 + 0.3 * c.lvl) - 1);
+      }
+      return null;
+  }
+}
 function rollChoices(g) {
   const pool = [];
   const early = g.level < 3;   // the first two picks are capsule upgrades only
@@ -1347,6 +1383,8 @@ function rollChoices(g) {
       c.stat = c.kind === 'capsule' ? statText(c.id, cur, c.gain) : '';
     }
   });
+  // b15: name the tier by the DPS the card adds (defence and utility cards keep their rolled tier)
+  for (const c of out) { const d = dpsGain(g, c); if (d !== null) { c.dps = d; c.roll = c.rarity; c.rarity = dpsRarity(d); } }
   return out;
 }
 function maybeLevelUp(g) {
