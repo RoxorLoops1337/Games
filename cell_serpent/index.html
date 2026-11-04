@@ -2827,7 +2827,7 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 /* level-up cards as full-width rows (like the Cell Survivor cards): icon, name + rarity, the now > next numbers on the right, then ONE plain
    sentence. No ellipsis anywhere: a whole row is wide enough for the sentence. The odds chips go, the slim LUCK bar stays. */
 #levelup .cards,#levelup .cards[data-n="2"],#levelup .cards[data-n="4"]{grid-template-columns:minmax(0,1fr);gap:8px;max-width:420px}
-#levelup .cards .card.pick,#levelup .cards[data-n="4"] .card.pick{flex-direction:row;flex-wrap:wrap;align-items:center;gap:0 10px;padding:7px 50px 7px 10px;min-height:66px;border-radius:16px;text-align:left}
+#levelup .cards .card.pick,#levelup .cards[data-n="4"] .card.pick{flex-direction:row;flex-wrap:wrap;align-items:center;gap:0 10px;padding:5px 50px 5px 10px;min-height:62px;border-radius:16px;text-align:left}
 #levelup .cards .card.pick .ic,#levelup .cards[data-n="4"] .card.pick .ic{flex:none;width:50px;height:50px;margin:0;border-radius:14px}
 #levelup .cards .card.pick .ic img{width:42px;height:42px}
 #levelup .cards .card.pick .ic .kd{display:none}
@@ -2841,7 +2841,7 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 #levelup .cards .card.pick .dv b{font-size:15px}
 #levelup .cards .card.pick .delta .gb{display:none}
 /* a dark plate behind the words: the foil of the rare tiers never fights the text */
-#levelup .cards .card.pick .bd,#levelup .cards[data-n="4"] .card.pick .bd{background:rgba(10,7,38,.78);border-radius:11px;padding:4px 8px}
+#levelup .cards .card.pick .bd,#levelup .cards[data-n="4"] .card.pick .bd{background:rgba(10,7,38,.78);border-radius:11px;padding:3px 8px}
 #levelup .cards .card.pick .ds,#levelup .cards[data-n="4"] .card.pick .ds{grid-column:1 / -1;grid-row:2;display:block;-webkit-line-clamp:unset;overflow:visible;font-size:14px;line-height:1.25;margin:0;color:#fff;font-weight:700}
 #levelup .cards .card.pick .pips{display:none}
 #levelup .cards .card.pick .dpsn{grid-column:1 / -1;grid-row:3;font-size:12px;line-height:1.2;color:#cfe4ff;font-weight:700}
@@ -2854,8 +2854,9 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 #levelup #skipBtn{background:rgba(10,7,38,.72);border-radius:18px}
 #levelup .banner::before{display:none}
 @media (max-height:700px){#levelup .cards .card.pick,#levelup .cards[data-n="4"] .card.pick{min-height:60px;padding-top:5px;padding-bottom:5px}#levelup .cards .card.pick .ic,#levelup .cards[data-n="4"] .card.pick .ic{width:42px;height:42px}#levelup .cards .card.pick .ic img{width:34px;height:34px}#levelup .cards .card.pick .lnk,#levelup .cards .card.pick .bet{display:none}}
-@media (max-height:760px){#levelup .cards .card.pick .lnk,#levelup .cards .card.pick .bet{display:none}#levelup .cards .card.pick,#levelup .cards[data-n="4"] .card.pick{min-height:62px}}
-@media (max-height:620px){#levelup .banner{display:none}#levelup .luckbox{display:none}#levelup .buildstrip{display:none}#levelup .cards .card.pick .ds{font-size:13px}}
+@media (max-height:760px){#levelup .buildstrip{display:none}#levelup .cards .card.pick,#levelup .cards[data-n="4"] .card.pick{min-height:56px}}
+@media (max-height:760px){#levelup .luckbox{display:none}}
+@media (max-height:620px){#levelup .cards .card.pick,#levelup .cards[data-n="4"] .card.pick{min-height:48px;padding:3px 46px 3px 8px}#levelup .cards .card.pick .ic,#levelup .cards[data-n="4"] .card.pick .ic{width:38px;height:38px}#levelup .cards .card.pick .ic img{width:30px;height:30px}#levelup .cards .card.pick .bd{padding:2px 6px}#levelup .cards .card.pick .nm,#levelup .cards .card.pick .nm .nt{font-size:15px}#levelup .banner{display:none}#levelup .luckbox{display:none}#levelup .buildstrip{display:none}#levelup .cards .card.pick .ds{font-size:13px}}
 /* end @css:38-cards-rows */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
