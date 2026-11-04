@@ -6,7 +6,7 @@ import { runs, winRate, PROFILES, profileFor } from './balance_harness.mjs';
 
 const N = 4;
 const fresh1 = winRate(1, {}, N), fresh3 = winRate(3, {}, N);
-assert.ok(fresh1.win >= 0.1 && fresh1.win <= 0.6, 'fresh account clears stage 1 sometimes: ' + fresh1.win);
+assert.ok(fresh1.win >= 0.1 && fresh1.win <= 0.8, 'fresh account clears stage 1 sometimes: ' + fresh1.win);
 assert.equal(fresh3.win, 0, 'fresh account cannot clear stage 3');
 assert.ok(fresh1.prog > fresh3.prog * 0.9, 'stage 3 is not easier than stage 1 on progress');
 

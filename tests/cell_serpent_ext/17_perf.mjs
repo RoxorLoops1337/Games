@@ -47,7 +47,7 @@ assert.ok(ms < 20000, 'stage 50 stress 60s sim took ' + ms.toFixed(0) + 'ms');
     for (let i = 0; i < 20; i++) R.draw(g, ui, 0.016);
     assert.ok(counts.grad <= 20 * 4, `stage ${stage}: ${counts.grad / 20} gradients per frame on the main canvas (budget 4)`);
     assert.ok(counts.clip <= 20 * 30, `stage ${stage}: ${counts.clip / 20} clips per frame (budget 30)`);
-    assert.ok(counts.make <= 40, `stage ${stage}: ${counts.make} canvases created in 20 steady frames`);
+    assert.ok(counts.make <= 50, `stage ${stage}: ${counts.make} canvases created in 20 steady frames`);   // b15: 40 -> 50, the snake now starts at the gate so a different set of cells is on screen after 240 steps
     R.setOptions({ lowQuality: true }); R.draw(g, ui, 0.016);   // low quality still draws
   }
 }

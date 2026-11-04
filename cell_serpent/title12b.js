@@ -16,7 +16,7 @@ export function faceBurstHTML(S) {
 // ---- first-run goal chip (shown on the title until the first run starts)
 export function firstGoalHTML(save) {
   if (!save || save.runs) return '';
-  return '<b class="goal12" style="--d:.3s"><i>★</i> First goal: pop the face of stage 1</b>';
+  return '<b class="goal12" style="--d:.3s"><i>★</i> First goal: pop all the cells of stage 1</b>';
 }
 
 // ---- welcome back

@@ -56,9 +56,9 @@ export function showTutorial(onDone, audio, kit, art) {
   const duo = A && A.duo ? im(A.duo, 'tduo') : '<i class="tcell"></i>';
   el.classList.toggle('art12', !!A); el.classList.toggle('shot5', !!SH);
   el.innerHTML = `<div class="tbox">
-    <div class="tstep s1 on"><div class="tcap">SLIDE</div><div class="tbar">${duo}<b class="tfinger">\u{1F446}</b></div><div class="tarrows"><em>◀</em><em>▶</em></div></div>
-    <div class="tstep s2"><div class="tcap">SHOOT</div><div class="tgold">${A ? im(A.gold, 'tyelimg') : '<i class="tyel">★</i>'}${SH || '<i class="tshot"></i><i class="tburst"></i>'}</div><div class="tbar">${duo}</div></div>
-    <div class="tstep s3"><div class="tcap">POP THE FACE</div><div class="tchain">${A ? im(A.cell, 'tseg') + im(A.cell, 'tseg') + im(A.cell, 'tseg') : '<i></i><i></i><i></i>'}<div class="tface"><span class="tshield"></span>${A ? im(A.head, 'thead') : '<b>\u{1F40D}</b>'}${FB}</div></div><div class="tbar">${duo}</div></div>
+    <div class="tstep s1 on"><div class="tcap">SLIDE</div><div class="tsub">Drag to move. Your shots fly straight up.</div><div class="tbar">${duo}<b class="tfinger">\u{1F446}</b></div><div class="tarrows"><em>◀</em><em>▶</em></div></div>
+    <div class="tstep s2"><div class="tcap">AUTO SHOOT</div><div class="tsub">You shoot by yourself. Pop gold cells!</div><div class="tgold">${A ? im(A.gold, 'tyelimg') : '<i class="tyel">★</i>'}${SH || '<i class="tshot"></i><i class="tburst"></i>'}</div><div class="tbar">${duo}</div></div>
+    <div class="tstep s3"><div class="tcap">POP THE CELLS</div><div class="tsub">Pop all the cells, then the face!</div><div class="tchain">${A ? im(A.cell, 'tseg') + im(A.cell, 'tseg') + im(A.cell, 'tseg') : '<i></i><i></i><i></i>'}<div class="tface"><span class="tshield"></span>${A ? im(A.head, 'thead') : '<b>\u{1F40D}</b>'}${FB}</div></div><div class="tbar">${duo}</div></div>
     <div class="tdots"><i class="on"></i><i></i><i></i></div>
     <div class="tbtns"><button class="tskip" type="button">SKIP</button><button class="tnext" type="button" aria-label="Next">▶</button></div></div>`;
   document.body.appendChild(el);
@@ -85,7 +85,7 @@ export function petHint(tabsRoot, hubTab, save) {
 export function eggNudge(egg, save) { if (egg && save.eggs > 0) egg.classList.add('nudge12'); }
 
 // ---- title extras: rising music notes, a tagline that cycles, a sparkle burst when PLAY is tapped
-const TAGS = ['RoxorLoops & Jasmin vs the Serpent.', 'Slide. Shoot. Sing.', 'Pop the face, save the beat.', 'Every cell has a groove.', 'Psst: the snake knows a song.'];
+const TAGS = ['RoxorLoops & Jasmin vs the Serpent.', 'Slide. Shoot. Sing.', 'Pop the cells, save the beat.', 'Every cell has a groove.', 'Psst: the snake knows a song.'];
 export function setupTitleLife(notesHost, tagEl) {
   if (notesHost && !notesHost.childNodes.length) {
     const G = ['\u266A', '\u266B', '\u2661', '\u266A', '\u266B', '\u2736', '\u266A'];

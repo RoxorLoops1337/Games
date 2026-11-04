@@ -4,7 +4,7 @@ import { SNACK_LIFE } from './sim.js';
 import { drawMirrorTether, beatPipState, drawBeatPips, drawShellArcs } from './run_fx_b12e.js';
 import { mirrorSide, beatPeriod, BEAT_WIN, BEATRUN_FROM, BEATRUN_LEN } from './sim.js';
 import { LATE_CUE } from './trait_ui.js';
-import { W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt, pointInto, RING_SCALE } from './sim.js';
+import { gateY, W, H, isBossStage, LINE_Y, virusName, daggerPos, stickSeg, uv, beatPhase, pointAt, pointInto, RING_SCALE } from './sim.js';
 import { INK, mix } from './art_draw.js';
 import { deathMotion, crownMotion } from './head_death.js';
 import { SIB_TIME } from './sibling_b11.js';
@@ -358,6 +358,31 @@ export function createRenderer(canvas, art, kit) {
     ctx.save(); ctx.lineJoin = 'round';
     const path = () => { ctx.beginPath(); if (ring) ctx.arc(ring.cx, ring.cy, ring.R, 0, TAU); else for (let x = 0; x <= W; x += 20) { const y = LINE_Y + Math.sin(x * 0.05 + S.t * 2.2) * 5; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } };
     path(); ctx.lineWidth = 11; ctx.strokeStyle = '#000'; ctx.stroke(); path(); ctx.lineWidth = 5; ctx.strokeStyle = '#fff'; ctx.stroke(); ctx.restore();
+  }
+
+  // b15: the gate: a thin neon rail under the HUD. The snake slides out from under it; chevrons mark where it comes in while it is still entering.
+  function gateX(path, gy) {
+    if (path._gy === gy) return path._gx;
+    let x = -1; const pts = path.pts;
+    for (let i = 1; i < pts.length; i++) if (pts[i].y >= gy) { x = pts[i].x; break; }
+    path._gy = gy; path._gx = x; return x;
+  }
+  function drawGate(g, gy) {
+    if (g.ring) return;
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.globalAlpha = 0.16; ctx.strokeStyle = '#ff9ad6'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(14, gy); ctx.lineTo(W - 14, gy); ctx.stroke();
+    ctx.globalAlpha = 0.7; ctx.strokeStyle = '#ffd9f0'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(14, gy); ctx.lineTo(W - 14, gy); ctx.stroke();
+    for (const sn of g.snakes) {
+      const segs = sn.segs, tail = segs[segs.length - 1]; if (!tail || tail.y > gy + 30 || g.ring) continue;
+      const x = gateX(sn.path || g.path, gy); if (x < 0) continue;
+      const ph = OPT.reduceMotion ? 0 : (S.t * 1.6) % 1;
+      ctx.strokeStyle = '#ffe36b'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
+      for (let k = 0; k < 3; k++) {
+        const t = (ph + k) / 3, y = gy + 8 + t * 46; ctx.globalAlpha = 0.85 * (1 - t);
+        ctx.beginPath(); ctx.moveTo(x - 20, y); ctx.lineTo(x, y + 14); ctx.lineTo(x + 20, y); ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   function drawSnake(g, sn) {
@@ -880,7 +905,9 @@ export function createRenderer(canvas, art, kit) {
     drawZones(g);
     HJ.under(g);
     if (g.ring && g.phase !== 'dead') drawAimLine(g);   // b12f: under the snake
-    for (const sn of g.snakes) drawSnake(g, sn);
+    { const gy = gateY(g); ctx.save(); ctx.beginPath(); ctx.rect(0, gy, W, H - gy); ctx.clip();   // b15: the snake only shows below the gate line, under the HUD
+      for (const sn of g.snakes) drawSnake(g, sn);
+      ctx.restore(); drawGate(g, gy); }
     drawWeapons(g);
     S.ko = g.phase === 'dead'; drawPlayerR(g);   // r10: the duo stays on screen, dizzy, while the revive prompt waits
     drawBullets(g);
