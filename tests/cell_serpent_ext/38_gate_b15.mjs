@@ -14,6 +14,7 @@ const EM = String.fromCharCode(8212);
 // the gate sits below the HUD (the boss bar pushes the stat row down 35 units) and above the playfield
 const g = sim.createGame({ seed: 5, stage: 9 }), gb = sim.createGame({ seed: 5, stage: 10 });
 ok(sim.gateY(g) === 182 && sim.gateY(gb) === 215, 'gate heights');
+ok(sim.gateY(sim.createGame({ seed: 5, stage: 6 })) === 8, 'circle stages have no gate');
 ok(sim.gateY(g) > 150 && sim.gateY(gb) > 185, 'below the HUD stat row (150, boss 185)');
 ok(sim.gateY(gb) < sim.LINE_Y / 4, 'a small strip of the field');
 
@@ -23,7 +24,7 @@ ok(sim.gateY(gb) < sim.LINE_Y / 4, 'a small strip of the field');
   let hits = 0;
   for (let i = 0; i < 400 && hits === 0; i++) {
     sim.step(gm, 1 / 30, { mx: 0, my: 0 });
-    const head = gm.snakes[0].segs[0];
+    const head = gm.snakes[0].segs[6];   // the face starts at the gate, the cells behind it are still coming out from under it
     if (head.y > 20 && head.y < sim.gateY(gm) - 30) {
       const before = head.hp;
       gm.bullets.push({ x: head.x, y: head.y + 10, vx: 0, vy: -10, dmg: 999, crit: false, pierce: 0, r: 8, life: 1, hit: [], beat: false, kind: 'p' });

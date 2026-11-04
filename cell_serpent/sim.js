@@ -807,7 +807,7 @@ function spawnSnake(g, n, o = {}) {
   const hpB = (pig ? hpBase(1 + 2 * n) * 0.5 : inv ? hpBase(n) * 1.3 : hpBase(n)) * (g.hard ? HARD_HP : 1) * ((g.mod && g.mod.hp) || 1);
   const ramp = i => 0.4 + 1.35 * Math.pow(i / Math.max(1, len - 1), 1.3);   // the first cells are soft, then it gets tougher and tougher
   const bossMul = i => (boss ? BOSS_HP[0] + (BOSS_HP[1] - BOSS_HP[0]) * Math.min(1, i / Math.max(1, BOSS_HP[2] * len)) : 1);   // bosses start soft so the first upgrade cells pop, and reach full 2.4x half way down
-  const ps0 = o.startPs === undefined ? Math.max(240, gateDist(path, gateY(g))) : o.startPs;   // b15: the face starts at the gate line (it used to start inside the top edge, now under the HUD)
+  const ps0 = o.startPs === undefined ? (g.ring ? 240 : Math.max(240, gateDist(path, gateY(g)))) : o.startPs;   // b15: the face starts at the gate line (it used to start inside the top edge, now under the HUD)
   let ps = ps0;
   for (let i = 0; i < len; i++) {
     let kind = pickKind(g, n, boss, i, len); if (kind === 'bomb' && segs.length && segs[segs.length - 1].kind === 'bomb') kind = 'normal';
@@ -1161,8 +1161,8 @@ function beatRun(g) {
   if (g.beatN >= BEATRUN_LEN) { g.beatN = 0; for (let n = 0; n < BEATRUN_GROOVE; n++) bumpGroove(g); g.events.push({ t: 'beatrun', x: g.p.x, y: g.p.y - 60 }); }
 }
 // b15: the snake comes in from UNDER the gate line below the HUD: cells above it are not drawn, not targeted and not hit
-let GATE = 182;
-export const gateY = g => (isBossStage(g.stage) ? 215 : 182);
+let GATE = 182, HIT_GATE = 0;
+export const gateY = g => (g.ring ? 8 : isBossStage(g.stage) ? 215 : 182);   // circle stages have no gate: the snake spirals in around the duo, not down from the top
 // the strip under the HUD is not shootable any more, so lane snakes crawl a little slower: a cell keeps the same time in the shootable part of the field (rings are unchanged)
 export const gateSlow = (g, path) => { if (g.ring || !path) return 1; const d8 = distAtY(path, 8), dg = distAtY(path, gateY(g)); return Math.sqrt(Math.min(1, Math.max(0.5, Math.min((path.len - dg) / Math.max(200, path.len - d8), (LINE_Y - gateY(g)) / (LINE_Y - 8))))); };   // half of the lost share (the stricter of the path based and the height based one): the hits above the gate were cheap ones, and the win rates of the old stages stay close
 const visible = s => s.y > GATE && s.y < H - 8 && s.x > 8 && s.x < W - 8;
@@ -1652,7 +1652,7 @@ function moveBullets(g, dt) {
     if (!dead) {
       const bx = b.x, by = b.y, br = b.r;
       for (let a = 0; a < sns.length && !dead; a++) { const sn = sns[a], segs = sn.segs; for (let i = 0; i < segs.length && !dead; i++) { const s = segs[i];
-        if (s.hp <= 0 || s.shield || s.wave || s.y < GATE) continue;
+        if (s.hp <= 0 || s.shield || s.wave || s.y < HIT_GATE) continue;
         const dx = s.x - bx, dy = s.y - by;
         if (Math.sqrt(dx * dx + dy * dy) >= s.r + br || b.hit.includes(s)) continue;
         b.hit.push(s);
@@ -1701,7 +1701,7 @@ export function chaseX(x, tx, dt, speed) {
   return Math.abs(st) >= Math.abs(d) ? tx : x + st;
 }
 export function step(g, dt, input) {
-  GATE = gateY(g);
+  GATE = gateY(g); HIT_GATE = g.ring ? -1e9 : GATE;   // circle stages keep their old rules: a shot can hit any cell
   if (g.phase !== 'play' && g.phase !== 'clear') return;
   g.t += dt;
   const p = g.p;

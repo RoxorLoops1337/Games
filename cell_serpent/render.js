@@ -368,6 +368,7 @@ export function createRenderer(canvas, art, kit) {
     path._gy = gy; path._gx = x; return x;
   }
   function drawGate(g, gy) {
+    if (g.ring) return;
     ctx.save(); ctx.lineCap = 'round';
     ctx.globalAlpha = 0.16; ctx.strokeStyle = '#ff9ad6'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(14, gy); ctx.lineTo(W - 14, gy); ctx.stroke();
     ctx.globalAlpha = 0.7; ctx.strokeStyle = '#ffd9f0'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(14, gy); ctx.lineTo(W - 14, gy); ctx.stroke();
