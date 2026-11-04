@@ -67,10 +67,14 @@ export function createRenderer(canvas, art, kit) {
   }
   // glows and text are baked once and blitted: gradients and stroked text are the expensive part of a frame
   const glowMemo = new Map(); let glowKit = null;
-  function glow(x, y, r, col, a = 0.6) {
-    if (glowKit !== kit) { glowKit = kit; glowMemo.clear(); }   // one Map lookup per glow instead of a new 'glow|' string and a cache lookup
+  function glowSprite(col) {
+    if (glowKit !== kit) { glowKit = kit; glowMemo.clear(); }
     let spr = glowMemo.get(col);
     if (spr === undefined) { spr = kit && kit.bake('glow|' + col, 64, 64, g => { const gr = g.createRadialGradient(0, 0, 0, 0, 0, 32); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(-32, -32, 64, 64); }); if (spr) glowMemo.set(col, spr); }
+    return spr;
+  }
+  function glow(x, y, r, col, a = 0.6) {
+    const spr = glowSprite(col);
     ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = 'lighter';
     if (spr) ctx.drawImage(spr.c, x - r, y - r, r * 2, r * 2);
     else { const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
@@ -137,9 +141,13 @@ export function createRenderer(canvas, art, kit) {
     if (S.textHide) return;   // b12k: ...and a second frame without the text gives the real pixels behind it
     if (kit && kit.makeCanvas) {   // 11-perf: strips are baked at preset sizes only and scaled to the exact size, so a pulsing number never bakes a canvas
       const ps = presetSize(size), q = size / ps;
-      if (str.length > 1 && NUMSTR.test(str)) { if (drawNumber(str, x, y, ps, q, fill, stroke, align)) return; }
+      // perf b15: over the bake budget the text waits one frame instead of being drawn live. A live strokeText on the busy main canvas forces the browser to flush
+      // everything pending (measured: 70 to 100 ms per call on the boss card, every frame, while the budget starved it), and a number that is still
+      // missing a glyph no longer bakes a whole-number strip of its own.
+      if (str.length > 1 && NUMSTR.test(str)) { drawNumber(str, x, y, ps, q, fill, stroke, align); return; }
       const t = textSprite(str, ps, fill, stroke);
-      if (t && t.c) { const w = t.w * q, h = t.h * q, pad = t.pad * q; ctx.drawImage(t.c, align === 'left' ? x - pad : align === 'right' ? x - w + pad : x - w / 2, y - h / 2, w, h); return; }
+      if (t === null) return;
+      if (t.c) { const w = t.w * q, h = t.h * q, pad = t.pad * q; ctx.drawImage(t.c, align === 'left' ? x - pad : align === 'right' ? x - w + pad : x - w / 2, y - h / 2, w, h); return; }
     }
     size = size >= 20 ? Math.round(size) : Math.round(size * 2) / 2;
     ctx.font = `800 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle';
@@ -460,7 +468,14 @@ export function createRenderer(canvas, art, kit) {
     else { ctx.moveTo(0, -q * 1.1); ctx.lineTo(q * 0.9, 0); ctx.lineTo(0, q * 1.1); ctx.lineTo(-q * 0.9, 0); ctx.closePath(); }
     ctx.fill(); ctx.stroke(); ctx.restore();
   }
-  function sparkleAt(x, y, r) { if (kit) { ctx.save(); ctx.translate(x, y); ctx.scale(r / 20, r / 20); kit.sparkle(ctx, 0, 0, 20); ctx.restore(); } }
+  // perf b15: the sparkle is baked once and drawn with one call (it was a save, translate, scale, two paths and a restore each)
+  let sparkKit = null, sparkSpr = null;
+  function sparkleAt(x, y, r) {
+    if (!kit) return;
+    if (sparkKit !== kit) { sparkKit = kit; sparkSpr = kit.bake ? kit.bake('spark|20', 48, 48, g => kit.sparkle(g, 0, 0, 20)) : null; }
+    if (sparkSpr) { const d = r * 2.4; ctx.drawImage(sparkSpr.c, x - d / 2, y - d / 2, d, d); return; }
+    ctx.save(); ctx.translate(x, y); ctx.scale(r / 20, r / 20); kit.sparkle(ctx, 0, 0, 20); ctx.restore();
+  }
 
   function drawPickup(pk) {
     const k = pk.kind, bob = Math.sin(S.t * 6 + pk.x) * 2;
@@ -699,9 +714,31 @@ export function createRenderer(canvas, art, kit) {
     ctx.restore();
     if (b.crit) { const f = (S.t * 5 + b.x * 0.03) % 1; ctx.save(); ctx.globalAlpha *= 1 - f; sparkleAt(b.x - ux * (20 + f * 44) + Math.sin(S.t * 9 + b.x) * 8, b.y - uy * (20 + f * 44), 7 * (1 - f * 0.5)); ctx.restore(); }
   }
+  // perf b15: notes are drawn in passes with ONE canvas transform call per sprite (no save/translate/rotate/restore per bullet): crit glows share one
+  // 'lighter' state, the comet tail is a baked streak, and a throttled phone with 100 notes in the air pays for 3 calls per note instead of about 25.
+  const TR = { sp: [null, null], kit: null };
+  function trailSpr(crit) {
+    if (TR.kit !== kit) { TR.kit = kit; TR.sp[0] = TR.sp[1] = null; }
+    let t = TR.sp[crit ? 1 : 0];
+    if (!t && kit && kit.bake) {
+      const L = crit ? 66 : 46, w = crit ? 8 : 5.5, col = crit ? '#ffd84d' : '#6fe3ff';
+      t = TR.sp[crit ? 1 : 0] = kit.bake('trail|' + (crit ? 1 : 0), 2 * (L + 10), 24, g => {
+        g.lineCap = 'round'; let al = 1;
+        for (let j = 0; j < 3; j++) { al *= 0.5; g.globalAlpha = al; g.strokeStyle = j === 2 ? '#fff' : col; g.lineWidth = w * (1 - j * 0.3); g.beginPath(); g.moveTo(-12, 0); g.lineTo(-L * (1 - j * 0.28), 0); g.stroke(); }
+      });
+    }
+    return t;
+  }
+  function noteTrail(b, col) {   // the crit glint (the tail itself is the baked streak above)
+    const sp = Math.hypot(b.vx, b.vy) || 1, ux = b.vx / sp, uy = b.vy / sp;
+    if (b.crit) { const f = (S.t * 5 + b.x * 0.03) % 1, a0 = ctx.globalAlpha; ctx.globalAlpha = a0 * (1 - f); sparkleAt(b.x - ux * (20 + f * 44) + Math.sin(S.t * 9 + b.x) * 8, b.y - uy * (20 + f * 44), 7 * (1 - f * 0.5)); ctx.globalAlpha = a0; }
+  }
+  const NOTE_KINDS = { needle: 1, snot: 1, bubble: 1 };
   function drawBullets(g) {
     if (HJ) HJ.bullets(g.bullets, lastDt);
-    for (const b of g.bullets) {
+    const bl = g.bullets; let notes = 0, crits = 0;
+    for (let i = 0; i < bl.length; i++) {   // the odd weapons first, in their own style
+      const b = bl[i];
       if (b.kind === 'needle') { const na = Math.atan2(b.vy, b.vx); ctx.save(); ctx.globalAlpha *= 0.28; ctx.strokeStyle = '#ff9ac6'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(b.x - Math.cos(na) * 34, b.y - Math.sin(na) * 34); ctx.lineTo(b.x - Math.cos(na) * 96, b.y - Math.sin(na) * 96); ctx.stroke(); ctx.restore(); blit(kit && kit.SPR.weapon('needle'), b.x, b.y, 140, na); continue; }
       if (b.kind === 'snot') {   // doves leave drifting feathers and flap
         const fe = kit && kit.SPR.feather(), sp = Math.hypot(b.vx, b.vy) || 1;
@@ -709,29 +746,70 @@ export function createRenderer(canvas, art, kit) {
         ctx.save(); ctx.translate(b.x, b.y); ctx.scale(1 + Math.sin(S.t * 22 + b.x) * 0.04, 1 - Math.sin(S.t * 22 + b.x) * 0.04); blit(kit && kit.SPR.weapon('dragon', Math.sin(S.t * 22 + b.x) > 0 ? 5 : 6), 0, 0, 132, Math.sin(S.t * 10 + b.x) * 0.25); ctx.restore(); continue;
       }
       if (b.kind === 'bubble') { blit(kit && kit.SPR.weapon('bubble'), b.x, b.y, b.r * 4.84, Math.sin(S.t * 3 + b.x) * 0.2); continue; }
-      const col = b.crit ? '#ffd84d' : '#6fe3ff';
-      if (b.crit) glow(b.x, b.y, 30, col, 0.55);
-      if (!OPT.lowQuality) noteTrail(b, col);   // 02-animal-art r4: notes leave a short comet tail, crits add glints
-      const spr = kit && kit.SPR.note(b.crit);
-      if (spr) blit(spr, b.x, b.y, b.crit ? 100 : 66, S.t * 6 + b.x * 0.05);
-      else { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, TAU); ctx.fill(); }
+      notes++; if (b.crit) crits++;
     }
+    if (!notes) return;
+    const m = baseM();
+    // pass 1: crit glows, one 'lighter' state for all of them
+    if (crits) {
+      const gl = glowSprite('#ffd84d');
+      ctx.save(); ctx.globalAlpha = 0.55; ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < bl.length; i++) { const b = bl[i]; if (b.crit && !NOTE_KINDS[b.kind]) { if (gl) ctx.drawImage(gl.c, b.x - 30, b.y - 30, 60, 60); } }
+      ctx.restore();
+    }
+    // pass 2: the comet tails, one transform call and one draw per note
+    if (!OPT.lowQuality) {
+      const t0 = trailSpr(false), t1 = trailSpr(true);
+      for (let i = 0; i < bl.length; i++) {
+        const b = bl[i]; if (NOTE_KINDS[b.kind]) continue;
+        const t = b.crit ? t1 : t0; if (!t) continue;
+        const sp = Math.hypot(b.vx, b.vy) || 1, c = b.vx / sp, s = b.vy / sp;
+        ctx.setTransform(m.a * c + m.c * s, m.b * c + m.d * s, -m.a * s + m.c * c, -m.b * s + m.d * c, m.a * b.x + m.c * b.y + m.e, m.b * b.x + m.d * b.y + m.f);
+        ctx.drawImage(t.c, -t.w / 2, -t.h / 2, t.w, t.h);
+      }
+      ctx.setTransform(m);
+      if (crits) for (let i = 0; i < bl.length; i++) { const b = bl[i]; if (b.crit && !NOTE_KINDS[b.kind]) noteTrail(b, '#ffd84d'); }
+    }
+    // pass 3: the note sprites, spinning
+    const ns0 = kit && kit.SPR.note(false), ns1 = kit && kit.SPR.note(true);
+    for (let i = 0; i < bl.length; i++) {
+      const b = bl[i]; if (NOTE_KINDS[b.kind]) continue;
+      const spr = b.crit ? ns1 : ns0;
+      if (spr) {
+        const size = b.crit ? 100 : 66, k = size / spr.w, rot = S.t * 6 + b.x * 0.05, c = Math.cos(rot) * k, s = Math.sin(rot) * k;
+        ctx.setTransform(m.a * c + m.c * s, m.b * c + m.d * s, -m.a * s + m.c * c, -m.b * s + m.d * c, m.a * b.x + m.c * b.y + m.e, m.b * b.x + m.d * b.y + m.f);
+        ctx.drawImage(spr.c, -spr.w / 2, -spr.h / 2, spr.w, spr.h);
+      } else { ctx.setTransform(m); ctx.fillStyle = b.crit ? '#ffd84d' : '#6fe3ff'; ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, TAU); ctx.fill(); }
+    }
+    ctx.setTransform(m);
   }
 
   const WCOL = { swab: '#ff7eb6', daggers: '#c9d3ee', tower: '#6fe3ff', dragon: '#8dff6a', needles: '#f2f6ff', stick: '#e0a468', bubble: '#bfe9ff', satellite: '#ffe14a', maw: '#8a4fe0' };
   const WSPR = { daggers: 'dagger', needles: 'needle' };
   const WAB = { swab: 'BP', daggers: 'SV', tower: 'SS', dragon: 'AN', needles: 'TP', stick: 'DS', bubble: 'HB', satellite: 'SL', maw: 'BD' };
   // Beat Pads sit under the snake and pulse on every tick
+  // perf b15: a sprite with ONE setTransform (m is the matrix at the start of the pass): no save, translate, rotate or restore per sprite
+  const IDENT = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };   // a minimal context (a test stub) has no getTransform
+  const baseM = () => { const m = ctx.getTransform && ctx.getTransform(); return m && typeof m.a === 'number' ? m : IDENT; };
+  function sprFast(m, spr, x, y, size, rot) {
+    const k = size / spr.w, c = Math.cos(rot) * k, s = Math.sin(rot) * k;
+    ctx.setTransform(m.a * c + m.c * s, m.b * c + m.d * s, -m.a * s + m.c * c, -m.b * s + m.d * c, m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f);
+    ctx.drawImage(spr.c, -spr.w / 2, -spr.h / 2, spr.w, spr.h);
+  }
   function drawZones(g) {
-    const pad = kit && kit.SPR.weapon('swab');
-    for (const z of g.zones) {
-      const fade = Math.min(1, z.life * 2), ph = 1 - Math.max(0, Math.min(1, z.tick / 0.3));
-      ctx.save(); ctx.globalAlpha = 0.9 * fade; blit(pad, z.x, z.y, z.r * 3.4 * (1 + 0.05 * (1 - ph)), 0); ctx.restore();
-      { const pw = kit && kit.SPR.paw(), z0 = (z.x * 0.013) % 1;   // a paw print trail walks round the pad
+    const zs = g.zones; if (!zs.length) return;
+    const pad = kit && kit.SPR.weapon('swab'), pw = kit && kit.SPR.paw(), m = baseM(), a0 = ctx.globalAlpha;
+    for (let zi = 0; zi < zs.length; zi++) {
+      const z = zs[zi], fade = Math.min(1, z.life * 2), ph = 1 - Math.max(0, Math.min(1, z.tick / 0.3));
+      if (pad) { ctx.globalAlpha = 0.9 * fade; sprFast(m, pad, z.x, z.y, z.r * 3.4 * (1 + 0.05 * (1 - ph)), 0); }
+      if (pw) {   // a paw print trail walks round the pad
+        const z0 = (z.x * 0.013) % 1;
         for (let j = 0; j < 6; j++) { const u = (S.t * 0.55 + j / 6 + z0) % 1, a = u * TAU, rr = z.r * 0.62, side = j % 2 ? 1 : -1;
-          ctx.save(); ctx.globalAlpha = Math.min(1, Math.sin(u * Math.PI) * 1.6) * fade; blit(pw, z.x + Math.cos(a) * rr + Math.cos(a + 1.57) * side * 5, z.y + Math.sin(a) * rr * 0.8 + Math.sin(a + 1.57) * side * 5, 34, a + 1.57); ctx.restore(); } }
-      ctx.save(); ctx.globalAlpha = (1 - ph) * 0.8 * fade; ctx.strokeStyle = '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(z.x, z.y, z.r * (0.45 + 0.55 * ph), 0, TAU); ctx.stroke(); ctx.restore();
+          ctx.globalAlpha = Math.min(1, Math.sin(u * Math.PI) * 1.6) * fade; sprFast(m, pw, z.x + Math.cos(a) * rr + Math.cos(a + 1.57) * side * 5, z.y + Math.sin(a) * rr * 0.8 + Math.sin(a + 1.57) * side * 5, 34, a + 1.57); }
+      }
+      ctx.setTransform(m); ctx.globalAlpha = (1 - ph) * 0.8 * fade; ctx.strokeStyle = '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(z.x, z.y, z.r * (0.45 + 0.55 * ph), 0, TAU); ctx.stroke();
     }
+    ctx.setTransform(m); ctx.globalAlpha = a0;
   }
   // 02-animal-art: weapon animals share the pet moods: 1 blink, 2 alert when a head is close, 0 calm
   let wScared = false;

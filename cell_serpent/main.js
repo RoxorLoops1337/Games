@@ -92,8 +92,22 @@ audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.se
 let stagKey = '';   // which hub tab already played its entrance
 const motion = createMotion({ $, buzz: p => buzz(p), getReduced: () => !!(save && save.settings && save.settings.reduceMotion) }); motion.init();
 const buzz = p => { try { if (save.settings.vibrate && navigator.vibrate) navigator.vibrate(p); } catch (e) { /* ignore */ } };
-function applySettings() { motion.applyReduced(); audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.setVolume(save.settings.volume); audio.setBeatTick(save.settings.beatTick); audio.setPump(save.settings.pump); if (R) R.setOptions({ reduceFlash: !!save.settings.reduceFlash, reduceMotion: save.settings.reduceMotion || systemReduceMotion(), lowQuality: save.settings.lowQuality, bigNumbers: save.settings.bigNumbers, colorBlind: save.settings.colorBlind, highContrast: save.settings.highContrast, leftHand: !!save.settings.leftHand, textScale: textScaleOf(save.settings) }); applyPageSettings(save.settings); applyCbPalette(kit, !!save.settings.colorBlind); applyCbRarity(RARITIES, !!save.settings.colorBlind); showSlider(save.settings.slider && mode === 'play' && !document.querySelector('.scr.on')); showZone(save.settings.thumbZone && mode === 'play' && !document.querySelector('.scr.on')); dprCap = save.settings.lowQuality ? 1 : Math.max(dprCap, 2); }
+function applySettings() { motion.applyReduced(); audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.setVolume(save.settings.volume); audio.setBeatTick(save.settings.beatTick); audio.setPump(save.settings.pump); if (R) R.setOptions({ reduceFlash: !!save.settings.reduceFlash, reduceMotion: save.settings.reduceMotion || systemReduceMotion(), lowQuality: !!save.settings.lowQuality || autoLow, bigNumbers: save.settings.bigNumbers, colorBlind: save.settings.colorBlind, highContrast: save.settings.highContrast, leftHand: !!save.settings.leftHand, textScale: textScaleOf(save.settings) }); applyPageSettings(save.settings); applyCbPalette(kit, !!save.settings.colorBlind); applyCbRarity(RARITIES, !!save.settings.colorBlind); showSlider(save.settings.slider && mode === 'play' && !document.querySelector('.scr.on')); showZone(save.settings.thumbZone && mode === 'play' && !document.querySelector('.scr.on')); dprCap = save.settings.lowQuality ? 1 : Math.max(dprCap, 2); }
 let art = null, R = null, kit = null;
+// perf b15: an automatic low quality tier. The JS cost of drawing a frame is measured (a moving average of R.draw milliseconds); a phone that spends more than about 9 ms
+// of every 16 on drawing alone gets the lighter effects at once (half the particles, backgrounds and hit juice), and gets the full show back after a quiet stretch.
+// The saved Low quality setting is untouched; this tier lives for the session only.
+let autoLow = false, drawMs = 3, drawCalm = 0, drawHot = 0, autoFlips = 0;
+function governDraw(ms) {
+  drawMs += (ms - drawMs) * 0.06;
+  if (!autoLow) {
+    if (drawMs > 9) drawHot++; else drawHot = Math.max(0, drawHot - 2);
+    if (drawHot > 50 && !save.settings.lowQuality) { autoLow = true; autoFlips++; drawHot = 0; drawCalm = 0; if (R) R.setOptions({ lowQuality: true }); }
+  } else if (autoFlips < 3) {   // after three flips the tier stays for the session: no flicker between two looks
+    if (drawMs < 4.2) drawCalm++; else drawCalm = Math.max(0, drawCalm - 3);
+    if (drawCalm > 1200) { autoLow = false; drawCalm = 0; drawHot = 0; if (R) R.setOptions({ lowQuality: !!save.settings.lowQuality }); }
+  }
+}
 const dayKey = () => Math.floor(Date.now() / 86400000);
 let slowFrames = 0, fastFrames = 0;
 const clk = createClock();   // 05-screen-feel: fixed-step clock fed with dt * slow-motion scale
@@ -876,7 +890,7 @@ function frame(now) {
     if (g.phase === 'play') audio.sync(beatPhase(g));
   }
   if (mode === 'pause') { if (pauseN > 2 && pauseW === canvas.width && pauseH === canvas.height) return; pauseN++; pauseW = canvas.width; pauseH = canvas.height; } else pauseN = 0;   // a paused picture is frozen: draw it a few times (and again after a resize), then leave the canvas alone
-  if (g) { drain(g, mode === 'play'); R.draw(g, { joy, fol: fol.on && followMode() ? fol : null, hints: save.runs < 2, aimHint }, mode === 'pause' ? 0 : dt);
+  if (g) { drain(g, mode === 'play'); const dt0 = performance.now(); R.draw(g, { joy, fol: fol.on && followMode() ? fol : null, hints: save.runs < 2, aimHint }, mode === 'pause' ? 0 : dt); if (mode === 'play' && g.phase === 'play') governDraw(performance.now() - dt0);
     if (mode === 'play') for (const n of R.takeSounds()) audio.play(n); else R.takeSounds(); }
 }
 
@@ -899,7 +913,7 @@ $('muteBtn').onclick = toggleMute;
 for (const [id, label] of [['muteBtn', 'Mute'], ['enPlus', 'Buy Voice'], ['stPrev', 'Previous stage'], ['stNext', 'Next stage']]) $(id).setAttribute('aria-label', label);
 addEventListener('error', () => { toast('Something glitched. Your save is safe.'); if (mode === 'play') pause(); }); $('muteBtn').textContent = save.muted ? '🔇' : '🔊';
 
-window.CS = { unlockAll: (v = true) => { setUnlockAll(v); if (mode === 'hub') renderHub(); }, unlockUI, fold: foldHook, motion, momentEvent, g: null, get hub2() { return hub2; }, save: () => save, mode: () => mode, openHub, startRun,
+window.CS = { perf: () => ({ drawMs, autoLow, autoFlips }), govern: governDraw, unlockAll: (v = true) => { setUnlockAll(v); if (mode === 'hub') renderHub(); }, unlockUI, fold: foldHook, motion, momentEvent, g: null, get hub2() { return hub2; }, save: () => save, mode: () => mode, openHub, startRun,
   // QA hook (batch 5): jump the live run to its end the way the sim does ('dead' | 'won'), then the normal flow (revive prompt, result) takes over
   force: kind => { if (mode !== 'play' || !g || g.phase === 'dead' || g.phase === 'won') return false; if (kind === 'dead') { g.p.hp = 0; g.p.revive = 0; g.phase = 'dead'; g.result = quitResult(g); g.events.push({ t: 'dead' }); return true; } if (kind === 'won') { g.snakes = []; g.phase = 'won'; g.result = { ...quitResult(g), won: true, stars: g.mode || g.hard ? 0 : 3 }; g.events.push({ t: 'won' }); return true; } return false; } };
 loadArt('assets/').then(a => {
