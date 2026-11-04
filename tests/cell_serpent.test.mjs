@@ -655,8 +655,8 @@ ok('card kinds have their own rarity: speed and damage can be common, extra note
   const seen = {};
   for (let i = 0; i < 400; i++) {
     const g = sim.createGame({ seed: 300 + i, stage: 10 }); g.level = 1 + (i % 20); g.pending = 1; sim.step(g, 1 / 60, {});
-    assert.ok(g.choices.some(c => c.rarity === 0), 'one common card is always there');
-    for (const c of g.choices) { (seen[c.id] = seen[c.id] || new Set()).add(c.rarity); if (c.id === 'notes') assert.ok(c.rarity >= 1, 'notes are never common'); if (c.id === 'burst') assert.ok(c.rarity >= 2, 'bursts are never common'); }
+    assert.ok(g.choices.some(c => c.roll === 0), 'one common card is always there');
+    for (const c of g.choices) { (seen[c.id] = seen[c.id] || new Set()).add(c.roll); if (c.id === 'notes') assert.ok(c.roll >= 1, 'notes are never common'); if (c.id === 'burst') assert.ok(c.roll >= 2, 'bursts are never common'); }
   }
   assert.ok(seen.aspd.has(0) && seen.cdmg.has(0), 'speed and damage do show up as common');
   assert.ok(!seen.notes.has(0) && !seen.burst.has(0) && !seen.burst.has(1));
