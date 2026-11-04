@@ -1164,7 +1164,7 @@ function beatRun(g) {
 let GATE = 182;
 export const gateY = g => (isBossStage(g.stage) ? 215 : 182);
 // the strip under the HUD is not shootable any more, so lane snakes crawl a little slower: a cell keeps the same time in the shootable part of the field (rings are unchanged)
-export const gateSlow = (g, path) => { if (g.ring || !path) return 1; const d8 = distAtY(path, 8), dg = distAtY(path, gateY(g)); return Math.min(1, Math.max(0.5, (path.len - dg) / Math.max(200, path.len - d8))); };
+export const gateSlow = (g, path) => { if (g.ring || !path) return 1; const d8 = distAtY(path, 8), dg = distAtY(path, gateY(g)); return Math.min(1, Math.max(0.5, Math.min((path.len - dg) / Math.max(200, path.len - d8), (LINE_Y - gateY(g)) / (LINE_Y - 8)))); };   // the stricter of the path based and the height based share of the shootable field
 const visible = s => s.y > GATE && s.y < H - 8 && s.x > 8 && s.x < W - 8;
 // accumulated effect of a run upgrade: summed rarity values, or the common value per pick if set directly
 const UPV = Object.fromEntries([...CAPSULE_UPS, ...PASSIVES].map(u => [u.id, u]));
