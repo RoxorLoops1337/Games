@@ -493,12 +493,13 @@ ok('index.html wires the module, the hub and every screen; the save key is kept;
 });
 
 
-ok('rarity: one of the three cards is always common, and luck makes better rarities likelier', () => {
+// b15: the tier shown follows the dps the card adds; the guaranteed safe pick is the common ROLL
+ok('rarity: one of the three cards is always a common roll, and luck makes better rarities likelier', () => {
   assert.equal(sim.RARITIES.length, 6);
   const w0 = sim.rarityWeights(0), w20 = sim.rarityWeights(20), share = w => 1 - w[0] / w.reduce((a, b) => a + b, 0);
   assert.ok(share(w20) > share(w0) * 1.5, 'luck lifts the chance of better rarities');
   assert.ok(w0[0] > w0[1] && w0[1] > w0[2] && w0[4] > w0[5], 'rare things are rarer at the start');
-  const mean = lvl => { let t = 0, n = 0; for (let i = 0; i < 150; i++) { const g = sim.createGame({ seed: 100 + i, stage: 10 }); g.level = lvl; g.pending = 1; sim.step(g, 1 / 60, {}); assert.ok(g.choices.some(c => c.rarity === 0), 'a common card'); for (const c of g.choices) { t += c.rarity; n++; } } return t / n; };
+  const mean = lvl => { let t = 0, n = 0; for (let i = 0; i < 150; i++) { const g = sim.createGame({ seed: 100 + i, stage: 10 }); g.level = lvl; g.pending = 1; sim.step(g, 1 / 60, {}); assert.ok(g.choices.some(c => c.roll === 0), 'a common roll'); for (const c of g.choices) { t += c.roll; n++; } } return t / n; };
   assert.ok(mean(25) > mean(3) + 0.4, 'later picks are better on average');
 });
 

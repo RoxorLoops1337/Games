@@ -1384,7 +1384,7 @@ function rollChoices(g) {
     }
   });
   // b15: name the tier by the DPS the card adds (defence and utility cards keep their rolled tier)
-  for (const c of out) { const d = dpsGain(g, c); if (d !== null) { c.dps = d; c.roll = c.rarity; c.rarity = dpsRarity(d); } }
+  for (const c of out) { c.roll = c.rarity; const d = dpsGain(g, c); if (d !== null) { c.dps = d; c.rarity = dpsRarity(d); } }
   return out;
 }
 function maybeLevelUp(g) {
