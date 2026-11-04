@@ -789,13 +789,19 @@ function newCell(ps, x, y, r, hp, kind, i) {
   return { ps, x, y, ang: Math.PI / 2, r, hp, max: hp, kind, flash: 0, orbCd: 0, i, carry: null, shield: i === 0, isHead: i === 0, tp: ps, vx: 0, vy: 0, wave: false, warded: false, gloom: false, frost: false, gold: false, goldT: 0, ward: false, lull: false, drum: false, choir: false, bell: false, quartet: false, qPopped: false, metro: false, pillow: false, snack: false, mirror: false, shell: false };
 }
 export const SNAKE_KEYS = ['id', 'path', 'segs', 'tail', 'breach', 'breachT', 'speed', 'slow', 'boss', 'skin', 'name', 'surge', 'surgeT', 'healT', 'drum', 'lane', 'napT', 'gloomW', 'rushT', 'loveT', 'creak', 'snzT', 'snzW', 'frostW', 'qT', 'qDone', 'qWin', 'qNeed', 'p2', 'p2T', 'cue', 'skipT'];
+// distance along a path where it first reaches the gate line (the snake is drawn only below it)
+function gateDist(path, gy) {
+  const pts = path.pts; for (let i = 0; i < pts.length; i++) if (pts[i].y >= gy) return path.cum[i];
+  return 240;
+}
 function spawnSnake(g, n, o = {}) {
   const pig = g.mode === 'pig', inv = g.mode === 'inv', boss = isBossStage(n), len = o.len || (pig ? 40 : inv ? 70 : snakeLength(n)), segs = [];
   const path = o.mirror ? mirrorPath(g.path) : g.path;
   const hpB = (pig ? hpBase(1 + 2 * n) * 0.5 : inv ? hpBase(n) * 1.3 : hpBase(n)) * (g.hard ? HARD_HP : 1) * ((g.mod && g.mod.hp) || 1);
   const ramp = i => 0.4 + 1.35 * Math.pow(i / Math.max(1, len - 1), 1.3);   // the first cells are soft, then it gets tougher and tougher
   const bossMul = i => (boss ? BOSS_HP[0] + (BOSS_HP[1] - BOSS_HP[0]) * Math.min(1, i / Math.max(1, BOSS_HP[2] * len)) : 1);   // bosses start soft so the first upgrade cells pop, and reach full 2.4x half way down
-  let ps = o.startPs === undefined ? 240 : o.startPs;   // the face starts just inside the top edge
+  const ps0 = o.startPs === undefined ? Math.max(240, gateDist(path, gateY(g))) : o.startPs;   // b15: the face starts at the gate line (it used to start inside the top edge, now under the HUD)
+  let ps = ps0;
   for (let i = 0; i < len; i++) {
     let kind = pickKind(g, n, boss, i, len); if (kind === 'bomb' && segs.length && segs[segs.length - 1].kind === 'bomb') kind = 'normal';
     const r = segRadius(boss, i, len);
@@ -821,7 +827,7 @@ function spawnSnake(g, n, o = {}) {
   markGold(g, n, segs, len);
   markSpecials(g, n, segs, len);
   g.upgradeLeft = (g.upgradeLeft || 0) + ups;
-  const speed = ((path.len - 240) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED * ringPace(n) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
+  const speed = ((path.len - Math.min(ps0, path.len - 400)) / arrivalTime(n)) * speedMul(n) * ((g.mod && g.mod.speed) || 1) * (g.ring ? RING_SPEED * ringPace(n) : 1) * (!g.ring && n >= 20 && pathKind(n) === 1 ? HAIRPIN_LATE : 1);
   segs.hpMax = segs.reduce((a, s) => a + s.max, 0);
   g.snakes.push({ id: ++g.sid, path, segs, tail: segs[segs.length - 1].ps, breach: false, breachT: 0, speed, slow: 0, boss, skin: skinOf(g, n), name: nameOf(g), surge: 'idle', surgeT: 4 + g.rand() * 3, healT: undefined, drum: false, lane: null, napT: 0, gloomW: undefined, rushT: 0, loveT: undefined, creak: false, snzT: undefined, snzW: false, frostW: undefined, qT: 0, qDone: 0, qWin: 0, qNeed: 0, p2: false, p2T: 0, cue: 0, skipT: RING_SKIP_EVERY });
   g.stageHpMax += segs.reduce((a, s) => a + s.max, 0);
