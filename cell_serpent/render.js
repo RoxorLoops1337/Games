@@ -749,7 +749,7 @@ export function createRenderer(canvas, art, kit) {
       notes++; if (b.crit) crits++;
     }
     if (!notes) return;
-    const m = ctx.getTransform();
+    const m = baseM();
     // pass 1: crit glows, one 'lighter' state for all of them
     if (crits) {
       const gl = glowSprite('#ffd84d');
@@ -789,6 +789,8 @@ export function createRenderer(canvas, art, kit) {
   const WAB = { swab: 'BP', daggers: 'SV', tower: 'SS', dragon: 'AN', needles: 'TP', stick: 'DS', bubble: 'HB', satellite: 'SL', maw: 'BD' };
   // Beat Pads sit under the snake and pulse on every tick
   // perf b15: a sprite with ONE setTransform (m is the matrix at the start of the pass): no save, translate, rotate or restore per sprite
+  const IDENT = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };   // a minimal context (a test stub) has no getTransform
+  const baseM = () => { const m = ctx.getTransform && ctx.getTransform(); return m && typeof m.a === 'number' ? m : IDENT; };
   function sprFast(m, spr, x, y, size, rot) {
     const k = size / spr.w, c = Math.cos(rot) * k, s = Math.sin(rot) * k;
     ctx.setTransform(m.a * c + m.c * s, m.b * c + m.d * s, -m.a * s + m.c * c, -m.b * s + m.d * c, m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f);
@@ -796,7 +798,7 @@ export function createRenderer(canvas, art, kit) {
   }
   function drawZones(g) {
     const zs = g.zones; if (!zs.length) return;
-    const pad = kit && kit.SPR.weapon('swab'), pw = kit && kit.SPR.paw(), m = ctx.getTransform(), a0 = ctx.globalAlpha;
+    const pad = kit && kit.SPR.weapon('swab'), pw = kit && kit.SPR.paw(), m = baseM(), a0 = ctx.globalAlpha;
     for (let zi = 0; zi < zs.length; zi++) {
       const z = zs[zi], fade = Math.min(1, z.life * 2), ph = 1 - Math.max(0, Math.min(1, z.tick / 0.3));
       if (pad) { ctx.globalAlpha = 0.9 * fade; sprFast(m, pad, z.x, z.y, z.r * 3.4 * (1 + 0.05 * (1 - ph)), 0); }
