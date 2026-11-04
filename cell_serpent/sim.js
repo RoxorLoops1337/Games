@@ -1147,7 +1147,10 @@ function beatRun(g) {
   g.beatN = idx === g.beatLast + 1 ? g.beatN + 1 : 1; g.beatLast = idx;
   if (g.beatN >= BEATRUN_LEN) { g.beatN = 0; for (let n = 0; n < BEATRUN_GROOVE; n++) bumpGroove(g); g.events.push({ t: 'beatrun', x: g.p.x, y: g.p.y - 60 }); }
 }
-const visible = s => s.y > 8 && s.y < H - 8 && s.x > 8 && s.x < W - 8;
+// b15: the snake comes in from UNDER the gate line below the HUD: cells above it are not drawn, not targeted and not hit
+let GATE = 182;
+export const gateY = g => (isBossStage(g.stage) ? 215 : 182);
+const visible = s => s.y > GATE && s.y < H - 8 && s.x > 8 && s.x < W - 8;
 // accumulated effect of a run upgrade: summed rarity values, or the common value per pick if set directly
 const UPV = Object.fromEntries([...CAPSULE_UPS, ...PASSIVES].map(u => [u.id, u]));
 export const uv = (g, id) => (g.val && g.val[id] !== undefined ? g.val[id] : (g.ups[id] || 0) * UPV[id].vals[0]);
@@ -1634,7 +1637,7 @@ function moveBullets(g, dt) {
     if (!dead) {
       const bx = b.x, by = b.y, br = b.r;
       for (let a = 0; a < sns.length && !dead; a++) { const sn = sns[a], segs = sn.segs; for (let i = 0; i < segs.length && !dead; i++) { const s = segs[i];
-        if (s.hp <= 0 || s.shield || s.wave) continue;
+        if (s.hp <= 0 || s.shield || s.wave || s.y < GATE) continue;
         const dx = s.x - bx, dy = s.y - by;
         if (Math.sqrt(dx * dx + dy * dy) >= s.r + br || b.hit.includes(s)) continue;
         b.hit.push(s);
@@ -1683,6 +1686,7 @@ export function chaseX(x, tx, dt, speed) {
   return Math.abs(st) >= Math.abs(d) ? tx : x + st;
 }
 export function step(g, dt, input) {
+  GATE = gateY(g);
   if (g.phase !== 'play' && g.phase !== 'clear') return;
   g.t += dt;
   const p = g.p;
