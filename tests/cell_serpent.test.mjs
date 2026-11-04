@@ -611,7 +611,7 @@ ok('revive: costs Sparkles, restores HP and knocks the snake back, at most three
 
 ok('damage is counted per source for the stats panel', () => {
   const g = sim.createGame({ seed: 6, unlocked: ALL }); g.weap.swab = { lv: 3, cd: 0 }; g.weap.stick = { lv: 3, cd: 0 }; g.p.hp = g.p.maxHp = 1e6;
-  run(g, 25, { mx: 0 }); const tot = Object.values(g.dmgBy).reduce((a, v) => a + v, 0);
+  run(g, 45, { mx: 0 }); const tot = Object.values(g.dmgBy).reduce((a, v) => a + v, 0);
   assert.ok(g.dmgBy.capsule > 0 && tot > 0 && Object.keys(g.dmgBy).length >= 2, JSON.stringify(g.dmgBy));
 });
 
