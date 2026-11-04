@@ -179,7 +179,7 @@ assert.ok(weekSp / Math.max(1, drip) < 0.25, 'weekly badges are a side dish, not
   say('stage  coins/run  time/run  Beats/hr(sustained)  runs to max one skill  runs to max all stats');
   const rows = {};
   for (const st of [3, 8, 15, 25, 40]) {
-    const r = runs(st, profileFor(st).build, 2), cpr = r.coins, perHour = cpr * regenRunsPerHour;
+    const r = runs(st, profileFor(st).build, st >= 25 ? 5 : 2), cpr = r.coins, perHour = cpr * regenRunsPerHour;
     rows[st] = { cpr, perHour, skillRuns: skillBeats / cpr, statRuns: statTop / cpr };
     say(String(st).padEnd(6), String(Math.round(cpr)).padEnd(10), String(Math.round(r.time)).padEnd(9), String(Math.round(perHour)).padEnd(20), (skillBeats / cpr).toFixed(1).padEnd(22), (statTop / cpr).toFixed(1));
   }
