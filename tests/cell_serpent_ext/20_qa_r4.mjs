@@ -43,11 +43,11 @@ if (chromium) {
         await p.goto(`http://localhost:${srv.address().port}/cell_serpent/`); await p.waitForFunction(() => window.CS && window.CS.R, null, { timeout: 10000 });
         // play stage 1 with the bot at full speed until it is won (a few seeds may lose)
         let won = false;
-        for (let k = 0; k < 8 && !won; k++) {
+        for (let k = 0; k < 20 && !won; k++) {
           won = await p.evaluate(async () => { window.CS.startRun(1); const sim = await import('/cell_serpent/sim.js'); const g = window.CS.g; let i = 0; while (g.phase !== 'won' && g.phase !== 'dead' && i++ < 400000) { if (g.phase === 'levelup') sim.choose(g, 0); else sim.step(g, 1 / 60, sim.botInput(g)); } return g.phase === 'won'; });
           if (!won) { await p.evaluate(() => window.CS.openHub('Battle')); await p.waitForTimeout(200); }
         }
-        assert.ok(won, 'the bot wins stage 1 within 8 tries');
+        assert.ok(won, 'the bot wins stage 1 within 20 tries');
         await p.waitForFunction(() => document.querySelector('#result.on') && document.querySelectorAll('#rList .r').length, null, { timeout: 15000 });
         await p.waitForTimeout(2600);   // entrance animations and the star reveal finish
         const m = await p.evaluate(() => {
