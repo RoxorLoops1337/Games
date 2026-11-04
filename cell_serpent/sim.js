@@ -1164,7 +1164,7 @@ function beatRun(g) {
 let GATE = 182;
 export const gateY = g => (isBossStage(g.stage) ? 215 : 182);
 // the strip under the HUD is not shootable any more, so lane snakes crawl a little slower: a cell keeps the same time in the shootable part of the field (rings are unchanged)
-export const gateSlow = (g, path) => { if (g.ring || !path) return 1; const d8 = distAtY(path, 8), dg = distAtY(path, gateY(g)); return Math.min(1, Math.max(0.5, Math.min((path.len - dg) / Math.max(200, path.len - d8), (LINE_Y - gateY(g)) / (LINE_Y - 8)))); };   // the stricter of the path based and the height based share of the shootable field
+export const gateSlow = (g, path) => { if (g.ring || !path) return 1; const d8 = distAtY(path, 8), dg = distAtY(path, gateY(g)); return Math.sqrt(Math.min(1, Math.max(0.5, Math.min((path.len - dg) / Math.max(200, path.len - d8), (LINE_Y - gateY(g)) / (LINE_Y - 8))))); };   // half of the lost share (the stricter of the path based and the height based one): the hits above the gate were cheap ones, and the win rates of the old stages stay close
 const visible = s => s.y > GATE && s.y < H - 8 && s.x > 8 && s.x < W - 8;
 // accumulated effect of a run upgrade: summed rarity values, or the common value per pick if set directly
 const UPV = Object.fromEntries([...CAPSULE_UPS, ...PASSIVES].map(u => [u.id, u]));
@@ -1808,12 +1808,12 @@ export function botInput(g) {
   }
   // aim: chest cells first, otherwise the cell closest to the membrane
   let tgt = null;
-  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && s.y > 40 && s.y < p.y - 120) {
+  for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && s.y > gateY(g) + 10 && s.y < p.y - 120) {
     if (s.carry === 'chest') { tgt = s; break; }
     if (!tgt || s.ps > tgt.ps) tgt = s;
   }
   if (tgt) ax += clamp((tgt.x - p.x) / 120, -1, 1) * 0.9;
-  if (g.ring) { let t2 = null; for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && s.y > 20 && s.y < H - 20 && s.x > 20 && s.x < W - 20) { if (s.carry === 'chest') { t2 = s; break; } if (!t2 || s.ps > t2.ps) t2 = s; } return { mx: 0, my: 0, aim: t2 ? Math.atan2(t2.y - p.y, t2.x - p.x) : p.aim, encore: g.encore >= 1 && !!t2 && hyp(t2.x - p.x, t2.y - p.y) < 140 }; }   // b11: circle stages, the bot aims at the furthest-along cell
+  if (g.ring) { let t2 = null; for (const sn of g.snakes) for (const s of sn.segs) if (s.hp > 0 && !s.shield && !s.wave && s.y > gateY(g) + 10 && s.y < H - 20 && s.x > 20 && s.x < W - 20) { if (s.carry === 'chest') { t2 = s; break; } if (!t2 || s.ps > t2.ps) t2 = s; } return { mx: 0, my: 0, aim: t2 ? Math.atan2(t2.y - p.y, t2.x - p.x) : p.aim, encore: g.encore >= 1 && !!t2 && hyp(t2.x - p.x, t2.y - p.y) < 140 }; }   // b11: circle stages, the bot aims at the furthest-along cell
   return { mx: clamp(ax, -1, 1), my: 0, encore: g.encore >= 1 && !!tgt && Math.abs(tgt.x - p.x) < tgt.r };
 }
 

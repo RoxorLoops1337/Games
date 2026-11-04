@@ -13,7 +13,7 @@ export function smartBot(g) {
   if (g.ring) {   // b11: circle stages: the duo stands still and aims at the furthest-along cell on screen (chests first)
     let t = null, bs = -1;
     for (const sn of g.snakes) for (const s of sn.segs) {
-      if (s.hp <= 0 || s.shield || s.wave || s.y <= 20 || s.y >= sim.H - 20 || s.x <= 20 || s.x >= sim.W - 20) continue;
+      if (s.hp <= 0 || s.shield || s.wave || s.y <= sim.gateY(g) + 10 || s.y >= sim.H - 20 || s.x <= 20 || s.x >= sim.W - 20) continue;   // b15: cells under the HUD gate cannot be hit
       const sc = (s.carry === 'chest' ? 1e6 : 0) + s.ps;
       if (sc > bs) { bs = sc; t = s; }
     }
@@ -21,7 +21,7 @@ export function smartBot(g) {
   }
   let tgt = null, best = -1;
   for (const sn of g.snakes) for (const s of sn.segs) {
-    if (s.hp <= 0 || s.shield || s.wave || s.y <= 40 || s.y >= p.y - 60) continue;
+    if (s.hp <= 0 || s.shield || s.wave || s.y <= sim.gateY(g) + 10 || s.y >= p.y - 60) continue;
     if (s.x < p.zone.x0 - s.r || s.x > p.zone.x1 + s.r) continue;
     const sc = (s.carry === 'chest' ? 1e6 : 0) + s.ps;
     if (sc > best) { best = sc; tgt = s; }

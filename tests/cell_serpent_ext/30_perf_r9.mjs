@@ -28,5 +28,5 @@ for (const stage of [3, 12, 30, 44]) {
   kills += g.kills;
 }
 assert.ok(kills > 5, 'the orbit weapons actually killed things: ' + kills);
-assert.equal(hash, 782987804, '(b15: gate under the HUD changes the snake start and speed; was 771212880) (b12d: ring stage pace changes stage 12; was 36158670) orbit-weapon runs unchanged (pin updated in b11 merge, ring stage 360 aim + earlier b11 changes: Beat Run groove, Mirror cell at stage 44, Bell reach fix)');
+assert.equal(hash, 827660306, '(b15: gate under the HUD changes the snake start and speed; was 771212880) (b12d: ring stage pace changes stage 12; was 36158670) orbit-weapon runs unchanged (pin updated in b11 merge, ring stage 360 aim + earlier b11 changes: Beat Run groove, Mirror cell at stage 44, Bell reach fix)');
 console.log('30_perf_r9 ok');
