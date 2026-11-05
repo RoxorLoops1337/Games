@@ -8,6 +8,7 @@
 // until every other cell is gone. If the face reaches the membrane it drains your HP.
 // Between runs you spend Beats and Sparkles on stats, loot boxes and skill levels (meta section).
 import { defaultUnlocked, sanitizeUnlocked } from './unlock_b12p.js';
+import { petSetBonus, ENCORE_LV, encoreValue } from './sets_b16h.js';   // batch 16 (h): pair and encore bonuses
 export const W = 720;
 export const H = 1280;
 export const LINE_Y = 1055;   // the membrane at the bottom
@@ -114,6 +115,7 @@ export function keepBonus(lvs) {   // lvs: id -> level
   const b = { atk: 0, vit: 0, coin: 0, guard: 0, crit: 0, cdn: 0, speed: 0 };
   for (const k of KEEPSAKES) b[k.stat] += k.per * ((lvs && lvs[k.id]) || 0);
   for (const set of KEEP_SETS) if (KEEPSAKES.filter(k => k.set === set.id).every(k => ((lvs && lvs[k.id]) || 0) > 0)) b[set.stat] += set.val;
+  for (const set of KEEP_SETS) if (KEEPSAKES.filter(k => k.set === set.id).every(k => ((lvs && lvs[k.id]) || 0) >= ENCORE_LV)) b[set.stat] += encoreValue(set.val);   // batch 16 (h): encore
   return b;
 }
 // Account level: every run teaches you something.
@@ -454,6 +456,7 @@ export function buyEgg(save) { if (save.sparkles < EGG_PRICE) return false; save
 export function petBonus(pets) {   // permanent, whether the pet is equipped or not
   const b = { atk: 0, vit: 0, coin: 0, guard: 0, crit: 0, cdn: 0 };
   for (const p of PETS) { const st = (pets && pets[p.id]) || 0; b[p.stat] += p.per * st; }
+  { const sb = petSetBonus(pets); for (const k of Object.keys(sb)) b[k] += sb[k]; }   // batch 16 (h): pairs
   return b;
 }
 // A fresh day gives a fresh egg and fresh Piggy Bank attempts.
