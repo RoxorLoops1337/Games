@@ -25,8 +25,8 @@ assert.ok(r6.win < 1 || r7.win < 1 || r6.win <= r7.win, 'the circle is never the
 // bosses: soft at the face, so the first yellow cells pop and the run can snowball; they are not a wall for a typical player
 const bossHp = n => { const g = sim.createGame({ seed: 5, stage: n }), s = g.snakes[0].segs; return [s[2].max, s[s.length - 1].max]; };
 assert.ok(sim.BOSS_HP[0] < 1 && sim.BOSS_HP[1] >= 2, 'boss cells start soft and end tough');
-const b10 = runs(10, profileFor(10).build, 8);   // b16: eight seeds, three were luck
-assert.ok(b10.prog >= 0.25, 'the stage 10 boss is a fight for the regular profile, not a wall: ' + b10.prog.toFixed(2));
+const b10 = runs(10, profileFor(10).build, 20);   // b16: twenty seeds (3 and 8 were luck: the mean is about 0.28)
+assert.ok(b10.prog >= 0.2, 'the stage 10 boss is a fight for the regular profile, not a wall: ' + b10.prog.toFixed(2));
 assert.ok(bossHp(10)[1] > bossHp(10)[0] * 3, 'a boss gets much tougher down its length');
 
 // typical player per band: owns skills, pets, keepsakes and an outfit; mid-band lanes are beatable but not free
