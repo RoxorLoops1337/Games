@@ -1,4 +1,6 @@
 import { keyAim, sliderAim, watchAim, resetAimSr, setFieldLabel } from './a11y_b12k.js';
+import { mountDailyTile, dailyOpts, dailyResultRows, dailyAfterResult } from './daily_ui_b16c.js';
+import { dayId as dchDayId, dailyStage as dchStage } from './daily_b16c.js';
 import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, RING_SCALE, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, metaBuyable, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { platMeta } from './plat_b12d.js';
 import { skinFor, recordAddictRun, eventInfo, ensureEvent } from './sim.js';
@@ -300,7 +302,7 @@ function renderBattle() {
   { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; bestPct = pr; $('stProg').innerHTML = `<div class="pgl${pr ? ' has' : ''}">Best <b>${pr}%</b>${bestTag(hard, powerGap(power(save), recPower(sel, hard)).gap)}</div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
   { const ws = $('wStrip'), wk = save.cleared + '|' + sel; if (ws && ws.dataset.k !== wk) { ws.dataset.k = wk; ws.innerHTML = actStripHTML(save.cleared, sel, MAX_STAGE, isBossStage, Math.min(MAX_STAGE, save.cleared + 4)); } }   // b11: five named worlds over the 50 ticks (worldStrip draws the ticks)   // r10: 50 ticks, boss crowns taller
   hub2.renderSide(); watchSideIcons($('battleSide')); watchSide($('battleSide'));
-  renderPig();
+  renderPig(); try { mountDailyTile(dchCtx); } catch (e) { /* b16c: the daily tile is optional */ }
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
   renderGoals(); foldTab('Battle');
   if (chips.dataset.sc !== sel + '|' + ckey) { chips.dataset.sc = sel + '|' + ckey; requestAnimationFrame(() => { const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } } }); }   // 17-perf: read layout after paint, and only when the stage changed
@@ -550,6 +552,8 @@ const defaultBoxOk = () => { audio.play('click'); openHub('Shop'); };
 $('bOk').onclick = defaultBoxOk;
 const toast = msg => { if (/^(Not enough|Nothing to claim|Out of Voice|That code does not)/.test(msg)) audio.play('deny'); const t = $('toast'); t.textContent = msg; { const tn = dressToast(t, msg); if (TONE_HAPTIC[tn]) haptic(TONE_HAPTIC[tn], save && save.settings); } t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200); };
 const hub2 = createHub2({ unlocked: id => isUnlocked(id, save), $, toast, tile, icon, curImg, audio, save: () => save, persist, show, openHub: t => openHub(t), renderHub: () => renderHub(), refreshCur: () => refreshCur(), dayKey, resetBoxOk: () => { $('bOk').onclick = defaultBoxOk; }, bodyURL: skin => { if (!kit) return ''; if (!(('b|' + skin) in iconCache)) { const spr = kit.SPR.body(skin, false, ''); iconCache['b|' + skin] = spr && spr.c.toDataURL ? spr.c.toDataURL() : ''; } return iconCache['b|' + skin]; } });
+// b16c: the Daily Challenge context (tile in the Battle tab, panel, result lines); it opens with the Daily Gigs
+const dchCtx = { save: () => save, persist, audio, $, isUnlocked: () => isUnlocked('gigs', save), stageName: n => stageInfo(n).name, start: () => { if (mode !== 'play' && mode !== 'pause') { persist(); startRun(dchStage(dchDayId()), 'daily'); } }, back: () => openHub('Battle'), openPanel: (t, b, cl) => hub2.openPanel(t, b, cl), share: txt => shareResult(txt, toast), url: location.origin + location.pathname, mode: () => mode };
 try { const pb = $('pBody'); if (pb && typeof MutationObserver === 'function') new MutationObserver(() => { if ($('pTitle').textContent === 'GOALS') trimGoalsPanel(pb, save); }).observe(pb, { childList: true }); } catch (e) { /* cosmetic */ }   // b12p: the long Goals page keeps out sections that are not open yet
 
 // ---------------------------------------------------------------- runs
@@ -561,8 +565,9 @@ function startRun(stage, mode2 = '') {
   const fromHub = shownId === 'hub';
   if (!mode2) save.last = { stage, hard: !!(hard && stage <= save.cleared) };
   audio.unlock(); fsOnRun(); audio.music(true, stage === 1 && !mode2);
-  sel = stage; ranResult = false; endT = 0;
-  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: platMeta(save), skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
+  if (mode2 !== 'daily') sel = stage; ranResult = false; endT = 0;
+  g = mode2 === 'daily' ? createGame(dailyOpts(dchDayId())) : createGame({ seed: (Math.random() * 1e9) | 0, meta: platMeta(save), skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
+  if (mode2 === 'daily') g.revivesLeft = 0;   // b16c: the house band plays without revives
   g.petJoy = save.petEquip.map(id => (save.pets[id].joy || 0) >= 100);   // round 6: an overjoyed pet shows off in the run (cosmetic)
   mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove(); if (fromHub) curtainOpen(document.documentElement.classList.contains('rm'));
   announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + (g.ring ? 'Drag to aim, or use the arrow keys. The duo shoots on its own.' : 'Slide to move, the duo shoots up on its own.'));
@@ -772,6 +777,7 @@ function showResult() {
   const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), stk0 = stickerIds(save), out = applyResult(save, r); logRun(r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
   stopFx(); stopBest(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
+  if (r.mode === 'daily') { rows.length = 0; rows.push(...dailyResultRows(out, cu, curImg)); }
   if (out.ribbons) rows.push(`<div class="r">${BOW} ${cu(out.ribbons)} Ribbons</div>`);
   if (out.pet) rows.push(`<div class="r">${icon(out.pet.id)}${cu(out.pet.n)} ${PETS.find(p => p.id === out.pet.id).name} fragments</div>`);
   if (out.egg) rows.push(`<div class="r">${icon('egg')}+1 Egg</div>`);
@@ -796,7 +802,7 @@ function showResult() {
   $('rList').innerHTML = rows.join(''); countUp($('rList'), reduce, () => audio.play('countend'), f => audio.play('count', { f }));
   for (const el of $('rList').children) el.classList.add('got');
   progMeter($('rLevel'), !r.won && !r.mode && !r.hard ? Math.floor((r.progress || 0) * 100) : null, out.prevPct || 0, reduce);
-  const pigRun = r.mode === 'pig' || r.mode === 'inv', nextOk = !pigRun && r.won && canPlay(save, r.stage + 1);
+  const pigRun = r.mode === 'pig' || r.mode === 'inv', nextOk = !pigRun && r.mode !== 'daily' && r.won && canPlay(save, r.stage + 1);
   $('rNext').style.display = nextOk ? '' : 'none'; $('rNext').classList.toggle('pulse', nextOk);
   $('rNext').onclick = () => { audio.play('click'); clearStickerPop(); beginStage(r.stage + 1); };
   $('rRetry').innerHTML = 'RETRY <span class="rcost">⚡' + ENERGY_COST + '</span>';
@@ -804,7 +810,7 @@ function showResult() {
   $('rShare').onclick = () => { audio.play('click'); shareResult(shareText(r, r.mode ? '' : stageInfo(r.stage).name, location.origin + location.pathname), toast); };
   $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); clearStickerPop(); try { retryFly($('rRetry'), rewardSnaps($('rList')), !!(save.settings.reduceMotion || systemReduceMotion())); } catch (e) { /* cosmetic */ } beginStage(r.stage); };
-  $('rHub').onclick = () => { audio.play('click'); curtainClose(document.documentElement.classList.contains('rm'), () => { clearStickerPop(); const fl = rewardSnaps($('rList')); flyRibbonsHome(fl.length); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; gigFlies(fl.map(it => ({ snap: it.s, kind: it.kind, amt: it.n })), 420); openHub('Battle'); }); };   // the hub pills wait at their old totals and count up as each chip lands (batch 7)
+  $('rHub').onclick = () => { audio.play('click'); curtainClose(document.documentElement.classList.contains('rm'), () => { clearStickerPop(); const fl = rewardSnaps($('rList')); flyRibbonsHome(fl.length); if (!pigRun && r.mode !== 'daily') sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; gigFlies(fl.map(it => ({ snap: it.s, kind: it.kind, amt: it.n })), 420); openHub('Battle'); }); };   // the hub pills wait at their old totals and count up as each chip lands (batch 7)
   { const st = r.stars || 0; $('rStars').innerHTML = r.won && !r.mode && !r.hard ? [1, 2, 3].map(i => `<span class="${i <= st ? '' : 'off'}">★</span>`).join('') : '';
     if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + Math.min(3, i + 1)); if (i === st - 1 && !reduce) confetti($('result'), st === 3 ? 30 : st === 2 ? 18 : 10); }, reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
@@ -819,6 +825,7 @@ function showResult() {
   if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
   if (!r.mode) { const wsk = stageInfo(r.stage).skin, wn = !!r.won; setTimeout(() => { if (mode === 'over' && $('result').classList.contains('on')) audio.play('worldmotif', { skin: wsk, won: wn }); }, wn ? 900 : 450); }   // b14e: a short motif per world
   try { dressDuo($('rImg'), { outfit: wornOutfit(save), pets: save.petEquip, kit, mood: r.won ? 'win' : 'lose', joy: Object.fromEntries(save.petEquip.map(id => [id, save.pets[id].joy || 0])) }); } catch (e) { /* ignore */ }
+  if (r.mode === 'daily') { try { dailyAfterResult(dchCtx, r, out); } catch (e) { /* cosmetic */ } }
   show('result'); mode = 'over';
 }
 

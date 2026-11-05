@@ -2866,6 +2866,23 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   .s3 .tchain{padding-top:118px!important} .tut12.art12 .s3 .tchain{padding-top:132px!important} .tut12 .s2 .tgold{margin-top:78px} .tut12.art12 .s3 .tseg{width:46px;height:46px;margin:-8px 0}.tut12.art12 .s3 .tface{width:62px;height:62px;margin-top:6px}
   @media (max-height:700px){.tut12 .tsub{top:46px;font-size:14px}.tut12.art12 .s3 .tchain{padding-top:112px!important}.tut12 .s2 .tgold{margin-top:66px}}
 /* end @css:38-tut-sub */
+/* @css:39-c-daily */
+  .dchbox{width:min(460px,100%)} .dchbox[hidden]{display:none!important}
+  .dch{width:100%;box-sizing:border-box;position:relative;overflow:hidden;display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:18px;border:2px solid #ffd54a99;background:linear-gradient(100deg,#4a2a08,#241046)}
+  .dch::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 40%,rgba(255,255,255,.1) 50%,transparent 60%);transform:translateX(-120%);animation:bnshine 5s ease-in-out infinite;pointer-events:none}
+  .dch-top{display:flex;align-items:center;gap:10px;min-width:0} .dch-ic{flex:none;width:46px;height:46px;display:grid;place-items:center;font-style:normal;font-size:28px;border-radius:14px;background:rgba(255,213,74,.16)}
+  .dch-tx{display:flex;flex-direction:column;min-width:0;gap:1px} .dch-tx b{font-size:16px;letter-spacing:.08em;color:#ffe14a} .dch-tx span{font-size:14px;font-weight:800;color:#fff;overflow-wrap:anywhere} .dch-tx small{font-size:12px;color:#d9cdea} .dch-tx small em{font-style:normal;font-weight:900;color:#ffe14a}
+  .dch-row{display:flex;gap:8px;width:100%} .dch-row .btn{flex:1 1 0;min-width:0;min-height:44px;padding:8px 10px;font-size:14px} .dch-row .btn.dim{flex:0 0 38%}
+  .dchp{display:flex;flex-direction:column;gap:10px;width:100%;text-align:left}
+  .dch-hero{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:16px;background:linear-gradient(100deg,#4a2a08,#241046);border:2px solid #ffd54a77} .dch-hero b{font-size:18px;color:#ffe14a;letter-spacing:.04em} .dch-hero span{font-weight:800;font-size:14px} .dch-hero small{font-size:12px;color:#d9cdea;line-height:1.35}
+  .dch-st{display:flex;gap:8px} .dch-st span{flex:1 1 0;display:flex;flex-direction:column;align-items:center;padding:6px 4px;border-radius:12px;background:rgba(255,255,255,.08);font-size:12px;color:#d9cdea} .dch-st b{font-size:18px;color:#fff}
+  .dch-nm{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#d9cdea} .dch-nm input{box-sizing:border-box;width:100%;min-height:44px;padding:8px 12px;border-radius:12px;border:2px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#fff;font:inherit;font-weight:800;font-size:16px}
+  .dch-bh{font-size:12px;font-weight:900;letter-spacing:.1em;color:#ffe14a} .dch-bd{display:flex;flex-direction:column;gap:4px}
+  .dch-r{display:flex;align-items:center;gap:10px;min-height:36px;padding:4px 10px;border-radius:10px;background:rgba(255,255,255,.07);font-weight:800;font-size:14px} .dch-r i{font-style:normal;width:26px;color:#d9cdea} .dch-r span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .dch-r b{color:#ffe14a} .dch-r.me{background:rgba(255,225,74,.2);outline:2px solid #ffe14a}
+  .dch-load{padding:12px;text-align:center;font-size:13px;color:#d9cdea}
+  @media(max-width:340px){.dch-tx b{font-size:15px} .dch-tx span{font-size:13px} .dch{padding:9px 10px}}
+  @media(prefers-reduced-motion:reduce){.dch::after{animation:none}}
+/* end @css:39-c-daily */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
