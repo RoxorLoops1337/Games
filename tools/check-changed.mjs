@@ -105,6 +105,7 @@ const FUNCTION_SUITES = {
   'dungeon_board.js': ['test:dpboard'],
   'dungeon_save.js': ['test:dpsave'],
   'dropbass_board.js': ['test:dropbass'],
+  'cell_serpent_daily.js': ['test:serpent'],
 };
 
 // Shared files with a precise rule (see the header). The home page is checked by test:site; the tool checks itself with test:checkchanged.
