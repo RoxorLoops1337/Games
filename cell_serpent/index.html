@@ -3027,6 +3027,12 @@ html.rm #result.close #rTitle{animation:none}
   @media(max-width:340px){.dch-tx b{font-size:15px} .dch-tx span{font-size:13px} .dch{padding:9px 10px}}
   @media(prefers-reduced-motion:reduce){.dch::after{animation:none}}
 /* end @css:39-c-daily */
+/* @css:39-z-result */
+/* batch 16 added a build pill, goal chip, close-call and door lines to the result screen: tighter gaps keep RETRY and MENU on screen on 844 px phones */
+/* the new extras sit under the buttons; RETRY and MENU stay where the old screens had them */
+#result .rbuild16e,#result .g16-chip{order:40}
+@media (max-height:900px){#result .rbuild16e,#result .g16-chip{margin-top:2px}}
+/* end @css:39-z-result */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
