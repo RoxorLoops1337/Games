@@ -24,6 +24,9 @@ import { seeded, newSeed, armChest, wasHeld, keepDetailHTML, keepCeremony } from
 import { renderStickerBook } from './sticker_b9.js';
 import { foldTab } from './fold_b12r.js';
 import { recordsHTML, setStripState, setStripHTML, treatLine } from './hub_b10.js';
+import { playStatsHTML, resetPstats } from './playstats_b16j.js';
+import { CAPSULE_UPS as PS_CAPS, PASSIVES as PS_PASS } from './sim.js';
+import { isUnlocked as psUnlocked } from './unlock_b12p.js';
 import { statBuyJuice } from './juice_b13b.js';
 import { statTeaserEl } from './onboard_b14b.js';
 import { readRuns, runLogHTML, decorateBundles, sparkleFlight, treatPips } from './hub_b11.js';
@@ -219,10 +222,13 @@ export function createHub2(c) {
     { const pc = platCard(s, () => { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); }); if (pc) list.appendChild(pc); }   // b12d Gold Records
     { const wc = wallCard(s, () => { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); }); if (wc) list.appendChild(wc); }   // b13d Gold Wall
     { const rc = document.createElement('div'); rc.className = 'recbox'; rc.innerHTML = recordsHTML(s); list.appendChild(rc); }
+    if (psUnlocked('playstats', s)) { const pb = document.createElement('div'); pb.className = 'pstatbox'; pb.innerHTML = playStatsHTML(s, psName); list.appendChild(pb);   // b16j: local-only Play Stats
+      const rb = pb.querySelector('.psreset'); if (rb) rb.onclick = () => { if (rb.dataset.arm) { resetPstats(save()); c.persist(); audio.play('click'); c.renderHub(); } else { rb.dataset.arm = '1'; rb.textContent = 'Sure?'; setTimeout(() => { if (rb.isConnected) { delete rb.dataset.arm; rb.textContent = 'Clear'; } }, 2500); } }; }
     { const rl = runLogHTML(readRuns()); if (rl) { const rb = document.createElement('div'); rb.className = 'runbox'; rb.innerHTML = rl; list.appendChild(rb); } }
     { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t), (n, from) => { save().sparkles += n; c.persist(); audio.play('bookdone'); sparkleFlight(from, calmMotion(), () => c.refreshCur(), { src: iconURL('sparkles') }); }); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }
     foldTab('Stats');
   }
+  const psName = id => { const w = WEAPONS.find(x => x.id === id) || PS_CAPS.find(x => x.id === id) || PS_PASS.find(x => x.id === id); return w ? w.name : id; };
   // the cheapest upgrade you can afford right now wears a "BEST BUY" ribbon (a nudge, never a rule)
   function bestBuy(core, s) {
     let pick = null, pc = 1e9;

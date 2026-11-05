@@ -76,6 +76,7 @@ import { logRun } from './hub_b11.js';
 import { initFullscreen, fsOnRun } from './fullscreen_fs.js';
 import { initInstall } from './install_b12n.js';
 import { isUnlocked, isTabUnlocked, setUnlockAll, unlockAllOn } from './unlock_b12p.js';
+import { recordRun as psRun, recordPick as psPick, recordSkip as psSkip, noteQuit as psQuit } from './playstats_b16j.js';
 import { createUnlockUI, trimGoalsPanel } from './unlock_ui_b12p.js';
 
 try { if (/[?&]unlock=all\b/.test(location.search)) setUnlockAll(true); } catch (e) { /* ignore */ }   // b12p: test/debug only, opens every tab and panel
@@ -609,6 +610,7 @@ const lvGuard = { at: 0, down: -1, moved: false }; trackPress($('cards'), lvGuar
 { const bs = $('buildStrip'), sh = $('bandSheet'); const tog = () => { if (!bs.innerHTML) return; if (!sh.classList.contains('on')) { sh.innerHTML = bandSheetHTML(g, icon); sh.classList.add('on'); } else sh.classList.remove('on'); }; bs.onclick = tog; sh.onclick = () => sh.classList.remove('on'); bs.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tog(); } }; }
 function pick(i) {
   if (mode !== 'play' || g.phase !== 'levelup' || pickLock) return;
+  psPick(save, g.choices[i]);
   { const c = g.choices[i]; if (c) announce('Picked ' + c.name + ', ' + RARITY_WORDS[c.rarity || 0] + '. ' + (c.stat || '')); }
   audio.play('upgrade'); { const pr = (g.choices[i] && g.choices[i].rarity) | 0; audio.play('card' + pr); if (pr >= 4) audio.play('stinger'); }
   const cs = $('cards').children, el = cs[i];
@@ -616,7 +618,7 @@ function pick(i) {
   pickLock = true; el.classList.add('chosen'); { const pr = (g.choices[i] && g.choices[i].rarity) | 0; pickBurst(el, RARITIES[pr].color, pr); } [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing'); { const pc = g.choices[i]; flyPick(el, $('buildStrip'), 360, () => { if (pc) { tickBand($('buildStrip'), pc.id, pc.kind === 'weapon' ? (pc.gain || 1) : 1, icon, RARITIES[pc.rarity | 0].color); if (pc.kind !== 'weapon' && chainPulse($('buildStrip'), g, pc.id, pc.isNew)) audio.play('click'); } }); }
   setTimeout(() => { if (!pickLock) return; pickLock = false; if (mode !== 'play' || g.phase !== 'levelup') return; choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }, 580);
 }
-$('skipBtn').onclick = () => { if (mode === 'play' && skipPick(g)) { audio.play('skip'); cardsFor = null; if (g.phase === 'levelup') showCards(); else show(''); } };
+$('skipBtn').onclick = () => { if (mode === 'play' && skipPick(g)) { psSkip(save); audio.play('skip'); cardsFor = null; if (g.phase === 'levelup') showCards(); else show(''); } };
 $('refreshBtn').onclick = () => { const pt = g.choices ? Math.max(0, ...g.choices.map(c => c.rarity || 0)) : 0; const prevC = g.choices; if (mode === 'play' && reroll(g)) { audio.play('click'); markReroll(); keepLocked(g.choices, prevC); rrChip = true; showCards(); betterRoll($('cards'), pt); { const rb = $('refreshBtn'), cw = $('cards'); rb.classList.remove('rr'); cw.classList.remove('rrx'); void rb.offsetWidth; rb.classList.add('rr'); cw.classList.add('rrx'); setTimeout(() => { rb.classList.remove('rr'); cw.classList.remove('rrx'); }, 650); } } };
 
 // ---------------------------------------------------------------- input
@@ -769,7 +771,7 @@ function flyRibbonsHome(nFly) {   // the result's Ribbons chip flies to the hub 
 }
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
-  const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), stk0 = stickerIds(save), out = applyResult(save, r); logRun(r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
+  const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), stk0 = stickerIds(save), out = applyResult(save, r); logRun(r); psRun(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
   stopFx(); stopBest(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
   if (out.ribbons) rows.push(`<div class="r">${BOW} ${cu(out.ribbons)} Ribbons</div>`);
@@ -900,7 +902,7 @@ $('resumeBtn').onclick = () => resume();
 $('pStats').onclick = () => { audio.play('click'); showStatsFromPause(); };
 $('pSet').onclick = () => { audio.play('click'); openSettings(() => show('pause')); };
 const quitNow = () => {
-  g.p.hp = 0; g.phase = 'dead';
+  psQuit(); g.p.hp = 0; g.phase = 'dead';
   g.result = quitResult(g);
   showResult();
 };

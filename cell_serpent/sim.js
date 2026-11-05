@@ -8,6 +8,7 @@
 // until every other cell is gone. If the face reaches the membrane it drains your HP.
 // Between runs you spend Beats and Sparkles on stats, loot boxes and skill levels (meta section).
 import { defaultUnlocked, sanitizeUnlocked } from './unlock_b12p.js';
+import { sanitizePstats } from './playstats_b16j.js';
 export const W = 720;
 export const H = 1280;
 export const LINE_Y = 1055;   // the membrane at the bottom
@@ -388,6 +389,7 @@ export function sanitizeSave(raw) {
   if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^h?\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
   if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
   s.addict = sanitizeAddict(raw.addict);
+  s.pstats = sanitizePstats(raw.pstats);   // b16j: local-only play stats (playstats_b16j.js)
   s.unlocked = sanitizeUnlocked(raw.unlocked);   // b12p: a save without the field is an old account and keeps every tab
   if (raw.treats && typeof raw.treats === 'object' && !Array.isArray(raw.treats)) { const tn = {}; for (const p of PETS) tn[p.id] = Math.min(9, num(raw.treats.n && raw.treats.n[p.id])); s.treats = { day: num(raw.treats.day), n: tn }; }   // round 10: treats given today, see pets_b10.js
   if (raw.petNames && typeof raw.petNames === 'object' && !Array.isArray(raw.petNames)) { const pn = {}; for (const p of PETS) { const v = raw.petNames[p.id]; const n = typeof v === 'string' ? v.replace(/[^\w \-!+&.]/g, '').trim().slice(0, 10) : ''; if (n) pn[p.id] = n; } s.petNames = pn; }
