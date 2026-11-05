@@ -36,6 +36,8 @@ export const UNLOCKS = [
   { id: 'shop', step: 5, kind: 'tab', tab: 'Shop', label: 'Shop', alt: { step: 4, sparkles: 50 }, hint: 'New: Shop! Treats and surprises, some are free.', inTab: 'Grab a treat' },
   { id: 'energyplus', step: 5, kind: 'misc', label: 'Voice + button' },
   { id: 'bestiary', step: 5, kind: 'chip', label: 'Preview (snake book)', el: 'bestiary' },
+  // ---- stage 5: Risk Doors (b16) appear before the stage that follows each boss
+  { id: 'doors', step: 5, kind: 'misc', label: 'Risk doors after a boss' },
   // ---- stage 6
   { id: 'gigs', step: 6, kind: 'panel', label: 'Daily gigs and the claim row', hint: 'New: Daily Gigs! Little jobs that pay Beats.', el: 'gigs' },
   { id: 'rewardfilter', step: 6, kind: 'panel', label: 'Rewards filter on the stage chips' },

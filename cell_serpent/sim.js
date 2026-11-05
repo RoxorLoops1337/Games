@@ -352,7 +352,7 @@ export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
   const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0, joy: 0 };
-  return { v: 8, unlocked: defaultUnlocked(), loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, bigTap: false, reviveTimer: true, volume: 1, thumbZone: false, aimAssist: false, textScale: 1, beatTick: false, pump: 2, fullscreen: true, controlStyle: 'follow' }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, gift: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, builds: {}, plat: { atk: 0, crt: 0, vit: 0, for: 0 }, wall: { plaques: {} }, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault(), voice: { got: {}, n: 0 }, goals16: g16Default() };
+  return { v: 8, unlocked: defaultUnlocked(), loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, bigTap: false, reviveTimer: true, volume: 1, thumbZone: false, aimAssist: false, textScale: 1, beatTick: false, pump: 2, fullscreen: true, controlStyle: 'follow' }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, gift: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, builds: {}, plat: { atk: 0, crt: 0, vit: 0, for: 0 }, wall: { plaques: {} }, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault(), voice: { got: {}, n: 0 }, goals16: g16Default(), risk: { taken: 0, won: 0, calm: 0 } };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -397,6 +397,7 @@ export function sanitizeSave(raw) {
   s.pstats = sanitizePstats(raw.pstats);   // b16j: local-only play stats (playstats_b16j.js)
   s.builds = {}; if (raw.builds && typeof raw.builds === 'object' && !Array.isArray(raw.builds)) for (const k of Object.keys(raw.builds).slice(0, 60)) { const n = Math.min(9999, num(raw.builds[k])); if (k.length <= 40 && /^[A-Za-z\- ]+$/.test(k) && n > 0) s.builds[k] = n; }   // b16e: build names the player has played
   s.goals16 = sanitizeG16(raw.goals16);   // b16i
+  if (raw.risk && typeof raw.risk === 'object') s.risk = { taken: Math.min(1e6, num(raw.risk.taken)), won: Math.min(1e6, num(raw.risk.won)), calm: Math.min(1e6, num(raw.risk.calm)) };
   s.unlocked = sanitizeUnlocked(raw.unlocked);   // b12p: a save without the field is an old account and keeps every tab
   if (raw.treats && typeof raw.treats === 'object' && !Array.isArray(raw.treats)) { const tn = {}; for (const p of PETS) tn[p.id] = Math.min(9, num(raw.treats.n && raw.treats.n[p.id])); s.treats = { day: num(raw.treats.day), n: tn }; }   // round 10: treats given today, see pets_b10.js
   if (raw.petNames && typeof raw.petNames === 'object' && !Array.isArray(raw.petNames)) { const pn = {}; for (const p of PETS) { const v = raw.petNames[p.id]; const n = typeof v === 'string' ? v.replace(/[^\w \-!+&.]/g, '').trim().slice(0, 10) : ''; if (n) pn[p.id] = n; } s.petNames = pn; }
@@ -608,6 +609,7 @@ export const clearReward = n => ({ sparkles: (isBossStage(n) ? 40 : 15) + 3 * n 
 export const totalStars = save => Object.values(save.stars || {}).reduce((a, v) => a + v, 0);
 export function applyResult(save, r) {
   const out = { beats: r.coins, sparkles: 0, first: false, egg: false, levelUps: 0, frags: r.frags || {} };
+  if (r.stage && !r.mode && !r.hard && hasDoors(r.stage) && save.risk) { if (r.risk) { save.risk.taken++; if (r.won) save.risk.won++; } else save.risk.calm++; }
   const lv0 = levelInfo(save.xp).lv; save.xp += Math.round((r.kills || 0) + 25 * (r.stage || 1) * (r.won ? 2 : 1) * (r.hard ? 1.5 : 1));
   const lv1 = levelInfo(save.xp).lv; out.levelUps = lv1 - lv0;
   for (let l = lv0 + 1; l <= lv1; l++) { const rw = levelReward(l); if (rw) { save.sparkles += rw.sparkles; out.sparkles += rw.sparkles; } }
@@ -661,6 +663,23 @@ export const MODS = [
   { id: 'rich', name: 'Rich', blurb: 'Beats are worth much more', coin: 1.6 },
 ];
 export const stageMod = n => (n >= 4 && n % 5 !== 0 && n % 3 === 1 ? MODS[Math.floor(n / 3) % MODS.length] : null);
+// Risk Doors (batch 16 b): before the stage that follows every boss (6, 11, 16 ...) the player picks a calm door (the stage as it is) or the
+// loud door: a harder twist for double Beats. Pure data + pure helpers, no random numbers; the twist merges into g.mod so every existing mod hook works.
+export const RISK_LOUD = [
+  { id: 'rk_tempo', name: 'Fast Tempo', blurb: 'The snake is 20% faster', speed: 1.2 },
+  { id: 'rk_bass', name: 'Heavy Bass', blurb: 'Cells have 25% more HP', hp: 1.25 },
+  { id: 'rk_plate', name: 'Plated Choir', blurb: 'Lots of armored cells', armor: 0.3 },
+  { id: 'rk_boom', name: 'Bomb Squad', blurb: 'Lots of bombs', bomb: 0.3 },
+];
+export const RISK_COIN = 2;   // the loud door pays double Beats
+export const hasDoors = n => n > 5 && n <= 50 && (n - 1) % 5 === 0;
+export const riskLoud = n => RISK_LOUD[Math.floor(n / 5) % RISK_LOUD.length];
+export const riskById = id => RISK_LOUD.find(r => r.id === id) || null;
+export function mergeRisk(base, r) {
+  if (!r) return base;
+  const b = base || {};
+  return { id: r.id, name: base ? base.name + ' + ' + r.name : r.name, blurb: r.blurb, speed: (b.speed || 1) * (r.speed || 1), hp: (b.hp || 1) * (r.hp || 1), coin: (b.coin || 1) * RISK_COIN, armor: Math.max(b.armor || 0, r.armor || 0) || undefined, bomb: Math.max(b.bomb || 0, r.bomb || 0) || undefined, risk: true };
+}
 // Most stages are one snake and a line at the bottom. Some stages have two snakes, and some put the duo in the middle with a circle around them.
 export const stageKind = n => (n % 6 === 0 ? 'ring' : (n % 7 === 0 || n % 10 === 8) ? 'double' : 'lane');
 export const KIND_LABEL = { lane: '', double: 'Two snakes', ring: 'Circle' };
@@ -1122,7 +1141,9 @@ export function startStage(g, n) {
   g.snakes.length = 0; g.stageHpMax = 0; g.zones.length = 0; g.maws.length = 0; g.bullets.length = 0; g.vq.length = 0;
   g.path = buildPath(n);
   const p = g.p;
-  g.mod = g.mode === '' ? stageMod(n) : null; if (g.mod && g.mod.coin) g.coinK *= g.mod.coin;
+  g.mod = g.mode === '' ? stageMod(n) : null;
+  if (g.risk && g.mode === '' && !g.hard && hasDoors(n)) g.mod = mergeRisk(g.mod, riskById(g.risk));
+  if (g.mod && g.mod.coin) g.coinK *= g.mod.coin;
   g.ring = g.mode === '' && stageKind(n) === 'ring' ? RING : null;
   g.upgradeLeft = 0;
   p.zone = g.ring ? { x0: RING.cx, x1: RING.cx } : { x0: 40, x1: W - 40 }; p.aim = -Math.PI / 2; p.x = W / 2; p.y = g.ring ? RING.cy : ROW_Y; p.kx = 0;
@@ -1149,7 +1170,7 @@ export function createGame(opts = {}) {
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
     groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, faceMax: 0, bombsPopped: 0, dangerT: 0, danger: 0, mod: null, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
     encore: 0, encoreUsed: 0, beam: null, goldPopped: 0, snacks: 0, clutches: 0, qStreak: 0, qBest: 0,
-    skin: '', ring: null, beatShots: 0, beatN: 0, beatLast: -1, bpool: [], cp: null, encoreReady: false, quartets: 0,
+    risk: (opts.risk && !opts.hard && !opts.mode && riskById(opts.risk) ? opts.risk : ''), skin: '', ring: null, beatShots: 0, beatN: 0, beatLast: -1, bpool: [], cp: null, encoreReady: false, quartets: 0,
   };
   startStage(g, opts.stage || 1);
   return g;
@@ -1321,7 +1342,7 @@ export function reviveGame(g) {
 }
 export const quitResult = g => makeResult(g, false);   // GIVE UP from the pause menu: the same result a loss gives (mode, hard, progress, damage)
 function makeResult(g, won) {
-  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, bombs: g.bombsPopped, stars: won && !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0, mod: g.mod ? g.mod.id : '', hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), quartets: g.quartets || 0, qBest: g.qBest || 0, progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
+  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, bombs: g.bombsPopped, stars: won && !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0, mod: g.mod ? g.mod.id : '', risk: g.risk && g.mod && g.mod.risk ? g.risk : '', hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), quartets: g.quartets || 0, qBest: g.qBest || 0, progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
 }
 // ---------------------------------------------------------------- skill picks
 // what an upgrade does now and after this pick, so every pick is visible in numbers
