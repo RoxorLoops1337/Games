@@ -2866,6 +2866,18 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   .s3 .tchain{padding-top:118px!important} .tut12.art12 .s3 .tchain{padding-top:132px!important} .tut12 .s2 .tgold{margin-top:78px} .tut12.art12 .s3 .tseg{width:46px;height:46px;margin:-8px 0}.tut12.art12 .s3 .tface{width:62px;height:62px;margin-top:6px}
   @media (max-height:700px){.tut12 .tsub{top:46px;font-size:14px}.tut12.art12 .s3 .tchain{padding-top:112px!important}.tut12 .s2 .tgold{margin-top:66px}}
 /* end @css:38-tut-sub */
+/* @css:39-e-build */
+.rbuild16e{display:flex;align-items:center;justify-content:center;gap:6px;max-width:92%;margin:0 auto 4px;padding:3px 12px;border-radius:999px;background:#241046;border:1.5px solid #8a6cf0;color:#fff;font-weight:900;font-size:14px;line-height:1.2}
+.rbuild16e[hidden]{display:none}
+.rbuild16e small{font-size:12px;font-weight:800;letter-spacing:.08em;color:#ffe27a}
+.rbuild16e b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rbuild16e em{font-style:normal;font-size:12px;font-weight:900;background:#ffd23f;color:#3a1a00;border-radius:8px;padding:1px 6px;animation:rb16ePop .5s cubic-bezier(.3,1.6,.5,1) both}
+.rbuild16e.fresh{border-color:#ffd23f;box-shadow:0 0 14px rgba(255,210,63,.45)}
+@keyframes rb16ePop{from{scale:.2;opacity:0}to{scale:1;opacity:1}}
+@media (max-height:700px){.rbuild16e{display:none}}
+@media (prefers-reduced-motion:reduce){.rbuild16e em{animation:none}}
+.pb9n b.pbname16e{color:#ffe27a;font-weight:900}
+/* end @css:39-e-build */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -3066,6 +3078,7 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   <h2 id="rTitle">THE SERPENT WINS</h2>
   <img class="hero" id="rImg" src="assets/duo_idle.png" alt="">
   <div class="sub" id="rSub"></div>
+  <div class="rbuild16e" id="rBuild" hidden></div>
   <div class="rhint" id="rHint"></div>
   <div class="rribbon" id="rRibbon"></div>
   <div class="stars" id="rStars"></div>
