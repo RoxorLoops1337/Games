@@ -1140,6 +1140,7 @@ export function createGame(opts = {}) {
     groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, faceMax: 0, bombsPopped: 0, dangerT: 0, danger: 0, mod: null, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
     encore: 0, encoreUsed: 0, beam: null, goldPopped: 0, snacks: 0, clutches: 0, qStreak: 0, qBest: 0,
     skin: '', ring: null, beatShots: 0, beatN: 0, beatLast: -1, bpool: [], cp: null, encoreReady: false, quartets: 0,
+    pStreak: 0, pBest: 0, dropT: 0, dropN: 0, stillT: 0, lastX: 0, lastA: 0, chorusIdx: -1, perfN: 0,   // b16a rhythm core
   };
   startStage(g, opts.stage || 1);
   return g;
@@ -1159,6 +1160,29 @@ function beatRun(g) {
   if (idx === g.beatLast) return;
   g.beatN = idx === g.beatLast + 1 ? g.beatN + 1 : 1; g.beatLast = idx;
   if (g.beatN >= BEATRUN_LEN) { g.beatN = 0; for (let n = 0; n < BEATRUN_GROOVE; n++) bumpGroove(g); g.events.push({ t: 'beatrun', x: g.p.x, y: g.p.y - 60 }); }
+}
+// b16a Rhythm Core: a volley judged against the beat grid. PERFECT (inside BEAT_PERFECT) builds a streak, +6% damage; a miss ends it.
+// Standing still (finger held, not sliding) lets the volley lock to the beat grid, so the choice is: chase the snake or hold the groove.
+// DROP_AT perfects in a row start the DROP: DROP_LEN seconds of boosted chorus (more damage, faster volleys). Deterministic: it only reads g.t and the lane position.
+export const RHY_FROM = 8, BEAT_PERFECT = 0.04, PERFECT_DMG = 1.06, DROP_AT = 12, DROP_LEN = 4, DROP_DMG = 1.15, DROP_RATE = 0.92, STILL_SPEED = 40, STILL_NEED = 0.18, SNAP_MAX = 0.2;
+export const beatOffset = g => { const T = beatPeriod(g), d = g.t % T; return d < T / 2 ? d : d - T; };   // signed seconds from the nearest beat: negative = early, positive = late
+export const judgeBeat = off => { const a = Math.abs(off); return a <= BEAT_PERFECT ? 2 : a <= BEAT_WIN ? 1 : off < 0 ? -1 : -2; };   // 2 perfect, 1 good, -1 early, -2 late
+function rhythmTrack(g, dt) {   // once per play frame: how long the duo has held still, the drop timer and the chorus beat
+  const m = g.ring ? Math.abs(g.p.aim - g.lastA) * 300 : Math.abs(g.p.x - g.lastX);
+  g.lastX = g.p.x; g.lastA = g.p.aim; g.stillT = m / Math.max(dt, 1e-4) < STILL_SPEED ? g.stillT + dt : 0;
+  if (g.dropT > 0) {
+    g.dropT -= dt;
+    const idx = Math.floor(g.t / beatPeriod(g)); if (idx !== g.chorusIdx) { g.chorusIdx = idx; g.events.push({ t: 'rchorus', n: idx & 3 }); }
+    if (g.dropT <= 0) { g.dropT = 0; g.events.push({ t: 'rdropend', x: g.p.x, y: g.p.y - 60 }); }
+  }
+}
+function rhythmJudge(g) {   // the lead volley of a shot: streak, drop, one event for the lane
+  const off = beatOffset(g), j = judgeBeat(off);
+  if (j === 2) { g.pStreak++; g.perfN++; if (g.pStreak > g.pBest) g.pBest = g.pStreak; }
+  else if (j < 0) g.pStreak = 0;
+  g.events.push({ t: 'rhy', j, off, n: g.pStreak, x: g.p.x, y: g.p.y - 60 });
+  if (g.pStreak >= DROP_AT && g.dropT <= 0) { g.pStreak = 0; g.dropT = DROP_LEN; g.dropN++; g.chorusIdx = -1; g.events.push({ t: 'rdrop', x: g.p.x, y: g.p.y - 80 }); }
+  return j;
 }
 // b15: the snake comes in from UNDER the gate line below the HUD: cells above it are not drawn, not targeted and not hit
 let GATE = 182, HIT_GATE = 0;
@@ -1311,7 +1335,7 @@ export function reviveGame(g) {
 }
 export const quitResult = g => makeResult(g, false);   // GIVE UP from the pause menu: the same result a loss gives (mode, hard, progress, damage)
 function makeResult(g, won) {
-  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, bombs: g.bombsPopped, stars: won && !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0, mod: g.mod ? g.mod.id : '', hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), quartets: g.quartets || 0, qBest: g.qBest || 0, progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
+  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, bombs: g.bombsPopped, stars: won && !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0, mod: g.mod ? g.mod.id : '', hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), quartets: g.quartets || 0, qBest: g.qBest || 0, drops: g.dropN || 0, perfBest: g.pBest || 0, progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
 }
 // ---------------------------------------------------------------- skill picks
 // what an upgrade does now and after this pick, so every pick is visible in numbers
@@ -1468,9 +1492,13 @@ function shootCapsule(g, dt) {
   const p = g.p, up = id => uv(g, id);
   if (!g.ring) p.aim = -Math.PI / 2;
   p.cd -= dt;
+  const rhy = g.stage >= RHY_FROM && !g.mode;
+  if (rhy) rhythmTrack(g, dt);
   while (p.cd <= 0) {
-    p.cd += (1 / p.rate) * cdMul(g) / (1 + up('aspd') / 100) * (p.rage > 0 ? 0.77 : 1);
-    for (let b = 0; b <= Math.round(up('burst')); b++) g.vq.push({ t: b * 0.1 });
+    p.cd += (1 / p.rate) * cdMul(g) / (1 + up('aspd') / 100) * (p.rage > 0 ? 0.77 : 1) * (g.dropT > 0 ? DROP_RATE : 1);
+    let lock = 0;   // b16a: held still, the volley waits for the beat grid (a half beat grid when the volleys are fast)
+    if (rhy && g.stillT >= STILL_NEED) { const T = beatPeriod(g), Gd = p.cd < T * 0.75 ? T / 2 : T, w = (Gd - (g.t % Gd)) % Gd; if (w <= Math.min(SNAP_MAX, Gd * 0.45)) { lock = w; p.cd += w; } }
+    for (let b = 0; b <= Math.round(up('burst')); b++) g.vq.push({ t: lock + b * 0.1, lead: b === 0 });
     if (p.cd < -0.2) p.cd = 0;
   }
   for (let i = g.vq.length - 1; i >= 0; i--) {
@@ -1478,11 +1506,11 @@ function shootCapsule(g, dt) {
     if (v.t > 0) continue;
     g.vq.splice(i, 1);
     const n = 1 + Math.round(up('notes'));
-    const ob = onBeat(g);
+    const ob = onBeat(g); if (rhy && v.lead) rhythmJudge(g);
     if (ob) { g.beatShots = (g.beatShots || 0) + 1; g.events.push({ t: 'beatshot' }); if (g.stage >= BEATRUN_FROM) beatRun(g); }
     for (let k = 0; k < n; k++) {
       const crit = g.rand() < p.crit + (ob ? BEAT_CRIT : 0);
-      fire(g, { x: muzX(g, (k - (n - 1) / 2) * 42, 30), y: muzY(g, (k - (n - 1) / 2) * 42, 30), a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1) * (ob ? 1 + up('dbeat') / 100 : 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
+      fire(g, { x: muzX(g, (k - (n - 1) / 2) * 42, 30), y: muzY(g, (k - (n - 1) / 2) * 42, 30), a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1) * (ob ? 1 + up('dbeat') / 100 : 1) * (rhy && ob && judgeBeat(beatOffset(g)) === 2 ? PERFECT_DMG : 1) * (g.dropT > 0 ? DROP_DMG : 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
     }
     g.shots++; g.events.push({ t: 'shoot' });
   }
