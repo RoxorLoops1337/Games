@@ -259,6 +259,7 @@ export function createRenderer(canvas, art, kit) {
       case 'gloom': addFloat(e.x, e.y - 40, 'GLOOM', '#b79bff', 26, -50); ring(e.x, e.y, 110, '#6a3fd0', 0.6); break;
       case 'soundcheck': ring(e.x, e.y, 80, '#ffd24a', 0.4); addFloat(e.x, e.y - 30, 'SOUNDCHECK', '#ffe36b', 20, -50); break;
       case 'goldfade': addFloat(e.x, e.y, 'gold lost', '#c9b36a', 18, -40); burst(e.x, e.y, 12, ['#c9b36a', '#8a7f5a', '#fff1a8'], 150, 0.8, 4); break;
+      case 'nearmiss': { const fx = Math.max(220, Math.min(W - 220, e.x)); addFloat(fx, e.y - 150, 'CLOSE CALL!', '#ff8aa8', 52, -40); addFloat(fx, e.y - 100, e.gap + ' px to spare', '#ffe3ec', 22, -30); } ring(e.x, e.y, 190, '#ff8aa8', 0.55); break;   // b16d
       case 'clutch': addFloat(e.x, e.y - 30, 'CLOSE CALL!', '#ff9ad6', 30, -70); ring(e.x, e.y, 80, '#ff9ad6', 0.4); break;
       case 'burst': ring(e.x, e.y, e.r, '#bfe9ff', 0.4); burst(e.x, e.y, 16, ['#bfe9ff', '#fff'], 260, 0.5, 5); break;
       case 'leak': S.trauma = Math.min(1, S.trauma + 0.55); S.flash = 0.4; S.flashCol = '#ff2a4d'; ring(e.x, LINE_Y, 120, '#ff2a4d', 0.5); burst(e.x, LINE_Y - 10, 22, ['#ff2a4d', '#ffd0e6', '#fff'], 360, 0.6, 6); addFloat(e.x, LINE_Y - 70, 'LEAK -' + Math.ceil(e.d), '#ff5a78', 26, -60); break;

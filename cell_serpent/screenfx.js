@@ -88,6 +88,7 @@ export function createScreenFx({ ctx, W, H, kit, art, text, glow, S, OPT, ring, 
         if (e.head) punch(e.x, e.y, e.boss ? 0.09 : 0.05, e.boss ? 0.28 : 0.4, e.boss ? 0.55 : 0.32);
         break;
       case 'clutch': F.clutchT = 0.55; if (!calm()) { S.trauma = Math.min(1, S.trauma + 0.3); if (!F.cc || F.cc.t > 0.35) { punch(e.x, e.y, 0.06, 0.45, 0.4); F.cc = { t: 0, dur: 1, x: clamp(e.x, 380, W - 380) }; } } break;   // close call: a cell died right at the line
+      case 'nearmiss': F.sounds.push('phew'); F.clutchT = 0.55; if (!calm()) { S.trauma = Math.min(1, S.trauma + 0.25); F.slow = { t: 1.1, dur: 1.1, k: 0.22 }; S.flash = Math.max(S.flash, 0.16); S.flashCol = '#ff8aa8'; } break;   // b16d: the face stopped a hair short of the line
       case 'won': startClear(g); break;
       case 'clear': confetti(e.boss ? 110 : 70); S.flash = Math.max(S.flash, 0.25); S.flashCol = '#ffe9a8'; break;
       case 'dead': punch(g.p.x, g.p.y, 0.07, 0.3, 0.6); F.deadT = 0.0001; markDead(g); break;

@@ -3000,6 +3000,16 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   .tss{flex:none;font-size:11px;letter-spacing:-.5px;color:#a79fd8} .tss u{text-decoration:none;color:#ffd24a}
   @media(max-width:340px){.tposter{width:60px;height:80px} .tpc{width:60px!important;height:80px!important} .tss{display:none}}
 /* end @css:39-f-tour */
+/* @css:39-d-retry */
+#revive .rvrow16d{display:flex;gap:8px;justify-content:center;align-items:center;width:100%;padding:0 16px;box-sizing:border-box}
+#revive .rvrow16d .btn{flex:1 1 0;min-width:0;max-width:170px;min-height:48px;font-size:16px;padding:10px 8px}
+#revive .rvrow16d #rvNo,#revive .rvrow16d #rvRetry{min-width:0;white-space:nowrap}
+#revive #rvRetry[hidden]{display:none}
+#revive #rvRetry .rcost{font-size:12px;opacity:.85;margin-left:4px}
+#result.close #rTitle{animation:nm16dPop .5s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes nm16dPop{0%{transform:scale(.7);opacity:0}100%{transform:scale(1);opacity:1}}
+html.rm #result.close #rTitle{animation:none}
+/* end @css:39-d-retry */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -3180,7 +3190,7 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   <div class="sub">The crowd wants one more song. The snake gets knocked back.</div>
   <div class="rvinfo" id="rvInfo"></div>
   <button class="btn gold" id="rvGo">REVIVE</button><div class="sub" id="rvLeft"></div>
-  <button class="btn dim" id="rvNo">Give up</button>
+  <div class="rvrow16d"><button class="btn dim" id="rvNo">Give up</button><button class="btn alt" id="rvRetry">RETRY</button></div>
   <button class="rvtimer" id="rvTimer"></button>
 </section>
 

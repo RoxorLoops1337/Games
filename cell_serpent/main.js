@@ -11,6 +11,7 @@ import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
 import { nextGoal, closeCall, renderGoal } from './result_goal.js';
+import { nmReset, nmWatch, nmState, closeCalls } from './near_miss_b16d.js';
 import { flyPick } from './pickfly.js';
 import { edgeMap } from './follow_b13c.js';
 import { newAim, aimDown, aimMove, aimUp, aimTick, aimAssisted } from './aim_b12f.js';
@@ -578,6 +579,7 @@ function startRun(stage, mode2 = '', riskId = '') {
   sel = stage; ranResult = false; endT = 0;
   g = createGame({ seed: (Math.random() * 1e9) | 0, meta: platMeta(save), skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, risk: riskId, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
   g.petJoy = save.petEquip.map(id => (save.pets[id].joy || 0) >= 100);   // round 6: an overjoyed pet shows off in the run (cosmetic)
+  nmReset();
   mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove(); if (fromHub) curtainOpen(document.documentElement.classList.contains('rm'));
   announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + (g.ring ? 'Drag to aim, or use the arrow keys. The duo shoots on its own.' : 'Slide to move, the duo shoots up on its own.'));
   window.CS.g = g;
@@ -757,6 +759,8 @@ function showRevive() {
   $('rvGo').onclick = () => { if (save.sparkles < cost) return; stopRing(); stopFx(); save.sparkles -= cost; persist(); reviveGame(g); reviveAsked = false; endT = 0; audio.play('levelup'); show(''); };
   const giveUp = () => { stopRing(); stopFx(); g.revivesLeft = 0; reviveAsked = false; show(''); };
   $('rvNo').onclick = () => { audio.play('click'); giveUp(); };
+  { const rb = $('rvRetry'), can = tickEnergy(save, Date.now()) >= ENERGY_COST && !g.mode; rb.hidden = !can; rb.innerHTML = 'RETRY <span class="rcost">⚡' + ENERGY_COST + '</span>';   // b16d: one tap back into the same stage (the result is still counted)
+    rb.onclick = () => { if (!can) return; stopRing(); stopFx(); g.revivesLeft = 0; reviveAsked = false; showResult(); const rr = $('rRetry'); if (rr && rr.onclick) rr.onclick(); }; }
   const timed = save.settings.reviveTimer !== false; $('rvTimer').textContent = timed ? 'Timer: ON' : 'Timer: OFF (take your time)';
   $('rvTimer').onclick = () => { audio.play('toggle'); save.settings.reviveTimer = !timed; persist(); stopRing(); stopFx(); showRevive(); };
   audio.duck(0.55, timed ? 10 : 3);   // the music sinks under the countdown heartbeat
@@ -805,7 +809,7 @@ function showResult() {
   $('rList').innerHTML = rows.join('');
   { const old = document.querySelector('.g16-chip'); if (old) old.remove(); const ch = g16 ? resultChipHTML(g16.res, g16.st) : ''; if (ch) $('rList').insertAdjacentHTML('afterend', ch); }
   $('rTitle').textContent = r.mode === 'inv' ? (r.won ? 'THE GIANT SERPENT BOWS!' : 'THE GIANT SERPENT WON') : r.mode === 'pig' ? (r.won ? 'PIGGY BANKS CRACKED!' : 'THE PIGGIES ESCAPED') : r.won ? 'STAGE CLEAR!' : r.name.toUpperCase() + ' WINS';
-  $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.') : `You popped ${r.kills} ${r.kills === 1 ? 'cell' : 'cells'}. ${isUnlocked('stats', save) ? 'Spend your Beats in the hub and try again.' : 'Every pop counts. Try again!'}`;
+  $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.' + (!r.mode && closeCalls() ? (closeCalls() === 1 ? ' One close call!' : ' ' + closeCalls() + ' close calls!') : '')) : `You popped ${r.kills} ${r.kills === 1 ? 'cell' : 'cells'}. ${isUnlocked('stats', save) ? 'Spend your Beats in the hub and try again.' : 'Every pop counts. Try again!'}`;
   $('result').classList.toggle('won', !!r.won); { const cc = closeCall(r); $('result').classList.toggle('close', !!cc); if (cc) { $('rTitle').textContent = cc.title; $('rSub').textContent = cc.sub; } }
   announce((r.won ? 'Stage clear. ' : 'Game over. ') + $('rTitle').textContent + '. ' + r.kills + (r.kills === 1 ? ' cell' : ' cells') + ' popped, ' + out.beats + ' beats earned.');
   if (r.hard) hard = true;
@@ -912,6 +916,7 @@ function frame(now) {
   if (mode === 'play') {
     clk.feed(dt, R.timeScale());   // slow motion on the last cell / boss face
     while (clk.take()) { step(g, 1 / 60, readInput()); if (g.phase === 'levelup' || g.phase === 'dead' || g.phase === 'won') { clk.drop(); break; } }   // never bank time while the sim waits (cards, game over)
+    { const nm = nmWatch(g); if (nm) { g.events.push({ t: 'nearmiss', gap: nm, x: nmState().x, y: nmState().y }); buzz([18, 40, 18]); } }   // b16d: close call moment
     if (g.phase === 'levelup' && cardsFor !== g.choices) showCards();
     if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5) && !(g.phase === 'won' && R.clearBusy())) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked && !(!isUnlocked('sparkles', save) && save.sparkles < reviveCost(g.revivesUsed))) showRevive();   /* b13a: a fresh account with no Sparkles skips the revive card it cannot use */ else if (!reviveAsked) showResult(); } }
     if (watchGroove(g.groove) < 0) audio.play('groovelost');
