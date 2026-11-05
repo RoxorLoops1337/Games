@@ -1532,7 +1532,7 @@ function shootCapsule(g, dt) {
   while (p.cd <= 0) {
     p.cd += (1 / p.rate) * cdMul(g) / (1 + up('aspd') / 100) * (p.rage > 0 ? 0.77 : 1) * (g.dropT > 0 ? DROP_RATE : 1);
     let lock = 0;   // b16a: held still, the volley waits for the beat grid (a half beat grid when the volleys are fast)
-    if (rhy && g.stillT >= STILL_NEED) { const T = beatPeriod(g), Gd = p.cd < T * 0.75 ? T / 2 : T, w = (Gd - (g.t % Gd)) % Gd; if (w <= Math.min(SNAP_MAX, Gd * 0.45)) { lock = w; p.cd += w; } }
+    if (rhy && g.stillT >= STILL_NEED) { const T = beatPeriod(g), Gd = p.cd < T * 0.75 ? T / 2 : T, w = (Gd - (g.t % Gd)) % Gd; if (w <= Math.min(SNAP_MAX, Gd * 0.45)) { lock = w; } }   // the volley fires on the grid; the cadence keeps its nominal spacing, so holding the groove never costs damage per second
     for (let b = 0; b <= Math.round(up('burst')); b++) g.vq.push({ t: lock + b * 0.1, lead: b === 0 });
     if (p.cd < -0.2) p.cd = 0;
   }
