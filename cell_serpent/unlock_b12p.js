@@ -74,6 +74,8 @@ export const UNLOCKS = [
   { id: 'badges', step: 18, kind: 'panel', label: 'Weekly challenge, badges' },
   { id: 'streak', step: 18, kind: 'panel', label: 'Quest chest streak' },
   { id: 'book', step: 20, kind: 'panel', label: 'Collection book' },
+  { id: 'sessgoals', step: 6, kind: 'panel', label: 'Session goals and play streak' },
+  { id: 'weekmut', step: 14, kind: 'panel', label: 'Weekly mutator' },
   { id: 'records_gold', step: 25, kind: 'panel', label: 'Gold Records (mastery)' },
 ];
 
