@@ -2866,6 +2866,16 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   .s3 .tchain{padding-top:118px!important} .tut12.art12 .s3 .tchain{padding-top:132px!important} .tut12 .s2 .tgold{margin-top:78px} .tut12.art12 .s3 .tseg{width:46px;height:46px;margin:-8px 0}.tut12.art12 .s3 .tface{width:62px;height:62px;margin-top:6px}
   @media (max-height:700px){.tut12 .tsub{top:46px;font-size:14px}.tut12.art12 .s3 .tchain{padding-top:112px!important}.tut12 .s2 .tgold{margin-top:66px}}
 /* end @css:38-tut-sub */
+/* @css:39-d-retry */
+#revive .rvrow16d{display:flex;gap:8px;justify-content:center;align-items:center;width:100%;padding:0 16px;box-sizing:border-box}
+#revive .rvrow16d .btn{flex:1 1 0;min-width:0;max-width:170px;min-height:48px;font-size:16px;padding:10px 8px}
+#revive .rvrow16d #rvNo,#revive .rvrow16d #rvRetry{min-width:0;white-space:nowrap}
+#revive #rvRetry[hidden]{display:none}
+#revive #rvRetry .rcost{font-size:12px;opacity:.85;margin-left:4px}
+#result.close #rTitle{animation:nm16dPop .5s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes nm16dPop{0%{transform:scale(.7);opacity:0}100%{transform:scale(1);opacity:1}}
+html.rm #result.close #rTitle{animation:none}
+/* end @css:39-d-retry */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -3046,7 +3056,7 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   <div class="sub">The crowd wants one more song. The snake gets knocked back.</div>
   <div class="rvinfo" id="rvInfo"></div>
   <button class="btn gold" id="rvGo">REVIVE</button><div class="sub" id="rvLeft"></div>
-  <button class="btn dim" id="rvNo">Give up</button>
+  <div class="rvrow16d"><button class="btn dim" id="rvNo">Give up</button><button class="btn alt" id="rvRetry">RETRY</button></div>
   <button class="rvtimer" id="rvTimer"></button>
 </section>
 
