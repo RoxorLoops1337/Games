@@ -75,6 +75,7 @@ import { panOf, sweepTick, isMilestone } from './audio_b12i.js';
 import { logRun } from './hub_b11.js';
 import { initFullscreen, fsOnRun } from './fullscreen_fs.js';
 import { initInstall } from './install_b12n.js';
+import { showDoors, hasDoors, riskLine } from './risk_b16b.js';
 import { isUnlocked, isTabUnlocked, setUnlockAll, unlockAllOn } from './unlock_b12p.js';
 import { createUnlockUI, trimGoalsPanel } from './unlock_ui_b12p.js';
 
@@ -324,12 +325,17 @@ $('wStrip').onclick = e => { const b = e.target.closest('.wact'); if (!b) return
 $('stOverview').onclick = () => { audio.play('click'); openOverview({ save: () => save, max: MAX_STAGE, isBoss: isBossStage, kindOf: stageKind, reach: () => Math.min(MAX_STAGE, save.cleared + 4), sel: () => sel, audio, info: stageInfo, mine: () => power(save), rec: n => recPower(n, false), kit: () => kit, pick: n => { sel = n; renderBattle(); } }); };
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
 $('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
-$('stGo').onclick = () => { audio.unlock(); audio.play('click'); const b = $('stGo'); b.classList.remove('go-hit'); void b.offsetWidth; b.classList.add('go-hit'); beginStage(sel); };
+$('stGo').onclick = () => { audio.unlock(); audio.play('click'); riskPick = null; const b = $('stGo'); b.classList.remove('go-hit'); void b.offsetWidth; b.classList.add('go-hit'); beginStage(sel); };
 $('enPlus').onclick = () => { audio.unlock(); if (buyEnergy(save, Date.now())) { persist(); audio.play('upgrade'); refreshCur(); toast('Voice +10'); } else toast('Not enough Sparkles'); };
 // a stage costs Voice; the Piggy Bank Parade is free
+let riskPick = null;   // b16: the door chosen for this stage; kept for RETRY (same stage), dropped on a win or a fresh START
 function beginStage(stage) {
+  if (!(hard && stage <= save.cleared) && hasDoors(stage) && stage <= save.cleared + 1 && isUnlocked('doors', save) && !(riskPick && riskPick.stage === stage)) {
+    showDoors({ stage, audio, reduce: !!(save.settings.reduceMotion || systemReduceMotion()), pick: id => { riskPick = { stage, id }; beginStage(stage); }, cancel: () => { if (mode !== 'play' && mode !== 'hub') openHub('Battle'); } });
+    return;
+  }
   if (!spendEnergy(save, Date.now())) { toast('Out of Voice! Rest a bit or grab some tea in the Shop'); openHub('Battle'); return; }
-  persist(); startRun(stage);
+  persist(); startRun(stage, '', riskPick && riskPick.stage === stage ? riskPick.id : '');
 }
 
 // the stage picture: the lane for this stage with the serpent on it
@@ -557,12 +563,12 @@ function newDemo() {
   demo = createGame({ seed: (Math.random() * 1e9) | 0, bot: true, stage: 1 + ((Math.random() * 3) | 0) });
   richDemo(demo);
 }
-function startRun(stage, mode2 = '') {
+function startRun(stage, mode2 = '', riskId = '') {
   const fromHub = shownId === 'hub';
   if (!mode2) save.last = { stage, hard: !!(hard && stage <= save.cleared) };
   audio.unlock(); fsOnRun(); audio.music(true, stage === 1 && !mode2);
   sel = stage; ranResult = false; endT = 0;
-  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: platMeta(save), skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
+  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: platMeta(save), skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, risk: riskId, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
   g.petJoy = save.petEquip.map(id => (save.pets[id].joy || 0) >= 100);   // round 6: an overjoyed pet shows off in the run (cosmetic)
   mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove(); if (fromHub) curtainOpen(document.documentElement.classList.contains('rm'));
   announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + (g.ring ? 'Drag to aim, or use the arrow keys. The duo shoots on its own.' : 'Slide to move, the duo shoots up on its own.'));
@@ -785,6 +791,7 @@ function showResult() {
   $('result').classList.toggle('won', !!r.won); { const cc = closeCall(r); $('result').classList.toggle('close', !!cc); if (cc) { $('rTitle').textContent = cc.title; $('rSub').textContent = cc.sub; } }
   announce((r.won ? 'Stage clear. ' : 'Game over. ') + $('rTitle').textContent + '. ' + r.kills + (r.kills === 1 ? ' cell' : ' cells') + ' popped, ' + out.beats + ' beats earned.');
   if (r.hard) hard = true;
+  if (r.won) riskPick = null; { const rl = riskLine(r); if (rl) $('rSub').textContent = rl + ' ' + $('rSub').textContent; }
   { const nmz = {}; for (const w of WEAPONS) nmz[w.id] = w.name; $('rHint').textContent = deathCoach(r, save) || lossHint(r, save.loadout, nmz); }
   if (out.levelUps) rows.push(`<div class="r">⭐ Level ${levelInfo(save.xp).lv}!</div>`);
   const li1 = levelInfo(save.xp), reduce = save.settings.reduceMotion;
