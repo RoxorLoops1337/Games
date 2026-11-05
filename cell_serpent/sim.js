@@ -1530,10 +1530,11 @@ function shootCapsule(g, dt) {
   const rhy = g.stage >= RHY_FROM && !g.mode;
   if (rhy) rhythmTrack(g, dt);
   while (p.cd <= 0) {
-    p.cd += (1 / p.rate) * cdMul(g) / (1 + up('aspd') / 100) * (p.rage > 0 ? 0.77 : 1) * (g.dropT > 0 ? DROP_RATE : 1);
+    const ivl = (1 / p.rate) * cdMul(g) / (1 + up('aspd') / 100) * (p.rage > 0 ? 0.77 : 1) * (g.dropT > 0 ? DROP_RATE : 1);
+    p.cd += ivl;
     let lock = 0;   // b16a: held still, the volley waits for the beat grid (a half beat grid when the volleys are fast)
-    if (rhy && g.stillT >= STILL_NEED) { const T = beatPeriod(g), Gd = p.cd < T * 0.75 ? T / 2 : T, w = (Gd - (g.t % Gd)) % Gd; if (w <= Math.min(SNAP_MAX, Gd * 0.45)) { lock = w; } }   // the volley fires on the grid; the cadence keeps its nominal spacing, so holding the groove never costs damage per second
-    for (let b = 0; b <= Math.round(up('burst')); b++) g.vq.push({ t: lock + b * 0.1, lead: b === 0 });
+    if (rhy && g.stillT >= STILL_NEED) { const T = beatPeriod(g), Gd = p.cd < T * 0.75 ? T / 2 : T, w = (Gd - (g.t % Gd)) % Gd; if (w <= Math.min(SNAP_MAX, Gd * 0.45)) { lock = w; p.cd += w; } }   // the volley waits for the grid; what the wait costs is paid back as damage on that volley (below), so holding the groove is damage neutral
+    for (let b = 0; b <= Math.round(up('burst')); b++) g.vq.push({ t: lock + b * 0.1, lead: b === 0, m: lock > 0 ? 1 + lock / ivl : 1 });
     if (p.cd < -0.2) p.cd = 0;
   }
   for (let i = g.vq.length - 1; i >= 0; i--) {
@@ -1545,7 +1546,7 @@ function shootCapsule(g, dt) {
     if (ob) { g.beatShots = (g.beatShots || 0) + 1; g.events.push({ t: 'beatshot' }); if (g.stage >= BEATRUN_FROM) beatRun(g); }
     for (let k = 0; k < n; k++) {
       const crit = g.rand() < p.crit + (ob ? BEAT_CRIT : 0);
-      fire(g, { x: muzX(g, (k - (n - 1) / 2) * 42, 30), y: muzY(g, (k - (n - 1) / 2) * 42, 30), a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1) * (ob ? 1 + up('dbeat') / 100 : 1) * (rhy && ob && judgeBeat(beatOffset(g)) === 2 ? PERFECT_DMG : 1) * (g.dropT > 0 ? DROP_DMG : 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
+      fire(g, { x: muzX(g, (k - (n - 1) / 2) * 42, 30), y: muzY(g, (k - (n - 1) / 2) * 42, 30), a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1) * (ob ? 1 + up('dbeat') / 100 : 1) * (rhy && ob && judgeBeat(beatOffset(g)) === 2 ? PERFECT_DMG : 1) * (g.dropT > 0 ? DROP_DMG : 1) * (v.m || 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
     }
     g.shots++; g.events.push({ t: 'shoot' });
   }
