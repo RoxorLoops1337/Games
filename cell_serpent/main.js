@@ -15,6 +15,7 @@ import { flyPick } from './pickfly.js';
 import { edgeMap } from './follow_b13c.js';
 import { newAim, aimDown, aimMove, aimUp, aimTick, aimAssisted } from './aim_b12f.js';
 import { levelUpJuice } from './juice_b13b.js';
+import { dealGoals, applyMutator, showRunGoals, hideRunGoals, checkGoals, bumpStreak, resultChipHTML, renderHubStrip } from './goals_b16i.js';
 import { bindMomentHaptics } from './audio_b14e.js';
 import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint, progMeter } from './result_fx.js';
 import { applyCbPalette, paintCbStrip, applyCbRarity } from './cb_palette.js';
@@ -302,7 +303,7 @@ function renderBattle() {
   hub2.renderSide(); watchSideIcons($('battleSide')); watchSide($('battleSide'));
   renderPig();
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
-  renderGoals(); foldTab('Battle');
+  renderGoals(); try { if (isUnlocked('sessgoals', save)) renderHubStrip(save, dayKey(), document.querySelector('.gl-box'), isUnlocked('weekmut', save)); } catch (e) { /* ignore */ } foldTab('Battle');
   if (chips.dataset.sc !== sel + '|' + ckey) { chips.dataset.sc = sel + '|' + ckey; requestAnimationFrame(() => { const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } } }); }   // 17-perf: read layout after paint, and only when the stage changed
 }
 // chip filter: only the stages that still pay something (next first clear, unpaid Hard clear)
@@ -569,6 +570,14 @@ function startRun(stage, mode2 = '') {
   window.CS.g = g;
   resetAimSr(); setFieldLabel(!!g.ring); aimS.now = aimS.tgt = -Math.PI / 2; aimHint = !!g.ring && aimHintLeft(); if (g.ring) aimHintBump();
   if (!mode2) teaseGoal(save, dayKey(), !!(save.settings.reduceMotion || systemReduceMotion())); else hideTease();
+  startGoals16(mode2);
+}
+// b16i: weekly mutator (one rule change per week) and three small session goals shown when a run starts
+function startGoals16(mode2) {
+  try { hideRunGoals(); if (mode2) return; if (isUnlocked('weekmut', save)) applyMutator(g, dayKey()); if (isUnlocked('sessgoals', save)) { dealGoals(save, dayKey(), save.cleared + 1); showRunGoals(save, dayKey(), !!(save.settings.reduceMotion || systemReduceMotion()), isUnlocked('weekmut', save)); } } catch (e) { /* ignore */ }
+}
+function finishGoals16(r) {
+  try { hideRunGoals(); const st = bumpStreak(save, dayKey()), res = isUnlocked('sessgoals', save) ? checkGoals(save, r, save.cleared + 1) : { ticked: [], set: false, beats: 0 }; return { st, res }; } catch (e) { return null; }
 }
 let awayH = hoursAway(Date.now()); addEventListener('pagehide', () => stampVisit(Date.now()));
 function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)) || firstGoalHTML(save); { const w = welcomeBack(save, Date.now(), awayH), el = $('wb12'); el.innerHTML = welcomeHTML(w); el.hidden = !w; $('title').classList.toggle('ret12', !!w); $('title').classList.toggle('hand13', !!w && wantsHand(save)); awayH = 0; stampVisit(Date.now()); } try { dressDuo(document.querySelector('.stage12 .hero'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ } }
@@ -769,7 +778,7 @@ function flyRibbonsHome(nFly) {   // the result's Ribbons chip flies to the hub 
 }
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
-  const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), stk0 = stickerIds(save), out = applyResult(save, r); logRun(r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
+  const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), stk0 = stickerIds(save), out = applyResult(save, r); const g16 = finishGoals16(r); logRun(r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
   stopFx(); stopBest(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
   if (out.ribbons) rows.push(`<div class="r">${BOW} ${cu(out.ribbons)} Ribbons</div>`);
@@ -780,6 +789,7 @@ function showResult() {
     if (fk.length > 1) rows.push(`<div class="r rfr10">${fk.map(id => `<span class="f10" title="${WEAPONS.find(w => w.id === id).name} fragment">${icon(id)}${cu(out.frags[id])}</span>`).join('')} fragments</div>`);
     else for (const id of fk) rows.push(`<div class="r">${icon(id)}${cu(out.frags[id])} ${WEAPONS.find(w => w.id === id).name} fragment</div>`); }
   $('rList').innerHTML = rows.join('');
+  { const old = document.querySelector('.g16-chip'); if (old) old.remove(); const ch = g16 ? resultChipHTML(g16.res, g16.st) : ''; if (ch) $('rList').insertAdjacentHTML('afterend', ch); }
   $('rTitle').textContent = r.mode === 'inv' ? (r.won ? 'THE GIANT SERPENT BOWS!' : 'THE GIANT SERPENT WON') : r.mode === 'pig' ? (r.won ? 'PIGGY BANKS CRACKED!' : 'THE PIGGIES ESCAPED') : r.won ? 'STAGE CLEAR!' : r.name.toUpperCase() + ' WINS';
   $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.') : `You popped ${r.kills} ${r.kills === 1 ? 'cell' : 'cells'}. ${isUnlocked('stats', save) ? 'Spend your Beats in the hub and try again.' : 'Every pop counts. Try again!'}`;
   $('result').classList.toggle('won', !!r.won); { const cc = closeCall(r); $('result').classList.toggle('close', !!cc); if (cc) { $('rTitle').textContent = cc.title; $('rSub').textContent = cc.sub; } }
