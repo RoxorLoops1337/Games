@@ -887,6 +887,7 @@ function drain(game, sound) {
     if (sound && e.t === 'stage' && game.skin) e.skin = game.skin;   // the stage card sting is per species
     if (sound && (e.t === 'snack' || e.t === 'snackget' || e.t === 'snackgone' || e.t === 'startle' || e.t === 'ringskip')) audio.play(e.t === 'snack' ? 'snackdrop' : e.t, e);
     if (sound && (e.t === 'mirror' || e.t === 'beatrun' || e.t === 'btwist')) audio.play(e.t, e);
+    if (sound && (e.t === 'rhy' || e.t === 'rdrop' || e.t === 'rdropend' || e.t === 'rchorus')) { audio.play(e.t, e); if (e.t === 'rdrop') buzz([30, 30, 60]); }   // b16a rhythm core
     if (sound && (e.t === 'bell' || (e.t === 'trait' && !e.warn))) audio.play(e.t === 'bell' ? 'bellring' : 'traitcue', e);
     if (!sound) continue;
     if (FX_SOUND.has(e.t)) audio.play(SFX[e.t] || e.t, e); else if (e.t === 'pet') audio.play(PETSND[e.id] || 'chirp');

@@ -10,6 +10,7 @@ import { stageVoice } from './audio_stage.js';
 import { comboTier, shimmerVol, bossExtra, colourOf, admit, registerB9 } from './audio_b9.js';
 import { registerB10 } from './audio_b10.js';
 import { registerB11 } from './audio_b11.js';
+import { registerB16a } from './audio_b16a.js';
 import { registerB10 as registerS10 } from './screen_b10.js';
 import { registerA10, keyLift, createAmbient } from './audio_b10b.js';
 import { registerA11, twistOf } from './audio_b11b.js';
@@ -512,6 +513,7 @@ export function createAudio() {
   registerB12i(sfx, tone, noise, duck, gate, now);   // batch 12: aim tick, crown clink, milestone, burst thinning (audio_b12i.js)
   registerB16g(sfx, tone, noise, duck, gate, { ac: () => ac, out: () => sfxBus, muted: () => muted });   // batch 16: voice clips (voice_b16g.js)
   registerB14e(sfx, tone, noise, duck, gate);   // batch 14: world win/lose motif (audio_b14e.js)
+  registerB16a(sfx, tone, noise, duck, gate);   // batch 16: perfect ping, the drop, chorus stabs (audio_b16a.js)
   registerB13h(sfx, tone, noise, duck, gate);   // batch 13: shot figure and sounds for gloom, nap, pillow, shell, metro, soundcheck (audio_b13h.js)
   registerA10(sfx, tone, noise, duck, gate);   // round 10: boss fill, bring pack, sticker book, pet calls (audio_b10b.js)
   return {
