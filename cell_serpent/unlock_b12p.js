@@ -44,6 +44,7 @@ export const UNLOCKS = [
   { id: 'worldstrip', step: 7, kind: 'panel', label: 'World strip' },
   { id: 'funfact', step: 7, kind: 'misc', label: 'BRING THEM fun fact' },
   // ---- stage 8
+  { id: 'voice', step: 4, kind: 'panel', label: 'Voice clips' },
   { id: 'gear', step: 8, kind: 'tab', tab: 'Gear', label: 'Gear', hint: 'New: Gear! Collect keepsakes for bonus power.', inTab: 'Tap a keepsake' },
   { id: 'swap', step: 8, kind: 'chip', label: 'Fragment swap', el: 'swap' },
   // ---- stage 9
