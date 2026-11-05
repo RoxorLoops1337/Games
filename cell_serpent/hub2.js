@@ -1,5 +1,7 @@
 import { platCard } from './plat_b12d.js';
 import { wallCard } from './wall_b13d.js';
+import { voiceCard } from './voice_b16g.js';
+import { isUnlocked as voiceUnlocked } from './unlock_b12p.js';
 // Cell Serpent hub, part two: the shop, the keepsake collection, the character page, and the little panels
 // (sign in, fan fund, fragment swap). It gets everything it needs from main.js through `c`.
 import {
@@ -221,6 +223,7 @@ export function createHub2(c) {
     bestBuy(core, s);
     { const pc = platCard(s, () => { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); }); if (pc) list.appendChild(pc); }   // b12d Gold Records
     { const wc = wallCard(s, () => { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); }); if (wc) list.appendChild(wc); }   // b13d Gold Wall
+    { if (voiceUnlocked('voice', s)) { const vc = voiceCard(s, id => { audio.unlock(); audio.play('voice', { id }); }); if (vc) list.appendChild(vc); } }   // b16g voice clips
     { const rc = document.createElement('div'); rc.className = 'recbox'; rc.innerHTML = recordsHTML(s); list.appendChild(rc); }
     if (psUnlocked('playstats', s)) { const pb = document.createElement('div'); pb.className = 'pstatbox'; pb.innerHTML = playStatsHTML(s, psName); list.appendChild(pb);   // b16j: local-only Play Stats
       const rb = pb.querySelector('.psreset'); if (rb) rb.onclick = () => { if (rb.dataset.arm) { resetPstats(save()); c.persist(); audio.play('click'); c.renderHub(); } else { rb.dataset.arm = '1'; rb.textContent = 'Sure?'; setTimeout(() => { if (rb.isConnected) { delete rb.dataset.arm; rb.textContent = 'Clear'; } }, 2500); } }; }
