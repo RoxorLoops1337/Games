@@ -2866,6 +2866,18 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
   .s3 .tchain{padding-top:118px!important} .tut12.art12 .s3 .tchain{padding-top:132px!important} .tut12 .s2 .tgold{margin-top:78px} .tut12.art12 .s3 .tseg{width:46px;height:46px;margin:-8px 0}.tut12.art12 .s3 .tface{width:62px;height:62px;margin-top:6px}
   @media (max-height:700px){.tut12 .tsub{top:46px;font-size:14px}.tut12.art12 .s3 .tchain{padding-top:112px!important}.tut12 .s2 .tgold{margin-top:66px}}
 /* end @css:38-tut-sub */
+/* @css:39-j-playstats */
+  html.lk-playstats #statList .pstatbox{display:none!important}
+  .pstatbox{width:min(520px,100%);margin:6px auto 4px} .pstatbox .sec{margin:12px 0 8px} .pstatbox .rec small{color:#e0dbf5;font-size:12px} .pstatbox .rec.zero{opacity:1}
+  .psrows{display:flex;flex-direction:column;gap:5px;margin:0 0 8px}
+  .psrow{display:flex;align-items:center;gap:8px;min-height:32px;padding:4px 10px;border-radius:10px;background:rgba(255,255,255,.07);border:1.5px solid rgba(123,224,224,.35);font-size:13px;color:#e8f4f4}
+  .psrow span{flex:0 0 auto;min-width:96px;color:#c4e3e3;font-weight:700;font-size:12px} .psrow b{flex:1 1 auto;min-width:0;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .psrow em{flex:0 0 auto;font-style:normal;font-weight:900;color:#ffd84d}
+  .pschart{display:flex;align-items:flex-end;gap:1.5px;height:54px;padding:4px 6px 0;border-radius:10px 10px 0 0;background:rgba(0,0,0,.28);border:1.5px solid rgba(123,224,224,.3);border-bottom:0}
+  .pschart i{flex:1 1 0;min-width:0;border-radius:2px 2px 0 0;background:rgba(255,255,255,.14)} .pschart i.ok{background:#7be0a0} .pschart i.bad{background:linear-gradient(180deg,#ff8f8f,#ff4f6f)}
+  .pstick{display:flex;justify-content:space-between;padding:2px 6px 3px;border-radius:0 0 10px 10px;background:rgba(0,0,0,.28);border:1.5px solid rgba(123,224,224,.3);border-top:0;font-size:12px;color:#c4e3e3}
+  .psfoot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px} .psnote{font-size:12px;line-height:1.25;color:#c4e3e3}
+  .psreset{flex:0 0 auto;min-width:64px;min-height:44px;padding:0 14px;border-radius:12px;border:2px solid rgba(255,255,255,.4);background:rgba(255,255,255,.08);color:#fff;font:800 12px/1 inherit;cursor:pointer}
+/* end @css:39-j-playstats */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}

@@ -58,6 +58,7 @@ export const UNLOCKS = [
   { id: 'wheel', step: 12, kind: 'chip', label: 'Goals and Lucky Spin', hint: 'New: Lucky Spin! One free spin a day.', el: 'wheel' },
   { id: 'nextreward', step: 12, kind: 'panel', label: 'Next Reward banner' },
   { id: 'ribbons', step: 12, kind: 'misc', label: 'Ribbons pill' },
+  { id: 'playstats', step: 12, kind: 'panel', label: 'Play Stats (local counters)' },
   { id: 'runlog', step: 12, kind: 'panel', label: 'Recent gigs log' },
   { id: 'backstage', step: 13, kind: 'chip', label: 'Backstage chest', hint: 'New: Backstage! Fans leave Beats while you are away.', el: 'backstage' },
   { id: 'invasion', step: 13, kind: 'panel', label: 'Serpent invasion gig' },
