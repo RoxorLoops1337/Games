@@ -2977,6 +2977,29 @@ img{-webkit-touch-callout:none;-webkit-user-drag:none}
 .rkd-back { margin-top: 16px; min-width: 120px; min-height: 44px; padding: 0 22px; border-radius: 22px; border: 2px solid #8fa3d9; background: transparent; color: #dfe7ff; font: 700 15px system-ui, sans-serif; cursor: pointer; }
 @media (max-height: 600px) { .rkd-t { font-size: 24px; } .rkd-s { margin-bottom: 10px; } .rkd-art svg { width: 44px; height: 58px; } .rkd-d { min-height: 0; } .rkd-door { padding: 10px 6px 8px; } .rkd-back { margin-top: 10px; } }
 /* end @css:39-b-doors */
+/* @css:39-f-tour */
+  .ovtabs{display:flex;gap:8px;margin-top:8px}
+  .ovtabs button{flex:1;min-height:44px;border-radius:99px;border:2px solid #a79fd8;background:rgba(255,255,255,.08);color:#fff;font:inherit;font-weight:900;font-size:13px;letter-spacing:.08em;cursor:pointer}
+  .ovtabs button.on{background:linear-gradient(180deg,#ffe14a,#ff9a2e);border-color:#ffe14a;color:#2b1608}
+  .ovpv[hidden]{display:none}
+  .ttop{display:flex;flex-direction:column;gap:2px;padding:2px 2px 0} .ttop b{font-size:14px;letter-spacing:.12em;color:#ffe14a} .ttop span{font-size:12px;color:#e6e1ff}
+  .tgig{display:flex;gap:10px;padding:10px;border-radius:16px;border:2px solid rgba(255,255,255,.18);background:linear-gradient(135deg,rgba(255,255,255,.1),rgba(255,255,255,.03))}
+  .tgig.soldout{border-color:#ffd24a;box-shadow:0 0 14px rgba(255,210,74,.35)} .tgig.next,.tgig.playing{border-color:var(--g1)} .tgig.locked{opacity:.7}
+  .tposter{position:relative;flex:none;width:84px;height:112px;border-radius:8px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.5);border:2px solid #fff;transform:rotate(-2deg);align-self:flex-start;background:var(--g2)}
+  .tpc{display:block;width:84px;height:112px} .tpc.sil{filter:brightness(0) opacity(.55)}
+  .tpic{position:absolute;left:4px;top:2px;font-style:normal;font-size:16px;text-shadow:0 1px 3px #000}
+  .tpst{position:absolute;left:-8px;right:-8px;bottom:14px;text-align:center;text-decoration:none;transform:rotate(-12deg);background:#d8203a;color:#fff;font-size:12px;font-weight:900;letter-spacing:.08em;padding:1px 0;border-top:2px solid #fff;border-bottom:2px solid #fff}
+  .tmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+  .thd{display:flex;flex-direction:column;line-height:1.2} .thd small{font-size:11px;font-weight:800;letter-spacing:.08em;color:#d9d3ff} .thd b{font-size:16px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .thd span{font-size:12px;color:#e6e1ff}
+  .tset{display:flex;flex-direction:column;gap:4px}
+  .tsl{appearance:none;display:flex;align-items:center;gap:8px;min-height:44px;padding:2px 8px;border-radius:10px;border:2px solid rgba(255,255,255,.16);background:rgba(0,0,0,.22);color:#fff;font:inherit;text-align:left;cursor:pointer}
+  .tsl.done{border-color:rgba(127,224,90,.7)} .tsl.nxt{border-color:#ffe14a;box-shadow:0 0 8px rgba(255,225,74,.6)} .tsl.hl{background:rgba(255,210,74,.14)} .tsl.lock{opacity:.6;cursor:default}
+  .tsl:active{transform:scale(.97)} .tsl:focus-visible{outline:2px solid #fff}
+  .tsk{flex:none;width:22px;text-align:center;font-style:normal;font-size:13px;font-weight:900;color:#ffe14a} .tsl.done .tsk{color:#9dff6d}
+  .tst{display:flex;flex-direction:column;min-width:0;flex:1;line-height:1.15} .tst b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .tst small{font-size:12px;color:#e6e1ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tss{flex:none;font-size:11px;letter-spacing:-.5px;color:#a79fd8} .tss u{text-decoration:none;color:#ffd24a}
+  @media(max-width:340px){.tposter{width:60px;height:80px} .tpc{width:60px!important;height:80px!important} .tss{display:none}}
+/* end @css:39-f-tour */
 /* @css:34-phone-hub */
   /* 1 touch: no 300 ms delay, no grey flash, instant pressed state (zero specificity so any existing :active rule still wins) */
   :where(button,[role=button],.tile,.card,.chip,.slot,.kcard,.stk,.sday){touch-action:manipulation;-webkit-tap-highlight-color:transparent}

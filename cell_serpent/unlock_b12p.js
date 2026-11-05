@@ -35,6 +35,7 @@ export const UNLOCKS = [
   // ---- stage 5: the shop (or at 4 with Sparkles to spend)
   { id: 'shop', step: 5, kind: 'tab', tab: 'Shop', label: 'Shop', alt: { step: 4, sparkles: 50 }, hint: 'New: Shop! Treats and surprises, some are free.', inTab: 'Grab a treat' },
   { id: 'energyplus', step: 5, kind: 'misc', label: 'Voice + button' },
+  { id: 'tour', step: 5, kind: 'misc', label: 'World tour map (ALL STAGES sheet)' },
   { id: 'bestiary', step: 5, kind: 'chip', label: 'Preview (snake book)', el: 'bestiary' },
   // ---- stage 5: Risk Doors (b16) appear before the stage that follows each boss
   { id: 'doors', step: 5, kind: 'misc', label: 'Risk doors after a boss' },
