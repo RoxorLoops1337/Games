@@ -2,6 +2,7 @@
 // side chips and the stage list overview sheet. Pure helpers first, then the small DOM part.
 import { worldStrip } from './battle_ui.js';
 import { wirePreview } from './stagemap_b13f.js';
+import { wireTour } from './tour_b16f.js';
 
 // ---- five named worlds of ten stages (names fit the show: warm-up to encore)
 export const ACTS = [
@@ -74,5 +75,6 @@ export function openOverview(c) {
   sh.querySelector('.dsx').onclick = () => { audio.play('click'); close(); };
   bg.addEventListener('click', e => { if (e.target === bg) { audio.play('click'); close(); } });
   if (!wirePreview(sh, c, close)) sh.querySelector('.ovbody').addEventListener('click', e => { const b = e.target.closest('.ovc'); if (!b || b.disabled) return; close(); pick(+b.dataset.n); });   // b13f: with the preview card a tap selects, GO jumps
+  if (c.tourOn && c.tourOn() && c.info) wireTour(sh, c);   // b16f: the STAGES / TOUR switch
   document.body.appendChild(bg); requestAnimationFrame(() => { bg.classList.add('on'); const cur = sh.querySelector('.ovc.sel'); if (cur) cur.scrollIntoView({ block: 'center' }); });
 }

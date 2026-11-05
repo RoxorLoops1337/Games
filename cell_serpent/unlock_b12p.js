@@ -35,6 +35,7 @@ export const UNLOCKS = [
   // ---- stage 5: the shop (or at 4 with Sparkles to spend)
   { id: 'shop', step: 5, kind: 'tab', tab: 'Shop', label: 'Shop', alt: { step: 4, sparkles: 50 }, hint: 'New: Shop! Treats and surprises, some are free.', inTab: 'Grab a treat' },
   { id: 'energyplus', step: 5, kind: 'misc', label: 'Voice + button' },
+  { id: 'tour', step: 5, kind: 'misc', label: 'World tour map (ALL STAGES sheet)' },
   { id: 'bestiary', step: 5, kind: 'chip', label: 'Preview (snake book)', el: 'bestiary' },
   // ---- stage 6
   { id: 'gigs', step: 6, kind: 'panel', label: 'Daily gigs and the claim row', hint: 'New: Daily Gigs! Little jobs that pay Beats.', el: 'gigs' },

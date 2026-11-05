@@ -53,7 +53,7 @@ ok('what each cleared count opens (the unlock table)', () => {
   const at = c => U.UNLOCKS.filter(u => U.isUnlocked(u.id, fresh(c)) && !U.isUnlocked(u.id, fresh(c - 1))).map(u => u.id).sort();
   const want = {
     1: ['bestbar', 'power', 'stats'], 2: ['loadout', 'skills', 'sparkles'], 3: ['gapfix', 'overview', 'pets'], 4: ['sign'],
-    5: ['bestiary', 'energyplus', 'shop'], 6: ['gigs', 'rewardfilter'], 7: ['fatal'].slice(0, 0).concat(['fund', 'funfact', 'worldstrip']),
+    5: ['bestiary', 'energyplus', 'shop', 'tour'], 6: ['gigs', 'rewardfilter'], 7: ['fatal'].slice(0, 0).concat(['fund', 'funfact', 'worldstrip']),
     8: ['gear', 'swap'], 9: ['event', 'presets'], 10: ['hard', 'pig', 'records'], 11: ['quests'], 12: ['nextreward', 'ribbons', 'runlog', 'wheel'],
     13: ['backstage', 'invasion', 'recstrip'], 14: ['achievements', 'trophies'], 15: ['stickers', 'wardrobe'], 16: ['pass'], 18: ['badges', 'season', 'streak'], 20: ['book'], 25: ['records_gold'],
   };
