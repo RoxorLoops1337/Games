@@ -65,6 +65,7 @@ import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
 import { pauseBuild, buildChipHTML, buildLine, pauseSub } from './result_b9.js';
 import { foldTab, foldSettings, hook as foldHook } from './fold_b12r.js';
+import { buildTraits, buildName, buildTagline, topWeapons, recordBuild, shareCard, skinName } from './build_id_b16e.js';
 import { bindSettingsFind, hubStickerPop, markStickersSeen, reviveInfoHTML, shareText, shareResult } from './result_b11.js';
 import { bindBuildChips, chipStatsText, stickerIds, newStickers, showStickerPop, clearStickerPop, bumpStatsTab, shineStars } from './result_b10.js';
 import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
@@ -748,7 +749,7 @@ function pauseRecap() {
   const pc = Math.floor((g.progress || 0) * 100), t = Math.floor(g.t || 0), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   $('pRecap').innerHTML = `<div><i>${RECAP.flag}</i>Stage<b>${g.stage}</b></div><div><i>${RECAP.clock}</i>Time<b>${mm}:${ss}</b></div><div><i>${RECAP.target}</i>Popped<b>${g.kills}</b></div><div class="pbar"><i style="width:${pc}%"></i><em>${pc}% of the way</em></div>`;
   { const ll = lossLine(g); $('quitBtn').title = 'Ends the run: ' + ll.text; $('quitBtn').setAttribute('aria-label', 'Hold to give up. You would lose ' + ll.text); $('pLose').innerHTML = `<b>Giving up ends this run</b>${ll.text}`; }
-  { const pb = pauseBuild(g.weap, save.loadout).filter(it => WEAPONS.some(x => x.id === it.id)); $('pBuild').innerHTML = pb.map(it => buildChipHTML(it, icon(it.id)).replace('<span class="pb9', '<span data-w="' + it.id + '" data-lv="' + it.lv + '" tabindex="0" role="button" class="pb9')).join('') + (pb.length ? `<em class="pb9n">${buildLine(pb)}</em>` : ''); $('pBuild').hidden = !pb.length; bindBuildChips($('pBuild'), id => chipStatsText(id, (g.weap[id] || {}).lv | 0, (save.skills[id] || {}).lv), () => audio.play('click')); $('pBuild').__reset10();
+  { const pb = pauseBuild(g.weap, save.loadout).filter(it => WEAPONS.some(x => x.id === it.id)); $('pBuild').innerHTML = pb.map(it => buildChipHTML(it, icon(it.id)).replace('<span class="pb9', '<span data-w="' + it.id + '" data-lv="' + it.lv + '" tabindex="0" role="button" class="pb9')).join('') + (pb.length ? `<em class="pb9n"><b class="pbname16e">${buildName(buildTraits(g.weap, g.ups, save.loadout, g.level - 1))}</b> ${buildLine(pb)}</em>` : ''); $('pBuild').hidden = !pb.length; bindBuildChips($('pBuild'), id => chipStatsText(id, (g.weap[id] || {}).lv | 0, (save.skills[id] || {}).lv), () => audio.play('click')); $('pBuild').__reset10();
     const ps = document.querySelector('#pause .pnote'); if (ps) ps.textContent = pauseSub(g.stage, g.mode ? '' : stageInfo(g.stage).name); }
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
@@ -805,7 +806,12 @@ function showResult() {
   $('rNext').onclick = () => { audio.play('click'); clearStickerPop(); beginStage(r.stage + 1); };
   $('rRetry').innerHTML = 'RETRY <span class="rcost">⚡' + ENERGY_COST + '</span>';
   { let gl = nextGoal(save); if (gl && !isTabUnlocked(gl.tab, save)) gl = null; renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
-  $('rShare').onclick = () => { audio.play('click'); shareResult(shareText(r, r.mode ? '' : stageInfo(r.stage).name, location.origin + location.pathname), toast); };
+  { const bt = buildTraits(g.weap, g.ups, save.loadout, r.picks), bn = buildName(bt), brec = r.mode ? null : recordBuild(save, bn), bel = $('rBuild');   // b16e: the run's build name
+    if (bel) { bel.hidden = !!r.mode; bel.innerHTML = r.mode ? '' : `<small>BUILD</small><b>${bn}</b>${brec && brec.fresh ? '<em>NEW</em>' : ''}`; bel.title = buildTagline(bt); bel.classList.toggle('fresh', !!(brec && brec.fresh)); }
+    if (brec && brec.fresh) persist();
+    const txt = shareText(r, r.mode ? '' : stageInfo(r.stage).name, location.origin + location.pathname), sk = stageInfo(r.stage).skin;
+    $('rShare').onclick = () => { audio.play('click'); const info = { name: r.mode ? 'Cell Serpent' : bn, tagline: buildTagline(bt), weapons: topWeapons(bt, 4), r, stageName: r.mode ? '' : stageInfo(r.stage).name, skin: sk, url: location.host + location.pathname };
+      shareCard(info, iconURL, (r.mode ? '' : bn + '. ') + txt, toast).then(res => { if (res === 'fail') shareResult(txt, toast); }).catch(() => shareResult(txt, toast)); }; }
   $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); clearStickerPop(); try { retryFly($('rRetry'), rewardSnaps($('rList')), !!(save.settings.reduceMotion || systemReduceMotion())); } catch (e) { /* cosmetic */ } beginStage(r.stage); };
   $('rHub').onclick = () => { audio.play('click'); curtainClose(document.documentElement.classList.contains('rm'), () => { clearStickerPop(); const fl = rewardSnaps($('rList')); flyRibbonsHome(fl.length); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; gigFlies(fl.map(it => ({ snap: it.s, kind: it.kind, amt: it.n })), 420); openHub('Battle'); }); };   // the hub pills wait at their old totals and count up as each chip lands (batch 7)
