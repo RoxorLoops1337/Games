@@ -12,6 +12,8 @@ import { systemReduceMotion } from './access.js';
 import { bondNote } from './pets_b9.js';
 import { masteryPathHTML, upgradeCeremony, feedPet, treatLabel, treatBlock, dayNow } from './pets_b10.js';
 import { petHeroHTML, nextStarHTML } from './pet_detail_b14d.js';
+import { petSetCardHTML, storyHTML, petSetWoke } from './sets_b16h.js';
+import { petWakeBanner, petStars } from './sets_ui_b16h.js';
 import { petLabel, petNick, setPetNick, nextIdea, NICK_MAX } from './pet_names.js';
 
 // what a skill does at the level a run starts with (weapon level 1), scaled by the permanent skill level
@@ -169,6 +171,7 @@ export function createSheets(c) {
       sh.appendChild(el('div', 'dshead pdwrap', petHeroHTML({ iconHTML: icon(id), label: petLabel(s, p), sub: `${petNick(s, id) ? p.name + ' · ' : ''}${rar.name} friend · ${owned ? (eq ? 'walking with you' : 'at home') : 'not met yet'}`, color: rar.color, stars: k.star, max: PET_MAX_STAR, owned })));
       if (owned) nickRow(sh, s, id, p);
       sh.appendChild(el('p', 'dsdesc', PET_ABILITY[id] || p.flavor));
+      sh.appendChild(el('div', 'pdset', petSetCardHTML(id, petStars(s), icon))); sh.appendChild(el('div', 'pdstory', storyHTML(id, k.star)));   // b16 h
       if (owned) { const wk = el('div', '', walkHTML(icon(id), eq, rar.color)); if (eq && (k.joy || 0) >= PET_JOY_MAX) wk.firstChild.insertAdjacentHTML('beforeend', '<span class="whrt h1">♥</span><span class="whrt h2">♥</span><span class="whrt h3">♥</span>'); wk.firstChild.classList.add('tap'); wk.firstChild.removeAttribute('aria-hidden'); wk.firstChild.setAttribute('role', 'button'); wk.firstChild.setAttribute('aria-label', 'Pet the ' + p.name.toLowerCase()); wk.firstChild.tabIndex = 0; wk.firstChild.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); wk.firstChild.click(); } }; wk.firstChild.onclick = () => petReact(wk.firstChild, id, audio, !!(save().settings.reduceMotion || systemReduceMotion())); sh.appendChild(wk); }
       if (owned) { const jy = el('div', 'dsjoy', joyHTML(k) + bondNote(k)); sh.appendChild(jy); wrapFold([jy], { id: 'sheet.pet.joy', title: 'Joy details' }); }
       if (owned) {
@@ -188,7 +191,7 @@ export function createSheets(c) {
       const lad = el('div', 'dsladder', Array.from({ length: PET_MAX_STAR }, (_, n) => `<span class="${n < k.star ? 'on' : n === k.star ? 'nx' : ''}"><i>${n + 1}★</i><b>${petBonusText(p, n + 1).split(' ')[0]}</b></span>`).join(''));
       const lnote = el('div', 'dsnote', 'Stars count even when the pet stays home.'); sh.appendChild(lad); sh.appendChild(lnote); wrapFold([lad, lnote], { id: 'sheet.pet.ladder', title: 'Star ladder' });
       const can = petCanUp(s, id), up = el('button', 'btn dsbig' + (can ? ' gold' : ''), maxed ? 'FULL STARS' : owned ? 'MORE STARS' : 'WELCOME HOME'); up.disabled = !can;
-      up.onclick = () => { if (petUp(s, id)) { persist(); audio.unlock(); audio.play('upgrade'); rerender(); petSheet(id); } };
+      up.onclick = () => { const b4 = petStars(s); if (petUp(s, id)) { persist(); audio.unlock(); audio.play('upgrade'); rerender(); petSheet(id); petWakeBanner(petSetWoke(b4, petStars(s)), audio, !!(s.settings.reduceMotion || systemReduceMotion())); } };
       sh.appendChild(up);
       if (owned) { const e = el('button', 'btn dseq alt', eq ? 'BENCH' : 'WALK WITH ME'); e.onclick = () => { if (togglePet(s, id)) { persist(); audio.play('click'); rerender(); petSheet(id); } }; sh.appendChild(e); }
     }, 'pet:' + id);

@@ -1,5 +1,7 @@
 import { platCard } from './plat_b12d.js';
 import { wallCard } from './wall_b13d.js';
+import { voiceCard } from './voice_b16g.js';
+import { isUnlocked as voiceUnlocked } from './unlock_b12p.js';
 // Cell Serpent hub, part two: the shop, the keepsake collection, the character page, and the little panels
 // (sign in, fan fund, fragment swap). It gets everything it needs from main.js through `c`.
 import {
@@ -20,10 +22,14 @@ import { ico, iconURL } from './icons.js';
 import { ribIcon, ribHTML, dressIcon, setTint, wardTry, tickTreats, SNACK_DESC } from './shop_b8.js';
 import { emptyCard as emptyCardB8 } from './empty_ux.js';
 import { gearBarHTML } from './pet_detail_b14d.js';
+import { ENCORE_LV, encoreLine, GEAR_SET_STORY } from './sets_b16h.js';
 import { seeded, newSeed, armChest, wasHeld, keepDetailHTML, keepCeremony } from './gear_fx.js';
 import { renderStickerBook } from './sticker_b9.js';
 import { foldTab } from './fold_b12r.js';
 import { recordsHTML, setStripState, setStripHTML, treatLine } from './hub_b10.js';
+import { playStatsHTML, resetPstats } from './playstats_b16j.js';
+import { CAPSULE_UPS as PS_CAPS, PASSIVES as PS_PASS } from './sim.js';
+import { isUnlocked as psUnlocked } from './unlock_b12p.js';
 import { statBuyJuice } from './juice_b13b.js';
 import { statTeaserEl } from './onboard_b14b.js';
 import { readRuns, runLogHTML, decorateBundles, sparkleFlight, treatPips } from './hub_b11.js';
@@ -218,11 +224,15 @@ export function createHub2(c) {
     bestBuy(core, s);
     { const pc = platCard(s, () => { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); }); if (pc) list.appendChild(pc); }   // b12d Gold Records
     { const wc = wallCard(s, () => { c.persist(); audio.unlock(); audio.play('upgrade'); c.renderHub(); }); if (wc) list.appendChild(wc); }   // b13d Gold Wall
+    { if (voiceUnlocked('voice', s)) { const vc = voiceCard(s, id => { audio.unlock(); audio.play('voice', { id }); }); if (vc) list.appendChild(vc); } }   // b16g voice clips
     { const rc = document.createElement('div'); rc.className = 'recbox'; rc.innerHTML = recordsHTML(s); list.appendChild(rc); }
+    if (psUnlocked('playstats', s)) { const pb = document.createElement('div'); pb.className = 'pstatbox'; pb.innerHTML = playStatsHTML(s, psName); list.appendChild(pb);   // b16j: local-only Play Stats
+      const rb = pb.querySelector('.psreset'); if (rb) rb.onclick = () => { if (rb.dataset.arm) { resetPstats(save()); c.persist(); audio.play('click'); c.renderHub(); } else { rb.dataset.arm = '1'; rb.textContent = 'Sure?'; setTimeout(() => { if (rb.isConnected) { delete rb.dataset.arm; rb.textContent = 'Clear'; } }, 2500); } }; }
     { const rl = runLogHTML(readRuns()); if (rl) { const rb = document.createElement('div'); rb.className = 'runbox'; rb.innerHTML = rl; list.appendChild(rb); } }
     { const bk = document.createElement('div'); list.appendChild(bk); const sb = renderStickerBook(bk, s, t => audio.play(t ? 'stickertap' : 'click', t), (n, from) => { save().sparkles += n; c.persist(); audio.play('bookdone'); sparkleFlight(from, calmMotion(), () => c.refreshCur(), { src: iconURL('sparkles') }); }); if (sb && sb.fresh) audio.play('stickernew', { n: sb.fresh }); }
     foldTab('Stats');
   }
+  const psName = id => { const w = WEAPONS.find(x => x.id === id) || PS_CAPS.find(x => x.id === id) || PS_PASS.find(x => x.id === id); return w ? w.name : id; };
   // the cheapest upgrade you can afford right now wears a "BEST BUY" ribbon (a nudge, never a rule)
   function bestBuy(core, s) {
     let pick = null, pc = 1e9;
@@ -255,7 +265,8 @@ export function createHub2(c) {
         const d = document.createElement('div'); d.className = 'setbox setx' + (full ? ' full' : '');
         d.innerHTML = `<div class="setring"><svg viewBox="0 0 72 72" aria-hidden="true"><circle class="bg" cx="36" cy="36" r="30"/><circle class="fg" cx="36" cy="36" r="30" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/></svg><b>${have}<small>/${members.length}</small></b></div>` +
           `<div class="setinfo"><div class="setn">${set.name}</div><div class="setm">${members.map(k => `<span class="${lvl(k) ? '' : 'off'}" title="${k.name}">${k.icon}<i>${lvl(k) ? '✔' : ''}</i></span>`).join('')}</div>` +
-          `<div class="setb ${full ? 'on' : ''}">${full ? 'ACTIVE: ' : 'Collect all: '}${STAT_TEXT[set.stat](set.val)}</div></div>`;
+          `<div class="setb ${full ? 'on' : ''}">${full ? 'ACTIVE: ' : 'Collect all: '}${STAT_TEXT[set.stat](set.val)}</div>` +
+          `<div class="setenc${members.every(k => lvl(k) >= ENCORE_LV) ? ' on' : ''}">${encoreLine(set.val, set.stat, Math.min(...members.map(k => lvl(k))))}</div><div class="setstory">${GEAR_SET_STORY[set.id] || ''}</div></div>`;
         d.onclick = () => { audio.play('click'); const first = members.find(k => !lvl(k)) || members[0]; openKeep(first); };
         box.appendChild(d);
       }

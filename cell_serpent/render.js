@@ -1,6 +1,7 @@
 // Canvas renderer. Reads the sim state, never changes it. Uses sprites from art.js
 // where they exist and draws procedural stand-ins otherwise.
 import { SNACK_LIFE } from './sim.js';
+import { drawLane, drawDropFrame, laneEvent } from './rhythm_b16a.js';
 import { drawMirrorTether, beatPipState, drawBeatPips, drawShellArcs } from './run_fx_b12e.js';
 import { mirrorSide, beatPeriod, BEAT_WIN, BEATRUN_FROM, BEATRUN_LEN } from './sim.js';
 import { LATE_CUE } from './trait_ui.js';
@@ -249,6 +250,9 @@ export function createRenderer(canvas, art, kit) {
       case 'snackget': ring(e.x, e.y, 120, '#ffe08a', 0.6); burst(e.x, e.y, 22, ['#ffcf70', '#fff', '#ffe36b'], 420, 0.8, 6); addFloat(g.p.x, g.p.y - 70, 'YUM! RAGE', '#ffe36b', 30, -70); break;
       case 'mirror': if (e.brk) { ring(e.x, e.y, 100, '#e6f2ff', 0.45); burst(e.x, e.y, 14, ['#e6f2ff', '#fff', '#9ec8ff'], 340, 0.7, 4); addFloat(e.x, e.y - 30, 'SHATTER', '#e6f2ff', 22, -50); } else { ring(e.x, e.y, 70, '#cfe6ff', 0.3); burst(e.x - 30, e.y, 3, ['#fff', '#9ec8ff'], 220, 0.35, 3); burst(e.x + 30, e.y, 3, ['#fff', '#9ec8ff'], 220, 0.35, 3); } break;
       case 'shell': ring(e.x, e.y, 56, '#9ad0ff', 0.25); burst(e.x, e.y, 4, ['#cfe8ff', '#fff'], 180, 0.3, 3); break;
+      case 'rhy': laneEvent(e, S.t); if (e.j === 2) { burst(g.p.x, g.p.y - 30, e.n >= 6 ? 8 : 4, ['#ffe36b', '#fff'], 260, 0.4, 4); ring(g.p.x, g.p.y, 70 + Math.min(e.n, 12) * 5, '#ffe36b', 0.3); } break;
+      case 'rdrop': laneEvent(e, S.t); S.trauma = Math.min(1, S.trauma + 0.5); if (!OPT.reduceFlash) { S.flash = 0.3; S.flashCol = '#ffc4e6'; } ring(e.x, g.p.y, 180, '#ff7eb6', 0.7); ring(e.x, g.p.y, 300, '#ffe36b', 0.9); burst(e.x, g.p.y - 40, 30, ['#ff7eb6', '#ffe36b', '#fff'], 560, 0.8, 6); addFloat(e.x, e.y - 20, 'THE DROP!', '#ffd0ee', 38, -90); break;
+      case 'rdropend': laneEvent(e, S.t); ring(e.x, g.p.y, 120, '#ffd0ee', 0.4); break;
       case 'beatrun': ring(e.x, e.y, 110, '#9bffe0', 0.5); burst(e.x, e.y, 14, ['#9bffe0', '#fff', '#ffe36b'], 330, 0.6, 5); addFloat(e.x, e.y - 20, 'BEAT RUN', '#b8ffe8', 26, -70); break;
       case 'btwist': { const K = { drop: [e.warn ? 'boom...' : 'BASS DROP!', '#ff9ad6'], hold: ['HOLD YOUR FIRE', '#bff3ff'], regrow: ['SECOND WIND', '#9dffc0'], mirror: ['HALL OF MIRRORS', '#e6f2ff'], swing: ['SWING!', '#ffd36b'], quartet: ['FOUR OF A KIND', '#9bffe0'] }[e.k]; if (K) { addFloat(e.x, e.y - 50, K[0], K[1], e.warn ? 22 : 28, -50); if (!e.warn) ring(e.x, e.y, 130, K[1], 0.5); if (e.k === 'drop' && !e.warn) S.trauma = Math.min(1, S.trauma + 0.35); } break; }
       case 'snackgone': burst(e.x, e.y, 6, ['#c9a46a', '#fff'], 90, 0.5, 4); break;
@@ -259,6 +263,7 @@ export function createRenderer(canvas, art, kit) {
       case 'gloom': addFloat(e.x, e.y - 40, 'GLOOM', '#b79bff', 26, -50); ring(e.x, e.y, 110, '#6a3fd0', 0.6); break;
       case 'soundcheck': ring(e.x, e.y, 80, '#ffd24a', 0.4); addFloat(e.x, e.y - 30, 'SOUNDCHECK', '#ffe36b', 20, -50); break;
       case 'goldfade': addFloat(e.x, e.y, 'gold lost', '#c9b36a', 18, -40); burst(e.x, e.y, 12, ['#c9b36a', '#8a7f5a', '#fff1a8'], 150, 0.8, 4); break;
+      case 'nearmiss': { const fx = Math.max(220, Math.min(W - 220, e.x)); addFloat(fx, e.y - 150, 'CLOSE CALL!', '#ff8aa8', 52, -40); addFloat(fx, e.y - 100, e.gap + ' px to spare', '#ffe3ec', 22, -30); } ring(e.x, e.y, 190, '#ff8aa8', 0.55); break;   // b16d
       case 'clutch': addFloat(e.x, e.y - 30, 'CLOSE CALL!', '#ff9ad6', 30, -70); ring(e.x, e.y, 80, '#ff9ad6', 0.4); break;
       case 'burst': ring(e.x, e.y, e.r, '#bfe9ff', 0.4); burst(e.x, e.y, 16, ['#bfe9ff', '#fff'], 260, 0.5, 5); break;
       case 'leak': S.trauma = Math.min(1, S.trauma + 0.55); S.flash = 0.4; S.flashCol = '#ff2a4d'; ring(e.x, LINE_Y, 120, '#ff2a4d', 0.5); burst(e.x, LINE_Y - 10, 22, ['#ff2a4d', '#ffd0e6', '#fff'], 360, 0.6, 6); addFloat(e.x, LINE_Y - 70, 'LEAK -' + Math.ceil(e.d), '#ff5a78', 26, -60); break;
@@ -633,6 +638,7 @@ export function createRenderer(canvas, art, kit) {
     if (g.phase === 'play' && !OPT.reduceMotion) { const ph = beatPhase(g), a = Math.pow(1 - ph, 3) * 0.28; if (a > 0.02) { ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#9ff3ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 46 + ph * 26, 0, TAU); ctx.stroke(); ctx.restore(); } }
     FX.aura(g); drawStreak(ctx, g, S.t);
     if (g.phase === 'play' && g.stage >= BEATRUN_FROM && !g.mode) drawBeatPips(ctx, p.x, p.y + (g.ring ? 36 : 52), beatPipState(g, beatPeriod(g), BEAT_WIN, BEATRUN_LEN), g.ring ? 0.85 : 1);
+    drawLane(ctx, g, S.t, text, OPT.reduceMotion); if (!OPT.reduceMotion) drawDropFrame(ctx, g, S.t, W, H);   // b16a rhythm core: the beat lane, the drop frame
     // aim tick
     if (!S.ko && !g.ring) { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.aim); ctx.globalAlpha *= 0.55; ctx.fillStyle = '#6fe3ff';
     ctx.beginPath(); ctx.moveTo(30, 0); ctx.lineTo(22, -6); ctx.lineTo(22, 6); ctx.fill(); ctx.restore(); }

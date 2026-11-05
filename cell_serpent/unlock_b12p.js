@@ -35,7 +35,10 @@ export const UNLOCKS = [
   // ---- stage 5: the shop (or at 4 with Sparkles to spend)
   { id: 'shop', step: 5, kind: 'tab', tab: 'Shop', label: 'Shop', alt: { step: 4, sparkles: 50 }, hint: 'New: Shop! Treats and surprises, some are free.', inTab: 'Grab a treat' },
   { id: 'energyplus', step: 5, kind: 'misc', label: 'Voice + button' },
+  { id: 'tour', step: 5, kind: 'misc', label: 'World tour map (ALL STAGES sheet)' },
   { id: 'bestiary', step: 5, kind: 'chip', label: 'Preview (snake book)', el: 'bestiary' },
+  // ---- stage 5: Risk Doors (b16) appear before the stage that follows each boss
+  { id: 'doors', step: 5, kind: 'misc', label: 'Risk doors after a boss' },
   // ---- stage 6
   { id: 'gigs', step: 6, kind: 'panel', label: 'Daily gigs and the claim row', hint: 'New: Daily Gigs! Little jobs that pay Beats.', el: 'gigs' },
   { id: 'rewardfilter', step: 6, kind: 'panel', label: 'Rewards filter on the stage chips' },
@@ -44,6 +47,7 @@ export const UNLOCKS = [
   { id: 'worldstrip', step: 7, kind: 'panel', label: 'World strip' },
   { id: 'funfact', step: 7, kind: 'misc', label: 'BRING THEM fun fact' },
   // ---- stage 8
+  { id: 'voice', step: 4, kind: 'panel', label: 'Voice clips' },
   { id: 'gear', step: 8, kind: 'tab', tab: 'Gear', label: 'Gear', hint: 'New: Gear! Collect keepsakes for bonus power.', inTab: 'Tap a keepsake' },
   { id: 'swap', step: 8, kind: 'chip', label: 'Fragment swap', el: 'swap' },
   // ---- stage 9
@@ -58,6 +62,7 @@ export const UNLOCKS = [
   { id: 'wheel', step: 12, kind: 'chip', label: 'Goals and Lucky Spin', hint: 'New: Lucky Spin! One free spin a day.', el: 'wheel' },
   { id: 'nextreward', step: 12, kind: 'panel', label: 'Next Reward banner' },
   { id: 'ribbons', step: 12, kind: 'misc', label: 'Ribbons pill' },
+  { id: 'playstats', step: 12, kind: 'panel', label: 'Play Stats (local counters)' },
   { id: 'runlog', step: 12, kind: 'panel', label: 'Recent gigs log' },
   { id: 'backstage', step: 13, kind: 'chip', label: 'Backstage chest', hint: 'New: Backstage! Fans leave Beats while you are away.', el: 'backstage' },
   { id: 'invasion', step: 13, kind: 'panel', label: 'Serpent invasion gig' },
@@ -72,6 +77,8 @@ export const UNLOCKS = [
   { id: 'badges', step: 18, kind: 'panel', label: 'Weekly challenge, badges' },
   { id: 'streak', step: 18, kind: 'panel', label: 'Quest chest streak' },
   { id: 'book', step: 20, kind: 'panel', label: 'Collection book' },
+  { id: 'sessgoals', step: 6, kind: 'panel', label: 'Session goals and play streak' },
+  { id: 'weekmut', step: 14, kind: 'panel', label: 'Weekly mutator' },
   { id: 'records_gold', step: 25, kind: 'panel', label: 'Gold Records (mastery)' },
 ];
 

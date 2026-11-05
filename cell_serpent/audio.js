@@ -10,6 +10,7 @@ import { stageVoice } from './audio_stage.js';
 import { comboTier, shimmerVol, bossExtra, colourOf, admit, registerB9 } from './audio_b9.js';
 import { registerB10 } from './audio_b10.js';
 import { registerB11 } from './audio_b11.js';
+import { registerB16a } from './audio_b16a.js';
 import { registerB10 as registerS10 } from './screen_b10.js';
 import { registerA10, keyLift, createAmbient } from './audio_b10b.js';
 import { registerA11, twistOf } from './audio_b11b.js';
@@ -17,6 +18,7 @@ import { registerB12i } from './audio_b12i.js';
 import { registerB13h, progShift, fillOf } from './audio_b13h.js';
 import { isBreakdown, isDrop, registerB14e } from './audio_b14e.js';
 import { registerB13b } from './juice_b13b.js';
+import { registerB16g } from './voice_b16g.js';
 import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
   let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
@@ -509,7 +511,9 @@ export function createAudio() {
   registerA11(sfx, tone, noise, duck, gate);   // round 11: book sting, pet glance, pounce, tab ping, curtain (audio_b11.js)
   registerB13b(sfx, tone, noise, duck, gate);   // batch 13: unlock fanfare, stat buy ladder, level-up lift (juice_b13b.js)
   registerB12i(sfx, tone, noise, duck, gate, now);   // batch 12: aim tick, crown clink, milestone, burst thinning (audio_b12i.js)
+  registerB16g(sfx, tone, noise, duck, gate, { ac: () => ac, out: () => sfxBus, muted: () => muted });   // batch 16: voice clips (voice_b16g.js)
   registerB14e(sfx, tone, noise, duck, gate);   // batch 14: world win/lose motif (audio_b14e.js)
+  registerB16a(sfx, tone, noise, duck, gate);   // batch 16: perfect ping, the drop, chorus stabs (audio_b16a.js)
   registerB13h(sfx, tone, noise, duck, gate);   // batch 13: shot figure and sounds for gloom, nap, pillow, shell, metro, soundcheck (audio_b13h.js)
   registerA10(sfx, tone, noise, duck, gate);   // round 10: boss fill, bring pack, sticker book, pet calls (audio_b10b.js)
   return {

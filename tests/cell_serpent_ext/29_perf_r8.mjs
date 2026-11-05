@@ -21,5 +21,5 @@ assert.equal(snakeKeys.size, 1, 'one key order for every snake');
 assert.equal(gameKeys.size, 1, 'no new game keys mid-run');
 assert.deepEqual([...cellKeys][0].split(','), sim.CELL_KEYS);
 assert.deepEqual([...snakeKeys][0].split(','), sim.SNAKE_KEYS);
-assert.equal(hash, 869737890, '(b15: gate under the HUD changes the snake start and speed; was 989117534) (b12d: ring stage pace RING_EARLY changes stage 12; was 579465015) seeded runs are unchanged by the shape work (pin updated in b11 merge, ring stage 360 aim + earlier b11 changes: Beat Run groove, boss phase 2 twists, Mirror cell at 36+, Bell reach fix)');
+assert.equal(hash, 485758292, /* b16a rhythm core: rhy events and the hold-still lock change the seeded run; was 869737890 */ '(b15: gate under the HUD changes the snake start and speed; was 989117534) (b12d: ring stage pace RING_EARLY changes stage 12; was 579465015) seeded runs are unchanged by the shape work (pin updated in b11 merge, ring stage 360 aim + earlier b11 changes: Beat Run groove, boss phase 2 twists, Mirror cell at 36+, Bell reach fix)');
 console.log('29_perf_r8 ok');

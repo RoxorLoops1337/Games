@@ -1,3 +1,4 @@
+import { soClose } from './near_miss_b16d.js';
 // Result screen helpers: the next-goal teaser (cheapest upgrade you can afford now, or the closest one) and the close-call lines.
 import { META, metaCost, metaBuyable, WEAPONS, skillUpgradeCost, SKILL_MAX_LV } from './sim.js';
 
@@ -25,10 +26,8 @@ export function nextGoal(save) {
 // close-call copy for a lost run: how much of the snake was left
 export function closeCall(r) {
   if (!r || r.won || r.mode || r.hard) return null;
-  const pct = Math.floor((r.progress || 0) * 100), left = 100 - pct;
-  if (pct >= 80) return { title: 'SO CLOSE!', sub: `Only ${left}% of the snake was left. One more go!` };
-  if (pct >= 55) return { title: 'ALMOST!', sub: `${left}% to go. You popped ${r.kills} cells.` };
-  return null;
+  const pct = Math.floor((r.progress || 0) * 100);
+  return soClose(pct);   // b16d: exact numbers ("91% popped")
 }
 
 export function renderGoal(host, goal, onGo) {

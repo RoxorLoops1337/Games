@@ -8,6 +8,11 @@
 // until every other cell is gone. If the face reaches the membrane it drains your HP.
 // Between runs you spend Beats and Sparkles on stats, loot boxes and skill levels (meta section).
 import { defaultUnlocked, sanitizeUnlocked } from './unlock_b12p.js';
+import { sanitizePstats } from './playstats_b16j.js';
+import { sanitizeVoice } from './voice_b16g.js';
+import { g16Default, sanitizeG16 } from './goals_b16i.js';
+import { petSetBonus, ENCORE_LV, encoreValue } from './sets_b16h.js';   // batch 16 (h): pair and encore bonuses
+import { defaultDch, sanitizeDch, recordDaily, DAILY_RIBBONS } from './daily_b16c.js';   // b16c: Daily Challenge
 export const W = 720;
 export const H = 1280;
 export const LINE_Y = 1055;   // the membrane at the bottom
@@ -114,6 +119,7 @@ export function keepBonus(lvs) {   // lvs: id -> level
   const b = { atk: 0, vit: 0, coin: 0, guard: 0, crit: 0, cdn: 0, speed: 0 };
   for (const k of KEEPSAKES) b[k.stat] += k.per * ((lvs && lvs[k.id]) || 0);
   for (const set of KEEP_SETS) if (KEEPSAKES.filter(k => k.set === set.id).every(k => ((lvs && lvs[k.id]) || 0) > 0)) b[set.stat] += set.val;
+  for (const set of KEEP_SETS) if (KEEPSAKES.filter(k => k.set === set.id).every(k => ((lvs && lvs[k.id]) || 0) >= ENCORE_LV)) b[set.stat] += encoreValue(set.val);   // batch 16 (h): encore
   return b;
 }
 // Account level: every run teaches you something.
@@ -347,7 +353,7 @@ export function defaultSave() {
   const skills = {};
   for (const w of WEAPONS) skills[w.id] = { lv: w.frag ? 0 : 1, frag: 0 };
   const pets = {}; for (const p of PETS) pets[p.id] = { star: 0, frag: 0, joy: 0 };
-  return { v: 8, unlocked: defaultUnlocked(), loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, bigTap: false, reviveTimer: true, volume: 1, thumbZone: false, aimAssist: false, textScale: 1, beatTick: false, pump: 2, fullscreen: true, controlStyle: 'follow' }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, gift: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, plat: { atk: 0, crt: 0, vit: 0, for: 0 }, wall: { plaques: {} }, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault() };
+  return { v: 8, unlocked: defaultUnlocked(), loadout: [...WEAPON_STARTERS], pets, petEquip: [], presets: [[], [], []], prog: {}, stars: {}, streak: { last: 0, n: 0 }, last: { stage: 1, hard: false }, settings: { music: true, vibrate: true, reduceMotion: false, reduceFlash: false, lowQuality: false, bigNumbers: false, colorBlind: false, highContrast: false, bigText: false, slider: false, leftHand: false, pauseGuard: false, bigTap: false, reviveTimer: true, volume: 1, thumbZone: false, aimAssist: false, textScale: 1, beatTick: false, pump: 2, fullscreen: true, controlStyle: 'follow' }, ribbons: 0, outfits: { owned: {}, worn: '' }, event: { key: 0, earned: 0, claimed: {} }, inv: { day: 0, left: 2, best: 0 }, card: { until: 0, last: 0 }, trophies: {}, hardCleared: 0, xp: 0, energy: { n: ENERGY_MAX, t: 0 }, keeps: Object.fromEntries(KEEPSAKES.map(k => [k.id, { lv: 0, frag: 0 }])), sign: { day: 0, n: 0 }, idle: { t: 0 }, fund: {}, shop: { welcome: 0, day: 0, refresh: 0, bought: {}, free: 0, gift: 0, xp: 0, gold: 0, limit: { week: 0, bought: {} } }, eggs: 1, login: 0, pig: { day: 0, left: 3, best: 0 }, beats: 0, sparkles: 0, meta: {}, builds: {}, plat: { atk: 0, crt: 0, vit: 0, for: 0 }, wall: { plaques: {} }, skills, daily: { day: 0, progress: {}, claimed: {} }, cleared: 0, best: 0, runs: 0, kills: 0, muted: false, addict: addictDefault(), voice: { got: {}, n: 0 }, goals16: g16Default(), dch: defaultDch(), risk: { taken: 0, won: 0, calm: 0 } };
 }
 export function sanitizeSave(raw) {
   const s = defaultSave();
@@ -359,6 +365,7 @@ export function sanitizeSave(raw) {
   if (raw.daily && typeof raw.daily === 'object') { s.daily.day = num(raw.daily.day); for (const k of Object.keys(raw.daily.progress || {})) s.daily.progress[k] = num(raw.daily.progress[k]); for (const k of Object.keys(raw.daily.claimed || {})) if (raw.daily.claimed[k]) s.daily.claimed[k] = 1; }
   for (const d of META) s.meta[d.id] = Math.min(d.max, num(raw.meta && raw.meta[d.id]));
   if (raw.wall && raw.wall.plaques && typeof raw.wall.plaques === 'object') for (const k of Object.keys(raw.wall.plaques)) if (/^[a-z]{3}$/.test(k) && raw.wall.plaques[k]) s.wall.plaques[k] = 1;   // b13d Gold Wall (wall_b13d.js)
+  s.voice = sanitizeVoice(raw.voice);   // b16g voice clips
   for (const k of Object.keys(s.plat)) s.plat[k] = Math.min(10, num(raw.plat && raw.plat[k]));   // b12 Gold Records (plat_b12d.js): ranks beyond a maxed stat
   for (const w of WEAPONS) {
     const r = raw.skills && raw.skills[w.id];
@@ -388,6 +395,11 @@ export function sanitizeSave(raw) {
   if (raw.prog && typeof raw.prog === 'object') for (const k of Object.keys(raw.prog)) if (/^h?\d+$/.test(k)) s.prog[k] = Math.min(100, num(raw.prog[k]));
   if (raw.pig && typeof raw.pig === 'object') s.pig = { day: num(raw.pig.day), left: Math.min(3, num(raw.pig.left, 3)), best: num(raw.pig.best) };
   s.addict = sanitizeAddict(raw.addict);
+  s.pstats = sanitizePstats(raw.pstats);   // b16j: local-only play stats (playstats_b16j.js)
+  s.builds = {}; if (raw.builds && typeof raw.builds === 'object' && !Array.isArray(raw.builds)) for (const k of Object.keys(raw.builds).slice(0, 60)) { const n = Math.min(9999, num(raw.builds[k])); if (k.length <= 40 && /^[A-Za-z\- ]+$/.test(k) && n > 0) s.builds[k] = n; }   // b16e: build names the player has played
+  s.goals16 = sanitizeG16(raw.goals16);   // b16i
+  if (raw.risk && typeof raw.risk === 'object') s.risk = { taken: Math.min(1e6, num(raw.risk.taken)), won: Math.min(1e6, num(raw.risk.won)), calm: Math.min(1e6, num(raw.risk.calm)) };
+  s.dch = sanitizeDch(raw.dch);
   s.unlocked = sanitizeUnlocked(raw.unlocked);   // b12p: a save without the field is an old account and keeps every tab
   if (raw.treats && typeof raw.treats === 'object' && !Array.isArray(raw.treats)) { const tn = {}; for (const p of PETS) tn[p.id] = Math.min(9, num(raw.treats.n && raw.treats.n[p.id])); s.treats = { day: num(raw.treats.day), n: tn }; }   // round 10: treats given today, see pets_b10.js
   if (raw.petNames && typeof raw.petNames === 'object' && !Array.isArray(raw.petNames)) { const pn = {}; for (const p of PETS) { const v = raw.petNames[p.id]; const n = typeof v === 'string' ? v.replace(/[^\w \-!+&.]/g, '').trim().slice(0, 10) : ''; if (n) pn[p.id] = n; } s.petNames = pn; }
@@ -454,6 +466,7 @@ export function buyEgg(save) { if (save.sparkles < EGG_PRICE) return false; save
 export function petBonus(pets) {   // permanent, whether the pet is equipped or not
   const b = { atk: 0, vit: 0, coin: 0, guard: 0, crit: 0, cdn: 0 };
   for (const p of PETS) { const st = (pets && pets[p.id]) || 0; b[p.stat] += p.per * st; }
+  { const sb = petSetBonus(pets); for (const k of Object.keys(sb)) b[k] += sb[k]; }   // batch 16 (h): pairs
   return b;
 }
 // A fresh day gives a fresh egg and fresh Piggy Bank attempts.
@@ -597,7 +610,9 @@ export const clearReward = n => ({ sparkles: (isBossStage(n) ? 40 : 15) + 3 * n 
 // Applies a finished run to the save and returns what was earned.
 export const totalStars = save => Object.values(save.stars || {}).reduce((a, v) => a + v, 0);
 export function applyResult(save, r) {
+  if (r.mode === 'daily') { const o = recordDaily(save, r); if (o.daily.pay) { save.ribbons += DAILY_RIBBONS; o.ribbons = DAILY_RIBBONS; } return o; }   // b16c: the Daily Challenge pays nothing but a few Ribbons and never touches stage progress
   const out = { beats: r.coins, sparkles: 0, first: false, egg: false, levelUps: 0, frags: r.frags || {} };
+  if (r.stage && !r.mode && !r.hard && hasDoors(r.stage) && save.risk) { if (r.risk) { save.risk.taken++; if (r.won) save.risk.won++; } else save.risk.calm++; }
   const lv0 = levelInfo(save.xp).lv; save.xp += Math.round((r.kills || 0) + 25 * (r.stage || 1) * (r.won ? 2 : 1) * (r.hard ? 1.5 : 1));
   const lv1 = levelInfo(save.xp).lv; out.levelUps = lv1 - lv0;
   for (let l = lv0 + 1; l <= lv1; l++) { const rw = levelReward(l); if (rw) { save.sparkles += rw.sparkles; out.sparkles += rw.sparkles; } }
@@ -651,6 +666,23 @@ export const MODS = [
   { id: 'rich', name: 'Rich', blurb: 'Beats are worth much more', coin: 1.6 },
 ];
 export const stageMod = n => (n >= 4 && n % 5 !== 0 && n % 3 === 1 ? MODS[Math.floor(n / 3) % MODS.length] : null);
+// Risk Doors (batch 16 b): before the stage that follows every boss (6, 11, 16 ...) the player picks a calm door (the stage as it is) or the
+// loud door: a harder twist for double Beats. Pure data + pure helpers, no random numbers; the twist merges into g.mod so every existing mod hook works.
+export const RISK_LOUD = [
+  { id: 'rk_tempo', name: 'Fast Tempo', blurb: 'The snake is 20% faster', speed: 1.2 },
+  { id: 'rk_bass', name: 'Heavy Bass', blurb: 'Cells have 25% more HP', hp: 1.25 },
+  { id: 'rk_plate', name: 'Plated Choir', blurb: 'Lots of armored cells', armor: 0.3 },
+  { id: 'rk_boom', name: 'Bomb Squad', blurb: 'Lots of bombs', bomb: 0.3 },
+];
+export const RISK_COIN = 2;   // the loud door pays double Beats
+export const hasDoors = n => n > 5 && n <= 50 && (n - 1) % 5 === 0;
+export const riskLoud = n => RISK_LOUD[Math.floor(n / 5) % RISK_LOUD.length];
+export const riskById = id => RISK_LOUD.find(r => r.id === id) || null;
+export function mergeRisk(base, r) {
+  if (!r) return base;
+  const b = base || {};
+  return { id: r.id, name: base ? base.name + ' + ' + r.name : r.name, blurb: r.blurb, speed: (b.speed || 1) * (r.speed || 1), hp: (b.hp || 1) * (r.hp || 1), coin: (b.coin || 1) * RISK_COIN, armor: Math.max(b.armor || 0, r.armor || 0) || undefined, bomb: Math.max(b.bomb || 0, r.bomb || 0) || undefined, risk: true };
+}
 // Most stages are one snake and a line at the bottom. Some stages have two snakes, and some put the duo in the middle with a circle around them.
 export const stageKind = n => (n % 6 === 0 ? 'ring' : (n % 7 === 0 || n % 10 === 8) ? 'double' : 'lane');
 export const KIND_LABEL = { lane: '', double: 'Two snakes', ring: 'Circle' };
@@ -1112,7 +1144,9 @@ export function startStage(g, n) {
   g.snakes.length = 0; g.stageHpMax = 0; g.zones.length = 0; g.maws.length = 0; g.bullets.length = 0; g.vq.length = 0;
   g.path = buildPath(n);
   const p = g.p;
-  g.mod = g.mode === '' ? stageMod(n) : null; if (g.mod && g.mod.coin) g.coinK *= g.mod.coin;
+  g.mod = g.mode === '' ? stageMod(n) : null;
+  if (g.risk && g.mode === '' && !g.hard && hasDoors(n)) g.mod = mergeRisk(g.mod, riskById(g.risk));
+  if (g.mod && g.mod.coin) g.coinK *= g.mod.coin;
   g.ring = g.mode === '' && stageKind(n) === 'ring' ? RING : null;
   g.upgradeLeft = 0;
   p.zone = g.ring ? { x0: RING.cx, x1: RING.cx } : { x0: 40, x1: W - 40 }; p.aim = -Math.PI / 2; p.x = W / 2; p.y = g.ring ? RING.cy : ROW_Y; p.kx = 0;
@@ -1138,8 +1172,9 @@ export function createGame(opts = {}) {
     level: 1, cells: 0, upgradeLeft: 0, pending: 0, choices: [], resume: 'play', rerolls: 4,
     coins: 0, kills: 0, score: 0, combo: 0, lastKill: -99, stageHp: 0, stageHpMax: 0, progress: 0, clearT: 0, lastKillPos: { x: W / 2, y: 300 },
     groove: 0, grooveT: 0, grooveMax: 0, chestsOpened: 0, faceMax: 0, bombsPopped: 0, dangerT: 0, danger: 0, mod: null, frags: {}, revived: false, result: null, bot: !!opts.bot, shots: 0, leaks: 0,
-    encore: 0, encoreUsed: 0, beam: null, goldPopped: 0, snacks: 0, clutches: 0, qStreak: 0, qBest: 0,
-    skin: '', ring: null, beatShots: 0, beatN: 0, beatLast: -1, bpool: [], cp: null, encoreReady: false, quartets: 0,
+    encore: 0, encoreUsed: 0, beam: null, goldPopped: 0, snacks: 0, clutches: 0, qStreak: 0, qBest: 0, dseed: opts.mode === 'daily' ? (opts.seed | 0) : 0, did: opts.did || '',
+    risk: (opts.risk && !opts.hard && !opts.mode && riskById(opts.risk) ? opts.risk : ''), skin: '', ring: null, beatShots: 0, beatN: 0, beatLast: -1, bpool: [], cp: null, encoreReady: false, quartets: 0,
+    pStreak: 0, pBest: 0, dropT: 0, dropN: 0, stillT: 0, lastX: 0, lastA: 0, chorusIdx: -1, perfN: 0,   // b16a rhythm core
   };
   startStage(g, opts.stage || 1);
   return g;
@@ -1159,6 +1194,29 @@ function beatRun(g) {
   if (idx === g.beatLast) return;
   g.beatN = idx === g.beatLast + 1 ? g.beatN + 1 : 1; g.beatLast = idx;
   if (g.beatN >= BEATRUN_LEN) { g.beatN = 0; for (let n = 0; n < BEATRUN_GROOVE; n++) bumpGroove(g); g.events.push({ t: 'beatrun', x: g.p.x, y: g.p.y - 60 }); }
+}
+// b16a Rhythm Core: a volley judged against the beat grid. PERFECT (inside BEAT_PERFECT) builds a streak, +6% damage; a miss ends it.
+// Standing still (finger held, not sliding) lets the volley lock to the beat grid, so the choice is: chase the snake or hold the groove.
+// DROP_AT perfects in a row start the DROP: DROP_LEN seconds of boosted chorus (more damage, faster volleys). Deterministic: it only reads g.t and the lane position.
+export const RHY_FROM = 8, BEAT_PERFECT = 0.04, PERFECT_DMG = 1.06, DROP_AT = 12, DROP_LEN = 4, DROP_DMG = 1.15, DROP_RATE = 0.92, STILL_SPEED = 40, STILL_NEED = 0.18, SNAP_MAX = 0.2;
+export const beatOffset = g => { const T = beatPeriod(g), d = g.t % T; return d < T / 2 ? d : d - T; };   // signed seconds from the nearest beat: negative = early, positive = late
+export const judgeBeat = off => { const a = Math.abs(off); return a <= BEAT_PERFECT ? 2 : a <= BEAT_WIN ? 1 : off < 0 ? -1 : -2; };   // 2 perfect, 1 good, -1 early, -2 late
+function rhythmTrack(g, dt) {   // once per play frame: how long the duo has held still, the drop timer and the chorus beat
+  const m = g.ring ? Math.abs(g.p.aim - g.lastA) * 300 : Math.abs(g.p.x - g.lastX);
+  g.lastX = g.p.x; g.lastA = g.p.aim; g.stillT = m / Math.max(dt, 1e-4) < STILL_SPEED ? g.stillT + dt : 0;
+  if (g.dropT > 0) {
+    g.dropT -= dt;
+    const idx = Math.floor(g.t / beatPeriod(g)); if (idx !== g.chorusIdx) { g.chorusIdx = idx; g.events.push({ t: 'rchorus', n: idx & 3 }); }
+    if (g.dropT <= 0) { g.dropT = 0; g.events.push({ t: 'rdropend', x: g.p.x, y: g.p.y - 60 }); }
+  }
+}
+function rhythmJudge(g) {   // the lead volley of a shot: streak, drop, one event for the lane
+  const off = beatOffset(g), j = judgeBeat(off);
+  if (j === 2) { g.pStreak++; g.perfN++; if (g.pStreak > g.pBest) g.pBest = g.pStreak; }
+  else if (j < 0) g.pStreak = 0;
+  g.events.push({ t: 'rhy', j, off, n: g.pStreak, x: g.p.x, y: g.p.y - 60 });
+  if (g.pStreak >= DROP_AT && g.dropT <= 0) { g.pStreak = 0; g.dropT = DROP_LEN; g.dropN++; g.chorusIdx = -1; g.events.push({ t: 'rdrop', x: g.p.x, y: g.p.y - 80 }); }
+  return j;
 }
 // b15: the snake comes in from UNDER the gate line below the HUD: cells above it are not drawn, not targeted and not hit
 let GATE = 182, HIT_GATE = 0;
@@ -1311,7 +1369,7 @@ export function reviveGame(g) {
 }
 export const quitResult = g => makeResult(g, false);   // GIVE UP from the pause menu: the same result a loss gives (mode, hard, progress, damage)
 function makeResult(g, won) {
-  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, bombs: g.bombsPopped, stars: won && !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0, mod: g.mod ? g.mod.id : '', hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), quartets: g.quartets || 0, qBest: g.qBest || 0, progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
+  return { chests: g.chestsOpened, groove: g.grooveMax, picks: g.level - 1, won, stage: g.stage, kills: g.kills, coins: Math.floor(g.coins), score: g.score, level: g.level, time: g.t, boss: isBossStage(g.stage), name: nameOf(g), mode: g.mode, bombs: g.bombsPopped, stars: won && !g.mode && !g.hard ? 1 + (g.revivesUsed === 0 && !g.revived ? 1 : 0) + (g.faceMax < 0.8 ? 1 : 0) : 0, mod: g.mod ? g.mod.id : '', risk: g.risk && g.mod && g.mod.risk ? g.risk : '', drops: g.dropN || 0, perfBest: g.pBest || 0, did: g.did || '', hard: g.hard, cp50: !!(g.cp && g.cp[0.5]), quartets: g.quartets || 0, qBest: g.qBest || 0, progress: g.progress, dmgBy: { ...g.dmgBy }, frags: { ...g.frags } };
 }
 // ---------------------------------------------------------------- skill picks
 // what an upgrade does now and after this pick, so every pick is visible in numbers
@@ -1343,6 +1401,7 @@ export function dpsGain(g, c) {
   }
 }
 function rollChoices(g) {
+  const R = g.dseed ? rng(Math.imul(g.dseed, 31) + g.level * 7919 + g.rerolls * 104729 + g.pending * 1299709) : g.rand;   // b16c: the Daily Challenge rolls its cards from the day, not from the fight
   const pool = [];
   const early = g.level < 3;   // the first two picks are capsule upgrades only
   const luck = (g.level - 1) * clamp((g.stage || 1) / 10, 0.1, 1);   // early stages: poor luck
@@ -1363,7 +1422,7 @@ function rollChoices(g) {
   const out = [];
   while (out.length < 3 && pool.length) {
     const tot = pool.reduce((a, u) => a + u.w, 0);
-    let r = g.rand() * tot, k = 0;
+    let r = R() * tot, k = 0;
     for (; k < pool.length - 1; k++) { r -= pool[k].w; if (r <= 0) break; }
     out.push(pool.splice(k, 1)[0]);
   }
@@ -1375,9 +1434,9 @@ function rollChoices(g) {
     const alt = CAPSULE_UPS.filter(u => !u.min && (g.ups[u.id] || 0) < u.max && uv(g, u.id) < u.cap && !out.some(o => o.id === u.id))[0] || PASSIVES.find(u => (g.ups[u.id] || 0) < u.max && !out.some(o => o.id === u.id));
     if (alt) { const l = g.ups[alt.id] || 0; out[out.length - 1] = { id: alt.id, kind: CAPSULE_UPS.includes(alt) ? 'capsule' : 'passive', name: alt.name, u: alt, lvl: l, max: alt.max, isNew: !l, w: 1 }; eligible = [out.length - 1]; }
   }
-  const common = eligible.length ? eligible[Math.floor(g.rand() * eligible.length)] : -1;
+  const common = eligible.length ? eligible[Math.floor(R() * eligible.length)] : -1;
   out.forEach((c, i) => {
-    c.rarity = i === common ? 0 : Math.max((c.u && c.u.min) || 0, rollRarity(g.rand, luck));
+    c.rarity = i === common ? 0 : Math.max((c.u && c.u.min) || 0, rollRarity(R, luck));
     if (c.kind === 'weapon') {
       c.gain = Math.min(c.max - c.lvl, [1, 1, 2, 2, 3, 3][c.rarity]);
       c.stat = c.isNew ? `New skill, starts at Lv ${c.gain}` : `Level ${c.lvl} → ${c.lvl + c.gain}`;
@@ -1468,9 +1527,14 @@ function shootCapsule(g, dt) {
   const p = g.p, up = id => uv(g, id);
   if (!g.ring) p.aim = -Math.PI / 2;
   p.cd -= dt;
+  const rhy = g.stage >= RHY_FROM && !g.mode;
+  if (rhy) rhythmTrack(g, dt);
   while (p.cd <= 0) {
-    p.cd += (1 / p.rate) * cdMul(g) / (1 + up('aspd') / 100) * (p.rage > 0 ? 0.77 : 1);
-    for (let b = 0; b <= Math.round(up('burst')); b++) g.vq.push({ t: b * 0.1 });
+    const ivl = (1 / p.rate) * cdMul(g) / (1 + up('aspd') / 100) * (p.rage > 0 ? 0.77 : 1) * (g.dropT > 0 ? DROP_RATE : 1);
+    p.cd += ivl;
+    let lock = 0;   // b16a: held still, the volley waits for the beat grid (a half beat grid when the volleys are fast)
+    if (rhy && g.stillT >= STILL_NEED) { const T = beatPeriod(g), Gd = p.cd < T * 0.75 ? T / 2 : T, w = (Gd - (g.t % Gd)) % Gd; if (w <= Math.min(SNAP_MAX, Gd * 0.45)) { lock = w; p.cd += w; } }   // the volley waits for the grid; what the wait costs is paid back as damage on that volley (below), so holding the groove is damage neutral
+    for (let b = 0; b <= Math.round(up('burst')); b++) g.vq.push({ t: lock + b * 0.1, lead: b === 0, m: lock > 0 ? 1 + lock / ivl : 1 });
     if (p.cd < -0.2) p.cd = 0;
   }
   for (let i = g.vq.length - 1; i >= 0; i--) {
@@ -1478,11 +1542,11 @@ function shootCapsule(g, dt) {
     if (v.t > 0) continue;
     g.vq.splice(i, 1);
     const n = 1 + Math.round(up('notes'));
-    const ob = onBeat(g);
+    const ob = onBeat(g); if (rhy && v.lead) rhythmJudge(g);
     if (ob) { g.beatShots = (g.beatShots || 0) + 1; g.events.push({ t: 'beatshot' }); if (g.stage >= BEATRUN_FROM) beatRun(g); }
     for (let k = 0; k < n; k++) {
       const crit = g.rand() < p.crit + (ob ? BEAT_CRIT : 0);
-      fire(g, { x: muzX(g, (k - (n - 1) / 2) * 42, 30), y: muzY(g, (k - (n - 1) / 2) * 42, 30), a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1) * (ob ? 1 + up('dbeat') / 100 : 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
+      fire(g, { x: muzX(g, (k - (n - 1) / 2) * 42, 30), y: muzY(g, (k - (n - 1) / 2) * 42, 30), a: p.aim, sp: p.bspeed, dmg: dmgMul(g) * (1 + up('cdmg') / 100) * (p.rage > 0 ? 1.6 : 1) * (crit ? p.critMul : 1) * (ob ? 1 + up('dbeat') / 100 : 1) * (rhy && ob && judgeBeat(beatOffset(g)) === 2 ? PERFECT_DMG : 1) * (g.dropT > 0 ? DROP_DMG : 1) * (v.m || 1), crit, beat: ob, pierce: Math.round(up('speed')), r: 6, life: 1.4, kind: 'pill' });
     }
     g.shots++; g.events.push({ t: 'shoot' });
   }

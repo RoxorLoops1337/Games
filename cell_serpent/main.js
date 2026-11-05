@@ -1,4 +1,6 @@
 import { keyAim, sliderAim, watchAim, resetAimSr, setFieldLabel } from './a11y_b12k.js';
+import { mountDailyTile, dailyOpts, dailyResultRows, dailyAfterResult } from './daily_ui_b16c.js';
+import { dayId as dchDayId, dailyStage as dchStage } from './daily_b16c.js';
 import { beatPhase, quitResult, upgradeAllPets as upgradePetsAll, stageKind, isBossStage, skipPick, totalStars, stageMod, claimAllGoals, upgradeAllSkills, hatchAll, exportSave, importSave, keepCanUp, KEEPSAKES, FUND, fundReady, TROPHIES, trophyReady, dealsFor, welcomeReady, W, MAX_STAGE, KIND_LABEL, RING, RING_SCALE, useInvAttempt, invStage, INV_NAME, power, spendEnergy, tickEnergy, ENERGY_MAX, ENERGY_COST, buyEnergy, reviveGame, reviveCost, recPower, levelInfo, HARD_HP, PETS, PET_MAX_STAR, PET_SLOTS, petCost, petCanUp, petUp, togglePet, hatchEgg, buyEgg, EGG_PRICE, dayLogin, pigTier, usePigAttempt, PIG_NAME, RARITIES, LOADOUT_SIZE, toggleLoadout, dailyGoals, addRunStats, goalProgress, claimGoal, createGame, step, choose, reroll, botInput, buildPath, pointAt, stageInfo, canPlay, clearReward, META, WEAPONS, BOXES, SKILL_MAX_LV, metaCost, metaBuyable, skillUpgradeCost, buyMeta, unlockSkill, levelSkill, openBox, applyResult, defaultSave, sanitizeSave } from './sim.js';
 import { platMeta } from './plat_b12d.js';
 import { skinFor, recordAddictRun, eventInfo, ensureEvent } from './sim.js';
@@ -11,11 +13,14 @@ import { createRenderer } from './render.js';
 import { createArtDraw } from './art_draw.js';
 import { createAudio } from './audio.js';
 import { nextGoal, closeCall, renderGoal } from './result_goal.js';
+import { nmReset, nmWatch, nmState, closeCalls } from './near_miss_b16d.js';
 import { flyPick } from './pickfly.js';
 import { edgeMap } from './follow_b13c.js';
 import { newAim, aimDown, aimMove, aimUp, aimTick, aimAssisted } from './aim_b12f.js';
 import { levelUpJuice } from './juice_b13b.js';
+import { dealGoals, applyMutator, showRunGoals, hideRunGoals, checkGoals, bumpStreak, resultChipHTML, renderHubStrip } from './goals_b16i.js';
 import { bindMomentHaptics } from './audio_b14e.js';
+import { bindVoice, voiceAfterRun } from './voice_b16g.js';
 import { revealStars, countUp, levelBar, reviveRing, stopFx, confetti, lossHint, progMeter } from './result_fx.js';
 import { applyCbPalette, paintCbStrip, applyCbRarity } from './cb_palette.js';
 import { textScaleOf, textScaleLabel, initGridNav, initSrPass } from './access.js';
@@ -59,11 +64,14 @@ import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, is
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
 import { hatchTag } from './pets_b10.js';
+import { petSetsStripHTML, petSetWoke } from './sets_b16h.js';
+import { petWakeBanner, petStars } from './sets_ui_b16h.js';
 import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collectionCelebrate, joyBadge } from './pets_b9.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
 import { pauseBuild, buildChipHTML, buildLine, pauseSub } from './result_b9.js';
 import { foldTab, foldSettings, hook as foldHook } from './fold_b12r.js';
+import { buildTraits, buildName, buildTagline, topWeapons, recordBuild, shareCard, skinName } from './build_id_b16e.js';
 import { bindSettingsFind, hubStickerPop, markStickersSeen, reviveInfoHTML, shareText, shareResult } from './result_b11.js';
 import { bindBuildChips, chipStatsText, stickerIds, newStickers, showStickerPop, clearStickerPop, bumpStatsTab, shineStars } from './result_b10.js';
 import { rewardSnaps, retryFly, lossLine, holdConfirm, trackModality } from './result_ux.js';
@@ -75,7 +83,9 @@ import { panOf, sweepTick, isMilestone } from './audio_b12i.js';
 import { logRun } from './hub_b11.js';
 import { initFullscreen, fsOnRun } from './fullscreen_fs.js';
 import { initInstall } from './install_b12n.js';
+import { showDoors, hasDoors, riskLine } from './risk_b16b.js';
 import { isUnlocked, isTabUnlocked, setUnlockAll, unlockAllOn } from './unlock_b12p.js';
+import { recordRun as psRun, recordPick as psPick, recordSkip as psSkip, noteQuit as psQuit } from './playstats_b16j.js';
 import { createUnlockUI, trimGoalsPanel } from './unlock_ui_b12p.js';
 
 try { if (/[?&]unlock=all\b/.test(location.search)) setUnlockAll(true); } catch (e) { /* ignore */ }   // b12p: test/debug only, opens every tab and panel
@@ -87,6 +97,7 @@ try { save = sanitizeSave(JSON.parse(localStorage.getItem(SAVE_KEY))); } catch (
 const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } };
 
 const audio = createAudio(), cues = createCues(audio);
+bindVoice(audio, () => save);   // b16g: milestone voice clips answer clears, bosses, streaks
 bindMomentHaptics(audio, () => save && save.settings);   // b14e: unlock, stat buy, level-up and result motif also buzz
 audio.setMuted(save.muted); audio.setMusicAllowed(save.settings.music); audio.setVolume(save.settings.volume);
 let stagKey = '';   // which hub tab already played its entrance
@@ -300,9 +311,9 @@ function renderBattle() {
   { const pr = save.prog[(hard ? 'h' : '') + sel] || 0; bestPct = pr; $('stProg').innerHTML = `<div class="pgl${pr ? ' has' : ''}">Best <b>${pr}%</b>${bestTag(hard, powerGap(power(save), recPower(sel, hard)).gap)}</div><div class="pgr"><i style="width:${pr}%"></i>${[25, 50, 100].map(t => `<span class="${pr >= t ? 'got' : ''}" style="left:${t}%">${icon('chest')}</span>`).join('')}</div>`; }
   { const ws = $('wStrip'), wk = save.cleared + '|' + sel; if (ws && ws.dataset.k !== wk) { ws.dataset.k = wk; ws.innerHTML = actStripHTML(save.cleared, sel, MAX_STAGE, isBossStage, Math.min(MAX_STAGE, save.cleared + 4)); } }   // b11: five named worlds over the 50 ticks (worldStrip draws the ticks)   // r10: 50 ticks, boss crowns taller
   hub2.renderSide(); watchSideIcons($('battleSide')); watchSide($('battleSide'));
-  renderPig();
+  renderPig(); try { mountDailyTile(dchCtx); } catch (e) { /* b16c: the daily tile is optional */ }
   syncDock(); watchDock(); fitTitle($('stTitle')); goTag($('stGo'), power(save), recPower(sel, hard), playable);
-  renderGoals(); foldTab('Battle');
+  renderGoals(); try { if (isUnlocked('sessgoals', save)) renderHubStrip(save, dayKey(), document.querySelector('.gl-box'), isUnlocked('weekmut', save)); } catch (e) { /* ignore */ } foldTab('Battle');
   if (chips.dataset.sc !== sel + '|' + ckey) { chips.dataset.sc = sel + '|' + ckey; requestAnimationFrame(() => { const chip = chips.querySelector('.sel'); if (chip) { try { chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: 'smooth' }); } catch (e) { /* ignore */ } } }); }   // 17-perf: read layout after paint, and only when the stage changed
 }
 // chip filter: only the stages that still pay something (next first clear, unpaid Hard clear)
@@ -321,15 +332,20 @@ $('claimGigs').onclick = () => { audio.play('click'); const fl = [...$('goalList
 bindStageNav($('btHero'), () => mode === 'hub' && hubTab === 'Battle' && $('hub').classList.contains('on') && !document.querySelector('.scr.on:not(#hub)'), dir => { const n = Math.max(1, Math.min(MAX_STAGE, save.cleared + 4, sel + dir)); if (n === sel) return false; audio.play('click'); sel = n; renderBattle(); return true; });
 $('gapFix').onclick = () => { const t = $('gapFix').dataset.tab; if (!t) return; audio.play('click'); hubTab = t; hubTabSwitch(); };
 $('wStrip').onclick = e => { const b = e.target.closest('.wact'); if (!b) return; const r = actTarget(+b.dataset.act, save.cleared, Math.min(MAX_STAGE, save.cleared + 4)); if (!r) return; if (r.locked) { audio.play('deny'); toast('Clear stage ' + Math.max(1, r.need) + ' to open this world'); return; } audio.play('click'); sel = r.stage; renderBattle(); };
-$('stOverview').onclick = () => { audio.play('click'); openOverview({ save: () => save, max: MAX_STAGE, isBoss: isBossStage, kindOf: stageKind, reach: () => Math.min(MAX_STAGE, save.cleared + 4), sel: () => sel, audio, info: stageInfo, mine: () => power(save), rec: n => recPower(n, false), kit: () => kit, pick: n => { sel = n; renderBattle(); } }); };
+$('stOverview').onclick = () => { audio.play('click'); openOverview({ save: () => save, max: MAX_STAGE, isBoss: isBossStage, kindOf: stageKind, reach: () => Math.min(MAX_STAGE, save.cleared + 4), sel: () => sel, audio, tourOn: () => isUnlocked('tour', save), info: stageInfo, mine: () => power(save), rec: n => recPower(n, false), kit: () => kit, pick: n => { sel = n; renderBattle(); } }); };
 $('stPrev').onclick =() => { audio.play('click'); sel = Math.max(1, sel - 1); renderBattle(); };
 $('stNext').onclick = () => { audio.play('click'); sel = Math.min(MAX_STAGE, save.cleared + 4, sel + 1); renderBattle(); };
-$('stGo').onclick = () => { audio.unlock(); audio.play('click'); const b = $('stGo'); b.classList.remove('go-hit'); void b.offsetWidth; b.classList.add('go-hit'); beginStage(sel); };
+$('stGo').onclick = () => { audio.unlock(); audio.play('click'); riskPick = null; const b = $('stGo'); b.classList.remove('go-hit'); void b.offsetWidth; b.classList.add('go-hit'); beginStage(sel); };
 $('enPlus').onclick = () => { audio.unlock(); if (buyEnergy(save, Date.now())) { persist(); audio.play('upgrade'); refreshCur(); toast('Voice +10'); } else toast('Not enough Sparkles'); };
 // a stage costs Voice; the Piggy Bank Parade is free
+let riskPick = null;   // b16: the door chosen for this stage; kept for RETRY (same stage), dropped on a win or a fresh START
 function beginStage(stage) {
+  if (!(hard && stage <= save.cleared) && hasDoors(stage) && stage <= save.cleared + 1 && isUnlocked('doors', save) && !(riskPick && riskPick.stage === stage)) {
+    showDoors({ stage, audio, reduce: !!(save.settings.reduceMotion || systemReduceMotion()), pick: id => { riskPick = { stage, id }; beginStage(stage); }, cancel: () => { if (mode !== 'play' && mode !== 'hub') openHub('Battle'); } });
+    return;
+  }
   if (!spendEnergy(save, Date.now())) { toast('Out of Voice! Rest a bit or grab some tea in the Shop'); openHub('Battle'); return; }
-  persist(); startRun(stage);
+  persist(); startRun(stage, '', riskPick && riskPick.stage === stage ? riskPick.id : '');
 }
 
 // the stage picture: the lane for this stage with the serpent on it
@@ -459,6 +475,7 @@ function renderPets() {
   };
   eggNudge(egg, save); list.appendChild(egg);
   list.insertAdjacentHTML('beforeend', collectionHTML(save));
+  if (PETS.some(p => save.pets[p.id].star > 0)) { const ps = document.createElement('div'); ps.className = 'petsets'; ps.innerHTML = petSetsStripHTML(petStars(save), icon); ps.addEventListener('click', ev => { const c = ev.target.closest('.pschip'); if (!c) return; audio.play('click'); sheets.petSheet(c.dataset.pet); }); list.appendChild(ps); }   // b16 h
   collectionCelebrate(save, list.lastElementChild, (tier, el) => { audio.play('levelup'); toast(tier === 'perfect' ? 'Full house! Every friend shines' : 'Everyone is home!'); if (!systemReduceMotion()) hatchBurst(el, '#ffd24a', tier === 'perfect' ? 3 : 2, false); });
   { const rdy = PETS.filter(p => petCanUp(save, p.id)).length; if (save.eggs > 1 || rdy) { const row = document.createElement('div'); row.className = 'refrow'; row.style.justifyContent = 'center'; row.style.gap = '10px'; if (save.eggs > 1) { const b = document.createElement('button'); b.className = 'btn small alt'; b.textContent = 'HATCH ALL (' + save.eggs + ')'; b.onclick = () => { const res = hatchAll(save); if (res.length) { persist(); audio.play('levelup'); refreshCur(); toast(res.length + ' eggs hatched'); renderHub(); } }; row.appendChild(b); } if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'STAR UP ALL (' + rdy + ')'; b.onclick = () => { if (upgradePetsAll(save)) { persist(); audio.play('upgrade'); renderHub(); } }; row.appendChild(b); } list.appendChild(row); } }
   list.appendChild(chipRow(['All', 'Owned', 'Ready'], petFilter, o => { petFilter = o; audio.play('click'); renderPets(); }, { Ready: PETS.filter(p => petCanUp(save, p.id)).length }));
@@ -471,7 +488,7 @@ function renderPets() {
     const starH = Array.from({ length: PET_MAX_STAR }, (_, n) => `<i class="star${n < k.star ? ' on' : ''}">★</i>`).join('');
     const t = tile({ cls: 'coll pet t-weapon' + (eq ? ' on-loadout' : '') + (owned ? '' : ' unowned') + (petCanUp(save, p.id) ? ' ready' : ''), ic: icon(p.id), lock: !owned, name: petLabel(save, p), chip: owned ? (eq ? 'WALKING' : 'AT HOME') : 'NEW', chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: p.flavor, pips: starH,
       bar: need ? Math.min(100, Math.round((k.frag / need) * 100)) : 100, barText: need ? k.frag + ' / ' + need : '', btn: maxed ? 'FULL STARS' : owned ? 'MORE STARS' : 'WELCOME HOME', disabled: !petCanUp(save, p.id),
-      onclick: () => { if (petUp(save, p.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } } });
+      onclick: () => { const b4 = petStars(save); if (petUp(save, p.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); petWakeBanner(petSetWoke(b4, petStars(save)), audio, systemReduceMotion()); } } });
     if (owned) { const e = document.createElement('button'); e.className = 'btn small go alt'; e.textContent = eq ? 'BENCH' : 'WALK WITH ME'; e.onclick = () => { if (togglePet(save, p.id)) { persist(); audio.play('click'); renderHub(); } }; t.appendChild(e); }
     { const rr = petRarity(p.id), ri = PET_RARITY[p.id] || 0; t.style.setProperty('--rc', rr.color); t.classList.add('prar' + ri); t.querySelector('.ds').insertAdjacentHTML('beforebegin', rarityChip(rr, ri)); }
     if (isNewItem(save, 'p', p.id)) t.insertAdjacentHTML('afterbegin', newRibbonHTML);
@@ -550,6 +567,8 @@ const defaultBoxOk = () => { audio.play('click'); openHub('Shop'); };
 $('bOk').onclick = defaultBoxOk;
 const toast = msg => { if (/^(Not enough|Nothing to claim|Out of Voice|That code does not)/.test(msg)) audio.play('deny'); const t = $('toast'); t.textContent = msg; { const tn = dressToast(t, msg); if (TONE_HAPTIC[tn]) haptic(TONE_HAPTIC[tn], save && save.settings); } t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200); };
 const hub2 = createHub2({ unlocked: id => isUnlocked(id, save), $, toast, tile, icon, curImg, audio, save: () => save, persist, show, openHub: t => openHub(t), renderHub: () => renderHub(), refreshCur: () => refreshCur(), dayKey, resetBoxOk: () => { $('bOk').onclick = defaultBoxOk; }, bodyURL: skin => { if (!kit) return ''; if (!(('b|' + skin) in iconCache)) { const spr = kit.SPR.body(skin, false, ''); iconCache['b|' + skin] = spr && spr.c.toDataURL ? spr.c.toDataURL() : ''; } return iconCache['b|' + skin]; } });
+// b16c: the Daily Challenge context (tile in the Battle tab, panel, result lines); it opens with the Daily Gigs
+const dchCtx = { save: () => save, persist, audio, $, isUnlocked: () => isUnlocked('gigs', save), stageName: n => stageInfo(n).name, start: () => { if (mode !== 'play' && mode !== 'pause') { persist(); startRun(dchStage(dchDayId()), 'daily'); } }, back: () => openHub('Battle'), openPanel: (t, b, cl) => hub2.openPanel(t, b, cl), share: txt => shareResult(txt, toast), url: location.origin + location.pathname, mode: () => mode };
 try { const pb = $('pBody'); if (pb && typeof MutationObserver === 'function') new MutationObserver(() => { if ($('pTitle').textContent === 'GOALS') trimGoalsPanel(pb, save); }).observe(pb, { childList: true }); } catch (e) { /* cosmetic */ }   // b12p: the long Goals page keeps out sections that are not open yet
 
 // ---------------------------------------------------------------- runs
@@ -557,18 +576,28 @@ function newDemo() {
   demo = createGame({ seed: (Math.random() * 1e9) | 0, bot: true, stage: 1 + ((Math.random() * 3) | 0) });
   richDemo(demo);
 }
-function startRun(stage, mode2 = '') {
+function startRun(stage, mode2 = '', riskId = '') {
   const fromHub = shownId === 'hub';
   if (!mode2) save.last = { stage, hard: !!(hard && stage <= save.cleared) };
   audio.unlock(); fsOnRun(); audio.music(true, stage === 1 && !mode2);
-  sel = stage; ranResult = false; endT = 0;
-  g = createGame({ seed: (Math.random() * 1e9) | 0, meta: platMeta(save), skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
+  if (mode2 !== 'daily') sel = stage; ranResult = false; endT = 0;
+  g = mode2 === 'daily' ? createGame(dailyOpts(dchDayId())) : createGame({ seed: (Math.random() * 1e9) | 0, meta: platMeta(save), skills: skillLevels(), loadout: save.loadout, stage, mode: mode2, risk: riskId, hard: hard && !mode2 && stage <= save.cleared, outfit: save.outfits.worn, arts: Object.fromEntries(Object.entries(save.keeps).map(([k, v]) => [k, v.lv])), pets: Object.fromEntries(PETS.map(p => [p.id, save.pets[p.id].star])), petEquip: save.petEquip });
+  if (mode2 === 'daily') g.revivesLeft = 0;   // b16c: the house band plays without revives
   g.petJoy = save.petEquip.map(id => (save.pets[id].joy || 0) >= 100);   // round 6: an overjoyed pet shows off in the run (cosmetic)
+  nmReset();
   mode = 'play'; acc = 0; clk.drop(); cardsFor = null; reviveAsked = false; show(''); resetGroove(); if (fromHub) curtainOpen(document.documentElement.classList.contains('rm'));
   announce('Stage ' + stage + (isBossStage(stage) ? ', boss stage' : '') + ' started. ' + (g.snakes.length > 1 ? 'Two snakes. ' : '') + (g.ring ? 'The snake circles you. ' : '') + (g.ring ? 'Drag to aim, or use the arrow keys. The duo shoots on its own.' : 'Slide to move, the duo shoots up on its own.'));
   window.CS.g = g;
   resetAimSr(); setFieldLabel(!!g.ring); aimS.now = aimS.tgt = -Math.PI / 2; aimHint = !!g.ring && aimHintLeft(); if (g.ring) aimHintBump();
   if (!mode2) teaseGoal(save, dayKey(), !!(save.settings.reduceMotion || systemReduceMotion())); else hideTease();
+  startGoals16(mode2);
+}
+// b16i: weekly mutator (one rule change per week) and three small session goals shown when a run starts
+function startGoals16(mode2) {
+  try { hideRunGoals(); if (mode2) return; if (isUnlocked('weekmut', save)) applyMutator(g, dayKey()); if (isUnlocked('sessgoals', save)) { dealGoals(save, dayKey(), save.cleared + 1); showRunGoals(save, dayKey(), !!(save.settings.reduceMotion || systemReduceMotion()), isUnlocked('weekmut', save)); } } catch (e) { /* ignore */ }
+}
+function finishGoals16(r) {
+  try { hideRunGoals(); const st = bumpStreak(save, dayKey()), res = isUnlocked('sessgoals', save) ? checkGoals(save, r, save.cleared + 1) : { ticked: [], set: false, beats: 0 }; return { st, res }; } catch (e) { return null; }
 }
 let awayH = hoursAway(Date.now()); addEventListener('pagehide', () => stampVisit(Date.now()));
 function refreshTitle() { $('titleInfo').innerHTML = titleInfoHTML(save, totalStars(save)) || firstGoalHTML(save); { const w = welcomeBack(save, Date.now(), awayH), el = $('wb12'); el.innerHTML = welcomeHTML(w); el.hidden = !w; $('title').classList.toggle('ret12', !!w); $('title').classList.toggle('hand13', !!w && wantsHand(save)); awayH = 0; stampVisit(Date.now()); } try { dressDuo(document.querySelector('.stage12 .hero'), { outfit: wornOutfit(save) }); } catch (e) { /* ignore */ } }
@@ -609,6 +638,7 @@ const lvGuard = { at: 0, down: -1, moved: false }; trackPress($('cards'), lvGuar
 { const bs = $('buildStrip'), sh = $('bandSheet'); const tog = () => { if (!bs.innerHTML) return; if (!sh.classList.contains('on')) { sh.innerHTML = bandSheetHTML(g, icon); sh.classList.add('on'); } else sh.classList.remove('on'); }; bs.onclick = tog; sh.onclick = () => sh.classList.remove('on'); bs.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tog(); } }; }
 function pick(i) {
   if (mode !== 'play' || g.phase !== 'levelup' || pickLock) return;
+  psPick(save, g.choices[i]);
   { const c = g.choices[i]; if (c) announce('Picked ' + c.name + ', ' + RARITY_WORDS[c.rarity || 0] + '. ' + (c.stat || '')); }
   audio.play('upgrade'); { const pr = (g.choices[i] && g.choices[i].rarity) | 0; audio.play('card' + pr); if (pr >= 4) audio.play('stinger'); }
   const cs = $('cards').children, el = cs[i];
@@ -616,7 +646,7 @@ function pick(i) {
   pickLock = true; el.classList.add('chosen'); { const pr = (g.choices[i] && g.choices[i].rarity) | 0; pickBurst(el, RARITIES[pr].color, pr); } [...cs].forEach((c, k) => { if (k !== i) c.classList.add('gone'); }); $('levelup').classList.add('flashing'); { const pc = g.choices[i]; flyPick(el, $('buildStrip'), 360, () => { if (pc) { tickBand($('buildStrip'), pc.id, pc.kind === 'weapon' ? (pc.gain || 1) : 1, icon, RARITIES[pc.rarity | 0].color); if (pc.kind !== 'weapon' && chainPulse($('buildStrip'), g, pc.id, pc.isNew)) audio.play('click'); } }); }
   setTimeout(() => { if (!pickLock) return; pickLock = false; if (mode !== 'play' || g.phase !== 'levelup') return; choose(g, i); cardsFor = null; if (g.phase !== 'levelup') show(''); }, 580);
 }
-$('skipBtn').onclick = () => { if (mode === 'play' && skipPick(g)) { audio.play('skip'); cardsFor = null; if (g.phase === 'levelup') showCards(); else show(''); } };
+$('skipBtn').onclick = () => { if (mode === 'play' && skipPick(g)) { psSkip(save); audio.play('skip'); cardsFor = null; if (g.phase === 'levelup') showCards(); else show(''); } };
 $('refreshBtn').onclick = () => { const pt = g.choices ? Math.max(0, ...g.choices.map(c => c.rarity || 0)) : 0; const prevC = g.choices; if (mode === 'play' && reroll(g)) { audio.play('click'); markReroll(); keepLocked(g.choices, prevC); rrChip = true; showCards(); betterRoll($('cards'), pt); { const rb = $('refreshBtn'), cw = $('cards'); rb.classList.remove('rr'); cw.classList.remove('rrx'); void rb.offsetWidth; rb.classList.add('rr'); cw.classList.add('rrx'); setTimeout(() => { rb.classList.remove('rr'); cw.classList.remove('rrx'); }, 650); } } };
 
 // ---------------------------------------------------------------- input
@@ -734,6 +764,8 @@ function showRevive() {
   $('rvGo').onclick = () => { if (save.sparkles < cost) return; stopRing(); stopFx(); save.sparkles -= cost; persist(); reviveGame(g); reviveAsked = false; endT = 0; audio.play('levelup'); show(''); };
   const giveUp = () => { stopRing(); stopFx(); g.revivesLeft = 0; reviveAsked = false; show(''); };
   $('rvNo').onclick = () => { audio.play('click'); giveUp(); };
+  { const rb = $('rvRetry'), can = tickEnergy(save, Date.now()) >= ENERGY_COST && !g.mode; rb.hidden = !can; rb.innerHTML = 'RETRY <span class="rcost">⚡' + ENERGY_COST + '</span>';   // b16d: one tap back into the same stage (the result is still counted)
+    rb.onclick = () => { if (!can) return; stopRing(); stopFx(); g.revivesLeft = 0; reviveAsked = false; showResult(); const rr = $('rRetry'); if (rr && rr.onclick) rr.onclick(); }; }
   const timed = save.settings.reviveTimer !== false; $('rvTimer').textContent = timed ? 'Timer: ON' : 'Timer: OFF (take your time)';
   $('rvTimer').onclick = () => { audio.play('toggle'); save.settings.reviveTimer = !timed; persist(); stopRing(); stopFx(); showRevive(); };
   audio.duck(0.55, timed ? 10 : 3);   // the music sinks under the countdown heartbeat
@@ -744,7 +776,7 @@ function pauseRecap() {
   const pc = Math.floor((g.progress || 0) * 100), t = Math.floor(g.t || 0), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
   $('pRecap').innerHTML = `<div><i>${RECAP.flag}</i>Stage<b>${g.stage}</b></div><div><i>${RECAP.clock}</i>Time<b>${mm}:${ss}</b></div><div><i>${RECAP.target}</i>Popped<b>${g.kills}</b></div><div class="pbar"><i style="width:${pc}%"></i><em>${pc}% of the way</em></div>`;
   { const ll = lossLine(g); $('quitBtn').title = 'Ends the run: ' + ll.text; $('quitBtn').setAttribute('aria-label', 'Hold to give up. You would lose ' + ll.text); $('pLose').innerHTML = `<b>Giving up ends this run</b>${ll.text}`; }
-  { const pb = pauseBuild(g.weap, save.loadout).filter(it => WEAPONS.some(x => x.id === it.id)); $('pBuild').innerHTML = pb.map(it => buildChipHTML(it, icon(it.id)).replace('<span class="pb9', '<span data-w="' + it.id + '" data-lv="' + it.lv + '" tabindex="0" role="button" class="pb9')).join('') + (pb.length ? `<em class="pb9n">${buildLine(pb)}</em>` : ''); $('pBuild').hidden = !pb.length; bindBuildChips($('pBuild'), id => chipStatsText(id, (g.weap[id] || {}).lv | 0, (save.skills[id] || {}).lv), () => audio.play('click')); $('pBuild').__reset10();
+  { const pb = pauseBuild(g.weap, save.loadout).filter(it => WEAPONS.some(x => x.id === it.id)); $('pBuild').innerHTML = pb.map(it => buildChipHTML(it, icon(it.id)).replace('<span class="pb9', '<span data-w="' + it.id + '" data-lv="' + it.lv + '" tabindex="0" role="button" class="pb9')).join('') + (pb.length ? `<em class="pb9n"><b class="pbname16e">${buildName(buildTraits(g.weap, g.ups, save.loadout, g.level - 1))}</b> ${buildLine(pb)}</em>` : ''); $('pBuild').hidden = !pb.length; bindBuildChips($('pBuild'), id => chipStatsText(id, (g.weap[id] || {}).lv | 0, (save.skills[id] || {}).lv), () => audio.play('click')); $('pBuild').__reset10();
     const ps = document.querySelector('#pause .pnote'); if (ps) ps.textContent = pauseSub(g.stage, g.mode ? '' : stageInfo(g.stage).name); }
 }
 function showStatsFromPause() { statsPanel(() => show('pause')); }
@@ -769,9 +801,10 @@ function flyRibbonsHome(nFly) {   // the result's Ribbons chip flies to the hub 
 }
 function showResult() {
   const r = g.result; if (!r || ranResult) return; ranResult = true;
-  const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), stk0 = stickerIds(save), out = applyResult(save, r); logRun(r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
+  const snap = keepSnap(save, dayKey()), li0 = levelInfo(save.xp), stk0 = stickerIds(save), out = applyResult(save, r); const g16 = finishGoals16(r); logRun(r); psRun(save, r); addRunStats(save, dayKey(), { ...r, kills: r.kills }); recordAddictRun(save, dayKey(), r); keepResult(snap, save, dayKey(), r, $('rKeep'), save.settings.reduceMotion); persist(); voiceAfterRun(save, audio, toast, persist); hub2.retain.checkAch(); audio.music(false); hub2.addict.renderResultNudge(r, out.prevPct);
   stopFx(); stopBest(); const cu = n => `+<span data-to="${n}">${n}</span>`;
   const rows = [`<div class="r">${curImg('beats')}${cu(out.beats)} Beats</div>`];
+  if (r.mode === 'daily') { rows.length = 0; rows.push(...dailyResultRows(out, cu, curImg)); }
   if (out.ribbons) rows.push(`<div class="r">${BOW} ${cu(out.ribbons)} Ribbons</div>`);
   if (out.pet) rows.push(`<div class="r">${icon(out.pet.id)}${cu(out.pet.n)} ${PETS.find(p => p.id === out.pet.id).name} fragments</div>`);
   if (out.egg) rows.push(`<div class="r">${icon('egg')}+1 Egg</div>`);
@@ -780,11 +813,13 @@ function showResult() {
     if (fk.length > 1) rows.push(`<div class="r rfr10">${fk.map(id => `<span class="f10" title="${WEAPONS.find(w => w.id === id).name} fragment">${icon(id)}${cu(out.frags[id])}</span>`).join('')} fragments</div>`);
     else for (const id of fk) rows.push(`<div class="r">${icon(id)}${cu(out.frags[id])} ${WEAPONS.find(w => w.id === id).name} fragment</div>`); }
   $('rList').innerHTML = rows.join('');
+  { const old = document.querySelector('.g16-chip'); if (old) old.remove(); const ch = g16 ? resultChipHTML(g16.res, g16.st) : ''; if (ch) $('rList').insertAdjacentHTML('afterend', ch); }
   $('rTitle').textContent = r.mode === 'inv' ? (r.won ? 'THE GIANT SERPENT BOWS!' : 'THE GIANT SERPENT WON') : r.mode === 'pig' ? (r.won ? 'PIGGY BANKS CRACKED!' : 'THE PIGGIES ESCAPED') : r.won ? 'STAGE CLEAR!' : r.name.toUpperCase() + ' WINS';
-  $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.') : `You popped ${r.kills} ${r.kills === 1 ? 'cell' : 'cells'}. ${isUnlocked('stats', save) ? 'Spend your Beats in the hub and try again.' : 'Every pop counts. Try again!'}`;
+  $('rSub').textContent = r.won ? (out.first && r.stage === 1 ? 'Stage select unlocked! Pick any stage you have cleared, or the next one.' : r.name + ' is down.' + (!r.mode && closeCalls() ? (closeCalls() === 1 ? ' One close call!' : ' ' + closeCalls() + ' close calls!') : '')) : `You popped ${r.kills} ${r.kills === 1 ? 'cell' : 'cells'}. ${isUnlocked('stats', save) ? 'Spend your Beats in the hub and try again.' : 'Every pop counts. Try again!'}`;
   $('result').classList.toggle('won', !!r.won); { const cc = closeCall(r); $('result').classList.toggle('close', !!cc); if (cc) { $('rTitle').textContent = cc.title; $('rSub').textContent = cc.sub; } }
   announce((r.won ? 'Stage clear. ' : 'Game over. ') + $('rTitle').textContent + '. ' + r.kills + (r.kills === 1 ? ' cell' : ' cells') + ' popped, ' + out.beats + ' beats earned.');
   if (r.hard) hard = true;
+  if (r.won) riskPick = null; { const rl = riskLine(r); if (rl) $('rSub').textContent = rl + ' ' + $('rSub').textContent; }
   { const nmz = {}; for (const w of WEAPONS) nmz[w.id] = w.name; $('rHint').textContent = deathCoach(r, save) || lossHint(r, save.loadout, nmz); }
   if (out.levelUps) rows.push(`<div class="r">⭐ Level ${levelInfo(save.xp).lv}!</div>`);
   const li1 = levelInfo(save.xp), reduce = save.settings.reduceMotion;
@@ -796,15 +831,20 @@ function showResult() {
   $('rList').innerHTML = rows.join(''); countUp($('rList'), reduce, () => audio.play('countend'), f => audio.play('count', { f }));
   for (const el of $('rList').children) el.classList.add('got');
   progMeter($('rLevel'), !r.won && !r.mode && !r.hard ? Math.floor((r.progress || 0) * 100) : null, out.prevPct || 0, reduce);
-  const pigRun = r.mode === 'pig' || r.mode === 'inv', nextOk = !pigRun && r.won && canPlay(save, r.stage + 1);
+  const pigRun = r.mode === 'pig' || r.mode === 'inv', nextOk = !pigRun && r.mode !== 'daily' && r.won && canPlay(save, r.stage + 1);
   $('rNext').style.display = nextOk ? '' : 'none'; $('rNext').classList.toggle('pulse', nextOk);
   $('rNext').onclick = () => { audio.play('click'); clearStickerPop(); beginStage(r.stage + 1); };
   $('rRetry').innerHTML = 'RETRY <span class="rcost">⚡' + ENERGY_COST + '</span>';
   { let gl = nextGoal(save); if (gl && !isTabUnlocked(gl.tab, save)) gl = null; renderGoal($('rGoal'), gl, () => { audio.play('click'); if (gl) openHub(gl.tab); }); }
-  $('rShare').onclick = () => { audio.play('click'); shareResult(shareText(r, r.mode ? '' : stageInfo(r.stage).name, location.origin + location.pathname), toast); };
+  { const bt = buildTraits(g.weap, g.ups, save.loadout, r.picks), bn = buildName(bt), brec = r.mode ? null : recordBuild(save, bn), bel = $('rBuild');   // b16e: the run's build name
+    if (bel) { bel.hidden = !!r.mode; bel.innerHTML = r.mode ? '' : `<small>BUILD</small><b>${bn}</b>${brec && brec.fresh ? '<em>NEW</em>' : ''}`; bel.title = buildTagline(bt); bel.classList.toggle('fresh', !!(brec && brec.fresh)); }
+    if (brec && brec.fresh) persist();
+    const txt = shareText(r, r.mode ? '' : stageInfo(r.stage).name, location.origin + location.pathname), sk = stageInfo(r.stage).skin;
+    $('rShare').onclick = () => { audio.play('click'); const info = { name: r.mode ? 'Cell Serpent' : bn, tagline: buildTagline(bt), weapons: topWeapons(bt, 4), r, stageName: r.mode ? '' : stageInfo(r.stage).name, skin: sk, url: location.host + location.pathname };
+      shareCard(info, iconURL, (r.mode ? '' : bn + '. ') + txt, toast).then(res => { if (res === 'fail') shareResult(txt, toast); }).catch(() => shareResult(txt, toast)); }; }
   $('rRetry').style.display = pigRun ? 'none' : '';
   $('rRetry').onclick = () => { audio.play('click'); clearStickerPop(); try { retryFly($('rRetry'), rewardSnaps($('rList')), !!(save.settings.reduceMotion || systemReduceMotion())); } catch (e) { /* cosmetic */ } beginStage(r.stage); };
-  $('rHub').onclick = () => { audio.play('click'); curtainClose(document.documentElement.classList.contains('rm'), () => { clearStickerPop(); const fl = rewardSnaps($('rList')); flyRibbonsHome(fl.length); if (!pigRun) sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; gigFlies(fl.map(it => ({ snap: it.s, kind: it.kind, amt: it.n })), 420); openHub('Battle'); }); };   // the hub pills wait at their old totals and count up as each chip lands (batch 7)
+  $('rHub').onclick = () => { audio.play('click'); curtainClose(document.documentElement.classList.contains('rm'), () => { clearStickerPop(); const fl = rewardSnaps($('rList')); flyRibbonsHome(fl.length); if (!pigRun && r.mode !== 'daily') sel = r.won ? Math.min(r.stage + 1, save.cleared + 1) : r.stage; gigFlies(fl.map(it => ({ snap: it.s, kind: it.kind, amt: it.n })), 420); openHub('Battle'); }); };   // the hub pills wait at their old totals and count up as each chip lands (batch 7)
   { const st = r.stars || 0; $('rStars').innerHTML = r.won && !r.mode && !r.hard ? [1, 2, 3].map(i => `<span class="${i <= st ? '' : 'off'}">★</span>`).join('') : '';
     if ($('rStars').children.length) revealStars($('rStars'), st, i => { audio.play('star' + Math.min(3, i + 1)); if (i === st - 1 && !reduce) confetti($('result'), st === 3 ? 30 : st === 2 ? 18 : 10); }, reduce);
     const mm = Math.floor((r.time || 0) / 60), ss = String(Math.floor((r.time || 0) % 60)).padStart(2, '0');
@@ -819,6 +859,7 @@ function showResult() {
   if (r.won && (out.first || out.starsGained > 0)) setTimeout(() => audio.play('stinger'), 200); else if (r.won && r.mode) audio.play('win');
   if (!r.mode) { const wsk = stageInfo(r.stage).skin, wn = !!r.won; setTimeout(() => { if (mode === 'over' && $('result').classList.contains('on')) audio.play('worldmotif', { skin: wsk, won: wn }); }, wn ? 900 : 450); }   // b14e: a short motif per world
   try { dressDuo($('rImg'), { outfit: wornOutfit(save), pets: save.petEquip, kit, mood: r.won ? 'win' : 'lose', joy: Object.fromEntries(save.petEquip.map(id => [id, save.pets[id].joy || 0])) }); } catch (e) { /* ignore */ }
+  if (r.mode === 'daily') { try { dailyAfterResult(dchCtx, r, out); } catch (e) { /* cosmetic */ } }
   show('result'); mode = 'over';
 }
 
@@ -853,6 +894,7 @@ function drain(game, sound) {
     if (sound && e.t === 'stage' && game.skin) e.skin = game.skin;   // the stage card sting is per species
     if (sound && (e.t === 'snack' || e.t === 'snackget' || e.t === 'snackgone' || e.t === 'startle' || e.t === 'ringskip')) audio.play(e.t === 'snack' ? 'snackdrop' : e.t, e);
     if (sound && (e.t === 'mirror' || e.t === 'beatrun' || e.t === 'btwist')) audio.play(e.t, e);
+    if (sound && (e.t === 'rhy' || e.t === 'rdrop' || e.t === 'rdropend' || e.t === 'rchorus')) { audio.play(e.t, e); if (e.t === 'rdrop') buzz([30, 30, 60]); }   // b16a rhythm core
     if (sound && (e.t === 'bell' || (e.t === 'trait' && !e.warn))) audio.play(e.t === 'bell' ? 'bellring' : 'traitcue', e);
     if (!sound) continue;
     if (FX_SOUND.has(e.t)) audio.play(SFX[e.t] || e.t, e); else if (e.t === 'pet') audio.play(PETSND[e.id] || 'chirp');
@@ -882,6 +924,7 @@ function frame(now) {
   if (mode === 'play') {
     clk.feed(dt, R.timeScale());   // slow motion on the last cell / boss face
     while (clk.take()) { step(g, 1 / 60, readInput()); if (g.phase === 'levelup' || g.phase === 'dead' || g.phase === 'won') { clk.drop(); break; } }   // never bank time while the sim waits (cards, game over)
+    { const nm = nmWatch(g); if (nm) { g.events.push({ t: 'nearmiss', gap: nm, x: nmState().x, y: nmState().y }); buzz([18, 40, 18]); } }   // b16d: close call moment
     if (g.phase === 'levelup' && cardsFor !== g.choices) showCards();
     if (g.phase === 'dead' || g.phase === 'won') { endT += dt; if (endT > (g.phase === 'dead' ? 1.1 : 0.5) && !(g.phase === 'won' && R.clearBusy())) { if (g.phase === 'dead' && g.revivesLeft > 0 && !reviveAsked && !(!isUnlocked('sparkles', save) && save.sparkles < reviveCost(g.revivesUsed))) showRevive();   /* b13a: a fresh account with no Sparkles skips the revive card it cannot use */ else if (!reviveAsked) showResult(); } }
     if (watchGroove(g.groove) < 0) audio.play('groovelost');
@@ -900,7 +943,7 @@ $('resumeBtn').onclick = () => resume();
 $('pStats').onclick = () => { audio.play('click'); showStatsFromPause(); };
 $('pSet').onclick = () => { audio.play('click'); openSettings(() => show('pause')); };
 const quitNow = () => {
-  g.p.hp = 0; g.phase = 'dead';
+  psQuit(); g.p.hp = 0; g.phase = 'dead';
   g.result = quitResult(g);
   showResult();
 };
