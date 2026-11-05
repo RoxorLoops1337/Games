@@ -61,6 +61,8 @@ import { createSheets, chipRow, hatchBurst, skillRank, petRarity, PET_RARITY, is
 import { swapSheet, rarityChip } from './loadout_ux.js';
 import { fitTags, collectionHTML, hatchRays } from './skillpets8.js';
 import { hatchTag } from './pets_b10.js';
+import { petSetsStripHTML, petSetWoke } from './sets_b16h.js';
+import { petWakeBanner, petStars } from './sets_ui_b16h.js';
 import { tileA11y, skillTileLabel, petTileLabel, masteryMark, petOnTile, collectionCelebrate, joyBadge } from './pets_b9.js';
 import { collectFly, hardLevel, snap } from './gig_fx.js';
 import { BOW, paintRibbonChip, holdRibbons, releaseRibbons, flyRibbons, momentEvent, bestMoment, showMoment } from './result_b8.js';
@@ -464,6 +466,7 @@ function renderPets() {
   };
   eggNudge(egg, save); list.appendChild(egg);
   list.insertAdjacentHTML('beforeend', collectionHTML(save));
+  if (PETS.some(p => save.pets[p.id].star > 0)) { const ps = document.createElement('div'); ps.className = 'petsets'; ps.innerHTML = petSetsStripHTML(petStars(save), icon); ps.addEventListener('click', ev => { const c = ev.target.closest('.pschip'); if (!c) return; audio.play('click'); sheets.petSheet(c.dataset.pet); }); list.appendChild(ps); }   // b16 h
   collectionCelebrate(save, list.lastElementChild, (tier, el) => { audio.play('levelup'); toast(tier === 'perfect' ? 'Full house! Every friend shines' : 'Everyone is home!'); if (!systemReduceMotion()) hatchBurst(el, '#ffd24a', tier === 'perfect' ? 3 : 2, false); });
   { const rdy = PETS.filter(p => petCanUp(save, p.id)).length; if (save.eggs > 1 || rdy) { const row = document.createElement('div'); row.className = 'refrow'; row.style.justifyContent = 'center'; row.style.gap = '10px'; if (save.eggs > 1) { const b = document.createElement('button'); b.className = 'btn small alt'; b.textContent = 'HATCH ALL (' + save.eggs + ')'; b.onclick = () => { const res = hatchAll(save); if (res.length) { persist(); audio.play('levelup'); refreshCur(); toast(res.length + ' eggs hatched'); renderHub(); } }; row.appendChild(b); } if (rdy) { const b = document.createElement('button'); b.className = 'btn small gold'; b.textContent = 'STAR UP ALL (' + rdy + ')'; b.onclick = () => { if (upgradePetsAll(save)) { persist(); audio.play('upgrade'); renderHub(); } }; row.appendChild(b); } list.appendChild(row); } }
   list.appendChild(chipRow(['All', 'Owned', 'Ready'], petFilter, o => { petFilter = o; audio.play('click'); renderPets(); }, { Ready: PETS.filter(p => petCanUp(save, p.id)).length }));
@@ -476,7 +479,7 @@ function renderPets() {
     const starH = Array.from({ length: PET_MAX_STAR }, (_, n) => `<i class="star${n < k.star ? ' on' : ''}">★</i>`).join('');
     const t = tile({ cls: 'coll pet t-weapon' + (eq ? ' on-loadout' : '') + (owned ? '' : ' unowned') + (petCanUp(save, p.id) ? ' ready' : ''), ic: icon(p.id), lock: !owned, name: petLabel(save, p), chip: owned ? (eq ? 'WALKING' : 'AT HOME') : 'NEW', chipCls: owned ? (eq ? 'eq' : '') : 'lock', desc: p.flavor, pips: starH,
       bar: need ? Math.min(100, Math.round((k.frag / need) * 100)) : 100, barText: need ? k.frag + ' / ' + need : '', btn: maxed ? 'FULL STARS' : owned ? 'MORE STARS' : 'WELCOME HOME', disabled: !petCanUp(save, p.id),
-      onclick: () => { if (petUp(save, p.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); } } });
+      onclick: () => { const b4 = petStars(save); if (petUp(save, p.id)) { persist(); audio.unlock(); audio.play('upgrade'); renderHub(); petWakeBanner(petSetWoke(b4, petStars(save)), audio, systemReduceMotion()); } } });
     if (owned) { const e = document.createElement('button'); e.className = 'btn small go alt'; e.textContent = eq ? 'BENCH' : 'WALK WITH ME'; e.onclick = () => { if (togglePet(save, p.id)) { persist(); audio.play('click'); renderHub(); } }; t.appendChild(e); }
     { const rr = petRarity(p.id), ri = PET_RARITY[p.id] || 0; t.style.setProperty('--rc', rr.color); t.classList.add('prar' + ri); t.querySelector('.ds').insertAdjacentHTML('beforebegin', rarityChip(rr, ri)); }
     if (isNewItem(save, 'p', p.id)) t.insertAdjacentHTML('afterbegin', newRibbonHTML);

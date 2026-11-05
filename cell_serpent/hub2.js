@@ -22,6 +22,7 @@ import { ico, iconURL } from './icons.js';
 import { ribIcon, ribHTML, dressIcon, setTint, wardTry, tickTreats, SNACK_DESC } from './shop_b8.js';
 import { emptyCard as emptyCardB8 } from './empty_ux.js';
 import { gearBarHTML } from './pet_detail_b14d.js';
+import { ENCORE_LV, encoreLine, GEAR_SET_STORY } from './sets_b16h.js';
 import { seeded, newSeed, armChest, wasHeld, keepDetailHTML, keepCeremony } from './gear_fx.js';
 import { renderStickerBook } from './sticker_b9.js';
 import { foldTab } from './fold_b12r.js';
@@ -264,7 +265,8 @@ export function createHub2(c) {
         const d = document.createElement('div'); d.className = 'setbox setx' + (full ? ' full' : '');
         d.innerHTML = `<div class="setring"><svg viewBox="0 0 72 72" aria-hidden="true"><circle class="bg" cx="36" cy="36" r="30"/><circle class="fg" cx="36" cy="36" r="30" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/></svg><b>${have}<small>/${members.length}</small></b></div>` +
           `<div class="setinfo"><div class="setn">${set.name}</div><div class="setm">${members.map(k => `<span class="${lvl(k) ? '' : 'off'}" title="${k.name}">${k.icon}<i>${lvl(k) ? '✔' : ''}</i></span>`).join('')}</div>` +
-          `<div class="setb ${full ? 'on' : ''}">${full ? 'ACTIVE: ' : 'Collect all: '}${STAT_TEXT[set.stat](set.val)}</div></div>`;
+          `<div class="setb ${full ? 'on' : ''}">${full ? 'ACTIVE: ' : 'Collect all: '}${STAT_TEXT[set.stat](set.val)}</div>` +
+          `<div class="setenc${members.every(k => lvl(k) >= ENCORE_LV) ? ' on' : ''}">${encoreLine(set.val, set.stat, Math.min(...members.map(k => lvl(k))))}</div><div class="setstory">${GEAR_SET_STORY[set.id] || ''}</div></div>`;
         d.onclick = () => { audio.play('click'); const first = members.find(k => !lvl(k)) || members[0]; openKeep(first); };
         box.appendChild(d);
       }

@@ -4,6 +4,7 @@
 //    The drop is rolled with a seeded random on press, so the glow tells the truth and the open uses the same roll.
 
 // small deterministic random (mulberry32), so a forecast and the real open agree
+import { ENCORE_LV, encoreLine } from './sets_b16h.js';
 export function seeded(seed) {
   let a = seed >>> 0;
   return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -58,7 +59,7 @@ export function keepDetailHTML(k, a, max, STAT_TEXT, KEEPSAKES, KEEP_SETS, owned
     const set = KEEP_SETS.find(x => x.id === k.set), mem = KEEPSAKES.filter(q => q.set === set.id), have = mem.filter(q => owned[q.id] > 0).length, full = have === mem.length;
     setHTML = `<div class="kstrip${full ? ' full' : ''}"><div class="ksn"><b>${set.name}</b><span>${have}/${mem.length}</span></div><div class="ksm">` +
       mem.map(q => `<span class="${owned[q.id] > 0 ? 'own' : ''}${q.id === k.id ? ' me' : ''}" title="${q.name}">${q.icon}</span>`).join('') +
-      `</div><div class="ksb">${full ? 'ACTIVE: ' : 'Collect all: '}${STAT_TEXT[set.stat](set.val)}</div></div>`;
+      `</div><div class="ksb">${full ? 'ACTIVE: ' : 'Collect all: '}${STAT_TEXT[set.stat](set.val)}</div><div class="setenc${mem.every(q => owned[q.id] >= ENCORE_LV) ? ' on' : ''}">${encoreLine(set.val, set.stat, Math.min(...mem.map(q => owned[q.id] || 0)))}</div></div>`;
   }
   return `<div class="kpips" aria-hidden="true">${pips}</div><div class="kst">${cur}</div>${delta}${setHTML}`;
 }
