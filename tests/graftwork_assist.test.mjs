@@ -156,9 +156,9 @@ await t('title: Assist toggle is off by default, remembered in meta.settings.ass
   for (const r of as) assert.ok(!hit(r, RESERVED), r.id + ' clear of reserved zone');
   assert.deepEqual(LAYOUT.findOverlaps().filter((o) => /assist/.test(o.a + o.b)), [], 'no overlaps with the assist row');
   const sx = regs.find((r) => r.id === 'title-assist-gentle'); click(app, sx.x + 5, sx.y + 5); frames(app, 3);
-  assert.equal(meta.settings.assist.gentle, false, 'options toggle independently'); assert.equal(meta.settings.assist.sturdy, true);
+  assert.equal(meta.settings.assist.gentle, true, 'options toggle independently (Gentle foes starts off)'); assert.equal(meta.settings.assist.sturdy, true);
   assert.equal(JSON.parse(JSON.stringify(META.loadMeta ? meta : meta)).settings.assist.on, true);
-  click(app, 232, 628); assert.deepEqual(started[1].assist, { sturdy: true, kind: true, mercy: true });
+  click(app, 232, 628); assert.deepEqual(started[1].assist, { sturdy: true, gentle: true, kind: true, mercy: true });
 });
 await t('title: every option has a plain tooltip text', () => {
   for (const o of ASSIST_OPTIONS) assert.ok(o.text.length > 20 && !/[\u2014\u2013]/.test(o.text));

@@ -344,14 +344,15 @@ export default {
     { const lt = titleName(app.shared.meta); if (S <= 1.2) ny += app.text(lt ? `"${lt}"` : hero.title, X + 112, ny, { size: 14, ui: true, italic: !!lt, color: lt ? COL.lamp : 'rgba(232,220,196,.65)', maxW: IW - 94 }); }
     y = Math.max(y + 80, ny) + 10;
     // hp
-    const bh = Math.max(16, Math.round(13 * Math.min(S, 1.25) * 1.25)), bx = X + 46, bw = IW - 28;
+    const bh = Math.max(16, Math.round(13 * Math.min(S, 1.25) * 1.25), Math.ceil(app.sz(Math.round(13 * Math.min(S, 1.25)), { ui: true, bold: true }) * 1.2) + 2), bx = X + 46, bw = IW - 28;
     drawHeart(g, X + 30, y + bh / 2, 18);
     app.reg('map-hp', bx, y, bw, bh, { group: 'left' });
     app.rr(bx, y, bw, bh, bh / 2); g.fillStyle = '#0e0b0a'; g.fill();
     const k = clamp(run.hp / run.maxHp, 0, 1);
     app.rr(bx, y, Math.max(6, bw * k), bh, bh / 2); g.fillStyle = k < 0.3 ? '#d33' : COL.scar; g.fill();
     app.rr(bx, y, bw, bh, bh / 2); g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = lnw(1.5); g.stroke();
-    app.text(`${run.hp} / ${run.maxHp}`, bx + bw / 2, y + (bh - 13 * Math.min(S, 1.25)) / 2 - 1, { ...cs(13), ui: true, align: 'center', bold: true, shadow: true, fit: { w: bw - 12, h: bh } });
+    { const hpO = { ...cs(13), ui: true, align: 'center', bold: true, shadow: true, fit: { w: bw - 12, h: bh } }, hpT = `${run.hp} / ${run.maxHp}`, hpL = app.layoutText(hpT, hpO);
+      app.text(hpT, bx + bw / 2, y + (bh - hpL.size) / 2 - 1, hpO); }
     if (app.inRect(X + 18, y - 4, IW, bh + 8)) app.tooltip('Health', 'Heal at the Forge. Some events and relics help too.');
     y += bh + 10;
     // gold + deck count
@@ -469,18 +470,24 @@ export default {
     g.strokeStyle = 'rgba(232,220,196,.25)'; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(X + 18, divY); g.lineTo(X + PW - 18, divY); g.stroke(); g.setLineDash([]);
     app.text('SCHOOL RESONANCE', X + 18, divY + 8, { size: 14, ui: true, bold: true, color: COL.lamp });
     const res = RUN.resonance(run);
+    // rows: name over bar when the panel has the room, else name, bar and count on one line (phones inflate the text and the legend eats the height)
+    const SP = Math.min(38, (Y0 + PH - 8 - rs) / 7), nmSz = app.sz(16, { bold: true }), roomy = SP >= Math.ceil(nmSz * 1.2) + 14;
     SCHOOLS_LIST().forEach((s, i) => {
-      const SP = Math.min(38, (Y0 + PH - 8 - rs) / 7), y = rs + i * SP;
+      const y = rs + i * SP;
       const c = res.counts[s.id] || 0, tier = res.tiers[s.id] || 0;
       app.reg('map-school' + i, X + 10, y - 2, PW - 20, SP - 2, { group: 'right' });
       const hov = app.inRect(X + 10, y - 2, PW - 20, SP - 2);
       if (hov) { app.rr(X + 10, y - 2, PW - 20, SP - 2, 6); g.fillStyle = 'rgba(232,220,196,.07)'; g.fill(); }
       g.save(); g.globalAlpha = c ? 1 : 0.55;
-      drawSchoolGlyph(g, s.id, X + 32, y + 10, 11, s.color);
-      app.text(s.name, X + 54, y, { size: 16, bold: true, color: c ? s.color : COL.vellum, fit: { w: 150, h: Math.min(22, SP - 12) } });
-      app.text(String(c), X + PW - 22, y, { size: 18, bold: true, align: 'right', color: tier ? COL.lamp : COL.vellum, fit: { w: 30, h: Math.min(22, SP - 12) } });
+      const rowH = SP - 2, nameW = roomy ? 150 : 84, bx = roomy ? X + 54 : X + 142, bw = roomy ? 190 : PW - 142 - 42 - 8;
+      const nO = { size: 16, bold: true, color: c ? s.color : COL.vellum, fit: { w: nameW, h: Math.min(24, rowH) } }, nL = app.layoutText(s.name, nO);
+      const cO = { size: 18, bold: true, align: 'right', color: tier ? COL.lamp : COL.vellum, fit: { w: 30, h: Math.min(24, rowH) } }, cL = app.layoutText(String(c), cO);
+      const ny = roomy ? y : y - 2 + (rowH - nL.size) / 2 - 1, cy = roomy ? y : y - 2 + (rowH - cL.size) / 2 - 1;
+      drawSchoolGlyph(g, s.id, X + 32, roomy ? y + 10 : y - 2 + rowH / 2, 11, s.color);
+      app.text(s.name, roomy ? X + 54 : X + 48, ny, nO);
+      app.text(String(c), X + PW - 22, cy, cO);
       // bar with ticks at 3 and 6
-      const bx = X + 54, bw = 190, by = y + Math.min(22, SP - 12);
+      const by = roomy ? y + Math.min(22, SP - 12) : y - 2 + rowH / 2 - 4;
       app.rr(bx, by, bw, 8, 4); g.fillStyle = 'rgba(232,220,196,.12)'; g.fill();
       if (c) { app.rr(bx, by, Math.max(8, bw * clamp(c / 6, 0, 1)), 8, 4); g.fillStyle = s.color; g.fill(); }
       for (const t of [3, 6]) {
