@@ -5,6 +5,10 @@ const bareCount = (run) => { let n = 0; for (const i of run.deck) if (i.grafts.l
 // A Bare card re-filed under a fresh uid: Tithe picks cheapest then OLDEST, so the new uid goes to the back of its cost.
 const refile = (run, R, inst) => { const id = inst.id, up = inst.up; R.removeCard(run, inst.uid); R.addCard(run, id); const n = run.deck[run.deck.length - 1]; if (up) R.upgrade(run, n.uid); if (run.flags.mem && run.flags.mem.uid === inst.uid) run.flags.mem.uid = n.uid; };
 // Replace every graft on a card with the same number of random ones.
+// Temper in an event: same rule as engine/cards.js temper() (FUSE_CAP 4). Inlined so this file keeps no imports.
+const FUSE_MAX = 4;
+const canFuse = (i) => i.grafts.length > 0 && (i.fused || []).length + i.grafts.length <= FUSE_MAX;
+const fuseInst = (run, i) => { if (!canFuse(i)) return false; i.fused = [...(i.fused || []), ...i.grafts]; i.grafts = []; if (run.stats) run.stats.tempered = (run.stats.tempered || 0) + 1; return true; };
 const rerollCard = (run, R, inst) => { const n = inst.grafts.length; for (const g of inst.grafts.slice()) R.stripGraft(run, inst.uid, g); let k = 0; for (let j = 0; j < n; j++) if (R.addGraftRandom(run, inst.uid)) k++; return k; };
 
 export const EVENT_LIST = [
@@ -495,6 +499,121 @@ export const EVENT_LIST = [
         apply: (run, R) => { R.gold(run, -80); R.addRelic(run, 'r_shatter_ward'); return 'A thin glass ring, hot from the furnace. -80 gold. "It will break," he says, "later than usual."'; } },
       { label: 'Sweep the shards', text: 'Gain 25 gold.', apply: (run, R) => { R.gold(run, 25); return 'You sweep for an hour. +25 gold. Nobody in the house is cut.'; } },
       leave('He turns back to the furnace and exhales through the pipe.'),
+    ],
+  },
+
+  // =====================================================================
+  // CONTENT WAVE 3 (H3): events that put Temper, Strain, the Thread and Overload into play.
+  // Flags used: debt (shared with the Friendly Lender), spool (charges for the Cursed Spool relic).
+  // =====================================================================
+  {
+    id: 'e_tailor_temper', name: 'The Tailor Who Hammers', act: 0,
+    text: 'A tailor with a cobbler\'s hammer and a mouthful of pins. "Patches come off," he says. "Hammered patches do not. They become the card. Lighter on the books, too. Heavier on the conscience."',
+    choices: [
+      { label: 'Temper a card (45 gold)', text: 'Pay 45 gold. All live grafts on a card are fused into it for good: boons AND prices stay, each weighs 1 less, the card stops being an Overload, and its patch slots empty. Max 4 fused grafts per card.', pick: 'card', pickFilter: canFuse, cond: (run) => run.gold >= 45 && run.deck.some(canFuse),
+        apply: (run, R, inst) => { if (!fuseInst(run, inst)) return 'The hammer finds nothing it can fuse. No charge.'; R.gold(run, -45); return 'Three taps and the patches stop being patches. -45 gold. You cannot strip them now, and he will not refund the Prices.'; } },
+      { label: 'Temper a card (7 max HP)', text: 'Lose 7 max HP. The same Temper, paid in blood.', pick: 'card', pickFilter: canFuse, cond: (run) => run.maxHp > 28 && run.deck.some(canFuse),
+        apply: (run, R, inst) => { if (!fuseInst(run, inst)) return 'The hammer finds nothing it can fuse. No charge.'; R.maxHp(run, -7); return 'He takes the fee from somewhere behind the ribs. -7 max HP. The card is permanent now, and so is the invoice.'; } },
+      leave('"Loose threads are honest," he says, spitting a pin.'),
+    ],
+  },
+  {
+    id: 'e_compound_interest', name: 'Compound Interest', act: 2,
+    text: 'The collector has brought a ledger, a lamp and a second, heavier ledger. "I do not raise interest," he says. "I let it grow." If you owe him nothing, he offers to fix that.',
+    choices: [
+      { label: 'Settle with him in the alley', text: 'Fight a Tax Collector (it also takes gold from Gilded cuts). Win and the debt is cleared; you receive 40 gold up front.', cond: (run) => run.flags.debt > 0,
+        apply: (run, R) => { delete run.flags.debt; R.gold(run, 40); R.queueFight(run, ['tax_collector']); return 'He sets the lamp down carefully, as if it were the dangerous thing. You are paid 40 gold in advance, for the risk.'; } },
+      { label: 'Restructure (-1 Budget)', text: 'The debt is cleared. Lose 1 Budget permanently, which can push grafts into Strain and hurt Bare cards.', cond: (run) => run.flags.debt > 0,
+        apply: (run, R) => { delete run.flags.debt; R.budget(run, -1); return 'He converts what you owe into room you no longer have. -1 Budget. The ledger closes, relieved.'; } },
+      { label: 'Borrow against a graft (100 gold)', text: 'Gain 100 gold and owe 150 later. A normal graft reward screen follows, since you have a plan.', cond: (run) => !run.flags.debt,
+        apply: (run, R) => { run.flags.debt = 150; R.gold(run, 100); R.queueGraftPick(run); return 'He writes 150 and underlines it twice. +100 gold. Then he holds the door for your next stitch.'; } },
+      leave('He adds a line to the heavier ledger. It grows slightly.'),
+    ],
+  },
+  {
+    id: 'e_seamstress_move', name: 'The Seamstress of Second Thoughts', act: 1,
+    text: 'She works at a window with the light behind her. "Grafts are not tattoos," she says. "They can be moved. Mind where. A card with one graft already has ideas of its own."',
+    choices: [
+      { label: 'Move a graft (15 gold)', text: 'Pay 15 gold. Move the last graft of a grafted card onto the card with the most grafts that still has room. The source may become Bare and open to the Tithe.', pick: 'card', pickFilter: grafted, cond: (run) => run.gold >= 15 && run.deck.some(grafted) && run.deck.length > 1,
+        apply: (run, R, inst) => {
+          const gid = inst.grafts[inst.grafts.length - 1];
+          const cands = run.deck.filter((i) => i.uid !== inst.uid && i.grafts.length < 2 && !i.id.startsWith('j_')).sort((a, b) => b.grafts.length - a.grafts.length);
+          const dest = cands.find((i) => R.moveGraft(run, inst.uid, i.uid, gid));
+          if (!dest) return 'She holds it up to the light, finds no card that will have it, and hands it back. No charge.';
+          R.gold(run, -15); return 'She lifts it with two pins and sets it down in a new place. -15 gold. Its Price came with it; its Weight too.';
+        } },
+      { label: 'Move a graft (6 HP)', text: 'Lose 6 HP. The same move, paid in blood.', pick: 'card', pickFilter: grafted, cond: (run) => run.hp > 10 && run.deck.some(grafted) && run.deck.length > 1,
+        apply: (run, R, inst) => {
+          const gid = inst.grafts[inst.grafts.length - 1];
+          const cands = run.deck.filter((i) => i.uid !== inst.uid && i.grafts.length < 2 && !i.id.startsWith('j_')).sort((a, b) => b.grafts.length - a.grafts.length);
+          const dest = cands.find((i) => R.moveGraft(run, inst.uid, i.uid, gid));
+          if (!dest) return 'She holds it up to the light, finds no card that will have it, and hands it back. No charge.';
+          R.hurt(run, 6); return 'She works without anaesthetic, yours or the card\'s. -6 HP. The graft sits in its new home like a guest.';
+        } },
+      leave('"Think about it," she says. "Everything does."'),
+    ],
+  },
+  {
+    id: 'e_school_mirror', name: 'The Mirror That Agrees', act: 3,
+    text: 'A tall mirror in the wings, stitched along its frame. It does not show your face. It shows your hand, holding a card, and then a second hand, holding the same card with the same school on it.',
+    choices: [
+      { label: 'Copy a graft (8 HP)', text: 'Lose 8 HP. Copy the last graft of a grafted card onto the first Bare card that accepts it. The copy weighs the same and carries the same Price, so Strain may follow.', pick: 'card', pickFilter: grafted, cond: (run) => run.hp > 12 && run.deck.some(grafted),
+        apply: (run, R, inst) => {
+          const gid = inst.grafts[inst.grafts.length - 1];
+          const bare = run.deck.filter((i) => i.uid !== inst.uid && i.grafts.length === 0 && !(i.fused && i.fused.length) && !i.id.startsWith('j_'));
+          for (const b of bare) { const r = R.addGraft(run, b.uid, gid); if (r && r.ok) { R.hurt(run, 8); return 'The reflection leans out and sews. A second card now carries the same school. -8 HP. It agrees with everything you said.'; } }
+          return 'The mirror looks over your Bare cards and finds none that will wear it. It shows you your own face instead. No charge.';
+        } },
+      { label: 'Take a shard (+35 gold, -3 max HP)', text: 'Gain 35 gold. Lose 3 max HP.', cond: (run) => run.maxHp > 24,
+        apply: (run, R) => { R.gold(run, 35); R.maxHp(run, -3); return 'A shard comes away in your hand and cuts something that is not your hand. +35 gold, -3 max HP.'; } },
+      leave('The mirror shows you leaving. It rehearses it twice.'),
+    ],
+  },
+  {
+    id: 'e_cursed_spool', name: 'A Spool That Hums', act: 0,
+    text: 'A wooden spool on a windowsill, wound with thread the colour of old bruises. It is warm. When you pick it up it pays out into your palm, then pays again, like a stitch repeated. The label says: NEXT FIGHT ONLY. THE FIGHT AFTER THAT, ASK THE FIGHT BEFORE.',
+    choices: [
+      { label: 'Wind it once (6 HP)', text: 'Lose 6 HP. Gain the relic Cursed Spool if you lack it, plus 1 charge: in your NEXT combat every Thread payout is paid twice.', cond: (run) => run.hp > 10,
+        apply: (run, R) => { R.hurt(run, 6); R.addRelic(run, 'r_cursed_spool'); run.flags.spool = (run.flags.spool | 0) + 1; return 'The spool takes six HP and starts to hum. One fight, double the payouts. It will not say what the second fight costs.'; } },
+      { label: 'Wind it twice (13 HP, 1 max HP)', text: 'Lose 13 HP and 1 max HP. Gain the relic if you lack it, plus 2 charges: your next two combats pay every Thread payout twice.', cond: (run) => run.hp > 18 && run.maxHp > 24,
+        apply: (run, R) => { R.hurt(run, 13); R.maxHp(run, -1); R.addRelic(run, 'r_cursed_spool'); run.flags.spool = (run.flags.spool | 0) + 2; return 'It hums like a kettle that wants something. Two fights of double payouts, for 13 HP and a little more.'; } },
+      { label: 'Sell it (25 gold)', text: 'Gain 25 gold.', apply: (run, R) => { R.gold(run, 25); return 'The pawnbroker holds it with tongs. +25 gold. He does not ask where you got it.'; } },
+      leave('The spool pays out into thin air for a while, then stops, offended.'),
+    ],
+  },
+  {
+    id: 'e_cloakroom', name: 'The Cloakroom', act: 1,
+    text: 'An attendant behind a counter of numbered hooks. "Check anything," she says, "for a fee in your favour." She eyes your deck the way a bank eyes an empty pocket. "Travel light and I will tip you."',
+    choices: [
+      { label: 'Check a graft (+35 gold)', text: 'Remove the last graft of a grafted card. Gain 35 gold. The graft is gone for good.', pick: 'card', pickFilter: grafted, cond: (run) => run.deck.some(grafted),
+        apply: (run, R, inst) => { R.stripGraft(run, inst.uid, inst.grafts[inst.grafts.length - 1]); R.gold(run, 35); return 'She hangs it on hook 9 and hands you a ticket she then eats. +35 gold. The weight is off your back and the boon with it.'; } },
+      { label: 'Travel light (no Strain)', text: 'Needs zero Strain. Gain a random potion and 10 gold. If you are Strained, she sniffs and gives you nothing.',
+        apply: (run, R) => { const s = R.strainOf(run); if (s.strain > 0) return 'Strain ' + s.strain + '. "Not light," she says, and turns a page. Nothing.'; R.addPotion(run, null); R.gold(run, 10); return 'You are light, she says. A potion and 10 gold are your tip.'; } },
+      leave('She hands your absent coat back to you anyway.'),
+    ],
+  },
+  {
+    id: 'e_proof_house', name: 'The Proof House', act: 3,
+    text: 'A concrete room where things are made to fail on purpose. A rack of Overloaded cards hums on a bench. An inspector in goggles says "Third graft, is it? I can certify it or I can break it. You choose which of us gets the surprise."',
+    choices: [
+      { label: 'Certify it (Temper, 6 HP)', text: 'Lose 6 HP. Temper a card with 3 grafts: it is no longer an Overload (no x1.5, no Shatter roll) and its grafts fuse for good.', pick: 'card', pickFilter: (i) => i.grafts.length === 3 && canFuse(i), cond: (run) => run.hp > 10 && run.deck.some((i) => i.grafts.length === 3 && canFuse(i)),
+        apply: (run, R, inst) => { if (!fuseInst(run, inst)) return 'The stamp bounces off. No charge.'; R.hurt(run, 6); return 'He stamps it SAFE and the stamp hurts you instead. -6 HP. The card holds, and now it cannot let go.'; } },
+      { label: 'Break-test it (50%)', text: 'Pick a card with 3 grafts. 50%: it survives and you gain 90 gold. 50%: it Shatters (destroyed) and you gain 1 Budget.', pick: 'card', pickFilter: (i) => i.grafts.length === 3, cond: (run) => run.deck.some((i) => i.grafts.length === 3),
+        apply: (run, R, inst) => { if (R.rng(run).chance(0.5)) { R.gold(run, 90); return 'It takes the load and hums. He pays 90 gold for the data. You keep the card.'; } R.shatter(run, inst.uid); R.budget(run, 1); return 'It goes with a high note. The card is destroyed. +1 Budget, as the weight leaves with the glass.'; } },
+      leave('"Come back when it has failed once," he says, to the bench.'),
+    ],
+  },
+  {
+    id: 'e_cross_loom', name: 'The Cross-Loom', act: 2,
+    text: 'A loom the size of a doorway, threaded in two colours at once. A weaver feeds it your cards one at a time. "Single colour is sturdy," she says. "Two colours is interesting. Interesting is how you get a Line of five."',
+    choices: [
+      { label: 'Weave a random graft (6 HP)', text: 'Lose 6 HP. Add one random graft to a card that already has exactly 1 graft. It may bridge two schools. The Weight is real.', pick: 'card', pickFilter: (i) => i.grafts.length === 1, cond: (run) => run.hp > 10 && run.deck.some((i) => i.grafts.length === 1),
+        apply: (run, R, inst) => { const g = R.addGraftRandom(run, inst.uid); if (!g) return 'Nothing in the basket fits this card. No charge.'; R.hurt(run, 6); return 'The shuttle goes through twice. The card now wears a second colour. -6 HP.'; } },
+      { label: 'Commission a pattern (45 gold)', text: 'Pay 45 gold. A normal graft reward screen follows.', cond: (run) => run.gold >= 45,
+        apply: (run, R) => { R.gold(run, -45); R.queueGraftPick(run); return 'She names a price and a pattern, in that order. -45 gold. A graft follows.'; } },
+      { label: 'Sell your offcuts (+30 gold)', text: 'Gain 30 gold and lose 4 HP to the shuttle.', cond: (run) => run.hp > 8,
+        apply: (run, R) => { R.gold(run, 30); R.hurt(run, 4); return 'You sweep the offcuts into her palm. +30 gold, -4 HP.'; } },
+      leave('The loom keeps weaving without you, in two colours, with feeling.'),
     ],
   },
 ];

@@ -582,9 +582,9 @@ function enemyPose(ed) {
   ed.lunge = 0; a.phase = 'idle'; a.k = 0;
 }
 function drawEnemyJ(ctx, ed, def, x, y) {
-  const a = ed.anim, sy = 1 + a.sq, sx = 1 / sy;
+  const a = ed.anim, idl = rmotion() || ed.dying > 0 ? 0 : Math.sin((S.t + ed.phase) * 2.1) * 0.014, sy = 1 + a.sq + idl, sx = 1 / (1 + a.sq) * (1 - idl * 0.6);
   ctx.save();
-  if (a.sq) { ctx.translate(x, y); ctx.scale(sx, sy); ctx.translate(-x, -y); }
+  if (a.sq || idl) { ctx.translate(x, y); ctx.scale(sx, sy); ctx.translate(-x, -y); }
   drawEnemy(ctx, def, x, y, { scale: ed.scale, t: S.t + ed.phase, hurt: ed.hurt, dying: ed.dying, attack: ed.lunge, st: ed.st, atk: ed.atk, state: a, hpFrac: a.hpFrac === undefined ? 1 : a.hpFrac });
   if (a.seamLit > 0) J.drawSeams(ctx, x, y, ed.w, ed.h, a.seamLit, S.t, 1 - ed.dying);
   ctx.restore();
@@ -810,7 +810,7 @@ function layoutHand(app, d) {
     let tx = sl.x, ty = sl.y, ts = sl.s, tr = sl.rot;
     if (hi >= 0 && i !== hi && !dr) { const dist = Math.abs(i - hi); const push = dist === 1 ? 70 : dist === 2 ? 30 : dist === 3 ? 10 : 0; tx += Math.sign(i - hi) * push; }
     if (!isDrag && dc.uid === S.sel) { tx = clamp(sl.x, pv ? 130 : 140, pv ? 1150 : 1140); ty = pv ? L.PREVIEW_Y : L.SEL_Y; ts = pv ? L.PREVIEW_S : L.SEL_S; tr = 0; }
-    else if (!isDrag && dc.uid === S.hov) { tx = clamp(sl.x, 140, 1140); ty = L.HOVER_Y; ts = L.HOVER_S; tr = 0; }
+    else if (!isDrag && dc.uid === S.hov) { tx = clamp(sl.x, 245, 975); ty = L.HOVER_Y; ts = L.HOVER_S; tr = 0; } // clear of the energy orb and End Turn
     dc.tx = tx; dc.ty = ty; dc.ts = ts; dc.trot = tr;
     if (isDrag) stepDrag(dc, dr, d, m, rm);
     else if (dc.fly) {
@@ -1499,16 +1499,25 @@ function drawPlayZone(app) {
   app.text(on ? 'Release to play' : 'Drag up to play', W / 2, PLAY_LINE - 28, { size: 18, ui: true, align: 'center', color: on ? COL.lamp : 'rgba(232,220,196,.5)' });
   ctx.restore();
 }
+const HERO_SCALE = 1.12;
+// soft ground shadow: a radial gradient squashed into an ellipse (no hard edge), rx = half width
+function groundShadow(ctx, x, y, rx, a) {
+  const ry = Math.max(10, rx * 0.26);
+  ctx.save(); ctx.translate(x, y); ctx.scale(1, ry / rx);
+  const g = ctx.createRadialGradient(0, 0, rx * 0.1, 0, 0, rx);
+  g.addColorStop(0, `rgba(0,0,0,${0.55 * a})`); g.addColorStop(0.6, `rgba(0,0,0,${0.28 * a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rx, 0, 6.283); ctx.fill(); ctx.restore();
+}
 function drawHeroAndHud(app) {
   const ctx = app.ctx, P = S.P;
   // shadow
-  ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(HERO_X, FOOT_Y + 4, 70, 12, 0, 0, 6.283); ctx.fill(); ctx.restore();
+  groundShadow(ctx, HERO_X, FOOT_Y - 2, 90, 1.25);
   const lunge = P.attack > 0 ? Math.sin(Math.min(1, P.attack / 2) * Math.PI) : 0;
   const hx = HERO_X + lunge * 34 - (S.heroKick || 0) * 14;
   const dying = S.ending && !S.ending.win ? P.dying : 0;
   ctx.save();
   if (dying) ctx.globalAlpha = 1 - dying * 0.6;
-  drawHero(ctx, S.run.hero, hx, FOOT_Y + dying * 24, { scale: 1, t: S.t, hurt: P.hurt, attack: lunge, dying });
+  drawHero(ctx, S.run.hero, hx, FOOT_Y + dying * 24, { scale: HERO_SCALE, t: S.t, hurt: P.hurt, attack: lunge, dying });
   ctx.restore();
   drawHeroPlate(app, P, HEROES[S.run.hero].name, S.t, S.dgr && S.dgr.on ? { pulse: S.dgr.pulse, level: S.dgr.level, rm: FX_OPTS.reduced || rmotion() } : null); // hp bar, block and statuses inside the hero-plate rect (combat_layout HERO_PLATE)
 }
@@ -1536,7 +1545,7 @@ function drawEnemies(app, tgtMode) {
       ctx.restore();
     }
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(ed.x, EF + 4, ed.w * 0.42, 10, 0, 0, 6.283); ctx.fill();
+    groundShadow(ctx, ed.x, EF - 2, Math.max(50, ed.w * 0.68), 1.25);
     const stun = ed.stunT > 0 ? Math.sin(S.t * 60) * 4 * ed.stunT : 0;
     const x = ed.x - ed.lunge * 46 * ed.scale + ed.kick * 12 + stun;
     drawEnemyJ(ctx, ed, def, x, EF + drop);
@@ -1636,20 +1645,30 @@ function drawTopBar(app) {
   if (app.button('Deck', L.DECK_BTN.x, L.DECK_BTN.y, L.DECK_BTN.w, L.DECK_BTN.h, { size: 18 })) { const f = app.shared.flow; if (f && f.openDeck) f.openDeck(); }
 }
 
+const PILE_LABEL = { draw: 'DRAW', disc: 'DISCARD', exh: 'EXH' };
 function pileStack(app, pos, count, s, label, key, onClick) {
-  const ctx = app.ctx;
-  const pulse = 1 + S.pulse[key] * 0.18;
+  const ctx = app.ctx, pl = S.pulse[key] || 0;
+  const bw = CARD_W * s, bh = CARD_H * s;
+  const pulse = 1 + pl * 0.18;
   const layers = Math.min(3, Math.ceil(count / 6));
+  // recessed slot under every pile so an empty one still reads as a place, not a gap
+  ctx.save(); ctx.translate(pos.x, pos.y);
+  app.rr(-bw / 2 - 5, -bh / 2 - 5, bw + 10, bh + 10, 8); ctx.fillStyle = 'rgba(8,6,6,.55)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = count ? 'rgba(232,220,196,.35)' : 'rgba(232,220,196,.25)'; ctx.setLineDash(count ? [] : [5, 4]); ctx.stroke(); ctx.setLineDash([]);
+  if (pl > 0) { ctx.shadowColor = COL.lamp; ctx.shadowBlur = 22 * pl; ctx.strokeStyle = rgba(COL.lamp, 0.9 * pl); ctx.lineWidth = 3; app.rr(-bw / 2 - 5, -bh / 2 - 5, bw + 10, bh + 10, 8); ctx.stroke(); }
+  ctx.restore();
   ctx.save(); ctx.translate(pos.x, pos.y); ctx.scale(pulse, pulse);
-  if (count === 0) { ctx.globalAlpha = 0.25; ctx.strokeStyle = COL.vellum; ctx.setLineDash([6, 5]); ctx.lineWidth = 2; ctx.strokeRect(-CARD_W * s / 2, -CARD_H * s / 2, CARD_W * s, CARD_H * s); }
+  if (count === 0) { drawCardBack(ctx, 0, 0, { scale: s, alpha: 0.16 }); }
   else for (let i = layers - 1; i >= 0; i--) drawCardBack(ctx, -i * 2, -i * 2.5, { scale: s });
   ctx.restore();
-  const bw = CARD_W * s, bh = CARD_H * s;
-  // count badge on the top right corner of the pile (inside the registered rect, clear of the screen edge)
-  const bx = pos.x + bw / 2 - 1, by = pos.y - bh / 2 + 11;
-  ctx.save(); ctx.fillStyle = 'rgba(14,12,10,.92)'; ctx.strokeStyle = COL.vellum; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(bx, by, 14, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
-  app.text(String(count), bx, by - 8, { size: 15, bold: true, ui: true, align: 'center', fixed: true });
-  const R = { x: pos.x - bw / 2 - 2, y: pos.y - bh / 2 - 3, w: bw + 20, h: bh + 3 };
+  // label ribbon across the lower part of the pile
+  const fs = 14, ly = Math.min(pos.y + bh / 2 - fs - 6, H - fs - 6);
+  ctx.save(); ctx.fillStyle = 'rgba(10,8,8,.82)'; ctx.fillRect(pos.x - bw / 2, ly - 2, bw, fs + 6); ctx.restore();
+  app.text(PILE_LABEL[key] || label, pos.x, ly, { size: fs, bold: true, ui: true, align: 'center', color: count ? COL.vellum : 'rgba(232,220,196,.55)', fixed: true });
+  // count badge on the top right corner of the pile (inside the registered rect, clear of the screen edge), bumps when cards arrive
+  const bx = pos.x + bw / 2 - 1, by = pos.y - bh / 2 + 11, br = 15 + pl * 4;
+  ctx.save(); ctx.fillStyle = count ? 'rgba(14,12,10,.95)' : 'rgba(14,12,10,.7)'; ctx.strokeStyle = pl > 0 ? COL.lamp : count ? COL.vellum : 'rgba(232,220,196,.4)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(bx, by, br, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
+  app.text(String(count), bx, by - 9, { size: 16 + Math.round(pl * 3), bold: true, ui: true, align: 'center', fixed: true, color: count ? '#fff' : 'rgba(232,220,196,.6)' });
+  const ry0 = Math.max(pos.y - bh / 2 - 5, L.ORB.y + L.ORB.size / 2 + 1), R = { x: pos.x - bw / 2 - 5, y: ry0, w: bw + 24, h: H - ry0 };
   app.reg('pile_' + key, R.x, R.y, R.w, R.h, {});
   if (app.inRect(R.x, R.y, R.w, R.h)) {
     app.cursor = 'pointer'; queueTip(app, 'pile' + key + count, [[{ title: label, text: `${count} card${count === 1 ? '' : 's'}.\nClick or press Q to view.`, color: COL.vellum, glyph: 'square' }]], R);
@@ -1709,7 +1728,12 @@ function drawCardInfo(app) {
       const stack = cardTipStack(spec, S.c, { tithed: !!dc.w.tithed, target: l.length === 1 ? l[0].e : null });
       const extra = cardSections(spec, dc.w, dc).filter((x) => /weight|^Price|^Jammed/.test(x.title)).map((x) => ({ title: x.title, text: x.text, color: x.color, glyph: 'hex' }));
       if (extra.length) { if (stack.length < 2) stack.push(extra.slice(0, 3)); else stack[1] = stack[1].concat(extra).slice(0, 4); }
-      if (stack.length) { const r = dcRect(dc); queueTip(app, 'card:' + dc.uid + ':' + (dc.w.tithed ? 1 : 0), stack, { x: r.x, y: r.y, w: r.w, h: r.h }); }
+      if (stack.length) {
+        const r = dcRect(dc), right = r.x + r.w + 8 + 320 <= L.END_BTN.x - 6;
+        // keyword panels live in the hand band (below the Thread rail, beside the lifted card), never over the rail, End Turn or the enemies
+        const band = { x: right ? r.x + r.w + 8 : r.x - 8, y: L.SEAM.y + L.SEAM.h + 8, bottom: H - 6, dir: right ? 1 : -1 };
+        queueTip(app, 'card:' + dc.uid + ':' + (dc.w.tithed ? 1 : 0), stack, { x: r.x, y: r.y, w: r.w, h: r.h, band });
+      }
     }
   }
   drawPopovers(app);

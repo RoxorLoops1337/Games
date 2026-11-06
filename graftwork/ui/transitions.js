@@ -273,7 +273,10 @@ export function drawTransitions(app) {
   }
   if (T.intro) { stepIntro(app, T, dt); if (T.intro) drawIntro(app, T.intro); }
   if (T.phase) { T.phase.t += dt; if (T.phase.t >= T.phase.life) T.phase = null; else drawPhase(app, T.phase); }
-  if (!T.wipe) capture(app, T); // the next transition wipes away this frame
+  // The next transition wipes away this frame. A full-canvas copy every frame was the top CPU hotspot (software canvases: 10+ ms),
+  // so copy every 4th frame, and every frame while the player is pressing/typing (when a screen change is about to happen).
+  const m = app.mouse;
+  if (!T.wipe && (!T.haveSnap || (app.frame & 3) === 0 || (m && (m.down || m.pressed || m.released)) || (app.pressedKeys && app.pressedKeys.length))) capture(app, T);
 }
 export function busy(app) { const T = app.tr; return !!(T && (T.wipe || T.intro || T.phase)); }
 

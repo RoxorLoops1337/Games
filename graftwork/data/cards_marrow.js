@@ -3,6 +3,11 @@
 // Statuses used here (scar, rustplate, anticoag, bloodrite) live in statuses_marrow.js.
 const bleedOf = { per: 'st:bleed@target' };
 const OVL = (c, ctx) => !!(ctx.spec && ctx.spec.overload); // true when this card carries a 3rd graft
+const TEMP = (c, ctx) => !!(ctx.spec && ctx.spec.fused && ctx.spec.fused.length); // this card is Tempered
+const LINE2 = (c) => !!c.seam && Object.keys(c.seam.counts || {}).filter((k) => c.seam.counts[k] > 0).length >= 2; // the Line bridges 2+ schools
+const cutLine = (A) => { const s = A.c.seam; if (!s) return; if (typeof A.cutLine === 'function') A.cutLine(); else s.forceCut = true; };
+const temperedIn = (A) => A.c.run.deck.filter((i) => i.fused && i.fused.length).length;
+const plateTempered = (A) => A.status(A.player, 'plated', Math.min(6, 1 + temperedIn(A)));
 export const CARDS_MARROW = [
   // ---------- starters ----------
   { id: 'm_cut', name: 'Cut', hero: 'marrow', type: 'attack', cost: 1, rarity: 'starter', fx: [{ op: 'dmg', n: 6 }], up: { fx: [{ op: 'dmg', n: 9 }] }, flavor: 'Steady hands.' },
@@ -53,4 +58,23 @@ export const CARDS_MARROW = [
   { id: 'm_blank_chart', name: 'Blank Chart', hero: 'marrow', type: 'attack', cost: 1, rarity: 'uncommon', school: 'rust', fx: [{ op: 'dmg', n: 7 }, { op: 'if', cond: { src: 'cardGrafts', eq: 0 }, ifText: 'this card has no grafts', then: [{ op: 'dmg', n: 8 }] }], up: { fx: [{ op: 'dmg', n: 9 }, { op: 'if', cond: { src: 'cardGrafts', eq: 0 }, ifText: 'this card has no grafts', then: [{ op: 'dmg', n: 11 }] }] }, flavor: 'Nothing on file. Nothing to hide.' },
   { id: 'm_stitchwork', name: 'Patchwork Doctrine', hero: 'marrow', type: 'power', cost: 2, rarity: 'rare', school: 'rust', target: 'self', fx: [{ op: 'status', s: 'plated', n: { base: 1, per: 'grafts', mul: 0.5, max: 6 }, to: 'self' }], up: { cost: 1, fx: [{ op: 'status', s: 'plated', n: { base: 2, per: 'grafts', mul: 0.5, max: 8 }, to: 'self' }] }, flavor: 'Every seam is an asset.' },
   { id: 'm_stress_test', name: 'Stress Test', hero: 'marrow', type: 'attack', cost: 2, rarity: 'rare', school: 'blood', fx: [{ op: 'dmg', n: 15 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 12 }, { op: 'heal', n: 6 }] }], up: { fx: [{ op: 'dmg', n: 19 }, { op: 'if', cond: OVL, ifText: 'this card is Overloaded', then: [{ op: 'dmg', n: 16 }, { op: 'heal', n: 8 }] }] }, flavor: 'It holds until it does not.' },
+
+  // ---------- H3: Thread / Temper / Budget combos ----------
+  { id: 'm_tailored_cut', name: 'Tailored Cut', hero: 'marrow', type: 'attack', cost: 1, rarity: 'uncommon', school: 'blood', art: 'scissors', target: 'enemy',
+    fx: [{ op: 'dmg', n: { base: 5, per: 'knots', mul: 3, max: 20 } }, { op: 'if', cond: TEMP, ifText: 'this card is Tempered', then: [{ op: 'status', s: 'bleed', n: 3 }] }],
+    up: { fx: [{ op: 'dmg', n: { base: 7, per: 'knots', mul: 3, max: 24 } }, { op: 'if', cond: TEMP, ifText: 'this card is Tempered', then: [{ op: 'status', s: 'bleed', n: 4 }] }] }, flavor: 'Cut to measure, hammered to fit.' },
+  { id: 'm_scrap_splint', name: 'Scrap Splint', hero: 'marrow', type: 'skill', cost: 1, rarity: 'common', school: 'rust', art: 'bandage', target: 'self',
+    fx: [{ op: 'block', n: 7 }, { op: 'addCard', card: 'j_flake', n: 1, to: 'hand' }], up: { fx: [{ op: 'block', n: 10 }, { op: 'addCard', card: 'j_flake', n: 1, to: 'hand' }] }, flavor: 'Held together with what fell off.' },
+  { id: 'm_mirrored_wound', name: 'Mirrored Wound', hero: 'marrow', type: 'attack', cost: 1, rarity: 'uncommon', school: 'blood', art: 'drop', target: 'enemy',
+    fx: [{ op: 'dmg', n: 6 }, { op: 'if', cond: LINE2, ifText: 'the Line holds 2 or more schools', then: [{ op: 'dmg', n: 4 }, { op: 'status', s: 'bleed', n: 3 }] }],
+    up: { fx: [{ op: 'dmg', n: 8 }, { op: 'if', cond: LINE2, ifText: 'the Line holds 2 or more schools', then: [{ op: 'dmg', n: 5 }, { op: 'status', s: 'bleed', n: 4 }] }] }, flavor: 'Two stories, one wound.' },
+  { id: 'm_light_packing', name: 'Light Packing', hero: 'marrow', type: 'skill', cost: 1, rarity: 'common', school: 'blood', art: 'hand', target: 'self',
+    fx: [{ op: 'block', n: 6 }, { op: 'if', cond: { src: 'strain', eq: 0 }, ifText: 'you have no Strain', then: [{ op: 'draw', n: 1 }, { op: 'heal', n: 2 }] }],
+    up: { fx: [{ op: 'block', n: 8 }, { op: 'if', cond: { src: 'strain', eq: 0 }, ifText: 'you have no Strain', then: [{ op: 'draw', n: 1 }, { op: 'heal', n: 3 }] }] }, flavor: 'Nothing declared, nothing carried.' },
+  { id: 'm_hemostatic_snip', name: 'Hemostatic Snip', hero: 'marrow', type: 'attack', cost: 0, rarity: 'uncommon', school: 'blood', art: 'scissors', target: 'enemy',
+    fx: [{ op: 'dmg', n: 3 }, { op: 'status', s: 'bleed', n: 2 }, { op: 'if', cond: { src: 'knots', gte: 4 }, ifText: 'the Line holds 4 or more knots', then: [{ op: 'heal', n: 4 }] }, { op: 'custom', fn: cutLine, text: 'Cut the Line.' }],
+    up: { fx: [{ op: 'dmg', n: 5 }, { op: 'status', s: 'bleed', n: 3 }, { op: 'if', cond: { src: 'knots', gte: 4 }, ifText: 'the Line holds 4 or more knots', then: [{ op: 'heal', n: 5 }] }, { op: 'custom', fn: cutLine, text: 'Cut the Line.' }] }, flavor: 'Quick, tidy, final.' },
+  { id: 'm_hammered_plate', name: 'Hammered Plate', hero: 'marrow', type: 'power', cost: 2, rarity: 'rare', school: 'rust', art: 'hammerrivet', target: 'self',
+    fx: [{ op: 'custom', fn: plateTempered, text: 'Gain Plated equal to 1 + the Tempered cards in your deck (max 6).' }],
+    up: { cost: 1, fx: [{ op: 'custom', fn: plateTempered, text: 'Gain Plated equal to 1 + the Tempered cards in your deck (max 6).' }] }, flavor: 'Every hammered seam is a rivet.' },
 ];

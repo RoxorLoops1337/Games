@@ -16,6 +16,7 @@ import { STATUS_THREAD } from './statuses_thread.js';
 import { CARDS_THREAD } from './cards_thread.js';
 import { GRAFTS_THREAD } from './grafts_thread.js';
 import { RELICS_THREAD } from './relics_thread.js';
+import { RELICS_MORE } from './relics_more.js';
 import { ENEMIES_NEW1 } from './enemies_new1.js';
 import { ENEMIES_NEW2 } from './enemies_new2.js';
 import { ENEMIES_NEW3 } from './enemies_new3.js';
@@ -50,7 +51,7 @@ export const STATUSES = byId('status', STATUS_LIST, STATUS_MARROW, STATUS_WICK, 
 export const CARDS = byId('card', CARDS_MARROW, CARDS_WICK, CARDS_ODILE, CARDS_ANY, CARDS_JUNK, CARDS_THREAD);
 export const GRAFTS = byId('graft', GRAFTS_SAFE, GRAFTS_GREEDY, GRAFTS_WEIRD, GRAFTS_THREAD, GRAFTS_EXTRA);
 export const ENEMIES = byId('enemy', ENEMIES_1, ENEMIES_2, ENEMIES_3, BOSSES, ENEMIES_NEW1, ENEMIES_NEW2, ENEMIES_NEW3);
-export const RELICS = byId('relic', RELIC_LIST, RELICS_THREAD);
+export const RELICS = byId('relic', RELIC_LIST, RELICS_THREAD, RELICS_MORE);
 export const POTIONS = byId('potion', POTION_LIST);
 export const EVENTS = byId('event', EVENT_LIST);
 export const HEROES = byId('hero', HERO_LIST);

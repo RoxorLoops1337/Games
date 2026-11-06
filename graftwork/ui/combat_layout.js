@@ -6,19 +6,21 @@ export const W = 1280, H = 720;
 export const HERO_X = 260, FOOT_Y = 458;
 export const BAR_H = 56;
 export const PLAY_LINE = 420;
-export const DRAW_POS = { x: 74, y: 673 }, DISC_POS = { x: 1206, y: 673 }, EXH_POS = { x: 1124, y: 690 };
-export const PILE_S = 0.3, EXH_S = 0.16;
+export const DRAW_POS = { x: 74, y: 673 }, DISC_POS = { x: 1206, y: 673 }, EXH_POS = { x: 1120, y: 682 };
+export const PILE_S = 0.3, EXH_S = 0.2;
 export const ORB = { x: 84, y: 578, size: 88 };
 export const STRAIN_BOX = { x: 14, y: 466, w: 128, h: 44 };
 // Hero plate (hp bar, block, statuses) sits right of the strain box and ends above the resting hand (y 516).
 export const HERO_PLATE = { x: 150, y: 464, w: 220, h: 52 };
 // Enemy lane (x 500..1252, y 70..400): nameplate+move y70..104, intent 104..134, art above the foot, hp bar + status rows below it.
-export const ENEMY_FOOT = 340, ENEMY_ART_H = 195, ENEMY_SLOT_MIN = 110, ENEMY_LANE_TOP = 70;
+export const ENEMY_FOOT = 356, ENEMY_ART_H = 195, ENEMY_SLOT_MIN = 110, ENEMY_LANE_TOP = 70;
 export const END_BTN = { x: 1086, y: 546, w: 172, h: 54 };
 export const SEAM = { x: 380, y: 468, w: 696, h: 50 }; // the thread rail (ui/seam_ui.js): right of the hero plate, above the hand, left of End Turn
 export const HAND_CX = 600, HAND_Y = 642, HAND_SPREAD = 900; // spec 622/940 widened away from END TURN (x1086); y keeps resting tops under the Thread rail (y518)
 export const HAND_GAP = 20;                       // extra air between small-hand cards (n <= 6)
-export const HOVER_Y = 520, HOVER_S = 1.22;       // desktop hover: lifted full face
+export const HOVER_S = 0.92;                      // desktop hover: lifted full face, sized so the lifted card stays below the enemy lane (top >= HOVER_TOP)
+export const HOVER_TOP = 420;                     // the lifted card never reaches above this y (enemy hp bars end ~ y400)
+export const HOVER_Y = H - (CARD_H * HOVER_S) / 2 - 6;
 export const SEL_Y = 470, SEL_S = 1.18;           // desktop selected (click-to-play)
 export const PREVIEW_Y = 400, PREVIEW_S = 1.0;    // touch tap preview
 export const PLAY_BTN = { w: 120, h: 52 }, CANCEL_BTN = 44;
@@ -57,7 +59,10 @@ export function enemySlots(defs) {
   const bs = defs.map((d) => { const b = enemyBounds(d) || { w: 150, h: 170 }; return { w: Math.max(40, b.w), h: Math.max(40, b.h) }; });
   const regionW = ENEMY_REGION.x1 - ENEMY_REGION.x0;
   const maxH = Math.max(...bs.map((b) => b.h));
-  let sc = Math.min(1, ENEMY_ART_H / maxH);
+  // Art height budget: a lone enemy or a duo stands big (bosses and elites bigger still), 3+ keep the clear 195 lane.
+  const tallest = Math.max(...defs.map((d) => (d.kind === 'boss' ? 0.94 : d.kind === 'elite' ? 1 : 1) * 1));
+  const budget = n === 1 ? 212 : n === 2 ? 206 : n === 3 ? 200 : ENEMY_ART_H;
+  let sc = Math.min(2.1, (budget * tallest) / maxH);
   const widths = (k) => bs.map((b) => Math.max(ENEMY_SLOT_MIN, b.w * k + 34));
   const total = (k) => widths(k).reduce((a, w) => a + w, 0) + gap * (n - 1);
   while (total(sc) > regionW && sc > 0.5) sc -= 0.02;
