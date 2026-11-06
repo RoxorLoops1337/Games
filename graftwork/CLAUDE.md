@@ -27,8 +27,11 @@ graftwork/
   ui/       screens + kits: core.js (app, COL, EASE, input, text cache), chrome.js (shared buttons/panels), one file per screen
             (title map combat reward graft shop forge event deckview codex end settings pause wardrobe), combat_hud.js + combat_layout.js (HUD grid),
             seam_ui.js (Thread rail), juice.js (tier tables), fx.js (particles), post.js + post_shaders.js (WebGL2 post), lights.js, audio.js,
-            a11y.js, fullscreen.js, transitions.js, tutorial.js, tooltips.js, layout_registry.js
-  art/      procedural canvas drawing only: cards.js, icons.js, enemies.js, heroes.js, backgrounds.js, attacks.js (attack rigs)
+            a11y.js, fullscreen.js, transitions.js, tutorial.js, tooltips.js, layout_registry.js,
+            assets.js (lazy image loader for assets/ward/manifest.json: get(id) is null until decoded, @1x on phones, @2x on desktop, a no-op in node),
+            ward.js (the Ward screen and its rules plumbing), ward_iso.js (the isometric map: projection, picking, rooms, actors, hero, thread, time-of-day light), ward_kit.js (cards, icons, glyphs)
+  art/      procedural canvas drawing only: cards.js, icons.js, enemies.js, heroes.js, backgrounds.js, attacks.js (attack rigs). Also the fallback of every Ward image (enemies and heroes are cached to offscreen canvases when no sprite is there)
+  assets/ward/   the Ward's generated WebP art + manifest.json (see Ward art exception below); owned by the art pipeline, never edited by hand; read only through ui/assets.js
   design/   ART_BIBLE THREAD ENEMY_DEPTH UX_SPEC JUICE BUILD_PLAN (+ README.md index)
 tests/graftwork_*.test.mjs     headless suites; tests/run_graftwork.mjs runs them all; tests/graftwork_lib.mjs is the fake-canvas harness
 tools/graftwork_*.mjs          balance and audio tooling (see Balance tooling)
@@ -160,3 +163,10 @@ Current targets and measured numbers (strong bot, 10 to 40 runs per hero, noisy)
 
 ## Ward art exception (AI-generated, Ward only)
 The owner authorised AI-generated raster art for the Ward (the hospital-building layer) only. This overrides the old "procedural art only" rule for the Ward; every other screen stays procedural. The generated set is committed in `graftwork/assets/ward/` (about 3 MB WebP, budget 12 MB): `rooms/` (isometric cutaway dioramas, one per `rm_*` id plus `plot_empty`, all on the same canvas so they share one floor diamond), `actors/` (heroes, Act 1 monsters, The Resident + `the_resident_l2`, The Matron, `npc_*`; `<id>_b` is the walk-step frame), `icons/` (wood, stone, gold, power, morning, midday, evening, night) and `cards/` (illustrations keyed by the `art` ids in `data/ward.js`, room arts alias to a room diorama). Each asset has `@1x.webp` (phone) and `@2x.webp` (desktop). `assets/ward/manifest.json` is the contract (tile ratio, floor diamond per room, feet anchor per actor, `cardsById` for the b_* cards). The dark/unpowered look is a code tint, never a second image. Raw generations are NOT in the repo; `tools/graftwork_art_build.py` documents and runs raw -> WebP -> manifest. Test: `tests/graftwork_art_assets.test.mjs`. No em dashes in any of it.
+
+## Ward isometric view (ui/ward_iso.js, design/WARD.md "Isometric view and art pipeline")
+- The 9 x 6 grid is a 2:1 diamond grid (TW 92 x TH 48 logical px, the same at every stage scale). `cellCenter(x, y)` from ui/ward.js is the middle of a cell's floor: tests and clicks use it. Picking is `ISO.pick(w, mx, my)`: floors first (exact diamonds), then the wall volume of a room (only matters above the back row).
+- Rooms draw back to front by x + y; the hovered, selected and hero rooms are drawn last. Actors (monsters, hero) are one pass sorted by screen y, after all rooms. Room sprites are placed by `floorCx / floorCy / floorW` of the manifest at 76 percent of the tile (a ground hairline between rooms keeps the neighbours readable). Every sprite has a procedural fallback (block rooms, `drawEnemy` / `drawHero` cached to offscreen canvases), so headless tests and a failed download both draw.
+- Reduced motion (meta.settings.reducedMotion or reduceMotion, or FX_OPTS.reduced) removes wander, bob, squash, candle flicker, motes and the walk frame swap.
+- Each room registers `ward-room-<id>` on the `world` layer (a box covering the diorama), so the layout sweeps ignore it and tooltips anchor to it.
+

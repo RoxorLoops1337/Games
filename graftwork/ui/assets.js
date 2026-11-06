@@ -1,7 +1,8 @@
 // Image assets for the Ward (design/WARD.md "Isometric view and art pipeline"): a lazy loader and cache for assets/ward/manifest.json.
 //
-//   manifest: { version, tile:{w,h}, rooms:{id:{file1x,file2x,w,h,floorCx,floorCy,floorW,floorH}}, actors:{id:{file1x,file2x,w,h,anchorX,anchorY,frames?}},
-//               icons:{id:{file1x,file2x,w,h}}, cards:{id:{file1x,file2x,w,h}} }
+//   manifest: { version, tile:{w,h}, rooms:{id:{file1x,file2x,w,h,floorCx,floorCy,floorW,floorH}},
+//               actors:{id:{file1x,file2x,w,h,anchorX,anchorY,kind,scale,walk1x,walk2x}}, icons:{id:{file1x,file2x,w,h}}, cards:{artId:{...}}, cardsById:{b_x:{room}} }
+//   Actor ids are hero ids (marrow), enemy ids (bedpan_slime, the_resident, the_resident_l2) and npc_*; walk1x / walk2x is the second step frame.
 //   All numbers are in sprite pixels (w x h is the frame both files are drawn into, so @1x and @2x are interchangeable).
 //
 //   assets.ensure(app)          starts the manifest load once (no-op in node / headless, or when fetch or Image is missing)
@@ -55,23 +56,27 @@ export function createAssets(opts = {}) {
     } catch (err) { e.bad = true; A.failed++; }
     return e;
   }
-  function get(group, id, app) {
+  function get(group, id, app, alt) {
     if (!A.ready()) return null;
     const d = defOf(group, id); if (!d) return null;
-    const f2 = A.use2x(app) ? (d.file2x || d.file1x) : (d.file1x || d.file2x);
-    if (!f2) return null;
-    const e = load(f2);
-    if (e.bad && d.file1x && f2 !== d.file1x) { const e1 = load(d.file1x); return e1.ok ? { img: e1.img, def: d } : null; }
-    return e.ok ? { img: e.img, def: d } : null;
+    const f1 = alt ? (d.walk1x || d.file1x) : d.file1x, fx = alt ? (d.walk2x || d.file2x) : d.file2x;
+    const want = A.use2x(app) ? [fx, f1] : [f1, fx];
+    for (const f of want) {
+      if (!f) continue;
+      const e = load(f);
+      if (e.ok) return { img: e.img, def: d };
+      if (!e.bad) return null; // still loading: do not start the other size
+    }
+    return null;
   }
   A.room = (id, app) => get('rooms', id, app);
-  A.actor = (id, app) => get('actors', id, app);
+  A.actor = (id, app, alt) => get('actors', id, app, alt); // alt: the second walk frame (falls back to the first)
   A.icon = (id, app) => get('icons', id, app);
   A.card = (id, app) => get('cards', id, app);
   A.preload = (app, kinds = ['rooms', 'actors']) => {
     A.ensure(app);
     if (!A.ready()) return;
-    for (const g of kinds) for (const id of Object.keys(A.manifest[g] || {})) get(g, id, app);
+    for (const g of kinds) for (const id of Object.keys(A.manifest[g] || {})) { get(g, id, app); if (g === 'actors') get(g, id, app, true); }
   };
   A.progress = (kinds = ['rooms', 'actors']) => {
     let total = 0, loaded = 0;
@@ -85,6 +90,10 @@ export function createAssets(opts = {}) {
   // the first of several candidate ids that the manifest knows (actor id guessing: 'hero_marrow' then 'hero')
   A.firstOf = (group, ids) => { for (const id of ids) if (defOf(group, id)) return id; return null; };
   A.ids = (group, prefix) => (A.manifest ? Object.keys(A.manifest[group] || {}).filter((k) => k === prefix || k.startsWith(prefix + '_')) : []);
+  // actor ids of one kind ('hero' | 'normal' | 'elite' | 'npc'), for enemies the art set does not paint yet
+  A.kindIds = (kind) => { const out = []; if (A.manifest) for (const [k, d] of Object.entries(A.manifest.actors || {})) if ((d.kind || (k.startsWith('npc_') ? 'npc' : '')) === kind && !k.endsWith('_l2')) out.push(k); return out; };
+  // the card illustration for a building card: its own art id, else the diorama of the room it builds
+  A.cardArt = (card, app) => { const a = card && card.art && A.card(card.art, app); if (a) return { ...a, kind: 'card' }; const m = A.ready() && A.manifest.cardsById && A.manifest.cardsById[card && card.id]; const ca = m && m.card && A.card(m.card, app); if (ca) return { ...ca, kind: 'card' }; const rm = m && m.room ? A.room(m.room, app) : (card && card.kind === 'room' ? A.room(card.room, app) : null); return rm ? { ...rm, kind: 'room' } : null; };
   return A;
 }
 

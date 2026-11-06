@@ -19,7 +19,7 @@ import { drawNodeIcon, drawEventSeal } from '../art/icons.js';
 import { assets } from './assets.js';
 import * as K from './ward_kit.js';
 
-export const TW = 92, TH = 46; // floor tile of the 2:1 projection (logical px)
+export const TW = 92, TH = 48; // floor tile of the 2:1 projection (logical px)
 export const MAPR = { x: 284, y: 64, w: 712, h: 484 }; // the map panel (same rectangle as the old sheet)
 const FILL = 0.76; // a room diorama is drawn at this share of the tile width, leaving a hairline of ground between rooms
 const UP = 70; // how far a diorama rises above its floor centre (layout only; the real sprite decides what is drawn)
@@ -47,7 +47,7 @@ function inVolume(px, py, cx, cy, hw, hh, up) {
 }
 export function pick(w, mx, my) {
   const g = geo(w), u = (mx - g.ox) / (TW / 2), v = (my - g.oy) / (TH / 2), gxf = (u + v) / 2, gyf = (v - u) / 2;
-  const gx = Math.round(gxf), gy = Math.round(gyf);
+  const gx = Math.round(gxf) || 0, gy = Math.round(gyf) || 0;
   if (gx >= 0 && gy >= 0 && gx < w.w && gy < w.h) return { x: gx, y: gy };
   const gr = w.grid;
   for (let d = w.w + w.h - 2; d >= 0; d--) for (let x = Math.min(d, w.w - 1); x >= 0 && d - x < w.h; x--) {
@@ -246,17 +246,16 @@ function heroCanvas(heroId, targetH) {
   if (o) { try { drawHero(o.x, heroId, cw / 2, ch - 6, { scale: sc, t: 0.2 }); out = { c: o.c, w: cw / ss, h: ch / ss, fx: cw / 2 / ss, fy: (ch - 6) / ss }; } catch (e) { out = null; } }
   V.hero.set(key, out); return out;
 }
-// the sprite ids a manifest may hold for an actor (first that exists wins): see design/WARD.md
-function actorSprite(app, kind, id, run, lvl, frame) {
+// the actor art for a figure: the hero by its id, an enemy by its id (the_resident_l2 for a Level 2 elite), an NPC by name. An enemy the set does not paint yet
+// borrows a figure of the same kind (picked by hash) so the room is never empty; null means draw the procedural figure.
+function actorSprite(app, kind, id, run, lvl, alt) {
   if (!assets.ready()) return null;
-  const sfx = frame ? ['_2', '_b', '_walk', '_step'] : [''];
-  let base;
-  if (kind === 'hero') base = [`hero_${run.hero}`, 'hero'];
-  else if (kind === 'elite') base = lvl >= 2 ? [`elite_${id}_l2`, 'elite_l2', `elite_${id}`, 'elite'] : [`elite_${id}`, 'elite', `mon_${id}`, 'monster'];
-  else base = [`mon_${id}`, `monster_${id}`, id, 'monster'];
-  for (const b of base) for (const s of sfx) { const a = assets.actor(b + s, app); if (a) return a; if (assets.has('actors', b + s)) return null; /* known, still loading */ }
-  if (kind === 'monster') { const ids = assets.ids('actors', 'monster').concat(assets.ids('actors', 'mon')); if (ids.length) { const a = assets.actor(ids[Math.floor(hash(id) * ids.length)], app); return a; } }
-  return null;
+  if (kind === 'hero') return assets.actor(id, app, alt);
+  if (kind === 'npc') return assets.actor(id, app, alt);
+  const own = kind === 'elite' && lvl >= 2 && assets.has('actors', id + '_l2') ? id + '_l2' : id;
+  if (assets.has('actors', own)) return assets.actor(own, app, alt);
+  const pool = assets.kindIds(kind === 'elite' ? 'elite' : 'normal'); if (!pool.length) return null;
+  return assets.actor(pool[Math.floor(hash(id) * pool.length)], app, alt);
 }
 function drawShadow(g, x, y, rw, a) { g.fillStyle = `rgba(0,0,0,${a})`; g.beginPath(); g.ellipse(x, y + 1, rw, rw * 0.38, 0, 0, TAU); g.fill(); }
 function drawActor(app, g, r, run) {
@@ -265,11 +264,11 @@ function drawActor(app, g, r, run) {
   if (r.ring) { g.save(); g.strokeStyle = rgba(COL.lamp, 0.7); g.lineWidth = 1.6; g.beginPath(); g.ellipse(r.x, r.y + 1, sz * 0.5, sz * 0.2, 0, 0, TAU); g.stroke(); g.restore(); }
   const lvl = r.lvl;
   if (r.kind === 'elite' && lvl >= 2) glowAt(g, r.x, r.y - sz * 0.45, sz * 0.9, 0.35 + 0.1 * Math.sin(r.ph * 3 + (r.bob || 0)), true);
-  const spr = actorSprite(app, r.kind, r.id, run, lvl, r.frame);
+  const spr = actorSprite(app, r.kind, r.id, run, lvl, r.frame === 1);
   g.save(); g.translate(r.x, r.y - r.bob); g.scale(r.flip * (1 / Math.max(0.2, r.sq)) * 1, r.sq); if (r.tilt) g.rotate(r.tilt);
   if (r.alpha < 1) g.globalAlpha *= r.alpha;
   if (spr) {
-    const d = spr.def, s = sz / (d.h || 1);
+    const d = spr.def, s = sz * (d.scale || 1) / (d.h || 1);
     g.drawImage(spr.img, -(d.anchorX === undefined ? d.w / 2 : d.anchorX) * s, -(d.anchorY === undefined ? d.h : d.anchorY) * s, d.w * s, d.h * s);
   } else {
     const o = r.kind === 'hero' ? heroCanvas(run.hero, sz) : enemyCanvas(r.id, sz);
@@ -368,14 +367,14 @@ export function drawRooms(host, inter) {
       for (let i = 0; i < cnt; i++) {
         const rec = poolRec(n++); V.list.push(rec); const e = r.contents[i], ph = hash(id + i) * TAU, sl = MON_SLOTS[i];
         const wx = calm ? 0 : Math.sin(S.t * 0.35 + ph) * 0.045, wy = calm ? 0 : Math.cos(S.t * 0.27 + ph * 1.7) * 0.022;
-        rec.kind = 'monster'; rec.id = e.id; rec.x = c.x + (sl[0] + wx) * TW * FILL; rec.y = c.y + (sl[1] + wy) * TW * FILL; rec.h = 22; rec.ph = ph;
+        rec.kind = 'monster'; rec.id = e.id; rec.x = c.x + (sl[0] + wx) * TW * FILL; rec.y = c.y + (sl[1] + wy) * TW * FILL; rec.h = 34; rec.ph = ph;
         rec.flip = calm ? (i % 2 ? -1 : 1) : (Math.cos(S.t * 0.35 + ph) >= 0 ? 1 : -1);
         rec.bob = calm ? 0 : Math.abs(Math.sin(S.t * 3.1 + ph)) * 1.4; rec.sq = calm ? 1 : 1 + 0.035 * Math.sin(S.t * 6.2 + ph); rec.lvl = 0; rec.frame = 0; rec.tilt = 0; rec.ring = 0;
         rec.alpha = popAt !== undefined && S.t < popAt + 0.3 && i === cnt - 1 ? clamp((S.t - popAt) / 0.3, 0, 1) : 1; if (popAt !== undefined && S.t < popAt && i === cnt - 1) rec.alpha = 0;
       }
     } else if (k0 === 'elite') {
       const e = r.contents[0], rec = poolRec(n++), ph = hash(id) * TAU; V.list.push(rec);
-      rec.kind = 'elite'; rec.id = e.id; rec.lvl = e.level || 1; rec.h = e.level >= 2 ? 34 : 30; rec.ph = ph;
+      rec.kind = 'elite'; rec.id = e.id; rec.lvl = e.level || 1; rec.h = e.level >= 2 ? 52 : 46; rec.ph = ph;
       rec.x = c.x + (calm ? 0 : Math.sin(S.t * 0.3 + ph) * 0.04) * TW; rec.y = c.y + (-0.01 + (calm ? 0 : Math.cos(S.t * 0.25 + ph) * 0.02)) * TW;
       rec.flip = calm ? 1 : (Math.cos(S.t * 0.3 + ph) >= 0 ? 1 : -1); rec.bob = calm ? 0 : Math.abs(Math.sin(S.t * 2.4 + ph)) * 1.6; rec.sq = calm ? 1 : 1 + 0.03 * Math.sin(S.t * 4.8); rec.frame = 0; rec.tilt = 0; rec.alpha = 1; rec.ring = 0;
     } else { // event / shop / forge / rest: a floating token over the floor
@@ -406,7 +405,7 @@ function heroRec(host, n) {
     kk = wk.i < wk.stop ? EASE.inOut(clamp(wk.t / host.stepS, 0, 1)) : 0; moving = wk.i < wk.stop;
     pos = { x: lerp(a.x, b.x, kk), y: lerp(a.y, b.y, kk) }; dx = b.x - a.x; if (moving && Math.abs(dx) > 1) V.faceHero = dx > 0 ? 1 : -1;
   }
-  rec.kind = 'hero'; rec.id = run.hero; rec.h = 32; rec.ph = 0; rec.lvl = 0; rec.alpha = 1; rec.data = null;
+  rec.kind = 'hero'; rec.id = run.hero; rec.h = 42; rec.ph = 0; rec.lvl = 0; rec.alpha = 1; rec.data = null;
   rec.x = pos.x + (moving ? 0 : TW * 0.03); rec.y = pos.y + TH * 0.04; rec.flip = V.faceHero;
   if (moving) { rec.frame = calm ? 0 : Math.floor(S.t * 9) % 2; rec.bob = Math.abs(Math.sin(kk * Math.PI * 2)) * 4; rec.sq = 1 - 0.07 * Math.abs(Math.sin(kk * Math.PI * 2 + 0.6)); rec.tilt = (rec.frame ? 1 : -1) * 0.05; }
   else { rec.frame = 0; rec.bob = calm ? 0 : (0.5 + 0.5 * Math.sin(S.t * 2.2)) * 1.1; rec.sq = calm ? 1 : 1 + 0.02 * Math.sin(S.t * 2.2); rec.tilt = 0; }
@@ -424,7 +423,7 @@ export function drawLight(host) {
   else if (w.phase === 'midday' && !S.trans) { g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = 'rgba(255,238,200,.05)'; app.rr(MAPR.x, MAPR.y, MAPR.w, MAPR.h, 6); g.fill(); g.restore(); }
   // lamp pools of lit rooms (after the multiply, so they glow through the dusk)
   const gl = host.glows;
-  for (let i = 0; i < gl.length; i += 3) { glowAt(g, gl[i], gl[i + 1], 46, gl[i + 2] * 0.4, true); }
+  for (let i = 0; i < gl.length; i += 3) { glowAt(g, gl[i], gl[i + 1], 40, gl[i + 2] * 0.26, true); }
   gl.length = 0;
   // moonlight from the top right at night
   if (L.moon > 0.02) { g.save(); app.rr(MAPR.x, MAPR.y, MAPR.w, MAPR.h, 6); g.clip(); const mg = g.createRadialGradient(MAPR.x + MAPR.w - 60, MAPR.y + 30, 8, MAPR.x + MAPR.w - 60, MAPR.y + 30, 330); mg.addColorStop(0, `rgba(190,214,255,${0.22 * L.moon})`); mg.addColorStop(1, 'rgba(190,214,255,0)'); g.fillStyle = mg; g.fillRect(MAPR.x, MAPR.y, MAPR.w, MAPR.h); g.restore(); }

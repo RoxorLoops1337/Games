@@ -128,7 +128,7 @@ export function roomGlyph(g, art, x, y, s, ink = INK, spot) {
 }
 
 // ---------------- resource icons ----------------
-// icon art from assets/ward/manifest.json (icons: res_wood res_stone res_gold res_bulb_on res_bulb_off phase_morning phase_midday phase_evening phase_night);
+// icon art from assets/ward/manifest.json (icons: wood stone gold power morning midday evening night);
 // any id the manifest lacks falls back to the engraved procedural drawing below
 function drawIcon(g, ids, x, y, s, alpha = 1) {
   for (const id of ids) {
@@ -137,10 +137,10 @@ function drawIcon(g, ids, x, y, s, alpha = 1) {
   }
   return false;
 }
-export function phaseIcon(g, ph, glyph, x, y, s, ink, spot) { if (!drawIcon(g, ['phase_' + ph], x, y, s * 1.15)) roomGlyph(g, glyph, x, y, s, ink, spot); }
+export function phaseIcon(g, ph, glyph, x, y, s, ink, spot) { if (!drawIcon(g, [ph], x, y, s * 1.15)) roomGlyph(g, glyph, x, y, s, ink, spot); }
 export function drawRes(g, kind, x, y, s, on = true) {
-  if (kind === 'bulb') { if (drawIcon(g, on ? ['res_bulb_on', 'res_power_on'] : ['res_bulb_off', 'res_power_off'], x, y, s * 1.2)) return; if (!on && drawIcon(g, ['res_bulb_on', 'res_power_on'], x, y, s * 1.2, 0.3)) return; }
-  else if (drawIcon(g, ['res_' + kind], x, y, s * 1.1)) return;
+  if (kind === 'bulb') { if (drawIcon(g, ['power'], x, y, s * 1.25, on ? 1 : 0.28)) return; }
+  else if (drawIcon(g, [kind], x, y, s * 1.1)) return;
   g.save(); g.translate(x, y); g.lineJoin = 'round'; g.lineCap = 'round';
   if (kind === 'gold') { g.restore(); drawCoin(g, x, y, s); return; }
   const r = s / 2;
@@ -219,7 +219,7 @@ export function drawBuildCard(app, card, x, y, w, h, o = {}) {
   // engraved illustration
   const iy = y + 46 * k, ih = o.full ? 50 * k : 78 * k;
   g.save(); g.globalAlpha *= A;
-  const cardArt = assets.card(card.id) || (room ? assets.room(card.room) : null); // no card illustration: the room's own diorama
+  const cardArt = assets.cardArt(card); // the card's illustration, else the diorama of its room
   if (cardArt) { const d = cardArt.def, bw = w * 0.84, bh = ih * 1.06, k = Math.min(bw / (d.w || 1), bh / (d.h || 1)); g.drawImage(cardArt.img, x + w / 2 - d.w * k / 2, iy + ih / 2 - d.h * k / 2, d.w * k, d.h * k); }
   else {
   g.beginPath(); g.ellipse(x + w / 2, iy + ih / 2, w * 0.36, ih * 0.46, 0, 0, TAU); g.fillStyle = 'rgba(255,248,230,.55)'; g.fill(); g.strokeStyle = rgba(INK, 0.55); g.lineWidth = lnw('hair'); g.stroke();

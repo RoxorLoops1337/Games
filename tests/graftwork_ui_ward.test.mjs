@@ -614,4 +614,143 @@ await t('item6: the Codex Rules tab teaches the Ward (build, the die and the rou
   }
 });
 
+// ---------------- isometric view (ui/ward_iso.js, ui/assets.js) ----------------
+const ISO = await import('../graftwork/ui/ward_iso.js');
+const { assets, createAssets } = await import('../graftwork/ui/assets.js');
+
+await t('iso: every cell centre picks its own cell, points off the plinth pick nothing, the wall above a back-row room picks that room', async () => {
+  const { run } = await setup({ seed: 'iso1' }); const w = run.ward;
+  for (let y = 0; y < w.h; y++) for (let x = 0; x < w.w; x++) { const c = ISO.cellC(w, x, y); assert.deepEqual(ISO.pick(w, c.x, c.y), { x, y }, `cell ${x},${y}`); assert.deepEqual(ISO.pick(w, c.x + ISO.TW * 0.3, c.y), { x, y }, 'inside the diamond'); }
+  assert.equal(ISO.pick(w, 20, 20), null); assert.equal(ISO.pick(w, 1270, 700), null);
+  layout(run, [['rm_entrance', 0, 2], ['rm_ward', 4, 0]]);
+  const top = ISO.cellC(w, 4, 0);
+  assert.deepEqual(ISO.pick(w, top.x, top.y - ISO.TH / 2 - 12), { x: 4, y: 0 }, 'the wall volume of a room on the back row');
+  assert.equal(ISO.pick(w, top.x, top.y - 200), null);
+  const tl = ISO.cellC(w, 0, 0), br = ISO.cellC(w, w.w - 1, w.h - 1), rt = ISO.cellC(w, w.w - 1, 0), lt = ISO.cellC(w, 0, w.h - 1), M = ISO.MAPR;
+  assert.ok(lt.x - ISO.TW / 2 >= M.x && rt.x + ISO.TW / 2 <= M.x + M.w && tl.y - 70 >= M.y && br.y + ISO.TH / 2 + 14 <= M.y + M.h, 'the whole floor fits the map panel (logical px: the same at every stage scale)');
+});
+
+await t('iso: a click at a room\'s iso position switches its power, a click on an empty cell does nothing (morning); rooms register a world hit box', async () => {
+  const { app, run, flow } = await setup({ seed: 'iso2' });
+  const [ent, qu] = layout(run, [['rm_entrance', 0, 2], ['rm_quarry', 1, 2]]);
+  run.ward.deck.hand = []; flow.route(); frames(app, 200);
+  assert.equal(run.ward.rooms[qu].on, true);
+  const c = ISO.cellC(run.ward, 1, 2); click(app, c.x, c.y); frames(app, 2);
+  assert.equal(run.ward.rooms[qu].on, false, 'the quarry went dark');
+  assert.ok(reg('ward-room-' + qu) && reg('ward-room-' + qu).layer === 'world', 'iso hit box registered for the room');
+  const e = ISO.cellC(run.ward, 6, 4); click(app, e.x, e.y); frames(app, 2);
+  assert.equal(run.ward.rooms[qu].on, false);
+  const box = ISO.roomBox(run.ward, 1, 2); assert.ok(box.w > 0 && box.h > ISO.TH, 'the room box covers the wall');
+});
+
+await t('iso: depth order is back to front (x + y), the hovered, selected and hero rooms come last', async () => {
+  const { app, run, flow } = await setup({ seed: 'iso3' });
+  const ids = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 2, 1], ['rm_chapel', 1, 3], ['rm_sawmill', 3, 3], ['rm_quarry', 6, 0], ['rm_linen', 0, 4]]);
+  const w = run.ward, key = (id) => w.rooms[id].x + w.rooms[id].y;
+  const plain = ISO.depthOrder(w, null).slice();
+  for (let i = 1; i < plain.length; i++) assert.ok(key(plain[i]) >= key(plain[i - 1]), 'non-decreasing depth');
+  assert.equal(plain.length, Object.keys(w.rooms).length);
+  const foc = ISO.depthOrder(w, (id) => id === ids[0]).slice();
+  assert.equal(foc[foc.length - 1], ids[0], 'the focus room is drawn last');
+  assert.deepEqual(foc.slice(0, -1), plain.filter((id) => id !== ids[0]), 'everything else keeps its order');
+  flow.route(); frames(app, 5);
+});
+
+await t('iso: monsters stand inside their room (one figure each, max 5), elites are larger and marked L2, a dark room is asleep', async () => {
+  const { app, run, flow } = await setup({ seed: 'iso4' });
+  const [ent, wd, iso, wd2] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2], ['rm_isolation', 2, 2], ['rm_ward', 3, 2]]);
+  const mk = (n) => Array.from({ length: n }, () => ({ kind: 'monster', id: NORMAL1[0] }));
+  run.ward.rooms[wd].contents = mk(7); run.ward.rooms[wd2].contents = mk(2); run.ward.rooms[iso].contents = [{ kind: 'elite', id: ELITE1, level: 2, age: 3 }];
+  run.ward.deck.hand = []; flow.route(); frames(app, 200);
+  const A = ISO.lastActors(), mons = A.filter((a) => a.kind === 'monster'), el = A.filter((a) => a.kind === 'elite'), hero = A.filter((a) => a.kind === 'hero');
+  assert.equal(mons.length, 5 + 2, 'a full ward shows 5 figures (the cap) and the other ward 2'); assert.equal(el.length, 1); assert.equal(hero.length, 1);
+  assert.equal(el[0].lvl, 2); assert.ok(el[0].h > mons[0].h, 'elites are larger');
+  const room = (id) => { const r = run.ward.rooms[id], c = ISO.cellC(run.ward, r.x, r.y); return (a) => Math.abs(a.x - c.x) < ISO.TW / 2 && Math.abs(a.y - c.y) < ISO.TH / 2; };
+  assert.equal(mons.filter(room(wd)).length, 5, 'they stand inside the floor diamond of their room');
+  for (let i = 1; i < A.length; i++) assert.ok(A[i - 1].y <= A[i].y, 'actors are drawn sorted by screen y');
+  run.ward.rooms[wd].on = false; frames(app, 3);
+  assert.equal(ISO.lastActors().filter((a) => a.kind === 'monster').length, 2, 'a dark room is asleep: nobody shows');
+});
+
+await t('iso: the hero stands on its room and walks smoothly cell to cell (between the two centres, facing the way it goes, alternating frames)', async () => {
+  const { app, run, flow } = await setup({ seed: 'iso5' });
+  const [a, b] = layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2]]);
+  run.ward.deck.hand = []; flow.route(); frames(app, 200);
+  const ca = ISO.cellC(run.ward, 0, 2), cb = ISO.cellC(run.ward, 1, 2), H0 = () => ISO.lastActors().find((x) => x.kind === 'hero');
+  assert.ok(Math.abs(H0().x - ca.x) < 8 && Math.abs(H0().y - ca.y) < 10, 'standing on the entrance');
+  const S = app.screens.ward.st; S.walk = { cells: [a, b], i: 0, stop: 1, t: 0.12, done: null, wait: false }; frames(app, 1);
+  const h = H0(); assert.ok(h.x > ca.x + 3 && h.x < cb.x, 'between the two centres'); assert.equal(h.flip, 1, 'faces right-down'); assert.ok(h.moving);
+  S.walk = null;
+});
+
+await t('assets loader: lazy, @1x on phones and @2x on desktop, null while loading, failures swallowed, headless is a no-op', async () => {
+  const fake = createAssets({ fetchJson: async () => ({ version: 1, tile: { w: 2, h: 1 }, rooms: { rm_ward: { file1x: 'w1.webp', file2x: 'w2.webp', w: 100, h: 100, floorCx: 50, floorCy: 75, floorW: 96, floorH: 48 } }, actors: { marrow: { file1x: 'h1.webp', file2x: 'h2.webp', walk1x: 'hb1.webp', walk2x: 'hb2.webp', w: 40, h: 60, anchorX: 20, anchorY: 58, kind: 'hero' }, gone: { file1x: 'x.webp', w: 1, h: 1, kind: 'normal' } }, icons: {}, cards: {}, cardsById: { b_ward: { room: 'rm_ward' } } }), makeImage: () => ({}) });
+  assert.equal(fake.room('rm_ward'), null, 'nothing before ensure'); assert.equal(fake.state, 'idle');
+  const desk = { scale: 1 }, phone = { scale: 0.6 };
+  fake.ensure(desk); await new Promise((r) => setTimeout(r, 5)); assert.ok(fake.ready());
+  assert.equal(fake.room('rm_ward', desk), null, 'requested, still loading');
+  const e2 = fake.imgs.get('w2.webp'); assert.ok(e2, 'desktop asks for the @2x file'); assert.ok(!fake.imgs.has('w1.webp'));
+  e2.img.onload(); const got = fake.room('rm_ward', desk); assert.ok(got && got.def.floorCx === 50);
+  fake.room('rm_ward', phone); assert.ok(fake.imgs.has('w1.webp'), 'phones ask for @1x');
+  fake.imgs.get('w1.webp').img.onerror(); assert.ok(fake.room('rm_ward', phone), 'a missing @1x falls back to the loaded @2x');
+  fake.actor('marrow', phone, true); assert.ok(fake.imgs.has('hb1.webp'), 'the walk frame is its own file');
+  fake.actor('gone', phone); fake.imgs.get('x.webp').img.onerror(); assert.equal(fake.actor('gone', phone), null); assert.ok(fake.failed >= 1);
+  assert.equal(fake.room('nope', desk), null); assert.equal(fake.actor('marrow', desk), null);
+  assert.deepEqual(fake.kindIds('hero'), ['marrow']);
+  fake.preload(desk); assert.ok(fake.imgs.has('h2.webp') && fake.imgs.has('hb2.webp'), 'preload queues the actors and their walk frames'); assert.equal(fake.progress().total, 3);
+  assert.equal(fake.cardArt({ id: 'b_ward', kind: 'room', room: 'rm_ward' }, desk).kind, 'room', 'a card without its own art shows its room');
+  const dead = createAssets({ fetchJson: async () => { throw new Error('404'); } }); dead.ensure(); await new Promise((r) => setTimeout(r, 5)); assert.equal(dead.state, 'none'); assert.equal(dead.room('rm_ward'), null);
+  const headless = createAssets(); headless.ensure(); assert.equal(headless.state, 'none', 'no fetch / Image in node: a harmless no-op');
+  assert.equal(assets.state === 'idle' || assets.state === 'none', true, 'the shared loader never started in headless tests');
+});
+
+await t('iso: with no art the rooms are procedural blocks; with a manifest the sprites are drawn aligned by floorCx / floorCy / floorW', async () => {
+  const { app, run, flow } = await setup({ seed: 'iso6' });
+  const [ent, wd, qu] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2], ['rm_quarry', 2, 2]]);
+  run.ward.deck.hand = []; flow.route(); frames(app, 100);
+  const calls = []; const dI = app.ctx.drawImage; app.ctx.drawImage = (...a) => { calls.push(a); };
+  const img = { naturalWidth: 400, naturalHeight: 400, width: 400, height: 400 };
+  const def = (f) => ({ file1x: f, file2x: f, w: 400, h: 400, floorCx: 200, floorCy: 300, floorW: 380, floorH: 190 });
+  try {
+    frames(app, 3); assert.equal(calls.filter((c) => c[0] === img).length, 0, 'no sprite without a manifest');
+    assets.manifest = { version: 1, tile: { w: 2, h: 1 }, rooms: { rm_ward: def('a.webp'), rm_quarry: def('q.webp') }, actors: {}, icons: {}, cards: {}, cardsById: {} };
+    assets.state = 'ready'; assets.imgs.set('a.webp', { ok: true, img }); assets.imgs.set('q.webp', { ok: true, img: { ...img } });
+    run.ward.rooms[qu].on = false; frames(app, 3);
+    const sp = calls.filter((c) => c[0] === img && c.length === 5), c1 = ISO.cellC(run.ward, 1, 2), s = ISO.TW * 0.76 / 380;
+    assert.ok(sp.length >= 1, 'the ward sprite was drawn');
+    const call = sp[sp.length - 1]; assert.ok(Math.abs(call[1] - (c1.x - 200 * s)) < 1 && Math.abs(call[2] - (c1.y - 300 * s)) < 1 && Math.abs(call[3] - 400 * s) < 1, 'aligned by the floor centre and scaled by the floor width');
+    assert.ok(calls.filter((c) => c[0] === assets.imgs.get('q.webp').img).length === 0, 'the dark quarry is not drawn from the plain sprite');
+  } finally { assets.reset(); app.ctx.drawImage = dI; }
+  frames(app, 3);
+});
+
+await t('iso: reduced motion stops the wander and the bob; with motion the monsters drift', async () => {
+  const run1 = async (reduce) => {
+    const { app, run, flow, meta } = await setup({ seed: 'iso7' }); meta.settings.reduceMotion = reduce; meta.settings.reducedMotion = reduce;
+    const [e, wd] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2]]);
+    run.ward.rooms[wd].contents = [{ kind: 'monster', id: NORMAL1[0] }, { kind: 'monster', id: NORMAL1[0] }]; run.ward.deck.hand = [];
+    flow.route(); frames(app, 200);
+    const snap = () => JSON.stringify(ISO.lastActors().filter((a) => a.kind === 'monster').map((a) => [a.x, a.y, a.bob, a.sq]));
+    const a = snap(); frames(app, 100); return a === snap();
+  };
+  assert.equal(await run1(true), true, 'reduced: frozen'); assert.equal(await run1(false), false, 'with motion: they move');
+});
+
+await t('iso: light by phase (cool morning, bright midday, amber evening, deep blue night) blends across the phase change', async () => {
+  const mr = { ...ISO.lightState('morning', null) }, d = { ...ISO.lightState('midday', null) }, ev = { ...ISO.lightState('evening', null) }, ni = { ...ISO.lightState('night', null) };
+  assert.ok(mr.b > mr.r, 'morning is cool'); assert.ok(d.a < 0.05, 'midday is untinted'); assert.ok(ev.r > ev.b && ev.glow > 0.3, 'evening is amber with lamps'); assert.ok(ni.b > ni.r && ni.glow >= 1 && ni.moon > 0, 'night is blue, lamps lit, moon up');
+  const mid = ISO.lightState('night', { from: 'evening', t: 0.5, dur: 1 });
+  assert.ok(mid.a > Math.min(ev.a, ni.a) - 1e-9 && mid.a < Math.max(ev.a, ni.a) + 1e-9 && mid.b > ev.b && mid.b < ni.b, 'halfway between the two');
+});
+
+await t('iso: a full floor (10 rooms, 40 monsters) stays within a canvas-call budget per frame', async () => {
+  const { app, run, flow } = await setup({ seed: 'iso8' });
+  const spec = [['rm_entrance', 0, 2]]; ['rm_ward', 'rm_ward', 'rm_ward', 'rm_chapel', 'rm_sawmill', 'rm_quarry', 'rm_linen', 'rm_workshop', 'rm_ward'].forEach((ty, i) => spec.push([ty, 1 + (i % 5), 1 + 2 * Math.floor(i / 5) + (i % 2)]));
+  const ids = layout(run, spec);
+  for (const id of ids) if (run.ward.rooms[id].type === 'rm_ward') run.ward.rooms[id].contents = Array.from({ length: 5 }, () => ({ kind: 'monster', id: NORMAL1[0] }));
+  run.ward.deck.hand = []; flow.route(); frames(app, 100);
+  const c0 = app.ctx.__calls; frames(app, 20); const per = (app.ctx.__calls - c0) / 20;
+  assert.ok(per < 6000, 'canvas calls per frame ' + Math.round(per));
+});
+
 console.log(`${n} ward UI checks passed`);
