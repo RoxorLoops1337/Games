@@ -17,7 +17,11 @@ export const FX_OPTS = { shake: true, reduced: false, quality: 1, mobile: typeof
 
 // Default effects quality: phones and tablets start on 'low' (the auto-downgrade in post.js still applies on top).
 // WCAG 2.3.1: at most 3 flashes in any one second (per Fx; the clock is its own age counter)
-function flashOk(fx) { const t = fx._ft || (fx._ft = []), now = (fx._clk = fx._clk || 0); while (t.length && now - t[0] >= 1) t.shift(); if (t.length >= 3) return false; t.push(now); return true; }
+// One gate shared by every flash source (Fx.flash and post.flash), keyed on a wall clock or an explicit time.
+const FL = [];
+export function flashGate(nowSec) { if (FX_OPTS.flashes === false) return false; const now = nowSec === undefined ? (typeof performance !== 'undefined' ? performance.now() / 1000 : Date.now() / 1000) : nowSec; while (FL.length && now - FL[0] >= 1) FL.shift(); if (FL.length >= 3) return false; FL.push(now); return true; }
+flashGate.reset = () => { FL.length = 0; };
+function flashOk() { return flashGate(); }
 export const defaultQuality = () => (FX_OPTS.mobile ? 'low' : 'high');
 export const CAP_DESKTOP = 2000;
 export const CAP_MOBILE = 600;

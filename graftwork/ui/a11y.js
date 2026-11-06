@@ -1,7 +1,7 @@
 // Accessibility kit: colourblind palettes + simulation, flash limiter, high contrast, gamepad -> key bridge, live announcements.
 // Pure enough to run headless (no DOM needed). Install once with installA11y(app); main.js calls applySettings(app) every frame.
 import { COL } from './core.js';
-import { FX_OPTS } from './fx.js';
+import { FX_OPTS, flashGate } from './fx.js';
 import { SCHOOL_COLORS, COLX, CB, clearCardCache } from '../art/cards.js';
 
 export const A11Y_DEFAULTS = { flashes: true, highContrast: false, colorblindMode: 'deuteranopia', announce: true };
@@ -68,14 +68,8 @@ export function applySettings(app) {
 }
 
 // ---- flash limiter: never more than 3 flashes in any one second ----
-const stamps = [];
-export function flashAllowed(nowSec) {
-  if (FX_OPTS.flashes === false) return false;
-  while (stamps.length && nowSec - stamps[0] >= 1) stamps.shift();
-  if (stamps.length >= 3) return false;
-  stamps.push(nowSec); return true;
-}
-export function resetFlashes() { stamps.length = 0; }
+export const flashAllowed = flashGate;
+export function resetFlashes() { flashGate.reset(); }
 
 // ---- live announcements ----
 // A visually hidden aria-live region. Without a DOM the lines are only logged in app.a11y.log (tests read that).
@@ -158,10 +152,9 @@ export function watchCombat(app, c, intentOf) {
   }
   if (c.player.hp < w.hp) A.announce(`You take ${w.hp - c.player.hp} damage. Health ${c.player.hp}.`, true);
   w.hp = c.player.hp;
-  if (!w.over && c.over) {
-    w.over = true;
-    const lost = c.over === 'lose' || c.player.hp <= 0;
-    A.announce(lost ? 'Defeat. You have fallen.' : 'Victory. The fight is won.', true);
-  }
+}
+// Called by the combat screen when the ending animation starts, so the line matches what the player sees.
+export function announceEnding(app, win) {
+  if (app.a11y) app.a11y.announce(win ? 'Victory. The fight is won.' : 'Defeat. You have fallen.', true);
 }
 export function describeFocus(rec) { return rec ? rec.label : ''; }

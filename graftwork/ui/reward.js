@@ -156,8 +156,9 @@ function drawRow(app, r, i, y, compact, K) {
   keyBadge(app, String(i + 1), x - 16, cy);
 
   if (!app.blocked && app.inRect(x, y, PW, h)) {
-    if (full) app.tooltip(info.title, `Potion slots full (${run.potions.length}/${RUN.potionSlots(run)}). Use a potion in combat to make room, or leave this one.`, { color: COL.bad });
-    else app.tooltip(info.title, null, { lines: info.tip, color: info.col });
+    const rowAnchor = { x, y, w: PW, h }; // tip sits beside the row, never over its Take chip
+    if (full) app.tooltip(info.title, `Potion slots full (${run.potions.length}/${RUN.potionSlots(run)}). Use a potion in combat to make room, or leave this one.`, { color: COL.bad, anchor: rowAnchor });
+    else app.tooltip(info.title, null, { lines: info.tip, color: info.col, anchor: rowAnchor });
     if (can && app.clicked(x, y, PW, h)) claim(app, r.id, x + PW / 2, cy);
   }
   return y + h + (compact ? 8 : 12);

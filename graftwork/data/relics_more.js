@@ -28,11 +28,11 @@ const repay = (A, p) => {
 
 export const RELICS_MORE = [
   // ---- mono-school ----
-  { id: 'r_monochrome_spindle', name: 'Monochrome Spindle', rarity: 'uncommon', text: 'While every graft in your deck is of ONE school, the first extend each turn deals 4 damage to a random enemy and gains 4 Block.',
-    on: { seamExtend: (A) => { if (deckSchools(A) !== 1 || !first(A, 'spindleTurn')) return; const t = randFoe(A); if (t) A.dmg(A.player, t, 4, { pierce: true }); A.block(A.player, 4); } } },
+  { id: 'r_monochrome_spindle', name: 'Monochrome Spindle', rarity: 'uncommon', text: 'While every graft in your deck is of ONE school, the first extend each turn deals 7 damage to a random enemy and gains 7 Block.',
+    on: { seamExtend: (A) => { if (deckSchools(A) !== 1 || !first(A, 'spindleTurn')) return; const t = randFoe(A); if (t) A.dmg(A.player, t, 7, { pierce: true }); A.block(A.player, 7); } } },
   // ---- bridging two schools ----
-  { id: 'r_bridge_pin', name: 'Bridge Pin', rarity: 'uncommon', text: 'The first time each turn you extend a Line that holds 2 or more schools, draw 1 card.',
-    on: { seamExtend: (A) => { if (nSchools(A) >= 2 && first(A, 'bridgePinTurn')) A.draw(1); } } },
+  { id: 'r_bridge_pin', name: 'Bridge Pin', rarity: 'uncommon', text: 'The first time each turn you extend a Line of 3 or more knots that holds 2 or more schools, draw 1 card.',
+    on: { seamExtend: (A) => { if (nSchools(A) >= 2 && seam(A).len >= 3 && first(A, 'bridgePinTurn')) A.draw(1); } } },
   { id: 'r_second_colour', name: 'Second Colour', rarity: 'uncommon', text: 'Cutting a Line that holds 2 or more schools gives 2 Block per stitch.',
     on: { seamCut: (A, p) => { if (p && p.paid === false) return; if (nSchools(A) >= 2) { const n = stitches(p); if (n > 0) A.block(A.player, 2 * n); } } } },
   // ---- Overload ----

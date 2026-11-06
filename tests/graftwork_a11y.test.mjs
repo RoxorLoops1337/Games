@@ -52,10 +52,10 @@ const mk = async () => { const meta = { settings: {} }; const app = await makeAp
 }
 // ---- flashes: switch + 3 per second cap ----
 {
-  FX_OPTS.flashes = true; const fx = new Fx();
+  FX_OPTS.flashes = true; A.resetFlashes(); const fx = new Fx();
   for (let i = 0; i < 6; i++) { fx.flash('#fff', 0.4, 0.2); fx.update(0.05); }
   assert.ok(fx.flashes.length <= 3, 'max 3 flashes in the first second, got ' + fx.flashes.length);
-  FX_OPTS.flashes = false; const f2 = new Fx(); f2.flash('#fff', 0.4, 0.2); assert.equal(f2.flashes.length, 0); FX_OPTS.flashes = true;
+  A.resetFlashes(); FX_OPTS.flashes = false; const f2 = new Fx(); f2.flash('#fff', 0.4, 0.2); assert.equal(f2.flashes.length, 0); FX_OPTS.flashes = true;
   A.resetFlashes(); assert.ok(A.flashAllowed(0) && A.flashAllowed(0.1) && A.flashAllowed(0.2) && !A.flashAllowed(0.3) && A.flashAllowed(1.3));
 }
 // ---- palettes are distinguishable under simulated deficiencies, and swap in place ----
@@ -76,8 +76,9 @@ const mk = async () => { const meta = { settings: {} }; const app = await makeAp
   assert.match(app.a11y.log[0], /Turn 1.*Gaunt attacks for 8/);
   app.t += 2; c.player.hp = 31; A.watchCombat(app, c, () => 'x'); assert.match(app.a11y.log.at(-1), /take 9 damage/);
   app.t += 2; c.turn = 2; A.watchCombat(app, c, () => 'x'); assert.match(app.a11y.log.at(-1), /Turn 2/);
-  app.t += 2; c.over = 'win'; A.watchCombat(app, c); assert.match(app.a11y.log.at(-1), /Victory/);
-  const c2 = { turn: 1, energy: 0, player: { hp: 0 }, over: 'lose', enemies: [] }; A.watchCombat(app, c2); assert.match(app.a11y.log.at(-1), /Defeat/);
+  app.t += 2; c.over = 'win'; A.watchCombat(app, c); assert.doesNotMatch(app.a11y.log.at(-1), /Victory/, 'ending is announced by the screen, not the final state');
+  A.announceEnding(app, true); assert.match(app.a11y.log.at(-1), /Victory/);
+  app.t += 2; A.announceEnding(app, false); assert.match(app.a11y.log.at(-1), /Defeat/);
   app.shared.meta.settings.announce = false; assert.equal(app.announce('hello'), false);
 }
 console.log('graftwork a11y ok');

@@ -14,7 +14,7 @@ import { drawHero, drawPortrait } from '../art/heroes.js';
 import { drawBackground } from '../art/backgrounds.js';
 import * as L from './combat_layout.js';
 import { maybeTip } from './tutorial.js';
-import { watchCombat } from './a11y.js';
+import { watchCombat, announceEnding } from './a11y.js';
 import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip } from './seam_ui.js';
 import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
 import { queueTip, flushTips, cardTipStack } from './tooltips.js';
@@ -1091,6 +1091,7 @@ function updateInput(app, dt) {
       else if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; sfx('uiBack'); }
       else if (!busy()) app.shared.flow.openSettings && app.shared.flow.openSettings();
     }
+    else if ((k === 'p' || k === 'P') && act) { const n = S.run.potions.length; let i = S.potSel == null ? -1 : S.potSel; for (let g = 0; g < n; g++) { i = (i + 1) % n; if (S.potions[i]) { S.potSel = i; S.sel = null; S.kbUsed = true; S.kbTarget = true; S.tgt = 0; sfx('uiHover'); break; } } }
     else if (k === 'q' || k === 'Q' || k === 'i' || k === 'I') S.modal = { kind: 'piles', tab: 'draw', scroll: 0 };
     else if (act) {
       if (/^[0-9]$/.test(k)) {
@@ -1381,6 +1382,7 @@ function syncIdle() {
 function startEnding() {
   const win = S.c.over === 'win';
   S.ending = { t: 0, win, skip: false, stamped: false, coins: false, hb: 0 };
+  if (APP && APP.a11y) announceEnding(APP, win);
   S.sel = null; S.drag = null; S.banner = null;
   if (win) {
     sfx('win'); S.P.attack = 0.0001; // hero flourish
@@ -1449,7 +1451,7 @@ function draw(app) {
   if (S.boss) { ctx.fillStyle = 'rgba(120,10,24,.2)'; ctx.fillRect(-20, -20, W + 40, H + 40); }
   const tgtMode = targeting() || (S.drag && selNeedsTarget());
   drawHeroAndHud(app);
-  drawEnemies(app, tgtMode);
+  drawEnemies(app, tgtMode); drawKbRing(app);
   drawSprites(app);
   drawCoins(app);
   { const fd = S.hand.find((d) => d.uid === (S.hov || S.sel)); drawSeamRail(app, c, L.SEAM, S.t, fd ? fd.w : null, !busy()); }
@@ -1569,6 +1571,13 @@ function drawEnemyHud(app, ed, alpha, hot) {
     app.text(ed.callout.text, ed.x, EF - ed.h * 0.6 - k * 30, { size: 22, bold: true, align: 'center', color: COL.vellum, stroke: '#0e0e0e', strokeW: 5, baseline: 'middle' }); ctx.restore();
   }
 }
+// Persistent keyboard / pad focus ring on the targeted enemy (dashed, high contrast, not colour-only)
+function drawKbRing(app) {
+  const l = liveEds(); if (!S.kbTarget || !S.kbUsed || !l.length || !targeting()) return;
+  const ed = l[S.tgt % l.length], ctx = app.ctx, x = ed.x - ed.w / 2 - 8, y = EF - ed.h - 8, w = ed.w + 16, h = ed.h + 16;
+  ctx.save(); app.rr(x, y, w, h, 12); ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = '#ffe9a8'; ctx.setLineDash([10, 6]); ctx.lineDashOffset = FX_OPTS.reduced ? 0 : -app.t * 20; ctx.stroke(); ctx.restore();
+  app.text('TARGET', ed.x, y - 22, { size: 15, bold: true, ui: true, align: 'center', color: '#ffe9a8', stroke: '#000', strokeW: 4 });
+}
 
 const col2 = (def) => (def.kind === 'boss' ? COL.scar : def.kind === 'elite' ? COL.lamp : COL.vellum);
 
@@ -1633,7 +1642,7 @@ function drawTopBar(app) {
   for (let i = 0; i < slots; i++) {
     const x = P0.x + i * pstep, y = P0.y + (P0.size - psz) / 2, sz = psz;
     const id = S.potions[i];
-    app.rr(x, y, sz, sz, 8); ctx.save(); ctx.fillStyle = 'rgba(40,34,30,.9)'; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = (S.potSel === i) ? COL.lamp : 'rgba(232,220,196,.35)'; ctx.stroke(); ctx.restore();
+    app.rr(x, y, sz, sz, 8); ctx.save(); ctx.fillStyle = 'rgba(40,34,30,.9)'; ctx.fill(); ctx.lineWidth = S.potSel === i ? 3.5 : 1.6; if (S.potSel === i && S.kbUsed) ctx.setLineDash([6, 4]); ctx.strokeStyle = (S.potSel === i) ? COL.lamp : 'rgba(232,220,196,.35)'; ctx.stroke(); ctx.restore();
     app.reg('potion' + i, x, y, sz, sz, {});
     if (id) {
       drawPotion(ctx, id, x + sz / 2, y + sz / 2, sz - 8);

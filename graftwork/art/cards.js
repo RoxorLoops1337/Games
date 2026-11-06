@@ -517,9 +517,9 @@ function cardPath(g, junk, seed) {
   g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.closePath();
 }
 
-function drawClamp(g, seed) {
+function drawClamp(g, seed, ty = -22) { // ty = bottom edge of the illustration window: the clamp straddles it and never covers the key number below
   const r = rngOf('clamp:' + seed);
-  g.save(); g.translate(0, -18); g.rotate(-0.2);
+  g.save(); g.translate(0, ty - 10); g.rotate(-0.12);
   g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(-112, 3, 224, 26);
   g.fillStyle = lg(g, 0, -12, 0, 14, [[0, '#c27a49'], [0.45, COLX.rust], [1, '#4d2714']]); g.fillRect(-112, -12, 224, 26); g.lineWidth = 2.4; g.strokeStyle = INK; g.strokeRect(-112, -12, 224, 26);
   for (let i = 0; i < 40; i++) { g.fillStyle = r() > 0.5 ? 'rgba(60,25,10,.5)' : 'rgba(220,150,90,.35)'; g.fillRect(-110 + r() * 218, -10 + r() * 22, 2 + r() * 5, 1.5 + r() * 2.5); }
@@ -701,7 +701,7 @@ function renderFace(g, spec, lines, price, o, I, win) {
   }
   if (junk) drawBandages(g);
   if (o.tithed) drawSeam(g, seed);
-  if (o.jam) drawClamp(g, seed);
+  if (o.jam) drawClamp(g, seed, win.y + win.h);
   if (o.mark) drawMark(g, o.mark, win, seed);
 }
 
