@@ -17,7 +17,7 @@ export function settingsOf(app) {
   if (!meta.settings || typeof meta.settings !== 'object') meta.settings = {};
   const s = meta.settings;
   if (!TEXT_STEPS.includes(s.textScale)) s.textScale = s.textSize === 'large' || s.largeText ? 125 : 100;
-  for (const k of Object.keys(DEFAULTS)) if (s[k] === undefined) s[k] = DEFAULTS[k];
+  for (const k of Object.keys(DEFAULTS)) if (s[k] === undefined && k !== 'quality') s[k] = DEFAULTS[k];
   if (!QUALITY.includes(s.quality)) s.quality = defaultQuality();
   return s;
 }
