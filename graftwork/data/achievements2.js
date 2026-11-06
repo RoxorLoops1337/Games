@@ -40,6 +40,6 @@ export const ACHIEVEMENTS_2 = [
   A('steady_nerves', 'Steady Nerves', 'Win at Ascension 8 or higher.', (r, c) => c.won && c.asc >= 8, back('gilt', 'Gilt Edge')),
   A('triple_pitch', 'Triple Pitch', 'Win at Ascension 7 with each hero.', (r, c, m) => HEROES3.every((h) => (m.wins[h] || 0) > 0 && (m.winAsc[h] || 0) >= 7), title('triple_pitch', 'Triple Pitch'),
     { progress: (m) => [HEROES3.filter((h) => (m.wins[h] || 0) > 0 && (m.winAsc[h] || 0) >= 7).length, 3] }),
-  A('boss_hunter', 'Boss Hunter', 'Defeat all 3 act bosses and the Grafter in one run.', (r, c) => c.won && st(r).bosses >= 3, title('boss_hunter', 'Boss Hunter')),
+  A('boss_hunter', 'Boss Hunter', 'Win a run in which all 3 act bosses fall before the Grafter.', (r, c) => c.won && !r.practice && st(r).bosses >= 3, title('boss_hunter', 'Boss Hunter')),
   A('case_closed', 'Case Closed', 'Earn 300 Credit across all runs.', (r, c, m) => ((m.credit && m.credit.total) || 0) >= 300, title('case_closed', 'Case Closed'), { progress: (m) => [Math.min(300, (m.credit && m.credit.total) || 0), 300] }),
 ];

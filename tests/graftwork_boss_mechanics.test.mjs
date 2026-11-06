@@ -67,7 +67,7 @@ t('Matron Claim: Tempered cards are immune', () => {
 });
 t('Matron Claim: the claimed card really fights at -25%', () => {
   const run = RUN.newRun({ hero: 'marrow', seed: 'matron-dmg' });
-  const s = run.deck.find((i) => i.id === 'm_strike');
+  const s = run.deck.find((i) => i.id === 'm_cut');
   s.grafts = [GOF.ember];
   const c = newCombat(run, ['the_matron']);
   c.run.hero = ''; const e = c.enemies[0]; e.hp = e.maxHp = 9999; e.block = 0;
@@ -89,7 +89,7 @@ t('Broker Late Fee: a Line that reaches 3 frays and he plates 4; cutting every s
   assert.equal(c.seam.len, 2); assert.equal(e.block, 0);
   const m = c.ev.length; P(c, 't_ember');
   assert.equal(c.seam.len, 2, 'the third stitch frays back to 2');
-  assert.equal(e.block, 4);
+  assert.equal(e.block, 3);
   assert.ok(c.ev.slice(m).some((x) => x.t === 'seamFray'));
   const c2 = fight('the_broker', 'bm2');
   for (const s of ['ember', 'rust', 'ember', 'rust']) P(c2, 't_' + s);
@@ -101,24 +101,24 @@ t('Broker Late Fee: Tempered cards stay off the Line (no fray)', () => {
   assert.equal(e.block, 0); assert.equal(c.seam.len, 0);
 });
 
-t('Impresario Ensemble: +1 per school past the first (max 3), intent equals the damage that lands', () => {
+t('Impresario Ensemble: +1 to every hit once three schools are played, intent equals the damage that lands', () => {
   const c = fight('the_impresario'); const e = c.enemies[0];
   assert.equal(e.move, 'downbeat');
-  P(c, 't_ember'); assert.ok(!e.st.ensemble, 'one school adds nothing');
-  P(c, 't_rust'); P(c, 't_static');
-  assert.equal(e.st.ensemble, 2);
+  const base = intentOf(c, e).dmg;
+  P(c, 't_ember'); P(c, 't_rust'); assert.ok(!e.st.ensemble, 'two schools add nothing');
+  P(c, 't_static');
+  assert.equal(e.st.ensemble, 1);
   const shown = intentOf(c, e).dmg;
-  P(c, 't_blood'); P(c, 't_echo'); assert.equal(e.st.ensemble, 3, 'capped at 3');
-  const shown3 = intentOf(c, e).dmg;
-  assert.equal(shown3 - shown, 1, 'intent follows the status');
-  assert.equal(hitTaken(c), shown3, 'intent == damage');
+  assert.equal(shown, base + 1, 'intent follows the status');
+  P(c, 't_blood'); P(c, 't_echo'); assert.equal(e.st.ensemble, 1, 'capped at 1');
+  assert.equal(hitTaken(c), shown, 'intent == damage');
   assert.ok(!e.st.ensemble, 'resets for the next turn');
 });
-t('Impresario Ensemble: a two-school turn costs only +1', () => {
+t('Impresario Ensemble: a two-school turn costs nothing', () => {
   const c = fight('the_impresario', 'bm4'); const e = c.enemies[0];
   const base = intentOf(c, e).dmg;
   for (const s of ['ember', 'rust', 'ember', 'rust', 'ember']) P(c, 't_' + s);
-  assert.equal(intentOf(c, e).dmg, base + 1);
+  assert.equal(intentOf(c, e).dmg, base);
 });
 
 t('Resident Mimic: +3 per card of your last school; intent == damage; ending on another school cools it', () => {
@@ -148,14 +148,14 @@ t('Defibrillator Insulated: Burn put on it returns half (rounded up, max 4) to y
   assert.equal(c.player.st.burn, 7);
 });
 
-t('Pickled King Thirst: heals 1 per 3 Block you gain, 9 a turn, resets each turn', () => {
+t('Pickled King Thirst: heals 1 per 4 Block you gain, 6 a turn, resets each turn', () => {
   const c = fight('pickled_king'); const e = c.enemies[0];
   e.hp = 1000;
-  c.A.block(c.player, 9); assert.equal(e.hp, 1003);
-  c.A.block(c.player, 60); assert.equal(e.hp, 1009, 'capped at 9 a turn');
+  c.A.block(c.player, 9); assert.equal(e.hp, 1002);
+  c.A.block(c.player, 60); assert.equal(e.hp, 1006, 'capped at 6 a turn');
   endTurn(c);
   e.hp = 1000; c.player.block = 0;
-  c.A.block(c.player, 3); assert.equal(e.hp, 1001, 'a new turn drinks again');
+  c.A.block(c.player, 4); assert.equal(e.hp, 1001, 'a new turn drinks again');
 });
 
 t('Stagehands Hoist the Heavy: jams the most expensive card in the next hand', () => {

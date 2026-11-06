@@ -286,6 +286,9 @@ const ST = {
   tally: ['tally', '#e8dcc4', RD], priced: ['tag', '#e8dcc4', GO], offer: ['scales', GO, '#e8dcc4'], interest: ['percent', GO, '#fff3b0'],
   brined: ['jar', '#6fb8a8', '#c8c0a0'], strings: ['marionette', '#e8dcc4', '#b3a58a'], fragile: ['goblet', '#bfe3ea', '#fff'], veiled: ['curtain', '#8e3a52', GO],
   baton: ['baton', '#f0ead8', '#6a4a30'],
+  // round 8: boss and elite signature mechanics
+  claim: ['clamp', '#e6c9bd', '#d2243c'], mimicry: ['speech', '#c9b6e6', '#f0ead8'], insulated: ['glove', '#f2c14e', '#6a4a30'], thirst: ['vial', '#6fb8a8', '#d2243c'],
+  latefee: ['receipt', '#e8dcc4', '#d2243c'], ensemble: ['bell', '#e8c36a', '#8e3a52'], leafarmor: ['shieldg', '#c9a227', '#f4e7a8'], applause: ['sparkle', '#ffe55a', '#8e3a52'],
   poison: ['poison', '#6fcf4a', '#f0ffd0'], brittle: ['brittle', '#b9c6cc', '#ffb0a8'], rejection: ['rejection', '#e6d8c0', '#d2243c'], infection: ['infection', '#d9c83a', '#fff6a0'],
   numb: ['numb', '#a9aeb2', '#f0f0f0'], unpicked: ['unpicked', '#e6d8c0', '#d2243c'], cadencelock: ['chainbreak', '#c8d2d8', '#ff6a5a'], stagefright: ['mask', '#e8dcc4', '#7FD1E0'],
   dread: ['slab', '#7a7480', '#ff6a5a'], leaden: ['leaden', '#8d949a', '#d8dde2'], weightofdebt: ['debtledger', '#e8dcc4', '#F2C14E'], stitchedup: ['stitchshield', '#c9d6dc', '#e8dcc4'],

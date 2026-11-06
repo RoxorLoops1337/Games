@@ -11,7 +11,7 @@
 //                                      Returns {x, y, angle, sway}. Pass `out` to avoid allocation.
 //   drawCard(ctx, spec, x, y, o)       centered. o: { scale, rot, tithed, jam, cost, glow 0..1, selected, dim 0..1, alpha, hover,
 //                                      preview, compact, tilt:{x,y} -1..1, mark:'numb'|'unpicked'|'reknit'|'frayed', rarity, t, still }
-//   drawCardBack(ctx, x, y, o)         centered. o: { scale, rot, alpha, dim, t }
+//   drawCardBack(ctx, x, y, o)         centered. o: { scale, rot, alpha, dim, t, back }; setCardBack(id) picks the equipped back (8 ids: BACK_IDS)
 //   drawGraftPatch(ctx, graft, x,y,w,h,o)   TOP-LEFT anchored. o: { hover, selected, dim, sold, scale }
 //   drawSchoolGlyph(ctx, school, x, y, r, color)   centered
 import { COL } from '../ui/core.js';
@@ -974,7 +974,7 @@ function getFace(spec, o) {
   }
   return { direct: (g) => renderFace(g, spec, lines, price, o, I, win), win, info: I };
 }
-export function clearCardCache() { cache.clear(); backCache = null; }
+export function clearCardCache() { cache.clear(); backCache = {}; }
 function buildLayers(ent) { // lazy: only cards that are ever tilted pay for the 3 parallax canvases
   if (ent.layers !== undefined) return ent.layers;
   const w = ent.win, I = ent.info, mk = (ww, hh) => makeCanvas(Math.ceil(ww * S), Math.ceil(hh * S));
@@ -1105,32 +1105,100 @@ function drawCbChip(ctx, spec) {
   ctx.fillText(({ attack: 'A', skill: 'S', power: 'P' })[spec.type] || '', x + 9, y + h / 2 + 1); ctx.restore();
 }
 // ---------- card back: a stitched suture cross over a vellum wound ----------
-let backCache = null;
+let backCache = {}, curBack = 'plain';
 function lens(g, len, wid, vertical) { g.beginPath(); if (vertical) { g.moveTo(0, -len); g.quadraticCurveTo(wid, 0, 0, len); g.quadraticCurveTo(-wid, 0, 0, -len); } else { g.moveTo(-len, 0); g.quadraticCurveTo(0, -wid, len, 0); g.quadraticCurveTo(0, wid, -len, 0); } g.closePath(); }
-function renderBack(g) {
-  rr(g, -HW, -HH, CARD_W, CARD_H, 12); g.fillStyle = '#3d352e'; g.fill(); shadeCurrent(g, '#3d352e', 0, 0, 190, 2);
+export const BACK_IDS = ['plain', 'ledger', 'bone', 'verdigris', 'oxblood', 'gilt', 'tapestry', 'ward_lamp'];
+export function setCardBack(id) { curBack = BACK_IDS.includes(id) ? id : 'plain'; }
+// Palette per back: base fill, the two frame strokes, the pulse glow and the motif ink. Motifs are drawn in -HW..HW, -HH..HH space.
+const PAL = {
+  plain: { base: '#3d352e', f1: 'rgba(201,162,39,.65)', f2: 'rgba(232,220,196,.35)', glow: '190,40,52', ink: '#7a2230', txt: 'rgba(232,220,196,.8)' },
+  ledger: { base: '#23382b', f1: 'rgba(214,190,110,.7)', f2: 'rgba(200,226,196,.35)', glow: '110,190,120', ink: '#a9c9a2', txt: 'rgba(214,236,206,.8)' },
+  bone: { base: '#cbbf9f', f1: 'rgba(90,70,40,.7)', f2: 'rgba(60,44,30,.35)', glow: '255,244,212', ink: '#4a3c2a', txt: 'rgba(58,44,30,.85)' },
+  verdigris: { base: '#1f4a47', f1: 'rgba(150,224,200,.65)', f2: 'rgba(170,230,210,.35)', glow: '90,200,180', ink: '#9ad8c4', txt: 'rgba(200,240,226,.8)' },
+  oxblood: { base: '#4a1219', f1: 'rgba(222,150,130,.6)', f2: 'rgba(240,190,170,.3)', glow: '220,60,60', ink: '#d6806c', txt: 'rgba(246,206,190,.8)' },
+  gilt: { base: '#1a1613', f1: 'rgba(242,193,78,.95)', f2: 'rgba(242,193,78,.5)', glow: '242,193,78', ink: '#f2c14e', txt: 'rgba(246,214,130,.9)' },
+  tapestry: { base: '#4d2c3c', f1: 'rgba(230,190,120,.7)', f2: 'rgba(230,200,150,.4)', glow: '230,150,90', ink: '#e0b67a', txt: 'rgba(240,214,170,.85)' },
+  ward_lamp: { base: '#131c2c', f1: 'rgba(255,190,90,.7)', f2: 'rgba(160,190,240,.35)', glow: '255,190,90', ink: '#ffc766', txt: 'rgba(206,222,250,.85)' },
+};
+function strokeLines(g, pts, col, w) { g.beginPath(); for (const [x1, y1, x2, y2] of pts) { g.moveTo(x1, y1); g.lineTo(x2, y2); } g.lineWidth = w; g.strokeStyle = col; g.lineCap = 'round'; g.stroke(); }
+function ring(g, x, y, r, col, w) { g.beginPath(); g.arc(x, y, r, 0, 6.2832); g.lineWidth = w; g.strokeStyle = col; g.stroke(); }
+const MOTIF = {
+  ledger(g, P) { // ruled ledger page: column rules, row ticks, a wax seal
+    const L = []; for (let y = -96; y <= 96; y += 12) L.push([-62, y, 62, y]);
+    strokeLines(g, L, 'rgba(200,226,196,.16)', 1);
+    strokeLines(g, [[-30, -100, -30, 100], [30, -100, 30, 100], [-62, -100, -62, 100], [62, -100, 62, 100]], 'rgba(214,190,110,.5)', 1.2);
+    const T = []; for (let y = -90; y <= 90; y += 12) T.push([-58, y, -40, y], [40, y, 58, y]);
+    strokeLines(g, T, P.ink, 1.6);
+    circ(g, 0, 0, 22, '#7a2230', 2); ring(g, 0, 0, 16, 'rgba(255,214,200,.5)', 1.2); strokeLines(g, [[-8, 0, 8, 0], [0, -8, 0, 8]], 'rgba(255,214,200,.7)', 2.2);
+  },
+  bone(g, P) { // spine: stacked vertebrae with a thread down the middle, ribs fanning out
+    for (let i = 0; i < 7; i++) { const y = -84 + i * 28, w = 22 - Math.abs(i - 3) * 1.5; rr(g, -w / 2, y - 9, w, 18, 6); g.fillStyle = '#e6dcc0'; g.fill(); g.lineWidth = 1.8; g.strokeStyle = P.ink; g.stroke(); }
+    for (let i = 0; i < 6; i++) { const y = -70 + i * 28; for (const sd of [-1, 1]) { g.beginPath(); g.moveTo(sd * 11, y); g.quadraticCurveTo(sd * 52, y - 6, sd * 56, y + 24); g.lineWidth = 3; g.strokeStyle = '#e6dcc0'; g.stroke(); g.lineWidth = 1; g.strokeStyle = P.ink; g.stroke(); } }
+    strokeLines(g, [[0, -96, 0, 96]], '#7a2230', 1.4);
+  },
+  verdigris(g, P) { // rosette: eight petals and a patina ring
+    for (let i = 0; i < 8; i++) { g.save(); g.rotate(i * Math.PI / 4); g.beginPath(); g.ellipse(0, -34, 12, 30, 0, 0, 6.2832); g.lineWidth = 2.2; g.strokeStyle = P.ink; g.stroke(); g.fillStyle = 'rgba(154,216,196,.14)'; g.fill(); g.restore(); }
+    ring(g, 0, 0, 70, P.ink, 1.4); ring(g, 0, 0, 76, 'rgba(154,216,196,.3)', 1); circ(g, 0, 0, 9, P.ink, 0); circ(g, 0, 0, 4, '#1f4a47', 0);
+    const r = rngOf('verdi'); for (let i = 0; i < 40; i++) { g.fillStyle = 'rgba(170,236,210,.12)'; g.beginPath(); g.arc(-HW + r() * CARD_W, -HH + r() * CARD_H, 1 + r() * 4, 0, 6.3); g.fill(); }
+  },
+  oxblood(g, P) { // diamond lattice, a stitched cross and a heart
+    const L = []; for (let k = -150; k <= 150; k += 20) { L.push([k, -110, k + 110, 0], [k, -110, k - 110, 0], [k, 110, k + 110, 0], [k, 110, k - 110, 0]); }
+    g.save(); rr(g, -HW + 14, -HH + 14, CARD_W - 28, CARD_H - 28, 5); g.clip(); strokeLines(g, L, 'rgba(240,170,150,.16)', 1); g.restore();
+    g.beginPath(); g.moveTo(0, 30); g.bezierCurveTo(-48, -2, -30, -44, 0, -18); g.bezierCurveTo(30, -44, 48, -2, 0, 30); g.fillStyle = '#8c1c28'; g.fill(); g.lineWidth = 2.6; g.strokeStyle = '#1b0508'; g.stroke();
+    const S = []; for (let i = -70; i <= 70; i += 14) { if (Math.abs(i) < 16) continue; S.push([-5, i, 5, i + 4], [-5, i + 4, 5, i]); } strokeLines(g, S, P.ink, 1.8);
+    strokeLines(g, [[0, -100, 0, 100]], 'rgba(240,190,170,.25)', 1);
+  },
+  gilt(g, P) { // sunburst: rays, a triple-ruled inner frame and a gilt boss
+    const R = []; for (let i = 0; i < 24; i++) { const a = i * Math.PI / 12, c = Math.cos(a), s = Math.sin(a); R.push([c * 18, s * 18, c * (i % 2 ? 62 : 82), s * (i % 2 ? 62 : 82)]); }
+    strokeLines(g, R, P.ink, 1.6); ring(g, 0, 0, 90, 'rgba(242,193,78,.55)', 1.2); ring(g, 0, 0, 96, 'rgba(242,193,78,.3)', 1);
+    circ(g, 0, 0, 16, '#f2c14e', 2); circ(g, 0, 0, 9, '#1a1613', 1.4); ring(g, 0, 0, 24, P.ink, 1.2);
+    rr(g, -HW + 5, -HH + 5, CARD_W - 10, CARD_H - 10, 9); g.lineWidth = 1; g.strokeStyle = 'rgba(242,193,78,.55)'; g.stroke();
+  },
+  tapestry(g, P) { // woven weft and warp, a diamond medallion with a stitched star
+    const W2 = []; for (let x = -70; x <= 70; x += 7) W2.push([x, -104, x, 104]); strokeLines(g, W2, 'rgba(230,190,120,.1)', 2);
+    const W3 = []; for (let y = -104; y <= 104; y += 7) W3.push([-70, y, 70, y]); strokeLines(g, W3, 'rgba(120,60,90,.35)', 2);
+    g.beginPath(); g.moveTo(0, -70); g.lineTo(46, 0); g.lineTo(0, 70); g.lineTo(-46, 0); g.closePath(); g.fillStyle = 'rgba(40,20,32,.7)'; g.fill(); g.lineWidth = 2.4; g.strokeStyle = P.ink; g.stroke();
+    g.beginPath(); g.moveTo(0, -48); g.lineTo(30, 0); g.lineTo(0, 48); g.lineTo(-30, 0); g.closePath(); g.lineWidth = 1.2; g.strokeStyle = 'rgba(230,200,150,.6)'; g.stroke();
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, c = Math.cos(a), s = Math.sin(a); strokeLines(g, [[c * 5, s * 5, c * (i % 2 ? 14 : 22), s * (i % 2 ? 14 : 22)]], P.ink, 1.8); }
+    const D = []; for (let y = -96; y <= 96; y += 16) { if (Math.abs(y) < 74) continue; D.push([-40, y, -30, y + 6], [-20, y, -10, y + 6], [0, y, 10, y + 6], [20, y, 30, y + 6], [40, y, 50, y + 6]); } strokeLines(g, D, P.ink, 1.6);
+  },
+  ward_lamp(g, P) { // the ward lamp: hanging chain, glass, flame, long glow and window mullions behind
+    strokeLines(g, [[-40, -104, -40, 104], [40, -104, 40, 104], [-40, -30, 40, -30], [-40, 40, 40, 40]], 'rgba(160,190,240,.12)', 2);
+    strokeLines(g, [[0, -104, 0, -62]], P.ink, 1.6); for (let y = -102; y < -64; y += 8) ring(g, 0, y, 2.6, P.ink, 1.2);
+    const gl = g.createRadialGradient(0, 8, 4, 0, 8, 80); gl.addColorStop(0, 'rgba(255,200,110,.55)'); gl.addColorStop(1, 'rgba(255,200,110,0)'); g.fillStyle = gl; g.fillRect(-90, -80, 180, 180);
+    g.beginPath(); g.moveTo(-14, -60); g.lineTo(14, -60); g.lineTo(22, 12); g.quadraticCurveTo(0, 30, -22, 12); g.closePath(); g.fillStyle = 'rgba(40,52,80,.8)'; g.fill(); g.lineWidth = 2.4; g.strokeStyle = P.ink; g.stroke();
+    g.beginPath(); g.moveTo(0, -4); g.quadraticCurveTo(-11, -18, 0, -34); g.quadraticCurveTo(11, -18, 0, -4); g.fillStyle = '#ffd98a'; g.fill(); g.lineWidth = 1.2; g.strokeStyle = '#7a3c10'; g.stroke();
+    rr(g, -18, -68, 36, 8, 3); g.fillStyle = P.ink; g.fill(); rr(g, -12, 22, 24, 8, 3); g.fillStyle = P.ink; g.fill();
+  },
+};
+function renderBack(g, id = 'plain') {
+  const P = PAL[id] || PAL.plain;
+  rr(g, -HW, -HH, CARD_W, CARD_H, 12); g.fillStyle = P.base; g.fill(); shadeCurrent(g, P.base, 0, 0, 190, 2);
   g.save(); rr(g, -HW, -HH, CARD_W, CARD_H, 12); g.clip(); const r = rngOf('back');
   for (let i = 0; i < 140; i++) { g.fillStyle = r() > 0.5 ? 'rgba(20,14,10,.12)' : 'rgba(255,240,220,.06)'; g.beginPath(); g.arc(-HW + r() * CARD_W, -HH + r() * CARD_H, 0.8 + r() * 3, 0, 6.3); g.fill(); }
-  rr(g, -HW + 8, -HH + 8, CARD_W - 16, CARD_H - 16, 7); g.lineWidth = 1.2; g.strokeStyle = 'rgba(201,162,39,.65)'; g.stroke();
-  rr(g, -HW + 12, -HH + 12, CARD_W - 24, CARD_H - 24, 5); g.lineWidth = 0.8; setDash(g, [3, 3]); g.strokeStyle = 'rgba(232,220,196,.35)'; g.stroke(); setDash(g, []);
+  rr(g, -HW + 8, -HH + 8, CARD_W - 16, CARD_H - 16, 7); g.lineWidth = id === 'gilt' ? 2.2 : 1.2; g.strokeStyle = P.f1; g.stroke();
+  rr(g, -HW + 12, -HH + 12, CARD_W - 24, CARD_H - 24, 5); g.lineWidth = 0.8; setDash(g, [3, 3]); g.strokeStyle = P.f2; g.stroke(); setDash(g, []);
+  if (MOTIF[id]) { g.save(); MOTIF[id](g, P); g.restore(); }
   g.restore();
   rr(g, -HW, -HH, CARD_W, CARD_H, 12); g.lineWidth = 2.5; g.strokeStyle = INK; g.stroke(); bevel(g, -HW, -HH, CARD_W, CARD_H, 12, 2, 0.4);
-  // the wound: two crossing lenses, lips first, then the vellum showing through
-  const arms = [[62, 17, false], [96, 17, true]];
-  arms.forEach(([len, wid, v]) => { lens(g, len, wid, v); g.lineWidth = 7; g.strokeStyle = '#2a1612'; g.lineJoin = 'round'; g.stroke(); lens(g, len, wid, v); g.lineWidth = 3; g.strokeStyle = '#7a2230'; g.stroke(); });
-  arms.forEach(([len, wid, v]) => { lens(g, len, wid, v); fs(g, '#d8c8a6', 0, 2); });
-  const fp = fibrePat(g); if (fp) { g.save(); arms.forEach(([len, wid, v]) => { lens(g, len, wid, v); g.clip(); }); g.globalCompositeOperation = 'multiply'; g.fillStyle = fp; g.fillRect(-100, -100, 200, 200); g.restore(); }
-  // stitches across both arms (dark thread over a 1px light emboss)
-  for (let pass = 0; pass < 2; pass++) {
-    g.beginPath();
-    for (let i = -80; i <= 80; i += 13) { if (Math.abs(i) < 14) continue; const o = pass ? 0 : 1, w2 = 14 * (1 - Math.abs(i) / 110); g.moveTo(-w2 + o, i + o - 2); g.lineTo(w2 + o, i + o + 2); }
-    for (let i = -52; i <= 52; i += 13) { if (Math.abs(i) < 14) continue; const o = pass ? 0 : 1, h2 = 14 * (1 - Math.abs(i) / 80); g.moveTo(i + o - 2, -h2 + o); g.lineTo(i + o + 2, h2 + o); }
-    g.lineWidth = 2; g.lineCap = 'round'; g.strokeStyle = pass ? '#0e0e0e' : 'rgba(255,246,220,.5)'; g.stroke();
+  if (id === 'plain') {
+    // the wound: two crossing lenses, lips first, then the vellum showing through
+    const arms = [[62, 17, false], [96, 17, true]];
+    arms.forEach(([len, wid, v]) => { lens(g, len, wid, v); g.lineWidth = 7; g.strokeStyle = '#2a1612'; g.lineJoin = 'round'; g.stroke(); lens(g, len, wid, v); g.lineWidth = 3; g.strokeStyle = '#7a2230'; g.stroke(); });
+    arms.forEach(([len, wid, v]) => { lens(g, len, wid, v); fs(g, '#d8c8a6', 0, 2); });
+    const fp = fibrePat(g); if (fp) { g.save(); arms.forEach(([len, wid, v]) => { lens(g, len, wid, v); g.clip(); }); g.globalCompositeOperation = 'multiply'; g.fillStyle = fp; g.fillRect(-100, -100, 200, 200); g.restore(); }
+    // stitches across both arms (dark thread over a 1px light emboss)
+    for (let pass = 0; pass < 2; pass++) {
+      g.beginPath();
+      for (let i = -80; i <= 80; i += 13) { if (Math.abs(i) < 14) continue; const o = pass ? 0 : 1, w2 = 14 * (1 - Math.abs(i) / 110); g.moveTo(-w2 + o, i + o - 2); g.lineTo(w2 + o, i + o + 2); }
+      for (let i = -52; i <= 52; i += 13) { if (Math.abs(i) < 14) continue; const o = pass ? 0 : 1, h2 = 14 * (1 - Math.abs(i) / 80); g.moveTo(i + o - 2, -h2 + o); g.lineTo(i + o + 2, h2 + o); }
+      g.lineWidth = 2; g.lineCap = 'round'; g.strokeStyle = pass ? '#0e0e0e' : 'rgba(255,246,220,.5)'; g.stroke();
+    }
+    circ(g, 0, 0, 5.5, BRASS, 1.6); circ(g, -1.4, -1.6, 1.6, BRASS_L, 0);
   }
-  circ(g, 0, 0, 5.5, BRASS, 1.6); circ(g, -1.4, -1.6, 1.6, BRASS_L, 0);
   [[-HW + 14, -HH + 14, 0.78], [HW - 14, -HH + 14, -0.78], [-HW + 14, HH - 14, -0.78], [HW - 14, HH - 14, 0.78]].forEach(([x, y, a]) => staple(g, x, y, 18, a));
   g.font = font(11, { bold: true, ui: true }); g.textAlign = 'center'; g.textBaseline = 'middle'; try { if ('letterSpacing' in g) g.letterSpacing = '3px'; } catch (e) { /* none */ }
-  engrave(g, 'GRAFTWORK', 0, 124, 'rgba(232,220,196,.8)', true);
+  engrave(g, 'GRAFTWORK', 0, 124, P.txt, true);
   BB = null;
 }
 export function drawCardBack(ctx, x, y, o = {}) {
@@ -1138,9 +1206,10 @@ export function drawCardBack(ctx, x, y, o = {}) {
   ctx.save(); ctx.translate(x, y); if (o.rot) ctx.rotate(o.rot); const s = o.scale || 1; ctx.scale(s, s); if (o.alpha !== undefined) ctx.globalAlpha = o.alpha;
   if (o.hover) ctx.translate(0, -6);
   ctx.save(); ctx.translate(-L.x * 7, -L.y * 10); rr(ctx, -HW, -HH, CARD_W, CARD_H, 12); ctx.fillStyle = 'rgba(0,0,0,.34)'; ctx.fill(); ctx.restore();
-  if (backCache === null) { const cv = makeCanvas(Math.ceil((CARD_W + 8) * S), Math.ceil((CARD_H + 8) * S)); if (cv) { cv.g.setTransform(S, 0, 0, S, 0, 0); cv.g.translate(HW + 4, HH + 4); renderBack(cv.g); backCache = cv.c; } else backCache = false; }
-  if (backCache) ctx.drawImage(backCache, -HW - 4, -HH - 4, CARD_W + 8, CARD_H + 8); else renderBack(ctx);
-  const pulse = 0.5 + 0.5 * Math.sin(t * 1.6), pg = ctx.createRadialGradient(0, 0, 4, 0, 0, 84); pg.addColorStop(0, `rgba(190,40,52,${0.1 + 0.16 * pulse})`); pg.addColorStop(1, 'rgba(190,40,52,0)'); ctx.fillStyle = pg; ctx.fillRect(-90, -100, 180, 200);
+  const bid = BACK_IDS.includes(o.back) ? o.back : curBack, P = PAL[bid];
+  if (backCache[bid] === undefined) { const cv = makeCanvas(Math.ceil((CARD_W + 8) * S), Math.ceil((CARD_H + 8) * S)); if (cv) { cv.g.setTransform(S, 0, 0, S, 0, 0); cv.g.translate(HW + 4, HH + 4); renderBack(cv.g, bid); backCache[bid] = cv.c; } else backCache[bid] = false; }
+  if (backCache[bid]) ctx.drawImage(backCache[bid], -HW - 4, -HH - 4, CARD_W + 8, CARD_H + 8); else renderBack(ctx, bid);
+  const pulse = 0.5 + 0.5 * Math.sin(t * 1.6), pg = ctx.createRadialGradient(0, 0, 4, 0, 0, 84); pg.addColorStop(0, `rgba(${P.glow},${(bid === 'bone' ? 0.06 : 0.1) + 0.16 * pulse * (bid === 'bone' ? 0.4 : 1)})`); pg.addColorStop(1, `rgba(${P.glow},0)`); ctx.fillStyle = pg; ctx.fillRect(-90, -100, 180, 200);
   rr(ctx, -HW + 0.75, -HH + 0.75, CARD_W - 1.5, CARD_H - 1.5, 11.5);
   const rg = ctx.createLinearGradient(L.x * HW, L.y * HH, -L.x * HW, -L.y * HH); rg.addColorStop(0, 'rgba(255,244,212,.7)'); rg.addColorStop(0.35, 'rgba(255,244,212,.15)'); rg.addColorStop(0.6, 'rgba(255,244,212,0)'); ctx.lineWidth = 1.5; ctx.strokeStyle = rg; ctx.stroke();
   if (o.dim > 0) { rr(ctx, -HW, -HH, CARD_W, CARD_H, 12); ctx.fillStyle = `rgba(12,8,8,${Math.min(0.85, o.dim * 0.7)})`; ctx.fill(); }

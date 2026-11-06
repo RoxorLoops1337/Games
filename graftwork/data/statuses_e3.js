@@ -19,7 +19,7 @@ export const STATUS_E3 = [
   // The Grafter: the school of your last Thread payout, used by its next Splice.
   { id: 'mirrorsch', name: 'Mirror', good: true, stack: 'int', desc: (n) => `Its next Splice uses the school of your last Thread payout: ${SCHOOLS_E3[n - 1] || 'none'}.` },
   // Impresario: one more voice per school you play this turn.
-  { id: 'ensemble', name: 'Ensemble', good: true, stack: 'int', mod: { outAdd: (n) => n }, desc: (n) => `It adds one voice for each school past the first you play in a turn: every hit deals ${n} more (max 3). Stay in one or two schools.` },
+  { id: 'ensemble', name: 'Ensemble', good: true, stack: 'int', mod: { outAdd: (n) => n }, desc: (n) => `Play three or more schools in a turn and every hit deals ${n} more. Stay in one or two schools.` },
   // Gold Leaf Golem: beaten leaf folds under one big blow.
   { id: 'leafarmor', name: 'Leaf Armor', good: true, stack: 'int', desc: (n) => `A single card hit deals at most ${n} damage. Burn, Bleed, Thorns and Thread arcs ignore it. Many small hits win.` },
   // The Diva: the room is loud.

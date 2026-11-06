@@ -24,8 +24,9 @@ export const START_RELICS = [
   { id: 'r_bandage_roll', cost: 40 }, { id: 'r_scar_tissue', cost: 50 }, { id: 'r_free_sample', cost: 50 },
   { id: 'r_cold_storage', cost: 60 }, { id: 'r_suture_thread', cost: 70 }, { id: 'r_sterile_field', cost: 80 },
 ];
-export const TITLES = [{ id: 'patient', name: 'Patient' }]; // achievements add more via reward { kind: 'title', id, name }
-export const TINTS = [{ id: 'none', name: 'Standard issue', color: null }, { id: 'ash', name: 'Ash', color: '#8d8a84' }, { id: 'rose', name: 'Rose', color: '#c97b84' }, { id: 'moss', name: 'Moss', color: '#7f9a6a' }, { id: 'brass', name: 'Brass', color: '#c9a227' }];
+export const TITLES = [{ id: 'patient', name: 'Patient', cost: 20 }, { id: 'outpatient', name: 'Outpatient', cost: 35 }, { id: 'night_shift', name: 'Night Shift', cost: 60 }]; // achievements add more via reward { kind: 'title', id, name }
+export const TINTS = [{ id: 'none', name: 'Standard issue', color: null }, { id: 'ash', name: 'Ash', color: '#8d8a84' }, { id: 'rose', name: 'Rose', color: '#c97b84' }, { id: 'moss', name: 'Moss', color: '#7f9a6a' }, { id: 'brass', name: 'Brass', color: '#c9a227' },
+  { id: 'ink', name: 'Ink', color: '#5a6fa8', cost: 45 }, { id: 'cinder', name: 'Cinder', color: '#d2623a', cost: 75 }]; // none + 5 tints; ash/rose/moss/brass are earned, ink/cinder bought
 
 // ---- case file milestones ----
 // check(run, x) where x = { overloaded, tempered, ... } from caseStats(). tiers pay once each per run.
@@ -96,6 +97,8 @@ export function equip(m, kind, id) {
   if (id !== null && !has(m, k[0], id) && !(kind === 'tint' && id === 'none')) return false;
   m.loadout[kind === 'relic' ? 'relic' : kind] = id; return true;
 }
+export function titleName(m) { const t = m && m.loadout && m.loadout.title; if (!t || !has(m, 'titles', t)) return null; const d = TITLES.find((x) => x.id === t); return (m.titleNames && m.titleNames[t]) || (d && d.name) || t; }
+export function tintColor(m) { const t = m && m.loadout && m.loadout.tint; const d = TINTS.find((x) => x.id === t); return d && d.color && has(m, 'tints', t) ? d.color : null; }
 export function startRelicOf(m) { const r = m && m.loadout && m.loadout.relic; return r && RELICS[r] && has(m, 'relics', r) ? r : null; }
 
 // ---- boss practice ----

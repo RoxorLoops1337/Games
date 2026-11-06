@@ -301,7 +301,7 @@ const impresario = {
   id: 'the_impresario', name: 'The Impresario', act: 3, kind: 'boss', start: { strength: 1 }, hp: 96,
   pick: (A, e) => { A.setStatus(e, 'ensemble', 0); e.data.sch = {}; return impresarioPick(A, e); },
   moves: {
-    downbeat: { name: 'Downbeat', tip: 'Ensemble: every hit deals +1 for each school past the first you play in a turn (max +3). Two schools or fewer keep the score quiet.', fx: [D(19), { op: 'block', n: 10 }] },
+    downbeat: { name: 'Downbeat', tip: 'Ensemble: every hit deals +1 once you play three or more schools in a turn. Two schools or fewer keep the score quiet.', fx: [D(19), { op: 'block', n: 10 }] },
     crescendo: { name: 'Crescendo', fx: [D(9, { hits: 3 })] },
     fermata: { name: 'Fermata', fx: [D(14), ST('costup', 1), ST('marked', 2)] },
     staccato: { name: 'Staccato', fx: [D(6, { hits: 5 })] },
@@ -319,7 +319,7 @@ const impresario = {
       if (e.data.turnSeen !== A.c.turn) { e.data.turnSeen = A.c.turn; e.data.sch = {}; }
       e.data.sch = e.data.sch || {};
       for (const s of sch) e.data.sch[s] = true;
-      A.setStatus(e, 'ensemble', Math.min(3, Math.max(0, Object.keys(e.data.sch).length - 1)));
+      A.setStatus(e, 'ensemble', Math.min(1, Math.max(0, Object.keys(e.data.sch).length - 2)));
     },
     afterMove(A, e) { stepAfter(A, e); },
     damaged(A, e) {

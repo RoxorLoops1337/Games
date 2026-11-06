@@ -248,6 +248,9 @@ function resolve(o, id) {
   return r;
 }
 
+// Equipped outfit tint (meta.loadout.tint): a colour wash over the figure and a soft-light wash on portraits. null = standard issue.
+let heroTint = null;
+export function setHeroTint(color) { heroTint = typeof color === 'string' ? color : null; }
 export function drawHero(ctx, heroId, x, y, o = {}) {
   try {
     const id = pick(heroId), sz = HERO_SIZE[id];
@@ -286,6 +289,7 @@ export function drawHero(ctx, heroId, x, y, o = {}) {
       // lamp wash on the face and torso, desaturation when hurt badly, hurt flash
       g.globalCompositeOperation = 'source-atop';
       { const hx = OX + lx * 10, hy = OY + hb * sy + ly * 8, rg = g.createRadialGradient(hx, hy, 2, hx, hy, 46); rg.addColorStop(0, 'rgba(255,214,150,0.30)'); rg.addColorStop(1, 'rgba(255,214,150,0)'); g.fillStyle = rg; g.fillRect(hx - 50, hy - 50, 100, 100); }
+      if (heroTint) { g.save(); g.globalAlpha = 0.38; g.fillStyle = heroTint; g.fillRect(0, 0, SW, SH); g.restore(); }
       if (low > 0 || d > 0) { g.fillStyle = `rgba(122,116,108,${Math.min(0.5, 0.34 * low + 0.3 * d)})`; g.fillRect(0, 0, SW, SH); }
       if (flashK > 0) { g.fillStyle = `rgba(255,255,255,${flashK * 0.7})`; g.fillRect(0, 0, SW, SH); }
       g.globalCompositeOperation = 'source-over';
@@ -346,6 +350,7 @@ export function drawPortrait(ctx, heroId, cx, cy, size) {
     ctx.strokeStyle = 'rgba(30,16,10,0.34)'; ctx.lineWidth = 1; ctx.beginPath();
     for (let k = 0; k < size * 0.9; k += 4) { ctx.moveTo(cx + size * 0.5 - k, cy + size * 0.5); ctx.lineTo(cx + size * 0.5, cy + size * 0.5 - k); }
     ctx.stroke();
+    if (heroTint) { ctx.globalCompositeOperation = 'soft-light'; ctx.globalAlpha = 0.85; ctx.fillStyle = heroTint; ctx.fillRect(cx - size / 2, cy - size / 2, size, size); ctx.globalAlpha = 1; }
     ctx.globalCompositeOperation = 'lighter';
     { const L = A.L, gx = cx + L.x * size * 0.55, gy = cy + L.y * size * 0.55, rg = ctx.createRadialGradient(gx, gy, 0, gx, gy, size * 0.8); rg.addColorStop(0, 'rgba(255,220,160,0.22)'); rg.addColorStop(1, 'rgba(255,220,160,0)'); ctx.fillStyle = rg; ctx.fillRect(cx - size / 2, cy - size / 2, size, size); }
     ctx.globalCompositeOperation = 'source-over';
