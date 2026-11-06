@@ -23,23 +23,26 @@ node tests/graftwork_difficulty.test.mjs               # the gate (about 12 s)
 ```
 
 ## Targets (A0, no Assist) and measured numbers
-| tier | target | before | after |
-|---|---|---|---|
-| RANDOM | 0 wins in 1000, median death Act 1 | 0.0 percent, Act 1 clear 1.3 percent, median floor 5 | unchanged |
-| SLOPPY | under 1 percent wins | 1.4 to 1.9 percent, Act 2 clear 20 percent | about 0.7 percent (3000 runs) |
-| CAREFUL | 5 to 15 percent | 30.6 percent (pure), now 16.9 percent pure in the new data | about 10 percent |
-| STRONG | 25 to 40 percent | 36.1 percent | 29 to 34 percent across seed batches of 300 per hero |
+Measured on both content pools (`GW_UNLOCK=all` and `GW_UNLOCK=start`, the pool a new player has, see UNLOCKS.md). Random 1000, sloppy 1000, careful and strong 300 per hero.
+| tier | target | before (all pool) | after, all pool | after, start pool |
+|---|---|---|---|---|
+| RANDOM | 0 wins in 1000, median death Act 1 | 0.0 percent | 0.0 percent, median floor 5 | 0.0 percent, median floor 5 |
+| SLOPPY | under 1 percent | 1.4 to 1.9 percent | 0.3 percent | 0.6 percent |
+| CAREFUL | 5 to 15 percent | 30.6 percent (pure) | 5.4 percent (pure 11.4) | 14.1 percent (pure 25.7) |
+| STRONG | 25 to 40 percent | 36.1 percent | 23.7 percent | 43.4 percent |
 
-Act 1 stays approachable: first-fight death 0.0 percent for STRONG and CAREFUL, first-two-fights 0.1 percent. Act 1 numbers were not touched.
+Act 1 stays approachable: first-fight death 0.0 percent for STRONG and CAREFUL on both pools, first-two-fights at most 0.1 percent. Act 1 numbers were not touched.
+
+Known gap: the start pool is about 20 points easier for the strong bot than the full pool. Part of that is a bot artifact (a bigger pool dilutes a bot that takes every relic and best-scored graft without avoiding trap items). Closing it means teaching the bot trap avoidance (graftwork_schools.mjs relics gives per-relic deltas), not hardening content further, otherwise the full pool falls under 20 percent.
 
 ## What was changed
-Only Act 2 and Act 3 enemy HP in data/enemies_2.js (x1.05, bosses too) and data/enemies_3.js (x1.12, The Impresario 116, The Grafter 200). Act 3 is where lucky or sloppy runs used to finish. Hero HP, Act 1 and the starter decks are unchanged.
+Only Act 2 and Act 3 enemy HP: data/enemies_2.js x1.134 in total (bosses too, The Broker 102), data/enemies_3.js x1.232 in total (The Impresario 128, The Grafter 220). Act 3 is where lucky or sloppy runs used to finish. Hero HP, Act 1 and the starter decks are unchanged.
 
 ## Assist
 Sloppy with Sturdy + Kind Strain + Mercy: about 15 percent wins (in the 5 to 20 target). With all four options (the panel default, `ASSIST_DEFAULT`): about 49 percent, too generous; Gentle foes (x0.8 damage) and Mercy are the big pieces (Gentle alone 9.7, Mercy alone 5.8, kind 0.8, sturdy 2.8). Not changed because tests/graftwork_assist.test.mjs pins x1.3 HP, x0.8 damage and the half-HP revive. Even Sturdy 1.15 and Gentle 0.9 still gave about 23 percent, so lowering means a design call on Gentle plus Mercy together. Careful and strong with all options win 92 and 99 percent, so Assist is a different game; it never counts for ascension or achievements.
 
 ## Luck
-STRONG across seed batches (GW_TAG a, b, c, 300 per hero): 29, 34, 33 percent. Inside the 20 to 45 band, so luck matters.
+STRONG across seed batches at the earlier Act 3 numbers (GW_TAG a, b, c, 300 per hero): 29, 34, 33 percent, a 5 point spread. Inside the 20 to 45 band, so luck matters.
 
 ## Re-measure
 Run all four tiers after any data change to enemies, relics, grafts or hero numbers. Keep RANDOM < SLOPPY < CAREFUL < STRONG with the gaps above.

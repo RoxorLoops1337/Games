@@ -377,7 +377,7 @@ const WHY = { gold: 'Not enough gold.', slots: 'Potion slots are full.', cantgra
 let S = null;
 const CARD_X = (i) => 347 + i * 198, CARD_Y = 190;
 const GRAFT_X = (i) => 270 + i * 220, GRAFT_Y = 362;
-const POT_X = (i) => 270 + i * 220, POT_Y = 500, POT_H = 88;
+const POT_X = (i) => 270 + i * 220, POT_Y = 502, POT_H = 86;
 const REL_X = 940, REL_Y = (i) => 362 + i * 112;
 
 function say(kind, seed) { S.quip = pickQ(kind, seed); S.quipT = 0; S.react = 1; }
@@ -575,7 +575,7 @@ export default {
 
     // ---- section labels ----
     const lab = (s, x, y, w = 250, short) => { const o = { size: 13, ui: true, bold: true, fit: { w, h: 19, lines: 1 }, color: 'rgba(232,220,196,.55)' }; return app.text(short && app.layoutText(s, o).trunc ? short : s, x, y, o); }; // fitted: the phone text floor inflates it, a section heading never runs under a tag or a tile
-    lab('CARDS FOR SALE', 270, 56); lab('GRAFT PATCHES', 270, 338, 124, 'PATCHES'); lab('POTIONS  ' + run.potions.length + '/' + RUN.potionSlots(run), 270, POT_Y - 22, 124, 'POTIONS ' + run.potions.length + '/' + RUN.potionSlots(run)); lab('RELICS', REL_X, 338); lab('SERVICES', 270, 592);
+    lab('CARDS FOR SALE', 270, 56); lab('GRAFT PATCHES', 270, 338, 124, 'PATCHES'); lab('POTIONS  ' + run.potions.length + '/' + RUN.potionSlots(run), 270, POT_Y - 21, 124, 'POTIONS ' + run.potions.length + '/' + RUN.potionSlots(run)); lab('RELICS', REL_X, 338); lab('SERVICES', 270, 592);
 
     const priceTag = (cx, cy, price, sold, grp) => {
       if (sold) return;
@@ -605,19 +605,23 @@ export default {
 
     // ---- grafts ----
     shop.grafts.forEach((it, i) => {
-      const gr = GRAFTS[it.id], x = GRAFT_X(i) + shakeX('graft' + i), y = GRAFT_Y, w = 205, h = 64, ph = 64;
-      app.reg('shop-graft' + i, GRAFT_X(i), y - 4, w, 114, { group: 'graft' + i }); // patch + its two rows (Boon, Price)
+      const gr = GRAFTS[it.id], x = GRAFT_X(i) + shakeX('graft' + i), y = GRAFT_Y, w = 205, h = 64, ph = 64; let grInfo = false, gInfoY = 0;
+      app.reg('shop-graft' + i, GRAFT_X(i), y - 4, w, 120, { group: 'graft' + i }); // patch + its two rows (Boon, Price)
       const over = !it.sold && app.inRect(GRAFT_X(i), y, w, 100), k = hv(app, 'g' + i, over);
       if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, `Weight ${gr.weight} (${gr.tier}): counts ${gr.weight} against your Budget.\n` + ['Boon', 'Price'].map((lab) => { const t = lab === 'Boon' ? gr.boon : gr.price; return wrapLimit(app, `${lab}: ${t}`, w - 2, 13, 1, { ui: true })[0] === `${lab}: ${t}` ? '' : `${lab}: ${t}\n`; }).join('') + `Sews onto one of your cards. ${it.price} gold.`, { color: COL[gr.school], gloss: [gr.boon, gr.price, String(gr.tier).toUpperCase()], school: gr.school, anchor: { x: GRAFT_X(i), y, w, h: 100, band: { x: Math.min(GRAFT_X(i), 590), y: 584, bottom: 716, dir: 1 } } }); } // Boon and Price are on the patch itself; the tip sits over the service row, never over the sibling patches
       g.save(); if (it.sold) g.globalAlpha = 0.45; g.translate(0, -3 * k);
       drawGraftPatch(g, gr, x, y, w, ph, { hover: k });
       // one line each for the Boon and the Price, so nobody has to hover to read what a patch does
       { // two rows, one line each, in the 40 px between the patch and the Potions heading; the size is shared so the rows never touch (the hover tip has the rest)
-        const rowO = { size: 13, ui: true, soft: true, fit: { w: w - 2, lines: 1 } };
+        let rowO = { size: 13, ui: true, soft: true, fit: { w: w - 2, lines: 1 } };
+        const cut = () => app.layoutText('Boon: ' + gr.boon, rowO).trunc || app.layoutText('Price: ' + gr.price, rowO).trunc;
+        if (cut() && touchUi(app)) { grInfo = true; rowO = { ...rowO, fit: { w: w - 30, lines: 1, soft: true } }; } // touch: no hover tip, so a chip opens the full Boon and Price
         const sz = Math.min(app.layoutText('Boon: ' + gr.boon, rowO).size, app.layoutText('Price: ' + gr.price, rowO).size), pitch = Math.max(15, sz + 3);
-        [['Boon', gr.boon, COL.good], ['Price', gr.price, '#ff8a8a']].forEach(([lab, txt, col], n) => app.text(`${lab}: ${txt}`, x, y + ph + 3 + n * pitch, { ...rowO, size: sz, exact: true, fit: { ...rowO.fit, soft: true }, color: col }));
+        [['Boon', gr.boon, COL.good], ['Price', gr.price, '#ff8a8a']].forEach(([lab, txt, col], n) => app.text(`${lab}: ${txt}`, x, y + ph + 9 + n * pitch, { ...rowO, size: sz, exact: true, color: col }));
+        gInfoY = y + ph + 9 + pitch * 0.5 + sz * 0.5;
       }
       g.restore();
+      if (grInfo && !it.sold && infoChip(app, x + w - 12, gInfoY, [], 'graft' + i)) { sfx(app, 'uiClick'); openInfoCard(app, gr.name, withGloss(`Weight ${gr.weight} (${gr.tier})\nBoon: ${gr.boon}\nPrice: ${gr.price}\n${it.price} gold.`), COL[gr.school] || COL.lamp); }
       if (it.sold) stamp(app, x + w / 2, y + ph / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w - 42, y - 16, it.price, false, 'graft' + i); // on the heading row, over the patch's top right corner, so the two rows below stay clear
       if (!it.sold && app.clicked(GRAFT_X(i), y, w, 100)) startGraftBuy(app, i);
     });

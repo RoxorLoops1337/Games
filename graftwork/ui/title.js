@@ -338,16 +338,16 @@ export default {
     g.save(); const dg = g.createLinearGradient(0, 0, 0, 130); dg.addColorStop(0, 'rgba(8,6,5,.0)'); dg.addColorStop(1, 'rgba(8,6,5,.55)'); g.fillStyle = dg; g.fillRect(0, 0, W, 130); g.fillStyle = 'rgba(8,6,5,.55)'; g.fillRect(0, 130, W, H - 130); g.restore();
     const phone = app.scale < 0.95; // phone stage scales: the boosted text needs a taller panel, so the whole select column uses the spare stage height
     app.text('Choose your grafter', 640, phone ? 92 : 112, { size: 26, align: 'center', bold: true, alpha: k, fit: { w: 700, lines: 1 } });
-    const pw = 380, ph = phone ? 402 : 352, gap = 20, px0 = (W - (pw * 3 + gap * 2)) / 2, py = phone ? 122 : 148;
+    const pw = 380, ph = phone ? 396 : 352, gap = 20, px0 = (W - (pw * 3 + gap * 2)) / 2, py = phone ? 122 : 148;
     HERO_ORDER.forEach((id, i) => {
       const h = HEROES[id]; if (!h) return;
       const px = px0 + i * (pw + gap), yy = py + (1 - k) * 30 * (i + 1) / 3;
       this.drawHeroPanel(app, h, px, yy, pw, ph, i);
     });
-    const ay = py + ph + 6;
+    const ay = py + ph + 6, ah = phone ? 46 : 32;
     this.drawAssist(app, px0, ay);
     // lower row
-    const ly = ay + 30;
+    const ly = ay + ah + 2;
     const unlocked = heroUnlocked(meta, this.hero);
     const maxA = Math.min(10, maxAscension(meta, this.hero) + 1);
     this.asc = clamp(this.asc, 0, maxA);
@@ -415,24 +415,24 @@ export default {
     return st.assist;
   },
   drawAssist(app, x, y) {
-    const a = this.assistOf(app), flow = app.shared.flow, h = 28;
+    const a = this.assistOf(app), flow = app.shared.flow, phone = app.scale < 0.95, h = phone ? 46 : 32;
     const save = () => { if (flow.saveMeta) flow.saveMeta(); };
     app.reg('title-assist', x, y, 130, h, { group: 'assist' });
     if (app.inRect(x, y, 130, h)) app.tooltip('Assist mode', 'An easier way to learn the game. Off by default. ' + ASSIST_NOTE);
-    const dis = app.scale < 0.95 ? 2 : 0; // labels sit in their buttons: up to two lines on a phone so nothing is cut
-    const lab = (txt, bx, bw, o) => app.text(txt, bx + bw / 2, y + h / 2, { size: o.size, bold: true, shadow: true, align: 'center', baseline: 'middle', color: o.color || COL.vellum, fit: { w: bw - (o.padL || 0) - 10, h: h - 2, lines: dis ? 2 : 1 } });
+    const bw0 = phone ? 176 : 134, dis = phone ? 2 : 0; // labels sit in their buttons: up to two lines on a phone so nothing is cut
+    const lab = (txt, bx, bw, o) => app.text(txt, bx + bw / 2, y + h / 2, { size: o.size, bold: true, shadow: true, align: 'center', baseline: 'middle', color: o.color || COL.vellum, fit: { w: bw - (o.padL || 0) - 4, h: h - 2, lines: dis ? 2 : 1 } });
     if (app.button('', x, y, 130, h, { fill: a.on ? '#2a3a2a' : undefined, stroke: a.on ? '#8fe0a0' : undefined })) { a.on = !a.on; save(); }
     lab('Assist: ' + (a.on ? 'On' : 'Off'), x, 130, { size: 15 });
     if (!a.on) return;
     ASSIST_OPTIONS.forEach((o, i) => {
-      const ox = x + 140 + i * 128, bw = 120, on = !!a[o.id];
+      const ox = x + 140 + i * (bw0 + 8), bw = bw0, on = !!a[o.id];
       app.reg('title-assist-' + o.id, ox, y, bw, h, { group: 'assist' });
       if (app.inRect(ox, y, bw, h)) app.tooltip(o.name + (on ? ' (on)' : ' (off)'), o.text);
       if (app.button('', ox, y, bw, h, { fill: on ? '#4a3a1d' : undefined, stroke: on ? COL.lamp : undefined })) { a[o.id] = !on; save(); }
       lab(o.name, ox + 20, bw - 20, { size: 14, color: on ? '#fbe9b0' : undefined });
       const g = app.ctx; g.save(); g.strokeStyle = on ? '#fbe9b0' : 'rgba(232,220,196,.55)'; g.lineWidth = lnw(1.5); g.strokeRect(ox + 8.5, y + h / 2 - 5.5, 11, 11); if (on) { g.fillStyle = '#fbe9b0'; g.fillRect(ox + 11, y + h / 2 - 3, 6, 6); } g.restore();
     });
-    const nx = x + 140 + 4 * 128 + 4;
+    const nx = x + 140 + 4 * (bw0 + 8) + 4;
     app.text('Assisted runs do not unlock ascensions or achievements.', nx, y + h / 2, { size: 12, ui: true, italic: true, baseline: 'middle', color: 'rgba(232,220,196,.6)', fit: { w: W - 50 - nx, h: h + 2, lines: dis ? 2 : 1 } });
   },
   drawHeroPanel(app, h, x, y, w, ph, idx) {
@@ -459,12 +459,11 @@ export default {
     g.restore();
     if (locked) { padlock(g, x + 54, y + 44, 0.9); }
     // name block (fitted: the name and title stop short of the school badge)
-    const nw = w - 108 - 72;
-    app.text(h.name, x + 108, y + 10, { size: 28, bold: true, color: locked ? '#8c8372' : COL.vellum, shadow: true, fit: { w: nw, lines: 1 } });
-    app.text(h.title, x + 108, y + 46, { size: 15, italic: true, color: locked ? '#6d655a' : '#d6c7a6', fit: { w: nw, lines: 1 } });
-    // school badge (shape glyph + name)
-    drawSchoolGlyph(g, h.school, x + w - 34, y + 26, 11, locked ? '#6d655a' : school.color);
-    app.text(school.name, x + w - 34, y + 46, { size: 11, ui: true, bold: true, align: 'center', color: locked ? '#6d655a' : school.color, fit: { w: 64, lines: 1 } });
+    app.text(h.name, x + 108, y + 10, { size: 28, bold: true, color: locked ? '#8c8372' : COL.vellum, shadow: true, fit: { w: w - 108 - 76, lines: 1 } });
+    app.text(h.title, x + 108, y + 46, { size: 15, italic: true, color: locked ? '#6d655a' : '#d6c7a6', fit: { w: w - 108 - 14, lines: 1 } });
+    // school badge (shape glyph, name to its left; the title row below runs under it)
+    drawSchoolGlyph(g, h.school, x + w - 26, y + 16, 11, locked ? '#6d655a' : school.color);
+    app.text(school.name, x + w - 14, y + 28, { size: 11, ui: true, bold: true, align: 'right', color: locked ? '#6d655a' : school.color, fit: { w: 60, lines: 1 } });
     if (locked) {
       app.text('LOCKED', x + 24, y + 86, { size: 12, ui: true, bold: true, color: '#8c8372', fit: { w: 120, lines: 1 } });
       const ul = app.text(h.unlock ? h.unlock.text : 'Locked.', x + 24, y + 106, { size: 17, color: '#9b8f7a', italic: true, fit: { w: w - 48, h: 60, lines: 3 } });
@@ -484,39 +483,44 @@ export default {
     for (const id of h.deck) { counts[id] = (counts[id] || 0) + 1; const t = CARDS[id] && CARDS[id].type; if (types[t] !== undefined) types[t]++; }
     const ids = Object.keys(counts), cw = iw / 2, cellW = cw - 12;
     const names = ids.map((id) => `${counts[id]}x ${CARDS[id] ? CARDS[id].name : id}`);
-    const rowO = { size: 13, ui: true };
-    let rowSz = 99; for (const n of names) rowSz = Math.min(rowSz, app.layoutText(n, { ...rowO, fit: { w: cellW, lines: 1 } }).size);
-    const rowPitch = Math.round(rowSz * 1.3), rows = Math.ceil(ids.length / 2);
-    const hdrO = { size: 12, ui: true, bold: true };
-    const tl = ['power', 'skill', 'attack'].map((t) => ({ t, s: `${types[t]} ${TYPE_NAMES[t]}` }));
-    const typeW = iw * 0.52;
-    let tySz = 99; for (const q of tl) tySz = Math.min(tySz, app.layoutText(q.s, { size: 12, ui: true, fit: { w: typeW / 3 - 4, lines: 1 } }).size);
-    const hdrSz = app.layoutText(`STARTER DECK  ${h.deck.length}`, { ...hdrO, fit: { w: iw - typeW - 8, lines: 1 } }).size;
-    const hdrH = Math.round(Math.max(hdrSz, tySz) * 1.25) + 3;
-    const deckH = hdrH + rows * rowPitch;
-    const lblL = app.layoutText('PASSIVE', { ...hdrO, fit: { w: 120, lines: 1 } }), lblH = Math.round(lblL.size * 1.22) + 1;
-    const hpL = app.layoutText(`${hp} HP    ${gold} gold`, { size: 13, ui: true, fit: { w: iw, lines: 1 } }), hpH = Math.round(hpL.size * 1.22) + 6;
-    const pOpts = { size: 14, color: '#fbe9b0', lineH: 17 };
-    const pL = app.layoutText(h.passive, { ...pOpts, fit: { w: iw, lines: 3 } }), passH = pL.lines.length * pL.lineH + 4;
-    const ruleH = 16, fixed = lblH + passH + hpH + deckH + ruleH;
-    const room = bottom - top - fixed;
+    const rows = Math.ceil(ids.length / 2);
+    const deckLbl = `STARTER DECK  ${h.deck.length}`, tl = ['power', 'skill', 'attack'].map((t) => ({ t, s: `${types[t]} ${TYPE_NAMES[t]}` }));
+    // m shrinks the design sizes (large text scales); the rules block must fit between the band and SELECTED, so take the largest m that does
+    let P = null;
+    for (const m of [1, 0.92, 0.85, 0.78, 0.7]) {
+      const rowO = { size: 13 * m, ui: true }, hdrO = { size: 12 * m, ui: true, bold: true };
+      let rowSz = 99; for (const n of names) rowSz = Math.min(rowSz, app.layoutText(n, { ...rowO, fit: { w: cellW, lines: 1 } }).size);
+      const rowPitch = Math.round(rowSz * 1.3);
+      const hdrSz = app.layoutText(deckLbl, { ...hdrO, fit: { w: iw, lines: 1 } }).size;
+      const tySz = Math.min(hdrSz, ...tl.map((q) => app.layoutText(q.s, { size: 12 * m, ui: true, fit: { w: iw / 3 - 8, lines: 1 } }).size));
+      const typesW = tl.reduce((n, q) => n + app.measure(q.s, tySz, { ui: true, exact: true }) + 10, -10);
+      const twoRows = app.measure(deckLbl, hdrSz, { ...hdrO, exact: true }) + typesW + 14 > iw; // the type counts drop to their own line when they would touch the label
+      const hdrH = Math.round(Math.max(hdrSz, tySz) * 1.25) + 3, deckH = hdrH * (twoRows ? 2 : 1) + rows * rowPitch;
+      const lblH = Math.round(app.layoutText('PASSIVE', { ...hdrO, fit: { w: 120, lines: 1 } }).size * 1.22) + 1;
+      const hpO = { size: 13 * m, ui: true }, hpTxt = `${hp} HP    ${gold} gold`, hpH = Math.round(app.layoutText(hpTxt, { ...hpO, fit: { w: iw, lines: 1 } }).size * 1.22) + 6;
+      const pOpts = { size: 14 * m, lineH: 17 * m }, pL = app.layoutText(h.passive, { ...pOpts, fit: { w: iw, lines: 3 } }), passH = pL.lines.length * pL.lineH + 4;
+      const room = bottom - top - (lblH + passH + hpH + deckH + 16);
+      P = { m, rowO, hdrO, rowSz, rowPitch, hdrSz, tySz, twoRows, hdrH, lblH, hpO, hpTxt, hpH, pOpts, passH, room };
+      if (room >= 0) break;
+    }
+    const { rowO, hdrO, rowSz, rowPitch, hdrSz, tySz, twoRows, hdrH, lblH, hpO, hpTxt, hpH, pOpts, passH, room } = P;
     let yy = top;
-    if (room >= 14) {
-      const bL = app.layoutText(h.blurb, { size: 14, lineH: 17, fit: { w: iw, h: room, lines: 3, soft: true } });
-      app.text(h.blurb, x + 20, yy, { size: 14, color: '#e0d4b8', lineH: 17, fit: { w: iw, h: room, lines: 3, soft: true } });
-      yy += bL.lines.length * bL.lineH + 8; // the rule line below shares this gap
+    if (room >= 14) { // the flavor blurb takes what is left (soft: it may shrink or lose its last line on the smallest phone stage)
+      const bO = { size: 14 * P.m, lineH: 17 * P.m, fit: { w: iw, h: room, lines: 3, soft: true } }, bL = app.layoutText(h.blurb, bO);
+      app.text(h.blurb, x + 20, yy, { ...bO, color: '#e0d4b8' });
+      yy += bL.lines.length * bL.lineH + 8;
     }
     stitchLine(g, x + 20, yy, x + w - 20, yy, { color: rgba(h.color, 0.55), size: 3, step: 10, lw: 1 });
     yy += 8;
     app.text('PASSIVE', x + 20, yy, { ...hdrO, color: labelColor(h.color), fit: { w: 120, lines: 1 } });
     yy += lblH;
-    app.text(h.passive, x + 20, yy, { ...pOpts, fit: { w: iw, lines: 3 } });
+    app.text(h.passive, x + 20, yy, { ...pOpts, color: '#fbe9b0', fit: { w: iw, lines: 3 } });
     yy += passH;
-    app.text(`${hp} HP    ${gold} gold`, x + 20, yy, { size: 13, ui: true, color: '#b7aa8c', fit: { w: iw, lines: 1 } });
+    app.text(hpTxt, x + 20, yy, { ...hpO, color: '#b7aa8c', fit: { w: iw, lines: 1 } });
     yy += hpH;
-    // starter deck
-    app.text(`STARTER DECK  ${h.deck.length}`, x + 20, yy, { ...hdrO, color: labelColor(h.color), fit: { w: iw - typeW - 8, lines: 1 } });
+    app.text(deckLbl, x + 20, yy, { ...hdrO, size: hdrSz, exact: true, color: labelColor(h.color) });
     let tx = x + w - 20;
+    if (twoRows) yy += hdrH;
     for (const q of tl) {
       const t = q.t, wd = app.measure(q.s, tySz, { ui: true, exact: true });
       tx -= wd; app.text(q.s, tx, yy, { size: tySz, exact: true, ui: true, color: COL[t] === '#8C2F2F' ? '#f0a0a0' : t === 'skill' ? '#a9cfe0' : '#c9b0e8' }); tx -= 10;
