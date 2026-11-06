@@ -35,7 +35,7 @@ export const CARDS_ODILE = [
     fx: [{ op: 'if', cond: { src: 'gold', gte: 8 }, ifText: 'you have 8 gold', then: [{ op: 'gold', n: -8 }, { op: 'status', s: 'weak', n: 2 }, { op: 'block', n: 8 }], else: [{ op: 'block', n: 4 }] }],
     up: { fx: [{ op: 'if', cond: { src: 'gold', gte: 6 }, ifText: 'you have 6 gold', then: [{ op: 'gold', n: -6 }, { op: 'status', s: 'weak', n: 2 }, { op: 'block', n: 11 }], else: [{ op: 'block', n: 5 }] }] }, flavor: 'Discretion has a price.' },
   { id: 'o_prepaid', name: 'Prepaid', hero: 'odile', type: 'skill', cost: 1, rarity: 'common', target: 'self', fx: [{ op: 'block', n: 5 }, { op: 'draw', n: 1 }], flags: { innate: true }, up: { fx: [{ op: 'block', n: 7 }, { op: 'draw', n: 1 }] }, flavor: 'Settled before you arrived.' },
-  { id: 'o_pawn_ticket', art: 'ticket', name: 'Pawn Ticket', hero: 'odile', type: 'skill', cost: 0, rarity: 'common', target: 'self', fx: [{ op: 'gold', n: 4 }, { op: 'block', n: 3 }, { op: 'discard', n: 1 }], flags: { exhaust: true }, up: { fx: [{ op: 'gold', n: 6 }, { op: 'block', n: 5 }, { op: 'discard', n: 1 }] }, flavor: 'Redeemable. Probably.' },
+  { id: 'o_pawn_ticket', art: 'ticket', name: 'Pawn Ticket', hero: 'odile', type: 'skill', cost: 0, rarity: 'common', target: 'self', fx: [{ op: 'gold', n: 4 }, { op: 'block', n: 3 }, { op: 'draw', n: 1 }], flags: { exhaust: true }, up: { fx: [{ op: 'gold', n: 6 }, { op: 'block', n: 5 }, { op: 'draw', n: 1 }] }, flavor: 'Redeemable. Probably.' },
 
   // ---- uncommon (8) ----
   { id: 'o_bulk_order', name: 'Bulk Order', hero: 'odile', type: 'attack', cost: 'X', rarity: 'uncommon', school: 'echo', fx: [{ op: 'dmg', n: 6, hits: { base: 0, per: 'x', mul: 1 } }], up: { fx: [{ op: 'dmg', n: 8, hits: { base: 0, per: 'x', mul: 1 } }] }, flavor: 'Quantity discounts apply to you.' },
@@ -54,10 +54,10 @@ export const CARDS_ODILE = [
   { id: 'o_standing_order', name: 'Standing Order', hero: 'odile', type: 'power', cost: 2, rarity: 'rare', school: 'echo', target: 'self', fx: [fxOn('standing_order', 1)], up: { fx: [fxOn('standing_order', 1)], cost: 1 }, flavor: 'The usual, please. Twice.' },
   { id: 'o_gilded_age', name: 'Gilded Age', hero: 'odile', type: 'power', cost: 1, rarity: 'rare', school: 'gilded', target: 'self', fx: [fxOn('gilt', 8), { op: 'block', n: 6 }], up: { fx: [fxOn('gilt', 12), { op: 'block', n: 8 }] }, flavor: 'Tasteful. Mostly.' },
   { id: 'o_hostile_takeover', name: 'Hostile Takeover', hero: 'odile', type: 'attack', cost: 3, rarity: 'rare', school: 'hoard', fx: [{ op: 'dmg', n: G(16, 0.15, 34) }], flags: { exhaust: true }, up: { fx: [{ op: 'dmg', n: G(20, 0.15, 40) }] }, flavor: 'We regret to inform you of your acquisition.' },
-  { id: 'o_market_crash', name: 'Market Crash', hero: 'odile', type: 'skill', cost: 2, rarity: 'rare', school: 'hoard', target: 'self',
-    fx: [{ op: 'if', cond: { src: 'gold', gte: 12 }, ifText: 'you have 12 gold', then: [{ op: 'gold', n: -12 }, { op: 'energy', n: 2 }, { op: 'draw', n: 4 }], else: [{ op: 'draw', n: 2 }, { op: 'block', n: 6 }] }], flags: { exhaust: true },
+  { id: 'o_market_crash', name: 'Market Crash', hero: 'odile', type: 'skill', cost: 1, rarity: 'rare', school: 'hoard', target: 'self',
+    fx: [{ op: 'if', cond: { src: 'gold', gte: 12 }, ifText: 'you have 12 gold', then: [{ op: 'gold', n: -12 }, { op: 'energy', n: 2 }, { op: 'draw', n: 4 }], else: [{ op: 'draw', n: 2 }, { op: 'block', n: 6 }] }],
     up: { fx: [{ op: 'if', cond: { src: 'gold', gte: 10 }, ifText: 'you have 10 gold', then: [{ op: 'gold', n: -10 }, { op: 'energy', n: 3 }, { op: 'draw', n: 4 }], else: [{ op: 'draw', n: 3 }, { op: 'block', n: 8 }] }] }, flavor: 'Buy low. Panic politely.' },
-  { id: 'o_golden_parachute', name: 'Golden Parachute', hero: 'odile', type: 'skill', cost: 1, rarity: 'rare', school: 'gilded', target: 'self', fx: [{ op: 'block', n: G(8, 0.15, 24) }], flags: { retain: true }, up: { fx: [{ op: 'block', n: G(11, 0.15, 30) }] }, flavor: 'Departing, with severance.' },
+  { id: 'o_golden_parachute', name: 'Golden Parachute', hero: 'odile', type: 'skill', cost: 1, rarity: 'rare', school: 'gilded', target: 'self', fx: [{ op: 'block', n: G(7, 0.12, 20) }], flags: { retain: true }, up: { fx: [{ op: 'block', n: G(10, 0.12, 26) }] }, flavor: 'Departing, with severance.' },
 
   // ---- graft builders (wave 2) ----
   { id: 'o_ledger_line', name: 'Ledger Line', hero: 'odile', type: 'attack', cost: 1, rarity: 'common', school: 'gilded', fx: [{ op: 'dmg', n: { base: 4, per: 'grafts', mul: 1, max: 12 } }, { op: 'gold', n: 2 }], up: { fx: [{ op: 'dmg', n: { base: 6, per: 'grafts', mul: 1, max: 15 } }, { op: 'gold', n: 3 }] }, flavor: 'Each addition is itemised.' },
@@ -69,13 +69,13 @@ export const CARDS_ODILE = [
 
   // ---- H3: Thread / Temper / Echo combos ----
   { id: 'o_reprint', name: 'Backorder', art: 'papers', hero: 'odile', type: 'skill', cost: 1, rarity: 'uncommon', school: 'hoard', target: 'self', flags: { retain: true },
-    fx: [{ op: 'block', n: 4 }, { op: 'draw', n: { base: 1, per: 'knots', mul: 0.5, max: 3 } }], up: { fx: [{ op: 'block', n: 6 }, { op: 'draw', n: { base: 1, per: 'knots', mul: 0.5, max: 3 } }] }, flavor: 'Held until the whole shipment arrives.' },
+    fx: [{ op: 'block', n: 5 }, { op: 'draw', n: { base: 1, per: 'knots', mul: 0.5, max: 3 } }], up: { fx: [{ op: 'block', n: 7 }, { op: 'draw', n: { base: 1, per: 'knots', mul: 0.5, max: 3 } }] }, flavor: 'Held until the whole shipment arrives.' },
   { id: 'o_choir_loft', name: 'Choir Loft', hero: 'odile', type: 'attack', cost: 1, rarity: 'common', school: 'echo', art: 'tuningfork', target: 'enemy',
     fx: [{ op: 'dmg', n: 4, hits: { base: 2, per: 'knots', mul: 0.5, max: 4 } }], up: { fx: [{ op: 'dmg', n: 5, hits: { base: 2, per: 'knots', mul: 0.5, max: 4 } }] }, flavor: 'Sung in rounds, billed in rounds.' },
   { id: 'o_mirror_sale', name: 'Mirror Sale', hero: 'odile', type: 'skill', cost: 1, rarity: 'rare', school: 'echo', art: 'mirror', target: 'self', flags: { exhaust: true },
     fx: [fxOn('echo', 1), { op: 'custom', fn: addKnot, text: 'Add a knot to the Line\'s top school.' }], up: { cost: 0, fx: [fxOn('echo', 1), { op: 'custom', fn: addKnot, text: 'Add a knot to the Line\'s top school.' }] }, flavor: 'Every item sold twice, once in reverse.' },
   { id: 'o_cross_listing', name: 'Cross-Listing', hero: 'odile', type: 'skill', cost: 1, rarity: 'common', school: 'hoard', art: 'ledger', target: 'self',
-    fx: [{ op: 'block', n: 6 }, { op: 'if', cond: LINE2, ifText: 'the Line holds 2 or more schools', then: [{ op: 'draw', n: 1 }, { op: 'gold', n: 3 }] }],
+    fx: [{ op: 'block', n: 6 }, { op: 'gold', n: 2 }, { op: 'if', cond: LINE2, ifText: 'the Line holds 2 or more schools', then: [{ op: 'draw', n: 1 }, { op: 'gold', n: 3 }] }],
     up: { fx: [{ op: 'block', n: 8 }, { op: 'if', cond: LINE2, ifText: 'the Line holds 2 or more schools', then: [{ op: 'draw', n: 1 }, { op: 'gold', n: 4 }] }] }, flavor: 'Listed under two headings, owed under both.' },
   { id: 'o_hardened_purse', name: 'Hardened Purse', hero: 'odile', type: 'skill', cost: 1, rarity: 'uncommon', school: 'gilded', art: 'coins', target: 'self',
     fx: [{ op: 'block', n: 6 }, { op: 'gold', n: 3 }, { op: 'if', cond: TEMP, ifText: 'this card is Tempered', then: [fxOn('gilt', 3)] }],
