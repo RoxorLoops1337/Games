@@ -14,6 +14,7 @@ import { drawHero, drawPortrait } from '../art/heroes.js';
 import { drawBackground } from '../art/backgrounds.js';
 import * as L from './combat_layout.js';
 import { maybeTip } from './tutorial.js';
+import { watchCombat } from './a11y.js';
 import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip } from './seam_ui.js';
 import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
 import { queueTip, flushTips, cardTipStack } from './tooltips.js';
@@ -1071,6 +1072,7 @@ function updateInput(app, dt) {
     u.cand = cand ? cand.uid : null;
     if (cand && !touch) { S.hov = cand.uid; if (S.hovPrev !== cand.uid) sfx('uiHover', { vol: 0.3 }); }
     else if (cand && touch && S.down && S.down.long) S.hov = cand.uid;
+    if (!S.hov && S.sel && S.kbUsed && !touch && !m.down) S.hov = S.sel; // keyboard focus shows the same tooltip as hover
     S.hovPrev = S.hov;
   } else if (S.drag) S.hov = S.drag.uid;
 
@@ -1089,21 +1091,23 @@ function updateInput(app, dt) {
       else if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; sfx('uiBack'); }
       else if (!busy()) app.shared.flow.openSettings && app.shared.flow.openSettings();
     }
-    else if (k === 'q' || k === 'Q') S.modal = { kind: 'piles', tab: 'draw', scroll: 0 };
+    else if (k === 'q' || k === 'Q' || k === 'i' || k === 'I') S.modal = { kind: 'piles', tab: 'draw', scroll: 0 };
     else if (act) {
       if (/^[0-9]$/.test(k)) {
         const idx = k === '0' ? 9 : Number(k) - 1; const dc = S.hand[idx];
-        if (dc) { if (S.sel === dc.uid) tryPlay(dc.uid, selNeedsTarget() ? liveEds()[S.tgt % Math.max(1, liveEds().length)] : null); else selectCard(dc.uid); }
-      } else if (k === 'Tab') { const l = liveEds(); if (l.length) { S.tgt = (S.tgt + (e.shiftKey ? l.length - 1 : 1)) % l.length; S.kbTarget = true; sfx('uiHover'); } }
+        if (dc) { if (S.sel === dc.uid) tryPlay(dc.uid, selNeedsTarget() ? liveEds()[S.tgt % Math.max(1, liveEds().length)] : null); else { selectCard(dc.uid); S.kbUsed = true; if (selNeedsTarget() && liveEds().length > 1) S.kbTarget = true; } }
+      } else if (k === 'Tab') { const l = liveEds(); if (l.length) { S.tgt = (S.tgt + (e.shiftKey ? l.length - 1 : 1)) % l.length; S.kbTarget = true; S.kbUsed = true; sfx('uiHover'); } }
+      else if ((k === 'ArrowUp' || k === 'ArrowDown') && S.sel && selNeedsTarget()) { const l = liveEds(); if (l.length) { S.tgt = (S.tgt + (k === 'ArrowDown' ? 1 : l.length - 1)) % l.length; S.kbTarget = true; S.kbUsed = true; sfx('uiHover'); } }
       else if (k === 'e' || k === 'E') doEndTurn();
       else if (k === 'Enter' || k === ' ') {
         if (u.endConfirm) doEndTurn();
         else if (S.sel) { const l = liveEds(); tryPlay(S.sel, selNeedsTarget() ? l[S.tgt % Math.max(1, l.length)] : null); }
         else if (S.potSel !== null && S.potSel !== undefined) { const l = liveEds(); tryPotion(S.potSel, l[S.tgt % Math.max(1, l.length)]); }
+        else doEndTurn();
       } else if (k === 'ArrowLeft' || k === 'ArrowRight') {
         const l = liveEds();
         if (S.sel && selNeedsTarget() && S.kbTarget && l.length) { S.tgt = (S.tgt + (k === 'ArrowRight' ? 1 : l.length - 1)) % l.length; sfx('uiHover'); }
-        else { const i = S.hand.findIndex((d) => d.uid === S.sel); const n = S.hand.length; if (n) selectCard(S.hand[(i < 0 ? (k === 'ArrowRight' ? 0 : n - 1) : (i + (k === 'ArrowRight' ? 1 : n - 1)) % n)].uid); }
+        else { S.kbUsed = true; const i = S.hand.findIndex((d) => d.uid === S.sel); const n = S.hand.length; if (n) selectCard(S.hand[(i < 0 ? (k === 'ArrowRight' ? 0 : n - 1) : (i + (k === 'ArrowRight' ? 1 : n - 1)) % n)].uid); }
       }
     }
   }
@@ -1113,6 +1117,7 @@ function updateInput(app, dt) {
 
   // ---- mouse / touch
   if (m.pressed && m.button === 2) { if (S.drag) cancelDrag(); else if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; sfx('uiBack'); } S.down = null; return; }
+  if (m.pressed) S.kbUsed = false;
   if (m.pressed) S.down = { x: m.x, y: m.y, uid: act ? u.cand : null, moved: false, t: 0, touch, long: false };
   if (S.down) {
     S.down.t += dt;
@@ -1297,6 +1302,7 @@ function fixLayout(snap) {
 // ---------------------------------------------------------------- update
 function update(app, dt) {
   if (!S) return;
+  if (app.a11y) { try { watchCombat(app, S.c, (e) => intentText(intentOf(S.c, e))); } catch { /* announcements never break play */ } }
   const raw = Math.min(dt, 0.05);
   const fxd = S.fx.update(raw);
   const ad = fxd * (S.skip ? 2.5 : 1);

@@ -205,7 +205,7 @@ export function installPost(app) {
       if (a >= ab.amt * (1 - ab.age / ab.ms)) { ab.amt = a; ab.age = 0; ab.ms = Math.max(30, +ms || 120); }
     },
     flash(color, a) {
-      if (S.tier === 'off' || !(a > 0)) return;
+      if (S.tier === 'off' || !(a > 0) || (app.shared && app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.flashes === false)) return;
       parseColor(color, fl.c); fl.a = clamp(+a, 0, 1) * (reduced() ? 0.2 : 1); fl.rate = fl.a / 0.2;
     },
     vignette(a, ms) { if (S.tier === 'off' || !(a > 0)) return; vg.a = clamp(+a, 0, 1); vg.age = 0; vg.ms = Math.max(30, +ms || 300); },

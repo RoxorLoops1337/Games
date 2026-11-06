@@ -22,7 +22,8 @@ export const CARD_W = 220, CARD_H = 310;
 const HW = CARD_W / 2, HH = CARD_H / 2;
 // Revised school colours from the art bible. The lead syncs data/schools.js and ui/core.js COL from this list.
 export const SCHOOL_COLORS = { ember: '#E8571F', echo: '#6CC6D6', hoard: '#B8922A', blood: '#A3142F', rust: '#8F4A2A', static: '#D9E84A', gilded: '#EFD98F' };
-const COLX = Object.assign({}, COL, SCHOOL_COLORS);
+export const CB = { on: false }; // colourblind pattern chips on cards (set by ui/a11y.js)
+export const COLX = Object.assign({}, COL, SCHOOL_COLORS);
 const INK = COL.ink, SEPIA = '#4a3022', BRASS = '#c9a227', BRASS_D = '#7a5f12', BRASS_L = '#fff1b0', STEEL = '#b9b4a8', STEEL_D = '#6c675e', SCAR_BRIGHT = '#e5546a';
 const SCHOOL_ORDER = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
 export const SCHOOL_SHAPES = { ember: 'flame', echo: 'arcs', hoard: 'pouch', blood: 'drop', rust: 'cog', static: 'bolt', gilded: 'diamond' };
@@ -836,10 +837,27 @@ export function drawCard(ctx, spec, x, y, o = {}) {
   if (o.hover && !o.selected) { cardPath(ctx, junk, cid); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(242,193,78,.55)'; ctx.stroke(); }
   if (o.selected || gl > 0.5) { cardPath(ctx, junk, cid); ctx.lineWidth = o.selected ? 3.5 : 2.5; ctx.strokeStyle = o.selected ? '#fff0b0' : COLX.lamp; ctx.stroke(); }
   if (o.preview) { rr(ctx, -HW - 3, -HH - 3, CARD_W + 6, CARD_H + 6, 14); ctx.lineWidth = 2; setDash(ctx, [8, 5]); ctx.strokeStyle = COLX.lamp; ctx.stroke(); setDash(ctx, []); }
+  if (CB.on && !junk && !o.noCb) drawCbChip(ctx, spec);
   if (o.dim > 0) { cardPath(ctx, junk, cid); ctx.fillStyle = `rgba(12,8,8,${Math.min(0.85, o.dim * 0.7)})`; ctx.fill(); }
   ctx.restore(); BB = null;
 }
 
+// Colourblind chip: card type letter + a school-specific fill pattern, bottom-left. Not colour dependent.
+const PAT_OF = { ember: 'diag', echo: 'waves', hoard: 'dots', blood: 'drops', rust: 'cross', static: 'zig', gilded: 'check' };
+function drawCbChip(ctx, spec) {
+  const sc = schoolOf(spec), x = -HW + 10, y = HH - 30, w = 54, h = 18;
+  ctx.save(); rr(ctx, x, y, w, h, 4); ctx.fillStyle = 'rgba(14,14,14,.88)'; ctx.fill(); ctx.clip();
+  ctx.strokeStyle = sc ? COLX[sc] : '#ddd'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 1.5;
+  const p = PAT_OF[sc] || 'none'; ctx.beginPath();
+  for (let i = 0; i < 9; i++) {
+    const px = x + 18 + i * 4.5;
+    if (p === 'diag') { ctx.moveTo(px, y + h); ctx.lineTo(px + 6, y); } else if (p === 'waves') { ctx.moveTo(px, y + 5 + (i % 2) * 6); ctx.lineTo(px + 4, y + 11 - (i % 2) * 6); } else if (p === 'cross') { ctx.moveTo(px, y); ctx.lineTo(px + 4, y + h); ctx.moveTo(px + 4, y); ctx.lineTo(px, y + h); } else if (p === 'zig') { ctx.moveTo(px, y + 3 + (i % 2) * 12); ctx.lineTo(px + 4.5, y + 15 - (i % 2) * 12); } else if (p === 'check') { if (i % 2 === 0) ctx.rect(px, y + 2, 4.5, 7); else ctx.rect(px, y + 9, 4.5, 7); } else if (p === 'dots') { ctx.moveTo(px + 2, y + 5); ctx.arc(px + 1, y + 5 + (i % 2) * 8, 1.6, 0, 6.3); } else if (p === 'drops') { ctx.moveTo(px, y + 3); ctx.lineTo(px + 2, y + 15); }
+  }
+  if (p === 'check' || p === 'dots') ctx.fill(); else ctx.stroke();
+  ctx.restore();
+  ctx.save(); ctx.font = font(12, { bold: true, ui: true }); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(({ attack: 'A', skill: 'S', power: 'P' })[spec.type] || '', x + 9, y + h / 2 + 1); ctx.restore();
+}
 // ---------- card back: a stitched suture cross over a vellum wound ----------
 let backCache = null;
 function lens(g, len, wid, vertical) { g.beginPath(); if (vertical) { g.moveTo(0, -len); g.quadraticCurveTo(wid, 0, 0, len); g.quadraticCurveTo(-wid, 0, 0, -len); } else { g.moveTo(-len, 0); g.quadraticCurveTo(0, -wid, len, 0); g.quadraticCurveTo(0, wid, -len, 0); } g.closePath(); }

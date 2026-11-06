@@ -1,4 +1,5 @@
 // Boot + flow. Screens never import each other: they call app.shared.flow.* and read app.shared.run.
+import * as A11Y from './ui/a11y.js';
 import { createApp } from './ui/core.js';
 import { FX_OPTS, defaultQuality } from './ui/fx.js';
 import * as audio from './ui/audio.js';
@@ -82,12 +83,14 @@ export function boot(canvas) {
   app.overlay = () => {
     const st = app.shared.meta.settings || {};
     FX_OPTS.shake = st.screenShake !== false; FX_OPTS.reduced = !!st.reducedMotion;
-    const ts = [100, 125, 150].includes(st.textScale) ? st.textScale : (st.textSize === 'large' ? 125 : 100);
+    const ts = [100, 125, 150, 175].includes(st.textScale) ? st.textScale : (st.textSize === 'large' ? 125 : 100);
     app.textScale = ts / 100;
     app.quality = st.quality || 'high'; FX_OPTS.quality = app.quality === 'off' ? 0 : app.quality === 'low' ? 0.5 : 1;
+    A11Y.applySettings(app);
     TRANS.drawTransitions(app);
     drawPauseOverlay(app);
   };
+  A11Y.installA11y(app);
   app.go('title');
   app.start();
   return { app, flow };
