@@ -111,13 +111,13 @@ function infoLines(app, x, y, w, h, lines, size = 15) {
 function drawInfo(app, x, y, w, h, info, hint) {
   app.panel(x, y, w, h, { fill: 'rgba(14,12,10,.96)', stroke: 'rgba(201,162,39,.5)' });
   if (!info) { app.text(hint || 'Hover a card to preview the result.', x + w / 2, y + h / 2 - 10, { size: 17, align: 'center', color: 'rgba(232,220,196,.6)', italic: true, fit: { w: w - 40, lines: 1 } }); return; }
-  const gw = 300, fo = { size: 13, ui: true, fit: { w: gw + 20, h: 20, lines: 1 } };
-  app.text('NOW', x + 16, y + 14, { size: 12, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
-  drawGauge(app, x + 62, y + 12, gw, info.before);
-  app.text(gaugeLabel(info.before), x + 62, y + 33, { ...fo, color: 'rgba(232,220,196,.75)' });
-  app.text('AFTER', x + 16, y + 62, { size: 12, ui: true, bold: true, color: COL.lamp });
-  drawGauge(app, x + 62, y + 60, gw, info.after);
-  app.text(gaugeLabel(info.after), x + 62, y + 81, { ...fo, color: info.after.strain ? COL.bad : COL.good });
+  const gw = 300, fo = { size: 13, ui: true, fit: { w: gw + 6, h: 20, lines: 1 } };
+  app.text('NOW', x + 16, y + 14, { size: 12, ui: true, bold: true, color: 'rgba(232,220,196,.6)', fit: { w: 58, lines: 1 } });
+  drawGauge(app, x + 78, y + 12, gw, info.before);
+  app.text(gaugeLabel(info.before), x + 78, y + 33, { ...fo, color: 'rgba(232,220,196,.75)' });
+  app.text('AFTER', x + 16, y + 62, { size: 12, ui: true, bold: true, color: COL.lamp, fit: { w: 58, lines: 1 } });
+  drawGauge(app, x + 78, y + 60, gw, info.after);
+  app.text(gaugeLabel(info.after), x + 78, y + 81, { ...fo, color: info.after.strain ? COL.bad : COL.good });
   infoLines(app, x + gw + 90, y + 10, w - gw - 106, h - 20, info.lines || [], 15);
 }
 
@@ -591,7 +591,7 @@ export default {
 
     // ---- section labels ----
     const lab = (s, x, y, w = 250, short) => { const o = { size: 13, ui: true, bold: true, fit: { w, h: 19, lines: 1 }, color: 'rgba(232,220,196,.55)' }; return app.text(short && app.layoutText(s, o).trunc ? short : s, x, y, o); }; // fitted: the phone text floor inflates it, a section heading never runs under a tag or a tile
-    lab('CARDS FOR SALE', 270, 56); lab('GRAFT PATCHES', 270, 338, 124, 'PATCHES'); lab('POTIONS  ' + run.potions.length + '/' + RUN.potionSlots(run), 270, POT_Y - 21, 124, 'POTIONS ' + run.potions.length + '/' + RUN.potionSlots(run)); lab('RELICS', REL_X, 338); lab('SERVICES', 270, 592);
+    lab('CARDS FOR SALE', 270, 56); lab('GRAFT PATCHES', 270, 338, 130, 'PATCHES'); lab('POTIONS  ' + run.potions.length + '/' + RUN.potionSlots(run), 270, POT_Y - 21, 130, 'POTIONS ' + run.potions.length + '/' + RUN.potionSlots(run)); lab('RELICS', REL_X, 338); lab('SERVICES', 270, 592);
 
     const priceTag = (cx, cy, price, sold, grp) => {
       if (sold) return;
@@ -641,7 +641,7 @@ export default {
       }
       g.restore();
       if (grInfo && !it.sold && infoChip(app, x + w - 12, gInfoY, [], 'graft' + i)) { sfx(app, 'uiClick'); openInfoCard(app, gr.name, withGloss(`Weight ${gr.weight} (${gr.tier})\nBoon: ${gr.boon}\nPrice: ${gr.price}\n${it.price} gold.`), COL[gr.school] || COL.lamp); }
-      if (it.sold) stamp(app, x + w / 2, y + ph / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w - 42, y - 16, it.price, false, 'graft' + i); // on the heading row, over the patch's top right corner, so the two rows below stay clear
+      if (it.sold) stamp(app, x + w / 2, y + ph / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w - 36, y - 16, it.price, false, 'graft' + i); // on the heading row, over the patch's top right corner, so the two rows below stay clear
       if (!it.sold && app.clicked(GRAFT_X(i), y, w, 100)) startGraftBuy(app, i);
     });
 
@@ -655,14 +655,14 @@ export default {
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawPotion(g, it.id, x + 30, y + 34 - 2 * k, 40);
       let nmO = { size: 15, bold: true, fit: { w: w - 58, lines: 1 } }; if (app.layoutText(p.name, nmO).trunc) nmO = { ...nmO, bold: false }; // a long name on the smallest phone drops the bold before it loses letters
-      const nmL = app.layoutText(p.name, nmO), nameY = y + 12 - 2 * k;
+      const nmL = app.layoutText(p.name, nmO), nameY = y + 14 - 2 * k;
       app.text(p.name, x + 56, nameY, { ...nmO, color: COL.vellum });
       { const dy0 = nameY + Math.ceil(nmL.size * 1.2) + 2, dO = { size: 14, ui: true, fit: { w: w - 64, h: y + h - 5 - 2 * k - dy0, soft: true } }, dL = app.layoutText(p.text, dO);
         app.text(p.text, x + 56, dy0, { ...dO, color: 'rgba(232,220,196,.85)' });
         potInfo = dL.trunc ? { x: x + 52, y: dy0 - 4, w: w - 58, h: dL.h + 8 } : null; }
       g.restore();
       if (potInfo && !it.sold && touchUi(app) && infoChip(app, x + 16, y + h - 15 - 2 * k, [potInfo], 'potion' + i)) { sfx(app, 'uiClick'); openInfoCard(app, p.name, withGloss(`${p.rarity}\n${p.text}\n${it.price} gold.`), COL.lamp); }
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 44, y - 1, it.price, false, 'potion' + i);
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 36, y - 1, it.price, false, 'potion' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(p.name, `${p.rarity}\n${p.text}\nPotion slots ${run.potions.length}/${RUN.potionSlots(run)}. ${it.price} gold.`, { anchor: { x: POT_X(i), y, w, h } }); }
       if (!it.sold && app.clicked(POT_X(i), y, w, h)) buyDirect(app, 'potion', i, { x: x + 30, y: y + 38 }, it.price);
     });

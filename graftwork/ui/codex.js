@@ -435,7 +435,7 @@ export default {
   },
   drawSchools(app, x, y, w, h) {
     const ctx = app.ctx, st = this.state('schools'), ids = SCHOOL_IDS();
-    const gap = 14, cw = Math.floor((w - 16 - gap) / 2), ch = Math.round(166 * growOf(app));
+    const gap = 14, cw = Math.floor((w - 16 - gap) / 2), ch = Math.round(166 + (growOf(app) - 1) * 70);
     const rows = Math.ceil(ids.length / 2);
     scrollArea(app, st, x, y, w, h, rows * (ch + gap) + gap, (top) => {
       ids.forEach((id, i) => {

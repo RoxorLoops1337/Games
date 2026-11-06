@@ -207,17 +207,18 @@ export default {
   drawSide(app, x, y, w, h, t) {
     const g = app.ctx, run = this.run;
     // masterpiece
-    const ph = 296;
+    const small = app.scale < 0.95, ph = small ? 318 : 296; // phones: the caption under the card is taller
     app.reg('end-star', x, y, w, ph, { group: 'star' });
     app.panel(x, y, w, ph, { r: 12, fill: 'rgba(30,22,10,.88)', stroke: this.star ? rgba(COL.lamp, 0.7) : 'rgba(232,220,196,.2)' });
     if (this.star) {
       const c = this.star, pulse = calm(app) ? 0.5 : 0.5 + Math.sin(app.t * 2) * 0.5;
       app.text('YOUR MASTERPIECE', x + w / 2, y + 12, { size: 13, ui: true, bold: true, align: 'center', color: COL.lamp });
-      drawCard(g, c.spec, x + w / 2, y + 140, { scale: 0.52, tithed: this.tithed.has(c.inst.uid), glow: true });
-      app.text(c.spec.name, x + w / 2, y + 232, { size: 17, bold: true, align: 'center' });
+      drawCard(g, c.spec, x + w / 2, y + (small ? 128 : 140), { scale: small ? 0.46 : 0.52, tithed: this.tithed.has(c.inst.uid), glow: true });
+      let cy = y + (small ? 206 : 232); // the caption is stacked from the heights it really takes
+      cy += app.text(c.spec.name, x + w / 2, cy, { size: 17, bold: true, align: 'center', fit: { w: w - 20, lines: 1 } }) + 2;
       const names = c.inst.grafts.map((id) => (GRAFTS[id] ? GRAFTS[id].name : id)).join(', ');
-      app.text(`${c.inst.grafts.length} grafts, weight ${c.w}${c.spec.overload ? ', Overload' : ''}`, x + w / 2, y + 254, { size: 12, ui: true, align: 'center', color: '#d9cba8' });
-      app.text(names, x + w / 2, y + 270, { size: 11, ui: true, align: 'center', color: '#a58f6b', maxW: w - 20, lineH: 13 });
+      cy += app.text(`${c.inst.grafts.length} grafts, weight ${c.w}${c.spec.overload ? ', Overload' : ''}`, x + w / 2, cy, { size: 12, ui: true, align: 'center', color: '#d9cba8', fit: { w: w - 20, lines: 1 } }) + 2;
+      app.text(names, x + w / 2, cy, { size: 11, ui: true, align: 'center', color: '#a58f6b', lineH: 13, fit: { w: w - 20, h: y + ph - 6 - cy, lines: 2 } });
       if (app.inRect(x + w / 2 - 60, y + 40, 120, 200)) { this.hover = { ...c, x: 640, y: 360 }; }
     } else {
       app.text('NO MASTERPIECE', x + w / 2, y + 100, { size: 14, ui: true, bold: true, align: 'center', color: '#8c8372' });
