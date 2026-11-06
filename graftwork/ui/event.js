@@ -194,12 +194,12 @@ export default {
     if (this.gotRelic && RELICS[this.gotRelic]) {
       this.gotRelicT += app.dt; const r = RELICS[this.gotRelic];
       const a = clamp(this.gotRelicT < 0.3 ? this.gotRelicT / 0.3 : 1, 0, 1);
-      app.reg('event-relic', FRAME.x + 60, FRAME.y + 150, FRAME.w - 120, 110, { overlay: true });
-      g.save(); g.globalAlpha = a; app.panel(FRAME.x + 60, FRAME.y + 150, FRAME.w - 120, 110, { fill: 'rgba(14,12,10,.92)', stroke: COL.lamp, lw: 2.5 });
+      app.reg('event-relic', FRAME.x + 60, FRAME.y + 150, FRAME.w - 120, 130, { overlay: true });
+      g.save(); g.globalAlpha = a; app.panel(FRAME.x + 60, FRAME.y + 150, FRAME.w - 120, 130, { fill: 'rgba(14,12,10,.92)', stroke: COL.lamp, lw: 2.5 });
       drawRelic(g, this.gotRelic, FRAME.x + 110, FRAME.y + 205, 56);
       app.text('Relic gained', FRAME.x + 156, FRAME.y + 166, { size: 13, ui: true, bold: true, color: COL.lamp });
       app.text(r.name, FRAME.x + 156, FRAME.y + 184, { size: 22, bold: true });
-      app.text(r.text, FRAME.x + 156, FRAME.y + 212, { size: 14, ui: true, maxW: FRAME.w - 240, color: 'rgba(232,220,196,.8)' });
+      wrapLimit(app, r.text, FRAME.w - 240, 14, 3, { ui: true }).forEach((ln, q) => app.text(ln, FRAME.x + 156, FRAME.y + 210 + q * Math.round(17 * tscale(app)), { size: 14, ui: true, color: 'rgba(232,220,196,.8)' }));
       g.restore();
     }
   },
@@ -269,8 +269,7 @@ export default {
     let ms = mk(4); const tot = (a) => a.reduce((n, m) => n + m.h + 10, 0);
     if (tot(ms) > room) ms = mk(2);
     if (tot(ms) > room) ms = mk(1);
-    if (globalThis.__D && tot(mk(0)) > room) console.log('BARE', room, tot(mk(0)), choices.length, k, ev.id);
-    const bare = tot(ms) > room; if (bare) ms = mk(0); // no room: labels only, the description moves into the hover tooltip
+    const bare = tot(ms) > room; if (bare) { ms = mk(0); if (tot(ms) > room) { const hh = Math.max(30, Math.floor((room - choices.length * 10) / choices.length)); ms = ms.map((m) => ({ sub: [], h: hh })); } } // no room: labels only, the description moves into the hover tooltip
     choices.forEach((c, idx) => {
       const sub = ms[idx].sub;
       const h = ms[idx].h;

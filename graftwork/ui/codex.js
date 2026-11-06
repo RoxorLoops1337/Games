@@ -303,6 +303,7 @@ export default {
       app.text(this.tab === 5 ? 'The seven schools. Hold 3 grafts of one to wake its bonus, 6 to wake the bigger one.' : 'The whole Graft system in six panels.', 36, 112, { size: 15, ui: true, italic: true, color: 'rgba(232,220,196,.65)' });
     }
     const CX = 28, CY = 144, CW = W - 56, CH = H - 144 - 20;
+    app.reg('scroll-codex', CX, CY, CW, CH, { overlay: true });
     if (kind === 'cards') this.drawCards(app, CX, CY, CW, CH);
     else if (kind) this.drawList(app, kind, CX, CY, CW, CH);
     else if (this.tab === 5) this.drawSchools(app, CX, CY, CW, CH);
