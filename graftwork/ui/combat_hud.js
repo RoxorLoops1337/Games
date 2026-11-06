@@ -251,7 +251,9 @@ function intentTip(app, ed, o) {
   const info = o.info;
   if (info.hidden) return [[{ title: 'Unknown intent', text: 'This enemy hides what it will do next.', color: '#bbb', glyph: 'diamond' }]];
   const ex = explainIntent(o.c, ed.e, info);
-  const text = (ex.lines.length ? ex.lines.join('\n') : intentText(info));
+  const mv = ed.e.def.moves[ed.e.move] || {};
+  let text = (ex.lines.length ? ex.lines.join('\n') : intentText(info));
+  for (const extra of [mv.note, mv.tip]) if (extra && !text.includes(extra)) text += '\n' + extra;
   return [[{ title: o.moveName || 'Intent', text, color: info.kinds.includes('attack') ? '#ff9a8a' : COL.vellum, glyph: 'tri', why: ex.why }]];
 }
 function bodyTip(ed, o) {
