@@ -27,11 +27,11 @@ const LEFT = { x: 12, y: 64, w: 260, h: 648 };
 const RIGHT = { x: 1008, y: 64, w: 260, h: 484 };
 const ACT = { x: 1008, y: 556, w: 260, h: 156 };
 const HAND = { x: 284, y: 556, w: 712, h: 164 };
-const CW = 124, CH = 164; // resting building card
+const CW = 124, CH = 156; // resting building card
 const STEP_S = 0.25; // a room per step
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III' };
 const PH_GLYPH = { morning: 'ward_sun', midday: 'ward_highsun', evening: 'ward_lamp', night: 'ward_moon' };
-const PH_SHORT = { morning: 'Build', midday: '+10% fight gold', evening: 'Dinner: +1 card', night: 'Danger, +25% gold' };
+const PH_SHORT = { morning: 'Build', midday: '+10% fight gold', evening: 'Dinner: +1 card', night: 'Risk, +25% gold' };
 const PH_TINT = { morning: ['#ffd27a', 0.07], midday: ['#ffffff', 0], evening: ['#6a3008', 0.17], night: ['#0b1a4a', 0.32] };
 const TRIG = { fight: ['fight', 'Ward fight'], elite: ['elite', 'Elite'], event: ['event', 'Chapel event'], shop: ['shop', 'Dispensary'], forge: ['forge', 'Workshop'], rest: ['rest', 'Clean sheets'], boss: ['boss', 'The boss'] };
 const DARKW = (r) => !r.on && ROOMS[r.type].power > 0;
@@ -142,7 +142,7 @@ function contentsText(r) {
 function bossLine(run, long) {
   const w = run.ward, days = w.dayLimit - w.day;
   if (WD.bossForced(run)) return long ? 'The boss is waiting. Tonight you are pulled in, wherever you stand.' : 'Boss tonight';
-  if (WD.bossOpen(run)) return long ? `The boss arrives on the last night (${plural(days, 'day')}). You may walk in early: boss HP x0.9, +30 gold and a free uncommon or rare plan.` : (days ? `Early boss open` : 'Boss tonight');
+  if (WD.bossOpen(run)) return long ? `The boss arrives on the last night (${plural(days, 'day')}). You may walk in early: boss HP x0.9, +30 gold and a free uncommon or rare plan.` : (days ? 'Boss open' : 'Boss tonight');
   return long ? `The boss arrives on the last night: ${plural(days, 'day')}. Safe to cross until two days before.` : `Boss in ${plural(days, 'day')}`;
 }
 
@@ -162,9 +162,9 @@ export default {
     if (MEM.plan) { // steps still to show: towards the next trigger (params.then) or to the end of the walk
       const idx = P.cells.indexOf(w.hero.room, P.at);
       if (idx > P.at) this.animate(app, P.at, idx, () => { P.at = idx; if (params && params.then) app.shared.flow.route(); else MEM.plan = null; });
-      else if (params && params.then) { app.after(1, () => app.shared.flow.route()); }
       else if (!w.walk) MEM.plan = null;
     }
+    if (params && params.then && !S.walk) app.after(1, () => app.shared.flow.route()); // nothing to show: on to the trigger's screen
   },
   leave() { },
   key() { return false; },
@@ -216,6 +216,7 @@ export default {
     this.leftPanel(app);
     this.rightPanel(app, inter);
     this.actions(app, inter);
+    S.selZone = null;
     if (w.phase === 'morning') this.hand(app, inter); else this.walkStrip(app);
     if (inter.chip) this.drawChip(app, inter.chip);
     this.drawTransition(app);
@@ -294,7 +295,8 @@ export default {
   interact(app) {
     const run = S.run, w = run.ward, m = app.mouse, out = { hoverCell: null, legal: null, path: null, dest: null, chip: null, preview: null };
     const gx = Math.floor((m.x - GRID.x) / CELL), gy = Math.floor((m.y - GRID.y) / CELL);
-    const onGrid = !app.blocked && gx >= 0 && gy >= 0 && gx < w.w && gy < w.h;
+    const z = S.selZone, inZone = z && m.x >= z.x && m.x <= z.x + z.w && m.y >= z.y && m.y <= z.y + z.h;
+    const onGrid = !app.blocked && !inZone && gx >= 0 && gy >= 0 && gx < w.w && gy < w.h;
     if (onGrid) out.hoverCell = { x: gx, y: gy };
     const hovRoom = onGrid ? WD.roomAt(run, gx, gy) : null;
     S.hoverRoom = hovRoom ? hovRoom.id : null;
@@ -522,7 +524,7 @@ export default {
     // icon + contents
     const has = r.contents.length > 0 && !theatre;
     const ink = theatre ? '#e8d6b0' : K.INK;
-    const iconX = has ? px + 19 : px + pw / 2, iconY = theatre ? py + 24 : py + 30, isz = theatre ? 28 : has ? 24 : 32;
+    const iconX = has ? px + 19 : px + pw / 2, iconY = theatre ? py + 16 : py + 30, isz = theatre ? 22 : has ? 24 : 32;
     K.roomGlyph(g, r.type, iconX, iconY, isz, ink, tint);
     if (has) this.drawContents(app, r, px + 34, py + 13, 32, 34);
     // power bulb (top left) and timer ring (top right)
@@ -536,7 +538,7 @@ export default {
     if (theatre) {
       const open = WD.bossOpen(run), txt = bossLine(run, false);
       if (open) { g.save(); app.rr(px, py, pw, ph, 5); g.strokeStyle = rgba('#ff5a6a', 0.5 + 0.5 * pulse); g.lineWidth = lnw('bold'); g.stroke(); g.restore(); }
-      app.text(txt, px + pw / 2, py + 40, { size: 11, ui: true, bold: true, align: 'center', color: open ? '#ffb3bd' : '#f2d98a', fit: { w: pw - 4, h: ph - 40, lines: 2 } });
+      app.text(txt, px + pw / 2, py + 30, { size: 12, ui: true, bold: true, align: 'center', color: open ? '#ffb3bd' : '#f2d98a', fit: { w: pw - 6, h: ph - 32, lines: 2, soft: true } });
     } else {
       const nO = { size: 10, ui: true, bold: true, align: 'center', color: rgba(K.INK, 0.85), fit: { w: pw - 6, lines: 1 } }, L = app.layoutText(K.roomShort(r.type).toUpperCase(), nO);
       if (!L.trunc) app.text(K.roomShort(r.type).toUpperCase(), px + pw / 2, py + ph - L.size - 3, nO);
@@ -561,7 +563,7 @@ export default {
       else { const cc = cellCenter(r.x, r.y); g.save(); g.strokeStyle = rgba(COL.scar, 1 - k); g.lineWidth = lnw('bold'); g.beginPath(); g.arc(cc.x + 12, cc.y - 4, 10 + 26 * EASE.out(k), 0, Math.PI * 2); g.stroke(); g.restore(); if (!MEM.pops['_b' + r.id]) { MEM.pops['_b' + r.id] = 1; S.fx.burst(cc.x + 12, cc.y - 4, 'spark', { n: 8 }); } }
     }
     if (hov) {
-      const anchor = { x: c.x, y: c.y, w: CELL, h: CELL, band: { x: RIGHT.x, y: RIGHT.y + 8, bottom: 716, dir: 1 } };
+      const anchor = { x: c.x, y: c.y, w: CELL, h: CELL, band: { x: LEFT.x + 2, y: Math.max(200, (S.logTop || 300) - 40), bottom: 716, dir: 1 } }; // over the log, never over the walk notes or the plan
       app.tooltip(d.name + (DARKW(r) ? ' (dark)' : ''), roomTip(run, r), { color: tint === '#8e1f2c' ? '#ff8a96' : COL.lamp, terms: roomTerms(r), anchor });
     }
   },
@@ -637,7 +639,7 @@ export default {
     for (const t of p.triggers || []) {
       const c = roomCenter(run, t.room), sx = c.x + 22, sy = c.y - 22;
       g.save(); g.fillStyle = t.bribed ? '#6a625a' : '#1f1914'; g.beginPath(); g.arc(sx, sy, 13, 0, Math.PI * 2); g.fill(); g.strokeStyle = t.bribed ? '#9a9088' : COL.scar; g.lineWidth = lnw('fine'); g.stroke(); g.restore();
-      drawNodeIcon(g, TRIG[t.kind] ? TRIG[t.kind][0] : 'event', sx, sy, 20, t.bribed ? 'locked' : 'visited');
+      drawNodeIcon(g, TRIG[t.kind] ? TRIG[t.kind][0] : 'event', sx, sy, 22, t.bribed ? 'locked' : 'available');
       if (!t.bribed) n++;
       g.save(); g.fillStyle = t.bribed ? '#6a625a' : COL.scar; g.beginPath(); g.arc(sx - 11, sy - 11, 7.5, 0, Math.PI * 2); g.fill(); g.restore();
       app.text(t.bribed ? '-' : String(n), sx - 11, sy - 18, { size: 11, ui: true, bold: true, align: 'center', color: '#fff3e0', fixed: true });
@@ -713,16 +715,16 @@ export default {
     // power bulbs
     const bx = x + 4, bw = RX + RW - bx - 8;
     app.text(`POWER ${pw.used}/${pw.cap}`, bx, 9, { size: 11, ui: true, bold: true, color: pw.free < 0 ? COL.bad : 'rgba(232,220,196,.7)', fit: { w: bw, lines: 1 } });
-    const nb = Math.max(pw.cap, pw.used), step = Math.min(14, bw / Math.max(1, nb));
-    for (let i = 0; i < nb; i++) K.drawRes(g, 'bulb', bx + 6 + i * step, 40, Math.min(13, step), i < pw.used);
+    const nb = Math.max(pw.cap, pw.used), step = Math.min(17, (bw - 4) / Math.max(1, nb));
+    for (let i = 0; i < nb; i++) K.drawRes(g, 'bulb', bx + 8 + i * step, 40, Math.min(16, step + 1), i < pw.used);
     if (app.inRect(bx, 6, bw + 8, 52)) app.tooltip('Power', `${pw.used} of ${pw.cap} in use, ${Math.max(0, pw.free)} spare. Each lit bulb is a room drawing power. Tap a room in the morning to switch it off.`, { color: COL.lamp, terms: ['Power', 'Dark room'], anchor: { x: bx, y: 6, w: bw, h: 52 } });
     // building deck: draw / discard and the viewer
     const DX = 928, DW = 192;
     app.reg('ward-plans-box', DX, 6, DW, 52, { group: 'top-plans' });
     app.panel(DX, 6, DW, 52, { fill: 'rgba(22,18,16,.94)', r: 8, rivets: false });
     const d = w.deck;
-    app.text('PLANS', DX + 10, 9, { size: 11, ui: true, bold: true, color: 'rgba(232,220,196,.7)', fit: { w: 70, lines: 1 } });
-    app.text(`${d.draw.length} / ${d.discard.length}`, DX + 10, 25, { size: 18, bold: true, color: COL.vellum, fit: { w: 76, lines: 1 } });
+    app.text('PLANS', DX + 10, 8, { size: 11, ui: true, bold: true, color: 'rgba(232,220,196,.7)', fit: { w: 70, lines: 1 } });
+    app.text(`${d.draw.length} draw`, DX + 10, 23, { size: 14, bold: true, color: COL.vellum, fit: { w: 80, lines: 1 } }); app.text(`${d.discard.length} used`, DX + 10, 39, { size: 12, ui: true, color: 'rgba(232,220,196,.6)', fit: { w: 80, h: 16, lines: 1 } });
     if (app.inRect(DX, 6, 92, 52)) app.tooltip('Building plans', `${d.draw.length} to draw, ${d.discard.length} used, ${d.hand.length} in hand. You draw 5 each morning; the used pile is reshuffled when the draw pile runs out.`, { color: COL.lamp, anchor: { x: DX, y: 6, w: 92, h: 52 } });
     if (app.button('View', DX + 96, 12, 88, 40, { size: 17, fit: true })) S.plans = true;
   },
@@ -770,7 +772,7 @@ export default {
     const bottom = L.y + L.h - 10, lines = [];
     for (let i = w.log.length - 1; i >= 0 && lines.length < 12; i--) lines.push(w.log[i].replace(/^D\d+ \w+: /, ''));
     for (const ln of lines) {
-      const o = { size: 13, ui: true, color: 'rgba(232,220,196,.72)', fit: { w: IW, lines: 2 } }, Lt = app.layoutText(ln, o);
+      const o = { size: 13, ui: true, color: 'rgba(232,220,196,.72)', fit: { w: IW, lines: 2, soft: true } }, Lt = app.layoutText(ln, o);
       if (y + Lt.h > bottom) break;
       app.text(ln, X, y, o); y += Lt.h + 5;
     }
@@ -830,8 +832,8 @@ export default {
       return;
     }
     big(PHASES[w.phase].name);
-    body(`Hover a room within ${WD.moveOf(run)} steps to see the walk. Every room on the red thread with something inside triggers, in order. Click to walk, or wait here.`, undefined, 6);
-    body(PHASES[w.phase].text, '#e0c27a', 4);
+    body(`${app.mouse.touch ? 'Tap' : 'Hover'} a room up to ${WD.moveOf(run)} steps away. Rooms on the red thread trigger in order. ${app.mouse.touch ? 'Tap again' : 'Click'} to walk.`, undefined, 6);
+    if (app.scale >= 0.95) body(PHASES[w.phase].text, '#e0c27a', 4);
   },
 
   // ---- bottom right: End Morning, Walk, Other route, Wait ----
@@ -878,21 +880,21 @@ export default {
     const lifted = S.sel !== null ? cards.findIndex((c) => c.uid === S.sel) : -1;
     cards.forEach((c, i) => {
       const card = BUILD_CARDS[c.id], r = rects[i];
-      app.reg('ward-card' + i, r.x, r.y, r.w, Math.min(r.h, H - r.y), { group: 'hand' });
+      const lift = i === lifted ? 18 : 0;
+      app.reg('ward-card' + i, r.x, r.y - lift, r.w, Math.min(r.h, H - r.y) + lift, { group: 'hand' });
       if (S.drag && S.drag.uid === c.uid) { K.drawBuildCard(app, card, r.x, r.y, r.w, r.h, { alpha: 0.25, run }); return; }
-      if (i === hov || i === lifted) return;
+      if (i === hov && i !== lifted) return;
+      if (i === lifted) { K.drawBuildCard(app, card, r.x, r.y - 18, r.w, r.h, { run, sel: true }); this.selButtons(app, c, card, r.x - 30, r.y - 70, r.w + 60); return; }
       const can = WD.canPlayBuild(run, c.uid, card.kind === 'room' ? { x: -1, y: -1 } : null).why !== 'cost';
-      K.drawBuildCard(app, card, r.x, r.y + 8, r.w, r.h, { run, dim: !can });
+      K.drawBuildCard(app, card, r.x, r.y, r.w, r.h, { run, dim: !can });
     });
     // the hovered or selected card, enlarged above the hand
-    const big = hov >= 0 && !S.drag ? hov : lifted;
+    const big = hov >= 0 && hov !== lifted && !S.drag ? hov : -1; // the selected plan stays put (its text is in the notes on the right), so its buttons never jump
     if (big >= 0) {
       const c = cards[big], card = BUILD_CARDS[c.id], r = rects[big], k = 1.5, bw = CW * k, bh = CH * k;
       const bx = clamp(r.x + r.w / 2 - bw / 2, SHEET.x, SHEET.x + SHEET.w - bw), by = H - bh - 6;
       app.reg('ward-card-big', bx, by, bw, bh, { overlay: true });
       K.drawBuildCard(app, card, bx, by, bw, bh, { full: true, sel: big === lifted, glow: true, run });
-      if (big === lifted && big !== hov) this.selButtons(app, c, card, bx, by - 52, bw);
-      else if (big === lifted) this.selButtons(app, c, card, bx, by - 52, bw);
       const cant = WD.canPlayBuild(run, c.uid, card.kind === 'room' ? { x: -1, y: -1 } : null);
       if (cant.why === 'cost') app.text(whyText(run, 'cost', card), bx + bw / 2, by - 24, { size: 14, ui: true, bold: true, align: 'center', color: COL.bad, stroke: '#1a1614', strokeW: 3, fit: { w: 320, lines: 1 } });
     }
@@ -904,6 +906,7 @@ export default {
   },
   selButtons(app, inst, card, x, y, w) {
     const run = S.run;
+    S.selZone = card.target === 'none' || card.target === 'res' ? { x: x + w / 2 - 146, y, w: 292, h: 44 } : null;
     if (card.target === 'none') { app.reg('ward-play', x + w / 2 - 70, y, 140, 44, { overlay: true }); if (app.button('Play', x + w / 2 - 70, y, 140, 44, { size: 20, fill: '#4a3a1d', stroke: COL.lamp })) this.play(app, inst.uid, null); }
     else if (card.target === 'res') {
       app.reg('ward-res-pick', x + w / 2 - 140, y, 280, 44, { overlay: true });
@@ -919,19 +922,21 @@ export default {
     app.reg('ward-strip', B.x, B.y, B.w, B.h - 8, { group: 'strip' });
     app.panel(B.x, B.y, B.w, B.h - 8, { fill: 'rgba(22,18,16,.94)', r: 10 });
     K.roomGlyph(g, PH_GLYPH[w.phase], B.x + 46, B.y + 46, 46, '#e8d6b0', w.phase === 'night' ? '#cfe0ff' : COL.lamp);
-    app.text(`${PHASES[w.phase].name} walk`, B.x + 90, B.y + 12, { size: 28, bold: true, color: COL.lamp, engraved: true, fit: { w: 300, lines: 1 } });
-    app.text(PHASES[w.phase].text, B.x + 90, B.y + 48, { size: 14, ui: true, color: 'rgba(232,220,196,.8)', fit: { w: B.w - 110, h: 38, lines: 2 } });
+    const tO = { size: 28, bold: true, color: COL.lamp, engraved: true, fit: { w: 300, lines: 1 } }, tL = app.layoutText(`${PHASES[w.phase].name} walk`, tO);
+    app.text(`${PHASES[w.phase].name} walk`, B.x + 90, B.y + 10, tO);
+    const legY = B.y + B.h - 8 - 36, ty = B.y + 14 + tL.size;
+    app.text(PHASES[w.phase].text, B.x + 90, ty, { size: 14, ui: true, color: 'rgba(232,220,196,.8)', fit: { w: B.w - 110, h: legY - ty - 2, lines: 3, soft: true } });
     // legend: what each trigger seal means
     const kinds = ['fight', 'elite', 'event', 'shop', 'forge', 'boss'], lw0 = (B.w - 40) / kinds.length;
     kinds.forEach((kd, i) => {
-      const lx = B.x + 20 + i * lw0, ly = B.y + 108;
+      const lx = B.x + 20 + i * lw0, ly = legY + 4;
       drawNodeIcon(g, kd, lx + 12, ly + 12, 22, 'available');
       app.text(TRIG[kd][1], lx + 28, ly + 4, { size: 13, ui: true, color: 'rgba(232,220,196,.75)', fit: { w: lw0 - 32, lines: 1 } });
     });
   },
 
   drawChip(app, chip) {
-    const g = app.ctx, o = { size: 15, ui: true, bold: true, fit: { w: 300, lines: 2 } }, L = app.layoutText(chip.text, o);
+    const g = app.ctx, o = { size: 15, ui: true, bold: true, fit: { w: 360, lines: 3 } }, L = app.layoutText(chip.text, o);
     const w = L.w + 20, h = L.h + 12;
     let x = chip.x + 18, y = chip.y - h - 14;
     if (x + w > W - 8) x = chip.x - w - 18;

@@ -14,6 +14,7 @@ import { wrapLimit, tscale, hpPerPlay } from './graft_parts.js';
 import { specGloss, cardGlossTip, glossTip, withGloss } from './tooltips.js';
 import { infoOpen, infoClose, touchUi, openInfoCard, infoChip, drawInfoCard } from './card_zoom.js';
 import { lnw } from '../art/linework.js';
+import { dispensary } from './ward_kit.js';
 const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 
 const BRASS = '#C9A227';
@@ -566,7 +567,7 @@ export default {
     const g = app.ctx, run = app.shared.run, flow = app.shared.flow, shop = run.pending;
     if (!shop || shop.kind !== 'shop') return;
     const so = S.fx.shakeOffset();
-    const locked = !!(S.modal.m || S.anim);
+    const locked = !!(S.modal.m || S.anim || S.disp);
     g.save(); g.translate(so.x, so.y);
     drawBackground(g, 'shop', S.t);
     const vg = g.createRadialGradient(640, 360, 200, 640, 360, 800); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)'); g.fillStyle = vg; g.fillRect(0, 0, 1280, 720);
@@ -695,14 +696,21 @@ export default {
 
     // ---- services ----
     const rp = RUN.servicePrice(run, 'remove'), sp = RUN.servicePrice(run, 'strip');
-    app.reg('shop-remove', 270, 614, 300, 66, { group: 'remove' }); app.reg('shop-strip', 590, 614, 300, 66, { group: 'strip' }); app.reg('shop-leave', 940, 600, 310, 90, { group: 'leave' });
+    const wardShop = !!shop.builds, SW = wardShop ? 200 : 300, SX2 = wardShop ? 480 : 590; // Ward mode: a third service, the Dispensary's building plans
+    app.reg('shop-remove', 270, 614, SW, 66, { group: 'remove' }); app.reg('shop-strip', SX2, 614, SW, 66, { group: 'strip' }); app.reg('shop-leave', 940, 600, 310, 90, { group: 'leave' });
     const grafted = run.deck.some((c) => c.grafts.length);
-    if (app.button('Remove a card', 270, 614, 300, 66, { size: 20, fit: true, sub: `${rp} gold`, subColor: run.gold >= rp ? COL.gold : COL.bad })) startRemove(app);
-    if (app.inRect(270, 614, 300, 66)) app.tooltip('Remove a card', `Delete one card from the deck for ${rp} gold. The price rises with every removal this run (${run.shopUses.remove} so far).`);
+    if (app.button('Remove a card', 270, 614, SW, 66, { size: 20, fit: true, sub: `${rp} gold`, subColor: run.gold >= rp ? COL.gold : COL.bad })) startRemove(app);
+    if (app.inRect(270, 614, SW, 66)) app.tooltip('Remove a card', `Delete one card from the deck for ${rp} gold. The price rises with every removal this run (${run.shopUses.remove} so far).`);
     const stripDis = !grafted;
-    if (app.button('Strip a graft', 590, 614, 300, 66, { size: 20, fit: true, disabled: stripDis, sub: sp === 0 ? 'Free' : `${sp} gold`, subColor: run.gold >= sp ? COL.gold : COL.bad })) startStrip(app);
-    if (app.inRect(590, 614, 300, 66)) app.tooltip('Strip a graft', stripDis ? 'None of your cards carry a graft.' : `Pick a card, then one of its grafts. The graft and its boon are lost, its price goes with it. ${sp === 0 ? 'Free this once.' : sp + ' gold.'}`);
+    if (app.button('Strip a graft', SX2, 614, SW, 66, { size: 20, fit: true, disabled: stripDis, sub: sp === 0 ? 'Free' : `${sp} gold`, subColor: run.gold >= sp ? COL.gold : COL.bad })) startStrip(app);
+    if (app.inRect(SX2, 614, SW, 66)) app.tooltip('Strip a graft', stripDis ? 'None of your cards carry a graft.' : `Pick a card, then one of its grafts. The graft and its boon are lost, its price goes with it. ${sp === 0 ? 'Free this once.' : sp + ' gold.'}`);
     const stripTitle = null; void stripTitle;
+    if (wardShop) {
+      app.reg('shop-plans', 690, 614, 230, 66, { group: 'plans' });
+      const left = shop.builds.filter((b) => !b.sold).length;
+      if (app.button('Building plans', 690, 614, 230, 66, { size: 20, fit: true, sub: left ? `${left} for sale, strike ${shop.buildRemovePrice}` : 'Sold out', subColor: COL.gold })) { S.disp = { tab: 'buy' }; sfx(app, 'uiClick'); }
+      if (app.inRect(690, 614, 230, 66)) app.tooltip('Building plans', `The Dispensary sells plans for your building deck and strikes one for ${shop.buildRemovePrice} gold.`, { terms: ['Dispensary'] });
+    }
     if (app.button('LEAVE', 940, 600, 310, 90, { size: 38, fit: true, fill: '#4a2a1c', stroke: COL.lamp })) { RUN.advance(run); flow.route(); }
     // (no hover tip on LEAVE: it opened over the Strip a graft button beside it)
 
@@ -715,6 +723,7 @@ export default {
     app.blocked = false;
     if (S.anim) { drawAnim(app, S.anim, S.fx); S.fx.draw(g); if (S.anim.t > 0.4) app.text('click to skip', 640, 700, { size: 13, ui: true, align: 'center', color: 'rgba(232,220,196,.5)' }); }
     else if (S.modal.m) { drawModal(app, S.modal, run); }
+    else if (S.disp) { dispensary(app, run, shop, S); }
     drawInfoCard(app);
   },
 };

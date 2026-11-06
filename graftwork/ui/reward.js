@@ -76,7 +76,7 @@ export default {
     const compact = !!st.init.choices;
     let y = 16 + th + sh + 12;
     // No relic choice: the short list would hang in the top third of the screen, so centre it between the header and the notes.
-    if (!compact) { const est = rows.reduce((a, r) => a + (r.id === 'relic' ? 96 : 80) + 12, 0); y += Math.round(clamp((560 - y - est) / 2 - 10, 0, 120)); }
+    if (!compact) { const est = rows.reduce((a, r) => a + (r.id === 'relic' ? 96 : 80) + 12, 0) + (st.buildInit ? 162 : 0); y += Math.round(clamp((560 - y - est) / 2 - 10, 0, 120)); }
     rows.forEach((r, i) => { y = drawRow(app, r, i, y, compact, K); });
     if (st.buildInit) y += buildPickRow(app, run, rw, PX, y, PW, compact ? 128 : 150, st) + (compact ? 8 : 12); // Ward mode: building plan pick
 

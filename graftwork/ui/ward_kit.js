@@ -185,7 +185,7 @@ export function drawBuildCard(app, card, x, y, w, h, o = {}) {
   g.restore();
   const A = o.alpha === undefined ? 1 : o.alpha;
   // name
-  app.text(card.name, x + w / 2, y + 8 * k, { size: Math.round(14 * k), bold: true, align: 'center', color: INK, alpha: A, fit: { w: w - 26 * k, lines: 1 } });
+  app.text(card.name, x + w / 2, y + 8 * k, { size: Math.round(14 * k), bold: true, align: 'center', color: INK, alpha: A, fit: { w: w - 24 * k, lines: 1, soft: true } }); // the tooltip carries the full name
   // cost row
   const parts = costParts(card), ok = o.run ? affords(o.run, card) : null;
   let cx = x + 9 * k; const cy = y + 33 * k, isz = 15 * k;
