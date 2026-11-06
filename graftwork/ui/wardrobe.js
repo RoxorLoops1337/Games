@@ -100,28 +100,37 @@ export default {
     const ctx = app.ctx, meta = app.shared.meta, gap = 10, cols = c.cols;
     const rows = Math.ceil(entries.length / cols), cw = Math.floor((w - gap * (cols - 1)) / cols);
     const ch = Math.min(c.id === 'title' ? 108 : 290, Math.floor((h - gap * (rows - 1)) / rows));
+    // the preview gives way to the text under it (phones inflate the text): name (2 lines), rules text (3 lines, relics), state line, button
+    const line = (sz, o) => Math.round(app.sz(sz, o) * 1.22);
+    const need = 24 + 2 * line(18, { bold: true }) + 4 + line(14, { ui: true }) + 4 + (c.id === 'relic' ? 3 * Math.round(app.sz(13, { ui: true }) * 1.16) : 0) + 32 + 14;
+    const prevH = c.prev ? Math.max(48, Math.min(c.prev, ch - need)) : 0;
     const heroId = (app.shared.run && app.shared.run.hero) || 'marrow';
     entries.forEach((e, i) => {
       const tx = x + (i % cols) * (cw + gap), ty = y + Math.floor(i / cols) * (ch + gap);
       const owned = isOwned(meta, c, e), on = isOn(meta, c, e), afford = e.cost !== null && meta.credit.bal >= e.cost;
       app.reg(`wardrobe-${c.id}-${i}`, tx, ty, cw, ch, { group: `tile${i}` });
       app.panel(tx, ty, cw, ch, { r: 10, fill: on ? 'rgba(50,40,18,.92)' : 'rgba(22,18,15,.92)', stroke: on ? COL.lamp : owned ? 'rgba(232,220,196,.45)' : 'rgba(232,220,196,.2)', lw: on ? 2.5 : 1.5 });
-      if (c.prev) {
-        const pcx = tx + cw / 2, pcy = ty + 12 + c.prev / 2;
-        ctx.save(); ctx.beginPath(); ctx.rect(tx + 2, ty + 2, cw - 4, c.prev + 20); ctx.clip();
+      if (prevH) {
+        const pcx = tx + cw / 2, pcy = ty + 12 + prevH / 2;
+        ctx.save(); ctx.beginPath(); ctx.rect(tx + 2, ty + 2, cw - 4, prevH + 20); ctx.clip();
         if (!owned) ctx.globalAlpha = 0.7;
-        if (c.id === 'back') drawCardBack(ctx, pcx, pcy, { scale: (c.prev - 6) / 310, back: e.id, t: 1.2 });
-        else if (c.id === 'tint') { setHeroTint(e.color); try { drawPortrait(ctx, heroId in HEROES ? heroId : 'marrow', pcx, pcy, c.prev - 16); } finally { setHeroTint(M.tintColor(meta)); } }
+        if (c.id === 'back') drawCardBack(ctx, pcx, pcy, { scale: (prevH - 6) / 310, back: e.id, t: 1.2 });
+        else if (c.id === 'tint') { setHeroTint(e.color); try { drawPortrait(ctx, heroId in HEROES ? heroId : 'marrow', pcx, pcy, prevH - 16); } finally { setHeroTint(M.tintColor(meta)); } }
         else if (e.id) drawRelic(ctx, e.id, pcx, pcy, 64);
         else { ctx.font = '38px serif'; ctx.fillStyle = 'rgba(232,220,196,.25)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('-', pcx, pcy); }
         ctx.restore();
       }
-      let yy = ty + 12 + (c.prev ? c.prev + 12 : 0);
-      app.text(e.name, tx + 14, yy, { size: 18, bold: true, color: owned ? COL.vellum : 'rgba(232,220,196,.7)', maxW: cw - 28 });
-      yy += 24;
-      if (e.text && c.id === 'relic') { app.text(clampText(app, e.text, cw - 28, 13, 2, { ui: true }), tx + 14, yy - 2, { size: 13, ui: true, maxW: cw - 28, lineH: 15, color: 'rgba(232,220,196,.75)' }); yy += 32; }
+      let yy = ty + 12 + (prevH ? prevH + 12 : 0);
+      const nO = { size: 18, bold: true, fit: { w: cw - 28, lines: 2 } }, nL = app.layoutText(e.name, nO);
+      app.text(e.name, tx + 14, yy, { ...nO, color: owned ? COL.vellum : 'rgba(232,220,196,.7)' });
+      yy += Math.max(24, nL.lines.length * nL.lineH + 4);
       const state = on ? 'Equipped' : owned ? 'Owned' : e.cost === null ? (e.ach ? `Earn: ${e.ach.name}` : 'Earned in play') : `${e.cost} Credit`;
-      app.text(state, tx + 14, yy, { size: 14, ui: true, color: on ? COL.lamp : owned ? COL.good : e.cost !== null && !afford ? COL.scar : 'rgba(232,220,196,.7)', maxW: cw - 28 });
+      const sO = { size: 14, ui: true, fit: { w: cw - 28, lines: 1 } }, stH = Math.round(app.layoutText(state, sO).size * 1.22) + 4;
+      if (e.text && c.id === 'relic') { // the relic's rules text takes the room between the name and the state line (never cut: the tooltip repeats it)
+        const room = ty + ch - 10 - 32 - 6 - stH - yy, dO = { size: 13, ui: true, lineH: 15, fit: { w: cw - 28, h: Math.max(15, room), lines: 4 } }, dL = app.layoutText(e.text, dO);
+        app.text(e.text, tx + 14, yy - 2, { ...dO, color: 'rgba(232,220,196,.75)' }); yy += dL.lines.length * dL.lineH + 2;
+      }
+      app.text(state, tx + 14, yy, { ...sO, color: on ? COL.lamp : owned ? COL.good : e.cost !== null && !afford ? COL.scar : 'rgba(232,220,196,.7)' });
       const lab = !owned ? (e.cost === null ? 'Locked' : afford ? `Buy  ${e.cost}` : `Need ${e.cost}`) : on ? (c.id === 'title' || c.id === 'relic' ? 'Remove' : 'Equipped') : 'Equip';
       const dis = (!owned && (e.cost === null || !afford)) || (on && (c.id === 'back' || c.id === 'tint'));
       const bh = 32, by = ty + ch - bh - 10;

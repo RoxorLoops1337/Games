@@ -6,7 +6,7 @@ import { makeApp, frames, click, key } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
 import * as METAX from '../graftwork/engine/meta.js';
 import * as LAYOUT from '../graftwork/ui/layout_registry.js';
-import { CARDS, GRAFTS, GRAFT_LIST, RELICS, POTIONS, EVENTS, HEROES } from '../graftwork/data/index.js';
+import { CARDS, GRAFTS, GRAFT_LIST, RELICS, POTIONS, EVENTS, HEROES, ENEMIES, STATUSES } from '../graftwork/data/index.js';
 
 const SCREENS = {};
 for (const n of ['map', 'graft', 'reward', 'shop', 'forge', 'event', 'deckview', 'codex', 'end', 'wardrobe', 'title', 'settings', 'pause']) SCREENS[n] = (await import(`../graftwork/ui/${n}.js`)).default;
@@ -264,6 +264,7 @@ for (const scale of [100, 125, 150]) {
   hp.app.push('deckview', { mode: 'pick', filter: (i) => i.id === 'm_cut', title: 'Choose a card', onPick() {} }); look(hp, 40, `deck/s${scale}/pick`);
   const hc = await make({ scale, seed: 'cx' }); flowFor(hc); hc.app.go('base');
   hc.meta.seen = { cards: Object.fromEntries(Object.keys(CARDS).slice(0, 30).map((k) => [k, 1])), grafts: Object.fromEntries(GRAFT_LIST.slice(0, 10).map((g) => [g.id, 1])), enemies: {}, relics: {}, statuses: {} };
+  hc.meta.seen = { cards: Object.fromEntries(Object.keys(CARDS).map((k) => [k, 1])), grafts: Object.fromEntries(GRAFT_LIST.map((g) => [g.id, 1])), enemies: Object.fromEntries(Object.keys(ENEMIES).map((k) => [k, 1])), relics: Object.fromEntries(Object.keys(RELICS).map((k) => [k, 1])), statuses: Object.fromEntries(Object.keys(STATUSES).map((k) => [k, 1])) }; // everything met: the longest real texts
   hc.app.push('codex', {});
   for (let i = 0; i < 7; i++) { hc.app.top().setTab(i); look(hc, 20, `codex/s${scale}/tab${i}`); hc.app.mouse.x = 400; hc.app.mouse.y = 300; hc.app.mouse.wheel = 400; look(hc, 5, `codex/s${scale}/tab${i}/scroll`); }
   for (const phone of [false, true]) for (const cat of [0, 1, 2, 3]) {
@@ -324,12 +325,12 @@ for (const pscale of [0.64, 0.54, 0.46]) {
     h.run.phase = 'shop'; h.run.pending = RUN.makeShop(h.run); h.run.potions = []; go(h, 'shop');
     const tag = T('shop') + '/' + hero; look(h, 60, tag);
     for (const [x, y] of [[347, 190], [780, 392], [380, 540], [1000, 400]]) { hoverAt(h, x, y); look(h, 3, tag + '/hover'); }
-    h.app.mouse.x = 0; h.app.mouse.y = 0; click(h.app, 270 + 100, 400); look(h, 30, tag + '/graftpicker'); key(h.app, 'Escape');
+    h.app.mouse.x = 0; h.app.mouse.y = 0; click(h.app, 270 + 100, 400); look(h, 30, tag + '/graftpicker'); hoverAt(h, 150, 220); look(h, 4, tag + '/graftpicker/hover'); key(h.app, 'Escape');
   }
   { const h = await make({ pscale, seed: 'pforge' }); flowFor(h); h.run.gold = 999; graftHeavy(h.run, 6); h.run.phase = 'forge'; h.run.pending = { kind: 'forge', used: 0 }; go(h, 'forge');
     look(h, 60, T('forge')); const fm = await import('../graftwork/ui/forge.js');
     for (let i = 0; i < 6; i++) { hoverAt(h, 100 + i * 200, 300); look(h, 3, T('forge') + '/hover'); }
-    for (const opt of [0, 3]) { click(h.app, fm.optionCenterX(opt), 300); look(h, 30, T('forge') + '/picker' + opt); key(h.app, 'Escape'); look(h, 20, T('forge') + '/closed'); } }
+    for (const opt of [0, 3]) { click(h.app, fm.optionCenterX(opt), 300); look(h, 30, T('forge') + '/picker' + opt); hoverAt(h, 150, 220); look(h, 4, T('forge') + '/picker' + opt + '/hover'); key(h.app, 'Escape'); look(h, 20, T('forge') + '/closed'); } }
   for (const ev of Object.values(EVENTS).filter((e, i) => i % 3 === 0)) {
     const h = await make({ pscale, seed: 'pev-' + ev.id }); flowFor(h); h.run.act = ev.act || 1; h.run.gold = 300;
     h.run.phase = 'event'; h.run.pending = { kind: 'event', id: ev.id, result: null }; h.run.flags = h.run.flags || {}; go(h, 'event');
@@ -345,6 +346,7 @@ for (const pscale of [0.64, 0.54, 0.46]) {
   }
   { const hc = await make({ pscale, seed: 'pcx' }); flowFor(hc); hc.app.go('base');
     hc.meta.seen = { cards: Object.fromEntries(Object.keys(CARDS).slice(0, 30).map((k) => [k, 1])), grafts: Object.fromEntries(GRAFT_LIST.slice(0, 10).map((g) => [g.id, 1])), enemies: {}, relics: {}, statuses: {} };
+    hc.meta.seen = { cards: Object.fromEntries(Object.keys(CARDS).map((k) => [k, 1])), grafts: Object.fromEntries(GRAFT_LIST.map((g) => [g.id, 1])), enemies: Object.fromEntries(Object.keys(ENEMIES).map((k) => [k, 1])), relics: Object.fromEntries(Object.keys(RELICS).map((k) => [k, 1])), statuses: Object.fromEntries(Object.keys(STATUSES).map((k) => [k, 1])) };
     hc.app.push('codex', {}); for (let i = 0; i < 7; i++) { hc.app.top().setTab(i); look(hc, 20, T('codex') + '/tab' + i); } }
   for (const cat of [0, 1, 2, 3]) { const hw = await make({ pscale, seed: 'pwd', meta: richMeta() }); flowFor(hw); hw.app.go('base'); hw.app.push('wardrobe', {}); hw.app.top().setCat(cat); look(hw, 20, T('wardrobe') + '/c' + cat); }
   for (const won of [true, false]) { const he = await make({ pscale, seed: 'pend' + won, hero: 'odile' }); flowFor(he); graftHeavy(he.run, 10); he.run.phase = won ? 'won' : 'dead'; he.run.killedBy = 'the_grafter'; he.run.flags = he.run.flags || {}; go(he, 'end'); look(he, 200, T('end') + '/' + (won ? 'won' : 'dead')); }

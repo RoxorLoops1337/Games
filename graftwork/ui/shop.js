@@ -92,18 +92,33 @@ export function openCards(st, o) { st.m = { kind: 'cards', scroll: 0, scrollT: 0
 // Grafts of one card: openGraft(st, {title, inst, info(gid)->preview, onPick(gid)})
 export function openGraftChoice(st, o) { st.m = { kind: 'grafts', t: 0, hov: -1, ...o }; }
 
+// The coloured result lines of the info panel, laid out as one block: the largest size at which all of them fit the box (wrapped as needed); only at the
+// smallest legible size is the last line that still fits cut with an ellipsis.
+function infoLines(app, x, y, w, h, lines, size = 15) {
+  if (!lines.length) return;
+  const target = app.sz(size, { ui: true }), lo = Math.min(target, Math.max(9, Math.round(size * 0.8), app.scale < 0.95 && app.scale > 0 ? Math.ceil(9 / app.scale) : 0));
+  const flat = (sz) => lines.flatMap((ln) => app.wrap(ln.t, w, sz, { ui: true, exact: true }).map((t, q, a) => ({ t, c: ln.c, end: q === a.length - 1 }))), tall = (F, sz) => F.length * Math.round(sz * 1.22) + 3 * F.filter((l) => l.end).length;
+  let sz = target, F = flat(sz);
+  while (sz > lo && tall(F, sz) > h) { sz--; F = flat(sz); }
+  const lh = Math.round(sz * 1.22); let yy = y;
+  for (let k = 0; k < F.length; k++) {
+    if (yy + sz > y + h + 2) break;
+    const cut = k < F.length - 1 && yy + lh + 3 + sz > y + h + 2; // the next line would not fit: this one ends in an ellipsis
+    app.text(cut ? F[k].t.replace(/[ ,.;:]+$/, '') + '…' : F[k].t, x, yy, { size: sz, exact: true, ui: true, color: F[k].c || COL.vellum });
+    yy += lh + (F[k].end ? 3 : 0);
+  }
+}
 function drawInfo(app, x, y, w, h, info, hint) {
   app.panel(x, y, w, h, { fill: 'rgba(14,12,10,.96)', stroke: 'rgba(201,162,39,.5)' });
-  if (!info) { app.text(hint || 'Hover a card to preview the result.', x + w / 2, y + h / 2 - 10, { size: 17, align: 'center', color: 'rgba(232,220,196,.6)', italic: true }); return; }
-  const gw = 300;
+  if (!info) { app.text(hint || 'Hover a card to preview the result.', x + w / 2, y + h / 2 - 10, { size: 17, align: 'center', color: 'rgba(232,220,196,.6)', italic: true, fit: { w: w - 40, lines: 1 } }); return; }
+  const gw = 300, fo = { size: 13, ui: true, fit: { w: gw + 20, h: 20, lines: 1 } };
   app.text('NOW', x + 16, y + 14, { size: 12, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
   drawGauge(app, x + 62, y + 12, gw, info.before);
-  app.text(gaugeLabel(info.before), x + 62, y + 34, { size: 13, ui: true, color: 'rgba(232,220,196,.75)' });
+  app.text(gaugeLabel(info.before), x + 62, y + 33, { ...fo, color: 'rgba(232,220,196,.75)' });
   app.text('AFTER', x + 16, y + 62, { size: 12, ui: true, bold: true, color: COL.lamp });
   drawGauge(app, x + 62, y + 60, gw, info.after);
-  app.text(gaugeLabel(info.after), x + 62, y + 82, { size: 13, ui: true, color: info.after.strain ? COL.bad : COL.good });
-  let yy = y + 12;
-  for (const ln of info.lines || []) { yy += app.text(ln.t, x + gw + 90, yy, { size: 15, ui: true, color: ln.c || COL.vellum, maxW: w - gw - 110, lineH: 19 }) + 3; }
+  app.text(gaugeLabel(info.after), x + 62, y + 81, { ...fo, color: info.after.strain ? COL.bad : COL.good });
+  infoLines(app, x + gw + 90, y + 10, w - gw - 106, h - 20, info.lines || [], 15);
 }
 
 // Tag for cards that look the same in a list (five starter Cuts): 'Cut 2 of 5, 1 graft, upgraded'. Null for a card with no twin.
@@ -129,10 +144,11 @@ export function drawModal(app, st, run, extra = {}) {
   app.reg('modal', 36, 30, 1208, 660, { overlay: true });
   g.save(); g.globalAlpha = fade; g.fillStyle = 'rgba(6,4,3,.82)'; g.fillRect(0, 0, 1280, 720);
   app.panel(36, 30, 1208, 660, { fill: 'rgba(26,22,20,.97)', stroke: rgba(BRASS, 0.7), lw: 3 });
-  app.text(m.title, 640, 44, { size: 30, bold: true, align: 'center', color: COL.lamp });
-  if (m.sub) app.text(m.sub, 640, 82, { size: 16, ui: true, align: 'center', color: 'rgba(232,220,196,.75)' });
+  app.text(m.title, 640, 44, { size: 30, bold: true, align: 'center', color: COL.lamp, fit: { w: 760, lines: 1 } });
+  if (m.sub) app.text(m.sub, 640, 82, { size: 16, ui: true, align: 'center', color: 'rgba(232,220,196,.75)', fit: { w: 960, h: 34, lines: 2 } });
   const close = () => { st.m = null; if (m.onCancel) m.onCancel(); };
-  if (app.button('Back', 1100, 42, 120, 40, { size: 18, key: 'escape' })) { sfx(app, 'uiBack'); close(); g.restore(); return true; }
+  if (app.button('Back', 1000, 42, 120, 40, { size: 18, key: 'escape', fit: true })) // left of the Pause / Fullscreen corner (x 1128 and up)
+    { sfx(app, 'uiBack'); close(); g.restore(); return true; }
   let picked = null, info = null;
 
   if (m.kind === 'cards') {
@@ -186,7 +202,7 @@ export function drawModal(app, st, run, extra = {}) {
       const th = Math.max(40, gh * gh / total), ty = gy + (gh - th) * (m.scroll / maxS);
       g.fillStyle = 'rgba(232,220,196,.12)'; g.fillRect(gx + gw + 4, gy, 6, gh); g.fillStyle = rgba(BRASS, 0.8); app.rr(gx + gw + 4, ty, 6, th, 3); g.fill();
     }
-    if (!m.cards.length) app.text(m.empty || 'Nothing to choose.', 640, 300, { size: 22, align: 'center', color: 'rgba(232,220,196,.6)', italic: true });
+    if (!m.cards.length) app.text(m.empty || 'Nothing to choose.', 640, 300, { size: 22, align: 'center', color: 'rgba(232,220,196,.6)', italic: true, fit: { w: 1000, lines: 1 } });
     drawInfo(app, 60, 566, 1160, 108, info, m.hint);
   } else { // grafts of one card
     const inst = m.inst, spec = cardSpec(inst), tith = tithedUids(run);
@@ -200,9 +216,9 @@ export function drawModal(app, st, run, extra = {}) {
       app.panel(bx, by, bw, bh, { fill: over && !why ? 'rgba(60,48,30,.95)' : 'rgba(38,32,28,.95)', stroke: over && !why ? COL.lamp : 'rgba(232,220,196,.35)', lw: over ? 3 : 2 });
       if (why) { g.save(); g.globalAlpha = 0.55; g.fillStyle = '#000'; app.rr(bx, by, bw, bh, 10); g.fill(); g.restore(); }
       drawGraftPatch(g, gr, bx + 14, by + 14, 250, 90, {});
-      app.text(`Weight ${gr.weight}${i >= MAX_GRAFTS_NORMAL ? ' +1 Overload' : ''}`, bx + 280, by + 12, { size: 15, ui: true, bold: true, color: COL.lamp });
-      app.text('Boon: ' + gr.boon, bx + 280, by + 36, { size: 15, ui: true, color: COL.good, maxW: bw - 300, lineH: 18 });
-      app.text('Price: ' + gr.price, bx + 280, by + 72, { size: 15, ui: true, color: COL.bad, maxW: bw - 300, lineH: 18 });
+      app.text(`Weight ${gr.weight}${i >= MAX_GRAFTS_NORMAL ? ' +1 Overload' : ''}`, bx + 280, by + 10, { size: 15, ui: true, bold: true, color: COL.lamp, fit: { w: bw - 300, h: 20, lines: 1 } });
+      app.text('Boon: ' + gr.boon, bx + 280, by + 33, { size: 15, ui: true, color: COL.good, lineH: 18, fit: { w: bw - 300, h: 38, lines: 2 } });
+      app.text('Price: ' + gr.price, bx + 280, by + 73, { size: 15, ui: true, color: COL.bad, lineH: 18, fit: { w: bw - 300, h: 38, lines: 2 } });
       if (over) { app.cursor = 'pointer'; glossTip(app, '', [gr.boon, gr.price, 'W' + gr.weight], { x: bx, y: by, w: bw, h: bh }, { school: gr.school }); }
       if (app.clicked(bx, by, bw, bh)) { if (why) { sfx(app, 'error'); m.toast = why; m.toastT = 1.6; } else picked = gid; }
     });
@@ -212,7 +228,7 @@ export function drawModal(app, st, run, extra = {}) {
     drawInfo(app, 60, 566, 1160, 108, info, 'Hover a graft to see the result of removing it.');
     void n;
   }
-  if (m.toastT > 0) { m.toastT -= dt; app.text(m.toast, 640, 540, { size: 20, align: 'center', bold: true, color: COL.bad, shadow: true, alpha: clamp(m.toastT * 3, 0, 1) }); }
+  if (m.toastT > 0) { m.toastT -= dt; app.text(m.toast, 640, 540, { size: 20, align: 'center', bold: true, color: COL.bad, shadow: true, alpha: clamp(m.toastT * 3, 0, 1), fit: { w: 1000, h: 50, lines: 2 } }); }
   if (extra.after) extra.after(app);
   g.restore();
   if (picked !== null) { st.m = null; m.onPick(picked); }
@@ -604,6 +620,8 @@ export default {
     if (hovered) app.tooltip(hovered.spec.name, `${typeLabel(hovered.spec)}, cost ${hovered.spec.cost}\n${cardLines(hovered.spec).join('\n')}\nBuying adds it to your deck for ${hovered.it.price} gold.`, { anchor: hovered.a, gloss: specGloss(hovered.spec), types: hovered.spec.type, school: hovered.spec.school });
 
     // ---- grafts ----
+    // phones: when any Boon or Price would be cut with the words 'Boon:' / 'Price:', all three patches use '+' and '-' instead (colour is not the only cue), which buys ~7 letters a row
+    const symRows = smallUi && shop.grafts.some((it) => { if (it.sold) return false; const gr = GRAFTS[it.id], o = { size: 13, ui: true, fit: { w: touchUi(app) ? 173 : 203, lines: 1, soft: true } }; return app.layoutText('Boon: ' + gr.boon, o).trunc || app.layoutText('Price: ' + gr.price, o).trunc; });
     shop.grafts.forEach((it, i) => {
       const gr = GRAFTS[it.id], x = GRAFT_X(i) + shakeX('graft' + i), y = GRAFT_Y, w = 205, h = 64, ph = 64; let grInfo = false, gInfoY = 0;
       app.reg('shop-graft' + i, GRAFT_X(i), y - 4, w, 120, { group: 'graft' + i }); // patch + its two rows (Boon, Price)
@@ -613,11 +631,12 @@ export default {
       drawGraftPatch(g, gr, x, y, w, ph, { hover: k });
       // one line each for the Boon and the Price, so nobody has to hover to read what a patch does
       { // two rows, one line each, in the 40 px between the patch and the Potions heading; the size is shared so the rows never touch (the hover tip has the rest)
-        let rowO = { size: 13, ui: true, soft: true, fit: { w: w - 2, lines: 1 } };
-        const cut = () => app.layoutText('Boon: ' + gr.boon, rowO).trunc || app.layoutText('Price: ' + gr.price, rowO).trunc;
+        let rowO = { size: 13, ui: true, fit: { w: w - 2, lines: 1, soft: true } };
+        const rows = symRows ? [['+', gr.boon, COL.good], ['-', gr.price, '#ff8a8a']] : [['Boon:', gr.boon, COL.good], ['Price:', gr.price, '#ff8a8a']];
+        const cut = () => rows.some(([lab, txt]) => app.layoutText(`${lab} ${txt}`, rowO).trunc);
         if (cut() && touchUi(app)) { grInfo = true; rowO = { ...rowO, fit: { w: w - 30, lines: 1, soft: true } }; } // touch: no hover tip, so a chip opens the full Boon and Price
-        const sz = Math.min(app.layoutText('Boon: ' + gr.boon, rowO).size, app.layoutText('Price: ' + gr.price, rowO).size), pitch = Math.max(15, sz + 3);
-        [['Boon', gr.boon, COL.good], ['Price', gr.price, '#ff8a8a']].forEach(([lab, txt, col], n) => app.text(`${lab}: ${txt}`, x, y + ph + 9 + n * pitch, { ...rowO, size: sz, exact: true, color: col }));
+        const sz = Math.min(...rows.map(([lab, txt]) => app.layoutText(`${lab} ${txt}`, rowO).size)), pitch = Math.max(15, sz + 3);
+        rows.forEach(([lab, txt, col], n) => app.text(`${lab} ${txt}`, x, y + ph + 9 + n * pitch, { ...rowO, size: sz, exact: true, color: col }));
         gInfoY = y + ph + 9 + pitch * 0.5 + sz * 0.5;
       }
       g.restore();
@@ -636,14 +655,14 @@ export default {
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawPotion(g, it.id, x + 30, y + 34 - 2 * k, 40);
       let nmO = { size: 15, bold: true, fit: { w: w - 58, lines: 1 } }; if (app.layoutText(p.name, nmO).trunc) nmO = { ...nmO, bold: false }; // a long name on the smallest phone drops the bold before it loses letters
-      const nmL = app.layoutText(p.name, nmO), nameY = y + 16 - 2 * k;
+      const nmL = app.layoutText(p.name, nmO), nameY = y + 9 - 2 * k;
       app.text(p.name, x + 56, nameY, { ...nmO, color: COL.vellum });
       { const dy0 = nameY + Math.ceil(nmL.size * 1.2) + 2, dO = { size: 14, ui: true, fit: { w: w - 64, h: y + h - 5 - 2 * k - dy0, soft: true } }, dL = app.layoutText(p.text, dO);
         app.text(p.text, x + 56, dy0, { ...dO, color: 'rgba(232,220,196,.85)' });
         potInfo = dL.trunc ? { x: x + 52, y: dy0 - 4, w: w - 58, h: dL.h + 8 } : null; }
       g.restore();
       if (potInfo && !it.sold && touchUi(app) && infoChip(app, x + 16, y + h - 15 - 2 * k, [potInfo], 'potion' + i)) { sfx(app, 'uiClick'); openInfoCard(app, p.name, withGloss(`${p.rarity}\n${p.text}\n${it.price} gold.`), COL.lamp); }
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 44, y, it.price, false, 'potion' + i);
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 44, y - 6, it.price, false, 'potion' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(p.name, `${p.rarity}\n${p.text}\nPotion slots ${run.potions.length}/${RUN.potionSlots(run)}. ${it.price} gold.`, { anchor: { x: POT_X(i), y, w, h } }); }
       if (!it.sold && app.clicked(POT_X(i), y, w, h)) buyDirect(app, 'potion', i, { x: x + 30, y: y + 38 }, it.price);
     });

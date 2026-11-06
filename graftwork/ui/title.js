@@ -420,7 +420,8 @@ export default {
     app.reg('title-assist', x, y, 130, h, { group: 'assist' });
     if (app.inRect(x, y, 130, h)) app.tooltip('Assist mode', 'An easier way to learn the game. Off by default. ' + ASSIST_NOTE);
     const bw0 = phone ? 176 : 134, dis = phone ? 2 : 0; // labels sit in their buttons: up to two lines on a phone so nothing is cut
-    const lab = (txt, bx, bw, o) => app.text(txt, bx + bw / 2, y + h / 2, { size: o.size, bold: true, shadow: true, align: 'center', baseline: 'middle', color: o.color || COL.vellum, fit: { w: bw - (o.padL || 0) - 4, h: h - 2, lines: dis ? 2 : 1 } });
+    const mid = (txt, o) => { const L = app.layoutText(txt, o); return y + (h - L.h) / 2; }; // vertical centre for one or two fitted lines
+    const lab = (txt, bx, bw, o) => { const O = { size: o.size, bold: true, shadow: true, align: 'center', color: o.color || COL.vellum, fit: { w: bw - 4, h: h - 2, lines: dis ? 2 : 1 } }; app.text(txt, bx + bw / 2, mid(txt, O), O); };
     if (app.button('', x, y, 130, h, { fill: a.on ? '#2a3a2a' : undefined, stroke: a.on ? '#8fe0a0' : undefined })) { a.on = !a.on; save(); }
     lab('Assist: ' + (a.on ? 'On' : 'Off'), x, 130, { size: 15 });
     if (!a.on) return;
@@ -433,7 +434,8 @@ export default {
       const g = app.ctx; g.save(); g.strokeStyle = on ? '#fbe9b0' : 'rgba(232,220,196,.55)'; g.lineWidth = lnw(1.5); g.strokeRect(ox + 8.5, y + h / 2 - 5.5, 11, 11); if (on) { g.fillStyle = '#fbe9b0'; g.fillRect(ox + 11, y + h / 2 - 3, 6, 6); } g.restore();
     });
     const nx = x + 140 + 4 * (bw0 + 8) + 4;
-    app.text('Assisted runs do not unlock ascensions or achievements.', nx, y + h / 2, { size: 12, ui: true, italic: true, baseline: 'middle', color: 'rgba(232,220,196,.6)', fit: { w: W - 50 - nx, h: h + 2, lines: dis ? 2 : 1 } });
+    const NO_ = { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.6)', fit: { w: W - 50 - nx, h: h + 2, lines: dis ? 2 : 1 } };
+    app.text('Assisted runs do not unlock ascensions or achievements.', nx, mid('Assisted runs do not unlock ascensions or achievements.', NO_), NO_);
   },
   drawHeroPanel(app, h, x, y, w, ph, idx) {
     const g = app.ctx, meta = app.shared.meta;

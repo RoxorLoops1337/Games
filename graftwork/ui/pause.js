@@ -225,6 +225,7 @@ export default {
       if (this.dragY !== undefined) this.scroll -= m.y - this.dragY; this.dragY = m.y;
     } else this.dragY = undefined;
     this.scroll = clamp(this.scroll, 0, maxS);
+    app.reg('scroll-help', px + 20, top, pw - 40, vh, { overlay: true }); // the glossary scrolls and is clipped inside this box
     g.save(); g.beginPath(); g.rect(px + 20, top, pw - 40, vh); g.clip();
     const draw = (rows, x0) => {
       let y = top - this.scroll;

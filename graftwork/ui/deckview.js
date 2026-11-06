@@ -18,13 +18,13 @@ const plural = (n, w) => (n === 1 ? w : w + 's');
 // ---------------------------------------------------------------- small widgets
 export function pill(app, text, cx, cy, color, o = {}) {
   const ctx = app.ctx, size = o.size || 11;
-  const w = app.measure(text, size, { ui: true, bold: true }) + 12;
+  const w = app.measure(text, size, { ui: true, bold: true }) + 12, ph = Math.max(16, Math.round(app.sz(size, { ui: true, bold: true }) * 1.22) + 4); // the pill grows with the text (phones inflate it)
   ctx.save();
-  app.rr(cx - w / 2, cy - 8, w, 16, 8);
+  app.rr(cx - w / 2, cy - ph / 2, w, ph, ph / 2);
   ctx.fillStyle = o.fill || 'rgba(10,8,7,.9)'; ctx.fill();
   ctx.lineWidth = lnw(1.5); ctx.strokeStyle = color; ctx.stroke();
   ctx.restore();
-  app.text(text, cx, cy - size * 0.62, { size, bold: true, ui: true, align: 'center', color: o.color || color });
+  app.text(text, cx, cy, { size, bold: true, ui: true, align: 'center', baseline: 'middle', color: o.color || color });
   return w;
 }
 
@@ -138,14 +138,14 @@ export function cardGrid(app, items, x, y, w, h, o = {}) {
         }
         if (it.selected) { ctx.save(); app.rr(left - 3, cardTop - 3, cw + 6, ch + 6, 8); ctx.lineWidth = lnw(3); ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore(); }
         if (st.kb && st.focus === i) { ctx.save(); app.rr(left - 4, cardTop - 4, cw + 8, ch + 8, 9); ctx.lineWidth = lnw(2); ctx.setLineDash([6, 4]); ctx.strokeStyle = COL.vellum; ctx.stroke(); ctx.restore(); }
-        if (it.badges && it.badges.length) {
+        if (it.badges && it.badges.length && cardTop + ch - 12 < y + h - 8 && cardTop + ch - 12 > y + 8) { // a badge past the clip edge is invisible: do not draw it
           // pills along the bottom edge of the card
           const ws = it.badges.map((b) => app.measure(b.text, 11, { ui: true, bold: true }) + 12);
           const tot = ws.reduce((a, b) => a + b, 0) + (ws.length - 1) * 3;
           let px = cx - tot / 2;
           it.badges.forEach((b, k) => { pill(app, b.text, px + ws[k] / 2, cardTop + ch - 12, b.color); px += ws[k] + 3; });
         }
-        if (it.label) app.text(it.label, cx, cardTop + ch + 3, { size: 14, ui: true, bold: true, align: 'center', color: it.labelColor || COL.vellum });
+        if (it.label && cardTop + ch + 3 + app.sz(14, { ui: true }) < y + h) app.text(it.label, cx, cardTop + ch + 3, { size: 14, ui: true, bold: true, align: 'center', color: it.labelColor || COL.vellum, fit: { w: cw + gap - 2, lines: 1 } });
         if (over && !it.disabled) app.cursor = 'pointer';
         if (!it.disabled && it.onClick && ((over && app.clicked(left, cardTop, cw, ch)) || (st.kb && st.focus === i && st.activate))) pend.push([it, i]);
       }
@@ -200,7 +200,7 @@ export function gaugeCells(app, x, y, info, o = {}) {
   ctx.save(); ctx.lineWidth = lnw(2); ctx.strokeStyle = 'rgba(232,220,196,.6)';
   ctx.beginPath(); ctx.moveTo(bStart, by - 2); ctx.lineTo(bStart, by); ctx.lineTo(bEnd, by); ctx.lineTo(bEnd, by - 2); ctx.stroke();
   ctx.restore();
-  app.text(`Budget ${info.budget}`, (bStart + bEnd) / 2, by + 3, { size: 13, ui: true, bold: true, align: 'center', color: COL.vellum });
+  app.text(`Budget ${info.budget}`, (bStart + bEnd) / 2, by + 3, { size: 13, ui: true, bold: true, align: 'center', color: COL.vellum, fit: { w: Math.max(60, bEnd - bStart), lines: 1 } });
   if (info.strain > 0) {
     const sStart = cx(info.budget), sEnd = cx(info.weight - 1) + cell;
     ctx.save(); ctx.lineWidth = lnw(2); ctx.strokeStyle = COL.bad;
@@ -223,7 +223,8 @@ export function resonanceStrip(app, run, x, y, w, h) {
     const lit = n > 0;
     ctx.save(); ctx.globalAlpha = lit ? 1 : 0.5;
     drawSchoolGlyph(ctx, id, left + 8, y + 15, 7, col);
-    app.text(s.name, left + 20, y + 5, { size: 15, bold: true, color: lit ? COL.vellum : 'rgba(232,220,196,.6)' });
+    const numW = Math.ceil(app.measure(`${n}`, 17, { bold: true, ui: true })) + 4;
+    app.text(s.name, left + 20, y + 5, { size: 15, bold: true, color: lit ? COL.vellum : 'rgba(232,220,196,.6)', fit: { w: inner - 20 - numW, lines: 1 } });
     app.text(`${n}`, left + inner, y + 4, { size: 17, bold: true, align: 'right', color: tier ? col : COL.vellum, ui: true });
     // track with ticks at 3 and 6
     const ty = y + 27, tw = inner;
@@ -235,8 +236,7 @@ export function resonanceStrip(app, run, x, y, w, h) {
     }
     ctx.restore();
     const txt = tier ? (s.resonance[tier] || '') : `At 3: ${s.resonance[3] || ''}`;
-    const rl = clamp(Math.floor((h - 41) / Math.ceil(app.sz(12, { ui: true }) * 1.08)), 1, 3);
-    app.text(clampText(app, txt, inner, 12, rl, { ui: true }), left, y + 38, { size: 12, ui: true, maxW: inner, lineH: 13, color: tier ? COL.vellum : 'rgba(232,220,196,.5)' });
+    app.text(txt, left, y + 38, { size: 12, ui: true, lineH: 13, color: tier ? COL.vellum : 'rgba(232,220,196,.5)', fit: { w: inner, h: h - 40, lines: 3, soft: true } }); // the full text is in the tooltip
     if (app.inRect(left - 4, y, colW, h)) app.tooltip(`${s.name}: ${n} ${plural(n, 'graft')}`, `3 grafts: ${s.resonance[3]}\n6 grafts: ${s.resonance[6]}\n${s.blurb || ''}`, { color: col });
   });
 }
@@ -327,14 +327,12 @@ export default {
     const sx = 640, sw = 420, SB = 104;
     let yy = 12;
     const lineH = Math.ceil(app.sz(15, { ui: true }) * 1.2);
-    const put = (str, o, minLines = 1) => {
-      const room = Math.floor((SB - yy) / lineH);
-      if (room < minLines) return;
-      const txt = clampText(app, str, sw, 15, room, { ui: true, bold: o.bold });
-      yy += app.text(txt, sx, yy, { size: 15, ui: true, maxW: sw, lineH: 17, ...o }) + 1;
+    const put = (str, o) => { // fitted to what is left of the block: shrinks, then wraps, and only a line that cannot fit at all is left out
+      const room = SB - yy; if (room < Math.round(app.layoutText('A', { size: 15, ui: true, fit: { w: sw } }).lineH)) return;
+      yy += app.text(str, sx, yy, { size: 15, ui: true, lineH: 17, ...o, fit: { w: sw, h: room } }) + 1;
     };
     if (info.strain > 0) {
-      yy += app.text(`Strain ${info.strain}`, sx, yy, { size: 24, bold: true, color: COL.bad });
+      yy += app.text(`Strain ${info.strain}`, sx, yy, { size: 24, bold: true, color: COL.bad, fit: { w: sw, lines: 1 } });
       const names = info.tithed.map((u) => { const inst = run.deck.find((d) => d.uid === u); return CARDS[inst.id].name; });
       const shown = names.slice(0, 6).join(', ') + (names.length > 6 ? ` and ${names.length - 6} more` : '');
       if (info.overflow > 0) put(`Backfire: ${info.backfire} grafted ${plural(info.backfire, 'card')} jam${info.backfire === 1 ? 's' : ''} each turn.`, { bold: true, color: '#ffb35a' });
@@ -342,7 +340,7 @@ export default {
       else put('No plain card is left to tithe.', { color: COL.bad });
       put('Strain falls on your plain cards: they fight at 75 percent.', {});
     } else {
-      yy += app.text('No Strain', sx, yy, { size: 24, bold: true, color: COL.good });
+      yy += app.text('No Strain', sx, yy, { size: 24, bold: true, color: COL.good, fit: { w: sw, lines: 1 } });
       const left = info.budget - info.weight;
       put((left > 0 ? `${left} Weight to spare before plain cards pay.` : 'Budget is full. One more Weight Tithes a plain card.') + '', {});
     }
@@ -379,7 +377,7 @@ export default {
     if (showCount) app.text(countTxt, W - 40, ty + 6, { size: 14, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
 
     // ---- main: grid
-    const MY = 148, MH = 466;
+    const MY = 148, MH = app.scale < 0.95 ? 452 : 466; // phones: the resonance strip below gets 3 lines of text
     const items = all.map((c) => {
       const w = instWeight(c.inst), tithed = tithedSet.has(c.inst.uid);
       const badges = [];
@@ -403,7 +401,7 @@ export default {
     this.drawSide(app, run, hv, info, 988, MY, 262, MH);
 
     // ---- resonance
-    resonanceStrip(app, run, 28, 620, W - 56, 84);
+    resonanceStrip(app, run, 28, MY + MH + 6, W - 56, 704 - (MY + MH + 6));
     ctx.restore();
     if (this.pending) this.pending();
   },
@@ -443,6 +441,7 @@ export default {
     if (!hv && app.inRect(x, y, w, h) && app.mouse.wheel) this.sideScroll = (this.sideScroll || 0) + app.mouse.wheel * 0.7;
     const maxScroll = hv ? 0 : Math.max(0, (this.sideH || 0) - h + pad);
     this.sideScroll = clamp(hv ? 0 : (this.sideScroll || 0), 0, maxScroll);
+    if (!hv) app.reg('scroll-side', x + 1, y + 1, w - 2, h - 2, { overlay: true }); // the idle help scrolls and is clipped inside this box
     ctx.save(); ctx.beginPath(); ctx.rect(x + 1, y + 1, w - 2, h - 2); ctx.clip();
     let yy = y + pad - this.sideScroll;
     const yTop = yy;
@@ -453,7 +452,7 @@ export default {
         yy += 4;
         yy += app.text(`${ok} ${plural(ok, 'card')} can be chosen.${this.o.multi ? ` Pick up to ${this.limit()}.` : ''}`, x + pad, yy, { size: 14, ui: true, maxW: w - 2 * pad, color: COL.vellum }) + 10;
       }
-      yy += app.text('How the Budget works', x + pad, yy, { size: 18, bold: true, color: COL.lamp }) + 4;
+      yy += app.text('How the Budget works', x + pad, yy, { size: 18, bold: true, color: COL.lamp, fit: { w: w - 2 * pad, lines: 1 } }) + 4;
       const rows = [
         ['Weight', COL.vellum, 'Every graft weighs 1 to 3.'],
         ['Budget', COL.vellum, `Your deck carries ${info.budget} Weight for free.`],
@@ -463,7 +462,8 @@ export default {
         ['Overload', COL.gold, 'A 3rd graft: numbers x1.5, +1 Weight, 25 percent Shatter.'],
       ];
       for (const [t, c, d] of rows) {
-        app.text(t, x + pad, yy, { size: 14, ui: true, bold: true, color: c });
+        const lw0 = Math.ceil(app.measure(t, 14, { ui: true, bold: true })) + 8;
+        if (yy <= y + h) app.text(t, x + pad, yy, { size: 14, ui: true, bold: true, color: c, fit: { w: Math.min(lw0, w - 2 * pad - 40), lines: 1 } });
         const lw = Math.ceil(app.measure(t, 14, { ui: true, bold: true })) + 8;
         const dx = Math.max(74, lw);
         if (yy > y + h) { // below the panel: only measure it (the wheel scrolls it into view)
@@ -476,6 +476,7 @@ export default {
       const inst = hv.inst, spec = hv.spec;
       yy += app.text(spec.name, x + pad, yy, { size: 20, bold: true, color: COL.lamp, maxW: w - 2 * pad, lineH: 23 }) + 2;
       const fusedIds = inst.fused || [];
+      const lc = Math.ceil(Math.max(app.measure('Boon', 12, { ui: true, bold: true }), app.measure('Price', 12, { ui: true, bold: true }))) + 8; // the Boon / Price label column follows the real text size
       if (!inst.grafts.length && !fusedIds.length) {
         const txt = isBare(inst) ? 'No grafts. A plain card: it weighs nothing, and it is what the Tithe lands on.' : 'No grafts. Junk takes none and weighs nothing.';
         yy += app.text(txt, x + pad, yy, { size: 14, ui: true, maxW: w - 2 * pad, color: COL.vellum }) + 6;
@@ -487,14 +488,15 @@ export default {
           const col = COL[gr.school] || COL.vellum, wt = (gr.weight || 1) + (i >= MAX_GRAFTS_NORMAL ? 1 : 0);
           ctx.save(); app.rr(x + 6, yy - 2, w - 12, 20, 5); ctx.fillStyle = rgba(col.startsWith('#') ? col : '#888888', 0.18); ctx.fill(); ctx.restore();
           drawSchoolGlyph(ctx, gr.school, x + pad + 6, yy + 8, 6, col);
-          app.text(gr.name, x + pad + 18, yy, { size: 15, bold: true, color: COL.vellum, maxW: w - 100 });
-          app.text(i >= MAX_GRAFTS_NORMAL ? `W${gr.weight || 1}+1` : `W${wt}`, x + w - pad, yy + 1, { size: 14, ui: true, bold: true, align: 'right', color: i >= MAX_GRAFTS_NORMAL ? COL.gold : COL.vellum });
-          yy += 24;
+          const wTxt = i >= MAX_GRAFTS_NORMAL ? `W${gr.weight || 1}+1` : `W${wt}`, wW = Math.ceil(app.measure(wTxt, 14, { ui: true, bold: true })) + 6;
+          app.text(gr.name, x + pad + 18, yy, { size: 15, bold: true, color: COL.vellum, fit: { w: w - 2 * pad - 18 - wW, lines: 1 } });
+          app.text(wTxt, x + w - pad, yy + 1, { size: 14, ui: true, bold: true, align: 'right', color: i >= MAX_GRAFTS_NORMAL ? COL.gold : COL.vellum });
+          yy += Math.max(24, Math.round(app.sz(15, { bold: true }) * 1.22) + 4);
           app.text('Boon', x + pad, yy, { size: 12, ui: true, bold: true, color: COL.good });
-          yy += Math.max(15, app.text(gr.boon || '', x + pad + 38, yy, { size: 13, ui: true, maxW: w - 2 * pad - 38, lineH: 15, color: COL.vellum }));
+          yy += Math.max(15, app.text(gr.boon || '', x + pad + lc, yy, { size: 13, ui: true, maxW: w - 2 * pad - lc, lineH: 15, color: COL.vellum }));
           yy += 2;
           app.text('Price', x + pad, yy, { size: 12, ui: true, bold: true, color: COL.bad });
-          yy += Math.max(15, app.text(gr.price || '', x + pad + 38, yy, { size: 13, ui: true, maxW: w - 2 * pad - 38, lineH: 15, color: '#ffb0b0' }));
+          yy += Math.max(15, app.text(gr.price || '', x + pad + lc, yy, { size: 13, ui: true, maxW: w - 2 * pad - lc, lineH: 15, color: '#ffb0b0' }));
           yy += 10;
         });
       }
@@ -504,7 +506,7 @@ export default {
         for (const gid of fusedIds) {
           const gr = GRAFTS[gid]; if (!gr) continue; const col = COL[gr.school] || COL.vellum;
           drawSchoolGlyph(ctx, gr.school, x + pad + 6, yy + 8, 6, col);
-          app.text(gr.name, x + pad + 18, yy, { size: 14, bold: true, color: COL.vellum, maxW: w - 100 });
+          app.text(gr.name, x + pad + 18, yy, { size: 14, bold: true, color: COL.vellum, fit: { w: w - 2 * pad - 18 - 40, lines: 1 } });
           app.text(`W${fusedWeight(gid)}`, x + w - pad, yy + 1, { size: 14, ui: true, bold: true, align: 'right', color: COL.vellum });
           yy += 20;
           yy += Math.max(14, app.text(`${gr.boon || ''} Price: ${gr.price || ''}`, x + pad + 18, yy, { size: 12, ui: true, maxW: w - 2 * pad - 18, lineH: 14, color: 'rgba(232,220,196,.8)' })) + 4;

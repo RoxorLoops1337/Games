@@ -367,7 +367,7 @@ function drawPatchBody(app, g, x, y, w, h, o) {
 
   const tx = x + 88, tw = w - 88 - 12;
   // tier ribbon
-  const tierO = { size: 13, ui: true, bold: true, fit: { w: 72, lines: 1 } }, tierL = app.layoutText(tier.label, tierO);
+  const tierO = { size: 13, ui: true, bold: true, fit: { w: 104, lines: 1 } }, tierL = app.layoutText(tier.label, tierO);
   const rw = Math.max(60, Math.ceil(tierL.w) + 26); // the label shrinks to fit; the ribbon follows the measured text
   ctx.save();
   ctx.fillStyle = tier.color;
@@ -375,7 +375,7 @@ function drawPatchBody(app, g, x, y, w, h, o) {
   ctx.restore();
   app.text(tier.label, x + w - 10 - rw / 2 + 4, y + 9 + (18 - tierL.size) / 2 - 1, { ...tierO, align: 'center', color: tier.ink });
   // weight tag: a "W2" pill (with the staples inside) so the glyphs are never unlabelled
-  const wl = 'W' + g.weight, wpad = 7, wst = g.weight * 8 + 4, wO = { size: 13, ui: true, bold: true, fit: { w: 40, lines: 1 } }, wL = app.layoutText(wl, wO);
+  const wl = 'W' + g.weight, wpad = 7, wst = g.weight * 8 + 4, wO = { size: 13, ui: true, bold: true, fit: { w: 52, lines: 1 } }, wL = app.layoutText(wl, wO);
   const ww = Math.ceil(wL.w) + wst + wpad * 2, wx = x + w - 10 - rw - 12 - ww;
   ctx.save(); app.rr(wx, y + 9, ww, 18, 9); ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.fill(); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = 'rgba(216,221,224,.7)'; ctx.stroke(); ctx.restore();
   app.text(wl, wx + wpad, y + 9 + (18 - wL.size) / 2 - 1, { ...wO, color: '#e8edf0' });
@@ -398,13 +398,13 @@ function drawPatchBody(app, g, x, y, w, h, o) {
   const avail = y + h - 4 - yy0 - 3 - dimH;
   // try 14, 13, 12 px text until boon + price both fit whole (no ellipsis) in the tile; else cut the boon first
   let fs = 14, boonL, priceL, lh;
-  for (const sz of [14, 13, 12]) {
+  for (const sz of [14, 13, 12, 11, 10]) {
     fs = sz; lh = Math.round(app.sz(sz, { ui: true }) * 1.16);
     const total = Math.max(2, Math.floor((avail - 3) / lh));
     const bl = app.wrap(g.boon, tw - lo, sz, { ui: true }), pl = app.wrap(g.price, tw - lo, sz, { ui: true });
-    const cap = compact ? 2 : total;
+    const cap = total;
     if (bl.length + pl.length <= cap) { boonL = bl; priceL = pl; break; }
-    if (sz === 12) {
+    if (sz === 10) {
       const pn = Math.min(pl.length, Math.max(1, cap - 1)), bn = Math.max(1, cap - pn);
       boonL = wrapLimit(app, g.boon, tw - lo, sz, bn, { ui: true }); priceL = wrapLimit(app, g.price, tw - lo, sz, pn, { ui: true });
     }
@@ -492,7 +492,8 @@ function drawAfter(app, c) {
   app.text('TITHED', lx, rowTithe + 7, { size: 14, ui: true, bold: true, color: COL.bad });
   const names = (u) => { const i = RUN.findInst(run, u); return i ? CARDS[i.id].name : '?'; };
   const tithedUids = pair ? A.tithed : strain.tithed;
-  let cx = lx + 80, cy = rowTithe;
+  const tx0 = lx + Math.max(80, Math.ceil(app.measure('TITHED', 14, { ui: true, bold: true })) + 12); // chips start clear of the (phone-inflated) label
+  let cx = tx0, cy = rowTithe;
   const chipH = 28, maxX = x + w - 16;
   let rows = 1, shown = 0;
   const anim = st.mode === 'attach' && st.anim ? st.anim : null;
@@ -502,7 +503,7 @@ function drawAfter(app, c) {
   for (const u of tithedUids) {
     const label = names(u);
     const cw = app.measure(label, 14, { ui: true, bold: true }) + 26;
-    if (cx + cw > maxX) { if (rows >= 2) break; rows++; cx = lx + 80; cy += chipH + 6; }
+    if (cx + cw > maxX) { if (rows >= 2) break; rows++; cx = tx0; cy += chipH + 6; }
     const isNew = pair && !pv.before.tithed.includes(u);
     const hov = app.inRect(cx, cy, cw, chipH);
     ctx.save();
