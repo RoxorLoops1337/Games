@@ -118,11 +118,14 @@ function drawRow(app, r, i, y, compact, K) {
   const ctx = app.ctx, run = st.run, rw = st.rw;
   const info = rowInfo(r);
   const S = tscale(app), k = Math.min(S, 1.25);
-  const lh = Math.round(15 * k * 1.22), tx = 84, tw = PW - tx - 160;
+  const tx = 84, tw = PW - tx - 160;
   const maxLines = compact ? 1 : r.id === 'relic' ? 3 : 2;
-    const dl = r.id === 'gold' ? [info.line] : wrapLimitK(app, info.line, tw, Math.round(15 * k), maxLines);
-  const headH = Math.round(13 * k * 1.22), titleH = Math.round(26 * k * 1.22);
-  const h = Math.max(compact ? 72 : r.id === 'relic' ? 96 : 80, 12 + headH + titleH + dl.length * lh + 10);
+  // every label is laid out first (fitted to its box), so the row height follows the sizes the phone really draws
+  const hO = { ...K(13), ui: true, bold: true, fit: { w: tw, lines: 1 } }, tO = { ...K(26), bold: true, fit: { w: tw, lines: 1 } };
+  const dO = { ...K(15), ui: true, fit: { w: tw, lines: maxLines } };
+  const hL = app.layoutText(info.head.toUpperCase(), hO), tL = app.layoutText(info.title, tO), dL = app.layoutText(info.line, dO);
+  const lh = dL.lineH, headH = Math.max(Math.round(13 * k * 1.22), Math.ceil(hL.size * 1.2)), titleH = Math.max(Math.round(26 * k * 1.22), Math.ceil(tL.size * 1.2));
+  const h = Math.max(compact ? 72 : r.id === 'relic' ? 96 : 80, 12 + headH + titleH + dL.lines.length * lh + 10);
   const slide = EASE.out(clamp((st.t - 0.15 - i * 0.12) / 0.45, 0, 1));
   const x = PX + (1 - slide) * 60;
   const full = r.id === 'potion' && !r.taken && run.potions.length >= RUN.potionSlots(run);
@@ -145,11 +148,9 @@ function drawRow(app, r, i, y, compact, K) {
   ctx.restore();
   const a = slide * (r.taken ? 0.45 : 1);
   let ty = yy + 10;
-  { const hO = { ...K(13), ui: true, bold: true, fit: { w: tw, lines: 1 } }, tO = { ...K(26), bold: true, fit: { w: tw, lines: 1 } };
-    const hL = app.layoutText(info.head.toUpperCase(), hO), tL = app.layoutText(info.title, tO);
-    app.text(info.head.toUpperCase(), x + tx, ty, { ...hO, color: DIM, alpha: a }); ty += Math.max(headH, Math.ceil(hL.size * 1.2));
-    app.text(info.title, x + tx, ty, { ...tO, color: info.col, shadow: true, alpha: a }); ty += Math.max(titleH, Math.ceil(tL.size * 1.2)); }
-  dl.forEach((ln, n) => app.text(ln, x + tx, ty + n * lh, { ...K(15), ui: true, color: COL.vellum, alpha: a, lineH: lh }));
+  app.text(info.head.toUpperCase(), x + tx, ty, { ...hO, color: DIM, alpha: a }); ty += headH;
+  app.text(info.title, x + tx, ty, { ...tO, color: info.col, shadow: true, alpha: a }); ty += titleH;
+  app.text(info.line, x + tx, ty, { ...dO, color: COL.vellum, alpha: a });
   // status chip
   const label = r.taken ? 'Taken' : full ? 'Slots full' : 'Take';
   const cw = 130, ch = Math.round(40 * Math.min(k, 1.2)), cx = x + PW - cw - 14, cyy = cy - ch / 2;
@@ -202,8 +203,8 @@ function drawChoices(app, y, K) {
     let ty = hy + 82;
     ty += app.text(rl.name, x + w / 2, ty, { ...K(21), bold: true, align: 'center', color: r2.color, shadow: true, alpha: a, maxW: w - 24, lineH: Math.round(21 * k * 1.15) });
     ty += app.text(r2.name.toUpperCase() + ' RELIC', x + w / 2, ty + 1, { ...K(12), ui: true, bold: true, align: 'center', color: DIM, alpha: a, maxW: w - 24 }) + 4;
-    const lh = Math.round(14 * k * 1.2), room = Math.max(1, Math.floor((hy + h - 30 - ty) / lh));
-    wrapLimit(app, rl.text, w - 28, Math.round(14 * k), room, { ui: true, fixed: true }).forEach((ln, q) => app.text(ln, x + w / 2, ty + q * lh, { size: Math.round(14 * k), fixed: true, ui: true, align: 'center', color: COL.vellum, alpha: a }));
+    const rh = Math.max(14, hy + h - 30 - ty);
+    app.text(rl.text, x + w / 2, ty, { size: Math.round(14 * k), fixed: true, ui: true, align: 'center', color: COL.vellum, alpha: a, fit: { w: w - 28, h: rh, lines: Math.max(1, Math.floor(rh / Math.round(14 * k * 1.2))) } });
     if (mine) app.text('TAKEN', x + w / 2, hy + h - 26, { size: 16, fixed: true, bold: true, align: 'center', color: COL.good });
     else keyBadge(app, 'QWE'[i], x + 18, hy + 18);
     if (!picked && !app.blocked && app.inRect(x, yy, w, h)) {

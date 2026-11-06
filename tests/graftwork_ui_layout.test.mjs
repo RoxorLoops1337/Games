@@ -9,7 +9,7 @@ import * as LAYOUT from '../graftwork/ui/layout_registry.js';
 import { CARDS, GRAFTS, GRAFT_LIST, RELICS, POTIONS, EVENTS, HEROES } from '../graftwork/data/index.js';
 
 const SCREENS = {};
-for (const n of ['map', 'graft', 'reward', 'shop', 'forge', 'event', 'deckview', 'codex', 'end', 'wardrobe']) SCREENS[n] = (await import(`../graftwork/ui/${n}.js`)).default;
+for (const n of ['map', 'graft', 'reward', 'shop', 'forge', 'event', 'deckview', 'codex', 'end', 'wardrobe', 'title', 'settings', 'pause']) SCREENS[n] = (await import(`../graftwork/ui/${n}.js`)).default;
 
 export const RESERVED = { x: 1128, y: 0, w: 144, h: 56 };
 const problems = [];
@@ -99,8 +99,8 @@ function look(h, n = 3, tag) {
 function go(h, name, params = {}) { h.app.go(name, { run: h.run, ...params }); }
 // Violations still open on phone stage scales (the 0.64 / 0.54 / 0.46 sweep), by screen|kind. They are listed, not failed, so the sweep can gate every
 // NEW regression while these screens are fixed one by one (fit them with app.text fit:{w,h,lines}, then delete the entry). Desktop scale 1 has no exemptions.
-const OPEN_ON_PHONE = new Set(['map|text-overflow', 'map|text-hits', 'map|text-text', 'reward|text-text', 'graft|text-text', 'graft|text-truncated', 'graft|text-overflow', 'shop|text-hits', 'shop|overlap', 'shop|text-overflow', 'shop|text-text', 'shop|text-truncated', 'forge|overlap', 'forge|text-overflow', 'event|text-text', 'deck|text-text', 'deck|text-overflow', 'end|text-text', 'wardrobe|text-text']);
-const OPEN_DESK = new Set(['shop|oob', 'event|oob', 'graft|text-text', 'deck|text-text', 'end|text-text', 'shop|text-hits']); // pre-existing on desktop: tooltips drawn past the stage, a dimmed card under its own label
+const OPEN_ON_PHONE = new Set(['map|text-overflow', 'map|text-hits', 'map|text-text', 'reward|text-text', 'graft|text-text', 'graft|text-truncated', 'graft|text-overflow', 'event|text-text']);
+const OPEN_DESK = new Set(['event|oob', 'graft|text-text']); // pre-existing on desktop: tooltips drawn past the stage, a dimmed card under its own label
 let openCount = 0;
 function done(name) {
   const mine = problems.filter((p) => p.startsWith(name));
@@ -349,7 +349,28 @@ for (const pscale of [0.64, 0.54, 0.46]) {
   for (const cat of [0, 1, 2, 3]) { const hw = await make({ pscale, seed: 'pwd', meta: richMeta() }); flowFor(hw); hw.app.go('base'); hw.app.push('wardrobe', {}); hw.app.top().setCat(cat); look(hw, 20, T('wardrobe') + '/c' + cat); }
   for (const won of [true, false]) { const he = await make({ pscale, seed: 'pend' + won, hero: 'odile' }); flowFor(he); graftHeavy(he.run, 10); he.run.phase = won ? 'won' : 'dead'; he.run.killedBy = 'the_grafter'; he.run.flags = he.run.flags || {}; go(he, 'end'); look(he, 200, T('end') + '/' + (won ? 'won' : 'dead')); }
 }
+
+// ---- TITLE, HERO SELECT, SETTINGS, PAUSE (desktop at scale 100/150 and every phone scale) -----------------------------
+for (const [scale, pscale] of [[100, 0], [150, 0], [100, 1], [100, 0.64], [100, 0.54], [100, 0.46]]) {
+  const T = (n) => `${n}/` + (pscale > 1 ? 'phone' : pscale ? 'p' + pscale : 's' + scale);
+  const o = { scale, seed: 'ttl', meta: richMeta() }; if (pscale > 1) o.phone = true; else if (pscale) o.pscale = pscale;
+  const h = await make(o); const f = flowFor(h); h.meta.unlocked.heroes = ['marrow', 'wick', 'odile']; h.meta.bestAsc = { marrow: 3 };
+  f.hasSave = () => false; f.start = () => {}; f.openSettings = () => h.app.push('settings', {}); f.openPause = () => h.app.push('pause', {});
+  h.app.shared.audio = { sfx() {}, music() {}, setVolumes() {}, mute() {} };
+  h.app.go('title'); look(h, 80, T('title') + '/menu');
+  hoverAt(h, 640, 330); look(h, 3, T('title') + '/hover');
+  const tm = h.app.top(); tm.openSelect(h.app); look(h, 40, T('title') + '/select');
+  for (let i = 0; i < 3; i++) { click(h.app, 50 + i * 400 + 190, 300); look(h, 5, T('title') + '/select' + i); hoverAt(h, 50 + i * 400 + 190, 300); look(h, 3, T('title') + '/selhover' + i); }
+  const hl = await make(o); const fl = flowFor(hl); fl.hasSave = () => false; fl.start = () => {}; hl.meta.unlocked.heroes = ['marrow']; hl.meta.settings.assist = { on: true, a: true, b: true, c: true, d: true };
+  hl.app.shared.audio = h.app.shared.audio; hl.app.go('title'); frames(hl.app, 60); hl.app.top().openSelect(hl.app); look(hl, 40, T('title') + '/locked');
+  hoverAt(hl, 690, 300); look(hl, 3, T('title') + '/lockedhover'); hoverAt(hl, 100, 540); look(hl, 3, T('title') + '/assisthover');
+  const hs = await make(o); flowFor(hs); hs.app.go('base'); hs.app.push('settings', {}); look(hs, 40, T('settings'));
+  for (const [x, y] of [[300, 150], [300, 250], [300, 350], [300, 450], [300, 550], [900, 300]]) { hoverAt(hs, x, y); look(hs, 3, T('settings') + '/hover'); }
+  const hp = await make(o); const fp = flowFor(hp); fp.openSettings = () => {}; fp.openPause = () => {}; fp.openWardrobe = () => {}; hp.app.shared.audio = h.app.shared.audio; hp.app.go('base'); hp.app.push('pause', {}); look(hp, 40, T('pause'));
+  for (const m of ['help']) { hp.app.top().mode = m; look(hp, 20, T('pause') + '/' + m); }
+  const hq = await make(o); flowFor(hq); hq.app.shared.audio = h.app.shared.audio; hq.app.go('base'); hq.app.push('pause', {}); look(hq, 20, T('pause') + '/m'); hq.app.top().activate(hq.app, 'abandon'); look(hq, 20, T('pause') + '/confirm');
+}
 let bad = 0;
-for (const pre of ['map', 'reward', 'graft', 'shop', 'forge', 'event', 'deck', 'codex', 'end', 'wardrobe']) { console.log(pre + ':'); bad += done(pre); }
+for (const pre of ['map', 'reward', 'graft', 'shop', 'forge', 'event', 'deck', 'codex', 'end', 'wardrobe', 'title', 'settings', 'pause']) { console.log(pre + ':'); bad += done(pre); }
 console.log('problems', bad, `(+${openCount} known open violations on phone scales, see OPEN_ON_PHONE)`);
 assert.equal(bad, 0, 'layout problems found (listed above)');

@@ -26,11 +26,11 @@ export const infoClose = () => { INFO.on = false; };
 export const touchUi = (app) => !!(app.mouse && app.mouse.touch) || app.scale < 0.95;
 export function openInfoCard(app, title, text, color) { Object.assign(INFO, { on: true, title: String(title || ''), text: String(text || ''), color: color || '#F2C14E', f0: app.frame, t0: app.t }); }
 // The small 'i' chip. Returns true on the frame it is tapped (the tap is consumed). Pass `also` rects (tap targets for the truncated text itself).
-export function infoChip(app, x, y, also = []) {
+export function infoChip(app, x, y, also = [], group) {
   const ctx = app.ctx, r = 11;
   ctx.save(); ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.strokeStyle = '#F2C14E'; ctx.lineWidth = lnw(1.5); ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
   app.text('i', x, y + 1, { size: 14, bold: true, ui: true, align: 'center', baseline: 'middle', color: '#F2C14E' });
-  if (app.reg) app.reg('info_chip', x - r, y - r, r * 2, r * 2, { layer: 'hud' });
+  if (app.reg) app.reg('info_chip', x - r, y - r, r * 2, r * 2, { layer: 'hud', group }); // group: the tile the chip sits in, so it may overlap that tile's own rect
   let hit = app.clicked(x - r - 3, y - r - 3, r * 2 + 6, r * 2 + 6);
   for (const a of also) if (!hit && app.clicked(a.x, a.y, a.w, a.h)) hit = true;
   return hit;

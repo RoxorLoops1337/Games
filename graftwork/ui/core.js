@@ -308,7 +308,7 @@ export function createApp(canvas, opts = {}) {
   // Visual press feedback hook: a short brass ripple inside the rect. Screens may call it for custom widgets; set app.onPress to also react.
   app.press = (x, y, w, h, r) => { CH.press(app, x, y, w, h, r); if (app.onPress) app.onPress(x, y, w, h); };
   let hotX = NaN, hotY = NaN, hotL = null;
-  // button: returns true on click. o: {fill, stroke, r, color, size, disabled, icon(ctx,x,y,w,h), sub, subColor, key, bold, ui}
+  // button: returns true on click. o: {fit, fill, stroke, r, color, size, disabled, icon(ctx,x,y,w,h), sub, subColor, key, bold, ui}
   app.button = (label, x, y, w, h, o = NO) => {
     const dis = !!o.disabled, F = app.focus;
     // Hit target floor: a button smaller than minTouch CSS px on screen grows its HIT area (not its look), by at most SMALL.maxHitGrow logical px a side.
@@ -330,7 +330,7 @@ export function createApp(canvas, opts = {}) {
     if (fi >= 0 && F.active && fi === F.idx) { CH.focusRing(app, x, y + dy, w, h, o.r === undefined ? 8 : o.r); if (!app.tip && o.tip) app.tooltip(o.tipTitle || label || 'Button', o.tip); app.focusLabel = label; }
     if (o.icon) o.icon(ctx, x, y + dy, w, h);
     const size = o.size || 20, ty = y + dy + (o.sub ? h / 2 - app.sz(size) * 0.95 : h / 2 - app.sz(size) * 0.55);
-    TO.size = size; TO.align = 'center'; TO.color = dis ? 'rgba(232,220,196,.35)' : (o.color || COL.vellum); TO.bold = o.bold !== false; TO.ui = o.ui; TO.shadow = !dis; TO.maxW = 0;
+    TO.size = size; TO.align = 'center'; TO.color = dis ? 'rgba(232,220,196,.35)' : (o.color || COL.vellum); TO.bold = o.bold !== false; TO.ui = o.ui; TO.shadow = !dis; TO.maxW = 0; TO.fit = o.fit ? { w: w - 8, lines: 1 } : null; // o.fit: shrink the label (and the sub line) to the button instead of overflowing it
     app.text(label, x + w / 2, ty, TO);
     if (o.sub) { TO.size = Math.round(size * 0.7); TO.color = o.subColor || 'rgba(232,220,196,.7)'; TO.bold = false; TO.ui = true; TO.shadow = false; app.text(o.sub, x + w / 2, ty + app.sz(size) * 1.15, TO); }
     if (!dis && o.key && keyHit(o.key)) { app.press(x, y, w, h, o.r); return true; }

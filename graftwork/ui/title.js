@@ -336,52 +336,54 @@ export default {
     const g = app.ctx, meta = app.shared.meta;
     const k = EASE.out(clamp(this.selK, 0, 1));
     g.save(); const dg = g.createLinearGradient(0, 0, 0, 130); dg.addColorStop(0, 'rgba(8,6,5,.0)'); dg.addColorStop(1, 'rgba(8,6,5,.55)'); g.fillStyle = dg; g.fillRect(0, 0, W, 130); g.fillStyle = 'rgba(8,6,5,.55)'; g.fillRect(0, 130, W, H - 130); g.restore();
-    app.text('Choose your grafter', 640, 112, { size: 26, align: 'center', bold: true, alpha: k });
-    const pw = 380, ph = 352, gap = 20, px0 = (W - (pw * 3 + gap * 2)) / 2, py = 148;
+    const phone = app.scale < 0.95; // phone stage scales: the boosted text needs a taller panel, so the whole select column uses the spare stage height
+    app.text('Choose your grafter', 640, phone ? 92 : 112, { size: 26, align: 'center', bold: true, alpha: k, fit: { w: 700, lines: 1 } });
+    const pw = 380, ph = phone ? 402 : 352, gap = 20, px0 = (W - (pw * 3 + gap * 2)) / 2, py = phone ? 122 : 148;
     HERO_ORDER.forEach((id, i) => {
       const h = HEROES[id]; if (!h) return;
       const px = px0 + i * (pw + gap), yy = py + (1 - k) * 30 * (i + 1) / 3;
       this.drawHeroPanel(app, h, px, yy, pw, ph, i);
     });
-    this.drawAssist(app, px0, 506);
+    const ay = py + ph + 6;
+    this.drawAssist(app, px0, ay);
     // lower row
-    const ly = 536;
+    const ly = ay + 30;
     const unlocked = heroUnlocked(meta, this.hero);
     const maxA = Math.min(10, maxAscension(meta, this.hero) + 1);
     this.asc = clamp(this.asc, 0, maxA);
     // seed
-    app.text('SEED (optional)', px0, ly, { size: 12, ui: true, bold: true, color: COL.lamp });
+    app.text('SEED (optional)', px0, ly, { size: 12, ui: true, bold: true, color: COL.lamp, fit: { w: 250, lines: 1 } });
     const sx = px0, sy = ly + 20, sw = 250, sh = 38;
     const sOver = app.inRect(sx, sy, sw, sh);
     if (app.clicked(sx, sy, sw, sh)) this.seedFocus = true; else if (app.mouse.released && !sOver) this.seedFocus = false;
     app.panel(sx, sy, sw, sh, { r: 6, fill: 'rgba(8,6,5,.8)', stroke: this.seedFocus ? COL.lamp : 'rgba(232,220,196,.35)' });
     if (sOver) app.cursor = 'text';
     const caret = this.seedFocus && Math.floor(app.t * 2) % 2 === 0 ? '|' : '';
-    if (this.seed) app.text(this.seed + caret, sx + 12, sy + 8, { size: 18, ui: true });
-    else app.text(this.seedFocus ? caret : 'random', sx + 12, sy + 9, { size: 16, ui: true, italic: true, color: 'rgba(232,220,196,.4)' });
+    if (this.seed) app.text(this.seed + caret, sx + 12, sy + 8, { size: 18, ui: true, fit: { w: sw - 24, lines: 1 } });
+    else app.text(this.seedFocus ? caret : 'random', sx + 12, sy + 9, { size: 16, ui: true, italic: true, color: 'rgba(232,220,196,.4)', fit: { w: sw - 24, lines: 1 } });
     for (const e of keys) {
       if (e.key === 'Backspace') { this.seed = this.seed.slice(0, -1); this.seedFocus = true; }
       else if (e.key.length === 1 && /[a-zA-Z0-9_-]/.test(e.key) && !e.ctrlKey && !e.metaKey && this.seed.length < 20) { this.seed += e.key; this.seedFocus = true; }
     }
     // ascension
     const ax = px0 + 290;
-    app.text('ASCENSION', ax, ly, { size: 12, ui: true, bold: true, color: COL.lamp });
+    app.text('ASCENSION', ax, ly, { size: 12, ui: true, bold: true, color: COL.lamp, fit: { w: 130, lines: 1 } });
     if (app.inRect(ax, ly - 4, 120, 70)) app.tooltip('Ascension', 'Difficulty. Leave it at 0 for your first run. Each step adds a harder rule once you have won.', { color: COL.lamp });
     if (app.button('<', ax, ly + 20, 38, 38, { size: 22, disabled: this.asc <= 0 })) this.asc--;
     app.text(String(this.asc), ax + 62, ly + 22, { size: 30, bold: true, align: 'center', color: this.asc ? '#ff9a7a' : COL.vellum });
     if (app.button('>', ax + 86, ly + 20, 38, 38, { size: 22, disabled: this.asc >= maxA })) this.asc++;
-    if (maxA < 10 && this.asc >= maxA) app.text('Clear this level to open the next.', ax, ly + 64, { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.5)', maxW: 130 });
+    if (maxA < 10 && this.asc >= maxA) app.text('Clear this level to open the next.', ax, ly + 64, { size: 12, ui: true, italic: true, color: 'rgba(232,220,196,.5)', fit: { w: 130, h: 40, lines: 2 } });
     // cumulative modifiers
     const tx = ax + 150, tw = W - px0 - tx;
     const lines = RUN.ASCENSION_TEXT.slice(1, this.asc + 1);
     app.panel(tx - 10, ly - 2, tw + 10, 134, { r: 8, fill: 'rgba(8,6,5,.55)', stroke: 'rgba(232,220,196,.15)' });
-    if (!lines.length) app.text('Ascension 0: ' + RUN.ASCENSION_TEXT[0], tx, ly + 8, { size: 14, ui: true, color: 'rgba(232,220,196,.6)' });
+    if (!lines.length) app.text('Ascension 0: ' + RUN.ASCENSION_TEXT[0], tx, ly + 8, { size: 14, ui: true, color: 'rgba(232,220,196,.6)', fit: { w: tw - 12, lines: 1 } });
     else {
       const col = lines.length > 5 ? 2 : 1, cw = col === 2 ? tw / 2 - 6 : tw - 12;
       lines.forEach((ln, i) => {
         const cx = tx + Math.floor(i / 5) * (tw / 2), cy = ly + 6 + (i % 5) * 24, last = i === lines.length - 1;
         app.text(`${i + 1}`, cx, cy, { size: 13, ui: true, bold: true, color: last ? '#ff9a7a' : '#a58f6b' });
-        app.text(ln, cx + 20, cy, { size: 13, ui: true, color: last ? '#ffe2d6' : '#cdbf9d', maxW: cw - 24, lineH: 14 });
+        app.text(ln, cx + 24, cy, { size: 13, ui: true, color: last ? '#ffe2d6' : '#cdbf9d', fit: { w: cw - 28, h: 24, lines: 1 } });
       });
     }
     // buttons
@@ -417,16 +419,21 @@ export default {
     const save = () => { if (flow.saveMeta) flow.saveMeta(); };
     app.reg('title-assist', x, y, 130, h, { group: 'assist' });
     if (app.inRect(x, y, 130, h)) app.tooltip('Assist mode', 'An easier way to learn the game. Off by default. ' + ASSIST_NOTE);
-    if (app.button('Assist: ' + (a.on ? 'On' : 'Off'), x, y, 130, h, { size: 15, fill: a.on ? '#2a3a2a' : undefined, stroke: a.on ? '#8fe0a0' : undefined })) { a.on = !a.on; save(); }
+    const dis = app.scale < 0.95 ? 2 : 0; // labels sit in their buttons: up to two lines on a phone so nothing is cut
+    const lab = (txt, bx, bw, o) => app.text(txt, bx + bw / 2, y + h / 2, { size: o.size, bold: true, shadow: true, align: 'center', baseline: 'middle', color: o.color || COL.vellum, fit: { w: bw - (o.padL || 0) - 10, h: h - 2, lines: dis ? 2 : 1 } });
+    if (app.button('', x, y, 130, h, { fill: a.on ? '#2a3a2a' : undefined, stroke: a.on ? '#8fe0a0' : undefined })) { a.on = !a.on; save(); }
+    lab('Assist: ' + (a.on ? 'On' : 'Off'), x, 130, { size: 15 });
     if (!a.on) return;
     ASSIST_OPTIONS.forEach((o, i) => {
-      const ox = x + 140 + i * 158, on = !!a[o.id];
-      app.reg('title-assist-' + o.id, ox, y, 150, h, { group: 'assist' });
-      if (app.inRect(ox, y, 150, h)) app.tooltip(o.name + (on ? ' (on)' : ' (off)'), o.text);
-      if (app.button(o.name, ox, y, 150, h, { size: 14, fill: on ? '#4a3a1d' : undefined, stroke: on ? COL.lamp : undefined, color: on ? '#fbe9b0' : undefined })) { a[o.id] = !on; save(); }
+      const ox = x + 140 + i * 128, bw = 120, on = !!a[o.id];
+      app.reg('title-assist-' + o.id, ox, y, bw, h, { group: 'assist' });
+      if (app.inRect(ox, y, bw, h)) app.tooltip(o.name + (on ? ' (on)' : ' (off)'), o.text);
+      if (app.button('', ox, y, bw, h, { fill: on ? '#4a3a1d' : undefined, stroke: on ? COL.lamp : undefined })) { a[o.id] = !on; save(); }
+      lab(o.name, ox + 20, bw - 20, { size: 14, color: on ? '#fbe9b0' : undefined });
       const g = app.ctx; g.save(); g.strokeStyle = on ? '#fbe9b0' : 'rgba(232,220,196,.55)'; g.lineWidth = lnw(1.5); g.strokeRect(ox + 8.5, y + h / 2 - 5.5, 11, 11); if (on) { g.fillStyle = '#fbe9b0'; g.fillRect(ox + 11, y + h / 2 - 3, 6, 6); } g.restore();
     });
-    app.text('Assisted runs do not unlock ascensions or achievements.', x + 140 + 4 * 158 + 6, y + 1, { size: 12, ui: true, italic: true, maxW: W - 50 - (x + 140 + 4 * 158 + 6), lineH: 14, color: 'rgba(232,220,196,.6)' });
+    const nx = x + 140 + 4 * 128 + 4;
+    app.text('Assisted runs do not unlock ascensions or achievements.', nx, y + h / 2, { size: 12, ui: true, italic: true, baseline: 'middle', color: 'rgba(232,220,196,.6)', fit: { w: W - 50 - nx, h: h + 2, lines: dis ? 2 : 1 } });
   },
   drawHeroPanel(app, h, x, y, w, ph, idx) {
     const g = app.ctx, meta = app.shared.meta;
@@ -451,52 +458,77 @@ export default {
     drawPortrait(g, h.id, x + 54, y + 40 + sway, 66);
     g.restore();
     if (locked) { padlock(g, x + 54, y + 44, 0.9); }
-    // name block
-    app.text(h.name, x + 108, y + 12, { size: 28, bold: true, color: locked ? '#8c8372' : COL.vellum, shadow: true });
-    app.text(h.title, x + 108, y + 46, { size: 15, italic: true, color: locked ? '#6d655a' : '#d6c7a6' });
+    // name block (fitted: the name and title stop short of the school badge)
+    const nw = w - 108 - 72;
+    app.text(h.name, x + 108, y + 10, { size: 28, bold: true, color: locked ? '#8c8372' : COL.vellum, shadow: true, fit: { w: nw, lines: 1 } });
+    app.text(h.title, x + 108, y + 46, { size: 15, italic: true, color: locked ? '#6d655a' : '#d6c7a6', fit: { w: nw, lines: 1 } });
     // school badge (shape glyph + name)
-    drawSchoolGlyph(g, h.school, x + w - 34, y + 30, 11, locked ? '#6d655a' : school.color);
-    app.text(school.name, x + w - 34, y + 46, { size: 11, ui: true, bold: true, align: 'center', color: locked ? '#6d655a' : school.color });
+    drawSchoolGlyph(g, h.school, x + w - 34, y + 26, 11, locked ? '#6d655a' : school.color);
+    app.text(school.name, x + w - 34, y + 46, { size: 11, ui: true, bold: true, align: 'center', color: locked ? '#6d655a' : school.color, fit: { w: 64, lines: 1 } });
     if (locked) {
-      app.text('LOCKED', x + 108, y + 62, { size: 12, ui: true, bold: true, color: '#8c8372' });
-      app.text(h.unlock ? h.unlock.text : 'Locked.', x + 24, y + 104, { size: 17, color: '#9b8f7a', maxW: w - 48, italic: true });
-      app.text(h.blurb, x + 24, y + 150, { size: 14, color: '#6d655a', maxW: w - 48 });
+      app.text('LOCKED', x + 24, y + 86, { size: 12, ui: true, bold: true, color: '#8c8372', fit: { w: 120, lines: 1 } });
+      const ul = app.text(h.unlock ? h.unlock.text : 'Locked.', x + 24, y + 106, { size: 17, color: '#9b8f7a', italic: true, fit: { w: w - 48, h: 60, lines: 3 } });
+      app.text(h.blurb, x + 24, y + 106 + ul + 8, { size: 14, color: '#6d655a', fit: { w: w - 48, h: 90, lines: 4, soft: true } });
       // a big shrouded bust so the locked card still teases who is waiting (idle breath unless reduced motion)
       g.save(); g.globalAlpha = 0.34 + (calm(app) ? 0 : 0.06 * Math.sin(app.t * 1.6 + idx));
-      drawPortrait(g, h.id, x + w / 2, y + 262 + (calm(app) ? 0 : Math.sin(app.t * 1.2 + idx) * 2), 128);
+      drawPortrait(g, h.id, x + w / 2, y + ph - 90 + (calm(app) ? 0 : Math.sin(app.t * 1.2 + idx) * 2), 128);
       g.restore();
-      g.save(); g.globalAlpha = 0.85; padlock(g, x + w / 2 + 44, y + 312, 0.8); g.restore();
+      g.save(); g.globalAlpha = 0.85; padlock(g, x + w / 2 + 44, y + ph - 40, 0.8); g.restore();
       return;
     }
-    // blurb + passive
-    let yy = y + 92;
-    yy += app.text(h.blurb, x + 20, yy, { size: 14, maxW: w - 40, color: '#e0d4b8', lineH: 17 }) + 8;
-    stitchLine(g, x + 20, yy, x + w - 20, yy, { color: rgba(h.color, 0.55), size: 3, step: 10, lw: 1 });
-    yy += 8;
-    app.text('PASSIVE', x + 20, yy, { size: 12, ui: true, bold: true, color: labelColor(h.color) });
-    yy += 14;
-    yy += app.text(h.passive, x + 20, yy, { size: 14, maxW: w - 40, color: '#fbe9b0', lineH: 17 }) + 4;
+    // Vertical budget: everything below the header band shares y+88 .. y+ph-26 (SELECTED sits under it). The rules (passive, starter deck) are fitted
+    // first and never cut; the flavor blurb takes whatever is left (soft: it may shrink or lose its last line on the smallest phone stage).
+    const iw = w - 40, top = y + 88, bottom = y + ph - 26;
     const hp = h.perks && h.perks.hp, gold = h.perks && h.perks.gold;
-    app.text(`${hp} HP    ${gold} gold`, x + 20, yy, { size: 13, ui: true, color: '#b7aa8c' });
-    yy += 26;
-    // starter deck
     const counts = {}, types = { attack: 0, skill: 0, power: 0 };
     for (const id of h.deck) { counts[id] = (counts[id] || 0) + 1; const t = CARDS[id] && CARDS[id].type; if (types[t] !== undefined) types[t]++; }
-    app.text(`STARTER DECK  ${h.deck.length}`, x + 20, yy, { size: 12, ui: true, bold: true, color: labelColor(h.color) });
-    let tx = x + w - 20;
-    for (const t of ['power', 'skill', 'attack']) {
-      const s = `${types[t]} ${TYPE_NAMES[t]}`; const wd = app.measure(s, 12, { ui: true });
-      tx -= wd; app.text(s, tx, yy, { size: 12, ui: true, color: COL[t] === '#8C2F2F' ? '#f0a0a0' : t === 'skill' ? '#a9cfe0' : '#c9b0e8' }); tx -= 12;
+    const ids = Object.keys(counts), cw = iw / 2, cellW = cw - 12;
+    const names = ids.map((id) => `${counts[id]}x ${CARDS[id] ? CARDS[id].name : id}`);
+    const rowO = { size: 13, ui: true };
+    let rowSz = 99; for (const n of names) rowSz = Math.min(rowSz, app.layoutText(n, { ...rowO, fit: { w: cellW, lines: 1 } }).size);
+    const rowPitch = Math.round(rowSz * 1.3), rows = Math.ceil(ids.length / 2);
+    const hdrO = { size: 12, ui: true, bold: true };
+    const tl = ['power', 'skill', 'attack'].map((t) => ({ t, s: `${types[t]} ${TYPE_NAMES[t]}` }));
+    const typeW = iw * 0.52;
+    let tySz = 99; for (const q of tl) tySz = Math.min(tySz, app.layoutText(q.s, { size: 12, ui: true, fit: { w: typeW / 3 - 4, lines: 1 } }).size);
+    const hdrSz = app.layoutText(`STARTER DECK  ${h.deck.length}`, { ...hdrO, fit: { w: iw - typeW - 8, lines: 1 } }).size;
+    const hdrH = Math.round(Math.max(hdrSz, tySz) * 1.25) + 3;
+    const deckH = hdrH + rows * rowPitch;
+    const lblL = app.layoutText('PASSIVE', { ...hdrO, fit: { w: 120, lines: 1 } }), lblH = Math.round(lblL.size * 1.22) + 1;
+    const hpL = app.layoutText(`${hp} HP    ${gold} gold`, { size: 13, ui: true, fit: { w: iw, lines: 1 } }), hpH = Math.round(hpL.size * 1.22) + 6;
+    const pOpts = { size: 14, color: '#fbe9b0', lineH: 17 };
+    const pL = app.layoutText(h.passive, { ...pOpts, fit: { w: iw, lines: 3 } }), passH = pL.lines.length * pL.lineH + 4;
+    const ruleH = 16, fixed = lblH + passH + hpH + deckH + ruleH;
+    const room = bottom - top - fixed;
+    let yy = top;
+    if (room >= 14) {
+      const bL = app.layoutText(h.blurb, { size: 14, lineH: 17, fit: { w: iw, h: room, lines: 3, soft: true } });
+      app.text(h.blurb, x + 20, yy, { size: 14, color: '#e0d4b8', lineH: 17, fit: { w: iw, h: room, lines: 3, soft: true } });
+      yy += bL.lines.length * bL.lineH + 8; // the rule line below shares this gap
     }
-    yy += 17;
-    const ids = Object.keys(counts);
+    stitchLine(g, x + 20, yy, x + w - 20, yy, { color: rgba(h.color, 0.55), size: 3, step: 10, lw: 1 });
+    yy += 8;
+    app.text('PASSIVE', x + 20, yy, { ...hdrO, color: labelColor(h.color), fit: { w: 120, lines: 1 } });
+    yy += lblH;
+    app.text(h.passive, x + 20, yy, { ...pOpts, fit: { w: iw, lines: 3 } });
+    yy += passH;
+    app.text(`${hp} HP    ${gold} gold`, x + 20, yy, { size: 13, ui: true, color: '#b7aa8c', fit: { w: iw, lines: 1 } });
+    yy += hpH;
+    // starter deck
+    app.text(`STARTER DECK  ${h.deck.length}`, x + 20, yy, { ...hdrO, color: labelColor(h.color), fit: { w: iw - typeW - 8, lines: 1 } });
+    let tx = x + w - 20;
+    for (const q of tl) {
+      const t = q.t, wd = app.measure(q.s, tySz, { ui: true, exact: true });
+      tx -= wd; app.text(q.s, tx, yy, { size: tySz, exact: true, ui: true, color: COL[t] === '#8C2F2F' ? '#f0a0a0' : t === 'skill' ? '#a9cfe0' : '#c9b0e8' }); tx -= 10;
+    }
+    yy += hdrH;
     ids.forEach((id, i) => {
-      const cx = x + 20 + (i % 2) * ((w - 40) / 2), cy = yy + Math.floor(i / 2) * 18;
+      const cx = x + 20 + (i % 2) * cw, cy = yy + Math.floor(i / 2) * rowPitch;
       const c = CARDS[id];
-      g.save(); g.fillStyle = c ? (COL[c.type] || '#888') : '#888'; g.fillRect(cx, cy + 3, 4, 11); g.restore();
-      app.text(`${counts[id]}x ${c ? c.name : id}`, cx + 10, cy, { size: 13, ui: true, color: '#efe3c4' });
+      g.save(); g.fillStyle = c ? (COL[c.type] || '#888') : '#888'; g.fillRect(cx, cy + 3, 4, Math.max(11, rowSz - 2)); g.restore();
+      app.text(names[i], cx + 10, cy, { ...rowO, color: '#efe3c4', size: rowSz, exact: true });
     });
-    if (sel) { app.text('SELECTED', x + w - 20, y + ph - 22, { size: 12, ui: true, bold: true, align: 'right', color: labelColor(h.color) }); }
+    if (sel) { app.text('SELECTED', x + w - 20, y + ph - 22, { size: 12, ui: true, bold: true, align: 'right', color: labelColor(h.color), fit: { w: 100, lines: 1 } }); }
   },
 
   // ---- credits ----

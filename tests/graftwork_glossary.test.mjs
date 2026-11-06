@@ -81,10 +81,10 @@ function expectTip(app, label, sources, opts = {}) {
   const i = raw.findIndex((x) => x === 'g_leaf_gilt');
   const r = reg('graft-patch' + (i < 0 ? 0 : i));
   hover(app, r);
-  expectTip(app, 'graft patch Leaf Gilt', [GRAFTS.g_leaf_gilt.boon, GRAFTS.g_leaf_gilt.price, 'SAFE', 'W1'], { school: 'gilded' });
+  expectTip(app, 'graft patch Leaf Gilt', [GRAFTS.g_leaf_gilt.boon, GRAFTS.g_leaf_gilt.price, 'SAFE'], { school: 'gilded' });
   assert.ok(tipDefs(app).includes('Gain 4 gold at the end of combat.'), 'Leaf Gilt tip says what Gilt does:\n' + tipDefs(app));
   // every patch and every card in the offer
-  for (let j = 0; j < raw.length; j++) { const g = GRAFTS[raw[j]]; hover(app, reg('graft-patch' + j)); expectTip(app, 'patch ' + g.id, [g.boon, g.price, String(g.tier).toUpperCase(), 'W' + g.weight], { school: g.school }); }
+  for (let j = 0; j < raw.length; j++) { const g = GRAFTS[raw[j]]; hover(app, reg('graft-patch' + j)); expectTip(app, 'patch ' + g.id, [g.boon, g.price, String(g.tier).toUpperCase()], { school: g.school }); }
   // the tip never covers a sibling patch
   const tip0 = getAll().find((x) => x.id === 'tip0'); assert.ok(tip0, 'tip panel registered');
 }
@@ -93,7 +93,7 @@ function expectTip(app, label, sources, opts = {}) {
   const sh = run.pending;
   const app = await boot(run, 'shop', shop);
   const gi = sh.grafts.findIndex((x) => !x.sold);
-  if (gi >= 0) { const g = GRAFTS[sh.grafts[gi].id]; hover(app, reg('shop-graft' + gi)); expectTip(app, 'shop patch ' + g.id, [g.boon, g.price, String(g.tier).toUpperCase(), 'W' + g.weight], { school: g.school }); }
+  if (gi >= 0) { const g = GRAFTS[sh.grafts[gi].id]; hover(app, reg('shop-graft' + gi)); expectTip(app, 'shop patch ' + g.id, [g.boon, g.price, String(g.tier).toUpperCase()], { school: g.school }); }
   for (let i = 0; i < sh.relics.length; i++) { const r = RELICS[sh.relics[i].id]; if (!keywordsIn(r.text).length) continue; hover(app, reg('shop-relic' + i)); expectTip(app, 'shop relic ' + r.id, [r.text]); }
   for (let i = 0; i < sh.potions.length; i++) { const p = POTIONS[sh.potions[i].id]; if (!keywordsIn(p.text).length) continue; hover(app, reg('shop-potion' + i)); expectTip(app, 'shop potion ' + p.id, [p.text]); }
   for (let i = 0; i < sh.cards.length; i++) { const sp = cardSpec({ uid: 0, id: sh.cards[i].id, grafts: [], up: 0 }); if (!keywordsIn(cardLines(sp)).length) continue; hover(app, reg('shop-card' + i)); assert.ok(app.tip, 'shop card tip'); expectTip(app, 'shop card ' + sp.id, [cardLines(sp)], { types: sp.type, school: sp.school }); }

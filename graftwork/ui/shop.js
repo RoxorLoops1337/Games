@@ -377,7 +377,7 @@ const WHY = { gold: 'Not enough gold.', slots: 'Potion slots are full.', cantgra
 let S = null;
 const CARD_X = (i) => 347 + i * 198, CARD_Y = 190;
 const GRAFT_X = (i) => 270 + i * 220, GRAFT_Y = 362;
-const POT_X = (i) => 270 + i * 220, POT_Y = 492;
+const POT_X = (i) => 270 + i * 220, POT_Y = 500, POT_H = 88;
 const REL_X = 940, REL_Y = (i) => 362 + i * 112;
 
 function say(kind, seed) { S.quip = pickQ(kind, seed); S.quipT = 0; S.react = 1; }
@@ -563,26 +563,26 @@ export default {
     app.reg('shop-title', 270, 8, 320, 44, { group: 'title' }); app.reg('shop-budget', 600, 4, 270, 60, { group: 'budget' });
     app.text('BUDGET', 600, 6, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.7)' });
     drawGauge(app, 600, 26, 260, info);
-    app.text(gaugeLabel(info), 600, 46, { size: 14, ui: true, maxW: 268, color: info.strain ? COL.bad : 'rgba(232,220,196,.7)' });
+    app.text(gaugeLabel(info), 600, 46, { size: 14, ui: true, fit: { w: 266, h: 17, lines: 1 }, color: info.strain ? COL.bad : 'rgba(232,220,196,.7)' });
     if (app.inRect(600, 4, 270, 60)) app.tooltip('Budget', `Total graft weight ${info.weight} against a Budget of ${info.budget}. Over it, each Strain point Tithes a Bare card (-25% numbers).` + (info.tithed.length ? `\nTithed now: ${info.tithed.map((u) => cardName(run, u)).join(', ')}.` : ''));
     // the top-right corner (x 1128..1272, y 0..56) belongs to the global Pause / Fullscreen buttons
     app.reg('shop-gold', 884, 10, 112, 44, { group: 'gold' }); app.reg('shop-deck', 1008, 10, 112, 44, { group: 'deckbtn' });
-    if (app.button(`Deck (${run.deck.length})`, 1008, 10, 112, 44, { size: 16 })) flow.openDeck();
+    if (app.button(`Deck (${run.deck.length})`, 1008, 10, 112, 44, { size: 16, fit: true })) flow.openDeck();
     app.panel(884, 10, 112, 44, { fill: 'rgba(14,12,10,.9)', stroke: rgba(BRASS, 0.7) });
     drawCoin(g, 904, 32, 24 + S.goldPop * 0);
-    app.text(String(Math.round(S.gold)), 920, 17, { size: 24, bold: true, color: COL.gold, shadow: true, maxW: 70 });
+    app.text(String(Math.round(S.gold)), 920, 17, { size: 24, bold: true, color: COL.gold, shadow: true, fit: { w: 70, lines: 1 } });
     if (app.inRect(884, 10, 112, 44)) app.tooltip('Gold', 'Spend it before the next fight does.');
 
     // ---- section labels ----
-    const lab = (s, x, y) => app.text(s, x, y, { size: 13, ui: true, maxW: 250, bold: true, color: 'rgba(232,220,196,.55)' });
-    lab('CARDS FOR SALE', 270, 56); lab('GRAFT PATCHES', 270, 342); lab('POTIONS  ' + run.potions.length + '/' + RUN.potionSlots(run), 270, 474); lab('RELICS', REL_X, 342); lab('SERVICES', 270, 598);
+    const lab = (s, x, y, w = 250, short) => { const o = { size: 13, ui: true, bold: true, fit: { w, h: 19, lines: 1 }, color: 'rgba(232,220,196,.55)' }; return app.text(short && app.layoutText(s, o).trunc ? short : s, x, y, o); }; // fitted: the phone text floor inflates it, a section heading never runs under a tag or a tile
+    lab('CARDS FOR SALE', 270, 56); lab('GRAFT PATCHES', 270, 338, 124, 'PATCHES'); lab('POTIONS  ' + run.potions.length + '/' + RUN.potionSlots(run), 270, POT_Y - 22, 124, 'POTIONS ' + run.potions.length + '/' + RUN.potionSlots(run)); lab('RELICS', REL_X, 338); lab('SERVICES', 270, 592);
 
     const priceTag = (cx, cy, price, sold, grp) => {
       if (sold) return;
-      const can = run.gold >= price, w = 78;
+      const can = run.gold >= price, w = Math.max(60, Math.round(app.measure(String(price), 19, { bold: true })) + 40); // the box follows the number (a 3-digit price on a phone is wider)
       app.reg('shop-price-' + grp, cx - w / 2, cy - 14, w, 28, { group: grp });
       app.panel(cx - w / 2, cy - 14, w, 28, { fill: 'rgba(10,8,6,.9)', stroke: can ? rgba(BRASS, 0.8) : 'rgba(179,38,58,.9)', r: 14 });
-      drawCoin(g, cx - 20, cy, 18); app.text(String(price), cx - 6, cy - 11, { size: 19, bold: true, color: can ? COL.gold : COL.bad });
+      drawCoin(g, cx - w / 2 + 16, cy, 18); app.text(String(price), cx - w / 2 + 30, cy - 11, { size: 19, bold: true, color: can ? COL.gold : COL.bad });
     };
 
     const smallUi = app.scale < 0.95; // phones: the text floor inflates every label, so tiles trade padding for words
@@ -606,9 +606,9 @@ export default {
     // ---- grafts ----
     shop.grafts.forEach((it, i) => {
       const gr = GRAFTS[it.id], x = GRAFT_X(i) + shakeX('graft' + i), y = GRAFT_Y, w = 205, h = 64, ph = 64;
-      app.reg('shop-graft' + i, GRAFT_X(i), y - 4, w, 100, { group: 'graft' + i });
+      app.reg('shop-graft' + i, GRAFT_X(i), y - 4, w, 114, { group: 'graft' + i }); // patch + its two rows (Boon, Price)
       const over = !it.sold && app.inRect(GRAFT_X(i), y, w, 100), k = hv(app, 'g' + i, over);
-      if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, `Weight ${gr.weight} (${gr.tier}): counts ${gr.weight} against your Budget.\n` + ['Boon', 'Price'].map((lab) => { const t = lab === 'Boon' ? gr.boon : gr.price; return wrapLimit(app, `${lab}: ${t}`, w - 2, 13, 1, { ui: true })[0] === `${lab}: ${t}` ? '' : `${lab}: ${t}\n`; }).join('') + `Sews onto one of your cards. ${it.price} gold.`, { color: COL[gr.school], gloss: [gr.boon, gr.price, String(gr.tier).toUpperCase(), 'W' + gr.weight], school: gr.school, anchor: { x: GRAFT_X(i), y, w, h: 100, band: { x: Math.min(GRAFT_X(i), 590), y: 584, bottom: 716, dir: 1 } } }); } // Boon and Price are on the patch itself; the tip sits over the service row, never over the sibling patches
+      if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, `Weight ${gr.weight} (${gr.tier}): counts ${gr.weight} against your Budget.\n` + ['Boon', 'Price'].map((lab) => { const t = lab === 'Boon' ? gr.boon : gr.price; return wrapLimit(app, `${lab}: ${t}`, w - 2, 13, 1, { ui: true })[0] === `${lab}: ${t}` ? '' : `${lab}: ${t}\n`; }).join('') + `Sews onto one of your cards. ${it.price} gold.`, { color: COL[gr.school], gloss: [gr.boon, gr.price, String(gr.tier).toUpperCase()], school: gr.school, anchor: { x: GRAFT_X(i), y, w, h: 100, band: { x: Math.min(GRAFT_X(i), 590), y: 584, bottom: 716, dir: 1 } } }); } // Boon and Price are on the patch itself; the tip sits over the service row, never over the sibling patches
       g.save(); if (it.sold) g.globalAlpha = 0.45; g.translate(0, -3 * k);
       drawGraftPatch(g, gr, x, y, w, ph, { hover: k });
       // one line each for the Boon and the Price, so nobody has to hover to read what a patch does
@@ -618,30 +618,34 @@ export default {
         [['Boon', gr.boon, COL.good], ['Price', gr.price, '#ff8a8a']].forEach(([lab, txt, col], n) => app.text(`${lab}: ${txt}`, x, y + ph + 3 + n * pitch, { ...rowO, size: sz, exact: true, fit: { ...rowO.fit, soft: true }, color: col }));
       }
       g.restore();
-      if (it.sold) stamp(app, x + w / 2, y + ph / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w - 44, y + ph + 46, it.price, false, 'graft' + i);
+      if (it.sold) stamp(app, x + w / 2, y + ph / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w - 42, y - 16, it.price, false, 'graft' + i); // on the heading row, over the patch's top right corner, so the two rows below stay clear
       if (!it.sold && app.clicked(GRAFT_X(i), y, w, 100)) startGraftBuy(app, i);
     });
 
     // ---- potions ----
+    // tile: icon and the 'i' chip down the left, name and description on the right; the price hangs on the top edge (right), over the heading row
     shop.potions.forEach((it, i) => {
-      const p = POTIONS[it.id], x = POT_X(i) + shakeX('potion' + i), y = POT_Y, w = 205, h = 96; let potInfo = null;
+      const p = POTIONS[it.id], x = POT_X(i) + shakeX('potion' + i), y = POT_Y, w = 205, h = POT_H; let potInfo = null;
       app.reg('shop-potion' + i, POT_X(i), y - 2, w, h + 2, { group: 'potion' + i });
       const over = !it.sold && app.inRect(POT_X(i), y, w, h), k = hv(app, 'p' + i, over);
       app.panel(x, y - 2 * k, w, h, { fill: over ? 'rgba(52,42,32,.95)' : 'rgba(26,22,20,.88)', stroke: over ? COL.lamp : 'rgba(232,220,196,.3)' });
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawPotion(g, it.id, x + 30, y + 34 - 2 * k, 40);
-      const nameH = app.text(p.name, x + 56, y + 6 - 2 * k, { size: 15, bold: true, color: COL.vellum, maxW: w - 62 }), descY = Math.max(smallUi ? 30 : 26, 6 + nameH + 3); // a two-line name pushes the description down
-      { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.2)), nl = clampN(Math.floor((h - (smallUi ? 18 : 34) - descY) / pitch), 1, 2); // phones inflate the text: the lines stop above the price tag
-        wrapLimit(app, p.text, w - 64, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 56, y + descY + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.85)' }));
-        potInfo = app.wrap(p.text, w - 64, 14, { ui: true }).length > nl ? { x: x + 52, y: y + descY - 4, w: w - 58, h: nl * pitch + 6 } : null; }
+      let nmO = { size: 15, bold: true, fit: { w: w - 58, lines: 1 } }; if (app.layoutText(p.name, nmO).trunc) nmO = { ...nmO, bold: false }; // a long name on the smallest phone drops the bold before it loses letters
+      const nmL = app.layoutText(p.name, nmO), nameY = y + 16 - 2 * k;
+      app.text(p.name, x + 56, nameY, { ...nmO, color: COL.vellum });
+      { const dy0 = nameY + Math.ceil(nmL.size * 1.2) + 2, dO = { size: 14, ui: true, fit: { w: w - 64, h: y + h - 5 - 2 * k - dy0, soft: true } }, dL = app.layoutText(p.text, dO);
+        app.text(p.text, x + 56, dy0, { ...dO, color: 'rgba(232,220,196,.85)' });
+        potInfo = dL.trunc ? { x: x + 52, y: dy0 - 4, w: w - 58, h: dL.h + 8 } : null; }
       g.restore();
-      if (potInfo && !it.sold && touchUi(app) && infoChip(app, x + w - 14, y + 14, [potInfo])) { sfx(app, 'uiClick'); openInfoCard(app, p.name, withGloss(`${p.rarity}\n${p.text}\n${it.price} gold.`), COL.lamp); }
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 50, y + h - (smallUi ? 6 : 20), it.price, false, 'potion' + i);
+      if (potInfo && !it.sold && touchUi(app) && infoChip(app, x + 16, y + h - 15 - 2 * k, [potInfo], 'potion' + i)) { sfx(app, 'uiClick'); openInfoCard(app, p.name, withGloss(`${p.rarity}\n${p.text}\n${it.price} gold.`), COL.lamp); }
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 44, y, it.price, false, 'potion' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(p.name, `${p.rarity}\n${p.text}\nPotion slots ${run.potions.length}/${RUN.potionSlots(run)}. ${it.price} gold.`, { anchor: { x: POT_X(i), y, w, h } }); }
       if (!it.sold && app.clicked(POT_X(i), y, w, h)) buyDirect(app, 'potion', i, { x: x + 30, y: y + 38 }, it.price);
     });
 
     // ---- relics ----
+    // tile: icon and the 'i' chip on the left, name (up to two lines) and text on the right; the price sits top right, so the text starts under it
     shop.relics.forEach((it, i) => {
       const r = RELICS[it.id], x = REL_X + shakeX('relic' + i), y = REL_Y(i), w = 310, h = smallUi ? 110 : 96; let relInfo = null;
       app.reg('shop-relic' + i, REL_X, y - 2, w, h + 2, { group: 'relic' + i });
@@ -649,14 +653,14 @@ export default {
       app.panel(x, y - 2 * k, w, h, { fill: over ? 'rgba(52,42,32,.95)' : 'rgba(26,22,20,.88)', stroke: over ? COL.lamp : rgba(BRASS, 0.5), lw: 2 });
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawRelic(g, it.id, x + 40, y + h / 2 - 2 * k, 56);
-      const rnO = { size: 17, bold: true, fit: { w: w - 76 - 94, lines: 1 } }, rnL = app.layoutText(r.name, rnO);
+      const rnO = { size: 17, bold: true, fit: { w: w - 76 - 90, lines: 2 } }, rnL = app.layoutText(r.name, rnO);
       app.text(r.name, x + 76, y + 8 - 2 * k, { ...rnO, color: COL.lamp });
-      { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.2)), ty0 = y + 8 + Math.ceil(rnL.size * 1.2) + 2, nl = clampN(Math.floor((y + h - 4 - ty0) / pitch), 1, 3);
-        app.text(r.text, x + 76, ty0 - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.88)', fit: { w: w - 90, h: y + h - 4 - ty0, lines: nl, soft: true } });
-        relInfo = app.wrap(r.text, w - 90, 14, { ui: true }).length > nl ? { x: x + 72, y: ty0 - 4, w: w - 82, h: nl * pitch + 6 } : null; }
+      { const ty0 = Math.max(y + 8 + (rnL.lines.length - 1) * rnL.lineH + Math.ceil(rnL.size * 1.2) + 2, y + 32), tO = { size: 14, ui: true, fit: { w: w - 90, h: y + h - 5 - ty0, soft: true } }, tL = app.layoutText(r.text, tO);
+        app.text(r.text, x + 76, ty0 - 2 * k, { ...tO, color: 'rgba(232,220,196,.88)' });
+        relInfo = tL.trunc ? { x: x + 72, y: ty0 - 4, w: w - 82, h: tL.h + 8 } : null; }
       g.restore();
-      if (relInfo && !it.sold && touchUi(app) && infoChip(app, x + w - 14, y + h - 16, [relInfo])) { sfx(app, 'uiClick'); openInfoCard(app, r.name, withGloss(`${r.rarity} relic\n${r.text}\n${it.price} gold.`), COL.lamp); }
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 52, y + 22, it.price, false, 'relic' + i);
+      if (relInfo && !it.sold && touchUi(app) && infoChip(app, x + 15, y + 15 - 2 * k, [relInfo], 'relic' + i)) { sfx(app, 'uiClick'); openInfoCard(app, r.name, withGloss(`${r.rarity} relic\n${r.text}\n${it.price} gold.`), COL.lamp); }
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 48, y + 17, it.price, false, 'relic' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(r.name, `${r.rarity} relic\n${r.text}\n${it.price} gold.`, { color: COL.lamp, anchor: { x: REL_X, y, w, h } }); }
       if (!it.sold && app.clicked(REL_X, y, w, h)) buyDirect(app, 'relic', i, { x: x + 40, y: y + 46 }, it.price);
     });
@@ -665,13 +669,13 @@ export default {
     const rp = RUN.servicePrice(run, 'remove'), sp = RUN.servicePrice(run, 'strip');
     app.reg('shop-remove', 270, 614, 300, 66, { group: 'remove' }); app.reg('shop-strip', 590, 614, 300, 66, { group: 'strip' }); app.reg('shop-leave', 940, 600, 310, 90, { group: 'leave' });
     const grafted = run.deck.some((c) => c.grafts.length);
-    if (app.button('Remove a card', 270, 614, 300, 66, { size: 20, sub: `${rp} gold`, subColor: run.gold >= rp ? COL.gold : COL.bad })) startRemove(app);
+    if (app.button('Remove a card', 270, 614, 300, 66, { size: 20, fit: true, sub: `${rp} gold`, subColor: run.gold >= rp ? COL.gold : COL.bad })) startRemove(app);
     if (app.inRect(270, 614, 300, 66)) app.tooltip('Remove a card', `Delete one card from the deck for ${rp} gold. The price rises with every removal this run (${run.shopUses.remove} so far).`);
     const stripDis = !grafted;
-    if (app.button('Strip a graft', 590, 614, 300, 66, { size: 20, disabled: stripDis, sub: sp === 0 ? 'Free' : `${sp} gold`, subColor: run.gold >= sp ? COL.gold : COL.bad })) startStrip(app);
+    if (app.button('Strip a graft', 590, 614, 300, 66, { size: 20, fit: true, disabled: stripDis, sub: sp === 0 ? 'Free' : `${sp} gold`, subColor: run.gold >= sp ? COL.gold : COL.bad })) startStrip(app);
     if (app.inRect(590, 614, 300, 66)) app.tooltip('Strip a graft', stripDis ? 'None of your cards carry a graft.' : `Pick a card, then one of its grafts. The graft and its boon are lost, its price goes with it. ${sp === 0 ? 'Free this once.' : sp + ' gold.'}`);
     const stripTitle = null; void stripTitle;
-    if (app.button('LEAVE', 940, 600, 310, 90, { size: 38, fill: '#4a2a1c', stroke: COL.lamp })) { RUN.advance(run); flow.route(); }
+    if (app.button('LEAVE', 940, 600, 310, 90, { size: 38, fit: true, fill: '#4a2a1c', stroke: COL.lamp })) { RUN.advance(run); flow.route(); }
     // (no hover tip on LEAVE: it opened over the Strip a graft button beside it)
 
     toastDraw(app, S, 560);

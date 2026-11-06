@@ -1,6 +1,6 @@
 // FORGE screen (run.phase === 'forge', run.pending = {kind:'forge', used, last}).
 // Five big options; the player picks one (two with perk 'forgeExtra'), watches the animation, then continues.
-import { tscale, wrapLimit } from './graft_parts.js';
+import { tscale } from './graft_parts.js';
 import { COL, EASE, rgba, clamp, lerp } from './core.js';
 import { Fx } from './fx.js';
 import { drawBackground } from '../art/backgrounds.js';
@@ -75,20 +75,19 @@ function drawOptionCard(app, run, i, o, over, k, disabledWhy, usedUp, shk) {
   g.shadowBlur = 0; app.panel(x, y, OW, OH, { fill: 'rgba(0,0,0,0)', stroke: 'rgba(0,0,0,0)', r: 14, lw: 2 }); // chrome overlay: engraved hatch, inset shadow, rivets (cached)
   g.save(); app.rr(x + 8, y + 8, OW - 16, OH - 16, 10); g.lineWidth = lnw(1); g.strokeStyle = dim ? 'rgba(232,220,196,.1)' : 'rgba(201,162,39,.3)'; g.setLineDash([5, 4]); g.stroke(); g.restore();
   g.globalAlpha = dim ? 0.4 : 1; drawOptIcon(g, o.id, x + OW / 2, y + 88, k, app.t, app); g.globalAlpha = 1;
-  const nameH = app.text(o.name, x + OW / 2, y + 150, { size: 30, bold: true, align: 'center', color: dim ? 'rgba(232,220,196,.4)' : COL.lamp, shadow: !dim });
-  // bottom block (reason or live detail) is sized from its real wrapped lines; the description gets what is left (phones inflate the text)
-  let bt = '', bo, bl = 0; const bsz = disabledWhy ? 14 : 15;
-  if (disabledWhy) { bt = disabledWhy; bo = { size: 14, ui: true, align: 'center', maxW: OW - 30, lineH: 17, color: COL.bad, bold: true }; }
-  else if (!usedUp) { const d = detailFor(run, o.id); bt = d.t; bo = { size: 15, ui: true, bold: true, align: 'center', maxW: OW - 24, color: d.c }; }
-  const bpitch = disabledWhy ? Math.round(17 * app.sz(14, { ui: true }) / 14) : Math.round(app.sz(15, { ui: true, bold: true }) * 1.22);
-  if (bt) bl = app.wrap(bt, bo.maxW, bsz, { ui: true, bold: true }).length;
-  const botTop = y + OH - 14 - bl * bpitch, descTop = y + 150 + nameH + 2;
-  const dpitch = Math.round(17 * app.sz(14, { ui: true }) / 14), nl = Math.max(1, Math.floor((botTop - descTop - 2) / dpitch));
-  const full = app.wrap(o.short || o.desc, OW - 30, 14, { ui: true }), trunc = full.length > nl || (!!o.short && !!o.desc && o.short !== o.desc);
-  wrapLimit(app, o.short || o.desc, OW - 30, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + OW / 2, descTop + q * dpitch, { size: 14, ui: true, align: 'center', lineH: 17, color: dim ? 'rgba(232,220,196,.35)' : COL.vellum }));
+  const nameH = app.text(o.name, x + OW / 2, y + 150, { size: 30, bold: true, align: 'center', color: dim ? 'rgba(232,220,196,.4)' : COL.lamp, shadow: !dim, fit: { w: OW - 20, lines: 1 } });
+  // bottom block (reason or live detail) is fitted to up to 4 lines; the description gets what is left (phones inflate the text)
+  let bt = '', bo, bL = null;
+  if (disabledWhy) { bt = disabledWhy; bo = { size: 14, ui: true, align: 'center', lineH: 17, color: COL.bad, bold: true, fit: { w: OW - 30, lines: 4 } }; }
+  else if (!usedUp) { const d = detailFor(run, o.id); bt = d.t; bo = { size: 15, ui: true, bold: true, align: 'center', color: d.c, fit: { w: OW - 24, lines: 3 } }; }
+  if (bt) bL = app.layoutText(bt, bo);
+  const botTop = y + OH - 14 - (bL ? (bL.lines.length - 1) * bL.lineH + bL.size : 0) - 2, descTop = y + 150 + nameH + 2;
+  const dO = { size: 14, ui: true, align: 'center', lineH: 17, fit: { w: OW - 30, h: botTop - descTop - 2, soft: true } }, dL = app.layoutText(o.short || o.desc, dO);
+  const trunc = dL.trunc || (!!o.short && !!o.desc && o.short !== o.desc);
+  app.text(o.short || o.desc, x + OW / 2, descTop, { ...dO, color: dim ? 'rgba(232,220,196,.35)' : COL.vellum });
   if (bt) app.text(bt, x + OW / 2, botTop, bo);
   g.restore();
-  return { trunc, text: { x: x + 8, y: descTop - 2, w: OW - 16, h: Math.max(20, nl * dpitch + 4) } };
+  return { trunc, text: { x: x + 8, y: descTop - 2, w: OW - 16, h: Math.max(20, dL.h + 4) } };
 }
 
 // ---- forge-specific animations ---------------------------------------------------------------------------------------
@@ -299,14 +298,14 @@ export default {
     app.reg('forge-head', 24, 4, 470, 56, { group: 'head' }); app.reg('forge-budget', 520, 4, 310, 60, { group: 'budget' });
     app.text('BUDGET', 520, 6, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.7)' });
     drawGauge(app, 520, 26, 300, info);
-    app.text(gaugeLabel(info), 520, 46, { size: 14, ui: true, maxW: 300, color: info.strain ? COL.bad : 'rgba(232,220,196,.7)' });
+    app.text(gaugeLabel(info), 520, 46, { size: 14, ui: true, fit: { w: 304, h: 17, lines: 1 }, color: info.strain ? COL.bad : 'rgba(232,220,196,.7)' });
     if (app.inRect(520, 4, 310, 60)) app.tooltip('Budget', `Total graft weight ${info.weight} against a Budget of ${info.budget}. Over it, each Strain point Tithes a Bare card (-25% numbers).` + (info.tithed.length ? `\nTithed now: ${info.tithed.map((u) => cardName(run, u)).join(', ')}.` : ''));
     if (app.inRect(320, 8, 160, 44)) app.tooltip('Health', `${run.hp} of ${run.maxHp} HP.`);
     // the top-right corner (x 1128..1272, y 0..56) belongs to the global Pause / Fullscreen buttons
     app.reg('forge-gold', 880, 10, 112, 44, { group: 'gold' }); app.reg('forge-deck', 1004, 10, 112, 44, { group: 'deckbtn' });
-    if (app.button(`Deck (${run.deck.length})`, 1004, 10, 112, 44, { size: 16 })) flow.openDeck();
+    if (app.button(`Deck (${run.deck.length})`, 1004, 10, 112, 44, { size: 16, fit: true })) flow.openDeck();
     app.panel(880, 10, 112, 44, { fill: 'rgba(14,12,10,.9)', stroke: rgba(BRASS, 0.7) });
-    drawCoin(g, 900, 32, 24); app.text(String(run.gold), 916, 17, { size: 24, bold: true, color: COL.gold, shadow: true, maxW: 72 });
+    drawCoin(g, 900, 32, 24); app.text(String(run.gold), 916, 17, { size: 24, bold: true, color: COL.gold, shadow: true, fit: { w: 72, lines: 1 } });
 
     app.text(left > 0 ? (max > 1 ? `Choose ${left === max ? 'up to two' : 'one more'}. Your Forge Hammer allows ${max}.` : 'Choose one.') : 'The fire is banked. Time to go.', 640, 92, { size: 20, italic: true, align: 'center', maxW: 900, color: 'rgba(232,220,196,.85)' });
 
@@ -319,7 +318,7 @@ export default {
       const shk = S.shakeI === i && S.shakeT > 0 ? Math.sin(S.shakeT * 70) * 9 * (S.shakeT / 0.4) : 0;
       const od = drawOptionCard(app, run, i, o, over, EASE.out(n), why, usedUp, shk);
       if (od.trunc && touchUi(app)) { // phones: no hover, so the full text opens on a tap of the chip or of the cut-off words
-        if (infoChip(app, x + OW - 18, OY + 18, [od.text])) { sfx(app, 'uiClick'); openInfoCard(app, o.name, withGloss(why ? `${o.desc}\n${why}` : o.desc), COL.lamp); }
+        if (infoChip(app, x + OW - 18, OY + 18, [od.text], 'opt' + i)) { sfx(app, 'uiClick'); openInfoCard(app, o.name, withGloss(why ? `${o.desc}\n${why}` : o.desc), COL.lamp); }
       }
       if (over) {
         app.cursor = dim ? 'not-allowed' : 'pointer';

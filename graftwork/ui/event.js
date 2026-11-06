@@ -218,7 +218,7 @@ export default {
     y += 20;
 
     // scene text, typewriter
-    const TS = ev.text.length > 560 ? 15 : ev.text.length > 330 ? 18 : 21, TL = Math.round((TS === 21 ? 29 : TS === 18 ? 25 : 21) * k);
+    const TS = ev.text.length > 560 ? 15 : ev.text.length > 330 ? 18 : 21, TL = Math.max(Math.round((TS === 21 ? 29 : TS === 18 ? 25 : 21) * k), Math.ceil(app.sz(TS) * 1.2)); // pitch follows the real (phone-inflated) font size
     const storyY = y;
     const lines = app.wrap(ev.text, iw, TS, {});
     const total = ev.text.length;
@@ -294,7 +294,7 @@ export default {
   drawResult(app, ix, iw, y) {
     const g = app.ctx, P = PANEL;
     const text = String(this.result);
-    const k = tscale(app), RL = Math.round(30 * k);
+    const k = tscale(app), RL = Math.max(Math.round(30 * k), Math.ceil(app.sz(22, { italic: true }) * 1.2));
     const lines = app.wrap(text, iw - 40, 22, { italic: true });
     const h = lines.length * RL + 44;
     app.reg('event-result', ix, y, iw, h, { group: 'panel' });
