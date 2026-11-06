@@ -48,14 +48,14 @@ const clearMarks = (A) => {
 
 export const ENEMIES_2 = [
   // ---------- NORMALS ----------
-  { id: 'jarhead', name: 'Jarhead', act: 2, kind: 'normal', start: { strength: 1 }, hp: [60, 66], pattern: ['bonk', 'slosh', 'bonk'],
+  { id: 'jarhead', name: 'Jarhead', act: 2, kind: 'normal', start: { strength: 2 }, hp: [60, 66], pattern: ['bonk', 'slosh', 'bonk'],
     moves: { bonk: { name: 'Glass Bonk', fx: [{ op: 'dmg', n: 12 }] }, slosh: { name: 'Brine Slosh', tip: 'Adds 2 Poison. Poison ignores Block and rises by 1 each turn.', fx: [{ op: 'dmg', n: 7 }, { op: 'block', n: 8, to: 'self' }, { op: 'status', s: 'poison', n: 2, to: 'player' }] } },
     on: { death: (A) => { A.summon('pickled_thing', 2); } },
     art: { body: 'jar', color: '#8fae6b', notes: 'Fat glass jar on stubby legs, cloudy brine, a cracked lid. Shatters into two small pickled things.' } },
-  { id: 'haggler', name: 'Haggler', act: 2, kind: 'normal', start: { strength: 1 }, hp: [60, 66], pattern: ['haggle', 'jab', 'jab'],
+  { id: 'haggler', name: 'Haggler', act: 2, kind: 'normal', start: { strength: 2 }, hp: [60, 66], pattern: ['haggle', 'jab', 'jab'],
     moves: { haggle: { name: 'Raise the Price', tip: 'Leaden: your highest-cost card costs 1 more next turn.', fx: [{ op: 'dmg', n: 10 }, { op: 'status', s: 'leaden', n: 1, to: 'player' }] }, jab: { name: 'Walking Stick', fx: [{ op: 'dmg', n: 15 }] } },
     art: { body: 'hunched', color: '#a9825a', notes: 'Hunched oval back, thin hooked nose, one long arm with an open palm.' } },
-  { id: 'coin_mite', name: 'Coin Mite', act: 2, kind: 'normal', start: { strength: 1 }, hp: [32, 36],
+  { id: 'coin_mite', name: 'Coin Mite', act: 2, kind: 'normal', start: { strength: 2 }, hp: [32, 36],
     pick: (A, e) => (e.data.flee ? 'flee' : ['nibble', 'nibble', 'scuttle'][e.turn % 3]),
     moves: {
       nibble: { name: 'Nibble Purse', fx: [{ op: 'dmg', n: 9 }, { op: 'custom', intent: 'debuff', text: 'Eats up to 15 of your gold.', fn: (A, ctx) => {
@@ -70,27 +70,27 @@ export const ENEMIES_2 = [
       death: (A, e, src) => { if (!e.data.fled && e.data.loot > 0 && src) A.gold(e.data.loot); },
     },
     art: { body: 'disc', color: '#d9b43c', notes: 'Flat gold coin disc with six twitching leg lines and two pin eyes.' } },
-  { id: 'lantern_fish', name: 'Lantern Fish', act: 2, kind: 'normal', start: { strength: 1 }, hp: [60, 66], pattern: ['glow', 'bite', 'reel', 'bite'],
+  { id: 'lantern_fish', name: 'Lantern Fish', act: 2, kind: 'normal', start: { strength: 2 }, hp: [60, 66], pattern: ['glow', 'bite', 'reel', 'bite'],
     moves: {
       glow: { name: 'Gloaming', fx: [{ op: 'dmg', n: 6 }, { op: 'custom', intent: 'debuff', text: 'Pulls 2 cards off your draw pile into the discard pile.', fn: mill(2) }] },
       bite: { name: 'Bite', fx: [{ op: 'dmg', n: 18 }] },
       reel: { name: 'Reel In', tip: 'Numb: the grafts on your top grafted card in hand stop working next turn. Lured: 1 card played pulls another from your hand.', fx: [{ op: 'dmg', n: 5 }, { op: 'status', s: 'lured', n: 1, to: 'player' }, { op: 'status', s: 'numb', n: 1, to: 'player' }] },
     },
     art: { body: 'lure', color: '#e2a64a', notes: 'Dark teardrop fish hanging from the ceiling by a polyline stalk ending in a glowing lantern circle.' } },
-  { id: 'rust_hound', name: 'Rust Hound', act: 2, kind: 'normal', start: { strength: 1 }, hp: [62, 68], pattern: ['gnaw', 'lunge', 'lunge'],
+  { id: 'rust_hound', name: 'Rust Hound', act: 2, kind: 'normal', start: { strength: 2 }, hp: [62, 68], pattern: ['gnaw', 'lunge', 'lunge'],
     moves: {
       gnaw: { name: 'Gnaw', tip: 'Strips all your Block, then Brittle: Block you gain shatters when emptied.', fx: [{ op: 'custom', intent: 'debuff', text: 'Strips all your Block.', fn: (A) => { if (A.player.block > 0) { A.player.block = 0; A.ev({ t: 'corrode' }); } } }, { op: 'dmg', n: 11 }, { op: 'status', s: 'corroded', n: 1, to: 'player' }, { op: 'status', s: 'brittle', n: 1, to: 'player' }] },
       lunge: { name: 'Lunge', fx: [{ op: 'dmg', n: 7, hits: 2 }] },
     },
     art: { body: 'jagged', color: '#a8573a', notes: 'Low spiky polygon of rusted plates, sawtooth back, a jaw of nails.' } },
-  { id: 'scale_merchant', name: 'Scale Merchant', act: 2, kind: 'normal', start: { strength: 1 }, hp: [62, 68], pattern: ['tilt', 'weigh'],
+  { id: 'scale_merchant', name: 'Scale Merchant', act: 2, kind: 'normal', start: { strength: 2 }, hp: [62, 68], pattern: ['tilt', 'weigh'],
     moves: {
       tilt: { name: 'Tilt', fx: [{ op: 'dmg', n: 6 }, { op: 'block', n: 8, to: 'self' }] },
       weigh: { name: 'Weigh', fx: [{ op: 'dmg', n: { base: 8, per: 'st:mirror@self', max: 28 } }], after: (A, e) => A.setStatus(e, 'mirror', 0) },
     },
     on: { damaged: (A, e, dmg, o) => { if (o.hit) A.setStatus(e, 'mirror', Math.min(dmg, 24)); } },
     art: { body: 'balance', color: '#c7b27a', notes: 'Thin upright beam with two swinging pan circles on chains, a small round head on top.' } },
-  { id: 'cleaver', name: 'Cleaver', act: 2, kind: 'normal', start: { strength: 1 }, hp: [60, 66], pattern: ['stalk', 'raise', 'chop'],
+  { id: 'cleaver', name: 'Cleaver', act: 2, kind: 'normal', start: { strength: 2 }, hp: [60, 66], pattern: ['stalk', 'raise', 'chop'],
     moves: {
       stalk: { name: 'Stalk', fx: [{ op: 'dmg', n: 9 }, { op: 'block', n: 5, to: 'self' }] },
       raise: { name: 'Lifts the Blade', fx: [{ op: 'block', n: 8, to: 'self' }, { op: 'status', s: 'raised', n: 1, to: 'self' }] },
@@ -105,14 +105,14 @@ export const ENEMIES_2 = [
       afterMove: (A, e) => { e.data.hurt = 0; },
     },
     art: { body: 'cleaver', color: '#b9b3a5', notes: 'Half-disc blade standing on two thin legs, flat edge down. Tilts back as it raises.' } },
-  { id: 'mold_bloom', name: 'Mold Bloom', act: 2, kind: 'normal', start: { strength: 1 }, hp: [60, 66], pattern: ['spore', 'smother', 'grow', 'smother'],
+  { id: 'mold_bloom', name: 'Mold Bloom', act: 2, kind: 'normal', start: { strength: 2 }, hp: [60, 66], pattern: ['spore', 'smother', 'grow', 'smother'],
     moves: {
       spore: { name: 'Spore Cloud', fx: [{ op: 'dmg', n: 5 }, { op: 'addCard', card: 'j_clot', n: 2, to: 'draw' }] },
       smother: { name: 'Smother', fx: [{ op: 'dmg', n: 18 }] },
       grow: { name: 'Bloom', fx: [{ op: 'dmg', n: 6 }, { op: 'custom', intent: 'buff', text: 'Grows 8 max HP and heals 8.', fn: grow(8) }] },
     },
     art: { body: 'bloom', color: '#6f9a5a', notes: 'Cluster of overlapping circles of different sizes, fuzzy outlines, growing from a damp patch.' } },
-  { id: 'twin_barrels', name: 'Twin Barrels', act: 2, kind: 'normal', start: { strength: 1 }, hp: [60, 66], pattern: ['enrage', 'burst', 'roll'],
+  { id: 'twin_barrels', name: 'Twin Barrels', act: 2, kind: 'normal', start: { strength: 2 }, hp: [60, 66], pattern: ['enrage', 'burst', 'roll'],
     moves: {
       enrage: { name: 'Left Barrel Rages', fx: [{ op: 'dmg', n: 4 }, { op: 'status', s: 'strength', n: 3, to: 'self' }] },
       burst: { name: 'Right Barrel Bursts', fx: [{ op: 'dmg', n: 16 }, { op: 'custom', intent: 'buff', text: 'Loses 8 HP.', fn: (A, ctx) => A.loseHp(ctx.srcEnt, 8, { floor1: true }) }] },
@@ -125,7 +125,7 @@ export const ENEMIES_2 = [
       tally: { name: 'Carry the One', fx: [{ op: 'dmg', n: 8 }, { op: 'block', n: 8, to: 'self' }] },
       invoice: { name: 'Invoice', fx: [{ op: 'dmg', n: 14 }, { op: 'addCard', card: 'j_ledger', n: 1, to: 'discard' }] },
     },
-    start: { strength: 1, tally: 0 },
+    start: { strength: 2, tally: 0 },
     on: {
       playerCard: (A, e) => {
         const k = A.c.cardsThisTurn.length;
@@ -137,7 +137,7 @@ export const ENEMIES_2 = [
       afterMove: (A, e) => A.setStatus(e, 'tally', 0),
     },
     art: { body: 'columns', color: '#b8a98a', notes: 'Two tall ledger-column rects side by side with tick marks scrolling down them, a small clock circle on top.' } },
-  { id: 'wax_sealer', name: 'Wax Sealer', act: 2, kind: 'normal', start: { strength: 1 }, hp: [60, 66],
+  { id: 'wax_sealer', name: 'Wax Sealer', act: 2, kind: 'normal', start: { strength: 2 }, hp: [60, 66],
     moves: {
       drip: { name: 'Drip', fx: [{ op: 'dmg', n: 8 }, { op: 'custom', intent: 'debuff', text: 'Jams the top 2 cards of your draw pile (+1 cost).', fn: jamTop(2) }] },
       seal: { name: 'Seal the Jar', fx: [{ op: 'dmg', n: 8 }, { op: 'custom', intent: 'debuff', text: 'Exhausts one of the top 5 cards of your draw pile, the most grafted first, then jams the next card.', fn: (A, ctx) => { sealOne(A, ctx); jamTop(1)(A); } }] },

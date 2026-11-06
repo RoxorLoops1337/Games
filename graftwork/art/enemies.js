@@ -1543,6 +1543,7 @@ function popFx(g, A) {
   if (T < 0.5) { const f = T / 0.5, ang = Math.sin(f * 18) * (1 - f) * 1.3 - 0.9, len = 30 * (1 - f * 0.3); g.quadraticCurveTo(ux + Math.cos(ang) * len * 0.5, uy + Math.sin(ang) * len * 0.5 - 6, ux + Math.cos(ang + 0.6) * len, uy + Math.sin(ang + 0.6) * len); }
   else g.quadraticCurveTo(ux + 6 + Math.sin(t * 2) * 3, uy + 8, ux + Math.sin(t * 1.7) * 4, uy + 22);
   g.stroke();
+  const sg = 4 * cl(T / 0.15, 0, 1); g.save(); g.translate(ux - 12, uy + 2 + sg); g.rotate(0.14 + sg * 0.02); poly(g, [0, 0, 20, -1, 21, 12, 1, 13], C('#e9e0c9'), 2); line(g, [3, 3, 17, 2], C(INK, 1, 0.5), 1); line(g, [3, 9, 18, 10], C(INK, 1, 0.5), 1); g.restore();
   g.strokeStyle = C(INK); g.lineWidth = 1.4; g.beginPath(); g.moveTo(ux - 5, uy - 5); g.lineTo(ux + 5, uy + 5); g.moveTo(ux + 5, uy - 5); g.lineTo(ux - 5, uy + 5); g.stroke();
   if (T < 0.15) { g.fillStyle = C('#fff7c8', 1, 0.8 * (1 - T / 0.15)); g.beginPath(); g.arc(ux, uy, 5 + T * 90, 0, TAU); g.fill(); }
 }
@@ -1621,72 +1622,78 @@ function ctx2ring(g, x, y, r, col) { g.strokeStyle = C(col); g.lineWidth = 2.2; 
 const GHOST = { understudys_shadow: 1 };
 const ACC_ALIAS = { shadow: 'understudys_shadow', understudy_shadow: 'understudys_shadow', clerk: 'ward_clerk', wasp: 'suture_wasp', tick: 'surge_tick', nanny: 'needle_nanny', surgeon: 'brine_surgeon' };
 
-// ---- compose the lit sprite onto tg (origin = feet, units = screen px at scale 1, already mirrored by m when m = -1)
+// ---- baked lit layers. The body itself is painted live (it animates); the layers derived from its silhouette are baked once per
+// (id, scale bucket, mirror, kind) at the rest pose: BACK = sepia outline halo + thickness copy, FRONT (per lamp bucket) = wet specular + hatch on the shadow side + rim strip.
 const R4 = [[1, 0], [-1, 0], [0, 1], [0, -1]], R8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]];
+const BAKE = new Map();
+let bakeAt = -1e9;
+const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+const AB = { t: 0, b: 0, blink: 0, att: 0, hurt: 0, big: 0, st: NOST, col: '#888', id: '', def: null, o: null, dying: 0, bw: 100, bh: 100, S: null, dt: 0, ldx: 0, frame: -1, extra: null, sag: 0 };
+function newCanvas(wp, hp) { const c = document.createElement('canvas'); c.width = wp; c.height = hp; const g = c.getContext && c.getContext('2d'); return g ? { c, g } : null; }
 function tintTo(sc, body, wp, hp, color) {
   const g = sc.g; g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, wp + 2, hp + 2);
   g.drawImage(body.c, 0, 0, wp, hp, 0, 0, wp, hp); g.globalCompositeOperation = 'source-in'; g.fillStyle = color; g.fillRect(0, 0, wp, hp); g.globalCompositeOperation = 'source-over';
 }
-function compose(tg, A, paint, bw, bh, k, q, m, L, op) {
-  const W = Math.ceil(bw * 1.9), H = Math.ceil(bh * 1.45 + 40), OX = W / 2, OY = H - 30, wp = Math.ceil(W * q), hp = Math.ceil(H * q);
-  const body = getBuf('body', wp, hp), sc = getBuf('sc', wp, hp);
-  if (!body || !sc) return false;
-  const g = body.g, lx = L.x * m, ly = L.y;
+function bake(def, id, art, key, bw, bh, k, q, m, lb, kind, needBack, needFront, geo) {
+  const body = getBuf('body', geo.wp, geo.hp), sc = getBuf('sc', geo.wp, geo.hp);
+  if (!body || !sc) return null;
+  const { W, H, OX, OY, wp, hp } = geo, paint = BODY[key];
+  const sz = baseSize(def || {}), t = phaseOf(id);
+  AB.t = t; AB.b = Math.sin(t * 2.1); AB.blink = 0; AB.att = 0; AB.hurt = 0; AB.st = NOST; AB.col = art.color || '#8a9a7a'; AB.id = id; AB.def = def; AB.o = null; AB.dying = 0; AB.bw = sz[0]; AB.bh = sz[1];
+  AB.S = {}; AB.dt = 0; AB.ldx = 0; AB.frame = -1; AB.extra = null; AB.sag = 0; AB.noSlice = false;
+  const g = body.g;
   g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, wp + 2, hp + 2);
-  g.setTransform(q, 0, 0, q, OX * q, OY * q);
-  g.save(); g.scale(k, k);
-  paint(g, A);
-  const acc = ACC[A.id] || ACC[ACC_ALIAS[A.id]]; if (acc) acc(g, A);
-  if (A.extra) extraFx(g, A);
-  popFx(g, A);
-  g.restore();
-  // wet specular + hatch on the shadow side, clipped to the painted pixels
-  g.globalCompositeOperation = 'source-atop';
-  const cx = 0, cy = -bh * 0.5, px = -ly, py = lx, ang = Math.atan2(py, px);
-  for (let i = 0; i < 3; i++) {
-    const u = (0.9 - i * 0.25), v = (i - 1) * bw * 0.13, rx = bw * (0.075 - i * 0.017);
-    g.fillStyle = i === 0 ? 'rgba(255,252,240,0.55)' : 'rgba(255,252,240,0.38)';
-    g.beginPath(); g.ellipse(cx + lx * bw * 0.2 * u + px * v, cy + ly * bh * 0.2 * u + py * v, rx, rx * 0.42, ang, 0, TAU); g.fill();
+  g.setTransform(q, 0, 0, q, OX * q, OY * q); g.save(); g.scale(k, k); paint(g, AB); const acc = ACC[id] || ACC[ACC_ALIAS[id]]; if (acc) acc(g, AB); g.restore();
+  const out = {};
+  if (needBack) {
+    const K = newCanvas(wp, hp); if (!K) return null;
+    const put = (ox, oy) => K.g.drawImage(sc.c, 0, 0, wp, hp, ox * q, oy * q, wp, hp);
+    if (kind === 'boss') { tintTo(sc, body, wp, hp, '#c9a227'); for (const d of R8) put(d[0] * 2.8, d[1] * 2.8); }
+    tintTo(sc, body, wp, hp, kind === 'boss' ? '#2b1810' : '#3a2214');
+    const orad = kind === 'boss' ? 1.4 : kind === 'elite' ? 2 : 1;
+    for (const d of (kind === 'normal' ? R4 : R8)) put(d[0] * orad, d[1] * orad);
+    K.g.globalAlpha = 0.5; put(3 * m, 4);
+    out.back = { c: K.c, wp, hp, W, H, OX, OY };
   }
-  const ht = hatchTiles(g), R = Math.max(bw, bh) * 1.1;
-  if (ht) {
-    const quad = (ox, oy, pat) => {
-      g.fillStyle = pat; g.beginPath();
-      g.moveTo(ox + px * R, oy + py * R); g.lineTo(ox - px * R, oy - py * R); g.lineTo(ox - px * R - lx * R * 2, oy - py * R - ly * R * 2); g.lineTo(ox + px * R - lx * R * 2, oy + py * R - ly * R * 2); g.closePath(); g.fill();
-    };
-    quad(cx - lx * bw * 0.12, cy - ly * bh * 0.12, ht.a);
-    quad(cx - lx * bw * 0.34, cy - ly * bh * 0.34 + bh * 0.1, ht.b);
+  if (needFront) {
+    const F = newCanvas(wp, hp); if (!F) return null;
+    const ang0 = lb * 0.12, lx = Math.cos(ang0) * m, ly = Math.sin(ang0), cx = 0, cy = -bh * 0.5, px = -ly, py = lx, ang = Math.atan2(py, px), fg = F.g;
+    fg.setTransform(q, 0, 0, q, OX * q, OY * q);
+    const ht = hatchTiles(fg), R = Math.max(bw, bh) * 1.1;
+    if (ht) {
+      const quad = (ox, oy, pat) => { fg.fillStyle = pat; fg.beginPath(); fg.moveTo(ox + px * R, oy + py * R); fg.lineTo(ox - px * R, oy - py * R); fg.lineTo(ox - px * R - lx * R * 2, oy - py * R - ly * R * 2); fg.lineTo(ox + px * R - lx * R * 2, oy + py * R - ly * R * 2); fg.closePath(); fg.fill(); };
+      quad(cx - lx * bw * 0.12, cy - ly * bh * 0.12, ht.a); quad(cx - lx * bw * 0.34, cy - ly * bh * 0.34 + bh * 0.1, ht.b);
+    }
+    for (let i = 0; i < 3; i++) {
+      const u = 0.9 - i * 0.25, v = (i - 1) * bw * 0.13, rx = bw * (0.075 - i * 0.017);
+      fg.fillStyle = i === 0 ? 'rgba(255,252,240,0.6)' : 'rgba(255,252,240,0.4)';
+      fg.beginPath(); fg.ellipse(cx + lx * bw * 0.2 * u + px * v, cy + ly * bh * 0.2 * u + py * v, rx, rx * 0.42, ang, 0, TAU); fg.fill();
+    }
+    fg.setTransform(1, 0, 0, 1, 0, 0); fg.globalCompositeOperation = 'destination-in'; fg.drawImage(body.c, 0, 0, wp, hp, 0, 0, wp, hp); // keep the overlay only on the body
+    tintTo(sc, body, wp, hp, '#ffe9b0'); const gs = sc.g; gs.globalCompositeOperation = 'destination-out'; gs.drawImage(body.c, 0, 0, wp, hp, -lx * 1.8 * q, -ly * 1.8 * q, wp, hp); gs.globalCompositeOperation = 'source-over';
+    fg.globalCompositeOperation = 'source-over'; fg.globalAlpha = 0.55; fg.drawImage(sc.c, 0, 0, wp, hp, 0, 0, wp, hp); fg.globalAlpha = 1;
+    out.front = { c: F.c, wp, hp, W, H, OX, OY };
   }
-  g.globalCompositeOperation = 'source-over';
-  const dx0 = -OX, dy0 = -OY;
-  const put = (ox, oy) => tg.drawImage(sc.c, 0, 0, wp, hp, dx0 + ox, dy0 + oy, W, H);
-  tg.save();
-  // outline by kind: boss gold, elite thick sepia, normal a thin warm sepia halo
-  if (op.kind === 'boss') { tintTo(sc, body, wp, hp, '#c9a227'); for (const d of R8) put(d[0] * 2.8, d[1] * 2.8); }
-  tintTo(sc, body, wp, hp, op.kind === 'boss' ? '#2b1810' : '#3a2214');
-  const orad = op.kind === 'boss' ? 1.4 : op.kind === 'elite' ? 2 : 1;
-  for (const d of (op.kind === 'normal' ? R4 : R8)) put(d[0] * orad, d[1] * orad);
-  tg.globalAlpha = 0.5; put(3 * m, 4); tg.globalAlpha = 1; // thickness
-  if (op.ghost) { tg.globalAlpha = 0.28; tg.drawImage(body.c, 0, 0, wp, hp, dx0 - 9 * m, dy0 + 2, W, H); tg.globalAlpha = 1; }
-  // body, with a sagging patch after the seam pop
-  const sag = A.sag || 0;
-  if (sag > 0.1 && !A.noSlice) {
-    const sw = (A.sagSide || 1) * m, x0 = sw > 0 ? bw * 0.1 : -bw * 0.55, w0 = bw * 0.45, y0 = -bh * 0.78, h0 = bh * 0.45;
-    tg.save(); tg.beginPath(); tg.rect(dx0, dy0, W, H); tg.rect(x0, y0, w0, h0); tg.clip('evenodd');
-    tg.drawImage(body.c, 0, 0, wp, hp, dx0, dy0, W, H); tg.restore();
-    tg.drawImage(body.c, (x0 + OX) * q, (y0 + OY) * q, w0 * q, h0 * q, x0, y0 + sag, w0, h0);
-  } else tg.drawImage(body.c, 0, 0, wp, hp, dx0, dy0, W, H);
-  // rim light: the lamp-side strip of the silhouette, additive
-  tintTo(sc, body, wp, hp, op.rim || '#ffe9b0');
-  const gs = sc.g; gs.globalCompositeOperation = 'destination-out'; gs.drawImage(body.c, 0, 0, wp, hp, -lx * 1.8 * q, -ly * 1.8 * q, wp, hp); gs.globalCompositeOperation = 'source-over';
-  tg.globalCompositeOperation = 'lighter'; tg.globalAlpha = 0.5; put(0, 0);
-  if (op.glow > 0.03) { tintTo(sc, body, wp, hp, op.glowCol); tg.globalAlpha = Math.min(0.4, op.glow * 0.45); put(0, 0); }
-  tg.restore();
-  return true;
+  return out;
 }
-
-// ---- cache of fully static sprites (idle at t = 0, e.g. the codex) per (id, scale bucket, mirror)
-const SPRITES = new Map();
+function getBakes(def, id, art, key, bw, bh, k, q, m, L, kind) {
+  const lb = Math.round(Math.atan2(L.y, L.x) / 0.12), kb = id + '|' + q + '|' + m + '|' + kind, kf = kb + '|' + lb;
+  let back = BAKE.get(kb), front = BAKE.get(kf);
+  if (back && front) return BK(back, front);
+  const now = nowMs();
+  if (back && !front && now - bakeAt < 14) { for (let d = 1; d < 5 && !front; d++) front = BAKE.get(kb + '|' + (lb + d)) || BAKE.get(kb + '|' + (lb - d)); if (front) return BK(back, front); }
+  const W = Math.ceil(bw * 1.9), H = Math.ceil(bh * 1.45 + 40);
+  const r = bake(def, id, art, key, bw, bh, k, q, m, lb, kind, !back, !front, { W, H, OX: W / 2, OY: H - 30, wp: Math.ceil(W * q), hp: Math.ceil(H * q) });
+  if (!r) return null;
+  if (BAKE.size > 140) BAKE.clear();
+  if (r.back) BAKE.set(kb, back = r.back);
+  if (r.front) BAKE.set(kf, front = r.front);
+  bakeAt = nowMs();
+  return BK(back, front);
+}
+const BKR = [null, null];
+function BK(a, b) { BKR[0] = a; BKR[1] = b; return BKR; }
+const lay = (ctx, l) => ctx.drawImage(l.c, 0, 0, l.wp, l.hp, -l.OX, -l.OY, l.W, l.H);
 
 // ---- extra status tells (screen orientation)
 function tells2(ctx, A, bw, bh, k) {
@@ -1744,6 +1751,9 @@ export function drawEnemy(ctx, def, x, y, o = {}) {
     const hasDoc = typeof document !== 'undefined' && document.createElement && !globalThis.__GW_LEGACY;
     if (d > 0 || !hasDoc) { stage(ctx, BODY[key], A, bw, bh, x, y, o, -1, k); return; }
     const L = lampAt(o.t || 0), q = Math.round(cl(devScale(ctx) * s, 0.6, 2.5) * 4) / 4;
+    const kind = def && def.kind === 'boss' ? 'boss' : def && def.kind === 'elite' ? 'elite' : 'normal';
+    const bk = getBakes(def, id, art, key, bw, bh, k, q, m, L, kind);
+    if (!bk) { stage(ctx, BODY[key], A, bw, bh, x, y, o, -1, k); return; }
     // floor contact shadow (cached blurred ellipse, skewed by the lamp)
     const sh = shadowSprite();
     ctx.save();
@@ -1770,28 +1780,16 @@ export function drawEnemy(ctx, def, x, y, o = {}) {
     const xf = A.extra && A.extra.flash > 0 ? cl(A.extra.flash, 0, 1) : 0;
     if (glowK) glow(ctx, 0, -bh * 0.5, Math.max(bw, bh) * 0.6, art.color || '#f2c14e', 0.3 * glowK);
     G.flash = Math.max(hurt > 0 ? Math.min(0.9, hurt * 1.25) : 0, xf * 0.9);
-    const kind = def && def.kind === 'boss' ? 'boss' : def && def.kind === 'elite' ? 'elite' : 'normal';
-    const op = { kind, ghost: !!GHOST[id], glow: glowK, glowCol: (A.extra && A.extra.glowCol) || C(art.color || '#f2c14e', 1.5), rim: '#ffe9b0' };
-    const stat = !(o.t > 0) && !hurt && !P && !att && !glowK && !A.extra && !A.sag && sp(S, 'sq').x === 0 && !S.sqHold && Math.abs(sp(S, 'hem').x) < 0.01 && !(hp !== undefined && hp <= 0.5);
-    let done = false;
-    if (stat) {
-      const ck = id + '|' + q + '|' + m + '|' + kind;
-      let spr = SPRITES.get(ck);
-      if (!spr) {
-        const W = Math.ceil(bw * 1.9), H = Math.ceil(bh * 1.45 + 40), c = document.createElement('canvas');
-        c.width = Math.ceil(W * q); c.height = Math.ceil(H * q);
-        const cg = c.getContext && c.getContext('2d');
-        if (cg) {
-          cg.setTransform(q * m, 0, 0, q, (W / 2) * q, (H - 30) * q);
-          if (compose(cg, A, BODY[key], bw, bh, k, q, m, L, op)) { spr = { c, W, H, wp: c.width, hp: c.height }; if (SPRITES.size > 48) SPRITES.clear(); SPRITES.set(ck, spr); }
-        }
-      }
-      if (spr) { ctx.scale(m, 1); ctx.drawImage(spr.c, 0, 0, spr.wp, spr.hp, -spr.W / 2, -(spr.H - 30), spr.W, spr.H); done = true; }
-    }
-    if (!done) {
-      if (!compose(ctx, A, BODY[key], bw, bh, k, q, m, L, op)) { ctx.restore(); stage(ctx, BODY[key], A, bw, bh, x, y, o, -1, k); return; }
-    }
+    lay(ctx, bk[0]);
+    if (GHOST[id]) { ctx.save(); ctx.globalAlpha *= 0.28; ctx.translate(-9 * m, 2); ctx.scale(k, k); BODY[key](ctx, A); ctx.restore(); }
+    ctx.save(); ctx.scale(k, k);
+    BODY[key](ctx, A);
+    const acc = ACC[id] || ACC[ACC_ALIAS[id]]; if (acc) acc(ctx, A);
+    if (A.extra) extraFx(ctx, A);
+    popFx(ctx, A);
+    ctx.restore();
     G.flash = 0;
+    lay(ctx, bk[1]);
     ctx.restore();
     if (A.st !== NOST) { ctx.save(); ctx.translate(x + ox, y + pdy * s); ctx.scale(s, s); tells(ctx, A, sz[0], sz[1], k); tells2(ctx, A, sz[0], sz[1], k); ctx.restore(); }
   } catch (e) {
