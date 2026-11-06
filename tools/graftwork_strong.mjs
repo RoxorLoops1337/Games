@@ -138,13 +138,12 @@ export function strongForge(run, pol, hpF) {
 // score = static value gain over the deck's median card (cardValue ratio via sim fxValue) + audit forced-win delta (wins per 200 runs / 20)
 //         + school bonus (shares the school of the deck's grafts) - dead-pick penalty (cards the audit measured as rarely played).
 // Gold budget: keep GW_RESERVE gold back for junk removal; at most GW_MAXBUY cards per run.
-const AUDIT_DELTA = { x_adrenal: 20, m_restraints: 46, m_secondwind: 57, m_desperate: 48, o_liquidate: 44, o_tip_the_usher: 36, o_golden_parachute: 22, w_bare_wire: 40, w_capacitor_bank: 35, m_thread_stitchup: 28, w_thread_fusewire: 19,
-  w_dynamo: -15, w_flashpoint: -20, m_bloodrite: -32, m_hammered_plate: -9, m_laybare: -15, o_gilded_age: -27, o_dividend: -20, o_tithe_ledger: -28, o_pawn_ticket: -4, o_cross_listing: -23, m_swab: -24, w_conductive_thread: -21, w_tinder_stack: -19,
-  w_graft_furnace: -19, o_market_crash: -43, o_audit: -30, w_chain_reaction: -25, x_resolve: -40, x_flatline: -30, o_reprint: -15, w_pyre_dance: 7, o_levy: 9, o_second_helping: 5 };
+// forced-card sweep (tools/graftwork_cardsweep.mjs, 2 copies in the starter deck, 200 runs, A0, no-pick bot): wins versus control, mean over heroes that can use the card
+const AUDIT_DELTA = { o_thread_doublehem: 63, m_secondwind: 58, m_restraints: 53, o_tip_the_usher: 52, w_burnout: 47, m_stitchwork: 45, x_plate: 45, m_desperate: 43, o_liquidate: 43, m_cauterize: 42, m_hemostatic_snip: 38, o_golden_parachute: 36, m_exsang: 35, w_bare_wire: 34, m_thread_stitchup: 33, w_wax_drip: 33, w_quick_flick: 29, o_mirror_sale: 29, x_adrenal: 28, m_hacksaw: 25, w_wax_armor: 25, m_mirrored_wound: 24, w_hot_seam: 24, m_flick: 23, m_blank_chart: 23, o_thread_sparespool: 23, m_thread_longsuture: 22, w_ember_toss: 22, o_market_crash: 48, w_blowtorch: 19, w_thread_trail: 18, o_pocket_change: 15, m_tailored_cut: 14, m_thread_bloodline: 14, w_pyre_dance: 14, o_double_bill: 14, w_thread_fusewire: 13, o_heirloom: 13, m_triage: 12, x_lunge: 11, o_second_helping: 10, w_capacitor_bank: 9, m_epidemic: 8, o_bulk_order: 8, o_clean_book: 8, w_thread_arcstitch: 7, m_stitch_count: 6, m_light_packing: 6, w_spark_gap: 6, o_levy: 6, o_bidding_war: 6, m_suture: 5, x_thread_basting: 5, w_earth_wire: 5, o_standing_order: 4, x_barbs: 3, w_scald: 3, w_fuse_bridge: 3, x_recall: 2, w_static_seam: 2, m_biohazard: 1, m_fever_chart: 1, w_leather_apron: 1, w_tempered_wick: 1, m_hemostat: 0, m_stress_test: -1, m_hammered_plate: -1, x_hold: -1, o_ledger_line: -1, m_scabover: -2, w_overcurrent: -2, o_loose_change: -2, m_lancet: -3, x_second: -3, x_thread_snip: -3, o_pawn_ticket: -3, o_patronage: -3, m_swab: -4, x_cleave: -4, w_tithe_pyre: -4, o_hostile_takeover: -4, w_arc_flash: -5, o_choir_loft: -5, m_flakeoff: -6, m_scrap_splint: -6, m_sweep: -7, m_thread_rustseam: -7, w_cinder_rain: -7, m_sewn_shut: -8, x_thread_cross: -8, w_slow_match: -8, w_dynamo: -8, o_overdraft: -8, m_scarpower: -9, x_gauze: -9, x_poise: -9, w_static_cling: -9, w_thread_conflagration: -9, o_triple_threat: -9, o_layaway: -10, o_dividend: -10, x_shrug: -11, o_heavy_purse: -11, x_jab: -12, o_reprint: -12, o_cross_listing: -12, m_hemorrhage: -13, w_conductive_thread: -13, o_hardened_purse: -13, w_backdraft: -14, m_drawblood: -15, x_brace: -15, w_tinder_stack: -15, x_haymaker: -16, x_thread_shears: -16, o_tithe_ledger: -16, m_reopen: -18, m_laybare: -18, o_gilded_age: -18, m_vivisect: -19, x_thread_tieoff: -19, o_browse: -19, x_thread_unpick: -21, m_bloodrite: -22, w_substation: -22, m_anticoag: -23, w_ringing_ears: -23, o_receipt: -24, o_inventory: -24, o_audit: -2, x_thread_pinking: -25, w_graft_furnace: 9, m_rustplate: -27, x_sweep: -27, x_flatline: 6, w_discharge: -28, m_amputate: -29, w_powder_keg: -30, w_wildfire_spread: -31, w_pilot_light: -31, o_overbooked: -31, o_keepsake: -32, w_flashpoint: -33, x_resolve: 30, x_thread_loom: -35, o_prepaid: -35, o_thread_embroidered: -35, w_wildfire: -37, w_chain_reaction: -7, o_thread_tapestry: -60 };
 const PICK_ON = () => (process.env.GW_PICK ?? '1') !== '0';
 export function auditDelta(id) { return AUDIT_DELTA[id] || 0; }
 export function strongShopCards(run, shop, pol) {
-  const margin = +(process.env.GW_MARGIN ?? 1.0), maxBuy = +(process.env.GW_MAXBUY ?? 3), reserve = +(process.env.GW_RESERVE ?? 0);
+  const margin = +(process.env.GW_MARGIN ?? 1.0), maxBuy = +(process.env.GW_MAXBUY ?? 4), reserve = +(process.env.GW_RESERVE ?? 0);
   const real = run.deck.filter((x) => CARDS[x.id].type !== 'junk');
   const vals = real.map((x) => cardValueStatic(x)).sort((x, y) => x - y);
   const med = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
@@ -154,7 +153,7 @@ export function strongShopCards(run, shop, pol) {
   const junkRemoval = run.deck.some((x) => CARDS[x.id].type === 'junk') ? RUN.servicePrice(run, 'remove') : 0;
   run.flags.gwBought = run.flags.gwBought || 0;
   for (let n = 0; n < 4 && run.flags.gwBought < maxBuy; n++) {
-    let best = -1, bs = +(process.env.GW_THRESH ?? 2);
+    let best = -1, bs = +(process.env.GW_THRESH ?? 3);
     shop.cards.forEach((k, i) => {
       if (k.sold || run.gold - k.price < Math.max(reserve, junkRemoval)) return;
       const def = CARDS[k.id];
@@ -172,7 +171,7 @@ function cardValueStatic(inst) { return fxValueOf(inst); }
 
 const STRONG = { maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft, forge: strongForge };
 POLICIES.strongNoPick = { ...STRONG, buyCards: +(process.env.GW_BUY ?? 0) };
-POLICIES.strongPick = { ...STRONG, buyCards: 1, shopCards: strongShopCards };
+POLICIES.strongPick = { ...STRONG, buyCards: 1, shopCards: strongShopCards, cardsFirst: (process.env.GW_FIRST ?? '1') === '1' };
 POLICIES.strong = PICK_ON() ? POLICIES.strongPick : POLICIES.strongNoPick;
 
 if (process.argv[1] && process.argv[1].endsWith('graftwork_strong.mjs')) {

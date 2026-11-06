@@ -18,8 +18,8 @@ export const CARDS_ANY = [
   C('x_barbs', 'Barbed Sutures', 'power', 1, 'uncommon', 'self', 'They pull both ways.', [{ op: 'status', s: 'thorns', n: 3, to: 'self' }], { fx: [{ op: 'status', s: 'thorns', n: 5, to: 'self' }] }),
   C('x_poise', 'Steady Hands', 'power', 1, 'uncommon', 'self', 'Caffeine, mostly.', [{ op: 'status', s: 'dexterity', n: 1, to: 'self' }], { fx: [{ op: 'status', s: 'dexterity', n: 2, to: 'self' }] }),
   // rare
-  C('x_resolve', 'Resolve', 'power', 2, 'rare', 'self', 'A prescription of spite.', [{ op: 'status', s: 'ritual', n: 1, to: 'self' }], { fx: [{ op: 'status', s: 'ritual', n: 2, to: 'self' }] }),
+  C('x_resolve', 'Resolve', 'power', 1, 'rare', 'self', 'A prescription of spite.', [{ op: 'status', s: 'ritual', n: 1, to: 'self' }, { op: 'block', n: 5 }], { fx: [{ op: 'status', s: 'ritual', n: 2, to: 'self' }, { op: 'block', n: 7 }] }),
   C('x_plate', 'Surgical Plating', 'power', 2, 'rare', 'self', 'Installed without anaesthetic.', [{ op: 'status', s: 'plated', n: 4, to: 'self' }, { op: 'status', s: 'regen', n: 2, to: 'self' }], { fx: [{ op: 'status', s: 'plated', n: 6, to: 'self' }, { op: 'status', s: 'regen', n: 3, to: 'self' }] }),
-  C('x_flatline', 'Flatline', 'skill', 2, 'rare', 'self', 'Briefly nothing can touch you.', [{ op: 'status', s: 'intangible', n: 1, to: 'self' }], { fx: [{ op: 'status', s: 'intangible', n: 1, to: 'self' }], cost: 1 }, { exhaust: true }),
+  C('x_flatline', 'Flatline', 'skill', 1, 'rare', 'self', 'Briefly nothing can touch you.', [{ op: 'status', s: 'intangible', n: 1, to: 'self' }, { op: 'block', n: 8 }], { fx: [{ op: 'status', s: 'intangible', n: 1, to: 'self' }, { op: 'block', n: 10 }], cost: 0 }, { exhaust: true, retain: true }),
   C('x_adrenal', 'Adrenaline Shot', 'skill', 0, 'rare', 'self', 'Side effects include everything.', [{ op: 'energy', n: 1 }, { op: 'draw', n: 1 }], { fx: [{ op: 'energy', n: 2 }, { op: 'draw', n: 1 }] }, { exhaust: true }),
 ].map((c) => (SCHOOL[c.id] ? { ...c, school: SCHOOL[c.id] } : c));

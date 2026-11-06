@@ -1,6 +1,6 @@
 # Card audit (O2): deck-building quality per hero
 
-Method. The strong bot never picks or buys cards (`buyCards` 0), so a pick counter would read zero for every non-starter. Instead each non-starter card (hero and neutral) was forced into the starter deck as 2 copies and played by the strong bot at A0: 200 runs per card per hero (same seeds for every card, a no-card control on those seeds), 300 runs on a second seed set to confirm outliers. Columns: wins and floors versus the control, plays per run. Wins noise is about +-15 per 200 runs, floors about +-1. Setup and payoff cards read low in a starter deck (power cards with no immediate effect, X-cost Charge, detonators with no Burn to detonate), so a low number means "needs support or lacks a floor", not "bad".
+Method. The no-pick strong bot (`POLICIES.strongNoPick`) never buys cards, so a pick counter would read zero for every non-starter. Instead each non-starter card (hero and neutral) was forced into the starter deck as 2 copies and played by the strong bot at A0: 200 runs per card per hero (same seeds for every card, a no-card control on those seeds), 300 runs on a second seed set to confirm outliers. Columns: wins and floors versus the control, plays per run. Wins noise is about +-15 per 200 runs, floors about +-1. Setup and payoff cards read low in a starter deck (power cards with no immediate effect, X-cost Charge, detonators with no Burn to detonate), so a low number means "needs support or lacks a floor", not "bad".
 
 Card ids are save keys (`deserializeRun` does no validation), so no id was removed: a redundant card was **re-themed under the same id** (new name, school, text, art).
 
@@ -60,3 +60,33 @@ Still low and left alone on purpose (setup or payoff cards that need their arche
 ## Gate
 
 Strong bot at A0 (100 runs per hero) is identical before and after, because it never acquires the changed cards: Marrow 24%, Wick 30%, Odile 27% wins (mean 27%), Act 1 clear 96 / 99 / 94 percent. A fresh 300-run read after the edits: 28 / 39 / 34 percent wins, Act 1 clear 94 / 99 / 94 percent.
+
+## Round 2: card pick policy and support-card rework
+
+### Strong bot pick policy (`GW_PICK`, default on)
+Cards only enter a run through the shop, so "pick" means a shop buy. `POLICIES.strongPick` (the default `POLICIES.strong`; `GW_PICK=0` or `POLICIES.strongNoPick` is the baseline) scores each shelf card as: static value over the deck median (sim `cardV`) + the forced-sweep delta from `tools/graftwork_cardsweep.mjs` (`AUDIT_DELTA`, wins per 200 runs divided by 20) + school bonus (+1.5 if it shares the school of the deck's grafts, +0.7 for a second school) - 1 for a Power in a deck under 9 cards. It buys the best card only if the score is >= 3 (`GW_THRESH`, the margin over skipping), at most 4 cards per run (`GW_MAXBUY`), before relics (`GW_FIRST`), never dipping below the price of a junk removal. Tuning notes: buying more, or at a lower threshold, hurts (a 6-card cap scored 28% against a 31% baseline; the deck dilutes its grafted stars), and the buy-after-relics order gave only +2.
+
+Pick-on versus pick-off, 900 runs per hero (150 runs per hero in brackets, noise +-4 per hero at 150), after the rework below:
+
+| | Marrow | Wick | Odile | mean |
+|---|---|---|---|---|
+| A0 off | 29.4% (34.7) | 31.1% (28.0) | 32.7% (32.7) | 31.1% (31.8) |
+| A0 on | 33.6% (33.3) | 32.6% (33.3) | 38.2% (46.0) | 34.8% (37.6) |
+| A5 off | 11.8% (9.3) | 14.3% (12.0) | 14.7% (20.0) | 13.6% (13.8) |
+| A5 on | 17.1% (13.3) | 13.9% (16.7) | 19.7% (20.7) | 16.9% (16.9) |
+| buys per run (A0) | 1.8 | 2.0 | 1.7 | |
+
+Picking is worth +3.7 points at A0 and +3.3 at A5 (target 3 to 10), floors +0.7. Odile gains most (+5.5) because Market Crash is her best buy. Wick at A5 is flat.
+
+### Rework (data only, ids kept), forced sweep: 2 copies, 200 runs, A0, no-pick bot, wins versus control (Marrow / Wick / Odile where the card exists)
+
+| card | role | change | before | after |
+|---|---|---|---|---|
+| x_resolve | neutral scaling power | cost 1 (was 2), Ritual 1 and Block 5 (up: Ritual 2, Block 7) | -28 / -42 / -33 | +36 / +20 / +35 |
+| x_flatline | neutral boss answer | cost 1, Intangible and Block 8, exhaust, retain (up: cost 0, Block 10) | -20 / -19 / -46 | +7 / +17 / -7 |
+| w_chain_reaction | Wick finisher | cost 1; lights 5 Burn on all, detonates, then 5 damage to all (up: 6 and 7). Self-fuelled, bigger with stacks | -38 | -7 |
+| w_graft_furnace | Wick engine | also 3 Burn on all now; Smolder 2 + 0.34 per graft (max 6) (up: 4 Burn, 3 base, max 7) | -25 | +9 |
+| o_market_crash | Odile gold to tempo | cost 0, exhaust; with 15 gold pay it for 2 energy and draw 3, else draw 1 and Block 6 (up 12 gold, draw 4, else draw 2 and Block 8) | +20 | +48 |
+| o_audit | Odile cycling | draw 3, discard 1, Block 7, retain, no exhaust (up adds 4 gold); was draw 4 discard 2 exhaust | -24 | -2 |
+
+Floors versus control after: all within -1.0 to +2.3 (Market Crash +2.2 is the high end; it is the only reworked card above a normal good-card range, Odile's gold-heavy builds can afford it, watch it). The earlier -43 read for Market Crash was on the old spec; the full unmodified sweep before this round is the "before" column. A fresh full sweep of every card (all heroes plus the neutral pool) lives in the same format via `node tools/graftwork_cardsweep.mjs <hero> 200`.

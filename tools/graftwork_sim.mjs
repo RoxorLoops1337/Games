@@ -322,6 +322,7 @@ function pickEventCard(run, ch, eligible) {
 
 function doShop(run, pol, log) {
   const shop = run.pending; log.shops++;
+  if (pol.buyCards && pol.shopCards && pol.cardsFirst) pol.shopCards(run, shop, pol);
   // 1) best relic we can afford (relics are the main gold sink)
   let guard = 0;
   while (guard++ < 6) {
@@ -330,7 +331,7 @@ function doShop(run, pol, log) {
     RUN.shopBuy(run, 'relic', opts[0].i);
   }
   // 1b) strong policy: buy cards clearly better than the deck's median card (gold is otherwise left unspent)
-  if (pol.buyCards && pol.shopCards) pol.shopCards(run, shop, pol);
+  if (pol.buyCards && pol.shopCards) { if (!pol.cardsFirst) pol.shopCards(run, shop, pol); }
   else if (pol.buyCards) {
     const vals = run.deck.filter((x) => CARDS[x.id].type !== 'junk').map((x) => cardV(x)).sort((x, y) => x - y);
     const med = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
