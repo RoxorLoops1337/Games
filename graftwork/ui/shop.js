@@ -248,6 +248,7 @@ function patchAt(app, graft, bx, by, w, h, rot, al) {
 function dimBg(app, k) { const g = app.ctx; g.save(); g.fillStyle = 'rgba(6,4,3,' + (0.97 * k) + ')'; g.fillRect(0, 0, 1280, 720); g.restore(); }
 
 export function drawAnim(app, a, fx) {
+  app.reg('shop-anim', 0, 0, 1280, 720, { overlay: true });
   const g = app.ctx, k = clamp(a.t / a.dur, 0, 1);
   dimBg(app, 0.9 * clamp(k * 6, 0, 1) * (k > 0.92 ? (1 - k) / 0.08 : 1));
   if (a.kind === 'attach') {

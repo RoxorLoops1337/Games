@@ -269,6 +269,7 @@ export default {
     let ms = mk(4); const tot = (a) => a.reduce((n, m) => n + m.h + 10, 0);
     if (tot(ms) > room) ms = mk(2);
     if (tot(ms) > room) ms = mk(1);
+    const bare = tot(ms) > room; if (bare) ms = mk(0); // no room: labels only, the description moves into the hover tooltip
     choices.forEach((c, idx) => {
       const sub = ms[idx].sub;
       const h = ms[idx].h;
@@ -286,7 +287,7 @@ export default {
       sub.forEach((ln, kk) => app.text(ln, x + 36, y + Math.round(42 * k * 0.9) + kk * Math.round(19 * k), { size: 15, ui: true, color: c.ok ? 'rgba(43,30,26,.8)' : 'rgba(43,30,26,.4)' }));
       if (!c.ok) app.text(this.reasonFor(run, c, ev), x + 36, y + h - Math.round(22 * k), { size: 14, maxW: w - 50, ui: true, bold: true, color: 'rgba(150,40,50,.85)' });
       else if (c.pick === 'card') app.text('Choose a card', x + w - 14, y + 14, { size: 13, ui: true, italic: true, align: 'right', color: 'rgba(43,30,26,.6)' });
-      if (over) app.cursor = 'pointer';
+      if (over) { app.cursor = 'pointer'; if (bare && c.text) app.tooltip(c.label, c.text); }
       let fire = false;
       if (c.ok && !this.picker && !this.busy) {
         if (over && mouse.released && mouse.pressStart && app.inRect(x, y, w, h)) { fire = true; if (app.onClick) app.onClick(); }

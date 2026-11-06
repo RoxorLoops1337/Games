@@ -229,6 +229,7 @@ function updateForgeAnim(app, a, dt) {
   return a.t >= a.dur;
 }
 function drawForgeAnim(app, a) {
+  app.reg('forge-anim', 0, 0, 1280, 720, { overlay: true });
   const g = app.ctx, k = clamp(a.t / a.dur, 0, 1);
   if (['attach', 'strip', 'move', 'burn'].includes(a.kind)) return drawAnim(app, a, S.fx);
   g.save(); g.fillStyle = `rgba(8,4,2,${0.96 * clamp(k * 8, 0, 1) * (k > 0.94 ? (1 - k) / 0.06 : 1)})`; g.fillRect(0, 0, 1280, 720); g.restore();
