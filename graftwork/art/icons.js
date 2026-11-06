@@ -16,8 +16,10 @@ function litGrad(c) { let g = _lit.get(c); if (!g) { g = c.createLinearGradient(
 function hatchLines(c, a = 0.3, from = 0.1) {
   if (PX < 6) return;
   const pitch = Math.max(0.17, 2.6 / PX);
-  c.beginPath(); for (let s = from; s < 1.5; s += pitch) { c.moveTo(s / 2 - 1.2, s / 2 + 1.2); c.lineTo(s / 2 + 1.2, s / 2 - 1.2); }
-  c.lineWidth = Math.min(0.05, Math.max(0.025, 0.9 / PX)); c.strokeStyle = `rgba(43,30,26,${a})`; c.lineCap = 'butt'; c.stroke();
+  // Path2D keeps the caller's current path intact (glyphs often stroke the same path after fs)
+  const hp = typeof Path2D !== 'undefined' ? new Path2D() : null; const t = hp || c; if (!hp) c.beginPath();
+  for (let s = from; s < 1.5; s += pitch) { t.moveTo(s / 2 - 1.2, s / 2 + 1.2); t.lineTo(s / 2 + 1.2, s / 2 - 1.2); }
+  c.lineWidth = Math.min(0.05, Math.max(0.025, 0.9 / PX)); c.strokeStyle = `rgba(43,30,26,${a})`; c.lineCap = 'butt'; if (hp) c.stroke(hp); else c.stroke();
 }
 // pixel-space version for discs centred on the origin
 function hatchDisc(c, rad, a = 0.3) {
