@@ -6,7 +6,7 @@ import { drawBackground } from '../art/backgrounds.js';
 import { drawCard, CARD_W, CARD_H } from '../art/cards.js';
 import { drawHeart, drawCoin } from '../art/icons.js';
 import * as RUN from '../engine/run.js';
-import { cardSpec, canGraft, strainInfo } from '../engine/cards.js';
+import { cardSpec, canGraft, strainInfo, canTemper, instWeight, fusedWeight, FUSE_CAP } from '../engine/cards.js';
 import { CARDS, GRAFTS } from '../data/index.js';
 import { drawGauge, gaugeLabel, drawModal, openCards, openGraftChoice, makeAnim, updateAnim, drawAnim, infoFromDeck, stripDeck, toastDraw, cardName } from './shop.js';
 
@@ -18,19 +18,27 @@ const OPTS = [
   { id: 'rest', name: 'Rest', desc: 'Lie down by the coals. Heal 30% of your max HP.' },
   { id: 'expand', name: 'Expand', desc: 'Let out the seams. +1 Budget for the rest of the run.' },
   { id: 'refine', name: 'Refine', desc: 'Hammer one card into its upgraded form.' },
+  { id: 'temper', name: 'Temper', short: 'Fuse a card\'s patches into it for good. The slots open up again.', desc: 'Hammer a card\'s patches into the card for good. Their boons and prices stay, the patches come off, and the slots open up for new grafts. Tempered grafts weigh 1 less, and an Overload loses its x1.5 and its Shatter risk.' },
   { id: 'strip', name: 'Strip', desc: 'Pull one graft off a card. The card stays, the boon is lost, the price goes too.' },
   { id: 'reforge', name: 'Reforge', desc: 'Lift a graft off one card and stitch it onto another.' },
 ];
-const OW = 214, OH = 350, OGAP = 22, OX0 = (1280 - (5 * OW + 4 * OGAP)) / 2, OY = 140;
+const OW = 182, OH = 350, OGAP = 16, OX0 = (1280 - (OPTS.length * OW + (OPTS.length - 1) * OGAP)) / 2, OY = 140;
+// Centre x of option i (tests click here).
+export const optionCenterX = (i) => OX0 + i * (OW + OGAP) + OW / 2;
+export const optionIndex = (id) => OPTS.findIndex((o) => o.id === id);
 
 const allowed = (run) => 1 + RUN.perkN(run, 'forgeExtra');
 const upgradable = (run) => run.deck.filter((i) => !i.up && CARDS[i.id].up && CARDS[i.id].type !== 'junk');
 const grafted = (run) => run.deck.filter((i) => i.grafts.length);
+const temperable = (run) => run.deck.filter(canTemper);
+const temperedOf = (inst) => ({ ...inst, fused: [...(inst.fused || []), ...inst.grafts], grafts: [] });
+const temperDeck = (run, uid) => run.deck.map((i) => (i.uid === uid ? temperedOf(i) : i));
 const movable = (inst, run) => inst.grafts.some((gid) => run.deck.some((d) => d !== inst && canGraft(d, gid)));
 const reforgeSources = (run) => grafted(run).filter((i) => movable(i, run));
 
 function reasonFor(run, id) {
   if (id === 'refine' && !upgradable(run).length) return 'Every card here is already refined.';
+  if (id === 'temper' && !temperable(run).length) return grafted(run).length ? `A card can hold at most ${FUSE_CAP} tempered grafts.` : 'No card carries a patch to hammer.';
   if (id === 'strip' && !grafted(run).length) return 'No card carries a graft.';
   if (id === 'reforge') {
     if (!grafted(run).length) return 'No card carries a graft.';
@@ -42,6 +50,7 @@ function detailFor(run, id) {
   if (id === 'rest') { const h = RUN.forgeHeal(run), to = Math.min(run.maxHp, run.hp + h); return { t: `HP ${run.hp} to ${to}  (+${to - run.hp})`, c: COL.good }; }
   if (id === 'expand') { const i = strainInfo(run); return { t: `Budget ${i.budget} to ${i.budget + 1}`, c: COL.lamp }; }
   if (id === 'refine') return { t: `${upgradable(run).length} cards can be refined`, c: COL.vellum };
+  if (id === 'temper') return { t: `${temperable(run).length} cards can be tempered`, c: COL.vellum };
   if (id === 'strip') return { t: `${grafted(run).length} cards carry grafts`, c: COL.vellum };
   return { t: `${reforgeSources(run).length} cards can give a graft`, c: COL.vellum };
 }
@@ -62,6 +71,11 @@ function drawOptIcon(g, id, cx, cy, k, t) {
   } else if (id === 'refine') {
     g.fillStyle = '#2b2b30'; g.beginPath(); g.moveTo(-50, 34); g.lineTo(50, 34); g.lineTo(38, 18); g.lineTo(54, 6); g.lineTo(54, -8); g.lineTo(-30, -8); g.lineTo(-52, 10); g.lineTo(-30, 14); g.closePath(); g.fill(); g.strokeStyle = '#6a6a72'; g.lineWidth = 2; g.stroke();
     g.save(); g.translate(-10, -14); g.rotate(-0.9 + Math.sin(t * 5) * 0.25 * k); g.fillStyle = '#7a5a3a'; g.fillRect(-4, -52, 8, 56); g.fillStyle = '#9aa3a8'; g.fillRect(-18, -66, 36, 18); g.restore();
+  } else if (id === 'temper') {
+    g.fillStyle = '#2b2b30'; g.fillRect(-52, 30, 104, 12);
+    g.fillStyle = '#b89a3a'; g.fillRect(-36, -4, 72, 36); g.strokeStyle = '#2a1e1a'; g.lineWidth = 2.5; g.setLineDash([5, 4]); g.strokeRect(-31, 1, 62, 26); g.setLineDash([]);
+    for (const rx of [-18, 0, 18]) { g.fillStyle = '#e8dcc4'; g.beginPath(); g.arc(rx, 14, 5, 0, 6.283); g.fill(); g.strokeStyle = '#2a1e1a'; g.lineWidth = 1.5; g.stroke(); }
+    g.save(); g.translate(26, -34); g.rotate(-0.7 + Math.sin(t * 5) * 0.25 * k); g.fillStyle = '#7a5a3a'; g.fillRect(-4, -4, 8, 58); g.fillStyle = '#9aa0a6'; g.fillRect(-20, -16, 40, 18); g.restore();
   } else if (id === 'strip') {
     g.strokeStyle = '#d8dde0'; g.lineWidth = 4; g.beginPath(); g.moveTo(-36, 40); g.lineTo(34, -44); g.stroke(); g.lineWidth = 2; g.beginPath(); g.arc(37, -48, 5, 0, 6.28); g.stroke();
     g.strokeStyle = COL.scar; g.lineWidth = 3; g.beginPath(); g.moveTo(37, -44);
@@ -87,7 +101,7 @@ function drawOptionCard(app, run, i, o, over, k, disabledWhy, usedUp, shk) {
   g.save(); app.rr(x + 8, y + 8, OW - 16, OH - 16, 10); g.lineWidth = 1; g.strokeStyle = dim ? 'rgba(232,220,196,.1)' : 'rgba(201,162,39,.3)'; g.setLineDash([5, 4]); g.stroke(); g.restore();
   g.globalAlpha = dim ? 0.4 : 1; drawOptIcon(g, o.id, x + OW / 2, y + 88, k, app.t); g.globalAlpha = 1;
   app.text(o.name, x + OW / 2, y + 150, { size: 30, bold: true, align: 'center', color: dim ? 'rgba(232,220,196,.4)' : COL.lamp, shadow: !dim });
-  app.text(o.desc, x + OW / 2, y + 196, { size: 15, ui: true, align: 'center', maxW: OW - 34, lineH: 19, color: dim ? 'rgba(232,220,196,.35)' : COL.vellum });
+  app.text(o.short || o.desc, x + OW / 2, y + 196, { size: 15, ui: true, align: 'center', maxW: OW - 34, lineH: 19, color: dim ? 'rgba(232,220,196,.35)' : COL.vellum });
   if (disabledWhy) app.text(disabledWhy, x + OW / 2, y + OH - 64, { size: 14, ui: true, align: 'center', maxW: OW - 30, lineH: 17, color: COL.bad, bold: true });
   else if (!usedUp) { const d = detailFor(run, o.id); app.text(d.t, x + OW / 2, y + OH - 46, { size: 15, ui: true, bold: true, align: 'center', maxW: OW - 24, color: d.c }); }
   g.restore();
@@ -122,6 +136,28 @@ function pickRefine(app) {
     compare: (inst) => cardSpec({ ...inst, up: 1 }),
     info: (inst) => { const i = strainInfo(run); return { before: i, after: i, lines: [{ t: `${CARDS[inst.id].name} becomes ${CARDS[inst.id].name}+. Grafts stay as they are.`, c: COL.vellum }] }; },
     onPick: (inst) => startRefine(app, inst),
+  });
+}
+function startTemper(app, inst) {
+  const run = app.shared.run, before = cardSpec(inst), names = inst.grafts.map((g) => GRAFTS[g].name);
+  const r = RUN.forgeAct(run, 'temper', inst.uid); if (!r.ok) return fail(app);
+  S.anim = { kind: 'refine', t: 0, dur: 2.6, before, after: cardSpec(inst), struck: false };
+  S.log.push(`Tempered ${before.name}: ${names.join(' and ')} are part of the card now.`);
+}
+function pickTemper(app) {
+  const run = app.shared.run;
+  openCards(S.modal, {
+    title: 'Temper which card?', sub: 'The hammer fuses its patches into the card. Boons and prices stay for good, and the patch slots open up again.', cards: temperable(run),
+    compare: (inst) => cardSpec(temperedOf(inst)),
+    info: (inst) => {
+      const w0 = instWeight(inst), w1 = instWeight(temperedOf(inst)), lines = [];
+      lines.push({ t: `Fused for good: ${inst.grafts.map((g) => GRAFTS[g].name).join(', ')}.`, c: COL.vellum });
+      lines.push({ t: w1 < w0 ? `Weight ${w0} to ${w1}: tempered grafts weigh 1 less.` : `Weight stays ${w0}: tempered grafts weigh 1 less, but never under 1.`, c: w1 < w0 ? COL.good : COL.vellum });
+      lines.push({ t: `Patch slots free again: ${2}.`, c: COL.vellum });
+      if (inst.grafts.length > 2) lines.push({ t: 'No longer an Overload: the x1.5 and the Shatter risk are gone.', c: COL.lamp });
+      return infoFromDeck(run, temperDeck(run, inst.uid), lines);
+    },
+    onPick: (inst) => startTemper(app, inst),
   });
 }
 function pickStrip(app) {
@@ -282,7 +318,7 @@ export default {
         if (why) app.tooltip(o.name + ' (unavailable)', why, { color: COL.bad }); else if (usedUp) app.tooltip(o.name, 'You have used your Forge choice.'); else app.tooltip(o.name, o.desc);
         if (app.clicked(x, OY, OW, OH)) {
           if (dim) { sfx(app, 'error'); S.shakeI = i; S.shakeT = 0.4; S.fx.shake(0.25); if (why) { S.toast = why; S.toastT = 1.8; } }
-          else { sfx(app, 'uiClick'); ({ rest: startRest, expand: startExpand, refine: pickRefine, strip: pickStrip, reforge: pickReforge })[o.id](app); }
+          else { sfx(app, 'uiClick'); ({ rest: startRest, expand: startExpand, refine: pickRefine, temper: pickTemper, strip: pickStrip, reforge: pickReforge })[o.id](app); }
         }
       }
     });

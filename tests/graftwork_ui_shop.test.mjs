@@ -5,7 +5,7 @@ import * as RUN from '../graftwork/engine/run.js';
 import { canGraft } from '../graftwork/engine/cards.js';
 import { GRAFTS, HEROES } from '../graftwork/data/index.js';
 import shop from '../graftwork/ui/shop.js';
-import forge from '../graftwork/ui/forge.js';
+import forge, { optionCenterX, optionIndex } from '../graftwork/ui/forge.js';
 
 const sfxLog = [];
 async function setup(hero, phase) {
@@ -73,15 +73,15 @@ for (const hero of Object.keys(HEROES)) {
     assert.equal(run.phase, 'map'); assert.equal(run.pending, null);
   }
   // ---------------- forge ----------------
-  const optX = (i) => 61 + i * 236 + 107;
-  for (const opt of ['rest', 'expand', 'refine', 'strip', 'reforge']) {
+  const optX = (i) => optionCenterX(i);
+  for (const opt of ['rest', 'expand', 'refine', 'temper', 'strip', 'reforge']) {
     const { run, app } = await setup(hero, 'forge');
     sewTwo(run);
     run.hp = run.maxHp - 25;
-    const i = ['rest', 'expand', 'refine', 'strip', 'reforge'].indexOf(opt);
+    const i = optionIndex(opt), fusedN = () => run.deck.reduce((n, c) => n + (c.fused || []).length, 0);
     const hp = run.hp, bb = run.budgetBonus, ups = run.deck.filter((c) => c.up).length, g0 = nGrafts(run), uids = run.deck.map((c) => c.grafts.slice());
     click(app, optX(i), 300); frames(app, 15);
-    if (opt === 'refine') { click(app, ...FIRST); frames(app, 5); }
+    if (opt === 'refine' || opt === 'temper') { click(app, ...FIRST); frames(app, 5); }
     if (opt === 'strip') { click(app, ...FIRST); frames(app, 15); click(app, ...GRAFT_ROW); }
     if (opt === 'reforge') { click(app, ...FIRST); frames(app, 15); click(app, ...GRAFT_ROW); frames(app, 15); click(app, ...FIRST); }
     settle(app);
@@ -89,6 +89,7 @@ for (const hero of Object.keys(HEROES)) {
     if (opt === 'rest') assert.equal(run.hp, Math.min(run.maxHp, hp + RUN.forgeHeal(run))); // Rest heals 30% of max HP but never past max
     if (opt === 'expand') assert.equal(run.budgetBonus, bb + 1);
     if (opt === 'refine') assert.equal(run.deck.filter((c) => c.up).length, ups + 1);
+    if (opt === 'temper') { assert.equal(nGrafts(run), g0 - 1, 'the patch left the card'); assert.equal(fusedN(), 1, 'and became part of it'); }
     if (opt === 'strip') assert.equal(nGrafts(run), g0 - 1);
     if (opt === 'reforge') { assert.equal(nGrafts(run), g0); assert.notDeepEqual(run.deck.map((c) => c.grafts), uids); }
     click(app, 640, 646); frames(app, 5);

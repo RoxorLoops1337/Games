@@ -3,7 +3,7 @@ import { GRAFTS, CARDS } from '../data/index.js';
 
 export function resonanceOf(run) {
   const counts = {};
-  for (const i of run.deck) for (const gid of i.grafts) { const s = GRAFTS[gid] && GRAFTS[gid].school; if (s) counts[s] = (counts[s] || 0) + 1; }
+  for (const i of run.deck) for (const gid of [...i.grafts, ...(i.fused || [])]) { const s = GRAFTS[gid] && GRAFTS[gid].school; if (s) counts[s] = (counts[s] || 0) + 1; }
   const tiers = {};
   for (const s of Object.keys(counts)) tiers[s] = counts[s] >= 6 ? 6 : counts[s] >= 3 ? 3 : 0;
   return { counts, tiers };

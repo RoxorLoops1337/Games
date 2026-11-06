@@ -124,7 +124,13 @@ export function createApp(canvas, opts = {}) {
   };
   app.inRect = (x, y, w, h) => app.mouse.x >= x && app.mouse.x <= x + w && app.mouse.y >= y && app.mouse.y <= y + h && !app.blocked;
   app.hover = app.inRect;
-  app.clicked = (x, y, w, h) => app.mouse.released && app.mouse.pressStart && inBox(app.mouse.pressStart, x, y, w, h) && app.inRect(x, y, w, h);
+  // A click is used ONCE per frame: whoever claims it first (a button) consumes it, so a modal that opens on that click
+  // cannot also receive it and pick whatever card appeared under the pointer.
+  app.clicked = (x, y, w, h) => {
+    const hit = !!(app.mouse.released && app.mouse.pressStart && inBox(app.mouse.pressStart, x, y, w, h) && app.inRect(x, y, w, h));
+    if (hit) app.mouse.released = false;
+    return hit;
+  };
   function inBox(p, x, y, w, h) { return p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h; }
   // button: returns true on click. o: {fill, color, size, disabled, icon(ctx,x,y,w,h), sub, key, hot}
   app.button = (label, x, y, w, h, o = {}) => {

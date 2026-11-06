@@ -2,7 +2,7 @@
 // offer (the heart of the game), shop, forge, events, ascension, daily seed, endless loops, save/restore.
 import { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS, HEROES, SCHOOLS } from '../data/index.js';
 import { makeRng, hashSeed } from './rng.js';
-import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS } from './cards.js';
+import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper } from './cards.js';
 
 export const ACT_ROWS = { 1: 10, 2: 10, 3: 11 };
 export const POTION_SLOTS = 3;
@@ -394,7 +394,7 @@ export function stripGraft(run, uid, gid) {
   inst.grafts.splice(i, 1);
   return true;
 }
-// choice: 'rest' | 'expand' | 'refine' (a: uid) | 'strip' (a: uid, b: gid) | 'reforge' (a: fromUid, b: gid, c: toUid)
+// choice: 'rest' | 'expand' | 'refine' (a: uid) | 'temper' (a: uid) | 'strip' (a: uid, b: gid) | 'reforge' (a: fromUid, b: gid, c: toUid)
 export function forgeAct(run, choice, a, b, c) {
   const f = run.pending;
   if (!f || f.kind !== 'forge' || f.used >= 1 + perkN(run, 'forgeExtra')) return { ok: false };
@@ -402,6 +402,7 @@ export function forgeAct(run, choice, a, b, c) {
   if (choice === 'rest') { run.hp = Math.min(run.maxHp, run.hp + forgeHeal(run)); ok = true; }
   else if (choice === 'expand') { run.budgetBonus += 1; ok = true; }
   else if (choice === 'refine') { const i = findInst(run, a); if (i && !i.up && CARDS[i.id].up) { i.up = 1; ok = true; } }
+  else if (choice === 'temper') { const i = findInst(run, a); if (i && canTemper(i)) { ok = temper(i); if (ok) run.stats.tempered = (run.stats.tempered || 0) + 1; } }
   else if (choice === 'strip') ok = stripGraft(run, a, b);
   else if (choice === 'reforge') {
     const from = findInst(run, a), to = findInst(run, c);

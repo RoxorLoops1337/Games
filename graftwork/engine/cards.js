@@ -8,6 +8,7 @@ export const BASE_BUDGET = 6;
 const PRICE_KINDS = new Set(['selfHurt', 'jam', 'junk', 'selfStatus', 'drawdown', 'goldCost', 'maxHp']);
 export const MAX_GRAFTS_NORMAL = 2; // the 3rd graft is an Overload
 export const MAX_GRAFTS = 3;
+export const FUSE_CAP = 4; // tempered (permanent) grafts one card can hold
 export const OVERLOAD_MULT = 1.5;
 export const OVERLOAD_SHATTER = 0.25;
 export const TITHE_MULT = 0.75;
@@ -66,7 +67,7 @@ export function cardSpec(inst) {
   const s = {
     uid: inst.uid, id: base.id, name: base.name, hero: base.hero, rarity: base.rarity || 'common', type: base.type,
     cost: base.cost, target: base.target || 'enemy', flags: { ...(base.flags || {}) }, fx: cloneFx(base.fx || []),
-    repeat: 0, pct: 0, lifesteal: 0, price: emptyPrice(), custom: [], grafts: inst.grafts.slice(),
+    repeat: 0, pct: 0, lifesteal: 0, price: emptyPrice(), custom: [], grafts: inst.grafts.slice(), fused: (inst.fused || []).slice(),
     up: !!inst.up, school: base.school || null, art: base.art || base.id, flavor: base.flavor || '', text: base.text || null,
     overload: inst.grafts.length > MAX_GRAFTS_NORMAL,
   };
@@ -79,7 +80,8 @@ export function cardSpec(inst) {
     if (u.text !== undefined) s.text = u.text;
     s.name = base.name + '+';
   }
-  for (const gid of inst.grafts) {
+  // Tempered (fused) grafts apply first and for good; the live patches follow.
+  for (const gid of [...(inst.fused || []), ...inst.grafts]) {
     const g = GRAFTS[gid];
     if (!g) throw new Error('unknown graft ' + gid);
     const waived = inst.waived && inst.waived.includes(gid);
@@ -89,12 +91,15 @@ export function cardSpec(inst) {
   return s;
 }
 
+// Hammering settles a graft: it weighs 1 less (never under 1) once it is tempered.
+export function fusedWeight(gid) { return Math.max(1, graftWeight(gid) - 1); }
 export function graftWeight(gid) { return (GRAFTS[gid] && GRAFTS[gid].weight) || 1; }
 
 // Weight a card contributes to the deck. The 3rd graft (Overload) weighs +1 extra.
 export function instWeight(inst) {
   let w = 0;
   inst.grafts.forEach((gid, i) => { w += graftWeight(gid) + (i >= MAX_GRAFTS_NORMAL ? 1 : 0); });
+  for (const gid of inst.fused || []) w += fusedWeight(gid);
   return w;
 }
 
@@ -107,7 +112,7 @@ export function relicMod(run, key) {
 export function budgetOf(run) { return BASE_BUDGET + (run.budgetBonus | 0) + relicMod(run, 'budget'); }
 
 const BARE_TYPES = new Set(['attack', 'skill', 'power']);
-export function isBare(inst) { return inst.grafts.length === 0 && BARE_TYPES.has(CARDS[inst.id].type); }
+export function isBare(inst) { return inst.grafts.length === 0 && !(inst.fused && inst.fused.length) && BARE_TYPES.has(CARDS[inst.id].type); }
 
 // Strain = weight over Budget. Each Strain point lands one Tithe on a Bare card: the cheapest first, oldest first.
 // Overflow (Strain with no Bare card left to take it) becomes Backfire: grafted cards jam in hand.
@@ -136,10 +141,10 @@ export function canGraft(inst, gid) {
   const g = GRAFTS[gid];
   if (!g) return false;
   if (inst.grafts.length >= MAX_GRAFTS) return false;
-  if (inst.grafts.includes(gid)) return false;
+  if (inst.grafts.includes(gid) || (inst.fused || []).includes(gid)) return false;
   const base = CARDS[inst.id];
   if (base.type === 'junk' || base.type === 'curse') return false;
-  if (g.not && g.not.some((x) => inst.grafts.includes(x))) return false;
+  if (g.not && g.not.some((x) => inst.grafts.includes(x) || (inst.fused || []).includes(x))) return false;
   const spec = cardSpec(inst);
   if (g.types && !g.types.includes(spec.type)) return false;
   if (g.ok && !g.ok(spec, inst)) return false;
@@ -148,3 +153,17 @@ export function canGraft(inst, gid) {
 
 export function hasDmg(spec) { return spec.fx.some((o) => o.op === 'dmg'); }
 export function hasBlock(spec) { return spec.fx.some((o) => o.op === 'block'); }
+
+// ---- Temper: hammer a card's live patches into the card for good ----
+// The boons AND prices stay (a fused graft still shapes the card). The patch slots empty out, so new grafts fit again,
+// the card is no longer an Overload (no x1.5, no Shatter roll), and each fused graft weighs 1 less.
+export function canTemper(inst) {
+  const t = CARDS[inst.id] && CARDS[inst.id].type;
+  return !!t && t !== 'junk' && inst.grafts.length > 0 && (inst.fused || []).length + inst.grafts.length <= FUSE_CAP;
+}
+export function temper(inst) {
+  if (!canTemper(inst)) return false;
+  inst.fused = [...(inst.fused || []), ...inst.grafts];
+  inst.grafts = [];
+  return true;
+}
