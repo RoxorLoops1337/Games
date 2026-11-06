@@ -9,11 +9,11 @@ export const CB_MODES = ['deuteranopia', 'protanopia', 'tritanopia'];
 export const SCHOOLS = ['ember', 'echo', 'hoard', 'blood', 'rust', 'static', 'gilded'];
 export const SCHOOL_PATTERNS = { ember: 'diag', echo: 'waves', hoard: 'dots', blood: 'drops', rust: 'cross', static: 'zig', gilded: 'check' };
 export const BASE_SCHOOLS = { ember: '#E8571F', echo: '#6CC6D6', hoard: '#B8922A', blood: '#A3142F', rust: '#8F4A2A', static: '#D9E84A', gilded: '#EFD98F' };
-// Lightness-separated palettes (Okabe-Ito leaning). Shapes and patterns carry the rest.
+// Palettes found by searching for the best worst-case CIE76 distance between the seven schools under each simulated deficiency. Shapes and patterns carry the rest.
 export const PALETTES = {
-  deuteranopia: { ember: '#E69F00', echo: '#56B4E9', hoard: '#8A6D00', blood: '#4A2A7A', rust: '#B05A1A', static: '#F6F26B', gilded: '#FFFFFF' },
-  protanopia: { ember: '#F0B000', echo: '#5CB8F0', hoard: '#7A6200', blood: '#3A2A8A', rust: '#A86A2A', static: '#F8F47A', gilded: '#FFFFFF' },
-  tritanopia: { ember: '#E8571F', echo: '#2A8F7A', hoard: '#7A4A00', blood: '#B0125A', rust: '#5A3A2A', static: '#FFE9A0', gilded: '#F2F2F2' },
+  deuteranopia: { ember: '#791515', echo: '#3CA7DD', hoard: '#1FAD7E', blood: '#3C3CDD', rust: '#272768', static: '#3CDD3C', gilded: '#F4F4BE' },
+  protanopia: { ember: '#943838', echo: '#3CA7DD', hoard: '#587915', blood: '#713CDD', rust: '#272768', static: '#3CDD3C', gilded: '#EAEAC8' },
+  tritanopia: { ember: '#DD3C71', echo: '#155879', hoard: '#DDA73C', blood: '#A73CDD', rust: '#793715', static: '#3CDD3C', gilded: '#C8EAC8' },
 };
 
 // ---- colour maths (Machado 2009, severity 1.0, linear RGB) ----

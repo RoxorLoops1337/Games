@@ -9,7 +9,7 @@ import { schoolsOf } from './cards.js';
 import { fire, specOf } from './combat.js';
 import { RELICS } from '../data/index.js';
 
-export const SEAM_LEN_CAP = 5, SEAM_CUTS_TURN = 3, SEAM_DRAW_TURN = 3, SEAM_CHARGE_TURN = 4, SEAM_GOLD_COMBAT = 20;
+export const SEAM_LEN_CAP = 5, SEAM_CUTS_TURN = 3, SEAM_DRAW_TURN = 3, SEAM_CHARGE_TURN = 6, SEAM_GOLD_COMBAT = 20;
 const SCHOOL_NAME = { ember: 'Ember', echo: 'Echo', hoard: 'Hoard', blood: 'Blood', rust: 'Rust', static: 'Static', gilded: 'Gilded' };
 
 export function seamInit(c) {
@@ -67,13 +67,13 @@ function timesFor(c, topSchool, firstCut) {
 function payText(school, n) {
   const nm = SCHOOL_NAME[school] || school;
   switch (school) {
-    case 'ember': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: ${2 * n} Burn to all`;
+    case 'ember': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: ${3 * n} Burn to all`;
     case 'echo': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: ${Math.ceil(n / 2)} Echo`;
     case 'hoard': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: draw ${Math.floor(n / 2)}, retain 1`;
     case 'blood': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: heal ${2 * n}`;
     case 'rust': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: ${3 * n} Block, pierce per junk`;
-    case 'static': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: ${n} Charge`;
-    case 'gilded': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: ${2 * n} gold`;
+    case 'static': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: ${n} Charge, ${2 * n} damage to a random enemy`;
+    case 'gilded': return `${n} stitch${n > 1 ? 'es' : ''} ${nm}: ${2 * n} gold, ${2 * n} Block`;
     default: return `${n} stitches ${nm}`;
   }
 }
@@ -128,7 +128,7 @@ function pay(c, entry, kind) {
   const s = c.seam, A = c.A, n = entry.stitches, school = entry.school;
   let amount = 0;
   switch (school) {
-    case 'ember': { const b = 2 * n; for (const e of A.alive()) A.status(e, 'burn', b); amount = b; break; }
+    case 'ember': { const b = 3 * n; for (const e of A.alive()) A.status(e, 'burn', b); amount = b; break; }
     case 'echo': { amount = Math.ceil(n / 2); A.status(c.player, 'echo', amount); break; }
     case 'hoard': {
       const want = Math.min(Math.floor(n / 2), SEAM_DRAW_TURN - s.paidTurn.draw);
@@ -146,8 +146,13 @@ function pay(c, entry, kind) {
       }
       break;
     }
-    case 'static': { amount = Math.min(n, SEAM_CHARGE_TURN - s.paidTurn.charge); if (amount > 0) { s.paidTurn.charge += amount; A.status(c.player, 'charge', amount); } else amount = 0; break; }
-    case 'gilded': { amount = Math.min(2 * n, SEAM_GOLD_COMBAT - s.gold); if (amount > 0) { s.gold += amount; A.gold(amount); } else amount = 0; break; }
+    case 'static': { amount = Math.min(n, SEAM_CHARGE_TURN - s.paidTurn.charge); if (amount > 0) { s.paidTurn.charge += amount; A.status(c.player, 'charge', amount); } else amount = 0;
+      // Static also arcs: 2 pierce damage per stitch to a random enemy (so the Line pays even with no Charge-spending card)
+      { const live = A.alive(); if (live.length) A.dmg(c.player, c.rng.pick(live), 2 * n, { noMods: true, pierce: true }); }
+      break; }
+    case 'gilded': { amount = Math.min(2 * n, SEAM_GOLD_COMBAT - s.gold); if (amount > 0) { s.gold += amount; A.gold(amount); } else amount = 0;
+      A.block(c.player, 2 * n); // the Line is also plated: 2 Block per stitch, gold or no gold
+      break; }
     default: break;
   }
   const info = { school, stitches: n, kind, amount };
