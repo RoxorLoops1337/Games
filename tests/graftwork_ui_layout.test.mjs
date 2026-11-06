@@ -4,11 +4,12 @@
 import assert from 'node:assert/strict';
 import { makeApp, frames, click, key } from './graftwork_lib.mjs';
 import * as RUN from '../graftwork/engine/run.js';
+import * as METAX from '../graftwork/engine/meta.js';
 import * as LAYOUT from '../graftwork/ui/layout_registry.js';
 import { CARDS, GRAFTS, GRAFT_LIST, RELICS, POTIONS, EVENTS, HEROES } from '../graftwork/data/index.js';
 
 const SCREENS = {};
-for (const n of ['map', 'graft', 'reward', 'shop', 'forge', 'event', 'deckview', 'codex', 'end']) SCREENS[n] = (await import(`../graftwork/ui/${n}.js`)).default;
+for (const n of ['map', 'graft', 'reward', 'shop', 'forge', 'event', 'deckview', 'codex', 'end', 'wardrobe']) SCREENS[n] = (await import(`../graftwork/ui/${n}.js`)).default;
 
 export const RESERVED = { x: 1128, y: 0, w: 144, h: 56 };
 const problems = [];
@@ -105,6 +106,9 @@ const graftHeavy = (run, n = 8) => {
 };
 const hoverAt = (h, x, y, n = 4) => { h.app.mouse.x = x; h.app.mouse.y = y; frames(h.app, n); };
 
+
+const richMeta = () => { const m = METAX.migrate(null); m.credit.bal = 140; m.credit.total = 400; for (const a of METAX.ACHIEVEMENTS.slice(0, 12)) if (a.reward) METAX.grantReward(m, a.reward); m.loadout.title = m.cosmetics.titles[0] || null; m.seen = { cards: {}, grafts: {}, enemies: {}, relics: {}, statuses: {} }; return m; };
+const caseFile = (run, won) => METAX.caseFile(Object.assign(run, { stats: { ...run.stats, maxLine: 5, maxHit: 61, shatters: 2, bosses: 3 } }), won, {});
 // ---- MAP ------------------------------------------------------------------------------------------------------------
 for (const scale of [100, 125, 150]) for (const act of [1, 2, 3]) {
   const h = await make({ scale, hero: ['marrow', 'wick', 'odile'][act - 1], seed: 'map' + act });
@@ -247,6 +251,13 @@ for (const scale of [100, 125, 150]) {
   hc.meta.seen = { cards: Object.fromEntries(Object.keys(CARDS).slice(0, 30).map((k) => [k, 1])), grafts: Object.fromEntries(GRAFT_LIST.slice(0, 10).map((g) => [g.id, 1])), enemies: {}, relics: {}, statuses: {} };
   hc.app.push('codex', {});
   for (let i = 0; i < 7; i++) { hc.app.top().setTab(i); look(hc, 20, `codex/s${scale}/tab${i}`); hc.app.mouse.x = 400; hc.app.mouse.y = 300; hc.app.mouse.wheel = 400; look(hc, 5, `codex/s${scale}/tab${i}/scroll`); }
+  for (const phone of [false, true]) for (const cat of [0, 1, 2, 3]) {
+    const hw = await make({ scale, phone, seed: 'wd', meta: richMeta() }); flowFor(hw).openWardrobe = () => hw.app.push('wardrobe', {});
+    hw.app.go('base'); hw.app.push('wardrobe', {}); hw.app.top().setCat(cat); look(hw, 20, `wardrobe/s${scale}/${phone ? 'phone' : 'desk'}/c${cat}`);
+    hoverAt(hw, 400, 300); look(hw, 3, `wardrobe/s${scale}/${phone ? 'phone' : 'desk'}/c${cat}/hover`);
+  }
+  { const hr = await make({ scale, seed: 'rec', meta: richMeta() }); flowFor(hr); hr.app.go('base'); hr.app.push('codex', {}); hr.app.top().setTab(7); look(hr, 20, `codex/s${scale}/records`); }
+  { const hf = await make({ scale, seed: 'cf', hero: 'wick', meta: richMeta() }); flowFor(hf); graftHeavy(hf.run, 6); hf.run.phase = 'won'; hf.run.flags = {}; hf.run.endInfo = { caseFile: caseFile(hf.run, true) }; go(hf, 'end'); look(hf, 200, `end/s${scale}/casefile`); }
   for (const won of [true, false]) {
     const he = await make({ scale, seed: 'end' + won, hero: won ? 'odile' : 'wick' });
     flowFor(he); graftHeavy(he.run, 10); he.run.phase = won ? 'won' : 'dead'; he.run.killedBy = 'the_grafter';
@@ -265,6 +276,6 @@ for (const scale of [100, 125, 150]) {
   for (const won of [true, false]) { const he = await make({ phone: true, seed: 'ph-end' + won, hero: 'odile' }); flowFor(he); graftHeavy(he.run, 10); he.run.phase = won ? 'won' : 'dead'; he.run.flags = he.run.flags || {}; go(he, 'end'); look(he, 200, 'end/phone/' + (won ? 'won' : 'dead')); }
 }
 let bad = 0;
-for (const pre of ['map', 'reward', 'graft', 'shop', 'forge', 'event', 'deck', 'codex', 'end']) { console.log(pre + ':'); bad += done(pre); }
+for (const pre of ['map', 'reward', 'graft', 'shop', 'forge', 'event', 'deck', 'codex', 'end', 'wardrobe']) { console.log(pre + ':'); bad += done(pre); }
 console.log('problems', bad);
 assert.equal(bad, 0, 'layout problems found (listed above)');

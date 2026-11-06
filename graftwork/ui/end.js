@@ -1,4 +1,5 @@
 // End-of-run screen (run.phase 'dead' or 'won'): recap, the deck as you left it, unlocks, next steps.
+import { titleName } from '../engine/meta2.js';
 import { tscale } from './graft_parts.js';
 import { COL, W, H, EASE, clamp, rgba } from './core.js';
 import { Fx } from './fx.js';
@@ -42,9 +43,11 @@ export default {
     });
     this.achs = (info.newAchievements || []).map((a) => {
       const id = typeof a === 'string' ? a : a.id; const d = ACHIEVEMENT_LIST.find((x) => x.id === id) || (typeof a === 'object' ? a : null);
-      return { kind: 'Record', name: d ? d.name : id, text: d ? d.text : '' };
+      return { kind: 'Record', name: d ? d.name : id, text: (typeof a === 'object' && a.text) || (d ? d.text : '') };
     });
-    this.news = [...this.unlocks, ...this.achs];
+    const cf = info.caseFile; // case file: milestones earned this run -> Credit (engine/meta2.js)
+    this.caseNews = cf && cf.total > 0 ? [{ kind: 'Credit', name: `+${cf.total} Credit`, text: cf.items.map((i) => i.name + (i.first ? ' (first)' : '')).join(', ') + (cf.capped ? '. Run cap reached.' : ''), rows: cf.items.map((i) => ({ n: i.name, c: i.credit, first: i.first })), capped: cf.capped }] : [];
+    this.news = [...this.caseNews, ...this.unlocks, ...this.achs];
     const kb = run.killedBy && (ENEMIES[run.killedBy] ? ENEMIES[run.killedBy].name : String(run.killedBy));
     this.killer = kb || null;
     const a = app.shared.audio;
@@ -72,7 +75,7 @@ export default {
     const hero = HEROES[run.hero];
     // ---- title ----
     const k = EASE.out(clamp(t / 0.8, 0, 1));
-    const title = this.won ? 'THE GRAFTER IS UNMADE' : run.abandoned ? 'WALKED OUT' : 'FLATLINE';
+    const title = run.practice ? (this.won ? 'PRACTICE CLEARED' : 'PRACTICE OVER') : this.won ? 'THE GRAFTER IS UNMADE' : run.abandoned ? 'WALKED OUT' : 'FLATLINE';
     const tcol = this.won ? '#f7dc8a' : '#d9606c';
     app.reg('end-title', 240, 14, 800, 108, { group: 'title' });
     g.save(); g.globalAlpha = k;
@@ -133,6 +136,7 @@ export default {
     app.reg('end-recap', x, y, w, h, { group: 'recap' });
     app.panel(x, y, w, h, { r: 12, fill: 'rgba(16,12,11,.88)' });
     app.text('RECAP', x + 18, y + 12, { size: 12, ui: true, bold: true, color: COL.lamp });
+    { const lt = titleName(app.shared.meta); if (lt) app.text(`"${lt}"`, x + w - 18, y + 12, { size: 12, ui: true, italic: true, align: 'right', color: COL.lamp, maxW: w - 100 }); }
     app.text(hero.name, x + 18, y + 32, { size: 26, bold: true, color: hero.color === '#9E0F2E' ? '#e66a7c' : hero.color });
     app.text(hero.title, x + 18, y + 62, { size: 14, italic: true, color: '#cdbf9d' });
     const rows = [
@@ -227,15 +231,26 @@ export default {
     let fitted = 0;
     for (let i = 0; i < this.news.length; i++) {
       const n = this.news[i];
-      const lines = app.wrap(n.text || '', w - 28, 12, { ui: true }).length, hh = kH + nH + Math.min(lines, 2) * tH + 10;
+      const lines = app.wrap(n.text || '', w - 28, 12, { ui: true }).length;
+      const rowH = tH + 2, room = ny + nh - (i < this.news.length - 1 ? hdrH + 8 : 6) - yy - kH - nH - 10;
+      const nRows = n.rows ? Math.max(0, Math.min(n.rows.length, Math.floor(room / rowH) - (n.rows.length > Math.floor(room / rowH) ? 1 : 0))) : 0;
+      const hh = kH + nH + (n.rows ? (nRows + (nRows < n.rows.length || n.capped ? 1 : 0)) * rowH : Math.min(lines, 2) * tH) + 10;
       if (yy + hh > ny + nh - (i < this.news.length - 1 ? hdrH + 8 : 6)) break;
       fitted = i + 1;
       const at = this.nextNew + i * 0.45, k = clamp((this.t0 - at) / 0.4, 0, 1);
       if (k > 0 && this.shown <= i) { this.shown = i + 1; if (!calm(app)) { this.fx.burst(x + w / 2, yy + 14, 'gild', { n: 18 }); this.fx.ring(x + w / 2, yy + 14, COL.lamp, 70, 0.6); } if (app.shared.audio) app.shared.audio.sfx(n.kind === 'Unlocked' ? 'relic' : 'gilded', { vol: 0.7 }); }
       g.save(); g.globalAlpha = EASE.out(k); g.translate((1 - EASE.out(k)) * 30, 0);
-      app.text(n.kind === 'Unlocked' ? 'UNLOCKED' : 'RECORD', x + 14, yy, { size: 10, ui: true, bold: true, color: n.kind === 'Unlocked' ? '#8fe0a0' : COL.lamp });
+      app.text(n.kind === 'Unlocked' ? 'UNLOCKED' : n.kind === 'Credit' ? 'CASE FILE' : 'RECORD', x + 14, yy, { size: 10, ui: true, bold: true, color: n.kind === 'Unlocked' ? '#8fe0a0' : COL.lamp });
       app.text(n.name, x + 14, yy + kH, { size: 17, bold: true, color: '#fbe9b0', shadow: true });
-      app.text(lines > 2 ? (n.text || '').slice(0, 56) + '...' : n.text || '', x + 14, yy + kH + nH + 2, { size: 12, ui: true, maxW: w - 28, lineH: 14, color: '#cdbf9d' });
+      if (n.rows) {
+        const ry = yy + kH + nH + 2;
+        n.rows.slice(0, nRows).forEach((r, j) => {
+          app.text(r.n, x + 14, ry + j * rowH, { size: 12, ui: true, maxW: w - 74, color: r.first ? '#fbe9b0' : '#cdbf9d' });
+          app.text(`+${r.c}`, x + w - 14, ry + j * rowH, { size: 12, ui: true, bold: true, align: 'right', color: COL.lamp });
+        });
+        const more = n.rows.length - nRows;
+        if (more > 0 || n.capped) app.text((more > 0 ? `and ${more} more` : '') + (more > 0 && n.capped ? ', ' : '') + (n.capped ? 'run cap reached' : ''), x + 14, ry + nRows * rowH, { size: 12, ui: true, italic: true, maxW: w - 28, color: '#a58f6b' });
+      } else app.text(lines > 2 ? (n.text || '').slice(0, 56) + '...' : n.text || '', x + 14, yy + kH + nH + 2, { size: 12, ui: true, maxW: w - 28, lineH: 14, color: '#cdbf9d' });
       g.restore();
       yy += hh;
     }
@@ -245,7 +260,7 @@ export default {
     const y = 660, bh = 48;
     const btns = [];
     btns.push(['New Run', 'new']);
-    if (this.won) btns.push(['Endless', 'endless']);
+    if (this.won && !run.practice) btns.push(['Endless', 'endless']);
     btns.push(['Copy seed', 'copy']);
     btns.push(['Back to title', 'title']);
     const small = app.scale < 0.95, bw = btns.length > 3 ? (small ? 236 : 200) : 236, gap = small ? 12 : 18, total = btns.length * bw + (btns.length - 1) * gap;

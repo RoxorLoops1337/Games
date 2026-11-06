@@ -6,7 +6,7 @@ import { drawPortrait } from '../art/heroes.js';
 import { drawSchoolGlyph } from '../art/cards.js';
 import * as RUN from '../engine/run.js';
 import { HEROES, SCHOOLS, CARDS } from '../data/index.js';
-import { heroUnlocked, maxAscension } from '../engine/meta.js';
+import { heroUnlocked, maxAscension, startRelicOf, practiceList, dailyPlayed } from '../engine/meta.js';
 import { loadRun } from '../engine/save.js';
 import { hashSeed } from '../engine/rng.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs } from './fullscreen.js';
@@ -236,6 +236,7 @@ export default {
   drawMenu(app, keys) {
     const g = app.ctx, meta = app.shared.meta, flow = app.shared.flow;
     if (keys.some((e) => e.key === 'Escape') && this.confirmAbandon) this.confirmAbandon = false;
+    if (!this.confirmAbandon && flow.openWardrobe && keys.some((e) => e.key === 'w' || e.key === 'W')) flow.openWardrobe();
     const bw = 330, bh = 48, step = (this.hasSave ? 1 : 0) + 5 + (canFullscreen() ? 1 : 0) > 6 ? 52 : 56, x = 640 - bw / 2;
     let y = 306;
     const k = EASE.out(clamp(this.menuK, 0, 1));
@@ -260,7 +261,7 @@ export default {
       if (id === 'new') {
         if (app.button('New Run', x, yy, bw, bh, { size: 22 })) { if (this.hasSave) { this.confirmAbandon = true; app.mouse.released = false; } else this.openSelect(app); }
       } else if (id === 'daily') {
-        const seed = todaySeed(), hero = RUN.dailyHero(seed), played = meta.dailyPlayed === seed;
+        const seed = todaySeed(), hero = RUN.dailyHero(seed), played = (meta.daily ? dailyPlayed(meta, seed) : false);
         const hn = HEROES[hero].name;
         const label = played ? 'Daily Run (played)' : 'Daily Run';
         if (app.inRect(x, yy, bw, bh)) {
@@ -270,7 +271,12 @@ export default {
         if (app.button(label, x, yy, bw, bh, { size: 22, sub: undefined, fill: played ? '#2a2623' : COL.slab2, color: played ? '#b9ad92' : COL.vellum })) {
           this.startDaily(app);
         }
-      } else if (id === 'codex') { if (app.button('Codex', x, yy, bw, bh, { size: 22 })) flow.openCodex(); }
+      } else if (id === 'codex') {
+        const hw = Math.floor((bw - 10) / 2);
+        if (app.button('Codex', x, yy, hw, bh, { size: 22 })) flow.openCodex();
+        if (app.inRect(x + hw + 10, yy, hw, bh)) app.tooltip('Wardrobe', 'Spend Credit on card backs, tints, titles and a starting relic. Shortcut: W.');
+        if (app.button('Wardrobe', x + hw + 10, yy, hw, bh, { size: 22 }) && flow.openWardrobe) flow.openWardrobe();
+      }
       else if (id === 'settings') { if (app.button('Settings', x, yy, bw, bh, { size: 22 })) flow.openSettings(); }
       else if (id === 'fullscreen') { fsRegisterRect(app, x, yy, bw, bh); if (app.button('Fullscreen: ' + (isFullscreen() ? 'On' : 'Off'), x, yy, bw, bh, { size: 22 })) requestFs(app); }
       else if (id === 'credits') { if (app.button('Credits', x, yy, bw, bh, { size: 22 })) { this.go(app, 'credits'); this.credK = 0; app.tween(this, { credK: 1 }, calm(app) ? 1 : 300, 'out'); } }
@@ -285,13 +291,13 @@ export default {
   startDaily(app) {
     const meta = app.shared.meta, flow = app.shared.flow;
     const seed = todaySeed(), hero = RUN.dailyHero(seed);
-    meta.dailyPlayed = seed; flow.saveMeta();
+    meta.daily = meta.daily || {}; meta.daily.lastPlayed = seed; flow.saveMeta();
     this.begin(app, { hero, ascension: 0, seed, daily: seed });
   },
   drawDailyCard(app, x, y) {
     const g = app.ctx, meta = app.shared.meta;
     const seed = todaySeed(), hero = RUN.dailyHero(seed), mod = RUN.DAILY_MODS[hashStr(seed) % RUN.DAILY_MODS.length];
-    const played = meta.dailyPlayed === seed, h = HEROES[hero];
+    const played = (meta.daily ? dailyPlayed(meta, seed) : false), h = HEROES[hero];
     const k = EASE.out(clamp(this.menuK - 0.2, 0, 1) / 0.8);
     g.save(); g.globalAlpha = k; g.translate((1 - k) * 40, 0);
     app.panel(x, y, 300, 190, { r: 12, fill: 'rgba(14,11,10,.72)', stroke: played ? 'rgba(232,220,196,.25)' : rgba(COL.lamp, 0.55) });
@@ -379,7 +385,17 @@ export default {
     if (app.button('Begin', px0 + 134, by, 116, 44, { size: 22, fill: unlocked ? '#4a3a1d' : undefined, stroke: COL.lamp, disabled: !unlocked, color: '#fbe9b0' }) || (!app.blocked && keys.some((e) => e.key === 'Enter') && unlocked)) {
       const opts = { hero: this.hero, ascension: this.asc };
       if (this.seed.trim()) opts.seed = this.seed.trim();
+      const sr = startRelicOf(meta); if (sr) opts.startRelic = sr;
       this.begin(app, opts);
+    }
+    // Practice a boss: unlocked once a boss has been met; replays it with the deck saved from that run
+    const pl = practiceList(meta);
+    if (pl.length) {
+      this.pi = (this.pi || 0) % pl.length; const p = pl[this.pi];
+      app.reg('title-practice', px0 + 264, by, 118, 44, { group: 'practice' });
+      if (app.inRect(px0 + 264, by, 118, 44)) app.tooltip('Practice: ' + p.name, 'Retry this boss with the deck you took into it.');
+      if (app.button('Practice', px0 + 264, by, 118, 44, { size: 16 })) { if (app.shared.flow.startPractice) app.shared.flow.startPractice(p); }
+      if (pl.length > 1 && app.button('>', px0 + 388, by, 30, 44, { size: 18 })) this.pi++;
     }
     if (keys.some((e) => e.key === 'Escape')) this.go(app, 'menu');
     if (keys.some((e) => e.key === 'ArrowRight' && !this.seedFocus)) { }

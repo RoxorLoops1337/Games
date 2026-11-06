@@ -14,11 +14,11 @@ export const HERO_LIST = [
     id: 'wick', name: 'Wick', title: "Chandler's Apprentice", color: '#FF6A2B', school: 'ember', unlocked: false,
     unlock: { text: 'Win a run with Marrow, or reach Act 2.', rule: 'act2' },
     blurb: 'Eager and flammable. Burn stacks, chained sparks, and a very short fuse.',
-    passive: 'Your first Attack each combat applies 3 Burn. Each extend lights 1 Burn on a random enemy.',
+    passive: 'Your first Attack each combat applies 2 Burn. Each extend lights 1 Burn on a random enemy.',
     perks: { hp: 76, gold: 99, combatHeal: 6 },
     on: {
       seamExtend: (A) => { const a = A.alive(); if (a.length) A.status(a[A.rng.int(a.length)], 'burn', 1); },
-      cardPlayed: (A, p) => { const c = A.c; if (p.spec.type === 'attack' && p.target && !c.wickFired) { c.wickFired = true; A.status(p.target, 'burn', 3); } },
+      cardPlayed: (A, p) => { const c = A.c; if (p.spec.type === 'attack' && p.target && !c.wickFired) { c.wickFired = true; A.status(p.target, 'burn', 2); } },
     },
     deck: ['w_spark', 'w_spark', 'w_spark', 'w_spark', 'w_spark', 'w_snuff', 'w_snuff', 'w_snuff', 'w_snuff', 'w_kindle', 'w_kindle', 'w_match', 'w_flare', 'w_fan', 'w_trim'],
   },

@@ -8,6 +8,7 @@ import { CARDS_JUNK } from './cards_junk.js';
 import { GRAFTS_SAFE } from './grafts_safe.js';
 import { GRAFTS_GREEDY } from './grafts_greedy.js';
 import { GRAFTS_WEIRD } from './grafts_weird.js';
+import { schoolsOf } from '../engine/cards.js';
 
 let _cards = null, _grafts = null;
 const cardDef = (id) => {
@@ -246,11 +247,12 @@ const heckler = {
 // ---------- ELITES ----------
 const diva = {
   id: 'the_diva', name: 'The Diva', act: 3, kind: 'elite', start: { strength: 1 }, hp: [126, 131],
-  pattern: ['vibrato', 'high_c', 'aria', 'encore'],
+  pick: (A, e) => { A.setStatus(e, 'applause', 0); return ['vibrato', 'high_c', 'aria', 'encore'][e.turn % 4]; },
+  on: { playerCard: (A, e) => { A.setStatus(e, 'applause', Math.max(0, Math.min(4, A.c.playsTurn - 5))); } },
   moves: {
     vibrato: { name: 'Vibrato', fx: [D(9, { hits: 3 }), CUSTOM('debuff', 'Exhausts a card you were about to draw', (A) => exhaustTop(A, 1))] },
     high_c: { name: 'High C', fx: [D(14), ST('weak', 1), CUSTOM('debuff', 'Silences the card you played most (jam, +1 cost)', (A) => silenceMostPlayed(A))] },
-    aria: { name: 'Aria (hold the note)', fx: [D(36), ST('brittle', 2)] },
+    aria: { name: 'Aria', tip: 'Hold the note: 36 damage, +3 for each card you play past your 5th this turn (max +12). Fewer, bigger plays keep it low.', fx: [D({ base: 36, per: 'st:applause@self', mul: 3 }), ST('brittle', 2)] },
     encore: { name: 'Encore', intent: ['buff', 'attack'], fx: [D(10), { op: 'block', n: 16 }, SELF('strength', 3)] },
   },
   art: { body: 'masks', color: '#e8c25a', notes: 'wide gold gown ellipse with a tiny head, mouth open as a dark circle' },
@@ -261,7 +263,7 @@ const stagehands = {
   pattern: ['sandbag', 'winch', 'rig', 'strike_set'],
   moves: {
     sandbag: { name: 'Drop the Sandbag', fx: [D(28), ST('frail', 1)] },
-    winch: { name: 'Winch', fx: [D(16), CUSTOM('debuff', 'Cuts 2 cards from your next draw into the discard', (A) => cutDraw(A, 2))] },
+    winch: { name: 'Hoist the Heavy', tip: 'Jams your most expensive card in the next hand (+1 cost). Cheap hands and 0-cost cards blunt it.', fx: [D(16), CUSTOM('debuff', 'Jams your most expensive card in your next hand (+1 cost)', (A) => jamBest(A, 1))] },
     rig: { name: 'Rig the Trap', fx: [D(14), ST('costup', 1), ST('infection', 1), { op: 'addCard', card: 'j_clot', n: 1, to: 'discard' }] },
     strike_set: { name: 'Strike the Set', intent: ['defend', 'buff', 'attack'], fx: [D(14), { op: 'block', n: 20 }, SELF('strength', 2)] },
   },
@@ -269,11 +271,13 @@ const stagehands = {
 };
 
 const goldLeafGolem = {
-  id: 'gold_leaf_golem', name: 'Gold Leaf Golem', act: 3, kind: 'elite', start: { strength: 1 }, hp: [129, 134],
+  id: 'gold_leaf_golem', name: 'Gold Leaf Golem', act: 3, kind: 'elite', start: { strength: 1, leafarmor: 14 }, hp: [129, 134],
   pattern: ['gild', 'slam', 'flake'],
+  // Leaf Armor: a single card hit deals at most 14. Status damage, Thorns and Thread arcs are not card hits and ignore it.
+  on: { modDamage: (A, e, n, o) => { const cap = e.st.leafarmor || 0; return o && o.card && cap > 0 && n > cap ? cap : n; } },
   moves: {
     gild: { name: 'Gild Itself', intent: ['defend', 'buff', 'attack'], fx: [{ op: 'block', n: { base: 8, per: 'gold', mul: 0.1, max: 36 } }, D(12), SELF('strength', 1)] },
-    slam: { name: 'Gilt Slam', fx: [D({ base: 24, per: 'gold', mul: 1 / 15, max: 32 })] },
+    slam: { name: 'Gilt Slam', tip: 'Leaf Armor: no single card hit deals more than 14 to it. Multi-hit, Burn and Bleed go through.', fx: [D({ base: 24, per: 'gold', mul: 1 / 15, max: 32 })] },
     flake: { name: 'Peel Your Gold', fx: [D(20), CUSTOM('debuff', 'Steals up to 12 gold and plates itself with it', (A, ctx) => {
       const take = Math.min(12, A.c.run.gold || 0);
       if (take > 0) { A.gold(-take); A.block(ctx.srcEnt, take); }
@@ -295,9 +299,9 @@ function impresarioPick(A, e) {
 }
 const impresario = {
   id: 'the_impresario', name: 'The Impresario', act: 3, kind: 'boss', start: { strength: 1 }, hp: 96,
-  pick: impresarioPick,
+  pick: (A, e) => { A.setStatus(e, 'ensemble', 0); e.data.sch = {}; return impresarioPick(A, e); },
   moves: {
-    downbeat: { name: 'Downbeat', fx: [D(19), { op: 'block', n: 10 }] },
+    downbeat: { name: 'Downbeat', tip: 'Ensemble: every hit deals +1 once you play three or more schools in a turn. Two schools or fewer keep the score quiet.', fx: [D(19), { op: 'block', n: 10 }] },
     crescendo: { name: 'Crescendo', fx: [D(9, { hits: 3 })] },
     fermata: { name: 'Fermata', fx: [D(14), ST('costup', 1), ST('marked', 2)] },
     staccato: { name: 'Staccato', fx: [D(6, { hits: 5 })] },
@@ -309,6 +313,14 @@ const impresario = {
   },
   on: {
     combatStart(A, e) { e.data.phase = 1; e.data.step = 0; A.setStatus(e, 'baton', 1); },
+    playerCard(A, e, { spec }) {
+      const sch = schoolsOf(spec);
+      if (!sch.length) return;
+      if (e.data.turnSeen !== A.c.turn) { e.data.turnSeen = A.c.turn; e.data.sch = {}; }
+      e.data.sch = e.data.sch || {};
+      for (const s of sch) e.data.sch[s] = true;
+      A.setStatus(e, 'ensemble', Math.min(1, Math.max(0, Object.keys(e.data.sch).length - 2)));
+    },
     afterMove(A, e) { stepAfter(A, e); },
     damaged(A, e) {
       const ph = actOf(e);

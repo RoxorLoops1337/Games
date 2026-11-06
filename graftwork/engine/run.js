@@ -2,6 +2,7 @@
 // offer (the heart of the game), shop, forge, events, ascension, daily seed, endless loops, save/restore.
 import { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS, HEROES, SCHOOLS } from '../data/index.js';
 import { makeRng, hashSeed } from './rng.js';
+import { DAILY_MODS } from '../data/dailymods.js';
 import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper } from './cards.js';
 
 export const ACT_ROWS = { 1: 10, 2: 10, 3: 11 };
@@ -25,14 +26,7 @@ export const ASCENSION_TEXT = [
   'Only 2 potion slots and 10% less max HP.',
   'All enemies hit 10% harder.',
 ];
-export const DAILY_MODS = [
-  { id: 'fragile', name: 'Fragile Stitches', text: 'Overload Shatter chance +15%.', shatter: 0.15 },
-  { id: 'tough', name: 'Thick Skinned', text: 'Enemies have 15% more HP.', hpMul: 1.15 },
-  { id: 'cheap', name: 'Clearance Sale', text: 'Shop prices are 25% lower.', shopMul: 0.75 },
-  { id: 'roomy', name: 'Roomy Ward', text: 'Budget +2.', budget: 2 },
-  { id: 'poor', name: 'Lean Times', text: 'Fight gold is halved.', goldMul: 0.5 },
-  { id: 'jumpy', name: 'Jumpy Hands', text: 'Start combat with 1 Echo.', echo: 1 },
-];
+export { DAILY_MODS }; // data/dailymods.js: 12 modifiers with an up and a down side
 
 // ---------- new run ----------
 export function newRun(opts = {}) {
@@ -57,6 +51,7 @@ export function newRun(opts = {}) {
   if (hero.id === 'marrow') addRelic(run, 'r_marrow_kit');
   if (hero.id === 'wick') addRelic(run, 'r_wick_kit');
   if (hero.id === 'odile') addRelic(run, 'r_odile_kit');
+  if (opts.startRelic && !opts.daily) addRelic(run, opts.startRelic); // bought in the Records tab (meta2 START_RELICS)
   if (run.daily) { run.dailyMod = DAILY_MODS[hashSeed(run.daily) % DAILY_MODS.length]; run.budgetBonus += run.dailyMod.budget || 0; }
   run.budgetBonus += -(asc >= 6 ? 1 : 0);
   startAct(run, 1);
@@ -469,6 +464,19 @@ export function afterEvent(run) {
 export function resolveFight(run, result) {
   const kind = run.pending ? run.pending.fightKind : 'normal';
   run.stats.fights++;
+  // Case file bookkeeping (read by engine/meta2.js): enemies met, and the deck going into each boss.
+  const met = (run.pending && run.pending.enemies) || [];
+  run.seenEnemies = run.seenEnemies || [];
+  for (const id of met) if (!run.seenEnemies.includes(id)) run.seenEnemies.push(id);
+  if (kind === 'boss' || kind === 'final') {
+    run.bossLog = run.bossLog || [];
+    run.bossLog.push({ kind, enemies: met.slice(), act: run.act, win: !!result.win, deck: run.deck.map((i) => ({ id: i.id, grafts: (i.grafts || []).slice(), fused: (i.fused || []).slice(), up: i.up || 0 })), relics: run.relics.slice(), maxHp: run.maxHp });
+  }
+  if (run.practice) { // a practice fight ends the session: win or lose, nothing else follows
+    run.phase = result.win && run.hp > 0 ? 'won' : 'dead'; run.pending = null;
+    if (run.phase === 'dead') run.killedBy = result.killedBy || null;
+    return run.phase;
+  }
   if (result.damageTaken) run.stats.damageTaken += result.damageTaken;
   run.stats.shatters += result.shattered.length;
   if (!result.win || run.hp <= 0) { run.killedBy = result.killedBy || null; run.phase = 'dead'; run.pending = null; return 'dead'; }

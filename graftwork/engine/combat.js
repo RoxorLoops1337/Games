@@ -68,7 +68,7 @@ function wrap(c, inst, tithed = false) {
 }
 export function specOf(c, card) {
   const s = cardSpec(afflInst(c, card));
-  s.tithed = !!card.tithed;
+  s.tithed = !!card.tithed || !!card.claimed; // claimed = the Matron's Claim, shown and scaled like a Tithe
   return s;
 }
 export function mult(spec, tithed) {
@@ -150,8 +150,11 @@ export function addStatus(c, tgt, s, n, o = {}) {
   let v = cur + n;
   if (!d.canNeg && v < 0) v = 0;
   if (v === 0) delete tgt.st[s]; else tgt.st[s] = Math.min(STATUS_CAP, v);
+  if (tgt.kind === 'player' && !d.good && n > 0 && tgt.st[s] && c.run && c.run.stats) { const a = c.run.stats.afflicted || (c.run.stats.afflicted = {}); a[s] = (a[s] || 0) + 1; } // case file
   if (!o.silent) c.ev.push({ t: 'status', who: tgt.uid || 'player', s, n: tgt.st[s] || 0, d: n });
   if (s === 'infection' && tgt.kind === 'player' && c.strain) refreshStrain(c);
+  // enemy hook: statusGained(A, e, statusId, n) (the Defibrillator reflects Burn)
+  if (tgt.kind === 'enemy' && n > 0 && !tgt.dead && tgt.def.on && tgt.def.on.statusGained) tgt.def.on.statusGained(c.A, tgt, s, n);
 }
 function eachStatus(ent, f) { for (const s of Object.keys(ent.st)) { const d = STATUSES[s]; if (d && ent.st[s]) f(d, ent.st[s], s); } }
 
@@ -173,6 +176,8 @@ export function gainBlock(c, tgt, n, o = {}) {
   if (n <= 0) return 0;
   tgt.block += n;
   c.ev.push({ t: 'block', who: tgt.uid || 'player', n });
+  // enemy hook: playerBlock(A, e, n) (the Pickled King drinks your Block)
+  if (tgt.kind === 'player') for (const e of c.enemies) if (!e.dead && e.def.on && e.def.on.playerBlock) e.def.on.playerBlock(c.A, e, n);
   return n;
 }
 
@@ -211,6 +216,7 @@ export function dealDamage(c, src, tgt, base, o = {}) {
   c.ev.push({ t: 'dmg', src: src ? (src.uid || 'player') : null, who: tgt.uid || 'player', raw, n, absorbed, hit: !o.status, thorns: !!o.thorns, broke: absorbed > 0 && tgt.block === 0 });
   if (absorbed > 0 && tgt.block === 0) eachStatus(tgt, (d, v) => { if (d.hooks && d.hooks.blockBroken) d.hooks.blockBroken(c.A, tgt, v, { amount: absorbed, src }); });
   if (src && o.card && c.currentCard) c.currentCard.dealt = (c.currentCard.dealt || 0) + n;
+  if (tgt.kind !== 'player' && src && src.kind === 'player' && !o.status && !o.thorns && raw > (c.maxHit || 0)) c.maxHit = raw; // biggest hit (case file)
   if (raw > 0 && !o.status && !o.thorns) {
     eachStatus(tgt, (d, v) => { if (d.hooks && d.hooks.attacked) d.hooks.attacked(c.A, tgt, v, { attacker: src, dmg: n, raw }); });
   }
@@ -541,7 +547,7 @@ export function playCard(c, hi, ti) {
   // repeats
   let times = 1 + sp.repeat;
   if (c.player.st.echo > 0 && sp.type !== 'power') { times++; addStatus(c, c.player, 'echo', -1); }
-  let m = mult(sp, card.tithed);
+  let m = mult(sp, card.tithed || card.claimed);
   if (card.brand) m *= 1.5;
   if (card.reknit && sp.overload) m /= OVERLOAD_MULT;
   let shatter = false;
@@ -736,6 +742,10 @@ export function finishCombat(c) {
   run.deck = run.deck.filter((i) => !i.shattered);
   const g = c.player.st.gilt || 0;
   if (g) run.gold = (run.gold || 0) + g;
+  if (run.stats) { // case file records
+    run.stats.maxLine = Math.max(run.stats.maxLine || 0, (c.seam && c.seam.maxLen) || 0);
+    run.stats.maxHit = Math.max(run.stats.maxHit || 0, c.maxHit || 0);
+  }
   fire(c, 'combatEnd', {});
   return { win: c.over === 'win', killedBy: c.lastHitBy || null, shattered: shattered.map((i) => i.id), turns: c.turn, damageTaken: c.damageTakenThisCombat };
 }

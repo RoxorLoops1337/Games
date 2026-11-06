@@ -8,9 +8,10 @@ const nSchools = (A) => Object.keys(seam(A).counts || {}).filter((k) => seam(A).
 const randFoe = (A) => { const a = A.alive(); return a.length ? a[A.rng.int(a.length)] : null; };
 
 export const RELICS_THREAD = [
-  { id: 'r_spool', name: 'Spool', rarity: 'uncommon', text: 'The Line can hold 6 knots instead of 5.', mod: { seamCap: 1 } },
-  { id: 'r_locking_forceps', name: 'Locking Forceps', rarity: 'uncommon', text: 'The first Line of each combat is Tied.',
-    on: { combatStart: (A) => { if (A.c.seam) A.c.seam.tied = true; } } },
+  { id: 'r_spool', name: 'Spool', rarity: 'uncommon', text: 'The Line can hold 6 knots instead of 5. Cutting a Line of 4 or more draws 1 card.', mod: { seamCap: 6 },
+    on: { seamCut: (A, p) => { if (p && p.paid !== false && p.len >= 4) A.draw(1); } } },
+  { id: 'r_locking_forceps', name: 'Locking Forceps', rarity: 'uncommon', text: 'The first Line of each combat is Tied. Gain 6 Block at combat start.',
+    on: { combatStart: (A) => { A.block(A.player, 9); if (A.c.seam) A.c.seam.tied = true; } } },
   { id: 'r_bobbin', name: 'Bobbin', rarity: 'common', text: 'The first cut each turn draws 1 card.',
     on: { seamCut: (A, p) => { if (p && p.paid === false) return; if (first(A, 'bobbinTurn')) A.draw(1); } } },
   { id: 'r_thimble', name: 'Thimble', rarity: 'common', text: 'Your first 2 Line extends each combat gain 2 Block.',
@@ -19,8 +20,8 @@ export const RELICS_THREAD = [
     on: { seamCut: (A, p) => { const n = stitches(p); const t = randFoe(A); if (n > 0 && t && !(p && p.paid === false)) A.dmg(A.player, t, 2 * n, { pierce: true }); } } },
   { id: 'r_embroidery_hoop', name: 'Embroidery Hoop', rarity: 'uncommon', text: 'When you extend a Line that holds 2 or more schools, heal 1.',
     on: { seamExtend: (A) => { if (nSchools(A) >= 2) A.heal(A.player, 1); } } },
-  { id: 'r_pin_cushion', name: 'Pin Cushion', rarity: 'rare', text: 'Cutting a Line of 5 applies 2 Vulnerable to all enemies.',
-    on: { seamCut: (A, p) => { if (p && p.len >= 5) for (const e of A.alive()) A.status(e, 'vulnerable', 2); } } },
+  { id: 'r_pin_cushion', name: 'Pin Cushion', rarity: 'rare', text: 'Cutting a Line of 3 or more applies 2 Vulnerable to all enemies.',
+    on: { seamCut: (A, p) => { if (p && p.len >= 3) for (const e of A.alive()) A.status(e, 'vulnerable', 2); } } },
   { id: 'r_blunt_shears', name: 'Blunt Shears', rarity: 'common', text: 'Your first cut each combat deals 6 damage to all enemies.',
     on: { seamCut: (A, p) => { const r = rx(A); if (r.bluntShears || (p && p.paid === false)) return; r.bluntShears = true; for (const e of A.alive()) A.dmg(A.player, e, 6, { pierce: true }); } } },
   { id: 'r_plain_cloth', name: 'Plain Cloth', rarity: 'uncommon', text: 'While the Line holds a single school, each extend deals 2 damage per knot to a random enemy.',

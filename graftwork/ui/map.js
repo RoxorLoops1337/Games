@@ -1,5 +1,6 @@
 // MAP screen (run.phase === 'map'): a pinned surgical chart. Row 0 at the bottom, the boss at the top.
 // Reads the run, calls RUN.enterNode then flow.route(). Left panel = the patient, right panel = legend + school resonance.
+import { titleName } from '../engine/meta2.js';
 import { COL, EASE, W, H, clamp, lerp, rgba, FONT, FONT_UI } from './core.js';
 import * as RUN from '../engine/run.js';
 import { strainInfo } from '../engine/cards.js';
@@ -336,7 +337,7 @@ export default {
     g.save(); app.rr(X + 20, y + 2, 76, 76, 6); g.clip(); drawPortrait(g, run.hero, X + 58, y + 40, 76); g.restore();
     let ny = y + 2;
     ny += app.text(hero.name, X + 112, ny, { ...cs(22, 1), bold: true, maxW: IW - 94 }) + 2;
-    if (S <= 1.2) ny += app.text(hero.title, X + 112, ny, { size: 14, ui: true, color: 'rgba(232,220,196,.65)', maxW: IW - 94 });
+    { const lt = titleName(app.shared.meta); if (S <= 1.2) ny += app.text(lt ? `"${lt}"` : hero.title, X + 112, ny, { size: 14, ui: true, italic: !!lt, color: lt ? COL.lamp : 'rgba(232,220,196,.65)', maxW: IW - 94 }); }
     y = Math.max(y + 80, ny) + 10;
     // hp
     const bh = Math.max(16, Math.round(13 * Math.min(S, 1.25) * 1.25)), bx = X + 46, bw = IW - 28;

@@ -5,6 +5,8 @@ import { HEROES, CARDS, GRAFTS } from '../data/index.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { strainInfo, budgetOf, MAX_GRAFTS_NORMAL } from './cards.js';
 import { ASCENSION_TEXT } from './run.js';
+import { defaults2, migrate2, awardCaseFile, recordBosses, grantReward } from './meta2.js';
+export * from './meta2.js';
 
 export const KEY = 'graftwork_meta_v1';
 export const HISTORY_MAX = 20;
@@ -32,6 +34,7 @@ export function defaultMeta() {
     seen, achievements: {},
     daily: { lastPlayed: null, best: null },
     tips: {}, settings: { ...DEFAULT_SETTINGS }, history: [],
+    ...defaults2(), // rev 2: credit, cosmetics, loadout, practice (engine/meta2.js)
   };
 }
 const isObj = (x) => x && typeof x === 'object' && !Array.isArray(x);
@@ -45,7 +48,8 @@ function fill(t, d) {
   return t;
 }
 export function migrate(m) {
-  if (!isObj(m)) return defaultMeta();
+  if (!isObj(m)) return migrate2(defaultMeta(), true);
+  const hadRev = m.rev >= 2;
   fill(m, defaultMeta());
   for (const k of Object.keys(m.stats)) if (k !== 'fastestWinFloors' && !Number.isFinite(m.stats[k])) m.stats[k] = 0;
   if (m.stats.fastestWinFloors !== null && !Number.isFinite(m.stats.fastestWinFloors)) m.stats.fastestWinFloors = null;
@@ -53,8 +57,8 @@ export function migrate(m) {
   if (!m.unlocked.heroes.includes('marrow')) m.unlocked.heroes.unshift('marrow');
   m.unlocked.heroes = m.unlocked.heroes.filter((h) => typeof h === 'string');
   m.history = m.history.filter(isObj).slice(0, HISTORY_MAX);
-  m.v = 1;
-  return m;
+  m.v = 1; // the key and the base shape are final; additive revisions live in m.rev
+  return migrate2(m, hadRev);
 }
 export function loadMeta() {
   let raw = null;
@@ -85,6 +89,7 @@ export function seenFromRun(m, run) {
   for (const r of run.relics || []) markSeen(m, 'relics', r);
   for (const p of run.potions || []) markSeen(m, 'potions', p);
   for (const e of run.seenEvents || []) markSeen(m, 'events', e);
+  for (const e of run.seenEnemies || []) markSeen(m, 'enemies', e); // run.js resolveFight records the enemies met
 }
 
 // ---------- queries ----------
@@ -130,6 +135,8 @@ function endContext(run, outcome, m) {
 export function recordRunEnd(m, run, outcome) {
   const res = { newUnlocks: [], newAchievements: [] };
   if (!m || !run) return res;
+  res.caseFile = { items: [], total: 0, capped: false };
+  if (run.practice) { run.metaDone = true; res.practice = true; return res; } // practice fights never touch stats or Credit
   if (run.metaDone) return res; // never count one run twice
   run.metaDone = true;
   const won = outcome === 'won';
@@ -157,6 +164,8 @@ export function recordRunEnd(m, run, outcome) {
     if (!cur || score > (cur.score || 0)) m.daily.best = { seed: run.daily, hero: run.hero, outcome, floors: st.floors || 0, grafts: st.grafts || 0, score };
   }
   seenFromRun(m, run);
+  res.caseFile = awardCaseFile(m, run, won); // milestones -> Credit (engine/meta2.js)
+  recordBosses(m, run);                      // saved decks for 'Practice a boss'
 
   // heroes
   const reachedAct2 = (run.act || 1) >= 2 || (run.loop || 0) > 0 || won;
@@ -175,7 +184,11 @@ export function recordRunEnd(m, run, outcome) {
     if (isAchieved(m, a.id)) continue;
     let ok = false;
     try { ok = !!a.check(run, ctx, m); } catch { ok = false; }
-    if (ok) { m.achievements[a.id] = { t: Date.now() }; res.newAchievements.push({ id: a.id, name: a.name, text: a.text }); }
+    if (ok) {
+      m.achievements[a.id] = { t: Date.now() };
+      const rw = a.reward && grantReward(m, a.reward) ? a.reward : null;
+      res.newAchievements.push({ id: a.id, name: a.name, text: rw ? `${a.text} Reward: ${rw.kind} ${rw.name}.` : a.text, reward: rw });
+    }
   }
 
   m.history.unshift({ hero: run.hero, asc, outcome, floors: st.floors || 0, grafts: st.grafts || 0, date: Date.now(), seed: String(run.seed), loop: run.loop || 0, daily: !!run.daily });
