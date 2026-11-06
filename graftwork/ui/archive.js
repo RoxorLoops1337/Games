@@ -80,7 +80,8 @@ export default {
     let yy = y + 34; const pitch = Math.min(38, (h - 34 - 8 - st.heroes.length * 46) / KINDS.length);
     for (const kd of KINDS) {
       const c = cc[kd];
-      app.text(`${KIND_LABEL[kd]} ${c.got} of ${c.total} unlocked`, x + 14, yy, { size: 14, ui: true, color: '#e0d4b8', fit: { w: iw, lines: 1, soft: true } });
+      const kO = { size: 14, ui: true, color: '#e0d4b8', fit: { w: iw, lines: 1, soft: true } }, kT = `${KIND_LABEL[kd]} ${c.got} of ${c.total} unlocked`;
+      app.text(app.layoutText(kT, kO).trunc ? `${KIND_LABEL[kd]} ${c.got} of ${c.total}` : kT, x + 14, yy, kO); // phones: drop the word 'unlocked' before any letters go
       bar(app, x + 14, yy + pitch - 9, iw, 5, c.total ? c.got / c.total : 1, c.got >= c.total ? '#8fe0a0' : '#b79442');
       yy += pitch;
     }

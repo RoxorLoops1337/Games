@@ -14,7 +14,7 @@ import { COL, clamp, rgba, EASE } from './core.js';
 import { lnw } from '../art/linework.js';
 import { drawCoin } from '../art/icons.js';
 import { WARD_GLOSSARY } from './tooltips.js';
-import { BUILD_CARDS, ROOMS } from '../data/ward.js';
+import { BUILD_CARDS, ROOMS, PHASES, WARD_TUNE } from '../data/ward.js';
 import * as WARD from '../engine/ward.js';
 import * as RUN from '../engine/run.js';
 
@@ -220,6 +220,44 @@ export function drawBuildCard(app, card, x, y, w, h, o = {}) {
   g.restore();
   app.text(kind.label, x + w / 2, ryy + 2 * k, { size: Math.round(11 * k), ui: true, bold: true, align: 'center', color: '#f6ecd4', alpha: A, fit: { w: w - 30 * k, h: rh, lines: 1 } });
   if (o.dim) { g.save(); app.rr(x, y, w, h, 8 * k); g.fillStyle = 'rgba(20,16,14,.42)'; g.fill(); g.restore(); }
+  if (o.dark) { // no spare power: the room would be built dark (the bulb is struck out)
+    const bx = x + w - 14 * k, by = y + 33 * k;
+    g.save(); g.strokeStyle = '#a3142f'; g.lineWidth = lnw('bold'); g.beginPath(); g.moveTo(bx - 9 * k, by + 9 * k); g.lineTo(bx + 9 * k, by - 9 * k); g.stroke(); g.restore();
+    app.text('DARK', x + w / 2, y + h - 40 * k, { size: Math.round(11 * k), ui: true, bold: true, align: 'center', color: '#a3142f', stroke: '#efe4cc', strokeW: 3, fit: { w: w - 20 * k, lines: 1 } });
+  }
+}
+
+// would this plan build its room dark? (a powered room, and the spare power is less than it draws)
+export function wouldBuildDark(run, card) {
+  const room = card && card.kind === 'room' ? ROOMS[card.room] : null;
+  if (!room || !(room.power > 0)) return false;
+  const pw = WARD.wardPower(run);
+  return pw.free < room.power;
+}
+// the building plans in hand that a morning could still play (not blocked by cost): used by the End Morning warning
+export function playablePlans(run) {
+  const w = run.ward, out = [];
+  for (const c of w.deck.hand) { const card = BUILD_CARDS[c.id]; if (card && WARD.canPlayBuild(run, c.uid, card.kind === 'room' ? { x: -1, y: -1 } : null).why !== 'cost') out.push(c); }
+  return out;
+}
+// the reward header's gold note: what the fight pays and why ("1 monster pays 75%, midday +10%")
+export function goldNote(wd, phase, kind) {
+  if (!wd || !wd.goldMul || Math.abs(wd.goldMul - 1) <= 0.01) return '';
+  const n = wd.count || 0, single = (!kind || kind === 'normal') && n >= 1;
+  const cf = single ? (n >= 2 ? 1 + WARD_TUNE.goldPerExtra * (n - 2) : 0.75) : 1; // data/ward.js goldPerExtra
+  const ph = wd.goldMul / cf, pct = Math.round((ph - 1) * 100), parts = [];
+  if (single && Math.abs(cf - 1) > 0.01) parts.push(`${plural0(n, 'monster')} pay${n === 1 ? 's' : ''} ${Math.round(cf * 100)}%`);
+  if (Math.abs(pct) >= 1) parts.push(`${phase ? PHASE_NAME[phase] || phase : 'the hour'} ${pct > 0 ? '+' : ''}${pct}%`);
+  return parts.length ? 'Gold: ' + parts.join(', ') + '.' : '';
+}
+const plural0 = (n, s) => `${n} ${s}${n === 1 ? '' : 's'}`;
+const PHASE_NAME = { midday: 'midday', evening: 'evening', night: 'night' };
+// where an event came from: "Chapel event, midday" plus how that hour leans (the event screen's heading)
+export function eventSource(pending) {
+  const ph = pending && pending.phase;
+  if (!ph || !PHASES[ph]) return null;
+  const lean = ph === 'midday' ? 'leans to gold and healing' : ph === 'night' ? 'leans strange and risky' : 'no lean';
+  return { head: `CHAPEL EVENT, ${PHASES[ph].name.toUpperCase()}`, lean };
 }
 
 // ---------------- the building deck viewer (Plans) ----------------

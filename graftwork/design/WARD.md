@@ -228,3 +228,20 @@ Shipped numbers (data/ward.js): FLOOR days 8 / 8 / 8 (was 6 / 7 / 7), `bigFight`
 random 0/120, sloppy 0/120, passive 1/180 (odile). Per act the strong bot fights 9 to 11 normal fights and about 2 elites in Act 1 to 3. The all pool is still 12 to 18 points below the start pool (same as before the dice; no single content kind explains it, N=120 ablations are noise at about 4 points). Spread is 7 points in the start pool and 2 in the all pool. The early boss is still never taken by the bot (needs a route-planning rule, a bot issue); its bonus was left at HP x0.85, 60 gold, one more graft pick.
 
 Unlock pacing (GW_MODE=ward, 200 players, 30 runs per hero pool): UP per boss 4.5 to 4.8, per elite 0.8 to 0.9, Act 3 reached 6 to 7, and Ward trigger rooms now count as floors (stats.floors). Ward strong median 40 runs to unlock all, careful 47; classic strong 39, careful 52. The "sloppy" unlock tier is the classic never-graft bot and is not meaningful in Ward mode.
+
+## 11. Closing the all-pool gap and the early boss (Z3)
+
+Finding: the all pool was 12 to 18 points below the start pool because of the BOT, not the content. Ablation (start pool plus one kind of locked content, strong bot, A0, N=100 per hero): locked cards 34/35/37, potions 28/32/39, events 29/37/42, building cards 42/48/48 (no harm at all), relics 24/25/36, safe grafts 29/24/35, greedy grafts 29/33/27, weird grafts 15/22/28. The 36 locked weird grafts carry a custom hook, which the classic strong pick (`graftScore` in tools/graftwork_sim.mjs) cannot value, so it adds a flat rarity credit of 2 / 3.5 / 5 points. That credit overpays weird grafts whose price (jams, junk, hand clogging) is bigger than the hook's boon, so the bot kept sewing them onto its best cards. No weird graft stood out as net negative on its own (per-graft win rates in the deck at N=450 per hero lie between 23 and 64 percent, within the survivorship noise), so no graft numbers were changed.
+
+Fix (bot, tools/graftwork_ward_sim.mjs): `wardPickGraft` is the strong pick with the weird credit halved (`GW_WEIRD_K`, default 0.5; 1 is the old behaviour, 0 removes it) and an empty per-graft table `GRAFT_ADJ` for future corrections. `GW_OLDPICK=1` restores the classic pick. New env `GW_UNLOCK=start+card,graft:weird,relic:rare` runs the start pool plus every locked item of those kinds (a kind may be narrowed by tier, school, hero or rarity) for ablations.
+
+Early boss (bot): it never took the early boss because the Theatre was never connected: the map is 9 wide, the Theatre sits on the far edge, the bot built about 3 Corridors and left 10 to 30 wood unspent. Rules now: (1) a Corridor (or Scaffold) is worth 6.5 while no chain of rooms links the hero to the Theatre (`theatreLinked`), (2) producer rooms are placed with a pull toward the Theatre (`GW_ROAD`, 0.6 per cell), (3) once the boss is open (last 2 days) and HP is at least 65 percent (`GW_EARLY_HP`), a route that enters the Theatre scores +30 and routes ending closer to it get up to +10, (4) `GW_EARLY=0` switches all of it off. Result: the early boss is fought on 40 to 50 percent of floors (was under 3 percent) and no tuning of its bonus (HP x0.85, 60 gold, one card, one graft) was needed.
+
+Numbers (strong bot, A0, N=150 per hero):
+
+| pool | marrow | wick | odile |
+|---|---|---|---|
+| all | 33% | 31% | 32% |
+| start | 30% | 41% | 45% |
+
+All-pool spread 2 points, inside the 25 to 40 target. The start pool rose (bot picks weird grafts better, early boss pays more); it is not a target. Other policies (N=60): random 0/180, sloppy 0/180, passive 1/180, careful 30 / 23 / 33 percent. Unlock pacing (GW_MODE=ward, 200 players, 30 runs): strong median 39 runs, careful 46 (targets 33 to 40 and 45 to 55).

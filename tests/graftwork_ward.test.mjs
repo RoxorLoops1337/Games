@@ -513,4 +513,44 @@ t('dice routes: a save round trip keeps the roll and the planned route; classic 
   const classic = RUN.newRun({ hero: 'marrow', seed: 'cl' }); assert.equal(classic.ward, undefined); assert.equal(RUN.runMode(classic), 'classic');
 });
 
+t('z5: a route through several fight rooms resumes at every step, in order, and ends on the last room only after all of them opened', () => {
+  const run = mk('multi');
+  const ids = layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0, [mon()]], ['rm_ward', 2, 0, [mon()]], ['rm_corridor', 3, 0], ['rm_ward', 4, 0, [mon()]]]);
+  W.endMorning(run); run.ward.roll = { key: '1:midday', base: 4, sides: 4, bonus: 0, n: 4, lucky: 0 };
+  for (const id of ids.slice(1)) assert.ok(W.extendRoute(run, id).ok);
+  const opened = [];
+  let p = W.startRoute(run);
+  for (let guard = 0; guard < 10 && p; guard++) {
+    opened.push(run.ward.hero.room);
+    assert.equal(run.phase, 'combat'); assert.ok(run.ward.walk, 'the walk is still on while a fight is open');
+    if (opened.length < 3) assert.notEqual(run.ward.hero.room, ids[4], 'the hero reaches the destination only after the fights on the way');
+    if (opened.length < 3) { clearFight(run); p = run.phase === 'combat' ? run.pending : null; if (!p) break; } else { clearFight(run); p = null; }
+    // a save and load in the middle of the walk changes nothing
+    if (run.ward.walk) { const copy = JSON.parse(JSON.stringify(run.ward)); assert.deepEqual(copy.walk, run.ward.walk); }
+  }
+  assert.deepEqual(opened, [ids[1], ids[2], ids[4]], 'each fight room opened, in route order');
+  assert.equal(run.phase, 'ward'); assert.equal(run.ward.phase, 'evening'); assert.equal(run.ward.walk, null); assert.equal(run.ward.hero.room, ids[4]);
+});
+
+t('z5: every walk phase has a die and a route list (midday, evening, night, after a fight, after a save without a route list)', () => {
+  const run = mk('dice-all');
+  layout(run, [['rm_entrance', 0, 0], ['rm_ward', 1, 0, [mon()]]]);
+  for (let day = 1; day <= 2; day++) {
+    W.endMorning(run);
+    for (const ph of ['midday', 'evening', 'night']) {
+      assert.equal(run.ward.phase, ph);
+      const r = W.rollOf(run); assert.ok(r && r.n >= 1, 'a roll in ' + ph); assert.ok(Array.isArray(run.ward.route));
+      if (ph === 'night' && W.bossForced(run)) break;
+      W.startWalk(run, run.ward.hero.room); // wait here: the phase moves on
+      if (run.phase === 'combat') clearFight(run);
+    }
+    assert.equal(run.ward.phase, 'morning', 'the day ends in a morning'); assert.equal(run.ward.day, day + 1);
+  }
+  // a save made before routes: the roll exists but the route list does not; the die and the route editor still work
+  const old = mk('dice-old'); layout(old, [['rm_entrance', 0, 0], ['rm_corridor', 1, 0]]); W.endMorning(old);
+  W.rollOf(old); delete old.ward.route;
+  assert.ok(W.rollOf(old)); assert.deepEqual(old.ward.route, []);
+  assert.equal(W.routeWhy(old, 'r2'), null, 'no crash on a missing route list');
+});
+
 console.log(n + ' passed');

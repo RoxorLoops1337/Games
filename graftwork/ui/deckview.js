@@ -88,7 +88,8 @@ export function cardGrid(app, items, x, y, w, h, o = {}) {
   const ctx = app.ctx, st = o.state || (o.state = {});
   const sc = o.scale || 0.62, cw = CARD_W * sc, ch = CARD_H * sc, gap = o.gap === undefined ? 12 : o.gap;
   const hasLabel = items.some((it) => it.label);
-  const rowH = ch + gap + (hasLabel ? 20 : 0);
+  const pillH = Math.max(16, Math.round(app.sz(11, { ui: true, bold: true }) * 1.22) + 4), pillY = ch + 2; // badge pills hang over the card's bottom edge (they never cover its last line of text); the row gap grows to hold them
+  const rowH = ch + Math.max(gap, items.some((it) => it.badges && it.badges.length) ? Math.ceil(pillY + pillH / 2 + 2 - ch) : 0) + (hasLabel ? 20 : 0);
   const sbw = 16;
   const cols = Math.max(1, Math.floor((w - sbw + gap) / (cw + gap)));
   const gridW = cols * cw + (cols - 1) * gap, ox = x + Math.max(gap, (w - sbw - gridW) / 2);
@@ -138,12 +139,12 @@ export function cardGrid(app, items, x, y, w, h, o = {}) {
         }
         if (it.selected) { ctx.save(); app.rr(left - 3, cardTop - 3, cw + 6, ch + 6, 8); ctx.lineWidth = lnw(3); ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore(); }
         if (st.kb && st.focus === i) { ctx.save(); app.rr(left - 4, cardTop - 4, cw + 8, ch + 8, 9); ctx.lineWidth = lnw(2); ctx.setLineDash([6, 4]); ctx.strokeStyle = COL.vellum; ctx.stroke(); ctx.restore(); }
-        if (it.badges && it.badges.length && cardTop + ch - 12 < y + h - 8 && cardTop + ch - 12 > y + 8) { // a badge past the clip edge is invisible: do not draw it
+        if (it.badges && it.badges.length && cardTop + pillY < y + h - 8 && cardTop + pillY > y + 8) { // a badge past the clip edge is invisible: do not draw it
           // pills along the bottom edge of the card
           const ws = it.badges.map((b) => app.measure(b.text, 11, { ui: true, bold: true }) + 12);
           const tot = ws.reduce((a, b) => a + b, 0) + (ws.length - 1) * 3;
           let px = cx - tot / 2;
-          it.badges.forEach((b, k) => { pill(app, b.text, px + ws[k] / 2, cardTop + ch - 12, b.color); px += ws[k] + 3; });
+          it.badges.forEach((b, k) => { pill(app, b.text, px + ws[k] / 2, cardTop + pillY, b.color); px += ws[k] + 3; });
         }
         if (it.label && cardTop + ch + 3 + app.sz(14, { ui: true }) < y + h) app.text(it.label, cx, cardTop + ch + 3, { size: 14, ui: true, bold: true, align: 'center', color: it.labelColor || COL.vellum, fit: { w: cw + gap - 2, lines: 1 } });
         if (over && !it.disabled) app.cursor = 'pointer';
@@ -519,8 +520,8 @@ export default {
     }
     ctx.restore();
     if (!hv && maxScroll > 0 && this.sideScroll < maxScroll - 1) {
-      const fh = Math.ceil(app.sz(11, { ui: true }) * 1.2) + 10;
-      const fg = ctx.createLinearGradient(0, y + h - fh, 0, y + h); fg.addColorStop(0, 'rgba(22,18,15,0)'); fg.addColorStop(0.5, 'rgba(22,18,15,.95)'); fg.addColorStop(1, 'rgba(22,18,15,.95)');
+      const fh = Math.ceil(app.sz(11, { ui: true }) * 1.2) + 16;
+      const fg = ctx.createLinearGradient(0, y + h - fh, 0, y + h); fg.addColorStop(0, 'rgba(22,18,15,0)'); fg.addColorStop(0.3, 'rgba(22,18,15,.97)'); fg.addColorStop(1, 'rgba(22,18,15,.97)');
       ctx.save(); ctx.fillStyle = fg; ctx.fillRect(x + 2, y + h - fh, w - 4, fh - 2); ctx.restore();
     }
     if (!hv && maxScroll > 0 && this.sideScroll < maxScroll - 1) app.text('Scroll for more', x + w / 2, y + h - 6 - app.sz(11, { ui: true }), { size: 11, ui: true, italic: true, align: 'center', color: COL.lamp, shadow: true });

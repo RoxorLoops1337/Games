@@ -623,6 +623,7 @@ export function rollWalk(run) {
 export function rollOf(run) {
   const w = W(run); if (!w || w.phase === 'morning') return null;
   if (!w.roll || w.roll.key !== `${w.day}:${w.phase}`) rollWalk(run);
+  if (!Array.isArray(w.route)) w.route = []; // a save from before routes: the die and the route editor always have a list
   return w.roll;
 }
 // Lucky Roll (effect 'reroll') or the Lucky Coin (once a day): roll the die again; what allowed it is spent

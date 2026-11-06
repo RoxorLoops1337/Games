@@ -12,6 +12,7 @@ import { drawBackground } from '../art/backgrounds.js';
 import { drawCard, CARD_W, CARD_H } from '../art/cards.js';
 import { drawHeart, drawCoin, drawRelic, drawEventSeal } from '../art/icons.js';
 import { lnw } from '../art/linework.js';
+import { eventSource } from './ward_kit.js';
 
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const FRAME = { x: 36, y: 40, w: 520, h: 560 };
@@ -211,7 +212,8 @@ export default {
     g.restore();
 
     // title
-    app.text(ev.act ? `ACT ${['', 'I', 'II', 'III'][ev.act]} EVENT` : 'EVENT', ix, P.y + 30, { size: 13, ui: true, bold: true, color: 'rgba(43,30,26,.55)' });
+    const src = this.run && this.run.mode === 'ward' ? eventSource(this.run.pending) : null; // Ward: which room and hour the event came from
+    app.text(src ? `${src.head} (${src.lean})` : ev.act ? `ACT ${['', 'I', 'II', 'III'][ev.act]} EVENT` : 'EVENT', ix, P.y + 30, { size: 13, ui: true, bold: true, color: 'rgba(43,30,26,.55)', maxW: iw });
     const th = app.text(ev.name, ix, P.y + 48, { size: 36, bold: true, color: COL.ink, maxW: iw, lineH: 42 });
     let y = P.y + 48 + th + 8;
     g.strokeStyle = COL.scar; g.lineWidth = lnw(2.5); g.setLineDash([10, 7]); g.beginPath(); g.moveTo(ix, y); g.lineTo(ix + iw, y); g.stroke(); g.setLineDash([]);

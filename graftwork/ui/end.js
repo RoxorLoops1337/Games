@@ -323,15 +323,21 @@ export default {
     // Too many entries for the full rows (a phone panel holds about one): every entry becomes ONE line (tag + name), so each is listed and none is dropped
     const estH = this.news.reduce((a, n) => a + kH + nH + (n.rows ? Math.min(n.rows.length, 2) * (tH + 2) + tH : Math.min(app.wrap(n.text || '', w - 28, 12, { ui: true }).length, 2) * tH) + 10, 0);
     if (this.news.length > 1 && yy + estH > ny + nh - 6) {
-      const lH = Math.ceil(app.sz(14, { bold: true }) * 1.25) + 3, cap = Math.max(1, Math.floor((ny + nh - 6 - yy) / lH)), shownN = Math.min(this.news.length, this.news.length > cap ? cap - 1 : cap);
+      const lH0 = Math.ceil(app.sz(14, { bold: true }) * 1.25) + 3, tagW = Math.ceil(app.measure('FILE', 10, { ui: true, bold: true })) + 8;
+      // a long name takes a second line before it loses letters; every entry still gets listed (the last rows give way to "and N more")
+      const nmL = this.news.map((n) => app.layoutText(n.name, { size: 14, bold: true, fit: { w: w - 28 - tagW, lines: 2, soft: true } }));
+      const hs = nmL.map((l) => Math.max(lH0, l.lines.length * l.lineH + 3)), room = ny + nh - 6 - yy;
+      let shownN = 0, used = 0; while (shownN < this.news.length && used + hs[shownN] <= room) used += hs[shownN++];
+      if (shownN < this.news.length) { shownN = Math.max(1, shownN - 1); }
+      let ty = yy;
       for (let i = 0; i < shownN; i++) {
-        const n = this.news[i], at = this.nextNew + i * 0.3, k = clamp((this.t0 - at) / 0.3, 0, 1), ty = yy + i * lH;
+        const n = this.news[i], at = this.nextNew + i * 0.3, k = clamp((this.t0 - at) / 0.3, 0, 1);
         if (k > 0 && this.shown <= i) { this.shown = i + 1; if (app.shared.audio) app.shared.audio.sfx(n.kind === 'Unlocked' ? 'relic' : 'gilded', { vol: 0.5 }); }
         g.save(); g.globalAlpha = EASE.out(k);
         const tag = n.kind === 'Unlocked' ? 'NEW' : n.kind === 'Credit' ? 'FILE' : 'REC', tw = Math.ceil(app.measure(tag, 10, { ui: true, bold: true })) + 8;
         app.text(tag, x + 14, ty + 2, { size: 10, ui: true, bold: true, color: n.kind === 'Unlocked' ? '#8fe0a0' : COL.lamp });
-        app.text(n.name, x + 14 + tw, ty, { size: 14, bold: true, color: '#fbe9b0', fit: { w: w - 28 - tw, lines: 1 } });
-        g.restore();
+        app.text(n.name, x + 14 + tw, ty, { size: 14, bold: true, color: '#fbe9b0', fit: { w: w - 28 - tw, lines: 2, soft: true } });
+        g.restore(); ty += hs[i];
       }
       if (this.news.length > shownN) app.text(`and ${this.news.length - shownN} more in the Codex`, x + w / 2, ny + nh - hdrH - 8, { size: 12, ui: true, italic: true, align: 'center', color: '#a58f6b', fit: { w: w - 20, lines: 1 } });
       return;
