@@ -209,6 +209,7 @@ export function createApp(canvas, opts = {}) {
     app.blocked = false;
     drawTip();
     if (app.overlay) app.overlay(app);
+    if (app.afterFrame) app.afterFrame(app);
     canvas.style.cursor = app.cursor;
     if (app.mouse.touchUp) { app.mouse.touchUp = false; app.mouse.x = -999; app.mouse.y = -999; }
     app.mouse.pressed = false; app.mouse.released = false; app.mouse.wheel = 0; app.pressedKeys.length = 0;

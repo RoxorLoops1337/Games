@@ -3,7 +3,7 @@ import { STATUSES, CARDS } from '../data/index.js';
 import { mult, scaleNum } from './combat.js';
 
 const SRC_NAMES = {
-  x: 'X', hand: 'card in hand', energy: 'Energy', block: 'Block', hp: 'HP', missingHp: 'missing HP', drawPile: 'card in draw pile', discard: 'card in discard',
+  knots: 'knot in the Thread', x: 'X', hand: 'card in hand', energy: 'Energy', block: 'Block', hp: 'HP', missingHp: 'missing HP', drawPile: 'card in draw pile', discard: 'card in discard',
   exhaust: 'exhausted card', plays: 'card played this turn', deck: 'card in your deck', grafts: 'graft in your deck', cardGrafts: 'graft on this card',
   strain: 'Strain', enemies: 'enemy', kills: 'kill this turn', dealt: 'damage dealt', gold: 'gold', junk: 'junk card', attacksInHand: 'Attack in hand',
 };

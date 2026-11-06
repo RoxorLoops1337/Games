@@ -116,11 +116,11 @@ export function isBare(inst) { return inst.grafts.length === 0 && !(inst.fused &
 
 // Strain = weight over Budget. Each Strain point lands one Tithe on a Bare card: the cheapest first, oldest first.
 // Overflow (Strain with no Bare card left to take it) becomes Backfire: grafted cards jam in hand.
-export function strainInfo(run, deck = run.deck, extraBudget = 0) {
+export function strainInfo(run, deck = run.deck, extraBudget = 0, extraStrain = 0) {
   let weight = 0;
   for (const inst of deck) weight += instWeight(inst);
   const budget = budgetOf(run) + extraBudget;
-  const strain = Math.max(0, weight - budget);
+  const strain = Math.max(0, weight + extraStrain - budget);
   const bare = deck.filter(isBare).sort((a, b) => (CARDS[a.id].cost === 'X' ? 1 : CARDS[a.id].cost) - (CARDS[b.id].cost === 'X' ? 1 : CARDS[b.id].cost) || a.uid - b.uid);
   const tithed = bare.slice(0, strain).map((i) => i.uid);
   const overflow = Math.max(0, strain - bare.length);

@@ -2,6 +2,7 @@
 import { createApp } from './ui/core.js';
 import { FX_OPTS } from './ui/fx.js';
 import * as audio from './ui/audio.js';
+import { installPost } from './ui/post.js';
 import * as RUN from './engine/run.js';
 import * as META from './engine/meta.js';
 import { saveRun, loadRun, clearRun, hasRun } from './engine/save.js';
@@ -56,6 +57,7 @@ export function boot(canvas) {
     openSettings() { app.push('settings', {}); },
     saveMeta() { META.saveMeta(app.shared.meta); },
   };
+  installPost(app);
   app.shared.flow = flow;
   app.shared.audio = audio;
   app.onClick = () => audio.sfx('uiClick');
