@@ -74,7 +74,7 @@ export default {
     const hero = HEROES[run.hero];
     // ---- title ----
     const k = EASE.out(clamp(t / 0.8, 0, 1));
-    const title = this.won ? 'THE GRAFTER IS UNMADE' : run.abandoned ? 'WALKED OUT' : 'FLATLINE';
+    const title = run.practice ? (this.won ? 'PRACTICE CLEARED' : 'PRACTICE OVER') : this.won ? 'THE GRAFTER IS UNMADE' : run.abandoned ? 'WALKED OUT' : 'FLATLINE';
     const tcol = this.won ? '#f7dc8a' : '#d9606c';
     app.reg('end-title', 240, 14, 800, 108, { group: 'title' });
     g.save(); g.globalAlpha = k;
@@ -247,7 +247,7 @@ export default {
     const y = 660, bh = 48;
     const btns = [];
     btns.push(['New Run', 'new']);
-    if (this.won) btns.push(['Endless', 'endless']);
+    if (this.won && !run.practice) btns.push(['Endless', 'endless']);
     btns.push(['Copy seed', 'copy']);
     btns.push(['Back to title', 'title']);
     const small = app.scale < 0.95, bw = btns.length > 3 ? (small ? 236 : 200) : 236, gap = small ? 12 : 18, total = btns.length * bw + (btns.length - 1) * gap;

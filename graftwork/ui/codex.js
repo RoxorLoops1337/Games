@@ -11,7 +11,7 @@ import { drawSeamBadge } from './seam_ui.js';
 import { statusText } from '../engine/text.js';
 import { cardGrid, gridKey, scrollArea, inView, pill, clampText, gaugeCells } from './deckview.js';
 
-const TABS = ['Cards', 'Grafts', 'Relics', 'Enemies', 'Statuses', 'Schools', 'Rules'];
+const TABS = ['Cards', 'Grafts', 'Relics', 'Enemies', 'Statuses', 'Schools', 'Rules', 'Records'];
 const KINDS = ['cards', 'grafts', 'relics', 'enemies', 'statuses'];
 const KEYS = { cards: CARDS, grafts: GRAFTS, relics: RELICS, enemies: ENEMIES, statuses: STATUSES };
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
@@ -286,7 +286,7 @@ export default {
     app.reg('codex-x', 1080, 16, 36, 36, { group: 'x' }); // left of the global Pause / Fullscreen zone
     if (app.button('X', 1080, 16, 36, 36, { size: 20, ui: true, r: 18 })) this.pending = () => { if (app.top() === this) app.pop(); };
     // tabs
-    const tw = 160, ty = 62;
+    const tw = 140, ty = 62;
     TABS.forEach((name, i) => {
       const kind = KINDS[i];
       const label = kind ? `${name} ${seenCount(app, kind)}/${Object.keys(KEYS[kind]).length}` : name;
@@ -309,6 +309,8 @@ export default {
       const caret = Math.floor(app.t * 2) % 2 ? '|' : '';
       if (this.q) app.text(this.q + caret, sx + 10, 111, { size: 15, ui: true, color: COL.vellum });
       else app.text('Type to search seen entries', sx + 10, 111, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.4)' });
+    } else if (this.tab === 7) {
+      app.text('Achievements, Credit and cosmetics. Credit is paid by the case file at the end of a run.', 36, 112, { size: 15, ui: true, italic: true, color: 'rgba(232,220,196,.65)' });
     } else {
       app.text(this.tab === 5 ? 'The seven schools. Hold 3 grafts of one to wake its bonus, 6 to wake the bigger one.' : 'The whole Graft system in eight panels.', 36, 112, { size: 15, ui: true, italic: true, color: 'rgba(232,220,196,.65)' });
     }
@@ -317,6 +319,7 @@ export default {
     if (kind === 'cards') this.drawCards(app, CX, CY, CW, CH);
     else if (kind) this.drawList(app, kind, CX, CY, CW, CH);
     else if (this.tab === 5) this.drawSchools(app, CX, CY, CW, CH);
+    else if (this.tab === 7) this.drawRecords(app, CX, CY, CW, CH);
     else this.drawRules(app, CX, CY, CW, CH);
     ctx.restore();
     if (this.pending) this.pending();
@@ -367,6 +370,42 @@ export default {
         ctx.restore();
       });
     });
+  },
+  // Records: achievements (left, scrolls) and the Credit shop (right: card backs, starting relics, equip)
+  drawRecords(app, x, y, w, h) {
+    const ctx = app.ctx, meta = app.shared.meta, M = app.shared.flow && app.shared.flow.META;
+    if (!meta || !M || !meta.credit) return;
+    const lw = Math.floor(w * 0.58), rx = x + lw + 12, rw = w - lw - 12, st = this.state('records');
+    const list = M.ACHIEVEMENTS, rh = 62, gap = 8;
+    scrollArea(app, st, x, y, lw, h, list.length * (rh + gap) + gap, (top) => {
+      list.forEach((a, i) => {
+        const cy = top + gap + i * (rh + gap); if (cy + rh < y || cy > y + h) return;
+        const done = M.isAchieved(meta, a.id), p = M.achievementProgress(meta, a.id), hidden = a.secret && !done;
+        app.panel(x + 8, cy, lw - 16, rh, { r: 8, fill: done ? 'rgba(50,40,18,.9)' : 'rgba(22,18,15,.9)', stroke: done ? COL.lamp : 'rgba(232,220,196,.2)', lw: 1.5 });
+        app.text(hidden ? '???' : a.name, x + 22, cy + 6, { size: 16, bold: true, color: done ? COL.lamp : COL.vellum, maxW: lw - 200 });
+        app.text(hidden ? 'A secret record.' : clampText(app, a.text, lw - 60, 13, 2, { ui: true }), x + 22, cy + 28, { size: 13, ui: true, maxW: lw - 60, lineH: 15, color: 'rgba(232,220,196,.75)' });
+        app.text(done ? 'DONE' : p.max > 1 ? `${p.n}/${p.max}` : '', x + lw - 24, cy + 8, { size: 13, ui: true, bold: true, align: 'right', color: done ? COL.good : 'rgba(232,220,196,.6)' });
+      });
+    });
+    app.panel(rx, y, rw, h, { r: 10, fill: 'rgba(10,8,7,.55)', stroke: 'rgba(232,220,196,.2)', lw: 1.5 });
+    app.text(`CREDIT  ${meta.credit.bal}`, rx + 16, y + 12, { size: 20, bold: true, color: COL.lamp });
+    app.text(`${M.ACHIEVEMENTS.filter((a) => M.isAchieved(meta, a.id)).length}/${M.ACHIEVEMENTS.length} records`, rx + rw - 16, y + 16, { size: 13, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
+    const rows = [];
+    for (const b of M.CARD_BACKS) rows.push({ kind: 'back', id: b.id, label: 'Back: ' + b.name, cost: b.cost, list: meta.cosmetics.backs, eq: meta.loadout.back });
+    for (const r of M.START_RELICS) rows.push({ kind: 'relic', id: r.id, label: 'Start: ' + ((RELICS[r.id] || {}).name || r.id), cost: r.cost, list: meta.cosmetics.relics, eq: meta.loadout.relic });
+    let yy = y + 48; const bh = 26;
+    for (const r of rows) {
+      if (yy + bh > y + h - 6) break;
+      const owned = r.list.includes(r.id), on = r.eq === r.id;
+      app.text(r.label, rx + 14, yy + 4, { size: 14, ui: true, color: owned ? COL.vellum : 'rgba(232,220,196,.6)', maxW: rw - 150 });
+      const lab = on ? (r.kind === 'relic' ? 'Unequip' : 'Equipped') : owned ? 'Equip' : r.cost === null ? 'Earn it' : `Buy ${r.cost}`;
+      const dis = (!owned && (r.cost === null || meta.credit.bal < r.cost)) || (on && r.kind === 'back');
+      if (app.button(lab, rx + rw - 118, yy, 104, bh, { size: 13, ui: true, r: 6, disabled: dis })) {
+        if (!owned) M.buy(meta, r.kind, r.id); else M.equip(meta, r.kind, on ? null : r.id);
+        app.shared.flow.saveMeta();
+      }
+      yy += bh + 4;
+    }
   },
   drawSchools(app, x, y, w, h) {
     const ctx = app.ctx, st = this.state('schools'), ids = SCHOOL_IDS();

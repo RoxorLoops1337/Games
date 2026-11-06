@@ -51,6 +51,7 @@ export function newRun(opts = {}) {
   if (hero.id === 'marrow') addRelic(run, 'r_marrow_kit');
   if (hero.id === 'wick') addRelic(run, 'r_wick_kit');
   if (hero.id === 'odile') addRelic(run, 'r_odile_kit');
+  if (opts.startRelic && !opts.daily) addRelic(run, opts.startRelic); // bought in the Records tab (meta2 START_RELICS)
   if (run.daily) { run.dailyMod = DAILY_MODS[hashSeed(run.daily) % DAILY_MODS.length]; run.budgetBonus += run.dailyMod.budget || 0; }
   run.budgetBonus += -(asc >= 6 ? 1 : 0);
   startAct(run, 1);

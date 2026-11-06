@@ -6,7 +6,7 @@ import { drawPortrait } from '../art/heroes.js';
 import { drawSchoolGlyph } from '../art/cards.js';
 import * as RUN from '../engine/run.js';
 import { HEROES, SCHOOLS, CARDS } from '../data/index.js';
-import { heroUnlocked, maxAscension } from '../engine/meta.js';
+import { heroUnlocked, maxAscension, startRelicOf, practiceList } from '../engine/meta.js';
 import { loadRun } from '../engine/save.js';
 import { hashSeed } from '../engine/rng.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs } from './fullscreen.js';
@@ -379,7 +379,17 @@ export default {
     if (app.button('Begin', px0 + 134, by, 116, 44, { size: 22, fill: unlocked ? '#4a3a1d' : undefined, stroke: COL.lamp, disabled: !unlocked, color: '#fbe9b0' }) || (!app.blocked && keys.some((e) => e.key === 'Enter') && unlocked)) {
       const opts = { hero: this.hero, ascension: this.asc };
       if (this.seed.trim()) opts.seed = this.seed.trim();
+      const sr = startRelicOf(meta); if (sr) opts.startRelic = sr;
       this.begin(app, opts);
+    }
+    // Practice a boss: unlocked once a boss has been met; replays it with the deck saved from that run
+    const pl = practiceList(meta);
+    if (pl.length) {
+      this.pi = (this.pi || 0) % pl.length; const p = pl[this.pi];
+      app.reg('title-practice', px0 + 264, by, 118, 44, { group: 'practice' });
+      if (app.inRect(px0 + 264, by, 118, 44)) app.tooltip('Practice: ' + p.name, 'Retry this boss with the deck you took into it.');
+      if (app.button('Practice', px0 + 264, by, 118, 44, { size: 16 })) { if (app.shared.flow.startPractice) app.shared.flow.startPractice(p); }
+      if (pl.length > 1 && app.button('>', px0 + 388, by, 30, 44, { size: 18 })) this.pi++;
     }
     if (keys.some((e) => e.key === 'Escape')) this.go(app, 'menu');
     if (keys.some((e) => e.key === 'ArrowRight' && !this.seedFocus)) { }
