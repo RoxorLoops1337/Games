@@ -4,12 +4,13 @@
 // Prints win rate, act reached, and per-act averages of normal fights, monsters fought, elites, events, shops, forges, rests.
 import * as RUN from '../graftwork/engine/run.js';
 import * as W from '../graftwork/engine/ward.js';
-import { canGraft, strainInfo } from '../graftwork/engine/cards.js';
-import { HEROES, RELICS } from '../graftwork/data/index.js';
+import { canGraft, strainInfo, schoolsOf, cardSpec } from '../graftwork/engine/cards.js';
+import { HEROES, RELICS, GRAFTS, CARDS } from '../graftwork/data/index.js';
 import { hashSeed } from '../graftwork/engine/rng.js';
-import { POLICIES, fight, chooseGraft, eventScore, pickEventCard, doShop, doForge } from './graftwork_sim.mjs';
+import { POLICIES, graftScore, fight, chooseGraft, eventScore, pickEventCard, doShop, doForge } from './graftwork_sim.mjs';
 import { tierFight } from './graftwork_tiers.mjs';
 import './graftwork_strong.mjs';
+import { UNLOCKS } from '../graftwork/data/unlocks.js';
 import { WARD_TUNE, PHASES, ROOMS, FLOOR } from '../graftwork/data/ward.js';
 // GW_TUNE='{"tune":{"waitHeal":6},"phases":{"night":{"enemyStr":0}},"rooms":{"rm_linen":{"heal":0.3}}}' patches the data in memory for what-if runs (nothing is written)
 if (process.env.GW_TUNE) { const t = JSON.parse(process.env.GW_TUNE); Object.assign(WARD_TUNE, t.tune || {}); for (const [k, v] of Object.entries(t.phases || {})) Object.assign(PHASES[k], v); for (const [k, v] of Object.entries(t.rooms || {})) Object.assign(ROOMS[k], v); for (const [k, v] of Object.entries(t.floor || {})) Object.assign(FLOOR[k], v); }
@@ -20,9 +21,15 @@ const dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
 
 // ---------------- strong builder ----------------
 const WANT = { rm_sawmill: 2, rm_quarry: 2, rm_ward: 3, rm_isolation: 2, rm_chapel: 1, rm_dispensary: 1, rm_workshop: 1, rm_linen: 1, rm_counting: 1, rm_generator: 3, rm_pharmacy: 1, rm_library: 1, rm_morgue: 1, rm_kitchen: 1, rm_boiler: 1, rm_laundry: 1, rm_isolation2: 1 };
+// is there a chain of rooms from the hero to the Theatre (a road for the early boss)?
+function theatreLinked(run) {
+  const w = run.ward, th = W.theatreOf(run), seen = new Set([w.hero.room]), q = [w.hero.room];
+  while (q.length) { const id = q.shift(); if (id === th.id) return true; for (const n of W.neighbors(run, id)) if (!seen.has(n)) { seen.add(n); q.push(n); } }
+  return false;
+}
 function roomPriority(run, type) {
   const w = run.ward, have = count(run, type), pw = W.wardPower(run), need = W.ROOMS[type].power;
-  if (type === 'rm_corridor') return w.day >= w.dayLimit - 3 && w.res.wood >= 2 ? 5 : w.res.wood >= 3 ? 1 : 0.2; // late in the floor: a road to the Theatre, for the early boss
+  if (type === 'rm_corridor') return EARLY_ON && !theatreLinked(run) ? 6.5 : w.day >= w.dayLimit - 4 && w.res.wood >= 2 ? 5 : w.res.wood >= 3 ? 1 : 0.2; // late in the floor: a road to the Theatre, for the early boss
   if (type === 'rm_generator') return pw.free < 1 ? 9 : pw.free < 2 ? 3 : 0;
   if (have >= (WANT[type] || 1)) return 0;
   if (need && pw.free < need) return 0.5; // would be built dark
@@ -37,7 +44,7 @@ function bestCell(run, type) {
     if (type === 'rm_corridor') return -dist(c, [th.x, th.y]) * 2 - dist(c, [hero.x, hero.y]) * 0.3;
     const spawner = !!(W.ROOMS[type].spawn);
     // spawners close to the hero's usual haunts, producers out of the way
-    return spawner ? -dist(c, [ent.x, ent.y]) * 0.6 - dist(c, [hero.x, hero.y]) * 0.6 : -Math.abs(c[1] - ent.y) * 0.2 + c[0] * 0 - dist(c, [th.x, th.y]) * -0.1;
+    return spawner ? -dist(c, [ent.x, ent.y]) * 0.6 - dist(c, [hero.x, hero.y]) * 0.6 : -Math.abs(c[1] - ent.y) * 0.2 - (EARLY_ON ? dist(c, [th.x, th.y]) * ROAD_W : 0);
   };
   return cells.slice().sort((a, b) => score(b) - score(a))[0];
 }
@@ -78,6 +85,10 @@ function strongMorning(run) {
 }
 
 // ---------------- strong walker ----------------
+// Early boss rule: once the Theatre is open (last 2 days) a healthy bot takes the boss at x0.85 HP instead of waiting for the night boss
+// (the idle boss grows, the floor keeps spawning, and the early kill pays gold, a building card and a graft). It walks toward the Theatre
+// while healthy and enters it when the route reaches it with at least EARLY_HP of its HP left after the route's fights.
+const ROAD_W = +(process.env.GW_ROAD ?? 0.6), EARLY_HP = +(process.env.GW_EARLY_HP ?? 0.65), EARLY_ON = (process.env.GW_EARLY ?? '1') !== '0';
 function walkScore(run, pv) {
   const w = run.ward, hpF = run.hp / run.maxHp, ph = w.phase, act = run.act;
   let s = 0, fights = 0, monsters = 0;
@@ -99,12 +110,16 @@ function walkScore(run, pv) {
     else if (t.kind === 'shop') s += run.gold >= 120 ? 8 : run.gold >= 60 ? 3 : 0.5;
     else if (t.kind === 'forge') s += hpF < 0.7 ? 11 : 6;
     else if (t.kind === 'rest') s += (1 - hpF) * 22;
-    else if (t.kind === 'boss') s += t.detail.early ? (hpF >= 0.7 && w.day >= w.dayLimit - 1 ? 30 : -40) : 100;
+    else if (t.kind === 'boss') s += t.detail.early ? (hpF >= EARLY_HP && hp >= run.maxHp * EARLY_HP ? 30 : -40) : 100;
   }
   if (fights > 2) s -= (fights - 2) * 4;
   if (hp < run.maxHp * 0.25) s -= 25;
   s -= pv.offPenalty * 0.6;
   if (pv.wait) s += 1;
+  if (EARLY_ON && W.bossOpen(run) && hpF >= EARLY_HP && !pv.triggers.some((t) => t.kind === 'boss') && pv.path && pv.path.length) {
+    const th = W.theatreOf(run), end = w.rooms[pv.path[pv.path.length - 1]];
+    if (end) s += Math.max(0, 8 - dist([end.x, end.y], [th.x, th.y])) * 1.2;
+  }
   return s;
 }
 // dice routes: a walk is at most the roll N rooms. pathR is pathTo cut to the roll (the policies score what a route of N steps would trigger),
@@ -179,12 +194,52 @@ function randomWalk(run, R) {
   return startR(run, R.pick(ok));
 }
 
+// GW_UNLOCK=start+card,graft opens the start pool plus every locked item of those kinds (card graft relic potion event build): ablations of the all pool
+function unlockOpt(v) {
+  if (!v.startsWith('start+')) return v;
+  const kinds = v.slice(6).split(',');
+  // a kind may be narrowed: graft:safe | graft:ember (tier or school), card:marrow (hero)
+  const ok = (e) => kinds.some((k) => { const [kd, sub] = k.split(':'); if (kd !== e.kind) return false; if (!sub) return true; const it = (e.kind === 'graft' ? GRAFTS : e.kind === 'card' ? CARDS : RELICS)[e.itemId] || {}; return [it.tier, it.school, it.hero, it.rarity].includes(sub); });
+  return Object.values(UNLOCKS).filter((e) => e.tier === 'locked' && ok(e)).map((e) => e.id);
+}
+// ---------------- ward graft pick ----------------
+// The classic strong pick credits every custom-hook (weird) graft a flat rarity bonus because fxValue cannot see inside hooks; in the Ward
+// that over-rewards weird grafts that cost more than they pay. GRAFT_ADJ is a per-graft correction measured from the sims (see WARD.md section 11).
+const WEIRD_CREDIT = { common: 2, uncommon: 3.5, rare: 5 };
+export const GRAFT_ADJ = {};
+const WEIRD_K = +(process.env.GW_WEIRD_K ?? 0.5);
+function wardPickGraft(run, pol) {
+  const offer = run.pending.offer;
+  const focus = {};
+  for (const inst of run.deck) for (const s of schoolsOf(cardSpec(inst))) focus[s] = (focus[s] || 0) + 1;
+  const top = Object.entries(focus).sort((a, b) => b[1] - a[1])[0];
+  let best = null, bs = -1e9;
+  for (const uid of offer.cards) {
+    const inst = RUN.findInst(run, uid);
+    for (const gid of offer.grafts) {
+      if (!canGraft(inst, gid)) continue;
+      const r = graftScore(run, inst, gid, pol);
+      if (r.strain > pol.maxStrain) continue;
+      const g = GRAFTS[gid];
+      let s = r.s;
+      if (g.mods.some((m) => m.k === 'custom')) s -= (1 - WEIRD_K) * (WEIRD_CREDIT[g.rarity] || 2);
+      s += GRAFT_ADJ[gid] || 0;
+      if (top && g.school === top[0]) s += 1.5; else if (top && (focus[g.school] || 0) >= 2) s += 0.7;
+      if (inst.grafts.length === 2 && r.strain === 0 && !run.flags.gwOverloaded && (hashSeed(run.seed + ':over') % 1000) / 1000 < 0.35) s += 3.5;
+      if (s > bs) { bs = s; best = [uid, gid]; }
+    }
+  }
+  const pick = best && bs >= 1.5 ? best : null;
+  if (pick && RUN.findInst(run, pick[0]).grafts.length === 2) run.flags.gwOverloaded = true;
+  return pick;
+}
+
 // ---------------- the run ----------------
 export function playWardRun(heroId, seed, policy = 'strong', asc = 0, o = {}) {
-  const pol = policy === 'careful' ? POLICIES.careful : POLICIES.strong, rnd = policy === 'random' || policy === 'sloppy', R = mkRng(`ward:${policy}:${seed}`);
+  const pol = policy === 'careful' ? POLICIES.careful : process.env.GW_OLDPICK ? POLICIES.strong : { ...POLICIES.strong, pickGraft: wardPickGraft }, rnd = policy === 'random' || policy === 'sloppy', R = mkRng(`ward:${policy}:${seed}`);
   const morningFn = { random: randomMorning, sloppy: sloppyMorning, passive: (r) => W.endMorning(r) }[policy] || strongMorning;
   const walkFn = { random: randomWalk, sloppy: nearestWalk, passive: hideWalk, fill: (r, Rn) => strongWalk(r, Rn, true) }[policy] || strongWalk;
-  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, mode: 'ward', assist: o.assist, unlocked: o.unlocked || process.env.GW_UNLOCK || 'all' });
+  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, mode: 'ward', assist: o.assist, unlocked: o.unlocked || unlockOpt(process.env.GW_UNLOCK || 'all') });
   const acts = { 1: blank(), 2: blank(), 3: blank() };
   const log = { fights: [], events: 0, shops: 0, acts };
   let guard = 0;

@@ -112,6 +112,8 @@ await t('walk: End Morning, preview the thread, confirm, fight -> reward -> graf
   const [ent, wd, ch] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, [{ kind: 'monster', id: NORMAL1[0] }, { kind: 'monster', id: NORMAL1[1] }]], ['rm_chapel', 2, 2, [{ kind: 'event' }]]]);
   flow.route(); frames(app, 200);
   const eb = reg('ward-act'); click(app, eb.x + eb.w / 2, eb.y + eb.h / 2); frames(app, 3);
+  assert.equal(run.ward.phase, 'morning', 'plans you could still play: the first click only warns');
+  click(app, eb.x + eb.w / 2, eb.y + eb.h / 2); frames(app, 3);
   assert.equal(run.ward.phase, 'midday', 'End Morning');
   run.ward.roll = { key: '1:midday', base: 3, sides: 4, bonus: 0, n: 3, lucky: 0 }; frames(app, 3);
   const wc = cellCenter(1, 2), cc = cellCenter(2, 2);
@@ -317,4 +319,149 @@ await t('z4: the title Continue line of a Ward run reads the day, not Floor 0', 
 });
 
 void BUILD_CARDS;
+// ---------------- Z5: the open UX findings of WARD_PLAYTEST.md ----------------
+await t('z5: End Morning warns once before it throws away plans you could still play (and not at all when nothing is playable)', async () => {
+  const { app, run, flow } = await setup({ seed: 'z5end' });
+  layout(run, [['rm_entrance', 0, 2]]);
+  run.ward.res.wood = 5; run.ward.res.stone = 5; run.ward.deck.hand = []; give(run, 'b_ward'); give(run, 'b_corridor');
+  flow.route(); frames(app, 200);
+  const A = reg('ward-act'), at = () => click(app, A.x + A.w / 2, A.y + A.h / 2);
+  at(); frames(app, 3);
+  assert.equal(run.ward.phase, 'morning', 'the first click only warns'); assert.match(app.screens.ward.st.toast, /2 plans you can still play will be discarded/);
+  assert.equal(run.ward.deck.hand.length, 2, 'nothing was thrown away');
+  at(); frames(app, 3);
+  assert.equal(run.ward.phase, 'midday', 'the second click ends the morning');
+  const b = await setup({ seed: 'z5end2' });
+  layout(b.run, [['rm_entrance', 0, 2]]); b.run.ward.res.wood = 0; b.run.ward.res.stone = 0; b.run.gold = 0; b.run.ward.deck.hand = []; give(b.run, 'b_ward');
+  b.flow.route(); frames(b.app, 200);
+  const B = reg('ward-act'); click(b.app, B.x + B.w / 2, B.y + B.h / 2); frames(b.app, 3);
+  assert.equal(b.run.ward.phase, 'midday', 'only plans you cannot afford: no warning');
+});
+
+await t('z5: a room that would be built dark is not paid for on the first drop; the second identical drop builds it', async () => {
+  const { app, run, flow } = await setup({ seed: 'z5dark' });
+  layout(run, [['rm_entrance', 0, 2], ['rm_sawmill', 1, 2]]);
+  run.ward.power.base = 1; WD.wardPower(run);
+  run.ward.res.wood = 10; run.ward.res.stone = 10; run.ward.deck.hand = []; give(run, 'b_ward');
+  assert.equal(KIT.wouldBuildDark(run, BUILD_CARDS.b_ward), true); assert.equal(KIT.wouldBuildDark(run, BUILD_CARDS.b_corridor), false);
+  flow.route(); frames(app, 200);
+  const r = handRects(1)[0], good = cellCenter(0, 3);
+  drag(app, r.x + r.w / 2, r.y + 60, good.x, good.y);
+  assert.equal(WD.roomAt(run, 0, 3), null, 'not built yet'); assert.equal(run.ward.res.wood, 10, 'nothing paid');
+  assert.match(app.screens.ward.st.toast, /would be built dark/);
+  drag(app, r.x + r.w / 2, r.y + 60, good.x, good.y);
+  const built = WD.roomAt(run, 0, 3); assert.ok(built && built.on === false, 'confirmed: built dark'); assert.equal(run.ward.res.wood, 8);
+  // with spare power there is no warning
+  const c = await setup({ seed: 'z5dark2' }); layout(c.run, [['rm_entrance', 0, 2]]); c.run.ward.res.wood = 10; c.run.ward.res.stone = 10; c.run.ward.deck.hand = []; give(c.run, 'b_ward');
+  c.flow.route(); frames(c.app, 200); drag(c.app, r.x + r.w / 2, r.y + 60, good.x, good.y);
+  assert.ok(WD.roomAt(c.run, 0, 3) && WD.roomAt(c.run, 0, 3).on, 'one drop when power is free');
+});
+
+await t('z5: the reward header explains the gold ("1 monster pays 75%, midday +10%") instead of "Gold x0.83"', async () => {
+  assert.equal(KIT.goldNote({ count: 1, goldMul: 0.825 }, 'midday', 'normal'), 'Gold: 1 monster pays 75%, midday +10%.');
+  assert.equal(KIT.goldNote({ count: 2, goldMul: 1.25 }, 'night', 'normal'), 'Gold: night +25%.');
+  assert.equal(KIT.goldNote({ count: 4, goldMul: 1.6 * 1.0 }, 'evening', 'normal'), 'Gold: 4 monsters pay 160%.');
+  assert.equal(KIT.goldNote({ count: 1, goldMul: 1.25 }, 'night', 'elite'), 'Gold: night +25%.');
+  assert.equal(KIT.goldNote({ count: 2, goldMul: 1 }, 'evening', 'normal'), '');
+  const { app, run, flow } = await setup({ seed: 'z5gold' });
+  const [, wd] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, [{ kind: 'monster', id: NORMAL1[0] }]]]);
+  run.ward.phase = 'midday'; flow.route(); frames(app, 100);
+  WD.startWalk(run, wd); assert.equal(run.phase, 'combat'); RUN.resolveFight(run, win()); flow.route(); frames(app, 60);
+  const texts = []; const tx = app.text.bind(app); app.text = (str, ...a) => { texts.push(String(str)); return tx(str, ...a); }; frames(app, 5);
+  assert.ok(texts.some((x) => /1 monster pays 75%, midday \+10%/.test(x)), 'header: ' + texts.filter((x) => /Gold|Spoils|Salvage/.test(x)).join(' | '));
+  assert.ok(!texts.some((x) => /Gold x0/.test(x)));
+});
+
+await t('z5: an event from the Chapel says which room and hour it came from', async () => {
+  assert.deepEqual(KIT.eventSource({ phase: 'night' }), { head: 'CHAPEL EVENT, NIGHT', lean: 'leans strange and risky' });
+  assert.equal(KIT.eventSource({}), null);
+  const { app, run, flow } = await setup({ seed: 'z5ev' });
+  const [, ch] = layout(run, [['rm_entrance', 0, 2], ['rm_chapel', 1, 2, [{ kind: 'event' }]]]);
+  run.ward.phase = 'midday'; flow.route(); frames(app, 100);
+  WD.startWalk(run, ch); assert.equal(run.phase, 'event'); assert.equal(run.pending.phase, 'midday'); flow.route();
+  const texts = []; const tx = app.text.bind(app); app.text = (str, ...a) => { texts.push(String(str)); return tx(str, ...a); }; frames(app, 30);
+  assert.ok(texts.some((x) => /CHAPEL EVENT, MIDDAY/.test(x)), texts.slice(0, 6).join(' | '));
+});
+
+await t('z5: Rest of day waits out every walk left today and stops in the morning; a room hover is one tooltip that leaves TODAY alone', async () => {
+  const { app, run, flow } = await setup({ seed: 'z5rest' });
+  layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2]]);
+  run.hp = 30; run.ward.deck.hand = []; flow.route(); frames(app, 200);
+  const A = reg('ward-act'); click(app, A.x + A.w / 2, A.y + A.h / 2); frames(app, 3);
+  assert.equal(run.ward.phase, 'midday');
+  const tips = []; const tt = app.tooltip.bind(app); app.tooltip = (title, text, o) => { tips.push({ title, o }); return tt(title, text, o); };
+  const c = cellCenter(1, 2); app.mouse.x = c.x; app.mouse.y = c.y; frames(app, 4);
+  const rt = tips.find((x) => /Corridor/.test(x.title)); assert.ok(rt, 'room tip shown');
+  assert.ok(!rt.o.terms, 'no stacked glossary panel'); assert.ok(rt.o.anchor.band.y >= 200, 'the tip band starts below TODAY');
+  app.mouse.x = 5; app.mouse.y = 5; frames(app, 2);
+  const rest = reg('ward-act'), bx = rest.x + rest.w - 50, by = rest.y + 108 + 23; click(app, bx, by); frames(app, 600);
+  assert.equal(run.ward.phase, 'morning'); assert.equal(run.ward.day, 2, 'midday, evening and night were waited out');
+  assert.equal(run.hp, 30 + 3 * WD.WARD_TUNE.waitHeal);
+});
+
+await t('z5: a route through two fight rooms plays both, the token walks the steps between, and the die is there again afterwards', async () => {
+  const { app, run, flow, seen } = await setup({ seed: 'z5multi' });
+  const m = () => [{ kind: 'monster', id: NORMAL1[0] }];
+  const [ent, w1, c1, w2, w3] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, m()], ['rm_corridor', 2, 2], ['rm_ward', 3, 2, m()], ['rm_ward', 4, 2, m()]]);
+  run.ward.phase = 'midday'; flow.route(); frames(app, 200);
+  run.ward.roll = { key: '1:midday', base: 4, sides: 4, bonus: 0, n: 4, lucky: 0 };
+  for (const id of [w1, c1, w2, w3]) { const r = run.ward.rooms[id], c = cellCenter(r.x, r.y); click(app, c.x, c.y); frames(app, 2); }
+  assert.deepEqual(run.ward.route, [w1, c1, w2, w3]);
+  const go = reg('ward-act'); click(app, go.x + go.w / 2, go.y + 25); frames(app, 40);
+  const fought = [];
+  for (let i = 0; i < 15 && run.phase !== 'ward'; i++) {
+    if (run.phase === 'combat') { fought.push(run.ward.hero.room); RUN.resolveFight(run, win()); flow.route(); frames(app, 40); }
+    else if (run.phase === 'reward') { RUN.claimGold(run, run.pending); if (run.pending.buildChoice) WD.takeBuildChoice(run, null); RUN.afterReward(run); flow.route(); frames(app, 40); }
+    else if (run.phase === 'graft') { RUN.skipGraft(run, 'gold'); RUN.afterGraft(run); flow.route(); frames(app, 40); }
+    else break;
+  }
+  frames(app, 120);
+  assert.deepEqual(fought, [w1, w2, w3], 'every fight room opened in order'); assert.equal(app.current, 'ward');
+  assert.equal(run.ward.hero.room, w3); assert.equal(run.ward.phase, 'evening');
+  assert.ok(seen.filter((s) => s === 'ward(walk)').length >= 1, 'steps between triggers were shown on the Ward');
+  const r = WD.rollOf(run); assert.ok(r && r.key === '1:evening', 'a fresh die for the evening'); assert.deepEqual(run.ward.route, []);
+  assert.equal(app.screens.ward.st.run.ward.hero.room, w3); void ent;
+});
+
+await t('z5: the hero is always on a room (a hero pointing at a removed room goes back to the Entrance), and a stale build stamp never hides a room', async () => {
+  const { app, run, flow } = await setup({ seed: 'z5hero' });
+  const [ent] = layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2]]);
+  run.ward.hero.room = 'r99'; flow.route(); frames(app, 30);
+  assert.equal(run.ward.hero.room, ent);
+  assert.equal(wardMod.buildAge(500, 3), 1, 'a stamp from an earlier clock counts as done'); assert.ok(Math.abs(wardMod.buildAge(2, 2.2) - 0.5) < 1e-9); assert.equal(wardMod.buildAge(undefined, 1), 1);
+});
+
+await t('z5: a Generator relights the rooms that were built dark (newest first, while the power lasts)', async () => {
+  const { app, run, flow } = await setup({ seed: 'z5gen' });
+  layout(run, [['rm_entrance', 0, 2], ['rm_sawmill', 1, 2]]);
+  run.ward.power.base = 1; WD.wardPower(run); run.ward.res.wood = 10; run.ward.res.stone = 10; run.ward.deck.hand = [];
+  give(run, 'b_ward'); give(run, 'b_quarry'); give(run, 'b_generator');
+  flow.route(); frames(app, 200);
+  const build = (i, n, x, y) => { const r = handRects(n)[i], c = cellCenter(x, y); drag(app, r.x + r.w / 2, r.y + 60, c.x, c.y); };
+  build(0, 3, 0, 3); build(0, 3, 0, 3); // the Ward, confirmed dark
+  const ward1 = WD.roomAt(run, 0, 3); assert.equal(ward1.on, false);
+  build(0, 2, 0, 1); build(0, 2, 0, 1); // the Quarry, dark too
+  const quarry = WD.roomAt(run, 0, 1); assert.equal(quarry.on, false);
+  build(0, 1, 1, 3); frames(app, 3); // the Generator adds 2 power: two dark rooms fit, the newest first
+  assert.equal(quarry.on, true); assert.equal(ward1.on, true); assert.match(app.screens.ward.st.toast, /Power is back/);
+});
+
+await t('z5: a walk resumed after a reload (no step plan in memory) still walks the steps between triggers instead of jumping to the end', async () => {
+  const { app, run, flow, seen } = await setup({ seed: 'z5resume' });
+  const m = () => [{ kind: 'monster', id: NORMAL1[0] }];
+  const [, w1, c1, w2] = layout(run, [['rm_entrance', 0, 2], ['rm_ward', 1, 2, m()], ['rm_corridor', 2, 2], ['rm_ward', 3, 2, m()]]);
+  run.ward.phase = 'midday'; flow.route(); frames(app, 200);
+  run.ward.roll = { key: '1:midday', base: 3, sides: 4, bonus: 0, n: 3, lucky: 0 };
+  for (const id of [w1, c1, w2]) { const r = run.ward.rooms[id], c = cellCenter(r.x, r.y); click(app, c.x, c.y); frames(app, 2); }
+  const go = reg('ward-act'); click(app, go.x + go.w / 2, go.y + 25); frames(app, 40);
+  assert.equal(run.phase, 'combat'); assert.equal(run.ward.hero.room, w1);
+  resetWardMem(); // the page was reloaded and Continue was pressed: only the saved run is left
+  RUN.resolveFight(run, win()); flow.route(); frames(app, 40);
+  RUN.claimGold(run, run.pending); if (run.pending.buildChoice) WD.takeBuildChoice(run, null); RUN.afterReward(run); flow.route(); frames(app, 10);
+  while (run.phase === 'graft') { RUN.skipGraft(run, 'gold'); RUN.afterGraft(run); flow.route(); frames(app, 10); }
+  frames(app, 120);
+  assert.ok(seen.includes('ward(walk)'), 'the token walked the corridor step: ' + seen.join(' '));
+  assert.equal(run.phase, 'combat'); assert.equal(run.ward.hero.room, w2);
+});
+
 console.log(`${n} ward UI checks passed`);

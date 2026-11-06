@@ -312,15 +312,17 @@ export default {
     const played = (meta.daily ? dailyPlayed(meta, seed) : false), h = HEROES[hero];
     const k = EASE.out(clamp(this.menuK - 0.2, 0, 1) / 0.8);
     g.save(); g.globalAlpha = k; g.translate((1 - k) * 40, 0);
-    app.panel(x, y, 300, 190, { r: 12, fill: 'rgba(14,11,10,.72)', stroke: played ? 'rgba(232,220,196,.25)' : rgba(COL.lamp, 0.55) });
+    const ph = app.scale < 0.55 ? 250 : app.scale < 0.95 ? 214 : 190; // phones: the inflated rules text needs the extra rows
+    app.panel(x, y, 300, ph, { r: 12, fill: 'rgba(14,11,10,.72)', stroke: played ? 'rgba(232,220,196,.25)' : rgba(COL.lamp, 0.55) });
     app.text("TODAY'S CASE", x + 16, y + 12, { size: 13, ui: true, bold: true, color: COL.lamp });
     app.text(seed.replace('daily-', ''), x + 284, y + 12, { size: 13, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
     drawPortrait(g, hero, x + 16 + 32, y + 66, 64);
     app.text(h.name, x + 100, y + 38, { size: 22, bold: true });
     app.text(h.title, x + 100, y + 64, { size: 14, italic: true, color: '#cdbf9d' });
     stitchLine(g, x + 16, y + 106, x + 284, y + 106, { color: 'rgba(232,220,196,.25)', size: 3, step: 10, lw: 1 });
-    app.text(mod.name, x + 16, y + 116, { size: 17, bold: true, color: '#f0d27a' });
-    app.text(mod.text, x + 16, y + 140, { size: 14, ui: true, maxW: 268, color: '#d9cba8' });
+    const mnO = { size: 17, bold: true, fit: { w: 268, lines: 1 } }, mnL = app.layoutText(mod.name, mnO), my = y + 116 + Math.ceil(mnL.size * 1.22) + 3;
+    app.text(mod.name, x + 16, y + 116, { ...mnO, color: '#f0d27a' });
+    app.text(mod.text, x + 16, my, { size: 14, ui: true, color: '#d9cba8', fit: { w: 268, h: y + ph - 8 - my, soft: true } });
     if (played) {
       g.save(); g.translate(x + 238, y + 62); g.rotate(-0.2); g.strokeStyle = COL.scar; g.lineWidth = lnw(2); g.strokeRect(-40, -13, 80, 26);
       app.text('PLAYED', 0, -8, { size: 14, bold: true, ui: true, align: 'center', color: COL.scar }); g.restore();
@@ -499,7 +501,7 @@ export default {
     const rows = Math.ceil(ids.length / 2);
     const deckLbl = `STARTER DECK  ${h.deck.length}`, tl = ['power', 'skill', 'attack'].map((t) => ({ t, s: `${types[t]} ${TYPE_NAMES[t]}` }));
     // m shrinks the design sizes (large text scales); the rules block must fit between the band and SELECTED, so take the largest m that does
-    let P = null;
+    let P = null, P0 = null;
     for (const m of [1, 0.92, 0.85, 0.78, 0.7]) {
       const rowO = { size: 13 * m, ui: true }, hdrO = { size: 12 * m, ui: true, bold: true };
       let rowSz = 99; for (const n of names) rowSz = Math.min(rowSz, app.layoutText(n, { ...rowO, fit: { w: cellW, lines: 1 } }).size);
@@ -514,14 +516,18 @@ export default {
       const pOpts = { size: 14 * m, lineH: 17 * m }, pL = app.layoutText(h.passive, { ...pOpts, fit: { w: iw, lines: 3 } }), passH = pL.lines.length * pL.lineH + 4;
       const room = bottom - top - (lblH + passH + hpH + deckH + 16);
       P = { m, rowO, hdrO, rowSz, rowPitch, hdrSz, tySz, twoRows, hdrH, lblH, hpO, hpTxt, hpH, pOpts, passH, room };
-      if (room >= 0) break;
+      if (room >= 0 && !P0) P0 = P;
+      if (room >= 0 && !(room >= 14 && app.layoutText(h.blurb, { size: 14 * m, lineH: 17 * m, fit: { w: iw, h: room, lines: 3, soft: true } }).trunc)) break; // smaller rules text until the flavor line is not cut
+      if (m === 0.7 && P0) P = P0;
     }
     const { rowO, hdrO, rowSz, rowPitch, hdrSz, tySz, twoRows, hdrH, lblH, hpO, hpTxt, hpH, pOpts, passH, room } = P;
     let yy = top;
     if (room >= 14) { // the flavor blurb takes what is left (soft: it may shrink or lose its last line on the smallest phone stage)
       const bO = { size: 14 * P.m, lineH: 17 * P.m, fit: { w: iw, h: room, lines: 3, soft: true } }, bL = app.layoutText(h.blurb, bO);
-      app.text(h.blurb, x + 20, yy, { ...bO, color: '#e0d4b8' });
-      yy += bL.lines.length * bL.lineH + 8;
+      if (!bL.trunc) { // a half sentence ending in "..." reads as a bug: when the whole line cannot fit, leave the flavor out (the rules below are what matter)
+        app.text(h.blurb, x + 20, yy, { ...bO, color: '#e0d4b8' });
+        yy += bL.lines.length * bL.lineH + 8;
+      }
     }
     stitchLine(g, x + 20, yy, x + w - 20, yy, { color: rgba(h.color, 0.55), size: 3, step: 10, lw: 1 });
     yy += 8;
@@ -552,7 +558,7 @@ export default {
   drawCredits(app, keys) {
     const g = app.ctx, k = EASE.out(clamp(this.credK, 0, 1));
     g.save(); g.fillStyle = 'rgba(0,0,0,.66)'; g.fillRect(0, 0, W, H); g.restore();
-    const w = 700, h = 500, x = 640 - w / 2, y = 110 + (1 - k) * 24;
+    const tall = app.scale < 0.95, w = 700, h = tall ? 580 : 500, x = 640 - w / 2, y = (tall ? 70 : 110) + (1 - k) * 24; // phones: a taller panel, so the inflated text keeps a legible size
     g.save(); g.globalAlpha = k;
     app.panel(x, y, w, h, { r: 16, fill: 'rgba(20,16,14,.98)', stroke: 'rgba(232,220,196,.45)' });
     app.text('Credits', 640, y + 20, { size: 32, bold: true, align: 'center' });
@@ -566,11 +572,16 @@ export default {
       ['Meta, unlocks and records', 'The progression programmers.'],
       ['The design council', 'Creative director, game designer, systems designer, narrative director, art director, audio director, technical director. They approved the Budget, and regret nothing.'],
     ];
+    // the rows share y+82 .. the tagline; phones inflate every label, so take the largest m whose real heights fit
+    let M = 0.7; const room = (y + h - 104) - (y + 82), blk = (m, [a, b]) => { const lA = app.layoutText(a, { size: 15 * m, ui: true, bold: true }), lB = app.layoutText(b, { size: 15 * m, lineH: 19 * m, maxW: w - 80 }); return { hA: Math.ceil(lA.size * 1.22), hB: lB.lines.length * lB.lineH }; };
+    for (const m of [1, 0.94, 0.88, 0.82, 0.76, 0.7]) { const gap = Math.round(12 * m); if (rows.reduce((n, r) => { const q = blk(m, r); return n + q.hA + 2 + q.hB + gap; }, -gap) <= room) { M = m; break; } }
     let yy = y + 82;
     for (const [a, b] of rows) {
-      app.text(a, x + 40, yy, { size: 15, ui: true, bold: true, color: COL.lamp });
-      yy += 20;
-      yy += app.text(b, x + 40, yy, { size: 15, maxW: w - 80, color: '#e0d4b8', lineH: 19 }) + 12;
+      const q = blk(M, [a, b]);
+      app.text(a, x + 40, yy, { size: 15 * M, ui: true, bold: true, color: COL.lamp });
+      yy += q.hA + 2;
+      app.text(b, x + 40, yy, { size: 15 * M, maxW: w - 80, color: '#e0d4b8', lineH: 19 * M });
+      yy += q.hB + Math.round(12 * M);
     }
     app.text('Cut what you love. Stitch what you need.', 640, y + h - 96, { size: 17, italic: true, align: 'center', color: '#d9cba8' });
     if (app.button('Close', 640 - 70, y + h - 60, 140, 42, { size: 18 }) || keys.some((e) => e.key === 'Escape')) this.go(app, 'menu');

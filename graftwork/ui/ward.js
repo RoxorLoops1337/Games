@@ -44,11 +44,18 @@ export function handRects(n) {
   for (let i = 0; i < n; i++) out.push({ x: x0 + i * (CW + gap), y: HAND.y + 2, w: CW, h: CH });
   return out;
 }
-const roomCenter = (run, rid) => { const r = run.ward.rooms[rid]; return r ? cellCenter(r.x, r.y) : { x: 640, y: 300 }; };
+const roomCenter = (run, rid) => { const r = run.ward.rooms[rid]; if (r) return cellCenter(r.x, r.y); const e = WD.entranceOf(run); return e ? cellCenter(e.x, e.y) : { x: 640, y: 300 }; }; // never a spot off the plan
 const reduced = (app) => { const s = app.shared.meta && app.shared.meta.settings; return !!(FX_OPTS.reduced || (s && (s.reducedMotion || s.reduceMotion))); };
 const sfx = (app, n, o) => { const a = app.shared.audio; if (a && a.sfx) { try { a.sfx(n, o); } catch (e) { /* audio is optional */ } } };
 const post = (app, fn, ...a) => { const p = app.post; if (p && typeof p[fn] === 'function') { try { p[fn](...a); } catch (e) { /* post is optional */ } } };
 const save = (run) => { try { saveRun(run); } catch (e) { /* storage is optional */ } };
+// the hero's token shares the plate with its label: true when the label does not fit beside the corner token
+export function heroOnTop(app, r) {
+  if (!r || r.type === 'rm_theatre') return false;
+  const name = K.roomShort(r.type).toUpperCase();
+  return app.layoutText(name, { size: 10, ui: true, bold: true, align: 'center', fit: { w: CELL - 8 - 22, lines: 1 } }).trunc;
+}
+const darkKey = (uid, tgt) => uid + ':' + (tgt && typeof tgt === 'object' ? tgt.x + ',' + tgt.y : tgt);
 const plural = (n, s, p) => `${n} ${n === 1 ? s : (p || s + 's')}`;
 
 // what survives leaving the screen for a fight and coming back (walk plan, phase seen, spawn counts, stamps)
@@ -56,12 +63,23 @@ function startDie(app) {
   S.dieRolling = reduced(app) ? 0 : 0.9; S.dieT = 0;
   if (S.dieRolling) { sfx(app, 'comboTick', { n: 3 }); for (let i = 1; i < 5; i++) app.after(i * 170, () => sfx(app, 'comboTick', { n: 3 + i })); }
 }
-const MEM = { dieKey: '', phaseKey: '', floorKey: '', seen: {}, plan: null, stamps: {}, pops: {}, bulbs: {} };
+const MEM = { dieKey: '', phaseKey: '', floorKey: '', seen: {}, plan: null, stamps: {}, pops: {}, bulbs: {}, darkBuilt: {} }; // darkBuilt: rooms that were built dark for lack of power (a later Generator relights them)
 export const wardMem = MEM; // tests
-export function resetWardMem() { MEM.dieKey = ''; MEM.phaseKey = ''; MEM.floorKey = ''; MEM.seen = {}; MEM.plan = null; MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; }
+// 0..1 progress of a build / upgrade pop-in. A stamp from the future (an earlier visit's clock) never hides a room: it counts as finished.
+export function buildAge(stamp, t) { if (stamp === undefined || !(stamp <= t)) return 1; return clamp((t - stamp) / 0.4, 0, 1); }
+export function resetWardMem() { MEM.dieKey = ''; MEM.phaseKey = ''; MEM.floorKey = ''; MEM.seen = {}; MEM.plan = null; MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; MEM.darkBuilt = {}; }
 
+// A walk that was resumed (page reload, Continue from the title) has no step plan in memory: rebuild it from the saved walk so the token still
+// walks the steps between two triggers instead of jumping to the end of the route.
+function ensurePlan(run) {
+  const w = run && run.ward;
+  if (MEM.plan || !w || !w.walk || w.walk.wait || !w.walk.path || !w.walk.path.length) return;
+  const cells = w.walk.path.slice(), at = cells.indexOf(w.hero.room);
+  if (at >= 0) MEM.plan = { act: w.act, cells, at, rid: w.walk.dest, wait: false };
+}
 // flow.route() calls this before it opens a trigger's screen: when the walk moved the hero since the last trigger, the Ward plays those steps first.
 export function wardInterlude(app, run, scr) {
+  ensurePlan(run);
   const P = MEM.plan, w = run && run.ward;
   if (!P || !w || !w.walk || w.act !== P.act || run.mode !== 'ward' || !app.screens.ward) return false;
   const idx = P.cells.indexOf(w.hero.room, P.at);
@@ -133,13 +151,6 @@ function roomTip(run, r) {
   if (!lines.length || r.type === 'rm_entrance' || r.type === 'rm_corridor') lines.push(d.hint);
   return lines.join('\n');
 }
-function roomTerms(r) {
-  const t = []; if (K.GLOSS_ROOM[r.type]) t.push(K.GLOSS_ROOM[r.type]);
-  if (DARKW(r)) t.push('Dark room'); else if (ROOMS[r.type].power) t.push('Power');
-  if (r.contents.some((c) => c.level >= 2)) t.push('Level 2 elite');
-  if (r.type === 'rm_ward' && r.contents.length > T.boardMax) t.push('Reinforcements');
-  return t;
-}
 function contentsText(r) {
   const n = r.contents.length, k = r.contents[0] && r.contents[0].kind;
   if (k === 'monster') { const names = {}; for (const c of r.contents) { const e = ENEMIES[c.id]; const nm = e ? e.name : c.id; names[nm] = (names[nm] || 0) + 1; } return Object.entries(names).map(([nm, c]) => (c > 1 ? `${c} x ${nm}` : nm)).join(', ') + '.'; }
@@ -160,13 +171,15 @@ let S = null;
 export default {
   enter(app, params) {
     const run = app.shared.run;
-    S = { run, fx: new Fx(), t: 0, drag: null, press: null, sel: null, selRoom: null, alt: 0, altFor: null, toast: '', toastT: 0, walk: null, trans: null, banner: null, plans: false, plansScroll: 0, chip: null, hoverRoom: null };
+    S = { run, fx: new Fx(), t: 0, drag: null, press: null, sel: null, selRoom: null, alt: 0, altFor: null, toast: '', toastT: 0, walk: null, trans: null, banner: null, plans: false, plansScroll: 0, chip: null, hoverRoom: null, endArm: 0, darkOk: '', rest: false, restT: 0 };
     this.st = S;
     MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; // these hold S.t times of an earlier visit: S.t restarts at 0 here (rooms built before a fight stayed invisible)
     const w = run.ward;
     if (!w) return;
+    if (!w.rooms[w.hero.room]) { const e = WD.entranceOf(run); if (e) w.hero.room = e.id; } // a hero is always standing in a room
     const fk = `${run.seed}|${run.act}|${run.loop || 0}`;
     if (MEM.floorKey !== fk) { if (MEM.floorKey || w.day === 1) S.banner = { t: 0, t0: Date.now(), act: run.act }; MEM.floorKey = fk; MEM.plan = null; MEM.seen = MEM.seen || {}; }
+    ensurePlan(run);
     const P = MEM.plan;
     if (P && P.act !== w.act) MEM.plan = null;
     if (MEM.plan) { // steps still to show: towards the next trigger (params.then) or to the end of the walk
@@ -187,6 +200,14 @@ export default {
     if (S.toastT > 0) S.toastT -= dt;
     if (S.banner) { const wall = (Date.now() - (S.banner.t0 || Date.now())) / 1000; S.banner.t = Math.max(S.banner.t + dt, wall); if (S.banner.t > 2.6) S.banner = null; } // wall clock too: a slow phone must not keep the plate up
     if (S.trans) { S.trans.t += dt; if (S.trans.t >= S.trans.dur) S.trans = null; }
+    if (S.rest) { // "Rest of day": wait here once per phase until the morning
+      const w0 = S.run.ward;
+      if (w0.phase === 'morning' || S.run.phase !== 'ward' || WD.bossForced(S.run) || (w0.route && w0.route.length)) S.rest = false;
+      else if (!S.walk && !S.banner && !S.trans && !S.dieRolling) {
+        S.restT -= dt;
+        if (S.restT <= 0) { S.restT = 0.4; if (!WD.pathTo(S.run, w0.hero.room).ok) S.rest = false; else this.walkTo(app, w0.hero.room, 0); }
+      }
+    }
     const wk = S.walk;
     if (wk) {
       wk.t += dt / (reduced(app) ? 0.2 : 1);
@@ -321,18 +342,19 @@ export default {
           const tgt = this.targetAt(run, card, gx, gy), chk = tgt === undefined ? { ok: false, why: 'target' } : WD.canPlayBuild(run, uid, tgt);
           out.drop = { tgt, ok: chk.ok };
           if (!chk.ok && (S.drag ? S.drag.moved : true)) out.chip = { text: whyText(run, chk.why, card, tgt), x: m.x, y: m.y, bad: true };
+          else if (chk.ok && K.wouldBuildDark(run, card)) { const pw = WD.wardPower(run); out.chip = { text: `No spare power (${pw.used} of ${pw.cap}): the ${ROOMS[card.room].name} would be built DARK. ${S.darkOk === darkKey(uid, tgt) ? 'Drop it again to confirm.' : 'Drop it to confirm, or switch a room off first.'}`, x: m.x, y: m.y, bad: true }; }
           else if (chk.ok) out.chip = { text: card.kind === 'room' ? `Build the ${card.name} here` : card.target === 'room' ? `${card.name} on the ${ROOMS[hovRoom.type].name}` : `Play ${card.name}`, x: m.x, y: m.y, bad: false };
         }
       }
       // release: drop a dragged plan, or a tap on the grid
       if (m.released && !app.blocked) {
         if (S.drag && S.drag.moved) {
-          if (out.drop && out.drop.ok) this.play(app, S.drag.uid, out.drop.tgt);
+          if (out.drop && out.drop.ok) { if (this.darkGuard(app, card, S.drag.uid, out.drop.tgt)) this.play(app, S.drag.uid, out.drop.tgt); }
           else if (onGrid && out.drop) { sfx(app, 'error'); this.toast(out.chip ? out.chip.text : 'Not here.'); }
           else if (card && card.target === 'none' && m.y < HAND.y - 10 && m.y > 60) this.play(app, S.drag.uid, null);
           S.drag = null; S.press = null; m.released = false;
         } else if (onGrid && m.pressStart && Math.floor((m.pressStart.x - GRID.x) / CELL) === gx && Math.floor((m.pressStart.y - GRID.y) / CELL) === gy && !S.drag) {
-          if (card) { if (out.drop && out.drop.ok) this.play(app, uid, out.drop.tgt); else { sfx(app, 'error'); this.toast(out.chip ? out.chip.text : 'Not here.'); } }
+          if (card) { if (out.drop && out.drop.ok) { if (this.darkGuard(app, card, uid, out.drop.tgt)) this.play(app, uid, out.drop.tgt); } else { sfx(app, 'error'); this.toast(out.chip ? out.chip.text : 'Not here.'); } }
           else if (hovRoom) this.power(app, hovRoom);
           m.released = false;
         }
@@ -379,6 +401,17 @@ export default {
     }
     return out;
   },
+  // a room that would be built dark is not paid for on the first drop: the second identical drop confirms (a toast says why in between)
+  darkGuard(app, card, uid, tgt) {
+    const run = S.run;
+    if (!K.wouldBuildDark(run, card)) return true;
+    const k = darkKey(uid, tgt);
+    if (S.darkOk === k) return true;
+    S.darkOk = k; sfx(app, 'error');
+    const pw = WD.wardPower(run);
+    this.toast(`No spare power (${pw.used} of ${pw.cap}): the ${ROOMS[card.room].name} would be built dark and the cost is paid either way. Drop it again to build it anyway, or switch a room off first.`);
+    return false;
+  },
   legalTargets(run, inst, card) {
     const w = run.ward, cells = [], rooms = [];
     if (card.kind === 'room') { for (const [x, y] of WD.buildCells(run)) if (WD.canBuild(run, inst.uid, x, y).ok) cells.push([x, y]); }
@@ -399,6 +432,7 @@ export default {
   play(app, uid, target) {
     const run = S.run, w = run.ward, inst = w.deck.hand.find((c) => c.uid === uid); if (!inst) return false;
     const card = BUILD_CARDS[inst.id], before = { wood: w.res.wood, stone: w.res.stone, hp: run.hp, gold: run.gold };
+    S.endArm = 0; S.darkOk = '';
     const r = WD.playBuildCard(run, uid, target);
     S.sel = null; S.drag = null; S.press = null;
     if (!r.ok) { sfx(app, 'error'); this.toast(whyText(run, r.why, card, target)); return false; }
@@ -410,7 +444,8 @@ export default {
       MEM.stamps[r.room] = S.t;
       sfx(app, 'graftScar'); app.after(red ? 0 : 140, () => sfx(app, 'block', { vol: 0.6 }));
       S.fx.burst(at.x, at.y + 20, 'dust', { n: red ? 4 : 18 }); S.fx.shake(0.25); post(app, 'shockwave', at.x, at.y, 0.25, 500);
-      if (!w.rooms[r.room].on) this.toast(`The ${ROOMS[card.room].name} is built dark: no spare power. Switch another room off or build a Generator.`);
+      if (!w.rooms[r.room].on) { MEM.darkBuilt[r.room] = 1; this.toast(`The ${ROOMS[card.room].name} is built dark: no spare power. Switch another room off or build a Generator.`); }
+      this.relight(app);
     } else if (card.kind === 'upgrade') { MEM.stamps[r.room] = S.t; sfx(app, 'upgrade'); S.fx.burst(at.x, at.y, 'gilded', { n: 14 }); }
     else {
       sfx(app, card.effect === 'demolish' ? 'graftScar' : 'buff');
@@ -421,8 +456,19 @@ export default {
       if (run.hp > before.hp) gains.push(`+${run.hp - before.hp} HP`);
       const msg = gains.join('  ') || card.name;
       S.fx.float(msg, card.effect === 'demolish' ? at.x : 640, card.effect === 'demolish' ? at.y : 470, { color: COL.lamp, size: 24 });
+      this.relight(app);
     }
     return true;
+  },
+  // power came back (a Generator, a room switched off): the rooms that were built dark, newest first, light up while the power lasts
+  relight(app) {
+    const run = S.run, w = run.ward, lit = [];
+    for (const id of Object.keys(MEM.darkBuilt).reverse()) {
+      const r = w.rooms[id];
+      if (!r || r.on || !ROOMS[r.type].power) { delete MEM.darkBuilt[id]; continue; }
+      if (WD.wardPower(run).free >= ROOMS[r.type].power && WD.togglePower(run, id).ok) { delete MEM.darkBuilt[id]; MEM.bulbs[id] = S.t; lit.push(ROOMS[r.type].name); }
+    }
+    if (lit.length) { sfx(app, 'buff', { vol: 0.7 }); this.toast(`Power is back: the ${lit.join(' and the ')} ${lit.length > 1 ? 'are' : 'is'} lit.`); }
   },
   power(app, room) {
     const run = S.run, r = WD.togglePower(run, room.id), nm = ROOMS[room.type].name;
@@ -437,7 +483,13 @@ export default {
     else { sfx(app, 'debuff', { vol: 0.7 }); this.toast(`Lights out in the ${nm}: its timer pauses, what is inside sleeps, and walking through costs 3 HP.`); }
   },
   endMorning(app) {
-    const run = S.run;
+    const run = S.run, left = K.playablePlans(run).length;
+    if (left && !(S.endArm > S.t)) { // plans you could still play are thrown away: ask once
+      S.endArm = S.t + 6; sfx(app, 'uiClick');
+      this.toast(`${plural(left, 'plan')} you can still play will be discarded. Press End Morning again to walk anyway.`);
+      return;
+    }
+    S.endArm = 0;
     if (!WD.endMorning(run)) return;
     S.sel = null; S.drag = null; save(run);
     sfx(app, 'turnEnd');
@@ -556,7 +608,7 @@ export default {
   drawPlate(app, r, legal, inter, pulse) {
     const g = app.ctx, run = S.run, w = run.ward, d = ROOMS[r.type], c = cellXY(r.x, r.y);
     const dark = DARKW(r), theatre = r.type === 'rm_theatre';
-    const st = MEM.stamps[r.id] !== undefined ? clamp((S.t - MEM.stamps[r.id]) / 0.4, 0, 1) : 1;
+    const st = buildAge(MEM.stamps[r.id], S.t);
     const sc = st < 1 ? 1 + 0.35 * (1 - EASE.back(st)) : 1;
     const hov = S.hoverRoom === r.id && !app.blocked;
     const sel = S.selRoom === r.id;
@@ -582,7 +634,7 @@ export default {
     if (has) this.drawContents(app, r, px + 34, py + 13, 32, 34);
     // power bulb (top left) and timer ring (top right)
     if (d.power) {
-      const bt = MEM.bulbs[r.id] !== undefined ? clamp((S.t - MEM.bulbs[r.id]) / 0.35, 0, 1) : 1, flick = bt < 1 && Math.sin(bt * 40) > 0;
+      const bt = MEM.bulbs[r.id] !== undefined && MEM.bulbs[r.id] <= S.t ? clamp((S.t - MEM.bulbs[r.id]) / 0.35, 0, 1) : 1, flick = bt < 1 && Math.sin(bt * 40) > 0;
       K.drawRes(g, 'bulb', px + 8, py + 9, 11, flick ? !r.on : r.on);
     } else if (d.powerAdd) { app.text('+' + d.powerAdd, px + 4, py + 2, { size: 10, ui: true, bold: true, color: '#5a6a10', fixed: true }); }
     const every = WD.everyOf(r);
@@ -593,8 +645,8 @@ export default {
       if (open) { g.save(); app.rr(px, py, pw, ph, 5); g.strokeStyle = rgba('#ff5a6a', 0.5 + 0.5 * pulse); g.lineWidth = lnw('bold'); g.stroke(); g.restore(); }
       app.text(txt, px + pw / 2, py + 30, { size: 12, ui: true, bold: true, align: 'center', color: open ? '#ffb3bd' : '#f2d98a', fit: { w: pw - 6, h: ph - 32, lines: 2, soft: true } });
     } else {
-      const nO = { size: 10, ui: true, bold: true, align: 'center', color: rgba(K.INK, 0.85), fit: { w: pw - 6, lines: 1 } }, L = app.layoutText(K.roomShort(r.type).toUpperCase(), nO);
-      if (!L.trunc) app.text(K.roomShort(r.type).toUpperCase(), px + pw / 2, py + ph - L.size - 3, nO);
+      const nO = { size: 10, ui: true, bold: true, align: 'center', color: rgba(K.INK, 0.85), fit: { w: pw - (w.hero.room === r.id && !heroOnTop(app, r) ? 22 : 6), lines: 1 } }, L = app.layoutText(K.roomShort(r.type).toUpperCase(), nO);
+      if (!L.trunc) app.text(K.roomShort(r.type).toUpperCase(), px + (w.hero.room === r.id && !heroOnTop(app, r) ? 3 + (pw - 22) / 2 : pw / 2), py + ph - L.size - 3, nO);
     }
     // upgrades: tiny engraved marks bottom right; overtime x2
     r.upgrades.slice(0, 3).forEach((u, i) => { const bc = BUILD_CARDS[u]; if (!bc) return; g.save(); g.fillStyle = '#f3e9d2'; g.beginPath(); g.arc(px + pw - 8 - i * 13, py + ph - 20, 6, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#7A5F12'; g.lineWidth = lnw('hair'); g.stroke(); K.roomGlyph(g, bc.art, px + pw - 8 - i * 13, py + ph - 20, 9, K.INK); g.restore(); });
@@ -616,8 +668,8 @@ export default {
       else { const cc = cellCenter(r.x, r.y); g.save(); g.strokeStyle = rgba(COL.scar, 1 - k); g.lineWidth = lnw('bold'); g.beginPath(); g.arc(cc.x + 12, cc.y - 4, 10 + 26 * EASE.out(k), 0, Math.PI * 2); g.stroke(); g.restore(); if (!MEM.pops['_b' + r.id]) { MEM.pops['_b' + r.id] = 1; S.fx.burst(cc.x + 12, cc.y - 4, 'spark', { n: 8 }); } }
     }
     if (hov) {
-      const anchor = { x: c.x, y: c.y, w: CELL, h: CELL, band: { x: LEFT.x + 2, y: Math.max(200, (S.logTop || 300) - 40), bottom: 716, dir: 1 } }; // over the log, never over the walk notes or the plan
-      app.tooltip(d.name + (DARKW(r) ? ' (dark)' : ''), roomTip(run, r), { color: tint === '#8e1f2c' ? '#ff8a96' : COL.lamp, terms: roomTerms(r), anchor });
+      const anchor = { x: c.x, y: c.y, w: CELL, h: CELL, band: { x: LEFT.x + 2, y: Math.max(200, (S.logTop || 300) + 4), bottom: 716, dir: 1 } }; // over the log only (never TODAY, the relics or the walk notes); one tip, no stacked glossary panel
+      app.tooltip(d.name + (DARKW(r) ? ' (dark)' : ''), roomTip(run, r), { color: tint === '#8e1f2c' ? '#ff8a96' : COL.lamp, anchor });
     }
   },
   timerRing(app, r, x, y, rad) {
@@ -708,9 +760,11 @@ export default {
       const k = wk.i < wk.stop ? EASE.inOut(clamp(wk.t / STEP_S, 0, 1)) : 0;
       pos = { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k) }; hop = Math.sin(k * Math.PI) * 8;
     }
-    const x = pos.x + 20, y = pos.y + 18 - hop, r = 15;
+    let ox = 31, oy = 32;
+    if (!wk && heroOnTop(app, w.rooms[w.hero.room])) oy = -29; // a long label (ENTRANCE) leaves no corner beside it: the token takes the top right instead
+    const x = pos.x + ox, y = pos.y + oy - hop, r = 11; // on the plate's lower right corner, clear of the room's label
     g.save();
-    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(x + 2, pos.y + 34, 13, 4, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(x + 1, y + 9, 10, 3, 0, 0, Math.PI * 2); g.fill();
     g.shadowColor = COL.lamp; g.shadowBlur = 12 + 4 * Math.sin(S.t * 3);
     g.fillStyle = '#2b2420'; g.beginPath(); g.arc(x, y, r + 2, 0, Math.PI * 2); g.fill(); g.shadowBlur = 0;
     g.save(); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.clip(); drawPortrait(g, run.hero, x, y + 2, r * 2.2); g.restore();
@@ -896,7 +950,9 @@ export default {
     app.reg('ward-act', A.x, A.y, A.w, A.h, { group: 'act' });
     if (w.phase === 'morning') {
       const hy = A.y + 8, bh = A.h - 16;
-      if (app.button('End Morning', A.x, hy, A.w, bh, { size: 26, sub: w.deck.hand.length ? `${plural(w.deck.hand.length, 'plan')} unplayed` : 'Walks follow', fill: '#5a3f10', stroke: COL.lamp, color: '#ffe9a8', fit: true, key: 'e' })) this.endMorning(app);
+      const left = K.playablePlans(run).length, armed = S.endArm > S.t;
+      const sub = armed ? 'Click again to confirm' : left ? `Discards ${plural(left, 'plan')}` : w.deck.hand.length ? `${plural(w.deck.hand.length, 'plan')} unplayed` : 'Walks follow';
+      if (app.button(armed ? `Discard ${plural(left, 'plan')}?` : 'End Morning', A.x, hy, A.w, bh, { size: 26, sub, fill: armed ? '#6a1a22' : '#5a3f10', stroke: armed ? COL.scar : COL.lamp, color: '#ffe9a8', fit: true, key: 'e' })) this.endMorning(app);
       return;
     }
     const forced = WD.bossForced(run), bh = 46;
@@ -911,8 +967,14 @@ export default {
       else if (app.button(`Undo step (${rt.length} of ${r ? r.n : 0})`, A.x, A.y + 54, A.w, 40, { size: 16, disabled: !rt.length, fit: true })) { WD.undoRoute(run); sfx(app, 'uiClick'); save(run); }
     }
     const wp = WD.pathTo(run, w.hero.room);
-    if (app.button(`Wait here (heal ${T.waitHeal})`, A.x, A.y + 108, A.w, bh, { size: 17, disabled: !wp.ok || !!(w.route && w.route.length), fit: true })) this.walkTo(app, w.hero.room, 0);
-    if (!wp.ok && app.inRect(A.x, A.y + 108, A.w, bh)) app.tooltip('Wait here', whyText(run, wp.why), { color: COL.bad });
+    const busyRoute = !!(w.route && w.route.length), ww = A.w - 114;
+    if (app.button(`Wait +${T.waitHeal} HP`, A.x, A.y + 108, ww, bh, { size: 16, disabled: !wp.ok || busyRoute, fit: true })) this.walkTo(app, w.hero.room, 0);
+    if (!wp.ok && app.inRect(A.x, A.y + 108, ww, bh)) app.tooltip('Wait here', whyText(run, wp.why), { color: COL.bad });
+    // a quiet day: wait out every walk phase that is left today (heal each time); it stops at once if anything opens or the morning comes
+    if (!forced) {
+      if (app.button('Rest day', A.x + ww + 6, A.y + 108, A.w - ww - 6, bh, { size: 15, disabled: !wp.ok || busyRoute || !!S.dieRolling, fit: true, key: 'r' })) { S.rest = true; S.restT = 0; }
+      if (app.inRect(A.x + ww + 6, A.y + 108, A.w - ww - 6, bh)) app.tooltip('Rest of the day', `Wait here for every walk left today (heal ${T.waitHeal} each), then it is morning. Stops if something in this room opens.`, { color: COL.lamp, anchor: { x: A.x, y: A.y + 108, w: A.w, h: bh } });
+    }
   },
 
   // ---- the building hand (morning) ----
@@ -938,9 +1000,9 @@ export default {
       app.reg('ward-card' + i, r.x, r.y - lift, r.w, Math.min(r.h, H - r.y) + lift, { group: 'hand' });
       if (S.drag && S.drag.uid === c.uid) { K.drawBuildCard(app, card, r.x, r.y, r.w, r.h, { alpha: 0.25, run }); return; }
       if (i === hov && i !== lifted) return;
-      if (i === lifted) { K.drawBuildCard(app, card, r.x, r.y - 18, r.w, r.h, { run, sel: true }); this.selButtons(app, c, card, r.x - 30, r.y - 70, r.w + 60); return; }
+      if (i === lifted) { K.drawBuildCard(app, card, r.x, r.y - 18, r.w, r.h, { run, sel: true, dark: K.wouldBuildDark(run, card) }); this.selButtons(app, c, card, r.x - 30, r.y - 70, r.w + 60); return; }
       const can = WD.canPlayBuild(run, c.uid, card.kind === 'room' ? { x: -1, y: -1 } : null).why !== 'cost';
-      K.drawBuildCard(app, card, r.x, r.y, r.w, r.h, { run, dim: !can });
+      K.drawBuildCard(app, card, r.x, r.y, r.w, r.h, { run, dim: !can, dark: can && K.wouldBuildDark(run, card) });
     });
     // the hovered or selected card, enlarged above the hand
     const big = hov >= 0 && hov !== lifted && !S.drag ? hov : -1; // the selected plan stays put (its text is in the notes on the right), so its buttons never jump
@@ -948,7 +1010,7 @@ export default {
       const c = cards[big], card = BUILD_CARDS[c.id], r = rects[big], k = 1.5, bw = CW * k, bh = CH * k;
       const bx = clamp(r.x + r.w / 2 - bw / 2, SHEET.x, SHEET.x + SHEET.w - bw), by = H - bh - 6;
       app.reg('ward-card-big', bx, by, bw, bh, { overlay: true });
-      K.drawBuildCard(app, card, bx, by, bw, bh, { full: true, sel: big === lifted, glow: true, run });
+      K.drawBuildCard(app, card, bx, by, bw, bh, { full: true, sel: big === lifted, glow: true, run, dark: K.wouldBuildDark(run, card) });
       const cant = WD.canPlayBuild(run, c.uid, card.kind === 'room' ? { x: -1, y: -1 } : null);
       if (cant.why === 'cost') app.text(whyText(run, 'cost', card), bx + bw / 2, by - 24, { size: 14, ui: true, bold: true, align: 'center', color: COL.bad, stroke: '#1a1614', strokeW: 3, fit: { w: 320, lines: 1 } });
     }

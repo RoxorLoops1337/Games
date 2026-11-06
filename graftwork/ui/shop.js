@@ -626,26 +626,34 @@ export default {
     // phones: when any Boon or Price would be cut with the words 'Boon:' / 'Price:', all three patches use '+' and '-' instead (colour is not the only cue), which buys ~7 letters a row
     const symRows = smallUi && shop.grafts.some((it) => { if (it.sold) return false; const gr = GRAFTS[it.id], o = { size: 13, ui: true, fit: { w: touchUi(app) ? 173 : 203, lines: 1, soft: true } }; return app.layoutText('Boon: ' + gr.boon, o).trunc || app.layoutText('Price: ' + gr.price, o).trunc; });
     shop.grafts.forEach((it, i) => {
-      const gr = GRAFTS[it.id], x = GRAFT_X(i) + shakeX('graft' + i), y = GRAFT_Y, w = 205, h = 64, ph = 64; let grInfo = false, gInfoY = 0;
+      const gr = GRAFTS[it.id], x = GRAFT_X(i) + shakeX('graft' + i), y = GRAFT_Y, yp = y - (smallUi ? 6 : 0), w = 205, h = 64, ph = 64; let grInfo = false, gInfoY = 0;
       app.reg('shop-graft' + i, GRAFT_X(i), y - 4, w, 120, { group: 'graft' + i }); // patch + its two rows (Boon, Price)
       const over = !it.sold && app.inRect(GRAFT_X(i), y, w, 100), k = hv(app, 'g' + i, over);
       if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, `Boon: ${gr.boon}\nPrice: ${gr.price}\nSews onto one of your cards. ${it.price} gold.`, { color: COL[gr.school], gloss: [gr.boon, gr.price, 'W' + gr.weight, String(gr.tier).toUpperCase()], school: gr.school, anchor: { x: GRAFT_X(i), y, w, h: 100, band: { x: Math.min(GRAFT_X(i), 590), y: 584, bottom: 716, dir: 1 } } }); } // the tip spells out the full Boon and Price and every rules word; it sits over the service row when that fits, else beside the patch
       g.save(); if (it.sold) g.globalAlpha = 0.45; g.translate(0, -3 * k);
-      drawGraftPatch(g, gr, x, y, w, ph, { hover: k });
-      if (!it.sold) newRibbon(app, it.id, x + 3, y + 3, w, { size: 10 });
+      drawGraftPatch(g, gr, x, yp, w, ph, { hover: k });
+      if (!it.sold) newRibbon(app, it.id, x + 3, yp + 3, w, { size: 10 });
       // one line each for the Boon and the Price, so nobody has to hover to read what a patch does
       { // two rows, one line each, in the 40 px between the patch and the Potions heading; the size is shared so the rows never touch (the hover tip has the rest)
         let rowO = { size: 13, ui: true, fit: { w: w - 2, lines: 1, soft: true } };
         const rows = symRows ? [['+', gr.boon, COL.good], ['-', gr.price, '#ff8a8a']] : [['Boon:', gr.boon, COL.good], ['Price:', gr.price, '#ff8a8a']];
         const cut = () => rows.some(([lab, txt]) => app.layoutText(`${lab} ${txt}`, rowO).trunc);
-        if (cut() && touchUi(app)) { grInfo = true; rowO = { ...rowO, fit: { w: w - 30, lines: 1, soft: true } }; } // touch: no hover tip, so a chip opens the full Boon and Price
-        const sz = Math.min(...rows.map(([lab, txt]) => app.layoutText(`${lab} ${txt}`, rowO).size)), pitch = Math.max(15, sz + 3);
-        rows.forEach(([lab, txt, col], n) => app.text(`${lab} ${txt}`, x, y + ph + 9 + n * pitch, { ...rowO, size: sz, exact: true, color: col }));
-        gInfoY = y + ph + 9 + pitch * 0.5 + sz * 0.5;
+        // phones: a row that would be cut gets a second line when the three lines still fit between the patch and the Potions heading
+        const lay = (lab, txt, n, o) => app.layoutText(`${lab} ${txt}`, { ...o, fit: { w: o.fit.w, lines: n, soft: true } });
+        const nl = rows.map(([lab, txt]) => (lay(lab, txt, 1, rowO).trunc ? 2 : 1)), room = POT_Y - 21 - (yp + ph + 3);
+        const sz2 = Math.min(...rows.map(([lab, txt], n) => lay(lab, txt, nl[n], rowO).size)), lh2 = Math.round(sz2 * 1.22);
+        if (smallUi && nl.some((n) => n > 1) && (nl[0] + nl[1]) * lh2 <= room && !rows.some(([lab, txt], n) => lay(lab, txt, nl[n], rowO).trunc)) {
+          let yy = yp + ph + 3; rows.forEach(([lab, txt, col], n) => { app.text(`${lab} ${txt}`, x, yy, { ...rowO, size: sz2, lineH: lh2, exact: true, fit: { w: rowO.fit.w, lines: nl[n], soft: true }, color: col }); yy += nl[n] * lh2; });
+        } else {
+          if (cut() && touchUi(app)) { grInfo = true; rowO = { ...rowO, fit: { w: w - 30, lines: 1, soft: true } }; } // touch: no hover tip, so a chip opens the full Boon and Price
+          const sz = Math.min(...rows.map(([lab, txt]) => app.layoutText(`${lab} ${txt}`, rowO).size)), pitch = Math.max(15, sz + 3);
+          rows.forEach(([lab, txt, col], n) => app.text(`${lab} ${txt}`, x, yp + ph + 9 + n * pitch, { ...rowO, size: sz, exact: true, color: col }));
+          gInfoY = yp + ph + 9 + pitch * 0.5 + sz * 0.5;
+        }
       }
       g.restore();
       if (grInfo && !it.sold && infoChip(app, x + w - 12, gInfoY, [], 'graft' + i)) { sfx(app, 'uiClick'); openInfoCard(app, gr.name, withGloss(`Weight ${gr.weight} (${gr.tier})\nBoon: ${gr.boon}\nPrice: ${gr.price}\n${it.price} gold.`), COL[gr.school] || COL.lamp); }
-      if (it.sold) stamp(app, x + w / 2, y + ph / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w - 36, y - 16, it.price, false, 'graft' + i); // on the heading row, over the patch's top right corner, so the two rows below stay clear
+      if (it.sold) stamp(app, x + w / 2, yp + ph / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w - 36, y - 16, it.price, false, 'graft' + i); // on the heading row, over the patch's top right corner, so the two rows below stay clear
       if (!it.sold && app.clicked(GRAFT_X(i), y, w, 100)) startGraftBuy(app, i);
     });
 
@@ -660,9 +668,10 @@ export default {
       drawPotion(g, it.id, x + 30, y + 34 - 2 * k, 40);
       if (!it.sold) newRibbon(app, it.id, x + 3, y + 3, 40, { size: 9 });
       let nmO = { size: 15, bold: true, fit: { w: w - 58, lines: 1 } }; if (app.layoutText(p.name, nmO).trunc) nmO = { ...nmO, bold: false }; // a long name on the smallest phone drops the bold before it loses letters
+      if (app.layoutText(p.name, nmO).trunc) nmO = { ...nmO, bold: true, lineH: 16, fit: { w: w - 58, lines: 2 } }; // still too long: two lines, never an ellipsis
       const nmL = app.layoutText(p.name, nmO), nameY = y + 14 - 2 * k;
       app.text(p.name, x + 56, nameY, { ...nmO, color: COL.vellum });
-      { const dy0 = nameY + Math.ceil(nmL.size * 1.2) + 2, dO = { size: 14, ui: true, fit: { w: w - 64, h: y + h - 5 - 2 * k - dy0, soft: true } }, dL = app.layoutText(p.text, dO);
+      { const dy0 = nameY + (nmL.lines.length - 1) * nmL.lineH + Math.ceil(nmL.size * (nmL.lines.length > 1 ? 1.05 : 1.2)) + 1, dO = { size: 14, ui: true, fit: { w: w - 64, h: y + h - 5 - 2 * k - dy0, soft: true } }, dL = app.layoutText(p.text, dO);
         app.text(p.text, x + 56, dy0, { ...dO, color: 'rgba(232,220,196,.85)' });
         potInfo = dL.trunc ? { x: x + 52, y: dy0 - 4, w: w - 58, h: dL.h + 8 } : null; }
       g.restore();

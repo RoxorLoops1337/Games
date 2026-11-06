@@ -23,19 +23,19 @@ in /tmp/claude-0/shots/z4/ (not in the repo).
 5. Design change delivered with this pass: dice routes (roll, plan a route step by step, Go). See WARD.md section 9. Walk phases before it were
    clear (hover thread, "1 fight (1 monster), 1 event, arrive at the Chapel", p1_1_preview_fight-event.png) but a click walked at once, with no
    confirm on desktop.
-6. Clarity, open: "End Morning" with affordable plans left in hand silently discards them ("5 plans unplayed" is the only hint). A one-line "unplayed
+6. Clarity, FIXED (Z5): "End Morning" with affordable plans left in hand silently discards them ("5 plans unplayed" is the only hint). A one-line "unplayed
    plans are discarded" in the sub label would help (b2_day1_start, a05_dropped).
-7. Clarity, open: a room built with no spare power is built dark and its cost is already paid; the toast explains it after the fact ("The Linen Room is
+7. Clarity, FIXED (Z5): a room built with no spare power is built dark and its cost is already paid; the toast explains it after the fact ("The Linen Room is
    built dark", b2_built.png). Better: dim the plan's bulb when `power.used + plan power > cap` before the drop.
-8. Clarity, open: a one-monster Ward fight pays "Gold x0.83" in the reward header (p2_first_reward.png). Reads as a penalty; say "1 monster pays 75 percent,
+8. Clarity, FIXED (Z5): a one-monster Ward fight pays "Gold x0.83" in the reward header (p2_first_reward.png). Reads as a penalty; say "1 monster pays 75 percent,
    midday +10 percent".
-9. Ugly, open: the hero token sits on the room label ("ENTRA...", "CHA...") in the hero's room (a03_ward_first.png).
-10. Ugly, open: hovering a room stacks two tooltips over the left panel and covers TODAY and the day log (a07_hover_chapel.png).
-11. Slow, open: an empty evening and night (nothing worth walking to) still needs Wait here twice; about 12 clicks for a quiet day (build 5, End Morning,
+9. Ugly, FIXED (Z5): the hero token sits on the room label ("ENTRA...", "CHA...") in the hero's room (a03_ward_first.png).
+10. Ugly, FIXED (Z5): hovering a room stacks two tooltips over the left panel and covers TODAY and the day log (a07_hover_chapel.png).
+11. Slow, FIXED (Z5): an empty evening and night (nothing worth walking to) still needs Wait here twice; about 12 clicks for a quiet day (build 5, End Morning,
     three walks). Consider "Wait out the rest of the day".
-12. Truncation, open (hero select, not the Ward): "Pays for power in his own..." on the phone (m1_select.png).
-13. Event screen does not say which phase or room the event came from, though the Chapel changes outcomes by phase (a10_event3.png).
-14. Info: dark rooms stay dark after a Generator is built until the player toggles them (power 8 of 8 with two dark rooms, a04 morning 2); correct but
+12. Truncation, FIXED (Z5) (hero select, not the Ward): "Pays for power in his own..." on the phone (m1_select.png).
+13. FIXED (Z5). Event screen does not say which phase or room the event came from, though the Chapel changes outcomes by phase (a10_event3.png).
+14. FIXED (Z5). Info: dark rooms stay dark after a Generator is built until the player toggles them (power 8 of 8 with two dark rooms, a04 morning 2); correct but
     surprising. The right panel could name the dark rooms when power is free.
 15. Info: the sim's strong bot wins less with dice (below); a fresh player will see about 1.5 fewer fights a day.
 
@@ -53,3 +53,22 @@ is always possible from the Entrance. Resume: Continue from the title restored t
 Random policy: 0 wins in every run. Elites per act stay 1.3 to 2.5, so the 2 to 3 target holds only in acts 2 and 3. The data was NOT retuned (the day counts are
 asserted by other tests and Z3 is editing data/ward.js): the cheapest lever is one more day a floor (7 / 8 / 8), then waitHeal and the wood and stone per monster.
 Act 2 is where most dice runs die.
+
+## Z5 pass: fixes and browser run
+
+Fixes (tests in graftwork_ui_ward "z5:" and graftwork_ward "z5:"): End Morning asks once when plans you could still play would be discarded (the button turns
+into "Discard N plans?"); a room that would be built dark shows a struck-out bulb and DARK on the plan card, a red chip while you drag, and is not paid for
+until the same drop is made twice; the reward header says "Gold: 1 monster pays 75%, midday +10%" (ward_kit goldNote); the hero token sits on the plate's
+lower right corner (top right when the label is long, like ENTRANCE); a room hover is one tooltip under TODAY (no stacked glossary panel); "Rest day" waits
+out every walk left today and stops in the morning, at a trigger, or on the boss night; the hero select leaves the flavor line out instead of cutting it
+with "..."; the event heading names the room and hour ("CHAPEL EVENT, MIDDAY (leans to gold and healing)"); a Generator or Demolish relights the rooms that
+were built dark, newest first, while the power lasts. Also: a resumed walk (reload, Continue) rebuilds its step plan so the token walks the steps between
+triggers, a stale build stamp from another clock can never hide a room (buildAge), the hero is put back in the Entrance if it points at a missing room, and
+a save without a route list gets one (engine rollOf).
+
+Browser (Playwright chromium, desktop 1280x720 and phone 1000x462, screenshots in /tmp/claude-0/shots/z5/): Act 1 boss (last night, Enter the Theatre, fight,
+reward, graft, floor 2 with Entrance, Chapel, Ward, Sawmill and the Market Wing title), Classic from the hero select switch (map, Floor 0 of 10, abandon button),
+Pause from the Ward (Resume, Deck, Esc, Abandon with its confirm, end screen), resume with a monster fight open mid-walk (Continue restores the combat and the walk).
+Findings: the Daily Run always starts the Classic map, whatever the mode switch says (not changed: the Daily card does not say so); Esc on the Deck opened from
+Pause closes both the Deck and the Pause; the boss reward screen (relic pair, building plan row, potion) draws the "left behind" hint over the relic cards
+(ui/reward.js, not changed). Could not reproduce the owner's "hero on an empty cell, rooms invisible" on this code; the stamp guard and the hero guard cover it.

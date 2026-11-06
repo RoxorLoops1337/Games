@@ -10,7 +10,7 @@ import * as ICONS from '../art/icons.js';
 import { wrapLimit, keyBadge, tscale } from './graft_parts.js';
 import { maybeTip } from './tutorial.js';
 import { lnw } from '../art/linework.js';
-import { buildPickRow } from './ward_kit.js';
+import { buildPickRow, goldNote } from './ward_kit.js';
 import { BUILD_CARDS } from '../data/ward.js';
 
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
@@ -65,7 +65,7 @@ export default {
     let sub = `${KIND[kind]}. Take what you can carry.`;
     if (rw.ward) { // Ward mode: what the rooms gave (wood and stone are already in the store)
       const wd = rw.ward, got = [wd.wood ? `+${wd.wood} wood` : '', wd.stone ? `+${wd.stone} stone` : ''].filter(Boolean).join(', ');
-      sub = `${KIND[kind]}${wd.count > 1 ? ` (${wd.count} monsters)` : ''}.` + (got ? ` Salvage: ${got}.` : '') + (wd.goldMul && Math.abs(wd.goldMul - 1) > 0.01 ? ` Gold x${Math.round(wd.goldMul * 100) / 100}.` : '');
+      sub = `${KIND[kind]}${wd.count > 1 ? ` (${wd.count} monsters)` : ''}.` + (got ? ` Salvage: ${got}.` : '') + (goldNote(wd, run.ward && run.ward.phase, kind) ? ' ' + goldNote(wd, run.ward && run.ward.phase, kind) : '');
       if (rw.wardBonus) sub += ` Early: +${rw.wardBonus.gold} gold, ${BUILD_CARDS[rw.wardBonus.card] ? BUILD_CARDS[rw.wardBonus.card].name : 'a plan'}.`;
     }
     const th = app.text('Spoils', 640, 16, { size: app.scale < 0.95 && st.init.choices ? 40 : 52, bold: true, align: 'center', color: COL.lamp, shadow: true, fixed: true });
