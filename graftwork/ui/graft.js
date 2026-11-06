@@ -206,7 +206,7 @@ function drawOfferCard(app, r, i, c) {
   const ctx = app.ctx, run = st.run;
   const inst = RUN.findInst(run, r.uid); if (!inst) return;
   const sel = st.selCard === r.uid;
-  app.reg('graft-card' + i, r.x, r.y - 16, r.w, r.h + 38, { group: 'card' + i });
+  app.reg('graft-card' + i, r.x, r.y - 16, r.w, r.h + 44, { group: 'card' + i });
   const deal = EASE.out(clamp((st.dealT - i * 0.1) / 0.5, 0, 1));
   if (deal <= 0) return;
   const hover = c.interactive && deal >= 1 && app.inRect(r.x, r.y, r.w, r.h);
@@ -261,7 +261,7 @@ function drawOfferCard(app, r, i, c) {
   const base = CARDS[inst.id];
   const cap = (inst.plays ? `Played ${inst.plays}x` : 'Never played') + '   ' + (inst.grafts.length ? `${inst.grafts.length} graft${inst.grafts.length > 1 ? 's' : ''}` : 'Bare');
   app.text(cap, cx + 12, r.cy + CH / 2 + 12, { size: 14, ui: true, align: 'center', color: DIM, alpha: deal, maxW: CW - 40 });
-  keyBadge(app, String(i + 1), cx - CW / 2 + 12, r.cy + CH / 2 + 22);
+  keyBadge(app, String(i + 1), cx - CW / 2 + 12, r.cy + CH / 2 + 20);
 
   if (hover) {
     const lines = [];
@@ -503,7 +503,7 @@ function drawButtons(app, c) {
     } else sfx(app, 'error');
   }
   if (app.inRect(TRAY_X, 556, 208, 46)) app.tooltip('Reroll', locked ? 'Rerolling is closed at Ascension 8 and above.' : poor ? `You need ${cost} gold. Each reroll costs 10 more.` : 'Deal a fresh set of cards and grafts. Each reroll costs 10 more gold.');
-  if (app.button('Decline the graft', TRAY_X + 222, 556, 208, 46, { size: 19, sub: 'Heal, Budget or gold', disabled: !interactive }) ) { st.menu = true; st.skipPick = []; sfx(app, 'uiClick'); }
+  if (app.button('Decline the graft', TRAY_X + 222, 556, 208, 46, { size: 17, sub: 'Heal, Budget or gold', disabled: !interactive }) ) { st.menu = true; st.skipPick = []; sfx(app, 'uiClick'); }
   if (app.inRect(TRAY_X + 222, 556, 208, 46)) app.tooltip('Decline the graft', `Sew nothing and take ${skipLimit(run) > 1 ? 'two' : 'one'} of: heal 8 HP, +1 Budget for the rest of the run, or +10 gold. Esc.`);
 
   app.reg('graft-reroll', TRAY_X, 556, 208, 46, { group: 'reroll' }); app.reg('graft-decline', TRAY_X + 222, 556, 208, 46, { group: 'decline' }); app.reg('graft-sew', TRAY_X, 612, TRAY_W, 76, { group: 'sew' });
