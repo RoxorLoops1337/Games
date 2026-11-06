@@ -69,8 +69,17 @@ export const wardMem = MEM; // tests
 export function buildAge(stamp, t) { if (stamp === undefined || !(stamp <= t)) return 1; return clamp((t - stamp) / 0.4, 0, 1); }
 export function resetWardMem() { MEM.dieKey = ''; MEM.phaseKey = ''; MEM.floorKey = ''; MEM.seen = {}; MEM.plan = null; MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; MEM.darkBuilt = {}; }
 
+// A walk that was resumed (page reload, Continue from the title) has no step plan in memory: rebuild it from the saved walk so the token still
+// walks the steps between two triggers instead of jumping to the end of the route.
+function ensurePlan(run) {
+  const w = run && run.ward;
+  if (MEM.plan || !w || !w.walk || w.walk.wait || !w.walk.path || !w.walk.path.length) return;
+  const cells = w.walk.path.slice(), at = cells.indexOf(w.hero.room);
+  if (at >= 0) MEM.plan = { act: w.act, cells, at, rid: w.walk.dest, wait: false };
+}
 // flow.route() calls this before it opens a trigger's screen: when the walk moved the hero since the last trigger, the Ward plays those steps first.
 export function wardInterlude(app, run, scr) {
+  ensurePlan(run);
   const P = MEM.plan, w = run && run.ward;
   if (!P || !w || !w.walk || w.act !== P.act || run.mode !== 'ward' || !app.screens.ward) return false;
   const idx = P.cells.indexOf(w.hero.room, P.at);
@@ -170,6 +179,7 @@ export default {
     if (!w.rooms[w.hero.room]) { const e = WD.entranceOf(run); if (e) w.hero.room = e.id; } // a hero is always standing in a room
     const fk = `${run.seed}|${run.act}|${run.loop || 0}`;
     if (MEM.floorKey !== fk) { if (MEM.floorKey || w.day === 1) S.banner = { t: 0, t0: Date.now(), act: run.act }; MEM.floorKey = fk; MEM.plan = null; MEM.seen = MEM.seen || {}; }
+    ensurePlan(run);
     const P = MEM.plan;
     if (P && P.act !== w.act) MEM.plan = null;
     if (MEM.plan) { // steps still to show: towards the next trigger (params.then) or to the end of the walk
