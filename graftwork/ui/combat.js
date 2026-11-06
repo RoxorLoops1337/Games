@@ -1673,11 +1673,13 @@ function drawHudBottom(app) {
   // strain readout
   const st = c.strain, B = L.STRAIN_BOX;
   const over = st.strain > 0;
-  app.panel(B.x, B.y, B.w, B.h, { fill: 'rgba(14,12,10,.8)', stroke: over ? COL.scar : 'rgba(232,220,196,.35)', r: 8 });
-  app.reg('strain', B.x, B.y, B.w, B.h, {});
+  // phones inflate the text: size the two rows from the real line height so Budget and Strain never touch
+  const sLh = Math.ceil(app.sz(15, { ui: true, bold: true }) * 1.1), sH = Math.max(B.h, sLh * 2 + 12);
+  app.panel(B.x, B.y, B.w, sH, { fill: 'rgba(14,12,10,.8)', stroke: over ? COL.scar : 'rgba(232,220,196,.35)', r: 8 });
+  app.reg('strain', B.x, B.y, B.w, sH, {});
   app.text(`Budget ${st.weight}/${st.budget}`, B.x + 10, B.y + 5, { size: 15, ui: true, bold: true, color: COL.vellum });
-  app.text(`Strain ${st.strain}`, B.x + 10, B.y + 24, { size: 15, ui: true, bold: true, color: over ? COL.bad : COL.good });
-  if (app.inRect(B.x, B.y, B.w, B.h)) {
+  app.text(`Strain ${st.strain}`, B.x + 10, B.y + 5 + sLh, { size: 15, ui: true, bold: true, color: over ? COL.bad : COL.good });
+  if (app.inRect(B.x, B.y, B.w, sH)) {
     const tithed = []; for (const w of S.known.values()) if (w.tithed) tithed.push(w);
     const lines = [];
     if (!over) lines.push('Within Budget. No card is Tithed.');

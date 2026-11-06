@@ -365,6 +365,7 @@ function tintOf(spec) { const s = schoolOf(spec); return (s && COLX[s]) || COLX[
 // ---------- the illustration window: 3 parallax layers (back wash, motif, foreground sprinkles) + inner shadow ring ----------
 const WIN = { x: -90, y: -112, w: 180, h: 90 };
 const WINC = { x: -90, y: -102, w: 180, h: 118 }; // compact face
+const WINCG = { x: -90, y: -102, w: 180, h: 70 };  // compact face with grafts: a shorter window leaves room for the graft band
 function artInfo(spec) {
   const r = rngOf('art:' + spec.id);
   const motif = pickMotif(spec);
@@ -480,6 +481,26 @@ function drawSmallPatch(g, gid, cx, cy, idx, sc = 1) {
   drawSchoolGlyph(g, school, cx, cy + 1, 7.5, mix(col, '#ffffff', 0.5));
   staple(g, cx - 1, cy - h / 2 + 2, 13, -0.15 + idx * 0.1);
   g.restore(); BB = null;
+}
+
+// Resting (compact) hand face: one chip per graft INSIDE the card (school glyph + name), so the key facts read without lifting the card.
+// The 3rd chip is the Overload: gold border and a crack. Names shrink to fit; a lifted card shows the full text.
+function drawGraftBand(g, grafts, x, y, w, h) {
+  const n = Math.min(3, grafts.length); if (!n) return;
+  const gap = 4, cw = (w - gap * (n - 1)) / n;
+  grafts.slice(0, 3).forEach((gid, i) => {
+    const gr = GRAFTS[gid], school = gr && gr.school, col = (school && COLX[school]) || '#888', cx = x + i * (cw + gap), over = i === 2;
+    g.save();
+    rr(g, cx, y, cw, h, 6); fs(g, mix(col, '#e9dfc6', 0.55), over ? 2.6 : 1.4, 2);
+    if (over) { rr(g, cx, y, cw, h, 6); g.lineWidth = 2.6; g.strokeStyle = COLX.lamp; g.stroke(); g.beginPath(); g.moveTo(cx + cw * 0.55, y); g.lineTo(cx + cw * 0.48, y + h * 0.4); g.lineTo(cx + cw * 0.6, y + h * 0.65); g.lineWidth = 1.4; g.strokeStyle = '#fff3b0'; g.stroke(); }
+    drawSchoolGlyph(g, school, cx + 11, y + h / 2, 6.5, mix(col, '#2b1e1a', 0.35));
+    const nm = String((gr && gr.name) || gid), tw = cw - 25;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    const sz = fitText(g, nm, tw, 16, 8, { bold: true, ui: true }); g.font = font(sz, { bold: true, ui: true }); g.fillStyle = '#2b1e1a';
+    if (g.measureText(nm).width > tw) { const first = nm.split(' ')[0]; g.fillText(first, cx + 20 + tw / 2, y + h / 2 + 0.5, tw); }
+    else g.fillText(nm, cx + 20 + tw / 2, y + h / 2 + 0.5, tw);
+    g.restore(); BB = null;
+  });
 }
 
 // ---------- card outline (junk is torn) ----------
@@ -660,7 +681,7 @@ function renderFace(g, spec, lines, price, o, I, win) {
     drawIllustration(g, I, win);
     const ki = keyInfo(lines), ty = win.y + win.h;
     if (ki) {
-      const size = ki.n.length > 2 ? 60 : ki.n.length > 1 ? 82 : 92; g.font = font(size, { bold: true }); g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+      const gz = (spec.grafts || []).length ? 0.78 : 1, size = Math.round((ki.n.length > 2 ? 60 : ki.n.length > 1 ? 82 : 92) * gz); g.font = font(size, { bold: true }); g.textAlign = 'center'; g.textBaseline = 'alphabetic';
       const wN = g.measureText(ki.n).width, cx = 14, baseY = ty + 8 + size * 0.78;
       const ncol = o.tithed ? '#7a6a60' : ki.kind === 'dmg' ? '#7a1c1c' : ki.kind === 'block' ? '#2f4a58' : ki.kind === 'heal' ? '#3a6a46' : '#4a3022';
       g.fillStyle = 'rgba(20,10,5,.28)'; g.fillText(ki.n, cx + 2, baseY + 3);
@@ -673,7 +694,7 @@ function renderFace(g, spec, lines, price, o, I, win) {
     g.textBaseline = 'middle';
     typeGlyph(g, spec.type, -76, 130, 11, frame);
     const sch = schoolOf(spec); if (sch) { circ(g, 76, 130, 13, 'rgba(232,220,196,.9)', 1.4); drawSchoolGlyph(g, sch, 76, 130, 9, COLX[sch]); }
-    (spec.grafts || []).slice(0, 3).forEach((gid, i) => drawSmallPatch(g, gid, HW + 3, -34 + i * 40, i, 0.9));
+    drawGraftBand(g, spec.grafts || [], -86, 46, 172, 38);
     (spec.fused || []).slice(0, 4).forEach((gid, i) => drawRivet(g, gid, -HW + 3, 8 + i * 24));
     if (o.tithed) { g.font = font(15, { bold: true, ui: true }); }
   }
@@ -694,7 +715,7 @@ function getFace(spec, o) {
   const key = faceKey(spec, lines, price, o);
   let ent = cache.get(key);
   if (ent) { cache.delete(key); cache.set(key, ent); return ent; }
-  const win = o.compact ? WINC : WIN, I = artInfo(spec);
+  const win = o.compact ? ((spec.grafts || []).length ? WINCG : WINC) : WIN, I = artInfo(spec);
   const cv = makeCanvas(Math.ceil((CARD_W + PAD * 2) * S), Math.ceil((CARD_H + PAD * 2) * S));
   if (cv) {
     cv.g.setTransform(S, 0, 0, S, 0, 0); cv.g.translate(HW + PAD, HH + PAD);
