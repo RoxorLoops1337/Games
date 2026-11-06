@@ -244,7 +244,7 @@ export function createApp(canvas, opts = {}) {
     return false;
   };
   // tooltip(title, text, {color, lines}): shown near the pointer this frame. ui/tooltips.js renderTip draws it; the fallback below is used when it returns false.
-  app.tooltip = (title, text, o = NO) => { app.tip = { title, text, color: o.color, lines: o.lines, anchor: o.anchor, o }; };
+  app.tooltip = (title, text, o = NO) => { if (app.blocked) return; /* a screen or modal on top covers this widget */ app.tip = { title, text, color: o.color, lines: o.lines, anchor: o.anchor, o }; };
   function drawTip() {
     const tip = app.tip; if (!tip) return;
     if (!app.forceTipFallback && renderTip(app, tip) !== false) return; // forceTipFallback: tests and debugging

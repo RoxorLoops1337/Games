@@ -92,8 +92,8 @@ export const EVENT_LIST = [
     id: 'e_coin_flip', name: 'Heads, Tails, Teeth', act: 0,
     text: 'A coin sits on a plinth. A plaque reads: DOUBLE OR NOTHING. A smaller plaque reads: NOTHING IS NOT NOTHING.',
     choices: [
-      { label: 'Flip for 40 gold (50%)', text: 'Pay 40 gold. 50% chance to win 100 gold. Otherwise lose the stake.', cond: (run) => run.gold >= 40,
-        apply: (run, R) => { if (R.rng(run).chance(0.5)) { R.gold(run, 100); return 'Heads. The coin returns with friends. +100 gold.'; } R.gold(run, -40); return 'Tails. The coin keeps your 40 gold and does not thank you.'; } },
+      { label: 'Flip for 40 gold (50%)', text: 'Pay 40 gold up front. 50% chance to win 100 gold back (net +60). Otherwise the 40 is gone.', cond: (run) => run.gold >= 40,
+        apply: (run, R) => { R.gold(run, -40); if (R.rng(run).chance(0.5)) { R.gold(run, 100); return 'Heads. The coin returns with friends. You paid 40 and win 100 (net +60 gold).'; } return 'Tails. The coin keeps your 40 gold and does not thank you.'; } },
       { label: 'Flip for blood (50%)', text: '50% chance to gain a random potion. Otherwise lose 6 HP.',
         apply: (run, R) => { if (R.rng(run).chance(0.5)) { R.addPotion(run, null); return 'Heads. A potion drops from the ceiling into your hand.'; } R.hurt(run, 6); return 'Tails. You lose 6 HP.'; } },
       leave('The coin spins by itself for a while, then stops, disappointed.'),

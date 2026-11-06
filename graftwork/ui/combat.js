@@ -178,6 +178,7 @@ function handle(ev) {
       return 95;
     }
     case 'status': return onStatus(ev);
+    case 'reknit': { const trn = APP && APP.shared && APP.shared.transitions; if (trn && trn.phaseBeat) trn.phaseBeat(APP, 'REKNIT'); fx.shake(0.3); return 600; }
     case 'immune': { const p = entPos(ev.who); fx.float('Immune', p.x, p.y - 40, { color: '#aaa', size: 20 }); return 110; }
     case 'heal': {
       const en = ent(ev.who); if (!en) return 0;
@@ -353,13 +354,14 @@ function onDmg(ev) {
       fx.hitstop(70); kick(dirx, 0, 9, 7, 0);
       fx.emit({ x: p.x, y: p.y, n: 14, colors: ['#9aa7ad', '#cfd8dc', '#6b7a82'], speed: 300, size: 4, gravity: 800, life: 0.7 });
       fx.emit({ x: p.x, y: p.y, n: 4, colors: ['#cfd8dc', '#9aa7ad'], speed: 220, size: 9, gravity: 900, life: 0.8, shape: 'shard', spin: 10 });
-      fx.ring(p.x, p.y, '#bcd0d8', 100, 0.4); fx.float('BROKEN', p.x, p.y - 62, { color: '#bcd0d8', size: 26, big: true, stroke: '#2a3a44', life: 1.2 }); sfx('blockBreak');
+      fx.ring(p.x, p.y, '#bcd0d8', 100, 0.4); fx.float('BROKEN', p.x, p.y - 104, { color: '#bcd0d8', size: 26, big: true, stroke: '#2a3a44', life: 1.2 }); sfx('blockBreak');
     } else {
       fx.hitstop(20); kick(dirx, 0, 3, 8, 0);
-      fx.float(String(ev.absorbed), p.x - 24, p.y - 26, { color: '#9fb4bd', size: 22, vy: -30, life: 0.8 });
+      fx.float(String(ev.absorbed), p.x - 46, p.y - 18, { color: '#9fb4bd', size: 22, vy: -30, life: 0.8 });
     }
     wait = ev.broke ? 120 : 90;
   }
+  const dxo = ev.absorbed > 0 ? 46 : 0; // damage that got past Block: its number sits to the right of the BROKEN / absorbed stamps, not on top of them
   if (ev.n > 0) {
     en.hp = Math.max(0, en.hp - ev.n); en.tdelay = 0.5;
     const mine = !isP && ev.src === 'player';
@@ -385,8 +387,8 @@ function onDmg(ev) {
       if (T.ink) fx.emit({ x: p.x, y: p.y, n: 8, colors: ['#1a1614', '#2b1e1a'], speed: 170, size: 6, gravity: 250, life: 0.8 });
       if (T.gore) fx.emit({ x: p.x, y: p.y, n: 18, colors: ['#9E0F2E', '#e8dcc4', '#c4223c'], speed: 380, size: 5, gravity: 800, life: 1.0, shape: 'flake', spin: 14 });
       if (T.slow) fx.slowmo(T.slow, T.slowMs);
-      if (typeof fx.floatCounter === 'function') fx.floatCounter(ev.who, p.x, p.y - 20, ev.n, { last: ctr.done, size: T.size, color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum });
-      else if (!multi) fx.float(String(ev.n), p.x + rnd(-14, 14), p.y - 20, { color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum, size: T.size, big: k.crit || k.overkill, life: k.crit || k.overkill ? 1.4 : 1.1, vy: T.vy, rot: T.tilt, pop: T.pop });
+      if (typeof fx.floatCounter === 'function') fx.floatCounter(ev.who, p.x + dxo, p.y - 20 - (dxo ? 14 : 0), ev.n, { last: ctr.done, size: T.size, color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum });
+      else if (!multi) fx.float(String(ev.n), p.x + dxo + rnd(-14, 14), p.y - 20, { color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum, size: T.size, big: k.crit || k.overkill, life: k.crit || k.overkill ? 1.4 : 1.1, vy: T.vy, rot: T.tilt, pop: T.pop });
       if (k.overkill) fx.float(`+${k.over} OVERKILL`, p.x, p.y - 84, { color: COL.gold, size: 18, life: 1.3 });
       const hopt = { pitch: T.pitch * (1 + Math.min(ctr.count, 10) * 0.04), vol: T.vol };
       if (typeof (jau() || {}).hit === 'function') audioCall('hit', slam ? Math.max(ev.n, en.maxHp * 0.2) : ev.n, en.maxHp, hopt); else sfx(slam ? 'hitBig' : T.body, hopt);
@@ -874,7 +876,7 @@ function drawHand(app) {
     const x = dc.x + sx, y = dc.y + oy;
     ctx.save();
     if (dc.sq > 0.001) { ctx.translate(x, y); ctx.scale(1 + dc.sq, 1 - dc.sq * 0.6); ctx.translate(-x, -y); }
-    drawCard(ctx, spec, x, y, { scale: dc.s, rot: dc.rot, tithed: dc.w.tithed, jam: dc.jam, cost, glow: selected ? 1 : (idle && chk.ok && dc.uid === S.hov ? 0.5 : 0), selected, dim: idle && !chk.ok ? 0.3 : 0, alpha: dc.alpha, hover: dc.uid === S.hov, compact: dc.s < 0.8 });
+    drawCard(ctx, spec, x, y, { scale: dc.s, rot: dc.rot, tithed: dc.w.tithed, jam: dc.jam, mark: dc.w.reknit ? 'reknit' : undefined, cost, glow: selected ? 1 : (idle && chk.ok && dc.uid === S.hov ? 0.5 : 0), selected, dim: idle && !chk.ok ? 0.3 : 0, alpha: dc.alpha, hover: dc.uid === S.hov, compact: dc.s < 0.8 });
     ctx.restore();
     if (dc.seam >= 0 && dc.seam < 1.4) drawSeam(ctx, dc);
     if (dc.jam) drawClamp(ctx, dc);
@@ -1255,7 +1257,7 @@ function drawPilesModal(app) {
   ctx.restore();
   if (hover) {
     const hx = clamp(hover.x, 130, W - 400), hy = clamp(hover.y, 200, 520);
-    drawCard(ctx, hover.spec, hx, hy, { scale: 0.95, tithed: hover.w.tithed, jam: hover.w.jam, cost: effCost(c, hover.w), hover: true });
+    drawCard(ctx, hover.spec, hx, hy, { scale: 0.95, tithed: hover.w.tithed, jam: hover.w.jam, mark: hover.w.reknit ? 'reknit' : undefined, cost: effCost(c, hover.w), hover: true });
     drawSections(app, cardSections(hover.spec, hover.w, null), hx + 120, 100, 250, 500);
   }
 }

@@ -2,7 +2,7 @@
 //
 // A deck card is an INSTANCE: { uid, id, grafts: [graftId...], up: 0|1 }.
 // cardSpec(inst) folds the base card, its upgrade and every graft into one SPEC the combat engine plays.
-import { CARDS, GRAFTS, RELICS } from '../data/index.js';
+import { CARDS, GRAFTS, RELICS, HEROES } from '../data/index.js';
 
 export const BASE_BUDGET = 6;
 const PRICE_KINDS = new Set(['selfHurt', 'jam', 'junk', 'selfStatus', 'drawdown', 'goldCost', 'maxHp']);
@@ -149,6 +149,74 @@ export function canGraft(inst, gid) {
   if (g.types && !g.types.includes(spec.type)) return false;
   if (g.ok && !g.ok(spec, inst)) return false;
   return true;
+}
+
+// Why a graft cannot go on a card: a short human reason, or null when it can (always agrees with canGraft).
+// Rules: full card, duplicate, junk, `not` clashes, `types`, then `ok(spec)`. A graft may carry its own `why` string for its ok rule;
+// otherwise the reason is DERIVED by probing ok() with small edits of the spec (cost, flags, target, damage/Block, resource ops, hero).
+const TYPE_WORD = { attack: 'Attacks', skill: 'Skills', power: 'Powers' };
+const FLAG_WHY = { exhaust: 'Already Exhausts', ethereal: 'Already Ethereal', retain: 'Already Retains', innate: 'Already Innate' };
+const okPasses = (g, spec, inst) => { try { return !!g.ok(spec, inst); } catch (e) { return false; } };
+const withSpec = (spec, patch) => ({ ...spec, ...patch });
+function probeWhy(g, spec, inst) {
+  if (typeof g.why === 'string' && g.why) return g.why;
+  // each probe: (spec) => [reason, editedSpec] or null when it does not apply to that spec
+  const fxAdd = (sp, o) => withSpec(sp, { fx: [...(sp.fx || []), o] });
+  const probes = [];
+  for (const f of Object.keys(FLAG_WHY)) probes.push((sp) => (sp.flags && sp.flags[f] ? [FLAG_WHY[f], withSpec(sp, { flags: { ...sp.flags, [f]: false } })] : null));
+  probes.push((sp) => {
+    if (typeof sp.cost !== 'number') return okPasses(g, withSpec(sp, { cost: 1 }), inst) ? ['Not on X cost cards', withSpec(sp, { cost: 1 })] : null;
+    const pass = [0, 1, 2, 3].filter((c) => okPasses(g, withSpec(sp, { cost: c }), inst));
+    if (!pass.length) return null;
+    if (pass.every((c) => c < sp.cost)) { const mx = Math.max(...pass); return [`Needs cost ${mx} or less`, withSpec(sp, { cost: mx })]; }
+    if (pass.every((c) => c > sp.cost)) { const mn = Math.min(...pass); return [`Needs cost ${mn} or more`, withSpec(sp, { cost: mn })]; }
+    return null;
+  });
+  probes.push((sp) => {
+    const quiet = (sp.fx || []).filter((o) => o.op !== 'draw' && o.op !== 'energy' && o.op !== 'gold');
+    return quiet.length !== (sp.fx || []).length ? ['Not on cards that draw or gain energy', withSpec(sp, { fx: quiet })] : null;
+  });
+  probes.push((sp) => {
+    const d = fxAdd(sp, { op: 'dmg', n: 5 }), bl = fxAdd(sp, { op: 'block', n: 5 });
+    const pd = okPasses(g, d, inst), pb = okPasses(g, bl, inst);
+    if (pd && pb) return ['Needs a card that deals damage or gives Block', d];
+    if (pd) return ['Needs a card that deals damage', d];
+    if (pb) return ['Needs a card that gives Block', bl];
+    const hit = withSpec(d, { target: 'enemy' });
+    if (okPasses(g, hit, inst)) return ['Needs a card that hits an enemy', hit];
+    return null;
+  });
+  probes.push((sp) => (sp.target !== 'enemy' && sp.target !== 'all' ? ['Needs a card that targets an enemy', withSpec(sp, { target: 'enemy' })] : null));
+  for (const h of Object.keys(HEROES)) probes.push((sp) => (h !== sp.hero ? [`${HEROES[h].name || h} cards only`, withSpec(sp, { hero: h })] : null));
+  // one edit fixes it: that is the reason
+  for (const pr of probes) { const r = pr(spec); if (r && okPasses(g, r[1], inst)) return r[0]; }
+  // several edits: stack them until it passes, name at most two
+  let cur = spec; const said = [];
+  for (const pr of probes) {
+    const r = pr(cur); if (!r) continue;
+    cur = r[1]; said.push(r[0]);
+    if (okPasses(g, cur, inst)) return said.slice(0, 2).map((t, i) => (i ? t[0].toLowerCase() + t.slice(1) : t)).join(', ');
+  }
+  return 'Does not fit this card';
+}
+export function cantGraftWhy(inst, gid) {
+  const g = GRAFTS[gid];
+  if (!g) return 'Unknown graft';
+  if (inst.grafts.length >= MAX_GRAFTS) return 'Card is full';
+  if (inst.grafts.includes(gid) || (inst.fused || []).includes(gid)) return `Already has ${g.name}`;
+  const base = CARDS[inst.id];
+  if (base.type === 'junk' || base.type === 'curse') return 'Junk cannot be grafted';
+  if (g.not) {
+    const clash = g.not.find((x) => inst.grafts.includes(x) || (inst.fused || []).includes(x));
+    if (clash) { const cg = GRAFTS[clash]; return cg ? `Clashes with ${cg.name}${cg.school ? ' (' + cg.school + ')' : ''}` : 'Clashes with another graft'; }
+  }
+  const spec = cardSpec(inst);
+  if (g.types && !g.types.includes(spec.type)) {
+    const w = g.types.map((t) => TYPE_WORD[t] || t);
+    return `${w.length > 1 ? w.slice(0, -1).join(', ') + ' and ' + w[w.length - 1] : w[0]} only`;
+  }
+  if (g.ok && !g.ok(spec, inst)) return probeWhy(g, spec, inst);
+  return null;
 }
 
 export function hasDmg(spec) { return spec.fx.some((o) => o.op === 'dmg'); }

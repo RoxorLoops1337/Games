@@ -30,6 +30,7 @@ export function drawBar(app, x, y, w, h, shown, trail, max, color, label) {
 }
 
 // ---- text helpers ----
+export const shortMove = (n) => { const t = String(n || '').replace(/\s*\([^)]*\)\s*$/, '').trim(); return t || String(n || ''); };
 // Shrinks a string to fit maxW (down to minSize), then ellipsizes. Returns { str, size, w }.
 export function fitText(app, str, maxW, size, minSize = 14, o = {}) {
   str = String(str);
@@ -222,7 +223,7 @@ export function drawEnemyPlate(app, ed, o) {
   // move name: always with <= 4 enemies, else on hover
   const info = o.info;
   if (info && !info.hidden && (o.many <= 4 || o.hot)) {
-    const mn = fitText(app, o.moveName || '', sw - 4, 15, 14, { ui: true });
+    const mn = fitText(app, shortMove(o.moveName), sw - 4, 15, 14, { ui: true }); // the (+4 if ...) detail lives in the hover tip, not on the plate
     app.text(mn.str, ed.x, L.ENEMY_LANE_TOP + 21, { size: mn.size, ui: true, align: 'center', color: COL.vellum2, stroke: '#0e0e0e', strokeW: 3 });
     app.reg(grp + ':move', ed.x - mn.w / 2, L.ENEMY_LANE_TOP + 21, mn.w, Math.round(mn.size * 1.25), { group: grp });
   }
