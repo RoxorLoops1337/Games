@@ -17,7 +17,7 @@ export const STATUS_E3 = [
   // The Grafter: Overload cards in your deck it has marked at half HP.
   { id: 'reknit', name: 'Reknit', good: true, stack: 'int', desc: (n) => `${n} Overload card${n > 1 ? 's' : ''} in your deck ${n > 1 ? 'are' : 'is'} marked: x1.0 instead of x1.5 and a 40% Shatter roll on first play. Tempered cards are not Overloads.` },
   // The Grafter: the school of your last Thread payout, used by its next Splice.
-  { id: 'mirrorsch', name: 'Mirror', good: true, stack: 'int', desc: (n) => `Its next Splice uses the school of your last Thread cut: ${SCHOOLS_E3[n - 1] || 'none'}.` },
+  { id: 'mirrorsch', name: 'Mirror', good: true, stack: 'int', desc: (n) => `Its next Splice uses the school of your last Thread payout: ${SCHOOLS_E3[n - 1] || 'none'}.` },
   // Locksmith: the school it has sealed (the first card of it you draw each turn is Frayed).
   { id: 'sealed', name: 'Sealed', good: true, stack: 'int', desc: (n) => `Your ${SCHOOLS_E3[n - 1] || 'biggest'} school is sealed: each turn the first card of it you would draw is Frayed (+1 cost, acts as Slack).` },
 ];

@@ -81,8 +81,8 @@ export const RELIC_LIST = [
     on: { combatEnd: (A) => A.gold(Math.min(16, 4 * A.c.strain.strain)) } },
   { id: 'r_jam_engine', name: 'Jam Engine', rarity: 'rare', text: 'At turn start, gain 1 Energy per jammed card in your hand (max 2).',
     on: { turnStart: (A) => { const n = Math.min(2, A.c.hand.filter((k) => k.jam).length); if (n) A.energy(n); } } },
-  { id: 'r_pale_deck', name: 'Pale Deck', rarity: 'rare', text: 'The first Bare Attack or Skill you play each combat draws 2 cards.',
-    on: { cardPlayed: (A, p) => { const s = S(A); if (isBare(p.spec) && !s.pale) { s.pale = true; A.draw(2); } } } },
+  { id: 'r_pale_deck', name: 'Pale Deck', rarity: 'rare', text: 'The first Bare Attack or Skill you play each combat draws 1 card.',
+    on: { cardPlayed: (A, p) => { const s = S(A); if (isBare(p.spec) && !s.pale) { s.pale = true; A.draw(1); } } } },
   { id: 'r_second_skin', name: 'Second Skin', rarity: 'rare', text: 'Once per combat, if you would die while under Strain, survive with 15 HP.',
     on: { wouldDie: (A) => {
       const s = S(A);
