@@ -84,7 +84,7 @@ export const ENEMIES_1 = [
     moves: { clipboard: { name: 'Clipboard', fx: [paperwork(2), blk(5)] }, stamp: { name: 'Stamp (+4 if 3+ junk)', note: 'Hits for 15 instead of 11 while you hold 3 or more junk cards in your deck.', fx: [dmg({ base: 3, per: 'junk', mul: 4, min: 11, max: 15 })] } },
     art: { body: 'tall', color: '#9fb8c9', notes: 'Tall narrow rect in scrubs, small round head, a rect clipboard held in one polyline arm.' } },
 
-  { id: 'leech_jar', name: 'Leech Jar', act: 1, kind: 'normal', start: { strength: 2 }, hp: [40, 44],
+  { id: 'leech_jar', name: 'Leech Jar', act: 1, kind: 'normal', start: { strength: 1 }, hp: [40, 44],
     pattern: ['siphon', 'pulse', 'siphon'],
     moves: {
       siphon: { name: 'Siphon', fx: [{ op: 'custom', fn: drainBlock, text: 'Drains up to 10 of your Block and heals by that much.', intent: 'debuff' }, dmg(6)] },
@@ -92,7 +92,7 @@ export const ENEMIES_1 = [
     },
     art: { body: 'cylinder', color: '#7fc4b0', notes: 'Glass cylinder with a metal lid and base, a fat red-brown leech curled inside as a wavy polyline.' } },
 
-  { id: 'crutchling', name: 'Crutchling', act: 1, kind: 'normal', hp: [38, 42], start: { strength: 2, dodge: 1 },
+  { id: 'crutchling', name: 'Crutchling', act: 1, kind: 'normal', hp: [38, 42], start: { strength: 1, dodge: 1 },
     pattern: ['jab', 'skitter', 'jab'],
     moves: { jab: { name: 'Jab', fx: [dmg(9)] }, skitter: { name: 'Skitter', fx: [blk(6), dmg(5)] } },
     on: {
@@ -107,7 +107,7 @@ export const ENEMIES_1 = [
     moves: { flutter: { name: 'Flutter', fx: [dmg(5), debuff('burn', 2)] }, dive: { name: 'Dive', fx: [dmg(10), debuff('brittle', 1)] } },
     art: { body: 'wings', color: '#e8a24a', notes: 'Small oval body, two large oval wings with glowing orange spots, short feeler polylines. Hovers.' } },
 
-  { id: 'gauze_mummy', name: 'Gauze Mummy', act: 1, kind: 'normal', hp: [40, 44], start: { strength: 2, plated: 3 },
+  { id: 'gauze_mummy', name: 'Gauze Mummy', act: 1, kind: 'normal', hp: [40, 44], start: { strength: 1, plated: 3 },
     pattern: ['lash', 'wrap', 'lash'],
     moves: { lash: { name: 'Lash', fx: [dmg(9)] }, wrap: { name: 'Rewrap', fx: [blk(15), dmg(4)] } },
     art: { body: 'striped', color: '#e8e0cc', notes: 'Upright rect with horizontal off-white stripes of bandage, loose trailing strips as polylines, two dark eye dots.' } },

@@ -1,5 +1,6 @@
 // FORGE screen (run.phase === 'forge', run.pending = {kind:'forge', used, last}).
 // Five big options; the player picks one (two with perk 'forgeExtra'), watches the animation, then continues.
+import { tscale } from './graft_parts.js';
 import { COL, EASE, rgba, clamp, lerp } from './core.js';
 import { Fx } from './fx.js';
 import { drawBackground } from '../art/backgrounds.js';
@@ -278,7 +279,12 @@ export default {
     if (Math.random() < dt * 5) S.fx.emit({ x: 100 + Math.random() * 1080, y: 725, n: 1, colors: ['#ff6a2b', '#ffb347'], speed: 40, angle: -1.57, spread: 0.8, life: 3, size: 2.2, gravity: -30, glow: true, drag: 0.1 });
     if (S.anim) { if (updateForgeAnim(app, S.anim, fdt || 0) || (app.mouse.released && S.anim.t > 0.5)) S.anim = null; }
   },
+  // dense screen: the text scale is honoured up to 110%
   draw(app) {
+    const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.1);
+    try { this.drawForge(app); } finally { app.textScale = ts; }
+  },
+  drawForge(app) {
     if (!S) return;
     const g = app.ctx, run = app.shared.run, flow = app.shared.flow, f = run.pending;
     if (!f || f.kind !== 'forge') return;
@@ -295,20 +301,24 @@ export default {
     app.text('The Forge', 40, 14, { size: 36, bold: true, color: COL.lamp, shadow: true });
     drawHeart(g, 330, 34, 30);
     app.text(`${run.hp} / ${run.maxHp}`, 352, 20, { size: 24, bold: true, color: COL.vellum, shadow: true });
-    app.text('BUDGET', 520, 8, { size: 12, ui: true, bold: true, color: 'rgba(232,220,196,.7)' });
+    app.reg('forge-head', 24, 4, 470, 56, { group: 'head' }); app.reg('forge-budget', 520, 4, 310, 60, { group: 'budget' });
+    app.text('BUDGET', 520, 6, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.7)' });
     drawGauge(app, 520, 26, 300, info);
-    app.text(gaugeLabel(info), 520, 48, { size: 12, ui: true, color: info.strain ? COL.bad : 'rgba(232,220,196,.7)' });
+    app.text(gaugeLabel(info), 520, 46, { size: 14, ui: true, maxW: 300, color: info.strain ? COL.bad : 'rgba(232,220,196,.7)' });
     if (app.inRect(520, 4, 310, 60)) app.tooltip('Budget', `Total graft weight ${info.weight} against a Budget of ${info.budget}. Over it, each Strain point Tithes a Bare card (-25% numbers).` + (info.tithed.length ? `\nTithed now: ${info.tithed.map((u) => cardName(run, u)).join(', ')}.` : ''));
     if (app.inRect(320, 8, 160, 44)) app.tooltip('Health', `${run.hp} of ${run.maxHp} HP.`);
-    if (app.button(`Deck (${run.deck.length})`, 1010, 10, 130, 44, { size: 18 })) flow.openDeck();
-    app.panel(1152, 10, 112, 44, { fill: 'rgba(14,12,10,.9)', stroke: rgba(BRASS, 0.7) });
-    drawCoin(g, 1174, 32, 24); app.text(String(run.gold), 1194, 17, { size: 24, bold: true, color: COL.gold, shadow: true });
+    // the top-right corner (x 1128..1272, y 0..56) belongs to the global Pause / Fullscreen buttons
+    app.reg('forge-gold', 880, 10, 112, 44, { group: 'gold' }); app.reg('forge-deck', 1004, 10, 112, 44, { group: 'deckbtn' });
+    if (app.button(`Deck (${run.deck.length})`, 1004, 10, 112, 44, { size: 16 })) flow.openDeck();
+    app.panel(880, 10, 112, 44, { fill: 'rgba(14,12,10,.9)', stroke: rgba(BRASS, 0.7) });
+    drawCoin(g, 900, 32, 24); app.text(String(run.gold), 916, 17, { size: 24, bold: true, color: COL.gold, shadow: true, maxW: 72 });
 
-    app.text(left > 0 ? (max > 1 ? `Choose ${left === max ? 'up to two' : 'one more'}. Your Forge Hammer allows ${max}.` : 'Choose one.') : 'The fire is banked. Time to go.', 640, 92, { size: 20, italic: true, align: 'center', color: 'rgba(232,220,196,.85)' });
+    app.text(left > 0 ? (max > 1 ? `Choose ${left === max ? 'up to two' : 'one more'}. Your Forge Hammer allows ${max}.` : 'Choose one.') : 'The fire is banked. Time to go.', 640, 92, { size: 20, italic: true, align: 'center', maxW: 900, color: 'rgba(232,220,196,.85)' });
 
     // options
     OPTS.forEach((o, i) => {
       const x = OX0 + i * (OW + OGAP), why = reasonFor(run, o.id), usedUp = left <= 0;
+      app.reg('forge-opt' + i, x - 4, OY - 4, OW + 8, OH + 8, { group: 'opt' + i });
       const over = app.inRect(x, OY, OW, OH), dim = !!why || usedUp;
       const key = o.id, v = S.h[key] || 0, n = clamp(v + (over && !dim ? 1 : -1) * app.dt * 9, 0, 1); S.h[key] = n;
       const shk = S.shakeI === i && S.shakeT > 0 ? Math.sin(S.shakeT * 70) * 9 * (S.shakeT / 0.4) : 0;
@@ -324,9 +334,10 @@ export default {
     });
 
     // log + continue
-    let ly = 506; for (const ln of S.log.slice(-2)) { ly += app.text(ln, 640, ly, { size: 17, ui: true, align: 'center', color: COL.good }) + 3; }
+    let ly = 506; app.reg('forge-log', 340, 500, 600, 44, { group: 'log' }); for (const ln of S.log.slice(-2)) { ly += app.text(ln, 640, ly, { size: 17, ui: true, align: 'center', color: COL.good, maxW: 590 }) + 3; }
     toastDraw(app, S, 560);
     const done = f.used > 0;
+    app.reg('forge-leave', done ? 490 : 520, 610, done ? 300 : 240, done ? 72 : 52, { group: 'leave' });
     if (app.button(done ? 'Continue' : 'Leave without choosing', done ? 490 : 520, 610, done ? 300 : 240, done ? 72 : 52, { size: done ? 32 : 18, fill: done ? '#4a2a1c' : undefined, stroke: done ? COL.lamp : undefined })) { RUN.advance(run); flow.route(); }
     if (app.inRect(490, 610, 300, 72) && done) app.tooltip('Continue', 'Back to the map.');
 

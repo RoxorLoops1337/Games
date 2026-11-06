@@ -245,7 +245,7 @@ const heckler = {
 
 // ---------- ELITES ----------
 const diva = {
-  id: 'the_diva', name: 'The Diva', act: 3, kind: 'elite', start: { strength: 1 }, hp: [176, 184],
+  id: 'the_diva', name: 'The Diva', act: 3, kind: 'elite', start: { strength: 2 }, hp: [176, 184],
   pattern: ['vibrato', 'high_c', 'aria', 'encore'],
   moves: {
     vibrato: { name: 'Vibrato', fx: [D(9, { hits: 3 }), CUSTOM('debuff', 'Exhausts a card you were about to draw', (A) => exhaustTop(A, 1))] },
@@ -257,7 +257,7 @@ const diva = {
 };
 
 const stagehands = {
-  id: 'stagehands', name: 'Stagehands', act: 3, kind: 'elite', start: { strength: 1 }, hp: [178, 186],
+  id: 'stagehands', name: 'Stagehands', act: 3, kind: 'elite', start: { strength: 2 }, hp: [178, 186],
   pattern: ['sandbag', 'winch', 'rig', 'strike_set'],
   moves: {
     sandbag: { name: 'Drop the Sandbag', fx: [D(28), ST('frail', 1)] },
@@ -269,7 +269,7 @@ const stagehands = {
 };
 
 const goldLeafGolem = {
-  id: 'gold_leaf_golem', name: 'Gold Leaf Golem', act: 3, kind: 'elite', start: { strength: 1 }, hp: [180, 188],
+  id: 'gold_leaf_golem', name: 'Gold Leaf Golem', act: 3, kind: 'elite', start: { strength: 2 }, hp: [180, 188],
   pattern: ['gild', 'slam', 'flake'],
   moves: {
     gild: { name: 'Gild Itself', intent: ['defend', 'buff', 'attack'], fx: [{ op: 'block', n: { base: 8, per: 'gold', mul: 0.1, max: 36 } }, D(12), SELF('strength', 2)] },

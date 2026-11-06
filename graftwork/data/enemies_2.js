@@ -167,7 +167,7 @@ export const ENEMIES_2 = [
     art: { body: 'hunched', color: '#9a7a9a', notes: 'Small cloaked oval with a square paddle held high.' } },
 
   // ---------- ELITES ----------
-  { id: 'the_appraiser', name: 'The Appraiser', act: 2, kind: 'elite', start: { strength: 1 }, hp: [114, 120], pattern: ['appraise', 'audit', 'levy'],
+  { id: 'the_appraiser', name: 'The Appraiser', act: 2, kind: 'elite', start: { strength: 2 }, hp: [114, 120], pattern: ['appraise', 'audit', 'levy'],
     moves: {
       appraise: { name: 'Appraise', fx: [{ op: 'dmg', n: 8 }, { op: 'custom', intent: 'debuff', text: 'Prices your most grafted card (two below half HP). Playing it costs you.', fn: (A, ctx) => markBest(ctx.srcEnt.hp * 2 <= ctx.srcEnt.maxHp ? 2 : 1)(A) }] },
       audit: { name: 'Audit', tip: 'Rejection: your card prices trigger twice next turn.', fx: [{ op: 'dmg', n: 15 }, { op: 'block', n: 8, to: 'self' }, { op: 'status', s: 'rejection', n: 1, to: 'player' }] },
@@ -184,7 +184,7 @@ export const ENEMIES_2 = [
       death: (A) => clearMarks(A),
     },
     art: { body: 'loupe', color: '#c9a86a', notes: 'Tall thin coat rect with a huge round monocle circle for a head, a tag on a string in one hand.' } },
-  { id: 'auction_house', name: 'Auction House', act: 2, kind: 'elite', start: { strength: 1 }, hp: [114, 120],
+  { id: 'auction_house', name: 'Auction House', act: 2, kind: 'elite', start: { strength: 2 }, hp: [114, 120],
     pick: (A, e) => {
       const bidders = A.alive().filter((x) => x.id === 'bidder').length;
       const t = e.data.t = (e.data.t || 0) + 1;
@@ -197,7 +197,7 @@ export const ENEMIES_2 = [
       gavel: { name: 'Gavel', tip: '14 damage, +6 for every living enemy in the room, itself included. Silence the Bidders first.', fx: [{ op: 'dmg', n: { base: 14, per: 'enemies', mul: 6 } }] },
     },
     art: { body: 'podium', color: '#7a4a2a', notes: 'Wide wooden podium rect with a stout gavel arm swinging from the top, a fringe of paddle shapes along the front.' } },
-  { id: 'pickled_king', name: 'The Pickled King', act: 2, kind: 'elite', hp: [100, 106], start: { strength: 1, brined: 16 },
+  { id: 'pickled_king', name: 'The Pickled King', act: 2, kind: 'elite', hp: [100, 106], start: { strength: 2, brined: 16 },
     pick: (A, e) => ['sour', 'decree', A.player.st.infection > 0 ? 'rotcrush' : 'crush'][e.turn % 3],
     moves: {
       sour: { name: 'Sour Crown', fx: [{ op: 'dmg', n: 14 }, { op: 'status', s: 'weak', n: 1, to: 'player' }] },
@@ -217,7 +217,7 @@ export const ENEMIES_2 = [
     art: { body: 'jar', color: '#6e8f3f', notes: 'Huge jar body, a jagged gold crown of three triangles on the lid, pale pickled limbs pressed against the glass.' } },
 
   // ---------- BOSS ----------
-  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 130, start: { strength: 1, interest: 1 },
+  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 130, start: { strength: 2, interest: 1 },
     pick: (A, e) => {
       const d = e.data;
       if (d.p2 === 1) return 'collect';
