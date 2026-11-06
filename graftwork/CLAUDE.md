@@ -1,6 +1,6 @@
 # GRAFTWORK
 
-"Cut what you love. Stitch what you need." A roguelike deckbuilder where you never add cards: after a fight you pick ONE of your OWN cards and ONE graft to sew onto it. Every graft has a Boon and a Price. Live at `https://games-71g.pages.dev/graftwork/`. Plain ES modules, no build step, no art files (everything drawn on canvas, audio synthesized). **No em dashes in any text, ever.**
+"Cut what you love. Stitch what you need." A roguelike deckbuilder where you never add cards: after a fight you pick ONE of your OWN cards and ONE graft to sew onto it. Every graft has a Boon and a Price. Live at `https://games-71g.pages.dev/graftwork/`. Plain ES modules, no build step, no art files EXCEPT the Ward (see below); everything else is drawn on canvas, audio synthesized. **No em dashes in any text, ever.**
 
 ## The one rule that makes it a game
 - Each graft has a **Weight** (1 to 3). Deck **Budget** is 6 (+ relics, + Forge "Expand", + skipping a graft).
@@ -157,3 +157,6 @@ Current targets and measured numbers (strong bot, 10 to 40 runs per hero, noisy)
 4. Run `node tests/graftwork_data.test.mjs` after every content edit and the whole runner before a merge. Never run other games' suites.
 5. Never rename localStorage keys, the `graftwork/` folder or card, graft and enemy ids (saves reference them). No em dashes in any text.
 6. Remove dead code only with proof (a grep or script over graftwork/, tests/ and tools/ finding the name once). Round 10 cleanup removed: status `recall` and its icon, `SMALL.cropY` and `app.cropY` (always 0), and unused exports `dailyModFor hasDmg hasBlock resetIds costText describeFocus KIND_NAME barCol statusSlots clickedIn TIER_ORDER drawCoinLabel resetTips`.
+
+## Ward art exception (AI-generated, Ward only)
+The owner authorised AI-generated raster art for the Ward (the hospital-building layer) only. This overrides the old "procedural art only" rule for the Ward; every other screen stays procedural. The generated set is committed in `graftwork/assets/ward/` (about 3 MB WebP, budget 12 MB): `rooms/` (isometric cutaway dioramas, one per `rm_*` id plus `plot_empty`, all on the same canvas so they share one floor diamond), `actors/` (heroes, Act 1 monsters, The Resident + `the_resident_l2`, The Matron, `npc_*`; `<id>_b` is the walk-step frame), `icons/` (wood, stone, gold, power, morning, midday, evening, night) and `cards/` (illustrations keyed by the `art` ids in `data/ward.js`, room arts alias to a room diorama). Each asset has `@1x.webp` (phone) and `@2x.webp` (desktop). `assets/ward/manifest.json` is the contract (tile ratio, floor diamond per room, feet anchor per actor, `cardsById` for the b_* cards). The dark/unpowered look is a code tint, never a second image. Raw generations are NOT in the repo; `tools/graftwork_art_build.py` documents and runs raw -> WebP -> manifest. Test: `tests/graftwork_art_assets.test.mjs`. No em dashes in any of it.

@@ -1,0 +1,6 @@
+{
+ "marrow": {"kind": "hero"}, "wick": {"kind": "hero"}, "odile": {"kind": "hero"},
+ "the_resident": {"kind": "elite"}, "the_resident_l2": {"kind": "elite", "level": 2},
+ "the_matron": {"kind": "boss"},
+ "npc_patient": {"kind": "npc"}, "npc_nurse": {"kind": "npc"}, "npc_porter": {"kind": "npc"}
+}
