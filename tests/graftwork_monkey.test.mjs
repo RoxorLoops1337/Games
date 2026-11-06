@@ -18,8 +18,8 @@ const D = await import('../graftwork/data/index.js');
 const { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS } = D;
 
 const { app, flow } = boot(canvas);
-const PHASES = ['map', 'combat', 'reward', 'graft', 'shop', 'forge', 'event', 'dead', 'won'];
-const PHASE_SCREEN = { map: 'map', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
+const PHASES = ['map', 'ward', 'combat', 'reward', 'graft', 'shop', 'forge', 'event', 'dead', 'won'];
+const PHASE_SCREEN = { map: 'map', ward: 'ward', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
 const MODALS = new Set(['deckview', 'codex', 'archive', 'wardrobe', 'settings', 'pause']);
 const MAX_TICKS = Number(process.env.GW_MONKEY_TICKS || 2500);
 const RUNS = Number(process.env.GW_MONKEY_RUNS || 4);

@@ -245,3 +245,9 @@ Numbers (strong bot, A0, N=150 per hero):
 | start | 30% | 41% | 45% |
 
 All-pool spread 2 points, inside the 25 to 40 target. The start pool rose (bot picks weird grafts better, early boss pays more); it is not a target. Other policies (N=60): random 0/180, sloppy 0/180, passive 1/180, careful 30 / 23 / 33 percent. Unlock pacing (GW_MODE=ward, 200 players, 30 runs): strong median 39 runs, careful 46 (targets 33 to 40 and 45 to 55).
+
+## Z5 UX notes (see WARD_PLAYTEST.md)
+
+- End Morning warns once when playable plans would be discarded. A room that would be built dark needs the same drop twice (cost is paid either way).
+- "Rest day" (key R) waits here for every walk left today; it stops at a trigger, the morning or the boss night. Dark-built rooms relight when a Generator
+  (or freed power) allows, newest first. Room hover shows one tooltip under TODAY. The event screen heading names the room and hour.
