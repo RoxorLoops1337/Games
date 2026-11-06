@@ -37,7 +37,7 @@ async function make(opts = {}) {
       const al = o.align || 'left', bl = o.baseline || 'top';
       const x0 = al === 'center' ? x - w / 2 : al === 'right' ? x - w : x;
       const y0 = bl === 'middle' ? y - size / 2 : bl === 'bottom' || bl === 'alphabetic' ? y - size : y;
-      texts.push({ s: String(lines[0]).slice(0, 40), x: x0, y: y0, w, h, size });
+      texts.push({ n: LAYOUT.getAll().length, s: String(lines[0]).slice(0, 40), x: x0, y: y0, w, h, size });
     }
     return rawText(str, x, y, o);
   };
@@ -66,7 +66,9 @@ function analyse(h, tag) {
     const where = `"${t.s}" @${Math.round(t.x)},${Math.round(t.y)} ${Math.round(t.w)}x${Math.round(t.h)}`;
     if (t.x < -1 || t.y < -1 || t.x + t.w > 1281 || t.y + t.h > 721) add('text-oob', where);
     const cx = t.x + t.w / 2, cy = t.y + t.h / 2;
-    const own = regs.filter((r) => inside(r, cx, cy)).sort((a, b) => a.w * a.h - b.w * b.h)[0];
+    // a modal owns only the text drawn after it registered (anything drawn earlier sits underneath it)
+    const cont = regs.filter((r, i) => inside(r, cx, cy) && (!r.overlay || i < t.n)).sort((a, b) => a.w * a.h - b.w * b.h);
+    const own = cont.find((r) => r.overlay) || cont[0];
     if (own && own.layer !== 'world' && (t.x < own.x - 2 || t.y < own.y - 2 || t.x + t.w > own.x + own.w + 2 || t.y + t.h > own.y + own.h + 2)) add('text-overflow', `${where} in ${own.id} ${Math.round(own.w)}x${Math.round(own.h)}`);
     if (hit(t, RESERVED) && !(own && own.overlay)) add('text-reserved', where);
     if (own && own.overlay) continue;

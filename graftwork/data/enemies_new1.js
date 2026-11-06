@@ -8,7 +8,7 @@ const buff = (s, n) => ({ op: 'status', s, n, to: 'self' });
 
 export const ENEMIES_NEW1 = [
   // Infection every third turn tithes a plain card for the rest of the fight. Kill it before the second sting.
-  { id: 'suture_wasp', name: 'Suture Wasp', act: 1, kind: 'normal', hp: [36, 36],
+  { id: 'suture_wasp', name: 'Suture Wasp', act: 1, kind: 'normal', start: { strength: 1 }, hp: [36, 36],
     pattern: ['dart', 'dart', 'sting'],
     moves: {
       dart: { name: 'Dart', fx: [dmg(10)] },
@@ -17,7 +17,7 @@ export const ENEMIES_NEW1 = [
     art: { body: 'wings', color: '#d9c04a', notes: 'Narrow banded wasp body, two thin glassy wings, a long sting that trails a loop of surgical thread; a needle eye sits at the stinger tip.' } },
 
   // Audit marks you with Dread; Fine punishes an unguarded end of turn. End with 5 Block and the Fine is only a filing.
-  { id: 'ward_clerk', name: 'Ward Clerk', act: 1, kind: 'normal', hp: [40, 40],
+  { id: 'ward_clerk', name: 'Ward Clerk', act: 1, kind: 'normal', start: { strength: 1 }, hp: [40, 40],
     pattern: ['audit', 'fine'],
     moves: {
       audit: { name: 'Audit (Dread)', note: '8 damage and Dread 1: end a turn with no Block and take 2 per stack.', fx: [dmg(8), debuff('dread', 1)] },
@@ -27,7 +27,7 @@ export const ENEMIES_NEW1 = [
     art: { body: 'podium', color: '#a89878', notes: 'A narrow reception desk with a tall stamp pad on top, pince-nez perched on a blank round head, a ledger spine and a dangling queue ticket.' } },
 
   // Cutting is the cure: every extension feeds it, every cut bruises it. Capped at 9 healing a turn.
-  { id: 'knitter', name: 'Knitter', act: 1, kind: 'normal', hp: [40, 40], start: { loose: 1 },
+  { id: 'knitter', name: 'Knitter', act: 1, kind: 'normal', hp: [40, 40], start: { strength: 1, loose: 1 },
     pattern: ['purl', 'cast', 'drop'],
     moves: {
       purl: { name: 'Purl', fx: [dmg(9)] },
@@ -47,7 +47,7 @@ export const ENEMIES_NEW1 = [
     art: { body: 'hunched', color: '#b79ac4', notes: 'Hunched crone shape wrapped in a long scarf that is half knitted into her own body, two crossed steel needles for arms, a ball of wool yarn at her feet.' } },
 
   // A battery with legs. Static extensions are the only defence: each one discharges 2 per knot of Line into it.
-  { id: 'surge_tick', name: 'Surge Tick', act: 1, kind: 'normal', hp: [32, 32],
+  { id: 'surge_tick', name: 'Surge Tick', act: 1, kind: 'normal', start: { strength: 1 }, hp: [32, 32],
     pattern: ['latch', 'swell', 'latch'],
     moves: {
       latch: { name: 'Latch', fx: [dmg(8)] },

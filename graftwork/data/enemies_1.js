@@ -69,7 +69,7 @@ const MATRON_P1 = ['scar', 'rap', 'smother'];
 
 export const ENEMIES_1 = [
   // ================= NORMALS =================
-  { id: 'bedpan_slime', name: 'Bedpan Slime', act: 1, kind: 'normal', hp: [38, 42],
+  { id: 'bedpan_slime', name: 'Bedpan Slime', act: 1, kind: 'normal', start: { strength: 1 }, hp: [38, 42],
     pattern: ['slap', 'slap', 'goo'],
     moves: { slap: { name: 'Slap', fx: [dmg(8)] }, goo: { name: 'Goo', fx: [debuff('weak', 1), debuff('poison', 1), blk(6)] } },
     on: { damaged: (A, e) => { if (e.hp > 0 && e.hp <= e.maxHp / 2) split(A, e); }, death: (A, e) => split(A, e) },
@@ -79,12 +79,12 @@ export const ENEMIES_1 = [
     moves: { nip: { name: 'Nip', fx: [dmg(4)] }, dribble: { name: 'Dribble', fx: [blk(4), dmg(2)] } },
     art: { body: 'dome', color: '#a8d27f', scale: 0.55, notes: 'Small pale green dome, half the size of the parent.' } },
 
-  { id: 'orderly', name: 'Orderly', act: 1, kind: 'normal', hp: [40, 44],
+  { id: 'orderly', name: 'Orderly', act: 1, kind: 'normal', start: { strength: 1 }, hp: [40, 44],
     pattern: ['clipboard', 'stamp', 'stamp'],
     moves: { clipboard: { name: 'Clipboard', fx: [paperwork(2), blk(5)] }, stamp: { name: 'Stamp (+4 if 3+ junk)', note: 'Hits for 15 instead of 11 while you hold 3 or more junk cards in your deck.', fx: [dmg({ base: 3, per: 'junk', mul: 4, min: 11, max: 15 })] } },
     art: { body: 'tall', color: '#9fb8c9', notes: 'Tall narrow rect in scrubs, small round head, a rect clipboard held in one polyline arm.' } },
 
-  { id: 'leech_jar', name: 'Leech Jar', act: 1, kind: 'normal', hp: [40, 44],
+  { id: 'leech_jar', name: 'Leech Jar', act: 1, kind: 'normal', start: { strength: 1 }, hp: [40, 44],
     pattern: ['siphon', 'pulse', 'siphon'],
     moves: {
       siphon: { name: 'Siphon', fx: [{ op: 'custom', fn: drainBlock, text: 'Drains up to 10 of your Block and heals by that much.', intent: 'debuff' }, dmg(6)] },
@@ -92,7 +92,7 @@ export const ENEMIES_1 = [
     },
     art: { body: 'cylinder', color: '#7fc4b0', notes: 'Glass cylinder with a metal lid and base, a fat red-brown leech curled inside as a wavy polyline.' } },
 
-  { id: 'crutchling', name: 'Crutchling', act: 1, kind: 'normal', hp: [38, 42], start: { dodge: 1 },
+  { id: 'crutchling', name: 'Crutchling', act: 1, kind: 'normal', hp: [38, 42], start: { strength: 1, dodge: 1 },
     pattern: ['jab', 'skitter', 'jab'],
     moves: { jab: { name: 'Jab', fx: [dmg(9)] }, skitter: { name: 'Skitter', fx: [blk(6), dmg(5)] } },
     on: {
@@ -102,17 +102,17 @@ export const ENEMIES_1 = [
     },
     art: { body: 'stilts', color: '#c9b48a', notes: 'Triangle torso balanced on two long thin polyline crutch legs, ending in small round feet. Leans forward.' } },
 
-  { id: 'fever_moth', name: 'Fever Moth', act: 1, kind: 'normal', hp: [38, 40],
+  { id: 'fever_moth', name: 'Fever Moth', act: 1, kind: 'normal', start: { strength: 1 }, hp: [38, 40],
     pattern: ['flutter', 'flutter', 'dive'],
     moves: { flutter: { name: 'Flutter', fx: [dmg(5), debuff('burn', 2)] }, dive: { name: 'Dive', fx: [dmg(10), debuff('brittle', 1)] } },
     art: { body: 'wings', color: '#e8a24a', notes: 'Small oval body, two large oval wings with glowing orange spots, short feeler polylines. Hovers.' } },
 
-  { id: 'gauze_mummy', name: 'Gauze Mummy', act: 1, kind: 'normal', hp: [40, 44], start: { plated: 3 },
+  { id: 'gauze_mummy', name: 'Gauze Mummy', act: 1, kind: 'normal', hp: [40, 44], start: { strength: 1, plated: 3 },
     pattern: ['lash', 'wrap', 'lash'],
     moves: { lash: { name: 'Lash', fx: [dmg(9)] }, wrap: { name: 'Rewrap', fx: [blk(15), dmg(4)] } },
     art: { body: 'striped', color: '#e8e0cc', notes: 'Upright rect with horizontal off-white stripes of bandage, loose trailing strips as polylines, two dark eye dots.' } },
 
-  { id: 'pill_swarm', name: 'Pill Swarm', act: 1, kind: 'normal', hp: [38, 42],
+  { id: 'pill_swarm', name: 'Pill Swarm', act: 1, kind: 'normal', start: { strength: 1 }, hp: [38, 42],
     pattern: ['rattle', 'rattle', 'overdose'],
     moves: {
       rattle: { name: 'Rattle', fx: [dmg(1, { hits: { base: 5, per: 'turn', mul: 0.34, max: 10 } })] },
@@ -120,7 +120,7 @@ export const ENEMIES_1 = [
     },
     art: { body: 'capsules', color: '#d96a8a', count: 5, notes: 'Five two-tone capsule shapes (rounded rects) orbiting each other in a loose cluster, tiny dot eyes on each.' } },
 
-  { id: 'iron_lung', name: 'Iron Lung', act: 1, kind: 'normal', hp: [40, 44],
+  { id: 'iron_lung', name: 'Iron Lung', act: 1, kind: 'normal', start: { strength: 1 }, hp: [40, 44],
     pattern: ['wheeze', 'inhale', 'blow'],
     moves: {
       wheeze: { name: 'Wheeze', fx: [dmg(8)] },
@@ -130,7 +130,7 @@ export const ENEMIES_1 = [
     on: { afterMove: (A, e, m) => { if (m === 'blow') A.setStatus(e, 'charging', 0); } },
     art: { body: 'bellows', color: '#8da0a8', notes: 'Large circle with ribbed ring lines like a bellows, a hose polyline looping out, expands and contracts when charging.' } },
 
-  { id: 'stitch_rat', name: 'Stitch Rat', act: 1, kind: 'normal', hp: [36, 40],
+  { id: 'stitch_rat', name: 'Stitch Rat', act: 1, kind: 'normal', start: { strength: 1 }, hp: [36, 40],
     opening: ['snip'], pattern: ['bite', 'bite', 'snip'],
     moves: {
       snip: { name: 'Snip', fx: [dmg(5), debuff('unpicked', 1), { op: 'custom', fn: stealGraft, text: 'Steals the grafts of one card until it dies.', intent: 'debuff' }] },
@@ -139,7 +139,7 @@ export const ENEMIES_1 = [
     on: { death: returnGrafts },
     art: { body: 'tail', color: '#b08a8a', notes: 'Low oval rat body with pointed snout, ears as small triangles, a long suture-thread tail as a zigzag polyline with X stitches.' } },
 
-  { id: 'night_nurse', name: 'Night Nurse', act: 1, kind: 'normal', hp: [38, 42],
+  { id: 'night_nurse', name: 'Night Nurse', act: 1, kind: 'normal', start: { strength: 1 }, hp: [38, 42],
     pattern: ['checkup', 'injection', 'tuck'],
     moves: {
       checkup: { name: 'Checkup', fx: [dmg(8), blk(4)] },
@@ -148,7 +148,7 @@ export const ENEMIES_1 = [
     },
     art: { body: 'lamp', color: '#3a4a5a', glow: '#f2e6a0', notes: 'Dark slim robe silhouette with a round lamp for a head, a pale glowing circle, thin polyline arm holding a syringe rect.' } },
 
-  { id: 'candy_striper', name: 'Candy Striper', act: 1, kind: 'normal', hp: [38, 42],
+  { id: 'candy_striper', name: 'Candy Striper', act: 1, kind: 'normal', start: { strength: 1 }, hp: [38, 42],
     pattern: ['treat', 'pinwheel', 'pinwheel'],
     moves: {
       treat: { name: 'Free Treat', fx: [dmg(4), debuff('weak', 2), debuff('frail', 2)] },
@@ -164,7 +164,7 @@ export const ENEMIES_1 = [
     art: { body: 'figure', color: '#f08a98', stripes: true, scale: 0.75, notes: 'Smaller Candy Striper figure, same stripes, a paler tone.' } },
 
   // ================= ELITES =================
-  { id: 'the_resident', name: 'The Resident', act: 1, kind: 'elite', hp: [70, 74],
+  { id: 'the_resident', name: 'The Resident', act: 1, kind: 'elite', start: { strength: 1 }, hp: [70, 74],
     pattern: ['examine', 'chart', 'mimic'],
     moves: {
       examine: { name: 'Examine', fx: [dmg(10), blk(6)] },
@@ -183,7 +183,7 @@ export const ENEMIES_1 = [
     },
     art: { body: 'tall', color: '#6d8fb0', glasses: true, notes: 'Tall narrow figure in a white coat with a stethoscope polyline, round head with rect glasses, mouth mirrors the player silhouette in the hand.' } },
 
-  { id: 'two_gurneys', name: 'Gurney, Head', act: 1, kind: 'elite', hp: [38, 38],
+  { id: 'two_gurneys', name: 'Gurney, Head', act: 1, kind: 'elite', start: { strength: 1 }, hp: [38, 38],
     pattern: ['ram', 'brace'],
     moves: {
       ram: { name: 'Ram', fx: [dmg(9)] },
@@ -198,7 +198,7 @@ export const ENEMIES_1 = [
     on: { death: (A) => { const head = A.alive().find((x) => x.id === 'two_gurneys'); if (head) { A.status(head, 'strength', 4); A.status(head, 'ritual', 1); } } },
     art: { body: 'box', color: '#a4b0b4', wheels: 4, notes: 'Matching gurney with the lump facing the other way, one wheel squeaking, slightly dented. The Foot end.' } },
 
-  { id: 'defibrillator', name: 'Defibrillator', act: 1, kind: 'elite', hp: [70, 74], start: { countdown: 4 },
+  { id: 'defibrillator', name: 'Defibrillator', act: 1, kind: 'elite', hp: [70, 74], start: { strength: 1, countdown: 4 },
     pick: (A, e) => ((e.st.countdown || 0) <= 1 ? 'discharge' : (e.turn % 2 === 0 ? 'paddle' : 'shock')),
     moves: {
       paddle: { name: 'Paddle', fx: [dmg(11), blk(8)] },

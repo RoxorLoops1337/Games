@@ -427,7 +427,12 @@ export default {
     if (hint) app.text(hint, X + PW / 2, dY - 18, { size: 13, ui: true, align: 'center', color: 'rgba(232,220,196,.45)', maxW: IW });
   },
 
+  // legend and resonance are reference panels: they follow the text scale up to 125%
   rightPanel(app, run) {
+    const ts = app.textScale; app.textScale = Math.min(ts, 1.25);
+    try { this.rightPanelInner(app, run); } finally { app.textScale = ts; }
+  },
+  rightPanelInner(app, run) {
     const g = app.ctx;
     const X = 968, PW = 300, Y0 = 64, PH = H - 12 - Y0; // starts under the global Pause / Fullscreen zone (x 1128..1272, y 0..56)
     app.panel(X, Y0, PW, PH, { fill: 'rgba(22,18,16,.94)', r: 12 });

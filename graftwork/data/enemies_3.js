@@ -63,7 +63,7 @@ const stepAfter = (A, e) => { e.data.step = (e.data.step || 0) + 1; };
 
 // ---------- NORMALS ----------
 const usher = {
-  id: 'usher', name: 'Usher', act: 3, kind: 'normal', hp: [92, 100],
+  id: 'usher', name: 'Usher', act: 3, kind: 'normal', start: { strength: 1 }, hp: [92, 100],
   pattern: ['spot', 'strike', 'lead'],
   moves: {
     spot: { name: 'Pick Your Seat', fx: [D(12), ST('marked', 2), ST('cadencelock', 1)] },
@@ -74,7 +74,7 @@ const usher = {
 };
 
 const maskChorus = {
-  id: 'mask_chorus', name: 'Mask Chorus', act: 3, kind: 'normal', hp: [90, 98],
+  id: 'mask_chorus', name: 'Mask Chorus', act: 3, kind: 'normal', start: { strength: 1 }, hp: [90, 98],
   pick(A, e) { const opts = ['sob', 'laugh', 'swap'].filter((m) => m !== e.data.last); const m = A.rng.pick(opts); e.data.last = m; return m; },
   moves: {
     sob: { name: 'Three Small Sobs', fx: [D(6, { hits: 3 })] },
@@ -86,7 +86,7 @@ const maskChorus = {
 
 const gildedCherub = {
   id: 'gilded_cherub', name: 'Gilded Cherub', act: 3, kind: 'normal', hp: [90, 100],
-  start: { fragile: 1 },
+  start: { strength: 1, fragile: 1 },
   pick(A, e) {
     const hurt = A.alive().some((x) => x.hp < x.maxHp * 0.85);
     if (hurt && e.data.last !== 'mend') return 'mend';
@@ -102,7 +102,7 @@ const gildedCherub = {
 
 const puppet = {
   id: 'puppet', name: 'Puppet', act: 3, kind: 'normal', hp: [92, 102],
-  start: { strings: 2 },
+  start: { strength: 1, strings: 2 },
   pattern: ['yank', 'dance', 'tangle', 'reknit'],
   moves: {
     yank: { name: 'Yank', fx: [D(20)] },
@@ -121,7 +121,7 @@ const puppet = {
 };
 
 const spotlight = {
-  id: 'spotlight', name: 'Spotlight', act: 3, kind: 'normal', hp: [90, 98],
+  id: 'spotlight', name: 'Spotlight', act: 3, kind: 'normal', start: { strength: 1 }, hp: [90, 98],
   pattern: ['glare', 'focus', 'glare'],
   moves: {
     glare: { name: 'Glare', fx: [D(18), ST('costup', 1)] },
@@ -134,7 +134,7 @@ const spotlight = {
 };
 
 const prompter = {
-  id: 'prompter', name: 'Prompter', act: 3, kind: 'normal', hp: [92, 100],
+  id: 'prompter', name: 'Prompter', act: 3, kind: 'normal', start: { strength: 1 }, hp: [92, 100],
   pattern: ['cue', 'cue', 'recite'],
   moves: {
     // The damage bonuses ride on the Primed status (+10 after an Attack, +6 after a Power, +8 for the same school twice in a row),
@@ -160,7 +160,7 @@ const prompter = {
 };
 
 const velvetCurtain = {
-  id: 'velvet_curtain', name: 'Velvet Curtain', act: 3, kind: 'normal', hp: [96, 105],
+  id: 'velvet_curtain', name: 'Velvet Curtain', act: 3, kind: 'normal', start: { strength: 1 }, hp: [96, 105],
   pattern: ['drape', 'smother'],
   moves: {
     drape: { name: 'Draw Across', intent: ['buff', 'attack'], fx: [D(12), ST('veiled', 2, 'allies')] },
@@ -174,7 +174,7 @@ const velvetCurtain = {
 };
 
 const applause = {
-  id: 'applause', name: 'Applause', act: 3, kind: 'normal', hp: [90, 100],
+  id: 'applause', name: 'Applause', act: 3, kind: 'normal', start: { strength: 1 }, hp: [90, 100],
   pattern: ['clap', 'clap', 'roar'],
   moves: {
     clap: { name: 'Polite Clapping', fx: [D(5, { hits: 3 })] },
@@ -190,7 +190,7 @@ const applause = {
 };
 
 const understudy = {
-  id: 'understudy', name: 'Understudy', act: 3, kind: 'normal', hp: [90, 100],
+  id: 'understudy', name: 'Understudy', act: 3, kind: 'normal', start: { strength: 1 }, hp: [90, 100],
   pattern: ['rehearse', 'rehearse', 'bow'],
   moves: {
     rehearse: { name: 'Rehearse', fx: [D(15)] },
@@ -217,7 +217,7 @@ const understudy = {
 };
 
 const critic = {
-  id: 'critic', name: 'Critic', act: 3, kind: 'normal', hp: [94, 104],
+  id: 'critic', name: 'Critic', act: 3, kind: 'normal', start: { strength: 1 }, hp: [94, 104],
   pattern: ['review', 'scathe'],
   moves: {
     review: { name: 'Review', fx: [D(16), { op: 'if', cond: (c, ctx) => criticLow(c, ctx.srcEnt), ifText: 'you dealt under 25 damage last turn', then: [CUSTOM('debuff', 'Frays your highest-cost card (jam)', (A) => jamBest(A, 1)), ST('dread', 2)] }] },
@@ -233,7 +233,7 @@ function hpTotal(c) { return c.enemies.reduce((a, x) => a + Math.max(0, x.hp) + 
 function criticLow(c, e) { return Math.max(0, (e.data.snap || 0) - hpTotal(c)) < 25; }
 
 const heckler = {
-  id: 'heckler', name: 'Heckler', act: 3, kind: 'normal', hp: [90, 98],
+  id: 'heckler', name: 'Heckler', act: 3, kind: 'normal', start: { strength: 1 }, hp: [90, 98],
   pattern: ['boo', 'hiss', 'pelt'],
   moves: {
     boo: { name: 'Boo', fx: [D(13), CUSTOM('debuff', 'Exhausts a card you were about to draw', (A) => exhaustTop(A, 1))] },
@@ -245,7 +245,7 @@ const heckler = {
 
 // ---------- ELITES ----------
 const diva = {
-  id: 'the_diva', name: 'The Diva', act: 3, kind: 'elite', hp: [176, 184],
+  id: 'the_diva', name: 'The Diva', act: 3, kind: 'elite', start: { strength: 1 }, hp: [176, 184],
   pattern: ['vibrato', 'high_c', 'aria', 'encore'],
   moves: {
     vibrato: { name: 'Vibrato', fx: [D(9, { hits: 3 }), CUSTOM('debuff', 'Exhausts a card you were about to draw', (A) => exhaustTop(A, 1))] },
@@ -257,7 +257,7 @@ const diva = {
 };
 
 const stagehands = {
-  id: 'stagehands', name: 'Stagehands', act: 3, kind: 'elite', hp: [178, 186],
+  id: 'stagehands', name: 'Stagehands', act: 3, kind: 'elite', start: { strength: 1 }, hp: [178, 186],
   pattern: ['sandbag', 'winch', 'rig', 'strike_set'],
   moves: {
     sandbag: { name: 'Drop the Sandbag', fx: [D(28), ST('frail', 1)] },
@@ -269,7 +269,7 @@ const stagehands = {
 };
 
 const goldLeafGolem = {
-  id: 'gold_leaf_golem', name: 'Gold Leaf Golem', act: 3, kind: 'elite', hp: [180, 188],
+  id: 'gold_leaf_golem', name: 'Gold Leaf Golem', act: 3, kind: 'elite', start: { strength: 1 }, hp: [180, 188],
   pattern: ['gild', 'slam', 'flake'],
   moves: {
     gild: { name: 'Gild Itself', intent: ['defend', 'buff', 'attack'], fx: [{ op: 'block', n: { base: 8, per: 'gold', mul: 0.1, max: 36 } }, D(12), SELF('strength', 2)] },
@@ -294,7 +294,7 @@ function impresarioPick(A, e) {
   return PHASES[ph - 1][(e.data.step || 0) % 3];
 }
 const impresario = {
-  id: 'the_impresario', name: 'The Impresario', act: 3, kind: 'boss', hp: 210,
+  id: 'the_impresario', name: 'The Impresario', act: 3, kind: 'boss', start: { strength: 1 }, hp: 210,
   pick: impresarioPick,
   moves: {
     downbeat: { name: 'Downbeat', fx: [D(22), { op: 'block', n: 10 }] },
@@ -382,7 +382,7 @@ function reknit(A, e) {
 const SPLICE_TEXT = 'Applies the effect of your most grafted school: Ember burn, Blood bleed, Echo a second hit, Hoard block it keeps, Rust junk, Static marks, Gilded steals gold. No grafts: Weak and block. With Strain 2+ it also adds Infection 1. It copies the school of your last Thread payout';
 
 const grafter = {
-  id: 'the_grafter', name: 'The Grafter', act: 3, kind: 'boss', final: true, hp: 300,
+  id: 'the_grafter', name: 'The Grafter', act: 3, kind: 'boss', start: { strength: 1 }, final: true, hp: 300,
   pattern: ['stitch', 'splice', 'mirror'],
   moves: {
     stitch: { name: 'Stitch', fx: [{ op: 'dmg', n: { base: 12, per: 'grafts', max: 52 } }] },
