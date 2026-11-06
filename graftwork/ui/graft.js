@@ -291,13 +291,15 @@ function drawOfferCard(app, r, i, c) {
     if (tithed) lines.push('This card will be Tithed: -25% numbers that combat.');
     if (inst.grafts.length >= 2) lines.push('A third graft is an OVERLOAD.');
     if (dim) lines.push('CANNOT TAKE THE SELECTED GRAFT: ' + cantReason(inst, st.selGraft));
-    app.tooltip(spec2name(inst), null, { lines, gloss: [cardLines(cardSpec(inst)), inst.grafts.map((x) => (GRAFTS[x] ? [GRAFTS[x].boon, GRAFTS[x].price] : []))], types: base.type, color: COL[base.type] ? '#e8dcc4' : COL.lamp, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, band: DETAIL_BAND } });
+    app.tooltip(spec2name(inst), null, { lines, gloss: [cardLines(cardSpec(inst)), inst.grafts.map((x) => (GRAFTS[x] ? [GRAFTS[x].boon, GRAFTS[x].price] : []))], types: base.type, color: COL[base.type] ? '#e8dcc4' : COL.lamp, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, region: DETAIL_REGION } });
     if (app.clicked(r.x, r.y, r.w, r.h)) clickCard(app, i);
   }
 }
 // The dedicated detail spot for every hover note on this table: the empty right half of the bill panel, clear of the cards and the tray.
 // A hovered patch floats its panel anywhere left of the patch column (it may cover the cards and the AFTER panel, never the patches, the tray buttons or the top bars).
 const PATCH_TIP_REGION = { x0: 6, y0: 64, x1: TRAY_X - 32, y1: 714 };
+// A hovered card explains itself in the table panel below the cards (clear of every sibling card, patch and button); the panel grows into columns, it never drops a definition.
+const DETAIL_REGION = { x0: 24, y0: 468, x1: 796, y1: 714 };
 const DETAIL_BAND = { x: 490, y: 574, bottom: 710, dir: 1 };
 const spec2name = (inst) => CARDS[inst.id].name + (inst.up ? '+' : '');
 
