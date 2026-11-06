@@ -9,6 +9,7 @@ import { drawHeart, drawCoin } from '../art/icons.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft, strainInfo, canTemper, instWeight, fusedWeight, FUSE_CAP } from '../engine/cards.js';
 import { CARDS, GRAFTS } from '../data/index.js';
+import { infoOpen, infoClose, touchUi, openInfoCard, infoChip, drawInfoCard } from './card_zoom.js';
 import { drawGauge, gaugeLabel, drawModal, openCards, openGraftChoice, makeAnim, updateAnim, drawAnim, infoFromDeck, stripDeck, toastDraw, cardName } from './shop.js';
 
 const BRASS = '#C9A227';
@@ -110,9 +111,11 @@ function drawOptionCard(app, run, i, o, over, k, disabledWhy, usedUp, shk) {
   if (bt) bl = app.wrap(bt, bo.maxW, bsz, { ui: true, bold: true }).length;
   const botTop = y + OH - 14 - bl * bpitch, descTop = y + 150 + nameH + 2;
   const dpitch = Math.round(17 * app.sz(14, { ui: true }) / 14), nl = Math.max(1, Math.floor((botTop - descTop - 2) / dpitch));
+  const full = app.wrap(o.short || o.desc, OW - 30, 14, { ui: true }), trunc = full.length > nl || (!!o.short && !!o.desc && o.short !== o.desc);
   wrapLimit(app, o.short || o.desc, OW - 30, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + OW / 2, descTop + q * dpitch, { size: 14, ui: true, align: 'center', lineH: 17, color: dim ? 'rgba(232,220,196,.35)' : COL.vellum }));
   if (bt) app.text(bt, x + OW / 2, botTop, bo);
   g.restore();
+  return { trunc, text: { x: x + 8, y: descTop - 2, w: OW - 16, h: Math.max(20, nl * dpitch + 4) } };
 }
 
 // ---- forge-specific animations ---------------------------------------------------------------------------------------
@@ -289,7 +292,7 @@ function drawForgeAnim(app, a) {
 }
 
 export default {
-  enter(app) { S = { fx: new Fx(), modal: { m: null }, h: {}, anim: null, toast: '', toastT: 0, log: [], t: 0, shakeI: -1, shakeT: 0 }; },
+  enter(app) { infoClose(); S = { fx: new Fx(), modal: { m: null }, h: {}, anim: null, toast: '', toastT: 0, log: [], t: 0, shakeI: -1, shakeT: 0 }; },
 
   update(app, dt) {
     if (!S) return; S.t += dt;
@@ -308,7 +311,7 @@ export default {
     const g = app.ctx, run = app.shared.run, flow = app.shared.flow, f = run.pending;
     if (!f || f.kind !== 'forge') return;
     const so = S.fx.shakeOffset();
-    const locked = !!(S.modal.m || S.anim);
+    const locked = !!(S.modal.m || S.anim || infoOpen());
     g.save(); g.translate(so.x, so.y);
     drawBackground(g, 'forge', S.t);
     const gl = g.createRadialGradient(640, 760, 40, 640, 760, 700); gl.addColorStop(0, 'rgba(255,120,40,.35)'); gl.addColorStop(1, 'rgba(255,90,20,0)'); g.fillStyle = gl; g.fillRect(0, 0, 1280, 720);
@@ -341,7 +344,10 @@ export default {
       const over = app.inRect(x, OY, OW, OH), dim = !!why || usedUp;
       const key = o.id, v = S.h[key] || 0, n = clamp(v + (over && !dim ? 1 : -1) * app.dt * 9, 0, 1); S.h[key] = n;
       const shk = S.shakeI === i && S.shakeT > 0 ? Math.sin(S.shakeT * 70) * 9 * (S.shakeT / 0.4) : 0;
-      drawOptionCard(app, run, i, o, over, EASE.out(n), why, usedUp, shk);
+      const od = drawOptionCard(app, run, i, o, over, EASE.out(n), why, usedUp, shk);
+      if (od.trunc && touchUi(app)) { // phones: no hover, so the full text opens on a tap of the chip or of the cut-off words
+        if (infoChip(app, x + OW - 18, OY + 18, [od.text])) { sfx(app, 'uiClick'); openInfoCard(app, o.name, why ? `${o.desc}\n${why}` : o.desc, COL.lamp); }
+      }
       if (over) {
         app.cursor = dim ? 'not-allowed' : 'pointer';
         const oa = { x, y: OY, w: OW, h: OH }; // beside the option card, never over it
@@ -367,5 +373,6 @@ export default {
     app.blocked = false;
     if (S.anim) { drawForgeAnim(app, S.anim); S.fx.draw(g); if (S.anim.t > 0.5) app.text('click to skip', 640, 700, { size: 13, ui: true, align: 'center', color: 'rgba(232,220,196,.5)' }); }
     else if (S.modal.m) drawModal(app, S.modal, run);
+    drawInfoCard(app);
   },
 };

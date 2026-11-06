@@ -211,4 +211,39 @@ assert.equal(small.length, 0, 'tap targets under 40 css px: ' + JSON.stringify(s
   down(640, 330); tick(2); up(640, 330); tick(60);
   assert.ok(!mapS.banner, 'a tap skips the act banner');
 }
+
+// ---- 10. phone info paths: a tap on the 'i' chip or the cut-off words opens the full text; a tap closes it; the graft tip never covers an option
+{
+  const { default: forgeS, optionCenterX, optionIndex } = await import('../graftwork/ui/forge.js');
+  const { default: shopS } = await import('../graftwork/ui/shop.js');
+  const { default: graftS } = await import('../graftwork/ui/graft.js');
+  const { infoOpen } = await import('../graftwork/ui/card_zoom.js');
+  const { tipSeen } = await import('../graftwork/ui/tutorial.js');
+  app.shared.flow = { RUN, route() {}, openDeck() {}, openSettings() {}, openCodex() {}, saveMeta() {} };
+  const chips = () => app.layout.getAll().filter((q) => q.id === 'info_chip');
+  const chipTap = (q) => { tap(q.x + q.w / 2, q.y + q.h / 2); };
+  // forge: Temper's long text is cut on the phone card
+  { const r = RUN.newRun({ hero: 'marrow', seed: 'ti1' }); r.phase = 'forge'; r.pending = { kind: 'forge', used: 0 }; app.shared.run = r;
+    app.register('t_forge3', forgeS); app.go('t_forge3', { run: r }); tick(120);
+    const cs = chips(); assert.ok(cs.length >= 1, 'forge shows an info chip on a cut-off description');
+    assert.ok(!infoOpen()); chipTap(cs[0]); tick(3); assert.ok(infoOpen(), 'tapping the chip opens the full text'); assert.equal(r.pending.used, 0, 'the chip tap did not pick the option');
+    assert.ok(app.layout.getAll().some((q) => q.id === 'info_card'), 'the card is registered'); tick(20);
+    tap(640, 360); tick(3); assert.ok(!infoOpen(), 'a tap closes it'); assert.equal(r.pending.used, 0, 'the closing tap picked nothing');
+    // the cut-off words themselves also open it
+    const c0 = cs[0]; tap(c0.x - 60, c0.y + 200); tick(3); assert.ok(infoOpen(), 'tapping the cut-off words opens it'); tap(640, 360); tick(3); assert.ok(!infoOpen());
+  }
+  // shop: potions (and relics) with cut-off text
+  { const r = RUN.newRun({ hero: 'marrow', seed: 'ti2' }); r.gold = 999; r.phase = 'shop'; r.pending = RUN.makeShop(r); app.shared.run = r;
+    app.register('t_shop3', shopS); app.go('t_shop3', { run: r }); tick(120);
+    const cs = chips(); assert.ok(cs.length >= 1, 'shop shows an info chip');
+    const gold0 = r.gold; chipTap(cs[0]); tick(3); assert.ok(infoOpen(), 'shop chip opens the card'); assert.equal(r.gold, gold0, 'opening it bought nothing');
+    tick(20); tap(640, 360); tick(3); assert.ok(!infoOpen()); assert.equal(r.gold, gold0, 'closing it bought nothing');
+  }
+  // graft tip: never over an option (tray tiles) on the phone stage
+  { const r = RUN.newRun({ hero: 'marrow', seed: 'ti3' }); RUN.startGraftPick(r); app.shared.run = r; app.shared.meta = { settings: {}, tips: {} };
+    app.register('t_graft3', graftS); app.go('t_graft3', { run: r }); tick(120);
+    tick(30); const tip = app._tipBox; assert.ok(tip && app._tipFrame >= app.frame - 2, 'a tip bubble is on screen');
+    for (const q of app.layout.getAll().filter((q) => /^graft-patch|^patch/.test(q.id))) assert.ok(tip.x + tip.w <= q.x || tip.x >= q.x + q.w || tip.y + tip.h <= q.y || tip.y >= q.y + q.h, `tip overlaps ${q.id}`);
+  }
+}
 console.log('graftwork touch ok');

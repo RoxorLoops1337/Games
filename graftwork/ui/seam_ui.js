@@ -17,6 +17,8 @@ import * as L from './combat_layout.js';
 
 const BRASS = '#C9A227', BRASS_D = '#7a5f16', BRASS_L = '#ecd27a', INK = '#0E0E0E', PAPER = '#f3ead4';
 const SCHOOL_NAME = { ember: 'Ember', echo: 'Echo', hoard: 'Hoard', blood: 'Blood', rust: 'Rust', static: 'Static', gilded: 'Gilded' };
+export const SEAM_MS = { extendStart: 90, extend: 140, cut: 300, pay: 280, snipClose: 60, beadFlight: 240 }; // waits (ms) the combat queue honours for the Thread beats; tests/graftwork_motion.test.mjs budgets them
+const SNIP_CLOSE = 0.06; // s: the scissors close on the thread, then the snap releases the beads (anticipation before the cut)
 const SPACING = 52, BEAD_R = 15, LEFT_W = 112, CHIP_W = 216;
 const rnd = (a, b) => a + Math.random() * (b - a);
 const schoolCol = (s) => COL[s] || BRASS;
@@ -287,18 +289,19 @@ function drawOverlays(app, c, rect) {
   // flying beads
   for (const f of M.fly) {
     const k = clamp((now - f.t0 - f.delay) / f.dur, 0, 1); if (now < f.t0 + f.delay) { drawBead(ctx, f.x0, f.y0, f.school, { tint: f.grey ? '#8a8478' : undefined }); continue; }
-    const e = f.grey ? EASE.in(k) : EASE.inOut(k);
+    const e = EASE.in(k); // accelerate into the target so the bead lands with speed
     const x = f.x0 + (f.x1 - f.x0) * e, y = f.y0 + (f.y1 - f.y0) * e + (f.grey ? 0 : -Math.sin(k * Math.PI) * f.arc);
     drawBead(ctx, x, y, f.school, { scale: 1 - 0.55 * e, alpha: 1 - Math.max(0, k - 0.75) * 4, tint: f.grey ? '#8a8478' : undefined });
     if (!f.grey && !f.trailed && FX_OPTS.reduced === false && M.fx && k > 0.02) M.fx.emit({ x, y, n: 1, color: schoolCol(f.school), speed: 20, life: 0.3, size: 3, gravity: 0, glow: false });
   }
+  for (const f of M.fly) if (now >= f.t0 + f.delay + f.dur && !f.grey && !f.landed && M.fx) { f.landed = true; M.fx.burst(f.x1, f.y1, 'spark', { n: 4, speed: 110, life: 0.25, size: 2.5, colors: [schoolCol(f.school), '#fff6c8'] }); }
   M.fly = M.fly.filter((f) => now < f.t0 + f.delay + f.dur);
   // the snip: scissors close on the thread with a bright flash
   const sk = (now - M.snipT) / 0.5;
   if (sk >= 0 && sk < 1) {
-    const x = M.snipX, close = clamp(sk / 0.22, 0, 1);
+    const x = M.snipX, close = clamp(sk / (SNIP_CLOSE / 0.5), 0, 1), fl = (sk - SNIP_CLOSE / 0.5) / 0.28;
     ctx.save(); ctx.globalAlpha = 1 - clamp((sk - 0.5) / 0.5, 0, 1);
-    if (sk < 0.3) { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4 * (1 - sk / 0.3) + 1; ctx.beginPath(); ctx.moveTo(x, rect.y - 6); ctx.lineTo(x, rect.y + rect.h + 6); ctx.stroke(); ctx.beginPath(); ctx.arc(x, cy, 26 * (1 - sk / 0.3) + 6, 0, 6.283); ctx.fillStyle = 'rgba(255,248,214,.55)'; ctx.fill(); ctx.globalCompositeOperation = 'source-over'; }
+    if (fl >= 0 && fl < 1) { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4 * (1 - fl) + 1; ctx.beginPath(); ctx.moveTo(x, rect.y - 6); ctx.lineTo(x, rect.y + rect.h + 6); ctx.stroke(); ctx.beginPath(); ctx.arc(x, cy, 26 * (1 - fl) + 6, 0, 6.283); ctx.fillStyle = 'rgba(255,248,214,.55)'; ctx.fill(); ctx.globalCompositeOperation = 'source-over'; }
     const sy = cy - 4 - (sk > 0.3 ? (sk - 0.3) * 40 : 0), open = 1 - close;
     ctx.translate(x + 6, sy); ctx.rotate(-0.4 + open * 0.0);
     ctx.lineCap = 'round'; ctx.strokeStyle = '#dfe6ea'; ctx.lineWidth = 3.2;
@@ -404,7 +407,7 @@ export function onSeamEvent(app, ev, ctx = {}) {
       if (fx) { fx.burst(p.x, p.y, 'spark', { n: ev.start ? 4 : 8, speed: 180, life: 0.35, size: 2.5, colors: [schoolCol(school), '#fff6c8', BRASS_L] }); }
       snd(app, 'knotTie', 'uiClick', { pitch: 0.9 + Math.min(0.5, M.beads.length * 0.1), vol: 0.7 });
       if (!ev.start) snd(app, 'needlePull', null, { vol: 0.5 });
-      return red ? 50 : ev.start ? 90 : 140;
+      return red ? 50 : ev.start ? SEAM_MS.extendStart : SEAM_MS.extend;
     }
     case 'seamCut': {
       M.payIdx = 0;
@@ -414,14 +417,15 @@ export function onSeamEvent(app, ev, ctx = {}) {
       const grey = paid <= 0 || !school;
       beads.forEach((b, i) => {
         const p = beadPos(rect, i), tg = grey ? { x: p.x + rnd(-14, 14), y: rect.y + rect.h + 120 } : targetFor(school, { ...ctx, c }, i);
-        M.fly.push({ school: b.school, x0: p.x, y0: p.y, x1: tg.x, y1: tg.y, t0: now + (red ? 0 : 0.14), delay: red ? 0 : i * 0.045, dur: red ? 0.2 : grey ? 0.5 : 0.42, arc: rnd(40, 110), grey });
+        M.fly.push({ school: b.school, x0: p.x, y0: p.y, x1: tg.x, y1: tg.y, t0: now + (red ? 0 : SNIP_CLOSE), delay: red ? 0 : i * 0.03, dur: red ? 0.2 : grey ? 0.45 : 0.24, arc: rnd(40, 90), grey });
       });
       M.nx = null;
-      if (fx && !red) { fx.flash('#fff3c8', 0.16, 0.12); fx.burst(sx, cy, 'spark', { n: 14, speed: 300, life: 0.4, colors: ['#ffffff', BRASS_L, '#dfe6ea'] }); fx.shake(0.12); }
+      const snap = () => { fx.flash('#fff3c8', 0.16, 0.12); fx.burst(sx, cy, 'spark', { n: 14, speed: 300, life: 0.4, colors: ['#ffffff', BRASS_L, '#dfe6ea'] }); fx.shake(0.12); };
+      if (fx && !red) { if (app.after) app.after(SNIP_CLOSE * 1000, snap); else snap(); }
       snd(app, 'snip', 'hitSmall', { vol: 0.8, pitch: 1.3 });
       snd(app, 'threadCut', null, { vol: 0.8 });
       if (ev.kind === 'break' && fx) fx.float('Snapped', sx, rect.y - 14, { color: '#9a9488', size: 18 });
-      return red ? 80 : grey ? 200 : 300;
+      return red ? 80 : grey ? 200 : SEAM_MS.cut;
     }
     case 'seamPay': {
       const school = ev.school, col = schoolCol(school), amount = ev.amount | 0, idx = M.payIdx++;
@@ -433,7 +437,7 @@ export function onSeamEvent(app, ev, ctx = {}) {
         signature(app, school, ev, { fx, c, rect, cy, targets, tg, red, entPos: ctx.entPos });
       }
       snd(app, PAY_SFX[school] || 'cardPlay', null, { vol: 0.8 });
-      return red ? 90 : 280;
+      return red ? 90 : SEAM_MS.pay;
     }
     case 'seamSlack': {
       const p = { x: (M.nx === null ? lx0(rect) + 24 : M.nx), y: cy - 8 };
