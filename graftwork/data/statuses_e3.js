@@ -18,6 +18,12 @@ export const STATUS_E3 = [
   { id: 'reknit', name: 'Reknit', good: true, stack: 'int', desc: (n) => `${n} Overload card${n > 1 ? 's' : ''} in your deck ${n > 1 ? 'are' : 'is'} marked: x1.0 instead of x1.5 and a 40% Shatter roll on first play. Tempered cards are not Overloads.` },
   // The Grafter: the school of your last Thread payout, used by its next Splice.
   { id: 'mirrorsch', name: 'Mirror', good: true, stack: 'int', desc: (n) => `Its next Splice uses the school of your last Thread payout: ${SCHOOLS_E3[n - 1] || 'none'}.` },
+  // Impresario: one more voice per school you play this turn.
+  { id: 'ensemble', name: 'Ensemble', good: true, stack: 'int', mod: { outAdd: (n) => n }, desc: (n) => `It adds one voice for each school past the first you play in a turn: every hit deals ${n} more (max 3). Stay in one or two schools.` },
+  // Gold Leaf Golem: beaten leaf folds under one big blow.
+  { id: 'leafarmor', name: 'Leaf Armor', good: true, stack: 'int', desc: (n) => `A single card hit deals at most ${n} damage. Burn, Bleed, Thorns and Thread arcs ignore it. Many small hits win.` },
+  // The Diva: the room is loud.
+  { id: 'applause', name: 'Applause', good: true, stack: 'int', desc: (n) => `Her Aria hits for ${n * 3} more: 3 for each card you play past your 5th this turn (max 4).` },
   // Locksmith: the school it has sealed (the first card of it you draw each turn is Frayed).
   { id: 'sealed', name: 'Sealed', good: true, stack: 'int', desc: (n) => `Your ${SCHOOLS_E3[n - 1] || 'biggest'} school is sealed: each turn the first card of it you would draw is Frayed (+1 cost, acts as Slack).` },
 ];

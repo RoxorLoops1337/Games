@@ -20,6 +20,8 @@ const tier = (c, s) => (c.res && c.res[s]) || 0;
 export function seamCap(c) {
   let cap = SEAM_LEN_CAP;
   for (const rid of c.run.relics || []) { const r = RELICS[rid]; if (r && r.mod && r.mod.seamCap) cap = Math.max(cap, r.mod.seamCap); }
+  const dm = c.run.dailyMod; // Daily Case 'lineCap' (Fraying, Short Thread) wins over relics
+  if (dm && dm.lineCap) cap = Math.min(cap, dm.lineCap);
   return cap;
 }
 const knotsOf = (spec) => (spec.overload ? 2 : 1);
@@ -190,6 +192,7 @@ export function seamStep(c, card, spec) {
   const k = knotsOf(spec), cap = seamCap(c);
   if (p.kind === 'extend') {
     s.len = Math.min(cap, s.len + k);
+    if (s.len > (s.maxLen || 0)) s.maxLen = s.len; // longest Line this combat (case file)
     for (const x of p.set) { s.counts[x] = (s.counts[x] || 0) + k; if (!s.order.includes(x)) s.order.push(x); }
     s.set = p.set.slice();
     for (const x of p.set) s.used[x] = true;

@@ -1,4 +1,4 @@
-import { instWeight } from '../engine/cards.js';
+import { instWeight, schoolsOf } from '../engine/cards.js';
 // ACT I: THE WARD. Enemies for act 1: 11 normals, 3 elites, 1 boss, plus summon-only helpers.
 // Summon-only helpers carry `summonOnly: true` (kind 'normal' so the content gate accepts them): the run owner must skip them when drawing encounters.
 // Enemy ops default to hitting the player; use to:'self'|'allies' for buffs. Every enemy has art:{ body, color, notes }.
@@ -63,6 +63,24 @@ function scarOne(A) {
   k.jam = true;
   A.ev({ t: 'jam', card: k.uid });
 }
+// ---- The Matron: Claim = a Tithe she picks. Her phase opens by claiming your most grafted card (-25% this combat). ----
+// Tempered cards (inst.fused) are immune, so Tempering your heaviest cards sends the Claim to a lighter one, or nowhere.
+function claimOne(A) {
+  const c = A.c;
+  const pool = [...c.hand, ...c.drawPile, ...c.discard, ...c.exhaust, ...c.powers]
+    .filter((k) => !k.temp && !k.tithed && !k.claimed && k.inst.grafts.length > 0 && !(k.inst.fused && k.inst.fused.length));
+  if (!pool.length) return false;
+  const top = Math.max(...pool.map((k) => instWeight(k.inst)));
+  const k = A.rng.pick(pool.filter((x) => instWeight(x.inst) === top));
+  k.claimed = true;
+  const m = A.alive().find((x) => x.id === 'the_matron');
+  if (m) A.status(m, 'claim', 1);
+  A.ev({ t: 'mark', card: k.uid });
+  return true;
+}
+const CLAIM_TIP = 'Claim: she takes your most grafted card for the fight (-25%, like a Tithe) when it opens and again when she rings. Tempered cards are immune.';
+const claim = { op: 'custom', fn: (A) => { claimOne(A); }, text: 'Claims your most grafted card: -25% this combat. Tempered cards are immune.', intent: 'debuff' };
+
 const scar = { op: 'custom', fn: (A) => scarOne(A), text: 'Jams your highest-weight grafted card (+1 cost) in your next hand.', intent: 'debuff' };
 
 const MATRON_P1 = ['scar', 'rap', 'smother'];
@@ -169,17 +187,20 @@ export const ENEMIES_1 = [
     moves: {
       examine: { name: 'Examine', fx: [dmg(10), blk(6)] },
       chart: { name: 'Chart', fx: [dmg(8), paperwork(1)] },
-      // Mimic hits for the Recall status: your last card that dealt 8 or more (10 to 22), plus 4 for each card you played past your 4th
-      // on the turn before it swings (max +12). Recall is kept equal to that total so the intent number is always true.
-      mimic: { name: 'Mimic (+4 per card past 4)', note: 'Copies your last big hit (10 to 22), +4 for every card you play past your 4th in a turn (max +12).', fx: [dmg({ base: 0, per: 'st:recall@self', min: 10, max: 26 })] },
+      // Mimic copies the school of your last card: 8 damage, +3 for each card of that school you played this turn (max 4 cards, 20 total).
+      // The Mimicry status always equals that count, so the intent number is the number that lands. Mono-school turns pay the most.
+      mimic: { name: 'Mimic', tip: 'Copies the school of your last card: +3 for each card of that school you played this turn (max +12). End the turn on another school.', fx: [dmg({ base: 8, per: 'st:mimicry@self', mul: 3 })] },
     },
+    pick: (A, e) => { e.data.cnt = {}; A.setStatus(e, 'mimicry', 0); return ['examine', 'chart', 'mimic'][e.turn % 3]; },
     on: {
-      playerCard: (A, e, { card }) => {
-        if (card && card.dealt >= 8) e.data.big = Math.min(22, card.dealt);
-        const bonus = Math.min(12, 4 * Math.max(0, A.c.playsTurn - 4));
-        A.setStatus(e, 'recall', Math.max(e.data.big || 0, bonus ? 10 : 0) + bonus);
+      playerCard: (A, e, { spec }) => {
+        const sch = schoolsOf(spec);
+        if (!sch.length) return;
+        if (e.data.turnSeen !== A.c.turn) { e.data.turnSeen = A.c.turn; e.data.cnt = {}; }
+        e.data.cnt = e.data.cnt || {};
+        for (const s of sch) e.data.cnt[s] = (e.data.cnt[s] || 0) + 1;
+        A.setStatus(e, 'mimicry', Math.min(4, e.data.cnt[sch[0]]));
       },
-      afterMove: (A, e, m) => { if (m === 'mimic') e.data.big = 0; A.setStatus(e, 'recall', e.data.big || 0); },
     },
     art: { body: 'tall', color: '#6d8fb0', glasses: true, notes: 'Tall narrow figure in a white coat with a stethoscope polyline, round head with rect glasses, mouth mirrors the player silhouette in the hand.' } },
 
@@ -198,15 +219,17 @@ export const ENEMIES_1 = [
     on: { death: (A) => { const head = A.alive().find((x) => x.id === 'two_gurneys'); if (head) { A.status(head, 'strength', 4); A.status(head, 'ritual', 1); } } },
     art: { body: 'box', color: '#a4b0b4', wheels: 4, notes: 'Matching gurney with the lump facing the other way, one wheel squeaking, slightly dented. The Foot end.' } },
 
-  { id: 'defibrillator', name: 'Defibrillator', act: 1, kind: 'elite', hp: [70, 74], start: { strength: 1, countdown: 4 },
+  { id: 'defibrillator', name: 'Defibrillator', act: 1, kind: 'elite', hp: [70, 74], start: { strength: 1, countdown: 4, insulated: 1 },
     pick: (A, e) => ((e.st.countdown || 0) <= 1 ? 'discharge' : (e.turn % 2 === 0 ? 'paddle' : 'shock')),
     moves: {
-      paddle: { name: 'Paddle', fx: [dmg(11), blk(8)] },
+      paddle: { name: 'Paddle', tip: 'Insulated: Burn you put on it arcs back, half as much (rounded up, max 4) lands on you. Hit it with plain damage instead.', fx: [dmg(11), blk(8)] },
       shock: { name: 'Shock', fx: [dmg(7, { hits: 2 })] },
       discharge: { name: 'Clear (-3 per 8 dealt)', note: '27 damage, 3 less for every 8 damage you dealt to it since its last Clear (min 14).', fx: [dmg({ base: 27, per: 'st:grounded@self', mul: -3, min: 14 })] },
     },
     // Countdown drops by 1 after every move; at 1 it discharges, then resets to 4 and gains 2 Strength. Stun delays it.
     on: {
+      // Insulated: Burn put on it arcs back as Burn on you (half, rounded up, at most 4 per application).
+      statusGained: (A, e, s, n) => { if (s === 'burn' && n > 0) A.status(A.player, 'burn', Math.min(4, Math.ceil(n / 2))); },
       afterMove: (A, e, m) => {
         if (m === 'discharge') { A.setStatus(e, 'countdown', 4); A.status(e, 'strength', 2); e.data.dealt = 0; A.setStatus(e, 'grounded', 0); }
         else A.status(e, 'countdown', -1);
@@ -224,12 +247,13 @@ export const ENEMIES_1 = [
       return MATRON_P1[t % 3];
     },
     moves: {
-      scar: { name: 'Scar', fx: [dmg(11), scar, paperwork(1)] },
+      scar: { name: 'Scar', tip: CLAIM_TIP, fx: [dmg(11), scar, paperwork(1)] },
       rap: { name: 'Rap', fx: [dmg(15), scar] },
       smother: { name: 'Smother', fx: [dmg(9), blk(14), scar, paperwork(1)] },
-      ring: { name: 'The Bell Tolls', note: 'Summons two volunteers and Rejection: your card prices trigger twice next turn.', fx: [buff('ritual', 1), debuff('rejection', 1), { op: 'summon', id: 'candy_volunteer', n: 2 }] },
+      ring: { name: 'The Bell Tolls', note: 'Summons two volunteers and Rejection: your card prices trigger twice next turn.', tip: 'Claims a second card (-25%). Tempered cards are immune.', fx: [buff('ritual', 1), debuff('rejection', 1), claim, { op: 'summon', id: 'candy_volunteer', n: 2 }] },
     },
     on: {
+      combatStart: (A, e) => { claimOne(A); },
       // Phase 2 at half HP: her queued move is swapped for Ring immediately so the player sees it coming.
       damaged: (A, e) => {
         if (e.data.phase !== 2 && e.hp > 0 && e.hp <= e.maxHp / 2) { e.data.phase = 2; e.move = 'ring'; A.ev({ t: 'intent', e: e.uid, move: 'ring' }); }

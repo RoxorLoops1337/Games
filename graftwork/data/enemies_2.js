@@ -197,15 +197,15 @@ export const ENEMIES_2 = [
       gavel: { name: 'Gavel', tip: '14 damage, +6 for every living enemy in the room, itself included. Silence the Bidders first.', fx: [{ op: 'dmg', n: { base: 14, per: 'enemies', mul: 6 } }] },
     },
     art: { body: 'podium', color: '#7a4a2a', notes: 'Wide wooden podium rect with a stout gavel arm swinging from the top, a fringe of paddle shapes along the front.' } },
-  { id: 'pickled_king', name: 'The Pickled King', act: 2, kind: 'elite', hp: [88, 94], start: { strength: 1, brined: 14 },
-    pick: (A, e) => ['sour', 'decree', A.player.st.infection > 0 ? 'rotcrush' : 'crush'][e.turn % 3],
-    moves: {
-      sour: { name: 'Sour Crown', fx: [{ op: 'dmg', n: 14 }, { op: 'status', s: 'weak', n: 1, to: 'player' }] },
-      decree: { name: 'Brined Decree', fx: [{ op: 'dmg', n: 6 }, { op: 'block', n: 12, to: 'self' }, { op: 'addCard', card: 'j_clot', n: 2, to: 'draw' }] },
-      crush: { name: 'Lid Crush', fx: [{ op: 'dmg', n: 28 }] },
-      rotcrush: { name: 'Rotted Crush', tip: 'Because you carry Infection the lid finds the rot: this hit ignores your Block.', fx: [{ op: 'dmg', n: 28, pierce: true }] },
-    },
+  { id: 'pickled_king', name: 'The Pickled King', act: 2, kind: 'elite', hp: [88, 94], start: { strength: 1, brined: 14, thirst: 1 },
+    // Thirst: every 3 Block you gain heals him 1 (up to 9 a turn).
     on: {
+      playerBlock: (A, e, n) => {
+        if (e.data.tSeen !== A.c.turn) { e.data.tSeen = A.c.turn; e.data.acc = 0; e.data.drank = 0; }
+        e.data.acc += n;
+        while (e.data.acc >= 3 && e.data.drank < 9) { e.data.acc -= 3; e.data.drank++; A.heal(e, 1); }
+        if (e.data.drank >= 9) e.data.acc = 0;
+      },
       damaged: (A, e) => {
         if (e.data.ferm || e.hp * 2 > e.maxHp) return;
         e.data.ferm = 1;
@@ -214,10 +214,17 @@ export const ENEMIES_2 = [
         A.block(e, 15, { raw: true });
       },
     },
+    pick: (A, e) => ['sour', 'decree', A.player.st.infection > 0 ? 'rotcrush' : 'crush'][e.turn % 3],
+    moves: {
+      sour: { name: 'Sour Crown', tip: 'Thirst: he heals 1 for every 3 Block you gain (up to 9 a turn). Race him with damage, not walls.', fx: [{ op: 'dmg', n: 14 }, { op: 'status', s: 'weak', n: 1, to: 'player' }] },
+      decree: { name: 'Brined Decree', fx: [{ op: 'dmg', n: 6 }, { op: 'block', n: 12, to: 'self' }, { op: 'addCard', card: 'j_clot', n: 2, to: 'draw' }] },
+      crush: { name: 'Lid Crush', fx: [{ op: 'dmg', n: 28 }] },
+      rotcrush: { name: 'Rotted Crush', tip: 'Because you carry Infection the lid finds the rot: this hit ignores your Block.', fx: [{ op: 'dmg', n: 28, pierce: true }] },
+    },
     art: { body: 'jar', color: '#6e8f3f', notes: 'Huge jar body, a jagged gold crown of three triangles on the lid, pale pickled limbs pressed against the glass.' } },
 
   // ---------- BOSS ----------
-  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 90, start: { strength: 1, interest: 1 },
+  { id: 'the_broker', name: 'The Broker', act: 2, kind: 'boss', hp: 90, start: { strength: 1, interest: 1, latefee: 1 },
     pick: (A, e) => {
       const d = e.data;
       if (d.p2 === 1) return 'collect';
@@ -228,13 +235,22 @@ export const ENEMIES_2 = [
       return id;
     },
     moves: {
-      sweet: { name: 'Sweet Talk', fx: [{ op: 'dmg', n: 12 }, { op: 'status', s: 'frail', n: 1, to: 'player' }] },
+      sweet: { name: 'Sweet Talk', tip: 'Late Fee: when your Line reaches 3 it frays (-1 stitch, he gains 4 Block). Cut every second card, or play Tempered and schoolless cards.', fx: [{ op: 'dmg', n: 12 }, { op: 'status', s: 'frail', n: 1, to: 'player' }] },
       hands: { name: 'Dangling Hands', fx: [{ op: 'dmg', n: 7, hits: 3 }] },
       offer: { name: 'An Offer', fx: [{ op: 'dmg', n: 6 }, { op: 'status', s: 'offer', n: 1, to: 'self' }] },
       foreclose: { name: 'Foreclose', tip: '26 damage, 3 less for every unspent energy you end the turn with, +8 if you carry 3 or more Strain.', fx: [{ op: 'dmg', n: { base: 26, per: 'energy', mul: -3, min: 10 } }], after: (A, e) => A.setStatus(e, 'surcharge', 0) },
       collect: { name: 'Collect', fx: [{ op: 'dmg', n: 8 }, { op: 'status', s: 'infection', n: 1, to: 'player' }, { op: 'custom', intent: 'debuff', text: 'Steals up to 30 of your gold.', fn: (A) => { A.gold(-Math.min(30, A.c.run.gold || 0)); } }, { op: 'summon', id: 'coin_mite', n: 1 }], after: (A, e) => { e.data.p2 = 2; } },
     },
     on: {
+      // Late Fee: a Line that grows to 3 frays by a stitch and the house pockets 4 Block. The Line can never sit at 3 or more.
+      seamExtend: (A, e, info) => {
+        const s = A.c.seam;
+        if (!s || s.len < 3) return;
+        s.len -= 1;
+        if (info && info.school && s.counts[info.school] > 0) s.counts[info.school] -= 1;
+        A.block(e, 4, { raw: true });
+        A.ev({ t: 'seamFray', card: info ? info.card : null });
+      },
       damaged: (A, e, dmg, o) => {
         if (e.st.offer && o.hit) e.data.offerDmg = (e.data.offerDmg || 0) + dmg;
         if (!e.data.p2 && e.hp * 2 <= e.maxHp) {

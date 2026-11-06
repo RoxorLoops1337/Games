@@ -56,6 +56,10 @@ export const STATUS_E2 = [
   // Conditional bonus on an enemy's next hit (Hot Pour, Foreclose). The move tooltip names the condition.
   { id: 'surcharge', name: 'Surcharge', good: true, stack: 'int', mod: { outAdd: (n) => n },
     desc: (n) => `Its next hit deals ${n} more. The move's tooltip says why.` },
+  // Pickled King: the brine drinks whatever you wall yourself in with.
+  { id: 'thirst', name: 'Thirst', good: true, stack: 'int', desc: () => 'Heals 1 for every 3 Block you gain (up to 9 a turn). Win by damage, not by walls.' },
+  // The Broker: the Line is charged by the stitch.
+  { id: 'latefee', name: 'Late Fee', good: true, stack: 'int', desc: () => 'When your Line reaches 3 it frays: it loses a stitch and he gains 4 Block. Cut every second card, or play Tempered and schoolless cards, which stay off the Line.' },
   // Pickled King: preserved flesh shrugs off any single big hit.
   { id: 'brined', name: 'Brined', good: true, stack: 'int', mod: { inCap: (n) => n },
     desc: (n) => `Any single hit deals at most ${n} damage.` },

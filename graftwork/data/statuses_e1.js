@@ -8,5 +8,11 @@ export const STATUS_E1 = [
   { id: 'countdown', name: 'Countdown', good: true, stack: 'int', desc: (n) => `Discharges when this reaches 1. Currently ${n}.` },
   { id: 'grounded', name: 'Grounded', good: false, stack: 'int', desc: (n) => `Its next Clear hits for ${n * 3} less (never below 14). Each 8 damage you deal to it before then adds one.` },
   { id: 'loose', name: 'Loose Weave', good: true, stack: 'int', desc: () => 'Heals 3 whenever you extend your Thread (up to 9 a turn). Takes 50% more damage from your cuts.' },
+  // The Matron: cards she has Claimed this combat (a Tithe by another name; Tempered cards are immune).
+  { id: 'claim', name: 'Claim', good: true, stack: 'int', desc: (n) => `She has Claimed ${n} of your cards: they fight at -25% this combat. She takes your most grafted card each phase. Tempered cards cannot be Claimed.` },
+  // The Resident: how many cards of your last school you played this turn.
+  { id: 'mimicry', name: 'Mimicry', good: true, stack: 'int', desc: (n) => `It copies the school of your last card. Its Mimic hits for 3 more per card of that school you played this turn (${n} so far, max 4). End on a different school.` },
+  // Defibrillator: the coat that throws your fire back.
+  { id: 'insulated', name: 'Insulated', good: true, stack: 'int', desc: () => 'Burn you put on it comes back: you gain half as much Burn (rounded up, at most 4 per application). Other damage is fine.' },
   { id: 'charging', name: 'Charging', good: true, stack: 'int', desc: (n) => `Winding up a heavy blow for next turn. Its Blow deals ${n * 2} more.` },
 ];

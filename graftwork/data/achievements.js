@@ -12,7 +12,8 @@ const thr = (id, name, text, stat, max, extra = {}) => ({
 const winAscAll = (n) => (meta) => HEROES3.every((h) => ((meta.winAsc && meta.winAsc[h]) || 0) >= n && ((meta.wins && meta.wins[h]) || 0) > 0);
 const winAscCount = (n) => (meta) => HEROES3.filter((h) => meta.wins && meta.wins[h] > 0 && (meta.winAsc[h] || 0) >= n).length;
 
-export const ACHIEVEMENTS = [
+import { ACHIEVEMENTS_2 } from './achievements2.js';
+const BASE_ACHIEVEMENTS = [
   // ---- progress
   { id: 'intake', name: 'Intake', text: 'Finish a run, however it ends.', check: (r, c, m) => m.stats.wins + m.stats.deaths >= 1 },
   { id: 'discharged', name: 'Discharged', text: 'Win a run.', check: (r, c) => c.won },
@@ -56,4 +57,5 @@ export const ACHIEVEMENTS = [
   { id: 'pincushion', name: 'Pincushion', text: 'Die holding 2 or more Overloaded cards.', secret: true, check: (r, c) => !c.won && c.overloaded >= 2 },
 ];
 
+export const ACHIEVEMENTS = [...BASE_ACHIEVEMENTS, ...ACHIEVEMENTS_2];
 export const ACHIEVEMENT_LIST = ACHIEVEMENTS;

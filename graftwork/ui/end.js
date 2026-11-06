@@ -42,9 +42,11 @@ export default {
     });
     this.achs = (info.newAchievements || []).map((a) => {
       const id = typeof a === 'string' ? a : a.id; const d = ACHIEVEMENT_LIST.find((x) => x.id === id) || (typeof a === 'object' ? a : null);
-      return { kind: 'Record', name: d ? d.name : id, text: d ? d.text : '' };
+      return { kind: 'Record', name: d ? d.name : id, text: (typeof a === 'object' && a.text) || (d ? d.text : '') };
     });
-    this.news = [...this.unlocks, ...this.achs];
+    const cf = info.caseFile; // case file: milestones earned this run -> Credit (engine/meta2.js)
+    this.caseNews = cf && cf.total > 0 ? [{ kind: 'Credit', name: `+${cf.total} Credit`, text: cf.items.map((i) => i.name + (i.first ? ' (first)' : '')).join(', ') + (cf.capped ? '. Run cap reached.' : '') }] : [];
+    this.news = [...this.caseNews, ...this.unlocks, ...this.achs];
     const kb = run.killedBy && (ENEMIES[run.killedBy] ? ENEMIES[run.killedBy].name : String(run.killedBy));
     this.killer = kb || null;
     const a = app.shared.audio;
@@ -233,7 +235,7 @@ export default {
       const at = this.nextNew + i * 0.45, k = clamp((this.t0 - at) / 0.4, 0, 1);
       if (k > 0 && this.shown <= i) { this.shown = i + 1; if (!calm(app)) { this.fx.burst(x + w / 2, yy + 14, 'gild', { n: 18 }); this.fx.ring(x + w / 2, yy + 14, COL.lamp, 70, 0.6); } if (app.shared.audio) app.shared.audio.sfx(n.kind === 'Unlocked' ? 'relic' : 'gilded', { vol: 0.7 }); }
       g.save(); g.globalAlpha = EASE.out(k); g.translate((1 - EASE.out(k)) * 30, 0);
-      app.text(n.kind === 'Unlocked' ? 'UNLOCKED' : 'RECORD', x + 14, yy, { size: 10, ui: true, bold: true, color: n.kind === 'Unlocked' ? '#8fe0a0' : COL.lamp });
+      app.text(n.kind === 'Unlocked' ? 'UNLOCKED' : n.kind === 'Credit' ? 'CASE FILE' : 'RECORD', x + 14, yy, { size: 10, ui: true, bold: true, color: n.kind === 'Unlocked' ? '#8fe0a0' : COL.lamp });
       app.text(n.name, x + 14, yy + kH, { size: 17, bold: true, color: '#fbe9b0', shadow: true });
       app.text(lines > 2 ? (n.text || '').slice(0, 56) + '...' : n.text || '', x + 14, yy + kH + nH + 2, { size: 12, ui: true, maxW: w - 28, lineH: 14, color: '#cdbf9d' });
       g.restore();
