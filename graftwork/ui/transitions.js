@@ -329,7 +329,7 @@ export function temperUpdate(app, a, fx, dt) {
       if (fx) {
         fx.hitstop(30); if (!rd) fx.shake(0.3 + i * 0.15);
         fx.burst(640, 330, 'spark', { n: 18 + i * 8, speed: 420 + i * 60 }); fx.burst(640, 330, 'ember', { n: 6 }); fx.ring(640, 330, '#ffb347', 150 + i * 40, 0.4);
-        if (i === 2) fx.flash('#ffd9a0', 0.4, 0.3);
+        if (i === 2) fx.flash('#ffd9a0', 0.15, 0.2);
       }
       if (!rd) post(app, 'shockwave', 640, 330, 0.3 + i * 0.15, 450);
     }
@@ -366,7 +366,7 @@ export function hammerPose(t) {
 export function temperTint(app, a, cx, cy, w, h) {
   const g = app.ctx, heat = heatAt(a.t), steel = steelAt(a.t);
   g.save();
-  if (heat > 0.02) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = heat * 0.55; g.fillStyle = heat > 0.85 ? '#ffb060' : '#ff6a2b'; g.beginPath(); g.roundRect(cx - w / 2, cy - h / 2, w, h, 14); g.fill(); }
+  if (heat > 0.02) { g.globalCompositeOperation = 'source-over'; g.globalAlpha = heat * 0.5; g.fillStyle = heat > 0.85 ? '#ff8a2a' : '#e8501a'; g.beginPath(); g.roundRect(cx - w / 2, cy - h / 2, w, h, 14); g.fill(); }
   if (steel > 0 && steel < 1.001) { g.globalCompositeOperation = 'source-over'; g.globalAlpha = Math.sin(steel * Math.PI) * 0.35; g.fillStyle = '#7fa8c4'; g.beginPath(); g.roundRect(cx - w / 2, cy - h / 2, w, h, 14); g.fill(); }
   g.restore();
 }

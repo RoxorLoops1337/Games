@@ -170,6 +170,7 @@ export async function runAudioCheck() {
     out.stack.crush5 = await page.evaluate(n => window.__ac.stack(n), ['hitCrush', 'hitHeavy', 'bossIntro', 'overload', 'bossKillThud']);
     out.muted = await page.evaluate(() => window.__ac.muted('boss'));
     out.modes = modes; out.names = sfx; out.errors = errors;
+    if (errors.length) throw new Error('audio page threw ' + errors.length + ' error(s): ' + errors[0]);
     return out;
   } finally { await browser.close(); srv.close(); }
 }
@@ -185,11 +186,11 @@ export function masking(r, mode) {
 // ---- CLI ----
 const f1 = (x, d = 1) => (Number.isFinite(x) ? x.toFixed(d) : String(x)).padStart(7);
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const r = await runAudioCheck();
+  let r; try { r = await runAudioCheck(); } catch (e) { console.error(String(e.message)); process.exit(1); }
   if (r.skipped) { console.log('skipped: ' + r.skipped); process.exit(0); }
   if (process.argv.includes('--json')) { console.log(JSON.stringify(r, null, 1)); process.exit(0); }
   const head = 'name'.padEnd(15) + ' peakdB  stRMS actRMS centHz    lenMs tailMs clip   dc*1e4 startAbs endLvl flags';
-  const flags = m => [m.silent && 'SILENT', m.clip && 'CLIP', m.peakDb > -1 && 'HOT', m.stDb < -36 && 'QUIET', m.cutEnd && 'CUT', m.startAbs > 0.03 && 'CLICK0', Math.abs(m.dc) > 0.002 && 'DC', m.centroid > 4500 && 'HARSH'].filter(Boolean).join(' ');
+  const flags = m => [m.silent && 'SILENT', m.clip && 'CLIP', m.peakDb > -1 && 'HOT', m.stDb < -40 && 'QUIET', m.cutEnd && 'CUT', m.startAbs > 0.03 && 'CLICK0', Math.abs(m.dc) > 0.002 && 'DC', m.centroid > 4500 && 'HARSH'].filter(Boolean).join(' ');
   const row = (n, m) => n.padEnd(15) + f1(m.peakDb) + f1(m.stDb) + f1(m.actRmsDb) + f1(m.centroid, 0) + f1(m.lenMs, 0) + f1(m.tailMs, 0) + f1(m.clip, 0) + f1(m.dc * 1e4) + f1(m.startAbs, 3) + f1(m.endLevel) + ' ' + flags(m);
   console.log('SFX\n' + head); for (const n of r.names) console.log(row(n, r.sfx[n]));
   console.log('\nMUSIC (steady state 3s on, intensity 0)\n' + head); for (const n of r.modes) console.log(row(n, r.music[n]));

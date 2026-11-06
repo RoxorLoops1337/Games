@@ -2,7 +2,7 @@
 //   node tools/graftwork_sim.mjs [runsPerHero=20] [ascension=0]
 import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, playCard, endTurn, canPlay, intentOf, resolvePending, usePotion, finishCombat, specOf, effCost, mult, val, cond } from '../graftwork/engine/combat.js';
-import { cardSpec, strainInfo, canGraft } from '../graftwork/engine/cards.js';
+import { cardSpec, strainInfo, canGraft, newInst } from '../graftwork/engine/cards.js';
 import { CARDS, GRAFTS, HEROES, ENEMIES, POTIONS, STATUSES } from '../graftwork/data/index.js';
 
 export const POLICIES = {
@@ -328,6 +328,17 @@ function doShop(run, pol, log) {
     const opts = shop.relics.map((r, i) => ({ r, i })).filter((x) => !x.r.sold && run.gold >= x.r.price).sort((a, b) => b.r.price - a.r.price);
     if (!opts.length) break;
     RUN.shopBuy(run, 'relic', opts[0].i);
+  }
+  // 1b) strong policy: buy cards clearly better than the deck's median card (gold is otherwise left unspent)
+  if (pol.buyCards) {
+    const vals = run.deck.filter((x) => CARDS[x.id].type !== 'junk').map((x) => cardV(x)).sort((x, y) => x - y);
+    const med = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
+    let g2 = 0;
+    while (g2++ < 4) {
+      const opts = shop.cards.map((k, i) => ({ k, i, v: cardV(newInst(k.id, () => -1)) })).filter((x) => !x.k.sold && run.gold >= x.k.price && x.v > med * pol.buyCards).sort((x, y) => y.v - x.v);
+      if (!opts.length) break;
+      RUN.shopBuy(run, 'card', opts[0].i);
+    }
   }
   // 2) remove junk, then the weakest starter if the deck is large and gold is plentiful
   const rem = () => RUN.servicePrice(run, 'remove');

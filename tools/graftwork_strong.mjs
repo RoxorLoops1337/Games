@@ -114,7 +114,7 @@ export function strongPickGraft(run, pol) {
   return best && bs >= +(process.env.GW_FLOOR ?? 1.5) ? best : null;
 }
 
-POLICIES.strong = { maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft };
+POLICIES.strong = { buyCards: +(process.env.GW_BUY ?? 0), maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft };
 
 if (process.argv[1] && process.argv[1].endsWith('graftwork_strong.mjs')) {
   const N = +process.argv[2] || 40, asc = +process.argv[3] || 0, only = process.argv[4];

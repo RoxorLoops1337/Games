@@ -262,9 +262,9 @@ function drawForgeAnim(app, a) {
     const T = app.shared.transitions, hit = a.t >= T.TEMPER.strikes[0], flip = a.t >= T.TEMPER.pop ? 1 : 0, hp = T.hammerPose(a.t);
     app.text('Temper', 640, 70, { size: 40, bold: true, align: 'center', color: COL.lamp, shadow: true });
     g.fillStyle = '#25262a'; g.beginPath(); g.moveTo(420, 600); g.lineTo(860, 600); g.lineTo(800, 560); g.lineTo(880, 530); g.lineTo(880, 500); g.lineTo(400, 500); g.lineTo(350, 540); g.lineTo(420, 550); g.closePath(); g.fill();
-    drawCard(g, flip ? a.after : a.before, 640, 330, { scale: 1.0, glow: T.heatAt(a.t) * 0.8 });
+    drawCard(g, flip ? a.after : a.before, 640, 330, { scale: 1.0, glow: T.heatAt(a.t) * 0.25 });
     T.temperTint(app, a, 640, 330, CARD_W, CARD_H); T.temperRivets(app, a, 640, 330, CARD_W, CARD_H, a.n);
-    drawHammer(g, 800, 220 + hp.dy, hp.ang);
+    drawHammer(g, 715, 250 + hp.dy, hp.ang);
     if (a.t > 1.7) app.text(`${a.before.name}: the patches are part of the card now.`, 640, 665, { size: 22, italic: true, align: 'center', color: COL.vellum, shadow: true, alpha: clamp((a.t - 1.7) * 4, 0, 1) });
     void hit;
   } else if (a.kind === 'refine') {

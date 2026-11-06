@@ -67,7 +67,7 @@ function checkEvents(c, evs, tag, st) {
 function runEnemyPhase(c, tag, st) {
   const single = c.enemies.filter((e) => !e.dead).length === 1;
   const shown = new Map();
-  for (const e of c.enemies) if (!e.dead && !(e.st.stun > 0)) { try { shown.set(e.uid, { move: e.move, id: e.id, info: intentOf(c, e), tip: !!(e.def.moves[e.move] && e.def.moves[e.move].tip) }); } catch (x) { bug(`${tag}: intentOf(${e.id}) threw ${x.message}`); } }
+  for (const e of c.enemies) if (!e.dead && !(e.st.stun > 0)) { try { shown.set(e.uid, { move: e.move, id: e.id, str: e.st.strength || 0, snap: JSON.stringify({ e: e.st, p: c.player.st, en: c.energy, blk: c.player.block, relics: c.run.relics, strain: c.strain && c.strain.strain }), info: intentOf(c, e), tip: !!(e.def.moves[e.move] && e.def.moves[e.move].tip) }); } catch (x) { bug(`${tag}: intentOf(${e.id}) threw ${x.message}`); } }
   const mark = c.ev.length;
   endTurn(c);
   const evs = c.ev.slice(mark);
@@ -75,13 +75,22 @@ function runEnemyPhase(c, tag, st) {
   const acted = new Set();
   for (const e of evs) if (e.t === 'enemyAct') acted.add(e.e);
   for (const [uid, s] of shown) {
+    if (c.over === 'lose') continue; // the player died mid-phase: later hits never land
+    if (c.enemies.some((x) => x.uid === uid && x.dead)) continue; // killed by its own thorns / burn mid-move
     if (!acted.has(uid) || shown.size > 1 || !single) continue; // several enemies buff, debuff and kill each other mid-phase: only lone enemies compare cleanly
-    const real = evs.filter((e) => e.t === 'dmg' && e.src === uid && e.who === 'player' && e.hit).reduce((a, e) => a + e.raw, 0);
+    const from = evs.findIndex((e) => e.t === 'enemyAct' && e.e === uid); // start-of-turn status hits (the Broker's Offer) land before the move and are not part of it
+    const act = evs[from];
+    if (act && act.move !== s.move) continue; // a phase change (burn tick at its turn start) swapped the move after the intent was shown
+    if (evs.slice(0, from).some((x) => x.t === 'dmg' && x.who === uid && x.hit)) continue; // end-of-turn payouts hit it first (Seam, relics): reactive moves (Weigh) change before they act
+    if (evs.slice(0, from).some((x) => x.t === 'block' && x.who === 'player')) continue; // end-of-turn Block (Seam payout, relic) lands before the enemy reads it: conditions on Block (Fine) move
+    const now = c.enemies.find((x) => x.uid === uid);
+    if (now && (now.st.strength || 0) !== s.str) continue; // it gained or lost Strength during the phase (phase change, ritual): the shown number was right when shown
+    const real = evs.slice(from).filter((e) => e.t === 'dmg' && e.src === uid && e.who === 'player' && e.hit).reduce((a, e) => a + e.raw, 0);
     // tidy: only compare when the move deals damage and nothing killed the player
     if (s.info.hidden) continue;
     const key = `intent mismatch ${s.id}/${s.move}`;
     const tipped = s.tip;
-    if (real !== s.info.dmg) advisory(`${key} (${tipped ? 'has tip' : 'NO tip'})`, `shown ${s.info.dmg}, dealt raw ${real}`);
+    if (real !== s.info.dmg) bug(`${key} (${tipped ? 'has tip' : 'NO tip'})`, `shown ${s.info.dmg}, dealt raw ${real} blocks ${JSON.stringify(evs.filter((x) => x.t === "block").map((x) => x.n))} hits ${JSON.stringify(evs.filter((x) => x.t === 'dmg' && x.src === uid && x.who === 'player').map((x) => x.raw))} ${s.snap}`);
   }
 }
 

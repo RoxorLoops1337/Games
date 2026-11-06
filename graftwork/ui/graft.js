@@ -32,7 +32,7 @@ function layout(offer, small) {
   const startX = 412 - ((n - 1) * 257) / 2;
   const cards = offer.cards.map((uid, i) => ({ uid, cx: startX + i * 257, cy: CARD_Y, x: startX + i * 257 - CW / 2, y: CARD_Y - CH / 2, w: CW, h: CH }));
   // phones: the text floor inflates every label ~1.4x, so the tiles get taller and the hover panel is dropped
-  const ph = small ? (m > 3 ? 108 : 136) : m > 3 ? 84 : 108, gap = small ? 6 : m > 3 ? 8 : 9;
+  const ph = small ? (m > 3 ? 110 : 146) : m > 3 ? 84 : 108, gap = small ? 4 : m > 3 ? 8 : 9;
   const patches = offer.grafts.map((gid, j) => ({ gid, x: TRAY_X, y: 80 + j * (ph + gap), w: TRAY_W, h: ph }));
   const end = 80 + m * (ph + gap);
   return { cards, patches, infoY: end + 2, infoH: small ? 0 : 548 - (end + 2) - 6 };
@@ -350,7 +350,7 @@ function drawPatchBody(app, g, x, y, w, h, o) {
 
   const tx = x + 88, tw = w - 88 - 12;
   // tier ribbon
-  const rw = 74;
+  const rw = Math.max(74, Math.ceil(app.measure(tier.label, 13, { ui: true, bold: true })) + 26); // phones inflate the label
   ctx.save();
   ctx.fillStyle = tier.color;
   ctx.beginPath(); ctx.moveTo(x + w - 10 - rw, y + 9); ctx.lineTo(x + w - 10, y + 9); ctx.lineTo(x + w - 10, y + 27); ctx.lineTo(x + w - 10 - rw, y + 27); ctx.lineTo(x + w - 10 - rw + 8, y + 18); ctx.closePath(); ctx.fill();
@@ -367,7 +367,7 @@ function drawPatchBody(app, g, x, y, w, h, o) {
   const lo = Math.round(40 * lk), lh = Math.round(16 * bk);
   const nameBot = y + 7 + app.sz(compact ? 18 : 20) * 1.2;
   let yy = Math.max(y + (compact ? 30 : 34), Math.round(nameBot));
-  const lines = clamp(Math.floor((y + h - 8 - yy - 3) / (2 * lh)), 1, compact ? 1 : 2);
+  const lines = clamp(Math.floor((y + h - 4 - yy - 3) / (2 * lh)), 1, compact ? 1 : 2);
   const boonL = wrapLimit(app, g.boon, tw - lo, 14, lines, { ui: true });
   const priceL = wrapLimit(app, g.price, tw - lo, 14, lines, { ui: true });
   app.text('Boon', tx, yy, { size: 13, ui: true, bold: true, color: COL.good });
@@ -424,16 +424,17 @@ function drawAfter(app, c) {
   // rows
   const lx = x + 16;
   const rowBudget = y + 46, rowStrain = y + 82, rowTithe = y + 114;
+  const vx = lx + Math.max(80, Math.ceil(app.measure('BUDGET', 14, { ui: true, bold: true })) + 10); // value column clears the inflated phone labels
   app.text('BUDGET', lx, rowBudget + 5, { size: 14, ui: true, bold: true, color: DIM });
   const wTxt = pair ? `${B.weight}/${B.budget}  →  ${A.weight}/${A.budget}` : `${A.weight}/${A.budget}`;
-  app.text(wTxt, lx + 80, rowBudget, { size: 24, bold: true, color: A.weight > A.budget ? '#ff9aa6' : COL.vellum });
+  app.text(wTxt, vx, rowBudget, { size: 24, bold: true, color: A.weight > A.budget ? '#ff9aa6' : COL.vellum });
   const addW = pair ? A.weight - B.weight : 0;
   drawGauge(app, lx + 262, rowBudget + 2, w - 262 - 32, 22, B.weight, A.budget, addW, st.t);
   if (app.inRect(lx, rowBudget - 4, w - 32, 36)) app.tooltip('Budget', pair ? `Weight ${B.weight} → ${A.weight} against a Budget of ${A.budget}. The pulsing cells are what this graft adds${A.weight > A.budget ? '; red cells are Strain' : ''}.` : 'Filled cells are graft weight in your deck, the gold line is your Budget. Red cells are Strain.', { color: COL.lamp });
 
   app.text('STRAIN', lx, rowStrain + 5, { size: 14, ui: true, bold: true, color: DIM });
   const sCol = A.strain > B.strain ? COL.bad : A.strain > 0 ? '#ffb36b' : COL.good;
-  app.text(pair ? `${B.strain}  →  ${A.strain}` : `${A.strain}`, lx + 80, rowStrain, { size: 24, bold: true, color: sCol });
+  app.text(pair ? `${B.strain}  →  ${A.strain}` : `${A.strain}`, vx, rowStrain, { size: 24, bold: true, color: sCol });
   let verdict = A.strain === 0 ? 'Within Budget. Nobody pays.' : `${A.tithed.length} Tithe${A.tithed.length === 1 ? '' : 's'} land${A.tithed.length === 1 ? 's' : ''} on Bare cards.`;
   app.text(verdict, lx + 262, rowStrain + 4, { size: 16, ui: true, color: A.strain ? '#ffb3b3' : COL.good });
   // max hp

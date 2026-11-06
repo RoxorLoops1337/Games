@@ -12,7 +12,7 @@ for (const s of SCHOOLS) {
 }
 
 export const ENEMIES_NEW2 = [
-  { id: 'needle_nanny', name: 'Needle Nanny', act: 2, kind: 'normal', start: { strength: 2 }, hp: [58, 64],
+  { id: 'needle_nanny', name: 'Needle Nanny', act: 2, kind: 'normal', start: { strength: 2 }, hp: [51, 56],
     pick: (A, e) => {
       if (e.turn % 2 === 0) return 'sew';
       return e.data.patchwork ? 'embroider' : 'prick';
@@ -32,7 +32,7 @@ export const ENEMIES_NEW2 = [
     },
     art: { body: 'figure', color: '#c4a8b8', notes: 'Stooped figure in a grey apron, a pincushion bristling with needles strapped to one forearm and a long darning needle held like a cane.' } },
 
-  { id: 'brine_surgeon', name: 'Brine Surgeon', act: 2, kind: 'normal', start: { strength: 2 }, hp: [62, 66],
+  { id: 'brine_surgeon', name: 'Brine Surgeon', act: 2, kind: 'normal', start: { strength: 2 }, hp: [55, 58],
     pick: (A, e) => {
       const t = e.turn % 3;
       if (t === 0) return 'incision';
@@ -46,7 +46,7 @@ export const ENEMIES_NEW2 = [
     },
     art: { body: 'tall', color: '#7fb5a0', notes: 'Tall green-gowned surgeon wading in a brine tank, a glass drip bag slung from the shoulder and a hooked scalpel for a hand.' } },
 
-  { id: 'scissor_nurse', name: 'Scissor Nurse', act: 2, kind: 'normal', start: { strength: 2 }, hp: [60, 66], pattern: ['snip', 'trim', 'clip'],
+  { id: 'scissor_nurse', name: 'Scissor Nurse', act: 2, kind: 'normal', start: { strength: 2 }, hp: [53, 58], pattern: ['snip', 'trim', 'clip'],
     moves: {
       snip: { name: 'Snip', fx: [{ op: 'dmg', n: 12 }] },
       trim: { name: 'Trim', fx: [{ op: 'dmg', n: 7 }, { op: 'block', n: 8, to: 'self' }] },
@@ -61,7 +61,7 @@ export const ENEMIES_NEW2 = [
     },
     art: { body: 'lamp', color: '#d8d0cc', notes: 'Starched nurse silhouette with a cap, one hand replaced by oversized open shears that catch the light.' } },
 
-  { id: 'ferric_warden', name: 'Ferric Warden', act: 2, kind: 'normal', start: { strength: 2 }, hp: [62, 68],
+  { id: 'ferric_warden', name: 'Ferric Warden', act: 2, kind: 'normal', start: { strength: 2 }, hp: [55, 60],
     pick: (A, e) => {
       if (!e.data.order) e.data.order = A.c.rng.shuffle(SCHOOLS.slice());
       const s = e.data.order[e.turn % SCHOOLS.length];
@@ -78,7 +78,7 @@ export const ENEMIES_NEW2 = [
     },
     art: { body: 'cone', color: '#9aa7b4', notes: 'Iron-filings cone with a heavy riveted visor and a magnet horseshoe lantern hung at the waist, glyph chalked on the chest.' } },
 
-  { id: 'tax_collector', name: 'Tax Collector', act: 2, kind: 'normal', start: { strength: 2 }, hp: [60, 66], pattern: ['levy', 'audit', 'seize'],
+  { id: 'tax_collector', name: 'Tax Collector', act: 2, kind: 'normal', start: { strength: 2 }, hp: [53, 58], pattern: ['levy', 'audit', 'seize'],
     moves: {
       levy: { name: 'Levy', fx: [{ op: 'dmg', n: 12 }] },
       audit: { name: 'Audit Trail', fx: [{ op: 'dmg', n: 7 }, { op: 'block', n: 8, to: 'self' }] },

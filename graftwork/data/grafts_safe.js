@@ -67,8 +67,8 @@ export const GRAFTS_SAFE = [
     { types: ['skill'], ok: (s) => !s.flags.exhaust }),
 
   // ---- static ----
-  G('g_ground_wire', 'Ground Wire', 'static', 'common', 'Gain 3 Charge when played.', 'Lose 1 HP when played.',
-    [{ k: 'addFx', fx: [{ op: 'status', s: 'charge', n: 3, to: 'self' }] }, { k: 'selfHurt', n: 1 }], { types: ['attack', 'skill'], ok: (s) => s.hero === 'wick' }),
+  G('g_ground_wire', 'Ground Wire', 'static', 'common', 'Gain 5 Charge when played.', 'Lose 1 HP when played.',
+    [{ k: 'addFx', fx: [{ op: 'status', s: 'charge', n: 5, to: 'self' }] }, { k: 'selfHurt', n: 1 }], { types: ['attack', 'skill'], ok: (s) => s.hero === 'wick' }),
   G('g_arc_clip', 'Arc Clip', 'static', 'common', 'Hits all enemies.', 'Numbers 25% lower.',
     [{ k: 'aoe' }, { k: 'pct', pct: -25 }], { types: ['attack'], ok: (s) => hits(s) && s.target === 'enemy' && cheap(s) }),
   G('g_live_lead', 'Live Lead', 'static', 'uncommon', 'Draw 2. Gain 3 Charge when played.', 'Exhaust. Add a Static to your discard pile each combat.',

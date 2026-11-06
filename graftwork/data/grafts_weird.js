@@ -51,18 +51,18 @@ export const GRAFTS_WEIRD = [
 
   // ---------- common ----------
   { id: 'g_ratchet_gear', name: 'Ratchet Gear', school: 'rust', weight: 1, tier: 'weird', rarity: 'common', types: AB, ok: dmgOrBlock,
-    boon: 'Each time this is discarded unplayed, it gains +4 numbers for the rest of the combat.', price: 'Costs 1 more.',
+    boon: 'Each time this is discarded unplayed, it gains +6 numbers for the rest of the combat.', price: 'Costs 1 more.',
     mods: [{ k: 'cost', d: 1 }, { k: 'custom', hooks: {
-      onDiscard(A, { card }) { card.bonus = Math.min(32, (card.bonus || 0) + 4); },
+      onDiscard(A, { card }) { card.bonus = Math.min(36, (card.bonus || 0) + 6); },
       onPlay(A, ctx) { bonusHit(A, ctx, ctx.card.bonus || 0); },
     } }] },
   { id: 'g_coward_suture', name: 'Coward Suture', school: 'rust', weight: 1, tier: 'weird', rarity: 'common', types: AB,
     boon: 'If you discard this unplayed, gain 10 block.', price: 'Its numbers are 25% lower.',
     mods: [{ k: 'pct', pct: -25 }, { k: 'custom', hooks: { onDiscard(A) { A.block(A.player, 10); } } }] },
   { id: 'g_slow_tumor', name: 'Slow Tumor', school: 'blood', weight: 1, tier: 'weird', rarity: 'common', types: AB, ok: (s) => dmgOrBlock(s) && numeric(s) && s.cost <= 2,
-    boon: 'Each time you draw it, it deals or blocks 6 more this play.', price: 'Each time you draw it, it costs 1 more until played.',
+    boon: 'Each time you draw it, it deals or blocks 8 more this play.', price: 'Each time you draw it, it costs 1 more until played.',
     mods: [{ k: 'custom', hooks: {
-      onDraw(A, { card }) { card.costMod = (card.costMod || 0) + 1; card.surge = 6; },
+      onDraw(A, { card }) { card.costMod = (card.costMod || 0) + 1; card.surge = 8; },
     } }, { k: 'custom', hooks: { onPlay(A, ctx) { bonusHit(A, ctx, ctx.card.surge || 0); } } }] },
   { id: 'g_vampire_teeth', name: 'Vampire Teeth', school: 'blood', weight: 1, tier: 'weird', rarity: 'common', types: ['attack'], ok: (s) => s.target === 'enemy' && hasD(s),
     boon: 'After the hit, if the target is at half HP or lower (or dead), heal 6.', price: 'Otherwise lose 2 HP.',
@@ -79,8 +79,8 @@ export const GRAFTS_WEIRD = [
     boon: 'On play, deals or blocks a random 0 to 10 extra.', price: '25% chance to jam (costs 1 more).',
     mods: [{ k: 'jam', p: 0.25 }, { k: 'custom', hooks: { onPlay(A, ctx) { if (!ctx.replay) ctx.card.roll = A.rng.int(11); bonusHit(A, ctx, ctx.card.roll || 0); } } }] },
   { id: 'g_return_spring', name: 'Return Spring', school: 'echo', weight: 1, tier: 'weird', rarity: 'common', types: AB, ok: dmgOrBlock,
-    boon: 'Innate. If you discard this unplayed, it goes on top of your draw pile.', price: 'Its numbers are 15% lower.',
-    mods: [{ k: 'flag', f: 'innate' }, { k: 'pct', pct: -15 }, { k: 'custom', hooks: { onDiscard(A, { card }) {
+    boon: 'Innate. If you discard this unplayed, it goes on top of your draw pile.', price: 'Its numbers are 10% lower.',
+    mods: [{ k: 'flag', f: 'innate' }, { k: 'pct', pct: -10 }, { k: 'custom', hooks: { onDiscard(A, { card }) {
       const c = A.c;
       const i = c.discard.indexOf(card);
       if (i >= 0) { c.discard.splice(i, 1); c.drawPile.push(card); }
