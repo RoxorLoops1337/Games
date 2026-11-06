@@ -338,8 +338,8 @@ export default {
     let ly = 506; app.reg('forge-log', 340, 500, 600, 44, { group: 'log' }); for (const ln of S.log.slice(-2)) { ly += app.text(ln, 640, ly, { size: 17, ui: true, align: 'center', color: COL.good, maxW: 590 }) + 3; }
     toastDraw(app, S, 560);
     const done = f.used > 0;
-    app.reg('forge-leave', done ? 490 : 520, 610, done ? 300 : 240, done ? 72 : 52, { group: 'leave' });
-    if (app.button(done ? 'Continue' : 'Leave without choosing', done ? 490 : 520, 610, done ? 300 : 240, done ? 72 : 52, { size: done ? 32 : 18, fill: done ? '#4a2a1c' : undefined, stroke: done ? COL.lamp : undefined })) { RUN.advance(run); flow.route(); }
+    app.reg('forge-leave', done ? 490 : 480, 610, done ? 300 : 320, done ? 72 : 52, { group: 'leave' });
+    if (app.button(done ? 'Continue' : 'Leave without choosing', done ? 490 : 480, 610, done ? 300 : 320, done ? 72 : 52, { size: done ? 32 : 18, fill: done ? '#4a2a1c' : undefined, stroke: done ? COL.lamp : undefined })) { RUN.advance(run); flow.route(); }
     if (app.inRect(490, 610, 300, 72) && done) app.tooltip('Continue', 'Back to the map.');
 
     S.fx.draw(g);

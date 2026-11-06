@@ -1,5 +1,6 @@
 // CODEX: modal reference book (flow.openCodex()). Tabs: Cards / Grafts / Relics / Enemies / Statuses / Schools / Rules.
 // Entries not yet in meta.seen[kind][id] show as silhouettes with a hint. Type to search (seen entries only).
+import { tscale } from './graft_parts.js';
 import { COL, W, H, rgba } from './core.js';
 import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { drawStatus, drawRelic } from '../art/icons.js';
@@ -256,7 +257,12 @@ export default {
     }
     return out;
   },
+  // the codex follows the text scale up to 125%
   draw(app) {
+    const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.25);
+    try { this.drawCodex(app); } finally { app.textScale = ts; }
+  },
+  drawCodex(app) {
     const ctx = app.ctx;
     this.pending = null;
     if (this.anim < 1) this.anim = Math.min(1, this.anim + app.dt / 0.16);

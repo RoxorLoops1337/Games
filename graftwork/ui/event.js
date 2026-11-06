@@ -237,7 +237,7 @@ export default {
     y += 20;
 
     // scene text, typewriter
-    const TS = ev.text.length > 330 ? 18 : 21, TL = Math.round((TS === 21 ? 29 : 25) * k);
+    const TS = ev.text.length > 560 ? 15 : ev.text.length > 330 ? 18 : 21, TL = Math.round((TS === 21 ? 29 : TS === 18 ? 25 : 21) * k);
     const lines = app.wrap(ev.text, iw, TS, {});
     const total = ev.text.length;
     const shown = Math.min(total, Math.floor(this.shown));
@@ -265,10 +265,11 @@ export default {
     // choices
     const choices = RUN.eventChoices(run);
     const room = P.y + P.h - 16 - y, many = choices.length;
-    const mk = (lim) => choices.map((c) => { const sub = c.text && lim ? wrapLimit(app, c.text, iw - 36, 15, lim, { ui: true }) : []; return { sub, h: Math.round((22 + 28) * k * 0.9) + sub.length * Math.round(19 * k) + (c.ok ? 6 : Math.round(22 * k)) }; });
+    const mk = (lim) => choices.map((c) => { const sub = c.text && lim ? wrapLimit(app, c.text, iw - 36, 15, lim, { ui: true }) : []; return { sub, h: Math.round((lim ? 50 : 38) * k * 0.9) + sub.length * Math.round(19 * k) + (c.ok ? 6 : Math.round(22 * k)) }; });
     let ms = mk(4); const tot = (a) => a.reduce((n, m) => n + m.h + 10, 0);
     if (tot(ms) > room) ms = mk(2);
     if (tot(ms) > room) ms = mk(1);
+    if (globalThis.__D) console.log('room', room, 'y', y, 'tot', tot(ms), 'n', choices.length, TS, lines.length);
     const bare = tot(ms) > room; if (bare) ms = mk(0); // no room: labels only, the description moves into the hover tooltip
     choices.forEach((c, idx) => {
       const sub = ms[idx].sub;
@@ -283,7 +284,7 @@ export default {
       g.restore();
       // number tab
       app.text(String(idx + 1), x + 18, y + 13, { size: 20, bold: true, color: c.ok ? COL.scar : 'rgba(43,30,26,.35)', align: 'center' });
-      app.text(c.label, x + 36, y + 10, { size: 22, bold: true, maxW: w - 190, color: c.ok ? COL.ink : 'rgba(43,30,26,.45)' });
+      app.text(wrapLimit(app, c.label, w - 190, 22, 1, { bold: true })[0], x + 36, y + 10, { size: 22, bold: true, color: c.ok ? COL.ink : 'rgba(43,30,26,.45)' });
       sub.forEach((ln, kk) => app.text(ln, x + 36, y + Math.round(42 * k * 0.9) + kk * Math.round(19 * k), { size: 15, ui: true, color: c.ok ? 'rgba(43,30,26,.8)' : 'rgba(43,30,26,.4)' }));
       if (!c.ok) app.text(this.reasonFor(run, c, ev), x + 36, y + h - Math.round(22 * k), { size: 14, maxW: w - 50, ui: true, bold: true, color: 'rgba(150,40,50,.85)' });
       else if (c.pick === 'card') app.text('Choose a card', x + w - 14, y + 14, { size: 13, ui: true, italic: true, align: 'right', color: 'rgba(43,30,26,.6)' });
@@ -337,6 +338,7 @@ export default {
     if (mouse.wheel) pk.scroll += mouse.wheel * 0.6;
     pk.scroll = clamp(pk.scroll, 0, maxS);
     let hover = -1;
+    app.reg('scroll-picker', 0, viewTop, W, viewH, { overlay: true });
     g.save(); g.beginPath(); g.rect(0, viewTop, W, viewH); g.clip();
     pk.cards.forEach((inst, i) => {
       const cx = gx + (i % per) * (cw + gap) + cw / 2, cy = viewTop + Math.floor(i / per) * (ch + gap) + ch / 2 + 8 + yoff - pk.scroll;

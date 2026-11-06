@@ -184,6 +184,7 @@ function doAbandon() { log('abandon'); flow.abandon(); step(); }
 function botFight() {
   const run = app.shared.run;
   log('bot fight');
+  run.hp = run.maxHp; // random play has usually bled the run: give the bot a fair fight so the reward path is exercised
   const { res } = fight(run, POLICIES.careful);
   RUN.resolveFight(run, res); flow.route(); step();
 }

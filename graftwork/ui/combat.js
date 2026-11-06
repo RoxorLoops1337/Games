@@ -871,7 +871,7 @@ function drawHand(app) {
     if (idle && !isDrag && !S.q.length) { const kind = seamBadgeOf(c, dc.w); if (kind) drawSeamBadgeAt(app, kind, left + cw - 16, top + 18, dc.s); }
     if (app.reg) {
       const rx = Math.max(0, left), ry = Math.max(0, top), rw = Math.min(W, left + cw) - rx, rh = Math.min(H, top + ch) - ry;
-      if (rw > 0 && rh > 0) app.reg('hand_' + dc.uid, rx, ry, rw, rh, { layer: 'hud', group: 'hand', overlay: lifted });
+      if (rw > 0 && rh > 0) app.reg('hand_' + dc.uid, rx, ry, rw, rh, { layer: 'hud', group: 'hand', overlay: lifted || !!S.hov || !!S.sel });
     }
   }
   for (const dc of S.hand) if (dc.chip) {

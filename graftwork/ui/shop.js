@@ -127,6 +127,7 @@ export function drawModal(app, st, run, extra = {}) {
     m.scrollT = clamp(m.scrollT, 0, maxS);
     m.scroll = lerp(m.scroll, m.scrollT, clamp(dt * 14, 0, 1));
     const tith = tithedUids(run);
+    app.reg('scroll-modal', gx, gy, gw, gh, { overlay: true });
     g.save(); app.rr(gx, gy, gw, gh, 8); g.clip();
     let hover = -1;
     const rects = m.cards.map((inst, i) => {

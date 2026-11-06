@@ -2,6 +2,7 @@
 //   opts: { mode: 'view'|'pick', filter(inst)->bool, title, onPick(inst | inst[]), onCancel(), multi: true|N }
 // Pick mode: the clicked inst goes to opts.onPick AFTER the view has closed (so the caller can flow.route() cleanly).
 // Also exports reusable helpers: scrollArea, cardGrid, gaugeCells, resonanceStrip, pill.
+import { tscale } from './graft_parts.js';
 import { COL, W, H, FONT, clamp, rgba, EASE } from './core.js';
 import { drawCard, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
@@ -61,6 +62,7 @@ export function scrollArea(app, st, x, y, w, h, contentH, draw) {
   if (Math.abs(st.target - st.scroll) < 0.4) st.scroll = st.target;
   st.scroll = clamp(st.scroll, 0, max);
 
+  app.reg('scroll-view', x, y, w, h, { overlay: true }); // content scrolls and is clipped inside this box
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   draw(y - st.scroll);
   ctx.restore();
@@ -280,7 +282,12 @@ export default {
     arr.forEach((c) => { c.ok = eligible(c.inst); });
     return arr;
   },
+  // the deck view follows the text scale up to 125%
   draw(app) {
+    const ts = app.textScale; app.textScale = Math.min(tscale(app), 1.25);
+    try { this.drawDeck(app); } finally { app.textScale = ts; }
+  },
+  drawDeck(app) {
     const ctx = app.ctx, run = app.shared.run;
     this.pending = null;
     if (this.anim < 1) this.anim = Math.min(1, this.anim + app.dt / 0.16);
