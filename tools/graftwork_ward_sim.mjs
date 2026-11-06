@@ -10,9 +10,9 @@ import { hashSeed } from '../graftwork/engine/rng.js';
 import { POLICIES, fight, chooseGraft, eventScore, pickEventCard, doShop, doForge } from './graftwork_sim.mjs';
 import { tierFight } from './graftwork_tiers.mjs';
 import './graftwork_strong.mjs';
-import { WARD_TUNE, PHASES, ROOMS } from '../graftwork/data/ward.js';
+import { WARD_TUNE, PHASES, ROOMS, FLOOR } from '../graftwork/data/ward.js';
 // GW_TUNE='{"tune":{"waitHeal":6},"phases":{"night":{"enemyStr":0}},"rooms":{"rm_linen":{"heal":0.3}}}' patches the data in memory for what-if runs (nothing is written)
-if (process.env.GW_TUNE) { const t = JSON.parse(process.env.GW_TUNE); Object.assign(WARD_TUNE, t.tune || {}); for (const [k, v] of Object.entries(t.phases || {})) Object.assign(PHASES[k], v); for (const [k, v] of Object.entries(t.rooms || {})) Object.assign(ROOMS[k], v); }
+if (process.env.GW_TUNE) { const t = JSON.parse(process.env.GW_TUNE); Object.assign(WARD_TUNE, t.tune || {}); for (const [k, v] of Object.entries(t.phases || {})) Object.assign(PHASES[k], v); for (const [k, v] of Object.entries(t.rooms || {})) Object.assign(ROOMS[k], v); for (const [k, v] of Object.entries(t.floor || {})) Object.assign(FLOOR[k], v); }
 
 function mkRng(seed) { let s = hashSeed(seed) >>> 0 || 1; const next = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; return { next, int: (n) => Math.floor(next() * n), pick: (a) => a[Math.floor(next() * a.length)] }; }
 const count = (run, type) => Object.values(run.ward.rooms).filter((r) => r.type === type).length;

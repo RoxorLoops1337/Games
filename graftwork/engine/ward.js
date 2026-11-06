@@ -171,6 +171,7 @@ export function morningStart(run) {
   w.phase = 'morning';
   w.effects = w.effects.filter((e) => e.until !== 'day');
   w.freeUsed = false;
+  if (T.morningHeal && w.day > 1 && run.hp > 0) run.hp = Math.min(run.maxHp, run.hp + T.morningHeal); // a hospital: the night staff patch you up
   for (const room of Object.values(w.rooms)) {
     if (isDark(room)) continue; // off rooms pause: no timers, no aging, no produce
     if (room.quarantine > 0) { room.quarantine--; continue; } // Quarantine: no spawns, no aging

@@ -110,7 +110,7 @@ export const PREBUILT = ['rm_ward', 'rm_chapel', 'rm_sawmill'];
 
 // Tuning (design/WARD.md section 8 lists every number and why).
 export const WARD_TUNE = {
-  move: 4, hand: 5, offHp: 3, waitHeal: 5, carry: 0.5,
+  move: 4, hand: 5, offHp: 3, waitHeal: 5, morningHeal: 0, carry: 0.5,
   boardMax: 3,                  // monsters on the board at once; the rest wait as reinforcements
   goldPerExtra: 0.3,            // ward fight gold +30% per monster beyond 2 (1 monster pays 75%)
   bigFight: 4,                  // 4+ monsters: one more graft pick
