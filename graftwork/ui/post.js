@@ -56,7 +56,7 @@ export function installPost(app) {
 
   const S = { tier: 'off', ceiling: 'high', noGL: !hasDom, lost: false, gradeInit: false, dirty: true, errors: 0, auto: true, lastWant: undefined, lastNow: 0, lastChange: 0, fastSince: 0, lastGrain: 0 };
   const ring = new Float32Array(60); let ringI = 0, ringN = 0, ringSum = 0;
-  const R = { cv: null, gl: null, P: null, tex: null, texW: 0, texH: 0, T: [], levels: 0, vao: null, half: false, sw: 0, sh: 0, glW: 0, glH: 0, sLeft: '', sTop: '', sWidth: '', sHeight: '', ignoreLoss: false };
+  const R = { cv: null, gl: null, P: null, tex: null, texW: 0, texH: 0, T: [], U: [], levels: 0, vao: null, half: false, sw: 0, sh: 0, glW: 0, glH: 0, sLeft: '', sTop: '', sWidth: '', sHeight: '', ignoreLoss: false };
 
   // ---- GL resource management ----
   function compile(gl, src, type) {
@@ -82,7 +82,8 @@ export function installPost(app) {
   function destroyTargets() {
     const gl = R.gl; if (!gl) return;
     for (const t of R.T) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fb); }
-    R.T = [];
+    for (const t of R.U) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fb); }
+    R.T = []; R.U = [];
   }
   function allocTargets() {
     const gl = R.gl; destroyTargets();
@@ -96,9 +97,15 @@ export function installPost(app) {
         const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
         if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) ok = false;
         R.T.push({ tex, fb, w, h, ipx: 1 / w, ipy: 1 / h });
+        if (i < want - 1) { // upsample accumulator for this level (the smallest level is its own accumulator)
+          const tex2 = mkTex(gl); gl.texStorage2D(gl.TEXTURE_2D, 1, half ? gl.RGBA16F : gl.RGBA8, w, h);
+          const fb2 = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb2); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex2, 0);
+          if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) ok = false;
+          R.U.push({ tex: tex2, fb: fb2, w, h });
+        } else R.U.push(R.T[i]);
         w = Math.max(2, w >> 1); h = Math.max(2, h >> 1);
       }
-      if (ok) { R.levels = want; gl.bindFramebuffer(gl.FRAMEBUFFER, null); return; }
+      if (ok) { R.levels = want; R.bloomTex = R.U[0].tex; gl.bindFramebuffer(gl.FRAMEBUFFER, null); return; }
       destroyTargets();
     }
     throw new Error('post: no complete framebuffer');
@@ -128,7 +135,7 @@ export function installPost(app) {
     R.P = {
       thresh: program(gl, FS_THRESH, ['t', 'px', 'thr', 'knee']),
       down: program(gl, FS_DOWN, ['t', 'px']),
-      up: program(gl, FS_UP, ['t', 'px']),
+      up: program(gl, FS_UP, ['t', 'skip', 'px']),
       comp: program(gl, FS_COMP, ['t', 'bloom', 'bloomK', 'caK', 'vig', 'grain', 'seed', 'flashA', 'gamma', 'sat', 'flashC', 'lift', 'gain', 'res', 'swA', 'swB', 'mask', 'nMask']),
     };
     R.vao = gl.createVertexArray(); gl.bindVertexArray(R.vao);
@@ -162,7 +169,7 @@ export function installPost(app) {
     R.ignoreLoss = true;
     try { if (gl) { const ext = gl.getExtension && gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext(); } } catch (e) { /* ignore */ }
     try { if (cv && cv.parentNode) cv.parentNode.removeChild(cv); } catch (e) { /* ignore */ }
-    R.cv = null; R.gl = null; R.P = null; R.tex = null; R.T = []; R.levels = 0; R.ignoreLoss = false; S.lost = false;
+    R.cv = null; R.gl = null; R.P = null; R.tex = null; R.T = []; R.U = []; R.levels = 0; R.ignoreLoss = false; S.lost = false;
   }
   function goOff(permanent) {
     destroyGL(); post.on = false; S.tier = permanent ? 'off' : 'off'; stats.tier = 'off';
@@ -307,12 +314,13 @@ export function installPost(app) {
           gl.bindFramebuffer(gl.FRAMEBUFFER, T[i].fb); gl.viewport(0, 0, T[i].w, T[i].h);
           gl.bindTexture(gl.TEXTURE_2D, T[i - 1].tex); gl.uniform2f(P.down.px, T[i - 1].ipx, T[i - 1].ipy); gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
-        gl.useProgram(P.up.pr); gl.uniform1i(P.up.t, 0); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-        for (let i = L - 1; i > 0; i--) {
-          gl.bindFramebuffer(gl.FRAMEBUFFER, T[i - 1].fb); gl.viewport(0, 0, T[i - 1].w, T[i - 1].h);
-          gl.bindTexture(gl.TEXTURE_2D, T[i].tex); gl.uniform2f(P.up.px, T[i].ipx, T[i].ipy); gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.useProgram(P.up.pr); gl.uniform1i(P.up.t, 0); gl.uniform1i(P.up.skip, 1);
+        const U = R.U;
+        for (let i = L - 2; i >= 0; i--) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, U[i].fb); gl.viewport(0, 0, T[i].w, T[i].h);
+          gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, T[i].tex); gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, U[i + 1].tex); gl.uniform2f(P.up.px, T[i + 1].ipx, T[i + 1].ipy); gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
-        gl.disable(gl.BLEND);
       }
       // composite uniforms
       for (let i = 0; i < 4; i++) {
@@ -330,7 +338,7 @@ export function installPost(app) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, R.glW, R.glH);
       gl.useProgram(P.comp.pr);
       const u = P.comp;
-      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, T[0].tex); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.tex);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, R.U[0].tex); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, R.tex);
       gl.uniform1i(u.t, 0); gl.uniform1i(u.bloom, 1);
       gl.uniform1f(u.bloomK, bl.k); gl.uniform1f(u.caK, caK); gl.uniform1f(u.vig, vgn);
       gl.uniform1f(u.grain, grainOn ? 0.05 : 0); gl.uniform1f(u.seed, Math.floor(app.t * 24) % 997); gl.uniform2f(u.res, R.glW, R.glH);

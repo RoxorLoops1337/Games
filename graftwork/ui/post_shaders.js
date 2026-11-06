@@ -23,14 +23,14 @@ void main(){ vec3 c = texture(t, uv).rgb * 4.;
   c += texture(t, uv + px * vec2(-1., 1.)).rgb;  c += texture(t, uv + px * vec2(1., 1.)).rgb;
   o = vec4(c * .125, 1.); }`;
 
-// Tent upsample, blended additively into the next larger level.
-export const FS_UP = HEAD + `uniform sampler2D t; uniform vec2 px;
+// Tent upsample of the smaller level, added to the same-size downsample (`skip`); no blending, so no read-modify-write.
+export const FS_UP = HEAD + `uniform sampler2D t, skip; uniform vec2 px;
 void main(){
   vec3 c = texture(t, uv + px * vec2(-1., 0.)).rgb + texture(t, uv + px * vec2(1., 0.)).rgb
          + texture(t, uv + px * vec2(0., -1.)).rgb + texture(t, uv + px * vec2(0., 1.)).rgb;
   c += (texture(t, uv + px * vec2(-.5, -.5)).rgb + texture(t, uv + px * vec2(.5, -.5)).rgb
       + texture(t, uv + px * vec2(-.5, .5)).rgb + texture(t, uv + px * vec2(.5, .5)).rgb) * 2.;
-  o = vec4(c * (1. / 12.), 1.); }`;
+  o = vec4(c * (1. / 12.) + texture(skip, uv).rgb, 1.); }`;
 
 // Composite. swA[i] = (x, y, radius, amp) in uv / height units (amp 0 = slot free), swB[i].x = ring width.
 // mask[i] = (x0, y0, x1, y1) in uv; inside (plus a 10 logical px feather) warp and aberration are zeroed and bloom is damped.

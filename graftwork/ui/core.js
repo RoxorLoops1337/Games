@@ -202,7 +202,7 @@ export function createApp(canvas, opts = {}) {
   app.tooltip = (title, text, o = NO) => { app.tip = { title, text, color: o.color, lines: o.lines, o }; };
   function drawTip() {
     const tip = app.tip; if (!tip) return;
-    if (renderTip(app, tip) !== false) return;
+    if (!app.forceTipFallback && renderTip(app, tip) !== false) return; // forceTipFallback: tests and debugging
     const maxW = 300, pad = 12, lh = app.sz(20), tsz = app.sz(19);
     const body = tip.lines ? tip.lines.join('\n') : (tip.text || '');
     const bl = body ? app.wrap(body, maxW, 16, { ui: true }) : [];
