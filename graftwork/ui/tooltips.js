@@ -26,37 +26,37 @@ export const KEYWORDS = {
   Bleed: K('#d12a44', 'circle', 'Lose HP at turn start, then Bleed drops by 1. Ignores Block.'),
   Poison: K('#8fd14f', 'circle', 'Lose HP at turn start (ignores Block), then Poison rises by 1 up to its cap.'),
   Brittle: K('#cfa3a3', 'tri', 'Block you gain shatters: when an attack empties it, you take 25% of the broken amount.'),
-  Tithe: K('#b3263a', 'cross', 'A Bare card taken by Strain. It fights at 75% numbers this combat.'),
+  Tithe: K('#b3263a', 'cross', 'A Bare card taken by Strain (too much graft Weight). It fights at 75% numbers (-25%) this combat.'),
   Strain: K('#ff7a7a', 'cross', 'Graft Weight over your Budget. Each point lands one Tithe on a Bare card.'),
   Backfire: K('#c0713a', 'cross', 'Strain with no Bare card left to take it. Every 2 overflow jams a grafted card in your opening hand.'),
   Overload: K('#f2c14e', 'star', 'A third graft. Damage and Block x1.5, and 25% to Shatter on its first play each combat.'),
   Shatter: K('#f2c14e', 'star', 'The card resolves, then is destroyed for the run.'),
   Temper: K('#e8dcc4', 'hex', 'Forge: fuses a card\'s patches into it for good. Boons and prices stay, the slots empty.'),
-  Echo: K('#7fd1e0', 'diamond', 'Your next card is played twice. Draw, energy and gold do not repeat.'),
+  Echo: K('#7fd1e0', 'diamond', 'Your next cards are played twice (Echo 2 = the next 2 cards). Draw, energy and gold do not repeat.'),
   Exhaust: K('#a79bb5', 'hex', 'Removed for the rest of this combat once played.'),
   Retain: K('#7fcf8a', 'hex', 'Stays in your hand at end of turn.'),
   Innate: K('#7fcf8a', 'hex', 'Starts in your opening hand.'),
   Ethereal: K('#a79bb5', 'hex', 'Exhausts if it is still in your hand at end of turn.'),
   Unplayable: K('#9aa0a6', 'cross', 'Cannot be played.'),
   Thread: K('#e8dcc4', 'diamond', 'Your hand is a thread. Cards that share a school extend the Line. Break the Line to cash it in.'),
-  Line: K('#e8dcc4', 'diamond', 'The chain of cards played this turn that share a school. Max 5 knots. It cashes in when cut or at turn end.'),
-  Knot: K('#e8dcc4', 'circle', 'One link in the Line. Some cards and grafts scale per knot.'),
-  Stitch: K('#e8dcc4', 'circle', 'What a cut pays out: knots minus 1, up to 4. Each stitch pays in the Line\'s top school.'),
-  Cut: K('#e8dcc4', 'tri', 'A card of a new school ends the Line and pays its stitches. A new Line starts at 1 knot.'),
+  Line: K('#e8dcc4', 'diamond', 'The chain of cards you play this turn that share a school: each one adds a Knot (max 5). It pays out when it is cut or when your turn ends.'),
+  Knot: K('#e8dcc4', 'circle', 'One card in the Line. A longer Line pays more when cut, and some cards and grafts count Knots.'),
+  Stitch: K('#e8dcc4', 'circle', 'What a Cut pays out: Knots minus 1 (max 4). Each Stitch gives the bonus of the Line\'s top school.'),
+  Cut: K('#e8dcc4', 'tri', 'Playing a card of a different school ends the Line and pays its Stitches. That card starts a new Line at 1 Knot.'),
   Slack: K('#b9b09a', 'square', 'A card with no school. It changes nothing: the Line neither grows nor breaks.'),
-  Tied: K('#e8dcc4', 'hex', 'A Tied Line carries over to the next turn at full value. A Tempered card is Tied: it acts as Slack and never cuts.'),
-  Frayed: K('#d8a066', 'cross', 'A jammed card is Frayed. It acts as Slack this turn.'),
+  Tied: K('#e8dcc4', 'hex', 'A Tied Line is kept for the next turn at full value instead of paying out. A Tempered card is Tied: it counts as Slack and never cuts.'),
+  Frayed: K('#d8a066', 'cross', 'A jammed card is Frayed: it counts as Slack this turn, so it neither extends nor cuts the Line.'),
   Claim: K('#c0713a', 'cross', 'The Matron takes your most grafted card for the fight: it fights at -25%, like a Tithe. A Tempered card cannot be Claimed.'),
   Ringing: K('#a79bb5', 'hex', 'A junk card. Unplayable and Ethereal: it clogs your hand, then fades if it is still there at end of turn.'),
   Weight: K('#d6c7a6', 'square', 'What a graft counts against your Budget (1 to 3).'),
   Budget: K('#d6c7a6', 'square', 'How much graft Weight the deck carries without Strain.'),
-  Resonance: K('#7fd1e0', 'star', 'A bonus for playing cards of matching schools together.'),
+  Resonance: K('#7fd1e0', 'star', 'A deck-wide bonus for carrying many grafts of one school: it unlocks at 3 grafts and again at 6.'),
   Strength: K('#ff9a6a', 'tri', 'Attacks deal this much extra damage.'),
   Dexterity: K('#7fd1e0', 'tri', 'Block gained is increased by this much.'),
   Thorns: K('#c9a227', 'tri', 'Attackers take this much damage.'),
 };
 // Rules words that are not statuses: types, schools, tiers and the loose words of the rules text.
-KEYWORDS.Jam = K('#d8a066', 'cross', 'A jammed card costs 1 more and acts as Slack (Frayed) this turn. It clears at end of turn.');
+KEYWORDS.Jam = K('#d8a066', 'cross', 'Jammed: the card costs 1 more and counts as Slack (Frayed) this turn. The jam clears at the end of the turn.');
 KEYWORDS.Bare = K('#d6c7a6', 'square', 'A card with no grafts (junk does not count). Strain lands its Tithe on the cheapest, oldest Bare card.');
 KEYWORDS.Pierce = K('#bcd0d8', 'tri', 'Damage that ignores Block and goes straight to HP.');
 KEYWORDS['X cost'] = K('#7fd1e0', 'diamond', 'Spends all your remaining Energy when played. The effect repeats or scales with the Energy spent.');
@@ -100,14 +100,30 @@ export const WARD_GLOSSARY = {
   Chapel: K('#3E7C74', 'diamond', 'Event room. An event every 4 days. The phase you walk in at changes how it leans.'),
   Dispensary: K('#5a8fd8', 'square', 'The shop as a room. Restocks every 3 days. Also sells building plans and strikes one for 50 gold.'),
   Workshop: K('#E8571F', 'hex', 'The forge as a room. Recharges every 3 days.'),
-  'Linen Room': K('#6a9a6a', 'circle', 'Clean sheets every 2 days: walk in to heal 25% of your max HP.'),
+  'Linen Room': K('#6a9a6a', 'circle', 'Clean sheets every 2 days: walk in to heal 30% of your max HP.'),
   Sawmill: K('#8F4A2A', 'square', '+2 wood each morning while lit.'),
   Quarry: K('#6f6a60', 'square', '+2 stone each morning while lit.'),
   'Counting House': K('#B8922A', 'square', '+15 gold each morning while lit.'),
   Generator: K('#b8c23a', 'star', '+2 power capacity. Uses none.'),
   Corridor: K('#8a7a5c', 'square', 'A cheap connector. Never spawns anything, never goes dark.'),
+  Pharmacy: K('#5a8fd8', 'circle', 'Service room. Every 3 days while lit it brews a potion (15 gold if your belt is full). No walking needed.'),
+  Library: K('#3E7C74', 'diamond', 'Service room. Each morning while lit, a 25% chance to upgrade a random card in your deck.'),
+  Morgue: K('#6f6a60', 'square', 'While lit, every monster you fight leaves 1 more stone.'),
+  Kitchen: K('#e0a050', 'circle', 'While lit, dinner draws 2 more cards on the first turn of evening fights instead of 1.'),
+  Boiler: K('#b8c23a', 'star', 'Uses no power. Adds 1 power capacity for every two lit Wards.'),
+  Laundry: K('#6a9a6a', 'circle', 'Service room. Every 2 days while lit it washes one junk card out of your deck.'),
+  'Isolation Ward II': K('#C9A227', 'tri', 'Elite room. An elite every 3 days, always Level 2. Uses 2 power.'),
+  Quarantine: K('#9aa0a6', 'cross', 'A room is cleared and stops spawning for 2 days.'),
+  Fumigate: K('#9aa0a6', 'cross', 'Kills every monster waiting in a Ward. They pay nothing.'),
+  'Double Doors': K('#8a7a5c', 'square', 'Walking through the room costs no MOVE. Stopping in it still counts.'),
+  Soundproofing: K('#8fb4d1', 'diamond', 'No night modifiers in the room: no night Strength, gold bonus or relic.'),
+  'Fire Door': K('#E8571F', 'tri', 'This Ward holds at most 3 monsters and leaves double wood and stone.'),
+  Floodlights: K('#FFE9A0', 'circle', 'No night modifiers anywhere today.'),
   Reinforcements: K('#ff9a8a', 'tri', 'Only 3 monsters fight at once. When one dies, the next in line from the Ward steps in.'),
   'Level 2 elite': K('#F2C14E', 'star', 'An Isolation elite left 3 days: +30% HP and +2 Strength, and one more relic to choose from.'),
+  Die: K('#e0c27a', 'square', 'Each walk phase you roll your die (D4 to start). Loaded Dice and Bone Dice add sides.'),
+  Roll: K('#e0c27a', 'square', 'The number you rolled is the longest route you can plan this phase. Morning Rounds, Weighted Die and the Noon Dial add to it.'),
+  Route: K('#B3263A', 'tri', 'Click the rooms next to you one by one, up to your roll, never the same room twice. Every room you enter triggers in order. Click the last step to undo it, then Go.'),
   'Dark room': K('#9aa0a6', 'cross', 'A room switched off. Its timers pause and what is inside sleeps. Walking through costs 3 HP (Lamp Oil saves it). Corridors never go dark.'),
 };
 // glossaryEntry(term): { title, text, color, glyph } for a Thread word, keyword, status name or status id; null if unknown.
@@ -122,12 +138,12 @@ export function glossaryEntry(term) {
 // 'knot' and 'knots' are written in lower case in boon text ("counts as 2 knots"): they find the Knot entry too
 const canon = (w) => (w === 'knot' ? 'Knot' : w);
 // Loose words are matched in any case, the CAPS tags (tier tags, weight pills, the AFTER panel) only in capitals.
-const LOOSE = { jam: 'Jam', jams: 'Jam', jammed: 'Jam', bare: 'Bare', pierce: 'Pierce', pierces: 'Pierce', piercing: 'Pierce', 'x cost': 'X cost', 'cost x': 'X cost' };
+const LOOSE = { cut: 'Cut', cuts: 'Cut', cutting: 'Cut', jam: 'Jam', jams: 'Jam', jammed: 'Jam', bare: 'Bare', pierce: 'Pierce', pierces: 'Pierce', piercing: 'Pierce', 'x cost': 'X cost', 'cost x': 'X cost' };
 const CAPS = { SAFE: 'Safe', GREEDY: 'Greedy', WEIRD: 'Weird', AFTER: 'After', W1: 'Weight', W2: 'Weight', W3: 'Weight' };
 const NOT_PLAIN = new Set(['Jam', 'Bare', 'Pierce', 'X cost', 'Safe', 'Greedy', 'Weird', 'After']);
 const NAMES = [...Object.keys(KEYWORDS).filter((n) => !NOT_PLAIN.has(n)), 'knot'].sort((a, b) => b.length - a.length);
 const KW_RE = new RegExp('\\b(' + NAMES.join('|') + ')(?:s|ed|d|ing)?\\b', 'g');
-const LOOSE_RE = /\b(jam(?:s|med)?|bare|pierc(?:e|es|ing)|x cost|cost x)\b/gi;
+const LOOSE_RE = /\b(cut(?:s|ting)?|jam(?:s|med)?|bare|pierc(?:e|es|ing)|x cost|cost x)\b/gi;
 const CAPS_RE = /\b(SAFE|GREEDY|WEIRD|AFTER|W[123])\b/g;
 // scan(line): every keyword hit in a string, in order, without overlaps: [{ i, len, name, caps }]
 function scan(line) {
@@ -157,10 +173,11 @@ export function keywordsIn(lines) {
 // then schools, then card types and basics (Block, Attack...). Each term once.
 const BASIC = new Set(['Block', 'Attack', 'Skill', 'Power', 'Junk', 'Energy']);
 const TAGS = new Set(['Safe', 'Greedy', 'Weird', 'After', 'Weight', 'Budget']);
-const rank = (name) => (BASIC.has(name) ? 3 : SCHOOLS_BY_NAME[name] ? 2 : TAGS.has(name) ? 1 : 0);
+const rank = (name) => (TAGS.has(name) ? 4 : BASIC.has(name) ? 3 : SCHOOLS_BY_NAME[name] ? 2 : 0); // statuses and rules words, then schools, basics, and last the tier tag and weight
 const SCHOOLS_BY_NAME = {}; for (const sc of Object.values(SCHOOLS)) SCHOOLS_BY_NAME[sc.name] = sc;
 export function defineTerm(name, n) {
   const k = KEYWORDS[name], d = STATUS_BY_NAME[name];
+  if (name === 'Echo' && n >= 1) return `Your next ${n === 1 ? 'card is' : n + ' cards are'} played twice. Draw, energy and gold do not repeat.`;
   if (name === 'Weight' && n >= 1 && n <= 3) return `Weight ${n}: this patch counts ${n} against your Budget. Over the Budget is Strain.`;
   if (d && typeof n === 'number' && Number.isFinite(n)) {
     try { let t = String(d.desc(n)); if (k && /Ignores Block/.test(k.text) && !/Block/.test(t)) t += ' Ignores Block.'; return t; } catch (e) { /* fall through */ }
@@ -181,7 +198,7 @@ export function glossaryFor(input, o = {}) {
   const found = new Map(); let order = 0;
   const add = (name, n) => { const f = found.get(name); if (f) { if (f.n === undefined && n !== undefined) f.n = n; return; } found.set(name, { name, n, order: order++ }); };
   for (const ln of flatStrings(input)) for (const h of scan(ln)) add(h.name, numAround(ln, h));
-  for (const ln of flatStrings(o.weak)) for (const h of scan(ln)) if (!TAGS.has(h.name)) add(h.name, numAround(ln, h)); // the tip's own prose: Weight / Budget there are already explained in place
+  for (const ln of flatStrings(o.weak)) for (const h of scan(ln)) add(h.name, numAround(ln, h)); // the tip's own prose: its rules words need a definition too (Weight and Budget included)
   for (const id of o.ids || []) { const d = STATUSES[id]; if (d) add(d.name, undefined); }
   if (o.types) for (const t of [].concat(o.types)) { const nm = String(t)[0].toUpperCase() + String(t).slice(1); if (KEYWORDS[nm]) add(nm, undefined); }
   if (o.school && SCHOOLS[o.school]) add(SCHOOLS[o.school].name === 'Echo' ? 'Echo' : SCHOOLS[o.school].name, undefined);
@@ -197,7 +214,7 @@ export function glossaryFor(input, o = {}) {
 // text + the definitions of its rules words, for the phone info card ("Gilt 4: Gain 4 gold at the end of combat.")
 export function withGloss(text, o = {}) { const g = glossaryText([text, o.gloss || []], o); return g ? `${text}\n\n${g}` : text; }
 // Plain-text form for the touch info card: "Gilt 4: Gain 4 gold at the end of combat."
-export function glossaryText(input, o = {}) { return glossaryFor(input, o).map((g) => `${g.title}: ${g.definition}`).join('\n'); }
+export function glossaryText(input, o = {}) { return glossaryFor(input, { max: GLOSS_MAX, ...o }).map((g) => `${g.title}: ${g.definition}`).join('\n'); }
 // Everything a card face says in rules words: its lines, the Boon and Price of every graft on it, X cost, Overload.
 export function specGloss(spec) {
   if (!spec) return [];
@@ -350,7 +367,7 @@ export function cardTipStack(spec, c, o = {}) {
   if (spec.overload) extra.push('Overload');
   if (o.tithed) extra.push('Tithe');
   if (spec.cost === 'X') extra.push('X cost');
-  const gl = glossaryFor([lines, extra], { max: GLOSS_MAX, school: spec.school, types: spec.type });
+  const gl = glossaryFor([specGloss(spec), extra], { max: GLOSS_MAX, school: spec.school, types: spec.type }); // the card's lines AND the Boon / Price words of every graft on it
   const kws = gl.map((g) => g.term);
   const p1 = gl.map((g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph }));
   const p2 = [];
@@ -360,7 +377,7 @@ export function cardTipStack(spec, c, o = {}) {
   walkOps(spec.fx, (op) => { if (op.s && STATUSES[op.s] && !seen.has(op.s) && !kws.includes(STATUSES[op.s].name)) { seen.add(op.s); p2.push(statusSection(op.s, typeof op.n === 'number' ? op.n : undefined)); } });
   const out = [];
   if (p1.length) out.push(p1);
-  if (p2.length) out.push(p2.slice(0, 4));
+  if (p2.length) out.push(p2);
   return out;
 }
 
@@ -385,17 +402,20 @@ function measureSection(app, s, bw, cfg) {
   const wh = why.reduce((a, w) => a + w.L.lines.length * w.L.lineH + 3, 0);
   return { s, gx, title, body, bodyO, why, whyO, th, bh, wh, h: th + cfg.tg + bh + wh };
 }
+// Panels are cut at SECTION boundaries so that each fills what is left of its column (colH = the column's height so far): the block gets as many columns as it needs, never more.
 function buildPanels(app, panels, W, cfg, availH) {
-  const bw = W - PAD * 2, out = [];
+  const pad = cfg.pad || PAD, bw = W - pad * 2, out = []; let colH = 0;
   for (const p of panels) {
     const secs = p.map((s) => measureSection(app, s, bw, cfg));
-    let cur = [], h = PAD * 2;
+    let cur = [], h = pad * 2;
+    const close = () => { out.push({ secs: cur, h, w: W }); colH = (colH ? colH + GAP : 0) + h; cur = []; h = pad * 2; };
     for (const m of secs) {
-      const add = (cur.length ? cfg.gap : 0) + m.h;
-      if (cur.length && h + add > availH) { out.push({ secs: cur, h, w: W }); cur = []; h = PAD * 2; }
+      const room = availH - (colH ? colH + GAP : 0);
+      if (!cur.length && colH && pad * 2 + m.h > room) colH = 0; // the panel starts a new column
+      else if (cur.length && h + cfg.gap + m.h > room) { close(); if (pad * 2 + m.h > availH - colH - GAP) colH = 0; }
       h += (cur.length ? cfg.gap : 0) + m.h; cur.push(m);
     }
-    if (cur.length) out.push({ secs: cur, h, w: W });
+    if (cur.length) close();
   }
   return out;
 }
@@ -411,28 +431,30 @@ function fitBlock(app, panels, availW, availH) {
   const phone = app.scale < 0.95;
   const boost = Math.max(1, app.sz(BO) / BO);
   const W0 = phone ? Math.round(Math.max(MAXW, Math.min(0.40 * 1280, MAXW * boost))) : MAXW;
+  const small = { ti: 16, bo: 15, gap: 4, tg: 2 }, tiny = { ti: 15, bo: 14, gap: 3, tg: 1, pad: 8 };
   const tries = [
     { W: W0, cfg: { ti: TI, bo: BO, gap: GAP, tg: 5 } },
-    { W: W0, cfg: { ti: 16, bo: 15, gap: 4, tg: 2 } },
-    { W: Math.min(Math.round(W0 * 1.4), 520), cfg: { ti: 16, bo: 15, gap: 4, tg: 2 } },
-  ];
-  let last = null;
-  for (const t of tries) {
-    const W = Math.min(t.W, Math.max(200, availW));
-    const ps = buildPanels(app, panels, W, t.cfg, availH), cols = flowColumns(ps, availH);
-    const w = cols.reduce((a, c) => a + c.w, 0) + (cols.length - 1) * GAP, h = Math.max(...cols.map((c) => c.h));
-    last = { cols, w, h, cfg: t.cfg, ok: w <= availW + 0.5 && h <= availH + 0.5 };
-    if (last.ok) return last;
-  }
-  // last resort: drop trailing sections (the least important definitions) until it fits
-  let rest = panels.map((p) => p.slice());
-  while (!last.ok) {
-    let i = rest.length - 1; while (i >= 0 && !rest[i].length) i--;
-    if (i < 0 || (rest.flat().length <= 1)) break;
-    rest[i].pop(); if (!rest[i].length) rest.pop();
-    const W = last.cols[0].w, ps = buildPanels(app, rest, W, last.cfg, availH), cols = flowColumns(ps, availH);
-    last = { cols, w: cols.reduce((a, c) => a + c.w, 0) + (cols.length - 1) * GAP, h: Math.max(...cols.map((c) => c.h)), cfg: last.cfg };
-    last.ok = last.w <= availW + 0.5 && last.h <= availH + 0.5;
+    { W: W0, cfg: small },
+    { W: Math.min(Math.round(W0 * 1.4), 520), cfg: small },
+    { W: Math.floor((availW - GAP) / 2), cfg: small }, // two columns, then three, before anything is cut
+    { W: Math.floor((availW - GAP) / 2), cfg: tiny },
+    { W: Math.floor((availW - 2 * GAP) / 3), cfg: tiny },
+    { W: Math.min(Math.round(W0 * 1.7), 620), cfg: small },
+    { W: Math.min(Math.round(W0 * 2), 760), cfg: tiny },
+  ].filter((t) => t.W >= 200);
+  const run = (W, cfg, ps) => { W = Math.min(W, Math.max(200, availW)); const bp = buildPanels(app, ps, W, cfg, availH), cols = flowColumns(bp, availH); const w = cols.reduce((a, c) => a + c.w, 0) + (cols.length - 1) * GAP, h = Math.max(...cols.map((c) => c.h)); return { cols, w, h, cfg, W, ok: w <= availW + 0.5 && h <= availH + 0.5 }; };
+  let last = null, narrow = null; // narrow: the attempt that fits the width with the least height (where the last resort cuts words)
+  for (const t of tries) { last = run(t.W, t.cfg, panels); if (last.ok) return last; if (last.w <= availW + 0.5 && (!narrow || last.h < narrow.h)) narrow = { h: last.h, t }; }
+  // Last resort, never a dropped definition: shorten the longest trailing definition by whole words, with a soft ellipsis (the info card keeps the full text).
+  const two = Math.floor((availW - GAP) / 2), base = (narrow && narrow.t) || { W: two >= 200 ? two : Math.max(200, availW), cfg: tiny };
+  let rest = panels.map((p) => p.map((s) => ({ ...s })));
+  last = run(base.W, base.cfg, rest);
+  for (let i = 0; i < 80 && !last.ok; i++) {
+    let best = null;
+    rest.forEach((p, pi) => p.forEach((s, si) => { if ((pi > 0 || si > 0) && s.text && s.text.length > 24 && (!best || s.text.length >= best.s.text.length)) best = { s }; }));
+    if (!best) break;
+    const words = best.s.text.replace(/…$/, '').split(' '); words.length = Math.max(3, Math.floor(words.length * 0.85)); best.s.text = words.join(' ').replace(/[,.:;]$/, '') + '…';
+    last = run(base.W, base.cfg, rest); last.cut = true;
   }
   return last;
 }
@@ -463,7 +485,10 @@ function place(app, a, w, h, B) {
 }
 export function tipBounds(app) { const s = app.safe || { l: 0, t: 0, r: 0, b: 0 }; return { x0: EDGE + s.l, y0: EDGE + s.t, x1: 1280 - EDGE - s.r, y1: 720 - EDGE - s.b }; }
 function drawStack(app, stack, anchor) {
-  const ctx = app.ctx, B = tipBounds(app);
+  const ctx = app.ctx;
+  let B = tipBounds(app);
+  // anchor.region = { x0, y0, x1, y1 }: the only part of the stage the floating panel may use (a screen keeps it off its button column)
+  if (anchor.region) { const g = anchor.region; B = { x0: Math.max(B.x0, g.x0), y0: Math.max(B.y0, g.y0), x1: Math.min(B.x1, g.x1), y1: Math.min(B.y1, g.y1) }; }
   const secs = stack.slice(0, 2).map((p) => p.slice());
   if (stack.length > 2) secs[1] = [...stack[1], { title: 'Also', text: stack.slice(2).flat().map((s) => s.title).join(', '), color: COL.vellum2 }];
   // anchor.band = { x, y, bottom, dir }: a fixed band beside the item (+1 right / -1 left of x) the panels fill column by column. When the stack
@@ -475,12 +500,13 @@ function drawStack(app, stack, anchor) {
     const by = Math.max(B.y0, band.y), availH = Math.min(band.bottom, B.y1) - by;
     if (availW > 200 && availH > 100) {
       const f = fitBlock(app, secs, availW, availH);
-      if (f.ok) { blk = f; rect = clearReserved({ x: band.dir > 0 ? band.x : band.x - f.w, y: by, w: f.w, h: f.h }, B); }
+      if (f.ok && !f.cut) { blk = f; rect = clearReserved({ x: band.dir > 0 ? band.x : band.x - f.w, y: by, w: f.w, h: f.h }, B); }
     }
   }
   if (!blk) {
     blk = fitBlock(app, secs, B.x1 - B.x0, B.y1 - B.y0);
     rect = place(app, anchor, blk.w, blk.h, B);
+    if (anchor.region) rect = { ...rect, x: Math.max(B.x0, Math.min(B.x1 - rect.w, rect.x)), y: Math.max(B.y0, Math.min(B.y1 - rect.h, rect.y)) };
   }
   const L = { rect, panels: [], anchor, frame: app.frame };
   app._tipDraw = true;
@@ -491,15 +517,16 @@ function drawStack(app, stack, anchor) {
       const first = p.secs[0] && p.secs[0].s, W = p.w, pl = { x: cx, y, w: W, h: p.h, secs: [] };
       app.panel(cx, y, W, p.h, { fill: 'rgba(14,12,10,.97)', stroke: (first && first.color) || COL.lamp });
       app.reg('tip' + idx++, cx, y, W, p.h, { layer: 'overlay', overlay: true, group: 'tip' });
-      let yy = y + PAD;
+      const pad = blk.cfg.pad || PAD;
+      let yy = y + pad;
       p.secs.forEach((m, si) => {
         const s = m.s, sy = yy;
-        if (s.glyph) drawGlyph(ctx, s.glyph, cx + PAD + 7, yy + m.title.lineH * 0.5, 13, s.color || COL.lamp);
-        app.text(s.title || ' ', cx + PAD + m.gx, yy, { size: blk.cfg.ti, bold: true, maxW: W - PAD * 2 - m.gx, color: s.color || COL.lamp });
+        if (s.glyph) drawGlyph(ctx, s.glyph, cx + pad + 7, yy + m.title.lineH * 0.5, 13, s.color || COL.lamp);
+        app.text(s.title || ' ', cx + pad + m.gx, yy, { size: blk.cfg.ti, bold: true, maxW: W - pad * 2 - m.gx, color: s.color || COL.lamp });
         yy += m.th + blk.cfg.tg;
-        if (m.body) { app.text(s.text, cx + PAD, yy, Object.assign({ color: COL.vellum }, m.bodyO)); yy += m.bh; }
-        for (const w of m.why) { app.text(w.str, cx + PAD, yy + 3, Object.assign({ color: COL.lamp }, m.whyO)); yy += w.L.lines.length * w.L.lineH + 3; }
-        pl.secs.push({ x: cx + PAD, y: sy, w: W - PAD * 2, h: yy - sy, title: s.title });
+        if (m.body) { app.text(s.text, cx + pad, yy, Object.assign({ color: COL.vellum }, m.bodyO)); yy += m.bh; }
+        for (const w of m.why) { app.text(w.str, cx + pad, yy + 3, Object.assign({ color: COL.lamp }, m.whyO)); yy += w.L.lines.length * w.L.lineH + 3; }
+        pl.secs.push({ x: cx + pad, y: sy, w: W - pad * 2, h: yy - sy, title: s.title, text: s.text || '', why: (s.why || []).slice() }); // text: what was really drawn (tests compare it with the full definition)
         yy += blk.cfg.gap;
       });
       L.panels.push(pl); y += p.h + GAP;
@@ -511,7 +538,7 @@ function drawStack(app, stack, anchor) {
 // Every plain or single-panel tip appends a glossary panel: one short definition per rules word the item names (max 3, most important first,
 // live numbers where the text has them). Sources: the tip's own text and lines, plus tip.o.gloss (strings the tile shows but the tip does not repeat,
 // such as a graft's Boon and Price). Words already titled in the tip are not repeated. tip.o.glossOnly: the glossary IS the tip.
-const GLOSS_MAX = 3;
+const GLOSS_MAX = 14; // every rules word the item names gets its definition: the panel grows (columns, wider, smaller type), it never drops one
 function sectionsText(stack) { const out = []; for (const p of stack) for (const s of p) { out.push(s.text || ''); for (const w of s.why || []) out.push(w); } return out; }
 function titleNames(stack) { const sk = new Set(); for (const p of stack) for (const s of p) for (const h of scan(s.title || '')) if (h.i === 0 && /^\s*[+-]?\d*\s*$/.test(String(s.title).slice(h.len))) sk.add(h.name); return sk; } // only a title that IS the word ('Burn 3'); 'Leaf Gilt' names a graft, not Gilt
 function glossPanel(stack, tip) {

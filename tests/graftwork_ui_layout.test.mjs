@@ -69,6 +69,10 @@ function checkTip(h, add) {
     });
   }
   for (let i = 0; i < L.panels.length; i++) for (let j = i + 1; j < L.panels.length; j++) if (hit(L.panels[i], L.panels[j])) add('tip-panels-overlap', `${i} x ${j}`);
+  // a tip never drops a definition: a soft ellipsis in a definition means the ladder had to cut words (the sweeps fit everything they hover on)
+  for (const p of L.panels) for (const sc of p.secs) if (/…$/.test(sc.text || '')) add('tip-definition-cut', `"${sc.title}": ${String(sc.text).slice(-30)}`);
+  // on the graft offer the floating patch panel keeps off the patch column and the tray buttons
+  for (const id of ['graft-patch0', 'graft-patch1', 'graft-patch2', 'graft-patch3', 'graft-reroll', 'graft-decline', 'graft-sew']) { const rg = LAYOUT.getAll().find((q) => q.id === id); if (rg && L.anchor && L.anchor.region && hit(r, rg)) add('tip-covers-graft-ui', id); }
   const T = h.tipTexts;
   for (const t of T) {
     if (t.trunc) add('tip-text-truncated', t.s);

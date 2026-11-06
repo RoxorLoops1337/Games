@@ -5,7 +5,7 @@ import * as RUN from '../graftwork/engine/run.js';
 import { cardSpec } from '../graftwork/engine/cards.js';
 import { cardLines, opText } from '../graftwork/engine/text.js';
 import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, ENEMIES, STATUSES, SCHOOLS } from '../graftwork/data/index.js';
-import { glossaryFor, glossaryEntry, keywordsIn, KEYWORDS, tipSections, defineTerm } from '../graftwork/ui/tooltips.js';
+import { specGloss, glossaryFor, glossaryEntry, keywordsIn, KEYWORDS, tipSections, defineTerm } from '../graftwork/ui/tooltips.js';
 import { getAll } from '../graftwork/ui/layout_registry.js';
 import graft from '../graftwork/ui/graft.js';
 import shop from '../graftwork/ui/shop.js';
@@ -13,6 +13,9 @@ import reward from '../graftwork/ui/reward.js';
 import forge from '../graftwork/ui/forge.js';
 import event from '../graftwork/ui/event.js';
 import deckview from '../graftwork/ui/deckview.js';
+import * as audioMod from '../graftwork/ui/audio.js';
+import combat from '../graftwork/ui/combat.js';
+import { GRAFT_LIST } from '../graftwork/data/index.js';
 
 // ---- (1) the resolver ----
 const REQUIRED = ['Gilt', 'Burn', 'Bleed', 'Poison', 'Charge', 'Echo', 'Strength', 'Dexterity', 'Weak', 'Vulnerable', 'Frail', 'Thorns', 'Ritual', 'Plated', 'Barricade', 'Intangible', 'Regen', 'Marked', 'Stunned',
@@ -144,5 +147,113 @@ function expectTip(app, label, sources, opts = {}) {
   }
   assert.ok(found, 'deck view: hovering a Leaf Gilt card explains Gilt');
   void sp;
+}
+
+// ---- (4) COMPLETENESS: every hover tip names the full Boon / Price (or the rules text it is about) AND defines every rules word in it, at desktop and phone scales ----
+// A tip never drops a definition: the panel grows (columns, wider, smaller type). The drawn sections (app.tipLayout) are compared with what glossaryFor says the item's own text needs.
+const SCALES = [1, 0.64, 0.54];
+async function bootScaled(run, name, mod, scale, extra = {}) {
+  const app = await makeApp({ run, meta: { settings: { tips: false } }, audio: { sfx() {}, music() {} }, ...extra });
+  if (scale < 1) { app.scale = scale; app.minPx = 11; }
+  app.ctx.measureText = (t) => { const m = /(\d+(?:\.\d+)?)px/.exec(String(app.ctx.font || '')); const sz = m ? +m[1] : 16; return { width: String(t).length * sz * (/bold/.test(String(app.ctx.font || '')) ? 0.56 : 0.52) }; };
+  app.register(name, mod); app.register('other', { draw() {} }); app.register('deckview', deckview);
+  app.shared.flow = { route() {}, openDeck() {}, META: null };
+  app.go(name, { run }); frames(app, 90);
+  return app;
+}
+const hit = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 1 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 1;
+// the terms an item's own sources need, resolved exactly as the tip does (without the max-3 cap)
+const needed = (tip, extra = []) => { const o = tip.o || {}; return glossaryFor([tip.text || '', tip.lines || [], o.gloss || [], extra], { max: 99, school: o.school, types: o.types, ids: o.ids, terms: o.terms }); };
+function tipComplete(app, label, { must = [], extra = [], titled = [], src = null, school, types } = {}) {
+  const tip = app.tip || { o: { school, types } }, L = app.tipLayout; // combat HUD tips are queued (no app.tip): pass src, the item's own sources
+  assert.ok((app.tip || src) && L, `${label}: a tip is drawn`);
+  const secs = L.panels.flatMap((p) => p.secs);
+  const all = secs.map((x) => `${x.title}\n${x.text}\n${(x.why || []).join('\n')}`).join('\n');
+  for (const m of must) assert.ok(all.includes(m), `${label}: tip says "${m}"\n--- drawn:\n${all}`);
+  for (const g of (src ? glossaryFor([src, extra], { max: 99, school, types }) : needed(tip, extra))) {
+    if (titled.includes(g.term) || (tip.title && tip.title.replace(/\s*\d+$/, '') === g.term)) continue;
+    const sec = secs.find((x) => x.title.startsWith(g.term) && x.text.includes(g.definition));
+    assert.ok(sec, `${label}: tip defines ${g.term} in full ("${g.definition}")\n--- drawn:\n${all}`);
+  }
+  assert.ok(!/…/.test(all) || false, `${label}: no definition was cut with an ellipsis`);
+  const r = L.rect;
+  assert.ok(r.x >= 5.5 && r.y >= 5.5 && r.x + r.w <= 1274.5 && r.y + r.h <= 714.5, `${label}: tip inside the stage ${JSON.stringify(r)}`);
+  for (const p of L.panels) {
+    p.secs.forEach((x, i) => { const n = p.secs[i + 1]; if (n) assert.ok(x.y + x.h <= n.y + 0.5, `${label}: sections "${x.title}" and "${n.title}" overlap`); assert.ok(x.y + x.h <= p.y + p.h - 4, `${label}: "${x.title}" inside its panel`); });
+  }
+  for (let i = 0; i < L.panels.length; i++) for (let j = i + 1; j < L.panels.length; j++) assert.ok(!hit(L.panels[i], L.panels[j]), `${label}: panels ${i} and ${j} overlap`);
+  return L;
+}
+// the richest grafts (most rules words in Boon + Price) plus the ones the owner reported
+const RICH = GRAFT_LIST.map((g) => ({ id: g.id, n: glossaryFor([g.boon, g.price], { max: 99, school: g.school }).length })).sort((a, b) => b.n - a.n).slice(0, 6).map((x) => x.id);
+const SWEEP = [...new Set(['g_reef_knot', 'g_scorch_thread', 'g_vampire_teeth', 'g_leaf_gilt', ...RICH])];
+for (const sc of SCALES) {
+  { // graft offer: every patch tip has Boon, Price, a definition per word, tier and weight, and stays off the patch column and the tray buttons
+    for (let k = 0; k < SWEEP.length; k += 3) {
+      const run = RUN.newRun({ hero: 'marrow', seed: 'w5g' + k }); RUN.startGraftPick(run);
+      SWEEP.slice(k, k + 3).forEach((gid, j) => { run.pending.offer.grafts[j] = gid; });
+      const app = await bootScaled(run, 'graft', graft, sc);
+      for (let j = 0; j < 3; j++) {
+        const g = GRAFTS[run.pending.offer.grafts[j]]; hover(app, reg('graft-patch' + j));
+        const L = tipComplete(app, `graft ${g.id} @${sc}`, { must: [`Boon: ${g.boon}`, `Price: ${g.price}`], extra: ['W' + g.weight, String(g.tier).toUpperCase()] });
+        for (const id of ['graft-patch0', 'graft-patch1', 'graft-patch2', 'graft-reroll', 'graft-decline', 'graft-sew']) { const r = reg(id); if (r) assert.ok(!hit(L.rect, r), `graft ${g.id} @${sc}: tip covers ${id}`); }
+        const want = glossaryFor([g.boon, g.price], { max: 99, school: g.school }).map((x) => x.term);
+        for (const t of want) if (t !== 'Echo' || /Echo/.test(g.boon + g.price)) assert.ok(L.panels.flatMap((p) => p.secs).some((x) => x.title.startsWith(t)), `graft ${g.id}: ${t} defined`);
+      }
+    }
+    // the owner's report: Reef Knot explains Line, Cut, Jam, Echo as a status
+    const run = RUN.newRun({ hero: 'marrow', seed: 'w5reef' }); RUN.startGraftPick(run); run.pending.offer.grafts[1] = 'g_reef_knot';
+    const app = await bootScaled(run, 'graft', graft, sc); hover(app, reg('graft-patch1'));
+    const txt = app.tipLayout.panels.flatMap((p) => p.secs).map((x) => `${x.title}|${x.text}`).join('\n');
+    for (const t of ['Line', 'Cut', 'Jam', 'Echo 1|Your next card is played twice', 'Weight', 'Greedy']) assert.ok(txt.includes(t), `Reef Knot @${sc} explains ${t}\n${txt}`);
+  }
+  { // shop: patches, relics, potions, cards
+    const run = RUN.newRun({ hero: 'marrow', seed: 'w5s' }); run.gold = 999; run.phase = 'shop'; run.pending = RUN.makeShop(run);
+    const sh = run.pending; SWEEP.slice(0, sh.grafts.length).forEach((gid, i) => { sh.grafts[i].id = gid; });
+    const app = await bootScaled(run, 'shop', shop, sc);
+    for (let i = 0; i < sh.grafts.length; i++) { const g = GRAFTS[sh.grafts[i].id]; hover(app, reg('shop-graft' + i)); tipComplete(app, `shop patch ${g.id} @${sc}`, { must: [`Boon: ${g.boon}`, `Price: ${g.price}`], extra: ['W' + g.weight] }); }
+    for (let i = 0; i < sh.relics.length; i++) { const r = RELICS[sh.relics[i].id]; if (!keywordsIn(r.text).length) continue; hover(app, reg('shop-relic' + i)); tipComplete(app, `shop relic ${r.id} @${sc}`, { must: [r.text] }); }
+    for (let i = 0; i < sh.potions.length; i++) { const p = POTIONS[sh.potions[i].id]; if (!keywordsIn(p.text).length) continue; hover(app, reg('shop-potion' + i)); tipComplete(app, `shop potion ${p.id} @${sc}`, { must: [p.text] }); }
+    for (let i = 0; i < sh.cards.length; i++) { const sp = cardSpec({ uid: 0, id: sh.cards[i].id, grafts: [], up: 0 }); if (!keywordsIn(cardLines(sp)).length) continue; hover(app, reg('shop-card' + i)); tipComplete(app, `shop card ${sp.id} @${sc}`, { extra: [cardLines(sp)] }); }
+  }
+  { // forge options
+    const run = RUN.newRun({ hero: 'marrow', seed: 'w5f' }); run.phase = 'forge'; run.pending = { kind: 'forge', used: 0 };
+    const app = await bootScaled(run, 'forge', forge, sc);
+    for (const o of getAll().filter((r) => /^forge-opt\d/.test(r.id))) { hover(app, o); if (app.tip && app.tip.text) tipComplete(app, `forge ${o.id} @${sc}`, { must: [app.tip.text] }); }
+  }
+  { // reward: relic choice and potion row
+    const pid = Object.keys(POTIONS).find((id) => keywordsIn(POTIONS[id].text).length);
+    const run = RUN.newRun({ hero: 'marrow', seed: 'w5r' }); run.phase = 'reward'; run.pending = { kind: 'normal', gold: 20, potion: pid, graft: true };
+    const app = await bootScaled(run, 'reward', reward, sc);
+    for (const r of getAll().filter((x) => /^reward-row\d/.test(x.id))) { hover(app, r); if (app.tip && app.tipLayout && keywordsIn(JSON.stringify(app.tip.o && app.tip.o.gloss || '')).length) tipComplete(app, `reward ${r.id} @${sc}`); }
+  }
+  { // deck view: a card carrying two grafts explains every word on the card and in both grafts
+    const run = RUN.newRun({ hero: 'marrow', seed: 'w5d' });
+    const inst = run.deck.find((i) => !i.id.startsWith('j_'));
+    for (const gid of ['g_reef_knot', 'g_scorch_thread']) RUN.applyGraft(run, inst.uid, gid, { keepPhase: true, free: true });
+    const app = await bootScaled(run, 'deckview', deckview, sc); let done = false;
+    for (let gy = 160; gy < 560 && !done; gy += 40) for (let gx = 40; gx < 700 && !done; gx += 50) {
+      app.mouse.x = gx; app.mouse.y = gy; frames(app, 30);
+      if (app.tip && JSON.stringify(app.tip.o && app.tip.o.gloss || '').includes('gain 1 Echo')) { tipComplete(app, `deck card with grafts @${sc}`); done = true; }
+    }
+    assert.ok(done, `deck view card with grafts found @${sc}`);
+  }
+  { // the Ward: every building card (reward pick) names its rooms and words, and each gets a definition
+    const run = RUN.newRun({ hero: 'marrow', seed: 'w5w', mode: 'ward' }); run.phase = 'reward'; run.pending = RUN.fightRewards(run, 'elite', {}); run.pending.buildChoice = run.pending.buildChoice || ['b_night_shift', 'b_lamp_oil', 'b_scrub_in'];
+    const app = await bootScaled(run, 'reward', reward, sc); let n = 0;
+    for (const r of getAll().filter((x) => /^reward-build\d/.test(x.id))) { hover(app, r); if (app.tip && app.tip.o && app.tip.o.terms && app.tip.o.terms.length) { tipComplete(app, `ward building card ${r.id} @${sc}`, { must: [app.tip.text] }); n++; } }
+    assert.ok(n >= 1, `ward building cards checked @${sc}: ${n}`);
+  }
+  { // combat: a hand card carrying two grafts
+    const run = RUN.newRun({ hero: 'marrow', seed: 'w5c' }); const inst = run.deck.find((i) => !i.id.startsWith('j_') && CARDS[i.id].type === 'attack');
+    for (const gid of ['g_reef_knot', 'g_scorch_thread']) RUN.applyGraft(run, inst.uid, gid, { keepPhase: true, free: true });
+    run.deck = run.deck.filter((i) => i.uid === inst.uid || run.deck.indexOf(i) < 4); // the grafted card is sure to be in the opening hand
+    run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['bedpan_slime'] };
+    const app = await bootScaled(run, 'combat', combat, sc, { audio: audioMod }); frames(app, 120);
+    const rs = getAll().filter((r) => /^hand_/.test(r.id)); let seen = 0;
+    const gs = ['g_reef_knot', 'g_scorch_thread'].map((id) => GRAFTS[id]), sp = cardSpec(inst);
+    for (const r of rs) { hover(app, r); if (app.tipLayout && JSON.stringify(app.tipLayout.panels).includes('Reef Knot')) { tipComplete(app, `combat hand card ${r.id} @${sc}`, { src: specGloss(sp), must: gs.flatMap((g) => [`Boon: ${g.boon}`, `Price: ${g.price}`]), school: sp.school, types: sp.type }); seen++; } }
+    assert.ok(seen >= 1 || rs.length === 0, `combat hand: a grafted card tip was checked @${sc}`);
+  }
 }
 console.log('graftwork glossary ok');

@@ -34,8 +34,9 @@ async function boot(run, scr, mod) {
     app.mouse.x = t.x; app.mouse.y = t.y; frames(app, 40); clear(); frames(app, 1);
     const tip = getAll().find((r) => r.id === 'tip0'); if (!tip) continue;
     seen++;
-    for (const r of getAll()) if (/^graft-(patch|card)\d/.test(r.id) && r.id !== t.me) assert.equal(inter(tip, r), 0, `${t.me} tip covers ${r.id}`);
-    assert.ok(tip.h <= 200, 'tip height capped: ' + tip.h);
+    const isPatch = /patch/.test(t.me); // a patch tip floats over the cards (it must spell out Boon, Price and every definition) but never over the patch column or the tray buttons; a card tip keeps off every sibling
+    for (const r of getAll()) if ((isPatch ? /^graft-(patch\d|reroll|decline|sew)/ : /^graft-(patch|card)\d/).test(r.id) && r.id !== t.me) assert.equal(inter(tip, r), 0, `${t.me} tip covers ${r.id}`);
+    if (!isPatch) assert.ok(tip.h <= 200, 'tip height capped: ' + tip.h);
   }
   assert.ok(seen >= 3, 'tips were drawn: ' + seen);
 }

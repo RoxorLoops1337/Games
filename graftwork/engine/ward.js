@@ -10,9 +10,9 @@
 //   startWalk(run, roomId, alt?) -> the first trigger's pending (run.phase set) | null (walk ended, next phase) | false (illegal, run.ward.why)
 //   afterTrigger(run)                         continue the walk (RUN.advance and RUN.afterEvent call it in ward mode)
 import { ROOMS, BUILD_CARDS, BUILD_LIST, STARTER_BUILD_DECK, PHASES, PHASE_ORDER, FLOOR, START_RES, PREBUILT, WARD_TUNE as T } from '../data/ward.js';
-import { ENEMIES, EVENTS } from '../data/index.js';
+import { ENEMIES, EVENTS, CARDS } from '../data/index.js';
 import { runAllows } from './unlock.js';
-import { makeEncounter, makeShop, startFight, startAct, priceMult, rollRelicByAct } from './run.js';
+import { makeEncounter, makeShop, startFight, startAct, priceMult, rollRelicByAct, perkN, rollPotion as RUN_rollPotion, potionSlots as potionCap } from './run.js';
 
 export { ROOMS, BUILD_CARDS, PHASES, FLOOR, T as WARD_TUNE };
 const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -33,14 +33,23 @@ const effectN = (run, id) => effect(run, id).reduce((a, e) => a + (e.n || 1), 0)
 const isDark = (room) => !room.on && def(room).power > 0;
 export function everyOf(room) { const s = def(room).spawn; return s && s.every ? s.every : 0; }
 export function spawnN(room) { return room.upgrades.includes('b_reinforced_beds') ? 2 : 1; } // monsters per tick
-export function capOf(room) { const s = def(room).spawn; if (!s) return 0; return room.upgrades.includes('b_sterile_field') ? 2 : (s.cap || 1); }
+export function capOf(room, run) {
+  const s = def(room).spawn; if (!s) return 0;
+  let cap = room.upgrades.includes('b_sterile_field') ? 2 : (s.cap || 1);
+  if (s.kind === 'fight') { if (run) cap += perkN(run, 'wardCap'); if (room.upgrades.includes('b_fire_door')) cap = Math.min(cap, T.fireDoorCap); }
+  return cap;
+}
+const lit = (run, type) => Object.values(W(run).rooms).filter((r) => r.type === type && !isDark(r));
 export function wardPower(run) {
   const w = W(run); let cap = w.power.base, used = 0;
-  for (const r of Object.values(w.rooms)) { cap += def(r).powerAdd || 0; if (r.on) used += def(r).power; }
+  const wards = Object.values(w.rooms).filter((r) => r.type === 'rm_ward' && r.on).length;
+  cap += perkN(run, 'powerCap') + effectN(run, 'power');
+  for (const r of Object.values(w.rooms)) { cap += def(r).powerAdd || 0; if (def(r).boiler) cap += Math.floor(wards / 2); if (r.on) used += def(r).power; }
   w.power.cap = cap; w.power.used = used;
   return { cap, used, free: cap - used };
 }
-export const moveOf = (run) => T.move + effectN(run, 'move');
+export const moveOf = (run) => T.move + effectN(run, 'move') + perkN(run, 'move');
+const lampOn = (run) => effect(run, 'lamp').length > 0 || perkN(run, 'noDark') > 0;
 export const bossForced = (run) => { const w = W(run); return !!w && w.day >= w.dayLimit && w.phase === 'night'; };
 export const bossOpen = (run) => { const w = W(run); return w.day >= w.dayLimit - T.earlyDays; };
 export const theatreOf = (run) => Object.values(W(run).rooms).find((r) => r.type === 'rm_theatre');
@@ -64,8 +73,8 @@ export function wardInit(run, act) {
   const rng = run.rng, prev = run.ward, F = FLOOR[act] || FLOOR[3];
   const w = {
     act, day: 1, dayLimit: F.days, phase: 'morning', w: F.w, h: F.h,
-    grid: Array.from({ length: F.h }, () => Array(F.w).fill(null)), rooms: {}, nextRoom: 1, cardNext: prev ? prev.cardNext : 1,
-    hero: { room: null }, res: { wood: START_RES.wood, stone: START_RES.stone }, power: { base: START_RES.power, cap: START_RES.power, used: 0 },
+    grid: Array.from({ length: F.h }, () => Array(F.w).fill(null)), rooms: {}, nextRoom: 1, cardNext: prev ? prev.cardNext : 1, dieUp: prev ? prev.dieUp || 0 : 0,
+    hero: { room: null }, res: { wood: START_RES.wood + perkN(run, 'startRes'), stone: START_RES.stone + perkN(run, 'startRes') }, power: { base: START_RES.power, cap: START_RES.power, used: 0 },
     deck: { draw: [], hand: [], discard: [] }, effects: [], log: [], walk: null, bossDone: false, why: null,
   };
   if (prev) { // a new floor: resources carry at 50 percent, the building deck in full
@@ -143,7 +152,7 @@ function pickElite(run) {
 function spawnInto(run, room) {
   const s = def(room).spawn;
   if (s.kind === 'fight') room.contents.push({ kind: 'monster', id: pickMonster(run) });
-  else if (s.kind === 'elite') room.contents.push({ kind: 'elite', id: pickElite(run), age: 0, level: 1 });
+  else if (s.kind === 'elite') room.contents.push({ kind: 'elite', id: pickElite(run), age: 0, level: def(room).level2 ? 2 : 1 });
   else room.contents.push({ kind: s.kind });
 }
 // one timer tick of one room (morning, or Double Shift)
@@ -154,15 +163,18 @@ export function tickRoom(run, room) {
   if (room.timers.spawn > 0) return false;
   room.timers.spawn = everyOf(room);
   let n = 0;
-  for (let k = 0; k < spawnN(room) && room.contents.length < capOf(room); k++) { spawnInto(run, room); n++; }
+  for (let k = 0; k < spawnN(room) && room.contents.length < capOf(room, run); k++) { spawnInto(run, room); n++; }
   return n > 0;
 }
 export function morningStart(run) {
   const w = W(run);
   w.phase = 'morning';
   w.effects = w.effects.filter((e) => e.until !== 'day');
+  w.freeUsed = false;
+  if (T.morningHeal && w.day > 1 && run.hp > 0) run.hp = Math.min(run.maxHp, run.hp + T.morningHeal); // a hospital: the night staff patch you up
   for (const room of Object.values(w.rooms)) {
     if (isDark(room)) continue; // off rooms pause: no timers, no aging, no produce
+    if (room.quarantine > 0) { room.quarantine--; continue; } // Quarantine: no spawns, no aging
     for (const c of room.contents) if (c.kind === 'elite') { c.age++; if (c.age >= T.eliteAge && !room.upgrades.includes('b_scrub_in')) c.level = 2; }
     const pr = def(room).produce;
     if (pr) {
@@ -172,9 +184,28 @@ export function morningStart(run) {
       if (pr.gold) { run.gold += pr.gold * k; run.stats.goldEarned += pr.gold * k; }
     }
     tickRoom(run, room);
+    autoRoom(run, room);
   }
-  drawHand(run, T.hand);
+  drawHand(run, T.hand + perkN(run, 'handPlus'));
   wardPower(run);
+}
+// quiet services of the Z3 rooms (data/ward.js `auto`): a potion, a card upgrade, a clean deck
+function autoRoom(run, room) {
+  const au = def(room).auto; if (!au) return;
+  if (au.every) { room.timers.auto = (room.timers.auto === undefined ? au.every : room.timers.auto) - 1; if (room.timers.auto > 0) return; room.timers.auto = au.every; }
+  if (au.potion) {
+    const id = RUN_rollPotion(run);
+    if (run.potions.length < potionCap(run) && id) { run.potions.push(id); log(run, 'The Pharmacy brews a potion.'); }
+    else { run.gold += T.pharmacyGold; run.stats.goldEarned += T.pharmacyGold; log(run, `The Pharmacy sells the batch: ${T.pharmacyGold} gold.`); }
+  }
+  if (au.upgrade && run.rng.chance(au.upgrade)) {
+    const list = run.deck.filter((i) => !i.up && CARDS[i.id] && CARDS[i.id].up && CARDS[i.id].type !== 'junk');
+    if (list.length) { const i = run.rng.pick(list); i.up = 1; log(run, `The Library upgrades ${CARDS[i.id].name}.`); }
+  }
+  if (au.junk) {
+    const i = run.deck.findIndex((x) => x.id.startsWith('j_'));
+    if (i >= 0) { run.deck.splice(i, 1); log(run, 'The Laundry washes out a junk card.'); }
+  }
 }
 export function drawHand(run, n) {
   const d = W(run).deck;
@@ -187,11 +218,16 @@ export function endMorning(run) {
   const w = W(run);
   if (!w || w.phase !== 'morning' || run.phase !== 'ward') return false;
   w.deck.discard.push(...w.deck.hand.splice(0));
-  w.phase = 'midday';
+  w.phase = 'midday'; rollWalk(run);
   return true;
 }
 
 // ---------------- building ----------------
+export function costOf(run, card) {
+  const w = W(run);
+  if (card.kind === 'room' && !w.freeUsed && perkN(run, 'firstFree') > 0) return {};
+  return card.cost;
+}
 const affords = (run, cost) => (W(run).res.wood >= (cost.wood || 0)) && (W(run).res.stone >= (cost.stone || 0)) && (run.gold >= (cost.gold || 0));
 function pay(run, cost) { const w = W(run); w.res.wood -= cost.wood || 0; w.res.stone -= cost.stone || 0; run.gold -= cost.gold || 0; }
 export function canBuild(run, uid, x, y) {
@@ -205,7 +241,7 @@ export function canPlayBuild(run, uid, target) {
   const inst = w.deck.hand.find((c) => c.uid === uid);
   if (!inst) return { ok: false, why: 'nocard' };
   const card = BUILD_CARDS[inst.id];
-  if (!affords(run, card.cost)) return { ok: false, why: 'cost' };
+  if (!affords(run, costOf(run, card))) return { ok: false, why: 'cost' };
   if (card.kind === 'room') {
     const { x, y } = target || {};
     if (!Number.isInteger(x) || !Number.isInteger(y) || !inside(w, x, y)) return { ok: false, why: 'bounds' };
@@ -224,6 +260,8 @@ export function canPlayBuild(run, uid, target) {
   switch (card.effect) {
     case 'res': return target === 'wood' || target === 'stone' ? { ok: true } : { ok: false, why: 'target' };
     case 'tick': { const room = w.rooms[target]; if (!room) return { ok: false, why: 'target' }; if (!everyOf(room)) return { ok: false, why: 'timer' }; if (isDark(room)) return { ok: false, why: 'power' }; return { ok: true }; }
+    case 'quarantine': { const room = w.rooms[target]; return room && def(room).spawn && !def(room).fixed ? { ok: true } : { ok: false, why: 'target' }; }
+    case 'fumigate': { const room = w.rooms[target]; if (!room || room.type !== 'rm_ward') return { ok: false, why: 'target' }; return room.contents.length ? { ok: true } : { ok: false, why: 'target' }; }
     case 'demolish': {
       if (target && typeof target === 'object') { const { x, y } = target; return inside(w, x, y) && w.grid[y][x] === 'rubble' ? { ok: true } : { ok: false, why: 'target' }; }
       const room = w.rooms[target];
@@ -242,15 +280,24 @@ export function playBuildCard(run, uid, target) {
   if (!chk.ok) return chk;
   const w = W(run), d = w.deck;
   const inst = d.hand.find((c) => c.uid === uid), card = BUILD_CARDS[inst.id];
-  pay(run, card.cost);
+  pay(run, costOf(run, card));
+  if (card.kind === 'room') w.freeUsed = true;
   d.hand.splice(d.hand.indexOf(inst), 1); d.discard.push(inst);
   let room = null;
   if (card.kind === 'room') { room = newRoom(run, card.room, target.x, target.y); log(run, `Built a ${def(room).name}${room.on ? '' : ' (dark: no spare power)'}.`); }
   else if (card.kind === 'upgrade') { room = w.rooms[target]; if (card.oneShot) room.overtime = 1; else room.upgrades.push(card.id); log(run, `${card.name} on the ${def(room).name}.`); }
   else {
     switch (card.effect) {
-      case 'move': case 'rations': case 'lamp': w.effects.push({ id: card.effect, n: card.n || 1, until: 'day' }); break;
+      case 'dieSides': w.dieUp = Math.min(8, (w.dieUp || 0) + (card.n || 2)); break;
+      case 'reroll': case 'dieBonus': w.effects.push({ id: card.effect, n: card.n || 1, until: 'day' }); break;
+      case 'move': case 'rations': case 'lamp': case 'flood': case 'nurse': case 'power': w.effects.push({ id: card.effect, n: card.n || 1, until: 'day' }); break;
       case 'bribe': w.effects.push({ id: 'bribe', n: 1, until: 'used' }); break;
+      case 'otpay': { const g = Math.min(T.otPayMax, T.otPayPer * Object.values(w.rooms).filter((r) => def(r).power > 0 && r.on).length); run.gold += g; run.stats.goldEarned += g; break; }
+      case 'quarantine': room = w.rooms[target]; room.contents = []; room.quarantine = T.quarantineDays; break;
+      case 'fumigate': room = w.rooms[target]; room.contents = []; break;
+      case 'linens': for (const r of lit(run, 'rm_linen')) { r.timers.spawn = 1; tickRoom(run, r); } break;
+      case 'shift': for (const r of Object.values(w.rooms)) if (everyOf(r) && !isDark(r)) { r.timers.spawn = 1; tickRoom(run, r); } break;
+      case 'ledger': drawHand(run, card.n || 2); break;
       case 'heal': run.hp = Math.min(run.maxHp, run.hp + card.n); break;
       case 'res': w.res[target] += card.n; break;
       case 'tick': room = w.rooms[target]; room.timers.spawn = 1; tickRoom(run, room); break;
@@ -291,7 +338,7 @@ export function wouldTrigger(run, room, isDest) {
 function previewWalk(run, path, wait) {
   const w = W(run), triggers = [];
   let off = 0, bribe = effectN(run, 'bribe');
-  const lamp = effect(run, 'lamp').length > 0;
+  const lamp = lampOn(run);
   path.forEach((rid, i) => {
     const room = w.rooms[rid];
     if (!wait && isDark(room) && !lamp) off += T.offHp;
@@ -330,7 +377,8 @@ export function pathTo(run, rid, alt = 0) {
   if (rid === w.hero.room) { const pv = previewWalk(run, [rid], true); return { ok: true, why: null, wait: true, path: [rid], triggers: pv.triggers, cost: 0, offPenalty: 0, alts: [], move: moveOf(run) }; }
   const paths = shortestPaths(run, w.hero.room, rid);
   if (!paths) return no('unreachable');
-  if (paths[0].length > moveOf(run)) return no('far');
+  const eff = (p) => p.reduce((a, id, i) => a + (i < p.length - 1 && w.rooms[id].upgrades.includes('b_double_doors') ? 0 : 1), 0);
+  if (Math.min(...paths.map(eff)) > moveOf(run)) return no('far');
   const scored = paths.map((p, i) => ({ p, i, pv: previewWalk(run, p, false) }));
   scored.sort((a, b) => a.pv.live - b.pv.live || a.pv.offPenalty - b.pv.offPenalty || a.i - b.i);
   const k = Math.max(0, Math.min(scored.length - 1, alt | 0)), pick = scored[k];
@@ -355,7 +403,11 @@ export function afterTrigger(run) {
     const rid = walk.path[walk.i++], room = w.rooms[rid];
     w.hero.room = rid;
     if (walk.again) walk.again = false;
-    else if (!walk.wait && isDark(room) && !effect(run, 'lamp').length) { run.hp = Math.max(1, run.hp - T.offHp); log(run, `You stumble through the dark ${def(room).name}: -${T.offHp} HP.`); }
+    else if (!walk.wait && isDark(room) && !lampOn(run)) { run.hp = Math.max(1, run.hp - T.offHp); log(run, `You stumble through the dark ${def(room).name}: -${T.offHp} HP.`); }
+    if (!walk.wait && !walk.forced) {
+      const hl = (w.phase === 'evening' ? perkN(run, 'eveningHeal') : 0) + (w.phase === 'night' ? effect(run, 'nurse').reduce((x, e) => x + e.n, 0) : 0);
+      if (hl > 0 && run.hp < run.maxHp) { run.hp = Math.min(run.maxHp, run.hp + hl); log(run, `Heal ${hl} on the way through the ${def(room).name}.`); }
+    }
     const t = wouldTrigger(run, room, walk.i === walk.path.length);
     if (!t) continue;
     if (t.kind !== 'boss' && effectN(run, 'bribe') > 0) { const b = w.effects.findIndex((e) => e.id === 'bribe'); w.effects.splice(b, 1); log(run, `The porter looks away at the ${def(room).name}.`); continue; }
@@ -374,36 +426,40 @@ export function advancePhase(run) {
   const w = W(run);
   const i = PHASE_ORDER.indexOf(w.phase);
   if (w.phase === 'night') { w.day++; log(run, `Day ${w.day} of ${w.dayLimit}.`); morningStart(run); }
-  else w.phase = PHASE_ORDER[i + 1];
+  else { w.phase = PHASE_ORDER[i + 1]; rollWalk(run); }
   return w.phase;
 }
 // phase modifiers for a fight in this room (read by engine/combat.js newCombat via run.pending.mods)
 export function phaseMods(run, room, kind, level = 1) {
   const w = W(run), ph = PHASES[w.phase] || {};
-  const ns = room && room.upgrades.includes('b_night_shift') && w.phase === 'night' ? 2 : 1;
-  const m = {};
+  const night = w.phase === 'night', quiet = night && (effect(run, 'flood').length > 0 || (room && room.upgrades.includes('b_soundproofing')));
+  const ns = quiet ? 0 : room && room.upgrades.includes('b_night_shift') && night ? 2 : 1;
+  const m = { phase: w.phase };
   if (kind === 'normal' && ph.enemyStr) m.enemyStr = ph.enemyStr * ns;
+  if (kind === 'boss') { const idle = Math.max(0, T.bossIdle.need - (w.fought || 0)); if (idle) m.enemyStr = Math.floor(idle / T.bossIdle.per); if (!m.enemyStr) delete m.enemyStr; } // hiding is punished: the boss grows restless
   if (kind === 'elite') { const s = (ph.eliteStr || 0) * ns + (level >= 2 ? T.eliteL2.str : 0); if (s) m.enemyStr = s; if (level >= 2) m.hpMul = T.eliteL2.hpMul; }
-  if (ph.firstTurnDraw) m.firstTurnDraw = ph.firstTurnDraw;
+  if (ph.firstTurnDraw) m.firstTurnDraw = lit(run, 'rm_kitchen').length ? T.kitchenDraw : ph.firstTurnDraw;
   const r = effectN(run, 'rations'); if (r) m.handAdd = r;
-  const g = ph.goldMul || 1; m.goldMul = 1 + (g - 1) * ns;
+  const g = ph.goldMul || 1; m.goldMul = 1 + (g - 1) * (night ? ns : 1);
   return m;
 }
 function launch(run, room, t) {
   const w = W(run);
+  run.stats.floors++; // every room that opens something counts like a map node (unlock points, history)
   const every = everyOf(room);
   switch (t.kind) {
     case 'fight': {
-      const ids = room.contents.map((c) => c.id); room.contents = [];
+      const ids = room.contents.map((c) => c.id); room.contents = []; w.fought = (w.fought || 0) + 1;
       run.phase = 'combat';
       run.pending = { kind: 'combat', fightKind: 'normal', enemies: ids.slice(0, T.boardMax), reinforce: ids.slice(T.boardMax), mods: phaseMods(run, room, 'normal'), ward: { room: room.id, count: ids.length } };
       log(run, `${ids.length} in the ${def(room).name}.`);
       return run.pending;
     }
     case 'elite': {
-      const e = room.contents.shift(); room.timers.spawn = every;
+      const e = room.contents.shift(); room.timers.spawn = every; w.fought = (w.fought || 0) + 1;
       run.phase = 'combat';
-      run.pending = { kind: 'combat', fightKind: 'elite', enemies: [e.id], reinforce: [], mods: phaseMods(run, room, 'elite', e.level), ward: { room: room.id, count: 1, elite: true, level: e.level, night: w.phase === 'night', ns: room.upgrades.includes('b_night_shift') } };
+      const m = phaseMods(run, room, 'elite', e.level);
+      run.pending = { kind: 'combat', fightKind: 'elite', enemies: [e.id], reinforce: [], mods: m, ward: { room: room.id, count: 1, elite: true, level: e.level, night: w.phase === 'night' && m.goldMul > 1, ns: room.upgrades.includes('b_night_shift') } };
       log(run, `An elite in Isolation${e.level >= 2 ? ' (Level 2)' : ''}.`);
       return run.pending;
     }
@@ -431,17 +487,23 @@ function launch(run, room, t) {
   return null;
 }
 // the Chapel's event: the act pool as in RUN.startEvent, weighted by the phase's lean
+// An event may carry `phase: 'midday' | 'evening' | 'night'` (or an array): it is 3 times as likely in those phases and half as likely in the
+// others. Untagged events keep the old lean by text (kind: heal or gold at midday, strange: chance and relics at night).
 const LEAN = { kind: /heal|gold/i, strange: /random|relic|max HP|Overload|50%/i };
+export function eventWeight(ev, phase) {
+  if (ev.phase) { const ph = [].concat(ev.phase); return ph.includes(phase) ? 3 : 0.5; }
+  const re = LEAN[(PHASES[phase] || {}).eventLean];
+  const txt = ev.choices.map((c) => (c.text || '') + ' ' + c.label).join(' ');
+  return re && re.test(txt) ? 3 : 1;
+}
 export function wardStartEvent(run) {
   const w = W(run);
   let pool = Object.values(EVENTS).filter((e) => (e.act === 0 || e.act === run.act) && !run.seenEvents.includes(e.id));
   const open = pool.filter((e) => runAllows(run, e.id)); if (open.length) pool = open;
   if (!pool.length) return null;
-  const re = LEAN[(PHASES[w.phase] || {}).eventLean];
-  const txt = (e) => e.choices.map((c) => (c.text || '') + ' ' + c.label).join(' ');
-  const ev = run.rng.weighted(pool, (e) => (re && re.test(txt(e)) ? 3 : 1));
+  const ev = run.rng.weighted(pool, (e) => eventWeight(e, w.phase));
   run.seenEvents.push(ev.id);
-  run.phase = 'event'; run.pending = { kind: 'event', id: ev.id, result: null };
+  run.phase = 'event'; run.pending = { kind: 'event', id: ev.id, result: null, phase: w.phase };
   return run.pending;
 }
 
@@ -452,9 +514,16 @@ export function rollBuildCard(run, rarities) {
   const wt = { common: 6, uncommon: 3, rare: 1.2 };
   return run.rng.weighted(pool, (c) => wt[c.rarity] || 1).id;
 }
-function buildChoice(run, rarities, n = 3) {
+// slots: one rarity list per offered card, so an offer has a shape (elite: common-or-uncommon, uncommon, uncommon-or-rare; boss: rare first)
+export const OFFER_SLOTS = {
+  elite: [['common', 'uncommon'], ['uncommon'], ['uncommon', 'rare']],
+  boss: [['rare'], ['rare', 'uncommon'], ['uncommon']],
+  shop: [['common', 'uncommon'], ['uncommon', 'common'], ['uncommon', 'rare']],
+};
+function buildChoice(run, slots, n = 3) {
   const out = [];
-  for (let g = 0; g < 20 && out.length < n; g++) { const id = rollBuildCard(run, rarities); if (!out.includes(id)) out.push(id); }
+  const lists = Array.isArray(slots[0]) ? slots : Array.from({ length: n }, () => slots);
+  for (const rar of lists) for (let g = 0; g < 20; g++) { const id = rollBuildCard(run, rar); if (!out.includes(id)) { out.push(id); break; } }
   return out;
 }
 // fightRewards hook: prev = the combat pending that just ended (carries .ward and .mods)
@@ -465,12 +534,12 @@ export function wardRewards(run, rw, prev) {
   let mul = mods.goldMul || 1;
   const gain = { wood: 0, stone: 0 };
   if (info.boss) {
-    rw.buildChoice = buildChoice(run, ['rare', 'uncommon']);
-    if (info.early) { run.gold += T.earlyBossGold; run.stats.goldEarned += T.earlyBossGold; const id = rollBuildCard(run, ['uncommon', 'rare']); addCard(run, id); rw.wardBonus = { gold: T.earlyBossGold, card: id }; }
+    rw.buildChoice = buildChoice(run, OFFER_SLOTS.boss);
+    if (info.early) { run.gold += T.earlyBossGold; run.stats.goldEarned += T.earlyBossGold; const id = rollBuildCard(run, ['uncommon', 'rare']); addCard(run, id); rw.wardBonus = { gold: T.earlyBossGold, card: id, graft: 1 }; run.flags.queueGraft = (run.flags.queueGraft || 0) + 1; }
     w.bossDone = true;
   } else if (info.elite) {
     gain.wood += T.resPerElite; gain.stone += T.resPerElite;
-    rw.buildChoice = buildChoice(run, ['common', 'uncommon', 'rare']);
+    rw.buildChoice = buildChoice(run, OFFER_SLOTS.elite);
     const extra = (info.night ? (PHASES.night.eliteRelic || 0) * (info.ns ? 2 : 1) : 0) + (info.level >= 2 ? T.eliteL2.relic : 0);
     if (extra > 0) {
       const list = [rw.relic]; for (let g = 0; g < 10 && list.length < 1 + extra; g++) { const r = rollRelicByAct(run); if (r && !list.includes(r)) list.push(r); }
@@ -480,10 +549,13 @@ export function wardRewards(run, rw, prev) {
     const n = info.count || 1;
     mul *= n >= 2 ? 1 + T.goldPerExtra * (n - 2) : 0.75;
     for (let i = 0; i < n * T.resPerMonster; i++) gain[run.rng.chance(0.5) ? 'wood' : 'stone']++;
+    if (lit(run, 'rm_morgue').length) gain.stone += n * T.morgueStone;
+    const fd = w.rooms[info.room]; if (fd && fd.upgrades.includes('b_fire_door')) { gain.wood *= 2; gain.stone *= 2; }
     if (n >= T.bigFight) run.flags.queueGraft = (run.flags.queueGraft || 0) + 1;
   }
   w.res.wood += gain.wood; w.res.stone += gain.stone;
   rw.gold = Math.round(rw.gold * mul);
+  if (mods.phase === 'night' && mods.goldMul > 1 && !info.boss) rw.gold += perkN(run, 'nightGold') * (info.count || 1);
   rw.ward = { ...gain, count: info.count || 0, goldMul: mul };
   return rw;
 }
@@ -499,7 +571,8 @@ export function takeBuildChoice(run, id) {
 // makeShop hook: the Dispensary also sells building cards and removes one
 export function wardShopExtend(run, shop) {
   const m = priceMult(run);
-  shop.builds = buildChoice(run, ['common', 'uncommon', 'rare']).map((id) => ({ id, price: Math.max(10, Math.round(T.buildPrice[BUILD_CARDS[id].rarity] * m)), sold: false }));
+  const slots = OFFER_SLOTS.shop.slice(); for (let k = 0; k < perkN(run, 'shopBuild'); k++) slots.push(['common', 'uncommon', 'rare']);
+  shop.builds = buildChoice(run, slots).map((id) => ({ id, price: Math.max(10, Math.round(T.buildPrice[BUILD_CARDS[id].rarity] * m)), sold: false }));
   shop.buildRemovePrice = T.buildRemovePrice; shop.buildRemoved = false;
   return shop;
 }
@@ -530,4 +603,68 @@ export function wardAdvance(run) {
   }
   afterTrigger(run);
   return run.phase;
+}
+
+// ---------------- dice routes (design/WARD.md, "Dice routes") ----------------
+// Each walk phase (midday, evening, night) the player ROLLS a die (run.ward.dice sides, default 4). The roll N is the longest route: the
+// player plans it one room at a time (orthogonally adjacent, never the same room twice), then every room entered activates in order.
+// extendRoute / undoRoute / clearRoute edit run.ward.route (room ids after the hero); startRoute walks it through afterTrigger.
+export const diceOf = (run) => (T.dice || 4) + (W(run).dieUp || 0) + perkN(run, 'dieSides'); // Loaded Dice (w.dieUp) and Bone Dice (relic) add sides
+export function rollWalk(run) {
+  const w = W(run); if (!w) return null;
+  const sides = diceOf(run), base = run.rng.int(sides) + 1; // 1..sides (rng.int(n) is 0..n-1)
+  const bonus = effectN(run, 'move') + perkN(run, 'move') + effectN(run, 'dieBonus') + (w.phase === 'midday' ? perkN(run, 'dieMidday') : 0); // Morning Rounds, Weighted Die, Noon Dial
+  w.roll = { key: `${w.day}:${w.phase}`, base, sides, bonus, n: base + bonus, lucky: effectN(run, 'reroll') + (w.rerollDay === w.day ? 0 : perkN(run, 'rerollDay')) };
+  w.route = [];
+  log(run, `Roll d${sides}: ${base}${bonus ? ` +${bonus}` : ''}.`);
+  return w.roll;
+}
+// a save made before dice, or a phase reached without rollWalk: roll once, lazily
+export function rollOf(run) {
+  const w = W(run); if (!w || w.phase === 'morning') return null;
+  if (!w.roll || w.roll.key !== `${w.day}:${w.phase}`) rollWalk(run);
+  return w.roll;
+}
+// Lucky Roll (effect 'reroll') or the Lucky Coin (once a day): roll the die again; what allowed it is spent
+export function rerollWalk(run) {
+  const w = W(run), r = rollOf(run);
+  if (!r || w.route.length || !r.lucky) return false;
+  const i = w.effects.findIndex((e) => e.id === 'reroll'); if (i >= 0) w.effects.splice(i, 1); else w.rerollDay = w.day;
+  rollWalk(run); return true;
+}
+export function routeInfo(run, route) {
+  const w = W(run), r = rollOf(run), rt = route || w.route || [];
+  const pv = previewWalk(run, rt, false);
+  return { ok: true, why: null, path: rt.slice(), triggers: pv.triggers, offPenalty: pv.offPenalty, n: r ? r.n : 0, left: r ? Math.max(0, r.n - rt.length) : 0, cost: rt.length, alts: [] };
+}
+// why: phase morning boss (last night: only the Theatre) full (the roll is spent) unreachable (no door) visited (a room once per route) theatre (the route ends in the Theatre) target
+export function routeWhy(run, rid) {
+  const w = W(run);
+  if (!w || run.phase !== 'ward') return 'phase';
+  if (w.phase === 'morning') return 'morning';
+  if (bossForced(run)) return 'boss';
+  const room = w.rooms[rid]; if (!room) return 'target';
+  const r = rollOf(run), rt = w.route, last = rt.length ? rt[rt.length - 1] : w.hero.room;
+  if (rt.length >= r.n) return 'full';
+  if (rt.length && w.rooms[last].type === 'rm_theatre' && bossOpen(run)) return 'theatre';
+  if (rid === w.hero.room || rt.includes(rid)) return 'visited';
+  if (!neighbors(run, last).includes(rid)) return 'unreachable';
+  return null;
+}
+export function extendRoute(run, rid) {
+  const why = routeWhy(run, rid);
+  if (why) { W(run).why = why; return { ok: false, why }; }
+  W(run).why = null; W(run).route.push(rid); return { ok: true, why: null };
+}
+export function undoRoute(run) { const w = W(run); return !!(w && w.route && w.route.pop()); }
+export function clearRoute(run) { const w = W(run); if (w) w.route = []; }
+export const legalSteps = (run) => Object.keys(W(run).rooms).filter((rid) => !routeWhy(run, rid));
+export function startRoute(run) {
+  const w = W(run);
+  if (!w || run.phase !== 'ward' || w.phase === 'morning' || bossForced(run)) { if (w) w.why = w && w.phase === 'morning' ? 'morning' : 'boss'; return false; }
+  if (!w.route || !w.route.length) { w.why = 'empty'; return false; }
+  w.why = null;
+  const path = w.route.slice(); w.route = [];
+  w.walk = { path, i: 0, dest: path[path.length - 1], wait: false, forced: false };
+  return afterTrigger(run);
 }

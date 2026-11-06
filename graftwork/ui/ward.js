@@ -34,6 +34,7 @@ const PH_GLYPH = { morning: 'ward_sun', midday: 'ward_highsun', evening: 'ward_l
 const PH_SHORT = { morning: 'Build', midday: '+10% fight gold', evening: 'Dinner: +1 card', night: 'Risk, +25% gold' };
 const PH_TINT = { morning: ['#ffe2a8', 0.5], midday: ['#ffffff', 0], evening: ['#d89a5a', 0.75], night: ['#5a6aa8', 0.85] }; // multiplied over the plan
 const TRIG = { fight: ['fight', 'Ward fight'], elite: ['elite', 'Elite'], event: ['event', 'Chapel event'], shop: ['shop', 'Dispensary'], forge: ['forge', 'Workshop'], rest: ['rest', 'Clean sheets'], boss: ['boss', 'The boss'] };
+const TRIG_SHORT = { fight: 'Fight', elite: 'Elite', event: 'Event', shop: 'Shop', forge: 'Forge', boss: 'Boss' };
 const DARKW = (r) => !r.on && ROOMS[r.type].power > 0;
 
 export const cellXY = (x, y) => ({ x: GRID.x + x * CELL, y: GRID.y + y * CELL });
@@ -51,9 +52,13 @@ const save = (run) => { try { saveRun(run); } catch (e) { /* storage is optional
 const plural = (n, s, p) => `${n} ${n === 1 ? s : (p || s + 's')}`;
 
 // what survives leaving the screen for a fight and coming back (walk plan, phase seen, spawn counts, stamps)
-const MEM = { phaseKey: '', floorKey: '', seen: {}, plan: null, stamps: {}, pops: {}, bulbs: {} };
+function startDie(app) {
+  S.dieRolling = reduced(app) ? 0 : 0.9; S.dieT = 0;
+  if (S.dieRolling) { sfx(app, 'comboTick', { n: 3 }); for (let i = 1; i < 5; i++) app.after(i * 170, () => sfx(app, 'comboTick', { n: 3 + i })); }
+}
+const MEM = { dieKey: '', phaseKey: '', floorKey: '', seen: {}, plan: null, stamps: {}, pops: {}, bulbs: {} };
 export const wardMem = MEM; // tests
-export function resetWardMem() { MEM.phaseKey = ''; MEM.floorKey = ''; MEM.seen = {}; MEM.plan = null; MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; }
+export function resetWardMem() { MEM.dieKey = ''; MEM.phaseKey = ''; MEM.floorKey = ''; MEM.seen = {}; MEM.plan = null; MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; }
 
 // flow.route() calls this before it opens a trigger's screen: when the walk moved the hero since the last trigger, the Ward plays those steps first.
 export function wardInterlude(app, run, scr) {
@@ -86,8 +91,12 @@ export function whyText(run, why, card, target) {
     case 'power': return 'That room is dark. Switch it on first.';
     case 'morning': return 'It is morning: build first, then End Morning to walk.';
     case 'far': return `Too far: you can walk ${WD.moveOf(run)} rooms this phase.`;
-    case 'unreachable': return 'No door leads there yet. Rooms connect through shared walls.';
+    case 'unreachable': return run.ward && run.ward.route ? 'Each step must be a room next to the last one (shared wall).' : 'No door leads there yet. Rooms connect through shared walls.';
     case 'boss': return 'The last night: only the Theatre.';
+    case 'full': return 'The roll is spent. Go, or undo a step.';
+    case 'visited': return 'A route never enters the same room twice.';
+    case 'theatre': return 'The route ends in the Theatre.';
+    case 'empty': return 'Plan a route first: click a room next to you.';
     default: return 'Not here.';
   }
 }
@@ -153,6 +162,7 @@ export default {
     const run = app.shared.run;
     S = { run, fx: new Fx(), t: 0, drag: null, press: null, sel: null, selRoom: null, alt: 0, altFor: null, toast: '', toastT: 0, walk: null, trans: null, banner: null, plans: false, plansScroll: 0, chip: null, hoverRoom: null };
     this.st = S;
+    MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; // these hold S.t times of an earlier visit: S.t restarts at 0 here (rooms built before a fight stayed invisible)
     const w = run.ward;
     if (!w) return;
     const fk = `${run.seed}|${run.act}|${run.loop || 0}`;
@@ -170,7 +180,10 @@ export default {
   key() { return false; },
   update(app, dt) {
     if (!S || !S.run.ward) return;
+    app.touchPan = !!S.plans; // a finger drag on the Ward is a plan drag (core.js turns a vertical touch move into a scroll otherwise, and the drop never happened); only the plans overlay scrolls
     S.t += dt; S.fx.update(dt);
+    if (S.dieRolling > 0) S.dieRolling = Math.max(0, S.dieRolling - dt);
+    { const w0 = S.run.ward; if (w0.phase !== 'morning' && !S.banner && S.run.phase === 'ward' && !WD.bossForced(S.run)) { const r0 = WD.rollOf(S.run); if (r0 && MEM.dieKey !== r0.key) { MEM.dieKey = r0.key; startDie(app); } } }
     if (S.toastT > 0) S.toastT -= dt;
     if (S.banner) { const wall = (Date.now() - (S.banner.t0 || Date.now())) / 1000; S.banner.t = Math.max(S.banner.t + dt, wall); if (S.banner.t > 2.6) S.banner = null; } // wall clock too: a slow phone must not keep the plate up
     if (S.trans) { S.trans.t += dt; if (S.trans.t >= S.trans.dur) S.trans = null; }
@@ -325,24 +338,44 @@ export default {
         }
       }
     } else {
-      // walk phases: hover (desktop) or the selected room (touch) is previewed
+      // walk phases (dice routes): the roll is the route length; a click appends the next room, the last step again takes it back
       const forced = WD.bossForced(run);
-      const rid = S.selRoom || (hovRoom ? hovRoom.id : null);
-      if (rid && w.rooms[rid]) {
-        if (S.altFor !== rid) { S.alt = 0; S.altFor = rid; }
-        const p = WD.pathTo(run, rid, S.alt);
-        out.preview = { rid, p };
-        if (p.ok) { out.path = [w.hero.room, ...(p.wait || p.forced ? (p.forced ? p.path : []) : p.path)]; out.dest = rid; }
-        else if (hovRoom && hovRoom.id === rid) out.chip = { text: whyText(run, p.why), x: m.x, y: m.y, bad: true };
-        void forced;
+      if (forced) {
+        const rid = S.selRoom || (hovRoom ? hovRoom.id : null);
+        if (rid && w.rooms[rid]) {
+          const p = WD.pathTo(run, rid, 0);
+          out.preview = { rid, p }; S.curP = p;
+          if (p.ok) { out.path = [w.hero.room, ...p.path]; out.dest = rid; }
+          else if (hovRoom && hovRoom.id === rid) out.chip = { text: whyText(run, p.why), x: m.x, y: m.y, bad: true };
+        }
+        if (m.released && !app.blocked && onGrid && hovRoom && m.pressStart && Math.floor((m.pressStart.x - GRID.x) / CELL) === gx && Math.floor((m.pressStart.y - GRID.y) / CELL) === gy) {
+          m.released = false;
+          const p = WD.pathTo(run, hovRoom.id, 0);
+          if (!p.ok) { sfx(app, 'error'); this.toast(whyText(run, p.why)); }
+          else if (m.touch && S.selRoom !== hovRoom.id) { S.selRoom = hovRoom.id; sfx(app, 'uiClick'); }
+          else this.walkTo(app, hovRoom.id, 0);
+        }
+        return out;
       }
-      if (m.released && !app.blocked && onGrid && hovRoom && m.pressStart && Math.floor((m.pressStart.x - GRID.x) / CELL) === gx && Math.floor((m.pressStart.y - GRID.y) / CELL) === gy) {
-        const p = WD.pathTo(run, hovRoom.id, S.altFor === hovRoom.id ? S.alt : 0);
+      const roll = WD.rollOf(run), rt = w.route || [];
+      const last = rt.length ? rt[rt.length - 1] : w.hero.room;
+      const hid = hovRoom && !S.walk && !S.dieRolling ? hovRoom.id : null;
+      const hwhy = hid ? WD.routeWhy(run, hid) : null;
+      const ghost = hid && !hwhy ? [...rt, hid] : rt;
+      if (ghost.length) {
+        const p = WD.routeInfo(run, ghost);
+        out.preview = { rid: ghost[ghost.length - 1], p, route: true, ghost: ghost.length > rt.length }; S.curP = p;
+        out.path = [w.hero.room, ...ghost]; out.dest = ghost[ghost.length - 1];
+      } else S.curP = null;
+      if (hid && hwhy && hid !== last) out.chip = { text: whyText(run, hwhy), x: m.x, y: m.y, bad: true };
+      if (m.released && !app.blocked && onGrid && hovRoom && !S.walk && m.pressStart && Math.floor((m.pressStart.x - GRID.x) / CELL) === gx && Math.floor((m.pressStart.y - GRID.y) / CELL) === gy) {
         m.released = false;
-        if (!p.ok) { sfx(app, 'error'); this.toast(whyText(run, p.why)); }
-        else if (m.touch && S.selRoom !== hovRoom.id) { S.selRoom = hovRoom.id; sfx(app, 'uiClick'); } // touch: first tap previews, the second walks
-        else this.walkTo(app, hovRoom.id, S.altFor === hovRoom.id ? S.alt : 0);
+        if (S.dieRolling) { /* the die is still tumbling */ }
+        else if (rt.length && hovRoom.id === last) { WD.undoRoute(run); sfx(app, 'uiClick'); save(run); }
+        else if (hwhy) { sfx(app, 'error'); this.toast(whyText(run, hwhy)); }
+        else { WD.extendRoute(run, hovRoom.id); sfx(app, 'mapStep'); save(run); }
       }
+      void roll;
     }
     return out;
   },
@@ -424,6 +457,26 @@ export default {
       MEM.plan.at = stop;
       const hp0 = run.hp;
       const res = WD.startWalk(run, rid, alt);
+      save(run);
+      if (res === false) { MEM.plan = null; this.toast(whyText(run, w.why)); return; }
+      this.afterEngine(app, hp0);
+    });
+  },
+  // dice route: the planned route walks; every room entered activates in order (the engine's afterTrigger continues it)
+  goRoute(app) {
+    const run = S.run, w = run.ward, rt = (w.route || []).slice();
+    if (!rt.length) { sfx(app, 'error'); this.toast(whyText(run, 'empty')); return; }
+    const start = w.hero.room, cells = [start, ...rt];
+    const live = WD.routeInfo(run, rt).triggers.filter((t) => !t.bribed && t.kind !== 'rest');
+    let stop = cells.length - 1;
+    if (live.length) { const k = cells.indexOf(live[0].room, 1); if (k >= 0) stop = k; }
+    MEM.plan = { act: w.act, cells, at: 0, rid: rt[rt.length - 1], wait: false };
+    S.selRoom = null;
+    sfx(app, 'mapStep');
+    this.animate(app, 0, stop, () => {
+      MEM.plan.at = stop;
+      const hp0 = run.hp;
+      const res = WD.startRoute(run);
       save(run);
       if (res === false) { MEM.plan = null; this.toast(whyText(run, w.why)); return; }
       this.afterEngine(app, hp0);
@@ -634,7 +687,7 @@ export default {
     g.strokeStyle = COL.scar; g.lineWidth = lnw('bold'); g.setLineDash([4, 4]); g.beginPath(); g.arc(dp.x, dp.y, 30 + Math.sin(S.t * 4) * 2, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
     g.restore();
     // numbered trigger seals
-    const p = WD.pathTo(run, dest, S.altFor === dest ? S.alt : 0);
+    const p = S.curP || WD.pathTo(run, dest, 0);
     let n = 0;
     for (const t of p.triggers || []) {
       const c = roomCenter(run, t.room), sx = c.x + 4, sy = c.y + 2;
@@ -760,8 +813,8 @@ export default {
     y += 50;
     // today
     app.text('TODAY', X, y, { size: 12, ui: true, bold: true, color: 'rgba(232,220,196,.6)', fit: { w: IW, lines: 1 } }); y += 18;
-    const eff = [`Move ${WD.moveOf(run)} rooms per walk`];
-    for (const e of w.effects) eff.push(e.id === 'move' ? `Morning Rounds: +${e.n} move` : e.id === 'rations' ? 'Rations: +1 card a turn' : e.id === 'lamp' ? 'Lamp Oil: dark rooms are free' : e.id === 'bribe' ? 'Bribe: the next trigger is skipped' : e.id);
+    const eff = [w.phase === 'morning' ? `Dice: d${WD.diceOf(run)} each walk` : `Roll ${(WD.rollOf(run) || {}).n || '?'} of d${WD.diceOf(run)}: ${(WD.rollOf(run) || {}).n || 0} rooms`];
+    for (const e of w.effects) eff.push(e.id === 'move' ? `Morning Rounds: +${e.n} to every roll` : e.id === 'rations' ? 'Rations: +1 card a turn' : e.id === 'lamp' ? 'Lamp Oil: dark rooms are free' : e.id === 'bribe' ? 'Bribe: the next trigger is skipped' : e.id);
     for (const t of eff.slice(0, 4)) y += app.text(t, X, y, { size: 13, ui: true, color: COL.vellum, fit: { w: IW, lines: 1 } }) + 2;
     y += 8;
     // log
@@ -813,7 +866,7 @@ export default {
     if (WD.bossForced(run) && !(pv && pv.p.ok)) { big('The last night', '#ff8a96'); body('The boss has scrubbed in. Every walk but the Operating Theatre is refused, and the Theatre takes you from wherever you stand. Choose it to begin.', undefined, 7); return; }
     if (pv && pv.p.ok) {
       const p = pv.p, dest = w.rooms[pv.rid];
-      big(p.wait ? 'Wait here' : `To the ${ROOMS[dest.type].name}`);
+      big(pv.route ? `Route: ${p.path.length} of ${p.n} steps` : p.wait ? 'Wait here' : `To the ${ROOMS[dest.type].name}`);
       body(walkSummary(run, p, pv.rid) + '.', COL.vellum, 4);
       let n = 0;
       for (const t of p.triggers.slice(0, 5)) {
@@ -823,16 +876,17 @@ export default {
         y += app.text(`${t.bribed ? '-' : n}. ${label}`, X + 24, y, { size: 13, ui: true, color: t.bribed ? 'rgba(232,220,196,.45)' : COL.vellum, fit: { w: IW - 24, lines: 1 } }) + 4;
       }
       y += 4;
+      if (pv.route) body(p.left > 0 ? `${plural(p.left, 'step')} left. Click the next room, or Go. Click the last step again to undo it.` : 'The roll is spent. Go, or undo the last step.', COL.good, 3);
       if (p.offPenalty) body(`Dark rooms on the way: -${p.offPenalty} HP.`, COL.bad, 2);
       if (p.wait) body(`Heal ${T.waitHeal}.` + (p.triggers.length ? ' What is here triggers.' : ''), COL.good, 2);
       const mods = []; const ph = PHASES[w.phase];
       if (p.triggers.some((t) => t.kind === 'fight' || t.kind === 'elite')) { if (ph.goldMul) mods.push(`fights pay +${Math.round((ph.goldMul - 1) * 100)}% gold`); if (ph.firstTurnDraw) mods.push('+1 card on the first turn'); if (ph.enemyStr) mods.push(`monsters +${ph.enemyStr} Strength, elites +${ph.eliteStr}`); }
       if (mods.length) body(PHASES[w.phase].name + ': ' + mods.join(', ') + '.', '#e0c27a', 3);
-      if (p.triggers.some((t) => t.kind === 'boss' && t.detail.early)) body('Early boss: HP x0.9, +30 gold and a free uncommon or rare plan.', COL.lamp, 3);
+      if (p.triggers.some((t) => t.kind === 'boss' && t.detail.early)) body('Early boss: HP x0.85, +60 gold, a free uncommon or rare plan and one more graft pick.', COL.lamp, 3);
       return;
     }
     big(PHASES[w.phase].name);
-    body(`${app.mouse.touch ? 'Tap' : 'Hover'} a room up to ${WD.moveOf(run)} steps away. Rooms on the red thread trigger in order. ${app.mouse.touch ? 'Tap again' : 'Click'} to walk.`, undefined, 6);
+    { const r = WD.rollOf(run); body(WD.bossForced(run) ? 'Choose the Theatre.' : `You rolled ${r ? r.n : '?'}. ${app.mouse.touch ? 'Tap' : 'Click'} the rooms next to you one by one to plan a route of up to ${r ? r.n : '?'} steps. Every room you enter triggers in order. Then press Go.`, undefined, 7); }
     if (app.scale >= 0.95) body(PHASES[w.phase].text, '#e0c27a', 4);
   },
 
@@ -845,19 +899,19 @@ export default {
       if (app.button('End Morning', A.x, hy, A.w, bh, { size: 26, sub: w.deck.hand.length ? `${plural(w.deck.hand.length, 'plan')} unplayed` : 'Walks follow', fill: '#5a3f10', stroke: COL.lamp, color: '#ffe9a8', fit: true, key: 'e' })) this.endMorning(app);
       return;
     }
-    const pv = inter.preview, forced = WD.bossForced(run);
-    const sel = S.selRoom && pv && pv.rid === S.selRoom && pv.p.ok ? pv : null;
-    const bh = 46;
-    if (pv && pv.p.ok && pv.p.alts && pv.p.alts.length) {
-      if (app.button(`Other route (${(S.alt || 0) + 1}/${pv.p.alts.length + 1})`, A.x, A.y, A.w, 40, { size: 16, fit: true })) { S.alt = ((S.alt || 0) + 1) % (pv.p.alts.length + 1); S.altFor = pv.rid; if (!S.selRoom && app.mouse.touch) S.selRoom = pv.rid; }
-    }
-    const walkLabel = sel ? (sel.p.wait ? 'Wait here' : `Walk to the ${K.roomShort(w.rooms[sel.rid].type)}`) : forced ? 'Enter the Theatre' : 'Pick a room';
-    const walkDis = !sel && !forced;
-    if (app.button(walkLabel, A.x, A.y + 48, A.w, bh + 4, { size: 20, disabled: walkDis, fill: walkDis ? undefined : '#5a1a22', stroke: COL.scar, fit: true })) {
-      if (sel) this.walkTo(app, sel.rid, S.alt); else if (forced) this.walkTo(app, WD.theatreOf(run).id, 0);
+    const forced = WD.bossForced(run), bh = 46;
+    if (forced) {
+      const pv = inter.preview, sel = S.selRoom && pv && pv.rid === S.selRoom && pv.p.ok ? pv : null;
+      if (app.button(sel ? 'Enter the Theatre' : 'Enter the Theatre', A.x, A.y + 48, A.w, bh + 4, { size: 20, fill: '#5a1a22', stroke: COL.scar, fit: true })) this.walkTo(app, WD.theatreOf(run).id, 0);
+    } else {
+      const rt = w.route || [], r = WD.rollOf(run);
+      const goLabel = rt.length ? `Go: ${plural(rt.length, 'step')}` : 'Plan a route';
+      if (app.button(goLabel, A.x, A.y, A.w, bh + 4, { size: 20, disabled: !rt.length || !!S.dieRolling, fill: rt.length ? '#5a1a22' : undefined, stroke: COL.scar, fit: true, key: 'g' })) this.goRoute(app);
+      if (r && r.lucky && !rt.length) { if (app.button('Lucky Roll: roll again', A.x, A.y + 54, A.w, 40, { size: 15, fit: true })) { WD.rerollWalk(run); MEM.dieKey = WD.rollOf(run).key; this.startDie(app); save(run); } }
+      else if (app.button(`Undo step (${rt.length} of ${r ? r.n : 0})`, A.x, A.y + 54, A.w, 40, { size: 16, disabled: !rt.length, fit: true })) { WD.undoRoute(run); sfx(app, 'uiClick'); save(run); }
     }
     const wp = WD.pathTo(run, w.hero.room);
-    if (app.button(`Wait here (heal ${T.waitHeal})`, A.x, A.y + 108, A.w, bh, { size: 17, disabled: !wp.ok, fit: true })) this.walkTo(app, w.hero.room, 0);
+    if (app.button(`Wait here (heal ${T.waitHeal})`, A.x, A.y + 108, A.w, bh, { size: 17, disabled: !wp.ok || !!(w.route && w.route.length), fit: true })) this.walkTo(app, w.hero.room, 0);
     if (!wp.ok && app.inRect(A.x, A.y + 108, A.w, bh)) app.tooltip('Wait here', whyText(run, wp.why), { color: COL.bad });
   },
 
@@ -925,16 +979,35 @@ export default {
     const tO = { size: 28, bold: true, color: COL.lamp, engraved: true, fit: { w: 300, lines: 1 } }, tL = app.layoutText(`${PHASES[w.phase].name} walk`, tO);
     app.text(`${PHASES[w.phase].name} walk`, B.x + 90, B.y + 10, tO);
     const legY = B.y + B.h - 8 - 36, ty = B.y + 14 + tL.size;
-    app.text(PHASES[w.phase].text, B.x + 90, ty, { size: 14, ui: true, color: 'rgba(232,220,196,.8)', fit: { w: B.w - 110, h: legY - ty - 2, lines: 3, soft: true } });
+    app.text(PHASES[w.phase].text, B.x + 90, ty, { size: 14, ui: true, color: 'rgba(232,220,196,.8)', fit: { w: B.w - 220, h: legY - ty - 2, lines: 3, soft: true } });
+    this.drawDie(app, B.x + B.w - 112, B.y + 12, 88);
     // legend: what each trigger seal means
     const kinds = ['fight', 'elite', 'event', 'shop', 'forge', 'boss'], lw0 = (B.w - 40) / kinds.length;
     kinds.forEach((kd, i) => {
       const lx = B.x + 20 + i * lw0, ly = legY + 4;
       drawNodeIcon(g, kd, lx + 12, ly + 12, 22, 'available');
-      app.text(TRIG[kd][1], lx + 28, ly + 4, { size: 13, ui: true, color: 'rgba(232,220,196,.75)', fit: { w: lw0 - 32, lines: 1 } });
+      app.text(app.scale < 0.8 ? TRIG_SHORT[kd] : TRIG[kd][1], lx + 28, ly + 4, { size: 13, ui: true, color: 'rgba(232,220,196,.75)', fit: { w: lw0 - 32, lines: 1 } });
     });
   },
 
+  // the engraved die: tumbles for a moment when rolled (instant with reduced motion), then keeps the result in view
+  drawDie(app, x, y, sz) {
+    const g = app.ctx, run = S.run, w = run.ward, r = w.route && w.phase !== 'morning' && !WD.bossForced(run) ? WD.rollOf(run) : null;
+    if (!r) return;
+    app.reg('ward-die', x, y, sz, sz, { group: 'strip' });
+    const roll = S.dieRolling > 0, face = roll ? 1 + Math.floor(S.t * 22) % r.sides : r.n;
+    const k = roll ? S.dieRolling : 0, wob = roll ? Math.sin(S.t * 30) * 0.22 * Math.min(1, k * 2) : 0;
+    g.save(); g.translate(x + sz / 2, y + sz / 2 - (roll ? Math.abs(Math.sin(S.t * 14)) * 10 * Math.min(1, k * 2) : 0)); g.rotate(wob);
+    app.rr(-sz / 2 + 4, -sz / 2 + 4, sz - 8, sz - 8, 12);
+    const gr = g.createLinearGradient(-sz / 2, -sz / 2, sz / 2, sz / 2); gr.addColorStop(0, '#f6ecd4'); gr.addColorStop(1, '#d4c19a');
+    g.fillStyle = gr; g.fill(); g.strokeStyle = '#3a2a14'; g.lineWidth = lnw('bold'); g.stroke();
+    app.rr(-sz / 2 + 10, -sz / 2 + 10, sz - 20, sz - 20, 8); g.strokeStyle = 'rgba(58,42,20,.35)'; g.lineWidth = 1; g.stroke();
+    g.restore();
+    app.text(String(face), x + sz / 2, y + sz / 2 - 20, { size: 36, bold: true, align: 'center', color: '#2a1c0c', fixed: true });
+    app.text(`d${r.sides}${!roll && r.bonus ? ' +' + r.bonus : ''}`, x + sz / 2, y + sz - 20, { size: 12, ui: true, bold: true, align: 'center', color: '#5a3f10', fixed: true });
+    if (app.inRect(x, y, sz, sz)) app.tooltip('The die', `Rolled ${r.n} (d${r.sides}${r.bonus ? `, +${r.bonus} today` : ''}). That is the longest route you can plan this phase.`);
+  },
+  startDie(app) { startDie(app); },
   drawChip(app, chip) {
     const g = app.ctx, o = { size: 15, ui: true, bold: true, fit: { w: 360, lines: 3 } }, L = app.layoutText(chip.text, o);
     const w = L.w + 20, h = L.h + 12;
@@ -994,8 +1067,8 @@ export default {
       if (tr) { const c = cellXY(tr.x, tr.y); if (maybeTip(app, 'ward_timers', c.x + CELL - 13, c.y + 13, 'The ring on a room counts the days to its next spawn. A Ward gains a monster every day, up to 5. Isolation grows an elite, the Chapel an event.', TIPO)) return; }
     } else {
       const hc = roomCenter(run, w.hero.room);
-      if (maybeTip(app, 'ward_walk', hc.x + 20, hc.y + 18, 'Hover a room to see your walk as a red thread. Every room on it with something inside triggers, in order: fights, events, the shop. Click to walk.', TIPO)) return;
-      maybeTip(app, 'ward_phases', 320, 32, 'A day: Morning builds, then three walks. Midday pays gold, Evening gives you an extra card, Night is dangerous and pays best. The boss comes on the last night.', TIPO);
+      if (maybeTip(app, 'ward_walk', hc.x + 20, hc.y + 18, 'Your die sets how far you can go. Click the rooms next to you one by one to draw a red thread (click the last step to undo), then press Go. Every room on it with something inside triggers, in order.', TIPO)) return;
+      maybeTip(app, 'ward_phases', 320, 32, 'A day: Morning builds, then three walks, each starting with a die roll that sets your route length. Midday pays gold, Evening gives you an extra card, Night is dangerous and pays best. The boss comes on the last night.', TIPO);
     }
   },
 };

@@ -9,9 +9,9 @@ import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES, BUILD_CARDS } from './i
 export const UP = {
   FLOOR: 2,            // even an instant death pays this (abandoned runs under ABANDON_MIN_FLOORS floors pay 0)
   PER_FLOOR: 0.04,      // per map node cleared
-  ELITE: 0.8, ELITE_MAX: 6,
-  BOSS: 4.5,           // per Act boss killed (the final boss is the win)
-  ACT: { 1: 0, 2: 2, 3: 6 }, // UP for the deepest Act reached
+  ELITE: 0.9, ELITE_MAX: 6,
+  BOSS: 4.8,           // per Act boss killed (the final boss is the win)
+  ACT: { 1: 0, 2: 2, 3: 7 }, // UP for the deepest Act reached
   WIN: 14, PER_ASC: 0.8,      // a win, plus per ascension level of that win
   FIRST_KILL: 0.5, FIRST_KILL_MAX: 8, // first lifetime kill of an enemy type (count capped per run)
   ACHIEVEMENT: 2.5, ACHIEVEMENT_MAX: 3, // new achievements this run (count capped)
@@ -19,7 +19,7 @@ export const UP = {
   ASSIST_MULT: 0.5,    // Assist runs pay half (the floor still applies)
   ABANDON_MIN_FLOORS: 3,
 };
-export const TARGET_TOTAL = 900;    // total UP that opens every locked item (cost curve is normalised to this)
+export const TARGET_TOTAL = 906;    // total UP that opens every locked item (cost curve is normalised to this)
 export const COST_CURVE = { early: 0.55, late: 1.65 };     // item cost multiplier at queue position 0 and 1 (linear between)
 export const COST_BASE = { card: 2.2, graft: 2.0, relic: 3.0, potion: 2.0, event: 1.5, build: 2.0 };
 export const COST_RARITY = { common: 0.8, uncommon: 1.0, shop: 1.0, rare: 1.6, boss: 1.6 };
@@ -58,16 +58,20 @@ export const START = {
     r_second_opinion r_second_look r_shatter_ward r_overload_valve r_bare_hands r_unjam_oil r_indulgence r_forge_hammer r_heavy_seam r_second_colour r_grounding_rod
     r_toll_booth r_light_load
     r_second_wind r_hollow_ledger r_lead_apron r_tithe_crown
-    r_pawn_ticket r_budget_ledger`)),
+    r_pawn_ticket r_budget_ledger
+    r_w_noon_ration r_w_moon_lamp r_w_spare_fuse r_w_night_ledger r_w_stockpile_deed`)),
   potion: new Set(L(`p_smelling_salts p_tonic p_firebomb p_sting p_adrenaline p_bitter_draught p_weak_tea p_unjam p_untithe p_strain_relief p_tourniquet p_vapors p_ether`)),
   event: new Set(L(`
     e_second_hand_surgeon e_back_alley_swap e_budget_loan e_tithe_collector e_free_polish e_coin_flip e_gift_basket e_lottery_ward
     e_vending_machine e_night_shift e_orderly_challenge e_gurney_race e_dentist_chair e_loan_shark e_weigh_in
     e_pickled_graft e_haggler e_lamp_lottery e_black_market_clinic e_patient_returns e_debt_collector
+    e_w_menu_board e_w_visiting_hours e_w_night_porter e_w_shift_change
     e_costume_rack e_rehearsal e_balcony_seat e_standing_ovation e_understudy e_repossession`)),
-  // Ward building cards: every room card plus half of the upgrade and effect cards (the starter building deck is inside this set)
-  build: new Set([...Object.values(BUILD_CARDS).filter((c) => c.kind === 'room').map((c) => c.id), ...L(`
-    b_overtime b_iron_doors b_reinforced_beds b_morning_rounds b_requisition b_triage b_lamp_oil`)]),
+  // Ward building cards: the 11 original rooms plus Scaffold and Laundry, and about half of the upgrade and effect cards (the starter building deck is inside this set).
+  // The other new rooms (Pharmacy, Library, Morgue, Kitchen, Boiler, Isolation Ward II) and the sharper upgrades and effects are earned.
+  build: new Set(L(`
+    b_corridor b_ward b_isolation b_chapel b_dispensary b_workshop b_sawmill b_quarry b_counting b_generator b_linen b_scaffold b_laundry
+    b_overtime b_iron_doors b_reinforced_beds b_double_doors b_morning_rounds b_requisition b_triage b_lamp_oil b_overtime_pay b_open_ledger b_fresh_linens`)),
 };
 
 // ============================ DERIVATION ============================

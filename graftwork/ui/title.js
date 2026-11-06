@@ -182,7 +182,7 @@ export default {
     try {
       const r = loadRun(); if (!r) return null;
       const h = HEROES[r.hero];
-      return { hero: h ? h.name : r.hero, act: r.act, floor: (r.stats && r.stats.floors) || r.row + 1, hp: r.hp, maxHp: r.maxHp, asc: r.ascension, daily: !!r.daily, loop: r.loop };
+      return { hero: h ? h.name : r.hero, act: r.act, floor: (r.stats && r.stats.floors) || r.row + 1, day: r.ward ? r.ward.day : 0, dayLimit: r.ward ? r.ward.dayLimit : 0, hp: r.hp, maxHp: r.maxHp, asc: r.ascension, daily: !!r.daily, loop: r.loop };
     } catch { return null; }
   },
   update(app, dt) { if (!this.p) return; },
@@ -260,7 +260,7 @@ export default {
       const yy = y + (1 - k) * 18;
       if (id === 'continue') {
         const s = this.saveInfo;
-        const sub = s ? `${s.hero}, Act ${s.act}, Floor ${s.floor}, ${s.hp}/${s.maxHp} HP` : 'Resume your last run';
+        const sub = s ? (s.day ? `${s.hero}, Act ${s.act}, Day ${s.day} of ${s.dayLimit}, ${s.hp}/${s.maxHp} HP` : `${s.hero}, Act ${s.act}, Floor ${s.floor}, ${s.hp}/${s.maxHp} HP`) : 'Resume your last run';
         if (app.button('Continue', x, yy, bw, bh + 12, { size: 24, fill: '#4a3a1d', stroke: COL.lamp, color: '#fbe9b0', sub, subColor: '#e3d3a4' })) { if (!flow.resume()) { this.hasSave = false; } }
         y += step + 14; continue;
       }

@@ -284,18 +284,21 @@ function drawOfferCard(app, r, i, c) {
   if (hover) {
     // one short note in the fixed detail band (never beside or over the sibling cards, patches or buttons)
     const lines = [];
-    if (base.flavor) lines.push(base.flavor);
-    lines.push(inst.plays ? `Played ${inst.plays} times.` : 'Never played.');
+    if (!st.small) { if (base.flavor) lines.push(base.flavor); lines.push(inst.plays ? `Played ${inst.plays} times.` : 'Never played.'); } // phones: the room goes to the definitions (the caption already says how often it was played)
     if (inst.grafts.length) lines.push('Grafts: ' + inst.grafts.map((x) => (GRAFTS[x] ? GRAFTS[x].name : x)).join(', ') + '.');
-    else lines.push(tithed ? 'No grafts, so a Tithe can land here.' : 'No grafts: a Bare card can be Tithed.');
+    else if (!st.small) lines.push(tithed ? 'No grafts, so a Tithe can land here.' : 'No grafts: a Bare card can be Tithed.');
     if (tithed) lines.push('This card will be Tithed: -25% numbers that combat.');
     if (inst.grafts.length >= 2) lines.push('A third graft is an OVERLOAD.');
     if (dim) lines.push('CANNOT TAKE THE SELECTED GRAFT: ' + cantReason(inst, st.selGraft));
-    app.tooltip(spec2name(inst), null, { lines, gloss: [cardLines(cardSpec(inst)), inst.grafts.map((x) => (GRAFTS[x] ? [GRAFTS[x].boon, GRAFTS[x].price] : []))], types: base.type, color: COL[base.type] ? '#e8dcc4' : COL.lamp, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, band: DETAIL_BAND } });
+    app.tooltip(spec2name(inst), null, { lines, gloss: [cardLines(cardSpec(inst)), inst.grafts.map((x) => (GRAFTS[x] ? [GRAFTS[x].boon, GRAFTS[x].price] : []))], types: base.type, color: COL[base.type] ? '#e8dcc4' : COL.lamp, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, region: st.small ? { ...DETAIL_REGION, y0: 392 } : DETAIL_REGION } }); // phones: the tall inflated text may also cover the lower part of the cards
     if (app.clicked(r.x, r.y, r.w, r.h)) clickCard(app, i);
   }
 }
 // The dedicated detail spot for every hover note on this table: the empty right half of the bill panel, clear of the cards and the tray.
+// A hovered patch floats its panel anywhere left of the patch column (it may cover the cards and the AFTER panel, never the patches, the tray buttons or the top bars).
+const PATCH_TIP_REGION = { x0: 6, y0: 64, x1: TRAY_X - 32, y1: 714 };
+// A hovered card explains itself in the table panel below the cards (clear of every sibling card, patch and button); the panel grows into columns, it never drops a definition.
+const DETAIL_REGION = { x0: 24, y0: 468, x1: 796, y1: 714 };
 const DETAIL_BAND = { x: 490, y: 574, bottom: 710, dir: 1 };
 const spec2name = (inst) => CARDS[inst.id].name + (inst.up ? '+' : '');
 
@@ -327,13 +330,12 @@ function drawPatchTile(app, r, j, c) {
 
   if (hover) {
     const info = resonanceInfo(st.run, g.school, c.counts);
-    // the tile already shows Boon and Price (the compact 4-patch tray truncates them, so only then repeat them)
-    const lines = [`Weight ${g.weight}: counts ${g.weight} against your Budget.`];
-    if (compact) lines.push('Boon: ' + g.boon, 'Price: ' + g.price);
+    // the tip always spells out the full Boon and Price (a tile may truncate them), then one definition per rules word, then the tier tag and the weight
+    const lines = ['Boon: ' + g.boon, 'Price: ' + g.price];
     const hp = g.mods.find((m) => m.k === 'maxHp'); if (hp) lines.push(`Permanently costs ${-hp.n} max HP.`);
     if (info && st.rects.infoH < 60) lines.push(...info.lines.slice(0, 2)); // the info panel shows it when there is room
     if (dim) lines.push('CANNOT GO ON THE SELECTED CARD: ' + cantReason(c.inst, r.gid));
-    app.tooltip(g.name, null, { lines, color: sc, gloss: [g.boon, g.price, String(g.tier || 'safe').toUpperCase()], school: g.school, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, band: DETAIL_BAND } }); // gloss: every rules word the Boon, Price, tier tag and weight pill name
+    app.tooltip(g.name, null, { lines, color: sc, gloss: [g.boon, g.price, 'W' + g.weight, String(g.tier || 'safe').toUpperCase()], school: g.school, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, region: PATCH_TIP_REGION } }); // gloss: every rules word the Boon, Price, tier tag and weight pill name
     if (app.clicked(x, y, w, h)) clickGraft(app, j);
   }
 }

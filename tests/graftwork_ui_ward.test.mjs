@@ -113,11 +113,15 @@ await t('walk: End Morning, preview the thread, confirm, fight -> reward -> graf
   flow.route(); frames(app, 200);
   const eb = reg('ward-act'); click(app, eb.x + eb.w / 2, eb.y + eb.h / 2); frames(app, 3);
   assert.equal(run.ward.phase, 'midday', 'End Morning');
-  const cc = cellCenter(2, 2); app.mouse.x = cc.x; app.mouse.y = cc.y; frames(app, 3);
-  const p = WD.pathTo(run, ch);
-  assert.deepEqual(p.path, [wd, ch]); assert.equal(p.triggers.length, 2);
+  run.ward.roll = { key: '1:midday', base: 3, sides: 4, bonus: 0, n: 3, lucky: 0 }; frames(app, 3);
+  const wc = cellCenter(1, 2), cc = cellCenter(2, 2);
+  click(app, cc.x, cc.y); frames(app, 3);
+  assert.deepEqual(run.ward.route, [], 'a room that is not next to you is not a step'); assert.match(app.screens.ward.st.toast, /next to the last one/);
+  click(app, wc.x, wc.y); frames(app, 3); click(app, cc.x, cc.y); frames(app, 3);
+  assert.deepEqual(run.ward.route, [wd, ch], 'each click appends one step');
+  const p = WD.routeInfo(run); assert.deepEqual(p.path, [wd, ch]); assert.equal(p.triggers.length, 2); assert.equal(p.left, 1);
   assert.equal(walkSummary(run, p, ch), '1 fight (2 monsters), 1 event, arrive at the Chapel');
-  click(app, cc.x, cc.y); frames(app, 40);
+  const go = reg('ward-act'); click(app, go.x + go.w / 2, go.y + 25); frames(app, 40);
   assert.equal(run.phase, 'combat'); assert.equal(app.current, 'combat');
   assert.equal(run.ward.hero.room, wd);
   frames(app, 20);
@@ -140,11 +144,14 @@ await t('walk: wait here heals 3; far and unreachable rooms explain why; the las
   layout(run, [['rm_entrance', 0, 2], ['rm_corridor', 1, 2], ['rm_corridor', 2, 2], ['rm_corridor', 3, 2], ['rm_corridor', 4, 2], ['rm_corridor', 5, 2], ['rm_linen', 7, 0]]);
   run.ward.phase = 'midday'; run.hp = 50;
   flow.route(); frames(app, 200);
-  assert.equal(whyText(run, WD.pathTo(run, WD.roomAt(run, 5, 2).id).why), 'Too far: you can walk 4 rooms this phase.');
-  assert.match(whyText(run, WD.pathTo(run, WD.roomAt(run, 7, 0).id).why), /No door leads there/);
+  run.ward.roll = { key: '1:midday', base: 1, sides: 4, bonus: 0, n: 1, lucky: 0 };
+  assert.match(whyText(run, WD.routeWhy(run, WD.roomAt(run, 7, 0).id)), /next to the last one/);
+  assert.ok(WD.extendRoute(run, WD.roomAt(run, 1, 2).id).ok);
+  assert.equal(WD.routeWhy(run, WD.roomAt(run, 2, 2).id), 'full'); assert.match(whyText(run, 'full'), /roll is spent/);
+  WD.clearRoute(run);
   const A = reg('ward-act');
   click(app, A.x + A.w / 2, A.y + 108 + 23); frames(app, 30);
-  assert.equal(run.hp, 53); assert.equal(run.ward.phase, 'evening');
+  assert.equal(run.hp, 50 + WD.WARD_TUNE.waitHeal); assert.equal(run.ward.phase, 'evening');
   run.ward.day = run.ward.dayLimit; run.ward.phase = 'night'; frames(app, 30);
   assert.equal(WD.pathTo(run, WD.roomAt(run, 1, 2).id).why, 'boss');
   assert.equal(whyText(run, 'boss'), 'The last night: only the Theatre.');
@@ -276,6 +283,37 @@ for (const ps of [0, 0.64, 0.54, 0.46]) await t('layout sweep ' + (ps ? 'phone '
   const mine = problems.slice(before);
   if (mine.length) console.log(mine.map((p) => '  ' + p).join('\n'));
   assert.equal(mine.length, 0, 'layout problems');
+});
+
+await t('z4: re-entering the Ward after a fight drops stale build stamps (rooms built in the morning stayed invisible until the old clock caught up)', async () => {
+  const { app, run, flow } = await setup({ seed: 'z4stamp' });
+  layout(run, [['rm_entrance', 0, 2]]);
+  run.ward.res.wood = 10; run.ward.res.stone = 10; run.ward.deck.hand = [];
+  give(run, 'b_ward');
+  flow.route(); frames(app, 600); // a long morning: the screen clock runs far past 0
+  const r = handRects(1)[0], good = cellCenter(1, 2);
+  drag(app, r.x + r.w / 2, r.y + 60, good.x, good.y);
+  const id = WD.roomAt(run, 1, 2).id;
+  assert.ok(wardMod.wardMem.stamps[id] > 5, 'the build stamped the late screen clock');
+  flow.route(); frames(app, 5); // back from a fight: a fresh screen state whose clock restarts at 0
+  assert.equal(wardMod.wardMem.stamps[id], undefined, 'stale stamp cleared on enter');
+});
+
+await t('z4: touch plan drags are not scrolls on the Ward (app.touchPan off), so a plan dragged up from the hand can drop', async () => {
+  const { app, run, flow } = await setup({ seed: 'z4touch' });
+  layout(run, [['rm_entrance', 0, 2]]);
+  flow.route(); frames(app, 30);
+  assert.equal(app.touchPan, false, 'morning: finger drags drop plans');
+  run.ward.phase = 'midday'; frames(app, 10); assert.equal(app.touchPan, false);
+});
+
+await t('z4: the title Continue line of a Ward run reads the day, not Floor 0', async () => {
+  const mem = {}; globalThis.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
+  const { run } = await setup({ seed: 'z4title' });
+  const { saveRun } = await import('../graftwork/engine/save.js'); saveRun(run);
+  const info = SCR.title.readSave({});
+  assert.ok(info && info.day === 1 && info.dayLimit === 8, JSON.stringify(info));
+  delete globalThis.localStorage;
 });
 
 void BUILD_CARDS;
