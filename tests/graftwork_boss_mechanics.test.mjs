@@ -160,7 +160,7 @@ t('Pickled King Thirst: heals 1 per 3 Block you gain, 9 a turn, resets each turn
 
 t('Stagehands Hoist the Heavy: jams the most expensive card in the next hand', () => {
   const c = fight('stagehands');
-  const real = Object.values(CARDS).filter((d) => d.type !== 'junk' && typeof d.cost === 'number' && !String(d.id).startsWith('t'));
+  const real = Object.values(CARDS).filter((d) => d.type !== 'junk' && typeof d.cost === 'number' && /^[mwox]_/.test(d.id));
   const heavy = real.reduce((a, b) => (b.cost > a.cost ? b : a));
   const cheap = real.reduce((a, b) => (b.cost < a.cost ? b : a));
   assert.ok(heavy.cost > cheap.cost);
