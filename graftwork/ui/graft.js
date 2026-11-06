@@ -351,8 +351,8 @@ function drawPatchBody(app, g, x, y, w, h, o) {
   ctx.restore();
   app.text(tier.label, x + w - 10 - rw / 2 + 4, y + 11, { size: 13, ui: true, bold: true, align: 'center', color: tier.ink });
   // staples (weight)
-  for (let i = 0; i < g.weight; i++) drawStaple(app.ctx, x + w - 22 - (g.weight - i) * 19 + 4, y + 33, 14, '#d8dde0');
-  app.text('weight ' + g.weight, x + w - 12 - rw - 4 - (compact ? 0 : 0), y + 11, { size: 12, ui: true, align: 'right', color: DIM });
+  for (let i = 0; i < g.weight; i++) drawStaple(app.ctx, x + w - 12 - rw - 8 - (g.weight - i) * 19 + 4, y + 11, 14, '#d8dde0');
+  
   // name
   app.text(g.name, tx, y + 7, { size: compact ? 18 : 20, bold: true, color: COL.vellum, shadow: true });
   // boon + price
