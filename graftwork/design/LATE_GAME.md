@@ -24,3 +24,6 @@ What works: intent tooltips are strong (they print base, strength, weak and the 
 
 ## Fixed in this pass
 Findings 1 and 2, both in ui/combat_hud.js (drawEnemyPlate badge, drawIntentBubble kinds). `node tests/run_graftwork.mjs`: 46/46 passed. Findings 3 to 15 were not fixed in this session (time budget), the list is ordered by priority for the next pass.
+
+## Fixed in pass S3 (findings 3 to 15)
+3 intent icons per move effect (engine/intent_icons.js: attack, multi + xN, sweep, heavy, Block, debuff, poison, buff, heal, summon, junk, special; up to 3). 4 intro plate 1.3 s (elite 1.1 s), gone before the queue releases. 5 enemy floats clamp below the intent plate (fyE). 6 hero status row 28 px (min 26) in a 64 px plate. 7 red up-arrow badge on the cost orb when cost is above printed. 8 Lid Crush and the Grafter mirror have tips. 9 hero tips use HERO_TIP_BAND (above the hero), the hero '+N' list opens upward. 10 lethal chip and red pulse (engine lethalIncoming). 11 card text merges same-effect lines and says "again" / "more" for repeated branch sentences (engine/text.js). 12 status names under icons for 3 or fewer statuses on one row. 13 tutorial bubbles take `avoid` rects (enemy name, move, intent). 14 enemy status icons shrink to 22 before collapsing. Tests: graftwork_s3_intents, graftwork_ui_combat_layout.

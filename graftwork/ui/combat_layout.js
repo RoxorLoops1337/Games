@@ -11,7 +11,10 @@ export const PILE_S = 0.3, EXH_S = 0.2;
 export const ORB = { x: 84, y: 578, size: 88 };
 export const STRAIN_BOX = { x: 14, y: 466, w: 128, h: 44 };
 // Hero plate (hp bar, block, statuses) sits right of the strain box and ends above the resting hand (y 516).
-export const HERO_PLATE = { x: 150, y: 464, w: 220, h: 52 };
+// h 64: hp bar, then one 28 px status row with the status names under the icons (<= 3 statuses); the nearest resting card top is y ~529.
+export const HERO_PLATE = { x: 150, y: 464, w: 220, h: 64 };
+// Hero tips (statuses, hp, block) fill this band on the empty wall above the hero, never the Thread rail or the hand below it.
+export const HERO_TIP_BAND = { x: 16, y: 76, bottom: 440, dir: 1 };
 // Enemy lane (x 500..1252, y 70..400): nameplate+move y70..104, intent 104..134, art above the foot, hp bar + status rows below it.
 export const ENEMY_FOOT = 356, ENEMY_ART_H = 195, ENEMY_SLOT_MIN = 110, ENEMY_LANE_TOP = 70;
 export const END_BTN = { x: 1086, y: 546, w: 172, h: 54 };

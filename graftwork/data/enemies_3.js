@@ -393,6 +393,8 @@ function reknit(A, e) {
 }
 const SPLICE_TEXT = 'Applies the effect of your most grafted school: Ember burn, Blood bleed, Echo a second hit, Hoard block it keeps, Rust junk, Static marks, Gilded steals gold. No grafts: Weak and block. With Strain 2+ it also adds Infection 1. It copies the school of your last Thread cut (the Line cashed when your turn ends comes too late to count)';
 
+const MIRROR_TIP = 'It copies your own card: the hardest-hitting attack in your deck (name above), and it hits you for that card\'s damage, at least 14 and at most 34.';
+
 const grafter = {
   id: 'the_grafter', name: 'The Grafter', act: 3, kind: 'boss', start: { strength: 1 }, final: true, hp: 165,
   pattern: ['stitch', 'splice', 'mirror'],
@@ -400,14 +402,14 @@ const grafter = {
     stitch: { name: 'Stitch', fx: [{ op: 'dmg', n: { base: 12, per: 'grafts', max: 36 } }] },
     splice: { name: 'Splice', intent: ['attack', 'debuff'], tip: 'If your most grafted school is Echo (or it copies an Echo payout), it hits a second time for 6 plus half your graft count. The number shown includes that second hit.',
       fx: [{ op: 'dmg', n: { base: 8, per: 'grafts', mul: 0.5, max: 28 } }, { ...CUSTOM('debuff', SPLICE_TEXT, spliceEffect), intentDmg: (c, e) => ((e.data.mirror || e.data.school) === 'echo' ? 6 + Math.floor((e.data.count || 0) / 2) : 0) }] },
-    mirror: { name: 'Your Best Card', fx: [D(14)] }, // replaced per fight in combatStart
+    mirror: { name: 'Your Best Card', tip: MIRROR_TIP, fx: [D(14)] }, // replaced per fight in combatStart
   },
   on: {
     combatStart(A, e) {
       const t = tallyDeck(A.c.run);
       Object.assign(e.data, { count: t.count, weight: t.weight, school: t.school, schools: t.schools, weights: t.weights, best: t.best, bestName: t.bestName });
       const dmg = Math.max(14, Math.min(34, t.best || 14));
-      const mirror = { name: t.bestName ? 'Your ' + t.bestName : 'Your Best Card', fx: [D(dmg)] };
+      const mirror = { name: t.bestName ? 'Your ' + t.bestName : 'Your Best Card', tip: MIRROR_TIP, fx: [D(dmg)] };
       e.def = { ...e.def, moves: { ...e.def.moves, mirror } }; // per-enemy clone, the shared definition is untouched
     },
     damaged(A, e) {

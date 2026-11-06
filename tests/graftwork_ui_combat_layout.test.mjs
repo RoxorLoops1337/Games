@@ -7,6 +7,7 @@ import * as audio from '../graftwork/ui/audio.js';
 import { ENEMIES, RELICS, POTIONS, STATUSES } from '../graftwork/data/index.js';
 import combat from '../graftwork/ui/combat.js';
 import * as L from '../graftwork/ui/combat_layout.js';
+import { statusSizes } from '../graftwork/ui/combat_hud.js';
 import { CARD_W, CARD_H } from '../graftwork/art/cards.js';
 import { keywordsIn, KEYWORDS, explainNumber, renderTip, drawCardText } from '../graftwork/ui/tooltips.js';
 import { cardSpec } from '../graftwork/engine/cards.js';
@@ -17,7 +18,7 @@ const longNames = normals.slice().sort((a, b) => ENEMIES[b].name.length - ENEMIE
 const fails = [], warns = new Set();
 const foreign = (id) => /^(hand_|seam|preview|end_confirm|pause|fs|fullscreen|cannot)/.test(id); // owned by other builders: warn, do not fail
 
-async function scene({ n, hand, relics = 0, potions = 0, statuses = 0, hover = null }) {
+async function scene({ n, hand, relics = 0, potions = 0, statuses = 0, hover = null, eAll = 0, hp = 0, heroSt = null }) {
   const run = RUN.newRun({ hero: 'marrow', seed: 'lay' + n + hand });
   run.phase = 'combat';
   run.pending = { kind: 'combat', fightKind: 'normal', enemies: longNames.slice(0, n) };
@@ -42,7 +43,14 @@ async function scene({ n, hand, relics = 0, potions = 0, statuses = 0, hover = n
     for (const e of c.enemies.slice(0, 1)) for (const s of ids) { e.st[s] = 2; st.edBy.get(e.uid).st[s] = 2; }
     for (const s of ids) { c.player.st[s] = 3; st.P.st[s] = 3; }
   }
+  if (eAll) { // every enemy carries `eAll` statuses (the crowded 4-enemy lane)
+    const ids = Object.keys(STATUSES).slice(0, eAll);
+    for (const e of c.enemies) for (const sid of ids) { e.st[sid] = 2; st.edBy.get(e.uid).st[sid] = 2; }
+  }
+  if (heroSt) for (const sid of heroSt) { c.player.st[sid] = 2; st.P.st[sid] = 2; }
+  if (hp) c.player.hp = hp;
   frames(app, 90);
+  if (hover === 'hero-status') { const r = app.layout.getAll().find((q) => q.id === 'status:hero'); app.mouse.x = r.x + 14; app.mouse.y = r.y + 14; frames(app, 40); }
   if (hover === 'enemy') { const ed = st.eds[0]; app.mouse.x = ed.x; app.mouse.y = L.ENEMY_FOOT - ed.h / 2; }
   texts.length = 0;
   frames(app, 12);
@@ -82,6 +90,35 @@ check('long statuses', await scene({ n: 3, hand: 5, statuses: 14 }));
 check('12 relics', await scene({ n: 2, hand: 5, relics: 12 }));
 check('3 potions', await scene({ n: 4, hand: 6, potions: 3 }));
 check('enemy hover', await scene({ n: 3, hand: 5, hover: 'enemy' }));
+
+// S3: status rows, labels, lethal chip, tip band
+{
+  const rects = (sc) => sc.app.layout.getAll();
+  // hero statuses are at least 26 px, enemy statuses never drop under 22 even with 8 on each of 4 enemies, and no row reaches the Thread rail
+  let sc = await scene({ n: 4, hand: 5, eAll: 8, heroSt: ['weak', 'vulnerable', 'strength', 'poison', 'burn', 'bleed'] });
+  check('4 enemies x 8 statuses', sc);
+  assert.ok(statusSizes.hero >= 26, 'hero status icons >= 26: ' + statusSizes.hero);
+  for (const ed of sc.st.eds) assert.ok(statusSizes['en' + ed.id] >= 22, 'enemy status icons >= 22: ' + statusSizes['en' + ed.id]);
+  for (const r of rects(sc).filter((q) => /^status:en/.test(q.id))) assert.ok(r.y + r.h <= L.SEAM.y - 2, `${r.id} ends at ${r.y + r.h}, above the Thread rail`);
+  const hr = rects(sc).find((q) => q.id === 'status:hero'); assert.ok(hr && hr.y >= L.HERO_PLATE.y && hr.y + hr.h <= L.HERO_PLATE.y + L.HERO_PLATE.h, 'hero row inside the hero plate');
+  // names under the icons with 3 or fewer statuses, glyph and number only with more
+  sc = await scene({ n: 2, hand: 5, heroSt: ['weak', 'vulnerable'] });
+  assert.ok(sc.texts.some((t) => t.str === 'Weak') && sc.texts.some((t) => t.str.startsWith('Vulnera')), 'status names shown for 2 statuses: ' + sc.texts.map((t) => t.str).join('|').slice(0, 200));
+  sc = await scene({ n: 2, hand: 5, heroSt: ['weak', 'vulnerable', 'strength', 'poison'] });
+  assert.ok(!sc.texts.some((t) => t.str === 'Weak'), 'no names with 4 statuses');
+  check('hero 2 statuses', await scene({ n: 3, hand: 7, heroSt: ['weak', 'vulnerable', 'strength'] }));
+  // lethal warning: skull chip near the HP plate only when the visible intents reach your HP
+  sc = await scene({ n: 3, hand: 5, hp: 1 });
+  assert.ok(rects(sc).some((q) => q.id === 'lethalChip'), 'lethal chip registered at 1 HP');
+  assert.ok(sc.texts.some((t) => /^Lethal: \d+ incoming$/.test(t.str)), 'chip text');
+  check('lethal chip', sc);
+  sc = await scene({ n: 3, hand: 5, hp: 999 });
+  assert.ok(!rects(sc).some((q) => q.id === 'lethalChip'), 'no chip at 999 HP');
+  // tips for hero statuses fill the band above the hero: never the Thread rail or the hand
+  sc = await scene({ n: 3, hand: 7, heroSt: ['weak', 'vulnerable'], hover: 'hero-status' });
+  const tips = rects(sc).filter((q) => /^tip\d/.test(q.id)); assert.ok(tips.length, 'hero status tip drawn');
+  for (const tp of tips) assert.ok(tp.y + tp.h <= L.HERO_TIP_BAND.bottom, `tip ends at ${tp.y + tp.h}, above the Thread rail and the hand`);
+}
 
 // presence: a lone enemy / duo stands bigger than a 3+ lane, 3+ keep slots that never overlap
 {

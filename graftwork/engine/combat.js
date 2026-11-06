@@ -10,6 +10,7 @@ import { resonanceOf, RES_HOOKS } from './resonance.js';
 import { seamInit, seamStep, seamEnd, seamTurnStart } from './seam.js';
 import { assistDmgMul, assistRevive, assistOpt } from './assist.js';
 import { afflInst, afflCost, afflStartTurn, afflEndTurn, afflAbsorb } from './afflictions.js';
+import { intentIcons } from './intent_icons.js';
 
 export const HAND_CAP = 10;
 export const MAX_PLAYS_TURN = 20;
@@ -598,11 +599,27 @@ export function pickMove(c, e) {
   c.ev.push({ t: 'intent', e: e.uid, move: id });
 }
 
+// Lethal warning: what the visible intents deal this enemy phase against the player's CURRENT Block and HP. intentOf already applies Weak (the attacker's
+// outMul) and Vulnerable (read one turn lower, since it ticks before they act); pierce hits ignore Block. Hidden intents are not counted.
+export function lethalIncoming(c) {
+  const out = { total: 0, pierce: 0, net: 0, lethal: false };
+  if (!c || c.over || !c.player || c.player.hp <= 0) return out;
+  for (const e of c.enemies) {
+    if (e.dead || !e.move || (e.st.stun > 0)) continue;
+    let info = null; try { info = intentOf(c, e); } catch (err) { info = null; }
+    if (!info || info.hidden) continue;
+    out.total += info.dmg || 0; out.pierce += info.pierce || 0;
+  }
+  out.net = Math.max(0, out.total - out.pierce - (c.player.block || 0)) + out.pierce;
+  out.lethal = out.net > 0 && out.net >= c.player.hp;
+  return out;
+}
+
 export function intentOf(c, e) {
   if (!e.move) return { kinds: ['unknown'], dmg: 0, hits: 0 };
   const mv = e.def.moves[e.move];
   const kinds = new Set();
-  let dmg = 0, hits = 0;
+  let dmg = 0, hits = 0, pierce = 0;
   const ctx = { srcEnt: e, target: c.player };
   // outgoing modifiers, then the player's incoming ones. The player's timed statuses (Vulnerable, Marked, Frail...) tick down at end of turn,
   // BEFORE the enemies act, so they are read one lower: the number shown is the number that lands.
@@ -622,7 +639,7 @@ export function intentOf(c, e) {
         kinds.add('attack');
         const n = hitMods(val(c, ctx, o.n));
         const h = val(c, ctx, o.hits) || 1;
-        dmg += n * h; hits += h; ctx.per = n;
+        dmg += n * h; hits += h; ctx.per = n; if (o.pierce) pierce += n * h;
       } else if (o.op === 'block') kinds.add('defend');
       else if (o.op === 'status') kinds.add(['self', 'allies'].includes(o.to) ? 'buff' : 'debuff');
       else if (o.op === 'addCard') kinds.add('junk');
@@ -635,7 +652,9 @@ export function intentOf(c, e) {
   if (mv.intent) { kinds.clear(); for (const k of [].concat(mv.intent)) kinds.add(k); }
   if (!kinds.size) kinds.add('unknown');
   const hidden = !!mv.hidden || (e.st.hidden > 0);
-  return { kinds: [...kinds], dmg, hits, per: ctx.per || 0, hidden, name: mv.name || e.move, move: e.move };
+  const info = { kinds: [...kinds], dmg, pierce, hits, per: ctx.per || 0, hidden, name: mv.name || e.move, move: e.move };
+  info.icons = intentIcons(mv, info, { maxHp: c.player.maxHp }); // one icon per effect (sweep, multi, heavy, poison...), see engine/intent_icons.js
+  return info;
 }
 
 function enemyAct(c, e) {

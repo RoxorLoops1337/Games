@@ -151,15 +151,15 @@ function drawWipe(app, w) {
 }
 
 // ---------------------------------------------------------------- intro plate
-// name plate slam + swinging lamp. 1.9 s; the combat queue waits ~1.2 s of that. A click skips to the exit.
-export const INTRO_LIFE = 1.9;
+// name plate slam + swinging lamp. 1.3 s (elite 1.1 s): it is gone by the time the combat queue releases, so the first telegraph is never under the dim. A click skips to the exit.
+export const INTRO_LIFE = 1.3;
 export function introCard(app, o) {
   const T = state(app); if (!T.on) return null;
   const name = String((o && o.name) || '???'), kind = (o && o.kind) || 'boss';
   const rd = reduced();
   const au = audioCall(app, 'audioState');
   const prev = au && typeof au.intensity === 'number' ? au.intensity : 0;
-  const it = { name, sub: String((o && o.sub) || (kind === 'elite' ? 'ELITE' : 'BOSS')), kind, t: 0, life: rd ? 1.2 : INTRO_LIFE, slammed: false, sparks: [], lampId: -1, prev, rd };
+  const it = { name, sub: String((o && o.sub) || (kind === 'elite' ? 'ELITE' : 'BOSS')), kind, t: 0, life: rd ? 1.0 : kind === 'elite' ? INTRO_LIFE - 0.2 : INTRO_LIFE, slammed: false, sparks: [], lampId: -1, prev, rd };
   T.intro = it; T.intros++;
   audioCall(app, 'setIntensity', kind === 'boss' ? 0.95 : 0.75);
   if (app.after) app.after(it.life * 1000 + 300, () => { if (T.intro === it || !T.intro) audioCall(app, 'setIntensity', it.prev); });

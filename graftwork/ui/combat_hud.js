@@ -69,7 +69,7 @@ function cornerShape(ctx, good, x, y) {
   if (good) { ctx.moveTo(x, y - 4); ctx.lineTo(x + 4.5, y + 4); ctx.lineTo(x - 4.5, y + 4); } else { ctx.moveTo(x - 4.5, y - 4); ctx.lineTo(x + 4.5, y - 4); ctx.lineTo(x, y + 4); }
   ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
 }
-function drawOneStatus(app, ent, id, x, y, sz, anchorRect) {
+function drawOneStatus(app, ent, id, x, y, sz, band, label) {
   const ctx = app.ctx, n = ent.st[id], pop = (ent.pop && ent.pop[id]) || 0, good = stGood(id);
   const k = 1 + 0.55 * pop * pop;
   ctx.save(); ctx.translate(x, y); ctx.scale(k, k); drawStatus(ctx, id, 0, 0, sz, good); ctx.restore();
@@ -83,11 +83,15 @@ function drawOneStatus(app, ent, id, x, y, sz, anchorRect) {
   if (cb(app)) cornerShape(ctx, good, x - sz / 2 + 3, y - sz / 2 + 4);
   const nfs = Math.max(14, Math.min(20, Math.round(sz * 0.58)));
   app.text(String(n), x + sz / 2 + 2, y + sz / 2 - nfs - 1, { size: nfs, bold: true, ui: true, align: 'right', stroke: '#0e0e0e', strokeW: 4, color: '#fff', fixed: true });
-  if (app.inRect(x - sz / 2, y - sz / 2, sz, sz)) queueTip(app, 'st:' + id + ':' + n, [[statusSection(id, n, ent)]], { x: x - sz / 2, y: y - sz / 2, w: sz, h: sz });
+  if (label) { const lw = Math.max(label, 30); const nm = fitText(app, stName(id), lw, 14, 14, { ui: true }); app.text(nm.str, x, y + sz / 2 + 2, { size: 14, ui: true, align: 'center', color: stCol(id), stroke: '#0e0e0e', strokeW: 3, fixed: true }); }
+  if (app.inRect(x - sz / 2, y - sz / 2, sz, sz + (label ? 17 : 0))) queueTip(app, 'st:' + id + ':' + n, [[statusSection(id, n, ent)]], { x: x - sz / 2, y: y - sz / 2, w: sz, h: sz, band });
 }
+// last icon size per status row key (read by the layout tests)
+export const statusSizes = {};
 // Status icons in rows: good statuses on the top row, bad on the second (rows = 2), or one row (rows = 1). Icons shrink from
-// `size` to 26 before anything collapses; beyond 8 (or what fits) the rest hides behind a '+N' chip opening a list.
-// ent: {st, pop}. o: { id, rows, group }. Returns the height used.
+// `size` down to o.minSize (default 26; enemy rows 22 when 4 enemies crowd the lane) before anything collapses; beyond 8 (or what fits) the rest hides behind a '+N' chip opening a list.
+// With 3 or fewer statuses (all on one row) the status NAME shows under each icon when it fits (o.labels); with more, the glyph and number only.
+// ent: {st, pop}. o: { id, rows, group, minSize, labels, band }. Returns the height used.
 export function drawStatusRow(app, ent, cx, y, maxW, size, t, o = {}) {
   const ids = Object.keys(ent.st).filter((s) => ent.st[s]);
   const rows = o.rows || 2, key = o.id || 'ent';
@@ -96,7 +100,9 @@ export function drawStatusRow(app, ent, cx, y, maxW, size, t, o = {}) {
   let sz = size, perRow = Math.max(1, Math.floor((maxW + 4) / (sz + 4)));
   const need = (k) => Math.max(1, Math.floor((maxW + 4) / (k + 4)));
   const fits = (k) => (rows === 1 ? ids.length <= need(k) : good.length <= need(k) && bad.length <= need(k)) && ids.length <= 8;
-  for (const k of [size, 30, 28, 26]) { if (k > size) continue; sz = k; perRow = need(k); if (fits(k)) break; }
+  const minSize = o.minSize || 26;
+  for (const k of [size, 30, 28, 26, 24, 22]) { if (k > size || k < minSize) continue; sz = k; perRow = need(k); if (fits(k)) break; }
+  statusSizes[key] = sz;
   let gShow = good, bShow = bad; const hidden = [];
   if (rows === 1) { const all = good.concat(bad); gShow = all.slice(0, ids.length <= Math.min(8, perRow) ? all.length : Math.min(8, perRow) - 1); bShow = []; hidden.push(...all.slice(gShow.length)); }
   else {
@@ -105,7 +111,11 @@ export function drawStatusRow(app, ent, cx, y, maxW, size, t, o = {}) {
     while (gShow.length + bShow.length > 8) { hidden.push((bShow.length ? bShow : gShow).pop()); }
     if (hidden.length && bShow.length >= perRow) hidden.push(bShow.pop());
   }
-  const step = sz + 4, rowH = sz + 3, ctx = app.ctx;
+  // names under the icons: <= 3 statuses, one occupied row (no room under the enemy rows for two), >= 44 px of width each
+  const nOne = rows === 1 || !(gShow.length && bShow.length);
+  const lw = ids.length ? Math.floor((maxW + 4) / ids.length) - 4 : 0;
+  const lab = !!o.labels && ids.length <= 3 && !hidden.length && nOne && lw >= 44 ? Math.min(lw, 80) : 0;
+  const step = lab ? Math.max(sz + 4, lab + 4) : sz + 4, rowH = sz + 3 + (lab ? 17 : 0), ctx = app.ctx;
   const rowsOut = rows === 1 ? [gShow.concat([])] : [gShow, bShow];
   let chip = hidden.length ? true : false;
   if (rows === 1) { /* chip joins the single row */ } else if (!bShow.length && gShow.length && chip) { /* chip goes on row 2 */ }
@@ -113,7 +123,7 @@ export function drawStatusRow(app, ent, cx, y, maxW, size, t, o = {}) {
   const lay = (list, extraChip) => {
     const n = list.length + (extraChip ? 1 : 0); if (!n) return;
     const w = n * step - 4, x0 = cx - w / 2 + sz / 2, yy = y + r * rowH + sz / 2;
-    list.forEach((id, i) => drawOneStatus(app, ent, id, x0 + i * step, yy, sz));
+    list.forEach((id, i) => drawOneStatus(app, ent, id, x0 + i * step, yy, sz, o.band, lab));
     minX = Math.min(minX, cx - w / 2); maxX = Math.max(maxX, cx + w / 2);
     if (extraChip) {
       const chipX = x0 + list.length * step - sz / 2, cr = { x: chipX, y: yy - sz / 2, w: sz + 6, h: sz };
@@ -142,7 +152,7 @@ export function drawPopovers(app) {
   const w = pc.kind === 'relic' ? cols * 38 + pad * 2 : 230;
   const rowsN = pc.kind === 'relic' ? Math.ceil(items.length / cols) : Math.min(items.length, 14);
   const h = pc.kind === 'relic' ? rowsN * 38 + pad * 2 : rowsN * rowH + pad * 2;
-  const x = clamp(pc.rect.x + pc.rect.w / 2 - w / 2, 6, 1274 - w), y = Math.min(pc.rect.y + pc.rect.h + 6, 714 - h);
+  const x = clamp(pc.rect.x + pc.rect.w / 2 - w / 2, 6, 1274 - w), y = pc.rect.y > 440 ? Math.max(6, pc.rect.y - h - 6) : Math.min(pc.rect.y + pc.rect.h + 6, 714 - h); // the hero's list opens upward, never over the hand
   app.panel(x, y, w, h, { fill: 'rgba(14,12,10,.98)', stroke: COL.lamp });
   app.reg('popover', x, y, w, h, { layer: 'overlay', overlay: true });
   if (pc.kind === 'relic') {
@@ -206,12 +216,15 @@ export function intentText(info) {
 export function drawIntentBubble(app, info, x, y, prog, alpha = 1, maxW = 170) {
   const ctx = app.ctx;
   if (!info || prog <= 0 || alpha <= 0) return { x, y, w: 0, h: 0 };
-  let kinds = info.hidden ? ['unknown'] : info.kinds.slice(0, 3); // a 3-effect move (Appraiser: attack + block + debuff) shows all three when the plate is wide enough
+  // one icon per effect, derived from the move's ops (engine/intent_icons.js): sword, multi-blade (+ xN), sweep, heavy, Block, debuff, buff, heal, summon, junk, special; up to 3 when the plate is wide enough
+  let kinds = info.hidden ? [{ k: 'unknown' }] : (info.icons && info.icons.length ? info.icons : info.kinds.map((k) => ({ k }))).slice(0, 3);
+  let isz = 36;
   const attack = !info.hidden && info.kinds.includes('attack');
   const num = attack ? String(info.hits > 1 ? info.per : info.dmg) : (info.hidden ? '?' : '');
   const hitTxt = attack && info.hits > 1 ? 'x' + info.hits : '';
   const numW = num ? app.measure(num, 30, { bold: true, ui: true }) : 0, hitW = hitTxt ? app.measure(hitTxt, 22, { bold: true, ui: true }) : 0;
-  const body = (k) => k.length * 38 + (numW ? numW + 4 : 0) + (hitW ? hitW + 4 : 0) + 16;
+  const body = (k) => k.length * (isz + 2) + (numW ? numW + 4 : 0) + (hitW ? hitW + 4 : 0) + 16;
+  if (body(kinds) > maxW && kinds.length > 1) isz = 28; // a narrow plate (4+ enemies) shrinks the icons before it drops an effect
   while (body(kinds) > maxW && kinds.length > 1) kinds = kinds.slice(0, -1);
   const w = Math.min(maxW, body(kinds)), h = 44;
   ctx.save();
@@ -223,7 +236,7 @@ export function drawIntentBubble(app, info, x, y, prog, alpha = 1, maxW = 170) {
   ctx.fillStyle = 'rgba(255,241,176,.55)'; for (const [rx, ry] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { ctx.beginPath(); ctx.arc(x + rx * (w / 2 - 3.5), y + ry * (h / 2 - 3.5), 1, 0, 6.2832); ctx.fill(); }
   ctx.beginPath(); ctx.rect(x - w / 2, y - h, w * clamp(prog * 1.6, 0, 1), h * 2); ctx.clip();
   let cx = x - w / 2 + 8;
-  for (const k of kinds) { drawIntent(ctx, k, cx + 17, y, 36); cx += 38; }
+  for (const ic of kinds) { drawIntent(ctx, ic.k, cx + isz / 2 - 1, y, isz, { hits: ic.hits, heavy: ic.k === 'heavy' }); cx += isz + 2; }
   if (num) { app.text(num, cx + 2, y - 18, { size: 30, bold: true, ui: true, color: '#fff', stroke: '#0e0e0e', strokeW: 4, fixed: true }); cx += numW + 4; }
   if (hitTxt) app.text(hitTxt, cx + 2, y - 13, { size: 22, bold: true, ui: true, color: '#ffd9a0', stroke: '#0e0e0e', strokeW: 4, fixed: true });
   ctx.restore();
@@ -257,6 +270,8 @@ export function drawEnemyPlate(app, ed, o) {
     const mvc = ed.e.def.moves && ed.e.def.moves[ed.e.move];
     if (ir.w && mvc && (mvc.tip || mvc.note) && !info.hidden) { const bx = ir.x + ir.w - 2, by0 = ir.y + 2; ctx.save(); ctx.beginPath(); ctx.arc(bx, by0, 9, 0, 6.2832); ctx.fillStyle = '#e6b84a'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#0e0e0e'; ctx.stroke(); app.text('+', bx, by0 - 9, { size: 15, bold: true, ui: true, align: 'center', color: '#1a1208', fixed: true }); ctx.restore(); }
   }
+  // enemy tips fill a band beside the whole plate (never over its own health bar, intent or statuses): right of the slot when it fits, else left
+  const bandR = left + sw + 8 + 320 <= W - 6, band = { x: bandR ? left + sw + 8 : left - 8, y: L.ENEMY_LANE_TOP, bottom: foot + 150, dir: bandR ? 1 : -1 };
   // hp bar + block
   const by = foot + 6, bx = left + 24, bw = sw - 26;
   drawBar(app, bx, by, bw, 16, ed.shown, ed.trail, ed.maxHp, '#a8412f', `${Math.max(0, Math.ceil(ed.hp))}/${ed.maxHp}`);
@@ -265,12 +280,10 @@ export function drawEnemyPlate(app, ed, o) {
   ctx.restore();
   // status rows
   ctx.save(); ctx.globalAlpha = o.alpha;
-  drawStatusRow(app, ed, ed.x, by + 24, sw - 2, ed.scale < 0.8 ? 28 : 32, 0, { id: grp, rows: 2, group: grp });
+  drawStatusRow(app, ed, ed.x, by + 24, sw - 2, ed.scale < 0.8 ? 28 : 32, 0, { id: grp, rows: 2, group: grp, minSize: 22, labels: true, band });
   ctx.restore();
   if (o.suppress) return;
   // tips: block, intent, hp/body
-  // enemy tips fill a band beside the whole plate (never over its own health bar, intent or statuses): right of the slot when it fits, else left
-  const bandR = left + sw + 8 + 320 <= W - 6, band = { x: bandR ? left + sw + 8 : left - 8, y: L.ENEMY_LANE_TOP, bottom: foot + 150, dir: bandR ? 1 : -1 };
   if (ed.block > 0 && app.inRect(left, by - 6, 24, 28)) queueTip(app, 'blk' + grp, [[{ title: 'Block ' + ed.block, text: 'Absorbs damage until this enemy acts.', color: '#bcd0d8', glyph: 'square' }]], { x: left, y: by - 6, w: 24, h: 28, band });
   else if (ir && ir.w && o.info && app.inRect(ir.x, ir.y, ir.w, ir.h)) queueTip(app, 'int' + grp + ':' + o.info.move, intentTip(app, ed, o), { x: ir.x, y: ir.y, w: ir.w, h: ir.h, band });
   else if (o.hot && !o.tgt && app.inRect(ed.x - ed.w / 2, foot - ed.h, ed.w, ed.h + 24)) queueTip(app, 'body' + grp, bodyTip(ed, o), { x: ed.x - ed.w / 2, y: foot - ed.h, w: ed.w, h: ed.h, band });
@@ -294,8 +307,10 @@ function bodyTip(ed, o) {
 
 // Hero plate: hp bar, block, one row of statuses (good first). Registers 'heroPlate'.
 // dgr (low HP): { pulse 0..1, level, rm }. The bar glows and throbs with the heartbeat, the number swells and shakes; reduced motion keeps a steady glow.
-export function drawHeroPlate(app, P, heroName, t, dgr) {
+// lethal ({ net }): the visible intents would kill you from here. The bar throbs red and a skull chip over the plate says how much is incoming.
+export function drawHeroPlate(app, P, heroName, t, dgr, lethal) {
   const ctx = app.ctx, H = L.HERO_PLATE;
+  if (lethal && lethal.lethal && !dgr) { const rm = !!lethal.rm; dgr = { pulse: rm ? 0.4 : 0.5 + 0.5 * Math.sin(t * 6), level: 0.55, rm }; }
   const hpLabel = `${Math.max(0, Math.ceil(P.hp))}/${P.maxHp}`;
   if (dgr) {
     const pu = dgr.rm ? 0.4 : dgr.pulse, lv = dgr.level, bx = H.x + 34, by = H.y + 2, bw = H.w - 38;
@@ -309,10 +324,17 @@ export function drawHeroPlate(app, P, heroName, t, dgr) {
   } else
   drawBar(app, H.x + 34, H.y + 2, H.w - 38, 16, P.shown, P.trail, P.maxHp, '#b3263a', hpLabel);
   if (P.block > 0) { const k = 1 + P.bpulse * 0.35; ctx.save(); ctx.translate(H.x + 15, H.y + 11); ctx.scale(k, k); drawShield(ctx, 0, 0, 32, P.block); ctx.restore(); }
-  drawStatusRow(app, P, H.x + H.w / 2, H.y + 26, H.w, 24, t, { id: 'hero', rows: 1, group: 'heroPlate' });
+  drawStatusRow(app, P, H.x + H.w / 2, H.y + 19, Object.keys(P.st).filter((k) => P.st[k]).length <= 3 ? H.w + 16 : H.w, 28, t, { id: 'hero', rows: 1, group: 'heroPlate', minSize: 26, labels: true, band: L.HERO_TIP_BAND });
   app.reg('heroPlate', H.x, H.y, H.w, H.h, {});
-  if (P.block > 0 && app.inRect(H.x, H.y, 30, 22)) queueTip(app, 'heroblk', [[{ title: 'Block ' + P.block, text: 'Absorbs damage until your next turn.', color: '#bcd0d8', glyph: 'square' }]], { x: H.x, y: H.y, w: 30, h: 22 });
-  else if (app.inRect(H.x + 34, H.y + 2, H.w - 38, 16)) queueTip(app, 'herohp', [[{ title: heroName, text: `HP ${P.hp} / ${P.maxHp}`, color: COL.bad, glyph: 'cross' }]], { x: H.x + 34, y: H.y + 2, w: H.w - 38, h: 16 });
+  if (lethal && lethal.lethal) {
+    const txt = `Lethal: ${lethal.net} incoming`, tw = app.measure(txt, 14, { bold: true, ui: true }), cw = tw + 40, cx = H.x + 34, cy = H.y - 28, ch = 24;
+    ctx.save(); const k = 0.5 + 0.5 * Math.sin(t * 6); app.rr(cx, cy, cw, ch, 7); ctx.fillStyle = 'rgba(40,6,10,.95)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = lethal.rm ? '#e0344a' : `rgba(255,${70 + Math.round(60 * k)},${80 + Math.round(40 * k)},1)`; ctx.stroke(); ctx.restore();
+    drawIntent(ctx, 'debuff', cx + 13, cy + ch / 2, 20);
+    app.text(txt, cx + 28, cy + 4, { size: 14, bold: true, ui: true, color: '#ffb0b0', stroke: '#2a0408', strokeW: 3, fixed: true });
+    app.reg('lethalChip', cx, cy, cw, ch, { group: 'heroPlate' });
+  }
+  if (P.block > 0 && app.inRect(H.x, H.y, 30, 22)) queueTip(app, 'heroblk', [[{ title: 'Block ' + P.block, text: 'Absorbs damage until your next turn.', color: '#bcd0d8', glyph: 'square' }]], { x: H.x, y: H.y, w: 30, h: 22, band: L.HERO_TIP_BAND });
+  else if (app.inRect(H.x + 34, H.y + 2, H.w - 38, 16)) queueTip(app, 'herohp', [[{ title: heroName, text: `HP ${P.hp} / ${P.maxHp}`, color: COL.bad, glyph: 'cross' }]], { x: H.x + 34, y: H.y + 2, w: H.w - 38, h: 16, band: L.HERO_TIP_BAND });
 }
 
 
