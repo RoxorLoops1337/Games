@@ -655,14 +655,14 @@ export default {
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawPotion(g, it.id, x + 30, y + 34 - 2 * k, 40);
       let nmO = { size: 15, bold: true, fit: { w: w - 58, lines: 1 } }; if (app.layoutText(p.name, nmO).trunc) nmO = { ...nmO, bold: false }; // a long name on the smallest phone drops the bold before it loses letters
-      const nmL = app.layoutText(p.name, nmO), nameY = y + 9 - 2 * k;
+      const nmL = app.layoutText(p.name, nmO), nameY = y + 12 - 2 * k;
       app.text(p.name, x + 56, nameY, { ...nmO, color: COL.vellum });
       { const dy0 = nameY + Math.ceil(nmL.size * 1.2) + 2, dO = { size: 14, ui: true, fit: { w: w - 64, h: y + h - 5 - 2 * k - dy0, soft: true } }, dL = app.layoutText(p.text, dO);
         app.text(p.text, x + 56, dy0, { ...dO, color: 'rgba(232,220,196,.85)' });
         potInfo = dL.trunc ? { x: x + 52, y: dy0 - 4, w: w - 58, h: dL.h + 8 } : null; }
       g.restore();
       if (potInfo && !it.sold && touchUi(app) && infoChip(app, x + 16, y + h - 15 - 2 * k, [potInfo], 'potion' + i)) { sfx(app, 'uiClick'); openInfoCard(app, p.name, withGloss(`${p.rarity}\n${p.text}\n${it.price} gold.`), COL.lamp); }
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 44, y - 6, it.price, false, 'potion' + i);
+      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 44, y - 1, it.price, false, 'potion' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(p.name, `${p.rarity}\n${p.text}\nPotion slots ${run.potions.length}/${RUN.potionSlots(run)}. ${it.price} gold.`, { anchor: { x: POT_X(i), y, w, h } }); }
       if (!it.sold && app.clicked(POT_X(i), y, w, h)) buyDirect(app, 'potion', i, { x: x + 30, y: y + 38 }, it.price);
     });
