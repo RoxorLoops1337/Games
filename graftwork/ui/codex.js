@@ -415,7 +415,7 @@ export default {
         app.panel(cx, cy, cw, ch, { r: 12, fill: 'rgba(22,18,15,.92)', stroke: 'rgba(232,220,196,.3)', lw: 2 });
         ctx.save(); ctx.beginPath(); ctx.rect(cx + 2, cy + 2, cw - 4, 156); ctx.clip();
         app.rr(cx + 6, cy + 6, cw - 12, 148, 8); ctx.fillStyle = 'rgba(232,220,196,.06)'; ctx.fill();
-        ruleArt(app, i, cx + cw / 2, cy + 74, cw - 24, 140);
+        if (cy + 156 >= y) ruleArt(app, i, cx + cw / 2, cy + 74, cw - 24, 140);
         ctx.restore();
         ctx.save(); ctx.fillStyle = COL.lamp; ctx.beginPath(); ctx.arc(cx + 26, cy + 178, 14, 0, 6.283); ctx.fill(); ctx.restore();
         app.text(String(i + 1), cx + 26, cy + 178 - 10, { size: 18, bold: true, align: 'center', color: COL.ink });

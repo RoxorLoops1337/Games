@@ -295,7 +295,7 @@ function drawPatchTile(app, r, j, c) {
   const slide = EASE.out(clamp((st.dealT - 0.25 - j * 0.1) / 0.5, 0, 1));
   if (slide <= 0) return;
   const compact = st.rects.patches.length > 3;
-  app.reg('graft-patch' + j, r.x - 28, r.y, r.w + 28, r.h, { group: 'patch' + j });
+  app.reg('graft-patch' + j, r.x - 24, r.y, r.w + 24, r.h, { group: 'patch' + j });
   const dim = st.mode === 'pick' && c.inst && !canGraft(c.inst, r.gid);
   const hover = c.interactive && slide >= 1 && app.inRect(r.x, r.y, r.w, r.h);
   const key = 'p' + r.gid;

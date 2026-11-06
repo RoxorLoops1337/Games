@@ -597,7 +597,7 @@ export default {
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawPotion(g, it.id, x + 30, y + 34 - 2 * k, 40);
       app.text(p.name, x + 56, y + 6 - 2 * k, { size: 15, bold: true, color: COL.vellum, maxW: w - 62 });
-      { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.1)), nl = clampN(Math.floor((h - (smallUi ? 18 : 34) - (smallUi ? 30 : 26)) / pitch), 1, 2); // phones inflate the text: the lines stop above the price tag
+      { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.2)), nl = clampN(Math.floor((h - (smallUi ? 18 : 34) - (smallUi ? 30 : 26)) / pitch), 1, 2); // phones inflate the text: the lines stop above the price tag
         wrapLimit(app, p.text, w - 64, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 56, y + (smallUi ? 30 : 26) + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.85)' })); }
       g.restore();
       if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 50, y + h - (smallUi ? 6 : 20), it.price, false, 'potion' + i);
@@ -614,7 +614,7 @@ export default {
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawRelic(g, it.id, x + 40, y + h / 2 - 2 * k, 56);
       app.text(r.name, x + 76, y + 8 - 2 * k, { size: 17, bold: true, color: COL.lamp, maxW: w - 76 - 94 });
-      { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.1)), ty0 = y + (smallUi ? 6 : 8) + Math.ceil(app.sz(17, { bold: true }) * (smallUi ? 1.12 : 1.2)) + 2, nl = clampN(Math.floor((y + h - 4 - ty0) / pitch), 1, 3);
+      { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.2)), ty0 = smallUi ? y + 6 + Math.ceil(app.sz(17, { bold: true }) * 1.12) + 2 : y + 38, nl = clampN(Math.floor((y + h - 4 - ty0) / pitch), 1, 3);
         wrapLimit(app, r.text, w - 90, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 76, ty0 + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.88)' })); }
       g.restore();
       if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 52, y + 22, it.price, false, 'relic' + i);

@@ -460,6 +460,9 @@ export default {
         app.text(t, x + pad, yy, { size: 14, ui: true, bold: true, color: c });
         const lw = Math.ceil(app.measure(t, 14, { ui: true, bold: true })) + 8;
         const dx = Math.max(74, lw);
+        if (yy > y + h) { // below the panel: only measure it (the wheel scrolls it into view)
+          yy += (app.wrap(d, w - 2 * pad - dx, 13, { ui: true }).length - 1) * Math.round(15 * tscale(app)) + app.sz(13, { ui: true }) + 6; continue;
+        }
         yy += Math.max(app.sz(14, { ui: true }) * 1.2, app.text(d, x + pad + dx, yy, { size: 13, ui: true, maxW: w - 2 * pad - dx, lineH: 15, color: 'rgba(232,220,196,.85)' })) + 6;
       }
       this.sideH = yy - yTop + pad;
@@ -472,7 +475,7 @@ export default {
         yy += app.text(txt, x + pad, yy, { size: 14, ui: true, maxW: w - 2 * pad, color: COL.vellum }) + 6;
       } else if (inst.grafts.length) {
         const total = instWeight(inst);
-        yy += app.text(`Adds ${total} Weight to the deck`, x + pad, yy, { size: 15, ui: true, bold: true, color: COL.vellum }) + 6;
+        yy += app.text(`Adds ${total} Weight to the deck`, x + pad, yy, { size: 15, ui: true, bold: true, color: COL.vellum, maxW: w - 2 * pad }) + 6;
         inst.grafts.forEach((gid, i) => {
           const gr = GRAFTS[gid]; if (!gr) return;
           const col = COL[gr.school] || COL.vellum, wt = (gr.weight || 1) + (i >= MAX_GRAFTS_NORMAL ? 1 : 0);
@@ -490,7 +493,7 @@ export default {
         });
       }
       if (fusedIds.length) {
-        if (!inst.grafts.length) yy += app.text(`Adds ${instWeight(inst)} Weight to the deck`, x + pad, yy, { size: 15, ui: true, bold: true, color: COL.vellum }) + 6;
+        if (!inst.grafts.length) yy += app.text(`Adds ${instWeight(inst)} Weight to the deck`, x + pad, yy, { size: 15, ui: true, bold: true, color: COL.vellum, maxW: w - 2 * pad }) + 6;
         yy += app.text('Tempered for good (cannot be stripped):', x + pad, yy, { size: 13, ui: true, bold: true, color: COL.lamp, maxW: w - 2 * pad, lineH: 15 }) + 3;
         for (const gid of fusedIds) {
           const gr = GRAFTS[gid]; if (!gr) continue; const col = COL[gr.school] || COL.vellum;

@@ -20,6 +20,7 @@ async function make(opts = {}) {
   const meta = { settings: { tips: false, reduceMotion: true, textScale: opts.scale || 100 }, tips: {}, seen: { cards: {}, grafts: {}, enemies: {}, relics: {}, statuses: {} }, ...(opts.meta || {}) };
   const app = await makeApp({ run, meta, audio: { sfx() {}, music() {} } });
   app.textScale = (opts.scale || 100) / 100;
+  if (opts.phone) { app.scale = 0.54; app.minPx = 11; } // 844x390 phone: the small-screen text floor inflates every label ~1.5x
   // proportional fake metrics so wrapping and fit checks are meaningful (the stock fake is 8px per char at any size)
   app.ctx.measureText = (s) => {
     const f = String(app.ctx.font || ''), m = /(\d+(?:\.\d+)?)px/.exec(f), size = m ? +m[1] : 16;
@@ -30,7 +31,7 @@ async function make(opts = {}) {
   const rawText = app.text;
   app.text = (str, x, y, o = {}) => {
     if (depth > 0 && str !== '' && str !== undefined && str !== null && o.alpha !== 0) {
-      const k = o.fixed ? 1 : app.textScale, usz = o.size || 18, size = Math.round(usz * k), lineH = o.lineH ? Math.round(o.lineH * k) : Math.round(size * 1.22);
+      const k = o.fixed ? 1 : app.textScale, usz = o.size || 18, size = app.sz(usz, o), lineH = o.lineH ? Math.round(o.lineH * k) : Math.round(size * 1.22);
       const lines = o.maxW ? app.wrap(String(str), o.maxW, usz, o) : String(str).split('\n');
       let w = 0; for (const l of lines) w = Math.max(w, app.measure(l, usz, o));
       const h = (lines.length - 1) * lineH + size;
@@ -253,6 +254,15 @@ for (const scale of [100, 125, 150]) {
     look(he, 200, `end/s${scale}/${won ? 'won' : 'dead'}`);
     hoverAt(he, 500, 300); look(he, 3, `end/s${scale}/${won ? 'won' : 'dead'}/hover`);
   }
+}
+// ---- PHONE (844x390: text floor inflates labels): the screens fixed for readability must stay overlap-free ----------
+{
+  const hg = await make({ phone: true, seed: 'ph-graft' }); flowFor(hg); graftHeavy(hg.run, 2); RUN.startGraftPick(hg.run); go(hg, 'graft');
+  look(hg, 90, 'graft/phone'); key(hg.app, '2'); key(hg.app, 'q'); look(hg, 40, 'graft/phone/pair');
+  const hd = await make({ phone: true, seed: 'ph-deck' }); flowFor(hd); hd.app.go('base'); graftHeavy(hd.run, 8); hd.app.push('deckview', {}); look(hd, 40, 'deck/phone');
+  hoverAt(hd, 1100, 300); look(hd, 3, 'deck/phone/side'); hoverAt(hd, 200, 300); look(hd, 3, 'deck/phone/hover');
+  const hc = await make({ phone: true, seed: 'ph-cx' }); flowFor(hc); hc.app.go('base'); hc.app.push('codex', {}); hc.app.top().setTab(6); look(hc, 20, 'codex/phone/rules');
+  for (const won of [true, false]) { const he = await make({ phone: true, seed: 'ph-end' + won, hero: 'odile' }); flowFor(he); graftHeavy(he.run, 10); he.run.phase = won ? 'won' : 'dead'; he.run.flags = he.run.flags || {}; go(he, 'end'); look(he, 200, 'end/phone/' + (won ? 'won' : 'dead')); }
 }
 let bad = 0;
 for (const pre of ['map', 'reward', 'graft', 'shop', 'forge', 'event', 'deck', 'codex', 'end']) { console.log(pre + ':'); bad += done(pre); }
