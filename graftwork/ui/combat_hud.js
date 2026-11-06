@@ -206,13 +206,13 @@ export function intentText(info) {
 export function drawIntentBubble(app, info, x, y, prog, alpha = 1, maxW = 170) {
   const ctx = app.ctx;
   if (!info || prog <= 0 || alpha <= 0) return { x, y, w: 0, h: 0 };
-  let kinds = info.hidden ? ['unknown'] : info.kinds.slice(0, 2);
+  let kinds = info.hidden ? ['unknown'] : info.kinds.slice(0, 3); // a 3-effect move (Appraiser: attack + block + debuff) shows all three when the plate is wide enough
   const attack = !info.hidden && info.kinds.includes('attack');
   const num = attack ? String(info.hits > 1 ? info.per : info.dmg) : (info.hidden ? '?' : '');
   const hitTxt = attack && info.hits > 1 ? 'x' + info.hits : '';
   const numW = num ? app.measure(num, 30, { bold: true, ui: true }) : 0, hitW = hitTxt ? app.measure(hitTxt, 22, { bold: true, ui: true }) : 0;
   const body = (k) => k.length * 38 + (numW ? numW + 4 : 0) + (hitW ? hitW + 4 : 0) + 16;
-  if (body(kinds) > maxW && kinds.length > 1) kinds = kinds.slice(0, 1);
+  while (body(kinds) > maxW && kinds.length > 1) kinds = kinds.slice(0, -1);
   const w = Math.min(maxW, body(kinds)), h = 44;
   ctx.save();
   ctx.globalAlpha = alpha * clamp(prog * 2.5, 0, 1);
@@ -253,6 +253,9 @@ export function drawEnemyPlate(app, ed, o) {
   if (info && ed.intentOut < 1) {
     ir = drawIntentBubble(app, info, ed.x, L.ENEMY_LANE_TOP + 64, ed.intentT, (1 - ed.intentOut), sw - 2);
     if (ir.w) app.reg(grp + ':intent', ir.x, ir.y, ir.w, ir.h, { group: grp });
+    // a move with a hover note (a condition that changes the number, e.g. Aria's +3 per extra card) gets a gold '+' pip so the plate itself says "this number can move"
+    const mvc = ed.e.def.moves && ed.e.def.moves[ed.e.move];
+    if (ir.w && mvc && (mvc.tip || mvc.note) && !info.hidden) { const bx = ir.x + ir.w - 2, by0 = ir.y + 2; ctx.save(); ctx.beginPath(); ctx.arc(bx, by0, 9, 0, 6.2832); ctx.fillStyle = '#e6b84a'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#0e0e0e'; ctx.stroke(); app.text('+', bx, by0 - 9, { size: 15, bold: true, ui: true, align: 'center', color: '#1a1208', fixed: true }); ctx.restore(); }
   }
   // hp bar + block
   const by = foot + 6, bx = left + 24, bw = sw - 26;
