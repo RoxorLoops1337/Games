@@ -6,23 +6,25 @@
 // room to room (250 ms a room) and each trigger opens its screen through flow.route(); the engine's afterTrigger continues the walk, and
 // wardInterlude() (called by flow.route) plays the steps between two triggers on this screen before the next one opens.
 // The run changes only through engine/ward.js (playBuildCard, togglePower, endMorning, startWalk). Saves go through engine/save.js.
-import { COL, EASE, W, H, clamp, lerp, rgba } from './core.js';
+import { COL, EASE, W, H, clamp, rgba } from './core.js';
 import * as WD from '../engine/ward.js';
 import { ROOMS, BUILD_CARDS, PHASES, PHASE_ORDER, FLOOR, WARD_TUNE as T } from '../data/ward.js';
 import { HEROES, RELICS, ENEMIES } from '../data/index.js';
 import { drawBackground } from '../art/backgrounds.js';
-import { drawNodeIcon, drawRelic, drawHeart, drawCoin, drawEventSeal } from '../art/icons.js';
+import { drawNodeIcon, drawRelic, drawHeart, drawCoin } from '../art/icons.js';
 import { drawPortrait } from '../art/heroes.js';
 import { Fx, FX_OPTS } from './fx.js';
 import { maybeTip } from './tutorial.js';
 import { lnw } from '../art/linework.js';
 import { saveRun } from '../engine/save.js';
 import * as K from './ward_kit.js';
+import * as ISO from './ward_iso.js';
+import { assets } from './assets.js';
 
 // ---------------- geometry (logical 1280 x 720) ----------------
-export const CELL = 76;
-export const GRID = { x: 298, y: 78 }; // 9 x 6 cells: x 298..982, y 78..534
-const SHEET = { x: 284, y: 64, w: 712, h: 484 };
+// The map is an isometric diamond grid (ui/ward_iso.js): a cell is a 2:1 diamond TW x TH, cellCenter is the middle of its floor.
+export const CELL = ISO.TW;
+const SHEET = ISO.MAPR;
 const LEFT = { x: 12, y: 64, w: 260, h: 648 };
 const RIGHT = { x: 1008, y: 64, w: 260, h: 484 };
 const ACT = { x: 1008, y: 556, w: 260, h: 156 };
@@ -37,8 +39,9 @@ const TRIG = { fight: ['fight', 'Ward fight'], elite: ['elite', 'Elite'], event:
 const TRIG_SHORT = { fight: 'Fight', elite: 'Elite', event: 'Event', shop: 'Shop', forge: 'Forge', boss: 'Boss' };
 const DARKW = (r) => !r.on && ROOMS[r.type].power > 0;
 
-export const cellXY = (x, y) => ({ x: GRID.x + x * CELL, y: GRID.y + y * CELL });
-export const cellCenter = (x, y) => ({ x: GRID.x + x * CELL + CELL / 2, y: GRID.y + y * CELL + CELL / 2 });
+const WDIM = () => (S && S.run && S.run.ward) || { w: 9, h: 6 };
+export const cellXY = (x, y) => { const b = ISO.cellBox(WDIM(), x, y); return { x: b.x, y: b.y }; }; // top left of the cell's diamond box
+export const cellCenter = (x, y) => ISO.cellC(WDIM(), x, y);
 export function handRects(n) {
   const gap = 14, tw = n * CW + Math.max(0, n - 1) * gap, x0 = HAND.x + (HAND.w - tw) / 2, out = [];
   for (let i = 0; i < n; i++) out.push({ x: x0 + i * (CW + gap), y: HAND.y + 2, w: CW, h: CH });
@@ -49,12 +52,6 @@ const reduced = (app) => { const s = app.shared.meta && app.shared.meta.settings
 const sfx = (app, n, o) => { const a = app.shared.audio; if (a && a.sfx) { try { a.sfx(n, o); } catch (e) { /* audio is optional */ } } };
 const post = (app, fn, ...a) => { const p = app.post; if (p && typeof p[fn] === 'function') { try { p[fn](...a); } catch (e) { /* post is optional */ } } };
 const save = (run) => { try { saveRun(run); } catch (e) { /* storage is optional */ } };
-// the hero's token shares the plate with its label: true when the label does not fit beside the corner token
-export function heroOnTop(app, r) {
-  if (!r || r.type === 'rm_theatre') return false;
-  const name = K.roomShort(r.type).toUpperCase();
-  return app.layoutText(name, { size: 10, ui: true, bold: true, align: 'center', fit: { w: CELL - 8 - 22, lines: 1 } }).trunc;
-}
 const darkKey = (uid, tgt) => uid + ':' + (tgt && typeof tgt === 'object' ? tgt.x + ',' + tgt.y : tgt);
 const plural = (n, s, p) => `${n} ${n === 1 ? s : (p || s + 's')}`;
 
@@ -176,6 +173,7 @@ export default {
     MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; // these hold S.t times of an earlier visit: S.t restarts at 0 here (rooms built before a fight stayed invisible)
     const w = run.ward;
     if (!w) return;
+    assets.ensure(app); // the room, actor and icon art (assets/ward/); every draw falls back to the procedural look until it is there
     if (!w.rooms[w.hero.room]) { const e = WD.entranceOf(run); if (e) w.hero.room = e.id; } // a hero is always standing in a room
     const fk = `${run.seed}|${run.act}|${run.loop || 0}`;
     if (MEM.floorKey !== fk) { if (MEM.floorKey || w.day === 1) S.banner = { t: 0, t0: Date.now(), act: run.act }; MEM.floorKey = fk; MEM.plan = null; MEM.seen = MEM.seen || {}; }
@@ -195,6 +193,7 @@ export default {
     if (!S || !S.run.ward) return;
     app.touchPan = !!S.plans; // a finger drag on the Ward is a plan drag (core.js turns a vertical touch move into a scroll otherwise, and the drop never happened); only the plans overlay scrolls
     S.t += dt; S.fx.update(dt);
+    if (!S.preloaded && assets.ready()) { S.preloaded = true; assets.preload(app); }
     if (S.dieRolling > 0) S.dieRolling = Math.max(0, S.dieRolling - dt);
     { const w0 = S.run.ward; if (w0.phase !== 'morning' && !S.banner && S.run.phase === 'ward' && !WD.bossForced(S.run)) { const r0 = WD.rollOf(S.run); if (r0 && MEM.dieKey !== r0.key) { MEM.dieKey = r0.key; startDie(app); } } }
     if (S.toastT > 0) S.toastT -= dt;
@@ -291,47 +290,26 @@ export default {
     MEM.seen = {}; for (const r of Object.values(w.rooms)) MEM.seen[r.id] = r.contents.length;
   },
 
-  // ---- the blueprint sheet: vellum, sub grid, hatched walls, title block ----
+  // ---- the map panel: a dark table under the isometric plinth (the ground, rooms and actors are drawn by ui/ward_iso.js) ----
   drawSheet(app) {
-    const g = app.ctx, run = S.run, w = run.ward, s = SHEET;
+    const g = app.ctx, s = SHEET;
     app.reg('ward-sheet', s.x, s.y, s.w, s.h, { layer: 'world' });
     g.save();
     g.fillStyle = 'rgba(0,0,0,.55)'; app.rr(s.x + 4, s.y + 6, s.w, s.h, 6); g.fill();
     app.rr(s.x, s.y, s.w, s.h, 6);
-    const pg = g.createLinearGradient(s.x, s.y, s.x + s.w * 0.3, s.y + s.h); pg.addColorStop(0, '#ece1c8'); pg.addColorStop(0.6, '#e2d4b4'); pg.addColorStop(1, '#d3c29c'); g.fillStyle = pg; g.fill();
-    g.strokeStyle = '#3b2a1e'; g.lineWidth = lnw('ink'); g.stroke();
-    g.beginPath(); g.rect(s.x + 5, s.y + 5, s.w - 10, s.h - 10); g.strokeStyle = rgba(K.INK, 0.5); g.lineWidth = lnw('hair'); g.stroke();
-    // foxing stains
-    for (let i = 0; i < 4; i++) { const fx = s.x + 60 + ((i * 197 + run.act * 61) % (s.w - 120)), fy = s.y + 50 + ((i * 131 + run.act * 37) % (s.h - 100)); const rg = g.createRadialGradient(fx, fy, 2, fx, fy, 60); rg.addColorStop(0, 'rgba(120,80,40,.09)'); rg.addColorStop(1, 'rgba(120,80,40,0)'); g.fillStyle = rg; g.fillRect(fx - 60, fy - 60, 120, 120); }
-    // sub grid and cell grid (blueprint rules)
-    const gx = GRID.x, gy = GRID.y, gw = w.w * CELL, gh = w.h * CELL;
-    g.strokeStyle = 'rgba(60,70,90,.10)'; g.lineWidth = lnw('hatch'); g.beginPath();
-    for (let x = gx; x <= gx + gw; x += CELL / 4) { g.moveTo(x, gy); g.lineTo(x, gy + gh); }
-    for (let y = gy; y <= gy + gh; y += CELL / 4) { g.moveTo(gx, y); g.lineTo(gx + gw, y); }
-    g.stroke();
-    g.strokeStyle = 'rgba(43,30,26,.28)'; g.lineWidth = lnw('hair'); g.setLineDash([3, 4]); g.beginPath();
-    for (let i = 0; i <= w.w; i++) { g.moveTo(gx + i * CELL, gy); g.lineTo(gx + i * CELL, gy + gh); }
-    for (let j = 0; j <= w.h; j++) { g.moveTo(gx, gy + j * CELL); g.lineTo(gx + gw, gy + j * CELL); }
-    g.stroke(); g.setLineDash([]);
-    // outer walls: a hatched band
-    const b = 7;
-    g.save(); g.beginPath(); g.rect(gx - b, gy - b, gw + b * 2, gh + b * 2); g.rect(gx, gy, gw, gh); g.clip('evenodd');
-    g.fillStyle = 'rgba(43,30,26,.18)'; g.fillRect(gx - b, gy - b, gw + b * 2, gh + b * 2);
-    g.strokeStyle = rgba(K.INK, 0.6); g.lineWidth = lnw('hatch'); g.beginPath();
-    for (let i = -gh - 20; i < gw + gh + 20; i += 5) { g.moveTo(gx - b + i, gy + gh + b); g.lineTo(gx - b + i + gh + b * 2, gy - b); }
-    g.stroke(); g.restore();
-    g.strokeStyle = K.INK; g.lineWidth = lnw('fine'); g.strokeRect(gx - b, gy - b, gw + b * 2, gh + b * 2); g.lineWidth = lnw('hair'); g.strokeRect(gx, gy, gw, gh);
-    // coordinate ticks
-    for (let i = 0; i < w.w; i++) app.text('ABCDEFGHI'[i], gx + i * CELL + CELL / 2, s.y + 1, { size: 10, ui: true, align: 'center', color: 'rgba(43,30,26,.45)', fixed: true });
+    const pg = g.createRadialGradient(s.x + s.w / 2, s.y + s.h * 0.45, 40, s.x + s.w / 2, s.y + s.h * 0.45, s.w * 0.62); pg.addColorStop(0, '#2a2119'); pg.addColorStop(1, '#0f0b09'); g.fillStyle = pg; g.fill();
+    g.strokeStyle = '#7A5F12'; g.lineWidth = lnw('ink'); g.stroke();
+    g.beginPath(); g.rect(s.x + 5, s.y + 5, s.w - 10, s.h - 10); g.strokeStyle = 'rgba(201,162,39,.22)'; g.lineWidth = lnw('hair'); g.stroke();
     g.restore();
   },
 
   // ---- pointer logic: what is hovered, what would happen, drag and drop, taps ----
   interact(app) {
     const run = S.run, w = run.ward, m = app.mouse, out = { hoverCell: null, legal: null, path: null, dest: null, chip: null, preview: null };
-    const gx = Math.floor((m.x - GRID.x) / CELL), gy = Math.floor((m.y - GRID.y) / CELL);
+    const pk = ISO.pick(w, m.x, m.y), gx = pk ? pk.x : -1, gy = pk ? pk.y : -1;
     const z = S.selZone, inZone = z && m.x >= z.x && m.x <= z.x + z.w && m.y >= z.y && m.y <= z.y + z.h;
-    const onGrid = !app.blocked && !inZone && gx >= 0 && gy >= 0 && gx < w.w && gy < w.h;
+    const onGrid = !app.blocked && !inZone && !!pk;
+    const sameCell = () => { if (!m.pressStart) return false; const q = ISO.pick(w, m.pressStart.x, m.pressStart.y); return !!q && q.x === gx && q.y === gy; }; // pressed and released on the same cell
     if (onGrid) out.hoverCell = { x: gx, y: gy };
     const hovRoom = onGrid ? WD.roomAt(run, gx, gy) : null;
     S.hoverRoom = hovRoom ? hovRoom.id : null;
@@ -354,7 +332,7 @@ export default {
           else if (onGrid && out.drop) { sfx(app, 'error'); this.toast(out.chip ? out.chip.text : 'Not here.'); }
           else if (card && card.target === 'none' && m.y < HAND.y - 10 && m.y > 60) this.play(app, S.drag.uid, null);
           S.drag = null; S.press = null; m.released = false;
-        } else if (onGrid && m.pressStart && Math.floor((m.pressStart.x - GRID.x) / CELL) === gx && Math.floor((m.pressStart.y - GRID.y) / CELL) === gy && !S.drag) {
+        } else if (onGrid && sameCell() && !S.drag) {
           if (card) { if (out.drop && out.drop.ok) { if (this.darkGuard(app, card, uid, out.drop.tgt)) this.play(app, uid, out.drop.tgt); } else { sfx(app, 'error'); this.toast(out.chip ? out.chip.text : 'Not here.'); } }
           else if (hovRoom) this.power(app, hovRoom);
           m.released = false;
@@ -371,7 +349,7 @@ export default {
           if (p.ok) { out.path = [w.hero.room, ...p.path]; out.dest = rid; }
           else if (hovRoom && hovRoom.id === rid) out.chip = { text: whyText(run, p.why), x: m.x, y: m.y, bad: true };
         }
-        if (m.released && !app.blocked && onGrid && hovRoom && m.pressStart && Math.floor((m.pressStart.x - GRID.x) / CELL) === gx && Math.floor((m.pressStart.y - GRID.y) / CELL) === gy) {
+        if (m.released && !app.blocked && onGrid && hovRoom && sameCell()) {
           m.released = false;
           const p = WD.pathTo(run, hovRoom.id, 0);
           if (!p.ok) { sfx(app, 'error'); this.toast(whyText(run, p.why)); }
@@ -391,7 +369,7 @@ export default {
         out.path = [w.hero.room, ...ghost]; out.dest = ghost[ghost.length - 1];
       } else S.curP = null;
       if (hid && hwhy && hid !== last) out.chip = { text: whyText(run, hwhy), x: m.x, y: m.y, bad: true };
-      if (m.released && !app.blocked && onGrid && hovRoom && !S.walk && m.pressStart && Math.floor((m.pressStart.x - GRID.x) / CELL) === gx && Math.floor((m.pressStart.y - GRID.y) / CELL) === gy) {
+      if (m.released && !app.blocked && onGrid && hovRoom && !S.walk && sameCell()) {
         m.released = false;
         if (S.dieRolling) { /* the die is still tumbling */ }
         else if (rt.length && hovRoom.id === last) { WD.undoRoute(run); sfx(app, 'uiClick'); save(run); }
@@ -588,9 +566,8 @@ export default {
     if (S.kb === undefined || S.kb < 0 || S.walk || S.banner) return;
     const items = this.kbItems(); if (!items.length) { S.kb = -1; return; }
     if (S.kb >= items.length) S.kb = items.length - 1;
-    const it = items[S.kb], c = cellXY(it.x, it.y), g = app.ctx;
-    g.save(); g.lineWidth = lnw('bold'); g.strokeStyle = '#ffffff'; app.rr(c.x + 2, c.y + 2, CELL - 4, CELL - 4, 9); g.stroke();
-    g.setLineDash([7, 5]); g.lineDashOffset = -S.t * 20; g.strokeStyle = COL.scar; app.rr(c.x + 2, c.y + 2, CELL - 4, CELL - 4, 9); g.stroke(); g.restore();
+    const it = items[S.kb];
+    ISO.drawFocus(this.host(app), it.x, it.y);
   },
   onKey(app, e) {
     if (app.blocked || S.walk || S.banner) return;
@@ -606,223 +583,45 @@ export default {
     else if ((k === 'p' || k === 'P') && !S.plans) S.plans = true;
   },
 
-  // ---- room plates ----
+  // ---- the isometric map: ground, rooms (back to front), actors, ghost, tooltip of the hovered room ----
+  host(app) {
+    const run = S.run;
+    const H = S.host || (S.host = { app, run, S, MEM, reduced: false, buildAge, bossLine, TRIG, stepS: STEP_S, glows: [], buildable: new Set(), bossOpen: false });
+    H.app = app; H.run = run; H.reduced = reduced(app); H.bossOpen = WD.bossOpen(run);
+    return H;
+  },
   drawRooms(app, inter) {
-    const g = app.ctx, run = S.run, w = run.ward, legal = inter.legal;
-    const legalCells = new Set(legal ? legal.cells.map(([x, y]) => x + ',' + y) : []), legalRooms = new Set(legal ? legal.rooms : []);
-    const pulse = 0.5 + 0.5 * Math.sin(S.t * 5);
-    // doors between adjacent rooms
-    g.save();
-    for (const r of Object.values(w.rooms)) for (const [dx, dy] of [[1, 0], [0, 1]]) {
-      const n = WD.roomAt(run, r.x + dx, r.y + dy); if (!n) continue;
-      const c = cellXY(r.x, r.y);
-      const ex = dx ? c.x + CELL : c.x + CELL / 2, ey = dy ? c.y + CELL : c.y + CELL / 2;
-      g.fillStyle = '#e6d8b8'; g.strokeStyle = K.INK; g.lineWidth = lnw('fine');
-      if (dx) { g.fillRect(ex - 6, ey - 10, 12, 20); g.beginPath(); g.moveTo(ex - 6, ey - 10); g.lineTo(ex + 6, ey - 10); g.moveTo(ex - 6, ey + 10); g.lineTo(ex + 6, ey + 10); g.stroke(); g.beginPath(); g.arc(ex - 6, ey - 10, 12, 0, Math.PI / 2); g.strokeStyle = rgba(K.INK, 0.35); g.lineWidth = lnw('hair'); g.stroke(); }
-      else { g.fillRect(ex - 10, ey - 6, 20, 12); g.beginPath(); g.moveTo(ex - 10, ey - 6); g.lineTo(ex - 10, ey + 6); g.moveTo(ex + 10, ey - 6); g.lineTo(ex + 10, ey + 6); g.stroke(); }
-    }
-    g.restore();
-    for (let y = 0; y < w.h; y++) for (let x = 0; x < w.w; x++) {
-      const id = w.grid[y][x], c = cellXY(x, y), key = x + ',' + y;
-      if (id === 'rubble') { this.drawRubble(app, c.x, c.y, legalCells.has(key), pulse); continue; }
-      if (!id) {
-        if (legalCells.has(key)) {
-          const hov = inter.hoverCell && inter.hoverCell.x === x && inter.hoverCell.y === y;
-          g.save(); app.rr(c.x + 5, c.y + 5, CELL - 10, CELL - 10, 6);
-          g.fillStyle = rgba(COL.lamp, hov ? 0.42 : 0.14 + 0.12 * pulse); g.fill();
-          g.setLineDash([6, 4]); g.lineDashOffset = -S.t * 18; g.strokeStyle = hov ? '#7A5F12' : rgba('#7A5F12', 0.8); g.lineWidth = lnw(hov ? 'bold' : 'fine'); g.stroke(); g.restore();
-          if (hov && S.drag) { // ghost of the room to be built
-            const card = BUILD_CARDS[(w.deck.hand.find((h) => h.uid === S.drag.uid) || {}).id];
-            if (card && card.kind === 'room') { g.save(); g.globalAlpha = 0.55; K.roomGlyph(g, card.room, c.x + CELL / 2, c.y + CELL / 2, 34, K.INK, K.ROOM_TINT[card.room]); g.restore(); }
-          }
-        }
-        continue;
-      }
-      this.drawPlate(app, w.rooms[id], legalRooms.has(id), inter, pulse);
-    }
-  },
-  drawRubble(app, x, y, legal, pulse) {
-    const g = app.ctx, cx = x + CELL / 2, cy = y + CELL / 2;
-    g.save();
-    g.fillStyle = 'rgba(70,58,46,.22)'; g.fillRect(x + 3, y + 3, CELL - 6, CELL - 6);
-    g.save(); g.beginPath(); g.rect(x + 3, y + 3, CELL - 6, CELL - 6); g.clip();
-    g.strokeStyle = rgba(K.INK, 0.45); g.lineWidth = lnw('hatch'); g.beginPath();
-    for (let i = -CELL; i < CELL; i += 5) { g.moveTo(x + i, y + CELL); g.lineTo(x + i + CELL, y); g.moveTo(x + i, y); g.lineTo(x + i + CELL, y + CELL); }
-    g.stroke(); g.restore();
-    const stones = [[-14, 10, 11], [8, 12, 13], [-2, -6, 10], [16, -10, 8], [-18, -14, 7]];
-    for (const [dx, dy, r] of stones) {
-      g.beginPath(); for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + dx; const rr = r * (0.75 + 0.25 * Math.sin(i * 2.3 + dy)); g.lineTo(cx + dx + Math.cos(a) * rr, cy + dy + Math.sin(a) * rr * 0.75); } g.closePath();
-      g.fillStyle = '#bdb3a2'; g.fill(); g.strokeStyle = K.INK; g.lineWidth = lnw('fine'); g.stroke();
-    }
-    if (legal) { app.rr(x + 4, y + 4, CELL - 8, CELL - 8, 6); g.strokeStyle = rgba('#7A5F12', 0.6 + 0.4 * pulse); g.lineWidth = lnw('bold'); g.setLineDash([6, 4]); g.stroke(); g.setLineDash([]); }
-    g.restore();
-  },
-  drawPlate(app, r, legal, inter, pulse) {
-    const g = app.ctx, run = S.run, w = run.ward, d = ROOMS[r.type], c = cellXY(r.x, r.y);
-    const dark = DARKW(r), theatre = r.type === 'rm_theatre';
-    const st = buildAge(MEM.stamps[r.id], S.t);
-    const sc = st < 1 ? 1 + 0.35 * (1 - EASE.back(st)) : 1;
-    const hov = S.hoverRoom === r.id && !app.blocked;
-    const sel = S.selRoom === r.id;
-    const px = c.x + 4, py = c.y + 4, pw = CELL - 8, ph = CELL - 8;
-    g.save();
-    g.translate(c.x + CELL / 2, c.y + CELL / 2); g.scale(sc, sc); g.translate(-(c.x + CELL / 2), -(c.y + CELL / 2));
-    if (st < 1) g.globalAlpha = clamp(st * 2, 0, 1);
-    // plate body: engraved brass-edged vellum plate, spot tint by room kind
-    const tint = K.ROOM_TINT[r.type] || '#8a7a5c';
-    g.fillStyle = 'rgba(0,0,0,.22)'; app.rr(px + 2, py + 3, pw, ph, 5); g.fill();
-    app.rr(px, py, pw, ph, 5);
-    const pg = g.createLinearGradient(px, py, px + pw, py + ph);
-    if (theatre) { pg.addColorStop(0, '#3a1a1e'); pg.addColorStop(1, '#22100f'); } else { pg.addColorStop(0, '#f3e9d2'); pg.addColorStop(1, '#ddcca8'); }
-    g.fillStyle = pg; g.fill();
-    g.fillStyle = rgba(tint, theatre ? 0.0 : 0.13); g.fill();
-    g.strokeStyle = theatre ? '#c9a227' : K.INK; g.lineWidth = lnw(hov || sel ? 'bold' : 'ink'); g.stroke();
-    app.rr(px + 3, py + 3, pw - 6, ph - 6, 3); g.strokeStyle = rgba(theatre ? '#c9a227' : tint, 0.65); g.lineWidth = lnw('hair'); g.stroke();
-    // icon + contents
-    const has = r.contents.length > 0 && !theatre;
-    const ink = theatre ? '#e8d6b0' : K.INK;
-    const iconX = has ? px + 19 : px + pw / 2, iconY = theatre ? py + 16 : py + 30, isz = theatre ? 22 : has ? 24 : 32;
-    K.roomGlyph(g, r.type, iconX, iconY, isz, ink, tint);
-    if (has) this.drawContents(app, r, px + 34, py + 13, 32, 34);
-    // power bulb (top left) and timer ring (top right)
-    if (d.power) {
-      const bt = MEM.bulbs[r.id] !== undefined && MEM.bulbs[r.id] <= S.t ? clamp((S.t - MEM.bulbs[r.id]) / 0.35, 0, 1) : 1, flick = bt < 1 && Math.sin(bt * 40) > 0;
-      K.drawRes(g, 'bulb', px + 8, py + 9, 11, flick ? !r.on : r.on);
-    } else if (d.powerAdd) { app.text('+' + d.powerAdd, px + 4, py + 2, { size: 10, ui: true, bold: true, color: '#5a6a10', fixed: true }); }
-    const every = WD.everyOf(r);
-    if (every && !theatre) this.timerRing(app, r, px + pw - 9, py + 9, 8);
-    // name (only when it fits), Theatre countdown tag
-    if (theatre) {
-      const open = WD.bossOpen(run), txt = bossLine(run, false);
-      if (open) { g.save(); app.rr(px, py, pw, ph, 5); g.strokeStyle = rgba('#ff5a6a', 0.5 + 0.5 * pulse); g.lineWidth = lnw('bold'); g.stroke(); g.restore(); }
-      app.text(txt, px + pw / 2, py + 30, { size: 12, ui: true, bold: true, align: 'center', color: open ? '#ffb3bd' : '#f2d98a', fit: { w: pw - 6, h: ph - 32, lines: 2, soft: true } });
-    } else {
-      const nO = { size: 10, ui: true, bold: true, align: 'center', color: rgba(K.INK, 0.85), fit: { w: pw - (w.hero.room === r.id && !heroOnTop(app, r) ? 22 : 6), lines: 1 } }, L = app.layoutText(K.roomShort(r.type).toUpperCase(), nO);
-      if (!L.trunc) app.text(K.roomShort(r.type).toUpperCase(), px + (w.hero.room === r.id && !heroOnTop(app, r) ? 3 + (pw - 22) / 2 : pw / 2), py + ph - L.size - 3, nO);
-    }
-    // upgrades: tiny engraved marks bottom right; overtime x2
-    r.upgrades.slice(0, 3).forEach((u, i) => { const bc = BUILD_CARDS[u]; if (!bc) return; g.save(); g.fillStyle = '#f3e9d2'; g.beginPath(); g.arc(px + pw - 8 - i * 13, py + ph - 20, 6, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#7A5F12'; g.lineWidth = lnw('hair'); g.stroke(); K.roomGlyph(g, bc.art, px + pw - 8 - i * 13, py + ph - 20, 9, K.INK); g.restore(); });
-    if (r.overtime) app.text('x2', px + pw - 3, py + ph - 26, { size: 11, ui: true, bold: true, align: 'right', color: '#7A5F12', fixed: true });
-    // dark: hatched shadow and a sleeping mark
-    if (dark) {
-      g.save(); app.rr(px, py, pw, ph, 5); g.fillStyle = 'rgba(16,13,12,.52)'; g.fill(); g.clip();
-      g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = lnw('hatch'); g.beginPath(); for (let i = -ph; i < pw; i += 4) { g.moveTo(px + i, py + ph); g.lineTo(px + i + ph, py); } g.stroke(); g.restore();
-      app.text('DARK', px + pw / 2, py + ph / 2 - 7, { size: 11, ui: true, bold: true, align: 'center', color: '#c9bfa8', fixed: true });
-    }
-    if (legal) { g.save(); app.rr(px - 2, py - 2, pw + 4, ph + 4, 7); g.strokeStyle = rgba(COL.lamp, 0.55 + 0.45 * pulse); g.lineWidth = lnw('bold'); g.setLineDash([6, 4]); g.lineDashOffset = -S.t * 18; g.stroke(); g.restore(); }
-    if (sel) { g.save(); app.rr(px - 3, py - 3, pw + 6, ph + 6, 8); g.strokeStyle = COL.scar; g.lineWidth = lnw('bold'); g.stroke(); g.restore(); }
-    g.restore();
+    const run = S.run, w = run.ward, H = this.host(app), g = app.ctx;
+    H.buildable.clear(); if (w.phase === 'morning') for (const [x, y] of WD.buildCells(run)) H.buildable.add(x + ',' + y);
+    ISO.drawGround(H, inter);
+    S.heroRec = ISO.drawRooms(H, inter);
+    ISO.drawGhost(H, inter);
     // spawn pop: a ring and a burst when a new arrival lands
-    const pt = MEM.pops[r.id];
-    if (pt !== undefined && S.t >= pt) {
+    for (const r of Object.values(w.rooms)) {
+      const pt = MEM.pops[r.id]; if (pt === undefined || S.t < pt) continue;
       const k = (S.t - pt) / 0.5;
-      if (k >= 1) delete MEM.pops[r.id];
-      else { const cc = cellCenter(r.x, r.y); g.save(); g.strokeStyle = rgba(COL.scar, 1 - k); g.lineWidth = lnw('bold'); g.beginPath(); g.arc(cc.x + 12, cc.y - 4, 10 + 26 * EASE.out(k), 0, Math.PI * 2); g.stroke(); g.restore(); if (!MEM.pops['_b' + r.id]) { MEM.pops['_b' + r.id] = 1; S.fx.burst(cc.x + 12, cc.y - 4, 'spark', { n: 8 }); } }
+      if (k >= 1) { delete MEM.pops[r.id]; continue; }
+      const cc = cellCenter(r.x, r.y);
+      g.save(); g.strokeStyle = rgba(COL.scar, 1 - k); g.lineWidth = lnw('bold'); g.beginPath(); g.ellipse(cc.x, cc.y, (10 + 30 * EASE.out(k)), (10 + 30 * EASE.out(k)) / 2, 0, 0, Math.PI * 2); g.stroke(); g.restore();
+      if (!MEM.pops['_b' + r.id]) { MEM.pops['_b' + r.id] = 1; S.fx.burst(cc.x, cc.y - 10, 'spark', { n: 8 }); }
     }
-    if (hov) {
-      const anchor = { x: c.x, y: c.y, w: CELL, h: CELL, band: { x: LEFT.x + 2, y: Math.max(200, (S.logTop || 300) + 4), bottom: 716, dir: 1 } }; // over the log only (never TODAY, the relics or the walk notes); one tip, no stacked glossary panel
-      app.tooltip(d.name + (DARKW(r) ? ' (dark)' : ''), roomTip(run, r), { color: tint === '#8e1f2c' ? '#ff8a96' : COL.lamp, anchor });
+    const hr = S.hoverRoom && !app.blocked ? w.rooms[S.hoverRoom] : null;
+    if (hr) {
+      const d = ROOMS[hr.type], tint = K.ROOM_TINT[hr.type] || '#8a7a5c', b = ISO.roomBox(w, hr.x, hr.y);
+      const anchor = { x: b.x, y: b.y, w: b.w, h: b.h, band: { x: LEFT.x + 2, y: Math.max(200, (S.logTop || 300) + 4), bottom: 716, dir: 1 } }; // over the log only (never TODAY, the relics or the walk notes); one tip, no stacked glossary panel
+      app.tooltip(d.name + (DARKW(hr) ? ' (dark)' : ''), roomTip(run, hr), { color: tint === '#8e1f2c' ? '#ff8a96' : COL.lamp, anchor });
     }
-  },
-  timerRing(app, r, x, y, rad) {
-    const g = app.ctx, every = WD.everyOf(r), left = r.timers.spawn, full = r.contents.length >= WD.capOf(r);
-    const k = clamp((every - left + 1) / every, 0, 1);
-    g.save();
-    g.fillStyle = '#f6eedb'; g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = rgba(K.INK, 0.35); g.lineWidth = lnw('fine'); g.stroke();
-    g.strokeStyle = full ? COL.scar : '#7A5F12'; g.lineWidth = lnw('bold'); g.beginPath(); g.arc(x, y, rad - 1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (full ? 1 : k)); g.stroke();
-    g.restore();
-    app.text(full ? '!' : String(left), x, y - 6, { size: 11, ui: true, bold: true, align: 'center', color: full ? COL.scar : K.INK, fixed: true });
-  },
-  drawContents(app, r, x, y, w, h) {
-    const g = app.ctx, n = r.contents.length, k = r.contents[0].kind, cx = x + w / 2;
-    if (k === 'monster') {
-      const show = Math.min(n, 3);
-      for (let i = show - 1; i >= 0; i--) this.figure(g, cx - 6 + i * 7 - (show - 1) * 2, y + 22 - i * 2, 0.9, false);
-      app.text('x' + n, x + w + 1, y + h - 13, { size: 13, ui: true, bold: true, align: 'right', color: COL.scar, stroke: '#f3e9d2', strokeW: 3, fixed: true });
-    } else if (k === 'elite') {
-      const e = r.contents[0];
-      this.figure(g, cx, y + 22, 1.2, true);
-      g.save(); g.fillStyle = e.level >= 2 ? COL.scar : '#7A5F12'; app.rr(x + w - 18, y + h - 15, 20, 15, 3); g.fill(); g.restore();
-      app.text('L' + e.level, x + w - 8, y + h - 14, { size: 11, ui: true, bold: true, align: 'center', color: '#fff3d0', fixed: true });
-    } else if (k === 'event') {
-      drawEventSeal(g, cx, y + h / 2 - 2, 11, true, false);
-      if (n > 1) app.text('x' + n, x + w + 1, y + h - 13, { size: 12, ui: true, bold: true, align: 'right', color: '#3E7C74', fixed: true });
-    } else { // charge mark: shop restocked, forge charged, sheets clean
-      g.save(); g.fillStyle = k === 'shop' ? '#5a8fd8' : k === 'forge' ? '#E8571F' : '#6a9a6a'; g.beginPath(); g.arc(cx, y + h / 2 - 2, 9, 0, Math.PI * 2); g.fill();
-      g.strokeStyle = '#2B1E1A'; g.lineWidth = lnw('fine'); g.stroke();
-      g.strokeStyle = '#fff6e0'; g.lineWidth = lnw('bold'); g.beginPath(); g.moveTo(cx - 4, y + h / 2 - 2); g.lineTo(cx - 1, y + h / 2 + 2); g.lineTo(cx + 5, y + h / 2 - 6); g.stroke(); g.restore();
-    }
-  },
-  figure(g, x, y, s, elite) { // a small engraved patient silhouette, feet at (x, y)
-    g.save(); g.translate(x, y); g.scale(s, s);
-    g.beginPath(); g.moveTo(-6, 0); g.quadraticCurveTo(-6, -11, 0, -11); g.quadraticCurveTo(6, -11, 6, 0); g.closePath();
-    g.fillStyle = elite ? '#7A5F12' : '#8e1f2c'; g.fill(); g.strokeStyle = K.INK; g.lineWidth = lnw('hair') / s; g.stroke();
-    g.beginPath(); g.arc(0, -14, 4, 0, Math.PI * 2); g.fillStyle = elite ? '#C9A227' : '#B3263A'; g.fill(); g.stroke();
-    if (elite) { g.beginPath(); g.moveTo(-4, -18); g.lineTo(-4, -22); g.lineTo(-1.5, -19.5); g.lineTo(0, -23); g.lineTo(1.5, -19.5); g.lineTo(4, -22); g.lineTo(4, -18); g.closePath(); g.fillStyle = '#F2C14E'; g.fill(); g.stroke(); }
-    g.restore();
+    ISO.drawLoading(H);
   },
 
-  // phase light over the sheet: dawn gold, plain midday, the lamp dims through the evening, moonlight at night
-  drawTint(app) {
-    const g = app.ctx, w = S.run.ward, tr = S.trans, s = SHEET;
-    const k = tr ? EASE.inOut(clamp(tr.t / tr.dur, 0, 1)) : 1;
-    const layer = (ph, a) => { const [c, al] = PH_TINT[ph] || PH_TINT.midday; if (al * a <= 0.001) return; g.save(); g.globalCompositeOperation = 'multiply'; g.fillStyle = rgba(c, al * a); g.fillRect(s.x, s.y, s.w, s.h); g.restore(); };
-    g.save(); app.rr(s.x, s.y, s.w, s.h, 6); g.clip();
-    if (tr && tr.from) layer(tr.from, 1 - k);
-    layer(w.phase, k);
-    if (w.phase === 'night') { const mg = g.createRadialGradient(s.x + s.w - 60, s.y + 40, 10, s.x + s.w - 60, s.y + 40, 380); mg.addColorStop(0, rgba('#cfe0ff', 0.28 * k)); mg.addColorStop(1, 'rgba(207,224,255,0)'); g.fillStyle = mg; g.fillRect(s.x, s.y, s.w, s.h); }
-    if (w.phase === 'evening') { const fl = 0.92 + 0.08 * Math.sin(S.t * 7) * Math.sin(S.t * 3.1); const lg = g.createRadialGradient(s.x + s.w / 2, s.y - 40, 20, s.x + s.w / 2, s.y - 40, 520); lg.addColorStop(0, rgba('#ffcf7a', 0.16 * fl * k)); lg.addColorStop(1, 'rgba(255,207,122,0)'); g.fillStyle = lg; g.fillRect(s.x, s.y, s.w, s.h); }
-    g.restore();
-  },
+  // time of day over the whole map: cool morning, plain midday, amber evening, deep blue night with lamp pools (ui/ward_iso.js)
+  drawTint(app) { ISO.drawLight(this.host(app)); },
 
-  // ---- the walk preview: a red thread through the rooms, numbered trigger seals ----
-  drawPath(app, path, dest) {
-    const g = app.ctx, run = S.run, w = run.ward, pts = path.map((rid) => roomCenter(run, rid));
-    g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
-    if (pts.length > 1) {
-      g.strokeStyle = 'rgba(14,14,14,.35)'; g.lineWidth = lnw(5); g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p.x + 1.5, p.y + 2) : g.moveTo(p.x + 1.5, p.y + 2))); g.stroke();
-      g.strokeStyle = COL.scar; g.lineWidth = lnw(4); g.setLineDash([10, 6]); g.lineDashOffset = reduced(app) ? 0 : -S.t * 24;
-      g.beginPath(); pts.forEach((p, i) => { if (!i) { g.moveTo(p.x, p.y); return; } const q = pts[i - 1], mx = (p.x + q.x) / 2 + (p.y - q.y) * 0.06, my = (p.y + q.y) / 2 - (p.x - q.x) * 0.06; g.quadraticCurveTo(mx, my, p.x, p.y); }); g.stroke(); g.setLineDash([]);
-      for (const p of pts.slice(1)) { g.fillStyle = COL.scar; g.beginPath(); g.arc(p.x, p.y, 3.2, 0, Math.PI * 2); g.fill(); }
-    }
-    // destination ring
-    const dp = roomCenter(run, dest);
-    g.strokeStyle = COL.scar; g.lineWidth = lnw('bold'); g.setLineDash([4, 4]); g.beginPath(); g.arc(dp.x, dp.y, 30 + Math.sin(S.t * 4) * 2, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
-    g.restore();
-    // numbered trigger seals
-    const p = S.curP || WD.pathTo(run, dest, 0);
-    let n = 0;
-    for (const t of p.triggers || []) {
-      const c = roomCenter(run, t.room), sx = c.x + 4, sy = c.y + 2;
-      g.save(); g.fillStyle = t.bribed ? '#6a625a' : '#1f1914'; g.beginPath(); g.arc(sx, sy, 16, 0, Math.PI * 2); g.fill(); g.strokeStyle = t.bribed ? '#9a9088' : COL.scar; g.lineWidth = lnw('fine'); g.stroke(); g.restore();
-      drawNodeIcon(g, TRIG[t.kind] ? TRIG[t.kind][0] : 'event', sx, sy, 28, t.bribed ? 'locked' : 'available');
-      if (!t.bribed) n++;
-      g.save(); g.fillStyle = t.bribed ? '#6a625a' : COL.scar; g.beginPath(); g.arc(sx - 15, sy - 14, 9, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#f3e9d2'; g.lineWidth = lnw('fine'); g.stroke(); g.restore();
-      app.text(t.bribed ? '-' : String(n), sx - 15, sy - 21, { size: 11, ui: true, bold: true, align: 'center', color: '#fff3e0', fixed: true });
-    }
-    void w;
-  },
-  drawHero(app) {
-    const g = app.ctx, run = S.run, w = run.ward;
-    let pos = roomCenter(run, w.hero.room), hop = 0;
-    const wk = S.walk;
-    if (wk) {
-      const a = roomCenter(run, wk.cells[wk.i]), b = roomCenter(run, wk.cells[Math.min(wk.i + 1, wk.cells.length - 1)]);
-      const k = wk.i < wk.stop ? EASE.inOut(clamp(wk.t / STEP_S, 0, 1)) : 0;
-      pos = { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k) }; hop = Math.sin(k * Math.PI) * 8;
-    }
-    let ox = 31, oy = 32;
-    if (!wk && heroOnTop(app, w.rooms[w.hero.room])) oy = -29; // a long label (ENTRANCE) leaves no corner beside it: the token takes the top right instead
-    const x = pos.x + ox, y = pos.y + oy - hop, r = 11; // on the plate's lower right corner, clear of the room's label
-    g.save();
-    g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(x + 1, y + 9, 10, 3, 0, 0, Math.PI * 2); g.fill();
-    g.shadowColor = COL.lamp; g.shadowBlur = 12 + 4 * Math.sin(S.t * 3);
-    g.fillStyle = '#2b2420'; g.beginPath(); g.arc(x, y, r + 2, 0, Math.PI * 2); g.fill(); g.shadowBlur = 0;
-    g.save(); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.clip(); drawPortrait(g, run.hero, x, y + 2, r * 2.2); g.restore();
-    g.strokeStyle = COL.lamp; g.lineWidth = lnw('bold'); g.beginPath(); g.arc(x, y, r + 1, 0, Math.PI * 2); g.stroke();
-    g.restore();
-    app.reg('ward-hero', x - r - 2, y - r - 2, r * 2 + 4, r * 2 + 4, { layer: 'world' });
+  // ---- the walk preview: a stitched thread across the floors, numbered trigger seals ----
+  drawPath(app, path, dest) { ISO.drawThread(this.host(app), path, dest, S.curP); },
+  drawHero(app) { // the hero itself is an actor of the room pass; this registers its hit box
+    const h = S.heroRec; if (!h) return;
+    app.reg('ward-hero', h.x - 14, h.y - h.h - h.bob, 28, h.h + 4, { layer: 'world' });
   },
 
   // ---- top bar: day, the brass day clock, resources, building deck ----
@@ -850,7 +649,7 @@ export default {
       g.fillStyle = rg; g.beginPath(); g.arc(mx, my, on ? 18 : 15, 0, Math.PI * 2); g.fill(); g.shadowBlur = 0;
       g.strokeStyle = on ? '#fff1b0' : '#3a2a10'; g.lineWidth = lnw(on ? 'bold' : 'fine'); g.stroke();
       g.globalAlpha = past ? 0.45 : 1;
-      K.roomGlyph(g, PH_GLYPH[ph], mx, my, on ? 22 : 18, '#2b1e0a', ph === 'night' ? '#cfe0ff' : '#fff1b0');
+      K.phaseIcon(g, ph, PH_GLYPH[ph], mx, my, on ? 22 : 18, '#2b1e0a', ph === 'night' ? '#cfe0ff' : '#fff1b0');
       g.restore();
     });
     const tx = CX + 26 + 3 * 42 + 26, tw = CX + CWd - tx - 8;
@@ -1089,7 +888,7 @@ export default {
     const g = app.ctx, run = S.run, w = run.ward, B = HAND;
     app.reg('ward-strip', B.x, B.y, B.w, B.h - 8, { group: 'strip' });
     app.panel(B.x, B.y, B.w, B.h - 8, { fill: 'rgba(22,18,16,.94)', r: 10 });
-    K.roomGlyph(g, PH_GLYPH[w.phase], B.x + 46, B.y + 46, 46, '#e8d6b0', w.phase === 'night' ? '#cfe0ff' : COL.lamp);
+    K.phaseIcon(g, w.phase, PH_GLYPH[w.phase], B.x + 46, B.y + 46, 46, '#e8d6b0', w.phase === 'night' ? '#cfe0ff' : COL.lamp);
     const tO = { size: 28, bold: true, color: COL.lamp, engraved: true, fit: { w: 300, lines: 1 } }, tL = app.layoutText(`${PHASES[w.phase].name} walk`, tO);
     app.text(`${PHASES[w.phase].name} walk`, B.x + 90, B.y + 10, tO);
     const legY = B.y + B.h - 8 - 36, ty = B.y + 14 + tL.size;
@@ -1178,7 +977,7 @@ export default {
       if (rr.length && maybeTip(app, 'ward_build', rr[0].x + 30, rr[0].y + 20, 'Morning: drag a building plan onto a glowing cell. A room must share a wall with a room. The cost is on the card: wood, stone, gold.', TIPO)) return;
       if (maybeTip(app, 'ward_power', 806, 40, 'Every lit room uses power (the bulbs, top). Tap a room to switch it off: its timer pauses, and walking through it costs 3 HP. Generators add power.', TIPO)) return;
       const tr = Object.values(w.rooms).find((r) => WD.everyOf(r) && r.type !== 'rm_theatre');
-      if (tr) { const c = cellXY(tr.x, tr.y); if (maybeTip(app, 'ward_timers', c.x + CELL - 13, c.y + 13, 'The ring on a room counts the days to its next spawn. A Ward gains a monster every day, up to 5. Isolation grows an elite, the Chapel an event.', TIPO)) return; }
+      if (tr) { const c = cellCenter(tr.x, tr.y); if (maybeTip(app, 'ward_timers', c.x - ISO.TW * 0.3, c.y - 6, 'The ring on a room counts the days to its next spawn. A Ward gains a monster every day, up to 5. Isolation grows an elite, the Chapel an event.', TIPO)) return; }
     } else {
       const hc = roomCenter(run, w.hero.room);
       if (maybeTip(app, 'ward_walk', hc.x + 20, hc.y + 18, 'Your die sets how far you can go. Click the rooms next to you one by one to draw a red thread (click the last step to undo), then press Go. Every room on it with something inside triggers, in order.', TIPO)) return;

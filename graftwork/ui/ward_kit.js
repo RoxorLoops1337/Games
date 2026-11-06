@@ -17,6 +17,7 @@ import { WARD_GLOSSARY } from './tooltips.js';
 import { BUILD_CARDS, ROOMS, PHASES, WARD_TUNE } from '../data/ward.js';
 import * as WARD from '../engine/ward.js';
 import * as RUN from '../engine/run.js';
+import { assets } from './assets.js';
 
 export const INK = '#2B1E1A', VELLUM = '#E8DCC4', BRASS = '#C9A227';
 export const DEFAULT_MODE = 'ward'; // the Ward is the default once its screen and tests are in (design/WARD.md step 4)
@@ -127,7 +128,19 @@ export function roomGlyph(g, art, x, y, s, ink = INK, spot) {
 }
 
 // ---------------- resource icons ----------------
+// icon art from assets/ward/manifest.json (icons: res_wood res_stone res_gold res_bulb_on res_bulb_off phase_morning phase_midday phase_evening phase_night);
+// any id the manifest lacks falls back to the engraved procedural drawing below
+function drawIcon(g, ids, x, y, s, alpha = 1) {
+  for (const id of ids) {
+    const ic = assets.icon(id);
+    if (ic) { const d = ic.def, k = s / Math.max(d.w || 1, d.h || 1); g.save(); if (alpha < 1) g.globalAlpha *= alpha; g.drawImage(ic.img, x - (d.w || s) * k / 2, y - (d.h || s) * k / 2, (d.w || s) * k, (d.h || s) * k); g.restore(); return true; }
+  }
+  return false;
+}
+export function phaseIcon(g, ph, glyph, x, y, s, ink, spot) { if (!drawIcon(g, ['phase_' + ph], x, y, s * 1.15)) roomGlyph(g, glyph, x, y, s, ink, spot); }
 export function drawRes(g, kind, x, y, s, on = true) {
+  if (kind === 'bulb') { if (drawIcon(g, on ? ['res_bulb_on', 'res_power_on'] : ['res_bulb_off', 'res_power_off'], x, y, s * 1.2)) return; if (!on && drawIcon(g, ['res_bulb_on', 'res_power_on'], x, y, s * 1.2, 0.3)) return; }
+  else if (drawIcon(g, ['res_' + kind], x, y, s * 1.1)) return;
   g.save(); g.translate(x, y); g.lineJoin = 'round'; g.lineCap = 'round';
   if (kind === 'gold') { g.restore(); drawCoin(g, x, y, s); return; }
   const r = s / 2;
@@ -206,9 +219,13 @@ export function drawBuildCard(app, card, x, y, w, h, o = {}) {
   // engraved illustration
   const iy = y + 46 * k, ih = o.full ? 50 * k : 78 * k;
   g.save(); g.globalAlpha *= A;
+  const cardArt = assets.card(card.id) || (room ? assets.room(card.room) : null); // no card illustration: the room's own diorama
+  if (cardArt) { const d = cardArt.def, bw = w * 0.84, bh = ih * 1.06, k = Math.min(bw / (d.w || 1), bh / (d.h || 1)); g.drawImage(cardArt.img, x + w / 2 - d.w * k / 2, iy + ih / 2 - d.h * k / 2, d.w * k, d.h * k); }
+  else {
   g.beginPath(); g.ellipse(x + w / 2, iy + ih / 2, w * 0.36, ih * 0.46, 0, 0, TAU); g.fillStyle = 'rgba(255,248,230,.55)'; g.fill(); g.strokeStyle = rgba(INK, 0.55); g.lineWidth = lnw('hair'); g.stroke();
   hatch(g, x + w / 2, iy + 2, w * 0.36, ih - 4, 0.12, 4);
   roomGlyph(g, card.kind === 'room' ? card.room : card.art, x + w / 2, iy + ih / 2, Math.min(w * 0.5, ih * 0.82), INK, room ? ROOM_TINT[card.room] : kind.color);
+  }
   g.restore();
   // rules text (enlarged card only)
   const ry = iy + ih + 4 * k, rb = y + h - 24 * k;
