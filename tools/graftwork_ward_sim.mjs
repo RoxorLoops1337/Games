@@ -5,11 +5,12 @@
 import * as RUN from '../graftwork/engine/run.js';
 import * as W from '../graftwork/engine/ward.js';
 import { canGraft, strainInfo } from '../graftwork/engine/cards.js';
-import { HEROES, RELICS } from '../graftwork/data/index.js';
+import { HEROES, RELICS, GRAFTS, CARDS } from '../graftwork/data/index.js';
 import { hashSeed } from '../graftwork/engine/rng.js';
 import { POLICIES, fight, chooseGraft, eventScore, pickEventCard, doShop, doForge } from './graftwork_sim.mjs';
 import { tierFight } from './graftwork_tiers.mjs';
 import './graftwork_strong.mjs';
+import { UNLOCKS } from '../graftwork/data/unlocks.js';
 import { WARD_TUNE, PHASES, ROOMS, FLOOR } from '../graftwork/data/ward.js';
 // GW_TUNE='{"tune":{"waitHeal":6},"phases":{"night":{"enemyStr":0}},"rooms":{"rm_linen":{"heal":0.3}}}' patches the data in memory for what-if runs (nothing is written)
 if (process.env.GW_TUNE) { const t = JSON.parse(process.env.GW_TUNE); Object.assign(WARD_TUNE, t.tune || {}); for (const [k, v] of Object.entries(t.phases || {})) Object.assign(PHASES[k], v); for (const [k, v] of Object.entries(t.rooms || {})) Object.assign(ROOMS[k], v); for (const [k, v] of Object.entries(t.floor || {})) Object.assign(FLOOR[k], v); }
@@ -179,12 +180,20 @@ function randomWalk(run, R) {
   return startR(run, R.pick(ok));
 }
 
+// GW_UNLOCK=start+card,graft opens the start pool plus every locked item of those kinds (card graft relic potion event build): ablations of the all pool
+function unlockOpt(v) {
+  if (!v.startsWith('start+')) return v;
+  const kinds = v.slice(6).split(',');
+  // a kind may be narrowed: graft:safe | graft:ember (tier or school), card:marrow (hero)
+  const ok = (e) => kinds.some((k) => { const [kd, sub] = k.split(':'); if (kd !== e.kind) return false; if (!sub) return true; const it = (e.kind === 'graft' ? GRAFTS : e.kind === 'card' ? CARDS : RELICS)[e.itemId] || {}; return [it.tier, it.school, it.hero, it.rarity].includes(sub); });
+  return Object.values(UNLOCKS).filter((e) => e.tier === 'locked' && ok(e)).map((e) => e.id);
+}
 // ---------------- the run ----------------
 export function playWardRun(heroId, seed, policy = 'strong', asc = 0, o = {}) {
   const pol = policy === 'careful' ? POLICIES.careful : POLICIES.strong, rnd = policy === 'random' || policy === 'sloppy', R = mkRng(`ward:${policy}:${seed}`);
   const morningFn = { random: randomMorning, sloppy: sloppyMorning, passive: (r) => W.endMorning(r) }[policy] || strongMorning;
   const walkFn = { random: randomWalk, sloppy: nearestWalk, passive: hideWalk, fill: (r, Rn) => strongWalk(r, Rn, true) }[policy] || strongWalk;
-  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, mode: 'ward', assist: o.assist, unlocked: o.unlocked || process.env.GW_UNLOCK || 'all' });
+  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, mode: 'ward', assist: o.assist, unlocked: o.unlocked || unlockOpt(process.env.GW_UNLOCK || 'all') });
   const acts = { 1: blank(), 2: blank(), 3: blank() };
   const log = { fights: [], events: 0, shops: 0, acts };
   let guard = 0;
