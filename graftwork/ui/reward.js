@@ -104,13 +104,13 @@ function buildRows() {
 
 function rowInfo(r) {
   const init = st.init, run = st.run;
-  if (r.id === 'gold') return { title: `${init.gold} gold`, line: 'Coins left on the table.', col: COL.gold, tip: ['Added to your purse.'], head: 'Gold' };
+  if (r.id === 'gold') return { title: `${init.gold} gold`, line: 'Coins left on the table.', col: COL.gold, tip: null, head: 'Gold' };
   if (r.id === 'potion') {
     const p = POTIONS[init.potion]; const r2 = RARITY[p.rarity] || RARITY.common;
-    return { title: p.name, line: p.text, col: r2.color, head: 'Potion', tip: [r2.name + ' potion.', p.text, 'Used from the combat screen.'], icon: (c, x, y, s) => ICONS.drawPotion(c, init.potion, x, y, s) };
+    return { title: p.name, line: p.text, col: r2.color, head: 'Potion', tip: ['Used from the combat screen: pick it from your potion slots. It is spent when drunk.'], icon: (c, x, y, s) => ICONS.drawPotion(c, init.potion, x, y, s) };
   }
   const rl = RELICS[init.relic]; const r2 = RARITY[rl.rarity] || RARITY.common;
-  return { title: rl.name, line: rl.text, col: r2.color, head: r2.name + ' relic', tip: [r2.name + ' relic.', rl.text], icon: (c, x, y, s) => ICONS.drawRelic(c, init.relic, x, y, s) };
+  return { title: rl.name, line: rl.text, col: r2.color, head: r2.name + ' relic', tip: ['Kept for the rest of the run. Its effect is always on.'], icon: (c, x, y, s) => ICONS.drawRelic(c, init.relic, x, y, s) };
 }
 
 function drawRow(app, r, i, y, compact, K) {
@@ -160,7 +160,7 @@ function drawRow(app, r, i, y, compact, K) {
   if (!app.blocked && app.inRect(x, y, PW, h)) {
     const rowAnchor = { x, y, w: PW, h }; // tip sits beside the row, never over its Take chip
     if (full) app.tooltip(info.title, `Potion slots full (${run.potions.length}/${RUN.potionSlots(run)}). Use a potion in combat to make room, or leave this one.`, { color: COL.bad, anchor: rowAnchor });
-    else app.tooltip(info.title, null, { lines: info.tip, color: info.col, anchor: rowAnchor });
+    else if (info.tip) app.tooltip(info.title, null, { lines: info.tip, color: info.col, anchor: rowAnchor }); // adds information only: the row already shows the name and text
     if (can && app.clicked(x, y, PW, h)) claim(app, r.id, x + PW / 2, cy);
   }
   return y + h + (compact ? 8 : 12);
@@ -204,7 +204,7 @@ function drawChoices(app, y, K) {
     if (mine) app.text('TAKEN', x + w / 2, hy + h - 26, { size: 16, fixed: true, bold: true, align: 'center', color: COL.good });
     else keyBadge(app, 'QWE'[i], x + 18, hy + 18);
     if (!picked && !app.blocked && app.inRect(x, yy, w, h)) {
-      app.tooltip(rl.name, null, { lines: [r2.name + ' relic.', rl.text, 'Only one can be taken.'], color: r2.color });
+      app.tooltip(rl.name, null, { lines: ['Only one can be taken, and it is kept for the rest of the run.'], color: r2.color });
       if (app.clicked(x, yy, w, h)) claim(app, 'boss', x + w / 2, yy + 60, id);
     }
   });

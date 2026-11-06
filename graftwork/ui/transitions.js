@@ -237,7 +237,7 @@ function drawIntro(app, it) {
 export function phaseBeat(app, label) {
   const T = state(app); if (!T.on) return;
   T.phase = { t: 0, life: reduced() ? 0.9 : 1.5, label: String(label || 'PHASE II') }; T.phases++;
-  if (!reduced()) { post(app, 'flash', '#ffffff', 0.45); post(app, 'shockwave', 640, 330, 0.9, 700); post(app, 'aberration', 5, 300); post(app, 'vignette', 0.6, 800); sfx(app, 'bossIntro', { pitch: 0.8 }); sfx(app, 'seamPop'); }
+  if (!reduced()) { post(app, 'flash', '#ffffff', 0.45); post(app, 'shockwave', 640, 40, 0.9, 700); post(app, 'aberration', 5, 300); post(app, 'vignette', 0.6, 800); sfx(app, 'bossIntro', { pitch: 0.8 }); sfx(app, 'seamPop'); }
   audioCall(app, 'setIntensity', 1);
 }
 export function watchPhases(app, c) {
@@ -255,10 +255,11 @@ export function watchPhases(app, c) {
 function drawPhase(app, p) {
   const ctx = app.ctx, k = p.t / p.life, a = k < 0.1 ? k / 0.1 : k > 0.75 ? (1 - k) / 0.25 : 1;
   ctx.save(); ctx.globalAlpha = clamp(a, 0, 1) * 0.9;
-  const hh = 84 * eOut(clamp(k * 6, 0, 1)); ctx.fillStyle = 'rgba(14,6,8,.85)'; ctx.fillRect(0, 300 - hh / 2, W, hh);
-  ctx.fillStyle = '#B3263A'; ctx.fillRect(0, 300 - hh / 2, W, 3); ctx.fillRect(0, 300 + hh / 2 - 3, W, 3);
-  ctx.globalAlpha = clamp(a, 0, 1); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 44px Georgia, serif'; ctx.lineWidth = 7; ctx.lineJoin = 'round';
-  const sl = (1 - eOut(clamp(k * 5, 0, 1))) * 140; ctx.strokeStyle = INK; ctx.strokeText(p.label, 640 + sl, 302); ctx.fillStyle = VELLUM; ctx.fillText(p.label, 640 + sl, 302);
+  // top band: the strip hangs from the top edge (over the header), never across the play area
+  const CY = 32, hh = 60 * eOut(clamp(k * 6, 0, 1)); ctx.fillStyle = 'rgba(14,6,8,.85)'; ctx.fillRect(0, CY - hh / 2, W, hh);
+  ctx.fillStyle = '#B3263A'; ctx.fillRect(0, CY - hh / 2, W, 3); ctx.fillRect(0, CY + hh / 2 - 3, W, 3);
+  ctx.globalAlpha = clamp(a, 0, 1); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 36px Georgia, serif'; ctx.lineWidth = 7; ctx.lineJoin = 'round';
+  const sl = (1 - eOut(clamp(k * 5, 0, 1))) * 140; ctx.strokeStyle = INK; ctx.strokeText(p.label, 640 + sl, CY + 2); ctx.fillStyle = VELLUM; ctx.fillText(p.label, 640 + sl, CY + 2);
   ctx.restore();
 }
 
@@ -306,7 +307,7 @@ export function overloadBeat(app, fx, x, y, shatterPct) {
 }
 // Shatter in combat: the card resolves, then breaks. Call next to the screen's own burst.
 export function shatterBeat(app, x, y) {
-  if (!reduced()) { post(app, 'shockwave', x, y, 0.85, 700); post(app, 'aberration', 5, 320); post(app, 'flash', '#ffe9a8', 0.4); post(app, 'vignette', 0.45, 600); }
+  if (!reduced()) { post(app, 'shockwave', x, y, 0.85, 700); post(app, 'aberration', 5, 320); post(app, 'flash', '#ffe9a8', 0.2); post(app, 'vignette', 0.3, 450); }
   sfx(app, 'hitCrush', { vol: 0.6, pitch: 1.3 });
 }
 // strain gauge reaction: shake offset while st.strainK > 0, plus a glow rect; call decay each frame with dt

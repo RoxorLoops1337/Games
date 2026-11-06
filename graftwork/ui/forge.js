@@ -131,7 +131,7 @@ function pickTemper(app) {
   const run = app.shared.run;
   openCards(S.modal, {
     title: 'Temper which card?', sub: 'The hammer fuses its patches into the card. Boons and prices stay for good, and the patch slots open up again.', cards: temperable(run),
-    compare: (inst) => cardSpec(temperedOf(inst)),
+    compare: (inst) => cardSpec(temperedOf(inst)), compareTag: 'FUSED: patches become part of the card',
     info: (inst) => {
       const w0 = instWeight(inst), w1 = instWeight(temperedOf(inst)), lines = [];
       lines.push({ t: `Fused for good: ${inst.grafts.map((g) => GRAFTS[g].name).join(', ')}.`, c: COL.vellum });

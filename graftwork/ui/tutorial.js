@@ -20,6 +20,8 @@ export const TIP_TEXTS = {
   resonance: 'Three grafts of one school wake a small bonus. Six wake a larger one. The strip in the deck view tracks it.',
   thread_chain: 'Two cards of one school tie a knot. Keep sharing a school to grow the Line, up to 5 knots.',
   thread_cut: 'A card of another school Cuts the Line and cashes it in. A longer Line pays more. Hover Line, Stitch or Cut for the rule.',
+  claim: 'Claim: the Matron takes your most grafted card for the fight, at -25% like a Tithe. Tempering a card makes it immune.',
+  ringing: 'Ringing is a junk card: unplayable, and it fades if unplayed. Some grafts and bosses shuffle it into your deck.',
   jam: 'Backfire jams grafted cards in your opening hand. A jammed card costs 1 more this turn.',
 };
 

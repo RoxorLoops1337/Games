@@ -9,7 +9,7 @@ import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft, strainInfo, previewGraft, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { cardLines, priceLines } from '../engine/text.js';
 import { CARDS, GRAFTS, RELICS, POTIONS } from '../data/index.js';
-import { wrapLimit, tscale } from './graft_parts.js';
+import { wrapLimit, tscale, hpPerPlay } from './graft_parts.js';
 import { infoOpen, infoClose, touchUi, openInfoCard, infoChip, drawInfoCard } from './card_zoom.js';
 const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -73,6 +73,7 @@ export function graftPreview(run, uid, gid) {
   const inst = RUN.findInst(run, uid);
   const lines = tithLines(p.before, p.after, p.tithedNames);
   if (inst.grafts.length >= MAX_GRAFTS_NORMAL) lines.unshift({ t: 'Overload: weighs +1, numbers x1.5, 25% Shatter on first play.', c: COL.lamp });
+  { const hb = hpPerPlay(cardSpec(inst)), ha = hpPerPlay(cardSpec({ ...inst, grafts: [...inst.grafts, gid] })); if (hb > 0 && ha > hb) lines.unshift({ t: `HP stacks: this card already costs ${hb} HP a play, with this graft ${ha}.`, c: COL.bad }); }
   return { before: p.before, after: p.after, names: p.tithedNames, lines };
 }
 export function stripDeck(run, uid, gid) {
@@ -101,6 +102,20 @@ function drawInfo(app, x, y, w, h, info, hint) {
   app.text(gaugeLabel(info.after), x + 62, y + 82, { size: 13, ui: true, color: info.after.strain ? COL.bad : COL.good });
   let yy = y + 12;
   for (const ln of info.lines || []) { yy += app.text(ln.t, x + gw + 90, yy, { size: 15, ui: true, color: ln.c || COL.vellum, maxW: w - gw - 110, lineH: 19 }) + 3; }
+}
+
+// Tag for cards that look the same in a list (five starter Cuts): 'Cut 2 of 5, 1 graft, upgraded'. Null for a card with no twin.
+export function cardTag(list, inst) {
+  const twins = list.filter((c) => c.id === inst.id); if (twins.length < 2) return null;
+  const parts = ['#' + (twins.indexOf(inst) + 1)];
+  if (inst.grafts.length) parts.push(inst.grafts.length + (inst.grafts.length === 1 ? ' graft' : ' grafts'));
+  if (inst.up) parts.push('+');
+  return parts.join(', ');
+}
+function drawCardTag(app, text, cx, cy, a = 1) {
+  const g = app.ctx, w = Math.max(34, app.measure(text, 12, { ui: true, bold: true }) + 14);
+  g.save(); g.globalAlpha = a; app.rr(cx - w / 2, cy - 9, w, 18, 9); g.fillStyle = 'rgba(14,12,10,.92)'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = COL.lamp; g.stroke(); g.restore();
+  app.text(text, cx, cy - 7, { size: 12, ui: true, bold: true, align: 'center', color: COL.lamp, alpha: a });
 }
 
 // Draws the open modal. Returns true while one is open (the caller should treat the rest of the screen as blocked).
@@ -142,19 +157,22 @@ export function drawModal(app, st, run, extra = {}) {
       const p = rects[i]; if (p.y < gy - chh || p.y > gy + gh + chh || i === hover) return;
       const why = m.reason ? m.reason(inst) : null;
       drawCard(g, cardSpec(inst), p.x, p.y, { scale: sc, tithed: tith.has(inst.uid), dim: why ? 0.55 : 0 });
+      const tg = cardTag(m.cards, inst); if (tg) drawCardTag(app, tg, p.x, p.y + chh / 2 - 12, why ? 0.55 : 1);
     });
     g.restore();
     if (hover >= 0) {
       const inst = m.cards[hover], p = rects[hover], why = m.reason ? m.reason(inst) : null, hs = 0.82;
-      const hx = clamp(p.x, gx + CARD_W * hs / 2, gx + gw - CARD_W * hs / 2), hy = clamp(p.y, gy + CARD_H * hs / 2 - 20, gy + gh - CARD_H * hs / 2 + 40);
+      const hx = clamp(p.x, gx + CARD_W * hs / 2, gx + gw - CARD_W * hs / 2), hy = clamp(p.y, gy + CARD_H * hs / 2 + 4, gy + gh - CARD_H * hs / 2 + 40);
       g.save(); g.shadowColor = 'rgba(0,0,0,.8)'; g.shadowBlur = 24;
       if (m.compare && !why) {
         const pcx = clamp(p.x, gx + CARD_W * hs + 24, gx + gw - CARD_W * hs - 24), dx = CARD_W * hs / 2 + 26;
         drawCard(g, cardSpec(inst), pcx - dx, hy, { scale: hs, tithed: tith.has(inst.uid) });
         drawCard(g, m.compare(inst), pcx + dx, hy, { scale: hs, selected: true, glow: 0.5 });
+        if (m.compareTag) { drawCardTag(app, m.compareTag, pcx + dx, hy + CARD_H * hs / 2 + 4); drawCardTag(app, 'NOW', pcx - dx, hy + CARD_H * hs / 2 + 4); } // names the right-hand card: what it becomes
         g.fillStyle = COL.lamp; g.beginPath(); g.moveTo(pcx - 12, hy - 16); g.lineTo(pcx + 12, hy); g.lineTo(pcx - 12, hy + 16); g.closePath(); g.fill();
       } else drawCard(g, cardSpec(inst), hx, hy, { scale: hs, tithed: tith.has(inst.uid), selected: !why, dim: why ? 0.4 : 0, hover: true });
       g.restore();
+      { const tg = cardTag(m.cards, inst); if (tg && !(m.compare && !why)) drawCardTag(app, tg, hx, hy + CARD_H * hs / 2 - 14); }
       app.cursor = why ? 'not-allowed' : 'pointer';
       info = why ? { before: strainInfo(run), after: strainInfo(run), lines: [{ t: why, c: COL.bad }] } : (m.info ? m.info(inst) : null);
       if (app.clicked(p.x - cw / 2, p.y - chh / 2, cw, chh)) {
@@ -585,14 +603,19 @@ export default {
 
     // ---- grafts ----
     shop.grafts.forEach((it, i) => {
-      const gr = GRAFTS[it.id], x = GRAFT_X(i) + shakeX('graft' + i), y = GRAFT_Y, w = 205, h = 64;
+      const gr = GRAFTS[it.id], x = GRAFT_X(i) + shakeX('graft' + i), y = GRAFT_Y, w = 205, h = 64, ph = 64;
       app.reg('shop-graft' + i, GRAFT_X(i), y - 4, w, 100, { group: 'graft' + i });
       const over = !it.sold && app.inRect(GRAFT_X(i), y, w, 100), k = hv(app, 'g' + i, over);
-      if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, [...graftLines(gr), `Sews onto one of your cards. ${it.price} gold.`].join('\n'), { color: COL[gr.school], anchor: { x: GRAFT_X(i), y, w, h: 100 } }); }
+      if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, `Weight ${gr.weight} (${gr.tier}): counts ${gr.weight} against your Budget.\n` + ['Boon', 'Price'].map((lab) => { const t = lab === 'Boon' ? gr.boon : gr.price; return wrapLimit(app, `${lab}: ${t}`, w - 2, 13, 1, { ui: true })[0] === `${lab}: ${t}` ? '' : `${lab}: ${t}\n`; }).join('') + `Sews onto one of your cards. ${it.price} gold.`, { color: COL[gr.school], anchor: { x: GRAFT_X(i), y, w, h: 100, band: { x: Math.min(GRAFT_X(i), 590), y: 584, bottom: 716, dir: 1 } } }); } // Boon and Price are on the patch itself; the tip sits over the service row, never over the sibling patches
       g.save(); if (it.sold) g.globalAlpha = 0.45; g.translate(0, -3 * k);
-      drawGraftPatch(g, gr, x, y, w, h, { hover: k });
+      drawGraftPatch(g, gr, x, y, w, ph, { hover: k });
+      // one line each for the Boon and the Price, so nobody has to hover to read what a patch does
+      for (const [n, lab, txt, col] of [[0, 'Boon', gr.boon, COL.good], [1, 'Price', gr.price, '#ff8a8a']]) {
+        const ln = wrapLimit(app, `${lab}: ${txt}`, w - 2, 13, 1, { ui: true })[0] || '';
+        app.text(ln, x, y + ph + 4 + n * 15, { size: 13, ui: true, color: col, maxW: w - 2 });
+      }
       g.restore();
-      if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w / 2, y + h + 22, it.price, false, 'graft' + i);
+      if (it.sold) stamp(app, x + w / 2, y + ph / 2, 'SOLD'); else priceTag(GRAFT_X(i) + w - 44, y + ph + 46, it.price, false, 'graft' + i);
       if (!it.sold && app.clicked(GRAFT_X(i), y, w, 100)) startGraftBuy(app, i);
     });
 

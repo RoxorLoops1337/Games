@@ -292,7 +292,7 @@ export default {
       const info = NODE_INFO[hovered.type] || [hovered.type, ''];
       const state = hovered.visited ? 'Visited.' : availIds.has(hovered.id) ? 'Click to enter.' : reach.has(hovered.id) ? 'Not yet reachable.' : 'Off your path.';
       const label = hovered.type === 'elite' ? 'Elite: relic reward' : info[0];
-      app.tooltip(info[0], (label === info[0] ? info[1] : label + '\n' + info[1]) + '\n' + state, { color: NODE_COL[hovered.type] });
+      app.tooltip(info[0], (label === info[0] ? info[1] : label + '\n' + info[1]) + '\n' + state, { color: NODE_COL[hovered.type], anchor: { x: hovered.sx !== undefined ? hovered.sx : app.mouse.x - 10, y: hovered.sy !== undefined ? hovered.sy : app.mouse.y - 10, w: 20, h: 20, band: { x: 950, y: 70, bottom: 340, dir: 1 } } }); // node notes sit over the legend (which says the same), never over the neighbouring nodes
     }
     g.restore(); // clip
     // pins + border
@@ -392,7 +392,7 @@ export default {
     // relics get whatever is left between here and the potions
     app.text('RELICS', X + 18, y, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
     y += 20;
-    this._tipSlot = { top: y - 2, bottom: potTop - 26 + 20 }; // first-run bubble sits in the empty relic shelf, never over the RELICS header or the potion slots
+    this._tipSlot = { top: y + 1, bottom: potTop - 26 + 20 }; // first-run bubble sits in the empty relic shelf, never over the RELICS header or the potion slots
     const per = 7, cell = 39, avail = Math.max(1, Math.floor((potTop - 26 - y) / cell));
     const cap = per * avail, over = run.relics.length > cap, shown = over ? cap - 1 : run.relics.length;
     run.relics.slice(0, shown).forEach((id, i) => {

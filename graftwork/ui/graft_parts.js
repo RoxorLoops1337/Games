@@ -25,6 +25,13 @@ export function cantReason(inst, gid) {
 }
 export { cantGraftWhy };
 
+// HP a card costs per play: its own 'lose HP' ops (they repeat on every replay) plus graft self damage (paid once).
+export function hpPerPlay(spec) {
+  let own = 0; const walk = (fx) => { for (const op of fx || []) { if (op.op === 'hp' && typeof op.n === 'number') own += op.n; if (op.then) walk(op.then); if (op.else) walk(op.else); if (op.fx) walk(op.fx); } };
+  walk(spec.fx);
+  return own * (1 + (spec.repeat || 0)) + ((spec.price && spec.price.selfHurt) || 0);
+}
+
 // School resonance line: "Ember 2/3 resonance" and what the next step does.
 export function resonanceInfo(run, schoolId, counts) {
   const s = SCHOOLS[schoolId]; if (!s) return null;

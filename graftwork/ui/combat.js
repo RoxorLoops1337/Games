@@ -594,7 +594,7 @@ function statusFx(ev, p) {
 function shatterBurst(p) {
   const fx = S.fx;
   fx.burst(p.x, p.y, 'shard', { n: 26, speed: 460, size: 8 }); fx.burst(p.x, p.y, 'glass', { n: 12 }); fx.ring(p.x, p.y, COL.gold, 160, 0.6);
-  fx.slowmo(0.35, 350); fx.flash('#ffe9a8', 0.22, 0.2); fx.shake(0.6); fx.float('SHATTERED', p.x, p.y + 64, { color: COL.gold, size: 34, big: true, life: 1.4 }); fx.float('Lost for the run', p.x, p.y + 104, { color: COL.vellum, size: 16, life: 1.4 });
+  fx.slowmo(0.35, 350); fx.flash('#ffe9a8', 0.22, 0.2); fx.shake(0.6); fx.float('SHATTERED', 640, 78, { color: COL.gold, size: 34, big: true, life: 1.4 }); fx.float('Lost for the run', 640, 118, { color: COL.vellum, size: 16, life: 1.4 }); // top band: never over the play area
   sfx('shatter');
   { const trn = APP && APP.shared && APP.shared.transitions; if (trn && trn.shatterBeat) trn.shatterBeat(APP, p.x, p.y); }
 }
@@ -1834,7 +1834,12 @@ function drawTips(app) {
   const jc = S.hand.find((d) => d.jam);
   if (jc && tip('jam', jc.x, jc.y - CARD_H * jc.s / 2, { side: 'above', w: 300 })) return;
   const oc = S.hand.find((d) => dcSpec(d).overload);
-  if (oc) tip('overload', oc.x, oc.y - CARD_H * oc.s / 2, { side: 'above', w: 300 });
+  if (oc && tip('overload', oc.x, oc.y - CARD_H * oc.s / 2, { side: 'above', w: 300 })) return;
+  // first-use rules words: one line each, the first time they show up
+  const rc = S.hand.find((d) => dcSpec(d).id === 'j_ringing');
+  if (rc && tip('ringing', rc.x, rc.y - CARD_H * rc.s / 2, { side: 'above', w: 300 })) return;
+  const cl = liveEds().find((d) => { const mv = d.e.move && d.e.def.moves[d.e.move]; return mv && (mv.fx || []).some((op) => /\bClaim/.test(op.text || '')); });
+  if (cl) tip('claim', cl.x, L.ENEMY_LANE_TOP + 64, { side: 'left', w: 300 });
 }
 
 function drawBanner(app) {
