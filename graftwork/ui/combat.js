@@ -900,14 +900,15 @@ function drawTouchPreview(app) {
   ctx.restore();
   if (app.reg) { app.reg('preview_play', r.play.x, r.play.y, r.play.w, r.play.h, { layer: 'hud', group: 'preview', overlay: true }); app.reg('preview_cancel', r.x.x, r.x.y, r.x.w, r.x.h, { layer: 'hud', group: 'preview', overlay: true }); }
 }
-const CONFIRM = { x: 886, y: 480, w: 372, h: 56 };
+// Right of the Thread rail (ends x 1076), above End Turn: never over the rail.
+const CONFIRM = { x: 1086, y: 432, w: 180, h: 106 };
 function drawEndConfirm(app) {
   const u = U(), ec = u.endConfirm; if (!ec) return;
   if (!canAct() || S.t - ec.t0 > 6) { u.endConfirm = null; return; }
   const ctx = app.ctx, B = CONFIRM, ready = S.t - ec.t0 >= 0.4;
   ctx.save(); app.rr(B.x, B.y, B.w, B.h, 10); ctx.fillStyle = 'rgba(14,12,10,.94)'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = ready ? COL.lamp : 'rgba(232,220,196,.4)'; ctx.stroke(); ctx.restore();
-  app.text(`End turn with ${ec.energy} energy and ${ec.n} playable card${ec.n === 1 ? '' : 's'}?`, B.x + B.w / 2, B.y + 20, { size: 15, ui: true, bold: true, align: 'center', baseline: 'middle', color: COL.vellum });
-  app.text('Enter or click to confirm. Esc to keep playing.', B.x + B.w / 2, B.y + 40, { size: 12, ui: true, align: 'center', baseline: 'middle', color: 'rgba(232,220,196,.65)' });
+  app.text(`End turn with ${ec.energy} energy and ${ec.n} playable card${ec.n === 1 ? '' : 's'}?`, B.x + 12, B.y + 10, { size: 15, ui: true, bold: true, maxW: B.w - 24, lineH: 18, color: COL.vellum });
+  app.text('Enter or click: end turn. Esc: keep playing.', B.x + 12, B.y + B.h - 36, { size: 12, ui: true, maxW: B.w - 24, lineH: 15, color: 'rgba(232,220,196,.7)' });
   if (app.reg) app.reg('end_confirm', B.x, B.y, B.w, B.h, { layer: 'hud', group: 'end_confirm', overlay: true });
 }
 function drawSeam(ctx, dc) {
@@ -1700,22 +1701,24 @@ function drawCardInfo(app) {
 }
 
 // first-run tips: one at a time, only while the player can act, never over a modal
+// Tips never cover the hero plate (y 464), the Thread rail (y 468) or the hand: bubbles stop above this line, the arrow reaches down.
+const TIP_BOTTOM = L.SEAM.y - 10;
 function drawTips(app) {
   if (!S || S.modal || S.ending || S.c.pending || S.banner || !canAct() || S.drag) return;
   const c = S.c, l = liveEds(), first = l[0];
   const has = (k) => app.shared.meta && app.shared.meta.tips && app.shared.meta.tips[k];
   const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
   if (first && !S.hov) {
-    if (tip('energy', L.ORB.x + 46, L.ORB.y - 50, { side: 'right', w: 280 })) return;
-    if (tip('intent', first.x, EF - first.h - 8, { side: 'below', w: 290 })) return;
-    if (S.hand.length && tip('playcard', L.HAND_CX, L.HAND_Y - 120, { side: 'above', w: 330 }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
-    if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 70, FOOT_Y - 150, { side: 'right', w: 280 })) return;
-    if (tip('endturn', L.END_BTN.x + L.END_BTN.w / 2, L.END_BTN.y, { side: 'above', w: 280 })) return;
+    if (tip('energy', L.ORB.x + 40, L.ORB.y - 46, { side: 'above', w: 270, maxBottom: TIP_BOTTOM })) return;
+    if (tip('intent', first.x, EF - first.h - 8, { side: 'below', w: 290, maxBottom: TIP_BOTTOM })) return;
+    if (S.hand.length && tip('playcard', 500, L.HAND_Y - 120, { side: 'above', w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
+    if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 70, FOOT_Y - 150, { side: 'right', w: 280, maxBottom: TIP_BOTTOM })) return;
+    if (tip('endturn', L.END_BTN.x + L.END_BTN.w / 2, L.END_BTN.y, { side: 'above', w: 280, maxBottom: TIP_BOTTOM })) return;
   }
   if (!has('endturn')) return; // later tips wait until the basics are known
   if (seamTip(app, c, L.SEAM)) return;
   const hc = S.hand.find((d) => d.w.tithed);
-  if (hc || S.seenTithe.size) { if (tip('strain', L.STRAIN_BOX.x + L.STRAIN_BOX.w, L.STRAIN_BOX.y + 22, { side: 'right', w: 300 })) return; }
+  if (hc || S.seenTithe.size) { if (tip('strain', L.STRAIN_BOX.x + L.STRAIN_BOX.w - 20, L.STRAIN_BOX.y, { side: 'above', w: 300, maxBottom: TIP_BOTTOM })) return; }
   const jc = S.hand.find((d) => d.jam);
   if (jc && tip('jam', jc.x, jc.y - CARD_H * jc.s / 2, { side: 'above', w: 300 })) return;
   const oc = S.hand.find((d) => dcSpec(d).overload);
