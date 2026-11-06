@@ -153,6 +153,7 @@ export default {
     const run = app.shared.run;
     S = { run, fx: new Fx(), t: 0, drag: null, press: null, sel: null, selRoom: null, alt: 0, altFor: null, toast: '', toastT: 0, walk: null, trans: null, banner: null, plans: false, plansScroll: 0, chip: null, hoverRoom: null };
     this.st = S;
+    MEM.stamps = {}; MEM.pops = {}; MEM.bulbs = {}; // these hold S.t times of an earlier visit: S.t restarts at 0 here (rooms built before a fight stayed invisible)
     const w = run.ward;
     if (!w) return;
     const fk = `${run.seed}|${run.act}|${run.loop || 0}`;

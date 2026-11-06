@@ -85,7 +85,7 @@ export function addPotion(run, id) {
   run.potions.push(id); return true;
 }
 function relicPool(run, rarities) {
-  return Object.values(RELICS).filter((r) => rarities.includes(r.rarity) && !run.relics.includes(r.id) && runAllows(run, r.id) && (!r.hero || r.hero === run.hero));
+  return Object.values(RELICS).filter((r) => rarities.includes(r.rarity) && !run.relics.includes(r.id) && runAllows(run, r.id) && (!r.hero || r.hero === run.hero) && (!r.ward || run.mode === 'ward'));
 }
 export function rollRelic(run, rarity) {
   const order = { common: ['common'], uncommon: ['uncommon'], rare: ['rare'], boss: ['boss'], shop: ['shop', 'uncommon'] };
@@ -450,7 +450,7 @@ export const R = {
   strainOf: (run) => strainInfo(run),
 };
 export function startEvent(run) {
-  const pool = Object.values(EVENTS).filter((e) => (e.act === 0 || e.act === run.act) && !run.seenEvents.includes(e.id));
+  const pool = Object.values(EVENTS).filter((e) => (e.act === 0 || e.act === run.act) && !run.seenEvents.includes(e.id) && (!e.ward || run.mode === 'ward'));
   const open = pool.filter((e) => runAllows(run, e.id));
   if (open.length) pool.splice(0, pool.length, ...open);
   const ev = pool.length ? run.rng.pick(pool) : null;

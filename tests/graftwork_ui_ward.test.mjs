@@ -278,5 +278,19 @@ for (const ps of [0, 0.64, 0.54, 0.46]) await t('layout sweep ' + (ps ? 'phone '
   assert.equal(mine.length, 0, 'layout problems');
 });
 
+await t('z4: re-entering the Ward after a fight drops stale build stamps (rooms built in the morning stayed invisible until the old clock caught up)', async () => {
+  const { app, run, flow } = await setup({ seed: 'z4stamp' });
+  layout(run, [['rm_entrance', 0, 2]]);
+  run.ward.res.wood = 10; run.ward.res.stone = 10; run.ward.deck.hand = [];
+  give(run, 'b_ward');
+  flow.route(); frames(app, 600); // a long morning: the screen clock runs far past 0
+  const r = handRects(1)[0], good = cellCenter(1, 2);
+  drag(app, r.x + r.w / 2, r.y + 60, good.x, good.y);
+  const id = WD.roomAt(run, 1, 2).id;
+  assert.ok(wardMod.wardMem.stamps[id] > 5, 'the build stamped the late screen clock');
+  flow.route(); frames(app, 5); // back from a fight: a fresh screen state whose clock restarts at 0
+  assert.equal(wardMod.wardMem.stamps[id], undefined, 'stale stamp cleared on enter');
+});
+
 void BUILD_CARDS;
 console.log(`${n} ward UI checks passed`);

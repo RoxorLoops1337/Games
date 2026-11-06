@@ -11,6 +11,9 @@ const canFuse = (i) => i.grafts.length > 0 && (i.fused || []).length + i.grafts.
 const fuseInst = (run, i) => { if (!canFuse(i)) return false; i.fused = [...(i.fused || []), ...i.grafts]; i.grafts = []; if (run.stats) run.stats.tempered = (run.stats.tempered || 0) + 1; return true; };
 const rerollCard = (run, R, inst) => { const n = inst.grafts.length; for (const g of inst.grafts.slice()) R.stripGraft(run, inst.uid, g); let k = 0; for (let j = 0; j < n; j++) if (R.addGraftRandom(run, inst.uid)) k++; return k; };
 
+// The phase a Ward event is running in (engine/ward.js keeps it on run.ward.phase); classic runs never see Ward events.
+const phaseOf = (run) => (run.ward && run.ward.phase) || 'midday';
+
 export const EVENT_LIST = [
   // ---------------- ANY ACT ----------------
   {
@@ -616,4 +619,123 @@ export const EVENT_LIST = [
       leave('The loom keeps weaving without you, in two colours, with feeling.'),
     ],
   },
+
+  // ---------------- WARD EVENTS (phase aware: the Chapel's midday, evening and night versions differ; `phase` is the hint the Ward weights by) ----------------
+  {
+    id: 'e_w_menu_board', name: 'The Menu Board', act: 0, ward: true, phase: 'evening',
+    text: 'A chalk menu hangs outside the canteen. The specials change with the hour and the handwriting changes with them. Someone has underlined "while supplies last" twice.',
+    choices: [
+      { label: 'Order the special (-12 gold)', text: 'Pay 12 gold. Midday: heal 14. Evening: heal 20. Night: 50% heal 26, 50% lose 6 HP.', cond: (run) => run.gold >= 12,
+        apply: (run, R) => { R.gold(run, -12); const p = phaseOf(run); if (p === 'night') { if (R.rng(run).chance(0.5)) { R.heal(run, 26); return 'The night cook is a genius. Heal 26 HP. -12 gold.'; } R.hurt(run, 6); return 'It moved. You lose 6 HP. -12 gold.'; } const n = p === 'evening' ? 20 : 14; R.heal(run, n); return `A proper meal. Heal ${n} HP. -12 gold.`; } },
+      { label: 'Raid the trolley', text: 'Midday: 25 gold. Evening: a potion. Night: 60% 45 gold, 40% lose 8 HP.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.gold(run, 25); return 'Nobody counts the trolley at noon. +25 gold.'; } if (p === 'evening') { R.addPotion(run, null); return 'Under the napkins, a potion. It was meant for someone else.'; } if (R.rng(run).chance(0.6)) { R.gold(run, 45); return 'The night shift shares. +45 gold.'; } R.hurt(run, 8); return 'The night shift does not share. You lose 8 HP.'; } },
+      leave('The menu changes while you watch.'),
+    ],
+  },
+  {
+    id: 'e_w_visiting_hours', name: 'Visiting Hours', act: 0, ward: true, phase: 'midday',
+    text: 'A queue of relatives with flowers and questions. Visiting hours end at an hour nobody has written down. A sign promises that all donations are tax deductible, somewhere.',
+    choices: [
+      { label: 'Accept donations', text: 'Midday: 35 gold. Evening: 20 gold and heal 6. Night: 8 gold only.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.gold(run, 35); return 'Generous, and busy. +35 gold.'; } if (p === 'evening') { R.gold(run, 20); R.heal(run, 6); return 'Fewer visitors, warmer ones. +20 gold, heal 6.'; } R.gold(run, 8); return 'Only the lost come at night. +8 gold.'; } },
+      { label: 'Take the flowers', text: 'Midday: heal 8. Evening: heal 12. Night: a random potion.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'night') { R.addPotion(run, null); return 'The flowers hide a small bottle. Nobody claims it.'; } const n = p === 'evening' ? 12 : 8; R.heal(run, n); return `Lilies. Heal ${n} HP.`; } },
+      leave('You show a visitor the way out. They show you the way in.'),
+    ],
+  },
+  {
+    id: 'e_w_noon_rounds', name: 'Consultants at Noon', act: 1, ward: true, phase: 'midday',
+    text: 'A row of consultants walks the corridor in step, white coats blowing. At noon they are cheerful. By evening they are tired. After dark you have not seen them at all.',
+    choices: [
+      { label: 'Ask for a second opinion', text: 'Midday: gain 30 gold and heal 5. Evening: heal 10. Night: lose 5 HP, gain a relic.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.gold(run, 30); R.heal(run, 5); return 'A cheerful invoice in your favour. +30 gold, heal 5.'; } if (p === 'evening') { R.heal(run, 10); return 'Tired and kind. Heal 10 HP.'; } R.hurt(run, 5); R.addRelic(run, null); return 'The opinion is unpleasant and comes with a relic. -5 HP.'; } },
+      { label: 'Follow them in step', text: 'Gain 1 Budget at midday, 12 gold at evening, a potion at night.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.budget(run, 1); return 'You keep pace. +1 Budget.'; } if (p === 'evening') { R.gold(run, 12); return 'They drop a pen, then a coin. +12 gold.'; } R.addPotion(run, null); return 'They drop a bottle and do not look back.'; } },
+      leave('You step aside. They do not.'),
+    ],
+  },
+  {
+    id: 'e_w_supper_bell', name: 'The Supper Bell', act: 1, ward: true, phase: 'evening',
+    text: 'A brass bell on a string. When it rings, every door in the corridor opens an inch. What looks out depends on the hour.',
+    choices: [
+      { label: 'Ring it', text: 'Midday: 20 gold. Evening: heal 14. Night: a fight with an Orderly for 55 gold.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.gold(run, 20); return 'Pocket change falls out of the doors. +20 gold.'; } if (p === 'evening') { R.heal(run, 14); return 'Soup, quietly. Heal 14 HP.'; } R.gold(run, 55); R.queueFight(run, ['orderly']); return 'The night orderly has been waiting for the bell. +55 gold now, then a fight.'; } },
+      { label: 'Muffle the bell (-1 max HP)', text: 'Lose 1 max HP. Gain 1 Budget.', apply: (run, R) => { R.maxHp(run, -1); R.budget(run, 1); return 'You wrap it in a sock. The doors stay closed. -1 max HP, +1 Budget.'; } },
+      leave('The bell rings itself, a little later.'),
+    ],
+  },
+  {
+    id: 'e_w_night_porter', name: 'The Night Porter', act: 0, ward: true, phase: 'night',
+    text: 'A porter with a trolley and no visible shift. He knows what is behind every door and would like you to know he knows. He offers it at a price that depends on the hour.',
+    choices: [
+      { label: 'Buy a tip (-20 gold)', text: 'Pay 20 gold. Midday: heal 6. Evening: a potion. Night: a relic.', cond: (run) => run.gold >= 20,
+        apply: (run, R) => { R.gold(run, -20); const p = phaseOf(run); if (p === 'midday') { R.heal(run, 6); return 'A boring tip, kindly meant. Heal 6. -20 gold.'; } if (p === 'evening') { R.addPotion(run, null); return 'The tip is a bottle. -20 gold.'; } R.addRelic(run, null); return 'The tip is a relic in a laundry bag. -20 gold.'; } },
+      { label: 'Help with the trolley', text: 'Midday: 12 gold. Evening: 12 gold. Night: 50% a relic, 50% lose 8 HP.',
+        apply: (run, R) => { const p = phaseOf(run); if (p !== 'night') { R.gold(run, 12); return 'He tips badly. +12 gold.'; } if (R.rng(run).chance(0.5)) { R.addRelic(run, null); return 'The trolley has a false bottom. A relic.'; } R.hurt(run, 8); return 'The trolley has a mind of its own. You lose 8 HP.'; } },
+      leave('He nods, as if you had said something very wise.'),
+    ],
+  },
+  {
+    id: 'e_w_lost_property', name: 'Lost Property', act: 2, ward: true, phase: ['midday', 'evening'],
+    text: 'A cage of umbrellas, false teeth and one very patient clipboard. A tag on each item. The tags change colour with the light.',
+    choices: [
+      { label: 'Claim something', text: 'Midday: 40 gold. Evening: 20 gold and a potion. Night: lose 6 HP, gain 15 gold.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.gold(run, 40); return 'Someone else will miss it. +40 gold.'; } if (p === 'evening') { R.gold(run, 20); R.addPotion(run, null); return 'A coat with a bottle in the lining. +20 gold.'; } R.hurt(run, 6); R.gold(run, 15); return 'The false teeth bite. -6 HP, +15 gold.'; } },
+      { label: 'Hand something in', text: 'Heal 10 at midday, heal 6 and gain 1 Budget at evening, gain 1 max HP at night.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.heal(run, 10); return 'A reward, in the form of tea. Heal 10 HP.'; } if (p === 'evening') { R.heal(run, 6); R.budget(run, 1); return 'The clipboard approves. Heal 6, +1 Budget.'; } R.maxHp(run, 1); return 'It was yours all along. +1 max HP.'; } },
+      leave('You take nothing and the cage looks hurt.'),
+    ],
+  },
+  {
+    id: 'e_w_laundry_chute', name: 'The Laundry Chute', act: 2, ward: true, phase: 'evening',
+    text: 'A steel chute in the wall, warm. Something comes down it every few minutes. At noon it is sheets. At dusk it is pockets. At night it is not sheets.',
+    choices: [
+      { label: 'Check the pockets', text: 'Midday: 15 gold. Evening: 35 gold. Night: 50% 60 gold, 50% lose 9 HP.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.gold(run, 15); return 'Mostly lint. +15 gold.'; } if (p === 'evening') { R.gold(run, 35); return 'Someone forgot their wage. +35 gold.'; } if (R.rng(run).chance(0.5)) { R.gold(run, 60); return 'A fat envelope. +60 gold.'; } R.hurt(run, 9); return 'The pocket had a hand in it. You lose 9 HP.'; } },
+      { label: 'Climb the chute', text: 'Heal 12 at midday. At evening a random potion. At night gain a relic and lose 10 HP.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.heal(run, 12); return 'Warm and clean. Heal 12 HP.'; } if (p === 'evening') { R.addPotion(run, null); return 'You land on a potion. Fine, it was a bag.'; } R.hurt(run, 10); R.addRelic(run, null); return 'Dark, steep, and at the bottom a relic. -10 HP.'; } },
+      leave('You close the hatch. It reopens at once.'),
+    ],
+  },
+  {
+    id: 'e_w_moonlit_surgeon', name: 'The Moonlit Surgeon', act: 3, ward: true, phase: 'night',
+    text: 'She works by lamplight and only after dark. By day she is in the book as a rumour. She offers a graft the way other people offer tea.',
+    choices: [
+      { label: 'Take the offer', text: 'Midday: heal 10. Evening: lose 4 HP, a graft pick. Night: lose 8 HP, two graft picks.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.heal(run, 10); return 'Daylight rounds: bandages only. Heal 10 HP.'; } if (p === 'evening') { R.hurt(run, 4); R.queueGraftPick(run); return 'A quick job. -4 HP, then a graft.'; } R.hurt(run, 8); R.queueGraftPick(run); R.queueGraftPick(run); return 'A long job, at the proper hour. -8 HP, two grafts.'; } },
+      { label: 'Ask for the fee', text: 'Gain 30 gold at midday and evening, 55 gold at night.',
+        apply: (run, R) => { const g = phaseOf(run) === 'night' ? 55 : 30; R.gold(run, g); return `She pays you to stay quiet. +${g} gold.`; } },
+      leave('She goes on working in the dark of the room, politely.'),
+    ],
+  },
+  {
+    id: 'e_w_shift_change', name: 'Shift Change', act: 0, ward: true, phase: ['midday', 'night'],
+    text: 'Two crews pass in the corridor, one leaving, one arriving, each convinced the other has left the mess. A whistle blows. A form is handed to you for signing.',
+    choices: [
+      { label: 'Sign for the day crew', text: 'Midday: 25 gold and heal 4. Evening: 12 gold. Night: nothing, but you are not charged.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.gold(run, 25); R.heal(run, 4); return 'Paid per signature. +25 gold, heal 4.'; } if (p === 'evening') { R.gold(run, 12); return 'Half pay for half a shift. +12 gold.'; } return 'The night crew does not recognise your handwriting.'; } },
+      { label: 'Sign for the night crew', text: 'Midday: nothing. Evening: 12 gold. Night: 40 gold and a potion.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'night') { R.gold(run, 40); R.addPotion(run, null); return 'They pay in cash and bottles. +40 gold.'; } if (p === 'evening') { R.gold(run, 12); return '+12 gold, signed in pencil.'; } return 'Nobody on the night crew is awake to pay you.'; } },
+      leave('You hand the form back unsigned. It is handed to you again.'),
+    ],
+  },
+  {
+    id: 'e_w_wakeful_patient', name: 'The Wakeful Patient', act: 1, ward: true, phase: 'night',
+    text: 'Bed nine is awake and has been for some time. At noon they chat. At dusk they ask for water. After midnight they ask for something else, and the monitor next to them does not beep.',
+    choices: [
+      { label: 'Sit with them', text: 'Midday: heal 6. Evening: heal 9 and 8 gold. Night: lose 6 HP, gain 1 max HP and a potion.',
+        apply: (run, R) => { const p = phaseOf(run); if (p === 'midday') { R.heal(run, 6); return 'A pleasant chat. Heal 6 HP.'; } if (p === 'evening') { R.heal(run, 9); R.gold(run, 8); return 'They press a few coins on you. Heal 9, +8 gold.'; } R.hurt(run, 6); R.maxHp(run, 1); R.addPotion(run, null); return 'You stay until dawn. -6 HP, +1 max HP, a potion.'; } },
+      { label: 'Bring the water', text: 'Gain 10 gold at any hour.', apply: (run, R) => { R.gold(run, 10); return 'They are very grateful. +10 gold.'; } },
+      leave('Their eyes follow you to the door and a little way past it.'),
+    ],
+  },
 ];
+
+// Phase hints for events written before the Ward: weight x3 in the named phases, x0.5 elsewhere (engine/ward.js eventWeight).
+// Midday leans to gold and healing, evening to small comforts and trades, night to chance and risk.
+export const EVENT_PHASE = {
+  e_gift_basket: 'midday', e_budget_loan: 'midday', e_vending_machine: 'midday', e_budget_pharmacy: 'midday', e_haggler: 'midday', e_free_polish: 'midday',
+  e_orderly_challenge: 'evening', e_stray_patient: 'evening', e_cloakroom: 'evening', e_standing_ovation: 'evening', e_costume_rack: 'evening',
+  e_morgue_drawer: 'night', e_coin_flip: 'night', e_gurney_race: 'night', e_night_shift: 'night', e_jarred_twin: 'night', e_lamp_lottery: 'night',
+};
+for (const e of EVENT_LIST) if (EVENT_PHASE[e.id] && !e.phase) e.phase = EVENT_PHASE[e.id];

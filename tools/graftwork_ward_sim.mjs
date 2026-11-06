@@ -1,28 +1,32 @@
 // Ward mode bots for GRAFTWORK (design/WARD.md): a heuristic builder + walker on top of the strong fight policy, and a random policy.
-//   node tools/graftwork_ward_sim.mjs [runsPerHero=20] [ascension=0] [strong|random|both]
+//   node tools/graftwork_ward_sim.mjs [runsPerHero=20] [ascension=0] [strong|careful|sloppy|random|passive|fill|all|both]
+//   GW_UNLOCK=start|all (default all) picks the card pool. passive = never builds, hides in the Entrance; fill = builds well but only walks to non-fight rooms until a Ward is full.
 // Prints win rate, act reached, and per-act averages of normal fights, monsters fought, elites, events, shops, forges, rests.
 import * as RUN from '../graftwork/engine/run.js';
 import * as W from '../graftwork/engine/ward.js';
 import { canGraft, strainInfo } from '../graftwork/engine/cards.js';
-import { HEROES } from '../graftwork/data/index.js';
+import { HEROES, RELICS } from '../graftwork/data/index.js';
 import { hashSeed } from '../graftwork/engine/rng.js';
 import { POLICIES, fight, chooseGraft, eventScore, pickEventCard, doShop, doForge } from './graftwork_sim.mjs';
 import { tierFight } from './graftwork_tiers.mjs';
 import './graftwork_strong.mjs';
+import { WARD_TUNE, PHASES, ROOMS } from '../graftwork/data/ward.js';
+// GW_TUNE='{"tune":{"waitHeal":6},"phases":{"night":{"enemyStr":0}},"rooms":{"rm_linen":{"heal":0.3}}}' patches the data in memory for what-if runs (nothing is written)
+if (process.env.GW_TUNE) { const t = JSON.parse(process.env.GW_TUNE); Object.assign(WARD_TUNE, t.tune || {}); for (const [k, v] of Object.entries(t.phases || {})) Object.assign(PHASES[k], v); for (const [k, v] of Object.entries(t.rooms || {})) Object.assign(ROOMS[k], v); }
 
 function mkRng(seed) { let s = hashSeed(seed) >>> 0 || 1; const next = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; return { next, int: (n) => Math.floor(next() * n), pick: (a) => a[Math.floor(next() * a.length)] }; }
 const count = (run, type) => Object.values(run.ward.rooms).filter((r) => r.type === type).length;
 const dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
 
 // ---------------- strong builder ----------------
-const WANT = { rm_sawmill: 2, rm_quarry: 2, rm_ward: 3, rm_isolation: 1, rm_chapel: 1, rm_dispensary: 1, rm_workshop: 1, rm_linen: 1, rm_counting: 1, rm_generator: 3 };
+const WANT = { rm_sawmill: 2, rm_quarry: 2, rm_ward: 3, rm_isolation: 2, rm_chapel: 1, rm_dispensary: 1, rm_workshop: 1, rm_linen: 1, rm_counting: 1, rm_generator: 3, rm_pharmacy: 1, rm_library: 1, rm_morgue: 1, rm_kitchen: 1, rm_boiler: 1, rm_laundry: 1, rm_isolation2: 1 };
 function roomPriority(run, type) {
   const w = run.ward, have = count(run, type), pw = W.wardPower(run), need = W.ROOMS[type].power;
   if (type === 'rm_corridor') return w.res.wood >= 3 ? 1 : 0.2;
   if (type === 'rm_generator') return pw.free < 1 ? 9 : pw.free < 2 ? 3 : 0;
   if (have >= (WANT[type] || 1)) return 0;
   if (need && pw.free < need) return 0.5; // would be built dark
-  const base = { rm_sawmill: 8, rm_quarry: 8, rm_ward: 7, rm_isolation: w.day >= 2 ? 7.5 : 5, rm_chapel: 4, rm_dispensary: 5, rm_workshop: 6, rm_linen: 5, rm_counting: 3 }[type] || 2;
+  const base = { rm_sawmill: 8, rm_quarry: 8, rm_ward: 7, rm_isolation: have === 0 ? 9.5 : 6, rm_chapel: 4, rm_dispensary: 5, rm_workshop: 6, rm_linen: 5, rm_counting: 3, rm_pharmacy: 3.5, rm_library: 4.5, rm_morgue: 3, rm_kitchen: 3, rm_boiler: Object.values(w.rooms).filter((r) => r.type === 'rm_ward').length >= 2 ? 4 : 0, rm_laundry: run.deck.some((x) => x.id.startsWith('j_')) ? 3 : 0, rm_isolation2: have === 0 && w.day >= 2 ? 6.5 : 0 }[type] || 2;
   return base - have * 2;
 }
 function bestCell(run, type) {
@@ -49,14 +53,16 @@ function strongMorning(run) {
         opts.push({ p, uid: inst.uid, target: { x: cell[0], y: cell[1] } });
       } else if (card.kind === 'upgrade') {
         const rooms = Object.values(w.rooms).filter((r) => card.on.includes(r.type));
-        const want = { b_reinforced_beds: 4, b_overtime: 3, b_scrub_in: 3, b_sterile_field: 2, b_iron_doors: 0.5, b_night_shift: 0 }[card.id] || 0;
+        const want = { b_reinforced_beds: 4, b_overtime: 3, b_scrub_in: 3, b_sterile_field: 2, b_iron_doors: 0.5, b_night_shift: 0, b_double_doors: 0.4, b_soundproofing: 1.5, b_fire_door: 0 }[card.id] || 0;
         for (const r of rooms) if (want > 0) opts.push({ p: want, uid: inst.uid, target: r.id });
       } else {
         const hpF = run.hp / run.maxHp;
-        const v = { move: 6, rations: 2.5, lamp: Object.values(w.rooms).some((r) => !r.on && W.ROOMS[r.type].power) ? 3 : 0, heal: hpF < 0.85 ? 5 : 0, res: 5, bribe: 0, tick: 2, demolish: 0 }[card.effect] || 0;
+        const wardsFull = Object.values(w.rooms).some((r) => r.type === 'rm_ward' && r.contents.length >= 4);
+        const v = { move: 6, rations: 2.5, lamp: Object.values(w.rooms).some((r) => !r.on && W.ROOMS[r.type].power) ? 3 : 0, heal: hpF < 0.85 ? 5 : 0, res: 5, bribe: 0, tick: 2, demolish: 0, flood: w.day >= 2 ? 2 : 0, otpay: run.gold < 150 ? 3 : 0, nurse: hpF < 0.75 ? 3 : 0, quarantine: 0, fumigate: wardsFull ? 3.5 : 0, power: W.wardPower(run).free < 1 ? 3 : 0, linens: Object.values(w.rooms).some((r) => r.type === 'rm_linen' && r.timers.spawn > 1 && !r.contents.length) && hpF < 0.8 ? 3 : 0, shift: 2, ledger: 3.5 }[card.effect] || 0;
         if (v <= 0) continue;
         let target = null;
         if (card.effect === 'res') target = w.res.wood <= w.res.stone ? 'wood' : 'stone';
+        if (card.effect === 'fumigate') { const r = Object.values(w.rooms).filter((x) => x.type === 'rm_ward').sort((a, b) => b.contents.length - a.contents.length)[0]; if (!r || r.contents.length < 4) continue; target = r.id; }
         if (card.effect === 'tick') { const r = Object.values(w.rooms).find((x) => x.type === 'rm_ward' && x.on) || Object.values(w.rooms).find((x) => W.everyOf(x) && x.on); if (!r) continue; target = r.id; }
         opts.push({ p: v, uid: inst.uid, target });
       }
@@ -101,13 +107,37 @@ function walkScore(run, pv) {
   if (pv.wait) s += 1;
   return s;
 }
-function strongWalk(run, R) {
+function forcedBoss(run) { return W.bossForced(run) ? W.startWalk(run, W.theatreOf(run).id) : undefined; }
+function hideWalk(run) { const f = forcedBoss(run); return f !== undefined ? f : W.startWalk(run, run.ward.hero.room); }
+// SLOPPY: plays one or two random cards, ignores power (rooms may stay dark), walks to the nearest room that holds anything, else the nearest room
+function sloppyMorning(run, R) {
   const w = run.ward;
+  for (let g = 0; g < 2 && w.deck.hand.length; g++) {
+    const inst = R.pick(w.deck.hand), card = W.BUILD_CARDS[inst.id];
+    let target = null;
+    if (card.target === 'cell') { const cells = W.buildCells(run); if (!cells.length) continue; const c = R.pick(cells); target = { x: c[0], y: c[1] }; }
+    else if (card.target === 'room') target = R.pick(Object.keys(w.rooms));
+    else if (card.target === 'res') target = R.pick(['wood', 'stone']);
+    W.playBuildCard(run, inst.uid, target);
+  }
+  W.endMorning(run);
+}
+function nearestWalk(run, R) {
+  const f = forcedBoss(run); if (f !== undefined) return f;
+  const w = run.ward;
+  const cand = Object.keys(w.rooms).map((rid) => ({ rid, p: W.pathTo(run, rid) })).filter((x) => x.p.ok && !x.p.wait);
+  const live = cand.filter((x) => x.p.triggers.length && x.p.triggers.every((t) => t.kind !== 'boss'));
+  const pool = (live.length ? live : cand).sort((a, b) => a.p.cost - b.p.cost);
+  return W.startWalk(run, pool.length ? pool[0].rid : w.hero.room);
+}
+function strongWalk(run, R, avoid = false) {
+  const w = run.ward;
+  if (avoid) { avoid = !Object.values(w.rooms).some((r) => r.type === 'rm_ward' && r.contents.length >= 5); }
   let best = null, bs = -1e9;
   for (const rid of Object.keys(w.rooms)) {
     const p = W.pathTo(run, rid); if (!p.ok) continue;
     const variants = [{ ...p, alt: 0 }, ...p.alts.map((a, i) => ({ ...a, alt: i + 1, wait: p.wait }))];
-    for (const v of variants) { const s = walkScore(run, v) + R.next() * 0.3; if (s > bs) { bs = s; best = [rid, v.alt]; } }
+    for (const v of variants) { let s = walkScore(run, v) + R.next() * 0.3; if (avoid && v.triggers.some((t) => !t.bribed && (t.kind === 'fight' || t.kind === 'elite' || (t.kind === 'boss' && t.detail.early)))) s -= 1000; if (s > bs) { bs = s; best = [rid, v.alt]; } }
   }
   return W.startWalk(run, best[0], best[1]);
 }
@@ -134,8 +164,10 @@ function randomWalk(run, R) {
 
 // ---------------- the run ----------------
 export function playWardRun(heroId, seed, policy = 'strong', asc = 0, o = {}) {
-  const pol = POLICIES.strong, rnd = policy === 'random', R = mkRng(`ward:${policy}:${seed}`);
-  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, mode: 'ward', assist: o.assist, unlocked: o.unlocked || 'all' });
+  const pol = policy === 'careful' ? POLICIES.careful : POLICIES.strong, rnd = policy === 'random' || policy === 'sloppy', R = mkRng(`ward:${policy}:${seed}`);
+  const morningFn = { random: randomMorning, sloppy: sloppyMorning, passive: (r) => W.endMorning(r) }[policy] || strongMorning;
+  const walkFn = { random: randomWalk, sloppy: nearestWalk, passive: hideWalk, fill: (r, Rn) => strongWalk(r, Rn, true) }[policy] || strongWalk;
+  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, mode: 'ward', assist: o.assist, unlocked: o.unlocked || process.env.GW_UNLOCK || 'all' });
   const acts = { 1: blank(), 2: blank(), 3: blank() };
   const log = { fights: [], events: 0, shops: 0, acts };
   let guard = 0;
@@ -143,15 +175,15 @@ export function playWardRun(heroId, seed, policy = 'strong', asc = 0, o = {}) {
     const A = acts[run.act];
     switch (run.phase) {
       case 'ward': {
-        if (run.ward.phase === 'morning') { (rnd ? randomMorning : strongMorning)(run, R); break; }
+        if (run.ward.phase === 'morning') { morningFn(run, R); break; }
         A.walks++;
-        const r = (rnd ? randomWalk : strongWalk)(run, R);
+        const r = walkFn(run, R);
         if (r === false) throw new Error('illegal walk ' + run.ward.why);
         break;
       }
       case 'combat': {
         const p = run.pending, kind = p.fightKind, hp0 = run.hp;
-        const res = rnd ? tierFight(run, 'random', R) : (pol.fight || fight)(run, pol).res;
+        const res = rnd ? tierFight(run, policy, R) : (pol.fight || fight)(run, pol).res;
         log.fights.push({ act: run.act, kind, win: res.win, hp0, hp: run.hp, count: (p.ward && p.ward.count) || p.enemies.length });
         if (kind === 'normal') { A.fights++; A.monsters += (p.ward && p.ward.count) || p.enemies.length; }
         if (kind === 'elite') A.elites++;
@@ -161,7 +193,7 @@ export function playWardRun(heroId, seed, policy = 'strong', asc = 0, o = {}) {
       case 'reward': {
         const rw = run.pending; RUN.claimGold(run, rw);
         if (rw.relic && (!rnd || R.next() < 0.5)) RUN.addRelic(run, rw.relic);
-        if (rw.relicChoices && rw.relicChoices.length) RUN.addRelic(run, rnd ? R.pick(rw.relicChoices) : (pol.pickRelic ? pol.pickRelic(rw.relicChoices) : rw.relicChoices[0]));
+        if (rw.relicChoices && rw.relicChoices.length) RUN.addRelic(run, rnd ? R.pick(rw.relicChoices) : pickRelicWard(pol, rw.relicChoices));
         if (rw.potion && (!rnd || R.next() < 0.5)) RUN.addPotion(run, rw.potion);
         if (rw.buildChoice) W.takeBuildChoice(run, rnd ? (R.next() < 0.7 ? R.pick(rw.buildChoice) : null) : pickBuild(run, rw.buildChoice));
         RUN.afterReward(run); break;
@@ -212,6 +244,13 @@ export function playWardRun(heroId, seed, policy = 'strong', asc = 0, o = {}) {
   const rests = run.ward ? run.ward.log.length : 0;
   return { outcome: run.phase, act: run.act, day: run.ward ? run.ward.day : 0, hp: run.hp, floors: log.fights.length, log, run, rests };
 }
+// the strong bot's boss ranking knows only the classic relics (an unknown id sorts first): Ward relics go after the ranked ones, and only
+// the two that change a whole fight (Dinner Gong, Moon Lamp, High Sun Tonic) are taken over an unranked classic relic
+function pickRelicWard(pol, ids) {
+  const classic = ids.filter((id) => !RELICS[id].ward), ward = ids.filter((id) => RELICS[id].ward);
+  if (classic.length) return pol.pickRelic ? pol.pickRelic(classic) : classic[0];
+  return ward[0];
+}
 function blank() { return { walks: 0, fights: 0, monsters: 0, elites: 0, events: 0, shops: 0, forges: 0, boss: null }; }
 function buildValue(run, id) {
   const c = W.BUILD_CARDS[id];
@@ -242,5 +281,5 @@ export function describe(policy, rows) {
 
 if (process.argv[1] && process.argv[1].endsWith('graftwork_ward_sim.mjs')) {
   const N = +process.argv[2] || 20, asc = +process.argv[3] || 0, which = process.argv[4] || 'both';
-  for (const p of which === 'both' ? ['random', 'strong'] : [which]) console.log(describe(p, wardTable(p, N, asc)));
+  for (const p of which === 'both' ? ['random', 'strong'] : which === 'all' ? ['random', 'sloppy', 'passive', 'fill', 'careful', 'strong'] : [which]) console.log(describe(p, wardTable(p, N, asc)));
 }
