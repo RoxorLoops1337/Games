@@ -161,8 +161,8 @@ function play(app, ctx, onTick, { maxTicks = 5000, endTurnOnly = false } = {}) {
 }
 
 // ---- 6. victory hands off exactly once; reduced motion produces no hit-stop, shake, zoom or slow-mo; effects work otherwise
-async function reducedRun(reduced) {
-  FX_OPTS.reduced = reduced; FX_OPTS.shake = true;
+async function reducedRun(reduced, shake = true) {
+  FX_OPTS.reduced = reduced; FX_OPTS.shake = shake;
   const ctx = setup({ seed: 'rm' + reduced, enemies: ['orderly', 'iron_lung'], hp: 900 });
   const before = ctx.run.stats.fights;
   const app = await boot(ctx);
@@ -181,8 +181,7 @@ async function reducedRun(reduced) {
   assert.equal(calm.stop, 0, 'no hit-stop in reduced motion'); assert.equal(calm.shake, 0, 'no shake'); assert.equal(calm.zoom, 1, 'no zoom'); assert.equal(calm.slow, 0, 'no slow-mo');
   const full = await reducedRun(false);
   assert.ok(full.stop > 0 && full.shake > 0 && full.zoom > 1 && full.slow > 0, 'effects exist when motion is on: ' + JSON.stringify(full));
-  FX_OPTS.shake = false;
-  const noShake = await reducedRun(false);
+  const noShake = await reducedRun(false, false);
   assert.equal(noShake.shake, 0, 'screen shake setting off');
   FX_OPTS.shake = true;
 }

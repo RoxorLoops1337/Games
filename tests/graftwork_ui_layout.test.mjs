@@ -137,6 +137,24 @@ for (const scale of [100, 125, 150]) for (const kind of ['normal', 'elite', 'bos
   if (kind === 'boss') { key(h.app, 'q'); look(h, 30, `reward/s${scale}/boss/picked`); }
 }
 
+
+// ---- GRAFT TABLE ----------------------------------------------------------------------------------------------------
+for (const scale of [100, 125, 150]) for (const four of [false, true]) {
+  const h = await make({ scale, seed: 'gt' + four });
+  flowFor(h); graftHeavy(h.run, four ? 9 : 2);
+  if (four) h.run.relics.push('r_second_opinion');
+  h.run.gold = 999;
+  RUN.startGraftPick(h.run);
+  go(h, 'graft');
+  const tag = `graft/s${scale}/${four ? 4 : 3}`;
+  look(h, 90, tag);
+  const off = h.run.pending.offer, scr = h.app.current;
+  key(h.app, '1'); key(h.app, 'q'); look(h, 40, tag + '/pair1');
+  for (let j = 0; j < off.grafts.length; j++) { key(h.app, 'qwer'[j]); look(h, 30, tag + '/g' + j); }
+  for (let i = 0; i < 3; i++) { key(h.app, String(i + 1)); look(h, 30, tag + '/c' + i); }
+  hoverAt(h, 300, 280); look(h, 2, tag + '/hovercard'); hoverAt(h, 1000, 150); look(h, 2, tag + '/hoverpatch');
+  key(h.app, 'Escape'); look(h, 10, tag + '/skip'); key(h.app, '1'); look(h, 5, tag + '/skip1');
+}
 let bad = 0;
-for (const pre of ['map', 'reward']) { console.log(pre + ':'); bad += done(pre); }
+for (const pre of ['map', 'reward', 'graft']) { console.log(pre + ':'); bad += done(pre); }
 console.log('problems', bad);

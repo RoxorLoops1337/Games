@@ -1132,6 +1132,7 @@ function updateInput(app, dt) {
   // sel survives only while the card exists
   if (S.sel && !S.hand.some((d) => d.uid === S.sel)) S.sel = null;
   if (S.drag && !m.down && !m.released) cancelDrag();
+  if (S.drag) app.escBusy = true;
 }
 
 function dropDrag(m) {

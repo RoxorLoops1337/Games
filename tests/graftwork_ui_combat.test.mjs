@@ -8,6 +8,7 @@ import { canPlay, needsTarget } from '../graftwork/engine/combat.js';
 import combat from '../graftwork/ui/combat.js';
 
 const DT = 1 / 60;
+const CARD_H_PREVIEW = 310;
 const MAX_TICKS = 4000;
 
 function setup({ hero = 'marrow', seed = 't', enemies, kind = 'normal', hp, potions = [], act = 1 }) {
@@ -256,4 +257,4 @@ console.log('graftwork ui combat ok, ticks', total, 'fights', ids.length + heroe
     if (i >= 0) { const p = combat.api().handPos(i); click(app, p.x, p.y); click(app, p.x, p.y); const dc = st.hand[i]; assert.ok(dc.chip && /Need|Unplayable|Jammed/.test(dc.chip.text), 'reason chip: ' + (dc.chip && dc.chip.text)); assert.ok(dc.shakeT > 0); frames(app, 90); assert.ok(!dc.chip, 'chip expires'); } }
 }
 function ctxFlow(app) { return app.shared.flow.settings || 0; }
-const CARD_H_PREVIEW = 310;
+

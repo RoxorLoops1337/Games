@@ -1390,7 +1390,7 @@ function getBuf(name, wp, hp) {
   if (typeof document === 'undefined' || !document.createElement) return null;
   let b = BUFS[name];
   if (!b) { const c = document.createElement('canvas'); const g = c.getContext && c.getContext('2d'); if (!g) return null; b = BUFS[name] = { c, g, w: 0, h: 0 }; }
-  if (b.w < wp || b.h < hp) { b.w = Math.max(b.w, Math.ceil(wp / 64) * 64); b.h = Math.max(b.h, Math.ceil(hp / 64) * 64); b.c.width = b.w; b.c.height = b.h; }
+  if (b.w < wp + 2 || b.h < hp + 2) { b.w = Math.max(b.w, Math.ceil((wp + 2) / 64) * 64); b.h = Math.max(b.h, Math.ceil((hp + 2) / 64) * 64); b.c.width = b.w; b.c.height = b.h; }
   return b;
 }
 let HATCH = null, SHADOW = null;
@@ -1519,10 +1519,10 @@ function ropeDraw(ctx, p, col, lw, edge) {
 const GP = { dx: 0, dy: 0, sx: 1, sy: 1, rot: 0, glow: 0, extra: null };
 function genericPose(phase, k) {
   GP.dy = 0; GP.rot = 0; GP.glow = 0; GP.extra = null;
-  if (phase === 'tell') { GP.dx = -10 * k; GP.sy = 1 - 0.12 * k; }
-  else if (phase === 'act') { GP.dx = -10 + 56 * k; GP.sy = 0.88 + 0.37 * k; GP.rot = 0.03 * k; }
-  else if (phase === 'hold') { GP.dx = 46; GP.sy = 1.25 - 0.25 * k; GP.rot = 0.03; }
-  else { GP.dx = 46 * (1 - k); GP.sy = 1 + 0.04 * (1 - k); GP.rot = 0.03 * (1 - k); }
+  if (phase === 'tell') { GP.dx = 10 * k; GP.sy = 1 - 0.12 * k; }
+  else if (phase === 'act') { GP.dx = 10 - 56 * k; GP.sy = 0.88 + 0.37 * k; GP.rot = -0.03 * k; }
+  else if (phase === 'hold') { GP.dx = -46; GP.sy = 1.25 - 0.25 * k; GP.rot = -0.03; }
+  else { GP.dx = -46 * (1 - k); GP.sy = 1 + 0.04 * (1 - k); GP.rot = -0.03 * (1 - k); }
   GP.sx = 1 / GP.sy;
   return GP;
 }
@@ -1624,7 +1624,7 @@ const ACC_ALIAS = { shadow: 'understudys_shadow', understudy_shadow: 'understudy
 // ---- compose the lit sprite onto tg (origin = feet, units = screen px at scale 1, already mirrored by m when m = -1)
 const R4 = [[1, 0], [-1, 0], [0, 1], [0, -1]], R8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]];
 function tintTo(sc, body, wp, hp, color) {
-  const g = sc.g; g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, wp, hp);
+  const g = sc.g; g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, wp + 2, hp + 2);
   g.drawImage(body.c, 0, 0, wp, hp, 0, 0, wp, hp); g.globalCompositeOperation = 'source-in'; g.fillStyle = color; g.fillRect(0, 0, wp, hp); g.globalCompositeOperation = 'source-over';
 }
 function compose(tg, A, paint, bw, bh, k, q, m, L, op) {
@@ -1632,7 +1632,7 @@ function compose(tg, A, paint, bw, bh, k, q, m, L, op) {
   const body = getBuf('body', wp, hp), sc = getBuf('sc', wp, hp);
   if (!body || !sc) return false;
   const g = body.g, lx = L.x * m, ly = L.y;
-  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, wp, hp);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, wp + 2, hp + 2);
   g.setTransform(q, 0, 0, q, OX * q, OY * q);
   g.save(); g.scale(k, k);
   paint(g, A);
@@ -1680,7 +1680,7 @@ function compose(tg, A, paint, bw, bh, k, q, m, L, op) {
   tintTo(sc, body, wp, hp, op.rim || '#ffe9b0');
   const gs = sc.g; gs.globalCompositeOperation = 'destination-out'; gs.drawImage(body.c, 0, 0, wp, hp, -lx * 1.8 * q, -ly * 1.8 * q, wp, hp); gs.globalCompositeOperation = 'source-over';
   tg.globalCompositeOperation = 'lighter'; tg.globalAlpha = 0.5; put(0, 0);
-  if (op.glow > 0.03) { tintTo(sc, body, wp, hp, op.glowCol); tg.globalAlpha = Math.min(0.8, op.glow * 0.8); put(0, 0); }
+  if (op.glow > 0.03) { tintTo(sc, body, wp, hp, op.glowCol); tg.globalAlpha = Math.min(0.4, op.glow * 0.45); put(0, 0); }
   tg.restore();
   return true;
 }
@@ -1733,15 +1733,15 @@ export function drawEnemy(ctx, def, x, y, o = {}) {
       try { P = atkPose(id, art.body, ak.phase, ak.k || 0); } catch (e) { P = null; }
       if (!P) P = genericPose(ak.phase, ak.k || 0);
     }
-    const lunge = P ? (P.dx || 0) : att * 46, pdy = P ? (P.dy || 0) : 0;
-    const ox = (fx * lunge - fx * hurt * 16) * s;
+    const lunge = P ? (P.dx || 0) : att * 46, pdy = P ? (P.dy || 0) : 0; // rig dx: px toward the hero is NEGATIVE (hero on the left), dy up is NEGATIVE, rot is a screen angle
+    const ox = ((P ? lunge * m : fx * lunge) - fx * hurt * 16) * s;
     const dtS = stepState(S, o, id, hp, key, x + ox, m);
     touched = true;
     A.S = S; A.dt = dtS; A.ldx = (S.vx || 0) * m * dtS / s; A.frame = FRAME; A.extra = P && P.extra && typeof P.extra === 'object' ? P.extra : null;
-    if (P) A.att = cl(lunge / 46, -1, 1);
+    if (P) A.att = cl(-lunge / 46, -1, 1);
     A.sag = S.seamPopped ? 4 * cl((S.popT || 0) / 0.15, 0, 1) : 0; A.sagSide = (phaseOf(id + 'g') * 7 | 0) % 2 ? 1 : -1; A.noSlice = key === 'patchwork';
     const bw = sz[0] * k, bh = sz[1] * k;
-    const hasDoc = typeof document !== 'undefined' && document.createElement;
+    const hasDoc = typeof document !== 'undefined' && document.createElement && !globalThis.__GW_LEGACY;
     if (d > 0 || !hasDoc) { stage(ctx, BODY[key], A, bw, bh, x, y, o, -1, k); return; }
     const L = lampAt(o.t || 0), q = Math.round(cl(devScale(ctx) * s, 0.6, 2.5) * 4) / 4;
     // floor contact shadow (cached blurred ellipse, skewed by the lamp)
@@ -1764,11 +1764,12 @@ export function drawEnemy(ctx, def, x, y, o = {}) {
     ctx.transform(1, 0, sk, 1, sk * bh * 0.9, 0);
     if (P) {
       const pivot = bh * 0.45, psy = P.sy || 1, psx = P.sx || 1 / psy;
-      ctx.translate(0, -pivot); ctx.rotate(fx * (P.rot || 0)); ctx.scale(psx, psy); ctx.translate(0, pivot);
+      ctx.translate(0, -pivot); ctx.rotate((P.rot || 0) * m); ctx.scale(psx, psy); ctx.translate(0, pivot);
     }
-    const glowK = P && P.glow > 0.03 ? cl(P.glow, 0, 1) : 0;
-    if (glowK) glow(ctx, 0, -bh * 0.5, Math.max(bw, bh) * 0.6, art.color || '#f2c14e', 0.35 * glowK);
-    G.flash = hurt > 0 ? Math.min(0.9, hurt * 1.25) : 0;
+    const glowK = P && P.glow > 0.03 ? cl(P.glow, 0, 1) * 0.6 : 0;
+    const xf = A.extra && A.extra.flash > 0 ? cl(A.extra.flash, 0, 1) : 0;
+    if (glowK) glow(ctx, 0, -bh * 0.5, Math.max(bw, bh) * 0.6, art.color || '#f2c14e', 0.3 * glowK);
+    G.flash = Math.max(hurt > 0 ? Math.min(0.9, hurt * 1.25) : 0, xf * 0.9);
     const kind = def && def.kind === 'boss' ? 'boss' : def && def.kind === 'elite' ? 'elite' : 'normal';
     const op = { kind, ghost: !!GHOST[id], glow: glowK, glowCol: (A.extra && A.extra.glowCol) || C(art.color || '#f2c14e', 1.5), rim: '#ffe9b0' };
     const stat = !(o.t > 0) && !hurt && !P && !att && !glowK && !A.extra && !A.sag && sp(S, 'sq').x === 0 && !S.sqHold && Math.abs(sp(S, 'hem').x) < 0.01 && !(hp !== undefined && hp <= 0.5);
