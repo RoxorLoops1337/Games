@@ -18,6 +18,7 @@ import { watchCombat, announceEnding } from './a11y.js';
 import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip } from './seam_ui.js';
 import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
 import { queueTip, flushTips, cardTipStack } from './tooltips.js';
+import { drawCardZoom } from './card_zoom.js';
 
 const { HERO_X, FOOT_Y, PLAY_LINE } = L;
 const EF = L.ENEMY_FOOT; // enemies stand on their own ground line (the HUD grid puts their plates inside the lane)
@@ -37,7 +38,7 @@ function tickEnt(en, d) {
   en.shown += (en.hp - en.shown) * (1 - Math.exp(-d * 16));
   if (Math.abs(en.shown - en.hp) < 0.05) en.shown = en.hp;
   if (en.trail > en.hp) { if (en.tdelay > 0) en.tdelay -= d; else en.trail = Math.max(en.hp, en.trail - Math.max(8, en.maxHp) * 1.1 * d); } else en.trail = en.hp;
-  en.hurt = Math.max(0, en.hurt - d * 4); en.bpulse = Math.max(0, en.bpulse - d * 3); en.kick = Math.max(0, en.kick - d * 5);
+  en.hurt = Math.max(0, en.hurt - d * 16); en.bpulse = Math.max(0, en.bpulse - d * 3); en.kick = Math.max(0, en.kick - d * 5);
   for (const s of Object.keys(en.pop)) { en.pop[s] -= d * 2.2; if (en.pop[s] <= 0) delete en.pop[s]; }
 }
 function mkEd(e) {
@@ -134,8 +135,8 @@ function handle(ev) {
     }
     case 'turnEnd': {
       S.sel = null; S.potSel = null; sfx('turnEnd'); comboCash();
-      for (const ed of S.eds) if (!(ed.st.barricade > 0)) ed.block = 0;
-      return 170;
+      for (const ed of S.eds) { if (!(ed.st.barricade > 0)) ed.block = 0; if (ed.visible && !ed.dyingOn) fx.ring(ed.x, EF - ed.h - 20, '#cfc3a8', 46, 0.3); } // intent plates pulse as the turn changes hands
+      return 90; // the first enemy action starts about 200 ms after End Turn
     }
     case 'intent': {
       const ed = S.edBy.get(ev.e); if (!ed) return 0;
@@ -199,7 +200,7 @@ function handle(ev) {
       const ed = S.edBy.get(ev.e); if (!ed) return 0;
       const info = intentWith(ed, ev.move);
       const atk = info && info.kinds.includes('attack');
-      ed.atkT = 0; ed.atkKind = atk ? 'attack' : 'cast'; ed.intentOut = 0.0001; ed.atkTm = atk ? J.atkTiming(ed.e.def) : null; S.lastAct.set(ev.e, ev.move);
+      ed.atkT = 0; ed.atkKind = atk ? 'attack' : 'cast'; ed.intentOut = 0.0001; ed.atkTm = atk ? J.atkTiming(ed.e.def) : null; ed.melee = !!(atk && J.isMelee(ed.e.def, ev.move)); S.lastAct.set(ev.e, ev.move);
       const mv = ed.e.def.moves[ev.move];
       ed.callout = { text: (mv && mv.name) || '', t: 0 };
       if (!atk) { const p = entPos(ev.e); fx.ring(p.x, p.y, '#cfc3a8', 80, 0.5); }
@@ -266,7 +267,11 @@ function handle(ev) {
       if (f) { f.shatter = { t: 0 }; f.out = true; sfx('jam', { pitch: 1.7, vol: 0.5 }); return 420; }
       shatterBurst(p); return 420;
     }
-    case 'seamExtend': case 'seamCut': case 'seamPay': case 'seamSlack': case 'seamFray': return onSeamEvent(APP, ev, { fx, entPos, c }) || 0;
+    case 'seamExtend': case 'seamCut': case 'seamPay': case 'seamSlack': case 'seamFray': {
+      let w = onSeamEvent(APP, ev, { fx, entPos, c }) || 0;
+      const nx = S.q[0]; if (ev.t === 'seamExtend' && nx && (nx.t === 'dmg' || nx.t === 'block')) w = Math.min(w, 20); // the strike must not wait for bead flourishes
+      return w;
+    }
     case 'addCard': return onAddCard(ev);
     case 'burnCard': {
       const w = S.known.get(ev.card); if (!w) return 0;
@@ -319,7 +324,7 @@ function onPlay(ev) {
   sp.toEnemy = !!tgtEd || spec.target === 'all';
   if (spec.type === 'attack') { S.P.attack = 0.0001; }
   sfx('cardPlay');
-  return 280;
+  return Math.round((J.CARD.lift + J.CARD.wind + J.CARD.flight) * 1000); // the next event (damage) lands on contact
 }
 
 function nextHitSame(ev) {
@@ -375,7 +380,7 @@ function onDmg(ev) {
       if (killing) stop = Math.max(stop, 200);
       fx.hitstop(stop);
       kick(dirx, -0.2, T.shake * (multi ? 1 + Math.min(0.5, ctr.count * 0.06) : 1) + (slam ? 3 : 0), T.decay, T.roll);
-      en.hurt = T.flash ? 1 : 0.25; en.kick = Math.min(1.5, T.kick);
+      en.hurt = T.flash ? T.flash / 60 : 0.25; en.kick = Math.min(1.5, T.kick);
       if (ed) { const a = ed.anim; a.sq = -Math.min(T.sq, J.squashLimit(ed.e.def)); a.sqv = 0; a.hold = 0.06; a.hit = 1; }
       if (T.ab) aberr(T.ab, 130);
       if (T.zoom > 1) zoomPunch(T.zoom, p.x, p.y, 9);
@@ -587,6 +592,7 @@ function enemyPose(ed) {
 function drawEnemyJ(ctx, ed, def, x, y) {
   const a = ed.anim, idl = rmotion() || ed.dying > 0 ? 0 : Math.sin((S.t + ed.phase) * 2.1) * 0.014, sy = 1 + a.sq + idl, sx = 1 / (1 + a.sq) * (1 - idl * 0.6);
   ctx.save();
+  if (ed.melee && ed.atkT >= 0 && ed.atkKind === 'attack' && ed.atkTm && !calm() && !rmotion()) x -= Math.max(0, ed.x - (HERO_X + 90)) * J.REACH_FRAC * J.reachK(ed.atkTm, ed.atkT * 1000);
   if (a.sq || idl) { ctx.translate(x, y); ctx.scale(sx, sy); ctx.translate(-x, -y); }
   drawEnemy(ctx, def, x, y, { scale: ed.scale, t: S.t + ed.phase, hurt: ed.hurt, dying: ed.dying, attack: ed.lunge, st: ed.st, atk: ed.atk, state: a, hpFrac: a.hpFrac === undefined ? 1 : a.hpFrac });
   if (a.seamLit > 0) J.drawSeams(ctx, x, y, ed.w, ed.h, a.seamLit, S.t, 1 - ed.dying);
@@ -705,13 +711,13 @@ function stepSprite(sp, d) {
       return;
     }
     if (sp.fate && t >= tI && !sp.out) { sp.out = true; leavePlay(sp); }
-    else if (!sp.fate && t > 0.9 && !sp.out) { sp.fate = 'discard'; sp.out = true; leavePlay(sp); }
+    else if (!sp.fate && t > tI + J.CARD.rest && !sp.out) { sp.fate = 'discard'; sp.out = true; leavePlay(sp); } // never rests on the target longer than CARD.rest
     if (!sp.out) {
       const ax = C.x - ux * 20, ay = C.y - uy * 20;
-      if (t < tL) { const k = EASE.out(t / tL); sp.x = lerp(f0.x, C.x, k); sp.y = lerp(f0.y, C.y, k); sp.s = lerp(f0.s, 0.86, k); sp.rot = lerp(f0.rot, 0, k); sp.sx = sp.sy = 1; }
+      if (t < tL) { const k = J.easeOutBack(t / tL, 1.2); sp.x = lerp(f0.x, C.x, k); sp.y = lerp(f0.y, C.y, k); sp.s = lerp(f0.s, 0.86, k); sp.rot = lerp(f0.rot, 0, k); sp.sx = sp.sy = 1; }
       else if (t < tW) { const k = EASE.out((t - tL) / CT.wind); sp.x = lerp(C.x, ax, k); sp.y = lerp(C.y, ay, k); sp.s = 0.86; sp.rot = 0; sp.sx = 1 - 0.1 * k; sp.sy = 1 + 0.06 * k; }
       else if (t < tF) {
-        const k = EASE.in((t - tW) / CT.flight), u = 1 - k, cx = (ax + tp.x) / 2, cy = (ay + tp.y) / 2 - 70;
+        const k = J.easeInQuad((t - tW) / CT.flight), u = 1 - k, cx = (ax + tp.x) / 2, cy = (ay + tp.y) / 2 - 70;
         sp.x = u * u * ax + 2 * u * k * cx + k * k * tp.x; sp.y = u * u * ay + 2 * u * k * cy + k * k * tp.y;
         sp.s = lerp(0.86, 0.34, k); sp.rot = ux * 0.2 * k; sp.sx = 1 - 0.12 * k; sp.sy = 1 + 0.15 * k;
         fx.emit({ x: sp.x, y: sp.y, n: 1, color: sp.col, speed: 40, size: 5, life: 0.3, gravity: 0, glow: true, jitter: 16 });
@@ -914,14 +920,21 @@ function drawTouchPreview(app) {
   if (app.reg) { app.reg('preview_play', r.play.x, r.play.y, r.play.w, r.play.h, { layer: 'hud', group: 'preview', overlay: true }); app.reg('preview_cancel', r.x.x, r.x.y, r.x.w, r.x.h, { layer: 'hud', group: 'preview', overlay: true }); }
 }
 // Right of the Thread rail (ends x 1076), above End Turn: never over the rail.
-const CONFIRM = { x: 1086, y: 432, w: 180, h: 106 };
+const CONFIRM = { x: 1086, y: 432, w: 180, h: 106 }, CONFIRM_H = 106, CONFIRM_BOTTOM = 538;
 function drawEndConfirm(app) {
   const u = U(), ec = u.endConfirm; if (!ec) return;
   if (!canAct() || S.t - ec.t0 > 6) { u.endConfirm = null; return; }
   const ctx = app.ctx, B = CONFIRM, ready = S.t - ec.t0 >= 0.4;
+  // phones inflate the text: size the box from the real wrapped lines (grows upward, bottom edge stays put) and say TAP, not Enter / Esc
+  const main = `End turn with ${ec.energy} energy and ${ec.n} playable card${ec.n === 1 ? '' : 's'}?`;
+  const hint = isTouch() ? 'Tap here to end the turn. Tap elsewhere to keep playing.' : 'Enter or click: end turn. Esc: keep playing.';
+  const l1 = app.wrap(main, B.w - 24, 15, { ui: true, bold: true }), l2 = app.wrap(hint, B.w - 24, 12, { ui: true });
+  const h1 = Math.round(app.sz(15, { ui: true, bold: true }) * 1.22), h2 = Math.round(app.sz(12, { ui: true }) * 1.22);
+  const bh = Math.max(CONFIRM_H, 20 + l1.length * h1 + 8 + l2.length * h2);
+  B.h = bh; B.y = CONFIRM_BOTTOM - bh;
   ctx.save(); app.rr(B.x, B.y, B.w, B.h, 10); ctx.fillStyle = 'rgba(14,12,10,.94)'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = ready ? COL.lamp : 'rgba(232,220,196,.4)'; ctx.stroke(); ctx.restore();
-  app.text(`End turn with ${ec.energy} energy and ${ec.n} playable card${ec.n === 1 ? '' : 's'}?`, B.x + 12, B.y + 10, { size: 15, ui: true, bold: true, maxW: B.w - 24, lineH: 18, color: COL.vellum });
-  app.text('Enter or click: end turn. Esc: keep playing.', B.x + 12, B.y + B.h - 36, { size: 12, ui: true, maxW: B.w - 24, lineH: 15, color: 'rgba(232,220,196,.7)' });
+  app.text(main, B.x + 12, B.y + 10, { size: 15, ui: true, bold: true, maxW: B.w - 24, color: COL.vellum });
+  app.text(hint, B.x + 12, B.y + 10 + l1.length * h1 + 8, { size: 12, ui: true, maxW: B.w - 24, color: 'rgba(232,220,196,.7)' });
   if (app.reg) app.reg('end_confirm', B.x, B.y, B.w, B.h, { layer: 'hud', group: 'end_confirm', overlay: true });
 }
 function drawSeam(ctx, dc) {
@@ -1053,6 +1066,7 @@ function updateInput(app, dt) {
   const keys = mine ? app.pressedKeys.slice() : [];
   app.escBusy = !!(mine && (S.drag || S.modal || S.sel || (S.potSel !== null && S.potSel !== undefined) || u.endConfirm || c.pending));
   if (!mine || app.blocked) { S.hov = null; S.down = null; if (S.drag) cancelDrag(); return; }
+  app.touchPan = !!(S.modal || c.pending); // a finger drag is a card drag in combat; the pile and pick lists scroll by drag
   const touch = isTouch();
 
   // speed-up while the queue plays
@@ -1121,6 +1135,7 @@ function updateInput(app, dt) {
   // ---- mouse / touch
   if (m.pressed && m.button === 2) { if (S.drag) cancelDrag(); else if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; sfx('uiBack'); } S.down = null; return; }
   if (m.pressed) S.kbUsed = false;
+  if (m.pressed && u.zoom) { u.zoom = null; S.down = null; return; } // a tap closes the preview zoom and does nothing else
   if (m.pressed) S.down = { x: m.x, y: m.y, uid: act ? u.cand : null, moved: false, t: 0, touch, long: false };
   if (S.down) {
     S.down.t += dt;
@@ -1176,25 +1191,27 @@ function clickAt(m, dn) {
   if (S.potSel !== null && S.potSel !== undefined) { const ed = enemyAt(x, y); if (ed) tryPotion(S.potSel, ed); else if (y > L.BAR_H) { S.potSel = null; } return; }
   // end-turn confirm chip
   if (u.endConfirm && L.inRectXY(x, y, CONFIRM.x, CONFIRM.y, CONFIRM.w, CONFIRM.h)) { doEndTurn(); return; }
+  if (u.endConfirm && isTouch() && !L.inRectXY(x, y, L.END_BTN.x, L.END_BTN.y, L.END_BTN.w, L.END_BTN.h)) { u.endConfirm = null; sfx('uiBack'); if (!dn.uid) return; } // touch has no Esc: a tap elsewhere keeps playing
   // touch preview controls
   if (u.touchPrev && S.sel) {
     const pc = S.hand.find((d) => d.uid === S.sel);
     if (pc) {
       const r = previewRects(pc);
-      if (L.inRectXY(x, y, r.x.x, r.x.y, r.x.w, r.x.h)) { S.sel = null; sfx('uiBack'); return; }
-      if (L.inRectXY(x, y, r.play.x, r.play.y, r.play.w, r.play.h)) { if (selNeedsTarget()) { pc.chip = { text: 'Pick a target', t: 0 }; sfx('error', { vol: 0.4 }); } else tryPlay(S.sel, null); return; }
+      const gx = APP.hitRect(r.x.x, r.x.y, r.x.w, r.x.h), gp = APP.hitRect(r.play.x, r.play.y, r.play.w, r.play.h); // phone tap-target floor
+      if (L.inRectXY(x, y, r.x.x, r.x.y, r.x.w, r.x.h) || L.inRectXY(x, y, gx.x, gx.y, gx.w, gx.h)) { S.sel = null; sfx('uiBack'); return; }
+      if (L.inRectXY(x, y, gp.x, gp.y, gp.w, gp.h)) { if (selNeedsTarget()) { pc.chip = { text: 'Pick a target', t: 0 }; sfx('error', { vol: 0.4 }); } else tryPlay(S.sel, null); return; }
     }
   }
   // tap / click on a card
   if (dn.uid && !dn.moved) {
     const uid = dn.uid;
-    if (S.sel === uid) { if (u.touchPrev) return; if (!selNeedsTarget()) tryPlay(uid, null); else { const l = liveEds(); if (l.length === 1) tryPlay(uid, l[0]); } }
+    if (S.sel === uid) { if (u.touchPrev) { u.zoom = uid; u.zoomT = APP.t; return; } if (!selNeedsTarget()) tryPlay(uid, null); else { const l = liveEds(); if (l.length === 1) tryPlay(uid, l[0]); } }
     else selectCard(uid);
     return;
   }
   if (S.sel) {
     if (selNeedsTarget()) { const ed = enemyAt(x, y); if (ed) tryPlay(S.sel, ed); else if (u.touchPrev && !S.sel) S.sel = null; }
-    else if (u.touchPrev) { const pc = S.hand.find((d) => d.uid === S.sel); if (pc && !L.inRectXY(x, y, pc.x - CARD_W * pc.s / 2, pc.y - CARD_H * pc.s / 2, CARD_W * pc.s, CARD_H * pc.s)) { S.sel = null; sfx('uiBack'); } }
+    else if (u.touchPrev) { const pc = S.hand.find((d) => d.uid === S.sel); const ed1 = pc && specOf(S.c, pc.w).target === 'enemy' ? enemyAt(x, y) : null; if (ed1) { tryPlay(S.sel, ed1); return; } if (pc && !L.inRectXY(x, y, pc.x - CARD_W * pc.s / 2, pc.y - CARD_H * pc.s / 2, CARD_W * pc.s, CARD_H * pc.s)) { S.sel = null; sfx('uiBack'); } }
     else if (y < PLAY_LINE && y > L.BAR_H + 4) tryPlay(S.sel, null);
     else if (y >= PLAY_LINE && !u.cand) S.sel = null;
   }
@@ -1477,7 +1494,7 @@ function draw(app) {
   drawCardInfo(app);
   drawBanner(app);
   drawJuice(app);
-  drawTips(app);
+  drawTips(app); drawZoomFace(app);
   if (c.pending && !S.ending && !busy()) drawPendingModal(app);
   if (S.modal) drawPilesModal(app);
 }
@@ -1649,9 +1666,15 @@ function drawTopBar(app) {
     if (id) {
       drawPotion(ctx, id, x + sz / 2, y + sz / 2, sz - 8);
       const p = POTIONS[id];
-      if (app.inRect(x, y, sz, sz)) {
-        app.cursor = 'pointer'; queueTip(app, 'pot:' + id, [[{ title: p.name, text: p.text + (canAct() ? '\n(click to use)' : ''), color: COL.energy, glyph: 'diamond' }]], { x, y, w: sz, h: sz });
-        if (canAct() && app.clicked(x, y, sz, sz)) { if (S.potSel === i) S.potSel = null; else tryPotion(S.run.potions.indexOf(id) >= 0 ? i : i, null); }
+      // touch: the first tap on a potion only shows its text ("tap again to use"); a hold shows it too. The tap target grows to the 40 px floor.
+      const tch = isTouch(), peek = tch && S.potPeek && S.potPeek.i === i && S.t - S.potPeek.t0 < 3.5;
+      if (app.inRect(x, y, sz, sz) || peek) {
+        app.cursor = 'pointer'; queueTip(app, 'pot:' + id, [[{ title: p.name, text: p.text + (canAct() ? (tch ? '\n(tap again to use)' : '\n(click to use)') : ''), color: COL.energy, glyph: 'diamond' }]], { x, y, w: sz, h: sz });
+      }
+      if (canAct() && app.clicked(x, y, sz, sz)) {
+        if (S.potSel === i) S.potSel = null;
+        else if (tch && !(S.potPeek && S.potPeek.i === i && S.t - S.potPeek.t0 < 3.5)) { S.potPeek = { i, t0: S.t }; sfx('uiClick', { pitch: 1.3 }); }
+        else { S.potPeek = null; tryPotion(i, null); }
       }
     }
   }
@@ -1737,8 +1760,15 @@ function drawHudBottom(app) {
   if (app.button('END TURN', E.x, E.y, E.w, E.h, { size: 22, fill: can && noPlays ? '#6b4a1a' : COL.slab2, disabled: !can }) && can) doEndTurn();
 }
 
+function zoomUid() { const u = U(); if (u.zoom && (S.sel !== u.zoom || S.drag)) u.zoom = null; return isTouch() && !S.modal && !S.drag ? (u.zoom || (S.down && S.down.long && S.hov) || null) : null; }
+function drawZoomFace(app) {
+  const uid = zoomUid(); if (!uid) return;
+  const dc = S.hand.find((d) => d.uid === uid); if (!dc) return;
+  let cost = effCost(S.c, dc.w); if (typeof cost === 'number' && dc.w.jam && !dc.jam) cost = Math.max(0, cost - 1);
+  drawCardZoom(app, dcSpec(dc), { cost, tithed: dc.w.tithed, jam: dc.jam, mark: dc.w.reknit ? 'reknit' : undefined, hint: U().zoom ? 'Tap to close' : 'Release to close' });
+}
 function drawCardInfo(app) {
-  if (!S.modal && !S.ending && !S.drag && !S.c.pending) {
+  if (!S.modal && !zoomUid() && !S.ending && !S.drag && !S.c.pending) {
     const dc = S.hand.find((d) => d.uid === S.hov);
     if (dc && dc.alpha >= 0.8) {
       const spec = dcSpec(dc), l = liveEds();
@@ -1785,6 +1815,8 @@ function drawTips(app) {
 
 function drawBanner(app) {
   const b = S.banner; if (!b) return;
+  if (b.style === 'boss' && b.t > 0.15 && APP.mouse.pressed) b.t = Math.max(b.t, b.life * 0.8); // a tap skips the boss banner
+  const hint = b.style === 'boss' && b.t > 0.8 && b.t < b.life * 0.8;
   const ctx = app.ctx, k = b.t / b.life;
   const a = k < 0.12 ? k / 0.12 : k > 0.8 ? (1 - k) / 0.2 : 1;
   ctx.save(); ctx.globalAlpha = clamp(a, 0, 1);
@@ -1794,6 +1826,7 @@ function drawBanner(app) {
     const slide = (1 - EASE.out(clamp(k * 4, 0, 1))) * 120;
     app.text(b.sub || '', W / 2 + slide, 246, { size: 20, ui: true, bold: true, align: 'center', color: COL.scar });
     app.text(b.title, W / 2 - slide, 276, { size: 64, bold: true, align: 'center', color: COL.vellum, stroke: '#0e0e0e', strokeW: 8 });
+    if (hint) app.text(isTouch() ? 'tap to continue' : 'click to continue', W / 2, 358, { size: 13, ui: true, align: 'center', color: 'rgba(232,220,196,.55)' });
   } else if (b.style === 'turn') {
     app.text(b.title, W / 2, 240 - k * 20, { size: 34, bold: true, align: 'center', color: COL.lamp, stroke: '#0e0e0e', strokeW: 6 });
   } else {

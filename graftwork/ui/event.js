@@ -265,7 +265,8 @@ export default {
     // choices
     const choices = RUN.eventChoices(run);
     const room = P.y + P.h - 16 - y, many = choices.length;
-    const mk = (lim) => choices.map((c) => { const sub = c.text && lim ? wrapLimit(app, c.text, iw - 36, 15, lim, { ui: true }) : []; return { sub, h: Math.round((lim ? 50 : 38) * k * 0.9) + sub.length * Math.round(19 * k) + (c.ok ? 6 : Math.round(22 * k)) }; });
+    const lp = Math.max(Math.round(19 * k), Math.round(app.sz(15, { ui: true }) * 1.22)); // real line pitch of the 15 px sub text (phones inflate it)
+    const mk = (lim) => choices.map((c) => { const sub = c.text && lim ? wrapLimit(app, c.text, iw - 36, 15, lim, { ui: true }) : []; return { sub, h: Math.round((lim ? 50 : 38) * k * 0.9) + sub.length * lp + (c.ok ? 6 : Math.round(22 * k)) }; });
     let ms = mk(4); const tot = (a) => a.reduce((n, m) => n + m.h + 10, 0);
     if (tot(ms) > room) ms = mk(2);
     if (tot(ms) > room) ms = mk(1);
@@ -285,7 +286,7 @@ export default {
       const cmp = h < 44, ly = cmp ? Math.max(2, Math.round((h - 16 * 1.22 * k) / 2)) : 10;
       app.text(String(idx + 1), x + 18, y + (cmp ? ly : 13), { size: cmp ? 16 : 20, bold: true, color: c.ok ? COL.scar : 'rgba(43,30,26,.35)', align: 'center' });
       app.text(wrapLimit(app, c.label, w - 190, 22, 1, { bold: true })[0], x + 36, y + ly, { size: cmp ? 16 : 22, bold: true, color: c.ok ? COL.ink : 'rgba(43,30,26,.45)' });
-      sub.forEach((ln, kk) => app.text(ln, x + 36, y + Math.round(42 * k * 0.9) + kk * Math.round(19 * k), { size: 15, ui: true, color: c.ok ? 'rgba(43,30,26,.8)' : 'rgba(43,30,26,.4)' }));
+      sub.forEach((ln, kk) => app.text(ln, x + 36, y + Math.round(42 * k * 0.9) + kk * lp, { size: 15, ui: true, color: c.ok ? 'rgba(43,30,26,.8)' : 'rgba(43,30,26,.4)' }));
       if (!c.ok) app.text(this.reasonFor(run, c, ev), x + 36, y + h - Math.round(22 * k), { size: 14, maxW: w - 50, ui: true, bold: true, color: 'rgba(150,40,50,.85)' });
       else if (c.pick === 'card') app.text('Choose a card', x + w - 14, y + 14, { size: 13, ui: true, italic: true, align: 'right', color: 'rgba(43,30,26,.6)' });
       if (over) { app.cursor = 'pointer'; if (bare && c.text) app.tooltip(c.label, c.text); }

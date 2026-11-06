@@ -48,7 +48,8 @@ export function maybeTip(app, key, x, y, text, o = {}) {
   const ctx = app.ctx, side = o.side || 'below', maxW = o.w || 270, pad = 12;
   const lines = app.wrap(text, maxW - pad * 2, 15, { ui: true });
   const bw = Math.min(maxW, Math.max(...lines.map((l) => app.measure(l, 15, { ui: true }))) + pad * 2 + 2);
-  const bh = lines.length * 19 + pad * 2 + 26;
+  const lh = Math.round(19 * app.sz(15, { ui: true }) / 15), btnH = Math.max(24, Math.round(app.sz(14, { ui: true }) * 1.7));
+  const bh = lines.length * lh + pad * 2 + btnH + 4; // real wrapped height incl. the small-screen text boost
   const pulse = (Math.sin(app.t * 4) + 1) / 2, gap = 16 + pulse * 4;
   let bx, by;
   if (side === 'below') { bx = x - bw / 2; by = y + gap; }
@@ -60,7 +61,7 @@ export function maybeTip(app, key, x, y, text, o = {}) {
   // o.maxBottom keeps the bubble clear of the hero plate, the Thread rail and the hand (the arrow just reaches further).
   if (o.maxBottom !== undefined && by + bh > o.maxBottom) by = Math.max(8, o.maxBottom - bh);
   // The bubble never eats clicks: only the small Got it button does, so cards, End Turn and the rail stay playable under it.
-  const dbw = 78, dbh = 24, dbx = bx + bw - pad - dbw + 4, dby = by + bh - dbh - 8;
+  const dbw = Math.max(78, Math.round(app.measure('Got it', 14, { ui: true, bold: true }) + 28)), dbh = btnH, dbx = bx + bw - pad - dbw + 4, dby = by + bh - dbh - 8;
   const inside = x >= bx && x <= bx + bw && y >= by && y <= by + bh;
   ctx.save();
   ctx.fillStyle = '#2a2116'; ctx.strokeStyle = COL.lamp; ctx.lineWidth = 2;

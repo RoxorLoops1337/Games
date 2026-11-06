@@ -377,8 +377,18 @@ function bought(app, spent, at, quip) {
   say(quip);
 }
 
+// Touch has no hover: the first tap on a stock item only inspects it (the shopkeeper's box says what and for how much), the second tap within 4 s buys.
+function touchGate(app, key, text) {
+  if (!app.mouse.touch) return true;
+  const pk = S.peek;
+  if (pk && pk.key === key && S.t - pk.t0 < 4) { S.peek = null; return true; }
+  S.peek = { key, t0: S.t }; S.quip = text; S.quipT = 0; S.react = 1; sfx(app, 'uiClick');
+  return false;
+}
 function buyDirect(app, kind, index, at, price) {
   const run = app.shared.run;
+  { const it = (kind === 'card' ? run.pending.cards : kind === 'potion' ? run.pending.potions : run.pending.relics)[index], T = kind === 'card' ? CARDS : kind === 'potion' ? POTIONS : RELICS, d = it && T[it.id];
+    if (!touchGate(app, kind + index, `${d ? d.name : kind}, ${price} gold. Tap again to buy.`)) return; }
   const r = RUN.shopBuy(run, kind, index);
   if (!r.ok) { fail(app, r.why, kind + index); return; }
   bought(app, price, at, 'buy');
@@ -596,9 +606,9 @@ export default {
       app.panel(x, y - 2 * k, w, h, { fill: over ? 'rgba(52,42,32,.95)' : 'rgba(26,22,20,.88)', stroke: over ? COL.lamp : 'rgba(232,220,196,.3)' });
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawPotion(g, it.id, x + 30, y + 34 - 2 * k, 40);
-      app.text(p.name, x + 56, y + 6 - 2 * k, { size: 15, bold: true, color: COL.vellum, maxW: w - 62 });
-      { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.2)), nl = clampN(Math.floor((h - (smallUi ? 18 : 34) - (smallUi ? 30 : 26)) / pitch), 1, 2); // phones inflate the text: the lines stop above the price tag
-        wrapLimit(app, p.text, w - 64, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 56, y + (smallUi ? 30 : 26) + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.85)' })); }
+      const nameH = app.text(p.name, x + 56, y + 6 - 2 * k, { size: 15, bold: true, color: COL.vellum, maxW: w - 62 }), descY = Math.max(smallUi ? 30 : 26, 6 + nameH + 3); // a two-line name pushes the description down
+      { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.2)), nl = clampN(Math.floor((h - (smallUi ? 18 : 34) - descY) / pitch), 1, 2); // phones inflate the text: the lines stop above the price tag
+        wrapLimit(app, p.text, w - 64, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 56, y + descY + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.85)' })); }
       g.restore();
       if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 50, y + h - (smallUi ? 6 : 20), it.price, false, 'potion' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(p.name, `${p.rarity}\n${p.text}\nPotion slots ${run.potions.length}/${RUN.potionSlots(run)}. ${it.price} gold.`, { anchor: { x: POT_X(i), y, w, h } }); }

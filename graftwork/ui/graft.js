@@ -518,7 +518,7 @@ function drawAfter(app, c) {
     app.text(wn.text, lx + 12 + hw + 6, wy + 9, { size: 14.5, ui: true, color: COL.vellum, maxW: w - 32 - hw - 36 });
     wy += bh + 5;
   }
-  if (!pair && !warns.length) app.text('Keys: 1-3 card, Q-R graft, Enter sews, Esc declines.', lx, y + h - 24, { size: 14, ui: true, maxW: w - 32, color: 'rgba(232,220,196,.45)' });
+  if (!pair && !warns.length) app.text(app.mouse.touch ? 'Tap a card, tap a graft, then Sew it on.' : 'Keys: 1-3 card, Q-R graft, Enter sews, Esc declines.', lx, y + h - 24, { size: 14, ui: true, maxW: w - 32, color: 'rgba(232,220,196,.45)' });
 }
 
 // ---------------------------------------------------------------- buttons

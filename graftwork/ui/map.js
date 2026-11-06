@@ -116,6 +116,7 @@ export default {
     // ---- input: scroll / drag / keys ----
     const overChart = !app.blocked && mouse.x >= CHART.x && mouse.x <= CHART.x + CHART.w;
     if (!app.blocked) {
+      app.touchPan = false; // the chart pans itself below
       if (mouse.wheel && overChart) { this.scroll += mouse.wheel * 0.7; this.scrollTarget = null; }
       if (mouse.pressed && overChart && !this.banner) { this.drag = { y: mouse.y, s: this.scroll }; this.moved = false; }
       if (this.drag && mouse.down) { const dy = mouse.y - this.drag.y; if (Math.abs(dy) > 6) this.moved = true; if (this.moved) { this.scroll = this.drag.s - dy; this.scrollTarget = null; } }
@@ -382,7 +383,7 @@ export default {
     // buttons are anchored to the bottom (stacked when the text scale makes them wide)
     const stack = S > 1.2, bH = 42, aH = 38;
     const abY = BOT - aH, dY = stack ? abY - 8 - bH * 2 - 8 : abY - 8 - bH;
-    const hint = S <= 1 ? (app.measure('Arrows or WASD to choose, Enter to go', 13, { ui: true }) <= IW ? 'Arrows or WASD to choose, Enter to go' : 'WASD to move, Enter to go') : null;
+    const hint = app.mouse.touch ? 'Tap a node, tap again to go' : S <= 1 ? (app.measure('Arrows or WASD to choose, Enter to go', 13, { ui: true }) <= IW ? 'Arrows or WASD to choose, Enter to go' : 'WASD to move, Enter to go') : null;
     const hintH = Math.ceil(app.sz(13, { ui: true }) * 1.2), hintY = hint ? dY - hintH - 6 : dY;
     // potions
     const potTop = hintY - 8 - 58;
@@ -500,8 +501,9 @@ export default {
     app.text(ACT_NAMES[b.act], 640 + slide, cy - 36, { size: 64, bold: true, align: 'center', color: COL.vellum, shadow: true });
     const sub = { 1: 'Visiting hours are over.', 2: 'Everything here has a price tag, including you.', 3: 'The audience is already seated.' }[b.act];
     app.text(sub, 640, cy + 44, { size: 20, italic: true, align: 'center', color: 'rgba(232,220,196,.7)' });
+    if (t > 0.8 && t < 2.0) app.text(app.mouse.touch ? 'tap to continue' : 'click to continue', W / 2, cy + 68, { size: 14, ui: true, align: 'center', color: 'rgba(232,220,196,.55)', alpha: clamp((t - 0.8) * 3, 0, 1) });
     g.restore();
-    if (app.mouse.pressed) b.t = Math.max(b.t, 2.0);
+    if ((app.mouse.pressed || app.mouse.released) && t > 0.15) b.t = Math.max(b.t, 2.0);
   },
 
   drawConfirm(app) {
