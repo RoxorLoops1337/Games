@@ -316,6 +316,251 @@ const MOTIFS = {
     g.restore();
     for (let i = 0; i < 6; i++) { const a = -2.6 + i * 0.5; line(g, Math.cos(a) * 14, 2 + Math.sin(a) * 12, Math.cos(a) * 24, 2 + Math.sin(a) * 20, k.main, 1.8); }
   },
+  // ----- Round 6b: one picture per idea (shears, spools, looms, purses, jars, forks ...) -----
+  shears(g, k) { // long tailor's shears, closed, blades laid on a cut of cloth
+    poly(g, [[-40, 14], [40, 8], [42, 34], [-38, 36]]); fs(g, k.paper, 1.8, 1);
+    for (let i = -34; i < 38; i += 8) line(g, i, 16, i + 2, 32, 'rgba(74,48,34,.35)', 0.8);
+    g.rotate(-0.42);
+    poly(g, [[-6, -5], [48, 0], [-6, 5]]); fs(g, k.steel, 2); poly(g, [[-6, -2], [44, 0.5], [-6, 6]]); fs(g, k.steelD, 1.4);
+    line(g, 2, -2, 40, -0.2, '#fff', 1);
+    circ(g, -8, 0, 3.4, k.brass, 1.6);
+    ell(g, -24, -6, 10, 7, null, 2.6); g.lineWidth = 2.4; g.strokeStyle = BRASS; g.stroke();
+    ell(g, -26, 10, 8, 6, null, 2.6); g.lineWidth = 2.4; g.strokeStyle = BRASS; g.stroke();
+  },
+  spool(g, k) { // wooden spool wound with thread, the end trailing off
+    ell(g, 0, 28, 28, 7, k.brass, 2); rr(g, -17, -22, 34, 50, 2); fs(g, k.main, 2);
+    for (let i = 0; i < 9; i++) line(g, -17, -18 + i * 5.4, 17, -15 + i * 5.4, 'rgba(43,30,26,.4)', 1);
+    ell(g, 0, -22, 28, 7, k.brass, 2); ell(g, 0, -24, 28, 7, mix(k.brass, '#fff', 0.3), 1.6);
+    line(g, -14, -26, 14, -26, 'rgba(255,255,255,.5)', 1);
+    cord(g, 2.2, k.main, () => { g.moveTo(17, 4); g.bezierCurveTo(34, 10, 28, 30, 40, 34); });
+    circ(g, 40, 34, 2, k.dark, 1);
+  },
+  bobbin(g, k) { // sewing-machine bobbin, a slotted brass reel with a loose tail
+    ell(g, 0, 22, 24, 8, k.brass, 2); rr(g, -9, -12, 18, 34, 2); fs(g, k.steel, 1.8);
+    rr(g, -18, -10, 36, 28, 3); fs(g, k.dark, 2);
+    for (let i = 0; i < 6; i++) line(g, -18, -6 + i * 4.4, 18, -4 + i * 4.4, alpha(k.light, 0.55), 1.2);
+    ell(g, 0, -12, 24, 8, k.brass, 2); circ(g, 0, -12, 4, INK, 1.4);
+    poly(g, [[-4, -22], [4, -22], [4, -16], [-4, -16]]); fs(g, k.steelD, 1);
+    cord(g, 2, k.main, () => { g.moveTo(18, 6); g.bezierCurveTo(34, 2, 30, -20, 40, -26); });
+  },
+  threader(g, k) { // wire needle threader, a diamond loop passing a thread through the eye
+    g.rotate(-0.35);
+    rr(g, -44, -3, 18, 6, 3); fs(g, k.brass, 1.6);
+    line(g, -26, 0, 2, 0, INK, 3); line(g, -26, 0, 2, 0, k.steel, 1.4);
+    poly(g, [[2, 0], [20, -9], [36, 0], [20, 9]]); g.lineWidth = 3; g.strokeStyle = INK; g.stroke(); g.lineWidth = 1.4; g.strokeStyle = k.steel; g.stroke();
+    poly(g, [[22, 14], [46, 14], [46, 17], [22, 17]]); fs(g, k.steel, 1.4); ell(g, 38, 15.5, 3, 1.3, INK, 0);
+    cord(g, 2, k.main, () => { g.moveTo(-20, -16); g.bezierCurveTo(0, -24, 14, 0, 38, 15.5); });
+  },
+  loom(g, k) { // small frame loom: warp threads, a shuttle, a woven band
+    rr(g, -38, -34, 76, 70, 3); fs(g, '#8a5a30', 2.4, 1); rr(g, -31, -27, 62, 56, 1); fs(g, k.paper, 1.4, 1);
+    for (let i = -26; i <= 26; i += 6.5) line(g, i, -27, i, 29, 'rgba(43,30,26,.85)', 1.2);
+    for (let r = 0; r < 4; r++) for (let i = -26; i < 26; i += 6.5) { const y = 8 + r * 5; line(g, i + (r % 2 ? 3 : 0), y, i + 6.5 + (r % 2 ? 3 : 0), y, r % 2 ? k.main : k.dark, 3.4); }
+    g.save(); g.translate(2, -8); g.rotate(-0.1); poly(g, [[-16, 0], [-10, -5], [10, -5], [16, 0], [10, 5], [-10, 5]]); fs(g, '#c9a15a', 2); line(g, -9, 0, 9, 0, k.main, 2); g.restore();
+    [[-38, -34], [38, -34], [-38, 36], [38, 36]].forEach(([x, y]) => circ(g, x, y, 2.4, k.brass, 1.2));
+  },
+  crossstitch(g, k) { // cross-stitched panel on a gridded cloth, a needle left in it
+    poly(g, [[-40, -30], [40, -30], [40, 34], [-40, 34]]); fs(g, k.paper, 2.2, 1);
+    for (let i = -34; i <= 34; i += 8) line(g, i, -26, i, 30, 'rgba(74,48,34,.2)', 0.7);
+    for (let j = -22; j <= 26; j += 8) line(g, -36, j, 36, j, 'rgba(74,48,34,.2)', 0.7);
+    const X = [[-26, -14], [-18, -14], [-10, -6], [-2, 2], [6, 10], [14, 2], [22, -6], [-2, -14], [-10, 10], [-18, 18], [14, 18], [22, 10]];
+    X.forEach(([x, y], i) => { const c = i % 3 ? k.main : INK; line(g, x - 3.2, y - 3.2, x + 3.2, y + 3.2, c, 2.2); line(g, x + 3.2, y - 3.2, x - 3.2, y + 3.2, c, 2.2); });
+    g.save(); g.translate(26, 22); g.rotate(-0.9); rr(g, -2, -22, 4, 28, 1.5); fs(g, k.steel, 1.2); ell(g, 0, -17, 1.2, 3, INK, 0); g.restore();
+  },
+  thimble(g, k) { // brass thimble pitted with dimples, a needle resting beside
+    g.beginPath(); g.moveTo(-22, 32); g.lineTo(-18, 2); g.bezierCurveTo(-18, -22, 18, -22, 18, 2); g.lineTo(22, 32); g.closePath();
+    fs(g, grad(g, -20, -20, 20, 30, [[0, mix(k.brass, '#fff', 0.35)], [1, BRASS_D]]), 2.6);
+    rr(g, -26, 28, 52, 8, 3); fs(g, k.brass, 2);
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) { const x = -11 + c * 7.4 + (r % 2 ? 3 : 0), y = -8 + r * 8; if (Math.abs(x) < 17 - Math.max(0, 2 - r) * 3) circ(g, x, y, 1.5, BRASS_D, 0.4); }
+    g.save(); g.translate(30, -12); g.rotate(0.9); rr(g, -1.6, -28, 3.2, 44, 1.5); fs(g, k.steel, 1.2); g.restore();
+  },
+  hoop(g, k) { // embroidery hoop gripping stretched linen with a half-sewn leaf
+    circ(g, 0, 0, 34, k.paper, 1.4);
+    for (let i = -28; i < 30; i += 7) line(g, i, -18, i + 2, 18, 'rgba(74,48,34,.14)', 0.8);
+    cord(g, 2.6, k.main, () => { g.moveTo(-18, 14); g.bezierCurveTo(-14, -14, 8, -22, 20, -14); g.bezierCurveTo(14, 4, 4, 14, -18, 14); });
+    cord(g, 1.8, k.dark, () => { g.moveTo(-14, 10); g.lineTo(12, -10); });
+    g.beginPath(); g.arc(0, 0, 34, 0, 6.3); g.lineWidth = 7; g.strokeStyle = INK; g.stroke(); g.lineWidth = 4.4; g.strokeStyle = '#a97b45'; g.stroke();
+    rr(g, 28, -8, 14, 16, 2); fs(g, k.brass, 1.8); line(g, 31, 0, 39, 0, INK, 1.4);
+  },
+  tapestry(g, k) { // woven hanging on a rod with a fringe and a pictured crest
+    rr(g, -42, -36, 84, 6, 3); fs(g, '#8a5a30', 2); circ(g, -44, -33, 4, k.brass, 1.4); circ(g, 44, -33, 4, k.brass, 1.4);
+    poly(g, [[-34, -30], [34, -30], [34, 28], [0, 38], [-34, 28]]); fs(g, k.dark, 2.4);
+    poly(g, [[-26, -24], [26, -24], [26, 22], [0, 30], [-26, 22]]); fs(g, k.paper, 1.4, 1);
+    for (let i = -22; i < 24; i += 6) line(g, i, -24, i, 24, 'rgba(74,48,34,.2)', 0.8);
+    poly(g, [[0, -16], [14, 0], [0, 18], [-14, 0]]); fs(g, k.main, 1.8);
+    circ(g, 0, 0, 4, k.brass, 1.2); line(g, -14, 0, 14, 0, INK, 1); line(g, 0, -16, 0, 18, INK, 1);
+    for (let i = -28; i <= 28; i += 7) line(g, i, 29 + Math.abs(i) * -0.15, i, 37 - Math.abs(i) * 0.15, k.brass, 1.8);
+  },
+  pinking(g, k) { // pinking-sheared zigzag edge with a pin trail
+    g.beginPath(); g.moveTo(-42, 6); for (let i = 0; i < 14; i++) { g.lineTo(-42 + i * 6 + 3, 14); g.lineTo(-42 + i * 6 + 6, 6); } g.lineTo(42, -30); g.lineTo(-42, -30); g.closePath(); fs(g, k.paper, 2.2, 1);
+    for (let i = -34; i < 40; i += 8) line(g, i, -22, i + 4, -2, 'rgba(74,48,34,.28)', 0.9);
+    [[-26, -10], [-4, -16], [20, -8]].forEach(([x, y]) => { line(g, x, y, x + 12, y + 22, k.steel, 1.6); circ(g, x, y, 3.4, k.brass, 1.4); });
+    cord(g, 1.8, k.main, () => { g.moveTo(-40, 24); g.lineTo(-30, 30); g.lineTo(-20, 24); g.lineTo(-10, 30); g.lineTo(0, 24); g.lineTo(10, 30); g.lineTo(20, 24); g.lineTo(30, 30); g.lineTo(40, 24); });
+  },
+  seamripper(g, k) { // seam ripper, forked steel hook in a wooden handle, cut stitches beside it
+    g.save(); g.rotate(-0.5);
+    rr(g, -42, -6, 34, 12, 6); fs(g, '#8a5a30', 2, 1); line(g, -38, -2, -14, -2, 'rgba(255,230,190,.5)', 1.2);
+    rr(g, -10, -3, 8, 6, 1); fs(g, k.brass, 1.2);
+    line(g, -2, 0, 22, 0, INK, 3.6); line(g, -2, 0, 22, 0, k.steel, 1.8);
+    g.beginPath(); g.moveTo(22, 0); g.bezierCurveTo(34, -2, 40, -12, 32, -18); g.lineWidth = 3.6; g.strokeStyle = INK; g.stroke(); g.lineWidth = 1.8; g.strokeStyle = k.steel; g.stroke();
+    poly(g, [[22, 0], [36, 8], [38, 3], [30, -3]]); fs(g, k.steel, 1.6); circ(g, 33, -18, 3.2, k.main, 1.4);
+    g.restore();
+    for (let i = 0; i < 4; i++) cord(g, 1.8, k.main, () => { g.moveTo(-34 + i * 11, 28); g.lineTo(-27 + i * 11, 22 + (i % 2) * 6); });
+  },
+  fusewire(g, k) { // spool of fuse wire with a lit end throwing sparks
+    ell(g, -14, 28, 24, 6, k.brass, 1.8); rr(g, -34, -4, 40, 32, 2); fs(g, k.steel, 2, 1);
+    for (let i = 0; i < 6; i++) line(g, -34, -1 + i * 5.2, 6, 1 + i * 5.2, 'rgba(43,30,26,.4)', 1);
+    ell(g, -14, -4, 24, 6, mix(k.brass, '#fff', 0.3), 1.8);
+    cord(g, 2, '#6c675e', () => { g.moveTo(6, 10); g.bezierCurveTo(20, 12, 22, -14, 30, -16); });
+    circ(g, 31, -18, 5, '#ffcb59', 1.4); circ(g, 31, -18, 2, '#fffbe0', 0);
+    [[-0.9, 12], [-0.2, 14], [0.5, 12], [-1.6, 10]].forEach(([a, l]) => line(g, 31 + Math.cos(a) * 7, -18 + Math.sin(a) * 7, 31 + Math.cos(a) * (7 + l), -18 + Math.sin(a) * (7 + l), k.main, 1.8));
+  },
+  anvil(g, k) { // tempering anvil on a block, hammer resting above the face
+    rr(g, -20, 20, 40, 18, 2); fs(g, '#8a5a30', 2.2, 1);
+    g.beginPath(); g.moveTo(-34, -6); g.lineTo(30, -6); g.lineTo(42, -14); g.lineTo(38, 4); g.lineTo(18, 6); g.lineTo(14, 20); g.lineTo(-14, 20); g.lineTo(-12, 6); g.lineTo(-30, 6); g.closePath();
+    fs(g, grad(g, -30, -10, 30, 20, [[0, k.steel], [1, k.steelD]]), 2.6);
+    line(g, -30, -4, 28, -4, '#fff', 1.4); circ(g, 0, -1, 1.6, INK, 0);
+    g.save(); g.translate(-8, -12); g.rotate(-0.5); rr(g, -3, -34, 6, 34, 2); fs(g, '#8a5a30', 1.6, 1); rr(g, -13, -46, 26, 13, 2); fs(g, k.steel, 2); g.restore();
+    for (let i = 0; i < 5; i++) { const a = -0.3 - i * 0.35; line(g, 30 + Math.cos(a) * 6, -10 + Math.sin(a) * 6, 30 + Math.cos(a) * 14, -10 + Math.sin(a) * 14, k.main, 1.8); }
+  },
+  purse(g, k) { // drawstring coin purse, fat and bulging, a coin spilling out
+    g.beginPath(); g.moveTo(-10, -22); g.bezierCurveTo(-40, -6, -40, 38, 0, 38); g.bezierCurveTo(40, 38, 40, -6, 10, -22); g.closePath();
+    fs(g, grad(g, -30, -20, 30, 36, [[0, mix(k.main, '#fff', 0.2)], [1, k.dark]]), 2.8);
+    for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(-8 + i * 5, -20); g.bezierCurveTo(-20 + i * 9, 0, -22 + i * 12, 14, -14 + i * 9, 34); g.lineWidth = 0.9; g.strokeStyle = 'rgba(43,30,26,.45)'; g.stroke(); }
+    poly(g, [[-14, -22], [14, -22], [18, -34], [8, -28], [0, -36], [-8, -28], [-18, -34]]); fs(g, k.dark, 2);
+    cord(g, 2, k.brass, () => { g.moveTo(-12, -20); g.bezierCurveTo(-4, -14, 4, -14, 12, -20); });
+    ell(g, 32, 30, 10, 10, k.brass, 2); ell(g, 32, 30, 6, 6, null, 1.2); line(g, 32, 26, 32, 34, INK, 1.4);
+    drawSchoolGlyphSafe(g, 0, 12, 5, k.brass);
+  },
+  mirror(g, k) { // hand mirror in a brass frame, the glass holding a pale reflection
+    g.save(); g.rotate(0.35);
+    rr(g, -5, 14, 10, 30, 5); fs(g, k.brass, 2);
+    ell(g, 0, -8, 25, 29, k.brass, 2.8);
+    ell(g, 0, -8, 20, 24, 'rgba(210,232,238,.9)', 1.8);
+    g.save(); g.beginPath(); g.ellipse ? g.ellipse(0, -8, 20, 24, 0, 0, 6.3) : g.arc(0, -8, 20, 0, 6.3); g.clip();
+    line(g, -26, 6, -2, -30, 'rgba(255,255,255,.7)', 4); line(g, -14, 14, 6, -20, 'rgba(255,255,255,.5)', 2);
+    g.globalAlpha = 0.55; poly(g, [[-8, -16], [8, -16], [10, 4], [0, 12], [-10, 4]]); g.fillStyle = k.main; g.fill(); g.globalAlpha = 1; g.restore();
+    [[-24, -26], [24, -26], [0, -36]].forEach(([x, y]) => circ(g, x, y, 2.4, k.main, 1.2));
+    g.restore();
+  },
+  batteryjar(g, k) { // Leyden-style jar: glass, foil wrap, a brass rod and ball throwing a spark
+    rr(g, -22, -10, 44, 48, 6); fs(g, 'rgba(225,238,238,.55)', 2.4);
+    rr(g, -22, 8, 44, 24, 2); fs(g, k.steel, 1.6, 1);
+    for (let i = 0; i < 5; i++) line(g, -22 + i * 11, 8, -22 + i * 11, 32, 'rgba(255,255,255,.4)', 1);
+    rr(g, -16, -20, 32, 12, 3); fs(g, '#8a5a30', 1.8, 1);
+    line(g, 0, -20, 0, -36, INK, 4); line(g, 0, -20, 0, -36, k.brass, 2); circ(g, 0, -38, 5, k.brass, 1.8);
+    poly(g, [[16, -42], [24, -34], [20, -34], [28, -24], [18, -32], [22, -32]]); fs(g, '#fffbe0', 1);
+    line(g, 30, -22, 36, -18, k.main, 2); line(g, 26, -44, 34, -48, k.main, 2);
+  },
+  tuningfork(g, k) { // steel tuning fork with ringing arcs
+    rr(g, -4, 6, 8, 34, 4); fs(g, k.steel, 1.8);
+    g.beginPath(); g.moveTo(-12, -34); g.lineTo(-12, -2); g.bezierCurveTo(-12, 10, 12, 10, 12, -2); g.lineTo(12, -34); g.lineWidth = 8; g.strokeStyle = INK; g.stroke(); g.lineWidth = 5; g.strokeStyle = k.steel; g.stroke();
+    line(g, -13, -32, -13, -4, '#fff', 1.2);
+    for (let j = 0; j < 3; j++) { g.beginPath(); g.arc(0, -20, 22 + j * 8, -0.6, 0.6); g.moveTo(Math.cos(Math.PI - 0.6) * (22 + j * 8), -20 + Math.sin(Math.PI - 0.6) * (22 + j * 8)); g.arc(0, -20, 22 + j * 8, Math.PI - 0.6, Math.PI + 0.6); g.lineWidth = 2; g.strokeStyle = alpha(k.main, 1 - j * 0.25); g.stroke(); }
+    circ(g, 0, 40, 3.4, k.brass, 1.4);
+  },
+  scalpelfan(g, k) { // a fan of three scalpels laid out from one brass pin
+    g.save(); g.translate(0, 26);
+    [-0.7, 0, 0.7].forEach((a, i) => { g.save(); g.rotate(a); poly(g, [[-3, 6], [3, 6], [3, -26], [0, -62], [-3, -26]]); fs(g, k.steel, 1.8); line(g, -0.8, -50, -0.8, -24, '#fff', 1.1); rr(g, -4, 6, 8, 14, 2); fs(g, i === 1 ? k.main : k.brass, 1.4); g.restore(); });
+    g.restore();
+    circ(g, 0, 26, 5, k.brass, 1.8);
+  },
+  belljar(g, k) { // glass bell jar over a specimen on a wooden plinth
+    rr(g, -34, 28, 68, 10, 3); fs(g, '#8a5a30', 2.2, 1);
+    g.beginPath(); g.moveTo(-26, 28); g.lineTo(-26, -8); g.bezierCurveTo(-26, -40, 26, -40, 26, -8); g.lineTo(26, 28); g.closePath(); fs(g, 'rgba(225,238,238,.38)', 2.4);
+    circ(g, 0, -40, 4, k.brass, 1.6);
+    line(g, -19, -10, -19, 20, 'rgba(255,255,255,.65)', 2.4);
+    g.beginPath(); g.moveTo(-8, 28); g.bezierCurveTo(-12, 10, -4, 4, -4, -8); g.bezierCurveTo(-4, -14, 10, -14, 10, -6); g.bezierCurveTo(10, 8, 14, 16, 12, 28); g.closePath(); fs(g, k.main, 1.8);
+    circ(g, 3, -4, 2, INK, 0);
+  },
+  keyring(g, k) { // iron ring of three keys of different wards
+    g.beginPath(); g.arc(0, -14, 14, 0, 6.3); g.lineWidth = 6; g.strokeStyle = INK; g.stroke(); g.lineWidth = 3; g.strokeStyle = k.steel; g.stroke();
+    [[-0.5, 1], [0.15, 0.82], [0.8, 1]].forEach(([a, s], i) => {
+      const col = i === 1 ? k.main : k.brass;
+      g.save(); g.translate(0, -2); g.rotate(a); circ(g, 0, 0, 7, col, 2); circ(g, 0, 0, 2.6, INK, 0);
+      rr(g, -2.4, 6, 4.8, 34 * s, 1.5); fs(g, col, 1.4);
+      poly(g, [[2.4, 28 * s], [8, 28 * s], [8, 33 * s], [2.4, 33 * s]]); fs(g, col, 1.2);
+      poly(g, [[-2.4, 36 * s], [-7, 36 * s], [-7, 40 * s], [-2.4, 40 * s]]); fs(g, col, 1.2); g.restore();
+    });
+  },
+  sutureknot(g, k) { // a surgeon's square knot pulled tight over a closed incision
+    poly(g, [[-42, -6], [42, -8], [42, 30], [-42, 32]]); fs(g, mix(k.paper, SCAR_BRIGHT, 0.2), 2, 1);
+    g.beginPath(); g.moveTo(-40, 12); g.bezierCurveTo(-10, 6, 10, 18, 40, 10); g.lineWidth = 4; g.strokeStyle = '#7a1a2a'; g.stroke();
+    for (let i = -34; i < 36; i += 12) cord(g, 2, '#0e0e0e', () => { g.moveTo(i, 2); g.lineTo(i + 3, 22); });
+    cord(g, 3.4, '#0e0e0e', () => { g.moveTo(-8, 8); g.bezierCurveTo(-16, -8, 8, -14, 6, 6); g.bezierCurveTo(4, 20, -18, 6, -4, -2); });
+    cord(g, 3.4, k.main, () => { g.moveTo(8, 8); g.bezierCurveTo(16, -8, -8, -14, -6, 6); });
+    circ(g, 0, 4, 4, '#0e0e0e', 1.4);
+    cord(g, 2.4, '#0e0e0e', () => { g.moveTo(4, 8); g.lineTo(18, -22); }); cord(g, 2.4, '#0e0e0e', () => { g.moveTo(-4, 8); g.lineTo(-20, -26); });
+  },
+  bandageroll(g, k) { // rolled bandage unspooling across a bench, pinned at the end
+    g.beginPath(); g.moveTo(-22, 30); g.lineTo(34, 30); g.lineTo(38, 20); g.lineTo(-22, 18); g.closePath(); fs(g, k.paper, 2, 1);
+    for (let i = 0; i < 9; i++) line(g, -14 + i * 6, 19 + (i % 2) * 0.4, -14 + i * 6, 29, 'rgba(120,90,60,.3)', 1);
+    line(g, -20, 24, 36, 24, alpha(k.main, 0.6), 3);
+    ell(g, -22, 6, 22, 24, k.paper, 2.4);
+    ell(g, -22, 6, 15, 17, null, 1.2); ell(g, -22, 6, 9, 11, null, 1.2); ell(g, -22, 6, 4, 5, INK, 1.4);
+    line(g, 30, 14, 32, 34, k.steel, 2.4); circ(g, 30, 14, 3, k.brass, 1.2);
+  },
+  gavel(g, k) { // auctioneer's gavel striking its block, a coin jumping
+    ell(g, 0, 34, 30, 7, '#8a5a30', 2); rr(g, -26, 22, 52, 12, 3); fs(g, '#6e4524', 2, 1);
+    g.save(); g.translate(8, -10); g.rotate(-0.55);
+    rr(g, -3.5, -2, 7, 52, 3); fs(g, '#8a5a30', 1.8, 1); rr(g, -22, -16, 44, 22, 4); fs(g, '#6e4524', 2.4, 1);
+    rr(g, -24, -17, 7, 24, 2); fs(g, k.brass, 1.6); rr(g, 17, -17, 7, 24, 2); fs(g, k.brass, 1.6); g.restore();
+    ell(g, -22, -16, 9, 9, k.brass, 2); ell(g, -22, -16, 5, 5, null, 1.2);
+    for (let i = 0; i < 4; i++) line(g, -28 + i * 4, 18, -30 + i * 6, 11, k.main, 1.8);
+  },
+  stamp(g, k) { // rubber stamp with the red print of the stamped form beneath
+    poly(g, [[-38, 14], [38, 14], [38, 36], [-38, 36]]); fs(g, k.paper, 1.8, 1);
+    g.save(); g.translate(14, 26); g.rotate(-0.08); ell(g, 0, 0, 15, 8, null, 2); g.strokeStyle = SCAR_BRIGHT; g.lineWidth = 2.2; g.stroke(); line(g, -8, 0, 8, 0, SCAR_BRIGHT, 2); g.restore();
+    for (let i = 0; i < 3; i++) line(g, -32, 20 + i * 6, -8 - i * 3, 20 + i * 6, 'rgba(43,30,26,.5)', 1.4);
+    rr(g, -22, -6, 44, 16, 3); fs(g, k.dark, 2.2); rr(g, -18, -10, 36, 6, 2); fs(g, k.steelD, 1.4);
+    g.beginPath(); g.moveTo(-8, -10); g.bezierCurveTo(-8, -34, 8, -34, 8, -10); g.closePath(); fs(g, '#8a5a30', 2, 1); line(g, -4, -26, -4, -14, 'rgba(255,230,190,.5)', 1.4);
+  },
+  powderkeg(g, k) { // banded powder keg with a fuse and a falling spark
+    g.beginPath(); g.moveTo(-26, -20); g.bezierCurveTo(-38, -4, -38, 20, -26, 34); g.lineTo(26, 34); g.bezierCurveTo(38, 20, 38, -4, 26, -20); g.closePath(); fs(g, '#8a5a30', 2.8, 2);
+    for (let i = -16; i <= 16; i += 8) line(g, i, -18, i * 1.2, 32, 'rgba(43,30,26,.5)', 1);
+    [-14, 24].forEach((y) => { rr(g, -34, y - 3, 68, 7, 2); fs(g, k.steel, 1.6, 1); });
+    ell(g, 0, -20, 26, 7, '#6e4524', 2);
+    cord(g, 2.2, '#b89a68', () => { g.moveTo(0, -24); g.bezierCurveTo(8, -36, -4, -40, 6, -48); });
+    circ(g, 6, -48, 4, '#ffcb59', 1.2); [0.5, 2.4, 4.2].forEach((a) => line(g, 6 + Math.cos(a) * 5, -48 + Math.sin(a) * 5, 6 + Math.cos(a) * 11, -48 + Math.sin(a) * 11, k.main, 1.6));
+    drawSchoolGlyphSafe(g, 0, 8, 6, k.main);
+  },
+  tourniquet(g, k) { // leather strap cinched round a limb with a windlass rod
+    g.beginPath(); g.moveTo(-40, -10); g.lineTo(-40, 24); g.bezierCurveTo(-20, 32, 20, 32, 40, 24); g.lineTo(40, -10); g.bezierCurveTo(20, -2, -20, -2, -40, -10); g.closePath(); fs(g, k.paper, 2.4, 1);
+    g.beginPath(); g.moveTo(-8, -8); g.lineTo(10, -8); g.lineTo(12, 30); g.lineTo(-10, 30); g.closePath(); fs(g, '#7a4a2a', 2.2, 2);
+    for (let i = 0; i < 4; i++) line(g, -8, -2 + i * 8, 10, -2 + i * 8, 'rgba(43,30,26,.5)', 1);
+    rr(g, -4, -14, 8, 6, 1); fs(g, k.brass, 1.4);
+    g.save(); g.translate(2, 6); g.rotate(-0.9); rr(g, -4, -42, 8, 54, 3); fs(g, k.steel, 1.8); circ(g, 0, -42, 4, k.brass, 1.4); g.restore();
+  },
+  matchstick(g, k) { // a lit match with a bright head and a spray of motes
+    g.save(); g.rotate(-0.6); rr(g, -4, -10, 8, 54, 2); fs(g, '#c9a15a', 1.8, 1); line(g, -1.5, -4, -1.5, 40, 'rgba(255,240,200,.5)', 1);
+    ell(g, 0, -16, 8, 10, k.dark, 2);
+    g.restore();
+    g.beginPath(); g.moveTo(-20, -30); g.bezierCurveTo(-14, -48, 4, -50, -4, -62); g.bezierCurveTo(20, -52, 26, -34, 14, -22); g.bezierCurveTo(8, -16, -14, -18, -20, -30); g.closePath(); fs(g, '#ffcb59', 2);
+    [[26, -8], [-30, -14], [20, -40]].forEach(([x, y]) => circ(g, x, y, 2, k.main, 1));
+    rr(g, 12, 18, 30, 20, 2); fs(g, k.paper, 1.8, 1); line(g, 14, 30, 40, 30, k.main, 4);
+  },
+  waxseal(g, k) { // wax seal pressed into a ribbon, a drip running down
+    poly(g, [[-40, -6], [40, -10], [40, 8], [-40, 12]]); fs(g, k.paper, 1.8, 1);
+    g.beginPath(); g.moveTo(-14, -14); g.bezierCurveTo(-28, -30, 10, -40, 22, -26); g.bezierCurveTo(36, -12, 32, 14, 16, 24); g.bezierCurveTo(14, 36, 8, 42, 6, 34); g.bezierCurveTo(-4, 34, -26, 24, -22, 8); g.bezierCurveTo(-34, 2, -24, -10, -14, -14); g.closePath();
+    fs(g, grad(g, -20, -20, 24, 30, [[0, k.light], [1, k.dark]]), 2.6);
+    circ(g, 4, 0, 12, null, 1.6); circ(g, 4, 0, 7, null, 1.2); drawSchoolGlyphSafe(g, 4, 0, 3.5, k.light);
+    ell(g, -8, -16, 5, 2.5, 'rgba(255,255,255,.45)', 0, -0.5);
+  },
+  ticket(g, k) { // pawn ticket torn in two, a stub and a string tag
+    g.save(); g.rotate(-0.12); poly(g, [[-40, -20], [8, -20], [8, 20], [-40, 20]]); fs(g, k.paper, 2.2, 1);
+    for (let i = 0; i < 3; i++) line(g, -34, -12 + i * 8, -6 - (i % 2) * 8, -12 + i * 8, 'rgba(43,30,26,.55)', 1.5);
+    circ(g, -33, 12, 4, k.main, 1.4);
+    poly(g, [[14, -18], [40, -18], [40, 22], [14, 22]]); fs(g, mix(k.paper, '#8a7a60', 0.15), 2, 1);
+    line(g, 20, -8, 34, -8, 'rgba(43,30,26,.55)', 1.5); line(g, 20, 0, 30, 0, 'rgba(43,30,26,.55)', 1.5); circ(g, 27, 12, 4, null, 1.4); g.restore();
+    cord(g, 1.8, k.brass, () => { g.moveTo(-26, 20); g.bezierCurveTo(-30, 34, -10, 40, 0, 32); });
+  },
+  dynamocoil(g, k) { // copper coil wound on a core between two magnet poles
+    poly(g, [[-40, -24], [-26, -24], [-26, 24], [-40, 24]]); fs(g, k.main, 2.2); poly(g, [[26, -24], [40, -24], [40, 24], [26, 24]]); fs(g, k.dark, 2.2);
+    line(g, -33, -14, -33, 14, 'rgba(255,255,255,.7)', 4); line(g, 33, -14, 33, 14, 'rgba(255,255,255,.4)', 4);
+    rr(g, -22, -6, 44, 12, 2); fs(g, k.steel, 1.6, 1);
+    for (let i = 0; i < 8; i++) { ell(g, -18 + i * 5, 0, 5, 16, null, 0); g.lineWidth = 4; g.strokeStyle = INK; g.stroke(); g.lineWidth = 2.4; g.strokeStyle = '#b8683a'; g.stroke(); }
+    line(g, 0, -24, 0, -38, k.brass, 2.4); circ(g, 0, -40, 3.4, k.brass, 1.4);
+    line(g, -8, 22, -8, 38, k.main, 2); line(g, 8, 22, 8, 38, k.main, 2);
+  },
 };
 function drawSchoolGlyphSafe(g, x, y, r, col) { circ(g, x, y, r, col, 1); }
 export const MOTIF_NAMES = Object.keys(MOTIFS);

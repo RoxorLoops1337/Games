@@ -1767,7 +1767,7 @@ function drawTips(app) {
   const has = (k) => app.shared.meta && app.shared.meta.tips && app.shared.meta.tips[k];
   const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
   if (first && !S.hov) {
-    if (tip('energy', L.ORB.x + 10, L.ORB.y - 44, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
+    if (tip('energy', L.ORB.x + 10, L.ORB.y - 44, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM }, `Energy pays for cards. You get ${c.maxEnergy} each turn and it does not carry over. Spend it.`)) return;
     if (tip('intent', first.x - first.w * 0.5 - 6, EF - first.h - 30, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
     if (S.hand.length && tip('playcard', 500, L.HAND_Y - 120, { side: 'above', w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
     if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 60, FOOT_Y - 230, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;

@@ -311,7 +311,7 @@ export default {
     app.blocked = blocked0;
     if (this.confirm) this.drawConfirm(app);
     if (!this.banner && !this.confirm && !this.trav) {
-      if (!maybeTip(app, 'mapnodes', 640, 640, 'Pick a node to walk to. Fights give gold and a graft, elites a relic, events are a gamble, shops sell, forges mend. The legend is on the right.', { pos: { x: 22, y: 322 }, w: 262 })) maybeTip(app, 'resonance', 968, 340, undefined, { side: 'left' });
+      if (!maybeTip(app, 'mapnodes', 640, 640, 'Pick a node to walk to. Fights give gold and a graft, elites a relic, events are a gamble, shops sell, forges mend. The legend is on the right.', { pos: { x: 22, y: 338 }, w: 262 })) maybeTip(app, 'resonance', 968, 340, undefined, { side: 'left' });
     }
   },
 
