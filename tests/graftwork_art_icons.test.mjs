@@ -44,6 +44,27 @@ for (const f of ['drawNeedle', 'drawScissors', 'drawKnot', 'drawLooseThread', 'd
 ok(glyphs.size >= 49, 'relic glyphs distinct enough: ' + glyphs.size);
 console.log('graftwork_art_icons ok', n);
 
+// ---- R1: engraved forge / reward / event icons, event plates, vellum
+{
+  const P = await import('../graftwork/art/plates.js');
+  const { EVENTS } = await import('../graftwork/data/index.js');
+  for (const id of I.FORGE_ICON_IDS) for (const sz of [48, 104, 128]) { I.drawForgeIcon(ctx, id, 50, 50, sz); I.drawForgeIcon(ctx, id, 50, 50, sz, { t: 2.3, k: 1, quality: 'low' }); I.drawForgeIcon(ctx, id, 50, 50, sz, { t: 2.3, k: 1, reduced: true }); }
+  I.drawForgeIcon(ctx, 'nonsense', 50, 50, 64);
+  ok(I.FORGE_ICON_IDS.length === 6 && I.FORGE_ICON_IDS.every((k) => /^#[0-9A-F]{6}$/i.test(I.FORGE_ICON_SPOT[k])), 'one spot colour per forge icon');
+  for (const k of I.REWARD_KINDS) for (const sz of [32, 56]) { I.drawRewardIcon(ctx, k, 40, 40, sz, { id: k === 'relic' ? Object.keys(RELICS)[0] : Object.keys(POTIONS)[0] }); }
+  ok(['gold', 'relic', 'potion', 'card', 'graft'].every((k) => I.REWARD_KINDS.includes(k)), 'reward kinds');
+  for (const st of ['take', 'taken', 'full']) for (const hv of [false, true]) I.drawRewardChip(ctx, 10, 10, 130, 40, st, hv);
+  for (const okk of [true, false]) I.drawEventSeal(ctx, 20, 20, 12, okk, okk);
+  ok(P.EVENT_MOTIFS.length >= 12, 'at least 12 event motifs: ' + P.EVENT_MOTIFS.length);
+  const used = new Set(); let generic = 0;
+  for (const ev of Object.values(EVENTS)) { const m = P.eventMotif(ev.id); if (m === 'generic') generic++; else used.add(m); P.drawEventPlate(ctx, ev.id, ev.act || 1, 36, 40, 520, 560); }
+  ok(used.size >= 12 && generic === 0, 'every event has a motif (motifs used ' + used.size + ', generic ' + generic + ')');
+  ok(P.eventMotif('e_unknown_future') === 'generic', 'generic fallback');
+  for (const act of [1, 2, 3, 9]) P.drawEventPlate(ctx, 'e_unknown_future', act, 0, 0, 260, 280);
+  P.drawVellum(ctx, 14, 10, 1252, 700, { r: 14, alpha: 0.9 }); P.drawVellum(ctx, 0, 0, 100, 80); P.drawEmptyMark(ctx, 100, 100);
+  console.log('graftwork_art_icons R1 ok');
+}
+
 // ---- round 4 backgrounds: every theme with parallax, ambient colours, cost benchmark (fake canvas = call overhead only)
 {
   const { fakeCtx: fc } = await import('./graftwork_lib.mjs');

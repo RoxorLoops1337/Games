@@ -275,17 +275,20 @@ function drawOfferCard(app, r, i, c) {
   keyBadge(app, String(i + 1), cx - CW / 2 + 12, capY + capH / 2);
 
   if (hover) {
+    // one short note in the fixed detail band (never beside or over the sibling cards, patches or buttons)
     const lines = [];
     if (base.flavor) lines.push(base.flavor);
-    lines.push(inst.plays ? `Played ${inst.plays} times.` : 'Never played.');
-    lines.push(inst.grafts.length ? 'Grafts: ' + inst.grafts.map((x) => (GRAFTS[x] ? GRAFTS[x].name : x)).join(', ') + '.' : 'No grafts: a Bare card can be Tithed.');
+    if (inst.grafts.length) lines.push('Grafts: ' + inst.grafts.map((x) => (GRAFTS[x] ? GRAFTS[x].name : x)).join(', ') + '.');
+    else lines.push(tithed ? 'No grafts, so a Tithe can land here.' : 'No grafts: a Bare card can be Tithed.');
     if (tithed) lines.push('This card will be Tithed: -25% numbers that combat.');
     if (inst.grafts.length >= 2) lines.push('A third graft is an OVERLOAD.');
     if (dim) lines.push('CANNOT TAKE THE SELECTED GRAFT: ' + cantReason(inst, st.selGraft));
-    app.tooltip(spec2name(inst), null, { lines, color: COL[base.type] ? '#e8dcc4' : COL.lamp });
+    app.tooltip(spec2name(inst), null, { lines, color: COL[base.type] ? '#e8dcc4' : COL.lamp, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, band: DETAIL_BAND } });
     if (app.clicked(r.x, r.y, r.w, r.h)) clickCard(app, i);
   }
 }
+// The dedicated detail spot for every hover note on this table: the empty right half of the bill panel, clear of the cards and the tray.
+const DETAIL_BAND = { x: 476, y: 574, bottom: 710, dir: 1 };
 const spec2name = (inst) => CARDS[inst.id].name + (inst.up ? '+' : '');
 
 // ---------------------------------------------------------------- graft tray
@@ -315,11 +318,13 @@ function drawPatchTile(app, r, j, c) {
 
   if (hover) {
     const info = resonanceInfo(st.run, g.school, c.counts);
-    const lines = [`${tier.label} graft. W${g.weight} = weight ${g.weight} (the staples): it counts ${g.weight} against your Budget.`, 'Boon: ' + g.boon, 'Price: ' + g.price];
+    // the tile already shows Boon and Price (the compact 4-patch tray truncates them, so only then repeat them)
+    const lines = [`Weight ${g.weight}: counts ${g.weight} against your Budget.`];
+    if (compact) lines.push('Boon: ' + g.boon, 'Price: ' + g.price);
     const hp = g.mods.find((m) => m.k === 'maxHp'); if (hp) lines.push(`Permanently costs ${-hp.n} max HP.`);
-    if (info) lines.push(...info.lines);
+    if (info) lines.push(...info.lines.slice(0, compact ? 1 : 2));
     if (dim) lines.push('CANNOT GO ON THE SELECTED CARD: ' + cantReason(c.inst, r.gid));
-    app.tooltip(g.name, null, { lines, color: sc });
+    app.tooltip(g.name, null, { lines, color: sc, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, band: DETAIL_BAND } });
     if (app.clicked(x, y, w, h)) clickGraft(app, j);
   }
 }

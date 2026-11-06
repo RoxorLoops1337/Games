@@ -3,7 +3,7 @@
 // Screens redraw every frame and call app.button(...) etc.; clicks are resolved from last frame's pointer state.
 import * as LAYOUT from './layout_registry.js';
 import * as CH from './chrome.js';
-import { renderTip } from './tooltips.js';
+import { renderTip, resetTips } from './tooltips.js';
 export const W = 1280, H = 720;
 export const FONT = 'Georgia, "Iowan Old Style", "Palatino Linotype", serif';
 export const FONT_UI = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
@@ -120,6 +120,7 @@ export function createApp(canvas, opts = {}) {
   app.go = (name, params) => {
     for (const s of app.stack) if (s.leave) s.leave(app);
     app.stack = []; app.navButtons = false; app.focus.idx = -1; app.focus.active = false;
+    app.tip = null; resetTips(); // no tooltip state survives a screen change
     const s = app.screens[name]; if (!s) throw new Error('no screen ' + name);
     app.stack.push(s); app.current = name; app.sceneT = 0;
     if (s.enter) s.enter(app, params || {});

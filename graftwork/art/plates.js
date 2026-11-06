@@ -25,12 +25,14 @@ export const plateStats = { get entries() { return cache.size; } };
 const W0 = 520, H0 = 560, FY = 466;
 const rrect = (g, x, y, w, h, r) => { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); };
 const poly = (g, p) => { g.beginPath(); g.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]); g.closePath(); };
+let _hp = null;
+const hatchPath = () => { if (!_hp) { _hp = new Path2D(); for (let s = -H0; s < W0 + 40; s += 4) { _hp.moveTo(s, H0); _hp.lineTo(s + H0, 0); } } return _hp; };
 // fill the current path, ink outline, highlight on the lit edge, 1px hatch that grows toward the lower right
 function shape(g, col, hatch = 0.34) {
   g.fillStyle = col; g.fill();
   g.save(); g.clip();
   const gr = g.createLinearGradient(0, 0, W0, H0); gr.addColorStop(0, 'rgba(10,6,4,0)'); gr.addColorStop(0.35, `rgba(10,6,4,${hatch * 0.5})`); gr.addColorStop(1, `rgba(10,6,4,${hatch})`);
-  g.strokeStyle = gr; g.lineWidth = 1; g.beginPath(); for (let s = -H0; s < W0 + 40; s += 4) { g.moveTo(s, H0); g.lineTo(s + H0, 0); } g.stroke();
+  g.strokeStyle = gr; g.lineWidth = 1; g.stroke(hatchPath()); // Path2D: the shape's own path stays current for the highlight and the ink
   g.translate(-1.2, -1.2); g.lineWidth = 2; g.strokeStyle = 'rgba(255,247,224,.38)'; g.stroke(); g.restore();
   g.lineWidth = 2.2; g.strokeStyle = INK; g.lineJoin = 'round'; g.stroke();
 }

@@ -235,6 +235,8 @@ export function cardTipStack(spec, c, o = {}) {
 // ---- rendering ----
 const MAXW = 320, PAD = 12, TI = 19, BO = 16;
 let key0 = '', t0 = 0, f0 = -9, pin = null, queued = null;
+// resetTips(): drop every pinned / queued / hover-delay tip (core's app.go calls it on each screen change, so a stale tip never follows you).
+export function resetTips() { key0 = ''; t0 = 0; f0 = -9; pin = null; queued = null; }
 const sc = (app, n) => Math.round(n * (app.textScale || 1));
 function measurePanel(app, sections) {
   const bw = MAXW - PAD * 2; let h = PAD * 2;
