@@ -8,7 +8,7 @@ const cap = (s) => s[0].toUpperCase() + s.slice(1);
 // Ferric Warden: one Allergy move per school, so the glyph is always readable from the move name.
 const allergyMoves = {};
 for (const s of SCHOOLS) {
-  allergyMoves['allergy_' + s] = { name: `Allergy: ${cap(s)}`, tip: `Allergic to ${cap(s)}. Your ${cap(s)} cards add no knot to the Thread and a Line cashed in ${cap(s)} pays nothing this turn.`, fx: [{ op: 'dmg', n: 11 }] };
+  allergyMoves['allergy_' + s] = { name: `Allergy: ${cap(s)}`, tip: `Allergic to ${cap(s)}. Your ${cap(s)} cards add no knot to the Thread and a Line cashed in ${cap(s)} pays nothing this turn.`, fx: [{ op: 'dmg', n: 12 }] };
 }
 
 export const ENEMIES_NEW2 = [
@@ -18,8 +18,8 @@ export const ENEMIES_NEW2 = [
       return e.data.patchwork ? 'embroider' : 'prick';
     },
     moves: {
-      sew: { name: 'Sew', tip: 'Unpicked: one patch on one card in your hand is gone next turn.', fx: [{ op: 'dmg', n: 8 }, { op: 'status', s: 'unpicked', n: 1, to: 'player' }] },
-      prick: { name: 'Prick', fx: [{ op: 'dmg', n: 13 }] },
+      sew: { name: 'Sew', tip: 'Unpicked: one patch on one card in your hand is gone next turn.', fx: [{ op: 'dmg', n: 9 }, { op: 'status', s: 'unpicked', n: 1, to: 'player' }] },
+      prick: { name: 'Prick', fx: [{ op: 'dmg', n: 14 }] },
       embroider: { name: 'Embroider', tip: 'Chosen when you play 3 or more grafted cards from one hand: she gains 2 Strength.', fx: [{ op: 'dmg', n: 7 }, { op: 'status', s: 'strength', n: 2, to: 'self' }] },
     },
     on: {
@@ -40,17 +40,17 @@ export const ENEMIES_NEW2 = [
       return 'scalpel';
     },
     moves: {
-      incision: { name: 'Incision', tip: 'Adds 2 Poison. Poison ignores Block and rises by 1 each turn.', fx: [{ op: 'dmg', n: 10 }, { op: 'status', s: 'poison', n: 2, to: 'player' }] },
-      scalpel: { name: 'Scalpel', fx: [{ op: 'dmg', n: 13 }] },
+      incision: { name: 'Incision', tip: 'Adds 2 Poison. Poison ignores Block and rises by 1 each turn.', fx: [{ op: 'dmg', n: 7 }, { op: 'status', s: 'poison', n: 2, to: 'player' }] },
+      scalpel: { name: 'Scalpel', fx: [{ op: 'dmg', n: 12 }] },
       drain: { name: 'Drain', tip: 'Heals 6 for every Poison on you (max 24). Cleanse the Poison first.', fx: [{ op: 'dmg', n: 6 }, { op: 'custom', intent: 'buff', text: 'Heals 6 per Poison on you (max 24).', fn: (A, ctx) => { const p = A.player.st.poison || 0; if (p > 0) A.heal(ctx.srcEnt, Math.min(24, 6 * p)); } }] },
     },
     art: { body: 'tall', color: '#7fb5a0', notes: 'Tall green-gowned surgeon wading in a brine tank, a glass drip bag slung from the shoulder and a hooked scalpel for a hand.' } },
 
   { id: 'scissor_nurse', name: 'Scissor Nurse', act: 2, kind: 'normal', hp: [60, 66], pattern: ['snip', 'trim', 'clip'],
     moves: {
-      snip: { name: 'Snip', fx: [{ op: 'dmg', n: 11 }] },
+      snip: { name: 'Snip', fx: [{ op: 'dmg', n: 12 }] },
       trim: { name: 'Trim', fx: [{ op: 'dmg', n: 7 }, { op: 'block', n: 8, to: 'self' }] },
-      clip: { name: 'Clip', fx: [{ op: 'dmg', n: 14 }] },
+      clip: { name: 'Clip', fx: [{ op: 'dmg', n: 16 }] },
     },
     on: {
       // Every cut that cashes gives her 2 Block; a Line of 4 or more is snipped to nothing.
@@ -80,9 +80,9 @@ export const ENEMIES_NEW2 = [
 
   { id: 'tax_collector', name: 'Tax Collector', act: 2, kind: 'normal', hp: [60, 66], pattern: ['levy', 'audit', 'seize'],
     moves: {
-      levy: { name: 'Levy', fx: [{ op: 'dmg', n: 11 }] },
+      levy: { name: 'Levy', fx: [{ op: 'dmg', n: 12 }] },
       audit: { name: 'Audit Trail', fx: [{ op: 'dmg', n: 7 }, { op: 'block', n: 8, to: 'self' }] },
-      seize: { name: 'Seize', tip: 'Also takes 5 gold whenever a Gilded cut pays you. Kill it to get the gold back.', fx: [{ op: 'dmg', n: 14 }] },
+      seize: { name: 'Seize', tip: 'Also takes 5 gold whenever a Gilded cut pays you. Kill it to get the gold back.', fx: [{ op: 'dmg', n: 16 }] },
     },
     on: {
       seamPay: (A, e, info) => {

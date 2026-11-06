@@ -49,11 +49,11 @@ const clearMarks = (A) => {
 export const ENEMIES_2 = [
   // ---------- NORMALS ----------
   { id: 'jarhead', name: 'Jarhead', act: 2, kind: 'normal', hp: [60, 66], pattern: ['bonk', 'slosh', 'bonk'],
-    moves: { bonk: { name: 'Glass Bonk', fx: [{ op: 'dmg', n: 14 }] }, slosh: { name: 'Brine Slosh', tip: 'Adds 2 Poison. Poison ignores Block and rises by 1 each turn.', fx: [{ op: 'dmg', n: 8 }, { op: 'block', n: 8, to: 'self' }, { op: 'status', s: 'poison', n: 2, to: 'player' }] } },
+    moves: { bonk: { name: 'Glass Bonk', fx: [{ op: 'dmg', n: 12 }] }, slosh: { name: 'Brine Slosh', tip: 'Adds 2 Poison. Poison ignores Block and rises by 1 each turn.', fx: [{ op: 'dmg', n: 7 }, { op: 'block', n: 8, to: 'self' }, { op: 'status', s: 'poison', n: 2, to: 'player' }] } },
     on: { death: (A) => { A.summon('pickled_thing', 2); } },
     art: { body: 'jar', color: '#8fae6b', notes: 'Fat glass jar on stubby legs, cloudy brine, a cracked lid. Shatters into two small pickled things.' } },
   { id: 'haggler', name: 'Haggler', act: 2, kind: 'normal', hp: [60, 66], pattern: ['haggle', 'jab', 'jab'],
-    moves: { haggle: { name: 'Raise the Price', tip: 'Leaden: your highest-cost card costs 1 more next turn.', fx: [{ op: 'dmg', n: 8 }, { op: 'status', s: 'leaden', n: 1, to: 'player' }] }, jab: { name: 'Walking Stick', fx: [{ op: 'dmg', n: 15 }] } },
+    moves: { haggle: { name: 'Raise the Price', tip: 'Leaden: your highest-cost card costs 1 more next turn.', fx: [{ op: 'dmg', n: 10 }, { op: 'status', s: 'leaden', n: 1, to: 'player' }] }, jab: { name: 'Walking Stick', fx: [{ op: 'dmg', n: 15 }] } },
     art: { body: 'hunched', color: '#a9825a', notes: 'Hunched oval back, thin hooked nose, one long arm with an open palm.' } },
   { id: 'coin_mite', name: 'Coin Mite', act: 2, kind: 'normal', hp: [32, 36],
     pick: (A, e) => (e.data.flee ? 'flee' : ['nibble', 'nibble', 'scuttle'][e.turn % 3]),
@@ -73,7 +73,7 @@ export const ENEMIES_2 = [
   { id: 'lantern_fish', name: 'Lantern Fish', act: 2, kind: 'normal', hp: [60, 66], pattern: ['glow', 'bite', 'reel', 'bite'],
     moves: {
       glow: { name: 'Gloaming', fx: [{ op: 'dmg', n: 6 }, { op: 'custom', intent: 'debuff', text: 'Pulls 2 cards off your draw pile into the discard pile.', fn: mill(2) }] },
-      bite: { name: 'Bite', fx: [{ op: 'dmg', n: 17 }] },
+      bite: { name: 'Bite', fx: [{ op: 'dmg', n: 18 }] },
       reel: { name: 'Reel In', tip: 'Numb: the grafts on your top grafted card in hand stop working next turn. Lured: 1 card played pulls another from your hand.', fx: [{ op: 'dmg', n: 5 }, { op: 'status', s: 'lured', n: 1, to: 'player' }, { op: 'status', s: 'numb', n: 1, to: 'player' }] },
     },
     art: { body: 'lure', color: '#e2a64a', notes: 'Dark teardrop fish hanging from the ceiling by a polyline stalk ending in a glowing lantern circle.' } },

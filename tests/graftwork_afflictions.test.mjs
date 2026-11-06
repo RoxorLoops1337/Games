@@ -28,7 +28,7 @@ t('every affliction resolves in STATUSES with a one-line tooltip and no em dash'
 
 t('poison: loses N at turn start ignoring Block, then rises by 1, capped at 6', () => {
   const { c } = mk();
-  c.player.block = 50; setStatus(c, c.player, 'poison', 2);
+  c.player.block = 50; setStatus(c, c.player, 'poison', 2); console.log('pre', c.player.hp);
   const hp = c.player.hp; endTurn(c);
   assert.equal(c.player.hp, hp - 2); assert.equal(c.player.st.poison, 3);
   endTurn(c); assert.equal(c.player.hp, hp - 5); assert.equal(c.player.st.poison, 4);
