@@ -605,6 +605,8 @@ function updateInput(app, dt) {
   const mine = app.stack[app.stack.length - 1] === SCREEN;
   const keys = mine ? app.pressedKeys.slice() : [];
   if (!mine || app.blocked) { S.hov = null; S.down = null; return; }
+  // Esc belongs to the global pause overlay (ui/pause.js) unless combat is mid-gesture: see app.escBusy
+  app.escBusy = !!(S.drag || S.modal || S.ending || c.pending || S.sel || (S.potSel !== null && S.potSel !== undefined));
 
   // speed-up while the queue plays
   if (busy() && !S.ending) { if (m.pressed || keys.some((e) => e.key === ' ' || e.key === 'Enter')) S.skip = true; }
@@ -633,7 +635,7 @@ function updateInput(app, dt) {
   // ---- keyboard
   for (const e of keys) {
     const k = e.key;
-    if (k === 'Escape') { if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; S.drag = null; sfx('uiBack'); } else if (!busy()) app.shared.flow.openSettings && app.shared.flow.openSettings(); }
+    if (k === 'Escape') { if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; S.drag = null; sfx('uiBack'); } }
     else if (k === 'q' || k === 'Q') S.modal = { kind: 'piles', tab: 'draw', scroll: 0 };
     else if (act) {
       if (/^[0-9]$/.test(k)) {

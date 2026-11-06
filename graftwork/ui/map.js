@@ -175,7 +175,7 @@ export default {
     // floor labels
     for (let r = 0; r < map.rows; r++) {
       const y = worldY(map, r) - this.scroll;
-      if (y < -20 || y > H + 20) continue;
+      if (y < 16 || y > H - 22) continue;
       const done = r <= run.row;
       app.text(String(r + 1), CHART.x + 22, y - 9, { size: 15, align: 'center', color: done ? 'rgba(43,30,26,.25)' : 'rgba(43,30,26,.55)', italic: true });
       g.strokeStyle = 'rgba(43,30,26,.22)'; g.lineWidth = 1; g.beginPath(); g.moveTo(CHART.x + 38, y + 14); g.lineTo(CHART.x + 50, y + 14); g.stroke();
@@ -215,6 +215,7 @@ export default {
       drawScalpel(g, 640, ys, 0.5, 1.0, 0.6);
     }
 
+    app.reg('map-chart', CHART.x, 0, CHART.w, H, { layer: 'world', group: 'chart' });
     // nodes
     let hovered = null;
     const click = [];
@@ -258,6 +259,7 @@ export default {
         g.save(); g.strokeStyle = COL.lamp; g.lineWidth = 2.5; g.setLineDash([6, 4]); g.lineDashOffset = -app.t * 20; g.beginPath(); g.arc(x, y, R + 12, 0, 6.283); g.stroke(); g.restore();
       }
       if (isAvail) click.push({ n, x, y, R, hov });
+      { const rr = R * sc + 2, y0 = Math.max(0, y - rr), y1 = Math.min(H, y + rr); if (y1 > y0) app.reg('node:' + n.id, x - rr, y0, rr * 2, y1 - y0, { group: 'node:' + n.id, overlay: !!(this.banner || this.confirm) }); }
     }
 
     // scalpel marker at current node or travelling
@@ -312,71 +314,103 @@ export default {
   },
 
   leftPanel(app, run) {
-    const g = app.ctx, hero = HEROES[run.hero];
-    const X = 12, PW = 300;
+    const g = app.ctx, hero = HEROES[run.hero], S = app.textScale || 1;
+    const X = 12, PW = 300, IW = PW - 36, BOT = 708 - 12;
+    const cs = (size, cap = 1.25) => ({ size: Math.round(size * Math.min(S, cap)), fixed: true }); // text that scales, but not past what the panel can hold
     app.panel(X, 12, PW, 696, { fill: 'rgba(22,18,16,.94)', r: 12 });
-    app.text('ACT ' + ROMAN[run.act] + (run.loop ? '  LOOP ' + (run.loop + 1) : ''), X + 18, 24, { size: 14, ui: true, color: COL.lamp, bold: true });
-    app.text(ACT_NAMES[run.act], X + 18, 42, { size: 26, bold: true, color: COL.vellum });
+    app.reg('map-left', X, 12, PW, 696, { group: 'left' });
+    // header (heights come back from app.text so a bigger text scale pushes the rest down)
+    let y = 22;
+    y += app.text('ACT ' + ROMAN[run.act] + (run.loop ? '  LOOP ' + (run.loop + 1) : ''), X + 18, y, { ...cs(14), ui: true, color: COL.lamp, bold: true, maxW: IW }) + 2;
+    y += app.text(ACT_NAMES[run.act], X + 18, y, { ...cs(26, 1), bold: true, color: COL.vellum, maxW: IW }) + 2;
     const rows = run.map.rows;
-    app.text(run.row < 0 ? 'Admission. Floor 0 of ' + rows : 'Floor ' + (run.row + 1) + ' of ' + rows, X + 18, 76, { size: 15, ui: true, color: 'rgba(232,220,196,.7)' });
-    g.strokeStyle = 'rgba(232,220,196,.25)'; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(X + 18, 102); g.lineTo(X + PW - 18, 102); g.stroke(); g.setLineDash([]);
+    y += app.text(run.row < 0 ? 'Admission. Floor 0 of ' + rows : 'Floor ' + (run.row + 1) + ' of ' + rows, X + 18, y, { ...cs(15), ui: true, color: 'rgba(232,220,196,.7)', maxW: IW }) + 6;
+    g.strokeStyle = 'rgba(232,220,196,.25)'; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(X + 18, y); g.lineTo(X + PW - 18, y); g.stroke(); g.setLineDash([]);
+    y += 10;
 
-    // portrait
-    app.panel(X + 18, 114, 80, 80, { fill: '#2b2420', stroke: hero.color, r: 8, lw: 2.5 });
-    g.save(); app.rr(X + 20, 116, 76, 76, 6); g.clip(); drawPortrait(g, run.hero, X + 58, 154, 76); g.restore();
-    app.text(hero.name, X + 112, 118, { size: 22, bold: true });
-    app.text(hero.title, X + 112, 146, { size: 14, ui: true, color: 'rgba(232,220,196,.65)', maxW: 180 });
+    // portrait + name
+    app.panel(X + 18, y, 80, 80, { fill: '#2b2420', stroke: hero.color, r: 8, lw: 2.5 });
+    app.reg('map-portrait', X + 18, y, 80, 80, { group: 'left' });
+    g.save(); app.rr(X + 20, y + 2, 76, 76, 6); g.clip(); drawPortrait(g, run.hero, X + 58, y + 40, 76); g.restore();
+    let ny = y + 2;
+    ny += app.text(hero.name, X + 112, ny, { ...cs(22, 1), bold: true, maxW: IW - 94 }) + 2;
+    if (S <= 1.2) ny += app.text(hero.title, X + 112, ny, { size: 14, ui: true, color: 'rgba(232,220,196,.65)', maxW: IW - 94 });
+    y = Math.max(y + 80, ny) + 10;
     // hp
-    drawHeart(g, X + 126, 188, 18);
-    const bx = X + 142, bw = 140;
-    app.rr(bx, 180, bw, 16, 8); g.fillStyle = '#0e0b0a'; g.fill();
+    const bh = Math.max(16, Math.round(13 * Math.min(S, 1.25) * 1.25)), bx = X + 46, bw = IW - 28;
+    drawHeart(g, X + 30, y + bh / 2, 18);
+    app.reg('map-hp', bx, y, bw, bh, { group: 'left' });
+    app.rr(bx, y, bw, bh, bh / 2); g.fillStyle = '#0e0b0a'; g.fill();
     const k = clamp(run.hp / run.maxHp, 0, 1);
-    app.rr(bx, 180, Math.max(6, bw * k), 16, 8); g.fillStyle = k < 0.3 ? '#d33' : COL.scar; g.fill();
-    app.rr(bx, 180, bw, 16, 8); g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = 1.5; g.stroke();
-    app.text(`${run.hp} / ${run.maxHp}`, bx + bw / 2, 181, { size: 13, ui: true, align: 'center', bold: true, shadow: true });
-    if (app.inRect(X + 112, 176, 180, 24)) app.tooltip('Health', 'Heal at the Forge. Some events and relics help too.');
-    // gold
-    drawCoin(g, X + 30, 220, 20);
-    app.text(String(run.gold), X + 46, 210, { size: 22, bold: true, color: COL.gold });
-    app.text(`${run.deck.length} cards`, X + PW - 18, 214, { size: 14, ui: true, align: 'right', color: 'rgba(232,220,196,.65)' });
+    app.rr(bx, y, Math.max(6, bw * k), bh, bh / 2); g.fillStyle = k < 0.3 ? '#d33' : COL.scar; g.fill();
+    app.rr(bx, y, bw, bh, bh / 2); g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = 1.5; g.stroke();
+    app.text(`${run.hp} / ${run.maxHp}`, bx + bw / 2, y + (bh - 13 * Math.min(S, 1.25)) / 2 - 1, { ...cs(13), ui: true, align: 'center', bold: true, shadow: true });
+    if (app.inRect(X + 18, y - 4, IW, bh + 8)) app.tooltip('Health', 'Heal at the Forge. Some events and relics help too.');
+    y += bh + 10;
+    // gold + deck count
+    const gh = Math.round(22 * Math.min(S, 1.25) * 1.22);
+    drawCoin(g, X + 30, y + gh / 2, 20);
+    app.text(String(run.gold), X + 46, y, { ...cs(22), bold: true, color: COL.gold, maxW: 110 });
+    app.text(`${run.deck.length} cards`, X + PW - 18, y + (gh - 14 * Math.min(S, 1.25)) / 2, { ...cs(14), ui: true, align: 'right', color: 'rgba(232,220,196,.65)' });
+    y += gh + 8;
 
     // budget
-    const si = strainInfo(run);
-    app.text('BUDGET', X + 18, 242, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
-    app.text(`${si.weight} / ${si.budget}`, X + PW - 18, 240, { size: 17, bold: true, align: 'right', color: si.strain ? COL.bad : COL.vellum });
-    const pips = Math.max(si.budget, si.weight, 6), pw = Math.min(20, (PW - 36 - (pips - 1) * 3) / pips);
+    const si = strainInfo(run), by0 = y;
+    app.text('BUDGET', X + 18, y, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
+    y += app.text(`${si.weight} / ${si.budget}`, X + PW - 18, y - 2, { ...cs(17), bold: true, align: 'right', color: si.strain ? COL.bad : COL.vellum }) + 2;
+    const pips = Math.max(si.budget, si.weight, 6), pw = Math.min(20, (IW - (pips - 1) * 3) / pips);
     for (let i = 0; i < pips; i++) {
       const px = X + 18 + i * (pw + 3);
       const over = i >= si.budget;
-      app.rr(px, 264, pw, 14, 3);
+      app.rr(px, y, pw, 14, 3);
       if (i < si.weight) g.fillStyle = over ? COL.scar : '#c9b48a'; else g.fillStyle = over ? 'rgba(179,38,58,.25)' : 'rgba(232,220,196,.12)';
       g.fill();
       g.strokeStyle = over ? 'rgba(179,38,58,.9)' : 'rgba(232,220,196,.35)'; g.lineWidth = 1; g.stroke();
     }
+    y += 18;
     const sTxt = si.strain ? `Strain ${si.strain}: ${si.tithed.length} card${si.tithed.length === 1 ? '' : 's'} Tithed` + (si.backfire ? `, Backfire ${si.backfire}` : '') : 'No Strain';
-    app.text(sTxt, X + 18, 284, { size: 14, ui: true, color: si.strain ? COL.bad : COL.good, bold: true });
-    if (app.inRect(X + 12, 236, PW, 70)) {
+    y += app.text(sTxt, X + 18, y, { ...cs(14), ui: true, color: si.strain ? COL.bad : COL.good, bold: true, maxW: IW });
+    if (app.inRect(X + 12, by0 - 4, PW, y - by0 + 8)) {
       const names = si.tithed.map((u) => { const i = run.deck.find((d) => d.uid === u); return i ? CARDS[i.id].name : ''; });
       app.tooltip('Budget', `Graft weight in your deck: ${si.weight}. Budget: ${si.budget}.\nEach point over is Strain, and lands a Tithe (-25% numbers) on a Bare card.` + (names.length ? '\nTithed now: ' + names.join(', ') + '.' : '') + (si.backfire ? `\nBackfire ${si.backfire}: grafted cards jam in your opening hand.` : ''), { color: si.strain ? COL.bad : COL.lamp });
     }
+    y += 10;
 
-    // relics
-    app.text('RELICS', X + 18, 314, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
-    const per = 7, cell = 39;
-    run.relics.forEach((id, i) => {
-      const cx = X + 18 + (i % per) * cell + 18, cy = 350 + Math.floor(i / per) * cell;
-      const over = app.inRect(cx - 18, cy - 18, 36, 36);
-      app.rr(cx - 18, cy - 18, 36, 36, 6); g.fillStyle = over ? 'rgba(242,193,78,.2)' : 'rgba(232,220,196,.07)'; g.fill();
+    // buttons are anchored to the bottom (stacked when the text scale makes them wide)
+    const stack = S > 1.2, bH = 42, aH = 38;
+    const abY = BOT - aH, dY = stack ? abY - 8 - bH * 2 - 8 : abY - 8 - bH;
+    const hint = S <= 1 ? 'Arrows or WASD to choose, Enter to go' : null;
+    const hintY = hint ? dY - 20 : dY;
+    // potions
+    const potTop = hintY - 8 - 58;
+    // relics get whatever is left between here and the potions
+    app.text('RELICS', X + 18, y, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
+    y += 20;
+    const per = 7, cell = 39, avail = Math.max(1, Math.floor((potTop - 26 - y) / cell));
+    const cap = per * avail, over = run.relics.length > cap, shown = over ? cap - 1 : run.relics.length;
+    run.relics.slice(0, shown).forEach((id, i) => {
+      const cx = X + 18 + (i % per) * cell + 18, cy = y + 18 + Math.floor(i / per) * cell;
+      const hv = app.inRect(cx - 18, cy - 18, 36, 36);
+      app.reg('map-relic' + i, cx - 18, cy - 18, 36, 36, { group: 'left' });
+      app.rr(cx - 18, cy - 18, 36, 36, 6); g.fillStyle = hv ? 'rgba(242,193,78,.2)' : 'rgba(232,220,196,.07)'; g.fill();
       drawRelic(g, id, cx, cy, 30);
-      if (over && RELICS[id]) app.tooltip(RELICS[id].name, RELICS[id].text, { color: COL.lamp });
+      if (hv && RELICS[id]) app.tooltip(RELICS[id].name, RELICS[id].text, { color: COL.lamp });
     });
-    if (!run.relics.length) app.text('None yet.', X + 18, 338, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.4)' });
+    if (over) {
+      const i = shown, cx = X + 18 + (i % per) * cell + 18, cy = y + 18 + Math.floor(i / per) * cell, hv = app.inRect(cx - 18, cy - 18, 36, 36);
+      app.reg('map-relic-more', cx - 18, cy - 18, 36, 36, { group: 'left' });
+      app.rr(cx - 18, cy - 18, 36, 36, 6); g.fillStyle = hv ? 'rgba(242,193,78,.2)' : 'rgba(232,220,196,.07)'; g.fill();
+      app.text('+' + (run.relics.length - shown), cx, cy - 8, { size: 14, ui: true, bold: true, align: 'center', fixed: true });
+      if (hv) app.tooltip('More relics', run.relics.slice(shown).map((id) => (RELICS[id] ? RELICS[id].name : id)).join(', '), { color: COL.lamp });
+    }
+    if (!run.relics.length) app.text('None yet.', X + 18, y, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.4)' });
 
     // potions
-    app.text('POTIONS', X + 18, 466, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
+    app.text('POTIONS', X + 18, potTop - 20, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
     const slots = RUN.potionSlots(run);
     for (let i = 0; i < slots; i++) {
-      const cx = X + 18 + i * 56 + 24, cy = 514, id = run.potions[i];
+      const cx = X + 18 + i * 56 + 24, cy = potTop + 26, id = run.potions[i];
+      app.reg('map-potion' + i, cx - 24, cy - 26, 48, 52, { group: 'left' });
       app.rr(cx - 24, cy - 26, 48, 52, 10); g.fillStyle = 'rgba(232,220,196,.07)'; g.fill(); g.strokeStyle = 'rgba(232,220,196,.3)'; g.lineWidth = 1.5; g.setLineDash(id ? [] : [4, 4]); g.stroke(); g.setLineDash([]);
       if (id) {
         drawPotion(g, id, cx, cy, 38);
@@ -385,53 +419,56 @@ export default {
     }
 
     // buttons
-    if (app.button(`Deck (${run.deck.length})`, X + 18, 568, 130, 42, { size: 18 })) app.shared.flow.openDeck();
-    if (app.button('Settings', X + 154, 568, 128, 42, { size: 18 })) app.shared.flow.openSettings();
-    if (app.button('Abandon run', X + 18, 626, PW - 36, 38, { size: 16, fill: '#2b1a1a', stroke: 'rgba(179,38,58,.7)', color: '#e6a0a0' })) this.confirm = true;
-    app.text('Arrows or WASD to choose, Enter to go', X + PW / 2, 676, { size: 12, ui: true, align: 'center', color: 'rgba(232,220,196,.4)' });
+    const dw = stack ? IW : 130, sw = stack ? IW : 128, sx = stack ? X + 18 : X + 154, sy = stack ? dY + bH + 8 : dY;
+    app.reg('map-deck', X + 18, dY, dw, bH, { group: 'left' }); app.reg('map-settings', sx, sy, sw, bH, { group: 'left' }); app.reg('map-abandon', X + 18, abY, IW, aH, { group: 'left' });
+    if (app.button(`Deck (${run.deck.length})`, X + 18, dY, dw, bH, { size: 18 })) app.shared.flow.openDeck();
+    if (app.button('Settings', sx, sy, sw, bH, { size: 18 })) app.shared.flow.openSettings();
+    if (app.button('Abandon run', X + 18, abY, IW, aH, { size: 16, fill: '#2b1a1a', stroke: 'rgba(179,38,58,.7)', color: '#e6a0a0' })) this.confirm = true;
+    if (hint) app.text(hint, X + PW / 2, dY - 18, { size: 13, ui: true, align: 'center', color: 'rgba(232,220,196,.45)', maxW: IW });
   },
 
   rightPanel(app, run) {
     const g = app.ctx;
-    const X = 968, PW = 300;
-    app.panel(X, 12, PW, 696, { fill: 'rgba(22,18,16,.94)', r: 12 });
-    app.text('LEGEND', X + 18, 24, { size: 14, ui: true, bold: true, color: COL.lamp });
-    const types = ['fight', 'elite', 'event', 'shop', 'forge', run.act === 3 ? 'boss' : 'boss'];
+    const X = 968, PW = 300, Y0 = 64, PH = H - 12 - Y0; // starts under the global Pause / Fullscreen zone (x 1128..1272, y 0..56)
+    app.panel(X, Y0, PW, PH, { fill: 'rgba(22,18,16,.94)', r: 12 });
+    app.reg('map-right', X, Y0, PW, PH, { group: 'right' });
+    app.text('LEGEND', X + 18, Y0 + 10, { size: 14, ui: true, bold: true, color: COL.lamp });
+    const types = ['fight', 'elite', 'event', 'shop', 'forge', 'boss'];
     const leg = { fight: 'Fight: gold and a graft', elite: 'Elite: relic reward', event: 'Event: ???', shop: 'Shop: spend gold', forge: 'Forge: rest, expand, refine, strip or reforge', boss: run.act === 3 ? 'Warden, then The Grafter' : 'Boss: ends the act' };
     types.forEach((t, i) => {
-      const y = 50 + i * 36;
-      g.fillStyle = '#1f1914'; g.beginPath(); g.arc(X + 34, y + 14, 15, 0, 6.283); g.fill(); g.strokeStyle = NODE_COL[t]; g.lineWidth = 2.4; g.stroke();
-      drawNodeIcon(g, t, X + 34, y + 14, 22, 'available');
-      app.text(NODE_INFO[t][0], X + 58, y + 1, { size: 16, bold: true, color: NODE_COL[t] === COL.scar ? '#e07a86' : NODE_COL[t] });
-      app.text(leg[t].split(': ')[1] || leg[t], X + 58, y + 19, { size: 12, ui: true, color: 'rgba(232,220,196,.6)', maxW: 220 });
+      const y = Y0 + 34 + i * 36;
+      g.fillStyle = '#1f1914'; g.beginPath(); g.arc(X + 34, y + 15, 15, 0, 6.283); g.fill(); g.strokeStyle = NODE_COL[t]; g.lineWidth = 2.4; g.stroke();
+      drawNodeIcon(g, t, X + 34, y + 15, 22, 'available');
+      app.text(NODE_INFO[t][0], X + 58, y, { size: 16, bold: true, color: NODE_COL[t] === COL.scar ? '#e07a86' : NODE_COL[t] });
+      app.text(leg[t].split(': ')[1] || leg[t], X + 58, y + 17, { size: 14, ui: true, color: 'rgba(232,220,196,.7)', maxW: 226 });
     });
     // path key
-    const ky = 292;
+    const ky = Y0 + 268;
     g.setLineDash([9, 6]); g.lineWidth = 3; g.strokeStyle = COL.scar; g.beginPath(); g.moveTo(X + 18, ky); g.lineTo(X + 62, ky); g.stroke();
-    g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(X + 18, ky + 20); g.lineTo(X + 62, ky + 20); g.stroke(); g.setLineDash([]);
-    app.text('Open path', X + 72, ky - 8, { size: 13, ui: true, color: 'rgba(232,220,196,.7)' });
-    app.text('Possible later', X + 72, ky + 12, { size: 13, ui: true, color: 'rgba(232,220,196,.7)' });
+    g.strokeStyle = 'rgba(232,220,196,.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(X + 18, ky + 22); g.lineTo(X + 62, ky + 22); g.stroke(); g.setLineDash([]);
+    app.text('Open path', X + 72, ky - 8, { size: 14, ui: true, color: 'rgba(232,220,196,.75)' });
+    app.text('Possible later', X + 72, ky + 14, { size: 14, ui: true, color: 'rgba(232,220,196,.75)' });
 
-    g.strokeStyle = 'rgba(232,220,196,.25)'; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(X + 18, 330); g.lineTo(X + PW - 18, 330); g.stroke(); g.setLineDash([]);
-    app.text('SCHOOL RESONANCE', X + 18, 340, { size: 14, ui: true, bold: true, color: COL.lamp });
+    g.strokeStyle = 'rgba(232,220,196,.25)'; g.setLineDash([6, 5]); g.beginPath(); g.moveTo(X + 18, Y0 + 306); g.lineTo(X + PW - 18, Y0 + 306); g.stroke(); g.setLineDash([]);
+    app.text('SCHOOL RESONANCE', X + 18, Y0 + 314, { size: 14, ui: true, bold: true, color: COL.lamp });
     const res = RUN.resonance(run);
     SCHOOLS_LIST().forEach((s, i) => {
-      const y = 366 + i * 47;
+      const y = Y0 + 338 + i * 38;
       const c = res.counts[s.id] || 0, tier = res.tiers[s.id] || 0;
-      const hov = app.inRect(X + 10, y - 4, PW - 20, 46);
-      if (hov) { app.rr(X + 10, y - 4, PW - 20, 46, 6); g.fillStyle = 'rgba(232,220,196,.07)'; g.fill(); }
-      g.save(); g.globalAlpha = c ? 1 : 0.5;
-      drawSchoolGlyph(g, s.id, X + 32, y + 16, 12, s.color);
-      app.text(s.name, X + 54, y + 1, { size: 16, bold: true, color: c ? s.color : COL.vellum });
-      app.text(String(c), X + PW - 22, y + 1, { size: 18, bold: true, align: 'right', color: tier ? COL.lamp : COL.vellum });
+      app.reg('map-school' + i, X + 10, y - 2, PW - 20, 36, { group: 'right' });
+      const hov = app.inRect(X + 10, y - 2, PW - 20, 36);
+      if (hov) { app.rr(X + 10, y - 2, PW - 20, 36, 6); g.fillStyle = 'rgba(232,220,196,.07)'; g.fill(); }
+      g.save(); g.globalAlpha = c ? 1 : 0.55;
+      drawSchoolGlyph(g, s.id, X + 32, y + 10, 11, s.color);
+      app.text(s.name, X + 54, y, { size: 16, bold: true, color: c ? s.color : COL.vellum });
+      app.text(String(c), X + PW - 22, y, { size: 18, bold: true, align: 'right', color: tier ? COL.lamp : COL.vellum });
       // bar with ticks at 3 and 6
-      const bx = X + 54, bw = 190, by = y + 25;
+      const bx = X + 54, bw = 190, by = y + 22;
       app.rr(bx, by, bw, 8, 4); g.fillStyle = 'rgba(232,220,196,.12)'; g.fill();
       if (c) { app.rr(bx, by, Math.max(8, bw * clamp(c / 6, 0, 1)), 8, 4); g.fillStyle = s.color; g.fill(); }
       for (const t of [3, 6]) {
-        const tx = bx + bw * (t / 6);
-        g.strokeStyle = c >= t ? COL.lamp : 'rgba(232,220,196,.6)'; g.lineWidth = 2; g.beginPath(); g.moveTo(tx - (t === 6 ? 1 : 0), by - 4); g.lineTo(tx - (t === 6 ? 1 : 0), by + 12); g.stroke();
-        app.text(String(t), tx - (t === 6 ? 1 : 0), by + 11, { size: 10, ui: true, align: 'center', color: c >= t ? COL.lamp : 'rgba(232,220,196,.5)' });
+        const tx = bx + bw * (t / 6) - (t === 6 ? 1 : 0);
+        g.strokeStyle = c >= t ? COL.lamp : 'rgba(232,220,196,.6)'; g.lineWidth = 2; g.beginPath(); g.moveTo(tx, by - 3); g.lineTo(tx, by + 11); g.stroke();
       }
       g.restore();
       if (hov) app.tooltip(s.name + ` (${c} graft${c === 1 ? '' : 's'})`, s.blurb + '\n' + (tier >= 3 ? '[ON] ' : '[3] ') + 'At 3: ' + s.resonance[3] + '\n' + (tier >= 6 ? '[ON] ' : '[6] ') + 'At 6: ' + s.resonance[6], { color: s.color });
@@ -443,6 +480,7 @@ export default {
     const a = t < 0.35 ? t / 0.35 : t > 2.0 ? clamp(1 - (t - 2.0) / 0.6, 0, 1) : 1;
     g.save(); g.globalAlpha = a * 0.78; g.fillStyle = '#0a0807'; g.fillRect(0, 0, W, H); g.globalAlpha = a;
     const cy = 330, slide = (1 - EASE.out(clamp(t / 0.7, 0, 1))) * 60;
+    app.reg('map-banner', 0, cy - 90, W, 180, { overlay: true });
     g.fillStyle = 'rgba(22,18,16,.95)'; g.fillRect(0, cy - 90, W, 180);
     g.strokeStyle = COL.scar; g.lineWidth = 3; g.setLineDash([14, 9]);
     g.beginPath(); g.moveTo(0, cy - 88); g.lineTo(W, cy - 88); g.moveTo(0, cy + 88); g.lineTo(W, cy + 88); g.stroke(); g.setLineDash([]);
@@ -458,6 +496,7 @@ export default {
     const g = app.ctx;
     g.fillStyle = 'rgba(8,6,5,.7)'; g.fillRect(0, 0, W, H);
     const x = 420, y = 240, w = 440, h = 220;
+    app.reg('map-confirm', x, y, w, h, { overlay: true });
     app.panel(x, y, w, h, { fill: '#1d1815', stroke: COL.scar, r: 14, lw: 3 });
     app.text('Abandon this run?', 640, y + 26, { size: 28, bold: true, align: 'center' });
     app.text('The run ends now and counts as a loss. There is no stitching this one back.', 640, y + 72, { size: 16, ui: true, align: 'center', maxW: 380, color: 'rgba(232,220,196,.8)' });

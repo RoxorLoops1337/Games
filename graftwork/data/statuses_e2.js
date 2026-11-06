@@ -27,7 +27,7 @@ export const STATUS_E2 = [
     desc: () => 'The chop lands next turn for a huge hit. Deal 18 damage in a single turn to stun it.' },
   // Ledgerman: counts cards played this turn.
   { id: 'tally', name: 'Tally', good: true, stack: 'int',
-    desc: (n) => `${n} card${n === 1 ? '' : 's'} counted this turn. From the 5th card on, every card costs you HP.` },
+    desc: (n) => `${n} card${n === 1 ? '' : 's'} counted this turn. From the 4th card on, every card you play costs you 3 HP (ignores Block).` },
   // The Appraiser: how many of your cards carry a price tag.
   { id: 'priced', name: 'Priced', good: false, stack: 'int',
     desc: (n) => `${n} of your cards ${n === 1 ? 'is' : 'are'} priced. Playing one costs 10 gold (or 5 HP if you are short) and feeds the Appraiser.` },
@@ -53,6 +53,9 @@ export const STATUS_E2 = [
         if (c.cardsThisTurn.length <= 2) A.addCard('j_ledger', 1, 'draw');
       },
     } },
+  // Conditional bonus on an enemy's next hit (Hot Pour, Foreclose). The move tooltip names the condition.
+  { id: 'surcharge', name: 'Surcharge', good: true, stack: 'int', mod: { outAdd: (n) => n },
+    desc: (n) => `Its next hit deals ${n} more. The move's tooltip says why.` },
   // Pickled King: preserved flesh shrugs off any single big hit.
   { id: 'brined', name: 'Brined', good: true, stack: 'int', mod: { inCap: (n) => n },
     desc: (n) => `Any single hit deals at most ${n} damage.` },

@@ -54,6 +54,7 @@ function cutDraw(A, n) {
   const c = A.c;
   for (let i = 0; i < n && c.drawPile.length; i++) { const k = c.drawPile.pop(); c.discard.push(k); A.ev({ t: 'discard', card: k.uid, why: 'effect' }); }
 }
+export { cardDef, graftDef, costOf, nextCards, jamBest };
 const D = (n, extra) => ({ op: 'dmg', n, ...extra });
 const ST = (s, n, to) => ({ op: 'status', s, n, to: to || 'player' });
 const SELF = (s, n) => ({ op: 'status', s, n, to: 'self' });
@@ -65,7 +66,7 @@ const usher = {
   id: 'usher', name: 'Usher', act: 3, kind: 'normal', hp: [92, 100],
   pattern: ['spot', 'strike', 'lead'],
   moves: {
-    spot: { name: 'Pick Your Seat', fx: [D(12), ST('marked', 2)] },
+    spot: { name: 'Pick Your Seat', fx: [D(12), ST('marked', 2), ST('cadencelock', 1)] },
     strike: { name: 'Torch Swing', fx: [D(24)] },
     lead: { name: 'This Way', fx: [D(14), { op: 'block', n: 12 }] },
   },
@@ -78,7 +79,7 @@ const maskChorus = {
   moves: {
     sob: { name: 'Three Small Sobs', fx: [D(6, { hits: 3 })] },
     laugh: { name: 'Hollow Laugh', fx: [D(9, { hits: 2 }), ST('weak', 1)] },
-    swap: { name: 'Swap Masks', fx: [D(8), { op: 'block', n: 12 }, ST('costup', 1)] },
+    swap: { name: 'Swap Masks', fx: [D(8), { op: 'block', n: 12 }, ST('costup', 1), ST('stagefright', 2)] },
   },
   art: { body: 'masks', color: '#d8c8f0', notes: 'three ellipses side by side, one grinning, one weeping, one blank' },
 };
@@ -106,7 +107,7 @@ const puppet = {
   moves: {
     yank: { name: 'Yank', fx: [D(20)] },
     dance: { name: 'Jerky Dance', fx: [D(9, { hits: 2 })] },
-    tangle: { name: 'Tangle', fx: [D(12), ST('drawdown', 1)] },
+    tangle: { name: 'Tangle', fx: [D(12), ST('drawdown', 1), ST('numb', 1)] },
     reknit: { name: 'Reknit Strings', intent: ['buff', 'attack'], fx: [D(10), CUSTOM('buff', 'Restores strings to 2', (A, ctx) => A.setStatus(ctx.srcEnt, 'strings', 2))] },
   },
   on: {
@@ -136,17 +137,24 @@ const prompter = {
   id: 'prompter', name: 'Prompter', act: 3, kind: 'normal', hp: [92, 100],
   pattern: ['cue', 'cue', 'recite'],
   moves: {
+    // The damage bonuses ride on the Primed status (+10 after an Attack, +6 after a Power, +8 for the same school twice in a row),
+    // so the intent number always includes them.
     cue: { name: 'Cue What You Did', fx: [
       D(10),
-      { op: 'if', cond: (c, ctx) => ctx.srcEnt.data.last === 'attack', ifText: 'your last card was an Attack', then: [D(10), ST('vulnerable', 1)] },
+      { op: 'if', cond: (c, ctx) => ctx.srcEnt.data.last === 'attack', ifText: 'your last card was an Attack (+10 damage)', then: [ST('vulnerable', 1)] },
       { op: 'if', cond: (c, ctx) => ctx.srcEnt.data.last === 'skill', ifText: 'your last card was a Skill', then: [ST('frail', 2), { op: 'addCard', card: 'j_paperwork', n: 1, to: 'discard' }] },
-      { op: 'if', cond: (c, ctx) => ctx.srcEnt.data.last === 'power', ifText: 'your last card was a Power', then: [ST('weak', 2), D(6)] },
+      { op: 'if', cond: (c, ctx) => ctx.srcEnt.data.last === 'power', ifText: 'your last card was a Power (+6 damage)', then: [ST('weak', 2)] },
+      { op: 'if', cond: (c, ctx) => !!ctx.srcEnt.data.same, ifText: 'your last two cards shared a school (+8 damage)', then: [] },
     ] },
     recite: { name: 'Recite', fx: [D(14), { op: 'block', n: 14 }] },
   },
   on: {
-    playerCard(A, e, p) { e.data.last = p.spec.type; },
-    afterMove(A, e) { e.data.last = null; },
+    playerCard(A, e, p) {
+      const t = p.spec.type, s = p.spec.school || null;
+      e.data.same = !!s && s === e.data.school; e.data.school = s; e.data.last = t;
+      if (e.move === 'cue') A.setStatus(e, 'primed', (t === 'attack' ? 10 : t === 'power' ? 6 : 0) + (e.data.same ? 8 : 0));
+    },
+    afterMove(A, e) { e.data.last = null; e.data.same = false; e.data.school = null; A.setStatus(e, 'primed', 0); },
   },
   art: { body: 'eyebox', color: '#6e5a88', notes: 'square prompt box with a single eye slit glowing at the front' },
 };
@@ -212,8 +220,8 @@ const critic = {
   id: 'critic', name: 'Critic', act: 3, kind: 'normal', hp: [94, 104],
   pattern: ['review', 'scathe'],
   moves: {
-    review: { name: 'Review', fx: [D(16), { op: 'if', cond: (c, ctx) => criticLow(c, ctx.srcEnt), ifText: 'you dealt under 20 damage last turn', then: [CUSTOM('debuff', 'Frays your highest-cost card (jam)', (A) => jamBest(A, 1))] }] },
-    scathe: { name: 'Scathing Notice', fx: [D(22), ST('frail', 1), { op: 'if', cond: (c, ctx) => criticLow(c, ctx.srcEnt), ifText: 'you dealt under 20 damage last turn', then: [CUSTOM('debuff', 'Frays your highest-cost card (jam)', (A) => jamBest(A, 1))] }] },
+    review: { name: 'Review', fx: [D(16), { op: 'if', cond: (c, ctx) => criticLow(c, ctx.srcEnt), ifText: 'you dealt under 25 damage last turn', then: [CUSTOM('debuff', 'Frays your highest-cost card (jam)', (A) => jamBest(A, 1)), ST('dread', 2)] }] },
+    scathe: { name: 'Scathing Notice', fx: [D(22), ST('frail', 1), { op: 'if', cond: (c, ctx) => criticLow(c, ctx.srcEnt), ifText: 'you dealt under 25 damage last turn', then: [CUSTOM('debuff', 'Frays your highest-cost card (jam)', (A) => jamBest(A, 1)), ST('dread', 2)] }] },
   },
   on: {
     combatStart(A, e) { e.data.snap = hpTotal(A.c); },
@@ -222,7 +230,7 @@ const critic = {
   art: { body: 'hat', color: '#2f2a3a', notes: 'very tall top hat on a thin coat, a pencil for one arm' },
 };
 function hpTotal(c) { return c.enemies.reduce((a, x) => a + Math.max(0, x.hp) + Math.max(0, x.block || 0), 0); }
-function criticLow(c, e) { return Math.max(0, (e.data.snap || 0) - hpTotal(c)) < 20; }
+function criticLow(c, e) { return Math.max(0, (e.data.snap || 0) - hpTotal(c)) < 25; }
 
 const heckler = {
   id: 'heckler', name: 'Heckler', act: 3, kind: 'normal', hp: [90, 98],
@@ -230,7 +238,7 @@ const heckler = {
   moves: {
     boo: { name: 'Boo', fx: [D(13), CUSTOM('debuff', 'Exhausts a card you were about to draw', (A) => exhaustTop(A, 1))] },
     hiss: { name: 'Hiss', fx: [D(22)] },
-    pelt: { name: 'Pelt with Fruit', fx: [D(12), { op: 'addCard', card: 'j_static', n: 1, to: 'draw' }] },
+    pelt: { name: 'Pelt with Fruit', fx: [D(12), ST('poison', 3), { op: 'addCard', card: 'j_static', n: 1, to: 'draw' }] },
   },
   art: { body: 'masks', color: '#9a4f4f', notes: 'one sneering mask on a stick, thrown tomatoes drawn as red circles' },
 };
@@ -242,7 +250,7 @@ const diva = {
   moves: {
     vibrato: { name: 'Vibrato', fx: [D(9, { hits: 3 }), CUSTOM('debuff', 'Exhausts a card you were about to draw', (A) => exhaustTop(A, 1))] },
     high_c: { name: 'High C', fx: [D(14), ST('weak', 1), CUSTOM('debuff', 'Silences the card you played most (jam, +1 cost)', (A) => silenceMostPlayed(A))] },
-    aria: { name: 'Aria (hold the note)', fx: [D(36)] },
+    aria: { name: 'Aria (hold the note)', fx: [D(36), ST('brittle', 2)] },
     encore: { name: 'Encore', intent: ['buff', 'attack'], fx: [D(10), { op: 'block', n: 16 }, SELF('strength', 3)] },
   },
   art: { body: 'masks', color: '#e8c25a', notes: 'wide gold gown ellipse with a tiny head, mouth open as a dark circle' },
@@ -254,7 +262,7 @@ const stagehands = {
   moves: {
     sandbag: { name: 'Drop the Sandbag', fx: [D(28), ST('frail', 1)] },
     winch: { name: 'Winch', fx: [D(16), CUSTOM('debuff', 'Cuts 2 cards from your next draw into the discard', (A) => cutDraw(A, 2))] },
-    rig: { name: 'Rig the Trap', fx: [D(14), ST('costup', 1), { op: 'addCard', card: 'j_clot', n: 1, to: 'discard' }] },
+    rig: { name: 'Rig the Trap', fx: [D(14), ST('costup', 1), ST('infection', 1), { op: 'addCard', card: 'j_clot', n: 1, to: 'discard' }] },
     strike_set: { name: 'Strike the Set', intent: ['defend', 'buff', 'attack'], fx: [D(14), { op: 'block', n: 20 }, SELF('strength', 2)] },
   },
   art: { body: 'puppet', color: '#4a4658', notes: 'two dark stick figures hauling ropes, a sandbag circle hung above you' },
@@ -265,7 +273,7 @@ const goldLeafGolem = {
   pattern: ['gild', 'slam', 'flake'],
   moves: {
     gild: { name: 'Gild Itself', intent: ['defend', 'buff', 'attack'], fx: [{ op: 'block', n: { base: 8, per: 'gold', mul: 0.1, max: 36 } }, D(12), SELF('strength', 2)] },
-    slam: { name: 'Gilt Slam', fx: [D(32)] },
+    slam: { name: 'Gilt Slam', fx: [D({ base: 30, per: 'gold', mul: 1 / 15, max: 40 })] },
     flake: { name: 'Peel Off Your Gold', fx: [D(20), CUSTOM('debuff', 'Steals up to 12 gold and plates itself with it', (A, ctx) => {
       const take = Math.min(12, A.c.run.gold || 0);
       if (take > 0) { A.gold(-take); A.block(ctx.srcEnt, take); }
@@ -294,7 +302,7 @@ const impresario = {
     fermata: { name: 'Fermata', fx: [D(14), ST('costup', 1), ST('marked', 2)] },
     staccato: { name: 'Staccato', fx: [D(6, { hits: 5 })] },
     cut_time: { name: 'Cut Time', fx: [D(20), ST('drawdown', 1), CUSTOM('debuff', 'Cuts 2 cards from your next draw into the discard', (A) => cutDraw(A, 2))] },
-    conduct: { name: 'Conduct the Pit', fx: [D(14), SELF('strength', 3), { op: 'addCard', card: 'j_ringing', n: 2, to: 'discard' }] },
+    conduct: { name: 'Conduct the Pit', fx: [D(14), ST('rejection', 1), SELF('strength', 3), { op: 'addCard', card: 'j_ringing', n: 2, to: 'discard' }] },
     fortissimo: { name: 'Fortissimo', fx: [D(34), ST('weak', 1)] },
     da_capo: { name: 'Da Capo', fx: [D(9, { hits: 4 }), CUSTOM('debuff', 'Exhausts a card you were about to draw', (A) => exhaustTop(A, 1))] },
     finale: { name: 'Finale', fx: [D(22), ST('vulnerable', 2), ST('costup', 1), ST('drawdown', 1)] },
@@ -350,7 +358,9 @@ const schoolN = (e) => Math.min(8, 2 + Math.floor((e.data.count || 0) / 3));
 
 function spliceEffect(A, ctx) {
   const e = ctx.srcEnt, n = schoolN(e), P = A.player;
-  switch (e.data.school) {
+  if (A.c.strain && A.c.strain.strain >= 2 && (P.st.infection || 0) < 3) A.status(P, 'infection', 1);
+  const sch = e.data.mirror || e.data.school;
+  switch (sch) {
     case 'ember': A.status(P, 'burn', n + 1); break;
     case 'blood': A.status(P, 'bleed', n); break;
     case 'echo': A.dmg(e, P, 6 + Math.floor((e.data.count || 0) / 2)); break;
@@ -361,7 +371,15 @@ function spliceEffect(A, ctx) {
     default: A.status(P, 'weak', 1); A.block(e, 10);
   }
 }
-const SPLICE_TEXT = 'Applies the effect of your most grafted school: Ember burn, Blood bleed, Echo a second hit, Hoard block it keeps, Rust junk, Static marks, Gilded steals gold. No grafts: Weak and block';
+// Reknit: at half HP every Overload card (3 grafts) in the deck is marked. Marked cards deal x1.0 and roll Shatter at 40% on first play
+// (needs the two playCard lines in the report). Tempering a card first removes it from the Overloads.
+function reknit(A, e) {
+  const c = A.c, uids = [];
+  for (const z of [c.hand, c.drawPile, c.discard, c.exhaust, c.powers]) for (const k of z) if (!k.temp && k.inst.grafts.length > 2 && !k.reknit) { k.reknit = true; uids.push(k.uid); }
+  e.data.reknit = uids.length;
+  if (uids.length) { A.status(e, 'reknit', uids.length); A.ev({ t: 'reknit', cards: uids, e: e.uid }); }
+}
+const SPLICE_TEXT = 'Applies the effect of your most grafted school: Ember burn, Blood bleed, Echo a second hit, Hoard block it keeps, Rust junk, Static marks, Gilded steals gold. No grafts: Weak and block. With Strain 2+ it also adds Infection 1. It copies the school of your last Thread payout';
 
 const grafter = {
   id: 'the_grafter', name: 'The Grafter', act: 3, kind: 'boss', final: true, hp: 300,
@@ -380,8 +398,14 @@ const grafter = {
       e.def = { ...e.def, moves: { ...e.def.moves, mirror } }; // per-enemy clone, the shared definition is untouched
     },
     damaged(A, e) {
-      if (!e.data.rage && e.hp < e.maxHp / 2) { e.data.rage = true; A.status(e, 'strength', 3); }
+      if (!e.data.rage && e.hp < e.maxHp / 2) { e.data.rage = true; A.status(e, 'strength', 3); reknit(A, e); }
     },
+    // Boss mirror (THREAD.md): the school of your last payout becomes the school of its next Splice.
+    seamPay(A, e, p) {
+      const i = p && p.school ? SCHOOL_ORDER.indexOf(p.school) : -1;
+      if (i >= 0) { e.data.mirror = p.school; A.setStatus(e, 'mirrorsch', i + 1); }
+    },
+    afterMove(A, e, m) { if (m === 'splice' && e.data.mirror) { e.data.mirror = null; A.setStatus(e, 'mirrorsch', 0); } },
   },
   art: { body: 'patchwork', color: '#b8a070', notes: 'a human figure stitched from mismatched patches in the colors of your own grafts, dark seams, no face' },
 };

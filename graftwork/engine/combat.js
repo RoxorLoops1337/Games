@@ -8,7 +8,7 @@ import { CARDS, ENEMIES, RELICS, POTIONS, STATUSES, HEROES } from '../data/index
 import { cardSpec, strainInfo, relicMod, newInst, OVERLOAD_MULT, OVERLOAD_SHATTER, TITHE_MULT } from './cards.js';
 import { resonanceOf, RES_HOOKS } from './resonance.js';
 import { seamInit, seamStep, seamEnd, seamTurnStart } from './seam.js';
-import { afflInst, afflCost, afflStartTurn, afflEndTurn } from './afflictions.js';
+import { afflInst, afflCost, afflStartTurn, afflEndTurn, afflAbsorb } from './afflictions.js';
 
 export const HAND_CAP = 10;
 export const MAX_PLAYS_TURN = 20;
@@ -204,6 +204,7 @@ export function dealDamage(c, src, tgt, base, o = {}) {
   const raw = n;
   let absorbed = 0;
   if (!o.pierce && tgt.block > 0) { absorbed = Math.min(tgt.block, n); tgt.block -= absorbed; n -= absorbed; }
+  if (n > 0 && tgt.st.stitchedup > 0) n = afflAbsorb(c, tgt, n); // Stitched Up (engine/afflictions.js)
   if (n > 0) tgt.hp -= n;
   if (tgt.kind === 'player') { c.damageTakenThisCombat += n; if (src && src.kind === 'enemy') c.lastHitBy = src.name; }
   c.ev.push({ t: 'dmg', src: src ? (src.uid || 'player') : null, who: tgt.uid || 'player', raw, n, absorbed, hit: !o.status, thorns: !!o.thorns, broke: absorbed > 0 && tgt.block === 0 });

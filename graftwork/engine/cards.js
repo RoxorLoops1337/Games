@@ -167,3 +167,12 @@ export function temper(inst) {
   inst.grafts = [];
   return true;
 }
+
+// The Thread (design/THREAD.md): the school set of a card = base school + every live AND fused graft school. Junk has none.
+export function schoolsOf(spec) {
+  const out = [];
+  if (!spec || spec.type === 'junk') return out;
+  if (spec.school) out.push(spec.school);
+  for (const gid of [...(spec.grafts || []), ...(spec.fused || [])]) { const s = GRAFTS[gid] && GRAFTS[gid].school; if (s && !out.includes(s)) out.push(s); }
+  return out;
+}

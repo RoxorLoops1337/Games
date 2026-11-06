@@ -1,17 +1,23 @@
 // Settings modal (app.push('settings')). Persists into app.shared.meta.settings, then flow.saveMeta().
 // Flags other screens may read from app.shared.meta.settings:
 //   master/sfx/music 0..1, muted bool, screenShake bool (default true), reducedMotion bool (default false),
-//   colorblind bool (add pattern/shape cues), textSize 'normal' | 'large'.
+//   colorblind bool (add pattern/shape cues), textScale 100|125|150 (textSize 'normal'|'large' is kept in sync for old readers),
+//   quality 'off'|'low'|'high' (effects), fullscreen bool (last known state).
 import { COL, W, H, EASE, clamp, rgba } from './core.js';
 import { clearRun } from '../engine/save.js';
+import { canFullscreen, isFullscreen, isIPhone, fsRegisterRect, requestFs } from './fullscreen.js';
 
-export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, colorblind: false, textSize: 'normal' };
+export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', fullscreen: false };
+export const TEXT_STEPS = [100, 125, 150];
+export const QUALITY = ['off', 'low', 'high'];
 
 export function settingsOf(app) {
   const meta = app.shared.meta;
   if (!meta.settings || typeof meta.settings !== 'object') meta.settings = {};
   const s = meta.settings;
   for (const k of Object.keys(DEFAULTS)) if (s[k] === undefined) s[k] = DEFAULTS[k];
+  if (!TEXT_STEPS.includes(s.textScale)) s.textScale = s.textSize === 'large' || s.largeText ? 125 : 100;
+  if (!QUALITY.includes(s.quality)) s.quality = 'high';
   return s;
 }
 
@@ -34,7 +40,7 @@ export default {
     const live = app.top() === this;
     const k = EASE.out(clamp(this.k, 0, 1));
     g.save(); g.fillStyle = `rgba(6,4,3,${0.72 * k})`; g.fillRect(0, 0, W, H); g.restore();
-    const w = 600, h = 640, x = 640 - w / 2, y = 40 + (1 - k) * 20;
+    const w = 600, h = 650, x = 640 - w / 2, y = 40 + (1 - k) * 20;
     g.save(); g.globalAlpha = k;
     app.panel(x, y, w, h, { r: 16, fill: 'rgba(22,18,16,.98)', stroke: 'rgba(232,220,196,.5)', lw: 2.5 });
     app.text('Settings', x + 32, y + 22, { size: 32, bold: true });
@@ -54,14 +60,12 @@ export default {
       ['screenShake', 'Screen shake', 'Camera kick on heavy hits.'],
       ['reducedMotion', 'Reduced motion', 'Fewer particles, no flashes, no hit-stop, calmer menus.'],
       ['colorblind', 'Colorblind patterns', 'Adds pattern and shape cues on top of colors.'],
-      ['textSize', 'Large text', 'Bigger text where the layout allows it.'],
     ];
     const ty0 = sy0 + 3 * 52 + 14;
     app.text('OPTIONS', x + 32, ty0 - 8, { size: 12, ui: true, bold: true, color: COL.lamp });
     toggles.forEach(([key, label, tip], i) => {
       const yy = ty0 + 14 + i * 46;
-      const isText = key === 'textSize';
-      const on = isText ? s.textSize === 'large' : !!s[key];
+      const on = !!s[key];
       const tx = x + w - 32 - 64, hov = app.inRect(x + 32, yy, w - 64, 40);
       if (hov) { app.tooltip(label, tip); app.cursor = 'pointer'; }
       app.text(label, x + 32, yy + 9, { size: 20, color: hov ? '#fff' : COL.vellum });
@@ -73,13 +77,17 @@ export default {
       g.restore();
       app.text(on ? 'On' : 'Off', tx - 12, yy + 11, { size: 15, ui: true, align: 'right', color: on ? '#b6e08f' : '#8c8372' });
       if (app.clicked(x + 32, yy, w - 64, 40) && live) {
-        if (isText) s.textSize = on ? 'normal' : 'large'; else s[key] = !on;
+        s[key] = !on;
         this.applyAudio(app); this.persist(app);
         if (app.shared.audio && !s.muted) app.shared.audio.sfx('uiClick');
       }
     });
     // reset
-    const ry = ty0 + 14 + toggles.length * 46 + 22;
+    const sy1 = ty0 + 14 + toggles.length * 46;
+    this.segRow(app, 'Text size', 'Scales text where the layout allows it.', x + 32, sy1, w - 64, TEXT_STEPS.map((v) => [v, v + '%']), s.textScale, (v) => { s.textScale = v; s.textSize = v > 100 ? 'large' : 'normal'; this.persist(app); }, live);
+    this.segRow(app, 'Effects quality', 'Off: no glow or post effects. Low: light. High: everything.', x + 32, sy1 + 40, w - 64, [['off', 'Off'], ['low', 'Low'], ['high', 'High']], s.quality, (v) => { s.quality = v; this.persist(app); }, live);
+    this.fsRow(app, x + 32, sy1 + 80, w - 64, s, live);
+    const ry = sy1 + 80 + 40 + 14;
     stitch(g, x + 32, ry - 8, x + w - 32, ry - 8);
     if (this.reset === 0) {
       if (app.button('Reset all progress', x + 32, ry + 4, 240, 40, { size: 17, fill: '#3a2020', stroke: 'rgba(179,38,58,.7)' })) this.reset = 1;
@@ -95,6 +103,33 @@ export default {
     if (this.done) { app.text(this.done, x + w - 32, ry + 14, { size: 14, ui: true, align: 'right', color: COL.good }); }
     g.restore();
     if (live && app.pressedKeys.some((e) => e.key === 'Escape')) { if (this.reset) this.reset = 0; else this.close(app); }
+  },
+  segRow(app, label, tip, x, y, w, opts, cur, set, live) {
+    const g = app.ctx, bw = 64, gap = 6, total = opts.length * bw + (opts.length - 1) * gap, sx = x + w - total;
+    if (app.inRect(x, y, sx - x - 8, 36)) app.tooltip(label, tip);
+    app.text(label, x, y + 7, { size: 20 });
+    opts.forEach(([v, text], i) => {
+      const bx = sx + i * (bw + gap), on = v === cur, over = live && app.inRect(bx, y + 2, bw, 32);
+      if (over) app.cursor = 'pointer';
+      g.save(); app.rr(bx, y + 2, bw, 32, 8); g.fillStyle = on ? '#6a8f4e' : over ? '#4a3f37' : '#3a322d'; g.fill();
+      g.lineWidth = 2; g.strokeStyle = on ? '#b6e08f' : 'rgba(232,220,196,.4)'; g.stroke(); g.restore();
+      app.text(text, bx + bw / 2, y + 9, { size: 15, ui: true, bold: true, align: 'center', color: on ? '#f4ecd2' : '#c9bda1', fixed: true });
+      if (live && app.clicked(bx, y + 2, bw, 32)) { if (v !== cur) set(v); if (app.shared.audio && !this.muted(app)) app.shared.audio.sfx('uiClick'); }
+    });
+  },
+  muted(app) { return !!settingsOf(app).muted; },
+  fsRow(app, x, y, w, s, live) {
+    const g = app.ctx, can = canFullscreen(), on = can && isFullscreen(), tx = x + w - 64;
+    app.text('Fullscreen', x, y + 7, { size: 20, color: can ? COL.vellum : '#8c8372' });
+    if (!can) { app.text(isIPhone() ? 'Add to Home Screen for fullscreen' : 'Not available here', x + w, y + 11, { size: 14, ui: true, align: 'right', color: '#8c8372', fixed: true }); return; }
+    fsRegisterRect(app, x, y, w, 36);
+    const hov = live && app.inRect(x, y, w, 36);
+    if (hov) { app.cursor = 'pointer'; app.tooltip('Fullscreen', 'Shortcut: F'); }
+    g.save(); app.rr(tx, y + 4, 64, 28, 14); g.fillStyle = on ? '#6a8f4e' : '#3a322d'; g.fill();
+    g.strokeStyle = on ? '#b6e08f' : 'rgba(232,220,196,.4)'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = on ? '#f4ecd2' : '#9b8f7a'; g.beginPath(); g.arc(tx + (on ? 50 : 14), y + 18, 10, 0, 6.283); g.fill(); g.restore();
+    app.text(on ? 'On' : 'Off', tx - 12, y + 9, { size: 15, ui: true, align: 'right', color: on ? '#b6e08f' : '#8c8372' });
+    if (live && app.clicked(x, y, w, 36)) requestFs(app);
   },
   slider(app, key, label, x, y, w, s) {
     const g = app.ctx, live = app.top() === this;

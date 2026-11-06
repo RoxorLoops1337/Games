@@ -19,6 +19,8 @@ import end from './ui/end.js';
 import deckview from './ui/deckview.js';
 import codex from './ui/codex.js';
 import settings from './ui/settings.js';
+import pause, { installPause, drawPauseOverlay } from './ui/pause.js';
+import { installFullscreen } from './ui/fullscreen.js';
 
 const PHASE_SCREEN = { map: 'map', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
@@ -55,14 +57,17 @@ export function boot(canvas) {
     openDeck(opts) { app.push('deckview', opts || {}); },
     openCodex() { app.push('codex', {}); },
     openSettings() { app.push('settings', {}); },
+    openPause() { if (!app.stack.some((s) => s.name === 'pause')) app.push('pause', {}); },
     saveMeta() { META.saveMeta(app.shared.meta); },
   };
   installPost(app);
+  installPause(app);
+  installFullscreen(app);
   app.shared.flow = flow;
   app.shared.audio = audio;
   app.onClick = () => audio.sfx('uiClick');
   app.onHover = () => audio.sfx('uiHover', { vol: 0.35 });
-  const S = { title, map, combat, reward, graft, shop, forge, event, end, deckview, codex, settings };
+  const S = { title, map, combat, reward, graft, shop, forge, event, end, deckview, codex, settings, pause };
   for (const k of Object.keys(S)) app.register(k, S[k]);
   const first = () => { audio.initAudio(); window.removeEventListener('pointerdown', first); window.removeEventListener('keydown', first); };
   window.addEventListener('pointerdown', first); window.addEventListener('keydown', first);
@@ -71,7 +76,10 @@ export function boot(canvas) {
   app.overlay = () => {
     const st = app.shared.meta.settings || {};
     FX_OPTS.shake = st.screenShake !== false; FX_OPTS.reduced = !!st.reducedMotion;
-    app.textScale = st.textSize === 'large' ? 1.12 : 1;
+    const ts = [100, 125, 150].includes(st.textScale) ? st.textScale : (st.textSize === 'large' ? 125 : 100);
+    app.textScale = ts / 100;
+    app.quality = FX_OPTS.quality = st.quality || 'high';
+    drawPauseOverlay(app);
   };
   app.go('title');
   app.start();
