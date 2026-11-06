@@ -313,7 +313,7 @@ export default {
     app.blocked = blocked0;
     if (this.confirm) this.drawConfirm(app);
     if (!this.banner && !this.confirm && !this.trav) {
-      if (!maybeTip(app, 'mapnodes', 640, 640, 'Pick a node to walk to. Fights give gold and a graft, elites a relic, events are a gamble, shops sell, forges mend. The legend is on the right.', { pos: { x: 22, y: 338 }, w: 262 })) maybeTip(app, 'resonance', 968, 340, undefined, { side: 'left' });
+      if (!maybeTip(app, 'mapnodes', 640, 640, 'Pick a node to walk to. Fights give gold and a graft, elites a relic, events are a gamble, shops sell, forges mend. The legend is on the right.', { pos: { x: 22, y: 338 }, w: 262 })) maybeTip(app, 'resonance', 968, 340, undefined, { pos: { x: 22, y: 338 }, w: 262 });
     }
   },
 
@@ -360,7 +360,7 @@ export default {
 
     // budget
     const si = strainInfo(run), by0 = y;
-    app.text('BUDGET', X + 18, y, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
+    app.text('GRAFT BUDGET', X + 18, y, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
     y += app.text(`${si.weight} / ${si.budget}`, X + PW - 18, y - 2, { ...cs(17), bold: true, align: 'right', color: si.strain ? COL.bad : COL.vellum }) + 2;
     const pips = Math.max(si.budget, si.weight, 6), pw = Math.min(20, (IW - (pips - 1) * 3) / pips);
     for (let i = 0; i < pips; i++) {

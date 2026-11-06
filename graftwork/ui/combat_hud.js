@@ -12,6 +12,20 @@ export const stCol = (id) => STATUS_COL[id] || (STATUSES[id] && STATUSES[id].goo
 export const stName = (id) => (STATUSES[id] ? STATUSES[id].name : id);
 export const stGood = (id) => !(STATUSES[id] && STATUSES[id].good === false);
 
+// cached 6px diagonal ink hatch tile for the bars (one pattern per context; null when no canvas exists, e.g. headless)
+const BAR_HATCH = new WeakMap(); let BAR_TILE = null;
+function barHatch(ctx) {
+  if (BAR_HATCH.has(ctx)) return BAR_HATCH.get(ctx);
+  let pat = null;
+  try {
+    if (!BAR_TILE && typeof document !== 'undefined' && document.createElement) {
+      const c = document.createElement('canvas'); c.width = c.height = 6; const g = c.getContext('2d');
+      if (g) { g.strokeStyle = 'rgba(20,8,6,.9)'; g.lineWidth = 1; g.beginPath(); g.moveTo(-1, 6); g.lineTo(6, -1); g.moveTo(2, 8); g.lineTo(8, 2); g.moveTo(-2, 2); g.lineTo(2, -2); g.stroke(); BAR_TILE = c; }
+    }
+    if (BAR_TILE) pat = ctx.createPattern(BAR_TILE, 'repeat');
+  } catch (e) { pat = null; }
+  BAR_HATCH.set(ctx, pat); return pat;
+}
 export function drawBar(app, x, y, w, h, shown, trail, max, color, label) {
   const ctx = app.ctx;
   const pct = max > 0 ? clamp(shown / max, 0, 1) : 0, tp = max > 0 ? clamp(trail / max, 0, 1) : 0;
@@ -22,9 +36,14 @@ export function drawBar(app, x, y, w, h, shown, trail, max, color, label) {
   const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, color); g.addColorStop(1, '#00000055');
   ctx.fillStyle = color; ctx.fillRect(x, y, w * pct, h);
   ctx.fillStyle = g; ctx.fillRect(x, y, w * pct, h);
-  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(x, y + 1, w * pct, Math.max(1, h * 0.28));
+  // engraved shading: ink hatch on the lower (shadow) half, a 1px lit line on top, a meniscus tick at the liquid edge (no web gloss)
+  const hp = barHatch(ctx); const fw = w * pct;
+  if (hp && fw > 2) { ctx.fillStyle = hp; ctx.globalAlpha = 0.5; ctx.fillRect(x, y + h * 0.5, fw, h * 0.5); ctx.globalAlpha = 1; }
+  ctx.fillStyle = 'rgba(255,241,200,.34)'; ctx.fillRect(x, y + 1, fw, 1);
+  if (fw > 3 && pct < 1) { ctx.fillStyle = 'rgba(255,241,200,.7)'; ctx.fillRect(x + fw - 1.5, y + 1, 1.5, h - 2); }
   ctx.restore();
-  app.rr(x, y, w, h, h / 2); ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(232,220,196,.55)'; ctx.stroke();
+  app.rr(x, y, w, h, h / 2); ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(214,190,140,.6)'; ctx.stroke();
+  app.rr(x + 1.5, y + 1.5, w - 3, h - 3, Math.max(1, h / 2 - 1.5)); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.stroke();
   ctx.restore();
   if (label) app.text(label, x + w / 2, y + h / 2 - 8, { size: 14, align: 'center', ui: true, bold: true, color: '#fff', stroke: '#0e0e0e', strokeW: 3, fixed: true });
 }
@@ -198,7 +217,10 @@ export function drawIntentBubble(app, info, x, y, prog, alpha = 1, maxW = 170) {
   ctx.save();
   ctx.globalAlpha = alpha * clamp(prog * 2.5, 0, 1);
   const col = info.hidden ? '#bbb' : attack ? '#e86a5a' : info.kinds.includes('debuff') ? '#c78bd8' : info.kinds.includes('buff') ? '#7fcf8a' : '#cfc3a8';
-  app.rr(x - w / 2, y - h / 2, w, h, 12); ctx.fillStyle = 'rgba(16,13,12,.88)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke();
+  // engraved brass-framed tag (not a web pill): squarer corners, spot-colour rule, thin sepia inner line, four rivets
+  app.rr(x - w / 2, y - h / 2, w, h, 6); ctx.fillStyle = 'rgba(16,13,12,.9)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke();
+  app.rr(x - w / 2 + 3, y - h / 2 + 3, w - 6, h - 6, 3.5); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(214,190,140,.32)'; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,241,176,.55)'; for (const [rx, ry] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { ctx.beginPath(); ctx.arc(x + rx * (w / 2 - 3.5), y + ry * (h / 2 - 3.5), 1, 0, 6.2832); ctx.fill(); }
   ctx.beginPath(); ctx.rect(x - w / 2, y - h, w * clamp(prog * 1.6, 0, 1), h * 2); ctx.clip();
   let cx = x - w / 2 + 8;
   for (const k of kinds) { drawIntent(ctx, k, cx + 17, y, 36); cx += 38; }

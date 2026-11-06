@@ -656,12 +656,31 @@ function paintBack(ctx, theme, c, par, fy) {
     const fl = layer('floor_' + theme, (g) => { g.drawImage(src, 0, fy - 18, W, H - fy + 18, 0, 0, W, H - fy + 18); g.globalCompositeOperation = 'destination-in'; const gr = g.createLinearGradient(0, 0, 0, 40); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,1)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; }, W, H - fy + 18);
     if (fl && par) ctx.drawImage(fl, -par * 40, fy - 18);
   }
+  atlasGrade(ctx);
 }
 function paintRefl(ctx, theme, c, par, fy) {
   const midC = c.midFn ? layer(c.mid, c.midFn) : null, props = !c.midFn && c.mid ? midProps(theme, c.mid[0], c.mid[1], fy) : null, refl = midC || props;
   if (refl) { ctx.save(); ctx.beginPath(); ctx.rect(0, fy, W, H - fy); ctx.clip(); ctx.globalAlpha = 0.12; ctx.translate(-par * 20, 2 * fy); ctx.scale(1, -1); ctx.drawImage(refl, 0, 0); ctx.restore(); }
 }
+// Atlas grade (art bible: spot colour only, lower saturation): pulls every painted wall toward sepia ink. Baked into the opaque back layer, so it costs nothing per frame.
+function atlasGrade(ctx) {
+  ctx.save(); ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.4; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = 0.16; ctx.fillStyle = '#c9a77a'; ctx.fillRect(0, 0, W, H); ctx.restore();
+}
+// Engraved shadow veil: 45 degree ink hatching that thickens toward the corners and the floor (hatching, not gradients). One cached layer.
+function hatchVeil() {
+  return layer('atlas_hatch', (g) => {
+    g.strokeStyle = 'rgba(28,16,8,.9)'; g.lineWidth = 1; g.beginPath();
+    for (let d = -H; d < W; d += 6) { g.moveTo(d, H); g.lineTo(d + H, 0); }
+    g.stroke();
+    g.beginPath(); for (let d = -H; d < W; d += 6) { g.moveTo(d + 3, 0); g.lineTo(d + 3 + H, H); } g.globalAlpha = 0.5; g.stroke(); g.globalAlpha = 1;
+    g.globalCompositeOperation = 'destination-in';
+    const r = g.createRadialGradient(W * 0.42, H * 0.4, H * 0.32, W * 0.5, H * 0.5, H * 0.95); r.addColorStop(0, 'rgba(0,0,0,0)'); r.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = r; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over';
+  });
+}
 function paintFront(ctx, theme, c, par) {
+  const hv = hatchVeil(); if (hv) { ctx.save(); ctx.globalAlpha = 0.2; ctx.drawImage(hv, 0, 0); ctx.restore(); }
   const fgl = fgLayer(c.fg[0], c.fg[0], c.fg[1]);
   if (fgl) { ctx.save(); ctx.globalAlpha = 0.9; ctx.drawImage(fgl, -40 - par * 56, -10, W + 80, H + 20); ctx.restore(); }
   // act palette wash + vignette

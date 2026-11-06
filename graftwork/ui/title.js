@@ -204,7 +204,8 @@ export default {
     drawLogo(app, 640, logoY, this.logoK);
     g.restore();
     if (this.state === 'menu') {
-      app.text('Cut what you love. Stitch what you need.', 640, 262, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: clamp((this.logoK - 0.6) * 3, 0, 1) });
+      app.text('Cut what you love. Stitch what you need.', 640, 258, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: clamp((this.logoK - 0.6) * 3, 0, 1) });
+      app.text('Goal: fight up the map, sew grafts onto your own cards, beat each Act boss.', 640, 282, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((this.logoK - 0.7) * 3, 0, 1) });
     }
     // keys
     const keys = app.blocked ? [] : app.pressedKeys;
@@ -364,6 +365,7 @@ export default {
     // ascension
     const ax = px0 + 290;
     app.text('ASCENSION', ax, ly, { size: 12, ui: true, bold: true, color: COL.lamp });
+    if (app.inRect(ax, ly - 4, 120, 70)) app.tooltip('Ascension', 'Difficulty. Leave it at 0 for your first run. Each step adds a harder rule once you have won.', { color: COL.lamp });
     if (app.button('<', ax, ly + 20, 38, 38, { size: 22, disabled: this.asc <= 0 })) this.asc--;
     app.text(String(this.asc), ax + 62, ly + 22, { size: 30, bold: true, align: 'center', color: this.asc ? '#ff9a7a' : COL.vellum });
     if (app.button('>', ax + 86, ly + 20, 38, 38, { size: 22, disabled: this.asc >= maxA })) this.asc++;
