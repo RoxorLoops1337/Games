@@ -1,83 +1,580 @@
-// Tiny synth: every sound is generated, no audio files.
+// Synth: every sound is generated, no audio files.
+// Buses: sfx and music (with a duck gain) -> master -> limiter -> out. Music is a sectioned 16-step groove:
+// key and tempo change every 5 stages, bosses get their own tense track, and the layers follow
+// mix({ stage, boss, groove (0..1), danger (0..1) }).
+import { registerHj8 } from './hit_juice8.js';
+import { beatBpm as simBpm, SKINS, skinFor } from './sim.js';
+import { humOf, squeakHz, HUB_CHORD, HUB_TWINKLE, HUB_GAIN } from './audio_b7.js';
+import { cardOf, deathOf, finishOf, rungSparkle, panicHz, bedOf } from './audio_b8.js';
+import { stageVoice } from './audio_stage.js';
+import { comboTier, shimmerVol, bossExtra, colourOf, admit, registerB9 } from './audio_b9.js';
+import { registerB10 } from './audio_b10.js';
+import { registerB11 } from './audio_b11.js';
+import { registerB16a } from './audio_b16a.js';
+import { registerB10 as registerS10 } from './screen_b10.js';
+import { registerA10, keyLift, createAmbient } from './audio_b10b.js';
+import { registerA11, twistOf } from './audio_b11b.js';
+import { registerB12i } from './audio_b12i.js';
+import { registerB13h, progShift, fillOf } from './audio_b13h.js';
+import { isBreakdown, isDrop, registerB14e } from './audio_b14e.js';
+import { registerB13b } from './juice_b13b.js';
+import { registerB16g } from './voice_b16g.js';
+import { pumpEnv, padDepth, lightPump, pumpLevel, chainBroke } from './audio_pump.js';
 export function createAudio() {
-  let ac = null, master = null, muted = false, noiseBuf = null, musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
+  let ac = null, master = null, sfxBus = null, musBus = null, duckG = null, mlp = null, muffled = false, muted = false, musicAllowed = true, noiseBuf = null, beatTick = false, wantMusic = false, tickOn = false;
+  let musicOn = false, step = 0, nextT = 0, timer = null, intensity = 0;
+  let mixS = { stage: 1, boss: false, groove: 0, danger: 0, skin: 'love', bphase: 0, ctier: 0 };
+  let pumpSet = 2, countSteps = 0;
+  let curPan = 0, live = 0, chain = 0, chainT = 0, vol = 1, uiT = 0, bstreak = 0, lastBeatShot = 0, beatNow = 0, fresh = false;
   const last = {};
   function ensure() {
     if (ac) return ac;
     const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
     if (!AC) return null;
-    ac = new AC();
-    master = ac.createGain(); master.gain.value = muted ? 0 : 0.5;
-    const comp = ac.createDynamicsCompressor(); master.connect(comp); comp.connect(ac.destination);
-    noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
-    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    try {
+      ac = new AC();
+      master = ac.createGain(); master.gain.value = muted ? 0 : 0.5 * vol;
+      const lim = ac.createDynamicsCompressor();   // brickwall-ish limiter so nothing clips
+      lim.threshold.value = -10; lim.knee.value = 3; lim.ratio.value = 14; lim.attack.value = 0.003; lim.release.value = 0.16;
+      master.connect(lim); lim.connect(ac.destination);
+      sfxBus = ac.createGain(); sfxBus.gain.value = 0.72; sfxBus.connect(master);
+      duckG = ac.createGain(); duckG.gain.value = 1; duckG.connect(master);
+      mlp = ac.createBiquadFilter(); mlp.type = 'lowpass'; mlp.frequency.value = muffled ? MUF_SHUT : MUF_OPEN; mlp.connect(duckG);   // music only: closes under cards and pause
+      musBus = ac.createGain(); musBus.gain.value = muffled ? MUS_MUFFLED : MUS_GAIN; musBus.connect(mlp);
+      noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    } catch (e) { ac = null; return null; }
     return ac;
   }
-  function tone(f, dur, type = 'square', vol = 0.15, slide = 0, delay = 0) {
-    if (!ac || muted) return;
+  const MUF_OPEN = 20000, MUF_SHUT = 650, MUS_GAIN = 0.62, MUS_MUFFLED = 0.5;
+  const bus = b => (b === 'm' ? musBus : sfxBus);
+  function tone(f, dur, type = 'square', vol = 0.15, slide = 0, delay = 0, b = 's') {
+    if (!ac || muted || live > 40) return;
     const t = ac.currentTime + delay;
     const o = ac.createOscillator(), g = ac.createGain();
     o.type = type; o.frequency.setValueAtTime(f, t);
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + dur);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-    o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+    o.connect(g); g.connect(curPan && b === 's' && ac.createStereoPanner ? panTo(g) : bus(b)); o.start(t); o.stop(t + dur + 0.02);
+    live++; o.onended = () => { live--; };
   }
-  function noise(dur, vol = 0.2, f0 = 2000, f1 = 300) {
-    if (!ac || muted) return;
-    const t = ac.currentTime;
+  function panTo(g) { try { const pn = ac.createStereoPanner(); pn.pan.value = curPan; pn.connect(sfxBus); return pn; } catch (e) { return sfxBus; } }   // b12: per voice pan (ring shots)
+  function noise(dur, vol = 0.2, f0 = 2000, f1 = 300, type = 'lowpass', delay = 0, b = 's') {
+    if (!ac || muted || live > 40) return;
+    const t = ac.currentTime + delay;
     const s = ac.createBufferSource(); s.buffer = noiseBuf;
-    const fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const fl = ac.createBiquadFilter(); fl.type = type; fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
     const g = ac.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-    s.connect(fl); fl.connect(g); g.connect(master); s.start(t); s.stop(t + dur);
+    s.connect(fl); fl.connect(g); g.connect(bus(b)); s.start(t); s.stop(t + dur);
+    live++; s.onended = () => { live--; };
   }
-  const gate = (k, ms) => { const n = performance.now(); if (n - (last[k] || 0) < ms) return false; last[k] = n; return true; };
+  // a held note that breathes with the kick: dips on t and on every beat (see audio_pump.js)
+  function pumpTone(f, dur, type, vol, delay, beat, depth) {
+    if (!ac || muted || live > 40) return;
+    const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    const pts = pumpEnv(vol, dur, beat, depth); g.gain.setValueAtTime(pts[0][1], t + pts[0][0]);
+    for (let i = 1; i < pts.length; i++) g.gain.linearRampToValueAtTime(pts[i][1], t + pts[i][0]);
+    o.connect(g); g.connect(bus('m')); o.start(t); o.stop(t + dur + 0.02);
+    live++; o.onended = () => { live--; };
+  }
+  // a soft swelling note (slow attack, slow release) for the choir hum and the hub twinkle; vol is the peak
+  function swell(f, dur, type, vol, delay = 0, b = 's') {
+    if (!ac || muted || live > 40) return;
+    const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + dur * 0.4); g.gain.linearRampToValueAtTime(0.0008, t + dur);
+    o.connect(g); g.connect(bus(b)); o.start(t); o.stop(t + dur + 0.02);
+    live++; o.onended = () => { live--; };
+  }
+  // lower the music for a moment (big moments), then let it swell back
+  function duck(amt = 0.5, hold = 0.35) {
+    if (!ac || !duckG) return;
+    const t = ac.currentTime;
+    try { duckG.gain.cancelScheduledValues(t); duckG.gain.setTargetAtTime(1 - amt, t, 0.02); duckG.gain.setTargetAtTime(1, t + hold, 0.3); } catch (e) { /* ignore */ }
+  }
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const gate = (k, ms) => { const n = now(); if (n - (last[k] || 0) < ms) return false; last[k] = n; return true; };
+  const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+  const PENT = [0, 2, 4, 7, 9];   // major pentatonic: pops always sound in key
+  const pentHz = (i, base = 72) => hz(base + PENT[i % 5] + 12 * Math.floor(i / 5));
+  function chainPitch() { const n = now(); chain = n - chainT < 650 ? Math.min(chain + 1, 14) : 0; chainT = n; return chain; }
+
+  const card0f = n => (n >= 2 ? 233 : 185);
   const sfx = {
-    shoot: () => gate('shoot', 70) && tone(520 + Math.random() * 60, 0.07, 'square', 0.05, -200),
-    hit: () => gate('hit', 35) && tone(240 + Math.random() * 80, 0.05, 'triangle', 0.08, -90),
-    kill: e => { if (!gate('kill', 40)) return; tone(300, 0.14, 'sawtooth', 0.1, -180); noise(0.12, 0.12, 1800, 200); if (e && e.head) tone(120, 0.4, 'sawtooth', 0.16, -70); },
-    boom: () => { noise(0.5, 0.35, 1500, 80); tone(90, 0.4, 'sawtooth', 0.2, -60); },
-    split: () => tone(660, 0.12, 'square', 0.07, 300),
-    gem: () => gate('gem', 45) && tone(880 + (performance.now() % 7) * 40, 0.08, 'sine', 0.08, 400),
-    coin: () => gate('coin', 45) && (tone(1200, 0.05, 'square', 0.05), tone(1600, 0.09, 'square', 0.05, 0, 0.05)),
-    hurt: () => { noise(0.3, 0.3, 900, 100); tone(140, 0.3, 'sawtooth', 0.2, -80); },
-    block: () => tone(900, 0.1, 'triangle', 0.1, -300),
-    power: () => [523, 659, 784].forEach((f, i) => tone(f, 0.12, 'triangle', 0.1, 0, i * 0.06)),
-    levelup: () => [440, 554, 659, 880].forEach((f, i) => tone(f, 0.16, 'square', 0.09, 0, i * 0.07)),
-    upgrade: () => tone(700, 0.12, 'triangle', 0.1, 300),
-    spit: () => gate('spit', 60) && tone(200, 0.15, 'sawtooth', 0.06, 160),
-    roar: () => { tone(70, 0.7, 'sawtooth', 0.22, -25); noise(0.6, 0.18, 600, 80); },
-    clear: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.22, 'triangle', 0.12, 0, i * 0.09)),
-    stage: e => { if (e && e.boss) { tone(60, 0.9, 'sawtooth', 0.25, -20); } else tone(330, 0.12, 'square', 0.08, 80); },
-    swarm: () => tone(180, 0.25, 'square', 0.07, 120),
-    revive: () => [392, 523, 659, 784].forEach((f, i) => tone(f, 0.2, 'sine', 0.12, 0, i * 0.08)),
-    dead: () => { [330, 262, 196, 131].forEach((f, i) => tone(f, 0.4, 'sawtooth', 0.14, -30, i * 0.18)); noise(0.8, 0.2, 800, 60); },
-    click: () => tone(600, 0.05, 'square', 0.06),
+    shoot: () => gate('shoot', 70) && tone(520 + Math.random() * 60, 0.07, 'square', 0.04, -200),
+    // hit: the timbre follows the weapon that landed it (e.src), a crit adds a bright ping
+    hit: e => {
+      const src = (e && e.src) || 'capsule', R = Math.random();
+      if (!gate('hit' + src, src === 'capsule' ? 35 : 55) || !gate('hit', 18)) return;
+      switch (src) {
+        case 'swab': tone(150, 0.09, 'sine', 0.11, -60); noise(0.05, 0.05, 900, 200); break;
+        case 'daggers': tone(1500 + R * 250, 0.04, 'sine', 0.05, 500); break;
+        case 'tower': tone(100, 0.18, 'sawtooth', 0.07, -25); tone(200, 0.14, 'triangle', 0.04, -40); break;
+        case 'dragon': tone(720 + R * 80, 0.07, 'sine', 0.05, 220); noise(0.04, 0.025, 6000, 3000, 'highpass'); break;
+        case 'needles': tone(2100 + R * 200, 0.03, 'square', 0.03, -900); break;
+        case 'stick': tone(82, 0.13, 'sine', 0.16, -40); noise(0.04, 0.06, 1200, 300); break;
+        case 'bubble': tone(380 + R * 60, 0.09, 'sine', 0.07, 520); break;
+        case 'satellite': tone(1240, 0.12, 'sine', 0.04); tone(1860, 0.1, 'sine', 0.025, 0, 0.03); break;
+        case 'maw': noise(0.08, 0.15, 1800, 300); tone(110, 0.1, 'square', 0.08, -50); break;
+        case 'encore': tone(300, 0.14, 'sawtooth', 0.05, 700); break;
+        default: tone(240 + R * 80, 0.05, 'triangle', 0.07, -90);
+      }
+      if (e && e.crit) tone(1568 + R * 120, 0.06, 'triangle', 0.05, 0, 0.01);
+    },
+    // pop: pitch climbs a pentatonic ladder along a kill chain
+    kill: e => {
+      if (!gate('kill', 30)) return;
+      const c = chainPitch(), f = pentHz(c, 69);
+      tone(f, 0.11, 'sine', 0.13, f * 0.35); tone(f * 2, 0.05, 'triangle', 0.05, 0, 0.01); noise(0.07, 0.07, 3500, 500);
+      { const rs = rungSparkle(c); if (rs) { tone(pentHz(c + 5, 81), 0.18, 'sine', 0.03 + 0.01 * rs, 0, 0.03); tone(pentHz(c + 9, 81), 0.22, 'triangle', 0.02 * rs, 0, 0.07); } }   // an octave rung of the kill chain sparkles
+      if (e && e.head) { sfx.headdeath(e); noise(0.2, 0.15, 1800, 150); duck(0.4, 0.3); }
+    },
+    boom: () => { noise(0.55, 0.3, 1500, 80); tone(90, 0.4, 'sawtooth', 0.18, -60); tone(55, 0.5, 'sine', 0.25, -20); duck(0.55, 0.4); },
+    split: () => tone(660, 0.12, 'square', 0.06, 300),
+    gem: () => gate('gem', 45) && tone(880 + (now() % 7) * 40, 0.08, 'sine', 0.07, 400),
+    // coin: a bright two-note ding with a little sparkle on top
+    coin: () => { if (!gate('coin', 45)) return; const j = (chain % 4) * 30; tone(1319 + j, 0.07, 'square', 0.055); tone(1976 + j, 0.16, 'triangle', 0.1, 0, 0.05); tone(3951, 0.1, 'sine', 0.025, 0, 0.06); },
+    hurt: () => { noise(0.3, 0.28, 900, 100); tone(140, 0.3, 'sawtooth', 0.18, -80); duck(0.5, 0.3); },
+    block: () => tone(900, 0.1, 'triangle', 0.09, -300),
+    power: () => { [523, 659, 784].forEach((f, i) => tone(f, 0.14, 'triangle', 0.09, 0, i * 0.06)); tone(1568, 0.3, 'sine', 0.04, 0, 0.18); },
+    levelup: () => { [440, 554, 659, 880].forEach((f, i) => tone(f, 0.18, 'square', 0.1, 0, i * 0.07)); tone(1760, 0.35, 'sine', 0.05, 0, 0.28); duck(0.35, 0.4); },
+    upgrade: () => { tone(700, 0.12, 'triangle', 0.09, 300); tone(1400, 0.2, 'sine', 0.04, 0, 0.08); },
+    spit: () => gate('spit', 60) && tone(200, 0.15, 'sawtooth', 0.05, 160),
+    roar: () => { tone(70, 0.7, 'sawtooth', 0.2, -25); noise(0.6, 0.16, 600, 80); duck(0.5, 0.6); },
+    clear: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.24, 'triangle', 0.1, 0, i * 0.09)); [1047, 1319, 1568].forEach(f => tone(f, 0.6, 'sine', 0.05, 0, 0.45)); duck(0.7, 1.2); },
+    stage: e => { if (e && e.boss) sfx.bossintro(); else if (e && e.skin) { sfx.riser(); sfx.stagecard(e); } else { sfx.riser(); tone(330, 0.12, 'square', 0.07, 80, 0.5); tone(494, 0.14, 'triangle', 0.05, 0, 0.6); } },
+    // stage start: a short rising sweep into the first notes
+    riser: () => { if (!gate('riser', 400)) return; noise(0.5, 0.05, 500, 7000, 'bandpass'); tone(220, 0.5, 'triangle', 0.04, 440); },
+    swarm: () => tone(180, 0.25, 'square', 0.06, 120),
+    revive: () => { [392, 523, 659, 784].forEach((f, i) => tone(f, 0.22, 'sine', 0.11, 0, i * 0.08)); tone(1568, 0.5, 'sine', 0.04, 0, 0.3); duck(0.5, 0.6); },
+    dead: () => { [330, 262, 196, 131].forEach((f, i) => tone(f, 0.4, 'sawtooth', 0.12, -30, i * 0.18)); noise(0.8, 0.18, 800, 60); duck(0.9, 1.5); },
+    click: () => { if (now() - uiT > 90) tone(640, 0.04, 'triangle', 0.06, -120); },
+    // animal voices: every skill has a sound
+    moo: () => gate('moo', 160) && (tone(115, 0.5, 'sawtooth', 0.09, -28), tone(230, 0.45, 'triangle', 0.05, -50)),
+    meow: () => gate('meow', 140) && (tone(650, 0.16, 'triangle', 0.08, 350), tone(960, 0.22, 'triangle', 0.07, -480, 0.14)),
+    chirp: () => gate('chirp', 90) && (tone(1800, 0.06, 'sine', 0.06, 700), tone(2300, 0.06, 'sine', 0.05, -500, 0.07)),
+    bark: () => gate('bark', 140) && (noise(0.08, 0.18, 2600, 500), tone(270, 0.12, 'sawtooth', 0.1, -130)),
+    quack: () => gate('quack', 120) && (tone(540, 0.11, 'sawtooth', 0.06, -190), tone(500, 0.1, 'sawtooth', 0.05, -160, 0.12)),
+    hoot: () => gate('hoot', 220) && (tone(430, 0.3, 'sine', 0.09, -70), tone(430, 0.3, 'sine', 0.07, -70, 0.34)),
+    coo: () => gate('coo', 120) && tone(620, 0.18, 'sine', 0.06, 140),
+    squeak: () => gate('squeak', 80) && tone(2400, 0.05, 'square', 0.03, -900),
+    baa: () => gate('baa', 200) && (tone(320, 0.4, 'sawtooth', 0.07, 45), tone(330, 0.4, 'sawtooth', 0.045, 40, 0.01)),
+    oink: () => gate('oink', 200) && (tone(190, 0.1, 'sawtooth', 0.09, 60), tone(200, 0.1, 'sawtooth', 0.08, -40, 0.11)),
+    // the title snake: every cell squeaks a pentatonic step, the head low and the tail tip high, so a swipe along it plays a tune
+    cellsq: e => { if (!gate('cellsq', 70)) return; const c = Math.max(0, Math.min(12, (e && e.cell) | 0)), f = 392 * Math.pow(2, ([0, 2, 4, 7, 9][c % 5] + 12 * Math.floor(c / 5)) / 12); tone(f, 0.09, 'triangle', 0.09, f * 0.25); tone(f * 2, 0.05, 'sine', 0.035, 0, 0.01); },
+    boop: () => gate('boop', 200) && tone(330, 0.2, 'sine', 0.09, -120),
+    danger: () => gate('danger', 300) && (tone(150, 0.1, 'square', 0.1), tone(150, 0.1, 'square', 0.1, 0, 0.16)),
+    dangertick: () => gate('dangertick', 200) && (tone(1180, 0.035, 'square', 0.035, -200), tone(70, 0.1, 'sine', 0.12, -20)),
+    mend: () => gate('mend', 300) && tone(880, 0.12, 'sine', 0.05, 520),
+    skip: () => tone(420, 0.1, 'triangle', 0.07, -120),
+    // loot count-up: a tiny rising pentatonic tick (e.n = 0..1 progress), and a big flash chord for a legendary find
+    counttick: e => { if (!gate('counttick', 55)) return; const k = Math.max(0, Math.min(1, (e && e.n) || 0)); tone(pentHz(Math.round(k * 9), 79), 0.05, 'triangle', 0.045); },
+    legend: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.5, 'triangle', 0.07, 0, i * 0.05)); tone(2093, 0.9, 'sine', 0.05, 0, 0.3); noise(0.6, 0.05, 4000, 9000, 'bandpass', 0.05); duck(0.5, 0.8); },
+
+    // ---- new sounds (see the report for which events should call them)
+    pop: e => sfx.kill(e),
+    // yellow upgrade cell popped: glassy chime
+    cell: () => { if (!gate('cell', 120)) return; [988, 1319, 1760].forEach((f, i) => tone(f, 0.28, 'sine', 0.08, 0, i * 0.055)); tone(2637, 0.4, 'triangle', 0.03, 0, 0.18); duck(0.3, 0.3); },
+    // a card appears / is picked, per rarity 0..5 (common to mythic); epic and above get a rising shimmer
+    card: e => {
+      const r = Math.max(0, Math.min(5, (e && (e.rarity | 0)) || 0));
+      const base = [523, 587, 659, 740, 784, 880][r];
+      tone(base, 0.16, 'triangle', 0.08); tone(base * 1.5, 0.2, 'sine', 0.05, 0, 0.06);
+      if (r >= 1) tone(base * 2, 0.25, 'sine', 0.05, 0, 0.1);
+      if (r >= 2) { for (let i = 0; i < 4 + r; i++) tone(base * 2 * Math.pow(1.122, i * 2), 0.18 + i * 0.02, 'sine', 0.05, 0, 0.12 + i * 0.05); }
+      if (r >= 4) { noise(0.7, 0.05, 3000, 9000, 'bandpass', 0.05); tone(base / 2, 0.8, 'sawtooth', 0.04, base / 4, 0.1); duck(0.45, 0.6); }
+      if (r >= 3) { tone(base * 3, 0.5, 'sine', 0.04, 0, 0.35); duck(0.3, 0.5); }
+    },
+    // cute stinger for stars (e.n = star number 1..3) and for rare cards
+    star: e => {
+      const n = Math.max(1, Math.min(3, (e && (e.n | 0)) || 1)), f = [784, 988, 1175][n - 1];
+      tone(f, 0.18, 'triangle', 0.09); tone(f * 2, 0.3, 'sine', 0.06, 0, 0.07); tone(f * 3, 0.35, 'sine', 0.025, 0, 0.12);
+      if (n === 3) [1047, 1319, 1568, 2093].forEach((g, i) => tone(g, 0.3, 'triangle', 0.06, 0, 0.2 + i * 0.07));
+      duck(0.4, 0.5);
+    },
+    stinger: () => { [659, 880, 1175, 1568].forEach((f, i) => tone(f, 0.16, 'triangle', 0.08, 0, i * 0.06)); tone(2093, 0.4, 'sine', 0.05, 0, 0.26); duck(0.4, 0.5); },
+    // boss arrives: low sting with a falling tritone
+    bossintro: () => { tone(60, 1.0, 'sawtooth', 0.22, -22); tone(185, 0.6, 'square', 0.07, -60, 0.1); tone(131, 0.7, 'square', 0.07, -40, 0.35); noise(0.9, 0.12, 400, 60); duck(0.6, 1.0); },
+    win: () => sfx.clear(),
+    // groove milestone (every 5): a small rising blip
+    groovehit: e => { if (!gate('groovehit', 200)) return; const k = Math.min(4, ((e && e.n) || 5) / 5 | 0); tone(pentHz(k + 2, 72), 0.14, 'triangle', 0.07); tone(pentHz(k + 4, 72), 0.2, 'sine', 0.05, 0, 0.06);
+      // the tier is also countable by ear: tier 2 and up add one more pulse each (a rising run), tier 4 ends in a bright chord
+      for (let i = 1; i < k; i++) tone(pentHz(k + 2 + i, 72), 0.1, 'triangle', 0.06, 0, 0.1 + i * 0.07);
+      if (k >= 4) for (const d of [0, 2, 4]) tone(pentHz(9 + d, 72), 0.34, 'sine', 0.05, 0, 0.36); },
+    // groove fell apart: a short falling two-note sigh (only after a good streak), so it is audible that the bonus is gone
+    groovelost: () => { if (!gate('groovelost', 400)) return; tone(pentHz(6, 72), 0.12, 'triangle', 0.05, -40); tone(pentHz(3, 72), 0.2, 'sine', 0.05, -60, 0.08); },
+    // a long kill streak (5+) stops: a small sad trombone, three sagging notes and a soft deflating hiss
+    sigh: () => { if (!gate('sigh', 900)) return; [[330, 0], [311, 0.2], [294, 0.4]].forEach(([f, d], i) => tone(f, i < 2 ? 0.2 : 0.55, 'sawtooth', 0.035, i < 2 ? -25 : -180, d)); tone(147, 0.9, 'triangle', 0.03, -120, 0.4); noise(0.5, 0.025, 1800, 300, 'lowpass', 0.45); },
+    // perfect clear (three stars): a bright fanfare that rides on top of the normal clear jingle
+    perfect: () => {
+      [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.16, 'triangle', 0.07, 0, 0.5 + i * 0.07));
+      [1047, 1319, 1568, 2093].forEach(f => tone(f, 0.9, 'sine', 0.045, 0, 0.84));
+      tone(3136, 0.5, 'sine', 0.02, 0, 0.9); noise(0.7, 0.04, 5000, 11000, 'bandpass', 0.8); duck(0.75, 1.7);
+    },
+    // boss phase change (e.n = 1 or 2): a low hit, a falling tritone and a rising siren, harder the second time
+    bossphase: e => {
+      const n = e && e.n >= 2 ? 2 : 1;
+      tone(55, 0.7, 'sawtooth', 0.12 + n * 0.015, -18); tone(card0f(n), 0.5, 'square', 0.045, -70, 0.05); noise(0.6, 0.07, 300, 2500, 'bandpass'); tone(300, 0.7, 'sawtooth', 0.025, 500 * n, 0.1);
+      if (n === 2) { tone(card0f(n) * 0.707, 0.5, 'square', 0.045, -50, 0.3); noise(0.5, 0.08, 2500, 90, 'lowpass', 0.3); }
+      duck(0.55, 0.8);
+    },
+    // snake reached the line: sharp alarm
+    leak: () => { if (!gate('leak', 250)) return; tone(220, 0.25, 'sawtooth', 0.15, -110); tone(165, 0.3, 'square', 0.08, -60, 0.05); noise(0.3, 0.15, 1200, 100); duck(0.5, 0.4); },
+    // on-beat shot: a crisp tick, climbing a pentatonic ladder while the player keeps hitting every beat
+    beatshot: () => {
+      const spb = 60 / (beatNow || 120), n = now();
+      if (n - lastBeatShot < spb * 550) return;   // one tick per beat
+      bstreak = n - lastBeatShot < spb * 1600 ? bstreak + 1 : 1; lastBeatShot = n;
+      const f = pentHz(Math.min(9, bstreak), 84);
+      tone(f, 0.05, 'triangle', 0.05, 0); noise(0.02, 0.03, 8000, 4000, 'highpass');
+      if (bstreak > 0 && bstreak % 8 === 0) { tone(f * 2, 0.22, 'sine', 0.05, 0, 0.03); tone(f * 3, 0.3, 'sine', 0.025, 0, 0.06); }
+      if (bstreak > 0 && bstreak % 10 === 0) sfx.streakburst({ n: bstreak });   // milestone: 10, 20, 30 ... (the HUD chip bursts on the same counts)
+    },
+    // streak milestone (10 / 20 / 30 on-beat shots in a row): a rising pentatonic run into a bright chord, a glitter sweep
+    // and, from 20, a low thump under it. Tier 1..3 gets bigger each time, the loudest stays well under the clear jingle.
+    streakburst: e => {
+      const k = Math.max(1, Math.min(3, Math.round(((e && e.n) || 10) / 10)));
+      for (let i = 0; i < 3 + k; i++) tone(pentHz(4 + i, 72), 0.12, 'triangle', 0.06, 0, 0.03 + i * 0.045);
+      const at = 0.05 + (3 + k) * 0.045;
+      for (const d of k >= 3 ? [0, 2, 4, 7] : [0, 2, 4]) tone(pentHz(9 + d, 72), 0.4 + 0.1 * k, 'sine', 0.045, 0, at);
+      noise(0.35 + 0.1 * k, 0.04, 3000, 11000, 'bandpass', 0.02);
+      if (k >= 2) { tone(110, 0.3, 'sine', 0.14, -40); noise(0.08, 0.06, 900, 200); }
+      duck(0.25 + 0.08 * k, 0.4);
+    },
+    // a long kill chain ran out (e.n = its length): a soft falling sigh, deeper for longer chains, quiet enough to sit under the pops
+    chainsigh: e => { if (!gate('chainsigh', 1200)) return; const k = Math.min(1, ((e && e.n) || 6) / 14), f = pentHz(5 + Math.round(k * 3), 72);
+      tone(f, 0.28, 'sine', 0.05, -f * 0.28); tone(f * 0.75, 0.4, 'triangle', 0.035, -f * 0.2, 0.1); noise(0.3, 0.012, 2400, 500, 'lowpass', 0.02); },
+    // Four-Part Harmony: the first quartet cell popped (e.n = cells still to go): a held open chord that swells in, one voice per cell left
+    quartetstart: e => { const n = Math.max(1, Math.min(3, (e && e.n) || 3));
+      for (let i = 0; i <= n; i++) { const f = hz([60, 67, 72, 76][i]); tone(f, 0.55, 'sine', 0.045, 0, i * 0.03); tone(f * 2.003, 0.4, 'triangle', 0.012, 0, i * 0.03 + 0.04); } },
+    // all four (or both) linked cells popped in time (e.n = cells in the set): the chord resolves upward, one voice per cell, then a shimmer
+    quartet: e => { if (!gate('quartet', 150)) return; const n = Math.max(2, Math.min(4, (e && e.n) || 4)), ch = [72, 76, 79, 84];
+      for (let i = 0; i < n; i++) { tone(hz(ch[i]), 0.5, 'sine', 0.055, 0, i * 0.045); tone(hz(ch[i] + 12), 0.3, 'triangle', 0.02, 0, i * 0.045 + 0.02); }
+      if (n >= 4) { tone(hz(96), 0.7, 'sine', 0.03, 0, 0.22); noise(0.45, 0.025, 4000, 10000, 'bandpass', 0.12); } duck(0.2 + 0.05 * n, 0.4); },
+    // the window ran out and the linked cells healed: the chord goes flat and thins out
+    quartetfail: () => { if (!gate('quartetfail', 300)) return; [72, 76, 79].forEach((m, i) => tone(hz(m), 0.3, 'sine', 0.035, -hz(m) * 0.06, i * 0.03)); tone(hz(66), 0.35, 'triangle', 0.03, -20, 0.1); },
+    // a choir cell popped: a breathy three voice "ooh" that fades the way the choir stops regrowing the cells around it
+    bellring: () => { if (!gate('bellring', 120)) return; [1319, 1976, 2637].forEach((f, i) => tone(f, 0.55 - i * 0.1, 'sine', 0.06 - i * 0.012, 0, i * 0.012)); noise(0.06, 0.04, 5000, 2500, 'bandpass'); },
+    traitcue: () => { if (!gate('traitcue', 300)) return; tone(330, 0.16, 'triangle', 0.06, 160); tone(495, 0.14, 'sine', 0.04, 100, 0.05); },
+    choirpop: () => { if (!gate('choirpop', 200)) return; [64, 67, 71].forEach((m, i) => { const f = hz(m); tone(f, 0.5, 'triangle', 0.02, -f * 0.12, i * 0.02); tone(f * 1.004, 0.5, 'sine', 0.025, -f * 0.12, i * 0.02); }); noise(0.35, 0.02, 1500, 400, 'bandpass', 0.01); },
+    // Encore beam fires / becomes ready
+    encore: () => { noise(0.9, 0.12, 400, 6000, 'bandpass'); tone(110, 0.9, 'sawtooth', 0.12, 440); [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.5, 'triangle', 0.06, 0, 0.1 + i * 0.05)); duck(0.55, 0.9); },
+    encoreready: () => { [784, 988, 1319].forEach((f, i) => tone(f, 0.12, 'sine', 0.07, 0, i * 0.07)); tone(1568, 0.5, 'triangle', 0.04, 0, 0.22); },
+    // gold cell popped: coin shower; gold cell faded away: a soft falling blip
+    goldpop: () => { if (!gate('goldpop', 80)) return; for (let i = 0; i < 5; i++) tone(1568 + i * 220 + (i % 2) * 90, 0.09, 'square', 0.03, 0, i * 0.04); tone(2093, 0.4, 'sine', 0.05, 0, 0.18); },
+    goldfade: () => gate('goldfade', 200) && tone(880, 0.25, 'sine', 0.04, -420),
+    // a cell died right at the line: tight rising whoosh
+    clutch: () => { if (!gate('clutch', 300)) return; noise(0.25, 0.08, 600, 5000, 'bandpass'); tone(330, 0.2, 'triangle', 0.07, 660); },
+    // run checkpoint chest: two-note banner
+    checkpoint: () => { tone(523, 0.12, 'triangle', 0.08); tone(784, 0.3, 'triangle', 0.08, 0, 0.1); tone(1047, 0.35, 'sine', 0.04, 0, 0.1); },
+    // result screen: numbers counting up (e.f 0..1 climbs the pitch) and the little ding when a row lands
+    count: e => { if (!gate('count', 48)) return; const f = Math.max(0, Math.min(1, (e && e.f) || 0)); tone(660 + f * 660, 0.03, 'square', 0.025); },
+    countend: () => { tone(1568, 0.06, 'triangle', 0.05); tone(2093, 0.12, 'sine', 0.04, 0, 0.04); },
+    // soft UI set
+    ready: () => { tone(1320, 0.07, 'sine', 0.05); tone(1760, 0.09, 'sine', 0.045, 0, 0.05); },
+    // beat streak milestone (10 / 20 / 30): a rising arpeggio that climbs a step higher each time
+    streakmile: e => { const k = Math.max(0, Math.min(2, (((e && e.n) || 10) / 10 | 0) - 1)), r = [1, 1.26, 1.5][k]; [523, 659, 784, 1047].forEach((f, i) => tone(f * r, 0.11, 'triangle', 0.06, 0, i * 0.055)); tone(1568 * r, 0.4, 'sine', 0.035, 0, 0.2); },
+    tap: () => { uiT = now(); tone(760, 0.035, 'sine', 0.06, -150); },
+    tab: () => { uiT = now(); tone(520, 0.05, 'triangle', 0.05); tone(780, 0.06, 'sine', 0.04, 0, 0.03); },
+    back: () => { uiT = now(); tone(440, 0.07, 'triangle', 0.06, -150); },
+    toggle: () => { uiT = now(); tone(600, 0.05, 'triangle', 0.06); tone(900, 0.07, 'sine', 0.05, 0, 0.045); },
+    buy: () => { uiT = now(); tone(1319, 0.06, 'square', 0.04); tone(1760, 0.12, 'triangle', 0.06, 0, 0.05); tone(2349, 0.12, 'sine', 0.03, 0, 0.1); },
+    // a sheet (pause, settings, a panel) slides in or out: a soft airy sweep under the tap, rising to open and falling to close
+    open: () => { uiT = now(); noise(0.14, 0.03, 700, 3600, 'bandpass', 0.02); tone(520, 0.08, 'sine', 0.035, 260, 0.03); },
+    close: () => { uiT = now(); noise(0.12, 0.028, 3200, 600, 'bandpass', 0.02); tone(520, 0.08, 'sine', 0.03, -230, 0.02); },
+    // slider drag: a small tick whose pitch follows the value (e: { f: 0..1 }), so the volume can be judged by ear
+    slide: e => { if (!gate('slide', 55)) return; const f = Math.max(0, Math.min(1, (e && e.f) || 0)); tone(480 + 520 * f, 0.03, 'sine', 0.05, -60); },
+    deny: () => { uiT = now(); tone(200, 0.09, 'square', 0.06, -30); tone(160, 0.12, 'square', 0.06, -30, 0.08); },
   };
-  // Looping bass + arp, scheduled slightly ahead of the clock.
-  const BASS = [55, 55, 82.4, 55, 65.4, 65.4, 98, 65.4], ARP = [220, 277, 330, 277, 262, 330, 392, 330];
+  sfx.card0 = () => sfx.card({ rarity: 0 }); sfx.card1 = () => sfx.card({ rarity: 1 }); sfx.card2 = () => sfx.card({ rarity: 2 });
+  sfx.card3 = () => sfx.card({ rarity: 3 }); sfx.card4 = () => sfx.card({ rarity: 4 }); sfx.card5 = () => sfx.card({ rarity: 5 });
+  // revive countdown: e.n is 3, 2, 1: the thump gets louder and a high tick joins in
+  sfx.heartbeat = e => { const k = 1 + (3 - Math.max(1, Math.min(3, (e && e.n) || 3))) * 0.18; tone(62, 0.13, 'sine', Math.min(0.5, 0.3 * k), -18); tone(52, 0.16, 'sine', Math.min(0.4, 0.24 * k), -14, 0.17); if (e && e.n === 1) tone(1320, 0.05, 'square', 0.03, 0, 0.17); };
+  // danger tick (round 7): called from the screen feel on the lub of the red heartbeat, so the sound follows the picture and
+  // its rate. A soft thump, then the dub a little later, and from half danger a clock tick on top. It stays under the revive heartbeat.
+  sfx.dangerbeat = () => {
+    if (!gate('dangerbeat', 140)) return;
+    const d = Math.max(0, Math.min(1, mixS.danger)), rate = 1.3 + Math.max(0, d - 0.12) / 0.88 * 1.9;
+    tone(60, 0.12, 'sine', 0.1 + 0.1 * d, -16); tone(50, 0.14, 'sine', 0.07 + 0.08 * d, -12, 0.22 / rate);
+    if (d > 0.5) tone(1760, 0.025, 'square', 0.02 + d * 0.02, 0, 0.22 / rate);
+  };
+  // choir cells are regrowing the cells around them: a quiet swelling chord whose colour is the species (see audio_b7.js)
+  sfx.choirhum = e => {
+    const h = humOf(e && e.skin), k = 0.75 + 0.08 * Math.min(4, (e && e.n) || 1);
+    h.iv.forEach((iv, i) => swell(hz(h.m + iv), h.dur, h.w, h.v * k, i * 0.03, 'm'));
+  };
+  // tapped title snake: every cell has its own pitch, the head answers with a round low "oh"
+  sfx.snakesqueak = e => {
+    if (!gate('snakesqueak', 70)) return;
+    const i = (e && e.i) | 0;
+    if (i === 0) { tone(330, 0.2, 'sine', 0.09, -110); tone(495, 0.14, 'sine', 0.04, -150, 0.02); return; }
+    const f = squeakHz(i); tone(f, 0.09, 'sine', 0.07, f * 0.45); tone(f * 2, 0.05, 'triangle', 0.02, 0, 0.01);
+  };
+  // tutorial step 3: the shielded face pops (matches the burst in the slide)
+  sfx.tutpop = () => { if (!gate('tutpop', 400)) return; tone(520, 0.1, 'sine', 0.11, 700); noise(0.12, 0.09, 4000, 900, 'bandpass'); tone(1046, 0.16, 'triangle', 0.06, 0, 0.07); tone(1568, 0.22, 'sine', 0.04, 0, 0.12); };
+  registerB9(sfx, tone, noise, gate);
+  registerB10(sfx, tone, noise, gate);
+  registerS10(sfx, tone, noise, gate);   // milestone chords per species, best time, near miss (screen_b10.js)
+  registerHj8(sfx, tone, noise, duck, gate);   // finishing blow per weapon, head death per species, ladder rungs (hit_juice8.js)
+  // round 8: stage card sting per species (see audio_b8.js CARD), lands with the card slam half a second after the riser
+  sfx.stagecard = e => {
+    if (!gate('stagecard', 500)) return;
+    const c = cardOf(e && e.skin);
+    c.n.forEach((m, i) => tone(hz(m), c.dur, c.w, c.v, 0, 0.5 + i * c.gap));
+    if (c.tail === 'ice') noise(0.4, 0.02, 7000, 3000, 'highpass', 0.5);
+  };
+  // round 9: the hub stage preview answers a new species with its own sting (no riser, no half second wait; quieter than the card)
+  sfx.stageprev = e => {
+    if (!gate('stageprev', 600)) return;
+    const v = stageVoice(e && e.skin, !!(e && e.boss)); if (!v) return;
+    const base = Math.min(...v.n.map(m => m[5]), ...(v.z || []).map(m => m[5]));
+    v.n.forEach(m => tone(m[0], m[1], m[2], m[3] * 0.7, m[4], m[5] - base + 0.02));
+    (v.z || []).forEach(m => noise(m[0], m[1] * 0.7, m[2], m[3], m[4], m[5] - base + 0.02));
+  };
+  // round 8: the head dies in its own voice per species (a sweep plus a colour), under the generic pop
+  sfx.headdeath = e => {
+    const d = deathOf(e && e.skin);
+    tone(d.f, d.dur, d.w, d.v, d.f2 - d.f);
+    switch (d.x) {
+      case 'heart': tone(hz(91), 0.3, 'sine', 0.04, 0, 0.1); tone(hz(95), 0.3, 'sine', 0.03, 0, 0.18); break;
+      case 'clank': noise(0.12, 0.12, 5000, 1200, 'bandpass'); tone(1400, 0.08, 'square', 0.03, -600); break;
+      case 'sneeze': noise(0.14, 0.1, 4500, 1800, 'bandpass'); break;
+      case 'grumble': tone(78, 0.5, 'square', 0.05, -20, 0.05); break;
+      case 'yawn': tone(330, 0.5, 'sine', 0.04, -150, 0.25); break;
+      case 'scratch': noise(0.2, 0.08, 6000, 800, 'bandpass'); break;
+      case 'pucker': tone(300, 0.2, 'sine', 0.05, 500, 0.2); break;
+      case 'crash': noise(0.5, 0.2, 900, 60); tone(55, 0.5, 'sine', 0.18, -15); break;
+      case 'shatter': noise(0.35, 0.09, 9000, 2500, 'highpass'); [3136, 3951, 4699].forEach((f, i) => tone(f, 0.12, 'sine', 0.025, 0, 0.04 * i)); break;
+      case 'sigh': noise(0.7, 0.04, 1200, 200, 'lowpass', 0.1); break;
+    }
+  };
+  // round 8: the finishing blow adds the killing weapon's own chime (only when the shot that killed the head is known)
+  sfx.finishblow = e => {
+    if (!gate('finishblow', 300)) return;
+    const f = finishOf(e && e.src);
+    f.c.forEach((m, i) => tone(hz(m), 0.3, f.w, 0.045, 0, 0.12 + i * 0.06));
+    tone(hz(f.c[f.c.length - 1] + 12), 0.5, 'sine', 0.02, 0, 0.3);
+  };
+  // round 8: a panicking face squeals on each lub of the red heartbeat: its pitch is the species and rises with danger
+  sfx.panic = () => {
+    if (mixS.boss || !gate('panic', 160)) return;
+    const d = Math.max(0, Math.min(1, mixS.danger)), f = panicHz(mixS.skin, d);
+    tone(f, 0.11, 'triangle', 0.025 + 0.02 * d, f * 0.18);
+    tone(f * 1.5, 0.09, 'sine', 0.012 + 0.01 * d, -f * 0.1, 0.07);
+  };
+  sfx.star1 = () => sfx.star({ n: 1 }); sfx.star2 = () => sfx.star({ n: 2 }); sfx.star3 = () => sfx.star({ n: 3 });
+
+  // ---------------------------------------------------------------- music
+  const SCALES = { major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10], phryg: [0, 1, 3, 5, 7, 8, 10] };
+  const ROOTS = [0, 2, 4, 7, 9, 5, 10, 3, 8, 6];   // C D E G A F Bb Eb Ab F#: one key per 5 stages
+  const PROG = [[0, 5, 3, 4], [5, 3, 0, 4], [3, 4, 2, 5], [0, 4, 5, 3]];   // 4 bars per section, sections cycle
+  const BPROG = [[0, 0, 1, 0], [0, 5, 1, 4], [0, 0, 1, 6], [0, 1, 0, 4]];
+  const note = (scale, deg, rootMidi) => rootMidi + scale[((deg % 7) + 7) % 7] + 12 * Math.floor(deg / 7);
+  // one groove flavour per snake species (index = SKINS order). sw: swing on odd 16ths (fraction of a step), arp/lead/bass: waveforms,
+  // hats: 0 offbeat, 1 straight eighths, 2 none, 3 open offbeats, kx: extra kick steps, ad: arp step divisor, ao: arp octave, minor: force the minor scale
+  const VARS = [
+    { sw: 0, arp: 'square', lead: 'triangle', bass: 'triangle', hats: 0, kx: [], ad: 1, ao: 0, pad: 'sine' },
+    { sw: 0.2, arp: 'sawtooth', lead: 'square', bass: 'triangle', hats: 0, kx: [7], ad: 1, ao: 0, pad: 'sine' },
+    { sw: 0, arp: 'triangle', lead: 'square', bass: 'triangle', hats: 1, kx: [], ad: 1, ao: 0, pad: 'triangle' },
+    { sw: 0, arp: 'square', lead: 'sawtooth', bass: 'sawtooth', hats: 0, kx: [10, 14], ad: 1, ao: -12, pad: 'sine' },
+    { sw: 0.1, arp: 'sine', lead: 'sine', bass: 'sine', hats: 2, kx: [], ad: 2, ao: 0, pad: 'triangle' },
+    { sw: 0, arp: 'square', lead: 'triangle', bass: 'triangle', hats: 3, kx: [], ad: 1, ao: 0, pad: 'sine' },
+    { sw: 0.32, arp: 'square', lead: 'sawtooth', bass: 'triangle', hats: 1, kx: [3], ad: 1, ao: 12, pad: 'sine' },
+    { sw: 0, arp: 'sawtooth', lead: 'sawtooth', bass: 'sawtooth', hats: 2, kx: [6, 10], ad: 1, ao: -12, pad: 'sawtooth' },
+    { sw: 0.05, arp: 'sine', lead: 'sine', bass: 'sine', hats: 3, kx: [], ad: 1, ao: 12, pad: 'triangle' },
+    { sw: 0.15, arp: 'triangle', lead: 'triangle', bass: 'sine', hats: 2, kx: [11], ad: 2, ao: 0, pad: 'sine', minor: true },
+  ];
+  const varOf = skin => VARS[Math.max(0, SKINS.indexOf(skin)) % VARS.length];
+  const LEAD = [0, 2, 4, 2, 1, 4, 2, 0], LEADB = [0, 1, 0, 3, 0, 1, 4, 3];
+  function kick(t, v = 0.3) { tone(150, 0.16, 'sine', v, -110, t, 'm'); noise(0.02, 0.05, 4000, 800, 'lowpass', t, 'm'); }
+  function snare(t, v = 0.1) { noise(0.13, v, 3000, 1200, 'bandpass', t, 'm'); tone(190, 0.09, 'triangle', v * 0.7, -70, t, 'm'); }
+  function hat(t, v = 0.03, open) { noise(open ? 0.14 : 0.03, v, 9000, 6000, 'highpass', t, 'm'); }
+  let beatAt = 0, beatBpm = 0;
+  // (re)start the scheduler for the current wish: full music, or only the metronome when music is off but the tick is on
+  function restart() {
+    musicOn = wantMusic && musicAllowed; tickOn = wantMusic && !musicAllowed && beatTick;
+    clearInterval(timer);
+    if ((musicOn || tickOn) && ensure()) { step = 0; fresh = true; nextT = ac.currentTime + 0.05; timer = setInterval(pump, 80); }
+    else { musicOn = tickOn = false; }
+  }
   function pump() {
-    if (!musicOn || !ac) return;
+    if (!(musicOn || tickOn) || !ac) return;
+    const m = mixS, boss = m.boss, tier = Math.floor(Math.max(0, m.stage - 1) / 5) % ROOTS.length;
+    // groove meter and snake closeness raise the layers
+    const lvl = Math.min(1, m.groove * 0.75 + m.danger * 0.45 + intensity * 0.2);
+    const bpm = simBpm(m.stage);   // the sim beat clock tempo, so on-beat shots line up with the kick
+    const sp = 60 / bpm / 4;
     while (nextT < ac.currentTime + 0.25) {
-      const sp = 0.17 - intensity * 0.03, i = step % 8;
-      if (!muted) {
-        const t = Math.max(0, nextT - ac.currentTime);
-        tone(BASS[i], sp * 1.8, 'triangle', 0.13, 0, t);
-        if (step % 2 === 0 || intensity > 0.5) tone(ARP[(step >> 1) % 8] * (step % 16 < 8 ? 1 : 1.125), sp, 'square', 0.025, 0, t);
-        if (i % 4 === 0) noise(0.05, 0.05, 6000, 2000);
+      const s = step % 16, bar = (step >> 4) % 4, sec = (step >> 6), t = Math.max(0, nextT - ac.currentTime);
+      if (s % 4 === 0) { beatAt = nextT; beatBpm = bpm; beatNow = bpm; if (amb) amb.dip(nextT, 60 / bpm); }   // for the screen edge pulse (see beat())
+      if (!muted && (tickOn || countSteps > 0)) {   // music off with the tick on, or the count-in before stage 1: the metronome alone
+        if (s % 4 === 0) tone(s === 0 && bar === 0 ? 1319 : 988, 0.05, 'triangle', s === 0 && bar === 0 ? 0.2 : 0.15, 0, t, 'm');
+      }
+      else if (!muted) {
+        const V = varOf(m.skin), bp = boss ? m.bphase : 0, ts = (s & 1) ? t + V.sw * sp : t;
+        const sc = boss ? SCALES.phryg : (tier % 3 === 2 || V.minor ? SCALES.minor : SCALES.major);
+        const root = 36 + ROOTS[tier] + (boss ? 5 + keyLift(bp) : 0);
+        const prog = (boss ? BPROG : PROG)[(sec + (boss ? 0 : progShift(m.stage))) % 4], deg = prog[bar];
+        const bassM = note(sc, deg, root), c0 = note(sc, deg, root + 24), c1 = note(sc, deg + 2, root + 24), c2 = note(sc, deg + 4, root + 24);
+        const bk = isBreakdown(sec, bar, boss, m.danger);   // b14: breakdown, only the pad plays
+        if (!boss && isDrop(sec, bar, s, boss)) { tone(110, 0.3, 'sine', 0.18, -70, t, 'm'); noise(0.7, 0.07, 8000, 3000, 'highpass', t, 'm'); }   // b14: the drop after it
+        // drums
+        if (bk) { /* breakdown: no drums */ } else if (s % 4 === 0) kick(t, boss ? 0.32 : 0.26 + lvl * 0.04);
+        else if (boss && (s === 6 || s === 14)) kick(t, 0.2);
+        else if (lvl > 0.5 && s === 10) kick(t, 0.16);
+        else if (!boss && lvl > 0.35 && V.kx.includes(s)) kick(t, 0.13);
+        else if (bp >= 1 && (s === 10 || (bp >= 2 && s === 3))) kick(t, 0.17);
+        if (!bk && (s === 4 || s === 12) && (lvl > 0.2 || boss)) snare(t, boss ? 0.13 : 0.09);
+        if (!bk && (lvl > 0.1 || boss)) {
+          const hm = boss ? 0 : V.hats;
+          if (hm === 1) { if (s % 2 === 0) hat(t, s % 4 === 0 ? 0.02 : 0.03, s === 14); }
+          else if (hm === 3) { if (s % 4 === 2) hat(t, 0.04, true); else if (lvl > 0.65 && s % 4 === 0) hat(t, 0.015); }
+          else if (hm !== 2) { if (s % 4 === 2) hat(t, 0.035, s === 14); else if ((lvl > 0.65 || bp >= 1) && s % 2 === 1) hat(ts, 0.018); }
+        }
+        // bass: eighths, octave jump to keep it moving
+        if (!bk && s % 2 === 0) tone(hz(bassM + (s % 8 === 6 ? 12 : 0)), sp * 1.9, boss ? 'sawtooth' : V.bass, boss ? 0.1 : V.bass === 'sawtooth' ? 0.1 : 0.14, 0, t, 'm');
+        // pad on the bar line
+        if (s === 0 && (lvl > 0.15 || boss || bk)) { [c0, c1, c2].forEach(n => pumpTone(hz(n - 12), sp * 15, boss || bp >= 2 ? 'sawtooth' : V.pad, boss ? 0.02 + bp * 0.004 : 0.03, t, sp * 4, padDepth(lvl, boss, pumpSet))); }
+        // arp over the chord
+        if (!bk && (lvl > 0.3 || boss)) { const q = [c0, c1, c2, c1][(s >> (boss ? 0 : 1)) % 4]; if (s % (boss ? 2 : 2 * V.ad) === 0) tone(hz(q + (sec % 2 && s >= 8 ? 12 : 0) + (boss ? (bp >= 1 && s % 4 === 2 ? 12 : 0) : V.ao)), sp * 1.6, boss ? 'square' : V.arp, (boss ? 0.026 : 0.022) * lightPump(s, lvl, boss, pumpSet), 0, ts, 'm'); }
+        // lead melody from high groove
+        if (!bk && (lvl > 0.62 || (boss && (lvl > 0.4 || bp >= 1))) && (s % 4 === 0 || s === 6 || s === 11 || s === 14)) {
+          const li = (bar * 4 + (s >> 2) + (s === 14 ? 1 : 0)) % 8, ld = deg + (boss ? LEADB : LEAD)[li];
+          tone(hz(note(sc, ld, root + 36) + (bp >= 2 ? 12 : 0)), sp * 2.6, boss ? 'sawtooth' : V.lead, boss ? 0.03 : (V.lead === 'sawtooth' || V.lead === 'square' ? 0.032 : 0.05) * lightPump(s, lvl, boss, pumpSet), 0, t, 'm');
+        }
+        // round 9: combo layers (open offbeat hats, a shimmer on the 16ths, a bar line sparkle), boss phase drums, and the world colour bell
+        if (m.ctier >= 1 && s % 4 === 2 && !boss && !bk) hat(t, 0.02 + m.ctier * 0.006, true);
+        if (m.ctier >= 3 && !boss && !bk && s % 2 === 1) hat(ts, 0.012);
+        if (m.ctier >= 2) { const sv = shimmerVol(m.ctier, s); if (sv) tone(hz([c1, c2, c0, c2][(s >> 1) % 4] + 12), sp * 1.2, 'sine', sv, 0, ts, 'm'); if (s === 0 && bar % 2 === 0) tone(hz(c2 + 12), sp * 6, 'sine', 0.014 * (m.ctier - 1), 0, t, 'm'); }
+        if (boss) { const bx = bossExtra(bp, bar, s); if (bx) { if (bx[0] === 'hat') hat(ts, bx[1]); else tone(120 - (s - 13) * 20, 0.14, 'sine', bx[1], -50, t, 'm'); } }
+        { const co = colourOf(m.skin); if (!boss && lvl > 0.2 && co.at.includes(s) && (bar & 1) === 0) tone(hz(note(sc, deg + co.off, root + co.oct)), sp * 3, co.w, co.v, 0, ts, 'm'); }
+        { const tw = !boss && lvl > 0.25 ? twistOf(m.skin, sec, bar, s) : null; if (tw) tone(hz(note(sc, deg + tw.off, root + 36)), sp * 1.8, tw.w, tw.v, 0, ts, 'm'); }   // r11: a counter line per world section
+        // species motif: 4 notes spread over the second and fourth bar
+        if ((bar & 1) === 1 && s % 4 === 0 && !boss && lvl > 0.05) tone(hz(note(sc, motifOf(m.stage)[s >> 2], root + 36)), sp * 3, 'sine', 0.032, 0, t, 'm');
+        // boss only: sub drone, off-beat sub pulses, a rising siren and a snare roll that lead into the next section
+        if (boss) {
+          if (s === 0) pumpTone(hz(bassM - 12), sp * 15.5, 'sine', 0.1, t, sp * 4, padDepth(lvl, true, pumpSet));
+          if (s % 4 === 2) tone(hz(bassM - 12), sp * 1.6, 'sine', 0.12, -3, t, 'm');
+          if (bar === 3 && s === 8) tone(330, sp * 8, 'sawtooth', 0.018, 520, t, 'm');
+          if (bar === 3 && s >= 12) snare(t, 0.05 + (s - 12) * 0.03);
+        }
+        // accessibility: an optional woodblock click on every beat (higher on the bar line), so the rhythm can be felt without the mix
+        if (beatTick && s % 4 === 0) tone(s === 0 && bar === 0 ? 1319 : 988, 0.05, 'triangle', s === 0 && bar === 0 ? 0.2 : 0.15, 0, t, 'm');
+        // (danger ticking now lives in sfx.dangerbeat: it follows the red heartbeat instead of the music grid)
+        // section ends: riser into a crash
+        { const fl = !boss ? fillOf(sec, bar, s, lvl) : null; if (fl) { if (fl.k === 'snare') snare(t, fl.v); else tone(fl.hz, sp * 1.5, 'sine', fl.v, -60, t, 'm'); } }   // b13: section fill
+        if (bar === 3 && s === 12 && lvl > 0.35) noise(sp * 4, 0.06, 800, 9000, 'bandpass', t, 'm');
+        if (bar === 0 && s === 0 && step > 0 && lvl > 0.35 && !bk) noise(0.5, 0.05, 7000, 3000, 'highpass', t, 'm');
       }
       nextT += sp; step++;
+      if (countSteps > 0 && --countSteps === 0) step = 0;   // the count-in is one bar: the song starts on its first bar
     }
   }
+  // one short 4 note phrase per snake species (scale degrees), played softly as a bell over the groove
+  const MOTIFS = [[0, 2, 4, 2], [0, 4, 2, 5], [4, 2, 0, 2], [0, 1, 4, 2], [2, 4, 5, 4], [0, 2, 1, 4], [4, 5, 4, 2], [0, 3, 2, 4], [5, 4, 2, 0], [2, 0, 2, 4]];
+  const motifOf = stage => MOTIFS[(Math.max(1, stage | 0) - 1) % MOTIFS.length];
+  // ambient hub bed (round 7): a slow, quiet major seventh pad with a breathing level and a rare twinkle, on the music bus
+  // (so it follows the Music setting, the volume and the muffle). Starts when the hub opens, stops when a run's music starts.
+  let wantHub = false, hubN = null, hubSkin = 'love';
+  function hubStop() {
+    const n = hubN; if (!n) return; hubN = null; clearTimeout(n.timer);
+    try { const t = ac.currentTime; n.out.gain.cancelScheduledValues && n.out.gain.cancelScheduledValues(t); n.out.gain.setValueAtTime(Math.max(0.0001, n.out.gain.value || HUB_GAIN), t); n.out.gain.linearRampToValueAtTime(0.0001, t + 0.5); n.oscs.forEach(o => o.stop(t + 0.6)); } catch (e) { /* ignore */ }
+  }
+  function hubStart() {
+    const bed = bedOf(hubSkin), t = ac.currentTime, out = ac.createGain(), lp = ac.createBiquadFilter(), lfo = ac.createOscillator(), lg = ac.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = bed.lp; out.gain.setValueAtTime(0.0001, t); out.gain.linearRampToValueAtTime(HUB_GAIN, t + 2.5);
+    lp.connect(out); out.connect(musBus);
+    const oscs = bed.chord.map((f, i) => { const o = ac.createOscillator(), vg = ac.createGain(); o.type = i < 2 ? 'sine' : bed.wave; o.frequency.setValueAtTime(f * (1 + 0.0015 * i), t); vg.gain.value = 0.5 * [1, 0.8, 0.6, 0.4][i]; o.connect(vg); vg.connect(lp); o.start(t); return o; });
+    lfo.type = 'sine'; lfo.frequency.setValueAtTime(0.07, t); lg.gain.value = HUB_GAIN * 0.25; lfo.connect(lg); lg.connect(out.gain); lfo.start(t); oscs.push(lfo);
+    const n = hubN = { out, oscs, timer: 0, skin: hubSkin };
+    const twinkle = () => { if (hubN !== n) return; swell(hz(bed.tw[Math.floor(Math.random() * bed.tw.length)]), 1.8, 'sine', 0.02, 0, 'm'); n.timer = setTimeout(twinkle, 3000 + Math.random() * 5000); };
+    n.timer = setTimeout(twinkle, 2500);
+  }
+  function hubSync() {
+    const want = wantHub && musicAllowed && !muted && !wantMusic && !!ac && !!musBus;
+    if (want && hubN && hubN.skin !== hubSkin) hubStop();   // the selected world changed: the old bed fades out, the new one comes in
+    if (want && !hubN) { try { hubStart(); } catch (e) { hubN = null; } } else if (!want && hubN) hubStop();
+  }
+  // round 10: a quiet ambient bed per world under the run music (audio_b10.js AMBIENT), follows the Music setting and the muffle
+  let amb = null;
+  function ambSync() {
+    if (!ac || !musBus || !noiseBuf) return;
+    const want = wantMusic && musicAllowed && !muted && !tickOn && countSteps === 0;
+    if (!amb) amb = createAmbient(ac, musBus, noiseBuf);
+    if (want) amb.start(mixS.skin); else amb.stop();
+  }
+  // resume count-in tick: a soft woodblock that climbs, e.n is 3, 2, 1
+  sfx.resumetick3 = () => sfx.resumetick({ n: 3 }); sfx.resumetick2 = () => sfx.resumetick({ n: 2 }); sfx.resumetick1 = () => sfx.resumetick({ n: 1 });
+  sfx.resumetick = e => { const n = Math.max(1, Math.min(3, (e && e.n) || 3)); tone(560 + (3 - n) * 140, 0.06, 'triangle', 0.08, -60); tone(1400 + (3 - n) * 300, 0.03, 'sine', 0.03); };
+  registerB11(sfx, tone, noise, gate);   // batch 11: mirror glance, beat run, boss twists (audio_b11.js)
+  registerA11(sfx, tone, noise, duck, gate);   // round 11: book sting, pet glance, pounce, tab ping, curtain (audio_b11.js)
+  registerB13b(sfx, tone, noise, duck, gate);   // batch 13: unlock fanfare, stat buy ladder, level-up lift (juice_b13b.js)
+  registerB12i(sfx, tone, noise, duck, gate, now);   // batch 12: aim tick, crown clink, milestone, burst thinning (audio_b12i.js)
+  registerB16g(sfx, tone, noise, duck, gate, { ac: () => ac, out: () => sfxBus, muted: () => muted });   // batch 16: voice clips (voice_b16g.js)
+  registerB14e(sfx, tone, noise, duck, gate);   // batch 14: world win/lose motif (audio_b14e.js)
+  registerB16a(sfx, tone, noise, duck, gate);   // batch 16: perfect ping, the drop, chorus stabs (audio_b16a.js)
+  registerB13h(sfx, tone, noise, duck, gate);   // batch 13: shot figure and sounds for gloom, nap, pillow, shell, metro, soundcheck (audio_b13h.js)
+  registerA10(sfx, tone, noise, duck, gate);   // round 10: boss fill, bring pack, sticker book, pet calls (audio_b10b.js)
   return {
-    unlock() { const a = ensure(); if (a && a.state === 'suspended') a.resume(); },
-    play(name, e) { if (ac && sfx[name]) sfx[name](e); },
-    setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5; },
+    unlock() { const a = ensure(); if (a && a.state === 'suspended') { try { a.resume(); } catch (e) { /* ignore */ } } hubSync(); ambSync(); },
+    hub(on, skin) { wantHub = !!on; if (skin) hubSkin = skin; hubSync(); ambSync(); },
+    hubWorld(skin) { if (skin && skin !== hubSkin) { hubSkin = skin; if (wantHub) hubSync(); } },
+    get hubOn() { return !!hubN; },
+    play(name, e) { if (ac && sfx[name] && admit(name, live)) { curPan = e && Number.isFinite(e.pan) ? e.pan : 0; try { sfx[name](e); } catch (err) { /* never break the game over a sound */ } curPan = 0; } },
+    setMuted(m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5 * vol; hubSync(); ambSync(); },
+    setVolume(v) { vol = Math.max(0, Math.min(1, +v)); if (!(vol >= 0)) vol = 1; if (master && !muted) master.gain.value = 0.5 * vol; },
+    get volume() { return vol; },
+    motif: motifOf,
     get muted() { return muted; },
-    music(on) {
-      musicOn = on;
-      if (on && ensure()) { nextT = ac.currentTime + 0.05; clearInterval(timer); timer = setInterval(pump, 80); }
-      else clearInterval(timer);
+    // countIn: true plays one bar of ticks (the tick-only scheduler) before the song starts, used for the very first stages
+    music(on, countIn) {
+      wantMusic = !!on; if (on) wantHub = false; hubSync(); restart(); countSteps = on && musicOn && countIn ? 16 : 0; ambSync();
     },
+    // pump depth setting: 0 off, 1 soft, 2 full (default)
+    setPump(v) { pumpSet = pumpLevel(v); },
+    get pump() { return pumpSet; },
+    // call every frame while playing: a long kill chain that goes quiet ends with a soft falling sigh (once per chain)
+    chainWatch() {
+      if (!ac) return;
+      if (chainBroke(chain, now() - chainT)) { const c = chain; chain = 0; sfx.chainsigh({ n: c }); }
+    },
+    // the beat tick is a metronome of its own: with the music switched off it still clicks on every beat
+    setBeatTick(b) { beatTick = !!b; if ((wantMusic && !musicAllowed && beatTick) !== tickOn) restart(); },
+    setMusicAllowed(b) { musicAllowed = b; if (!b || tickOn) restart(); hubSync(); ambSync(); },
+    get tickOnly() { return tickOn; },
+    get musicAllowed() { return musicAllowed; },
     intensity(v) { intensity = v; },
+    // groove 0..1, danger 0..1 (how close the face is to the line), stage number, boss flag
+    mix(o) { if (o) mixS = { stage: o.stage || 1, boss: !!o.boss, groove: Math.max(0, Math.min(1, o.groove || 0)), danger: Math.max(0, Math.min(1, o.danger || 0)), skin: o.skin || skinFor(o.stage || 1), bphase: Math.max(0, Math.min(2, o.bphase | 0)), ctier: comboTier(o.combo | 0) }; ambSync(); },
+    // close the music behind a lowpass (cards, pause) and open it again; call every frame, only changes act
+    muffle(on) {
+      on = !!on; if (on === muffled) return; muffled = on;
+      if (!ac || !mlp) return;
+      const t = ac.currentTime;
+      try { mlp.frequency.cancelScheduledValues(t); mlp.frequency.setTargetAtTime(on ? MUF_SHUT : MUF_OPEN, t, on ? 0.05 : 0.14); musBus.gain.setTargetAtTime(on ? MUS_MUFFLED : MUS_GAIN, t, 0.08); } catch (e) { /* ignore */ }
+    },
+    get muffled() { return muffled; },
+    duck,
+    get beatStreak() { return bstreak && now() - lastBeatShot < 60 / (beatNow || 120) * 1600 ? bstreak : 0; },
+    // align the music grid to the sim beat clock: simPhase 0..1 is the sim's beat phase now (see beatPhase in sim.js)
+    sync(simPhase) {
+      if (!(musicOn || tickOn) || !ac || !beatNow || !(simPhase >= 0)) return;
+      const spb = 60 / beatNow, sp = spb / 4, Q = nextT + ((4 - (step & 3)) & 3) * sp;
+      let ap = ((ac.currentTime - (ac.outputLatency || ac.baseLatency || 0) - Q) / spb) % 1; if (ap < 0) ap += 1;
+      let e = simPhase - ap; e -= Math.round(e);   // -0.5..0.5 of a beat; positive: the sim is ahead, so the music must come sooner
+      const sec = e * spb;
+      if (fresh && step < 5) { nextT += sec < 0 ? -sec : spb - sec; fresh = false; return; }   // first alignment after the music starts
+      fresh = false;
+      if (Math.abs(sec) > 0.1) { if (gate('resync', 1500)) nextT += sec < 0 ? -sec : spb - sec; return; }
+      if (Math.abs(sec) > 0.012) nextT -= Math.max(-0.0025, Math.min(0.0025, sec));
+    },
+    // where we are in the beat: { bpm, phase 0..1 since the last kick }, or null when the music is not playing
+    beat() {
+      if (!(musicOn || tickOn) || !ac || !beatBpm) return null;
+      const spb = 60 / beatBpm; let ph = ((ac.currentTime - beatAt) / spb) % 1; if (ph < 0) ph += 1;
+      return { bpm: beatBpm, phase: ph };
+    },
+    names: () => Object.keys(sfx),
   };
 }

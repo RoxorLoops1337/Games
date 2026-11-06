@@ -10,10 +10,10 @@ let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('ok', name); };
 const ALL = CATS.map((c) => c.id);
 
-t('data: 30 cats, 5 starters, unique ids, every cat has a handled attack', () => {
-  assert.equal(CATS.length, 30);
-  assert.equal(STARTERS.length, 5);
-  assert.equal(new Set(ALL).size, 30);
+t('data: 32 cats, 3 starters, unique ids, every cat has a handled attack', () => {
+  assert.equal(CATS.length, 32);
+  assert.equal(STARTERS.length, 3);
+  assert.equal(new Set(ALL).size, 32);
   const kinds = new Set(['melee', 'proj', 'lob', 'cone', 'chain', 'beam', 'strike', 'nova', 'mine', 'storm', 'spread']);
   for (const c of CATS) {
     assert.ok(kinds.has(c.atk.t), c.id + ' attack kind');
@@ -27,6 +27,30 @@ t('data: 30 cats, 5 starters, unique ids, every cat has a handled attack', () =>
 t('snacks: perm, temp and instant exist, all have text', () => {
   for (const k of ['perm', 'temp', 'instant']) assert.ok(SNACKS.some((s) => s.kind === k), k);
   for (const s of SNACKS) assert.ok(s.name && s.icon && s.desc, s.id);
+});
+
+t('snacks: Berry Smoothie gives attack speed and range for 3 waves', () => {
+  const g = newGame({ seed: 7 });
+  addCat(g, 'tabby');
+  const base = calcMods(g);
+  eatSnack(g, 'smoothie');
+  const m = calcMods(g);
+  assert.ok(m.haste > base.haste && m.range > base.range, 'both bonuses apply');
+  for (let i = 0; i < 3; i++) { startWave(g); g.enemies = []; g.queue = []; step(g, 3); step(g, 0.1); }
+  assert.equal(g.temp.length, 0, 'it wears off after three waves');
+});
+
+t('snacks: Rice Ball is a permanent snack that adds a little damage and health together', () => {
+  const sn = SNACKS.find((x) => x.id === 'rice');
+  assert.ok(sn && sn.kind === 'perm', 'rice ball exists as a permanent snack');
+  const g = newGame({ seed: 7 });
+  addCat(g, 'tabby');
+  const base = calcMods(g), mx = catMaxHp(g, g.cats[0]);
+  eatSnack(g, 'rice');
+  const m = calcMods(g);
+  assert.ok(m.dmg > base.dmg && catMaxHp(g, g.cats[0]) > mx, 'more damage and more health');
+  for (let i = 0; i < 4; i++) { startWave(g); g.enemies = []; g.queue = []; step(g, 3); step(g, 0.1); }
+  assert.equal(g.perm.length, 1, 'it lasts the whole run');
 });
 
 t('addCat: stack, auto-merge equals, bench, then refuses', () => {
@@ -173,7 +197,8 @@ t('a nest wave: nest spawns mice, can be destroyed, ends the wave with a cat rew
   spawned = seen.size;
   assert.equal(g.state, 'clear');
   assert.ok(spawned >= 5, 'nest spawned ' + spawned);
-  assert.deepEqual(g.reward, ['cat', 'item', 'snack']);
+  assert.ok(g.reward.length >= 3 && g.reward.length <= 4, 'the first nest pays a cat, a relic and a box (the relic takes the snack\'s place): ' + g.reward);
+  assert.equal(g.reward[0], 'cat'); assert.equal(g.reward[1], 'relic'); assert.ok(g.reward.slice(2).some((r) => /^box:(basket|silver|golden)$/.test(r)), 'a nest pays a box of basket or better (an elite may add a second one)'); 
   assert.equal(g.run.bossKills, 1);
   assert.ok(minNest < 450, 'the world scrolled the nest toward the stack: ' + minNest);
 });
@@ -217,12 +242,12 @@ t('unlocks: stat rules, run merge, Ember lv3 unlocks Volcano', () => {
   let st = emptyStats();
   const un = new Set(STARTERS);
   assert.deepEqual(checkUnlocks(st, un), []);
-  st = mergeRun(st, { kills: 400, bossKills: 1, recruits: 3, merges: 0, lvl3: 0, lvl3Of: { ember: true }, snacks: 0, temp: 0, flawless: 0, wave: 7 });
+  st = mergeRun(st, { kills: 700, bossKills: 1, recruits: 3, merges: 0, lvl3: 0, lvl3Of: { ember: true }, snacks: 0, temp: 0, flawless: 0, wave: 9 });
   const fresh = checkUnlocks(st, un);
   for (const id of ['yuki', 'hawkeye', 'boomer', 'volcano']) assert.ok(fresh.includes(id), id);
   assert.ok(!fresh.includes('shadow'));
   assert.equal(st.runs, 1);
-  assert.deepEqual(unlockProgress(CAT_BY_ID.shadow, st), { have: 7, need: 10 });
+  assert.deepEqual(unlockProgress(CAT_BY_ID.shadow, st), { have: 9, need: 12 });
 });
 
 console.log(`${n} tests passed`);

@@ -13,8 +13,13 @@
 //   tools/<dir>/...          the suite that uses that tool (TOOL_SUITES, or the
 //                            game of the same name, or a suite importing it)
 //   root *.md, docs/, design/, production/, project.yaml, .claude/, .gitignore, awesome_farm/   nothing (docs; Awesome Farm has its own check)
-// Anything it cannot place (build.js, package.json, an unmapped folder, a new
-// game) falls back to the FULL check. Unknown means "run everything", never
+//   package.json            only the suites whose `test:` script was added or changed. A dependency or an existing non-test script changing
+//                           still means FULL (it can affect every game); adding a test script for one game does not.
+//   build.js                the suites whose files mention build.js or dist/ (the build itself always runs first)
+//   index.html (the home)   test:site (every game card must point at a folder that exists)
+//   _headers, _redirects    the suites that mention them (usually none: the deploy is what they affect)
+// Anything it cannot place (package-lock.json, an unmapped folder, a new
+// game, an unknown root file) falls back to the FULL check. Unknown means "run everything", never
 // "run nothing", so a gap in the map costs time, not safety.
 //
 //   node tools/check-changed.mjs            build + the changed games' suites
@@ -75,10 +80,12 @@ const GAME_SUITES = {
   blockmates: ['test:blockmates'],
   stacking_cats: ['test:stackingcats'],
   graftwork: ['test:graftwork'],
+  sunbeam_siege: ['test:sunbeam'],
   rustgrift: ['test:rustgrift'],
   midnight_mog: ['test:midnightmog'],
   drop_the_bass: ['test:dropbass'],
   pitch_story: ['test:pitchstory'],
+  groove_lock: ['test:groovelock'],
 };
 
 // Folders the site serves that have no test suite: a change there only needs
@@ -87,7 +94,7 @@ const NO_SUITE = [
   'Carnegiendon', 'DhauwieSurvival', 'beatbox_story', 'carmanager', 'chase_hq',
   'crypto', 'cutie_merge', 'decktest', 'evolve_and_conquer', 'gamedevloop',
   'mazekeep', 'messenger', 'night_shift', 'pitchdeck', 'ralpherizer',
-  'roblox_obby', 'thieu_excuses_app', 'tower-defense-sprites', 'verb_collector',
+  'roblox_obby', 'thieu_excuses_app', 'tower-defense-sprites',
 ];
 
 const FUNCTION_SUITES = {
@@ -98,7 +105,12 @@ const FUNCTION_SUITES = {
   'dungeon_board.js': ['test:dpboard'],
   'dungeon_save.js': ['test:dpsave'],
   'dropbass_board.js': ['test:dropbass'],
+  'cell_serpent_daily.js': ['test:serpent'],
 };
+
+// Shared files with a precise rule (see the header). The home page is checked by test:site; the tool checks itself with test:checkchanged.
+const SITE_SUITES = ['test:site'];
+const SELF_SUITES = { 'tools/check-changed.mjs': ['test:checkchanged'] };
 
 const TOOL_SUITES = {
   choirscore: ['test:choirimport'],
@@ -114,6 +126,7 @@ const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url),
 const CHECK_SUITES = [...pkg.scripts.check.matchAll(/npm run (test:[\w:]+)/g)].map((m) => m[1]);
 
 const sh = (cmd) => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+let BASE = baseArg;   // the commit the branch is compared with (set by changedFiles; package.json is compared against it)
 
 function changedFiles() {
   let base = baseArg;
@@ -126,6 +139,7 @@ function changedFiles() {
     }
   }
   if (!base) return null;
+  BASE = base;
   const out = [
     sh(`git diff --name-only ${base}`),
     sh('git ls-files --others --exclude-standard'),
@@ -152,6 +166,40 @@ function suiteFiles(suite) {
   return seen;
 }
 
+// Suites of the test files that mention a shared file (a suite that never mentions it cannot be affected by it). Looks at tests/ itself, so runners that
+// pick their sub-suites at runtime are not missed; a mentioning file that no suite owns means we cannot place it (null = FULL).
+function mentioning(re) {
+  const files = sh('ls tests').split('\n').filter((n) => /\.mjs$/.test(n) && re.test(readFileSync(`tests/${n}`, 'utf8'))).map((n) => `tests/${n}`);
+  const p = plan(files);
+  return p.why.length ? null : [...p.suites];
+}
+
+// package.json: the suites of the test scripts that changed, or null (= FULL) when something that can affect every game changed.
+function packageSuites() {
+  let old;
+  try { old = JSON.parse(sh(`git show ${BASE || "HEAD"}:package.json`)); } catch { return null; }
+  const strip = (check) => check.split('&&').map((p) => p.trim()).filter((p) => !/^npm run test:[\w:]+$/.test(p)).join(' && ');
+  const rest = (o) => JSON.stringify({ ...o, scripts: undefined });
+  if (rest(old) !== rest(pkg)) return null;                                              // dependencies, engines, name ...
+  if (strip(old.scripts.check || '') !== strip(pkg.scripts.check || '')) return null;    // `check` may only gain, lose or reorder `npm run test:x`
+  const suites = [];
+  for (const k of new Set([...Object.keys(old.scripts), ...Object.keys(pkg.scripts)])) {
+    if (old.scripts[k] === pkg.scripts[k] || k === 'check') continue;
+    if (k.startsWith('test:')) { if (pkg.scripts[k] !== undefined) suites.push(k); continue; }   // added or changed test script (a removed one runs nothing)
+    if (old.scripts[k] !== undefined) return null;                                         // an existing non-test script changed or went away
+  }                                                                                        // (a brand new non-test script cannot break anything that exists)
+  return suites;
+}
+
+// Suites for a shared root file, or null when it cannot be placed (= FULL).
+function sharedSuites(f) {
+  if (f === 'package.json') return packageSuites();
+  if (f === 'index.html') return SITE_SUITES;
+  if (f === 'build.js') return mentioning(/build\.js|['"`]dist['"`\/]|\bdist\//);
+  if (f === '_headers' || f === '_redirects') return mentioning(new RegExp(f));
+  return null;
+}
+
 function plan(files) {
   const suites = new Set();
   const why = [];
@@ -168,6 +216,8 @@ function plan(files) {
         CHECK_SUITES.filter((s) => suiteFiles(s).has(f));
       if (own.length) { own.forEach((s) => suites.add(s)); continue; }
     }
+    if (SELF_SUITES[f]) { SELF_SUITES[f].forEach((x) => suites.add(x)); continue; }
+    if (!rest.length) { const sh = sharedSuites(f); if (sh) { sh.forEach((x) => suites.add(x)); continue; } }
     if (top === 'tools' && rest.length === 1) {
       continue; // loose editors and one-off scripts (screenshots, timing); no suite runs them
     }
@@ -188,7 +238,7 @@ function plan(files) {
 // telling this file. Say so, so the gap gets closed instead of silently costing
 // a full check on every change to that game.
 const mapped = new Set([...Object.values(GAME_SUITES), ...Object.values(FUNCTION_SUITES),
-  ...Object.values(TOOL_SUITES)].flat());
+  ...Object.values(TOOL_SUITES), SITE_SUITES, ...Object.values(SELF_SUITES)].flat());
 const unmapped = CHECK_SUITES.filter((s) => !mapped.has(s));
 if (unmapped.length) {
   console.log(`note: add ${unmapped.join(', ')} to GAME_SUITES in tools/check-changed.mjs\n`);

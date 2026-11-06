@@ -1,9 +1,14 @@
 // cutscene.js: plays a CUTSCENES script. The scene is drawn on the canvas (art_world.drawScene), the dialogue is a DOM box.
 import { CUTSCENES } from './data_story.js';
 import { AW, h, btn } from './ui_core.js';
+import { t } from './i18n.js';
 
 const NAMES = { roxor: 'RoxorLoops', jasmin: 'Jasmin', loopy: 'Loopy', playback: 'Mr. Playback', narr: '' };
-const COLORS = { roxor: '#3d8a00', jasmin: '#d6307f', loopy: '#2a8a6a', playback: '#a01f66', narr: '#241140' };
+// speaker name tags are crayon-coloured stickers with ink text; the dialogue itself is always ink
+const TAGS = { roxor: '#9be34a', jasmin: '#ff8cc6', loopy: '#7fe3f0', playback: '#ff7ac0' };
+
+// epilogues and the credits have their own tracks (audio.js 'epilogue' and 'credits')
+const musicFor = (id) => (/^epilogue_/.test(id) ? 'epilogue' : /^credits_/.test(id) ? 'credits' : null);
 
 export class Cutscene {
   constructor(app, id, onDone) {
@@ -11,12 +16,12 @@ export class Cutscene {
     this.script = CUTSCENES[id];
     this.p = 0; this.l = 0; this.t = 0; this.panelT = 0; this.chars = 0; this.done = false; this.lastBlip = 0;
     this.box = h('div', { class: 'cut-box', onclick: () => this.advance() });
-    this.who = h('div', { class: 'who' }); this.txt = h('div'); this.nx = h('div', { class: 'nx' }, 'tap');
+    this.who = h('div', { class: 'who' }); this.txt = h('div'); this.nx = h('div', { class: 'nx' }, t('cut.tap', 'tap'));
     this.box.append(this.who, this.txt, this.nx);
-    this.skip = btn('Skip', () => this.finish(), 'dark small cut-skip');
+    this.skip = btn(t('cut.skip', 'Skip'), () => this.finish(), 'gold small cut-skip');
     app.ui.append(this.skip, this.box);
     this.setLine(true);
-    const m = this.script.panels[0].music || this.script.music;
+    const m = musicFor(id) || this.script.panels[0].music || this.script.music;
     if (m) app.audio.musicStart(m);
   }
   get panel() { return this.script.panels[this.p]; }
@@ -26,10 +31,10 @@ export class Cutscene {
     this.chars = 0;
     const nm = NAMES[ln.who];
     this.who.textContent = nm; this.who.style.display = nm ? '' : 'none';
-    this.who.style.background = ln.who === 'narr' ? '#12082b' : '#12082b';
-    this.who.style.color = ln.who === 'roxor' ? '#9dff3a' : ln.who === 'jasmin' ? '#ff8ac8' : ln.who === 'loopy' ? '#6dffd0' : ln.who === 'playback' ? '#ff5fb0' : '#fff';
+    this.who.style.background = TAGS[ln.who] || '#ffd60a';
+    this.who.style.color = '#2b2733';
     this.txt.style.fontStyle = ln.who === 'narr' ? 'italic' : '';
-    this.txt.style.color = COLORS[ln.who] || '#241140';
+    this.txt.style.color = '#2b2733';
     this.txt.textContent = '';
     this.nx.style.visibility = 'hidden';
   }
@@ -50,7 +55,7 @@ export class Cutscene {
     if (this.l + 1 < this.panel.lines.length) { this.l++; this.setLine(); return; }
     if (this.p + 1 < this.script.panels.length) {
       this.p++; this.l = 0; this.panelT = 0; this.setLine();
-      const m = this.panel.music; if (m) this.app.audio.musicStart(m);
+      const m = musicFor(this.id) || this.panel.music; if (m) this.app.audio.musicStart(m);
       return;
     }
     this.finish();
@@ -63,6 +68,9 @@ export class Cutscene {
   draw(ctx, view) {
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
     const prog = Math.min(1, this.panelT / 8);
-    AW.drawScene(ctx, this.panel.scene, view.cw, view.ch, this.t, { progress: prog });
+    // the heroes wear what the profile says (a scene takes one outfit id for the duo: used when both wear the same one; outfits has both)
+    const worn = (this.app.profile && this.app.profile.outfits && this.app.profile.outfits.worn) || {};
+    const same = worn.roxor && worn.roxor === worn.jasmin;
+    AW.drawScene(ctx, this.panel.scene, view.cw, view.ch, this.t, { progress: prog, outfit: same ? worn.roxor : 'default', outfits: worn });
   }
 }

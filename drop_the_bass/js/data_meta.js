@@ -23,13 +23,13 @@ export const STUDIO = {
   royalty:  { id: 'royalty',  name: 'Royalties',         glyph: 'record',  max: 8,  cost: geo(180, 1.38), fx: [['interest', 'add', 0.005]],    desc: 'Earn +0.5% interest on your coins after every wave.' },
   tipcup:   { id: 'tipcup',   name: 'Tip Cup',           glyph: 'coin',    max: 10, cost: geo(100, 1.31), fx: [['waveCoins', 'add', 3]],       desc: 'Start every wave with +3 coins.' },
   setlist:  { id: 'setlist',  name: 'Spare Setlist',     glyph: 'reroll',  max: 4,  cost: geo(400, 1.9),  fx: [['rerolls', 'add', 1]],         desc: '+1 free reroll per run.' },
-  rack:     { id: 'rack',     name: 'Bigger Rack',       glyph: 'gear',    max: 3,  cost: geo(900, 2.6),  fx: [],                              desc: '+1 turret in your loadout (starts at 5).', special: 'loadout' },
+  rack:     { id: 'rack',     name: 'Roadie Rack',        glyph: 'gear',    max: 3,  cost: geo(900, 2.6),  fx: [['startCoins', 'add', 60]],     desc: 'Start every run with +60 coins.' },
   stream:   { id: 'stream',   name: 'Streaming Royalties', glyph: 'note',  max: 8,  cost: geo(250, 1.5),  fx: [],                              desc: 'Earn more Records while you are away (and a longer away cap).', special: 'offline' },
 };
 export const STUDIO_IDS = Object.keys(STUDIO);
 export const HERO_MAX = 10;
 export const heroCost = (lv) => Math.round(120 * Math.pow(1.5, lv - 1));     // price to go from lv to lv+1
-export const LOADOUT_BASE = 5;
+export const LOADOUT_BASE = 12;
 export const AUTOMERGE_PRICE = 150;   // diamonds
 
 // ---------------------------------------------------------------- Gear
@@ -125,15 +125,40 @@ export function fameReward(lv) {   // reward for reaching level lv
 }
 
 // ---------------------------------------------------------------- Outfits (cosmetic)
+// Every outfit: id, name, desc, price (diamonds, 0 when it is earned instead) and optional unlock: { world: 'beach' } (that stage is cleared) or { endless: 50 }
+// (best Endless wave reached on any stage). An outfit with an unlock is granted free the moment the rule is met (meta.js syncOutfits). Ids are append-only.
+const O = (id, name, desc, price, unlock) => (unlock ? { id, name, desc, price, unlock } : { id, name, desc, price });
 export const OUTFITS = {
-  roxor:  { default: { id: 'default', name: 'Classic Tee', price: 0 }, onesie: { id: 'onesie', name: 'Monster Onesie', price: 120 } },
-  jasmin: { default: { id: 'default', name: 'Pink Top',    price: 0 }, onesie: { id: 'onesie', name: 'Unicorn Onesie', price: 120 } },
+  roxor: {
+    default: O('default', 'Classic Tee', 'The black tee with the yellow smiley.', 0),
+    onesie: O('onesie', 'Monster Onesie', 'A cosy green monster hood with horns.', 120),
+    stage: O('stage', 'Stage Sparkle', 'A purple sequin jacket, gold stripes and star pins.', 80),
+    rocker: O('rocker', 'Punk Rocker', 'Studded leather jacket, band tee, ripped jeans and boots.', 160),
+    beach: O('beach', 'Beach Bum', 'Flower shirt, board shorts, sandals and a straw hat. Clear Bonfire Beach.', 0, { world: 'beach' }),
+    moon: O('moon', 'Moonlight Raver', 'Holographic jacket, glow-stick bracelets and a star visor. Clear Moonlight Rave.', 0, { world: 'moon' }),
+    outfit_gold: O('outfit_gold', 'Golden Headliner', 'A gold sequin stage look. Reach wave 50 in Endless.', 0, { endless: 50 }),
+  },
+  jasmin: {
+    default: O('default', 'Pink Top', 'The pink crop top and baggy cargo pants.', 0),
+    onesie: O('onesie', 'Unicorn Onesie', 'A fluffy unicorn hood with a rainbow mane.', 120),
+    stage: O('stage', 'Stage Sparkle', 'A pink sequin dress with star motifs and gold bangles.', 80),
+    rocker: O('rocker', 'Punk Rocker', 'Plaid skirt, fishnet sleeves, band top and chunky boots.', 160),
+    beach: O('beach', 'Beach Bloom', 'A sunny sundress, sandals and a flower crown. Clear Bonfire Beach.', 0, { world: 'beach' }),
+    moon: O('moon', 'Moonlight Raver', 'Holographic jacket, glow-stick bracelets and a moon hair clip. Clear Moonlight Rave.', 0, { world: 'moon' }),
+    outfit_gold: O('outfit_gold', 'Golden Headliner', 'A gold sequin stage dress and tiara. Reach wave 50 in Endless.', 0, { endless: 50 }),
+  },
 };
 
 // ---------------------------------------------------------------- Daily login and quests
 export const LOGIN_REWARDS = [
   { day: 1, records: 150 }, { day: 2, diamonds: 8 }, { day: 3, records: 300 }, { day: 4, diamonds: 12 },
   { day: 5, records: 500, crate: 'garage' }, { day: 6, diamonds: 20 }, { day: 7, diamonds: 30, crate: 'studio' },
+];
+// Streak bonuses on top of the 7-day calendar: each is paid once per profile the first time the login streak reaches `days`.
+export const STREAK_MILESTONES = [
+  { days: 7,  diamonds: 20 },
+  { days: 14, diamonds: 40 },
+  { days: 30, diamonds: 100, crate: 'studio' },
 ];
 export const QUESTS = [
   { id: 'q_kills',   stat: 'kills',    goal: 150, text: 'Defeat 150 Static', reward: { records: 120 } },
@@ -150,6 +175,23 @@ export const QUESTS = [
   { id: 'q_beat',    stat: 'perfects', goal: 10,  text: 'Make 10 on-beat deploys', reward: { records: 140 } },
   { id: 'q_remix',   stat: 'remixes',  goal: 8,   text: 'Pick 8 Remix cards', reward: { records: 140 } },
   { id: 'q_lvl5',    stat: 'maxLevel', goal: 5,   text: 'Merge a turret to level 5', reward: { diamonds: 6 }, max: true },
+  // round 6 (append only). Stats come from the run result (meta.applyRunResult) or the crate, gear merge and wheel hooks in meta.js.
+  { id: 'q_duet',    stat: 'duets',    goal: 2,   text: 'Trigger the Duet Finale 2 times', reward: { diamonds: 6 } },
+  { id: 'q_relics',  stat: 'relics',   goal: 4,   text: 'Pick up 4 Merch relics', reward: { records: 160 } },
+  { id: 'q_flaw',    stat: 'flawless', goal: 1,   text: 'Win a stage with no leaks', reward: { diamonds: 10 } },
+  { id: 'q_modwin',  stat: 'modWins',  goal: 1,   text: 'Win a run with a modifier on', reward: { diamonds: 8 } },
+  { id: 'q_crates',  stat: 'crates',   goal: 2,   text: 'Open 2 crates', reward: { records: 200 } },
+  { id: 'q_gearmrg', stat: 'gearMerges', goal: 2, text: 'Merge gear 2 times', reward: { records: 180 } },
+  { id: 'q_spin',    stat: 'spins',    goal: 1,   text: 'Spin the Lucky Wheel', reward: { records: 100 } },
+  { id: 'q_daily',   stat: 'dailies',  goal: 1,   text: 'Play the Daily Challenge', reward: { diamonds: 6 } },
+  { id: 'q_coins',   stat: 'coins',    goal: 3000, text: 'Earn 3,000 coins in your runs', reward: { records: 140 } },
+  { id: 'q_endless', stat: 'endlessWave', goal: 12, text: 'Reach wave 12 in Endless', reward: { diamonds: 6 }, max: true },
+  // round 7 (append only). Stats come from the run result (sim counters dropRerolls, sells, moves, branches, synergies).
+  { id: 'q_reroll',  stat: 'dropRerolls', goal: 6, text: 'Re-roll the next drop 6 times', reward: { records: 120 } },
+  { id: 'q_branch',  stat: 'branches', goal: 2,   text: 'Pick 2 turret upgrade paths', reward: { diamonds: 6 } },
+  { id: 'q_move',    stat: 'moves',    goal: 8,   text: 'Move turrets 8 times', reward: { records: 110 } },
+  { id: 'q_sell',    stat: 'sells',    goal: 4,   text: 'Sell 4 turrets', reward: { records: 100 } },
+  { id: 'q_syn',     stat: 'synergies', goal: 3,  text: 'Have 3 synergy pairs active at once', reward: { diamonds: 6 }, max: true },
 ];
 
 // ---------------------------------------------------------------- Achievements ("Stickers"), claimed for diamonds
@@ -170,7 +212,8 @@ export const ACHIEVEMENTS = [
   { id: 'a_boss1',    stat: 'bosses',    goal: 5,      name: 'Boss Fight',        text: 'Defeat 5 bosses.',              diamonds: 10 },
   { id: 'a_boss2',    stat: 'bosses',    goal: 50,     name: 'Boss Rush',         text: 'Defeat 50 bosses.',             diamonds: 40 },
   { id: 'a_world2',   stat: 'worlds',    goal: 2,      name: 'On The Street',     text: 'Clear 2 stages.',               diamonds: 15, max: true },
-  { id: 'a_world5',   stat: 'worlds',    goal: 5,      name: 'Mega Arena',        text: 'Clear all 5 stages.',           diamonds: 80, max: true },
+  { id: 'a_world5',   stat: 'worlds',    goal: 5,      name: 'Mega Arena',        text: 'Clear the first 5 stages.',        diamonds: 80, max: true },
+  { id: 'a_world7',   stat: 'worlds',    goal: 7,      name: 'Moon Walk',         text: 'Clear all 7 stages, up to the Moon.', diamonds: 120, max: true },
   { id: 'a_stars15',  stat: 'stars',     goal: 15,     name: 'Starstruck',        text: 'Collect 15 stars.',             diamonds: 20, max: true },
   { id: 'a_stars50',  stat: 'stars',     goal: 50,     name: 'Constellation',     text: 'Collect 50 stars.',             diamonds: 60, max: true },
   { id: 'a_combo',    stat: 'bestCombo', goal: 30,     name: 'Combo Breaker',     text: 'Reach a 30 kill combo.',        diamonds: 10, max: true },
@@ -190,7 +233,7 @@ export const ACHIEVEMENTS = [
   { id: 'a_duet',     stat: 'duets',     goal: 10,     name: 'In Harmony',        text: 'Trigger the Duet Finale 10 times.', diamonds: 15 },
   { id: 'a_codex1',   stat: 'seenEnemies', goal: 10,  name: 'Know Your Enemy',   text: 'Meet all 10 kinds of Static.',  diamonds: 20, max: true },
   { id: 'a_codex2',   stat: 'seenBosses',  goal: 5,   name: 'Boss Collector',    text: 'Meet all 5 bosses.',            diamonds: 30, max: true },
-  { id: 'a_rack',     stat: 'turretsOwned', goal: 12, name: 'Full Rack',         text: 'Unlock all 12 turrets.',        diamonds: 40, max: true },
+  { id: 'a_rack',     stat: 'wins',        goal: 10,  name: 'Tour Regular',      text: 'Win 10 stages.',                diamonds: 40 },
   { id: 'a_rush',     stat: 'rushBest',    goal: 10,  name: 'Boss Rush Done',    text: 'Beat all 10 bosses in Boss Rush.', diamonds: 50, max: true },
   { id: 'a_wheel',    stat: 'spins',       goal: 10,  name: 'Lucky Spinner',     text: 'Spin the Lucky Wheel 10 times.', diamonds: 15 },
   { id: 'a_perfect',  stat: 'flawless',  goal: 1,      name: 'Not A Scratch',     text: 'Win a stage with no leaks.',    diamonds: 20 },
@@ -231,3 +274,69 @@ export const WHEEL = [
   { id: 'c2',    weight: 4,  label: 'Studio', reward: { crate: 'studio' }, glyph: 'gift' },
   { id: 'd30',   weight: 2,  label: '30',    reward: { diamonds: 30 },  glyph: 'diamond' },
 ];
+
+// ---------------------------------------------------------------- Fame titles (shown next to the Fame level)
+export const FAME_TITLES = [
+  [1, 'Garage Band'], [3, 'Street Busker'], [6, 'Open Mic Hero'], [10, 'Local Legend'], [14, 'Club Regular'], [19, 'Opening Act'],
+  [25, 'Household Name'], [31, 'Festival Headliner'], [38, 'Chart Topper'], [45, 'Arena Star'], [50, 'Bass Legend'],
+];
+export function fameTitle(lv) {
+  let t = FAME_TITLES[0][1];
+  for (const [min, name] of FAME_TITLES) if (lv >= min) t = name;
+  return t;
+}
+
+// ---------------------------------------------------------------- Weekly Gig (one fixed run per ISO week, same seed for everyone)
+// Each gig = one DAILY_MODS id (the sim's opts.daily) + a few extra base effects, on a fixed stage, 25 waves.
+// Rotation is by week number, so neighbouring weeks never repeat.
+export const WEEKLY_WAVES = 25;
+export const WEEKLY_GIGS = [
+  { id: 'garage_marathon', name: 'Garage Marathon',  mod: 'rich_tour',       world: 'garage',   extra: [['enemyHp', 'mul', 1.25]] },
+  { id: 'street_sprint',   name: 'Street Sprint',    mod: 'speed_run',       world: 'busk',     extra: [['enemyHp', 'mul', 1.15]] },
+  { id: 'club_glass',      name: 'Glass Night',      mod: 'glass_cannon',    world: 'club',     extra: [['rate', 'mul', 1.15]] },
+  { id: 'festival_remix',  name: 'Festival Remix',   mod: 'level_three',     world: 'festival', extra: [['enemyHp', 'mul', 1.2]] },
+  { id: 'solo_tour',       name: 'Solo Tour',        mod: 'no_merge',        world: 'busk',     extra: [['enemyHp', 'mul', 1.3]] },
+  { id: 'arena_duet',      name: 'Arena Duet',       mod: 'two_instruments', world: 'arena',    extra: [['enemyHp', 'mul', 1.35]] },
+];
+export const WEEKLY_REWARD = { diamonds: 20, perWave: 1, winDiamonds: 25, records: 600, perWaveRecords: 60, fans: 120, crate: 'studio', crateMinWaves: 15 };
+
+// ---------------------------------------------------------------- Seasons (round 6): one theme per calendar month
+// SEASONS[month 1..12] = { id, name, desc, accent (card colour), theme (glyph name for the card art), keepsake }. The keepsake is a limited-time
+// cosmetic granted ONCE per season when all three season goals are claimed: { kind: 'outfit', id } (both heroes get it) or { kind: 'skin', id }.
+// There is no new art: every keepsake reuses an existing outfit or board skin id. If the player already owns it, the keepsake pays SEASON_KEEPSAKE_BONUS instead.
+// Season ids and goal ids are append-only (profile.season points at them). The English name and desc go through the data overlay (SEASONS.<month>.name).
+export const SEASONS = {
+  1:  { id: 'winter_gig',       name: 'Winter Gig',          desc: 'Snowed-in sessions. The Static freeze up and the crowd sings along.',   accent: '#6fb7ff', theme: 'snow',    keepsake: { kind: 'skin', id: 'skin_chalk' } },
+  2:  { id: 'heart_beat',       name: 'Heart Beat Month',    desc: 'Love songs only. Every merge makes the speakers blush.',                 accent: '#ff6f9f', theme: 'heart',   keepsake: { kind: 'outfit', id: 'stage' } },
+  3:  { id: 'spring_bloom',     name: 'Spring Bloom',        desc: 'Flowers on the amps and sunshine on the stage.',                         accent: '#7fd66b', theme: 'flower',  keepsake: { kind: 'skin', id: 'skin_sticker' } },
+  4:  { id: 'rainy_remix',      name: 'Rainy Day Remix',     desc: 'Puddles, umbrellas and a very wet bass drop.',                           accent: '#5aa7e8', theme: 'drop',    keepsake: { kind: 'outfit', id: 'onesie' } },
+  5:  { id: 'street_festival',  name: 'Street Festival',     desc: 'Banners up, buskers out. Play every corner of town.',                    accent: '#ff9f43', theme: 'horn',    keepsake: { kind: 'outfit', id: 'rocker' } },
+  6:  { id: 'beach_bash',       name: 'Summer Beach Bash',   desc: 'Sand, sun and subwoofers. The beach party never stops.',                 accent: '#ffc83d', theme: 'sparkle', keepsake: { kind: 'outfit', id: 'beach' } },
+  7:  { id: 'heatwave_rave',    name: 'Heatwave Rave',       desc: 'It is hot, it is loud, and the Static are melting.',                     accent: '#ff5a4f', theme: 'fire',    keepsake: { kind: 'skin', id: 'skin_midnight' } },
+  8:  { id: 'sunset_sessions',  name: 'Sunset Sessions',     desc: 'Golden hour jams on the rooftop.',                                       accent: '#ff8a5c', theme: 'star',    keepsake: { kind: 'outfit', id: 'moon' } },
+  9:  { id: 'back_to_beats',    name: 'Back to School Beats', desc: 'New term, new tempo. Show the class how it is done.',                   accent: '#b78af0', theme: 'note',    keepsake: { kind: 'outfit', id: 'stage' } },
+  10: { id: 'spooky_static',    name: 'Spooky Static',       desc: 'Things go buzz in the night. Be brave, keep the beat.',                  accent: '#ff7a1c', theme: 'skull',   keepsake: { kind: 'outfit', id: 'onesie' } },
+  11: { id: 'autumn_harvest',   name: 'Autumn Harvest Jam',  desc: 'Falling leaves, warm amps and a bumper crop of beats.',                  accent: '#c9822b', theme: 'clover',  keepsake: { kind: 'skin', id: 'skin_chalk' } },
+  12: { id: 'snowy_encore',     name: 'Snowy Encore',        desc: 'One last show of the year under the fairy lights.',                      accent: '#8fd3ff', theme: 'bell',    keepsake: { kind: 'skin', id: 'skin_midnight' } },
+};
+// The three goals of every season, counted from the first of the month (profile.season.progress). Rewards are paid on claim.
+export const SEASON_GOALS = [
+  { id: 'kills',  stat: 'kills',  goal: 2500, reward: { records: 900 } },
+  { id: 'merges', stat: 'merges', goal: 400,  reward: { diamonds: 20 } },
+  { id: 'wins',   stat: 'wins',   goal: 8,    reward: { diamonds: 30, records: 600 } },
+];
+export const SEASON_KEEPSAKE_BONUS = { diamonds: 25 };
+
+// ---------------------------------------------------------------- Board skins (cosmetic, bought with diamonds)
+// The art lives in doodle_env.js (BOARD_SKINS names and descriptions). Here only the shop side: ids (append-only) and prices.
+// Owned skins: profile.skins.owned, equipped one: profile.settings.skin. The default skin is free and always owned.
+export const SKIN_DEFAULT = 'skin_paper';
+export const SKIN_PRICES = { skin_paper: 0, skin_chalk: 60, skin_sticker: 100, skin_midnight: 140 };
+export const SKIN_IDS = Object.keys(SKIN_PRICES);
+// fallback names, used when doodle_env.js has no BOARD_SKINS yet
+export const SKIN_FALLBACK = {
+  skin_paper: { name: 'Notebook Paper', desc: 'The classic ruled page with tape and crayon.' },
+  skin_chalk: { name: 'Chalkboard', desc: 'A dark slate board with chalk-white outlines.' },
+  skin_sticker: { name: 'Scrapbook', desc: 'A bright pastel page with washi tape and stickers.' },
+  skin_midnight: { name: 'Midnight Page', desc: 'An inky night page with glow crayon lines.' },
+};

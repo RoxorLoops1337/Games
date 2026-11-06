@@ -13,8 +13,12 @@ export function lightSprite(col, size = 64) {
   if (!c) {
     c = document.createElement('canvas'); c.width = c.height = size;
     const x = c.getContext('2d'), g = x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    g.addColorStop(0, col); g.addColorStop(0.35, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+    g.addColorStop(0, col); g.addColorStop(1, col);
     x.globalAlpha = 1; x.fillStyle = g; x.fillRect(0, 0, size, size);
+    // smooth, quadratic-like falloff instead of a flat core with a hard edge
+    const m = x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    m.addColorStop(0, 'rgba(0,0,0,1)'); m.addColorStop(0.25, 'rgba(0,0,0,.72)'); m.addColorStop(0.6, 'rgba(0,0,0,.24)'); m.addColorStop(1, 'rgba(0,0,0,0)');
+    x.globalCompositeOperation = 'destination-in'; x.fillStyle = m; x.fillRect(0, 0, size, size); x.globalCompositeOperation = 'source-over';
     glowCache.set(key, c);
   }
   return c;
@@ -23,22 +27,34 @@ export function lightSprite(col, size = 64) {
 function mk(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return [c, c.getContext('2d')]; }
 
 export function createPost(W, H) {
-  const LS = 3, BS = 4;                                  // light map is 1/3 size, bloom buffer 1/4
+  const LS = 3, BS = 6;                                  // light map is 1/3 size, bloom buffer 1/6, refreshed every third frame
   const [lightCv, lctx] = mk(W / LS, H / LS);
   const [bloomCv, bctx] = mk(W / BS, H / BS);
-  const [noiseCv, nctx] = mk(128, 128);
-  const img = nctx.createImageData(128, 128);
-  for (let i = 0; i < img.data.length; i += 4) { const v = 90 + Math.random() * 90; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  const NW = 480, NH = 270, NP = 24;                      // grain is one low-res sheet, drawn once per frame at a random offset
+  const [noiseCv, nctx] = mk(NW, NH);
+  const img = nctx.createImageData(NW, NH);
+  let bloomN = 0;
+  for (let i = 0; i < img.data.length; i += 4) { const r = Math.random(); img.data[i] = img.data[i + 1] = img.data[i + 2] = r < 0.5 ? 0 : 255; img.data[i + 3] = 40 + Math.random() * 215; }
   nctx.putImageData(img, 0, 0);
 
   return {
     hasFilter: HAS_FILTER,
     // ambient: css colour. lights: [{x,y,r,col,a}] in world pixels. shadowBlobs: moving cloud shadows [{x,y,rx,ry,a}].
     // Multiplied over the scene: dark where there is no light, untouched where there is.
-    light(ctx, ambient, lights, blobs) {
+    light(ctx, ambient, lights, blobs, grade) {
       lctx.setTransform(1, 0, 0, 1, 0, 0);
       lctx.globalCompositeOperation = 'source-over';
       lctx.fillStyle = ambient; lctx.fillRect(0, 0, lightCv.width, lightCv.height);
+      if (grade) {                                       // colour grade rides on the same multiply pass (no extra full-screen blend)
+        const gg = lctx.createLinearGradient(0, 0, 0, lightCv.height);
+        gg.addColorStop(0, grade[0]); gg.addColorStop(1, grade[1]);
+        lctx.fillStyle = gg; lctx.fillRect(0, 0, lightCv.width, lightCv.height);
+        if (grade[2] > 0.02) {
+          const d = lctx.createLinearGradient(0, lightCv.height * 0.35, 0, lightCv.height * 0.85);
+          d.addColorStop(0, 'rgba(255,150,120,0)'); d.addColorStop(1, `rgba(255,150,120,${0.3 * grade[2]})`);
+          lctx.fillStyle = d; lctx.fillRect(0, 0, lightCv.width, lightCv.height);
+        }
+      }
       if (blobs) for (const b of blobs) {
         lctx.globalAlpha = b.a; lctx.fillStyle = '#6a60a0'; lctx.beginPath(); lctx.ellipse(b.x / LS, b.y / LS, b.rx / LS, b.ry / LS, 0, 0, TAU); lctx.fill();
       }
@@ -48,7 +64,9 @@ export function createPost(W, H) {
         lctx.globalAlpha = Math.min(1, l.a == null ? 1 : l.a);
         lctx.drawImage(lightSprite(l.col), l.x / LS - r, l.y / LS - r, r * 2, r * 2);
       }
-      lctx.globalAlpha = 1; lctx.globalCompositeOperation = 'source-over';
+      // a whisper of noise breaks up the banding that 8-bit multiplies show in dark, smooth gradients (night themes)
+      lctx.globalAlpha = 0.035; lctx.globalCompositeOperation = 'source-over'; lctx.drawImage(noiseCv, 0, 0, lightCv.width, lightCv.height);
+      lctx.globalAlpha = 1;
       ctx.save();
       ctx.globalCompositeOperation = 'multiply';
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
@@ -58,9 +76,10 @@ export function createPost(W, H) {
     // soft glow around the brightest parts: a thresholded, blurred copy of the frame added back on top. It fades out
     // toward the top of the screen so the sky does not wash everything out.
     bloom(ctx, src, strength = 0.3) {
+      if ((bloomN++ % 3) === 0) {
       bctx.setTransform(1, 0, 0, 1, 0, 0);
       bctx.globalCompositeOperation = 'copy';
-      if (HAS_FILTER) bctx.filter = 'brightness(0.62) contrast(3.2) blur(2.2px)';
+      if (HAS_FILTER) bctx.filter = 'brightness(0.62) contrast(3.2) blur(1.6px)';
       bctx.drawImage(src, 0, 0, bloomCv.width, bloomCv.height);
       if (HAS_FILTER) bctx.filter = 'none';
       else { bctx.globalCompositeOperation = 'multiply'; bctx.drawImage(bloomCv, 0, 0); bctx.drawImage(bloomCv, 0, 0); }
@@ -69,6 +88,7 @@ export function createPost(W, H) {
       m.addColorStop(0, 'rgba(0,0,0,.1)'); m.addColorStop(0.4, 'rgba(0,0,0,.8)'); m.addColorStop(1, 'rgba(0,0,0,1)');
       bctx.fillStyle = m; bctx.fillRect(0, 0, bloomCv.width, bloomCv.height);
       bctx.globalCompositeOperation = 'source-over';
+      }
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalCompositeOperation = 'lighter';
@@ -93,9 +113,10 @@ export function createPost(W, H) {
     },
     grain(ctx, t, strength = 0.05) {
       ctx.save();
-      ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = strength;
-      const ox = Math.floor(t * 997) % 128, oy = Math.floor(t * 613) % 128;
-      for (let y = -oy; y < H; y += 128) for (let x = -ox; x < W; x += 128) ctx.drawImage(noiseCv, x, y);
+      ctx.globalAlpha = strength * 0.5;
+      const ox = Math.floor(t * 997) % NP, oy = Math.floor(t * 613) % NP;
+      const sx = (W + NP * 4) / NW, sy = (H + NP * 4) / NH;
+      ctx.drawImage(noiseCv, -ox * 2, -oy * 2, NW * sx, NH * sy);
       ctx.restore();
     },
     // a few soft discs along the line from the sun through the middle of the screen
@@ -103,7 +124,7 @@ export function createPost(W, H) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const cx = W / 2, cy = H / 2;
-      for (const [u, r, col] of [[0.35, 26, '#ffe9b0'], [0.6, 14, '#ffb8e0'], [0.85, 36, '#b8e8ff'], [1.15, 18, '#fff3c0']]) {
+      for (const [u, r, col] of [[0.9, 36, '#b8e8ff'], [1.15, 18, '#fff3c0'], [1.4, 26, '#ffd8f0']]) {
         const x = sx + (cx - sx) * u, y = sy + (cy - sy) * u;
         ctx.globalAlpha = strength * (u > 1 ? 0.7 : 1);
         ctx.drawImage(lightSprite(col), x - r, y - r, r * 2, r * 2);

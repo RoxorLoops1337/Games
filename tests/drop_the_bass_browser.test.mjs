@@ -18,6 +18,7 @@ if (!pw) skip('playwright not found');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 const srv = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html';
+  if (p.startsWith('/api/')) { res.writeHead(204); res.end(); return; }   // the anonymous stats beacon
   fs.readFile(path.join(ROOT, p), (e, d) => { if (e) { res.writeHead(404); res.end('nf'); } else { res.writeHead(200, { 'content-type': MIME[path.extname(p)] || 'application/octet-stream' }); res.end(d); } });
 });
 await new Promise((r) => srv.listen(0, r));

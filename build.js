@@ -17,6 +17,9 @@ const { execFileSync, execSync } = require('child_process');
 
 const watch = process.argv.includes('--watch');
 
+// Drop the Bass: refresh the service worker precache list and version before the static copy (a test checks it too).
+try { execFileSync(process.execPath, [path.join(__dirname, 'tools', 'dtb_make_manifest.mjs')], { stdio: 'inherit' }); } catch (e) { console.warn('dtb manifest not refreshed:', e.message); }
+
 const REPO = __dirname;
 const DIST = path.join(REPO, 'dist');
 
@@ -36,7 +39,6 @@ const STATIC_PATHS = [
   'Carnegiendon',
   'loop_jam',
   'gamedevloop',
-  'verb_collector',
   'thieu_excuses_app',
   'mazekeep',
   'ralpherizer',
@@ -92,9 +94,11 @@ const STATIC_PATHS = [
   'blockmates',
   'stacking_cats',
   'graftwork',
+  'sunbeam_siege',
   'rustgrift',
   'midnight_mog',
   'drop_the_bass',
+  'groove_lock',
   'tools',
 ];
 
@@ -107,10 +111,6 @@ const BUNDLES = [
   {
     entryPoints: [path.join('beatbox_heroes', 'park3d', 'main.js')],
     outfile: path.join(DIST, 'beatbox_heroes', 'park3d.bundle.js'),
-  },
-  {
-    entryPoints: [path.join('verb_collector', 'main.tsx')],
-    outfile: path.join(DIST, 'verb_collector', 'verb-collector.bundle.js'),
   },
 ];
 
@@ -169,18 +169,33 @@ const buildPitchStory = () => {
   console.log('copied pitch_story/play → dist/pitch_story/play');
 };
 
-// Beatbox Heroes ESM splitting build (park3d/entry.js -> r3/entry.js + r3/p3-*.js): one tool owns the esbuild options (tools/beatbox_heroes/build_park3d.mjs --esm).
-// Output is mirrored into the source tree like the other bundles, and the entry URL is stamped into index.html as window.BBH_R3.
+// Beatbox Heroes 3D build (park3d/entry.js -> r3/entry.js + r3/p3-*.js, park3d/main.js -> park3d.bundle.js): one tool owns the esbuild options
+// (tools/beatbox_heroes/build_park3d.mjs). The result goes to dist/ and is MIRRORED INTO THE SOURCE TREE AND COMMITTED: Cloudflare Pages runs no build and
+// serves the repo as it is, so the committed copy (and the hash stamped into the committed pages) is what players get. Because of that the build must be
+// gentle with those tracked files: it never deletes the mirror up front (it used to, so a slow, failed or interrupted build left ~55 tracked files "deleted"
+// for every other session sharing the checkout), it writes only files whose content changed, and it removes only chunks of an older build, at the very end.
 const R3_SRC = path.join(REPO, 'beatbox_heroes', 'r3');
 const isR3Out = (f) => f === 'entry.js' || /^p3-.*\.js$/.test(f);
-const cleanR3Mirror = () => { if (fs.existsSync(R3_SRC)) for (const f of fs.readdirSync(R3_SRC)) if (isR3Out(f)) fs.rmSync(path.join(R3_SRC, f)); };
+const isHeroesGenerated = (rel) => rel === 'park3d.bundle.js' || /^r3\/(entry\.js|p3-[\w.-]+\.js)$/.test(rel);   // relative to beatbox_heroes/
+// copy src over dst only when the content differs (an unchanged mirror is not even touched)
+const copyIfChanged = (src, dst) => {
+  const buf = fs.readFileSync(src);
+  if (fs.existsSync(dst) && fs.readFileSync(dst).equals(buf)) return false;
+  fs.mkdirSync(path.dirname(dst), { recursive: true });
+  fs.writeFileSync(dst, buf);
+  return true;
+};
 const buildBeatboxR3 = () => {
   const outDir = path.join(DIST, 'beatbox_heroes', 'r3');
   execFileSync(process.execPath, [path.join(REPO, 'tools', 'beatbox_heroes', 'build_park3d.mjs'), '--esm', '--out', outDir], { stdio: 'inherit' });
   const entry = fs.readFileSync(path.join(outDir, 'entry.js'));
   const hash = crypto.createHash('sha256').update(entry).digest('hex').slice(0, 10);
-  for (const f of fs.readdirSync(outDir)) if (isR3Out(f)) fs.copyFileSync(path.join(outDir, f), path.join(R3_SRC, f));
-  console.log(`mirrored        → beatbox_heroes/r3/entry.js + chunks`);
+  const fresh = fs.readdirSync(outDir).filter(isR3Out);
+  fs.mkdirSync(R3_SRC, { recursive: true });
+  let changed = 0;
+  for (const f of fresh) if (copyIfChanged(path.join(outDir, f), path.join(R3_SRC, f))) changed++;
+  for (const f of fs.readdirSync(R3_SRC)) if (isR3Out(f) && !fresh.includes(f)) fs.rmSync(path.join(R3_SRC, f));   // a chunk of an older build
+  console.log(`mirrored        → beatbox_heroes/r3/entry.js + chunks (${changed} changed)`);
   for (const html of [path.join(DIST, 'beatbox_heroes', 'index.html'), path.join(REPO, 'beatbox_heroes', 'index.html')]) {
     if (!fs.existsSync(html)) continue;
     const before = fs.readFileSync(html, 'utf8');
@@ -199,7 +214,7 @@ const wipeDist = () => {
 // folder). Clawspire: the old pre-rendered intro (js/intro.js draws it live, no
 // code requests these) and the design docs.
 // Encore Island 3D keeps its preview/lab pages and notes next to the code; none of it is part of the site
-const DEV_ONLY = /^(encore_island\/view3d\/(lab[\w]*\.html|[\w]*lab[\w]*\.js|README\.md)|encore_island_3d\/(preview_\w+\.html|DESIGN\.md)|ludus_maximus_3d\/(lab\/.*|ART_BIBLE\.md|ROADMAP\.md))$/;
+const DEV_ONLY = /^(sunbeam_siege\/(demo|design|tests)\/.*|sunbeam_siege\/NOTES\.md|encore_island\/view3d\/(lab[\w]*\.html|[\w]*lab[\w]*\.js|README\.md)|encore_island_3d\/(preview_\w+\.html|DESIGN\.md)|ludus_maximus_3d\/(lab\/.*|ART_BIBLE\.md|ROADMAP\.md))$/;
 const SKIP_IN_DIST = {
   clawspire: new Set(['intro.mp4', 'intro.webm', 'intro_poster.jpg', 'DESIGN.md', 'ART_PROMPTS.md']),
   // Hocus Vocus: the re-theme plan (hundreds of KB of design notes) is never deployed
@@ -219,7 +234,7 @@ const copyStatic = () => {
     // A game's CLAUDE.md is notes for coding sessions, never part of the site.
     const opts = { recursive: true, filter: (p) => {
       const r = path.relative(src, p).split(path.sep).join('/');
-      return !skip.has(r) && r !== 'CLAUDE.md' && !DEV_ONLY.test(rel + '/' + r);
+      return !skip.has(r) && r !== 'CLAUDE.md' && !DEV_ONLY.test(rel + '/' + r) && !(rel === 'beatbox_heroes' && isHeroesGenerated(r));   // dist gets the FRESH 3D build below, never the mirror
     } };
     fs.cpSync(src, dst, opts);
   }
@@ -346,7 +361,6 @@ const minifyClawspire = () => {
   }
 
   wipeDist();
-  cleanR3Mirror(); // stale ESM entry/chunks mirrored into the source tree by an earlier build must not be copied into dist/
   copyStatic();
   writeArtManifest();
   minifyClawspire();
@@ -368,7 +382,7 @@ const minifyClawspire = () => {
     const sourceCopyPath = path.join(REPO, sourceGameDir, bundleBaseName);
     // Mirror bundle into the source folder so the site works without a
     // Pages build step (e.g. file:// previews).
-    fs.copyFileSync(t.outfile, sourceCopyPath);
+    copyIfChanged(t.outfile, sourceCopyPath);   // an unchanged committed mirror is not rewritten
     console.log(`mirrored        → ${path.relative(REPO, sourceCopyPath)}`);
     // Rewrite both index.html copies (dist + source) to pin the hash.
     const stamp = (htmlPath) => {

@@ -48,9 +48,11 @@ node with a mock ctx: guard `document` use. Sprite caches: `makeCanvas(w,h)` ret
 Neon sticker look: dark violet backdrops, thick dark outlines (3 px), bright flat fills with a lighter highlight and darker shade,
 small sparkles, soft glow on the important thing. Cute but cheeky. The Static are fuzzy grey blobs with googly eyes, glitch offsets
 in cyan and magenta, never gory. Palette is `COL` in data_core.js. Jasmin pink (#ff5fb0), RoxorLoops green (#9dff3a).
-RoxorLoops: tall swooping brown mohawk pushed up and forward, shaved sides, short mullet tail, pale blue-grey cheeky eyes, smirk with a
-flash of teeth, black tee with an orange smiley, olive pants, lime sneakers, black mic with a green band, light stubble.
-Jasmin: long dark hair in a high ponytail with a pink scrunchie, a heart necklace, hoop earring, warm smile, pink top, a mic with a pink band.
+RoxorLoops (doodle art, from the crayon duo reference): chibi, spiky auburn mohawk swept up and forward with orange highlights, shaved tan sides, long
+auburn mullet, big bright blue eyes, open grin with pink tongue, blush, black oversized tee with a yellow smiley, black cargo pants (orange stitching,
+thigh pockets), chunky black sneakers with white soles, black mic with a green band, rock-on hand when an arm is raised.
+Jasmin: chibi, long wavy auburn hair in a high ponytail with a pink scrunchie and a small pink hair clip, big brown eyes with lashes (a wink when
+happy), blush, silver hoop earring, bead necklace, pink crop top, pink baggy cargo pants, white-pink sneakers, black mic with a pink band, open waving hand.
 Onesies (outfit 'onesie'): Roxor a green monster onesie with horns hood, Jasmin a unicorn onesie with a horn and rainbow mane.
 Loopy: a living loop-station pedal (rounded rectangle, two big round footswitch "feet", a tiny screen face with eyes, a cable tail), the guide.
 
@@ -118,3 +120,119 @@ scratchpad, LOOK at it (Read the png), fix, repeat. Lab pages live in `drop_the_
   offline Streaming Royalties, lucky wheel, boosters.
 - Tests: `npm run test:dropbass` (data, sim, meta, battle view headless, balance bot, board function, audio, art, browser smoke when Playwright exists).
 - Balance: tests/drop_the_bass_balance.test.mjs prints the bot win-rate table. Stage difficulty is set by WORLDS[].hpMul/coinMul and ECON.hpGrowth.
+
+## Added systems (read these before changing the area)
+- `GAMEPLAY_API.md`: sim API (synergies, poolOdds, rerollNext, nextWavePreview, currentWaveInfo, recap, difficulty). Stun and push-back are budgeted (`stunE`, `pushE`) so nothing can be locked in place forever.
+- `AUDIO_EVENTS.md`: new sfx, `AudioFx.setMusicState`, heartbeat, beat sync.
+- `META_NOTES.md`: weekly gig, friends, save robustness (backup key `drop_the_bass_save_v1_bak`), studio scene.
+- `js/share.js`: results share card. `fonts/`: self-hosted Patrick Hand.
+- The game has ONE look (crayon doodle). All 12 turrets are in the drop pool from the first run.
+- Resume: turret ages use the run clock (`run.t - tu.born`), never the view clock. `tests/drop_the_bass_visual.test.mjs` guards that turrets stay visible after a resume.
+
+## Backlog (improvement loop notes)
+- Round 1: added tests/drop_the_bass_recap_tips.test.mjs, which fails if any recap tip sentence from sim.js has no da, nl or de translation (the UI matches the English sentence; moving to tip ids is still a good cleanup).
+- Ideas next: boss hint card and codex art for lowpass and silence; per-modifier balance review with the bot matrix; colour-blind cues (shapes plus colour on lanes, ally and enemy rings); a Larger text setting; more first-time hints (hero abilities pick, skins); recap tips as ids; a mid-run "what changed" summary after boss phases; stats.html review once real data arrives; check the 25 wave stages with real play.
+
+### Round 3 (ten improvements, in order)
+1. Larger text setting also scales the battle canvas HUD text (it only reached the DOM menus).
+2. Selected turret panel: lines no longer collide, panel never covers the selected turret.
+3. Boss intro, hint card and codex art for lowpass and silence verified and fixed.
+4. Performance pass on 25-wave stages with 25+ turrets and a boss (frame budget test).
+5. Hint pile-up: at most one first-time hint at a time, spaced out; the skin hint only after the first stage clear.
+6. Recap tips carry ids (sim.js) instead of the UI matching English sentences.
+7. Dead code and unused translation keys removed (a11y.makePerfWatch, toast.autolow).
+8. Results screen shows personal bests and a New Record celebration (endless, daily, weekly).
+9. Browser test that scans visible hub and battle text in da, nl and de for untranslated English.
+10. Save export and import covers every profile field added since round 1 (language, accessibility, skins, milestones, friends), with tests.
+
+Round 3 result: all ten shipped. Notes: HUD canvas text honours Larger text (a11y.textScale); ring and icon caching cut canvas ops about 14 percent; the backdrop (about 4.7 ms) and the board floor (about 3.4 ms) in doodle_env.js are now the biggest frame costs (Low graphics barely helps there). Hint icons for synergy, branch, preview, reroll, boss phase and hero ready were added.
+Ideas next (round 4): cheaper backdrop and board floor in Low graphics; per-boss first-time hint cards; tutorial step for the preview and reroll; sound mix check on phones; daily streak rewards and a friendly welcome-back summary; tablet and landscape layout; more outfits and skins to chase; an in-game changelog card; endless mode variety (themed waves every 10); a 'practice a boss' mode from the codex.
+
+### Round 4 (ten improvements, in order)
+1. Cheaper backdrop and board floor drawing (cache static layers, simpler pass in Low graphics).
+2. First-time hint card per new boss (lowpass, silence and the older bosses), with the right icon.
+3. Practice a boss from the codex: a single boss wave, no rewards, no save changes.
+4. Next steps card for new players (preview, reroll, synergy, branch, hero move) with ticks as they are used.
+5. Welcome-back summary after a long absence (royalties, resets, weekly status).
+6. What's new card shown once per game version, in all four languages.
+7. Daily streak rewards at 7, 14 and 30 days.
+8. Keyboard shortcut list in How to Play on desktop.
+9. Endless: a themed wave every 10 waves announced with a banner.
+10. Canvas aria-label and page title follow the language.
+
+Round 4 result: all ten shipped (backdrop and board baked at device scale: about 4x cheaper, Low graphics skips live bits; per-boss hint cards; Practice a boss from the codex; Next steps card; Welcome back sheet; What's new card with GAME.version 2 and data_changelog.js; streak rewards at 7/14/30 days; desktop shortcuts in How to Play; language-aware page title and canvas label; themed endless waves from wave 15).
+Ideas next (round 5): lane chevrons still stroked live (about 0.5 ms); tablet and landscape layout; a short interactive tutorial step for the preview and reroll; a boss codex page with phase diagrams; leaderboard friends invite by link; sound mix check on phones; seasonal event (a limited-time stage skin and outfit); gamepad support; first-run onboarding polish (skip tutorial for returning players on a new device via save code).
+
+### Round 5 (ten improvements, in order)
+1. Title screen: the language picker overlaps the DROP THE BASS logo (bug); move it.
+2. Wide screens and landscape: the world sign on the battle backdrop is clipped by the board ('GAR  AYS'); only draw it when it is visible.
+3. Lane chevrons on the board are stroked live every frame: bake them.
+4. Codex Bosses: show each boss's phases (thresholds, effect names) as a small diagram.
+5. Friend invite link: ?friend=Name adds a friend after a confirm; 'Copy invite link' in the leaderboard.
+6. 'Already played? Import your save' on the title menu for returning players on a new device.
+7. Offline ready toast and a small offline indicator (PWA).
+8. Quick mute toggle on the title screen and in the pause menu.
+9. Default Reduce motion on for fresh profiles when the system prefers reduced motion.
+10. Tablet and landscape check: no clipped HUD, sensible centring (verified with screenshots at 1280x720, 820x1180, 844x390).
+
+Round 5 result: items 1 to 9 shipped (title picker moved, sign hidden when covered on wide screens, baked chevrons, codex boss phase diagrams, friend invite links, import on the title menu, offline ready toast and Offline chip, quick mute, reduced motion default). Item 10: portrait tablet is fine; landscape phones and desktops show the 540x960 column scaled to height with decorative sides (a real landscape layout is a bigger design task).
+Ideas next (round 6): a real landscape layout (side panels with turret list and stats); gamepad support; tutorial step for preview and reroll; seasonal limited-time event; sound mix check on phones; daily quest variety; leaderboard seasons; share card in the player's outfits (done) plus animated GIF replay; accessibility audit with a screen reader (aria for DOM menus); balance review of modifiers with the bot matrix.
+
+### Round 6 (ten improvements, in order)
+1. One modal at a time: a modal queue at hub open (Welcome back, Daily Gig, What's new, hints) with a clear priority.
+2. Wide screens: side panels (run stats and turret legend) in the margins instead of empty decoration.
+3. Gamepad support (d-pad cursor, buttons for drop, merge, hero moves, pause).
+4. Tutorial teaches the wave preview and the re-roll.
+5. Screen reader and keyboard focus management for DOM menus (roles, live region, focus trap, Esc).
+6. Seasonal event: a monthly theme with event goals and a limited-time outfit or skin.
+7. Ten more daily quests for variety.
+8. Modifier balance review with the bot matrix (reward vs difficulty).
+9. Monkey test: seeded random input fuzz in all four languages, no page errors.
+10. Diagnostics: an error ring buffer and a 'Report a problem' button in Settings that copies version, language, device and recent errors.
+
+Round 6 result: all ten shipped (modal queue with priorities; wide-screen side panels; gamepad support with a How to Play card; tutorial steps for preview and reroll; a11y focus management; monthly seasons with goals; ten more quests; modifier reward multipliers rebalanced; seeded monkey fuzz test in four languages; diagnostics ring buffer with a Report a problem button). Test lessons: when a test removes a hint modal from the DOM it must also clear `battle.hintQueue`, or the game keeps ignoring taps; measure layout only after finite CSS animations end (d-pop scales cards for 0.3 s).
+Ideas next (round 7): pad support for DOM modals (pause, choice, hint); selling and moving turrets by pad; quest counters that need sim hooks (hero moves, synergies, rerolls, flawless waves); tutorial coverage review; sound mix on phones; leaderboard seasons; a changelog entry per version bump; trim the monkey test runtime.
+
+### Round 7 (improvements, in order)
+1. Gamepad drives the DOM menus (pause, Remix pick, hints, results): d-pad moves focus, A presses, B closes (`domPadKey` in gamepad.js, keyboard path).
+2. Pad sell: R3 twice (within 2 s) sells the selected turret; the first press asks.
+3. Five new quests fed by new sim counters (`dropRerolls`, `branches`, `moves`, `sells`, `synergies` in the run result): re-roll, upgrade paths, moves, sells, synergy pairs.
+4. GAME.version 3 with a What's new entry (Seasons and gamepads) in four languages.
+5. Tests: `drop_the_bass_r7.test.mjs` (counters, quests, changelog, pad sell) and `drop_the_bass_r7_browser.test.mjs` (fake pad driving the pause menu in Chromium).
+
+Round 7 result: a smaller round (5 items). Balance bot check (bal.mjs, level 0) looks sane: Garage is winnable by a merging bot, later stages punish idle and no-merge play.
+Ideas next (round 8): the pad cannot yet drive hub screens (only battle menus); quest toast when a goal completes mid-run; a leaderboard season label; tutorial coverage for branches and synergies; sound mix on real phones (needs a device); trim the monkey test runtime; run-level stat cards on the recap for the new counters.
+
+### Round 8 (improvements, in order)
+1. The pad drives the title and hub screens (`MenuPad` in gamepad.js, polled from main.js): D-pad moves focus, A presses, B closes a modal.
+2. LB and RB switch the hub tab.
+3. A starts the TAP TO START title.
+4. Pad rumble on the same events as the phone haptics (`PadControl.rumble`, follows the Vibrate and Reduce motion settings).
+5. Results: a tactics line (Re-rolls, Sold, Moved, Paths) shown only when used.
+6. Results: today's quests the run completed are listed (`out.questsDone` from `applyRunResult`).
+7. How to Play gamepad card lists the menu controls.
+8. Tests: `drop_the_bass_r8.test.mjs` (quests done, rumble) and `drop_the_bass_r8_browser.test.mjs` (hub pad, title start, rumble, seeded pad fuzz).
+
+Round 8 result: 8 items shipped (smaller than ten; the pad work was the biggest gap left from round 6).
+Ideas next (round 9): pad cursor for the shop and gear screens (focus order is reading order, grids are awkward); quest toast during a run; leaderboard season label; tutorial coverage for upgrade paths and synergies; a settings toggle for rumble strength; share card with tactics; sound mix on phones (needs a device); trim the monkey test runtime; balance pass on Endless past wave 40.
+
+### Round 9 (improvements, in order)
+1. Menu pad uses spatial navigation (nearest control in the pressed direction, wraps to the far end) instead of reading order, so grids in the shop and gear screens work.
+2. A toast during the run when a daily quest goal is reached (`Battle.questWatch`, once per quest, not in the tutorial or practice).
+3. Results: a line when the run finished a monthly season goal (`out.seasonNew`).
+4. Tests: `drop_the_bass_r9.test.mjs` (season goals) and `drop_the_bass_r9_browser.test.mjs` (spatial nav on a 2x2 grid, quest toast once).
+
+Round 9 result: 4 items shipped (small round, the loop is in polish territory).
+Ideas next (round 10): a real device pass for pad focus visuals on the gear grid; share card with tactics; rumble strength setting; leaderboard seasons need a server field; balance pass on Endless past wave 40 with the bot; tutorial coverage for upgrade paths and synergies; trim the monkey test runtime; review of the 29 older quests for duplicates of the new stats.
+
+### Round 10 (improvements, in order)
+1. Daily quests the player cannot work on are never dealt or re-rolled into (`questAvailable`: the Endless quest needs the first stage clear).
+2. The menu gamepad says "Gamepad connected" once on its first use (hub and title, like the battle does).
+3. Checks, no change needed: Endless bot (level 0 reaches about wave 16, a level 20 studio about wave 70 to 80 in 4000 s of play), wide and portrait battle screenshots in da and de look right.
+
+Round 10 result: 2 small items shipped. The loop is near diminishing returns on the pad and meta side; the remaining value is in real-device feedback.
+Ideas next (round 11): ask for real player feedback on the pad and tablet layout; share card with tactics; rumble strength setting; leaderboard seasons need a server field; tutorial coverage for upgrade paths and synergies; trim the monkey test runtime; more outfits to chase (art needed); a gear screen pad pass on a real device.
+
+### Round 11
+Bug hunt only: the monkey test with seeds 2024, 777 and 31337 (30 s per language, `DTB_MONKEY_SEED`, `DTB_MONKEY_SECS`) found nothing in en, da, nl and de. Shipped: the `DTB_MONKEY_SEED` switch so anyone can hunt with new seeds. No game change this round.
+Ideas next: unchanged from round 10 (real-device feedback on pad and tablet, share card with tactics, rumble strength, tutorial coverage for upgrade paths and synergies).

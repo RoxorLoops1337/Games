@@ -1,0 +1,5 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#231a3d;color:#f6ecd8;font:11px sans-serif">
+<canvas id="c"></canvas><script src="../src/gfx/icons.js"></script><script>
+var I=SB.gfx.icons,n=I.names,S=5,cols=9,cw=15*S+70,ch=12*S+22,c=document.getElementById('c');c.width=cols*cw;c.height=Math.ceil(n.length/cols)*ch;var x=c.getContext('2d');
+n.forEach(function(k,i){var ox=(i%cols)*cw+6,oy=((i/cols)|0)*ch+4;I.draw(x,k,ox,oy,{scale:S,cb:true,frame:i%2==0});x.fillStyle='#f6ecd8';x.fillText(k,ox,oy+12*S+12);});
+</script>

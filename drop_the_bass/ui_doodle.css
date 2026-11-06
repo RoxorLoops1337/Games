@@ -1,0 +1,454 @@
+/* ui_doodle.css: the CRAYON NOTEBOOK look for every DOM screen. Everything is scoped under body.doodle, so body.classic (and the plain ui.css) is untouched.
+   Cream paper with ruled lines, thick ink outlines with slightly wobbly corners, flat crayon colours, hard offset shadows, a hand-written face
+   (Patrick Hand, self-hosted, with Comic Sans style fallbacks). No blur, no glow, no glossy gradients, no shine sweeps. Hit areas, the 540 px
+   layout width and reduced motion handling stay as in ui.css. */
+
+/* Patrick Hand is self-hosted (fonts/, SIL OFL 1.1, see fonts/OFL.txt) so the look survives offline play. */
+@font-face{font-family:"Patrick Hand";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/PatrickHand-latin-ext.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Patrick Hand";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/PatrickHand-latin.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+
+body.doodle{
+  --ink:#2b2733; --ink2:#3a3445; --panel:#fbf6e6; --panel2:#f3ead0; --line:#2b2733; --bone:#2b2733; --dim:#6b6477;
+  --pink:#ff5fb0; --green:#43b94a; --cyan:#19d3ff; --gold:#ffc83a; --orange:#ff9226; --red:#e8403f; --violet:#7b4fd0;
+  --coin:#e8a21c; --diamond:#19b8e0; --record:#ff5fb0;
+  --common:#8a8a96; --rare:#2f7de1; --epic:#7b4fd0; --legendary:#e8870c; --mythic:#e8309c;
+  --edge:#2b2733; --edge-hi:#2b2733; --glass-hi:linear-gradient(transparent,transparent);
+  --paper:#fbf6e6; --paper2:#f3ead0; --rule:#a9cdf0; --margin:#f08a8a; --crayon:#ffd60a;
+  --wob:255px 18px 225px 18px/18px 225px 18px 255px; --wob2:18px 255px 18px 225px/225px 18px 255px 18px;
+  --hand:"Patrick Hand","Gochi Hand","Comic Sans MS","Chalkboard SE","Marker Felt",system-ui,sans-serif;
+  --halo:-1.5px -1.5px 0 #2b2733,1.5px -1.5px 0 #2b2733,-1.5px 1.5px 0 #2b2733,1.5px 1.5px 0 #2b2733,0 2px 0 #2b2733;
+  --haloW:-2px -2px 0 #fff,2px -2px 0 #fff,-2px 2px 0 #fff,2px 2px 0 #fff,0 3px 0 #fff;
+  font-family:var(--hand); color:var(--ink);
+}
+body.doodle{
+  background-color:#fbf6e6;
+  background-image:linear-gradient(90deg,transparent 0 35px,#f08a8a 35px 37px,transparent 37px),repeating-linear-gradient(180deg,transparent 0 31px,#a9cdf0 31px 33px);
+  background-attachment:fixed;
+}
+body.doodle #ui{font-family:var(--hand);text-rendering:optimizeLegibility}
+body.doodle button,body.doodle input,body.doodle textarea,body.doodle select{font-family:var(--hand)}
+body.doodle #boot{background:#fbf6e6;color:#2b2733;font:400 36px/1 var(--hand);letter-spacing:.08em;text-shadow:3px 3px 0 #ff5fb0}
+body.doodle #boot i{background:#f3ead0;border:3px solid #2b2733;height:12px;border-radius:8px 6px 9px 6px;width:160px}
+body.doodle #boot i::after{background:repeating-linear-gradient(-45deg,#43b94a 0 6px,#8fe07a 6px 9px)}
+body.doodle #boot small{font:400 17px/1.4 var(--hand);color:#6b6477}
+body.doodle .noscript{background:#fbf6e6;color:#2b2733}
+
+/* hand-drawn wobble: a slow 7 fps "boil" on the few big decorative things (never on scrolling content) */
+@keyframes d-boil{0%{transform:rotate(-.5deg) translate(0,0)}33%{transform:rotate(.4deg) translate(.6px,-.6px)}66%{transform:rotate(-.2deg) translate(-.5px,.5px)}100%{transform:rotate(-.5deg) translate(0,0)}}
+@keyframes d-wiggle{0%,100%{transform:rotate(-1.2deg)}50%{transform:rotate(1.2deg)}}
+@keyframes d-pop{0%{transform:scale(.7) rotate(-4deg);opacity:0}70%{transform:scale(1.06) rotate(1deg)}100%{transform:none;opacity:1}}
+@keyframes d-march{to{background-position:24px 0}}
+
+/* screens and hub chrome */
+body.doodle .hub-top{padding:12px 12px 8px;background:rgba(251,246,230,.94);border-bottom:3px solid #2b2733;box-shadow:0 3px 0 rgba(43,39,51,.18)}
+body.doodle .fame,body.doodle .cur,body.doodle .iconbtn{
+  background:#fbf6e6;border:3px solid #2b2733;border-radius:var(--wob);box-shadow:3px 4px 0 #2b2733;color:#2b2733;text-shadow:none}
+body.doodle .cur{font-weight:400;font-size:22px;letter-spacing:.02em}
+body.doodle .fame .lv{background:#ff5fb0;border:3px solid #2b2733;color:#fff;text-shadow:var(--halo);box-shadow:2px 2px 0 #2b2733;font-weight:400;font-size:24px}
+body.doodle .fame .nm{color:#6b6477;font-weight:400;font-size:15px;letter-spacing:.04em;text-transform:none}
+body.doodle .iconbtn:active{transform:translate(2px,3px);box-shadow:1px 1px 0 #2b2733}
+body.doodle .iconbtn canvas,body.doodle .cur canvas{filter:none}
+body.doodle .pbar{background:#f3ead0;border:3px solid #2b2733;border-radius:9px 7px 10px 7px;box-shadow:none;height:16px}
+body.doodle .pbar>i{background:repeating-linear-gradient(-45deg,#ff5fb0 0 6px,#ff9ad0 6px 10px);border-radius:5px 3px 6px 3px;box-shadow:none;position:static}
+body.doodle .pbar>i::after{display:none}
+body.doodle .quest .pbar>i{background:repeating-linear-gradient(-45deg,#43b94a 0 6px,#8fe07a 6px 10px);box-shadow:none}
+
+/* tab bar: a paper strip, the active tab is highlighted with a yellow crayon */
+body.doodle .tabs{margin:0;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:rgba(251,246,230,.96);border:0;border-top:3px solid #2b2733;border-radius:0;box-shadow:0 -3px 0 rgba(43,39,51,.12)}
+body.doodle .tab{color:#6b6477;font:400 15px var(--hand);letter-spacing:.02em;text-transform:none;border-radius:var(--wob);border:3px solid transparent;transition:transform .12s}
+body.doodle .tab.on{color:#2b2733;background:#ffe28a;border-color:#2b2733;box-shadow:2px 3px 0 #2b2733;text-shadow:none;animation:d-boil .43s steps(1) infinite}
+body.doodle .tab.on canvas{filter:none;transform:translateY(-2px) scale(1.08)}
+body.doodle .tab:active{transform:scale(.94)}
+body.doodle .badge{background:#e8403f;border:2.5px solid #2b2733;color:#fff;box-shadow:none;font-weight:400;text-shadow:none;animation:d-pop .3s backwards}
+
+/* headings and text */
+body.doodle h2{font:400 32px var(--hand);letter-spacing:.05em;text-transform:uppercase;color:#2b2733;text-shadow:none;background:linear-gradient(transparent 62%,#ffd60a 62% 92%,transparent 92%);display:inline-block;padding:0 6px;margin:14px 2px 10px}
+body.doodle h3{font:400 23px var(--hand);text-shadow:none;letter-spacing:.01em}
+body.doodle .sub,body.doodle .timer{color:#6b6477;font-weight:400;font-size:17px}
+body.doodle .credit{color:#6b6477;letter-spacing:.06em;text-shadow:none;opacity:1;font-size:14px}
+
+/* cards: taped notebook paper with a hard shadow */
+body.doodle .card{background:#fbf6e6;border:3px solid #2b2733;border-radius:var(--wob);padding:14px;box-shadow:4px 5px 0 #2b2733;animation:d-pop .3s backwards;color:#2b2733}
+body.doodle .card.locked{filter:grayscale(.8) opacity(.7)}
+body.doodle .world{padding:0;overflow:hidden}
+body.doodle .world .art{box-shadow:inset 0 -3px 0 #2b2733;border-bottom:3px solid #2b2733}
+body.doodle .world .ttl{font:400 34px var(--hand);letter-spacing:.04em;color:#fff;text-shadow:var(--halo)}
+body.doodle .world .num{background:#ffd60a;border:3px solid #2b2733;color:#2b2733;box-shadow:2px 2px 0 #2b2733;font-weight:400;font-size:24px}
+body.doodle .lockbox{background:rgba(251,246,230,.88);backdrop-filter:none;-webkit-backdrop-filter:none;color:#2b2733;font-weight:400}
+body.doodle .lockbox canvas{filter:none}
+
+/* buttons: fat crayon-filled keys with an ink outline, they sink when pressed */
+body.doodle .btn{position:static;overflow:visible;appearance:none;border:3.5px solid #2b2733;border-bottom-width:3.5px;border-radius:var(--wob);background:#ff5fb0;color:#fff;
+  font:400 23px var(--hand);letter-spacing:.03em;text-shadow:var(--halo);box-shadow:3px 5px 0 #2b2733;transition:transform .1s;min-height:50px;padding:8px 16px}
+body.doodle .btn::before,body.doodle .btn::after{display:none}
+body.doodle .btn:hover:not(:disabled){filter:none;transform:rotate(-.6deg) translateY(-1px)}
+body.doodle .btn:active:not(:disabled){transform:translate(3px,4px);box-shadow:0 1px 0 #2b2733;border-bottom-width:3.5px}
+body.doodle .btn.green{background:#43b94a}
+body.doodle .btn.blue{background:#2f7de1}
+body.doodle .btn.gold{background:#ffc83a;color:#2b2733;text-shadow:var(--haloW)}
+body.doodle .btn.dark{background:#7b4fd0}
+body.doodle .btn.red{background:#e8403f}
+body.doodle .btn:disabled,body.doodle .btn.off{filter:grayscale(.9) opacity(.65);box-shadow:2px 3px 0 #2b2733}
+body.doodle .btn.small{font-size:19px;min-height:42px;padding:5px 12px}
+body.doodle .btn.big{font-size:32px;min-height:70px;border-radius:var(--wob2);letter-spacing:.05em;box-shadow:4px 6px 0 #2b2733;animation:d-boil .43s steps(1) infinite}
+body.doodle .btn.big:active:not(:disabled){animation:none}
+body.doodle .btn canvas{filter:none}
+
+body.doodle .chip,body.doodle .pill{background:#f3ead0;color:#2b2733;border:2.5px solid #2b2733;box-shadow:none;border-radius:9px 6px 10px 6px;font-weight:400;font-size:16px;letter-spacing:0}
+body.doodle .pill{font-size:14px}
+body.doodle .chip canvas{filter:none}
+body.doodle .rar-common{color:var(--common)}
+body.doodle .seg button{border:3px solid #2b2733;background:#fbf6e6;color:#6b6477;border-radius:var(--wob);font:400 18px var(--hand);box-shadow:2px 3px 0 #2b2733;transition:transform .1s}
+body.doodle .seg button.on{background:#ff5fb0;color:#fff;text-shadow:var(--halo);box-shadow:2px 3px 0 #2b2733}
+body.doodle .seg button:active{transform:translate(2px,3px);box-shadow:0 0 0 #2b2733}
+body.doodle .enc button{border:3px solid #2b2733;background:#ffd60a;color:#2b2733;box-shadow:2px 3px 0 #2b2733;border-radius:var(--wob);font:400 26px var(--hand)}
+body.doodle .enc button:active{transform:translate(2px,3px);box-shadow:0 0 0 #2b2733}
+
+/* studio, turret cards, icon sockets */
+body.doodle .up .ic,body.doodle .tcard .ic,body.doodle .pick .ic{background:#f3ead0;border:3px solid #2b2733;box-shadow:none;border-radius:var(--wob2)}
+body.doodle .up .nm{font-weight:400;font-size:21px}
+body.doodle .up .ds{color:#6b6477;font-weight:400;font-size:16px}
+body.doodle .pips i{background:#f3ead0;border:2.5px solid #2b2733;border-radius:5px 3px 6px 3px;box-shadow:none}
+body.doodle .pips i.on{background:#43b94a;box-shadow:none;border-color:#2b2733}
+
+/* gear */
+body.doodle .gslot,body.doodle .gitem{background:#f3ead0;border:3px solid #2b2733;border-radius:var(--wob2);box-shadow:2px 3px 0 #2b2733;overflow:hidden;transition:transform .1s}
+body.doodle .gitem:hover,body.doodle .gslot:hover{box-shadow:2px 3px 0 #2b2733}
+body.doodle .gitem:active,body.doodle .gslot:active{transform:translate(2px,3px);box-shadow:0 0 0 #2b2733}
+body.doodle .gitem.sel{outline:4px dashed #ff5fb0;outline-offset:1px}
+body.doodle .gslot .lv,body.doodle .gitem .lv{background:#fbf6e6;color:#2b2733;border:2px solid #2b2733;border-radius:6px;font-weight:400;font-size:13px}
+body.doodle .gitem .eq{background:#43b94a;color:#fff;border:2px solid #2b2733;box-shadow:none;font-weight:400;text-shadow:none}
+body.doodle .gitem .new{background:#e8403f;color:#fff;border:2px solid #2b2733;animation:d-wiggle .6s ease-in-out infinite;font-weight:400}
+body.doodle .gitem .mg{background:#ffc83a;color:#2b2733;border:2px solid #2b2733;font-weight:400}
+body.doodle .herocard canvas.hp{filter:none}
+
+/* modals: a sheet of paper dropped on the desk */
+body.doodle .modal-bg{background:rgba(43,39,51,.55);backdrop-filter:none;-webkit-backdrop-filter:none}
+body.doodle .modal{background:#fbf6e6;border:4px solid #2b2733;border-radius:var(--wob);padding:16px;color:#2b2733;
+  background-image:linear-gradient(90deg,transparent 0 31px,#f08a8a 31px 33px,transparent 33px),repeating-linear-gradient(180deg,transparent 0 31px,#a9cdf0 31px 33px);
+  box-shadow:6px 8px 0 #2b2733;animation:d-pop .32s}
+body.doodle .modal h2{text-align:center}
+body.doodle .toast{background:#ffe28a;color:#2b2733;border:3.5px solid #2b2733;border-radius:var(--wob);box-shadow:3px 4px 0 #2b2733;font-weight:400;font-size:20px;animation:d-pop .25s}
+body.doodle .hr{height:0;background:none;border-top:3px dashed #2b2733;opacity:.5;margin:12px 0}
+
+/* remix and relic picks */
+body.doodle .pick{background:#fbf6e6;color:#2b2733;border:3.5px solid #2b2733;border-radius:var(--wob);box-shadow:4px 5px 0 #2b2733;animation:d-pop .35s backwards;transition:transform .12s;overflow:visible}
+body.doodle .pick::after{display:none}
+body.doodle .pick:hover{transform:rotate(-.7deg) translateY(-2px);filter:none}
+body.doodle .pick:active{transform:translate(3px,4px);box-shadow:1px 1px 0 #2b2733}
+body.doodle .pick .nm{font-weight:400;font-size:25px;text-shadow:none}
+body.doodle .pick .ds{color:#4b4455;font-weight:400;font-size:19px}
+body.doodle .pick .rar{font-weight:400;font-size:15px;text-shadow:none;letter-spacing:.05em}
+body.doodle .pick.rar-b-rare{border-color:#2b2733;background:#e6f1ff;box-shadow:4px 5px 0 #2f7de1}
+body.doodle .pick.rar-b-epic{border-color:#2b2733;background:#efe6ff;box-shadow:4px 5px 0 #7b4fd0}
+body.doodle .pick.rar-b-legendary{border-color:#2b2733;background:#fff1cc;box-shadow:4px 5px 0 #ffb02e;animation:d-pop .35s backwards,d-wiggle 1.4s ease-in-out .4s infinite}
+body.doodle .pick.rar-b-mythic{border-color:#2b2733;background:#ffe0f0;box-shadow:4px 5px 0 #ff5fb0}
+
+/* results */
+body.doodle .res-title{font:400 62px var(--hand);letter-spacing:.05em;color:var(--c1,#43b94a);text-shadow:var(--halo),4px 5px 0 #2b2733;animation:d-pop .6s}
+body.doodle .res-title.win{--c1:#43b94a}
+body.doodle .res-title.lose{--c1:#e8403f}
+body.doodle .big-stars canvas{filter:none}
+body.doodle .big-stars canvas.pop{animation:d-pop .5s backwards}
+body.doodle .rewi{background:#fbf6e6;border:3px solid #2b2733;border-radius:var(--wob);box-shadow:3px 4px 0 #2b2733;font-weight:400;font-size:23px;animation:d-pop .35s backwards;color:#2b2733}
+body.doodle .rewi canvas{filter:none}
+body.doodle .statgrid{font-size:19px;font-weight:400}
+body.doodle .statgrid b{color:#2b2733;text-shadow:none;font-weight:400}
+body.doodle .loot .gitem{animation:d-pop .45s backwards;box-shadow:2px 3px 0 #2b2733}
+
+/* crates */
+body.doodle .cratecard{background:#fbf6e6}
+body.doodle .cratecard canvas.cr{-webkit-mask-image:none;mask-image:none}
+body.doodle .opening{background:none}
+body.doodle .opening canvas.cr{-webkit-mask-image:none;mask-image:none}
+body.doodle .odds{font-weight:400;font-size:15px;color:#4b4455}
+body.doodle .revi{animation:d-pop .5s backwards;border-radius:var(--wob)}
+body.doodle .revi::before{display:none}
+body.doodle .revi canvas{filter:none}
+
+/* goals */
+body.doodle .day,body.doodle .ms,body.doodle .cdx{background:#fbf6e6;border:3px solid #2b2733;border-radius:var(--wob2);box-shadow:2px 3px 0 #2b2733;color:#2b2733;font-weight:400;font-size:14px}
+body.doodle .day.cur2,body.doodle .ms.ready{border-color:#2b2733;background:#fff1b8;box-shadow:3px 4px 0 #ff9226;animation:d-wiggle 1.2s ease-in-out infinite}
+body.doodle .day.done,body.doodle .ms.got{opacity:.5}
+body.doodle .ach.done{border-color:#2b2733;background:#e6f6e0}
+body.doodle .ach.done .nm{color:#2a8a30}
+body.doodle .cdx .nm{font-weight:400;font-size:18px}
+body.doodle .cdx .ds{color:#6b6477;font-weight:400;font-size:14px}
+body.doodle .cdx.unk{filter:brightness(.55) contrast(.8)}
+body.doodle .cdx:active{transform:translate(2px,3px)}
+body.doodle .hint-card canvas{filter:none}
+body.doodle .hint-card p{font-weight:400;font-size:23px}
+
+/* title and cutscenes: ink text with a white halo so it reads over the scene */
+body.doodle .title-wrap{background:none}
+body.doodle .tap{font:400 36px var(--hand);letter-spacing:.14em;color:#2b2733;text-shadow:var(--haloW)}
+body.doodle .menu .btn.big{font-size:34px;min-height:76px;letter-spacing:.1em}
+body.doodle .cut-box{background:#fbf6e6;color:#2b2733;border:4px solid #2b2733;border-radius:var(--wob);box-shadow:5px 7px 0 #2b2733;font-weight:400;font-size:25px;line-height:1.3;animation:d-pop .3s;
+  background-image:repeating-linear-gradient(180deg,transparent 0 31px,#a9cdf0 31px 33px)}
+body.doodle .cut-box::before{display:none}
+body.doodle .cut-box{padding:26px 18px 30px}
+body.doodle .cut-box .who{background:#ffd60a;color:#2b2733;border:3.5px solid #2b2733;border-radius:var(--wob);box-shadow:2px 3px 0 #2b2733;font:400 21px var(--hand);letter-spacing:.06em;text-transform:uppercase;top:-22px;transform:rotate(-2deg)}
+body.doodle .cut-box .nx{color:#e8403f;font-size:18px;font-weight:400;animation:d-wiggle .9s ease-in-out infinite}
+body.doodle .cut-skip{opacity:1}
+
+/* inputs */
+body.doodle .rangeRow,body.doodle .toggle{font-weight:400;font-size:20px}
+body.doodle .rangeRow input[type=range]{accent-color:#ff5fb0}
+body.doodle textarea.code,body.doodle input[type=text]{background:#fbf6e6;color:#2b2733;border:3px solid #2b2733;border-radius:var(--wob2);box-shadow:inset 2px 3px 0 rgba(43,39,51,.15)}
+body.doodle textarea.code{font:15px var(--hand)}
+
+/* focus: a dashed crayon ring */
+body.doodle button:focus-visible,body.doodle .tab:focus-visible,body.doodle .pick:focus-visible{outline:3px dashed #2f7de1;outline-offset:3px}
+/* round 6: every other control gets the same ring (links, inputs, sliders, textareas, clickable cards that became role=button, the dialog itself, the canvas) */
+body.doodle a:focus-visible,body.doodle input:focus-visible,body.doodle select:focus-visible,body.doodle textarea:focus-visible,body.doodle [role=button]:focus-visible,body.doodle [tabindex]:focus-visible,body.doodle .link-btn:focus-visible,body.doodle .seg button:focus-visible,body.doodle .iconbtn:focus-visible{outline:3px dashed #2f7de1;outline-offset:3px}
+body.doodle .modal:focus,body.doodle .modal:focus-visible{outline:none}
+body.doodle #game:focus-visible{outline:3px dashed #2f7de1;outline-offset:-6px}
+body.doodle .btn.green:focus-visible,body.doodle .btn.gold:focus-visible,body.doodle .btn.red:focus-visible,body.doodle .tab.on:focus-visible{outline-color:#1b4fa0;box-shadow:0 0 0 3px #fff,2px 3px 0 #2b2733}
+
+@media (prefers-reduced-motion:reduce){
+  body.doodle .tab.on,body.doodle .btn.big,body.doodle .day.cur2,body.doodle .ms.ready,body.doodle .gitem .new,body.doodle .pick.rar-b-legendary,body.doodle .cut-box .nx{animation:none}
+}
+body.doodle.reduce .tab.on,body.doodle.reduce .btn.big,body.doodle.reduce .day.cur2,body.doodle.reduce .ms.ready,body.doodle.reduce .gitem .new,body.doodle.reduce .pick.rar-b-legendary,body.doodle.reduce .cut-box .nx{animation:none}
+
+/* contrast guards: inline pale or dark colours from the classic UI */
+body.doodle .how [style*="color:#fff"],body.doodle .how [style*="color:#e"],body.doodle .how [style*="color:#d"],body.doodle .how [style*="color:#c"],body.doodle .how [style*="color:#b"]{color:#2b2733!important}
+body.doodle input,body.doodle textarea,body.doodle select{background:#fbf6e6!important;color:#2b2733!important}
+body.doodle .ibox,body.doodle .icon-box{background:#fbf6e6}
+body.doodle .opening h2,body.doodle .modal h2{text-shadow:none}
+body.doodle .chip,body.doodle .chip *{color:#2b2733;text-shadow:none;font-weight:400}
+
+/* ---- consistency pass: one crayon look everywhere ---- */
+body.doodle .icbox{width:54px;height:54px;min-width:54px;display:flex;align-items:center;justify-content:center;background:#f3ead0;border:3px solid #2b2733;border-radius:var(--wob2)}
+/* secondary buttons are lavender paper with ink text, not dark violet */
+body.doodle .btn.dark{background:#e4d9fa;color:#2b2733;text-shadow:none}
+body.doodle .btn.dark.off{background:#ece8f2}
+body.doodle .cut-skip{background:#ffd60a;color:#2b2733;text-shadow:none}
+/* ink text sits over decoration: a thin paper halo keeps it readable */
+body.doodle h3,body.doodle .sub,body.doodle .timer,body.doodle .hub-main>.sub{text-shadow:-1px -1px 0 #fbf6e6,1px -1px 0 #fbf6e6,-1px 1px 0 #fbf6e6,1px 1px 0 #fbf6e6}
+body.doodle .card h3,body.doodle .card .sub,body.doodle .modal .sub,body.doodle .modal h3{text-shadow:none}
+body.doodle .hub-main>h2{background-color:#fbf6e6}
+body.doodle .hub-main{background:none}
+/* world cards: title in the hand font with an ink outline, no accent glow */
+body.doodle .world .ttl{color:#fff!important;font-family:var(--hand)}
+body.doodle .lockbox{border:3px dashed #2b2733;border-radius:var(--wob);margin:8px}
+/* leaderboard and chips */
+body.doodle .modal .row{color:#2b2733}
+body.doodle .gitem,body.doodle .gslot{background-color:#f3ead0}
+body.doodle .pbar>i.dark{background:#b79af0}
+body.doodle .rangeRow input[type=range]{background:transparent}
+body.doodle #boot b{font-weight:400;color:#ff5fb0;text-shadow:3px 3px 0 #2b2733}
+body.doodle .world .ttl{color:#2b2733!important;background:#fbf6e6;border:3px solid #2b2733;border-radius:var(--wob);padding:0 12px;box-shadow:2px 3px 0 #2b2733;text-shadow:none;font-size:28px;transform:rotate(-1.5deg);left:14px;bottom:10px}
+body.doodle #boot small{text-shadow:none}
+
+/* ---- defeat recap ("What happened") and share button ---- */
+body.doodle .recap{margin:8px 0;padding:10px 12px;box-shadow:3px 4px 0 #2b2733}
+body.doodle .recap h3{margin:0 0 4px;font-size:24px}
+body.doodle .rc-row{margin:6px 0}
+body.doodle .rc-lbl{font-size:17px;color:#6b6477}
+body.doodle .rc-bars{display:flex;gap:6px;align-items:flex-end;justify-content:center;min-height:76px;padding-top:4px}
+body.doodle .rc-bar{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;width:34px;font-size:15px}
+body.doodle .rc-bar i{display:block;width:100%;background:repeating-linear-gradient(-45deg,#2f7de1 0 5px,#7fb2f0 5px 8px);border:2.5px solid #2b2733;border-radius:5px 3px 6px 3px}
+body.doodle .rc-bar.worst i{background:repeating-linear-gradient(-45deg,#e8403f 0 5px,#f59a98 5px 8px)}
+body.doodle .rc-bar span{color:#6b6477;font-size:14px}
+body.doodle .rc-types{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+body.doodle .rc-type{display:flex;flex-direction:column;align-items:center;min-width:64px;font-size:14px;line-height:1.1;text-align:center}
+body.doodle .rc-type b{font-weight:400;font-size:19px}
+body.doodle .rc-type span{color:#6b6477;max-width:78px;overflow-wrap:anywhere}
+body.doodle .rc-line{font-size:18px;margin:4px 0}
+body.doodle .rc-line b{font-weight:400;color:#e8403f}
+body.doodle .rc-tips{margin-top:6px}
+body.doodle .rc-tip{display:flex;gap:8px;align-items:flex-start;font-size:18px;line-height:1.2;margin:5px 0;color:#4b4455}
+body.doodle .rc-tip canvas{flex:none;margin-top:1px}
+
+/* ---- phone tap targets: #ui is scaled by --s (set in main.js), so ask for 44 CSS px in ui units ---- */
+body.doodle #ui{--tap:calc(44px / var(--s,1))}
+body.doodle #ui .btn,body.doodle #ui .tab,body.doodle #ui .iconbtn,body.doodle #ui .seg button,body.doodle #ui .enc button,body.doodle #ui .pick,body.doodle #ui .cut-skip{min-height:var(--tap)}
+body.doodle #ui .btn,body.doodle #ui .iconbtn,body.doodle #ui .seg button,body.doodle #ui .enc button{min-width:var(--tap)}
+body.doodle #ui .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+body.doodle .recap .rc-bar{width:40px}
+
+/* ---- meta additions: fame title, studio scene, difficulty, weekly gig, leaderboard tabs and friends, continue run ---- */
+body.doodle .fame-title{font-family:var(--hand);font-size:17px;letter-spacing:0;text-transform:none;color:#2b2733;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.05}
+body.doodle .fame-pbar{position:relative;height:16px;overflow:hidden}
+body.doodle .fame-cnt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:400 13px var(--hand);color:#2b2733;text-shadow:-1px -1px 0 #fbf6e6,1px -1px 0 #fbf6e6,-1px 1px 0 #fbf6e6,1px 1px 0 #fbf6e6;letter-spacing:0}
+body.doodle .studio-scene{border:3px solid #2b2733;border-radius:var(--wob);overflow:hidden;background:#fbf6e6;box-shadow:2px 3px 0 #2b2733;margin:0 0 10px}
+body.doodle .studio-scene canvas{display:block;width:100%!important;height:auto!important}
+body.doodle .studio-cap{padding:4px 10px 6px;font-size:14px;text-align:center;border-top:3px dashed #2b2733;margin:0}
+body.doodle .seg.diff button{font-size:20px}
+body.doodle .lb-row{padding:6px 6px;border-bottom:2px dashed #2b2733;align-items:center;gap:6px}
+body.doodle .lb-row.friend{background:#d4f2b8}
+body.doodle .lb-row.me{background:#ffe28a}
+body.doodle .lb-row.missing{opacity:.6}
+body.doodle .lb-rank{width:38px;font-weight:900;color:#6b6477}
+body.doodle .lb-name{font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.doodle .lb-score{font-weight:900;min-width:30px;text-align:right}
+body.doodle .lb-tag{font:400 12px var(--hand);margin-left:6px;padding:0 6px;border:2px solid #2b2733;border-radius:8px;vertical-align:middle}
+body.doodle .lb-tag.you{background:#ff5fb0;color:#fff}
+body.doodle .lb-tag.fr{background:#9dff3a;color:#2b2733}
+body.doodle .lb-add,body.doodle .lb-x{width:30px;height:30px;border:3px solid #2b2733;border-radius:50%;background:#fbf6e6;font:400 20px var(--hand);color:#2b2733;line-height:1;padding:0;cursor:pointer}
+body.doodle .lb-x{background:#ece8f2;color:#6b6477}
+body.doodle .lb-addrow{margin-top:10px;gap:8px}
+body.doodle .lb-input{flex:1;min-width:0;font:400 20px var(--hand);padding:8px 10px;border-radius:10px;border:3px solid #2b2733}
+body.doodle .cont-run{display:flex;flex-direction:column;align-items:center;gap:0;line-height:1.05}
+body.doodle .cont-run .cr-s{font:400 15px var(--hand);opacity:.85}
+
+/* ---- second tour round: Setlist sheet, wardrobe and skins strips, modifier results, second tour heading ---- */
+body.doodle .tour2{color:#7b4fd0}
+body.doodle .setlist .sl-h{margin:12px 0 6px;font-size:22px}
+body.doodle .sl-hero{display:flex;gap:8px;align-items:flex-start;border:3px solid #2b2733;border-radius:var(--wob);padding:8px;margin-bottom:8px;background:#fffaf0;box-shadow:2px 3px 0 #2b2733}
+body.doodle .sl-who{font-size:19px;margin-bottom:4px}
+body.doodle .sl-abs{display:flex;flex-direction:column;gap:5px}
+body.doodle .sl-ab{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:0;padding:5px 9px;border:3px solid #2b2733;border-radius:12px 8px 13px 8px;background:#fbf6e6;color:#2b2733;font:400 17px/1.1 var(--hand);cursor:pointer;min-height:var(--tap)}
+body.doodle .sl-ab.on{background:#d4f2b8;box-shadow:2px 3px 0 #2b2733}
+body.doodle .sl-ab.locked{background:#ece8f2;color:#6b6477}
+body.doodle .sl-abn{display:flex;align-items:center;gap:5px;font-size:18px}
+body.doodle .sl-abd{font-size:14px;color:#6b6477;margin-left:23px}
+body.doodle .sl-mods{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+body.doodle .sl-mod{display:flex;align-items:center;gap:5px;padding:5px 7px;border:3px solid #2b2733;border-radius:12px 8px 13px 8px;background:#fbf6e6;color:#2b2733;font:400 16px/1.05 var(--hand);text-align:left;cursor:pointer;min-height:var(--tap)}
+body.doodle .sl-mod.on{background:#d4f2b8;box-shadow:2px 3px 0 #2b2733}
+body.doodle .sl-mn{flex:1;min-width:0}
+body.doodle .flames{display:inline-flex;align-items:center;gap:0;vertical-align:middle}
+body.doodle .sl-read{margin-top:8px;padding:8px 10px;border:3px dashed #2b2733;border-radius:12px;background:#fffaf0;font-size:16px}
+body.doodle .sl-sum{margin-top:6px;display:flex;flex-direction:column;gap:2px}
+body.doodle .sl-pay{color:#2e8b38}
+body.doodle .sl-lock{display:flex;gap:10px;align-items:center}
+body.doodle .sl-foot{position:sticky;bottom:-16px;margin:12px -16px -16px;padding:8px 16px 14px;background:#fbf6e6;border-top:3px solid #2b2733;z-index:2}
+body.doodle .sl-foot .btnrow{margin-top:6px}
+body.doodle .sl-start{flex:2}
+body.doodle .ward{margin:0 0 14px}
+body.doodle .ward-head{justify-content:space-between;align-items:center;margin-bottom:6px}
+body.doodle .ward-strip{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;scroll-snap-type:x proximity;scrollbar-width:thin}
+body.doodle .ward-card{flex:none;width:112px;scroll-snap-align:start;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px 8px;border:3px solid #2b2733;border-radius:var(--wob);background:#fbf6e6;box-shadow:2px 3px 0 #2b2733}
+body.doodle .ward-card.worn{background:#d4f2b8}
+body.doodle .ward-card.locked canvas{filter:grayscale(.85) opacity(.65)}
+body.doodle .ward-name{font-size:16px;line-height:1.05;text-align:center;min-height:34px;display:flex;align-items:center}
+body.doodle .ward-state{display:flex;align-items:center;justify-content:center;gap:3px;font-size:14px;line-height:1.05;text-align:center;color:#6b6477;min-height:40px}
+body.doodle .ward-state.worn{color:#2e8b38;font-size:17px}
+body.doodle .ward-act{padding:4px 10px;font-size:17px}
+body.doodle .ward-card.skin canvas{border:2px solid #2b2733;border-radius:6px}
+body.doodle .res-mods{margin-top:8px;padding:8px}
+body.doodle .install-row{margin:4px 0}
+/* i18n: long German and Dutch words must wrap or ellipsize instead of overflowing tabs, buttons and chips */
+body.doodle{overflow-wrap:break-word}
+html[lang=de] body.doodle .btn,html[lang=nl] body.doodle .btn,html[lang=da] body.doodle .btn,html[lang=de] body.doodle .sub,html[lang=de] body.doodle .ds,html[lang=de] body.doodle .nm{hyphens:auto}
+body.doodle .tab{min-width:0;overflow-wrap:anywhere}
+body.doodle .seg button{min-width:0;overflow:hidden;text-overflow:ellipsis}
+body.doodle .btn{max-width:100%}
+body.doodle .chip,body.doodle .pill{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+body.doodle .ward-name,body.doodle .ward-state,body.doodle .sl-abn,body.doodle .sl-abd{min-width:0;overflow-wrap:anywhere}
+body.doodle .toggle>:first-child{min-width:0}
+
+/* ---- round 2: settings helpers, countdowns, codex lists, action toast, accessibility (Larger text, Colour-blind cues) ---- */
+body.doodle .set-help{font-size:14px;margin:-4px 0 6px;line-height:1.1}
+body.doodle .sub.cd{color:#7b4fd0;font-size:16px}
+body.doodle .toast.act{display:flex;align-items:center;gap:10px;pointer-events:auto;max-width:94%;text-align:left}
+body.doodle .toast.act .toast-msg{flex:1;min-width:0}
+body.doodle .toast.act .btn{flex:none}
+body.doodle .codex-seg{flex-wrap:wrap}
+body.doodle .codex-seg button{flex:1 1 auto;padding-left:8px;padding-right:8px}
+body.doodle .codexgrid .cdx canvas{max-width:100%}
+body.doodle .cdx-list{grid-template-columns:1fr}
+body.doodle .cdx-row{display:grid;grid-template-columns:76px 1fr;gap:8px;align-items:start;padding:6px;border:3px solid #2b2733;border-radius:var(--wob);background:#fffaf0;box-shadow:2px 3px 0 #2b2733}
+body.doodle .cdx-row.unk{filter:brightness(.7)}
+body.doodle .cdx-who{text-align:center}
+body.doodle .cdx-who .nm{font-size:15px;line-height:1.05}
+body.doodle .cdx-pair{display:flex;flex-direction:column;gap:6px;min-width:0}
+body.doodle .cdx-b{display:grid;grid-template-columns:38px 1fr;column-gap:6px;text-align:left;padding:5px 7px;box-shadow:none}
+body.doodle .cdx-b canvas{grid-row:1 / span 2;align-self:center;width:34px;height:34px}
+body.doodle .cdx-b .nm,body.doodle .cdx-b .ds{min-width:0}
+body.doodle .cdx-syn .syn-ic{display:flex;align-items:center;justify-content:center;gap:4px}
+body.doodle .cdx-syn .syn-ic canvas{width:46px;height:46px}
+body.doodle .cdx-syn .syn-ic canvas:nth-child(2){width:20px;height:20px}
+body.doodle .cdx-syn .syn-who{font-size:12px;margin-top:2px}
+body.doodle .cdx .nm,body.doodle .cdx .ds{overflow-wrap:anywhere}
+
+/* Larger text: zoom the text-bearing layers (the layout width stays 540, so everything just reflows and wraps) */
+body.doodle.bigtext .hub-main>*,body.doodle.bigtext .hub-top>*,body.doodle.bigtext .tabs>*,body.doodle.bigtext .modal>*,body.doodle.bigtext .toast,
+body.doodle.bigtext .cut-box,body.doodle.bigtext .menu>*{zoom:1.15}
+body.doodle.bigtext .modal>*{zoom:1.12}
+body.doodle.bigtext .tabs .tab{font-size:15px}
+
+/* Colour-blind cues: shapes and marks next to colour (rarity, risk, chosen/on states, disabled) */
+body.doodle.colorblind .rar-common::before{content:"\25CB\00a0"}
+body.doodle.colorblind .rar-rare::before{content:"\25A0\00a0"}
+body.doodle.colorblind .rar-epic::before{content:"\25B2\00a0"}
+body.doodle.colorblind .rar-legendary::before{content:"\2605\00a0"}
+body.doodle.colorblind .rar-mythic::before{content:"\25C6\00a0"}
+body.doodle.colorblind .gitem::before,body.doodle.colorblind .gslot::before{position:absolute;left:3px;top:1px;z-index:3;font-size:16px;line-height:1;color:#2b2733;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff}
+body.doodle.colorblind .gitem,body.doodle.colorblind .gslot{position:relative}
+body.doodle.colorblind [data-rar=common]::before{content:"\25CB"}
+body.doodle.colorblind [data-rar=rare]::before{content:"\25A0"}
+body.doodle.colorblind [data-rar=epic]::before{content:"\25B2"}
+body.doodle.colorblind [data-rar=legendary]::before{content:"\2605"}
+body.doodle.colorblind [data-rar=mythic]::before{content:"\25C6"}
+body.doodle.colorblind .sl-mod.on .sl-mn::after{content:"\00a0\2713";font-weight:700}
+body.doodle.colorblind .seg button.on{text-decoration:underline;text-underline-offset:3px}
+body.doodle.colorblind .seg button.on::before{content:"\2713\00a0"}
+body.doodle.colorblind .tab.on{border-style:dashed}
+body.doodle.colorblind .btn.off,body.doodle.colorblind .btn:disabled{border-style:dashed}
+body.doodle.colorblind .ward-card.worn,body.doodle.colorblind .sl-mod.on,body.doodle.colorblind .sl-ab.on{border-style:double;border-width:5px}
+body.doodle.colorblind .sl-ab.locked{border-style:dashed}
+body.doodle.colorblind .flames .cb-n{display:inline}
+body.doodle .flames .cb-n{display:none;font-size:14px;margin-left:2px}
+
+/* personal bests on the results screen */
+body.doodle .res-bests{position:relative;margin-top:8px;padding:10px 12px;overflow:hidden}
+body.doodle .res-bests h3{margin:0 0 4px;text-align:center}
+body.doodle .bst-row{display:flex;align-items:baseline;gap:8px;font-size:19px;padding:2px 0;border-bottom:2px dashed rgba(43,39,51,.18)}
+body.doodle .bst-row:last-of-type{border-bottom:0}
+body.doodle .bst-l{flex:1 1 auto;min-width:0}
+body.doodle .bst-row b{font-weight:400;color:#2b2733}
+body.doodle .bst-row i{font-style:normal;color:var(--dim);font-size:16px;text-align:right;min-width:5.5em}
+body.doodle .bst-row.hit b{color:#c8780a;text-shadow:1px 1px 0 #fff3c4}
+body.doodle .nr-sticker{position:absolute;top:6px;right:8px;transform:rotate(7deg);background:var(--gold);color:#2b2733;border:3px solid #2b2733;border-radius:var(--wob);padding:2px 10px;font-size:21px;box-shadow:2px 3px 0 #2b2733;animation:d-pop .5s .4s backwards;max-width:46%;text-align:center;line-height:1.05}
+body.doodle .bst-count{text-align:center;font-size:15px;margin-top:2px}
+body.doodle .nr-confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+body.doodle .nr-confetti span{position:absolute;top:-8px;width:8px;height:12px;border:1.5px solid #2b2733;border-radius:2px;animation:nr-fall 1.6s ease-in forwards}
+@keyframes nr-fall{0%{transform:translate(0,0) rotate(0);opacity:1}100%{transform:translate(var(--dx),210px) rotate(var(--rot));opacity:0}}
+body.doodle.reduce .nr-confetti,body.doodle.reduce .nr-sticker{animation:none}
+body.doodle.reduce .nr-confetti{display:none}
+@media (prefers-reduced-motion:reduce){body.doodle .nr-confetti{display:none}body.doodle .nr-sticker{animation:none}}
+
+/* round 4: next steps card, desktop shortcuts, practice badge, welcome rows */
+body.doodle .nextsteps .step{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:18px;line-height:1.1}
+body.doodle .nextsteps .step-tick{flex:none;width:26px;height:26px;border:3px solid #2b2733;border-radius:8px 6px 9px 6px;background:#fffdf3;display:inline-flex;align-items:center;justify-content:center}
+body.doodle .nextsteps .step.done{opacity:.6}
+body.doodle .nextsteps .step.done .step-nm{text-decoration:line-through}
+body.doodle .shortcuts .keys{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center}
+body.doodle .shortcuts .keyrow{display:contents}
+body.doodle .shortcuts kbd{font:400 16px var(--hand,sans-serif);background:#fffdf3;border:2.5px solid #2b2733;border-radius:7px;box-shadow:0 2px 0 #2b2733;padding:2px 8px;white-space:nowrap;text-align:center}
+body.doodle .shortcuts .keyrow span{font-size:16px;line-height:1.1;color:#4b4455}
+body.doodle .practice-badge{position:absolute;left:50%;top:70px;transform:translateX(-50%) rotate(-2deg);z-index:6;pointer-events:none;background:#ffd95a;color:#2b2733;border:3px solid #2b2733;border-radius:10px 7px 11px 7px;box-shadow:2px 3px 0 #2b2733;padding:1px 12px;font:400 17px var(--hand,sans-serif);letter-spacing:1px}
+body.doodle .welcome-sheet .wb-row canvas{flex:none}
+body.doodle .whatsnew .wn-list{color:#2b2733}
+
+/* ---- round 5: quick mute, import link, offline chip, codex boss phases */
+body.doodle .mute-btn{padding:0}
+body.doodle .mute-btn canvas{width:calc(var(--tap,44px) * .62);height:calc(var(--tap,44px) * .62)}
+body.doodle .mute-btn.is-muted{background:#ece8f4}
+body.doodle .link-btn{align-self:center;margin:-8px 0 -8px;background:none;border:0;padding:6px 10px;min-height:var(--tap);font:400 17px var(--hand);color:#2b2733;text-decoration:underline;text-underline-offset:3px;text-shadow:var(--haloW);cursor:pointer;text-align:center}
+body.doodle .link-btn:active{transform:translateY(2px)}
+body.doodle .hub-top{position:relative}
+body.doodle .offline-chip{position:absolute;right:14px;top:100%;margin-top:4px;z-index:3;padding:1px 10px;border:2px solid #2b2733;border-radius:12px;background:#ffd23c;color:#2b2733;font:400 14px/1.3 var(--hand);box-shadow:1px 2px 0 #2b2733;pointer-events:none}
+body.doodle .offline-chip[hidden]{display:none}
+body.doodle .cdx-boss{display:flex;flex-direction:column;align-items:stretch;gap:6px;text-align:left}
+body.doodle .cdx-boss .bossHead{display:flex;align-items:center;gap:10px}
+body.doodle .cdx-boss .bossHead canvas{flex:none;width:80px;height:80px}
+body.doodle .cdx-boss .bossTxt{min-width:0}
+body.doodle .cdx-boss>.btn{align-self:flex-end}
+body.doodle .bp-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
+body.doodle .bp-head .btn{flex:none}
+body.doodle .bossphases{border-top:2px dashed rgba(43,39,51,.35);padding-top:6px}
+body.doodle .bp-title{font-size:13px;color:#6b6477}
+body.doodle .bp-bar{position:relative;height:16px;margin:0 6px;border:3px solid #2b2733;border-radius:9px;background:#e9e3f4;overflow:visible}
+body.doodle .bp-fill{position:absolute;inset:0;border-radius:6px;background:linear-gradient(90deg,#e8403f,#ffc83d 55%,#7ed957)}
+body.doodle .bp-notch{position:absolute;top:-6px;bottom:-6px;width:4px;margin-left:-2px;background:#2b2733;border-radius:2px}
+body.doodle .bp-marks{position:relative;height:18px;margin:0 6px}
+body.doodle .bp-pct{position:absolute;top:2px;transform:translateX(-50%);font-size:13px;line-height:1;color:#2b2733;white-space:nowrap}
+body.doodle .bp-pct.r{transform:translateX(-85%)}
+body.doodle .bp-pct.l{transform:translateX(-15%)}
+body.doodle .bp-list{display:flex;flex-direction:column;gap:3px}
+body.doodle .bp-row{display:flex;gap:6px;align-items:flex-start;font-size:14px;line-height:1.15;color:#2b2733}
+body.doodle .bp-row .bp-txt{min-width:0;overflow-wrap:anywhere}
+body.doodle .bp-row b{font-weight:400;font-size:16px}
+body.doodle .bp-tag{flex:none;min-width:38px;text-align:center;padding:0 4px;border:2px solid #2b2733;border-radius:8px;background:#ffd23c;font-size:13px;line-height:1.35}

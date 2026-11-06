@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pawprint demo</title>
+<style>
+  :root { --bg:#140f26; --panel:#231a3d; --text:#f6ecd8; --dim:#b7a9c9; --border:#4a3a78; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--text); font:13px system-ui, sans-serif; }
+  h1 { font:700 20px "Trebuchet MS", sans-serif; letter-spacing:.04em; margin:0 0 4px; }
+  h2 { font:700 14px "Trebuchet MS", sans-serif; letter-spacing:.04em; margin:20px 0 8px; color:#ffd95a; }
+  p { color:var(--dim); margin:0 0 8px; }
+  .grid { display:flex; flex-wrap:wrap; gap:6px; }
+  .cell { background:var(--panel); border:2px solid var(--border); padding:4px; text-align:center; }
+  .cell small { display:block; color:var(--dim); font-size:10px; margin-top:2px; max-width:132px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  canvas { image-rendering: pixelated; display:block; margin:0 auto; background:#2a2147; }
+  .row { display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end; }
+  .ctl { margin:6px 0; }
+  button { background:#ffb347; border:0; border-bottom:3px solid #c27a1f; color:#2b1606; padding:4px 10px; font-weight:700; cursor:pointer; }
+</style>
+</head>
+<body>
+<h1>Pawprint demo</h1>
+<p>Procedural 32x32 cats. 40 varied cats (animated idle), then every pose, accessories, patterns and bodies. Add ?static=1 to freeze the animation.</p>
+<div class="ctl"><button id="pause">Pause</button> <span id="stats"></span></div>
+
+<h2>40 cats (seeds 1 to 40, rotating clans)</h2>
+<div class="grid" id="g40"></div>
+
+<h2>Every pose (8 cats): idle0 idle1 blink attack hurt hurt-flash sleep+Zzz dead boxed hidden</h2>
+<div id="poses"></div>
+
+<h2>Death fade (loops)</h2>
+<div class="row" id="death"></div>
+
+<h2>Accessories (same cat)</h2>
+<div class="grid" id="accs"></div>
+
+<h2>Patterns and fur</h2>
+<div class="grid" id="pats"></div>
+
+<h2>Bodies, ears, eyes, tails</h2>
+<div class="grid" id="parts"></div>
+
+<h2>Named descriptors and champions</h2>
+<div class="grid" id="named"></div>
+
+<script src="pawprint.js"></script>
+<script>
+(function () {
+  var PP = SB.gfx.pawprint;
+  var q = new URLSearchParams(location.search);
+  var frozen = q.get('static') === '1', paused = false, tick = 0;
+  var anims = [];
+  var CLANS = ['alley', 'hearth', 'moon', 'mischief', 'neutral'];
+  var RAR = ['common', 'common', 'uncommon', 'rare', 'common', 'epic'];
+
+  function el(tag, cls, parent) { var e = document.createElement(tag); if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; }
+  function cell(parent, label, w, h, scale, paint) {
+    var c = el('div', 'cell', parent), cv = el('canvas', '', c);
+    cv.width = w * scale; cv.height = h * scale;
+    var ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = false;
+    var lb = el('small', '', c); lb.textContent = label;
+    anims.push(function (t) { ctx.clearRect(0, 0, cv.width, cv.height); paint(ctx, t); });
+    return cv;
+  }
+
+  // 40 cats
+  var g40 = document.getElementById('g40');
+  for (var i = 1; i <= 40; i++) (function (i) {
+    var clan = CLANS[i % 5], g = PP.randomGenome(i * 7919 + 3, { clan: clan, rarity: RAR[i % RAR.length] });
+    cell(g40, '#' + i + ' ' + clan + ' ' + g.fur + ' ' + g.pattern + ' ' + g.body, 32, 32, 4, function (ctx, t) { PP.drawCat(ctx, g, 'idle', 0, 0, 4, t + i * 11); });
+  })(i);
+
+  // poses
+  var poseWrap = document.getElementById('poses');
+  var poseNames = ['idle0', 'idle1', 'blink0', 'attack', 'hurt', 'hurtflash', 'sleep', 'dead', 'boxed', 'hidden'];
+  for (var k = 0; k < 8; k++) (function (k) {
+    var g = PP.randomGenome(k * 131 + 17, { clan: CLANS[k % 5], rarity: 'rare' });
+    var row = el('div', 'row', poseWrap); row.style.marginBottom = '6px';
+    poseNames.forEach(function (pn) {
+      cell(row, pn, 32, 32, 3, function (ctx, t) {
+        if (pn === 'hurtflash') PP.drawCat(ctx, g, { name: 'hurt', flash: true }, 0, 0, 3, t);
+        else if (pn === 'idle0' || pn === 'idle1' || pn === 'blink0' || pn === 'attack' || pn === 'hurt' || pn === 'dead') PP.drawCat(ctx, g, pn, 0, 0, 3, t);
+        else PP.drawCat(ctx, g, pn, 0, 0, 3, t);
+      });
+    });
+  })(k);
+
+  // death fade
+  var dw = document.getElementById('death');
+  for (var d = 0; d < 4; d++) (function (d) {
+    var g = PP.randomGenome(500 + d, { clan: CLANS[d] });
+    cell(dw, 'death t sweep', 32, 40, 4, function (ctx, t) {
+      var tt = ((t + d * 30) % 150) / 150;
+      PP.deathFade(ctx, g, 0, 12, 4, tt);
+    });
+  })(d);
+
+  // accessories
+  var aw = document.getElementById('accs');
+  var base = { seed: 3, body: 'tabby', fur: 'ginger', pattern: 'stripes', ears: 'point', eyes: 'round', eyeColor: 'green', tail: 'long' };
+  PP.ACCESSORIES.forEach(function (a) {
+    var g = Object.assign({}, base, { accessory: a });
+    cell(aw, a, 32, 32, 4, function (ctx, t) { PP.drawCat(ctx, g, 'idle', 0, 0, 4, t); });
+  });
+  // also on a black cat for contrast
+  ['hat_wizard', 'hat_crown', 'headphones', 'cape', 'box_head', 'sunglasses'].forEach(function (a) {
+    var g = Object.assign({}, base, { fur: 'black', pattern: 'solid', eyeColor: 'amber', body: 'tall', accessory: a });
+    cell(aw, 'black tall ' + a, 32, 32, 4, function (ctx, t) { PP.drawCat(ctx, g, 'idle', 0, 0, 4, t); });
+  });
+
+  // patterns
+  var pw = document.getElementById('pats');
+  [['orange tabby', 'orange stripes'], ['tuxedo', 'tuxedo'], ['calico', 'calico'], ['siamese', 'siamese'], ['bengal spots', 'bengal'],
+   ['black', 'black'], ['ginger', 'ginger'], ['grey', 'grey'], ['white', 'white'], ['tortoiseshell', 'tortoiseshell'], ['hairless', 'hairless'],
+   ['bicolor grey', 'bicolor grey'], ['cream', 'cream'], ['chocolate tabby', 'chocolate tabby'], ['blue russian', 'blue'], ['grey tabby', 'grey tabby']].forEach(function (p) {
+    var g = PP.fromDescriptor(p[0] + ' tabby body', 4); // body word 'tabby' sets pattern if no other
+    g = PP.fromDescriptor(p[0], 12);
+    cell(pw, p[1], 32, 32, 4, function (ctx, t) { PP.drawCat(ctx, g, 'idle', 0, 0, 4, t); });
+  });
+
+  // parts
+  var tw = document.getElementById('parts');
+  PP.BODIES.forEach(function (b) {
+    var g = Object.assign({}, base, { body: b, accessory: 'none' });
+    cell(tw, 'body ' + b, 32, 32, 4, function (ctx, t) { PP.drawCat(ctx, g, 'idle', 0, 0, 4, t); });
+  });
+  PP.EARS.forEach(function (e) {
+    var g = Object.assign({}, base, { ears: e, fur: 'grey', pattern: 'solid' });
+    cell(tw, 'ears ' + e, 32, 32, 4, function (ctx, t) { PP.drawCat(ctx, g, 'idle', 0, 0, 4, t); });
+  });
+  PP.EYES.forEach(function (e) {
+    var g = Object.assign({}, base, { eyes: e, eyeColor: 'blue', fur: 'white', pattern: 'solid' });
+    cell(tw, 'eyes ' + e, 32, 32, 4, function (ctx, t) { PP.drawCat(ctx, g, 'idle', 0, 0, 4, t); });
+  });
+  PP.TAILS.forEach(function (e) {
+    var g = Object.assign({}, base, { tail: e, fur: 'cream', pattern: 'stripes' });
+    cell(tw, 'tail ' + e, 32, 32, 4, function (ctx, t) { PP.drawCat(ctx, g, 'idle', 0, 0, 4, t); });
+  });
+  ['green', 'amber', 'blue', 'copper', 'odd'].forEach(function (e) {
+    var g = Object.assign({}, base, { eyeColor: e, fur: 'black', pattern: 'solid' });
+    cell(tw, 'eye color ' + e, 32, 32, 4, function (ctx, t) { PP.drawCat(ctx, g, 'idle', 0, 0, 4, t); });
+  });
+
+  // named
+  var nw = document.getElementById('named');
+  ['elder_cat', 'champion_sunbeam', 'champion_moonwhisker'].forEach(function (id) {
+    var g = PP.fromId(id);
+    cell(nw, id + ' (x1.25)', 40, 40, 4, function (ctx, t) { PP.drawCat(ctx, g, 'idle', 4, 8, 4, t); });
+  });
+  ['ginger tabby chonk wizard', 'black tuxedo slim bowtie', 'white fluffy fat crown', 'grey kitten amber eyes sleepy party', 'calico floof bandana', 'siamese tall monocle', 'bengal large helm', 'hairless scarf'].forEach(function (d) {
+    var g = PP.fromDescriptor(d);
+    cell(nw, d, 32, 32, 4, function (ctx, t) { PP.drawCat(ctx, g, 'idle', 0, 0, 4, t); });
+  });
+  // flip test
+  var gf = PP.fromId('elder_cat');
+  cell(nw, 'flipped', 32, 32, 4, function (ctx, t) { PP.drawCat(ctx, gf, { name: 'idle', flip: true }, 0, 0, 4, t); });
+
+  function frame() {
+    if (!paused && !frozen) tick++;
+    for (var i = 0; i < anims.length; i++) anims[i](tick);
+    document.getElementById('stats').textContent = 'cache ' + JSON.stringify(PP.cacheStats());
+    if (!frozen) requestAnimationFrame(frame);
+  }
+  document.getElementById('pause').onclick = function () { paused = !paused; };
+  window.__tick = function (t) { tick = t; for (var i = 0; i < anims.length; i++) anims[i](tick); };
+  frame();
+})();
+</script>
+</body>
+</html>

@@ -7,7 +7,7 @@ export const GAME = {
   subtitle: 'Turret Defense',
   tagline: 'Merge your gear. Hold the stage. Keep the music live.',
   saveKey: 'drop_the_bass_save_v1',
-  version: 1,
+  version: 3,
 };
 
 // ---------------------------------------------------------------- board geometry (logical pixels, the canvas is 540 x 960)
@@ -46,7 +46,7 @@ export const lvlRate = (L) => 1 + 0.05 * (L - 1);
 export const lvlRange = (L) => 1 + 0.035 * (L - 1);
 
 // kind = how it fires. hero = which of the duo "owns" the instrument (flavour and art accent).
-// unlock = { fame: account level needed, records: price in Records }. Starter turrets cost nothing.
+// unlock = { fame, records }: kept for save compatibility; every turret is free from the start.
 export const TURRETS = {
   kick:    { id: 'kick',    name: 'Kick Cannon',     hero: 'roxor',  kind: 'splash',  color: '#ff7a3c', accent: '#ffd9a0',
              dmg: 20, rate: 0.85, range: 190, splash: 52, unlock: { fame: 1, records: 0 },
@@ -65,40 +65,78 @@ export const TURRETS = {
              blurb: 'A low pulse rolls out in a ring and slows everything it touches.',
              perks: { 3: 'Stronger slow', 5: 'Pulse pushes enemies back', 7: 'Double pulse' } },
   mic:     { id: 'mic',     name: 'Siren Mic',       hero: 'jasmin', kind: 'beam',    color: '#ff5fb0', accent: '#ffd0ea',
-             dmg: 16, rate: 0.95, range: 230, unlock: { fame: 2, records: 300 },
+             dmg: 16, rate: 0.95, range: 230, unlock: { fame: 1, records: 0 },
              blurb: 'Jasmin\'s sung beam pierces a whole line of Static.',
              perks: { 4: 'Wider beam', 5: 'Every 8th beam heals the stage', 7: 'Beam sings twice' } },
   synth:   { id: 'synth',   name: 'Arc Synth',       hero: 'roxor',  kind: 'chain',   color: '#35c8ff', accent: '#c4f1ff',
-             dmg: 11, rate: 1.15, range: 155, chains: 2, unlock: { fame: 3, records: 700 },
+             dmg: 11, rate: 1.15, range: 155, chains: 2, unlock: { fame: 1, records: 0 },
              blurb: 'Lightning that jumps from one enemy to the next.',
              perks: { 3: '+1 chain', 5: '+1 chain and short stun', 7: '+1 chain' } },
   horn:    { id: 'horn',    name: 'Air Horn',        hero: 'roxor',  kind: 'cone',    color: '#ff4a5e', accent: '#ffc4cb',
-             dmg: 8, rate: 0.55, range: 125, stun: 0.7, unlock: { fame: 4, records: 1200 },
+             dmg: 8, rate: 0.55, range: 125, stun: 0.7, unlock: { fame: 1, records: 0 },
              blurb: 'A blast cone that stuns and shoves enemies back down the path.',
              perks: { 3: 'Longer stun', 5: 'Wider cone', 7: 'Blasts all around' } },
   scratch: { id: 'scratch', name: 'Vinyl Scratcher', hero: 'jasmin', kind: 'boomerang', color: '#e5e5ff', accent: '#ffffff',
-             dmg: 13, rate: 0.75, range: 170, unlock: { fame: 5, records: 2000 },
+             dmg: 13, rate: 0.75, range: 170, unlock: { fame: 1, records: 0 },
              blurb: 'Throws a spinning record that flies out and comes back, hitting twice.',
              perks: { 3: 'Throws 2 records', 5: 'Records ignore armor', 7: 'Throws 3 records' } },
   loop:    { id: 'loop',    name: 'Loop Station',    hero: 'jasmin', kind: 'aura_rate', color: '#3cff9a', accent: '#c8ffe2',
-             dmg: 0, rate: 0, range: 0, aura: 0.18, unlock: { fame: 6, records: 3200 },
+             dmg: 0, rate: 0, range: 0, aura: 0.18, unlock: { fame: 1, records: 0 },
              blurb: 'Does not shoot. Neighbours play faster, like a loop that never stops.',
              perks: { 3: 'Neighbours get range too', 5: 'Neighbours sometimes fire twice', 7: 'Aura is 50% stronger' } },
   cowbell: { id: 'cowbell', name: 'Cowbell Sniper',  hero: 'roxor',  kind: 'sniper',  color: '#ffb02e', accent: '#fff0c4',
-             dmg: 55, rate: 0.42, range: 320, crit: 0.25, unlock: { fame: 7, records: 4800 },
+             dmg: 55, rate: 0.42, range: 320, crit: 0.25, unlock: { fame: 1, records: 0 },
              blurb: 'More cowbell. Huge long range hits that mark the target.',
              perks: { 3: 'Mark lasts longer', 5: 'Shots pierce 1 enemy', 7: 'Executes weakened enemies' } },
   amp:     { id: 'amp',     name: 'Amp Stack',       hero: 'roxor',  kind: 'aura_dmg', color: '#ff3c8a', accent: '#ffc2dd',
-             dmg: 0, rate: 0, range: 0, aura: 0.16, unlock: { fame: 8, records: 7000 },
+             dmg: 0, rate: 0, range: 0, aura: 0.16, unlock: { fame: 1, records: 0 },
              blurb: 'Does not shoot. Neighbours hit harder. Turn it up to eleven.',
              perks: { 3: 'More damage aura', 5: 'Neighbours gain crit', 7: 'Aura is 50% stronger' } },
   vocal:   { id: 'vocal',   name: 'Choir Orb',       hero: 'jasmin', kind: 'orb',     color: '#ffe0f4', accent: '#ffffff',
-             dmg: 9, rate: 0.5, range: 200, unlock: { fame: 10, records: 11000 },
+             dmg: 9, rate: 0.5, range: 200, unlock: { fame: 1, records: 0 },
              blurb: 'Jasmin\'s harmony drifts as a homing choir orb and bursts into soft light.',
              perks: { 3: 'Orbs seek faster', 5: 'Burst heals the stage sometimes', 7: 'Fires 2 orbs' } },
 };
 export const TURRET_IDS = Object.keys(TURRETS);
-export const STARTER_TURRETS = ['kick', 'snare', 'hat', 'sub'];
+export const STARTER_TURRETS = Object.keys(TURRETS);   // every turret is in the drop pool from the first run
+
+// ---------------------------------------------------------------- turret synergies
+// Two turrets on ORTHOGONALLY adjacent tiles (up, down, left, right; not diagonal) trigger a pair bonus. These are extra: the
+// neighbour auras of Loop Station and Amp Stack (which reach diagonals) keep working as before.
+// fx.a applies to the turret of type a, fx.b to the turret of type b. Numeric effects scale with the LOWER level of the pair:
+// scale = min(SYN_SCALE_MAX, 1 + SYN_SCALE_PER_LEVEL * (lowerLevel - 1)). Keys in SYN_FLAT never scale.
+// Effect keys: rate dmg range crit (additive fractions), slowedDmg / stunnedDmg (kick shells vs slowed / stunned enemies),
+// stun (extra seconds), spinFloor (Hi-Hat starts spun up), healAny + healEvery (Siren Mic heals at any level every N beams),
+// healChance (Choir Orb burst heal chance), chain (Vinyl records arc to a neighbour), chains (Arc Synth extra jumps), aura (aura strength).
+export const SYN_SCALE_PER_LEVEL = 0.1;
+export const SYN_SCALE_MAX = 1.6;
+export const SYN_FLAT = ['healAny', 'healEvery', 'chain', 'chains'];
+export const SYNERGIES = [
+  { id: 'slow_smash',   a: 'sub',     b: 'kick',    name: 'Slow and Smash',  desc: 'Kick shells hit slowed enemies 25% harder.', fx: { b: { slowedDmg: 0.25 } } },
+  { id: 'sharp_amp',    a: 'cowbell', b: 'amp',     name: 'Sharp and Loud',  desc: 'Cowbell Sniper gets more crit and damage.', fx: { a: { crit: 0.1, dmg: 0.08 } } },
+  { id: 'spin_loop',    a: 'hat',     b: 'loop',    name: 'Looped Roll',     desc: 'Hi-Hat starts spun up and the loop gets louder.', fx: { a: { spinFloor: 0.35 }, b: { aura: 0.1 } } },
+  { id: 'tight_kit',    a: 'snare',   b: 'hat',     name: 'Tight Kit',       desc: 'Snare and Hi-Hat both play 10% faster.', fx: { a: { rate: 0.1 }, b: { rate: 0.1 } } },
+  { id: 'healing_duet', a: 'mic',     b: 'vocal',   name: 'Healing Duet',    desc: 'The beam heals the stage more often.', fx: { a: { healAny: 1, healEvery: 5 }, b: { healChance: 0.1 } } },
+  { id: 'blast_stun',   a: 'horn',    b: 'sub',     name: 'Stun Bass',       desc: 'Air Horn stuns longer and Sub Bass hits harder.', fx: { a: { stun: 0.4 }, b: { dmg: 0.12 } } },
+  { id: 'record_chain', a: 'scratch', b: 'synth',   name: 'Sparking Records', desc: 'Records throw sparks to a nearby enemy.', fx: { a: { chain: 1 }, b: { rate: 0.1 } } },
+  { id: 'shove_smash',  a: 'horn',    b: 'kick',    name: 'Shove and Smash', desc: 'Kick shells hit stunned enemies 30% harder.', fx: { a: { range: 0.06 }, b: { stunnedDmg: 0.3 } } },
+  { id: 'hot_wire',     a: 'synth',   b: 'amp',     name: 'Hot Wire',        desc: 'Arc Synth jumps one more time and hits harder.', fx: { a: { chains: 1, dmg: 0.08 } } },
+  { id: 'duet_crit',    a: 'mic',     b: 'cowbell', name: 'Perfect Pitch',   desc: 'Both land more critical hits.', fx: { a: { crit: 0.06 }, b: { crit: 0.06 } } },
+  { id: 'double_stack', a: 'loop',    b: 'amp',     name: 'Double Stack',    desc: 'Both auras get 15% stronger.', fx: { a: { aura: 0.15 }, b: { aura: 0.15 } } },
+  { id: 'steady_beat',  a: 'snare',   b: 'loop',    name: 'Steady Beat',     desc: 'Snare plays faster with more crit.', fx: { a: { rate: 0.08, crit: 0.05 }, b: { aura: 0.1 } } },
+  { id: 'choir_loop',   a: 'vocal',   b: 'loop',    name: 'Endless Chorus',  desc: 'Choir Orb fires faster and reaches further.', fx: { a: { rate: 0.15, range: 0.05 } } },
+];
+export const SYNERGY_BY_ID = Object.fromEntries(SYNERGIES.map((s) => [s.id, s]));
+// derived: TURRET_PARTNERS[type] = [{ partner, id, name, desc }] so a UI can show "works well with"
+export const TURRET_PARTNERS = (() => {
+  const out = Object.fromEntries(Object.keys(TURRETS).map((id) => [id, []]));
+  for (const s of SYNERGIES) {
+    out[s.a].push({ partner: s.b, id: s.id, name: s.name, desc: s.desc });
+    out[s.b].push({ partner: s.a, id: s.id, name: s.name, desc: s.desc });
+  }
+  return out;
+})();
+export const synergyScale = (lowerLevel) => Math.min(SYN_SCALE_MAX, 1 + SYN_SCALE_PER_LEVEL * (Math.max(1, lowerLevel) - 1));
 
 // ---------------------------------------------------------------- enemies (the Static)
 // hp is a multiplier of the wave's base hp. speed in px per second. armor is flat damage removed per hit (min 25% of the hit goes through).
@@ -124,6 +162,8 @@ export const BOSSES = {
   reverb:     { id: 'reverb',     name: 'Reverb Titan',    hpMul: 52, speed: 27, armor: 1, r: 40, color: '#9f7bff', coins: 190, trick: 'Echoes itself: spawns Echo Minis as it walks.' },
   djglitch:   { id: 'djglitch',   name: 'DJ Glitch',       hpMul: 60, speed: 34, armor: 0, r: 34, color: '#35f0c8', coins: 230, trick: 'Teleports along the path and jams your nearest turrets.' },
   playback:   { id: 'playback',   name: 'Mr. Playback',    hpMul: 90, speed: 28, armor: 2, r: 44, color: '#ff4fa0', coins: 400, trick: 'Perfect, polished, three phases. Calls everything, heals, and hits the skip button.' },
+  lowpass:    { id: 'lowpass',    name: 'The Low-Pass Tide', hpMul: 70, speed: 29, armor: 0, r: 42, color: '#3fb8c8', coins: 300, trick: 'Washes over small hits: it takes much less damage from fast weak shots.' },
+  silence:    { id: 'silence',    name: 'Dr. Dead Air',      hpMul: 120, speed: 25, armor: 2, r: 44, color: '#4a4866', coins: 600, trick: 'Mutes your turrets in waves and steals the music.' },
 };
 export const BOSS_IDS = Object.keys(BOSSES);
 
@@ -166,6 +206,19 @@ export const MAPS = {
       [[3, -1], [3, 9]],
     ],
     blocked: [[1, 9], [5, 9], [2, 9], [4, 9]],
+  },
+  // Bonfire Beach: one spawn, the path forks around the bonfire (left and right arms) and merges again at the middle row.
+  beach: {
+    paths: [
+      [[3, -1], [3, 1], [0, 1], [0, 5], [3, 5], [3, 9]],
+      [[3, -1], [3, 1], [6, 1], [6, 5], [3, 5], [3, 9]],
+    ],
+    blocked: [[3, 3], [0, 0], [6, 0], [0, 9], [1, 9], [5, 9], [6, 9]],
+  },
+  // Moon Stage: one long inward spiral (clockwise from the bottom right) ending at the stage in the centre.
+  moon: {
+    paths: [[[7, 9], [0, 9], [0, 0], [6, 0], [6, 7], [2, 7], [2, 2], [4, 2], [4, 5]]],
+    blocked: [[1, 1], [5, 8]],
   },
 };
 
@@ -221,23 +274,31 @@ export function laneAt(lane, d) {
 
 // Worlds = the stops on the tour. wavesTotal is the story length; endless continues past it.
 export const WORLDS = [
-  { id: 'garage',   n: 1, name: 'Garage Days',     place: 'Roxor\'s Garage',  map: 'garage',   bpm: 100, wavesTotal: 20, hpMul: 1.0,  pool: ['fuzz', 'zip', 'brick', 'echo'],
+  { id: 'garage',   n: 1, name: 'Garage Days',     place: 'Roxor\'s Garage',  map: 'garage',   bpm: 100, wavesTotal: 20, hpMul: 3.5, pool: ['fuzz', 'zip', 'brick', 'echo'],
     boss10: 'compressor', boss: 'compressor', sky: ['#1a1038', '#3a1d5c'], accent: '#ff9a3c', ground: '#2a1c4a', coinMul: 1.0,
     blurb: 'Where it all started. A cluttered garage, a loop pedal and a very confused cat.' },
-  { id: 'busk',     n: 2, name: 'Busk Street',     place: 'Old Town Street',  map: 'busk',     bpm: 108, wavesTotal: 20, hpMul: 2.3,  pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech'],
+  { id: 'busk',     n: 2, name: 'Busk Street',     place: 'Old Town Street',  map: 'busk',     bpm: 108, wavesTotal: 20, hpMul: 8, pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech'],
     boss10: 'compressor', boss: 'noisegate', sky: ['#10264a', '#2a4a7a'], accent: '#ffd23c', ground: '#1f2f5a', coinMul: 1.7,
     blurb: 'Cobblestones, street lamps and a crowd that has gone suspiciously quiet.' },
-  { id: 'club',     n: 3, name: 'Neon Club',       place: 'The Neon Club',    map: 'club',     bpm: 120, wavesTotal: 20, hpMul: 6,  pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal'],
+  { id: 'club',     n: 3, name: 'Neon Club',       place: 'The Neon Club',    map: 'club',     bpm: 120, wavesTotal: 20, hpMul: 21, pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal'],
     boss10: 'noisegate', boss: 'reverb', sky: ['#2a0f40', '#5a1a6a'], accent: '#ff4fd0', ground: '#2e1450', coinMul: 2.8,
     blurb: 'Lasers, fog and a dance floor that forgot how to dance.' },
-  { id: 'festival', n: 4, name: 'Festival Fields', place: 'Sunset Festival', map: 'festival', bpm: 126, wavesTotal: 20, hpMul: 22,  pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal', 'mute', 'rager'],
+  { id: 'festival', n: 4, name: 'Festival Fields', place: 'Sunset Festival', map: 'festival', bpm: 126, wavesTotal: 20, hpMul: 77, pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal', 'mute', 'rager'],
     boss10: 'reverb', boss: 'djglitch', sky: ['#4a1f3a', '#ff7a4a'], accent: '#ffb02e', ground: '#3a2048', coinMul: 4.6,
     blurb: 'Two entrances, one stage and a sunset that has gone grey around the edges.' },
-  { id: 'arena',    n: 5, name: 'Mega Arena',      place: 'The Mega Arena',   map: 'arena',    bpm: 132, wavesTotal: 20, hpMul: 80,     pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal', 'mute', 'rager'],
+  { id: 'arena',    n: 5, name: 'Mega Arena',      place: 'The Mega Arena',   map: 'arena',    bpm: 132, wavesTotal: 20, hpMul: 280,   pool: ['fuzz', 'zip', 'brick', 'echo', 'drone', 'leech', 'gate', 'squeal', 'mute', 'rager'],
     boss10: 'djglitch', boss: 'playback', sky: ['#0a0a2a', '#2a1060'], accent: '#ff5fb0', ground: '#1c1240', coinMul: 4.6,
     blurb: 'Three lanes, ninety thousand empty seats and Mr. Playback at the soundboard.' },
+  // Second tour. hpMul values are placeholders until the balance pass.
+  { id: 'beach',    n: 6, name: 'Bonfire Beach',   place: 'Sunset Bonfire Cove', map: 'beach', bpm: 112, wavesTotal: 25, hpMul: 400, pool: ['fuzz', 'zip', 'echo', 'drone', 'brick', 'leech', 'squeal', 'rager', 'mute', 'gate'],
+    boss10: 'djglitch', boss: 'lowpass', sky: ['#2a1038', '#ff7a3c'], accent: '#ff8a4c', ground: '#0f4a58', coinMul: 2.6,
+    blurb: 'A bonfire, a boat for a stage and a tide of muffled sound. The path splits around the fire and comes back together.' },
+  { id: 'moon',     n: 7, name: 'Moonlight Rave',  place: 'The Moon Stage',   map: 'moon',     bpm: 138, wavesTotal: 25, hpMul: 900, pool: ['fuzz', 'zip', 'drone', 'echo', 'brick', 'leech', 'rager', 'gate', 'squeal', 'mute'],
+    boss10: 'lowpass', boss: 'silence', sky: ['#050a2e', '#1f2f9a'], accent: '#5fe8ff', ground: '#101a5a', coinMul: 0.8,
+    blurb: 'A floating stage, low gravity and one very long spiral walk to the middle. Dr. Dead Air waits at the end.' },
 ];
 export const WORLD_BY_ID = Object.fromEntries(WORLDS.map((w) => [w.id, w]));
+export const WORLD_ORDER = WORLDS.map((w) => w.id);   // the tour order; never assume a fixed world count, derive from this
 export const ENCORE_MAX = 5;   // encore 0 = normal, 1..5 harder (hp, speed) and richer rewards
 export const encoreHp = (e) => 1 + 0.55 * e + 0.08 * e * e;
 export const encoreSpeed = (e) => 1 + 0.05 * e;
@@ -263,11 +324,26 @@ export const ECON = {
   critMul: 2.0,
   heroCdRoxor: 30, heroCdJasmin: 34,
   duetWindow: 2.0,
-  rerollCostDiamonds: 3,
+  rerollCostDiamonds: 3,   // remix card reroll (UI pays this when no free reroll is left)
+  dropRerollCoinPct: 0.45, // re-roll the next dropped turret: 45% of the current deploy cost (rounded up)
+  dropRerollGems: 2,       // ... or this many diamonds
   reviveDiamonds: 50,
   hpPerWaveBase: 28,       // base hp of a 'fuzz' on wave 1 (before world and encore multipliers)
-  hpGrowth: 1.17,         // per wave
+  hpGrowth: 1.21,         // per wave
   hpGrowthLate: 1.15,      // after wave 20 (endless)
+};
+
+// ---------------------------------------------------------------- difficulty (Run opts.difficulty, default 'normal')
+// hpMul multiplies enemy health, stageHp is added to the stage health, speedMul multiplies enemy speed, coinMul multiplies kill coins.
+// recordsMul / fansMul are the reward multipliers the meta layer applies to the end-of-run payout (result.rewardMul mirrors them).
+export const DIFFICULTY_IDS = ['easy', 'normal', 'hard'];
+export const DIFFICULTY = {
+  easy:   { id: 'easy',   name: 'Easy',   desc: 'Softer Static, a bigger stage and slower enemies. Rewards -25%.',
+            hpMul: 0.7, stageHp: 6, speedMul: 0.92, coinMul: 1, recordsMul: 0.75, fansMul: 0.75 },
+  normal: { id: 'normal', name: 'Normal', desc: 'The way the band intended.',
+            hpMul: 1, stageHp: 0, speedMul: 1, coinMul: 1, recordsMul: 1, fansMul: 1 },
+  hard:   { id: 'hard',   name: 'Hard',   desc: 'Tougher Static, a smaller stage and faster enemies. Coins +15%, rewards +25%.',
+            hpMul: 1.3, stageHp: -4, speedMul: 1.06, coinMul: 1.15, recordsMul: 1.25, fansMul: 1.25 },
 };
 
 export const fmt = (n) => {

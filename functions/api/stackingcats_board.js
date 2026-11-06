@@ -6,6 +6,7 @@
 //   GET  /api/stackingcats_board?day=2026-10-25 -> { day, top: [{name,score,wave,kills}], all: [...] }
 //   POST /api/stackingcats_board {name,score,wave,kills,day} -> best per name on that day and all time,
 //                                  20s per-IP write throttle, returns both boards.
+//   POST /api/stackingcats_board {type:'run',name,score,wave,kills} -> an ordinary run: all time board only.
 
 const json = (o, s) => new Response(JSON.stringify(o), {
   status: s || 200,
@@ -20,12 +21,38 @@ const dayOf = (ms) => { const d = new Date(ms); return `${d.getUTCFullYear()}-${
 const dayOk = (day, now) => DAY_RE.test(day) && [-1, 0, 1].some((k) => dayOf(now + k * 86400000) === day);
 const DAY_TTL = 5 * 86400; // KV needs at least 60 seconds
 
+// weekly challenge: ISO week keys like 2026-W43 (UTC). Same rules as weekKey() in the game.
+const WEEK_RE = /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/;
+export function weekOf(ms) {
+  const d = new Date(ms), day0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const dow = (new Date(day0).getUTCDay() + 6) % 7;
+  const thu = day0 + (3 - dow) * 86400000;
+  const y = new Date(thu).getUTCFullYear();
+  return `${y}-W${p2(Math.floor((thu - Date.UTC(y, 0, 1)) / (7 * 86400000)) + 1)}`;
+}
+// this week, last week or next week is acceptable
+const weekOk = (week, now) => WEEK_RE.test(week) && [-7, 0, 7].some((k) => weekOf(now + k * 86400000) === week);
+const WEEK_TTL = 21 * 86400; // KV needs at least 60 seconds
+
+// names are public: obvious profanity becomes Anonymous (the game checks the same list before it lets a name be saved)
+const BAD_NAME = /(fuck|shit|cunt|nigg|fagg|bitch|whore|slut|rape|nazi|hitler|dick|cock|pussy|penis|vagina|asshole)/i;
+export const cleanName = (raw) => {
+  const n = String(raw || '').replace(/[^\w \-.']/g, '').trim().slice(0, 12);
+  return !n || BAD_NAME.test(n.replace(/[ \-.'_0-9]/g, '')) ? 'Anonymous' : n;
+};
+
 async function read(KV, key) { try { return JSON.parse((await KV.get(key)) || '[]'); } catch (e) { return []; } }
 
 export async function onRequestGet({ request, env }) {
   const KV = kv(env);
   if (!KV) return json({ error: 'not configured' }, 503);
   const now = Date.now();
+  const q = new URL(request.url).searchParams;
+  if (q.get('type') === 'weekly') {
+    let week = q.get('week') || weekOf(now);
+    if (!weekOk(week, now)) week = weekOf(now);
+    return json({ type: 'weekly', week, top: await read(KV, 'sc:w:' + week), all: await read(KV, 'sc:wall') });
+  }
   let day = new URL(request.url).searchParams.get('day') || dayOf(now);
   if (!dayOk(day, now)) day = dayOf(now);
   return json({ day, top: await read(KV, 'sc:d:' + day), all: await read(KV, 'sc:all') });
@@ -40,14 +67,18 @@ export async function onRequestPost({ request, env }) {
   let b;
   try { b = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
   const now = Date.now();
-  const name = String(b.name || '').replace(/[^\w \-.']/g, '').trim().slice(0, 12) || 'Anonymous';
+  const name = cleanName(b.name);
   const wave = Math.floor(+b.wave), kills = Math.floor(+b.kills), score = Math.floor(+b.score);
+  const run = b.type === 'run';   // an ordinary run only competes on the all time board
+  const weekly = b.type === 'weekly';
   const day = String(b.day || '');
-  if (!dayOk(day, now)) return json({ error: 'bad day' }, 400);
+  const week = String(b.week || '');
+  if (!run && (weekly ? !weekOk(week, now) : !dayOk(day, now))) return json({ error: weekly ? 'bad week' : 'bad day' }, 400);
   if (![wave, kills, score].every(Number.isFinite) || wave < 1 || wave > 300 || kills < 0 || kills > wave * 80 || score < 1 || score > 1000000) return json({ error: 'bad score' }, 400);
   const entry = { name, score, wave, kills, t: now };
   const result = {};
-  for (const [key, ttl] of [['sc:d:' + day, DAY_TTL], ['sc:all', 0]]) {
+  const boards = run ? [['sc:all', 0]] : weekly ? [['sc:w:' + week, WEEK_TTL], ['sc:wall', 0]] : [['sc:d:' + day, DAY_TTL], ['sc:all', 0]];
+  for (const [key, ttl] of boards) {
     const top = await read(KV, key);
     const i = top.findIndex((e) => e.name === name);
     if (i >= 0 && top[i].score >= score) { result[key] = top; continue; }
@@ -59,6 +90,8 @@ export async function onRequestPost({ request, env }) {
     result[key] = top;
   }
   await KV.put('scrl:' + ip, String(now), { expirationTtl: 60 });
+  if (run) return json({ type: 'run', all: result['sc:all'] });
+  if (weekly) return json({ type: 'weekly', week, top: result['sc:w:' + week], all: result['sc:wall'] });
   return json({ day, top: result['sc:d:' + day], all: result['sc:all'] });
 }
 

@@ -3,9 +3,9 @@
 import assert from 'node:assert/strict';
 import {
   newGame, addCat, mergeCats, mergePairs, rollCatChoices, rollSnackChoices, eatSnack, startWave, step, catMaxHp, releaseCat, moveCat, TUNE,
-  rollItemChoices, takeItem, equipItem, useReroll,
+  rollItemChoices, takeItem, rollRelicChoices, takeRelic, openBox, equipItem, useReroll, autoSpecialPick, useSpecial, useZoomies,
 } from '../stacking_cats/sim.js';
-import { ITEM_BY_ID, emptyKingdom } from '../stacking_cats/cats.js';
+import { ITEM_BY_ID, emptyKingdom, itemSlots } from '../stacking_cats/cats.js';
 import { CAT_BY_ID, CATS, SNACK_BY_ID, STARTERS, MAX_STACK, START_CATS } from '../stacking_cats/cats.js';
 
 const QUICK = !!process.env.QUICK;
@@ -48,25 +48,27 @@ function snack(g) {
   eatSnack(g, ch[0]);
 }
 
-const RAR = { common: 1, rare: 2, epic: 3 };
-function loot(g) {
-  const ch = rollItemChoices(g).sort((a, b) => RAR[ITEM_BY_ID[b].rarity] - RAR[ITEM_BY_ID[a].rarity]);
-  takeItem(g, ch[0]);
-  // put it on the strongest cat that still has a free slot (or the first cat)
-  const target = g.cats.find((c) => c.items.length < (c.lvl >= 3 ? 2 : 1)) || g.cats[0];
+// a lootbox is a chance, not a choice: the bot opens it and puts the relic on a cat with a free slot (or the first cat)
+function lootBox(g, tier) {
+  openBox(g, tier);
+  const target = g.cats.find((c) => c.items.length < itemSlots(c.lvl)) || g.cats[0];
   if (target) equipItem(g, g.stash.length - 1, target.uid);
 }
 
-export function playRun(seed, { maxWave = 80, kingdom = null, difficulty = 'normal' } = {}) {
+// skill 1 also fires charged special moves and the zoomies the way an attentive player does (the plain bot never does, so it plays far worse than a person)
+export function playRun(seed, { maxWave = 80, kingdom = null, difficulty = 'normal', skill = 0 } = {}) {
   const g = newGame({ seed, unlocked: STARTERS, events: false, kingdom, difficulty });
   for (let i = 0; i < START_CATS; i++) recruit(g);
   for (let i = 0; i < g.meta.startSnacks; i++) snack(g);
   while (g.state !== 'over' && g.wave < maxWave) {
     startWave(g);
     let guard = 0;
-    while (g.state !== 'clear' && g.state !== 'over' && guard++ < 30 * 600) step(g);
+    while (g.state !== 'clear' && g.state !== 'over' && guard++ < 30 * 600) {
+      step(g);
+      if (skill && guard % 10 === 0) { const u = autoSpecialPick(g); if (u) useSpecial(g, u.uid !== undefined ? u.uid : u); if (g.zoom >= 100) useZoomies(g); }
+    }
     if (g.state === 'over') break;
-    for (const r of g.reward) { if (r === 'cat') recruit(g); else if (r === 'item') loot(g); else snack(g); }
+    for (const r of g.reward) { if (r === 'cat') recruit(g); else if (r === 'relic') { const ch = rollRelicChoices(g); if (ch.length) takeRelic(g, ch[0]); } else if (r.startsWith('box:')) lootBox(g, r.slice(4)); else snack(g); }
     arrange(g);
   }
   return { wave: g.wave, kills: g.run.kills, cats: g.cats.length, state: g.state, coins: Math.floor(g.run.coins) };
@@ -79,25 +81,32 @@ export function maxedKingdom(frac = 1) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // Two yardsticks. The plain bot never fires specials or zoomies and plays far worse than a person; the attentive bot (skill 1) is the one the
+  // targets are set on: a fresh save should end well before the wave 30 finale, and only Kingdom upgrades (many runs of coins) get you further.
   const N = QUICK ? 6 : 16;
-  const spread = (opts) => { const w = []; for (let s = 1; s <= N; s++) w.push(playRun(s * 7919, opts).wave); return w.sort((a, b) => a - b); };
+  const spread = (opts, n = N, skill = 0) => { const w = []; for (let s = 1; s <= n; s++) w.push(playRun(s * 7919, { skill, ...opts }).wave); return w.sort((a, b) => a - b); };
   const waves = spread({});
   const med = waves[Math.floor(N / 2)];
-  console.log('waves reached', waves.join(' '), 'median', med);
-  const rich = spread({ kingdom: maxedKingdom(1) }), half = spread({ kingdom: maxedKingdom(0.5) });
-  console.log('half kingdom', half.join(' '), 'median', half[Math.floor(N / 2)]);
-  console.log('full kingdom', rich.join(' '), 'median', rich[Math.floor(N / 2)]);
-  assert.ok(half[Math.floor(N / 2)] >= med, 'a half built kingdom should not be weaker');
-  assert.ok(rich[Math.floor(N / 2)] > med + 2, 'a full kingdom should clearly help');
-  assert.ok(rich.every((w) => w < 80), 'even a full kingdom must be beatable');
-  // difficulty: the average wave must go down from Cozy to Normal to Hard
-  const mean = (opts) => { const M = QUICK ? 20 : 40; let t = 0; for (let k = 1; k <= M; k++) t += playRun(k * 104729 + 17, opts).wave; return t / M; };
-  const mc = mean({ difficulty: 'cozy' }), mn = mean({ difficulty: 'normal' }), mh = mean({ difficulty: 'hard' });
-  console.log('mean wave cozy', mc.toFixed(1), 'normal', mn.toFixed(1), 'hard', mh.toFixed(1));
-  assert.ok(mc > mn * 1.1 && mn > mh * 1.1, 'difficulty levels should be clearly different');
-  assert.ok(med >= 8, 'too hard: median wave ' + med);
-  assert.ok(med <= 40, 'too easy: median wave ' + med);
+  console.log('plain bot, waves reached', waves.join(' '), 'median', med);
+  assert.ok(med >= 5, 'too hard: the plain bot median wave ' + med);
   assert.ok(waves.every((w) => w < 80), 'a run never ended: the game is endless-easy');
-  assert.ok(waves.filter((w) => w >= 6).length >= N * 0.55, 'the first nest should usually fall');
+  assert.ok(waves.filter((w) => w >= 6).length >= N * 0.5, 'the first nest should usually fall');
+  const NA = QUICK ? 24 : 48;
+  const att = spread({}, NA, 1), attHalf = spread({ kingdom: maxedKingdom(0.5) }, NA, 1), attFull = spread({ kingdom: maxedKingdom(1) }, NA, 1);
+  const m = (a) => a[Math.floor(a.length / 2)], fin = (a) => a.filter((w) => w >= 30).length;
+  console.log('attentive fresh', att.join(' '), 'median', m(att), 'finale', fin(att) + '/' + NA);
+  console.log('attentive half kingdom median', m(attHalf), 'finale', fin(attHalf) + '/' + NA, ' full kingdom median', m(attFull), 'finale', fin(attFull) + '/' + NA);
+  assert.ok(m(att) >= 8 && m(att) <= 18, 'a fresh save with an attentive player should end around wave 8 to 18, median ' + m(att));
+  assert.ok(fin(att) <= NA * 0.08, 'the wave 30 finale should be out of reach on a fresh save: ' + fin(att) + '/' + NA);
+  assert.ok(m(att) >= med, 'paying attention (specials, zoomies) must help');
+  assert.ok(m(attHalf) >= m(att) + 3, 'a half built kingdom should clearly help: ' + m(attHalf) + ' vs ' + m(att));
+  assert.ok(m(attFull) >= m(att) + 10, 'a full kingdom should help a lot: ' + m(attFull) + ' vs ' + m(att));
+  assert.ok(fin(attFull) >= NA * 0.3, 'a full kingdom must be able to reach the finale: ' + fin(attFull) + '/' + NA);
+  assert.ok(attFull.every((w) => w < 80), 'even a full kingdom must be beatable');
+  // difficulty: the average wave must go down from Cozy to Normal to Hard
+  const mean = (opts) => { const M = QUICK ? 24 : 48; let t = 0; for (let k = 1; k <= M; k++) t += playRun(k * 104729 + 17, { skill: 1, ...opts }).wave; return t / M; };
+  const mc = mean({ difficulty: 'cozy' }), mn = mean({ difficulty: 'normal' }), mh = mean({ difficulty: 'hard' });
+  console.log('attentive mean wave cozy', mc.toFixed(1), 'normal', mn.toFixed(1), 'hard', mh.toFixed(1));
+  assert.ok(mc > mn * 1.1 && mn > mh * 1.1, 'difficulty levels should be clearly different');
   console.log('balance ok');
 }

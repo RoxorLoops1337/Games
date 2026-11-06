@@ -1,0 +1,18 @@
+{
+  "name": "Drop the Bass",
+  "short_name": "Drop the Bass",
+  "description": "Turret defense with RoxorLoops and Jasmin. Merge your gear into speaker turrets, remix, loot and keep the music live.",
+  "id": "/drop_the_bass/",
+  "start_url": "/drop_the_bass/",
+  "scope": "/drop_the_bass/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf6e6",
+  "theme_color": "#fbf6e6",
+  "categories": ["games"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

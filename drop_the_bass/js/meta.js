@@ -1,16 +1,21 @@
 // meta.js: the profile (save data) and everything that changes it between runs. Pure functions on a plain object:
 // no DOM, no Math.random (callers pass an rng), no Date.now (callers pass `now` in ms).
-import {
-  GAME, WORLDS, WORLD_BY_ID, ENEMIES, BOSSES, TURRETS, STARTER_TURRETS, RARITY, RARITY_ORDER, ENCORE_MAX, encoreReward, ECON,
-} from './data_core.js';
+import { GAME, WORLDS, WORLD_BY_ID, ENEMIES, BOSSES, TURRETS, STARTER_TURRETS, RARITY, RARITY_ORDER, ENCORE_MAX, encoreReward } from './data_core.js';
 import {
   STUDIO, STUDIO_IDS, HERO_MAX, heroCost, LOADOUT_BASE, AUTOMERGE_PRICE, SLOTS, STATS, SETS, GEAR, GEAR_IDS, GEAR_MAX_LEVEL,
-  gearUpgradeCost, GEAR_SELL, CRATES, PITY, fansForLevel, FAME_MAX, fameReward, OUTFITS, LOGIN_REWARDS, QUESTS, ACHIEVEMENTS, STAR_MILESTONES, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE,
+  gearUpgradeCost, GEAR_SELL, CRATES, PITY, fansForLevel, FAME_MAX, fameReward, OUTFITS, LOGIN_REWARDS, STREAK_MILESTONES, QUESTS, ACHIEVEMENTS, STAR_MILESTONES, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE,
+  SKIN_DEFAULT, SKIN_PRICES, SKIN_IDS, SKIN_FALLBACK,
 } from './data_meta.js';
-import { DAILY_MODS, DAILY_MOD_IDS } from './data_run.js';
+import { EPILOGUES, CREDITS_FINAL } from './data_story.js';
+import { HERO_ABILITIES, HERO_ABILITY_DEFAULT, RUN_MODIFIER_BY_ID, MAX_RUN_MODIFIERS, ENDLESS_MILESTONES, BOSS_PHASES, BOSS_PHASE_EFFECTS } from './data_depth.js';
+import { DAILY_MOD_IDS } from './data_run.js';
 import { makeRng, hashSeed } from './rng.js';
+import * as CORE from './data_core.js';
+import { WEEKLY_GIGS, WEEKLY_WAVES, WEEKLY_REWARD, SEASONS, SEASON_GOALS, SEASON_KEEPSAKE_BONUS } from './data_meta.js';
+import { cleanName, cleanFriends, addFriend as lbAddFriend, removeFriend as lbRemoveFriend, FRIENDS_MAX } from './lb.js';
 
 const DAY = 86400000;
+const emptySeason = () => ({ id: '', month: '', progress: { kills: 0, merges: 0, wins: 0 }, claimed: {} });
 export const dayOf = (now) => Math.floor((now - new Date(now).getTimezoneOffset() * 60000) / DAY);
 
 // ------------------------------------------------------------------------------------------------ profile
@@ -20,60 +25,299 @@ export function newProfile(now = 0) {
   const turretsUnlocked = {};
   for (const t of STARTER_TURRETS) turretsUnlocked[t] = true;
   return {
-    v: GAME.version, created: now, lastSeen: now,
-    records: 250, diamonds: 30, fans: 0, fame: 1, name: '', resume: null, boosters: {}, wheel: null,
-    studio: {}, heroLv: { roxor: 1, jasmin: 1 },
+    v: GAME.version, poolV: 2, created: now, lastSeen: now, lastActive: 0, whatsNewSeen: GAME.version, nextSteps: { done: {}, dismissed: false, open: true },
+    records: 250, diamonds: 30, fans: 0, fame: 1, name: '', resume: null, boosters: {}, wheel: null, friends: [], weekly: { id: '', done: false, best: 0 }, bests: {},
+    studio: {}, heroLv: { roxor: 1, jasmin: 1 }, season: emptySeason(),
     turretsUnlocked, loadout: STARTER_TURRETS.slice(),
     prog, bossesSeen: {}, encoreCleared: {},
     gear: { items: [], equipped: { head: null, mic: null, body: null, chain: null, feet: null }, uid: 1 },
     outfits: { owned: { roxor: ['default'], jasmin: ['default'] }, worn: { roxor: 'default', jasmin: 'default' } },
     stats: { kills: 0, merges: 0, deploys: 0, runs: 0, wins: 0, bosses: 0, waves: 0, heroUses: 0, bestCombo: 0, perfects: 0, remixes: 0, maxLevel: 0,
-             crates: 0, spins: 0, rushBest: 0, legendary: 0, gearMerges: 0, endless: 0, relics: 0, dailies: 0, duets: 0, flawless: 0, streak: 0, coins: 0 },
+             crates: 0, spins: 0, rushBest: 0, legendary: 0, gearMerges: 0, endless: 0, relics: 0, dailies: 0, duets: 0, flawless: 0, streak: 0, coins: 0, weeklies: 0 },
     achClaimed: {}, starClaimed: {},
     daily: { day: -1, quests: [], rerolled: false, prog: {}, challengeDay: -1, challengeBest: 0 },
-    login: { lastDay: -1, streak: 0, claimedDay: -1 },
+    login: { lastDay: -1, streak: 0, claimedDay: -1, bonus: {} },
     crate: { sinceEpic: 0, sinceLegend: 0 },
     tutorial: { done: false, hints: {} },
-    story: { intro: false, worlds: {}, ending: false },
+    story: { intro: false, worlds: {}, ending: false, epilogues: {} },
+    heroAbility: { roxor: HERO_ABILITY_DEFAULT.roxor, jasmin: HERO_ABILITY_DEFAULT.jasmin }, modifiers: [], modPin: false,
+    skins: { owned: [SKIN_DEFAULT] }, milestones: { claimed: {}, cosmetics: [] },
     seen: { turrets: {}, enemies: {}, bosses: {}, relics: {} },
     autoMerge: false, autoMergeOn: true,
-    settings: { lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1 },
+    settings: { style: 'doodle', lowfx: false, music: 0.7, sfx: 0.9, shake: true, numbers: true, vibrate: true, reduce: false, beat: true, speed: 1, difficulty: 'normal', skin: SKIN_DEFAULT, analytics: true, skipSetlist: false, lang: 'auto', colorblind: false, autolow: true, bigtext: false, muted: false },
   };
+}
+const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+// number clamp: undefined keeps the default, anything that is not a finite number falls back to lo
+const num = (v, d, lo = 0, hi = Infinity) => (v === undefined ? d : (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo));
+const int = (v, d, lo = 0, hi = Infinity) => Math.floor(num(v, d, lo, hi));
+
+export const DIFFICULTY_IDS = ['easy', 'normal', 'hard'];
+const DIFF_FALLBACK = {
+  easy:   { id: 'easy',   name: 'Easy',   desc: 'Gentler Static. Good for a chill session.' },
+  normal: { id: 'normal', name: 'Normal', desc: 'The standard tour.' },
+  hard:   { id: 'hard',   name: 'Hard',   desc: 'Tougher Static, bigger rewards.' },
+};
+// name and description come from data_core.js DIFFICULTY when it exists, with a safe fallback
+export function difficultyInfo(id) {
+  const t = CORE.DIFFICULTY && isObj(CORE.DIFFICULTY) ? CORE.DIFFICULTY : null;
+  const k = DIFFICULTY_IDS.includes(id) ? id : 'normal';
+  const e = t && isObj(t[k]) ? t[k] : {};
+  return { id: k, name: typeof e.name === 'string' ? e.name : DIFF_FALLBACK[k].name, desc: typeof e.desc === 'string' ? e.desc : DIFF_FALLBACK[k].desc };
+}
+export const difficultyOf = (p) => (p && p.settings && DIFFICULTY_IDS.includes(p.settings.difficulty) ? p.settings.difficulty : 'normal');
+
+// ---- run modifiers (Setlist). Up to MAX_RUN_MODIFIERS known ids, no duplicates.
+export function cleanModifiers(list) {
+  const out = [];
+  if (Array.isArray(list)) for (const id of list) if (typeof id === 'string' && RUN_MODIFIER_BY_ID[id] && !out.includes(id) && out.length < MAX_RUN_MODIFIERS) out.push(id);
+  return out;
 }
 export function migrate(p, now = 0) {
   const base = newProfile(now);
-  if (!p || typeof p !== 'object') return base;
+  if (!isObj(p)) return base;
   const out = Object.assign({}, base, p);
-  for (const k of ['settings', 'stats', 'tutorial', 'story', 'seen', 'login', 'daily', 'crate', 'outfits', 'gear', 'heroLv']) out[k] = Object.assign({}, base[k], p[k] || {});
+  for (const k of ['settings', 'stats', 'tutorial', 'story', 'seen', 'login', 'daily', 'crate', 'outfits', 'gear', 'heroLv', 'weekly']) out[k] = Object.assign({}, base[k], isObj(p[k]) ? p[k] : {});
   out.prog = Object.assign({}, base.prog);
-  for (const w of WORLDS) out.prog[w.id] = Object.assign({}, base.prog[w.id], (p.prog || {})[w.id] || {});
-  out.turretsUnlocked = Object.assign({}, base.turretsUnlocked, p.turretsUnlocked || {});
+  for (const w of WORLDS) out.prog[w.id] = Object.assign({}, base.prog[w.id], isObj((p.prog || {})[w.id]) ? p.prog[w.id] : {});
+  out.turretsUnlocked = Object.assign({}, base.turretsUnlocked, isObj(p.turretsUnlocked) ? p.turretsUnlocked : {});
+  // ---- sanitise types (a damaged or hand-edited save must never poison the game with NaN or strings)
+  out.records = int(p.records, base.records); out.diamonds = int(p.diamonds, base.diamonds); out.fans = int(p.fans, base.fans);
+  out.fame = int(p.fame, base.fame, 1, FAME_MAX);
+  out.created = num(p.created, base.created); out.lastSeen = num(p.lastSeen, base.lastSeen);
+  out.name = typeof p.name === 'string' ? cleanName(p.name) : '';
+  out.friends = cleanFriends(p.friends);
+  out.resume = isObj(p.resume) ? p.resume : null;
+  out.boosters = isObj(p.boosters) ? p.boosters : {};
+  out.wheel = isObj(p.wheel) ? p.wheel : null;
+  out.autoMerge = !!p.autoMerge; out.autoMergeOn = p.autoMergeOn === undefined ? true : !!p.autoMergeOn;
+  out.pendingCrates = (Array.isArray(p.pendingCrates) ? p.pendingCrates : []).filter((c) => typeof c === 'string' && CRATES[c]);
+  out.studio = {};
+  if (isObj(p.studio)) for (const id of STUDIO_IDS) { const l = int(p.studio[id], 0, 0, STUDIO[id].max); if (l > 0) out.studio[id] = l; }
+  for (const who of ['roxor', 'jasmin']) out.heroLv[who] = int(out.heroLv[who], 1, 1, HERO_MAX);
+  for (const k of Object.keys(base.stats)) out.stats[k] = num(out.stats[k], base.stats[k]);
+  for (const k of Object.keys(base.crate)) out.crate[k] = int(out.crate[k], base.crate[k]);
+  for (const w of WORLDS) {
+    const pr = out.prog[w.id], bs = base.prog[w.id];
+    pr.cleared = !!pr.cleared; pr.bestEndless = int(pr.bestEndless, 0); pr.bestWave = int(pr.bestWave, 0);
+    pr.stars = bs.stars.map((_, i) => int(Array.isArray(pr.stars) ? pr.stars[i] : 0, 0, 0, 3));
+  }
+  const s = out.settings, bsn = base.settings;
+  s.music = num(s.music, bsn.music, 0, 1); s.sfx = num(s.sfx, bsn.sfx, 0, 1); s.speed = num(s.speed, 1, 1, 3);
+  for (const k of ['lowfx', 'shake', 'numbers', 'vibrate', 'reduce', 'beat']) s[k] = !!s[k];
+  s.style = s.style === 'classic' ? 'classic' : 'doodle';
+  s.difficulty = DIFFICULTY_IDS.includes(s.difficulty) ? s.difficulty : 'normal';
+  s.analytics = s.analytics === undefined ? true : !!s.analytics;
+  s.skipSetlist = !!s.skipSetlist;
+  s.muted = !!s.muted;   // the quick mute button (title screen and pause menu); old saves have none, so false
+  s.colorblind = !!s.colorblind; s.bigtext = !!s.bigtext; s.autolow = s.autolow === undefined ? true : !!s.autolow;   // accessibility (js/a11y.js); autolow: drop to low graphics when the frame rate stays low
+  s.lang = ['en', 'da', 'nl', 'de'].includes(s.lang) ? s.lang : 'auto';   // 'auto' follows the device language
+  // second tour fields: ability picks, pinned modifiers, epilogues seen, board skins, claimed Endless milestones
+  out.story.epilogues = isObj(out.story.epilogues) ? Object.fromEntries(Object.entries(out.story.epilogues).filter(([k, v]) => WORLD_BY_ID[k] && v).map(([k]) => [k, true])) : {};
+  out.heroAbility = {};
+  for (const who of ['roxor', 'jasmin']) { const id = isObj(p.heroAbility) ? p.heroAbility[who] : null; out.heroAbility[who] = (HERO_ABILITIES[who] || []).some((a) => a.id === id) ? id : HERO_ABILITY_DEFAULT[who]; }
+  out.modifiers = cleanModifiers(p.modifiers); out.modPin = !!p.modPin;
+  const ownedSk = [SKIN_DEFAULT];
+  if (isObj(p.skins) && Array.isArray(p.skins.owned)) for (const id of p.skins.owned) if (typeof id === 'string' && SKIN_PRICES[id] !== undefined && !ownedSk.includes(id)) ownedSk.push(id);
+  out.skins = { owned: ownedSk };
+  s.skin = ownedSk.includes(s.skin) ? s.skin : SKIN_DEFAULT;
+  out.milestones = { claimed: {}, cosmetics: [] };
+  if (isObj(p.milestones)) {
+    if (isObj(p.milestones.claimed)) for (const m of ENDLESS_MILESTONES) if (p.milestones.claimed[m.id]) out.milestones.claimed[m.id] = true;
+    if (Array.isArray(p.milestones.cosmetics)) out.milestones.cosmetics = p.milestones.cosmetics.filter((c, i, a) => typeof c === 'string' && a.indexOf(c) === i).slice(0, 20);
+  }
+  out.season = cleanSeason(p.season);
+  out.bests = cleanBests(p.bests, out);
+  out.weekly = { id: typeof out.weekly.id === 'string' ? out.weekly.id : '', done: !!out.weekly.done, best: int(out.weekly.best, 0) };
+  out.daily.day = num(out.daily.day, -1, -1); out.daily.challengeDay = num(out.daily.challengeDay, -1, -1); out.daily.challengeBest = int(out.daily.challengeBest, 0);
+  if (!Array.isArray(out.daily.quests)) out.daily.quests = [];
+  out.daily.quests = out.daily.quests.filter((q) => isObj(q) && typeof q.id === 'string');
+  if (!isObj(out.daily.prog)) out.daily.prog = {};
   if (!Array.isArray(out.loadout) || !out.loadout.length) out.loadout = STARTER_TURRETS.slice();
+  if (!p.poolV) { out.loadout = STARTER_TURRETS.slice(); out.poolV = 2; }   // older saves had a 4 to 8 turret pool: every drop now draws from all of them
   out.loadout = out.loadout.filter((t) => TURRETS[t] && out.turretsUnlocked[t]);
   if (!out.loadout.length) out.loadout = STARTER_TURRETS.slice();
   if (!Array.isArray(out.gear.items)) out.gear.items = [];
-  out.gear.items = out.gear.items.filter((g) => g && GEAR[g.tpl] && RARITY[g.rarity]);
-  out.gear.equipped = Object.assign({}, base.gear.equipped, p.gear && p.gear.equipped || {});
-  for (const s of SLOTS) if (out.gear.equipped[s] != null && !out.gear.items.some((g) => g.uid === out.gear.equipped[s])) out.gear.equipped[s] = null;
+  out.gear.items = out.gear.items.filter((g) => isObj(g) && GEAR[g.tpl] && RARITY[g.rarity]).map((g) => Object.assign({}, g, { lvl: int(g.lvl, 1, 1, GEAR_MAX_LEVEL) }));
+  out.gear.equipped = Object.assign({}, base.gear.equipped, isObj(p.gear && p.gear.equipped) ? p.gear.equipped : {});
+  for (const sl of SLOTS) if (out.gear.equipped[sl] != null && !out.gear.items.some((g) => g.uid === out.gear.equipped[sl])) out.gear.equipped[sl] = null;
+  out.gear.uid = Math.max(int(out.gear.uid, 1, 1), 1 + out.gear.items.reduce((m, g) => Math.max(m, +g.uid || 0), 0));
+  // outfits: keep only known ids (ids are append-only, so a newer save never loses one), always own 'default', never wear an outfit that is not owned
+  out.outfits = { owned: {}, worn: {} };
+  for (const who of ['roxor', 'jasmin']) {
+    const raw = isObj(p.outfits) && isObj(p.outfits.owned) && Array.isArray(p.outfits.owned[who]) ? p.outfits.owned[who] : [];
+    const own = ['default'];
+    for (const id of raw) if (typeof id === 'string' && OUTFITS[who][id] && !own.includes(id)) own.push(id);
+    out.outfits.owned[who] = own;
+    const wn = isObj(p.outfits) && isObj(p.outfits.worn) ? p.outfits.worn[who] : 'default';
+    out.outfits.worn[who] = own.includes(wn) ? wn : 'default';
+  }
+  syncOutfits(out);
+  // round 4: streak bonuses already paid, last activity, the What's new version seen, the Next steps card
+  out.login.bonus = {};
+  if (isObj(p.login) && isObj(p.login.bonus)) for (const m of STREAK_MILESTONES) if (p.login.bonus[m.days]) out.login.bonus[m.days] = true;
+  out.login.streak = int(out.login.streak, 0); out.login.lastDay = num(out.login.lastDay, -1, -1); out.login.claimedDay = num(out.login.claimedDay, -1, -1);
+  out.lastActive = num(p.lastActive, 0);
+  out.whatsNewSeen = int(p.whatsNewSeen, 0);
+  const ns = isObj(p.nextSteps) ? p.nextSteps : {};
+  out.nextSteps = { done: {}, dismissed: !!ns.dismissed, open: ns.open === undefined ? true : !!ns.open };
+  if (isObj(ns.done)) for (const id of NEXT_STEP_IDS) if (ns.done[id]) out.nextSteps.done[id] = true;
+  syncNextSteps(out);   // old saves: features their stats already prove are ticked
   out.v = GAME.version;
   return out;
 }
 export function serialize(p) { return JSON.stringify(p); }
+// a raw (already JSON parsed) value that plausibly is a Drop the Bass save: an object with stats and either prog or records
+export function looksLikeSave(raw) { return isObj(raw) && isObj(raw.stats) && (isObj(raw.prog) || typeof raw.records === 'number'); }
 export function parseSave(str, now = 0) {
-  try { return migrate(JSON.parse(str), now); } catch (e) { return null; }
+  try {
+    if (typeof str !== 'string' || !str.trim()) return null;
+    const raw = JSON.parse(str);
+    return looksLikeSave(raw) ? migrate(raw, now) : null;
+  } catch (e) { return null; }
 }
+// repair a live profile in place (NaN, strings in number fields...) so the next save can pass validation
+export function repairProfile(p, now = 0) {
+  const fixed = migrate(JSON.parse(JSON.stringify(p, (k, v) => (typeof v === 'number' && !Number.isFinite(v) ? 0 : v))), now);
+  for (const k of Object.keys(p)) delete p[k];
+  Object.assign(p, fixed);
+  return p;
+}
+
+// ---- save storage: validate-then-commit with a second copy of the last good save
+export const SAVE_KEY = GAME.saveKey;
+export const SAVE_BAK_KEY = GAME.saveKey + '_bak';         // last good save (no run snapshot)
+export const SAVE_PREV_KEY = GAME.saveKey + '_prev';       // the profile that was replaced by an import or a reset
+export const SAVE_CORRUPT_KEY = GAME.saveKey + '_corrupt'; // an unreadable main save, kept for manual rescue
+const safeGet = (store, k) => { try { return store.getItem(k); } catch (e) { return null; } };
+const safeSet = (store, k, v) => { try { store.setItem(k, v); return true; } catch (e) { return false; } };
+export function progressScore(p) {
+  if (!isObj(p)) return 0;
+  const st = isObj(p.stats) ? p.stats : {}, studio = isObj(p.studio) ? p.studio : {};
+  let n = (+st.runs || 0) * 3 + (+st.kills || 0) / 200 + (+p.fame || 0) * 10 + (+p.fans || 0) / 50;
+  for (const k of Object.keys(studio)) n += +studio[k] || 0;
+  if (isObj(p.prog)) for (const w of Object.keys(p.prog)) if (p.prog[w] && p.prog[w].cleared) n += 25;
+  return n;
+}
+// Serialise, parse it back and check the shape BEFORE touching storage. A bad profile never overwrites a good save.
+// Returns { ok, reason?, bytes? }. opts.force = replace the backup even if the new save has less progress (reset, import).
+export function commitSave(store, p, opts = {}) {
+  let str, raw;
+  try { str = serialize(p); raw = JSON.parse(str); } catch (e) { return { ok: false, reason: 'serialize' }; }
+  if (!looksLikeSave(raw)) return { ok: false, reason: 'shape' };
+  for (const k of ['records', 'diamonds', 'fans', 'fame']) if (typeof raw[k] !== 'number' || !Number.isFinite(raw[k]) || raw[k] < 0) return { ok: false, reason: 'bad_' + k };
+  if (!isObj(raw.settings) || !isObj(raw.studio) || !isObj(raw.gear)) return { ok: false, reason: 'shape' };
+  // the backup first (without the run snapshot, so it stays small), unless it would replace a far more advanced one
+  const slim = Object.assign({}, raw, { resume: null });
+  const oldBak = safeGet(store, SAVE_BAK_KEY);
+  let keepBak = false;
+  if (oldBak && !opts.force) { const ob = parseSave(oldBak, 0); if (ob && progressScore(ob) > 20 && progressScore(slim) < progressScore(ob) * 0.5) keepBak = true; }
+  if (!keepBak) safeSet(store, SAVE_BAK_KEY, JSON.stringify(slim));
+  if (!safeSet(store, SAVE_KEY, str)) return { ok: false, reason: 'storage' };
+  if (safeGet(store, SAVE_KEY) !== str) return { ok: false, reason: 'verify' };
+  return { ok: true, bytes: str.length, keptBackup: keepBak };
+}
+// The phases of a boss for the codex diagram: one group per DISTINCT health threshold, highest first. pct is the whole percent the boss health
+// drops to (66 means 'at 66% health or below'); entries are the effects that fire there (names and descriptions are translated data).
+// A boss with no phases, and an effect id the table does not know, are skipped safely.
+export function bossPhaseGroups(bossId) {
+  const list = Array.isArray(BOSS_PHASES[bossId]) ? BOSS_PHASES[bossId] : [];
+  const groups = [];
+  for (const ph of list.slice().sort((a, b) => b.at - a.at)) {
+    const fx = BOSS_PHASE_EFFECTS[ph.id];
+    if (!fx || !(ph.at >= 0 && ph.at <= 1)) continue;
+    let g = groups.find((x) => x.at === ph.at);
+    if (!g) { g = { at: ph.at, pct: Math.round(ph.at * 100), entries: [] }; groups.push(g); }
+    g.entries.push({ id: ph.id, name: fx.name, desc: fx.desc });
+  }
+  return groups;
+}
+// A brand new profile (no save on this device) starts with Reduce motion on when the system asks for it. A stored choice is never touched:
+// call this only for a profile that was just created. mm is matchMedia (or a fake); anything that throws or is missing changes nothing.
+export function applyFreshDefaults(p, mm) {
+  try { if (p && p.settings && typeof mm === 'function' && mm('(prefers-reduced-motion: reduce)').matches) p.settings.reduce = true; } catch (e) { /* no media query support */ }
+  return p;
+}
+// Load: the main save, else the backup (recovered:true), else a new profile. A corrupt main save is kept under SAVE_CORRUPT_KEY.
+export function loadSave(store, now = 0) {
+  const rawMain = safeGet(store, SAVE_KEY), rawBak = safeGet(store, SAVE_BAK_KEY);
+  const main = rawMain ? parseSave(rawMain, now) : null;
+  if (main) return { profile: main, source: 'main', recovered: false, corrupt: false, hadSave: true };
+  const corrupt = !!rawMain;
+  if (corrupt) safeSet(store, SAVE_CORRUPT_KEY, rawMain);
+  const bak = rawBak ? parseSave(rawBak, now) : null;
+  if (bak) return { profile: bak, source: 'backup', recovered: true, corrupt, hadSave: true };
+  return { profile: newProfile(now), source: 'new', recovered: false, corrupt, hadSave: false };
+}
+
+// ---- save code: DTB1.<base64>.<checksum>. Old raw base64 codes still import. The run snapshot is left out.
+const b64enc = (s) => (typeof btoa === 'function' ? btoa(unescape(encodeURIComponent(s))) : Buffer.from(s, 'utf8').toString('base64'));
+const b64dec = (s) => (typeof atob === 'function' ? decodeURIComponent(escape(atob(s))) : Buffer.from(s, 'base64').toString('utf8'));
+export function checksum(s) { let a = 0x811c9dc5; for (let i = 0; i < s.length; i++) { a ^= s.charCodeAt(i); a = Math.imul(a, 16777619) >>> 0; } return a.toString(36); }
 export function exportCode(p) {
-  const s = JSON.stringify(p);
-  return typeof btoa === 'function' ? btoa(unescape(encodeURIComponent(s))) : Buffer.from(s, 'utf8').toString('base64');
+  const s = JSON.stringify(Object.assign({}, p, { resume: null }));
+  const body = b64enc(s);
+  return 'DTB1.' + body + '.' + checksum(body);
 }
 export function importCode(code, now = 0) {
   try {
-    const s = typeof atob === 'function' ? decodeURIComponent(escape(atob(code.trim()))) : Buffer.from(code.trim(), 'base64').toString('utf8');
-    const p = JSON.parse(s);
-    if (!p || typeof p !== 'object' || !p.stats) return null;
-    return migrate(p, now);
+    if (typeof code !== 'string') return null;
+    let c = code.replace(/[\s"'`]/g, '');
+    if (!c) return null;
+    if (c.startsWith('DTB1.')) {
+      const parts = c.split('.');
+      if (parts.length !== 3 || checksum(parts[1]) !== parts[2]) return null;   // truncated or edited
+      c = parts[1];
+    }
+    c = c.replace(/-/g, '+').replace(/_/g, '/');
+    const raw = JSON.parse(b64dec(c));
+    if (!looksLikeSave(raw)) return null;
+    const p = migrate(raw, now); p.resume = null;
+    return p;
   } catch (e) { return null; }
 }
+
+// ---- resume safety net: reject a run snapshot that cannot be played (NaN, missing fields, born times after the run clock)
+const fin = (v) => typeof v === 'number' && Number.isFinite(v);
+export function checkResume(r) {
+  const bad = (reason) => ({ ok: false, reason });
+  if (!isObj(r)) return bad('no resume');
+  if (!isObj(r.cfg) || typeof r.cfg.mode !== 'string' || !WORLD_BY_ID[r.cfg.world]) return bad('missing run setup');
+  const s = r.snap;
+  if (!isObj(s)) return bad('missing snapshot');
+  if (!isObj(s.opts) || !WORLD_BY_ID[s.opts.world]) return bad('missing stage');
+  for (const k of ['t', 'coins', 'stageHp', 'stageMax', 'wave', 'cleared', 'hype', 'hypeNeed', 'uid', 'rngState', 'prepT']) if (!fin(s[k])) return bad('bad ' + k);
+  if (s.t < 0 || s.coins < 0 || s.stageMax <= 0 || s.stageHp < 0 || s.stageHp > s.stageMax + 50 || s.wave < 0 || s.wave > 500) return bad('impossible numbers');
+  if (s.phase !== 'prep' && s.phase !== 'wave') return bad('bad phase');
+  if (!Array.isArray(s.turrets) || !Array.isArray(s.enemies) || !Array.isArray(s.spawnQ) || !Array.isArray(s.projectiles) || !Array.isArray(s.loadout)) return bad('missing lists');
+  if (!isObj(s.mods) || !isObj(s.heroLv)) return bad('missing mods');
+  if (s.turrets.length > 70) return bad('too many turrets');
+  const slots = new Set();
+  for (const t of s.turrets) {
+    if (!isObj(t) || !TURRETS[t.type]) return bad('unknown turret');
+    if (!fin(t.level) || t.level < 1 || t.level > 7 || !fin(t.slot) || t.slot < 0 || slots.has(t.slot)) return bad('bad turret');
+    if (!fin(t.x) || !fin(t.y) || !fin(t.born) || !fin(t.cd)) return bad('bad turret numbers');
+    if (t.born > s.t + 0.001) return bad('turret born after the run clock');
+    slots.add(t.slot);
+  }
+  for (const e of s.enemies) {
+    if (!isObj(e) || typeof e.type !== 'string') return bad('bad enemy');
+    if (!fin(e.hp) || !fin(e.maxHp) || e.maxHp <= 0 || !fin(e.x) || !fin(e.y) || !fin(e.d) || !fin(e.speed)) return bad('bad enemy numbers');
+  }
+  for (const q of s.spawnQ) if (!isObj(q) || !fin(q.at) || typeof q.type !== 'string') return bad('bad spawn queue');
+  return { ok: true };
+}
+export function resumeSummary(r) {
+  if (!isObj(r)) return null;
+  const w = WORLD_BY_ID[r.world] || WORLD_BY_ID[r.cfg && r.cfg.world];
+  const turrets = r.snap && Array.isArray(r.snap.turrets) ? r.snap.turrets.length : 0;
+  return { stage: w ? w.name : 'Unknown stage', wave: +r.wave || 0, turrets, mode: r.mode || (r.cfg && r.cfg.mode) || 'story' };
+}
+
+// ---- friends (names only; pure helpers live in lb.js)
+export function addFriend(p, name) { const r = lbAddFriend(p.friends, name, p.name); if (r.ok) p.friends = r.list; return r; }
+export function removeFriend(p, name) { p.friends = lbRemoveFriend(p.friends, name); return p.friends; }
+export { FRIENDS_MAX };
 
 // ------------------------------------------------------------------------------------------------ studio, heroes, turrets
 export const studioLevel = (p, id) => p.studio[id] || 0;
@@ -84,10 +328,9 @@ export function buyStudio(p, id) {
   if (c == null) return { ok: false, reason: 'max' };
   if (p.records < c) return { ok: false, reason: 'records', cost: c };
   p.records -= c; p.studio[id] = studioLevel(p, id) + 1;
-  if (id === 'rack') { /* loadout size grows */ }
   return { ok: true, cost: c };
 }
-export const loadoutSize = (p) => LOADOUT_BASE + studioLevel(p, 'rack');
+export const loadoutSize = () => LOADOUT_BASE;
 export function heroUpgradeCost(p, who) { const l = p.heroLv[who]; return l >= HERO_MAX ? null : heroCost(l); }
 export function upgradeHero(p, who) {
   const c = heroUpgradeCost(p, who);
@@ -129,14 +372,131 @@ export function buyAutoMerge(p) {
   if (p.diamonds < AUTOMERGE_PRICE) return { ok: false, reason: 'diamonds' };
   p.diamonds -= AUTOMERGE_PRICE; p.autoMerge = true; return { ok: true };
 }
+// ---- outfits (cosmetic). p.outfits = { owned: { roxor: [ids], jasmin: [ids] }, worn: { roxor: id, jasmin: id } }
+const HEROES = ['roxor', 'jasmin'];
+// best Endless wave reached on any stage (stats.endless, or the per-stage best when an old save has only that)
+export function bestEndlessWave(p) { let b = (p.stats && +p.stats.endless) || 0; for (const w of WORLDS) b = Math.max(b, (p.prog && p.prog[w.id] && +p.prog[w.id].bestEndless) || 0); return b; }
+// is an unlock rule { world: 'beach' } (that stage is cleared) or { endless: 50 } (best Endless wave) met? No rule means always.
+export function outfitUnlockMet(p, unlock) {
+  if (!unlock) return true;
+  if (unlock.world !== undefined) { const pr = p.prog && p.prog[unlock.world]; if (!(pr && pr.cleared)) return false; }
+  if (unlock.endless !== undefined && bestEndlessWave(p) < unlock.endless) return false;
+  return true;
+}
+export function outfitUnlocked(p, who, id) { const o = OUTFITS[who] && OUTFITS[who][id]; return !!o && outfitUnlockMet(p, o.unlock); }
+// grant every earned outfit (free, no diamonds). Returns the new ones as [{ who, id }]. Safe to call any time.
+export function syncOutfits(p) {
+  const fresh = [];
+  for (const who of HEROES) {
+    if (!isObj(p.outfits)) p.outfits = {};
+    if (!isObj(p.outfits.owned)) p.outfits.owned = {};
+    if (!isObj(p.outfits.worn)) p.outfits.worn = {};
+    if (!Array.isArray(p.outfits.owned[who])) p.outfits.owned[who] = ['default'];
+    const own = p.outfits.owned[who];
+    for (const id of Object.keys(OUTFITS[who])) if (OUTFITS[who][id].unlock && !own.includes(id) && outfitUnlockMet(p, OUTFITS[who][id].unlock)) { own.push(id); fresh.push({ who, id }); }
+  }
+  return fresh;
+}
+// the wardrobe of one hero for the UI: every outfit with owned, worn, locked (rule not met yet), the price and a short "how to get it" line
+export function outfitList(p, who) {
+  syncOutfits(p);
+  return Object.keys(OUTFITS[who] || {}).map((id) => {
+    const o = OUTFITS[who][id], owned = p.outfits.owned[who].includes(id), locked = !owned && !outfitUnlockMet(p, o.unlock);
+    let how = owned ? 'Owned' : o.price > 0 ? o.price + ' diamonds' : 'Free';
+    if (locked) how = o.unlock.world !== undefined ? 'Clear ' + ((WORLD_BY_ID[o.unlock.world] || {}).name || o.unlock.world) : 'Reach Endless wave ' + o.unlock.endless;
+    return { id, name: o.name, desc: o.desc, price: o.price, unlock: o.unlock || null, owned, worn: p.outfits.worn[who] === id, locked, how };
+  });
+}
 export function buyOutfit(p, who, id) {
   const o = OUTFITS[who] && OUTFITS[who][id];
   if (!o) return { ok: false };
+  syncOutfits(p);
   if (p.outfits.owned[who].includes(id)) { p.outfits.worn[who] = id; return { ok: true, equipped: true }; }
+  if (!outfitUnlockMet(p, o.unlock)) return { ok: false, reason: 'locked' };
   if (p.diamonds < o.price) return { ok: false, reason: 'diamonds' };
   p.diamonds -= o.price; p.outfits.owned[who].push(id); p.outfits.worn[who] = id;
   return { ok: true };
 }
+
+// ---- Setlist: hero abilities, run modifiers, board skins (pre-run choices and cosmetics)
+// hero abilities: p.heroAbility = { roxor, jasmin }. The sim falls back to the original when a pick is still locked; the UI shows the hero level needed.
+export function heroAbilityList(p, who) {
+  const lv = (p.heroLv && p.heroLv[who]) || 1, chosen = heroAbilityOf(p, who);
+  return (HERO_ABILITIES[who] || []).map((a) => ({ id: a.id, name: a.name, desc: a.desc, unlockLv: a.unlockLv, cdMul: a.cdMul, unlocked: lv >= a.unlockLv, chosen: a.id === chosen }));
+}
+export function heroAbilityOf(p, who) {
+  const list = HERO_ABILITIES[who] || [], id = p.heroAbility && p.heroAbility[who];
+  const a = list.find((x) => x.id === id);
+  if (a && ((p.heroLv && p.heroLv[who]) || 1) >= a.unlockLv) return a.id;
+  return HERO_ABILITY_DEFAULT[who];
+}
+export function setHeroAbility(p, who, id) {
+  const a = (HERO_ABILITIES[who] || []).find((x) => x.id === id);
+  if (!a) return { ok: false, reason: 'unknown' };
+  if (((p.heroLv && p.heroLv[who]) || 1) < a.unlockLv) return { ok: false, reason: 'locked', need: a.unlockLv };
+  if (!isObj(p.heroAbility)) p.heroAbility = Object.assign({}, HERO_ABILITY_DEFAULT);
+  p.heroAbility[who] = id;
+  return { ok: true };
+}
+// what the sim gets as opts.heroAbility (always valid for the current hero levels)
+export const heroAbilitySetup = (p) => ({ roxor: heroAbilityOf(p, 'roxor'), jasmin: heroAbilityOf(p, 'jasmin') });
+
+// run modifiers: payout multiplier for a list of ids (product of each mul). Without modifiers { records:1, fans:1, diamonds:1 }.
+export function modMulOf(ids) {
+  const m = { records: 1, fans: 1, diamonds: 1 };
+  for (const id of cleanModifiers(ids)) { const d = RUN_MODIFIER_BY_ID[id].mul || {}; for (const k of ['records', 'fans', 'diamonds']) m[k] *= d[k] || 1; }
+  for (const k of Object.keys(m)) m[k] = Math.round(m[k] * 1000) / 1000;
+  return m;
+}
+// the risk level shown as flames: 1 to 3 per modifier from its bonus, summed and capped at 5 for the selection
+export function modFlames(id) { const m = RUN_MODIFIER_BY_ID[id]; if (!m) return 0; const r = (m.mul && m.mul.records) || 1; return r >= 1.45 ? 3 : r >= 1.3 ? 2 : 1; }
+export function modifiersOf(p) { return cleanModifiers(p.modifiers); }
+export function toggleModifier(p, id) {
+  if (!RUN_MODIFIER_BY_ID[id]) return { ok: false, reason: 'unknown' };
+  const cur = cleanModifiers(p.modifiers), i = cur.indexOf(id);
+  if (i >= 0) { cur.splice(i, 1); p.modifiers = cur; return { ok: true, on: false }; }
+  if (cur.length >= MAX_RUN_MODIFIERS) return { ok: false, reason: 'full' };
+  cur.push(id); p.modifiers = cur; return { ok: true, on: true };
+}
+// called when a run starts: the picks are used up unless pinned
+export function consumeModifiers(p) { const ids = cleanModifiers(p.modifiers); if (!p.modPin) p.modifiers = []; return ids; }
+
+export function skinList(p, names) {
+  return SKIN_IDS.map((id) => {
+    const n = (names && names[id]) || SKIN_FALLBACK[id] || { name: id, desc: '' };
+    const owned = p.skins.owned.includes(id);
+    return { id, name: n.name, desc: n.desc, price: SKIN_PRICES[id], owned, worn: p.settings.skin === id };
+  });
+}
+// true when the player can pay for at least one stage skin or unlocked outfit they do not own yet (drives the one-time "something to buy" hint)
+export function cosmeticAffordable(p) {
+  if (SKIN_IDS.some((id) => SKIN_PRICES[id] > 0 && !p.skins.owned.includes(id) && p.diamonds >= SKIN_PRICES[id])) return true;
+  return ['roxor', 'jasmin'].some((who) => outfitList(p, who).some((o) => !o.owned && !o.locked && o.price > 0 && p.diamonds >= o.price));
+}
+export function buySkin(p, id) {
+  if (SKIN_PRICES[id] === undefined) return { ok: false, reason: 'unknown' };
+  if (p.skins.owned.includes(id)) return { ok: false, reason: 'owned' };
+  if (p.diamonds < SKIN_PRICES[id]) return { ok: false, reason: 'diamonds', cost: SKIN_PRICES[id] };
+  p.diamonds -= SKIN_PRICES[id]; p.skins.owned.push(id);
+  return { ok: true, cost: SKIN_PRICES[id] };
+}
+export function equipSkin(p, id) {
+  if (!p.skins.owned.includes(id)) return { ok: false, reason: 'not owned' };
+  p.settings.skin = id; return { ok: true };
+}
+
+// ---- epilogues: the first clear of a world plays its epilogue once per profile; the first Moon clear also plays the credits.
+// Never in the tutorial or daily runs. Returns the cutscene ids to play ([] when none) and marks them seen.
+export function takeEpilogues(p, world, firstClear, mode) {
+  if (!firstClear || mode !== 'story' || !WORLD_BY_ID[world]) return [];
+  if (!isObj(p.story.epilogues)) p.story.epilogues = {};
+  if (p.story.epilogues[world]) return [];
+  p.story.epilogues[world] = true;
+  const list = [EPILOGUES[world]];
+  if (world === WORLDS[WORLDS.length - 1].id) list.push(CREDITS_FINAL);
+  return list.filter(Boolean);
+}
+export const worldStarsMax = () => WORLDS.length * 3 * (ENCORE_MAX + 1);
 
 // ------------------------------------------------------------------------------------------------ gear
 const rarIdx = (r) => RARITY_ORDER.indexOf(r);
@@ -187,7 +547,7 @@ export function mergeGear(p, uids) {
   const ng = makeGear(p, gs[0].tpl, RARITY_ORDER[rarIdx(gs[0].rarity) + 1]);
   ng.lvl = Math.max(1, best - 2);
   if (wasEquipped) p.gear.equipped[GEAR[ng.tpl].slot] = ng.uid;
-  p.stats.gearMerges++;
+  p.stats.gearMerges++; dailyAdd(p, 'gearMerges', 1);
   if (ng.rarity === 'legendary' || ng.rarity === 'mythic') p.stats.legendary++;
   return { ok: true, item: ng };
 }
@@ -262,7 +622,7 @@ export function openCrateFree(p, tier, rng) {
     const min = c.guarantee && i === c.items - 1 && !items.some((g) => rarIdx(g.rarity) >= rarIdx(c.guarantee)) ? c.guarantee : null;
     items.push(rollGearItem(p, c.odds, rng, { min }));
   }
-  p.stats.crates++;
+  p.stats.crates++; dailyAdd(p, 'crates', 1);
   return items;
 }
 export function crateOddsTable(tier) {
@@ -307,15 +667,19 @@ export function computeRunSetup(p) {
     for (const l of gearStatLines(g)) fx.push(...STATS[l.stat].fx(l.value));
   }
   for (const b of setBonuses(p)) fx.push(...STATS[b.stat].fx(b.v));
-  return { baseFx: fx, heroLv: Object.assign({}, p.heroLv), loadout: p.loadout.slice(), autoMerge: p.autoMerge, autoMergeOn: p.autoMergeOn };
+  return { baseFx: fx, heroLv: Object.assign({}, p.heroLv), loadout: p.loadout.slice(), autoMerge: p.autoMerge, autoMergeOn: p.autoMergeOn, difficulty: difficultyOf(p) };
 }
 
 // ------------------------------------------------------------------------------------------------ daily: login, quests, challenge
+// add to today's quest counter of a stat (quests read p.daily.prog[stat]); used by the hooks outside a run (crates, gear merges, the wheel)
+function dailyAdd(p, stat, n) { if (!isObj(p.daily)) return; if (!isObj(p.daily.prog)) p.daily.prog = {}; p.daily.prog[stat] = (p.daily.prog[stat] || 0) + n; }
+// quests a player cannot work on yet are never dealt (Endless unlocks with the first stage clear)
+export const questAvailable = (p, q) => !(q.stat === 'endlessWave' && !endlessUnlocked(p));
 export function ensureDaily(p, now, rng) {
   const day = dayOf(now);
   if (p.daily.day === day && p.daily.quests.length) return false;
   const r = rng || makeRng(hashSeed('quests' + day));
-  const pool = r.shuffle(QUESTS);
+  const pool = r.shuffle(QUESTS.filter((q) => questAvailable(p, q)));
   const picked = []; const stats = new Set();
   for (const q of pool) { if (stats.has(q.stat)) continue; stats.add(q.stat); picked.push({ id: q.id, claimed: false }); if (picked.length >= 3) break; }
   p.daily.day = day; p.daily.quests = picked; p.daily.rerolled = false; p.daily.prog = {};
@@ -332,7 +696,7 @@ export function rerollQuest(p, id, rng) {
   if (p.daily.rerolled) return { ok: false, reason: 'used' };
   const slot = p.daily.quests.find((x) => x.id === id); if (!slot || slot.claimed) return { ok: false };
   const have = new Set(p.daily.quests.map((x) => questDef(x.id).stat));
-  const opts = QUESTS.filter((q) => !have.has(q.stat));
+  const opts = QUESTS.filter((q) => !have.has(q.stat) && questAvailable(p, q));
   if (!opts.length) return { ok: false };
   slot.id = rng.pick(opts).id; p.daily.rerolled = true; return { ok: true };
 }
@@ -345,6 +709,161 @@ export function grant(p, reward, rng) {
   else if (reward.crate) p.pendingCrates = (p.pendingCrates || []).concat([reward.crate]);
   return out;
 }
+// ---- Next steps card (Tour tab): features the player has not tried yet. profile.nextSteps = { done: {id: true}, dismissed, open }.
+// Ticks come from battle events (main.js watches the run events), from run results (modifiers) and from what the profile already proves.
+export const NEXT_STEP_IDS = ['preview', 'reroll', 'synergy', 'branch', 'hero', 'modifier', 'outfit'];
+function stepsOf(p) {
+  if (!isObj(p.nextSteps)) p.nextSteps = { done: {}, dismissed: false, open: true };
+  if (!isObj(p.nextSteps.done)) p.nextSteps.done = {};
+  return p.nextSteps;
+}
+export function markStep(p, id) {
+  if (!NEXT_STEP_IDS.includes(id)) return false;
+  const ns = stepsOf(p);
+  if (ns.done[id]) return false;
+  ns.done[id] = true; return true;
+}
+// tick whatever the profile already proves (hero uses, hints that only fire on the event, a worn outfit, pinned modifiers). Returns the number of new ticks.
+export function syncNextSteps(p) {
+  let n = 0;
+  const hints = (p.tutorial && p.tutorial.hints) || {};
+  if (((p.stats && p.stats.heroUses) || 0) > 0 && markStep(p, 'hero')) n++;
+  if (hints.hint_synergy && markStep(p, 'synergy')) n++;
+  if (hints.hint_branch && markStep(p, 'branch')) n++;
+  if (p.modPin && Array.isArray(p.modifiers) && p.modifiers.length && markStep(p, 'modifier')) n++;
+  const worn = isObj(p.outfits) && isObj(p.outfits.worn) ? p.outfits.worn : {};
+  if (HEROES.some((who) => worn[who] && worn[who] !== 'default') && markStep(p, 'outfit')) n++;
+  return n;
+}
+export function nextStepsState(p) {
+  const ns = stepsOf(p);
+  const items = NEXT_STEP_IDS.map((id) => ({ id, done: !!ns.done[id] }));
+  const done = items.filter((i) => i.done).length;
+  return { items, done, total: items.length, dismissed: !!ns.dismissed, open: ns.open !== false, visible: !!(p.tutorial && p.tutorial.done) && !ns.dismissed && done < items.length };
+}
+export function setNextStepsOpen(p, open) { stepsOf(p).open = !!open; }
+export function dismissNextSteps(p) { stepsOf(p).dismissed = true; }
+
+// ---- What's new: the player has seen the card for this game version (new players start up to date: the card is for people who played before)
+export const whatsNewDue = (p) => !!p.tutorial.done && (p.whatsNewSeen || 0) < GAME.version;
+export function markWhatsNewSeen(p) { p.whatsNewSeen = GAME.version; }
+
+// ---- Streak bonuses (7, 14 and 30 days in a row), each paid once per profile. The streak that already exists counts.
+export function streakBonusReady(p) { return STREAK_MILESTONES.filter((m) => !p.login.bonus[m.days] && p.login.streak >= m.days); }
+export function claimStreakBonuses(p, rng) {
+  const out = [];
+  for (const m of streakBonusReady(p)) {
+    p.login.bonus[m.days] = true;
+    const reward = { diamonds: m.diamonds, crate: m.crate };
+    const g = grant(p, reward, rng);
+    out.push({ days: m.days, reward, loot: g.loot });
+  }
+  return out;
+}
+// the next unpaid streak bonus: { days, left, reward, ready } or null when all three are paid. `left` counts today when today's login is still to claim.
+export function nextStreakBonus(p, now) {
+  const ls = loginStatus(p, now);
+  const m = STREAK_MILESTONES.find((x) => !p.login.bonus[x.days]);
+  if (!m) return null;
+  const streak = ls.claimable ? ls.streak : p.login.streak;
+  return { days: m.days, left: Math.max(0, m.days - streak), reward: { diamonds: m.diamonds, crate: m.crate || null }, ready: p.login.streak >= m.days, today: ls.claimable && streak >= m.days };
+}
+
+// ---- Seasons (round 6). profile.season = { id, month: 'YYYY-MM', progress: { kills, merges, wins }, claimed: { <goal id>: true, keepsake: true } }.
+// It belongs to ONE calendar month (local time) and resets when the month changes (ensureSeason). Old saves have no season: they start empty.
+export const seasonMonthKey = (now) => { const d = new Date(now); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
+export const seasonOf = (now) => SEASONS[new Date(now).getMonth() + 1];
+export const seasonMsLeft = (now) => { const d = new Date(now); return Math.max(0, new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() - now); };
+function cleanSeason(raw) {
+  const out = emptySeason();
+  if (!isObj(raw)) return out;
+  out.id = typeof raw.id === 'string' && /^[a-z0-9_]{0,40}$/.test(raw.id) ? raw.id : '';
+  out.month = typeof raw.month === 'string' && /^\d{4}-\d{2}$/.test(raw.month) ? raw.month : '';
+  for (const g of SEASON_GOALS) { out.progress[g.stat] = int(isObj(raw.progress) ? raw.progress[g.stat] : 0, 0, 0, 100000000); if (isObj(raw.claimed) && raw.claimed[g.id]) out.claimed[g.id] = true; }
+  if (isObj(raw.claimed) && raw.claimed.keepsake) out.claimed.keepsake = true;
+  if (!out.id || !out.month) return emptySeason();
+  return out;
+}
+// roll the profile into the current month's season; a new month starts at zero. Returns true when it reset. Safe to call any time.
+export function ensureSeason(p, now) {
+  const s = seasonOf(now), mk = seasonMonthKey(now);
+  if (isObj(p.season) && p.season.month === mk && p.season.id === s.id && isObj(p.season.progress) && isObj(p.season.claimed)) return false;
+  p.season = { id: s.id, month: mk, progress: { kills: 0, merges: 0, wins: 0 }, claimed: {} };
+  return true;
+}
+export function addSeasonProgress(p, result, now) {
+  ensureSeason(p, now);
+  const pr = p.season.progress;
+  pr.kills = (pr.kills || 0) + Math.max(0, int(result.kills, 0)); pr.merges = (pr.merges || 0) + Math.max(0, int(result.merges, 0)); if (result.won) pr.wins = (pr.wins || 0) + 1;
+}
+// what the Goals card shows: the season, time left, each goal with value and state, the keepsake and whether all three goals are claimed
+export function seasonState(p, now) {
+  const season = seasonOf(now), live = isObj(p.season) && p.season.month === seasonMonthKey(now) && p.season.id === season.id;
+  const pr = live ? p.season.progress : {}, cl = live ? p.season.claimed : {};
+  const goals = SEASON_GOALS.map((g) => { const v = Math.min(g.goal, int(pr[g.stat], 0)); return Object.assign({}, g, { value: v, done: v >= g.goal, claimed: !!cl[g.id] }); });
+  const allClaimed = goals.every((g) => g.claimed);
+  return { season, msLeft: seasonMsLeft(now), goals, keepsake: season.keepsake, keepsakeGot: !!cl.keepsake, allClaimed, ready: goals.filter((g) => g.done && !g.claimed).length };
+}
+export const seasonReady = (p, now) => seasonState(p, now).ready;
+// does the player own the keepsake already? (outfit: both heroes; skin: owned)
+export function keepsakeOwned(p, k) {
+  if (k.kind === 'skin') return !!(p.skins && p.skins.owned.includes(k.id));
+  return HEROES.every((who) => p.outfits && p.outfits.owned && p.outfits.owned[who] && p.outfits.owned[who].includes(k.id));
+}
+export function keepsakeName(k) {
+  if (k.kind === 'skin') return (SKIN_FALLBACK[k.id] || {}).name || k.id;
+  return (OUTFITS.roxor[k.id] || {}).name || k.id;
+}
+// claim one finished goal; when it was the last of the three the keepsake is granted once (or its bonus when it is already owned)
+export function claimSeasonGoal(p, goalId, now, rng) {
+  ensureSeason(p, now);
+  const st = seasonState(p, now), g = st.goals.find((x) => x.id === goalId);
+  if (!g || !g.done || g.claimed) return { ok: false };
+  p.season.claimed[goalId] = true;
+  const gr = grant(p, g.reward, rng);
+  const out = { ok: true, reward: g.reward, loot: gr.loot, keepsake: null };
+  if (SEASON_GOALS.every((x) => p.season.claimed[x.id]) && !p.season.claimed.keepsake) {
+    p.season.claimed.keepsake = true;
+    const k = st.keepsake, owned = keepsakeOwned(p, k);
+    if (owned) { grant(p, SEASON_KEEPSAKE_BONUS, rng); out.keepsake = { kind: k.kind, id: k.id, bonus: SEASON_KEEPSAKE_BONUS }; }
+    else {
+      if (k.kind === 'skin') p.skins.owned.push(k.id);
+      else for (const who of HEROES) if (!p.outfits.owned[who].includes(k.id)) p.outfits.owned[who].push(k.id);
+      out.keepsake = { kind: k.kind, id: k.id, bonus: null };
+    }
+  }
+  return out;
+}
+
+// ---- Welcome back: shown once when the hub opens after WELCOME_MIN_HOURS away. `awayFrom` is the last activity (ms) before this session.
+export const WELCOME_MIN_HOURS = 12;
+export function awayHours(p, now, awayFrom) {
+  const ref = awayFrom != null ? awayFrom : Math.max(+p.lastSeen || 0, +p.lastActive || 0);
+  return ref > 0 ? Math.max(0, (now - ref) / 3600000) : 0;
+}
+export function welcomeSummary(p, now, awayFrom) {
+  if (!p.tutorial.done) return null;
+  const hours = awayHours(p, now, awayFrom);
+  if (hours < WELCOME_MIN_HOURS) return null;
+  const ls = loginStatus(p, now), dc = dailyChallenge(p, now), wg = weeklyGig(p, now);
+  const streakState = p.login.streak <= 0 ? 'new' : (p.login.lastDay >= ls.day - 1 ? 'alive' : 'broken');
+  const nextWorld = WORLDS.find((w) => worldUnlocked(p, w.id) && !p.prog[w.id].cleared);
+  const badges = readyBadges(p, now);
+  let goal;
+  if (nextWorld) goal = { id: 'stage', stage: nextWorld.name };
+  else if (!dc.done) goal = { id: 'daily' };
+  else if (!wg.done) goal = { id: 'weekly' };
+  else goal = { id: 'endless' };
+  return {
+    hours, days: Math.floor(hours / 24), royalties: offlineRecords(p, now),
+    login: { claimable: ls.claimable, day: ls.reward.day, streak: ls.streak, state: streakState },
+    streakBonus: nextStreakBonus(p, now),
+    daily: { done: dc.done, resetMs: dailyResetMs(now) }, weekly: { done: wg.done, best: wg.best, waves: wg.waves, msLeft: wg.msLeft, fresh: !!p.weekly.id && p.weekly.id !== wg.id },
+    ready: badges.goals - (ls.claimable ? 1 : 0) - badges.season, goal,
+    season: badges.season > 0 ? { name: seasonOf(now).name, ready: badges.season, msLeft: seasonMsLeft(now) } : null,
+  };
+}
+
 export function loginStatus(p, now) {
   const day = dayOf(now);
   const claimable = p.login.claimedDay !== day;
@@ -359,7 +878,8 @@ export function claimLogin(p, now, rng) {
   p.login.lastDay = st.day; p.login.claimedDay = st.day; p.login.streak = st.streak;
   p.stats.streak = Math.max(p.stats.streak, st.streak);
   const g = grant(p, st.reward, rng);
-  return { ok: true, streak: st.streak, reward: st.reward, loot: g.loot };
+  const bonuses = claimStreakBonuses(p, rng);
+  return { ok: true, streak: st.streak, reward: st.reward, loot: g.loot, bonuses };
 }
 export function dailyChallenge(p, now) {
   const day = dayOf(now);
@@ -368,6 +888,30 @@ export function dailyChallenge(p, now) {
   const maxW = highestUnlockedWorld(p);
   const world = WORLDS[Math.floor(r.next() * (maxW + 1))].id;
   return { day, mod, world, seed: hashSeed('dailyseed' + day), waves: 15, done: p.daily.challengeDay === day };
+}
+// ---- Weekly Gig: one fixed run per ISO week (UTC), same seed and mods for everybody, 25 waves, one big reward claim per week
+export function isoWeek(now) {
+  const d = new Date(now), t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const dow = (new Date(t).getUTCDay() + 6) % 7;                 // Monday = 0
+  const thu = t + (3 - dow) * DAY, year = new Date(thu).getUTCFullYear();
+  const week = Math.floor((thu - Date.UTC(year, 0, 1)) / DAY / 7) + 1;
+  return { year, week, id: year + '-W' + String(week).padStart(2, '0'), start: t - dow * DAY, end: t - dow * DAY + 7 * DAY };
+}
+// ms until the Daily Challenge changes (next local midnight, the same clock as dayOf) and until the next ISO week starts (Monday 00:00 UTC)
+export const dailyResetMs = (now) => Math.max(0, (dayOf(now) + 1) * DAY + new Date(now).getTimezoneOffset() * 60000 - now);
+export const weeklyResetMs = (now) => Math.max(0, isoWeek(now).end - now);
+export function weeklyGig(p, now) {
+  const w = isoWeek(now);
+  const gig = WEEKLY_GIGS[(w.year * 53 + w.week) % WEEKLY_GIGS.length];
+  const mine = p && p.weekly && p.weekly.id === w.id ? p.weekly : null;
+  return { id: w.id, week: w.week, gig, name: gig.name, mod: gig.mod, world: gig.world, extra: gig.extra, seed: hashSeed('weekly' + w.id), waves: WEEKLY_WAVES,
+    done: !!(mine && mine.done), best: mine ? mine.best : 0, endsAt: w.end, msLeft: Math.max(0, w.end - now) };
+}
+export function weeklyRewards(result, first) {
+  const R = WEEKLY_REWARD, c = result.cleared;
+  const o = { diamonds: R.diamonds + c * R.perWave + (result.won ? R.winDiamonds : 0), records: R.records + c * R.perWaveRecords, fans: R.fans, crate: (result.won || c >= R.crateMinWaves) ? R.crate : null };
+  if (!first) { o.diamonds = 0; o.crate = null; o.records = 0; o.fans = 0; }
+  return o;
 }
 export function offlineRate(p) { return 18 + 6 * p.fame + 14 * studioLevel(p, 'stream'); }
 export function offlineCapHours(p) { return 6 + 2 * studioLevel(p, 'stream'); }
@@ -412,7 +956,46 @@ export function readyBadges(p, now) {
   const quests = p.daily.quests.filter((s) => !s.claimed && questProgress(p, questDef(s.id)) >= questDef(s.id).goal).length;
   const ach = claimableAchievements(p).length;
   const stars = STAR_MILESTONES.filter((m) => !p.starClaimed[m.stars] && totalStars(p) >= m.stars).length;
-  return { login: login.claimable ? 1 : 0, quests, ach, stars, goals: (login.claimable ? 1 : 0) + quests + ach + stars };
+  const season = seasonReady(p, now);
+  return { login: login.claimable ? 1 : 0, quests, ach, stars, season, goals: (login.claimable ? 1 : 0) + quests + ach + stars + season };
+}
+
+// ------------------------------------------------------------------------------------------------ personal bests
+// profile.bests[key] = { wave, combo, kills, time }: the best of each per stage and mode. time is the fastest WON run in seconds (0 = none yet).
+// Keys: story:<world>:<encore>, endless:<world>, rush, daily, weekly. Older saves are seeded from the numbers they already kept (wave only).
+export const BEST_FIELDS = ['wave', 'combo', 'kills', 'time'];
+export function bestKey(result) {
+  const m = result && result.mode, w = (result && result.world) || '';
+  if (m === 'story') return 'story:' + w + ':' + int(result.encore, 0, 0, ENCORE_MAX);
+  if (m === 'endless') return 'endless:' + w;
+  if (m === 'rush') return 'rush';
+  if (m === 'daily') return result.weekly ? 'weekly' : 'daily';
+  return null;
+}
+const cleanBest = (b) => ({ wave: int(b && b.wave, 0, 0, 100000), combo: int(b && b.combo, 0, 0, 100000), kills: int(b && b.kills, 0, 0, 10000000), time: int(b && b.time, 0, 0, 10000000) });
+function cleanBests(src, prof) {
+  const out = {};
+  if (isObj(src)) for (const k of Object.keys(src).slice(0, 200)) if (/^[a-z0-9_:]+$/.test(k) && isObj(src[k])) out[k] = cleanBest(src[k]);
+  const seed = (k, wave) => { if (wave > 0 && !out[k]) out[k] = cleanBest({ wave }); };
+  for (const w of WORLDS) { const pr = prof.prog && prof.prog[w.id]; if (pr) { seed('story:' + w.id + ':0', pr.bestWave); seed('endless:' + w.id, pr.bestEndless); } }
+  if (prof.daily) seed('daily', prof.daily.challengeBest);
+  if (prof.weekly) seed('weekly', prof.weekly.best);
+  return out;
+}
+// Compare a finished run with the stored best, then store the better numbers. Returns null for modes without bests (tutorial).
+// { key, prev: {wave,combo,kills,time}|null, now: {...}, beaten: { wave, combo, kills, time } booleans, record: any beaten against a real previous best }
+export function recordBests(p, result) {
+  const key = bestKey(result);
+  if (!key) return null;
+  if (!isObj(p.bests)) p.bests = {};
+  const prev = p.bests[key] ? cleanBest(p.bests[key]) : null;
+  const run = { wave: int(result.cleared, 0), combo: int(result.bestCombo, 0), kills: int(result.kills, 0), time: result.won && result.time > 0 ? Math.max(1, Math.round(result.time)) : 0 };
+  const beaten = { wave: false, combo: false, kills: false, time: false };
+  const now = prev ? Object.assign({}, prev) : cleanBest(null);
+  for (const f of ['wave', 'combo', 'kills']) if (run[f] > now[f]) { beaten[f] = !!prev && prev[f] > 0; now[f] = run[f]; }
+  if (run.time > 0 && (now.time === 0 || run.time < now.time)) { beaten.time = !!prev && prev.time > 0; now.time = run.time; }
+  p.bests[key] = now;
+  return { key, prev, now, run, beaten, record: Object.values(beaten).some(Boolean) };
 }
 
 // ------------------------------------------------------------------------------------------------ run results
@@ -426,8 +1009,9 @@ export function runRewards(result) {
   return { records, fans };
 }
 export function applyRunResult(p, result, rng, now = 0) {
-  const out = { records: 0, fans: 0, diamonds: 0, loot: [], levelUps: [], newStars: 0, firstClear: false, unlockedWorld: null, firstBosses: [], challenge: null, newBestEndless: false };
+  const out = { records: 0, fans: 0, diamonds: 0, loot: [], levelUps: [], newStars: 0, firstClear: false, unlockedWorld: null, firstBosses: [], questsDone: [], seasonNew: 0, challenge: null, newBestEndless: false, modifiers: [], modMul: null, milestones: [], newOutfits: [] };
   const w = WORLD_BY_ID[result.world];
+  out.bests = recordBests(p, result);
   const rw = runRewards(result);
   let records = rw.records, fans = rw.fans;
   const pr = p.prog[w.id];
@@ -435,15 +1019,31 @@ export function applyRunResult(p, result, rng, now = 0) {
   S.runs++; S.kills += result.kills; S.merges += result.merges; S.deploys += result.deploys; S.waves += result.cleared;
   S.bosses += result.bossKills; S.heroUses += result.heroUses || 0; S.perfects += result.perfects || 0; S.remixes += result.remixes || 0;
   S.duets += result.duets || 0; S.relics += (result.relics || []).length;
+  if (Array.isArray(result.modifiers) && result.modifiers.length) markStep(p, 'modifier');
+  syncNextSteps(p);
   S.bestCombo = Math.max(S.bestCombo, result.bestCombo); S.maxLevel = Math.max(S.maxLevel, result.maxLevel || 0);
   S.coins += result.coinsEarned || 0;
+  const seasonReadyBefore = seasonReady(p, now || Date.now());
+  addSeasonProgress(p, result, now || Date.now());
+  out.seasonNew = Math.max(0, seasonReady(p, now || Date.now()) - seasonReadyBefore);   // season goals this run finished (claimed in Goals)
   // daily quest progress
   const dp = p.daily.prog;
+  const questsDoneIds = () => (p.daily.quests || []).filter((q) => { const d = questDef(q.id); return d && questProgress(p, d) >= d.goal; }).map((q) => q.id);
+  const questsBefore = questsDoneIds();
   const add = (k, v) => { dp[k] = (dp[k] || 0) + v; };
   add('kills', result.kills); add('merges', result.merges); add('deploys', result.deploys); add('runs', 1); add('waves', result.cleared);
   add('bosses', result.bossKills); add('heroUses', result.heroUses || 0); add('perfects', result.perfects || 0); add('remixes', result.remixes || 0);
   if (result.won) add('wins', 1);
+  // round 6 quest stats (all read from the run result, so no sim change is needed)
+  add('duets', result.duets || 0); add('relics', (result.relics || []).length); add('coins', result.coinsEarned || 0);
+  add('dropRerolls', result.dropRerolls || 0); add('branches', result.branches || 0); add('moves', result.moves || 0); add('sells', result.sells || 0);
+  dp.synergies = Math.max(dp.synergies || 0, result.synergies || 0);
+  if (result.won && result.leaks === 0) add('flawless', 1);
+  if (result.won && Array.isArray(result.modifiers) && result.modifiers.length) add('modWins', 1);
+  if (result.mode === 'daily') add('dailies', 1);
+  if (result.mode === 'endless') dp.endlessWave = Math.max(dp.endlessWave || 0, result.cleared || 0);
   dp.bestCombo = Math.max(dp.bestCombo || 0, result.bestCombo); dp.maxLevel = Math.max(dp.maxLevel || 0, result.maxLevel || 0);
+  out.questsDone = questsDoneIds().filter((id) => !questsBefore.includes(id));   // today's quests this run completed (the results screen lists them)
   // bosses seen for the first time
   for (const b of result.bossTypes || []) if (!p.bossesSeen[b]) { p.bossesSeen[b] = true; out.firstBosses.push(b); out.diamonds += 8; }
   if (result.mode === 'story') {
@@ -470,6 +1070,17 @@ export function applyRunResult(p, result, rng, now = 0) {
   } else if (result.mode === 'rush') {
     S.rushBest = Math.max(S.rushBest || 0, result.bossKills);
     out.diamonds += result.bossKills * 3 + (result.won ? 25 : 0);
+  } else if (result.mode === 'daily' && result.weekly) {
+    const wid = String(result.weekId || '');
+    const first = !(p.weekly && p.weekly.id === wid && p.weekly.done);
+    const wr = weeklyRewards(result, first);
+    out.challenge = { first, weekly: true, bonus: { diamonds: wr.diamonds, records: wr.records, fans: wr.fans, crate: wr.crate } };
+    if (first) {
+      S.weeklies = (S.weeklies || 0) + 1;
+      out.diamonds += wr.diamonds; records += wr.records; fans += wr.fans;
+      if (wr.crate) p.pendingCrates = (p.pendingCrates || []).concat([wr.crate]);
+    } else { records = Math.round(records * 0.5); fans = Math.round(fans * 0.5); }
+    p.weekly = { id: wid, done: true, best: Math.max(p.weekly && p.weekly.id === wid ? p.weekly.best : 0, result.cleared) };
   } else if (result.mode === 'daily') {
     out.challenge = { first: p.daily.challengeDay !== dayOf(now) };
     if (out.challenge.first) {
@@ -481,6 +1092,27 @@ export function applyRunResult(p, result, rng, now = 0) {
     p.daily.challengeBest = Math.max(p.daily.challengeBest || 0, result.cleared);
   }
   out.diamonds += result.gems || 0;
+  // run modifiers: the sim only reports modMul, the payout is multiplied here (records, fans and diamonds)
+  const mods = cleanModifiers(result.modifiers);
+  const mm = result.modMul && isObj(result.modMul) ? result.modMul : (mods.length ? modMulOf(mods) : null);
+  if (mm && mods.length && result.mode !== 'daily') {
+    const f = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 1);
+    records = Math.round(records * f(mm.records)); fans = Math.round(fans * f(mm.fans)); out.diamonds = Math.round(out.diamonds * f(mm.diamonds));
+    out.modifiers = mods; out.modMul = { records: f(mm.records), fans: f(mm.fans), diamonds: f(mm.diamonds) };
+  }
+  if (result.rewardMul) { records = Math.round(records * (result.rewardMul.records || 1)); fans = Math.round(fans * (result.rewardMul.fans || 1)); }   // easy pays less, hard pays more
+  // Endless milestones: each id pays its reward once per profile
+  if (!isObj(p.milestones)) p.milestones = { claimed: {}, cosmetics: [] };
+  if (!isObj(p.milestones.claimed)) p.milestones.claimed = {};
+  if (!Array.isArray(p.milestones.cosmetics)) p.milestones.cosmetics = [];
+  for (const id of Array.isArray(result.milestones) ? result.milestones : []) {
+    const ms = ENDLESS_MILESTONES.find((x) => x.id === id);
+    if (!ms || p.milestones.claimed[id]) continue;
+    p.milestones.claimed[id] = true;
+    out.diamonds += (ms.reward && ms.reward.diamonds) || 0;
+    if (ms.reward && ms.reward.cosmetic && !p.milestones.cosmetics.includes(ms.reward.cosmetic)) p.milestones.cosmetics.push(ms.reward.cosmetic);
+    out.milestones.push({ id: ms.id, name: ms.name, wave: ms.wave, reward: ms.reward });
+  }
   p.records += records; out.records = records;
   p.diamonds += out.diamonds;
   out.fans = fans;
@@ -490,6 +1122,7 @@ export function applyRunResult(p, result, rng, now = 0) {
   if (dropChance && rng.chance(dropChance)) out.loot.push(rollGearItem(p, 'garage', rng));
   if (result.won && result.stars === 3) out.loot.push(rollGearItem(p, 'garage', rng, { min: 'rare' }));
   p.lastSeen = now || p.lastSeen;
+  out.newOutfits = syncOutfits(p);
   return out;
 }
 
@@ -517,7 +1150,7 @@ export function spinWheel(p, now, rng) {
   const seg = rng.weighted(WHEEL, (w) => w.weight);
   const index = WHEEL.indexOf(seg);
   const g = grant(p, seg.reward, rng);
-  p.stats.spins = (p.stats.spins || 0) + 1;
+  p.stats.spins = (p.stats.spins || 0) + 1; dailyAdd(p, 'spins', 1);
   return { ok: true, index, seg, loot: g.loot };
 }
 

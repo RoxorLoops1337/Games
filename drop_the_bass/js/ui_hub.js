@@ -1,19 +1,24 @@
 // ui_hub.js: the DOM hub shown between runs. Tabs: Tour (stages), Studio (upgrades), Band (heroes and gear), Shop (crates), Goals (daily).
-import {
-  WORLDS, TURRETS, TURRET_IDS, ENEMIES, ENEMY_IDS, BOSSES, BOSS_IDS, RARITY, RARITY_ORDER, COL, ENCORE_MAX, fmt, MAX_LEVEL, GAME,
-} from './data_core.js';
-import {
-  STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, OUTFITS, LOGIN_REWARDS, ACHIEVEMENTS,
-  STAR_MILESTONES, AUTOMERGE_PRICE, fansForLevel, fameReward, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE, GEAR_MAX_LEVEL, GEAR_SELL,
-} from './data_meta.js';
+import { WORLDS, TURRETS, TURRET_IDS, ENEMIES, ENEMY_IDS, BOSSES, BOSS_IDS, RARITY, RARITY_ORDER, ENCORE_MAX, fmt, GAME, SYNERGIES } from './data_core.js';
+import { STUDIO, STUDIO_IDS, HERO_MAX, SLOTS, SLOT_NAMES, STATS, SETS, GEAR, CRATES, CRATE_IDS, PITY, LOGIN_REWARDS, STREAK_MILESTONES, ACHIEVEMENTS, STAR_MILESTONES, AUTOMERGE_PRICE, fameReward, BOOSTERS, BOOSTER_IDS, WHEEL, WHEEL_SPIN_PRICE, GEAR_MAX_LEVEL, GEAR_SELL, fameTitle, WEEKLY_REWARD, SEASON_KEEPSAKE_BONUS } from './data_meta.js';
 import { REMIX, RELICS, DAILY_MODS } from './data_run.js';
+import { TURRET_BRANCHES, BOSS_PHASES, BOSS_PHASE_EFFECTS } from './data_depth.js';
 import * as M from './meta.js';
-import { fetchBoard, rankOf } from './lb.js';
+import { fetchBoard, boardRows, cleanName, FRIENDS_MAX, inviteLink } from './lb.js';
+import { drawStudioScene, studioProps } from './doodle_env.js';
+import { t, tn, LANGS, getLangPref } from './i18n.js';
+import { CHANGELOG } from './data_changelog.js';
+import { resetText, durationText } from './countdown.js';
+import { readDiag, clearDiag, diagReport } from './diag.js';
+import { setlistSheet } from './ui_setlist.js';
+import { wardrobeSection, skinsSection, skinThumb } from './ui_wardrobe.js';
+import { canInstall, promptInstall, onInstallChange, isInstalled, isOnline, onOnlineChange } from './pwa.js';
+export { setlistSheet };
 import {
-  h, canvasOf, icon, turretIcon, turretLive, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW,
+  h, canvasOf, icon, turretIcon, turretLive, gearIcon, enemyIcon, currencyChip, modal, toast, btn, rarClass, rarName, AE, AW, hubHint, keepFocus,
 } from './ui_core.js';
 
-const TABS = [['tour', 'Tour', 'play'], ['studio', 'Studio', 'gear'], ['band', 'Band', 'mic'], ['shop', 'Crates', 'gift'], ['goals', 'Goals', 'star']];
+const TABS = [['tour', () => t('hub.tab.tour', 'Tour'), 'play'], ['studio', () => t('hub.tab.studio', 'Studio'), 'gear'], ['band', () => t('hub.tab.band', 'Band'), 'mic'], ['shop', () => t('hub.tab.crates', 'Crates'), 'gift'], ['goals', () => t('hub.tab.goals', 'Goals'), 'star']];
 
 export function buildHub(app, startTab) {
   const p = app.profile;
@@ -21,7 +26,8 @@ export function buildHub(app, startTab) {
   const el = h('div', { class: 'screen' });
   const top = h('div', { class: 'hub-top' });
   const main = h('div', { class: 'hub-main' });
-  const tabs = h('div', { class: 'tabs' });
+  const tabs = h('div', { class: 'tabs', role: 'tablist', 'aria-label': t('a11y.hub_tabs', 'Menu') });
+  main.setAttribute('role', 'tabpanel'); main.id = 'hubmain';
   el.append(top, main, tabs);
 
   const renderTop = () => {
@@ -30,31 +36,57 @@ export function buildHub(app, startTab) {
     top.append(
       h('div', { class: 'fame', onclick: () => fameInfo(app) },
         h('div', { class: 'lv' }, p.fame),
-        h('div', { class: 'bar' }, h('div', { class: 'nm' }, 'FAME  ' + fmt(p.fans) + ' / ' + (need === Infinity ? 'MAX' : fmt(need))),
-          h('div', { class: 'pbar' }, h('i', { style: 'width:' + (need === Infinity ? 100 : Math.min(100, p.fans / need * 100)) + '%' })))),
-      h('div', { class: 'cur', title: 'Records' }, icon('record', 26), fmt(p.records)),
-      h('div', { class: 'cur', title: 'Diamonds' }, icon('diamond', 26), fmt(p.diamonds)),
-      h('button', { class: 'iconbtn', onclick: () => { app.audio.play('ui_open'); settingsModal(app); }, 'aria-label': 'Settings' }, icon('gear', 28)),
+        h('div', { class: 'bar' }, h('div', { class: 'nm fame-title', title: t('hub.fame_title', 'Fame {n}', { n: p.fame }) }, fameTitle(p.fame)),
+          h('div', { class: 'pbar fame-pbar' }, h('i', { style: 'width:' + (need === Infinity ? 100 : Math.min(100, p.fans / need * 100)) + '%' }), h('span', { class: 'fame-cnt' }, fmt(p.fans) + ' / ' + (need === Infinity ? t('common.max', 'MAX') : fmt(need)))))),
+      h('div', { class: 'cur', title: t('hub.records', 'Records') }, icon('record', 26), fmt(p.records)),
+      h('div', { class: 'cur', title: t('hub.diamonds', 'Diamonds') }, icon('diamond', 26), fmt(p.diamonds)),
+      h('button', { class: 'iconbtn', onclick: () => { app.audio.play('ui_open'); settingsModal(app); }, 'aria-label': t('hub.settings', 'Settings') }, icon('gear', 28)),
+      offlineChip(),
     );
   };
+  // small 'Offline' chip on the header while the device has no connection (the leaderboard and stats calls already fail quietly)
+  const offlineChip = () => h('div', { class: 'offline-chip', 'data-offline': '', role: 'status', hidden: isOnline() ? '' : null }, t('hub.offline', 'Offline'));
+  const offNet = onOnlineChange(() => { if (!el.isConnected) { offNet(); return; } const c = top.querySelector('.offline-chip'); if (c) c.hidden = isOnline(); });
   const renderTabs = () => {
     tabs.replaceChildren();
     const b = M.readyBadges(p, app.now());
     for (const [id, name, glyph] of TABS) {
       const badge = id === 'goals' ? b.goals : id === 'shop' ? (p.pendingCrates ? p.pendingCrates.length : 0) : id === 'band' ? M.mergeableGear(p).length : 0;
-      tabs.append(h('button', { class: 'tab' + (state.tab === id ? ' on' : ''), onclick: () => { state.tab = id; app.hubTab = id; app.audio.play('ui_tab'); render(); main.scrollTop = 0; } },
-        icon(glyph, 34), name, badge ? h('span', { class: 'badge' }, badge) : null));
+      tabs.append(h('button', { class: 'tab' + (state.tab === id ? ' on' : ''), role: 'tab', id: 'hubtab-' + id, 'aria-selected': state.tab === id ? 'true' : 'false', 'aria-controls': 'hubmain', onclick: () => { state.tab = id; app.hubTab = id; app.audio.play('ui_tab'); render(); main.scrollTop = 0; } },
+        icon(glyph, 34), name(), badge ? h('span', { class: 'badge' }, badge) : null));
     }
   };
   const render = () => {
     const sc = main.scrollTop;
-    renderTop(); renderTabs();
-    main.replaceChildren(TAB_FN[state.tab](app, state, render));
+    keepFocus(el, () => {
+      renderTop(); renderTabs();
+      main.setAttribute('aria-labelledby', 'hubtab-' + state.tab);
+      main.replaceChildren(TAB_FN[state.tab](app, state, render));
+    });
     main.scrollTop = sc;
     app.save();
   };
   state.render = render;
+  // arrow keys move between the tabs (Home and End jump), as a tablist should
+  tabs.addEventListener('keydown', (e) => {
+    const i = TABS.findIndex(([id]) => id === state.tab), n = TABS.length;
+    const j = e.key === 'ArrowRight' ? (i + 1) % n : e.key === 'ArrowLeft' ? (i + n - 1) % n : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : -1;
+    if (j < 0) return;
+    e.preventDefault(); state.tab = TABS[j][0]; app.hubTab = state.tab; app.audio.play('ui_tab'); render(); main.scrollTop = 0;
+    const nb = tabs.querySelector('#hubtab-' + state.tab); if (nb) nb.focus();
+  });
   render();
+  // Daily and Weekly countdowns: refresh the text every 20 s while this hub is on screen; a new day rebuilds the cards
+  state.day = M.dayOf(app.now());
+  const tickCd = () => {
+    if (!el.isConnected) { if (el.__seen) clearInterval(cdTimer); return; }
+    el.__seen = true;
+    const now = app.now();
+    if (M.dayOf(now) !== state.day) { state.day = M.dayOf(now); M.ensureDaily(p, now); render(); return; }
+    for (const n of el.querySelectorAll('[data-cd]')) { const txt = n.dataset.cd === 'season' ? t('season.ends', 'Ends in {time}', { time: durationText(M.seasonMsLeft(now)) }) : resetText(n.dataset.cd === 'weekly' ? M.weeklyResetMs(now) : M.dailyResetMs(now)); if (n.textContent !== txt) n.textContent = txt; }
+  };
+  const cdTimer = setInterval(tickCd, 20000);
+  state.tickCd = tickCd;
   return { el, render, state };
 }
 
@@ -70,18 +102,21 @@ function tourTab(app, st, rerender) {
   const p = app.profile;
   const wrap = h('div');
   // loadout
-  wrap.append(h('h2', null, 'Your Dropkit'));
+  wrap.append(h('h2', null, t('tour.dropkit', 'Your Dropkit')));
   const lo = h('div', { class: 'card' },
     h('div', { class: 'row', style: 'flex-wrap:wrap' }, p.loadout.map((id) => h('div', { style: 'text-align:center;width:60px' }, turretIcon(id, 50), h('div', { class: 'sub', style: 'font-size:11px' }, TURRETS[id].name.split(' ')[0])))),
-    h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, p.loadout.length + '/' + M.loadoutSize(p) + ' turrets in your drop pool.'), btn('Edit', () => loadoutModal(app, rerender), 'dark small')));
+    h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, t('tour.pool_count', '{n}/{max} turrets in your drop pool.', { n: p.loadout.length, max: M.loadoutSize(p) })), btn(t('common.edit', 'Edit'), () => loadoutModal(app, rerender), 'dark small')));
   wrap.append(lo);
+  if (p.tutorial.done) wrap.append(difficultyCard(app, rerender));
+  if (p.tutorial.done) { M.syncNextSteps(p); const ns = nextStepsCard(app, rerender); if (ns) wrap.append(ns); }
 
   // resume a saved run
+  if (p.resume && !M.checkResume(p.resume).ok) { p.resume = null; app.save(); }
   if (p.resume) {
-    const rw = WORLDS.find((x) => x.id === p.resume.world);
+    const rs = M.resumeSummary(p.resume);
     wrap.append(h('div', { class: 'card', style: 'border-color:var(--green)' }, h('div', { class: 'row' }, icon('play', 40, '#9dff3a'),
-      h('div', { class: 'grow' }, h('h3', null, 'Run in progress'), h('div', { class: 'sub' }, rw.name + ', wave ' + p.resume.wave + (p.resume.mode === 'endless' ? ' (Endless)' : ''))),
-      btn('Resume', () => app.resumeRun(), 'green small'), btn('Drop', () => { p.resume = null; app.save(); rerender(); }, 'dark small'))));
+      h('div', { class: 'grow' }, h('h3', null, t('tour.run_in_progress', 'Run in progress')), h('div', { class: 'sub' }, (rs.mode === 'endless' ? tn('tour.resume_info_endless', rs.turrets, '{stage}, wave {wave}, {n} turret (Endless)', '{stage}, wave {wave}, {n} turrets (Endless)', { stage: rs.stage, wave: rs.wave }) : tn('tour.resume_info', rs.turrets, '{stage}, wave {wave}, {n} turret', '{stage}, wave {wave}, {n} turrets', { stage: rs.stage, wave: rs.wave })))),
+      btn(t('tour.resume', 'Resume'), () => app.resumeRun(), 'green small'), btn(t('tour.drop_run', 'Drop'), () => { p.resume = null; app.save(); rerender(); }, 'dark small'))));
   }
   // boosters
   if (p.tutorial.done) {
@@ -92,8 +127,8 @@ function tourTab(app, st, rerender) {
       const b = BOOSTERS[id], on = !!p.boosters[id];
       bs.append(h('button', { class: 'btn small ' + (on ? 'green' : 'dark'), style: 'flex:1 1 45%', title: b.desc, onclick: () => { M.toggleBooster(p, id); app.audio.play('ui_click'); rerender(); } }, icon(b.glyph, 22), b.name, h('span', { class: 'chip' }, icon('diamond', 14), b.price)));
     }
-    wrap.append(h('div', { class: 'card' }, h('h3', null, 'Boosters'), h('div', { class: 'sub', style: 'margin-bottom:6px' }, BOOSTER_IDS.filter((id) => p.boosters[id]).map((id) => BOOSTERS[id].desc).join(' ') || 'Optional diamond boosts for your next run. Pick any.'), bs,
-      tot ? h('div', { class: 'sub', style: 'margin-top:6px' }, 'Costs ' + tot + ' diamonds when the run starts.') : null));
+    wrap.append(h('div', { class: 'card' }, h('h3', null, t('tour.boosters', 'Boosters')), h('div', { class: 'sub', style: 'margin-bottom:6px' }, BOOSTER_IDS.filter((id) => p.boosters[id]).map((id) => BOOSTERS[id].desc).join(' ') || t('tour.boosters_hint', 'Optional diamond boosts for your next run. Pick any.')), bs,
+      tot ? h('div', { class: 'sub', style: 'margin-top:6px' }, t('tour.boosters_cost', 'Costs {n} diamonds when the run starts.', { n: tot })) : null));
   }
   // daily challenge
   if (p.tutorial.done) {
@@ -101,55 +136,116 @@ function tourTab(app, st, rerender) {
     const mod = DAILY_MODS[dc.mod];
     const w = WORLDS.find((x) => x.id === dc.world);
     wrap.append(h('div', { class: 'card', style: 'border-color:var(--gold)' },
-      h('div', { class: 'row' }, h('div', { class: 'ic', style: 'width:54px;height:54px;border-radius:12px;background:#12082b;display:flex;align-items:center;justify-content:center' }, icon(mod.glyph, 38)),
-        h('div', { class: 'grow' }, h('h3', null, 'Daily Challenge: ' + mod.name), h('div', { class: 'sub' }, mod.desc), h('div', { class: 'sub' }, w.name + ', 15 waves'))),
-      h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, dc.done ? 'Reward claimed today. Play again for fun (half rewards).' : 'First clear today: diamonds, Records and fans!'),
-        btn(dc.done ? 'Play' : 'Play!', () => app.startRun({ mode: 'daily', world: dc.world, encore: 0, seed: dc.seed, daily: dc.mod, wavesTotal: dc.waves }), dc.done ? 'dark' : 'gold'))));
+      h('div', { class: 'row' }, h('div', { class: 'ic icbox' }, icon(mod.glyph, 38)),
+        h('div', { class: 'grow' }, h('h3', null, t('tour.daily_title', 'Daily Challenge: {mod}', { mod: mod.name })), h('div', { class: 'sub' }, mod.desc), h('div', { class: 'sub' }, t('tour.stage_waves', '{stage}, {n} waves', { stage: w.name, n: dc.waves })),
+          h('div', { class: 'sub cd', 'data-cd': 'daily' }, resetText(M.dailyResetMs(app.now()))))),
+      h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, dc.done ? t('tour.daily_done', 'Reward claimed today. Play again for fun (half rewards).') : t('tour.daily_first', 'First clear today: diamonds, Records and fans!')),
+        btn(icon('crown', 24), () => boardModal(app, 'daily', t('mode.daily', 'Daily Challenge')), 'dark small', { 'aria-label': t('hub.leaderboard', 'Leaderboard') }),
+        btn(dc.done ? t('common.play', 'Play') : t('common.play_bang', 'Play!'), () => app.requestRun({ mode: 'daily', world: dc.world, encore: 0, seed: dc.seed, daily: dc.mod, wavesTotal: dc.waves }), dc.done ? 'dark' : 'gold'))));
+    wrap.append(weeklyCard(app));
   }
 
   if (M.endlessUnlocked(p) && p.prog.arena.cleared) {
     wrap.append(h('div', { class: 'card', style: 'border-color:var(--red)' }, h('div', { class: 'row' }, enemyIcon('playback', 56, true),
-      h('div', { class: 'grow' }, h('h3', null, 'Boss Rush'), h('div', { class: 'sub' }, 'Ten bosses back to back, no breaks. Best: ' + (p.stats.rushBest || 0) + '/10. Diamonds for every boss.')),
-      btn('Play', () => { const m = modal(h('div', null, h('h2', null, 'Boss Rush'), h('div', { class: 'sub', style: 'text-align:center' }, 'Pick the stage to fight on.'), h('div', { class: 'col', style: 'margin-top:10px' }, WORLDS.filter((w) => p.prog[w.id].cleared).map((w) => btn(w.name, () => { m.close(); app.startRun({ mode: 'rush', world: w.id, encore: 0 }); }, 'dark'))))); }, 'red small'))));
+      h('div', { class: 'grow' }, h('h3', null, t('mode.rush', 'Boss Rush')), h('div', { class: 'sub' }, t('tour.rush_desc', 'Ten bosses back to back, no breaks. Best: {best}/10. Diamonds for every boss.', { best: p.stats.rushBest || 0 }))),
+      btn(t('common.play', 'Play'), () => { const m = modal(h('div', null, h('h2', null, t('mode.rush', 'Boss Rush')), h('div', { class: 'sub', style: 'text-align:center' }, t('tour.rush_pick', 'Pick the stage to fight on.')), h('div', { class: 'col', style: 'margin-top:10px' }, WORLDS.filter((w) => p.prog[w.id].cleared).map((w) => btn(w.name, () => { m.close(); app.requestRun({ mode: 'rush', world: w.id, encore: 0 }); }, 'dark'))))); }, 'red small'))));
   }
-  wrap.append(h('h2', null, 'The Tour'));
+  wrap.append(h('h2', null, t('tour.title', 'The Tour')));
   const ts = M.totalStars(p);
-  wrap.append(h('div', { class: 'sub', style: 'margin:-4px 2px 8px' }, 'Stars ' + ts + '/' + (WORLDS.length * 3 * (ENCORE_MAX + 1)) + '. Clear a stage to unlock the next. Higher Encores are tougher and pay more.'));
+  wrap.append(h('div', { class: 'sub', style: 'margin:-4px 2px 8px' }, t('tour.stars_hint', 'Stars {n}/{max}. Clear a stage to unlock the next. Higher Encores are tougher and pay more.', { n: ts, max: WORLDS.length * 3 * (ENCORE_MAX + 1) })));
   WORLDS.forEach((w) => {
+    if (w.n === 6) wrap.append(h('h2', { class: 'tour2' }, t('tour.second_tour', 'The Second Tour')), h('div', { class: 'sub', style: 'margin:-4px 2px 8px' }, t('tour.second_tour_hint', 'Two more stages beyond the Mega Arena: a bonfire cove and the Moon.')));
     const unlocked = M.worldUnlocked(p, w.id);
     const pr = p.prog[w.id];
     const enc = st['enc_' + w.id] || 0;
     const boss = BOSSES[w.boss];
     const card = h('div', { class: 'card world' + (unlocked ? '' : '') });
-    const art = h('div', { class: 'art' }, canvasOf(504, 92, (ctx) => AW.drawBackdrop(ctx, w.id, 504, 92, 0.5, {})),
+    const art = h('div', { class: 'art' }, canvasOf(504, 92, (ctx) => AW.drawBackdrop(ctx, w.id, 504, 92, 0.5, { thumb: true })),
       h('div', { class: 'ttl', style: 'color:' + w.accent }, w.name), h('div', { class: 'num' }, w.n));
     const body = h('div', { class: 'body' });
     body.append(h('div', { class: 'sub' }, w.blurb));
     body.append(h('div', { class: 'row', style: 'margin:8px 0' }, enemyIcon(w.boss, 48, true),
-      h('div', { class: 'grow' }, h('div', { style: 'font-weight:900' }, 'Boss: ' + boss.name), h('div', { class: 'sub', style: 'font-size:13px' }, boss.trick))));
+      h('div', { class: 'grow' }, h('div', { style: 'font-weight:900' }, t('tour.boss', 'Boss: {name}', { name: boss.name })), h('div', { class: 'sub', style: 'font-size:13px' }, boss.trick))));
     const best = pr.stars[enc] || 0;
     const encRow = h('div', { class: 'row' },
-      h('div', { class: 'grow' }, stars(best), h('div', { class: 'sub', style: 'font-size:13px' }, 'Best wave ' + pr.bestWave + '/' + w.wavesTotal + (pr.bestEndless ? '  Endless ' + pr.bestEndless : ''))));
+      h('div', { class: 'grow' }, stars(best), h('div', { class: 'sub', style: 'font-size:13px' }, t('tour.best_wave', 'Best wave {n}/{total}', { n: pr.bestWave, total: w.wavesTotal }) + (pr.bestEndless ? '  ' + t('tour.best_endless', 'Endless {n}', { n: pr.bestEndless }) : ''))));
     if (pr.cleared) {
       const maxE = ENCORE_MAX;
       const e = h('div', { class: 'enc' },
         h('button', { onclick: () => { st['enc_' + w.id] = Math.max(0, enc - 1); rerender(); }, disabled: enc <= 0 }, '-'),
-        h('div', { style: 'min-width:80px;text-align:center;font-weight:900' }, enc === 0 ? 'Normal' : 'Encore ' + enc),
-        h('button', { onclick: () => { if (M.encoreUnlocked(p, w.id, enc + 1)) st['enc_' + w.id] = Math.min(maxE, enc + 1); else toast('Win Encore ' + enc + ' first.'); rerender(); }, disabled: enc >= maxE }, '+'));
+        h('div', { style: 'min-width:80px;text-align:center;font-weight:900' }, enc === 0 ? t('tour.normal', 'Normal') : t('tour.encore', 'Encore {n}', { n: enc })),
+        h('button', { onclick: () => { if (M.encoreUnlocked(p, w.id, enc + 1)) st['enc_' + w.id] = Math.min(maxE, enc + 1); else toast(t('tour.win_encore_first', 'Win Encore {n} first.', { n: enc })); rerender(); }, disabled: enc >= maxE }, '+'));
       encRow.append(e);
     }
     body.append(encRow);
-    const acts = h('div', { class: 'btnrow' }, btn('PLAY', () => app.startRun({ mode: 'story', world: w.id, encore: enc }), 'green'));
-    if (pr.cleared) acts.append(btn('ENDLESS', () => app.startRun({ mode: 'endless', world: w.id, encore: enc }), 'blue'), btn(icon('crown', 24), () => boardModal(app, 'endless:' + w.id, w.name + ' Endless'), 'dark small', { 'aria-label': 'Leaderboard' }));
+    const acts = h('div', { class: 'btnrow' }, btn(t('tour.play_caps', 'PLAY'), () => app.requestRun({ mode: 'story', world: w.id, encore: enc }), 'green'));
+    if (pr.cleared) acts.append(btn(t('tour.endless_caps', 'ENDLESS'), () => app.requestRun({ mode: 'endless', world: w.id, encore: enc }), 'blue'), btn(icon('crown', 24), () => boardModal(app, 'endless:' + w.id, t('tour.stage_endless', '{stage} Endless', { stage: w.name })), 'dark small', { 'aria-label': t('hub.leaderboard', 'Leaderboard') }));
     body.append(acts);
     card.append(art, body);
     if (!unlocked) {
       const prev = WORLDS[w.n - 2];
-      card.append(h('div', { class: 'lockbox' }, icon('lock', 44), 'Clear ' + prev.name + ' to unlock'));
+      card.append(h('div', { class: 'lockbox' }, icon('lock', 44), t('tour.clear_to_unlock', 'Clear {stage} to unlock', { stage: prev.name })));
     }
     wrap.append(card);
   });
   return wrap;
+}
+
+// ---- Next steps: a friendly checklist of the newer features, ticked as the player tries them (profile.nextSteps, see meta.js)
+const STEP_TEXT = {
+  preview: () => [t('steps.preview', 'Peek at the next wave'), t('steps.preview_how', 'Tap the WAVE box during a run.')],
+  reroll: () => [t('steps.reroll', 'Re-roll a drop'), t('steps.reroll_how', 'Tap the round arrows next to DROP.')],
+  synergy: () => [t('steps.synergy', 'Form a synergy'), t('steps.synergy_how', 'Put two partner turrets side by side.')],
+  branch: () => [t('steps.branch', 'Choose an upgrade path'), t('steps.branch_how', 'Tap a level 4 turret and pick a path.')],
+  hero: () => [t('steps.hero', 'Use a hero move'), t('steps.hero_how', 'Tap a hero portrait when it is charged.')],
+  modifier: () => [t('steps.modifier', 'Try a modifier'), t('steps.modifier_how', 'Add one in the Setlist before a run.')],
+  outfit: () => [t('steps.outfit', 'Wear a new outfit'), t('steps.outfit_how', 'Open the Wardrobe on the Band tab.')],
+};
+function nextStepsCard(app, rerender) {
+  const p = app.profile, st = M.nextStepsState(p);
+  if (!st.visible) return null;
+  const list = h('div', { class: 'steps-list' }, st.items.map((it) => {
+    const [name, how] = STEP_TEXT[it.id]();
+    return h('div', { class: 'step' + (it.done ? ' done' : ''), 'data-step': it.id },
+      h('span', { class: 'step-tick' }, it.done ? icon('check', 22, '#2f9e44') : null),
+      h('div', { class: 'grow' }, h('div', { class: 'step-nm' }, name), it.done ? null : h('div', { class: 'sub', style: 'font-size:13px' }, how)));
+  }));
+  return h('div', { class: 'card nextsteps', 'data-nextsteps': '' },
+    h('div', { class: 'row' }, icon('star', 32, '#ffc83d'),
+      h('div', { class: 'grow' }, h('h3', { style: 'margin:0' }, t('steps.title', 'Next steps')), h('div', { class: 'sub', style: 'font-size:13px' }, t('steps.progress', '{done} of {total} tried', { done: st.done, total: st.total }))),
+      btn(st.open ? t('steps.hide', 'Hide') : t('steps.show', 'Show'), () => { M.setNextStepsOpen(p, !st.open); app.save(); rerender(); }, 'dark small', { 'data-steps-toggle': '', 'aria-expanded': st.open ? 'true' : 'false' })),
+    st.open ? list : null,
+    st.open ? h('div', { class: 'row', style: 'justify-content:flex-end;margin-top:4px' }, btn(t('steps.dismiss', 'Got it, hide for good'), () => { M.dismissNextSteps(p); app.save(); rerender(); }, 'dark small', { 'data-steps-dismiss': '' })) : null);
+}
+
+function difficultyCard(app, rerender) {
+  const p = app.profile, cur = M.difficultyOf(p);
+  const seg = h('div', { class: 'seg diff' }, M.DIFFICULTY_IDS.map((id) => h('button', { class: cur === id ? 'on' : '', onclick: () => { if (cur !== id) { p.settings.difficulty = id; app.audio.play('ui_click'); app.save(); } rerender(); } }, M.difficultyInfo(id).name)));
+  return h('div', { class: 'card diffcard' }, h('div', { class: 'row' }, h('h3', { style: 'margin:0' }, t('setlist.difficulty', 'Difficulty')), h('div', { class: 'grow sub', style: 'text-align:right' }, M.difficultyInfo(cur).desc)), seg,
+    h('div', { class: 'sub', style: 'font-size:12px' }, t('tour.diff_hint', 'Applies to Story, Endless and Boss Rush. The Daily and Weekly Gigs are always Normal, so everyone plays the same run.')));
+}
+const FX_TEXT = { enemyHp: (v) => t('weekly.fx_hp', 'Static have +{n}% health', { n: Math.round((v - 1) * 100) }), rate: (v) => t('weekly.fx_rate', 'turrets fire {n}% faster', { n: Math.round((v - 1) * 100) }), coin: (v) => t('weekly.fx_coin', '+{n}% coins', { n: Math.round((v - 1) * 100) }), enemySpeed: (v) => t('weekly.fx_speed', 'Static move {n}% faster', { n: Math.round((v - 1) * 100) }) };
+function weeklyCard(app) {
+  const p = app.profile, wg = M.weeklyGig(p, app.now()), mod = DAILY_MODS[wg.mod], w = WORLDS.find((x) => x.id === wg.world);
+  const extra = wg.extra.map(([path, , v]) => (FX_TEXT[path] ? FX_TEXT[path](v) : '')).filter(Boolean).join(', ');
+  return h('div', { class: 'card weekly', style: 'border-color:var(--pink)' },
+    h('div', { class: 'row' }, h('div', { class: 'ic icbox' }, icon('ticket', 38)),
+      h('div', { class: 'grow' }, h('h3', null, t('weekly.title', 'Weekly Gig: {name}', { name: wg.name })), h('div', { class: 'sub' }, mod.name + ': ' + mod.desc + (extra ? ' ' + t('weekly.also', 'Also: {fx}.', { fx: extra }) : '')), h('div', { class: 'sub' }, t('weekly.info2', '{stage}, {n} waves. Same run for everyone.', { stage: w.name, n: wg.waves })),
+        h('div', { class: 'sub cd', 'data-cd': 'weekly' }, resetText(M.weeklyResetMs(app.now()))))),
+    h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, wg.done ? t('weekly.done', 'Reward claimed this week (best {best}/{total}). Replays pay half Records, no bonus.', { best: wg.best, total: wg.waves }) : t('weekly.reward', 'One big reward a week: {n}+ diamonds, Records, fans and a Studio crate for a win.', { n: WEEKLY_REWARD.diamonds + WEEKLY_REWARD.winDiamonds })),
+      btn(icon('crown', 24), () => boardModal(app, 'weekly', t('weekly.title', 'Weekly Gig: {name}', { name: wg.name })), 'dark small', { 'aria-label': t('hub.leaderboard', 'Leaderboard') }),
+      btn(wg.done ? t('common.play', 'Play') : t('common.play_bang', 'Play!'), () => {
+        const go = () => app.requestRun({ mode: 'daily', world: wg.world, encore: 0, seed: wg.seed, daily: wg.mod, wavesTotal: wg.waves, weekly: true, weekId: wg.id, extraFx: wg.extra });
+        if (!hubHint(app, 'hint_weekly', go)) go();   // the first Weekly Gig explains itself, then starts
+      }, wg.done ? 'dark' : 'gold')));
+}
+// the next prop the Studio will grow, as a one-line hint under the backstage scene
+function studioCaption(p) {
+  const sp = studioProps(p.studio);
+  const next = [['amps', t('studio.cap.amps', 'Bigger Speakers puts amp stacks on the stage')], ['riser', t('studio.cap.riser', 'Tight Timing builds a drum riser')], ['banner', t('studio.cap.banner', 'Showmanship hangs a banner')], ['lights', t('studio.cap.lights', 'Hype Drive strings up lights')],
+    ['jar', t('studio.cap.jar', 'Tip Jar starts a tip jar')], ['truss', t('studio.cap.truss', 'Sturdy Stage raises a truss')], ['van', t('studio.cap.van', 'Roadie Rack buys a tour van')], ['cables', t('studio.cap.cables', 'Long Cables lays out cables')], ['charm', t('studio.cap.charm', 'Lucky Charm hangs a lucky clover')], ['eq', t('studio.cap.eq', 'Keep upgrading to light up the equaliser')]].find(([k]) => !sp[k]);
+  if (next) return t('studio.cap.next', 'Next: {what}. Hero levels make Roxor and Jasmin glow.', { what: next[1] });
+  return sp.amps >= 4 && sp.riser >= 3 && sp.van >= 3 && sp.lights >= 3 ? t('studio.cap.full', 'A full stage show! Hero levels add sparkles and a crown.') : t('studio.cap.all', 'Every prop is on stage. Keep upgrading to make them bigger.');
 }
 
 function loadoutModal(app, rerender) {
@@ -157,14 +253,14 @@ function loadoutModal(app, rerender) {
   const body = h('div');
   const m = modal(body);
   const draw = () => {
-    body.replaceChildren(h('h2', null, 'Drop Pool'), h('div', { class: 'sub', style: 'text-align:center;margin-bottom:8px' }, 'Every DROP picks a random turret from this pool. Choose ' + M.loadoutSize(p) + '. Mix attackers with a Loop Station or Amp Stack!'));
+    body.replaceChildren(h('h2', null, t('loadout.title', 'Drop Pool')), h('div', { class: 'sub', style: 'text-align:center;margin-bottom:8px' }, t('loadout.hint', 'Every DROP picks a random turret from this pool. Choose {n}. Mix attackers with a Loop Station or Amp Stack!', { n: M.loadoutSize(p) })));
     const g = h('div', { class: 'codexgrid' });
     for (const id of TURRET_IDS) {
-      const t = TURRETS[id], own = p.turretsUnlocked[id], on = p.loadout.includes(id);
-      g.append(h('div', { class: 'cdx' + (own ? '' : ' unk'), style: on ? 'border-color:var(--green)' : '', onclick: () => { if (!own) { toast(t.name + ': Fame ' + t.unlock.fame + ' and ' + fmt(t.unlock.records) + ' Records (Studio).'); return; } if (!M.toggleLoadout(p, id)) toast('Pool is full or empty. Remove one first.'); else app.audio.play('ui_click'); draw(); rerender(); } },
-        turretIcon(id, 64), h('div', { class: 'nm' }, t.name), h('div', { class: 'ds' }, own ? (on ? 'IN POOL' : 'tap to add') : 'locked')));
+      const tu = TURRETS[id], own = p.turretsUnlocked[id], on = p.loadout.includes(id);
+      g.append(h('div', { class: 'cdx' + (own ? '' : ' unk'), style: on ? 'border-color:var(--green)' : '', onclick: () => { if (!own) { toast(t('loadout.locked', '{name}: Fame {fame} and {records} Records (Studio).', { name: tu.name, fame: tu.unlock.fame, records: fmt(tu.unlock.records) })); return; } if (!M.toggleLoadout(p, id)) toast(t('loadout.full', 'Pool is full or empty. Remove one first.')); else app.audio.play('ui_click'); draw(); rerender(); } },
+        turretIcon(id, 64), h('div', { class: 'nm' }, tu.name), h('div', { class: 'ds' }, own ? (on ? t('loadout.in_pool', 'IN POOL') : t('loadout.tap_add', 'tap to add')) : t('loadout.locked_tag', 'locked'))));
     }
-    body.append(g, h('div', { class: 'btnrow' }, btn('Done', () => m.close(), 'green')));
+    body.append(g, h('div', { class: 'btnrow' }, btn(t('common.done', 'Done'), () => m.close(), 'green')));
   };
   draw();
 }
@@ -173,10 +269,13 @@ function loadoutModal(app, rerender) {
 function studioTab(app, st, rerender) {
   const p = app.profile;
   const wrap = h('div');
-  wrap.append(h('h2', null, 'The Studio'), h('div', { class: 'sub', style: 'margin:-4px 2px 8px' }, 'Permanent upgrades, bought with Records. They help in every run.'));
+  wrap.append(h('h2', null, t('studio.title', 'The Studio')), h('div', { class: 'sub', style: 'margin:-4px 2px 8px' }, t('studio.hint', 'Permanent upgrades, bought with Records. They help in every run.')));
+  wrap.append(h('div', { class: 'studio-scene' }, canvasOf(504, 170, (ctx, t) => drawStudioScene(ctx, 504, 170, t, p.studio, { heroLv: p.heroLv, outfits: p.outfits.worn }), { live: true }),
+    h('div', { class: 'sub studio-cap' }, studioCaption(p))));
+  hubHint(app, 'hint_studio_scene');
   const seg = h('div', { class: 'seg' });
   const sec = st.studioSec || 'up';
-  for (const [id, name] of [['up', 'Upgrades'], ['turrets', 'Turrets'], ['heroes', 'Heroes']]) seg.append(h('button', { class: sec === id ? 'on' : '', onclick: () => { st.studioSec = id; rerender(); } }, name));
+  for (const [id, name] of [['up', t('studio.sec.upgrades', 'Upgrades')], ['turrets', t('studio.sec.turrets', 'Turrets')], ['heroes', t('studio.sec.heroes', 'Heroes')]]) seg.append(h('button', { class: sec === id ? 'on' : '', onclick: () => { st.studioSec = id; rerender(); } }, name));
   wrap.append(seg);
   if (sec === 'up') {
     for (const id of STUDIO_IDS) {
@@ -184,33 +283,33 @@ function studioTab(app, st, rerender) {
       const can = cost != null && p.records >= cost;
       wrap.append(h('div', { class: 'card up' }, h('div', { class: 'ic' }, icon(u.glyph, 34)),
         h('div', { class: 'grow' }, h('div', { class: 'nm' }, u.name), h('div', { class: 'ds' }, u.desc), h('div', { class: 'pips', style: 'margin-top:4px' }, Array.from({ length: Math.min(u.max, 20) }, (_, i) => h('i', { class: i < lv ? 'on' : '' })))),
-        cost == null ? h('span', { class: 'pill', style: 'color:var(--gold)' }, 'MAX') : btn([icon('record', 20), fmt(cost)], () => { const r = M.buyStudio(p, id); if (r.ok) { app.audio.play('record'); app.audio.play('levelup', { vol: 0.5 }); } else app.audio.play('error'); rerender(); }, can ? 'green small' : 'dark small off')));
+        cost == null ? h('span', { class: 'pill', style: 'color:var(--gold)' }, t('common.max', 'MAX')) : btn([icon('record', 20), fmt(cost)], () => { const r = M.buyStudio(p, id); if (r.ok) { app.audio.play('record'); app.audio.play('levelup', { vol: 0.5 }); } else app.audio.play('error'); rerender(); }, can ? 'green small' : 'dark small off')));
     }
   } else if (sec === 'turrets') {
-    wrap.append(h('div', { class: 'sub', style: 'margin:0 2px 8px' }, 'New turrets join your drop pool. They need Fame level and Records.'));
+    wrap.append(h('div', { class: 'sub', style: 'margin:0 2px 8px' }, t('studio.turrets_hint', 'New turrets join your drop pool. They need Fame level and Records.')));
     for (const id of TURRET_IDS) {
-      const t = TURRETS[id], own = p.turretsUnlocked[id];
+      const tu = TURRETS[id], own = p.turretsUnlocked[id];
       const c = M.canUnlockTurret(p, id);
-      const perks = Object.entries(t.perks).map(([l, d]) => 'Lv' + l + ': ' + d).join('  ');
+      const perks = Object.entries(tu.perks).map(([l, d]) => t('studio.perk', 'Lv{lv}: {desc}', { lv: l, desc: d })).join('  ');
       wrap.append(h('div', { class: 'card' + (own ? '' : '') },
-        h('div', { class: 'tcard' }, h('div', { class: 'ic', style: 'border-color:' + t.color }, turretLive(id, 5, 52)),
-          h('div', { class: 'grow' }, h('div', { class: 'nm', style: 'font-weight:900;font-size:19px' }, t.name), h('div', { class: 'sub' }, t.blurb)),
-          own ? h('span', { class: 'pill', style: 'color:var(--green)' }, 'OWNED')
-            : btn(c.ok ? [icon('record', 20), fmt(t.unlock.records)] : (c.reason === 'fame' ? 'Fame ' + t.unlock.fame : [icon('record', 20), fmt(t.unlock.records)]), () => { const r = M.unlockTurret(p, id); if (r.ok) { app.audio.play('levelup'); toast(t.name + ' unlocked and added to your pool!'); } else app.audio.play('error'); rerender(); }, c.ok ? 'gold small' : 'dark small off')),
+        h('div', { class: 'tcard' }, h('div', { class: 'ic', style: 'border-color:' + tu.color }, turretLive(id, 5, 52)),
+          h('div', { class: 'grow' }, h('div', { class: 'nm', style: 'font-weight:900;font-size:19px' }, tu.name), h('div', { class: 'sub' }, tu.blurb)),
+          own ? h('span', { class: 'pill', style: 'color:var(--green)' }, t('common.owned', 'OWNED'))
+            : btn(c.ok ? [icon('record', 20), fmt(tu.unlock.records)] : (c.reason === 'fame' ? t('studio.need_fame', 'Fame {n}', { n: tu.unlock.fame }) : [icon('record', 20), fmt(tu.unlock.records)]), () => { const r = M.unlockTurret(p, id); if (r.ok) { app.audio.play('levelup'); toast(t('studio.turret_unlocked', '{name} unlocked and added to your pool!', { name: tu.name })); } else app.audio.play('error'); rerender(); }, c.ok ? 'gold small' : 'dark small off')),
         h('div', { class: 'sub', style: 'font-size:12px;margin-top:6px' }, perks)));
     }
   } else {
     for (const who of ['roxor', 'jasmin']) {
       const lv = p.heroLv[who], cost = M.heroUpgradeCost(p, who);
       const col = who === 'roxor' ? 'var(--green)' : 'var(--pink)';
-      const name = who === 'roxor' ? 'RoxorLoops: Beatbox Blast' : 'Jasmin: Siren Song';
-      const desc = who === 'roxor' ? 'Shakes the whole stage. Hits every Static for big damage, stuns and shoves them back, and un-jams your turrets.' : 'A sung spell. Slows every Static hard, makes them take +20% damage for a few seconds and mends the stage.';
+      const name = who === 'roxor' ? t('hero.roxor.ability', 'RoxorLoops: Beatbox Blast') : t('hero.jasmin.ability', 'Jasmin: Siren Song');
+      const desc = who === 'roxor' ? t('hero.roxor.desc', 'Shakes the whole stage. Hits every Static for big damage, stuns and shoves them back, and un-jams your turrets.') : t('hero.jasmin.desc', 'A sung spell. Slows every Static hard, makes them take +20% damage for a few seconds and mends the stage.');
       wrap.append(h('div', { class: 'card', style: 'border-color:' + col },
         h('div', { class: 'herocard' }, canvasOf(90, 120, (ctx, t) => AW.drawHero(ctx, who, 45, 112, 108, { t, outfit: p.outfits.worn[who], pose: 'idle' }), { live: true }),
           h('div', { class: 'grow' }, h('div', { style: 'font-weight:900;font-size:20px;color:' + col }, name), h('div', { class: 'sub' }, desc),
-            h('div', { class: 'row', style: 'margin-top:6px' }, h('span', { class: 'pill' }, 'LEVEL ' + lv + '/' + HERO_MAX), cost == null ? h('span', { class: 'pill', style: 'color:var(--gold)' }, 'MAX') : btn([icon('record', 20), fmt(cost)], () => { const r = M.upgradeHero(p, who); app.audio.play(r.ok ? 'levelup' : 'error'); rerender(); }, p.records >= cost ? 'green small' : 'dark small off'))))));
+            h('div', { class: 'row', style: 'margin-top:6px' }, h('span', { class: 'pill' }, t('studio.hero_level', 'LEVEL {lv}/{max}', { lv, max: HERO_MAX })), cost == null ? h('span', { class: 'pill', style: 'color:var(--gold)' }, t('common.max', 'MAX')) : btn([icon('record', 20), fmt(cost)], () => { const r = M.upgradeHero(p, who); app.audio.play(r.ok ? 'levelup' : 'error'); rerender(); }, p.records >= cost ? 'green small' : 'dark small off'))))));
     }
-    wrap.append(h('div', { class: 'sub', style: 'margin:0 2px' }, 'Hero levels make abilities hit harder and recharge faster.'));
+    wrap.append(h('div', { class: 'sub', style: 'margin:0 2px' }, t('studio.heroes_hint', 'Hero levels make abilities hit harder and recharge faster.')));
   }
   return wrap;
 }
@@ -222,25 +321,26 @@ function statText(item) {
 function bandTab(app, st, rerender) {
   const p = app.profile;
   const wrap = h('div');
-  wrap.append(h('h2', null, 'The Band'));
-  // heroes + outfits
+  wrap.append(h('h2', null, t('band.title', 'The Band')));
+  // heroes + wardrobe (every outfit drawn on the hero, buy or wear), then the stage skins
   const heroes = h('div', { class: 'row', style: 'gap:8px;margin-bottom:10px' });
   for (const who of ['roxor', 'jasmin']) {
     const col = who === 'roxor' ? 'var(--green)' : 'var(--pink)';
     heroes.append(h('div', { class: 'card grow', style: 'text-align:center;margin:0;border-color:' + col },
       canvasOf(150, 176, (ctx, t) => AW.drawHero(ctx, who, 75, 168, 138, { t, outfit: p.outfits.worn[who], pose: 'cheer' }), { live: true }),
-      h('div', { style: 'font-weight:900;color:' + col }, who === 'roxor' ? 'RoxorLoops' : 'Jasmin'),
-      h('div', { class: 'row', style: 'justify-content:center;margin-top:6px' }, btn(p.outfits.worn[who] === 'onesie' ? 'Classic' : (p.outfits.owned[who].includes('onesie') ? 'Onesie' : [icon('diamond', 18), OUTFITS[who].onesie.price]),
-        () => { const target = p.outfits.worn[who] === 'onesie' ? 'default' : 'onesie'; const r = M.buyOutfit(p, who, target); if (!r.ok) { toast('Need ' + OUTFITS[who].onesie.price + ' diamonds for the ' + OUTFITS[who].onesie.name + '.'); app.audio.play('error'); } else app.audio.play('reveal_rare'); rerender(); }, 'dark small'))));
+      h('div', { style: 'font-weight:900;color:' + col }, who === 'roxor' ? 'RoxorLoops' : 'Jasmin')));
   }
   wrap.append(heroes);
+  wrap.append(wardrobeSection(app, 'roxor', rerender), wardrobeSection(app, 'jasmin', rerender), skinsSection(app, rerender));
+  hubHint(app, 'hint_wardrobe');
+  if (M.cosmeticAffordable(p)) hubHint(app, 'hint_skin_buy');
 
   // equipped slots
-  wrap.append(h('h3', null, 'Equipped'));
+  wrap.append(h('h3', null, t('band.equipped', 'Equipped')));
   const slots = h('div', { class: 'slots' });
   for (const s of SLOTS) {
     const g = M.gearById(p, p.gear.equipped[s]);
-    const b = h('button', { class: 'gslot', style: g ? 'border-color:' + RARITY[g.rarity].color : '', onclick: () => { if (g) gearModal(app, g, rerender); else { st.gearSlot = s; rerender(); } } },
+    const b = h('button', { class: 'gslot', 'data-rar': g ? g.rarity : null, style: g ? 'border-color:' + RARITY[g.rarity].color : '', onclick: () => { if (g) gearModal(app, g, rerender); else { st.gearSlot = s; rerender(); } } },
       g ? gearIcon(g, 64) : canvasOf(64, 64, (ctx) => { ctx.globalAlpha = 0.35; AE.drawGear(ctx, s, 'empty', 'common', 32, 32, 40); }), g ? h('span', { class: 'lv' }, g.lvl) : null);
     slots.append(b);
   }
@@ -249,20 +349,20 @@ function bandTab(app, st, rerender) {
   const tot = M.gearTotals(p);
   const lines = Object.entries(tot).map(([k, v]) => STATS[k].label + ' ' + M.fmtStat(k, v));
   const sb = M.setBonuses(p);
-  wrap.append(h('div', { class: 'card' }, h('div', { class: 'sub' }, lines.length ? lines.join('  |  ') : 'No gear equipped. Open a crate in the Crates tab!'),
-    sb.length ? h('div', { style: 'margin-top:6px' }, sb.map((b) => h('div', { style: 'font-size:14px;font-weight:800;color:' + SETS[b.set].color }, SETS[b.set].name + ' (' + b.count + '): ' + b.text))) : null,
-    h('div', { class: 'sub', style: 'margin-top:6px;font-size:12px' }, Object.values(SETS).map((s) => s.name + ': 2/3/5 pieces').join('   '))));
+  wrap.append(h('div', { class: 'card' }, h('div', { class: 'sub' }, lines.length ? lines.join('  |  ') : t('band.no_gear', 'No gear equipped. Open a crate in the Crates tab!')),
+    sb.length ? h('div', { style: 'margin-top:6px' }, sb.map((b) => h('div', { style: 'font-size:14px;font-weight:800;color:' + SETS[b.set].color }, t('band.set_bonus', '{name} ({n}): {text}', { name: SETS[b.set].name, n: b.count, text: b.text })))) : null,
+    h('div', { class: 'sub', style: 'margin-top:6px;font-size:12px' }, Object.values(SETS).map((s) => t('band.set_pieces', '{name}: 2/3/5 pieces', { name: s.name })).join('   '))));
 
   // inventory
-  wrap.append(h('h3', null, 'Gear Bag (' + p.gear.items.length + ')'));
+  wrap.append(h('h3', null, t('band.gear_bag', 'Gear Bag ({n})', { n: p.gear.items.length })));
   const seg = h('div', { class: 'seg' });
-  for (const s of ['all'].concat(SLOTS)) seg.append(h('button', { class: st.gearSlot === s ? 'on' : '', onclick: () => { st.gearSlot = s; rerender(); } }, s === 'all' ? 'All' : ({ head: 'Head', mic: 'Mic', body: 'Top', chain: 'Bling', feet: 'Shoes' })[s]));
+  for (const s of ['all'].concat(SLOTS)) seg.append(h('button', { class: st.gearSlot === s ? 'on' : '', onclick: () => { st.gearSlot = s; rerender(); } }, s === 'all' ? t('band.slot.all', 'All') : ({ head: t('band.slot.head', 'Head'), mic: t('band.slot.mic', 'Mic'), body: t('band.slot.body', 'Top'), chain: t('band.slot.chain', 'Bling'), feet: t('band.slot.feet', 'Shoes') })[s]));
   wrap.append(seg);
   const mergeable = M.mergeableGear(p);
   if (mergeable.length) {
     const grp = mergeable[0];
-    wrap.append(h('div', { class: 'card', style: 'border-color:var(--gold)' }, h('div', { class: 'row' }, gearIcon(grp[0], 52), h('div', { class: 'grow' }, h('b', null, 'Merge ready! '), h('span', { class: 'sub' }, '3x ' + GEAR[grp[0].tpl].name + ' (' + rarName(grp[0].rarity) + ') make one ' + rarName(RARITY_ORDER[RARITY_ORDER.indexOf(grp[0].rarity) + 1]) + '.')),
-      btn('MERGE', () => { const r = M.mergeGear(p, grp.slice().sort((a, b) => (p.gear.equipped[GEAR[a.tpl].slot] === a.uid ? 1 : 0) - (p.gear.equipped[GEAR[b.tpl].slot] === b.uid ? 1 : 0)).slice(0, 3).map((g) => g.uid)); if (r.ok) { app.audio.play('reveal_' + (r.item.rarity)); toast('Merged into ' + rarName(r.item.rarity) + ' ' + GEAR[r.item.tpl].name + '!'); } rerender(); }, 'gold small'))));
+    wrap.append(h('div', { class: 'card', style: 'border-color:var(--gold)' }, h('div', { class: 'row' }, gearIcon(grp[0], 52), h('div', { class: 'grow' }, h('b', null, t('band.merge_ready', 'Merge ready!') + ' '), h('span', { class: 'sub' }, t('band.merge_desc', '3x {name} ({rarity}) make one {next}.', { name: GEAR[grp[0].tpl].name, rarity: rarName(grp[0].rarity), next: rarName(RARITY_ORDER[RARITY_ORDER.indexOf(grp[0].rarity) + 1]) }))),
+      btn(t('band.merge_caps', 'MERGE'), () => { const r = M.mergeGear(p, grp.slice().sort((a, b) => (p.gear.equipped[GEAR[a.tpl].slot] === a.uid ? 1 : 0) - (p.gear.equipped[GEAR[b.tpl].slot] === b.uid ? 1 : 0)).slice(0, 3).map((g) => g.uid)); if (r.ok) { app.audio.play('reveal_' + (r.item.rarity)); toast(t('band.merged_into', 'Merged into {rarity} {name}!', { rarity: rarName(r.item.rarity), name: GEAR[r.item.tpl].name })); } rerender(); }, 'gold small'))));
   }
   const items = p.gear.items.filter((g) => st.gearSlot === 'all' || GEAR[g.tpl].slot === st.gearSlot)
     .sort((a, b) => RARITY_ORDER.indexOf(b.rarity) - RARITY_ORDER.indexOf(a.rarity) || b.lvl - a.lvl);
@@ -270,10 +370,10 @@ function bandTab(app, st, rerender) {
   const mgKeys = new Set(mergeable.map((l) => l[0].tpl + ':' + l[0].rarity));
   for (const g of items) {
     const eq = p.gear.equipped[GEAR[g.tpl].slot] === g.uid;
-    grid.append(h('button', { class: 'gitem', style: 'border-color:' + RARITY[g.rarity].color, onclick: () => { g.fresh = false; gearModal(app, g, rerender); } },
-      gearIcon(g, 64), h('span', { class: 'lv' }, g.lvl), eq ? h('span', { class: 'eq' }, 'ON') : null, g.fresh ? h('span', { class: 'new' }, 'NEW') : null, mgKeys.has(g.tpl + ':' + g.rarity) ? h('span', { class: 'mg' }, 'x3') : null));
+    grid.append(h('button', { class: 'gitem', 'data-rar': g.rarity, style: 'border-color:' + RARITY[g.rarity].color, onclick: () => { g.fresh = false; gearModal(app, g, rerender); } },
+      gearIcon(g, 64), h('span', { class: 'lv' }, g.lvl), eq ? h('span', { class: 'eq' }, t('common.on', 'ON')) : null, g.fresh ? h('span', { class: 'new' }, t('common.new', 'NEW')) : null, mgKeys.has(g.tpl + ':' + g.rarity) ? h('span', { class: 'mg' }, 'x3') : null));
   }
-  if (!items.length) wrap.append(h('div', { class: 'sub', style: 'text-align:center;padding:16px' }, 'Nothing here yet. Win stages and open crates to find gear.'));
+  if (!items.length) wrap.append(h('div', { class: 'sub', style: 'text-align:center;padding:16px' }, t('band.empty', 'Nothing here yet. Win stages and open crates to find gear.')));
   wrap.append(grid);
   return wrap;
 }
@@ -289,17 +389,17 @@ export function gearModal(app, g, rerender) {
     const same = p.gear.items.filter((x) => x.tpl === g.tpl && x.rarity === g.rarity);
     body.replaceChildren(
       h('div', { style: 'text-align:center' }, canvasOf(120, 120, (ctx, t) => { AE.drawRarityFrame(ctx, g.rarity, 60, 60, 108, 108, t); AE.drawGear(ctx, tpl.slot, g.tpl, g.rarity, 60, 60, 80); }, { live: true }),
-        h('h2', { style: 'margin:4px 0' }, tpl.name), h('div', { class: rarClass(g.rarity), style: 'font-weight:900' }, rarName(g.rarity) + '  |  Level ' + g.lvl + '/' + GEAR_MAX_LEVEL + '  |  ' + SLOT_NAMES[tpl.slot]),
-        tpl.set ? h('div', { style: 'font-weight:800;color:' + SETS[tpl.set].color }, 'Set: ' + SETS[tpl.set].name) : null),
-      h('div', { class: 'card', style: 'margin-top:10px' }, M.gearStatLines(g).map((l) => h('div', { style: 'font-weight:900;font-size:19px' }, STATS[l.stat].label + ' ', h('span', { style: 'color:var(--green)' }, M.fmtStat(l.stat, l.value)), l.main ? '' : h('span', { class: 'sub' }, '  (bonus)'))),
-        RARITY_ORDER.indexOf(g.rarity) < 2 ? h('div', { class: 'sub' }, 'Epic and above also give a bonus stat.') : null),
+        h('h2', { style: 'margin:4px 0' }, tpl.name), h('div', { class: rarClass(g.rarity), style: 'font-weight:900' }, t('gear.line', '{rarity}  |  Level {lv}/{max}  |  {slot}', { rarity: rarName(g.rarity), lv: g.lvl, max: GEAR_MAX_LEVEL, slot: SLOT_NAMES[tpl.slot] })),
+        tpl.set ? h('div', { style: 'font-weight:800;color:' + SETS[tpl.set].color }, t('gear.set', 'Set: {name}', { name: SETS[tpl.set].name })) : null),
+      h('div', { class: 'card', style: 'margin-top:10px' }, M.gearStatLines(g).map((l) => h('div', { style: 'font-weight:900;font-size:19px' }, STATS[l.stat].label + ' ', h('span', { style: 'color:var(--green)' }, M.fmtStat(l.stat, l.value)), l.main ? '' : h('span', { class: 'sub' }, '  ' + t('gear.bonus', '(bonus)')))),
+        RARITY_ORDER.indexOf(g.rarity) < 2 ? h('div', { class: 'sub' }, t('gear.epic_bonus', 'Epic and above also give a bonus stat.')) : null),
       h('div', { class: 'btnrow' },
-        btn(eq ? 'Unequip' : 'Equip', () => { if (eq) M.unequipSlot(p, tpl.slot); else M.equipGear(p, g.uid); app.audio.play('ui_click'); draw(); rerender(); }, eq ? 'dark' : 'green'),
-        cost == null ? btn('Max level', () => {}, 'dark off') : btn(['Upgrade ', icon('record', 20), fmt(cost)], () => { const r = M.upgradeGear(p, g.uid); app.audio.play(r.ok ? 'levelup' : 'error'); draw(); rerender(); }, p.records >= cost ? 'blue' : 'dark off')),
+        btn(eq ? t('gear.unequip', 'Unequip') : t('gear.equip', 'Equip'), () => { if (eq) M.unequipSlot(p, tpl.slot); else M.equipGear(p, g.uid); app.audio.play('ui_click'); draw(); rerender(); }, eq ? 'dark' : 'green'),
+        cost == null ? btn(t('gear.max_level', 'Max level'), () => {}, 'dark off') : btn([t('gear.upgrade', 'Upgrade') + ' ', icon('record', 20), fmt(cost)], () => { const r = M.upgradeGear(p, g.uid); app.audio.play(r.ok ? 'levelup' : 'error'); draw(); rerender(); }, p.records >= cost ? 'blue' : 'dark off')),
       h('div', { class: 'btnrow' },
-        btn(scrapArmed ? 'Tap again to scrap' : ['Scrap +', icon('record', 18), fmt(GEAR_SELL[g.rarity] + Math.round((g.lvl - 1) * 20))], () => { if (!scrapArmed) { scrapArmed = true; draw(); return; } const r = M.scrapGear(p, g.uid); if (r.ok) { app.audio.play('sell'); toast('Scrapped for ' + r.value + ' Records'); } m.close(); rerender(); }, 'red small'),
-        btn('Close', () => m.close(), 'dark small')),
-      same.length >= 3 && RARITY_ORDER.indexOf(g.rarity) < RARITY_ORDER.length - 1 ? h('div', { class: 'btnrow' }, btn('Merge 3 into ' + rarName(RARITY_ORDER[RARITY_ORDER.indexOf(g.rarity) + 1]), () => { const uids = same.filter((x) => x.uid !== g.uid).slice(0, 2).map((x) => x.uid).concat([g.uid]); const r = M.mergeGear(p, uids); if (r.ok) { app.audio.play('reveal_' + r.item.rarity); toast('Merged!'); } m.close(); rerender(); }, 'gold')) : null,
+        btn(scrapArmed ? t('gear.scrap_confirm', 'Tap again to scrap') : [t('gear.scrap', 'Scrap +'), icon('record', 18), fmt(GEAR_SELL[g.rarity] + Math.round((g.lvl - 1) * 20))], () => { if (!scrapArmed) { scrapArmed = true; draw(); return; } const r = M.scrapGear(p, g.uid); if (r.ok) { app.audio.play('sell'); toast(t('gear.scrapped', 'Scrapped for {n} Records', { n: r.value })); } m.close(); rerender(); }, 'red small'),
+        btn(t('common.close', 'Close'), () => m.close(), 'dark small')),
+      same.length >= 3 && RARITY_ORDER.indexOf(g.rarity) < RARITY_ORDER.length - 1 ? h('div', { class: 'btnrow' }, btn(t('gear.merge3', 'Merge 3 into {rarity}', { rarity: rarName(RARITY_ORDER[RARITY_ORDER.indexOf(g.rarity) + 1]) }), () => { const uids = same.filter((x) => x.uid !== g.uid).slice(0, 2).map((x) => x.uid).concat([g.uid]); const r = M.mergeGear(p, uids); if (r.ok) { app.audio.play('reveal_' + r.item.rarity); toast(t('gear.merged', 'Merged!')); } m.close(); rerender(); }, 'gold')) : null,
     );
   };
   draw();
@@ -312,11 +412,11 @@ function oddsRow(tier) {
 function shopTab(app, st, rerender) {
   const p = app.profile;
   const wrap = h('div');
-  wrap.append(h('h2', null, 'Crates'));
+  wrap.append(h('h2', null, t('shop.title', 'Crates')));
   if (p.pendingCrates && p.pendingCrates.length) {
     wrap.append(h('div', { class: 'card', style: 'border-color:var(--gold);animation:glow 2s infinite' }, h('div', { class: 'row' }, canvasOf(70, 60, (ctx, t) => AE.drawCrate(ctx, p.pendingCrates[0], 35, 32, 56, { t, shake: 0.5 }), { live: true }),
-      h('div', { class: 'grow' }, h('b', null, 'You have ' + p.pendingCrates.length + ' free crate' + (p.pendingCrates.length > 1 ? 's' : '') + '!')),
-      btn('Open', () => { const tier = p.pendingCrates.shift(); if (!p.pendingCrates.length) delete p.pendingCrates; const items = M.openCrateFree(p, tier, app.rng()); crateOpening(app, tier, items, rerender); }, 'gold'))));
+      h('div', { class: 'grow' }, h('b', null, tn('shop.free_crates', p.pendingCrates.length, 'You have {n} free crate!', 'You have {n} free crates!'))),
+      btn(t('shop.open', 'Open'), () => { const tier = p.pendingCrates.shift(); if (!p.pendingCrates.length) delete p.pendingCrates; const items = M.openCrateFree(p, tier, app.rng()); crateOpening(app, tier, items, rerender); }, 'gold'))));
   }
   for (const id of CRATE_IDS) {
     const c = CRATES[id];
@@ -326,16 +426,16 @@ function shopTab(app, st, rerender) {
     const crateCv = canvasOf(150, 130, (ctx, t) => AE.drawCrate(ctx, id, 75, 70, 110, { t }), { live: true });
     crateCv.classList.add('cr');
     wrap.append(h('div', { class: 'card cratecard' }, crateCv,
-      h('h3', null, c.name), h('div', { class: 'sub' }, c.blurb + (c.items > 1 ? ' (' + c.items + ' items)' : '')), oddsRow(id),
-      btn([icon(priceIcon, 24), fmt(priceN)], () => { const r = M.buyCrate(p, id, app.rng()); if (!r.ok) { app.audio.play('error'); toast('Not enough ' + (c.price.records ? 'Records' : 'diamonds') + '.'); return; } crateOpening(app, id, r.items, rerender); }, ok ? 'gold' : 'dark off')));
+      h('h3', null, c.name), h('div', { class: 'sub' }, c.blurb + (c.items > 1 ? ' ' + t('shop.items_n', '({n} items)', { n: c.items }) : '')), oddsRow(id),
+      btn([icon(priceIcon, 24), fmt(priceN)], () => { const r = M.buyCrate(p, id, app.rng()); if (!r.ok) { app.audio.play('error'); toast(c.price.records ? t('shop.no_records', 'Not enough Records.') : t('shop.no_diamonds', 'Not enough diamonds.')); return; } crateOpening(app, id, r.items, rerender); }, ok ? 'gold' : 'dark off')));
   }
-  wrap.append(h('div', { class: 'sub', style: 'margin:0 2px 10px' }, 'Pity timer: an Epic is guaranteed within ' + PITY.epicEvery + ' items and a Legendary within ' + PITY.legendaryEvery + '. Items so far since last: Epic ' + p.crate.sinceEpic + ', Legendary ' + p.crate.sinceLegend + '. Duplicates are never wasted: merge 3 of the same into the next rarity.'));
+  wrap.append(h('div', { class: 'sub', style: 'margin:0 2px 10px' }, t('shop.pity', 'Pity timer: an Epic is guaranteed within {epic} items and a Legendary within {leg}. Items so far since last: Epic {sinceEpic}, Legendary {sinceLeg}. Duplicates are never wasted: merge 3 of the same into the next rarity.', { epic: PITY.epicEvery, leg: PITY.legendaryEvery, sinceEpic: p.crate.sinceEpic, sinceLeg: p.crate.sinceLegend })));
   // special offers
-  wrap.append(h('h2', null, 'Upgrades'));
-  wrap.append(h('div', { class: 'card' }, h('div', { class: 'row' }, h('div', { class: 'ic', style: 'width:54px;height:54px;border-radius:12px;background:#12082b;display:flex;align-items:center;justify-content:center' }, icon('merge', 38)),
-    h('div', { class: 'grow' }, h('h3', null, 'Auto-Merge Rack'), h('div', { class: 'sub' }, 'Unlocks the MERGE button in battle: merges every matching pair with one tap.')),
-    p.autoMerge ? h('span', { class: 'pill', style: 'color:var(--green)' }, 'OWNED') : btn([icon('diamond', 22), AUTOMERGE_PRICE], () => { const r = M.buyAutoMerge(p); app.audio.play(r.ok ? 'levelup' : 'error'); if (!r.ok) toast('Need ' + AUTOMERGE_PRICE + ' diamonds. Win stages and finish quests to earn them!'); rerender(); }, p.diamonds >= AUTOMERGE_PRICE ? 'gold small' : 'dark small off'))));
-  wrap.append(h('div', { class: 'sub', style: 'margin:0 2px' }, 'Diamonds are earned in the game only: first clears, stars, bosses, quests, stickers and daily rewards. Nothing here costs real money.'));
+  wrap.append(h('h2', null, t('shop.upgrades', 'Upgrades')));
+  wrap.append(h('div', { class: 'card' }, h('div', { class: 'row' }, h('div', { class: 'ic icbox' }, icon('merge', 38)),
+    h('div', { class: 'grow' }, h('h3', null, t('shop.automerge', 'Auto-Merge Rack')), h('div', { class: 'sub' }, t('shop.automerge_desc', 'Unlocks the MERGE button in battle: merges every matching pair with one tap.'))),
+    p.autoMerge ? h('span', { class: 'pill', style: 'color:var(--green)' }, t('common.owned', 'OWNED')) : btn([icon('diamond', 22), AUTOMERGE_PRICE], () => { const r = M.buyAutoMerge(p); app.audio.play(r.ok ? 'levelup' : 'error'); if (!r.ok) toast(t('shop.need_diamonds', 'Need {n} diamonds. Win stages and finish quests to earn them!', { n: AUTOMERGE_PRICE })); rerender(); }, p.diamonds >= AUTOMERGE_PRICE ? 'gold small' : 'dark small off'))));
+  wrap.append(h('div', { class: 'sub', style: 'margin:0 2px' }, t('shop.diamonds_note', 'Diamonds are earned in the game only: first clears, stars, bosses, quests, stickers and daily rewards. Nothing here costs real money.')));
   return wrap;
 }
 
@@ -346,20 +446,20 @@ export function crateOpening(app, tier, items, rerender) {
   const best = items.reduce((b, g) => (RARITY_ORDER.indexOf(g.rarity) > RARITY_ORDER.indexOf(b) ? g.rarity : b), 'common');
   const cv = canvasOf(220, 190, (ctx, t) => AE.drawCrate(ctx, tier, 110, 100, 170, { t, shake: phase === 0 ? 1 : 0, open: phase === 1 ? Math.min(1, (performance.now() - (body.__t0 || 0)) / 400) : 0 }), { live: true });
   cv.classList.add('cr'); if (!app.profile.settings.reduce) cv.classList.add('shake');
-  body.append(h('h2', null, CRATES[tier].name), cv, h('div', { class: 'sub' }, 'Tap the crate!'));
+  body.append(h('h2', null, CRATES[tier].name), cv, h('div', { class: 'sub' }, t('crate.tap', 'Tap the crate!')));
   app.audio.play('crate_shake');
   const reveal = () => {
     if (phase) return; phase = 1; body.__t0 = performance.now();
     app.audio.play('crate_open');
     setTimeout(() => {
-      body.replaceChildren(h('h2', null, 'You got!'));
+      body.replaceChildren(h('h2', null, t('crate.you_got', 'You got!')));
       const row = h('div', { class: 'reveal' });
       body.append(row);
       items.forEach((g, i) => {
         setTimeout(() => {
           app.audio.play('reveal_' + g.rarity);
           row.append(h('div', { class: 'revi' }, gearIcon(g, 120), h('div', { style: 'font-weight:900' }, GEAR[g.tpl].name), h('div', { class: rarClass(g.rarity), style: 'font-weight:900' }, rarName(g.rarity)), h('div', { class: 'sub', style: 'font-size:13px' }, statText(g).join(', '))));
-          if (i === items.length - 1) body.append(h('div', { class: 'btnrow', style: 'width:100%' }, btn('Nice!', () => { m.close(); rerender && rerender(); }, 'green')));
+          if (i === items.length - 1) body.append(h('div', { class: 'btnrow', style: 'width:100%' }, btn(t('crate.nice', 'Nice!'), () => { m.close(); rerender && rerender(); }, 'green')));
         }, 500 + i * 650);
       });
     }, 550);
@@ -372,52 +472,174 @@ export function crateOpening(app, tier, items, rerender) {
 function rewardChips(r) {
   return h('span', { class: 'row', style: 'gap:6px' }, r.records ? currencyChip('records', fmt(r.records)) : null, r.diamonds ? currencyChip('diamonds', r.diamonds) : null, r.crate ? h('span', { class: 'chip' }, icon('gift', 18), CRATES[r.crate].name.split(' ')[0]) : null);
 }
+// ---- daily login: claim the Daily Gig and any streak bonus it unlocks (7, 14 and 30 days in a row)
+export function claimDailyGig(app, rerender, done) {
+  const p = app.profile, now = app.now(), ls = M.loginStatus(p, now);
+  const r = M.claimLogin(p, now, app.rng());
+  if (!r.ok) return r;
+  app.audio.play('chest');
+  if (r.bonuses.length) announceStreakBonuses(app, r.bonuses, rerender);
+  if (r.loot.length) crateOpening(app, ls.reward.crate, r.loot, rerender);
+  else if (!r.bonuses.length) toast(t('goals.daily_claimed', 'Daily reward claimed!'));
+  if (done) done(r);
+  return r;
+}
+function announceStreakBonuses(app, list, rerender) {
+  for (const b of list) {
+    toast(t('streak.bonus_toast', '{days} days in a row! Streak bonus: +{n} diamonds', { days: b.days, n: b.reward.diamonds || 0 }), 4200);
+    if (b.loot && b.loot.length && b.reward.crate) crateOpening(app, b.reward.crate, b.loot, rerender);
+  }
+}
+// the next streak bonus as a small chip row (or a claim button when the streak already earned it)
+export function streakChip(app, rerender) {
+  const p = app.profile, nb = M.nextStreakBonus(p, app.now());
+  if (!nb) return h('div', { class: 'sub streak-chip', 'data-streak-chip': 'done', style: 'font-size:13px;margin-top:6px' }, t('streak.all_done', 'All streak bonuses collected. Legend!'));
+  if (nb.ready) {
+    return h('div', { class: 'row streak-chip', 'data-streak-chip': 'ready', style: 'margin-top:6px' }, h('div', { class: 'grow sub' }, t('streak.ready', '{days}-day streak bonus is ready!', { days: nb.days })),
+      rewardChips(nb.reward), btn(t('goals.claim', 'Claim'), () => { const got = M.claimStreakBonuses(p, app.rng()); app.audio.play('chest'); announceStreakBonuses(app, got, rerender); app.save(); rerender(); }, 'gold small'));
+  }
+  return h('div', { class: 'row streak-chip', 'data-streak-chip': 'next', style: 'margin-top:6px;flex-wrap:wrap;gap:6px' },
+    h('div', { class: 'grow sub', style: 'font-size:14px' }, tn('streak.next', nb.left, 'Next streak bonus: day {days}, {n} day to go', 'Next streak bonus: day {days}, {n} days to go', { days: nb.days })), rewardChips(nb.reward));
+}
+
+// ---- the monthly Season card (SEASONS in data_meta.js): theme, countdown to the end of the month, three goals, the keepsake cosmetic
+const seasonGoalText = (g) => g.id === 'kills' ? t('season.goal_kills', 'Defeat {n} Static', { n: fmt(g.goal) }) : g.id === 'merges' ? t('season.goal_merges', 'Merge {n} times', { n: fmt(g.goal) }) : t('season.goal_wins', 'Win {n} runs', { n: fmt(g.goal) });
+function seasonCard(app, rerender) {
+  const p = app.profile, now = app.now();
+  M.ensureSeason(p, now);
+  const st = M.seasonState(p, now), S = st.season, k = st.keepsake;
+  const kName = M.keepsakeName(k);
+  const card = h('div', { class: 'card season-card', 'data-season': S.id, style: 'border-color:' + S.accent + ';box-shadow:3px 4px 0 ' + S.accent },
+    h('div', { class: 'row', style: 'gap:10px' }, icon(S.theme, 44, S.accent), h('div', { class: 'grow' },
+      h('div', { style: 'font-size:12px;letter-spacing:.06em;color:#6b6477' }, t('season.label', 'This month\'s season')),
+      h('h3', { style: 'margin:0;text-align:left' }, S.name), h('div', { class: 'sub', style: 'font-size:14px' }, S.desc))),
+    h('div', { class: 'sub cd season-cd', 'data-cd': 'season', style: 'margin:4px 0 6px' }, t('season.ends', 'Ends in {time}', { time: durationText(st.msLeft) })));
+  for (const g of st.goals) {
+    card.append(h('div', { class: 'row season-goal', 'data-season-goal': g.id, style: 'margin:6px 0;gap:8px' },
+      h('div', { class: 'grow' }, h('div', { style: 'font-weight:900;font-size:16px' }, seasonGoalText(g)), h('div', { class: 'pbar', style: 'height:12px' }, h('i', { style: 'width:' + g.value / g.goal * 100 + '%;background:' + S.accent })), h('div', { class: 'sub', style: 'font-size:12px' }, fmt(g.value) + ' / ' + fmt(g.goal))),
+      rewardChips(g.reward),
+      g.claimed ? h('span', { class: 'pill' }, t('goals.done_caps', 'DONE')) : btn(t('goals.claim', 'Claim'), () => {
+        const r = M.claimSeasonGoal(p, g.id, app.now(), app.rng());
+        if (!r.ok) return;
+        app.audio.play('diamond'); app.save();
+        if (r.keepsake) { app.audio.play('achievement'); toast(r.keepsake.bonus ? t('season.keepsake_dupe', 'Season complete! You own {name} already: +{n} diamonds.', { name: kName, n: SEASON_KEEPSAKE_BONUS.diamonds }) : t('season.keepsake_got', 'Season complete! You got {name}.', { name: kName }), 4600); }
+        rerender();
+      }, g.done ? 'gold small' : 'dark small off', { 'data-season-claim': g.id })));
+  }
+  const owned = M.keepsakeOwned(p, k);
+  card.append(h('div', { class: 'row season-keepsake', 'data-season-keepsake': st.keepsakeGot ? 'got' : 'open', style: 'margin-top:6px;gap:8px;align-items:center' }, icon(k.kind === 'skin' ? 'sparkle' : 'hat', 28, S.accent),
+    h('div', { class: 'grow sub', style: 'font-size:14px' }, st.keepsakeGot ? t('season.keepsake_done', 'Keepsake collected: {name}', { name: kName }) : owned ? t('season.keepsake_owned', 'Finish all three goals for the keepsake: {name} (you own it, so +{n} diamonds)', { name: kName, n: SEASON_KEEPSAKE_BONUS.diamonds }) : t('season.keepsake_goal', 'Finish all three goals to keep {name}', { name: kName }))));
+  return card;
+}
+
 function goalsTab(app, st, rerender) {
   const p = app.profile, now = app.now();
   M.ensureDaily(p, now);
   const wrap = h('div');
   const off = M.offlineRecords(p, now);
-  if (off >= 10) wrap.append(h('div', { class: 'card', style: 'border-color:var(--record)' }, h('div', { class: 'row' }, icon('note', 40), h('div', { class: 'grow' }, h('b', null, 'Streaming Royalties'), h('div', { class: 'sub' }, 'Your songs kept playing while you were away: ' + off + ' Records (' + M.offlineRate(p) + '/hour, max ' + M.offlineCapHours(p) + ' hours).')),
-    btn('Claim', () => { M.claimOffline(p, now); app.audio.play('record'); rerender(); }, 'green small'))));
+  if (off >= 10) wrap.append(h('div', { class: 'card', style: 'border-color:var(--record)' }, h('div', { class: 'row' }, icon('note', 40), h('div', { class: 'grow' }, h('b', null, t('goals.royalties', 'Streaming Royalties')), h('div', { class: 'sub' }, t('goals.royalties_desc', 'Your songs kept playing while you were away: {n} Records ({rate}/hour, max {hours} hours).', { n: off, rate: M.offlineRate(p), hours: M.offlineCapHours(p) }))),
+    btn(t('goals.claim', 'Claim'), () => { M.claimOffline(p, now); app.audio.play('record'); rerender(); }, 'green small'))));
+  wrap.append(seasonCard(app, rerender));
   // lucky wheel
-  wrap.append(h('h2', null, 'Lucky Wheel'));
+  wrap.append(h('h2', null, t('goals.wheel', 'Lucky Wheel')));
   wrap.append(wheelCard(app, rerender));
   // login
   const ls = M.loginStatus(p, now);
-  wrap.append(h('h2', null, 'Daily Gig'));
+  wrap.append(h('h2', null, t('goals.daily_gig', 'Daily Gig')));
   const cal = h('div', { class: 'cal' });
   LOGIN_REWARDS.forEach((r, i) => {
     const cur = i === ls.idx && ls.claimable, done = (i < ls.idx) || (i === ls.idx && !ls.claimable);
-    cal.append(h('div', { class: 'day' + (cur ? ' cur2' : '') + (done ? ' done' : '') }, 'Day ' + r.day, icon(r.crate ? 'gift' : r.diamonds ? 'diamond' : 'record', 30), h('span', { style: 'font-size:11px' }, r.diamonds ? r.diamonds : r.records)));
+    cal.append(h('div', { class: 'day' + (cur ? ' cur2' : '') + (done ? ' done' : '') }, t('goals.day', 'Day {n}', { n: r.day }), icon(r.crate ? 'gift' : r.diamonds ? 'diamond' : 'record', 30), h('span', { style: 'font-size:11px' }, r.diamonds ? r.diamonds : r.records)));
   });
-  wrap.append(h('div', { class: 'card' }, cal, h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, 'Streak: ' + Math.max(p.login.streak, 0) + ' day' + (p.login.streak === 1 ? '' : 's')),
-    btn(ls.claimable ? 'Claim Day ' + ls.reward.day : 'Come back tomorrow', () => { const r = M.claimLogin(p, now, app.rng()); if (r.ok) { app.audio.play('chest'); if (r.loot.length) crateOpening(app, ls.reward.crate, r.loot, rerender); else toast('Daily reward claimed!'); } rerender(); }, ls.claimable ? 'gold' : 'dark off'))));
+  wrap.append(h('div', { class: 'card' }, cal, h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow sub' }, tn('goals.streak', Math.max(p.login.streak, 0), 'Streak: {n} day', 'Streak: {n} days')),
+    btn(ls.claimable ? t('goals.claim_day', 'Claim Day {n}', { n: ls.reward.day }) : t('goals.come_back', 'Come back tomorrow'), () => { claimDailyGig(app, rerender); rerender(); }, ls.claimable ? 'gold' : 'dark off')),
+    streakChip(app, rerender)));
   // quests
-  wrap.append(h('h2', null, 'Daily Quests'));
+  wrap.append(h('h2', null, t('goals.quests', 'Daily Quests')));
   p.daily.quests.forEach((slot) => {
     const q = M.questDef(slot.id), prog = M.questProgress(p, q), done = prog >= q.goal;
     wrap.append(h('div', { class: 'card quest' }, h('div', { class: 'row' }, h('div', { class: 'grow' }, h('div', { style: 'font-weight:900' }, q.text), h('div', { class: 'pbar' }, h('i', { style: 'width:' + prog / q.goal * 100 + '%' })), h('div', { class: 'sub', style: 'font-size:12px' }, fmt(prog) + ' / ' + fmt(q.goal))), rewardChips(q.reward),
-      slot.claimed ? h('span', { class: 'pill' }, 'DONE') : btn(done ? 'Claim' : 'Swap', () => { if (done) { M.claimQuest(p, q.id); app.audio.play('diamond'); } else { const r = M.rerollQuest(p, q.id, app.rng()); if (!r.ok) toast('One swap per day.'); } rerender(); }, done ? 'gold small' : (p.daily.rerolled ? 'dark small off' : 'dark small')))));
+      slot.claimed ? h('span', { class: 'pill' }, t('goals.done_caps', 'DONE')) : btn(done ? t('goals.claim', 'Claim') : t('goals.swap', 'Swap'), () => { if (done) { M.claimQuest(p, q.id); app.audio.play('diamond'); } else { const r = M.rerollQuest(p, q.id, app.rng()); if (!r.ok) toast(t('goals.one_swap', 'One swap per day.')); } rerender(); }, done ? 'gold small' : (p.daily.rerolled ? 'dark small off' : 'dark small')))));
   });
   // star milestones
-  wrap.append(h('h2', null, 'Star Chests'), h('div', { class: 'sub', style: 'margin:-4px 2px 6px' }, 'You have ' + M.totalStars(p) + ' stars.'));
+  wrap.append(h('h2', null, t('goals.star_chests', 'Star Chests')), h('div', { class: 'sub', style: 'margin:-4px 2px 6px' }, t('goals.you_have_stars', 'You have {n} stars.', { n: M.totalStars(p) })));
   const ms = h('div', { class: 'star-ms' });
   for (const m of STAR_MILESTONES) {
     const got = p.starClaimed[m.stars], ready = !got && M.totalStars(p) >= m.stars;
-    ms.append(h('div', { class: 'ms' + (ready ? ' ready' : '') + (got ? ' got' : ''), onclick: () => { if (ready) { const r = M.claimStarMilestone(p, m.stars, app.rng()); app.audio.play('chest'); if (r.loot && r.loot.length) crateOpening(app, m.reward.crate, r.loot, rerender); rerender(); } else if (!got) toast('Collect ' + m.stars + ' stars (' + M.totalStars(p) + ' so far).'); } },
+    ms.append(h('div', { class: 'ms' + (ready ? ' ready' : '') + (got ? ' got' : ''), onclick: () => { if (ready) { const r = M.claimStarMilestone(p, m.stars, app.rng()); app.audio.play('chest'); if (r.loot && r.loot.length) crateOpening(app, m.reward.crate, r.loot, rerender); rerender(); } else if (!got) toast(t('goals.collect_stars', 'Collect {n} stars ({have} so far).', { n: m.stars, have: M.totalStars(p) })); } },
       icon('star', 34, got ? '#8a7cc0' : '#ffc83d'), h('div', null, m.stars), rewardChips(m.reward)));
   }
   wrap.append(ms);
   // achievements
-  wrap.append(h('h2', null, 'Stickers'));
+  wrap.append(h('h2', null, t('goals.stickers', 'Stickers')));
   const list = ACHIEVEMENTS.slice().sort((a, b) => { const sa = M.achievementState(p, a), sb = M.achievementState(p, b); return (sb.done && !sb.claimed) - (sa.done && !sa.claimed) || (sa.claimed - sb.claimed); });
   for (const a of list) {
     const s = M.achievementState(p, a);
     wrap.append(h('div', { class: 'card ach' + (s.done ? ' done' : ''), style: 'margin-bottom:8px' }, icon(s.claimed ? 'check' : 'star', 36, s.done ? '#ffc83d' : '#8a7cc0'),
       h('div', { class: 'grow' }, h('div', { class: 'nm', style: 'font-weight:900' }, a.name), h('div', { class: 'sub', style: 'font-size:13px' }, a.text), h('div', { class: 'pbar', style: 'height:10px;margin-top:3px' }, h('i', { style: 'width:' + s.value / a.goal * 100 + '%' })), h('div', { class: 'sub', style: 'font-size:11px' }, fmt(s.value) + ' / ' + fmt(a.goal))),
-      s.claimed ? h('span', { class: 'pill' }, 'GOT') : btn([icon('diamond', 20), a.diamonds], () => { if (M.claimAchievement(p, a.id).ok) app.audio.play('achievement'); rerender(); }, s.done ? 'gold small' : 'dark small off')));
+      s.claimed ? h('span', { class: 'pill' }, t('goals.got_caps', 'GOT')) : btn([icon('diamond', 20), a.diamonds], () => { if (M.claimAchievement(p, a.id).ok) app.audio.play('achievement'); rerender(); }, s.done ? 'gold small' : 'dark small off')));
   }
   return wrap;
+}
+
+// ================================================================================================ welcome back and what's new
+// The friendly summary after 12 or more hours away (M.welcomeSummary). `done` runs when the sheet closes.
+export function welcomeSheet(app, sum, done) {
+  const p = app.profile, now = app.now();
+  const row = (glyph, txt, key) => h('div', { class: 'row wb-row', 'data-wb': key, style: 'align-items:center;gap:10px;margin:6px 0' }, icon(glyph, 30), h('div', { class: 'grow', style: 'font-size:17px;line-height:1.15' }, txt));
+  const away = sum.hours >= 48 ? tn('welcome.away_days', sum.days, 'You were away for {n} day.', 'You were away for {n} days.') : tn('welcome.away_hours', Math.floor(sum.hours), 'You were away for {n} hour.', 'You were away for {n} hours.');
+  const rows = [];
+  if (sum.royalties > 0) rows.push(row('record', t('welcome.sheet_royalties', 'Streaming Royalties: {n} Records are waiting for you.', { n: fmt(sum.royalties) }), 'royalties'));
+  if (sum.login.claimable) {
+    rows.push(row('gift', t('welcome.sheet_daily', 'Daily Gig: the day {day} reward is ready.', { day: sum.login.day }), 'login'));
+    rows.push(row('fire', sum.login.state === 'alive' ? t('welcome.streak_alive', 'Your streak is alive. Claim today to make it {n} days.', { n: sum.login.streak })
+      : sum.login.state === 'broken' ? t('welcome.streak_broken', 'Your streak ended, but a new one starts today.') : t('welcome.streak_new', 'Log in every day to build a streak and earn bonuses.'), 'streak'));
+  } else rows.push(row('check', tn('welcome.streak_done', Math.max(p.login.streak, 0), 'Daily Gig claimed. Streak: {n} day.', 'Daily Gig claimed. Streak: {n} days.'), 'streak'));
+  if (sum.streakBonus) rows.push(row('diamond', sum.streakBonus.ready ? t('welcome.bonus_ready', 'A {days}-day streak bonus is ready on the Goals tab.', { days: sum.streakBonus.days })
+    : tn('welcome.bonus_next', sum.streakBonus.left, 'Next streak bonus at day {days}: {n} day to go.', 'Next streak bonus at day {days}: {n} days to go.', { days: sum.streakBonus.days }), 'bonus'));
+  rows.push(row('target', sum.daily.done ? t('welcome.daily_done', 'You already played today\'s Daily Challenge.') : t('welcome.daily_fresh', 'A fresh Daily Challenge is waiting.'), 'daily'));
+  rows.push(row('ticket', sum.weekly.done ? t('welcome.weekly_done', 'Weekly Gig done (best {best}/{total}). {time}', { best: sum.weekly.best, total: sum.weekly.waves, time: resetText(sum.weekly.msLeft) })
+    : sum.weekly.fresh ? t('welcome.weekly_new', 'A new Weekly Gig has started. {time}', { time: resetText(sum.weekly.msLeft) }) : t('welcome.weekly_open', 'Weekly Gig is open. {time}', { time: resetText(sum.weekly.msLeft) }), 'weekly'));
+  if (sum.ready > 0) rows.push(row('star', tn('welcome.ready', sum.ready, '{n} reward is waiting on the Goals tab.', '{n} rewards are waiting on the Goals tab.'), 'ready'));
+  if (sum.season) rows.push(row('star', tn('season.welcome_ready', sum.season.ready, '{name}: {n} season reward is ready to claim.', '{name}: {n} season rewards are ready to claim.', { name: sum.season.name }), 'season'));
+  const goal = sum.goal.id === 'stage' ? t('welcome.goal_stage', 'Next goal: clear {stage}.', { stage: sum.goal.stage }) : sum.goal.id === 'daily' ? t('welcome.goal_daily', 'Next goal: win today\'s Daily Challenge.')
+    : sum.goal.id === 'weekly' ? t('welcome.goal_weekly', 'Next goal: play this week\'s Weekly Gig.') : t('welcome.goal_endless', 'Next goal: beat your best Endless wave.');
+  const collect = sum.royalties > 0 || sum.login.claimable;
+  const m = modal(h('div', { class: 'welcome-sheet' }, h('h2', null, t('welcome.back', 'Welcome back!')), h('div', { class: 'sub', style: 'text-align:center' }, away), rows,
+    h('div', { class: 'card', style: 'border-color:var(--green);margin:8px 0 0;padding:8px 10px', 'data-wb': 'goal' }, h('b', null, goal)),
+    h('div', { class: 'btnrow' }, btn(collect ? t('welcome.collect_go', 'Collect and play') : t('welcome.lets_go', 'Let\'s go'), () => {
+      if (sum.royalties > 0) { M.claimOffline(p, now); app.audio.play('record'); }
+      if (sum.login.claimable) claimDailyGig(app, () => app.hub && app.hub.render());
+      m.close();
+    }, 'green'))), { onClose: () => { app.save(); if (app.hub && app.hub.render) app.hub.render(); if (done) done(); } });
+  return m;
+}
+// the plain Daily Gig sheet (a short absence): shows the streak bonus that is coming
+export function dailyGigModal(app, ls, done) {
+  const p = app.profile, nb = M.nextStreakBonus(p, app.now());
+  const m = modal(h('div', null, h('h2', null, t('welcome.daily_gig', 'Daily Gig!')), h('div', { class: 'sub', style: 'text-align:center' }, t('welcome.daily_info', 'Day {day} of your tour. Streak: {streak}', { day: ls.reward.day, streak: ls.streak })),
+    nb ? h('div', { class: 'row streak-next', 'data-streak-next': '', style: 'justify-content:center;flex-wrap:wrap;gap:6px;margin-top:6px' }, h('span', { class: 'sub' }, nb.today ? t('streak.today', 'Today you earn the {days}-day streak bonus!', { days: nb.days })
+      : tn('streak.next', nb.left, 'Next streak bonus: day {days}, {n} day to go', 'Next streak bonus: day {days}, {n} days to go', { days: nb.days })), rewardChips(nb.reward)) : null,
+    h('div', { class: 'btnrow' }, btn(t('welcome.claim', 'Claim reward'), () => { claimDailyGig(app, null); m.close(); }, 'gold'))), { onClose: () => { app.save(); if (app.hub && app.hub.render) app.hub.render(); if (done) done(); } });
+  return m;
+}
+// the royalties-only sheet (the old welcome back, a short absence)
+export function royaltiesModal(app, off, done) {
+  const p = app.profile, now = app.now();
+  const m = modal(h('div', null, h('h2', null, t('welcome.back', 'Welcome back!')), h('div', { class: 'sub', style: 'text-align:center' }, t('welcome.streaming', 'Your songs kept streaming while you were away: {n} Records.', { n: off })),
+    h('div', { class: 'btnrow' }, btn(t('welcome.collect', 'Collect'), () => { M.claimOffline(p, now); m.close(); app.audio.play('record'); }, 'green'))), { onClose: () => { app.save(); if (app.hub && app.hub.render) app.hub.render(); if (done) done(); } });
+  return m;
+}
+// What's new: the newest changelog entry in full, older ones as short lines. Opened once per game version and from Settings.
+export function whatsNewModal(app, done) {
+  const p = app.profile;
+  M.markWhatsNewSeen(p); app.save();
+  const latest = CHANGELOG[0];
+  const m = modal(h('div', { class: 'whatsnew' }, h('h2', null, t('whatsnew.title', 'What\'s new')), h('h3', { style: 'margin:2px 0 6px;text-align:center' }, latest.title),
+    h('ul', { class: 'wn-list', style: 'margin:0 0 6px;padding-left:20px;font-size:17px;line-height:1.2' }, latest.items.map((it) => h('li', { style: 'margin:4px 0' }, it))),
+    CHANGELOG.slice(1).map((e) => h('div', { class: 'sub wn-old', style: 'font-size:13px;margin-top:4px' }, h('b', null, e.title + ': '), e.items.join(' '))),
+    h('div', { class: 'btnrow' }, btn(t('whatsnew.ok', 'Nice!'), () => m.close(), 'green'))), { wide: false, onClose: () => { if (done) done(); } });
+  return m;
 }
 
 // ================================================================================================ extras: fame info, codex, settings
@@ -425,14 +647,14 @@ function fameInfo(app) {
   const p = app.profile;
   const body = h('div');
   const m = modal(body);
-  body.append(h('h2', null, 'Fame ' + p.fame), h('div', { class: 'sub', style: 'text-align:center' }, 'Earn fans by clearing waves and stages. Each Fame level pays out diamonds and Records, and unlocks turrets in the Studio.'));
+  body.append(h('h2', null, t('hub.fame_title', 'Fame {n}', { n: p.fame })), h('div', { class: 'sub', style: 'text-align:center' }, t('fame.hint', 'Earn fans by clearing waves and stages. Each Fame level pays out diamonds and Records, and unlocks turrets in the Studio.')));
   const upcoming = [];
   for (let l = p.fame + 1; l <= Math.min(p.fame + 5, 50); l++) upcoming.push(l);
   for (const l of upcoming) {
     const r = fameReward(l);
-    body.append(h('div', { class: 'card', style: 'margin:8px 0 0;padding:8px' }, h('div', { class: 'row' }, h('div', { style: 'font-weight:900;width:70px' }, 'Level ' + l), rewardChips(r), r.unlocks ? h('span', { class: 'chip' }, 'Unlocks ' + r.unlocks.map((i) => TURRETS[i].name).join(', ')) : null)));
+    body.append(h('div', { class: 'card', style: 'margin:8px 0 0;padding:8px' }, h('div', { class: 'row' }, h('div', { style: 'font-weight:900;width:70px' }, t('fame.level', 'Level {n}', { n: l })), rewardChips(r), r.unlocks ? h('span', { class: 'chip' }, t('fame.unlocks', 'Unlocks {list}', { list: r.unlocks.map((i) => TURRETS[i].name).join(', ') })) : null)));
   }
-  body.append(h('div', { class: 'btnrow' }, btn('Close', () => m.close(), 'dark')));
+  body.append(h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'dark')));
 }
 
 export function codexModal(app) {
@@ -441,19 +663,78 @@ export function codexModal(app) {
   const m = modal(body, { wide: true });
   let sec = 'turrets';
   const draw = () => {
-    body.replaceChildren(h('h2', null, 'Codex'));
+    body.replaceChildren(h('h2', null, t('codex.title', 'Codex')));
     const seg = h('div', { class: 'seg' });
-    for (const [id, nm] of [['turrets', 'Turrets'], ['enemies', 'Static'], ['bosses', 'Bosses'], ['remix', 'Remix'], ['relics', 'Merch']]) seg.append(h('button', { class: sec === id ? 'on' : '', onclick: () => { sec = id; draw(); } }, nm));
+    for (const [id, nm] of [['turrets', t('codex.turrets', 'Turrets')], ['enemies', t('codex.static', 'Static')], ['bosses', t('codex.bosses', 'Bosses')], ['branches', t('codex.branches', 'Paths')], ['synergies', t('codex.synergies', 'Pairs')], ['remix', t('codex.remix', 'Remix')], ['relics', t('codex.merch', 'Merch')], ['looks', t('codex.looks', 'Looks')]]) seg.append(h('button', { class: sec === id ? 'on' : '', onclick: () => { sec = id; draw(); body.parentElement.scrollTop = 0; } }, nm));
     body.append(seg);
+    seg.classList.add('codex-seg');
     const g = h('div', { class: 'codexgrid' });
-    if (sec === 'turrets') for (const id of TURRET_IDS) { const t = TURRETS[id]; const own = p.turretsUnlocked[id]; g.append(h('div', { class: 'cdx' + (own ? '' : ' unk') }, turretLive(id, 4, 72), h('div', { class: 'nm' }, own ? t.name : '???'), h('div', { class: 'ds' }, own ? t.blurb : 'Fame ' + t.unlock.fame))); }
-    if (sec === 'enemies') for (const id of ENEMY_IDS) { const e = ENEMIES[id]; if (e.hidden) continue; const seen = p.seen.enemies[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 70), h('div', { class: 'nm' }, seen ? e.name : '???'), h('div', { class: 'ds' }, seen ? e.blurb : 'Not met yet'))); }
-    if (sec === 'bosses') for (const id of BOSS_IDS) { const b = BOSSES[id]; const seen = p.seen.bosses[id] || p.bossesSeen[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 80, true), h('div', { class: 'nm' }, seen ? b.name : '???'), h('div', { class: 'ds' }, seen ? b.trick : 'Not met yet'))); }
+    if (sec === 'branches') {
+      g.classList.add('cdx-list');
+      body.append(h('div', { class: 'sub', style: 'text-align:center;margin-bottom:6px' }, t('codex.branches_hint', 'A level 4 turret can pick one of two upgrade paths. The choice is permanent for that turret.')));
+      for (const id of TURRET_IDS) {
+        const list = TURRET_BRANCHES[id]; if (!list) continue;
+        const own = p.turretsUnlocked[id];
+        g.append(h('div', { class: 'cdx-row' + (own ? '' : ' unk'), 'data-branches': id }, h('div', { class: 'cdx-who' }, turretIcon(id, 56), h('div', { class: 'nm' }, TURRETS[id].name)),
+          h('div', { class: 'cdx-pair' }, list.map((b) => h('div', { class: 'cdx cdx-b', 'data-branch': b.id }, icon(b.glyph, 34, TURRETS[id].color), h('div', { class: 'nm' }, b.name), h('div', { class: 'ds' }, b.desc))))));
+      }
+    }
+    if (sec === 'synergies') {
+      g.classList.add('cdx-list');
+      body.append(h('div', { class: 'sub', style: 'text-align:center;margin-bottom:6px' }, t('codex.synergies_hint', 'Put these pairs side by side (not diagonal) and they boost each other.')));
+      for (const sy of SYNERGIES) {
+        const have = p.turretsUnlocked[sy.a] && p.turretsUnlocked[sy.b];
+        g.append(h('div', { class: 'cdx cdx-syn' + (have ? '' : ' unk'), 'data-syn': sy.id }, h('div', { class: 'syn-ic' }, turretIcon(sy.a, 46), icon('plus', 20), turretIcon(sy.b, 46)),
+          h('div', { class: 'nm' }, sy.name), h('div', { class: 'ds' }, sy.desc), h('div', { class: 'ds syn-who' }, TURRETS[sy.a].name + ' + ' + TURRETS[sy.b].name)));
+      }
+    }
+    if (sec === 'looks') {
+      g.classList.add('cdx-list');
+      for (const who of ['roxor', 'jasmin']) {
+        body.append(h('h3', { style: 'margin:8px 0 4px;color:' + (who === 'roxor' ? 'var(--green)' : 'var(--pink)') }, who === 'roxor' ? 'RoxorLoops' : 'Jasmin'));
+        const row = h('div', { class: 'codexgrid' });
+        for (const o of M.outfitList(p, who)) row.append(h('div', { class: 'cdx' + (o.owned ? '' : ' unk'), 'data-outfit': who + ':' + o.id }, canvasOf(70, 92, (ctx) => AW.drawHero(ctx, who, 35, 88, 84, { t: 0.4, outfit: o.id, pose: 'idle' })), h('div', { class: 'nm' }, o.name), h('div', { class: 'ds' }, o.desc)));
+        body.append(row);
+      }
+      const row = h('div', { class: 'codexgrid' });
+      body.append(h('h3', { style: 'margin:8px 0 4px' }, t('ward.skins', 'Stage skins')));
+      for (const sk of M.skinList(p, AW.BOARD_SKINS || null)) row.append(h('div', { class: 'cdx' + (sk.owned ? '' : ' unk'), 'data-skin': sk.id }, skinThumb(sk.id, 70, 98), h('div', { class: 'nm' }, sk.name), h('div', { class: 'ds' }, sk.desc)));
+      body.append(row);
+    }
+    if (sec === 'turrets') for (const id of TURRET_IDS) { const tu = TURRETS[id]; const own = p.turretsUnlocked[id]; g.append(h('div', { class: 'cdx' + (own ? '' : ' unk') }, turretLive(id, 4, 72), h('div', { class: 'nm' }, own ? tu.name : '???'), h('div', { class: 'ds' }, own ? tu.blurb : t('studio.need_fame', 'Fame {n}', { n: tu.unlock.fame })))); }
+    if (sec === 'enemies') for (const id of ENEMY_IDS) { const e = ENEMIES[id]; if (e.hidden) continue; const seen = p.seen.enemies[id]; g.append(h('div', { class: 'cdx' + (seen ? '' : ' unk') }, enemyIcon(id, 70), h('div', { class: 'nm' }, seen ? e.name : '???'), h('div', { class: 'ds' }, seen ? e.blurb : t('codex.not_met', 'Not met yet')))); }
+    if (sec === 'bosses') body.append(h('div', { class: 'sub', style: 'text-align:center;margin-bottom:6px' }, t('codex.practice_hint', 'Practice fights one boss with no rewards and no changes to your save.')));
+    if (sec === 'bosses') {
+      g.classList.add('cdx-list');
+      for (const id of BOSS_IDS) {
+        const b = BOSSES[id], seen = p.seen.bosses[id] || p.bossesSeen[id];
+        g.append(h('div', { class: 'cdx cdx-boss' + (seen ? '' : ' unk'), 'data-boss': id },
+          h('div', { class: 'bossHead' }, enemyIcon(id, 80, true), h('div', { class: 'bossTxt' }, h('div', { class: 'nm' }, seen ? b.name : '???'), h('div', { class: 'ds' }, seen ? b.trick : t('codex.not_met', 'Not met yet')))),
+          seen ? bossPhasesDiagram(id, btn(t('codex.practice', 'Practice'), () => { m.close(); app.startRun({ mode: 'practice', boss: id }); }, 'green small', { 'data-practice': id })) : null));
+      }
+    }
     if (sec === 'remix') for (const c of Object.values(REMIX)) g.append(h('div', { class: 'cdx' }, icon(c.glyph, 44, RARITY[c.rarity].color), h('div', { class: 'nm ' + rarClass(c.rarity) }, c.name), h('div', { class: 'ds' }, c.desc)));
     if (sec === 'relics') for (const c of Object.values(RELICS)) g.append(h('div', { class: 'cdx' }, icon(c.glyph, 44, RARITY[c.rarity].color), h('div', { class: 'nm ' + rarClass(c.rarity) }, c.name), h('div', { class: 'ds' }, c.desc)));
-    body.append(g, h('div', { class: 'btnrow' }, btn('Close', () => m.close(), 'dark')));
+    if (g.children.length) body.append(g);
+    body.append(h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'dark')));
   };
   draw();
+}
+
+// The phases of one boss: a health bar (full on the right) with a notch at every distinct threshold and its percent under the notch, then one line
+// per effect that fires there (name and a one line description, both translated data).
+function bossPhasesDiagram(id, action) {
+  const groups = M.bossPhaseGroups(id);
+  if (!groups.length) return action;
+  const bar = h('div', { class: 'bp-bar' }, h('i', { class: 'bp-fill' }));
+  const marks = h('div', { class: 'bp-marks' });
+  groups.forEach((gr, i) => {
+    bar.append(h('i', { class: 'bp-notch', style: 'left:' + gr.pct + '%', 'data-at': gr.pct }));
+    marks.append(h('span', { class: 'bp-pct' + (gr.pct >= 90 ? ' r' : gr.pct <= 10 ? ' l' : ''), style: 'left:' + gr.pct + '%' }, gr.pct + '%'));
+  });
+  const list = h('div', { class: 'bp-list' }, groups.map((gr) => gr.entries.map((e) => h('div', { class: 'bp-row', 'data-phase': e.id },
+    h('span', { class: 'bp-tag' }, gr.pct + '%'), h('div', { class: 'bp-txt' }, h('b', null, e.name), ' ', e.desc)))));
+  return h('div', { class: 'bossphases', 'data-phases': id }, h('div', { class: 'bp-head' }, h('div', { class: 'bp-title' }, t('codex.phases', 'Phases (boss health)')), action), bar, marks, list);
 }
 
 export function settingsModal(app) {
@@ -461,33 +742,92 @@ export function settingsModal(app) {
   const body = h('div');
   const m = modal(body);
   const draw = () => {
-    body.replaceChildren(h('h2', null, 'Settings'));
-    const slider = (label, key, apply) => h('div', { class: 'rangeRow' }, h('span', { style: 'width:80px' }, label), h('input', { type: 'range', min: 0, max: 100, value: Math.round(s[key] * 100), oninput: (e) => { s[key] = e.target.value / 100; apply(); app.save(); }, onchange: () => app.audio.play('ui_click') }));
-    const tog = (label, key) => h('div', { class: 'toggle' }, label, btn(s[key] ? 'ON' : 'OFF', () => { s[key] = !s[key]; app.applySettings(); app.save(); draw(); }, s[key] ? 'green small' : 'dark small'));
-    body.append(slider('Music', 'music', () => app.applySettings()), slider('Sound', 'sfx', () => app.applySettings()),
-      tog('Screen shake', 'shake'), tog('Damage numbers', 'numbers'), tog('Vibration', 'vibrate'), tog('Beat helper (DROP ring)', 'beat'), tog('Reduce motion', 'reduce'), tog('Low graphics (faster)', 'lowfx'));
-    if (p.autoMerge) body.append(tog2('Auto-merge after each drop', p.autoMergeOn, () => { p.autoMergeOn = !p.autoMergeOn; app.save(); draw(); }));
-    body.append(h('div', { class: 'hr' }), h('h3', null, 'Leaderboard name'), h('input', { type: 'text', maxlength: 16, value: p.name || '', placeholder: 'Your name (optional)', style: 'width:100%;font:800 18px sans-serif;padding:10px;border-radius:10px;border:3px solid var(--line);background:#12082b;color:#fff', oninput: (e) => { p.name = e.target.value.replace(/[^\w \-.']/g, '').slice(0, 16); app.save(); } }));
-    body.append(h('div', { class: 'hr' }), h('h3', null, 'Save data'), h('div', { class: 'sub' }, 'Your progress is saved on this device. Copy the code to move it to another device.'));
+    body.replaceChildren(h('h2', null, t('settings.title', 'Settings')));
+    const slider = (label, key, apply) => h('div', { class: 'rangeRow' }, h('span', { style: 'width:80px' }, label), h('input', { type: 'range', 'aria-label': label, min: 0, max: 100, value: Math.round(s[key] * 100), oninput: (e) => { s[key] = e.target.value / 100; apply(); app.save(); }, onchange: () => app.audio.play('ui_click') }));
+    // Install the app: hidden once installed; Safari on iOS has no prompt, so it gets a how-to hint instead
+    const installRow = () => {
+      if (isInstalled()) return null;
+      const row = h('div', { class: 'install-row' });
+      const fill = () => {
+        row.replaceChildren();
+        if (isInstalled()) return;
+        if (canInstall()) row.append(h('div', { class: 'toggle' }, t('settings.install_app', 'Install the app'), btn(t('settings.install', 'Install'), async () => { const r = await promptInstall(); if (r === 'accepted') toast(t('settings.installed', 'Installed! Look for it on your home screen.')); fill(); }, 'gold small')));
+        else row.append(h('div', { class: 'sub install-hint', style: 'font-size:15px' }, t('settings.install_hint', 'Install: in Safari tap Share, then Add to Home Screen. Chrome and Edge offer an Install button when the game is ready.')));
+      };
+      fill();
+      const off = onInstallChange(() => { if (!row.isConnected) { off(); return; } fill(); });
+      return row;
+    };
+    const help = (txt) => h('div', { class: 'sub set-help' }, txt);
+    const tog = (label, key) => h('div', { class: 'toggle' }, label, btn(s[key] ? t('common.on', 'ON') : t('common.off', 'OFF'), () => { s[key] = !s[key]; app.applySettings(); app.save(); draw(); }, s[key] ? 'green small' : 'dark small'));
+    body.append(slider(t('settings.music', 'Music'), 'music', () => app.applySettings()), slider(t('settings.sound', 'Sound'), 'sfx', () => app.applySettings()),
+      tog(t('settings.shake', 'Screen shake'), 'shake'), tog(t('settings.numbers', 'Damage numbers'), 'numbers'), tog(t('settings.vibration', 'Vibration'), 'vibrate'), tog(t('settings.beat', 'Beat helper (DROP ring)'), 'beat'), tog(t('settings.reduce', 'Reduce motion'), 'reduce'), tog(t('settings.lowfx', 'Low graphics (faster)'), 'lowfx'),
+      tog(t('settings.autolow', 'Auto low graphics when slow'), 'autolow'), help(t('settings.autolow_hint', 'If a battle runs slowly for a few seconds, Low graphics turns on by itself.')));
+    body.append(h('div', { class: 'hr' }), h('h3', null, t('settings.access', 'Accessibility')),
+      tog(t('settings.bigtext', 'Larger text'), 'bigtext'), help(t('settings.bigtext_hint', 'Makes menu and battle text bigger.')),
+      tog(t('settings.colorblind', 'Colour-blind cues'), 'colorblind'), help(t('settings.colorblind_hint', 'Adds shapes and marks next to colours: rarity, risk, on and off.')));
+    body.append(tog2(t('settings.show_setlist', 'Show the Setlist before a run'), !s.skipSetlist, () => { s.skipSetlist = !s.skipSetlist; app.save(); draw(); }));
+    body.append(tog(t('settings.analytics', 'Share anonymous play stats'), 'analytics'), h('div', { class: 'sub set-help' }, t('settings.analytics_hint', 'Helps balance the game. No names or identifiers are sent.')));
+    body.append(h('div', { class: 'hr' }), h('h3', null, t('settings.language', 'Language')), langPicker(app, true, draw));
+    body.append(installRow());
+    if (p.autoMerge) body.append(tog2(t('settings.automerge', 'Auto-merge after each drop'), p.autoMergeOn, () => { p.autoMergeOn = !p.autoMergeOn; app.save(); draw(); }));
+    body.append(h('div', { class: 'hr' }), h('h3', null, t('settings.lb_name', 'Leaderboard name')), h('input', { type: 'text', maxlength: 16, value: p.name || '', placeholder: t('settings.name_ph', 'Your name (optional)'), style: 'width:100%;font:400 20px var(--hand,sans-serif);padding:10px;border-radius:10px;border:3px solid var(--line)', oninput: (e) => { p.name = e.target.value.replace(/[^\w \-.']/g, '').slice(0, 16); app.save(); } }));
+    body.append(h('div', { class: 'hr' }), h('h3', null, t('settings.save_data', 'Save data')), h('div', { class: 'sub' }, t('settings.save_hint', 'Your progress is saved on this device. Copy the code to move it to another device.')));
     const ta = h('textarea', { class: 'code', readonly: true }, M.exportCode(p));
-    body.append(ta, h('div', { class: 'btnrow' }, btn('Copy code', () => { ta.select(); try { navigator.clipboard.writeText(ta.value); toast('Copied!'); } catch (e) { document.execCommand('copy'); toast('Copied!'); } }, 'blue small'),
-      btn('Import code', () => importModal(app), 'dark small')));
-    body.append(h('div', { class: 'btnrow' }, btn('How to play', () => { m.close(); app.showHowTo(); }, 'dark small'), btn('Codex', () => { m.close(); codexModal(app); }, 'dark small')));
-    body.append(h('div', { class: 'btnrow' }, btn('Replay intro', () => { m.close(); app.playCutscene('intro', () => app.openHub()); }, 'dark small'), btn('Reset game', () => resetModal(app), 'red small')));
-    body.append(h('div', { class: 'credit', style: 'text-align:center;margin-top:10px;font-size:12px;color:var(--dim)' }, GAME.title + ' by RoxorLoops & Jasmin. Keyboard: Space drop, M merge all, Q/W heroes, N next wave, F speed, Esc pause.'));
-    body.append(h('div', { class: 'btnrow' }, btn('Close', () => m.close(), 'green')));
+    body.append(ta, h('div', { class: 'btnrow' }, btn(t('settings.copy_code', 'Copy code'), () => { ta.select(); const fb = () => { try { document.execCommand('copy'); toast(t('settings.copied', 'Copied!')); } catch (e) { toast(t('settings.copy_by_hand', 'Select the code and copy it by hand.')); } }; try { navigator.clipboard.writeText(ta.value).then(() => toast(t('settings.copied', 'Copied!')), fb); } catch (e) { fb(); } }, 'blue small'),
+      btn(t('settings.import_code', 'Import code'), () => importModal(app), 'dark small')));
+    body.append(h('div', { class: 'btnrow' }, btn(t('settings.how_to', 'How to play'), () => { m.close(); app.showHowTo(); }, 'dark small'), btn(t('codex.title', 'Codex'), () => { m.close(); codexModal(app); }, 'dark small')));
+    body.append(h('div', { class: 'btnrow' }, btn(t('whatsnew.title', 'What\'s new'), () => { m.close(); whatsNewModal(app); }, 'dark small', { 'data-whatsnew': '' })));
+    body.append(h('div', { class: 'btnrow' }, btn(t('diag.open', 'Report a problem'), () => reportModal(app), 'dark small', { 'data-report': '' })));
+    body.append(h('div', { class: 'btnrow' }, btn(t('settings.replay_intro', 'Replay intro'), () => { m.close(); app.playCutscene('intro', () => app.openHub()); }, 'dark small'), btn(t('settings.reset', 'Reset game'), () => resetModal(app), 'red small')));
+    body.append(h('div', { class: 'credit', style: 'text-align:center;margin-top:10px;font-size:12px;color:var(--dim)' }, t('settings.credit', '{title} by RoxorLoops & Jasmin. Keyboard: Space drop, M merge all, Q/W heroes, N next wave, F speed, Esc pause.', { title: GAME.title })));
+    body.append(h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'green')));
   };
   draw();
 }
-function tog2(label, on, fn) { return h('div', { class: 'toggle' }, label, btn(on ? 'ON' : 'OFF', fn, on ? 'green small' : 'dark small')); }
-function importModal(app) {
-  const ta = h('textarea', { class: 'code', placeholder: 'Paste your save code here' });
-  const m = modal(h('div', null, h('h2', null, 'Import save'), h('div', { class: 'sub' }, 'This replaces the progress on this device.'), ta,
-    h('div', { class: 'btnrow' }, btn('Import', () => { const np = M.importCode(ta.value, app.now()); if (!np) { toast('That code did not work.'); return; } app.replaceProfile(np); m.close(); toast('Save imported!'); }, 'green'), btn('Cancel', () => m.close(), 'dark'))));
+// ---- Report a problem: a compact text the player can copy and send (nothing is sent by the game). js/diag.js builds it.
+export function diagEnv(app) {
+  const p = app.profile;
+  let saveBytes = 0; try { saveBytes = (localStorage.getItem(M.SAVE_KEY) || '').length; } catch (e) { /* no storage */ }
+  const v = app.view || {};
+  return { version: GAME.version, lang: app.langNow(), langPref: getLangPref(), screen: app.screen, width: typeof window !== 'undefined' ? window.innerWidth : 0, height: typeof window !== 'undefined' ? window.innerHeight : 0,
+    dpr: Math.round(((typeof window !== 'undefined' && window.devicePixelRatio) || v.dpr || 1) * 100) / 100, ua: typeof navigator !== 'undefined' ? navigator.userAgent : '', online: isOnline(), saveBytes,
+    fame: p.fame, fameTitle: fameTitle(p.fame), heroLv: p.heroLv, errors: (() => { try { return readDiag(localStorage); } catch (e) { return []; } })() };
+}
+export function reportModal(app) {
+  const body = h('div', { class: 'report-box' });
+  const m = modal(body);
+  const draw = () => {
+    const text = diagReport(diagEnv(app));
+    const ta = h('textarea', { class: 'code report-text', readonly: true, rows: 12, 'aria-label': t('diag.text_label', 'Problem report text'), style: 'font-size:12px;line-height:1.2;height:210px' }, text);
+    const copied = () => toast(t('settings.copied', 'Copied!'));
+    const byHand = () => { try { window.prompt(t('diag.prompt', 'Copy this report and send it to the developers:'), text); } catch (e) { toast(t('settings.copy_by_hand', 'Select the code and copy it by hand.')); } };
+    body.replaceChildren(h('h2', null, t('diag.title', 'Report a problem')), h('div', { class: 'sub', style: 'font-size:14px;text-align:center' }, t('diag.hint', 'Copy this and send it with a short note. The game sends nothing by itself. It holds no name or save contents.')), ta,
+      h('div', { class: 'btnrow' },
+        btn(t('diag.copy', 'Copy'), () => { try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(copied, byHand); else byHand(); } catch (e) { byHand(); } }, 'blue small', { 'data-report-copy': '' }),
+        btn(t('diag.clear', 'Clear errors'), () => { clearDiag(localStorage); draw(); toast(t('diag.cleared', 'Error list cleared.')); }, 'dark small', { 'data-report-clear': '' })),
+      h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'green')));
+  };
+  draw();
+  return m;
+}
+function tog2(label, on, fn) { return h('div', { class: 'toggle' }, label, btn(on ? t('common.on', 'ON') : t('common.off', 'OFF'), fn, on ? 'green small' : 'dark small')); }
+export function importModal(app) {
+  const ta = h('textarea', { class: 'code', placeholder: t('import.placeholder', 'Paste your save code here (it starts with DTB1.)') });
+  const body = h('div');
+  const m = modal(body);
+  const ask = () => body.replaceChildren(h('h2', null, t('import.title', 'Import save')), h('div', { class: 'sub' }, t('import.hint', 'This replaces the progress on this device. Your current save is kept as a backup first.')), ta,
+    h('div', { class: 'btnrow' }, btn(t('import.check', 'Check code'), () => {
+      const np = M.importCode(ta.value, app.now());
+      if (!np) { toast(t('import.bad', 'That code did not work. Copy the whole code, from DTB1 to the end.'), 3600); app.audio.play('error'); return; }
+      body.replaceChildren(h('h2', null, t('import.found', 'Found a save')), h('div', { class: 'sub', style: 'text-align:center' }, t('import.summary', 'Fame {fame} ({title}), {records} Records, {diamonds} diamonds, {stages} stages cleared.', { fame: np.fame, title: fameTitle(np.fame), records: fmt(np.records), diamonds: fmt(np.diamonds), stages: M.clearedCount(np) })),
+        h('div', { class: 'btnrow' }, btn(t('import.replace', 'Replace my save'), () => { app.replaceProfile(np); m.close(); toast(t('import.done', 'Save imported!')); }, 'green'), btn(t('common.back', 'Back'), ask, 'dark')));
+    }, 'green'), btn(t('common.cancel', 'Cancel'), () => m.close(), 'dark')));
+  ask();
 }
 function resetModal(app) {
-  const m = modal(h('div', null, h('h2', null, 'Reset everything?'), h('div', { class: 'sub', style: 'text-align:center' }, 'This deletes all progress on this device. It cannot be undone.'),
-    h('div', { class: 'btnrow' }, btn('Delete it all', () => { app.replaceProfile(M.newProfile(app.now())); m.close(); app.showTitle(); }, 'red'), btn('Keep playing', () => m.close(), 'green'))));
+  const m = modal(h('div', null, h('h2', null, t('reset.title', 'Reset everything?')), h('div', { class: 'sub', style: 'text-align:center' }, t('reset.hint', 'This deletes all progress on this device. It cannot be undone.')),
+    h('div', { class: 'btnrow' }, btn(t('reset.delete', 'Delete it all'), () => { app.replaceProfile(app.freshProfile ? app.freshProfile() : M.newProfile(app.now())); m.close(); app.showTitle(); }, 'red'), btn(t('reset.keep', 'Keep playing'), () => m.close(), 'green'))));
 }
 
 // ================================================================================================ lucky wheel and leaderboard
@@ -495,6 +835,7 @@ function wheelCard(app, rerender) {
   const p = app.profile, now = app.now();
   const st = M.wheelState(p, now);
   const seg = Math.PI * 2 / WHEEL.length;
+  const wlab = (w) => (w.id === 'c1' ? t('wheel.crate', 'Crate') : w.id === 'c2' ? t('wheel.studio', 'Studio') : w.label);
   const anim = { a: 0, from: 0, to: 0, t0: 0, dur: 0, spinning: false };
   const cv = canvasOf(240, 250, (ctx, t) => {
     if (anim.spinning) { const k = Math.min(1, (performance.now() - anim.t0) / anim.dur); const e = 1 - Math.pow(1 - k, 3); anim.a = anim.from + (anim.to - anim.from) * e; if (k >= 1) anim.spinning = false; }
@@ -503,38 +844,102 @@ function wheelCard(app, rerender) {
     WHEEL.forEach((w, i) => {
       const a0 = -Math.PI / 2 + i * seg, a1 = a0 + seg;
       ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 108, a0, a1); ctx.closePath();
-      ctx.fillStyle = ['#ff5fb0', '#7a5cff', '#2fe6ff', '#ffc83d'][i % 4]; ctx.globalAlpha = 0.92; ctx.fill(); ctx.globalAlpha = 1; ctx.lineWidth = 3; ctx.strokeStyle = '#12082b'; ctx.stroke();
+      ctx.fillStyle = ['#ff8cc6', '#b79af0', '#7fd6f5', '#ffd95a'][i % 4]; ctx.fill(); ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = '#2b2733'; ctx.stroke();
+      ctx.save(); ctx.clip(); ctx.strokeStyle = 'rgba(43,39,51,0.16)'; ctx.lineWidth = 2; ctx.beginPath(); for (let k = -120; k < 120; k += 9) { ctx.moveTo(k, -110); ctx.lineTo(k + 60, 110); } ctx.stroke(); ctx.restore();
       ctx.save(); ctx.rotate(a0 + seg / 2); AE.drawGlyph(ctx, w.glyph, 74, 0, 26, '#fff');
-      ctx.translate(48, 0); ctx.rotate(Math.PI / 2 * 0); ctx.fillStyle = '#fff'; ctx.font = '900 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = '#12082b'; ctx.lineWidth = 3; ctx.strokeText(w.label, 0, 0); ctx.fillText(w.label, 0, 0); ctx.restore();
+      ctx.translate(48, 0); ctx.rotate(Math.PI / 2 * 0); ctx.fillStyle = '#fff'; ctx.font = '400 16px "Patrick Hand","Comic Sans MS",system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = '#2b2733'; ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeText(wlab(w), 0, 0); ctx.fillText(wlab(w), 0, 0); ctx.restore();
     });
     ctx.restore();
-    ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fillStyle = '#12082b'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fillStyle = '#ffd60a'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#2b2733'; ctx.stroke();
     ctx.restore();
-    ctx.beginPath(); ctx.moveTo(120, 36); ctx.lineTo(108, 10); ctx.lineTo(132, 10); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#12082b'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(120, 36); ctx.lineTo(108, 10); ctx.lineTo(132, 10); ctx.closePath(); ctx.fillStyle = '#e8403f'; ctx.fill(); ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeStyle = '#2b2733'; ctx.stroke();
   }, { live: true });
-  const label = h('div', { class: 'sub', style: 'text-align:center' }, st.free ? 'Your free daily spin is ready!' : 'Come back tomorrow for a free spin, or spin for ' + WHEEL_SPIN_PRICE + ' diamonds.');
+  const label = h('div', { class: 'sub', style: 'text-align:center' }, st.free ? t('wheel.free_ready', 'Your free daily spin is ready!') : t('wheel.come_back', 'Come back tomorrow for a free spin, or spin for {n} diamonds.', { n: WHEEL_SPIN_PRICE }));
   let busy = false;
-  const spin = btn(st.free ? 'SPIN!' : [icon('diamond', 20), WHEEL_SPIN_PRICE + ' Spin'], () => {
+  const spin = btn(st.free ? t('wheel.spin_free', 'SPIN!') : [icon('diamond', 20), t('wheel.spin_paid', '{n} Spin', { n: WHEEL_SPIN_PRICE })], () => {
     if (busy) return;
     const r = M.spinWheel(p, now, app.rng());
-    if (!r.ok) { app.audio.play('error'); toast('Need ' + WHEEL_SPIN_PRICE + ' diamonds.'); return; }
+    if (!r.ok) { app.audio.play('error'); toast(t('wheel.need', 'Need {n} diamonds.', { n: WHEEL_SPIN_PRICE })); return; }
     busy = true; app.audio.play('crate_shake');
     anim.from = anim.a % (Math.PI * 2); anim.to = anim.from + Math.PI * 2 * 5 + ((-(r.index * seg + seg / 2) - anim.from) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2); anim.t0 = performance.now(); anim.dur = 3600; anim.spinning = true;
     let ticks = 0; const tk = setInterval(() => { if (!anim.spinning) { clearInterval(tk); return; } app.audio.play('tick', { vol: 0.4, pitch: 1 + (ticks++ % 3) * 0.05 }); }, 140);
-    setTimeout(() => { app.audio.play('reveal_' + (r.seg.reward.crate || r.seg.reward.diamonds >= 10 ? 'epic' : 'rare')); toast('You won ' + r.seg.label + (r.seg.reward.records ? ' Records' : r.seg.reward.diamonds ? ' diamonds' : ' crate') + '!', 2600); if (r.loot && r.loot.length) crateOpening(app, r.seg.reward.crate, r.loot, rerender); else rerender(); }, 3800);
+    setTimeout(() => { app.audio.play('reveal_' + (r.seg.reward.crate || r.seg.reward.diamonds >= 10 ? 'epic' : 'rare')); toast(r.seg.reward.records ? t('wheel.won_records', 'You won {n} Records!', { n: r.seg.label }) : r.seg.reward.diamonds ? t('wheel.won_diamonds', 'You won {n} diamonds!', { n: r.seg.label }) : t('wheel.won_crate', 'You won a crate!'), 2600); if (r.loot && r.loot.length) crateOpening(app, r.seg.reward.crate, r.loot, rerender); else rerender(); }, 3800);
   }, st.free ? 'gold big' : 'blue');
   return h('div', { class: 'card', style: 'text-align:center' }, cv, label, h('div', { style: 'margin-top:8px' }, spin));
 }
 
+// 'Copy invite link': <origin>/drop_the_bass/?friend=<name>. Clipboard API first; when it is missing or refuses, a prompt shows the link to copy by hand.
+export function copyInviteLink(app) {
+  const link = inviteLink(typeof location !== 'undefined' ? location.origin : '', app.profile.name);
+  if (!link) return false;
+  const byHand = () => { try { window.prompt(t('board.invite_prompt', 'Copy this link and send it to your friend:'), link); } catch (e) { toast(link, 6000); } };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(() => toast(t('board.invite_copied', 'Invite link copied!')), byHand);
+    else byHand();
+  } catch (e) { byHand(); }
+  return true;
+}
+// Someone opened a friend link (?friend=Name, see main.js): ask once, never add by itself. name is already cleaned by lb.friendFromSearch.
+export function friendInviteModal(app, name, done) {
+  const n = cleanName(name);
+  if (!n) { if (done) done(); return null; }
+  const m = modal(h('div', { class: 'friend-invite', 'data-friend-invite': n }, h('h2', null, t('friend.invite_title', 'Friend invite')),
+    h('div', { class: 'sub', style: 'text-align:center;font-size:20px' }, t('friend.invite_ask', 'Add {name} as a friend?', { name: n })),
+    h('div', { class: 'sub', style: 'text-align:center;font-size:13px;margin-top:4px' }, t('friend.invite_hint', 'You will see their scores pinned on the leaderboards.')),
+    h('div', { class: 'btnrow' }, btn(t('friend.invite_add', 'Add friend'), () => {
+      const r = M.addFriend(app.profile, n);
+      m.close(); app.save();
+      if (r.ok) { app.audio.play('ui_click'); toast(t('board.added', 'Added {name} to your friends.', { name: r.name })); }
+      else toast(({ empty: t('board.err_empty', 'Type a name first.'), self: t('board.err_self', 'That is you!'), dup: t('board.err_dup', 'Already a friend.'), full: t('board.err_full', 'Your friend list is full ({max}).', { max: FRIENDS_MAX }) })[r.reason]);
+    }, 'green', { 'data-friend-yes': '' }), btn(t('friend.invite_no', 'No thanks'), () => m.close(), 'dark', { 'data-friend-no': '' }))), { sticky: true, onClose: () => { if (done) done(); } });
+  return m;
+}
+
 export function boardModal(app, id, title) {
   const p = app.profile;
-  const body = h('div', null, h('h2', null, title), h('div', { class: 'sub', style: 'text-align:center' }, 'Loading...'));
+  const state = { tab: 'all', top: undefined, msg: '' };
+  const body = h('div');
   const m = modal(body);
-  fetchBoard(id).then((top) => {
+  const addFriend = (name) => {
+    const r = M.addFriend(p, name);
+    state.msg = r.ok ? t('board.added', 'Added {name} to your friends.', { name: r.name }) : ({ empty: t('board.err_empty', 'Type a name first.'), self: t('board.err_self', 'That is you!'), dup: t('board.err_dup', 'Already a friend.'), full: t('board.err_full', 'Your friend list is full ({max}).', { max: FRIENDS_MAX }) })[r.reason];
+    if (r.ok) app.audio.play('ui_click'); else app.audio.play('error');
+    app.save(); draw();
+  };
+  const draw = () => {
     body.replaceChildren(h('h2', null, title));
-    if (!top) { body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, 'The leaderboard is offline right now. Your own best is still saved.')); }
-    else if (!top.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, 'No scores yet. Be the first!'));
-    else top.slice(0, 20).forEach((e, i) => body.append(h('div', { class: 'row', style: 'padding:6px 4px;border-bottom:2px solid #12082b' + (e.name === p.name ? ';background:#3b2a7a55' : '') }, h('div', { style: 'width:34px;font-weight:900;color:' + (i < 3 ? 'var(--gold)' : 'var(--dim)') }, '#' + (i + 1)), h('div', { class: 'grow', style: 'font-weight:800' }, e.name), h('div', { style: 'font-weight:900' }, e.score))));
-    body.append(h('div', { class: 'sub', style: 'font-size:12px;text-align:center;margin-top:8px' }, p.name ? 'You appear as ' + p.name + '.' : 'Set your name in Settings to join the board.'), h('div', { class: 'btnrow' }, btn('Close', () => m.close(), 'green')));
-  });
+    const seg = h('div', { class: 'seg' });
+    for (const [tid, nm] of [['all', t('board.all', 'All')], ['friends', t('board.friends', 'Friends ({n})', { n: p.friends.length })]]) seg.append(h('button', { class: state.tab === tid ? 'on' : '', onclick: () => { state.tab = tid; state.msg = ''; draw(); } }, nm));
+    body.append(seg);
+    if (state.top === undefined) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:14px' }, t('board.loading', 'Loading...')));
+    else {
+      if (!state.top) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, t('board.offline', 'The leaderboard is offline right now. Your own best is still saved.')));
+      else if (!state.top.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, t('board.empty', 'No scores yet. Be the first!')));
+      const rows = boardRows(state.top || [], p.friends, p.name, state.tab);
+      if (state.tab === 'friends' && !p.friends.length) body.append(h('div', { class: 'sub', style: 'text-align:center;padding:10px' }, t('board.no_friends', 'Add friends by name to follow their scores here.')));
+      rows.forEach((e) => {
+        const top3 = e.rank > 0 && e.rank <= 3;
+        const act = e.me ? null : e.friend ? h('button', { class: 'lb-x', 'aria-label': t('board.remove_friend', 'Remove friend'), title: t('board.remove_friend', 'Remove friend'), onclick: () => { M.removeFriend(p, e.name); state.msg = ''; app.save(); draw(); } }, 'x')
+          : h('button', { class: 'lb-add', 'aria-label': t('board.add_friend', 'Add friend'), title: t('board.add_friend', 'Add friend'), onclick: () => addFriend(e.name) }, '+');
+        body.append(h('div', { class: 'row lb-row' + (e.me ? ' me' : '') + (e.friend ? ' friend' : '') + (e.missing ? ' missing' : '') },
+          h('div', { class: 'lb-rank', style: top3 ? 'color:#c77d00' : '' }, e.rank > 0 ? '#' + e.rank : '-'),
+          h('div', { class: 'grow lb-name' }, e.name, e.me ? h('span', { class: 'lb-tag you' }, t('board.you', 'YOU')) : null, e.friend ? h('span', { class: 'lb-tag fr' }, t('board.friend', 'FRIEND')) : null),
+          h('div', { class: 'lb-score' }, e.score == null ? '-' : e.score), act));
+      });
+    }
+    const inp = h('input', { type: 'text', maxlength: 16, placeholder: t('board.add_ph', 'Add a friend by name'), class: 'lb-input', 'aria-label': t('board.friend_name', 'Friend name'), onkeydown: (ev) => { if (ev.key === 'Enter') addFriend(inp.value); } });
+    body.append(h('div', { class: 'row lb-addrow' }, inp, btn(t('board.add', 'Add'), () => addFriend(cleanName(inp.value)), 'blue small')));
+    if (state.msg) body.append(h('div', { class: 'sub', style: 'font-size:13px;text-align:center' }, state.msg));
+    if (p.name) body.append(h('div', { class: 'btnrow', style: 'margin-top:6px' }, btn([icon('heart', 20), t('board.copy_invite', 'Copy invite link')], () => copyInviteLink(app), 'dark small', { 'data-copy-invite': '' })));
+    body.append(h('div', { class: 'sub', style: 'font-size:12px;text-align:center;margin-top:8px' }, p.name ? t('board.you_appear', 'You appear as {name}.', { name: p.name }) : t('board.set_name', 'Set your name in Settings to join the board.')), h('div', { class: 'btnrow' }, btn(t('common.close', 'Close'), () => m.close(), 'green')));
+  };
+  draw();
+  fetchBoard(id).then((top) => { state.top = top; draw(); });
+}
+
+// language picker: text buttons with the native names (no flags). withAuto adds 'Auto' (follow the device); the title screen leaves it out.
+export function langPicker(app, withAuto, redraw) {
+  const cur = getLangPref(), now = withAuto ? cur : (cur === 'auto' ? app.langNow() : cur);
+  const opts = (withAuto ? [{ code: 'auto', name: t('settings.lang_auto', 'Auto') }] : []).concat(LANGS);
+  return h('div', { class: 'seg langpick', style: 'flex-wrap:wrap' }, opts.map((o) => h('button', { style: 'flex:none;white-space:nowrap;padding-left:10px;padding-right:10px', class: now === o.code ? 'on' : '', lang: o.code === 'auto' ? undefined : o.code, onclick: () => { app.audio.play('ui_click'); app.setLangPref(o.code); if (redraw) redraw(); } }, o.name)));
 }

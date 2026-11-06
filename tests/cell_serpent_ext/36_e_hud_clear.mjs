@@ -1,0 +1,23 @@
+// 36-e: the HUD rows ghost while snake cells pass under them.
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'cell_serpent');
+const m = await import(join(root, 'hud_b13e.js'));
+const g = { snakes: [{ segs: [{ x: 100, y: 400, r: 30, hp: 5 }, { x: 100, y: 120, r: 30, hp: 0 }] }] };
+assert.equal(m.cellsUnderBand(g, m.CLEAR_TOP, m.CLEAR_BOTTOM), false, 'a dead cell in the band does not count, a far cell neither');
+g.snakes[0].segs[1].hp = 3;
+assert.equal(m.cellsUnderBand(g, m.CLEAR_TOP, m.CLEAR_BOTTOM), true, 'a living cell in the band counts');
+g.snakes[0].segs[1].y = 30; g.snakes[0].segs[1].r = 20;
+assert.equal(m.cellsUnderBand(g, m.CLEAR_TOP, m.CLEAR_BOTTOM), false, 'a cell wholly above the band does not count');
+g.snakes[0].segs[1].y = 60; g.snakes[0].segs[1].r = 30;
+assert.equal(m.cellsUnderBand(g, m.CLEAR_TOP, m.CLEAR_BOTTOM), true, 'a cell whose edge reaches the band counts');
+assert.equal(m.cellsUnderBand(null, 0, 9), false);
+let v = 1; for (let i = 0; i < 30; i++) v = m.fadeStep(v, 0, 1 / 60);
+assert.ok(v < 0.1 && v >= 0, 'fades out within half a second');
+let u = 0; const out = m.fadeStep(0, 1, 1 / 60); for (let i = 0; i < 30; i++) u = m.fadeStep(u, 1, 1 / 60);
+assert.ok(out < 0.1 && u > 0.5 && u < 1, 'comes back slower than it leaves');
+const hud = readFileSync(join(root, 'hud.js'), 'utf8');
+assert.ok(/cellsUnderBand\(g,/.test(hud) && /FADE_MIN/.test(hud), 'hud.js uses the clear band');
+assert.ok(m.FADE_MIN >= 0.25 && m.FADE_TOP_MIN > m.FADE_MIN, 'the ghost stays visible');

@@ -2,6 +2,8 @@
 // light pillars, ray bursts, an aurora ripple, weighted combat text, screen shake and punch, and a cheap screen-space post pass
 // (bloom from a downscaled copy, colour grade, vignette, low-health pulse, chromatic fringe, speed lines).
 // Pure canvas. Local LCG instead of Math.random so the same events look the same. Safe in node with a mock ctx (sprites fall back to arcs).
+import { isDoodle } from './style.js';
+import * as DFX from './doodle_fx.js';
 let seed = 12345;
 const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
 const MAX_P = 420, MAX_F = 60, MAX_L = 28, MAX_T = 40;
@@ -68,11 +70,23 @@ export class Fx {
     for (let i = 0; i < n && this.parts.length < MAX_P; i++) {
       const a = o.dir != null ? o.dir + (rnd() - 0.5) * (o.spread || 1.2) : rnd() * TAU;
       const v = sp * (0.35 + rnd() * 0.9);
-      this.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (o.up || 0), life: life * (0.6 + rnd() * 0.6), max: life, size: size * (0.6 + rnd() * 0.8), color: Array.isArray(color) ? color[(rnd() * color.length) | 0] : color, g: o.g == null ? 120 : o.g, shape: o.shape || 'glow', drag: o.drag == null ? 1.2 : o.drag });
+      this.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (o.up || 0), life: life * (0.6 + rnd() * 0.6), max: life, size: size * (0.6 + rnd() * 0.8), color: Array.isArray(color) ? color[(rnd() * color.length) | 0] : color, k: o.kind != null ? o.kind : (i + this.parts.length) % 3, g: o.g == null ? 120 : o.g, shape: o.shape || 'glow', drag: o.drag == null ? 1.2 : o.drag });
     }
   }
   // streaking sparks: bright, fast, drawn as motion streaks
   sparks(x, y, color, n = 8, o = {}) { this.burst(x, y, color, n, Object.assign({ speed: 260, life: 0.32, size: 2, g: 260, shape: 'spark', drag: 2.2 }, o)); }
+  // a ring of small stars flying outward (merge sparkle). n evenly spaced, kind 1 = star in the doodle look.
+  sparkRing(x, y, n, color, speed = 150, life = 0.6) {
+    const a0 = rnd() * TAU;
+    for (let i = 0; i < n && this.parts.length < MAX_P; i++) {
+      const a = a0 + i / n * TAU;
+      this.parts.push({ x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, life, max: life, size: 3.6, color: Array.isArray(color) ? color[i % color.length] : color, k: 1, g: 0, shape: 'glow', drag: 1.6 });
+    }
+  }
+  // soft grey smoke puffs for a defeated enemy (cheap: a few circles that swell and fade)
+  puff(x, y, n = 5, color = ['#e4e0ee', '#c9c4d6', '#ffffff'], r = 12) {
+    this.burst(x, y, color, n, { speed: 70, life: 0.45, size: r * 0.5, g: -10, drag: 2.2, shape: 'puff', kind: 0 });
+  }
   confetti(x, y, n = 30) {
     const cols = ['#ff5fb0', '#9dff3a', '#2fe6ff', '#ffc83d', '#b66bff', '#ff9a3c'];
     this.burst(x, y, cols, n, { speed: 260, life: 1.3, size: 4, up: 160, g: 380, shape: 'rect', spread: 6.3 });
@@ -132,6 +146,7 @@ export class Fx {
 
   // ------------------------------------------------------------------ world layer (under the HUD, inside the shaken board transform)
   drawWorld(ctx) {
+    if (isDoodle()) return DFX.drawWorld(this, ctx);
     ctx.save();
     // 1) soft ground glows and light pillars
     ctx.globalCompositeOperation = 'lighter';
@@ -225,6 +240,7 @@ export class Fx {
 
   // ------------------------------------------------------------------ combat text: overshoot pop, thick outline, crits get a burst behind them
   drawFloaters(ctx) {
+    if (isDoodle()) return DFX.drawFloaters(this, ctx);
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     for (const f of this.floats) {
@@ -245,6 +261,7 @@ export class Fx {
   }
   // aurora ripple across the whole board (Siren Song) and other full-screen light, drawn in logical space
   drawScreenLight(ctx, W, H) {
+    if (isDoodle()) return DFX.drawScreenLight(this, ctx, W, H);
     if (!this.auroras.length) return;
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     for (const A of this.auroras) {
@@ -263,6 +280,7 @@ export class Fx {
     ctx.restore();
   }
   speedLines(ctx, W, H, speed) {
+    if (isDoodle()) return DFX.speedLines(this, ctx, W, H, speed);
     if (speed < 2) return;
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#ffffff'; ctx.lineCap = 'round';
     const n = speed >= 3 ? 16 : 8;
@@ -276,6 +294,7 @@ export class Fx {
 
   // ------------------------------------------------------------------ screen-space post pass (device pixels). o: { cw, ch, dpr, accent, hp, beat, pulse }
   post(ctx, o) {
+    if (isDoodle()) return DFX.post(this, ctx, o);
     const cw = o.cw * o.dpr, ch = o.ch * o.dpr;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
     const canvas = ctx.canvas;
@@ -333,6 +352,7 @@ export class Fx {
     ctx.restore();
   }
   drawFlash(ctx, w, h) {
+    if (isDoodle()) return DFX.drawFlash(this, ctx, w, h);
     if (this.flash <= 0.01) return;
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(0.75, this.flash);
     const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.hypot(w, h) * 0.6);

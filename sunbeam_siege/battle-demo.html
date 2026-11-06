@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sunbeam Siege battle demo</title>
+<link rel="stylesheet" href="src/styles/base.css">
+<link rel="stylesheet" href="src/styles/battle.css">
+</head>
+<body>
+<div id="app"></div>
+<!-- data -->
+<script src="src/data/glossary.js"></script>
+<script src="src/data/cards-neutral.js"></script>
+<script src="src/data/cards-alley.js"></script>
+<script src="src/data/cards-hearth.js"></script>
+<script src="src/data/cards-moon.js"></script>
+<script src="src/data/cards-mischief.js"></script>
+<script src="src/data/champions-ah.js"></script>
+<script src="src/data/champions-mm.js"></script>
+<script src="src/data/enemies-rodents.js"></script>
+<script src="src/data/enemies-dogs.js"></script>
+<script src="src/data/enemies-household.js"></script>
+<script src="src/data/enemies-wild.js"></script>
+<script src="src/data/enemies-bosses.js"></script>
+<script src="src/data/relics.js"></script>
+<script src="src/data/cards-starters.js" onerror="void 0"></script>
+<script src="src/data/upgrades.js" onerror="void 0"></script>
+<script src="src/data/events.js" onerror="void 0"></script>
+<script src="src/data/story.js" onerror="void 0"></script>
+<script src="src/data/tutorial.js" onerror="void 0"></script>
+<script src="src/data/meta.js" onerror="void 0"></script>
+<script src="src/data/encounters.js" onerror="void 0"></script>
+<!-- engine (optional, used when ?engine=real and it exists) -->
+<script src="src/engine/util.js" onerror="void 0"></script>
+<script src="src/engine/registry.js" onerror="void 0"></script>
+<script src="src/engine/content.js" onerror="void 0"></script>
+<script src="src/engine/card-inst.js" onerror="void 0"></script>
+<script src="src/engine/battle.js" onerror="void 0"></script>
+<script src="src/engine/battle-ai.js" onerror="void 0"></script>
+<script src="src/engine/ops-bosses.js" onerror="void 0"></script>
+<script src="src/engine/ops-pests.js" onerror="void 0"></script>
+<script src="src/engine/ops-alley.js" onerror="void 0"></script>
+<script src="src/engine/ops-hearth.js" onerror="void 0"></script>
+<script src="src/engine/ops-moon.js" onerror="void 0"></script>
+<script src="src/engine/ops-mischief.js" onerror="void 0"></script>
+<script src="src/engine/ops-neutral.js" onerror="void 0"></script>
+<script src="src/engine/ops-champions.js" onerror="void 0"></script>
+<script src="src/engine/run.js" onerror="void 0"></script>
+<script src="src/engine/map.js" onerror="void 0"></script>
+<script src="src/engine/rewards.js" onerror="void 0"></script>
+<script src="src/engine/profile.js" onerror="void 0"></script>
+<!-- gfx, audio -->
+<script src="src/gfx/pawprint.js"></script>
+<script src="src/gfx/pestprint.js"></script>
+<script src="src/gfx/icons.js" onerror="void 0"></script>
+<script src="src/gfx/fx.js" onerror="void 0"></script>
+<script src="src/audio.js"></script>
+<!-- ui -->
+<script src="src/ui/ui-core.js"></script>
+<script src="src/ui/deck-viewer.js"></script>
+<script src="src/ui/battle.js"></script>
+<script src="src/ui/mock-battle.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  if (q.get('phone')) document.documentElement.classList.add('touch');
+  tryInit();
+  function tryInit() { try { SB.audio.init({ seed: 7 }); } catch (e) {} }
+  // stub reward and gameover screens so the hand-off can be seen
+  ['reward', 'gameover'].forEach(function (n) {
+    SB.ui.register(n, { mount: function (root, p) {
+      root.appendChild(SB.ui.h('div', { style: 'padding:40px;text-align:center' }, SB.ui.h('h1.title', {}, n + ' screen (stub)'),
+        SB.ui.h('p', {}, 'outcome: ' + p.outcome), SB.ui.h('button.btn', { onclick: start }, 'Fight again')));
+    }, unmount: function () {} });
+  });
+  function start() {
+    var useReal = q.get('engine') === 'real' && SB.battle && SB.battle.create;
+    var run = (SB.run && SB.run.newRun && useReal) ? SB.run.newRun({ seed: 7, clan: 'alley', side: 'hearth' }) : SB.mockRun();
+    window.__run = run;
+    var enc = { id: 'demo', waves: [] }, node = null, seed = 7;
+    if (useReal && SB.run.enterNode) {
+      var kindQ = q.get('node');
+      var av = SB.run.availableNodes(run);
+      var out = SB.run.enterNode(run, av[0]);
+      enc = out.payload.encounter; node = out.payload.node; seed = out.payload.seed;
+    }
+    SB.ui.go('battle', { run: run, encounter: enc, node: node, factory: useReal ? function (r, e, o) {
+      try { return SB.battle.create(r, e, o); }
+      catch (err) { console.warn('real engine failed, using mock: ' + err.message); document.title += ' (mock fallback)'; return SB.mockBattle.create(SB.mockRun(), { id: 'demo', waves: [] }, o); }
+    } : SB.mockBattle.create, opts: { seed: seed } });
+  }
+  window.__start = start;
+  start();
+})();
+</script>
+</body>
+</html>

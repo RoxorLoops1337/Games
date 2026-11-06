@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Doodle enemies lab</title>
+<style>html,body{margin:0;background:#2a2630}canvas{display:block;margin:0 auto;max-width:100%;height:auto}</style></head><body>
+<canvas id="c" width="1080" height="1500"></canvas>
+<script type="module">
+import { drawEnemy, drawBoss, setArtScale } from '../js/doodle_enemies.js';
+import { paper } from '../js/doodle_kit.js';
+import { ENEMY_IDS, BOSS_IDS, AFFIXES } from '../js/data_core.js';
+setArtScale(2);
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const Q = new URLSearchParams(location.search), T0 = +(Q.get('t') || 0);
+function label(s, x, y) { ctx.fillStyle = '#2b2733'; ctx.font = '800 20px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(s, x, y); }
+function frame(ms) {
+  const t = T0 + ms / 1000;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); paper(ctx, 0, 0, 1080, 1500, {});
+  const ids = ENEMY_IDS;
+  // row 1: every type, scaled up 2x
+  ids.forEach((id, i) => { const x = 90 + (i % 6) * 180, y = 120 + Math.floor(i / 6) * 210; ctx.save(); ctx.translate(x, y); ctx.scale(2, 2); drawEnemy(ctx, id, 0, 0, { t, ang: 0.4 + i * 0.3, id: i, hp: i % 3 === 0 ? 0.6 : 1 }); ctx.restore(); label(id, x, y + 80); });
+  // row: affixes on fuzz
+  const affs = Object.keys(AFFIXES);
+  affs.forEach((a, i) => { const x = 90 + i * 180, y = 590; ctx.save(); ctx.translate(x, y); ctx.scale(2, 2); drawEnemy(ctx, a === 'swift' ? 'zip' : 'fuzz', 0, 0, { t, ang: 0, affix: a, id: 20 + i, scale: a === 'giant' ? 1.4 : 1 }); ctx.restore(); label(a, x, y + 80); });
+  // row: status
+  const sts = [['slow', { slow: 1 }], ['stun', { stun: 1 }], ['burn', { burn: 1 }], ['mark', { mark: 1 }], ['shield', { shield: 0.7 }], ['rage', { rage: 1 }], ['hit', { hit: 0.8 }]];
+  sts.forEach(([n, o], i) => { const x = 90 + i * 150, y = 800; ctx.save(); ctx.translate(x, y); ctx.scale(2, 2); drawEnemy(ctx, i === 5 ? 'rager' : 'fuzz', 0, 0, Object.assign({ t, ang: 0.2, id: 40 + i, hp: 0.5 }, o)); ctx.restore(); label(n, x, y + 80); });
+  // bosses
+  BOSS_IDS.forEach((id, i) => { const x = 110 + i * 215, y = 1030; ctx.save(); ctx.translate(x, y); ctx.scale(1.3, 1.3); drawBoss(ctx, id, 0, 0, { t, ang: 0.3, hp: 0.7, phase: 1, gated: false }); ctx.restore(); label(id, x, y + 100); });
+  [['noisegate', { gated: true }], ['playback', { phase: 2 }], ['playback', { phase: 3 }]].forEach(([id, o], i) => { const x = 110 + i * 215, y = 1290; ctx.save(); ctx.translate(x, y); ctx.scale(1.3, 1.3); drawBoss(ctx, id, 0, 0, Object.assign({ t, ang: 0.3, hp: 0.4, hit: i === 2 ? 0.6 : 0 }, o)); ctx.restore(); label(id + ' ' + (o.gated ? 'gated' : 'phase ' + o.phase), x, y + 100); });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.__ready = true;
+</script></body></html>
