@@ -140,7 +140,13 @@ const PENT = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3];
 export const pent = (i) => PENT[i % 5] * Math.pow(2, Math.floor(i / 5));
 export function causeOfDeath(moveName, n) { return moveName ? `Killed by ${moveName}${n > 0 ? ` (${n})` : ''}` : n > 0 ? `Killed by the ward (${n})` : 'Killed by the ward'; }
 // timings of a played card in seconds (JUICE.md card choreography)
-export const CARD = { lift: 0.09, wind: 0.07, flight: 0.11, impact: 0.04, fold: 0.15, burn: 0.45, crack: 0.12, hold: 0.08 };
+export const CARD = { lift: 0.09, wind: 0.07, flight: 0.11, impact: 0.04, fold: 0.15, burn: 0.45, crack: 0.12, hold: 0.08, rest: 0.12 };
+// easing curves (t in 0..1). easeOutBack overshoots then settles, easeInQuad is a quick accelerate for strikes, easeInOutCubic for glides.
+export const easeOutBack = (t, c = 1.70158) => { const k = Math.max(0, Math.min(1, t)) - 1; return 1 + (c + 1) * k * k * k + c * k * k; };
+export const easeInQuad = (t) => { const k = Math.max(0, Math.min(1, t)); return k * k; };
+export const easeInOutCubic = (t) => { const k = Math.max(0, Math.min(1, t)); return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; };
+// motion budgets in ms from design/JUICE.md; tests/graftwork_motion.test.mjs holds the code to them
+export const BUDGET = { cardToImpact: 310, cardRest: 160, light: { tell: 120, act: 60, hold: 40, rec: 180 }, heavy: { tell: 280, act: 70, hold: 90, rec: 320 }, boss: { tell: 450, act: 90, hold: 140, rec: 400 }, victory: 1800, death: 2800, stillMax: 200 };
 export const FINAL = { hold: 0.42, seams: 6, perSeam: 0.06 };
 
 // ---------------------------------------------------------------- drawing helpers

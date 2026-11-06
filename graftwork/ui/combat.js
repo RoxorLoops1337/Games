@@ -266,7 +266,11 @@ function handle(ev) {
       if (f) { f.shatter = { t: 0 }; f.out = true; sfx('jam', { pitch: 1.7, vol: 0.5 }); return 420; }
       shatterBurst(p); return 420;
     }
-    case 'seamExtend': case 'seamCut': case 'seamPay': case 'seamSlack': case 'seamFray': return onSeamEvent(APP, ev, { fx, entPos, c }) || 0;
+    case 'seamExtend': case 'seamCut': case 'seamPay': case 'seamSlack': case 'seamFray': {
+      let w = onSeamEvent(APP, ev, { fx, entPos, c }) || 0;
+      const nx = S.q[0]; if (ev.t === 'seamExtend' && nx && (nx.t === 'dmg' || nx.t === 'block')) w = Math.min(w, 20); // the strike must not wait for bead flourishes
+      return w;
+    }
     case 'addCard': return onAddCard(ev);
     case 'burnCard': {
       const w = S.known.get(ev.card); if (!w) return 0;
@@ -319,7 +323,7 @@ function onPlay(ev) {
   sp.toEnemy = !!tgtEd || spec.target === 'all';
   if (spec.type === 'attack') { S.P.attack = 0.0001; }
   sfx('cardPlay');
-  return 280;
+  return Math.round((J.CARD.lift + J.CARD.wind + J.CARD.flight) * 1000); // the next event (damage) lands on contact
 }
 
 function nextHitSame(ev) {
@@ -705,13 +709,13 @@ function stepSprite(sp, d) {
       return;
     }
     if (sp.fate && t >= tI && !sp.out) { sp.out = true; leavePlay(sp); }
-    else if (!sp.fate && t > 0.9 && !sp.out) { sp.fate = 'discard'; sp.out = true; leavePlay(sp); }
+    else if (!sp.fate && t > tI + J.CARD.rest && !sp.out) { sp.fate = 'discard'; sp.out = true; leavePlay(sp); } // never rests on the target longer than CARD.rest
     if (!sp.out) {
       const ax = C.x - ux * 20, ay = C.y - uy * 20;
-      if (t < tL) { const k = EASE.out(t / tL); sp.x = lerp(f0.x, C.x, k); sp.y = lerp(f0.y, C.y, k); sp.s = lerp(f0.s, 0.86, k); sp.rot = lerp(f0.rot, 0, k); sp.sx = sp.sy = 1; }
+      if (t < tL) { const k = J.easeOutBack(t / tL, 1.2); sp.x = lerp(f0.x, C.x, k); sp.y = lerp(f0.y, C.y, k); sp.s = lerp(f0.s, 0.86, k); sp.rot = lerp(f0.rot, 0, k); sp.sx = sp.sy = 1; }
       else if (t < tW) { const k = EASE.out((t - tL) / CT.wind); sp.x = lerp(C.x, ax, k); sp.y = lerp(C.y, ay, k); sp.s = 0.86; sp.rot = 0; sp.sx = 1 - 0.1 * k; sp.sy = 1 + 0.06 * k; }
       else if (t < tF) {
-        const k = EASE.in((t - tW) / CT.flight), u = 1 - k, cx = (ax + tp.x) / 2, cy = (ay + tp.y) / 2 - 70;
+        const k = J.easeInQuad((t - tW) / CT.flight), u = 1 - k, cx = (ax + tp.x) / 2, cy = (ay + tp.y) / 2 - 70;
         sp.x = u * u * ax + 2 * u * k * cx + k * k * tp.x; sp.y = u * u * ay + 2 * u * k * cy + k * k * tp.y;
         sp.s = lerp(0.86, 0.34, k); sp.rot = ux * 0.2 * k; sp.sx = 1 - 0.12 * k; sp.sy = 1 + 0.15 * k;
         fx.emit({ x: sp.x, y: sp.y, n: 1, color: sp.col, speed: 40, size: 5, life: 0.3, gravity: 0, glow: true, jitter: 16 });
@@ -914,14 +918,21 @@ function drawTouchPreview(app) {
   if (app.reg) { app.reg('preview_play', r.play.x, r.play.y, r.play.w, r.play.h, { layer: 'hud', group: 'preview', overlay: true }); app.reg('preview_cancel', r.x.x, r.x.y, r.x.w, r.x.h, { layer: 'hud', group: 'preview', overlay: true }); }
 }
 // Right of the Thread rail (ends x 1076), above End Turn: never over the rail.
-const CONFIRM = { x: 1086, y: 432, w: 180, h: 106 };
+const CONFIRM = { x: 1086, y: 432, w: 180, h: 106 }, CONFIRM_H = 106, CONFIRM_BOTTOM = 538;
 function drawEndConfirm(app) {
   const u = U(), ec = u.endConfirm; if (!ec) return;
   if (!canAct() || S.t - ec.t0 > 6) { u.endConfirm = null; return; }
   const ctx = app.ctx, B = CONFIRM, ready = S.t - ec.t0 >= 0.4;
+  // phones inflate the text: size the box from the real wrapped lines (grows upward, bottom edge stays put) and say TAP, not Enter / Esc
+  const main = `End turn with ${ec.energy} energy and ${ec.n} playable card${ec.n === 1 ? '' : 's'}?`;
+  const hint = isTouch() ? 'Tap here to end the turn. Tap elsewhere to keep playing.' : 'Enter or click: end turn. Esc: keep playing.';
+  const l1 = app.wrap(main, B.w - 24, 15, { ui: true, bold: true }), l2 = app.wrap(hint, B.w - 24, 12, { ui: true });
+  const h1 = Math.round(app.sz(15, { ui: true, bold: true }) * 1.22), h2 = Math.round(app.sz(12, { ui: true }) * 1.22);
+  const bh = Math.max(CONFIRM_H, 20 + l1.length * h1 + 8 + l2.length * h2);
+  B.h = bh; B.y = CONFIRM_BOTTOM - bh;
   ctx.save(); app.rr(B.x, B.y, B.w, B.h, 10); ctx.fillStyle = 'rgba(14,12,10,.94)'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = ready ? COL.lamp : 'rgba(232,220,196,.4)'; ctx.stroke(); ctx.restore();
-  app.text(`End turn with ${ec.energy} energy and ${ec.n} playable card${ec.n === 1 ? '' : 's'}?`, B.x + 12, B.y + 10, { size: 15, ui: true, bold: true, maxW: B.w - 24, lineH: 18, color: COL.vellum });
-  app.text('Enter or click: end turn. Esc: keep playing.', B.x + 12, B.y + B.h - 36, { size: 12, ui: true, maxW: B.w - 24, lineH: 15, color: 'rgba(232,220,196,.7)' });
+  app.text(main, B.x + 12, B.y + 10, { size: 15, ui: true, bold: true, maxW: B.w - 24, color: COL.vellum });
+  app.text(hint, B.x + 12, B.y + 10 + l1.length * h1 + 8, { size: 12, ui: true, maxW: B.w - 24, color: 'rgba(232,220,196,.7)' });
   if (app.reg) app.reg('end_confirm', B.x, B.y, B.w, B.h, { layer: 'hud', group: 'end_confirm', overlay: true });
 }
 function drawSeam(ctx, dc) {
@@ -1176,6 +1187,7 @@ function clickAt(m, dn) {
   if (S.potSel !== null && S.potSel !== undefined) { const ed = enemyAt(x, y); if (ed) tryPotion(S.potSel, ed); else if (y > L.BAR_H) { S.potSel = null; } return; }
   // end-turn confirm chip
   if (u.endConfirm && L.inRectXY(x, y, CONFIRM.x, CONFIRM.y, CONFIRM.w, CONFIRM.h)) { doEndTurn(); return; }
+  if (u.endConfirm && isTouch() && !L.inRectXY(x, y, L.END_BTN.x, L.END_BTN.y, L.END_BTN.w, L.END_BTN.h)) { u.endConfirm = null; sfx('uiBack'); if (!dn.uid) return; } // touch has no Esc: a tap elsewhere keeps playing
   // touch preview controls
   if (u.touchPrev && S.sel) {
     const pc = S.hand.find((d) => d.uid === S.sel);
@@ -1194,7 +1206,7 @@ function clickAt(m, dn) {
   }
   if (S.sel) {
     if (selNeedsTarget()) { const ed = enemyAt(x, y); if (ed) tryPlay(S.sel, ed); else if (u.touchPrev && !S.sel) S.sel = null; }
-    else if (u.touchPrev) { const pc = S.hand.find((d) => d.uid === S.sel); if (pc && !L.inRectXY(x, y, pc.x - CARD_W * pc.s / 2, pc.y - CARD_H * pc.s / 2, CARD_W * pc.s, CARD_H * pc.s)) { S.sel = null; sfx('uiBack'); } }
+    else if (u.touchPrev) { const pc = S.hand.find((d) => d.uid === S.sel); const ed1 = pc && specOf(S.c, pc.w).target === 'enemy' ? enemyAt(x, y) : null; if (ed1) { tryPlay(S.sel, ed1); return; } if (pc && !L.inRectXY(x, y, pc.x - CARD_W * pc.s / 2, pc.y - CARD_H * pc.s / 2, CARD_W * pc.s, CARD_H * pc.s)) { S.sel = null; sfx('uiBack'); } }
     else if (y < PLAY_LINE && y > L.BAR_H + 4) tryPlay(S.sel, null);
     else if (y >= PLAY_LINE && !u.cand) S.sel = null;
   }
