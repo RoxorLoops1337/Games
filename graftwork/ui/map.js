@@ -383,7 +383,7 @@ export default {
     // buttons are anchored to the bottom (stacked when the text scale makes them wide)
     const stack = S > 1.2, bH = 42, aH = 38;
     const abY = BOT - aH, dY = stack ? abY - 8 - bH * 2 - 8 : abY - 8 - bH;
-    const hint = S <= 1 ? (app.measure('Arrows or WASD to choose, Enter to go', 13, { ui: true }) <= IW ? 'Arrows or WASD to choose, Enter to go' : 'WASD to move, Enter to go') : null;
+    const hint = app.mouse.touch ? 'Tap a node, tap again to go' : S <= 1 ? (app.measure('Arrows or WASD to choose, Enter to go', 13, { ui: true }) <= IW ? 'Arrows or WASD to choose, Enter to go' : 'WASD to move, Enter to go') : null;
     const hintH = Math.ceil(app.sz(13, { ui: true }) * 1.2), hintY = hint ? dY - hintH - 6 : dY;
     // potions
     const potTop = hintY - 8 - 58;

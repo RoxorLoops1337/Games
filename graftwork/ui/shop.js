@@ -377,8 +377,18 @@ function bought(app, spent, at, quip) {
   say(quip);
 }
 
+// Touch has no hover: the first tap on a stock item only inspects it (the shopkeeper's box says what and for how much), the second tap within 4 s buys.
+function touchGate(app, key, text) {
+  if (!app.mouse.touch) return true;
+  const pk = S.peek;
+  if (pk && pk.key === key && S.t - pk.t0 < 4) { S.peek = null; return true; }
+  S.peek = { key, t0: S.t }; S.quip = text; S.quipT = 0; S.react = 1; sfx(app, 'uiClick');
+  return false;
+}
 function buyDirect(app, kind, index, at, price) {
   const run = app.shared.run;
+  { const it = (kind === 'card' ? run.pending.cards : kind === 'potion' ? run.pending.potions : run.pending.relics)[index], T = kind === 'card' ? CARDS : kind === 'potion' ? POTIONS : RELICS, d = it && T[it.id];
+    if (!touchGate(app, kind + index, `${d ? d.name : kind}, ${price} gold. Tap again to buy.`)) return; }
   const r = RUN.shopBuy(run, kind, index);
   if (!r.ok) { fail(app, r.why, kind + index); return; }
   bought(app, price, at, 'buy');

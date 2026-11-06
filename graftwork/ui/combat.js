@@ -37,7 +37,7 @@ function tickEnt(en, d) {
   en.shown += (en.hp - en.shown) * (1 - Math.exp(-d * 16));
   if (Math.abs(en.shown - en.hp) < 0.05) en.shown = en.hp;
   if (en.trail > en.hp) { if (en.tdelay > 0) en.tdelay -= d; else en.trail = Math.max(en.hp, en.trail - Math.max(8, en.maxHp) * 1.1 * d); } else en.trail = en.hp;
-  en.hurt = Math.max(0, en.hurt - d * 8); en.bpulse = Math.max(0, en.bpulse - d * 3); en.kick = Math.max(0, en.kick - d * 5);
+  en.hurt = Math.max(0, en.hurt - d * 16); en.bpulse = Math.max(0, en.bpulse - d * 3); en.kick = Math.max(0, en.kick - d * 5);
   for (const s of Object.keys(en.pop)) { en.pop[s] -= d * 2.2; if (en.pop[s] <= 0) delete en.pop[s]; }
 }
 function mkEd(e) {
@@ -379,7 +379,7 @@ function onDmg(ev) {
       if (killing) stop = Math.max(stop, 200);
       fx.hitstop(stop);
       kick(dirx, -0.2, T.shake * (multi ? 1 + Math.min(0.5, ctr.count * 0.06) : 1) + (slam ? 3 : 0), T.decay, T.roll);
-      en.hurt = T.flash ? 1 : 0.25; en.kick = Math.min(1.5, T.kick);
+      en.hurt = T.flash ? T.flash / 60 : 0.25; en.kick = Math.min(1.5, T.kick);
       if (ed) { const a = ed.anim; a.sq = -Math.min(T.sq, J.squashLimit(ed.e.def)); a.sqv = 0; a.hold = 0.06; a.hit = 1; }
       if (T.ab) aberr(T.ab, 130);
       if (T.zoom > 1) zoomPunch(T.zoom, p.x, p.y, 9);
@@ -1061,11 +1061,11 @@ function hoverCand(m) {
 function updateInput(app, dt) {
   const m = app.mouse, c = S.c, u = U();
   ensureTouch(app);
-  app.touchPan = !!(S.modal || c.pending); // a finger drag is a card drag in combat; the pile and pick lists scroll by drag
   const mine = app.stack[app.stack.length - 1] === SCREEN;
   const keys = mine ? app.pressedKeys.slice() : [];
   app.escBusy = !!(mine && (S.drag || S.modal || S.sel || (S.potSel !== null && S.potSel !== undefined) || u.endConfirm || c.pending));
   if (!mine || app.blocked) { S.hov = null; S.down = null; if (S.drag) cancelDrag(); return; }
+  app.touchPan = !!(S.modal || c.pending); // a finger drag is a card drag in combat; the pile and pick lists scroll by drag
   const touch = isTouch();
 
   // speed-up while the queue plays
@@ -1195,8 +1195,9 @@ function clickAt(m, dn) {
     const pc = S.hand.find((d) => d.uid === S.sel);
     if (pc) {
       const r = previewRects(pc);
-      if (L.inRectXY(x, y, r.x.x, r.x.y, r.x.w, r.x.h)) { S.sel = null; sfx('uiBack'); return; }
-      if (L.inRectXY(x, y, r.play.x, r.play.y, r.play.w, r.play.h)) { if (selNeedsTarget()) { pc.chip = { text: 'Pick a target', t: 0 }; sfx('error', { vol: 0.4 }); } else tryPlay(S.sel, null); return; }
+      const gx = APP.hitRect(r.x.x, r.x.y, r.x.w, r.x.h), gp = APP.hitRect(r.play.x, r.play.y, r.play.w, r.play.h); // phone tap-target floor
+      if (L.inRectXY(x, y, r.x.x, r.x.y, r.x.w, r.x.h) || L.inRectXY(x, y, gx.x, gx.y, gx.w, gx.h)) { S.sel = null; sfx('uiBack'); return; }
+      if (L.inRectXY(x, y, gp.x, gp.y, gp.w, gp.h)) { if (selNeedsTarget()) { pc.chip = { text: 'Pick a target', t: 0 }; sfx('error', { vol: 0.4 }); } else tryPlay(S.sel, null); return; }
     }
   }
   // tap / click on a card
@@ -1663,9 +1664,15 @@ function drawTopBar(app) {
     if (id) {
       drawPotion(ctx, id, x + sz / 2, y + sz / 2, sz - 8);
       const p = POTIONS[id];
-      if (app.inRect(x, y, sz, sz)) {
-        app.cursor = 'pointer'; queueTip(app, 'pot:' + id, [[{ title: p.name, text: p.text + (canAct() ? '\n(click to use)' : ''), color: COL.energy, glyph: 'diamond' }]], { x, y, w: sz, h: sz });
-        if (canAct() && app.clicked(x, y, sz, sz)) { if (S.potSel === i) S.potSel = null; else tryPotion(S.run.potions.indexOf(id) >= 0 ? i : i, null); }
+      // touch: the first tap on a potion only shows its text ("tap again to use"); a hold shows it too. The tap target grows to the 40 px floor.
+      const tch = isTouch(), peek = tch && S.potPeek && S.potPeek.i === i && S.t - S.potPeek.t0 < 3.5;
+      if (app.inRect(x, y, sz, sz) || peek) {
+        app.cursor = 'pointer'; queueTip(app, 'pot:' + id, [[{ title: p.name, text: p.text + (canAct() ? (tch ? '\n(tap again to use)' : '\n(click to use)') : ''), color: COL.energy, glyph: 'diamond' }]], { x, y, w: sz, h: sz });
+      }
+      if (canAct() && app.clicked(x, y, sz, sz)) {
+        if (S.potSel === i) S.potSel = null;
+        else if (tch && !(S.potPeek && S.potPeek.i === i && S.t - S.potPeek.t0 < 3.5)) { S.potPeek = { i, t0: S.t }; sfx('uiClick', { pitch: 1.3 }); }
+        else { S.potPeek = null; tryPotion(i, null); }
       }
     }
   }

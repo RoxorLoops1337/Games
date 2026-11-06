@@ -74,4 +74,18 @@ for (const reduced of [false, true]) {
   frames(app, 120);
   FX_OPTS.reduced = false;
 }
+// 7. hit flash: a medium hit's white fades within ~60 ms (JUICE.md), not the old 125 ms, and a hit-stop never stretches it past stop + 100 ms
+{
+  const run = RUN.newRun({ hero: 'marrow', seed: 'mo' }); run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: 'normal', enemies: ['orderly'] }; run.hp = 900; run.maxHp = 900; run.potions = [];
+  const app = await makeApp({ run, audio, flow: { RUN, route() {}, openDeck() {}, openSettings() {} } });
+  app.register('combat', combat); app.go('combat', { run }); frames(app, 120);
+  const a = combat.api(); const idx = a.c.hand.findIndex((k) => k.inst.id === 'm_cut');
+  if (idx >= 0) {
+    const hp = a.handPos(idx), ep = a.enemyPos(0); click(app, hp.x, hp.y); frames(app, 10); click(app, ep.x, ep.y);
+    const S = combat.api().state(); let live = 0, peak = 0, seen = false;
+    for (let i = 0; i < 90; i++) { app.tick(1 / 60); const h = S.eds[0].hurt; peak = Math.max(peak, h); if (h > 0.05) { seen = true; if (S.fx.stop <= 0) live += 1000 / 60; } }
+    assert.ok(seen && peak > 0.2, 'the victim flashes on a hit');
+    assert.ok(live <= 70, `hit flash fades over ${live.toFixed(0)} ms outside hit-stop`);
+  }
+}
 console.log('graftwork motion ok');
