@@ -10,7 +10,7 @@ import { lnw } from '../art/linework.js';
 
 // 'build' (Ward building cards) joins when the unlock model gates any
 export const KINDS = ['card', 'graft', 'relic', 'potion', 'event', ...(Object.values(UNLOCKS).some((e) => e.kind === 'build') ? ['build'] : [])];
-export const KIND_LABEL = { card: 'Cards', graft: 'Grafts', relic: 'Relics', potion: 'Potions', event: 'Events', build: 'Buildings' };
+export const KIND_LABEL = { card: 'Cards', graft: 'Grafts', relic: 'Relics', potion: 'Potions', event: 'Events', build: 'Building cards' };
 export const KIND_ONE = { card: 'card', graft: 'graft', relic: 'relic', potion: 'potion', event: 'event', build: 'building card' };
 const TABLE = { card: CARDS, graft: GRAFTS, relic: RELICS, potion: POTIONS, event: EVENTS, build: BUILD_CARDS };
 export const RARITY_COL = { common: '#b9ad92', uncommon: '#8fd0a0', rare: '#f2c14e', boss: '#c58bff', shop: '#7fd0e0', start: '#b9ad92' };
