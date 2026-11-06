@@ -36,13 +36,14 @@ export const RELICS_MORE = [
   { id: 'r_second_colour', name: 'Second Colour', rarity: 'uncommon', text: 'Cutting a Line that holds 2 or more schools gives 2 Block per stitch.',
     on: { seamCut: (A, p) => { if (p && p.paid === false) return; if (nSchools(A) >= 2) { const n = stitches(p); if (n > 0) A.block(A.player, 2 * n); } } } },
   // ---- Overload ----
-  { id: 'r_stitched_third', name: 'Stitched Third', rarity: 'rare', text: 'An Overloaded card that extends the Line adds one extra knot (still capped by the Line limit).',
-    on: { seamExtend: (A, p) => { if (!(p && p.spec && p.spec.overload)) return; const s = seam(A); const cap = (A.c.run.relics || []).includes('r_spool') ? 6 : 5; if (s.len < cap) { s.len += 1; if (p.school) s.counts[p.school] = (s.counts[p.school] || 0) + 1; } } } },
+  { id: 'r_stitched_third', name: 'Stitched Third', rarity: 'rare', text: 'An Overloaded card that extends the Line adds one extra knot (still capped by the Line limit). Playing an Overload card gains 9 Block and Ties the Line.',
+    on: { seamExtend: (A, p) => { if (!(p && p.spec && p.spec.overload)) return; const s = seam(A); const cap = (A.c.run.relics || []).includes('r_spool') ? 6 : 5; if (s.len < cap) { s.len += 1; if (p.school) s.counts[p.school] = (s.counts[p.school] || 0) + 1; } },
+      cardPlayed: (A, p) => { if (p && p.spec && p.spec.overload) { A.block(A.player, 9); if (A.c.seam) A.c.seam.tied = true; } } } },
   // ---- Tempered cards ----
-  { id: 'r_hammered_brass', name: 'Hammered Brass', rarity: 'uncommon', text: 'The first 2 Tempered cards you play each turn give 4 Block.',
-    on: { cardPlayed: (A, p) => { if (!tempered(p)) return; const r = rx(A); if (r.brassTurn !== A.c.turn) { r.brassTurn = A.c.turn; r.brassN = 0; } if (r.brassN < 2) { r.brassN++; A.block(A.player, 4); } } } },
-  { id: 'r_anvil_thread', name: 'Anvil Thread', rarity: 'rare', text: 'Playing a Tempered card Ties the Line: it carries over to your next turn at full value.',
-    on: { cardPlayed: (A, p) => { if (tempered(p) && A.c.seam) A.c.seam.tied = true; } } },
+  { id: 'r_hammered_brass', name: 'Hammered Brass', rarity: 'uncommon', text: 'The first 2 Tempered cards you play each turn give 2 Block.',
+    on: { cardPlayed: (A, p) => { if (!tempered(p)) return; const r = rx(A); if (r.brassTurn !== A.c.turn) { r.brassTurn = A.c.turn; r.brassN = 0; } if (r.brassN < 2) { r.brassN++; A.block(A.player, 2); } } } },
+  { id: 'r_anvil_thread', name: 'Anvil Thread', rarity: 'rare', text: 'Playing a Tempered card Ties the Line: it carries over to your next turn at full value, and you gain 2 Block.',
+    on: { cardPlayed: (A, p) => { if (tempered(p)) { A.block(A.player, 2); if (A.c.seam) A.c.seam.tied = true; } } } },
   // ---- low Budget use ----
   { id: 'r_lean_ledger', name: 'Lean Ledger', rarity: 'common', text: 'At turn start, gain 2 Block per unused Budget (max 10).',
     on: { turnStart: (A) => { const s = A.c.strain; const free = s ? s.budget - s.weight : 0; if (free > 0) A.block(A.player, Math.min(10, 2 * free)); } } },
