@@ -645,7 +645,7 @@ export default {
     if (app.inRect(590, 614, 300, 66)) app.tooltip('Strip a graft', stripDis ? 'None of your cards carry a graft.' : `Pick a card, then one of its grafts. The graft and its boon are lost, its price goes with it. ${sp === 0 ? 'Free this once.' : sp + ' gold.'}`);
     const stripTitle = null; void stripTitle;
     if (app.button('LEAVE', 940, 600, 310, 90, { size: 38, fill: '#4a2a1c', stroke: COL.lamp })) { RUN.advance(run); flow.route(); }
-    if (app.inRect(940, 600, 310, 90)) app.tooltip('Leave the market', 'Back to the map. Unsold stock stays here.');
+    // (no hover tip on LEAVE: it opened over the Strip a graft button beside it)
 
     toastDraw(app, S, 560);
     S.fx.draw(g);

@@ -5,7 +5,7 @@ import { COL, EASE, rgba, clamp, lerp } from './core.js';
 import { Fx } from './fx.js';
 import { drawBackground } from '../art/backgrounds.js';
 import { drawCard, CARD_W, CARD_H } from '../art/cards.js';
-import { drawHeart, drawCoin } from '../art/icons.js';
+import { drawHeart, drawCoin, drawForgeIcon } from '../art/icons.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft, strainInfo, canTemper, instWeight, fusedWeight, FUSE_CAP } from '../engine/cards.js';
 import { CARDS, GRAFTS } from '../data/index.js';
@@ -49,48 +49,18 @@ function reasonFor(run, id) {
   return null;
 }
 function detailFor(run, id) {
-  if (id === 'rest') { const h = RUN.forgeHeal(run), to = Math.min(run.maxHp, run.hp + h); return { t: `HP ${run.hp} to ${to}  (+${to - run.hp})`, c: COL.good }; }
+  if (id === 'rest') { const h = RUN.forgeHeal(run), to = Math.min(run.maxHp, run.hp + h); return to === run.hp ? { t: `Already at full HP (${run.hp})`, c: COL.vellum } : { t: `HP ${run.hp} to ${to}  (+${to - run.hp})`, c: COL.good }; }
   if (id === 'expand') { const i = strainInfo(run); return { t: `Budget ${i.budget} to ${i.budget + 1}`, c: COL.lamp }; }
-  if (id === 'refine') return { t: `${upgradable(run).length} cards can be refined`, c: COL.vellum };
-  if (id === 'temper') return { t: `${temperable(run).length} cards can be tempered`, c: COL.vellum };
-  if (id === 'strip') return { t: `${grafted(run).length} cards carry grafts`, c: COL.vellum };
-  return { t: `${reforgeSources(run).length} cards can give a graft`, c: COL.vellum };
+  if (id === 'refine') return { t: `${upgradable(run).length} ${upgradable(run).length === 1 ? 'card' : 'cards'} can be refined`, c: COL.vellum };
+  if (id === 'temper') return { t: `${temperable(run).length} ${temperable(run).length === 1 ? 'card' : 'cards'} can be tempered`, c: COL.vellum };
+  if (id === 'strip') return { t: `${grafted(run).length} ${grafted(run).length === 1 ? 'card carries' : 'cards carry'} grafts`, c: COL.vellum };
+  return { t: `${reforgeSources(run).length} ${reforgeSources(run).length === 1 ? 'card' : 'cards'} can give a graft`, c: COL.vellum };
 }
 
 // ---- option icons (procedural) ------------------------------------------------------------------------------------------
-function drawOptIcon(g, id, cx, cy, k, t) {
-  g.save(); g.translate(cx, cy); g.lineCap = 'round'; g.lineJoin = 'round';
-  if (id === 'rest') {
-    const fl = 1 + Math.sin(t * 8) * 0.05 + k * 0.1;
-    const gl = g.createRadialGradient(0, 0, 4, 0, 0, 90); gl.addColorStop(0, `rgba(255,170,60,${0.45 + k * 0.3})`); gl.addColorStop(1, 'rgba(255,120,30,0)'); g.fillStyle = gl; g.fillRect(-90, -90, 180, 180);
-    g.scale(fl, fl); const fg = g.createLinearGradient(0, -50, 0, 40); fg.addColorStop(0, '#ffe08a'); fg.addColorStop(0.5, '#ff9a3c'); fg.addColorStop(1, '#c0391b');
-    g.fillStyle = fg; g.beginPath(); g.moveTo(0, -52); g.bezierCurveTo(30, -22, 34, 4, 26, 24); g.bezierCurveTo(20, 40, -20, 40, -26, 24); g.bezierCurveTo(-34, 4, -16, -14, 0, -52); g.fill();
-    g.fillStyle = 'rgba(255,240,180,.85)'; g.beginPath(); g.moveTo(0, -10); g.bezierCurveTo(14, 6, 14, 24, 0, 30); g.bezierCurveTo(-14, 24, -12, 6, 0, -10); g.fill();
-    g.strokeStyle = '#3a2418'; g.lineWidth = 9; g.beginPath(); g.moveTo(-40, 40); g.lineTo(40, 28); g.moveTo(-40, 28); g.lineTo(40, 40); g.stroke();
-  } else if (id === 'expand') {
-    for (let i = 0; i < 3; i++) { const x = -56 + i * 42, filled = i < 2; g.fillStyle = filled ? '#c9a227' : 'rgba(0,0,0,.4)'; g.strokeStyle = BRASS; g.lineWidth = 3; g.beginPath(); g.roundRect(x, -16, 34, 38, 5); g.fill(); g.stroke(); }
-    g.strokeStyle = COL.lamp; g.lineWidth = 5; const o = Math.sin(t * 4) * 3 * k; g.beginPath(); g.moveTo(46, -50 + o); g.lineTo(46, -28 + o); g.moveTo(35, -39 + o); g.lineTo(57, -39 + o); g.stroke();
-  } else if (id === 'refine') {
-    g.fillStyle = '#2b2b30'; g.beginPath(); g.moveTo(-50, 34); g.lineTo(50, 34); g.lineTo(38, 18); g.lineTo(54, 6); g.lineTo(54, -8); g.lineTo(-30, -8); g.lineTo(-52, 10); g.lineTo(-30, 14); g.closePath(); g.fill(); g.strokeStyle = '#6a6a72'; g.lineWidth = 2; g.stroke();
-    g.save(); g.translate(-10, -14); g.rotate(-0.9 + Math.sin(t * 5) * 0.25 * k); g.fillStyle = '#7a5a3a'; g.fillRect(-4, -52, 8, 56); g.fillStyle = '#9aa3a8'; g.fillRect(-18, -66, 36, 18); g.restore();
-  } else if (id === 'temper') {
-    g.fillStyle = '#2b2b30'; g.fillRect(-52, 30, 104, 12);
-    g.fillStyle = '#b89a3a'; g.fillRect(-36, -4, 72, 36); g.strokeStyle = '#2a1e1a'; g.lineWidth = 2.5; g.setLineDash([5, 4]); g.strokeRect(-31, 1, 62, 26); g.setLineDash([]);
-    for (const rx of [-18, 0, 18]) { g.fillStyle = '#e8dcc4'; g.beginPath(); g.arc(rx, 14, 5, 0, 6.283); g.fill(); g.strokeStyle = '#2a1e1a'; g.lineWidth = 1.5; g.stroke(); }
-    g.save(); g.translate(26, -34); g.rotate(-0.7 + Math.sin(t * 5) * 0.25 * k); g.fillStyle = '#7a5a3a'; g.fillRect(-4, -4, 8, 58); g.fillStyle = '#9aa0a6'; g.fillRect(-20, -16, 40, 18); g.restore();
-  } else if (id === 'strip') {
-    g.strokeStyle = '#d8dde0'; g.lineWidth = 4; g.beginPath(); g.moveTo(-36, 40); g.lineTo(34, -44); g.stroke(); g.lineWidth = 2; g.beginPath(); g.arc(37, -48, 5, 0, 6.28); g.stroke();
-    g.strokeStyle = COL.scar; g.lineWidth = 3; g.beginPath(); g.moveTo(37, -44);
-    for (let i = 1; i <= 14; i++) g.lineTo(37 - i * 5 + Math.sin(i * 0.9 + t * 4 * k) * 8, -44 + i * 6.5); g.stroke();
-  } else if (id === 'reforge') {
-    const c1 = '#7FD1E0', c2 = '#F2C14E';
-    g.fillStyle = c1; g.fillRect(-62, -26, 46, 54); g.fillStyle = 'rgba(255,255,255,.1)'; g.fillRect(-62, -26, 46, 54);
-    g.strokeStyle = 'rgba(232,220,196,.8)'; g.lineWidth = 2.5; g.strokeRect(-62, -26, 46, 54); g.strokeRect(16, -26, 46, 54);
-    g.fillStyle = c2; g.fillRect(-52, -8, 26, 18);
-    const o = Math.sin(t * 4) * 4 * k; g.strokeStyle = COL.lamp; g.lineWidth = 5; g.beginPath(); g.moveTo(-8 + o, 0); g.lineTo(8 + o, 0); g.moveTo(2 + o, -8); g.lineTo(10 + o, 0); g.lineTo(2 + o, 8); g.stroke();
-    g.setLineDash([4, 4]); g.strokeStyle = 'rgba(232,220,196,.6)'; g.strokeRect(24, -2, 30, 22); g.setLineDash([]);
-  }
-  g.restore();
+function drawOptIcon(g, id, cx, cy, k, t, app) {
+  const st = app && app.shared && app.shared.meta && app.shared.meta.settings;
+  drawForgeIcon(g, id, cx, cy, 128, { t, k, quality: app && app.quality, reduced: !!(st && (st.reduceMotion || st.reducedMotion)) }); // engraved, art/icons.js
 }
 
 function drawOptionCard(app, run, i, o, over, k, disabledWhy, usedUp, shk) {
@@ -102,7 +72,7 @@ function drawOptionCard(app, run, i, o, over, k, disabledWhy, usedUp, shk) {
   g.shadowBlur = 0; g.lineWidth = over && !dim ? 3 : 2; g.strokeStyle = dim ? 'rgba(232,220,196,.2)' : over ? COL.lamp : rgba(BRASS, 0.7); g.stroke();
   g.shadowBlur = 0; app.panel(x, y, OW, OH, { fill: 'rgba(0,0,0,0)', stroke: 'rgba(0,0,0,0)', r: 14, lw: 2 }); // chrome overlay: engraved hatch, inset shadow, rivets (cached)
   g.save(); app.rr(x + 8, y + 8, OW - 16, OH - 16, 10); g.lineWidth = 1; g.strokeStyle = dim ? 'rgba(232,220,196,.1)' : 'rgba(201,162,39,.3)'; g.setLineDash([5, 4]); g.stroke(); g.restore();
-  g.globalAlpha = dim ? 0.4 : 1; drawOptIcon(g, o.id, x + OW / 2, y + 88, k, app.t); g.globalAlpha = 1;
+  g.globalAlpha = dim ? 0.4 : 1; drawOptIcon(g, o.id, x + OW / 2, y + 88, k, app.t, app); g.globalAlpha = 1;
   const nameH = app.text(o.name, x + OW / 2, y + 150, { size: 30, bold: true, align: 'center', color: dim ? 'rgba(232,220,196,.4)' : COL.lamp, shadow: !dim });
   // bottom block (reason or live detail) is sized from its real wrapped lines; the description gets what is left (phones inflate the text)
   let bt = '', bo, bl = 0; const bsz = disabledWhy ? 14 : 15;
@@ -249,7 +219,7 @@ function drawForgeAnim(app, a) {
   if (a.kind === 'rest') {
     const pulse = 0.7 + Math.sin(a.t * 6) * 0.1, fk = EASE.out(clamp((k - 0.2) / 0.5, 0, 1));
     const gl = g.createRadialGradient(640, 420, 10, 640, 420, 420); gl.addColorStop(0, `rgba(255,170,70,${0.5 * pulse})`); gl.addColorStop(1, 'rgba(255,120,30,0)'); g.fillStyle = gl; g.fillRect(0, 0, 1280, 720);
-    drawOptIcon(g, 'rest', 640, 330, 1, app.t); // fire
+    drawOptIcon(g, 'rest', 640, 330, 1, app.t, app); // fire
     const hp = lerp(a.from, a.to, fk);
     app.text('Rest', 640, 100, { size: 40, bold: true, align: 'center', color: COL.lamp, shadow: true });
     drawHeart(g, 440, 520, 40);

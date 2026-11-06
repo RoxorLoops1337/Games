@@ -140,7 +140,7 @@ function drawRow(app, r, i, y, compact, K) {
   const yy = y + (hover ? -2 : 0);
   ctx.save(); ctx.globalAlpha = slide * (r.taken ? 0.4 : 1);
   const cy = yy + h / 2;
-  if (r.id === 'gold') ICONS.drawCoin(ctx, x + 46, cy, 48); else info.icon(ctx, x + 46, cy, 52);
+  ICONS.drawRewardIcon(ctx, r.id, x + 46, cy, 56, { id: r.id === 'relic' ? st.init.relic : st.init.potion, spot: r.id === 'gold' ? undefined : info.col });
   ctx.restore();
   const a = slide * (r.taken ? 0.45 : 1);
   let ty = yy + 10;
@@ -152,8 +152,7 @@ function drawRow(app, r, i, y, compact, K) {
   const cw = 130, ch = Math.round(40 * Math.min(k, 1.2)), cx = x + PW - cw - 14, cyy = cy - ch / 2;
   app.reg('reward-chip' + i, cx, cyy, cw, ch, { group: 'row' + i });
   ctx.save(); ctx.globalAlpha = slide;
-  app.rr(cx, cyy, cw, ch, 8); ctx.fillStyle = r.taken ? 'rgba(80,100,80,.35)' : full ? 'rgba(90,20,30,.6)' : hover ? '#6a4a14' : '#4a3410'; ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = r.taken ? 'rgba(127,207,138,.5)' : full ? COL.bad : COL.lamp; ctx.stroke(); ctx.restore();
+  ICONS.drawRewardChip(ctx, cx, cyy, cw, ch, r.taken ? 'taken' : full ? 'full' : 'take', hover); ctx.restore(); // engraved tag (art/icons.js)
   const fs = Math.min(20 * k, (cw - 12) / (label.length * 0.56));
   app.text(label, cx + cw / 2, cyy + (ch - fs) / 2 - 1, { size: Math.floor(Math.max(14, fs)), fixed: true, bold: true, align: 'center', color: r.taken ? COL.good : full ? '#ffb3bd' : '#ffe9a8', alpha: slide });
   keyBadge(app, String(i + 1), x - 16, cy);

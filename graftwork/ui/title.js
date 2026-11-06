@@ -204,8 +204,8 @@ export default {
     drawLogo(app, 640, logoY, this.logoK);
     g.restore();
     if (this.state === 'menu') {
-      app.text('Cut what you love. Stitch what you need.', 640, 258, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: clamp((this.logoK - 0.6) * 3, 0, 1) });
-      app.text('Goal: fight up the map, sew grafts onto your own cards, beat each Act boss.', 640, 282, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((this.logoK - 0.7) * 3, 0, 1) });
+      app.text('Cut what you love. Stitch what you need.', 640, 250, { size: 22, italic: true, align: 'center', color: '#d9cba8', shadow: true, alpha: clamp((this.logoK - 0.6) * 3, 0, 1) });
+      app.text('Goal: fight up the map, sew grafts onto your own cards, beat each Act boss.', 640, 272, { size: 14, align: 'center', color: '#bfae88', shadow: true, alpha: clamp((this.logoK - 0.7) * 3, 0, 1) });
     }
     // keys
     const keys = app.blocked ? [] : app.pressedKeys;

@@ -8,6 +8,7 @@ import { drawCard, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
 import { cardSpec, strainInfo, isBare, instWeight, fusedWeight, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { resonanceOf } from '../engine/resonance.js';
+import { drawVellum, drawEmptyMark } from '../art/plates.js';
 
 const reduceMotion = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion);
 const plural = (n, w) => (n === 1 ? w : w + 's');
@@ -102,6 +103,7 @@ export function cardGrid(app, items, x, y, w, h, o = {}) {
   }
   let hover = -1;
   if (!items.length) {
+    drawEmptyMark(ctx, x + w / 2, y + h / 2 - 34);
     app.text(o.empty || 'Nothing here.', x + w / 2, y + h / 2 - 12, { size: 20, align: 'center', color: 'rgba(232,220,196,.55)', italic: true });
     st.view = { x, y, w, h }; st.max = 0; st.scroll = st.target = 0;
     return { hover, cols, rowH };
@@ -298,6 +300,7 @@ export default {
     const PX = 14, PY = 10, PW = W - 28, PH = H - 20;
     app.reg('deck-panel', PX, PY, PW, PH, { overlay: true });
     app.panel(PX, PY, PW, PH, { r: 14, fill: '#1c1714', stroke: 'rgba(232,220,196,.5)', lw: 3 });
+    drawVellum(ctx, PX + 3, PY + 3, PW - 6, PH - 6, { r: 12, alpha: 0.9 }); // baked vellum
     if (app.mouse.pressed && !app.inRect(PX, PY, PW, PH) && !this.pick && !app.blocked) this.pending = () => this.close(app, false);
     if (!run) { app.text('No run in progress.', W / 2, 340, { size: 24, align: 'center' }); ctx.restore(); return; }
 

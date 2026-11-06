@@ -1753,11 +1753,12 @@ function drawHudBottom(app) {
   const st = c.strain, B = L.STRAIN_BOX;
   const over = st.strain > 0;
   // phones inflate the text: size the two rows from the real line height so Budget and Strain never touch
-  const sLh = Math.ceil(app.sz(15, { ui: true, bold: true }) * 1.1), sH = Math.max(B.h, sLh * 2 + 12);
+  const sLh = Math.ceil(app.sz(15, { ui: true, bold: true }) * 1.1), sH = Math.max(B.h, sLh * ((c.strain.backfire || 0) > 0 ? 3 : 2) + 12);
   app.panel(B.x, B.y, B.w, sH, { fill: 'rgba(14,12,10,.8)', stroke: over ? COL.scar : 'rgba(232,220,196,.35)', r: 8 });
   app.reg('strain', B.x, B.y, B.w, sH, {});
   app.text(`Budget ${st.weight}/${st.budget}`, B.x + 10, B.y + 5, { size: 15, ui: true, bold: true, color: COL.vellum });
   app.text(`Strain ${st.strain}`, B.x + 10, B.y + 5 + sLh, { size: 15, ui: true, bold: true, color: over ? COL.bad : COL.good });
+  if (st.backfire > 0) app.text(`Backfire ${st.backfire}`, B.x + 10, B.y + 5 + sLh * 2, { size: 15, ui: true, bold: true, color: COL.bad });
   if (app.inRect(B.x, B.y, B.w, sH)) {
     const tithed = []; for (const w of S.known.values()) if (w.tithed) tithed.push(w);
     const lines = [];
@@ -1815,7 +1816,8 @@ function drawTips(app) {
   if (!S || S.modal || S.ending || S.c.pending || S.banner || !canAct() || S.drag) return;
   const c = S.c, l = liveEds(), first = l[0];
   const has = (k) => app.shared.meta && app.shared.meta.tips && app.shared.meta.tips[k];
-  const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
+  // narrow bubbles grow tall on small screens (boosted text): when one would reach the hero's head, it widens instead (still the quiet wall)
+  const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o.pos === QUIET && !o.fallback ? { ...o, fitBottom: 236, fallback: { w: 430 } } : o);
   // the card-play tip shows right away once a card is selected, and otherwise right after the energy tip (before the intent tip)
   if (S.hand.length && S.sel && !has('playcard') && tip('playcard', 500, L.HAND_Y - 120, { pos: QUIET, w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
   if (first && !S.hov) {

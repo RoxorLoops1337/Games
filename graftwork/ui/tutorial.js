@@ -41,6 +41,12 @@ export function maybeTip(app, key, x, y, text, o = {}) {
   if (app._tipFrame === app.frame && app._tipKey !== key) return false; // one tip at a time
   app._tipFrame = app.frame; app._tipKey = key;
   if (text === undefined) text = TIP_TEXTS[key] || '';
+  // o.fallback: { pos, w, maxBottom }: used instead when the wrapped bubble would not fit between o.pos.y and o.maxBottom (small screens inflate the text)
+  const fitB = o.fitBottom !== undefined ? o.fitBottom : o.maxBottom;
+  if (o.fallback && o.pos && fitB !== undefined) {
+    const mw = o.w || 270, ls = app.wrap(text, mw - 24, 15, { ui: true }), need = ls.length * Math.round(19 * app.sz(15, { ui: true }) / 15) + 24 + Math.max(24, Math.round(app.sz(14, { ui: true }) * 1.7)) + 4;
+    if (o.pos.y + need > fitB) { const fb = o.fallback; return maybeTip(app, key, x, y, text, { ...o, ...fb, fallback: null }); }
+  }
   const ctx = app.ctx, side = o.side || 'below', maxW = o.w || 270, pad = 12;
   const lines = app.wrap(text, maxW - pad * 2, 15, { ui: true });
   const bw = Math.min(maxW, Math.max(...lines.map((l) => app.measure(l, 15, { ui: true }))) + pad * 2 + 2);

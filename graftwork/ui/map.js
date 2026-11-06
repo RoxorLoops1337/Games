@@ -313,7 +313,9 @@ export default {
     app.blocked = blocked0;
     if (this.confirm) this.drawConfirm(app);
     if (!this.banner && !this.confirm && !this.trav) {
-      if (!maybeTip(app, 'mapnodes', 640, 640, 'Pick a node to walk to. Fights give gold and a graft, elites a relic, events are a gamble, shops sell, forges mend. The legend is on the right.', { pos: { x: 22, y: 338 }, w: 262 })) maybeTip(app, 'resonance', 968, 340, undefined, { pos: { x: 22, y: 338 }, w: 262 });
+      const slot = this._tipSlot || { top: 356, bottom: 500 };
+      const TIPO = { pos: { x: 22, y: slot.top }, w: 262, maxBottom: slot.bottom, fallback: { pos: { x: 352, y: 12 }, w: 580, maxBottom: 140 } };
+      if (!maybeTip(app, 'mapnodes', 640, 640, 'Pick a node to walk to. Fights give gold and a graft, elites a relic, events are a gamble, shops sell, forges mend. The legend is on the right.', TIPO)) maybeTip(app, 'resonance', 968, 340, undefined, TIPO);
     }
   },
 
@@ -390,6 +392,7 @@ export default {
     // relics get whatever is left between here and the potions
     app.text('RELICS', X + 18, y, { size: 13, ui: true, bold: true, color: 'rgba(232,220,196,.6)' });
     y += 20;
+    this._tipSlot = { top: y - 2, bottom: potTop - 26 + 20 }; // first-run bubble sits in the empty relic shelf, never over the RELICS header or the potion slots
     const per = 7, cell = 39, avail = Math.max(1, Math.floor((potTop - 26 - y) / cell));
     const cap = per * avail, over = run.relics.length > cap, shown = over ? cap - 1 : run.relics.length;
     run.relics.slice(0, shown).forEach((id, i) => {
