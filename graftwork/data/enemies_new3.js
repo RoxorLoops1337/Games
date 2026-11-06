@@ -23,7 +23,7 @@ const stageManager = {
   moves: {
     cue: { name: 'Cue the Crew', intent: ['defend', 'buff', 'attack'], fx: [D(8), ST('stitchedup', 8, 'allies'),
       CUSTOM('buff', 'Gives itself Stitched Up 8 when it stands alone', (A, ctx) => { if (!A.alive().some((x) => x !== ctx.srcEnt)) A.status(ctx.srcEnt, 'stitchedup', 8); })] },
-    prompt_book: { name: 'Consult the Prompt Book', fx: [D(16), { op: 'block', n: 8 }] },
+    prompt_book: { name: 'Prompt Book', fx: [D(16), { op: 'block', n: 8 }] },
     call_time: { name: 'Call Time', fx: [D(12), { op: 'if', cond: () => false, ifText: 'you played fewer than 3 cards this turn (+18 damage)', then: [] }] },
   },
   pick(A, e) {
@@ -48,7 +48,7 @@ const understudysShadow = {
   id: 'understudys_shadow', name: "Understudy's Shadow", act: 3, kind: 'normal', start: { strength: 1 }, hp: [76, 82],
   pattern: ['mimic', 'curtsey', 'mimic'],
   moves: {
-    mimic: { name: 'Mimic Your Last Line', intent: ['attack', 'debuff'], fx: [D(8), CUSTOM('debuff', 'Copies the school of your last card: Ember burn 2, Blood bleed 2, Echo weak 1, Static marked 1, Gilded frail 1, Hoard 10 block for itself, Rust a Flake in your discard', (A, ctx) => {
+    mimic: { name: 'Mimic Last Card', intent: ['attack', 'debuff'], fx: [D(8), CUSTOM('debuff', 'Copies the school of your last card: Ember burn 2, Blood bleed 2, Echo weak 1, Static marked 1, Gilded frail 1, Hoard 10 block for itself, Rust a Flake in your discard', (A, ctx) => {
       const e = ctx.srcEnt, s = e.data.school;
       if (!s) return;
       if (RIDERS[s]) A.status(A.player, RIDERS[s][0], RIDERS[s][1]);

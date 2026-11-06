@@ -274,7 +274,7 @@ const goldLeafGolem = {
   moves: {
     gild: { name: 'Gild Itself', intent: ['defend', 'buff', 'attack'], fx: [{ op: 'block', n: { base: 8, per: 'gold', mul: 0.1, max: 36 } }, D(12), SELF('strength', 1)] },
     slam: { name: 'Gilt Slam', fx: [D({ base: 24, per: 'gold', mul: 1 / 15, max: 32 })] },
-    flake: { name: 'Peel Off Your Gold', fx: [D(20), CUSTOM('debuff', 'Steals up to 12 gold and plates itself with it', (A, ctx) => {
+    flake: { name: 'Peel Your Gold', fx: [D(20), CUSTOM('debuff', 'Steals up to 12 gold and plates itself with it', (A, ctx) => {
       const take = Math.min(12, A.c.run.gold || 0);
       if (take > 0) { A.gold(-take); A.block(ctx.srcEnt, take); }
     })] },

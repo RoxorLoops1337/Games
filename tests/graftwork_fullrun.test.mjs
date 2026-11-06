@@ -75,7 +75,7 @@ for (const hero of ['marrow', 'wick', 'odile']) {
 }
 t('combat screen wires the Grafter reknit event (phase strip) and brands marked cards', () => {
   const src = readFileSync(new URL('../graftwork/ui/combat.js', import.meta.url), 'utf8');
-  assert.match(src, /case 'reknit':[^\n]*phaseBeat/, 'reknit event fires the phase strip');
+  assert.match(src, /case 'reknit':[^\n]*phaseBeat\(APP, 'REKNIT'\)/, 'reknit event fires the phase strip');
   assert.match(src, /mark: dc\.w\.reknit \? 'reknit'/, 'marked hand cards are drawn with the reknit brand');
 });
 console.log(`${n} full-run checks passed`);

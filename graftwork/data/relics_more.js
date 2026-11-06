@@ -54,7 +54,7 @@ export const RELICS_MORE = [
   { id: 'r_grounding_rod', name: 'Grounding Rod', rarity: 'uncommon', text: 'A Static payout deals 3 damage per stitch to all enemies.',
     on: { seamPay: (A, p) => { if (!p || p.school !== 'static') return; const n = (p.stitches | 0); if (n <= 0) return; for (const e of A.alive()) A.dmg(A.player, e, 3 * n, { pierce: true }); } } },
   // ---- event relic: its charges are run.flags.spool, set by the event "A Spool That Hums" ----
-  { id: 'r_cursed_spool', name: 'Cursed Spool', rarity: 'start', text: 'Each charge (wound at the event) makes your next combat pay every Thread payout twice. Without a charge it does nothing.',
+  { id: 'r_cursed_spool', name: 'Cursed Spool', rarity: 'start', text: 'Each charge (wound at the Spool event) makes your next combat pay every Thread payout twice. No charge, no effect.',
     on: {
       combatStart: (A, p, run) => { const r = run || A.c.run; if (r && r.flags && r.flags.spool > 0) { r.flags.spool -= 1; rx(A).spoolOn = true; } },
       seamPay: (A, p) => { if (rx(A).spoolOn) repay(A, p); },

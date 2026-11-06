@@ -359,6 +359,7 @@ function pickMotif(spec) {
   if (has('addCard')) return 'papers'; if (has('dmg')) return ['scalpel', 'bonesaw', 'clamp', 'bone'][hash(spec.id || '') % 4];
   return MOTIF_NAMES[hash(spec.id || spec.name || '') % MOTIF_NAMES.length];
 }
+export const motifOf = (spec) => pickMotif(spec);
 function schoolOf(spec) { return spec.school || HERO_SCHOOL[spec.hero] || null; }
 function tintOf(spec) { const s = schoolOf(spec); return (s && COLX[s]) || COLX[spec.type] || '#8a7a60'; }
 
