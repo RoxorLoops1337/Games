@@ -7,6 +7,7 @@ import { drawSchoolGlyph } from '../art/cards.js';
 import * as RUN from '../engine/run.js';
 import { HEROES, SCHOOLS, CARDS } from '../data/index.js';
 import { heroUnlocked, maxAscension, startRelicOf, practiceList, dailyPlayed } from '../engine/meta.js';
+import { ASSIST_OPTIONS, ASSIST_NOTE, ASSIST_DEFAULT, assistFlags } from '../engine/assist.js';
 import { loadRun } from '../engine/save.js';
 import { hashSeed } from '../engine/rng.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs } from './fullscreen.js';
@@ -340,6 +341,7 @@ export default {
       const px = px0 + i * (pw + gap), yy = py + (1 - k) * 30 * (i + 1) / 3;
       this.drawHeroPanel(app, h, px, yy, pw, ph, i);
     });
+    this.drawAssist(app, px0, 506);
     // lower row
     const ly = 536;
     const unlocked = heroUnlocked(meta, this.hero);
@@ -386,6 +388,7 @@ export default {
       const opts = { hero: this.hero, ascension: this.asc };
       if (this.seed.trim()) opts.seed = this.seed.trim();
       const sr = startRelicOf(meta); if (sr) opts.startRelic = sr;
+      const af = assistFlags(this.assistOf(app)); if (af) opts.assist = af; // Assist mode (engine/assist.js)
       this.begin(app, opts);
     }
     // Practice a boss: unlocked once a boss has been met; replays it with the deck saved from that run
@@ -399,6 +402,28 @@ export default {
     }
     if (keys.some((e) => e.key === 'Escape')) this.go(app, 'menu');
     if (keys.some((e) => e.key === 'ArrowRight' && !this.seedFocus)) { }
+  },
+  // Assist mode: a toggle plus 4 independent options, remembered in meta.settings.assist (off by default)
+  assistOf(app) {
+    const st = app.shared.meta.settings;
+    if (!st.assist || typeof st.assist !== 'object') st.assist = { ...ASSIST_DEFAULT };
+    return st.assist;
+  },
+  drawAssist(app, x, y) {
+    const a = this.assistOf(app), flow = app.shared.flow, h = 28;
+    const save = () => { if (flow.saveMeta) flow.saveMeta(); };
+    app.reg('title-assist', x, y, 130, h, { group: 'assist' });
+    if (app.inRect(x, y, 130, h)) app.tooltip('Assist mode', 'An easier way to learn the game. Off by default. ' + ASSIST_NOTE);
+    if (app.button('Assist: ' + (a.on ? 'On' : 'Off'), x, y, 130, h, { size: 15, fill: a.on ? '#2a3a2a' : undefined, stroke: a.on ? '#8fe0a0' : undefined })) { a.on = !a.on; save(); }
+    if (!a.on) return;
+    ASSIST_OPTIONS.forEach((o, i) => {
+      const ox = x + 140 + i * 158, on = !!a[o.id];
+      app.reg('title-assist-' + o.id, ox, y, 150, h, { group: 'assist' });
+      if (app.inRect(ox, y, 150, h)) app.tooltip(o.name + (on ? ' (on)' : ' (off)'), o.text);
+      if (app.button(o.name, ox, y, 150, h, { size: 14, fill: on ? '#4a3a1d' : undefined, stroke: on ? COL.lamp : undefined, color: on ? '#fbe9b0' : undefined })) { a[o.id] = !on; save(); }
+      const g = app.ctx; g.save(); g.strokeStyle = on ? '#fbe9b0' : 'rgba(232,220,196,.55)'; g.lineWidth = 1.5; g.strokeRect(ox + 8.5, y + h / 2 - 5.5, 11, 11); if (on) { g.fillStyle = '#fbe9b0'; g.fillRect(ox + 11, y + h / 2 - 3, 6, 6); } g.restore();
+    });
+    app.text('Assisted runs do not unlock ascensions or achievements.', x + 140 + 4 * 158 + 6, y + 1, { size: 12, ui: true, italic: true, maxW: W - 50 - (x + 140 + 4 * 158 + 6), lineH: 14, color: 'rgba(232,220,196,.6)' });
   },
   drawHeroPanel(app, h, x, y, w, ph, idx) {
     const g = app.ctx, meta = app.shared.meta;

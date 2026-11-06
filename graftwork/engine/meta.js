@@ -12,7 +12,7 @@ export const KEY = 'graftwork_meta_v1';
 export const HISTORY_MAX = 20;
 export const MAX_ASC = 10;
 export const SEEN_KINDS = ['cards', 'grafts', 'enemies', 'relics', 'potions', 'statuses', 'events'];
-export const DEFAULT_SETTINGS = { master: 0.8, sfx: 0.8, music: 0.35, screenShake: true, reducedMotion: false, colorblind: false, flashes: true, highContrast: false, colorblindMode: "deuteranopia", largeText: false, tips: true, muted: false };
+export const DEFAULT_SETTINGS = { master: 0.8, sfx: 0.8, music: 0.35, screenShake: true, reducedMotion: false, colorblind: false, flashes: true, highContrast: false, colorblindMode: "deuteranopia", largeText: false, tips: true, muted: false, assist: { on: false, sturdy: true, gentle: true, kind: true, mercy: true } };
 export { ACHIEVEMENTS };
 
 // ---------- storage (injectable) ----------
@@ -147,18 +147,19 @@ export function recordRunEnd(m, run, outcome) {
   S.elites += st.elites || 0; S.bosses += st.bosses || 0; S.goldEarned += st.goldEarned || 0;
   S.bestLoop = Math.max(S.bestLoop, run.loop || 0);
   const asc = run.ascension || 0;
+  const assisted = !!run.assist; // Assist mode (engine/assist.js): played and counted in stats, but no ascension, daily best or achievements
   if (won) {
     S.fastestWinFloors = S.fastestWinFloors === null ? (st.floors || 0) : Math.min(S.fastestWinFloors, st.floors || 0);
     m.wins[run.hero] = (m.wins[run.hero] || 0) + 1;
     m.winAsc[run.hero] = Math.max(m.winAsc[run.hero] || 0, asc);
-    if (run.daily) S.dailyWins++;
+    if (run.daily && !assisted) S.dailyWins++;
     const next = Math.min(MAX_ASC, asc + 1);
-    if (next > maxAscension(m, run.hero) && next > asc) {
+    if (!assisted && next > maxAscension(m, run.hero) && next > asc) {
       m.bestAsc[run.hero] = next;
       res.newUnlocks.push({ kind: 'ascension', id: run.hero + ':' + next, name: 'Ascension ' + next, text: ASCENSION_TEXT[next] || '' });
     }
   }
-  if (run.daily) {
+  if (run.daily && !assisted) {
     const cur = m.daily.best;
     const score = (won ? 1000 : 0) + (st.floors || 0);
     if (!cur || score > (cur.score || 0)) m.daily.best = { seed: run.daily, hero: run.hero, outcome, floors: st.floors || 0, grafts: st.grafts || 0, score };
@@ -181,7 +182,7 @@ export function recordRunEnd(m, run, outcome) {
   // achievements
   const ctx = endContext(run, outcome, m);
   for (const a of ACHIEVEMENTS) {
-    if (isAchieved(m, a.id)) continue;
+    if (assisted || isAchieved(m, a.id)) continue;
     let ok = false;
     try { ok = !!a.check(run, ctx, m); } catch { ok = false; }
     if (ok) {
@@ -191,7 +192,7 @@ export function recordRunEnd(m, run, outcome) {
     }
   }
 
-  m.history.unshift({ hero: run.hero, asc, outcome, floors: st.floors || 0, grafts: st.grafts || 0, date: Date.now(), seed: String(run.seed), loop: run.loop || 0, daily: !!run.daily });
+  m.history.unshift({ hero: run.hero, asc, outcome, floors: st.floors || 0, grafts: st.grafts || 0, date: Date.now(), seed: String(run.seed), loop: run.loop || 0, daily: !!run.daily, ...(assisted ? { assist: true } : {}) });
   m.history = m.history.slice(0, HISTORY_MAX);
   saveMeta(m);
   return res;

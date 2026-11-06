@@ -7,9 +7,9 @@ import * as RUN from '../graftwork/engine/run.js';
 import { newCombat, playCard, endTurn, canPlay, intentOf, resolvePending, usePotion, finishCombat, specOf } from '../graftwork/engine/combat.js';
 import { seamPreview } from '../graftwork/engine/seam.js';
 import { hashSeed } from '../graftwork/engine/rng.js';
-import { cardSpec, canGraft, canTemper, schoolsOf } from '../graftwork/engine/cards.js';
+import { cardSpec, canGraft, canTemper, schoolsOf, newInst } from '../graftwork/engine/cards.js';
 import { GRAFTS, HEROES, CARDS } from '../graftwork/data/index.js';
-import { POLICIES, cardValue, graftScore, playRun } from './graftwork_sim.mjs';
+import { POLICIES, cardValue, graftScore, playRun, cardV as fxValueOf } from './graftwork_sim.mjs';
 
 // rough value of one stitch of each school payout
 const STITCH_VAL = { ember: 3.2, echo: 4, hoard: 3, blood: 1.6, rust: 3.5, static: 2.5, gilded: 0.5 };
@@ -133,7 +133,47 @@ export function strongForge(run, pol, hpF) {
   return RUN.forgeAct(run, 'temper', c[0].uid).ok;
 }
 
-POLICIES.strong = { buyCards: +(process.env.GW_BUY ?? 0), maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft, forge: strongForge };
+// ---------- card pick / shop buy policy (GW_PICK) ----------
+// Cards only enter a run through the shop (5 per visit). Policy: score every shelf card, buy the best while it beats skipping by a margin.
+// score = static value gain over the deck's median card (cardValue ratio via sim fxValue) + audit forced-win delta (wins per 200 runs / 20)
+//         + school bonus (shares the school of the deck's grafts) - dead-pick penalty (cards the audit measured as rarely played).
+// Gold budget: keep GW_RESERVE gold back for junk removal; at most GW_MAXBUY cards per run.
+const AUDIT_DELTA = { x_adrenal: 20, m_restraints: 46, m_secondwind: 57, m_desperate: 48, o_liquidate: 44, o_tip_the_usher: 36, o_golden_parachute: 22, w_bare_wire: 40, w_capacitor_bank: 35, m_thread_stitchup: 28, w_thread_fusewire: 19,
+  w_dynamo: -15, w_flashpoint: -20, m_bloodrite: -32, m_hammered_plate: -9, m_laybare: -15, o_gilded_age: -27, o_dividend: -20, o_tithe_ledger: -28, o_pawn_ticket: -4, o_cross_listing: -23, m_swab: -24, w_conductive_thread: -21, w_tinder_stack: -19,
+  w_graft_furnace: -19, o_market_crash: -43, o_audit: -30, w_chain_reaction: -25, x_resolve: -40, x_flatline: -30, o_reprint: -15, w_pyre_dance: 7, o_levy: 9, o_second_helping: 5 };
+const PICK_ON = () => (process.env.GW_PICK ?? '1') !== '0';
+export function auditDelta(id) { return AUDIT_DELTA[id] || 0; }
+export function strongShopCards(run, shop, pol) {
+  const margin = +(process.env.GW_MARGIN ?? 1.0), maxBuy = +(process.env.GW_MAXBUY ?? 3), reserve = +(process.env.GW_RESERVE ?? 0);
+  const real = run.deck.filter((x) => CARDS[x.id].type !== 'junk');
+  const vals = real.map((x) => cardValueStatic(x)).sort((x, y) => x - y);
+  const med = vals.length ? vals[Math.floor(vals.length / 2)] : 0;
+  const focus = {};
+  for (const inst of run.deck) for (const g of inst.grafts) { const s = GRAFTS[g].school; focus[s] = (focus[s] || 0) + 1; }
+  const top = Object.entries(focus).sort((a, b) => b[1] - a[1])[0];
+  const junkRemoval = run.deck.some((x) => CARDS[x.id].type === 'junk') ? RUN.servicePrice(run, 'remove') : 0;
+  run.flags.gwBought = run.flags.gwBought || 0;
+  for (let n = 0; n < 4 && run.flags.gwBought < maxBuy; n++) {
+    let best = -1, bs = +(process.env.GW_THRESH ?? 2);
+    shop.cards.forEach((k, i) => {
+      if (k.sold || run.gold - k.price < Math.max(reserve, junkRemoval)) return;
+      const def = CARDS[k.id];
+      let s = cardValueStatic(newInst(k.id, () => -1)) - med * margin * 0.5 - med * 0.5;
+      s += auditDelta(k.id) / 20;
+      if (top && def.school === top[0]) s += 1.5; else if (top && (focus[def.school] || 0) >= 2 && def.school) s += 0.7;
+      if (def.type === 'power' && real.length < 9) s -= 1;
+      if (s > bs) { bs = s; best = i; }
+    });
+    if (best < 0) break;
+    if (RUN.shopBuy(run, 'card', best).ok) run.flags.gwBought++; else break;
+  }
+}
+function cardValueStatic(inst) { return fxValueOf(inst); }
+
+const STRONG = { maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft, forge: strongForge };
+POLICIES.strongNoPick = { ...STRONG, buyCards: +(process.env.GW_BUY ?? 0) };
+POLICIES.strongPick = { ...STRONG, buyCards: 1, shopCards: strongShopCards };
+POLICIES.strong = PICK_ON() ? POLICIES.strongPick : POLICIES.strongNoPick;
 
 if (process.argv[1] && process.argv[1].endsWith('graftwork_strong.mjs')) {
   const N = +process.argv[2] || 40, asc = +process.argv[3] || 0, only = process.argv[4];

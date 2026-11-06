@@ -2,6 +2,7 @@
 // offer (the heart of the game), shop, forge, events, ascension, daily seed, endless loops, save/restore.
 import { CARDS, GRAFTS, ENEMIES, RELICS, POTIONS, EVENTS, HEROES, SCHOOLS } from '../data/index.js';
 import { makeRng, hashSeed } from './rng.js';
+import { applyAssist } from './assist.js';
 import { DAILY_MODS } from '../data/dailymods.js';
 import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper } from './cards.js';
 
@@ -54,6 +55,7 @@ export function newRun(opts = {}) {
   if (opts.startRelic && !opts.daily) addRelic(run, opts.startRelic); // bought in the Records tab (meta2 START_RELICS)
   if (run.daily) { run.dailyMod = DAILY_MODS[hashSeed(run.daily) % DAILY_MODS.length]; run.budgetBonus += run.dailyMod.budget || 0; }
   run.budgetBonus += -(asc >= 6 ? 1 : 0);
+  if (opts.assist && !opts.daily) applyAssist(run, opts.assist); // Assist mode (engine/assist.js); daily cases never take it
   startAct(run, 1);
   return run;
 }

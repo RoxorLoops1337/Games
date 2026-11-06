@@ -8,6 +8,7 @@ import { CARDS, ENEMIES, RELICS, POTIONS, STATUSES, HEROES } from '../data/index
 import { cardSpec, strainInfo, relicMod, newInst, OVERLOAD_MULT, OVERLOAD_SHATTER, TITHE_MULT } from './cards.js';
 import { resonanceOf, RES_HOOKS } from './resonance.js';
 import { seamInit, seamStep, seamEnd, seamTurnStart } from './seam.js';
+import { assistDmgMul, assistRevive, assistOpt } from './assist.js';
 import { afflInst, afflCost, afflStartTurn, afflEndTurn, afflAbsorb } from './afflictions.js';
 
 export const HAND_CAP = 10;
@@ -127,7 +128,7 @@ export function spawn(c, id, o = {}) {
   hp = Math.round(hp * k);
   const e = { kind: 'enemy', uid: c.nextId++, id, def: d, name: d.name, hp, maxHp: hp, block: 0, st: {}, turn: 0, move: null, dead: false, minion: !!d.minion, data: {} };
   if (o.slot !== undefined && o.slot < c.enemies.length) c.enemies.splice(o.slot, 0, e); else c.enemies.push(e);
-  e.dmgMul = (asc >= 10 ? 1.1 : 1) * (asc >= 7 && d.kind === 'elite' ? 1.15 : 1) * (1 + (c.run.loop || 0) * 0.15);
+  e.dmgMul = (asc >= 10 ? 1.1 : 1) * (asc >= 7 && d.kind === 'elite' ? 1.15 : 1) * (1 + (c.run.loop || 0) * 0.15) * assistDmgMul(c.run); // Assist: Gentle foes
   if (d.start) for (const s of Object.keys(d.start)) e.st[s] = d.start[s];
   c.ev.push({ t: 'spawn', e: e.uid, id, silent: !!o.silent });
   if (!o.silent) pickMove(c, e);
@@ -234,6 +235,7 @@ export function kill(c, e, src) {
     // relics may save the player (e.g. a once-per-run revive)
     fire(c, 'wouldDie', {});
     if (c.player.hp > 0) return;
+    if (assistRevive(c)) return; // Assist: Mercy, once per run
     c.over = 'lose'; c.ev.push({ t: 'lose' });
     return;
   }
@@ -552,7 +554,7 @@ export function playCard(c, hi, ti) {
   let shatter = false;
   if (sp.overload && !card.rolled) {
     card.rolled = true;
-    const p = Math.max(0, (card.reknit ? 0.4 : OVERLOAD_SHATTER) + relicMod(c.run, 'shatter') + (c.ascension >= 8 ? 0.1 : 0) + ((c.run.dailyMod && c.run.dailyMod.shatter) || 0));
+    const p = assistOpt(c.run, 'mercy') ? 0 : Math.max(0, (card.reknit ? 0.4 : OVERLOAD_SHATTER) + relicMod(c.run, 'shatter') + (c.ascension >= 8 ? 0.1 : 0) + ((c.run.dailyMod && c.run.dailyMod.shatter) || 0));
     if (c.rng.chance(p)) shatter = true;
   }
   for (let r = 0; r < times; r++) {

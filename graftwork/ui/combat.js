@@ -180,6 +180,7 @@ function handle(ev) {
     }
     case 'status': return onStatus(ev);
     case 'reknit': { const trn = APP && APP.shared && APP.shared.transitions; if (trn && trn.phaseBeat) trn.phaseBeat(APP, 'REKNIT'); fx.shake(0.3); return 600; }
+    case 'assistRevive': { const p = entPos('player'); fx.float('Mercy: back on your feet', p.x, p.y - 70, { color: '#8fe0a0', size: 26 }); fx.ring(p.x, p.y, '#8fe0a0', 110, 0.6); return 400; }
     case 'immune': { const p = entPos(ev.who); fx.float('Immune', p.x, p.y - 40, { color: '#aaa', size: 20 }); return 110; }
     case 'heal': {
       const en = ent(ev.who); if (!en) return 0;
