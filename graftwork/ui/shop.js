@@ -10,6 +10,7 @@ import { cardSpec, canGraft, strainInfo, previewGraft, MAX_GRAFTS_NORMAL } from 
 import { cardLines, priceLines } from '../engine/text.js';
 import { CARDS, GRAFTS, RELICS, POTIONS } from '../data/index.js';
 import { wrapLimit, tscale } from './graft_parts.js';
+import { infoOpen, infoClose, touchUi, openInfoCard, infoChip, drawInfoCard } from './card_zoom.js';
 const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 
 const BRASS = '#C9A227';
@@ -504,6 +505,7 @@ function drawBubble(app) {
 
 export default {
   enter(app, params) {
+    infoClose();
     const run = app.shared.run;
     S = { fx: new Fx(), modal: { m: null }, h: {}, anim: null, toast: '', toastT: 0, shakeKey: null, shakeT: 0, react: 0, gold: run.gold, quip: '', quipT: 0, goldPop: 0, t: 0 };
     S.quip = pickQ('greet', hashStr(String(run.seed) + ':' + run.act + ':' + run.row + ':' + (run.node || '')));
@@ -537,7 +539,7 @@ export default {
     const vg = g.createRadialGradient(640, 360, 200, 640, 360, 800); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)'); g.fillStyle = vg; g.fillRect(0, 0, 1280, 720);
     drawKeeper(app, S.t);
     drawBubble(app);
-    app.blocked = locked || app.blocked;
+    app.blocked = locked || infoOpen() || app.blocked;
 
     // ---- header ----
     const info = strainInfo(run);
@@ -600,7 +602,7 @@ export default {
 
     // ---- potions ----
     shop.potions.forEach((it, i) => {
-      const p = POTIONS[it.id], x = POT_X(i) + shakeX('potion' + i), y = POT_Y, w = 205, h = 96;
+      const p = POTIONS[it.id], x = POT_X(i) + shakeX('potion' + i), y = POT_Y, w = 205, h = 96; let potInfo = null;
       app.reg('shop-potion' + i, POT_X(i), y - 2, w, h + 2, { group: 'potion' + i });
       const over = !it.sold && app.inRect(POT_X(i), y, w, h), k = hv(app, 'p' + i, over);
       app.panel(x, y - 2 * k, w, h, { fill: over ? 'rgba(52,42,32,.95)' : 'rgba(26,22,20,.88)', stroke: over ? COL.lamp : 'rgba(232,220,196,.3)' });
@@ -608,8 +610,10 @@ export default {
       drawPotion(g, it.id, x + 30, y + 34 - 2 * k, 40);
       const nameH = app.text(p.name, x + 56, y + 6 - 2 * k, { size: 15, bold: true, color: COL.vellum, maxW: w - 62 }), descY = Math.max(smallUi ? 30 : 26, 6 + nameH + 3); // a two-line name pushes the description down
       { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.2)), nl = clampN(Math.floor((h - (smallUi ? 18 : 34) - descY) / pitch), 1, 2); // phones inflate the text: the lines stop above the price tag
-        wrapLimit(app, p.text, w - 64, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 56, y + descY + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.85)' })); }
+        wrapLimit(app, p.text, w - 64, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 56, y + descY + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.85)' }));
+        potInfo = app.wrap(p.text, w - 64, 14, { ui: true }).length > nl ? { x: x + 52, y: y + descY - 4, w: w - 58, h: nl * pitch + 6 } : null; }
       g.restore();
+      if (potInfo && !it.sold && touchUi(app) && infoChip(app, x + w - 14, y + 14, [potInfo])) { sfx(app, 'uiClick'); openInfoCard(app, p.name, `${p.rarity}\n${p.text}\n${it.price} gold.`, COL.lamp); }
       if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 50, y + h - (smallUi ? 6 : 20), it.price, false, 'potion' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(p.name, `${p.rarity}\n${p.text}\nPotion slots ${run.potions.length}/${RUN.potionSlots(run)}. ${it.price} gold.`, { anchor: { x: POT_X(i), y, w, h } }); }
       if (!it.sold && app.clicked(POT_X(i), y, w, h)) buyDirect(app, 'potion', i, { x: x + 30, y: y + 38 }, it.price);
@@ -617,7 +621,7 @@ export default {
 
     // ---- relics ----
     shop.relics.forEach((it, i) => {
-      const r = RELICS[it.id], x = REL_X + shakeX('relic' + i), y = REL_Y(i), w = 310, h = smallUi ? 110 : 96;
+      const r = RELICS[it.id], x = REL_X + shakeX('relic' + i), y = REL_Y(i), w = 310, h = smallUi ? 110 : 96; let relInfo = null;
       app.reg('shop-relic' + i, REL_X, y - 2, w, h + 2, { group: 'relic' + i });
       const over = !it.sold && app.inRect(REL_X, y, w, h), k = hv(app, 'r' + i, over);
       app.panel(x, y - 2 * k, w, h, { fill: over ? 'rgba(52,42,32,.95)' : 'rgba(26,22,20,.88)', stroke: over ? COL.lamp : rgba(BRASS, 0.5), lw: 2 });
@@ -625,8 +629,10 @@ export default {
       drawRelic(g, it.id, x + 40, y + h / 2 - 2 * k, 56);
       app.text(r.name, x + 76, y + 8 - 2 * k, { size: 17, bold: true, color: COL.lamp, maxW: w - 76 - 94 });
       { const pitch = Math.ceil(app.sz(14, { ui: true }) * (smallUi ? 1.04 : 1.2)), ty0 = smallUi ? y + 6 + Math.ceil(app.sz(17, { bold: true }) * 1.12) + 2 : y + 38, nl = clampN(Math.floor((y + h - 4 - ty0) / pitch), 1, 3);
-        wrapLimit(app, r.text, w - 90, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 76, ty0 + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.88)' })); }
+        wrapLimit(app, r.text, w - 90, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 76, ty0 + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.88)' }));
+        relInfo = app.wrap(r.text, w - 90, 14, { ui: true }).length > nl ? { x: x + 72, y: ty0 - 4, w: w - 82, h: nl * pitch + 6 } : null; }
       g.restore();
+      if (relInfo && !it.sold && touchUi(app) && infoChip(app, x + w - 14, y + h - 16, [relInfo])) { sfx(app, 'uiClick'); openInfoCard(app, r.name, `${r.rarity} relic\n${r.text}\n${it.price} gold.`, COL.lamp); }
       if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 52, y + 22, it.price, false, 'relic' + i);
       if (over) { app.cursor = 'pointer'; app.tooltip(r.name, `${r.rarity} relic\n${r.text}\n${it.price} gold.`, { color: COL.lamp, anchor: { x: REL_X, y, w, h } }); }
       if (!it.sold && app.clicked(REL_X, y, w, h)) buyDirect(app, 'relic', i, { x: x + 40, y: y + 46 }, it.price);
@@ -654,5 +660,6 @@ export default {
     app.blocked = false;
     if (S.anim) { drawAnim(app, S.anim, S.fx); S.fx.draw(g); if (S.anim.t > 0.4) app.text('click to skip', 640, 700, { size: 13, ui: true, align: 'center', color: 'rgba(232,220,196,.5)' }); }
     else if (S.modal.m) { drawModal(app, S.modal, run); }
+    drawInfoCard(app);
   },
 };

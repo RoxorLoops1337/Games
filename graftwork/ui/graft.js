@@ -127,7 +127,8 @@ export default {
     else if (st.mode === 'pick') {
       const T = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
       // Bubbles sit in the hover-hint box (right, above the buttons): quiet, and it never hides the cards, the table bill or the grafts.
-      const HB = { pos: { x: 826, y: 440 }, w: 430 };
+      // Phones: the grafts column runs down to y 530 (taller tiles), so the bubble moves under the cards (over the empty bill) and never covers an option.
+      const HB = st.small ? { pos: { x: 24, y: AFTER.y + 2 }, w: 640 } : { pos: { x: 826, y: 440 }, w: 430 };
       (T('graftpick', 520, AFTER.y - 6, HB) || T('boonprice', TRAY_X + 4, 200, HB) || T('budget', 200, 62, HB) ||
         (strain.strain > 0 && T('strain', 200, 62, HB)) || T('skipping', TRAY_X + 326, 556, HB));
     }
@@ -627,7 +628,7 @@ function confirmGraft(app) {
   const speed = st.reduce ? 2 : 1;
   const over = !!res.overload;
   st.snap = { pv, uid, gid, cardR, patchR, newTithed, overload: over, g: GRAFTS[gid] };
-  st.anim = { t: 0, speed, over, f: {}, end: (over ? 1.9 : newTithed.length ? 2.05 : 1.45) / speed };
+  st.anim = { t: 0, speed, over, f: {}, end: (over ? 1.75 : newTithed.length ? 2.05 : 1.45) / speed };
   st.mode = 'attach';
   st.dealT = 99;
   sfx(app, 'uiClick');
@@ -638,7 +639,7 @@ const T_FLY = 0.5, T_STITCH = 0.5, T_CLUNK = 0.89, T_TITHE = 1.15, T_SLAM = 1.05
 function advanceAnim(app, d) {
   const a = st.anim; if (!a || a.done) return;
   const k = a.speed;
-  a.t += d * k;
+  a.t += d; // real seconds; the sped-up (reduced motion) timeline is a.t * k everywhere else
   const s = st.snap, f = a.f, fx = st.fx;
   const cx = s.cardR.cx, cy = s.cardR.cy - 18;
   const col = schoolColor(s.g.school);
@@ -649,7 +650,7 @@ function advanceAnim(app, d) {
       if (a.t >= at / k && !f['s' + i]) { f['s' + i] = 1; if (T && T.stitchBeat) T.stitchBeat(app, fx, cx + 36 - 79 + (158 / 6) * i, cy + 92 + (i % 2 ? 1 : -1) * 57, i, 6, col, a.over); }
     }
   }
-  if (a.t >= T_STITCH / k && !f.stitch) { f.stitch = 1; sfx(app, 'graftAttach'); if (a.over) sfx(app, 'overload'); }
+  if (a.t >= T_STITCH / k && !f.stitch) { f.stitch = 1; sfx(app, 'graftAttach'); }
   if (a.t >= T(T_CLUNK) && !f.clunk) {
     f.clunk = 1;
     fx.hitstop(40);
@@ -705,7 +706,7 @@ function drawAttach(app) {
   const tier = TIER[s.g.tier] || TIER.safe;
   const cx = s.cardR.cx, cy = s.cardR.cy - 18;
   const tx = cx + 36, ty = cy + 92, tw = 150, th = 100;
-  const fly = EASE.inOut(clamp(t / T_FLY, 0, 1));
+  const fk0 = clamp(t / T_FLY, 0, 1), fly = EASE.inOut(fk0) - 0.05 * Math.sin(Math.PI * clamp(fk0 / 0.3, 0, 1)) * (fk0 < 0.3 ? 1 : 0); // small pull-back before the throw
   const sx = s.patchR.x + s.patchR.w / 2, sy = s.patchR.y + s.patchR.h / 2;
   const px = lerp(sx, tx, fly), py = lerp(sy, ty, fly) - Math.sin(Math.PI * fly) * 90;
   const w = lerp(300, tw, fly), h = lerp(s.patchR.h + 30, th, fly);

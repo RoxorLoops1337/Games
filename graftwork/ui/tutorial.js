@@ -96,6 +96,7 @@ export function maybeTip(app, key, x, y, text, o = {}) {
   ctx.save(); app.rr(dbx, dby, dbw, dbh, 8); ctx.fillStyle = hot ? '#7a5410' : '#3a2f1a'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore();
   app.text('Got it', dbx + dbw / 2, dby + dbh / 2, { size: 14, ui: true, bold: true, align: 'center', baseline: 'middle', color: COL.vellum });
   app._tipBtn = { x: dbx, y: dby, w: dbw, h: dbh }; // for tests and tooling
+  app._tipBox = { x: bx, y: by, w: bw, h: bh };
   if (hot) {
     app.cursor = 'pointer';
     if (app.clicked(dbx, dby, dbw, dbh)) {

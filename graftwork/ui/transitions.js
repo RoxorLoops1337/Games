@@ -320,7 +320,7 @@ export function decay(st, dt) { if (st.strainK > 0) st.strainK = Math.max(0, st.
 
 // ---------------------------------------------------------------- temper (forge hammer)
 // heat 0..0.5 s, three strikes, rivets pop, cool to steel blue, then the line of text.
-export const TEMPER = { dur: 2.5, heat: [0.05, 0.55], strikes: [0.65, 0.83, 1.01], pop: 1.17, cool: [1.25, 1.85] };
+export const TEMPER = { dur: 2.3, heat: [0.05, 0.55], strikes: [0.65, 0.83, 1.01], pop: 1.17, cool: [1.25, 1.85] };
 export function temperUpdate(app, a, fx, dt) {
   a.t += dt;
   const rd = reduced();
@@ -357,13 +357,13 @@ export function heatAt(t) {
 export function steelAt(t) { return clamp((t - TEMPER.cool[0]) / (TEMPER.cool[1] - TEMPER.cool[0]), 0, 1); }
 // hammer: { y offset, angle } for forge.drawHammer(g, 800, 220 + dy, ang)
 export function hammerPose(t) {
-  const S = TEMPER.strikes, UP = -0.75, DOWN = 0.4;
-  let prev = 0.1;
-  for (let i = 0; i < S.length; i++) {
-    if (t < S[i]) { const k = clamp((t - prev) / (S[i] - prev), 0, 1); return { dy: lerp(-30, 40, eIn(k)), ang: lerp(UP, DOWN, eIn(k)) }; }
-    prev = S[i] + 0.04;
-  }
-  const k = clamp((t - S[2]) / 0.5, 0, 1); return { dy: lerp(40, -20, eOut(k)), ang: lerp(DOWN, UP, eOut(k)) };
+  // wind-up (eIn) to each strike, then a short recoil bounce back up (eOut) before the next wind-up: no teleporting between strikes
+  const S = TEMPER.strikes, UP = -0.75, DOWN = 0.4, REC = 0.09;
+  let i = 0; while (i < S.length && t >= S[i]) i++;
+  if (i >= S.length) { const k = clamp((t - S[2]) / 0.5, 0, 1), d = clamp((t - S[2] - 0.5) / 0.8, 0, 1); return { dy: lerp(40, -20, eOut(k)) - 90 * eInOut(d), ang: lerp(DOWN, UP, eOut(k)) - 0.2 * eInOut(d) }; } // lifts clear, then drifts up and away while the card cools
+  if (i > 0 && t < S[i - 1] + REC) { const k = eOut((t - S[i - 1]) / REC); return { dy: lerp(40, -14, k), ang: lerp(DOWN, UP + 0.3, k) }; }
+  const s0 = i > 0 ? S[i - 1] + REC : 0.1, k = clamp((t - s0) / (S[i] - s0), 0, 1);
+  return i > 0 ? { dy: lerp(-14, 40, eIn(k)), ang: lerp(UP + 0.3, DOWN, eIn(k)) } : { dy: lerp(-30, 40, eIn(k)), ang: lerp(UP, DOWN, eIn(k)) };
 }
 // tint over the card rect (cx, cy centre, w x h); rivets pop at the corners of the patch zone
 export function temperTint(app, a, cx, cy, w, h) {
