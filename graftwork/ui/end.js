@@ -10,12 +10,13 @@ import { cardSpec, instWeight, strainInfo } from '../engine/cards.js';
 import * as RUN from '../engine/run.js';
 import { HEROES, ENEMIES, RELICS, GRAFTS } from '../data/index.js';
 import { ACHIEVEMENT_LIST } from '../data/achievements.js';
+import { lnw } from '../art/linework.js';
 
 const GAP = 7;
 const calm = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion);
 
 function stitch(g, x1, y1, x2, y2, col = 'rgba(232,220,196,.25)') {
-  g.save(); g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2);
+  g.save(); g.strokeStyle = col; g.lineWidth = lnw(1.5); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2);
   for (let x = x1; x < x2; x += 12) { g.moveTo(x, y1 - 3); g.lineTo(x, y1 + 3); }
   g.stroke(); g.restore();
 }
@@ -123,7 +124,7 @@ export default {
       g.fillStyle = vg; g.fillRect(0, 0, W, H);
       // flatline: the ECG head sweeps, then holds flat
       const y = 128, sweep = clamp(t / 1.6, 0, 1), hx = sweep * W;
-      g.save(); g.strokeStyle = '#d9606c'; g.lineWidth = 2.5; g.shadowColor = '#b3263a'; g.shadowBlur = 8; g.globalAlpha = 0.75; g.beginPath();
+      g.save(); g.strokeStyle = '#d9606c'; g.lineWidth = lnw(2.5); g.shadowColor = '#b3263a'; g.shadowBlur = 8; g.globalAlpha = 0.75; g.beginPath();
       for (let x = 0; x <= hx; x += 4) {
         let yy = y;
         const dx = x - 260; if (Math.abs(dx) < 44) yy += (dx < -14 ? 0 : dx < -4 ? -40 : dx < 6 ? 48 : dx < 18 ? -20 : 0) * (1 - Math.abs(dx) / 80);

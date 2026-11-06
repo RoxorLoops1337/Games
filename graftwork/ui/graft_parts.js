@@ -4,6 +4,7 @@ import { SCHOOLS, GRAFTS, CARDS } from '../data/index.js';
 import * as ICONS from '../art/icons.js';
 import { cardSpec, cantGraftWhy } from '../engine/cards.js';
 import { OVERLOAD_SHATTER, relicMod } from '../engine/cards.js';
+import { lnw } from '../art/linework.js';
 
 export const TIER = {
   safe: { label: 'SAFE', color: '#7fc4b4', ink: '#0f2a24' },
@@ -59,14 +60,14 @@ export function wrapLimit(app, str, maxW, size, maxLines, o = {}) {
 
 // A staple (weight pip): a small bracket.
 export function drawStaple(ctx, x, y, w = 14, color = '#cfd6da') {
-  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = lnw(2.4); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 7); ctx.lineTo(x + w, y + 7); ctx.lineTo(x + w, y); ctx.stroke();
   ctx.restore();
 }
 
 export function keyBadge(app, label, x, y) {
   const ctx = app.ctx;
-  ctx.save(); ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.strokeStyle = 'rgba(232,220,196,.6)'; ctx.lineWidth = 1.5;
+  ctx.save(); ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.strokeStyle = 'rgba(232,220,196,.6)'; ctx.lineWidth = lnw(1.5);
   app.rr(x - 11, y - 11, 22, 22, 5); ctx.fill(); ctx.stroke(); ctx.restore();
   app.text(label, x, y - 8, { size: 14, ui: true, bold: true, align: 'center', color: COL.vellum });
 }
@@ -87,16 +88,16 @@ export function drawSeam(ctx, cx, cy, w, h, p = 1, t = 0) {
   ctx.save();
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
-  ctx.strokeStyle = COL.scar; ctx.lineWidth = 5;
+  ctx.strokeStyle = COL.scar; ctx.lineWidth = lnw(5);
   ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
   for (let i = 1; i <= n; i++) {
     if (i <= upto) ctx.lineTo(pts[i][0], pts[i][1]);
     else { const f = clamp(upto - (i - 1), 0, 1); if (f > 0) ctx.lineTo(pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f); break; }
   }
   ctx.stroke(); ctx.shadowBlur = 0;
-  ctx.strokeStyle = '#ff9aa6'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.strokeStyle = '#ff9aa6'; ctx.lineWidth = lnw(1.5); ctx.stroke();
   // cross stitches
-  ctx.strokeStyle = '#1a0a0c'; ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#1a0a0c'; ctx.lineWidth = lnw(2.5);
   for (let i = 1; i < n; i++) {
     if (i > upto) break;
     const [x, y] = pts[i];
@@ -110,13 +111,13 @@ export function drawCrack(ctx, cx, cy, w, h, p = 1, t = 0) {
   ctx.save();
   const pulse = 0.65 + 0.35 * Math.sin(t * 5);
   ctx.shadowColor = COL.lamp; ctx.shadowBlur = 16 * pulse;
-  ctx.strokeStyle = COL.lamp; ctx.lineWidth = 4;
+  ctx.strokeStyle = COL.lamp; ctx.lineWidth = lnw(4);
   ctx.setLineDash([14, 5, 3, 5]);
   ctx.globalAlpha = clamp(p * 1.5, 0, 1);
   const x = cx - w / 2 - 3, y = cy - h / 2 - 3;
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w + 6, h + 6, 12) : ctx.rect(x, y, w + 6, h + 6); ctx.stroke();
   ctx.setLineDash([]); ctx.shadowBlur = 0;
-  ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff3c4';
+  ctx.lineWidth = lnw(2.5); ctx.strokeStyle = '#fff3c4';
   const cracks = [
     [[-w / 2, -h * 0.18], [-w * 0.32, -h * 0.1], [-w * 0.4, h * 0.02], [-w * 0.2, h * 0.1]],
     [[w / 2, h * 0.28], [w * 0.3, h * 0.2], [w * 0.38, h * 0.08], [w * 0.18, -h * 0.02]],
@@ -154,19 +155,19 @@ export function drawGauge(app, x, y, w, h, weight, budget, addW = 0, t = 0) {
     app.rr(cx, y, cw, h, 4);
     if (i < weight) {
       ctx.fillStyle = over ? COL.scar : COL.vellum; ctx.fill();
-      ctx.strokeStyle = over ? '#ff6b7e' : '#fff6e0'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.strokeStyle = over ? '#ff6b7e' : '#fff6e0'; ctx.lineWidth = lnw(1.5); ctx.stroke();
     } else if (i < weight + addW) {
       ctx.fillStyle = rgba(over ? '#ff3d55' : COL.lamp, 0.35 + 0.5 * pulse); ctx.fill();
-      ctx.strokeStyle = over ? '#ff3d55' : COL.lamp; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = over ? '#ff3d55' : COL.lamp; ctx.lineWidth = lnw(2); ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
     } else {
       ctx.fillStyle = 'rgba(232,220,196,.06)'; ctx.fill();
-      ctx.strokeStyle = over ? 'rgba(179,38,58,.55)' : 'rgba(232,220,196,.3)'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.strokeStyle = over ? 'rgba(179,38,58,.55)' : 'rgba(232,220,196,.3)'; ctx.lineWidth = lnw(1.5); ctx.stroke();
     }
   }
   // budget line
   if (budget > 0 && budget < total) {
     const lx = x + budget * (cw + gap) - gap / 2;
-    ctx.strokeStyle = COL.lamp; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(lx, y - 5); ctx.lineTo(lx, y + h + 5); ctx.stroke();
+    ctx.strokeStyle = COL.lamp; ctx.lineWidth = lnw(2); ctx.beginPath(); ctx.moveTo(lx, y - 5); ctx.lineTo(lx, y + h + 5); ctx.stroke();
   }
   ctx.restore();
   return { x, y, w: used, h };
@@ -176,7 +177,7 @@ export function drawGauge(app, x, y, w, h, weight, budget, addW = 0, t = 0) {
 export function drawLamp(ctx, x, swing, a = 1) {
   ctx.save();
   ctx.translate(x, -10); ctx.rotate(swing);
-  ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 54); ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = lnw(2); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 54); ctx.stroke();
   // shade
   ctx.fillStyle = '#2c2520'; ctx.beginPath(); ctx.moveTo(-26, 76); ctx.lineTo(-10, 52); ctx.lineTo(10, 52); ctx.lineTo(26, 76); ctx.closePath(); ctx.fill();
   ctx.strokeStyle = 'rgba(232,220,196,.25)'; ctx.stroke();

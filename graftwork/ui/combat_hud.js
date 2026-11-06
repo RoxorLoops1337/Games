@@ -6,6 +6,7 @@ import { drawStatus, drawIntent, drawShield, drawRelic } from '../art/icons.js';
 import * as L from './combat_layout.js';
 import { queueTip, statusSection, keywordSection, explainIntent } from './tooltips.js';
 import { opText } from '../engine/text.js';
+import { lnw } from '../art/linework.js';
 
 export const STATUS_COL = { burn: COL.ember, bleed: '#d12a44', poison: '#8fd14f', vulnerable: '#e0a050', weak: '#9aa8b0', strength: '#ff9a6a', dexterity: '#7fd1e0' };
 export const stCol = (id) => STATUS_COL[id] || (STATUSES[id] && STATUSES[id].good ? COL.good : COL.bad);
@@ -20,7 +21,7 @@ function barHatch(ctx) {
   try {
     if (!BAR_TILE && typeof document !== 'undefined' && document.createElement) {
       const c = document.createElement('canvas'); c.width = c.height = 6; const g = c.getContext('2d');
-      if (g) { g.strokeStyle = 'rgba(20,8,6,.9)'; g.lineWidth = 1; g.beginPath(); g.moveTo(-1, 6); g.lineTo(6, -1); g.moveTo(2, 8); g.lineTo(8, 2); g.moveTo(-2, 2); g.lineTo(2, -2); g.stroke(); BAR_TILE = c; }
+      if (g) { g.strokeStyle = 'rgba(20,8,6,.9)'; g.lineWidth = lnw(1); g.beginPath(); g.moveTo(-1, 6); g.lineTo(6, -1); g.moveTo(2, 8); g.lineTo(8, 2); g.moveTo(-2, 2); g.lineTo(2, -2); g.stroke(); BAR_TILE = c; }
     }
     if (BAR_TILE) pat = ctx.createPattern(BAR_TILE, 'repeat');
   } catch (e) { pat = null; }
@@ -42,22 +43,19 @@ export function drawBar(app, x, y, w, h, shown, trail, max, color, label) {
   ctx.fillStyle = 'rgba(255,241,200,.34)'; ctx.fillRect(x, y + 1, fw, 1);
   if (fw > 3 && pct < 1) { ctx.fillStyle = 'rgba(255,241,200,.7)'; ctx.fillRect(x + fw - 1.5, y + 1, 1.5, h - 2); }
   ctx.restore();
-  app.rr(x, y, w, h, h / 2); ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(214,190,140,.6)'; ctx.stroke();
-  app.rr(x + 1.5, y + 1.5, w - 3, h - 3, Math.max(1, h / 2 - 1.5)); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.stroke();
+  app.rr(x, y, w, h, h / 2); ctx.lineWidth = lnw(1.6); ctx.strokeStyle = 'rgba(214,190,140,.6)'; ctx.stroke();
+  app.rr(x + 1.5, y + 1.5, w - 3, h - 3, Math.max(1, h / 2 - 1.5)); ctx.lineWidth = lnw(1); ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.stroke();
   ctx.restore();
   if (label) app.text(label, x + w / 2, y + h / 2 - 8, { size: 14, align: 'center', ui: true, bold: true, color: '#fff', stroke: '#0e0e0e', strokeW: 3, fixed: true });
 }
 
 // ---- text helpers ----
 export const shortMove = (n) => { const t = String(n || '').replace(/\s*\([^)]*\)\s*$/, '').trim(); return t || String(n || ''); };
-// Shrinks a string to fit maxW (down to minSize), then ellipsizes. Returns { str, size, w }.
-export function fitText(app, str, maxW, size, minSize = 14, o = {}) {
-  str = String(str);
-  let sz = size;
-  while (sz > minSize && app.measure(str, Math.round(sz * (app.textScale || 1)), o) > maxW) sz--;
-  let w = app.measure(str, Math.round(sz * (app.textScale || 1)), o);
-  while (str.length > 1 && w > maxW) { str = str.slice(0, -2) + '…'; w = app.measure(str, Math.round(sz * (app.textScale || 1)), o); if (str.length <= 2) break; }
-  return { str, size: sz, w };
+// Fits one label into maxW on a single line: shrinks from the (floor-boosted) size down to a legible minimum, ellipsizes only as a last resort.
+// Returns { str, size (FINAL px: pass it back to app.text with exact:true), w, trunc }. minSize is accepted for old callers and ignored (the core knows the legible minimum).
+export function fitText(app, str, maxW, size, minSize, o = {}) {
+  const L = app.layoutText(String(str), { ...o, size, fit: { w: maxW, lines: 1 } });
+  return { str: L.lines[0], size: L.size, w: L.w, trunc: L.trunc };
 }
 
 // ---- HUD popovers (relic '+N', status '+N'): one open at a time, drawn last by drawPopovers ----
@@ -65,7 +63,7 @@ export const hudState = { open: null, chip: null };
 const cb = (app) => !!(app.shared && app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.colorblind);
 
 function cornerShape(ctx, good, x, y) {
-  ctx.save(); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 1.5; ctx.beginPath();
+  ctx.save(); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = lnw(1.5); ctx.beginPath();
   if (good) { ctx.moveTo(x, y - 4); ctx.lineTo(x + 4.5, y + 4); ctx.lineTo(x - 4.5, y + 4); } else { ctx.moveTo(x - 4.5, y - 4); ctx.lineTo(x + 4.5, y - 4); ctx.lineTo(x, y + 4); }
   ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
 }
@@ -73,17 +71,17 @@ function drawOneStatus(app, ent, id, x, y, sz, band, label) {
   const ctx = app.ctx, n = ent.st[id], pop = (ent.pop && ent.pop[id]) || 0, good = stGood(id);
   const k = 1 + 0.55 * pop * pop;
   ctx.save(); ctx.translate(x, y); ctx.scale(k, k); drawStatus(ctx, id, 0, 0, sz, good); ctx.restore();
-  if (pop > 0) { ctx.save(); ctx.globalAlpha = pop; ctx.strokeStyle = stCol(id); ctx.lineWidth = 3 * pop + 1; ctx.beginPath(); ctx.arc(x, y, sz * 0.5 + (1 - pop) * sz * 0.9, 0, 6.283); ctx.stroke(); ctx.restore(); }
+  if (pop > 0) { ctx.save(); ctx.globalAlpha = pop; ctx.strokeStyle = stCol(id); ctx.lineWidth = lnw(3 * pop + 1); ctx.beginPath(); ctx.arc(x, y, sz * 0.5 + (1 - pop) * sz * 0.9, 0, 6.283); ctx.stroke(); ctx.restore(); }
   const d = STATUSES[id];
   if (d && d.stack === 'dur' && n > 0 && n <= 5) { // duration pips on the lower arc
-    ctx.save(); ctx.fillStyle = stCol(id); ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 1;
+    ctx.save(); ctx.fillStyle = stCol(id); ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = lnw(1);
     for (let i = 0; i < n; i++) { const a = 1.5708 + (i - (n - 1) / 2) * 0.42; const px = x + Math.cos(a) * (sz / 2 + 1), py = y + Math.sin(a) * (sz / 2 + 1); ctx.beginPath(); ctx.arc(px, py, 2, 0, 6.283); ctx.fill(); ctx.stroke(); }
     ctx.restore();
   }
   if (cb(app)) cornerShape(ctx, good, x - sz / 2 + 3, y - sz / 2 + 4);
   const nfs = Math.max(14, Math.min(20, Math.round(sz * 0.58)));
   app.text(String(n), x + sz / 2 + 2, y + sz / 2 - nfs - 1, { size: nfs, bold: true, ui: true, align: 'right', stroke: '#0e0e0e', strokeW: 4, color: '#fff', fixed: true });
-  if (label) { const lw = Math.max(label, 30); const nm = fitText(app, stName(id), lw, 14, 14, { ui: true }); app.text(nm.str, x, y + sz / 2 + 2, { size: 14, ui: true, align: 'center', color: stCol(id), stroke: '#0e0e0e', strokeW: 3, fixed: true }); }
+  if (label) { const lw = Math.max(label, 30); const nm = fitText(app, stName(id), lw, 14, 14, { ui: true }); app.text(nm.str, x, y + sz / 2 + 2, { size: nm.size, exact: true, ui: true, align: 'center', color: stCol(id), stroke: '#0e0e0e', strokeW: 3 }); }
   if (app.inRect(x - sz / 2, y - sz / 2, sz, sz + (label ? 17 : 0))) queueTip(app, 'st:' + id + ':' + n, [[statusSection(id, n, ent)]], { x: x - sz / 2, y: y - sz / 2, w: sz, h: sz, band });
 }
 // last icon size per status row key (read by the layout tests)
@@ -114,7 +112,8 @@ export function drawStatusRow(app, ent, cx, y, maxW, size, t, o = {}) {
   // names under the icons: <= 3 statuses, one occupied row (no room under the enemy rows for two), >= 44 px of width each
   const nOne = rows === 1 || !(gShow.length && bShow.length);
   const lw = ids.length ? Math.floor((maxW + 4) / ids.length) - 4 : 0;
-  const lab = !!o.labels && ids.length <= 3 && !hidden.length && nOne && lw >= 44 ? Math.min(lw, 80) : 0;
+  let lab = !!o.labels && ids.length <= 3 && !hidden.length && nOne && lw >= 44 ? Math.min(lw, 80) : 0;
+  if (lab && !ids.every((id) => !app.layoutText(stName(id), { size: 14, ui: true, fixed: true, fit: { w: lab, lines: 1 } }).trunc)) lab = 0; // a name that cannot fit whole is left to the tooltip
   const step = lab ? Math.max(sz + 4, lab + 4) : sz + 4, rowH = sz + 3 + (lab ? 17 : 0), ctx = app.ctx;
   const rowsOut = rows === 1 ? [gShow.concat([])] : [gShow, bShow];
   let chip = hidden.length ? true : false;
@@ -127,7 +126,7 @@ export function drawStatusRow(app, ent, cx, y, maxW, size, t, o = {}) {
     minX = Math.min(minX, cx - w / 2); maxX = Math.max(maxX, cx + w / 2);
     if (extraChip) {
       const chipX = x0 + list.length * step - sz / 2, cr = { x: chipX, y: yy - sz / 2, w: sz + 6, h: sz };
-      app.rr(cr.x, cr.y, cr.w, cr.h, 6); ctx.save(); ctx.fillStyle = 'rgba(14,12,10,.92)'; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore();
+      app.rr(cr.x, cr.y, cr.w, cr.h, 6); ctx.save(); ctx.fillStyle = 'rgba(14,12,10,.92)'; ctx.fill(); ctx.lineWidth = lnw(1.6); ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore();
       app.text('+' + hidden.length, cr.x + cr.w / 2, cr.y + cr.h / 2 - 8, { size: 14, bold: true, ui: true, align: 'center', color: COL.lamp, fixed: true });
       maxX = Math.max(maxX, cr.x + cr.w);
       if (app.inRect(cr.x, cr.y, cr.w, cr.h)) { app.cursor = 'pointer'; if (app.clicked(cr.x, cr.y, cr.w, cr.h)) hudState.open = hudState.open === 'st:' + key ? null : 'st:' + key; }
@@ -186,7 +185,7 @@ export function drawRelicStrip(app, relics) {
   let endX = R.x + Math.max(0, shown - 1) * step + R.size + 2;
   if (n > shown) {
     const rest = n - shown, cr = { x: R.x + shown * step, y: R.y - 14, w: 46, h: 28 };
-    app.rr(cr.x, cr.y, cr.w, cr.h, 7); ctx.save(); ctx.fillStyle = 'rgba(40,34,30,.95)'; ctx.fill(); ctx.lineWidth = 1.8; ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore();
+    app.rr(cr.x, cr.y, cr.w, cr.h, 7); ctx.save(); ctx.fillStyle = 'rgba(40,34,30,.95)'; ctx.fill(); ctx.lineWidth = lnw(1.8); ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore();
     app.text('+' + rest, cr.x + cr.w / 2, cr.y + 4, { size: 18, bold: true, ui: true, align: 'center', color: COL.lamp, fixed: true });
     if (app.inRect(cr.x, cr.y, cr.w, cr.h)) { app.cursor = 'pointer'; if (app.clicked(cr.x, cr.y, cr.w, cr.h)) hudState.open = hudState.open === 'relics' ? null : 'relics'; }
     if (hudState.open === 'relics') hudState.chip = { key: 'relics', rect: cr, items: relics.slice(shown).map((id) => ({ id })), kind: 'relic' };
@@ -231,8 +230,8 @@ export function drawIntentBubble(app, info, x, y, prog, alpha = 1, maxW = 170) {
   ctx.globalAlpha = alpha * clamp(prog * 2.5, 0, 1);
   const col = info.hidden ? '#bbb' : attack ? '#e86a5a' : info.kinds.includes('debuff') ? '#c78bd8' : info.kinds.includes('buff') ? '#7fcf8a' : '#cfc3a8';
   // engraved brass-framed tag (not a web pill): squarer corners, spot-colour rule, thin sepia inner line, four rivets
-  app.rr(x - w / 2, y - h / 2, w, h, 6); ctx.fillStyle = 'rgba(16,13,12,.9)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke();
-  app.rr(x - w / 2 + 3, y - h / 2 + 3, w - 6, h - 6, 3.5); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(214,190,140,.32)'; ctx.stroke();
+  app.rr(x - w / 2, y - h / 2, w, h, 6); ctx.fillStyle = 'rgba(16,13,12,.9)'; ctx.fill(); ctx.lineWidth = lnw(2); ctx.strokeStyle = col; ctx.stroke();
+  app.rr(x - w / 2 + 3, y - h / 2 + 3, w - 6, h - 6, 3.5); ctx.lineWidth = lnw(1); ctx.strokeStyle = 'rgba(214,190,140,.32)'; ctx.stroke();
   ctx.fillStyle = 'rgba(255,241,176,.55)'; for (const [rx, ry] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { ctx.beginPath(); ctx.arc(x + rx * (w / 2 - 3.5), y + ry * (h / 2 - 3.5), 1, 0, 6.2832); ctx.fill(); }
   ctx.beginPath(); ctx.rect(x - w / 2, y - h, w * clamp(prog * 1.6, 0, 1), h * 2); ctx.clip();
   let cx = x - w / 2 + 8;
@@ -252,13 +251,13 @@ export function drawEnemyPlate(app, ed, o) {
   ctx.save(); ctx.globalAlpha = o.alpha;
   // nameplate
   const nm = fitText(app, ed.e.name, sw - 4, 17, 14, { bold: true });
-  app.text(nm.str, ed.x, L.ENEMY_LANE_TOP, { size: nm.size, bold: true, align: 'center', color: nameCol, stroke: '#0e0e0e', strokeW: 3 });
+  app.text(nm.str, ed.x, L.ENEMY_LANE_TOP, { size: nm.size, exact: true, bold: true, align: 'center', color: nameCol, stroke: '#0e0e0e', strokeW: 3 });
   app.reg(grp + ':name', ed.x - nm.w / 2, L.ENEMY_LANE_TOP, nm.w, Math.round(nm.size * 1.25), { group: grp });
   // move name: always with <= 4 enemies, else on hover
   const info = o.info;
   if (info && !info.hidden && (o.many <= 4 || o.hot)) {
     const mn = fitText(app, shortMove(o.moveName), sw - 4, 15, 14, { ui: true }); // the (+4 if ...) detail lives in the hover tip, not on the plate
-    app.text(mn.str, ed.x, L.ENEMY_LANE_TOP + 21, { size: mn.size, ui: true, align: 'center', color: COL.vellum2, stroke: '#0e0e0e', strokeW: 3 });
+    app.text(mn.str, ed.x, L.ENEMY_LANE_TOP + 21, { size: mn.size, exact: true, ui: true, align: 'center', color: COL.vellum2, stroke: '#0e0e0e', strokeW: 3 });
     app.reg(grp + ':move', ed.x - mn.w / 2, L.ENEMY_LANE_TOP + 21, mn.w, Math.round(mn.size * 1.25), { group: grp });
   }
   // intent plate
@@ -268,7 +267,7 @@ export function drawEnemyPlate(app, ed, o) {
     if (ir.w) app.reg(grp + ':intent', ir.x, ir.y, ir.w, ir.h, { group: grp });
     // a move with a hover note (a condition that changes the number, e.g. Aria's +3 per extra card) gets a gold '+' pip so the plate itself says "this number can move"
     const mvc = ed.e.def.moves && ed.e.def.moves[ed.e.move];
-    if (ir.w && mvc && (mvc.tip || mvc.note) && !info.hidden) { const bx = ir.x + ir.w - 2, by0 = ir.y + 2; ctx.save(); ctx.beginPath(); ctx.arc(bx, by0, 9, 0, 6.2832); ctx.fillStyle = '#e6b84a'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#0e0e0e'; ctx.stroke(); app.text('+', bx, by0 - 9, { size: 15, bold: true, ui: true, align: 'center', color: '#1a1208', fixed: true }); ctx.restore(); }
+    if (ir.w && mvc && (mvc.tip || mvc.note) && !info.hidden) { const bx = ir.x + ir.w - 2, by0 = ir.y + 2; ctx.save(); ctx.beginPath(); ctx.arc(bx, by0, 9, 0, 6.2832); ctx.fillStyle = '#e6b84a'; ctx.fill(); ctx.lineWidth = lnw(2); ctx.strokeStyle = '#0e0e0e'; ctx.stroke(); app.text('+', bx, by0 - 9, { size: 15, bold: true, ui: true, align: 'center', color: '#1a1208', fixed: true }); ctx.restore(); }
   }
   // enemy tips fill a band beside the whole plate (never over its own health bar, intent or statuses): right of the slot when it fits, else left
   const bandR = left + sw + 8 + 320 <= W - 6, band = { x: bandR ? left + sw + 8 : left - 8, y: L.ENEMY_LANE_TOP, bottom: foot + 150, dir: bandR ? 1 : -1 };
@@ -328,7 +327,7 @@ export function drawHeroPlate(app, P, heroName, t, dgr, lethal) {
   app.reg('heroPlate', H.x, H.y, H.w, H.h, {});
   if (lethal && lethal.lethal) {
     const txt = `Lethal: ${lethal.net} incoming`, tw = app.measure(txt, 14, { bold: true, ui: true }), cw = tw + 40, cx = H.x + 34, cy = H.y - 28, ch = 24;
-    ctx.save(); const k = 0.5 + 0.5 * Math.sin(t * 6); app.rr(cx, cy, cw, ch, 7); ctx.fillStyle = 'rgba(40,6,10,.95)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = lethal.rm ? '#e0344a' : `rgba(255,${70 + Math.round(60 * k)},${80 + Math.round(40 * k)},1)`; ctx.stroke(); ctx.restore();
+    ctx.save(); const k = 0.5 + 0.5 * Math.sin(t * 6); app.rr(cx, cy, cw, ch, 7); ctx.fillStyle = 'rgba(40,6,10,.95)'; ctx.fill(); ctx.lineWidth = lnw(2); ctx.strokeStyle = lethal.rm ? '#e0344a' : `rgba(255,${70 + Math.round(60 * k)},${80 + Math.round(40 * k)},1)`; ctx.stroke(); ctx.restore();
     drawIntent(ctx, 'debuff', cx + 13, cy + ch / 2, 20);
     app.text(txt, cx + 28, cy + 4, { size: 14, bold: true, ui: true, color: '#ffb0b0', stroke: '#2a0408', strokeW: 3, fixed: true });
     app.reg('lethalChip', cx, cy, cw, ch, { group: 'heroPlate' });

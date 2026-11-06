@@ -9,10 +9,20 @@ import { CARDS, GRAFTS, RELICS, ENEMIES, STATUSES, SCHOOLS, HEROES, GRAFT_LIST }
 import { cardSpec } from '../engine/cards.js';
 import { drawSeamBadge } from './seam_ui.js';
 import { drawVellum, drawEmptyMark } from '../art/plates.js';
-import { statusText } from '../engine/text.js';
+import { statusText, opText } from '../engine/text.js';
+import { glossTip } from './tooltips.js';
 import { cardGrid, gridKey, scrollArea, inView, pill, clampText, gaugeCells } from './deckview.js';
+import { lnw } from '../art/linework.js';
 
 const TABS = ['Cards', 'Grafts', 'Relics', 'Enemies', 'Statuses', 'Schools', 'Rules', 'Records'];
+// Rules words an entry names, for the hover glossary: [texts, options]
+function entryGloss(kind, id, d) {
+  if (kind === 'grafts') return [[d.boon, d.price, String(d.tier || '').toUpperCase(), 'W' + d.weight], { school: d.school }];
+  if (kind === 'relics') return [[d.text], {}];
+  if (kind === 'statuses') return [[], { ids: [id] }];
+  if (kind === 'enemies') return [Object.values(d.moves || {}).flatMap((m) => [m.name, m.note, m.tip, ...(m.fx || []).map((op) => { try { return opText(op, 0); } catch (e) { return ''; } })]), {}];
+  return [[], {}];
+}
 const KINDS = ['cards', 'grafts', 'relics', 'enemies', 'statuses'];
 const KEYS = { cards: CARDS, grafts: GRAFTS, relics: RELICS, enemies: ENEMIES, statuses: STATUSES };
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
@@ -76,7 +86,7 @@ function qmark(app, x, y, size, color) { app.text('?', x, y - size * 0.62, { siz
 function unknownCard(app, ctx, cx, cy, sc, hot) {
   ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc);
   app.rr(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 14); ctx.fillStyle = hot ? 'rgba(34,27,23,.8)' : 'rgba(21,17,15,.7)'; ctx.fill();
-  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(232,220,196,.22)'; ctx.setLineDash([14, 9]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.lineWidth = lnw(4); ctx.strokeStyle = 'rgba(232,220,196,.22)'; ctx.setLineDash([14, 9]); ctx.stroke(); ctx.setLineDash([]);
   ctx.restore();
   qmark(app, cx, cy + 10, 64 * sc / 0.56 * 0.6);
 }
@@ -85,7 +95,7 @@ function unknownCard(app, ctx, cx, cy, sc, hot) {
 const CELLS = {
   grafts: { h: 112, draw(app, ctx, id, d, seen, x, y, w, h) {
     if (!seen) {
-      app.rr(x + 8, y + 8, 124, h - 16, 14); ctx.fillStyle = '#15110f'; ctx.fill(); ctx.setLineDash([8, 6]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(232,220,196,.25)'; ctx.stroke(); ctx.setLineDash([]);
+      app.rr(x + 8, y + 8, 124, h - 16, 14); ctx.fillStyle = '#15110f'; ctx.fill(); ctx.setLineDash([8, 6]); ctx.lineWidth = lnw(2); ctx.strokeStyle = 'rgba(232,220,196,.25)'; ctx.stroke(); ctx.setLineDash([]);
       qmark(app, x + 70, y + h / 2, 44);
       app.text('Unknown graft', x + 146, y + 12, { size: 17, bold: true, color: 'rgba(232,220,196,.6)' });
       app.text(hintFor.grafts(d), x + 146, y + 38, { size: 13, ui: true, italic: true, maxW: w - 158, lineH: 16, color: 'rgba(232,220,196,.55)' });
@@ -103,7 +113,7 @@ const CELLS = {
   } },
   relics: { h: 96, draw(app, ctx, id, d, seen, x, y, w, h) {
     if (!seen) {
-      ctx.save(); ctx.fillStyle = '#15110f'; ctx.beginPath(); ctx.arc(x + 44, y + h / 2, 28, 0, 6.283); ctx.fill(); ctx.setLineDash([6, 5]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(232,220,196,.25)'; ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.fillStyle = '#15110f'; ctx.beginPath(); ctx.arc(x + 44, y + h / 2, 28, 0, 6.283); ctx.fill(); ctx.setLineDash([6, 5]); ctx.lineWidth = lnw(2); ctx.strokeStyle = 'rgba(232,220,196,.25)'; ctx.stroke(); ctx.restore();
       qmark(app, x + 44, y + h / 2, 34);
       app.text('Unknown relic', x + 88, y + 12, { size: 17, bold: true, color: 'rgba(232,220,196,.6)' });
       app.text(hintFor.relics(d), x + 88, y + 38, { size: 13, ui: true, italic: true, maxW: w - 100, lineH: 16, color: 'rgba(232,220,196,.55)' });
@@ -135,7 +145,7 @@ const CELLS = {
   } },
   statuses: { h: 78, draw(app, ctx, id, d, seen, x, y, w, h) {
     if (!seen) {
-      ctx.save(); ctx.fillStyle = '#15110f'; ctx.beginPath(); ctx.arc(x + 38, y + h / 2, 22, 0, 6.283); ctx.fill(); ctx.setLineDash([5, 4]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(232,220,196,.25)'; ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.fillStyle = '#15110f'; ctx.beginPath(); ctx.arc(x + 38, y + h / 2, 22, 0, 6.283); ctx.fill(); ctx.setLineDash([5, 4]); ctx.lineWidth = lnw(2); ctx.strokeStyle = 'rgba(232,220,196,.25)'; ctx.stroke(); ctx.restore();
       qmark(app, x + 38, y + h / 2, 28);
       app.text('Unknown status', x + 76, y + 10, { size: 16, bold: true, color: 'rgba(232,220,196,.6)' });
       app.text(hintFor.statuses(d), x + 76, y + 34, { size: 13, ui: true, italic: true, maxW: w - 88, color: 'rgba(232,220,196,.55)' });
@@ -165,7 +175,7 @@ function ruleArt(app, i, cx, cy, w, h) {
   const demoGraft = GRAFT_LIST.find((g) => g.tier === 'safe') || GRAFT_LIST[0];
   const g3 = GRAFT_LIST.filter((g) => g.tier === 'safe' && g.school !== demoGraft.school).slice(0, 2);
   const card = (grafts, o = {}) => cardSpec({ uid: 0, id: 'm_cut', grafts, up: 0 });
-  const arrow = (x1, y1, x2, col) => { ctx.save(); ctx.strokeStyle = col || COL.lamp; ctx.fillStyle = col || COL.lamp; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - 8, y1); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x2, y1); ctx.lineTo(x2 - 12, y1 - 7); ctx.lineTo(x2 - 12, y1 + 7); ctx.closePath(); ctx.fill(); ctx.restore(); };
+  const arrow = (x1, y1, x2, col) => { ctx.save(); ctx.strokeStyle = col || COL.lamp; ctx.fillStyle = col || COL.lamp; ctx.lineWidth = lnw(3); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - 8, y1); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x2, y1); ctx.lineTo(x2 - 12, y1 - 7); ctx.lineTo(x2 - 12, y1 + 7); ctx.closePath(); ctx.fill(); ctx.restore(); };
   switch (i) {
     case 0: {
       drawCard(ctx, card([]), cx - 124, cy, { scale: 0.4 });
@@ -211,16 +221,16 @@ function ruleArt(app, i, cx, cy, w, h) {
       break;
     }
     case 6: { // the Thread: three knots, then the scissors
-      ctx.strokeStyle = '#0a0908'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - 72, cy); ctx.lineTo(cx + 48, cy); ctx.stroke();
-      ['ember', 'ember', 'echo'].forEach((sc, k) => { const bx = cx - 60 + k * 40; ctx.beginPath(); ctx.arc(bx, cy, 15, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = 3.4; ctx.strokeStyle = '#C9A227'; ctx.stroke(); drawSchoolGlyph(ctx, sc, bx, cy, 10, (SCHOOLS[sc] || {}).color); });
+      ctx.strokeStyle = '#0a0908'; ctx.lineWidth = lnw(3); ctx.beginPath(); ctx.moveTo(cx - 72, cy); ctx.lineTo(cx + 48, cy); ctx.stroke();
+      ['ember', 'ember', 'echo'].forEach((sc, k) => { const bx = cx - 60 + k * 40; ctx.beginPath(); ctx.arc(bx, cy, 15, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = lnw(3.4); ctx.strokeStyle = '#C9A227'; ctx.stroke(); drawSchoolGlyph(ctx, sc, bx, cy, 10, (SCHOOLS[sc] || {}).color); });
       drawSeamBadge(app, 'cut', cx + 78, cy, 0.9, 'echo');
       break;
     }
     case 7: { // Slack, Tied, Frayed: a loose thread, a locked knot, a fraying end
-      ctx.strokeStyle = '#0a0908'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - 80, cy); ctx.lineTo(cx + 80, cy); ctx.stroke();
+      ctx.strokeStyle = '#0a0908'; ctx.lineWidth = lnw(3); ctx.beginPath(); ctx.moveTo(cx - 80, cy); ctx.lineTo(cx + 80, cy); ctx.stroke();
       ctx.save(); ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(232,220,196,.6)'; ctx.beginPath(); ctx.arc(cx - 56, cy, 16, 0, 6.283); ctx.stroke(); ctx.restore();
-      ctx.beginPath(); ctx.arc(cx, cy, 16, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#C9A227'; ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx + 40, cy); for (let k = 1; k <= 5; k++) ctx.lineTo(cx + 40 + k * 7, cy + (k % 2 ? -7 : 7) * Math.sin(t * 3 + k)); ctx.strokeStyle = '#d8a066'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, 16, 0, 6.283); ctx.fillStyle = '#1d1813'; ctx.fill(); ctx.lineWidth = lnw(4); ctx.strokeStyle = '#C9A227'; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + 40, cy); for (let k = 1; k <= 5; k++) ctx.lineTo(cx + 40 + k * 7, cy + (k % 2 ? -7 : 7) * Math.sin(t * 3 + k)); ctx.strokeStyle = '#d8a066'; ctx.lineWidth = lnw(2); ctx.stroke();
       break;
     }
     default: {
@@ -309,7 +319,7 @@ export default {
         fx += cwid + 5;
       }
       const sx = W - 300 - 30;
-      app.rr(sx, 106, 300, 28, 6); ctx.fillStyle = 'rgba(10,8,7,.8)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = this.q ? COL.lamp : 'rgba(232,220,196,.35)'; ctx.stroke();
+      app.rr(sx, 106, 300, 28, 6); ctx.fillStyle = 'rgba(10,8,7,.8)'; ctx.fill(); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = this.q ? COL.lamp : 'rgba(232,220,196,.35)'; ctx.stroke();
       const caret = Math.floor(app.t * 2) % 2 ? '|' : '';
       if (this.q) app.text(this.q + caret, sx + 10, 111, { size: 15, ui: true, color: COL.vellum });
       else app.text('Type to search seen entries', sx + 10, 111, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.4)' });
@@ -368,6 +378,7 @@ export default {
         const cx = x + 8 + (i % 3) * (cw + gap), cy = top + gap + Math.floor(i / 3) * (ch + gap);
         if (cy + ch < y || cy > y + h) return;
         const hot = inView(app, st, cx, cy, cw, ch);
+        if (hot && e.seen) { const [tx, go] = entryGloss(kind, e.id, e.d); glossTip(app, '', tx, { x: cx, y: cy, w: cw, h: ch }, go); }
         app.panel(cx, cy, cw, ch, { r: 10, fill: hot ? 'rgba(40,32,26,.95)' : 'rgba(22,18,15,.9)', stroke: e.seen ? 'rgba(232,220,196,.3)' : 'rgba(232,220,196,.12)', lw: 1.5 });
         ctx.save(); ctx.beginPath(); ctx.rect(cx, cy, cw, ch); ctx.clip();
         cell.draw(app, ctx, e.id, e.d, e.seen, cx, cy, cw, ch);
@@ -385,6 +396,7 @@ export default {
       list.forEach((a, i) => {
         const cy = top + gap + i * (rh + gap); if (cy + rh < y || cy > y + h) return;
         const done = M.isAchieved(meta, a.id), p = M.achievementProgress(meta, a.id), hidden = a.secret && !done;
+        if (!hidden && inView(app, st, x + 8, cy, lw - 16, rh)) glossTip(app, '', [a.text], { x: x + 8, y: cy, w: lw - 16, h: rh });
         app.panel(x + 8, cy, lw - 16, rh, { r: 8, fill: done ? 'rgba(50,40,18,.9)' : 'rgba(22,18,15,.9)', stroke: done ? COL.lamp : 'rgba(232,220,196,.2)', lw: 1.5 });
         app.text(hidden ? '???' : a.name, x + 22, cy + 6, { size: 16, bold: true, color: done ? COL.lamp : COL.vellum, maxW: lw - 200 });
         app.text(hidden ? 'A secret record.' : clampText(app, a.text, lw - 60, 13, 2, { ui: true }), x + 22, cy + 28, { size: 13, ui: true, maxW: lw - 60, lineH: 15, color: 'rgba(232,220,196,.75)' });
@@ -420,6 +432,7 @@ export default {
         const s = SCHOOLS[id], cx = x + 8 + (i % 2) * (cw + gap), cy = top + gap + Math.floor(i / 2) * (ch + gap);
         if (cy + ch < y || cy > y + h) return;
         const col = s.color || COL.vellum;
+        if (inView(app, st, cx, cy, cw, ch)) glossTip(app, '', [s.blurb, s.resonance[3], s.resonance[6]], { x: cx, y: cy, w: cw, h: ch });
         app.panel(cx, cy, cw, ch, { r: 10, fill: 'rgba(22,18,15,.9)', stroke: rgba(col.startsWith('#') ? col : '#888888', 0.55), lw: 2 });
         drawSchoolGlyph(ctx, id, cx + 38, cy + 40, 24, col);
         app.text(s.name, cx + 76, cy + 12, { size: 24, bold: true, color: col });
@@ -455,6 +468,7 @@ export default {
         const r = Math.floor(i / cols), c = i % cols;
         const cx = x + c * (cw + gap), cy = top + rowH.slice(0, r).reduce((a, b) => a + b + gap, 0), ch = rowH[r], g = geo[i];
         if (cy > y + h || cy + ch < y) return;
+        if (inView(app, this.rulesSt, cx, cy, cw, ch)) glossTip(app, '', [title, text], { x: cx, y: cy, w: cw, h: ch });
         app.panel(cx, cy, cw, ch, { r: 12, fill: 'rgba(22,18,15,.92)', stroke: 'rgba(232,220,196,.3)', lw: 2 });
         ctx.save(); ctx.beginPath(); ctx.rect(cx + 2, cy + 2, cw - 4, 156); ctx.clip();
         app.rr(cx + 6, cy + 6, cw - 12, 148, 8); ctx.fillStyle = 'rgba(232,220,196,.06)'; ctx.fill();

@@ -17,8 +17,9 @@ import { maybeTip } from './tutorial.js';
 import { watchCombat, announceEnding } from './a11y.js';
 import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip } from './seam_ui.js';
 import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
-import { queueTip, flushTips, cardTipStack } from './tooltips.js';
+import { queueTip, flushTips, cardTipStack, glossTip, specGloss } from './tooltips.js';
 import { drawCardZoom } from './card_zoom.js';
+import { lnw } from '../art/linework.js';
 
 const { HERO_X, FOOT_Y, PLAY_LINE } = L;
 const EF = L.ENEMY_FOOT; // enemies stand on their own ground line (the HUD grid puts their plates inside the lane)
@@ -632,7 +633,7 @@ function drawSpriteCard(ctx, sp) {
   const tr = sp.trail;
   if (tr && tr.length > 1) {
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.strokeStyle = sp.col || '#fff';
-    for (let i = 1; i < tr.length; i++) { const k = i / tr.length; ctx.globalAlpha = k * 0.6; ctx.lineWidth = 3 + k * 16 * sp.s * 1.5; ctx.beginPath(); ctx.moveTo(tr[i - 1].x, tr[i - 1].y); ctx.lineTo(tr[i].x, tr[i].y); ctx.stroke(); }
+    for (let i = 1; i < tr.length; i++) { const k = i / tr.length; ctx.globalAlpha = k * 0.6; ctx.lineWidth = lnw(3 + k * 16 * sp.s * 1.5); ctx.beginPath(); ctx.moveTo(tr[i - 1].x, tr[i - 1].y); ctx.lineTo(tr[i].x, tr[i].y); ctx.stroke(); }
     ctx.restore();
   }
   const w = CARD_W * sp.s, h = CARD_H * sp.s, burn = sp.mode === 'burn', edgeY = burn ? sp.y + h / 2 - (sp.burnMask || 0) * h : 0;
@@ -650,7 +651,7 @@ function drawSpriteCard(ctx, sp) {
   }
   if (sp.shatter) {
     const k = Math.min(1, sp.shatter.t / J.CARD.crack);
-    ctx.save(); ctx.translate(sp.x, sp.y); ctx.strokeStyle = '#fff6c8'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+    ctx.save(); ctx.translate(sp.x, sp.y); ctx.strokeStyle = '#fff6c8'; ctx.lineWidth = lnw(2.5); ctx.lineJoin = 'round';
     for (let i = 0; i < 6; i++) {
       const a = i * 1.047 + 0.3, L2 = 120 * sp.s * 1.6 * k; ctx.beginPath(); ctx.moveTo(0, 0);
       for (let s2 = 1; s2 <= 4; s2++) { const r = L2 * s2 / 4, j2 = Math.sin(i * 9 + s2 * 3) * 9 * sp.s; ctx.lineTo(Math.cos(a) * r - Math.sin(a) * j2, Math.sin(a) * r + Math.cos(a) * j2); }
@@ -873,12 +874,12 @@ function drawCardShadow(ctx, dc, lift) {
 function drawLock(ctx, x, y, s) {
   ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
   ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.beginPath(); ctx.arc(0, 0, 13, 0, 6.283); ctx.fill();
-  ctx.strokeStyle = COL.vellum; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, -3, 4.5, Math.PI, 0); ctx.stroke();
+  ctx.strokeStyle = COL.vellum; ctx.lineWidth = lnw(2); ctx.beginPath(); ctx.arc(0, -3, 4.5, Math.PI, 0); ctx.stroke();
   ctx.fillStyle = COL.vellum; ctx.fillRect(-6, -2, 12, 9); ctx.restore();
 }
 function drawChip(app, text, x, y, col) {
   const ctx = app.ctx, w = Math.max(90, text.length * 8.6 + 22);
-  ctx.save(); app.rr(x - w / 2, y - 14, w, 28, 8); ctx.fillStyle = 'rgba(14,12,10,.92)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke(); ctx.restore();
+  ctx.save(); app.rr(x - w / 2, y - 14, w, 28, 8); ctx.fillStyle = 'rgba(14,12,10,.92)'; ctx.fill(); ctx.lineWidth = lnw(2); ctx.strokeStyle = col; ctx.stroke(); ctx.restore();
   app.text(text, x, y, { size: 15, ui: true, bold: true, align: 'center', baseline: 'middle', color: col });
 }
 
@@ -934,9 +935,9 @@ function drawTouchPreview(app) {
   const dc = S.hand.find((d) => d.uid === S.sel); if (!dc || dc.ty !== L.PREVIEW_Y) return;
   const r = previewRects(dc), ctx = app.ctx, tgt = selNeedsTarget();
   ctx.save();
-  app.rr(r.play.x, r.play.y, r.play.w, r.play.h, 10); ctx.fillStyle = tgt ? '#3a2f1a' : '#7a5410'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = COL.lamp; ctx.stroke();
+  app.rr(r.play.x, r.play.y, r.play.w, r.play.h, 10); ctx.fillStyle = tgt ? '#3a2f1a' : '#7a5410'; ctx.fill(); ctx.lineWidth = lnw(3); ctx.strokeStyle = COL.lamp; ctx.stroke();
   app.text(tgt ? 'TAP TARGET' : 'PLAY', r.play.x + r.play.w / 2, r.play.y + r.play.h / 2, { size: tgt ? 15 : 24, bold: true, align: 'center', baseline: 'middle', color: COL.vellum, ui: true });
-  ctx.beginPath(); ctx.arc(r.x.x + r.x.w / 2, r.x.y + r.x.h / 2, r.x.w / 2, 0, 6.283); ctx.fillStyle = 'rgba(14,12,10,.92)'; ctx.fill(); ctx.strokeStyle = COL.vellum; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(r.x.x + r.x.w / 2, r.x.y + r.x.h / 2, r.x.w / 2, 0, 6.283); ctx.fillStyle = 'rgba(14,12,10,.92)'; ctx.fill(); ctx.strokeStyle = COL.vellum; ctx.lineWidth = lnw(2); ctx.stroke();
   const cx = r.x.x + r.x.w / 2, cy = r.x.y + r.x.h / 2; ctx.beginPath(); ctx.moveTo(cx - 8, cy - 8); ctx.lineTo(cx + 8, cy + 8); ctx.moveTo(cx + 8, cy - 8); ctx.lineTo(cx - 8, cy + 8); ctx.stroke();
   ctx.restore();
   if (app.reg) { app.reg('preview_play', r.play.x, r.play.y, r.play.w, r.play.h, { layer: 'hud', group: 'preview', overlay: true }); app.reg('preview_cancel', r.x.x, r.x.y, r.x.w, r.x.h, { layer: 'hud', group: 'preview', overlay: true }); }
@@ -954,7 +955,7 @@ function drawEndConfirm(app) {
   const h1 = Math.round(app.sz(15, { ui: true, bold: true }) * 1.22), h2 = Math.round(app.sz(12, { ui: true }) * 1.22);
   const bh = Math.max(CONFIRM_H, 20 + l1.length * h1 + 8 + l2.length * h2);
   B.h = bh; B.y = CONFIRM_BOTTOM - bh;
-  ctx.save(); app.rr(B.x, B.y, B.w, B.h, 10); ctx.fillStyle = 'rgba(14,12,10,.94)'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = ready ? COL.lamp : 'rgba(232,220,196,.4)'; ctx.stroke(); ctx.restore();
+  ctx.save(); app.rr(B.x, B.y, B.w, B.h, 10); ctx.fillStyle = 'rgba(14,12,10,.94)'; ctx.fill(); ctx.lineWidth = lnw(2.5); ctx.strokeStyle = ready ? COL.lamp : 'rgba(232,220,196,.4)'; ctx.stroke(); ctx.restore();
   app.text(main, B.x + 12, B.y + 10, { size: 15, ui: true, bold: true, maxW: B.w - 24, color: COL.vellum });
   app.text(hint, B.x + 12, B.y + 10 + l1.length * h1 + 8, { size: 12, ui: true, maxW: B.w - 24, color: 'rgba(232,220,196,.7)' });
   if (app.reg) app.reg('end_confirm', B.x, B.y, B.w, B.h, { layer: 'hud', group: 'end_confirm', overlay: true });
@@ -963,7 +964,7 @@ function drawSeam(ctx, dc) {
   const k = clamp(dc.seam, 0, 1);
   ctx.save(); ctx.translate(dc.x, dc.y); ctx.rotate(dc.rot); ctx.scale(dc.s, dc.s);
   ctx.globalAlpha = dc.seam > 1 ? Math.max(0, 1 - (dc.seam - 1) * 2.5) : 1;
-  ctx.strokeStyle = COL.scar; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.strokeStyle = COL.scar; ctx.lineWidth = lnw(5); ctx.lineCap = 'round';
   ctx.beginPath(); const x0 = -CARD_W / 2, y0 = -CARD_H / 2 + 70;
   ctx.moveTo(x0, y0);
   const steps = 14; for (let i = 1; i <= steps * k; i++) { const f = i / steps; ctx.lineTo(x0 + CARD_W * f, y0 + (i % 2 ? 12 : -12) + f * 80); }
@@ -973,7 +974,7 @@ function drawClamp(ctx, dc) {
   const k = EASE.back(clamp(dc.jamT, 0, 1));
   ctx.save(); ctx.translate(dc.x, dc.y); ctx.rotate(dc.rot); ctx.scale(dc.s, dc.s); ctx.globalAlpha = dc.alpha;
   const off = (1 - k) * 160;
-  ctx.fillStyle = '#6b3a1f'; ctx.strokeStyle = '#2a140a'; ctx.lineWidth = 3;
+  ctx.fillStyle = '#6b3a1f'; ctx.strokeStyle = '#2a140a'; ctx.lineWidth = lnw(3);
   ctx.fillRect(-CARD_W / 2 - 6 - off, -14, CARD_W / 2 + 6, 26); ctx.strokeRect(-CARD_W / 2 - 6 - off, -14, CARD_W / 2 + 6, 26);
   ctx.fillRect(off, -14, CARD_W / 2 + 6, 26); ctx.strokeRect(off, -14, CARD_W / 2 + 6, 26);
   ctx.fillStyle = '#a0522d'; for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(-CARD_W / 2 + 12 + i * 22 - off, 0, 5, 0, 6.283); ctx.fill(); ctx.beginPath(); ctx.arc(14 + i * 22 + off, 0, 5, 0, 6.283); ctx.fill(); }
@@ -1322,7 +1323,7 @@ function drawPendingModal(app) {
     const spec = specOf(c, w);
     drawCard(ctx, spec, x, y, { scale: sc * (sel ? 1.05 : 1), tithed: w.tithed, jam: w.jam, cost: effCost(c, w), selected: sel, glow: sel ? 1 : 0 });
     const over = app.inRect(x - cw / 2, y - ch / 2, cw, ch);
-    if (over) { hover = { w, spec }; app.cursor = 'pointer'; }
+    if (over) { hover = { w, spec, a: { x: x - cw / 2, y: y - ch / 2, w: cw, h: ch } }; app.cursor = 'pointer'; }
     if (over && app.clicked(x - cw / 2, y - ch / 2, cw, ch)) {
       if (sel) S.pend.delete(w.uid); else { if (S.pend.size >= need) S.pend.delete(S.pend.values().next().value); S.pend.add(w.uid); }
       sfx('uiClick');
@@ -1330,6 +1331,7 @@ function drawPendingModal(app) {
   });
   ctx.restore();
   if (hover && pool.length > 6) drawSections(app, cardSections(hover.spec, hover.w, null), W - 270, 150, 250, 400);
+  else if (hover) glossTip(app, '', [specGloss(hover.spec), hover.w.tithed ? 'Tithe' : ''], hover.a, { types: hover.spec.type, school: hover.spec.school });
   const ready = S.pend.size === need;
   if (app.button('Confirm', W / 2 - 100, 640, 200, 52, { size: 24, fill: ready ? COL.attack : COL.slab2, disabled: !ready })) confirmPending();
 }
@@ -1496,6 +1498,7 @@ function draw(app) {
   drawSprites(app);
   drawCoins(app);
   { const fd = S.hand.find((d) => d.uid === (S.hov || S.sel)); drawSeamRail(app, c, L.SEAM, S.t, fd ? fd.w : null, !busy()); }
+  if (c.seam && app.inRect(L.SEAM.x, L.SEAM.y, L.SEAM.w, L.SEAM.h)) { const n = c.seam.len || 0; queueTip(app, 'seamrail' + n, [[{ title: `The Line: ${n} knot${n === 1 ? '' : 's'}`, text: 'Cards that share a school extend the Line. A Cut pays its Stitches and starts a new Line. Slack cards change nothing. A Tied Line carries over to the next turn.', color: '#e8dcc4', glyph: 'diamond' }]], { x: L.SEAM.x, y: L.SEAM.y, w: L.SEAM.w, h: L.SEAM.h }); } // the Thread rail names its own words: Line, Knot, Stitch, Cut, Slack, Tied
   drawHand(app);
   drawHudBottom(app);
   fx.draw(ctx);
@@ -1523,7 +1526,7 @@ function draw(app) {
 
 function bracketEd(ctx, ed, a, fill) {
   const x = ed.x - ed.w / 2 - 6, y = EF - ed.h - 10, w = ed.w + 12, h = ed.h + 22, l = 16;
-  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = COL.lamp; ctx.lineWidth = 4; ctx.lineCap = 'square';
+  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = COL.lamp; ctx.lineWidth = lnw(4); ctx.lineCap = 'square';
   if (fill) { ctx.fillStyle = 'rgba(242,193,78,.08)'; ctx.fillRect(x, y, w, h); }
   ctx.beginPath();
   ctx.moveTo(x, y + l); ctx.lineTo(x, y); ctx.lineTo(x + l, y);
@@ -1543,7 +1546,7 @@ function drawPlayZone(app) {
   if (tgt === 'all' || tgt === 'enemy') drawTargetBrackets(app, null, tgt === 'all' || liveEds().length === 1);
   ctx.save();
   if (tgt === 'self' || tgt === 'none') { ctx.fillStyle = `rgba(242,193,78,${on ? 0.1 : 0.05})`; ctx.fillRect(0, 150, W, PLAY_LINE - 150); }
-  ctx.strokeStyle = on ? COL.lamp : 'rgba(232,220,196,.25)'; ctx.setLineDash([10, 8]); ctx.lineWidth = 2;
+  ctx.strokeStyle = on ? COL.lamp : 'rgba(232,220,196,.25)'; ctx.setLineDash([10, 8]); ctx.lineWidth = lnw(2);
   ctx.beginPath(); ctx.moveTo(150, PLAY_LINE); ctx.lineTo(1130, PLAY_LINE); ctx.stroke(); ctx.setLineDash([]);
   app.text(on ? 'Release to play' : 'Drag up to play', W / 2, PLAY_LINE - 28, { size: 18, ui: true, align: 'center', color: on ? COL.lamp : 'rgba(232,220,196,.5)' });
   ctx.restore();
@@ -1589,7 +1592,7 @@ function drawEnemies(app, tgtMode) {
     // target highlight
     if (tgtMode && !ed.e.dead) {
       const hot = hoverEd === ed;
-      ctx.save(); ctx.strokeStyle = hot ? COL.lamp : 'rgba(242,193,78,.45)'; ctx.lineWidth = hot ? 4 : 2.5; ctx.shadowColor = COL.lamp; ctx.shadowBlur = hot ? 18 : 6;
+      ctx.save(); ctx.strokeStyle = hot ? COL.lamp : 'rgba(242,193,78,.45)'; ctx.lineWidth = lnw(hot ? 4 : 2.5); ctx.shadowColor = COL.lamp; ctx.shadowBlur = hot ? 18 : 6;
       ctx.beginPath(); ctx.ellipse(ed.x, EF + 6, ed.w * 0.55 + (hot ? 10 : 0) + Math.sin(S.t * 6) * 2, 16, 0, 0, 6.283); ctx.stroke();
       if (hot) { ctx.fillStyle = 'rgba(242,193,78,.1)'; ctx.fillRect(ed.x - ed.w / 2 - 8, EF - ed.h - 8, ed.w + 16, ed.h + 20); }
       ctx.restore();
@@ -1617,7 +1620,7 @@ function drawEnemyHud(app, ed, alpha, hot) {
 function drawKbRing(app) {
   const l = liveEds(); if (!S.kbTarget || !S.kbUsed || !l.length || !targeting()) return;
   const ed = l[S.tgt % l.length], ctx = app.ctx, x = ed.x - ed.w / 2 - 8, y = EF - ed.h - 8, w = ed.w + 16, h = ed.h + 16;
-  ctx.save(); app.rr(x, y, w, h, 12); ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = '#ffe9a8'; ctx.setLineDash([10, 6]); ctx.lineDashOffset = FX_OPTS.reduced ? 0 : -app.t * 20; ctx.stroke(); ctx.restore();
+  ctx.save(); app.rr(x, y, w, h, 12); ctx.lineWidth = lnw(6); ctx.strokeStyle = '#000'; ctx.stroke(); ctx.lineWidth = lnw(3); ctx.strokeStyle = '#ffe9a8'; ctx.setLineDash([10, 6]); ctx.lineDashOffset = FX_OPTS.reduced ? 0 : -app.t * 20; ctx.stroke(); ctx.restore();
   app.text('TARGET', ed.x, y - 22, { size: 15, bold: true, ui: true, align: 'center', color: '#ffe9a8', stroke: '#000', strokeW: 4 });
 }
 
@@ -1652,7 +1655,7 @@ function drawAimArrow(app) {
   const cx = (from.x + to.x) / 2, cy = Math.min(from.y, to.y) - 120;
   const col = snap ? COL.lamp : rgba(COL.vellum, 0.5);
   ctx.save();
-  ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lnw(3); ctx.lineCap = 'round';
   ctx.setLineDash([14, 9]); ctx.lineDashOffset = rm ? 0 : -S.t * 40;
   ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.quadraticCurveTo(cx, cy, to.x, to.y); ctx.stroke(); ctx.setLineDash([]);
   const tx = to.x - cx, ty = to.y - cy, tl = Math.hypot(tx, ty) || 1, ux = tx / tl, uy = ty / tl;
@@ -1668,10 +1671,12 @@ function drawTopBar(app) {
   ctx.restore();
   // hero block 0..365: portrait, name, hp, gold (the right 144 px of the bar belong to the global Pause / Fullscreen buttons)
   drawPortrait(ctx, run.hero, 32, 28, 40);
-  const hn = fitText(app, hero.name, 118, 19, 14, { bold: true });
-  app.text(hn.str, 60, 6, { size: hn.size, bold: true, color: COL.vellum });
-  const ht = fitText(app, hero.title || '', 118, 14, 14, { ui: true });
-  app.text(ht.str, 60, 29, { size: ht.size, ui: true, color: COL.vellum2 });
+  app.text(hero.name, 60, 6, { size: 19, bold: true, color: COL.vellum, fit: { w: 126, lines: 1 } });
+  { // title: shrink to fit; a title too long for the slot even at the legible minimum drops trailing words (never an ellipsis)
+    let words = String(hero.title || '').split(' '), tt = words.join(' ');
+    while (words.length > 1 && app.layoutText(tt, { size: 14, ui: true, fit: { w: 126, lines: 1 } }).trunc) { words.pop(); tt = words.join(' '); }
+    if (!app.layoutText(tt, { size: 14, ui: true, fit: { w: 126, lines: 1 } }).trunc) app.text(tt, 60, 29, { size: 14, ui: true, color: COL.vellum2, fit: { w: 126, lines: 1 } }); // the name is primary; a title that cannot fit whole at the legible minimum is left out
+  }
   drawHeart(ctx, 192, 28, 26);
   { const hl = `${Math.max(0, Math.ceil(P.hp))}/${P.maxHp}`; app.text(hl, 210, 17, { size: hl.length > 5 ? 15 : 19, bold: true, ui: true, color: COL.bad }); }
   const gp = 1 + S.goldPulse * 0.25;
@@ -1684,7 +1689,7 @@ function drawTopBar(app) {
   for (let i = 0; i < slots; i++) {
     const x = P0.x + i * pstep, y = P0.y + (P0.size - psz) / 2, sz = psz;
     const id = S.potions[i];
-    app.rr(x, y, sz, sz, 8); ctx.save(); ctx.fillStyle = 'rgba(40,34,30,.9)'; ctx.fill(); ctx.lineWidth = S.potSel === i ? 3.5 : 1.6; if (S.potSel === i && S.kbUsed) ctx.setLineDash([6, 4]); ctx.strokeStyle = (S.potSel === i) ? COL.lamp : 'rgba(232,220,196,.35)'; ctx.stroke(); ctx.restore();
+    app.rr(x, y, sz, sz, 8); ctx.save(); ctx.fillStyle = 'rgba(40,34,30,.9)'; ctx.fill(); ctx.lineWidth = lnw(S.potSel === i ? 3.5 : 1.6); if (S.potSel === i && S.kbUsed) ctx.setLineDash([6, 4]); ctx.strokeStyle = (S.potSel === i) ? COL.lamp : 'rgba(232,220,196,.35)'; ctx.stroke(); ctx.restore();
     app.reg('potion' + i, x, y, sz, sz, {});
     if (id) {
       drawPotion(ctx, id, x + sz / 2, y + sz / 2, sz - 8);
@@ -1716,8 +1721,8 @@ function pileStack(app, pos, count, s, label, key, onClick) {
   const layers = Math.min(3, Math.ceil(count / 6));
   // recessed slot under every pile so an empty one still reads as a place, not a gap
   ctx.save(); ctx.translate(pos.x, pos.y);
-  app.rr(-bw / 2 - 5, -bh / 2 - 5, bw + 10, bh + 10, 8); ctx.fillStyle = 'rgba(8,6,6,.55)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = count ? 'rgba(232,220,196,.35)' : 'rgba(232,220,196,.25)'; ctx.setLineDash(count ? [] : [5, 4]); ctx.stroke(); ctx.setLineDash([]);
-  if (pl > 0) { ctx.shadowColor = COL.lamp; ctx.shadowBlur = 22 * pl; ctx.strokeStyle = rgba(COL.lamp, 0.9 * pl); ctx.lineWidth = 3; app.rr(-bw / 2 - 5, -bh / 2 - 5, bw + 10, bh + 10, 8); ctx.stroke(); }
+  app.rr(-bw / 2 - 5, -bh / 2 - 5, bw + 10, bh + 10, 8); ctx.fillStyle = 'rgba(8,6,6,.55)'; ctx.fill(); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = count ? 'rgba(232,220,196,.35)' : 'rgba(232,220,196,.25)'; ctx.setLineDash(count ? [] : [5, 4]); ctx.stroke(); ctx.setLineDash([]);
+  if (pl > 0) { ctx.shadowColor = COL.lamp; ctx.shadowBlur = 22 * pl; ctx.strokeStyle = rgba(COL.lamp, 0.9 * pl); ctx.lineWidth = lnw(3); app.rr(-bw / 2 - 5, -bh / 2 - 5, bw + 10, bh + 10, 8); ctx.stroke(); }
   ctx.restore();
   ctx.save(); ctx.translate(pos.x, pos.y); ctx.scale(pulse, pulse);
   if (count === 0) { drawCardBack(ctx, 0, 0, { scale: s, alpha: 0.16 }); }
@@ -1729,7 +1734,7 @@ function pileStack(app, pos, count, s, label, key, onClick) {
   app.text(PILE_LABEL[key] || label, pos.x, ly, { size: fs, bold: true, ui: true, align: 'center', color: count ? COL.vellum : 'rgba(232,220,196,.55)', fixed: true });
   // count badge on the top right corner of the pile (inside the registered rect, clear of the screen edge), bumps when cards arrive
   const bx = pos.x + bw / 2 - 1, by = pos.y - bh / 2 + 11, br = 15 + pl * 4;
-  ctx.save(); ctx.fillStyle = count ? 'rgba(14,12,10,.95)' : 'rgba(14,12,10,.7)'; ctx.strokeStyle = pl > 0 ? COL.lamp : count ? COL.vellum : 'rgba(232,220,196,.4)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(bx, by, br, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
+  ctx.save(); ctx.fillStyle = count ? 'rgba(14,12,10,.95)' : 'rgba(14,12,10,.7)'; ctx.strokeStyle = pl > 0 ? COL.lamp : count ? COL.vellum : 'rgba(232,220,196,.4)'; ctx.lineWidth = lnw(2); ctx.beginPath(); ctx.arc(bx, by, br, 0, 6.283); ctx.fill(); ctx.stroke(); ctx.restore();
   app.text(String(count), bx, by - 9, { size: 16 + Math.round(pl * 3), bold: true, ui: true, align: 'center', fixed: true, color: count ? '#fff' : 'rgba(232,220,196,.6)' });
   const ry0 = Math.max(pos.y - bh / 2 - 5, L.ORB.y + L.ORB.size / 2 + 1), R = { x: pos.x - bw / 2 - 5, y: ry0, w: bw + 24, h: H - ry0 };
   app.reg('pile_' + key, R.x, R.y, R.w, R.h, {});
@@ -1756,12 +1761,13 @@ function drawHudBottom(app) {
   const st = c.strain, B = L.STRAIN_BOX;
   const over = st.strain > 0;
   // phones inflate the text: size the two rows from the real line height so Budget and Strain never touch
-  const sLh = Math.ceil(app.sz(15, { ui: true, bold: true }) * 1.1), sH = Math.max(B.h, sLh * ((c.strain.backfire || 0) > 0 ? 3 : 2) + 12);
+  const rows = [[`Budget ${st.weight}/${st.budget}`, COL.vellum], [`Strain ${st.strain}`, over ? COL.bad : COL.good]];
+  if (st.backfire > 0) rows.push([`Backfire ${st.backfire}`, COL.bad]);
+  const sfit = { w: B.w - 16, lines: 1 }, sL = rows.map((r) => app.layoutText(r[0], { size: 15, ui: true, bold: true, fit: sfit }));
+  const sSz = Math.min(...sL.map((l) => l.size)), sLh = Math.ceil(sSz * 1.15), sH = Math.max(B.h, sLh * rows.length + 12);
   app.panel(B.x, B.y, B.w, sH, { fill: 'rgba(14,12,10,.8)', stroke: over ? COL.scar : 'rgba(232,220,196,.35)', r: 8 });
   app.reg('strain', B.x, B.y, B.w, sH, {});
-  app.text(`Budget ${st.weight}/${st.budget}`, B.x + 10, B.y + 5, { size: 15, ui: true, bold: true, color: COL.vellum });
-  app.text(`Strain ${st.strain}`, B.x + 10, B.y + 5 + sLh, { size: 15, ui: true, bold: true, color: over ? COL.bad : COL.good });
-  if (st.backfire > 0) app.text(`Backfire ${st.backfire}`, B.x + 10, B.y + 5 + sLh * 2, { size: 15, ui: true, bold: true, color: COL.bad });
+  rows.forEach((r, i) => app.text(r[0], B.x + 8, B.y + 6 + sLh * i, { size: sSz, exact: true, ui: true, bold: true, color: r[1] }));
   if (app.inRect(B.x, B.y, B.w, sH)) {
     const tithed = []; for (const w of S.known.values()) if (w.tithed) tithed.push(w);
     const lines = [];
@@ -1780,7 +1786,7 @@ function drawHudBottom(app) {
   const noPlays = idle && !c.over && !c.pending && !c.hand.some((_, i) => canPlay(c, i).ok);
   const can = canAct();
   app.reg('endTurn', E.x, E.y, E.w, E.h, {});
-  if (can && noPlays) { ctx.save(); ctx.shadowColor = COL.lamp; ctx.shadowBlur = 16 + Math.sin(S.t * 5) * 8; app.rr(E.x, E.y, E.w, E.h, 10); ctx.strokeStyle = COL.lamp; ctx.lineWidth = 3; ctx.stroke(); ctx.restore(); }
+  if (can && noPlays) { ctx.save(); ctx.shadowColor = COL.lamp; ctx.shadowBlur = 16 + Math.sin(S.t * 5) * 8; app.rr(E.x, E.y, E.w, E.h, 10); ctx.strokeStyle = COL.lamp; ctx.lineWidth = lnw(3); ctx.stroke(); ctx.restore(); }
   if (app.button('END TURN', E.x, E.y, E.w, E.h, { size: 22, fill: can && noPlays ? '#6b4a1a' : COL.slab2, disabled: !can }) && can) doEndTurn();
 }
 

@@ -2,6 +2,7 @@
 // drawPortrait(ctx, heroId, cx, cy, size): a bust (head and shoulders) centred at (cx,cy), fitted in a size x size circle.
 import { K } from './enemies.js';
 import { keyLamp } from './backgrounds.js';
+import { lnw } from './linework.js';
 const { C, INK, poly, line, limb, ell, circ, rect, seam, staple, bandage, wrap, glow, flame, eye, dots, mouthStitch, thread, coin, stage, prepA, text0 } = K;
 const TAU = Math.PI * 2;
 
@@ -27,7 +28,7 @@ function marrow(ctx, A) {
   // long coat with swaying hem
   ctx.beginPath(); ctx.moveTo(-30, -136 + b); ctx.lineTo(30, -136 + b); ctx.lineTo(38, -60); ctx.lineTo(42 + sway, -26);
   for (let i = 0; i < 5; i++) ctx.lineTo(42 + sway * (1 + (i + 1) * 0.35) - (i + 0.5) * 17, i % 2 ? -26 : -20 + Math.sin(t * 2 + i - A.mv * 2) * 2);
-  ctx.lineTo(-42 + sway, -26); ctx.lineTo(-38, -60); ctx.closePath(); ctx.fillStyle = C('#2c2832'); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C(INK); ctx.stroke();
+  ctx.lineTo(-42 + sway, -26); ctx.lineTo(-38, -60); ctx.closePath(); ctx.fillStyle = C('#2c2832'); ctx.fill(); ctx.lineWidth = lnw(3); ctx.strokeStyle = C(INK); ctx.stroke();
   line(ctx, [-30, -134 + b, -36, -60, -40, -28], C('#4a4452', 1, 0.8), 2);
   // apron over the coat
   poly(ctx, [-20, -124 + b, 20, -124 + b, 26, -34, -26, -34], C('#e8dcc4'), 2.8);
@@ -55,7 +56,7 @@ function marrow(ctx, A) {
   poly(ctx, [-15, -160 + b, -10, -172 + b, 6, -173 + b, 15, -162 + b, 10, -165 + b, -2, -168 + b, -12, -162 + b], C('#2a1f1a'), 2.4);
   for (let i = 0; i < 9; i++) circ(ctx, -8 + (i % 3) * 7 + (i > 5 ? 1.5 : 0), -138 + b + Math.floor(i / 3) * 3 - (i % 2), 0.8, C('#3a2a22'), 0); // stubble
   // round glasses
-  for (const gx of [-6, 7]) { circ(ctx, gx, -152 + b, 6.4, C('#cfe8e4', 1, 0.3), 2.2); ctx.strokeStyle = C('#a58c4a'); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(gx, -152 + b, 6.4, 0, TAU); ctx.stroke(); eye(ctx, gx + 1, -152 + b, 3, 0.8, 0, A.blink); }
+  for (const gx of [-6, 7]) { circ(ctx, gx, -152 + b, 6.4, C('#cfe8e4', 1, 0.3), 2.2); ctx.strokeStyle = C('#a58c4a'); ctx.lineWidth = lnw(1.4); ctx.beginPath(); ctx.arc(gx, -152 + b, 6.4, 0, TAU); ctx.stroke(); eye(ctx, gx + 1, -152 + b, 3, 0.8, 0, A.blink); }
   spec(ctx, -9, -155 + b, 1.8, A); spec(ctx, 4, -155 + b, 1.8, A, 0.8);
   line(ctx, [0, -152 + b, 1, -152 + b], C('#a58c4a'), 1.6); line(ctx, [-12, -153 + b, -14, -152 + b], C('#a58c4a'), 1.4);
   line(ctx, [-12, -160 + b, -2, -162 + b], C(INK), 2); line(ctx, [2, -162 + b, 13, -160 + b], C(INK), 2);
@@ -70,12 +71,12 @@ function marrow(ctx, A) {
   poly(ctx, [-4, -9, 12, -9, 12, 9, -4, 9], C('#6a4a2a'), 2.6); circ(ctx, 4, 0, 1.8, C('#c9ced0'), 1);
   const tx = [12, -5, 14, -7, 22, -5, 26, -7, 34, -5, 38, -7, 46, -5, 50, -7, 58, -5, 62, -7, 74, -3, 76, 5];
   const pts = []; for (let i = 0; i < 20; i += 1) { const x = 14 + i * 3.1; pts.push(x, 5 + (i % 2 ? 0 : 3.4)); }
-  ctx.beginPath(); ctx.moveTo(12, -5); ctx.lineTo(74, -3); ctx.lineTo(78, 5); for (let i = pts.length - 2; i >= 0; i -= 2) ctx.lineTo(pts[i], pts[i + 1]); ctx.lineTo(12, 5); ctx.closePath(); ctx.fillStyle = C('#e8e4d6'); ctx.fill(); ctx.lineWidth = 2.4; ctx.strokeStyle = C(INK); ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(12, -5); ctx.lineTo(74, -3); ctx.lineTo(78, 5); for (let i = pts.length - 2; i >= 0; i -= 2) ctx.lineTo(pts[i], pts[i + 1]); ctx.lineTo(12, 5); ctx.closePath(); ctx.fillStyle = C('#e8e4d6'); ctx.fill(); ctx.lineWidth = lnw(2.4); ctx.strokeStyle = C(INK); ctx.lineJoin = 'round'; ctx.stroke();
   line(ctx, [16, -2, 70, -1], C('#fff', 1, 0.7), 1.6); poly(ctx, [40, 0, 52, 1, 50, 5, 38, 4], C('#9e0f2e'), 0);
   circ(ctx, 28, 0, 1.6, C('#9a9a98'), 1); circ(ctx, 52, -1, 1.6, C('#9a9a98'), 1);
   ctx.restore();
   // bone saw sweep: crescent trail around the elbow
-  if (att > 0.08) { for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(ex, ey, 52 + k * 8, a - 1.1 * att + k * 0.08, a + 0.15); ctx.strokeStyle = C('#f3ecd8', 1, 0.34 * att * (1 - k * 0.22)); ctx.lineWidth = 9 - k * 2; ctx.lineCap = 'round'; ctx.stroke(); } }
+  if (att > 0.08) { for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(ex, ey, 52 + k * 8, a - 1.1 * att + k * 0.08, a + 0.15); ctx.strokeStyle = C('#f3ecd8', 1, 0.34 * att * (1 - k * 0.22)); ctx.lineWidth = lnw(9 - k * 2); ctx.lineCap = 'round'; ctx.stroke(); } }
   hand(ctx, hx, hy, 6.5, sk);
   ctx.save(); ctx.translate(hx, hy); ctx.rotate(a); spec(ctx, 20 + (A.L ? A.L.swing * 60 : 0), -2, 2.2, A); ctx.restore();
   stitchGlow(ctx, A, 0, -96 + b);
@@ -154,7 +155,7 @@ function odile(ctx, A) {
   poly(ctx, [-24, -132 + b, -12, -128 + b, -4, -100, -14, -72, -22, -52], C(coat, 0.8), 2.4); poly(ctx, [24, -132 + b, 12, -128 + b, 4, -100, 14, -72, 22, -52], C(coat, 0.8), 2.4);
   line(ctx, [-22, -52, 22, -52], C(trim), 3); line(ctx, [-24, -130 + b, -13, -128 + b], C(trim), 2.4);
   // watch chain
-  ctx.beginPath(); ctx.moveTo(-8, -100); ctx.quadraticCurveTo(0, -86 + Math.sin(t * 2) * 1, 10, -98); ctx.strokeStyle = C(trim); ctx.lineWidth = 1.8; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-8, -100); ctx.quadraticCurveTo(0, -86 + Math.sin(t * 2) * 1, 10, -98); ctx.strokeStyle = C(trim); ctx.lineWidth = lnw(1.8); ctx.stroke();
   // cravat, high collar
   poly(ctx, [-12, -134 + b, 12, -134 + b, 8, -118 + b, 0, -108 + b, -8, -118 + b], C('#f3ecd8'), 2.2); circ(ctx, 0, -120 + b, 3.2, C('#b3263a'), 1.6);
   poly(ctx, [-24, -132 + b, -14, -146 + b, -8, -134 + b], C(coat, 0.7), 2.4); poly(ctx, [24, -132 + b, 14, -146 + b, 8, -134 + b], C(coat, 0.7), 2.4);
@@ -163,7 +164,7 @@ function odile(ctx, A) {
   ctx.save(); ctx.translate(-22, -62); ctx.rotate(Math.sin(t * 1.4) * 0.04);
   line(ctx, [-4, -34, 6, 6], C('#5a3a20'), 3.4);
   rect(ctx, -12, -4, 26, 24, C('#7a5030'), 5, 2.6); poly(ctx, [-12, -4, 14, -4, 14, 6, 0, 10, -12, 6], C('#5a3a20'), 2.2); circ(ctx, 1, 8, 2.4, C(trim), 1.2);
-  for (let i = 0; i < 3; i++) { const sw2 = Math.sin(t * 3 + i * 1.4 + att * 2) * 3 + Math.sin(t * 11 + i * 2.1) * 0.8 * Math.abs(A.mv * 6 + att) - A.mv * 6; line(ctx, [-6 + i * 6, 18, -8 + i * 6 + sw2, 28], C(trim), 1.4); ctx.save(); ctx.translate(-8 + i * 6 + sw2, 29); ctx.rotate(sw2 * 0.05); circ(ctx, 0, 0, 2.6, null, 1.6); ctx.strokeStyle = C(trim); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, 2.6, 0, TAU); ctx.stroke(); line(ctx, [0, 2.4, 0, 9], C(trim), 1.8); line(ctx, [0, 7, 3, 7], C(trim), 1.6); ctx.restore(); }
+  for (let i = 0; i < 3; i++) { const sw2 = Math.sin(t * 3 + i * 1.4 + att * 2) * 3 + Math.sin(t * 11 + i * 2.1) * 0.8 * Math.abs(A.mv * 6 + att) - A.mv * 6; line(ctx, [-6 + i * 6, 18, -8 + i * 6 + sw2, 28], C(trim), 1.4); ctx.save(); ctx.translate(-8 + i * 6 + sw2, 29); ctx.rotate(sw2 * 0.05); circ(ctx, 0, 0, 2.6, null, 1.6); ctx.strokeStyle = C(trim); ctx.lineWidth = lnw(1.5); ctx.beginPath(); ctx.arc(0, 0, 2.6, 0, TAU); ctx.stroke(); line(ctx, [0, 2.4, 0, 9], C(trim), 1.8); line(ctx, [0, 7, 3, 7], C(trim), 1.6); ctx.restore(); }
   ctx.restore();
   // back arm with rings, hand at the lapel
   limb(ctx, [-22, -126 + b, -34, -104, -24, -88], C(coat), 9); rect(ctx, -29, -96, 11, 7, C('#f3ecd8'), 2, 1.8);
@@ -180,7 +181,7 @@ function odile(ctx, A) {
   eye(ctx, -5, hy + 1, 3.6, 0.8, 0, A.blink, '#4a6a3a'); eye(ctx, 7, hy + 1, 3.4, 0.8, 0, A.blink, '#4a6a3a');
   line(ctx, [-10, hy - 5, -1, hy - 5], C('#7a5a1a'), 1.8); line(ctx, [3, hy - 6, 12, hy - 5], C('#7a5a1a'), 1.8);
   // monocle on the leading eye with chain
-  ctx.beginPath(); ctx.arc(7, hy + 1, 6.4, 0, TAU); ctx.fillStyle = C('#fff', 1, 0.18); ctx.fill(); ctx.strokeStyle = C(trim); ctx.lineWidth = 1.8; ctx.stroke(); spec(ctx, 5, hy - 1, 1.8, A); ctx.beginPath(); ctx.moveTo(8, hy + 7); ctx.quadraticCurveTo(12, hy + 22, 6, hy + 30); ctx.strokeStyle = C(trim); ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(7, hy + 1, 6.4, 0, TAU); ctx.fillStyle = C('#fff', 1, 0.18); ctx.fill(); ctx.strokeStyle = C(trim); ctx.lineWidth = lnw(1.8); ctx.stroke(); spec(ctx, 5, hy - 1, 1.8, A); ctx.beginPath(); ctx.moveTo(8, hy + 7); ctx.quadraticCurveTo(12, hy + 22, 6, hy + 30); ctx.strokeStyle = C(trim); ctx.lineWidth = lnw(1.2); ctx.stroke();
   line(ctx, [2, hy + 6, 4, hy + 10], C(sk, 0.7), 1.4);
   mouthStitch(ctx, 3, hy + 11, 9, 1.4, '#7a1f2e', 3);
   circ(ctx, -10, hy + 8, 2.4, C('#f4a0a8', 1, 0.5), 0);
@@ -189,14 +190,14 @@ function odile(ctx, A) {
   const ex = sx + Math.cos(a) * 24, ey = sy + Math.sin(a) * 24, hx = ex + Math.cos(a - 0.5) * 22, hy2 = ey + Math.sin(a - 0.5) * 22;
   limb(ctx, [sx, sy, ex, ey], C(coat), 9); rect(ctx, ex - 5, ey - 4, 10, 9, C('#f3ecd8'), 2, 1.8);
   limb(ctx, [ex, ey, hx, hy2], C(coat), 8); hand(ctx, hx, hy2, 5, sk); for (const dx of [-3, 0, 3]) circ(ctx, hx + dx + 1, hy2 - 3, 1.6, C(trim), 0.8); circ(ctx, hx + 4, hy2 + 2, 1.8, C('#b3263a'), 0.8);
-  if (A.fl > 0) for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.arc(hx, hy2, 98 - k * 4, -0.25 + att * 0.6 + Math.PI / 2 - A.fl * TAU * 0.8 - k * 0.1, -0.25 + att * 0.6 + Math.PI / 2 - A.fl * TAU * 0.8 + 0.5); ctx.strokeStyle = C('#f2e3a8', 1, 0.28 * (1 - k * 0.18)); ctx.lineWidth = 7 - k; ctx.stroke(); }
+  if (A.fl > 0) for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.arc(hx, hy2, 98 - k * 4, -0.25 + att * 0.6 + Math.PI / 2 - A.fl * TAU * 0.8 - k * 0.1, -0.25 + att * 0.6 + Math.PI / 2 - A.fl * TAU * 0.8 + 0.5); ctx.strokeStyle = C('#f2e3a8', 1, 0.28 * (1 - k * 0.18)); ctx.lineWidth = lnw(7 - k); ctx.stroke(); }
   ctx.save(); ctx.translate(hx, hy2); ctx.rotate(-0.25 + att * 0.6 - (att < 0 ? att * 0.5 : 0) + A.fl * TAU);
   const len = 104; line(ctx, [0, -6, 0, len], C(INK), 6); line(ctx, [0, -6, 0, len], C('#2a1a20'), 3.4); line(ctx, [-0.8, -2, -0.8, len - 4], C('#fff', 1, 0.2), 1);
   circ(ctx, 0, -8, 7, C(trim), 2.4); ell(ctx, -2, -10, 2.4, 1.6, C('#fff', 1, 0.6), 0); spec(ctx, 1, -10, 1.6, A); rect(ctx, -3.5, len - 6, 7, 6, C(trim), 1, 2);
   ctx.restore();
   stitchGlow(ctx, A, -2, -100 + b);
 }
-function fs0(ctx, fill) { ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = 2.6; ctx.strokeStyle = C(INK); ctx.stroke(); }
+function fs0(ctx, fill) { ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = lnw(2.6); ctx.strokeStyle = C(INK); ctx.stroke(); }
 
 const PAINT = { marrow, wick, odile };
 function pick(heroId) { return PAINT[heroId] ? heroId : 'marrow'; }
@@ -208,7 +209,7 @@ function stitchGlow(ctx, A, x, y) {
   const ph = (A.t * (1.2 * (1 - d) + 0.25)) % 1, pulse = Math.exp(-ph * 7) * live;
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   glow(ctx, x, y, 22 + pulse * 16, '#ff3a4e', 0.1 + pulse * 0.4);
-  ctx.strokeStyle = C('#ff6a6a', 1, 0.25 + pulse * 0.6); ctx.lineWidth = 1.6; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x - 14, y); ctx.lineTo(x + 14, y + 2); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = C('#ff6a6a', 1, 0.25 + pulse * 0.6); ctx.lineWidth = lnw(1.6); ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x - 14, y); ctx.lineTo(x + 14, y + 2); ctx.stroke(); ctx.setLineDash([]);
   ctx.restore();
 }
 
@@ -222,7 +223,7 @@ function scratch() {
   SC = { body: mkc(SW * R, SH * R), band: mkc(SW * R, SH * R), rim: mkc(SW * R, SH * R) };
   for (const k of ['body', 'band', 'rim']) { SC[k + 'g'] = SC[k].getContext('2d'); if (!SC[k + 'g']) { SC = null; return null; } }
   const h = mkc(SW * R, SH * R), g = h.getContext('2d');
-  if (g) { g.strokeStyle = 'rgba(70,40,24,0.9)'; g.lineWidth = 1.1 * R; g.beginPath(); for (let k = -SH * R; k < SW * R; k += 5 * R) { g.moveTo(k, SH * R); g.lineTo(k + SH * R, 0); } g.stroke(); g.lineWidth = 0.8 * R; g.beginPath(); for (let k = -SH * R; k < SW * R; k += 5 * R) { g.moveTo(k, 0); g.lineTo(k + SH * R, SH * R); } g.stroke(); }
+  if (g) { g.strokeStyle = 'rgba(70,40,24,0.9)'; g.lineWidth = lnw(1.1 * R); g.beginPath(); for (let k = -SH * R; k < SW * R; k += 5 * R) { g.moveTo(k, SH * R); g.lineTo(k + SH * R, 0); } g.stroke(); g.lineWidth = lnw(0.8 * R); g.beginPath(); for (let k = -SH * R; k < SW * R; k += 5 * R) { g.moveTo(k, 0); g.lineTo(k + SH * R, SH * R); } g.stroke(); }
   HATCH = h; return SC;
 }
 const LAMPCOL = { marrow: '#ffd9a0', wick: '#ffb060', odile: '#ffe6a0' }, CASTCOL = { marrow: '#b3263a', wick: '#ff8a2b', odile: '#f2c14e' }, HEADY = { marrow: -152, wick: -118, odile: -154 };
@@ -321,11 +322,11 @@ export function drawHero(ctx, heroId, x, y, o = {}) {
 function collapseDetail(g, id, d, A) {
   const top = id === 'wick' ? -88 : -128, bot = id === 'wick' ? -44 : -52, split = Math.min(1, d * 1.4), n = 6;
   g.save();
-  g.strokeStyle = C('#1a0c08', 1, 0.8); g.lineWidth = 1 + split * 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(0, top); for (let i = 1; i <= n; i++) g.lineTo(Math.sin(i * 2.3) * 2 * split, top + (bot - top) * i / n); g.stroke();
-  g.strokeStyle = C('#d6c7a6', 1, 0.8); g.lineWidth = 1.2;
+  g.strokeStyle = C('#1a0c08', 1, 0.8); g.lineWidth = lnw(1 + split * 6); g.lineCap = 'round'; g.beginPath(); g.moveTo(0, top); for (let i = 1; i <= n; i++) g.lineTo(Math.sin(i * 2.3) * 2 * split, top + (bot - top) * i / n); g.stroke();
+  g.strokeStyle = C('#d6c7a6', 1, 0.8); g.lineWidth = lnw(1.2);
   for (let i = 0; i < n; i++) { if ((i * 37 % 10) / 10 < d * 0.9) continue; const yy = top + (bot - top) * (i + 0.5) / n; g.beginPath(); g.moveTo(-4 - split * 3, yy - 3); g.lineTo(4 + split * 3, yy + 3); g.moveTo(-4 - split * 3, yy + 3); g.lineTo(4 + split * 3, yy - 3); g.stroke(); }
   const dd = d * d;
-  for (let i = 0; i < 3; i++) { g.save(); g.translate(-14 + i * 14 + (i - 1) * dd * 10, top + 18 + i * 14 + dd * (30 + i * 16)); g.rotate((i - 1) * dd * 0.9); g.fillStyle = C('#c9b48a', 1, 0.95); g.strokeStyle = C(INK); g.lineWidth = 1.6; g.fillRect(-7, -6, 14, 12); g.strokeRect(-7, -6, 14, 12); g.setLineDash([2, 2]); g.beginPath(); g.moveTo(-5, 0); g.lineTo(5, 0); g.stroke(); g.restore(); }
+  for (let i = 0; i < 3; i++) { g.save(); g.translate(-14 + i * 14 + (i - 1) * dd * 10, top + 18 + i * 14 + dd * (30 + i * 16)); g.rotate((i - 1) * dd * 0.9); g.fillStyle = C('#c9b48a', 1, 0.95); g.strokeStyle = C(INK); g.lineWidth = lnw(1.6); g.fillRect(-7, -6, 14, 12); g.strokeRect(-7, -6, 14, 12); g.setLineDash([2, 2]); g.beginPath(); g.moveTo(-5, 0); g.lineTo(5, 0); g.stroke(); g.restore(); }
   g.restore();
 }
 
@@ -347,7 +348,7 @@ export function drawPortrait(ctx, heroId, cx, cy, size) {
     PAINT[id](ctx, A);
     ctx.restore();
     // engraved plate: hatch on the shadow corner, key-lamp wash from the upper left, warm rim
-    ctx.strokeStyle = 'rgba(30,16,10,0.34)'; ctx.lineWidth = 1; ctx.beginPath();
+    ctx.strokeStyle = 'rgba(30,16,10,0.34)'; ctx.lineWidth = lnw(1); ctx.beginPath();
     for (let k = 0; k < size * 0.9; k += 4) { ctx.moveTo(cx + size * 0.5 - k, cy + size * 0.5); ctx.lineTo(cx + size * 0.5, cy + size * 0.5 - k); }
     ctx.stroke();
     if (heroTint) { ctx.globalCompositeOperation = 'soft-light'; ctx.globalAlpha = 0.85; ctx.fillStyle = heroTint; ctx.fillRect(cx - size / 2, cy - size / 2, size, size); ctx.globalAlpha = 1; }
@@ -356,8 +357,8 @@ export function drawPortrait(ctx, heroId, cx, cy, size) {
     ctx.globalCompositeOperation = 'source-over';
     { const rg = ctx.createRadialGradient(cx, cy, size * 0.3, cx, cy, size * 0.52); rg.addColorStop(0, 'rgba(0,0,0,0)'); rg.addColorStop(1, 'rgba(10,4,2,0.5)'); ctx.fillStyle = rg; ctx.fillRect(cx - size / 2, cy - size / 2, size, size); }
     ctx.restore();
-    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, size / 2 - 1, 0, TAU); ctx.lineWidth = 3; ctx.strokeStyle = C(INK); ctx.stroke(); ctx.lineWidth = 1.2; ctx.strokeStyle = C('#a58c4a'); ctx.beginPath(); ctx.arc(cx, cy, size / 2 - 4, 0, TAU); ctx.stroke();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,226,168,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, size / 2 - 2, Math.PI * 0.9, Math.PI * 1.55); ctx.stroke(); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, size / 2 - 1, 0, TAU); ctx.lineWidth = lnw(3); ctx.strokeStyle = C(INK); ctx.stroke(); ctx.lineWidth = lnw(1.2); ctx.strokeStyle = C('#a58c4a'); ctx.beginPath(); ctx.arc(cx, cy, size / 2 - 4, 0, TAU); ctx.stroke();
+    ctx.lineWidth = lnw(1.5); ctx.strokeStyle = 'rgba(255,226,168,0.55)'; ctx.beginPath(); ctx.arc(cx, cy, size / 2 - 2, Math.PI * 0.9, Math.PI * 1.55); ctx.stroke(); ctx.restore();
   } catch (e) {
     if (globalThis.__GW_ART_THROW) throw e;
     try { ctx.restore(); } catch (e2) { /* ignore */ }

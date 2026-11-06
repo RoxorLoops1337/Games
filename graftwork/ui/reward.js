@@ -8,6 +8,7 @@ import { drawBackground } from '../art/backgrounds.js';
 import * as ICONS from '../art/icons.js';
 import { wrapLimit, keyBadge, tscale } from './graft_parts.js';
 import { maybeTip } from './tutorial.js';
+import { lnw } from '../art/linework.js';
 
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
 const RARITY = {
@@ -80,7 +81,7 @@ export default {
     if (rw.relicChoices && rw.relicChoices.length) notes.push('Choose a relic, or leave them all.');
     const nl = Math.round(15 * Math.min(S, 1.25) * 1.22), shown = notes.slice(0, S > 1.2 ? 1 : 2);
     if (shown.length) app.reg('reward-notes', 340, 640 - 8 - shown.length * nl, 600, shown.length * nl, { group: 'notes' });
-    shown.forEach((n, i) => app.text(n, 640, 640 - 8 - (shown.length - i) * nl, { ...K(15), ui: true, align: 'center', color: '#ffb36b', maxW: 590, lineH: nl }));
+    shown.forEach((n, i) => app.text(n, 640, 640 - 8 - (shown.length - i) * nl, { ...K(15), ui: true, align: 'center', color: '#ffb36b', fit: { w: 590, h: nl }, lineH: nl }));
 
     const toGraft = rw.graft && RUN.graftableCards(run).length > 0;
     const label = toGraft ? 'Continue to the graft table' : 'Continue to the map';
@@ -133,9 +134,9 @@ function drawRow(app, r, i, y, compact, K) {
   if (hover) { ctx.shadowColor = info.col; ctx.shadowBlur = 22; }
   app.rr(x, y + (hover ? -2 : 0), PW, h, 12);
   ctx.fillStyle = r.taken ? 'rgba(30,26,22,.7)' : hover ? '#3a2e24' : '#2b231e'; ctx.fill(); ctx.shadowBlur = 0;
-  ctx.lineWidth = hover ? 3 : 2; ctx.strokeStyle = r.taken ? 'rgba(232,220,196,.15)' : hover ? COL.lamp : 'rgba(232,220,196,.4)'; ctx.stroke();
+  ctx.lineWidth = lnw(hover ? 3 : 2); ctx.strokeStyle = r.taken ? 'rgba(232,220,196,.15)' : hover ? COL.lamp : 'rgba(232,220,196,.4)'; ctx.stroke();
   if (!r.taken) app.panel(x, y + (hover ? -2 : 0), PW, h, { fill: 'rgba(0,0,0,0)', stroke: 'rgba(0,0,0,0)', r: 12, lw: 2 }); // engraved hatch, inset shadow, rivets (cached)
-  ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = r.taken ? 'rgba(232,220,196,.1)' : rgba(info.col, 0.6); app.rr(x + 5, y + 5 + (hover ? -2 : 0), PW - 10, h - 10, 8); ctx.stroke(); ctx.setLineDash([]);
+  ctx.setLineDash([6, 5]); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = r.taken ? 'rgba(232,220,196,.1)' : rgba(info.col, 0.6); app.rr(x + 5, y + 5 + (hover ? -2 : 0), PW - 10, h - 10, 8); ctx.stroke(); ctx.setLineDash([]);
   ctx.restore();
   const yy = y + (hover ? -2 : 0);
   ctx.save(); ctx.globalAlpha = slide * (r.taken ? 0.4 : 1);
@@ -144,8 +145,10 @@ function drawRow(app, r, i, y, compact, K) {
   ctx.restore();
   const a = slide * (r.taken ? 0.45 : 1);
   let ty = yy + 10;
-  app.text(info.head.toUpperCase(), x + tx, ty, { ...K(13), ui: true, bold: true, color: DIM, alpha: a, maxW: tw }); ty += headH;
-  app.text(info.title, x + tx, ty, { ...K(26), bold: true, color: info.col, shadow: true, alpha: a, maxW: tw }); ty += titleH;
+  { const hO = { ...K(13), ui: true, bold: true, fit: { w: tw, lines: 1 } }, tO = { ...K(26), bold: true, fit: { w: tw, lines: 1 } };
+    const hL = app.layoutText(info.head.toUpperCase(), hO), tL = app.layoutText(info.title, tO);
+    app.text(info.head.toUpperCase(), x + tx, ty, { ...hO, color: DIM, alpha: a }); ty += Math.max(headH, Math.ceil(hL.size * 1.2));
+    app.text(info.title, x + tx, ty, { ...tO, color: info.col, shadow: true, alpha: a }); ty += Math.max(titleH, Math.ceil(tL.size * 1.2)); }
   dl.forEach((ln, n) => app.text(ln, x + tx, ty + n * lh, { ...K(15), ui: true, color: COL.vellum, alpha: a, lineH: lh }));
   // status chip
   const label = r.taken ? 'Taken' : full ? 'Slots full' : 'Take';
@@ -159,8 +162,8 @@ function drawRow(app, r, i, y, compact, K) {
 
   if (!app.blocked && app.inRect(x, y, PW, h)) {
     const rowAnchor = { x, y, w: PW, h }; // tip sits beside the row, never over its Take chip
-    if (full) app.tooltip(info.title, `Potion slots full (${run.potions.length}/${RUN.potionSlots(run)}). Use a potion in combat to make room, or leave this one.`, { color: COL.bad, anchor: rowAnchor });
-    else if (info.tip) app.tooltip(info.title, null, { lines: info.tip, color: info.col, anchor: rowAnchor }); // adds information only: the row already shows the name and text
+    if (full) app.tooltip(info.title, `Potion slots full (${run.potions.length}/${RUN.potionSlots(run)}). Use a potion in combat to make room, or leave this one.`, { color: COL.bad, anchor: rowAnchor, gloss: [info.line] });
+    else if (info.tip) app.tooltip(info.title, null, { lines: info.tip, color: info.col, anchor: rowAnchor, gloss: [info.line] }); // adds information only: the row already shows the name and text
     if (can && app.clicked(x, y, PW, h)) claim(app, r.id, x + PW / 2, cy);
   }
   return y + h + (compact ? 8 : 12);
@@ -189,7 +192,7 @@ function drawChoices(app, y, K) {
     if (hover || mine) { ctx.shadowColor = mine ? COL.good : '#c58bff'; ctx.shadowBlur = 26; }
     app.rr(x, yy + (hover ? -4 : 0), w, h, 12);
     ctx.fillStyle = hover ? '#33283a' : '#271f2c'; ctx.fill(); ctx.shadowBlur = 0;
-    ctx.lineWidth = hover || mine ? 3 : 2; ctx.strokeStyle = mine ? COL.good : hover ? COL.lamp : 'rgba(197,139,255,.55)'; ctx.stroke();
+    ctx.lineWidth = lnw(hover || mine ? 3 : 2); ctx.strokeStyle = mine ? COL.good : hover ? COL.lamp : 'rgba(197,139,255,.55)'; ctx.stroke();
     ctx.restore();
     const hy = yy + (hover ? -4 : 0);
     ctx.save(); ctx.globalAlpha = slide * (locked ? 0.3 : 1);
@@ -204,7 +207,7 @@ function drawChoices(app, y, K) {
     if (mine) app.text('TAKEN', x + w / 2, hy + h - 26, { size: 16, fixed: true, bold: true, align: 'center', color: COL.good });
     else keyBadge(app, 'QWE'[i], x + 18, hy + 18);
     if (!picked && !app.blocked && app.inRect(x, yy, w, h)) {
-      app.tooltip(rl.name, null, { lines: ['Only one can be taken, and it is kept for the rest of the run.'], color: r2.color });
+      app.tooltip(rl.name, null, { lines: ['Only one can be taken, and it is kept for the rest of the run.'], color: r2.color, gloss: [rl.text], anchor: { x, y: yy, w, h, band: { x: clamp(x, 24, 1280 - 24 - 2 * 328), y: yy + h + 12, bottom: 716, dir: 1 } } });
       if (app.clicked(x, yy, w, h)) claim(app, 'boss', x + w / 2, yy + 60, id);
     }
   });

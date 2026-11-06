@@ -15,6 +15,18 @@ import { HEROES } from '../graftwork/data/index.js';
 import { POLICIES, playRun } from './graftwork_sim.mjs';
 import './graftwork_strong.mjs';
 
+// CAREFUL slips: with probability SLIP a play is replaced by a random playable card (one slip in four ends the turn instead).
+// The sim's careful and the strong bot share one card evaluator and play almost the same, so this models a careful HUMAN who reads
+// intents but misplays now and then. `careful_pure` is the unmodified sim policy.
+export const SLIP = +(process.env.GW_SLIP ?? 0.09);
+function slip(c, best, run) {
+  const R = run.__slipR || (run.__slipR = mkRng('slip:' + run.seed));
+  if (R.next() >= SLIP) return undefined;
+  if (R.next() < 0.25) return -1;
+  const ok = []; c.hand.forEach((k, i) => { if (canPlay(c, i).ok) ok.push(i); });
+  return ok.length ? R.pick(ok) : undefined;
+}
+POLICIES.carefulSlip = { ...POLICIES.careful, slip };
 export const ASSIST_ALL = { on: true, sturdy: true, gentle: true, kind: true, mercy: true };
 function mkRng(seed) { let s = hashSeed(seed) >>> 0 || 1; const next = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; return { next, int: (n) => Math.floor(next() * n), pick: (a) => a[Math.floor(next() * a.length)] }; }
 
@@ -114,7 +126,7 @@ export function lowRun(tier, heroId, seed, asc = 0, o = {}) {
 
 export function runTier(tier, hero, seed, asc = 0, o = {}) {
   if (tier === 'random' || tier === 'sloppy') return lowRun(tier, hero, seed, asc, o);
-  return playRun(hero, seed, POLICIES[tier], asc, o);
+  return playRun(hero, seed, tier === 'careful' ? POLICIES.carefulSlip : tier === 'careful_pure' ? POLICIES.careful : POLICIES[tier], asc, o);
 }
 
 const median = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0; };
@@ -137,7 +149,7 @@ export function row(tier, s) { return `${tier.padEnd(8)} N=${String(s.N).padEnd(
 
 if (process.argv[1] && process.argv[1].endsWith('graftwork_tiers.mjs')) {
   const [, , t, nArg, ascArg, assistArg, hero] = process.argv;
-  const asc = +ascArg || 0, o = { assist: assistArg === 'assist' ? ASSIST_ALL : undefined, hero };
+  const asc = +ascArg || 0, o = { assist: assistArg === "assist" ? ASSIST_ALL : undefined, hero: hero || undefined, tag: process.env.GW_TAG || "tier" };
   const defaults = { random: 1000, sloppy: 1000, careful: 300, strong: 300 };
   for (const tier of t && t !== 'all' ? [t] : Object.keys(defaults)) console.log(row(tier, measure(tier, +nArg || defaults[tier], asc, o)) + (o.assist ? '  [assist]' : ''));
 }

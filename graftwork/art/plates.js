@@ -1,3 +1,4 @@
+import { lnw } from './linework.js';
 // GRAFTWORK plates: baked, cached engraved surfaces. Nothing here costs more than one drawImage per frame once warm.
 //  drawEventPlate(ctx, id, act, x, y, w, h)  the event illustration: sepia wash, light pool, floor, a procedural motif keyed by the event id
 //                                            (EVENT_MOTIFS, generic fallback), hatch veil, vignette, deckled paper edge. Static: no animation to freeze.
@@ -32,11 +33,11 @@ function shape(g, col, hatch = 0.34) {
   g.fillStyle = col; g.fill();
   g.save(); g.clip();
   const gr = g.createLinearGradient(0, 0, W0, H0); gr.addColorStop(0, 'rgba(10,6,4,0)'); gr.addColorStop(0.35, `rgba(10,6,4,${hatch * 0.5})`); gr.addColorStop(1, `rgba(10,6,4,${hatch})`);
-  g.strokeStyle = gr; g.lineWidth = 1; g.stroke(hatchPath()); // Path2D: the shape's own path stays current for the highlight and the ink
-  g.translate(-1.2, -1.2); g.lineWidth = 2; g.strokeStyle = 'rgba(255,247,224,.38)'; g.stroke(); g.restore();
-  g.lineWidth = 2.2; g.strokeStyle = INK; g.lineJoin = 'round'; g.stroke();
+  g.strokeStyle = gr; g.lineWidth = lnw(1); g.stroke(hatchPath()); // Path2D: the shape's own path stays current for the highlight and the ink
+  g.translate(-1.2, -1.2); g.lineWidth = lnw(2); g.strokeStyle = 'rgba(255,247,224,.38)'; g.stroke(); g.restore();
+  g.lineWidth = lnw(2.2); g.strokeStyle = INK; g.lineJoin = 'round'; g.stroke();
 }
-const line = (g, x1, y1, x2, y2, w = 2, k = INK) => { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.lineWidth = w; g.strokeStyle = k; g.lineCap = 'round'; g.stroke(); };
+const line = (g, x1, y1, x2, y2, w = 2, k = INK) => { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.lineWidth = lnw(w); g.strokeStyle = k; g.lineCap = 'round'; g.stroke(); };
 const disc = (g, x, y, r, col, hatch) => { g.beginPath(); g.arc(x, y, r, 0, TAU); shape(g, col, hatch); };
 
 // ---- motifs: g, tone = { m (material), l (spot colour of the act) } ----
@@ -57,7 +58,7 @@ const M = {
   hooded(g, t) { // hooded stranger holding a lantern
     g.beginPath(); g.moveTo(190, FY); g.quadraticCurveTo(196, 330, 236, 270); g.quadraticCurveTo(260, 232, 284, 270); g.quadraticCurveTo(326, 330, 332, FY); g.closePath(); shape(g, t.m, 0.42);
     g.beginPath(); g.moveTo(236, 282); g.quadraticCurveTo(260, 250, 284, 282); g.quadraticCurveTo(260, 322, 236, 282); g.closePath(); shape(g, '#0d0907', 0.1);
-    line(g, 300, 340, 372, 330, 8); rrect(g, 366, 334, 34, 46, 5); shape(g, t.m); disc(g, 383, 360, 11, t.l, 0.15); line(g, 383, 330, 383, 300, 2); g.beginPath(); g.arc(383, 296, 8, Math.PI, 0); g.lineWidth = 2; g.strokeStyle = INK; g.stroke();
+    line(g, 300, 340, 372, 330, 8); rrect(g, 366, 334, 34, 46, 5); shape(g, t.m); disc(g, 383, 360, 11, t.l, 0.15); line(g, 383, 330, 383, 300, 2); g.beginPath(); g.arc(383, 296, 8, Math.PI, 0); g.lineWidth = lnw(2); g.strokeStyle = INK; g.stroke();
     for (let i = 0; i < 7; i++) line(g, 383, 360, 383 + Math.cos(i * 0.9) * 46, 360 + Math.sin(i * 0.9) * 46, 1, 'rgba(255,240,190,.32)');
   },
   ledger(g, t) { // open ledger, quill, stamp
@@ -70,7 +71,7 @@ const M = {
   twins(g, t) { // two identical cards and a mirror seam
     for (const [cx, rot] of [[165, -0.06], [355, 0.06]]) { g.save(); g.translate(cx, 330); g.rotate(rot); rrect(g, -62, -110, 124, 180, 8); shape(g, '#e4d6b4', 0.3); rrect(g, -48, -94, 96, 80, 5); shape(g, '#b79d70', 0.3); disc(g, 0, -54, 16, t.l, 0.2); line(g, -40, 10, 40, 10, 1.4); line(g, -40, 26, 20, 26, 1.4); line(g, -40, 42, 30, 42, 1.4); g.restore(); }
     g.setLineDash([7, 7]); line(g, 260, 190, 260, FY, 1.6); g.setLineDash([]);
-    g.beginPath(); g.moveTo(236, 330); g.lineTo(284, 330); g.moveTo(272, 320); g.lineTo(284, 330); g.lineTo(272, 340); g.lineWidth = 2; g.strokeStyle = t.l; g.stroke();
+    g.beginPath(); g.moveTo(236, 330); g.lineTo(284, 330); g.moveTo(272, 320); g.lineTo(284, 330); g.lineTo(272, 340); g.lineWidth = lnw(2); g.strokeStyle = t.l; g.stroke();
   },
   shelf(g, t) { // shelves of bottles, one glowing
     for (const y of [330, 450]) { rrect(g, 90, y, 340, 10, 2); shape(g, '#6b4a2e'); }
@@ -82,7 +83,7 @@ const M = {
     g.beginPath(); g.ellipse(260, FY - 6, 150, 18, 0, 0, TAU); g.fillStyle = 'rgba(0,0,0,.35)'; g.fill();
     for (let i = 0; i < 28; i++) { const a = i / 28 * TAU; g.beginPath(); g.arc(260 + Math.cos(a) * 112, 330 + Math.sin(a) * 112, 7, 0, TAU); shape(g, '#d8c9a4', 0.2); }
     disc(g, 260, 330, 112, t.l, 0.36); disc(g, 260, 330, 84, 'rgba(0,0,0,0)', 0.2); line(g, 260, 280, 260, 380, 5); line(g, 210, 330, 310, 330, 5);
-    g.beginPath(); g.arc(260, 330, 98, Math.PI * 1.08, Math.PI * 1.6); g.lineWidth = 2; g.strokeStyle = 'rgba(255,247,224,.7)'; g.stroke();
+    g.beginPath(); g.arc(260, 330, 98, Math.PI * 1.08, Math.PI * 1.6); g.lineWidth = lnw(2); g.strokeStyle = 'rgba(255,247,224,.7)'; g.stroke();
   },
   machine(g, t) { // vending machine
     rrect(g, 170, 180, 180, 286, 8); shape(g, t.m); rrect(g, 186, 200, 148, 150, 4); shape(g, '#10100e', 0.2);
@@ -124,7 +125,7 @@ const M = {
   spool(g, t) { // spool with a loose thread
     rrect(g, 190, 250, 140, 22, 6); shape(g, '#b9955e'); rrect(g, 190, 420, 140, 22, 6); shape(g, '#b9955e'); rrect(g, 210, 270, 100, 150, 4); shape(g, t.l, 0.4);
     for (let i = 0; i < 12; i++) line(g, 210, 280 + i * 12, 310, 286 + i * 12, 1, 'rgba(43,30,26,.55)');
-    g.beginPath(); g.moveTo(310, 410); g.bezierCurveTo(400, 400, 360, 470, 440, 454); g.bezierCurveTo(470, 450, 480, 470, 450, 478); g.lineWidth = 6; g.strokeStyle = INK; g.stroke(); g.lineWidth = 3; g.strokeStyle = t.l; g.stroke();
+    g.beginPath(); g.moveTo(310, 410); g.bezierCurveTo(400, 400, 360, 470, 440, 454); g.bezierCurveTo(470, 450, 480, 470, 450, 478); g.lineWidth = lnw(6); g.strokeStyle = INK; g.stroke(); g.lineWidth = lnw(3); g.strokeStyle = t.l; g.stroke();
     line(g, 372, 200, 330, 262, 4); line(g, 372, 200, 396, 172, 4, '#d8d3c6'); ci(g, 398, 168, 6);
   },
   anvil(g, t) { // anvil, hammer, spark
@@ -134,7 +135,7 @@ const M = {
     g.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, r = i % 2 ? 8 : 20; g.lineTo(230 + Math.cos(a) * r, 340 + Math.sin(a) * r); } g.closePath(); shape(g, t.l, 0.1);
   },
 };
-function ci(g, x, y, r) { g.beginPath(); g.arc(x, y, r, 0, TAU); g.lineWidth = 2; g.strokeStyle = INK; g.stroke(); }
+function ci(g, x, y, r) { g.beginPath(); g.arc(x, y, r, 0, TAU); g.lineWidth = lnw(2); g.strokeStyle = INK; g.stroke(); }
 M.generic = (g, t) => { // doorway and a figure
   rrect(g, 170, 220, 130, 246, 6); shape(g, t.m); g.beginPath(); g.moveTo(186, FY); g.lineTo(186, 300); g.quadraticCurveTo(235, 250, 284, 300); g.lineTo(284, FY); g.closePath(); shape(g, t.l, 0.3);
   g.beginPath(); g.moveTo(330, FY); g.quadraticCurveTo(334, 380, 360, 350); g.quadraticCurveTo(376, 336, 392, 350); g.quadraticCurveTo(418, 380, 422, FY); g.closePath(); shape(g, '#14100d', 0.4); disc(g, 376, 330, 14, '#14100d', 0.4);
@@ -169,12 +170,12 @@ function bakePlate(g, id, act) {
   const lg = g.createRadialGradient(lx, ly, 6, lx, ly, 300); lg.addColorStop(0, 'rgba(232,214,168,.4)'); lg.addColorStop(0.5, 'rgba(232,214,168,.16)'); lg.addColorStop(1, 'rgba(232,214,168,0)'); g.fillStyle = lg; g.fillRect(0, 0, W0, H0);
   // floor: dark slab with perspective seams, engraved
   const fg = g.createLinearGradient(0, FY, 0, H0); fg.addColorStop(0, 'rgba(8,6,4,.55)'); fg.addColorStop(1, 'rgba(4,3,2,.92)'); g.fillStyle = fg; g.fillRect(0, FY, W0, H0 - FY);
-  g.strokeStyle = 'rgba(232,214,168,.22)'; g.lineWidth = 1; g.beginPath(); g.moveTo(0, FY); g.lineTo(W0, FY); for (let i = 1; i < 6; i++) { g.moveTo(W0 / 2 + (i - 3) * 16, FY); g.lineTo(W0 / 2 + (i - 3) * 150, H0); } g.stroke();
+  g.strokeStyle = 'rgba(232,214,168,.22)'; g.lineWidth = lnw(1); g.beginPath(); g.moveTo(0, FY); g.lineTo(W0, FY); for (let i = 1; i < 6; i++) { g.moveTo(W0 / 2 + (i - 3) * 16, FY); g.lineTo(W0 / 2 + (i - 3) * 150, H0); } g.stroke();
   // motif with a soft shadow grounding it
   const name = eventMotif(id), tone = { m: '#85735a', l: light };
   g.save(); (M[name] || M.generic)(g, tone); g.restore();
   // hatch veil: 45 degree lines everywhere, double cross hatch in the corners
-  g.strokeStyle = 'rgba(8,6,4,.1)'; g.lineWidth = 1; g.beginPath(); for (let s = -H0; s < W0; s += 5) { g.moveTo(s, H0); g.lineTo(s + H0, 0); } g.stroke();
+  g.strokeStyle = 'rgba(8,6,4,.1)'; g.lineWidth = lnw(1); g.beginPath(); for (let s = -H0; s < W0; s += 5) { g.moveTo(s, H0); g.lineTo(s + H0, 0); } g.stroke();
   g.save(); g.beginPath(); g.rect(0, 0, W0, H0); g.ellipse(W0 / 2, H0 / 2, 250, 270, 0, 0, TAU, true); g.clip('evenodd');
   g.strokeStyle = 'rgba(8,6,4,.18)'; g.beginPath(); for (let s = 0; s < W0 + H0; s += 5) { g.moveTo(s, 0); g.lineTo(s - H0, H0); } g.stroke(); g.restore();
   const vg = g.createRadialGradient(W0 / 2, H0 / 2, 150, W0 / 2, H0 / 2, 400); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)'); g.fillStyle = vg; g.fillRect(0, 0, W0, H0);
@@ -188,8 +189,8 @@ function bakePlate(g, id, act) {
   g.moveTo(edge[0][0], edge[0][1]); for (let i = 1; i < edge.length; i++) g.lineTo(edge[i][0], edge[i][1]); g.closePath();
   const pg = g.createLinearGradient(0, 0, W0, H0); pg.addColorStop(0, '#e4d7b8'); pg.addColorStop(1, '#bfae88'); g.fillStyle = pg; g.fill('evenodd');
   g.save(); g.clip('evenodd'); g.fillStyle = 'rgba(120,90,40,.12)'; for (let i = 0; i < 60; i++) { g.beginPath(); g.arc(r() * W0, r() * H0, 1 + r() * 2, 0, TAU); g.fill(); } g.restore();
-  g.beginPath(); g.moveTo(edge[0][0], edge[0][1]); for (let i = 1; i < edge.length; i++) g.lineTo(edge[i][0], edge[i][1]); g.closePath(); g.lineWidth = 1.6; g.strokeStyle = INK; g.stroke();
-  g.lineWidth = 1; g.strokeStyle = 'rgba(255,247,224,.35)'; g.strokeRect(M0 + 3.5, M0 + 3.5, W0 - 2 * M0 - 7, H0 - 2 * M0 - 7);
+  g.beginPath(); g.moveTo(edge[0][0], edge[0][1]); for (let i = 1; i < edge.length; i++) g.lineTo(edge[i][0], edge[i][1]); g.closePath(); g.lineWidth = lnw(1.6); g.strokeStyle = INK; g.stroke();
+  g.lineWidth = lnw(1); g.strokeStyle = 'rgba(255,247,224,.35)'; g.strokeRect(M0 + 3.5, M0 + 3.5, W0 - 2 * M0 - 7, H0 - 2 * M0 - 7);
   g.strokeStyle = 'rgba(43,30,26,.55)'; g.strokeRect(M0 + 6.5, M0 + 6.5, W0 - 2 * M0 - 13, H0 - 2 * M0 - 13);
 }
 export function drawEventPlate(ctx, id, act, x, y, w, h) {
@@ -208,7 +209,7 @@ function bakeVellum(g, w, h, seed) {
   for (let i = 0; i < Math.max(14, w * h / 26000); i++) { const x = r() * w, y = r() * h, rad = 14 + r() * 46, gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, `rgba(120,78,32,${0.1 + r() * 0.1})`); gr.addColorStop(1, 'rgba(120,78,32,0)'); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
   g.fillStyle = 'rgba(150,100,45,.35)'; for (let i = 0; i < w * h / 4200; i++) g.fillRect(r() * w, r() * h, 1 + (r() < 0.2 ? 1 : 0), 1);
   // fibres: short curved hairs, light and dark
-  g.lineWidth = 1; g.lineCap = 'round';
+  g.lineWidth = lnw(1); g.lineCap = 'round';
   for (let i = 0; i < w * h / 900; i++) { const x = r() * w, y = r() * h, a = r() * TAU, l = 5 + r() * 20; g.strokeStyle = r() < 0.6 ? `rgba(232,220,196,${0.04 + r() * 0.05})` : `rgba(0,0,0,${0.08 + r() * 0.08})`; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a + 0.8) * l * 0.5, y + Math.sin(a + 0.8) * l * 0.5, x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke(); }
   // edge darkening
   const eg = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.hypot(w, h) * 0.55); eg.addColorStop(0, 'rgba(0,0,0,0)'); eg.addColorStop(1, 'rgba(0,0,0,.55)'); g.fillStyle = eg; g.fillRect(0, 0, w, h);
@@ -225,7 +226,7 @@ export function drawVellum(ctx, x, y, w, h, o = {}) {
 }
 export function drawEmptyMark(ctx, x, y, w = 160) {
   ctx.save(); ctx.translate(x, y); ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(232,220,196,.35)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(232,220,196,.35)'; ctx.lineWidth = lnw(1);
   ctx.beginPath(); ctx.moveTo(-w / 2, 0); ctx.lineTo(-10, 0); ctx.moveTo(10, 0); ctx.lineTo(w / 2, 0); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(6, 0); ctx.lineTo(0, 6); ctx.lineTo(-6, 0); ctx.closePath(); ctx.fillStyle = 'rgba(179,38,58,.55)'; ctx.fill(); ctx.strokeStyle = 'rgba(43,30,26,.9)'; ctx.stroke();
   ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(-w / 2 + 14, 7); ctx.lineTo(w / 2 - 14, 7); ctx.strokeStyle = 'rgba(232,220,196,.22)'; ctx.stroke(); ctx.setLineDash([]);

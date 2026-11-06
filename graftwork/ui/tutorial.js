@@ -3,6 +3,7 @@
 // (meta.tips[key] = 1, saved through flow.saveMeta()). meta.settings.tips === false switches every tip off.
 // Call it LAST in your draw() so the bubble sits on top. Only one tip shows per frame; the first caller wins.
 import { COL, W, H, clamp, rgba } from './core.js';
+import { lnw } from '../art/linework.js';
 
 export const TIP_TEXTS = {
   energy: 'Energy pays for cards. You get 3 a turn. Unspent Energy is lost.',
@@ -75,7 +76,7 @@ export function maybeTip(app, key, x, y, text, o = {}) {
   const dbw = Math.max(78, Math.round(app.measure('Got it', 14, { ui: true, bold: true }) + 28)), dbh = btnH, dbx = bx + bw - pad - dbw + 4, dby = by + bh - dbh - 8;
   const inside = x >= bx && x <= bx + bw && y >= by && y <= by + bh;
   ctx.save();
-  ctx.fillStyle = '#2a2116'; ctx.strokeStyle = COL.lamp; ctx.lineWidth = 2;
+  ctx.fillStyle = '#2a2116'; ctx.strokeStyle = COL.lamp; ctx.lineWidth = lnw(2);
   const ex = clamp(x, bx + 16, bx + bw - 16), ey = clamp(y, by + 16, by + bh - 16);
   if (!inside) {
     // arrow from the nearest bubble edge to the point; a long reach is a thin line with a head so it hides little
@@ -100,11 +101,11 @@ export function maybeTip(app, key, x, y, text, o = {}) {
   }
   ctx.shadowColor = rgba(COL.lamp, 0.35 + pulse * 0.4); ctx.shadowBlur = 10 + pulse * 10;
   app.rr(bx, by, bw, bh, 10); ctx.fillStyle = '#2a2116'; ctx.fill(); ctx.shadowBlur = 0;
-  ctx.lineWidth = 2; ctx.strokeStyle = COL.lamp; ctx.stroke();
+  ctx.lineWidth = lnw(2); ctx.strokeStyle = COL.lamp; ctx.stroke();
   ctx.restore();
   app.text(text, bx + pad, by + pad, { size: 15, ui: true, maxW: maxW - pad * 2, lineH: 19, color: COL.vellum });
   const hot = app.inRect(dbx, dby, dbw, dbh);
-  ctx.save(); app.rr(dbx, dby, dbw, dbh, 8); ctx.fillStyle = hot ? '#7a5410' : '#3a2f1a'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore();
+  ctx.save(); app.rr(dbx, dby, dbw, dbh, 8); ctx.fillStyle = hot ? '#7a5410' : '#3a2f1a'; ctx.fill(); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore();
   app.text('Got it', dbx + dbw / 2, dby + dbh / 2, { size: 14, ui: true, bold: true, align: 'center', baseline: 'middle', color: COL.vellum });
   app._tipBtn = { x: dbx, y: dby, w: dbw, h: dbh }; // for tests and tooling
   app._tipBox = { x: bx, y: by, w: bw, h: bh };

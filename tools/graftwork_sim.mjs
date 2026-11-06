@@ -201,6 +201,7 @@ export function fight(run, pol, maxTurns = 40) {
       // play setup cards first when a card of value is waiting to use them
       if (bestSetup >= 0 && (bestSetup === best || bss > 3.5) && !(echo && bestSetup !== best)) best = bestSetup;
       if (best < 0) break;
+      if (pol.slip) { const o = pol.slip(c, best, run); if (o === -1) break; if (o !== undefined) best = o; } // optional human-error hook (tools/graftwork_tiers.mjs)
       const sp = specOf(c, c.hand[best]);
       let ti = null;
       if (sp.target === 'enemy') {

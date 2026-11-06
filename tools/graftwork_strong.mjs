@@ -169,7 +169,10 @@ export function strongShopCards(run, shop, pol) {
 }
 function cardValueStatic(inst) { return fxValueOf(inst); }
 
-const STRONG = { maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft, forge: strongForge };
+// Boss relic choice (the plain sim takes choice 0). Rank from forced-pick runs (100 runs x 3 heroes each, A0).
+const BOSS_RANK = ['r_second_wind', 'r_lead_apron', 'r_tithe_crown', 'r_parasite_heart', 'r_hollow_ledger', 'r_glass_throat', 'r_absolution', 'r_gamblers_thread'];
+const pickRelic = (ch) => ch.slice().sort((a, b) => BOSS_RANK.indexOf(a) - BOSS_RANK.indexOf(b))[0];
+const STRONG = { pickRelic, maxStrain: +(process.env.GW_MS ?? 2), greed: +(process.env.GW_GREED ?? 0.6), fight: strongFight, pickGraft: strongPickGraft, forge: strongForge };
 POLICIES.strongNoPick = { ...STRONG, buyCards: +(process.env.GW_BUY ?? 0) };
 POLICIES.strongPick = { ...STRONG, buyCards: 1, shopCards: strongShopCards, cardsFirst: (process.env.GW_FIRST ?? '1') === '1' };
 POLICIES.strong = PICK_ON() ? POLICIES.strongPick : POLICIES.strongNoPick;

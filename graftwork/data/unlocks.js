@@ -8,18 +8,18 @@ import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES } from './index.js';
 // Unlock Points (UP) a finished run pays. Every term is added, then clamped to [UP.FLOOR, UP.RUN_CAP].
 export const UP = {
   FLOOR: 2,            // even an instant death pays this (abandoned runs under ABANDON_MIN_FLOORS floors pay 0)
-  PER_FLOOR: 0.2,      // per map node cleared
-  ELITE: 1.2, ELITE_MAX: 6,
-  BOSS: 2.4,           // per Act boss killed (the final boss is the win)
-  ACT: { 1: 0, 2: 1, 3: 2.5 }, // UP for the deepest Act reached
-  WIN: 4.5, PER_ASC: 0.4,      // a win, plus per ascension level of that win
+  PER_FLOOR: 0.1,      // per map node cleared
+  ELITE: 1, ELITE_MAX: 6,
+  BOSS: 3,           // per Act boss killed (the final boss is the win)
+  ACT: { 1: 0, 2: 2, 3: 5 }, // UP for the deepest Act reached
+  WIN: 9, PER_ASC: 0.6,      // a win, plus per ascension level of that win
   FIRST_KILL: 0.5, FIRST_KILL_MAX: 8, // first lifetime kill of an enemy type (count capped per run)
   ACHIEVEMENT: 2.5, ACHIEVEMENT_MAX: 3, // new achievements this run (count capped)
-  RUN_CAP: 20,         // a perfect run never pays more than this, so TOTAL_COST / RUN_CAP is the hard minimum of runs
+  RUN_CAP: 24,         // a perfect run never pays more than this, so TOTAL_COST / RUN_CAP is the hard minimum of runs
   ASSIST_MULT: 0.5,    // Assist runs pay half (the floor still applies)
   ABANDON_MIN_FLOORS: 3,
 };
-export const TARGET_TOTAL = 590;    // total UP that opens every locked item (cost curve is normalised to this)
+export const TARGET_TOTAL = 700;    // total UP that opens every locked item (cost curve is normalised to this)
 export const COST_CURVE = { early: 0.55, late: 1.65 };     // item cost multiplier at queue position 0 and 1 (linear between)
 export const COST_BASE = { card: 2.2, graft: 2.0, relic: 3.0, potion: 2.0, event: 1.5 };
 export const COST_RARITY = { common: 0.8, uncommon: 1.0, shop: 1.0, rare: 1.6, boss: 1.6 };

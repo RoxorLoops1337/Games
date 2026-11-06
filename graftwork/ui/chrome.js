@@ -1,3 +1,4 @@
+import { lnw } from '../art/linework.js';
 // Physical UI chrome (design/ART_BIBLE.md "UI chrome"): brass-framed slab panels with rivets, inset shadow and a lit top edge,
 // buttons with 2 px press travel, plus plate / rivet / vial / dial / badge helpers.
 // Textures are baked ONCE into offscreen canvases (keyed by size and colours, numeric keys so a hit allocates nothing);
@@ -61,17 +62,18 @@ function bakePanel(s, w, h, r, fill, stroke, lw, rivets, pad) {
     g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetX = 0; g.shadowOffsetY = 0;
   }
   if (w >= 80 && h >= 60) { // engraved shadow side: sparse 45 degree ink hatching along the bottom and right edges (baked once with the panel)
-    g.save(); g.strokeStyle = 'rgba(0,0,0,.22)'; g.lineWidth = 1;
+    g.save(); g.strokeStyle = 'rgba(0,0,0,.17)'; g.lineWidth = lnw('hatch');
     const bh = Math.min(h * 0.3, 70), rw = Math.min(w * 0.12, 50), step = 6;
     g.beginPath(); g.rect(0, h - bh, w, bh); g.rect(w - rw, 0, rw, h); g.clip();
     g.beginPath(); for (let d = -h; d < w; d += step) { g.moveTo(d, h); g.lineTo(d + h, 0); } g.stroke();
     g.restore();
   }
-  g.strokeStyle = 'rgba(255,241,176,.34)'; g.lineWidth = 1; // lit top edge
+  g.strokeStyle = 'rgba(255,241,176,.34)'; g.lineWidth = lnw(1); // lit top edge
   g.beginPath(); g.moveTo(r * 0.7 + lw, lw + 1.5); g.lineTo(w - r * 0.7 - lw, lw + 1.5); g.stroke();
   g.restore();
-  g.beginPath(); rrp(g, 0, 0, w, h, r); g.lineWidth = lw; g.strokeStyle = stroke === 'brass' ? brassGrad(g, h, 0.8) : stroke; g.stroke();
-  g.beginPath(); rrp(g, lw, lw, w - lw * 2, h - lw * 2, Math.max(0, r - lw)); g.lineWidth = 1; g.strokeStyle = 'rgba(0,0,0,.4)'; g.stroke();
+  g.beginPath(); rrp(g, 0, 0, w, h, r); g.lineWidth = lnw(lw); g.strokeStyle = stroke === 'brass' ? brassGrad(g, h, 0.8) : stroke; g.stroke();
+  const gi = Math.max(2.5, lnw(lw) + 1.6); g.beginPath(); rrp(g, gi, gi, w - gi * 2, h - gi * 2, Math.max(0, r - gi)); g.lineWidth = lnw('hair'); g.strokeStyle = 'rgba(201,162,39,.2)'; g.stroke(); // subtle double rule
+  g.beginPath(); rrp(g, lnw(lw), lnw(lw), w - lnw(lw) * 2, h - lnw(lw) * 2, Math.max(0, r - lnw(lw))); g.lineWidth = lnw('hair'); g.strokeStyle = 'rgba(0,0,0,.4)'; g.stroke();
   if (rivets && w >= 64 && h >= 48) { const i = Math.max(8, r * 0.7 + 3); rivet(g, i, i, 2.4); rivet(g, w - i, i, 2.4); rivet(g, i, h - i, 2.4); rivet(g, w - i, h - i, 2.4); }
   return o.c;
 }
@@ -90,7 +92,7 @@ export function panel(app, x, y, w, h, o) {
   }
   cache.vector++;
   ctx.save(); app.rr(x, y, w, h, r); ctx.fillStyle = fill; ctx.fill();
-  ctx.lineWidth = lw; ctx.strokeStyle = stroke === 'brass' ? 'rgba(201,162,39,.7)' : stroke; ctx.stroke();
+  ctx.lineWidth = lnw(lw); ctx.strokeStyle = stroke === 'brass' ? 'rgba(201,162,39,.7)' : stroke; ctx.stroke();
   ctx.fillStyle = 'rgba(255,241,176,.25)'; ctx.fillRect(x + r * 0.7 + lw, y + lw + 1, Math.max(0, w - r * 1.4 - lw * 2), 1);
   ctx.restore();
 }
@@ -114,7 +116,7 @@ function bakeButton(s, w, h, r, fill, stroke, state, pad) {
   if (state !== 3 && w > 24) { g.fillStyle = 'rgba(255,255,255,.028)'; for (let yy = 2; yy < h; yy += 3) g.fillRect(0, yy + ((yy * 7) % 3) * 0.3, w, 1); } // brushed grain
   if (state !== 3) { g.fillStyle = state === 2 ? 'rgba(255,241,176,.12)' : 'rgba(255,241,176,.42)'; g.fillRect(r * 0.6 + 1, 1, Math.max(0, w - r * 1.2 - 2), 1); } // lit top edge
   g.restore();
-  g.beginPath(); rrp(g, 0, 0, w, h, r); g.lineWidth = state === 1 ? 2.2 : 1.8;
+  g.beginPath(); rrp(g, 0, 0, w, h, r); g.lineWidth = lnw(state === 1 ? 2.2 : 1.8);
   g.strokeStyle = state === 3 ? 'rgba(232,220,196,.2)' : state === 1 ? LAMP : stroke === 'brass' ? brassGrad(g, h, 0.62) : stroke; g.stroke();
   return o.c;
 }
@@ -136,14 +138,14 @@ export function button(app, x, y, w, h, o, state) {
   const dy = state === 2 ? 2 : 0;
   ctx.save(); app.rr(x, y + dy, w, h, r); ctx.fillStyle = fill; ctx.fill();
   ctx.fillStyle = state === 1 ? 'rgba(255,236,190,.14)' : state === 2 ? 'rgba(0,0,0,.25)' : state === 3 ? 'rgba(40,36,34,.6)' : 'rgba(255,236,190,.05)'; ctx.fill();
-  ctx.lineWidth = state === 1 ? 2.2 : 1.8; ctx.strokeStyle = state === 3 ? 'rgba(232,220,196,.2)' : state === 1 ? LAMP : stroke === 'brass' ? 'rgba(201,162,39,.6)' : stroke; ctx.stroke();
+  ctx.lineWidth = lnw(state === 1 ? 2.2 : 1.8); ctx.strokeStyle = state === 3 ? 'rgba(232,220,196,.2)' : state === 1 ? LAMP : stroke === 'brass' ? 'rgba(201,162,39,.6)' : stroke; ctx.stroke();
   ctx.restore();
   return dy;
 }
 const DASH = [5, 3];
 export function focusRing(app, x, y, w, h, r = 8) {
   const ctx = app.ctx; ctx.save(); app.rr(x - 3, y - 3, w + 6, h + 6, r + 3);
-  ctx.lineWidth = 2; ctx.strokeStyle = BRASS_LIGHT; ctx.globalAlpha = 0.65 + 0.35 * Math.sin(app.t * 6); ctx.setLineDash(DASH); ctx.stroke(); ctx.restore();
+  ctx.lineWidth = lnw(2); ctx.strokeStyle = BRASS_LIGHT; ctx.globalAlpha = 0.65 + 0.35 * Math.sin(app.t * 6); ctx.setLineDash(DASH); ctx.stroke(); ctx.restore();
 }
 
 // ---- ripples (pressed feedback) ----
@@ -159,7 +161,7 @@ export function drawRipples(app) {
     const p = RIP[i]; if (p.t >= 1) continue;
     p.t += app.dt / 0.35; if (p.t >= 1) continue;
     ctx.save(); app.rr(p.x, p.y, p.w, p.h, p.r); ctx.clip();
-    ctx.globalAlpha = 0.5 * (1 - p.t); ctx.lineWidth = 2; ctx.strokeStyle = BRASS_LIGHT; ctx.beginPath(); ctx.arc(p.cx, p.cy, 4 + p.t * Math.max(p.w, p.h) * 0.6, 0, 6.2832); ctx.stroke(); ctx.restore();
+    ctx.globalAlpha = 0.5 * (1 - p.t); ctx.lineWidth = lnw(2); ctx.strokeStyle = BRASS_LIGHT; ctx.beginPath(); ctx.arc(p.cx, p.cy, 4 + p.t * Math.max(p.w, p.h) * 0.6, 0, 6.2832); ctx.stroke(); ctx.restore();
   }
 }
 
@@ -179,13 +181,13 @@ export function vial(app, x, y, w, h, frac, o = {}) {
     for (let i = 0; i <= 8; i++) { const px = x + (w * i) / 8; ctx.lineTo(px, top + Math.sin(t * 2.4 + i * 0.9) * amp); }
     ctx.lineTo(x + w, y + h); ctx.closePath(); ctx.fillStyle = color; ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x + w * 0.62, top, w * 0.38, y + h - top); // shaded side
-    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.5; ctx.beginPath(); // meniscus
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = lnw(1.5); ctx.beginPath(); // meniscus
     for (let i = 0; i <= 8; i++) { const px = x + (w * i) / 8, py = top + Math.sin(t * 2.4 + i * 0.9) * amp; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
     ctx.stroke();
   }
   ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(x + w * 0.16, y + 4, Math.max(1.5, w * 0.1), h - 8); // glass streak
   ctx.restore();
-  ctx.save(); app.rr(x, y, w, h, r); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,241,176,.55)'; ctx.stroke(); ctx.restore();
+  ctx.save(); app.rr(x, y, w, h, r); ctx.lineWidth = lnw(2); ctx.strokeStyle = 'rgba(255,241,176,.55)'; ctx.stroke(); ctx.restore();
   ctx.fillStyle = BRASS; ctx.fillRect(x + 2, y - 2, w - 4, 4); ctx.fillRect(x + 2, y + h - 2, w - 4, 4); // brass caps
   ctx.fillStyle = BRASS_LIGHT; ctx.fillRect(x + 2, y - 2, w - 4, 1);
 }
@@ -194,12 +196,12 @@ export function dial(app, cx, cy, rad, value, max, o = {}) {
   const ctx = app.ctx, k = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0, a0 = Math.PI * 0.75, a = a0 + k * Math.PI * 1.5;
   ctx.save();
   ctx.fillStyle = 'rgba(8,6,6,.85)'; ctx.beginPath(); ctx.arc(cx, cy, rad, 0, 6.2832); ctx.fill();
-  ctx.lineWidth = Math.max(2, rad * 0.14); ctx.strokeStyle = BRASS; ctx.stroke();
-  ctx.lineWidth = 1; ctx.strokeStyle = BRASS_LIGHT; ctx.beginPath(); ctx.arc(cx, cy, rad - 1, Math.PI * 1.1, Math.PI * 1.6); ctx.stroke();
-  const n = Math.max(1, Math.min(10, max | 0)); ctx.strokeStyle = 'rgba(232,220,196,.6)'; ctx.lineWidth = 1.2; ctx.beginPath();
+  ctx.lineWidth = lnw(Math.max(2, rad * 0.14)); ctx.strokeStyle = BRASS; ctx.stroke();
+  ctx.lineWidth = lnw(1); ctx.strokeStyle = BRASS_LIGHT; ctx.beginPath(); ctx.arc(cx, cy, rad - 1, Math.PI * 1.1, Math.PI * 1.6); ctx.stroke();
+  const n = Math.max(1, Math.min(10, max | 0)); ctx.strokeStyle = 'rgba(232,220,196,.6)'; ctx.lineWidth = lnw(1.2); ctx.beginPath();
   for (let i = 0; i <= n; i++) { const an = a0 + (i / n) * Math.PI * 1.5, c = Math.cos(an), s = Math.sin(an); ctx.moveTo(cx + c * rad * 0.62, cy + s * rad * 0.62); ctx.lineTo(cx + c * rad * 0.8, cy + s * rad * 0.8); }
   ctx.stroke();
-  ctx.strokeStyle = o.color || '#7fd1e0'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(cx - Math.cos(a) * rad * 0.15, cy - Math.sin(a) * rad * 0.15); ctx.lineTo(cx + Math.cos(a) * rad * 0.72, cy + Math.sin(a) * rad * 0.72); ctx.stroke();
+  ctx.strokeStyle = o.color || '#7fd1e0'; ctx.lineWidth = lnw(2.4); ctx.beginPath(); ctx.moveTo(cx - Math.cos(a) * rad * 0.15, cy - Math.sin(a) * rad * 0.15); ctx.lineTo(cx + Math.cos(a) * rad * 0.72, cy + Math.sin(a) * rad * 0.72); ctx.stroke();
   ctx.fillStyle = BRASS; ctx.beginPath(); ctx.arc(cx, cy, rad * 0.14, 0, 6.2832); ctx.fill();
   ctx.restore();
 }

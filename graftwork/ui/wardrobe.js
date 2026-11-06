@@ -10,6 +10,7 @@ import { drawRelic } from '../art/icons.js';
 import { RELICS, HEROES } from '../data/index.js';
 import * as M from '../engine/meta.js';
 import { clampText } from './deckview.js';
+import { lnw } from '../art/linework.js';
 
 const CATS = [
   { id: 'back', label: 'Card backs', list: 'backs', cols: 4, prev: 178 },
@@ -76,7 +77,7 @@ export default {
     app.text('Wardrobe', 36, 18, { size: 28, bold: true, color: COL.lamp });
     const bal = (meta.credit && meta.credit.bal) || 0;
     app.reg('wardrobe-credit', 230, 14, 210, 40, { group: 'credit' });
-    app.rr(230, 14, 210, 40, 8); ctx.fillStyle = 'rgba(10,8,7,.8)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = rgba(COL.lamp, 0.6); ctx.stroke();
+    app.rr(230, 14, 210, 40, 8); ctx.fillStyle = 'rgba(10,8,7,.8)'; ctx.fill(); ctx.lineWidth = lnw(1.5); ctx.strokeStyle = rgba(COL.lamp, 0.6); ctx.stroke();
     app.text(`CREDIT  ${bal}`, 335, 22, { size: 22, bold: true, align: 'center', color: COL.lamp, maxW: 194 });
     app.text('Paid by the case file at the end of a run.', 456, 26, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.6)', maxW: 600 });
     app.reg('wardrobe-x', 1080, 16, 36, 36, { group: 'x' }); // left of the global Pause / Fullscreen zone
@@ -124,7 +125,7 @@ export default {
       const lab = !owned ? (e.cost === null ? 'Locked' : afford ? `Buy  ${e.cost}` : `Need ${e.cost}`) : on ? (c.id === 'title' || c.id === 'relic' ? 'Remove' : 'Equipped') : 'Equip';
       const dis = (!owned && (e.cost === null || !afford)) || (on && (c.id === 'back' || c.id === 'tint'));
       const bh = 32, by = ty + ch - bh - 10;
-      if (app.inRect(tx, ty, cw, ch)) app.tooltip(e.name, e.ach ? `${e.ach.text}${owned ? '' : ' Earned by this record.'}` : e.text || (e.cost === null ? 'Earned in play.' : 'Costs Credit.'), { color: COL.lamp });
+      if (app.inRect(tx, ty, cw, ch)) app.tooltip(e.name, e.ach ? `${e.ach.text}${owned ? '' : ' Earned by this record.'}` : e.text || (e.cost === null ? 'Earned in play.' : 'Costs Credit.'), { color: COL.lamp, gloss: [e.ach ? e.ach.text : '', e.text || ''] });
       if (app.button(lab, tx + 12, by, cw - 24, bh, { size: 15, ui: true, r: 7, disabled: dis, fill: !owned && afford ? '#4a3a1d' : undefined, stroke: !owned && afford ? COL.lamp : undefined })) this.act(app, c, e);
     });
   },

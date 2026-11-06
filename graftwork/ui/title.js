@@ -11,6 +11,7 @@ import { ASSIST_OPTIONS, ASSIST_NOTE, ASSIST_DEFAULT, assistFlags } from '../eng
 import { loadRun } from '../engine/save.js';
 import { hashSeed } from '../engine/rng.js';
 import { canFullscreen, isFullscreen, isIPhone, fsButton, fsRegisterRect, requestFs } from './fullscreen.js';
+import { lnw } from '../art/linework.js';
 
 export const VERSION = 'v1.0';
 const HERO_ORDER = ['marrow', 'wick', 'odile'];
@@ -23,7 +24,7 @@ const todaySeed = () => RUN.dailySeed();
 // ---------- small drawing helpers ----------
 function padlock(g, x, y, s, col = '#9b8f7a') {
   g.save(); g.translate(x, y); g.scale(s, s);
-  g.strokeStyle = col; g.lineWidth = 5; g.beginPath(); g.arc(0, -8, 11, Math.PI, 0); g.lineTo(11, 0); g.moveTo(-11, -8); g.lineTo(-11, 0); g.stroke();
+  g.strokeStyle = col; g.lineWidth = lnw(5); g.beginPath(); g.arc(0, -8, 11, Math.PI, 0); g.lineTo(11, 0); g.moveTo(-11, -8); g.lineTo(-11, 0); g.stroke();
   g.fillStyle = col; g.beginPath(); g.roundRect ? g.roundRect(-17, -2, 34, 26, 4) : g.rect(-17, -2, 34, 26); g.fill();
   g.fillStyle = '#1A1614'; g.beginPath(); g.arc(0, 8, 4, 0, 6.283); g.fill(); g.fillRect(-1.5, 8, 3, 9);
   g.restore();
@@ -31,7 +32,7 @@ function padlock(g, x, y, s, col = '#9b8f7a') {
 function stitchLine(g, x1, y1, x2, y2, o = {}) {
   const len = Math.hypot(x2 - x1, y2 - y1), n = Math.max(1, Math.floor(len / (o.step || 12)));
   const ux = (x2 - x1) / len, uy = (y2 - y1) / len, nx = -uy, ny = ux, s = o.size || 4;
-  g.save(); g.strokeStyle = o.color || '#0E0E0E'; g.lineWidth = o.lw || 2; g.lineCap = 'round';
+  g.save(); g.strokeStyle = o.color || '#0E0E0E'; g.lineWidth = lnw(o.lw || 2); g.lineCap = 'round';
   g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
   g.beginPath();
   for (let i = 0; i <= n; i++) { const px = x1 + ux * (len * i / n), py = y1 + uy * (len * i / n); g.moveTo(px - nx * s, py - ny * s); g.lineTo(px + nx * s, py + ny * s); }
@@ -40,9 +41,9 @@ function stitchLine(g, x1, y1, x2, y2, o = {}) {
 function staple(g, x, y, ang = 0, s = 1) {
   g.save(); g.translate(x, y); g.rotate(ang); g.scale(s, s);
   g.shadowColor = 'rgba(0,0,0,.7)'; g.shadowBlur = 6; g.shadowOffsetY = 2;
-  g.strokeStyle = '#d6a94a'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.moveTo(-14, -3); g.lineTo(-14, 3); g.lineTo(14, 3); g.lineTo(14, -3); g.stroke();
+  g.strokeStyle = '#d6a94a'; g.lineWidth = lnw(5); g.lineCap = 'round'; g.beginPath(); g.moveTo(-14, -3); g.lineTo(-14, 3); g.lineTo(14, 3); g.lineTo(14, -3); g.stroke();
   g.shadowBlur = 0; g.shadowOffsetY = 0;
-  g.strokeStyle = '#fff1b8'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(-13, 1.5); g.lineTo(13, 1.5); g.stroke();
+  g.strokeStyle = '#fff1b8'; g.lineWidth = lnw(1.5); g.beginPath(); g.moveTo(-13, 1.5); g.lineTo(13, 1.5); g.stroke();
   g.restore();
 }
 
@@ -78,10 +79,10 @@ function drawLogo(app, cx, cy, k) {
   g.globalAlpha = clamp(k * 2 - 0.4, 0, 1);
   const seam = (x0, x3, y0, ang) => {
     g.save(); g.translate(x0, y0); g.rotate(ang); const L = x3 - x0;
-    g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
-    g.strokeStyle = '#0a0808'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
-    g.lineWidth = 3; g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 4, -13); g.lineTo(x + 4, 13); } g.stroke();
-    g.strokeStyle = 'rgba(255,240,200,.25)'; g.lineWidth = 1; g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 3, -12); g.lineTo(x + 3, 12); } g.stroke();
+    g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = lnw(6); g.lineCap = 'round'; g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
+    g.strokeStyle = '#0a0808'; g.lineWidth = lnw(3); g.beginPath(); g.moveTo(0, 0); g.lineTo(L, 0); g.stroke();
+    g.lineWidth = lnw(3); g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 4, -13); g.lineTo(x + 4, 13); } g.stroke();
+    g.strokeStyle = 'rgba(255,240,200,.25)'; g.lineWidth = lnw(1); g.beginPath(); for (let x = 8; x < L; x += 16) { g.moveTo(x - 3, -12); g.lineTo(x + 3, 12); } g.stroke();
     g.restore();
   };
   seam(x1 + w1 * 0.1, x1 + w1 * 0.9, seamY - 4, -0.04);
@@ -111,7 +112,7 @@ function drawScene(app, st) {
   g.restore();
   // lamp fixture
   g.save(); g.translate(640, -20); g.rotate(sway);
-  g.strokeStyle = '#0c0a09'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 30); g.stroke();
+  g.strokeStyle = '#0c0a09'; g.lineWidth = lnw(3); g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 30); g.stroke();
   g.fillStyle = '#2b2622'; g.beginPath(); g.moveTo(-40, 62); g.quadraticCurveTo(-34, 30, 0, 28); g.quadraticCurveTo(34, 30, 40, 62); g.closePath(); g.fill();
   g.fillStyle = '#fbe39a'; g.shadowColor = '#ffd36a'; g.shadowBlur = 30; g.beginPath(); g.ellipse(0, 62, 40, 7, 0, 0, 6.283); g.fill();
   g.restore();
@@ -125,7 +126,7 @@ function drawScene(app, st) {
       const x = -120 + p * (W + 240), y = c.y + Math.sin(t * 0.4 + c.ph) * (still ? 0 : 18);
       g.save(); g.translate(x, y); g.rotate(c.rot + (still ? 0 : Math.sin(t * 0.3 + c.ph) * 0.08));
       g.globalAlpha = c.a * Math.sin(p * Math.PI);
-      g.strokeStyle = '#e8dcc4'; g.lineWidth = 2; g.setLineDash([7, 6]);
+      g.strokeStyle = '#e8dcc4'; g.lineWidth = lnw(2); g.setLineDash([7, 6]);
       g.beginPath(); g.roundRect ? g.roundRect(-45 * c.s, -63 * c.s, 90 * c.s, 126 * c.s, 8) : g.rect(-45 * c.s, -63 * c.s, 90 * c.s, 126 * c.s); g.stroke();
       g.setLineDash([]); g.beginPath(); g.moveTo(-30 * c.s, 0); g.lineTo(30 * c.s, 0); g.stroke();
       g.restore();
@@ -221,9 +222,9 @@ export default {
     const over = app.inRect(mx, my, 38, 38);
     if (over) { app.cursor = 'pointer'; app.tooltip(st.muted ? 'Sound off' : 'Sound on', 'Click to toggle.'); }
     app.panel(mx, my, 38, 38, { r: 8, fill: over ? 'rgba(60,50,42,.9)' : 'rgba(26,22,20,.8)', stroke: over ? COL.lamp : 'rgba(232,220,196,.4)' });
-    g.save(); g.strokeStyle = COL.vellum; g.fillStyle = COL.vellum; g.lineWidth = 2;
+    g.save(); g.strokeStyle = COL.vellum; g.fillStyle = COL.vellum; g.lineWidth = lnw(2);
     g.beginPath(); g.moveTo(mx + 9, my + 15); g.lineTo(mx + 14, my + 15); g.lineTo(mx + 20, my + 9); g.lineTo(mx + 20, my + 29); g.lineTo(mx + 14, my + 23); g.lineTo(mx + 9, my + 23); g.closePath(); g.fill();
-    if (st.muted) { g.strokeStyle = COL.scar; g.lineWidth = 3; g.beginPath(); g.moveTo(mx + 25, my + 14); g.lineTo(mx + 33, my + 24); g.moveTo(mx + 33, my + 14); g.lineTo(mx + 25, my + 24); g.stroke(); }
+    if (st.muted) { g.strokeStyle = COL.scar; g.lineWidth = lnw(3); g.beginPath(); g.moveTo(mx + 25, my + 14); g.lineTo(mx + 33, my + 24); g.moveTo(mx + 33, my + 14); g.lineTo(mx + 25, my + 24); g.stroke(); }
     else { g.beginPath(); g.arc(mx + 21, my + 19, 6, -0.9, 0.9); g.stroke(); g.beginPath(); g.arc(mx + 21, my + 19, 11, -0.9, 0.9); g.stroke(); }
     g.restore();
     if (app.clicked(mx, my, 38, 38)) {
@@ -312,7 +313,7 @@ export default {
     app.text(mod.name, x + 16, y + 116, { size: 17, bold: true, color: '#f0d27a' });
     app.text(mod.text, x + 16, y + 140, { size: 14, ui: true, maxW: 268, color: '#d9cba8' });
     if (played) {
-      g.save(); g.translate(x + 238, y + 62); g.rotate(-0.2); g.strokeStyle = COL.scar; g.lineWidth = 2; g.strokeRect(-40, -13, 80, 26);
+      g.save(); g.translate(x + 238, y + 62); g.rotate(-0.2); g.strokeStyle = COL.scar; g.lineWidth = lnw(2); g.strokeRect(-40, -13, 80, 26);
       app.text('PLAYED', 0, -8, { size: 14, bold: true, ui: true, align: 'center', color: COL.scar }); g.restore();
     }
     g.restore();
@@ -423,7 +424,7 @@ export default {
       app.reg('title-assist-' + o.id, ox, y, 150, h, { group: 'assist' });
       if (app.inRect(ox, y, 150, h)) app.tooltip(o.name + (on ? ' (on)' : ' (off)'), o.text);
       if (app.button(o.name, ox, y, 150, h, { size: 14, fill: on ? '#4a3a1d' : undefined, stroke: on ? COL.lamp : undefined, color: on ? '#fbe9b0' : undefined })) { a[o.id] = !on; save(); }
-      const g = app.ctx; g.save(); g.strokeStyle = on ? '#fbe9b0' : 'rgba(232,220,196,.55)'; g.lineWidth = 1.5; g.strokeRect(ox + 8.5, y + h / 2 - 5.5, 11, 11); if (on) { g.fillStyle = '#fbe9b0'; g.fillRect(ox + 11, y + h / 2 - 3, 6, 6); } g.restore();
+      const g = app.ctx; g.save(); g.strokeStyle = on ? '#fbe9b0' : 'rgba(232,220,196,.55)'; g.lineWidth = lnw(1.5); g.strokeRect(ox + 8.5, y + h / 2 - 5.5, 11, 11); if (on) { g.fillStyle = '#fbe9b0'; g.fillRect(ox + 11, y + h / 2 - 3, 6, 6); } g.restore();
     });
     app.text('Assisted runs do not unlock ascensions or achievements.', x + 140 + 4 * 158 + 6, y + 1, { size: 12, ui: true, italic: true, maxW: W - 50 - (x + 140 + 4 * 158 + 6), lineH: 14, color: 'rgba(232,220,196,.6)' });
   },

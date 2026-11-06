@@ -9,8 +9,10 @@ import { drawHeart, drawCoin, drawForgeIcon } from '../art/icons.js';
 import * as RUN from '../engine/run.js';
 import { cardSpec, canGraft, strainInfo, canTemper, instWeight, fusedWeight, FUSE_CAP } from '../engine/cards.js';
 import { CARDS, GRAFTS } from '../data/index.js';
+import { withGloss } from './tooltips.js';
 import { infoOpen, infoClose, touchUi, openInfoCard, infoChip, drawInfoCard } from './card_zoom.js';
 import { drawGauge, gaugeLabel, drawModal, openCards, openGraftChoice, makeAnim, updateAnim, drawAnim, infoFromDeck, stripDeck, toastDraw, cardName } from './shop.js';
+import { lnw } from '../art/linework.js';
 
 const BRASS = '#C9A227';
 const sfx = (app, name, o) => { const a = app.shared && app.shared.audio; if (a && a.sfx) a.sfx(name, o); };
@@ -69,9 +71,9 @@ function drawOptionCard(app, run, i, o, over, k, disabledWhy, usedUp, shk) {
   g.save(); if (k > 0.02 && !dim) { g.shadowColor = 'rgba(255,140,50,.6)'; g.shadowBlur = 28 * k; }
   app.rr(x, y, OW, OH, 14);
   const gr = g.createLinearGradient(0, y, 0, y + OH); gr.addColorStop(0, dim ? '#26211e' : '#3d2a1e'); gr.addColorStop(1, dim ? '#161311' : '#1e1410'); g.fillStyle = gr; g.fill();
-  g.shadowBlur = 0; g.lineWidth = over && !dim ? 3 : 2; g.strokeStyle = dim ? 'rgba(232,220,196,.2)' : over ? COL.lamp : rgba(BRASS, 0.7); g.stroke();
+  g.shadowBlur = 0; g.lineWidth = lnw(over && !dim ? 3 : 2); g.strokeStyle = dim ? 'rgba(232,220,196,.2)' : over ? COL.lamp : rgba(BRASS, 0.7); g.stroke();
   g.shadowBlur = 0; app.panel(x, y, OW, OH, { fill: 'rgba(0,0,0,0)', stroke: 'rgba(0,0,0,0)', r: 14, lw: 2 }); // chrome overlay: engraved hatch, inset shadow, rivets (cached)
-  g.save(); app.rr(x + 8, y + 8, OW - 16, OH - 16, 10); g.lineWidth = 1; g.strokeStyle = dim ? 'rgba(232,220,196,.1)' : 'rgba(201,162,39,.3)'; g.setLineDash([5, 4]); g.stroke(); g.restore();
+  g.save(); app.rr(x + 8, y + 8, OW - 16, OH - 16, 10); g.lineWidth = lnw(1); g.strokeStyle = dim ? 'rgba(232,220,196,.1)' : 'rgba(201,162,39,.3)'; g.setLineDash([5, 4]); g.stroke(); g.restore();
   g.globalAlpha = dim ? 0.4 : 1; drawOptIcon(g, o.id, x + OW / 2, y + 88, k, app.t, app); g.globalAlpha = 1;
   const nameH = app.text(o.name, x + OW / 2, y + 150, { size: 30, bold: true, align: 'center', color: dim ? 'rgba(232,220,196,.4)' : COL.lamp, shadow: !dim });
   // bottom block (reason or live detail) is sized from its real wrapped lines; the description gets what is left (phones inflate the text)
@@ -196,7 +198,7 @@ function drawHammer(g, x, y, ang) {
   g.save(); g.translate(x, y); g.rotate(ang);
   g.fillStyle = '#6b4a2c'; g.fillRect(-7, -10, 14, 150);
   const mg = g.createLinearGradient(-50, 0, 50, 0); mg.addColorStop(0, '#8a9298'); mg.addColorStop(0.5, '#cfd6da'); mg.addColorStop(1, '#6a7278');
-  g.fillStyle = mg; g.beginPath(); g.roundRect(-52, -52, 104, 48, 6); g.fill(); g.strokeStyle = '#2b2f33'; g.lineWidth = 3; g.stroke();
+  g.fillStyle = mg; g.beginPath(); g.roundRect(-52, -52, 104, 48, 6); g.fill(); g.strokeStyle = '#2b2f33'; g.lineWidth = lnw(3); g.stroke();
   g.restore();
 }
 
@@ -226,7 +228,7 @@ function drawForgeAnim(app, a) {
     const bw = 360, bx = 470, by = 505;
     app.rr(bx, by, bw, 30, 8); g.fillStyle = 'rgba(0,0,0,.6)'; g.fill();
     g.save(); app.rr(bx, by, bw, 30, 8); g.clip(); g.fillStyle = COL.scar; g.fillRect(bx, by, bw * (a.from / a.max), 30); g.fillStyle = '#7fcf8a'; g.fillRect(bx, by, bw * (hp / a.max), 30); g.fillStyle = COL.scar; g.fillRect(bx, by, bw * (Math.min(hp, a.from) / a.max), 30); g.restore();
-    app.rr(bx, by, bw, 30, 8); g.strokeStyle = 'rgba(232,220,196,.6)'; g.lineWidth = 2; g.stroke();
+    app.rr(bx, by, bw, 30, 8); g.strokeStyle = 'rgba(232,220,196,.6)'; g.lineWidth = lnw(2); g.stroke();
     app.text(`${Math.round(hp)} / ${a.max}`, 640, by + 3, { size: 22, bold: true, align: 'center', color: '#fff', shadow: true });
     if (a.healed) app.text(`+${a.healed}`, 860, 502, { size: 34, bold: true, color: COL.good, shadow: true, alpha: fk });
     app.text('The coals do the talking.', 640, 580, { size: 20, italic: true, align: 'center', color: 'rgba(232,220,196,.8)', alpha: fk });
@@ -317,7 +319,7 @@ export default {
       const shk = S.shakeI === i && S.shakeT > 0 ? Math.sin(S.shakeT * 70) * 9 * (S.shakeT / 0.4) : 0;
       const od = drawOptionCard(app, run, i, o, over, EASE.out(n), why, usedUp, shk);
       if (od.trunc && touchUi(app)) { // phones: no hover, so the full text opens on a tap of the chip or of the cut-off words
-        if (infoChip(app, x + OW - 18, OY + 18, [od.text])) { sfx(app, 'uiClick'); openInfoCard(app, o.name, why ? `${o.desc}\n${why}` : o.desc, COL.lamp); }
+        if (infoChip(app, x + OW - 18, OY + 18, [od.text])) { sfx(app, 'uiClick'); openInfoCard(app, o.name, withGloss(why ? `${o.desc}\n${why}` : o.desc), COL.lamp); }
       }
       if (over) {
         app.cursor = dim ? 'not-allowed' : 'pointer';

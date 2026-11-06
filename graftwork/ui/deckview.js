@@ -9,6 +9,8 @@ import { CARDS, GRAFTS, SCHOOLS } from '../data/index.js';
 import { cardSpec, strainInfo, isBare, instWeight, fusedWeight, MAX_GRAFTS_NORMAL } from '../engine/cards.js';
 import { resonanceOf } from '../engine/resonance.js';
 import { drawVellum, drawEmptyMark } from '../art/plates.js';
+import { lnw } from '../art/linework.js';
+import { cardGlossTip } from './tooltips.js';
 
 const reduceMotion = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion);
 const plural = (n, w) => (n === 1 ? w : w + 's');
@@ -20,7 +22,7 @@ export function pill(app, text, cx, cy, color, o = {}) {
   ctx.save();
   app.rr(cx - w / 2, cy - 8, w, 16, 8);
   ctx.fillStyle = o.fill || 'rgba(10,8,7,.9)'; ctx.fill();
-  ctx.lineWidth = 1.5; ctx.strokeStyle = color; ctx.stroke();
+  ctx.lineWidth = lnw(1.5); ctx.strokeStyle = color; ctx.stroke();
   ctx.restore();
   app.text(text, cx, cy - size * 0.62, { size, bold: true, ui: true, align: 'center', color: o.color || color });
   return w;
@@ -108,7 +110,7 @@ export function cardGrid(app, items, x, y, w, h, o = {}) {
     st.view = { x, y, w, h }; st.max = 0; st.scroll = st.target = 0;
     return { hover, cols, rowH };
   }
-  const pend = [];
+  const pend = []; let hr = null;
   scrollArea(app, st, x, y, w, h, contentH, (top) => {
     const r0 = Math.max(0, Math.floor((y - top - gap) / rowH)), r1 = Math.min(rows - 1, Math.ceil((y + h - top) / rowH));
     for (let r = r0; r <= r1; r++) {
@@ -127,14 +129,15 @@ export function cardGrid(app, items, x, y, w, h, o = {}) {
         const it = items[i];
         const left = ox + c * (cw + gap), cardTop = top + gap + r * rowH;
         const over = inView(app, st, left, cardTop, cw, ch);
+        if (hover === i) hr = { x: left, y: cardTop, w: cw, h: ch };
         const hot = hover === i && !it.disabled;
         const cx = left + cw / 2, cy = cardTop + ch / 2 - (hot ? 4 : 0);
         if (it.draw) it.draw(ctx, cx, cy, sc * (hot ? 1.04 : 1), hot);
         else if (it.spec) {
           drawCard(ctx, it.spec, cx, cy, { scale: sc * (hot ? 1.04 : 1), tithed: !!it.tithed, jam: !!it.jam, glow: hot ? 0.6 : 0, selected: !!it.selected, dim: it.dim ? 0.55 : 0, hover: hot });
         }
-        if (it.selected) { ctx.save(); app.rr(left - 3, cardTop - 3, cw + 6, ch + 6, 8); ctx.lineWidth = 3; ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore(); }
-        if (st.kb && st.focus === i) { ctx.save(); app.rr(left - 4, cardTop - 4, cw + 8, ch + 8, 9); ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.strokeStyle = COL.vellum; ctx.stroke(); ctx.restore(); }
+        if (it.selected) { ctx.save(); app.rr(left - 3, cardTop - 3, cw + 6, ch + 6, 8); ctx.lineWidth = lnw(3); ctx.strokeStyle = COL.lamp; ctx.stroke(); ctx.restore(); }
+        if (st.kb && st.focus === i) { ctx.save(); app.rr(left - 4, cardTop - 4, cw + 8, ch + 8, 9); ctx.lineWidth = lnw(2); ctx.setLineDash([6, 4]); ctx.strokeStyle = COL.vellum; ctx.stroke(); ctx.restore(); }
         if (it.badges && it.badges.length) {
           // pills along the bottom edge of the card
           const ws = it.badges.map((b) => app.measure(b.text, 11, { ui: true, bold: true }) + 12);
@@ -149,6 +152,7 @@ export function cardGrid(app, items, x, y, w, h, o = {}) {
     }
   });
   st.activate = false;
+  if (hover >= 0 && hr && items[hover].spec && !items[hover].draw) cardGlossTip(app, items[hover].spec, o.glossBand ? { ...hr, band: o.glossBand } : hr, { extra: items[hover].gloss }); // hover or keyboard focus: the rules words on this card, explained
   for (const [it, i] of pend) { it.onClick(it, i); break; }
   return { hover, cols, rowH };
 }
@@ -182,9 +186,9 @@ export function gaugeCells(app, x, y, info, o = {}) {
     ctx.save();
     app.rr(left, y, cell, cell, 4);
     ctx.fillStyle = !full ? 'rgba(232,220,196,.07)' : over ? COL.scar : COL.vellum; ctx.fill();
-    ctx.lineWidth = 1.6; ctx.strokeStyle = !full ? 'rgba(232,220,196,.4)' : over ? '#ff7a7a' : COL.vellum2; ctx.stroke();
+    ctx.lineWidth = lnw(1.6); ctx.strokeStyle = !full ? 'rgba(232,220,196,.4)' : over ? '#ff7a7a' : COL.vellum2; ctx.stroke();
     if (full) { // stitch mark
-      ctx.strokeStyle = over ? 'rgba(255,200,200,.85)' : 'rgba(43,30,26,.7)'; ctx.lineWidth = 1.8; ctx.beginPath();
+      ctx.strokeStyle = over ? 'rgba(255,200,200,.85)' : 'rgba(43,30,26,.7)'; ctx.lineWidth = lnw(1.8); ctx.beginPath();
       ctx.moveTo(left + cell * 0.28, y + cell * 0.28); ctx.lineTo(left + cell * 0.72, y + cell * 0.72);
       ctx.moveTo(left + cell * 0.72, y + cell * 0.28); ctx.lineTo(left + cell * 0.28, y + cell * 0.72); ctx.stroke();
     }
@@ -193,13 +197,13 @@ export function gaugeCells(app, x, y, info, o = {}) {
   // brackets
   const by = y + cell + 5;
   const bEnd = cx(info.budget - 1) + cell, bStart = x;
-  ctx.save(); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(232,220,196,.6)';
+  ctx.save(); ctx.lineWidth = lnw(2); ctx.strokeStyle = 'rgba(232,220,196,.6)';
   ctx.beginPath(); ctx.moveTo(bStart, by - 2); ctx.lineTo(bStart, by); ctx.lineTo(bEnd, by); ctx.lineTo(bEnd, by - 2); ctx.stroke();
   ctx.restore();
   app.text(`Budget ${info.budget}`, (bStart + bEnd) / 2, by + 3, { size: 13, ui: true, bold: true, align: 'center', color: COL.vellum });
   if (info.strain > 0) {
     const sStart = cx(info.budget), sEnd = cx(info.weight - 1) + cell;
-    ctx.save(); ctx.lineWidth = 2; ctx.strokeStyle = COL.bad;
+    ctx.save(); ctx.lineWidth = lnw(2); ctx.strokeStyle = COL.bad;
     ctx.beginPath(); ctx.moveTo(sStart, by - 2); ctx.lineTo(sStart, by); ctx.lineTo(sEnd, by); ctx.lineTo(sEnd, by - 2); ctx.stroke();
     ctx.restore();
     app.text(`Strain ${info.strain}`, sStart, by + 3, { size: 13, ui: true, bold: true, color: COL.bad });
@@ -383,13 +387,13 @@ export default {
       if (w > 0) badges.push({ text: `W${w}`, color: c.spec.overload ? COL.gold : COL.vellum });
       if (c.spec.overload) badges.push({ text: 'OVERLOAD', color: COL.gold });
       return {
-        spec: c.spec, tithed, inst: c.inst, badges, weight: w,
+        spec: c.spec, tithed, inst: c.inst, badges, weight: w, gloss: [tithed ? 'Tithe' : '', w > 0 ? 'W' + w : '', isBare(c.inst) ? 'Bare' : ''],
         dim: this.pick && !c.ok, disabled: this.pick && !c.ok, selected: this.sel.has(c.inst.uid),
         onClick: () => this.choose(app, c.inst),
       };
     });
     const emptyMsg = this.pick ? 'No card can take this.' : this.grafted ? 'No grafted cards yet. Graft one after a fight.' : this.bare ? 'Every card here has a graft.' : 'Nothing matches.';
-    const g = cardGrid(app, items, 30, MY, 690, MH, { state: this.st, scale: 0.56, gap: 10, empty: emptyMsg });
+    const g = cardGrid(app, items, 30, MY, 690, MH, { state: this.st, scale: 0.56, gap: 10, empty: emptyMsg, glossBand: { x: 940, y: MY, bottom: MY + MH, dir: 1 } });
     if (this.pick && g.hover >= 0 && items[g.hover].disabled) app.tooltip('Cannot choose', 'This card does not qualify.');
     this.hoverIdx = g.hover;
     const hv = g.hover >= 0 ? items[g.hover] : null;

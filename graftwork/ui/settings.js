@@ -8,6 +8,7 @@ import { COL, W, H, EASE, clamp, rgba } from './core.js';
 import { A11Y_DEFAULTS, CB_MODES, a11yOf } from './a11y.js';
 import { clearRun } from '../engine/save.js';
 import { canFullscreen, isFullscreen, isIPhone, fsRegisterRect, requestFs } from './fullscreen.js';
+import { lnw } from '../art/linework.js';
 
 export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', fullscreen: false };
 export const TEXT_STEPS = [100, 125, 150, 175];
@@ -51,7 +52,7 @@ export default {
     // close X
     const cx = x + w - 54, cy = y + 16, over = app.inRect(cx, cy, 38, 38);
     app.panel(cx, cy, 38, 38, { r: 8, fill: over ? 'rgba(90,40,40,.9)' : 'rgba(40,32,28,.9)', stroke: over ? COL.scar : 'rgba(232,220,196,.4)' });
-    g.save(); g.strokeStyle = COL.vellum; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(cx + 11, cy + 11); g.lineTo(cx + 27, cy + 27); g.moveTo(cx + 27, cy + 11); g.lineTo(cx + 11, cy + 27); g.stroke(); g.restore();
+    g.save(); g.strokeStyle = COL.vellum; g.lineWidth = lnw(3); g.lineCap = 'round'; g.beginPath(); g.moveTo(cx + 11, cy + 11); g.lineTo(cx + 27, cy + 27); g.moveTo(cx + 27, cy + 11); g.lineTo(cx + 11, cy + 27); g.stroke(); g.restore();
     if (over) app.cursor = 'pointer';
     if (app.clicked(cx, cy, 38, 38)) { this.close(app); g.restore(); return; }
     const sy0 = y + 70;
@@ -79,7 +80,7 @@ export default {
       // switch
       g.save();
       app.rr(tx, yy + 6, 64, 28, 14); g.fillStyle = on ? '#6a8f4e' : '#3a322d'; g.fill();
-      g.strokeStyle = on ? '#b6e08f' : 'rgba(232,220,196,.4)'; g.lineWidth = 2; g.stroke();
+      g.strokeStyle = on ? '#b6e08f' : 'rgba(232,220,196,.4)'; g.lineWidth = lnw(2); g.stroke();
       g.fillStyle = on ? '#f4ecd2' : '#9b8f7a'; g.beginPath(); g.arc(tx + (on ? 50 : 14), yy + 20, 10, 0, 6.283); g.fill();
       g.restore();
       app.text(on ? 'On' : 'Off', tx - 12, yy + 11, { size: 15, ui: true, align: 'right', color: on ? '#b6e08f' : '#8c8372' });
@@ -117,7 +118,7 @@ export default {
   reg(app, x, y, w, h, label, tip, act) {
     const i = this.rows.length; this.rows.push({ x, y, w, h, label, tip, act });
     if (this.kb && i === this.foc) {
-      const g = app.ctx; g.save(); app.rr(x - 6, y - 2, w + 12, h + 4, 8); g.lineWidth = 2.5; g.strokeStyle = '#ffe9a8'; g.setLineDash && g.setLineDash([6, 4]); g.stroke(); g.restore();
+      const g = app.ctx; g.save(); app.rr(x - 6, y - 2, w + 12, h + 4, 8); g.lineWidth = lnw(2.5); g.strokeStyle = '#ffe9a8'; g.setLineDash && g.setLineDash([6, 4]); g.stroke(); g.restore();
       app.tooltip(label, tip);
     }
   },
@@ -143,7 +144,7 @@ export default {
       const bx = sx + i * (bw + gap), on = v === cur, over = live && app.inRect(bx, y + 2, bw, 32);
       if (over) app.cursor = 'pointer';
       g.save(); app.rr(bx, y + 2, bw, 32, 8); g.fillStyle = on ? '#6a8f4e' : over ? '#4a3f37' : '#3a322d'; g.fill();
-      g.lineWidth = 2; g.strokeStyle = on ? '#b6e08f' : 'rgba(232,220,196,.4)'; g.stroke(); g.restore();
+      g.lineWidth = lnw(2); g.strokeStyle = on ? '#b6e08f' : 'rgba(232,220,196,.4)'; g.stroke(); g.restore();
       app.text(text, bx + bw / 2, y + 9, { size: 15, ui: true, bold: true, align: 'center', color: on ? '#f4ecd2' : '#c9bda1', fixed: true });
       if (live && app.clicked(bx, y + 2, bw, 32)) { if (v !== cur) set(v); if (app.shared.audio && !this.muted(app)) app.shared.audio.sfx('uiClick'); }
     });
@@ -158,7 +159,7 @@ export default {
     this.reg(app, x, y, w, 36, 'Fullscreen', 'Shortcut: F', () => requestFs(app));
     if (hov) { app.cursor = 'pointer'; app.tooltip('Fullscreen', 'Shortcut: F'); }
     g.save(); app.rr(tx, y + 4, 64, 28, 14); g.fillStyle = on ? '#6a8f4e' : '#3a322d'; g.fill();
-    g.strokeStyle = on ? '#b6e08f' : 'rgba(232,220,196,.4)'; g.lineWidth = 2; g.stroke();
+    g.strokeStyle = on ? '#b6e08f' : 'rgba(232,220,196,.4)'; g.lineWidth = lnw(2); g.stroke();
     g.fillStyle = on ? '#f4ecd2' : '#9b8f7a'; g.beginPath(); g.arc(tx + (on ? 50 : 14), y + 18, 10, 0, 6.283); g.fill(); g.restore();
     app.text(on ? 'On' : 'Off', tx - 12, y + 9, { size: 15, ui: true, align: 'right', color: on ? '#b6e08f' : '#8c8372' });
     if (live && app.clicked(x, y, w, 36)) requestFs(app);
@@ -186,14 +187,14 @@ export default {
     // seam track
     app.rr(tx, ty - 4, tw, 8, 4); g.fillStyle = '#0e0b0a'; g.fill();
     app.rr(tx, ty - 4, tw * v, 8, 4); g.fillStyle = s.muted ? '#6d655a' : COL.lamp; g.fill();
-    g.strokeStyle = 'rgba(14,14,14,.7)'; g.lineWidth = 1.5; g.beginPath();
+    g.strokeStyle = 'rgba(14,14,14,.7)'; g.lineWidth = lnw(1.5); g.beginPath();
     for (let i = 1; i < 20; i++) { const px = tx + (tw * i) / 20; g.moveTo(px, ty - 6); g.lineTo(px, ty + 6); }
     g.stroke();
     // staple thumb
     const hx = tx + tw * v;
     g.shadowColor = 'rgba(0,0,0,.7)'; g.shadowBlur = 6; g.fillStyle = over || this.drag === key ? '#ffe9a8' : '#d6a94a';
     app.rr(hx - 8, ty - 15, 16, 30, 4); g.fill(); g.shadowBlur = 0;
-    g.strokeStyle = '#fff1b8'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(hx - 3, ty - 9); g.lineTo(hx - 3, ty + 9); g.moveTo(hx + 3, ty - 9); g.lineTo(hx + 3, ty + 9); g.stroke();
+    g.strokeStyle = '#fff1b8'; g.lineWidth = lnw(1.5); g.beginPath(); g.moveTo(hx - 3, ty - 9); g.lineTo(hx - 3, ty + 9); g.moveTo(hx + 3, ty - 9); g.lineTo(hx + 3, ty + 9); g.stroke();
     g.restore();
     app.text(Math.round(v * 100) + '%', x + w, y + 8, { size: 17, ui: true, align: 'right', color: '#d9cba8' });
   },
@@ -212,7 +213,7 @@ export default {
 };
 
 function stitch(g, x1, y1, x2, y2) {
-  g.save(); g.strokeStyle = 'rgba(232,220,196,.3)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2);
+  g.save(); g.strokeStyle = 'rgba(232,220,196,.3)'; g.lineWidth = lnw(1.5); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2);
   for (let x = x1; x < x2; x += 12) { g.moveTo(x, y1 - 3); g.lineTo(x, y1 + 3); }
   g.stroke(); g.restore();
 }

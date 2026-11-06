@@ -9,11 +9,12 @@
 //   queueTip(app, key, stack, anchor) / flushTips(app)  combat HUD tips: one per frame, drawn last, 150 ms hover delay
 //   statusPanel / keywordPanel / cardTipStack helpers build the sections.
 import { COL } from './core.js';
-import { STATUSES } from '../data/index.js';
+import { STATUSES, SCHOOLS, GRAFTS } from '../data/index.js';
 import { cardLines } from '../engine/text.js';
 import { mult, scaleNum } from '../engine/combat.js';
 import { OVERLOAD_MULT, TITHE_MULT } from '../engine/cards.js';
 import { opText, srcName } from '../engine/text.js';
+import { lnw } from '../art/linework.js';
 
 const K = (color, glyph, text) => ({ color, glyph, text });
 export const KEYWORDS = {
@@ -54,38 +55,132 @@ export const KEYWORDS = {
   Dexterity: K('#7fd1e0', 'tri', 'Block gained is increased by this much.'),
   Thorns: K('#c9a227', 'tri', 'Attackers take this much damage.'),
 };
+// Rules words that are not statuses: types, schools, tiers and the loose words of the rules text.
+KEYWORDS.Jam = K('#d8a066', 'cross', 'A jammed card costs 1 more and acts as Slack (Frayed) this turn. It clears at end of turn.');
+KEYWORDS.Bare = K('#d6c7a6', 'square', 'A card with no grafts (junk does not count). Strain lands its Tithe on the cheapest, oldest Bare card.');
+KEYWORDS.Pierce = K('#bcd0d8', 'tri', 'Damage that ignores Block and goes straight to HP.');
+KEYWORDS['X cost'] = K('#7fd1e0', 'diamond', 'Spends all your remaining Energy when played. The effect repeats or scales with the Energy spent.');
+KEYWORDS.Attack = K('#e0a050', 'tri', 'A card that deals damage. Strength adds to it, Weak cuts it, Vulnerable raises it.');
+KEYWORDS.Skill = K('#8fb4d1', 'square', 'A card that defends or sets something up (Block, draw, buffs).');
+KEYWORDS.Power = K('#c58bff', 'star', 'Played once, then stays out of your deck for the rest of the combat.');
+KEYWORDS.Junk = K('#a79bb5', 'hex', 'A clog card added by a Price. Most are Unplayable and fade at end of turn. Rust grafts turn them into fuel.');
+KEYWORDS.Safe = K('#8fd18f', 'diamond', 'Safe patch: Weight 1, a small Boon and a simple Price.');
+KEYWORDS.Greedy = K('#e0a050', 'tri', 'Greedy patch: Weight 2 or 3, a big Boon. It pushes you toward Strain.');
+KEYWORDS.Weird = K('#c58bff', 'star', 'Weird patch: it changes how the card works, with a Price to match.');
+KEYWORDS.After = K('#f2c14e', 'square', 'The deck as it will be if you sew this graft: Weight, Budget, Strain and who gets Tithed.');
+for (const sc of Object.values(SCHOOLS)) {
+  if (KEYWORDS[sc.name]) continue; // Echo is a status too: the status text wins, the school is named by o.school
+  KEYWORDS[sc.name] = K(sc.color, 'diamond', `${sc.name} school. ${sc.blurb} At 3 grafts of it: ${sc.resonance[3]} At 6: ${sc.resonance[6]}`);
+}
 // Every status (player afflictions included) is a glossary word too, so card text and tooltips can name it.
 export const THREAD_TERMS = ['Thread', 'Line', 'Knot', 'Stitch', 'Cut', 'Slack', 'Tied', 'Frayed'];
+// A number that prints as 'N' but still counts as 2 in comparisons: desc(NUM) reads 'Gain N gold at the end of combat.'
+const NUM = Object.assign(Object.create(Number.prototype), { valueOf: () => 2, toString: () => 'N', [Symbol.toPrimitive]: (h) => (h === 'number' ? 2 : 'N') });
+const STATUS_BY_NAME = {};
+const generic = (d) => { try { return String(d.desc(NUM)); } catch (e) { try { return String(d.desc(2)); } catch (e2) { return ''; } } };
 for (const d of Object.values(STATUSES)) {
-  if (!d || !d.name || KEYWORDS[d.name]) continue;
-  let text = ''; try { text = d.desc(2); } catch (e) { text = ''; }
-  KEYWORDS[d.name] = K(d.good === false ? '#ff9a8a' : '#8fd18f', d.good === false ? 'tri' : 'diamond', text);
+  if (!d || !d.name) continue;
+  STATUS_BY_NAME[d.name] = d;
+  if (KEYWORDS[d.name]) continue;
+  KEYWORDS[d.name] = K(d.good === false ? '#ff9a8a' : '#8fd18f', d.good === false ? 'tri' : 'diamond', generic(d));
 }
+KEYWORDS.Charge.text = 'Stored by Static cards. Every 2 Charge adds 1 to each hit you deal (max +3). Static cards spend it.';
 // glossaryEntry(term): { title, text, color, glyph } for a Thread word, keyword, status name or status id; null if unknown.
 export function glossaryEntry(term) {
   const name = Object.keys(KEYWORDS).find((n) => n.toLowerCase() === String(term).toLowerCase());
   if (name) { const k = KEYWORDS[name]; return { title: name, text: k.text, color: k.color, glyph: k.glyph }; }
   const d = STATUSES[term]; if (!d) return null;
-  let text = ''; try { text = d.desc(2); } catch (e) { text = ''; }
-  return { title: d.name, text, color: d.good === false ? '#ff9a8a' : '#8fd18f', glyph: d.good === false ? 'tri' : 'diamond' };
+  return { title: d.name, text: KEYWORDS[d.name] ? KEYWORDS[d.name].text : generic(d), color: d.good === false ? '#ff9a8a' : '#8fd18f', glyph: d.good === false ? 'tri' : 'diamond' };
 }
 // 'knot' and 'knots' are written in lower case in boon text ("counts as 2 knots"): they find the Knot entry too
 const canon = (w) => (w === 'knot' ? 'Knot' : w);
-const NAMES = [...Object.keys(KEYWORDS), 'knot'].sort((a, b) => b.length - a.length);
+// Loose words are matched in any case, the CAPS tags (tier tags, weight pills, the AFTER panel) only in capitals.
+const LOOSE = { jam: 'Jam', jams: 'Jam', jammed: 'Jam', bare: 'Bare', pierce: 'Pierce', pierces: 'Pierce', piercing: 'Pierce', 'x cost': 'X cost', 'cost x': 'X cost' };
+const CAPS = { SAFE: 'Safe', GREEDY: 'Greedy', WEIRD: 'Weird', AFTER: 'After', W1: 'Weight', W2: 'Weight', W3: 'Weight' };
+const NOT_PLAIN = new Set(['Jam', 'Bare', 'Pierce', 'X cost', 'Safe', 'Greedy', 'Weird', 'After']);
+const NAMES = [...Object.keys(KEYWORDS).filter((n) => !NOT_PLAIN.has(n)), 'knot'].sort((a, b) => b.length - a.length);
 const KW_RE = new RegExp('\\b(' + NAMES.join('|') + ')(?:s|ed)?\\b', 'g');
+const LOOSE_RE = /\b(jam(?:s|med)?|bare|pierc(?:e|es|ing)|x cost|cost x)\b/gi;
+const CAPS_RE = /\b(SAFE|GREEDY|WEIRD|AFTER|W[123])\b/g;
+// scan(line): every keyword hit in a string, in order, without overlaps: [{ i, len, name, caps }]
+function scan(line) {
+  const hits = []; line = String(line || '');
+  KW_RE.lastIndex = 0; let m;
+  while ((m = KW_RE.exec(line))) hits.push({ i: m.index, len: m[0].length, name: canon(m[1]) });
+  LOOSE_RE.lastIndex = 0;
+  while ((m = LOOSE_RE.exec(line))) hits.push({ i: m.index, len: m[0].length, name: LOOSE[m[1].toLowerCase()] });
+  CAPS_RE.lastIndex = 0;
+  while ((m = CAPS_RE.exec(line))) hits.push({ i: m.index, len: m[0].length, name: CAPS[m[1]], caps: m[1] });
+  hits.sort((a, b) => a.i - b.i || b.len - a.len);
+  const out = []; let end = -1;
+  for (const h of hits) if (h.i >= end) { out.push(h); end = h.i + h.len; }
+  return out;
+}
 
 export function keywordsIn(lines) {
   const out = [];
   const arr = Array.isArray(lines) ? lines : [String(lines || '')];
-  for (const ln of arr) {
-    KW_RE.lastIndex = 0; let m;
-    while ((m = KW_RE.exec(ln))) if (!out.includes(canon(m[1]))) out.push(canon(m[1]));
-  }
+  for (const ln of arr) for (const h of scan(ln)) if (!out.includes(h.name)) out.push(h.name);
   return out;
 }
 
+// ---- glossaryFor: the one resolver every tooltip, info card and tip panel uses ----
+// glossaryFor(text | [texts], { max = 3, skip: Set of names, school, ids: [status ids], types }) -> [{ term, title, definition, text, color, glyph, n }]
+// 'Gain 4 Gilt' resolves with the live number (4): "Gain 4 gold at the end of combat." Most important first: statuses and rules words,
+// then schools, then card types and basics (Block, Attack...). Each term once.
+const BASIC = new Set(['Block', 'Attack', 'Skill', 'Power', 'Junk', 'Energy']);
+const TAGS = new Set(['Safe', 'Greedy', 'Weird', 'After']);
+const rank = (name) => (BASIC.has(name) ? 3 : SCHOOLS_BY_NAME[name] ? 2 : TAGS.has(name) ? 1 : 0);
+const SCHOOLS_BY_NAME = {}; for (const sc of Object.values(SCHOOLS)) SCHOOLS_BY_NAME[sc.name] = sc;
+export function defineTerm(name, n) {
+  const k = KEYWORDS[name], d = STATUS_BY_NAME[name];
+  if (name === 'Weight' && n >= 1 && n <= 3) return `Weight ${n}: this patch counts ${n} against your Budget. Over the Budget is Strain.`;
+  if (d && typeof n === 'number' && Number.isFinite(n)) {
+    try { let t = String(d.desc(n)); if (k && /Ignores Block/.test(k.text) && !/Block/.test(t)) t += ' Ignores Block.'; return t; } catch (e) { /* fall through */ }
+  }
+  return k ? k.text : '';
+}
+function numAround(line, h) {
+  const before = line.slice(Math.max(0, h.i - 12), h.i).match(/([+-]?\d+)\s*(?:x\s*)?$/);
+  if (before && !/per\s+\d+\s*$/.test(line.slice(Math.max(0, h.i - 12), h.i))) return +before[1];
+  const after = line.slice(h.i + h.len, h.i + h.len + 6).match(/^\s+(\d+)\b/);
+  if (after) return +after[1];
+  if (h.caps && /^W[123]$/.test(h.caps)) return +h.caps[1];
+  return undefined;
+}
+const flatStrings = (v, out = []) => { if (v === null || v === undefined) return out; if (Array.isArray(v)) v.forEach((x) => flatStrings(x, out)); else if (typeof v === 'string') out.push(v); return out; };
+export function glossaryFor(input, o = {}) {
+  const max = o.max === undefined ? 3 : o.max, skip = o.skip || new Set();
+  const found = new Map(); let order = 0;
+  const add = (name, n) => { const f = found.get(name); if (f) { if (f.n === undefined && n !== undefined) f.n = n; return; } found.set(name, { name, n, order: order++ }); };
+  for (const ln of flatStrings(input)) for (const h of scan(ln)) add(h.name, numAround(ln, h));
+  for (const id of o.ids || []) { const d = STATUSES[id]; if (d) add(d.name, undefined); }
+  if (o.types) for (const t of [].concat(o.types)) { const nm = String(t)[0].toUpperCase() + String(t).slice(1); if (KEYWORDS[nm]) add(nm, undefined); }
+  if (o.school && SCHOOLS[o.school]) add(SCHOOLS[o.school].name === 'Echo' ? 'Echo' : SCHOOLS[o.school].name, undefined);
+  const list = [...found.values()].filter((f) => !skip.has(f.name)).sort((a, b) => rank(a.name) - rank(b.name) || a.order - b.order);
+  return list.slice(0, max).map((f) => {
+    const k = KEYWORDS[f.name], d = STATUS_BY_NAME[f.name];
+    const definition = defineTerm(f.name, f.n);
+    return { term: f.name, title: d && f.n !== undefined && f.name !== 'Weight' ? `${f.name} ${f.n}` : f.name, definition, text: definition, color: k.color, glyph: k.glyph, n: f.n };
+  });
+}
+// text + the definitions of its rules words, for the phone info card ("Gilt 4: Gain 4 gold at the end of combat.")
+export function withGloss(text, o = {}) { const g = glossaryText([text, o.gloss || []], o); return g ? `${text}\n\n${g}` : text; }
+// Plain-text form for the touch info card: "Gilt 4: Gain 4 gold at the end of combat."
+export function glossaryText(input, o = {}) { return glossaryFor(input, o).map((g) => `${g.title}: ${g.definition}`).join('\n'); }
+// Everything a card face says in rules words: its lines, the Boon and Price of every graft on it, X cost, Overload.
+export function specGloss(spec) {
+  if (!spec) return [];
+  const gs = [...(spec.fused || []), ...(spec.grafts || [])].map((id) => (GRAFTS[id] ? [GRAFTS[id].boon, GRAFTS[id].price] : []));
+  return [cardLines(spec), gs, spec.cost === 'X' ? 'X cost' : '', spec.overload ? 'Overload' : ''];
+}
+// glossary-only hover tip for a card face (picker grids, deck view, codex, rewards)
+export function cardGlossTip(app, spec, anchor, o = {}) { if (spec) glossTip(app, o.title || '', [specGloss(spec), o.extra || []], anchor, { types: spec.type, school: spec.school }); }
+// A hover target that has no tip of its own: a tip made only of definitions. anchor may carry a band.
+export function glossTip(app, title, texts, anchor, o = {}) { app.tooltip(title || '', '', { glossOnly: true, gloss: texts, anchor, color: o.color, school: o.school, types: o.types, ids: o.ids }); }
+
 export function drawGlyph(ctx, kind, x, y, s, color) {
-  ctx.save(); ctx.translate(x, y); ctx.fillStyle = color; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = 1; ctx.beginPath();
+  ctx.save(); ctx.translate(x, y); ctx.fillStyle = color; ctx.strokeStyle = '#0e0e0e'; ctx.lineWidth = lnw(1); ctx.beginPath();
   const r = s / 2;
   if (kind === 'square') ctx.rect(-r * 0.8, -r * 0.8, r * 1.6, r * 1.6);
   else if (kind === 'tri') { ctx.moveTo(0, -r); ctx.lineTo(r, r * 0.8); ctx.lineTo(-r, r * 0.8); ctx.closePath(); }
@@ -99,8 +194,8 @@ export function drawGlyph(ctx, kind, x, y, s, color) {
 
 // ---- card text with keyword underlines ----
 const tokens = (line) => {
-  const out = []; let last = 0; KW_RE.lastIndex = 0; let m;
-  while ((m = KW_RE.exec(line))) { if (m.index > last) out.push({ t: line.slice(last, m.index) }); out.push({ t: m[0], kw: canon(m[1]) }); last = m.index + m[0].length; }
+  const out = []; let last = 0;
+  for (const h of scan(line)) { if (h.i > last) out.push({ t: line.slice(last, h.i) }); out.push({ t: line.slice(h.i, h.i + h.len), kw: h.name }); last = h.i + h.len; }
   if (last < line.length) out.push({ t: line.slice(last) });
   return out;
 };
@@ -118,7 +213,7 @@ export function drawCardText(app, ctx, lines, x, y, w, size = 15, o = {}) {
       const col = wd.kw ? KEYWORDS[wd.kw].color : (o.color || COL.vellum);
       app.text(wd.t, cx, yy, { size, ui: true, bold: !!wd.kw, color: col, fixed: o.fixed, stroke: o.stroke, strokeW: o.strokeW });
       if (wd.kw) {
-        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]);
+        ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = lnw(1.5); ctx.setLineDash([2, 3]);
         ctx.beginPath(); ctx.moveTo(cx, yy + sz * 1.12); ctx.lineTo(cx + ww, yy + sz * 1.12); ctx.stroke(); ctx.restore();
       }
       cx += ww;
@@ -221,10 +316,13 @@ export function statusSection(id, n, ent) {
 export function cardTipStack(spec, c, o = {}) {
   if (!spec) return [];
   const lines = cardLines(spec, !!o.tithed);
-  const kws = keywordsIn(lines);
-  if (spec.overload && !kws.includes('Overload')) kws.push('Overload');
-  if (o.tithed && !kws.includes('Tithe')) kws.push('Tithe');
-  const p1 = kws.slice(0, 5).map(keywordSection).filter(Boolean);
+  const extra = [];
+  if (spec.overload) extra.push('Overload');
+  if (o.tithed) extra.push('Tithe');
+  if (spec.cost === 'X') extra.push('X cost');
+  const gl = glossaryFor([lines, extra], { max: GLOSS_MAX, school: spec.school, types: spec.type });
+  const kws = gl.map((g) => g.term);
+  const p1 = gl.map((g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph }));
   const p2 = [];
   const why = explainNumber(spec, c, o);
   if (why.length) p2.push({ title: 'The numbers', color: COL.lamp, glyph: 'square', text: '', why });
@@ -252,21 +350,29 @@ function measurePanel(app, sections) {
   });
   return { lay, h: h - 8 };
 }
-// Plain and single-panel tips gloss the rules words in their text (Line, knots, Claim, Tithe, Ringing...) in a second panel, up to two.
-// Not in a fixed band shorter than 250px (those tips are tight; they spell out what matters themselves).
-const JARGON = ['Line', 'Knot', 'Claim', 'Tithe', 'Ringing', 'Strain', 'Backfire', 'Stitch', 'Overload', 'Shatter', 'Thread', 'Weight', 'Budget'];
-function gloss(stack, tip) {
-  const band = tip.anchor && tip.anchor.band;
-  if (stack.length !== 1 || (band && band.bottom - band.y < 250)) return stack;
-  const have = new Set(stack[0].map((s) => s.title));
-  const text = stack[0].map((s) => (s.text || '') + ' ' + (s.why || []).join(' ')).join(' ');
-  const kws = keywordsIn(text).filter((n) => JARGON.includes(n) && !have.has(n) && !stack[0].some((s) => String(s.title || '').startsWith(n))).slice(0, 2).map(keywordSection).filter(Boolean);
-  return kws.length ? [stack[0], kws] : stack;
+// Every plain or single-panel tip appends a glossary panel: one short definition per rules word the item names (max 3, most important first,
+// live numbers where the text has them). Sources: the tip's own text and lines, plus tip.o.gloss (strings the tile shows but the tip does not repeat,
+// such as a graft's Boon and Price). Words already titled in the tip are not repeated. tip.o.glossOnly: the glossary IS the tip.
+const GLOSS_MAX = 3;
+function sectionsText(stack) { const out = []; for (const p of stack) for (const s of p) { out.push(s.text || ''); for (const w of s.why || []) out.push(w); } return out; }
+function titleNames(stack) { const sk = new Set(); for (const p of stack) for (const s of p) for (const h of scan(s.title || '')) sk.add(h.name); return sk; }
+function glossPanel(stack, tip) {
+  const o = tip.o || tip;
+  const gl = glossaryFor([sectionsText(stack), o.gloss || []], { max: GLOSS_MAX, skip: titleNames(stack), school: o.school, types: o.types, ids: o.ids });
+  return gl.map((g) => ({ title: g.title, text: g.definition, color: g.color, glyph: g.glyph }));
 }
 function toStack(tip) {
-  if (tip.stack) return gloss(tip.stack, tip);
+  const o = tip.o || tip;
+  if (o.glossOnly && !tip.stack) {
+    const gl = glossPanel([[]], tip);
+    const sec = (tip.title ? [{ title: tip.title, text: tip.text || '', color: tip.color }] : []).concat(gl);
+    return sec.length ? [sec] : [];
+  }
   const text = tip.lines ? tip.lines.join('\n') : (tip.text || '');
-  return gloss([[{ title: tip.title, text, color: tip.color }]], tip);
+  const stack = tip.stack || [[{ title: tip.title, text, color: tip.color }]];
+  if (stack.length !== 1) return stack;
+  const gl = glossPanel(stack, tip);
+  return gl.length ? [stack[0], gl] : stack;
 }
 function place(app, a, w, h, prevBottomY) {
   // right of the item, else left, else below/above; never under the pointer, always on screen
@@ -318,6 +424,7 @@ function drawStack(app, stack, anchor) {
 export function renderTip(app, tip) {
   if (!tip) return false;
   const stack = toStack(tip);
+  if (!stack.length) return true;
   const k = tip.key || JSON.stringify(stack).slice(0, 200);
   if (app.frame - f0 > 1 || k !== key0) { key0 = k; t0 = app.t; }
   f0 = app.frame;
@@ -329,9 +436,14 @@ export function renderTip(app, tip) {
 }
 // HUD tips: call from anywhere while hovering; flushTips draws the last one at the end of the frame.
 export function queueTip(app, key, stack, anchor) { queued = { key, stack, anchor, frame: app.frame }; }
-export function flushTips(app) {
+// A tip held with a finger stays after the finger lifts, until the next tap. core.js calls this on frames with no live tip.
+let pinFrame = -1;
+export function drawPinnedTip(app) {
   if (pin && app.mouse.pressed && !(app.mouse.touchUp)) pin = null;
-  if (pin) { drawStack(app, pin.stack, pin.anchor); }
+  if (pin && pinFrame !== app.frame) { pinFrame = app.frame; drawStack(app, pin.stack, pin.anchor); }
+}
+export function flushTips(app) {
+  drawPinnedTip(app);
   const q = queued; queued = null;
   if (!q || q.frame !== app.frame) return false;
   return renderTip(app, { stack: q.stack, anchor: q.anchor, key: q.key });
