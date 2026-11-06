@@ -156,7 +156,7 @@ export function addStatus(c, tgt, s, n, o = {}) {
 function eachStatus(ent, f) { for (const s of Object.keys(ent.st)) { const d = STATUSES[s]; if (d && ent.st[s]) f(d, ent.st[s], s); } }
 
 export function heal(c, tgt, n) {
-  if (n <= 0 || tgt.dead) return 0;
+  if (n <= 0 || tgt.dead || (tgt.kind === 'player' && c.over === 'lose')) return 0; // no healing after death (regen at the turn start that a poison tick just ended)
   const h = Math.min(n, tgt.maxHp - tgt.hp);
   tgt.hp += h;
   if (h > 0) c.ev.push({ t: 'heal', who: tgt.uid || 'player', n: h });

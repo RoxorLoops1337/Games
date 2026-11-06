@@ -114,8 +114,8 @@ export const ENEMIES_2 = [
     art: { body: 'bloom', color: '#6f9a5a', notes: 'Cluster of overlapping circles of different sizes, fuzzy outlines, growing from a damp patch.' } },
   { id: 'twin_barrels', name: 'Twin Barrels', act: 2, kind: 'normal', start: { strength: 2 }, hp: [53, 58], pattern: ['enrage', 'burst', 'roll'],
     moves: {
-      enrage: { name: 'Left Barrel Rages', fx: [{ op: 'dmg', n: 4 }, { op: 'status', s: 'strength', n: 3, to: 'self' }] },
-      burst: { name: 'Right Barrel Bursts', fx: [{ op: 'dmg', n: 16 }, { op: 'custom', intent: 'buff', text: 'Loses 8 HP.', fn: (A, ctx) => A.loseHp(ctx.srcEnt, 8, { floor1: true }) }] },
+      enrage: { name: 'Left Rages', fx: [{ op: 'dmg', n: 4 }, { op: 'status', s: 'strength', n: 3, to: 'self' }] },
+      burst: { name: 'Right Bursts', fx: [{ op: 'dmg', n: 16 }, { op: 'custom', intent: 'buff', text: 'Loses 8 HP.', fn: (A, ctx) => A.loseHp(ctx.srcEnt, 8, { floor1: true }) }] },
       roll: { name: 'Roll', fx: [{ op: 'dmg', n: 9 }] },
     },
     art: { body: 'barrels', color: '#8b5a2b', notes: 'Two stacked or side-by-side barrel rects with iron bands; the left glows red when enraged, the right bulges and cracks.' } },
@@ -203,7 +203,7 @@ export const ENEMIES_2 = [
       sour: { name: 'Sour Crown', fx: [{ op: 'dmg', n: 14 }, { op: 'status', s: 'weak', n: 1, to: 'player' }] },
       decree: { name: 'Brined Decree', fx: [{ op: 'dmg', n: 6 }, { op: 'block', n: 12, to: 'self' }, { op: 'addCard', card: 'j_clot', n: 2, to: 'draw' }] },
       crush: { name: 'Lid Crush', fx: [{ op: 'dmg', n: 28 }] },
-      rotcrush: { name: 'Lid Crush, Rotted', tip: 'Because you carry Infection the lid finds the rot: this hit ignores your Block.', fx: [{ op: 'dmg', n: 28, pierce: true }] },
+      rotcrush: { name: 'Rotted Crush', tip: 'Because you carry Infection the lid finds the rot: this hit ignores your Block.', fx: [{ op: 'dmg', n: 28, pierce: true }] },
     },
     on: {
       damaged: (A, e) => {

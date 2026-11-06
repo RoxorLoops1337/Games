@@ -24,13 +24,13 @@ const schoolCol = (s) => COL[s] || BRASS;
 // ---------------------------------------------------------------- shared text
 export function payShort(school, n) {
   switch (school) {
-    case 'ember': return `+${2 * n} Burn to all`;
+    case 'ember': return `+${3 * n} Burn to all`;
     case 'echo': return `+${Math.ceil(n / 2)} Echo`;
     case 'hoard': return Math.floor(n / 2) > 0 ? `Draw ${Math.floor(n / 2)}, retain 1` : 'Retain 1';
     case 'blood': return `Heal ${2 * n}`;
     case 'rust': return `+${3 * n} Block`;
-    case 'static': return `+${n} Charge`;
-    case 'gilded': return `+${2 * n} gold`;
+    case 'static': return `+${n} Charge, ${2 * n} zap`;
+    case 'gilded': return `+${2 * n} gold, ${2 * n} Block`;
     default: return `${n} stitches`;
   }
 }

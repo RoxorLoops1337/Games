@@ -16,6 +16,12 @@
 export const FX_OPTS = { shake: true, reduced: false, quality: 1, mobile: typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || '') };
 
 // Default effects quality: phones and tablets start on 'low' (the auto-downgrade in post.js still applies on top).
+// WCAG 2.3.1: at most 3 flashes in any one second (per Fx; the clock is its own age counter)
+// One gate shared by every flash source (Fx.flash and post.flash), keyed on a wall clock or an explicit time.
+const FL = [];
+export function flashGate(nowSec) { if (FX_OPTS.flashes === false) return false; const now = nowSec === undefined ? (typeof performance !== 'undefined' ? performance.now() / 1000 : Date.now() / 1000) : nowSec; while (FL.length && now - FL[0] >= 1) FL.shift(); if (FL.length >= 3) return false; FL.push(now); return true; }
+flashGate.reset = () => { FL.length = 0; };
+function flashOk() { return flashGate(); }
 export const defaultQuality = () => (FX_OPTS.mobile ? 'low' : 'high');
 export const CAP_DESKTOP = 2000;
 export const CAP_MOBILE = 600;
@@ -279,6 +285,7 @@ export class Fx {
   hitstop(ms) { if (FX_OPTS.reduced) return; this.stop = Math.max(this.stop, ms / 1000); }
   slowmo(scale, ms) { if (FX_OPTS.reduced) return; this.slow = ms / 1000; this.slowScale = scale; }
   flash(color = '#fff', a = 0.4, life = 0.25) {
+    if (FX_OPTS.flashes === false || !flashOk(this)) return; // 'Screen flashes' off, or already 3 in the last second
     if (FX_OPTS.reduced) a *= 0.35;
     const f = this._take(this.flashes, this.flashFree, () => ({})); f.color = color; f.a = a; f.age = 0; f.life = life;
   }
@@ -286,6 +293,7 @@ export class Fx {
   // returns the effective dt (0 while hit-stopped, scaled in slow-mo)
   update(dt) {
     this.nt += dt; // noise clock runs on real time
+    this._clk = (this._clk || 0) + dt;
     if (this.stop > 0) { this.stop -= dt; return 0; }
     let d = dt;
     if (this.slow > 0) { this.slow -= dt; d = dt * this.slowScale; }

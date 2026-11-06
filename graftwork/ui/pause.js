@@ -283,7 +283,7 @@ export function drawPauseOverlay(app) {
     if (app.inRect(P.x, P.y, P.w, P.h)) app.tooltip('Pause', 'Esc');
     if (app.button('', P.x, P.y, P.w, P.h, { icon: pauseIcon, disabled: busy })) openPause(app);
     fsButton(app, F.x, F.y, F.w, F.h, { id: 'fs_btn' });
-    if (!busy && app.stackAtStart === 1 && app.pressedKeys.some((e) => e.key === 'Escape')) openPause(app);
+    if (!busy && app.stackAtStart === 1 && app.pressedKeys.some((e) => e.key === 'Pause' || e.key === 'Escape')) openPause(app);
   }
   app.escBusy = false;
 }

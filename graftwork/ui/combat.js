@@ -14,6 +14,7 @@ import { drawHero, drawPortrait } from '../art/heroes.js';
 import { drawBackground } from '../art/backgrounds.js';
 import * as L from './combat_layout.js';
 import { maybeTip } from './tutorial.js';
+import { watchCombat, announceEnding } from './a11y.js';
 import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip } from './seam_ui.js';
 import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
 import { queueTip, flushTips, cardTipStack } from './tooltips.js';
@@ -177,6 +178,7 @@ function handle(ev) {
       return 95;
     }
     case 'status': return onStatus(ev);
+    case 'reknit': { const trn = APP && APP.shared && APP.shared.transitions; if (trn && trn.phaseBeat) trn.phaseBeat(APP, 'REKNIT'); fx.shake(0.3); return 600; }
     case 'immune': { const p = entPos(ev.who); fx.float('Immune', p.x, p.y - 40, { color: '#aaa', size: 20 }); return 110; }
     case 'heal': {
       const en = ent(ev.who); if (!en) return 0;
@@ -352,13 +354,14 @@ function onDmg(ev) {
       fx.hitstop(70); kick(dirx, 0, 9, 7, 0);
       fx.emit({ x: p.x, y: p.y, n: 14, colors: ['#9aa7ad', '#cfd8dc', '#6b7a82'], speed: 300, size: 4, gravity: 800, life: 0.7 });
       fx.emit({ x: p.x, y: p.y, n: 4, colors: ['#cfd8dc', '#9aa7ad'], speed: 220, size: 9, gravity: 900, life: 0.8, shape: 'shard', spin: 10 });
-      fx.ring(p.x, p.y, '#bcd0d8', 100, 0.4); fx.float('BROKEN', p.x, p.y - 62, { color: '#bcd0d8', size: 26, big: true, stroke: '#2a3a44', life: 1.2 }); sfx('blockBreak');
+      fx.ring(p.x, p.y, '#bcd0d8', 100, 0.4); fx.float('BROKEN', p.x, p.y - 104, { color: '#bcd0d8', size: 26, big: true, stroke: '#2a3a44', life: 1.2 }); sfx('blockBreak');
     } else {
       fx.hitstop(20); kick(dirx, 0, 3, 8, 0);
-      fx.float(String(ev.absorbed), p.x - 24, p.y - 26, { color: '#9fb4bd', size: 22, vy: -30, life: 0.8 });
+      fx.float(String(ev.absorbed), p.x - 46, p.y - 18, { color: '#9fb4bd', size: 22, vy: -30, life: 0.8 });
     }
     wait = ev.broke ? 120 : 90;
   }
+  const dxo = ev.absorbed > 0 ? 46 : 0; // damage that got past Block: its number sits to the right of the BROKEN / absorbed stamps, not on top of them
   if (ev.n > 0) {
     en.hp = Math.max(0, en.hp - ev.n); en.tdelay = 0.5;
     const mine = !isP && ev.src === 'player';
@@ -384,8 +387,8 @@ function onDmg(ev) {
       if (T.ink) fx.emit({ x: p.x, y: p.y, n: 8, colors: ['#1a1614', '#2b1e1a'], speed: 170, size: 6, gravity: 250, life: 0.8 });
       if (T.gore) fx.emit({ x: p.x, y: p.y, n: 18, colors: ['#9E0F2E', '#e8dcc4', '#c4223c'], speed: 380, size: 5, gravity: 800, life: 1.0, shape: 'flake', spin: 14 });
       if (T.slow) fx.slowmo(T.slow, T.slowMs);
-      if (typeof fx.floatCounter === 'function') fx.floatCounter(ev.who, p.x, p.y - 20, ev.n, { last: ctr.done, size: T.size, color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum });
-      else if (!multi) fx.float(String(ev.n), p.x + rnd(-14, 14), p.y - 20, { color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum, size: T.size, big: k.crit || k.overkill, life: k.crit || k.overkill ? 1.4 : 1.1, vy: T.vy, rot: T.tilt, pop: T.pop });
+      if (typeof fx.floatCounter === 'function') fx.floatCounter(ev.who, p.x + dxo, p.y - 20 - (dxo ? 14 : 0), ev.n, { last: ctr.done, size: T.size, color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum });
+      else if (!multi) fx.float(String(ev.n), p.x + dxo + rnd(-14, 14), p.y - 20, { color: k.crit || k.overkill ? '#ff4a4a' : COL.vellum, size: T.size, big: k.crit || k.overkill, life: k.crit || k.overkill ? 1.4 : 1.1, vy: T.vy, rot: T.tilt, pop: T.pop });
       if (k.overkill) fx.float(`+${k.over} OVERKILL`, p.x, p.y - 84, { color: COL.gold, size: 18, life: 1.3 });
       const hopt = { pitch: T.pitch * (1 + Math.min(ctr.count, 10) * 0.04), vol: T.vol };
       if (typeof (jau() || {}).hit === 'function') audioCall('hit', slam ? Math.max(ev.n, en.maxHp * 0.2) : ev.n, en.maxHp, hopt); else sfx(slam ? 'hitBig' : T.body, hopt);
@@ -873,7 +876,7 @@ function drawHand(app) {
     const x = dc.x + sx, y = dc.y + oy;
     ctx.save();
     if (dc.sq > 0.001) { ctx.translate(x, y); ctx.scale(1 + dc.sq, 1 - dc.sq * 0.6); ctx.translate(-x, -y); }
-    drawCard(ctx, spec, x, y, { scale: dc.s, rot: dc.rot, tithed: dc.w.tithed, jam: dc.jam, cost, glow: selected ? 1 : (idle && chk.ok && dc.uid === S.hov ? 0.5 : 0), selected, dim: idle && !chk.ok ? 0.3 : 0, alpha: dc.alpha, hover: dc.uid === S.hov, compact: dc.s < 0.8 });
+    drawCard(ctx, spec, x, y, { scale: dc.s, rot: dc.rot, tithed: dc.w.tithed, jam: dc.jam, mark: dc.w.reknit ? 'reknit' : undefined, cost, glow: selected ? 1 : (idle && chk.ok && dc.uid === S.hov ? 0.5 : 0), selected, dim: idle && !chk.ok ? 0.3 : 0, alpha: dc.alpha, hover: dc.uid === S.hov, compact: dc.s < 0.8 });
     ctx.restore();
     if (dc.seam >= 0 && dc.seam < 1.4) drawSeam(ctx, dc);
     if (dc.jam) drawClamp(ctx, dc);
@@ -1071,6 +1074,7 @@ function updateInput(app, dt) {
     u.cand = cand ? cand.uid : null;
     if (cand && !touch) { S.hov = cand.uid; if (S.hovPrev !== cand.uid) sfx('uiHover', { vol: 0.3 }); }
     else if (cand && touch && S.down && S.down.long) S.hov = cand.uid;
+    if (!S.hov && S.sel && S.kbUsed && !touch && !m.down) S.hov = S.sel; // keyboard focus shows the same tooltip as hover
     S.hovPrev = S.hov;
   } else if (S.drag) S.hov = S.drag.uid;
 
@@ -1089,21 +1093,24 @@ function updateInput(app, dt) {
       else if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; sfx('uiBack'); }
       else if (!busy()) app.shared.flow.openSettings && app.shared.flow.openSettings();
     }
-    else if (k === 'q' || k === 'Q') S.modal = { kind: 'piles', tab: 'draw', scroll: 0 };
+    else if ((k === 'p' || k === 'P') && act) { const n = S.run.potions.length; let i = S.potSel == null ? -1 : S.potSel; for (let g = 0; g < n; g++) { i = (i + 1) % n; if (S.potions[i]) { S.potSel = i; S.sel = null; S.kbUsed = true; S.kbTarget = true; S.tgt = 0; sfx('uiHover'); break; } } }
+    else if (k === 'q' || k === 'Q' || k === 'i' || k === 'I') S.modal = { kind: 'piles', tab: 'draw', scroll: 0 };
     else if (act) {
       if (/^[0-9]$/.test(k)) {
         const idx = k === '0' ? 9 : Number(k) - 1; const dc = S.hand[idx];
-        if (dc) { if (S.sel === dc.uid) tryPlay(dc.uid, selNeedsTarget() ? liveEds()[S.tgt % Math.max(1, liveEds().length)] : null); else selectCard(dc.uid); }
-      } else if (k === 'Tab') { const l = liveEds(); if (l.length) { S.tgt = (S.tgt + (e.shiftKey ? l.length - 1 : 1)) % l.length; S.kbTarget = true; sfx('uiHover'); } }
+        if (dc) { if (S.sel === dc.uid) tryPlay(dc.uid, selNeedsTarget() ? liveEds()[S.tgt % Math.max(1, liveEds().length)] : null); else { selectCard(dc.uid); S.kbUsed = true; if (selNeedsTarget() && liveEds().length > 1) S.kbTarget = true; } }
+      } else if (k === 'Tab') { const l = liveEds(); if (l.length) { S.tgt = (S.tgt + (e.shiftKey ? l.length - 1 : 1)) % l.length; S.kbTarget = true; S.kbUsed = true; sfx('uiHover'); } }
+      else if ((k === 'ArrowUp' || k === 'ArrowDown') && S.sel && selNeedsTarget()) { const l = liveEds(); if (l.length) { S.tgt = (S.tgt + (k === 'ArrowDown' ? 1 : l.length - 1)) % l.length; S.kbTarget = true; S.kbUsed = true; sfx('uiHover'); } }
       else if (k === 'e' || k === 'E') doEndTurn();
       else if (k === 'Enter' || k === ' ') {
         if (u.endConfirm) doEndTurn();
         else if (S.sel) { const l = liveEds(); tryPlay(S.sel, selNeedsTarget() ? l[S.tgt % Math.max(1, l.length)] : null); }
         else if (S.potSel !== null && S.potSel !== undefined) { const l = liveEds(); tryPotion(S.potSel, l[S.tgt % Math.max(1, l.length)]); }
+        else doEndTurn();
       } else if (k === 'ArrowLeft' || k === 'ArrowRight') {
         const l = liveEds();
         if (S.sel && selNeedsTarget() && S.kbTarget && l.length) { S.tgt = (S.tgt + (k === 'ArrowRight' ? 1 : l.length - 1)) % l.length; sfx('uiHover'); }
-        else { const i = S.hand.findIndex((d) => d.uid === S.sel); const n = S.hand.length; if (n) selectCard(S.hand[(i < 0 ? (k === 'ArrowRight' ? 0 : n - 1) : (i + (k === 'ArrowRight' ? 1 : n - 1)) % n)].uid); }
+        else { S.kbUsed = true; const i = S.hand.findIndex((d) => d.uid === S.sel); const n = S.hand.length; if (n) selectCard(S.hand[(i < 0 ? (k === 'ArrowRight' ? 0 : n - 1) : (i + (k === 'ArrowRight' ? 1 : n - 1)) % n)].uid); }
       }
     }
   }
@@ -1113,6 +1120,7 @@ function updateInput(app, dt) {
 
   // ---- mouse / touch
   if (m.pressed && m.button === 2) { if (S.drag) cancelDrag(); else if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; sfx('uiBack'); } S.down = null; return; }
+  if (m.pressed) S.kbUsed = false;
   if (m.pressed) S.down = { x: m.x, y: m.y, uid: act ? u.cand : null, moved: false, t: 0, touch, long: false };
   if (S.down) {
     S.down.t += dt;
@@ -1249,7 +1257,7 @@ function drawPilesModal(app) {
   ctx.restore();
   if (hover) {
     const hx = clamp(hover.x, 130, W - 400), hy = clamp(hover.y, 200, 520);
-    drawCard(ctx, hover.spec, hx, hy, { scale: 0.95, tithed: hover.w.tithed, jam: hover.w.jam, cost: effCost(c, hover.w), hover: true });
+    drawCard(ctx, hover.spec, hx, hy, { scale: 0.95, tithed: hover.w.tithed, jam: hover.w.jam, mark: hover.w.reknit ? 'reknit' : undefined, cost: effCost(c, hover.w), hover: true });
     drawSections(app, cardSections(hover.spec, hover.w, null), hx + 120, 100, 250, 500);
   }
 }
@@ -1297,6 +1305,7 @@ function fixLayout(snap) {
 // ---------------------------------------------------------------- update
 function update(app, dt) {
   if (!S) return;
+  if (app.a11y) { try { watchCombat(app, S.c, (e) => intentText(intentOf(S.c, e))); } catch { /* announcements never break play */ } }
   const raw = Math.min(dt, 0.05);
   const fxd = S.fx.update(raw);
   const ad = fxd * (S.skip ? 2.5 : 1);
@@ -1375,6 +1384,7 @@ function syncIdle() {
 function startEnding() {
   const win = S.c.over === 'win';
   S.ending = { t: 0, win, skip: false, stamped: false, coins: false, hb: 0 };
+  if (APP && APP.a11y) announceEnding(APP, win);
   S.sel = null; S.drag = null; S.banner = null;
   if (win) {
     sfx('win'); S.P.attack = 0.0001; // hero flourish
@@ -1443,7 +1453,7 @@ function draw(app) {
   if (S.boss) { ctx.fillStyle = 'rgba(120,10,24,.2)'; ctx.fillRect(-20, -20, W + 40, H + 40); }
   const tgtMode = targeting() || (S.drag && selNeedsTarget());
   drawHeroAndHud(app);
-  drawEnemies(app, tgtMode);
+  drawEnemies(app, tgtMode); drawKbRing(app);
   drawSprites(app);
   drawCoins(app);
   { const fd = S.hand.find((d) => d.uid === (S.hov || S.sel)); drawSeamRail(app, c, L.SEAM, S.t, fd ? fd.w : null, !busy()); }
@@ -1563,6 +1573,13 @@ function drawEnemyHud(app, ed, alpha, hot) {
     app.text(ed.callout.text, ed.x, EF - ed.h * 0.6 - k * 30, { size: 22, bold: true, align: 'center', color: COL.vellum, stroke: '#0e0e0e', strokeW: 5, baseline: 'middle' }); ctx.restore();
   }
 }
+// Persistent keyboard / pad focus ring on the targeted enemy (dashed, high contrast, not colour-only)
+function drawKbRing(app) {
+  const l = liveEds(); if (!S.kbTarget || !S.kbUsed || !l.length || !targeting()) return;
+  const ed = l[S.tgt % l.length], ctx = app.ctx, x = ed.x - ed.w / 2 - 8, y = EF - ed.h - 8, w = ed.w + 16, h = ed.h + 16;
+  ctx.save(); app.rr(x, y, w, h, 12); ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.stroke(); ctx.lineWidth = 3; ctx.strokeStyle = '#ffe9a8'; ctx.setLineDash([10, 6]); ctx.lineDashOffset = FX_OPTS.reduced ? 0 : -app.t * 20; ctx.stroke(); ctx.restore();
+  app.text('TARGET', ed.x, y - 22, { size: 15, bold: true, ui: true, align: 'center', color: '#ffe9a8', stroke: '#000', strokeW: 4 });
+}
 
 const col2 = (def) => (def.kind === 'boss' ? COL.scar : def.kind === 'elite' ? COL.lamp : COL.vellum);
 
@@ -1616,7 +1633,7 @@ function drawTopBar(app) {
   const ht = fitText(app, hero.title || '', 118, 14, 14, { ui: true });
   app.text(ht.str, 60, 29, { size: ht.size, ui: true, color: COL.vellum2 });
   drawHeart(ctx, 192, 28, 26);
-  app.text(`${Math.max(0, Math.ceil(P.hp))}/${P.maxHp}`, 210, 17, { size: 19, bold: true, ui: true, color: COL.bad });
+  { const hl = `${Math.max(0, Math.ceil(P.hp))}/${P.maxHp}`; app.text(hl, 210, 17, { size: hl.length > 5 ? 15 : 19, bold: true, ui: true, color: COL.bad }); }
   const gp = 1 + S.goldPulse * 0.25;
   ctx.save(); ctx.translate(L.GOLD_POS.x - 10, L.GOLD_POS.y); ctx.scale(gp, gp); drawCoin(ctx, 0, 0, 24); ctx.restore();
   app.text(String(S.gold), L.GOLD_POS.x + 8, 17, { size: 19, bold: true, ui: true, color: COL.gold });
@@ -1627,7 +1644,7 @@ function drawTopBar(app) {
   for (let i = 0; i < slots; i++) {
     const x = P0.x + i * pstep, y = P0.y + (P0.size - psz) / 2, sz = psz;
     const id = S.potions[i];
-    app.rr(x, y, sz, sz, 8); ctx.save(); ctx.fillStyle = 'rgba(40,34,30,.9)'; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = (S.potSel === i) ? COL.lamp : 'rgba(232,220,196,.35)'; ctx.stroke(); ctx.restore();
+    app.rr(x, y, sz, sz, 8); ctx.save(); ctx.fillStyle = 'rgba(40,34,30,.9)'; ctx.fill(); ctx.lineWidth = S.potSel === i ? 3.5 : 1.6; if (S.potSel === i && S.kbUsed) ctx.setLineDash([6, 4]); ctx.strokeStyle = (S.potSel === i) ? COL.lamp : 'rgba(232,220,196,.35)'; ctx.stroke(); ctx.restore();
     app.reg('potion' + i, x, y, sz, sz, {});
     if (id) {
       drawPotion(ctx, id, x + sz / 2, y + sz / 2, sz - 8);
@@ -1743,16 +1760,17 @@ function drawCardInfo(app) {
 // first-run tips: one at a time, only while the player can act, never over a modal
 // Tips never cover the hero plate (y 464), the Thread rail (y 468) or the hand: bubbles stop above this line, the arrow reaches down.
 const TIP_BOTTOM = L.SEAM.y - 10;
+const QUIET = { x: 16, y: 80 }; // empty wall above the hero: first-run bubbles sit here so they never cover the hero, the enemies or the cards
 function drawTips(app) {
   if (!S || S.modal || S.ending || S.c.pending || S.banner || !canAct() || S.drag) return;
   const c = S.c, l = liveEds(), first = l[0];
   const has = (k) => app.shared.meta && app.shared.meta.tips && app.shared.meta.tips[k];
   const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
   if (first && !S.hov) {
-    if (tip('energy', L.ORB.x + 40, L.ORB.y - 46, { side: 'above', w: 270, maxBottom: TIP_BOTTOM })) return;
-    if (tip('intent', first.x, EF - first.h - 8, { side: 'below', w: 290, maxBottom: TIP_BOTTOM })) return;
+    if (tip('energy', L.ORB.x + 10, L.ORB.y - 44, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM }, `Energy pays for cards. You get ${c.maxEnergy} each turn and it does not carry over. Spend it.`)) return;
+    if (tip('intent', first.x - first.w * 0.5 - 6, EF - first.h - 30, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
     if (S.hand.length && tip('playcard', 500, L.HAND_Y - 120, { side: 'above', w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
-    if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 70, FOOT_Y - 150, { side: 'right', w: 280, maxBottom: TIP_BOTTOM })) return;
+    if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 60, FOOT_Y - 230, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
     if (tip('endturn', L.END_BTN.x + L.END_BTN.w / 2, L.END_BTN.y, { side: 'above', w: 280, maxBottom: TIP_BOTTOM })) return;
   }
   if (!has('endturn')) return; // later tips wait until the basics are known

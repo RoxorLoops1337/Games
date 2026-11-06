@@ -145,6 +145,13 @@ function drawScene(app, st) {
 }
 
 // ---------- the screen ----------
+// Hero accent colours (Marrow's blood red) are too dark to read as small labels on the dark panel: mix them toward vellum.
+export function labelColor(hex, k = 0.62) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return '#e8dcc4';
+  const n = parseInt(m[1], 16), mix = (c) => Math.round(c + (255 - c) * k);
+  return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => mix(c).toString(16).padStart(2, '0')).join('');
+}
+
 export default {
   enter(app, params) {
     this.p = params || {};
@@ -422,7 +429,7 @@ export default {
     yy += app.text(h.blurb, x + 20, yy, { size: 14, maxW: w - 40, color: '#e0d4b8', lineH: 17 }) + 8;
     stitchLine(g, x + 20, yy, x + w - 20, yy, { color: rgba(h.color, 0.55), size: 3, step: 10, lw: 1 });
     yy += 8;
-    app.text('PASSIVE', x + 20, yy, { size: 11, ui: true, bold: true, color: h.color });
+    app.text('PASSIVE', x + 20, yy, { size: 12, ui: true, bold: true, color: labelColor(h.color) });
     yy += 14;
     yy += app.text(h.passive, x + 20, yy, { size: 14, maxW: w - 40, color: '#fbe9b0', lineH: 17 }) + 4;
     const hp = h.perks && h.perks.hp, gold = h.perks && h.perks.gold;
@@ -431,11 +438,11 @@ export default {
     // starter deck
     const counts = {}, types = { attack: 0, skill: 0, power: 0 };
     for (const id of h.deck) { counts[id] = (counts[id] || 0) + 1; const t = CARDS[id] && CARDS[id].type; if (types[t] !== undefined) types[t]++; }
-    app.text(`STARTER DECK  ${h.deck.length}`, x + 20, yy, { size: 11, ui: true, bold: true, color: h.color });
+    app.text(`STARTER DECK  ${h.deck.length}`, x + 20, yy, { size: 12, ui: true, bold: true, color: labelColor(h.color) });
     let tx = x + w - 20;
     for (const t of ['power', 'skill', 'attack']) {
-      const s = `${types[t]} ${TYPE_NAMES[t]}`; const wd = app.measure(s, 11, { ui: true });
-      tx -= wd; app.text(s, tx, yy, { size: 11, ui: true, color: COL[t] === '#8C2F2F' ? '#e08a8a' : t === 'skill' ? '#8fb7c9' : '#b79ad6' }); tx -= 12;
+      const s = `${types[t]} ${TYPE_NAMES[t]}`; const wd = app.measure(s, 12, { ui: true });
+      tx -= wd; app.text(s, tx, yy, { size: 12, ui: true, color: COL[t] === '#8C2F2F' ? '#f0a0a0' : t === 'skill' ? '#a9cfe0' : '#c9b0e8' }); tx -= 12;
     }
     yy += 17;
     const ids = Object.keys(counts);
@@ -443,9 +450,9 @@ export default {
       const cx = x + 20 + (i % 2) * ((w - 40) / 2), cy = yy + Math.floor(i / 2) * 18;
       const c = CARDS[id];
       g.save(); g.fillStyle = c ? (COL[c.type] || '#888') : '#888'; g.fillRect(cx, cy + 3, 4, 11); g.restore();
-      app.text(`${counts[id]}x ${c ? c.name : id}`, cx + 10, cy, { size: 13, ui: true, color: '#d9cba8' });
+      app.text(`${counts[id]}x ${c ? c.name : id}`, cx + 10, cy, { size: 13, ui: true, color: '#efe3c4' });
     });
-    if (sel) { app.text('SELECTED', x + w - 20, y + ph - 22, { size: 11, ui: true, bold: true, align: 'right', color: h.color }); }
+    if (sel) { app.text('SELECTED', x + w - 20, y + ph - 22, { size: 12, ui: true, bold: true, align: 'right', color: labelColor(h.color) }); }
   },
 
   // ---- credits ----

@@ -566,21 +566,21 @@ export default {
       app.reg('shop-card' + i, CARD_X(i) - 77, cy - 112, 154, 217 + 4 + 33, { group: 'card' + i });
       const over = !it.sold && app.inRect(CARD_X(i) - 77, cy - 108, 154, 217);
       const k = hv(app, 'c' + i, over);
-      if (over) { app.cursor = 'pointer'; hovered = { i, spec, it }; }
+      if (over) { app.cursor = 'pointer'; hovered = { i, spec, it, a: { x: CARD_X(i) - 77, y: cy - 108, w: 154, h: 217 } }; }
       g.save(); if (k > 0.02) { g.shadowColor = 'rgba(242,193,78,.5)'; g.shadowBlur = 20 * k; }
       drawCard(g, spec, cx, cy - 8 * k, { scale: sc0 + 0.06 * k, dim: it.sold ? 0.6 : 0, glow: k * 0.5 });
       g.restore();
       if (it.sold) stamp(app, cx, cy, 'SOLD'); else priceTag(CARD_X(i), cy + 126, it.price, false, 'card' + i);
       if (!it.sold && app.clicked(CARD_X(i) - 77, cy - 108, 154, 217)) buyDirect(app, 'card', i, { x: CARD_X(i), y: cy }, it.price);
     });
-    if (hovered) app.tooltip(hovered.spec.name, `${typeLabel(hovered.spec)}, cost ${hovered.spec.cost}\n${cardLines(hovered.spec).join('\n')}\nBuying adds it to your deck for ${hovered.it.price} gold.`, { color: COL[hovered.spec.type] === undefined ? undefined : undefined });
+    if (hovered) app.tooltip(hovered.spec.name, `${typeLabel(hovered.spec)}, cost ${hovered.spec.cost}\n${cardLines(hovered.spec).join('\n')}\nBuying adds it to your deck for ${hovered.it.price} gold.`, { anchor: hovered.a });
 
     // ---- grafts ----
     shop.grafts.forEach((it, i) => {
       const gr = GRAFTS[it.id], x = GRAFT_X(i) + shakeX('graft' + i), y = GRAFT_Y, w = 205, h = 64;
       app.reg('shop-graft' + i, GRAFT_X(i), y - 4, w, 100, { group: 'graft' + i });
       const over = !it.sold && app.inRect(GRAFT_X(i), y, w, 100), k = hv(app, 'g' + i, over);
-      if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, [...graftLines(gr), `Sews onto one of your cards. ${it.price} gold.`].join('\n'), { color: COL[gr.school] }); }
+      if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, [...graftLines(gr), `Sews onto one of your cards. ${it.price} gold.`].join('\n'), { color: COL[gr.school], anchor: { x: GRAFT_X(i), y, w, h: 100 } }); }
       g.save(); if (it.sold) g.globalAlpha = 0.45; g.translate(0, -3 * k);
       drawGraftPatch(g, gr, x, y, w, h, { hover: k });
       g.restore();
@@ -601,7 +601,7 @@ export default {
         wrapLimit(app, p.text, w - 64, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 56, y + (smallUi ? 30 : 26) + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.85)' })); }
       g.restore();
       if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 50, y + h - (smallUi ? 6 : 20), it.price, false, 'potion' + i);
-      if (over) { app.cursor = 'pointer'; app.tooltip(p.name, `${p.rarity}\n${p.text}\nPotion slots ${run.potions.length}/${RUN.potionSlots(run)}. ${it.price} gold.`); }
+      if (over) { app.cursor = 'pointer'; app.tooltip(p.name, `${p.rarity}\n${p.text}\nPotion slots ${run.potions.length}/${RUN.potionSlots(run)}. ${it.price} gold.`, { anchor: { x: POT_X(i), y, w, h } }); }
       if (!it.sold && app.clicked(POT_X(i), y, w, h)) buyDirect(app, 'potion', i, { x: x + 30, y: y + 38 }, it.price);
     });
 
@@ -618,7 +618,7 @@ export default {
         wrapLimit(app, r.text, w - 90, 14, nl, { ui: true }).forEach((ln, q) => app.text(ln, x + 76, ty0 + q * pitch - 2 * k, { size: 14, ui: true, color: 'rgba(232,220,196,.88)' })); }
       g.restore();
       if (it.sold) stamp(app, x + w / 2, y + h / 2, 'SOLD'); else priceTag(x + w - 52, y + 22, it.price, false, 'relic' + i);
-      if (over) { app.cursor = 'pointer'; app.tooltip(r.name, `${r.rarity} relic\n${r.text}\n${it.price} gold.`, { color: COL.lamp }); }
+      if (over) { app.cursor = 'pointer'; app.tooltip(r.name, `${r.rarity} relic\n${r.text}\n${it.price} gold.`, { color: COL.lamp, anchor: { x: REL_X, y, w, h } }); }
       if (!it.sold && app.clicked(REL_X, y, w, h)) buyDirect(app, 'relic', i, { x: x + 40, y: y + 46 }, it.price);
     });
 

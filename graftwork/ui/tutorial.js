@@ -5,21 +5,21 @@
 import { COL, W, H, clamp, rgba } from './core.js';
 
 export const TIP_TEXTS = {
-  energy: 'Energy pays for cards. You get 3 each turn and it does not carry over. Spend it.',
-  intent: 'The icon over an enemy is its next move. A sword is damage, a shield is Block, a flame is a curse. Plan around it.',
-  block: 'Block soaks damage this turn, then it is gone. Build it when the sword is coming.',
-  endturn: 'End Turn when you are done. Unspent cards stay in your hand only if they Retain.',
-  graftpick: 'You never add cards. Pick one of your own cards and one graft to sew onto it.',
-  boonprice: 'Every graft has a Boon and a Price. The Boon is the good part. The Price is always paid, so read it.',
-  budget: 'Budget is how much Weight your deck carries for free. Each graft weighs 1 to 3.',
-  strain: 'Weight over Budget is Strain. Each point Tithes a plain card: it fights at 75 percent. The deck view shows which.',
-  overload: 'A third graft is an Overload: numbers x1.5, one extra Weight, and a 25 percent chance to Shatter the card for good.',
-  skipping: 'You may skip the graft. Heal 8, gain 1 Budget for good, or take 10 gold. Doing nothing is a plan.',
-  forge: 'The Forge heals you, strips a graft, upgrades a card or Expands your Budget. One service per visit.',
-  shop: 'Cards, grafts, relics and potions for gold. Removing a card is the cheapest way to improve your deck.',
-  resonance: 'Three grafts of one school wake a small bonus. Six wake a larger one. The strip at the bottom of the deck view tracks it.',
-  thread_chain: 'Two cards of one school: you tied a knot. Keep sharing a school to grow the Line, up to 5 knots.',
-  thread_cut: 'A card of another school cut the Line and cashed it in. A longer Line pays more. Hover Line, Stitch or Cut for the rule.',
+  energy: 'Energy pays for cards. You get 3 a turn. Unspent Energy is lost.',
+  intent: 'The icon over an enemy is its next move. Sword: damage. Shield: Block. Flame: a curse. Plan around it.',
+  block: 'Block soaks damage this turn, then it is gone. Raise it when the sword is coming.',
+  endturn: 'End Turn when done. Cards you did not play are discarded unless they Retain.',
+  graftpick: 'You never add cards. Pick one of your own cards and sew one graft onto it.',
+  boonprice: 'Every graft has a Boon and a Price. The Price is always paid. Read it.',
+  budget: 'Budget is the Weight your deck carries for free. Each graft weighs 1 to 3.',
+  strain: 'Weight over Budget is Strain. Each point Tithes a Bare card: it fights at 75 percent. The deck view shows which.',
+  overload: 'A third graft is an Overload: numbers x1.5, +1 Weight, and a 25 percent chance to Shatter the card for good.',
+  skipping: 'You may skip the graft: heal 8, gain 1 Budget for good, or take 10 gold.',
+  forge: 'The Forge heals, strips a graft, upgrades a card or Expands your Budget. One service per visit.',
+  shop: 'Cards, grafts, relics and potions for gold. Removing a card is the cheapest upgrade.',
+  resonance: 'Three grafts of one school wake a small bonus. Six wake a larger one. The strip in the deck view tracks it.',
+  thread_chain: 'Two cards of one school tie a knot. Keep sharing a school to grow the Line, up to 5 knots.',
+  thread_cut: 'A card of another school Cuts the Line and cashes it in. A longer Line pays more. Hover Line, Stitch or Cut for the rule.',
   jam: 'Backfire jams grafted cards in your opening hand. A jammed card costs 1 more this turn.',
 };
 
@@ -37,7 +37,7 @@ export function resetTips(app) {
   meta.tips = {}; const f = app.shared.flow; if (f && f.saveMeta) f.saveMeta();
 }
 
-// o: { side: 'below'|'above'|'left'|'right' (where the bubble sits relative to the point, default 'below'), w: max width (default 270) }
+// o: { pos: {x, y} fixed top-left corner of the bubble (use a quiet corner so it never covers what it teaches about), side: 'below'|'above'|'left'|'right' (where the bubble sits relative to the point, default 'below'), w: max width (default 270) }
 // Returns true while the tip is on screen this frame.
 export function maybeTip(app, key, x, y, text, o = {}) {
   const meta = app.shared.meta;
@@ -55,6 +55,7 @@ export function maybeTip(app, key, x, y, text, o = {}) {
   else if (side === 'above') { bx = x - bw / 2; by = y - gap - bh; }
   else if (side === 'left') { bx = x - gap - bw; by = y - bh / 2; }
   else { bx = x + gap; by = y - bh / 2; }
+  if (o.pos) { bx = o.pos.x; by = o.pos.y; } // o.pos: fixed top-left spot in a quiet corner, the arrow still reaches (x, y)
   bx = clamp(bx, 8, W - bw - 8); by = clamp(by, 8, H - bh - 8);
   // o.maxBottom keeps the bubble clear of the hero plate, the Thread rail and the hand (the arrow just reaches further).
   if (o.maxBottom !== undefined && by + bh > o.maxBottom) by = Math.max(8, o.maxBottom - bh);

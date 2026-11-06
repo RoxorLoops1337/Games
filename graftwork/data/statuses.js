@@ -24,7 +24,7 @@ export const STATUS_LIST = [
   { id: 'costup', name: 'Heavy Hands', good: false, stack: 'int', desc: (n) => `Cards cost ${n} more this turn.`, hooks: { turnEnd: (A, o) => A.setStatus(o, 'costup', 0) } },
   { id: 'emberaura', name: 'Ember Aura', good: true, stack: 'int', desc: (n) => `Whenever you play an Attack, apply ${n} Burn to its target.`,
     hooks: { cardPlayed: (A, o, n, p) => { if (p.spec.type === 'attack' && p.target) A.status(p.target, 'burn', n); } } },
-  { id: 'charge', name: 'Charge', good: true, stack: 'int', desc: (n) => `${n} Charge stored. Static cards spend it.` },
+  { id: 'charge', name: 'Charge', good: true, stack: 'int', mod: { outAdd: (n) => Math.min(3, Math.floor(n / 2)) }, desc: (n) => `${n} Charge stored. Every 2 Charge adds 1 to each hit you deal (max +3). Static cards spend it.` },
   { id: 'gilt', name: 'Gilt', good: true, stack: 'int', desc: (n) => `Gain ${n} gold at the end of combat.` },
   { id: 'marked', name: 'Marked', good: false, stack: 'dur', desc: (n) => `Marked by the Usher for ${n} turn${n > 1 ? 's' : ''}: takes 25% more damage.`, mod: { inMul: () => 1.25 } },
   { id: 'stun', name: 'Stunned', good: false, stack: 'dur', desc: () => 'Skips its next action.' },

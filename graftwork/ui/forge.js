@@ -337,7 +337,8 @@ export default {
       drawOptionCard(app, run, i, o, over, EASE.out(n), why, usedUp, shk);
       if (over) {
         app.cursor = dim ? 'not-allowed' : 'pointer';
-        if (why) app.tooltip(o.name + ' (unavailable)', why, { color: COL.bad }); else if (usedUp) app.tooltip(o.name, 'You have used your Forge choice.'); else app.tooltip(o.name, o.desc);
+        const oa = { x, y: OY, w: OW, h: OH }; // beside the option card, never over it
+        if (why) app.tooltip(o.name + ' (unavailable)', why, { color: COL.bad, anchor: oa }); else if (usedUp) app.tooltip(o.name, 'You have used your Forge choice.', { anchor: oa }); else app.tooltip(o.name, o.desc, { anchor: oa });
         if (app.clicked(x, OY, OW, OH)) {
           if (dim) { sfx(app, 'error'); S.shakeI = i; S.shakeT = 0.4; S.fx.shake(0.25); if (why) { S.toast = why; S.toastT = 1.8; } }
           else { sfx(app, 'uiClick'); ({ rest: startRest, expand: startExpand, refine: pickRefine, temper: pickTemper, strip: pickStrip, reforge: pickReforge })[o.id](app); }

@@ -98,7 +98,7 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
   click(app, 640, 442); assert.equal(log.codex, 1, 'codex');
   click(app, 640, 554); frames(app, 20); assert.equal(title.state, 'credits'); key(app, 'Escape'); assert.equal(title.state, 'menu');
   click(app, 640, 498); frames(app, 10); assert.equal(app.stack.length, 2, 'settings pushed');
-  click(app, 340 + 600 - 54 + 19, 40 + 16 + 19); frames(app, 2); assert.equal(app.stack.length, 1, 'X closes settings');
+  click(app, 340 + 600 - 54 + 19, 14 + 16 + 19); frames(app, 2); assert.equal(app.stack.length, 1, 'X closes settings');
   click(app, 1245, 675); assert.equal(meta.settings.muted, true, 'mute corner toggle'); assert.equal(log.muted, true);
 }
 
@@ -106,27 +106,27 @@ for (const [i, hero] of ['marrow', 'wick', 'odile'].entries()) {
 {
   const { app, meta, log } = await rig();
   app.go('title'); frames(app, 10); app.push('settings'); frames(app, 30);
-  click(app, 640, 372);  // screen shake
+  click(app, 640, 297);  // screen shake
   assert.equal(meta.settings.screenShake, false);
-  click(app, 640, 418);  // reduced motion
+  click(app, 640, 333);  // reduced motion
   assert.equal(meta.settings.reducedMotion, true);
-  click(app, 640, 464);  // colorblind
+  click(app, 640, 369);  // colorblind
   assert.equal(meta.settings.colorblind, true);
-  click(app, 340 + 600 - 32 - 70 + 32, 490 + 18);  // text size 150%
+  click(app, 806, 478);  // text size 150%
   assert.equal(meta.settings.textScale, 150); assert.equal(meta.settings.textSize, 'large');
-  click(app, 640, 326);  // mute
+  click(app, 640, 261);  // mute
   assert.equal(meta.settings.muted, true);
-  click(app, 640, 326);
+  click(app, 640, 261);
   assert.equal(meta.settings.muted, false);
   const saves = log.saved;
-  click(app, 562 + 145, 140);  // master slider to 50%
+  click(app, 562 + 145, 102);  // master slider to 50%
   assert.ok(Math.abs(meta.settings.master - 0.5) < 0.02, 'master ' + meta.settings.master);
   assert.ok(Math.abs(log.vol.master - meta.settings.master) < 0.001, 'audio updated live');
   assert.ok(log.saved > saves, 'persisted');
   assert.equal(JSON.parse(globalThis.localStorage ? globalThis.localStorage.getItem('graftwork_meta_v1') : JSON.stringify(meta)).settings.master, meta.settings.master);
   // reset needs two confirms
   meta.stats.wins = 5; saveRun(RUN.newRun({ seed: 'x' }));
-  const ry = 490 + 80 + 40 + 14;
+  const ry = 460 + 120 + 40 + 14;
   click(app, 450, ry + 4 + 20); frames(app, 2); assert.equal(settings.reset, 1);
   assert.equal(meta.stats.wins, 5, 'not erased after one confirm');
   click(app, 420, ry + 26 + 19); frames(app, 2); assert.equal(settings.reset, 2);

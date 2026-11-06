@@ -188,6 +188,7 @@ export function createApp(canvas, opts = {}) {
       const ln = lines[i], yy = y + i * lineH;
       if (o.shadow) { ctx.fillStyle = 'rgba(0,0,0,.65)'; put(false, ln, x + 1.5, yy + 1.5, o); }
       if (o.engraved) { ctx.fillStyle = 'rgba(255,236,190,.2)'; put(false, ln, x, yy + 1, o); ctx.fillStyle = 'rgba(0,0,0,.6)'; put(false, ln, x, yy - 1, o); } // debossed: lit lower lip, dark upper lip
+      if (!o.stroke && app.highContrast && !o.engraved) { ctx.lineWidth = Math.max(3, size / 5); ctx.strokeStyle = '#000'; ctx.lineJoin = 'round'; put(true, ln, x, yy, o); }
       if (o.stroke) { ctx.lineWidth = o.strokeW || 3; ctx.strokeStyle = o.stroke; ctx.lineJoin = 'round'; put(true, ln, x, yy, o); }
       ctx.fillStyle = col; put(false, ln, x, yy, o);
     }
@@ -231,7 +232,7 @@ export function createApp(canvas, opts = {}) {
       rec.x = x; rec.y = y; rec.w = w; rec.h = h; rec.dis = dis; rec.label = label;
     }
     const dy = CH.button(app, x, y, w, h, o, dis ? 3 : down ? 2 : over ? 1 : 0);
-    if (fi >= 0 && F.active && fi === F.idx) CH.focusRing(app, x, y + dy, w, h, o.r === undefined ? 8 : o.r);
+    if (fi >= 0 && F.active && fi === F.idx) { CH.focusRing(app, x, y + dy, w, h, o.r === undefined ? 8 : o.r); if (!app.tip && o.tip) app.tooltip(o.tipTitle || label || 'Button', o.tip); app.focusLabel = label; }
     if (o.icon) o.icon(ctx, x, y + dy, w, h);
     const size = o.size || 20, ty = y + dy + (o.sub ? h / 2 - app.sz(size) * 0.95 : h / 2 - app.sz(size) * 0.55);
     TO.size = size; TO.align = 'center'; TO.color = dis ? 'rgba(232,220,196,.35)' : (o.color || COL.vellum); TO.bold = o.bold !== false; TO.ui = o.ui; TO.shadow = !dis; TO.maxW = 0;
@@ -243,7 +244,7 @@ export function createApp(canvas, opts = {}) {
     return false;
   };
   // tooltip(title, text, {color, lines}): shown near the pointer this frame. ui/tooltips.js renderTip draws it; the fallback below is used when it returns false.
-  app.tooltip = (title, text, o = NO) => { app.tip = { title, text, color: o.color, lines: o.lines, o }; };
+  app.tooltip = (title, text, o = NO) => { if (app.blocked) return; /* a screen or modal on top covers this widget */ app.tip = { title, text, color: o.color, lines: o.lines, anchor: o.anchor, o }; };
   function drawTip() {
     const tip = app.tip; if (!tip) return;
     if (!app.forceTipFallback && renderTip(app, tip) !== false) return; // forceTipFallback: tests and debugging
@@ -270,6 +271,20 @@ export function createApp(canvas, opts = {}) {
     app.tick(raw);
     requestAnimationFrame(frame);
   }
+  // Arrow keys / D-pad: nearest enabled button in that direction (falls back to the first one when nothing is focused yet)
+  function spatialNext(F, k) {
+    if (!F.active || F.idx < 0 || F.idx >= F.n) { for (let i = 0; i < F.n; i++) if (!F.list[i].dis) return i; return -1; }
+    const a = F.list[F.idx], ax = a.x + a.w / 2, ay = a.y + a.h / 2;
+    const dx = k === 'ArrowLeft' ? -1 : k === 'ArrowRight' ? 1 : 0, dy = k === 'ArrowUp' ? -1 : k === 'ArrowDown' ? 1 : 0;
+    let best = -1, bs = 1e12;
+    for (let i = 0; i < F.n; i++) {
+      const b = F.list[i]; if (i === F.idx || b.dis) continue;
+      const ox = b.x + b.w / 2 - ax, oy = b.y + b.h / 2 - ay, along = ox * dx + oy * dy, across = Math.abs(dx ? oy : ox);
+      if (along <= 1) continue;
+      const sc = along + across * 2; if (sc < bs) { bs = sc; best = i; }
+    }
+    return best;
+  }
   // keyboard navigation over the buttons registered LAST frame (screens opt in with app.navButtons = true)
   function focusStep() {
     const F = app.focus, prev = F.list; F.list = F.cur; F.cur = prev; F.n = F.curN; F.curN = 0;
@@ -282,11 +297,15 @@ export function createApp(canvas, opts = {}) {
         const dir = e.shiftKey ? -1 : 1; let idx = F.active ? F.idx : (dir > 0 ? -1 : F.n);
         for (let g = 0; g < F.n; g++) { idx = (idx + dir + F.n) % F.n; if (!F.list[idx].dis) break; }
         F.idx = idx; F.active = true;
+      } else if ((k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown') && F.n > 0) {
+        const nx = spatialNext(F, k);
+        if (nx >= 0) { F.idx = nx; F.active = true; }
       } else if ((k === 'Enter' || k === ' ') && F.active && F.idx >= 0 && F.idx < F.n) F.fire = true;
     }
   }
   // one simulation + draw step (tests call this directly)
   app.tick = (raw) => {
+    if (app.preTick) app.preTick(app, raw);
     const dt = raw * (app.timeScale === undefined ? 1 : app.timeScale);
     app.dt = dt; app.t += dt; app.sceneT += dt; app.frame++;
     // pointer click bookkeeping

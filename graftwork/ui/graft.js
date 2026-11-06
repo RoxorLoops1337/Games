@@ -10,7 +10,7 @@ import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_W, CARD_H } from '../ar
 import { drawBackground } from '../art/backgrounds.js';
 import * as ICONS from '../art/icons.js';
 import {
-  TIER, tscale, schoolColor, shatterChance, cantReason, resonanceInfo, wrapLimit, drawStaple, keyBadge, drawSeam, drawCrack, drawGauge, drawLamp,
+  TIER, tscale, schoolColor, shatterChance, cantReason, cantGraftWhy, resonanceInfo, wrapLimit, drawStaple, keyBadge, drawSeam, drawCrack, drawGauge, drawLamp,
 } from './graft_parts.js';
 
 const SC = 1.05;                       // offered card scale
@@ -123,11 +123,13 @@ export default {
     ctx.restore();
     st.fx.draw(ctx); st.fx.drawFlash(ctx, 1280, 720);
 
-    if (st.menu) drawSkipMenu(app);
+    if (st.menu) { app.tip = null; drawSkipMenu(app); } // the decline menu covers the table: no tooltips from widgets under it
     else if (st.mode === 'pick') {
       const T = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
-      (T('graftpick', 640, AFTER.y + 2, { side: 'below', w: 300 }) || T('boonprice', TRAY_X, 160, { side: 'left', w: 300 }) || T('budget', 200, 62, { side: 'below', w: 300 }) ||
-        (strain.strain > 0 && T('strain', 200, 62, { side: 'below', w: 300 })) || T('skipping', TRAY_X + 326, 556, { side: 'above', w: 300 }));
+      // Bubbles sit in the hover-hint box (right, above the buttons): quiet, and it never hides the cards, the table bill or the grafts.
+      const HB = { pos: { x: 826, y: 440 }, w: 430 };
+      (T('graftpick', 520, AFTER.y - 6, HB) || T('boonprice', TRAY_X + 4, 200, HB) || T('budget', 200, 62, HB) ||
+        (strain.strain > 0 && T('strain', 200, 62, HB)) || T('skipping', TRAY_X + 326, 556, HB));
     }
     // click anywhere skips the attach animation
     if (st.mode === 'attach' && app.mouse.released) finishAnim(app);
@@ -247,7 +249,7 @@ function drawOfferCard(app, r, i, c) {
   } else {
     drawCard(ctx, cardSpec(inst), cx, cy, { scale: SC, tithed, selected: sel, hover, dim: dim ? 0.5 : 0 });
   }
-  if (dim) { ctx.save(); ctx.fillStyle = 'rgba(12,10,9,.58)'; app.rr(cx - CW / 2, cy - CH / 2, CW, CH, 12); ctx.fill(); ctx.restore(); app.text('Cannot take it', cx, cy - 10, { size: 22, bold: true, align: 'center', color: '#ffb3bd', stroke: '#1a0a0c', strokeW: 5 }); }
+  if (dim) { ctx.save(); ctx.fillStyle = 'rgba(12,10,9,.58)'; app.rr(cx - CW / 2, cy - CH / 2, CW, CH, 12); ctx.fill(); ctx.restore(); const why = cantGraftWhy(inst, st.selGraft) || 'Cannot take it'; app.text(why, cx, cy - 26, { size: 20, bold: true, align: 'center', color: '#ffb3bd', stroke: '#1a0a0c', strokeW: 5, maxW: CW - 36, lineH: 24 }); }
   // tithe seam (preview or current)
   const seamP = seamProgress(r.uid);
   if (c.tithedSet.has(r.uid) && seamP < 1) drawSeam(ctx, cx, cy, CW - 10, CH - 14, seamP, st.t);
@@ -435,7 +437,7 @@ function drawAfter(app, c) {
   app.panel(x, y, w, h, { fill: 'rgba(18,15,13,.9)', stroke: pair ? 'rgba(242,193,78,.7)' : 'rgba(232,220,196,.3)', lw: pair ? 2.5 : 2 });
   const A = pair ? pv.after : strain, B = pair ? pv.before : strain;
   app.text(pair ? 'AFTER' : 'THE TABLE', x + 16, y + 8, { size: 28, bold: true, color: pair ? COL.lamp : COL.vellum, shadow: true });
-  const sub = st.note ? st.note.text : pair ? `${c.g.name} on ${spec2name(c.inst)}. Nothing is sewn until you press Sew it on.` : 'Choose one of your cards and one graft. This panel shows the whole bill first.';
+  const sub = st.note ? st.note.text : pair ? (st.mode === 'attach' ? `Sewing ${c.g.name} onto ${spec2name(c.inst)}...` : `${c.g.name} on ${spec2name(c.inst)}. Nothing is sewn until you press Sew it on.`) : 'Choose one of your cards and one graft. This panel shows the whole bill first.';
   const subX = x + (pair ? 134 : 196), subW = w - (pair ? 150 : 212);
   const subL = wrapLimit(app, sub, subW, 14, 1, { ui: true });
   app.text(subL[0], subX, y + 15, { size: 14, ui: true, color: st.note ? '#ff9aa6' : DIM });

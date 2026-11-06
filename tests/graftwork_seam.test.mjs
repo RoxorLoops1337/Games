@@ -88,10 +88,10 @@ t('a second school with count 1 pays nothing', () => {
   const m = mark(c); play(c, mk(c, 'tp_rust'));
   assert.equal(since(c, m, 'seamPay').length, 1);
 });
-t('Ember pays 2 Burn per stitch to all enemies', () => {
+t('Ember pays 3 Burn per stitch to all enemies', () => {
   const c = fight('s', ['bedpan_slime', 'slime_bit']);
   const m = line3(c, 'ember'); void m;
-  for (const e of c.enemies) assert.equal(e.st.burn, 4);
+  for (const e of c.enemies) assert.equal(e.st.burn, 6);
 });
 t('Echo pays 1 Echo per 2 stitches rounded up', () => {
   const c = fight(); line3(c, 'echo'); assert.equal(c.player.st.echo, 1);
@@ -121,10 +121,10 @@ t('Rust pays 3 Block per stitch and 2 pierce per junk in hand per stitch', () =>
   assert.equal(c.player.block, 6);
   assert.equal(hp - e.hp, 8, '2 stitches x 2 junk x 2');
 });
-t('Static pays 1 Charge per stitch, cap 4 per turn', () => {
+t('Static pays 1 Charge per stitch, cap 6 per turn, plus 2 arc damage per stitch', () => {
   const c = fight(); line3(c, 'static'); assert.equal(c.player.st.charge, 2);
-  const d = fight(); d.seam.paidTurn.charge = 3; line3(d, 'static'); assert.equal(d.player.st.charge, 1);
-  const e = fight(); e.seam.paidTurn.charge = 4; line3(e, 'static'); assert.equal(e.player.st.charge || 0, 0);
+  const d = fight(); d.seam.paidTurn.charge = 5; line3(d, 'static'); assert.equal(d.player.st.charge, 1);
+  const e = fight(); e.seam.paidTurn.charge = 6; line3(e, 'static'); assert.equal(e.player.st.charge || 0, 0);
 });
 t('Gilded pays 2 gold per stitch, cap 20 per combat', () => {
   const c = fight(); const g = c.run.gold; line3(c, 'gilded'); assert.equal(c.run.gold, g + 4);

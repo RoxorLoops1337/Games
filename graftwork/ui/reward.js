@@ -65,6 +65,8 @@ export default {
     const rows = buildRows(app);
     const compact = !!st.init.choices;
     let y = 16 + th + sh + 12;
+    // No relic choice: the short list would hang in the top third of the screen, so centre it between the header and the notes.
+    if (!compact) { const est = rows.reduce((a, r) => a + (r.id === 'relic' ? 96 : 80) + 12, 0); y += Math.round(clamp((560 - y - est) / 2 - 10, 0, 120)); }
     rows.forEach((r, i) => { y = drawRow(app, r, i, y, compact, K); });
 
     // boss relic choice
@@ -88,7 +90,7 @@ export default {
 
     if (!st) return;
     st.fx.draw(ctx); st.fx.drawFlash(ctx, 1280, 720);
-    maybeTip(app, 'rewardspoils', 640, 640, 'Click a reward to claim it. Anything you leave is forfeited when you continue. Then you graft one of your own cards.', { side: 'above', w: 330 });
+    maybeTip(app, 'rewardspoils', 288, 230, 'Click a reward to claim it. Anything you leave is forfeited when you continue. Then you graft one of your own cards.', { pos: { x: 12, y: 330 }, w: 206 });
   },
 };
 
@@ -156,8 +158,9 @@ function drawRow(app, r, i, y, compact, K) {
   keyBadge(app, String(i + 1), x - 16, cy);
 
   if (!app.blocked && app.inRect(x, y, PW, h)) {
-    if (full) app.tooltip(info.title, `Potion slots full (${run.potions.length}/${RUN.potionSlots(run)}). Use a potion in combat to make room, or leave this one.`, { color: COL.bad });
-    else app.tooltip(info.title, null, { lines: info.tip, color: info.col });
+    const rowAnchor = { x, y, w: PW, h }; // tip sits beside the row, never over its Take chip
+    if (full) app.tooltip(info.title, `Potion slots full (${run.potions.length}/${RUN.potionSlots(run)}). Use a potion in combat to make room, or leave this one.`, { color: COL.bad, anchor: rowAnchor });
+    else app.tooltip(info.title, null, { lines: info.tip, color: info.col, anchor: rowAnchor });
     if (can && app.clicked(x, y, PW, h)) claim(app, r.id, x + PW / 2, cy);
   }
   return y + h + (compact ? 8 : 12);
@@ -169,7 +172,7 @@ function drawChoices(app, y, K) {
   const ctx = app.ctx, rw = st.rw, init = st.init;
   const S = tscale(app), k = Math.min(S, 1.25);
   const n = init.choices.length;
-  const w = 264, h = 262, gap = 20;
+  const w = 264, h = 232, gap = 20; // 232: the cards end well above the forfeit notes and the Continue button
   const totalW = n * w + (n - 1) * gap, x0 = 640 - totalW / 2;
   const picked = st.taken.boss;
   const hh = app.text(picked ? 'Relic claimed.' : 'Choose ONE relic', 640, y, { ...K(20), bold: true, align: 'center', color: picked ? COL.good : '#c58bff', shadow: true, maxW: 500 });

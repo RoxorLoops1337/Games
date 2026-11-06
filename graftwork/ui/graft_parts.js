@@ -2,7 +2,7 @@
 import { COL, EASE, clamp, rgba } from './core.js';
 import { SCHOOLS, GRAFTS, CARDS } from '../data/index.js';
 import * as ICONS from '../art/icons.js';
-import { cardSpec } from '../engine/cards.js';
+import { cardSpec, cantGraftWhy } from '../engine/cards.js';
 import { OVERLOAD_SHATTER, relicMod } from '../engine/cards.js';
 
 export const TIER = {
@@ -20,14 +20,10 @@ export function shatterChance(run) {
 
 // Why can this graft not go on this card? (text for the dim tooltip)
 export function cantReason(inst, gid) {
-  const g = GRAFTS[gid];
-  if (!g) return 'Unknown graft.';
-  if (inst.grafts.includes(gid)) return 'This card already wears that graft.';
-  if (g.not) { const hit = g.not.filter((x) => inst.grafts.includes(x)); if (hit.length) return 'Conflicts with ' + hit.map((x) => (GRAFTS[x] ? GRAFTS[x].name : x)).join(', ') + '.'; }
-  const spec = cardSpec(inst);
-  if (g.types && !g.types.includes(spec.type)) return 'Only goes on ' + g.types.join(' or ') + ' cards.';
-  return 'This card cannot take that graft (nothing for it to hook into).';
+  const why = cantGraftWhy(inst, gid);
+  return why ? why + '.' : '';
 }
+export { cantGraftWhy };
 
 // School resonance line: "Ember 2/3 resonance" and what the next step does.
 export function resonanceInfo(run, schoolId, counts) {

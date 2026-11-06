@@ -142,18 +142,19 @@ for (const webkit of [false, true]) {
   const { app, meta, log } = await rig(null);
   app.go('title'); frames(app, 5); app.push('settings'); frames(app, 30);
   const s = settingsOf(app); assert.equal(s.textScale, 100); assert.equal(s.quality, 'high');
-  const sy1 = 292 + 14 + 4 * 46; // text row y
-  const segX = (i) => 340 + 600 - 32 - (3 * 64 + 12) + i * 70 + 32;
+  // rects come from the settings screen's own keyboard rows (cannot drift when the layout moves)
+  const row = (label) => app.top().rows.find((r) => r.label === label);
+  const seg = (label, i, n) => { const r = row(label); const total = n * 64 + (n - 1) * 6; return [r.x + r.w - total + i * 70 + 32, r.y + 18]; };
   const saves = log.saved;
-  click(app, segX(2), sy1 + 18); assert.equal(s.textScale, 150); assert.equal(s.textSize, 'large'); assert.ok(log.saved > saves, 'persisted');
-  click(app, segX(1), sy1 + 18); assert.equal(s.textScale, 125);
-  click(app, segX(0), sy1 + 58); assert.equal(s.quality, 'off');
-  click(app, segX(1), sy1 + 58); assert.equal(s.quality, 'low');
+  click(app, ...seg('Text size', 2, 4)); assert.equal(s.textScale, 150); assert.equal(s.textSize, 'large'); assert.ok(log.saved > saves, 'persisted');
+  click(app, ...seg('Text size', 1, 4)); assert.equal(s.textScale, 125);
+  click(app, ...seg('Effects quality', 0, 3)); assert.equal(s.quality, 'off');
+  click(app, ...seg('Effects quality', 1, 3)); assert.equal(s.quality, 'low');
   // existing toggles still there
-  click(app, 640, 326); assert.equal(s.muted, true);
+  { const r = row('Mute all sound'); click(app, 640, r.y + 17); assert.equal(s.muted, true); }
   // old saves: largeText/textSize large migrates to 125
   const m2 = { settings: { textSize: 'large' } }; const a2 = { shared: { meta: m2 } }; assert.equal(settingsOf(a2).textScale, 125);
   // overlay applies the scale through main.js logic: simple contract check
-  assert.ok([100, 125, 150].includes(s.textScale));
+  assert.ok([100, 125, 150, 175].includes(s.textScale));
 }
 console.log('graftwork pause ui ok');

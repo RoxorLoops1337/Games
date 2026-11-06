@@ -16,6 +16,7 @@
 //   app.post.setQuality('off'|'low'|'high')
 //   app.staticFrame = true                  optional hint from a screen: the 2D canvas did not change, skip the upload
 // Not thread-safe (main thread only). The frame loop (update/render) allocates nothing.
+import { flashGate } from './fx.js';
 import { VS, FS_THRESH, FS_DOWN, FS_UP, FS_COMP, GRADES } from './post_shaders.js';
 
 const W = 1280, H = 720;
@@ -205,7 +206,7 @@ export function installPost(app) {
       if (a >= ab.amt * (1 - ab.age / ab.ms)) { ab.amt = a; ab.age = 0; ab.ms = Math.max(30, +ms || 120); }
     },
     flash(color, a) {
-      if (S.tier === 'off' || !(a > 0)) return;
+      if (S.tier === 'off' || !(a > 0) || (app.shared && app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.flashes === false) || !flashGate()) return;
       parseColor(color, fl.c); fl.a = clamp(+a, 0, 1) * (reduced() ? 0.2 : 1); fl.rate = fl.a / 0.2;
     },
     vignette(a, ms) { if (S.tier === 'off' || !(a > 0)) return; vg.a = clamp(+a, 0, 1); vg.age = 0; vg.ms = Math.max(30, +ms || 300); },

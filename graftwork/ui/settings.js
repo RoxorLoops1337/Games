@@ -5,17 +5,19 @@
 //   quality 'off'|'low'|'high' (effects), fullscreen bool (last known state).
 import { defaultQuality } from './fx.js';
 import { COL, W, H, EASE, clamp, rgba } from './core.js';
+import { A11Y_DEFAULTS, CB_MODES, a11yOf } from './a11y.js';
 import { clearRun } from '../engine/save.js';
 import { canFullscreen, isFullscreen, isIPhone, fsRegisterRect, requestFs } from './fullscreen.js';
 
 export const DEFAULTS = { master: 0.8, sfx: 0.8, music: 0.35, muted: false, screenShake: true, reducedMotion: false, colorblind: false, textSize: 'normal', textScale: 100, quality: 'high', fullscreen: false };
-export const TEXT_STEPS = [100, 125, 150];
+export const TEXT_STEPS = [100, 125, 150, 175];
 export const QUALITY = ['off', 'low', 'high'];
 
 export function settingsOf(app) {
   const meta = app.shared.meta;
   if (!meta.settings || typeof meta.settings !== 'object') meta.settings = {};
   const s = meta.settings;
+  for (const k of Object.keys(A11Y_DEFAULTS)) if (s[k] === undefined) s[k] = A11Y_DEFAULTS[k];
   if (!TEXT_STEPS.includes(s.textScale)) s.textScale = s.textSize === 'large' || s.largeText ? 125 : 100;
   for (const k of Object.keys(DEFAULTS)) if (s[k] === undefined && k !== 'quality') s[k] = DEFAULTS[k];
   if (!QUALITY.includes(s.quality)) s.quality = defaultQuality();
@@ -24,7 +26,7 @@ export function settingsOf(app) {
 
 export default {
   enter(app) {
-    this.k = 0; this.drag = null; this.reset = 0; this.fresh = true;
+    this.k = 0; this.foc = 0; this.kb = false; this.rows = []; this.drag = null; this.reset = 0; this.fresh = true;
     settingsOf(app);
     app.tween(this, { k: 1 }, settingsOf(app).reducedMotion ? 1 : 220, 'out');
   },
@@ -37,11 +39,12 @@ export default {
   close(app) { if (app.shared.audio) app.shared.audio.sfx('uiBack'); app.pop(); },
   draw(app) {
     const g = app.ctx, s = settingsOf(app);
+    const prevRows = this.rows || []; this.rows = [];
     if (this.fresh) { app.mouse.released = false; app.mouse.pressed = false; this.fresh = false; }
     const live = app.top() === this;
     const k = EASE.out(clamp(this.k, 0, 1));
     g.save(); g.fillStyle = `rgba(6,4,3,${0.72 * k})`; g.fillRect(0, 0, W, H); g.restore();
-    const w = 600, h = 650, x = 640 - w / 2, y = 40 + (1 - k) * 20;
+    const w = 600, h = 686, x = 640 - w / 2, y = 14 + (1 - k) * 20;
     g.save(); g.globalAlpha = k;
     app.panel(x, y, w, h, { r: 16, fill: 'rgba(22,18,16,.98)', stroke: 'rgba(232,220,196,.5)', lw: 2.5 });
     app.text('Settings', x + 32, y + 22, { size: 32, bold: true });
@@ -51,23 +54,26 @@ export default {
     g.save(); g.strokeStyle = COL.vellum; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(cx + 11, cy + 11); g.lineTo(cx + 27, cy + 27); g.moveTo(cx + 27, cy + 11); g.lineTo(cx + 11, cy + 27); g.stroke(); g.restore();
     if (over) app.cursor = 'pointer';
     if (app.clicked(cx, cy, 38, 38)) { this.close(app); g.restore(); return; }
-    const sy0 = y + 82;
+    const sy0 = y + 70;
     // sliders
     const sliders = [['master', 'Master volume'], ['sfx', 'Sound effects'], ['music', 'Music']];
-    sliders.forEach(([key, label], i) => this.slider(app, key, label, x + 32, sy0 + i * 52, w - 64, s));
+    sliders.forEach(([key, label], i) => this.slider(app, key, label, x + 32, sy0 + i * 44, w - 64, s));
     // toggles
     const toggles = [
       ['muted', 'Mute all sound', 'Silences everything. Volumes are kept.'],
       ['screenShake', 'Screen shake', 'Camera kick on heavy hits.'],
       ['reducedMotion', 'Reduced motion', 'Fewer particles, no flashes, no hit-stop, calmer menus.'],
-      ['colorblind', 'Colorblind patterns', 'Adds pattern and shape cues on top of colors.'],
+      ['colorblind', 'Colorblind mode', 'Safe school palette plus pattern and shape cues on cards, statuses and the Thread rail.'],
+      ['flashes', 'Screen flashes', 'Off removes every white or colored full-screen flash. Never more than 3 per second either way.'],
+      ['highContrast', 'High contrast text', 'Dark outline behind all text.'],
     ];
-    const ty0 = sy0 + 3 * 52 + 14;
+    const ty0 = sy0 + 3 * 44 + 14;
     app.text('OPTIONS', x + 32, ty0 - 8, { size: 12, ui: true, bold: true, color: COL.lamp });
     toggles.forEach(([key, label, tip], i) => {
-      const yy = ty0 + 14 + i * 46;
+      const yy = ty0 + 14 + i * 36;
       const on = !!s[key];
-      const tx = x + w - 32 - 64, hov = app.inRect(x + 32, yy, w - 64, 40);
+      const tx = x + w - 32 - 64, hov = app.inRect(x + 32, yy, w - 64, 34);
+      this.reg(app, x + 32, yy, w - 64, 34, label, tip, () => { s[key] = !s[key]; this.applyAudio(app); this.persist(app); });
       if (hov) { app.tooltip(label, tip); app.cursor = 'pointer'; }
       app.text(label, x + 32, yy + 9, { size: 20, color: hov ? '#fff' : COL.vellum });
       // switch
@@ -77,18 +83,19 @@ export default {
       g.fillStyle = on ? '#f4ecd2' : '#9b8f7a'; g.beginPath(); g.arc(tx + (on ? 50 : 14), yy + 20, 10, 0, 6.283); g.fill();
       g.restore();
       app.text(on ? 'On' : 'Off', tx - 12, yy + 11, { size: 15, ui: true, align: 'right', color: on ? '#b6e08f' : '#8c8372' });
-      if (app.clicked(x + 32, yy, w - 64, 40) && live) {
+      if (app.clicked(x + 32, yy, w - 64, 34) && live) {
         s[key] = !on;
         this.applyAudio(app); this.persist(app);
         if (app.shared.audio && !s.muted) app.shared.audio.sfx('uiClick');
       }
     });
     // reset
-    const sy1 = ty0 + 14 + toggles.length * 46;
+    const sy1 = ty0 + 14 + toggles.length * 36;
     this.segRow(app, 'Text size', 'Scales text where the layout allows it.', x + 32, sy1, w - 64, TEXT_STEPS.map((v) => [v, v + '%']), s.textScale, (v) => { s.textScale = v; s.textSize = v > 100 ? 'large' : 'normal'; this.persist(app); }, live);
-    this.segRow(app, 'Effects quality', 'Off: no glow or post effects. Low: light. High: everything.', x + 32, sy1 + 40, w - 64, [['off', 'Off'], ['low', 'Low'], ['high', 'High']], s.quality, (v) => { s.quality = v; this.persist(app); }, live);
-    this.fsRow(app, x + 32, sy1 + 80, w - 64, s, live);
-    const ry = sy1 + 80 + 40 + 14;
+    this.segRow(app, 'Colorblind palette', 'Deuteranopia, protanopia or tritanopia. Used when Colorblind mode is on.', x + 32, sy1 + 40, w - 64, CB_MODES.map((v) => [v, v.slice(0, 3).toUpperCase()]), s.colorblindMode, (v) => { s.colorblindMode = v; this.persist(app); }, live);
+    this.segRow(app, 'Effects quality', 'Off: no glow or post effects. Low: light. High: everything.', x + 32, sy1 + 80, w - 64, [['off', 'Off'], ['low', 'Low'], ['high', 'High']], s.quality, (v) => { s.quality = v; this.persist(app); }, live);
+    this.fsRow(app, x + 32, sy1 + 120, w - 64, s, live);
+    const ry = sy1 + 120 + 40 + 14;
     stitch(g, x + 32, ry - 8, x + w - 32, ry - 8);
     if (this.reset === 0) {
       if (app.button('Reset all progress', x + 32, ry + 4, 240, 40, { size: 17, fill: '#3a2020', stroke: 'rgba(179,38,58,.7)' })) this.reset = 1;
@@ -103,12 +110,35 @@ export default {
     }
     if (this.done) { app.text(this.done, x + w - 32, ry + 14, { size: 14, ui: true, align: 'right', color: COL.good }); }
     g.restore();
+    if (live) this.keys(app, prevRows);
     if (live && app.pressedKeys.some((e) => e.key === 'Escape')) { if (this.reset) this.reset = 0; else this.close(app); }
   },
+  // Keyboard / gamepad rows: reg() records a row each frame (and draws the focus ring + tooltip), keys() acts on last frame's rows.
+  reg(app, x, y, w, h, label, tip, act) {
+    const i = this.rows.length; this.rows.push({ x, y, w, h, label, tip, act });
+    if (this.kb && i === this.foc) {
+      const g = app.ctx; g.save(); app.rr(x - 6, y - 2, w + 12, h + 4, 8); g.lineWidth = 2.5; g.strokeStyle = '#ffe9a8'; g.setLineDash && g.setLineDash([6, 4]); g.stroke(); g.restore();
+      app.tooltip(label, tip);
+    }
+  },
+  keys(app, rows) {
+    const n = rows.length; if (!n) return;
+    for (const e of app.pressedKeys) {
+      const k = e.key;
+      if (k === 'ArrowDown' || (k === 'Tab' && !e.shiftKey)) { this.kb = true; this.foc = (this.foc + 1) % n; }
+      else if (k === 'ArrowUp' || (k === 'Tab' && e.shiftKey)) { this.kb = true; this.foc = (this.foc + n - 1) % n; }
+      else if (this.kb && (k === 'ArrowLeft' || k === 'ArrowRight')) { const r = rows[this.foc % n]; if (r) r.act(k === 'ArrowRight' ? 1 : -1); }
+      else if (this.kb && (k === 'Enter' || k === ' ')) { const r = rows[this.foc % n]; if (r) r.act(1); }
+      else continue;
+      if (app.shared.audio) app.shared.audio.sfx('uiHover', { vol: 0.3 });
+    }
+  },
+  key(app, e) { return app.top() === this && ['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(e.key); },
   segRow(app, label, tip, x, y, w, opts, cur, set, live) {
     const g = app.ctx, bw = 64, gap = 6, total = opts.length * bw + (opts.length - 1) * gap, sx = x + w - total;
     if (app.inRect(x, y, sx - x - 8, 36)) app.tooltip(label, tip);
     app.text(label, x, y + 7, { size: 20 });
+    this.reg(app, x, y, w, 36, label, tip, (d) => { const i = opts.findIndex((o) => o[0] === cur); const n = opts[(i + (d || 1) + opts.length) % opts.length][0]; set(n); });
     opts.forEach(([v, text], i) => {
       const bx = sx + i * (bw + gap), on = v === cur, over = live && app.inRect(bx, y + 2, bw, 32);
       if (over) app.cursor = 'pointer';
@@ -125,6 +155,7 @@ export default {
     if (!can) { app.text(isIPhone() ? 'Add to Home Screen for fullscreen' : 'Not available here', x + w, y + 11, { size: 14, ui: true, align: 'right', color: '#8c8372', fixed: true }); return; }
     fsRegisterRect(app, x, y, w, 36);
     const hov = live && app.inRect(x, y, w, 36);
+    this.reg(app, x, y, w, 36, 'Fullscreen', 'Shortcut: F', () => requestFs(app));
     if (hov) { app.cursor = 'pointer'; app.tooltip('Fullscreen', 'Shortcut: F'); }
     g.save(); app.rr(tx, y + 4, 64, 28, 14); g.fillStyle = on ? '#6a8f4e' : '#3a322d'; g.fill();
     g.strokeStyle = on ? '#b6e08f' : 'rgba(232,220,196,.4)'; g.lineWidth = 2; g.stroke();
@@ -136,6 +167,7 @@ export default {
     const g = app.ctx, live = app.top() === this;
     const tx = x + 190, tw = w - 190 - 56, ty = y + 18;
     app.text(label, x, y + 6, { size: 20 });
+    this.reg(app, x, y, w, 40, label, 'Left and Right change the volume.', (d) => { s[key] = clamp(Math.round((s[key] + (d || 1) * 0.05) * 100) / 100, 0, 1); this.applyAudio(app); this.persist(app); });
     const hit = [tx - 10, y, tw + 20, 40];
     const over = app.inRect(...hit);
     if (over) app.cursor = 'pointer';

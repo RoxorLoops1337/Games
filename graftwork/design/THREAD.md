@@ -8,7 +8,7 @@ Pitch: your hand is a suture line. Chain cards that overlap in school, then CUT 
 - SLACK: a card with an empty set changes nothing.
 - CUT: a card with a set but NO overlap cashes the current Line, then starts a new one with len 1. Tempered cards (any fused graft) are TIED: they act as Slack instead of cutting.
 - PAYOUT: S = min(len, 5) - 1 stitches, paid in the top-count school. If a second school has count >= 2 it also pays floor(S/2). Per stitch:
-  Ember 2 Burn to all enemies | Echo 1 Echo per 2 stitches rounded up | Hoard draw 1 per 2 stitches (max 3 per turn) and retain 1 card | Blood heal 2 | Rust Block 3 plus 2 pierce damage per junk in hand to a random enemy | Static 1 Charge (max 4 per turn) | Gilded 2 gold (max 20 per combat).
+  Ember 3 Burn to all enemies | Echo 1 Echo per 2 stitches rounded up | Hoard draw 1 per 2 stitches (max 3 per turn) and retain 1 card | Blood heal 2 | Rust Block 3 plus 2 pierce damage per junk in hand to a random enemy | Static 1 Charge (max 6 per turn) plus 2 pierce damage to a random enemy | Gilded 2 gold (max 20 per combat) plus 2 Block. Charge itself now adds 1 to every hit you deal per 2 stored (max +3).
 - Overload cards count as 2 knots. Replays and Echo count once. A JAMMED card is Frayed and acts as Slack.
 - Turn end: an unfinished Line cashes at S-1. Turn start resets the Line unless it is Tied.
 - Strain: Tithed cards are bare so use base school only and make good Slack filler.

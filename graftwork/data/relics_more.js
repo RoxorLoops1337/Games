@@ -28,11 +28,11 @@ const repay = (A, p) => {
 
 export const RELICS_MORE = [
   // ---- mono-school ----
-  { id: 'r_monochrome_spindle', name: 'Monochrome Spindle', rarity: 'uncommon', text: 'While every graft in your deck is of ONE school, the first extend each turn deals 4 damage to a random enemy and gains 4 Block.',
-    on: { seamExtend: (A) => { if (deckSchools(A) !== 1 || !first(A, 'spindleTurn')) return; const t = randFoe(A); if (t) A.dmg(A.player, t, 4, { pierce: true }); A.block(A.player, 4); } } },
+  { id: 'r_monochrome_spindle', name: 'Monochrome Spindle', rarity: 'uncommon', text: 'While every graft in your deck is of ONE school, the first extend each turn deals 7 damage to a random enemy and gains 7 Block.',
+    on: { seamExtend: (A) => { if (deckSchools(A) !== 1 || !first(A, 'spindleTurn')) return; const t = randFoe(A); if (t) A.dmg(A.player, t, 7, { pierce: true }); A.block(A.player, 7); } } },
   // ---- bridging two schools ----
-  { id: 'r_bridge_pin', name: 'Bridge Pin', rarity: 'uncommon', text: 'The first time each turn you extend a Line that holds 2 or more schools, draw 1 card.',
-    on: { seamExtend: (A) => { if (nSchools(A) >= 2 && first(A, 'bridgePinTurn')) A.draw(1); } } },
+  { id: 'r_bridge_pin', name: 'Bridge Pin', rarity: 'uncommon', text: 'The first time each turn you extend a Line of 3 or more knots that holds 2 or more schools, draw 1 card.',
+    on: { seamExtend: (A) => { if (nSchools(A) >= 2 && seam(A).len >= 3 && first(A, 'bridgePinTurn')) A.draw(1); } } },
   { id: 'r_second_colour', name: 'Second Colour', rarity: 'uncommon', text: 'Cutting a Line that holds 2 or more schools gives 2 Block per stitch.',
     on: { seamCut: (A, p) => { if (p && p.paid === false) return; if (nSchools(A) >= 2) { const n = stitches(p); if (n > 0) A.block(A.player, 2 * n); } } } },
   // ---- Overload ----
@@ -54,7 +54,7 @@ export const RELICS_MORE = [
   { id: 'r_grounding_rod', name: 'Grounding Rod', rarity: 'uncommon', text: 'A Static payout deals 3 damage per stitch to all enemies.',
     on: { seamPay: (A, p) => { if (!p || p.school !== 'static') return; const n = (p.stitches | 0); if (n <= 0) return; for (const e of A.alive()) A.dmg(A.player, e, 3 * n, { pierce: true }); } } },
   // ---- event relic: its charges are run.flags.spool, set by the event "A Spool That Hums" ----
-  { id: 'r_cursed_spool', name: 'Cursed Spool', rarity: 'start', text: 'Each charge (wound at the event) makes your next combat pay every Thread payout twice. Without a charge it does nothing.',
+  { id: 'r_cursed_spool', name: 'Cursed Spool', rarity: 'start', text: 'Each charge (wound at the Spool event) makes your next combat pay every Thread payout twice. No charge, no effect.',
     on: {
       combatStart: (A, p, run) => { const r = run || A.c.run; if (r && r.flags && r.flags.spool > 0) { r.flags.spool -= 1; rx(A).spoolOn = true; } },
       seamPay: (A, p) => { if (rx(A).spoolOn) repay(A, p); },
