@@ -316,49 +316,60 @@ export default {
     const gb = gaugeCells(app, gx, gy, info, { maxW: 330 });
     app.text(`Weight ${info.weight} of Budget ${info.budget}`, gx, gy + gb.h + 8, { size: 14, ui: true, color: 'rgba(232,220,196,.75)' });
     if (app.inRect(gx, gy, gb.w, gb.h + 8)) app.tooltip('Budget', 'Each graft has a Weight of 1 to 3. Your deck carries as much Weight as its Budget for free. Every point over is Strain.');
-    // strain block
-    const sx = 640, sw = 520;
+    // strain block: stays above the tab row (y 108) and left of the X button, so it only draws the lines that fit (phones inflate the text)
+    const sx = 640, sw = 420, SB = 104;
+    let yy = 12;
+    const lineH = Math.ceil(app.sz(15, { ui: true }) * 1.2);
+    const put = (str, o, minLines = 1) => {
+      const room = Math.floor((SB - yy) / lineH);
+      if (room < minLines) return;
+      const txt = clampText(app, str, sw, 15, room, { ui: true, bold: o.bold });
+      yy += app.text(txt, sx, yy, { size: 15, ui: true, maxW: sw, lineH: 17, ...o }) + 1;
+    };
     if (info.strain > 0) {
-      app.text(`Strain ${info.strain}`, sx, 12, { size: 24, bold: true, color: COL.bad });
-      let yy = 42;
-      yy += app.text('Strain falls on your plain cards: they fight at 75 percent.', sx, yy, { size: 15, ui: true, maxW: sw, lineH: 17 });
+      yy += app.text(`Strain ${info.strain}`, sx, yy, { size: 24, bold: true, color: COL.bad });
       const names = info.tithed.map((u) => { const inst = run.deck.find((d) => d.uid === u); return CARDS[inst.id].name; });
       const shown = names.slice(0, 6).join(', ') + (names.length > 6 ? ` and ${names.length - 6} more` : '');
-      if (names.length) {
-        app.text('Tithed this combat:', sx, yy, { size: 15, ui: true, color: COL.vellum });
-        yy += app.text(shown + '.', sx + app.measure('Tithed this combat: ', 15, { ui: true }), yy, { size: 15, ui: true, bold: true, color: COL.bad, maxW: sw - 140, lineH: 17 });
-      } else { yy += app.text('No plain card is left to tithe.', sx, yy, { size: 15, ui: true, color: COL.bad, lineH: 17 }); }
-      if (info.overflow > 0) app.text(`Backfire: ${info.backfire} grafted ${plural(info.backfire, 'card')} jam${info.backfire === 1 ? 's' : ''} each turn.`, sx, yy + 1, { size: 15, ui: true, bold: true, color: '#ffb35a', maxW: sw });
+      if (info.overflow > 0) put(`Backfire: ${info.backfire} grafted ${plural(info.backfire, 'card')} jam${info.backfire === 1 ? 's' : ''} each turn.`, { bold: true, color: '#ffb35a' });
+      if (names.length) put(`Tithed this combat: ${shown}.`, { bold: true, color: COL.bad });
+      else put('No plain card is left to tithe.', { color: COL.bad });
+      put('Strain falls on your plain cards: they fight at 75 percent.', {});
     } else {
-      app.text('No Strain', sx, 12, { size: 24, bold: true, color: COL.good });
+      yy += app.text('No Strain', sx, yy, { size: 24, bold: true, color: COL.good });
       const left = info.budget - info.weight;
-      app.text(left > 0 ? `${left} Weight to spare before your plain cards start paying.` : 'Budget is full. One more Weight and a plain card is Tithed.', sx, 42, { size: 15, ui: true, maxW: sw, lineH: 17 });
-      app.text('Every card fights at full strength.', sx, 77, { size: 15, ui: true, color: 'rgba(232,220,196,.6)' });
+      put((left > 0 ? `${left} Weight to spare before your plain cards start paying.` : 'Budget is full. One more Weight and a plain card is Tithed.') + ' Every card fights at full strength.', {});
     }
     app.reg('deck-x', 1080, 18, 36, 36, { group: 'x' }); // left of the global Pause / Fullscreen zone
     if (this.pending === null && app.button('X', 1080, 18, 36, 36, { size: 20, ui: true, key: undefined, r: 18 })) this.pending = () => this.close(app, true);
 
-    // ---- tabs row
+    // ---- tabs row (chip widths follow the real text, so phones never overlap neighbours)
     let tx = 36; const ty = 110;
+    const cw = (label, min, pad) => Math.max(min, Math.ceil(app.measure(label, 14, { ui: true, bold: true })) + pad);
+    const countTxt = `${all.length} of ${run.deck.length}`, countW = Math.ceil(app.measure(countTxt, 14, { ui: true })) + 4;
     for (const [id, label] of TYPE_TABS) {
       const n = id === 'all' ? run.deck.length : run.deck.filter((d) => CARDS[d.id].type === id).length;
       if (id === 'junk' && n === 0 && this.type !== 'junk') continue;
-      const lw = Math.max(56, app.measure(label, 14, { ui: true, bold: true }) + 28);
+      const lw = cw(label, 56, 28);
       if (chip(app, label, tx, ty, lw, this.type === id)) { this.type = id; this.st.target = 0; this.st.focus = -1; }
       tx += lw + 6;
     }
-    tx += 12;
-    if (chip(app, 'Grafted only', tx, ty, 108, this.grafted)) { this.grafted = !this.grafted; this.st.target = 0; }
-    tx += 114;
-    if (chip(app, 'Bare only', tx, ty, 90, this.bare)) { this.bare = !this.bare; this.st.target = 0; }
-    tx += 108;
-    app.text('Sort', tx, ty + 6, { size: 14, ui: true, color: 'rgba(232,220,196,.6)' }); tx += 38;
+    tx += 6;
+    const gw = cw('Grafted only', 108, 24);
+    if (chip(app, 'Grafted only', tx, ty, gw, this.grafted)) { this.grafted = !this.grafted; this.st.target = 0; }
+    tx += gw + 6;
+    const bw = cw('Bare only', 90, 24);
+    if (chip(app, 'Bare only', tx, ty, bw, this.bare)) { this.bare = !this.bare; this.st.target = 0; }
+    tx += bw + 12;
+    const sortW = SORTS.reduce((a, [, l]) => a + cw(l, 54, 24) + 5, 0), sortLbl = Math.ceil(app.measure('Sort', 14, { ui: true })) + 8;
+    const room = W - 36 - tx;
+    const showCount = room >= sortW + sortLbl + countW + 10;
+    if (room >= sortW + sortLbl) { app.text('Sort', tx, ty + 6, { size: 14, ui: true, color: 'rgba(232,220,196,.6)' }); tx += sortLbl; }
     for (const [id, label] of SORTS) {
-      const lw = Math.max(54, app.measure(label, 14, { ui: true, bold: true }) + 24);
+      const lw = cw(label, 54, 24);
       if (chip(app, label, tx, ty, lw, this.sort === id)) { this.sort = id; this.st.target = 0; }
       tx += lw + 5;
     }
-    app.text(`${all.length} of ${run.deck.length}`, W - 40, ty + 6, { size: 14, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
+    if (showCount) app.text(countTxt, W - 40, ty + 6, { size: 14, ui: true, align: 'right', color: 'rgba(232,220,196,.6)' });
 
     // ---- main: grid
     const MY = 148, MH = 466;
@@ -421,7 +432,13 @@ export default {
   drawSide(app, run, hv, info, x, y, w, h) {
     const ctx = app.ctx, pad = 12;
     app.panel(x, y, w, h, { r: 10, fill: 'rgba(10,8,7,.55)', stroke: 'rgba(232,220,196,.2)', lw: 1.5 });
-    let yy = y + pad;
+    // phones inflate the text, so the notes can outgrow the panel: clip them and let the wheel scroll the idle help
+    if (!hv && app.inRect(x, y, w, h) && app.mouse.wheel) this.sideScroll = (this.sideScroll || 0) + app.mouse.wheel * 0.7;
+    const maxScroll = hv ? 0 : Math.max(0, (this.sideH || 0) - h + pad);
+    this.sideScroll = clamp(hv ? 0 : (this.sideScroll || 0), 0, maxScroll);
+    ctx.save(); ctx.beginPath(); ctx.rect(x + 1, y + 1, w - 2, h - 2); ctx.clip();
+    let yy = y + pad - this.sideScroll;
+    const yTop = yy;
     if (!hv) {
       if (this.pick) {
         const ok = this.list(run).filter((c) => c.ok).length;
@@ -440,8 +457,11 @@ export default {
       ];
       for (const [t, c, d] of rows) {
         app.text(t, x + pad, yy, { size: 14, ui: true, bold: true, color: c });
-        yy += app.text(d, x + pad + 74, yy, { size: 13, ui: true, maxW: w - 2 * pad - 74, lineH: 15, color: 'rgba(232,220,196,.85)' }) + 6;
+        const lw = Math.ceil(app.measure(t, 14, { ui: true, bold: true })) + 8;
+        const dx = Math.max(74, lw);
+        yy += Math.max(app.sz(14, { ui: true }) * 1.2, app.text(d, x + pad + dx, yy, { size: 13, ui: true, maxW: w - 2 * pad - dx, lineH: 15, color: 'rgba(232,220,196,.85)' })) + 6;
       }
+      this.sideH = yy - yTop + pad;
     } else {
       const inst = hv.inst, spec = hv.spec;
       yy += app.text(spec.name, x + pad, yy, { size: 20, bold: true, color: COL.lamp, maxW: w - 2 * pad, lineH: 23 }) + 2;
@@ -485,6 +505,8 @@ export default {
       if (spec.overload) yy += app.text('Overload: numbers x1.5. 25 percent chance to Shatter on its first play each combat.', x + pad, yy, { size: 13, ui: true, bold: true, color: COL.gold, maxW: w - 2 * pad, lineH: 15 }) + 4;
       else if (inst.grafts.length === MAX_GRAFTS_NORMAL) yy += app.text('Full. A 3rd graft would Overload it.', x + pad, yy, { size: 13, ui: true, color: 'rgba(232,220,196,.6)', maxW: w - 2 * pad, lineH: 15 });
     }
+    ctx.restore();
+    if (!hv && maxScroll > 0 && this.sideScroll < maxScroll - 1) app.text('Scroll for more', x + w / 2, y + h - 6 - app.sz(11, { ui: true }), { size: 11, ui: true, italic: true, align: 'center', color: COL.lamp, shadow: true });
     if (this.pick && this.o.multi) {
       const n = this.sel.size;
       if (app.button(`Confirm (${n})`, x + pad, y + h - 52, w - 2 * pad, 40, { size: 18, ui: true, disabled: n === 0, fill: '#5a4720', stroke: COL.lamp, color: COL.lamp })) {
