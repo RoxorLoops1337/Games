@@ -45,6 +45,8 @@ export const KEYWORDS = {
   Slack: K('#b9b09a', 'square', 'A card with no school. It changes nothing: the Line neither grows nor breaks.'),
   Tied: K('#e8dcc4', 'hex', 'A Tied Line carries over to the next turn at full value. A Tempered card is Tied: it acts as Slack and never cuts.'),
   Frayed: K('#d8a066', 'cross', 'A jammed card is Frayed. It acts as Slack this turn.'),
+  Claim: K('#c0713a', 'cross', 'The Matron takes your most grafted card for the fight: it fights at -25%, like a Tithe. A Tempered card cannot be Claimed.'),
+  Ringing: K('#a79bb5', 'hex', 'A junk card. Unplayable and Ethereal: it clogs your hand, then fades if it is still there at end of turn.'),
   Weight: K('#d6c7a6', 'square', 'What a graft counts against your Budget (1 to 3).'),
   Budget: K('#d6c7a6', 'square', 'How much graft Weight the deck carries without Strain.'),
   Resonance: K('#7fd1e0', 'star', 'A bonus for playing cards of matching schools together.'),
@@ -67,7 +69,9 @@ export function glossaryEntry(term) {
   let text = ''; try { text = d.desc(2); } catch (e) { text = ''; }
   return { title: d.name, text, color: d.good === false ? '#ff9a8a' : '#8fd18f', glyph: d.good === false ? 'tri' : 'diamond' };
 }
-const NAMES = Object.keys(KEYWORDS).sort((a, b) => b.length - a.length);
+// 'knot' and 'knots' are written in lower case in boon text ("counts as 2 knots"): they find the Knot entry too
+const canon = (w) => (w === 'knot' ? 'Knot' : w);
+const NAMES = [...Object.keys(KEYWORDS), 'knot'].sort((a, b) => b.length - a.length);
 const KW_RE = new RegExp('\\b(' + NAMES.join('|') + ')(?:s|ed)?\\b', 'g');
 
 export function keywordsIn(lines) {
@@ -75,7 +79,7 @@ export function keywordsIn(lines) {
   const arr = Array.isArray(lines) ? lines : [String(lines || '')];
   for (const ln of arr) {
     KW_RE.lastIndex = 0; let m;
-    while ((m = KW_RE.exec(ln))) if (!out.includes(m[1])) out.push(m[1]);
+    while ((m = KW_RE.exec(ln))) if (!out.includes(canon(m[1]))) out.push(canon(m[1]));
   }
   return out;
 }
@@ -96,7 +100,7 @@ export function drawGlyph(ctx, kind, x, y, s, color) {
 // ---- card text with keyword underlines ----
 const tokens = (line) => {
   const out = []; let last = 0; KW_RE.lastIndex = 0; let m;
-  while ((m = KW_RE.exec(line))) { if (m.index > last) out.push({ t: line.slice(last, m.index) }); out.push({ t: m[0], kw: m[1] }); last = m.index + m[0].length; }
+  while ((m = KW_RE.exec(line))) { if (m.index > last) out.push({ t: line.slice(last, m.index) }); out.push({ t: m[0], kw: canon(m[1]) }); last = m.index + m[0].length; }
   if (last < line.length) out.push({ t: line.slice(last) });
   return out;
 };
@@ -235,6 +239,8 @@ export function cardTipStack(spec, c, o = {}) {
 // ---- rendering ----
 const MAXW = 320, PAD = 12, TI = 19, BO = 16;
 let key0 = '', t0 = 0, f0 = -9, pin = null, queued = null;
+// resetTips(): drop every pinned / queued / hover-delay tip (core's app.go calls it on each screen change, so a stale tip never follows you).
+export function resetTips() { key0 = ''; t0 = 0; f0 = -9; pin = null; queued = null; }
 const sc = (app, n) => Math.round(n * (app.textScale || 1));
 function measurePanel(app, sections) {
   const bw = MAXW - PAD * 2; let h = PAD * 2;
@@ -246,10 +252,21 @@ function measurePanel(app, sections) {
   });
   return { lay, h: h - 8 };
 }
+// Plain and single-panel tips gloss the rules words in their text (Line, knots, Claim, Tithe, Ringing...) in a second panel, up to two.
+// Not in a fixed band shorter than 250px (those tips are tight; they spell out what matters themselves).
+const JARGON = ['Line', 'Knot', 'Claim', 'Tithe', 'Ringing', 'Strain', 'Backfire', 'Stitch', 'Overload', 'Shatter', 'Thread', 'Weight', 'Budget'];
+function gloss(stack, tip) {
+  const band = tip.anchor && tip.anchor.band;
+  if (stack.length !== 1 || (band && band.bottom - band.y < 250)) return stack;
+  const have = new Set(stack[0].map((s) => s.title));
+  const text = stack[0].map((s) => (s.text || '') + ' ' + (s.why || []).join(' ')).join(' ');
+  const kws = keywordsIn(text).filter((n) => JARGON.includes(n) && !have.has(n) && !stack[0].some((s) => String(s.title || '').startsWith(n))).slice(0, 2).map(keywordSection).filter(Boolean);
+  return kws.length ? [stack[0], kws] : stack;
+}
 function toStack(tip) {
-  if (tip.stack) return tip.stack;
+  if (tip.stack) return gloss(tip.stack, tip);
   const text = tip.lines ? tip.lines.join('\n') : (tip.text || '');
-  return [[{ title: tip.title, text, color: tip.color }]];
+  return gloss([[{ title: tip.title, text, color: tip.color }]], tip);
 }
 function place(app, a, w, h, prevBottomY) {
   // right of the item, else left, else below/above; never under the pointer, always on screen
@@ -276,7 +293,7 @@ function drawStack(app, stack, anchor) {
   // anchor.band = { x, y, bottom, dir }: panels fill a fixed band (column by column, dir +1 right / -1 left of x) instead of the usual placement
   const band = anchor.band;
   const pos = band ? { x: band.x, y: band.y } : place(app, anchor, MAXW, Math.min(totalH, 700));
-  let y = band ? band.y : Math.max(6, Math.min(714 - totalH, pos.y));
+  let y = band ? Math.min(band.y, Math.max(6, 714 - panels[0].h)) : Math.max(6, Math.min(714 - totalH, pos.y));
   let col = 0;
   panels.forEach((p, i) => {
     if (band && i > 0 && y + p.h > band.bottom) { col++; y = band.y; }

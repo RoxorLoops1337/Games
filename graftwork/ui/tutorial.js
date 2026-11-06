@@ -20,6 +20,8 @@ export const TIP_TEXTS = {
   resonance: 'Three grafts of one school wake a small bonus. Six wake a larger one. The strip in the deck view tracks it.',
   thread_chain: 'Two cards of one school tie a knot. Keep sharing a school to grow the Line, up to 5 knots.',
   thread_cut: 'A card of another school Cuts the Line and cashes it in. A longer Line pays more. Hover Line, Stitch or Cut for the rule.',
+  claim: 'Claim: the Matron takes your most grafted card for the fight, at -25% like a Tithe. Tempering a card makes it immune.',
+  ringing: 'Ringing is a junk card: unplayable, and it fades if unplayed. Some grafts and bosses shuffle it into your deck.',
   jam: 'Backfire jams grafted cards in your opening hand. A jammed card costs 1 more this turn.',
 };
 
@@ -41,6 +43,12 @@ export function maybeTip(app, key, x, y, text, o = {}) {
   if (app._tipFrame === app.frame && app._tipKey !== key) return false; // one tip at a time
   app._tipFrame = app.frame; app._tipKey = key;
   if (text === undefined) text = TIP_TEXTS[key] || '';
+  // o.fallback: { pos, w, maxBottom }: used instead when the wrapped bubble would not fit between o.pos.y and o.maxBottom (small screens inflate the text)
+  const fitB = o.fitBottom !== undefined ? o.fitBottom : o.maxBottom;
+  if (o.fallback && o.pos && fitB !== undefined) {
+    const mw = o.w || 270, ls = app.wrap(text, mw - 24, 15, { ui: true }), need = ls.length * Math.round(19 * app.sz(15, { ui: true }) / 15) + 24 + Math.max(24, Math.round(app.sz(14, { ui: true }) * 1.7)) + 4;
+    if (o.pos.y + need > fitB) { const fb = o.fallback; return maybeTip(app, key, x, y, text, { ...o, ...fb, fallback: null }); }
+  }
   const ctx = app.ctx, side = o.side || 'below', maxW = o.w || 270, pad = 12;
   const lines = app.wrap(text, maxW - pad * 2, 15, { ui: true });
   const bw = Math.min(maxW, Math.max(...lines.map((l) => app.measure(l, 15, { ui: true }))) + pad * 2 + 2);

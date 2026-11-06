@@ -10,9 +10,11 @@ import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_W, CARD_H } from '../ar
 import { drawBackground } from '../art/backgrounds.js';
 import * as ICONS from '../art/icons.js';
 import {
-  TIER, tscale, schoolColor, shatterChance, cantReason, cantGraftWhy, resonanceInfo, wrapLimit, drawStaple, keyBadge, drawSeam, drawCrack, drawGauge, drawLamp,
+  TIER, tscale, schoolColor, shatterChance, hpPerPlay, cantReason, cantGraftWhy, resonanceInfo, wrapLimit, drawStaple, keyBadge, drawSeam, drawCrack, drawGauge, drawLamp,
 } from './graft_parts.js';
 
+import { KEYWORDS, keywordsIn } from './tooltips.js';
+const GLOSS = ['Line', 'Knot', 'Claim', 'Ringing', 'Tithe', 'Stitch', 'Slack'];
 const SC = 1.05;                       // offered card scale
 const CW = CARD_W * SC, CH = CARD_H * SC;
 const CARD_Y = 274;                   // card centre line
@@ -268,24 +270,30 @@ function drawOfferCard(app, r, i, c) {
 
   // caption row
   const base = CARDS[inst.id];
-  const cap = (inst.plays ? `Played ${inst.plays}x` : 'Never played') + ', ' + (inst.grafts.length ? `${inst.grafts.length} graft${inst.grafts.length > 1 ? 's' : ''}` : 'Bare');
+  const twins = st.run.deck.filter((x) => x.id === inst.id);
+  const gTxt = inst.grafts.length ? `${inst.grafts.length} graft${inst.grafts.length > 1 ? 's' : ''}` : 'Bare';
+  const cap = twins.length > 1 ? `Copy #${twins.indexOf(inst) + 1} of ${twins.length}, ${gTxt}` : (inst.plays ? `Played ${inst.plays}x` : 'Never played') + ', ' + gTxt; // copies of one card are told apart by number (the played count stays in the hover note)
   // phones inflate the caption: lift it so it never touches the AFTER panel below
   const capH = Math.ceil(app.sz(14, { ui: true }) * 1.2), capY = Math.min(r.cy + CH / 2 + 12, AFTER.y - capH - 4);
   app.text(cap, cx + 12, capY, { size: 14, ui: true, align: 'center', color: DIM, alpha: deal, maxW: CW - 8 });
   keyBadge(app, String(i + 1), cx - CW / 2 + 12, capY + capH / 2);
 
   if (hover) {
+    // one short note in the fixed detail band (never beside or over the sibling cards, patches or buttons)
     const lines = [];
     if (base.flavor) lines.push(base.flavor);
     lines.push(inst.plays ? `Played ${inst.plays} times.` : 'Never played.');
-    lines.push(inst.grafts.length ? 'Grafts: ' + inst.grafts.map((x) => (GRAFTS[x] ? GRAFTS[x].name : x)).join(', ') + '.' : 'No grafts: a Bare card can be Tithed.');
+    if (inst.grafts.length) lines.push('Grafts: ' + inst.grafts.map((x) => (GRAFTS[x] ? GRAFTS[x].name : x)).join(', ') + '.');
+    else lines.push(tithed ? 'No grafts, so a Tithe can land here.' : 'No grafts: a Bare card can be Tithed.');
     if (tithed) lines.push('This card will be Tithed: -25% numbers that combat.');
     if (inst.grafts.length >= 2) lines.push('A third graft is an OVERLOAD.');
     if (dim) lines.push('CANNOT TAKE THE SELECTED GRAFT: ' + cantReason(inst, st.selGraft));
-    app.tooltip(spec2name(inst), null, { lines, color: COL[base.type] ? '#e8dcc4' : COL.lamp });
+    app.tooltip(spec2name(inst), null, { lines, color: COL[base.type] ? '#e8dcc4' : COL.lamp, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, band: DETAIL_BAND } });
     if (app.clicked(r.x, r.y, r.w, r.h)) clickCard(app, i);
   }
 }
+// The dedicated detail spot for every hover note on this table: the empty right half of the bill panel, clear of the cards and the tray.
+const DETAIL_BAND = { x: 490, y: 574, bottom: 710, dir: 1 };
 const spec2name = (inst) => CARDS[inst.id].name + (inst.up ? '+' : '');
 
 // ---------------------------------------------------------------- graft tray
@@ -315,11 +323,14 @@ function drawPatchTile(app, r, j, c) {
 
   if (hover) {
     const info = resonanceInfo(st.run, g.school, c.counts);
-    const lines = [`${tier.label} graft. W${g.weight} = weight ${g.weight} (the staples): it counts ${g.weight} against your Budget.`, 'Boon: ' + g.boon, 'Price: ' + g.price];
+    // the tile already shows Boon and Price (the compact 4-patch tray truncates them, so only then repeat them)
+    const lines = [`Weight ${g.weight}: counts ${g.weight} against your Budget.`];
+    if (compact) lines.push('Boon: ' + g.boon, 'Price: ' + g.price);
     const hp = g.mods.find((m) => m.k === 'maxHp'); if (hp) lines.push(`Permanently costs ${-hp.n} max HP.`);
-    if (info) lines.push(...info.lines);
+    if (info && st.rects.infoH < 60) lines.push(...info.lines.slice(0, 2)); // the info panel shows it when there is room
+    for (const kw of keywordsIn([g.boon, g.price]).filter((n) => GLOSS.includes(n)).slice(0, 1)) lines.push(`${kw}: ${KEYWORDS[kw].text.split('. ')[0].replace(/\.$/, '')}.`); // first-use jargon: one line on the first rules word the patch uses
     if (dim) lines.push('CANNOT GO ON THE SELECTED CARD: ' + cantReason(c.inst, r.gid));
-    app.tooltip(g.name, null, { lines, color: sc });
+    app.tooltip(g.name, null, { lines, color: sc, anchor: { x: r.x, y: r.y, w: r.w, h: r.h, band: DETAIL_BAND } });
     if (app.clicked(x, y, w, h)) clickGraft(app, j);
   }
 }
@@ -501,22 +512,29 @@ function drawAfter(app, c) {
   const warns = [];
   if (pair && pv.overload) {
     const pct = Math.round(shatterChance(run) * 100);
-    warns.push({ gold: true, head: 'OVERLOAD', text: `numbers x1.5, ${pct} percent to SHATTER on first play each combat, weighs +1 extra.` });
+    warns.push({ gold: true, head: 'OVERLOAD', text: `numbers x1.5, ${pct}% to SHATTER on first play, weighs +1.` });
+  }
+  if (pair) {
+    const hb = hpPerPlay(cardSpec(c.inst)), ha = hpPerPlay(pv.spec);
+    if (hb > 0 && ha > hb) warns.push({ head: 'HP STACKS', text: `${hb} HP a play becomes ${ha}: it stacks with the card's own HP cost.` });
   }
   if (A.backfire > 0 && (pair ? A.backfire >= B.backfire : true)) {
-    warns.push({ head: 'BACKFIRE', text: `${A.backfire} grafted card${A.backfire > 1 ? 's' : ''} in your opening hand jam each turn (+1 cost). ${A.overflow} Strain has no Bare card to Tithe.` });
+    warns.push({ head: 'BACKFIRE', text: `${A.backfire} grafted card${A.backfire > 1 ? 's' : ''} jam in your opening hand (+1 cost). ${A.overflow} Strain has no Bare card to take it.` });
   }
+  // warnings stay in the left 444px so the hover detail band (right half of this panel) never covers them
+  const WW = 444;
   for (const wn of warns) {
-    if (wy + 34 > y + h - 4) break;
-    const bh = 36;
+    const hw = app.measure(wn.head + ':', 16, { ui: true, bold: true }), tx = lx + 12 + hw + 6, tw = WW - (tx - lx) - 10;
+    const tl = wrapLimit(app, wn.text, tw, 14.5, 3, { ui: true });
+    const lh = Math.round(app.sz(14.5, { ui: true }) * 1.2), bh = Math.max(36, tl.length * lh + 14);
+    if (wy + bh > y + h - 4) break;
     ctx.save();
-    app.rr(lx, wy, w - 32, bh, 7);
+    app.rr(lx, wy, WW, bh, 7);
     ctx.fillStyle = wn.gold ? 'rgba(80,58,10,.85)' : 'rgba(80,12,22,.85)'; ctx.fill();
     ctx.strokeStyle = wn.gold ? COL.lamp : COL.bad; ctx.lineWidth = 2; if (wn.gold) ctx.setLineDash([9, 3, 2, 3]); ctx.stroke();
     ctx.restore();
-    const hw = app.measure(wn.head + ':', 16, { ui: true, bold: true });
     app.text(wn.head + ':', lx + 12, wy + 8, { size: 16, ui: true, bold: true, color: wn.gold ? COL.lamp : '#ff8f9c' });
-    app.text(wn.text, lx + 12 + hw + 6, wy + 9, { size: 14.5, ui: true, color: COL.vellum, maxW: w - 32 - hw - 36 });
+    tl.forEach((ln, q) => app.text(ln, tx, wy + 9 + q * lh, { size: 14.5, ui: true, color: COL.vellum }));
     wy += bh + 5;
   }
   if (!pair && !warns.length) app.text(app.mouse.touch ? 'Tap a card, tap a graft, then Sew it on.' : 'Keys: 1-3 card, Q-R graft, Enter sews, Esc declines.', lx, y + h - 24, { size: 14, ui: true, maxW: w - 32, color: 'rgba(232,220,196,.45)' });

@@ -52,7 +52,7 @@ key(app, 'Escape'); key(app, 'Escape');
 assert.equal(app.stack.length, 1, 'codex closes');
 // tips
 app.screens.base.draw = (a) => { maybeTip(a, 'strain', 600, 300, TIP_TEXTS.strain); };
-assert.equal(Object.keys(TIP_TEXTS).length, 16);
+assert.equal(Object.keys(TIP_TEXTS).length, 18);
 frames(app, 5);
 assert.equal(meta.tips.strain, undefined);
 { const tb = app._tipBtn; click(app, tb.x + tb.w / 2, tb.y + tb.h / 2); }

@@ -670,3 +670,133 @@ export function drawLooseThread(ctx, x, y, size, color = '#E8DCC4') { withGlyph(
 export function drawClasp(ctx, x, y, size, color = '#C9A227') { withGlyph(ctx, x, y, size, color, '#7A5F12', 'clasp', 1.4); }
 // Revised school colours from the art bible (lead: sync COL.* to these).
 export const SCHOOL_GLYPH_COLORS = { ember: '#E8571F', echo: '#6CC6D6', hoard: '#B8922A', blood: '#A3142F', rust: '#8F4A2A', static: '#D9E84A', gilded: '#EFD98F' };
+
+// ======================================================================================
+// R1: engraved forge option icons, reward plates and chips, event choice seals.
+// Same hand as the card motifs: ONE sepia outline, 1 px hatch on the shadow side, ONE spot colour per icon, a 1 px highlight.
+// drawForgeIcon(ctx, id, x, y, size, opt)   id: rest expand refine temper strip reforge. opt: { t, k, quality, reduced } (t and k only move the flame, hammer and arrows)
+// drawRewardIcon(ctx, kind, x, y, size, opt) kind: gold relic potion card graft. opt: { id (relic / potion id), spot, rarity }
+// drawRewardChip(ctx, x, y, w, h, state, hover) state: take taken full.   drawEventSeal(ctx, x, y, r, ok, hover)
+// ======================================================================================
+const PAPER = '#E8DCC4', STEEL = '#b9b4a6', WOOD = '#8a6038', LEATHER = '#7a5233', GOLD = '#C9A227', EMBER = '#E8571F', THREAD = '#B3263A', GLASS = '#6CC6D6';
+export const FORGE_ICON_IDS = ['rest', 'expand', 'refine', 'temper', 'strip', 'reforge'];
+export const FORGE_ICON_SPOT = { rest: EMBER, expand: GOLD, refine: EMBER, temper: GOLD, strip: THREAD, reforge: GLASS };
+const glyphFrame = (ctx, x, y, size, fn) => {
+  const S = (size / 2) * 1.1; ctx.save(); ctx.translate(x, y); ctx.scale(S, S); const p = PX; PX = S; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  try { fn(); } finally { PX = p; ctx.restore(); }
+};
+const inkLine = (c, pts, k, w) => { c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]); ln(c, D, w + Math.max(0.05, 2 / PX)); c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]); ln(c, k, w); };
+const hamm = (c, spot) => {
+  rr(c, -0.06, -0.5, 0.12, 0.92, 0.04); fs(c, WOOD, 0.035);
+  rr(c, -0.3, -0.7, 0.6, 0.28, 0.05); fs(c, STEEL, 0.04);
+  seg(c, -0.22, -0.62, 0.1, -0.62, 'rgba(255,247,224,.85)', Math.max(0.025, 1 / PX));
+  if (spot) { rr(c, -0.08, -0.42, 0.16, 0.07, 0.02); fs(c, spot, 0.025); }
+};
+const anvilPath = (c) => path(c, [-0.76, 0.1, -0.5, 0.0, 0.5, 0.0, 0.5, 0.12, 0.28, 0.2, 0.2, 0.32, 0.42, 0.52, -0.42, 0.52, -0.2, 0.32, -0.28, 0.2, -0.5, 0.15]);
+const FORGE = {
+  rest(c, o) {
+    const fl = 1 + Math.sin(o.t * 8) * 0.05 + o.k * 0.08;
+    if (o.quality !== 'low' && o.quality !== 'off') { const gl = c.createRadialGradient(0, 0, 0.05, 0, 0, 1.05); gl.addColorStop(0, `rgba(232,87,31,${0.26 + o.k * 0.2})`); gl.addColorStop(1, 'rgba(232,87,31,0)'); c.fillStyle = gl; c.fillRect(-1.1, -1.1, 2.2, 2.2); }
+    c.save(); c.translate(0, 0.62); c.rotate(0.12); rr(c, -0.62, -0.09, 1.24, 0.18, 0.08); fs(c, WOOD, 0.04); c.restore();
+    c.save(); c.translate(0, 0.62); c.rotate(-0.12); rr(c, -0.62, -0.09, 1.24, 0.18, 0.08); fs(c, '#6e4a2c', 0.04); c.restore();
+    c.save(); c.translate(0, 0.5); c.scale(fl, fl); c.translate(0, -0.5); flamePath(c); fs(c, EMBER, 0.05);
+    c.save(); c.translate(0.02, 0.28); c.scale(0.5, 0.5); flamePath(c); c.fillStyle = '#FFF1B0'; c.fill(); c.restore(); c.restore();
+  },
+  expand(c, o) {
+    for (let i = 0; i < 3; i++) {
+      const x = -0.74 + i * 0.5;
+      rr(c, x, -0.05, 0.4, 0.55, 0.06);
+      if (i < 2) { fs(c, GOLD, 0.05); seg(c, x + 0.08, 0.05, x + 0.08, 0.4, 'rgba(255,241,176,.8)', Math.max(0.025, 1 / PX)); }
+      else { c.fillStyle = 'rgba(232,220,196,.12)'; c.fill(); c.setLineDash([0.09, 0.07]); ln(c, D, Math.max(0.045, 1.2 / PX)); c.setLineDash([]); }
+    }
+    const oo = Math.sin(o.t * 4) * 0.04 * o.k; inkLine(c, [0.5, -0.66 + oo, 0.5, -0.3 + oo], GOLD, 0.11); inkLine(c, [0.32, -0.48 + oo, 0.68, -0.48 + oo], GOLD, 0.11);
+  },
+  refine(c, o) {
+    anvilPath(c); fs(c, STEEL, 0.05);
+    c.save(); c.translate(0.5, 0.25); c.rotate(-0.55 + Math.sin(o.t * 5) * 0.22 * o.k); hamm(c, null); c.restore();
+    starPath(c, 0.02, -0.1, 0.17, 4, 0.3); fs(c, EMBER, 0.03);
+  },
+  temper(c, o) {
+    rr(c, -0.72, 0.18, 1.44, 0.14, 0.04); fs(c, '#4a4440', 0.03);
+    rr(c, -0.62, -0.18, 1.0, 0.4, 0.07); fs(c, LEATHER, 0.05);
+    c.setLineDash([0.07, 0.06]); rr(c, -0.55, -0.11, 0.86, 0.26, 0.04); ln(c, 'rgba(232,220,196,.75)', Math.max(0.03, 1 / PX)); c.setLineDash([]);
+    for (const rx of [-0.38, -0.12, 0.14]) { ci(c, rx, 0.02, 0.07); fs(c, GOLD, 0.03); }
+    c.save(); c.translate(0.62, 0.35); c.rotate(-0.62 + Math.sin(o.t * 5) * 0.22 * o.k); hamm(c, GOLD); c.restore();
+  },
+  strip(c, o) {
+    inkLine(c, [-0.5, 0.64, 0.46, -0.52], '#d8d3c6', 0.085);
+    ci(c, 0.5, -0.58, 0.075); c.fillStyle = 'rgba(0,0,0,0)'; ln(c, D, Math.max(0.05, 1.4 / PX));
+    const pts = [0.52, -0.5]; for (let i = 1; i <= 12; i++) pts.push(0.52 - i * 0.055 + Math.sin(i * 0.9 + o.t * 3 * o.k) * 0.09, -0.5 + i * 0.1);
+    inkLine(c, pts, THREAD, 0.055);
+    seg(c, -0.4, 0.5, 0.36, -0.42, 'rgba(255,247,224,.7)', Math.max(0.02, 0.8 / PX));
+  },
+  reforge(c, o) {
+    rr(c, -0.8, -0.42, 0.52, 0.76, 0.05); fs(c, 'rgba(108,198,214,.3)', 0.05);
+    rr(c, -0.7, -0.2, 0.32, 0.28, 0.03); fs(c, PAPER, 0.04); seg(c, -0.64, -0.06, -0.44, -0.06, 'rgba(43,30,26,.6)', Math.max(0.025, 0.8 / PX));
+    rr(c, 0.28, -0.42, 0.52, 0.76, 0.05); c.fillStyle = 'rgba(108,198,214,.1)'; c.fill(); c.setLineDash([0.09, 0.07]); ln(c, D, Math.max(0.05, 1.3 / PX)); c.setLineDash([]);
+    const oo = Math.sin(o.t * 4) * 0.05 * o.k; arrow(c, -0.18 + oo, -0.04, 0.16 + oo, -0.04, GLASS, 0.1, 0.22);
+    seg(c, -0.74, -0.34, -0.5, -0.34, 'rgba(255,247,224,.8)', Math.max(0.025, 1 / PX));
+  },
+};
+export function drawForgeIcon(ctx, id, x, y, size, opt) {
+  const o = { t: 0, k: 0, quality: 'high', ...(opt || {}) }; if (o.reduced) { o.t = 0; o.k = 0; }
+  glyphFrame(ctx, x, y, size, () => (FORGE[id] || FORGE.rest)(ctx, o));
+}
+
+// Reward plate: engraved square tile (ink outline, spot rule, hatch, highlight) around the item's own drawing.
+const PLATE_SPOT = { gold: '#D4AA32', relic: '#B8922A', potion: '#4f9a5c', card: '#E8DCC4', graft: THREAD };
+export const REWARD_KINDS = Object.keys(PLATE_SPOT);
+const REWARD = {
+  card(c) { c.save(); c.rotate(-0.12); rr(c, -0.36, -0.5, 0.72, 1.0, 0.07); fs(c, PAPER, 0.05); rr(c, -0.26, -0.38, 0.52, 0.42, 0.04); fs(c, '#c4b08a', 0.03); seg(c, -0.22, 0.2, 0.22, 0.2, 'rgba(43,30,26,.7)', Math.max(0.03, 1 / PX)); seg(c, -0.22, 0.34, 0.1, 0.34, 'rgba(43,30,26,.7)', Math.max(0.03, 1 / PX)); c.restore(); },
+  graft(c) { rr(c, -0.5, -0.4, 1.0, 0.8, 0.08); fs(c, LEATHER, 0.05); c.setLineDash([0.08, 0.06]); rr(c, -0.4, -0.3, 0.8, 0.6, 0.04); ln(c, 'rgba(232,220,196,.8)', Math.max(0.03, 1 / PX)); c.setLineDash([]); for (const [px, py] of [[-0.2, 0], [0.2, 0]]) { seg(c, px - 0.09, py - 0.09, px + 0.09, py + 0.09, THREAD, Math.max(0.05, 1.4 / PX)); seg(c, px + 0.09, py - 0.09, px - 0.09, py + 0.09, THREAD, Math.max(0.05, 1.4 / PX)); } },
+};
+export function drawRewardIcon(ctx, kind, x, y, size, opt) {
+  const o = opt || {}, spot = o.spot || PLATE_SPOT[kind] || GOLD, r = size / 2;
+  ctx.save(); ctx.translate(x, y); const p = PX; PX = r;
+  rr(ctx, -r, -r, size, size, r * 0.26); ctx.fillStyle = '#241c18'; ctx.fill();
+  ctx.save(); rr(ctx, -r, -r, size, size, r * 0.26); ctx.clip();
+  const g = ctx.createLinearGradient(-r, -r, r, r); g.addColorStop(0, 'rgba(255,247,224,.10)'); g.addColorStop(0.5, 'rgba(255,247,224,0)'); ctx.fillStyle = g; ctx.fillRect(-r, -r, size, size);
+  if (r >= 8) { ctx.beginPath(); const pitch = Math.max(2.6, r * 0.14); for (let q = r * 0.2; q < r * 2.4; q += pitch) { ctx.moveTo(q - r, r); ctx.lineTo(q + r, -r); } ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.26)'; ctx.stroke(); }
+  ctx.restore();
+  rr(ctx, -r, -r, size, size, r * 0.26); ctx.lineWidth = Math.max(1.5, r * 0.07); ctx.strokeStyle = D; ctx.stroke();
+  rr(ctx, -r * 0.86, -r * 0.86, size * 0.86, size * 0.86, r * 0.2); ctx.lineWidth = 1; ctx.strokeStyle = rgba(spot, 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-r * 0.72, -r * 0.93); ctx.lineTo(r * 0.5, -r * 0.93); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,247,224,.7)'; ctx.stroke();
+  PX = p; ctx.restore();
+  const inner = size * 0.74;
+  if (kind === 'gold') drawCoin(ctx, x, y, inner);
+  else if (kind === 'relic') drawRelic(ctx, o.id, x, y, inner, o.rarity);
+  else if (kind === 'potion') drawPotion(ctx, o.id, x, y, inner);
+  else glyphFrame(ctx, x, y, size * 0.72, () => (REWARD[kind] || REWARD.card)(ctx));
+}
+
+const _chip = new Map();
+function chipHatch(w, h) {
+  const key = (w << 12) | h; let hp = _chip.get(key);
+  if (!hp && typeof Path2D !== 'undefined') { hp = new Path2D(); for (let s = 6; s < w + h; s += 4) { hp.moveTo(s, 0); hp.lineTo(s - h, h); } if (_chip.size > 40) _chip.clear(); _chip.set(key, hp); }
+  return hp || null;
+}
+export function drawRewardChip(ctx, x, y, w, h, state = 'take', hover = false) {
+  const spot = state === 'taken' ? '#7FCF8A' : state === 'full' ? '#c2433f' : GOLD;
+  const fill = state === 'taken' ? '#243026' : state === 'full' ? '#3a1a1f' : hover ? '#5c4012' : '#3d2a10';
+  ctx.save(); ctx.translate(x, y);
+  rr(ctx, 0, 0, w, h, 6); ctx.fillStyle = fill; ctx.fill();
+  ctx.save(); rr(ctx, 0, 0, w, h, 6); ctx.clip();
+  const hp = chipHatch(Math.round(w), Math.round(h));
+  if (hp) { ctx.save(); ctx.translate(Math.floor(w * 0.35), 0); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.stroke(hp); ctx.restore(); }
+  const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(255,247,224,.16)'); g.addColorStop(0.45, 'rgba(255,247,224,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+  rr(ctx, 0.5, 0.5, w - 1, h - 1, 6); ctx.lineWidth = 1.5; ctx.strokeStyle = D; ctx.stroke();
+  rr(ctx, 3, 3, w - 6, h - 6, 4); ctx.lineWidth = 1; ctx.strokeStyle = rgba(spot, hover ? 1 : 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(8, 1.5); ctx.lineTo(w * 0.55, 1.5); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,247,224,.6)'; ctx.stroke();
+  ctx.restore();
+}
+
+// Event choice seal: a small wax roundel under the number (ink outline, red wax, hatch, highlight). Disabled choices go grey ink.
+export function drawEventSeal(ctx, x, y, r, ok = true, hover = false) {
+  ctx.save(); ctx.translate(x, y); const p = PX; PX = r;
+  disc(ctx, r, D); disc(ctx, r * 0.86, ok ? (hover ? '#c9485a' : '#d9bfa0') : '#b9ad96');
+  if (r >= 7) hatchDisc(ctx, r * 0.86, 0.32);
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, TAU); ctx.lineWidth = 1; ctx.strokeStyle = ok ? 'rgba(179,38,58,.75)' : 'rgba(43,30,26,.35)'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.76, Math.PI * 1.1, Math.PI * 1.6); ctx.lineWidth = 1; ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,247,224,.8)'; ctx.stroke();
+  PX = p; ctx.restore();
+}

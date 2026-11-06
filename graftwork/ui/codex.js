@@ -8,6 +8,7 @@ import { drawEnemy, enemyBounds } from '../art/enemies.js';
 import { CARDS, GRAFTS, RELICS, ENEMIES, STATUSES, SCHOOLS, HEROES, GRAFT_LIST } from '../data/index.js';
 import { cardSpec } from '../engine/cards.js';
 import { drawSeamBadge } from './seam_ui.js';
+import { drawVellum, drawEmptyMark } from '../art/plates.js';
 import { statusText } from '../engine/text.js';
 import { cardGrid, gridKey, scrollArea, inView, pill, clampText, gaugeCells } from './deckview.js';
 
@@ -74,7 +75,7 @@ function qmark(app, x, y, size, color) { app.text('?', x, y - size * 0.62, { siz
 
 function unknownCard(app, ctx, cx, cy, sc, hot) {
   ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc);
-  app.rr(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 14); ctx.fillStyle = hot ? '#221b17' : '#15110f'; ctx.fill();
+  app.rr(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 14); ctx.fillStyle = hot ? 'rgba(34,27,23,.8)' : 'rgba(21,17,15,.7)'; ctx.fill();
   ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(232,220,196,.22)'; ctx.setLineDash([14, 9]); ctx.stroke(); ctx.setLineDash([]);
   ctx.restore();
   qmark(app, cx, cy + 10, 64 * sc / 0.56 * 0.6);
@@ -281,6 +282,7 @@ export default {
     ctx.save(); ctx.globalAlpha = k; ctx.translate(0, (1 - k) * 14);
     app.reg('codex-panel', 14, 10, W - 28, H - 20, { overlay: true });
     app.panel(14, 10, W - 28, H - 20, { r: 14, fill: '#1c1714', stroke: 'rgba(232,220,196,.5)', lw: 3 });
+    drawVellum(ctx, 17, 13, W - 34, H - 26, { r: 12, alpha: 0.9 }); // baked vellum behind everything on the page
     app.text('Codex', 36, 18, { size: 28, bold: true, color: COL.lamp });
     app.text('Everything you have met. The rest waits in silhouette.', 150, 30, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.6)' });
     app.reg('codex-x', 1080, 16, 36, 36, { group: 'x' }); // left of the global Pause / Fullscreen zone
@@ -341,7 +343,7 @@ export default {
     const px = x + gw + 12, pw = w - gw - 12;
     app.panel(px, y, pw, h, { r: 10, fill: 'rgba(10,8,7,.55)', stroke: 'rgba(232,220,196,.2)', lw: 1.5 });
     const hv = g.hover >= 0 ? items[g.hover] : null;
-    if (!hv) { app.text('Hover a card', px + pw / 2, y + h / 2 - 12, { size: 20, italic: true, align: 'center', color: 'rgba(232,220,196,.5)' }); return; }
+    if (!hv) { app.text('Hover a card', px + pw / 2, y + h / 2 - 12, { size: 20, italic: true, align: 'center', color: 'rgba(232,220,196,.5)' }); drawEmptyMark(ctx, x + w / 2, y + h / 2 - 34); return; }
     const cy = y + 16 + (CARD_H * 1.1) / 2;
     if (hv.seen) drawCard(ctx, hv.spec, px + pw / 2, cy, { scale: 1.1, glow: 0.3, hover: true, preview: true });
     else unknownCard(app, ctx, px + pw / 2, cy, 1.1, true);

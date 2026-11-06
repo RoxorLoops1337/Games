@@ -594,7 +594,7 @@ function statusFx(ev, p) {
 function shatterBurst(p) {
   const fx = S.fx;
   fx.burst(p.x, p.y, 'shard', { n: 26, speed: 460, size: 8 }); fx.burst(p.x, p.y, 'glass', { n: 12 }); fx.ring(p.x, p.y, COL.gold, 160, 0.6);
-  fx.slowmo(0.35, 350); fx.flash('#ffe9a8', 0.22, 0.2); fx.shake(0.6); fx.float('SHATTERED', p.x, p.y + 64, { color: COL.gold, size: 34, big: true, life: 1.4 }); fx.float('Lost for the run', p.x, p.y + 104, { color: COL.vellum, size: 16, life: 1.4 });
+  fx.slowmo(0.35, 350); fx.flash('#ffe9a8', 0.22, 0.2); fx.shake(0.6); fx.float('SHATTERED', 640, 78, { color: COL.gold, size: 34, big: true, life: 1.4 }); fx.float('Lost for the run', 640, 118, { color: COL.vellum, size: 16, life: 1.4 }); // top band: never over the play area
   sfx('shatter');
   { const trn = APP && APP.shared && APP.shared.transitions; if (trn && trn.shatterBeat) trn.shatterBeat(APP, p.x, p.y); }
 }
@@ -1753,11 +1753,12 @@ function drawHudBottom(app) {
   const st = c.strain, B = L.STRAIN_BOX;
   const over = st.strain > 0;
   // phones inflate the text: size the two rows from the real line height so Budget and Strain never touch
-  const sLh = Math.ceil(app.sz(15, { ui: true, bold: true }) * 1.1), sH = Math.max(B.h, sLh * 2 + 12);
+  const sLh = Math.ceil(app.sz(15, { ui: true, bold: true }) * 1.1), sH = Math.max(B.h, sLh * ((c.strain.backfire || 0) > 0 ? 3 : 2) + 12);
   app.panel(B.x, B.y, B.w, sH, { fill: 'rgba(14,12,10,.8)', stroke: over ? COL.scar : 'rgba(232,220,196,.35)', r: 8 });
   app.reg('strain', B.x, B.y, B.w, sH, {});
   app.text(`Budget ${st.weight}/${st.budget}`, B.x + 10, B.y + 5, { size: 15, ui: true, bold: true, color: COL.vellum });
   app.text(`Strain ${st.strain}`, B.x + 10, B.y + 5 + sLh, { size: 15, ui: true, bold: true, color: over ? COL.bad : COL.good });
+  if (st.backfire > 0) app.text(`Backfire ${st.backfire}`, B.x + 10, B.y + 5 + sLh * 2, { size: 15, ui: true, bold: true, color: COL.bad });
   if (app.inRect(B.x, B.y, B.w, sH)) {
     const tithed = []; for (const w of S.known.values()) if (w.tithed) tithed.push(w);
     const lines = [];
@@ -1815,7 +1816,8 @@ function drawTips(app) {
   if (!S || S.modal || S.ending || S.c.pending || S.banner || !canAct() || S.drag) return;
   const c = S.c, l = liveEds(), first = l[0];
   const has = (k) => app.shared.meta && app.shared.meta.tips && app.shared.meta.tips[k];
-  const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
+  // narrow bubbles grow tall on small screens (boosted text): when one would reach the hero's head, it widens instead (still the quiet wall)
+  const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o.pos === QUIET && !o.fallback ? { ...o, fitBottom: 236, fallback: { w: 430 } } : o);
   // the card-play tip shows right away once a card is selected, and otherwise right after the energy tip (before the intent tip)
   if (S.hand.length && S.sel && !has('playcard') && tip('playcard', 500, L.HAND_Y - 120, { pos: QUIET, w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
   if (first && !S.hov) {
@@ -1832,7 +1834,12 @@ function drawTips(app) {
   const jc = S.hand.find((d) => d.jam);
   if (jc && tip('jam', jc.x, jc.y - CARD_H * jc.s / 2, { side: 'above', w: 300 })) return;
   const oc = S.hand.find((d) => dcSpec(d).overload);
-  if (oc) tip('overload', oc.x, oc.y - CARD_H * oc.s / 2, { side: 'above', w: 300 });
+  if (oc && tip('overload', oc.x, oc.y - CARD_H * oc.s / 2, { side: 'above', w: 300 })) return;
+  // first-use rules words: one line each, the first time they show up
+  const rc = S.hand.find((d) => dcSpec(d).id === 'j_ringing');
+  if (rc && tip('ringing', rc.x, rc.y - CARD_H * rc.s / 2, { side: 'above', w: 300 })) return;
+  const cl = liveEds().find((d) => { const mv = d.e.move && d.e.def.moves[d.e.move]; return mv && (mv.fx || []).some((op) => /\bClaim/.test(op.text || '')); });
+  if (cl) tip('claim', cl.x, L.ENEMY_LANE_TOP + 64, { side: 'left', w: 300 });
 }
 
 function drawBanner(app) {

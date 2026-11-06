@@ -1,5 +1,5 @@
 // Combat screen drawing helpers: bars, status rows, intent bubbles, card keyword panel.
-import { COL, EASE, clamp, rgba } from './core.js';
+import { COL, EASE, W, clamp, rgba } from './core.js';
 import { STATUSES, GRAFTS, SCHOOLS, CARDS, RELICS } from '../data/index.js';
 import { statusText } from '../engine/text.js';
 import { drawStatus, drawIntent, drawShield, drawRelic } from '../art/icons.js';
@@ -266,9 +266,11 @@ export function drawEnemyPlate(app, ed, o) {
   ctx.restore();
   if (o.suppress) return;
   // tips: block, intent, hp/body
-  if (ed.block > 0 && app.inRect(left, by - 6, 24, 28)) queueTip(app, 'blk' + grp, [[{ title: 'Block ' + ed.block, text: 'Absorbs damage until this enemy acts.', color: '#bcd0d8', glyph: 'square' }]], { x: left, y: by - 6, w: 24, h: 28 });
-  else if (ir && ir.w && o.info && app.inRect(ir.x, ir.y, ir.w, ir.h)) queueTip(app, 'int' + grp + ':' + o.info.move, intentTip(app, ed, o), { x: ir.x, y: ir.y, w: ir.w, h: ir.h });
-  else if (o.hot && !o.tgt && app.inRect(ed.x - ed.w / 2, foot - ed.h, ed.w, ed.h + 24)) queueTip(app, 'body' + grp, bodyTip(ed, o), { x: ed.x - ed.w / 2, y: foot - ed.h, w: ed.w, h: ed.h });
+  // enemy tips fill a band beside the whole plate (never over its own health bar, intent or statuses): right of the slot when it fits, else left
+  const bandR = left + sw + 8 + 320 <= W - 6, band = { x: bandR ? left + sw + 8 : left - 8, y: L.ENEMY_LANE_TOP, bottom: foot + 150, dir: bandR ? 1 : -1 };
+  if (ed.block > 0 && app.inRect(left, by - 6, 24, 28)) queueTip(app, 'blk' + grp, [[{ title: 'Block ' + ed.block, text: 'Absorbs damage until this enemy acts.', color: '#bcd0d8', glyph: 'square' }]], { x: left, y: by - 6, w: 24, h: 28, band });
+  else if (ir && ir.w && o.info && app.inRect(ir.x, ir.y, ir.w, ir.h)) queueTip(app, 'int' + grp + ':' + o.info.move, intentTip(app, ed, o), { x: ir.x, y: ir.y, w: ir.w, h: ir.h, band });
+  else if (o.hot && !o.tgt && app.inRect(ed.x - ed.w / 2, foot - ed.h, ed.w, ed.h + 24)) queueTip(app, 'body' + grp, bodyTip(ed, o), { x: ed.x - ed.w / 2, y: foot - ed.h, w: ed.w, h: ed.h, band });
 }
 function intentTip(app, ed, o) {
   const info = o.info;

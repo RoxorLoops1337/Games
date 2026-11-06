@@ -6,9 +6,10 @@ import * as RUN from '../engine/run.js';
 import { cardSpec } from '../engine/cards.js';
 import { EVENTS, RELICS } from '../data/index.js';
 import { Fx } from './fx.js';
+import { drawEventPlate } from '../art/plates.js';
 import { drawBackground } from '../art/backgrounds.js';
 import { drawCard, CARD_W, CARD_H } from '../art/cards.js';
-import { drawHeart, drawCoin, drawRelic } from '../art/icons.js';
+import { drawHeart, drawCoin, drawRelic, drawEventSeal } from '../art/icons.js';
 
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const FRAME = { x: 36, y: 40, w: 520, h: 560 };
@@ -56,55 +57,31 @@ const SIL = {
 };
 const SETS = [['door', 'figure'], ['table', 'figure', 'crates'], ['gurney', 'figure'], ['jars', 'table'], ['chair', 'figure', 'crates'], ['curtain', 'figure', 'table'], ['figure', 'crates'], ['door', 'jars', 'figure']];
 
-function drawScene(g, ev, act, t) {
+function drawScene(g, ev, act, t, rm) {
   const [dark, mid, light] = ACT_TINT[act] || ACT_TINT[1];
   const h = hash(ev.id);
   g.save();
   g.beginPath(); g.rect(FRAME.x, FRAME.y, FRAME.w, FRAME.h); g.clip();
   g.save(); g.translate(FRAME.x, FRAME.y); const sc = Math.max(FRAME.w / W, FRAME.h / H); g.scale(sc, sc); drawBackground(g, 'event', t); g.restore();
-  // act wash
-  const wash = g.createLinearGradient(0, FRAME.y, 0, FRAME.y + FRAME.h);
-  wash.addColorStop(0, rgba(dark, 0.78)); wash.addColorStop(0.6, rgba(mid, 0.42)); wash.addColorStop(1, rgba(dark, 0.9));
-  g.fillStyle = wash; g.fillRect(FRAME.x, FRAME.y, FRAME.w, FRAME.h);
-  // light pool
+  // engraved plate (baked once per event and act: sepia wash, motif keyed by the event id, hatch veil, vignette, paper edge)
+  drawEventPlate(g, ev.id, act, FRAME.x, FRAME.y, FRAME.w, FRAME.h);
+  // the one practical: a hanging lamp, its pool breathes unless motion is reduced
   const lx = FRAME.x + FRAME.w * (0.3 + ((h >> 3) % 40) / 100), ly = FRAME.y + 150;
-  const flick = 1 + Math.sin(t * 7 + h) * 0.03 + Math.sin(t * 13.3) * 0.02;
-  const lg = g.createRadialGradient(lx, ly, 6, lx, ly, 280 * flick); lg.addColorStop(0, rgba(light, 0.5)); lg.addColorStop(0.35, rgba(light, 0.16)); lg.addColorStop(1, rgba(light, 0));
-  g.fillStyle = lg; g.fillRect(FRAME.x, FRAME.y, FRAME.w, FRAME.h);
-  // hanging lamp
-  g.strokeStyle = 'rgba(0,0,0,.7)'; g.lineWidth = 2; g.beginPath(); g.moveTo(lx, FRAME.y); g.lineTo(lx, ly - 14); g.stroke();
-  g.fillStyle = light; g.shadowColor = light; g.shadowBlur = 18; g.beginPath(); g.arc(lx, ly, 9, 0, 6.283); g.fill(); g.shadowBlur = 0;
-  // floor
-  const fy = FRAME.y + FRAME.h - 96;
-  const fg = g.createLinearGradient(0, fy, 0, FRAME.y + FRAME.h); fg.addColorStop(0, rgba('#0a0807', 0.55)); fg.addColorStop(1, rgba('#050403', 0.95));
-  g.fillStyle = fg; g.fillRect(FRAME.x, fy, FRAME.w, 96);
-  g.strokeStyle = rgba(light, 0.14); g.lineWidth = 1; g.beginPath(); g.moveTo(FRAME.x, fy); g.lineTo(FRAME.x + FRAME.w, fy); g.stroke();
-  for (let i = 1; i < 6; i++) { g.beginPath(); g.moveTo(FRAME.x + FRAME.w / 2 + (i - 3) * 20, fy); g.lineTo(FRAME.x + FRAME.w / 2 + (i - 3) * 160, FRAME.y + FRAME.h); g.stroke(); }
-  // silhouettes
-  const set = SETS[h % SETS.length];
-  const sil = '#070605';
-  const glow = rgba(light, 0.55);
-  set.forEach((name, i) => {
-    const x = FRAME.x + 110 + i * (FRAME.w - 220) / Math.max(1, set.length - 1 || 1) + (set.length === 1 ? 150 : 0) + (((h >> (i * 4)) & 7) - 3) * 6;
-    const y = fy + 70 + (i % 2) * 14, s = 1.15 + (((h >> (i * 3 + 1)) & 3) * 0.08);
-    g.save(); g.shadowColor = rgba(light, 0.4); g.shadowBlur = 8;
-    SIL[name](g, x, y, s, sil, glow);
-    g.restore();
-  });
+  const flick = rm ? 1 : 1 + Math.sin(t * 7 + h) * 0.03 + Math.sin(t * 13.3) * 0.02;
+  const lg = g.createRadialGradient(lx, ly, 6, lx, ly, 240 * flick); lg.addColorStop(0, rgba(light, 0.3)); lg.addColorStop(0.4, rgba(light, 0.08)); lg.addColorStop(1, rgba(light, 0));
+  g.fillStyle = lg; g.fillRect(FRAME.x + 10, FRAME.y + 10, FRAME.w - 20, FRAME.h - 20);
+  g.strokeStyle = '#2b1e1a'; g.lineWidth = 2; g.beginPath(); g.moveTo(lx, FRAME.y + 12); g.lineTo(lx, ly - 10); g.stroke();
+  g.beginPath(); g.arc(lx, ly, 8, 0, 6.283); g.fillStyle = light; g.fill(); g.lineWidth = 2; g.strokeStyle = '#2b1e1a'; g.stroke();
   // drifting motes
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < (rm ? 0 : 16); i++) {
     const px = FRAME.x + ((hash('m' + i + ev.id) % 1000) / 1000) * FRAME.w + Math.sin(t * 0.4 + i) * 12;
     const py = FRAME.y + FRAME.h - ((t * (10 + (i % 5) * 4) + (hash('n' + i) % 600)) % (FRAME.h));
     g.fillStyle = rgba(light, 0.22 + 0.15 * Math.sin(t * 2 + i)); g.beginPath(); g.arc(px, py, 1.5 + (i % 3) * 0.6, 0, 6.283); g.fill();
   }
-  // edge vignette
-  const vg = g.createRadialGradient(FRAME.x + FRAME.w / 2, FRAME.y + FRAME.h / 2, 160, FRAME.x + FRAME.w / 2, FRAME.y + FRAME.h / 2, 420);
-  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.65)'); g.fillStyle = vg; g.fillRect(FRAME.x, FRAME.y, FRAME.w, FRAME.h);
   g.restore();
   // frame: stitched border and corner tabs
   g.save();
   g.lineWidth = 8; g.strokeStyle = '#2b2018'; g.strokeRect(FRAME.x - 4, FRAME.y - 4, FRAME.w + 8, FRAME.h + 8);
-  g.lineWidth = 2; g.strokeStyle = 'rgba(232,220,196,.55)'; g.setLineDash([9, 7]); g.strokeRect(FRAME.x + 6, FRAME.y + 6, FRAME.w - 12, FRAME.h - 12); g.setLineDash([]);
   g.restore();
 }
 
@@ -186,7 +163,7 @@ export default {
       if (app.button('Continue', PANEL.x + 40, PANEL.y + 140, 200, 54, { size: 22 })) this.cont(app);
       g.restore(); return;
     }
-    drawScene(g, ev, run.act, app.t);
+    drawScene(g, ev, run.act, app.t, reduced(app));
     this.drawHud(app, run);
     this.drawPanel(app, run, ev);
     g.restore();
@@ -286,6 +263,7 @@ export default {
       g.restore();
       // number tab
       const cmp = h < 44, ly = cmp ? Math.max(2, Math.round((h - 16 * 1.22 * k) / 2)) : 10;
+      drawEventSeal(g, x + 18, y + (cmp ? ly + 8 : 24), cmp ? 11 : 13, c.ok, over); // engraved wax roundel under the number
       app.text(String(idx + 1), x + 18, y + (cmp ? ly : 13), { size: cmp ? 16 : 20, bold: true, color: c.ok ? COL.scar : 'rgba(43,30,26,.35)', align: 'center' });
       app.text(wrapLimit(app, c.label, w - 190, 22, 1, { bold: true })[0], x + 36, y + ly, { size: cmp ? 16 : 22, bold: true, color: c.ok ? COL.ink : 'rgba(43,30,26,.45)' });
       sub.forEach((ln, kk) => app.text(ln, x + 36, y + Math.round(42 * k * 0.9) + kk * lp, { size: 15, ui: true, color: c.ok ? 'rgba(43,30,26,.8)' : 'rgba(43,30,26,.4)' }));
