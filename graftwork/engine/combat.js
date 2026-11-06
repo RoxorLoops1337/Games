@@ -180,6 +180,7 @@ export function loseHp(c, tgt, n, o = {}) {
   n = Math.max(0, Math.floor(n));
   if (n <= 0 || tgt.dead) return 0;
   if (o.floor1 && tgt.hp - n < 1) n = Math.max(0, tgt.hp - 1);
+  if (n <= 0) return 0;
   tgt.hp -= n;
   if (tgt.kind === 'player') c.damageTakenThisCombat += n;
   c.ev.push({ t: 'hp', who: tgt.uid || 'player', n, src: o.src || 'cost' });
@@ -353,7 +354,7 @@ export function readSrc(c, ctx, src) {
     case 'dealt': return ctx.dealt || 0;
     case 'gold': return c.run.gold || 0;
     case 'knots': return c.seam ? c.seam.len : 0;
-    case 'junk': return [...c.hand, ...c.drawPile, ...c.discard].filter((k) => CARDS[k.inst.id].type === 'junk').length;
+    case 'junk': return [...c.hand, ...c.drawPile, ...c.discard].filter((k) => CARDS[k.inst.id].type === 'junk' && !(ctx.srcEnt && c.hand.includes(k) && !k.retain && specOf(c, k).flags.ethereal)).length; // an enemy acts after the turn ends: ethereal junk in hand is already gone
     case 'attacksInHand': return c.hand.filter((k) => CARDS[k.inst.id].type === 'attack').length;
     default:
       if (src && src.startsWith('st:')) { const [s, w] = src.slice(3).split('@'); const ent = entOf(c, ctx, w || 'self'); return ent ? (ent.st[s] || 0) : 0; }
@@ -585,7 +586,7 @@ export function pickMove(c, e) {
   else if (d.opening && e.turn < d.opening.length) id = d.opening[e.turn];
   else if (d.pattern) id = d.pattern[(e.turn - (d.opening ? d.opening.length : 0)) % d.pattern.length];
   else id = Object.keys(d.moves)[0];
-  if (!d.moves[id]) throw new Error(`enemy ${e.id} has no move ${id}`);
+  if (!(e.def.moves || d.moves)[id]) throw new Error(`enemy ${e.id} has no move ${id}`); // pick() may swap e.def (Understudy learns moves)
   e.move = id;
   c.ev.push({ t: 'intent', e: e.uid, move: id });
 }
@@ -596,24 +597,31 @@ export function intentOf(c, e) {
   const kinds = new Set();
   let dmg = 0, hits = 0;
   const ctx = { srcEnt: e, target: c.player };
+  // outgoing modifiers, then the player's incoming ones. The player's timed statuses (Vulnerable, Marked, Frail...) tick down at end of turn,
+  // BEFORE the enemies act, so they are read one lower: the number shown is the number that lands.
+  const hitMods = (n0) => {
+    let n = n0;
+    eachStatus(e, (d, v) => { if (d.mod && d.mod.outAdd) n += d.mod.outAdd(v); });
+    eachStatus(e, (d, v) => { if (d.mod && d.mod.outMul) n *= d.mod.outMul(v); });
+    if (e.dmgMul) n *= e.dmgMul;
+    eachStatus(c.player, (d, v) => { if (d.stack === 'dur') v -= 1; if (v > 0 && d.mod && d.mod.inMul) n *= d.mod.inMul(v); });
+    n = Math.max(0, Math.floor(n));
+    eachStatus(c.player, (d, v) => { if (d.stack === 'dur') v -= 1; if (v > 0 && d.mod && d.mod.inCap && n > d.mod.inCap(v)) n = d.mod.inCap(v); });
+    return n;
+  };
   for (const op of mv.fx || []) {
     const walk = (o) => {
       if (o.op === 'dmg') {
         kinds.add('attack');
-        let n = val(c, ctx, o.n);
-        eachStatus(e, (d, v) => { if (d.mod && d.mod.outAdd) n += d.mod.outAdd(v); });
-        eachStatus(e, (d, v) => { if (d.mod && d.mod.outMul) n *= d.mod.outMul(v); });
-        if (e.dmgMul) n *= e.dmgMul;
-        eachStatus(c.player, (d, v) => { if (d.mod && d.mod.inMul) n *= d.mod.inMul(v); });
-        n = Math.max(0, Math.floor(n));
+        const n = hitMods(val(c, ctx, o.n));
         const h = val(c, ctx, o.hits) || 1;
         dmg += n * h; hits += h; ctx.per = n;
       } else if (o.op === 'block') kinds.add('defend');
       else if (o.op === 'status') kinds.add(['self', 'allies'].includes(o.to) ? 'buff' : 'debuff');
       else if (o.op === 'addCard') kinds.add('junk');
       else if (o.op === 'summon') kinds.add('summon');
-      else if (o.op === 'if') { (o.then || []).forEach(walk); }
-      else if (o.op === 'custom' && o.intent) kinds.add(o.intent);
+      else if (o.op === 'if') { let ok = true; try { ok = !!cond(c, ctx, o.cond); } catch (x) { ok = true; } (ok ? (o.then || []) : (o.else || [])).forEach(walk); } // the branch that will really run
+      else if (o.op === 'custom') { if (o.intent) kinds.add(o.intent); if (o.intentDmg) { const b = o.intentDmg(c, e) || 0, x = b > 0 ? hitMods(b) : 0; if (x > 0) { dmg += x; kinds.add('attack'); } } } // extra damage a custom op deals (e.g. the Grafter's Echo splice)
     };
     walk(op);
   }

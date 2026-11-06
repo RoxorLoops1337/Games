@@ -49,8 +49,8 @@ export const GRAFTS_EXTRA = [
     boon: 'Apply 2 Burn per Ember graft in your deck (max 12).', price: 'Exhaust. Lose 3 HP when played.',
     mods: [{ k: 'flag', f: 'exhaust' }, { k: 'selfHurt', n: 3 }, hook((A, ctx) => { const t = pick(A, ctx); const n = Math.min(12, 2 * stack(A, 'ember')); if (t && n) A.status(t, 'burn', n); })] }),
   G({ id: 'g_fever_wick', name: 'Fever Wick', school: 'ember', weight: 2, tier: 'weird', rarity: 'rare', types: ATK, ok: (s) => hits(s) && num(s) && s.cost <= 2,
-    boon: 'Apply 1 Burn, plus 2 per point of Strain (max 13).', price: 'Costs 1 more. Lose 1 HP per Strain when played (max 5).',
-    mods: [{ k: 'cost', d: 1 }, hook((A, ctx) => {
+    boon: 'Apply 1 Burn, plus 2 per point of Strain (max 13).', price: '15% chance to jam. Lose 1 HP per Strain when played (max 3).',
+    mods: [{ k: 'jam', p: 0.15 }, hook((A, ctx) => {
       const s = strainOf(A); const t = pick(A, ctx);
       if (t) A.status(t, 'burn', Math.min(13, 1 + 2 * s));
       if (s > 0 && !ctx.replay) A.loseHp(A.player, Math.min(3, s), { floor1: true, src: 'graft' });
@@ -113,47 +113,47 @@ export const GRAFTS_EXTRA = [
     boon: 'Gain 1 Thorns per Rust graft in your deck (max 3).', price: 'Gain 1 Frail when played.',
     mods: [{ k: 'selfStatus', s: 'frail', n: 1 }, hook((A, ctx) => { const n = Math.min(3, stack(A, 'rust')); if (n && !ctx.replay) A.status(A.player, 'thorns', n); })] }),
   G({ id: 'g_slag_vent', name: 'Slag Vent', school: 'rust', weight: 2, tier: 'greedy', rarity: 'uncommon', types: AB, ok: (s) => !s.flags.exhaust,
-    boon: 'Deal 4 damage to all enemies per junk card in your hand (max 20).', price: 'Exhaust. Shuffle 2 Rust Flakes into your deck each combat.',
+    boon: 'Deal 6 damage to all enemies per junk card in your hand (max 30).', price: 'Exhaust. Shuffle 2 Rust Flakes into your deck each combat.',
     mods: [{ k: 'flag', f: 'exhaust' }, { k: 'junk', card: 'j_flake', n: 2, to: 'draw' }, hook((A, ctx) => {
-      const n = Math.min(20, 4 * junkIn(A).length);
+      const n = Math.min(30, 6 * junkIn(A).length);
       if (n) for (const e of A.alive()) A.dmg(A.player, e, Math.max(1, Math.round(n * (ctx.mult || 1))), { card: true });
     })] }),
   G({ id: 'g_scrapheap_mind', name: 'Scrapheap Mind', school: 'rust', weight: 1, tier: 'weird', rarity: 'uncommon', types: AB,
-    boon: 'Exhaust every junk card in your hand and draw 1 for each (max 3).', price: 'Costs 1 more.',
-    mods: [{ k: 'cost', d: 1 }, hook((A, ctx) => {
+    boon: 'Exhaust every junk card in your hand and draw 1 for each (max 3).', price: 'Lose 1 HP when played.',
+    mods: [{ k: 'selfHurt', n: 1 }, hook((A, ctx) => {
       if (ctx.replay) return;
       const c = A.c; const junk = junkIn(A);
       for (const k of junk) { const i = c.hand.indexOf(k); if (i < 0) continue; c.hand.splice(i, 1); c.exhaust.push(k); k.jam = false; k.costMod = 0; c.ev.push({ t: 'exhaust', card: k.uid }); }
       if (junk.length) A.draw(Math.min(3, junk.length));
     })] }),
   G({ id: 'g_corroded_lattice', name: 'Corroded Lattice', school: 'rust', weight: 3, tier: 'greedy', rarity: 'rare', types: AB, ok: (s) => dmgOrBlock(s) && num(s),
-    boon: '+5 numbers per Rust graft in your deck (max 25).', price: 'Costs 1 more. Shuffle 1 Clot into your deck each combat.',
-    mods: [{ k: 'cost', d: 1 }, { k: 'junk', card: 'j_clot', n: 1, to: 'draw' }, hook((A, ctx) => boost(A, ctx, Math.min(25, 5 * stack(A, 'rust'))))] }),
+    boon: '+5 numbers per Rust graft in your deck (max 25).', price: 'Shuffle 1 Clot into your deck each combat.',
+    mods: [{ k: 'junk', card: 'j_clot', n: 1, to: 'draw' }, hook((A, ctx) => boost(A, ctx, Math.min(25, 5 * stack(A, 'rust'))))] }),
 
   // ================= STATIC =================
   G({ id: 'g_phase_lock', name: 'Phase Lock', school: 'static', weight: 1, tier: 'safe', rarity: 'common', types: AB,
     boon: 'Gain 1 Charge per 2 Static grafts in your deck (min 1, max 4).', price: 'Lose 1 HP when played.',
     mods: [{ k: 'selfHurt', n: 1 }, hook((A, ctx) => { if (!ctx.replay) A.status(A.player, 'charge', Math.min(4, Math.max(1, Math.floor(stack(A, 'static') / 2)))); })] }),
   G({ id: 'g_tesla_coil', name: 'Tesla Coil', school: 'static', weight: 3, tier: 'greedy', rarity: 'rare', types: ATK, ok: (s) => hits(s) && num(s) && s.cost <= 2,
-    boon: 'Deal 3 damage to all enemies per Static or Echo graft in your deck (max 18).', price: 'Costs 1 more. 15% chance to jam.',
-    mods: [{ k: 'cost', d: 1 }, { k: 'jam', p: 0.15 }, hook((A, ctx) => {
+    boon: 'Deal 3 damage to all enemies per Static or Echo graft in your deck (max 18).', price: '15% chance to jam.',
+    mods: [{ k: 'jam', p: 0.15 }, hook((A, ctx) => {
       const n = Math.min(18, 3 * stack(A, 'static', 'echo'));
       if (n) for (const e of A.alive()) A.dmg(A.player, e, Math.max(1, Math.round(n * (ctx.mult || 1))), { card: true });
     })] }),
   G({ id: 'g_short_circuit', name: 'Short Circuit', school: 'static', weight: 2, tier: 'weird', rarity: 'rare', types: AB,
-    boon: 'Every jammed card in your hand is un-jammed and deals 6 damage to a random enemy.', price: '25% chance to jam. Lose 3 HP when played.',
-    mods: [{ k: 'jam', p: 0.25 }, { k: 'selfHurt', n: 3 }, hook((A, ctx) => {
+    boon: 'Every jammed card in your hand is un-jammed and deals 8 damage to a random enemy.', price: '25% chance to jam. Lose 2 HP when played.',
+    mods: [{ k: 'jam', p: 0.25 }, { k: 'selfHurt', n: 2 }, hook((A, ctx) => {
       if (ctx.replay) return;
       for (const k of A.c.hand) {
         if (!k.jam) continue;
         const live = A.alive(); if (!live.length) break;
         k.jam = false;
-        A.dmg(A.player, A.rng.pick(live), Math.max(1, Math.round(6 * (ctx.mult || 1))), { card: true });
+        A.dmg(A.player, A.rng.pick(live), Math.max(1, Math.round(8 * (ctx.mult || 1))), { card: true });
       }
     })] }),
   G({ id: 'g_load_spike', name: 'Load Spike', school: 'static', weight: 1, tier: 'weird', rarity: 'common', types: AB,
-    boon: 'If you have 4 or more Charge, gain 1 Energy.', price: 'Lose 3 HP when played.',
-    mods: [{ k: 'selfHurt', n: 3 }, hook((A, ctx) => { if (!ctx.replay && (A.player.st.charge || 0) >= 4) A.energy(1); })] }),
+    boon: 'If you have 3 or more Charge, gain 1 Energy.', price: 'Lose 1 HP when played.',
+    mods: [{ k: 'selfHurt', n: 1 }, hook((A, ctx) => { if (!ctx.replay && (A.player.st.charge || 0) >= 3) A.energy(1); })] }),
 
   // ================= GILDED =================
   G({ id: 'g_gold_standard', name: 'Gold Standard', school: 'gilded', weight: 1, tier: 'safe', rarity: 'common', types: AB, ok: dmgOrBlock,
@@ -170,6 +170,6 @@ export const GRAFTS_EXTRA = [
       A.block(A.player, Math.max(1, Math.round(3 * s * (ctx.mult || 1))));
     })] }),
   G({ id: 'g_gilded_cage', name: 'Gilded Cage', school: 'gilded', weight: 2, tier: 'greedy', rarity: 'uncommon', types: ['skill'], ok: (s) => !s.flags.exhaust,
-    boon: 'Gain Plated equal to half your Gilded grafts, rounded up (min 1, max 4).', price: 'Exhaust. Costs 8 gold each play.',
-    mods: [{ k: 'flag', f: 'exhaust' }, { k: 'goldCost', n: 8 }, hook((A) => { A.status(A.player, 'plated', Math.min(4, Math.max(1, Math.ceil(stack(A, 'gilded') / 2)))); })] }),
+    boon: 'Gain Plated equal to half your Gilded grafts, rounded up (min 1, max 4).', price: 'Exhaust. Costs 4 gold each play.',
+    mods: [{ k: 'flag', f: 'exhaust' }, { k: 'goldCost', n: 4 }, hook((A) => { A.status(A.player, 'plated', Math.min(4, Math.max(1, Math.ceil(stack(A, 'gilded') / 2)))); })] }),
 ];

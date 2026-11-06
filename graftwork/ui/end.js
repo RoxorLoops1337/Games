@@ -19,6 +19,12 @@ function stitch(g, x1, y1, x2, y2, col = 'rgba(232,220,196,.25)') {
   g.stroke(); g.restore();
 }
 
+// largest unscaled size (down to 9) at which str fits in maxW once the text scale and the phone floor are applied
+function fitSize(app, str, maxW, size) {
+  let s = size;
+  while (s > 9 && app.measure(str, s, { ui: true }) > maxW) s -= 1;
+  return s;
+}
 export default {
   enter(app, params) {
     const run = (params && params.run) || app.shared.run;
@@ -127,8 +133,8 @@ export default {
     app.reg('end-recap', x, y, w, h, { group: 'recap' });
     app.panel(x, y, w, h, { r: 12, fill: 'rgba(16,12,11,.88)' });
     app.text('RECAP', x + 18, y + 12, { size: 12, ui: true, bold: true, color: COL.lamp });
-    app.text(hero.name, x + 18, y + 28, { size: 26, bold: true, color: hero.color === '#9E0F2E' ? '#e66a7c' : hero.color });
-    app.text(hero.title, x + 18, y + 58, { size: 14, italic: true, color: '#cdbf9d' });
+    app.text(hero.name, x + 18, y + 32, { size: 26, bold: true, color: hero.color === '#9E0F2E' ? '#e66a7c' : hero.color });
+    app.text(hero.title, x + 18, y + 62, { size: 14, italic: true, color: '#cdbf9d' });
     const rows = [
       ['Ascension', run.ascension || 0], ['Seed', String(run.seed).length > 16 ? String(run.seed).slice(0, 15) + '...' : run.seed],
       ['Floors climbed', st.floors], ['Fights won', st.fights - (this.won ? 0 : (run.phase === 'dead' && !run.abandoned ? 1 : 0))], ['Elites', st.elites],
@@ -137,7 +143,7 @@ export default {
     ];
     if (run.loop) rows.splice(1, 0, ['Endless loops', run.loop]);
     if (run.daily) rows.splice(1, 0, ['Daily', run.dailyMod ? run.dailyMod.name : 'yes']);
-    let yy = y + 84;
+    let yy = y + 88;
     rows.forEach(([a, b], i) => {
       const reveal = clamp((this.t0 - 0.3 - i * 0.07) / 0.25, 0, 1);
       g.save(); g.globalAlpha = reveal;
@@ -213,45 +219,50 @@ export default {
     const ny = y + ph + 12, nh = h - ph - 12;
     app.reg('end-news', x, ny, w, nh, { group: 'news' });
     app.panel(x, ny, w, nh, { r: 12, fill: 'rgba(16,12,11,.88)', stroke: this.news.length ? rgba(COL.lamp, 0.5) : undefined });
-    app.text(this.news.length ? 'NEW ON THE RECORD' : 'NOTHING NEW ON THE RECORD', x + w / 2, ny + 10, { size: 12, ui: true, bold: true, align: 'center', color: this.news.length ? COL.lamp : '#8c8372' });
-    let yy = ny + 32;
+    app.text(this.news.length ? 'NEW ON THE RECORD' : 'NOTHING NEW', x + w / 2, ny + 10, { size: 12, ui: true, bold: true, align: 'center', color: this.news.length ? COL.lamp : '#8c8372' });
+    // phones inflate every label, so row offsets come from the real text heights
+    const kH = Math.ceil(app.sz(10, { ui: true, bold: true }) * 1.2), nH = Math.ceil(app.sz(17, { bold: true }) * 1.2), tH = Math.ceil(app.sz(12, { ui: true }) * 1.22);
+    const hdrH = Math.ceil(app.sz(12, { ui: true, bold: true }) * 1.2);
+    let yy = ny + 10 + hdrH + 8;
     let fitted = 0;
     for (let i = 0; i < this.news.length; i++) {
       const n = this.news[i];
-      const lines = app.wrap(n.text || '', w - 28, 12, { ui: true }).length, hh = 36 + Math.min(lines, 2) * 14 + 6;
-      if (yy + hh > ny + nh - (i < this.news.length - 1 ? 24 : 6)) break;
+      const lines = app.wrap(n.text || '', w - 28, 12, { ui: true }).length, hh = kH + nH + Math.min(lines, 2) * tH + 10;
+      if (yy + hh > ny + nh - (i < this.news.length - 1 ? hdrH + 8 : 6)) break;
       fitted = i + 1;
       const at = this.nextNew + i * 0.45, k = clamp((this.t0 - at) / 0.4, 0, 1);
       if (k > 0 && this.shown <= i) { this.shown = i + 1; if (!calm(app)) { this.fx.burst(x + w / 2, yy + 14, 'gild', { n: 18 }); this.fx.ring(x + w / 2, yy + 14, COL.lamp, 70, 0.6); } if (app.shared.audio) app.shared.audio.sfx(n.kind === 'Unlocked' ? 'relic' : 'gilded', { vol: 0.7 }); }
       g.save(); g.globalAlpha = EASE.out(k); g.translate((1 - EASE.out(k)) * 30, 0);
       app.text(n.kind === 'Unlocked' ? 'UNLOCKED' : 'RECORD', x + 14, yy, { size: 10, ui: true, bold: true, color: n.kind === 'Unlocked' ? '#8fe0a0' : COL.lamp });
-      app.text(n.name, x + 14, yy + 11, { size: 17, bold: true, color: '#fbe9b0', shadow: true });
-      app.text(lines > 2 ? (n.text || '').slice(0, 56) + '...' : n.text || '', x + 14, yy + 33, { size: 12, ui: true, maxW: w - 28, lineH: 14, color: '#cdbf9d' });
+      app.text(n.name, x + 14, yy + kH, { size: 17, bold: true, color: '#fbe9b0', shadow: true });
+      app.text(lines > 2 ? (n.text || '').slice(0, 56) + '...' : n.text || '', x + 14, yy + kH + nH + 2, { size: 12, ui: true, maxW: w - 28, lineH: 14, color: '#cdbf9d' });
       g.restore();
       yy += hh;
     }
-    if (this.news.length > fitted) app.text(`and ${this.news.length - fitted} more in the Codex`, x + w / 2, ny + nh - 24, { size: 12, ui: true, italic: true, align: 'center', color: '#a58f6b' });
+    if (this.news.length > fitted) app.text(`and ${this.news.length - fitted} more in the Codex`, x + w / 2, ny + nh - hdrH - 8, { size: 12, ui: true, italic: true, align: 'center', color: '#a58f6b' });
   },
   drawButtons(app, flow, run) {
-    const y = 662, bh = 46;
+    const y = 660, bh = 48;
     const btns = [];
     btns.push(['New Run', 'new']);
     if (this.won) btns.push(['Endless', 'endless']);
     btns.push(['Copy seed', 'copy']);
     btns.push(['Back to title', 'title']);
-    const bw = 200, gap = 18, total = btns.length * bw + (btns.length - 1) * gap;
+    const small = app.scale < 0.95, bw = btns.length > 3 ? (small ? 236 : 200) : 236, gap = small ? 12 : 18, total = btns.length * bw + (btns.length - 1) * gap;
     let x = 640 - total / 2;
     for (const [label, id] of btns) {
       const fill = id === 'new' ? '#4a3a1d' : id === 'endless' ? '#2a3a2a' : undefined;
       const stroke = id === 'new' ? COL.lamp : id === 'endless' ? '#8fe0a0' : undefined;
       const sub = id === 'new' ? `${HEROES[run.hero].name}, ascension ${run.ascension || 0}` : id === 'endless' ? 'The next loop, harder' : undefined;
       app.reg('end-btn-' + id, x, y, bw, bh, { group: 'btn' + id });
-      if (app.button(label, x, y, bw, bh, { size: 18, fill, stroke, sub })) {
+      const fitSub = sub ? fitSize(app, sub, bw - 20, 12) : 12;
+      if (app.button(label, x, y, bw, bh, { size: 18, fill, stroke, sub: sub ? ' ' : undefined })) {
         if (id === 'new') flow.start({ hero: run.hero, ascension: run.ascension || 0 });
         else if (id === 'endless') { RUN.startLoop(run); run.phase = 'map'; run.ended = false; delete run.endInfo; flow.route(); }
         else if (id === 'copy') this.copySeed(app);
         else flow.toTitle();
       }
+      if (sub) app.text(sub, x + bw / 2, y + bh - app.sz(fitSub, { ui: true }) - 5, { size: fitSub, ui: true, align: 'center', color: 'rgba(232,220,196,.7)', maxW: bw - 16 });
       x += bw + gap;
     }
   },

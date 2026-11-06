@@ -18,7 +18,7 @@ function schoolsOfInst(inst) {
 // Guard role: Cue hands every ally Stitched Up (itself when alone). Call Time is a two-turn telegraphed big that only lands in
 // full when you played fewer than 3 cards; the 18 extra rides on Primed, so the intent number drops the moment you play your 3rd card.
 const stageManager = {
-  id: 'stage_manager', name: 'Stage Manager', act: 3, kind: 'normal', start: { strength: 1 }, hp: [92, 98],
+  id: 'stage_manager', name: 'Stage Manager', act: 3, kind: 'normal', start: { strength: 1 }, hp: [78, 83],
   pattern: ['cue', 'prompt_book', 'call_time'],
   moves: {
     cue: { name: 'Cue the Crew', intent: ['defend', 'buff', 'attack'], fx: [D(8), ST('stitchedup', 8, 'allies'),
@@ -45,7 +45,7 @@ const RIDERS = {
   ember: ['burn', 2], blood: ['bleed', 2], echo: ['weak', 1], static: ['marked', 1], gilded: ['frail', 1],
 };
 const understudysShadow = {
-  id: 'understudys_shadow', name: "Understudy's Shadow", act: 3, kind: 'normal', start: { strength: 1 }, hp: [90, 96],
+  id: 'understudys_shadow', name: "Understudy's Shadow", act: 3, kind: 'normal', start: { strength: 1 }, hp: [76, 82],
   pattern: ['mimic', 'curtsey', 'mimic'],
   moves: {
     mimic: { name: 'Mimic Your Last Line', intent: ['attack', 'debuff'], fx: [D(8), CUSTOM('debuff', 'Copies the school of your last card: Ember burn 2, Blood bleed 2, Echo weak 1, Static marked 1, Gilded frail 1, Hoard 10 block for itself, Rust a Flake in your discard', (A, ctx) => {
@@ -86,7 +86,7 @@ function fray(A, e) {
   if (k) { k.jam = true; A.ev({ t: 'jam', card: k.uid }); }
 }
 const locksmith = {
-  id: 'locksmith', name: 'Locksmith', act: 3, kind: 'normal', start: { strength: 1 }, hp: [92, 100],
+  id: 'locksmith', name: 'Locksmith', act: 3, kind: 'normal', start: { strength: 1 }, hp: [66, 72],
   pattern: ['tumbler', 'bolt', 'rake'],
   moves: {
     tumbler: { name: 'Turn the Tumbler', fx: [D(14), { op: 'block', n: 8 }] },

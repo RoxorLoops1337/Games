@@ -142,7 +142,8 @@ function pickRefine(app) {
 function startTemper(app, inst) {
   const run = app.shared.run, before = cardSpec(inst), names = inst.grafts.map((g) => GRAFTS[g].name);
   const r = RUN.forgeAct(run, 'temper', inst.uid); if (!r.ok) return fail(app);
-  S.anim = { kind: 'refine', t: 0, dur: 2.6, before, after: cardSpec(inst), struck: false };
+  const tr = app.shared && app.shared.transitions;
+  S.anim = tr && tr.TEMPER ? { kind: 'temper', t: 0, dur: tr.TEMPER.dur, before, after: cardSpec(inst), n: names.length } : { kind: 'refine', t: 0, dur: 2.6, before, after: cardSpec(inst), struck: false };
   S.log.push(`Tempered ${before.name}: ${names.join(' and ')} are part of the card now.`);
 }
 function pickTemper(app) {
@@ -220,6 +221,7 @@ function drawHammer(g, x, y, ang) {
 
 function updateForgeAnim(app, a, dt) {
   if (['attach', 'strip', 'move', 'burn'].includes(a.kind)) return updateAnim(app, a, S.fx, dt);
+  if (a.kind === 'temper') return app.shared.transitions.temperUpdate(app, a, S.fx, dt);
   a.t += dt; const k = a.t / a.dur;
   if (a.kind === 'rest') { if (Math.random() < 0.7) S.fx.burst(640 + (Math.random() - 0.5) * 240, 520, 'ember', { n: 1 }); if (k > 0.3 && !a.healFx) { a.healFx = true; S.fx.burst(640, 360, 'heal', { n: 16 }); } }
   else if (a.kind === 'expand') { if (!a.clunk && k > 0.4) { a.clunk = true; sfx(app, 'graftScar'); S.fx.hitstop(40); S.fx.shake(0.3); S.fx.burst(640 + (a.after.budget - 1) * 30, 360, 'spark'); S.fx.flash(BRASS, 0.15, 0.2); } }
@@ -256,6 +258,15 @@ function drawForgeAnim(app, a) {
     app.text(`Budget ${Math.round(slide >= 1 ? a.after.budget : a.before.budget)}`, 640, 400, { size: 34, bold: true, align: 'center', color: COL.vellum, shadow: true });
     app.text(gaugeLabel(a.after), 640, 450, { size: 17, ui: true, align: 'center', color: a.after.strain ? COL.bad : 'rgba(232,220,196,.8)', alpha: slide });
     if (a.before.strain > a.after.strain) app.text('One Strain point eased.', 640, 480, { size: 17, ui: true, align: 'center', color: COL.good, alpha: slide });
+  } else if (a.kind === 'temper') {
+    const T = app.shared.transitions, hit = a.t >= T.TEMPER.strikes[0], flip = a.t >= T.TEMPER.pop ? 1 : 0, hp = T.hammerPose(a.t);
+    app.text('Temper', 640, 70, { size: 40, bold: true, align: 'center', color: COL.lamp, shadow: true });
+    g.fillStyle = '#25262a'; g.beginPath(); g.moveTo(420, 600); g.lineTo(860, 600); g.lineTo(800, 560); g.lineTo(880, 530); g.lineTo(880, 500); g.lineTo(400, 500); g.lineTo(350, 540); g.lineTo(420, 550); g.closePath(); g.fill();
+    drawCard(g, flip ? a.after : a.before, 640, 330, { scale: 1.0, glow: T.heatAt(a.t) * 0.25 });
+    T.temperTint(app, a, 640, 330, CARD_W, CARD_H); T.temperRivets(app, a, 640, 330, CARD_W, CARD_H, a.n);
+    drawHammer(g, 715, 250 + hp.dy, hp.ang);
+    if (a.t > 1.7) app.text(`${a.before.name}: the patches are part of the card now.`, 640, 665, { size: 22, italic: true, align: 'center', color: COL.vellum, shadow: true, alpha: clamp((a.t - 1.7) * 4, 0, 1) });
+    void hit;
   } else if (a.kind === 'refine') {
     const swing = clamp(k / 0.4, 0, 1), hit = k > 0.4;
     const ang = lerp(-1.2, 0.0, EASE.in(swing)) + (hit ? Math.max(0, 0.2 - (k - 0.4) * 1.2) : 0);

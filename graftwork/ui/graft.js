@@ -24,16 +24,18 @@ const DIM = 'rgba(232,220,196,.6)';
 
 let st = null;
 
+const trn = (app) => (app.shared && app.shared.transitions) || null;
 const sfx = (app, name, o) => { const a = app.shared && app.shared.audio; if (a && a.sfx) { try { a.sfx(name, o); } catch (e) { /* audio is optional */ } } };
 
-function layout(offer) {
+function layout(offer, small) {
   const n = offer.cards.length, m = offer.grafts.length;
   const startX = 412 - ((n - 1) * 257) / 2;
   const cards = offer.cards.map((uid, i) => ({ uid, cx: startX + i * 257, cy: CARD_Y, x: startX + i * 257 - CW / 2, y: CARD_Y - CH / 2, w: CW, h: CH }));
-  const ph = m > 3 ? 84 : 108, gap = m > 3 ? 8 : 9;
+  // phones: the text floor inflates every label ~1.4x, so the tiles get taller and the hover panel is dropped
+  const ph = small ? (m > 3 ? 110 : 146) : m > 3 ? 84 : 108, gap = small ? 4 : m > 3 ? 8 : 9;
   const patches = offer.grafts.map((gid, j) => ({ gid, x: TRAY_X, y: 80 + j * (ph + gap), w: TRAY_W, h: ph }));
   const end = 80 + m * (ph + gap);
-  return { cards, patches, infoY: end + 2, infoH: 548 - (end + 2) - 6 };
+  return { cards, patches, infoY: end + 2, infoH: small ? 0 : 548 - (end + 2) - 6 };
 }
 
 function skipLimit(run) { return RUN.perk(run, 'extraSkipChoice') ? 2 : 1; }
@@ -48,7 +50,7 @@ export default {
       menu: false, skipPick: [], fx: new Fx(), mode: 'pick', anim: null, snap: null, lift: {}, note: null, ending: false,
       reduce: !!(meta.settings && meta.settings.reducedMotion), done: false,
     };
-    st.rects = layout(st.offer);
+    st.small = app.scale < 0.95; st.rects = layout(st.offer, st.small);
     this.st = st;
   },
   leave() { st = null; },
@@ -56,6 +58,7 @@ export default {
   update(app, dt) {
     if (!st) return;
     const d = st.fx.update(dt);
+    { const T = trn(app); if (T && T.decay) T.decay(st, dt); }
     st.t += dt; st.dealT += dt; st.morphT = Math.min(1, st.morphT + dt / 0.5);
     if (st.note) { st.note.age += dt; if (st.note.age > 2.6) st.note = null; }
     if (st.mode === 'attach' && st.anim) advanceAnim(app, d);
@@ -73,6 +76,7 @@ export default {
   },
   drawTable(app) {
     if (!st) return;
+    if (st.small !== (app.scale < 0.95)) { st.small = app.scale < 0.95; st.rects = layout(st.offer, st.small); }
     const ctx = app.ctx, run = st.run;
     const live = st.mode === 'pick';
     const interactive = live && !st.menu && !app.blocked;
@@ -100,7 +104,9 @@ export default {
     const pv = pair ? (live ? getPreview(inst, st.selGraft) : st.snap.pv) : null;
     const tithedSet = new Set(pair ? pv.after.tithed : strain.tithed);
 
-    drawTopBar(app, strain, interactive);
+    { const T = trn(app), go = T && T.gaugeOffset ? T.gaugeOffset(st, st.t) : { x: 0, y: 0 };
+      ctx.save(); ctx.translate(go.x, go.y); drawTopBar(app, strain, interactive); ctx.restore();
+      if (T && T.gaugeGlow) T.gaugeGlow(app, st, 24, 42, 360, 16); }
 
     // ---- cards ----
     R.cards.forEach((r, i) => drawOfferCard(app, r, i, { inst, g, pair, pv, tithedSet, interactive, counts }));
@@ -120,7 +126,7 @@ export default {
     if (st.menu) drawSkipMenu(app);
     else if (st.mode === 'pick') {
       const T = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
-      (T('graftpick', 412, 130, { side: 'below', w: 300 }) || T('boonprice', TRAY_X, 160, { side: 'left', w: 300 }) || T('budget', 200, 62, { side: 'below', w: 300 }) ||
+      (T('graftpick', 640, AFTER.y + 2, { side: 'below', w: 300 }) || T('boonprice', TRAY_X, 160, { side: 'left', w: 300 }) || T('budget', 200, 62, { side: 'below', w: 300 }) ||
         (strain.strain > 0 && T('strain', 200, 62, { side: 'below', w: 300 })) || T('skipping', TRAY_X + 326, 556, { side: 'above', w: 300 }));
     }
     // click anywhere skips the attach animation
@@ -260,8 +266,10 @@ function drawOfferCard(app, r, i, c) {
   // caption row
   const base = CARDS[inst.id];
   const cap = (inst.plays ? `Played ${inst.plays}x` : 'Never played') + ', ' + (inst.grafts.length ? `${inst.grafts.length} graft${inst.grafts.length > 1 ? 's' : ''}` : 'Bare');
-  app.text(cap, cx + 12, r.cy + CH / 2 + 12, { size: 14, ui: true, align: 'center', color: DIM, alpha: deal, maxW: CW - 8 });
-  keyBadge(app, String(i + 1), cx - CW / 2 + 12, r.cy + CH / 2 + 20);
+  // phones inflate the caption: lift it so it never touches the AFTER panel below
+  const capH = Math.ceil(app.sz(14, { ui: true }) * 1.2), capY = Math.min(r.cy + CH / 2 + 12, AFTER.y - capH - 4);
+  app.text(cap, cx + 12, capY, { size: 14, ui: true, align: 'center', color: DIM, alpha: deal, maxW: CW - 8 });
+  keyBadge(app, String(i + 1), cx - CW / 2 + 12, capY + capH / 2);
 
   if (hover) {
     const lines = [];
@@ -287,7 +295,7 @@ function drawPatchTile(app, r, j, c) {
   const slide = EASE.out(clamp((st.dealT - 0.25 - j * 0.1) / 0.5, 0, 1));
   if (slide <= 0) return;
   const compact = st.rects.patches.length > 3;
-  app.reg('graft-patch' + j, r.x - 28, r.y, r.w + 28, r.h, { group: 'patch' + j });
+  app.reg('graft-patch' + j, r.x - 24, r.y, r.w + 24, r.h, { group: 'patch' + j });
   const dim = st.mode === 'pick' && c.inst && !canGraft(c.inst, r.gid);
   const hover = c.interactive && slide >= 1 && app.inRect(r.x, r.y, r.w, r.h);
   const key = 'p' + r.gid;
@@ -304,7 +312,7 @@ function drawPatchTile(app, r, j, c) {
 
   if (hover) {
     const info = resonanceInfo(st.run, g.school, c.counts);
-    const lines = [`${tier.label} graft, weight ${g.weight}.`, 'Boon: ' + g.boon, 'Price: ' + g.price];
+    const lines = [`${tier.label} graft. W${g.weight} = weight ${g.weight} (the staples): it counts ${g.weight} against your Budget.`, 'Boon: ' + g.boon, 'Price: ' + g.price];
     const hp = g.mods.find((m) => m.k === 'maxHp'); if (hp) lines.push(`Permanently costs ${-hp.n} max HP.`);
     if (info) lines.push(...info.lines);
     if (dim) lines.push('CANNOT GO ON THE SELECTED CARD: ' + cantReason(c.inst, r.gid));
@@ -344,27 +352,48 @@ function drawPatchBody(app, g, x, y, w, h, o) {
 
   const tx = x + 88, tw = w - 88 - 12;
   // tier ribbon
-  const rw = 74;
+  const rw = Math.max(74, Math.ceil(app.measure(tier.label, 13, { ui: true, bold: true })) + 26); // phones inflate the label
   ctx.save();
   ctx.fillStyle = tier.color;
   ctx.beginPath(); ctx.moveTo(x + w - 10 - rw, y + 9); ctx.lineTo(x + w - 10, y + 9); ctx.lineTo(x + w - 10, y + 27); ctx.lineTo(x + w - 10 - rw, y + 27); ctx.lineTo(x + w - 10 - rw + 8, y + 18); ctx.closePath(); ctx.fill();
   ctx.restore();
   app.text(tier.label, x + w - 10 - rw / 2 + 4, y + 11, { size: 13, ui: true, bold: true, align: 'center', color: tier.ink });
-  // staples (weight)
-  for (let i = 0; i < g.weight; i++) drawStaple(app.ctx, x + w - 12 - rw - 8 - (g.weight - i) * 19 + 4, y + 11, 14, '#d8dde0');
-  
+  // weight tag: a "W2" pill (with the staples inside) so the glyphs are never unlabelled
+  const wl = 'W' + g.weight, wpad = 7, wst = g.weight * 8 + 4;
+  const ww = Math.ceil(app.measure(wl, 13, { ui: true, bold: true })) + wst + wpad * 2, wx = x + w - 10 - rw - 6 - ww;
+  ctx.save(); app.rr(wx, y + 9, ww, 18, 9); ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(216,221,224,.7)'; ctx.stroke(); ctx.restore();
+  app.text(wl, wx + wpad, y + 11, { size: 13, ui: true, bold: true, color: '#e8edf0' });
+  const sx0 = wx + wpad + Math.ceil(app.measure(wl, 13, { ui: true, bold: true })) + 4;
+  for (let i = 0; i < g.weight; i++) drawStaple(app.ctx, sx0 + i * 8, y + 13, 5, '#d8dde0');
+
   // name
   app.text(g.name, tx, y + 7, { size: compact ? 18 : 20, bold: true, color: COL.vellum, shadow: true });
   // boon + price
-  const lines = compact ? 1 : 2;
-  const boonL = wrapLimit(app, g.boon, tw - 40, 14, lines, { ui: true });
-  const priceL = wrapLimit(app, g.price, tw - 40, 14, lines, { ui: true });
-  let yy = y + (compact ? 30 : 34);
+  // phones inflate small text (SMALL floor): scale label column, line height and the lines budget by the real size
+  const lk = app.sz(13, { ui: true, bold: true }) / 13;
+  const lo = Math.round(40 * lk);
+  const nameBot = y + 7 + app.sz(compact ? 18 : 20) * 1.2;
+  const yy0 = Math.max(y + (compact ? 30 : 34), Math.round(nameBot));
+  const avail = y + h - 4 - yy0 - 3;
+  // try 14, 13, 12 px text until boon + price both fit whole (no ellipsis) in the tile; else cut the boon first
+  let fs = 14, boonL, priceL, lh;
+  for (const sz of [14, 13, 12]) {
+    fs = sz; lh = Math.round(app.sz(sz, { ui: true }) * 1.16);
+    const total = Math.max(2, Math.floor((avail - 3) / lh));
+    const bl = app.wrap(g.boon, tw - lo, sz, { ui: true }), pl = app.wrap(g.price, tw - lo, sz, { ui: true });
+    const cap = compact ? 2 : total;
+    if (bl.length + pl.length <= cap) { boonL = bl; priceL = pl; break; }
+    if (sz === 12) {
+      const pn = Math.min(pl.length, Math.max(1, cap - 1)), bn = Math.max(1, cap - pn);
+      boonL = wrapLimit(app, g.boon, tw - lo, sz, bn, { ui: true }); priceL = wrapLimit(app, g.price, tw - lo, sz, pn, { ui: true });
+    }
+  }
+  let yy = yy0;
   app.text('Boon', tx, yy, { size: 13, ui: true, bold: true, color: COL.good });
-  boonL.forEach((ln, i) => app.text(ln, tx + 40, yy + i * 16, { size: 14, ui: true, color: COL.vellum }));
-  yy += lines * 16 + 3;
+  boonL.forEach((ln, i) => app.text(ln, tx + lo, yy + i * lh, { size: fs, ui: true, color: COL.vellum }));
+  yy += boonL.length * lh + 3;
   app.text('Price', tx, yy, { size: 13, ui: true, bold: true, color: COL.bad });
-  priceL.forEach((ln, i) => app.text(ln, tx + 40, yy + i * 16, { size: 14, ui: true, color: '#ff7a7a' }));
+  priceL.forEach((ln, i) => app.text(ln, tx + lo, yy + i * lh, { size: fs, ui: true, color: '#ff7a7a' }));
   const hp = g.mods.find((m) => m.k === 'maxHp');
   if (hp) {
     const label = `MAX HP ${hp.n}`;
@@ -376,6 +405,7 @@ function drawPatchBody(app, g, x, y, w, h, o) {
 }
 
 function drawInfoPanel(app, R, counts) {
+  if (R.infoH < 60) return;
   const ctx = app.ctx;
   const x = TRAY_X, y = R.infoY, w = TRAY_W, h = R.infoH;
   app.reg('graft-info', x, y, w, h, { group: 'info' });
@@ -406,21 +436,24 @@ function drawAfter(app, c) {
   const A = pair ? pv.after : strain, B = pair ? pv.before : strain;
   app.text(pair ? 'AFTER' : 'THE TABLE', x + 16, y + 8, { size: 28, bold: true, color: pair ? COL.lamp : COL.vellum, shadow: true });
   const sub = st.note ? st.note.text : pair ? `${c.g.name} on ${spec2name(c.inst)}. Nothing is sewn until you press Sew it on.` : 'Choose one of your cards and one graft. This panel shows the whole bill first.';
-  app.text(sub, x + (pair ? 134 : 196), y + 15, { size: 14, ui: true, color: st.note ? '#ff9aa6' : DIM, maxW: w - (pair ? 150 : 212) });
+  const subX = x + (pair ? 134 : 196), subW = w - (pair ? 150 : 212);
+  const subL = wrapLimit(app, sub, subW, 14, 1, { ui: true });
+  app.text(subL[0], subX, y + 15, { size: 14, ui: true, color: st.note ? '#ff9aa6' : DIM });
 
   // rows
   const lx = x + 16;
   const rowBudget = y + 46, rowStrain = y + 82, rowTithe = y + 114;
+  const vx = lx + Math.max(80, Math.ceil(app.measure('BUDGET', 14, { ui: true, bold: true })) + 10); // value column clears the inflated phone labels
   app.text('BUDGET', lx, rowBudget + 5, { size: 14, ui: true, bold: true, color: DIM });
   const wTxt = pair ? `${B.weight}/${B.budget}  →  ${A.weight}/${A.budget}` : `${A.weight}/${A.budget}`;
-  app.text(wTxt, lx + 80, rowBudget, { size: 24, bold: true, color: A.weight > A.budget ? '#ff9aa6' : COL.vellum });
+  app.text(wTxt, vx, rowBudget, { size: 24, bold: true, color: A.weight > A.budget ? '#ff9aa6' : COL.vellum });
   const addW = pair ? A.weight - B.weight : 0;
   drawGauge(app, lx + 262, rowBudget + 2, w - 262 - 32, 22, B.weight, A.budget, addW, st.t);
   if (app.inRect(lx, rowBudget - 4, w - 32, 36)) app.tooltip('Budget', pair ? `Weight ${B.weight} → ${A.weight} against a Budget of ${A.budget}. The pulsing cells are what this graft adds${A.weight > A.budget ? '; red cells are Strain' : ''}.` : 'Filled cells are graft weight in your deck, the gold line is your Budget. Red cells are Strain.', { color: COL.lamp });
 
   app.text('STRAIN', lx, rowStrain + 5, { size: 14, ui: true, bold: true, color: DIM });
   const sCol = A.strain > B.strain ? COL.bad : A.strain > 0 ? '#ffb36b' : COL.good;
-  app.text(pair ? `${B.strain}  →  ${A.strain}` : `${A.strain}`, lx + 80, rowStrain, { size: 24, bold: true, color: sCol });
+  app.text(pair ? `${B.strain}  →  ${A.strain}` : `${A.strain}`, vx, rowStrain, { size: 24, bold: true, color: sCol });
   let verdict = A.strain === 0 ? 'Within Budget. Nobody pays.' : `${A.tithed.length} Tithe${A.tithed.length === 1 ? '' : 's'} land${A.tithed.length === 1 ? 's' : ''} on Bare cards.`;
   app.text(verdict, lx + 262, rowStrain + 4, { size: 16, ui: true, color: A.strain ? '#ffb3b3' : COL.good });
   // max hp
@@ -498,7 +531,7 @@ function drawButtons(app, c) {
   const sub = locked ? 'Locked (Ascension 8)' : rerollFree ? 'Free' : `${cost} gold`;
   if (app.button('Reroll offer', TRAY_X, 556, 208, 46, { size: 19, sub, disabled: !can, subColor: poor && !locked ? '#ff9aa6' : undefined }) && can) {
     if (RUN.rerollGraftOffer(run)) {
-      st.offer = run.pending.offer; st.rects = layout(st.offer); st.selCard = null; st.selGraft = null; st.dealT = 0; st.morphT = 1; st.pvKey = '';
+      st.offer = run.pending.offer; st.small = app.scale < 0.95; st.rects = layout(st.offer, st.small); st.selCard = null; st.selGraft = null; st.dealT = 0; st.morphT = 1; st.pvKey = '';
       sfx(app, 'shuffle'); if (!rerollFree) sfx(app, 'coin', { vol: 0.5 });
     } else sfx(app, 'error');
   }
@@ -608,6 +641,12 @@ function advanceAnim(app, d) {
   const cx = s.cardR.cx, cy = s.cardR.cy - 18;
   const col = schoolColor(s.g.school);
   const T = (v) => v / k;
+  { const T = trn(app); // one tick, spark and shiver per stitch
+    for (let i = 1; i <= 6; i++) {
+      const at = T_STITCH + (T_CLUNK - T_STITCH) * (i / 6) * 0.92;
+      if (a.t >= at / k && !f['s' + i]) { f['s' + i] = 1; if (T && T.stitchBeat) T.stitchBeat(app, fx, cx + 36 - 79 + (158 / 6) * i, cy + 92 + (i % 2 ? 1 : -1) * 57, i, 6, col, a.over); }
+    }
+  }
   if (a.t >= T_STITCH / k && !f.stitch) { f.stitch = 1; sfx(app, 'graftAttach'); if (a.over) sfx(app, 'overload'); }
   if (a.t >= T(T_CLUNK) && !f.clunk) {
     f.clunk = 1;
@@ -615,6 +654,7 @@ function advanceAnim(app, d) {
     fx.emit({ x: cx + 36, y: cy + 92, n: 30, colors: [col, '#ffffff', COL.lamp], speed: 340, life: 0.8, size: 4.5, glow: true, gravity: 380 });
     fx.ring(cx + 36, cy + 92, col, 150, 0.5);
     if (!st.reduce) fx.shake(0.3);
+    { const T = trn(app); if (T && T.clunkBeat) T.clunkBeat(app, st, RUN.strainInfo(st.run), cx + 36, cy + 92); }
   }
   if (a.t >= T(T_TITHE) && s.newTithed.length) {
     s.newTithed.forEach((u, i) => {
@@ -629,6 +669,7 @@ function advanceAnim(app, d) {
   if (a.over && a.t >= T(T_SLAM) && !f.slam) {
     f.slam = 1; fx.burst(cx, cy, 'shard', { n: 22, speed: 480 }); fx.flash(COL.lamp, 0.35, 0.3);
     if (!st.reduce) { fx.shake(0.8); fx.slowmo(0.4, 500); }
+    { const T = trn(app); if (T && T.overloadBeat) T.overloadBeat(app, fx, cx, cy, Math.round(shatterChance(st.run) * 100)); }
   }
   if (a.t >= a.end) finishAnim(app);
 }
@@ -678,7 +719,7 @@ function drawAttach(app) {
     const n = 6, cnt = sp * n;
     const pts = [];
     for (let i = 0; i <= n; i++) pts.push([-tw / 2 - 4 + ((tw + 8) / n) * i, (i % 2 ? 1 : -1) * (th / 2 + 7)]);
-    ctx.shadowBlur = 0; ctx.strokeStyle = '#efe6d0'; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.shadowBlur = 0; ctx.strokeStyle = s.overload ? '#ffb09a' : '#efe6d0'; ctx.lineWidth = s.overload ? 3 : 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
     let tip = pts[0];
     for (let i = 1; i <= n; i++) {
