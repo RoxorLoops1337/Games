@@ -37,7 +37,7 @@ export function resetTips(app) {
   meta.tips = {}; const f = app.shared.flow; if (f && f.saveMeta) f.saveMeta();
 }
 
-// o: { side: 'below'|'above'|'left'|'right' (where the bubble sits relative to the point, default 'below'), w: max width (default 270) }
+// o: { pos: {x, y} fixed top-left corner of the bubble (use a quiet corner so it never covers what it teaches about), side: 'below'|'above'|'left'|'right' (where the bubble sits relative to the point, default 'below'), w: max width (default 270) }
 // Returns true while the tip is on screen this frame.
 export function maybeTip(app, key, x, y, text, o = {}) {
   const meta = app.shared.meta;
@@ -55,6 +55,7 @@ export function maybeTip(app, key, x, y, text, o = {}) {
   else if (side === 'above') { bx = x - bw / 2; by = y - gap - bh; }
   else if (side === 'left') { bx = x - gap - bw; by = y - bh / 2; }
   else { bx = x + gap; by = y - bh / 2; }
+  if (o.pos) { bx = o.pos.x; by = o.pos.y; } // o.pos: fixed top-left spot in a quiet corner, the arrow still reaches (x, y)
   bx = clamp(bx, 8, W - bw - 8); by = clamp(by, 8, H - bh - 8);
   // o.maxBottom keeps the bubble clear of the hero plate, the Thread rail and the hand (the arrow just reaches further).
   if (o.maxBottom !== undefined && by + bh > o.maxBottom) by = Math.max(8, o.maxBottom - bh);

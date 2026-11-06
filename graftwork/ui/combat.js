@@ -1758,16 +1758,17 @@ function drawCardInfo(app) {
 // first-run tips: one at a time, only while the player can act, never over a modal
 // Tips never cover the hero plate (y 464), the Thread rail (y 468) or the hand: bubbles stop above this line, the arrow reaches down.
 const TIP_BOTTOM = L.SEAM.y - 10;
+const QUIET = { x: 16, y: 80 }; // empty wall above the hero: first-run bubbles sit here so they never cover the hero, the enemies or the cards
 function drawTips(app) {
   if (!S || S.modal || S.ending || S.c.pending || S.banner || !canAct() || S.drag) return;
   const c = S.c, l = liveEds(), first = l[0];
   const has = (k) => app.shared.meta && app.shared.meta.tips && app.shared.meta.tips[k];
   const tip = (k, x, y, o, txt) => maybeTip(app, k, x, y, txt, o);
   if (first && !S.hov) {
-    if (tip('energy', L.ORB.x + 40, L.ORB.y - 46, { side: 'above', w: 270, maxBottom: TIP_BOTTOM })) return;
-    if (tip('intent', first.x, EF - first.h - 8, { side: 'below', w: 290, maxBottom: TIP_BOTTOM })) return;
+    if (tip('energy', L.ORB.x + 10, L.ORB.y - 44, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
+    if (tip('intent', first.x - first.w * 0.5 - 6, EF - first.h - 30, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
     if (S.hand.length && tip('playcard', 500, L.HAND_Y - 120, { side: 'above', w: 430, maxBottom: TIP_BOTTOM }, 'Click a card to select it, then click it again or drag it up to play it. Attacks ask for a target. Keys 1 to 0 also select.')) return;
-    if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 70, FOOT_Y - 150, { side: 'right', w: 280, maxBottom: TIP_BOTTOM })) return;
+    if (c.enemies.some((e) => !e.dead && e.move && intentWith(S.edBy.get(e.uid), e.move) && intentWith(S.edBy.get(e.uid), e.move).kinds.includes('attack')) && tip('block', HERO_X + 60, FOOT_Y - 230, { pos: QUIET, w: 250, maxBottom: TIP_BOTTOM })) return;
     if (tip('endturn', L.END_BTN.x + L.END_BTN.w / 2, L.END_BTN.y, { side: 'above', w: 280, maxBottom: TIP_BOTTOM })) return;
   }
   if (!has('endturn')) return; // later tips wait until the basics are known
