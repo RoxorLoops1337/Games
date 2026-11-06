@@ -102,11 +102,11 @@ export default {
       const ry = top + i * pitch, first = i === 0, it = s.items[0];
       if (first) { app.rr(x + 8, ry, w - 16, pitch - 3, 8); app.ctx.fillStyle = 'rgba(242,193,78,.10)'; app.ctx.fill(); app.ctx.lineWidth = lnw(1.5); app.ctx.strokeStyle = rgba(GOLD, 0.5); app.ctx.stroke(); }
       drawSilhouette(app, s.kind, x + 38, ry + (pitch - 3) / 2, Math.min(28, pitch - 8));
-      const n = s.items.length, label = `${shortHint(it.hint)} ${n > 1 ? `${n} ${KIND_LABEL[s.kind].toLowerCase()} open together.` : ''}`;
+      const n = s.items.length, label = `${shortHint(it.hint)} ${n > 1 ? `${n} ${((KIND_LABEL[s.kind] || 'items') || 'items').toLowerCase()} open together.` : ''}`;
       app.text(first ? 'NEXT' : String(i + 1), x + 66, ry + 6, { size: 11, ui: true, bold: true, color: first ? GOLD : DIM, fit: { w: 44, lines: 1 } });
       app.text(label, x + 116, ry + 6, { size: 14, ui: true, color: first ? '#fbe9b0' : '#d9cba8', fit: { w: w - 116 - 140, h: pitch - 8, lines: 2, soft: true } });
       app.text(`${s.cost} points`, x + w - 18, ry + 6, { size: 15, ui: true, bold: true, align: 'right', color: first ? GOLD : '#cdbf9d', fit: { w: 112, lines: 1 } });
-      if (app.inRect(x + 8, ry, w - 16, pitch - 3)) app.tooltip(first ? 'Next unlock' : `Unlock ${i + 1}`, `${n} ${n > 1 ? 'items' : 'item'} (${KIND_LABEL[s.kind].toLowerCase()}). Costs ${s.cost} points; your unspent points carry over.`, { color: GOLD });
+      if (app.inRect(x + 8, ry, w - 16, pitch - 3)) app.tooltip(first ? 'Next unlock' : `Unlock ${i + 1}`, `${n} ${n > 1 ? 'items' : 'item'} (${((KIND_LABEL[s.kind] || 'items') || 'items').toLowerCase()}). Costs ${s.cost} points; your unspent points carry over.`, { color: GOLD });
     });
   },
   tileTip(app, v, anchor) {

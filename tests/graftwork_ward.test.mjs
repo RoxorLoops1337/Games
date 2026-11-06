@@ -284,7 +284,7 @@ t('unlocks: building cards are kind build; start set = every room card plus half
   const run = RUN.newRun({ hero: 'wick', seed: 'u', mode: 'ward', unlocked: 'start' });
   for (let i = 0; i < 60; i++) assert.ok(START.build.has(W.rollBuildCard(run, ['common', 'uncommon', 'rare'])));
   for (const id of Object.keys(BUILD_CARDS)) assert.ok(/^b_/.test(id)); for (const id of Object.keys(ROOMS)) assert.ok(/^rm_/.test(id));
-  assert.ok(!/—/.test(JSON.stringify(BUILD_LIST.map((c) => c.text + c.name)) + JSON.stringify(Object.values(ROOMS).map((r) => r.hint))), 'no em dashes');
+  assert.ok(!/\u2014/.test(JSON.stringify(BUILD_LIST.map((c) => c.text + c.name)) + JSON.stringify(Object.values(ROOMS).map((r) => r.hint))), 'no em dashes');
 });
 
 t('classic mode is untouched: no mode field, no ward state, no phase mods; seeded runs replay identically', () => {

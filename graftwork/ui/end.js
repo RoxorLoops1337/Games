@@ -177,22 +177,20 @@ export default {
       g.restore();
       ty += bh + 6; room -= bh + 6;
     }
-    const items = this.stamps.filter((s) => s.v), cw = Math.floor((w - 8) / 3), chh = 62, rows = Math.max(1, Math.floor(room / (chh + 4))), cap = rows * 3;
-    const shown = items.length > cap ? cap - 1 : items.length;
+    const items = this.stamps.filter((s) => s.v), cw = Math.floor((w - 8) / 3), chh = 62, rows = Math.max(1, Math.floor(room / (chh + 4))), shown = Math.min(items.length, rows * 3);
+    if (items.length > shown) app.text(`+${items.length - shown} more in the Archive`, x + w, y, { size: 11, ui: true, italic: true, align: 'right', color: '#a58f6b', fit: { w: Math.max(60, w - app.measure('OPENED NOW', 11, { ui: true, bold: true }) - 12), lines: 1 } });
+    const nameH = Math.ceil(app.sz(11, { ui: true }) * 1.2) + 4;
     for (let j = 0; j < shown; j++) {
       const v = items[j].v, i = this.stamps.indexOf(items[j]), k = stampK(i), cx0 = x + (j % 3) * (cw + 4), cy0 = ty + Math.floor(j / 3) * (chh + 4);
-      if (k > 0) trigger(i, cx0 + cw / 2, cy0 + 26, false);
-      const sc = 1 + (1 - EASE.out(k)) * 0.7;
+      if (k > 0) trigger(i, cx0 + cw / 2, cy0 + 22, false);
+      const sc = 1 + (1 - EASE.out(k)) * 0.7, artH = chh - nameH - 4;
       g.save(); g.globalAlpha = EASE.out(k);
       app.rr(cx0, cy0, cw, chh, 8); g.fillStyle = 'rgba(20,15,10,.9)'; g.fill(); g.lineWidth = lnw(1.5); g.strokeStyle = rgba(GOLD, 0.6); g.stroke();
-      g.save(); g.translate(cx0 + cw / 2, cy0 + 22); g.scale(sc, sc); drawArt(app, v.kind, v.itemId, 0, 0, v.kind === 'card' ? 40 : 32); g.restore();
-      app.text(v.name, cx0 + cw / 2, cy0 + chh - 6 - Math.ceil(app.sz(11, { ui: true }) * 1.2), { size: 11, ui: true, align: 'center', color: '#fbe9b0', fit: { w: cw - 8, lines: 1 } });
+      g.save(); g.beginPath(); g.rect(cx0 + 2, cy0 + 2, cw - 4, artH); g.clip(); g.translate(cx0 + cw / 2, cy0 + 2 + artH / 2); g.scale(sc, sc); drawArt(app, v.kind, v.itemId, 0, 0, Math.min(v.kind === 'card' ? 36 : 30, artH - 2)); g.restore();
+      g.fillStyle = 'rgba(8,6,5,.92)'; g.fillRect(cx0 + 2, cy0 + chh - nameH - 2, cw - 4, nameH);
+      app.text(v.name, cx0 + cw / 2, cy0 + chh - nameH, { size: 11, ui: true, align: 'center', color: '#fbe9b0', fit: { w: cw - 8, lines: 1 } });
       g.restore();
-      if (k >= 1 && app.inRect(cx0, cy0, cw, chh)) app.tooltip(v.name, `New ${v.kind} in the Archive. ${KIND_LABEL[v.kind]} you open show up in offers from the next run.`, { color: GOLD });
-    }
-    if (items.length > shown) {
-      const j = shown, cx0 = x + (j % 3) * (cw + 4), cy0 = ty + Math.floor(j / 3) * (chh + 4);
-      app.text(`and ${items.length - shown} more in the Archive`, cx0 + cw / 2, cy0 + chh / 2 - 8, { size: 12, ui: true, italic: true, align: 'center', color: '#a58f6b', fit: { w: cw - 6, h: chh - 8, lines: 3 } });
+      if (k >= 1 && app.inRect(cx0, cy0, cw, chh)) app.tooltip(v.name, `New ${v.kind} in the Archive. ${KIND_LABEL[v.kind] || 'Items'} you open show up in offers from the next run.`, { color: GOLD });
     }
   },
   drawAtmosphere(app, t, still) {
