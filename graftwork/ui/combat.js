@@ -870,7 +870,7 @@ function drawHand(app) {
     const cw = CARD_W * dc.s, ch = CARD_H * dc.s, left = dc.x - cw / 2, top = dc.y - ch / 2;
     if (idle && !chk.ok) drawLock(ctx, left + 18 * Math.max(0.8, dc.s), dc.y + 8, Math.max(0.8, dc.s));
     if (dc.costFlash > 0) { ctx.save(); ctx.globalAlpha = dc.costFlash * 0.8; ctx.fillStyle = '#e03a3a'; ctx.beginPath(); ctx.arc(left + 26 * dc.s * 1.1, top + 26 * dc.s * 1.1, 24 * dc.s, 0, 6.283); ctx.fill(); ctx.restore(); }
-    if (idle && !isDrag && !S.q.length) { const kind = seamBadgeOf(c, dc.w); if (kind) drawSeamBadgeAt(app, kind, left + cw - 16, top + 18, dc.s); }
+    if (idle && !isDrag && !S.q.length) { const kind = seamBadgeOf(c, dc.w); if (kind) drawSeamBadgeAt(app, kind, left + cw - 14, top + 66 * dc.s, dc.s); }
     if (app.reg) {
       const rx = Math.max(0, left), ry = Math.max(0, top), rw = Math.min(W, left + cw) - rx, rh = Math.min(H, top + ch) - ry;
       if (rw > 0 && rh > 0) app.reg('hand_' + dc.uid, rx, ry, rw, rh, { layer: 'hud', group: 'hand', overlay: lifted || !!S.hov || !!S.sel });

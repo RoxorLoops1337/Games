@@ -17,6 +17,7 @@ export const ENEMY_FOOT = 340, ENEMY_ART_H = 195, ENEMY_SLOT_MIN = 110, ENEMY_LA
 export const END_BTN = { x: 1086, y: 546, w: 172, h: 54 };
 export const SEAM = { x: 380, y: 468, w: 696, h: 50 }; // the thread rail (ui/seam_ui.js): right of the hero plate, above the hand, left of End Turn
 export const HAND_CX = 600, HAND_Y = 642, HAND_SPREAD = 900; // spec 622/940 widened away from END TURN (x1086); y keeps resting tops under the Thread rail (y518)
+export const HAND_GAP = 20;                       // extra air between small-hand cards (n <= 6)
 export const HOVER_Y = 520, HOVER_S = 1.22;       // desktop hover: lifted full face
 export const SEL_Y = 470, SEL_S = 1.18;           // desktop selected (click-to-play)
 export const PREVIEW_Y = 400, PREVIEW_S = 1.0;    // touch tap preview
@@ -37,7 +38,8 @@ export function handScale(n) { return n <= 4 ? 0.72 : n <= 6 ? 0.66 : n <= 8 ? 0
 // Resting fan slot of card i out of n.
 export function handSlot(i, n) {
   const s = handScale(n), cw = CARD_W * s;
-  const step = n > 1 ? Math.min(cw, (HAND_SPREAD - cw) / (n - 1)) : 0;
+  // Small hands fan with a small GAP so each name strip clears the next card's cost orb; big hands squeeze (then hover lifts the full face).
+  const step = n > 1 ? Math.min(cw + (n <= 6 ? HAND_GAP : 0), (HAND_SPREAD - cw) / (n - 1)) : 0;
   const off = i - (n - 1) / 2;
   return { x: HAND_CX + off * step, y: HAND_Y + off * off * (n > 6 ? 1.6 : 2.4), rot: off * (n > 6 ? 0.022 : 0.032), s, cw, ch: CARD_H * s, step };
 }
