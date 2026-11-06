@@ -10,7 +10,7 @@ const HEAD = '#version 300 es\nprecision highp float;\nin vec2 uv; out vec4 o;\n
 // Soft-knee threshold on 4 bilinear taps (box prefilter, kills fireflies), writes the half-res bloom base.
 export const FS_THRESH = HEAD + `uniform sampler2D t; uniform vec2 px; uniform float thr, knee;
 vec3 soft(vec3 c){ float l = max(c.r, max(c.g, c.b)); float q = clamp(l - thr + knee, 0., 2. * knee);
-  q = q * q / (4. * knee + 1e-4); float w = max(q, l - thr) / max(l, 1e-4); return c * max(w, 0.); }
+  q = q * q / (4. * knee + 1e-4); float w = max(q, l - thr) / max(1. - thr, 1e-3); return c * clamp(w, 0., 1.); } // ramps 0 at the threshold to full colour at white
 void main(){
   vec3 c = soft(texture(t, uv + px * vec2(-1., -1.)).rgb) + soft(texture(t, uv + px * vec2(1., -1.)).rgb)
          + soft(texture(t, uv + px * vec2(-1., 1.)).rgb) + soft(texture(t, uv + px * vec2(1., 1.)).rgb);
@@ -57,7 +57,7 @@ void main(){
   if (caK > 1e-6){ vec2 off = (u - .5) * caK * live;
     c = vec3(texture(t, u + off).r, texture(t, u).g, texture(t, u - off).b); }
   else c = texture(t, u).rgb;
-  if (bloomK > 0.) c += texture(bloom, u).rgb * bloomK * (1. - .7 * m);
+  if (bloomK > 0.) c += texture(bloom, u).rgb * bloomK * 3. * (1. - .7 * m);
   c = c * gain + lift; c = pow(max(c, 0.), vec3(1. / gamma));
   float L = dot(c, vec3(.299, .587, .114)); c = mix(vec3(L), c, sat);
   // filmic shoulder: untouched below .92, rolls highlights (bloom sums) off towards 1

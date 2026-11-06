@@ -2,6 +2,8 @@
 //   { name, enter(app, params), leave(app), update(app, dt), draw(app), key(app, e) }
 // Screens redraw every frame and call app.button(...) etc.; clicks are resolved from last frame's pointer state.
 import * as LAYOUT from './layout_registry.js';
+import * as CH from './chrome.js';
+import { renderTip } from './tooltips.js';
 export const W = 1280, H = 720;
 export const FONT = 'Georgia, "Iowan Old Style", "Palatino Linotype", serif';
 export const FONT_UI = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
@@ -29,7 +31,12 @@ export function createApp(canvas, opts = {}) {
     cursor: 'default', tip: null, hot: null, shared: opts.shared || {},
     scale: 1, offX: 0, offY: 0, textCache: new Map(), layout: LAYOUT,
     reg: (id, x, y, w, h, o) => LAYOUT.register(id, x, y, w, h, o),
+    chrome: CH,
+    navButtons: false, // screens opt in: Tab / Shift-Tab / Enter walk the buttons registered last frame
+    focus: { idx: -1, active: false, n: 0, curN: 0, list: [], cur: [], fire: false, lx: -999, ly: -999 },
   };
+  const NO = Object.freeze({}); // shared empty options: calls without options allocate nothing
+  const TO = {}; // scratch text options for the chrome's own labels (read synchronously by app.text)
 
   // ---- stage scaling ----
   app.resize = () => {
@@ -51,7 +58,7 @@ export function createApp(canvas, opts = {}) {
   canvas.addEventListener('pointercancel', () => { app.mouse.down = false; app.mouse.released = false; app.mouse.x = -999; app.mouse.y = -999; });
   canvas.addEventListener('wheel', (e) => { app.mouse.wheel += e.deltaY; e.preventDefault(); }, { passive: false });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  window.addEventListener('keydown', (e) => { if (e.repeat) return; app.keys.add(e.key); app.pressedKeys.push(e); const s = top(); if (s && s.key && s.key(app, e)) e.preventDefault(); });
+  window.addEventListener('keydown', (e) => { if (e.repeat) return; app.keys.add(e.key); app.pressedKeys.push(e); if (app.navButtons && e.key === 'Tab') e.preventDefault(); const s = top(); if (s && s.key && s.key(app, e)) e.preventDefault(); });
   window.addEventListener('keyup', (e) => app.keys.delete(e.key));
   window.addEventListener('resize', app.resize);
 
@@ -60,7 +67,7 @@ export function createApp(canvas, opts = {}) {
   app.register = (name, scr) => { scr.name = name; app.screens[name] = scr; };
   app.go = (name, params) => {
     for (const s of app.stack) if (s.leave) s.leave(app);
-    app.stack = [];
+    app.stack = []; app.navButtons = false; app.focus.idx = -1; app.focus.active = false;
     const s = app.screens[name]; if (!s) throw new Error('no screen ' + name);
     app.stack.push(s); app.current = name; app.sceneT = 0;
     if (s.enter) s.enter(app, params || {});
@@ -79,51 +86,80 @@ export function createApp(canvas, opts = {}) {
   app.clearTweens = (obj) => { app.tweens = app.tweens.filter((t) => !obj || t.obj !== obj); };
 
   // ---- drawing helpers ----
-  function font(size, o = {}) { return `${o.italic ? 'italic ' : ''}${o.bold ? 'bold ' : ''}${size}px ${o.ui ? FONT_UI : FONT}`; }
+  const fontCache = new Map();
+  function font(size, o = NO) {
+    const k = size * 8 + (o.italic ? 1 : 0) + (o.bold ? 2 : 0) + (o.ui ? 4 : 0);
+    let f = fontCache.get(k);
+    if (!f) { f = `${o.italic ? 'italic ' : ''}${o.bold ? 'bold ' : ''}${size}px ${o.ui ? FONT_UI : FONT}`; if (fontCache.size > 600) fontCache.clear(); fontCache.set(k, f); }
+    return f;
+  }
   app.font = font;
-  app.wrap = (str, maxW, size, o = {}) => {
-    const key = str + '|' + maxW + '|' + size + '|' + (o.bold ? 1 : 0) + (o.ui ? 1 : 0);
+  const hasLS = 'letterSpacing' in ctx; // canvas letterSpacing (engraved names); skipped where unsupported
+  // Text scale: settings may store 1 / 1.25 / 1.5 or 100 / 125 / 150. Public wrap, measure and text all apply it the same way (unless o.fixed).
+  const scaleOf = (o) => { if (o.fixed) return 1; const v = app.textScale; return v >= 50 ? v / 100 : v > 0 ? v : 1; };
+  app.sz = (size, o = NO) => Math.round(size * scaleOf(o));
+  const spacing = (o) => { if (hasLS && o.engraved) ctx.letterSpacing = '0.5px'; };
+  function tabW(ln) { const cell = ctx.measureText('0').width; let w = 0; for (let i = 0; i < ln.length; i++) { const c = ln.charCodeAt(i); w += c >= 48 && c <= 57 ? cell : ctx.measureText(ln[i]).width; } return w; }
+  function lineW(ln, o) { return o.tab ? tabW(ln) : ctx.measureText(ln).width; }
+  // size here is the FINAL (already scaled) size
+  function wrapRaw(str, maxW, size, o) {
+    const key = str + '|' + maxW + '|' + size + '|' + (o.bold ? 1 : 0) + (o.ui ? 1 : 0) + (o.italic ? 1 : 0) + (o.engraved ? 1 : 0) + (o.tab ? 1 : 0);
     const hit = app.textCache.get(key); if (hit) return hit;
-    ctx.save(); ctx.font = font(size, o);
+    ctx.save(); ctx.font = font(size, o); spacing(o);
     const out = [];
     for (const para of String(str).split('\n')) {
       let line = '';
       for (const word of para.split(' ')) {
         const test = line ? line + ' ' + word : word;
-        if (ctx.measureText(test).width > maxW && line) { out.push(line); line = word; } else line = test;
+        if (lineW(test, o) > maxW && line) { out.push(line); line = word; } else line = test;
       }
       out.push(line);
     }
     ctx.restore();
     if (app.textCache.size > 800) app.textCache.clear();
     app.textCache.set(key, out); return out;
-  };
-  // text(str, x, y, {size, color, align, baseline, bold, italic, ui, maxW, lineH, shadow, alpha, stroke}) -> total height
+  }
+  app.wrap = (str, maxW, size, o = NO) => wrapRaw(str, maxW, Math.round(size * scaleOf(o)), o);
+  const ONE = [''];
+  function put(stroke, ln, x, y, o) {
+    if (!o.tab) { if (stroke) ctx.strokeText(ln, x, y); else ctx.fillText(ln, x, y); return; }
+    const al = ctx.textAlign, tw = tabW(ln), cell = ctx.measureText('0').width;
+    let cx = al === 'center' ? x - tw / 2 : al === 'right' || al === 'end' ? x - tw : x;
+    ctx.textAlign = 'left';
+    for (let i = 0; i < ln.length; i++) {
+      const c = ln.charCodeAt(i), ch = ln[i], isD = c >= 48 && c <= 57, cw = isD ? cell : ctx.measureText(ch).width;
+      const dx = isD ? (cell - ctx.measureText(ch).width) / 2 : 0;
+      if (stroke) ctx.strokeText(ch, cx + dx, y); else ctx.fillText(ch, cx + dx, y);
+      cx += cw;
+    }
+    ctx.textAlign = al;
+  }
+  // text(str, x, y, {size, color, align, baseline, bold, italic, ui, maxW, lineH, shadow, alpha, stroke, engraved, tab, fixed}) -> total height
   app.textScale = 1;
-  app.text = (str, x, y, o = {}) => {
-    const size = Math.round((o.size || 18) * (o.fixed ? 1 : app.textScale)), lineH = o.lineH || Math.round(size * 1.22);
+  app.text = (str, x, y, o = NO) => {
+    const k = scaleOf(o), size = Math.round((o.size || 18) * k), lineH = o.lineH ? Math.round(o.lineH * k) : Math.round(size * 1.22);
     ctx.save();
     ctx.font = font(size, o); ctx.textAlign = o.align || 'left'; ctx.textBaseline = o.baseline || 'top';
     if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
-    const lines = o.maxW ? app.wrap(str, o.maxW, size, o) : String(str).split('\n');
-    lines.forEach((ln, i) => {
-      const yy = y + i * lineH;
-      if (o.shadow) { ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillText(ln, x + 1.5, yy + 1.5); }
-      if (o.stroke) { ctx.lineWidth = o.strokeW || 3; ctx.strokeStyle = o.stroke; ctx.lineJoin = 'round'; ctx.strokeText(ln, x, yy); }
-      ctx.fillStyle = o.color || COL.vellum; ctx.fillText(ln, x, yy);
-    });
+    spacing(o);
+    let lines;
+    if (o.maxW) lines = wrapRaw(str, o.maxW, size, o);
+    else { str = String(str); if (str.indexOf('\n') >= 0) lines = str.split('\n'); else { ONE[0] = str; lines = ONE; } }
+    const col = o.color || COL.vellum;
+    for (let i = 0; i < lines.length; i++) {
+      const ln = lines[i], yy = y + i * lineH;
+      if (o.shadow) { ctx.fillStyle = 'rgba(0,0,0,.65)'; put(false, ln, x + 1.5, yy + 1.5, o); }
+      if (o.engraved) { ctx.fillStyle = 'rgba(255,236,190,.2)'; put(false, ln, x, yy + 1, o); ctx.fillStyle = 'rgba(0,0,0,.6)'; put(false, ln, x, yy - 1, o); } // debossed: lit lower lip, dark upper lip
+      if (o.stroke) { ctx.lineWidth = o.strokeW || 3; ctx.strokeStyle = o.stroke; ctx.lineJoin = 'round'; put(true, ln, x, yy, o); }
+      ctx.fillStyle = col; put(false, ln, x, yy, o);
+    }
     ctx.restore();
     return lines.length * lineH;
   };
-  app.measure = (str, size, o = {}) => { ctx.save(); ctx.font = font(size, o); const w = ctx.measureText(str).width; ctx.restore(); return w; };
+  app.measure = (str, size, o = NO) => { ctx.save(); ctx.font = font(Math.round(size * scaleOf(o)), o); spacing(o); const w = lineW(String(str), o); ctx.restore(); return w; };
   app.rr = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); };
-  app.panel = (x, y, w, h, o = {}) => {
-    ctx.save();
-    app.rr(x, y, w, h, o.r === undefined ? 10 : o.r);
-    ctx.fillStyle = o.fill || 'rgba(26,22,20,.92)'; ctx.fill();
-    ctx.lineWidth = o.lw || 2; ctx.strokeStyle = o.stroke || 'rgba(232,220,196,.35)'; ctx.stroke();
-    ctx.restore();
-  };
+  // panel: brass-framed slab (cached texture). o: {fill, stroke, r, lw, rivets:false, plain:true}
+  app.panel = (x, y, w, h, o = NO) => CH.panel(app, x, y, w, h, o);
   app.inRect = (x, y, w, h) => app.mouse.x >= x && app.mouse.x <= x + w && app.mouse.y >= y && app.mouse.y <= y + h && !app.blocked;
   app.hover = app.inRect;
   // A click is used ONCE per frame: whoever claims it first (a button) consumes it, so a modal that opens on that click
@@ -134,41 +170,50 @@ export function createApp(canvas, opts = {}) {
     return hit;
   };
   function inBox(p, x, y, w, h) { return p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h; }
-  // button: returns true on click. o: {fill, color, size, disabled, icon(ctx,x,y,w,h), sub, key, hot}
-  app.button = (label, x, y, w, h, o = {}) => {
-    const over = !o.disabled && app.inRect(x, y, w, h);
+  function keyHit(k) { const a = app.pressedKeys; for (let i = 0; i < a.length; i++) { const e = a[i]; if (e && e.key && e.key.toLowerCase() === k) return true; } return false; }
+  // Visual press feedback hook: a short brass ripple inside the rect. Screens may call it for custom widgets; set app.onPress to also react.
+  app.press = (x, y, w, h, r) => { CH.press(app, x, y, w, h, r); if (app.onPress) app.onPress(x, y, w, h); };
+  let hotX = NaN, hotY = NaN, hotL = null;
+  // button: returns true on click. o: {fill, stroke, r, color, size, disabled, icon(ctx,x,y,w,h), sub, subColor, key, bold, ui}
+  app.button = (label, x, y, w, h, o = NO) => {
+    const dis = !!o.disabled, F = app.focus;
+    const over = !dis && app.inRect(x, y, w, h);
     const down = over && app.mouse.down;
-    if (over) { app.cursor = 'pointer'; if (app.hot !== label + x + y) { app.hot = label + x + y; if (app.onHover) app.onHover(); } }
-    ctx.save();
-    const lift = over && !down ? -2 : 0;
-    app.rr(x, y + lift, w, h, o.r === undefined ? 8 : o.r);
-    const base = o.fill || COL.slab2;
-    ctx.fillStyle = o.disabled ? 'rgba(60,54,50,.7)' : down ? shade(base.startsWith('#') ? base : '#26201c', 0.8) : over ? shade(base.startsWith('#') ? base : '#26201c', 1.35) : base;
-    ctx.fill();
-    ctx.lineWidth = over ? 2.5 : 1.8; ctx.strokeStyle = o.disabled ? 'rgba(232,220,196,.2)' : over ? COL.lamp : (o.stroke || 'rgba(232,220,196,.55)'); ctx.stroke();
-    ctx.restore();
-    if (o.icon) o.icon(ctx, x, y + lift, w, h);
-    const ty = y + lift + (o.sub ? h / 2 - (o.size || 20) * 0.95 : h / 2 - (o.size || 20) * 0.55);
-    app.text(label, x + w / 2, ty, { size: o.size || 20, align: 'center', color: o.disabled ? 'rgba(232,220,196,.35)' : (o.color || COL.vellum), bold: o.bold !== false, ui: o.ui });
-    if (o.sub) app.text(o.sub, x + w / 2, ty + (o.size || 20) * 1.15, { size: Math.round((o.size || 20) * 0.7), align: 'center', color: o.subColor || 'rgba(232,220,196,.7)', ui: true });
-    if (o.key && app.pressedKeys.some((e) => e.key.toLowerCase() === o.key) && !o.disabled) return true;
-    if (!o.disabled && app.clicked(x, y, w, h)) { if (app.onClick) app.onClick(); return true; }
+    if (over) { app.cursor = 'pointer'; if (hotL !== label || hotX !== x || hotY !== y) { hotL = label; hotX = x; hotY = y; app.hot = label + x + y; if (app.onHover) app.onHover(); } }
+    else if (dis && app.inRect(x, y, w, h)) app.cursor = 'not-allowed';
+    let fi = -1;
+    if (app.navButtons) { // register for keyboard navigation (pooled records, no allocation after warm-up)
+      fi = F.curN++; let rec = F.cur[fi]; if (!rec) rec = F.cur[fi] = { x: 0, y: 0, w: 0, h: 0, dis: false, label: '' };
+      rec.x = x; rec.y = y; rec.w = w; rec.h = h; rec.dis = dis; rec.label = label;
+    }
+    const dy = CH.button(app, x, y, w, h, o, dis ? 3 : down ? 2 : over ? 1 : 0);
+    if (fi >= 0 && F.active && fi === F.idx) CH.focusRing(app, x, y + dy, w, h, o.r === undefined ? 8 : o.r);
+    if (o.icon) o.icon(ctx, x, y + dy, w, h);
+    const size = o.size || 20, ty = y + dy + (o.sub ? h / 2 - app.sz(size) * 0.95 : h / 2 - app.sz(size) * 0.55);
+    TO.size = size; TO.align = 'center'; TO.color = dis ? 'rgba(232,220,196,.35)' : (o.color || COL.vellum); TO.bold = o.bold !== false; TO.ui = o.ui; TO.shadow = !dis; TO.maxW = 0;
+    app.text(label, x + w / 2, ty, TO);
+    if (o.sub) { TO.size = Math.round(size * 0.7); TO.color = o.subColor || 'rgba(232,220,196,.7)'; TO.bold = false; TO.ui = true; TO.shadow = false; app.text(o.sub, x + w / 2, ty + app.sz(size) * 1.15, TO); }
+    if (!dis && o.key && keyHit(o.key)) { app.press(x, y, w, h, o.r); return true; }
+    if (!dis && fi >= 0 && F.active && F.fire && fi === F.idx) { F.fire = false; app.press(x, y, w, h, o.r); if (app.onClick) app.onClick(); return true; }
+    if (!dis && app.clicked(x, y, w, h)) { app.press(x, y, w, h, o.r); if (app.onClick) app.onClick(); return true; }
     return false;
   };
-  // tooltip(lines | string): shown near the pointer this frame. {title, text, color}
-  app.tooltip = (title, text, o = {}) => { app.tip = { title, text, color: o.color, lines: o.lines }; };
+  // tooltip(title, text, {color, lines}): shown near the pointer this frame. ui/tooltips.js renderTip draws it; the fallback below is used when it returns false.
+  app.tooltip = (title, text, o = NO) => { app.tip = { title, text, color: o.color, lines: o.lines, o }; };
   function drawTip() {
     const tip = app.tip; if (!tip) return;
-    const maxW = 300, pad = 12;
+    if (renderTip(app, tip) !== false) return;
+    const maxW = 300, pad = 12, lh = app.sz(20), tsz = app.sz(19);
     const body = tip.lines ? tip.lines.join('\n') : (tip.text || '');
     const bl = body ? app.wrap(body, maxW, 16, { ui: true }) : [];
-    const h = pad * 2 + (tip.title ? 26 : 0) + bl.length * 20;
+    const tl = tip.title ? app.wrap(tip.title, maxW, 19, { bold: true }) : [];
+    const h = pad * 2 + tl.length * (tsz + 4) + bl.length * lh, pw = maxW + pad * 2;
     let x = app.mouse.x + 18, y = app.mouse.y + 18;
-    if (x + maxW + pad * 2 > W) x = app.mouse.x - maxW - pad * 2 - 12;
-    if (y + h > H) y = H - h - 8;
-    app.panel(x, y, maxW + pad * 2, h, { fill: 'rgba(14,12,10,.97)', stroke: tip.color || COL.lamp });
+    if (x + pw > W - 6) x = app.mouse.x - pw - 12; // flip to the left of the pointer
+    x = clamp(x, 6, W - pw - 6); y = clamp(y, 6, H - h - 6);
+    app.panel(x, y, pw, h, { fill: 'rgba(14,12,10,.97)', stroke: tip.color || 'brass', rivets: false });
     let yy = y + pad;
-    if (tip.title) { app.text(tip.title, x + pad, yy, { size: 19, bold: true, color: tip.color || COL.lamp }); yy += 26; }
+    if (tip.title) yy += app.text(tip.title, x + pad, yy, { size: 19, bold: true, color: tip.color || COL.lamp, engraved: true, maxW }) + 4;
     if (body) app.text(body, x + pad, yy, { size: 16, ui: true, maxW, lineH: 20, color: COL.vellum });
   }
 
@@ -181,12 +226,29 @@ export function createApp(canvas, opts = {}) {
     app.tick(raw);
     requestAnimationFrame(frame);
   }
+  // keyboard navigation over the buttons registered LAST frame (screens opt in with app.navButtons = true)
+  function focusStep() {
+    const F = app.focus, prev = F.list; F.list = F.cur; F.cur = prev; F.n = F.curN; F.curN = 0;
+    if (!app.navButtons) { F.active = false; return; }
+    if (app.mouse.x !== F.lx || app.mouse.y !== F.ly) { if (F.lx !== -999 && app.mouse.x > -900) F.active = false; F.lx = app.mouse.x; F.ly = app.mouse.y; }
+    const keys = app.pressedKeys;
+    for (let i = 0; i < keys.length; i++) {
+      const e = keys[i], k = e && e.key;
+      if (k === 'Tab' && F.n > 0) {
+        const dir = e.shiftKey ? -1 : 1; let idx = F.active ? F.idx : (dir > 0 ? -1 : F.n);
+        for (let g = 0; g < F.n; g++) { idx = (idx + dir + F.n) % F.n; if (!F.list[idx].dis) break; }
+        F.idx = idx; F.active = true;
+      } else if ((k === 'Enter' || k === ' ') && F.active && F.idx >= 0 && F.idx < F.n) F.fire = true;
+    }
+  }
   // one simulation + draw step (tests call this directly)
   app.tick = (raw) => {
     const dt = raw * (app.timeScale === undefined ? 1 : app.timeScale);
     app.dt = dt; app.t += dt; app.sceneT += dt; app.frame++;
     // pointer click bookkeeping
     if (app.mouse.pressed) app.mouse.pressStart = { x: app.mouse.x, y: app.mouse.y };
+    CH.frameStart(app);
+    focusStep();
     // tweens
     for (const tw of app.tweens) {
       tw.t += dt * 1000; const k = clamp(tw.t / tw.ms, 0, 1), e = tw.ease(k);
@@ -209,11 +271,13 @@ export function createApp(canvas, opts = {}) {
       if (s.draw) s.draw(app);
     }
     app.blocked = false;
+    CH.drawRipples(app);
     drawTip();
     if (app.overlay) app.overlay(app);
     if (app.afterFrame) app.afterFrame(app);
     canvas.style.cursor = app.cursor;
     if (app.mouse.touchUp) { app.mouse.touchUp = false; app.mouse.x = -999; app.mouse.y = -999; }
+    app.focus.fire = false;
     app.mouse.pressed = false; app.mouse.released = false; app.mouse.wheel = 0; app.pressedKeys.length = 0;
   };
   app.start = () => { app.resize(); running = true; last = performance.now(); requestAnimationFrame(frame); };

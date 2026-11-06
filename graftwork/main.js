@@ -78,7 +78,7 @@ export function boot(canvas) {
     FX_OPTS.shake = st.screenShake !== false; FX_OPTS.reduced = !!st.reducedMotion;
     const ts = [100, 125, 150].includes(st.textScale) ? st.textScale : (st.textSize === 'large' ? 125 : 100);
     app.textScale = ts / 100;
-    app.quality = FX_OPTS.quality = st.quality || 'high';
+    app.quality = st.quality || 'high'; FX_OPTS.quality = app.quality === 'off' ? 0 : app.quality === 'low' ? 0.5 : 1;
     drawPauseOverlay(app);
   };
   app.go('title');

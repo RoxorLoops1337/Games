@@ -449,8 +449,8 @@ export class Fx {
 
 const BURSTS = {
   spark: { n: 14, colors: ['#fff6c8', '#ffd24a', '#ff9a3c'], speed: 320, life: 0.45, size: 3, glow: true, shape: 'streak' },
-  ember: { n: 12, colors: ['#E8571F', '#ffb347', '#ffe08a'], speed: 140, life: 0.9, size: 3.2, gravity: -140, drag: 0.8, glow: true, shape: 'ember', shimmer: true },
-  blood: { n: 14, colors: ['#A3142F', '#c4223c', '#6d0a20'], speed: 260, life: 0.8, size: 4, gravity: 700, shape: 'droplet' },
+  ember: { n: 12, colors: ['#E8571F', '#ffb347', '#ffe08a'], speed: 140, life: 0.9, size: 4.2, gravity: -140, drag: 0.8, glow: true, shape: 'ember', shimmer: true },
+  blood: { n: 14, colors: ['#A3142F', '#c4223c', '#6d0a20'], speed: 260, life: 0.8, size: 5.5, gravity: 700, shape: 'droplet' },
   dust: { n: 10, colors: ['#8a8070', '#a99f8c'], speed: 120, life: 0.7, size: 5, gravity: -20, drag: 2, shape: 'glow' },
   ash: { n: 10, colors: ['#6b625a', '#8a8070', '#4a4440'], speed: 40, life: 2.2, size: 3, gravity: 18, drag: 1.4, shape: 'flake', spin: 5 },
   shard: { n: 10, colors: ['#F2C14E', '#fff3c4', '#cfa43a'], speed: 360, life: 0.8, size: 6, gravity: 900, shape: 'shard', spin: 14 },

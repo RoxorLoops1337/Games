@@ -40,7 +40,10 @@ export function resonanceInfo(run, schoolId, counts) {
   return { name: s.name, n, next, color: s.color, lines, blurb: s.blurb };
 }
 
-export function wrapLimit(app, str, maxW, size, maxLines, o = {}) {
+// size is the UNSCALED size (what you pass to app.text); the text scale is applied here so the measuring matches the drawing.
+// Pass {fixed:true} when the caller draws with app.text(..., {fixed:true}) at exactly this size.
+export function wrapLimit(app, str, maxW, size0, maxLines, o = {}) {
+  const size = Math.round(size0 * (o.fixed ? 1 : (app.textScale || 1)));
   const lines = app.wrap(str, maxW, size, o);
   if (lines.length <= maxLines) return lines;
   const out = lines.slice(0, maxLines);

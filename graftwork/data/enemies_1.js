@@ -201,9 +201,9 @@ export const ENEMIES_1 = [
   { id: 'defibrillator', name: 'Defibrillator', act: 1, kind: 'elite', hp: [70, 74], start: { countdown: 4 },
     pick: (A, e) => ((e.st.countdown || 0) <= 1 ? 'discharge' : (e.turn % 2 === 0 ? 'paddle' : 'shock')),
     moves: {
-      paddle: { name: 'Paddle', fx: [dmg(8), blk(8)] },
-      shock: { name: 'Shock', fx: [dmg(5, { hits: 2 })] },
-      discharge: { name: 'Clear (-3 per 8 dealt)', note: '26 damage, 3 less for every 8 damage you dealt to it since its last Clear (min 8).', fx: [dmg({ base: 26, per: 'st:grounded@self', mul: -3, min: 8 })] },
+      paddle: { name: 'Paddle', fx: [dmg(11), blk(8)] },
+      shock: { name: 'Shock', fx: [dmg(7, { hits: 2 })] },
+      discharge: { name: 'Clear (-3 per 8 dealt)', note: '27 damage, 3 less for every 8 damage you dealt to it since its last Clear (min 14).', fx: [dmg({ base: 27, per: 'st:grounded@self', mul: -3, min: 14 })] },
     },
     // Countdown drops by 1 after every move; at 1 it discharges, then resets to 4 and gains 2 Strength. Stun delays it.
     on: {

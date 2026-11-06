@@ -542,10 +542,11 @@ export function playCard(c, hi, ti) {
   if (c.player.st.echo > 0 && sp.type !== 'power') { times++; addStatus(c, c.player, 'echo', -1); }
   let m = mult(sp, card.tithed);
   if (card.brand) m *= 1.5;
+  if (card.reknit && sp.overload) m /= OVERLOAD_MULT;
   let shatter = false;
   if (sp.overload && !card.rolled) {
     card.rolled = true;
-    const p = Math.max(0, OVERLOAD_SHATTER + relicMod(c.run, 'shatter') + (c.ascension >= 8 ? 0.1 : 0) + ((c.run.dailyMod && c.run.dailyMod.shatter) || 0));
+    const p = Math.max(0, (card.reknit ? 0.4 : OVERLOAD_SHATTER) + relicMod(c.run, 'shatter') + (c.ascension >= 8 ? 0.1 : 0) + ((c.run.dailyMod && c.run.dailyMod.shatter) || 0));
     if (c.rng.chance(p)) shatter = true;
   }
   for (let r = 0; r < times; r++) {
@@ -673,7 +674,7 @@ export function endTurn(c) {
   // hand: retain stays, the rest is discarded (ethereal exhausts)
   for (const card of c.hand.slice()) {
     const sp = specOf(c, card);
-    if (sp.flags.retain) { card.jam = false; continue; }
+    if (sp.flags.retain || card.retain) { card.jam = false; continue; }
     discardCard(c, card, 'turnEnd');
   }
   tickDurations(c, c.player);

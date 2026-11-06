@@ -20,7 +20,10 @@ drawEnemy(ctx, { id: 'weird', art: { body: 'nope', color: '#abc' } }, 10, 10, {}
 drawEnemy(ctx, { id: 'bare' }, 10, 10, { dying: 0.5 });
 assert.ok(enemyBounds({ id: 'bare' }).w > 0);
 for (const h of ['marrow', 'wick', 'odile', 'unknown']) {
-  for (const o of [{ t: 0 }, { t: 1, hurt: 1 }, { t: 1, attack: 1 }, { t: 1, attack: -1 }, { t: 1, dying: 0.3 }, { t: 1, dying: 1, flip: true }]) drawHero(ctx, h, 200, 400, o);
+  const hs = [{ t: 0 }, { t: 1, hurt: 1 }, { t: 1, attack: 1 }, { t: 1, attack: -1 }, { t: 1, dying: 0.3 }, { t: 1, dying: 1, flip: true }, { t: 2, lowHp: true }, { t: 2, lowHp: 0.5, dying: 0.5 }];
+  for (const state of ['idle', 'hurt', 'attack', 'cast', 'victory']) for (const p of [0, 0.2, 0.5, 0.8, 1]) hs.push({ t: 3 + p, state, p });
+  for (const d of [0, 0.25, 0.5, 0.75, 0.95, 1]) hs.push({ t: 4, dying: d });
+  for (const o of hs) drawHero(ctx, h, 200, 400, o);
   drawPortrait(ctx, h, 100, 100, 160);
 }
 console.log('graftwork art chars ok', ENEMY_LIST.length, 'enemies', n, 'draws');

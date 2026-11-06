@@ -9,12 +9,15 @@ function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>>
 
 // ---- offscreen cache ----
 const cache = new Map();
+let cacheBytes = 0; const CACHE_MAX = 90 * 1024 * 1024;
 function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 function layer(key, fn, w = W, h = H) {
   if (typeof document === 'undefined' || !document.createElement) return null;
   let c = cache.get(key);
-  if (!c) { c = mk(w, h); const g = c.getContext('2d'); if (!g) return null; fn(g); cache.set(key, c); if (cache.size > 7) cache.delete(cache.keys().next().value); }
-  else { cache.delete(key); cache.set(key, c); }
+  if (!c) {
+    c = mk(w, h); const g = c.getContext('2d'); if (!g) return null; fn(g); cache.set(key, c); cacheBytes += w * h * 4;
+    while (cacheBytes > CACHE_MAX && cache.size > 1) { const k = cache.keys().next().value; const v = cache.get(k); cacheBytes -= (v.width || 1) * (v.height || 1) * 4; cache.delete(k); }
+  } else { cache.delete(key); cache.set(key, c); }
   return c;
 }
 function stat(ctx, key, fn, x = 0, y = 0) { const c = layer(key, fn); if (c) ctx.drawImage(c, x, y); else fn(ctx); }
@@ -505,20 +508,153 @@ function loseDyn(ctx, t, o) {
 function loseDraw(ctx, t, o) { stat(ctx, 'lose', loseStatic); loseDyn(ctx, t, o); }
 
 // ======================================================================================
-// WARD / THEATRE / MAP wrappers
+// ROUND 4: FOUR PARALLAX LAYERS + KEY LAMP + SHAFTS + REFLECTIONS + PRACTICAL LIGHTS
+// far wall (.2) | mid props (.5) | floor (1.0) | pre-blurred foreground (1.4). o.parallax is the camera x offset -1..1.
 // ======================================================================================
-function wardDraw(ctx, t, o) { stat(ctx, 'ward', wardStatic); wardDyn(ctx, t, o); }
-function theatreDraw(ctx, t, o) { stat(ctx, 'theatre', theatreStatic); theatreDyn(ctx, t, o); }
-function mapDraw(ctx, theme, t, o) { stat(ctx, theme, (g) => mapStatic(g, theme)); mapDyn(ctx, t, o); }
+// ---- the shared key lamp: feature-detects lightDir(t) from art/cards.js, else a local pendulum (+/-12 deg, 6 s) ----
+let cardsLight = null;
+try { import('./cards.js').then((m) => { if (typeof m.lightDir === 'function') cardsLight = m.lightDir; }).catch(() => {}); } catch (e) { /* ignore */ }
+let LIGHTS = null;
+try { import('../ui/lights.js').then((m) => { LIGHTS = m.lights || m.default || m; }).catch(() => {}); } catch (e) { /* ignore */ }
+const LAMP = { x: -0.6, y: -0.8, swing: 0 };
+// returns { x, y } unit vector pointing TOWARD the lamp (upper left), plus swing (radians off rest)
+export function keyLamp(t = 0) {
+  let sw = Math.sin(t * TAU / 6) * (12 * Math.PI / 180), vx = 0, vy = 0, ok = false;
+  if (cardsLight) {
+    try {
+      const r = cardsLight(t);
+      if (typeof r === 'number') { sw = r; } else if (r && typeof r.x === 'number' && typeof r.y === 'number') { vx = r.x; vy = r.y; ok = true; }
+    } catch (e) { cardsLight = null; }
+  }
+  if (!ok) { const a = Math.atan2(-0.8, -0.6) + sw; vx = Math.cos(a); vy = Math.sin(a); }
+  if (vy > 0) { vx = -vx; vy = -vy; }
+  const n = Math.hypot(vx, vy) || 1; LAMP.x = vx / n; LAMP.y = vy / n; LAMP.swing = ok ? Math.atan2(vx, -vy) + 0.6435 * 0 : sw;
+  return LAMP;
+}
 
-const THEMES = { ward: wardDraw, market: marketDraw, theatre: theatreDraw, title: titleDraw, table: tableDraw, shop: shopDraw, forge: forgeDraw, event: eventDraw, win: winDraw, lose: loseDraw };
-export const BACKGROUND_THEMES = [...Object.keys(THEMES), 'map1', 'map2', 'map3'];
+const ACT_AMBIENT = { ward: '#2e2a24', market: '#1f2e30', theatre: '#2a1c36', map1: '#2e2a24', map2: '#1f2e30', map3: '#2a1c36', title: '#241c18', table: '#262022', shop: '#2a2016', forge: '#2e1a12', event: '#1c2230', win: '#3a3220', lose: '#1a1214' };
+// ambient colour per theme for the lightmap pass (what unlit areas fade to)
+export function ambient(theme) { return ACT_AMBIENT[theme] || '#241c18'; }
+
+// ---- soft sprites ----
+function shaftSprite(color) {
+  return layer('shaft_' + color, (g) => {
+    const w = 128, h = 512, v = g.createLinearGradient(0, 0, 0, h); v.addColorStop(0, rgba(color, 1)); v.addColorStop(0.55, rgba(color, 0.35)); v.addColorStop(1, rgba(color, 0));
+    g.fillStyle = v; g.beginPath(); g.moveTo(w * 0.42, 0); g.lineTo(w * 0.58, 0); g.lineTo(w, h); g.lineTo(0, h); g.closePath(); g.fill();
+    g.globalCompositeOperation = 'destination-in'; const hz = g.createLinearGradient(0, 0, w, 0); hz.addColorStop(0, 'rgba(0,0,0,0)'); hz.addColorStop(0.3, 'rgba(0,0,0,1)'); hz.addColorStop(0.7, 'rgba(0,0,0,1)'); hz.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = hz; g.fillRect(0, 0, w, h);
+  }, 128, 512);
+}
+function fogLayer(color) {
+  return layer('fogl_' + color, (g) => { const gr = g.createLinearGradient(0, 0, 0, 260); gr.addColorStop(0, rgba(color, 0)); gr.addColorStop(1, rgba(color, 0.9)); g.fillStyle = gr; g.fillRect(0, 0, 1024, 260); for (let i = 0; i < 14; i++) { const x = (i * 83) % 1024, y = 120 + ((i * 47) % 120); const rg = g.createRadialGradient(x, y, 0, x, y, 120); rg.addColorStop(0, rgba(color, 0.55)); rg.addColorStop(1, rgba(color, 0)); g.fillStyle = rg; g.fillRect(x - 120, y - 120, 240, 240); } }, 1024, 260);
+}
+// pre-blurred foreground silhouettes: drawn once at 1/8 scale, upscaled bilinear = heavy blur. No ctx.filter.
+function fgLayer(key, kind, col) {
+  return layer('fg_' + key, (g) => {
+    g.scale(1 / 8, 1 / 8); g.fillStyle = col;
+    const r = rng(kind.length * 17 + 3);
+    if (kind === 'drape') { for (const s of [0, 1]) { const x0 = s ? W : 0, d = s ? -1 : 1; g.beginPath(); g.moveTo(x0, 0); g.lineTo(x0 + d * 150, 0); g.quadraticCurveTo(x0 + d * 90, 300, x0 + d * 170, 720); g.lineTo(x0, 720); g.fill(); } }
+    else if (kind === 'pillar') { for (const x of [-20, 1220]) g.fillRect(x, 0, 80, 720); g.fillRect(30, 660, 160, 80); g.fillRect(1090, 670, 170, 70); }
+    else if (kind === 'curtain') { for (const s of [0, 1]) { const x0 = s ? W : 0, d = s ? -1 : 1; g.beginPath(); g.moveTo(x0, 0); g.lineTo(x0 + d * 220, 0); g.quadraticCurveTo(x0 + d * 130, 320, x0 + d * 210, 720); g.lineTo(x0, 720); g.fill(); } g.fillRect(0, 0, W, 30); }
+    else { for (let i = 0; i < 6; i++) { const x = r() < 0.5 ? r() * 160 : W - r() * 160, y = 380 + r() * 340; g.beginPath(); g.ellipse(x, y, 60 + r() * 70, 80 + r() * 120, 0, 0, TAU); g.fill(); } g.fillRect(0, 700, W, 20); }
+  }, 160, 90);
+}
+// mid-depth prop silhouettes (alpha-composited, reused flipped for floor reflections)
+function midProps(key, kind, col, floorY) {
+  return layer('mid_' + key, (g) => {
+    g.fillStyle = col; g.strokeStyle = col; g.lineCap = 'round';
+    const r = rng(kind.length * 31 + 5);
+    if (kind === 'iv') { for (const x of [120, 560, 1180]) { g.lineWidth = 4; g.beginPath(); g.moveTo(x, floorY); g.lineTo(x, floorY - 250); g.moveTo(x - 36, floorY - 250); g.lineTo(x + 36, floorY - 250); g.stroke(); g.beginPath(); g.ellipse(x + 20, floorY - 215, 14, 26, 0, 0, TAU); g.fill(); g.lineWidth = 2; g.beginPath(); g.moveTo(x + 20, floorY - 190); g.quadraticCurveTo(x + 50, floorY - 120, x + 24, floorY - 60); g.stroke(); g.lineWidth = 4; for (const a of [-1, 0, 1]) { g.beginPath(); g.moveTo(x, floorY - 12); g.lineTo(x + a * 26, floorY); g.stroke(); } } g.fillRect(780, floorY - 46, 90, 10); g.fillRect(790, floorY - 36, 6, 36); g.fillRect(854, floorY - 36, 6, 36); }
+    else if (kind === 'stall') { for (const [x, w] of [[90, 150], [1030, 170]]) { g.fillRect(x, floorY - 70, w, 70); g.fillRect(x - 6, floorY - 180, 8, 110); g.fillRect(x + w - 2, floorY - 180, 8, 110); g.beginPath(); g.moveTo(x - 14, floorY - 180); g.lineTo(x + w + 14, floorY - 180); g.lineTo(x + w, floorY - 214); g.lineTo(x, floorY - 214); g.fill(); for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(x + 14 + i * (w - 24) / 5, floorY - 76, 7 + r() * 5, 0, TAU); g.fill(); } } }
+    else if (kind === 'stage') { for (const x of [400, 880]) { g.lineWidth = 4; g.beginPath(); g.moveTo(x, floorY); g.lineTo(x, floorY - 140); g.moveTo(x - 30, floorY - 140); g.lineTo(x + 30, floorY - 140); g.stroke(); for (const dx of [-30, 0, 30]) { g.fillRect(x + dx - 3, floorY - 168, 6, 28); } } g.lineWidth = 3; for (const x of [150, 1130]) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 340); g.stroke(); g.beginPath(); g.arc(x, 360, 24, 0, TAU); g.fill(); } }
+    else if (kind === 'hang') { for (let i = 0; i < 9; i++) { const x = 80 + i * 130 + r() * 40, l = 80 + r() * 200; g.lineWidth = 2; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, l); g.stroke(); g.beginPath(); g.ellipse(x, l + 18, 11 + r() * 8, 18 + r() * 10, 0, 0, TAU); g.fill(); } }
+    else { for (let i = 0; i < 7; i++) { const x = 90 + i * 170 + r() * 50, h = 40 + r() * 90, w = 30 + r() * 60; g.fillRect(x, floorY - h, w, h); g.fillRect(x + 4, floorY - h - 8, w - 8, 8); } }
+  });
+}
+
+// ---- per-theme look ----
+// st: static layer producers [far] and optional opaque mid; dyn: existing animated practicals; tint: palette wash.
+const CFG = {};
+function cfg(theme, c) { CFG[theme] = c; }
+cfg('ward', { far: wardStatic, dyn: wardDyn, floorY: 506, tint: ['#E8DCC4', 0.07], shaft: ['#fff1c8', 0.1, 4, 140], mid: ['iv', 'rgba(8,16,12,.55)'], fg: ['drape', 'rgba(10,22,16,.85)'], part: ['#dff5e6', 0.35, false], fog: ['#9fc2b0', 0.16], reflect: true, vig: 0,
+  lights: [[320, 72, 260, '#cfffe0', 0.9, 0.12], [640, 72, 260, '#cfffe0', 0.9, 0.12], [960, 72, 260, '#cfffe0', 0.9, 0.12]] });
+cfg('market', { far: marketFar, farKey: 'mk_far', mid: 'mk_mid', midFn: marketMid, floorFrom: 'mid', dyn: marketDyn, floorY: 540, tint: ['#D4C9A8', 0.05], shaft: ['#7FD1E0', 0.08, 4, 120], fg: ['pillar', 'rgba(6,4,3,.9)'], part: ['#ffd9a0', 0.4, true], fog: ['#6fa8a4', 0.15], reflect: true, vig: 0,
+  lights: [[330, 190, 240, '#ffb450', 0.8, 0.2], [640, 130, 220, '#ffb450', 0.8, 0.2], [960, 190, 240, '#ffb450', 0.8, 0.2], [120, 150, 200, '#ffb450', 0.7, 0.2], [1170, 150, 200, '#ffb450', 0.7, 0.2]] });
+cfg('theatre', { far: theatreStatic, dyn: theatreDyn, floorY: 520, tint: ['#BFB3A4', 0.05], shaft: ['#F5E6A8', 0.12, 4, 170], mid: ['stage', 'rgba(8,4,16,.6)'], fg: ['curtain', 'rgba(60,8,20,.9)'], part: ['#e8d0ff', 0.4, true], fog: ['#7a5a9a', 0.17], reflect: true, vig: 0,
+  lights: [[330, 20, 420, '#F5E6A8', 0.9, 0.06], [950, 20, 420, '#ffd9a0', 0.9, 0.06]] });
+cfg('title', { far: titleStatic, dyn: titleDyn, floorY: 580, tint: ['#E8DCC4', 0.04], shaft: ['#F2C14E', 0.09, 3, 120], mid: ['hang', 'rgba(10,8,6,.5)'], fg: ['blob', 'rgba(6,4,3,.85)'], part: ['#F2C14E', 0.35, true], fog: ['#a89878', 0.12], vig: 0.75 });
+cfg('table', { far: tableStatic, dyn: tableDyn, floorY: 600, tint: ['#E8DCC4', 0.04], shaft: ['#e8f4ff', 0.09, 3, 130], mid: ['crates', 'rgba(8,8,10,.45)'], fg: ['blob', 'rgba(6,6,8,.8)'], part: ['#dfe8f0', 0.3, false], fog: ['#8896a0', 0.1], vig: 0.7 });
+cfg('shop', { far: shopStatic, dyn: shopDyn, floorY: 580, tint: ['#D4C9A8', 0.04], shaft: ['#ffd9a0', 0.09, 3, 130], mid: ['hang', 'rgba(10,8,6,.45)'], fg: ['blob', 'rgba(6,4,3,.8)'], part: ['#ffd9a0', 0.35, true], fog: ['#a89070', 0.1], vig: 0.45 });
+cfg('forge', { far: forgeStatic, dyn: forgeDyn, floorY: 580, tint: ['#E85D3A', 0.05], shaft: ['#ff9a4a', 0.1, 3, 130], mid: ['crates', 'rgba(10,4,2,.5)'], fg: ['blob', 'rgba(8,3,2,.85)'], part: ['#ff9a4a', 0.5, true], fog: ['#7a4a38', 0.14], vig: 0.45 });
+cfg('event', { far: eventStatic, dyn: eventDyn, floorY: 580, tint: ['#8896b0', 0.05], shaft: ['#cfe0ff', 0.09, 3, 130], mid: ['hang', 'rgba(6,8,14,.45)'], fg: ['blob', 'rgba(4,6,12,.85)'], part: ['#cfe0ff', 0.3, false], fog: ['#8090a8', 0.14], vig: 0.35 });
+cfg('win', { far: winStatic, dyn: winDyn, floorY: 580, tint: ['#F2C14E', 0.06], shaft: ['#F5E6A8', 0.14, 5, 150], mid: ['hang', 'rgba(20,14,4,.35)'], fg: ['blob', 'rgba(16,10,2,.7)'], part: ['#F5E6A8', 0.5, true], fog: ['#c8b078', 0.1], vig: 0.4 });
+cfg('lose', { far: loseStatic, dyn: loseDyn, floorY: 580, tint: ['#2a1a22', 0.12], shaft: ['#8a7a9a', 0.06, 3, 120], mid: ['crates', 'rgba(4,2,4,.55)'], fg: ['blob', 'rgba(2,0,2,.9)'], part: ['#a090b0', 0.25, false], fog: ['#5a4a60', 0.18], vig: 0.6 });
+for (const m of ['map1', 'map2', 'map3']) cfg(m, { far: (g) => mapStatic(g, m), dyn: mapDyn, floorY: 600, tint: [m === 'map1' ? '#E8DCC4' : m === 'map2' ? '#D4C9A8' : '#BFB3A4', 0.04], shaft: ['#fff3d0', 0.07, 3, 130], mid: ['crates', 'rgba(8,6,6,.3)'], fg: ['blob', 'rgba(6,4,4,.6)'], part: ['#e8dcc4', 0.25, false], fog: ['#8a8070', 0.08], vig: 0.3 });
+
+let regTheme = null, regIds = [];
+function registerLights(theme, c) {
+  if (regTheme === theme) return;
+  if (LIGHTS) {
+    try { for (const id of regIds) LIGHTS.remove && LIGHTS.remove(id); regIds = []; if (c.lights && LIGHTS.add) for (const [x, y, r, color, intensity, flicker] of c.lights) regIds.push(LIGHTS.add({ x, y, r, color, intensity, flicker, cone: theme === 'theatre' })); } catch (e) { regIds = []; }
+  }
+  regTheme = theme;
+}
+function clampP(v) { return v > 1 ? 1 : v < -1 ? -1 : (v || 0); }
+
+function drawThemed(ctx, theme, c, t, o) {
+  const par = clampP(o.parallax), Lm = keyLamp(t), fy = c.floorY;
+  registerLights(theme, c);
+  o.parallax = par; // exposed so combat can read back / shift on hits
+  // 1. far wall (.2)
+  const far = layer(c.farKey || ('bg_' + theme), c.far);
+  if (far) ctx.drawImage(far, -9.6 - par * 8, -5.4, W * 1.015, H * 1.015); else c.far(ctx);
+  // 2. mid props (.5)
+  let midC = null;
+  if (c.midFn) { midC = layer(c.mid, c.midFn); if (midC) ctx.drawImage(midC, -par * 20, 0); else c.midFn(ctx); }
+  let props = null;
+  if (!c.midFn && c.mid) { props = midProps(theme, c.mid[0], c.mid[1], fy); if (props) { ctx.drawImage(props, -par * 20, 0); } }
+  // 3. floor (1.0): cropped band of the scene feathered at the horizon
+  const src = c.midFn ? midC : far;
+  if (src) {
+    const fl = layer('floor_' + theme, (g) => { g.drawImage(src, 0, fy - 18, W, H - fy + 18, 0, 0, W, H - fy + 18); g.globalCompositeOperation = 'destination-in'; const gr = g.createLinearGradient(0, 0, 0, 40); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,1)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; }, W, H - fy + 18);
+    if (fl && par) ctx.drawImage(fl, -par * 40, fy - 18);
+  }
+  // practicals (flicker, sway) ride the mid depth
+  ctx.save(); ctx.translate(-par * 20, 0); c.dyn(ctx, t, o); ctx.restore();
+  // reflections: flipped mid props on the floor at alpha .12
+  if (c.reflect) {
+    const refl = midC || props;
+    if (refl) { ctx.save(); ctx.beginPath(); ctx.rect(0, fy, W, H - fy); ctx.clip(); ctx.globalAlpha = 0.12; ctx.translate(-par * 20, 2 * fy); ctx.scale(1, -1); ctx.drawImage(refl, 0, 0); ctx.restore(); }
+  }
+  // 4. key-lamp wash + additive light shafts swinging with the lamp
+  const [sc, sa, sn, sw] = c.shaft;
+  const sh = shaftSprite(sc), sway = Lm.swing, ang = 0.2 + sway * 1.4;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const wash = glowSprite('lamp_' + sc, sc); if (wash) { ctx.globalAlpha = 0.16; ctx.drawImage(wash, -120 + Lm.x * -60 - par * 10, -180, 700, 560); }
+  if (sh) for (let i = 0; i < sn; i++) {
+    const bx = (i + 0.5) * (W / sn) + sway * 220 - par * 16 * (1 + i * 0.1), len = 640 + (i % 2) * 60, a = sa * (0.7 + 0.3 * Math.sin(t * 0.7 + i * 1.9)), w = sw * (0.8 + (i % 3) * 0.2);
+    ctx.save(); ctx.translate(bx, -10); ctx.rotate(-ang); ctx.globalAlpha = Math.min(0.2, a); ctx.drawImage(sh, -w / 2, 0, w, len); ctx.restore();
+  }
+  ctx.restore();
+  // dust motes crossing the shafts (bright inside, faint outside) + floating particles
+  drawMotes(ctx, t, 211, 36, '#fff6dc', 0.7, (x, y) => { let k = 0.12; for (let i = 0; i < sn; i++) { const bx = (i + 0.5) * (W / sn) + sway * 220, cx = bx - Math.tan(ang) * y * 0.9 * -1 * -1, hw = (sw * 0.5) * (0.15 + y / 640); const d = Math.abs(x - (bx - Math.sin(ang) * y)); if (d < hw) k = Math.max(k, 1 - d / hw); } return k; });
+  drawMotes(ctx, t, 307, 22, c.part[0], c.part[1], null, c.part[2]);
+  // fog in the lower third
+  const fg = fogLayer(c.fog[0]);
+  if (fg) { ctx.save(); ctx.globalAlpha = c.fog[1]; const fx = -(((t * 9 + 200) % 1024) + 1024) % 1024; for (let k = 0; k < 3; k++) ctx.drawImage(fg, fx + k * 1024 - par * 30, H - 260 * 1.0, 1024, 260); ctx.restore(); }
+  // 5. foreground blur (1.4)
+  const fgl = fgLayer(c.fg[0], c.fg[0], c.fg[1]);
+  if (fgl) { ctx.save(); ctx.globalAlpha = 0.9; ctx.drawImage(fgl, -40 - par * 56, -10, W + 80, H + 20); ctx.restore(); }
+  // act palette wash + vignette
+  ctx.save(); ctx.globalAlpha = c.tint[1]; ctx.fillStyle = c.tint[0]; ctx.fillRect(0, 0, W, H); ctx.restore();
+  drawVignette(ctx, c.vig || 0.55);
+}
+
+export const BACKGROUND_THEMES = Object.keys(CFG);
 export function drawBackground(ctx, theme, t = 0, o = {}) {
   o = o || {}; if (o.still) t = 0;
   ctx.save(); ctx.setLineDash && ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-  const fn = THEMES[theme];
-  if (fn) fn(ctx, t, o);
-  else if (MAPTINT[theme]) mapDraw(ctx, theme, t, o);
+  const c = CFG[theme];
+  if (c) drawThemed(ctx, theme, c, t, o);
   else { ctx.fillStyle = COL.slab; ctx.fillRect(0, 0, W, H); drawVignette(ctx, 0.5); }
   darkenOverlay(ctx, o);
   ctx.restore();

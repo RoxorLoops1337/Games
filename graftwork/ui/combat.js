@@ -13,6 +13,7 @@ import { drawHero, drawPortrait } from '../art/heroes.js';
 import { drawBackground } from '../art/backgrounds.js';
 import * as L from './combat_layout.js';
 import { maybeTip } from './tutorial.js';
+import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip } from './seam_ui.js';
 import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName } from './combat_hud.js';
 
 const { HERO_X, FOOT_Y, PLAY_LINE } = L;
@@ -260,6 +261,7 @@ function handle(ev) {
       fx.slowmo(0.35, 350); fx.flash('#ffe9a8', 0.35, 0.3); fx.shake(0.6); fx.float('SHATTERED', p.x, p.y - 80, { color: COL.gold, size: 34, big: true, life: 1.4 });
       sfx('shatter'); return 420;
     }
+    case 'seamExtend': case 'seamCut': case 'seamPay': case 'seamSlack': case 'seamFray': return onSeamEvent(APP, ev, { fx, entPos, c }) || 0;
     case 'addCard': return onAddCard(ev);
     case 'burnCard': {
       const w = S.known.get(ev.card); if (!w) return 0;
@@ -483,43 +485,158 @@ function dcSpec(dc) {
 }
 function dcRect(dc) { const w = CARD_W * dc.s, h = CARD_H * dc.s; return { x: dc.x - w / 2, y: dc.y - h / 2, w, h }; }
 
+// ---- U5: hand fan, hover, drag follow, cannot-play chips (UX_SPEC 1)
+const U = () => S.u || (S.u = { candId: null, candT: 0, lx: 0, ly: 0, speed: 0, endConfirm: null });
+const rmotion = () => { const s = APP.shared && APP.shared.meta && APP.shared.meta.settings; return !!(s && (s.reducedMotion || s.reduceMotion)); };
+const isTouch = () => !!(APP && APP.mouse && APP.mouse.touch);
+const LIFTED = (dc) => dc.uid === S.hov || dc.uid === S.sel || (S.drag && S.drag.uid === dc.uid) || !!dc.fly;
+
+function dragTarget(m, dr) {
+  return dr.touch ? { x: clamp(m.x, 20, W - 20), y: clamp(m.y - 70, 40, H) } : { x: clamp(m.x + dr.ox, 20, W - 20), y: clamp(m.y + dr.oy, 40, H) };
+}
+// the point that decides zones and targets: the card's visual position on touch (finger minus 70), the pointer otherwise
+function dragPt() { const m = APP.mouse, dr = S.drag; return dr && dr.touch ? { x: m.x, y: m.y - 70 } : { x: m.x, y: m.y }; }
+
+function stepDrag(dc, dr, d, m, rm) {
+  dr.t += d;
+  dr.lift = Math.min(1, dr.lift + d / (rm ? 0.016 : 0.09));
+  dc.s = lerp(dr.s0, 0.95, EASE.out(dr.lift));
+  const tp = dragTarget(m, dr);
+  const K = rm ? 1200 : 520, C = rm ? 69.3 : 45.6;
+  const steps = clamp(Math.ceil(d / 0.004), 1, 12), h = d / steps;
+  for (let i = 0; i < steps; i++) {
+    dr.vx += (K * (tp.x - dc.x) - C * dr.vx) * h; dr.vy += (K * (tp.y - dc.y) - C * dr.vy) * h;
+    dc.x += dr.vx * h; dc.y += dr.vy * h;
+  }
+  const tt = rm ? 0 : clamp(dr.vx / 2400, -0.22, 0.22);
+  dr.tilt += (tt - dr.tilt) * (1 - Math.exp(-d * 14));
+  dc.rot = dr.tilt + dr.rot0 * (1 - EASE.out(dr.lift));
+  dc.sq = rm ? 0 : Math.min(Math.hypot(dr.vx, dr.vy) / 9000, 0.04);
+}
+function flyHome(dc) { dc.fly = { t: 0, x: dc.x, y: dc.y, s: dc.s, rot: dc.rot }; dc.sq = 0; }
+
 function layoutHand(app, d) {
-  const n = S.hand.length, m = app.mouse;
+  const n = S.hand.length, m = app.mouse, u = U(), dr = S.drag, rm = rmotion();
   const hi = S.hand.findIndex((dc) => dc.uid === S.hov);
+  const di = dr ? S.hand.findIndex((dc) => dc.uid === dr.uid) : -1;
+  const nn = di >= 0 ? n - 1 : n;
+  const pv = u.touchPrev && S.sel;
   S.hand.forEach((dc, i) => {
-    const sl = L.handSlot(i, n);
+    const isDrag = di === i;
+    const si = di >= 0 && i > di ? i - 1 : i;
+    const sl = L.handSlot(isDrag ? clamp(i, 0, Math.max(0, nn - 1)) : si, Math.max(1, nn));
     let tx = sl.x, ty = sl.y, ts = sl.s, tr = sl.rot;
-    if (hi >= 0 && i !== hi && !S.drag) { const dist = Math.abs(i - hi); if (dist === 1) tx += Math.sign(i - hi) * 62; else if (dist === 2) tx += Math.sign(i - hi) * 22; else if (dist === 3) tx += Math.sign(i - hi) * 8; }
-    if (dc.uid === S.hov && !(S.drag && S.drag.uid === dc.uid)) { tx = clamp(sl.x, 150, 1130); ty = L.HOVER_Y; ts = L.HOVER_S; tr = 0; }
-    else if (dc.uid === S.sel) { ty = sl.y - 78; ts = sl.s * 1.18; tr = 0; }
-    if (S.drag && S.drag.uid === dc.uid) { tx = m.x; ty = m.y; ts = 0.78; tr = 0; }
+    if (hi >= 0 && i !== hi && !dr) { const dist = Math.abs(i - hi); const push = dist === 1 ? 70 : dist === 2 ? 30 : dist === 3 ? 10 : 0; tx += Math.sign(i - hi) * push; }
+    if (!isDrag && dc.uid === S.sel) { tx = clamp(sl.x, pv ? 130 : 140, pv ? 1150 : 1140); ty = pv ? L.PREVIEW_Y : L.SEL_Y; ts = pv ? L.PREVIEW_S : L.SEL_S; tr = 0; }
+    else if (!isDrag && dc.uid === S.hov) { tx = clamp(sl.x, 140, 1140); ty = L.HOVER_Y; ts = L.HOVER_S; tr = 0; }
     dc.tx = tx; dc.ty = ty; dc.ts = ts; dc.trot = tr;
-    const k = 1 - Math.exp(-d * (S.drag && S.drag.uid === dc.uid ? 45 : 17));
-    dc.x += (tx - dc.x) * k; dc.y += (ty - dc.y) * k; dc.s += (ts - dc.s) * k; dc.rot += (tr - dc.rot) * k;
+    if (isDrag) stepDrag(dc, dr, d, m, rm);
+    else if (dc.fly) {
+      const f = dc.fly; f.t += d; const k = rm ? 1 : clamp(f.t / 0.16, 0, 1), e = EASE.out(k);
+      dc.x = lerp(f.x, tx, e); dc.y = lerp(f.y, ty, e); dc.s = lerp(f.s, ts, e); dc.rot = lerp(f.rot, tr, e);
+      if (k >= 1) { dc.fly = null; dc.settle = rm ? 0 : 1; }
+    } else {
+      const k = 1 - Math.exp(-d * 17);
+      dc.x += (tx - dc.x) * k; dc.y += (ty - dc.y) * k; dc.s += (ts - dc.s) * k; dc.rot += (tr - dc.rot) * k;
+      dc.sq = 0;
+    }
+    if (dc.settle > 0) dc.settle = Math.max(0, dc.settle - d / 0.15);
+    if (dc.chip) { dc.chip.t += d; if (dc.chip.t > 1.2) dc.chip = null; }
+    if (dc.costFlash > 0) dc.costFlash = Math.max(0, dc.costFlash - d / 0.35);
     dc.alpha = Math.min(1, dc.alpha + d * 6);
     if (dc.seam >= 0 && dc.seam < 1) dc.seam += d / 0.5;
     if (dc.jamT < 1) dc.jamT = Math.min(1, dc.jamT + d / 0.25);
-    if (dc.shakeT > 0) dc.shakeT = Math.max(0, dc.shakeT - d * 3);
+    if (dc.shakeT > 0) dc.shakeT = Math.max(0, dc.shakeT - d / 0.22);
   });
 }
 
+function drawCardShadow(ctx, dc, lift) {
+  const cw = CARD_W * dc.s, ch = CARD_H * dc.s, rx = cw * (0.46 + 0.08 * lift), ry = 12 + 12 * lift;
+  ctx.save(); ctx.translate(dc.x, dc.y + ch * 0.48 + 14 * lift); ctx.scale(1, ry / rx);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+  g.addColorStop(0, `rgba(0,0,0,${0.45 * lift})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rx, 0, 6.283); ctx.fill(); ctx.restore();
+}
+function drawLock(ctx, x, y, s) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.fillStyle = 'rgba(14,12,10,.85)'; ctx.beginPath(); ctx.arc(0, 0, 13, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = COL.vellum; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, -3, 4.5, Math.PI, 0); ctx.stroke();
+  ctx.fillStyle = COL.vellum; ctx.fillRect(-6, -2, 12, 9); ctx.restore();
+}
+function drawChip(app, text, x, y, col) {
+  const ctx = app.ctx, w = Math.max(90, text.length * 8.6 + 22);
+  ctx.save(); app.rr(x - w / 2, y - 14, w, 28, 8); ctx.fillStyle = 'rgba(14,12,10,.92)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke(); ctx.restore();
+  app.text(text, x, y, { size: 15, ui: true, bold: true, align: 'center', baseline: 'middle', color: col });
+}
+
 function drawHand(app) {
-  const ctx = app.ctx, c = S.c;
+  const ctx = app.ctx, c = S.c, rm = rmotion();
   const idle = canAct();
   const order = S.hand.slice();
-  order.sort((a, b) => (a.uid === S.hov ? 1 : 0) - (b.uid === S.hov ? 1 : 0) || (S.drag && a.uid === S.drag.uid ? 1 : 0) - (S.drag && b.uid === S.drag.uid ? 1 : 0));
+  const rank = (dc) => (S.drag && dc.uid === S.drag.uid ? 3 : dc.fly ? 2 : dc.uid === S.hov ? 2 : dc.uid === S.sel ? 1 : 0);
+  order.sort((a, b) => rank(a) - rank(b));
+  const nh = S.hand.length;
   for (const dc of order) {
     const spec = dcSpec(dc);
     const hi = c.hand.indexOf(dc.w);
     const chk = hi >= 0 && !S.q.length ? canPlay(c, hi) : { ok: true };
     let cost = hi >= 0 ? effCost(c, dc.w) : spec.cost;
     if (typeof cost === 'number' && dc.w.jam && !dc.jam) cost = Math.max(0, cost - 1);
-    const sx = dc.shakeT > 0 ? Math.sin(S.t * 90) * 7 * dc.shakeT : 0;
-    const selected = dc.uid === S.sel;
-    drawCard(ctx, spec, dc.x + sx, dc.y, { scale: dc.s, rot: dc.rot, tithed: dc.w.tithed, jam: dc.jam, cost, glow: selected ? 1 : (idle && chk.ok && dc.uid === S.hov ? 0.5 : 0), selected, dim: idle && !chk.ok ? 0.35 : 0, alpha: dc.alpha, hover: dc.uid === S.hov });
+    const isDrag = !!(S.drag && S.drag.uid === dc.uid);
+    const sx = dc.shakeT > 0 ? Math.sin((1 - dc.shakeT) * 6 * Math.PI * 1.0) * 6 * dc.shakeT : 0;
+    const oy = dc.settle > 0 ? -Math.sin((1 - dc.settle) * Math.PI) * 4 : 0;
+    const selected = dc.uid === S.sel && !isDrag;
+    const lifted = LIFTED(dc);
+    if (isDrag) drawCardShadow(ctx, dc, EASE.out(S.drag.lift)); else if (lifted && dc.s > 0.8) drawCardShadow(ctx, dc, 0.4);
+    const x = dc.x + sx, y = dc.y + oy;
+    ctx.save();
+    if (dc.sq > 0.001) { ctx.translate(x, y); ctx.scale(1 + dc.sq, 1 - dc.sq * 0.6); ctx.translate(-x, -y); }
+    drawCard(ctx, spec, x, y, { scale: dc.s, rot: dc.rot, tithed: dc.w.tithed, jam: dc.jam, cost, glow: selected ? 1 : (idle && chk.ok && dc.uid === S.hov ? 0.5 : 0), selected, dim: idle && !chk.ok ? 0.3 : 0, alpha: dc.alpha, hover: dc.uid === S.hov, compact: dc.s < 0.8 });
+    ctx.restore();
     if (dc.seam >= 0 && dc.seam < 1.4) drawSeam(ctx, dc);
     if (dc.jam) drawClamp(ctx, dc);
+    const cw = CARD_W * dc.s, ch = CARD_H * dc.s, left = dc.x - cw / 2, top = dc.y - ch / 2;
+    if (idle && !chk.ok) drawLock(ctx, left + 18 * Math.max(0.8, dc.s), dc.y + 8, Math.max(0.8, dc.s));
+    if (dc.costFlash > 0) { ctx.save(); ctx.globalAlpha = dc.costFlash * 0.8; ctx.fillStyle = '#e03a3a'; ctx.beginPath(); ctx.arc(left + 26 * dc.s * 1.1, top + 26 * dc.s * 1.1, 24 * dc.s, 0, 6.283); ctx.fill(); ctx.restore(); }
+    if (idle && !isDrag && !S.q.length) { const kind = seamBadgeOf(c, dc.w); if (kind) drawSeamBadgeAt(app, kind, left + cw - 16, top + 18, dc.s); }
+    if (app.reg) {
+      const rx = Math.max(0, left), ry = Math.max(0, top), rw = Math.min(W, left + cw) - rx, rh = Math.min(H, top + ch) - ry;
+      if (rw > 0 && rh > 0) app.reg('hand_' + dc.uid, rx, ry, rw, rh, { layer: 'hud', group: 'hand', overlay: lifted });
+    }
   }
+  for (const dc of S.hand) if (dc.chip) {
+    const k = dc.chip.t, a = k > 0.9 ? 1 - (k - 0.9) / 0.3 : 1;
+    ctx.save(); ctx.globalAlpha = clamp(a, 0, 1);
+    drawChip(app, dc.chip.text, clamp(dc.x, 90, W - 90), Math.max(64, dc.y - CARD_H * dc.s / 2 - 22 - Math.min(k, 0.2) * 20), COL.bad); ctx.restore();
+  }
+  drawTouchPreview(app); drawEndConfirm(app);
+}
+
+function previewRects(dc) {
+  const cx = clamp(dc.x, 130, 1150), cw = CARD_W * dc.s, ch = CARD_H * dc.s;
+  return { play: { x: cx - L.PLAY_BTN.w / 2, y: Math.min(dc.y + ch / 2 + 8, H - L.PLAY_BTN.h - 4), w: L.PLAY_BTN.w, h: L.PLAY_BTN.h }, x: { x: cx + cw / 2 - 22, y: dc.y - ch / 2 - 22, w: L.CANCEL_BTN, h: L.CANCEL_BTN } };
+}
+function drawTouchPreview(app) {
+  const u = U(); if (!u.touchPrev || !S.sel || S.drag) return;
+  const dc = S.hand.find((d) => d.uid === S.sel); if (!dc || dc.ty !== L.PREVIEW_Y) return;
+  const r = previewRects(dc), ctx = app.ctx, tgt = selNeedsTarget();
+  ctx.save();
+  app.rr(r.play.x, r.play.y, r.play.w, r.play.h, 10); ctx.fillStyle = tgt ? '#3a2f1a' : '#7a5410'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = COL.lamp; ctx.stroke();
+  app.text(tgt ? 'TAP TARGET' : 'PLAY', r.play.x + r.play.w / 2, r.play.y + r.play.h / 2, { size: tgt ? 15 : 24, bold: true, align: 'center', baseline: 'middle', color: COL.vellum, ui: true });
+  ctx.beginPath(); ctx.arc(r.x.x + r.x.w / 2, r.x.y + r.x.h / 2, r.x.w / 2, 0, 6.283); ctx.fillStyle = 'rgba(14,12,10,.92)'; ctx.fill(); ctx.strokeStyle = COL.vellum; ctx.lineWidth = 2; ctx.stroke();
+  const cx = r.x.x + r.x.w / 2, cy = r.x.y + r.x.h / 2; ctx.beginPath(); ctx.moveTo(cx - 8, cy - 8); ctx.lineTo(cx + 8, cy + 8); ctx.moveTo(cx + 8, cy - 8); ctx.lineTo(cx - 8, cy + 8); ctx.stroke();
+  ctx.restore();
+  if (app.reg) { app.reg('preview_play', r.play.x, r.play.y, r.play.w, r.play.h, { layer: 'hud', group: 'preview', overlay: true }); app.reg('preview_cancel', r.x.x, r.x.y, r.x.w, r.x.h, { layer: 'hud', group: 'preview', overlay: true }); }
+}
+const CONFIRM = { x: 886, y: 480, w: 372, h: 56 };
+function drawEndConfirm(app) {
+  const u = U(), ec = u.endConfirm; if (!ec) return;
+  if (!canAct() || S.t - ec.t0 > 6) { u.endConfirm = null; return; }
+  const ctx = app.ctx, B = CONFIRM, ready = S.t - ec.t0 >= 0.4;
+  ctx.save(); app.rr(B.x, B.y, B.w, B.h, 10); ctx.fillStyle = 'rgba(14,12,10,.94)'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = ready ? COL.lamp : 'rgba(232,220,196,.4)'; ctx.stroke(); ctx.restore();
+  app.text(`End turn with ${ec.energy} energy and ${ec.n} playable card${ec.n === 1 ? '' : 's'}?`, B.x + B.w / 2, B.y + 20, { size: 15, ui: true, bold: true, align: 'center', baseline: 'middle', color: COL.vellum });
+  app.text('Enter or click to confirm. Esc to keep playing.', B.x + B.w / 2, B.y + 40, { size: 12, ui: true, align: 'center', baseline: 'middle', color: 'rgba(232,220,196,.65)' });
+  if (app.reg) app.reg('end_confirm', B.x, B.y, B.w, B.h, { layer: 'hud', group: 'end_confirm', overlay: true });
 }
 function drawSeam(ctx, dc) {
   const k = clamp(dc.seam, 0, 1);
@@ -547,9 +664,17 @@ function busy() { return S.q.length > 0 || S.wait > 0; }
 function canAct() { return S && !busy() && !S.c.over && !S.c.pending && !S.modal && !S.ending && APP.stack[APP.stack.length - 1] === SCREEN; }
 
 // ---------------------------------------------------------------- actions
+function reasonText(dc, why) {
+  const c = S.c;
+  if (why === 'energy' && dc) {
+    const cost = effCost(c, dc.w);
+    if (dc.w.jam && typeof cost === 'number' && cost - 1 <= c.energy) return 'Jammed: +1 cost';
+    return `Need ${cost} energy`;
+  }
+  return why === 'noTarget' ? 'No valid target' : (WHY[why] || 'Cannot play that');
+}
 function reject(dc, why) {
-  const msg = WHY[why] || 'Cannot play that';
-  if (dc) { dc.shakeT = 1; S.fx.float(msg, clamp(dc.x, 140, 1140), Math.max(330, dc.y - 190), { color: COL.bad, size: 22, life: 0.9 }); }
+  if (dc) { dc.shakeT = 1; dc.costFlash = 1; dc.chip = { text: reasonText(dc, why), t: 0 }; }
   sfx('error');
 }
 function tryPlay(uid, ed) {
@@ -558,16 +683,23 @@ function tryPlay(uid, ed) {
   const dc = S.hand.find((d) => d.uid === uid);
   const chk = canPlay(c, hi);
   if (!chk.ok) { reject(dc, chk.why); return false; }
+  if (chk.spec && chk.spec.target === 'enemy' && !liveEds().length) { reject(dc, 'noTarget'); return false; }
   if (needsTarget(c, hi) && !ed) { S.sel = uid; return false; }
   const ti = ed ? c.enemies.indexOf(ed.e) : undefined;
   const r = playCard(c, hi, ti);
   if (!r.ok) { reject(dc, r.why); return false; }
-  S.sel = null; S.drag = null; S.potSel = null;
+  S.sel = null; S.drag = null; S.potSel = null; U().endConfirm = null;
   absorb(); return true;
 }
 function doEndTurn() {
   if (!canAct()) return;
-  endTurn(S.c); S.sel = null; absorb();
+  const u = U(), c = S.c;
+  if (u.endConfirm) { if (S.t - u.endConfirm.t0 < 0.4) return; u.endConfirm = null; } // re-arms after 400 ms, a double click is ignored
+  else {
+    let n = 0; for (let i = 0; i < c.hand.length; i++) if (canPlay(c, i).ok) n++;
+    if (c.energy > 0 && n > 0) { u.endConfirm = { t0: S.t, energy: c.energy, n }; sfx('uiClick'); return; }
+  }
+  endTurn(c); S.sel = null; absorb();
 }
 function tryPotion(i, ed) {
   const id = S.run.potions[i]; if (!id || !canAct()) return false;
@@ -596,17 +728,46 @@ function targeting() { return (S.sel && selNeedsTarget()) || (S.potSel !== null 
 
 function selectCard(uid) {
   if (!S.hand.some((d) => d.uid === uid)) return;
-  S.sel = uid; S.potSel = null; S.tgt = 0; S.kbTarget = false; sfx('uiClick', { pitch: 1.3 });
+  const u = U();
+  S.sel = uid; S.potSel = null; S.tgt = 0; S.kbTarget = false; u.touchPrev = isTouch(); u.endConfirm = null; sfx('uiClick', { pitch: 1.3 });
+}
+function ensureTouch(app) {
+  if (app._u5in || !app.canvas || !app.canvas.addEventListener) return; app._u5in = true;
+  app.canvas.addEventListener('pointerdown', (e) => { if (e.isPrimary === false) app.mouse.second = true; else app.mouse.touch = !!e.pointerType && e.pointerType !== 'mouse'; }, true);
+}
+function cancelDrag(keepSel) {
+  const dr = S.drag; if (!dr) return;
+  S.drag = null; S.down = null;
+  const dc = S.hand.find((d) => d.uid === dr.uid); if (dc) flyHome(dc);
+  if (!keepSel) S.sel = null;
+  sfx('uiBack');
+}
+function snapTarget(p) {
+  let best = null, bd = 90;
+  for (const ed of liveEds()) { const dd = Math.hypot(ed.x - p.x, FOOT_Y - ed.h * 0.55 - p.y); if (dd < bd) { bd = dd; best = ed; } }
+  return best || enemyAt(p.x, p.y);
+}
+// hover candidate: the visible strip of each resting card (never the lifted card), plus the column above the card that is already lifted
+function hoverCand(m) {
+  const n = S.hand.length;
+  for (let i = n - 1; i >= 0; i--) {
+    const dc = S.hand[i]; if (dc.alpha < 0.3) continue;
+    const st = L.handStrip(i, n);
+    let top = st.top; if (dc.uid === S.hovPrev || dc.uid === S.sel) top = Math.min(top, dc.y - CARD_H * dc.s / 2);
+    if (m.x >= st.x0 && m.x < st.x1 && m.y >= top && m.y <= H) return dc;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- input
 function updateInput(app, dt) {
-  const m = app.mouse, c = S.c;
+  const m = app.mouse, c = S.c, u = U();
+  ensureTouch(app);
   const mine = app.stack[app.stack.length - 1] === SCREEN;
   const keys = mine ? app.pressedKeys.slice() : [];
-  if (!mine || app.blocked) { S.hov = null; S.down = null; return; }
-  // Esc belongs to the global pause overlay (ui/pause.js) unless combat is mid-gesture: see app.escBusy
-  app.escBusy = !!(S.drag || S.modal || S.ending || c.pending || S.sel || (S.potSel !== null && S.potSel !== undefined));
+  app.escBusy = !!(mine && (S.drag || S.modal || S.sel || (S.potSel !== null && S.potSel !== undefined) || u.endConfirm || c.pending));
+  if (!mine || app.blocked) { S.hov = null; S.down = null; if (S.drag) cancelDrag(); return; }
+  const touch = isTouch();
 
   // speed-up while the queue plays
   if (busy() && !S.ending) { if (m.pressed || keys.some((e) => e.key === ' ' || e.key === 'Enter')) S.skip = true; }
@@ -615,14 +776,18 @@ function updateInput(app, dt) {
     if (keys.some((e) => e.key === ' ' || e.key === 'Enter') && S.ending.t > 0.4) S.ending.skip = true;
   }
 
-  // ---- hover over hand
-  S.hov = null;
-  if (!S.modal && !S.ending && !(S.drag)) {
-    const prev = S.hovPrev;
-    let cand = null;
-    if (prev) { const dc = S.hand.find((d) => d.uid === prev); if (dc && L.inRectXY(m.x, m.y, ...rectArr(dc))) cand = dc; }
-    if (!cand) for (let i = S.hand.length - 1; i >= 0; i--) { const dc = S.hand[i]; if (dc.alpha > 0.3 && L.inRectXY(m.x, m.y, ...rectArr(dc))) { cand = dc; break; } }
-    if (cand && m.y > 300) { S.hov = cand.uid; if (S.hovPrev !== cand.uid) sfx('uiHover', { vol: 0.3 }); }
+  // ---- hover over hand (strip only, 40 ms intent delay on fast sweeps)
+  u.speed = u.speed * 0.6 + (Math.hypot(m.x - u.lx, m.y - u.ly) / Math.max(dt, 1e-3)) * 0.4; u.lx = m.x; u.ly = m.y;
+  S.hov = null; u.cand = null;
+  if (!S.modal && !S.ending && !S.drag) {
+    let cand = hoverCand(m), want = cand ? cand.uid : null;
+    if (want !== S.hovPrev && S.hovPrev && !m.pressed && u.speed > 1500) {
+      u.candT = u.candId === want ? u.candT + dt : 0; u.candId = want;
+      if (u.candT < 0.04) { want = S.hovPrev; cand = S.hand.find((d) => d.uid === want) || null; }
+    } else u.candId = null;
+    u.cand = cand ? cand.uid : null;
+    if (cand && !touch) { S.hov = cand.uid; if (S.hovPrev !== cand.uid) sfx('uiHover', { vol: 0.3 }); }
+    else if (cand && touch && S.down && S.down.long) S.hov = cand.uid;
     S.hovPrev = S.hov;
   } else if (S.drag) S.hov = S.drag.uid;
 
@@ -635,27 +800,60 @@ function updateInput(app, dt) {
   // ---- keyboard
   for (const e of keys) {
     const k = e.key;
-    if (k === 'Escape') { if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; S.drag = null; sfx('uiBack'); } }
+    if (k === 'Escape') {
+      if (S.drag) cancelDrag();
+      else if (u.endConfirm) { u.endConfirm = null; sfx('uiBack'); }
+      else if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; sfx('uiBack'); }
+      else if (!busy()) app.shared.flow.openSettings && app.shared.flow.openSettings();
+    }
     else if (k === 'q' || k === 'Q') S.modal = { kind: 'piles', tab: 'draw', scroll: 0 };
     else if (act) {
       if (/^[0-9]$/.test(k)) {
         const idx = k === '0' ? 9 : Number(k) - 1; const dc = S.hand[idx];
         if (dc) { if (S.sel === dc.uid) tryPlay(dc.uid, selNeedsTarget() ? liveEds()[S.tgt % Math.max(1, liveEds().length)] : null); else selectCard(dc.uid); }
       } else if (k === 'Tab') { const l = liveEds(); if (l.length) { S.tgt = (S.tgt + (e.shiftKey ? l.length - 1 : 1)) % l.length; S.kbTarget = true; sfx('uiHover'); } }
+      else if (k === 'e' || k === 'E') doEndTurn();
       else if (k === 'Enter' || k === ' ') {
-        if (S.sel) { const l = liveEds(); tryPlay(S.sel, selNeedsTarget() ? l[S.tgt % Math.max(1, l.length)] : null); }
+        if (u.endConfirm) doEndTurn();
+        else if (S.sel) { const l = liveEds(); tryPlay(S.sel, selNeedsTarget() ? l[S.tgt % Math.max(1, l.length)] : null); }
         else if (S.potSel !== null && S.potSel !== undefined) { const l = liveEds(); tryPotion(S.potSel, l[S.tgt % Math.max(1, l.length)]); }
-        else doEndTurn();
       } else if (k === 'ArrowLeft' || k === 'ArrowRight') {
-        const i = S.hand.findIndex((d) => d.uid === S.sel); const n = S.hand.length; if (n) selectCard(S.hand[(i < 0 ? (k === 'ArrowRight' ? 0 : n - 1) : (i + (k === 'ArrowRight' ? 1 : n - 1)) % n)].uid);
+        const l = liveEds();
+        if (S.sel && selNeedsTarget() && S.kbTarget && l.length) { S.tgt = (S.tgt + (k === 'ArrowRight' ? 1 : l.length - 1)) % l.length; sfx('uiHover'); }
+        else { const i = S.hand.findIndex((d) => d.uid === S.sel); const n = S.hand.length; if (n) selectCard(S.hand[(i < 0 ? (k === 'ArrowRight' ? 0 : n - 1) : (i + (k === 'ArrowRight' ? 1 : n - 1)) % n)].uid); }
       }
     }
   }
 
-  // ---- mouse
-  if (m.pressed && m.button === 2) { if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; S.drag = null; sfx('uiBack'); } S.down = null; return; }
-  if (m.pressed) S.down = { x: m.x, y: m.y, uid: act ? S.hov : null, moved: false };
-  if (S.down && S.down.uid && m.down && !S.drag && act && Math.hypot(m.x - S.down.x, m.y - S.down.y) > 12) { S.drag = { uid: S.down.uid }; S.sel = S.down.uid; S.down.moved = true; }
+  // ---- second finger cancels a drag
+  if (m.second) { m.second = false; if (S.drag) { cancelDrag(); return; } }
+
+  // ---- mouse / touch
+  if (m.pressed && m.button === 2) { if (S.drag) cancelDrag(); else if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; sfx('uiBack'); } S.down = null; return; }
+  if (m.pressed) S.down = { x: m.x, y: m.y, uid: act ? u.cand : null, moved: false, t: 0, touch, long: false };
+  if (S.down) {
+    S.down.t += dt;
+    const dist = Math.hypot(m.x - S.down.x, m.y - S.down.y);
+    if (S.down.uid && m.down && !S.drag && act) {
+      if (dist > (S.down.touch ? 10 : 8) || (S.down.t >= 0.12 && dist > 3)) {
+        const dc = S.hand.find((d) => d.uid === S.down.uid);
+        if (dc) {
+          const rm = rmotion();
+          S.drag = { uid: dc.uid, touch: S.down.touch, ox: clamp(dc.x - S.down.x, -80, 80), oy: clamp(dc.y - S.down.y, -80, 80), vx: 0, vy: 0, lift: 0, t: 0, tilt: 0, s0: dc.s, rot0: dc.rot, armed: false, everArmed: false, aim: false, snap: null };
+          if (rm) S.drag.lift = 1;
+          dc.fly = null; S.sel = dc.uid; u.touchPrev = false; u.endConfirm = null; S.down.moved = true; sfx('uiClick', { vol: 0.5, pitch: 1.5 });
+        }
+      } else if (S.down.touch && !S.down.long && S.down.t >= 0.35 && dist <= 10) { S.down.long = true; sfx('uiHover', { vol: 0.4 }); }
+    }
+  }
+  if (S.drag) {
+    const dr = S.drag, p = dragPt();
+    if (!dr.armed && p.y < L.ARM_Y) { dr.armed = true; dr.everArmed = true; sfx('uiHover', { vol: 0.35, pitch: 1.4 }); }
+    else if (dr.armed && p.y > L.DISARM_Y) dr.armed = false;
+    dr.aim = p.y < L.AIM_LINE;
+    dr.snap = selNeedsTarget() ? snapTarget(p) : null;
+    if (dr.everArmed && p.y > 560 && p.x > 120 && p.x < 1160 && !m.released) { cancelDrag(); return; } // dragged back over the hand
+  }
   if (m.released) {
     const dn = S.down; S.down = null;
     if (S.drag) { dropDrag(m); }
@@ -663,38 +861,52 @@ function updateInput(app, dt) {
   }
   // sel survives only while the card exists
   if (S.sel && !S.hand.some((d) => d.uid === S.sel)) S.sel = null;
-  if (S.drag && !m.down && !m.released) S.drag = null;
+  if (S.drag && !m.down && !m.released) cancelDrag();
 }
-const rectArr = (dc) => { const r = dcRect(dc); return [r.x, r.y, r.w, r.h]; };
 
 function dropDrag(m) {
-  const uid = S.drag.uid; S.drag = null;
-  if (m.y < PLAY_LINE && m.y > L.BAR_H) {
-    if (S.c.hand.findIndex((k) => k.uid === uid) >= 0) {
-      const hi = S.c.hand.findIndex((k) => k.uid === uid);
-      if (needsTarget(S.c, hi)) { const ed = enemyAt(m.x, m.y); if (ed) tryPlay(uid, ed); else { S.sel = uid; S.tgt = 0; } }
-      else tryPlay(uid, null);
-    }
-  } else S.sel = null;
+  const dr = S.drag, uid = dr.uid, p = dragPt();
+  S.drag = null;
+  const hi = S.c.hand.findIndex((k) => k.uid === uid);
+  const dc = S.hand.find((d) => d.uid === uid);
+  if (hi < 0 || !dc) { S.sel = null; return; }
+  if (!dr.armed || p.y <= L.BAR_H) { S.sel = null; flyHome(dc); sfx('uiBack'); return; }
+  let ed = null;
+  if (needsTarget(S.c, hi)) {
+    ed = dr.snap || snapTarget(p);
+    if (!ed) { S.sel = uid; S.tgt = 0; U().touchPrev = false; dc.chip = { text: 'Pick a target', t: 0 }; flyHome(dc); sfx('error', { vol: 0.4 }); return; }
+  } else if (specOf(S.c, dc.w).target === 'enemy') ed = liveEds()[0] || null;
+  if (!tryPlay(uid, ed)) { const d2 = S.hand.find((d) => d.uid === uid); if (d2) { flyHome(d2); } S.sel = null; }
 }
 function clickAt(m, dn) {
-  const x = m.x, y = m.y;
+  const x = m.x, y = m.y, u = U();
   // potion target mode
   if (S.potSel !== null && S.potSel !== undefined) { const ed = enemyAt(x, y); if (ed) tryPotion(S.potSel, ed); else if (y > L.BAR_H) { S.potSel = null; } return; }
-  // click on a card
-  if (dn.uid && S.hov === dn.uid) {
+  // end-turn confirm chip
+  if (u.endConfirm && L.inRectXY(x, y, CONFIRM.x, CONFIRM.y, CONFIRM.w, CONFIRM.h)) { doEndTurn(); return; }
+  // touch preview controls
+  if (u.touchPrev && S.sel) {
+    const pc = S.hand.find((d) => d.uid === S.sel);
+    if (pc) {
+      const r = previewRects(pc);
+      if (L.inRectXY(x, y, r.x.x, r.x.y, r.x.w, r.x.h)) { S.sel = null; sfx('uiBack'); return; }
+      if (L.inRectXY(x, y, r.play.x, r.play.y, r.play.w, r.play.h)) { if (selNeedsTarget()) { pc.chip = { text: 'Pick a target', t: 0 }; sfx('error', { vol: 0.4 }); } else tryPlay(S.sel, null); return; }
+    }
+  }
+  // tap / click on a card
+  if (dn.uid && !dn.moved) {
     const uid = dn.uid;
-    if (S.sel === uid) { if (!selNeedsTarget()) tryPlay(uid, null); else { const l = liveEds(); if (l.length === 1) tryPlay(uid, l[0]); } }
+    if (S.sel === uid) { if (u.touchPrev) return; if (!selNeedsTarget()) tryPlay(uid, null); else { const l = liveEds(); if (l.length === 1) tryPlay(uid, l[0]); } }
     else selectCard(uid);
     return;
   }
   if (S.sel) {
-    if (selNeedsTarget()) { const ed = enemyAt(x, y); if (ed) tryPlay(S.sel, ed); }
+    if (selNeedsTarget()) { const ed = enemyAt(x, y); if (ed) tryPlay(S.sel, ed); else if (u.touchPrev && !S.sel) S.sel = null; }
+    else if (u.touchPrev) { const pc = S.hand.find((d) => d.uid === S.sel); if (pc && !L.inRectXY(x, y, pc.x - CARD_W * pc.s / 2, pc.y - CARD_H * pc.s / 2, CARD_W * pc.s, CARD_H * pc.s)) { S.sel = null; sfx('uiBack'); } }
     else if (y < PLAY_LINE && y > L.BAR_H + 4) tryPlay(S.sel, null);
-    else if (y >= PLAY_LINE && !S.hov) S.sel = null;
+    else if (y >= PLAY_LINE && !u.cand) S.sel = null;
   }
 }
-
 // ---------------------------------------------------------------- modals
 function poolOf(kind) {
   const c = S.c;
@@ -922,6 +1134,7 @@ function draw(app) {
   drawEnemies(app, tgtMode);
   drawSprites(app);
   drawCoins(app);
+  { const fd = S.hand.find((d) => d.uid === (S.hov || S.sel)); drawSeamRail(app, c, L.SEAM, S.t, fd ? fd.w : null, !busy()); }
   drawHand(app);
   drawHudBottom(app);
   fx.draw(ctx);
@@ -942,14 +1155,33 @@ function draw(app) {
   if (S.modal) drawPilesModal(app);
 }
 
+function bracketEd(ctx, ed, a, fill) {
+  const x = ed.x - ed.w / 2 - 6, y = FOOT_Y - ed.h - 10, w = ed.w + 12, h = ed.h + 22, l = 16;
+  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = COL.lamp; ctx.lineWidth = 4; ctx.lineCap = 'square';
+  if (fill) { ctx.fillStyle = 'rgba(242,193,78,.08)'; ctx.fillRect(x, y, w, h); }
+  ctx.beginPath();
+  ctx.moveTo(x, y + l); ctx.lineTo(x, y); ctx.lineTo(x + l, y);
+  ctx.moveTo(x + w - l, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + l);
+  ctx.moveTo(x + w, y + h - l); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - l, y + h);
+  ctx.moveTo(x + l, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - l);
+  ctx.stroke(); ctx.restore();
+}
+function drawTargetBrackets(app, snap, all) {
+  for (const ed of liveEds()) bracketEd(app.ctx, ed, all || ed === snap ? 1 : 0.55, all || ed === snap);
+}
+
 function drawPlayZone(app) {
-  const ctx = app.ctx; const on = app.mouse.y < PLAY_LINE;
-  ctx.save(); ctx.strokeStyle = on ? COL.lamp : 'rgba(232,220,196,.25)'; ctx.setLineDash([10, 8]); ctx.lineWidth = 2;
+  const ctx = app.ctx, dr = S.drag; if (!dr) return;
+  const on = dr.armed, dc = S.hand.find((d) => d.uid === dr.uid);
+  const tgt = dc ? specOf(S.c, dc.w).target : 'self';
+  if (tgt === 'all' || tgt === 'enemy') drawTargetBrackets(app, null, tgt === 'all' || liveEds().length === 1);
+  ctx.save();
+  if (tgt === 'self' || tgt === 'none') { ctx.fillStyle = `rgba(242,193,78,${on ? 0.1 : 0.05})`; ctx.fillRect(0, 150, W, PLAY_LINE - 150); }
+  ctx.strokeStyle = on ? COL.lamp : 'rgba(232,220,196,.25)'; ctx.setLineDash([10, 8]); ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(150, PLAY_LINE); ctx.lineTo(1130, PLAY_LINE); ctx.stroke(); ctx.setLineDash([]);
   app.text(on ? 'Release to play' : 'Drag up to play', W / 2, PLAY_LINE - 28, { size: 18, ui: true, align: 'center', color: on ? COL.lamp : 'rgba(232,220,196,.5)' });
   ctx.restore();
 }
-
 function drawHeroAndHud(app) {
   const ctx = app.ctx, P = S.P;
   // shadow
@@ -1055,24 +1287,31 @@ function drawCoins(app) {
 }
 
 function drawAimArrow(app) {
-  const ctx = app.ctx, m = app.mouse;
+  const ctx = app.ctx, m = app.mouse, dr = S.drag, rm = rmotion();
   const dc = S.hand.find((d) => d.uid === S.sel);
-  let from = dc ? { x: dc.x, y: dc.y - CARD_H * dc.s / 2 } : (S.potSel != null ? { x: potionPos(S.potSel).x, y: 56 } : null);
-  if (!from) return;
-  if (S.drag) from = { x: L.HAND_CX, y: L.HAND_Y - 90 };
-  const ed = S.hoverEd;
-  const to = ed ? { x: ed.x, y: FOOT_Y - ed.h * 0.7 } : { x: m.x, y: m.y };
-  const cx = (from.x + to.x) / 2, cy = Math.min(from.y, to.y) - 140;
+  let from, to, snap = null;
+  if (dr) {
+    if (!dr.aim || !dc) { if (dc) drawTargetBrackets(app, null, false); return; }
+    from = { x: dc.x, y: dc.y - CARD_H * dc.s / 2 }; snap = dr.snap;
+    const p = dragPt(); to = snap ? { x: snap.x, y: FOOT_Y - snap.h * 0.55 } : p;
+  } else {
+    from = dc ? { x: dc.x, y: dc.y - CARD_H * dc.s / 2 } : (S.potSel != null ? { x: potionPos(S.potSel).x, y: 56 } : null);
+    if (!from) return;
+    const l = liveEds();
+    snap = S.kbTarget && l.length ? l[S.tgt % l.length] : snapTarget(m);
+    to = snap ? { x: snap.x, y: FOOT_Y - snap.h * 0.55 } : { x: m.x, y: m.y };
+  }
+  drawTargetBrackets(app, snap, false);
+  const cx = (from.x + to.x) / 2, cy = Math.min(from.y, to.y) - 120;
+  const col = snap ? COL.lamp : rgba(COL.vellum, 0.5);
   ctx.save();
-  ctx.strokeStyle = ed ? COL.lamp : 'rgba(242,193,78,.7)'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 5; ctx.setLineDash([2, 12]); ctx.lineCap = 'round';
-  ctx.shadowColor = COL.lamp; ctx.shadowBlur = 8;
+  ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.setLineDash([14, 9]); ctx.lineDashOffset = rm ? 0 : -S.t * 40;
   ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.quadraticCurveTo(cx, cy, to.x, to.y); ctx.stroke(); ctx.setLineDash([]);
-  // arrow head along tangent at the end
   const tx = to.x - cx, ty = to.y - cy, tl = Math.hypot(tx, ty) || 1, ux = tx / tl, uy = ty / tl;
-  ctx.beginPath(); ctx.moveTo(to.x, to.y); ctx.lineTo(to.x - ux * 22 - uy * 11, to.y - uy * 22 + ux * 11); ctx.lineTo(to.x - ux * 22 + uy * 11, to.y - uy * 22 - ux * 11); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(to.x + ux * 2, to.y + uy * 2); ctx.lineTo(to.x - ux * 12 - uy * 7, to.y - uy * 12 + ux * 7); ctx.lineTo(to.x - ux * 12 + uy * 7, to.y - uy * 12 - ux * 7); ctx.closePath(); ctx.fill();
   ctx.restore();
 }
-
 function drawTopBar(app) {
   const ctx = app.ctx, run = S.run, P = S.P, hero = HEROES[run.hero];
   ctx.save();
@@ -1201,6 +1440,7 @@ function drawTips(app) {
     if (tip('endturn', L.END_BTN.x + L.END_BTN.w / 2, L.END_BTN.y, { side: 'above', w: 280 })) return;
   }
   if (!has('endturn')) return; // later tips wait until the basics are known
+  if (seamTip(app, c, L.SEAM)) return;
   const hc = S.hand.find((d) => d.w.tithed);
   if (hc || S.seenTithe.size) { if (tip('strain', L.STRAIN_BOX.x + L.STRAIN_BOX.w, L.STRAIN_BOX.y + 22, { side: 'right', w: 300 })) return; }
   const jc = S.hand.find((d) => d.jam);

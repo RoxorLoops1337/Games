@@ -11,8 +11,8 @@ export const ENEMIES_NEW1 = [
   { id: 'suture_wasp', name: 'Suture Wasp', act: 1, kind: 'normal', hp: [36, 36],
     pattern: ['dart', 'dart', 'sting'],
     moves: {
-      dart: { name: 'Dart', fx: [dmg(8)] },
-      sting: { name: 'Sting (Infection)', note: 'Every third turn: 5 damage and Infection 1 (Strain counts +1 this combat).', fx: [dmg(5), debuff('infection', 1)] },
+      dart: { name: 'Dart', fx: [dmg(10)] },
+      sting: { name: 'Sting (Infection)', note: 'Every third turn: 7 damage and Infection 1 (Strain counts +1 this combat).', fx: [dmg(7), debuff('infection', 1)] },
     },
     art: { body: 'wings', color: '#d9c04a', notes: 'Narrow banded wasp body, two thin glassy wings, a long sting that trails a loop of surgical thread; a needle eye sits at the stinger tip.' } },
 
@@ -20,9 +20,9 @@ export const ENEMIES_NEW1 = [
   { id: 'ward_clerk', name: 'Ward Clerk', act: 1, kind: 'normal', hp: [40, 40],
     pattern: ['audit', 'fine'],
     moves: {
-      audit: { name: 'Audit (Dread)', note: '6 damage and Dread 1: end a turn with no Block and take 2 per stack.', fx: [dmg(6), debuff('dread', 1)] },
-      fine: { name: 'Fine (13 if Block under 5)', note: 'Hits for 13 if you end your turn with under 5 Block, otherwise only 6.',
-        fx: [{ op: 'if', cond: (c) => c.player.block < 5, ifText: 'your Block is under 5 when it acts', then: [dmg(13)], else: [dmg(6)] }] },
+      audit: { name: 'Audit (Dread)', note: '8 damage and Dread 1: end a turn with no Block and take 2 per stack.', fx: [dmg(8), debuff('dread', 1)] },
+      fine: { name: 'Fine (14 if Block under 5)', note: 'Hits for 14 if you end your turn with under 5 Block, otherwise only 7.',
+        fx: [{ op: 'if', cond: (c) => c.player.block < 5, ifText: 'your Block is under 5 when it acts', then: [dmg(14)], else: [dmg(7)] }] },
     },
     art: { body: 'podium', color: '#a89878', notes: 'A narrow reception desk with a tall stamp pad on top, pince-nez perched on a blank round head, a ledger spine and a dangling queue ticket.' } },
 
@@ -30,9 +30,9 @@ export const ENEMIES_NEW1 = [
   { id: 'knitter', name: 'Knitter', act: 1, kind: 'normal', hp: [40, 40], start: { loose: 1 },
     pattern: ['purl', 'cast', 'drop'],
     moves: {
-      purl: { name: 'Purl', fx: [dmg(7)] },
+      purl: { name: 'Purl', fx: [dmg(9)] },
       cast: { name: 'Cast On', fx: [dmg(4), blk(7)] },
-      drop: { name: 'Dropped Stitch', fx: [dmg(11)] },
+      drop: { name: 'Dropped Stitch', fx: [dmg(13)] },
     },
     on: {
       combatStart: (A, e) => { e.data.healed = 0; },
@@ -50,7 +50,7 @@ export const ENEMIES_NEW1 = [
   { id: 'surge_tick', name: 'Surge Tick', act: 1, kind: 'normal', hp: [32, 32],
     pattern: ['latch', 'swell', 'latch'],
     moves: {
-      latch: { name: 'Latch', fx: [dmg(6)] },
+      latch: { name: 'Latch', fx: [dmg(8)] },
       swell: { name: 'Swell (+2 Strength)', note: 'Gains 2 Strength, so every unanswered Swell makes later Latches hit harder.', fx: [dmg(3), buff('strength', 2)] },
     },
     on: {

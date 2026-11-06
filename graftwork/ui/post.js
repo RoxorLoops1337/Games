@@ -47,7 +47,7 @@ export function installPost(app) {
   const ab = { amt: 0, age: 0, ms: 1 };
   const vg = { a: 0, age: 0, ms: 1 };
   const fl = { a: 0, rate: 5, c: new Float32Array([1, 1, 1]) };
-  const bl = { k: 0.5, thr: 0.94, knee: 0.06 };
+  const bl = { k: 0.6, thr: 0.94, knee: 0.06 };
   const gCur = new Float32Array(GRADES.neutral), gFrom = new Float32Array(GRADES.neutral), gTo = new Float32Array(GRADES.neutral);
   const g = { t: 1, ms: 1, name: 'neutral', autoKey: '' };
   const userRects = new Float32Array(32); let nUser = 0;
@@ -179,7 +179,7 @@ export function installPost(app) {
 
   // ---- public API ----
   const post = {
-    on: false,
+    on: false, autoQuality: true,
     setQuality(q) { if (!TIERS.includes(q)) return; S.ceiling = q; stats.ceiling = q; setTier(q); resetRing(); },
     setGrade(name, ms) {
       const to = GRADES[name]; if (!to) return;
@@ -209,7 +209,7 @@ export function installPost(app) {
         const o = nUser * 4; userRects[o] = r[0] / W; userRects[o + 1] = r[1] / H; userRects[o + 2] = (r[0] + r[2]) / W; userRects[o + 3] = (r[1] + r[3]) / H; nUser++;
       }
     },
-    stats,
+    stats, _R: R,
     // advance effect timers by dt seconds (render() calls this with the real frame time)
     update(dt) {
       const ms = dt * 1000;
@@ -256,7 +256,7 @@ export function installPost(app) {
     stats.frames++;
     if (ringN < 60) return;
     const avg = ringSum / 60; stats.avgFrame = avg;
-    if (!S.auto || t - S.lastChange < 5000) { if (avg >= 12) S.fastSince = 0; return; }
+    if (post.autoQuality === false || t - S.lastChange < 5000) { if (avg >= 12) S.fastSince = 0; return; }
     const ti = TIERS.indexOf(S.tier);
     if (avg > 18 && ti > 0 && (ti > 1 || avg > 24)) { setTier(TIERS[ti - 1]); stats.drops++; resetRing(); return; }
     if (avg < 12) { if (!S.fastSince) S.fastSince = t; else if (t - S.fastSince > 10000 && ti < TIERS.indexOf(S.ceiling)) { setTier(TIERS[ti + 1]); stats.rises++; resetRing(); } } else S.fastSince = 0;
