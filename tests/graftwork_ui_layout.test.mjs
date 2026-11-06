@@ -172,6 +172,59 @@ for (const scale of [100, 125, 150]) for (const hero of ['marrow', 'wick']) {
   click(h.app, 270 + 100, 400); look(h, 30, tag + '/graftpicker'); key(h.app, 'Escape'); look(h, 30, tag + '/back');
   if (scale === 100) { addCards(h.run, 25); click(h.app, 400, 645); look(h, 30, tag + '/removepicker'); h.app.mouse.wheel = 400; look(h, 10, tag + '/removepicker2'); key(h.app, 'Escape'); }
 }
+
+// ---- FORGE ----------------------------------------------------------------------------------------------------------
+for (const scale of [100, 125, 150]) {
+  const h = await make({ scale, seed: 'forge' });
+  flowFor(h); h.run.gold = 999; h.run.relics.push(Object.keys(RELICS).find((id) => RELICS[id].perk === 'forgeExtra') || 'r_none'); graftHeavy(h.run, 6);
+  h.run.phase = 'forge'; h.run.pending = { kind: 'forge', used: 0 };
+  go(h, 'forge');
+  const tag = `forge/s${scale}`;
+  look(h, 60, tag);
+  for (let i = 0; i < 6; i++) { hoverAt(h, 100 + i * 200, 300); look(h, 3, tag + '/hover'); }
+  h.app.mouse.x = 0; h.app.mouse.y = 0;
+  if (scale === 100) {
+    for (const nCards of [1, 8, 40]) for (let opt = 0; opt < 6; opt++) {
+      const hh = await make({ scale, seed: 'fp' + nCards + opt });
+      flowFor(hh); hh.run.gold = 999; graftHeavy(hh.run, 6);
+      if (nCards === 40) addCards(hh.run, 30); if (nCards === 1) hh.run.deck.splice(1);
+      hh.run.phase = 'forge'; hh.run.pending = { kind: 'forge', used: 0 };
+      go(hh, 'forge'); frames(hh.app, 40);
+      const fm = await import('../graftwork/ui/forge.js');
+      click(hh.app, fm.optionCenterX(opt), 300); look(hh, 30, `forge/picker${nCards}/o${opt}`);
+      hh.app.mouse.wheel = 500; look(hh, 10, `forge/picker${nCards}/o${opt}/scroll`);
+      key(hh.app, 'Escape'); look(hh, 20, `forge/picker${nCards}/o${opt}/closed`);
+    }
+  }
+}
+
+// ---- EVENT ----------------------------------------------------------------------------------------------------------
+{
+  const evs = Object.values(EVENTS);
+  for (const scale of [100, 125, 150]) for (const ev of evs) {
+    const h = await make({ scale, seed: 'ev-' + ev.id, hero: ['marrow', 'wick', 'odile'][ev.id.length % 3] });
+    flowFor(h); h.run.act = ev.act || 1; h.run.gold = 300;
+    h.run.phase = 'event'; h.run.pending = { kind: 'event', id: ev.id, result: null };
+    h.run.flags = h.run.flags || {};
+    go(h, 'event');
+    if (!h.app.screens.event.ev) continue;
+    look(h, 400, `event/s${scale}/${ev.id}`);
+    // hover each choice, then take choice 1
+    for (let y = 300; y < 650; y += 90) { hoverAt(h, 900, y); look(h, 2, `event/s${scale}/${ev.id}/hover`); }
+    key(h.app, '1'); look(h, 400, `event/s${scale}/${ev.id}/result`);
+  }
+  // synthetic: 1 to 5 choices and a very long text
+  for (const scale of [100, 150]) for (const n of [1, 2, 3, 4, 5]) {
+    const h = await make({ scale, seed: 'evx' });
+    flowFor(h);
+    const fake = { id: 'e_layout', name: 'A Very Long Event Name That Wraps Over Two Lines Of The Parchment', act: 0, text: 'The corridor smells of iodine and old coins. '.repeat(9),
+      choices: Array.from({ length: n }, (_, i) => ({ label: 'Choice number ' + (i + 1) + ' with a long label', text: 'Plain description of what this does to you and your deck, said at some length so it wraps onto several lines of the choice card.', apply: () => 'Done.' })) };
+    EVENTS.e_layout = fake;
+    h.run.phase = 'event'; h.run.pending = { kind: 'event', id: 'e_layout', result: null };
+    go(h, 'event'); look(h, 600, `event/s${scale}/fake${n}`);
+    delete EVENTS.e_layout;
+  }
+}
 let bad = 0;
-for (const pre of ['map', 'reward', 'graft', 'shop']) { console.log(pre + ':'); bad += done(pre); }
+for (const pre of ['map', 'reward', 'graft', 'shop', 'forge', 'event']) { console.log(pre + ':'); bad += done(pre); }
 console.log('problems', bad);

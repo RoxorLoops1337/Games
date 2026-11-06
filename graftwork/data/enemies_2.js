@@ -167,7 +167,7 @@ export const ENEMIES_2 = [
     art: { body: 'hunched', color: '#9a7a9a', notes: 'Small cloaked oval with a square paddle held high.' } },
 
   // ---------- ELITES ----------
-  { id: 'the_appraiser', name: 'The Appraiser', act: 2, kind: 'elite', start: { strength: 2 }, hp: [114, 120], pattern: ['appraise', 'audit', 'levy'],
+  { id: 'the_appraiser', name: 'The Appraiser', act: 2, kind: 'elite', start: { strength: 1 }, hp: [114, 120], pattern: ['appraise', 'audit', 'levy'],
     moves: {
       appraise: { name: 'Appraise', fx: [{ op: 'dmg', n: 8 }, { op: 'custom', intent: 'debuff', text: 'Prices your most grafted card (two below half HP). Playing it costs you.', fn: (A, ctx) => markBest(ctx.srcEnt.hp * 2 <= ctx.srcEnt.maxHp ? 2 : 1)(A) }] },
       audit: { name: 'Audit', tip: 'Rejection: your card prices trigger twice next turn.', fx: [{ op: 'dmg', n: 15 }, { op: 'block', n: 8, to: 'self' }, { op: 'status', s: 'rejection', n: 1, to: 'player' }] },
