@@ -30,7 +30,7 @@ POLICIES.carefulSlip = { ...POLICIES.careful, slip };
 export const ASSIST_ALL = { on: true, sturdy: true, gentle: true, kind: true, mercy: true };
 function mkRng(seed) { let s = hashSeed(seed) >>> 0 || 1; const next = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; return { next, int: (n) => Math.floor(next() * n), pick: (a) => a[Math.floor(next() * a.length)] }; }
 
-function tierFight(run, tier, R, maxTurns = 40) {
+export function tierFight(run, tier, R, maxTurns = 40) {
   const kind = run.pending.fightKind;
   const c = newCombat(run, run.pending.enemies, { kind });
   let guard = 0;

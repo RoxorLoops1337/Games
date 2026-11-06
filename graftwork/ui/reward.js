@@ -1,5 +1,6 @@
 // SPOILS: what the fight left on the table. Gold, a potion, an elite relic or a boss relic choice, then on to the graft table.
 // Everything is claimed through engine/run.js; whatever is not claimed is forfeited on Continue.
+import { newRibbon } from './archive_kit.js';
 import { COL, EASE, clamp, lerp, rgba } from './core.js';
 import { Fx } from './fx.js';
 import * as RUN from '../engine/run.js';
@@ -146,6 +147,7 @@ function drawRow(app, r, i, y, compact, K) {
   const cy = yy + h / 2;
   ICONS.drawRewardIcon(ctx, r.id, x + 46, cy, 56, { id: r.id === 'relic' ? st.init.relic : st.init.potion, spot: r.id === 'gold' ? undefined : info.col });
   ctx.restore();
+  if (!r.taken && r.id !== 'gold') newRibbon(app, r.id === 'relic' ? st.init.relic : st.init.potion, x + 4, yy + 4, 40, { size: 10 });
   const a = slide * (r.taken ? 0.45 : 1);
   let ty = yy + 10;
   app.text(info.head.toUpperCase(), x + tx, ty, { ...hO, color: DIM, alpha: a }); ty += headH;
@@ -200,6 +202,7 @@ function drawChoices(app, y, K, bottom) {
     ctx.save(); ctx.globalAlpha = slide * (locked ? 0.3 : 1);
     ICONS.drawRelic(ctx, id, x + w / 2, hy + 36, 48);
     ctx.restore();
+    if (!locked) newRibbon(app, id, x - 8, hy + 8, w, { size: 10, right: true });
     const a = slide * (locked ? 0.3 : 1);
     let ty = hy + 64;
     ty += app.text(rl.name, x + w / 2, ty, { ...K(21), bold: true, align: 'center', color: r2.color, shadow: true, alpha: a, maxW: w - 24, lineH: Math.round(21 * k * 1.15) });

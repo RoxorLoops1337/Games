@@ -18,7 +18,7 @@ t('inventory: start pool is about 35 to 40 percent of cards, grafts, relics and 
   const inv = inventory(); const r = (k) => inv.start[k] / inv.total[k];
   for (const k of ['card', 'graft', 'relic']) assert.ok(r(k) >= 0.33 && r(k) <= 0.41, `${k} ${r(k).toFixed(2)}`);
   for (const k of ['potion', 'event']) assert.ok(r(k) >= 0.45 && r(k) <= 0.55, `${k} ${r(k).toFixed(2)}`);
-  assert.equal(inv.locked.card + inv.locked.graft + inv.locked.relic + inv.locked.potion + inv.locked.event, LOCKED_IDS.length);
+  assert.equal(inv.locked.card + inv.locked.graft + inv.locked.relic + inv.locked.potion + inv.locked.event + (inv.locked.build || 0), LOCKED_IDS.length);
   for (const k of Object.keys(START)) for (const id of START[k]) assert.ok(UNLOCKS[k + ':' + id], 'START lists a known item ' + id);
 });
 t('starting pool: 3 archetypes per hero, all 7 schools at tier 1 and 2, every act, bosses, Thread', () => {

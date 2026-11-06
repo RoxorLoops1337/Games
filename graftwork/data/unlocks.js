@@ -1,8 +1,8 @@
 // Content unlock model: what is open from the first run, what is locked, in which order it opens and what it costs.
 // Pure data + derivation, no meta access (engine/unlock.js does the bookkeeping). Item ids are never renamed (saves).
-// Unlock id = `${kind}:${itemId}`, kind in card | graft | relic | potion | event. Heroes and ascensions are separate (HERO_GATES).
+// Unlock id = `${kind}:${itemId}`, kind in card | graft | relic | potion | event | build (Ward building cards, data/ward.js). Heroes and ascensions are separate (HERO_GATES).
 // Voice: no em dashes.
-import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES } from './index.js';
+import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES, BUILD_CARDS } from './index.js';
 
 // ============================ MODEL CONSTANTS (tune here) ============================
 // Unlock Points (UP) a finished run pays. Every term is added, then clamped to [UP.FLOOR, UP.RUN_CAP].
@@ -21,9 +21,9 @@ export const UP = {
 };
 export const TARGET_TOTAL = 900;    // total UP that opens every locked item (cost curve is normalised to this)
 export const COST_CURVE = { early: 0.55, late: 1.65 };     // item cost multiplier at queue position 0 and 1 (linear between)
-export const COST_BASE = { card: 2.2, graft: 2.0, relic: 3.0, potion: 2.0, event: 1.5 };
+export const COST_BASE = { card: 2.2, graft: 2.0, relic: 3.0, potion: 2.0, event: 1.5, build: 2.0 };
 export const COST_RARITY = { common: 0.8, uncommon: 1.0, shop: 1.0, rare: 1.6, boss: 1.6 };
-export const STEP_SIZE = { card: 3, graft: 3, relic: 3, potion: 2, event: 2 }; // items per queue step (a "drop")
+export const STEP_SIZE = { card: 3, graft: 3, relic: 3, potion: 2, event: 2, build: 2 }; // items per queue step (a "drop")
 export const AFFINITY_WINDOW = 6;   // the next step is picked from the first N open steps; the most played hero's step wins
 export const AFFINITY_MIN_RUNS = 2; // runs with a hero before its cards are pulled forward
 export const WELCOME_UP_PER_RUN = 5, WELCOME_UP_CAP = 160; // old saves: one-time UP for runs already played
@@ -65,14 +65,17 @@ export const START = {
     e_vending_machine e_night_shift e_orderly_challenge e_gurney_race e_dentist_chair e_loan_shark e_weigh_in
     e_pickled_graft e_haggler e_lamp_lottery e_black_market_clinic e_patient_returns e_debt_collector
     e_costume_rack e_rehearsal e_balcony_seat e_standing_ovation e_understudy e_repossession`)),
+  // Ward building cards: every room card plus half of the upgrade and effect cards (the starter building deck is inside this set)
+  build: new Set([...Object.values(BUILD_CARDS).filter((c) => c.kind === 'room').map((c) => c.id), ...L(`
+    b_overtime b_iron_doors b_reinforced_beds b_morning_rounds b_requisition b_triage b_lamp_oil`)]),
 };
 
 // ============================ DERIVATION ============================
-const KINDS = ['card', 'graft', 'relic', 'potion', 'event'];
+const KINDS = ['card', 'graft', 'relic', 'potion', 'event', 'build'];
 const RANK = { common: 0, uncommon: 1, shop: 1, rare: 2, boss: 2.5 };
 const TIERR = { safe: 0, greedy: 1, weird: 2 };
 const TYPER = { attack: 0, skill: 1, power: 2 };
-const kindOfTable = { card: CARDS, graft: GRAFTS, relic: RELICS, potion: POTIONS, event: EVENTS };
+const kindOfTable = { card: CARDS, graft: GRAFTS, relic: RELICS, potion: POTIONS, event: EVENTS, build: BUILD_CARDS };
 export const uid = (kind, id) => `${kind}:${id}`;
 
 // Items that can be gated (everything a run can roll), in definition order.
@@ -83,13 +86,14 @@ function gateable() {
   for (const r of Object.values(RELICS)) if (r.rarity !== 'start') out.push({ kind: 'relic', id: r.id, d: r });
   for (const p of Object.values(POTIONS)) out.push({ kind: 'potion', id: p.id, d: p });
   for (const e of Object.values(EVENTS)) out.push({ kind: 'event', id: e.id, d: e });
+  for (const b of Object.values(BUILD_CARDS)) out.push({ kind: 'build', id: b.id, d: b });
   return out;
 }
 const power = (it, i) => {
   const d = it.d;
   if (it.kind === 'card') return (RANK[d.rarity] || 0) * 10 + (d.cost === 'X' ? 2.5 : d.cost || 0) + (TYPER[d.type] || 0) * 0.5 + (d.flags && d.flags.unplayable ? 0 : 0);
   if (it.kind === 'graft') return (TIERR[d.tier] || 0) * 10 + (RANK[d.rarity] || 0) * 3 + (d.weight || 1);
-  if (it.kind === 'relic' || it.kind === 'potion') return (RANK[d.rarity] || 0) * 10 + 0.001 * i;
+  if (it.kind === 'relic' || it.kind === 'potion' || it.kind === 'build') return (RANK[d.rarity] || 0) * 10 + 0.001 * i;
   return (d.act || 0) * 10 + 0.001 * i; // events: neutral first, then Act 1..3
 };
 const rarityOf = (it) => it.d.rarity || 'common';
@@ -133,7 +137,7 @@ function build() {
   for (const s of steps) for (const e of s.items) {
     const d = kindOfTable[e.kind][e.itemId];
     const who = e.kind === 'card' ? (e.hero ? (HEROES[e.hero] ? HEROES[e.hero].name : e.hero) + ' ' : 'Neutral ') : '';
-    const what = e.kind === 'event' ? (e.act ? `An Act ${e.act} event` : 'An event') : e.kind === 'graft' ? `A ${d.tier} ${d.rarity} graft` : e.kind === 'relic' ? `A ${d.rarity} relic` : e.kind === 'potion' ? `A ${d.rarity} potion` : `A ${who}${d.rarity} card`;
+    const what = e.kind === 'event' ? (e.act ? `An Act ${e.act} event` : 'An event') : e.kind === 'graft' ? `A ${d.tier} ${d.rarity} graft` : e.kind === 'relic' ? `A ${d.rarity} relic` : e.kind === 'potion' ? `A ${d.rarity} potion` : e.kind === 'build' ? `A ${d.rarity} Ward building card` : `A ${who}${d.rarity} card`;
     e.hint = `${what}. Earn Unlock Points to open it (${stage(s.pos)} unlock).` + (s.hero ? ` Playing ${HEROES[s.hero] ? HEROES[s.hero].name : s.hero} opens it sooner.` : '');
   }
   return { items, byItem, steps, total };

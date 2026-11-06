@@ -141,7 +141,7 @@ export function defineTerm(name, n) {
   return k ? k.text : '';
 }
 function numAround(line, h) {
-  const before = line.slice(Math.max(0, h.i - 12), h.i).match(/([+-]?\d+)\s*(?:x\s*)?$/);
+  const before = line.slice(Math.max(0, h.i - 12), h.i).match(/(?<![\d.])([+-]?\d+)\s*(?:x\s*)?$/); // not the tail of a multiplier: 'x0.75 Weak' is no 75
   if (before && !/per\s+\d+\s*$/.test(line.slice(Math.max(0, h.i - 12), h.i))) return +before[1];
   const after = line.slice(h.i + h.len, h.i + h.len + 6).match(/^\s+(\d+)\b/);
   if (after) return +after[1];

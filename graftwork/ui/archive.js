@@ -4,7 +4,7 @@ import { tscale } from './graft_parts.js';
 import { COL, W, H, rgba } from './core.js';
 import { unlockState, lockedHint, isFresh } from '../engine/unlock.js';
 import { cardSpec } from '../engine/cards.js';
-import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES } from '../data/index.js';
+import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, HEROES, BUILD_CARDS } from '../data/index.js';
 import { glossTip, cardGlossTip } from './tooltips.js';
 import { scrollArea, inView } from './deckview.js';
 import { KINDS, KIND_LABEL, KIND_ONE, GOLD, itemViews, categoryCounts, drawMini, drawSilhouette, shortHint, padlock } from './archive_kit.js';
@@ -65,7 +65,7 @@ export default {
     yy += app.text('PROGRESS', x + 14, yy, { size: 12, ui: true, bold: true, color: COL.lamp }) + 4;
     yy += app.text(st.done ? 'Archive complete' : `Archive ${st.percent} percent`, x + 14, yy, { size: 28, bold: true, color: st.done ? '#8fe0a0' : '#fbe9b0', fit: { w: iw, lines: 1 } }) + 6;
     bar(app, x + 14, yy, iw, 14, st.total ? st.unlockedCount / st.total : 1, st.done ? '#8fe0a0' : GOLD); yy += 22;
-    yy += app.text(`${st.unlockedCount} of ${st.total} locked items opened`, x + 14, yy, { size: 14, ui: true, color: '#e0d4b8', fit: { w: iw, lines: 1 } }) + 8;
+    yy += app.text(`${st.unlockedCount} of ${st.total} locked items opened`, x + 14, yy, { size: 14, ui: true, color: '#e0d4b8', fit: { w: iw, lines: 2 } }) + 8;
     yy += app.text(`Runs finished: ${runs}`, x + 14, yy, { size: 14, ui: true, color: '#cdbf9d', fit: { w: iw, lines: 1 } }) + 10;
     if (st.done) { app.text('Everything is unlocked. Nothing left to earn here.', x + 14, yy, { size: 14, ui: true, italic: true, color: '#8fe0a0', fit: { w: iw, h: y + h - yy - 8, lines: 3 } }); return; }
     yy += app.text('NEXT UNLOCK', x + 14, yy, { size: 12, ui: true, bold: true, color: COL.lamp }) + 4;
@@ -115,17 +115,21 @@ export default {
     else if (v.kind === 'graft') { const d = GRAFTS[v.itemId]; glossTip(app, d.name, [d.boon, d.price, String(d.tier || '').toUpperCase(), 'W' + d.weight], anchor, { school: d.school }); }
     else if (v.kind === 'relic') glossTip(app, RELICS[v.itemId].name, [RELICS[v.itemId].text], anchor, {});
     else if (v.kind === 'potion') glossTip(app, POTIONS[v.itemId].name, [POTIONS[v.itemId].text], anchor, {});
+    else if (v.kind === 'build') app.tooltip(v.name, String((BUILD_CARDS[v.itemId] && (BUILD_CARDS[v.itemId].hint || BUILD_CARDS[v.itemId].text)) || 'A Ward building card.'), { anchor });
     else app.tooltip(v.name, String((EVENTS[v.itemId] && EVENTS[v.itemId].text) || '').slice(0, 160), { anchor });
   },
   drawGrid(app, meta, x, y, w, h) {
     const g = app.ctx, cc = categoryCounts(meta);
     app.reg('archive-grid', x, y, w, h, { group: 'grid' });
     app.panel(x, y, w, h, { r: 12, fill: 'rgba(16,12,11,.88)' });
-    const tw = Math.floor((w - 24 - 4 * 6) / 5);
+    const tw = Math.floor((w - 24 - (KINDS.length - 1) * 6) / KINDS.length);
     KINDS.forEach((kd, i) => {
       const on = this.tab === i, c = cc[kd];
-      app.reg('archive-tab' + i, x + 12 + i * (tw + 6), y + 10, tw, 32, { group: 'tab' + i });
-      if (app.button(`${KIND_LABEL[kd]} ${c.got}/${c.total}`, x + 12 + i * (tw + 6), y + 10, tw, 32, { size: 15, ui: true, fit: true, fill: on ? '#5a4720' : COL.slab2, stroke: on ? COL.lamp : 'rgba(232,220,196,.4)', color: on ? COL.lamp : COL.vellum, r: 7 })) this.setTab(i);
+      app.reg('archive-tab' + i, x + 12 + i * (tw + 6), y + 10, tw, 32, { group: 'grid' });
+      let lab = `${KIND_LABEL[kd]} ${c.got}/${c.total}`;
+      if (app.measure(lab, 15, { ui: true, bold: true }) > tw - 14) lab = `${KIND_LABEL[kd]} ${c.got}`;
+      if (app.measure(lab, 15, { ui: true, bold: true }) > tw - 14) lab = KIND_LABEL[kd];
+      if (app.button(lab, x + 12 + i * (tw + 6), y + 10, tw, 32, { size: 15, ui: true, fit: true, fill: on ? '#5a4720' : COL.slab2, stroke: on ? COL.lamp : 'rgba(232,220,196,.4)', color: on ? COL.lamp : COL.vellum, r: 7 })) this.setTab(i);
     });
     const kind = KINDS[this.tab];
     let gy = y + 50;
@@ -133,7 +137,7 @@ export default {
       let fx = x + 12; const cw = Math.floor((w - 24 - 4 * 5) / 5);
       CARD_FILTERS.forEach(([id, label]) => {
         const on = this.hero === id;
-        app.reg('archive-f' + id, fx, gy, cw, 26, { group: 'f' + id });
+        app.reg('archive-f' + id, fx, gy, cw, 26, { group: 'grid' });
         if (app.button(label, fx, gy, cw, 26, { size: 13, ui: true, fit: true, r: 6, fill: on ? '#5a4720' : COL.slab2, stroke: on ? COL.lamp : 'rgba(232,220,196,.4)', color: on ? COL.lamp : COL.vellum })) { this.hero = id; this.state('card').target = 0; }
         fx += cw + 5;
       });
@@ -143,7 +147,7 @@ export default {
     if (kind === 'card' && this.hero !== 'all') list = list.filter((v) => (this.hero === 'any' ? !v.hero : v.hero === this.hero));
     const aw = w - 16, ah = y + h - gy - 8, cellW = 50, cellH = 58, cols = Math.max(1, Math.floor((aw - 24) / cellW)), rows = Math.ceil(list.length / cols);
     const stt = this.state(kind + this.hero);
-    app.reg('scroll-archive', x + 8, gy, aw, ah, { group: 'gridbox' });
+    app.reg('scroll-archive', x + 8, gy, aw, ah, { group: 'grid' });
     const ox = x + 8 + (aw - cols * cellW) / 2;
     scrollArea(app, stt, x + 8, gy, aw, ah, rows * cellH + 8, (top) => {
       list.forEach((v, i) => {

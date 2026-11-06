@@ -30,7 +30,7 @@ import pause, { installPause, drawPauseOverlay } from './ui/pause.js';
 import { installTransitions } from './ui/transitions.js';
 import { installFullscreen } from './ui/fullscreen.js';
 
-const PHASE_SCREEN = { map: 'map', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', dead: 'end', won: 'end' };
+const PHASE_SCREEN = { map: 'map', combat: 'combat', reward: 'reward', graft: 'graft', shop: 'shop', forge: 'forge', event: 'event', ward: 'ward', dead: 'end', won: 'end' };
 const ACT_THEME = { 1: 'ward', 2: 'market', 3: 'theatre' };
 
 export function applyLoadout(m) { try { setCardBack(m.loadout.back); setHeroTint(META.tintColor(m)); } catch (e) { /* cosmetics are optional */ } }

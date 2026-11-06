@@ -1,5 +1,6 @@
 // SHOP screen (run.phase === 'shop', run.pending = shop) plus the shared "workbench kit" the Forge screen reuses:
 // gauges, card / graft pickers with live Budget-Strain-Tithe preview, and the attach / strip / move flourishes.
+import { newRibbon } from './archive_kit.js';
 import { COL, EASE, rgba, clamp, lerp } from './core.js';
 import { Fx } from './fx.js';
 import { drawBackground } from '../art/backgrounds.js';
@@ -614,6 +615,7 @@ export default {
       g.save(); if (k > 0.02) { g.shadowColor = 'rgba(242,193,78,.5)'; g.shadowBlur = 20 * k; }
       drawCard(g, spec, cx, cy - 8 * k, { scale: sc0 + 0.06 * k, dim: it.sold ? 0.6 : 0, glow: k * 0.5 });
       g.restore();
+      if (!it.sold) newRibbon(app, it.id, CARD_X(i) - 73, cy - 104, 60, { size: 10 });
       if (it.sold) stamp(app, cx, cy, 'SOLD'); else priceTag(CARD_X(i), cy + 126, it.price, false, 'card' + i);
       if (!it.sold && app.clicked(CARD_X(i) - 77, cy - 108, 154, 217)) buyDirect(app, 'card', i, { x: CARD_X(i), y: cy }, it.price);
     });
@@ -629,6 +631,7 @@ export default {
       if (over) { app.cursor = 'pointer'; app.tooltip(gr.name, `Weight ${gr.weight} (${gr.tier}): counts ${gr.weight} against your Budget.\n` + ['Boon', 'Price'].map((lab) => { const t = lab === 'Boon' ? gr.boon : gr.price; return wrapLimit(app, `${lab}: ${t}`, w - 2, 13, 1, { ui: true })[0] === `${lab}: ${t}` ? '' : `${lab}: ${t}\n`; }).join('') + `Sews onto one of your cards. ${it.price} gold.`, { color: COL[gr.school], gloss: [gr.boon, gr.price, String(gr.tier).toUpperCase()], school: gr.school, anchor: { x: GRAFT_X(i), y, w, h: 100, band: { x: Math.min(GRAFT_X(i), 590), y: 584, bottom: 716, dir: 1 } } }); } // Boon and Price are on the patch itself; the tip sits over the service row, never over the sibling patches
       g.save(); if (it.sold) g.globalAlpha = 0.45; g.translate(0, -3 * k);
       drawGraftPatch(g, gr, x, y, w, ph, { hover: k });
+      if (!it.sold) newRibbon(app, it.id, x + 3, y + 3, w, { size: 10 });
       // one line each for the Boon and the Price, so nobody has to hover to read what a patch does
       { // two rows, one line each, in the 40 px between the patch and the Potions heading; the size is shared so the rows never touch (the hover tip has the rest)
         let rowO = { size: 13, ui: true, fit: { w: w - 2, lines: 1, soft: true } };
@@ -654,6 +657,7 @@ export default {
       app.panel(x, y - 2 * k, w, h, { fill: over ? 'rgba(52,42,32,.95)' : 'rgba(26,22,20,.88)', stroke: over ? COL.lamp : 'rgba(232,220,196,.3)' });
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawPotion(g, it.id, x + 30, y + 34 - 2 * k, 40);
+      if (!it.sold) newRibbon(app, it.id, x + 3, y + 3, 40, { size: 9 });
       let nmO = { size: 15, bold: true, fit: { w: w - 58, lines: 1 } }; if (app.layoutText(p.name, nmO).trunc) nmO = { ...nmO, bold: false }; // a long name on the smallest phone drops the bold before it loses letters
       const nmL = app.layoutText(p.name, nmO), nameY = y + 14 - 2 * k;
       app.text(p.name, x + 56, nameY, { ...nmO, color: COL.vellum });
@@ -676,6 +680,7 @@ export default {
       app.panel(x, y - 2 * k, w, h, { fill: over ? 'rgba(52,42,32,.95)' : 'rgba(26,22,20,.88)', stroke: over ? COL.lamp : rgba(BRASS, 0.5), lw: 2 });
       g.save(); if (it.sold) g.globalAlpha = 0.4;
       drawRelic(g, it.id, x + 40, y + h / 2 - 2 * k, 56);
+      if (!it.sold) newRibbon(app, it.id, x + 3, y + h - 18, 40, { size: 9 });
       const rnO = { size: 17, bold: true, fit: { w: w - 76 - 90, lines: 2 } }, rnL = app.layoutText(r.name, rnO);
       app.text(r.name, x + 76, y + 8 - 2 * k, { ...rnO, color: COL.lamp });
       { const ty0 = Math.max(y + 8 + (rnL.lines.length - 1) * rnL.lineH + Math.ceil(rnL.size * 1.2) + 2, y + 32), tO = { size: 14, ui: true, fit: { w: w - 90, h: y + h - 5 - ty0, soft: true } }, tL = app.layoutText(r.text, tO);

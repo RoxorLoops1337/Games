@@ -1,5 +1,6 @@
 // THE GRAFT TABLE: pick one of your own cards and one graft, read the whole bill, then sew.
 // Immediate-mode screen. The run is only changed through engine/run.js (applyGraft, skipGraft, rerollGraftOffer, afterGraft).
+import { newRibbon } from './archive_kit.js';
 import { COL, EASE, clamp, lerp, rgba } from './core.js';
 import { Fx } from './fx.js';
 import { maybeTip } from './tutorial.js';
@@ -321,6 +322,7 @@ function drawPatchTile(app, r, j, c) {
   if (sel) { ctx.shadowColor = COL.lamp; ctx.shadowBlur = 26; }
   drawPatchBody(app, g, x, y, w, h, { tier, sc, compact, sel, hover, dim });
   ctx.restore();
+  if (!dim && slide >= 1) newRibbon(app, r.gid, x + 3, y + 3, w, { size: 10 });
   keyBadge(app, GRAFT_KEYS[j].toUpperCase(), x - 14, y + h / 2);
 
   if (hover) {

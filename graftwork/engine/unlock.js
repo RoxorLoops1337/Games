@@ -3,12 +3,12 @@
 // Meta fields (all under meta.unlocked, additive): ids {unlockId:1}, points, lifetime, played {hero:n}, killed {enemyId:1}, maxAct, v (model version).
 // Run gating: run.unlockedAtStart = undefined (everything open: tools and old runs) | array of unlocked ids (non start items) ; start items always open.
 import { UNLOCKS, UNLOCK_OF_ITEM, STEPS, TOTAL_COST, LOCKED_IDS, UP, HERO_GATES, AFFINITY_WINDOW, AFFINITY_MIN_RUNS, WELCOME_UP_PER_RUN, WELCOME_UP_CAP, uid, inventory } from '../data/unlocks.js';
-import { HEROES, CARDS, GRAFTS, RELICS, POTIONS, EVENTS } from '../data/index.js';
+import { HEROES, CARDS, GRAFTS, RELICS, POTIONS, EVENTS, BUILD_CARDS } from '../data/index.js';
 export { UP, TOTAL_COST, HERO_GATES, STEPS, UNLOCKS, inventory };
 
-const NAMES = { card: CARDS, graft: GRAFTS, relic: RELICS, potion: POTIONS, event: EVENTS };
+const NAMES = { card: CARDS, graft: GRAFTS, relic: RELICS, potion: POTIONS, event: EVENTS, build: BUILD_CARDS };
 const isObj = (x) => x && typeof x === 'object' && !Array.isArray(x);
-const SEEN_KEY = { card: 'cards', graft: 'grafts', relic: 'relics', potion: 'potions', event: 'events' };
+const SEEN_KEY = { card: 'cards', graft: 'grafts', relic: 'relics', potion: 'potions', event: 'events', build: 'builds' };
 
 export function unlockDefaults() { return { ids: {}, points: 0, lifetime: 0, played: {}, killed: {}, maxAct: 1, v: 1 }; }
 function U(m) { // the unlock block, repaired in place

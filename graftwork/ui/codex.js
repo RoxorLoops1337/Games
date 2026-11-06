@@ -13,6 +13,9 @@ import { statusText, opText } from '../engine/text.js';
 import { glossTip } from './tooltips.js';
 import { cardGrid, gridKey, scrollArea, inView, pill, gaugeCells } from './deckview.js';
 import { lnw } from '../art/linework.js';
+import { isItemUnlocked, lockedHint } from '../engine/unlock.js';
+import { categoryCounts, padlock } from './archive_kit.js';
+const GATE_KIND = { cards: 'card', grafts: 'graft', relics: 'relic' };
 
 const TABS = ['Cards', 'Grafts', 'Relics', 'Enemies', 'Statuses', 'Schools', 'Rules', 'Records'];
 // Rules words an entry names, for the hover glossary: [texts, options]
@@ -40,6 +43,8 @@ export function isSeen(app, kind, id) {
   const m = app.shared.meta, s = m && m.seen && m.seen[kind];
   return !!((s && s[id]) || runOwns(app.shared.run, kind, id));
 }
+// Locked = the Archive has not opened it yet (hint says how); unseen = open but never offered to you. Locked wins only while the entry is not seen.
+export function isLocked(app, kind, id) { const k = GATE_KIND[kind]; return !!k && !isSeen(app, kind, id) && !isItemUnlocked(app.shared.meta, k, id); }
 function seenCount(app, kind) { return Object.keys(KEYS[kind]).filter((id) => isSeen(app, kind, id)).length; }
 
 // ---------------------------------------------------------------- filters
@@ -83,12 +88,12 @@ function enemySilhouette(def, sc) {
 }
 function qmark(app, x, y, size, color) { app.text('?', x, y - size * 0.62, { size, bold: true, align: 'center', color: color || 'rgba(232,220,196,.35)' }); }
 
-function unknownCard(app, ctx, cx, cy, sc, hot) {
+function unknownCard(app, ctx, cx, cy, sc, hot, locked) {
   ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc);
   app.rr(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 14); ctx.fillStyle = hot ? 'rgba(34,27,23,.8)' : 'rgba(21,17,15,.7)'; ctx.fill();
   ctx.lineWidth = lnw(4); ctx.strokeStyle = 'rgba(232,220,196,.22)'; ctx.setLineDash([14, 9]); ctx.stroke(); ctx.setLineDash([]);
   ctx.restore();
-  qmark(app, cx, cy + 10, 64 * sc / 0.56 * 0.6);
+  if (locked) padlock(ctx, cx, cy + 6, 1.7 * sc / 0.56 * 0.6); else qmark(app, cx, cy + 10, 64 * sc / 0.56 * 0.6);
 }
 
 // ---------------------------------------------------------------- list cells
@@ -100,9 +105,10 @@ const CELLS = {
   grafts: { h: 112, draw(app, ctx, id, d, seen, x, y, w, h) {
     if (!seen) {
       app.rr(x + 8, y + 8, 124, h - 16, 14); ctx.fillStyle = '#15110f'; ctx.fill(); ctx.setLineDash([8, 6]); ctx.lineWidth = lnw(2); ctx.strokeStyle = 'rgba(232,220,196,.25)'; ctx.stroke(); ctx.setLineDash([]);
-      qmark(app, x + 70, y + h / 2, 44);
-      app.text('Unknown graft', x + 146, y + 12, { size: 17, bold: true, color: 'rgba(232,220,196,.6)', fit: { w: w - 158, lines: 1 } });
-      app.text(hintFor.grafts(d), x + 146, y + 12 + LHT(app, 17, { bold: true }) + 6, { size: 13, ui: true, italic: true, lineH: 16, color: 'rgba(232,220,196,.55)', fit: { w: w - 158, lines: 3, soft: true } });
+      if (isLocked(app, 'grafts', id)) padlock(ctx, x + 70, y + h / 2, 2.2); else qmark(app, x + 70, y + h / 2, 44);
+      const lk = isLocked(app, 'grafts', id);
+      app.text(lk ? 'Locked graft' : 'Unknown graft', x + 146, y + 12, { size: 17, bold: true, color: 'rgba(232,220,196,.6)', fit: { w: w - 158, lines: 1 } });
+      app.text(lk ? lockedHint(id) : hintFor.grafts(d), x + 146, y + 12 + LHT(app, 17, { bold: true }) + 6, { size: 13, ui: true, italic: true, lineH: 16, color: 'rgba(232,220,196,.55)', fit: { w: w - 158, lines: 3, soft: true } });
       return;
     }
     drawGraftPatch(ctx, d, x + 8, y + 10, 128, h - 20);
@@ -120,9 +126,10 @@ const CELLS = {
   relics: { h: 96, draw(app, ctx, id, d, seen, x, y, w, h) {
     if (!seen) {
       ctx.save(); ctx.fillStyle = '#15110f'; ctx.beginPath(); ctx.arc(x + 44, y + h / 2, 28, 0, 6.283); ctx.fill(); ctx.setLineDash([6, 5]); ctx.lineWidth = lnw(2); ctx.strokeStyle = 'rgba(232,220,196,.25)'; ctx.stroke(); ctx.restore();
-      qmark(app, x + 44, y + h / 2, 34);
-      app.text('Unknown relic', x + 88, y + 12, { size: 17, bold: true, color: 'rgba(232,220,196,.6)', fit: { w: w - 100, lines: 1 } });
-      app.text(hintFor.relics(d), x + 88, y + 12 + LHT(app, 17, { bold: true }) + 6, { size: 13, ui: true, italic: true, lineH: 16, color: 'rgba(232,220,196,.55)', fit: { w: w - 100, lines: 3, soft: true } });
+      if (isLocked(app, 'relics', id)) padlock(ctx, x + 44, y + h / 2, 1.8); else qmark(app, x + 44, y + h / 2, 34);
+      const lk = isLocked(app, 'relics', id);
+      app.text(lk ? 'Locked relic' : 'Unknown relic', x + 88, y + 12, { size: 17, bold: true, color: 'rgba(232,220,196,.6)', fit: { w: w - 100, lines: 1 } });
+      app.text(lk ? lockedHint(id) : hintFor.relics(d), x + 88, y + 12 + LHT(app, 17, { bold: true }) + 6, { size: 13, ui: true, italic: true, lineH: 16, color: 'rgba(232,220,196,.55)', fit: { w: w - 100, lines: 3, soft: true } });
       return;
     }
     drawRelic(ctx, id, x + 44, y + h / 2, 56);
@@ -284,7 +291,7 @@ export default {
       if (!passes(kind, f, d)) continue;
       const seen = isSeen(app, kind, id);
       if (q && !(seen && d.name.toLowerCase().includes(q))) continue;
-      out.push({ id, d, seen });
+      out.push({ id, d, seen, locked: !seen && isLocked(app, kind, id) });
     }
     return out;
   },
@@ -304,7 +311,9 @@ export default {
     app.panel(14, 10, W - 28, H - 20, { r: 14, fill: '#1c1714', stroke: 'rgba(232,220,196,.5)', lw: 3 });
     drawVellum(ctx, 17, 13, W - 34, H - 26, { r: 12, alpha: 0.9 }); // baked vellum behind everything on the page
     app.text('Codex', 36, 18, { size: 28, bold: true, color: COL.lamp });
-    app.text('Everything you have met. The rest waits in silhouette.', 150, 30, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.6)' });
+    app.text('Everything you have met. The rest waits in silhouette.', 150, 30, { size: 14, ui: true, italic: true, color: 'rgba(232,220,196,.6)', fit: { w: 540, lines: 1 } });
+    { const kd = KINDS[this.tab], cnt = kd && GATE_KIND[kd] ? categoryCounts(app.shared.meta)[GATE_KIND[kd]] : null;
+      if (cnt) app.text(`${TABS[this.tab]} ${cnt.got} of ${cnt.total} unlocked`, 1070, 24, { size: 15, ui: true, bold: true, align: 'right', color: '#f2c14e', fit: { w: 360, lines: 1 } }); }
     app.reg('codex-x', 1080, 16, 36, 36, { group: 'x' }); // left of the global Pause / Fullscreen zone
     if (app.button('X', 1080, 16, 36, 36, { size: 20, ui: true, r: 18 })) this.pending = () => { if (app.top() === this) app.pop(); };
     // tabs
@@ -352,10 +361,10 @@ export default {
     const ctx = app.ctx, st = this.state('cards');
     const list = this.entries(app, 'cards');
     this.count = list.length;
-    const items = list.map(({ id, d, seen }) => ({
-      id, d, seen,
+    const items = list.map(({ id, d, seen, locked }) => ({
+      id, d, seen, locked,
       spec: seen ? cardSpec({ uid: 0, id, grafts: [], up: 0 }) : null,
-      draw: seen ? null : (c2, cx, cy, sc, hot) => unknownCard(app, c2, cx, cy, sc, hot),
+      draw: seen ? null : (c2, cx, cy, sc, hot) => unknownCard(app, c2, cx, cy, sc, hot, locked),
     }));
     const gw = w - 330;
     const g = cardGrid(app, items, x, y, gw, h, { state: st, scale: 0.56, gap: 10, empty: this.q ? 'Nothing seen matches.' : 'Nothing here.' });
@@ -366,14 +375,14 @@ export default {
     if (!hv) { app.text('Hover a card', px + pw / 2, y + h / 2 - 12, { size: 20, italic: true, align: 'center', color: 'rgba(232,220,196,.5)' }); drawEmptyMark(ctx, x + w / 2, y + h / 2 - 34); return; }
     const cy = y + 16 + (CARD_H * 1.1) / 2;
     if (hv.seen) drawCard(ctx, hv.spec, px + pw / 2, cy, { scale: 1.1, glow: 0.3, hover: true, preview: true });
-    else unknownCard(app, ctx, px + pw / 2, cy, 1.1, true);
+    else unknownCard(app, ctx, px + pw / 2, cy, 1.1, true, hv.locked);
     let yy = y + 16 + CARD_H * 1.1 + 14;
     const d = hv.d, heroName = d.hero === 'any' ? 'Neutral' : (HEROES[d.hero] ? HEROES[d.hero].name : d.hero);
     if (hv.seen) {
       app.text(`${heroName} · ${cap(d.rarity)} · ${cap(d.type)}`, px + pw / 2, yy, { size: 14, ui: true, align: 'center', color: 'rgba(232,220,196,.75)' });
     } else {
-      app.text('Unknown', px + pw / 2, yy, { size: 17, bold: true, align: 'center', color: 'rgba(232,220,196,.7)' });
-      app.text(hintFor.cards(d), px + 14, yy + 24, { size: 13, ui: true, italic: true, maxW: pw - 28, lineH: 16, color: 'rgba(232,220,196,.6)' });
+      app.text(hv.locked ? 'Locked' : 'Unknown', px + pw / 2, yy, { size: 17, bold: true, align: 'center', color: hv.locked ? '#c9b98f' : 'rgba(232,220,196,.7)' });
+      app.text(hv.locked ? lockedHint(hv.id) : hintFor.cards(d), px + 14, yy + 24, { size: 13, ui: true, italic: true, maxW: pw - 28, lineH: 16, color: 'rgba(232,220,196,.6)' });
     }
   },
   drawList(app, kind, x, y, w, h) {

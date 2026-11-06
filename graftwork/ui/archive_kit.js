@@ -3,15 +3,16 @@
 import { COL } from './core.js';
 import { drawCard, drawGraftPatch, drawSchoolGlyph, CARD_W, CARD_H } from '../art/cards.js';
 import { drawRelic, drawPotion, drawEventSeal } from '../art/icons.js';
-import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS } from '../data/index.js';
+import { CARDS, GRAFTS, RELICS, POTIONS, EVENTS, BUILD_CARDS } from '../data/index.js';
 import { UNLOCKS, isUnlocked, isFresh, takeFresh, unlockState } from '../engine/unlock.js';
 import { cardSpec } from '../engine/cards.js';
 import { lnw } from '../art/linework.js';
 
-export const KINDS = ['card', 'graft', 'relic', 'potion', 'event'];
-export const KIND_LABEL = { card: 'Cards', graft: 'Grafts', relic: 'Relics', potion: 'Potions', event: 'Events' };
-export const KIND_ONE = { card: 'card', graft: 'graft', relic: 'relic', potion: 'potion', event: 'event' };
-const TABLE = { card: CARDS, graft: GRAFTS, relic: RELICS, potion: POTIONS, event: EVENTS };
+// 'build' (Ward building cards) joins when the unlock model gates any
+export const KINDS = ['card', 'graft', 'relic', 'potion', 'event', ...(Object.values(UNLOCKS).some((e) => e.kind === 'build') ? ['build'] : [])];
+export const KIND_LABEL = { card: 'Cards', graft: 'Grafts', relic: 'Relics', potion: 'Potions', event: 'Events', build: 'Buildings' };
+export const KIND_ONE = { card: 'card', graft: 'graft', relic: 'relic', potion: 'potion', event: 'event', build: 'building card' };
+const TABLE = { card: CARDS, graft: GRAFTS, relic: RELICS, potion: POTIONS, event: EVENTS, build: BUILD_CARDS };
 export const RARITY_COL = { common: '#b9ad92', uncommon: '#8fd0a0', rare: '#f2c14e', boss: '#c58bff', shop: '#7fd0e0', start: '#b9ad92' };
 export const GOLD = '#f2c14e';
 export const calm = (app) => { const s = app.shared.meta && app.shared.meta.settings; return !!(s && (s.reducedMotion || s.reduceMotion)); };
@@ -43,7 +44,8 @@ export const shortHint = (h) => String(h || '').split('. ')[0].replace(/\.$/, ''
 // ---------------------------------------------------------------- art
 export function drawArt(app, kind, itemId, cx, cy, size, o = {}) {
   const g = app.ctx;
-  if (kind === 'card') { let sp = null; try { sp = cardSpec({ uid: 0, id: itemId, grafts: [], up: 0 }); } catch { sp = null; } if (sp) drawCard(g, sp, cx, cy, { scale: size / CARD_H, alpha: o.alpha === undefined ? 1 : o.alpha }); }
+  if (kind === 'build') { const w = size * 0.7; app.rr(cx - w / 2, cy - size / 2, w, size, 5); g.fillStyle = '#221c18'; g.fill(); g.lineWidth = lnw(2); g.strokeStyle = '#7fd0e0'; g.stroke(); g.fillStyle = '#7fd0e0'; g.fillRect(cx - w * 0.3, cy - size * 0.1, w * 0.6, 2); g.fillRect(cx - w * 0.3, cy + size * 0.1, w * 0.4, 2); }
+  else if (kind === 'card') { let sp = null; try { sp = cardSpec({ uid: 0, id: itemId, grafts: [], up: 0 }); } catch { sp = null; } if (sp) drawCard(g, sp, cx, cy, { scale: size / CARD_H, alpha: o.alpha === undefined ? 1 : o.alpha }); }
   else if (kind === 'graft') { const d = GRAFTS[itemId]; if (d) drawGraftPatch(g, d, cx - size * 0.75, cy - size * 0.42, size * 1.5, size * 0.84, {}); }
   else if (kind === 'relic') drawRelic(g, itemId, cx, cy, size * 0.9);
   else if (kind === 'potion') drawPotion(g, itemId, cx, cy, size * 0.9);
@@ -57,7 +59,7 @@ export function padlock(g, x, y, s, col = '#9b8f7a') {
 export function drawSilhouette(app, kind, cx, cy, size, o = {}) {
   const g = app.ctx, hot = !!o.hot, edge = hot ? 'rgba(232,220,196,.5)' : 'rgba(232,220,196,.2)';
   g.save(); g.fillStyle = hot ? '#1d1815' : '#13100e'; g.strokeStyle = edge; g.lineWidth = lnw(1.6); g.setLineDash([5, 4]);
-  if (kind === 'card') { const w = size * 0.7, h = size; app.rr(cx - w / 2, cy - h / 2, w, h, 5); }
+  if (kind === 'card' || kind === 'build') { const w = size * 0.7, h = size; app.rr(cx - w / 2, cy - h / 2, w, h, 5); }
   else if (kind === 'graft') { const w = size * 1.3, h = size * 0.62; app.rr(cx - w / 2, cy - h / 2, w, h, 4); }
   else if (kind === 'event') { g.beginPath(); g.arc(cx, cy, size * 0.4, 0, 6.283); }
   else if (kind === 'potion') { const w = size * 0.55, h = size * 0.85; app.rr(cx - w / 2, cy - h / 2 + size * 0.06, w, h, size * 0.2); }
@@ -79,11 +81,12 @@ export function drawMini(app, view, cx, cy, size, o = {}) {
 // ---------------------------------------------------------------- NEW ribbon (once per item)
 // A finished run opens items (meta.unlocked.fresh). The first time one is drawn in an offer the ribbon shows, the item leaves the fresh set (saved on the next
 // meta save) and stays 'live' while the same screen is open, so it does not blink out under the player's eyes.
-let live = new Set(), liveScreen = null;
+let live = new Set(), liveScreen = null, lastFrame = -9;
 export function resetRibbons() { live = new Set(); liveScreen = null; }
 export function newRibbon(app, itemId, x, y, w, o = {}) {
   const meta = app.shared.meta; if (!meta) return false;
-  const scr = app.current || null; if (scr !== liveScreen) { live = new Set(); liveScreen = scr; }
+  const scr = app.current || null; if (scr !== liveScreen || app.frame - lastFrame > 2) { live = new Set(); liveScreen = scr; }
+  lastFrame = app.frame;
   if (isFresh(meta, itemId)) { takeFresh(meta, itemId); live.add(itemId); }
   if (!live.has(itemId)) return false;
   const g = app.ctx, s = o.size || 11, tw = Math.max(34, app.measure('NEW', s, { ui: true, bold: true }) + 14), th = Math.ceil(app.sz(s, { ui: true, bold: true }) * 1.2) + 4;

@@ -5,6 +5,7 @@ import { makeRng, hashSeed } from './rng.js';
 import { applyAssist } from './assist.js';
 import { DAILY_MODS } from '../data/dailymods.js';
 import { runAllows, snapshotFor } from './unlock.js';
+import { wardInit, wardRewards, wardShopExtend, wardShopBuy, wardAdvance, afterTrigger as wardAfterTrigger } from './ward.js';
 import { newInst, cardSpec, canGraft, strainInfo, budgetOf, relicMod, previewGraft, MAX_GRAFTS, canTemper, temper } from './cards.js';
 
 export const ACT_ROWS = { 1: 10, 2: 10, 3: 11 };
@@ -49,6 +50,7 @@ export function newRun(opts = {}) {
     ...(snap ? { unlockedAtStart: snap } : {}),
     seenEvents: [], rerolls: 0, shopUses: { remove: 0, strip: 0 }, pending: null,
   };
+  if (opts.mode === 'ward') run.mode = 'ward'; // Ward mode (engine/ward.js); classic runs carry no mode field so their saves stay byte identical
   run.uidNext = uid;
   if (asc >= 9) { run.maxHp = Math.round(run.maxHp * 0.9); run.hp = run.maxHp; }
   if (asc >= 3) run.deck.push(newInst('j_clot', () => run.uidNext++));
@@ -105,7 +107,9 @@ export function rollPotion(run) {
 
 // ---------- map ----------
 const COLS = 6;
+export function runMode(run) { return run.mode === 'ward' ? 'ward' : 'classic'; }
 export function startAct(run, act) {
+  if (run.mode === 'ward') { run.act = act; run.row = -1; run.node = null; run.map = null; wardInit(run, act); return; }
   run.act = act; run.row = -1; run.node = null;
   run.map = genMap(run, act);
   run.phase = 'map';
@@ -214,6 +218,7 @@ export function startFight(run, kind) {
 
 // ---------- rewards ----------
 export function fightRewards(run, kind, result) {
+  const prevPending = run.pending; // Ward mode reads its room info and phase modifiers from the fight that just ended
   const act = run.act;
   const rng = run.rng;
   const gm = (run.dailyMod && run.dailyMod.goldMul) || 1;
@@ -225,6 +230,7 @@ export function fightRewards(run, kind, result) {
   const potionChance = 0.4 + relicMod(run, 'potionChance') * 0.1;
   if (kind !== 'final' && rng.chance(kind === 'normal' ? potionChance : 0.6)) rw.potion = rollPotion(run);
   if (kind === 'final') rw.graft = false;
+  if (run.mode === 'ward') wardRewards(run, rw, prevPending);
   run.phase = 'reward'; run.pending = rw;
   return rw;
 }
@@ -348,7 +354,9 @@ export function makeShop(run) {
   const potions = [0, 1, 2].map(() => ({ id: rollPotion(run), price: 50, sold: false }));
   const m = priceMult(run);
   for (const it of [...cards, ...grafts, ...relics, ...potions]) it.price = Math.max(10, Math.round(it.price * m));
-  return { kind: 'shop', cards, grafts, relics, potions, removeUses: 0 };
+  const shop = { kind: 'shop', cards, grafts, relics, potions, removeUses: 0 };
+  if (run.mode === 'ward') wardShopExtend(run, shop); // building cards + removal at the Dispensary
+  return shop;
 }
 export function servicePrice(run, svc) {
   const m = priceMult(run);
@@ -359,6 +367,7 @@ export function servicePrice(run, svc) {
 export function shopBuy(run, kind, index, extra) {
   const shop = run.pending;
   if (!shop || shop.kind !== 'shop') return { ok: false, why: 'noshop' };
+  if (kind === 'build' || kind === 'buildRemove') return run.mode === 'ward' ? wardShopBuy(run, shop, kind, index, extra) : { ok: false, why: 'kind' };
   if (kind === 'remove') {
     const price = servicePrice(run, 'remove'); const inst = findInst(run, extra);
     if (!inst || run.gold < price) return { ok: false, why: 'gold' };
@@ -466,6 +475,7 @@ export function eventChoose(run, i, uid) {
 export function afterEvent(run) {
   if (run.flags.queueFight) { const q = run.flags.queueFight; delete run.flags.queueFight; run.phase = 'combat'; run.pending = { kind: 'combat', fightKind: q.elite ? 'elite' : 'normal', enemies: q.enemies, fromEvent: true }; return run.phase; }
   if (run.flags.queueGraft > 0) { run.flags.queueGraft--; startGraftPick(run); return run.phase; }
+  if (run.mode === 'ward') { wardAfterTrigger(run); return run.phase; } // back to the walk
   run.phase = 'map'; run.pending = null; return run.phase;
 }
 
@@ -514,6 +524,7 @@ export function afterGraft(run) {
   return advance(run);
 }
 export function advance(run) {
+  if (run.mode === 'ward') return wardAdvance(run); // the walk continues, or the next floor after the boss
   const node = run.node ? run.map.nodes[run.node] : null;
   run.pending = null;
   if (node && node.type === 'boss' && run.act < 3) {

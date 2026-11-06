@@ -12,8 +12,8 @@ import { HEROES, ENEMIES, RELICS, GRAFTS } from '../data/index.js';
 import { ACHIEVEMENT_LIST } from '../data/achievements.js';
 import { lnw } from '../art/linework.js';
 import { drawPortrait } from '../art/heroes.js';
-import { KIND_LABEL, GOLD, drawArt }
-import { UP } from '../engine/unlock.js' from './archive_kit.js';
+import { KIND_LABEL, GOLD, drawArt } from './archive_kit.js';
+import { UP } from '../engine/unlock.js';
 
 const GAP = 7;
 const calm = (app) => !!(app.shared.meta && app.shared.meta.settings && app.shared.meta.settings.reducedMotion);
@@ -177,7 +177,7 @@ export default {
       g.restore();
       ty += bh + 6; room -= bh + 6;
     }
-    const items = this.stamps.filter((s) => s.v), cw = Math.floor((w - 8) / 3), chh = 70, rows = Math.max(1, Math.floor(room / (chh + 4))), cap = rows * 3;
+    const items = this.stamps.filter((s) => s.v), cw = Math.floor((w - 8) / 3), chh = 62, rows = Math.max(1, Math.floor(room / (chh + 4))), cap = rows * 3;
     const shown = items.length > cap ? cap - 1 : items.length;
     for (let j = 0; j < shown; j++) {
       const v = items[j].v, i = this.stamps.indexOf(items[j]), k = stampK(i), cx0 = x + (j % 3) * (cw + 4), cy0 = ty + Math.floor(j / 3) * (chh + 4);
@@ -185,7 +185,7 @@ export default {
       const sc = 1 + (1 - EASE.out(k)) * 0.7;
       g.save(); g.globalAlpha = EASE.out(k);
       app.rr(cx0, cy0, cw, chh, 8); g.fillStyle = 'rgba(20,15,10,.9)'; g.fill(); g.lineWidth = lnw(1.5); g.strokeStyle = rgba(GOLD, 0.6); g.stroke();
-      g.save(); g.translate(cx0 + cw / 2, cy0 + 28); g.scale(sc, sc); drawArt(app, v.kind, v.itemId, 0, 0, v.kind === 'card' ? 46 : 38); g.restore();
+      g.save(); g.translate(cx0 + cw / 2, cy0 + 22); g.scale(sc, sc); drawArt(app, v.kind, v.itemId, 0, 0, v.kind === 'card' ? 40 : 32); g.restore();
       app.text(v.name, cx0 + cw / 2, cy0 + chh - 6 - Math.ceil(app.sz(11, { ui: true }) * 1.2), { size: 11, ui: true, align: 'center', color: '#fbe9b0', fit: { w: cw - 8, lines: 1 } });
       g.restore();
       if (k >= 1 && app.inRect(cx0, cy0, cw, chh)) app.tooltip(v.name, `New ${v.kind} in the Archive. ${KIND_LABEL[v.kind]} you open show up in offers from the next run.`, { color: GOLD });
@@ -322,6 +322,22 @@ export default {
     const hdrH = Math.ceil(app.sz(12, { ui: true, bold: true }) * 1.2);
     let yy = ny + 10 + hdrH + 8;
     let fitted = 0;
+    // Too many entries for the full rows (a phone panel holds about one): every entry becomes ONE line (tag + name), so each is listed and none is dropped
+    const estH = this.news.reduce((a, n) => a + kH + nH + (n.rows ? Math.min(n.rows.length, 2) * (tH + 2) + tH : Math.min(app.wrap(n.text || '', w - 28, 12, { ui: true }).length, 2) * tH) + 10, 0);
+    if (this.news.length > 1 && yy + estH > ny + nh - 6) {
+      const lH = Math.ceil(app.sz(14, { bold: true }) * 1.25) + 3, cap = Math.max(1, Math.floor((ny + nh - 6 - yy) / lH)), shownN = Math.min(this.news.length, this.news.length > cap ? cap - 1 : cap);
+      for (let i = 0; i < shownN; i++) {
+        const n = this.news[i], at = this.nextNew + i * 0.3, k = clamp((this.t0 - at) / 0.3, 0, 1), ty = yy + i * lH;
+        if (k > 0 && this.shown <= i) { this.shown = i + 1; if (app.shared.audio) app.shared.audio.sfx(n.kind === 'Unlocked' ? 'relic' : 'gilded', { vol: 0.5 }); }
+        g.save(); g.globalAlpha = EASE.out(k);
+        const tag = n.kind === 'Unlocked' ? 'NEW' : n.kind === 'Credit' ? 'FILE' : 'REC', tw = Math.ceil(app.measure(tag, 10, { ui: true, bold: true })) + 8;
+        app.text(tag, x + 14, ty + 2, { size: 10, ui: true, bold: true, color: n.kind === 'Unlocked' ? '#8fe0a0' : COL.lamp });
+        app.text(n.name, x + 14 + tw, ty, { size: 14, bold: true, color: '#fbe9b0', fit: { w: w - 28 - tw, lines: 1 } });
+        g.restore();
+      }
+      if (this.news.length > shownN) app.text(`and ${this.news.length - shownN} more in the Codex`, x + w / 2, ny + nh - hdrH - 8, { size: 12, ui: true, italic: true, align: 'center', color: '#a58f6b', fit: { w: w - 20, lines: 1 } });
+      return;
+    }
     for (let i = 0; i < this.news.length; i++) {
       const n = this.news[i];
       const lines = app.wrap(n.text || '', w - 28, 12, { ui: true }).length;
