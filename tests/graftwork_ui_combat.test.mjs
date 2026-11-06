@@ -186,7 +186,7 @@ for (const id of ids) {
   const a = await mk(meta);
   frames(app0(a), 1);
   assert.equal(a.app._tipKey, 'energy', 'first fight starts with the energy tip');
-  click(a.app, 260, 484); frames(a.app, 3);
+  { const tb = a.app._tipBtn; click(a.app, tb.x + tb.w / 2, tb.y + tb.h / 2); } frames(a.app, 3);
   assert.equal(meta.tips.energy, 1, 'dismissing the energy tip persists it');
   assert.ok(a.saved > 0, 'meta was saved');
   frames(a.app, 3);

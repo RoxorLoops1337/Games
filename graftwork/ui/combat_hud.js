@@ -61,11 +61,12 @@ function drawOneStatus(app, ent, id, x, y, sz, anchorRect) {
     ctx.restore();
   }
   if (cb(app)) cornerShape(ctx, good, x - sz / 2 + 3, y - sz / 2 + 4);
-  app.text(String(n), x + sz / 2 + 1, y + sz / 2 - 15, { size: 14, bold: true, ui: true, align: 'right', stroke: '#0e0e0e', strokeW: 3, color: '#fff', fixed: true });
+  const nfs = Math.max(14, Math.min(20, Math.round(sz * 0.58)));
+  app.text(String(n), x + sz / 2 + 2, y + sz / 2 - nfs - 1, { size: nfs, bold: true, ui: true, align: 'right', stroke: '#0e0e0e', strokeW: 4, color: '#fff', fixed: true });
   if (app.inRect(x - sz / 2, y - sz / 2, sz, sz)) queueTip(app, 'st:' + id + ':' + n, [[statusSection(id, n, ent)]], { x: x - sz / 2, y: y - sz / 2, w: sz, h: sz });
 }
 // Status icons in rows: good statuses on the top row, bad on the second (rows = 2), or one row (rows = 1). Icons shrink from
-// `size` to 20 before anything collapses; beyond 8 (or what fits) the rest hides behind a '+N' chip opening a list.
+// `size` to 26 before anything collapses; beyond 8 (or what fits) the rest hides behind a '+N' chip opening a list.
 // ent: {st, pop}. o: { id, rows, group }. Returns the height used.
 export function drawStatusRow(app, ent, cx, y, maxW, size, t, o = {}) {
   const ids = Object.keys(ent.st).filter((s) => ent.st[s]);
@@ -75,7 +76,7 @@ export function drawStatusRow(app, ent, cx, y, maxW, size, t, o = {}) {
   let sz = size, perRow = Math.max(1, Math.floor((maxW + 4) / (sz + 4)));
   const need = (k) => Math.max(1, Math.floor((maxW + 4) / (k + 4)));
   const fits = (k) => (rows === 1 ? ids.length <= need(k) : good.length <= need(k) && bad.length <= need(k)) && ids.length <= 8;
-  for (const k of [size, 22, 20]) { if (k > size) continue; sz = k; perRow = need(k); if (fits(k)) break; }
+  for (const k of [size, 30, 28, 26]) { if (k > size) continue; sz = k; perRow = need(k); if (fits(k)) break; }
   let gShow = good, bShow = bad; const hidden = [];
   if (rows === 1) { const all = good.concat(bad); gShow = all.slice(0, ids.length <= Math.min(8, perRow) ? all.length : Math.min(8, perRow) - 1); bShow = []; hidden.push(...all.slice(gShow.length)); }
   else {
@@ -239,7 +240,7 @@ export function drawEnemyPlate(app, ed, o) {
   ctx.restore();
   // status rows
   ctx.save(); ctx.globalAlpha = o.alpha;
-  drawStatusRow(app, ed, ed.x, by + 24, sw - 2, ed.scale < 0.8 ? 22 : 26, 0, { id: grp, rows: 2, group: grp });
+  drawStatusRow(app, ed, ed.x, by + 24, sw - 2, ed.scale < 0.8 ? 28 : 32, 0, { id: grp, rows: 2, group: grp });
   ctx.restore();
   if (o.suppress) return;
   // tips: block, intent, hp/body
@@ -265,9 +266,21 @@ function bodyTip(ed, o) {
 }
 
 // Hero plate: hp bar, block, one row of statuses (good first). Registers 'heroPlate'.
-export function drawHeroPlate(app, P, heroName, t) {
+// dgr (low HP): { pulse 0..1, level, rm }. The bar glows and throbs with the heartbeat, the number swells and shakes; reduced motion keeps a steady glow.
+export function drawHeroPlate(app, P, heroName, t, dgr) {
   const ctx = app.ctx, H = L.HERO_PLATE;
-  drawBar(app, H.x + 34, H.y + 2, H.w - 38, 16, P.shown, P.trail, P.maxHp, '#b3263a', `${Math.max(0, Math.ceil(P.hp))}/${P.maxHp}`);
+  const hpLabel = `${Math.max(0, Math.ceil(P.hp))}/${P.maxHp}`;
+  if (dgr) {
+    const pu = dgr.rm ? 0.4 : dgr.pulse, lv = dgr.level, bx = H.x + 34, by = H.y + 2, bw = H.w - 38;
+    const sh = dgr.rm ? 0 : Math.sin(t * 90) * 1.6 * pu * lv, grow = 1 + pu * 0.06 * lv;
+    ctx.save(); ctx.translate(bx + bw / 2 + sh, by + 8); ctx.scale(grow, 1 + pu * 0.22 * lv); ctx.translate(-(bx + bw / 2), -8);
+    ctx.shadowColor = `rgba(255,40,60,${0.45 + 0.5 * pu * lv})`; ctx.shadowBlur = 8 + 16 * pu * lv;
+    drawBar(app, bx, 0, bw, 16, P.shown, P.trail, P.maxHp, pu > 0.5 ? '#e0344a' : '#b3263a', '');
+    ctx.restore();
+    const fs = 14 + Math.round(5 * pu * lv);
+    app.text(hpLabel, bx + bw / 2 + sh, by + 8 - 8 - (fs - 14) * 0.5, { size: fs, align: 'center', ui: true, bold: true, color: pu > 0.5 ? '#ffb0b0' : '#ff8a8a', stroke: '#2a0408', strokeW: 4, fixed: true });
+  } else
+  drawBar(app, H.x + 34, H.y + 2, H.w - 38, 16, P.shown, P.trail, P.maxHp, '#b3263a', hpLabel);
   if (P.block > 0) { const k = 1 + P.bpulse * 0.35; ctx.save(); ctx.translate(H.x + 15, H.y + 11); ctx.scale(k, k); drawShield(ctx, 0, 0, 32, P.block); ctx.restore(); }
   drawStatusRow(app, P, H.x + H.w / 2, H.y + 26, H.w, 24, t, { id: 'hero', rows: 1, group: 'heroPlate' });
   app.reg('heroPlate', H.x, H.y, H.w, H.h, {});

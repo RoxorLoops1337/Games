@@ -55,9 +55,8 @@ app.screens.base.draw = (a) => { maybeTip(a, 'strain', 600, 300, TIP_TEXTS.strai
 assert.equal(Object.keys(TIP_TEXTS).length, 16);
 frames(app, 5);
 assert.equal(meta.tips.strain, undefined);
-click(app, 600, 360 + 10);
+{ const tb = app._tipBtn; click(app, tb.x + tb.w / 2, tb.y + tb.h / 2); }
 frames(app, 3);
-if (!meta.tips.strain) { for (let y = 320; y < 420 && !meta.tips.strain; y += 10) click(app, 600, y); }
 assert.equal(meta.tips.strain, 1, 'tip dismissed and stored'); assert.ok(saved.length >= 1);
 const n = saved.length; frames(app, 5); click(app, 600, 340); assert.equal(saved.length, n, 'fires once');
 meta.settings.tips = false; assert.equal(tipsActive(meta), false);

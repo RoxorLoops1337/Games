@@ -83,6 +83,21 @@ calls.length = 0;
 calls.push((a) => { ch.plate(a, 10, 10, 120, 30, 'Marrow'); ch.vial(a, 20, 60, 24, 90, 0.6); ch.vial(a, 60, 60, 24, 90, 0); ch.dial(a, 120, 100, 20, 2, 3); ch.badge(a, 200, 100, '12'); ch.rivet(a.ctx, 5, 5); a.press(10, 10, 50, 20); });
 frames(app, 5);
 
+// --- small-screen floor: text >= 11 CSS px (capped boost), hit area >= 40 CSS px, desktop untouched
+{
+  const a = await makeApp({ meta: { settings: {} } });
+  a.textScale = 1;
+  a.scale = 1; assert.equal(a.sz(9), 9, 'no floor at scale 1');
+  a.scale = 0.54; assert.equal(a.sz(9), Math.round(9 * 1.5), 'boost is capped at 1.5x');
+  assert.equal(a.sz(16), Math.ceil(11 / 0.54), 'floor reaches 11 CSS px');
+  assert.ok(a.sz(30) === 30, 'large text is left alone');
+  assert.ok(a.measure('abc', 9) > 0 && a.wrap('a b c', 1000, 9).length === 1);
+  let n = 0; const calls2 = [];
+  a.register('hit', { draw(x) { if (x.button('S', 100, 100, 44, 38)) n++; } }); a.go('hit');
+  click(a, 96, 100); frames(a, 2); assert.equal(n, 1, 'tiny button grows its hit area on small screens');
+  a.scale = 1; n = 0; click(a, 90, 100); frames(a, 2); assert.equal(n, 0, 'no growth at scale 1');
+  assert.ok(a.safe && a.safe.t === 0 && a.safe.r === 0, 'safe insets default to zero');
+}
 // --- benchmark: 500 buttons + 200 panels per tick, plain no-op context (measures our JS, not the Proxy)
 const noop = () => {};
 const grad = { addColorStop: noop };

@@ -16,6 +16,8 @@ for (const e of ENEMY_LIST) {
   assert.ok(b.w > 0 && b.h > 0, e.id + ' bounds');
   for (const o of states) { drawEnemy(ctx, e, 300, 400, o); n++; }
 }
+// regression: ui/combat.js passes its own anim object as o.state (fields sq, hold, hit ... are numbers): must not collide with the art springs
+for (const e of ENEMY_LIST) for (const hp of [1, 0.5, 0.2, 0]) { const state = { sq: 0.1, sqv: 3, hold: 0, hit: 1, seamLit: 0.4, hem: 'x', jel: 5, brn: 2 }; drawEnemy(ctx, e, 300, 400, { t: 2, hurt: 0.3, state, hpFrac: hp }); drawEnemy(ctx, e, 300, 400, { t: 2.05, state, hpFrac: hp }); }
 drawEnemy(ctx, { id: 'weird', art: { body: 'nope', color: '#abc' } }, 10, 10, {});
 drawEnemy(ctx, { id: 'bare' }, 10, 10, { dying: 0.5 });
 assert.ok(enemyBounds({ id: 'bare' }).w > 0);
@@ -45,20 +47,20 @@ for (const e of [...ENEMY_LIST, ...newDefs]) {
       n2 += 2;
     }
   }
-  assert.ok(state.seamPopped, e.id + ' seam popped at <= 50%');
-  assert.ok(state.sq && state.hem && state.jel && state.brn && state.fl, e.id + ' springs persist in o.state');
-  assert.ok(state.popT > 0, e.id + ' popT advances');
+  assert.ok(state.__art.seamPopped, e.id + ' seam popped at <= 50%');
+  const AS = state.__art; assert.ok(AS.sq && AS.hem && AS.jel && AS.brn && AS.fl, e.id + ' springs persist in o.state.__art (private namespace)');
+  assert.ok(AS.popT > 0, e.id + ' popT advances');
   drawEnemy(ctx, e, 300, 400, { t: 0, state: {} }); drawEnemy(ctx, e, 300, 400, { dying: 0.6, state, hpFrac: 0.2 }); drawEnemy(ctx, e, 300, 400, { t: 1, scale: 1.2, hpFrac: 0.3, atk: { phase: 'nope', k: 2 } });
 }
 { // a hit squashes the victim, then the spring settles back
   const e = ENEMY_LIST[0], state = {};
   drawEnemy(ctx, e, 300, 400, { t: 1, hurt: 0, state });
   drawEnemy(ctx, e, 300, 400, { t: 1.016, hurt: 1, state });
-  assert.ok(state.sq.x < -0.15, 'hit squash starts near 0.8, got ' + state.sq.x);
+  assert.ok(state.__art.sq.x < -0.15, 'hit squash starts near 0.8, got ' + state.__art.sq.x);
   for (let i = 1; i < 90; i++) drawEnemy(ctx, e, 300, 400, { t: 1.016 + i / 60, hurt: 0, state });
-  assert.ok(Math.abs(state.sq.x) < 0.02, 'squash springs back');
-  const s2 = {}; drawEnemy(ctx, e, 300, 400, { t: 1, hpFrac: 0.9, state: s2 }); assert.ok(!s2.seamPopped, 'no pop above 50%');
-  drawEnemy(ctx, e, 300, 400, { t: 1.1, hpFrac: 0.49, state: s2 }); assert.ok(s2.seamPopped, 'pop below 50%');
+  assert.ok(Math.abs(state.__art.sq.x) < 0.02, 'squash springs back');
+  const s2 = {}; drawEnemy(ctx, e, 300, 400, { t: 1, hpFrac: 0.9, state: s2 }); assert.ok(!s2.__art.seamPopped, 'no pop above 50%');
+  drawEnemy(ctx, e, 300, 400, { t: 1.1, hpFrac: 0.49, state: s2 }); assert.ok(s2.__art.seamPopped, 'pop below 50%');
 }
 { // benchmark: 6 enemies + hero per frame (fake ctx, so JS cost only; real canvas cost is measured in the browser screenshot script)
   const six = ENEMY_LIST.slice(0, 6), sts = six.map(() => ({}));

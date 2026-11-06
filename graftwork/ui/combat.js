@@ -508,7 +508,9 @@ function dangerTick(raw) {
     if (Math.abs(want.bpm - d.bpm) >= 4) { d.bpm = want.bpm; audioCall('heartbeat', want.bpm); }
     d.level = want.level; d.t += raw;
     const per = 60 / Math.max(40, d.bpm);
-    if (d.t >= per) { d.t -= per; d.pulse = 1; post('vignette', 0.3 * want.level, 260); }
+    // lub-dub in step with the heartbeat audio: a full beat, then a softer second one 30% of the way into the period
+    if (d.t >= per) { d.t -= per; d.pulse = 1; d.dub = false; post('vignette', 0.3 * want.level, 260); }
+    else if (!d.dub && d.t >= per * 0.3) { d.dub = true; d.pulse = Math.max(d.pulse, 0.65); }
   }
   d.pulse = Math.max(0, d.pulse - raw * 3.5);
 }
@@ -1414,9 +1416,9 @@ function finalize() {
 
 // ---------------------------------------------------------------- draw
 function theme() { return ACT_THEME[S.run.act] || 'ward'; }
-function vignette(ctx, a, color) {
+function vignette(ctx, a, color, inner = 200) {
   if (a <= 0) return;
-  const g = ctx.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, 760);
+  const g = ctx.createRadialGradient(W / 2, H / 2, inner, W / 2, H / 2, 760);
   g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, rgba(color, clamp(a, 0, 1)));
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 }
@@ -1446,7 +1448,10 @@ function draw(app) {
   vignette(ctx, 0.35, '#000000');
   if (S.boss) vignette(ctx, 0.25, '#3a0008');
   if (S.vig > 0) vignette(ctx, S.vig * 0.75, '#b3263a');
-  if (S.dgr && S.dgr.on) vignette(ctx, (FX_OPTS.reduced ? 0.25 : 0.12 + S.dgr.pulse * 0.4) * S.dgr.level, '#7a0a1c');
+  if (S.dgr && S.dgr.on) { // low HP: a red rim that beats with the heart; critical (level 1) closes in tighter. Reduced motion: a steady rim.
+    const rm = FX_OPTS.reduced || rmotion(), lv = S.dgr.level, pu = rm ? 0.35 : S.dgr.pulse;
+    vignette(ctx, (0.3 + pu * 0.5) * lv, '#8a0c20', lv >= 1 ? 120 : 200);
+  }
   if (S.lamp > 0) { ctx.fillStyle = `rgba(0,0,0,${S.lamp * 0.45})`; ctx.fillRect(0, 0, W, H); }
   if (S.dark > 0) { ctx.fillStyle = `rgba(0,0,0,${S.dark * 0.6})`; ctx.fillRect(0, 0, W, H); }
   if (S.drag && !selNeedsTarget()) drawPlayZone(app);
@@ -1496,7 +1501,7 @@ function drawHeroAndHud(app) {
   if (dying) ctx.globalAlpha = 1 - dying * 0.6;
   drawHero(ctx, S.run.hero, hx, FOOT_Y + dying * 24, { scale: 1, t: S.t, hurt: P.hurt, attack: lunge, dying });
   ctx.restore();
-  drawHeroPlate(app, P, HEROES[S.run.hero].name, S.t); // hp bar, block and statuses inside the hero-plate rect (combat_layout HERO_PLATE)
+  drawHeroPlate(app, P, HEROES[S.run.hero].name, S.t, S.dgr && S.dgr.on ? { pulse: S.dgr.pulse, level: S.dgr.level, rm: FX_OPTS.reduced || rmotion() } : null); // hp bar, block and statuses inside the hero-plate rect (combat_layout HERO_PLATE)
 }
 
 function drawEnemies(app, tgtMode) {

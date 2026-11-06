@@ -1718,6 +1718,41 @@ function tells2(ctx, A, bw, bh, k) {
   }
 }
 
+// ---- damaged state (hpFrac < 0.6): sutures torn open, wax-red stains, dripping, slump and panting. Cheap: a few strokes, no offscreen work.
+function woundFx(ctx, A, bw, bh, hp) {
+  if (hp === undefined || hp >= 0.62) return;
+  const dm = cl((0.62 - hp) / 0.62, 0, 1), t = A.t || 0, id = (A.def && A.def.id) || 'x', ph = phaseOf(id + 'w');
+  const n = hp < 0.18 ? 3 : hp < 0.4 ? 2 : 1;
+  ctx.save();
+  for (let i = 0; i < n; i++) {
+    const r1 = Math.sin(ph * 12.9 + i * 78.2) * 0.5 + 0.5, r2 = Math.sin(ph * 37.7 + i * 11.1) * 0.5 + 0.5;
+    const x = (r1 - 0.5) * bw * 0.46, y = -bh * (0.3 + r2 * 0.45), len = 15 + dm * 10 + i * 3, a = (r1 - 0.5) * 1.6 + (i % 2 ? 0.7 : -0.5);
+    const dx = Math.cos(a) * len * 0.5, dy = Math.sin(a) * len * 0.5;
+    // stain: wax-red wash under the gash
+    ctx.fillStyle = C('#b0202c', 1, 0.2 + dm * 0.18); ctx.beginPath(); ctx.ellipse(x, y + 2, len * 0.75, len * 0.5, a, 0, TAU); ctx.fill();
+    // torn-open gash: dark red slot with an ink lip
+    ctx.lineCap = 'round'; ctx.strokeStyle = C(INK); ctx.lineWidth = 5.2; ctx.beginPath(); ctx.moveTo(x - dx, y - dy); ctx.lineTo(x + dx, y + dy); ctx.stroke();
+    ctx.strokeStyle = C('#d2303c'); ctx.lineWidth = 2.6; ctx.stroke();
+    // broken sutures crossing it: two still tied, one snapped
+    ctx.strokeStyle = C('#e8dcc4'); ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let j = -1; j <= 1; j++) { const px = x + dx * j * 0.6, py = y + dy * j * 0.6, nx = -Math.sin(a) * 5.5, ny = Math.cos(a) * 5.5; ctx.moveTo(px - nx, py - ny); ctx.lineTo(px + nx * (j === 1 ? 0.25 : 1), py + ny * (j === 1 ? 0.25 : 1)); }
+    ctx.stroke();
+    // drip
+    if (dm > 0.25) {
+      const f = (t * 0.6 + r1 * 3 + i * 0.37) % 1, gy = y + dy + 4 + f * bh * 0.28;
+      ctx.fillStyle = C('#c5262f', 1, 0.9 * (1 - f * f)); ctx.beginPath(); ctx.ellipse(x + dx + 1, gy, 1.6, 2.6 + f * 2, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = C('#c5262f', 1, 0.5 * (1 - f)); ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x + dx + 1, y + dy); ctx.lineTo(x + dx + 1, gy); ctx.stroke();
+    }
+  }
+  // a bandage slapped on, soaked through
+  const bx = (Math.sin(ph * 5.3) * 0.5) * bw * 0.3, by = -bh * 0.55 + Math.cos(ph * 3.1) * bh * 0.12;
+  bandage(ctx, bx, by, 22, 12, 0.5 + ph * 0.6);
+  ctx.fillStyle = C('#b0202c', 1, 0.35 + dm * 0.4); ctx.beginPath(); ctx.arc(bx + 1, by + 1, 3 + dm * 2.5, 0, TAU); ctx.fill();
+  // bruise glow at the foot, grey pallor smudge at the crown
+  if (dm > 0.4) { glow(ctx, 0, -bh * 0.06, bw * 0.5, '#a3141f', 0.16 * dm); }
+  ctx.restore();
+}
+
 // ---- the public entry
 export function drawEnemy(ctx, def, x, y, o = {}) {
   let touched = false;
@@ -1769,7 +1804,10 @@ export function drawEnemy(ctx, def, x, y, o = {}) {
     ctx.translate(x + ox, y + pdy * s);
     ctx.scale(s * m, s);
     ctx.rotate(-fx * hurt * 0.06 + (P ? 0 : fx * att * 0.03));
-    const sqy = 1 + sp(S, 'sq').x, jx = 1 + sp(S, 'jel').x;
+    // idle breathing (anchored at the feet, quicker and shallower when hurt) and a slump / shiver when badly hurt
+    const dmg = hp === undefined ? 0 : cl((0.6 - hp) / 0.6, 0, 1), bre = Math.sin(A.t * (2.1 + dmg * 2.2) + phaseOf(id) * 6) * (0.014 - dmg * 0.004);
+    if (dmg > 0 && !P) { ctx.rotate(fx * dmg * 0.055 + Math.sin(A.t * 7 + phaseOf(id)) * dmg * dmg * 0.012); ctx.scale(1 + dmg * 0.02, 1 - dmg * 0.045); }
+    const sqy = 1 + sp(S, 'sq').x + bre, jx = 1 + sp(S, 'jel').x;
     ctx.scale(1 / sqy * jx, sqy / jx);
     const sk = (sp(S, 'hem').x * m / (s * bh * 0.9) * (CLOTH[key] || 0.15)) + Math.sin(A.t * 1.6 - 0.4 * TAU) * 0.012 * (CLOTH[key] || 0.1);
     ctx.transform(1, 0, sk, 1, sk * bh * 0.9, 0);
@@ -1786,6 +1824,7 @@ export function drawEnemy(ctx, def, x, y, o = {}) {
     ctx.save(); ctx.scale(k, k);
     BODY[key](ctx, A);
     const acc = ACC[id] || ACC[ACC_ALIAS[id]]; if (acc) acc(ctx, A);
+    woundFx(ctx, A, sz[0], sz[1], hp);
     if (A.extra) extraFx(ctx, A);
     popFx(ctx, A);
     ctx.restore();
