@@ -25,30 +25,30 @@ const unpick = (A) => {
 
 export const CARDS_THREAD = [
   // ---------- neutral ----------
-  { id: 'x_thread_cross', name: 'Cross-Stitch', hero: 'any', type: 'attack', cost: 1, rarity: 'common', target: 'enemy', flags: {},
+  { id: 'x_thread_cross', art: 'crossstitch', name: 'Cross-Stitch', hero: 'any', type: 'attack', cost: 1, rarity: 'common', target: 'enemy', flags: {},
     fx: [{ op: 'dmg', n: KN(6, 2) }], up: { fx: [{ op: 'dmg', n: KN(8, 3) }] }, flavor: 'One more pass and it holds.' },
   { id: 'x_thread_snip', name: 'Snip', hero: 'any', type: 'attack', cost: 0, rarity: 'common', target: 'enemy', flags: {},
     fx: [{ op: 'dmg', n: 4 }, { op: 'custom', fn: cutNow, text: 'Cut the Line.' }],
     up: { fx: [{ op: 'dmg', n: 7 }, { op: 'custom', fn: cutNow, text: 'Cut the Line.' }] }, flavor: 'Cashes the Line. Not a metaphor.' },
-  { id: 'x_thread_tieoff', name: 'Tie Off', hero: 'any', type: 'skill', cost: 1, rarity: 'common', target: 'self', flags: {},
+  { id: 'x_thread_tieoff', art: 'threader', name: 'Tie Off', hero: 'any', type: 'skill', cost: 1, rarity: 'common', target: 'self', flags: {},
     fx: [{ op: 'block', n: 5 }, { op: 'custom', fn: tieNow, text: 'Tie the Line: it carries over at full value.' }],
     up: { fx: [{ op: 'block', n: 8 }, { op: 'custom', fn: tieNow, text: 'Tie the Line: it carries over at full value.' }] }, flavor: 'A knot holds what hands cannot.' },
-  { id: 'x_thread_basting', name: 'Basting', hero: 'any', type: 'skill', cost: 0, rarity: 'common', target: 'self', flags: { exhaust: true },
+  { id: 'x_thread_basting', art: 'thimble', name: 'Basting', hero: 'any', type: 'skill', cost: 0, rarity: 'common', target: 'self', flags: { exhaust: true },
     fx: [{ op: 'draw', n: 1 }, { op: 'custom', fn: basting, text: 'Once per turn, add a knot to the Line\'s top school.' }],
     up: { fx: [{ op: 'draw', n: 2 }, { op: 'custom', fn: basting, text: 'Once per turn, add a knot to the Line\'s top school.' }] }, flavor: 'Temporary, like most promises here.' },
-  { id: 'x_thread_unpick', name: 'Unpick', hero: 'any', type: 'skill', cost: 1, rarity: 'uncommon', target: 'self', flags: {},
+  { id: 'x_thread_unpick', art: 'seamripper', name: 'Unpick', hero: 'any', type: 'skill', cost: 1, rarity: 'uncommon', target: 'self', flags: {},
     fx: [{ op: 'custom', fn: unpick, text: 'Remove the last knot from the Line.' }, { op: 'draw', n: 1 }, { op: 'block', n: 4 }],
     up: { fx: [{ op: 'custom', fn: unpick, text: 'Remove the last knot from the Line.' }, { op: 'draw', n: 2 }, { op: 'block', n: 6 }] }, flavor: 'Undoing takes a steady hand too.' },
-  { id: 'x_thread_pinking', name: 'Pinking Shears', hero: 'any', type: 'attack', cost: 1, rarity: 'uncommon', target: 'all', school: 'rust', flags: {},
+  { id: 'x_thread_pinking', art: 'pinking', name: 'Pinking Shears', hero: 'any', type: 'attack', cost: 1, rarity: 'uncommon', target: 'all', school: 'rust', flags: {},
     fx: [{ op: 'dmg', n: KN(2, 2, 14), to: 'all' }], up: { fx: [{ op: 'dmg', n: KN(3, 2, 18), to: 'all' }] }, flavor: 'Zigzag edge. Fewer frayed ends, more frayed nerves.' },
-  { id: 'x_thread_shears', name: 'Tailor\'s Shears', hero: 'any', type: 'attack', cost: 2, rarity: 'rare', target: 'enemy', school: 'blood', flags: {},
+  { id: 'x_thread_shears', art: 'shears', name: 'Tailor\'s Shears', hero: 'any', type: 'attack', cost: 2, rarity: 'rare', target: 'enemy', school: 'blood', flags: {},
     fx: [{ op: 'dmg', n: KN(8, 4, 28) }, { op: 'custom', fn: cutNow, text: 'Cut the Line.' }],
     up: { fx: [{ op: 'dmg', n: KN(10, 5, 35) }, { op: 'custom', fn: cutNow, text: 'Cut the Line.' }] }, flavor: 'The longer the line, the cleaner the cut.' },
-  { id: 'x_thread_loom', name: 'Standing Loom', hero: 'any', type: 'power', cost: 2, rarity: 'rare', target: 'self', school: 'hoard', flags: {},
+  { id: 'x_thread_loom', art: 'loom', name: 'Standing Loom', hero: 'any', type: 'power', cost: 2, rarity: 'rare', target: 'self', school: 'hoard', flags: {},
     fx: [{ op: 'status', s: 'plated', n: KN(1, 1, 5), to: 'self' }], up: { fx: [{ op: 'status', s: 'plated', n: KN(2, 1, 6), to: 'self' }] }, flavor: 'It works while you do not.' },
 
   // ---------- Marrow ----------
-  { id: 'm_thread_bloodline', name: 'Bloodline', hero: 'marrow', type: 'attack', cost: 1, rarity: 'common', target: 'enemy', school: 'blood', flags: {},
+  { id: 'm_thread_bloodline', art: 'bobbin', name: 'Bloodline', hero: 'marrow', type: 'attack', cost: 1, rarity: 'common', target: 'enemy', school: 'blood', flags: {},
     fx: [{ op: 'dmg', n: KN(5, 2) }, { op: 'status', s: 'bleed', n: KN(0, 1, 5) }], up: { fx: [{ op: 'dmg', n: KN(6, 3) }, { op: 'status', s: 'bleed', n: KN(1, 1, 6) }] }, flavor: 'Follow the bleeding to its source.' },
   { id: 'm_thread_stitchup', name: 'Stitch Up', hero: 'marrow', type: 'skill', cost: 1, rarity: 'common', target: 'self', school: 'blood', flags: {},
     fx: [{ op: 'block', n: KN(4, 2) }, { op: 'heal', n: 1 }], up: { fx: [{ op: 'block', n: KN(5, 3) }, { op: 'heal', n: 2 }] }, flavor: 'Neat work is its own anaesthetic.' },
@@ -62,7 +62,7 @@ export const CARDS_THREAD = [
   // ---------- Wick ----------
   { id: 'w_thread_trail', name: 'Candle Trail', hero: 'wick', type: 'attack', cost: 1, rarity: 'common', target: 'enemy', school: 'ember', flags: {},
     fx: [{ op: 'dmg', n: KN(4, 2) }, { op: 'status', s: 'burn', n: KN(1, 1, 5) }], up: { fx: [{ op: 'dmg', n: KN(5, 2) }, { op: 'status', s: 'burn', n: KN(2, 1, 6) }] }, flavor: 'Wax remembers where it has been.' },
-  { id: 'w_thread_fusewire', name: 'Fuse Wire', hero: 'wick', type: 'attack', cost: 0, rarity: 'common', target: 'enemy', school: 'static', flags: {},
+  { id: 'w_thread_fusewire', art: 'fusewire', name: 'Fuse Wire', hero: 'wick', type: 'attack', cost: 0, rarity: 'common', target: 'enemy', school: 'static', flags: {},
     fx: [{ op: 'dmg', n: KN(2, 2, 9) }, { op: 'status', s: 'charge', n: 1, to: 'self' }], up: { fx: [{ op: 'dmg', n: KN(3, 2, 11) }, { op: 'status', s: 'charge', n: 1, to: 'self' }] }, flavor: 'Thin, conductive, regrettable.' },
   { id: 'w_thread_arcstitch', name: 'Arc Stitch', hero: 'wick', type: 'attack', cost: 1, rarity: 'uncommon', target: 'enemy', school: 'static', flags: {},
     fx: [{ op: 'dmg', n: KN(3, 3) }, { op: 'status', s: 'charge', n: 2, to: 'self' }], up: { fx: [{ op: 'dmg', n: KN(4, 3) }, { op: 'status', s: 'charge', n: 3, to: 'self' }] }, flavor: 'The needle sparks. The patient notices.' },
@@ -71,12 +71,12 @@ export const CARDS_THREAD = [
     up: { fx: [{ op: 'dmg', n: KN(6, 4, 26), to: 'all' }, { op: 'status', s: 'burn', n: KN(1, 1, 5), to: 'all' }] }, flavor: 'Sewn along the edge so it cannot spread. It spreads.' },
 
   // ---------- Odile ----------
-  { id: 'o_thread_embroidered', name: 'Embroidered Purse', hero: 'odile', type: 'skill', cost: 1, rarity: 'common', target: 'self', school: 'gilded', flags: {},
+  { id: 'o_thread_embroidered', art: 'hoop', name: 'Embroidered Purse', hero: 'odile', type: 'skill', cost: 1, rarity: 'common', target: 'self', school: 'gilded', flags: {},
     fx: [{ op: 'block', n: 4 }, { op: 'gold', n: KN(1, 1, 6) }], up: { fx: [{ op: 'block', n: 6 }, { op: 'gold', n: KN(2, 1, 7) }] }, flavor: 'Monogrammed, so you cannot lose it twice.' },
-  { id: 'o_thread_sparespool', name: 'Spare Spool', hero: 'odile', type: 'skill', cost: 0, rarity: 'common', target: 'self', school: 'hoard', flags: { retain: true },
+  { id: 'o_thread_sparespool', art: 'spool', name: 'Spare Spool', hero: 'odile', type: 'skill', cost: 0, rarity: 'common', target: 'self', school: 'hoard', flags: { retain: true },
     fx: [{ op: 'draw', n: 1 }, { op: 'block', n: KN(0, 2, 8) }], up: { fx: [{ op: 'draw', n: 1 }, { op: 'block', n: KN(2, 2, 10) }] }, flavor: 'Kept in a drawer for the right wound.' },
   { id: 'o_thread_doublehem', name: 'Double Hem', hero: 'odile', type: 'skill', cost: 1, rarity: 'uncommon', target: 'self', school: 'echo', flags: {},
     fx: [{ op: 'block', n: KN(4, 2, 10) }, { op: 'status', s: 'echo', n: 1, to: 'self' }], up: { fx: [{ op: 'block', n: KN(5, 2, 14) }, { op: 'status', s: 'echo', n: 1, to: 'self' }] }, flavor: 'Folded over and stitched again, for a fee.' },
-  { id: 'o_thread_tapestry', name: 'Tapestry', hero: 'odile', type: 'power', cost: 2, rarity: 'rare', target: 'self', school: 'gilded', flags: {},
+  { id: 'o_thread_tapestry', art: 'tapestry', name: 'Tapestry', hero: 'odile', type: 'power', cost: 2, rarity: 'rare', target: 'self', school: 'gilded', flags: {},
     fx: [{ op: 'status', s: 'gilt', n: KN(2, 2, 10), to: 'self' }], up: { fx: [{ op: 'status', s: 'gilt', n: KN(4, 2, 14), to: 'self' }] }, flavor: 'Commissioned. Framed. Insured. Yours.' },
 ];

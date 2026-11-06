@@ -4,7 +4,7 @@ import { fakeCtx, installDom } from './graftwork_lib.mjs';
 installDom();
 const { CARD_LIST, GRAFT_LIST } = await import('../graftwork/data/index.js');
 const { cardSpec } = await import('../graftwork/engine/cards.js');
-const { drawCard, drawCardBack, drawGraftPatch, drawSchoolGlyph, SCHOOL_SHAPES, CARD_W, CARD_H, MOTIF_NAMES, lightDir, SCHOOL_COLORS, clearCardCache } = await import('../graftwork/art/cards.js');
+const { motifOf, drawCard, drawCardBack, drawGraftPatch, drawSchoolGlyph, SCHOOL_SHAPES, CARD_W, CARD_H, MOTIF_NAMES, lightDir, SCHOOL_COLORS, clearCardCache } = await import('../graftwork/art/cards.js');
 const { makeRng } = await import('../graftwork/engine/rng.js');
 
 let n = 0;
@@ -43,6 +43,13 @@ t('light_dir_is_a_pendulum_from_the_upper_left', () => {
 t('motif_library_has_the_new_content_motifs', () => {
   assert.ok(MOTIF_NAMES.length >= 39);
   for (const m of ['knot', 'scissors', 'sewneedle', 'tangle', 'poisonvial', 'crackedshield', 'pulledstitch', 'hammerrivet']) assert.ok(MOTIF_NAMES.includes(m), m);
+});
+t('round6b_motifs_exist_and_every_card_art_keyword_resolves', () => {
+  assert.ok(MOTIF_NAMES.length >= 60);
+  for (const m of ['shears', 'spool', 'bobbin', 'threader', 'loom', 'crossstitch', 'thimble', 'hoop', 'tapestry', 'pinking', 'seamripper', 'fusewire', 'anvil', 'purse', 'mirror', 'batteryjar', 'tuningfork', 'scalpelfan', 'belljar', 'keyring', 'sutureknot', 'bandageroll', 'gavel', 'stamp']) assert.ok(MOTIF_NAMES.includes(m), m);
+  for (const c of CARD_LIST) { if (c.art) assert.ok(MOTIF_NAMES.includes(c.art), c.id + ' art ' + c.art); assert.ok(MOTIF_NAMES.includes(motifOf(cardSpec({ uid: 1, id: c.id, grafts: [], up: 0 }))), c.id); }
+  const arts = CARD_LIST.filter((c) => c.art && /^(shears|spool|bobbin|threader|loom|crossstitch|thimble|hoop|tapestry|pinking|seamripper|fusewire|anvil|purse|mirror|batteryjar|tuningfork|scalpelfan|belljar|keyring|sutureknot|bandageroll|gavel|stamp|powderkeg|tourniquet|matchstick|waxseal|ticket|dynamocoil)$/.test(c.art));
+  assert.ok(arts.length >= 30);
 });
 t('school_colours_are_the_revised_set', () => { assert.equal(SCHOOL_COLORS.ember, '#E8571F'); assert.equal(SCHOOL_COLORS.gilded, '#EFD98F'); assert.equal(Object.keys(SCHOOL_COLORS).length, 7); });
 t('every_new_motif_and_state_draws_via_spec_art', () => {
