@@ -24,6 +24,7 @@ const DIM = 'rgba(232,220,196,.6)';
 
 let st = null;
 
+const trn = (app) => (app.shared && app.shared.transitions) || null;
 const sfx = (app, name, o) => { const a = app.shared && app.shared.audio; if (a && a.sfx) { try { a.sfx(name, o); } catch (e) { /* audio is optional */ } } };
 
 function layout(offer) {
@@ -56,6 +57,7 @@ export default {
   update(app, dt) {
     if (!st) return;
     const d = st.fx.update(dt);
+    { const T = trn(app); if (T && T.decay) T.decay(st, dt); }
     st.t += dt; st.dealT += dt; st.morphT = Math.min(1, st.morphT + dt / 0.5);
     if (st.note) { st.note.age += dt; if (st.note.age > 2.6) st.note = null; }
     if (st.mode === 'attach' && st.anim) advanceAnim(app, d);
@@ -100,7 +102,9 @@ export default {
     const pv = pair ? (live ? getPreview(inst, st.selGraft) : st.snap.pv) : null;
     const tithedSet = new Set(pair ? pv.after.tithed : strain.tithed);
 
-    drawTopBar(app, strain, interactive);
+    { const T = trn(app), go = T && T.gaugeOffset ? T.gaugeOffset(st, st.t) : { x: 0, y: 0 };
+      ctx.save(); ctx.translate(go.x, go.y); drawTopBar(app, strain, interactive); ctx.restore();
+      if (T && T.gaugeGlow) T.gaugeGlow(app, st, 24, 42, 360, 16); }
 
     // ---- cards ----
     R.cards.forEach((r, i) => drawOfferCard(app, r, i, { inst, g, pair, pv, tithedSet, interactive, counts }));
@@ -608,6 +612,12 @@ function advanceAnim(app, d) {
   const cx = s.cardR.cx, cy = s.cardR.cy - 18;
   const col = schoolColor(s.g.school);
   const T = (v) => v / k;
+  { const T = trn(app); // one tick, spark and shiver per stitch
+    for (let i = 1; i <= 6; i++) {
+      const at = T_STITCH + (T_CLUNK - T_STITCH) * (i / 6) * 0.92;
+      if (a.t >= at / k && !f['s' + i]) { f['s' + i] = 1; if (T && T.stitchBeat) T.stitchBeat(app, fx, cx + 36 - 79 + (158 / 6) * i, cy + 92 + (i % 2 ? 1 : -1) * 57, i, 6, col, a.over); }
+    }
+  }
   if (a.t >= T_STITCH / k && !f.stitch) { f.stitch = 1; sfx(app, 'graftAttach'); if (a.over) sfx(app, 'overload'); }
   if (a.t >= T(T_CLUNK) && !f.clunk) {
     f.clunk = 1;
@@ -615,6 +625,7 @@ function advanceAnim(app, d) {
     fx.emit({ x: cx + 36, y: cy + 92, n: 30, colors: [col, '#ffffff', COL.lamp], speed: 340, life: 0.8, size: 4.5, glow: true, gravity: 380 });
     fx.ring(cx + 36, cy + 92, col, 150, 0.5);
     if (!st.reduce) fx.shake(0.3);
+    { const T = trn(app); if (T && T.clunkBeat) T.clunkBeat(app, st, RUN.strainInfo(st.run), cx + 36, cy + 92); }
   }
   if (a.t >= T(T_TITHE) && s.newTithed.length) {
     s.newTithed.forEach((u, i) => {
@@ -629,6 +640,7 @@ function advanceAnim(app, d) {
   if (a.over && a.t >= T(T_SLAM) && !f.slam) {
     f.slam = 1; fx.burst(cx, cy, 'shard', { n: 22, speed: 480 }); fx.flash(COL.lamp, 0.35, 0.3);
     if (!st.reduce) { fx.shake(0.8); fx.slowmo(0.4, 500); }
+    { const T = trn(app); if (T && T.overloadBeat) T.overloadBeat(app, fx, cx, cy, Math.round(shatterChance(st.run) * 100)); }
   }
   if (a.t >= a.end) finishAnim(app);
 }
@@ -678,7 +690,7 @@ function drawAttach(app) {
     const n = 6, cnt = sp * n;
     const pts = [];
     for (let i = 0; i <= n; i++) pts.push([-tw / 2 - 4 + ((tw + 8) / n) * i, (i % 2 ? 1 : -1) * (th / 2 + 7)]);
-    ctx.shadowBlur = 0; ctx.strokeStyle = '#efe6d0'; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.shadowBlur = 0; ctx.strokeStyle = s.overload ? '#ffb09a' : '#efe6d0'; ctx.lineWidth = s.overload ? 3 : 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
     let tip = pts[0];
     for (let i = 1; i <= n; i++) {

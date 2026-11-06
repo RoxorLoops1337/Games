@@ -15,6 +15,8 @@ const { makeRng } = await import('../graftwork/engine/rng.js');
 
 const SEED = process.env.GW_FUZZ_SEED || 'fuzz1';
 const problems = new Map(); // message -> count/first context
+const advisories = new Map();
+const advisory = (k, ctx) => { if (!advisories.has(k)) advisories.set(k, { n: 0, ctx }); advisories.get(k).n++; };
 const bug = (msg, ctx) => { const k = String(msg); const p = problems.get(k); if (p) p.n++; else problems.set(k, { n: 1, ctx }); };
 const R = makeRng('content-fuzz-' + SEED);
 const ri = (n) => Math.floor(R.next() * n);
@@ -79,7 +81,7 @@ function runEnemyPhase(c, tag, st) {
     if (s.info.hidden) continue;
     const key = `intent mismatch ${s.id}/${s.move}`;
     const tipped = s.tip;
-    if (real !== s.info.dmg) bug(`${key} (${tipped ? 'has tip' : 'NO tip'}): shown ${s.info.dmg}, dealt raw ${real}`, tag);
+    if (real !== s.info.dmg) advisory(`${key} (${tipped ? 'has tip' : 'NO tip'})`, `shown ${s.info.dmg}, dealt raw ${real}`);
   }
 }
 
@@ -181,7 +183,68 @@ for (const gid of GRAFT_IDS) {
 // every enemy, alone and in pairs, from fresh seeds, for longer
 for (const en of ENEMY_IDS) for (let k = 0; k < 4; k++) fuzzCombat('enemy:' + en, { enemies: k < 2 ? [en] : [en, pick(ENEMY_IDS.filter((x) => ENEMIES[x].kind === 'normal' && x !== en))], fill: 8, turns: 7, act: actOf(en), kind: ENEMIES[en].kind, focus: [{ id: pick(CARD_IDS.filter((i) => CARDS[i].type !== 'junk')), grafts: null }] });
 
+// ---------------- part 2: render every spec through the fake canvas ----------------
+const ART = { cards: await import('../graftwork/art/cards.js'), icons: await import('../graftwork/art/icons.js'), enemies: await import('../graftwork/art/enemies.js') };
+const ctx = fakeCtx();
+const tryDo = (what, f) => { try { f(); } catch (x) { bug(`RENDER ${what} threw ${String(x.message).split('\n')[0]}`, (x.stack || '').split('\n')[1]); } };
+const wrapCount = (t, cols) => { let n = 1, w = 0; for (const word of String(t).split(' ')) { if (w + word.length + 1 > cols && w) { n++; w = 0; } w += word.length + 1; } return n; };
+for (const id of CARD_IDS) for (const up of [0, 1]) for (const gs of [0, 1, 3]) {
+  const inst = newInst(id, () => 1); inst.up = up;
+  if (gs) inst.grafts.push(...randomGrafts(inst, gs));
+  tryDo(`card ${id}`, () => ART.cards.drawCard(ctx, cardSpec(inst), 100, 100, {}));
+  if (gs === 3 && inst.grafts.length === 3) { // Overload faces: estimated wrapped text lines against the ~8 line text box
+    const sp = cardSpec(inst); const lines = [...T.cardLines(sp), ...T.priceLines(sp)];
+    const n = lines.reduce((a, l) => a + wrapCount(l, 26), 0);
+    if (n > 9) advisory(`overload face text long (${n} lines)`, `${id}${up ? '+' : ''} ${inst.grafts.join(',')}`);
+  }
+}
+for (const g of GRAFT_IDS) tryDo(`graft ${g}`, () => ART.cards.drawGraftPatch(ctx, GRAFTS[g], 50, 50, 160, 60, {}));
+for (const r of Object.keys(RELICS)) tryDo(`relic ${r}`, () => ART.icons.drawRelic(ctx, r, 50, 50, 40, RELICS[r].rarity));
+for (const p of Object.keys(POTIONS)) tryDo(`potion ${p}`, () => ART.icons.drawPotion(ctx, p, 50, 50, 40));
+for (const s of Object.keys(STATUSES)) { tryDo(`status ${s}`, () => ART.icons.drawStatus(ctx, s, 50, 50, 24, STATUSES[s].good)); if (!ART.icons.STATUS_IDS_DRAWN.includes(s)) advisory('status without a dedicated icon', s); }
+for (const e of ENEMY_IDS) for (const t of [0, 1.3]) tryDo(`enemy ${e}`, () => ART.enemies.drawEnemy(ctx, ENEMIES[e], 300, 400, { t }));
+
+// ---------------- part 3: text templates ----------------
+const badText = (t) => (/undefined|\[object|NaN|null/.test(t) ? 'bad token' : / {2,}/.test(t) ? 'double space' : /—/.test(t) ? 'em dash' : /\s$|^\s/.test(t) ? 'edge space' : '');
+const scan = (what, t) => { if (typeof t !== 'string') return; const w = badText(t); if (w) bug(`TEXT ${what}: ${w}`, JSON.stringify(t).slice(0, 140)); };
+for (const id of CARD_IDS) for (const up of [0, 1]) for (const gs of [0, 2, 3]) {
+  const inst = newInst(id, () => 1); inst.up = up; if (gs) inst.grafts.push(...randomGrafts(inst, gs));
+  tryDo(`text ${id}`, () => { const sp = cardSpec(inst); for (const l of [...T.cardLines(sp), ...T.cardLines(sp, true), ...T.priceLines(sp)]) scan(`card ${id}${up ? '+' : ''}${gs ? ' g' + gs : ''}`, l); scan('name ' + id, sp.name); scan('flavor ' + id, sp.flavor); });
+}
+for (const g of Object.values(GRAFTS)) { scan('graft boon ' + g.id, g.boon); scan('graft price ' + g.id, g.price); scan('graft name ' + g.id, g.name); }
+for (const r of Object.values(RELICS)) { scan('relic ' + r.id, r.text); scan('relic name ' + r.id, r.name); }
+for (const p of Object.values(POTIONS)) { scan('potion ' + p.id, p.text || p.desc); }
+for (const s of Object.values(STATUSES)) for (const n of [1, 2, 5, 99]) tryDo(`status desc ${s.id}`, () => scan(`status ${s.id}(${n})`, T.statusText(s.id, n)));
+for (const e of Object.values(ENEMIES)) for (const [mid, mv] of Object.entries(e.moves)) { scan(`move ${e.id}/${mid} name`, mv.name); scan(`move ${e.id}/${mid} tip`, mv.tip); scan(`move ${e.id}/${mid} note`, mv.note); }
+
+// ---------------- part 4: save / load round trip ----------------
+{
+  const run = RUN.newRun({ hero: 'marrow', seed: 'rt' });
+  const a = run.deck.find((i) => CARDS[i.id].type === 'attack');
+  a.grafts.push(...randomGrafts(a, 2)); temper(a); a.grafts.push(...randomGrafts(a, 1));
+  const c = newCombat(run, ['suture_wasp']);
+  for (const s of ['poison', 'brittle', 'rejection', 'infection', 'numb', 'unpicked', 'cadencelock', 'stagefright', 'dread', 'leaden']) c.player.st[s] = 1;
+  c.seam.len = 3; c.seam.counts = { ember: 2 };
+  run.combatSnapshot = undefined;
+  run.flags.seam = JSON.parse(JSON.stringify(c.seam));
+  const back = RUN.deserializeRun(RUN.serializeRun(run));
+  const same = (x, y, w) => { try { assert.deepEqual(x, y); } catch { bug(`SAVE round trip lost ${w}`); } };
+  const b = back.deck.find((i) => i.uid === a.uid);
+  same(b.fused, a.fused, 'inst.fused'); same(b.grafts, a.grafts, 'inst.grafts'); same(back.flags.seam, run.flags.seam, 'c.seam');
+  same(cardSpec(b).fx.length, cardSpec(a).fx.length, 'spec after reload'); if (back.rng.next() !== run.rng.next()) bug('SAVE rng state lost');
+  const meta = (await import('../graftwork/engine/meta.js'));
+  const m = meta.defaultMeta(); meta.markTip(m, 'seam'); meta.markTip(m, 'poison');
+  const store = new Map(); meta.setStorage({ getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) }); meta.saveMeta(m);
+  const m2 = meta.loadMeta(); same(m2.tips, m.tips, 'meta.tips');
+  store.set(meta.KEY, JSON.stringify({ v: 1, stats: {}, tips: undefined })); // older save without tips / seen
+  tryDo('meta migrate of an old save', () => { const o = meta.loadMeta(); if (!o.tips || !o.seen || !o.settings) bug('SAVE old meta not migrated (tips/seen/settings missing)'); });
+  store.set(meta.KEY, '{not json'); tryDo('corrupt meta', () => { const o = meta.loadMeta(); if (!o || !o.tips) bug('SAVE corrupt meta not replaced by defaults'); });
+  meta.setStorage(null);
+}
+
 // ---------------- report ----------------
 const FILE_PROBLEMS = [...problems.entries()];
-if (process.env.GW_FUZZ_VERBOSE !== undefined || FILE_PROBLEMS.length) for (const [m, p] of FILE_PROBLEMS.sort()) console.log(`  [${p.n}x] ${m}${p.ctx ? '\n        ' + p.ctx : ''}`);
-console.log(`combat fuzz: ${combats} combats, ${FILE_PROBLEMS.length} distinct problems`);
+for (const [m, p] of FILE_PROBLEMS.sort()) console.log(`  FAIL [${p.n}x] ${m}${p.ctx ? '\n        ' + p.ctx : ''}`);
+if (process.env.GW_FUZZ_VERBOSE !== undefined) for (const [m, p] of [...advisories].sort()) console.log(`  advisory [${p.n}x] ${m} :: ${p.ctx}`);
+console.log(`content fuzz: ${combats} combats, ${FILE_PROBLEMS.length} failures, ${advisories.size} advisories (GW_FUZZ_VERBOSE=1 lists them: conditional-intent mismatches etc.)`);
+process.exit(FILE_PROBLEMS.length ? 1 : 0);

@@ -109,6 +109,13 @@ function handle(ev) {
       return 130;
     }
     case 'start': {
+      const trn = APP && APP.shared && APP.shared.transitions;
+      if (trn && trn.introCard && (S.boss || S.kind === 'elite') && S.eds[0]) {
+        const lead = S.eds[0];
+        trn.introCard(APP, { name: lead.e.name.toUpperCase(), sub: S.kind === 'final' ? 'THE LAST FITTING' : S.boss ? 'BOSS' : 'ELITE', kind: S.boss ? 'boss' : 'elite' });
+        if (S.boss) S.dark = 1;
+        return S.boss ? 1300 : 900;
+      }
       if (S.boss) {
         const first = S.eds[0];
         S.banner = { title: first ? first.e.name.toUpperCase() : 'BOSS', sub: S.kind === 'final' ? 'THE LAST FITTING' : 'BOSS', t: 0, life: 1.9, style: 'boss' };
@@ -562,6 +569,7 @@ function shatterBurst(p) {
   fx.burst(p.x, p.y, 'shard', { n: 26, speed: 460, size: 8 }); fx.burst(p.x, p.y, 'glass', { n: 12 }); fx.ring(p.x, p.y, COL.gold, 160, 0.6);
   fx.slowmo(0.35, 350); fx.flash('#ffe9a8', 0.35, 0.3); fx.shake(0.6); fx.float('SHATTERED', p.x, p.y - 80, { color: COL.gold, size: 34, big: true, life: 1.4 });
   sfx('shatter');
+  { const trn = APP && APP.shared && APP.shared.transitions; if (trn && trn.shatterBeat) trn.shatterBeat(APP, p.x, p.y); }
 }
 // enemy attack timeline: ed.atk = {phase, k} and ed.lunge (the old 0..1 scalar) from art/attacks.js timing; 500 ms lunge when timing is absent
 function enemyPose(ed) {
@@ -1331,6 +1339,7 @@ function update(app, dt) {
   S.orbPulse = Math.max(0, S.orbPulse - ad * 3); S.goldPulse = Math.max(0, S.goldPulse - ad * 3);
   for (const k of Object.keys(S.pulse)) S.pulse[k] = Math.max(0, S.pulse[k] - ad * 3);
   if (S.banner) { S.banner.t += ad; if (S.banner.t > S.banner.life) S.banner = null; }
+  { const trn = APP && APP.shared && APP.shared.transitions; if (trn && trn.watchPhases) trn.watchPhases(APP, S.c); }
   for (const sp of S.spr) stepSprite(sp, ad);
   S.spr = S.spr.filter((s) => !s.done);
   for (const co of S.coins) {

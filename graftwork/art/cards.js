@@ -867,11 +867,11 @@ function layoutText(g, spec, lines, price, o) {
   g.textAlign = 'center'; g.textBaseline = 'alphabetic';
   const flavor = spec.flavor ? String(spec.flavor) : '';
   let best = null;
-  for (let s = 15; s >= 10; s -= 0.5) {
-    g.font = font(s); const lh = s * 1.2;
+  for (let s = 15; s >= 8; s -= 0.5) {   // Overload cards stack three grafts of text: keep shrinking (down to 8) rather than spill off the face
+    g.font = font(s); const lh = s * (s < 10 ? 1.1 : 1.2);
     const rl = lines.map((l) => wrapText(g, l, MAXW)); const rn = rl.reduce((a, b) => a + b.length, 0);
     const rH = rn * lh + Math.max(0, rl.length - 1) * 2.5;
-    const ps = Math.max(11, Math.min(13, s - 2)); g.font = font(ps, { bold: true });
+    const ps = Math.max(8.5, Math.min(13, s - 2)); g.font = font(ps, { bold: true });
     const pl = price.map((l) => wrapText(g, l, MAXW)); const pn = pl.reduce((a, b) => a + b.length, 0);
     const pH = pn ? pn * ps * 1.2 + 12 : 0;
     best = { s, lh, rl, rH, ps, pl, pH };
