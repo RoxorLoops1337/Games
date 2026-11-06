@@ -46,7 +46,7 @@ export default {
     const ctx = app.ctx, run = st.run, rw = st.rw;
     const S = tscale(app), K = (size, cap = 1.25) => ({ size: Math.round(size * Math.min(S, cap)), fixed: true });
     drawBackground(ctx, ACT_THEME[run.act] || 'ward', st.t);
-    ctx.save(); ctx.fillStyle = 'rgba(8,6,5,.55)'; ctx.fillRect(0, 0, 1280, 720); ctx.restore();
+    ctx.save(); ctx.fillStyle = 'rgba(8,6,5,.4)'; ctx.fillRect(0, 0, 1280, 720); ctx.restore();
 
     // purse: top left, so the top right stays free for the global Pause / Fullscreen buttons
     const ph = Math.round(26 * Math.min(S, 1.25) * 1.22);
@@ -134,6 +134,7 @@ function drawRow(app, r, i, y, compact, K) {
   app.rr(x, y + (hover ? -2 : 0), PW, h, 12);
   ctx.fillStyle = r.taken ? 'rgba(30,26,22,.7)' : hover ? '#3a2e24' : '#2b231e'; ctx.fill(); ctx.shadowBlur = 0;
   ctx.lineWidth = hover ? 3 : 2; ctx.strokeStyle = r.taken ? 'rgba(232,220,196,.15)' : hover ? COL.lamp : 'rgba(232,220,196,.4)'; ctx.stroke();
+  if (!r.taken) app.panel(x, y + (hover ? -2 : 0), PW, h, { fill: 'rgba(0,0,0,0)', stroke: 'rgba(0,0,0,0)', r: 12, lw: 2 }); // engraved hatch, inset shadow, rivets (cached)
   ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = r.taken ? 'rgba(232,220,196,.1)' : rgba(info.col, 0.6); app.rr(x + 5, y + 5 + (hover ? -2 : 0), PW - 10, h - 10, 8); ctx.stroke(); ctx.setLineDash([]);
   ctx.restore();
   const yy = y + (hover ? -2 : 0);

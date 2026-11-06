@@ -60,6 +60,13 @@ function bakePanel(s, w, h, r, fill, stroke, lw, rivets, pad) {
     g.shadowColor = 'rgba(0,0,0,.75)'; g.shadowBlur = 9; g.shadowOffsetX = 1; g.shadowOffsetY = 2.5; g.fillStyle = '#000'; g.fill('evenodd');
     g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetX = 0; g.shadowOffsetY = 0;
   }
+  if (w >= 80 && h >= 60) { // engraved shadow side: sparse 45 degree ink hatching along the bottom and right edges (baked once with the panel)
+    g.save(); g.strokeStyle = 'rgba(0,0,0,.22)'; g.lineWidth = 1;
+    const bh = Math.min(h * 0.3, 70), rw = Math.min(w * 0.12, 50), step = 6;
+    g.beginPath(); g.rect(0, h - bh, w, bh); g.rect(w - rw, 0, rw, h); g.clip();
+    g.beginPath(); for (let d = -h; d < w; d += step) { g.moveTo(d, h); g.lineTo(d + h, 0); } g.stroke();
+    g.restore();
+  }
   g.strokeStyle = 'rgba(255,241,176,.34)'; g.lineWidth = 1; // lit top edge
   g.beginPath(); g.moveTo(r * 0.7 + lw, lw + 1.5); g.lineTo(w - r * 0.7 - lw, lw + 1.5); g.stroke();
   g.restore();

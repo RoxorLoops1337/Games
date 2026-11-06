@@ -100,6 +100,7 @@ function drawOptionCard(app, run, i, o, over, k, disabledWhy, usedUp, shk) {
   app.rr(x, y, OW, OH, 14);
   const gr = g.createLinearGradient(0, y, 0, y + OH); gr.addColorStop(0, dim ? '#26211e' : '#3d2a1e'); gr.addColorStop(1, dim ? '#161311' : '#1e1410'); g.fillStyle = gr; g.fill();
   g.shadowBlur = 0; g.lineWidth = over && !dim ? 3 : 2; g.strokeStyle = dim ? 'rgba(232,220,196,.2)' : over ? COL.lamp : rgba(BRASS, 0.7); g.stroke();
+  g.shadowBlur = 0; app.panel(x, y, OW, OH, { fill: 'rgba(0,0,0,0)', stroke: 'rgba(0,0,0,0)', r: 14, lw: 2 }); // chrome overlay: engraved hatch, inset shadow, rivets (cached)
   g.save(); app.rr(x + 8, y + 8, OW - 16, OH - 16, 10); g.lineWidth = 1; g.strokeStyle = dim ? 'rgba(232,220,196,.1)' : 'rgba(201,162,39,.3)'; g.setLineDash([5, 4]); g.stroke(); g.restore();
   g.globalAlpha = dim ? 0.4 : 1; drawOptIcon(g, o.id, x + OW / 2, y + 88, k, app.t); g.globalAlpha = 1;
   const nameH = app.text(o.name, x + OW / 2, y + 150, { size: 30, bold: true, align: 'center', color: dim ? 'rgba(232,220,196,.4)' : COL.lamp, shadow: !dim });

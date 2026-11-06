@@ -6,13 +6,13 @@ import { COL, W, H, clamp, rgba } from './core.js';
 
 export const TIP_TEXTS = {
   energy: 'Energy pays for cards. You get 3 a turn. Unspent Energy is lost.',
-  intent: 'The icon over an enemy is its next move. Sword: damage. Shield: Block. Flame: a curse. Plan around it.',
+  intent: 'The icon over an enemy is its next move. Sword: damage. Shield: Block. Flame: a curse. Plan around it. Small icons under its health are statuses: hover them.',
   block: 'Block soaks damage this turn, then it is gone. Raise it when the sword is coming.',
   endturn: 'End Turn when done. Cards you did not play are discarded unless they Retain.',
   graftpick: 'You never add cards. Pick one of your own cards and sew one graft onto it.',
   boonprice: 'Every graft has a Boon and a Price. The Price is always paid. Read it.',
-  budget: 'Budget is the Weight your deck carries for free. Each graft weighs 1 to 3.',
-  strain: 'Weight over Budget is Strain. Each point Tithes a Bare card: it fights at 75 percent. The deck view shows which.',
+  budget: 'Budget is how much graft Weight (1 to 3 each) your deck carries for free. Go over it and you take Strain: weaker cards.',
+  strain: 'Weight over Budget is Strain. Each point Tithes one ungrafted (Bare) card: it fights at 75 percent this fight. The deck view shows which.',
   overload: 'A third graft is an Overload: numbers x1.5, +1 Weight, and a 25 percent chance to Shatter the card for good.',
   skipping: 'You may skip the graft: heal 8, gain 1 Budget for good, or take 10 gold.',
   forge: 'The Forge heals, strips a graft, upgrades a card or Expands your Budget. One service per visit.',

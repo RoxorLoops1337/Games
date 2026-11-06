@@ -152,3 +152,38 @@ export function migrate2(m, hadRev) {
   m.rev = REV;
   return m;
 }
+
+// ---- defeat advice: one concrete line from how the run died (run.deathCause, set by finishCombat). 12 cause categories. ----
+export const DEATH_ADVICE = {
+  poison: 'Cleanse or Block early; Poison ignores Block and grows each turn. Kill the source fast.',
+  burn: 'Burn ticks every turn and ignores Block. Cleanse it, or end the fight before it stacks.',
+  bleed: 'Bleed ticks every turn and ignores Block. Cleanse it, and avoid taking hits while it runs.',
+  brittle: 'Brittle turns broken Block into damage. Keep Block small and steady instead of one big wall.',
+  stagefright: 'Stage Fright punishes the cards you play. Play fewer, bigger cards, or Cleanse it.',
+  dread: 'Dread bites when you end a turn with no Block. Always leave a little Block up.',
+  strain: 'Too many grafts: Temper a card at the Forge, strip a graft, or skip a graft for +1 Budget.',
+  backfire: 'Backfire jammed your opening hand. Cut your Weight under Budget or Temper a card to stop it.',
+  boss: 'A boss has one trick. Read its move tips and plan your turns around the counter.',
+  elite: 'Elites hit hard. Read the intent each turn, Block the sword, and skip them when low on HP.',
+  enemy: 'Read the intent icon every turn and Block when the sword is coming.',
+  generic: 'Heal at the Forge before a hard fight, and keep your Strain at 0.',
+};
+export function deathAdviceCategory(run) {
+  const cs = (run && run.deathCause) || null;
+  if (!cs) return (run && run.strain) ? 'strain' : 'generic';
+  if (cs.status && DEATH_ADVICE[cs.status]) return cs.status;
+  if ((cs.strain || 0) >= 2) return 'strain';
+  if ((cs.backfire || 0) > 0) return 'backfire';
+  const en = cs.enemy && ENEMIES[cs.enemy];
+  if (en) return en.kind === 'boss' ? 'boss' : en.kind === 'elite' ? 'elite' : 'enemy';
+  if ((cs.strain || 0) >= 1) return 'strain';
+  return 'generic';
+}
+// Returns { cat, text }. A boss, elite or enemy death quotes the counter from the move tip that killed you when it has one.
+export function deathAdvice(run) {
+  const cat = deathAdviceCategory(run), cs = (run && run.deathCause) || null;
+  let text = DEATH_ADVICE[cat];
+  const en = cs && cs.enemy && ENEMIES[cs.enemy], mv = en && en.moves && cs.move && en.moves[cs.move];
+  if ((cat === 'boss' || cat === 'elite' || cat === 'enemy') && mv && mv.tip) text = `${mv.name || 'This move'}: ${mv.tip}`;
+  return { cat, text };
+}

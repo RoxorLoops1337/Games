@@ -1080,8 +1080,8 @@ export function drawCard(ctx, spec, x, y, o = {}) {
   } else face.direct(ctx);
   drawCardLive(ctx, spec, o, win, t, L, junk, cid);
   drawCostOrb(ctx, spec, o, L);
-  if (o.hover && !o.selected) { cardPath(ctx, junk, cid); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(242,193,78,.55)'; ctx.stroke(); }
-  if (o.selected || gl > 0.5) { cardPath(ctx, junk, cid); ctx.lineWidth = o.selected ? 3.5 : 2.5; ctx.strokeStyle = o.selected ? '#fff0b0' : COLX.lamp; ctx.stroke(); }
+  if (o.hover && !o.selected) { cardPath(ctx, junk, cid); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(232,220,196,.45)'; ctx.stroke(); }
+  if (o.selected || gl > 0.5) { cardPath(ctx, junk, cid); ctx.lineWidth = o.selected ? 4.5 : 2.5; ctx.strokeStyle = o.selected ? '#f2c14e' : COLX.lamp; ctx.stroke(); }
   if (o.preview) { rr(ctx, -HW - 3, -HH - 3, CARD_W + 6, CARD_H + 6, 14); ctx.lineWidth = 2; setDash(ctx, [8, 5]); ctx.strokeStyle = COLX.lamp; ctx.stroke(); setDash(ctx, []); }
   if (CB.on && !junk && !o.noCb) drawCbChip(ctx, spec);
   if (o.dim > 0) { cardPath(ctx, junk, cid); ctx.fillStyle = `rgba(12,8,8,${Math.min(0.85, o.dim * 0.7)})`; ctx.fill(); }

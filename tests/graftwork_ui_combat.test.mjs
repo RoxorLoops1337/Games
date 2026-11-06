@@ -190,7 +190,7 @@ for (const id of ids) {
   assert.equal(meta.tips.energy, 1, 'dismissing the energy tip persists it');
   assert.ok(a.saved > 0, 'meta was saved');
   frames(a.app, 3);
-  assert.equal(a.app._tipKey, 'intent', 'next tip in sequence is the intent tip');
+  assert.equal(a.app._tipKey, 'playcard', 'next tip in sequence is the card-play tip (before intent)');
   const b = await mk(meta); frames(b.app, 3);
   assert.notEqual(b.app._tipKey, 'energy', 'a dismissed tip never shows again');
   const off = { tips: {}, settings: { tips: false } };
