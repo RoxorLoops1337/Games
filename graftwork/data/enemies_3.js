@@ -379,7 +379,7 @@ function reknit(A, e) {
   e.data.reknit = uids.length;
   if (uids.length) { A.status(e, 'reknit', uids.length); A.ev({ t: 'reknit', cards: uids, e: e.uid }); }
 }
-const SPLICE_TEXT = 'Applies the effect of your most grafted school: Ember burn, Blood bleed, Echo a second hit, Hoard block it keeps, Rust junk, Static marks, Gilded steals gold. No grafts: Weak and block. With Strain 2+ it also adds Infection 1. It copies the school of your last Thread payout';
+const SPLICE_TEXT = 'Applies the effect of your most grafted school: Ember burn, Blood bleed, Echo a second hit, Hoard block it keeps, Rust junk, Static marks, Gilded steals gold. No grafts: Weak and block. With Strain 2+ it also adds Infection 1. It copies the school of your last Thread cut (the Line cashed when your turn ends comes too late to count)';
 
 const grafter = {
   id: 'the_grafter', name: 'The Grafter', act: 3, kind: 'boss', start: { strength: 1 }, final: true, hp: 165,
@@ -401,10 +401,10 @@ const grafter = {
     damaged(A, e) {
       if (!e.data.rage && e.hp < e.maxHp / 2) { e.data.rage = true; A.status(e, 'strength', 3); reknit(A, e); }
     },
-    // Boss mirror (THREAD.md): the school of your last payout becomes the school of its next Splice.
+    // Boss mirror (THREAD.md): the school of your last cut payout (not the end-of-turn cash, which lands after the intent was shown) becomes the school of its next Splice.
     seamPay(A, e, p) {
       const i = p && p.school ? SCHOOL_ORDER.indexOf(p.school) : -1;
-      if (i >= 0) { e.data.mirror = p.school; A.setStatus(e, 'mirrorsch', i + 1); }
+      if (i >= 0 && p.kind !== 'end') { e.data.mirror = p.school; A.setStatus(e, 'mirrorsch', i + 1); }
     },
     afterMove(A, e, m) { if (m === 'splice' && e.data.mirror) { e.data.mirror = null; A.setStatus(e, 'mirrorsch', 0); } },
   },
