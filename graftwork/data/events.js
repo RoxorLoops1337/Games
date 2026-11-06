@@ -5,6 +5,10 @@ const bareCount = (run) => { let n = 0; for (const i of run.deck) if (i.grafts.l
 // A Bare card re-filed under a fresh uid: Tithe picks cheapest then OLDEST, so the new uid goes to the back of its cost.
 const refile = (run, R, inst) => { const id = inst.id, up = inst.up; R.removeCard(run, inst.uid); R.addCard(run, id); const n = run.deck[run.deck.length - 1]; if (up) R.upgrade(run, n.uid); if (run.flags.mem && run.flags.mem.uid === inst.uid) run.flags.mem.uid = n.uid; };
 // Replace every graft on a card with the same number of random ones.
+// Temper in an event: same rule as engine/cards.js temper() (FUSE_CAP 4). Inlined so this file keeps no imports.
+const FUSE_MAX = 4;
+const canFuse = (i) => i.grafts.length > 0 && (i.fused || []).length + i.grafts.length <= FUSE_MAX;
+const fuseInst = (run, i) => { if (!canFuse(i)) return false; i.fused = [...(i.fused || []), ...i.grafts]; i.grafts = []; if (run.stats) run.stats.tempered = (run.stats.tempered || 0) + 1; return true; };
 const rerollCard = (run, R, inst) => { const n = inst.grafts.length; for (const g of inst.grafts.slice()) R.stripGraft(run, inst.uid, g); let k = 0; for (let j = 0; j < n; j++) if (R.addGraftRandom(run, inst.uid)) k++; return k; };
 
 export const EVENT_LIST = [

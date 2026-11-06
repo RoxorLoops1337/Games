@@ -273,9 +273,14 @@ function drawStack(app, stack, anchor) {
   const panels = stack.slice(0, 2).map((p) => measurePanel(app, p));
   if (stack.length > 2) { const extra = stack.slice(2).flat().map((s) => s.title).join(', '); panels[1] = measurePanel(app, [...stack[1], { title: 'Also', text: extra, color: COL.vellum2 }]); }
   const totalH = panels.reduce((a, p) => a + p.h, 0) + (panels.length - 1) * 8;
-  const pos = place(app, anchor, MAXW, Math.min(totalH, 700));
-  let y = Math.max(6, Math.min(714 - totalH, pos.y));
+  // anchor.band = { x, y, bottom, dir }: panels fill a fixed band (column by column, dir +1 right / -1 left of x) instead of the usual placement
+  const band = anchor.band;
+  const pos = band ? { x: band.x, y: band.y } : place(app, anchor, MAXW, Math.min(totalH, 700));
+  let y = band ? band.y : Math.max(6, Math.min(714 - totalH, pos.y));
+  let col = 0;
   panels.forEach((p, i) => {
+    if (band && i > 0 && y + p.h > band.bottom) { col++; y = band.y; }
+    pos.x = band ? band.x + col * (MAXW + 8) * band.dir - (band.dir < 0 ? MAXW : 0) : pos.x;
     const first = p.lay[0] && p.lay[0].s;
     app.panel(pos.x, y, MAXW, p.h, { fill: 'rgba(14,12,10,.97)', stroke: (first && first.color) || COL.lamp });
     app.reg('tip' + i, pos.x, y, MAXW, p.h, { layer: 'overlay', overlay: true, group: 'tip' });

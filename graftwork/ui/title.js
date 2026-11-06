@@ -409,7 +409,12 @@ export default {
     if (locked) {
       app.text('LOCKED', x + 108, y + 62, { size: 12, ui: true, bold: true, color: '#8c8372' });
       app.text(h.unlock ? h.unlock.text : 'Locked.', x + 24, y + 104, { size: 17, color: '#9b8f7a', maxW: w - 48, italic: true });
-      app.text(h.blurb, x + 24, y + 190, { size: 14, color: '#6d655a', maxW: w - 48 });
+      app.text(h.blurb, x + 24, y + 150, { size: 14, color: '#6d655a', maxW: w - 48 });
+      // a big shrouded bust so the locked card still teases who is waiting (idle breath unless reduced motion)
+      g.save(); g.globalAlpha = 0.34 + (calm(app) ? 0 : 0.06 * Math.sin(app.t * 1.6 + idx));
+      drawPortrait(g, h.id, x + w / 2, y + 262 + (calm(app) ? 0 : Math.sin(app.t * 1.2 + idx) * 2), 128);
+      g.restore();
+      g.save(); g.globalAlpha = 0.85; padlock(g, x + w / 2 + 44, y + 312, 0.8); g.restore();
       return;
     }
     // blurb + passive

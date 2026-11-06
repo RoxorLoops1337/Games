@@ -231,11 +231,12 @@ export default {
       const R = big ? 38 : 27;
       const hov = !app.blocked && !this.banner && Math.hypot(mouse.x - x, mouse.y - y) < R + 5 && mouse.x > CHART.x && mouse.x < CHART.x + CHART.w;
       if (hov) { hovered = n; }
-      const state = n.visited ? 'visited' : isAvail ? 'available' : reach.has(n.id) ? 'locked' : 'locked';
+      // reachable-later nodes keep their full colour (icons must read at a glance); only off-path nodes sink back
+      const state = n.visited ? 'visited' : isAvail ? 'available' : reach.has(n.id) ? 'reach' : 'locked';
       const faint = !n.visited && !isAvail && !reach.has(n.id);
       const pulse = isAvail ? 0.5 + 0.5 * Math.sin(this.pulse * 4 + n.col) : 0;
       g.save();
-      g.globalAlpha = n.visited ? (isCur ? 1 : 0.5) : faint ? 0.3 : isAvail ? 1 : 0.8;
+      g.globalAlpha = n.visited ? (isCur ? 1 : 0.5) : faint ? 0.45 : isAvail ? 1 : 0.92;
       if (isAvail) { // pulsing halo
         g.fillStyle = rgba('#B3263A', 0.18 + 0.2 * pulse); g.beginPath(); g.arc(x, y, R + 9 + 4 * pulse, 0, 6.283); g.fill();
       }
@@ -246,7 +247,7 @@ export default {
       g.lineWidth = big ? 4 : 3; g.strokeStyle = NODE_COL[n.type] || '#aaa'; g.stroke();
       g.lineWidth = 1; g.strokeStyle = 'rgba(0,0,0,.6)'; g.beginPath(); g.arc(0, 0, R - 5, 0, 6.283); g.stroke();
       g.restore();
-      g.save(); g.globalAlpha = n.visited ? 0.55 : faint ? 0.35 : 1;
+      g.save(); g.globalAlpha = n.visited ? 0.55 : faint ? 0.6 : 1;
       drawNodeIcon(g, n.type, x, y, R * 1.45 * sc, state);
       g.restore();
       if (n.visited) { // tick

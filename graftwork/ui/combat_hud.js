@@ -191,19 +191,19 @@ export function drawIntentBubble(app, info, x, y, prog, alpha = 1, maxW = 170) {
   const attack = !info.hidden && info.kinds.includes('attack');
   const num = attack ? String(info.hits > 1 ? info.per : info.dmg) : (info.hidden ? '?' : '');
   const hitTxt = attack && info.hits > 1 ? 'x' + info.hits : '';
-  const numW = num ? app.measure(num, 24, { bold: true, ui: true }) : 0, hitW = hitTxt ? app.measure(hitTxt, 18, { bold: true, ui: true }) : 0;
-  const body = (k) => k.length * 30 + (numW ? numW + 4 : 0) + (hitW ? hitW + 4 : 0) + 16;
+  const numW = num ? app.measure(num, 30, { bold: true, ui: true }) : 0, hitW = hitTxt ? app.measure(hitTxt, 22, { bold: true, ui: true }) : 0;
+  const body = (k) => k.length * 38 + (numW ? numW + 4 : 0) + (hitW ? hitW + 4 : 0) + 16;
   if (body(kinds) > maxW && kinds.length > 1) kinds = kinds.slice(0, 1);
-  const w = Math.min(maxW, body(kinds)), h = 36;
+  const w = Math.min(maxW, body(kinds)), h = 44;
   ctx.save();
   ctx.globalAlpha = alpha * clamp(prog * 2.5, 0, 1);
   const col = info.hidden ? '#bbb' : attack ? '#e86a5a' : info.kinds.includes('debuff') ? '#c78bd8' : info.kinds.includes('buff') ? '#7fcf8a' : '#cfc3a8';
   app.rr(x - w / 2, y - h / 2, w, h, 12); ctx.fillStyle = 'rgba(16,13,12,.88)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke();
   ctx.beginPath(); ctx.rect(x - w / 2, y - h, w * clamp(prog * 1.6, 0, 1), h * 2); ctx.clip();
   let cx = x - w / 2 + 8;
-  for (const k of kinds) { drawIntent(ctx, k, cx + 14, y, 28); cx += 30; }
-  if (num) { app.text(num, cx + 2, y - 14, { size: 24, bold: true, ui: true, color: '#fff', stroke: '#0e0e0e', strokeW: 4, fixed: true }); cx += numW + 4; }
-  if (hitTxt) app.text(hitTxt, cx + 2, y - 10, { size: 18, bold: true, ui: true, color: '#ffd9a0', stroke: '#0e0e0e', strokeW: 4, fixed: true });
+  for (const k of kinds) { drawIntent(ctx, k, cx + 17, y, 36); cx += 38; }
+  if (num) { app.text(num, cx + 2, y - 18, { size: 30, bold: true, ui: true, color: '#fff', stroke: '#0e0e0e', strokeW: 4, fixed: true }); cx += numW + 4; }
+  if (hitTxt) app.text(hitTxt, cx + 2, y - 13, { size: 22, bold: true, ui: true, color: '#ffd9a0', stroke: '#0e0e0e', strokeW: 4, fixed: true });
   ctx.restore();
   return { x: x - w / 2, y: y - h / 2, w, h };
 }
@@ -229,7 +229,7 @@ export function drawEnemyPlate(app, ed, o) {
   // intent plate
   let ir = null;
   if (info && ed.intentOut < 1) {
-    ir = drawIntentBubble(app, info, ed.x, L.ENEMY_LANE_TOP + 57, ed.intentT, (1 - ed.intentOut), sw - 2);
+    ir = drawIntentBubble(app, info, ed.x, L.ENEMY_LANE_TOP + 54, ed.intentT, (1 - ed.intentOut), sw - 2);
     if (ir.w) app.reg(grp + ':intent', ir.x, ir.y, ir.w, ir.h, { group: grp });
   }
   // hp bar + block
