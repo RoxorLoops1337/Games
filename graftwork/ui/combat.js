@@ -18,6 +18,7 @@ import { watchCombat, announceEnding } from './a11y.js';
 import { seamBadge as seamBadgeOf, drawSeamBadge as drawSeamBadgeAt, drawSeamRail, onSeamEvent, seamTip } from './seam_ui.js';
 import { drawBar, drawStatusRow, drawIntentBubble, intentText, cardSections, drawSections, gearIcon, stCol, stName, drawEnemyPlate, drawHeroPlate, drawRelicStrip, drawPopovers, fitText } from './combat_hud.js';
 import { queueTip, flushTips, cardTipStack } from './tooltips.js';
+import { drawCardZoom } from './card_zoom.js';
 
 const { HERO_X, FOOT_Y, PLAY_LINE } = L;
 const EF = L.ENEMY_FOOT; // enemies stand on their own ground line (the HUD grid puts their plates inside the lane)
@@ -1134,6 +1135,7 @@ function updateInput(app, dt) {
   // ---- mouse / touch
   if (m.pressed && m.button === 2) { if (S.drag) cancelDrag(); else if (S.sel || S.potSel !== null && S.potSel !== undefined) { S.sel = null; S.potSel = null; sfx('uiBack'); } S.down = null; return; }
   if (m.pressed) S.kbUsed = false;
+  if (m.pressed && u.zoom) { u.zoom = null; S.down = null; return; } // a tap closes the preview zoom and does nothing else
   if (m.pressed) S.down = { x: m.x, y: m.y, uid: act ? u.cand : null, moved: false, t: 0, touch, long: false };
   if (S.down) {
     S.down.t += dt;
@@ -1203,7 +1205,7 @@ function clickAt(m, dn) {
   // tap / click on a card
   if (dn.uid && !dn.moved) {
     const uid = dn.uid;
-    if (S.sel === uid) { if (u.touchPrev) return; if (!selNeedsTarget()) tryPlay(uid, null); else { const l = liveEds(); if (l.length === 1) tryPlay(uid, l[0]); } }
+    if (S.sel === uid) { if (u.touchPrev) { u.zoom = uid; u.zoomT = APP.t; return; } if (!selNeedsTarget()) tryPlay(uid, null); else { const l = liveEds(); if (l.length === 1) tryPlay(uid, l[0]); } }
     else selectCard(uid);
     return;
   }
@@ -1489,7 +1491,7 @@ function draw(app) {
   if (S.lamp > 0) { ctx.fillStyle = `rgba(0,0,0,${S.lamp * 0.45})`; ctx.fillRect(0, 0, W, H); }
   if (S.dark > 0) { ctx.fillStyle = `rgba(0,0,0,${S.dark * 0.6})`; ctx.fillRect(0, 0, W, H); }
   if (S.drag && !selNeedsTarget()) drawPlayZone(app);
-  drawCardInfo(app);
+  drawCardInfo(app); drawZoomFace(app);
   drawBanner(app);
   drawJuice(app);
   drawTips(app);
@@ -1758,8 +1760,15 @@ function drawHudBottom(app) {
   if (app.button('END TURN', E.x, E.y, E.w, E.h, { size: 22, fill: can && noPlays ? '#6b4a1a' : COL.slab2, disabled: !can }) && can) doEndTurn();
 }
 
+function zoomUid() { const u = U(); if (u.zoom && (S.sel !== u.zoom || S.drag)) u.zoom = null; return isTouch() && !S.modal && !S.drag ? (u.zoom || (S.down && S.down.long && S.hov) || null) : null; }
+function drawZoomFace(app) {
+  const uid = zoomUid(); if (!uid) return;
+  const dc = S.hand.find((d) => d.uid === uid); if (!dc) return;
+  let cost = effCost(S.c, dc.w); if (typeof cost === 'number' && dc.w.jam && !dc.jam) cost = Math.max(0, cost - 1);
+  drawCardZoom(app, dcSpec(dc), { cost, tithed: dc.w.tithed, jam: dc.jam, mark: dc.w.reknit ? 'reknit' : undefined, hint: U().zoom ? 'Tap to close' : 'Release to close' });
+}
 function drawCardInfo(app) {
-  if (!S.modal && !S.ending && !S.drag && !S.c.pending) {
+  if (!S.modal && !zoomUid() && !S.ending && !S.drag && !S.c.pending) {
     const dc = S.hand.find((d) => d.uid === S.hov);
     if (dc && dc.alpha >= 0.8) {
       const spec = dcSpec(dc), l = liveEds();
@@ -1806,6 +1815,8 @@ function drawTips(app) {
 
 function drawBanner(app) {
   const b = S.banner; if (!b) return;
+  if (b.style === 'boss' && b.t > 0.15 && APP.mouse.pressed) b.t = Math.max(b.t, b.life * 0.8); // a tap skips the boss banner
+  const hint = b.style === 'boss' && b.t > 0.8 && b.t < b.life * 0.8;
   const ctx = app.ctx, k = b.t / b.life;
   const a = k < 0.12 ? k / 0.12 : k > 0.8 ? (1 - k) / 0.2 : 1;
   ctx.save(); ctx.globalAlpha = clamp(a, 0, 1);
@@ -1815,6 +1826,7 @@ function drawBanner(app) {
     const slide = (1 - EASE.out(clamp(k * 4, 0, 1))) * 120;
     app.text(b.sub || '', W / 2 + slide, 246, { size: 20, ui: true, bold: true, align: 'center', color: COL.scar });
     app.text(b.title, W / 2 - slide, 276, { size: 64, bold: true, align: 'center', color: COL.vellum, stroke: '#0e0e0e', strokeW: 8 });
+    if (hint) app.text(isTouch() ? 'tap to continue' : 'click to continue', W / 2, 358, { size: 13, ui: true, align: 'center', color: 'rgba(232,220,196,.55)' });
   } else if (b.style === 'turn') {
     app.text(b.title, W / 2, 240 - k * 20, { size: 34, bold: true, align: 'center', color: COL.lamp, stroke: '#0e0e0e', strokeW: 6 });
   } else {
