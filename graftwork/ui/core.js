@@ -1,6 +1,7 @@
 // Immediate-mode canvas UI toolkit. One 1280x720 logical canvas, scaled to fit. Every screen is an object:
 //   { name, enter(app, params), leave(app), update(app, dt), draw(app), key(app, e) }
 // Screens redraw every frame and call app.button(...) etc.; clicks are resolved from last frame's pointer state.
+import * as LAYOUT from './layout_registry.js';
 export const W = 1280, H = 720;
 export const FONT = 'Georgia, "Iowan Old Style", "Palatino Linotype", serif';
 export const FONT_UI = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
@@ -26,7 +27,8 @@ export function createApp(canvas, opts = {}) {
     keys: new Set(), pressedKeys: [],
     screens: {}, stack: [], tweens: [], timers: [],
     cursor: 'default', tip: null, hot: null, shared: opts.shared || {},
-    scale: 1, offX: 0, offY: 0, textCache: new Map(),
+    scale: 1, offX: 0, offY: 0, textCache: new Map(), layout: LAYOUT,
+    reg: (id, x, y, w, h, o) => LAYOUT.register(id, x, y, w, h, o),
   };
 
   // ---- stage scaling ----
@@ -198,7 +200,7 @@ export function createApp(canvas, opts = {}) {
     // draw
     ctx.setTransform(app.px, 0, 0, app.px, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    app.tip = null; app.cursor = 'default';
+    app.tip = null; app.cursor = 'default'; LAYOUT.clear();
     const stack = app.stack;
     for (let i = 0; i < stack.length; i++) {
       const s = stack[i];

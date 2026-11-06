@@ -31,8 +31,8 @@ U1 Post FX: ui/post.js (+ ui/post_shaders.js), tests/graftwork_post.test.mjs
 U2 Lights and particles: ui/lights.js, ui/fx.js, tests/graftwork_fx.test.mjs
 U3 Pause menu and fullscreen: ui/pause.js, ui/fullscreen.js, ui/title.js, ui/settings.js, main.js
 U4 Layout registry and non-combat screens: ui/layout_registry.js, ui/map.js, graft.js, graft_parts.js, shop.js, forge.js, event.js, reward.js, deckview.js, codex.js, end.js, tests/graftwork_ui_layout.test.mjs
-U5 Combat hand, drag, aim: ui/combat.js (hand, input, drag, aim, preview regions: layoutHand, drawHand, updateInput, dropDrag, clickAt, tryPlay, selectCard, drawAimArrow, drawPlayZone, drawCardInfo), ui/combat_layout.js, tests/graftwork_ui_combat.test.mjs
-U6 Combat HUD and tooltips: ui/combat_hud.js, ui/tooltips.js, and the HUD regions of ui/combat.js (drawTopBar, drawHudBottom, drawEnemyHud, drawHeroAndHud, pileStack)
+U5 Combat hand, drag, aim: ui/combat.js (hand, input, drag, aim regions: layoutHand, drawHand, updateInput, dropDrag, clickAt, tryPlay, selectCard, drawAimArrow, drawPlayZone, the end-turn confirm and cannot-play chips), ui/combat_layout.js, tests/graftwork_ui_combat.test.mjs
+U6 Combat HUD and tooltips: ui/combat_hud.js, ui/tooltips.js, tests/graftwork_ui_combat_layout.test.mjs, and the HUD regions of ui/combat.js (drawTopBar, drawHudBottom, drawEnemyHud, drawHeroAndHud, pileStack, drawCardInfo)
 U7 Thread UI: ui/seam_ui.js (+ the rail rect in combat_layout.js and the calls into seam_ui from combat.js draw()/handle())
 U8 Core chrome: ui/core.js, ui/chrome.js
 A1 Card art: art/cards.js
@@ -42,3 +42,13 @@ A4 Heroes and backgrounds: art/heroes.js, art/backgrounds.js
 A5 Icons: art/icons.js
 J1 Juice director: ui/juice.js plus the event-handler and ending regions of ui/combat.js (handle, onDmg, onKill, onStatus, onPlay, startEnding, updateEnding, finalize, vignette)
 J2 Audio: ui/audio.js, tests/graftwork_audio.test.mjs
+
+## CROSS-MODULE CONTRACTS
+- Layout registry (already in core.js): `app.reg(id,x,y,w,h,{layer,group,overlay})`; see ui/layout_registry.js. Every HUD widget registers each frame; cleared by core.js at frame start.
+- Card art: drawCard options gain `compact:true` (resting hand cards: cost, name, type glyph, key number only; A1 implements, U5 uses it) and `tilt:{x,y}` (hover parallax, -1..1).
+- Enemy animation: combat.js keeps a persistent `ed.anim = {}` object per enemy and passes `{ atk:{phase,k}, state: ed.anim, hpFrac }` to drawEnemy via its `o` argument (A2 reads them; the old `o.attack` scalar still works). J1 drives ed.atk from art/attacks.js `timing(id, body)` so the damage event lands at tell+act.
+- Post API: `app.post.shockwave(x,y,strength,ms)`, `aberration(amount,ms)`, `flash(color,a)`, `vignette(a,ms)`, `setBloom(k)`, `setGrade(name,ms)`, `setMaskRects(rects)`; always safe to call (no-op when effects are off or reduced motion). U1 sets the grade per screen automatically from app.current and run.act.
+- Audio API additions (J2): `audio.setIntensity(0..1)`, `audio.setLowpass(hz, ms)`, `audio.heartbeat(bpm|0)`, `audio.sfx(name, {pitch, vol, pan})` with new names listed in ui/audio.js SFX_NAMES.
+- Lights (U2): `lights.add({x,y,r,color,intensity,flicker,cone})`, `lights.remove(id)`, `lights.clear()`, `lights.render(ctx, ambient)`; backgrounds and screens feature-detect it.
+- Thread read API (E1 exports from engine/seam.js): `seamPreview(c, card)` -> { kind:'extend'|'cut'|'slack'|'tied', school, len, payout:[{school, stitches, text}] }.
+- Settings keys (meta.settings): reducedMotion, screenShake, textScale (100|125|150), quality ('off'|'low'|'high'), tips, fullscreen pref.
