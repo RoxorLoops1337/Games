@@ -64,7 +64,7 @@ function tierFight(run, tier, R, maxTurns = 40) {
 export function lowRun(tier, heroId, seed, asc = 0, o = {}) {
   const R = mkRng(`${tier}:${seed}`);
   const rnd = tier === 'random';
-  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, assist: o.assist });
+  const run = RUN.newRun({ hero: heroId, seed, ascension: asc, assist: o.assist, unlocked: o.unlocked || process.env.GW_UNLOCK || 'all' });
   const log = { fights: [] };
   let guard = 0;
   while (guard++ < 600 && run.phase !== 'dead' && run.phase !== 'won') {
