@@ -7,6 +7,7 @@ import * as audio from '../graftwork/ui/audio.js';
 import { ENEMIES, RELICS, POTIONS, STATUSES } from '../graftwork/data/index.js';
 import combat from '../graftwork/ui/combat.js';
 import * as L from '../graftwork/ui/combat_layout.js';
+import { CARD_W, CARD_H } from '../graftwork/art/cards.js';
 import { keywordsIn, KEYWORDS, explainNumber, renderTip, drawCardText } from '../graftwork/ui/tooltips.js';
 import { cardSpec } from '../graftwork/engine/cards.js';
 import { cardLines } from '../graftwork/engine/text.js';
@@ -81,6 +82,21 @@ check('long statuses', await scene({ n: 3, hand: 5, statuses: 14 }));
 check('12 relics', await scene({ n: 2, hand: 5, relics: 12 }));
 check('3 potions', await scene({ n: 4, hand: 6, potions: 3 }));
 check('enemy hover', await scene({ n: 3, hand: 5, hover: 'enemy' }));
+
+// presence: a lone enemy / duo stands bigger than a 3+ lane, 3+ keep slots that never overlap
+{
+  const d = (id) => ENEMIES[id];
+  const one = L.enemySlots([d('leech_jar')])[0], three = L.enemySlots(['leech_jar', 'orderly', 'slime_bit'].map(d)), four = L.enemySlots(['leech_jar', 'orderly', 'slime_bit', 'stitch_rat'].map(d));
+  assert.ok(one.h >= 190, 'single enemy art height ' + one.h);
+  assert.ok(one.scale > 1.2, 'single Leech Jar scaled up: ' + one.scale);
+  for (const sl of [three, four]) for (let i = 1; i < sl.length; i++) assert.ok(sl[i].x - sl[i].sw / 2 >= sl[i - 1].x + sl[i - 1].sw / 2 - 0.01, 'slots overlap');
+  assert.ok(four[0].h <= L.ENEMY_ART_H + 1, '4+ enemies stay at the clear lane height');
+  // lifted hand card: stays below the enemy lane and clear of End Turn and the energy orb at every hand slot
+  const ch = CARD_H * L.HOVER_S, cw = CARD_W * L.HOVER_S;
+  assert.ok(L.HOVER_Y - ch / 2 >= L.HOVER_TOP - 1 && L.HOVER_Y + ch / 2 <= L.H, 'lifted card top/bottom ' + (L.HOVER_Y - ch / 2));
+  assert.ok(L.ENEMY_FOOT + 50 <= L.HOVER_TOP, 'enemy hp bar row stays above the lifted card');
+  for (let n = 1; n <= 10; n++) for (let i = 0; i < n; i++) { const x = Math.max(245, Math.min(975, L.handSlot(i, n).x)); assert.ok(x + cw / 2 < L.END_BTN.x && x - cw / 2 > L.ORB.x + L.ORB.size / 2, 'lifted card clear of End Turn/orb'); }
+}
 
 // glossary and explanations
 assert.ok(['Block', 'Vulnerable', 'Weak', 'Frail', 'Burn', 'Bleed', 'Poison', 'Brittle', 'Tithe', 'Strain', 'Backfire', 'Overload', 'Shatter', 'Temper', 'Echo', 'Exhaust', 'Retain', 'Innate', 'Ethereal', 'Thread', 'Knot', 'Cut', 'Weight', 'Budget', 'Resonance'].every((k) => KEYWORDS[k] && KEYWORDS[k].glyph && KEYWORDS[k].color && KEYWORDS[k].text));

@@ -19,7 +19,7 @@ export const SEAM = { x: 380, y: 468, w: 696, h: 50 }; // the thread rail (ui/se
 export const HAND_CX = 600, HAND_Y = 642, HAND_SPREAD = 900; // spec 622/940 widened away from END TURN (x1086); y keeps resting tops under the Thread rail (y518)
 export const HAND_GAP = 20;                       // extra air between small-hand cards (n <= 6)
 export const HOVER_S = 0.92;                      // desktop hover: lifted full face, sized so the lifted card stays below the enemy lane (top >= HOVER_TOP)
-export const HOVER_TOP = 430;                     // the lifted card never reaches above this y (enemy hp bars end ~ y400)
+export const HOVER_TOP = 420;                     // the lifted card never reaches above this y (enemy hp bars end ~ y400)
 export const HOVER_Y = H - (CARD_H * HOVER_S) / 2 - 6;
 export const SEL_Y = 470, SEL_S = 1.18;           // desktop selected (click-to-play)
 export const PREVIEW_Y = 400, PREVIEW_S = 1.0;    // touch tap preview

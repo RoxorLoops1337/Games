@@ -604,27 +604,18 @@ function drawThemed(ctx, theme, c, t, o) {
   const par = clampP(o.parallax), Lm = keyLamp(t), fy = c.floorY;
   registerLights(theme, c);
   o.parallax = par; // exposed so combat can read back / shift on hits
-  // 1. far wall (.2)
-  const far = layer(c.farKey || ('bg_' + theme), c.far);
-  if (far) ctx.drawImage(far, -9.6 - par * 8, -5.4, W * 1.015, H * 1.015); else c.far(ctx);
-  // 2. mid props (.5)
-  let midC = null;
-  if (c.midFn) { midC = layer(c.mid, c.midFn); if (midC) ctx.drawImage(midC, -par * 20, 0); else c.midFn(ctx); }
-  let props = null;
-  if (!c.midFn && c.mid) { props = midProps(theme, c.mid[0], c.mid[1], fy); if (props) { ctx.drawImage(props, -par * 20, 0); } }
-  // 3. floor (1.0): cropped band of the scene feathered at the horizon
-  const src = c.midFn ? midC : far;
-  if (src) {
-    const fl = layer('floor_' + theme, (g) => { g.drawImage(src, 0, fy - 18, W, H - fy + 18, 0, 0, W, H - fy + 18); g.globalCompositeOperation = 'destination-in'; const gr = g.createLinearGradient(0, 0, 0, 40); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,1)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; }, W, H - fy + 18);
-    if (fl && par) ctx.drawImage(fl, -par * 40, fy - 18);
-  }
+  // The static parallax layers (far wall, mid props, floor), their reflection and the static front (foreground blur, tint, vignette)
+  // only move when the parallax moves. Once it has held still for a frame they are baked into one canvas each, so a still frame
+  // costs three blits instead of ~8 full-screen ones plus a gradient. While the parallax changes the layers are drawn one by one.
+  const st = bake.theme === theme ? bake : (bake.theme = theme, bake.par = NaN, bake.back = bake.front = bake.refl = null, bake.still = 0, bake);
+  st.still = par === st.par ? st.still + 1 : 0; st.par = par;
+  if (st.still >= 1 && !st.back) { try { st.back = bakeLayer(theme, c, par, fy, 'back'); st.front = bakeLayer(theme, c, par, fy, 'front'); st.refl = c.reflect ? bakeLayer(theme, c, par, fy, 'refl') : null; } catch (e) { st.back = st.front = st.refl = null; } }
+  if (st.still < 1 && st.back) st.back = st.front = st.refl = null;
+  const useBake = !!(st.back && st.front);
+  if (useBake) ctx.drawImage(st.back, 0, 0); else paintBack(ctx, theme, c, par, fy);
   // practicals (flicker, sway) ride the mid depth
   ctx.save(); ctx.translate(-par * 20, 0); c.dyn(ctx, t, o); ctx.restore();
-  // reflections: flipped mid props on the floor at alpha .12
-  if (c.reflect) {
-    const refl = midC || props;
-    if (refl) { ctx.save(); ctx.beginPath(); ctx.rect(0, fy, W, H - fy); ctx.clip(); ctx.globalAlpha = 0.12; ctx.translate(-par * 20, 2 * fy); ctx.scale(1, -1); ctx.drawImage(refl, 0, 0); ctx.restore(); }
-  }
+  if (c.reflect) { if (useBake) { if (st.refl) ctx.drawImage(st.refl, 0, fy); } else paintRefl(ctx, theme, c, par, fy); }
   // 4. key-lamp wash + additive light shafts swinging with the lamp
   const [sc, sa, sn, sw] = c.shaft;
   const sh = shaftSprite(sc), sway = Lm.swing, ang = 0.2 + sway * 1.4;
@@ -641,14 +632,42 @@ function drawThemed(ctx, theme, c, t, o) {
   // fog in the lower third
   const fg = fogLayer(c.fog[0]);
   if (fg) { ctx.save(); ctx.globalAlpha = c.fog[1]; const fx = -(((t * 9 + 200) % 1024) + 1024) % 1024; for (let k = 0; k < 3; k++) ctx.drawImage(fg, fx + k * 1024 - par * 30, H - 260 * 1.0, 1024, 260); ctx.restore(); }
-  // 5. foreground blur (1.4)
+  if (useBake) ctx.drawImage(st.front, 0, 0); else paintFront(ctx, theme, c, par);
+}
+const bake = { theme: '', par: NaN, back: null, front: null, refl: null, still: 0 };
+function bakeLayer(theme, c, par, fy, kind) {
+  if (typeof document === 'undefined' || !document.createElement) return null;
+  const cv = mk(W, kind === 'refl' ? H - fy : H); const g = cv.getContext && cv.getContext('2d'); if (!g) return null;
+  if (kind === 'back') paintBack(g, theme, c, par, fy); else if (kind === 'front') paintFront(g, theme, c, par); else { g.translate(0, -fy); paintRefl(g, theme, c, par, fy); }
+  return cv;
+}
+function paintBack(ctx, theme, c, par, fy) {
+  // 1. far wall (.2)
+  const far = layer(c.farKey || ('bg_' + theme), c.far);
+  if (far) ctx.drawImage(far, -9.6 - par * 8, -5.4, W * 1.015, H * 1.015); else c.far(ctx);
+  // 2. mid props (.5)
+  let midC = null;
+  if (c.midFn) { midC = layer(c.mid, c.midFn); if (midC) ctx.drawImage(midC, -par * 20, 0); else c.midFn(ctx); }
+  let props = null;
+  if (!c.midFn && c.mid) { props = midProps(theme, c.mid[0], c.mid[1], fy); if (props) { ctx.drawImage(props, -par * 20, 0); } }
+  // 3. floor (1.0): cropped band of the scene feathered at the horizon
+  const src = c.midFn ? midC : far;
+  if (src) {
+    const fl = layer('floor_' + theme, (g) => { g.drawImage(src, 0, fy - 18, W, H - fy + 18, 0, 0, W, H - fy + 18); g.globalCompositeOperation = 'destination-in'; const gr = g.createLinearGradient(0, 0, 0, 40); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,1)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; }, W, H - fy + 18);
+    if (fl && par) ctx.drawImage(fl, -par * 40, fy - 18);
+  }
+}
+function paintRefl(ctx, theme, c, par, fy) {
+  const midC = c.midFn ? layer(c.mid, c.midFn) : null, props = !c.midFn && c.mid ? midProps(theme, c.mid[0], c.mid[1], fy) : null, refl = midC || props;
+  if (refl) { ctx.save(); ctx.beginPath(); ctx.rect(0, fy, W, H - fy); ctx.clip(); ctx.globalAlpha = 0.12; ctx.translate(-par * 20, 2 * fy); ctx.scale(1, -1); ctx.drawImage(refl, 0, 0); ctx.restore(); }
+}
+function paintFront(ctx, theme, c, par) {
   const fgl = fgLayer(c.fg[0], c.fg[0], c.fg[1]);
   if (fgl) { ctx.save(); ctx.globalAlpha = 0.9; ctx.drawImage(fgl, -40 - par * 56, -10, W + 80, H + 20); ctx.restore(); }
   // act palette wash + vignette
   ctx.save(); ctx.globalAlpha = c.tint[1]; ctx.fillStyle = c.tint[0]; ctx.fillRect(0, 0, W, H); ctx.restore();
   drawVignette(ctx, c.vig || 0.55);
 }
-
 export const BACKGROUND_THEMES = Object.keys(CFG);
 export function drawBackground(ctx, theme, t = 0, o = {}) {
   o = o || {}; if (o.still) t = 0;
